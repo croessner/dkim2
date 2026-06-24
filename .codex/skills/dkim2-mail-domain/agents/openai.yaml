@@ -1,0 +1,4 @@
+interface:
+  display_name: "DKIM2 Mail Domain"
+  short_description: "Email, SMTP, RFC5322, Milter expertise"
+  default_prompt: "Use $dkim2-mail-domain to analyze this DKIM2 task through SMTP, RFC5322, MIME, DKIM, and Milter behavior."

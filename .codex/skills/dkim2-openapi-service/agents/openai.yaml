@@ -1,0 +1,4 @@
+interface:
+  display_name: "DKIM2 OpenAPI Service"
+  short_description: "dkim2d OpenAPI and generated clients"
+  default_prompt: "Use $dkim2-openapi-service to update or review the DKIM2 daemon OpenAPI boundary and generated client workflows."

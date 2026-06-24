@@ -1,0 +1,28 @@
+# OS and editor metadata
+.DS_Store
+Thumbs.db
+.idea/
+*.iml
+.vscode/
+
+# Build outputs
+/bin/
+/dist/
+/coverage/
+coverage.out
+*.coverprofile
+*.test
+*.out
+*.prof
+*.pprof
+
+# Local logs and environment
+*.log
+.env
+.env.*
+!.env.example
+
+# Local scratch data
+temp/
+/tmp/
+/work/

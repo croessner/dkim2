@@ -1,0 +1,4 @@
+interface:
+  display_name: "DKIM2 Security Testing"
+  short_description: "Reproducers, fuzzing, abuse cases"
+  default_prompt: "Use $dkim2-security-testing to plan or implement DKIM2 reproducer-first security and robustness tests."

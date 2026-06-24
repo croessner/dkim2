@@ -1,0 +1,8 @@
+go 1.26
+
+use (
+	./cmd/dkim2-milter
+	./cmd/dkim2ctl
+	./cmd/dkim2d
+	./lib
+)

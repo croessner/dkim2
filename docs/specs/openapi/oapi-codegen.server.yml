@@ -1,0 +1,6 @@
+package: generated
+generate:
+  strict-server: true
+  models: true
+output: ../../../cmd/dkim2d/internal/httpjson/generated/server.gen.go
+

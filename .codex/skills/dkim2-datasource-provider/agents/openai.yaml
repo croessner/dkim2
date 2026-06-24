@@ -1,0 +1,4 @@
+interface:
+  display_name: "DKIM2 Datasource Provider"
+  short_description: "Datasource, Valkey, LDAP, SQL boundaries"
+  default_prompt: "Use $dkim2-datasource-provider to design or review DKIM2 datasource and replay-store provider work."

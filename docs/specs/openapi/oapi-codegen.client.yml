@@ -1,0 +1,6 @@
+package: generated
+generate:
+  client: true
+  models: true
+output: ../../../cmd/dkim2ctl/internal/testclient/generated/client.gen.go
+

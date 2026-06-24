@@ -1,0 +1,4 @@
+interface:
+  display_name: "DKIM2 Review Audit"
+  short_description: "Reviewer and auditor pass for DKIM2"
+  default_prompt: "Use $dkim2-review-audit to review this DKIM2 change for correctness, regressions, tests, security, and policy compliance."

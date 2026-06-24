@@ -1,0 +1,4 @@
+interface:
+  display_name: "DKIM2 Milter Adapter"
+  short_description: "Milter EOM and SMTP adapter fidelity"
+  default_prompt: "Use $dkim2-milter-adapter to handle DKIM2 Milter adapter behavior, EOM flow, and SMTP message fidelity."

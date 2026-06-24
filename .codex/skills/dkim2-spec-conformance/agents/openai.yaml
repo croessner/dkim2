@@ -1,0 +1,4 @@
+interface:
+  display_name: "DKIM2 Spec Conformance"
+  short_description: "Draft/RFC fidelity for DKIM2 work"
+  default_prompt: "Use $dkim2-spec-conformance to keep this DKIM2 change faithful to the active draft and RFC behavior."

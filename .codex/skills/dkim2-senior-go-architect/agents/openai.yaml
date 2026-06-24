@@ -1,0 +1,4 @@
+interface:
+  display_name: "DKIM2 Senior Go Architect"
+  short_description: "Go architecture, OOP, DRY, boundaries"
+  default_prompt: "Use $dkim2-senior-go-architect to design this DKIM2 Go change with clean module boundaries and maintainable abstractions."
