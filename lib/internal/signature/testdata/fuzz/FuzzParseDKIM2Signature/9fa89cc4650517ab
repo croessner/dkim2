@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("i=1;m=1;t=0;mf=PC00X000X0B0Ln0+;rt=;d=0;s=0:0:0A00;")

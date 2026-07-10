@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("x_ext=private-token-value; X_Ext=again;")

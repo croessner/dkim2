@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("i=2; m=3; t=1000000000000; mf=PHNlbmRlckBleGFtcGxlLnRlc3Q+; rt=PHVzZXJAZXhhbXBsZS5uZXQ+; d=Example.ORG; s=selector1:ed25519-sha256:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqg==;")
