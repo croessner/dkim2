@@ -1,0 +1,19 @@
+{
+  "draft": "draft-ietf-dkim-dkim2-spec-04",
+  "headers_base64": "UmVjZWl2ZWQ6IGJ5IG14LmludmFsaWQNClJFVFVSTi1QQVRIOiA8c2VuZGVyQGV4YW1wbGUuaW52YWxpZD4NCkRlbGl2ZXJlZC1UbzogPHJlY2lwaWVudEBleGFtcGxlLmludmFsaWQ+DQpBdXRoZW50aWNhdGlvbi1SZXN1bHRzOiBteC5pbnZhbGlkOyBub25lDQpYLURlYnVnOiBzeW50aGV0aWMgdHJhY2UNCkRLSU0tU2lnbmF0dXJlOiB2PTE7IHN5bnRoZXRpYw0KQVJDLU1lc3NhZ2UtU2lnbmF0dXJlOiBpPTE7IHN5bnRoZXRpYw0KTWVzc2FnZS1JbnN0YW5jZTogbT0xOyBoPXN5bnRoZXRpYw0KREtJTTItU2lnbmF0dXJlOiBpPTE7IHM9c3ludGhldGljDQpTdWJqZWN0OgkgQWxwaGENCiAJQmV0YQkJIEdhbW1hIAkNCkZyb206IEV4YW1wbGUgU2VuZGVyIDxzZW5kZXJAZXhhbXBsZS5pbnZhbGlkPg0Kc3ViamVjdDogU2Vjb25kIFZhbHVlDQpFbXB0eToNCkFscGhhOiBvbmUNCkFMUEhBOiB0d28NCg==",
+  "canonical_base64": "YWxwaGE6dHdvDQphbHBoYTpvbmUNCmVtcHR5Og0KZnJvbTpFeGFtcGxlIFNlbmRlciA8c2VuZGVyQGV4YW1wbGUuaW52YWxpZD4NCnN1YmplY3Q6U2Vjb25kIFZhbHVlDQpzdWJqZWN0OkFscGhhIEJldGEgR2FtbWENCg==",
+  "sha256_base64": "OR2mEsVHq0e4pMoEsZvKAjNqtPVG2KdpOLrIq2ygz58=",
+  "included_fields": 6,
+  "excluded_fields": 9,
+  "excluded_counts": {
+    "received": 1,
+    "return_path": 1,
+    "delivered_to": 1,
+    "authentication_results": 1,
+    "x_header": 1,
+    "dkim_signature": 1,
+    "arc": 1,
+    "message_instance": 1,
+    "dkim2_signature": 1
+  }
+}
