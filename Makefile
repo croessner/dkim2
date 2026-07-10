@@ -19,21 +19,21 @@ fmt:
 
 .PHONY: test
 test:
-	@for module in $(MODULES); do \
+	@set -e; for module in $(MODULES); do \
 		echo "==> go test $$module/..."; \
 		(cd $$module && go test ./...); \
 	done
 
 .PHONY: race
 race:
-	@for module in $(MODULES); do \
+	@set -e; for module in $(MODULES); do \
 		echo "==> go test -race $$module/..."; \
 		(cd $$module && go test -race ./...); \
 	done
 
 .PHONY: vet
 vet:
-	@for module in $(MODULES); do \
+	@set -e; for module in $(MODULES); do \
 		echo "==> go vet $$module/..."; \
 		(cd $$module && go vet ./...); \
 	done
@@ -44,7 +44,7 @@ lint:
 
 .PHONY: govulncheck
 govulncheck:
-	@for module in $(MODULES); do \
+	@set -e; for module in $(MODULES); do \
 		echo "==> govulncheck $$module/..."; \
 		(cd $$module && govulncheck ./...); \
 	done
@@ -56,5 +56,4 @@ check-openapi:
 	@test -s docs/specs/openapi/oapi-codegen.client.yml
 
 .PHONY: guardrails
-guardrails: fmt vet lint test race check-openapi
-
+guardrails: fmt vet lint test race check-openapi govulncheck
