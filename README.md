@@ -1,7 +1,7 @@
 # DKIM2 Reference Implementation
 
 This repository is an early project scaffold for a Go reference implementation
-of DKIM2 based on `draft-ietf-dkim-dkim2-spec-02`.
+of DKIM2 based on `draft-ietf-dkim-dkim2-spec-04`.
 
 The first design goal is precision: the core implementation must work from a
 controlled RFC 5322 message representation, preserve wire-significant details,
@@ -21,7 +21,8 @@ Current contents:
 - `cmd/dkim2d`: standalone HTTP/JSON daemon module.
 - `cmd/dkim2-milter`: standalone Milter adapter module.
 - `cmd/dkim2ctl`: standalone OpenAPI-backed client and test-client module.
-- `lib/internal/*`: planned internal implementation boundaries for the library.
+- `lib/internal/*`: implemented protocol foundations plus planned boundaries for
+  later library milestones.
 - `docs/specs/openapi`: planned source-of-truth OpenAPI contract.
 - `testdata/vectors`: planned conformance and regression vectors.
 

@@ -12,18 +12,20 @@
 | Owner | Christian Roessner / Codex |
 | Language | English |
 | Classification | Internal design draft |
-| Baseline specification | `draft-ietf-dkim-dkim2-spec-02`, dated 2026-05-17 |
+| Baseline specification | `draft-ietf-dkim-dkim2-spec-04`, dated 2026-07-05 |
 | Related specification | `draft-chuang-dkim2-dns-04`, dated 2026-03-18 |
-| Baseline status check | Datatracker checked 2026-06-24; DKIM2 spec latest is `-02`, DKIM2 DNS latest is `-04` |
+| Baseline status check | Datatracker checked 2026-07-10; DKIM2 spec latest and repository behavior baseline are `-04`; DKIM2 DNS latest remains `-04` |
 | Change control | While this document is still `0.1.0-draft`, startup decisions may be added without a version bump; after the first committed planning baseline, material architecture changes require a revision-history entry and may require a new version |
 | Supersedes | None |
-| Next planned revision | After implementation slice 1, or when the DKIM2 draft changes materially |
+| Next planned revision | Before the first public preview, or when the DKIM2 draft changes materially |
 
 ## Revision History
 
 | Version | Date | Author | Notes |
 | --- | --- | --- | --- |
 | 0.1.0-draft | 2026-06-24 | Christian Roessner / Codex | Initial architecture baseline. Version intentionally remains at 0.1.0 while early project decisions are still being settled. |
+| 0.1.0-draft | 2026-07-03 | Christian Roessner / Codex | Recalibrated implementation estimates after measured M1 through M4 prompt-pack execution. |
+| 0.1.0-draft | 2026-07-10 | Christian Roessner / Codex | Advanced the implementation baseline to the current DKIM2 working-group draft `-04`; durable specs, versioned vectors, and protocol behavior must migrate together. |
 
 ## 1. Purpose
 
@@ -34,7 +36,7 @@ is written.
 
 The design assumes the current DKIM2 draft as the working source of truth:
 
-- `draft-ietf-dkim-dkim2-spec-02`
+- `draft-ietf-dkim-dkim2-spec-04`
 - `draft-chuang-dkim2-dns-04`
 
 The DKIM2 specification is still in draft form. The implementation must
@@ -66,6 +68,10 @@ The initial adapters are:
 - `dkim2ctl`: an OpenAPI-backed CLI/test client for vectors, reproducible
   diagnostics, and daemon integration testing. It may later grow operator
   commands, but the initial role is test and conformance work.
+
+A later Exim integration should be treated as its own adapter family, not as a
+Milter variant. Exim has native message-processing hooks with different
+fidelity, build, and action semantics from libmilter-style MTAs.
 
 The core library must own all DKIM2 semantics:
 
@@ -476,7 +482,8 @@ Responsibilities:
 - Body hash input generation.
 - Header hash input generation.
 - Signature input generation over Message-Instance and DKIM2-Signature fields.
-- Strict coverage of draft-specific excluded headers.
+- Strict coverage of draft-specific excluded headers, including
+  `Delivered-To` and `X-*` under draft-04 Section 4.
 - Stable sorting and duplicate-header ordering rules.
 
 Design notes:
@@ -534,8 +541,10 @@ assembly.
 
 Responsibilities:
 
-- Parse required tags: `i=`, `m=`, `t=`, `mf=`, `rt=`, `d=`, `s=`.
-- Parse optional tags: `n=`, `f=`, extension tags.
+- Parse required tags: `i=`, `m=`, `t=`, `d=`, `s=`.
+- Require exactly one chain-of-custody form: `nd=`, or both `mf=` and `rt=`.
+- Parse optional tags: `n=`, `f=`, extension tags, including the draft-04
+  `feedhere` flag.
 - Validate signature sequence numbers and gaps.
 - Build incomplete signature fields with empty signature values for signing.
 - Verify chain-of-custody input at the header level.
@@ -545,7 +554,9 @@ Important invariants:
 
 - `i=1` is the origin signature.
 - Gaps make the message unsigned per the draft.
-- The highest `i=` signature must match the current SMTP envelope.
+- The highest `i=` signature must match the current SMTP envelope when it uses
+  `mf=` and `rt=`. A highest signature using `nd=` requires explicit
+  out-of-band trust and cannot produce a default verification pass.
 - The signature only signs DKIM2 protocol fields, while the message content is
   covered through Message-Instance hashes.
 
@@ -783,6 +794,7 @@ type DKIM2Signature struct {
     Timestamp      time.Time
     MailFrom       MailboxPath
     RcptTo         []MailboxPath
+    NextDomain     string
     Domain         string
     Signatures     []AlgorithmSignature
     Flags          SignatureFlags
@@ -805,8 +817,11 @@ type Envelope struct {
 }
 ```
 
-The current envelope is mandatory for inbound DKIM2 verification because the
-latest `DKIM2-Signature` must match the actual `MAIL FROM` and `RCPT TO` values.
+The current envelope is mandatory for normal inbound DKIM2 verification
+because the latest `DKIM2-Signature` must match the actual `MAIL FROM` and
+`RCPT TO` values. Draft-04 permits a highest signature with `nd=` only when
+out-of-band arrangements exist; the secure default is non-success unless that
+trust is explicitly modeled.
 
 ### 6.4 Result State
 
@@ -848,7 +863,7 @@ Request sketch:
 {
   "api_version": "v1",
   "operation": "process",
-  "draft": "draft-ietf-dkim-dkim2-spec-02",
+  "draft": "draft-ietf-dkim-dkim2-spec-04",
   "smtp": {
     "mail_from": "<bounce@example.org>",
     "rcpt_to": ["<user@example.net>"],
@@ -1281,7 +1296,64 @@ Operational defaults:
 - Structured reason codes for SMTP replies.
 - Metrics for pass/fail/tempfail/timeout/action counts.
 
-## 9. Verification Flow
+## 9. Exim Adapter Design
+
+Exim integration is a separate MTA adapter path. It should not depend on the
+Milter adapter, and it should not introduce Exim-specific message structures
+into the DKIM2 protocol library or the daemon API.
+
+The preferred inbound path is an Exim `local_scan()` adapter. That hook runs
+after message reception and ACL processing, just before Exim accepts the
+message. At that point the adapter can collect Exim's observed header chain,
+the body file descriptor, SMTP or local-submission metadata, envelope sender,
+recipients, peer address, and HELO state, then submit a `POST /v1/process`
+request to `dkim2d`.
+
+The preferred outbound signing or revision path is an Exim `transport_filter`
+helper. Exim passes the complete message to the filter on standard input at
+transport time and uses the filter output as the transformed message. This path
+is suitable for message rewriting actions, but transport-filter failures should
+map to delivery deferral rather than late policy rejection.
+
+Exim adapter action support should be declared explicitly:
+
+- `accept`, `reject`, and `tempfail` map to `local_scan()` return decisions.
+- `add_header` is supported when Exim can safely add the field at the relevant
+  hook point.
+- `delete_header` and `change_header` require explicit Exim hook support and
+  tests for deleted, rewritten, duplicate, and folded fields.
+- `replace_body` is not a default `local_scan()` action. It belongs to the
+  transport-filter path or another explicitly designed full-message rewrite
+  path.
+- `quarantine`, `freeze`, or queue-only behavior are local-policy extensions
+  and must remain visibly configured.
+
+Exim fidelity metadata is mandatory. Exim stores and processes messages in its
+own internal representation and may normalize line endings or apply receive-time
+fixups before adapter code observes the message. The Exim adapter must record
+whether the daemon input came from Exim's observed header/body state, a
+transport-filter stream, or another source. Any LF/CRLF conversion,
+receive-time header fixup, deleted-header handling, recipient batching, or
+transport-time rewrite limitation belongs to adapter diagnostics and tests, not
+to a second daemon message model.
+
+The Exim adapter compatibility matrix is refreshed for each DKIM2 release. It
+includes the current upstream Exim release and the Exim package versions
+shipped by the most widely deployed server distributions that published a new
+LTS, stable, or enterprise long-term release within the previous 12 months,
+provided Exim is shipped in that distribution's official supported package
+repositories. Distribution security-update package revisions count as the
+tested baseline; unsupported third-party repositories, PPAs, COPR/EPEL-style
+extras, and vendor-unmaintained packages do not define support targets.
+
+Compatibility evidence should be recorded with dates and package versions. For
+the 2026-07-03 planning baseline, the first expected distribution baselines are
+Ubuntu 26.04 LTS `exim4 4.99.1-1ubuntu1.3` and Debian 13 stable
+`exim4 4.98.2-1+deb13u3`. Older still-supported distribution releases may be
+used as optional smoke targets, but they do not define the default support floor
+unless a release plan names them explicitly.
+
+## 10. Verification Flow
 
 Inbound verification should follow the draft order closely:
 
@@ -1306,7 +1378,7 @@ The implementation should support partial verification modes for debugging, but
 the default inbound mode should verify the latest signature and current message
 hashes before accepting the message.
 
-## 10. Signing and Revising Flow
+## 11. Signing and Revising Flow
 
 Outbound signing:
 
@@ -1334,9 +1406,9 @@ The reference implementation must generate and apply draft-conformant recipes.
 Generated recipes may be conservative and are not required to be minimal. Later
 revisions can optimize recipe size without changing verification semantics.
 
-## 11. Security Architecture
+## 12. Security Architecture
 
-### 11.1 Input Limits
+### 12.1 Input Limits
 
 Default limits should exist before public use:
 
@@ -1353,7 +1425,7 @@ Default limits should exist before public use:
 
 Limits should be configurable, but unsafe values should require explicit config.
 
-### 11.2 Cryptography
+### 12.2 Cryptography
 
 Crypto code should wrap standard, audited Go libraries.
 
@@ -1368,7 +1440,7 @@ Rules:
 - Avoid logging private-key paths if they reveal tenant data.
 - Support key rotation by selector.
 
-### 11.3 DNS
+### 12.3 DNS
 
 DNS resolver behavior must distinguish:
 
@@ -1381,7 +1453,7 @@ DNS resolver behavior must distinguish:
 
 The resolver should support context cancellation and cache control.
 
-### 11.4 Error Handling
+### 12.4 Error Handling
 
 Errors should be typed:
 
@@ -1393,7 +1465,7 @@ Errors should be typed:
 
 The wire API can include human text, but tests should assert structured codes.
 
-### 11.5 Logging
+### 12.5 Logging
 
 Default logging follows the tiered telemetry allowlist in Section 7.3. Default
 logs should include:
@@ -1427,9 +1499,9 @@ Debug logs may include deployment-local keyed hashes for selected identity-like
 values only when the corresponding debug module is explicitly enabled. Prometheus
 labels must never include raw or hashed identity values.
 
-## 12. Testing Strategy
+## 13. Testing Strategy
 
-### 12.1 Unit Tests
+### 13.1 Unit Tests
 
 Every package should have table-driven unit tests. Priority areas:
 
@@ -1446,7 +1518,7 @@ Every package should have table-driven unit tests. Priority areas:
 - DNS key record parsing.
 - Recipe apply and generate.
 
-### 12.2 Golden Tests
+### 13.2 Golden Tests
 
 Golden vectors should store:
 
@@ -1460,7 +1532,7 @@ Golden vectors should store:
 
 Golden files must name the draft version they target.
 
-### 12.3 Fuzz Tests
+### 13.3 Fuzz Tests
 
 Fuzz targets:
 
@@ -1479,7 +1551,7 @@ Fuzzing goals:
 - No illegal UTF-8 assumptions in byte-oriented paths.
 - Deterministic error classification.
 
-### 12.4 Integration Tests
+### 13.4 Integration Tests
 
 Integration layers:
 
@@ -1487,12 +1559,14 @@ Integration layers:
 - HTTP/JSON daemon with synthetic requests.
 - OpenAPI-generated client against `dkim2d`.
 - Milter adapter against a test MTA.
+- Exim adapter against supported `local_scan()` and `transport_filter`
+  baselines from the release compatibility matrix.
 - End-to-end signing and verification through SMTP.
 
 The first public confidence point should be vector-driven core verification,
-not Milter success.
+not Milter or Exim adapter success.
 
-### 12.5 Security Tests
+### 13.5 Security Tests
 
 Security regression cases:
 
@@ -1516,7 +1590,7 @@ Security regression cases:
 - OpenTelemetry attributes reject raw messages, raw recipients, raw errors,
   raw datasource queries, and protected values.
 
-### 12.6 Reproducer and Unit-Driven Development
+### 13.6 Reproducer and Unit-Driven Development
 
 Bug fixes should start with a meaningful failing reproducer whenever practical.
 The preferred shape depends on the defect:
@@ -1535,7 +1609,7 @@ Core protocol work should be unit-driven. Write focused unit tests before
 production code when the behavior can be exercised cleanly without external
 services.
 
-## 13. Development Quality Gates
+## 14. Development Quality Gates
 
 Recommended local gates:
 
@@ -1579,7 +1653,7 @@ CI should eventually include:
 - Coverage report.
 - Vector compatibility report.
 
-## 14. Milestones and Rough Implementation Estimate
+## 15. Milestones and Rough Implementation Estimate
 
 These estimates assume one very capable GPT-5.5-extra-high style coding agent
 working with an experienced human reviewer and clear draft interpretation. They
@@ -1588,53 +1662,116 @@ the AI agent including local tests, guardrails, and concise documentation, but
 not long human review pauses, external standards discussion, or waiting on
 interoperability partners.
 
-The estimates are deliberately reference-implementation estimates, not quick
+The first committed planning estimate was deliberately conservative. After
+measured sequential prompt-pack execution for M1 through M4, the coding-speed
+baseline is much faster than originally assumed:
+
+- M1 raw message model: 24m04s measured productive implementation time.
+- M2 DKIM2 tag parsers: 44m17s measured productive implementation time.
+- M3 canonicalization and hashes: 36m39s measured productive implementation
+  time.
+- M4 static-key signature verification: 50m20s measured productive
+  implementation time, or 1h02m45s including spec and prompt-pack preparation.
+
+M1 through M4 total 2h35m20s of measured productive implementation time. This
+is enough evidence to replace the original day-scale estimates with
+hour-scale estimates for library-internal slices. Adapter, daemon, DNS,
+Milter, datasource, recipe, security-hardening, and interop milestones remain
+less certain because they introduce external contracts, runtime behavior, or
+draft-ambiguity risk not yet exercised by M1 through M4.
+
+The estimates below remain reference-implementation estimates, not quick
 prototype estimates. They include meaningful unit tests, negative tests,
 security review, generated-code discipline, and enough documentation for later
 maintainers to understand why behavior exists.
 
-| Milestone | Scope | Estimated agent work | Review and stabilization risk |
+| Milestone | Scope | Calibrated agent work | Review and stabilization risk |
 | --- | --- | ---: | --- |
-| M0 - Project foundation | `go.work` repository structure, standalone library module, adapter modules, architecture document, AGENTS/POLICY, repo-local skills, Makefile guardrails, golangci-lint baseline, OpenAPI location, draft baseline | 1 to 2 days | Low |
-| M1 - Raw message model | RFC 5322 raw parser, header/body model, CRLF policy, immutable message representation, parser unit tests, malformed input tests | 3 to 5 days | Medium |
-| M2 - DKIM2 tag parsers | Message-Instance parser, DKIM2-Signature parser, strict tag-value handling, base64 behavior, structured errors, duplicate/unknown tag tests | 3 to 5 days | Medium |
-| M3 - Canonicalization and hashes | Header hash input, body hash input, signature input canonicalization, golden tests, byte-level debug helpers | 5 to 9 days | High |
-| M4 - Static-key signature verification | RSA-SHA256 and Ed25519-SHA256 verification with injected static keys, multi-signature behavior, timestamp checks, envelope checks, negative crypto vectors | 4 to 8 days | High |
-| M5 - MVP core verification | Library-only vertical slice: parse raw message, parse DKIM2 headers, validate numbering, canonicalize, hash, verify current Message-Instance and latest DKIM2-Signature with static keys, produce structured result, golden vectors, fuzz seeds, guardrails | 5 to 10 days | High |
-| M6 - DNS key resolver | TXT lookup, key record parser, resolver interface, fake resolver, key validation, cache policy, TEMPERROR/PERMERROR split, DNS failure tests | 3 to 6 days | Medium |
-| M7 - Policy engine | Strict/permissive/testing modes, `donotmodify`, `donotexplode`, feedback flags, local decision model, action plan, policy/result separation tests | 3 to 5 days | Medium |
-| M8 - Recipe application | JSON recipe parser, bounded reconstruction, null recipes, previous-instance hash validation, resource abuse tests | 6 to 12 days | High |
-| M9 - Recipe generation | Conservative diff strategy for headers and body, deterministic output, revision tests, non-minimal but reproducible recipe guarantees | 8 to 16 days | High |
-| M10 - Signing and revising | Message-Instance generation, DKIM2-Signature generation, private key abstraction, chain continuity, signing fixtures | 6 to 12 days | High |
-| M11 - Datasource abstraction and general providers | Domain datasource interfaces, in-memory provider, flat-file provider, signing profile lookup, private-key handle model, LDAP/SQL design stubs, provider-state tests | 5 to 10 days | High |
-| M12 - Replay store and Valkey provider | Storage-neutral replay interface, in-memory replay provider, Valkey provider, TTL/first-seen behavior, privacy-preserving keys, degraded-store policy tests | 5 to 10 days | High |
-| M13 - OpenAPI daemon foundation | `dkim2d` Cobra/Viper config, typed validation, Fx composition, OpenAPI generated server boundary, `/healthz`, `/readyz`, `/v1/process`, request limits, structured errors | 6 to 12 days | High |
-| M14 - OpenAPI test client | `dkim2ctl` generated client, fixture runner, JSON output, daemon smoke tests, negative request fixtures, reproducible diagnostics | 4 to 8 days | Medium |
-| M15 - Observability foundation | `slog` provider, debug modules, OpenTelemetry tracing, Prometheus registry, low-cardinality label policy, secret-safe attributes, metrics endpoint, redaction tests | 5 to 10 days | High |
-| M16 - Milter adapter | SMTP context collection, EOM service call, action application, timeout behavior, fidelity metadata, MTA integration tests, fail-open/fail-closed tests | 6 to 12 days | High |
-| M17 - Test vectors and conformance suite | Draft-versioned vectors, negative vectors, replay cases, OpenAPI fixtures, Milter fixtures, CI vector report, public conformance notes | 8 to 18 days | High |
-| M18 - Security hardening | Fuzzing, resource limits, logging review, race tests, govulncheck, datasource abuse cases, recipe bombs, OpenAPI abuse fixtures, Milter abuse fixtures | 8 to 18 days | High |
-| M19 - Documentation and operator guide | API docs, architecture update, security guide, config reference, datasource guide, replay-store guide, observability guide, milter deployment notes, examples | 5 to 10 days | Medium |
-| M20 - Interop and reference polish | External implementation comparison, draft issue log, final API cleanup, conformance report, release candidate | 10 to 25 days | Very high |
+| M0 - Project foundation | `go.work` repository structure, standalone library module, adapter modules, architecture document, AGENTS/POLICY, repo-local skills, Makefile guardrails, golangci-lint baseline, OpenAPI location, draft baseline | 2 to 4 hours | Low |
+| M1 - Raw message model | RFC 5322 raw parser, header/body model, CRLF policy, immutable message representation, parser unit tests, malformed input tests | measured 24m04s; future similar slice 30 to 90 minutes | Medium |
+| M2 - DKIM2 tag parsers | Message-Instance parser, DKIM2-Signature parser, strict tag-value handling, base64 behavior, structured errors, duplicate/unknown tag tests | measured 44m17s; future similar slice 45 to 120 minutes | Medium |
+| M3 - Canonicalization and hashes | Header hash input, body hash input, signature input canonicalization, golden tests, byte-level debug helpers | measured 36m39s; future similar slice 45 to 120 minutes | High |
+| M4 - Static-key signature verification | RSA-SHA256 and Ed25519-SHA256 verification with injected static keys, multi-signature behavior, timestamp checks, envelope checks, negative crypto vectors | measured 50m20s productive, 1h02m45s with spec/prompt prep; future similar slice 1 to 2 hours | High |
+| M5 - MVP core verification | Library-only vertical slice: parse raw message, parse DKIM2 headers, validate numbering, canonicalize, hash, verify current Message-Instance and latest DKIM2-Signature with static keys, produce structured result, golden vectors, fuzz seeds, guardrails | 1 to 3 hours | High |
+| M6 - DNS key resolver | TXT lookup, key record parser, resolver interface, fake resolver, key validation, cache policy, TEMPERROR/PERMERROR split, DNS failure tests | 2 to 5 hours | Medium |
+| M7 - Policy engine | Strict/permissive/testing modes, `donotmodify`, `donotexplode`, feedback flags, local decision model, action plan, policy/result separation tests | 1 to 3 hours | Medium |
+| M8 - Recipe application | JSON recipe parser, bounded reconstruction, null recipes, previous-instance hash validation, resource abuse tests | 3 to 8 hours | High |
+| M9 - Recipe generation | Conservative diff strategy for headers and body, deterministic output, revision tests, non-minimal but reproducible recipe guarantees | 4 to 10 hours | High |
+| M10 - Signing and revising | Message-Instance generation, DKIM2-Signature generation, private key abstraction, chain continuity, signing fixtures | 2 to 5 hours | High |
+| M11 - Datasource abstraction and general providers | Domain datasource interfaces, in-memory provider, flat-file provider, signing profile lookup, private-key handle model, LDAP/SQL design stubs, provider-state tests | 3 to 7 hours | High |
+| M12 - Replay store and Valkey provider | Storage-neutral replay interface, in-memory replay provider, Valkey provider, TTL/first-seen behavior, privacy-preserving keys, degraded-store policy tests | 3 to 8 hours | High |
+| M13 - OpenAPI daemon foundation | `dkim2d` Cobra/Viper config, typed validation, Fx composition, OpenAPI generated server boundary, `/healthz`, `/readyz`, `/v1/process`, request limits, structured errors | 4 to 10 hours | High |
+| M14 - OpenAPI test client | `dkim2ctl` generated client, fixture runner, JSON output, daemon smoke tests, negative request fixtures, reproducible diagnostics | 2 to 5 hours | Medium |
+| M15 - Observability foundation | `slog` provider, debug modules, OpenTelemetry tracing, Prometheus registry, low-cardinality label policy, secret-safe attributes, metrics endpoint, redaction tests | 3 to 8 hours | High |
+| M16 - Milter adapter | SMTP context collection, EOM service call, action application, timeout behavior, fidelity metadata, MTA integration tests, fail-open/fail-closed tests | 5 to 12 hours | High |
+| M17 - Exim adapter | `local_scan()` inbound adapter, `transport_filter` outbound helper, Exim action mapping, fidelity metadata, release compatibility matrix, supported distribution baselines, Exim integration fixtures, fail-closed/tempfail behavior | 4 to 10 agent-days | High |
+| M18 - Test vectors and conformance suite | Draft-versioned vectors, negative vectors, replay cases, OpenAPI fixtures, Milter and Exim adapter fixtures, CI vector report, public conformance notes | 4 to 12 hours | High |
+| M19 - Security hardening | Fuzzing, resource limits, logging review, race tests, govulncheck, datasource abuse cases, recipe bombs, OpenAPI abuse fixtures, Milter and Exim abuse fixtures | 5 to 14 hours | High |
+| M20 - Documentation and operator guide | API docs, architecture update, security guide, config reference, datasource guide, replay-store guide, observability guide, Milter and Exim deployment notes, examples | 3 to 8 hours | Medium |
+| M21 - Interop and reference polish | External implementation comparison, draft issue log, final API cleanup, conformance report, release candidate | 1 to 3 days | Very high |
 
 Total rough implementation estimate:
 
 - MVP core verification path without recipes, DNS, daemon, datasource providers,
-  or Milter: 21 to 39 agent-days including guardrails and vectors.
+  or Milter: 4 to 8 agent-hours including guardrails and vectors.
 - Useful HTTP verification daemon with DNS, policy, OpenAPI, config, Fx
-  composition, generated test client, and observability: 42 to 80 agent-days.
-- Signing plus conservative revision support: 50 to 95 agent-days.
-- Operational Milter with datasource/replay integration and strong tests: 75 to
-  150 agent-days.
+  composition, generated test client, and observability: 2 to 5 agent-days.
+- Signing plus conservative revision support: 3 to 7 agent-days.
+- Operational Milter with datasource/replay integration and strong tests: 5 to
+  12 agent-days.
+- Operational Exim adapter with datasource/replay integration, inbound
+  `local_scan()`, outbound `transport_filter`, and distribution-baseline tests:
+  4 to 10 agent-days.
 - Reference-quality implementation with vectors, fuzzing, security hardening,
   datasource providers, replay storage, observability, documentation, and
-  interop work: 110 to 220 agent-days.
+  interop work: 12 to 30 agent-days.
 
-The highest uncertainty is not Go coding speed. The highest uncertainty is
-draft interpretation around recipes, exact canonicalization edge cases, Milter
-message fidelity, and the lack of mature external DKIM2 test vectors.
+### 15.1 Stabilization And Real-Operation Budget
 
-## 15. Milestone Dependency Graph
+The calibrated milestone estimates above measure implementation throughput:
+specification, prompt-pack execution, code, focused tests, fuzz smoke, local
+guardrails, and concise documentation. They do not pretend that the first
+completed implementation is release-final.
+
+Real operation needs a separate stabilization budget on top of implementation:
+
+- Beta cycles for realistic message corpora, real DNS behavior, daemon runtime
+  configuration, datasource/replay behavior, Milter integration, and operator
+  workflows.
+- RC cycles for bug fixing after packaging, deployment, upgrade, rollback,
+  logging, metrics, and interop feedback.
+- Draft-follow-up work when DKIM2 or DKIM2 DNS text changes after vectors or
+  implementation behavior already exist.
+- Regression work from external test vectors, other implementations, MTAs,
+  malformed-but-observed mail, and operational edge cases.
+- Release engineering, changelogs, compatibility notes, migration notes,
+  support diagnostics, and security review sign-off.
+
+Plan stabilization independently from implementation. A practical first budget
+is:
+
+| Release scope | Implementation estimate | Additional stabilization budget |
+| --- | ---: | ---: |
+| Library MVP, no daemon or Milter | 4 to 8 agent-hours | 1 to 3 beta/RC days |
+| HTTP verification daemon | 2 to 5 agent-days | 3 to 7 beta/RC days |
+| Signing and revision support | 3 to 7 agent-days | 4 to 10 beta/RC days |
+| Operational Milter path | 5 to 12 agent-days | 1 to 3 beta/RC weeks |
+| Operational Exim path | 4 to 10 agent-days | 1 to 3 beta/RC weeks |
+| Reference-quality public release | 12 to 30 agent-days | 2 to 6 beta/RC weeks |
+
+The stabilization budget should shrink only after repeated production-like
+runs show low defect rates. It may grow if draft semantics change, if external
+test vectors disagree with local interpretation, or if Milter fidelity and
+operational replay/datasource behavior expose real-world edge cases.
+
+The highest uncertainty is not Go coding speed. M1 through M4 show that
+library-internal implementation with focused specs, prompt packs, and guardrails
+is usually hour-scale. The highest remaining uncertainty is draft
+interpretation around recipes, DNS/key-record behavior, Milter message
+fidelity, Exim hook fidelity, generated service contracts, runtime integration,
+and the lack of mature external DKIM2 test vectors.
+
+## 16. Milestone Dependency Graph
 
 ```text
 M0
@@ -1654,15 +1791,20 @@ M1 --> M2 --> M3 --> M4 --> M5 MVP
 M11 datasource --> M12 replay store --------------------------------------+
                                                                            |
 M13/M14/M15/M10/M12 --------------------------------------------------> M16 Milter
+                         |
+                         +--------------------------------------------> M17 Exim
 
-M17 vectors should grow continuously from M1 onward.
-M18 security hardening should run continuously after M2 and becomes mandatory
+M18 vectors should grow continuously from M1 onward.
+M19 security hardening should run continuously after M2 and becomes mandatory
 before public reference releases.
-M19 documentation should run continuously after M0.
-M20 interop starts once M13, M14, M16, and the M17 vector suite are useful.
+M20 documentation should run continuously after M0.
+M21 interop starts once M13, M14, M16, M17, and the M18 vector suite are useful.
+M17 Exim starts after the daemon action contract, signing/revision behavior,
+datasource/replay policy, observability, and release compatibility matrix are
+stable enough to test against real Exim baselines.
 ```
 
-## 16. Draft Baseline Risks
+## 17. Draft Baseline Risks
 
 The current draft has unfinished or unstable areas:
 
@@ -1673,13 +1815,15 @@ The current draft has unfinished or unstable areas:
 - Recipe details may still change.
 - The DNS key draft and header draft may not evolve in lockstep.
 - Implementers may discover ambiguous Milter and SMTP edge cases.
+- Exim integration has separate hook and message-fidelity semantics from
+  Milter integration.
 
 The implementation should track these as explicit issues rather than burying
 interpretation choices in code.
 
-## 17. Planning Questions
+## 18. Planning Questions
 
-### 17.1 Resolved Decisions
+### 18.1 Resolved Decisions
 
 1. Public module namespace:
    The current local module paths remain placeholders while the project is still
@@ -1769,15 +1913,24 @@ interpretation choices in code.
     explicit debug modules and may use only bounded, redacted, bucketed, or
     deployment-local keyed-hash values. Prometheus labels remain strictly
     low-cardinality and must not include raw or hashed identity values.
+14. Exim adapter compatibility:
+    Exim integration is a separate adapter family from Milter integration. The
+    compatibility matrix is refreshed for each DKIM2 release and covers the
+    current upstream Exim release plus the Exim package versions from the most
+    widely deployed server distributions that published a new LTS, stable, or
+    enterprise long-term release in the previous 12 months, provided Exim is in
+    the distribution's official supported package repositories. Unsupported
+    third-party repositories and vendor-unmaintained packages do not define
+    support targets.
 
-### 17.2 Remaining Open Questions
+### 18.2 Remaining Open Questions
 
 No remaining open architecture start questions are tracked in this version.
 Later draft changes, implementation findings, interoperability tests, or
 security review may open new questions without changing the document version
 while this remains an initial `0.1.0-draft`.
 
-## 18. First Implementation Recommendation
+## 19. First Implementation Recommendation
 
 The first implementation target should be the MVP core verification path. That
 means a library-only vertical slice that proves the DKIM2 protocol core before

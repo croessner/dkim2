@@ -5,7 +5,7 @@ implementation. Keep `go.work`, every module `go.mod`, generated code,
 documentation, CI, and local guardrails aligned with Go 1.26 whenever toolchain
 details change.
 
-The implementation baseline is `draft-ietf-dkim-dkim2-spec-02` plus
+The implementation baseline is `draft-ietf-dkim-dkim2-spec-04` plus
 `draft-chuang-dkim2-dns-04`. Treat the draft version as part of the behavior
 under test. If a later draft changes semantics, update durable documentation and
 test vectors before changing protocol behavior.
