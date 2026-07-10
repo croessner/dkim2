@@ -1,0 +1,430 @@
+package verify
+
+import "slices"
+
+// CheckKind identifies one verification check dimension.
+type CheckKind string
+
+const (
+	// CheckKindBodyHash identifies current body hash validation.
+	CheckKindBodyHash CheckKind = "body_hash"
+	// CheckKindHeaderHash identifies current header hash validation.
+	CheckKindHeaderHash CheckKind = "header_hash"
+	// CheckKindSignature identifies cryptographic signature validation.
+	CheckKindSignature CheckKind = "signature"
+	// CheckKindKey identifies static public-key lookup and validation.
+	CheckKindKey CheckKind = "key"
+	// CheckKindTimestamp identifies local timestamp policy validation.
+	CheckKindTimestamp CheckKind = "timestamp"
+	// CheckKindEnvelope identifies current SMTP envelope validation.
+	CheckKindEnvelope CheckKind = "envelope"
+	// CheckKindDomainAlignment identifies d= alignment with the signed MAIL FROM domain.
+	CheckKindDomainAlignment CheckKind = "domain_alignment"
+	// CheckKindNextDomain identifies nd= chain-of-custody validation.
+	CheckKindNextDomain CheckKind = "next_domain"
+)
+
+// CheckStatus records a stable per-check outcome.
+type CheckStatus string
+
+const (
+	// CheckStatusNotEvaluated records a check that has not run.
+	CheckStatusNotEvaluated CheckStatus = "not_evaluated"
+	// CheckStatusPass records a successful check.
+	CheckStatusPass CheckStatus = "pass"
+	// CheckStatusFail records a failed check.
+	CheckStatusFail CheckStatus = "fail"
+	// CheckStatusUnsupported records a non-success unsupported state.
+	CheckStatusUnsupported CheckStatus = "unsupported"
+	// CheckStatusSkipped records an explicit skipped check.
+	CheckStatusSkipped CheckStatus = "skipped"
+	// CheckStatusNotApplicable records a check outside the selected target.
+	CheckStatusNotApplicable CheckStatus = "not_applicable"
+	// CheckStatusIndeterminate records a bounded non-success unknown state.
+	CheckStatusIndeterminate CheckStatus = "indeterminate"
+)
+
+// SignatureSetStatus records one s= selector:algorithm:signature outcome.
+type SignatureSetStatus string
+
+const (
+	// SignatureSetStatusNotChecked records a signature set not yet evaluated.
+	SignatureSetStatusNotChecked SignatureSetStatus = "not_checked"
+	// SignatureSetStatusPass records a cryptographic pass for one signature set.
+	SignatureSetStatusPass SignatureSetStatus = "pass"
+	// SignatureSetStatusFail records a cryptographic failure for one signature set.
+	SignatureSetStatusFail SignatureSetStatus = "fail"
+	// SignatureSetStatusUnsupportedAlgorithm records a known non-success unsupported algorithm.
+	SignatureSetStatusUnsupportedAlgorithm SignatureSetStatus = "unsupported_algorithm"
+	// SignatureSetStatusDisabledAlgorithm records an algorithm disabled by local policy.
+	SignatureSetStatusDisabledAlgorithm SignatureSetStatus = "disabled_algorithm"
+	// SignatureSetStatusMissingKey records a missing public key.
+	SignatureSetStatusMissingKey SignatureSetStatus = "missing_key"
+	// SignatureSetStatusInvalidKey records public key material rejected before crypto use.
+	SignatureSetStatusInvalidKey SignatureSetStatus = "invalid_key"
+	// SignatureSetStatusAmbiguousKey records multiple matching public keys.
+	SignatureSetStatusAmbiguousKey SignatureSetStatus = "ambiguous_key"
+	// SignatureSetStatusWrongKeyType records a public key type mismatch.
+	SignatureSetStatusWrongKeyType SignatureSetStatus = "wrong_key_type"
+	// SignatureSetStatusKeyPolicyRejected records a key rejected by verifier policy.
+	SignatureSetStatusKeyPolicyRejected SignatureSetStatus = "key_policy_rejected"
+	// SignatureSetStatusProviderError records a bounded key-provider failure.
+	SignatureSetStatusProviderError SignatureSetStatus = "provider_error"
+)
+
+// KeyStatus records provider and key validation state.
+type KeyStatus string
+
+const (
+	// KeyStatusNotChecked records a key lookup that has not run.
+	KeyStatusNotChecked KeyStatus = "not_checked"
+	// KeyStatusFound records a key lookup that returned usable material.
+	KeyStatusFound KeyStatus = "found"
+	// KeyStatusMissing records absent key material.
+	KeyStatusMissing KeyStatus = "missing"
+	// KeyStatusInvalid records malformed or mismatched key material.
+	KeyStatusInvalid KeyStatus = "invalid"
+	// KeyStatusAmbiguous records multiple matching key records.
+	KeyStatusAmbiguous KeyStatus = "ambiguous"
+	// KeyStatusWrongType records key material with the wrong Go public-key type.
+	KeyStatusWrongType KeyStatus = "wrong_type"
+	// KeyStatusPolicyRejected records a key or algorithm rejected by local policy.
+	KeyStatusPolicyRejected KeyStatus = "policy_rejected"
+	// KeyStatusUnsupportedAlgorithm records an unsupported algorithm lookup.
+	KeyStatusUnsupportedAlgorithm KeyStatus = "unsupported_algorithm"
+	// KeyStatusDisabledAlgorithm records a disabled algorithm lookup.
+	KeyStatusDisabledAlgorithm KeyStatus = "disabled_algorithm"
+	// KeyStatusProviderError records an internal provider failure.
+	KeyStatusProviderError KeyStatus = "provider_error"
+)
+
+// TimestampStatus records local t= policy state.
+type TimestampStatus string
+
+const (
+	// TimestampStatusNotChecked records a timestamp check that has not run.
+	TimestampStatusNotChecked TimestampStatus = "not_checked"
+	// TimestampStatusPass records an accepted timestamp.
+	TimestampStatusPass TimestampStatus = "pass"
+	// TimestampStatusFuture records a timestamp beyond future tolerance.
+	TimestampStatusFuture TimestampStatus = "future"
+	// TimestampStatusExpired records a timestamp older than maximum age.
+	TimestampStatusExpired TimestampStatus = "expired"
+	// TimestampStatusNoMaxAge records an explicitly disabled maximum-age cap.
+	TimestampStatusNoMaxAge TimestampStatus = "no_max_age"
+	// TimestampStatusNotApplicable records a timestamp check outside the target semantics.
+	TimestampStatusNotApplicable TimestampStatus = "not_applicable"
+	// TimestampStatusInvalid records malformed parser-owned timestamp state.
+	TimestampStatusInvalid TimestampStatus = "invalid"
+)
+
+// EnvelopeStatus records current SMTP envelope match state.
+type EnvelopeStatus string
+
+const (
+	// EnvelopeStatusNotChecked records an envelope check that has not run.
+	EnvelopeStatusNotChecked EnvelopeStatus = "not_checked"
+	// EnvelopeStatusPass records a draft-conformant current-envelope match.
+	EnvelopeStatusPass EnvelopeStatus = "pass"
+	// EnvelopeStatusMissing records absent required envelope evidence.
+	EnvelopeStatusMissing EnvelopeStatus = "missing"
+	// EnvelopeStatusMismatch records byte-level envelope mismatch.
+	EnvelopeStatusMismatch EnvelopeStatus = "mismatch"
+	// EnvelopeStatusInvalid records malformed parser-owned or request-owned path state.
+	EnvelopeStatusInvalid EnvelopeStatus = "invalid"
+	// EnvelopeStatusReversePathMismatch records a reverse-path byte mismatch.
+	EnvelopeStatusReversePathMismatch EnvelopeStatus = "reverse_path_mismatch"
+	// EnvelopeStatusRecipientValueMismatch records a current forward path absent from the signed recipient set.
+	EnvelopeStatusRecipientValueMismatch EnvelopeStatus = "recipient_value_mismatch"
+	// EnvelopeStatusNotApplicable records a disabled or non-current target check.
+	EnvelopeStatusNotApplicable EnvelopeStatus = "not_applicable"
+)
+
+// DomainAlignmentStatus records signing-domain alignment with the signed reverse-path.
+type DomainAlignmentStatus string
+
+const (
+	// DomainAlignmentStatusNotChecked records a domain alignment check that has not run.
+	DomainAlignmentStatusNotChecked DomainAlignmentStatus = "not_checked"
+	// DomainAlignmentStatusPass records exact or label-boundary suffix alignment.
+	DomainAlignmentStatusPass DomainAlignmentStatus = "pass"
+	// DomainAlignmentStatusMismatch records a non-aligned signing domain.
+	DomainAlignmentStatusMismatch DomainAlignmentStatus = "mismatch"
+	// DomainAlignmentStatusInvalid records malformed signed reverse-path domain evidence.
+	DomainAlignmentStatusInvalid DomainAlignmentStatus = "invalid"
+	// DomainAlignmentStatusNotApplicable records the null reverse-path exception.
+	DomainAlignmentStatusNotApplicable DomainAlignmentStatus = "not_applicable"
+)
+
+// NextDomainStatus records nd= chain validation and OOB state.
+type NextDomainStatus string
+
+const (
+	// NextDomainStatusNotChecked records an nd= check that has not run.
+	NextDomainStatusNotChecked NextDomainStatus = "not_checked"
+	// NextDomainStatusPass records exact canonical nd= to next d= matching.
+	NextDomainStatusPass NextDomainStatus = "pass"
+	// NextDomainStatusMismatch records a non-matching next signing domain.
+	NextDomainStatusMismatch NextDomainStatus = "mismatch"
+	// NextDomainStatusMissingNext records an absent immediate successor signature.
+	NextDomainStatusMissingNext NextDomainStatus = "missing_next"
+	// NextDomainStatusOutOfBandRequired records terminal nd= state requiring OOB acceptance.
+	NextDomainStatusOutOfBandRequired NextDomainStatus = "out_of_band_required"
+	// NextDomainStatusNotApplicable records a signature without nd=.
+	NextDomainStatusNotApplicable NextDomainStatus = "not_applicable"
+)
+
+// HashStatus records body or header hash validation state.
+type HashStatus string
+
+const (
+	// HashStatusNotChecked records a hash check that has not run.
+	HashStatusNotChecked HashStatus = "not_checked"
+	// HashStatusPass records a matching sha256 digest.
+	HashStatusPass HashStatus = "pass"
+	// HashStatusMismatch records a non-matching sha256 digest.
+	HashStatusMismatch HashStatus = "mismatch"
+	// HashStatusMissingSHA256 records absence of the required sha256 hash set.
+	HashStatusMissingSHA256 HashStatus = "missing_sha256"
+	// HashStatusUnsupported records only unsupported hash algorithms.
+	HashStatusUnsupported HashStatus = "unsupported"
+	// HashStatusInvalid records malformed parser-owned hash state.
+	HashStatusInvalid HashStatus = "invalid"
+)
+
+// TargetStatus records the overall target verification state.
+type TargetStatus string
+
+const (
+	// TargetStatusNotEvaluated records a target that has not run.
+	TargetStatusNotEvaluated TargetStatus = "not_evaluated"
+	// TargetStatusPass records target success for evaluated checks.
+	TargetStatusPass TargetStatus = "pass"
+	// TargetStatusFail records target failure.
+	TargetStatusFail TargetStatus = "fail"
+	// TargetStatusMixed records mixed per-signature-set outcomes.
+	TargetStatusMixed TargetStatus = "mixed"
+	// TargetStatusUnsupported records no checkable supported path.
+	TargetStatusUnsupported TargetStatus = "unsupported"
+	// TargetStatusIndeterminate records bounded non-success ambiguity.
+	TargetStatusIndeterminate TargetStatus = "indeterminate"
+)
+
+// Target identifies the selected DKIM2 signature and instance numbers.
+type Target struct {
+	// Sequence records the selected i= DKIM2-Signature value.
+	Sequence uint64
+	// InstanceNumber records the selected m= Message-Instance value.
+	InstanceNumber uint64
+}
+
+// CheckResult records one bounded verification check fact.
+type CheckResult struct {
+	// Kind records the verification check dimension.
+	Kind CheckKind
+	// Status records the check outcome.
+	Status CheckStatus
+	// Code records an optional stable error code.
+	Code ErrorCode
+	// Algorithm records an allowlisted algorithm name when relevant.
+	Algorithm Algorithm
+	// TimestampStatus records local timestamp policy detail when relevant.
+	TimestampStatus TimestampStatus
+	// EnvelopeStatus records current SMTP envelope detail when relevant.
+	EnvelopeStatus EnvelopeStatus
+	// DomainAlignmentStatus records bounded d= to mf= domain alignment detail.
+	DomainAlignmentStatus DomainAlignmentStatus
+	// NextDomainStatus records bounded nd= chain detail without domain values.
+	NextDomainStatus NextDomainStatus
+	// Target records bounded sequence and instance context.
+	Target Target
+}
+
+// SignatureSetResult records bounded facts for one signature set.
+type SignatureSetResult struct {
+	// Index records the zero-based s= set position.
+	Index int
+	// Algorithm records the signature algorithm name.
+	Algorithm Algorithm
+	// Status records the per-signature-set outcome.
+	Status SignatureSetStatus
+	// KeyStatus records associated key lookup and validation state.
+	KeyStatus KeyStatus
+}
+
+// Result stores immutable verification facts for later M5 mapping.
+type Result struct {
+	draft         string
+	target        Target
+	status        TargetStatus
+	checks        []CheckResult
+	signatureSets []SignatureSetResult
+}
+
+// NewResult constructs immutable verification result facts.
+func NewResult(target Target, status TargetStatus, checks []CheckResult, signatureSets []SignatureSetResult) Result {
+	return Result{
+		draft:         DraftBaseline,
+		target:        target,
+		status:        sanitizeTargetStatus(status),
+		checks:        cloneCheckResults(checks),
+		signatureSets: cloneSignatureSetResults(signatureSets),
+	}
+}
+
+// Draft returns the active DKIM2 draft baseline for this result.
+func (r Result) Draft() string {
+	if r.draft == "" {
+		return DraftBaseline
+	}
+
+	return r.draft
+}
+
+// Target returns selected target identifiers.
+func (r Result) Target() Target {
+	return r.target
+}
+
+// Status returns the overall target status.
+func (r Result) Status() TargetStatus {
+	return r.status
+}
+
+// Checks returns immutable per-check facts.
+func (r Result) Checks() []CheckResult {
+	return cloneCheckResults(r.checks)
+}
+
+// SignatureSets returns immutable per-signature-set facts.
+func (r Result) SignatureSets() []SignatureSetResult {
+	return cloneSignatureSetResults(r.signatureSets)
+}
+
+// Known reports whether status is part of the per-check vocabulary.
+func (s CheckStatus) Known() bool {
+	switch s {
+	case CheckStatusNotEvaluated, CheckStatusPass, CheckStatusFail, CheckStatusUnsupported, CheckStatusSkipped, CheckStatusNotApplicable, CheckStatusIndeterminate:
+		return true
+	default:
+		return false
+	}
+}
+
+// Known reports whether status is part of the per-signature-set vocabulary.
+func (s SignatureSetStatus) Known() bool {
+	switch s {
+	case SignatureSetStatusNotChecked, SignatureSetStatusPass, SignatureSetStatusFail, SignatureSetStatusUnsupportedAlgorithm, SignatureSetStatusDisabledAlgorithm, SignatureSetStatusMissingKey, SignatureSetStatusInvalidKey, SignatureSetStatusAmbiguousKey, SignatureSetStatusWrongKeyType, SignatureSetStatusKeyPolicyRejected, SignatureSetStatusProviderError:
+		return true
+	default:
+		return false
+	}
+}
+
+// Known reports whether status is part of the key-status vocabulary.
+func (s KeyStatus) Known() bool {
+	switch s {
+	case KeyStatusNotChecked, KeyStatusFound, KeyStatusMissing, KeyStatusInvalid, KeyStatusAmbiguous, KeyStatusWrongType, KeyStatusPolicyRejected, KeyStatusUnsupportedAlgorithm, KeyStatusDisabledAlgorithm, KeyStatusProviderError:
+		return true
+	default:
+		return false
+	}
+}
+
+// Known reports whether status is part of the timestamp-status vocabulary.
+func (s TimestampStatus) Known() bool {
+	switch s {
+	case TimestampStatusNotChecked, TimestampStatusPass, TimestampStatusFuture, TimestampStatusExpired, TimestampStatusNoMaxAge, TimestampStatusNotApplicable, TimestampStatusInvalid:
+		return true
+	default:
+		return false
+	}
+}
+
+// Known reports whether status is part of the envelope-status vocabulary.
+func (s EnvelopeStatus) Known() bool {
+	switch s {
+	case EnvelopeStatusNotChecked, EnvelopeStatusPass, EnvelopeStatusMissing, EnvelopeStatusMismatch, EnvelopeStatusInvalid, EnvelopeStatusReversePathMismatch, EnvelopeStatusRecipientValueMismatch, EnvelopeStatusNotApplicable:
+		return true
+	default:
+		return false
+	}
+}
+
+// Known reports whether status is part of the domain-alignment vocabulary.
+func (s DomainAlignmentStatus) Known() bool {
+	switch s {
+	case DomainAlignmentStatusNotChecked, DomainAlignmentStatusPass, DomainAlignmentStatusMismatch, DomainAlignmentStatusInvalid, DomainAlignmentStatusNotApplicable:
+		return true
+	default:
+		return false
+	}
+}
+
+// Known reports whether status is part of the next-domain vocabulary.
+func (s NextDomainStatus) Known() bool {
+	switch s {
+	case NextDomainStatusNotChecked, NextDomainStatusPass, NextDomainStatusMismatch, NextDomainStatusMissingNext, NextDomainStatusOutOfBandRequired, NextDomainStatusNotApplicable:
+		return true
+	default:
+		return false
+	}
+}
+
+// Known reports whether status is part of the hash-status vocabulary.
+func (s HashStatus) Known() bool {
+	switch s {
+	case HashStatusNotChecked, HashStatusPass, HashStatusMismatch, HashStatusMissingSHA256, HashStatusUnsupported, HashStatusInvalid:
+		return true
+	default:
+		return false
+	}
+}
+
+// Known reports whether status is part of the overall target vocabulary.
+func (s TargetStatus) Known() bool {
+	switch s {
+	case TargetStatusNotEvaluated, TargetStatusPass, TargetStatusFail, TargetStatusMixed, TargetStatusUnsupported, TargetStatusIndeterminate:
+		return true
+	default:
+		return false
+	}
+}
+
+// cloneCheckResults returns immutable copies of check facts.
+func cloneCheckResults(input []CheckResult) []CheckResult {
+	cloned := slices.Clone(input)
+	for i := range cloned {
+		cloned[i].Algorithm = sanitizeResultAlgorithm(cloned[i].Algorithm)
+	}
+
+	return cloned
+}
+
+// cloneSignatureSetResults returns immutable copies of signature-set facts.
+func cloneSignatureSetResults(input []SignatureSetResult) []SignatureSetResult {
+	cloned := slices.Clone(input)
+	for i := range cloned {
+		cloned[i].Algorithm = sanitizeResultAlgorithm(cloned[i].Algorithm)
+	}
+
+	return cloned
+}
+
+// sanitizeResultAlgorithm maps unrecognized result tokens to a fixed non-secret value.
+func sanitizeResultAlgorithm(algorithm Algorithm) Algorithm {
+	if algorithm == "" || knownAlgorithm(algorithm) {
+		return algorithm
+	}
+
+	return AlgorithmUnknown
+}
+
+// sanitizeTargetStatus falls back to a non-success status for unknown values.
+func sanitizeTargetStatus(status TargetStatus) TargetStatus {
+	if status.Known() {
+		return status
+	}
+
+	return TargetStatusIndeterminate
+}
