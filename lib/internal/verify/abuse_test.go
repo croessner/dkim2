@@ -14,6 +14,7 @@ func TestVerifierHandlesManySignatureSetsAtLimit(t *testing.T) {
 
 	fixture := newDeterministicRSAVerificationFixture(t)
 	verifier := mustVerifierForFixtureWithOptions(t, fixture, WithLimits(Limits{
+		MaxInstanceHashSets:   defaultMaxSignatureSets,
 		MaxSignatureSets:      testSignatureSetLimit,
 		MaxEnvelopeRecipients: defaultMaxEnvelopeRecipients,
 	}))
@@ -41,11 +42,8 @@ func TestVerifierHandlesManySignatureSetsAtLimit(t *testing.T) {
 		t.Fatalf("over-limit fixture parse error = %v", err)
 	}
 	result, err = verifier.Verify(context.Background(), Request{Message: overLimit.message, Envelope: matchingEnvelope()})
-	if err != nil {
-		t.Fatalf("Verify() over limit error = %v", err)
-	}
-	if result.Status() != TargetStatusFail || !hasCheckCode(result, CheckKindSignature, CheckStatusFail, ErrorCodeLimitExceeded, "", "") {
-		t.Fatalf("result = %q checks=%#v, want typed verifier limit failure", result.Status(), result.Checks())
+	if !IsErrorCode(err, ErrorCodeLimitExceeded) || result.Status() != "" {
+		t.Fatalf("result/error = %q/%v, want pre-evaluation typed limit failure", result.Status(), err)
 	}
 }
 
@@ -124,6 +122,7 @@ func TestVerifierTimestampBoundaries(t *testing.T) {
 func TestVerifierBoundsEnvelopeRequestShape(t *testing.T) {
 	fixture := newDeterministicRSAVerificationFixture(t)
 	verifier := mustVerifierForFixtureWithOptions(t, fixture, WithLimits(Limits{
+		MaxInstanceHashSets:   defaultMaxSignatureSets,
 		MaxSignatureSets:      defaultMaxSignatureSets,
 		MaxEnvelopeRecipients: 1,
 	}))

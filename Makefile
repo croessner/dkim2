@@ -40,7 +40,10 @@ vet:
 
 .PHONY: lint
 lint:
-	@golangci-lint run ./lib/... ./cmd/dkim2d/... ./cmd/dkim2-milter/... ./cmd/dkim2ctl/...
+	@set -e; for module in $(MODULES); do \
+		echo "==> golangci-lint $$module/..."; \
+		(cd $$module && golangci-lint run ./...); \
+	done
 
 .PHONY: govulncheck
 govulncheck:

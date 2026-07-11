@@ -89,8 +89,8 @@ func TestVerifierFailsClosedForDuplicateTargets(t *testing.T) {
 	message := mustParseVerificationMessage(t, raw)
 
 	_, err := verifier.Verify(context.Background(), Request{Message: message, Envelope: matchingEnvelope()})
-	if !IsErrorCode(err, ErrorCodeMalformedState) {
-		t.Fatalf("Verify() error = %v, want malformed duplicate target", err)
+	if !IsErrorCode(err, ErrorCodeSequenceInvalid) {
+		t.Fatalf("Verify() error = %v, want typed invalid sequence", err)
 	}
 }
 

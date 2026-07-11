@@ -139,7 +139,7 @@ func (s Signature) Nonce() ([]byte, bool) {
 	return bytes.Clone(s.nonce), true
 }
 
-// HeaderIndex returns the M1 raw header occurrence index.
+// HeaderIndex returns the raw header occurrence index.
 func (s Signature) HeaderIndex() int {
 	return s.headerIndex
 }

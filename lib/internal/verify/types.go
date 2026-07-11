@@ -41,7 +41,7 @@ type KeyMetadata struct {
 
 // Request carries current-message verification input for later coordination.
 type Request struct {
-	// Message is the M1 parser-owned RFC 5322 message.
+	// Message is the parser-owned RFC 5322 message.
 	Message rawmsg.Message
 	// Envelope carries current SMTP envelope evidence.
 	Envelope Envelope

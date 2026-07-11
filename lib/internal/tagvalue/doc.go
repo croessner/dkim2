@@ -4,8 +4,8 @@
 // FWS, and permits an optional final semicolon.
 // ScanTerminated owns the stricter draft-ietf-dkim-dkim2-spec-04 header-field
 // rule that every tag has a semicolon terminator and tag names are matched
-// case-insensitively after M1 unfolding. Both split semicolon-separated tag
-// specifications, preserve case-sensitive values, and reject ambiguous or
+// case-insensitively after raw-header unfolding. Both split semicolon-separated
+// tag specifications, preserve case-sensitive values, and reject ambiguous or
 // duplicated tags before semantic parsers run.
 // It also owns strict DKIM2 base64string parsing: space and tab FWS are
 // stripped, standard RFC 4648 padding is required, non-canonical pad bits fail,

@@ -57,7 +57,7 @@ func (m MessageInstance) Number() uint64 {
 	return m.number
 }
 
-// HeaderIndex returns the M1 raw header occurrence index.
+// HeaderIndex returns the raw header occurrence index.
 func (m MessageInstance) HeaderIndex() int {
 	return m.headerIndex
 }

@@ -12,15 +12,16 @@ import (
 )
 
 type signatureEvaluation struct {
-	checks  []CheckResult
-	sets    []SignatureSetResult
-	pass    int
-	fail    int
-	other   int
-	ignored int
+	checks    []CheckResult
+	sets      []SignatureSetResult
+	pass      int
+	fail      int
+	other     int
+	temporary int
+	ignored   int
 }
 
-// signatureInputDigest calculates SHA-256 over M3 Section 9.6 input bytes.
+// signatureInputDigest calculates SHA-256 over Section 9.6 input bytes.
 func signatureInputDigest(canonicalizer canonical.Canonicalizer, message rawmsg.Message, target Target) ([]byte, error) {
 	signatureInput, err := canonicalizer.SignatureInput(canonical.SignatureInputSelection{
 		Headers:        message.Headers(),
@@ -63,8 +64,10 @@ func (v Verifier) evaluateSignatureSets(ctx context.Context, targetSignature sig
 		switch setResult.Status {
 		case SignatureSetStatusPass:
 			evaluation.pass++
-		case SignatureSetStatusFail, SignatureSetStatusInvalidKey, SignatureSetStatusWrongKeyType, SignatureSetStatusKeyPolicyRejected, SignatureSetStatusProviderError, SignatureSetStatusAmbiguousKey:
+		case SignatureSetStatusFail, SignatureSetStatusInvalidKey, SignatureSetStatusWrongKeyType, SignatureSetStatusKeyPolicyRejected, SignatureSetStatusProviderError, SignatureSetStatusProviderPermanent, SignatureSetStatusProviderContract, SignatureSetStatusAmbiguousKey:
 			evaluation.fail++
+		case SignatureSetStatusProviderTemporary:
+			evaluation.temporary++
 		case SignatureSetStatusUnsupportedAlgorithm:
 			evaluation.ignored++
 		default:
@@ -109,9 +112,21 @@ func (v Verifier) evaluateSignatureSet(ctx context.Context, targetSignature sign
 
 		return result
 	}
-	if key.Algorithm != algorithm || key.Metadata.Status != KeyStatusFound {
+	if key.Algorithm != algorithm {
 		result.Status = SignatureSetStatusInvalidKey
 		result.KeyStatus = KeyStatusInvalid
+
+		return result
+	}
+	if key.Metadata.Status != KeyStatusFound {
+		switch key.Metadata.Status {
+		case KeyStatusMissing, KeyStatusInvalid, KeyStatusAmbiguous:
+			result.KeyStatus = key.Metadata.Status
+			result.Status = signatureSetStatusFromKeyStatus(key.Metadata.Status)
+		default:
+			result.KeyStatus = KeyStatusInvalid
+			result.Status = SignatureSetStatusInvalidKey
+		}
 
 		return result
 	}
@@ -162,6 +177,14 @@ func verifySignatureDigest(algorithm Algorithm, material any, digest []byte, sig
 
 // signatureSetStatusFromKeyError maps key errors into signature-set facts.
 func signatureSetStatusFromKeyError(err error, status KeyStatus) (SignatureSetStatus, KeyStatus) {
+	switch ProviderFailureClassOf(err) {
+	case ProviderFailureTemporary:
+		return SignatureSetStatusProviderTemporary, KeyStatusProviderTemporary
+	case ProviderFailurePermanent:
+		return SignatureSetStatusProviderPermanent, KeyStatusProviderPermanent
+	case ProviderFailureContract:
+		return SignatureSetStatusProviderContract, KeyStatusProviderContract
+	}
 	switch {
 	case IsErrorCode(err, ErrorCodeMissingKey):
 		return SignatureSetStatusMissingKey, KeyStatusMissing
@@ -203,6 +226,12 @@ func signatureSetStatusFromKeyStatus(status KeyStatus) SignatureSetStatus {
 		return SignatureSetStatusDisabledAlgorithm
 	case KeyStatusInvalid:
 		return SignatureSetStatusInvalidKey
+	case KeyStatusProviderTemporary:
+		return SignatureSetStatusProviderTemporary
+	case KeyStatusProviderPermanent:
+		return SignatureSetStatusProviderPermanent
+	case KeyStatusProviderContract:
+		return SignatureSetStatusProviderContract
 	default:
 		return SignatureSetStatusProviderError
 	}
@@ -212,6 +241,7 @@ func signatureSetStatusFromKeyStatus(status KeyStatus) SignatureSetStatus {
 func signatureCheckResult(set SignatureSetResult, target Target) CheckResult {
 	status := CheckStatusFail
 	code := ErrorCodeSignatureMismatch
+	providerClass := ProviderFailureClass("")
 	switch set.Status {
 	case SignatureSetStatusPass:
 		status = CheckStatusPass
@@ -231,15 +261,26 @@ func signatureCheckResult(set SignatureSetResult, target Target) CheckResult {
 		code = ErrorCodeKeyPolicyRejected
 	case SignatureSetStatusProviderError:
 		code = ErrorCodeProviderError
+	case SignatureSetStatusProviderTemporary, SignatureSetStatusProviderPermanent, SignatureSetStatusProviderContract:
+		code = ErrorCodeProviderError
+		switch set.Status {
+		case SignatureSetStatusProviderTemporary:
+			providerClass = ProviderFailureTemporary
+		case SignatureSetStatusProviderPermanent:
+			providerClass = ProviderFailurePermanent
+		default:
+			providerClass = ProviderFailureContract
+		}
 	case SignatureSetStatusAmbiguousKey:
 		code = ErrorCodeAmbiguousKey
 	}
 
 	return CheckResult{
-		Kind:      CheckKindSignature,
-		Status:    status,
-		Code:      code,
-		Algorithm: set.Algorithm,
-		Target:    target,
+		Kind:                 CheckKindSignature,
+		Status:               status,
+		Code:                 code,
+		Algorithm:            set.Algorithm,
+		ProviderFailureClass: providerClass,
+		Target:               target,
 	}
 }

@@ -16,16 +16,50 @@ type verificationInput struct {
 
 // Verify extracts DKIM2 fields from a raw message and verifies the selected target.
 func (v Verifier) Verify(ctx context.Context, request Request) (Result, error) {
-	instances, err := instance.Extract(request.Message)
+	instanceParser, err := instance.NewParser(instance.Limits{MaxHashSets: v.options.Limits.MaxInstanceHashSets})
 	if err != nil {
 		return Result{}, malformedStateError(CheckKindSignature, Target{}, err)
 	}
-	signatures, err := signature.Extract(request.Message)
+	instances, err := instanceParser.Extract(request.Message)
+	if err != nil {
+		if instance.IsErrorCode(err, instance.ErrorCodeLimitExceeded) {
+			return Result{}, newError(ErrorCodeLimitExceeded, ErrorLocation{Check: CheckKindSignature}, ErrorDetails{Class: ErrorClassLimit}, nil)
+		}
+		if instance.IsErrorCode(err, instance.ErrorCodeMissingOrigin) || instance.IsErrorCode(err, instance.ErrorCodeDuplicateNumber) || instance.IsErrorCode(err, instance.ErrorCodeSequenceGap) {
+			return Result{}, newError(ErrorCodeSequenceInvalid, ErrorLocation{Check: CheckKindSignature}, ErrorDetails{Class: ErrorClassMalformed}, nil)
+		}
+		return Result{}, malformedStateError(CheckKindSignature, Target{}, err)
+	}
+	signatureParser, err := signature.NewParser(signature.Limits{
+		MaxRecipients:    v.options.Limits.MaxEnvelopeRecipients,
+		MaxSignatureSets: v.options.Limits.MaxSignatureSets,
+	})
 	if err != nil {
 		return Result{}, malformedStateError(CheckKindSignature, Target{}, err)
+	}
+	signatures, err := signatureParser.Extract(request.Message)
+	if err != nil {
+		if signature.IsErrorCode(err, signature.ErrorCodeLimitExceeded) {
+			return Result{}, newError(ErrorCodeLimitExceeded, ErrorLocation{Check: CheckKindSignature}, ErrorDetails{Class: ErrorClassLimit}, nil)
+		}
+		code := ErrorCodeMalformedState
+		if signature.IsErrorCode(err, signature.ErrorCodeMissingOrigin) || signature.IsErrorCode(err, signature.ErrorCodeDuplicateSequence) || signature.IsErrorCode(err, signature.ErrorCodeSequenceGap) {
+			code = ErrorCodeSequenceInvalid
+		}
+		typed := newError(code, ErrorLocation{Check: CheckKindSignature}, ErrorDetails{Class: ErrorClassMalformed}, err)
+		if len(signatures) > 0 {
+			typed.custody = custodyStatus(signatures)
+		}
+		return Result{}, typed
 	}
 
-	return v.verifyExtracted(ctx, verificationInput{request: request, instances: instances, signatures: signatures})
+	result, err := v.verifyExtracted(ctx, verificationInput{request: request, instances: instances, signatures: signatures})
+	if err != nil {
+		if typed, ok := err.(*Error); ok {
+			typed.custody = custodyStatus(signatures)
+		}
+	}
+	return result, err
 }
 
 // verifyExtracted verifies protocol state extracted exclusively from Request.Message.
@@ -63,7 +97,29 @@ func (v Verifier) verifyExtracted(ctx context.Context, input verificationInput) 
 	checks = append(checks, timestamp.check, nextDomain.check, envelope.check, domainAlignment.check)
 	status := targetStatus(hashes.pass, timestamp.pass, envelope.pass, domainAlignment.pass, nextDomain, signatures)
 
-	return NewResult(target, status, checks, signatures.sets), nil
+	return NewResultWithCustody(target, status, checks, signatures.sets, custodyStatus(input.signatures)), nil
+}
+
+// custodyStatus derives bounded whole-sequence nd= coverage after successful extraction.
+func custodyStatus(signatures []signature.Signature) CustodyStatus {
+	if len(signatures) == 0 {
+		return CustodyStatusNotPresent
+	}
+	current := highestSignatureSequence(signatures)
+	sawIntermediate := false
+	for _, parsed := range signatures {
+		if !parsed.HasNextDomain() {
+			continue
+		}
+		if parsed.Sequence() == current {
+			return CustodyStatusTerminalNDRequiresOOB
+		}
+		sawIntermediate = true
+	}
+	if sawIntermediate {
+		return CustodyStatusNDLinksEvaluated
+	}
+	return CustodyStatusNotPresent
 }
 
 // selectVerificationTarget validates parsed references and chooses the target signature.
@@ -253,6 +309,9 @@ func targetStatus(hashPass bool, timestampPass bool, envelopePass bool, domainAl
 		return TargetStatusFail
 	}
 	if signatures.pass > 0 && signatures.fail == 0 && signatures.other == 0 {
+		if signatures.temporary > 0 {
+			return TargetStatusIndeterminate
+		}
 		if nextDomain.unsupported {
 			return TargetStatusUnsupported
 		}
@@ -263,6 +322,9 @@ func targetStatus(hashPass bool, timestampPass bool, envelopePass bool, domainAl
 	}
 	if signatures.fail > 0 {
 		return TargetStatusFail
+	}
+	if signatures.temporary > 0 {
+		return TargetStatusIndeterminate
 	}
 
 	return TargetStatusUnsupported

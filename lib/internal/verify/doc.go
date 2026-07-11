@@ -1,8 +1,8 @@
 // Package verify coordinates DKIM2 static-key verification contracts.
 //
 // The package owns the library-internal verification boundary for
-// draft-ietf-dkim-dkim2-spec-04. It consumes the M1 raw RFC 5322 message model,
-// the M2 Message-Instance and DKIM2-Signature parsers, and the M3
+// draft-ietf-dkim-dkim2-spec-04. It consumes the raw RFC 5322 message model,
+// the Message-Instance and DKIM2-Signature parsers, and the
 // canonicalization and SHA-256 helpers. It must not reimplement raw parsing,
 // DKIM2 tag parsing, base64string parsing, sequence validation, canonical body
 // or header input, or Section 9.6 signature input rendering.
@@ -12,7 +12,7 @@
 // The default algorithm policy allows exactly rsa-sha256 and ed25519-sha256.
 // RSA verifier policy defaults to a 1024-bit minimum so the verifier can
 // validate the active draft-required 1024 through 2048 bit range.
-// RSA-SHA256 verifies SHA-256 plus PKCS#1 v1.5 over M3 Section 9.6 input
+// RSA-SHA256 verifies SHA-256 plus PKCS#1 v1.5 over Section 9.6 input
 // bytes. Ed25519-SHA256 verifies Ed25519 over SHA-256 digest bytes of the same
 // input.
 //

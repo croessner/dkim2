@@ -69,6 +69,8 @@ type TimestampPolicy struct {
 
 // Limits contains fail-closed verification resource settings.
 type Limits struct {
+	// MaxInstanceHashSets bounds h= sets parsed from one Message-Instance.
+	MaxInstanceHashSets int
 	// MaxSignatureSets bounds signature sets evaluated for one DKIM2-Signature.
 	MaxSignatureSets int
 	// MaxEnvelopeRecipients bounds current forward-path values in one request.
@@ -85,7 +87,7 @@ func DefaultOptions() Options {
 	}
 }
 
-// DefaultAlgorithmPolicy returns the active M4 signature algorithm allowlist.
+// DefaultAlgorithmPolicy returns the active signature algorithm allowlist.
 func DefaultAlgorithmPolicy() AlgorithmPolicy {
 	return AlgorithmPolicy{
 		AllowedAlgorithms: []Algorithm{AlgorithmRSASHA256, AlgorithmEd25519SHA256},
@@ -104,6 +106,7 @@ func DefaultTimestampPolicy() TimestampPolicy {
 // DefaultLimits returns restrictive verification resource defaults.
 func DefaultLimits() Limits {
 	return Limits{
+		MaxInstanceHashSets:   defaultMaxSignatureSets,
 		MaxSignatureSets:      defaultMaxSignatureSets,
 		MaxEnvelopeRecipients: defaultMaxEnvelopeRecipients,
 	}
@@ -231,6 +234,8 @@ func (p TimestampPolicy) Validate() error {
 // Validate rejects unsafe verification limit settings.
 func (l Limits) Validate() error {
 	switch {
+	case l.MaxInstanceHashSets <= 0:
+		return invalidOptionError("max_instance_hash_sets", l.MaxInstanceHashSets)
 	case l.MaxSignatureSets <= 0:
 		return invalidOptionError("max_signature_sets", l.MaxSignatureSets)
 	case l.MaxEnvelopeRecipients <= 0:
@@ -262,7 +267,7 @@ func (o Options) clone() Options {
 	return o
 }
 
-// knownAlgorithm reports whether algorithm is defined by the active M4 contract.
+// knownAlgorithm reports whether algorithm is defined by the active verification contract.
 func knownAlgorithm(algorithm Algorithm) bool {
 	switch algorithm {
 	case AlgorithmRSASHA256, AlgorithmEd25519SHA256:

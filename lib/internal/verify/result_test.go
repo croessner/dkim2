@@ -63,6 +63,9 @@ func TestResultAccessorsAreImmutable(t *testing.T) {
 	if result.Status() != TargetStatusPass {
 		t.Fatalf("Status() = %q, want pass", result.Status())
 	}
+	if result.CustodyStatus().Known() {
+		t.Fatalf("CustodyStatus() = %q, base constructor must not claim evaluated custody", result.CustodyStatus())
+	}
 	if result.Checks()[0].Status != CheckStatusPass {
 		t.Fatalf("Checks()[0].Status = %q, want pass", result.Checks()[0].Status)
 	}
@@ -71,11 +74,24 @@ func TestResultAccessorsAreImmutable(t *testing.T) {
 	}
 }
 
-// TestResultSanitizesUnknownTargetStatus verifies unknown overall state is non-success.
-func TestResultSanitizesUnknownTargetStatus(t *testing.T) {
+// TestResultWithCustodyRequiresAnExplicitKnownState verifies evaluated custody is opt-in.
+func TestResultWithCustodyRequiresAnExplicitKnownState(t *testing.T) {
+	target := Target{Sequence: 1, InstanceNumber: 1}
+	result := NewResultWithCustody(target, TargetStatusPass, nil, nil, CustodyStatusNotPresent)
+	if result.CustodyStatus() != CustodyStatusNotPresent {
+		t.Fatalf("CustodyStatus() = %q, want not_present", result.CustodyStatus())
+	}
+	unknown := NewResultWithCustody(target, TargetStatusPass, nil, nil, CustodyStatus("future"))
+	if unknown.CustodyStatus().Known() {
+		t.Fatalf("unknown custody became known: %q", unknown.CustodyStatus())
+	}
+}
+
+// TestResultBoundsUnknownTargetStatus verifies unknown overall state remains detectable and secret-safe.
+func TestResultBoundsUnknownTargetStatus(t *testing.T) {
 	result := NewResult(Target{}, TargetStatus("raw body secret"), nil, nil)
-	if result.Status() != TargetStatusIndeterminate {
-		t.Fatalf("Status() = %q, want indeterminate", result.Status())
+	if result.Status() != TargetStatusUnknown {
+		t.Fatalf("Status() = %q, want unknown", result.Status())
 	}
 }
 

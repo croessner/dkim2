@@ -70,6 +70,12 @@ const (
 	SignatureSetStatusKeyPolicyRejected SignatureSetStatus = "key_policy_rejected"
 	// SignatureSetStatusProviderError records a bounded key-provider failure.
 	SignatureSetStatusProviderError SignatureSetStatus = "provider_error"
+	// SignatureSetStatusProviderTemporary records typed retryable provider failure.
+	SignatureSetStatusProviderTemporary SignatureSetStatus = "provider_temporary"
+	// SignatureSetStatusProviderPermanent records typed unrecoverable provider failure.
+	SignatureSetStatusProviderPermanent SignatureSetStatus = "provider_permanent"
+	// SignatureSetStatusProviderContract records inconsistent provider behavior.
+	SignatureSetStatusProviderContract SignatureSetStatus = "provider_contract"
 )
 
 // KeyStatus records provider and key validation state.
@@ -96,6 +102,24 @@ const (
 	KeyStatusDisabledAlgorithm KeyStatus = "disabled_algorithm"
 	// KeyStatusProviderError records an internal provider failure.
 	KeyStatusProviderError KeyStatus = "provider_error"
+	// KeyStatusProviderTemporary records typed retryable provider failure.
+	KeyStatusProviderTemporary KeyStatus = "provider_temporary"
+	// KeyStatusProviderPermanent records typed unrecoverable provider failure.
+	KeyStatusProviderPermanent KeyStatus = "provider_permanent"
+	// KeyStatusProviderContract records inconsistent provider behavior.
+	KeyStatusProviderContract KeyStatus = "provider_contract"
+)
+
+// CustodyStatus records structural nd= coverage established by protocol extraction.
+type CustodyStatus string
+
+const (
+	// CustodyStatusNotPresent reports successful extraction found no nd=.
+	CustodyStatusNotPresent CustodyStatus = "not_present"
+	// CustodyStatusNDLinksEvaluated reports one or more intermediate nd= links were checked.
+	CustodyStatusNDLinksEvaluated CustodyStatus = "nd_links_evaluated"
+	// CustodyStatusTerminalNDRequiresOOB reports the current terminal nd= requires OOB trust.
+	CustodyStatusTerminalNDRequiresOOB CustodyStatus = "terminal_nd_requires_oob"
 )
 
 // TimestampStatus records local t= policy state.
@@ -208,6 +232,8 @@ const (
 	TargetStatusUnsupported TargetStatus = "unsupported"
 	// TargetStatusIndeterminate records bounded non-success ambiguity.
 	TargetStatusIndeterminate TargetStatus = "indeterminate"
+	// TargetStatusUnknown records an unrecognized internal status without retaining its spelling.
+	TargetStatusUnknown TargetStatus = "unknown"
 )
 
 // Target identifies the selected DKIM2 signature and instance numbers.
@@ -228,6 +254,8 @@ type CheckResult struct {
 	Code ErrorCode
 	// Algorithm records an allowlisted algorithm name when relevant.
 	Algorithm Algorithm
+	// HashStatus records typed current hash state when relevant.
+	HashStatus HashStatus
 	// TimestampStatus records local timestamp policy detail when relevant.
 	TimestampStatus TimestampStatus
 	// EnvelopeStatus records current SMTP envelope detail when relevant.
@@ -236,6 +264,8 @@ type CheckResult struct {
 	DomainAlignmentStatus DomainAlignmentStatus
 	// NextDomainStatus records bounded nd= chain detail without domain values.
 	NextDomainStatus NextDomainStatus
+	// ProviderFailureClass records typed provider detail without raw causes.
+	ProviderFailureClass ProviderFailureClass
 	// Target records bounded sequence and instance context.
 	Target Target
 }
@@ -252,13 +282,14 @@ type SignatureSetResult struct {
 	KeyStatus KeyStatus
 }
 
-// Result stores immutable verification facts for later M5 mapping.
+// Result stores immutable bounded verification facts for service coordination.
 type Result struct {
 	draft         string
 	target        Target
 	status        TargetStatus
 	checks        []CheckResult
 	signatureSets []SignatureSetResult
+	custody       CustodyStatus
 }
 
 // NewResult constructs immutable verification result facts.
@@ -266,10 +297,21 @@ func NewResult(target Target, status TargetStatus, checks []CheckResult, signatu
 	return Result{
 		draft:         DraftBaseline,
 		target:        target,
-		status:        sanitizeTargetStatus(status),
+		status:        boundedTargetStatus(status),
 		checks:        cloneCheckResults(checks),
 		signatureSets: cloneSignatureSetResults(signatureSets),
 	}
+}
+
+// NewResultWithCustody constructs immutable facts with established structural coverage.
+func NewResultWithCustody(target Target, status TargetStatus, checks []CheckResult, signatureSets []SignatureSetResult, custody CustodyStatus) Result {
+	result := NewResult(target, status, checks, signatureSets)
+	if custody.Known() {
+		result.custody = custody
+	} else {
+		result.custody = ""
+	}
+	return result
 }
 
 // Draft returns the active DKIM2 draft baseline for this result.
@@ -301,6 +343,9 @@ func (r Result) SignatureSets() []SignatureSetResult {
 	return cloneSignatureSetResults(r.signatureSets)
 }
 
+// CustodyStatus returns whole-sequence structural nd= coverage.
+func (r Result) CustodyStatus() CustodyStatus { return r.custody }
+
 // Known reports whether status is part of the per-check vocabulary.
 func (s CheckStatus) Known() bool {
 	switch s {
@@ -314,7 +359,7 @@ func (s CheckStatus) Known() bool {
 // Known reports whether status is part of the per-signature-set vocabulary.
 func (s SignatureSetStatus) Known() bool {
 	switch s {
-	case SignatureSetStatusNotChecked, SignatureSetStatusPass, SignatureSetStatusFail, SignatureSetStatusUnsupportedAlgorithm, SignatureSetStatusDisabledAlgorithm, SignatureSetStatusMissingKey, SignatureSetStatusInvalidKey, SignatureSetStatusAmbiguousKey, SignatureSetStatusWrongKeyType, SignatureSetStatusKeyPolicyRejected, SignatureSetStatusProviderError:
+	case SignatureSetStatusNotChecked, SignatureSetStatusPass, SignatureSetStatusFail, SignatureSetStatusUnsupportedAlgorithm, SignatureSetStatusDisabledAlgorithm, SignatureSetStatusMissingKey, SignatureSetStatusInvalidKey, SignatureSetStatusAmbiguousKey, SignatureSetStatusWrongKeyType, SignatureSetStatusKeyPolicyRejected, SignatureSetStatusProviderError, SignatureSetStatusProviderTemporary, SignatureSetStatusProviderPermanent, SignatureSetStatusProviderContract:
 		return true
 	default:
 		return false
@@ -324,7 +369,17 @@ func (s SignatureSetStatus) Known() bool {
 // Known reports whether status is part of the key-status vocabulary.
 func (s KeyStatus) Known() bool {
 	switch s {
-	case KeyStatusNotChecked, KeyStatusFound, KeyStatusMissing, KeyStatusInvalid, KeyStatusAmbiguous, KeyStatusWrongType, KeyStatusPolicyRejected, KeyStatusUnsupportedAlgorithm, KeyStatusDisabledAlgorithm, KeyStatusProviderError:
+	case KeyStatusNotChecked, KeyStatusFound, KeyStatusMissing, KeyStatusInvalid, KeyStatusAmbiguous, KeyStatusWrongType, KeyStatusPolicyRejected, KeyStatusUnsupportedAlgorithm, KeyStatusDisabledAlgorithm, KeyStatusProviderError, KeyStatusProviderTemporary, KeyStatusProviderPermanent, KeyStatusProviderContract:
+		return true
+	default:
+		return false
+	}
+}
+
+// Known reports whether custody status belongs to the closed verification vocabulary.
+func (s CustodyStatus) Known() bool {
+	switch s {
+	case CustodyStatusNotPresent, CustodyStatusNDLinksEvaluated, CustodyStatusTerminalNDRequiresOOB:
 		return true
 	default:
 		return false
@@ -384,11 +439,19 @@ func (s HashStatus) Known() bool {
 // Known reports whether status is part of the overall target vocabulary.
 func (s TargetStatus) Known() bool {
 	switch s {
-	case TargetStatusNotEvaluated, TargetStatusPass, TargetStatusFail, TargetStatusMixed, TargetStatusUnsupported, TargetStatusIndeterminate:
+	case TargetStatusNotEvaluated, TargetStatusPass, TargetStatusFail, TargetStatusMixed, TargetStatusUnsupported, TargetStatusIndeterminate, TargetStatusUnknown:
 		return true
 	default:
 		return false
 	}
+}
+
+// boundedTargetStatus preserves a detectable fixed token for unknown internal status.
+func boundedTargetStatus(status TargetStatus) TargetStatus {
+	if status.Known() {
+		return status
+	}
+	return TargetStatusUnknown
 }
 
 // cloneCheckResults returns immutable copies of check facts.
@@ -418,13 +481,4 @@ func sanitizeResultAlgorithm(algorithm Algorithm) Algorithm {
 	}
 
 	return AlgorithmUnknown
-}
-
-// sanitizeTargetStatus falls back to a non-success status for unknown values.
-func sanitizeTargetStatus(status TargetStatus) TargetStatus {
-	if status.Known() {
-		return status
-	}
-
-	return TargetStatusIndeterminate
 }

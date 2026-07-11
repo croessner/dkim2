@@ -5,7 +5,7 @@
 // s= tags, exactly one envelope form consisting of nd= or the mf=/rt= pair,
 // plus optional n= and f= tags. Every header tag must have its draft-required
 // semicolon terminator. Known flags include feedhere. The parser consumes
-// immutable rawmsg.HeaderField values, preserves the M1 header occurrence
+// immutable rawmsg.HeaderField values, preserves the raw header occurrence
 // index, and delegates shared tag-list scanning and padded base64string decoding
 // to lib/internal/tagvalue.
 //

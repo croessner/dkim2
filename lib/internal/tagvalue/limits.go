@@ -22,7 +22,7 @@ type Limits struct {
 	MaxBase64DecodedBytes int
 }
 
-// DefaultLimits returns the restrictive M2 scanner defaults.
+// DefaultLimits returns the restrictive tag scanner defaults.
 func DefaultLimits() Limits {
 	return Limits{
 		MaxFieldValueBytes:    defaultMaxFieldValueBytes,

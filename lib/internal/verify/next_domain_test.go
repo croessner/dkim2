@@ -36,6 +36,9 @@ func TestVerifierAcceptsExactNextDomainChain(t *testing.T) {
 	if result.Status() != TargetStatusPass || !hasNextDomainCheck(result, NextDomainStatusPass, CheckStatusPass) {
 		t.Fatalf("result = %q checks=%#v, want exact next-domain pass", result.Status(), result.Checks())
 	}
+	if result.CustodyStatus() != CustodyStatusNDLinksEvaluated {
+		t.Fatalf("CustodyStatus() = %q, want nd_links_evaluated", result.CustodyStatus())
+	}
 	if !hasEnvelopeCheck(result, EnvelopeStatusNotApplicable, CheckStatusNotApplicable) {
 		t.Fatalf("checks = %#v, want nd= envelope check not applicable", result.Checks())
 	}
@@ -56,6 +59,9 @@ func TestVerifierRejectsNextDomainMismatch(t *testing.T) {
 	var verifyErr *Error
 	if !errors.As(err, &verifyErr) || verifyErr.Class() != ErrorClassNextDomain || verifyErr.Location().Check != CheckKindNextDomain {
 		t.Fatalf("Verify() classification = %#v, want bounded next-domain error", verifyErr)
+	}
+	if verifyErr.CustodyStatus() != CustodyStatusNDLinksEvaluated {
+		t.Fatalf("CustodyStatus() = %q, want nd_links_evaluated", verifyErr.CustodyStatus())
 	}
 	for _, domain := range []string{testDomain, nextHopDomain, "wrong.example.test"} {
 		if strings.Contains(err.Error(), domain) {
@@ -108,6 +114,9 @@ func TestVerifierDoesNotPassHighestNextDomain(t *testing.T) {
 	}
 	if result.Status() != TargetStatusUnsupported || !hasNextDomainCheck(result, NextDomainStatusOutOfBandRequired, CheckStatusUnsupported) {
 		t.Fatalf("result = %q checks=%#v, want OOB-required unsupported state", result.Status(), result.Checks())
+	}
+	if result.CustodyStatus() != CustodyStatusTerminalNDRequiresOOB {
+		t.Fatalf("CustodyStatus() = %q, want terminal OOB", result.CustodyStatus())
 	}
 	if !hasEnvelopeCheck(result, EnvelopeStatusNotApplicable, CheckStatusNotApplicable) ||
 		!hasDomainAlignmentCheck(result, DomainAlignmentStatusNotApplicable, CheckStatusNotApplicable) {

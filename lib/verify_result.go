@@ -1,0 +1,432 @@
+package dkim2
+
+import "slices"
+
+// DraftIdentifier identifies the exact DKIM2 behavior baseline implemented by this verification facade.
+const DraftIdentifier = "draft-ietf-dkim-dkim2-spec-04"
+
+// ResultState identifies one of the four public DKIM2 verification outcomes.
+type ResultState string
+
+const (
+	// ResultStatePASS reports complete success for the declared current-only scope.
+	ResultStatePASS ResultState = "PASS"
+	// ResultStateFAIL reports a supported integrity mismatch.
+	ResultStateFAIL ResultState = "FAIL"
+	// ResultStatePERMERROR reports unrecoverable malformed, missing, unsupported, or ambiguous state.
+	ResultStatePERMERROR ResultState = "PERMERROR"
+	// ResultStateTEMPERROR reports a typed temporary public-key-provider failure.
+	ResultStateTEMPERROR ResultState = "TEMPERROR"
+)
+
+// Known reports whether the result state belongs to the closed four-state vocabulary.
+func (s ResultState) Known() bool {
+	switch s {
+	case ResultStatePASS, ResultStateFAIL, ResultStatePERMERROR, ResultStateTEMPERROR:
+		return true
+	default:
+		return false
+	}
+}
+
+// VerificationScope identifies which message state was verified.
+type VerificationScope string
+
+const (
+	// VerificationScopeCurrent limits the result to the highest current signature and instance.
+	VerificationScopeCurrent VerificationScope = "current"
+)
+
+// Known reports whether the scope belongs to the closed public vocabulary.
+func (s VerificationScope) Known() bool {
+	return s == VerificationScopeCurrent
+}
+
+// HistoricalState identifies whether one historical verification dimension was evaluated.
+type HistoricalState string
+
+const (
+	// HistoricalStateNotEvaluated reports that the historical dimension was not evaluated.
+	HistoricalStateNotEvaluated HistoricalState = "not_evaluated"
+)
+
+// Known reports whether the historical state belongs to the closed public vocabulary.
+func (s HistoricalState) Known() bool {
+	return s == HistoricalStateNotEvaluated
+}
+
+// CustodyStructure identifies the separately evaluated structural next-domain coverage.
+type CustodyStructure string
+
+const (
+	// CustodyStructureNotEvaluated reports that earlier failure prevented reliable next-domain presence detection.
+	CustodyStructureNotEvaluated CustodyStructure = "not_evaluated"
+	// CustodyStructureNotPresent reports that no next-domain link was present.
+	CustodyStructureNotPresent CustodyStructure = "not_present"
+	// CustodyStructureNDLinksEvaluated reports that one or more intermediate next-domain links were evaluated.
+	CustodyStructureNDLinksEvaluated CustodyStructure = "nd_links_evaluated"
+	// CustodyStructureTerminalNDRequiresOOB reports that the current terminal next-domain needs unmodeled OOB trust.
+	CustodyStructureTerminalNDRequiresOOB CustodyStructure = "terminal_nd_requires_oob"
+)
+
+// Known reports whether the custody structure belongs to the closed public vocabulary.
+func (s CustodyStructure) Known() bool {
+	switch s {
+	case CustodyStructureNotEvaluated, CustodyStructureNotPresent, CustodyStructureNDLinksEvaluated, CustodyStructureTerminalNDRequiresOOB:
+		return true
+	default:
+		return false
+	}
+}
+
+// CheckClass identifies a bounded verification concern without exposing message-derived values.
+type CheckClass string
+
+const (
+	// CheckClassMessage identifies raw message handling.
+	CheckClassMessage CheckClass = "message"
+	// CheckClassProtocol identifies DKIM2 field and sequence handling.
+	CheckClassProtocol CheckClass = "protocol"
+	// CheckClassBodyHash identifies current body-hash verification.
+	CheckClassBodyHash CheckClass = "body_hash"
+	// CheckClassHeaderHash identifies current header-hash verification.
+	CheckClassHeaderHash CheckClass = "header_hash"
+	// CheckClassSignature identifies cryptographic signature verification.
+	CheckClassSignature CheckClass = "signature"
+	// CheckClassKey identifies public-key validity or availability.
+	CheckClassKey CheckClass = "key"
+	// CheckClassTimestamp identifies timestamp policy evaluation.
+	CheckClassTimestamp CheckClass = "timestamp"
+	// CheckClassEnvelope identifies current SMTP envelope comparison.
+	CheckClassEnvelope CheckClass = "envelope"
+	// CheckClassDomainAlignment identifies signing-domain alignment.
+	CheckClassDomainAlignment CheckClass = "domain_alignment"
+	// CheckClassNextDomain identifies structural next-domain evaluation.
+	CheckClassNextDomain CheckClass = "next_domain"
+	// CheckClassProvider identifies public-key-provider behavior.
+	CheckClassProvider CheckClass = "provider"
+	// CheckClassInternalContract identifies an unknown or inconsistent internal fact.
+	CheckClassInternalContract CheckClass = "internal_contract"
+)
+
+// Known reports whether the check class belongs to the closed public vocabulary.
+func (c CheckClass) Known() bool {
+	switch c {
+	case CheckClassMessage, CheckClassProtocol, CheckClassBodyHash, CheckClassHeaderHash,
+		CheckClassSignature, CheckClassKey, CheckClassTimestamp, CheckClassEnvelope,
+		CheckClassDomainAlignment, CheckClassNextDomain, CheckClassProvider, CheckClassInternalContract:
+		return true
+	default:
+		return false
+	}
+}
+
+// ReasonCode identifies a bounded verification reason without retaining raw causes or input.
+type ReasonCode string
+
+const (
+	// ReasonNone reports no failure reason for a successful fact.
+	ReasonNone ReasonCode = "none"
+	// ReasonInvalidRequest reports invalid public request state.
+	ReasonInvalidRequest ReasonCode = "invalid_request"
+	// ReasonLimitExceeded reports a configured resource limit violation.
+	ReasonLimitExceeded ReasonCode = "limit_exceeded"
+	// ReasonMalformedMessage reports malformed RFC 5322 input.
+	ReasonMalformedMessage ReasonCode = "malformed_message"
+	// ReasonMalformedProtocol reports malformed DKIM2 protocol input.
+	ReasonMalformedProtocol ReasonCode = "malformed_protocol"
+	// ReasonMissingProtocol reports required DKIM2 protocol state is absent.
+	ReasonMissingProtocol ReasonCode = "missing_protocol"
+	// ReasonSequenceInvalid reports invalid instance or signature numbering.
+	ReasonSequenceInvalid ReasonCode = "sequence_invalid"
+	// ReasonUnsupportedAlgorithm reports that no required supported algorithm was checkable.
+	ReasonUnsupportedAlgorithm ReasonCode = "unsupported_algorithm"
+	// ReasonHashMismatch reports a supported current-message hash mismatch.
+	ReasonHashMismatch ReasonCode = "hash_mismatch"
+	// ReasonSignatureMismatch reports a supported cryptographic signature mismatch.
+	ReasonSignatureMismatch ReasonCode = "signature_mismatch"
+	// ReasonMissingKey reports that required public-key material is absent.
+	ReasonMissingKey ReasonCode = "missing_key"
+	// ReasonInvalidKey reports invalid public-key material.
+	ReasonInvalidKey ReasonCode = "invalid_key"
+	// ReasonAmbiguousKey reports ambiguous public-key material.
+	ReasonAmbiguousKey ReasonCode = "ambiguous_key"
+	// ReasonProviderTemporary reports a typed temporary provider failure.
+	ReasonProviderTemporary ReasonCode = "provider_temporary"
+	// ReasonProviderPermanent reports a typed permanent provider failure.
+	ReasonProviderPermanent ReasonCode = "provider_permanent"
+	// ReasonProviderContract reports an inconsistent or unclassified provider outcome.
+	ReasonProviderContract ReasonCode = "provider_contract"
+	// ReasonTimestampInvalid reports an expired, future, or unrepresentable timestamp.
+	ReasonTimestampInvalid ReasonCode = "timestamp_invalid"
+	// ReasonEnvelopeMismatch reports current SMTP envelope disagreement.
+	ReasonEnvelopeMismatch ReasonCode = "envelope_mismatch"
+	// ReasonDomainAlignmentMismatch reports signing-domain alignment failure.
+	ReasonDomainAlignmentMismatch ReasonCode = "domain_alignment_mismatch"
+	// ReasonNextDomainMismatch reports structural next-domain disagreement.
+	ReasonNextDomainMismatch ReasonCode = "next_domain_mismatch"
+	// ReasonOutOfBandRequired reports a terminal next-domain requiring unmodeled OOB trust.
+	ReasonOutOfBandRequired ReasonCode = "out_of_band_required"
+	// ReasonInternalContract reports an unknown or inconsistent internal fact.
+	ReasonInternalContract ReasonCode = "internal_contract"
+)
+
+// Known reports whether the reason belongs to the closed public vocabulary.
+func (r ReasonCode) Known() bool {
+	switch r {
+	case ReasonNone, ReasonInvalidRequest, ReasonLimitExceeded, ReasonMalformedMessage,
+		ReasonMalformedProtocol, ReasonMissingProtocol, ReasonSequenceInvalid,
+		ReasonUnsupportedAlgorithm, ReasonHashMismatch, ReasonSignatureMismatch,
+		ReasonMissingKey, ReasonInvalidKey, ReasonAmbiguousKey, ReasonProviderTemporary,
+		ReasonProviderPermanent, ReasonProviderContract, ReasonTimestampInvalid,
+		ReasonEnvelopeMismatch, ReasonDomainAlignmentMismatch, ReasonNextDomainMismatch,
+		ReasonOutOfBandRequired, ReasonInternalContract:
+		return true
+	default:
+		return false
+	}
+}
+
+// SignatureStatus identifies a bounded per-signature-set outcome.
+type SignatureStatus string
+
+const (
+	// SignatureStatusPASS reports a supported passing signature set.
+	SignatureStatusPASS SignatureStatus = "pass"
+	// SignatureStatusFAIL reports a supported failing signature set.
+	SignatureStatusFAIL SignatureStatus = "fail"
+	// SignatureStatusPERMERROR reports permanent key or protocol state for the set.
+	SignatureStatusPERMERROR SignatureStatus = "permerror"
+	// SignatureStatusTEMPERROR reports typed temporary provider state for the set.
+	SignatureStatusTEMPERROR SignatureStatus = "temperror"
+	// SignatureStatusIgnored reports an unknown algorithm ignored during aggregation.
+	SignatureStatusIgnored SignatureStatus = "ignored"
+)
+
+// Known reports whether the signature status belongs to the closed public vocabulary.
+func (s SignatureStatus) Known() bool {
+	switch s {
+	case SignatureStatusPASS, SignatureStatusFAIL, SignatureStatusPERMERROR, SignatureStatusTEMPERROR, SignatureStatusIgnored:
+		return true
+	default:
+		return false
+	}
+}
+
+// VerificationTarget identifies the current signature sequence and Message-Instance number.
+type VerificationTarget struct {
+	sequence uint64
+	instance uint64
+}
+
+// newVerificationTarget constructs immutable bounded target metadata.
+func newVerificationTarget(sequence, instance uint64) VerificationTarget {
+	return VerificationTarget{sequence: sequence, instance: instance}
+}
+
+// Sequence returns the target DKIM2-Signature sequence number.
+func (t VerificationTarget) Sequence() uint64 {
+	return t.sequence
+}
+
+// Instance returns the target Message-Instance number.
+func (t VerificationTarget) Instance() uint64 {
+	return t.instance
+}
+
+// CheckFact records one bounded verification check and reason.
+type CheckFact struct {
+	class  CheckClass
+	reason ReasonCode
+}
+
+// newCheckFact constructs immutable bounded check metadata.
+func newCheckFact(class CheckClass, reason ReasonCode) CheckFact {
+	return CheckFact{class: class, reason: reason}
+}
+
+// Class returns the bounded verification concern.
+func (f CheckFact) Class() CheckClass {
+	return f.class
+}
+
+// Reason returns the bounded verification reason.
+func (f CheckFact) Reason() ReasonCode {
+	return f.reason
+}
+
+// SignatureSetFact records one bounded algorithm-family and signature-set outcome.
+type SignatureSetFact struct {
+	algorithm Algorithm
+	status    SignatureStatus
+	reason    ReasonCode
+}
+
+// newSignatureSetFact constructs immutable bounded signature-set metadata.
+func newSignatureSetFact(algorithm Algorithm, status SignatureStatus, reason ReasonCode) SignatureSetFact {
+	return SignatureSetFact{algorithm: algorithm, status: status, reason: reason}
+}
+
+// Algorithm returns the bounded signature algorithm family.
+func (f SignatureSetFact) Algorithm() Algorithm {
+	return f.algorithm
+}
+
+// Status returns the bounded signature-set status.
+func (f SignatureSetFact) Status() SignatureStatus {
+	return f.status
+}
+
+// Reason returns the bounded signature-set reason.
+func (f SignatureSetFact) Reason() ReasonCode {
+	return f.reason
+}
+
+// VerifyResult is an immutable structured current-verification outcome.
+type VerifyResult struct {
+	draft                string
+	state                ResultState
+	scope                VerificationScope
+	historicalContent    HistoricalState
+	historicalSignatures HistoricalState
+	custodyStructure     CustodyStructure
+	target               VerificationTarget
+	primaryReason        ReasonCode
+	checks               []CheckFact
+	signatures           []SignatureSetFact
+}
+
+type verifyResultData struct {
+	state                ResultState
+	scope                VerificationScope
+	historicalContent    HistoricalState
+	historicalSignatures HistoricalState
+	custodyStructure     CustodyStructure
+	target               VerificationTarget
+	primaryReason        ReasonCode
+	checks               []CheckFact
+	signatures           []SignatureSetFact
+}
+
+// newVerifyResult constructs a result while cloning every collection owned by its caller.
+func newVerifyResult(data verifyResultData) VerifyResult {
+	if !verifyResultDataValid(data) {
+		return internalContractResult(data.target)
+	}
+
+	return VerifyResult{
+		draft:                DraftIdentifier,
+		state:                data.state,
+		scope:                data.scope,
+		historicalContent:    data.historicalContent,
+		historicalSignatures: data.historicalSignatures,
+		custodyStructure:     data.custodyStructure,
+		target:               data.target,
+		primaryReason:        data.primaryReason,
+		checks:               slices.Clone(data.checks),
+		signatures:           slices.Clone(data.signatures),
+	}
+}
+
+// verifyResultDataValid rejects unknown facts and impossible public result combinations.
+func verifyResultDataValid(data verifyResultData) bool {
+	if !data.state.Known() || !data.scope.Known() ||
+		!data.historicalContent.Known() || !data.historicalSignatures.Known() ||
+		!data.custodyStructure.Known() || !data.primaryReason.Known() {
+		return false
+	}
+	if data.state == ResultStatePASS &&
+		data.custodyStructure != CustodyStructureNotPresent &&
+		data.custodyStructure != CustodyStructureNDLinksEvaluated {
+		return false
+	}
+	for _, fact := range data.checks {
+		if !fact.class.Known() || !fact.reason.Known() {
+			return false
+		}
+	}
+	for _, fact := range data.signatures {
+		if !fact.algorithm.Known() || !fact.status.Known() || !fact.reason.Known() {
+			return false
+		}
+	}
+
+	return true
+}
+
+// internalContractResult returns a bounded fail-closed result for invalid adapter input.
+func internalContractResult(target VerificationTarget) VerifyResult {
+	return VerifyResult{
+		draft:                DraftIdentifier,
+		state:                ResultStatePERMERROR,
+		scope:                VerificationScopeCurrent,
+		historicalContent:    HistoricalStateNotEvaluated,
+		historicalSignatures: HistoricalStateNotEvaluated,
+		custodyStructure:     CustodyStructureNotEvaluated,
+		target:               target,
+		primaryReason:        ReasonInternalContract,
+		checks: []CheckFact{
+			newCheckFact(CheckClassInternalContract, ReasonInternalContract),
+		},
+	}
+}
+
+// PrimaryReason returns the deterministic highest-precedence bounded reason.
+func (r VerifyResult) PrimaryReason() ReasonCode {
+	return r.primaryReason
+}
+
+// Draft returns the exact DKIM2 draft identifier governing this result.
+func (r VerifyResult) Draft() string {
+	return r.draft
+}
+
+// State returns one of the four public verification states.
+func (r VerifyResult) State() ResultState {
+	return r.state
+}
+
+// Scope returns the current-only verification scope.
+func (r VerifyResult) Scope() VerificationScope {
+	return r.scope
+}
+
+// HistoricalContent returns the historical content and recipe coverage state.
+func (r VerifyResult) HistoricalContent() HistoricalState {
+	return r.historicalContent
+}
+
+// HistoricalSignatures returns the historical cryptographic-signature coverage state.
+func (r VerifyResult) HistoricalSignatures() HistoricalState {
+	return r.historicalSignatures
+}
+
+// CustodyStructure returns separately evaluated structural next-domain coverage.
+func (r VerifyResult) CustodyStructure() CustodyStructure {
+	return r.custodyStructure
+}
+
+// Target returns the current verification target metadata.
+func (r VerifyResult) Target() VerificationTarget {
+	return r.target
+}
+
+// Checks returns an independent copy of the bounded check facts.
+func (r VerifyResult) Checks() []CheckFact {
+	return slices.Clone(r.checks)
+}
+
+// CheckCount returns the bounded number of retained check facts.
+func (r VerifyResult) CheckCount() int {
+	return len(r.checks)
+}
+
+// SignatureSets returns an independent copy of the bounded signature-set facts.
+func (r VerifyResult) SignatureSets() []SignatureSetFact {
+	return slices.Clone(r.signatures)
+}
+
+// SignatureSetCount returns the bounded number of retained signature-set facts.
+func (r VerifyResult) SignatureSetCount() int {
+	return len(r.signatures)
+}

@@ -37,6 +37,8 @@ const (
 	ErrorCodeProviderError ErrorCode = "provider_error"
 	// ErrorCodeMalformedState reports malformed parser-owned verification state.
 	ErrorCodeMalformedState ErrorCode = "malformed_state"
+	// ErrorCodeSequenceInvalid reports non-contiguous or duplicate extracted numbering.
+	ErrorCodeSequenceInvalid ErrorCode = "sequence_invalid"
 	// ErrorCodeMissingTarget reports a missing signature or instance target.
 	ErrorCodeMissingTarget ErrorCode = "missing_target"
 	// ErrorCodeDuplicateTarget reports duplicate signature or instance targets.
@@ -133,6 +135,15 @@ type Error struct {
 	location ErrorLocation
 	details  ErrorDetails
 	cause    error
+	custody  CustodyStatus
+}
+
+// CustodyStatus returns established whole-sequence coverage for chain errors.
+func (e *Error) CustodyStatus() CustodyStatus {
+	if e == nil {
+		return ""
+	}
+	return e.custody
 }
 
 // newError constructs a bounded verification error without raw message data.

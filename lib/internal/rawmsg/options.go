@@ -39,7 +39,7 @@ type ParserOptions struct {
 	RecordNormalizedInput bool
 }
 
-// DefaultParserOptions returns the restrictive M1 parser defaults.
+// DefaultParserOptions returns the restrictive raw-message parser defaults.
 func DefaultParserOptions() ParserOptions {
 	return ParserOptions{
 		MaxMessageBytes:       defaultMaxMessageBytes,

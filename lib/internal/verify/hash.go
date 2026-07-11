@@ -16,15 +16,15 @@ type hashCheckResults struct {
 	pass   bool
 }
 
-// compareTargetHashes compares current M3 sha256 hashes with the target instance.
+// compareTargetHashes compares current SHA-256 hashes with the target instance.
 func compareTargetHashes(canonicalizer canonical.Canonicalizer, message rawmsg.Message, targetInstance instance.MessageInstance, target Target) (hashCheckResults, error) {
 	hashSet, hashState := targetSHA256HashSet(targetInstance)
 	if hashState != HashStatusPass {
 		status, code := checkStatusForHashState(hashState)
 
 		return hashCheckResults{
-			body:   hashCheckResult(CheckKindBodyHash, status, code, target),
-			header: hashCheckResult(CheckKindHeaderHash, status, code, target),
+			body:   hashCheckResult(CheckKindBodyHash, status, code, hashState, target),
+			header: hashCheckResult(CheckKindHeaderHash, status, code, hashState, target),
 		}, nil
 	}
 
@@ -48,15 +48,15 @@ func compareTargetHashes(canonicalizer canonical.Canonicalizer, message rawmsg.M
 	expectedBodyHash, ok := hashSet.BodyHash()
 	if !ok {
 		return hashCheckResults{
-			body:   hashCheckResult(CheckKindBodyHash, CheckStatusFail, ErrorCodeMalformedState, target),
-			header: hashCheckResult(CheckKindHeaderHash, CheckStatusFail, ErrorCodeMalformedState, target),
+			body:   hashCheckResult(CheckKindBodyHash, CheckStatusFail, ErrorCodeMalformedState, HashStatusInvalid, target),
+			header: hashCheckResult(CheckKindHeaderHash, CheckStatusFail, ErrorCodeMalformedState, HashStatusInvalid, target),
 		}, nil
 	}
 	expectedHeaderHash, ok := hashSet.HeaderHash()
 	if !ok {
 		return hashCheckResults{
-			body:   hashCheckResult(CheckKindBodyHash, CheckStatusFail, ErrorCodeMalformedState, target),
-			header: hashCheckResult(CheckKindHeaderHash, CheckStatusFail, ErrorCodeMalformedState, target),
+			body:   hashCheckResult(CheckKindBodyHash, CheckStatusFail, ErrorCodeMalformedState, HashStatusInvalid, target),
+			header: hashCheckResult(CheckKindHeaderHash, CheckStatusFail, ErrorCodeMalformedState, HashStatusInvalid, target),
 		}, nil
 	}
 
@@ -64,8 +64,8 @@ func compareTargetHashes(canonicalizer canonical.Canonicalizer, message rawmsg.M
 	headerStatus, headerCode := compareSHA256Digest(headerDigest.Bytes(), expectedHeaderHash.Decoded())
 
 	return hashCheckResults{
-		body:   hashCheckResult(CheckKindBodyHash, bodyStatus, bodyCode, target),
-		header: hashCheckResult(CheckKindHeaderHash, headerStatus, headerCode, target),
+		body:   hashCheckResult(CheckKindBodyHash, bodyStatus, bodyCode, hashStatusFromCheck(bodyStatus), target),
+		header: hashCheckResult(CheckKindHeaderHash, headerStatus, headerCode, hashStatusFromCheck(headerStatus), target),
 		pass:   bodyStatus == CheckStatusPass && headerStatus == CheckStatusPass,
 	}, nil
 }
@@ -125,11 +125,23 @@ func checkStatusForHashState(status HashStatus) (CheckStatus, ErrorCode) {
 }
 
 // hashCheckResult constructs one bounded hash check fact.
-func hashCheckResult(kind CheckKind, status CheckStatus, code ErrorCode, target Target) CheckResult {
+func hashCheckResult(kind CheckKind, status CheckStatus, code ErrorCode, hashStatus HashStatus, target Target) CheckResult {
 	return CheckResult{
-		Kind:   kind,
-		Status: status,
-		Code:   code,
-		Target: target,
+		Kind:       kind,
+		Status:     status,
+		Code:       code,
+		HashStatus: hashStatus,
+		Target:     target,
 	}
+}
+
+// hashStatusFromCheck maps digest comparison state to the typed hash vocabulary.
+func hashStatusFromCheck(status CheckStatus) HashStatus {
+	if status == CheckStatusPass {
+		return HashStatusPass
+	}
+	if status == CheckStatusFail {
+		return HashStatusMismatch
+	}
+	return HashStatusInvalid
 }
