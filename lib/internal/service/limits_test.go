@@ -96,13 +96,13 @@ func TestMappingCapsRetainedFactsAtExactAndOverBoundaries(t *testing.T) {
 	}
 	limits.MaxSignatureFacts = 1
 	over := mapVerificationResult(newVerifyResultWithDefaultCustody(target, verify.TargetStatusPass, twoChecks, overSets), limits)
-	if len(over.SignatureSets()) > limits.MaxSignatureFacts || over.State() != StatePERMERROR || over.PrimaryReason() != ReasonLimitExceeded {
+	if len(over.SignatureSets()) > limits.MaxSignatureFacts || over.State() != StatePASS || over.PrimaryReason() != ReasonNone {
 		t.Fatalf("over signature-cap result = len %d state/reason %q/%q", len(over.SignatureSets()), over.State(), over.PrimaryReason())
 	}
 }
 
-// TestMappingClassifiesCoherentCheckRetentionOverflowAsLimit verifies capped retention does not invent contract failure.
-func TestMappingClassifiesCoherentCheckRetentionOverflowAsLimit(t *testing.T) {
+// TestMappingPreservesOutcomeAcrossCoherentCheckRetention verifies presentation caps do not rewrite protocol state.
+func TestMappingPreservesOutcomeAcrossCoherentCheckRetention(t *testing.T) {
 	target := verify.Target{Sequence: 1, InstanceNumber: 1}
 	checks := requiredPassChecks(target)
 	sets := []verify.SignatureSetResult{{Index: 0, Algorithm: verify.AlgorithmRSASHA256, Status: verify.SignatureSetStatusPass, KeyStatus: verify.KeyStatusFound}}
@@ -111,7 +111,7 @@ func TestMappingClassifiesCoherentCheckRetentionOverflowAsLimit(t *testing.T) {
 	var retained []CheckFact
 	for _, ordered := range [][]verify.CheckResult{checks, reverseCheckResults(checks)} {
 		result := mapVerificationResult(newVerifyResultWithDefaultCustody(target, verify.TargetStatusPass, ordered, sets), limits)
-		if result.State() != StatePERMERROR || result.PrimaryReason() != ReasonLimitExceeded || len(result.Checks()) > limits.MaxCheckFacts {
+		if result.State() != StatePASS || result.PrimaryReason() != ReasonNone || len(result.Checks()) > limits.MaxCheckFacts {
 			t.Fatalf("coherent capped result = %q/%q len=%d", result.State(), result.PrimaryReason(), len(result.Checks()))
 		}
 		if retained == nil {
@@ -167,8 +167,8 @@ func TestMappingSignatureRetentionIsDeterministicAcrossPermutations(t *testing.T
 	for _, orderedChecks := range [][]verify.CheckResult{checks, reverseCheckResults(checks)} {
 		for _, orderedSets := range [][]verify.SignatureSetResult{sets, reverseSignatureSets(sets)} {
 			result := mapVerificationResult(newVerifyResultWithDefaultCustody(target, verify.TargetStatusPass, orderedChecks, orderedSets), limits)
-			if result.State() != StatePERMERROR || result.PrimaryReason() != ReasonLimitExceeded || len(result.SignatureSets()) != 1 {
-				t.Fatal("coherent signature retention overflow did not map to bounded limit state")
+			if result.State() != StatePASS || result.PrimaryReason() != ReasonNone || len(result.SignatureSets()) != 1 {
+				t.Fatal("coherent signature retention rewrote protocol state")
 			}
 			if retained == nil {
 				retained = result.SignatureSets()

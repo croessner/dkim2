@@ -364,7 +364,7 @@ func assertPublicGoldenFactImmutability(t *testing.T, result VerifyResult, name 
 }
 
 // loadPublicGoldenCorpus loads the frozen synthetic Draft-04 corpus.
-func loadPublicGoldenCorpus(t *testing.T) publicGoldenCorpus {
+func loadPublicGoldenCorpus(t testing.TB) publicGoldenCorpus {
 	t.Helper()
 	raw, err := os.ReadFile("testdata/vectors/draft-ietf-dkim-dkim2-spec-04/public-golden.json")
 	if err != nil {
@@ -378,20 +378,20 @@ func loadPublicGoldenCorpus(t *testing.T) publicGoldenCorpus {
 }
 
 // rsaKey reconstructs the frozen synthetic public RSA key.
-func (c publicGoldenCorpus) rsaKey(t *testing.T) *rsa.PublicKey {
+func (c publicGoldenCorpus) rsaKey(t testing.TB) *rsa.PublicKey {
 	t.Helper()
 	modulus := decodeGoldenBytes(t, c.RSAModulus)
 	return &rsa.PublicKey{N: new(big.Int).SetBytes(modulus), E: c.RSAExponent}
 }
 
 // edKey reconstructs the frozen synthetic public Ed25519 key.
-func (c publicGoldenCorpus) edKey(t *testing.T) ed25519.PublicKey {
+func (c publicGoldenCorpus) edKey(t testing.TB) ed25519.PublicKey {
 	t.Helper()
 	return ed25519.PublicKey(decodeGoldenBytes(t, c.Ed25519))
 }
 
 // decodeGoldenBytes decodes one fixed base64 byte container.
-func decodeGoldenBytes(t *testing.T, value string) []byte {
+func decodeGoldenBytes(t testing.TB, value string) []byte {
 	t.Helper()
 	decoded, err := base64.StdEncoding.DecodeString(value)
 	if err != nil {
@@ -401,7 +401,7 @@ func decodeGoldenBytes(t *testing.T, value string) []byte {
 }
 
 // decodeGoldenPaths decodes fixed SMTP path containers.
-func decodeGoldenPaths(t *testing.T, values []string) [][]byte {
+func decodeGoldenPaths(t testing.TB, values []string) [][]byte {
 	t.Helper()
 	paths := make([][]byte, len(values))
 	for i, value := range values {

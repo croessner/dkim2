@@ -96,7 +96,12 @@ func preExtractionResult(reason Reason) Result {
 	if reason != ReasonMalformedMessage && reason != ReasonLimitExceeded {
 		class = CheckInternalContract
 	}
-	return newResult(StatePERMERROR, CustodyNotEvaluated, Target{}, reason, []CheckFact{{Class: class, Reason: reason}}, nil)
+	result := newResult(StatePERMERROR, CustodyNotEvaluated, Target{}, reason, []CheckFact{{Class: class, Reason: reason}}, nil)
+	projection, err := buildUnavailablePolicyProjection(reason)
+	if err != nil {
+		return internalContractResult(Target{})
+	}
+	return result.withPolicyProjection(projection)
 }
 
 // mapVerificationError sanitizes protocol errors into populated service results.
@@ -112,9 +117,38 @@ func mapVerificationError(err error) Result {
 			custody = mapCustody(typed.CustodyStatus())
 		}
 		reason, class, state := mapVerificationErrorCode(typed.Code())
-		return newResult(state, custody, target, reason, []CheckFact{{Class: class, Reason: reason}}, nil)
+		if verificationErrorHasUnavailableTarget(typed.Code(), target) {
+			target = Target{}
+		}
+		result := newResult(state, custody, target, reason, []CheckFact{{Class: class, Reason: reason}}, nil)
+		if target == (Target{}) {
+			projection, projectionErr := buildUnavailablePolicyProjection(reason)
+			if projectionErr != nil {
+				return internalContractResult(Target{})
+			}
+			return result.withPolicyProjection(projection)
+		}
+		return result
 	}
-	return newResult(StatePERMERROR, custody, target, reason, []CheckFact{{Class: class, Reason: reason}}, nil)
+	result := newResult(StatePERMERROR, custody, target, reason, []CheckFact{{Class: class, Reason: reason}}, nil)
+	projection, projectionErr := buildUnavailablePolicyProjection(reason)
+	if projectionErr != nil {
+		return internalContractResult(Target{})
+	}
+	return result.withPolicyProjection(projection)
+}
+
+// verificationErrorHasUnavailableTarget identifies failures before authoritative selection.
+func verificationErrorHasUnavailableTarget(code verify.ErrorCode, diagnosticTarget Target) bool {
+	switch code {
+	case verify.ErrorCodeLimitExceeded, verify.ErrorCodeMissingTarget, verify.ErrorCodeDuplicateTarget,
+		verify.ErrorCodeSequenceInvalid:
+		return true
+	case verify.ErrorCodeMalformedState:
+		return diagnosticTarget == (Target{})
+	default:
+		return false
+	}
 }
 
 // mapVerificationErrorCode exhaustively maps bounded verification error codes.

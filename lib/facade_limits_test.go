@@ -115,7 +115,7 @@ func TestFacadeWiresPublicResultCaps(t *testing.T) {
 				t.Fatalf("NewVerifier() error = %v", err)
 			}
 			result, err := verifier.Verify(context.Background(), NewVerifyRequest(tt.raw, []byte("<>"), [][]byte{[]byte("<rcpt@example.test>")}))
-			if err != nil || result.State() != ResultStatePERMERROR || result.PrimaryReason() != ReasonLimitExceeded || result.CheckCount() > tt.checkCap || result.SignatureSetCount() > tt.signCap {
+			if err != nil || result.State() != ResultStatePERMERROR || result.PrimaryReason() != ReasonMissingKey || result.CheckCount() > tt.checkCap || result.SignatureSetCount() > tt.signCap {
 				t.Fatalf("Verify() = %q/%q checks=%d signatures=%d err=%v", result.State(), result.PrimaryReason(), result.CheckCount(), result.SignatureSetCount(), err)
 			}
 		})

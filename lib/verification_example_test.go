@@ -2,10 +2,12 @@ package dkim2_test
 
 import (
 	"context"
+	"crypto/rsa"
 	_ "embed"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"math/big"
 	"time"
 
 	dkim2 "github.com/croessner/dkim2"
@@ -18,6 +20,8 @@ type syntheticMissingProvider struct{}
 
 type syntheticTemporaryProvider struct{}
 
+type syntheticKeyProvider struct{ key *rsa.PublicKey }
+
 // LookupPublicKey returns deterministic key absence without network access.
 func (syntheticMissingProvider) LookupPublicKey(_ context.Context, query dkim2.PublicKeyQuery) (dkim2.PublicKeyResult, error) {
 	return dkim2.MissingPublicKey(query.Algorithm()), nil
@@ -26,6 +30,14 @@ func (syntheticMissingProvider) LookupPublicKey(_ context.Context, query dkim2.P
 // LookupPublicKey returns typed temporary state without exposing a provider cause.
 func (syntheticTemporaryProvider) LookupPublicKey(context.Context, dkim2.PublicKeyQuery) (dkim2.PublicKeyResult, error) {
 	return dkim2.PublicKeyResult{}, dkim2.NewTemporaryProviderError()
+}
+
+// LookupPublicKey returns the frozen synthetic RSA public key.
+func (p syntheticKeyProvider) LookupPublicKey(_ context.Context, query dkim2.PublicKeyQuery) (dkim2.PublicKeyResult, error) {
+	if query.Algorithm() != dkim2.AlgorithmRSASHA256 {
+		return dkim2.MissingPublicKey(query.Algorithm()), nil
+	}
+	return dkim2.FoundRSAPublicKey(p.key), nil
 }
 
 // ExampleVerifier demonstrates secret-safe structured result handling.
@@ -100,8 +112,41 @@ func ExampleVerifier_temporaryProvider() {
 	// rsa-sha256 temperror provider_temporary
 }
 
+// ExampleEvaluatePolicy demonstrates strict policy over a library-created passing result.
+func ExampleEvaluatePolicy() {
+	verifier, _ := dkim2.NewVerifier(syntheticKeyProvider{key: syntheticExampleRSAKey()}, dkim2.WithVerificationClock(func() time.Time { return time.Unix(1700000000, 0) }))
+	result, _ := verifier.Verify(context.Background(), syntheticExampleRequest())
+	decision, _ := dkim2.EvaluatePolicy(result)
+	action := decision.ActionPlan().Actions()[0]
+	fmt.Println(decision.VerificationState(), decision.Verdict(), decision.PrimaryReason())
+	fmt.Println(action.Kind(), action.Terminal())
+
+	// Output:
+	// PASS accept protocol_pass
+	// accept true
+}
+
+// ExampleEvaluatePolicy_testingUnavailable demonstrates explicit non-terminal observation of unavailable protocol input.
+func ExampleEvaluatePolicy_testingUnavailable() {
+	verifier, _ := dkim2.NewVerifier(syntheticMissingProvider{}, dkim2.WithVerificationClock(func() time.Time { return time.Unix(1700000000, 0) }))
+	result, _ := verifier.Verify(context.Background(), syntheticExampleRequestNamed("missing_protocol"))
+	decision, _ := dkim2.EvaluatePolicy(result, dkim2.WithPolicyMode(dkim2.PolicyModeTesting))
+	action := decision.ActionPlan().Actions()[0]
+	fmt.Println(decision.VerificationState(), decision.Verdict(), decision.PrimaryReason())
+	fmt.Println(action.Kind(), action.Terminal())
+
+	// Output:
+	// PERMERROR continue testing_mode_observe
+	// continue false
+}
+
 // syntheticExampleRequest decodes the frozen synthetic current-message fixture.
 func syntheticExampleRequest() dkim2.VerifyRequest {
+	return syntheticExampleRequestNamed("rsa_pass")
+}
+
+// syntheticExampleRequestNamed decodes one frozen synthetic current-message fixture.
+func syntheticExampleRequestNamed(name string) dkim2.VerifyRequest {
 	type vector struct {
 		Raw     string   `json:"raw_base64"`
 		Reverse string   `json:"reverse_path_base64"`
@@ -111,7 +156,7 @@ func syntheticExampleRequest() dkim2.VerifyRequest {
 		Vectors map[string]vector `json:"vectors"`
 	}
 	_ = json.Unmarshal(publicExampleCorpus, &corpus)
-	fixture := corpus.Vectors["rsa_pass"]
+	fixture := corpus.Vectors[name]
 	raw, _ := base64.StdEncoding.DecodeString(fixture.Raw)
 	reverse, _ := base64.StdEncoding.DecodeString(fixture.Reverse)
 	forward := make([][]byte, len(fixture.Forward))
@@ -119,4 +164,15 @@ func syntheticExampleRequest() dkim2.VerifyRequest {
 		forward[index], _ = base64.StdEncoding.DecodeString(encoded)
 	}
 	return dkim2.NewVerifyRequest(raw, reverse, forward)
+}
+
+// syntheticExampleRSAKey reconstructs the frozen synthetic RSA public key.
+func syntheticExampleRSAKey() *rsa.PublicKey {
+	var corpus struct {
+		RSAModulus  string `json:"rsa_modulus_base64"`
+		RSAExponent int    `json:"rsa_exponent"`
+	}
+	_ = json.Unmarshal(publicExampleCorpus, &corpus)
+	modulus, _ := base64.StdEncoding.DecodeString(corpus.RSAModulus)
+	return &rsa.PublicKey{N: new(big.Int).SetBytes(modulus), E: corpus.RSAExponent}
 }

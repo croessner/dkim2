@@ -406,7 +406,7 @@ func TestDNSDraft04PublicQueryHasNoLookupMethodSurface(t *testing.T) {
 }
 
 // dnsPassTransport constructs found public records for frozen RSA and Ed25519 owners.
-func dnsPassTransport(t *testing.T, rsaRecord, edRecord string, dnssec DNSSECStatus) *dnsVectorTransport {
+func dnsPassTransport(t testing.TB, rsaRecord, edRecord string, dnssec DNSSECStatus) *dnsVectorTransport {
 	t.Helper()
 	return &dnsVectorTransport{lookup: func(_ context.Context, owner string) (TXTLookupResult, error) {
 		switch owner {
@@ -458,7 +458,7 @@ func fixedPublicError(err error) func(context.Context, string) (TXTLookupResult,
 }
 
 // foundPublicTXT constructs one immutable synthetic TXT answer.
-func foundPublicTXT(t *testing.T, record string, dnssec DNSSECStatus) TXTLookupResult {
+func foundPublicTXT(t testing.TB, record string, dnssec DNSSECStatus) TXTLookupResult {
 	t.Helper()
 	result, err := NewFoundTXTLookupResult([][]byte{[]byte(record)}, time.Minute, dnssec)
 	if err != nil {
@@ -468,7 +468,7 @@ func foundPublicTXT(t *testing.T, record string, dnssec DNSSECStatus) TXTLookupR
 }
 
 // mustDNSVectorProvider constructs a configured public DNS provider.
-func mustDNSVectorProvider(t *testing.T, transport TXTTransport, config DNSProviderConfig) PublicKeyProvider {
+func mustDNSVectorProvider(t testing.TB, transport TXTTransport, config DNSProviderConfig) PublicKeyProvider {
 	t.Helper()
 	provider, err := NewDNSPublicKeyProviderWithConfig(transport, config)
 	if err != nil {
@@ -523,7 +523,7 @@ func snapshotPublicResult(result VerifyResult) publicResultSnapshot {
 }
 
 // loadDNSGoldenManifest validates both active draft identifiers and public key encodings.
-func loadDNSGoldenManifest(t *testing.T, corpus publicGoldenCorpus) dnsGoldenManifest {
+func loadDNSGoldenManifest(t testing.TB, corpus publicGoldenCorpus) dnsGoldenManifest {
 	t.Helper()
 	raw, err := os.ReadFile("testdata/vectors/draft-chuang-dkim2-dns-04/dns-golden.json")
 	if err != nil {

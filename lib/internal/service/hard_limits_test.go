@@ -50,11 +50,11 @@ func TestMappingAccumulatorCheckHardCapDistinguishesExactAndOver(t *testing.T) {
 	for range limits.MaxCheckFacts {
 		accumulator.appendCheck(fact)
 	}
-	if len(accumulator.checks) != limits.MaxCheckFacts || accumulator.overflow || accumulator.reason != ReasonNone {
+	if len(accumulator.checks) != limits.MaxCheckFacts || accumulator.hardOverflow || accumulator.reason != ReasonNone {
 		t.Fatal("exact hard check cap reported overflow")
 	}
 	accumulator.appendCheck(fact)
-	if len(accumulator.checks) != limits.MaxCheckFacts || !accumulator.overflow || accumulator.severity != severityPass || accumulator.reason != ReasonNone {
+	if len(accumulator.checks) != limits.MaxCheckFacts || accumulator.hardOverflow || accumulator.severity != severityPass || accumulator.reason != ReasonNone {
 		t.Fatal("one-over hard check cap changed protocol semantics before aggregation")
 	}
 	accumulator.add(severityPermanent, ReasonLimitExceeded)

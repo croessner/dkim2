@@ -1,6 +1,10 @@
 package dkim2
 
-import "slices"
+import (
+	"slices"
+
+	"github.com/croessner/dkim2/internal/policy"
+)
 
 // DraftIdentifier identifies the exact DKIM2 behavior baseline implemented by this verification facade.
 const DraftIdentifier = "draft-ietf-dkim-dkim2-spec-04"
@@ -308,6 +312,7 @@ type VerifyResult struct {
 	primaryReason        ReasonCode
 	checks               []CheckFact
 	signatures           []SignatureSetFact
+	policyProjection     policy.Projection
 }
 
 type verifyResultData struct {
@@ -320,6 +325,7 @@ type verifyResultData struct {
 	primaryReason        ReasonCode
 	checks               []CheckFact
 	signatures           []SignatureSetFact
+	policyProjection     policy.Projection
 }
 
 // newVerifyResult constructs a result while cloning every collection owned by its caller.
@@ -339,6 +345,7 @@ func newVerifyResult(data verifyResultData) VerifyResult {
 		primaryReason:        data.primaryReason,
 		checks:               slices.Clone(data.checks),
 		signatures:           slices.Clone(data.signatures),
+		policyProjection:     data.policyProjection.Clone(),
 	}
 }
 
@@ -383,7 +390,7 @@ func publicResultKeyPolicyCoherent(fact SignatureSetFact) bool {
 
 // internalContractResult returns a bounded fail-closed result for invalid adapter input.
 func internalContractResult(target VerificationTarget) VerifyResult {
-	return VerifyResult{
+	result := VerifyResult{
 		draft:                DraftIdentifier,
 		state:                ResultStatePERMERROR,
 		scope:                VerificationScopeCurrent,
@@ -396,6 +403,11 @@ func internalContractResult(target VerificationTarget) VerifyResult {
 			newCheckFact(CheckClassInternalContract, ReasonInternalContract),
 		},
 	}
+	if target == (VerificationTarget{}) {
+		projection, _ := policy.NewUnavailableProjection(policy.PreTargetInternalContract)
+		result.policyProjection = projection
+	}
+	return result
 }
 
 // PrimaryReason returns the deterministic highest-precedence bounded reason.

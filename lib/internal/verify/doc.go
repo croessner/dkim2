@@ -32,4 +32,12 @@
 // values, full DKIM2 fields, decoded envelope paths, recipient lists, nonces,
 // raw signatures, public-key bytes, private keys, tokens, or protected
 // configuration values.
+//
+// Verify derives one bounded flag candidate from the already parsed selected
+// DKIM2-Signature. The candidate contains only target sequence and the five
+// known policy booleans; it owns no raw flag text. It remains unauthenticated
+// evidence in this package. The service layer alone may upgrade it to a sealed
+// policy hop after the aggregate current result is PASS. Non-PASS results may
+// retain parser evidence internally but cannot create authenticated policy
+// facts, feedback intent, or local actions.
 package verify

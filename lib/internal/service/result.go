@@ -1,6 +1,10 @@
 package service
 
-import "slices"
+import (
+	"slices"
+
+	"github.com/croessner/dkim2/internal/policy"
+)
 
 // Target identifies the current signature and instance numbers.
 type Target struct{ Sequence, Instance uint64 }
@@ -31,6 +35,7 @@ type Result struct {
 	primaryReason        Reason
 	checks               []CheckFact
 	signatures           []SignatureSetFact
+	policyProjection     policy.Projection
 }
 
 // newResult constructs an immutable populated service result.
@@ -82,12 +87,26 @@ func serviceResultKeyPolicyCoherent(fact SignatureSetFact) bool {
 
 // internalContractResult returns a bounded fail-closed invariant result.
 func internalContractResult(target Target) Result {
-	return Result{
+	result := Result{
 		draft: DraftIdentifier, state: StatePERMERROR, scope: ScopeCurrent,
 		historicalContent: HistoricalNotEvaluated, historicalSignatures: HistoricalNotEvaluated,
 		custody: CustodyNotEvaluated, target: target, primaryReason: ReasonInternalContract,
 		checks: []CheckFact{{Class: CheckInternalContract, Reason: ReasonInternalContract}},
 	}
+	if target == (Target{}) {
+		projection, _ := policy.NewUnavailableProjection(policy.PreTargetInternalContract)
+		result.policyProjection = projection
+	}
+	return result
+}
+
+// withPolicyProjection attaches an independently cloned coherent projection.
+func (r Result) withPolicyProjection(projection policy.Projection) Result {
+	if !projection.Valid() {
+		return r
+	}
+	r.policyProjection = projection.Clone()
+	return r
 }
 
 // Draft returns the exact active behavior baseline.
@@ -119,3 +138,6 @@ func (r Result) Checks() []CheckFact { return slices.Clone(r.checks) }
 
 // SignatureSets returns immutable bounded signature-set facts.
 func (r Result) SignatureSets() []SignatureSetFact { return slices.Clone(r.signatures) }
+
+// PolicyProjection returns an independent internal facade-transfer clone.
+func (r Result) PolicyProjection() policy.Projection { return r.policyProjection.Clone() }

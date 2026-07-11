@@ -16,22 +16,23 @@ const (
 )
 
 type mappingAccumulator struct {
-	severity         outcomeSeverity
-	reason           Reason
-	checks           []CheckFact
-	signatures       []SignatureSetFact
-	required         map[verify.CheckKind]bool
-	setIndices       [hardMaxSignatureFacts]bool
-	signatureChecks  map[Algorithm]int
-	signatureSets    map[Algorithm]int
-	supportedPass    int
-	maxChecks        int
-	maxSignatures    int
-	overflow         bool
-	target           verify.Target
-	envelopeStatus   verify.EnvelopeStatus
-	alignmentStatus  verify.DomainAlignmentStatus
-	nextDomainStatus verify.NextDomainStatus
+	severity           outcomeSeverity
+	reason             Reason
+	checks             []CheckFact
+	signatures         []SignatureSetFact
+	completeSignatures []SignatureSetFact
+	required           map[verify.CheckKind]bool
+	setIndices         [hardMaxSignatureFacts]bool
+	signatureChecks    map[Algorithm]int
+	signatureSets      map[Algorithm]int
+	supportedPass      int
+	maxChecks          int
+	maxSignatures      int
+	hardOverflow       bool
+	target             verify.Target
+	envelopeStatus     verify.EnvelopeStatus
+	alignmentStatus    verify.DomainAlignmentStatus
+	nextDomainStatus   verify.NextDomainStatus
 }
 
 // mapVerificationResult centrally maps protocol facts into the four-state service contract.
@@ -43,16 +44,17 @@ func mapVerificationResult(input verify.Result, limits Limits) Result {
 	checks := input.Checks()
 	sets := input.SignatureSets()
 	accumulator := mappingAccumulator{
-		reason:          ReasonNone,
-		checks:          make([]CheckFact, 0, min(len(checks), limits.MaxCheckFacts)),
-		signatures:      make([]SignatureSetFact, 0, min(len(sets), limits.MaxSignatureFacts)),
-		required:        make(map[verify.CheckKind]bool, 7),
-		signatureChecks: make(map[Algorithm]int, 3),
-		signatureSets:   make(map[Algorithm]int, 3),
-		maxChecks:       limits.MaxCheckFacts,
-		maxSignatures:   limits.MaxSignatureFacts,
-		target:          input.Target(),
-		overflow:        len(checks) > limits.MaxCheckFacts || len(sets) > limits.MaxSignatureFacts,
+		reason:             ReasonNone,
+		checks:             make([]CheckFact, 0, min(len(checks), limits.MaxCheckFacts)),
+		signatures:         make([]SignatureSetFact, 0, min(len(sets), limits.MaxSignatureFacts)),
+		completeSignatures: make([]SignatureSetFact, 0, min(len(sets), hardMaxSignatureFacts)),
+		required:           make(map[verify.CheckKind]bool, 7),
+		signatureChecks:    make(map[Algorithm]int, 3),
+		signatureSets:      make(map[Algorithm]int, 3),
+		maxChecks:          limits.MaxCheckFacts,
+		maxSignatures:      limits.MaxSignatureFacts,
+		target:             input.Target(),
+		hardOverflow:       len(checks) > DefaultLimits().MaxCheckFacts || len(sets) > hardMaxSignatureFacts,
 	}
 	if inputContractDefect(checks, sets, input.Target()) {
 		accumulator.add(severityPermanent, ReasonInternalContract)
@@ -71,7 +73,7 @@ func mapVerificationResult(input verify.Result, limits Limits) Result {
 		accumulator.mapSignatureSet(set)
 	}
 	accumulator.requireCompleteCurrentChecks()
-	if len(sets) <= limits.MaxSignatureFacts {
+	if len(sets) <= hardMaxSignatureFacts {
 		accumulator.requireContiguousSetIndices(len(sets))
 	}
 
@@ -87,13 +89,21 @@ func mapVerificationResult(input verify.Result, limits Limits) Result {
 		accumulator.add(severityPermanent, ReasonUnsupportedAlgorithm)
 	}
 	accumulator.enforceTargetStatus(input.Status())
-	if accumulator.overflow {
+	if accumulator.hardOverflow {
 		accumulator.add(severityPermanent, ReasonLimitExceeded)
 	}
 
 	slices.SortFunc(accumulator.checks, compareCheckFacts)
 	slices.SortFunc(accumulator.signatures, compareSignatureFacts)
-	return newResult(stateForSeverity(accumulator.severity), custody, target, accumulator.reason, accumulator.checks, accumulator.signatures)
+	result := newResult(stateForSeverity(accumulator.severity), custody, target, accumulator.reason, accumulator.checks, accumulator.signatures)
+	if len(accumulator.completeSignatures) > hardMaxSignatureFacts {
+		return result
+	}
+	projection, err := buildSelectedPolicyProjection(result.state, result.primaryReason, target, input, accumulator.completeSignatures)
+	if err != nil {
+		return result
+	}
+	return result.withPolicyProjection(projection)
 }
 
 // enforceTargetStatus rejects inconsistent aggregate and target-state combinations.
@@ -619,7 +629,6 @@ func (a *mappingAccumulator) appendCheck(fact CheckFact) {
 		a.checks = append(a.checks, fact)
 		return
 	}
-	a.overflow = true
 	worst := 0
 	for index := 1; index < len(a.checks); index++ {
 		if compareCheckFacts(a.checks[worst], a.checks[index]) < 0 {
@@ -633,11 +642,13 @@ func (a *mappingAccumulator) appendCheck(fact CheckFact) {
 
 // appendSignature retains a signature fact only within the configured output cap.
 func (a *mappingAccumulator) appendSignature(fact SignatureSetFact) {
+	if len(a.completeSignatures) < hardMaxSignatureFacts+1 {
+		a.completeSignatures = append(a.completeSignatures, fact)
+	}
 	if len(a.signatures) < a.maxSignatures {
 		a.signatures = append(a.signatures, fact)
 		return
 	}
-	a.overflow = true
 	worst := 0
 	for index := 1; index < len(a.signatures); index++ {
 		if compareSignatureFacts(a.signatures[worst], a.signatures[index]) < 0 {

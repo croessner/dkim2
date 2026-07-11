@@ -298,13 +298,46 @@ type SignatureSetResult struct {
 
 // Result stores immutable bounded verification facts for service coordination.
 type Result struct {
-	draft         string
-	target        Target
-	status        TargetStatus
-	checks        []CheckResult
-	signatureSets []SignatureSetResult
-	custody       CustodyStatus
+	draft          string
+	target         Target
+	status         TargetStatus
+	checks         []CheckResult
+	signatureSets  []SignatureSetResult
+	custody        CustodyStatus
+	targetFlags    TargetFlagCandidate
+	hasTargetFlags bool
 }
+
+// TargetFlagCandidate stores bounded parser-owned evidence for the selected target.
+type TargetFlagCandidate struct {
+	sequence     uint64
+	doNotModify  bool
+	doNotExplode bool
+	feedback     bool
+	feedHere     bool
+	exploded     bool
+}
+
+// Valid reports whether the candidate identifies a positive target sequence.
+func (c TargetFlagCandidate) Valid() bool { return c.sequence > 0 }
+
+// Sequence returns the parsed target signature sequence.
+func (c TargetFlagCandidate) Sequence() uint64 { return c.sequence }
+
+// DoNotModify reports whether parsed target flags contain donotmodify.
+func (c TargetFlagCandidate) DoNotModify() bool { return c.doNotModify }
+
+// DoNotExplode reports whether parsed target flags contain donotexplode.
+func (c TargetFlagCandidate) DoNotExplode() bool { return c.doNotExplode }
+
+// Feedback reports whether parsed target flags contain feedback.
+func (c TargetFlagCandidate) Feedback() bool { return c.feedback }
+
+// FeedHere reports whether parsed target flags contain feedhere.
+func (c TargetFlagCandidate) FeedHere() bool { return c.feedHere }
+
+// Exploded reports whether parsed target flags contain exploded.
+func (c TargetFlagCandidate) Exploded() bool { return c.exploded }
 
 // NewResult constructs immutable verification result facts.
 func NewResult(target Target, status TargetStatus, checks []CheckResult, signatureSets []SignatureSetResult) Result {
@@ -359,6 +392,24 @@ func (r Result) SignatureSets() []SignatureSetResult {
 
 // CustodyStatus returns whole-sequence structural nd= coverage.
 func (r Result) CustodyStatus() CustodyStatus { return r.custody }
+
+// withTargetFlagCandidate attaches coherent parser-owned evidence to a result.
+func (r Result) withTargetFlagCandidate(candidate TargetFlagCandidate) Result {
+	if !candidate.Valid() || r.target.Sequence == 0 || candidate.sequence != r.target.Sequence {
+		return r
+	}
+	r.targetFlags = candidate
+	r.hasTargetFlags = true
+	return r
+}
+
+// TargetFlagCandidate returns the bounded parsed candidate by value when present.
+func (r Result) TargetFlagCandidate() (TargetFlagCandidate, bool) {
+	if !r.hasTargetFlags || !r.targetFlags.Valid() || r.targetFlags.sequence != r.target.Sequence {
+		return TargetFlagCandidate{}, false
+	}
+	return r.targetFlags, true
+}
 
 // Known reports whether status is part of the per-check vocabulary.
 func (s CheckStatus) Known() bool {

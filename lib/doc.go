@@ -14,6 +14,26 @@
 // The precedence is caller/API error, PERMERROR, FAIL, TEMPERROR, then PASS;
 // these states do not prescribe local MTA acceptance policy.
 //
+// EvaluatePolicy applies a separate immutable local policy decision to the
+// sealed projection embedded in a library-created VerifyResult. Verification
+// state remains authoritative and unchanged. Strict mode is the default;
+// permissive and testing modes require explicit options. A continue verdict is
+// non-terminal and is neither PASS nor accept. Every successful evaluation
+// returns exactly one matching disposition action.
+//
+// The public verifier authenticates current-signature flags only on aggregate
+// PASS. Current scope therefore reports donotmodify and donotexplode history as
+// not_evaluated and never infers historical honor. Feedback output is bounded
+// intent without a destination or route. DNS t=y is authenticated key metadata,
+// not the local testing mode; coherent all-set testing makes PASS and the
+// closed eligible failure rows non-terminal without rewriting verification
+// state. Effective testing PASS also suppresses flag-derived compliance,
+// feedback, and exploded output. Pre-target malformed, missing, sequence, or
+// limit outcomes remain valid fact-free PERMERROR results for policy
+// evaluation. Policy results, findings, actions, and errors contain only bounded
+// enums, booleans, counts, and sequence numbers, never message, identity,
+// selector, key, provider, or route material.
+//
 // Provider status is exactly found, missing, invalid, ambiguous, revoked,
 // unsupported_key_type, or algorithm_mismatch, and a declared status accompanies
 // a nil error. Found results contain a matching *rsa.PublicKey or

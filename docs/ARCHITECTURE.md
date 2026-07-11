@@ -646,9 +646,10 @@ Owns local policy decisions over verified protocol facts.
 
 Responsibilities:
 
-- Map protocol results to accept/reject/tempfail/defer decisions.
+- Map sealed protocol results to accept/reject/tempfail/continue decisions.
 - Evaluate `donotmodify`, `donotexplode`, and `feedback` flags.
 - Allow deployments to choose strict, permissive, and testing modes.
+- Produce exactly one bounded disposition action for each successful decision.
 - Keep policy separate from cryptographic correctness.
 
 Design notes:
@@ -656,6 +657,9 @@ Design notes:
 - A message can be cryptographically valid and still fail local policy.
 - A message can be cryptographically invalid but still be accepted by a
   permissive deployment policy.
+- DNS `t=y` is independent of local testing mode. A coherent testing signer is
+  handled as unsigned policy input with `continue`, while the authoritative
+  verification state remains unchanged.
 - The result model must preserve that distinction.
 
 ### 5.11 `lib/internal/service`
@@ -667,20 +671,20 @@ Core services:
 - `Verifier`
 - `Signer`
 - `Reviser`
-- `ActionPlanner`
-
-Example:
-
-```go
-type Verifier struct {
-    Keys   keyresolver.Resolver
-    Clock  Clock
-    Policy policy.Evaluator
-}
-```
 
 The service layer should be where end-to-end workflows live. Lower packages
 should stay focused on one protocol concern.
+
+For the current library verifier, service authenticates the verify-owned flag
+candidate only after aggregate `PASS` and seals the policy projection from the
+authoritative target plus complete signature/key facts. Public
+`MaxCheckFacts` and `MaxSignatureFacts` settings are presentation-retention
+caps only: they deterministically narrow public detail without rewriting the
+four-state result or the complete sealed policy evidence. Hard parser and set
+limits remain separate fail-closed input limits. The root `dkim2` facade owns
+construction of the policy evaluator, calls it with the sealed projection, and
+adapts the immutable decision; service does not duplicate policy mapping or
+action planning.
 
 ### 5.12 `cmd/dkim2d/internal/app`
 
@@ -1718,7 +1722,7 @@ maintainers to understand why behavior exists.
 | M4 - Static-key signature verification | RSA-SHA256 and Ed25519-SHA256 verification with injected static keys, multi-signature behavior, timestamp checks, envelope checks, negative crypto vectors | measured 50m20s productive, 1h02m45s with spec/prompt prep; future similar slice 1 to 2 hours | High |
 | M5 - MVP core verification | Library-only vertical slice: parse raw message, parse DKIM2 headers, validate numbering, canonicalize, hash, verify current Message-Instance and latest DKIM2-Signature with static keys, produce structured result, golden vectors, fuzz seeds, guardrails | 1 to 3 hours | High |
 | M6 - DNS key resolver | TXT lookup, key record parser, resolver interface, fake resolver, key validation, cache policy, TEMPERROR/PERMERROR split, DNS failure tests | measured 3h11m08s; future similar slice 3 to 6 hours | Medium |
-| M7 - Policy engine | Strict/permissive/testing modes, `donotmodify`, `donotexplode`, feedback flags, local decision model, action plan, policy/result separation tests | 1 to 3 hours | Medium |
+| M7 - Policy engine | Strict/permissive/testing modes, `donotmodify`, `donotexplode`, feedback flags, local decision model, action plan, policy/result separation tests | measured 2h35m33s prompt wall-clock, 2h42m32s elapsed; future similar slice 2 to 4 hours | Medium |
 | M8 - Recipe application | JSON recipe parser, bounded reconstruction, null recipes, previous-instance hash validation, resource abuse tests | 3 to 8 hours | High |
 | M9 - Recipe generation | Conservative diff strategy for headers and body, deterministic output, revision tests, non-minimal but reproducible recipe guarantees | 4 to 10 hours | High |
 | M10 - Signing and revising | Message-Instance generation, DKIM2-Signature generation, private key abstraction, chain continuity, signing fixtures | 2 to 5 hours | High |

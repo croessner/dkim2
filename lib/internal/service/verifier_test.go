@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/croessner/dkim2/internal/canonical"
+	"github.com/croessner/dkim2/internal/policy"
 	"github.com/croessner/dkim2/internal/rawmsg"
 	"github.com/croessner/dkim2/internal/verify"
 )
@@ -39,6 +40,48 @@ func TestVerifierMapsSequenceExtractionFailureToUnevaluatedCustody(t *testing.T)
 	}
 	if result.State() != StatePERMERROR || result.PrimaryReason() != ReasonSequenceInvalid || result.Custody() != CustodyNotEvaluated {
 		t.Fatalf("result = %q/%q/%q", result.State(), result.PrimaryReason(), result.Custody())
+	}
+	projection := result.PolicyProjection()
+	if result.Target() != (Target{}) || !projection.Valid() || projection.Form() != policy.TargetUnavailable || projection.PreTargetReason() != policy.PreTargetSequenceInvalid {
+		t.Fatalf("sequence projection = target=%#v projection=%#v", result.Target(), projection)
+	}
+}
+
+// TestVerifierMapsDuplicateSequenceDiagnosticToUnavailableTarget verifies diagnostic i= is not authoritative.
+func TestVerifierMapsDuplicateSequenceDiagnosticToUnavailableTarget(t *testing.T) {
+	const timestamp = uint64(1700000000)
+	raw := string(syntheticCurrentMessage(t, timestamp, 1, 1))
+	start := strings.Index(raw, "DKIM2-Signature:")
+	end := strings.Index(raw[start:], "\r\n")
+	if start < 0 || end < 0 {
+		t.Fatal("synthetic message lacks signature header")
+	}
+	line := raw[start : start+end+2]
+	raw = raw[:start] + line + raw[start:]
+	config := DefaultConfig()
+	config.Clock = func() time.Time { return time.Unix(int64(timestamp), 0) }
+	verifier, err := NewVerifier(&countingProvider{}, config)
+	if err != nil {
+		t.Fatalf("NewVerifier() error = %v", err)
+	}
+	result, err := verifier.Verify(context.Background(), NewRequest([]byte(raw), []byte("<>"), [][]byte{[]byte("<rcpt@example.test>")}))
+	if err != nil {
+		t.Fatalf("Verify() error = %v", err)
+	}
+	projection := result.PolicyProjection()
+	if result.State() != StatePERMERROR || result.PrimaryReason() != ReasonSequenceInvalid || result.Target() != (Target{}) ||
+		!projection.Valid() || projection.Form() != policy.TargetUnavailable || projection.PreTargetReason() != policy.PreTargetSequenceInvalid {
+		t.Fatalf("duplicate result = %q/%q target=%#v projection=%#v", result.State(), result.PrimaryReason(), result.Target(), projection)
+	}
+}
+
+// TestMalformedStateTargetClassificationPreservesPostSelectionDiagnostics verifies location-aware provenance.
+func TestMalformedStateTargetClassificationPreservesPostSelectionDiagnostics(t *testing.T) {
+	if !verificationErrorHasUnavailableTarget(verify.ErrorCodeMalformedState, Target{}) {
+		t.Fatal("pre-target malformed state was not classified unavailable")
+	}
+	if verificationErrorHasUnavailableTarget(verify.ErrorCodeMalformedState, Target{Sequence: 1, Instance: 1}) {
+		t.Fatal("post-selection malformed state was classified target unavailable")
 	}
 }
 

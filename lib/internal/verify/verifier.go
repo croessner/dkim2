@@ -68,6 +68,7 @@ func (v Verifier) verifyExtracted(ctx context.Context, input verificationInput) 
 	if err != nil {
 		return Result{}, err
 	}
+	targetFlags := newTargetFlagCandidate(targetSignature)
 	currentSequence := highestSignatureSequence(input.signatures)
 	if input.request.TargetSequence != 0 && target.InstanceNumber < highestInstanceNumber(input.instances) {
 		return Result{}, unsupportedHistoricalTargetError(target)
@@ -97,7 +98,20 @@ func (v Verifier) verifyExtracted(ctx context.Context, input verificationInput) 
 	checks = append(checks, timestamp.check, nextDomain.check, envelope.check, domainAlignment.check)
 	status := targetStatus(hashes.pass, timestamp.pass, envelope.pass, domainAlignment.pass, nextDomain, signatures)
 
-	return NewResultWithCustody(target, status, checks, signatures.sets, custodyStatus(input.signatures)), nil
+	return NewResultWithCustody(target, status, checks, signatures.sets, custodyStatus(input.signatures)).withTargetFlagCandidate(targetFlags), nil
+}
+
+// newTargetFlagCandidate derives bounded evidence from the already parsed selected signature.
+func newTargetFlagCandidate(parsed signature.Signature) TargetFlagCandidate {
+	flags := parsed.Flags()
+	return TargetFlagCandidate{
+		sequence:     parsed.Sequence(),
+		doNotModify:  flags.HasKnown(signature.FlagDoNotModify),
+		doNotExplode: flags.HasKnown(signature.FlagDoNotExplode),
+		feedback:     flags.HasKnown(signature.FlagFeedback),
+		feedHere:     flags.HasKnown(signature.FlagFeedHere),
+		exploded:     flags.HasKnown(signature.FlagExploded),
+	}
 }
 
 // custodyStatus derives bounded whole-sequence nd= coverage after successful extraction.

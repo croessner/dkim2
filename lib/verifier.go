@@ -4,6 +4,7 @@ import (
 	"context"
 	"reflect"
 
+	"github.com/croessner/dkim2/internal/policy"
 	"github.com/croessner/dkim2/internal/service"
 )
 
@@ -59,11 +60,13 @@ func (v *Verifier) Verify(ctx context.Context, request VerifyRequest) (VerifyRes
 
 // publicPreflightLimitResult returns bounded current-scope failure before parsing or provider work.
 func publicPreflightLimitResult() VerifyResult {
+	projection, _ := policy.NewUnavailableProjection(policy.PreTargetLimitExceeded)
 	return newVerifyResult(verifyResultData{
 		state: ResultStatePERMERROR, scope: VerificationScopeCurrent,
 		historicalContent: HistoricalStateNotEvaluated, historicalSignatures: HistoricalStateNotEvaluated,
 		custodyStructure: CustodyStructureNotEvaluated, primaryReason: ReasonLimitExceeded,
-		checks: []CheckFact{newCheckFact(CheckClassMessage, ReasonLimitExceeded)},
+		checks:           []CheckFact{newCheckFact(CheckClassMessage, ReasonLimitExceeded)},
+		policyProjection: projection,
 	})
 }
 

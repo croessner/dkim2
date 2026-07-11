@@ -1,9 +1,17 @@
 package dkim2
 
-import "github.com/croessner/dkim2/internal/service"
+import (
+	"github.com/croessner/dkim2/internal/policy"
+	"github.com/croessner/dkim2/internal/service"
+)
 
 // adaptServiceResult maps the internal coordinator DTO into the immutable public contract.
 func adaptServiceResult(input service.Result) VerifyResult {
+	return adaptServiceResultWithProjection(input, input.PolicyProjection())
+}
+
+// adaptServiceResultWithProjection maps one service result with an explicit sealed clone.
+func adaptServiceResultWithProjection(input service.Result, projection policy.Projection) VerifyResult {
 	state, okState := adaptState(input.State())
 	custody, okCustody := adaptCustody(input.Custody())
 	reason, okReason := adaptReason(input.PrimaryReason())
@@ -11,6 +19,9 @@ func adaptServiceResult(input service.Result) VerifyResult {
 		input.HistoricalContent() != service.HistoricalNotEvaluated || input.HistoricalSignatures() != service.HistoricalNotEvaluated ||
 		!okState || !okCustody || !okReason {
 		return internalContractResult(newVerificationTarget(input.Target().Sequence, input.Target().Instance))
+	}
+	if !projection.Valid() || !projectionMatchesServiceResult(projection, input) {
+		projection = policy.Projection{}
 	}
 	checks := input.Checks()
 	signatures := input.SignatureSets()
@@ -45,7 +56,66 @@ func adaptServiceResult(input service.Result) VerifyResult {
 		historicalContent: HistoricalStateNotEvaluated, historicalSignatures: HistoricalStateNotEvaluated,
 		custodyStructure: custody, target: newVerificationTarget(input.Target().Sequence, input.Target().Instance),
 		primaryReason: reason, checks: publicChecks, signatures: publicSignatures,
+		policyProjection: projection,
 	})
+}
+
+// projectionMatchesServiceResult validates facade transfer without rebuilding provenance.
+func projectionMatchesServiceResult(projection policy.Projection, input service.Result) bool {
+	wantProtocol, ok := mapServicePolicyProtocol(input.State())
+	if !ok || projection.Protocol() != wantProtocol {
+		return false
+	}
+	if projection.Form() == policy.TargetUnavailable {
+		return input.Target() == (service.Target{}) && input.State() == service.StatePERMERROR && preTargetReasonMatchesService(projection.PreTargetReason(), input.PrimaryReason())
+	}
+	reason, reasonOK := mapServiceVerificationReason(input.PrimaryReason())
+	return projection.Form() == policy.TargetSelected && reasonOK && projection.VerificationReason() == reason && input.Target().Sequence > 0 && projection.TargetSequence() == input.Target().Sequence
+}
+
+// mapServiceVerificationReason exhaustively binds selected aggregate reason provenance.
+func mapServiceVerificationReason(reason service.Reason) (policy.VerificationReason, bool) {
+	if reason == service.ReasonInvalidRequest || !reason.Known() {
+		return "", false
+	}
+	mapped := policy.VerificationReason(reason)
+	return mapped, mapped.Known()
+}
+
+// preTargetReasonMatchesService binds every unavailable provenance reason exactly.
+func preTargetReasonMatchesService(reason policy.PreTargetReason, serviceReason service.Reason) bool {
+	switch reason {
+	case policy.PreTargetLimitExceeded:
+		return serviceReason == service.ReasonLimitExceeded
+	case policy.PreTargetMalformedMessage:
+		return serviceReason == service.ReasonMalformedMessage
+	case policy.PreTargetMalformedProtocol:
+		return serviceReason == service.ReasonMalformedProtocol
+	case policy.PreTargetMissingProtocol:
+		return serviceReason == service.ReasonMissingProtocol
+	case policy.PreTargetSequenceInvalid:
+		return serviceReason == service.ReasonSequenceInvalid
+	case policy.PreTargetInternalContract:
+		return serviceReason == service.ReasonInternalContract
+	default:
+		return false
+	}
+}
+
+// mapServicePolicyProtocol exhaustively validates the projection protocol class.
+func mapServicePolicyProtocol(state service.State) (policy.ProtocolClass, bool) {
+	switch state {
+	case service.StatePASS:
+		return policy.ProtocolPASS, true
+	case service.StateFAIL:
+		return policy.ProtocolFAIL, true
+	case service.StatePERMERROR:
+		return policy.ProtocolPERMERROR, true
+	case service.StateTEMPERROR:
+		return policy.ProtocolTEMPERROR, true
+	default:
+		return "", false
+	}
 }
 
 // adaptState maps the closed internal four-state vocabulary.
