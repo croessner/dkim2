@@ -34,7 +34,11 @@ func adaptServiceResult(input service.Result) VerifyResult {
 		if !algorithmOK || !statusOK || !reasonOK {
 			return internalContractResult(newVerificationTarget(input.Target().Sequence, input.Target().Instance))
 		}
-		publicSignatures = append(publicSignatures, newSignatureSetFact(algorithm, status, factReason))
+		metadata := newKeyPolicyMetadata(fact.KeyPolicy.TestingDeclared, fact.KeyPolicy.StrictIdentityDeclared)
+		if fact.KeyPolicy.StrictIdentityApplicable {
+			return internalContractResult(newVerificationTarget(input.Target().Sequence, input.Target().Instance))
+		}
+		publicSignatures = append(publicSignatures, newSignatureSetFact(algorithm, status, factReason, metadata))
 	}
 	return newVerifyResult(verifyResultData{
 		state: state, scope: VerificationScopeCurrent,

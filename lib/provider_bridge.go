@@ -40,16 +40,21 @@ func (b publicKeyBridge) LookupKey(ctx context.Context, query verify.KeyQuery) (
 	if result.IsZero() || !result.Status().Known() || result.Algorithm() != algorithm {
 		return verify.PublicKey{}, verify.NewProviderFailure(verify.ProviderFailureContract)
 	}
+	metadata := result.KeyPolicyMetadata()
+	if (result.Status() == PublicKeyStatusMissing || result.Status() == PublicKeyStatusAmbiguous) &&
+		(metadata.TestingDeclared() || metadata.StrictIdentityDeclared()) {
+		return verify.PublicKey{}, verify.NewProviderFailure(verify.ProviderFailureContract)
+	}
 
 	internalAlgorithm := verify.Algorithm(result.Algorithm())
 	switch result.Status() {
 	case PublicKeyStatusFound:
 		return foundInternalPublicKey(result, internalAlgorithm)
-	case PublicKeyStatusMissing, PublicKeyStatusInvalid, PublicKeyStatusAmbiguous:
+	case PublicKeyStatusMissing, PublicKeyStatusInvalid, PublicKeyStatusAmbiguous, PublicKeyStatusRevoked, PublicKeyStatusUnsupportedKeyType, PublicKeyStatusAlgorithmMismatch:
 		if publicResultHasMaterial(result) {
 			return verify.PublicKey{}, verify.NewProviderFailure(verify.ProviderFailureContract)
 		}
-		return verify.PublicKey{Algorithm: internalAlgorithm, Metadata: verify.KeyMetadata{Status: internalKeyStatus(result.Status())}}, nil
+		return verify.PublicKey{Algorithm: internalAlgorithm, Metadata: verify.KeyMetadata{Status: internalKeyStatus(result.Status()), Policy: internalKeyPolicyMetadata(result.KeyPolicyMetadata())}}, nil
 	default:
 		return verify.PublicKey{}, verify.NewProviderFailure(verify.ProviderFailureContract)
 	}
@@ -67,12 +72,12 @@ func foundInternalPublicKey(result PublicKeyResult, algorithm verify.Algorithm) 
 		if !hasRSA || rsaKey == nil || rsaKey.N == nil {
 			return verify.PublicKey{}, verify.NewProviderFailure(verify.ProviderFailureContract)
 		}
-		return verify.PublicKey{Algorithm: algorithm, Material: cloneRSAPublicKey(rsaKey), Metadata: verify.KeyMetadata{Status: verify.KeyStatusFound}}, nil
+		return verify.PublicKey{Algorithm: algorithm, Material: cloneRSAPublicKey(rsaKey), Metadata: verify.KeyMetadata{Status: verify.KeyStatusFound, Policy: internalKeyPolicyMetadata(result.KeyPolicyMetadata())}}, nil
 	case verify.AlgorithmEd25519SHA256:
 		if !hasEd {
 			return verify.PublicKey{}, verify.NewProviderFailure(verify.ProviderFailureContract)
 		}
-		return verify.PublicKey{Algorithm: algorithm, Material: ed25519.PublicKey(append([]byte(nil), edKey...)), Metadata: verify.KeyMetadata{Status: verify.KeyStatusFound}}, nil
+		return verify.PublicKey{Algorithm: algorithm, Material: ed25519.PublicKey(append([]byte(nil), edKey...)), Metadata: verify.KeyMetadata{Status: verify.KeyStatusFound, Policy: internalKeyPolicyMetadata(result.KeyPolicyMetadata())}}, nil
 	default:
 		return verify.PublicKey{}, verify.NewProviderFailure(verify.ProviderFailureContract)
 	}
@@ -106,7 +111,22 @@ func internalKeyStatus(status PublicKeyStatus) verify.KeyStatus {
 		return verify.KeyStatusInvalid
 	case PublicKeyStatusAmbiguous:
 		return verify.KeyStatusAmbiguous
+	case PublicKeyStatusRevoked:
+		return verify.KeyStatusRevoked
+	case PublicKeyStatusUnsupportedKeyType:
+		return verify.KeyStatusUnsupportedKeyType
+	case PublicKeyStatusAlgorithmMismatch:
+		return verify.KeyStatusAlgorithmMismatch
 	default:
 		return verify.KeyStatusProviderContract
+	}
+}
+
+// internalKeyPolicyMetadata maps bounded public DNS declarations into verifier facts.
+func internalKeyPolicyMetadata(metadata KeyPolicyMetadata) verify.KeyPolicyMetadata {
+	return verify.KeyPolicyMetadata{
+		TestingDeclared:          metadata.TestingDeclared(),
+		StrictIdentityDeclared:   metadata.StrictIdentityDeclared(),
+		StrictIdentityApplicable: metadata.StrictIdentityApplicable(),
 	}
 }

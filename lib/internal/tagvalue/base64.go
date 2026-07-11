@@ -2,7 +2,7 @@ package tagvalue
 
 import "encoding/base64"
 
-// Base64String stores immutable views of one strict DKIM2 base64string value.
+// Base64String stores immutable views of one canonical DKIM2 Base64 value.
 type Base64String struct {
 	original []byte
 	encoded  []byte
@@ -11,6 +11,16 @@ type Base64String struct {
 
 // ParseBase64String parses a padded RFC 4648 DKIM2 base64string value.
 func ParseBase64String(input []byte, limits Limits) (Base64String, error) {
+	return parseBase64String(input, limits, false)
+}
+
+// ParseOptionalPaddingBase64String parses RFC 4648 Base64 with optional terminal padding.
+func ParseOptionalPaddingBase64String(input []byte, limits Limits) (Base64String, error) {
+	return parseBase64String(input, limits, true)
+}
+
+// parseBase64String parses strict Base64 under the selected terminal-padding policy.
+func parseBase64String(input []byte, limits Limits, optionalPadding bool) (Base64String, error) {
 	limits = limits.normalize()
 	if err := limits.Validate(); err != nil {
 		return Base64String{}, err
@@ -19,20 +29,28 @@ func ParseBase64String(input []byte, limits Limits) (Base64String, error) {
 		return Base64String{}, limitExceededError("max_tag_value_bytes", limits.MaxTagValueBytes, len(input), ErrorLocation{})
 	}
 
-	original := copyBytes(input)
 	encoded := stripBase64FWS(input)
 	padCount, err := validateBase64AlphabetAndPadding(encoded)
 	if err != nil {
 		return Base64String{}, err
 	}
-	if len(encoded) == 0 || len(encoded)%4 != 0 {
+	if len(encoded) == 0 {
 		return Base64String{}, base64Error(ErrorCodeInvalidBase64Length, 0)
+	}
+	if remainder := len(encoded) % 4; remainder != 0 {
+		if !optionalPadding || padCount != 0 || remainder == 1 {
+			return Base64String{}, base64Error(ErrorCodeInvalidBase64Length, 0)
+		}
+		missingPadding := 4 - remainder
+		encoded = append(encoded, bytesOf('=', missingPadding)...)
+		padCount = missingPadding
 	}
 
 	decodedLen := decodedBase64Length(len(encoded), padCount)
 	if decodedLen > limits.MaxBase64DecodedBytes {
 		return Base64String{}, limitExceededError("max_base64_decoded_bytes", limits.MaxBase64DecodedBytes, decodedLen, ErrorLocation{})
 	}
+	original := copyBytes(input)
 
 	decoded := make([]byte, decodedLen)
 	written, decodeErr := base64.StdEncoding.Decode(decoded, encoded)
@@ -49,6 +67,15 @@ func ParseBase64String(input []byte, limits Limits) (Base64String, error) {
 		encoded:  copyBytes(encoded),
 		decoded:  copyBytes(decoded),
 	}, nil
+}
+
+// bytesOf returns count copies of value for bounded canonical padding.
+func bytesOf(value byte, count int) []byte {
+	output := make([]byte, count)
+	for index := range output {
+		output[index] = value
+	}
+	return output
 }
 
 // Original returns the parser-owned encoded bytes before FWS stripping.

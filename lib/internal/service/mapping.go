@@ -130,7 +130,7 @@ func inputContractDefect(checks []verify.CheckResult, sets []verify.SignatureSet
 		}
 	}
 	for _, set := range sets {
-		if _, known := mapAlgorithm(set.Algorithm); !known || !set.Status.Known() || !set.KeyStatus.Known() || set.Index < 0 || !signatureKeyPairValid(set.Status, set.KeyStatus) || !signatureAlgorithmCoherent(set.Algorithm, set.Status) {
+		if _, known := mapAlgorithm(set.Algorithm); !known || !set.Status.Known() || !set.KeyStatus.Known() || !set.KeyPolicy.Valid() || !signatureKeyPolicyCoherent(set.Status, set.KeyPolicy) || set.Index < 0 || !signatureKeyPairValid(set.Status, set.KeyStatus) || !signatureAlgorithmCoherent(set.Algorithm, set.Status) {
 			return true
 		}
 	}
@@ -448,7 +448,7 @@ func (a *mappingAccumulator) mapNextDomainCheck(class CheckClass, check verify.C
 func (a *mappingAccumulator) mapSignatureSet(set verify.SignatureSetResult) {
 	algorithm, algorithmKnown := mapAlgorithm(set.Algorithm)
 	trackedIndex := set.Index >= 0 && set.Index < hardMaxSignatureFacts
-	if !algorithmKnown || !set.Status.Known() || !set.KeyStatus.Known() || set.Index < 0 || trackedIndex && a.setIndices[set.Index] || !signatureKeyPairValid(set.Status, set.KeyStatus) || !signatureAlgorithmCoherent(set.Algorithm, set.Status) {
+	if !algorithmKnown || !set.Status.Known() || !set.KeyStatus.Known() || !set.KeyPolicy.Valid() || !signatureKeyPolicyCoherent(set.Status, set.KeyPolicy) || set.Index < 0 || trackedIndex && a.setIndices[set.Index] || !signatureKeyPairValid(set.Status, set.KeyStatus) || !signatureAlgorithmCoherent(set.Algorithm, set.Status) {
 		a.add(severityPermanent, ReasonInternalContract)
 		a.appendSignature(SignatureSetFact{Algorithm: AlgorithmUnknown, Status: SignaturePERMERROR, Reason: ReasonInternalContract})
 		return
@@ -457,7 +457,7 @@ func (a *mappingAccumulator) mapSignatureSet(set verify.SignatureSetResult) {
 		a.setIndices[set.Index] = true
 	}
 	a.signatureSets[algorithm]++
-	fact := SignatureSetFact{Algorithm: algorithm}
+	fact := SignatureSetFact{Algorithm: algorithm, KeyPolicy: serviceKeyPolicyMetadata(set.KeyPolicy)}
 	switch set.Status {
 	case verify.SignatureSetStatusPass:
 		if set.KeyStatus != verify.KeyStatusFound || algorithm == AlgorithmUnknown {
@@ -514,6 +514,12 @@ func signatureKeyPairValid(status verify.SignatureSetStatus, keyStatus verify.Ke
 		return keyStatus == verify.KeyStatusInvalid
 	case verify.SignatureSetStatusAmbiguousKey:
 		return keyStatus == verify.KeyStatusAmbiguous
+	case verify.SignatureSetStatusRevokedKey:
+		return keyStatus == verify.KeyStatusRevoked
+	case verify.SignatureSetStatusUnsupportedKeyType:
+		return keyStatus == verify.KeyStatusUnsupportedKeyType
+	case verify.SignatureSetStatusKeyAlgorithmMismatch:
+		return keyStatus == verify.KeyStatusAlgorithmMismatch
 	case verify.SignatureSetStatusWrongKeyType:
 		return keyStatus == verify.KeyStatusWrongType
 	case verify.SignatureSetStatusKeyPolicyRejected:
@@ -528,6 +534,31 @@ func signatureKeyPairValid(status verify.SignatureSetStatus, keyStatus verify.Ke
 		return keyStatus == verify.KeyStatusProviderContract
 	default:
 		return false
+	}
+}
+
+// signatureKeyPolicyCoherent restricts DNS metadata to unique-record key states.
+func signatureKeyPolicyCoherent(status verify.SignatureSetStatus, metadata verify.KeyPolicyMetadata) bool {
+	if metadata == (verify.KeyPolicyMetadata{}) {
+		return true
+	}
+	switch status {
+	case verify.SignatureSetStatusPass, verify.SignatureSetStatusFail, verify.SignatureSetStatusInvalidKey,
+		verify.SignatureSetStatusRevokedKey, verify.SignatureSetStatusUnsupportedKeyType,
+		verify.SignatureSetStatusKeyAlgorithmMismatch, verify.SignatureSetStatusWrongKeyType,
+		verify.SignatureSetStatusKeyPolicyRejected:
+		return true
+	default:
+		return false
+	}
+}
+
+// serviceKeyPolicyMetadata maps verifier-owned bounded DNS declarations.
+func serviceKeyPolicyMetadata(metadata verify.KeyPolicyMetadata) KeyPolicyMetadata {
+	return KeyPolicyMetadata{
+		TestingDeclared:          metadata.TestingDeclared,
+		StrictIdentityDeclared:   metadata.StrictIdentityDeclared,
+		StrictIdentityApplicable: metadata.StrictIdentityApplicable,
 	}
 }
 
@@ -708,7 +739,8 @@ func knownErrorCode(code verify.ErrorCode) bool {
 	switch code {
 	case "", verify.ErrorCodeInvalidOptions, verify.ErrorCodeInvalidRequest, verify.ErrorCodeLimitExceeded,
 		verify.ErrorCodeUnsupportedAlgorithm, verify.ErrorCodeUnsupportedTarget, verify.ErrorCodeDisabledAlgorithm,
-		verify.ErrorCodeMissingKey, verify.ErrorCodeAmbiguousKey, verify.ErrorCodeInvalidKey, verify.ErrorCodeWrongKeyType,
+		verify.ErrorCodeMissingKey, verify.ErrorCodeAmbiguousKey, verify.ErrorCodeInvalidKey, verify.ErrorCodeRevokedKey,
+		verify.ErrorCodeUnsupportedKeyType, verify.ErrorCodeKeyAlgorithmMismatch, verify.ErrorCodeWrongKeyType,
 		verify.ErrorCodeKeyPolicyRejected, verify.ErrorCodeProviderError, verify.ErrorCodeMalformedState,
 		verify.ErrorCodeSequenceInvalid,
 		verify.ErrorCodeMissingTarget, verify.ErrorCodeDuplicateTarget, verify.ErrorCodeHashMismatch,
@@ -730,6 +762,12 @@ func mapKeyErrorCode(code verify.ErrorCode) (Reason, outcomeSeverity) {
 		return ReasonAmbiguousKey, severityPermanent
 	case verify.ErrorCodeInvalidKey, verify.ErrorCodeWrongKeyType, verify.ErrorCodeKeyPolicyRejected:
 		return ReasonInvalidKey, severityPermanent
+	case verify.ErrorCodeRevokedKey:
+		return ReasonRevokedKey, severityPermanent
+	case verify.ErrorCodeUnsupportedKeyType:
+		return ReasonUnsupportedKeyType, severityPermanent
+	case verify.ErrorCodeKeyAlgorithmMismatch:
+		return ReasonKeyAlgorithmMismatch, severityPermanent
 	case verify.ErrorCodeProviderError:
 		return ReasonProviderContract, severityPermanent
 	case verify.ErrorCodeDisabledAlgorithm:
@@ -746,6 +784,12 @@ func reasonForSignatureSet(set verify.SignatureSetResult) Reason {
 		return ReasonMissingKey
 	case verify.SignatureSetStatusAmbiguousKey:
 		return ReasonAmbiguousKey
+	case verify.SignatureSetStatusRevokedKey:
+		return ReasonRevokedKey
+	case verify.SignatureSetStatusUnsupportedKeyType:
+		return ReasonUnsupportedKeyType
+	case verify.SignatureSetStatusKeyAlgorithmMismatch:
+		return ReasonKeyAlgorithmMismatch
 	case verify.SignatureSetStatusInvalidKey, verify.SignatureSetStatusWrongKeyType, verify.SignatureSetStatusKeyPolicyRejected:
 		return ReasonInvalidKey
 	case verify.SignatureSetStatusProviderPermanent:
@@ -769,7 +813,7 @@ func classForReason(reason Reason) CheckClass {
 
 // reasonRank makes equal-precedence primary reasons independent of input order.
 func reasonRank(reason Reason) int {
-	for index, candidate := range []Reason{ReasonInternalContract, ReasonLimitExceeded, ReasonMalformedMessage, ReasonMalformedProtocol, ReasonMissingProtocol, ReasonSequenceInvalid, ReasonUnsupportedAlgorithm, ReasonMissingKey, ReasonInvalidKey, ReasonAmbiguousKey, ReasonProviderPermanent, ReasonProviderContract, ReasonTimestampInvalid, ReasonEnvelopeMismatch, ReasonDomainAlignmentMismatch, ReasonNextDomainMismatch, ReasonOutOfBandRequired, ReasonHashMismatch, ReasonSignatureMismatch, ReasonProviderTemporary, ReasonNone} {
+	for index, candidate := range []Reason{ReasonInternalContract, ReasonLimitExceeded, ReasonMalformedMessage, ReasonMalformedProtocol, ReasonMissingProtocol, ReasonSequenceInvalid, ReasonUnsupportedAlgorithm, ReasonMissingKey, ReasonRevokedKey, ReasonUnsupportedKeyType, ReasonKeyAlgorithmMismatch, ReasonInvalidKey, ReasonAmbiguousKey, ReasonProviderPermanent, ReasonProviderContract, ReasonTimestampInvalid, ReasonEnvelopeMismatch, ReasonDomainAlignmentMismatch, ReasonNextDomainMismatch, ReasonOutOfBandRequired, ReasonHashMismatch, ReasonSignatureMismatch, ReasonProviderTemporary, ReasonNone} {
 		if reason == candidate {
 			return index
 		}

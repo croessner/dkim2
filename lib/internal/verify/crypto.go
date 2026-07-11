@@ -5,6 +5,7 @@ import (
 	"crypto"
 	"crypto/ed25519"
 	"crypto/rsa"
+	"errors"
 
 	"github.com/croessner/dkim2/internal/canonical"
 	"github.com/croessner/dkim2/internal/rawmsg"
@@ -64,7 +65,7 @@ func (v Verifier) evaluateSignatureSets(ctx context.Context, targetSignature sig
 		switch setResult.Status {
 		case SignatureSetStatusPass:
 			evaluation.pass++
-		case SignatureSetStatusFail, SignatureSetStatusInvalidKey, SignatureSetStatusWrongKeyType, SignatureSetStatusKeyPolicyRejected, SignatureSetStatusProviderError, SignatureSetStatusProviderPermanent, SignatureSetStatusProviderContract, SignatureSetStatusAmbiguousKey:
+		case SignatureSetStatusFail, SignatureSetStatusInvalidKey, SignatureSetStatusWrongKeyType, SignatureSetStatusKeyPolicyRejected, SignatureSetStatusProviderError, SignatureSetStatusProviderPermanent, SignatureSetStatusProviderContract, SignatureSetStatusAmbiguousKey, SignatureSetStatusRevokedKey, SignatureSetStatusUnsupportedKeyType, SignatureSetStatusKeyAlgorithmMismatch:
 			evaluation.fail++
 		case SignatureSetStatusProviderTemporary:
 			evaluation.temporary++
@@ -108,28 +109,42 @@ func (v Verifier) evaluateSignatureSet(ctx context.Context, targetSignature sign
 		Algorithm: algorithm,
 	})
 	if err != nil {
+		if !providerKeyErrorPairValid(key, algorithm, err) {
+			result.Status = SignatureSetStatusProviderContract
+			result.KeyStatus = KeyStatusProviderContract
+
+			return result
+		}
 		result.Status, result.KeyStatus = signatureSetStatusFromKeyError(err, key.Metadata.Status)
 
 		return result
 	}
+	if !key.Metadata.Policy.Valid() || !keyPolicyMetadataAllowed(key.Metadata.Status, key.Metadata.Policy, err) {
+		result.Status = SignatureSetStatusProviderContract
+		result.KeyStatus = KeyStatusProviderContract
+
+		return result
+	}
 	if key.Algorithm != algorithm {
-		result.Status = SignatureSetStatusInvalidKey
-		result.KeyStatus = KeyStatusInvalid
+		result.Status = SignatureSetStatusProviderContract
+		result.KeyStatus = KeyStatusProviderContract
 
 		return result
 	}
 	if key.Metadata.Status != KeyStatusFound {
 		switch key.Metadata.Status {
-		case KeyStatusMissing, KeyStatusInvalid, KeyStatusAmbiguous:
+		case KeyStatusMissing, KeyStatusInvalid, KeyStatusAmbiguous, KeyStatusRevoked, KeyStatusUnsupportedKeyType, KeyStatusAlgorithmMismatch:
 			result.KeyStatus = key.Metadata.Status
 			result.Status = signatureSetStatusFromKeyStatus(key.Metadata.Status)
+			result.KeyPolicy = key.Metadata.Policy
 		default:
-			result.KeyStatus = KeyStatusInvalid
-			result.Status = SignatureSetStatusInvalidKey
+			result.KeyStatus = KeyStatusProviderContract
+			result.Status = SignatureSetStatusProviderContract
 		}
 
 		return result
 	}
+	result.KeyPolicy = key.Metadata.Policy
 
 	material, keyStatus, err := validatePublicKeyMaterial(algorithm, key.Material, v.options.AlgorithmPolicy)
 	if err != nil {
@@ -148,6 +163,41 @@ func (v Verifier) evaluateSignatureSet(ctx context.Context, targetSignature sign
 	result.Status = SignatureSetStatusPass
 
 	return result
+}
+
+// providerKeyErrorPairValid validates typed internal provider error disjointness.
+func providerKeyErrorPairValid(key PublicKey, algorithm Algorithm, err error) bool {
+	if key.Metadata.Policy != (KeyPolicyMetadata{}) || key.Material != nil {
+		return false
+	}
+	if class := ProviderFailureClassOf(err); class.Known() {
+		return key.Algorithm == "" && key.Metadata == (KeyMetadata{})
+	}
+	if key.Algorithm != algorithm || !key.Metadata.Status.Known() {
+		return false
+	}
+	var typed *Error
+	if !errors.As(err, &typed) {
+		return false
+	}
+	_, mapped := signatureSetStatusFromKeyError(err, key.Metadata.Status)
+	return mapped == key.Metadata.Status && mapped != KeyStatusProviderError || IsErrorCode(err, ErrorCodeProviderError) && mapped == KeyStatusProviderError
+}
+
+// keyPolicyMetadataAllowed restricts DNS declarations to unique-record key states.
+func keyPolicyMetadataAllowed(status KeyStatus, metadata KeyPolicyMetadata, err error) bool {
+	if metadata == (KeyPolicyMetadata{}) {
+		return true
+	}
+	if err != nil {
+		return false
+	}
+	switch status {
+	case KeyStatusFound, KeyStatusInvalid, KeyStatusRevoked, KeyStatusUnsupportedKeyType, KeyStatusAlgorithmMismatch, KeyStatusWrongType, KeyStatusPolicyRejected:
+		return true
+	default:
+		return false
+	}
 }
 
 // verifySignatureDigest verifies one decoded signature over Section 9.6 digest bytes.
@@ -216,6 +266,12 @@ func signatureSetStatusFromKeyStatus(status KeyStatus) SignatureSetStatus {
 		return SignatureSetStatusMissingKey
 	case KeyStatusAmbiguous:
 		return SignatureSetStatusAmbiguousKey
+	case KeyStatusRevoked:
+		return SignatureSetStatusRevokedKey
+	case KeyStatusUnsupportedKeyType:
+		return SignatureSetStatusUnsupportedKeyType
+	case KeyStatusAlgorithmMismatch:
+		return SignatureSetStatusKeyAlgorithmMismatch
 	case KeyStatusWrongType:
 		return SignatureSetStatusWrongKeyType
 	case KeyStatusPolicyRejected:
@@ -255,6 +311,12 @@ func signatureCheckResult(set SignatureSetResult, target Target) CheckResult {
 		code = ErrorCodeMissingKey
 	case SignatureSetStatusInvalidKey:
 		code = ErrorCodeInvalidKey
+	case SignatureSetStatusRevokedKey:
+		code = ErrorCodeRevokedKey
+	case SignatureSetStatusUnsupportedKeyType:
+		code = ErrorCodeUnsupportedKeyType
+	case SignatureSetStatusKeyAlgorithmMismatch:
+		code = ErrorCodeKeyAlgorithmMismatch
 	case SignatureSetStatusWrongKeyType:
 		code = ErrorCodeWrongKeyType
 	case SignatureSetStatusKeyPolicyRejected:

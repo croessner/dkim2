@@ -24,8 +24,8 @@ func TestPublicProviderVocabulariesAreClosed(t *testing.T) {
 		t.Fatal("zero or unknown algorithm reported known")
 	}
 
-	statuses := []PublicKeyStatus{PublicKeyStatusFound, PublicKeyStatusMissing, PublicKeyStatusInvalid, PublicKeyStatusAmbiguous}
-	if got := tokensFromPublicKeyStatuses(statuses); !reflect.DeepEqual(got, []string{string(PublicKeyStatusFound), string(PublicKeyStatusMissing), string(PublicKeyStatusInvalid), string(PublicKeyStatusAmbiguous)}) {
+	statuses := []PublicKeyStatus{PublicKeyStatusFound, PublicKeyStatusMissing, PublicKeyStatusInvalid, PublicKeyStatusAmbiguous, PublicKeyStatusRevoked, PublicKeyStatusUnsupportedKeyType, PublicKeyStatusAlgorithmMismatch}
+	if got := tokensFromPublicKeyStatuses(statuses); !reflect.DeepEqual(got, []string{string(PublicKeyStatusFound), string(PublicKeyStatusMissing), string(PublicKeyStatusInvalid), string(PublicKeyStatusAmbiguous), string(PublicKeyStatusRevoked), string(PublicKeyStatusUnsupportedKeyType), string(PublicKeyStatusAlgorithmMismatch)}) {
 		t.Fatalf("statuses = %v", got)
 	}
 	for _, status := range statuses {
@@ -92,8 +92,11 @@ func TestNonFoundPublicKeyResultsCarryNoMaterial(t *testing.T) {
 		status PublicKeyStatus
 	}{
 		{name: "missing", result: MissingPublicKey(AlgorithmRSASHA256), status: PublicKeyStatusMissing},
-		{name: "invalid", result: InvalidPublicKey(AlgorithmRSASHA256), status: PublicKeyStatusInvalid},
-		{name: "ambiguous", result: AmbiguousPublicKey(AlgorithmRSASHA256), status: PublicKeyStatusAmbiguous},
+		{name: testNameInvalid, result: InvalidPublicKey(AlgorithmRSASHA256), status: PublicKeyStatusInvalid},
+		{name: testNameAmbiguous, result: AmbiguousPublicKey(AlgorithmRSASHA256), status: PublicKeyStatusAmbiguous},
+		{name: testNameRevoked, result: RevokedPublicKey(AlgorithmRSASHA256), status: PublicKeyStatusRevoked},
+		{name: testNameUnsupported, result: UnsupportedKeyTypePublicKey(AlgorithmRSASHA256), status: PublicKeyStatusUnsupportedKeyType},
+		{name: testNameMismatch, result: AlgorithmMismatchPublicKey(AlgorithmRSASHA256), status: PublicKeyStatusAlgorithmMismatch},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -107,6 +110,19 @@ func TestNonFoundPublicKeyResultsCarryNoMaterial(t *testing.T) {
 				t.Fatal("non-found result exposed Ed25519 material")
 			}
 		})
+	}
+}
+
+// TestPublicKeyResultCarriesImmutablePolicyMetadata verifies bounded DNS declarations.
+func TestPublicKeyResultCarriesImmutablePolicyMetadata(t *testing.T) {
+	metadata := newKeyPolicyMetadata(true, true)
+	result := withKeyPolicyMetadata(RevokedPublicKey(AlgorithmRSASHA256), metadata)
+	got := result.KeyPolicyMetadata()
+	if !got.TestingDeclared() || !got.StrictIdentityDeclared() || got.StrictIdentityApplicable() {
+		t.Fatalf("metadata = testing %v strict %v applicable %v", got.TestingDeclared(), got.StrictIdentityDeclared(), got.StrictIdentityApplicable())
+	}
+	if MissingPublicKey(AlgorithmRSASHA256).KeyPolicyMetadata().TestingDeclared() {
+		t.Fatal("static missing result carried DNS policy metadata")
 	}
 }
 

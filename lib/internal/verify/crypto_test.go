@@ -111,7 +111,7 @@ func TestVerifierReportsRejectedAndWrongTypeKeys(t *testing.T) {
 	}{
 		{
 			name:     "too small rsa",
-			material: &rsa.PublicKey{N: big.NewInt(17), E: 65537},
+			material: &rsa.PublicKey{N: big.NewInt(65539), E: 3},
 			status:   SignatureSetStatusKeyPolicyRejected,
 		},
 		{
@@ -148,8 +148,9 @@ func TestVerifierReportsRejectedAndWrongTypeKeys(t *testing.T) {
 func TestVerifierRejectsInvalidProviderSuccessInvariants(t *testing.T) {
 	fixture := newRSAVerificationFixture(t)
 	tests := []struct {
-		name string
-		key  PublicKey
+		name   string
+		key    PublicKey
+		status SignatureSetStatus
 	}{
 		{
 			name: "algorithm mismatch",
@@ -158,6 +159,7 @@ func TestVerifierRejectsInvalidProviderSuccessInvariants(t *testing.T) {
 				Material:  fixture.rsaPublicKey,
 				Metadata:  KeyMetadata{Status: KeyStatusFound},
 			},
+			status: SignatureSetStatusProviderContract,
 		},
 		{
 			name: "missing found status",
@@ -165,6 +167,7 @@ func TestVerifierRejectsInvalidProviderSuccessInvariants(t *testing.T) {
 				Algorithm: AlgorithmRSASHA256,
 				Material:  fixture.rsaPublicKey,
 			},
+			status: SignatureSetStatusProviderContract,
 		},
 	}
 	for _, tt := range tests {
@@ -180,14 +183,32 @@ func TestVerifierRejectsInvalidProviderSuccessInvariants(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Verify() error = %v", err)
 			}
-			if result.Status() == TargetStatusPass || !hasSignatureSet(result, AlgorithmRSASHA256, SignatureSetStatusInvalidKey) {
-				t.Fatalf("result = %#v sets=%#v, want invalid key", result, result.SignatureSets())
+			if result.Status() == TargetStatusPass || !hasSignatureSet(result, AlgorithmRSASHA256, tt.status) {
+				t.Fatalf("result = %#v sets=%#v, want %q", result, result.SignatureSets(), tt.status)
 			}
 		})
 	}
 }
 
 type providerFunc func(context.Context, KeyQuery) (PublicKey, error)
+
+// TestSignatureCheckResultPreservesDNSKeyReasons verifies distinct DNS policy failures are not collapsed.
+func TestSignatureCheckResultPreservesDNSKeyReasons(t *testing.T) {
+	target := Target{Sequence: 1, InstanceNumber: 1}
+	for _, tt := range []struct {
+		status SignatureSetStatus
+		code   ErrorCode
+	}{
+		{status: SignatureSetStatusRevokedKey, code: ErrorCodeRevokedKey},
+		{status: SignatureSetStatusUnsupportedKeyType, code: ErrorCodeUnsupportedKeyType},
+		{status: SignatureSetStatusKeyAlgorithmMismatch, code: ErrorCodeKeyAlgorithmMismatch},
+	} {
+		check := signatureCheckResult(SignatureSetResult{Algorithm: AlgorithmRSASHA256, Status: tt.status}, target)
+		if check.Status != CheckStatusFail || check.Code != tt.code || check.Target != target {
+			t.Fatalf("signatureCheckResult(%q) = %q/%q/%#v", tt.status, check.Status, check.Code, check.Target)
+		}
+	}
+}
 
 // LookupKey resolves a key through the test function.
 func (f providerFunc) LookupKey(ctx context.Context, query KeyQuery) (PublicKey, error) {

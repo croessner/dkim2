@@ -14,18 +14,50 @@
 // The precedence is caller/API error, PERMERROR, FAIL, TEMPERROR, then PASS;
 // these states do not prescribe local MTA acceptance policy.
 //
-// Provider status is exactly found, missing, invalid, or ambiguous, and a
-// declared status accompanies a nil error. Found results contain a matching
-// *rsa.PublicKey or ed25519.PublicKey; accepted public material is cloned before
-// use. Private keys, crypto.Signer, open-ended material, mismatched algorithms,
-// and inconsistent status/material pairs are not accepted. Provider failures
-// are classified only through typed temporary or permanent errors, never error
+// Provider status is exactly found, missing, invalid, ambiguous, revoked,
+// unsupported_key_type, or algorithm_mismatch, and a declared status accompanies
+// a nil error. Found results contain a matching *rsa.PublicKey or
+// ed25519.PublicKey; accepted public material is cloned before use. Private
+// keys, crypto.Signer, open-ended material, mismatched algorithms, and
+// inconsistent status/material pairs are not accepted. Provider failures are
+// classified only through typed temporary or permanent errors, never error
 // text. An error matching the active caller context remains Go control flow.
-// Missing, invalid, ambiguous, typed permanent, and contract failures produce
-// structured PERMERROR results. Typed temporary failure produces TEMPERROR only
-// without a higher-priority fact. A provider-owned deadline while the caller
-// context is live is temporary only when explicitly typed temporary; otherwise
-// it is a provider contract error.
+// Missing, invalid, ambiguous, revoked, unsupported, mismatch, typed permanent,
+// and contract failures produce structured PERMERROR results. Typed temporary
+// failure produces TEMPERROR only without a higher-priority fact. A
+// provider-owned deadline while the caller context is live is temporary only
+// when explicitly typed temporary; otherwise it is a provider contract error.
+//
+// NewDNSPublicKeyProvider constructs the DNS-backed provider for
+// draft-chuang-dkim2-dns-04. It derives an absolute
+// <selector>._domainkey.<signing-domain>. owner from signed values, so transports
+// and callers must treat that name as sensitive diagnostic data. TXTTransport
+// returns already-concatenated bytes for one TXT resource record while retaining
+// the RR count. More than one RR is fail-closed ambiguous; records are never
+// selected or concatenated across RR boundaries. NetTXTTransport maps each
+// net.Resolver string to one RR and supplies zero TTL, so it cannot populate the
+// provider cache. TTL-aware injected transports may enable bounded positive,
+// authoritative-negative, and stable-error caching.
+//
+// DNS key records use PKCS#1 RSAPublicKey DER for RSA and exactly 32 raw bytes
+// for Ed25519. Empty p= is revoked. Non-empty p= accepts omitted terminal
+// Base64 padding as DNS-04 specifies while still requiring canonical zero pad
+// bits. The parser follows the DNS-04 k= prose and RFC 6376 Erratum 5137 by
+// recognizing lowercase k= despite the inherited ABNF typo. The active DKIM2
+// signature grammar exposes no q= option; DNS TXT is the only lookup binding.
+// Testing t=y and strict-identity t=s declarations reach
+// KeyPolicyMetadata, but do not change cryptographic state or prescribe an MTA
+// action. StrictIdentityApplicable is false because the active DKIM2 i= is a
+// numeric sequence. DNSSECStatus is bounded transport diagnostic metadata and
+// never changes key acceptance, cache lifetime, or verification facts.
+//
+// DNSProviderConfig bounds cache capacity, TTL classes, transport concurrency,
+// coalesced waiters, and lookup duration. Non-final canceled waiters leave a
+// shared lookup independently. The final canceled waiter cancels the transport
+// context and remains cleanup owner until the context-compliant transport
+// returns. A deliberately context-ignoring injected transport can therefore
+// hold that final caller and its single bounded flight slot; no helper goroutine
+// is created to pretend arbitrary Go code can be forcibly canceled.
 //
 // Every populated result reports scope=current, historical content and recipes
 // not_evaluated, and historical signatures not_evaluated. Custody structure is

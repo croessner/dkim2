@@ -18,9 +18,15 @@ import (
 const (
 	publicVectorClock                = int64(1700000000)
 	goldenVectorRSAPass              = "rsa_pass"
+	goldenVectorEd25519Pass          = "ed25519_pass"
 	goldenVectorMalformed            = "malformed_message"
 	goldenVectorMissingProtocol      = "missing_protocol"
 	goldenVectorInconsistentSequence = "inconsistent_sequence"
+	testNameAmbiguous                = "ambiguous"
+	testNameInvalid                  = "invalid"
+	testNameRevoked                  = "revoked"
+	testNameUnsupported              = "unsupported"
+	testNameMismatch                 = "mismatch"
 )
 
 type publicGoldenVector struct {
@@ -216,7 +222,7 @@ func expectedPublicGoldenSignatures(testCase publicGoldenCase) []publicGoldenSig
 	switch testCase.vector {
 	case goldenVectorMissingProtocol, goldenVectorMalformed, goldenVectorInconsistentSequence:
 		return nil
-	case "ed25519_pass":
+	case goldenVectorEd25519Pass:
 		return []publicGoldenSignatureFact{{algorithm: AlgorithmEd25519SHA256, status: SignatureStatusPASS, reason: ReasonNone}}
 	case "both_pass":
 		return []publicGoldenSignatureFact{{algorithm: AlgorithmEd25519SHA256, status: SignatureStatusPASS, reason: ReasonNone}, passRSA}

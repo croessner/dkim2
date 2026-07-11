@@ -265,7 +265,7 @@ func parseTagSpec(input []byte, offset int, tagIndex int, known KnownTags, limit
 		return Tag{}, NewError(ErrorCodeInvalidTagName, ErrorLocation{Offset: offset + nameLeading, TagIndex: tagIndex}, ErrorDetails{})
 	}
 	knownTag := known.containsName(name, caseInsensitive)
-	if !knownTag && !validExtensionTagValue(rawValue) {
+	if (!caseInsensitive || !knownTag) && !validTagValue(rawValue) {
 		return Tag{}, NewError(ErrorCodeInvalidTagValue, ErrorLocation{Offset: offset + equals + 1 + valueLeading, TagIndex: tagIndex}, ErrorDetails{})
 	}
 
@@ -375,8 +375,8 @@ func tagNameForMode(input []byte, maxNameBytes int, caseInsensitive bool) (strin
 	return string(output), true
 }
 
-// validExtensionTagValue enforces DNS-04 printable non-semicolon tag-value bytes.
-func validExtensionTagValue(input []byte) bool {
+// validTagValue enforces printable non-semicolon bytes for DNS tags and header extensions.
+func validTagValue(input []byte) bool {
 	for _, b := range input {
 		if b == '\t' || b == ' ' || b >= '!' && b <= ':' || b >= '<' && b <= '~' {
 			continue

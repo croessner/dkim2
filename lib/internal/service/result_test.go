@@ -22,6 +22,8 @@ func TestNewResultRejectsUnknownAndImpossibleFacts(t *testing.T) {
 		{name: "unknown reason", state: StatePERMERROR, custody: CustodyNotEvaluated, reason: Reason("raw-secret")},
 		{name: "unknown check", state: StatePERMERROR, custody: CustodyNotEvaluated, reason: ReasonInternalContract, checks: []CheckFact{{Class: CheckClass("raw-secret"), Reason: ReasonInternalContract}}},
 		{name: "unknown signature", state: StatePERMERROR, custody: CustodyNotPresent, reason: ReasonInternalContract, signatures: []SignatureSetFact{{Algorithm: Algorithm("raw-secret"), Status: SignaturePASS, Reason: ReasonNone}}},
+		{name: "applicable strict metadata", state: StatePERMERROR, custody: CustodyNotPresent, reason: ReasonInternalContract, signatures: []SignatureSetFact{{Algorithm: AlgorithmRSASHA256, Status: SignaturePASS, Reason: ReasonNone, KeyPolicy: KeyPolicyMetadata{StrictIdentityApplicable: true}}}},
+		{name: "metadata without unique key", state: StatePERMERROR, custody: CustodyNotPresent, reason: ReasonMissingKey, signatures: []SignatureSetFact{{Algorithm: AlgorithmRSASHA256, Status: SignaturePERMERROR, Reason: ReasonMissingKey, KeyPolicy: KeyPolicyMetadata{TestingDeclared: true}}}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

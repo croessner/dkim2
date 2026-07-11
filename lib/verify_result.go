@@ -151,6 +151,12 @@ const (
 	ReasonInvalidKey ReasonCode = "invalid_key"
 	// ReasonAmbiguousKey reports ambiguous public-key material.
 	ReasonAmbiguousKey ReasonCode = "ambiguous_key"
+	// ReasonRevokedKey reports an explicitly revoked DNS public key.
+	ReasonRevokedKey ReasonCode = "revoked_key"
+	// ReasonUnsupportedKeyType reports an unsupported DNS key type.
+	ReasonUnsupportedKeyType ReasonCode = "unsupported_key_type"
+	// ReasonKeyAlgorithmMismatch reports disagreement between requested algorithm and DNS key type.
+	ReasonKeyAlgorithmMismatch ReasonCode = "key_algorithm_mismatch"
 	// ReasonProviderTemporary reports a typed temporary provider failure.
 	ReasonProviderTemporary ReasonCode = "provider_temporary"
 	// ReasonProviderPermanent reports a typed permanent provider failure.
@@ -177,7 +183,7 @@ func (r ReasonCode) Known() bool {
 	case ReasonNone, ReasonInvalidRequest, ReasonLimitExceeded, ReasonMalformedMessage,
 		ReasonMalformedProtocol, ReasonMissingProtocol, ReasonSequenceInvalid,
 		ReasonUnsupportedAlgorithm, ReasonHashMismatch, ReasonSignatureMismatch,
-		ReasonMissingKey, ReasonInvalidKey, ReasonAmbiguousKey, ReasonProviderTemporary,
+		ReasonMissingKey, ReasonInvalidKey, ReasonAmbiguousKey, ReasonRevokedKey, ReasonUnsupportedKeyType, ReasonKeyAlgorithmMismatch, ReasonProviderTemporary,
 		ReasonProviderPermanent, ReasonProviderContract, ReasonTimestampInvalid,
 		ReasonEnvelopeMismatch, ReasonDomainAlignmentMismatch, ReasonNextDomainMismatch,
 		ReasonOutOfBandRequired, ReasonInternalContract:
@@ -260,11 +266,16 @@ type SignatureSetFact struct {
 	algorithm Algorithm
 	status    SignatureStatus
 	reason    ReasonCode
+	metadata  KeyPolicyMetadata
 }
 
 // newSignatureSetFact constructs immutable bounded signature-set metadata.
-func newSignatureSetFact(algorithm Algorithm, status SignatureStatus, reason ReasonCode) SignatureSetFact {
-	return SignatureSetFact{algorithm: algorithm, status: status, reason: reason}
+func newSignatureSetFact(algorithm Algorithm, status SignatureStatus, reason ReasonCode, metadata ...KeyPolicyMetadata) SignatureSetFact {
+	fact := SignatureSetFact{algorithm: algorithm, status: status, reason: reason}
+	if len(metadata) == 1 {
+		fact.metadata = metadata[0]
+	}
+	return fact
 }
 
 // Algorithm returns the bounded signature algorithm family.
@@ -281,6 +292,9 @@ func (f SignatureSetFact) Status() SignatureStatus {
 func (f SignatureSetFact) Reason() ReasonCode {
 	return f.reason
 }
+
+// KeyPolicyMetadata returns bounded DNS key declarations for this signature set.
+func (f SignatureSetFact) KeyPolicyMetadata() KeyPolicyMetadata { return f.metadata }
 
 // VerifyResult is an immutable structured current-verification outcome.
 type VerifyResult struct {
@@ -346,12 +360,25 @@ func verifyResultDataValid(data verifyResultData) bool {
 		}
 	}
 	for _, fact := range data.signatures {
-		if !fact.algorithm.Known() || !fact.status.Known() || !fact.reason.Known() {
+		if !fact.algorithm.Known() || !fact.status.Known() || !fact.reason.Known() || fact.metadata.StrictIdentityApplicable() || !publicResultKeyPolicyCoherent(fact) {
 			return false
 		}
 	}
 
 	return true
+}
+
+// publicResultKeyPolicyCoherent restricts DNS metadata to unique-record result reasons.
+func publicResultKeyPolicyCoherent(fact SignatureSetFact) bool {
+	if !fact.metadata.TestingDeclared() && !fact.metadata.StrictIdentityDeclared() {
+		return true
+	}
+	switch fact.reason {
+	case ReasonNone, ReasonSignatureMismatch, ReasonInvalidKey, ReasonRevokedKey, ReasonUnsupportedKeyType, ReasonKeyAlgorithmMismatch:
+		return true
+	default:
+		return false
+	}
 }
 
 // internalContractResult returns a bounded fail-closed result for invalid adapter input.

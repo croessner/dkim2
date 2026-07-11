@@ -39,7 +39,7 @@ func TestAlgorithmPolicyClassifiesAllowedUnsupportedAndDisabled(t *testing.T) {
 // TestValidateRSAPublicKeyMaterialEnforcesTypeAndMinimum verifies RSA key policy.
 func TestValidateRSAPublicKeyMaterialEnforcesTypeAndMinimum(t *testing.T) {
 	policy := DefaultAlgorithmPolicy()
-	key := &rsa.PublicKey{N: new(big.Int).Lsh(big.NewInt(1), 1023), E: 65537}
+	key := &rsa.PublicKey{N: new(big.Int).Add(new(big.Int).Lsh(big.NewInt(1), 1023), big.NewInt(1)), E: 65537}
 	material, status, err := validatePublicKeyMaterial(AlgorithmRSASHA256, key, policy)
 	if err != nil {
 		t.Fatalf("validatePublicKeyMaterial() error = %v", err)
@@ -60,9 +60,43 @@ func TestValidateRSAPublicKeyMaterialEnforcesTypeAndMinimum(t *testing.T) {
 		t.Fatalf("wrong type status/error = %q/%v, want wrong type", status, err)
 	}
 
-	_, status, err = validatePublicKeyMaterial(AlgorithmRSASHA256, &rsa.PublicKey{N: big.NewInt(17), E: 65537}, policy)
+	_, status, err = validatePublicKeyMaterial(AlgorithmRSASHA256, &rsa.PublicKey{N: big.NewInt(17), E: 3}, policy)
 	if !IsErrorCode(err, ErrorCodeKeyPolicyRejected) || status != KeyStatusPolicyRejected {
 		t.Fatalf("small key status/error = %q/%v, want policy rejected", status, err)
+	}
+}
+
+// TestValidateRSAPublicKeyMaterialRejectsEvenModulus verifies the shared RSA invariant.
+func TestValidateRSAPublicKeyMaterialRejectsEvenModulus(t *testing.T) {
+	modulus := new(big.Int).Lsh(big.NewInt(1), 1023)
+	_, status, err := validatePublicKeyMaterial(AlgorithmRSASHA256, &rsa.PublicKey{N: modulus, E: 65537}, DefaultAlgorithmPolicy())
+	if !IsErrorCode(err, ErrorCodeInvalidKey) || status != KeyStatusInvalid {
+		t.Fatalf("validatePublicKeyMaterial() = %q/%v, want invalid key", status, err)
+	}
+}
+
+// TestValidateRSAPublicKeyMaterialRejectsInvalidShape verifies RFC 8017 modulus and exponent bounds.
+func TestValidateRSAPublicKeyMaterialRejectsInvalidShape(t *testing.T) {
+	tests := []struct {
+		name string
+		key  *rsa.PublicKey
+	}{
+		{name: "nil key", key: nil},
+		{name: "nil modulus", key: &rsa.PublicKey{E: 3}},
+		{name: "negative modulus", key: &rsa.PublicKey{N: big.NewInt(-17), E: 3}},
+		{name: "zero modulus", key: &rsa.PublicKey{N: big.NewInt(0), E: 3}},
+		{name: "zero exponent", key: &rsa.PublicKey{N: big.NewInt(17), E: 0}},
+		{name: "even exponent", key: &rsa.PublicKey{N: big.NewInt(17), E: 2}},
+		{name: "exponent equals modulus", key: &rsa.PublicKey{N: big.NewInt(17), E: 17}},
+		{name: "exponent exceeds modulus", key: &rsa.PublicKey{N: big.NewInt(17), E: 19}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, status, err := validatePublicKeyMaterial(AlgorithmRSASHA256, tt.key, DefaultAlgorithmPolicy())
+			if !IsErrorCode(err, ErrorCodeInvalidKey) || status != KeyStatusInvalid {
+				t.Fatalf("validatePublicKeyMaterial() = %q/%v, want invalid key", status, err)
+			}
+		})
 	}
 }
 

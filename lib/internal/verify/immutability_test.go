@@ -54,7 +54,9 @@ func TestStaticProviderEd25519KeyMaterialAndMetadataAreImmutable(t *testing.T) {
 		Selector:  testSelector,
 		Algorithm: AlgorithmEd25519SHA256,
 		Material:  key,
-		Metadata:  KeyMetadata{Source: "immutability.fixture"},
+		Metadata: KeyMetadata{Source: "immutability.fixture", Policy: KeyPolicyMetadata{
+			TestingDeclared: true, StrictIdentityDeclared: true,
+		}},
 	}})
 	if err != nil {
 		t.Fatalf("NewStaticKeyProvider() error = %v", err)
@@ -67,6 +69,9 @@ func TestStaticProviderEd25519KeyMaterialAndMetadataAreImmutable(t *testing.T) {
 	}
 	if resolved.Metadata.Source != "immutability.fixture" || resolved.Metadata.Status != KeyStatusFound {
 		t.Fatalf("Metadata = %#v, want immutable fixture metadata", resolved.Metadata)
+	}
+	if resolved.Metadata.Policy != (KeyPolicyMetadata{}) {
+		t.Fatalf("static provider leaked DNS policy metadata: %#v", resolved.Metadata.Policy)
 	}
 	resolvedKey := resolved.Material.(ed25519.PublicKey)
 	if !bytes.Equal(resolvedKey, original) {

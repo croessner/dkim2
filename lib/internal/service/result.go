@@ -16,6 +16,7 @@ type SignatureSetFact struct {
 	Algorithm Algorithm
 	Status    SignatureStatus
 	Reason    Reason
+	KeyPolicy KeyPolicyMetadata
 }
 
 // Result is an immutable internal current-verification outcome.
@@ -59,11 +60,24 @@ func resultDataValid(state State, custody Custody, reason Reason, checks []Check
 		}
 	}
 	for _, fact := range signatures {
-		if !fact.Algorithm.Known() || !fact.Status.Known() || !fact.Reason.Known() {
+		if !fact.Algorithm.Known() || !fact.Status.Known() || !fact.Reason.Known() || !fact.KeyPolicy.Valid() || !serviceResultKeyPolicyCoherent(fact) {
 			return false
 		}
 	}
 	return true
+}
+
+// serviceResultKeyPolicyCoherent restricts DNS metadata to unique-record result reasons.
+func serviceResultKeyPolicyCoherent(fact SignatureSetFact) bool {
+	if fact.KeyPolicy == (KeyPolicyMetadata{}) {
+		return true
+	}
+	switch fact.Reason {
+	case ReasonNone, ReasonSignatureMismatch, ReasonInvalidKey, ReasonRevokedKey, ReasonUnsupportedKeyType, ReasonKeyAlgorithmMismatch:
+		return true
+	default:
+		return false
+	}
 }
 
 // internalContractResult returns a bounded fail-closed invariant result.

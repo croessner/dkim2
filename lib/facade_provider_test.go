@@ -33,7 +33,7 @@ func TestFacadeVerifiesEd25519WithClonedProviderKey(t *testing.T) {
 	raw, publicKey := publicEd25519Fixture(t)
 	verifier, err := NewVerifier(publicProviderFunc(func(context.Context, PublicKeyQuery) (PublicKeyResult, error) {
 		// The found-result constructor is the provider-to-library ownership boundary.
-		result := FoundEd25519PublicKey(publicKey)
+		result := withKeyPolicyMetadata(FoundEd25519PublicKey(publicKey), newKeyPolicyMetadata(true, true))
 		publicKey[0] ^= 0xff
 		return result, nil
 	}), WithVerificationClock(func() time.Time { return time.Unix(1700000000, 0) }))
@@ -55,6 +55,10 @@ func TestFacadeVerifiesEd25519WithClonedProviderKey(t *testing.T) {
 		signatures[0].Algorithm() != AlgorithmEd25519SHA256 || signatures[0].Status() != SignatureStatusPASS || signatures[0].Reason() != ReasonNone {
 		t.Fatalf("bounded facts = checks:%d signatures:%#v", len(checks), signatures)
 	}
+	metadata := signatures[0].KeyPolicyMetadata()
+	if !metadata.TestingDeclared() || !metadata.StrictIdentityDeclared() || metadata.StrictIdentityApplicable() {
+		t.Fatalf("pass metadata = %#v", metadata)
+	}
 	for _, check := range checks {
 		if !check.Class().Known() || !check.Reason().Known() {
 			t.Fatalf("unknown public check fact = %q/%q", check.Class(), check.Reason())
@@ -64,6 +68,30 @@ func TestFacadeVerifiesEd25519WithClonedProviderKey(t *testing.T) {
 	signatures[0] = SignatureSetFact{}
 	if result.Checks()[0].Class() == "" || result.SignatureSets()[0].Algorithm() != AlgorithmEd25519SHA256 {
 		t.Fatal("public result accessors exposed mutable result storage")
+	}
+}
+
+// TestFacadePreservesDNSMetadataWithoutChangingSignatureFailure verifies verdict neutrality.
+func TestFacadePreservesDNSMetadataWithoutChangingSignatureFailure(t *testing.T) {
+	raw, _ := publicEd25519Fixture(t)
+	wrongKey, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("ed25519.GenerateKey() error = %v", err)
+	}
+	verifier, err := NewVerifier(publicProviderFunc(func(context.Context, PublicKeyQuery) (PublicKeyResult, error) {
+		return withKeyPolicyMetadata(FoundEd25519PublicKey(wrongKey), newKeyPolicyMetadata(true, true)), nil
+	}), WithVerificationClock(func() time.Time { return time.Unix(1700000000, 0) }))
+	if err != nil {
+		t.Fatalf("NewVerifier() error = %v", err)
+	}
+	result, verifyErr := verifier.Verify(context.Background(), NewVerifyRequest(raw, []byte("<>"), [][]byte{[]byte("<rcpt@example.test>")}))
+	sets := result.SignatureSets()
+	if verifyErr != nil || result.State() != ResultStateFAIL || len(sets) != 1 || sets[0].Reason() != ReasonSignatureMismatch {
+		t.Fatalf("Verify() = %q/%q sets=%#v error=%v", result.State(), result.PrimaryReason(), sets, verifyErr)
+	}
+	metadata := sets[0].KeyPolicyMetadata()
+	if !metadata.TestingDeclared() || !metadata.StrictIdentityDeclared() || metadata.StrictIdentityApplicable() {
+		t.Fatalf("fail metadata = %#v", metadata)
 	}
 }
 
@@ -80,6 +108,9 @@ func TestFacadeMapsDeclaredProviderOutcomes(t *testing.T) {
 		{name: string(PublicKeyStatusMissing), result: MissingPublicKey(AlgorithmRSASHA256), state: ResultStatePERMERROR, reason: ReasonMissingKey},
 		{name: string(PublicKeyStatusInvalid), result: InvalidPublicKey(AlgorithmRSASHA256), state: ResultStatePERMERROR, reason: ReasonInvalidKey},
 		{name: string(PublicKeyStatusAmbiguous), result: AmbiguousPublicKey(AlgorithmRSASHA256), state: ResultStatePERMERROR, reason: ReasonAmbiguousKey},
+		{name: string(PublicKeyStatusRevoked), result: RevokedPublicKey(AlgorithmRSASHA256), state: ResultStatePERMERROR, reason: ReasonRevokedKey},
+		{name: string(PublicKeyStatusUnsupportedKeyType), result: UnsupportedKeyTypePublicKey(AlgorithmRSASHA256), state: ResultStatePERMERROR, reason: ReasonUnsupportedKeyType},
+		{name: string(PublicKeyStatusAlgorithmMismatch), result: AlgorithmMismatchPublicKey(AlgorithmRSASHA256), state: ResultStatePERMERROR, reason: ReasonKeyAlgorithmMismatch},
 		{name: string(ProviderErrorClassTemporary), err: NewTemporaryProviderError(), state: ResultStateTEMPERROR, reason: ReasonProviderTemporary},
 		{name: "classified provider deadline", err: temporaryProviderDeadline{}, state: ResultStateTEMPERROR, reason: ReasonProviderTemporary},
 		{name: "permanent provider deadline", err: permanentProviderDeadline{}, state: ResultStatePERMERROR, reason: ReasonProviderContract},

@@ -21,3 +21,10 @@ covered RSA, Ed25519, combined algorithms, timestamp boundaries, unknown hash
 handling, and the intermediate next-domain vector without recording private
 material. Tests decode these bytes only as input to the public root-package
 facade; they do not invoke internal verification or canonicalization APIs.
+
+The DNS-backed public verification manifest lives at
+`lib/testdata/vectors/draft-chuang-dkim2-dns-04/dns-golden.json`. It binds the
+same synthetic messages to `draft-chuang-dkim2-dns-04`, stores only the public
+PKCS#1 RSA representation and raw 32-byte Ed25519 representation, and names
+only reserved `.test` lookup owners. DNS vector tests enter through the public
+TXT transport, DNS provider, and verifier APIs; they perform no network calls.

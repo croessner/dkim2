@@ -148,6 +148,12 @@ func mapVerificationErrorCode(code verify.ErrorCode) (Reason, CheckClass, State)
 		return ReasonAmbiguousKey, CheckKey, StatePERMERROR
 	case verify.ErrorCodeInvalidKey, verify.ErrorCodeWrongKeyType, verify.ErrorCodeKeyPolicyRejected:
 		return ReasonInvalidKey, CheckKey, StatePERMERROR
+	case verify.ErrorCodeRevokedKey:
+		return ReasonRevokedKey, CheckKey, StatePERMERROR
+	case verify.ErrorCodeUnsupportedKeyType:
+		return ReasonUnsupportedKeyType, CheckKey, StatePERMERROR
+	case verify.ErrorCodeKeyAlgorithmMismatch:
+		return ReasonKeyAlgorithmMismatch, CheckKey, StatePERMERROR
 	case verify.ErrorCodeProviderError:
 		return ReasonProviderContract, CheckProvider, StatePERMERROR
 	case verify.ErrorCodeMalformedState:

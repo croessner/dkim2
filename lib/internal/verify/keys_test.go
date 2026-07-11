@@ -17,7 +17,7 @@ const (
 
 // TestStaticKeyProviderLookupCanonicalTupleAndCopies verifies deterministic key lookup.
 func TestStaticKeyProviderLookupCanonicalTupleAndCopies(t *testing.T) {
-	key := &rsa.PublicKey{N: new(big.Int).Lsh(big.NewInt(1), 1023), E: 65537}
+	key := &rsa.PublicKey{N: new(big.Int).Add(new(big.Int).Lsh(big.NewInt(1), 1023), big.NewInt(1)), E: 65537}
 	provider, err := NewStaticKeyProvider([]StaticKey{{
 		Domain:    "Example.TEST",
 		Selector:  "Selector.TEST",
@@ -129,7 +129,7 @@ func TestStaticKeyProviderRejectsInvalidWrongTypePolicyAndUnsupportedKeys(t *tes
 				Domain:    testDomain,
 				Selector:  testSelector,
 				Algorithm: AlgorithmRSASHA256,
-				Material:  &rsa.PublicKey{N: big.NewInt(17), E: 65537},
+				Material:  &rsa.PublicKey{N: big.NewInt(65539), E: 3},
 			},
 			code: ErrorCodeKeyPolicyRejected,
 		},

@@ -23,6 +23,9 @@ func TestSignatureKeyStatusCoherenceMatrix(t *testing.T) {
 		{verify.SignatureSetStatusMissingKey, verify.KeyStatusMissing, SignaturePERMERROR, ReasonMissingKey, severityPermanent},
 		{verify.SignatureSetStatusInvalidKey, verify.KeyStatusInvalid, SignaturePERMERROR, ReasonInvalidKey, severityPermanent},
 		{verify.SignatureSetStatusAmbiguousKey, verify.KeyStatusAmbiguous, SignaturePERMERROR, ReasonAmbiguousKey, severityPermanent},
+		{verify.SignatureSetStatusRevokedKey, verify.KeyStatusRevoked, SignaturePERMERROR, ReasonRevokedKey, severityPermanent},
+		{verify.SignatureSetStatusUnsupportedKeyType, verify.KeyStatusUnsupportedKeyType, SignaturePERMERROR, ReasonUnsupportedKeyType, severityPermanent},
+		{verify.SignatureSetStatusKeyAlgorithmMismatch, verify.KeyStatusAlgorithmMismatch, SignaturePERMERROR, ReasonKeyAlgorithmMismatch, severityPermanent},
 		{verify.SignatureSetStatusWrongKeyType, verify.KeyStatusWrongType, SignaturePERMERROR, ReasonInvalidKey, severityPermanent},
 		{verify.SignatureSetStatusKeyPolicyRejected, verify.KeyStatusPolicyRejected, SignaturePERMERROR, ReasonInvalidKey, severityPermanent},
 		{verify.SignatureSetStatusProviderError, verify.KeyStatusProviderError, SignaturePERMERROR, ReasonProviderContract, severityPermanent},
@@ -52,6 +55,47 @@ func TestSignatureKeyStatusCoherenceMatrix(t *testing.T) {
 	}
 	if signatureKeyPairValid("", "") || signatureKeyPairValid(verify.SignatureSetStatus("future"), verify.KeyStatusFound) {
 		t.Fatal("zero or unknown signature/key pair accepted")
+	}
+}
+
+// TestSignatureKeyPolicyMetadataCoherence verifies exact propagation and illegal status pairs.
+func TestSignatureKeyPolicyMetadataCoherence(t *testing.T) {
+	metadata := verify.KeyPolicyMetadata{TestingDeclared: true, StrictIdentityDeclared: true}
+	allowed := []struct {
+		status verify.SignatureSetStatus
+		key    verify.KeyStatus
+	}{
+		{verify.SignatureSetStatusPass, verify.KeyStatusFound},
+		{verify.SignatureSetStatusFail, verify.KeyStatusFound},
+		{verify.SignatureSetStatusInvalidKey, verify.KeyStatusInvalid},
+		{verify.SignatureSetStatusRevokedKey, verify.KeyStatusRevoked},
+		{verify.SignatureSetStatusUnsupportedKeyType, verify.KeyStatusUnsupportedKeyType},
+		{verify.SignatureSetStatusKeyAlgorithmMismatch, verify.KeyStatusAlgorithmMismatch},
+		{verify.SignatureSetStatusWrongKeyType, verify.KeyStatusWrongType},
+		{verify.SignatureSetStatusKeyPolicyRejected, verify.KeyStatusPolicyRejected},
+	}
+	for _, pair := range allowed {
+		accumulator := testAccumulator()
+		accumulator.mapSignatureSet(verify.SignatureSetResult{Algorithm: verify.AlgorithmRSASHA256, Status: pair.status, KeyStatus: pair.key, KeyPolicy: metadata})
+		if len(accumulator.signatures) != 1 || accumulator.signatures[0].KeyPolicy != (KeyPolicyMetadata{TestingDeclared: true, StrictIdentityDeclared: true}) {
+			t.Fatalf("metadata for %q/%q = %#v", pair.status, pair.key, accumulator.signatures)
+		}
+	}
+	for _, status := range []verify.SignatureSetStatus{
+		verify.SignatureSetStatusNotChecked, verify.SignatureSetStatusDisabledAlgorithm,
+		verify.SignatureSetStatusMissingKey, verify.SignatureSetStatusAmbiguousKey,
+		verify.SignatureSetStatusProviderError,
+		verify.SignatureSetStatusProviderTemporary, verify.SignatureSetStatusProviderPermanent,
+		verify.SignatureSetStatusProviderContract, verify.SignatureSetStatusUnsupportedAlgorithm,
+	} {
+		if signatureKeyPolicyCoherent(status, metadata) {
+			t.Fatalf("metadata accepted for %q", status)
+		}
+	}
+	bad := verify.SignatureSetResult{Algorithm: verify.AlgorithmRSASHA256, Status: verify.SignatureSetStatusPass, KeyStatus: verify.KeyStatusFound, KeyPolicy: verify.KeyPolicyMetadata{StrictIdentityApplicable: true}}
+	result := mapVerificationResult(newVerifyResultWithDefaultCustody(verify.Target{Sequence: 1, InstanceNumber: 1}, verify.TargetStatusPass, requiredPassChecks(verify.Target{Sequence: 1, InstanceNumber: 1}), []verify.SignatureSetResult{bad}), DefaultLimits())
+	if result.State() != StatePERMERROR || result.PrimaryReason() != ReasonInternalContract {
+		t.Fatalf("invalid applicable metadata mapped to %q/%q", result.State(), result.PrimaryReason())
 	}
 }
 
@@ -166,12 +210,13 @@ func TestMappingValidatesCustodyAndCurrentCheckCoherence(t *testing.T) {
 	}
 }
 
-// TestKnownM4ErrorCodesAreExhaustivelyRecognized verifies zero success and every current code.
-func TestKnownM4ErrorCodesAreExhaustivelyRecognized(t *testing.T) {
+// TestKnownVerificationErrorCodesAreExhaustivelyRecognized verifies zero success and every current code.
+func TestKnownVerificationErrorCodesAreExhaustivelyRecognized(t *testing.T) {
 	codes := []verify.ErrorCode{
 		"", verify.ErrorCodeInvalidOptions, verify.ErrorCodeInvalidRequest, verify.ErrorCodeLimitExceeded,
 		verify.ErrorCodeUnsupportedAlgorithm, verify.ErrorCodeUnsupportedTarget, verify.ErrorCodeDisabledAlgorithm,
-		verify.ErrorCodeMissingKey, verify.ErrorCodeAmbiguousKey, verify.ErrorCodeInvalidKey, verify.ErrorCodeWrongKeyType,
+		verify.ErrorCodeMissingKey, verify.ErrorCodeAmbiguousKey, verify.ErrorCodeInvalidKey, verify.ErrorCodeRevokedKey,
+		verify.ErrorCodeUnsupportedKeyType, verify.ErrorCodeKeyAlgorithmMismatch, verify.ErrorCodeWrongKeyType,
 		verify.ErrorCodeKeyPolicyRejected, verify.ErrorCodeProviderError, verify.ErrorCodeMalformedState,
 		verify.ErrorCodeSequenceInvalid, verify.ErrorCodeMissingTarget, verify.ErrorCodeDuplicateTarget,
 		verify.ErrorCodeHashMismatch, verify.ErrorCodeSignatureMismatch, verify.ErrorCodeTimestampInvalid,

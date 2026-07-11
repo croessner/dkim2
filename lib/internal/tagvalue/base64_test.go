@@ -7,7 +7,10 @@ import (
 	"testing"
 )
 
-const encodedMan = "TWFu"
+const (
+	encodedMa  = "TWE="
+	encodedMan = "TWFu"
+)
 
 // TestParseBase64StringAcceptsCanonicalValues verifies strict padded decoding.
 func TestParseBase64StringAcceptsCanonicalValues(t *testing.T) {
@@ -18,10 +21,10 @@ func TestParseBase64StringAcceptsCanonicalValues(t *testing.T) {
 		wantDecoded []byte
 	}{
 		{name: "no padding needed", input: []byte(encodedMan), wantEncoded: encodedMan, wantDecoded: []byte("Man")},
-		{name: "one padding byte", input: []byte("TWE="), wantEncoded: "TWE=", wantDecoded: []byte("Ma")},
+		{name: "one padding byte", input: []byte(encodedMa), wantEncoded: encodedMa, wantDecoded: []byte("Ma")},
 		{name: "two padding bytes", input: []byte("TQ=="), wantEncoded: "TQ==", wantDecoded: []byte("M")},
 		{name: "space and tab stripped", input: []byte(" T\tW F\tu "), wantEncoded: encodedMan, wantDecoded: []byte("Man")},
-		{name: "padding with fws", input: []byte("\tT W E = "), wantEncoded: "TWE=", wantDecoded: []byte("Ma")},
+		{name: "padding with fws", input: []byte("\tT W E = "), wantEncoded: encodedMa, wantDecoded: []byte("Ma")},
 	}
 
 	for _, tt := range tests {
@@ -43,6 +46,31 @@ func TestParseBase64StringAcceptsCanonicalValues(t *testing.T) {
 				t.Fatalf("Original() = %q, want parser-owned input copy", got)
 			}
 		})
+	}
+}
+
+// TestParseOptionalPaddingBase64StringAcceptsDNSValues verifies optional input and canonical output padding.
+func TestParseOptionalPaddingBase64StringAcceptsDNSValues(t *testing.T) {
+	for _, tt := range []struct {
+		input, encoded, decoded string
+	}{
+		{input: "TWE", encoded: encodedMa, decoded: "Ma"},
+		{input: "TQ", encoded: "TQ==", decoded: "M"},
+		{input: " T\tW E ", encoded: encodedMa, decoded: "Ma"},
+		{input: encodedMa, encoded: encodedMa, decoded: "Ma"},
+	} {
+		value, err := ParseOptionalPaddingBase64String([]byte(tt.input), Limits{})
+		if err != nil || value.EncodedString() != tt.encoded || string(value.Decoded()) != tt.decoded {
+			t.Fatalf("optional padding parse = %q/%q error=%v", value.EncodedString(), value.Decoded(), err)
+		}
+	}
+	for _, input := range []string{"T", "TR", "TWF", "TQ=", "TWE==", "T=WE", "TWE===", "TW-F"} {
+		if _, err := ParseOptionalPaddingBase64String([]byte(input), Limits{}); err == nil {
+			t.Fatal("malformed optional-padding value accepted")
+		}
+	}
+	if _, err := ParseOptionalPaddingBase64String([]byte("TWE"), Limits{MaxBase64DecodedBytes: 1}); !IsErrorCode(err, ErrorCodeLimitExceeded) {
+		t.Fatalf("unpadded decoded-limit error = %v, want limit exceeded", err)
 	}
 }
 

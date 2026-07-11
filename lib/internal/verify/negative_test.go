@@ -258,5 +258,5 @@ func sha256Sum(seed string) [32]byte {
 
 // tinyRSAPublicKey returns a parser-shaped key below the verifier bit minimum.
 func tinyRSAPublicKey() *rsa.PublicKey {
-	return &rsa.PublicKey{N: big.NewInt(17), E: 65537}
+	return &rsa.PublicKey{N: big.NewInt(65539), E: 3}
 }

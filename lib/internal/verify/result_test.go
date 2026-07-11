@@ -27,6 +27,20 @@ func TestStatusVocabularyIsStable(t *testing.T) {
 	}
 }
 
+// TestDNSKeyStatusVocabularyIsStable verifies DNS provider states are closed and known.
+func TestDNSKeyStatusVocabularyIsStable(t *testing.T) {
+	for _, status := range []SignatureSetStatus{SignatureSetStatusRevokedKey, SignatureSetStatusUnsupportedKeyType, SignatureSetStatusKeyAlgorithmMismatch} {
+		if !status.Known() {
+			t.Fatalf("signature status %q unknown", status)
+		}
+	}
+	for _, status := range []KeyStatus{KeyStatusRevoked, KeyStatusUnsupportedKeyType, KeyStatusAlgorithmMismatch} {
+		if !status.Known() {
+			t.Fatalf("key status %q unknown", status)
+		}
+	}
+}
+
 // TestResultAccessorsAreImmutable verifies result slices are copied.
 func TestResultAccessorsAreImmutable(t *testing.T) {
 	checks := []CheckResult{{

@@ -45,7 +45,7 @@ func validateRSAPublicKey(material any, minBits int) (any, KeyStatus, error) {
 	if !ok {
 		return nil, KeyStatusWrongType, wrongKeyTypeError(AlgorithmRSASHA256)
 	}
-	if key == nil || key.N == nil || key.N.Sign() <= 0 || key.E <= 1 || key.E%2 == 0 {
+	if !ValidRSAPublicKeyStructure(key) {
 		return nil, KeyStatusInvalid, invalidKeyError(AlgorithmRSASHA256)
 	}
 	if key.N.BitLen() < minBits {
@@ -53,6 +53,12 @@ func validateRSAPublicKey(material any, minBits int) (any, KeyStatus, error) {
 	}
 
 	return cloneRSAPublicKey(key), KeyStatusFound, nil
+}
+
+// ValidRSAPublicKeyStructure reports whether key satisfies RFC 8017 public-key shape invariants.
+func ValidRSAPublicKeyStructure(key *rsa.PublicKey) bool {
+	return key != nil && key.N != nil && key.N.Sign() > 0 && key.N.Bit(0) == 1 &&
+		key.E >= 3 && key.E%2 == 1 && big.NewInt(int64(key.E)).Cmp(key.N) < 0
 }
 
 // validateEd25519PublicKey checks Ed25519 public-key type and fixed length.

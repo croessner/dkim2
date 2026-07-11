@@ -7,9 +7,12 @@
 // case-insensitively after raw-header unfolding. Both split semicolon-separated
 // tag specifications, preserve case-sensitive values, and reject ambiguous or
 // duplicated tags before semantic parsers run.
-// It also owns strict DKIM2 base64string parsing: space and tab FWS are
-// stripped, standard RFC 4648 padding is required, non-canonical pad bits fail,
-// and encoded plus decoded byte views remain immutable after parsing.
+// It also owns DKIM2 base64string parsing: space and tab FWS are stripped,
+// non-canonical pad bits fail, and encoded plus decoded byte views remain
+// immutable after parsing. ParseBase64String requires standard RFC 4648
+// padding for protocol header fields. ParseOptionalPaddingBase64String is the
+// DNS-04 mode; it accepts omitted terminal padding and returns canonical padded
+// encoded bytes without relaxing alphabet, pad-bit, or resource limits.
 //
 // Errors from this package are structured and bounded. They expose stable
 // codes, operational classes, safe location and limit metadata, and only

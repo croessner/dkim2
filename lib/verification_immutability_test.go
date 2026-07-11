@@ -32,7 +32,7 @@ func TestPublicProviderKeysAreClonedBeforeUse(t *testing.T) {
 			},
 		},
 		{
-			name: "ed25519", vector: "ed25519_pass",
+			name: "ed25519", vector: goldenVectorEd25519Pass,
 			build: func(handoff chan<- struct{}, mutated <-chan struct{}) (PublicKeyProvider, func()) {
 				key := corpus.edKey(t)
 				provider := publicProviderFunc(func(context.Context, PublicKeyQuery) (PublicKeyResult, error) {

@@ -29,7 +29,7 @@ const (
 	ErrorCodeInvalidBase64Alphabet ErrorCode = "invalid_base64_alphabet"
 	// ErrorCodeInvalidBase64Padding reports misplaced or excessive padding.
 	ErrorCodeInvalidBase64Padding ErrorCode = "invalid_base64_padding"
-	// ErrorCodeInvalidBase64Length reports an empty or unpadded encoded value.
+	// ErrorCodeInvalidBase64Length reports an empty or structurally invalid encoded length.
 	ErrorCodeInvalidBase64Length ErrorCode = "invalid_base64_length"
 	// ErrorCodeInvalidBase64PadBits reports non-zero RFC 4648 pad bits.
 	ErrorCodeInvalidBase64PadBits ErrorCode = "invalid_base64_pad_bits"

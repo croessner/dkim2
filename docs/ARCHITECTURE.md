@@ -566,18 +566,35 @@ Owns DNS key lookup and DKIM2 key record parsing.
 
 Responsibilities:
 
-- Resolve `selector._domainkey.domain`.
-- Parse and validate DKIM2-compatible DNS TXT key records.
-- Enforce one usable record per selector.
-- Distinguish temporary DNS failures from permanent key absence.
-- Cache results only within safe TTL and policy boundaries.
-- Support deterministic test resolvers.
+- Validate ASCII selector/domain components and resolve the absolute
+  `selector._domainkey.domain.` owner while preserving dotted selector labels.
+- Consume one already-concatenated TXT RR payload while retaining RR boundaries
+  and failing closed on a multi-record RRset.
+- Parse DNS-04 records through `internal/tagvalue`, including revocation,
+  ignored extension/retired tags, DNS-optional terminal Base64 padding with
+  canonical pad bits, and bounded `t=y`/`t=s` metadata.
+- Decode PKCS#1 RSA public DER and raw 32-byte Ed25519 public keys while reusing
+  `internal/verify` as the authoritative crypto/key-validation owner.
+- Distinguish missing, revoked, invalid, ambiguous, unsupported key type,
+  algorithm mismatch, temporary, permanent, and provider-contract states.
+- Cache only TTL-backed stable results under bounded deterministic LRU policy.
+- Coalesce same-key misses with bounded waiters, non-blocking global lookup
+  saturation, and explicit final-waiter cleanup ownership.
+- Support deterministic fake transports, injected clocks, and instance parent
+  contexts without network or global mutable state.
 
 Design notes:
 
-- The resolver interface must be injectable from day one.
-- DNS timeouts must be controlled by context.
-- Key revocation must be represented as a distinct permanent state.
+- The root package owns public transport/provider adapters; keyresolver does not
+  import the root package or own four-state verification mapping.
+- Derived qnames and cache keys are sensitive and never enter errors or results.
+- DNS-04 lowercase `k=` follows prose and RFC 6376 Erratum 5137; no signature
+  `q=` API is invented for the active DKIM2 grammar.
+- DNSSEC is diagnostic-only. Testing and strict-identity flags are metadata,
+  not cryptographic verdict or MTA policy.
+- A final canceled waiter cancels and owns the flight until a compliant
+  transport returns. No helper goroutine masks an injected transport that
+  ignores context.
 
 ### 5.8 `lib/internal/datasource`
 
@@ -1445,13 +1462,20 @@ Rules:
 DNS resolver behavior must distinguish:
 
 - Temporary lookup failure.
-- Permanent NXDOMAIN or missing record.
-- Multiple TXT records.
+- Authoritative NXDOMAIN or NODATA missing state.
+- Multiple TXT records as fail-closed ambiguity.
 - Malformed record.
 - Revoked key.
+- Unsupported key type.
 - Algorithm mismatch.
+- Permanent transport and provider-contract failure.
 
-The resolver should support context cancellation and cache control.
+TXT character-string chunks are concatenated within one RR without added
+whitespace; RR boundaries are never concatenated. RSA records contain PKCS#1
+public DER and Ed25519 records contain exactly 32 raw public bytes. The resolver
+supports context cancellation, bounded TTL/LRU caching, bounded coalescing, and
+non-blocking saturation. DNSSEC remains diagnostic-only and does not alter
+verification or cache behavior.
 
 ### 12.4 Error Handling
 
@@ -1693,7 +1717,7 @@ maintainers to understand why behavior exists.
 | M3 - Canonicalization and hashes | Header hash input, body hash input, signature input canonicalization, golden tests, byte-level debug helpers | measured 36m39s; future similar slice 45 to 120 minutes | High |
 | M4 - Static-key signature verification | RSA-SHA256 and Ed25519-SHA256 verification with injected static keys, multi-signature behavior, timestamp checks, envelope checks, negative crypto vectors | measured 50m20s productive, 1h02m45s with spec/prompt prep; future similar slice 1 to 2 hours | High |
 | M5 - MVP core verification | Library-only vertical slice: parse raw message, parse DKIM2 headers, validate numbering, canonicalize, hash, verify current Message-Instance and latest DKIM2-Signature with static keys, produce structured result, golden vectors, fuzz seeds, guardrails | 1 to 3 hours | High |
-| M6 - DNS key resolver | TXT lookup, key record parser, resolver interface, fake resolver, key validation, cache policy, TEMPERROR/PERMERROR split, DNS failure tests | 2 to 5 hours | Medium |
+| M6 - DNS key resolver | TXT lookup, key record parser, resolver interface, fake resolver, key validation, cache policy, TEMPERROR/PERMERROR split, DNS failure tests | measured 3h11m08s; future similar slice 3 to 6 hours | Medium |
 | M7 - Policy engine | Strict/permissive/testing modes, `donotmodify`, `donotexplode`, feedback flags, local decision model, action plan, policy/result separation tests | 1 to 3 hours | Medium |
 | M8 - Recipe application | JSON recipe parser, bounded reconstruction, null recipes, previous-instance hash validation, resource abuse tests | 3 to 8 hours | High |
 | M9 - Recipe generation | Conservative diff strategy for headers and body, deterministic output, revision tests, non-minimal but reproducible recipe guarantees | 4 to 10 hours | High |

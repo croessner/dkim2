@@ -64,6 +64,12 @@ const (
 	SignatureSetStatusInvalidKey SignatureSetStatus = "invalid_key"
 	// SignatureSetStatusAmbiguousKey records multiple matching public keys.
 	SignatureSetStatusAmbiguousKey SignatureSetStatus = "ambiguous_key"
+	// SignatureSetStatusRevokedKey records an explicitly revoked DNS public key.
+	SignatureSetStatusRevokedKey SignatureSetStatus = "revoked_key"
+	// SignatureSetStatusUnsupportedKeyType records an unsupported DNS key type.
+	SignatureSetStatusUnsupportedKeyType SignatureSetStatus = "unsupported_key_type"
+	// SignatureSetStatusKeyAlgorithmMismatch records DNS key type disagreement with the requested algorithm.
+	SignatureSetStatusKeyAlgorithmMismatch SignatureSetStatus = "key_algorithm_mismatch"
 	// SignatureSetStatusWrongKeyType records a public key type mismatch.
 	SignatureSetStatusWrongKeyType SignatureSetStatus = "wrong_key_type"
 	// SignatureSetStatusKeyPolicyRejected records a key rejected by verifier policy.
@@ -92,6 +98,12 @@ const (
 	KeyStatusInvalid KeyStatus = "invalid"
 	// KeyStatusAmbiguous records multiple matching key records.
 	KeyStatusAmbiguous KeyStatus = "ambiguous"
+	// KeyStatusRevoked records an explicitly revoked DNS public key.
+	KeyStatusRevoked KeyStatus = "revoked"
+	// KeyStatusUnsupportedKeyType records an unsupported DNS key type.
+	KeyStatusUnsupportedKeyType KeyStatus = "unsupported_key_type"
+	// KeyStatusAlgorithmMismatch records disagreement between requested algorithm and DNS key type.
+	KeyStatusAlgorithmMismatch KeyStatus = "algorithm_mismatch"
 	// KeyStatusWrongType records key material with the wrong Go public-key type.
 	KeyStatusWrongType KeyStatus = "wrong_type"
 	// KeyStatusPolicyRejected records a key or algorithm rejected by local policy.
@@ -280,6 +292,8 @@ type SignatureSetResult struct {
 	Status SignatureSetStatus
 	// KeyStatus records associated key lookup and validation state.
 	KeyStatus KeyStatus
+	// KeyPolicy carries bounded DNS declarations from the selected key record.
+	KeyPolicy KeyPolicyMetadata
 }
 
 // Result stores immutable bounded verification facts for service coordination.
@@ -359,7 +373,7 @@ func (s CheckStatus) Known() bool {
 // Known reports whether status is part of the per-signature-set vocabulary.
 func (s SignatureSetStatus) Known() bool {
 	switch s {
-	case SignatureSetStatusNotChecked, SignatureSetStatusPass, SignatureSetStatusFail, SignatureSetStatusUnsupportedAlgorithm, SignatureSetStatusDisabledAlgorithm, SignatureSetStatusMissingKey, SignatureSetStatusInvalidKey, SignatureSetStatusAmbiguousKey, SignatureSetStatusWrongKeyType, SignatureSetStatusKeyPolicyRejected, SignatureSetStatusProviderError, SignatureSetStatusProviderTemporary, SignatureSetStatusProviderPermanent, SignatureSetStatusProviderContract:
+	case SignatureSetStatusNotChecked, SignatureSetStatusPass, SignatureSetStatusFail, SignatureSetStatusUnsupportedAlgorithm, SignatureSetStatusDisabledAlgorithm, SignatureSetStatusMissingKey, SignatureSetStatusInvalidKey, SignatureSetStatusAmbiguousKey, SignatureSetStatusRevokedKey, SignatureSetStatusUnsupportedKeyType, SignatureSetStatusKeyAlgorithmMismatch, SignatureSetStatusWrongKeyType, SignatureSetStatusKeyPolicyRejected, SignatureSetStatusProviderError, SignatureSetStatusProviderTemporary, SignatureSetStatusProviderPermanent, SignatureSetStatusProviderContract:
 		return true
 	default:
 		return false
@@ -369,7 +383,7 @@ func (s SignatureSetStatus) Known() bool {
 // Known reports whether status is part of the key-status vocabulary.
 func (s KeyStatus) Known() bool {
 	switch s {
-	case KeyStatusNotChecked, KeyStatusFound, KeyStatusMissing, KeyStatusInvalid, KeyStatusAmbiguous, KeyStatusWrongType, KeyStatusPolicyRejected, KeyStatusUnsupportedAlgorithm, KeyStatusDisabledAlgorithm, KeyStatusProviderError, KeyStatusProviderTemporary, KeyStatusProviderPermanent, KeyStatusProviderContract:
+	case KeyStatusNotChecked, KeyStatusFound, KeyStatusMissing, KeyStatusInvalid, KeyStatusAmbiguous, KeyStatusRevoked, KeyStatusUnsupportedKeyType, KeyStatusAlgorithmMismatch, KeyStatusWrongType, KeyStatusPolicyRejected, KeyStatusUnsupportedAlgorithm, KeyStatusDisabledAlgorithm, KeyStatusProviderError, KeyStatusProviderTemporary, KeyStatusProviderPermanent, KeyStatusProviderContract:
 		return true
 	default:
 		return false

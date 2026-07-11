@@ -42,12 +42,19 @@ const (
 	PublicKeyStatusInvalid PublicKeyStatus = "invalid"
 	// PublicKeyStatusAmbiguous reports more than one matching public key.
 	PublicKeyStatusAmbiguous PublicKeyStatus = "ambiguous"
+	// PublicKeyStatusRevoked reports an explicitly empty DNS public key.
+	PublicKeyStatusRevoked PublicKeyStatus = "revoked"
+	// PublicKeyStatusUnsupportedKeyType reports an unrecognized DNS key type.
+	PublicKeyStatusUnsupportedKeyType PublicKeyStatus = "unsupported_key_type"
+	// PublicKeyStatusAlgorithmMismatch reports disagreement between requested algorithm and DNS key type.
+	PublicKeyStatusAlgorithmMismatch PublicKeyStatus = "algorithm_mismatch"
 )
 
 // Known reports whether the status is in the closed provider vocabulary.
 func (s PublicKeyStatus) Known() bool {
 	switch s {
-	case PublicKeyStatusFound, PublicKeyStatusMissing, PublicKeyStatusInvalid, PublicKeyStatusAmbiguous:
+	case PublicKeyStatusFound, PublicKeyStatusMissing, PublicKeyStatusInvalid, PublicKeyStatusAmbiguous,
+		PublicKeyStatusRevoked, PublicKeyStatusUnsupportedKeyType, PublicKeyStatusAlgorithmMismatch:
 		return true
 	default:
 		return false
@@ -91,7 +98,28 @@ type PublicKeyResult struct {
 	algorithm  Algorithm
 	rsaKey     *rsa.PublicKey
 	ed25519Key ed25519.PublicKey
+	metadata   KeyPolicyMetadata
 }
+
+// KeyPolicyMetadata carries bounded DNS key declarations without raw record data.
+type KeyPolicyMetadata struct {
+	testingDeclared        bool
+	strictIdentityDeclared bool
+}
+
+// newKeyPolicyMetadata constructs immutable DNS policy metadata.
+func newKeyPolicyMetadata(testingDeclared, strictIdentityDeclared bool) KeyPolicyMetadata {
+	return KeyPolicyMetadata{testingDeclared: testingDeclared, strictIdentityDeclared: strictIdentityDeclared}
+}
+
+// TestingDeclared reports whether the DNS key record declared t=y.
+func (m KeyPolicyMetadata) TestingDeclared() bool { return m.testingDeclared }
+
+// StrictIdentityDeclared reports whether the DNS key record declared t=s.
+func (m KeyPolicyMetadata) StrictIdentityDeclared() bool { return m.strictIdentityDeclared }
+
+// StrictIdentityApplicable reports false because active DKIM2 i= is a numeric sequence.
+func (m KeyPolicyMetadata) StrictIdentityApplicable() bool { return false }
 
 // FoundRSAPublicKey constructs a found RSA-SHA256 result with cloned public material.
 func FoundRSAPublicKey(key *rsa.PublicKey) PublicKeyResult {
@@ -126,6 +154,27 @@ func AmbiguousPublicKey(algorithm Algorithm) PublicKeyResult {
 	return PublicKeyResult{status: PublicKeyStatusAmbiguous, algorithm: algorithm}
 }
 
+// RevokedPublicKey constructs an explicitly revoked result without key material.
+func RevokedPublicKey(algorithm Algorithm) PublicKeyResult {
+	return PublicKeyResult{status: PublicKeyStatusRevoked, algorithm: algorithm}
+}
+
+// UnsupportedKeyTypePublicKey constructs an unsupported DNS key-type result without material.
+func UnsupportedKeyTypePublicKey(algorithm Algorithm) PublicKeyResult {
+	return PublicKeyResult{status: PublicKeyStatusUnsupportedKeyType, algorithm: algorithm}
+}
+
+// AlgorithmMismatchPublicKey constructs a requested-algorithm mismatch result without material.
+func AlgorithmMismatchPublicKey(algorithm Algorithm) PublicKeyResult {
+	return PublicKeyResult{status: PublicKeyStatusAlgorithmMismatch, algorithm: algorithm}
+}
+
+// withKeyPolicyMetadata attaches bounded DNS declarations to one provider result.
+func withKeyPolicyMetadata(result PublicKeyResult, metadata KeyPolicyMetadata) PublicKeyResult {
+	result.metadata = metadata
+	return result
+}
+
 // Status returns the declared closed lookup outcome.
 func (r PublicKeyResult) Status() PublicKeyStatus {
 	return r.status
@@ -135,6 +184,9 @@ func (r PublicKeyResult) Status() PublicKeyStatus {
 func (r PublicKeyResult) Algorithm() Algorithm {
 	return r.algorithm
 }
+
+// KeyPolicyMetadata returns immutable bounded DNS key declarations.
+func (r PublicKeyResult) KeyPolicyMetadata() KeyPolicyMetadata { return r.metadata }
 
 // RSAPublicKey returns an independent RSA public-key copy when that variant is present.
 func (r PublicKeyResult) RSAPublicKey() (*rsa.PublicKey, bool) {
@@ -156,7 +208,7 @@ func (r PublicKeyResult) Ed25519PublicKey() (ed25519.PublicKey, bool) {
 
 // IsZero reports whether no declared provider outcome is present.
 func (r PublicKeyResult) IsZero() bool {
-	return r.status == "" && r.algorithm == "" && r.rsaKey == nil && r.ed25519Key == nil
+	return r.status == "" && r.algorithm == "" && r.rsaKey == nil && r.ed25519Key == nil && r.metadata == (KeyPolicyMetadata{})
 }
 
 // PublicKeyProvider resolves static public-key intent without exposing provider-specific models.
@@ -164,7 +216,8 @@ func (r PublicKeyResult) IsZero() bool {
 // The legal return matrix is closed: a zero result may accompany either the
 // active caller context error or a classified temporary or permanent provider
 // error; a declared found, missing, invalid, or ambiguous result must accompany
-// a nil error. Every other pair is a provider contract violation. Implementations
+// a nil error. Revoked, unsupported-key-type, and algorithm-mismatch results
+// also carry no material and accompany nil error. Every other pair is a provider contract violation. Implementations
 // must not place raw causes, provider metadata, private keys, or signer objects
 // in either return value. A provider-owned deadline while the caller context is
 // live is valid only when classified temporary; permanent or unclassified

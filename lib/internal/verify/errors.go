@@ -29,6 +29,12 @@ const (
 	ErrorCodeAmbiguousKey ErrorCode = "ambiguous_key"
 	// ErrorCodeInvalidKey reports malformed or mismatched public key material.
 	ErrorCodeInvalidKey ErrorCode = "invalid_key"
+	// ErrorCodeRevokedKey reports an explicitly revoked DNS public key.
+	ErrorCodeRevokedKey ErrorCode = "revoked_key"
+	// ErrorCodeUnsupportedKeyType reports an unsupported DNS key type.
+	ErrorCodeUnsupportedKeyType ErrorCode = "unsupported_key_type"
+	// ErrorCodeKeyAlgorithmMismatch reports disagreement between a signature algorithm and DNS key type.
+	ErrorCodeKeyAlgorithmMismatch ErrorCode = "key_algorithm_mismatch"
 	// ErrorCodeWrongKeyType reports key material with the wrong Go public-key type.
 	ErrorCodeWrongKeyType ErrorCode = "wrong_key_type"
 	// ErrorCodeKeyPolicyRejected reports a key rejected by local policy.
@@ -409,7 +415,7 @@ func classForCode(code ErrorCode) ErrorClass {
 		return ErrorClassUnsupported
 	case ErrorCodeOutOfBandRequired:
 		return ErrorClassUnsupported
-	case ErrorCodeMissingKey, ErrorCodeAmbiguousKey, ErrorCodeInvalidKey, ErrorCodeWrongKeyType, ErrorCodeKeyPolicyRejected, ErrorCodeProviderError:
+	case ErrorCodeMissingKey, ErrorCodeAmbiguousKey, ErrorCodeInvalidKey, ErrorCodeRevokedKey, ErrorCodeUnsupportedKeyType, ErrorCodeKeyAlgorithmMismatch, ErrorCodeWrongKeyType, ErrorCodeKeyPolicyRejected, ErrorCodeProviderError:
 		return ErrorClassKey
 	case ErrorCodeMissingTarget:
 		return ErrorClassMissing

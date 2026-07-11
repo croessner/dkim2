@@ -44,7 +44,7 @@ func TestPublicVerificationVocabulariesAreClosed(t *testing.T) {
 		ReasonMalformedMessage, ReasonMalformedProtocol, ReasonMissingProtocol,
 		ReasonSequenceInvalid, ReasonUnsupportedAlgorithm, ReasonHashMismatch,
 		ReasonSignatureMismatch, ReasonMissingKey, ReasonInvalidKey,
-		ReasonAmbiguousKey, ReasonProviderTemporary, ReasonProviderPermanent,
+		ReasonAmbiguousKey, ReasonRevokedKey, ReasonUnsupportedKeyType, ReasonKeyAlgorithmMismatch, ReasonProviderTemporary, ReasonProviderPermanent,
 		ReasonProviderContract, ReasonTimestampInvalid, ReasonEnvelopeMismatch,
 		ReasonDomainAlignmentMismatch, ReasonNextDomainMismatch,
 		ReasonOutOfBandRequired, ReasonInternalContract,
@@ -131,6 +131,19 @@ func TestVerifyResultZeroValueCannotPass(t *testing.T) {
 	}
 	if result.Checks() != nil || result.SignatureSets() != nil {
 		t.Fatal("zero result unexpectedly contains facts")
+	}
+}
+
+// TestVerifyResultRejectsMetadataWithoutUniqueKey verifies public invariant ownership.
+func TestVerifyResultRejectsMetadataWithoutUniqueKey(t *testing.T) {
+	result := newVerifyResult(verifyResultData{
+		state: ResultStatePERMERROR, scope: VerificationScopeCurrent,
+		historicalContent: HistoricalStateNotEvaluated, historicalSignatures: HistoricalStateNotEvaluated,
+		custodyStructure: CustodyStructureNotPresent, primaryReason: ReasonMissingKey,
+		signatures: []SignatureSetFact{newSignatureSetFact(AlgorithmRSASHA256, SignatureStatusPERMERROR, ReasonMissingKey, newKeyPolicyMetadata(true, false))},
+	})
+	if result.PrimaryReason() != ReasonInternalContract {
+		t.Fatalf("PrimaryReason() = %q", result.PrimaryReason())
 	}
 }
 

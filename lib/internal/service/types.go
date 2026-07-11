@@ -141,6 +141,12 @@ const (
 	ReasonInvalidKey Reason = "invalid_key"
 	// ReasonAmbiguousKey reports ambiguous public-key material.
 	ReasonAmbiguousKey Reason = "ambiguous_key"
+	// ReasonRevokedKey reports an explicitly revoked DNS public key.
+	ReasonRevokedKey Reason = "revoked_key"
+	// ReasonUnsupportedKeyType reports an unsupported DNS key type.
+	ReasonUnsupportedKeyType Reason = "unsupported_key_type"
+	// ReasonKeyAlgorithmMismatch reports disagreement between requested algorithm and DNS key type.
+	ReasonKeyAlgorithmMismatch Reason = "key_algorithm_mismatch"
 	// ReasonProviderTemporary reports typed retryable provider failure.
 	ReasonProviderTemporary Reason = "provider_temporary"
 	// ReasonProviderPermanent reports typed unrecoverable provider failure.
@@ -164,12 +170,22 @@ const (
 // Known reports whether the reason belongs to the closed service vocabulary.
 func (r Reason) Known() bool {
 	switch r {
-	case ReasonNone, ReasonInvalidRequest, ReasonLimitExceeded, ReasonMalformedMessage, ReasonMalformedProtocol, ReasonMissingProtocol, ReasonSequenceInvalid, ReasonUnsupportedAlgorithm, ReasonHashMismatch, ReasonSignatureMismatch, ReasonMissingKey, ReasonInvalidKey, ReasonAmbiguousKey, ReasonProviderTemporary, ReasonProviderPermanent, ReasonProviderContract, ReasonTimestampInvalid, ReasonEnvelopeMismatch, ReasonDomainAlignmentMismatch, ReasonNextDomainMismatch, ReasonOutOfBandRequired, ReasonInternalContract:
+	case ReasonNone, ReasonInvalidRequest, ReasonLimitExceeded, ReasonMalformedMessage, ReasonMalformedProtocol, ReasonMissingProtocol, ReasonSequenceInvalid, ReasonUnsupportedAlgorithm, ReasonHashMismatch, ReasonSignatureMismatch, ReasonMissingKey, ReasonInvalidKey, ReasonAmbiguousKey, ReasonRevokedKey, ReasonUnsupportedKeyType, ReasonKeyAlgorithmMismatch, ReasonProviderTemporary, ReasonProviderPermanent, ReasonProviderContract, ReasonTimestampInvalid, ReasonEnvelopeMismatch, ReasonDomainAlignmentMismatch, ReasonNextDomainMismatch, ReasonOutOfBandRequired, ReasonInternalContract:
 		return true
 	default:
 		return false
 	}
 }
+
+// KeyPolicyMetadata carries bounded DNS key declarations through service mapping.
+type KeyPolicyMetadata struct {
+	TestingDeclared          bool
+	StrictIdentityDeclared   bool
+	StrictIdentityApplicable bool
+}
+
+// Valid reports whether policy metadata is coherent with the active DKIM2 draft.
+func (m KeyPolicyMetadata) Valid() bool { return !m.StrictIdentityApplicable }
 
 // Algorithm identifies a bounded signature algorithm family.
 type Algorithm string
