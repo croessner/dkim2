@@ -306,6 +306,8 @@ type Result struct {
 	custody        CustodyStatus
 	targetFlags    TargetFlagCandidate
 	hasTargetFlags bool
+	history        HistoryWalk
+	hasHistory     bool
 }
 
 // TargetFlagCandidate stores bounded parser-owned evidence for the selected target.
@@ -409,6 +411,24 @@ func (r Result) TargetFlagCandidate() (TargetFlagCandidate, bool) {
 		return TargetFlagCandidate{}, false
 	}
 	return r.targetFlags, true
+}
+
+// withHistory attaches one immutable walk without changing current facts.
+func (r Result) withHistory(walk HistoryWalk) Result {
+	if !walk.Valid() || r.target.InstanceNumber == 0 || walk.TargetInstance() != r.target.InstanceNumber {
+		return r
+	}
+	r.history = walk.clone()
+	r.hasHistory = true
+	return r
+}
+
+// historyWalk returns one internal immutable history view.
+func (r Result) historyWalk() (HistoryWalk, bool) {
+	if !r.hasHistory || !r.history.Valid() || r.target.InstanceNumber == 0 || r.history.TargetInstance() != r.target.InstanceNumber {
+		return HistoryWalk{}, false
+	}
+	return r.history.clone(), true
 }
 
 // Known reports whether status is part of the per-check vocabulary.

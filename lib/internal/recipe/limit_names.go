@@ -1,0 +1,28 @@
+package recipe
+
+const (
+	limitNameMaxDecodedRecipeBytes   = "max_decoded_recipe_bytes"
+	limitNameMaxJSONDepth            = "max_json_depth"
+	limitNameMaxJSONMembers          = "max_json_members"
+	limitNameMaxJSONTokens           = "max_json_tokens"
+	limitNameMaxHeaderNames          = "max_header_names"
+	limitNameMaxHeaderNameBytes      = "max_header_name_bytes"
+	limitNameMaxTotalHeaderNameBytes = "max_total_header_name_bytes"
+	limitNameMaxStepsPerHeader       = "max_steps_per_header"
+	limitNameMaxBodySteps            = "max_body_steps"
+	limitNameMaxTotalSteps           = "max_total_steps"
+	limitNameMaxCopyRanges           = "max_copy_ranges"
+	limitNameMaxCopiedItemsPerRange  = "max_copied_items_per_range"
+	limitNameMaxTotalCopiedItems     = "max_total_copied_items"
+	limitNameMaxDataStrings          = "max_data_strings"
+	limitNameMaxDataStringBytes      = "max_data_string_bytes"
+	limitNameMaxTotalLiteralBytes    = "max_total_literal_bytes"
+	limitNameMaxHeaderFields         = "max_header_fields"
+	limitNameMaxHeaderFieldBytes     = "max_header_field_bytes"
+	limitNameMaxHeaderLineBytes      = "max_header_line_bytes"
+	limitNameMaxHeaderBytes          = "max_header_bytes"
+	limitNameMaxBodyLines            = "max_body_lines"
+	limitNameMaxBodyLineBytes        = "max_body_line_bytes"
+	limitNameMaxStateBytes           = "max_state_bytes"
+	limitNameMaxOperationWorkUnits   = "max_operation_work_units"
+)

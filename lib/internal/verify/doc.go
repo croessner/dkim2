@@ -40,4 +40,12 @@
 // policy hop after the aggregate current result is PASS. Non-PASS results may
 // retain parser evidence internally but cannot create authenticated policy
 // facts, feedback intent, or local actions.
+//
+// After aggregate current verification passes, Verify may walk authenticated
+// Message-Instance history through the recipe parser, recipe applier, and
+// canonical hash owner. The resulting immutable HistoryWalk records bounded
+// reconstructed-content coverage only. It does not verify historical
+// signatures, authenticate historical policy flags, alter current four-state
+// truth, or project history through the service or public facade in this
+// increment. Non-PASS results perform no recipe-history work.
 package verify

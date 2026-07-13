@@ -633,3 +633,46 @@ func signedPublicFlaggedPolicyMessage(t testing.TB, timestamp int64) ([]byte, *r
 	}
 	return []byte(build(base64.StdEncoding.EncodeToString(sealed))), &key.PublicKey
 }
+
+// signedPublicHistoriedMessage creates a current PASS fixture with sealed m=2 history work.
+func signedPublicHistoriedMessage(t testing.TB, timestamp int64) ([]byte, *rsa.PublicKey) {
+	t.Helper()
+	key, err := rsa.GenerateKey(rand.Reader, 1024)
+	if err != nil {
+		t.Fatalf("rsa.GenerateKey() error = %v", err)
+	}
+	canonicalizer, err := canonical.NewCanonicalizer()
+	if err != nil {
+		t.Fatalf("NewCanonicalizer() error = %v", err)
+	}
+	base, err := rawmsg.Parse([]byte("From: sender@example.test\r\nSubject: current history\r\n\r\nbody line\r\n"))
+	if err != nil {
+		t.Fatalf("rawmsg.Parse(base) error = %v", err)
+	}
+	headerHash, _ := canonicalizer.HeaderHashFromMessage(base)
+	bodyHash, _ := canonicalizer.BodyHashFromMessage(base)
+	headerDigest, _ := headerHash.Digest()
+	bodyDigest, _ := bodyHash.Digest()
+	build := func(signature string) string {
+		hashes := "sha256:" + headerDigest.Base64() + ":" + bodyDigest.Base64()
+		return "From: sender@example.test\r\nSubject: current history\r\n" +
+			"Message-Instance: m=1; h=" + hashes + ";\r\n" +
+			"Message-Instance: m=2; h=" + hashes + "; r=" + base64.StdEncoding.EncodeToString([]byte(`{`)) + ";\r\n" +
+			"DKIM2-Signature: i=1; m=2; t=" + strconv.FormatInt(timestamp, 10) + "; mf=PD4=; rt=PHJjcHRAZXhhbXBsZS50ZXN0Pg==; d=example.test; s=selector.test:rsa-sha256:" + signature + ";\r\n\r\nbody line\r\n"
+	}
+	placeholder := base64.StdEncoding.EncodeToString(make([]byte, 128))
+	unsigned, err := rawmsg.Parse([]byte(build(placeholder)))
+	if err != nil {
+		t.Fatalf("rawmsg.Parse(unsigned) error = %v", err)
+	}
+	input, err := canonicalizer.SignatureInput(canonical.SignatureInputSelection{Headers: unsigned.Headers(), TargetSequence: 1})
+	if err != nil {
+		t.Fatalf("SignatureInput() error = %v", err)
+	}
+	digest := sha256.Sum256(input.Bytes())
+	sealed, err := rsa.SignPKCS1v15(rand.Reader, key, crypto.SHA256, digest[:])
+	if err != nil {
+		t.Fatalf("rsa.SignPKCS1v15() error = %v", err)
+	}
+	return []byte(build(base64.StdEncoding.EncodeToString(sealed))), &key.PublicKey
+}

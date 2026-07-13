@@ -10,6 +10,9 @@ var canonicalBodyCRLF = []byte("\r\n")
 
 // BodyHashInput builds DKIM2 Section 6.1 canonical body hash input.
 func (c Canonicalizer) BodyHashInput(body rawmsg.Body) (ByteInput, error) {
+	if !body.Initialized() {
+		return ByteInput{}, newError(ErrorCodeMalformedState, ErrorLocation{Kind: KindBodyHashInput}, ErrorDetails{Class: ErrorClassMalformed}, nil)
+	}
 	rawBody := body.Bytes()
 	canonical, removedTrailingEmptyLines, terminalAction := canonicalizeBodyBytes(rawBody)
 	if len(canonical) > c.options.Limits.MaxBodyInputBytes {

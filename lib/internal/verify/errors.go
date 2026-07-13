@@ -67,6 +67,20 @@ const (
 	ErrorCodeOutOfBandRequired ErrorCode = "out_of_band_required"
 	// ErrorCodeInternalMisuse reports invalid internal verifier API use.
 	ErrorCodeInternalMisuse ErrorCode = "internal_misuse"
+	// ErrorCodeHistoryInvalidOptions reports invalid history coordinator limits.
+	ErrorCodeHistoryInvalidOptions ErrorCode = "history_invalid_options"
+	// ErrorCodeHistoryInvalidState reports direct incoherent history inputs.
+	ErrorCodeHistoryInvalidState ErrorCode = "history_invalid_state"
+	// ErrorCodeHistoryInstanceNotAdjacent reports invalid m= transition ordering.
+	ErrorCodeHistoryInstanceNotAdjacent ErrorCode = "history_instance_not_adjacent"
+	// ErrorCodeHistoryMissingRecipe reports an absent required r= value.
+	ErrorCodeHistoryMissingRecipe ErrorCode = "history_missing_recipe"
+	// ErrorCodeHistoryMissingSHA256 reports absent historical baseline hashes.
+	ErrorCodeHistoryMissingSHA256 ErrorCode = "history_missing_sha256"
+	// ErrorCodeHistoryLimitExceeded reports a cumulative history ceiling.
+	ErrorCodeHistoryLimitExceeded ErrorCode = "history_limit_exceeded"
+	// ErrorCodeHistoryInternalContract reports an impossible coordinator state.
+	ErrorCodeHistoryInternalContract ErrorCode = "history_internal_contract"
 )
 
 // ErrorClass groups verification failures for stable callers.
@@ -403,11 +417,11 @@ func providerError(algorithm Algorithm, cause error) *Error {
 // classForCode maps verification codes to default operational classes.
 func classForCode(code ErrorCode) ErrorClass {
 	switch code {
-	case ErrorCodeInvalidOptions:
+	case ErrorCodeInvalidOptions, ErrorCodeHistoryInvalidOptions:
 		return ErrorClassInvariant
 	case ErrorCodeInvalidRequest:
 		return ErrorClassRequest
-	case ErrorCodeLimitExceeded:
+	case ErrorCodeLimitExceeded, ErrorCodeHistoryLimitExceeded:
 		return ErrorClassLimit
 	case ErrorCodeUnsupportedAlgorithm, ErrorCodeDisabledAlgorithm:
 		return ErrorClassAlgorithm
@@ -417,7 +431,7 @@ func classForCode(code ErrorCode) ErrorClass {
 		return ErrorClassUnsupported
 	case ErrorCodeMissingKey, ErrorCodeAmbiguousKey, ErrorCodeInvalidKey, ErrorCodeRevokedKey, ErrorCodeUnsupportedKeyType, ErrorCodeKeyAlgorithmMismatch, ErrorCodeWrongKeyType, ErrorCodeKeyPolicyRejected, ErrorCodeProviderError:
 		return ErrorClassKey
-	case ErrorCodeMissingTarget:
+	case ErrorCodeMissingTarget, ErrorCodeHistoryMissingRecipe, ErrorCodeHistoryMissingSHA256:
 		return ErrorClassMissing
 	case ErrorCodeDuplicateTarget:
 		return ErrorClassDuplicate
@@ -431,8 +445,10 @@ func classForCode(code ErrorCode) ErrorClass {
 		return ErrorClassEnvelope
 	case ErrorCodeNextDomainMismatch, ErrorCodeMissingNextSignature:
 		return ErrorClassNextDomain
-	case ErrorCodeInternalMisuse:
+	case ErrorCodeInternalMisuse, ErrorCodeHistoryInvalidState, ErrorCodeHistoryInternalContract:
 		return ErrorClassInternal
+	case ErrorCodeHistoryInstanceNotAdjacent:
+		return ErrorClassMalformed
 	default:
 		return ErrorClassMalformed
 	}

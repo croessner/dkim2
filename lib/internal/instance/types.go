@@ -14,6 +14,23 @@ const (
 	HashAlgorithmSHA256 = "sha256"
 )
 
+// HashSelectionStatus identifies baseline SHA-256 selection state.
+type HashSelectionStatus string
+
+const (
+	// HashSelectionStatusSelected reports one usable SHA-256 tuple.
+	HashSelectionStatusSelected HashSelectionStatus = "selected"
+	// HashSelectionStatusMissing reports no SHA-256 or unknown hash tuple.
+	HashSelectionStatusMissing HashSelectionStatus = "missing"
+	// HashSelectionStatusUnsupported reports only unknown hash algorithms.
+	HashSelectionStatusUnsupported HashSelectionStatus = "unsupported"
+)
+
+// Known reports whether status belongs to the closed selection vocabulary.
+func (s HashSelectionStatus) Known() bool {
+	return s == HashSelectionStatusSelected || s == HashSelectionStatusMissing || s == HashSelectionStatusUnsupported
+}
+
 // Limits contains fail-closed Message-Instance parser resource settings.
 type Limits struct {
 	// TagLimits bounds shared DKIM2 tag-list and base64string parsing.
@@ -74,6 +91,23 @@ func (m MessageInstance) Recipe() (tagvalue.Base64String, bool) {
 	}
 
 	return m.recipe, true
+}
+
+// SHA256HashSet selects the single parser-known baseline tuple.
+func (m MessageInstance) SHA256HashSet() (HashSet, HashSelectionStatus) {
+	sawUnknown := false
+	for _, hashSet := range m.hashes {
+		if hashSet.name == HashAlgorithmSHA256 && hashSet.known && hashSet.headerHash.DecodedLen() == 32 && hashSet.bodyHash.DecodedLen() == 32 {
+			return hashSet.clone(), HashSelectionStatusSelected
+		}
+		if !hashSet.known {
+			sawUnknown = true
+		}
+	}
+	if sawUnknown {
+		return HashSet{}, HashSelectionStatusUnsupported
+	}
+	return HashSet{}, HashSelectionStatusMissing
 }
 
 // HashSet stores one immutable h= algorithm/header/body hash tuple.

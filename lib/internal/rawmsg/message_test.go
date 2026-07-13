@@ -115,8 +115,8 @@ func TestTypeConstructorsEnforceInvariants(t *testing.T) {
 	if _, err := NewHeaderField(0, []byte("Bad Name"), []byte(" value"), []byte(" value"), []byte("Bad Name: value\r\n")); !IsParserErrorCode(err, ErrorCodeMalformedHeader) {
 		t.Fatalf("NewHeaderField invalid name error = %v", err)
 	}
-	if _, err := NewHeaderBlock([]HeaderField{}, []byte{}); !IsParserErrorCode(err, ErrorCodeInvalidInvariant) {
-		t.Fatalf("NewHeaderBlock empty field error = %v", err)
+	if headers, err := NewHeaderBlock([]HeaderField{}, []byte{}); err != nil || !headers.Initialized() {
+		t.Fatalf("NewHeaderBlock initialized empty = %#v, %v", headers, err)
 	}
 	line, err := NewBodyLine(0, 2, 1, 0)
 	if !IsParserErrorCode(err, ErrorCodeInvalidInvariant) {

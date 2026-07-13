@@ -10,9 +10,11 @@
 //
 // Collection helpers extract Message-Instance fields from a full raw message in
 // RFC 5322 occurrence order and validate that m= numbers are contiguous from
-// origin value 1. This package intentionally does not calculate hashes, compare
-// hashes, or parse recipe JSON semantics. Those invariants are deferred to
-// later canonicalization, hash, and recipe milestones.
+// origin value 1. This package owns strict recipe base64 decoding and immutable
+// decoded-byte storage but intentionally does not parse recipe JSON or apply a
+// reconstruction plan; those semantics belong to lib/internal/recipe. Hash
+// selection is exposed as a closed SHA-256 selection result, while canonical
+// hash calculation and authenticated comparison remain outside this package.
 //
 // Diagnostics are structured and bounded. Errors may expose stable codes,
 // small allowlisted tag names, indexes, and resource-limit metadata, but must

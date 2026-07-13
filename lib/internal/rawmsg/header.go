@@ -9,14 +9,19 @@ import (
 type HeaderBlock struct {
 	fields        []HeaderField
 	originalBytes []byte
+	initialized   bool
 }
 
 // NewHeaderBlock constructs an immutable header block from validated fields.
 func NewHeaderBlock(fields []HeaderField, originalBytes []byte) (HeaderBlock, error) {
 	if len(fields) == 0 {
-		return HeaderBlock{}, NewParserError(ErrorCodeInvalidInvariant, ErrorLocation{}, ParserErrorDetails{
-			Reason: ErrorReasonInvariant,
-		})
+		if len(originalBytes) != 0 {
+			return HeaderBlock{}, NewParserError(ErrorCodeInvalidInvariant, ErrorLocation{}, ParserErrorDetails{
+				Reason: ErrorReasonInvariant,
+			})
+		}
+
+		return HeaderBlock{initialized: true}, nil
 	}
 
 	copiedFields := make([]HeaderField, len(fields))
@@ -44,12 +49,23 @@ func NewHeaderBlock(fields []HeaderField, originalBytes []byte) (HeaderBlock, er
 	return HeaderBlock{
 		fields:        copiedFields,
 		originalBytes: bytes.Clone(originalBytes),
+		initialized:   true,
 	}, nil
+}
+
+// Initialized reports whether the block was constructed through rawmsg validation.
+func (h HeaderBlock) Initialized() bool {
+	return h.initialized
 }
 
 // Len returns the number of header fields in occurrence order.
 func (h HeaderBlock) Len() int {
 	return len(h.fields)
+}
+
+// OriginalByteLen returns the validated raw header-block size without cloning bytes.
+func (h HeaderBlock) OriginalByteLen() int {
+	return len(h.originalBytes)
 }
 
 // Fields returns immutable copies of the header field sequence.
@@ -109,6 +125,7 @@ func (h HeaderBlock) clone() HeaderBlock {
 	return HeaderBlock{
 		fields:        cloneHeaderFields(h.fields),
 		originalBytes: bytes.Clone(h.originalBytes),
+		initialized:   h.initialized,
 	}
 }
 
@@ -245,6 +262,11 @@ func canonicalHeaderLookupName(name string) (string, bool) {
 	}
 
 	return lowerASCII([]byte(name)), true
+}
+
+// CanonicalHeaderName validates an RFC 5322 field name and returns its ASCII lowercase form.
+func CanonicalHeaderName(name string) (string, bool) {
+	return canonicalHeaderLookupName(name)
 }
 
 // invalidHeaderFieldNameOffset returns the first invalid byte offset.

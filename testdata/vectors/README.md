@@ -28,3 +28,10 @@ same synthetic messages to `draft-chuang-dkim2-dns-04`, stores only the public
 PKCS#1 RSA representation and raw 32-byte Ed25519 representation, and names
 only reserved `.test` lookup owners. DNS vector tests enter through the public
 TXT transport, DNS provider, and verifier APIs; they perform no network calls.
+
+The internal draft-04 recipe-application fixture lives at
+`lib/internal/recipe/testdata/golden/recipe-application-draft-ietf-dkim-dkim2-spec-04.json`.
+Its package-local loader proves bottom-up header reconstruction, top-down body
+reconstruction, copied terminal-line fidelity, deterministic cross-name
+grouping, and truthful unavailable-body handling. It remains internal because
+M8 deliberately exposes no public history result or recipe API.

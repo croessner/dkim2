@@ -57,3 +57,30 @@ func TestErrorStringIsBoundedAndSecretSafe(t *testing.T) {
 		t.Fatal("IsErrorCode did not match verification error code")
 	}
 }
+
+// TestHistoryErrorCodesUseCentralOperationalClasses verifies exhaustive default mapping.
+func TestHistoryErrorCodesUseCentralOperationalClasses(t *testing.T) {
+	tests := []struct {
+		code  ErrorCode
+		class ErrorClass
+	}{
+		{code: ErrorCodeHistoryInvalidOptions, class: ErrorClassInvariant},
+		{code: ErrorCodeHistoryInvalidState, class: ErrorClassInternal},
+		{code: ErrorCodeHistoryInstanceNotAdjacent, class: ErrorClassMalformed},
+		{code: ErrorCodeHistoryMissingRecipe, class: ErrorClassMissing},
+		{code: ErrorCodeHistoryMissingSHA256, class: ErrorClassMissing},
+		{code: ErrorCodeHistoryLimitExceeded, class: ErrorClassLimit},
+		{code: ErrorCodeHistoryInternalContract, class: ErrorClassInternal},
+	}
+
+	for _, tc := range tests {
+		t.Run(string(tc.code), func(t *testing.T) {
+			if got := classForCode(tc.code); got != tc.class {
+				t.Fatalf("classForCode(%q) = %q, want %q", tc.code, got, tc.class)
+			}
+			if got := historyError(tc.code).Class(); got != tc.class {
+				t.Fatalf("historyError(%q).Class() = %q, want %q", tc.code, got, tc.class)
+			}
+		})
+	}
+}

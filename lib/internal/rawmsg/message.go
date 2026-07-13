@@ -2,6 +2,21 @@ package rawmsg
 
 import "bytes"
 
+// MessageFraming identifies whether an empty body used an explicit header/body separator.
+type MessageFraming string
+
+const (
+	// MessageFramingHeaderOnly identifies header bytes without a separator or body.
+	MessageFramingHeaderOnly MessageFraming = "header_only"
+	// MessageFramingDelimited identifies an explicit CRLF header/body separator.
+	MessageFramingDelimited MessageFraming = "delimited"
+)
+
+// Known reports whether framing belongs to the closed raw-message vocabulary.
+func (f MessageFraming) Known() bool {
+	return f == MessageFramingHeaderOnly || f == MessageFramingDelimited
+}
+
 // Message stores immutable raw RFC 5322 message bytes and controlled views.
 type Message struct {
 	rawBytes []byte
@@ -17,7 +32,7 @@ func NewMessage(rawBytes []byte, headers HeaderBlock, body Body, metadata Parser
 			Reason: ErrorReasonInvariant,
 		})
 	}
-	if headers.Len() == 0 {
+	if !headers.Initialized() || !body.Initialized() {
 		return Message{}, NewParserError(ErrorCodeInvalidInvariant, ErrorLocation{}, ParserErrorDetails{
 			Reason: ErrorReasonInvariant,
 		})
@@ -47,6 +62,22 @@ func NewMessage(rawBytes []byte, headers HeaderBlock, body Body, metadata Parser
 		body:     validatedBody,
 		metadata: metadata,
 	}, nil
+}
+
+// Initialized reports whether the message was constructed through rawmsg validation.
+func (m Message) Initialized() bool {
+	return len(m.rawBytes) > 0 && m.headers.Initialized() && m.body.Initialized()
+}
+
+// Framing returns the validated raw message's header/body separator form.
+func (m Message) Framing() MessageFraming {
+	if !m.Initialized() {
+		return ""
+	}
+	if len(m.body.bytes) == 0 && bytes.Equal(m.rawBytes, m.headers.originalBytes) {
+		return MessageFramingHeaderOnly
+	}
+	return MessageFramingDelimited
 }
 
 // matchesMessageComponents verifies header-only or delimiter-separated body framing.

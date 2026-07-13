@@ -6,8 +6,9 @@ const limitNameMaxBodyLineBytes = "max_body_line_bytes"
 
 // Body stores immutable parser-owned body bytes and their line index.
 type Body struct {
-	bytes []byte
-	lines BodyLineIndex
+	bytes       []byte
+	lines       BodyLineIndex
+	initialized bool
 }
 
 // NewBody constructs an immutable body from bytes and a validated line index.
@@ -52,9 +53,15 @@ func NewBody(data []byte, lines BodyLineIndex) (Body, error) {
 	}
 
 	return Body{
-		bytes: bytes.Clone(data),
-		lines: lines.clone(),
+		bytes:       bytes.Clone(data),
+		lines:       lines.clone(),
+		initialized: true,
 	}, nil
+}
+
+// Initialized reports whether the body was constructed through rawmsg validation.
+func (b Body) Initialized() bool {
+	return b.initialized
 }
 
 // Bytes returns the parser-owned body bytes.
@@ -72,11 +79,36 @@ func (b Body) Len() int {
 	return len(b.bytes)
 }
 
+// LineCount returns the validated body-line count without cloning the index.
+func (b Body) LineCount() int {
+	return len(b.lines.lines)
+}
+
+// LineBytes returns one detached encoded line including its original terminator.
+func (b Body) LineBytes(index int) ([]byte, bool) {
+	if index < 0 || index >= len(b.lines.lines) {
+		return nil, false
+	}
+	line := b.lines.lines[index]
+	end := line.endOffset + line.lineEndingWidth
+	return bytes.Clone(b.bytes[line.startOffset:end]), true
+}
+
+// LineEncodedLen returns one line's byte size including its original terminator.
+func (b Body) LineEncodedLen(index int) (int, bool) {
+	if index < 0 || index >= len(b.lines.lines) {
+		return 0, false
+	}
+	line := b.lines.lines[index]
+	return line.endOffset - line.startOffset + line.lineEndingWidth, true
+}
+
 // clone returns a deep copy of the body.
 func (b Body) clone() Body {
 	return Body{
-		bytes: bytes.Clone(b.bytes),
-		lines: b.lines.clone(),
+		bytes:       bytes.Clone(b.bytes),
+		lines:       b.lines.clone(),
+		initialized: b.initialized,
 	}
 }
 

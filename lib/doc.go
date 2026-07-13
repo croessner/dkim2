@@ -79,8 +79,12 @@
 // hold that final caller and its single bounded flight slot; no helper goroutine
 // is created to pretend arbitrary Go code can be forcibly canceled.
 //
-// Every populated result reports scope=current, historical content and recipes
-// not_evaluated, and historical signatures not_evaluated. Custody structure is
+// Every populated public result reports scope=current, historical content and
+// recipes not_evaluated, and historical signatures not_evaluated. The internal
+// verifier may reconstruct and hash-check bounded Message-Instance history only
+// after current PASS, but that internal content evidence is intentionally not
+// projected through this public facade and never authenticates historical
+// signatures or policy flags. Custody structure is
 // reported separately as not_evaluated, not_present, nd_links_evaluated, or
 // terminal_nd_requires_oob. Pre-extraction parser or early-limit uncertainty is
 // not_evaluated, never not_present; not_present is reported only after

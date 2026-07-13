@@ -24,7 +24,9 @@ Current contents:
 - `lib/internal/*`: implemented protocol foundations plus planned boundaries for
   later library milestones.
 - `docs/specs/openapi`: planned source-of-truth OpenAPI contract.
-- `testdata/vectors`: planned conformance and regression vectors.
+- `lib/testdata/vectors`: draft-versioned public verification and DNS vectors.
+- `lib/internal/*/testdata`: package-owned canonicalization, recipe, parser,
+  fuzz, and regression fixtures.
 
 The library module path and command module paths are provisional and must be
 confirmed before a public release.

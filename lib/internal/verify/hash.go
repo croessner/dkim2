@@ -72,30 +72,15 @@ func compareTargetHashes(canonicalizer canonical.Canonicalizer, message rawmsg.M
 
 // targetSHA256HashSet finds the known sha256 hash set for an instance.
 func targetSHA256HashSet(targetInstance instance.MessageInstance) (instance.HashSet, HashStatus) {
-	hashSets := targetInstance.HashSets()
-	if len(hashSets) == 0 {
+	hashSet, status := targetInstance.SHA256HashSet()
+	switch status {
+	case instance.HashSelectionStatusSelected:
+		return hashSet, HashStatusPass
+	case instance.HashSelectionStatusUnsupported:
+		return instance.HashSet{}, HashStatusUnsupported
+	default:
 		return instance.HashSet{}, HashStatusMissingSHA256
 	}
-
-	sawUnknown := false
-	for _, hashSet := range hashSets {
-		if hashSet.Name() != instance.HashAlgorithmSHA256 {
-			if !hashSet.Known() {
-				sawUnknown = true
-			}
-			continue
-		}
-		if !hashSet.Known() {
-			return instance.HashSet{}, HashStatusInvalid
-		}
-
-		return hashSet, HashStatusPass
-	}
-	if sawUnknown {
-		return instance.HashSet{}, HashStatusUnsupported
-	}
-
-	return instance.HashSet{}, HashStatusMissingSHA256
 }
 
 // compareSHA256Digest compares two fixed-size digest byte slices fail closed.

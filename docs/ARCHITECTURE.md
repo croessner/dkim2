@@ -26,6 +26,7 @@
 | 0.1.0-draft | 2026-06-24 | Christian Roessner / Codex | Initial architecture baseline. Version intentionally remains at 0.1.0 while early project decisions are still being settled. |
 | 0.1.0-draft | 2026-07-03 | Christian Roessner / Codex | Recalibrated implementation estimates after measured M1 through M4 prompt-pack execution. |
 | 0.1.0-draft | 2026-07-10 | Christian Roessner / Codex | Advanced the implementation baseline to the current DKIM2 working-group draft `-04`; durable specs, versioned vectors, and protocol behavior must migrate together. |
+| 0.1.0-draft | 2026-07-13 | Christian Roessner / Codex | Recorded M8 recipe-application completion: strict decoded-JSON parsing, bounded immutable reconstruction, post-current-PASS historical content hash validation, versioned golden/fuzz evidence, and unchanged public historical signature/policy non-evaluation. Exact total effort remains unavailable because several prompt start timestamps were not retained. |
 
 ## 1. Purpose
 
@@ -1723,7 +1724,7 @@ maintainers to understand why behavior exists.
 | M5 - MVP core verification | Library-only vertical slice: parse raw message, parse DKIM2 headers, validate numbering, canonicalize, hash, verify current Message-Instance and latest DKIM2-Signature with static keys, produce structured result, golden vectors, fuzz seeds, guardrails | 1 to 3 hours | High |
 | M6 - DNS key resolver | TXT lookup, key record parser, resolver interface, fake resolver, key validation, cache policy, TEMPERROR/PERMERROR split, DNS failure tests | measured 3h11m08s; future similar slice 3 to 6 hours | Medium |
 | M7 - Policy engine | Strict/permissive/testing modes, `donotmodify`, `donotexplode`, feedback flags, local decision model, action plan, policy/result separation tests | measured 2h35m33s prompt wall-clock, 2h42m32s elapsed; future similar slice 2 to 4 hours | Medium |
-| M8 - Recipe application | JSON recipe parser, bounded reconstruction, null recipes, previous-instance hash validation, resource abuse tests | 3 to 8 hours | High |
+| M8 - Recipe application | Completed: strict JSON recipe parser, bounded immutable reconstruction, null-body state, previous-instance hash validation, resource abuse/fuzz/race tests, and draft-04 golden fixture | Exact total unavailable; retained prompt spans are recorded in the ignored timing ledger referenced by the durable M8 spec without inferring missing starts | High; completed with independent normative and architecture review |
 | M9 - Recipe generation | Conservative diff strategy for headers and body, deterministic output, revision tests, non-minimal but reproducible recipe guarantees | 4 to 10 hours | High |
 | M10 - Signing and revising | Message-Instance generation, DKIM2-Signature generation, private key abstraction, chain continuity, signing fixtures | 2 to 5 hours | High |
 | M11 - Datasource abstraction and general providers | Domain datasource interfaces, in-memory provider, flat-file provider, signing profile lookup, private-key handle model, LDAP/SQL design stubs, provider-state tests | 3 to 7 hours | High |

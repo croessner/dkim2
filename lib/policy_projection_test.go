@@ -34,6 +34,26 @@ func TestFacadeTransfersAndClonesSealedPolicyProjection(t *testing.T) {
 	}
 }
 
+// TestHistoriedCorePassRemainsCurrentOnlyAcrossServiceAndFacade locks the M8 compatibility boundary.
+func TestHistoriedCorePassRemainsCurrentOnlyAcrossServiceAndFacade(t *testing.T) {
+	const timestamp = int64(1700000000)
+	raw, key := signedPublicHistoriedMessage(t, timestamp)
+	verifier, err := NewVerifier(publicProviderFunc(func(context.Context, PublicKeyQuery) (PublicKeyResult, error) {
+		return FoundRSAPublicKey(key), nil
+	}), WithVerificationClock(func() time.Time { return time.Unix(timestamp, 0) }))
+	if err != nil {
+		t.Fatalf("NewVerifier() error = %v", err)
+	}
+	serviceResult, err := verifier.service.Verify(context.Background(), service.NewRequest(raw, []byte("<>"), [][]byte{[]byte("<rcpt@example.test>")}))
+	if err != nil || serviceResult.State() != service.StatePASS || serviceResult.Target().Instance != 2 || serviceResult.HistoricalContent() != service.HistoricalNotEvaluated || serviceResult.HistoricalSignatures() != service.HistoricalNotEvaluated {
+		t.Fatalf("service historied PASS = %q target=%#v history=%q/%q error=%v", serviceResult.State(), serviceResult.Target(), serviceResult.HistoricalContent(), serviceResult.HistoricalSignatures(), err)
+	}
+	publicResult, err := verifier.Verify(context.Background(), NewVerifyRequest(raw, []byte("<>"), [][]byte{[]byte("<rcpt@example.test>")}))
+	if err != nil || publicResult.State() != ResultStatePASS || publicResult.Target().Instance() != 2 || publicResult.Scope() != VerificationScopeCurrent || publicResult.HistoricalContent() != HistoricalStateNotEvaluated || publicResult.HistoricalSignatures() != HistoricalStateNotEvaluated {
+		t.Fatalf("facade historied PASS = %q target=%#v scope=%q history=%q/%q error=%v", publicResult.State(), publicResult.Target(), publicResult.Scope(), publicResult.HistoricalContent(), publicResult.HistoricalSignatures(), err)
+	}
+}
+
 // TestFacadeZerosMismatchedSelectedReasonWithoutRewritingVerification verifies exact provenance.
 func TestFacadeZerosMismatchedSelectedReasonWithoutRewritingVerification(t *testing.T) {
 	verifier, err := NewVerifier(publicProviderFunc(func(context.Context, PublicKeyQuery) (PublicKeyResult, error) {

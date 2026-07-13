@@ -3,6 +3,9 @@ package verify
 import (
 	"slices"
 	"time"
+
+	"github.com/croessner/dkim2/internal/canonical"
+	"github.com/croessner/dkim2/internal/recipe"
 )
 
 const (
@@ -49,6 +52,7 @@ type Option func(*Options)
 type Verifier struct {
 	keyProvider KeyProvider
 	options     Options
+	history     HistoryCoordinator
 }
 
 // AlgorithmPolicy contains fail-closed signature algorithm settings.
@@ -155,10 +159,27 @@ func NewVerifier(provider KeyProvider, options ...Option) (Verifier, error) {
 	if err := resolved.Validate(); err != nil {
 		return Verifier{}, err
 	}
+	parser, err := recipe.NewParser(recipe.Limits{})
+	if err != nil {
+		return Verifier{}, invalidOptionError("history_parser", 0)
+	}
+	applier, err := recipe.NewApplier(recipe.Limits{})
+	if err != nil {
+		return Verifier{}, invalidOptionError("history_applier", 0)
+	}
+	canonicalizer, err := canonical.NewCanonicalizer()
+	if err != nil {
+		return Verifier{}, invalidOptionError("history_canonicalizer", 0)
+	}
+	history, err := NewHistoryCoordinator(parser, applier, canonicalizer, HistoryLimits{})
+	if err != nil {
+		return Verifier{}, invalidOptionError("history_coordinator", 0)
+	}
 
 	return Verifier{
 		keyProvider: provider,
 		options:     resolved.clone(),
+		history:     history,
 	}, nil
 }
 

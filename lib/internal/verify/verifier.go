@@ -5,6 +5,7 @@ import (
 
 	"github.com/croessner/dkim2/internal/canonical"
 	"github.com/croessner/dkim2/internal/instance"
+	"github.com/croessner/dkim2/internal/recipe"
 	"github.com/croessner/dkim2/internal/signature"
 )
 
@@ -16,7 +17,7 @@ type verificationInput struct {
 
 // Verify extracts DKIM2 fields from a raw message and verifies the selected target.
 func (v Verifier) Verify(ctx context.Context, request Request) (Result, error) {
-	instanceParser, err := instance.NewParser(instance.Limits{MaxHashSets: v.options.Limits.MaxInstanceHashSets})
+	instanceParser, err := instance.NewParser(verifierInstanceLimits(v.options.Limits.MaxInstanceHashSets, recipe.DefaultLimits()))
 	if err != nil {
 		return Result{}, malformedStateError(CheckKindSignature, Target{}, err)
 	}
@@ -62,6 +63,18 @@ func (v Verifier) Verify(ctx context.Context, request Request) (Result, error) {
 	return result, err
 }
 
+// verifierInstanceLimits binds decoded Message-Instance recipes to recipe-owned limits.
+func verifierInstanceLimits(maxHashSets int, recipeLimits recipe.Limits) instance.Limits {
+	limits := instance.DefaultLimits()
+	limits.MaxHashSets = maxHashSets
+	decodedRecipeLimit := recipeLimits.MaxDecodedRecipeBytes
+	if decodedRecipeLimit == 0 {
+		decodedRecipeLimit = recipe.DefaultLimits().MaxDecodedRecipeBytes
+	}
+	limits.TagLimits.MaxBase64DecodedBytes = decodedRecipeLimit
+	return limits
+}
+
 // verifyExtracted verifies protocol state extracted exclusively from Request.Message.
 func (v Verifier) verifyExtracted(ctx context.Context, input verificationInput) (Result, error) {
 	targetSignature, targetInstance, target, err := selectVerificationTarget(input)
@@ -98,7 +111,36 @@ func (v Verifier) verifyExtracted(ctx context.Context, input verificationInput) 
 	checks = append(checks, timestamp.check, nextDomain.check, envelope.check, domainAlignment.check)
 	status := targetStatus(hashes.pass, timestamp.pass, envelope.pass, domainAlignment.pass, nextDomain, signatures)
 
-	return NewResultWithCustody(target, status, checks, signatures.sets, custodyStatus(input.signatures)).withTargetFlagCandidate(targetFlags), nil
+	result := NewResultWithCustody(target, status, checks, signatures.sets, custodyStatus(input.signatures)).withTargetFlagCandidate(targetFlags)
+	if !aggregateCurrentPass(result) {
+		return result, nil
+	}
+	return v.attachAuthenticatedHistory(ctx, result, input)
+}
+
+// attachAuthenticatedHistory runs only after coherent aggregate current PASS.
+func (v Verifier) attachAuthenticatedHistory(ctx context.Context, current Result, input verificationInput) (Result, error) {
+	target := current.Target().InstanceNumber
+	fallback := func() (Result, error) { return current.withHistory(newInternalContractHistoryWalk(target)), nil }
+	state, err := recipe.NewState(input.request.Message)
+	if err != nil {
+		return fallback()
+	}
+	collection, err := instance.NewCollection(input.instances)
+	if err != nil {
+		return fallback()
+	}
+	walk, err := v.history.Walk(ctx, current, collection, state)
+	if err != nil {
+		if ctx.Err() != nil {
+			return Result{}, ctx.Err()
+		}
+		return fallback()
+	}
+	if !walk.Valid() || walk.TargetInstance() != target {
+		return fallback()
+	}
+	return current.withHistory(walk), nil
 }
 
 // newTargetFlagCandidate derives bounded evidence from the already parsed selected signature.

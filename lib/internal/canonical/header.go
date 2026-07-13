@@ -17,6 +17,9 @@ type headerFieldRecord struct {
 
 // HeaderHashInput builds DKIM2 Section 6.2 canonical header hash input.
 func (c Canonicalizer) HeaderHashInput(headers rawmsg.HeaderBlock) (ByteInput, error) {
+	if !headers.Initialized() {
+		return ByteInput{}, newError(ErrorCodeMalformedState, ErrorLocation{Kind: KindHeaderHashInput}, ErrorDetails{Class: ErrorClassMalformed}, nil)
+	}
 	fields := headers.Fields()
 	if len(fields) > c.options.Limits.MaxFieldCount {
 		return ByteInput{}, headerLimitExceededError("max_field_count", len(fields), c.options.Limits.MaxFieldCount, 0)
