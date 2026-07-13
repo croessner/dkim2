@@ -18,6 +18,9 @@
 // The package also owns SHA-256 result containers. Hash calculation helpers
 // build on immutable canonical byte and digest accessors, restrictive limits,
 // domain-named options, and structured secret-safe diagnostics.
+// It also provides the immutable Section 4 and Section 6.2 signed-header
+// relevance classifier consumed through recipe's narrow interface, keeping the
+// exclusion rules in one canonical owner without introducing a package cycle.
 //
 // Debug metadata is bounded by design. It may carry canonicalization kind,
 // draft version, safe algorithm names, counts, lengths, and allowlisted
@@ -25,8 +28,8 @@
 // values, full DKIM2 fields, decoded envelope paths, recipients, nonces,
 // signatures, private keys, tokens, or protected configuration values.
 //
-// Recipe application, cryptographic verification, DNS lookup, policy,
-// datasource behavior, daemon behavior, Milter integration, OpenAPI mapping,
-// concrete logging, metrics, tracing, and public facade APIs are deferred to
-// later milestones.
+// Recipe parsing, application, and generation remain recipe-owned.
+// Cryptographic verification, DNS lookup, policy, datasource behavior, daemon
+// behavior, Milter integration, OpenAPI mapping, concrete logging, metrics,
+// tracing, and public facade APIs remain outside this package.
 package canonical

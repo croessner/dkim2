@@ -1132,9 +1132,9 @@ and reviewer approval.
 - Public historical verification state, historical signature verification,
   authenticated historical flag projection, and policy compliance remain for a
   later durable specification.
-- Recipe generation and deterministic serialization are the next architecture
-  increment. They must consume the closed model defined here rather than
-  creating a parallel schema.
+- Recipe generation and deterministic serialization are completed by
+  `docs/specs/implementation/recipe-generation.md`; they consume the closed
+  model defined here rather than creating a parallel schema.
 
 ### Interpretation-To-Test Mapping
 

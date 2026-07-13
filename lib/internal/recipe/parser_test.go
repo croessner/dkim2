@@ -7,17 +7,26 @@ import (
 )
 
 const (
-	testRecipeHeaderName    = "Subject"
-	testBodyNullRecipe      = `{"b":null}`
-	testBodyEmptyRecipe     = `{"b":[]}`
-	testBodyDataXRecipe     = `{"b":[{"d":["x"]}]}`
-	testBodyStepsLabel      = "body steps"
-	testLiteralBytesLabel   = "literal bytes"
-	testHeaderRemovalRecipe = `{"h":{"A":[]}}`
-	testHeaderDataXRecipe   = `{"h":{"A":[{"d":["x"]}]}}`
-	testHeaderDataXYRecipe  = `{"h":{"A":[{"d":["xy"]}]}}`
-	testTwoHeaderRecipe     = `{"h":{"A":[],"B":[]}}`
-	testTwoRangesRecipe     = `{"b":[{"c":[1,1]},{"c":[2,2]}]}`
+	testRecipeHeaderName         = "Subject"
+	testBodyNullRecipe           = `{"b":null}`
+	testBodyEmptyRecipe          = `{"b":[]}`
+	testBodyDataXRecipe          = `{"b":[{"d":["x"]}]}`
+	testBodyStepsLabel           = "body steps"
+	testLiteralBytesLabel        = "literal bytes"
+	testHeaderNamesLabel         = "header names"
+	testStateBytesLabel          = "state bytes"
+	testTotalStepsLabel          = "total steps"
+	testCopyRangesLabel          = "copy ranges"
+	testDataStringsLabel         = "data strings"
+	testDataStringBytesLabel     = "data string bytes"
+	testCopiedItemsPerRangeLabel = "copied items per range"
+	testHeaderNameBytesLabel     = "header name bytes"
+	testStepsPerHeaderLabel      = "steps per header"
+	testHeaderRemovalRecipe      = `{"h":{"A":[]}}`
+	testHeaderDataXRecipe        = `{"h":{"A":[{"d":["x"]}]}}`
+	testHeaderDataXYRecipe       = `{"h":{"A":[{"d":["xy"]}]}}`
+	testTwoHeaderRecipe          = `{"h":{"A":[],"B":[]}}`
+	testTwoRangesRecipe          = `{"b":[{"c":[1,1]},{"c":[2,2]}]}`
 )
 
 // TestParserAcceptsDraftRecipeForms verifies the complete Prompt 02 schema surface.
@@ -177,7 +186,7 @@ func TestParserEnforcesRepresentativeLimits(t *testing.T) {
 		{"depth", `{"x":{"y":{"z":1}},"b":null}`, func(l *Limits) { l.MaxJSONDepth = 2 }, limitNameMaxJSONDepth},
 		{"members", `{"x":1,"b":null}`, func(l *Limits) { l.MaxJSONMembers = 1 }, limitNameMaxJSONMembers},
 		{"tokens", testBodyNullRecipe, func(l *Limits) { l.MaxJSONTokens = 4 }, limitNameMaxJSONTokens},
-		{"header names", testTwoHeaderRecipe, func(l *Limits) { l.MaxHeaderNames = 1 }, limitNameMaxHeaderNames},
+		{testHeaderNamesLabel, testTwoHeaderRecipe, func(l *Limits) { l.MaxHeaderNames = 1 }, limitNameMaxHeaderNames},
 		{"steps", `{"b":[{"d":["a"]},{"d":["b"]}]}`, func(l *Limits) { l.MaxBodySteps = 1; l.MaxTotalSteps = 1; l.MaxStepsPerHeader = 1 }, limitNameMaxBodySteps},
 		{"ranges", testTwoRangesRecipe, func(l *Limits) { l.MaxCopyRanges = 1 }, limitNameMaxCopyRanges},
 		{"strings", `{"b":[{"d":["a","b"]}]}`, func(l *Limits) { l.MaxDataStrings = 1 }, limitNameMaxDataStrings},

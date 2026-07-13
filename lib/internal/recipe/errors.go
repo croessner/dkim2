@@ -43,6 +43,24 @@ const (
 	ErrorCodeInvalidLiteral ErrorCode = "invalid_literal"
 	// ErrorCodeSourceUnavailable reports a copy operation without source bytes.
 	ErrorCodeSourceUnavailable ErrorCode = "source_unavailable"
+	// ErrorCodeInvalidGenerator reports a zero or invalid generation dependency set.
+	ErrorCodeInvalidGenerator ErrorCode = "invalid_generator"
+	// ErrorCodeInvalidRequest reports an invalid generation request or unknown body state.
+	ErrorCodeInvalidRequest ErrorCode = "invalid_request"
+	// ErrorCodeInvalidPolicy reports a value outside a closed generation policy.
+	ErrorCodeInvalidPolicy ErrorCode = "invalid_policy"
+	// ErrorCodeHeaderRelevance reports invalid, failing, or inconsistent relevance classification.
+	ErrorCodeHeaderRelevance ErrorCode = "header_relevance"
+	// ErrorCodeHeaderUnrepresentable reports a relevant header state that cannot be reconstructed.
+	ErrorCodeHeaderUnrepresentable ErrorCode = "header_unrepresentable"
+	// ErrorCodeBodyUnrepresentable reports a body state rejected by unavailable-body policy.
+	ErrorCodeBodyUnrepresentable ErrorCode = "body_unrepresentable"
+	// ErrorCodeSerializationFailure reports deterministic decoded-JSON serialization failure.
+	ErrorCodeSerializationFailure ErrorCode = "serialization_failure"
+	// ErrorCodeGeneratedOutputInvariant reports an internal generated parse or apply proof failure.
+	ErrorCodeGeneratedOutputInvariant ErrorCode = "generated_output_invariant"
+	// ErrorCodeReconstructionMismatch reports generated output that does not reconstruct the target.
+	ErrorCodeReconstructionMismatch ErrorCode = "reconstruction_mismatch"
 )
 
 // Known reports whether code belongs to the closed recipe vocabulary.
@@ -53,7 +71,10 @@ func (c ErrorCode) Known() bool {
 		ErrorCodeInvalidHeaderName, ErrorCodeHeaderNameCollision, ErrorCodeInvalidHeaderRecipe,
 		ErrorCodeInvalidBodyRecipe, ErrorCodeInvalidStep, ErrorCodeInvalidCopyRange,
 		ErrorCodeCopyRangeOrder, ErrorCodeCopyRangeOutOfBounds, ErrorCodeInvalidLiteral,
-		ErrorCodeSourceUnavailable:
+		ErrorCodeSourceUnavailable, ErrorCodeInvalidGenerator, ErrorCodeInvalidRequest,
+		ErrorCodeInvalidPolicy, ErrorCodeHeaderRelevance, ErrorCodeHeaderUnrepresentable,
+		ErrorCodeBodyUnrepresentable, ErrorCodeSerializationFailure,
+		ErrorCodeGeneratedOutputInvariant, ErrorCodeReconstructionMismatch:
 		return true
 	default:
 		return false
@@ -78,12 +99,24 @@ const (
 	ErrorClassRange ErrorClass = "range"
 	// ErrorClassSource identifies unavailable reconstruction input.
 	ErrorClassSource ErrorClass = "source"
+	// ErrorClassRequest identifies invalid generation requests.
+	ErrorClassRequest ErrorClass = "request"
+	// ErrorClassPolicy identifies invalid closed generation policy values.
+	ErrorClassPolicy ErrorClass = "policy"
+	// ErrorClassRepresentation identifies content that recipes cannot represent.
+	ErrorClassRepresentation ErrorClass = "representation"
+	// ErrorClassSerialization identifies deterministic output encoding failures.
+	ErrorClassSerialization ErrorClass = "serialization"
+	// ErrorClassInvariant identifies internal dependency or proof disagreement.
+	ErrorClassInvariant ErrorClass = "invariant"
 )
 
 // Known reports whether class belongs to the closed recipe vocabulary.
 func (c ErrorClass) Known() bool {
 	return c == ErrorClassOptions || c == ErrorClassState || c == ErrorClassLimit ||
-		c == ErrorClassSyntax || c == ErrorClassSchema || c == ErrorClassRange || c == ErrorClassSource
+		c == ErrorClassSyntax || c == ErrorClassSchema || c == ErrorClassRange || c == ErrorClassSource ||
+		c == ErrorClassRequest || c == ErrorClassPolicy || c == ErrorClassRepresentation ||
+		c == ErrorClassSerialization || c == ErrorClassInvariant
 }
 
 // Dimension identifies one bounded recipe dimension.
@@ -131,9 +164,7 @@ type Error struct {
 
 // newError constructs a bounded error and deliberately drops arbitrary causes.
 func newError(code ErrorCode, location ErrorLocation, details ErrorDetails, _ error) *Error {
-	if !details.Class.Known() {
-		details.Class = classForCode(code)
-	}
+	details.Class = classForCode(code)
 	location = sanitizeErrorLocation(location)
 	if !details.Dimension.Known() {
 		details.Dimension = ""
@@ -237,13 +268,17 @@ func classForCode(code ErrorCode) ErrorClass {
 	switch code {
 	case ErrorCodeInvalidOptions:
 		return ErrorClassOptions
-	case ErrorCodeInvalidState:
+	case ErrorCodeInvalidState, ErrorCodeInvalidGenerator:
 		return ErrorClassState
+	case ErrorCodeInvalidRequest:
+		return ErrorClassRequest
+	case ErrorCodeInvalidPolicy:
+		return ErrorClassPolicy
 	case ErrorCodeLimitExceeded:
 		return ErrorClassLimit
-	case ErrorCodeInvalidJSON, ErrorCodeDuplicateMember, ErrorCodeInvalidTopLevel:
+	case ErrorCodeInvalidJSON, ErrorCodeDuplicateMember:
 		return ErrorClassSyntax
-	case ErrorCodeMissingRecipeDimension, ErrorCodeInvalidHeaderName,
+	case ErrorCodeInvalidTopLevel, ErrorCodeMissingRecipeDimension, ErrorCodeInvalidHeaderName,
 		ErrorCodeHeaderNameCollision, ErrorCodeInvalidHeaderRecipe,
 		ErrorCodeInvalidBodyRecipe, ErrorCodeInvalidStep, ErrorCodeInvalidLiteral:
 		return ErrorClassSchema
@@ -251,6 +286,12 @@ func classForCode(code ErrorCode) ErrorClass {
 		return ErrorClassRange
 	case ErrorCodeSourceUnavailable:
 		return ErrorClassSource
+	case ErrorCodeHeaderUnrepresentable, ErrorCodeBodyUnrepresentable:
+		return ErrorClassRepresentation
+	case ErrorCodeSerializationFailure:
+		return ErrorClassSerialization
+	case ErrorCodeHeaderRelevance, ErrorCodeGeneratedOutputInvariant, ErrorCodeReconstructionMismatch:
+		return ErrorClassInvariant
 	default:
 		return ErrorClassState
 	}
@@ -286,6 +327,9 @@ func knownLimitName(value string) bool {
 		limitNameMaxDataStringBytes, limitNameMaxTotalLiteralBytes, limitNameMaxHeaderFields,
 		limitNameMaxHeaderFieldBytes, limitNameMaxHeaderLineBytes, limitNameMaxHeaderBytes,
 		limitNameMaxBodyLines, limitNameMaxBodyLineBytes, limitNameMaxStateBytes, limitNameMaxOperationWorkUnits,
+		limitNameMaxInputBytes, limitNameMaxInputItems, limitNameMaxCandidateEntries,
+		limitNameMaxCandidateKeyBytes, limitNameMaxComparisons, limitNameMaxGenerationWorkUnits,
+		limitNameGenerationWorkCoherence,
 		"literal_limit_coherence", "step_limit_coherence", "copy_limit_coherence":
 		return true
 	default:

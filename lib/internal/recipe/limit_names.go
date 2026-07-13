@@ -25,4 +25,11 @@ const (
 	limitNameMaxBodyLineBytes        = "max_body_line_bytes"
 	limitNameMaxStateBytes           = "max_state_bytes"
 	limitNameMaxOperationWorkUnits   = "max_operation_work_units"
+	limitNameMaxInputBytes           = "max_input_bytes"
+	limitNameMaxInputItems           = "max_input_items"
+	limitNameMaxCandidateEntries     = "max_candidate_entries"
+	limitNameMaxCandidateKeyBytes    = "max_candidate_key_bytes"
+	limitNameMaxComparisons          = "max_comparisons"
+	limitNameMaxGenerationWorkUnits  = "max_generation_work_units"
+	limitNameGenerationWorkCoherence = "generation_work_coherence"
 )

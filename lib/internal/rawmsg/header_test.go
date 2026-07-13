@@ -2,8 +2,38 @@ package rawmsg
 
 import (
 	"bytes"
+	"errors"
 	"testing"
 )
+
+// TestHeaderFieldViewTraversesWithoutExposingMutableStorage verifies bounded reverse views.
+func TestHeaderFieldViewTraversesWithoutExposingMutableStorage(t *testing.T) {
+	message, err := Parse([]byte("A: one\r\nB: folded\r\n continuation\r\n\r\nbody"))
+	if err != nil {
+		t.Fatalf("Parse returned error: %v", err)
+	}
+	var names []string
+	err = message.Headers().VisitFieldsReverse(func(view HeaderFieldView) error {
+		names = append(names, view.NameLower())
+		value := view.UnfoldedValueCopy()
+		if len(value) != view.UnfoldedValueLen() || view.OriginalByteLen() == 0 || view.MaximumPhysicalLineBytes() == 0 {
+			return errors.New("invalid field view")
+		}
+		if len(value) > 0 {
+			value[0] ^= 1
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("VisitFieldsReverse returned error: %v", err)
+	}
+	if len(names) != 2 || names[0] != "b" || names[1] != "a" {
+		t.Fatalf("reverse names = %v", names)
+	}
+	if got := message.Headers().FieldsByName("b")[0].UnfoldedValue(); !bytes.Equal(got, []byte(" folded continuation")) {
+		t.Fatalf("view copy mutated header: %q", got)
+	}
+}
 
 // TestHeaderBlockNameAccessorsPreserveOrderAndCopies verifies duplicate lookup safety.
 func TestHeaderBlockNameAccessorsPreserveOrderAndCopies(t *testing.T) {

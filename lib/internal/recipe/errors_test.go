@@ -16,7 +16,7 @@ func TestErrorContractBoundsLocationsAndExcludesSecrets(t *testing.T) {
 		Dimension: Dimension("secret@example.test"), StepKind: StepKind("private-body"),
 	}, errors.New("password raw recipe"))
 	if !errors.Is(err, &Error{code: ErrorCodeInvalidLiteral}) || !IsErrorCode(err, ErrorCodeInvalidLiteral) {
-		t.Fatalf("typed matching failed: %v", err)
+		t.Fatalf("typed matching failed: code=%s class=%s", err.Code(), err.Class())
 	}
 	if got := err.Location(); got != (ErrorLocation{}) {
 		t.Fatalf("Location() = %#v, want zero-clamped", got)
@@ -24,15 +24,15 @@ func TestErrorContractBoundsLocationsAndExcludesSecrets(t *testing.T) {
 	text := err.Error()
 	for _, forbidden := range []string{toxicLimitMarker, "secret@example.test", "private-body", "password", "raw recipe"} {
 		if strings.Contains(text, forbidden) {
-			t.Fatalf("Error() leaked %q in %q", forbidden, text)
+			t.Fatal("Error() leaked protected diagnostic content")
 		}
 	}
 	if errors.Unwrap(err) != nil || err.Code() != ErrorCodeInvalidLiteral || !err.Class().Known() {
-		t.Fatalf("error accessors invalid: %#v", err)
+		t.Fatalf("error accessors invalid: code=%s class=%s unwrap=%t", err.Code(), err.Class(), errors.Unwrap(err) != nil)
 	}
 	for _, rendered := range []string{fmt.Sprint(err), fmt.Sprintf("%+v", err)} {
 		if strings.Contains(rendered, "password") || strings.Contains(rendered, "raw recipe") {
-			t.Fatalf("formatted chain leaked toxic cause: %q", rendered)
+			t.Fatal("formatted chain leaked protected cause")
 		}
 	}
 }
@@ -42,12 +42,12 @@ func TestErrorLimitNamesUseAClosedAllowlist(t *testing.T) {
 	for _, toxic := range []string{"password", toxicLimitMarker, strings.Repeat("a", 80)} {
 		err := newError(ErrorCodeLimitExceeded, ErrorLocation{}, ErrorDetails{LimitName: toxic}, nil)
 		if strings.Contains(err.Error(), toxic) || err.LimitName() != "" {
-			t.Fatalf("toxic limit name escaped: %q / %q", err.Error(), err.LimitName())
+			t.Fatal("protected limit name escaped the closed allowlist")
 		}
 	}
 	err := newError(ErrorCodeLimitExceeded, ErrorLocation{}, ErrorDetails{LimitName: limitNameMaxJSONTokens}, nil)
 	if err.LimitName() != limitNameMaxJSONTokens || !strings.Contains(err.Error(), limitNameMaxJSONTokens) {
-		t.Fatalf("closed limit missing: %q", err.Error())
+		t.Fatalf("closed limit missing: code=%s class=%s", err.Code(), err.Class())
 	}
 }
 
@@ -72,7 +72,7 @@ func TestEveryRecipeErrorCodeHasAnExplicitOperationalClass(t *testing.T) {
 		{code: ErrorCodeLimitExceeded, class: ErrorClassLimit},
 		{code: ErrorCodeInvalidJSON, class: ErrorClassSyntax},
 		{code: ErrorCodeDuplicateMember, class: ErrorClassSyntax},
-		{code: ErrorCodeInvalidTopLevel, class: ErrorClassSyntax},
+		{code: ErrorCodeInvalidTopLevel, class: ErrorClassSchema},
 		{code: ErrorCodeMissingRecipeDimension, class: ErrorClassSchema},
 		{code: ErrorCodeInvalidHeaderName, class: ErrorClassSchema},
 		{code: ErrorCodeHeaderNameCollision, class: ErrorClassSchema},
@@ -84,6 +84,15 @@ func TestEveryRecipeErrorCodeHasAnExplicitOperationalClass(t *testing.T) {
 		{code: ErrorCodeCopyRangeOutOfBounds, class: ErrorClassRange},
 		{code: ErrorCodeInvalidLiteral, class: ErrorClassSchema},
 		{code: ErrorCodeSourceUnavailable, class: ErrorClassSource},
+		{code: ErrorCodeInvalidGenerator, class: ErrorClassState},
+		{code: ErrorCodeInvalidRequest, class: ErrorClassRequest},
+		{code: ErrorCodeInvalidPolicy, class: ErrorClassPolicy},
+		{code: ErrorCodeHeaderRelevance, class: ErrorClassInvariant},
+		{code: ErrorCodeHeaderUnrepresentable, class: ErrorClassRepresentation},
+		{code: ErrorCodeBodyUnrepresentable, class: ErrorClassRepresentation},
+		{code: ErrorCodeSerializationFailure, class: ErrorClassSerialization},
+		{code: ErrorCodeGeneratedOutputInvariant, class: ErrorClassInvariant},
+		{code: ErrorCodeReconstructionMismatch, class: ErrorClassInvariant},
 	}
 
 	for _, tc := range tests {
@@ -95,5 +104,22 @@ func TestEveryRecipeErrorCodeHasAnExplicitOperationalClass(t *testing.T) {
 	}
 	if got := classForCode(ErrorCode("future")); got != ErrorClassState {
 		t.Fatalf("unknown code class = %q, want fail-safe %q", got, ErrorClassState)
+	}
+}
+
+// TestErrorClassMappingOverridesCallerDetails verifies code is the sole class authority.
+func TestErrorClassMappingOverridesCallerDetails(t *testing.T) {
+	constructed := newError(ErrorCodeInvalidRequest, ErrorLocation{}, ErrorDetails{Class: ErrorClassSyntax}, nil)
+	if constructed.Class() != ErrorClassRequest {
+		t.Fatalf("constructed class = %q, want %q", constructed.Class(), ErrorClassRequest)
+	}
+	parser, err := NewParser(Limits{})
+	if err != nil {
+		t.Fatalf("NewParser() code=%s", recipeTestErrorCode(err))
+	}
+	_, _, err = parser.Parse([]byte(`[]`))
+	var parsed *Error
+	if !errors.As(err, &parsed) || parsed.Code() != ErrorCodeInvalidTopLevel || parsed.Class() != ErrorClassSchema {
+		t.Fatalf("parser top-level shape: code=%s", recipeTestErrorCode(err))
 	}
 }

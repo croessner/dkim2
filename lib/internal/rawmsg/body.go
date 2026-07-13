@@ -11,6 +11,12 @@ type Body struct {
 	initialized bool
 }
 
+// BodyLineView provides read-only bounded traversal without cloning body storage.
+type BodyLineView struct {
+	body *Body
+	line BodyLine
+}
+
 // NewBody constructs an immutable body from bytes and a validated line index.
 func NewBody(data []byte, lines BodyLineIndex) (Body, error) {
 	nextOffset := 0
@@ -82,6 +88,54 @@ func (b Body) Len() int {
 // LineCount returns the validated body-line count without cloning the index.
 func (b Body) LineCount() int {
 	return len(b.lines.lines)
+}
+
+// Equal reports exact body-byte equality without exposing or cloning storage.
+func (b Body) Equal(other Body) bool {
+	return b.Initialized() && other.Initialized() && bytes.Equal(b.bytes, other.bytes)
+}
+
+// VisitLines visits immutable line views in top-down message order.
+func (b Body) VisitLines(visit func(BodyLineView) error) error {
+	if !b.Initialized() || visit == nil {
+		return NewParserError(ErrorCodeInvalidInvariant, ErrorLocation{}, ParserErrorDetails{Reason: ErrorReasonInvariant})
+	}
+	for _, line := range b.lines.lines {
+		if err := visit(BodyLineView{body: &b, line: line}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// EncodedLen returns content plus the validated original terminator width.
+func (v BodyLineView) EncodedLen() int {
+	if v.body == nil || !v.line.valid {
+		return 0
+	}
+	return v.line.endOffset - v.line.startOffset + v.line.lineEndingWidth
+}
+
+// ContentLen returns line bytes excluding the validated original terminator.
+func (v BodyLineView) ContentLen() int {
+	if v.body == nil || !v.line.valid {
+		return 0
+	}
+	return v.line.endOffset - v.line.startOffset
+}
+
+// Terminated reports whether the line ended with CRLF in the parsed body.
+func (v BodyLineView) Terminated() bool {
+	return v.body != nil && v.line.valid && v.line.lineEndingWidth == len(crlf)
+}
+
+// EncodedCopy returns detached exact content and terminator bytes.
+func (v BodyLineView) EncodedCopy() []byte {
+	if v.body == nil || !v.line.valid {
+		return nil
+	}
+	end := v.line.endOffset + v.line.lineEndingWidth
+	return bytes.Clone(v.body.bytes[v.line.startOffset:end])
 }
 
 // LineBytes returns one detached encoded line including its original terminator.

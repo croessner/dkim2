@@ -6,6 +6,42 @@ import (
 	"testing"
 )
 
+// TestBodyLineViewTraversesWithoutExposingStorage verifies top-down immutable views.
+func TestBodyLineViewTraversesWithoutExposingStorage(t *testing.T) {
+	zero := BodyLineView{}
+	if zero.EncodedLen() != 0 || zero.ContentLen() != 0 || zero.Terminated() || zero.EncodedCopy() != nil {
+		t.Fatal("zero body line view exposed storage")
+	}
+	message, err := Parse([]byte("A:x\r\n\r\none\r\ntwo"))
+	if err != nil {
+		t.Fatalf("Parse returned error: %v", err)
+	}
+	var encoded [][]byte
+	err = message.Body().VisitLines(func(view BodyLineView) error {
+		line := view.EncodedCopy()
+		if len(line) != view.EncodedLen() || view.ContentLen() <= 0 {
+			return errors.New("invalid body view")
+		}
+		encoded = append(encoded, line)
+		return nil
+	})
+	if err != nil || len(encoded) != 2 || !bytes.Equal(encoded[0], []byte("one\r\n")) || !bytes.Equal(encoded[1], []byte("two")) {
+		t.Fatalf("body views: count=%d error=%v", len(encoded), err)
+	}
+	if !bytes.Equal(message.Body().Bytes(), []byte("one\r\ntwo")) {
+		t.Fatal("view copy mutated body storage")
+	}
+	if err := message.Body().VisitLines(nil); err == nil {
+		t.Fatal("nil visitor accepted")
+	}
+	toxic := errors.New("stop")
+	calls := 0
+	err = message.Body().VisitLines(func(BodyLineView) error { calls++; return toxic })
+	if !errors.Is(err, toxic) || calls != 1 {
+		t.Fatalf("early visitor stop: calls=%d error=%v", calls, err)
+	}
+}
+
 // TestBodyEmptyAfterDelimiterIsValid verifies empty strict bodies have no synthetic line.
 func TestBodyEmptyAfterDelimiterIsValid(t *testing.T) {
 	msg, err := Parse([]byte("A: b\r\n\r\n"))

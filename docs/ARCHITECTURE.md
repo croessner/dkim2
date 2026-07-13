@@ -27,6 +27,8 @@
 | 0.1.0-draft | 2026-07-03 | Christian Roessner / Codex | Recalibrated implementation estimates after measured M1 through M4 prompt-pack execution. |
 | 0.1.0-draft | 2026-07-10 | Christian Roessner / Codex | Advanced the implementation baseline to the current DKIM2 working-group draft `-04`; durable specs, versioned vectors, and protocol behavior must migrate together. |
 | 0.1.0-draft | 2026-07-13 | Christian Roessner / Codex | Recorded M8 recipe-application completion: strict decoded-JSON parsing, bounded immutable reconstruction, post-current-PASS historical content hash validation, versioned golden/fuzz evidence, and unchanged public historical signature/policy non-evaluation. Exact total effort remains unavailable because several prompt start timestamps were not retained. |
+| 0.1.0-draft | 2026-07-13 | Christian Roessner / Codex | Specified M9 recipe generation as a deterministic bounded inverse operation: canonical-owned header relevance, exact unfolded/header and framed-body semantics, explicit body-unavailable policy, compact decoded JSON, and internal M8 parse/apply proof. Message-Instance formatting and hash-gated signing remain M10 ownership. |
+| 0.1.0-draft | 2026-07-13 | Christian Roessner / Codex | Completed M9 inverse recipe generation with deterministic non-minimal planning, explicit disclosure and body-unavailable policies, compact decoded JSON, strict parse/apply/self-proof, draft-versioned golden/fuzz evidence, abuse/race/privacy/dependency coverage, and unchanged M10 ownership of revision hash gating, Message-Instance formatting, and signing. |
 
 ## 1. Purpose
 
@@ -54,10 +56,9 @@ implementations.
 
 Initial modules:
 
-- `lib`: the DKIM2 reference library. The current module path is a local
-  placeholder. The intended public namespace is expected to be in the
-  `github.com/go-dkim2/...` family, with `github.com/go-dkim2/libdkim2` as the
-  likely library path.
+- `lib`: the DKIM2 reference library at the current module path
+  `github.com/croessner/dkim2`. A different publication namespace may be
+  selected before the first public release, but is not an active module path.
 - `cmd/dkim2d`: an HTTP/JSON service module.
 - `cmd/dkim2-milter`: a Milter adapter module.
 - `cmd/dkim2ctl`: an OpenAPI-generated client and test-client module.
@@ -145,7 +146,7 @@ cmd/dkim2-milter module      cmd/dkim2d module      cmd/dkim2ctl module
           +------------------------+-----------+
                                    |
                     standalone DKIM2 library module
-              likely future path: github.com/go-dkim2/libdkim2
+                 current path: github.com/croessner/dkim2
                                    |
                  raw message, canonicalization, recipes,
                     signatures, keys, policy, service API
@@ -217,8 +218,9 @@ The Go module boundary is part of the architecture:
 - The reference library lives in `lib/`.
 - Adapter implementations live in separate modules under `cmd/`.
 - Adapter-specific dependencies must not appear in the library module.
-- The library should expose a public facade at its module root. The likely
-  future public path is `github.com/go-dkim2/libdkim2`.
+- The library exposes a public facade at its module root. Its current path is
+  `github.com/croessner/dkim2`; any future publication-path change requires an
+  explicit module migration.
 - Internal implementation packages should remain under `lib/internal`.
 - Command modules should normally import only the public library facade.
 - Temporary local development uses `go.work`; releases use tagged module
@@ -486,6 +488,9 @@ Responsibilities:
 - Strict coverage of draft-specific excluded headers, including
   `Delivered-To` and `X-*` under draft-04 Section 4.
 - Stable sorting and duplicate-header ordering rules.
+- An immutable draft-04 Section 4 plus Section 6.2 signed-header relevance
+  classifier exposed through a validated fallible method set for recipe
+  generation without duplicating the exclusion table.
 
 Design notes:
 
@@ -493,6 +498,9 @@ Design notes:
 - There should be no hidden dependency on map iteration order.
 - The code should expose intermediate canonical bytes in test-only helpers or
   explicit debug APIs.
+- Recipe production code must not import this package. The canonical relevance
+  implementation satisfies a recipe-owned consumer interface through normal Go
+  method-set compatibility; external integration tests prove the wiring.
 
 ### 5.4 `lib/internal/instance`
 
@@ -521,7 +529,7 @@ Owns recipe generation and application.
 
 Responsibilities:
 
-- Parse base64 JSON recipes.
+- Parse decoded JSON recipes after instance-owned base64 decoding.
 - Validate the recipe schema.
 - Apply recipes to reconstruct previous message instances.
 - Generate recipes from before/after message states.
@@ -531,9 +539,21 @@ Design notes:
 
 - Recipe generation must be draft-conformant, deterministic, bounded, and
   reproducible, but generated recipes are not required to be minimal.
+- Generation is the inverse operation from the current/after source to the
+  previous/before target. Header matching uses exact unfolded values within
+  case-insensitive name groups; body matching includes exact line terminators
+  and framing.
+- Generated decoded JSON uses a fixed compact representation and must pass the
+  same strict parser and applier limits before success. Padded base64 and
+  Message-Instance formatting remain `lib/internal/instance` and M10 concerns.
+- Body unavailability is a closed explicit caller policy for content that is
+  unrepresentable or forbidden by copy-only disclosure, never a fallback for
+  limits, cancellation, or internal failure. Relevant headers have no
+  unavailable form and fail closed.
 - A later optimization phase can make recipes smaller without changing
   verification semantics or the public model.
-- Null recipes must be represented explicitly because they have policy meaning.
+- The `b:null` body member must be represented explicitly because body
+  unavailability has policy meaning; a null whole recipe is not a valid form.
 
 ### 5.6 `lib/internal/signature`
 
@@ -1725,7 +1745,7 @@ maintainers to understand why behavior exists.
 | M6 - DNS key resolver | TXT lookup, key record parser, resolver interface, fake resolver, key validation, cache policy, TEMPERROR/PERMERROR split, DNS failure tests | measured 3h11m08s; future similar slice 3 to 6 hours | Medium |
 | M7 - Policy engine | Strict/permissive/testing modes, `donotmodify`, `donotexplode`, feedback flags, local decision model, action plan, policy/result separation tests | measured 2h35m33s prompt wall-clock, 2h42m32s elapsed; future similar slice 2 to 4 hours | Medium |
 | M8 - Recipe application | Completed: strict JSON recipe parser, bounded immutable reconstruction, null-body state, previous-instance hash validation, resource abuse/fuzz/race tests, and draft-04 golden fixture | Exact total unavailable; retained prompt spans are recorded in the ignored timing ledger referenced by the durable M8 spec without inferring missing starts | High; completed with independent normative and architecture review |
-| M9 - Recipe generation | Conservative diff strategy for headers and body, deterministic output, revision tests, non-minimal but reproducible recipe guarantees | 4 to 10 hours | High |
+| M9 - Recipe generation | Completed: deterministic inverse header/body planning, non-minimal compact decoded JSON, explicit policies, strict self-proof, and draft-versioned golden/fuzz/abuse/race/privacy evidence | Retained exact seven-slice prompt spans are recorded in the ignored timing ledger; active engineering time was not separately tracked | High; completed with independent normative and architecture review |
 | M10 - Signing and revising | Message-Instance generation, DKIM2-Signature generation, private key abstraction, chain continuity, signing fixtures | 2 to 5 hours | High |
 | M11 - Datasource abstraction and general providers | Domain datasource interfaces, in-memory provider, flat-file provider, signing profile lookup, private-key handle model, LDAP/SQL design stubs, provider-state tests | 3 to 7 hours | High |
 | M12 - Replay store and Valkey provider | Storage-neutral replay interface, in-memory replay provider, Valkey provider, TTL/first-seen behavior, privacy-preserving keys, degraded-store policy tests | 3 to 8 hours | High |
@@ -1855,13 +1875,14 @@ interpretation choices in code.
 ### 18.1 Resolved Decisions
 
 1. Public module namespace:
-   The current local module paths remain placeholders while the project is still
-   in early planning. The preferred public target is a dedicated
+   The current library module path is `github.com/croessner/dkim2`, with command
+   modules below `github.com/croessner/dkim2/cmd/`. A possible public target is a dedicated
    `github.com/go-dkim2/...` namespace. The reference library is likely to be
    published as `github.com/go-dkim2/libdkim2`; daemon, Milter, and test-client
    components should use analogous names under the same namespace if that
-   organization/repository structure is created. This is not yet binding and
-   must be revisited before the first public release.
+   organization/repository structure is created. This is not binding, is not
+   the current module identity, and must be revisited before the first public
+   release.
 2. Daemon message input model:
    `dkim2d` accepts raw RFC 5322 message input for DKIM2 processing. The stable
    API does not include a structured Milter-specific input model, and no later
@@ -1876,8 +1897,9 @@ interpretation choices in code.
    visible in effective config, logs, metrics, and operator documentation.
 4. Recipe conformance and minimization:
    The reference implementation must fully support draft-conformant recipe
-   parsing, validation, application, generation, null recipes, reconstruction of
-   previous message instances, and hash verification. Generated recipes must be
+   parsing, validation, application, generation, the `b:null` body-unavailable
+   state, previous-message reconstruction, and hash verification. Generated
+   recipes must be
    correct, deterministic, bounded, and reproducible, but they are not required
    to be minimal. Recipe minimization is deferred as an optimization milestone
    and must not affect verification correctness.

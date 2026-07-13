@@ -12,6 +12,11 @@ type HeaderBlock struct {
 	initialized   bool
 }
 
+// HeaderFieldView provides read-only bounded traversal without deep-cloning a field.
+type HeaderFieldView struct {
+	field *HeaderField
+}
+
 // NewHeaderBlock constructs an immutable header block from validated fields.
 func NewHeaderBlock(fields []HeaderField, originalBytes []byte) (HeaderBlock, error) {
 	if len(fields) == 0 {
@@ -80,6 +85,70 @@ func (h HeaderBlock) Field(index int) (HeaderField, bool) {
 	}
 
 	return h.fields[index].clone(), true
+}
+
+// VisitFieldsReverse visits immutable field views from the bottom header upward.
+func (h HeaderBlock) VisitFieldsReverse(visit func(HeaderFieldView) error) error {
+	if !h.Initialized() || visit == nil {
+		return NewParserError(ErrorCodeInvalidInvariant, ErrorLocation{}, ParserErrorDetails{Reason: ErrorReasonInvariant})
+	}
+	for index := len(h.fields) - 1; index >= 0; index-- {
+		if err := visit(HeaderFieldView{field: &h.fields[index]}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// NameLower returns the immutable canonical lowercase name without allocation.
+func (v HeaderFieldView) NameLower() string {
+	if v.field == nil || !v.field.valid {
+		return ""
+	}
+	return v.field.nameLower
+}
+
+// OriginalByteLen returns the encoded field size without copying bytes.
+func (v HeaderFieldView) OriginalByteLen() int {
+	if v.field == nil || !v.field.valid {
+		return 0
+	}
+	return len(v.field.originalBytes)
+}
+
+// UnfoldedValueLen returns the exact unfolded value size without copying bytes.
+func (v HeaderFieldView) UnfoldedValueLen() int {
+	if v.field == nil || !v.field.valid {
+		return 0
+	}
+	return len(v.field.unfoldedValue)
+}
+
+// UnfoldedValueCopy returns one detached exact unfolded value.
+func (v HeaderFieldView) UnfoldedValueCopy() []byte {
+	if v.field == nil || !v.field.valid {
+		return nil
+	}
+	return bytes.Clone(v.field.unfoldedValue)
+}
+
+// MaximumPhysicalLineBytes scans the encoded field and returns its longest line excluding CRLF.
+func (v HeaderFieldView) MaximumPhysicalLineBytes() int {
+	if v.field == nil || !v.field.valid {
+		return 0
+	}
+	maximum, start := 0, 0
+	for index := 0; index+1 < len(v.field.originalBytes); index++ {
+		if v.field.originalBytes[index] != '\r' || v.field.originalBytes[index+1] != '\n' {
+			continue
+		}
+		if length := index - start; length > maximum {
+			maximum = length
+		}
+		start = index + 2
+		index++
+	}
+	return maximum
 }
 
 // FieldsByName returns header occurrences matching a lowercase ASCII name.

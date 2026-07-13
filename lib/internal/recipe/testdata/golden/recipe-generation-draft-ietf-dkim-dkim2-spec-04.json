@@ -1,0 +1,137 @@
+{
+  "draft": "draft-ietf-dkim-dkim2-spec-04",
+  "cases": [
+    {
+      "name": "combined-order-and-escaping",
+      "json": "{\"h\":{\"a\\\"\\\\z\":[{\"c\":[1,2]},{\"d\":[\"quote\\\"slash\\\\\",\"\\u0000\\b\\t\\f\\u001f\",\"Grüße/<>  &�\"]}],\"z\":[]},\"b\":[{\"c\":[3,4]},{\"d\":[\"body\"]}]}"
+    },
+    {
+      "name": "header-only",
+      "json": "{\"h\":{\"subject\":[{\"d\":[\"old\"]}]}}"
+    },
+    {
+      "name": "body-empty",
+      "json": "{\"b\":[]}"
+    },
+    {
+      "name": "body-unavailable",
+      "json": "{\"b\":null}"
+    },
+    {
+      "name": "data-before-copy-and-multidigit",
+      "json": "{\"b\":[{\"d\":[\"\\u0001\\u0002\",\"direct/<> &\"]},{\"c\":[123456789,123456790]}]}"
+    }
+  ],
+  "generation_cases": [
+    {
+      "name": "unchanged-known",
+      "previous_base64": "U3ViamVjdDogc2FtZQ0KDQpib2R5DQo=",
+      "current_base64": "U3ViamVjdDogc2FtZQ0KDQpib2R5DQo=",
+      "body_policy": "reject",
+      "literal_policy": "copy_only",
+      "outcome": "unchanged",
+      "body_outcome": "unchanged",
+      "json": "",
+      "reconstructed": {"framing": "delimited", "body_availability": "known", "body_base64": "Ym9keQ0K", "relevant_headers": [{"name": "subject", "values_bottom_up_base64": ["IHNhbWU="]}]},
+      "canonical": {"header_input_base64": "c3ViamVjdDpzYW1lDQo=", "header_sha256_base64": "VoixIGbRzYg7/vygwrTXQcmrGEFJoXnm8Socjc8jWb4=", "body_input_base64": "Ym9keQ0K", "body_sha256_base64": "Ck5SoRNWUpSR4X0COv7R5ub2pUTtl6xz4dTFz++ji4M="}
+    },
+    {
+      "name": "replace-known",
+      "previous_base64": "U3ViamVjdDogcHJldmlvdXMNCg0Kb2xkDQo=",
+      "current_base64": "U3ViamVjdDogY3VycmVudA0KDQpuZXcNCg==",
+      "body_policy": "reject",
+      "literal_policy": "allow_literals",
+      "outcome": "recipe",
+      "body_outcome": "generated",
+      "json": "{\"h\":{\"subject\":[{\"d\":[\" previous\"]}]},\"b\":[{\"d\":[\"old\"]}]}",
+      "reconstructed": {"framing": "delimited", "body_availability": "known", "body_base64": "b2xkDQo=", "relevant_headers": [{"name": "subject", "values_bottom_up_base64": ["IHByZXZpb3Vz"]}]},
+      "canonical": {"header_input_base64": "c3ViamVjdDpwcmV2aW91cw0K", "header_sha256_base64": "edEaObNmY+yF+Ykc4wu23DzhrZC2fwvl1AlA8eTTjCo=", "body_input_base64": "b2xkDQo=", "body_sha256_base64": "EXxdag9X6OJbSynP19sdc8PF5dv2f7yzPSGLwpXDLSU="}
+    },
+    {
+      "name": "duplicate-copy",
+      "previous_base64": "QTogZHVwbGljYXRlDQpBOiBkdXBsaWNhdGUNCg0KZA0KZA0K",
+      "current_base64": "QTogZHVwbGljYXRlDQpBOiBtaWRkbGUNCkE6IGR1cGxpY2F0ZQ0KDQpkDQptDQpkDQo=",
+      "body_policy": "reject",
+      "literal_policy": "copy_only",
+      "outcome": "recipe",
+      "body_outcome": "generated",
+      "json": "{\"h\":{\"a\":[{\"c\":[1,1]},{\"c\":[3,3]}]},\"b\":[{\"c\":[1,1]},{\"c\":[3,3]}]}",
+      "reconstructed": {"framing": "delimited", "body_availability": "known", "body_base64": "ZA0KZA0K", "relevant_headers": [{"name": "a", "values_bottom_up_base64": ["IGR1cGxpY2F0ZQ==", "IGR1cGxpY2F0ZQ=="]}]},
+      "canonical": {"header_input_base64": "YTpkdXBsaWNhdGUNCmE6ZHVwbGljYXRlDQo=", "header_sha256_base64": "+s+Uy0gMAI5OiENR9Lrim2G8e0g6x6z3YYOIUEmbgNw=", "body_input_base64": "ZA0KZA0K", "body_sha256_base64": "vIRZrmmjZhv6YUsI7p2l69ryMWXuHMcWeffr8YUEF2w="}
+    },
+    {
+      "name": "header-only-unavailable",
+      "previous_base64": "U3ViamVjdDogcHJpb3INCg==",
+      "current_base64": "U3ViamVjdDogY3VycmVudA0KDQpib2R5DQo=",
+      "body_policy": "allow_unavailable",
+      "literal_policy": "allow_literals",
+      "outcome": "recipe",
+      "body_outcome": "unavailable",
+      "unavailable_reason": "unrepresentable",
+      "json": "{\"h\":{\"subject\":[{\"d\":[\" prior\"]}]},\"b\":null}",
+      "reconstructed": {"body_availability": "unavailable", "relevant_headers": [{"name": "subject", "values_bottom_up_base64": ["IHByaW9y"]}]},
+      "canonical": {"header_input_base64": "c3ViamVjdDpwcmlvcg0K", "header_sha256_base64": "9+cNuXZL8SiWzIqWq6ypuMQHVZBMGcXcII2Bg/k3XX0="}
+    },
+    {
+      "name": "current-only-header-removal",
+      "previous_base64": "QjogcmV0YWluZWQNCg0KYm9keQ0K",
+      "current_base64": "QTogcmVtb3ZlZA0KQjogcmV0YWluZWQNCg0KYm9keQ0K",
+      "body_policy": "reject",
+      "literal_policy": "copy_only",
+      "outcome": "recipe",
+      "body_outcome": "unchanged",
+      "json": "{\"h\":{\"a\":[]}}",
+      "reconstructed": {"framing": "delimited", "body_availability": "known", "body_base64": "Ym9keQ0K", "relevant_headers": [{"name": "a", "values_bottom_up_base64": []}, {"name": "b", "values_bottom_up_base64": ["IHJldGFpbmVk"]}]},
+      "canonical": {"header_input_base64": "YjpyZXRhaW5lZA0K", "header_sha256_base64": "1fWUHAodXsaUmgkCytQ2rWu+6fwmdclLautktHXL0lQ=", "body_input_base64": "Ym9keQ0K", "body_sha256_base64": "Ck5SoRNWUpSR4X0COv7R5ub2pUTtl6xz4dTFz++ji4M="}
+    },
+    {
+      "name": "binary-body-copy",
+      "previous_base64": "QTp4DQoNCv8NCg==",
+      "current_base64": "QTp4DQoNCnByZWZpeA0K/w0K",
+      "body_policy": "reject",
+      "literal_policy": "copy_only",
+      "outcome": "recipe",
+      "body_outcome": "generated",
+      "json": "{\"b\":[{\"c\":[2,2]}]}",
+      "reconstructed": {"framing": "delimited", "body_availability": "known", "body_base64": "/w0K", "relevant_headers": [{"name": "a", "values_bottom_up_base64": ["eA=="]}]},
+      "canonical": {"header_input_base64": "YTp4DQo=", "header_sha256_base64": "OO+pvFvwlAWKjwYWSS8W8RpktwtSa8RPRMCGFHUYvpg=", "body_input_base64": "/w0K", "body_sha256_base64": "EyC13BOqkdusbqvDRstlVZKu+CRKjtBLjEs73Vm4r0w="}
+    },
+    {
+      "name": "json-sensitive-header-key",
+      "previous_base64": "YSJcejogcHJpb3INCg0KYm9keQ0K",
+      "current_base64": "QSJcWjogY3VycmVudA0KDQpib2R5DQo=",
+      "body_policy": "reject",
+      "literal_policy": "allow_literals",
+      "outcome": "recipe",
+      "body_outcome": "unchanged",
+      "json": "{\"h\":{\"a\\\"\\\\z\":[{\"d\":[\" prior\"]}]}}",
+      "reconstructed": {"framing": "delimited", "body_availability": "known", "body_base64": "Ym9keQ0K", "relevant_headers": [{"name": "a\"\\z", "values_bottom_up_base64": ["IHByaW9y"]}]},
+      "canonical": {"header_input_base64": "YSJcejpwcmlvcg0K", "header_sha256_base64": "aLVKFXLNCAb+nzmgxLZiV1l7UCw5PHM+816BIourlfU=", "body_input_base64": "Ym9keQ0K", "body_sha256_base64": "Ck5SoRNWUpSR4X0COv7R5ub2pUTtl6xz4dTFz++ji4M="}
+    },
+    {
+      "name": "delimited-empty-from-header-only",
+      "previous_base64": "QTp4DQoNCg==",
+      "current_base64": "QTp4DQo=",
+      "body_policy": "reject",
+      "literal_policy": "copy_only",
+      "outcome": "recipe",
+      "body_outcome": "generated",
+      "json": "{\"b\":[]}",
+      "reconstructed": {"framing": "delimited", "body_availability": "known", "body_base64": "", "relevant_headers": [{"name": "a", "values_bottom_up_base64": ["eA=="]}]},
+      "canonical": {"header_input_base64": "YTp4DQo=", "header_sha256_base64": "OO+pvFvwlAWKjwYWSS8W8RpktwtSa8RPRMCGFHUYvpg=", "body_input_base64": "DQo=", "body_sha256_base64": "frcCV1k9oG9oKj3dpUqdJg1PxRT2RSN/XKdLCPjaYaY="}
+    },
+    {
+      "name": "copy-only-literal-unavailable",
+      "previous_base64": "U3ViamVjdDogcHJldmlvdXMNCg0Kb2xkDQo=",
+      "current_base64": "U3ViamVjdDogcHJldmlvdXMNCg0KbmV3DQo=",
+      "body_policy": "allow_unavailable",
+      "literal_policy": "copy_only",
+      "outcome": "recipe",
+      "body_outcome": "unavailable",
+      "unavailable_reason": "literal_required",
+      "json": "{\"b\":null}",
+      "reconstructed": {"body_availability": "unavailable", "relevant_headers": [{"name": "subject", "values_bottom_up_base64": ["IHByZXZpb3Vz"]}]},
+      "canonical": {"header_input_base64": "c3ViamVjdDpwcmV2aW91cw0K", "header_sha256_base64": "edEaObNmY+yF+Ykc4wu23DzhrZC2fwvl1AlA8eTTjCo="}
+    }
+  ]
+}

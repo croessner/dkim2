@@ -193,7 +193,7 @@ func TestApplyHeadersEnforcesOutputAndWorkLimits(t *testing.T) {
 		{"output line bytes", []byte("A:x\r\n\r\n"), testHeaderDataXYRecipe, 4, limitNameMaxHeaderLineBytes, func(l *Limits, n int) { l.MaxHeaderLineBytes = n }},
 		{"source header bytes", []byte("A:x\r\nB:y\r\n\r\n"), testHeaderRemovalRecipe, 10, limitNameMaxHeaderBytes, func(l *Limits, n int) { l.MaxHeaderBytes = n }},
 		{"output header bytes", []byte("A:x\r\n\r\n"), testHeaderDataXYRecipe, 6, limitNameMaxHeaderBytes, func(l *Limits, n int) { l.MaxHeaderBytes = n }},
-		{"state bytes", []byte("A:x\r\n\r\nb\r\n"), testHeaderDataXRecipe, 10, limitNameMaxStateBytes, func(l *Limits, n int) { l.MaxStateBytes = n }},
+		{testStateBytesLabel, []byte("A:x\r\n\r\nb\r\n"), testHeaderDataXRecipe, 10, limitNameMaxStateBytes, func(l *Limits, n int) { l.MaxStateBytes = n }},
 		{"copy range", []byte("A:x\r\nA:y\r\n\r\n"), `{"h":{"A":[{"c":[1,2]}]}}`, 2, limitNameMaxCopiedItemsPerRange, func(l *Limits, n int) { l.MaxCopiedItemsPerRange = n }},
 		{"total copies", []byte("A:x\r\nB:y\r\n\r\n"), `{"h":{"A":[{"c":[1,1]}],"B":[{"c":[1,1]}]}}`, 2, limitNameMaxTotalCopiedItems, func(l *Limits, n int) { l.MaxCopiedItemsPerRange = 1; l.MaxTotalCopiedItems = n }},
 		{"operation work", []byte("A:x\r\n\r\n"), testHeaderDataXRecipe, 7, limitNameMaxOperationWorkUnits, func(l *Limits, n int) { l.MaxOperationWorkUnits = n }},
@@ -215,11 +215,11 @@ func TestApplyHeadersEnforcesNameBudgetsAcrossSourceAndPlan(t *testing.T) {
 // TestApplyHeadersRevalidatesParsedPlanBudgets verifies Parser and Applier limits cannot diverge.
 func TestApplyHeadersRevalidatesParsedPlanBudgets(t *testing.T) {
 	checks := []applyLimitCheck{
-		{"steps per header", []byte("A:x\r\n\r\n"), `{"h":{"A":[{"d":["x"]},{"d":["y"]}]}}`, 2, limitNameMaxStepsPerHeader, func(l *Limits, n int) { l.MaxStepsPerHeader = n }},
-		{"total steps", []byte("A:x\r\nB:y\r\n\r\n"), `{"h":{"A":[{"d":["x"]}],"B":[{"d":["y"]}]}}`, 2, limitNameMaxTotalSteps, func(l *Limits, n int) { l.MaxStepsPerHeader = n; l.MaxBodySteps = n; l.MaxTotalSteps = n }},
-		{"copy ranges", []byte("A:x\r\nA:y\r\n\r\n"), `{"h":{"A":[{"c":[1,1]},{"c":[2,2]}]}}`, 2, limitNameMaxCopyRanges, func(l *Limits, n int) { l.MaxCopyRanges = n }},
-		{"data strings", []byte("A:x\r\n\r\n"), `{"h":{"A":[{"d":["x","y"]}]}}`, 2, limitNameMaxDataStrings, func(l *Limits, n int) { l.MaxDataStrings = n }},
-		{"data string bytes", []byte("A:x\r\n\r\n"), testHeaderDataXYRecipe, 2, limitNameMaxDataStringBytes, func(l *Limits, n int) { l.MaxDataStringBytes = n }},
+		{testStepsPerHeaderLabel, []byte("A:x\r\n\r\n"), `{"h":{"A":[{"d":["x"]},{"d":["y"]}]}}`, 2, limitNameMaxStepsPerHeader, func(l *Limits, n int) { l.MaxStepsPerHeader = n }},
+		{testTotalStepsLabel, []byte("A:x\r\nB:y\r\n\r\n"), `{"h":{"A":[{"d":["x"]}],"B":[{"d":["y"]}]}}`, 2, limitNameMaxTotalSteps, func(l *Limits, n int) { l.MaxStepsPerHeader = n; l.MaxBodySteps = n; l.MaxTotalSteps = n }},
+		{testCopyRangesLabel, []byte("A:x\r\nA:y\r\n\r\n"), `{"h":{"A":[{"c":[1,1]},{"c":[2,2]}]}}`, 2, limitNameMaxCopyRanges, func(l *Limits, n int) { l.MaxCopyRanges = n }},
+		{testDataStringsLabel, []byte("A:x\r\n\r\n"), `{"h":{"A":[{"d":["x","y"]}]}}`, 2, limitNameMaxDataStrings, func(l *Limits, n int) { l.MaxDataStrings = n }},
+		{testDataStringBytesLabel, []byte("A:x\r\n\r\n"), testHeaderDataXYRecipe, 2, limitNameMaxDataStringBytes, func(l *Limits, n int) { l.MaxDataStringBytes = n }},
 		{testLiteralBytesLabel, []byte("A:x\r\n\r\n"), `{"h":{"A":[{"d":["xy","z"]}]}}`, 3, limitNameMaxTotalLiteralBytes, func(l *Limits, n int) { l.MaxDataStringBytes = n; l.MaxTotalLiteralBytes = n }},
 	}
 	runApplyLimitChecks(t, checks, Applier.applyHeaders)

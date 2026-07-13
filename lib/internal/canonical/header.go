@@ -15,6 +15,21 @@ type headerFieldRecord struct {
 	canonicalBytes []byte
 }
 
+type excludedHeaderKind uint8
+
+const (
+	excludedHeaderNone excludedHeaderKind = iota
+	excludedHeaderReceived
+	excludedHeaderReturnPath
+	excludedHeaderDeliveredTo
+	excludedHeaderAuthenticationResults
+	excludedHeaderX
+	excludedHeaderDKIMSignature
+	excludedHeaderARC
+	excludedHeaderMessageInstance
+	excludedHeaderDKIM2Signature
+)
+
 // HeaderHashInput builds DKIM2 Section 6.2 canonical header hash input.
 func (c Canonicalizer) HeaderHashInput(headers rawmsg.HeaderBlock) (ByteInput, error) {
 	if !headers.Initialized() {
@@ -145,28 +160,54 @@ func isHeaderWSP(b byte) bool {
 	return b == ' ' || b == '\t'
 }
 
-// countExcludedHeader records allowlisted Section 6.2 exclusions.
-func countExcludedHeader(nameLower string, counts *ExcludedHeaderCounts) bool {
+// excludedHeaderKindForName classifies the authoritative Section 4 and Section 6.2 exclusion set.
+func excludedHeaderKindForName(nameLower string) excludedHeaderKind {
 	switch {
 	case nameLower == "received":
-		counts.Received++
+		return excludedHeaderReceived
 	case nameLower == "return-path":
-		counts.ReturnPath++
+		return excludedHeaderReturnPath
 	case nameLower == "delivered-to":
-		counts.DeliveredTo++
+		return excludedHeaderDeliveredTo
 	case nameLower == "authentication-results":
-		counts.AuthenticationResults++
+		return excludedHeaderAuthenticationResults
 	case strings.HasPrefix(nameLower, "x-"):
-		counts.XHeader++
+		return excludedHeaderX
 	case nameLower == "dkim-signature":
-		counts.DKIMSignature++
+		return excludedHeaderDKIMSignature
 	case strings.HasPrefix(nameLower, "arc-"):
-		counts.ARC++
+		return excludedHeaderARC
 	case nameLower == "message-instance":
-		counts.MessageInstance++
+		return excludedHeaderMessageInstance
 	case nameLower == "dkim2-signature":
-		counts.DKIM2Signature++
+		return excludedHeaderDKIM2Signature
 	default:
+		return excludedHeaderNone
+	}
+}
+
+// countExcludedHeader records allowlisted Section 6.2 exclusions.
+func countExcludedHeader(nameLower string, counts *ExcludedHeaderCounts) bool {
+	switch excludedHeaderKindForName(nameLower) {
+	case excludedHeaderReceived:
+		counts.Received++
+	case excludedHeaderReturnPath:
+		counts.ReturnPath++
+	case excludedHeaderDeliveredTo:
+		counts.DeliveredTo++
+	case excludedHeaderAuthenticationResults:
+		counts.AuthenticationResults++
+	case excludedHeaderX:
+		counts.XHeader++
+	case excludedHeaderDKIMSignature:
+		counts.DKIMSignature++
+	case excludedHeaderARC:
+		counts.ARC++
+	case excludedHeaderMessageInstance:
+		counts.MessageInstance++
+	case excludedHeaderDKIM2Signature:
+		counts.DKIM2Signature++
+	case excludedHeaderNone:
 		return false
 	}
 

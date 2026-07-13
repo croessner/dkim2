@@ -35,3 +35,12 @@ Its package-local loader proves bottom-up header reconstruction, top-down body
 reconstruction, copied terminal-line fidelity, deterministic cross-name
 grouping, and truthful unavailable-body handling. It remains internal because
 M8 deliberately exposes no public history result or recipe API.
+
+The internal draft-04 recipe-generation fixture lives at
+`lib/internal/recipe/testdata/golden/recipe-generation-draft-ietf-dkim-dkim2-spec-04.json`.
+It retains exact compact decoded JSON together with synthetic previous/current
+states, disclosure and unavailable-body policies, closed outcomes,
+reconstructed semantics, and Section 6 canonical evidence. Package-local fuzz,
+abuse, privacy, dependency, and race tests complement the retained vectors.
+Generation remains internal because Message-Instance base64 and formatting,
+revision hash gating, and signing are intentionally deferred.

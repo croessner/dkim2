@@ -92,6 +92,13 @@
 // historical content or signature verification. A terminal current nd=
 // requires unmodeled out-of-band trust and therefore returns PERMERROR.
 //
+// The internal recipe subsystem can also generate deterministic conservative
+// decoded JSON that applies to a current state to reconstruct previous recipe
+// semantics. Generation is not exposed by this public facade and does not
+// decide whether hashes require a new Message-Instance. Base64, field
+// formatting, sequence progression, revision signing, and private-key use
+// remain outside the current public API.
+//
 // Supported PASS plus an unknown algorithm may pass; unknown-only coverage is
 // PERMERROR, and a supported signature or current hash mismatch prevents PASS
 // according to the precedence above. Callers should inspect typed state,
