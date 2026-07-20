@@ -9,6 +9,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/croessner/dkim2/internal/canonical"
@@ -19,11 +20,12 @@ const ed25519Selector = "ed-selector.test"
 
 type multiSignatureFixture struct {
 	verificationFixture
-	rsaKey       *rsa.PublicKey
-	ed25519Key   ed25519.PublicKey
-	wrongEd25519 ed25519.PublicKey
-	sequenceOne  uint64
-	sequenceTwo  uint64
+	rsaPrivateKey *rsa.PrivateKey
+	rsaKey        *rsa.PublicKey
+	ed25519Key    ed25519.PublicKey
+	wrongEd25519  ed25519.PublicKey
+	sequenceOne   uint64
+	sequenceTwo   uint64
 }
 
 // TestVerifierAggregatesMultipleSignatureSets verifies all-checkable-signatures behavior.
@@ -131,12 +133,44 @@ func TestVerifierSelectsHighestCurrentSignature(t *testing.T) {
 		Material:  fixture.rsaKey,
 	}})
 
-	result, err := verifier.Verify(context.Background(), Request{Message: fixture.message, Envelope: matchingEnvelope()})
+	result, err := verifier.Verify(context.Background(), Request{Message: fixture.message, Envelope: sequentialCurrentEnvelope()})
 	if err != nil {
 		t.Fatalf("Verify() error = %v", err)
 	}
 	if result.Status() != TargetStatusPass || result.Target().Sequence != fixture.sequenceTwo {
 		t.Fatalf("target/status = %#v/%s, want highest sequence pass", result.Target(), result.Status())
+	}
+}
+
+// TestVerifierRejectsCustodyBeforeProviderLookup verifies structural early failure.
+func TestVerifierRejectsCustodyBeforeProviderLookup(t *testing.T) {
+	fixture := newSequentialSignatureFixture(t)
+	raw := strings.Replace(fixture.raw, "mf=PHNlbmRlckBleGFtcGxlLnRlc3Q+", "mf=PHNlbmRlckBldmlsLnRlc3Q+", 1)
+	message := mustParseVerificationMessage(t, raw)
+	provider := &countingMissingProvider{}
+	verifier, err := NewVerifier(provider, testClockOption())
+	if err != nil {
+		t.Fatalf("NewVerifier() error = %v", err)
+	}
+	_, err = verifier.Verify(context.Background(), Request{Message: message, Envelope: sequentialCurrentEnvelope()})
+	if !IsErrorCode(err, ErrorCodeCustodyMismatch) || provider.count != 0 {
+		t.Fatalf("Verify() error=%v provider_calls=%d, want early custody rejection", err, provider.count)
+	}
+}
+
+// TestVerifierDoesNotExemptCurrentMismatchForHistoricalSelection verifies target binding.
+func TestVerifierDoesNotExemptCurrentMismatchForHistoricalSelection(t *testing.T) {
+	fixture := newSequentialSignatureFixture(t)
+	raw := strings.Replace(fixture.raw, "mf=PHNlbmRlckBleGFtcGxlLnRlc3Q+", "mf=PHNlbmRlckBldmlsLnRlc3Q+", 1)
+	message := mustParseVerificationMessage(t, raw)
+	provider := &countingMissingProvider{}
+	verifier, err := NewVerifier(provider, testClockOption())
+	if err != nil {
+		t.Fatalf("NewVerifier() error = %v", err)
+	}
+	_, err = verifier.Verify(context.Background(), Request{Message: message, TargetSequence: fixture.sequenceOne})
+	if !IsErrorCode(err, ErrorCodeCustodyMismatch) || provider.count != 0 {
+		t.Fatalf("historical Verify() error=%v provider_calls=%d", err, provider.count)
 	}
 }
 
@@ -176,6 +210,16 @@ func TestVerifierCanSkipEnvelopeOnlyForExplicitNonCurrentDiagnostics(t *testing.
 
 // newMultiSignatureFixture creates one target field with RSA and Ed25519 signature sets.
 func newMultiSignatureFixture(t *testing.T) multiSignatureFixture {
+	return newOrderedMultiSignatureFixture(t, false)
+}
+
+// newReversedMultiSignatureFixture creates one target whose Ed25519 set precedes its RSA set in source order.
+func newReversedMultiSignatureFixture(t *testing.T) multiSignatureFixture {
+	return newOrderedMultiSignatureFixture(t, true)
+}
+
+// newOrderedMultiSignatureFixture creates one dual-signature target in controlled source order.
+func newOrderedMultiSignatureFixture(t *testing.T, reverse bool) multiSignatureFixture {
 	t.Helper()
 
 	rsaKey, err := rsa.GenerateKey(rand.Reader, 1024)
@@ -192,8 +236,9 @@ func newMultiSignatureFixture(t *testing.T) multiSignatureFixture {
 	}
 
 	headerDigest, bodyDigest := baseMessageDigests(t)
-	placeholderSet := testSelector + ":" + string(AlgorithmRSASHA256) + ":" + base64.StdEncoding.EncodeToString(bytesOf(0xa5, 128)) + "," +
-		ed25519Selector + ":" + string(AlgorithmEd25519SHA256) + ":" + base64.StdEncoding.EncodeToString(bytesOf(0xa5, ed25519.SignatureSize))
+	rsaPlaceholder := testSelector + ":" + string(AlgorithmRSASHA256) + ":" + base64.StdEncoding.EncodeToString(bytesOf(0xa5, 128))
+	edPlaceholder := ed25519Selector + ":" + string(AlgorithmEd25519SHA256) + ":" + base64.StdEncoding.EncodeToString(bytesOf(0xa5, ed25519.SignatureSize))
+	placeholderSet := orderedMultiSignatureSets(rsaPlaceholder, edPlaceholder, reverse)
 	unsignedRaw := rawWithSignatureFields(headerDigest, bodyDigest, []string{signatureField(1, placeholderSet)})
 	unsigned := mustParseVerificationMessage(t, unsignedRaw)
 	digest := signatureDigestForTarget(t, unsigned, 1)
@@ -202,8 +247,9 @@ func newMultiSignatureFixture(t *testing.T) multiSignatureFixture {
 		t.Fatalf("rsa.SignPKCS1v15() error = %v", err)
 	}
 	edSignature := ed25519.Sign(edPrivate, digest)
-	signedSet := testSelector + ":" + string(AlgorithmRSASHA256) + ":" + base64.StdEncoding.EncodeToString(rsaSignature) + "," +
-		ed25519Selector + ":" + string(AlgorithmEd25519SHA256) + ":" + base64.StdEncoding.EncodeToString(edSignature)
+	rsaSet := testSelector + ":" + string(AlgorithmRSASHA256) + ":" + base64.StdEncoding.EncodeToString(rsaSignature)
+	edSet := ed25519Selector + ":" + string(AlgorithmEd25519SHA256) + ":" + base64.StdEncoding.EncodeToString(edSignature)
+	signedSet := orderedMultiSignatureSets(rsaSet, edSet, reverse)
 	parsed, err := parseVerificationFixture(rawWithSignatureFields(headerDigest, bodyDigest, []string{signatureField(1, signedSet)}))
 	if err != nil {
 		t.Fatalf("parseVerificationFixture() error = %v", err)
@@ -215,6 +261,14 @@ func newMultiSignatureFixture(t *testing.T) multiSignatureFixture {
 		ed25519Key:          edPublic,
 		wrongEd25519:        wrongPublic,
 	}
+}
+
+// orderedMultiSignatureSets joins controlled RSA and Ed25519 sets in source or reversed order.
+func orderedMultiSignatureSets(rsaSet, edSet string, reverse bool) string {
+	if reverse {
+		return edSet + "," + rsaSet
+	}
+	return rsaSet + "," + edSet
 }
 
 // newSupportedAndUnknownSignatureFixture signs a target containing one supported and one future set.
@@ -264,9 +318,12 @@ func newSequentialSignatureFixture(t *testing.T) multiSignatureFixture {
 	}
 	firstSet := testSelector + ":" + string(AlgorithmRSASHA256) + ":" + base64.StdEncoding.EncodeToString(firstSignature)
 
+	secondField := func(sequence uint64, sets string) string {
+		return strings.Replace(signatureField(sequence, sets), "mf=PD4=", "mf=PHNlbmRlckBleGFtcGxlLnRlc3Q+", 1)
+	}
 	secondUnsigned := mustParseVerificationMessage(t, rawWithSignatureFields(headerDigest, bodyDigest, []string{
 		signatureField(1, firstSet),
-		signatureField(2, placeholder),
+		secondField(2, placeholder),
 	}))
 	secondDigest := signatureDigestForTarget(t, secondUnsigned, 2)
 	secondSignature, err := rsa.SignPKCS1v15(rand.Reader, key, crypto.SHA256, secondDigest)
@@ -277,7 +334,7 @@ func newSequentialSignatureFixture(t *testing.T) multiSignatureFixture {
 
 	parsed, err := parseVerificationFixture(rawWithSignatureFields(headerDigest, bodyDigest, []string{
 		signatureField(1, firstSet),
-		signatureField(2, secondSet),
+		secondField(2, secondSet),
 	}))
 	if err != nil {
 		t.Fatalf("parseVerificationFixture() error = %v", err)
@@ -289,6 +346,11 @@ func newSequentialSignatureFixture(t *testing.T) multiSignatureFixture {
 		sequenceOne:         1,
 		sequenceTwo:         2,
 	}
+}
+
+// sequentialCurrentEnvelope returns the non-null envelope recorded by the second fixture signature.
+func sequentialCurrentEnvelope() Envelope {
+	return NewEnvelope([]byte("<sender@example.test>"), [][]byte{[]byte("<rcpt@example.test>")})
 }
 
 // validKeys returns static keys for every known signature set in the fixture.

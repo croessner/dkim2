@@ -21,18 +21,20 @@ Current contents:
 - `cmd/dkim2-milter`: standalone Milter adapter module.
 - `cmd/dkim2ctl`: standalone OpenAPI-backed client and test-client module.
 - `lib/internal/*`: implemented raw-message, parser, canonicalization,
-  verification, policy, recipe-application, and inverse recipe-generation
-  foundations plus explicit boundaries for later work.
+  verification, policy, recipe, signing, revision, route-authority, and
+  restricted-release foundations plus explicit boundaries for later work.
 - `docs/specs/openapi`: authoritative source-of-truth OpenAPI contract.
-- `lib/testdata/vectors`: draft-versioned public verification and DNS vectors.
+- `lib/testdata/vectors`: draft-versioned verification, DNS, custody, crypto,
+  signing, revision, and insertion vectors.
 - `lib/internal/*/testdata`: package-owned canonicalization, recipe application
   and generation, parser, fuzz, and regression fixtures.
 
-Recipe generation is currently an internal library capability. It emits
-deterministic conservative decoded JSON that reconstructs a previous message
-state from the current state and proves its output through the strict recipe
-parser and applier. Message-Instance formatting, recipe base64 encoding,
-hash-gated revision decisions, and signing remain later work.
+The public library signs origin messages, hash-unchanged forwarding copies,
+recipe-backed revisions, and authorized next-domain transitions. Signing uses
+exact outgoing SMTP envelope evidence, authority-issued copy tickets, opaque
+private-key handles, deterministic draft-04 fields, final message reparsing,
+custody checks, and cryptographic self-verification. Local-only and
+out-of-band outputs remain closed until their exact route-bound release.
 
 Useful verification commands:
 

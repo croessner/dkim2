@@ -80,8 +80,37 @@ func TestMalformedStateTargetClassificationPreservesPostSelectionDiagnostics(t *
 	if !verificationErrorHasUnavailableTarget(verify.ErrorCodeMalformedState, Target{}) {
 		t.Fatal("pre-target malformed state was not classified unavailable")
 	}
+	for _, partial := range []Target{{Sequence: 1}, {Instance: 1}} {
+		if !verificationErrorHasUnavailableTarget(verify.ErrorCodeCustodyMismatch, partial) {
+			t.Fatalf("partial target %#v was not classified unavailable", partial)
+		}
+	}
 	if verificationErrorHasUnavailableTarget(verify.ErrorCodeMalformedState, Target{Sequence: 1, Instance: 1}) {
 		t.Fatal("post-selection malformed state was classified target unavailable")
+	}
+}
+
+// TestStructuralChainErrorsNormalizeToUnavailableMalformedProtocol proves the complete pre-target mapping matrix.
+func TestStructuralChainErrorsNormalizeToUnavailableMalformedProtocol(t *testing.T) {
+	for _, code := range []verify.ErrorCode{
+		verify.ErrorCodeCustodyMismatch,
+		verify.ErrorCodeNextDomainMismatch,
+		verify.ErrorCodeMissingNextSignature,
+	} {
+		t.Run(string(code), func(t *testing.T) {
+			target := Target{Sequence: 2}
+			reason, class, state := mapVerificationErrorCode(code)
+			if !verificationErrorHasUnavailableTarget(code, target) {
+				t.Fatal("partial structural target was treated as authoritative")
+			}
+			target = Target{}
+			reason, class, state = unavailableVerificationFailure(code, reason, class, state)
+			projection, err := buildUnavailablePolicyProjection(reason)
+			if err != nil || target != (Target{}) || reason != ReasonMalformedProtocol || class != CheckProtocol || state != StatePERMERROR ||
+				!projection.Valid() || projection.Form() != policy.TargetUnavailable || projection.PreTargetReason() != policy.PreTargetMalformedProtocol {
+				t.Fatalf("mapping = target=%#v %q/%q/%q projection=%#v error=%v", target, reason, class, state, projection, err)
+			}
+		})
 	}
 }
 
@@ -104,11 +133,62 @@ func TestVerifierPreservesEvaluatedCustodyOnNextDomainMismatch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Verify() error = %v", err)
 	}
-	if result.State() != StatePERMERROR || result.PrimaryReason() != ReasonNextDomainMismatch || result.Custody() != CustodyNDLinksEvaluated {
+	projection := result.PolicyProjection()
+	if result.State() != StatePERMERROR || result.PrimaryReason() != ReasonMalformedProtocol || result.Custody() != CustodyNDLinksEvaluated || result.Target() != (Target{}) ||
+		!projection.Valid() || projection.Form() != policy.TargetUnavailable || projection.PreTargetReason() != policy.PreTargetMalformedProtocol {
 		t.Fatalf("result = %q/%q/%q", result.State(), result.PrimaryReason(), result.Custody())
 	}
 	if provider.calls != 0 {
 		t.Fatalf("provider calls = %d, want zero", provider.calls)
+	}
+}
+
+// TestVerifierDoesNotClaimAbsentCustodyWhenInstancesAreMissing verifies signature evidence remains indeterminate.
+func TestVerifierDoesNotClaimAbsentCustodyWhenInstancesAreMissing(t *testing.T) {
+	signatureText := base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{0x22}, 128))
+	raw := "From: sender@example.test\r\n" +
+		"DKIM2-Signature: i=1; m=1; t=1700000000; nd=next.example.test; d=first.example.test; s=selector.test:rsa-sha256:" + signatureText + ";\r\n\r\nbody\r\n"
+	provider := &countingProvider{}
+	config := DefaultConfig()
+	config.Clock = func() time.Time { return time.Unix(1700000000, 0) }
+	verifier, err := NewVerifier(provider, config)
+	if err != nil {
+		t.Fatalf("NewVerifier() error = %v", err)
+	}
+	result, err := verifier.Verify(context.Background(), NewRequest([]byte(raw), nil, nil))
+	if err != nil {
+		t.Fatalf("Verify() error = %v", err)
+	}
+	if result.PrimaryReason() != ReasonMissingProtocol || result.Custody() != CustodyNotEvaluated || provider.calls != 0 {
+		t.Fatalf("missing-instance result=%s/%s provider_calls=%d", result.PrimaryReason(), result.Custody(), provider.calls)
+	}
+}
+
+// TestVerifierMapsOrdinaryAdjacencyMismatchAsMalformedProtocol verifies public custody failure taxonomy.
+func TestVerifierMapsOrdinaryAdjacencyMismatchAsMalformedProtocol(t *testing.T) {
+	digest := base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{0x11}, 32))
+	signatureText := base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{0x22}, 128))
+	raw := "From: sender@example.test\r\n" +
+		"Message-Instance: m=1; h=sha256:" + digest + ":" + digest + ";\r\n" +
+		"DKIM2-Signature: i=1; m=1; t=1700000000; mf=PGFAb3JpZ2luLnRlc3Q+; rt=PGJAcmVsYXkudGVzdD4=; d=origin.test; s=selector.test:rsa-sha256:" + signatureText + ";\r\n" +
+		"DKIM2-Signature: i=2; m=1; t=1700000000; mf=PGJAZXZpbC50ZXN0Pg==; rt=PGNAZmluYWwudGVzdD4=; d=evil.test; s=selector.test:rsa-sha256:" + signatureText + ";\r\n\r\nbody\r\n"
+	provider := &countingProvider{}
+	config := DefaultConfig()
+	config.Clock = func() time.Time { return time.Unix(1700000000, 0) }
+	verifier, err := NewVerifier(provider, config)
+	if err != nil {
+		t.Fatalf("NewVerifier() error = %v", err)
+	}
+	result, err := verifier.Verify(context.Background(), NewRequest([]byte(raw), nil, nil))
+	if err != nil {
+		t.Fatalf("Verify() error = %v", err)
+	}
+	if result.State() != StatePERMERROR || result.PrimaryReason() != ReasonMalformedProtocol || provider.calls != 0 {
+		t.Fatalf("adjacency result=%s/%s provider_calls=%d", result.State(), result.PrimaryReason(), provider.calls)
+	}
+	projection := result.PolicyProjection()
+	if result.Target() != (Target{}) || !projection.Valid() || projection.Form() != policy.TargetUnavailable || projection.PreTargetReason() != policy.PreTargetMalformedProtocol {
+		t.Fatalf("adjacency target=%#v projection=%#v", result.Target(), projection)
 	}
 }
 

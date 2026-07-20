@@ -37,23 +37,27 @@ func (v Verifier) checkTimestamp(targetSignature signature.Signature, target Tar
 
 // timestampStatus classifies t= seconds using deterministic verifier policy.
 func (v Verifier) timestampStatus(seconds uint64) TimestampStatus {
+	return timestampStatusAt(v.options.Clock.Now(), seconds, v.options.TimestampPolicy)
+}
+
+// timestampStatusAt classifies one timestamp against an already captured clock.
+func timestampStatusAt(now time.Time, seconds uint64, policy TimestampPolicy) TimestampStatus {
 	if seconds > maxRepresentableUnixSeconds {
 		return TimestampStatusInvalid
 	}
 
 	timestamp := time.Unix(int64(seconds), 0)
-	now := v.options.Clock.Now()
-	futureLimit, ok := safeAddDuration(now, v.options.TimestampPolicy.FutureTolerance)
+	futureLimit, ok := safeAddDuration(now, policy.FutureTolerance)
 	if !ok {
 		return TimestampStatusInvalid
 	}
 	if timestamp.After(futureLimit) {
 		return TimestampStatusFuture
 	}
-	if v.options.TimestampPolicy.MaxAge <= 0 {
+	if policy.MaxAge <= 0 {
 		return TimestampStatusNoMaxAge
 	}
-	if now.After(timestamp) && now.Sub(timestamp) > v.options.TimestampPolicy.MaxAge {
+	if now.After(timestamp) && now.Sub(timestamp) > policy.MaxAge {
 		return TimestampStatusExpired
 	}
 

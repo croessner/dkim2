@@ -85,7 +85,7 @@ func parseSignatureSet(input []byte, limits tagvalue.Limits, fieldIndex int, sig
 		knownAlgorithm: knownSignatureAlgorithm(algorithm),
 		signature:      signature,
 	}
-	if algorithm == AlgorithmEd25519SHA256 && signature.DecodedLen() != ed25519SignatureBytes {
+	if Algorithm(algorithm) == AlgorithmEd25519SHA256 && signature.DecodedLen() != ed25519SignatureBytes {
 		return Set{}, newError(ErrorCodeInvalidSignatureLength, ErrorLocation{FieldIndex: fieldIndex, SignatureIndex: signatureIndex}, ErrorDetails{
 			TagName: "s",
 			Limit:   ed25519SignatureBytes,
@@ -98,12 +98,7 @@ func parseSignatureSet(input []byte, limits tagvalue.Limits, fieldIndex int, sig
 
 // knownSignatureAlgorithm reports whether algorithm is parser-known.
 func knownSignatureAlgorithm(algorithm string) bool {
-	switch algorithm {
-	case AlgorithmRSASHA256, AlgorithmEd25519SHA256:
-		return true
-	default:
-		return false
-	}
+	return Algorithm(algorithm).Known()
 }
 
 // malformedSignatureSetError constructs a bounded s= syntax failure.

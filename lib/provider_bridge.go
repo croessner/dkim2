@@ -13,12 +13,15 @@ type publicKeyBridge struct{ provider PublicKeyProvider }
 // LookupKey adapts the closed public provider matrix into typed protocol-core key facts.
 func (b publicKeyBridge) LookupKey(ctx context.Context, query verify.KeyQuery) (verify.PublicKey, error) {
 	algorithm, ok := publicAlgorithm(query.Algorithm)
-	if !ok || b.provider == nil {
+	if !ok || nilPublicKeyProvider(b.provider) {
 		return verify.PublicKey{}, verify.NewProviderFailure(verify.ProviderFailureContract)
 	}
 	result, err := b.provider.LookupPublicKey(ctx, newPublicKeyQuery(query.Domain, query.Selector, algorithm))
 	if err != nil {
 		if !result.IsZero() {
+			return verify.PublicKey{}, verify.NewProviderFailure(verify.ProviderFailureContract)
+		}
+		if nilSigningCallback(err) {
 			return verify.PublicKey{}, verify.NewProviderFailure(verify.ProviderFailureContract)
 		}
 		if ctx != nil && ctx.Err() != nil && errors.Is(err, ctx.Err()) {

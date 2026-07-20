@@ -15,9 +15,9 @@ import (
 	"time"
 )
 
-// TestDecodeKeyAcceptsStrictRSAAndClonesMaterial verifies PKCS#1 decoding without size policy.
+// TestDecodeKeyAcceptsStrictRSAAndClonesMaterial verifies PKCS#1 decoding with fixed crypto policy.
 func TestDecodeKeyAcceptsStrictRSAAndClonesMaterial(t *testing.T) {
-	key := &rsa.PublicKey{N: big.NewInt(3233), E: 17}
+	key := syntheticRSAKey(1024, 65537)
 	record := keyDataRecord(KeyTypeRSA, x509.MarshalPKCS1PublicKey(key), newMetadata(true, true))
 	outcome, err := DecodeKey(record, AlgorithmRSASHA256)
 	if err != nil {
@@ -37,9 +37,33 @@ func TestDecodeKeyAcceptsStrictRSAAndClonesMaterial(t *testing.T) {
 	}
 }
 
+// TestDecodeKeyAcceptsStructurallyValidRSAOutsideCryptoPolicy locks the DNS-policy boundary.
+func TestDecodeKeyAcceptsStructurallyValidRSAOutsideCryptoPolicy(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		bits     int
+		exponent int
+	}{
+		{name: "non-policy exponent", bits: 1024, exponent: 3},
+		{name: "below verifier minimum", bits: 1023, exponent: 65537},
+		{name: "above crypto maximum", bits: 8193, exponent: 65537},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			outcome, err := DecodeKey(keyDataRecord(KeyTypeRSA, x509.MarshalPKCS1PublicKey(syntheticRSAKey(test.bits, test.exponent)), newMetadata(false, false)), AlgorithmRSASHA256)
+			if err != nil || outcome.Status() != KeyOutcomeFound || !outcome.Valid() {
+				t.Fatalf("DecodeKey(%d bits, e=%d) status=%s valid=%v error=%v, want found", test.bits, test.exponent, outcome.Status(), outcome.Valid(), err)
+			}
+			key, ok := outcome.Material().(*rsa.PublicKey)
+			if !ok || key.N.BitLen() != test.bits || key.E != test.exponent {
+				t.Fatalf("Material() = %T/%v, want detached %d-bit RSA key with e=%d", outcome.Material(), key, test.bits, test.exponent)
+			}
+		})
+	}
+}
+
 // TestDecodeKeyRejectsWrongRSAContainersAndShape verifies strict full PKCS#1 structural decoding.
 func TestDecodeKeyRejectsWrongRSAContainersAndShape(t *testing.T) {
-	valid := &rsa.PublicKey{N: big.NewInt(3233), E: 17}
+	valid := syntheticRSAKey(1024, 65537)
 	spki, err := x509.MarshalPKIXPublicKey(valid)
 	if err != nil {
 		t.Fatalf("MarshalPKIXPublicKey() error = %v", err)
@@ -126,7 +150,8 @@ func TestDecodeKeyAcceptsRawEd25519AndRejectsWrappedOrWrongLength(t *testing.T) 
 
 // TestKeyOutcomeMaterialSupportsConcurrentCallerMutation verifies per-call detached key copies.
 func TestKeyOutcomeMaterialSupportsConcurrentCallerMutation(t *testing.T) {
-	rsaOutcome, err := DecodeKey(keyDataRecord(KeyTypeRSA, x509.MarshalPKCS1PublicKey(&rsa.PublicKey{N: big.NewInt(3233), E: 17}), newMetadata(false, false)), AlgorithmRSASHA256)
+	rsaKey := syntheticRSAKey(1024, 65537)
+	rsaOutcome, err := DecodeKey(keyDataRecord(KeyTypeRSA, x509.MarshalPKCS1PublicKey(rsaKey), newMetadata(false, false)), AlgorithmRSASHA256)
 	if err != nil {
 		t.Fatalf("DecodeKey(RSA) error = %v", err)
 	}
@@ -147,9 +172,16 @@ func TestKeyOutcomeMaterialSupportsConcurrentCallerMutation(t *testing.T) {
 		}(byte(index))
 	}
 	callers.Wait()
-	if rsaOutcome.Material().(*rsa.PublicKey).N.Cmp(big.NewInt(3233)) != 0 || edOutcome.Material().(ed25519.PublicKey)[0] != 0x42 {
+	if rsaOutcome.Material().(*rsa.PublicKey).N.Cmp(rsaKey.N) != 0 || edOutcome.Material().(ed25519.PublicKey)[0] != 0x42 {
 		t.Fatal("concurrent caller mutation changed outcome-owned key material")
 	}
+}
+
+// syntheticRSAKey constructs a structurally valid public key at one exact bit length.
+func syntheticRSAKey(bits, exponent int) *rsa.PublicKey {
+	modulus := new(big.Int).Lsh(big.NewInt(1), uint(bits-1))
+	modulus.SetBit(modulus, 0, 1)
+	return &rsa.PublicKey{N: modulus, E: exponent}
 }
 
 // TestDecodeKeyPreservesClosedNonFoundStatesAndCoherence verifies precedence without decoding.

@@ -88,6 +88,9 @@ func (l Limits) normalize() Limits {
 	if l.MaxHashSets == 0 {
 		l.MaxHashSets = defaults.MaxHashSets
 	}
+	if l.MaxInstances == 0 {
+		l.MaxInstances = defaults.MaxInstances
+	}
 
 	return l
 }
@@ -96,7 +99,7 @@ func (l Limits) normalize() Limits {
 func missingTagError(fieldIndex int, tagName string) *Error {
 	return newError(ErrorCodeMissingRequiredTag, ErrorLocation{FieldIndex: fieldIndex}, ErrorDetails{
 		Class:   ErrorClassMissing,
-		TagName: tagName,
+		TagName: TagName(tagName),
 	}, nil)
 }
 
@@ -122,6 +125,6 @@ func parseInstanceNumber(value string, fieldIndex int) (uint64, error) {
 // invalidNumberError constructs a bounded m= syntax failure.
 func invalidNumberError(fieldIndex int) *Error {
 	return newError(ErrorCodeInvalidNumber, ErrorLocation{FieldIndex: fieldIndex}, ErrorDetails{
-		TagName: "m",
+		TagName: TagNameNumber,
 	}, nil)
 }

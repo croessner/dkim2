@@ -65,6 +65,25 @@ func TestStaticKeyProviderLookupCanonicalTupleAndCopies(t *testing.T) {
 	}
 }
 
+// TestStaticKeyProviderAcceptsExactMaximumRSAAndRejectsOneOver locks provider admission.
+func TestStaticKeyProviderAcceptsExactMaximumRSAAndRejectsOneOver(t *testing.T) {
+	keyAt := func(bits int) *rsa.PublicKey {
+		modulus := new(big.Int).Lsh(big.NewInt(1), uint(bits-1))
+		modulus.SetBit(modulus, 0, 1)
+		return &rsa.PublicKey{N: modulus, E: 65537}
+	}
+	if _, err := NewStaticKeyProvider([]StaticKey{{
+		Domain: testDomain, Selector: testSelector, Algorithm: AlgorithmRSASHA256, Material: keyAt(8192),
+	}}); err != nil {
+		t.Fatalf("exact 8192-bit static key error = %v", err)
+	}
+	if _, err := NewStaticKeyProvider([]StaticKey{{
+		Domain: testDomain, Selector: testSelector, Algorithm: AlgorithmRSASHA256, Material: keyAt(8193),
+	}}); !IsErrorCode(err, ErrorCodeKeyPolicyRejected) {
+		t.Fatalf("8193-bit static key error = %v, want policy rejection", err)
+	}
+}
+
 // TestStaticKeyProviderRejectsDuplicateCanonicalTuples verifies duplicate fail-closed state.
 func TestStaticKeyProviderRejectsDuplicateCanonicalTuples(t *testing.T) {
 	key := ed25519.PublicKey(bytes.Repeat([]byte{0x11}, ed25519.PublicKeySize))
@@ -154,6 +173,7 @@ func TestStaticKeyProviderRejectsInvalidWrongTypePolicyAndUnsupportedKeys(t *tes
 			options: []StaticKeyProviderOption{WithStaticKeyAlgorithmPolicy(AlgorithmPolicy{
 				AllowedAlgorithms: []Algorithm{AlgorithmRSASHA256},
 				MinRSABits:        1024,
+				MaxRSABits:        8192,
 			})},
 			code: ErrorCodeDisabledAlgorithm,
 		},

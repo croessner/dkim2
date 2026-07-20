@@ -13,6 +13,30 @@ func (testKeyProvider) LookupKey(context.Context, KeyQuery) (PublicKey, error) {
 	return PublicKey{}, nil
 }
 
+type panicTypedNilKeyProvider struct{}
+
+// LookupKey panics if a typed-nil provider crosses verifier preflight.
+func (*panicTypedNilKeyProvider) LookupKey(context.Context, KeyQuery) (PublicKey, error) {
+	panic("typed-nil key provider invoked")
+}
+
+// TestNewVerifierRejectsTypedNilKeyProvider proves constructor and copied-value validity fail closed.
+func TestNewVerifierRejectsTypedNilKeyProvider(t *testing.T) {
+	var provider *panicTypedNilKeyProvider
+	if verifier, err := NewVerifier(provider); err == nil || verifier.Valid() {
+		t.Fatalf("NewVerifier(typed nil) valid=%v error=%v", verifier.Valid(), err)
+	}
+
+	verifier, err := NewVerifier(testKeyProvider{})
+	if err != nil {
+		t.Fatalf("NewVerifier() error = %v", err)
+	}
+	verifier.keyProvider = provider
+	if verifier.Valid() {
+		t.Fatal("Verifier.Valid() accepted a typed-nil key provider")
+	}
+}
+
 // TestDefaultAlgorithmPolicyMatchesM4Contract verifies the M4 verifier defaults.
 func TestDefaultAlgorithmPolicyMatchesM4Contract(t *testing.T) {
 	policy := DefaultAlgorithmPolicy()
@@ -26,11 +50,23 @@ func TestDefaultAlgorithmPolicyMatchesM4Contract(t *testing.T) {
 	if policy.MinRSABits != 1024 {
 		t.Fatalf("MinRSABits = %d, want 1024", policy.MinRSABits)
 	}
+	if policy.MaxRSABits != 8192 {
+		t.Fatalf("MaxRSABits = %d, want 8192", policy.MaxRSABits)
+	}
 	if !policy.Allows(AlgorithmRSASHA256) || !policy.Allows(AlgorithmEd25519SHA256) {
 		t.Fatal("default algorithm policy does not allow both M4 algorithms")
 	}
 	if policy.Allows("sha512") {
 		t.Fatal("default algorithm policy allowed unsupported algorithm")
+	}
+}
+
+// TestAlgorithmPolicyAcceptsExactSharedRSAMaximum locks option-boundary coherence.
+func TestAlgorithmPolicyAcceptsExactSharedRSAMaximum(t *testing.T) {
+	policy := DefaultAlgorithmPolicy()
+	policy.MinRSABits = 8192
+	if err := policy.Validate(); err != nil {
+		t.Fatalf("exact 8192-bit policy error = %v", err)
 	}
 }
 
@@ -55,6 +91,16 @@ func TestNewVerifierRejectsUnsafeOptions(t *testing.T) {
 			option: WithAlgorithmPolicy(AlgorithmPolicy{
 				AllowedAlgorithms: []Algorithm{AlgorithmRSASHA256},
 				MinRSABits:        512,
+				MaxRSABits:        8192,
+			}),
+			code: ErrorCodeInvalidOptions,
+		},
+		{
+			name: "rsa minimum above shared maximum",
+			option: WithAlgorithmPolicy(AlgorithmPolicy{
+				AllowedAlgorithms: []Algorithm{AlgorithmRSASHA256},
+				MinRSABits:        8193,
+				MaxRSABits:        8192,
 			}),
 			code: ErrorCodeInvalidOptions,
 		},
@@ -63,6 +109,7 @@ func TestNewVerifierRejectsUnsafeOptions(t *testing.T) {
 			option: WithAlgorithmPolicy(AlgorithmPolicy{
 				AllowedAlgorithms: []Algorithm{"sha512"},
 				MinRSABits:        1024,
+				MaxRSABits:        8192,
 			}),
 			code: ErrorCodeUnsupportedAlgorithm,
 		},
@@ -134,5 +181,15 @@ func TestNewVerifierUsesValidatedDefaults(t *testing.T) {
 	}
 	if verifier.KeyProvider() == nil {
 		t.Fatal("KeyProvider() returned nil for injected provider")
+	}
+}
+
+// TestNewVerifierKeepsRecipeSubLimitsCoherent proves narrowing the decoded
+// recipe budget also narrows dependent literal and data-string limits.
+func TestNewVerifierKeepsRecipeSubLimitsCoherent(t *testing.T) {
+	limits := DefaultRevisionLimits()
+	limits.MaxDecodedRecipeBytes = 64
+	if _, err := NewVerifier(testKeyProvider{}, WithRevisionLimits(limits)); err != nil {
+		t.Fatalf("NewVerifier() with narrowed decoded recipe limit error = %v", err)
 	}
 }

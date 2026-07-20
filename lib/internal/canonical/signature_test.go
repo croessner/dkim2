@@ -20,7 +20,7 @@ func TestSignatureInputOrdersFieldsAndNullsTarget(t *testing.T) {
 			signatureLine(2, "sel-b:rsa-sha256:"+base64Text("target signature"), " n=target-note;\r\n")+
 			messageInstanceLine(1, "early value")+
 			signatureLine(1, "sel-a:rsa-sha256:"+base64Text("complete signature"), " f=feedback;\r\n")+
-			signatureLine(3, "sel-c:rsa-sha256:"+base64Text("later signature"), " n=later;\r\n"))
+			strings.Replace(signatureLine(3, "sel-c:rsa-sha256:"+base64Text("later signature"), " n=later;\r\n"), "m=3", "m=2", 1))
 	canonicalizer := mustCanonicalizer(t)
 
 	got, err := canonicalizer.SignatureInputFromMessage(msg, 2)

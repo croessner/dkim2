@@ -177,6 +177,9 @@ func (l Limits) normalize() Limits {
 	if l.MaxNonceBytes == 0 {
 		l.MaxNonceBytes = defaults.MaxNonceBytes
 	}
+	if l.MaxSignatures == 0 {
+		l.MaxSignatures = defaults.MaxSignatures
+	}
 
 	return l
 }
@@ -195,7 +198,7 @@ func requiredTag(field tagvalue.Field, fieldIndex int, tagName string) (tagvalue
 func missingTagError(fieldIndex int, tagName string) *Error {
 	return newError(ErrorCodeMissingRequiredTag, ErrorLocation{FieldIndex: fieldIndex}, ErrorDetails{
 		Class:   ErrorClassMissing,
-		TagName: tagName,
+		TagName: TagName(tagName),
 	}, nil)
 }
 
@@ -240,7 +243,7 @@ func parseTimestamp(value string, fieldIndex int) (uint64, error) {
 // invalidNumberError constructs a bounded i= or m= syntax failure.
 func invalidNumberError(fieldIndex int, tagName string) *Error {
 	return newError(ErrorCodeInvalidNumber, ErrorLocation{FieldIndex: fieldIndex}, ErrorDetails{
-		TagName: tagName,
+		TagName: TagName(tagName),
 	}, nil)
 }
 
@@ -255,7 +258,7 @@ func invalidTimestampError(fieldIndex int) *Error {
 func invalidLimitError(limitName string, limit int) *Error {
 	return newError(ErrorCodeInvalidOptions, ErrorLocation{}, ErrorDetails{
 		Class:     ErrorClassInvariant,
-		LimitName: limitName,
+		LimitName: LimitName(limitName),
 		Limit:     limit,
 	}, nil)
 }

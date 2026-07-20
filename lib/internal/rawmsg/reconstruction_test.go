@@ -112,7 +112,7 @@ func TestReconstructedMessageRevalidatesNarrowerOptions(t *testing.T) {
 	}{
 		{"header field", func(o *ParserOptions) { o.MaxHeaderFieldBytes = len("A: four\r\n") - 1 }},
 		{"header line", func(o *ParserOptions) { o.MaxHeaderLineBytes = len("A: four") - 1 }},
-		{"header bytes", func(o *ParserOptions) { o.MaxHeaderBytes = len("A: four\r\n") - 1 }},
+		{testNameHeaderBytes, func(o *ParserOptions) { o.MaxHeaderBytes = len("A: four\r\n") - 1 }},
 		{"body line", func(o *ParserOptions) { o.MaxBodyLineBytes = len("four") - 1 }},
 		{"message", func(o *ParserOptions) { o.MaxMessageBytes = len("A: four\r\n\r\nfour\r\n") - 1 }},
 	}

@@ -2,6 +2,8 @@ package instance
 
 import (
 	"errors"
+	"fmt"
+	"math"
 	"strings"
 	"testing"
 
@@ -33,6 +35,48 @@ func TestExtractFindsMessageInstancesInHeaderOrder(t *testing.T) {
 	}
 	if instances[1].Number() != 2 || instances[1].HeaderIndex() != 3 {
 		t.Fatalf("second instance number/index = %d/%d, want 2/3", instances[1].Number(), instances[1].HeaderIndex())
+	}
+}
+
+// TestHashSetLimitIsAppliedPerInstance proves independent fields each receive the full local budget.
+func TestHashSetLimitIsAppliedPerInstance(t *testing.T) {
+	message := strings.Join([]string{
+		instanceHeader("m=1; h=" + syntheticHashSets(maxHashSetsHard)),
+		instanceHeader("m=2; h=" + syntheticHashSets(maxHashSetsHard)),
+		"",
+		syntheticBody,
+	}, "\r\n")
+	instances, err := Extract(parseRawMessage(t, message))
+	if err != nil || len(instances) != 2 {
+		t.Fatalf("two exact-limit instances were rejected")
+	}
+	oneOver := instanceMessage("m=1; h=" + syntheticHashSets(maxHashSetsHard+1))
+	if _, err := Extract(parseRawMessage(t, oneOver)); !IsErrorCode(err, ErrorCodeLimitExceeded) {
+		t.Fatalf("one-over per-instance hash sets were accepted")
+	}
+}
+
+// TestValidateSequenceRejectsMaxUint64WithoutUnboundedIteration locks bounded sequence work.
+func TestValidateSequenceRejectsMaxUint64WithoutUnboundedIteration(t *testing.T) {
+	err := ValidateSequence([]MessageInstance{{number: 1}, {number: math.MaxUint64}})
+	if !IsErrorCode(err, ErrorCodeSequenceGap) {
+		t.Fatalf("ValidateSequence() error = %v", err)
+	}
+}
+
+// TestInstanceLimitsRejectWideningAndValidateSequenceCapsBeforeWork locks parser hard caps.
+func TestInstanceLimitsRejectWideningAndValidateSequenceCapsBeforeWork(t *testing.T) {
+	for _, limits := range []Limits{
+		{MaxHashSets: maxHashSetsHard + 1, MaxInstances: maxInstancesHard},
+		{MaxHashSets: maxHashSetsHard, MaxInstances: maxInstancesHard + 1},
+	} {
+		if _, err := NewParser(limits); !IsErrorCode(err, ErrorCodeInvalidOptions) {
+			t.Fatalf("NewParser() accepted widened limits")
+		}
+	}
+	instances := make([]MessageInstance, maxInstancesHard+1)
+	if err := ValidateSequence(instances); !IsErrorCode(err, ErrorCodeLimitExceeded) {
+		t.Fatalf("ValidateSequence() did not reject oversized collection")
 	}
 }
 
@@ -119,4 +163,13 @@ func instanceHeader(value string) string {
 	}
 
 	return "Message-Instance: " + value
+}
+
+// syntheticHashSets returns count unique future-algorithm hash tuples.
+func syntheticHashSets(count int) string {
+	sets := make([]string, count)
+	for index := range sets {
+		sets[index] = fmt.Sprintf("future%d:QQ==:Qg==", index)
+	}
+	return strings.Join(sets, ",")
 }

@@ -4,10 +4,12 @@ import (
 	"context"
 	"math"
 	"reflect"
+	"strings"
 	"sync"
 	"testing"
 
 	"github.com/croessner/dkim2/internal/instance"
+	"github.com/croessner/dkim2/internal/rawmsg"
 	"github.com/croessner/dkim2/internal/recipe"
 )
 
@@ -31,19 +33,22 @@ func TestEveryHistoryHardMaximumAcceptsExactAndRejectsOneOver(t *testing.T) {
 	}
 }
 
-// TestHistoryWalkManyInstancesHonorsExactAndOneOverTransitionLimit proves bounded long-chain work.
-func TestHistoryWalkManyInstancesHonorsExactAndOneOverTransitionLimit(t *testing.T) {
-	const exactInstances = 129
+// TestHistoryWalkHonorsMessageInstanceCollectionCap proves bounded long-chain parsing and work.
+func TestHistoryWalkHonorsMessageInstanceCollectionCap(t *testing.T) {
+	const exactInstances = 128
 	exactState, exactCollection := manyHistoryFixture(t, exactInstances)
 	exact, err := mustHistoryCoordinator(t, HistoryLimits{}).Walk(context.Background(), historyPassResult(uint64(exactInstances)), exactCollection, exactState)
-	if err != nil || !exact.Valid() || exact.Coverage() != HistoryCoverageComplete || exact.ReachedInstance() != 1 || len(exact.Transitions()) != 128 {
+	if err != nil || !exact.Valid() || exact.Coverage() != HistoryCoverageComplete || exact.ReachedInstance() != 1 || len(exact.Transitions()) != 127 {
 		t.Fatalf("exact long-chain limit failed: coverage=%s reached=%d retained=%d", exact.Coverage(), exact.ReachedInstance(), len(exact.Transitions()))
 	}
 
-	overState, overCollection := manyHistoryFixture(t, exactInstances+1)
-	over, err := mustHistoryCoordinator(t, HistoryLimits{}).Walk(context.Background(), historyPassResult(uint64(exactInstances+1)), overCollection, overState)
-	if err != nil || !over.Valid() || over.Coverage() != HistoryCoveragePartial || over.StopReason() != HistoryStopLimitExceeded || over.ReachedInstance() != 2 || len(over.Transitions()) != 128 {
-		t.Fatalf("one-over long-chain limit failed: coverage=%s stop=%s reached=%d retained=%d", over.Coverage(), over.StopReason(), over.ReachedInstance(), len(over.Transitions()))
+	_, overFields := manyHistoryFields(t, exactInstances+1)
+	message, parseErr := rawmsg.Parse([]byte(strings.Join(overFields, "") + "Subject:carrier\r\n\r\nbody\r\n"))
+	if parseErr != nil {
+		t.Fatal("one-over history fixture raw message failed")
+	}
+	if _, err := instance.Extract(message); !instance.IsErrorCode(err, instance.ErrorCodeLimitExceeded) {
+		t.Fatal("one-over history fixture bypassed Message-Instance collection cap")
 	}
 }
 
@@ -106,6 +111,13 @@ func TestHistoryArithmeticEdgesStayChecked(t *testing.T) {
 // manyHistoryFixture constructs a contiguous identity-recipe chain of the requested length.
 func manyHistoryFixture(t *testing.T, count int) (recipe.State, instance.Collection) {
 	t.Helper()
+	state, fields := manyHistoryFields(t, count)
+	return state, parseHistoryCollection(t, fields...)
+}
+
+// manyHistoryFields constructs contiguous identity-recipe fields without parsing them.
+func manyHistoryFields(t *testing.T, count int) (recipe.State, []string) {
+	t.Helper()
 	message := []byte("Subject:current\r\n\r\nbody\r\n")
 	digests := historyDigests(t, message)
 	fields := make([]string, count)
@@ -116,5 +128,5 @@ func manyHistoryFixture(t *testing.T, count int) (recipe.State, instance.Collect
 		}
 		fields[number-1] = historyInstanceLine(uint64(number), testHistorySHA256, digests, recipeJSON)
 	}
-	return mustHistoryState(t, message), parseHistoryCollection(t, fields...)
+	return mustHistoryState(t, message), fields
 }

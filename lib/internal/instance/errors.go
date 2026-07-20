@@ -3,6 +3,7 @@ package instance
 import (
 	"errors"
 	"fmt"
+	"io"
 )
 
 // ErrorCode identifies a bounded Message-Instance parser failure.
@@ -35,7 +36,25 @@ const (
 	ErrorCodeDuplicateNumber ErrorCode = "duplicate_number"
 	// ErrorCodeSequenceGap reports a missing Message-Instance m= number.
 	ErrorCodeSequenceGap ErrorCode = "sequence_gap"
+	// ErrorCodeInvalidConstruction reports an invalid generated instance model.
+	ErrorCodeInvalidConstruction ErrorCode = "invalid_construction"
+	// ErrorCodeRenderInvariant reports internal deterministic-render disagreement.
+	ErrorCodeRenderInvariant ErrorCode = "render_invariant"
 )
+
+// Known reports whether code belongs to the closed Message-Instance vocabulary.
+func (c ErrorCode) Known() bool {
+	switch c {
+	case ErrorCodeWrongHeaderField, ErrorCodeMissingRequiredTag, ErrorCodeInvalidNumber,
+		ErrorCodeMalformedHashSet, ErrorCodeDuplicateHashName, ErrorCodeInvalidHashBase64,
+		ErrorCodeInvalidHashLength, ErrorCodeInvalidRecipeBase64, ErrorCodeLimitExceeded,
+		ErrorCodeInvalidOptions, ErrorCodeMissingOrigin, ErrorCodeDuplicateNumber,
+		ErrorCodeSequenceGap, ErrorCodeInvalidConstruction, ErrorCodeRenderInvariant:
+		return true
+	default:
+		return false
+	}
+}
 
 // ErrorClass groups Message-Instance parser failures for stable callers.
 type ErrorClass string
@@ -53,6 +72,46 @@ const (
 	ErrorClassInvariant ErrorClass = "invariant"
 )
 
+// Known reports whether class belongs to the closed Message-Instance vocabulary.
+func (c ErrorClass) Known() bool {
+	return c == ErrorClassMalformed || c == ErrorClassMissing || c == ErrorClassDuplicate ||
+		c == ErrorClassLimit || c == ErrorClassInvariant
+}
+
+// TagName identifies one closed Message-Instance tag name.
+type TagName string
+
+// Message-Instance tag names form the closed diagnostic vocabulary.
+const (
+	TagNameNumber TagName = "m"
+	TagNameHashes TagName = "h"
+	TagNameRecipe TagName = "r"
+)
+
+// Known reports whether name belongs to the closed Message-Instance tag vocabulary.
+func (n TagName) Known() bool {
+	return n == TagNameNumber || n == TagNameHashes || n == TagNameRecipe
+}
+
+// LimitName identifies one closed Message-Instance limit name.
+type LimitName string
+
+// Message-Instance limit names form the closed resource vocabulary.
+const (
+	LimitNameMaxHashSets     LimitName = "max_hash_sets"
+	LimitNameMaxInstances    LimitName = "max_instances"
+	LimitNameMaxFieldBytes   LimitName = "max_field_bytes"
+	LimitNameMaxLineBytes    LimitName = "max_line_bytes"
+	LimitNameMaxRecipeBytes  LimitName = "max_recipe_bytes"
+	LimitNameRenderCoherence LimitName = "render_limit_coherence"
+)
+
+// Known reports whether name belongs to the closed Message-Instance limit vocabulary.
+func (n LimitName) Known() bool {
+	return n == LimitNameMaxHashSets || n == LimitNameMaxInstances || n == LimitNameMaxFieldBytes ||
+		n == LimitNameMaxLineBytes || n == LimitNameMaxRecipeBytes || n == LimitNameRenderCoherence
+}
+
 // ErrorLocation identifies bounded Message-Instance parser context.
 type ErrorLocation struct {
 	// FieldIndex records the rawmsg header occurrence index when known.
@@ -66,9 +125,9 @@ type ErrorDetails struct {
 	// Class records the stable operational class for the error.
 	Class ErrorClass
 	// TagName records an allowlisted Message-Instance tag when relevant.
-	TagName string
+	TagName TagName
 	// LimitName records the resource limit identifier for structured callers.
-	LimitName string
+	LimitName LimitName
 	// Limit records the configured limit when relevant.
 	Limit int
 	// Count records the observed count or size when relevant.
@@ -89,12 +148,17 @@ type Error struct {
 
 // newError constructs a bounded parser error without raw field data.
 func newError(code ErrorCode, location ErrorLocation, details ErrorDetails, cause error) *Error {
-	if details.Class == "" {
-		details.Class = classForCode(code)
+	if !code.Known() {
+		code = ErrorCodeRenderInvariant
 	}
+	details.Class = classForCode(code)
 
-	details.TagName = safeDiagnosticToken(details.TagName)
-	details.LimitName = safeDiagnosticToken(details.LimitName)
+	if !details.TagName.Known() {
+		details.TagName = ""
+	}
+	if !details.LimitName.Known() {
+		details.LimitName = ""
+	}
 
 	return &Error{
 		code:     code,
@@ -131,6 +195,12 @@ func (e *Error) Error() string {
 
 	return msg
 }
+
+// GoString returns the same secret-safe diagnostic for Go-syntax formatting.
+func (e *Error) GoString() string { return e.Error() }
+
+// Format routes every fmt form through the secret-safe diagnostic.
+func (e *Error) Format(state fmt.State, _ rune) { _, _ = io.WriteString(state, e.Error()) }
 
 // Is matches parser errors by code for errors.Is.
 func (e *Error) Is(target error) bool {
@@ -184,7 +254,7 @@ func (e *Error) TagName() string {
 		return ""
 	}
 
-	return e.details.TagName
+	return string(e.details.TagName)
 }
 
 // LimitName returns the resource limit name for structured callers only.
@@ -193,7 +263,7 @@ func (e *Error) LimitName() string {
 		return ""
 	}
 
-	return e.details.LimitName
+	return string(e.details.LimitName)
 }
 
 // Limit returns the configured resource limit associated with the error.
@@ -251,7 +321,7 @@ func classForCode(code ErrorCode) ErrorClass {
 		return ErrorClassDuplicate
 	case ErrorCodeLimitExceeded:
 		return ErrorClassLimit
-	case ErrorCodeInvalidOptions:
+	case ErrorCodeInvalidOptions, ErrorCodeRenderInvariant:
 		return ErrorClassInvariant
 	default:
 		return ErrorClassMalformed

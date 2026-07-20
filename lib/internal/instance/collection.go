@@ -15,6 +15,11 @@ func Extract(msg rawmsg.Message) ([]MessageInstance, error) {
 // Extract parses Message-Instance fields from msg in raw header occurrence order.
 func (p Parser) Extract(msg rawmsg.Message) ([]MessageInstance, error) {
 	fields := msg.Headers().FieldsByName(HeaderName)
+	if len(fields) > p.limits.MaxInstances {
+		return nil, newError(ErrorCodeLimitExceeded, ErrorLocation{}, ErrorDetails{
+			Class: ErrorClassLimit, LimitName: LimitNameMaxInstances, Limit: p.limits.MaxInstances, Count: len(fields),
+		}, nil)
+	}
 	instances := make([]MessageInstance, 0, len(fields))
 	for _, field := range fields {
 		parsed, err := p.ParseField(field)
@@ -35,6 +40,11 @@ func ValidateSequence(instances []MessageInstance) error {
 	if len(instances) == 0 {
 		return nil
 	}
+	if len(instances) > maxInstancesHard {
+		return newError(ErrorCodeLimitExceeded, ErrorLocation{}, ErrorDetails{
+			Class: ErrorClassLimit, LimitName: LimitNameMaxInstances, Limit: maxInstancesHard, Count: len(instances),
+		}, nil)
+	}
 
 	seen := make(map[uint64]int, len(instances))
 	maxNumber := uint64(0)
@@ -52,13 +62,16 @@ func ValidateSequence(instances []MessageInstance) error {
 		return newSequenceError(ErrorCodeMissingOrigin, firstInstanceIndex(instances), 1, lowestObservedNumber(instances), 0)
 	}
 
-	for expected := uint64(1); expected <= maxNumber; expected++ {
-		if _, ok := seen[expected]; ok {
-			continue
-		}
+	if maxNumber != uint64(len(instances)) {
+		for expected := uint64(1); expected <= uint64(len(instances)); expected++ {
+			if _, ok := seen[expected]; ok {
+				continue
+			}
 
-		observed, fieldIndex := nextObservedNumber(instances, expected)
-		return newSequenceError(ErrorCodeSequenceGap, fieldIndex, expected, observed, 0)
+			observed, fieldIndex := nextObservedNumber(instances, expected)
+			return newSequenceError(ErrorCodeSequenceGap, fieldIndex, expected, observed, 0)
+		}
+		return newSequenceError(ErrorCodeSequenceGap, firstInstanceIndex(instances), uint64(len(instances)), maxNumber, 0)
 	}
 
 	return nil
@@ -107,7 +120,7 @@ func nextObservedNumber(instances []MessageInstance, expected uint64) (uint64, i
 func newSequenceError(code ErrorCode, fieldIndex int, expected uint64, observed uint64, duplicateOf int) *Error {
 	details := ErrorDetails{
 		Class:          ErrorClassMalformed,
-		TagName:        "m",
+		TagName:        TagNameNumber,
 		ExpectedNumber: expected,
 		ObservedNumber: observed,
 	}

@@ -1,6 +1,10 @@
 package dkim2
 
-import "errors"
+import (
+	"errors"
+
+	"github.com/croessner/dkim2/internal/niliface"
+)
 
 // APIErrorCode identifies bounded verifier construction or request misuse.
 type APIErrorCode string
@@ -127,8 +131,14 @@ func (e *providerError) ProviderErrorClass() ProviderErrorClass {
 
 // ProviderErrorClassOf returns a known typed provider class or the zero value.
 func ProviderErrorClassOf(err error) ProviderErrorClass {
+	if nilClassifiedProviderValue(err) {
+		return ""
+	}
 	var classified ClassifiedProviderError
 	if !errors.As(err, &classified) {
+		return ""
+	}
+	if nilClassifiedProviderValue(classified) {
 		return ""
 	}
 	class := classified.ProviderErrorClass()
@@ -137,4 +147,9 @@ func ProviderErrorClassOf(err error) ProviderErrorClass {
 	}
 
 	return class
+}
+
+// nilClassifiedProviderValue detects top-level and unwrapped typed-nil errors.
+func nilClassifiedProviderValue(value any) bool {
+	return niliface.IsNil(value)
 }

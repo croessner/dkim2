@@ -3,6 +3,7 @@ package tagvalue
 import (
 	"errors"
 	"fmt"
+	"io"
 )
 
 // ErrorCode identifies a bounded DKIM2 tag-value scanner failure.
@@ -35,6 +36,19 @@ const (
 	ErrorCodeInvalidBase64PadBits ErrorCode = "invalid_base64_pad_bits"
 )
 
+// Known reports whether code belongs to the closed tag-value vocabulary.
+func (c ErrorCode) Known() bool {
+	switch c {
+	case ErrorCodeEmptyTagSpec, ErrorCodeMissingTagTerminator, ErrorCodeMissingEquals,
+		ErrorCodeInvalidTagName, ErrorCodeInvalidTagValue, ErrorCodeDuplicateTag,
+		ErrorCodeLimitExceeded, ErrorCodeInvalidOptions, ErrorCodeInvalidBase64Alphabet,
+		ErrorCodeInvalidBase64Padding, ErrorCodeInvalidBase64Length, ErrorCodeInvalidBase64PadBits:
+		return true
+	default:
+		return false
+	}
+}
+
 // ErrorClass groups tag-value scanner failures into stable operational classes.
 type ErrorClass string
 
@@ -49,6 +63,29 @@ const (
 	ErrorClassInvariant ErrorClass = "invariant"
 )
 
+// Known reports whether class belongs to the closed tag-value vocabulary.
+func (c ErrorClass) Known() bool {
+	return c == ErrorClassMalformed || c == ErrorClassDuplicate || c == ErrorClassLimit || c == ErrorClassInvariant
+}
+
+// LimitName identifies one closed tag-value scanner limit.
+type LimitName string
+
+// Tag-value limit names form the closed scanner resource vocabulary.
+const (
+	LimitNameMaxFieldValueBytes    LimitName = "max_field_value_bytes"
+	LimitNameMaxTags               LimitName = "max_tags"
+	LimitNameMaxTagNameBytes       LimitName = "max_tag_name_bytes"
+	LimitNameMaxTagValueBytes      LimitName = "max_tag_value_bytes"
+	LimitNameMaxBase64DecodedBytes LimitName = "max_base64_decoded_bytes"
+)
+
+// Known reports whether name belongs to the closed scanner limit vocabulary.
+func (n LimitName) Known() bool {
+	return n == LimitNameMaxFieldValueBytes || n == LimitNameMaxTags || n == LimitNameMaxTagNameBytes ||
+		n == LimitNameMaxTagValueBytes || n == LimitNameMaxBase64DecodedBytes
+}
+
 // ErrorLocation identifies bounded tag-list context for a scanner error.
 type ErrorLocation struct {
 	// Offset records a zero-based byte offset when known.
@@ -61,14 +98,14 @@ type ErrorLocation struct {
 type ErrorDetails struct {
 	// Class records the stable operational class for the error.
 	Class ErrorClass
-	// TagName records a canonical known tag name when it is allowlisted.
-	TagName string
 	// LimitName records the resource limit identifier for structured callers.
-	LimitName string
+	LimitName LimitName
 	// Limit records the configured limit when relevant.
 	Limit int
 	// Count records the observed count or size when relevant.
 	Count int
+	// tagName records only a scanner-proven KnownTags member.
+	tagName string
 }
 
 // Error is a typed, secret-safe DKIM2 tag-value scanner error.
@@ -80,12 +117,13 @@ type Error struct {
 
 // NewError constructs a bounded scanner error for classification.
 func NewError(code ErrorCode, location ErrorLocation, details ErrorDetails) *Error {
-	if details.Class == "" {
-		details.Class = classForCode(code)
+	if !code.Known() {
+		code = ErrorCodeInvalidOptions
 	}
-
-	details.TagName = safeDiagnosticToken(details.TagName)
-	details.LimitName = safeDiagnosticToken(details.LimitName)
+	details.Class = classForCode(code)
+	if !details.LimitName.Known() {
+		details.LimitName = ""
+	}
 
 	return &Error{
 		code:     code,
@@ -103,8 +141,8 @@ func (e *Error) Error() string {
 	msg := fmt.Sprintf("tagvalue scanner error: code=%s class=%s offset=%d tag_index=%d",
 		safeDiagnosticToken(string(e.code)), safeDiagnosticToken(string(e.details.Class)),
 		e.location.Offset, e.location.TagIndex)
-	if e.details.TagName != "" {
-		msg += fmt.Sprintf(" tag=%s", e.details.TagName)
+	if e.details.tagName != "" {
+		msg += fmt.Sprintf(" tag=%s", e.details.tagName)
 	}
 	if e.details.Limit > 0 {
 		msg += fmt.Sprintf(" limit=%d", e.details.Limit)
@@ -115,6 +153,12 @@ func (e *Error) Error() string {
 
 	return msg
 }
+
+// GoString returns the same secret-safe diagnostic for Go-syntax formatting.
+func (e *Error) GoString() string { return e.Error() }
+
+// Format routes every fmt form through the secret-safe diagnostic.
+func (e *Error) Format(state fmt.State, _ rune) { _, _ = io.WriteString(state, e.Error()) }
 
 // Is matches scanner errors by code for errors.Is.
 func (e *Error) Is(target error) bool {
@@ -159,7 +203,7 @@ func (e *Error) TagName() string {
 		return ""
 	}
 
-	return e.details.TagName
+	return e.details.tagName
 }
 
 // LimitName returns the resource limit name for structured callers only.
@@ -168,7 +212,7 @@ func (e *Error) LimitName() string {
 		return ""
 	}
 
-	return e.details.LimitName
+	return string(e.details.LimitName)
 }
 
 // Limit returns the configured resource limit associated with the error.

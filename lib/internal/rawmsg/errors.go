@@ -23,6 +23,8 @@ const (
 	ErrorCodeLimitExceeded ErrorCode = "limit_exceeded"
 	// ErrorCodeUnsupportedPolicy reports an unknown parser policy value.
 	ErrorCodeUnsupportedPolicy ErrorCode = "unsupported_policy"
+	// ErrorCodeInvalidTransportForm reports missing or unsupported signing transport metadata.
+	ErrorCodeInvalidTransportForm ErrorCode = "invalid_transport_form"
 	// ErrorCodeInvalidInvariant reports an invalid type-construction invariant.
 	ErrorCodeInvalidInvariant ErrorCode = "invalid_invariant"
 )
@@ -179,7 +181,7 @@ func IsParserErrorCode(err error, code ErrorCode) bool {
 // reasonForCode maps stable error codes to default reason classes.
 func reasonForCode(code ErrorCode) ErrorReasonClass {
 	switch code {
-	case ErrorCodeBareLF, ErrorCodeBareCR, ErrorCodeMixedLineEndings, ErrorCodeMissingDelimiter:
+	case ErrorCodeBareLF, ErrorCodeBareCR, ErrorCodeMixedLineEndings, ErrorCodeMissingDelimiter, ErrorCodeInvalidTransportForm:
 		return ErrorReasonPolicy
 	case ErrorCodeMalformedHeader:
 		return ErrorReasonMalformed

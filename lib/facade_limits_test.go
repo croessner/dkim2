@@ -7,6 +7,11 @@ import (
 	"time"
 )
 
+const (
+	testNameRecipients = "recipients"
+	testNameHashSets   = "hash sets"
+)
+
 type callCountingPublicProvider struct{ calls int }
 
 // LookupPublicKey records facade-to-provider calls and reports a missing key.
@@ -32,8 +37,8 @@ func TestFacadeAcceptsExactPublicLimitBoundaries(t *testing.T) {
 		option VerifierOption
 	}{
 		{name: "raw", option: WithMaxRawMessageBytes(len(raw))},
-		{name: "recipients", option: WithMaxRecipients(1)},
-		{name: "hash sets", option: WithMaxInstanceHashSets(1)},
+		{name: testNameRecipients, option: WithMaxRecipients(1)},
+		{name: testNameHashSets, option: WithMaxInstanceHashSets(1)},
 		{name: publicSignatureSetsTestName, option: WithMaxSignatureSets(1)},
 		{name: "check facts", option: WithMaxCheckFacts(baselineResult.CheckCount())},
 		{name: "signature facts", option: WithMaxSignatureFacts(baselineResult.SignatureSetCount())},
@@ -63,8 +68,8 @@ func TestFacadeWiresPreProviderLimits(t *testing.T) {
 		options    []VerifierOption
 	}{
 		{name: "raw", raw: base, recipients: [][]byte{[]byte("<rcpt@example.test>")}, options: []VerifierOption{WithMaxRawMessageBytes(len(base) - 1)}},
-		{name: "recipients", raw: base, recipients: [][]byte{[]byte("<rcpt@example.test>"), []byte("<other@example.test>")}, options: []VerifierOption{WithMaxRecipients(1)}},
-		{name: "hash sets", raw: duplicateProtocolSet(base, []byte("h=")), recipients: [][]byte{[]byte("<rcpt@example.test>")}, options: []VerifierOption{WithMaxInstanceHashSets(1)}},
+		{name: testNameRecipients, raw: base, recipients: [][]byte{[]byte("<rcpt@example.test>"), []byte("<other@example.test>")}, options: []VerifierOption{WithMaxRecipients(1)}},
+		{name: testNameHashSets, raw: duplicateProtocolSet(base, []byte("h=")), recipients: [][]byte{[]byte("<rcpt@example.test>")}, options: []VerifierOption{WithMaxInstanceHashSets(1)}},
 		{name: publicSignatureSetsTestName, raw: duplicateProtocolSet(base, []byte("s=")), recipients: [][]byte{[]byte("<rcpt@example.test>")}, options: []VerifierOption{WithMaxSignatureSets(1)}},
 	}
 	for _, tt := range tests {

@@ -5,10 +5,10 @@ import (
 	"crypto/ed25519"
 	"crypto/rsa"
 	"errors"
-	"reflect"
 	"time"
 
 	"github.com/croessner/dkim2/internal/keyresolver"
+	"github.com/croessner/dkim2/internal/niliface"
 )
 
 // DNSPublicKeyProvider resolves public verification keys through DNS TXT records.
@@ -89,16 +89,7 @@ func internalDNSResolverLimits(limits DNSResolverLimits) keyresolver.Limits {
 
 // nilPublicTXTTransport reports nil and typed-nil public transport dependencies.
 func nilPublicTXTTransport(transport TXTTransport) bool {
-	if transport == nil {
-		return true
-	}
-	value := reflect.ValueOf(transport)
-	switch value.Kind() {
-	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
-		return value.IsNil()
-	default:
-		return false
-	}
+	return niliface.IsNil(transport)
 }
 
 // LookupPublicKey resolves one canonical public query without applying verifier key policy.

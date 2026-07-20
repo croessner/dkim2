@@ -1,8 +1,7 @@
 package recipe
 
 import (
-	"reflect"
-
+	"github.com/croessner/dkim2/internal/niliface"
 	"github.com/croessner/dkim2/internal/rawmsg"
 )
 
@@ -126,16 +125,7 @@ func (g Generator) classifyStableHeader(nameLower string) (bool, error) {
 
 // nilInterface reports nil and typed-nil interface dependencies without invoking methods.
 func nilInterface(value any) bool {
-	if value == nil {
-		return true
-	}
-	reflected := reflect.ValueOf(value)
-	switch reflected.Kind() {
-	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
-		return reflected.IsNil()
-	default:
-		return false
-	}
+	return niliface.IsNil(value)
 }
 
 // stableHeaderRelevance validates a dependency twice and drops callback errors opaquely.

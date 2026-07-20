@@ -5,6 +5,8 @@ import (
 	"testing"
 )
 
+const testNameHeaderBytes = "header bytes"
+
 // TestDefaultParserOptionsAreRestrictive verifies the M1 fail-closed defaults.
 func TestDefaultParserOptionsAreRestrictive(t *testing.T) {
 	opts := DefaultParserOptions()
@@ -51,7 +53,7 @@ func TestParserOptionsValidateSafeLimits(t *testing.T) {
 			code: ErrorCodeLimitExceeded,
 		},
 		{
-			name: "header bytes",
+			name: testNameHeaderBytes,
 			mut:  func(opts *ParserOptions) { opts.MaxHeaderBytes = -1 },
 			code: ErrorCodeLimitExceeded,
 		},

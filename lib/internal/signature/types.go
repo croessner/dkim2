@@ -2,6 +2,8 @@ package signature
 
 import (
 	"bytes"
+	"fmt"
+	"io"
 	"slices"
 
 	"github.com/croessner/dkim2/internal/tagvalue"
@@ -11,10 +13,18 @@ const (
 	// HeaderName is the lowercase rawmsg name for DKIM2-Signature fields.
 	HeaderName = "dkim2-signature"
 	// AlgorithmRSASHA256 is the baseline RSA signature algorithm name.
-	AlgorithmRSASHA256 = "rsa-sha256"
+	AlgorithmRSASHA256 Algorithm = "rsa-sha256"
 	// AlgorithmEd25519SHA256 is the baseline Ed25519 signature algorithm name.
-	AlgorithmEd25519SHA256 = "ed25519-sha256"
+	AlgorithmEd25519SHA256 Algorithm = "ed25519-sha256"
 )
+
+// Algorithm identifies one closed generated signing algorithm.
+type Algorithm string
+
+// Known reports whether algorithm belongs to the baseline signature vocabulary.
+func (a Algorithm) Known() bool {
+	return a == AlgorithmRSASHA256 || a == AlgorithmEd25519SHA256
+}
 
 // Limits contains fail-closed DKIM2-Signature parser resource settings.
 type Limits struct {
@@ -28,6 +38,8 @@ type Limits struct {
 	MaxFlags int
 	// MaxNonceBytes bounds printable ASCII n= values.
 	MaxNonceBytes int
+	// MaxSignatures bounds DKIM2-Signature fields in one message.
+	MaxSignatures int
 }
 
 // DefaultLimits returns restrictive DKIM2-Signature parser defaults.
@@ -38,22 +50,27 @@ func DefaultLimits() Limits {
 		MaxSignatureSets: 16,
 		MaxFlags:         32,
 		MaxNonceBytes:    64,
+		MaxSignatures:    128,
 	}
 }
 
 // Validate rejects unsafe DKIM2-Signature parser limit values.
 func (l Limits) Validate() error {
-	if l.MaxRecipients < 0 {
+	hard := DefaultLimits()
+	if l.MaxRecipients <= 0 || l.MaxRecipients > hard.MaxRecipients {
 		return invalidLimitError("max_recipients", l.MaxRecipients)
 	}
-	if l.MaxSignatureSets < 0 {
+	if l.MaxSignatureSets <= 0 || l.MaxSignatureSets > hard.MaxSignatureSets {
 		return invalidLimitError("max_signature_sets", l.MaxSignatureSets)
 	}
-	if l.MaxFlags < 0 {
+	if l.MaxFlags <= 0 || l.MaxFlags > hard.MaxFlags {
 		return invalidLimitError("max_flags", l.MaxFlags)
 	}
-	if l.MaxNonceBytes < 0 {
+	if l.MaxNonceBytes <= 0 || l.MaxNonceBytes > hard.MaxNonceBytes {
 		return invalidLimitError("max_nonce_bytes", l.MaxNonceBytes)
+	}
+	if l.MaxSignatures <= 0 || l.MaxSignatures > hard.MaxSignatures {
+		return invalidLimitError("max_signatures", l.MaxSignatures)
 	}
 
 	return nil
@@ -75,6 +92,15 @@ type Signature struct {
 	hasNonce       bool
 	headerIndex    int
 }
+
+// String returns a constant secret-safe parsed-signature summary.
+func (s Signature) String() string { return "signature.Signature{redacted}" }
+
+// GoString returns the constant secret-safe parsed-signature Go representation.
+func (s Signature) GoString() string { return s.String() }
+
+// Format routes every parsed-signature fmt form through the secret-safe summary.
+func (s Signature) Format(state fmt.State, _ rune) { _, _ = io.WriteString(state, s.String()) }
 
 // Sequence returns the parsed i= DKIM2-Signature sequence number.
 func (s Signature) Sequence() uint64 {
@@ -150,6 +176,15 @@ type EnvelopePath struct {
 	container tagvalue.Base64String
 }
 
+// String returns a constant secret-safe envelope-path summary.
+func (p EnvelopePath) String() string { return "signature.EnvelopePath{redacted}" }
+
+// GoString returns the constant secret-safe envelope-path Go representation.
+func (p EnvelopePath) GoString() string { return p.String() }
+
+// Format routes every envelope-path fmt form through the secret-safe summary.
+func (p EnvelopePath) Format(state fmt.State, _ rune) { _, _ = io.WriteString(state, p.String()) }
+
 // Value returns the decoded parser-owned SMTP path bytes.
 func (p EnvelopePath) Value() []byte {
 	return bytes.Clone(p.value)
@@ -174,6 +209,15 @@ type Set struct {
 	knownAlgorithm bool
 	signature      tagvalue.Base64String
 }
+
+// String returns a constant secret-safe signature-set summary.
+func (s Set) String() string { return "signature.Set{redacted}" }
+
+// GoString returns the constant secret-safe signature-set Go representation.
+func (s Set) GoString() string { return s.String() }
+
+// Format routes every signature-set fmt form through the secret-safe summary.
+func (s Set) Format(state fmt.State, _ rune) { _, _ = io.WriteString(state, s.String()) }
 
 // Selector returns the canonical selector name for DNS key lookup.
 func (s Set) Selector() string {

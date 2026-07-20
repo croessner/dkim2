@@ -2,6 +2,7 @@ package verify
 
 import (
 	"context"
+	"errors"
 
 	"github.com/croessner/dkim2/internal/canonical"
 	"github.com/croessner/dkim2/internal/instance"
@@ -17,50 +18,68 @@ type verificationInput struct {
 
 // Verify extracts DKIM2 fields from a raw message and verifies the selected target.
 func (v Verifier) Verify(ctx context.Context, request Request) (Result, error) {
-	instanceParser, err := instance.NewParser(verifierInstanceLimits(v.options.Limits.MaxInstanceHashSets, recipe.DefaultLimits()))
+	if ctx == nil {
+		return Result{}, newError(ErrorCodeInternalMisuse, ErrorLocation{}, ErrorDetails{Class: ErrorClassInternal}, nil)
+	}
+	input, err := v.extractVerificationInput(request, recipe.DefaultLimits().MaxDecodedRecipeBytes)
 	if err != nil {
-		return Result{}, malformedStateError(CheckKindSignature, Target{}, err)
+		return Result{}, err
+	}
+
+	result, err := v.verifyExtracted(ctx, input)
+	if typed, ok := err.(*Error); ok && len(input.signatures) == 0 {
+		typed.custody = CustodyStatusNotPresent
+	}
+	return result, err
+}
+
+// extractVerificationInput parses protocol fields once through their authoritative owners.
+func (v Verifier) extractVerificationInput(request Request, maxDecodedRecipeBytes int) (verificationInput, error) {
+	recipeLimits := recipe.DefaultLimits()
+	recipeLimits.MaxDecodedRecipeBytes = maxDecodedRecipeBytes
+	instanceParser, err := instance.NewParser(verifierInstanceLimits(v.options.Limits.MaxInstanceHashSets, recipeLimits))
+	if err != nil {
+		return verificationInput{}, malformedStateError(CheckKindSignature, Target{}, err)
 	}
 	instances, err := instanceParser.Extract(request.Message)
 	if err != nil {
 		if instance.IsErrorCode(err, instance.ErrorCodeLimitExceeded) {
-			return Result{}, newError(ErrorCodeLimitExceeded, ErrorLocation{Check: CheckKindSignature}, ErrorDetails{Class: ErrorClassLimit}, nil)
+			return verificationInput{}, newError(ErrorCodeLimitExceeded, ErrorLocation{Check: CheckKindSignature}, ErrorDetails{Class: ErrorClassLimit}, nil)
 		}
 		if instance.IsErrorCode(err, instance.ErrorCodeMissingOrigin) || instance.IsErrorCode(err, instance.ErrorCodeDuplicateNumber) || instance.IsErrorCode(err, instance.ErrorCodeSequenceGap) {
-			return Result{}, newError(ErrorCodeSequenceInvalid, ErrorLocation{Check: CheckKindSignature}, ErrorDetails{Class: ErrorClassMalformed}, nil)
+			typed := newError(ErrorCodeSequenceInvalid, ErrorLocation{Check: CheckKindSignature}, ErrorDetails{Class: ErrorClassMalformed}, nil)
+			if len(request.Message.Headers().FieldsByName(instance.HeaderName)) == 0 &&
+				len(request.Message.Headers().FieldsByName(signature.HeaderName)) == 0 {
+				typed.custody = CustodyStatusNotPresent
+			}
+			return verificationInput{}, typed
 		}
-		return Result{}, malformedStateError(CheckKindSignature, Target{}, err)
+		return verificationInput{}, malformedStateError(CheckKindSignature, Target{}, err)
 	}
 	signatureParser, err := signature.NewParser(signature.Limits{
 		MaxRecipients:    v.options.Limits.MaxEnvelopeRecipients,
 		MaxSignatureSets: v.options.Limits.MaxSignatureSets,
 	})
 	if err != nil {
-		return Result{}, malformedStateError(CheckKindSignature, Target{}, err)
+		return verificationInput{}, malformedStateError(CheckKindSignature, Target{}, err)
 	}
 	signatures, err := signatureParser.Extract(request.Message)
 	if err != nil {
 		if signature.IsErrorCode(err, signature.ErrorCodeLimitExceeded) {
-			return Result{}, newError(ErrorCodeLimitExceeded, ErrorLocation{Check: CheckKindSignature}, ErrorDetails{Class: ErrorClassLimit}, nil)
+			return verificationInput{}, newError(ErrorCodeLimitExceeded, ErrorLocation{Check: CheckKindSignature}, ErrorDetails{Class: ErrorClassLimit}, nil)
 		}
 		code := ErrorCodeMalformedState
 		if signature.IsErrorCode(err, signature.ErrorCodeMissingOrigin) || signature.IsErrorCode(err, signature.ErrorCodeDuplicateSequence) || signature.IsErrorCode(err, signature.ErrorCodeSequenceGap) {
 			code = ErrorCodeSequenceInvalid
 		}
 		typed := newError(code, ErrorLocation{Check: CheckKindSignature}, ErrorDetails{Class: ErrorClassMalformed}, err)
-		if len(signatures) > 0 {
-			typed.custody = custodyStatus(signatures)
+		if len(request.Message.Headers().FieldsByName(signature.HeaderName)) == 0 && signature.IsErrorCode(err, signature.ErrorCodeMissingOrigin) {
+			typed.custody = CustodyStatusNotPresent
 		}
-		return Result{}, typed
+		return verificationInput{}, typed
 	}
 
-	result, err := v.verifyExtracted(ctx, verificationInput{request: request, instances: instances, signatures: signatures})
-	if err != nil {
-		if typed, ok := err.(*Error); ok {
-			typed.custody = custodyStatus(signatures)
-		}
-	}
-	return result, err
+	return verificationInput{request: request, instances: instances, signatures: signatures}, nil
 }
 
 // verifierInstanceLimits binds decoded Message-Instance recipes to recipe-owned limits.
@@ -77,7 +96,7 @@ func verifierInstanceLimits(maxHashSets int, recipeLimits recipe.Limits) instanc
 
 // verifyExtracted verifies protocol state extracted exclusively from Request.Message.
 func (v Verifier) verifyExtracted(ctx context.Context, input verificationInput) (Result, error) {
-	targetSignature, targetInstance, target, err := selectVerificationTarget(input)
+	targetSignature, targetInstance, custody, target, err := selectVerificationTarget(input)
 	if err != nil {
 		return Result{}, err
 	}
@@ -100,10 +119,16 @@ func (v Verifier) verifyExtracted(ctx context.Context, input verificationInput) 
 		return Result{}, err
 	}
 	signatures := v.evaluateSignatureSets(ctx, targetSignature, digest, target)
+	if err := ctx.Err(); err != nil {
+		return Result{}, err
+	}
 	timestamp := v.checkTimestamp(targetSignature, target)
 	nextDomain := checkNextDomain(targetSignature, target, currentSequence)
 	envelope := v.checkEnvelope(input.request, targetSignature, target, currentSequence)
-	domainAlignment := checkDomainAlignment(targetSignature, target)
+	domainAlignment, err := checkDomainAlignment(custody, target)
+	if err != nil {
+		return Result{}, err
+	}
 
 	checks := make([]CheckResult, 0, 6+len(signatures.checks))
 	checks = append(checks, hashes.body, hashes.header)
@@ -111,7 +136,7 @@ func (v Verifier) verifyExtracted(ctx context.Context, input verificationInput) 
 	checks = append(checks, timestamp.check, nextDomain.check, envelope.check, domainAlignment.check)
 	status := targetStatus(hashes.pass, timestamp.pass, envelope.pass, domainAlignment.pass, nextDomain, signatures)
 
-	result := NewResultWithCustody(target, status, checks, signatures.sets, custodyStatus(input.signatures)).withTargetFlagCandidate(targetFlags)
+	result := NewResultWithCustody(target, status, checks, signatures.sets, custodyStatus(custody)).withTargetFlagCandidate(targetFlags)
 	if !aggregateCurrentPass(result) {
 		return result, nil
 	}
@@ -156,46 +181,32 @@ func newTargetFlagCandidate(parsed signature.Signature) TargetFlagCandidate {
 	}
 }
 
-// custodyStatus derives bounded whole-sequence nd= coverage after successful extraction.
-func custodyStatus(signatures []signature.Signature) CustodyStatus {
-	if len(signatures) == 0 {
+// custodyStatus maps one validated shared custody result into the public vocabulary.
+func custodyStatus(result signature.CustodyResult) CustodyStatus {
+	if !result.Evaluated() {
 		return CustodyStatusNotPresent
 	}
-	current := highestSignatureSequence(signatures)
-	sawIntermediate := false
-	for _, parsed := range signatures {
-		if !parsed.HasNextDomain() {
-			continue
-		}
-		if parsed.Sequence() == current {
-			return CustodyStatusTerminalNDRequiresOOB
-		}
-		sawIntermediate = true
+	if result.Status() == signature.CustodyStatusTerminalNextDomain {
+		return CustodyStatusTerminalNDRequiresOOB
 	}
-	if sawIntermediate {
+	if result.HadNextDomain() {
 		return CustodyStatusNDLinksEvaluated
 	}
 	return CustodyStatusNotPresent
 }
 
 // selectVerificationTarget validates parsed references and chooses the target signature.
-func selectVerificationTarget(input verificationInput) (signature.Signature, instance.MessageInstance, Target, error) {
+func selectVerificationTarget(input verificationInput) (signature.Signature, instance.MessageInstance, signature.CustodyResult, Target, error) {
 	instances := input.instances
 	signatures := input.signatures
 	if err := validateInstanceCollection(instances); err != nil {
-		return signature.Signature{}, instance.MessageInstance{}, Target{}, err
-	}
-	if err := validateNextDomainChain(signatures); err != nil {
-		return signature.Signature{}, instance.MessageInstance{}, Target{}, err
+		return signature.Signature{}, instance.MessageInstance{}, signature.CustodyResult{}, Target{}, err
 	}
 	if err := validateSignatureCollection(signatures); err != nil {
-		return signature.Signature{}, instance.MessageInstance{}, Target{}, err
+		return signature.Signature{}, instance.MessageInstance{}, signature.CustodyResult{}, Target{}, err
 	}
 	if err := validateReferencedInstances(instances, signatures); err != nil {
-		return signature.Signature{}, instance.MessageInstance{}, Target{}, err
-	}
-	if err := validateCurrentInstanceReference(instances, signatures); err != nil {
-		return signature.Signature{}, instance.MessageInstance{}, Target{}, err
+		return signature.Signature{}, instance.MessageInstance{}, signature.CustodyResult{}, Target{}, err
 	}
 
 	targetSequence := input.request.TargetSequence
@@ -204,18 +215,26 @@ func selectVerificationTarget(input verificationInput) (signature.Signature, ins
 	}
 	targetSignature, err := signatureBySequence(signatures, targetSequence)
 	if err != nil {
-		return signature.Signature{}, instance.MessageInstance{}, Target{}, err
+		return signature.Signature{}, instance.MessageInstance{}, signature.CustodyResult{}, Target{}, err
 	}
 	target := Target{
 		Sequence:       targetSignature.Sequence(),
 		InstanceNumber: targetSignature.InstanceNumber(),
 	}
+	allowedDirectSequence := uint64(0)
+	if targetSequence == highestSignatureSequence(signatures) {
+		allowedDirectSequence = targetSequence
+	}
+	custody, err := validateCustodyChain(signatures, allowedDirectSequence)
+	if err != nil {
+		return signature.Signature{}, instance.MessageInstance{}, signature.CustodyResult{}, target, err
+	}
 	targetInstance, err := instanceByNumber(instances, target.InstanceNumber)
 	if err != nil {
-		return signature.Signature{}, instance.MessageInstance{}, target, err
+		return signature.Signature{}, instance.MessageInstance{}, signature.CustodyResult{}, target, err
 	}
 
-	return targetSignature, targetInstance, target, nil
+	return targetSignature, targetInstance, custody, target, nil
 }
 
 // highestInstanceNumber returns the current Message-Instance number.
@@ -230,54 +249,25 @@ func highestInstanceNumber(instances []instance.MessageInstance) uint64 {
 	return highest
 }
 
-// validateCurrentInstanceReference enforces the draft-versioned highest i= to highest m= interpretation.
-func validateCurrentInstanceReference(instances []instance.MessageInstance, signatures []signature.Signature) error {
-	var highestInstance uint64
-	for _, parsed := range instances {
-		if parsed.Number() > highestInstance {
-			highestInstance = parsed.Number()
-		}
-	}
-	var current signature.Signature
-	for _, parsed := range signatures {
-		if parsed.Sequence() > current.Sequence() {
-			current = parsed
-		}
-	}
-	if current.InstanceNumber() != highestInstance {
-		return malformedSequenceError("current_instance_reference", Target{
-			Sequence:       current.Sequence(),
-			InstanceNumber: current.InstanceNumber(),
-		})
-	}
-
-	return nil
-}
-
 // validateInstanceCollection verifies contiguous unique Message-Instance numbers.
 func validateInstanceCollection(instances []instance.MessageInstance) error {
 	if len(instances) == 0 {
 		return targetMissingError("message_instance", 0, Target{})
 	}
-
-	seen := make(map[uint64]int, len(instances))
-	maxNumber := uint64(0)
-	for _, parsed := range instances {
-		number := parsed.Number()
-		if _, exists := seen[number]; exists {
-			return targetDuplicateError("message_instance", number, Target{InstanceNumber: number})
+	if err := instance.ValidateSequence(instances); err != nil {
+		var typed *instance.Error
+		if !errors.As(err, &typed) {
+			return malformedSequenceError("message_instance", Target{})
 		}
-		seen[number] = parsed.HeaderIndex()
-		if number > maxNumber {
-			maxNumber = number
-		}
-	}
-	for expected := uint64(1); expected <= maxNumber; expected++ {
-		if _, exists := seen[expected]; !exists {
-			return malformedSequenceError("message_instance", Target{InstanceNumber: expected})
+		switch typed.Code() {
+		case instance.ErrorCodeLimitExceeded:
+			return newError(ErrorCodeLimitExceeded, ErrorLocation{Check: CheckKindSignature}, ErrorDetails{Class: ErrorClassLimit}, nil)
+		case instance.ErrorCodeDuplicateNumber:
+			return targetDuplicateError("message_instance", typed.ObservedNumber(), Target{InstanceNumber: typed.ObservedNumber()})
+		default:
+			return malformedSequenceError("message_instance", Target{InstanceNumber: typed.ExpectedNumber()})
 		}
 	}
-
 	return nil
 }
 
@@ -287,41 +277,32 @@ func validateSignatureCollection(signatures []signature.Signature) error {
 		return targetMissingError("dkim2_signature", 0, Target{})
 	}
 
-	seen := make(map[uint64]int, len(signatures))
-	maxSequence := uint64(0)
-	for _, parsed := range signatures {
-		sequence := parsed.Sequence()
-		if _, exists := seen[sequence]; exists {
-			return targetDuplicateError("dkim2_signature", sequence, Target{Sequence: sequence})
+	if err := signature.ValidateSequence(signatures); err != nil {
+		var typed *signature.Error
+		if !errors.As(err, &typed) {
+			return malformedSequenceError("dkim2_signature", Target{})
 		}
-		seen[sequence] = parsed.HeaderIndex()
-		if sequence > maxSequence {
-			maxSequence = sequence
-		}
-	}
-	for expected := uint64(1); expected <= maxSequence; expected++ {
-		if _, exists := seen[expected]; !exists {
-			return malformedSequenceError("dkim2_signature", Target{Sequence: expected})
+		switch typed.Code() {
+		case signature.ErrorCodeLimitExceeded:
+			return newError(ErrorCodeLimitExceeded, ErrorLocation{Check: CheckKindSignature}, ErrorDetails{Class: ErrorClassLimit}, nil)
+		case signature.ErrorCodeDuplicateSequence:
+			return targetDuplicateError("dkim2_signature", typed.ObservedNumber(), Target{Sequence: typed.ObservedNumber()})
+		default:
+			return malformedSequenceError("dkim2_signature", Target{Sequence: typed.ExpectedNumber()})
 		}
 	}
-
 	return nil
 }
 
 // validateReferencedInstances rejects current instances above every signature reference.
 func validateReferencedInstances(instances []instance.MessageInstance, signatures []signature.Signature) error {
-	maxReference := uint64(0)
-	for _, parsed := range signatures {
-		if parsed.InstanceNumber() > maxReference {
-			maxReference = parsed.InstanceNumber()
+	if err := signature.ValidateInstanceReferences(instances, signatures); err != nil {
+		var typed *signature.Error
+		if !errors.As(err, &typed) {
+			return malformedSequenceError("message_instance", Target{})
 		}
+		return malformedSequenceError("message_instance", Target{InstanceNumber: typed.ObservedNumber()})
 	}
-	for _, parsed := range instances {
-		if parsed.Number() > maxReference {
-			return malformedSequenceError("message_instance", Target{InstanceNumber: parsed.Number()})
-		}
-	}
-
 	return nil
 }
 

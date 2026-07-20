@@ -2,8 +2,8 @@ package service
 
 import (
 	"context"
-	"reflect"
 
+	"github.com/croessner/dkim2/internal/niliface"
 	"github.com/croessner/dkim2/internal/rawmsg"
 	"github.com/croessner/dkim2/internal/verify"
 )
@@ -38,16 +38,7 @@ func NewVerifier(provider verify.KeyProvider, config Config) (Verifier, error) {
 
 // nilKeyProvider reports nil and typed-nil injected interface dependencies.
 func nilKeyProvider(provider verify.KeyProvider) bool {
-	if provider == nil {
-		return true
-	}
-	value := reflect.ValueOf(provider)
-	switch value.Kind() {
-	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
-		return value.IsNil()
-	default:
-		return false
-	}
+	return niliface.IsNil(provider)
 }
 
 // Verify parses raw input, delegates protocol verification, and returns one disjoint outcome.
@@ -119,6 +110,7 @@ func mapVerificationError(err error) Result {
 		reason, class, state := mapVerificationErrorCode(typed.Code())
 		if verificationErrorHasUnavailableTarget(typed.Code(), target) {
 			target = Target{}
+			reason, class, state = unavailableVerificationFailure(typed.Code(), reason, class, state)
 		}
 		result := newResult(state, custody, target, reason, []CheckFact{{Class: class, Reason: reason}}, nil)
 		if target == (Target{}) {
@@ -140,14 +132,28 @@ func mapVerificationError(err error) Result {
 
 // verificationErrorHasUnavailableTarget identifies failures before authoritative selection.
 func verificationErrorHasUnavailableTarget(code verify.ErrorCode, diagnosticTarget Target) bool {
+	if diagnosticTarget.Sequence == 0 || diagnosticTarget.Instance == 0 {
+		return true
+	}
 	switch code {
 	case verify.ErrorCodeLimitExceeded, verify.ErrorCodeMissingTarget, verify.ErrorCodeDuplicateTarget,
 		verify.ErrorCodeSequenceInvalid:
 		return true
-	case verify.ErrorCodeMalformedState:
-		return diagnosticTarget == (Target{})
 	default:
 		return false
+	}
+}
+
+// unavailableVerificationFailure normalizes pre-target errors to one sealable policy taxonomy.
+func unavailableVerificationFailure(code verify.ErrorCode, reason Reason, class CheckClass, state State) (Reason, CheckClass, State) {
+	switch code {
+	case verify.ErrorCodeCustodyMismatch, verify.ErrorCodeNextDomainMismatch, verify.ErrorCodeMissingNextSignature:
+		return ReasonMalformedProtocol, CheckProtocol, StatePERMERROR
+	case verify.ErrorCodeLimitExceeded, verify.ErrorCodeMissingTarget, verify.ErrorCodeDuplicateTarget,
+		verify.ErrorCodeSequenceInvalid, verify.ErrorCodeMalformedState:
+		return reason, class, state
+	default:
+		return ReasonInternalContract, CheckInternalContract, StatePERMERROR
 	}
 }
 
@@ -170,6 +176,8 @@ func mapVerificationErrorCode(code verify.ErrorCode) (Reason, CheckClass, State)
 		return ReasonTimestampInvalid, CheckTimestamp, StatePERMERROR
 	case verify.ErrorCodeEnvelopeMismatch:
 		return ReasonEnvelopeMismatch, CheckEnvelope, StatePERMERROR
+	case verify.ErrorCodeCustodyMismatch:
+		return ReasonMalformedProtocol, CheckProtocol, StatePERMERROR
 	case verify.ErrorCodeDomainAlignmentMismatch:
 		return ReasonDomainAlignmentMismatch, CheckDomainAlignment, StatePERMERROR
 	case verify.ErrorCodeNextDomainMismatch, verify.ErrorCodeMissingNextSignature:

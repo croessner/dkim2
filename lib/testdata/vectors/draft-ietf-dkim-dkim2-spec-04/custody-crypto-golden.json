@@ -1,0 +1,81 @@
+{
+  "draft": "draft-ietf-dkim-dkim2-spec-04",
+  "rsa_8192_verify": {
+    "public_der_base64": "MIIECgKCBAEA6UMT7kAjTiRnUMBU30Q4RYDr+J+Hf8bHK81ysluhEmK+eegzpskulZS5PwCTaIP+zAzXAsuWS1JObkgUk0tZP00eH9GCpRlQPziA5BRpIDpPfPmzHN5gDocV/1/C7LzsAU2g2GgqtxX+bq0eihxAAw7nk0EnsqWeYaZ4rKED598VSJsP2XZ8UUPsaOe6oIWF8iNH0aBt+Dlg+Rc7jVfeGPzthgtUuN8MSrNducprWfKijSo0E99MpeOBxnpD8d0ujdmSxhW2sJCiN1p0eAEhIX9e6JbD4StotvtjTocVv2juq8so/Uwsa/brVf4+5RvcaH7BZOxueRe1K/0+jXTdYhY7cyP6pEtIRILGnlB6x0WCp7BQdkoBpDdfMZLUtoE1xTf30aWifEUh+BrsRqZI4kD5FXoafLa5sSK7MP6zaH2pZimiVs06T32+Iqh6aq17E82W1KzwjJMOMX64YiwKGmMr6kchL7iEGPH5psIONj4GPqiKBBrG9K+wTyNS4tuPrLnmth4kTAhSNQkvsZeGys8EyEcwMwBJnzBB0l/H/dbbAHO0icF62Jx8YCGBKbaTTKqmVgMm+6p5vAZv0UpdTM5Dji3Ql9ZF/regmox+Gf+EOHl63xGpJPHjkfIZE9XEb1pOIv0ERGc2zFYahyLv1MP7GFjNBKAfxK7yxlWs7s7yHaTlw6pqjPcW5aNi/xC7kGKDUyhW50LKlMc+5NSYhqaY6QRkFAbWyvD53BZYF/rCLrcVBjvicf0qGv7h9ZB6PE3pbl04Lpe8cvJsLqPQww7f5/CeiZ44WIZ5FFaYjZ7/G1AaqoMEkQFHBnb10ixMSHSTrjqL3crkJ6FN+0tz3U9dLI0e7vt53XanwvWdzFvZcvFj4jj/4yEpUhV0Y8iOeb3u/xJWc6pVPUkWRbKCgWMDRNF7OR9KuaSja0np/uKYV7kQG7a7HOB00brqJqqqHOp1IdO5n8tBh3o51gAOYfuTS4MR9VDOhm+TVXtz1XfaMEUkbjlw+YU6HUDvPIjALfs0NFY/bLALqXfxbS0IJAcZ9wzAHaZTFNR+usG9HP+69IhNcFCVr0kqXJ07H+t4mF6G8bMuQsh84c+p5KpcIdLjAKO6nBvvbZlJrEbZB1sFrJDd6/Llh7GXQltqG8WOOw7BEmK9os1Rg1qqM0BQHjP2iwPpPGydXRMZhXHvVBN1IOnuRM2kiNjeCkRw/JY0NUNBJaPxHn1Ac5/CD36SFb+EQiA4jeybupe6UkFMxyGfP8L3jDA8VubOOc2LLUlF6DYcMIz0TR0Kfy8D8s7tvUeVRFW0WJtIVgyvzBHdIr5cMt0bO52Am8CW0woaqLBt1aRQwplTLEippfhgeDlt5wIDAQAB",
+    "digest_base64": "258QmpzL/QhBoS+w/R2ETgReanPjhtqMumebOF/S40w=",
+    "signature_base64": "QO8BvreSnXSEqiH7bM87g8HOBPGDs1dU8XgjaGagl6JT1Sw+QWVkCKQQ9XaY3BQbZsGEJDIdmqGV/A2bC+3cCVOjvqiPwlVGfBQZrl3GWLiGsosQTqnwwsAHc5fbaJ9k3LMu7SC0HfLhW0CHTahqVfZKJ/MzIAscqUeGLT9a0uH9yYWuajGNSlcOqrjGXDLycIdj4YOv7bfdwniAIb8fMFcySea4/gxvU9iZJe7T6sH+W8eqqELuEsE/6nwserLFtH1qVhaXyYFVd9qmXNy1kNUKeVfvQiTJvrCMbOhP5ajrGX5l4uqtnR2LlLF4a1M07VGXveRVNlADBBFL4aazi/5Pj5BRzvbBJe1Huw7yEciULmk32i7Ux6QiCkUA0RiVu8Gz4YxCNJzXxu5klKAlw/p4Cykh0XX8akjIgC0J1ZN6lO3IUzJ6021d9gs4JIIu2x8Df88dlXq+FTChuUp7KKSv428T5BkNifPMEUVTBI21fCP0y+KBtPRbj8vUAuOrvkMsvsXUwHi57USNS++6Q28NwMExCYG7rGeNS4Z4JhbYF2rhEH5Q64ykz8Bpng+PdrlWL6oFvgqACK2mbVdMkREHry7LIzIztW26pjxsHQYZLdUAHEfHUZsU6wzFbOw3eZpG17KXw1jiodFnrii9uHJQptqQuwtE5ORBK58vjG+hAJTJB+iRzgcDemvgBNLCkzBh6IceWYXM3464pQc/Y19bLDjMXbCwSchGB6Hn2lTUnCOfXWnfwK1yD3c9yz85MDy+5xuHCb39EQCwBXNHQgT/V9QGjhRrWWu8Vw5xxhWV84xNSbv0ukdzdilMHLCK6Kh188dvhlehr7pLqR5OLGJ9miAnQqw1RQ2HMX3WYuBX4w8Ob7o+dbbXQTnqyR6jTLYKT6XBgcUunjjsUqaXFkH9xcTaKxdk/ICgCLR9k1unzEU+hov5zHzz4qL73az3oENkoWeCuN1qeyxuHPiY3PRIm/dld741mwlD0yBQRT0DooOlNz3jabHLa1EeFuc/92vEMUiVSPmQR3LEXVlp7pVzQ7VFhslKIIeLoGZcCPRFsHAdVVu5QgsYFlktReWxxnVQA5U9vG2fOttRMtOE1Ukep52Ugdg0QzCpqHOh6m09kI+AMavwo88jlBlzkL8vxuFLeBcbgVaI6WFFM5rcvARb44IBPi+R4ocYgdXDFa4BQ5oL4NrOub/wvR9LXSy8QO2FQI9DOfnZymDzIf+uHf78wapE0q0alPY9x+k6uNud1rj/r/lw3SovKUWykQP1a218K+kbLAy7T8ck0woPbg4MLzdE8xOwof1ZLQ71PQ/KU+//IVw/qtPNN4wjanMEcshbbtTNmF1lHjEfJiZdZQ=="
+  },
+  "ed25519_verify": {
+    "public_base64": "CLmqxOzchQITos7Qv8HPhmHhw1DNnXRriAhp3ARCnkg=",
+    "digest_base64": "TtYmYjhCd+Dji5dPALmo/cvTdcEFgNOUnirdsZ2OTCc=",
+    "signature_base64": "kKmZWLulAe0+XiHjoGWxsETubKFNpAiyNo0hrOUQ7Xid63BbV+Qa3W8sQZ6w50uosPT4bbSNPfnvfQE/GEoUBw=="
+  },
+  "custody_cases": [
+    {
+      "name": "adjacent_ordinary_direction",
+      "want_status": "ordinary_complete",
+      "signatures": [
+        {"sequence": 1, "instance": 1, "domain": "origin.test", "mail_from": "<a@origin.test>", "recipients": ["<b@relay.example>"]},
+        {"sequence": 2, "instance": 1, "domain": "relay.example", "mail_from": "<b@sub.relay.example>", "recipients": ["<c@final.test>"]}
+      ]
+    },
+    {
+      "name": "adjacent_ordinary_reverse_rejected",
+      "want_error": "custody_mismatch",
+      "signatures": [
+        {"sequence": 1, "instance": 1, "domain": "origin.test", "mail_from": "<a@origin.test>", "recipients": ["<b@sub.relay.example>"]},
+        {"sequence": 2, "instance": 1, "domain": "relay.example", "mail_from": "<b@relay.example>", "recipients": ["<c@final.test>"]}
+      ]
+    },
+    {
+      "name": "adjacent_ordinary_label_near_miss",
+      "want_error": "custody_mismatch",
+      "signatures": [
+        {"sequence": 1, "instance": 1, "domain": "origin.test", "mail_from": "<a@origin.test>", "recipients": ["<b@relay.example>"]},
+        {"sequence": 2, "instance": 1, "domain": "evilrelay.example", "mail_from": "<b@evilrelay.example>", "recipients": ["<c@final.test>"]}
+      ]
+    },
+    {
+      "name": "ordinary_next_domain_run_termination",
+      "want_status": "ordinary_complete",
+      "signatures": [
+        {"sequence": 1, "instance": 1, "domain": "origin.test", "mail_from": "<a@origin.test>", "recipients": ["<b@entry.example>"]},
+        {"sequence": 2, "instance": 1, "domain": "entry.example", "next_domain": "middle.example"},
+        {"sequence": 3, "instance": 1, "domain": "middle.example", "next_domain": "exit.example"},
+        {"sequence": 4, "instance": 1, "domain": "exit.example", "mail_from": "<b@exit.example>", "recipients": ["<c@final.test>"]}
+      ]
+    },
+    {
+      "name": "terminal_next_domain_requires_oob",
+      "want_status": "terminal_next_domain",
+      "signatures": [
+        {"sequence": 1, "instance": 1, "domain": "origin.test", "mail_from": "<a@origin.test>", "recipients": ["<b@entry.example>"]},
+        {"sequence": 2, "instance": 1, "domain": "entry.example", "next_domain": "middle.example"}
+      ]
+    },
+    {
+      "name": "next_domain_exactness_rejected",
+      "want_error": "custody_mismatch",
+      "signatures": [
+        {"sequence": 1, "instance": 1, "domain": "origin.test", "mail_from": "<a@origin.test>", "recipients": ["<b@entry.example>"]},
+        {"sequence": 2, "instance": 1, "domain": "entry.example", "next_domain": "middle.example"},
+        {"sequence": 3, "instance": 2, "domain": "sub.middle.example", "mail_from": "<b@sub.middle.example>", "recipients": ["<c@final.test>"]}
+      ]
+    },
+    {
+      "name": "historical_instance_references_preserved",
+      "want_status": "ordinary_complete",
+      "signatures": [
+        {"sequence": 1, "instance": 1, "domain": "origin.test", "mail_from": "<a@origin.test>", "recipients": ["<b@relay.example>"]},
+        {"sequence": 2, "instance": 2, "domain": "relay.example", "mail_from": "<b@relay.example>", "recipients": ["<c@final.example>"]},
+        {"sequence": 3, "instance": 3, "domain": "final.example", "mail_from": "<c@final.example>", "recipients": ["<d@destination.test>"]}
+      ]
+    }
+  ],
+  "rsa_boundaries": [
+    {"name": "minimum", "bits": 1024, "exponent": 65537, "valid": true},
+    {"name": "maximum", "bits": 8192, "exponent": 65537, "valid": true},
+    {"name": "over_maximum", "bits": 8193, "exponent": 65537, "valid": false},
+    {"name": "wrong_exponent", "bits": 1024, "exponent": 3, "valid": false}
+  ]
+}

@@ -73,3 +73,31 @@ func (a Applier) Apply(current State, recipe Recipe) (State, Usage, error) {
 	}
 	return state, usage.usage(), nil
 }
+
+// ApplyHistorical strictly applies reconstructable dimensions after an explicit body-unavailable boundary.
+func (a Applier) ApplyHistorical(current State, recipe Recipe) (State, Usage, error) {
+	if current.BodyState() != BodyAvailabilityUnavailable || !recipeHasBodyCopy(recipe) {
+		return a.Apply(current, recipe)
+	}
+	usage, err := newUsageCounter(a.limits)
+	if err != nil {
+		return State{}, Usage{}, err
+	}
+	if !a.valid() || !current.Valid() || !recipe.Valid() {
+		return State{}, usage.usage(), invalidStateError()
+	}
+	if err := a.validateHeaderPlanBudgets(recipe); err != nil {
+		return State{}, usage.usage(), err
+	}
+	if err := a.validateBodyPlanBudgets(recipe); err != nil {
+		return State{}, usage.usage(), err
+	}
+	headerState, err := a.applyHeadersUsing(current, recipe, usage, false)
+	if err != nil {
+		return State{}, usage.usage(), err
+	}
+	if headerState.BodyState() != BodyAvailabilityUnavailable {
+		return State{}, usage.usage(), invalidStateError()
+	}
+	return headerState, usage.usage(), nil
+}

@@ -1,65 +1,25 @@
 package verify
 
-import "errors"
+import "github.com/croessner/dkim2/internal/provider"
 
 // ProviderFailureClass identifies a typed provider failure without raw cause data.
-type ProviderFailureClass string
+type ProviderFailureClass = provider.FailureClass
 
 const (
 	// ProviderFailureTemporary identifies retryable provider unavailability.
-	ProviderFailureTemporary ProviderFailureClass = "temporary"
+	ProviderFailureTemporary = provider.FailureTemporary
 	// ProviderFailurePermanent identifies unrecoverable provider failure.
-	ProviderFailurePermanent ProviderFailureClass = "permanent"
+	ProviderFailurePermanent = provider.FailurePermanent
 	// ProviderFailureContract identifies an inconsistent or unclassified provider outcome.
-	ProviderFailureContract ProviderFailureClass = "contract"
+	ProviderFailureContract = provider.FailureContract
 )
-
-// Known reports whether the provider failure class belongs to the closed vocabulary.
-func (c ProviderFailureClass) Known() bool {
-	switch c {
-	case ProviderFailureTemporary, ProviderFailurePermanent, ProviderFailureContract:
-		return true
-	default:
-		return false
-	}
-}
-
-type classifiedProviderFailure interface {
-	error
-	ProviderFailureClass() ProviderFailureClass
-}
-
-type providerFailure struct{ class ProviderFailureClass }
 
 // NewProviderFailure constructs a cause-free typed provider failure.
 func NewProviderFailure(class ProviderFailureClass) error {
-	if !class.Known() {
-		class = ProviderFailureContract
-	}
-	return &providerFailure{class: class}
-}
-
-// Error returns a bounded provider diagnostic.
-func (e *providerFailure) Error() string {
-	if e == nil || !e.class.Known() {
-		return "key provider failure"
-	}
-	return "key provider failure: " + string(e.class)
-}
-
-// ProviderFailureClass returns the typed provider failure class.
-func (e *providerFailure) ProviderFailureClass() ProviderFailureClass {
-	if e == nil {
-		return ""
-	}
-	return e.class
+	return provider.NewFailure(class)
 }
 
 // ProviderFailureClassOf returns a known typed class without inspecting error text.
 func ProviderFailureClassOf(err error) ProviderFailureClass {
-	var failure classifiedProviderFailure
-	if !errors.As(err, &failure) || !failure.ProviderFailureClass().Known() {
-		return ""
-	}
-	return failure.ProviderFailureClass()
+	return provider.ClassOf(err)
 }

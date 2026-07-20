@@ -2,6 +2,7 @@ package signature
 
 import (
 	"errors"
+	"math"
 	"strings"
 	"testing"
 
@@ -34,6 +35,27 @@ func TestExtractFindsSignaturesInHeaderOrder(t *testing.T) {
 	}
 	if signatures[1].Sequence() != 2 || signatures[1].HeaderIndex() != 3 {
 		t.Fatalf("second signature sequence/index = %d/%d, want 2/3", signatures[1].Sequence(), signatures[1].HeaderIndex())
+	}
+}
+
+// TestValidateSequenceRejectsMaxUint64WithoutUnboundedIteration locks bounded sequence work.
+func TestValidateSequenceRejectsMaxUint64WithoutUnboundedIteration(t *testing.T) {
+	err := ValidateSequence([]Signature{{sequence: 1}, {sequence: math.MaxUint64}})
+	if !IsErrorCode(err, ErrorCodeSequenceGap) {
+		t.Fatalf("ValidateSequence() error = %v", err)
+	}
+}
+
+// TestSignatureLimitsRejectWideningAndSequenceCapsBeforeWork locks collection hard limits.
+func TestSignatureLimitsRejectWideningAndSequenceCapsBeforeWork(t *testing.T) {
+	limits := DefaultLimits()
+	limits.MaxSignatures++
+	if _, err := NewParser(limits); !IsErrorCode(err, ErrorCodeInvalidOptions) {
+		t.Fatal("NewParser() accepted widened signature collection limit")
+	}
+	signatures := make([]Signature, DefaultLimits().MaxSignatures+1)
+	if err := ValidateSequence(signatures); !IsErrorCode(err, ErrorCodeLimitExceeded) {
+		t.Fatal("ValidateSequence() accepted oversized signature collection")
 	}
 }
 
@@ -153,6 +175,87 @@ func TestValidateInstanceReferencesAcceptsCoveredInstances(t *testing.T) {
 
 	if err := ValidateInstanceReferences(instances, signatures); err != nil {
 		t.Fatalf("ValidateInstanceReferences() error = %v", err)
+	}
+}
+
+// TestValidateInstanceReferencesRejectsDecreasingAndMissingReferences locks reference existence and order.
+func TestValidateInstanceReferencesRejectsDecreasingAndMissingReferences(t *testing.T) {
+	instanceFields := []string{
+		"Message-Instance: m=1; h=sha256:" + base64OfByte(0x11, 32) + ":" + base64OfByte(0x22, 32) + ";",
+		"Message-Instance: m=2; h=sha256:" + base64OfByte(0x33, 32) + ":" + base64OfByte(0x44, 32) + ";",
+		"Message-Instance: m=3; h=sha256:" + base64OfByte(0x55, 32) + ":" + base64OfByte(0x66, 32) + ";",
+	}
+	for _, test := range []struct {
+		name       string
+		signatures []string
+	}{
+		{name: "decreasing", signatures: []string{dkim2SignatureHeader(collectionSignatureValue("1", "2")), dkim2SignatureHeader(collectionSignatureValue("2", "1"))}},
+		{name: "missing", signatures: []string{dkim2SignatureHeader(collectionSignatureValue("1", "4"))}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			lines := append(append([]string{}, instanceFields...), test.signatures...)
+			lines = append(lines, "", syntheticBody)
+			msg := parseRawMessage(t, strings.Join(lines, "\r\n"))
+			instances, err := instance.Extract(msg)
+			if err != nil {
+				t.Fatalf("instance.Extract() error = %v", err)
+			}
+			signatures, err := Extract(msg)
+			if err != nil {
+				t.Fatalf("Extract() error = %v", err)
+			}
+			if err := ValidateInstanceReferences(instances, signatures); !IsErrorCode(err, ErrorCodeInvalidInstanceReference) {
+				t.Fatalf("ValidateInstanceReferences() error = %v", err)
+			}
+		})
+	}
+}
+
+// TestValidateInstanceReferencesAcceptsExistingForwardJump verifies inherited intermediate instances need no signature.
+func TestValidateInstanceReferencesAcceptsExistingForwardJump(t *testing.T) {
+	msg := parseRawMessage(t, strings.Join([]string{
+		"Message-Instance: m=1; h=sha256:" + base64OfByte(0x11, 32) + ":" + base64OfByte(0x22, 32) + ";",
+		"Message-Instance: m=2; h=sha256:" + base64OfByte(0x33, 32) + ":" + base64OfByte(0x44, 32) + ";",
+		"Message-Instance: m=3; h=sha256:" + base64OfByte(0x55, 32) + ":" + base64OfByte(0x66, 32) + ";",
+		dkim2SignatureHeader(collectionSignatureValue("1", "1")),
+		dkim2SignatureHeader(collectionSignatureValue("2", "3")),
+		"",
+		syntheticBody,
+	}, "\r\n"))
+	instances, err := instance.Extract(msg)
+	if err != nil {
+		t.Fatalf("instance.Extract() error = %v", err)
+	}
+	signatures, err := Extract(msg)
+	if err != nil {
+		t.Fatalf("Extract() error = %v", err)
+	}
+	if err := ValidateInstanceReferences(instances, signatures); err != nil {
+		t.Fatalf("ValidateInstanceReferences() jump error = %v", err)
+	}
+}
+
+// TestValidateInstanceReferencesRejectsExactlyOneEmptyCollection verifies standalone fail-closed use.
+func TestValidateInstanceReferencesRejectsExactlyOneEmptyCollection(t *testing.T) {
+	msg := parseRawMessage(t, strings.Join([]string{
+		"Message-Instance: m=1; h=sha256:" + base64OfByte(0x11, 32) + ":" + base64OfByte(0x22, 32) + ";",
+		dkim2SignatureHeader(collectionSignatureValue("1", "1")),
+		"",
+		syntheticBody,
+	}, "\r\n"))
+	instances, err := instance.Extract(msg)
+	if err != nil {
+		t.Fatalf("instance.Extract() error = %v", err)
+	}
+	signatures, err := Extract(msg)
+	if err != nil {
+		t.Fatalf("Extract() error = %v", err)
+	}
+	if err := ValidateInstanceReferences(nil, signatures); !IsErrorCode(err, ErrorCodeInvalidInstanceReference) {
+		t.Fatalf("missing instances error = %v", err)
+	}
+	if err := ValidateInstanceReferences(instances, nil); !IsErrorCode(err, ErrorCodeUnreferencedInstance) {
+		t.Fatalf("missing signatures error = %v", err)
 	}
 }
 

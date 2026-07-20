@@ -60,8 +60,11 @@ func TestVerifierRejectsNextDomainMismatch(t *testing.T) {
 	if !errors.As(err, &verifyErr) || verifyErr.Class() != ErrorClassNextDomain || verifyErr.Location().Check != CheckKindNextDomain {
 		t.Fatalf("Verify() classification = %#v, want bounded next-domain error", verifyErr)
 	}
+	if verifyErr.Location().TargetSequence != 1 {
+		t.Fatalf("TargetSequence = %d, want offending nd predecessor 1", verifyErr.Location().TargetSequence)
+	}
 	if verifyErr.CustodyStatus() != CustodyStatusNDLinksEvaluated {
-		t.Fatalf("CustodyStatus() = %q, want nd_links_evaluated", verifyErr.CustodyStatus())
+		t.Fatalf("CustodyStatus() = %q, want bounded evaluated nd evidence", verifyErr.CustodyStatus())
 	}
 	for _, domain := range []string{testDomain, nextHopDomain, "wrong.example.test"} {
 		if strings.Contains(err.Error(), domain) {
@@ -92,6 +95,9 @@ func TestValidateNextDomainChainRejectsMissingNextSignature(t *testing.T) {
 	var verifyErr *Error
 	if !errors.As(err, &verifyErr) || verifyErr.Class() != ErrorClassNextDomain || verifyErr.Location().Check != CheckKindNextDomain {
 		t.Fatalf("validateNextDomainChain() classification = %#v, want bounded next-domain error", verifyErr)
+	}
+	if verifyErr.Location().TargetSequence != 1 || verifyErr.CustodyStatus().Known() {
+		t.Fatalf("missing-successor sequence=%d custody=%s, want predecessor 1 and no completed evidence", verifyErr.Location().TargetSequence, verifyErr.CustodyStatus())
 	}
 	if strings.Contains(err.Error(), nextHopDomain) {
 		t.Fatalf("validateNextDomainChain() error leaked domain: %v", err)
@@ -166,6 +172,7 @@ func newNextDomainChainFixture(t *testing.T, firstNextDomain string) multiSignat
 
 	return multiSignatureFixture{
 		verificationFixture: parsed,
+		rsaPrivateKey:       key,
 		rsaKey:              &key.PublicKey,
 		sequenceOne:         1,
 		sequenceTwo:         2,
@@ -198,7 +205,7 @@ func newHighestNextDomainFixture(t *testing.T) multiSignatureFixture {
 		t.Fatalf("parseVerificationFixture() error = %v", err)
 	}
 
-	return multiSignatureFixture{verificationFixture: parsed, rsaKey: &key.PublicKey, sequenceOne: 1}
+	return multiSignatureFixture{verificationFixture: parsed, rsaPrivateKey: key, rsaKey: &key.PublicKey, sequenceOne: 1}
 }
 
 // nextDomainSignatureField renders a bounded nd= DKIM2-Signature value.

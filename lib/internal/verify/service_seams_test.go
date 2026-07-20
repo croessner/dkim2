@@ -4,7 +4,9 @@ import (
 	"context"
 	"crypto/rsa"
 	"errors"
+	"fmt"
 	"math/big"
+	"strings"
 	"testing"
 )
 
@@ -27,6 +29,18 @@ func TestServiceSeamVocabulariesAreClosed(t *testing.T) {
 	}
 	if SignatureSetStatus("future").Known() || KeyStatus("future").Known() || CustodyStatus("future").Known() {
 		t.Fatal("unknown service-seam status reported known")
+	}
+}
+
+// TestKeyProviderBoundaryFormattingIsRedacted proves provider tuples and key material never render.
+func TestKeyProviderBoundaryFormattingIsRedacted(t *testing.T) {
+	query := KeyQuery{Domain: "SECRET.example.test", Selector: "SECRET-selector", Algorithm: AlgorithmRSASHA256}
+	key := PublicKey{Algorithm: AlgorithmRSASHA256, Material: []byte("SECRET-key")}
+	for _, value := range []any{query, key} {
+		formatted := fmt.Sprintf("%v %+v %#v", value, value, value)
+		if strings.Contains(formatted, "SECRET") || !strings.Contains(formatted, "redacted") {
+			t.Fatalf("unsafe provider boundary formatting %q", formatted)
+		}
 	}
 }
 
@@ -83,6 +97,41 @@ func TestProviderFailureClassificationIsTypedAndCauseFree(t *testing.T) {
 	if ProviderFailureClassOf(errors.New("temporary")) != "" {
 		t.Fatal("provider failure was classified from error text")
 	}
+}
+
+// TestVerifierClassifiesProviderFailureOnce proves stateful external classifiers cannot drift.
+func TestVerifierClassifiesProviderFailureOnce(t *testing.T) {
+	fixture := newRSAVerificationFixture(t)
+	failure := &togglingVerifierProviderFailure{}
+	verifier, err := NewVerifier(providerFunc(func(context.Context, KeyQuery) (PublicKey, error) {
+		return PublicKey{}, failure
+	}), testClockOption())
+	if err != nil {
+		t.Fatalf("NewVerifier() error = %v", err)
+	}
+	result, verifyErr := verifier.Verify(context.Background(), Request{
+		Message: fixture.message, Envelope: matchingEnvelope(),
+	})
+	if verifyErr != nil || !hasSignatureSet(result, AlgorithmRSASHA256, SignatureSetStatusProviderTemporary) {
+		t.Fatalf("Verify() sets/error = %#v/%v", result.SignatureSets(), verifyErr)
+	}
+	if failure.calls != 1 {
+		t.Fatalf("ProviderFailureClass() calls = %d, want 1", failure.calls)
+	}
+}
+
+type togglingVerifierProviderFailure struct{ calls int }
+
+// Error returns one constant secret-safe provider failure summary.
+func (*togglingVerifierProviderFailure) Error() string { return "provider failure" }
+
+// ProviderFailureClass changes after its first invocation to expose repeated classification.
+func (e *togglingVerifierProviderFailure) ProviderFailureClass() ProviderFailureClass {
+	e.calls++
+	if e.calls == 1 {
+		return ProviderFailureTemporary
+	}
+	return ProviderFailurePermanent
 }
 
 // TestDeclaredNonFoundProviderStatusesRemainDistinct verifies no-error provider results are not collapsed.
@@ -209,6 +258,8 @@ func TestProviderUnknownKeyStatusAndInvalidMetadataBecomeContract(t *testing.T) 
 	for _, metadata := range []KeyMetadata{
 		{Status: KeyStatus("future")},
 		{Status: KeyStatusFound, Policy: KeyPolicyMetadata{StrictIdentityApplicable: true}},
+		{Status: KeyStatusFound, Source: strings.Repeat("a", 65)},
+		{Status: KeyStatusFound, Source: "unsafe/source"},
 	} {
 		verifier, err := NewVerifier(providerFunc(func(context.Context, KeyQuery) (PublicKey, error) {
 			return PublicKey{Algorithm: AlgorithmRSASHA256, Material: fixture.rsaPublicKey, Metadata: metadata}, nil

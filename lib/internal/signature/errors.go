@@ -3,6 +3,7 @@ package signature
 import (
 	"errors"
 	"fmt"
+	"io"
 )
 
 // ErrorCode identifies a bounded DKIM2-Signature parser failure.
@@ -53,7 +54,33 @@ const (
 	ErrorCodeSequenceGap ErrorCode = "sequence_gap"
 	// ErrorCodeUnreferencedInstance reports a Message-Instance above every signature m= reference.
 	ErrorCodeUnreferencedInstance ErrorCode = "unreferenced_instance"
+	// ErrorCodeInvalidInstanceReference reports missing or decreasing signature m= references.
+	ErrorCodeInvalidInstanceReference ErrorCode = "invalid_instance_reference"
+	// ErrorCodeInvalidConstruction reports invalid generated-field input.
+	ErrorCodeInvalidConstruction ErrorCode = "invalid_construction"
+	// ErrorCodeRenderInvariant reports an internal generated-field rendering failure.
+	ErrorCodeRenderInvariant ErrorCode = "render_invariant"
+	// ErrorCodeCustodyMismatch reports a fail-closed custody transition or alignment failure.
+	ErrorCodeCustodyMismatch ErrorCode = "custody_mismatch"
 )
+
+// Known reports whether code belongs to the closed DKIM2-Signature vocabulary.
+func (c ErrorCode) Known() bool {
+	switch c {
+	case ErrorCodeWrongHeaderField, ErrorCodeMissingRequiredTag, ErrorCodeInvalidNumber,
+		ErrorCodeInvalidTimestamp, ErrorCodeInvalidEnvelopeBase64, ErrorCodeInvalidEnvelopePath,
+		ErrorCodeInvalidDomain, ErrorCodeInvalidEnvelopeForm, ErrorCodeMalformedSignatureSet,
+		ErrorCodeDuplicateSignatureAlgorithm, ErrorCodeDuplicateSelector,
+		ErrorCodeInvalidSignatureBase64, ErrorCodeInvalidSignatureLength, ErrorCodeInvalidNonce,
+		ErrorCodeMalformedFlag, ErrorCodeDuplicateKnownFlag, ErrorCodeLimitExceeded,
+		ErrorCodeInvalidOptions, ErrorCodeMissingOrigin, ErrorCodeDuplicateSequence,
+		ErrorCodeSequenceGap, ErrorCodeUnreferencedInstance, ErrorCodeInvalidInstanceReference, ErrorCodeInvalidConstruction,
+		ErrorCodeRenderInvariant, ErrorCodeCustodyMismatch:
+		return true
+	default:
+		return false
+	}
+}
 
 // ErrorClass groups DKIM2-Signature parser failures for stable callers.
 type ErrorClass string
@@ -70,6 +97,71 @@ const (
 	// ErrorClassInvariant classifies invalid parser configuration.
 	ErrorClassInvariant ErrorClass = "invariant"
 )
+
+// Known reports whether class belongs to the closed DKIM2-Signature vocabulary.
+func (c ErrorClass) Known() bool {
+	return c == ErrorClassMalformed || c == ErrorClassMissing || c == ErrorClassDuplicate ||
+		c == ErrorClassLimit || c == ErrorClassInvariant
+}
+
+// TagName identifies one closed DKIM2-Signature tag name.
+type TagName string
+
+// DKIM2-Signature tag names form the closed diagnostic vocabulary.
+const (
+	TagNameSequence   TagName = "i"
+	TagNameInstance   TagName = "m"
+	TagNameTimestamp  TagName = "t"
+	TagNameMailFrom   TagName = "mf"
+	TagNameRecipients TagName = "rt"
+	TagNameNextDomain TagName = "nd"
+	TagNameDomain     TagName = "d"
+	TagNameSignatures TagName = "s"
+	TagNameNonce      TagName = "n"
+	TagNameFlags      TagName = "f"
+)
+
+// Known reports whether name belongs to the closed signature tag vocabulary.
+func (n TagName) Known() bool {
+	switch n {
+	case TagNameSequence, TagNameInstance, TagNameTimestamp, TagNameMailFrom,
+		TagNameRecipients, TagNameNextDomain, TagNameDomain, TagNameSignatures,
+		TagNameNonce, TagNameFlags:
+		return true
+	default:
+		return false
+	}
+}
+
+// LimitName identifies one closed DKIM2-Signature limit name.
+type LimitName string
+
+// DKIM2-Signature limit names form the closed resource vocabulary.
+const (
+	LimitNameMaxRecipients        LimitName = "max_recipients"
+	LimitNameMaxSignatureSets     LimitName = "max_signature_sets"
+	LimitNameMaxFlags             LimitName = "max_flags"
+	LimitNameMaxNonceBytes        LimitName = "max_nonce_bytes"
+	LimitNameMaxSignatures        LimitName = "max_signatures"
+	LimitNameMaxFieldBytes        LimitName = "max_field_bytes"
+	LimitNameMaxLineBytes         LimitName = "max_line_bytes"
+	LimitNameMaxEnvelopePathBytes LimitName = "max_envelope_path_bytes"
+	LimitNameMaxSignatureBytes    LimitName = "max_signature_bytes"
+	LimitNameRenderCoherence      LimitName = "render_limit_coherence"
+)
+
+// Known reports whether name belongs to the closed signature limit vocabulary.
+func (n LimitName) Known() bool {
+	switch n {
+	case LimitNameMaxRecipients, LimitNameMaxSignatureSets, LimitNameMaxFlags,
+		LimitNameMaxNonceBytes, LimitNameMaxSignatures, LimitNameMaxFieldBytes,
+		LimitNameMaxLineBytes, LimitNameMaxEnvelopePathBytes,
+		LimitNameMaxSignatureBytes, LimitNameRenderCoherence:
+		return true
+	default:
+		return false
+	}
+}
 
 // ErrorLocation identifies bounded DKIM2-Signature parser context.
 type ErrorLocation struct {
@@ -88,9 +180,9 @@ type ErrorDetails struct {
 	// Class records the stable operational class for the error.
 	Class ErrorClass
 	// TagName records an allowlisted DKIM2-Signature tag when relevant.
-	TagName string
+	TagName TagName
 	// LimitName records the resource limit identifier for structured callers.
-	LimitName string
+	LimitName LimitName
 	// Limit records the configured limit when relevant.
 	Limit int
 	// Count records the observed count or size when relevant.
@@ -111,12 +203,17 @@ type Error struct {
 
 // newError constructs a bounded parser error without raw field data.
 func newError(code ErrorCode, location ErrorLocation, details ErrorDetails, cause error) *Error {
-	if details.Class == "" {
-		details.Class = classForCode(code)
+	if !code.Known() {
+		code = ErrorCodeRenderInvariant
 	}
+	details.Class = classForCode(code)
 
-	details.TagName = safeDiagnosticToken(details.TagName)
-	details.LimitName = safeDiagnosticToken(details.LimitName)
+	if !details.TagName.Known() {
+		details.TagName = ""
+	}
+	if !details.LimitName.Known() {
+		details.LimitName = ""
+	}
 
 	return &Error{
 		code:     code,
@@ -159,6 +256,12 @@ func (e *Error) Error() string {
 
 	return msg
 }
+
+// GoString returns the same secret-safe diagnostic for Go-syntax formatting.
+func (e *Error) GoString() string { return e.Error() }
+
+// Format routes every fmt form through the secret-safe diagnostic.
+func (e *Error) Format(state fmt.State, _ rune) { _, _ = io.WriteString(state, e.Error()) }
 
 // Is matches parser errors by code for errors.Is.
 func (e *Error) Is(target error) bool {
@@ -212,7 +315,7 @@ func (e *Error) TagName() string {
 		return ""
 	}
 
-	return e.details.TagName
+	return string(e.details.TagName)
 }
 
 // LimitName returns the resource limit name for structured callers only.
@@ -221,7 +324,7 @@ func (e *Error) LimitName() string {
 		return ""
 	}
 
-	return e.details.LimitName
+	return string(e.details.LimitName)
 }
 
 // Limit returns the configured resource limit associated with the error.
@@ -279,7 +382,7 @@ func classForCode(code ErrorCode) ErrorClass {
 		return ErrorClassDuplicate
 	case ErrorCodeLimitExceeded:
 		return ErrorClassLimit
-	case ErrorCodeInvalidOptions:
+	case ErrorCodeInvalidOptions, ErrorCodeRenderInvariant:
 		return ErrorClassInvariant
 	default:
 		return ErrorClassMalformed

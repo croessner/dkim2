@@ -2,12 +2,10 @@ package verify
 
 import (
 	"context"
-	"crypto"
-	"crypto/ed25519"
-	"crypto/rsa"
 	"errors"
 
 	"github.com/croessner/dkim2/internal/canonical"
+	"github.com/croessner/dkim2/internal/cryptodkim2"
 	"github.com/croessner/dkim2/internal/rawmsg"
 	"github.com/croessner/dkim2/internal/signature"
 )
@@ -59,24 +57,35 @@ func (v Verifier) evaluateSignatureSets(ctx context.Context, targetSignature sig
 	}
 
 	for index, set := range sets {
+		if ctx == nil || ctx.Err() != nil {
+			break
+		}
 		setResult := v.evaluateSignatureSet(ctx, targetSignature, set, index, digest, target)
 		evaluation.sets = append(evaluation.sets, setResult)
 		evaluation.checks = append(evaluation.checks, signatureCheckResult(setResult, target))
-		switch setResult.Status {
-		case SignatureSetStatusPass:
-			evaluation.pass++
-		case SignatureSetStatusFail, SignatureSetStatusInvalidKey, SignatureSetStatusWrongKeyType, SignatureSetStatusKeyPolicyRejected, SignatureSetStatusProviderError, SignatureSetStatusProviderPermanent, SignatureSetStatusProviderContract, SignatureSetStatusAmbiguousKey, SignatureSetStatusRevokedKey, SignatureSetStatusUnsupportedKeyType, SignatureSetStatusKeyAlgorithmMismatch:
-			evaluation.fail++
-		case SignatureSetStatusProviderTemporary:
-			evaluation.temporary++
-		case SignatureSetStatusUnsupportedAlgorithm:
-			evaluation.ignored++
-		default:
-			evaluation.other++
+		evaluation.account(setResult)
+		if ctx.Err() != nil {
+			break
 		}
 	}
 
 	return evaluation
+}
+
+// account records one evaluated set in the closed aggregate result buckets.
+func (e *signatureEvaluation) account(setResult SignatureSetResult) {
+	switch setResult.Status {
+	case SignatureSetStatusPass:
+		e.pass++
+	case SignatureSetStatusFail, SignatureSetStatusInvalidKey, SignatureSetStatusWrongKeyType, SignatureSetStatusKeyPolicyRejected, SignatureSetStatusProviderError, SignatureSetStatusProviderPermanent, SignatureSetStatusProviderContract, SignatureSetStatusAmbiguousKey, SignatureSetStatusRevokedKey, SignatureSetStatusUnsupportedKeyType, SignatureSetStatusKeyAlgorithmMismatch:
+		e.fail++
+	case SignatureSetStatusProviderTemporary:
+		e.temporary++
+	case SignatureSetStatusUnsupportedAlgorithm:
+		e.ignored++
+	default:
+		e.other++
+	}
 }
 
 // evaluateSignatureSet checks one selector:algorithm:signature tuple.
@@ -108,18 +117,23 @@ func (v Verifier) evaluateSignatureSet(ctx context.Context, targetSignature sign
 		Selector:  set.Selector(),
 		Algorithm: algorithm,
 	})
+	if ctx.Err() != nil {
+		return result
+	}
 	if err != nil {
-		if !providerKeyErrorPairValid(key, algorithm, err) {
+		failureClass := ProviderFailureClassOf(err)
+		if !providerKeyErrorPairValid(key, algorithm, err, failureClass) {
 			result.Status = SignatureSetStatusProviderContract
 			result.KeyStatus = KeyStatusProviderContract
 
 			return result
 		}
-		result.Status, result.KeyStatus = signatureSetStatusFromKeyError(err, key.Metadata.Status)
+		result.Status, result.KeyStatus = signatureSetStatusFromKeyError(err, key.Metadata.Status, failureClass)
 
 		return result
 	}
-	if !key.Metadata.Policy.Valid() || !keyPolicyMetadataAllowed(key.Metadata.Status, key.Metadata.Policy, err) {
+	if !key.Metadata.Policy.Valid() || !key.Metadata.Policy.AllowedForStatus(key.Metadata.Status, err != nil) ||
+		!ValidProviderSource(key.Metadata.Source) {
 		result.Status = SignatureSetStatusProviderContract
 		result.KeyStatus = KeyStatusProviderContract
 
@@ -148,7 +162,9 @@ func (v Verifier) evaluateSignatureSet(ctx context.Context, targetSignature sign
 
 	material, keyStatus, err := validatePublicKeyMaterial(algorithm, key.Material, v.options.AlgorithmPolicy)
 	if err != nil {
-		result.Status, result.KeyStatus = signatureSetStatusFromKeyError(err, keyStatus)
+		result.Status, result.KeyStatus = signatureSetStatusFromKeyError(
+			err, keyStatus, ProviderFailureClassOf(err),
+		)
 
 		return result
 	}
@@ -166,11 +182,16 @@ func (v Verifier) evaluateSignatureSet(ctx context.Context, targetSignature sign
 }
 
 // providerKeyErrorPairValid validates typed internal provider error disjointness.
-func providerKeyErrorPairValid(key PublicKey, algorithm Algorithm, err error) bool {
+func providerKeyErrorPairValid(
+	key PublicKey,
+	algorithm Algorithm,
+	err error,
+	failureClass ProviderFailureClass,
+) bool {
 	if key.Metadata.Policy != (KeyPolicyMetadata{}) || key.Material != nil {
 		return false
 	}
-	if class := ProviderFailureClassOf(err); class.Known() {
+	if failureClass.Known() {
 		return key.Algorithm == "" && key.Metadata == (KeyMetadata{})
 	}
 	if key.Algorithm != algorithm || !key.Metadata.Status.Known() {
@@ -180,54 +201,37 @@ func providerKeyErrorPairValid(key PublicKey, algorithm Algorithm, err error) bo
 	if !errors.As(err, &typed) {
 		return false
 	}
-	_, mapped := signatureSetStatusFromKeyError(err, key.Metadata.Status)
+	_, mapped := signatureSetStatusFromKeyError(err, key.Metadata.Status, failureClass)
 	return mapped == key.Metadata.Status && mapped != KeyStatusProviderError || IsErrorCode(err, ErrorCodeProviderError) && mapped == KeyStatusProviderError
-}
-
-// keyPolicyMetadataAllowed restricts DNS declarations to unique-record key states.
-func keyPolicyMetadataAllowed(status KeyStatus, metadata KeyPolicyMetadata, err error) bool {
-	if metadata == (KeyPolicyMetadata{}) {
-		return true
-	}
-	if err != nil {
-		return false
-	}
-	switch status {
-	case KeyStatusFound, KeyStatusInvalid, KeyStatusRevoked, KeyStatusUnsupportedKeyType, KeyStatusAlgorithmMismatch, KeyStatusWrongType, KeyStatusPolicyRejected:
-		return true
-	default:
-		return false
-	}
 }
 
 // verifySignatureDigest verifies one decoded signature over Section 9.6 digest bytes.
 func verifySignatureDigest(algorithm Algorithm, material any, digest []byte, signatureBytes []byte, target Target, index int) error {
-	switch algorithm {
-	case AlgorithmRSASHA256:
-		key, ok := material.(*rsa.PublicKey)
-		if !ok {
-			return wrongKeyTypeError(algorithm)
-		}
-
-		return rsa.VerifyPKCS1v15(key, crypto.SHA256, digest, signatureBytes)
-	case AlgorithmEd25519SHA256:
-		key, ok := material.(ed25519.PublicKey)
-		if !ok {
-			return wrongKeyTypeError(algorithm)
-		}
-		if !ed25519.Verify(key, digest, signatureBytes) {
-			return signatureMismatchError(algorithm, target, index)
-		}
-
+	err := cryptodkim2.VerifyDigest(algorithm, material, digest, signatureBytes, cryptodkim2.DefaultLimits())
+	if err == nil {
 		return nil
-	default:
+	}
+	switch cryptodkim2.ErrorCodeOf(err) {
+	case cryptodkim2.ErrorCodeUnsupportedAlgorithm:
 		return unsupportedAlgorithmError(algorithm)
+	case cryptodkim2.ErrorCodeWrongKeyType:
+		return wrongKeyTypeError(algorithm)
+	case cryptodkim2.ErrorCodeInvalidKey:
+		return invalidKeyError(algorithm)
+	case cryptodkim2.ErrorCodeKeyPolicyRejected:
+		return keyPolicyRejectedError(algorithm)
+	default:
+		return signatureMismatchError(algorithm, target, index)
 	}
 }
 
 // signatureSetStatusFromKeyError maps key errors into signature-set facts.
-func signatureSetStatusFromKeyError(err error, status KeyStatus) (SignatureSetStatus, KeyStatus) {
-	switch ProviderFailureClassOf(err) {
+func signatureSetStatusFromKeyError(
+	err error,
+	status KeyStatus,
+	failureClass ProviderFailureClass,
+) (SignatureSetStatus, KeyStatus) {
+	switch failureClass {
 	case ProviderFailureTemporary:
 		return SignatureSetStatusProviderTemporary, KeyStatusProviderTemporary
 	case ProviderFailurePermanent:

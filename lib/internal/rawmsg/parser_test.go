@@ -324,7 +324,7 @@ func TestParseNegativeChecklistExposesStructuredErrors(t *testing.T) {
 			},
 			code:      ErrorCodeLimitExceeded,
 			reason:    ErrorReasonLimit,
-			limitName: "max_header_field_bytes",
+			limitName: limitNameMaxHeaderFieldBytes,
 		},
 		{
 			name: "header block exceeding configured header limit",
@@ -335,7 +335,7 @@ func TestParseNegativeChecklistExposesStructuredErrors(t *testing.T) {
 			},
 			code:      ErrorCodeLimitExceeded,
 			reason:    ErrorReasonLimit,
-			limitName: "max_header_bytes",
+			limitName: limitNameMaxHeaderBytes,
 		},
 		{
 			name: "message exceeding configured message limit",
@@ -346,7 +346,7 @@ func TestParseNegativeChecklistExposesStructuredErrors(t *testing.T) {
 			},
 			code:      ErrorCodeLimitExceeded,
 			reason:    ErrorReasonLimit,
-			limitName: "max_message_bytes",
+			limitName: limitNameMaxMessageBytes,
 		},
 		{
 			name: "body line exceeding configured indexing limit",

@@ -1,6 +1,10 @@
 package tagvalue
 
-import "encoding/base64"
+import (
+	"encoding/base64"
+	"fmt"
+	"io"
+)
 
 // Base64String stores immutable views of one canonical DKIM2 Base64 value.
 type Base64String struct {
@@ -101,6 +105,21 @@ func (v Base64String) Decoded() []byte {
 // DecodedLen returns the decoded byte length without exposing decoded bytes.
 func (v Base64String) DecodedLen() int {
 	return len(v.decoded)
+}
+
+// String returns a secret-safe summary instead of encoded or decoded content.
+func (v Base64String) String() string {
+	return "tagvalue.Base64String{redacted}"
+}
+
+// GoString returns the same secret-safe summary for Go-syntax formatting.
+func (v Base64String) GoString() string {
+	return v.String()
+}
+
+// Format routes every fmt form through the secret-safe summary.
+func (v Base64String) Format(state fmt.State, _ rune) {
+	_, _ = io.WriteString(state, v.String())
 }
 
 // stripBase64FWS removes only draft-allowed space and tab bytes.

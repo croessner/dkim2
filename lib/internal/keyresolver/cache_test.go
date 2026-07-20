@@ -121,16 +121,18 @@ func TestOutcomeCacheSeparatesAlgorithmsClonesMutationAndRejectsCorruption(t *te
 		t.Fatal("algorithm-separated entry was overwritten")
 	}
 
-	rsaOutcome := KeyOutcome{status: KeyOutcomeFound, algorithm: AlgorithmRSASHA256, material: &rsa.PublicKey{N: big.NewInt(65539), E: 3}, metadata: newMetadata(false, false), initialized: true}
+	rsaSource := syntheticRSAKey(1024, 65537)
+	rsaOriginal := new(big.Int).Set(rsaSource.N)
+	rsaOutcome := KeyOutcome{status: KeyOutcomeFound, algorithm: AlgorithmRSASHA256, material: rsaSource, metadata: newMetadata(false, false), initialized: true}
 	cache.put(rsaKey, rsaOutcome, time.Minute)
 	rsaOutcome.material.(*rsa.PublicKey).N.SetInt64(17)
 	gotRSA, hit, corrupt := cache.get(rsaKey)
-	if !hit || corrupt || gotRSA.Material().(*rsa.PublicKey).N.Cmp(big.NewInt(65539)) != 0 {
+	if !hit || corrupt || gotRSA.Material().(*rsa.PublicKey).N.Cmp(rsaOriginal) != 0 {
 		t.Fatal("cache retained source RSA modulus")
 	}
 	gotRSA.Material().(*rsa.PublicKey).N.SetInt64(19)
 	gotRSA, _, _ = cache.get(rsaKey)
-	if gotRSA.Material().(*rsa.PublicKey).N.Cmp(big.NewInt(65539)) != 0 {
+	if gotRSA.Material().(*rsa.PublicKey).N.Cmp(rsaOriginal) != 0 {
 		t.Fatal("cache accessor exposed RSA modulus")
 	}
 

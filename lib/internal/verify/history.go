@@ -148,13 +148,13 @@ func (l HistoryLimits) normalized() (HistoryLimits, error) {
 
 // HistoryUsage stores cumulative recipe-owned operation usage.
 type HistoryUsage struct {
-	decoded, emitted, items, work int
-	initialized                   bool
+	decoded, emitted, items, work, canonical int
+	initialized                              bool
 }
 
 // Valid reports whether usage is initialized and nonnegative.
 func (u HistoryUsage) Valid() bool {
-	return u.initialized && u.decoded >= 0 && u.emitted >= 0 && u.items >= 0 && u.work >= 0
+	return u.initialized && u.decoded >= 0 && u.emitted >= 0 && u.items >= 0 && u.work >= 0 && u.canonical >= 0
 }
 
 // DecodedBytes returns cumulative decoded recipe bytes.
@@ -168,6 +168,9 @@ func (u HistoryUsage) Items() int { return u.items }
 
 // WorkUnits returns cumulative recipe operation work.
 func (u HistoryUsage) WorkUnits() int { return u.work }
+
+// CanonicalBytes returns cumulative Section 6 canonical input bytes.
+func (u HistoryUsage) CanonicalBytes() int { return u.canonical }
 
 // addRecipe transactionally adds one parser or applier Usage.
 func (u HistoryUsage) addRecipe(value recipe.Usage, limits HistoryLimits) (HistoryUsage, error) {
@@ -193,7 +196,7 @@ func (u HistoryUsage) addRecipe(value recipe.Usage, limits HistoryLimits) (Histo
 	if !workOK {
 		work = math.MaxInt
 	}
-	next := HistoryUsage{decoded, emitted, items, work, true}
+	next := HistoryUsage{decoded: decoded, emitted: emitted, items: items, work: work, canonical: u.canonical, initialized: true}
 	if !ok || decoded > limits.MaxCumulativeDecodedBytes {
 		return next, historyLimitError(historyLimitDecoded, limits.MaxCumulativeDecodedBytes, decoded)
 	}
@@ -207,6 +210,23 @@ func (u HistoryUsage) addRecipe(value recipe.Usage, limits HistoryLimits) (Histo
 		return next, historyLimitError(historyLimitWork, limits.MaxCumulativeWorkUnits, work)
 	}
 	return next, nil
+}
+
+// addCanonical transactionally adds one bounded Section 6 canonicalization category.
+func (u HistoryUsage) addCanonical(value, limit int) (HistoryUsage, error) {
+	if !u.Valid() || value < 0 || limit <= 0 {
+		return u, historyError(ErrorCodeHistoryInternalContract)
+	}
+	next, ok := historyAdd(u.canonical, value)
+	if !ok || next > limit {
+		if !ok {
+			next = math.MaxInt
+		}
+		u.canonical = next
+		return u, historyLimitError("max_cumulative_canonical_bytes", limit, next)
+	}
+	u.canonical = next
+	return u, nil
 }
 
 // HistoryTransition stores one immutable adjacent authenticated reconstruction.
@@ -396,47 +416,114 @@ func (c HistoryCoordinator) ValidatePrevious(state recipe.State, current, previo
 		return HistoryTransition{}, historyError(ErrorCodeHistoryInstanceNotAdjacent)
 	}
 	hashSet, selection := previous.SHA256HashSet()
-	return c.validatePreviousSelection(state, current, previous, hashSet, selection)
+	transition, _, err := c.validatePreviousSelectionWithin(state, current, previous, hashSet, selection, math.MaxInt)
+	return transition, err
 }
 
 // validatePreviousSelection owns future-compatible hash-selection result mapping.
 func (c HistoryCoordinator) validatePreviousSelection(state recipe.State, current, previous instance.MessageInstance, hashSet instance.HashSet, selection instance.HashSelectionStatus) (HistoryTransition, error) {
+	transition, _, err := c.validatePreviousSelectionWithin(state, current, previous, hashSet, selection, math.MaxInt)
+	return transition, err
+}
+
+// validatePreviousWithin compares one adjacent state under a remaining canonical-work ceiling.
+func (c HistoryCoordinator) validatePreviousWithin(state recipe.State, current, previous instance.MessageInstance, remaining int) (HistoryTransition, int, error) {
+	if !c.initialized || !state.Valid() {
+		return HistoryTransition{}, 0, historyError(ErrorCodeHistoryInvalidState)
+	}
+	if current.Number() <= 1 || previous.Number()+1 != current.Number() {
+		return HistoryTransition{}, 0, historyError(ErrorCodeHistoryInstanceNotAdjacent)
+	}
+	hashSet, selection := previous.SHA256HashSet()
+	return c.validatePreviousSelectionWithin(state, current, previous, hashSet, selection, remaining)
+}
+
+// validatePreviousSelectionWithin owns bounded future-compatible hash-selection mapping.
+func (c HistoryCoordinator) validatePreviousSelectionWithin(state recipe.State, current, previous instance.MessageInstance, hashSet instance.HashSet, selection instance.HashSelectionStatus, remaining int) (HistoryTransition, int, error) {
 	if selection == instance.HashSelectionStatusMissing {
-		return HistoryTransition{}, historyError(ErrorCodeHistoryMissingSHA256)
+		return HistoryTransition{}, 0, historyError(ErrorCodeHistoryMissingSHA256)
 	}
 	bodyState := HistoryDimensionUnsupported
 	if state.BodyState() == recipe.BodyAvailabilityUnavailable {
 		bodyState = HistoryDimensionUnavailable
 	}
 	if selection == instance.HashSelectionStatusUnsupported {
-		return HistoryTransition{current.Number(), previous.Number(), HistoryRecipeModeApplied, HistoryDimensionUnsupported, bodyState, state, true}, nil
+		return HistoryTransition{current.Number(), previous.Number(), HistoryRecipeModeApplied, HistoryDimensionUnsupported, bodyState, state, true}, 0, nil
 	}
-	headerResult, err := c.canonicalizer.HeaderHash(state.Headers())
+	headerResult, bodyResult, work, err := c.canonicalHashesWithin(state, remaining)
 	if err != nil {
-		return HistoryTransition{}, historyError(ErrorCodeHistoryInternalContract)
+		if canonical.IsErrorCode(err, canonical.ErrorCodeLimitExceeded) || IsErrorCode(err, ErrorCodeHistoryLimitExceeded) {
+			return HistoryTransition{}, 0, historyLimitError("max_cumulative_canonical_bytes", remaining, remaining+1)
+		}
+		return HistoryTransition{}, 0, historyError(ErrorCodeHistoryInternalContract)
 	}
 	headerDigest, ok := headerResult.Digest()
 	if !ok {
-		return HistoryTransition{}, historyError(ErrorCodeHistoryInternalContract)
+		return HistoryTransition{}, 0, historyError(ErrorCodeHistoryInternalContract)
 	}
 	expectedHeader, headerOK := hashSet.HeaderHash()
 	expectedBody, bodyOK := hashSet.BodyHash()
 	if !headerOK || !bodyOK {
-		return HistoryTransition{}, historyError(ErrorCodeHistoryInternalContract)
+		return HistoryTransition{}, 0, historyError(ErrorCodeHistoryInternalContract)
 	}
 	headerState := historyDigestState(headerDigest.Bytes(), expectedHeader.Decoded())
 	if body, known := state.Body(); known {
-		bodyResult, hashErr := c.canonicalizer.BodyHash(body)
-		if hashErr != nil {
-			return HistoryTransition{}, historyError(ErrorCodeHistoryInternalContract)
-		}
+		_ = body
 		bodyDigest, digestOK := bodyResult.Digest()
 		if !digestOK {
-			return HistoryTransition{}, historyError(ErrorCodeHistoryInternalContract)
+			return HistoryTransition{}, 0, historyError(ErrorCodeHistoryInternalContract)
 		}
 		bodyState = historyDigestState(bodyDigest.Bytes(), expectedBody.Decoded())
 	}
-	return HistoryTransition{current.Number(), previous.Number(), HistoryRecipeModeApplied, headerState, bodyState, state, true}, nil
+	return HistoryTransition{current.Number(), previous.Number(), HistoryRecipeModeApplied, headerState, bodyState, state, true}, work, nil
+}
+
+// canonicalHashesWithin computes Section 6 hashes without exceeding remaining aggregate work.
+func (c HistoryCoordinator) canonicalHashesWithin(state recipe.State, remaining int) (canonical.Result, canonical.Result, int, error) {
+	if remaining <= 0 {
+		return canonical.Result{}, canonical.Result{}, 0, historyLimitError("max_cumulative_canonical_bytes", remaining, 1)
+	}
+	headerInputBytes := state.Headers().OriginalByteLen()
+	if headerInputBytes > remaining {
+		return canonical.Result{}, canonical.Result{}, 0, historyLimitError("max_cumulative_canonical_bytes", remaining, headerInputBytes)
+	}
+	limits := c.canonicalizer.Options().Limits
+	limits.MaxHeaderInputBytes = min(limits.MaxHeaderInputBytes, remaining)
+	headerCanonicalizer, err := canonical.NewCanonicalizer(canonical.WithLimits(limits))
+	if err != nil {
+		return canonical.Result{}, canonical.Result{}, 0, err
+	}
+	header, err := headerCanonicalizer.HeaderHash(state.Headers())
+	if err != nil {
+		return canonical.Result{}, canonical.Result{}, 0, err
+	}
+	work := canonicalWorkBytes(header.CanonicalBytes())
+	body, known := state.Body()
+	if !known {
+		return header, canonical.Result{}, work, nil
+	}
+	remaining -= work
+	if remaining <= 0 {
+		return canonical.Result{}, canonical.Result{}, 0, historyLimitError("max_cumulative_canonical_bytes", work, work+1)
+	}
+	if body.Len() > remaining {
+		return canonical.Result{}, canonical.Result{}, 0, historyLimitError("max_cumulative_canonical_bytes", remaining, body.Len())
+	}
+	limits = c.canonicalizer.Options().Limits
+	limits.MaxBodyInputBytes = min(limits.MaxBodyInputBytes, remaining)
+	bodyCanonicalizer, err := canonical.NewCanonicalizer(canonical.WithLimits(limits))
+	if err != nil {
+		return canonical.Result{}, canonical.Result{}, 0, err
+	}
+	bodyResult, err := bodyCanonicalizer.BodyHash(body)
+	if err != nil {
+		return canonical.Result{}, canonical.Result{}, 0, err
+	}
+	bodyWork := canonicalWorkBytes(bodyResult.CanonicalBytes())
+	if bodyWork > math.MaxInt-work {
+		return canonical.Result{}, canonical.Result{}, 0, historyLimitError("max_cumulative_canonical_bytes", remaining, math.MaxInt)
+	}
+	return header, bodyResult, work + bodyWork, nil
 }
 
 // Walk reconstructs authenticated historical content after coherent current PASS.
@@ -450,11 +537,30 @@ func (c HistoryCoordinator) Walk(ctx context.Context, current Result, collection
 	if !c.initialized || !aggregateCurrentPass(current) || !collection.Valid() || !initial.Valid() || current.target.InstanceNumber != collection.HighestNumber() {
 		return HistoryWalk{}, historyError(ErrorCodeHistoryInvalidState)
 	}
-	target := current.target.InstanceNumber
-	usage := HistoryUsage{initialized: true}
-	currentInstance, ok := collection.ByNumber(target)
-	if !ok || !c.currentStateMatches(initial, currentInstance) {
+	return c.walkAuthenticatedWithin(ctx, current.target.InstanceNumber, collection, initial, math.MaxInt, false)
+}
+
+// walkAuthenticatedWithin reconstructs history with an aggregate Section 6 work ceiling.
+func (c HistoryCoordinator) walkAuthenticatedWithin(ctx context.Context, target uint64, collection instance.Collection, initial recipe.State, maxCanonicalBytes int, currentAlreadyProved bool) (HistoryWalk, error) {
+	if ctx == nil || !c.initialized || !collection.Valid() || !initial.Valid() || target == 0 || target != collection.HighestNumber() {
 		return HistoryWalk{}, historyError(ErrorCodeHistoryInvalidState)
+	}
+	if maxCanonicalBytes <= 0 {
+		return sealedHistory(target, target, nil, HistoryUsage{initialized: true}, HistoryStopLimitExceeded, false), nil
+	}
+	if err := ctx.Err(); err != nil {
+		return HistoryWalk{}, err
+	}
+	currentInstance, ok := collection.ByNumber(target)
+	if !ok {
+		return HistoryWalk{}, historyError(ErrorCodeHistoryInvalidState)
+	}
+	usage, stop, err := c.proveCurrentHistoryState(initial, currentInstance, maxCanonicalBytes, currentAlreadyProved)
+	if err != nil {
+		return HistoryWalk{}, err
+	}
+	if stop != "" {
+		return sealedHistory(target, target, nil, usage, stop, false), nil
 	}
 	if target == 1 {
 		return newHistoryWalk(HistoryCoverageComplete, HistoryStopOriginReached, 1, 1, nil, usage), nil
@@ -486,15 +592,19 @@ func (c HistoryCoordinator) Walk(ctx context.Context, current Result, collection
 		if stop, stopped := historyParseStop(parseErr, usageErr); stopped {
 			return sealedHistory(target, reached, transitions, usage, stop, sawUnavailable), nil
 		}
-		next, applyUsage, applyErr := c.applier.Apply(state, plan)
+		next, applyUsage, applyErr := c.applier.ApplyHistorical(state, plan)
 		usage, usageErr = usage.addRecipe(applyUsage, c.limits)
 		if stop, stopped := historyApplyStop(applyErr, usageErr); stopped {
 			return sealedHistory(target, reached, transitions, usage, stop, sawUnavailable), nil
 		}
-		transition, transitionErr := c.ValidatePrevious(next, currentInstance, previous)
+		transition, canonicalWork, transitionErr := c.validatePreviousWithin(next, currentInstance, previous, maxCanonicalBytes-usage.canonical)
 		if transitionErr != nil {
 			stop := historyTransitionStop(transitionErr)
 			return sealedHistory(target, reached, transitions, usage, stop, sawUnavailable), nil
+		}
+		usage, usageErr = usage.addCanonical(canonicalWork, maxCanonicalBytes)
+		if usageErr != nil {
+			return sealedHistory(target, reached, transitions, usage, HistoryStopLimitExceeded, sawUnavailable), nil
 		}
 		if len(transitions) < c.limits.MaxRetainedTransitions {
 			transitions = append(transitions, transition)
@@ -516,38 +626,63 @@ func (c HistoryCoordinator) Walk(ctx context.Context, current Result, collection
 		}
 		state = next
 	}
-	coverage := HistoryCoverageComplete
-	if sawUnavailable {
-		coverage = HistoryCoveragePartial
-	}
+	coverage := completedHistoryCoverage(sawUnavailable)
 	return newHistoryWalk(coverage, HistoryStopOriginReached, target, reached, transitions, usage).withTerminal(lastTransition).withUnavailable(sawUnavailable), nil
 }
 
+// completedHistoryCoverage maps a complete walk with an explicit body gap to partial coverage.
+func completedHistoryCoverage(sawUnavailable bool) HistoryCoverage {
+	if sawUnavailable {
+		return HistoryCoveragePartial
+	}
+	return HistoryCoverageComplete
+}
+
+// proveCurrentHistoryState accounts for or accepts the independently proved current tuple.
+func (c HistoryCoordinator) proveCurrentHistoryState(initial recipe.State, current instance.MessageInstance, maxCanonicalBytes int, currentAlreadyProved bool) (HistoryUsage, HistoryStopReason, error) {
+	usage := HistoryUsage{initialized: true}
+	if currentAlreadyProved {
+		return usage, "", nil
+	}
+	matches, work, err := c.currentStateMatches(initial, current, maxCanonicalBytes)
+	if err != nil {
+		return usage, HistoryStopLimitExceeded, nil
+	}
+	usage, err = usage.addCanonical(work, maxCanonicalBytes)
+	if err != nil {
+		return usage, HistoryStopLimitExceeded, nil
+	}
+	if !matches {
+		return HistoryUsage{}, "", historyError(ErrorCodeHistoryInvalidState)
+	}
+	return usage, "", nil
+}
+
 // currentStateMatches binds direct Walk input to the already passing current tuple.
-func (c HistoryCoordinator) currentStateMatches(state recipe.State, current instance.MessageInstance) bool {
+func (c HistoryCoordinator) currentStateMatches(state recipe.State, current instance.MessageInstance, maxCanonicalBytes int) (bool, int, error) {
 	if state.BodyState() != recipe.BodyAvailabilityKnown {
-		return false
+		return false, 0, nil
 	}
 	hashSet, selection := current.SHA256HashSet()
 	if selection != instance.HashSelectionStatusSelected {
-		return false
+		return false, 0, nil
 	}
 	headerExpected, headerOK := hashSet.HeaderHash()
 	bodyExpected, bodyOK := hashSet.BodyHash()
-	body, known := state.Body()
+	_, known := state.Body()
 	if !headerOK || !bodyOK || !known {
-		return false
+		return false, 0, nil
 	}
-	headerResult, headerErr := c.canonicalizer.HeaderHash(state.Headers())
-	bodyResult, bodyErr := c.canonicalizer.BodyHash(body)
+	headerResult, bodyResult, work, canonicalErr := c.canonicalHashesWithin(state, maxCanonicalBytes)
+	headerErr, bodyErr := canonicalErr, canonicalErr
 	if headerErr != nil || bodyErr != nil {
-		return false
+		return false, 0, canonicalErr
 	}
 	headerDigest, headerDigestOK := headerResult.Digest()
 	bodyDigest, bodyDigestOK := bodyResult.Digest()
 	return headerDigestOK && bodyDigestOK &&
 		historyDigestState(headerDigest.Bytes(), headerExpected.Decoded()) == HistoryDimensionMatched &&
-		historyDigestState(bodyDigest.Bytes(), bodyExpected.Decoded()) == HistoryDimensionMatched
+		historyDigestState(bodyDigest.Bytes(), bodyExpected.Decoded()) == HistoryDimensionMatched, work, nil
 }
 
 // historyParseStop maps parser and cumulative failures to one closed stop.
@@ -583,6 +718,9 @@ func historyApplyStop(applyErr, usageErr error) (HistoryStopReason, bool) {
 
 // historyTransitionStop maps usage-free comparison errors to one closed stop.
 func historyTransitionStop(err error) HistoryStopReason {
+	if IsErrorCode(err, ErrorCodeHistoryLimitExceeded) {
+		return HistoryStopLimitExceeded
+	}
 	if IsErrorCode(err, ErrorCodeHistoryMissingSHA256) {
 		return HistoryStopHashMissing
 	}

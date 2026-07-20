@@ -5,7 +5,13 @@ import "bytes"
 var crlf = []byte("\r\n")
 var strictHeaderBodyDelimiter = []byte("\r\n\r\n")
 
-const limitNameMaxHeaderLineBytes = "max_header_line_bytes"
+const (
+	limitNameMaxMessageBytes     = "max_message_bytes"
+	limitNameMaxHeaderBytes      = "max_header_bytes"
+	limitNameMaxHeaderFields     = "max_header_fields"
+	limitNameMaxHeaderFieldBytes = "max_header_field_bytes"
+	limitNameMaxHeaderLineBytes  = "max_header_line_bytes"
+)
 
 // Parse parses raw RFC 5322 bytes with restrictive default parser options.
 func Parse(data []byte) (Message, error) {
@@ -23,7 +29,7 @@ func ParseWithOptions(data []byte, options ParserOptions) (Message, error) {
 	if len(data) > options.MaxMessageBytes {
 		return Message{}, NewParserError(ErrorCodeLimitExceeded, ErrorLocation{}, ParserErrorDetails{
 			Reason:    ErrorReasonLimit,
-			LimitName: "max_message_bytes",
+			LimitName: limitNameMaxMessageBytes,
 			Limit:     options.MaxMessageBytes,
 		})
 	}
@@ -52,7 +58,7 @@ func ParseWithOptions(data []byte, options ParserOptions) (Message, error) {
 	if len(headerBytes) > options.MaxHeaderBytes {
 		return Message{}, NewParserError(ErrorCodeLimitExceeded, ErrorLocation{}, ParserErrorDetails{
 			Reason:    ErrorReasonLimit,
-			LimitName: "max_header_bytes",
+			LimitName: limitNameMaxHeaderBytes,
 			Limit:     options.MaxHeaderBytes,
 		})
 	}
@@ -198,7 +204,7 @@ func parseHeaderBlock(headerBytes []byte, options ParserOptions) (HeaderBlock, e
 				if len(fields) > options.MaxHeaderFields {
 					return HeaderBlock{}, NewParserError(ErrorCodeLimitExceeded, ErrorLocation{Offset: lineStart, Line: lineNumber, Column: 1}, ParserErrorDetails{
 						Reason:    ErrorReasonLimit,
-						LimitName: "max_header_fields",
+						LimitName: limitNameMaxHeaderFields,
 						Limit:     options.MaxHeaderFields,
 					})
 				}
@@ -235,7 +241,7 @@ func buildHeaderField(index int, headerBytes []byte, start int, end int, options
 	if end <= start || end-start > options.MaxHeaderFieldBytes {
 		return HeaderField{}, NewParserError(ErrorCodeLimitExceeded, ErrorLocation{Offset: start}, ParserErrorDetails{
 			Reason:    ErrorReasonLimit,
-			LimitName: "max_header_field_bytes",
+			LimitName: limitNameMaxHeaderFieldBytes,
 			Limit:     options.MaxHeaderFieldBytes,
 		})
 	}

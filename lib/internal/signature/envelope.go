@@ -8,19 +8,25 @@ import (
 	"github.com/croessner/dkim2/internal/tagvalue"
 )
 
+// MaxEnvelopePathBytes is the RFC 5321 maximum path length including brackets.
+const MaxEnvelopePathBytes = 256
+
+// ValidEnvelopePath reports whether exact path bytes satisfy the shared SMTP path contract.
+func ValidEnvelopePath(path []byte, allowNull bool) bool { return validEnvelopePath(path, allowNull) }
+
 // parseEnvelopePath decodes and checks one base64-wrapped SMTP path.
 func parseEnvelopePath(value string, limits tagvalue.Limits, fieldIndex int, recipientIndex int, tagName string) (EnvelopePath, error) {
 	parsed, err := tagvalue.ParseBase64String([]byte(value), limits)
 	if err != nil {
 		return EnvelopePath{}, newError(ErrorCodeInvalidEnvelopeBase64, ErrorLocation{FieldIndex: fieldIndex, RecipientIndex: recipientIndex}, ErrorDetails{
-			TagName: tagName,
+			TagName: TagName(tagName),
 		}, err)
 	}
 
 	decoded := parsed.Decoded()
 	if !validEnvelopePath(decoded, tagName == "mf") {
 		return EnvelopePath{}, newError(ErrorCodeInvalidEnvelopePath, ErrorLocation{FieldIndex: fieldIndex, RecipientIndex: recipientIndex}, ErrorDetails{
-			TagName: tagName,
+			TagName: TagName(tagName),
 		}, nil)
 	}
 
@@ -65,9 +71,7 @@ func parseRecipientPaths(value string, limits Limits, fieldIndex int) ([]Envelop
 
 // validEnvelopePath checks RFC 5321 reverse-path or forward-path syntax.
 func validEnvelopePath(path []byte, allowNull bool) bool {
-	const maxPathBytes = 256
-
-	if len(path) < 2 || len(path) > maxPathBytes || path[0] != '<' || path[len(path)-1] != '>' {
+	if len(path) < 2 || len(path) > MaxEnvelopePathBytes || path[0] != '<' || path[len(path)-1] != '>' {
 		return false
 	}
 	inner := path[1 : len(path)-1]

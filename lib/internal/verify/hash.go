@@ -11,9 +11,10 @@ import (
 const sha256DigestLength = 32
 
 type hashCheckResults struct {
-	body   CheckResult
-	header CheckResult
-	pass   bool
+	body          CheckResult
+	header        CheckResult
+	pass          bool
+	canonicalWork int
 }
 
 // compareTargetHashes compares current SHA-256 hashes with the target instance.
@@ -64,10 +65,16 @@ func compareTargetHashes(canonicalizer canonical.Canonicalizer, message rawmsg.M
 	headerStatus, headerCode := compareSHA256Digest(headerDigest.Bytes(), expectedHeaderHash.Decoded())
 
 	return hashCheckResults{
-		body:   hashCheckResult(CheckKindBodyHash, bodyStatus, bodyCode, hashStatusFromCheck(bodyStatus), target),
-		header: hashCheckResult(CheckKindHeaderHash, headerStatus, headerCode, hashStatusFromCheck(headerStatus), target),
-		pass:   bodyStatus == CheckStatusPass && headerStatus == CheckStatusPass,
+		body:          hashCheckResult(CheckKindBodyHash, bodyStatus, bodyCode, hashStatusFromCheck(bodyStatus), target),
+		header:        hashCheckResult(CheckKindHeaderHash, headerStatus, headerCode, hashStatusFromCheck(headerStatus), target),
+		pass:          bodyStatus == CheckStatusPass && headerStatus == CheckStatusPass,
+		canonicalWork: canonicalWorkBytes(bodyResult.CanonicalBytes()) + canonicalWorkBytes(headerResult.CanonicalBytes()),
 	}, nil
+}
+
+// canonicalWorkBytes charges at least all scanned input even when canonical output collapses.
+func canonicalWorkBytes(input canonical.ByteInput) int {
+	return max(input.Len(), input.Metadata().InputBytes)
 }
 
 // targetSHA256HashSet finds the known sha256 hash set for an instance.

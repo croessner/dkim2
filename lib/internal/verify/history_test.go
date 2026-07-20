@@ -175,8 +175,8 @@ func TestHistoryWalkContinuesAfterNullWithDataRecovery(t *testing.T) {
 	}
 }
 
-// TestHistoryWalkStopsOnCopyAfterUnavailableBody verifies later source failure precedence.
-func TestHistoryWalkStopsOnCopyAfterUnavailableBody(t *testing.T) {
+// TestHistoryWalkContinuesHeadersOnCopyAfterUnavailableBody verifies persistent body-gap semantics.
+func TestHistoryWalkContinuesHeadersOnCopyAfterUnavailableBody(t *testing.T) {
 	currentBytes := []byte("Subject:current\r\n\r\ncurrent\r\n")
 	middleBytes := []byte("Subject:middle\r\n\r\nplaceholder\r\n")
 	collection := parseHistoryCollection(t,
@@ -185,8 +185,13 @@ func TestHistoryWalkStopsOnCopyAfterUnavailableBody(t *testing.T) {
 		historyInstanceLine(3, testHistorySHA256, historyDigests(t, currentBytes), `{"h":{"Subject":[{"d":["middle"]}]},"b":null}`),
 	)
 	walk, err := mustHistoryCoordinator(t, HistoryLimits{}).Walk(context.Background(), historyPassResult(3), collection, mustHistoryState(t, currentBytes))
-	if err != nil || !walk.Valid() || walk.Coverage() != HistoryCoveragePartial || walk.StopReason() != HistoryStopSourceUnavailable || walk.ReachedInstance() != 2 || len(walk.Transitions()) != 1 || walk.Usage().DecodedBytes() == 0 {
+	if err != nil || !walk.Valid() || walk.Coverage() != HistoryCoveragePartial || walk.StopReason() != HistoryStopOriginReached || walk.ReachedInstance() != 1 || len(walk.Transitions()) != 2 || !walk.hadUnavailable || walk.Usage().DecodedBytes() == 0 {
 		t.Fatalf("later unavailable copy mismatch: coverage=%s stop=%s reached=%d err=%v", walk.Coverage(), walk.StopReason(), walk.ReachedInstance(), err)
+	}
+	for _, transition := range walk.Transitions() {
+		if transition.HeaderState() != HistoryDimensionMatched || transition.BodyState() != HistoryDimensionUnavailable {
+			t.Fatalf("transition %d->%d = %s/%s", transition.FromInstance(), transition.ToInstance(), transition.HeaderState(), transition.BodyState())
+		}
 	}
 }
 
@@ -334,6 +339,47 @@ func TestHistoryMismatchPrecedesUnavailableCoverage(t *testing.T) {
 	walk, err := mustHistoryCoordinator(t, HistoryLimits{}).Walk(context.Background(), historyPassResult(2), collection, state)
 	if err != nil || !walk.Valid() || walk.Coverage() != HistoryCoverageFailed || walk.StopReason() != HistoryStopHashMismatch || walk.Transitions()[0].BodyState() != HistoryDimensionUnavailable {
 		t.Fatalf("mismatch/unavailable precedence: coverage=%s stop=%s err=%v", walk.Coverage(), walk.StopReason(), err)
+	}
+}
+
+// TestHistoryWalkContinuesHeaderProofAcrossBodyUnavailableCopy locks strict b:null boundary semantics.
+func TestHistoryWalkContinuesHeaderProofAcrossBodyUnavailableCopy(t *testing.T) {
+	current := []byte("Subject:current\r\n\r\ncurrent\r\n")
+	middle := []byte("Subject:middle\r\n\r\nmiddle\r\n")
+	origin := []byte("Subject:origin\r\n\r\norigin\r\n")
+	collection := parseHistoryCollection(t,
+		historyInstanceLine(1, testHistorySHA256, historyDigests(t, origin), ""),
+		historyInstanceLine(2, testHistorySHA256, historyDigests(t, middle), `{"h":{"Subject":[{"d":["origin"]}]},"b":[{"c":[1,1]}]}`),
+		historyInstanceLine(3, testHistorySHA256, historyDigests(t, current), `{"h":{"Subject":[{"d":["middle"]}]},"b":null}`),
+	)
+	walk, err := mustHistoryCoordinator(t, HistoryLimits{}).Walk(context.Background(), historyPassResult(3), collection, mustHistoryState(t, current))
+	if err != nil || !walk.Valid() || walk.Coverage() != HistoryCoveragePartial || walk.StopReason() != HistoryStopOriginReached || walk.ReachedInstance() != 1 || len(walk.Transitions()) != 2 || !walk.hadUnavailable {
+		t.Fatalf("Walk() = coverage=%q stop=%q reached=%d transitions=%d gap=%t error=%v", walk.Coverage(), walk.StopReason(), walk.ReachedInstance(), len(walk.Transitions()), walk.hadUnavailable, err)
+	}
+	for _, transition := range walk.Transitions() {
+		if transition.HeaderState() != HistoryDimensionMatched || transition.BodyState() != HistoryDimensionUnavailable {
+			t.Fatalf("transition %d->%d = %q/%q", transition.FromInstance(), transition.ToInstance(), transition.HeaderState(), transition.BodyState())
+		}
+	}
+
+	wrongOrigin := parseHistoryCollection(t,
+		historyInstanceLine(1, testHistorySHA256, historyDigests(t, []byte("Subject:wrong\r\n\r\norigin\r\n")), ""),
+		historyInstanceLine(2, testHistorySHA256, historyDigests(t, middle), `{"h":{"Subject":[{"d":["origin"]}]},"b":[{"c":[1,1]}]}`),
+		historyInstanceLine(3, testHistorySHA256, historyDigests(t, current), `{"h":{"Subject":[{"d":["middle"]}]},"b":null}`),
+	)
+	failed, err := mustHistoryCoordinator(t, HistoryLimits{}).Walk(context.Background(), historyPassResult(3), wrongOrigin, mustHistoryState(t, current))
+	if err != nil || failed.Coverage() != HistoryCoverageFailed || failed.StopReason() != HistoryStopHashMismatch || failed.Transitions()[1].HeaderState() != HistoryDimensionMismatch {
+		t.Fatalf("wrong older header = coverage=%q stop=%q error=%v", failed.Coverage(), failed.StopReason(), err)
+	}
+
+	malformed := parseHistoryCollection(t,
+		historyInstanceLine(1, testHistorySHA256, historyDigests(t, origin), ""),
+		historyInstanceLine(2, testHistorySHA256, historyDigests(t, middle), `{`),
+		historyInstanceLine(3, testHistorySHA256, historyDigests(t, current), `{"h":{"Subject":[{"d":["middle"]}]},"b":null}`),
+	)
+	stopped, err := mustHistoryCoordinator(t, HistoryLimits{}).Walk(context.Background(), historyPassResult(3), malformed, mustHistoryState(t, current))
+	if err != nil || stopped.Coverage() != HistoryCoveragePartial || stopped.StopReason() != HistoryStopRecipeInvalid || stopped.ReachedInstance() != 2 {
+		t.Fatalf("malformed older recipe = coverage=%q stop=%q reached=%d error=%v", stopped.Coverage(), stopped.StopReason(), stopped.ReachedInstance(), err)
 	}
 }
 

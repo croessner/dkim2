@@ -3,8 +3,13 @@ package verify
 import (
 	"context"
 	"encoding/base64"
+	"math"
+	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/croessner/dkim2/internal/instance"
+	"github.com/croessner/dkim2/internal/signature"
 )
 
 // TestVerifierVerifiesMessageInputWithRSA verifies the message extraction path.
@@ -100,7 +105,7 @@ func TestVerifierRejectsCurrentSignatureReferencingOlderInstance(t *testing.T) {
 	hashSet := "sha256:" + fixture.headerDigestBase64 + ":" + fixture.bodyDigestBase64
 	placeholder := testSelector + ":" + string(AlgorithmRSASHA256) + ":" + base64.StdEncoding.EncodeToString(bytesOf(0xa5, 128))
 	first := strings.Replace(signatureField(1, placeholder), "m=1", "m=2", 1)
-	second := signatureField(2, placeholder)
+	second := strings.Replace(signatureField(2, placeholder), "mf=PD4=", "mf=PHNlbmRlckBleGFtcGxlLnRlc3Q+", 1)
 	raw := baseVerificationHeaders() +
 		"Message-Instance: m=1; h=" + hashSet + ";\r\n" +
 		"Message-Instance: m=2; h=" + hashSet + ";\r\n" +
@@ -130,7 +135,7 @@ func TestVerifierRejectsExplicitHistoricalTargetBeforeHashingCurrentBytes(t *tes
 		"Message-Instance: m=1; h=" + hashSet + ";\r\n" +
 		"Message-Instance: m=2; h=" + hashSet + ";\r\n" +
 		"DKIM2-Signature: " + signatureField(1, placeholder) + "\r\n" +
-		"DKIM2-Signature: " + strings.Replace(signatureField(2, placeholder), "m=1", "m=2", 1) + "\r\n\r\n" + verificationBody()
+		"DKIM2-Signature: " + strings.Replace(strings.Replace(signatureField(2, placeholder), "m=1", "m=2", 1), "mf=PD4=", "mf=PHNlbmRlckBleGFtcGxlLnRlc3Q+", 1) + "\r\n\r\n" + verificationBody()
 	parsed, err := parseVerificationFixture(raw)
 	if err != nil {
 		t.Fatalf("parseVerificationFixture() error = %v", err)
@@ -144,6 +149,77 @@ func TestVerifierRejectsExplicitHistoricalTargetBeforeHashingCurrentBytes(t *tes
 	})
 	if !IsErrorCode(err, ErrorCodeUnsupportedTarget) {
 		t.Fatalf("Verify() error = %v, want unsupported historical target", err)
+	}
+}
+
+// TestSelectVerificationTargetPreservesInheritedInstanceReferences locks i1/m1 i2/m2 i3/m3.
+func TestSelectVerificationTargetPreservesInheritedInstanceReferences(t *testing.T) {
+	fixture := newRSAVerificationFixture(t)
+	hashSet := "sha256:" + fixture.headerDigestBase64 + ":" + fixture.bodyDigestBase64
+	placeholder := testSelector + ":" + string(AlgorithmRSASHA256) + ":" + base64.StdEncoding.EncodeToString(bytesOf(0xa5, 128))
+	field := func(sequence, messageInstance int, domain, mailFrom, recipient string) string {
+		value := signatureField(uint64(sequence), placeholder)
+		value = strings.Replace(value, "m=1", "m="+strconv.Itoa(messageInstance), 1)
+		value = strings.Replace(value, "mf=PD4=", "mf="+encodeEnvelopePath([]byte(mailFrom)), 1)
+		value = strings.Replace(value, "rt=PHJjcHRAZXhhbXBsZS50ZXN0Pg==", "rt="+encodeEnvelopePath([]byte(recipient)), 1)
+		return strings.Replace(value, "d="+testDomain, "d="+domain, 1)
+	}
+	raw := baseVerificationHeaders() +
+		"Message-Instance: m=1; h=" + hashSet + ";\r\n" +
+		"Message-Instance: m=2; h=" + hashSet + ";\r\n" +
+		"Message-Instance: m=3; h=" + hashSet + ";\r\n" +
+		"DKIM2-Signature: " + field(1, 1, "origin.test", "<a@origin.test>", "<b@relay.test>") + "\r\n" +
+		"DKIM2-Signature: " + field(2, 2, "relay.test", "<b@relay.test>", "<c@final.test>") + "\r\n" +
+		"DKIM2-Signature: " + field(3, 3, "final.test", "<c@final.test>", "<d@destination.test>") + "\r\n\r\n" + verificationBody()
+	message := mustParseVerificationMessage(t, raw)
+	instanceParser, err := instance.NewParser(instance.Limits{})
+	if err != nil {
+		t.Fatalf("instance.NewParser() error = %v", err)
+	}
+	instances, err := instanceParser.Extract(message)
+	if err != nil {
+		t.Fatalf("instance Extract() error = %v", err)
+	}
+	signatureParser, err := signature.NewParser(signature.Limits{})
+	if err != nil {
+		t.Fatalf("signature.NewParser() error = %v", err)
+	}
+	signatures, err := signatureParser.Extract(message)
+	if err != nil {
+		t.Fatalf("signature Extract() error = %v", err)
+	}
+	for index, parsed := range signatures {
+		if parsed.InstanceNumber() != uint64(index+1) {
+			t.Fatalf("signature i=%d references m=%d", parsed.Sequence(), parsed.InstanceNumber())
+		}
+	}
+	_, _, custody, target, err := selectVerificationTarget(verificationInput{request: Request{Message: message}, instances: instances, signatures: signatures})
+	if err != nil || !custody.Valid() || target != (Target{Sequence: 3, InstanceNumber: 3}) {
+		t.Fatalf("select target=%#v custody_valid=%v error=%v", target, custody.Valid(), err)
+	}
+}
+
+// TestVerifierCollectionWrappersBoundMaxUintSequences verifies owner validation prevents unbounded loops.
+func TestVerifierCollectionWrappersBoundMaxUintSequences(t *testing.T) {
+	fixture := newRSAVerificationFixture(t)
+	maxText := strconv.FormatUint(math.MaxUint64, 10)
+	signatureMessage := mustParseVerificationMessage(t, baseVerificationHeaders()+
+		"DKIM2-Signature: "+strings.Replace(signatureField(1, testSelector+":"+string(AlgorithmRSASHA256)+":"+fixture.signatureBase64), "i=1", "i="+maxText, 1)+"\r\n\r\n"+verificationBody())
+	parsedSignature, err := signature.Parse(signatureMessage.Headers().FieldsByName(signature.HeaderName)[0])
+	if err != nil {
+		t.Fatalf("signature.Parse() error = %v", err)
+	}
+	if err := validateSignatureCollection([]signature.Signature{parsedSignature}); !IsErrorCode(err, ErrorCodeMalformedState) {
+		t.Fatalf("signature MaxUint mapping error = %v", err)
+	}
+	instanceMessage := mustParseVerificationMessage(t, baseVerificationHeaders()+
+		"Message-Instance: m="+maxText+"; h=sha256:"+fixture.headerDigestBase64+":"+fixture.bodyDigestBase64+";\r\n\r\n"+verificationBody())
+	parsedInstance, err := instance.Parse(instanceMessage.Headers().FieldsByName(instance.HeaderName)[0])
+	if err != nil {
+		t.Fatalf("instance.Parse() error = %v", err)
+	}
+	if err := validateInstanceCollection([]instance.MessageInstance{parsedInstance}); !IsErrorCode(err, ErrorCodeMalformedState) {
+		t.Fatalf("instance MaxUint mapping error = %v", err)
 	}
 }
 

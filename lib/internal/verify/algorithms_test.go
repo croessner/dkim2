@@ -13,6 +13,7 @@ func TestAlgorithmPolicyClassifiesAllowedUnsupportedAndDisabled(t *testing.T) {
 	policy := AlgorithmPolicy{
 		AllowedAlgorithms: []Algorithm{AlgorithmRSASHA256},
 		MinRSABits:        1024,
+		MaxRSABits:        8192,
 	}
 	if err := policy.Validate(); err != nil {
 		t.Fatalf("Validate() error = %v", err)
@@ -63,6 +64,17 @@ func TestValidateRSAPublicKeyMaterialEnforcesTypeAndMinimum(t *testing.T) {
 	_, status, err = validatePublicKeyMaterial(AlgorithmRSASHA256, &rsa.PublicKey{N: big.NewInt(17), E: 3}, policy)
 	if !IsErrorCode(err, ErrorCodeKeyPolicyRejected) || status != KeyStatusPolicyRejected {
 		t.Fatalf("small key status/error = %q/%v, want policy rejected", status, err)
+	}
+
+	narrow := policy
+	narrow.MaxRSABits = 1024
+	tooLarge := &rsa.PublicKey{
+		N: new(big.Int).Add(new(big.Int).Lsh(big.NewInt(1), 1024), big.NewInt(1)),
+		E: 65537,
+	}
+	_, status, err = validatePublicKeyMaterial(AlgorithmRSASHA256, tooLarge, narrow)
+	if !IsErrorCode(err, ErrorCodeKeyPolicyRejected) || status != KeyStatusPolicyRejected {
+		t.Fatalf("narrow maximum status/error = %q/%v, want policy rejected", status, err)
 	}
 }
 
@@ -136,6 +148,7 @@ func TestValidatePublicKeyMaterialRejectsUnsupportedAndDisabledAlgorithms(t *tes
 	policy := AlgorithmPolicy{
 		AllowedAlgorithms: []Algorithm{AlgorithmRSASHA256},
 		MinRSABits:        1024,
+		MaxRSABits:        8192,
 	}
 	key := ed25519.PublicKey(bytes.Repeat([]byte{0x42}, ed25519.PublicKeySize))
 

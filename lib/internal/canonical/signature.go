@@ -2,6 +2,8 @@ package canonical
 
 import (
 	"bytes"
+	"fmt"
+	"io"
 	"sort"
 
 	"github.com/croessner/dkim2/internal/instance"
@@ -20,6 +22,44 @@ type SignatureInputSelection struct {
 	Headers rawmsg.HeaderBlock
 	// TargetSequence selects the DKIM2-Signature i= value rendered incomplete.
 	TargetSequence uint64
+}
+
+// String returns a constant protected-input summary.
+func (s SignatureInputSelection) String() string {
+	return "canonical.SignatureInputSelection{redacted}"
+}
+
+// GoString returns the constant protected-input Go representation.
+func (s SignatureInputSelection) GoString() string { return s.String() }
+
+// Format routes every selection formatting form through the redacted summary.
+func (s SignatureInputSelection) Format(state fmt.State, _ rune) {
+	_, _ = io.WriteString(state, s.String())
+}
+
+// SigningInputSelection identifies structured existing and newly generated Section 9.6 input.
+type SigningInputSelection struct {
+	// Headers is the sole authority for inherited complete protocol fields.
+	Headers rawmsg.HeaderBlock
+	// GeneratedInstance is the optional next Message-Instance model.
+	GeneratedInstance instance.MessageInstance
+	// GeneratedInstanceField is the exact planner-owned rendering of GeneratedInstance.
+	GeneratedInstanceField []byte
+	// HasGeneratedInstance distinguishes an absent model from an invalid supplied model.
+	HasGeneratedInstance bool
+	// Target is the structured new DKIM2-Signature with every s= value empty.
+	Target signature.UnsignedTarget
+}
+
+// String returns a constant protected signing-input summary.
+func (s SigningInputSelection) String() string { return "canonical.SigningInputSelection{redacted}" }
+
+// GoString returns the constant protected signing-input Go representation.
+func (s SigningInputSelection) GoString() string { return s.String() }
+
+// Format routes every signing selection formatting form through the redacted summary.
+func (s SigningInputSelection) Format(state fmt.State, _ rune) {
+	_, _ = io.WriteString(state, s.String())
 }
 
 type signatureInputRecord struct {
@@ -94,6 +134,182 @@ func (c Canonicalizer) SignatureInputFromMessage(message rawmsg.Message, targetS
 		Headers:        message.Headers(),
 		TargetSequence: targetSequence,
 	})
+}
+
+// SigningInput builds Section 9.6 input without inserting an incomplete field into a message.
+//
+//nolint:gocyclo // The fail-closed sequence mirrors one normative ordered construction.
+func (c Canonicalizer) SigningInput(selection SigningInputSelection) (ByteInput, error) {
+	if !selection.Target.Valid() || (!selection.HasGeneratedInstance &&
+		(selection.GeneratedInstance.Number() != 0 || selection.GeneratedInstanceField != nil)) {
+		return ByteInput{}, signatureMissingTargetError("dkim2_signature", 0)
+	}
+	protocolFieldCount, ok := checkedSignatureInputAdd(
+		len(selection.Headers.FieldsByName(instance.HeaderName)),
+		len(selection.Headers.FieldsByName(signature.HeaderName)),
+	)
+	if !ok {
+		return ByteInput{}, signatureLimitExceededError("max_field_count", c.options.Limits.MaxFieldCount+1, c.options.Limits.MaxFieldCount, 0)
+	}
+	protocolFieldCount, ok = checkedSignatureInputAdd(protocolFieldCount, 1)
+	if !ok {
+		return ByteInput{}, signatureLimitExceededError("max_field_count", c.options.Limits.MaxFieldCount+1, c.options.Limits.MaxFieldCount, 0)
+	}
+	if selection.HasGeneratedInstance {
+		protocolFieldCount, ok = checkedSignatureInputAdd(protocolFieldCount, 1)
+		if !ok {
+			return ByteInput{}, signatureLimitExceededError("max_field_count", c.options.Limits.MaxFieldCount+1, c.options.Limits.MaxFieldCount, 0)
+		}
+	}
+	if protocolFieldCount > c.options.Limits.MaxFieldCount {
+		return ByteInput{}, signatureLimitExceededError("max_field_count", protocolFieldCount, c.options.Limits.MaxFieldCount, 0)
+	}
+	instances, signatures, err := extractSignatureInputState(selection.Headers)
+	if err != nil {
+		return ByteInput{}, err
+	}
+	targetSequence := selection.Target.Sequence()
+	targetInstance := selection.Target.InstanceNumber()
+	if targetSequence != uint64(len(signatures))+1 {
+		return ByteInput{}, signatureMissingTargetError("dkim2_signature", targetSequence)
+	}
+	expectedInstance := uint64(len(instances))
+	if selection.HasGeneratedInstance {
+		expectedInstance++
+		if selection.GeneratedInstance.Number() != expectedInstance || targetInstance != expectedInstance {
+			return ByteInput{}, signatureMissingTargetError("message_instance", targetInstance)
+		}
+	} else if targetInstance != expectedInstance || expectedInstance == 0 {
+		return ByteInput{}, signatureMissingTargetError("message_instance", targetInstance)
+	}
+	includedFields, ok := checkedSignatureInputAdd(len(instances), len(signatures))
+	if !ok {
+		return ByteInput{}, signatureLimitExceededError("max_field_count", c.options.Limits.MaxFieldCount+1, c.options.Limits.MaxFieldCount, 0)
+	}
+	includedFields, ok = checkedSignatureInputAdd(includedFields, 1)
+	if !ok {
+		return ByteInput{}, signatureLimitExceededError("max_field_count", c.options.Limits.MaxFieldCount+1, c.options.Limits.MaxFieldCount, 0)
+	}
+	if selection.HasGeneratedInstance {
+		includedFields, ok = checkedSignatureInputAdd(includedFields, 1)
+		if !ok {
+			return ByteInput{}, signatureLimitExceededError("max_field_count", c.options.Limits.MaxFieldCount+1, c.options.Limits.MaxFieldCount, 0)
+		}
+	}
+	if includedFields > c.options.Limits.MaxFieldCount {
+		return ByteInput{}, signatureLimitExceededError("max_field_count", includedFields, c.options.Limits.MaxFieldCount, 0)
+	}
+
+	records := make([]signatureInputRecord, 0, includedFields)
+	inputBytes := 0
+	if len(instances) > 0 {
+		existingTarget := targetInstance
+		if selection.HasGeneratedInstance {
+			existingTarget--
+		}
+		records, err = c.signatureInputInstanceRecords(selection.Headers, instances, existingTarget)
+		if err != nil {
+			return ByteInput{}, err
+		}
+		for _, record := range records {
+			field, _ := selection.Headers.Field(record.headerIndex)
+			inputBytes, ok = checkedSignatureInputAdd(inputBytes, len(field.OriginalBytes()))
+			if !ok {
+				return ByteInput{}, signatureLimitExceededError("max_signature_input_bytes", c.options.Limits.MaxSignatureInputBytes+1, c.options.Limits.MaxSignatureInputBytes, record.headerIndex)
+			}
+		}
+	}
+	if selection.HasGeneratedInstance {
+		rendered, renderErr := selection.GeneratedInstance.Render(instance.DefaultRenderLimits())
+		if renderErr != nil {
+			return ByteInput{}, renderErr
+		}
+		if !bytes.Equal(rendered, selection.GeneratedInstanceField) {
+			return ByteInput{}, signatureMissingTargetError("message_instance", targetInstance)
+		}
+		field, fieldErr := standaloneSignatureInputField(selection.GeneratedInstanceField, instance.HeaderName)
+		if fieldErr != nil {
+			return ByteInput{}, fieldErr
+		}
+		canonicalBytes, canonicalErr := c.canonicalizeSignatureInputField(field)
+		if canonicalErr != nil {
+			return ByteInput{}, canonicalErr
+		}
+		records = append(records, signatureInputRecord{number: selection.GeneratedInstance.Number(), headerIndex: -1, canonicalBytes: canonicalBytes})
+		inputBytes, ok = checkedSignatureInputAdd(inputBytes, len(selection.GeneratedInstanceField))
+		if !ok {
+			return ByteInput{}, signatureLimitExceededError("max_signature_input_bytes", c.options.Limits.MaxSignatureInputBytes+1, c.options.Limits.MaxSignatureInputBytes, -1)
+		}
+	}
+	sortSignatureInputRecords(records)
+
+	signatureRecords, err := c.signatureInputCompleteSignatureRecords(selection.Headers, signatures, targetSequence)
+	if err != nil {
+		return ByteInput{}, err
+	}
+	for _, record := range signatureRecords {
+		field, _ := selection.Headers.Field(record.headerIndex)
+		inputBytes, ok = checkedSignatureInputAdd(inputBytes, len(field.OriginalBytes()))
+		if !ok {
+			return ByteInput{}, signatureLimitExceededError("max_signature_input_bytes", c.options.Limits.MaxSignatureInputBytes+1, c.options.Limits.MaxSignatureInputBytes, record.headerIndex)
+		}
+	}
+	targetBytes := selection.Target.UnsignedBytes()
+	targetField, err := standaloneSignatureInputField(targetBytes, signature.HeaderName)
+	if err != nil {
+		return ByteInput{}, err
+	}
+	targetCanonical, err := c.canonicalizeSignatureInputField(targetField)
+	if err != nil {
+		return ByteInput{}, err
+	}
+	signatureRecords = append(signatureRecords, signatureInputRecord{number: targetSequence, headerIndex: -1, canonicalBytes: targetCanonical})
+	inputBytes, ok = checkedSignatureInputAdd(inputBytes, len(targetBytes))
+	if !ok {
+		return ByteInput{}, signatureLimitExceededError("max_signature_input_bytes", c.options.Limits.MaxSignatureInputBytes+1, c.options.Limits.MaxSignatureInputBytes, -1)
+	}
+
+	canonicalBytes := make([]byte, 0)
+	for _, record := range records {
+		canonicalBytes, err = appendSignatureInputField(canonicalBytes, record, c.options.Limits.MaxSignatureInputBytes)
+		if err != nil {
+			return ByteInput{}, err
+		}
+	}
+	for _, record := range signatureRecords {
+		canonicalBytes, err = appendSignatureInputField(canonicalBytes, record, c.options.Limits.MaxSignatureInputBytes)
+		if err != nil {
+			return ByteInput{}, err
+		}
+	}
+	return NewCanonicalBytes(KindSignatureInput, canonicalBytes, Metadata{
+		InputBytes: inputBytes, IncludedFields: includedFields,
+		ExcludedFields: len(selection.Headers.Fields()) - len(instances) - len(signatures),
+	})
+}
+
+// checkedSignatureInputAdd rejects integer overflow in exact signing accounting.
+func checkedSignatureInputAdd(left, right int) (int, bool) {
+	if left < 0 || right < 0 || right > int(^uint(0)>>1)-left {
+		return 0, false
+	}
+	return left + right, true
+}
+
+// standaloneSignatureInputField parses one generated header without creating message insertion state.
+func standaloneSignatureInputField(field []byte, expectedName string) (rawmsg.HeaderField, error) {
+	raw := make([]byte, 0, len(field)+2)
+	raw = append(raw, field...)
+	raw = append(raw, '\r', '\n')
+	message, err := rawmsg.Parse(raw)
+	if err != nil {
+		return rawmsg.HeaderField{}, err
+	}
+	fields := message.Headers().FieldsByName(expectedName)
+	if len(fields) != 1 || len(message.Headers().Fields()) != 1 {
+		return rawmsg.HeaderField{}, signatureMissingTargetError(expectedName, 0)
+	}
+	return fields[0], nil
 }
 
 // extractSignatureInputState parses and validates protocol fields from one authoritative header block.
@@ -181,7 +397,7 @@ func (c Canonicalizer) signatureInputInstanceRecords(headers rawmsg.HeaderBlock,
 
 // signatureInputCompleteSignatureRecords selects complete DKIM2-Signature fields before target.
 func (c Canonicalizer) signatureInputCompleteSignatureRecords(headers rawmsg.HeaderBlock, signatures []signature.Signature, targetSequence uint64) ([]signatureInputRecord, error) {
-	if targetSequence > uint64(len(signatures)) {
+	if targetSequence == 0 || targetSequence > uint64(len(signatures))+1 {
 		return nil, signatureMissingTargetError("dkim2_signature", targetSequence)
 	}
 
@@ -411,8 +627,12 @@ func signatureInputFieldByIndex(headers rawmsg.HeaderBlock, index int, nameLower
 
 // appendSignatureInputField appends one field and enforces total input size.
 func appendSignatureInputField(output []byte, record signatureInputRecord, limit int) ([]byte, error) {
-	if len(output)+len(record.canonicalBytes) > limit {
-		return nil, signatureLimitExceededError("max_signature_input_bytes", len(output)+len(record.canonicalBytes), limit, record.headerIndex)
+	total, ok := checkedSignatureInputAdd(len(output), len(record.canonicalBytes))
+	if !ok || total > limit {
+		if !ok {
+			total = limit + 1
+		}
+		return nil, signatureLimitExceededError("max_signature_input_bytes", total, limit, record.headerIndex)
 	}
 
 	return append(output, record.canonicalBytes...), nil

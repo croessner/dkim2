@@ -283,7 +283,7 @@ func duplicateTagError(tag Tag, offset int, tagIndex int) *Error {
 		Class: ErrorClassDuplicate,
 	}
 	if tag.known {
-		details.TagName = tag.name
+		details.tagName = tag.name
 	}
 
 	return NewError(ErrorCodeDuplicateTag, ErrorLocation{Offset: offset, TagIndex: tagIndex}, details)

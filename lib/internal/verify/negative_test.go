@@ -163,7 +163,9 @@ func TestVerifierNegativeVectors(t *testing.T) {
 				if err != nil {
 					t.Fatalf("NewStaticKeyProvider() error = %v", err)
 				}
-				verifier, err := NewVerifier(provider, testClockOption(), WithAlgorithmPolicy(AlgorithmPolicy{AllowedAlgorithms: []Algorithm{AlgorithmEd25519SHA256}, MinRSABits: 1024}))
+				verifier, err := NewVerifier(provider, testClockOption(), WithAlgorithmPolicy(AlgorithmPolicy{
+					AllowedAlgorithms: []Algorithm{AlgorithmEd25519SHA256}, MinRSABits: 1024, MaxRSABits: 8192,
+				}))
 				if err != nil {
 					t.Fatalf("NewVerifier() error = %v", err)
 				}

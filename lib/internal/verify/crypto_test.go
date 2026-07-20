@@ -103,6 +103,7 @@ func TestVerifierReportsMissingKeyAndUnsupportedAlgorithm(t *testing.T) {
 // TestVerifierReportsRejectedAndWrongTypeKeys verifies provider-returned invalid keys fail closed.
 func TestVerifierReportsRejectedAndWrongTypeKeys(t *testing.T) {
 	fixture := newRSAVerificationFixture(t)
+	malformedSignature := fixture.withSignatureBytes([]byte{0x01})
 
 	tests := []struct {
 		name     string
@@ -110,8 +111,18 @@ func TestVerifierReportsRejectedAndWrongTypeKeys(t *testing.T) {
 		status   SignatureSetStatus
 	}{
 		{
-			name:     "too small rsa",
-			material: &rsa.PublicKey{N: big.NewInt(65539), E: 3},
+			name:     "rsa exponent three",
+			material: syntheticVerifierRSAKey(1024, 3),
+			status:   SignatureSetStatusKeyPolicyRejected,
+		},
+		{
+			name:     "rsa below minimum",
+			material: syntheticVerifierRSAKey(1023, 65537),
+			status:   SignatureSetStatusKeyPolicyRejected,
+		},
+		{
+			name:     "rsa above maximum",
+			material: syntheticVerifierRSAKey(8193, 65537),
 			status:   SignatureSetStatusKeyPolicyRejected,
 		},
 		{
@@ -133,7 +144,11 @@ func TestVerifierReportsRejectedAndWrongTypeKeys(t *testing.T) {
 				t.Fatalf("NewVerifier() error = %v", err)
 			}
 
-			result, err := verifier.Verify(context.Background(), Request{Message: fixture.message, Envelope: matchingEnvelope()})
+			message := fixture.message
+			if tt.status == SignatureSetStatusKeyPolicyRejected {
+				message = malformedSignature.message
+			}
+			result, err := verifier.Verify(context.Background(), Request{Message: message, Envelope: matchingEnvelope()})
 			if err != nil {
 				t.Fatalf("Verify() error = %v", err)
 			}
@@ -142,6 +157,13 @@ func TestVerifierReportsRejectedAndWrongTypeKeys(t *testing.T) {
 			}
 		})
 	}
+}
+
+// syntheticVerifierRSAKey constructs a structurally valid RSA key for verifier policy tests.
+func syntheticVerifierRSAKey(bits, exponent int) *rsa.PublicKey {
+	modulus := new(big.Int).Lsh(big.NewInt(1), uint(bits-1))
+	modulus.SetBit(modulus, 0, 1)
+	return &rsa.PublicKey{N: modulus, E: exponent}
 }
 
 // TestVerifierRejectsInvalidProviderSuccessInvariants verifies nil-error provider results still fail closed.

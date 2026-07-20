@@ -1,6 +1,10 @@
 package signature
 
-import "slices"
+import (
+	"fmt"
+	"io"
+	"slices"
+)
 
 const (
 	// FlagDoNotModify is the parser-known donotmodify policy flag.
@@ -19,6 +23,15 @@ const (
 type Flags struct {
 	values []Flag
 }
+
+// String returns a constant secret-safe flags summary.
+func (f Flags) String() string { return "signature.Flags{redacted}" }
+
+// GoString returns the constant secret-safe flags Go representation.
+func (f Flags) GoString() string { return f.String() }
+
+// Format routes every flags fmt form through the secret-safe summary.
+func (f Flags) Format(state fmt.State, _ rune) { _, _ = io.WriteString(state, f.String()) }
 
 // Values returns immutable copies of parsed f= flags in field order.
 func (f Flags) Values() []Flag {
@@ -50,6 +63,15 @@ type Flag struct {
 	name  string
 	known bool
 }
+
+// String returns a constant secret-safe flag summary.
+func (f Flag) String() string { return "signature.Flag{redacted}" }
+
+// GoString returns the constant secret-safe flag Go representation.
+func (f Flag) GoString() string { return f.String() }
+
+// Format routes every flag fmt form through the secret-safe summary.
+func (f Flag) Format(state fmt.State, _ rune) { _, _ = io.WriteString(state, f.String()) }
 
 // Name returns the canonical flag name.
 func (f Flag) Name() string {

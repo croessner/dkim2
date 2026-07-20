@@ -10,7 +10,7 @@ func parseDomain(value string, fieldIndex int, tagName string) (string, error) {
 	domain, ok := canonicalDNSName([]byte(value))
 	if !ok {
 		return "", newError(ErrorCodeInvalidDomain, ErrorLocation{FieldIndex: fieldIndex}, ErrorDetails{
-			TagName: tagName,
+			TagName: TagName(tagName),
 		}, nil)
 	}
 

@@ -2,6 +2,8 @@ package verify
 
 import (
 	"context"
+	"fmt"
+	"io"
 
 	"github.com/croessner/dkim2/internal/rawmsg"
 )
@@ -21,6 +23,15 @@ type KeyQuery struct {
 	Algorithm Algorithm
 }
 
+// String returns a constant secret-safe key query summary.
+func (q KeyQuery) String() string { return "verify.KeyQuery{redacted}" }
+
+// GoString returns a constant secret-safe key query Go representation.
+func (q KeyQuery) GoString() string { return q.String() }
+
+// Format routes every query formatting form through the redacted summary.
+func (q KeyQuery) Format(state fmt.State, _ rune) { _, _ = io.WriteString(state, q.String()) }
+
 // PublicKey carries provider-owned public key material and bounded metadata.
 type PublicKey struct {
 	// Algorithm records the algorithm the key material is intended to verify.
@@ -30,6 +41,15 @@ type PublicKey struct {
 	// Metadata carries secret-safe provider classification facts.
 	Metadata KeyMetadata
 }
+
+// String returns a constant secret-safe public-key result summary.
+func (k PublicKey) String() string { return "verify.PublicKey{redacted}" }
+
+// GoString returns a constant secret-safe public-key Go representation.
+func (k PublicKey) GoString() string { return k.String() }
+
+// Format routes every key formatting form through the redacted summary.
+func (k PublicKey) Format(state fmt.State, _ rune) { _, _ = io.WriteString(state, k.String()) }
 
 // KeyMetadata carries bounded key-provider facts without key bytes.
 type KeyMetadata struct {
@@ -53,6 +73,28 @@ type KeyPolicyMetadata struct {
 
 // Valid reports whether metadata is coherent with the active DKIM2 draft.
 func (m KeyPolicyMetadata) Valid() bool { return !m.StrictIdentityApplicable }
+
+// AllowedForStatus reports whether DNS declarations may accompany one provider key status.
+func (m KeyPolicyMetadata) AllowedForStatus(status KeyStatus, providerFailed bool) bool {
+	if m == (KeyPolicyMetadata{}) {
+		return true
+	}
+	if providerFailed {
+		return false
+	}
+	switch status {
+	case KeyStatusFound, KeyStatusInvalid, KeyStatusRevoked, KeyStatusUnsupportedKeyType,
+		KeyStatusAlgorithmMismatch, KeyStatusWrongType, KeyStatusPolicyRejected:
+		return true
+	default:
+		return false
+	}
+}
+
+// ValidProviderSource reports whether a source is an empty or bounded low-cardinality token.
+func ValidProviderSource(value string) bool {
+	return value == "" || safeDiagnosticToken(value) == value
+}
 
 // Request carries current-message verification input for later coordination.
 type Request struct {

@@ -12,6 +12,8 @@ const (
 	HeaderName = "message-instance"
 	// HashAlgorithmSHA256 is the baseline known Message-Instance hash name.
 	HashAlgorithmSHA256 = "sha256"
+	maxHashSetsHard     = 16
+	maxInstancesHard    = 128
 )
 
 // HashSelectionStatus identifies baseline SHA-256 selection state.
@@ -37,23 +39,31 @@ type Limits struct {
 	TagLimits tagvalue.Limits
 	// MaxHashSets bounds comma-separated h= hash sets.
 	MaxHashSets int
+	// MaxInstances bounds Message-Instance fields in one message.
+	MaxInstances int
 }
 
 // DefaultLimits returns restrictive Message-Instance parser defaults.
 func DefaultLimits() Limits {
 	return Limits{
-		TagLimits:   tagvalue.DefaultLimits(),
-		MaxHashSets: 16,
+		TagLimits:    tagvalue.DefaultLimits(),
+		MaxHashSets:  maxHashSetsHard,
+		MaxInstances: maxInstancesHard,
 	}
 }
 
 // Validate rejects unsafe Message-Instance parser limit values.
 func (l Limits) Validate() error {
-	if l.MaxHashSets < 0 {
+	if l.MaxHashSets <= 0 || l.MaxHashSets > maxHashSetsHard {
 		return newError(ErrorCodeInvalidOptions, ErrorLocation{}, ErrorDetails{
 			Class:     ErrorClassInvariant,
 			LimitName: "max_hash_sets",
 			Limit:     l.MaxHashSets,
+		}, nil)
+	}
+	if l.MaxInstances <= 0 || l.MaxInstances > maxInstancesHard {
+		return newError(ErrorCodeInvalidOptions, ErrorLocation{}, ErrorDetails{
+			Class: ErrorClassInvariant, LimitName: LimitNameMaxInstances, Limit: l.MaxInstances,
 		}, nil)
 	}
 

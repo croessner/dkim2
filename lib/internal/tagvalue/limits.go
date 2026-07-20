@@ -80,7 +80,7 @@ func (l Limits) normalize() Limits {
 func limitOptionError(limitName string, limit int) *Error {
 	return NewError(ErrorCodeInvalidOptions, ErrorLocation{}, ErrorDetails{
 		Class:     ErrorClassInvariant,
-		LimitName: limitName,
+		LimitName: LimitName(limitName),
 		Limit:     limit,
 	})
 }
@@ -89,7 +89,7 @@ func limitOptionError(limitName string, limit int) *Error {
 func limitExceededError(limitName string, limit int, count int, location ErrorLocation) *Error {
 	return NewError(ErrorCodeLimitExceeded, location, ErrorDetails{
 		Class:     ErrorClassLimit,
-		LimitName: limitName,
+		LimitName: LimitName(limitName),
 		Limit:     limit,
 		Count:     count,
 	})

@@ -19,6 +19,7 @@ func TestVerifierChecksSigningDomainAgainstMailFrom(t *testing.T) {
 		{name: "ascii case insensitive", reverse: []byte("<sender@BOUNCE.EXAMPLE.TEST>"), wantTarget: TargetStatusPass, wantDomain: DomainAlignmentStatusPass, wantCheck: CheckStatusPass},
 		{name: "label boundary mismatch", reverse: []byte("<sender@notexample.test>"), wantTarget: TargetStatusFail, wantDomain: DomainAlignmentStatusMismatch, wantCheck: CheckStatusFail},
 		{name: "foreign domain", reverse: []byte("<sender@example.invalid>"), wantTarget: TargetStatusFail, wantDomain: DomainAlignmentStatusMismatch, wantCheck: CheckStatusFail},
+		{name: "address literal", reverse: []byte("<sender@[192.0.2.1]>"), wantTarget: TargetStatusFail, wantDomain: DomainAlignmentStatusInvalid, wantCheck: CheckStatusFail},
 		{name: "null reverse path", reverse: []byte("<>"), wantTarget: TargetStatusPass, wantDomain: DomainAlignmentStatusNotApplicable, wantCheck: CheckStatusNotApplicable},
 	}
 

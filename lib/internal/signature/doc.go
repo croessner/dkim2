@@ -15,7 +15,7 @@
 // special case where Message-Instance numbers are above every signature m=
 // reference. Current SMTP envelope matching, canonical signature input
 // assembly, DNS key lookup, and cryptographic verification are deferred to
-// later milestones. Diagnostics are typed and bounded, and must not expose raw
+// downstream protocol operations. Diagnostics are typed and bounded, and must not expose raw
 // DKIM2-Signature fields, decoded envelope paths, recipient lists, nonce
 // values, selectors, signatures, or other secret-bearing message data.
 package signature

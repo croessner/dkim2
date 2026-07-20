@@ -12,16 +12,23 @@ func parseNonce(value string, limits Limits, fieldIndex int) ([]byte, error) {
 			Count:     len(value),
 		}, nil)
 	}
-	for i := 0; i < len(value); i++ {
-		b := value[i]
-		if b < 0x20 || b > 0x7e || b == ';' {
-			return nil, newError(ErrorCodeInvalidNonce, ErrorLocation{FieldIndex: fieldIndex}, ErrorDetails{
-				TagName: "n",
-			}, nil)
-		}
+	if !ValidNonceSyntax([]byte(value)) {
+		return nil, newError(ErrorCodeInvalidNonce, ErrorLocation{FieldIndex: fieldIndex}, ErrorDetails{
+			TagName: "n",
+		}, nil)
 	}
 
 	return []byte(value), nil
+}
+
+// ValidNonceSyntax reports whether bytes are printable ASCII excluding the tag terminator.
+func ValidNonceSyntax(value []byte) bool {
+	for _, b := range value {
+		if b < 0x20 || b > 0x7e || b == ';' {
+			return false
+		}
+	}
+	return true
 }
 
 // splitCommaList splits a non-empty DKIM2 comma list without interpreting values.

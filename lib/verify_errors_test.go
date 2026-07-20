@@ -6,6 +6,32 @@ import (
 	"testing"
 )
 
+type typedNilClassifiedProviderError struct{}
+
+// Error panics on typed nil so the classifier must reject before invocation.
+func (e *typedNilClassifiedProviderError) Error() string {
+	if e == nil {
+		panic("typed nil Error invoked")
+	}
+	return "classified"
+}
+
+// ProviderErrorClass panics on typed nil so the classifier must reject before invocation.
+func (e *typedNilClassifiedProviderError) ProviderErrorClass() ProviderErrorClass {
+	if e == nil {
+		panic("typed nil ProviderErrorClass invoked")
+	}
+	return ProviderErrorClassTemporary
+}
+
+type wrappedProviderError struct{ inner error }
+
+// Error returns a bounded wrapper diagnostic without invoking the inner error.
+func (wrappedProviderError) Error() string { return "wrapped provider error" }
+
+// Unwrap exposes the typed-nil classified error to errors.As.
+func (e wrappedProviderError) Unwrap() error { return e.inner }
+
 // TestProviderErrorClassesAreClosedAndMachineReadable verifies typed classification.
 func TestProviderErrorClassesAreClosedAndMachineReadable(t *testing.T) {
 	classes := []ProviderErrorClass{ProviderErrorClassTemporary, ProviderErrorClassPermanent}
@@ -43,6 +69,19 @@ func TestProviderErrorClassesAreClosedAndMachineReadable(t *testing.T) {
 	}
 	if ProviderErrorClassOf(errors.New("temporary")) != "" {
 		t.Fatal("unclassified text error acquired a provider class")
+	}
+}
+
+// TestProviderErrorClassOfRejectsDirectAndWrappedTypedNilValues proves the
+// shared classifier cannot invoke methods through typed-nil error interfaces.
+func TestProviderErrorClassOfRejectsDirectAndWrappedTypedNilValues(t *testing.T) {
+	var typedNil *typedNilClassifiedProviderError
+	var direct error = typedNil
+	if class := ProviderErrorClassOf(direct); class != "" {
+		t.Fatalf("direct typed-nil class = %q", class)
+	}
+	if class := ProviderErrorClassOf(wrappedProviderError{inner: direct}); class != "" {
+		t.Fatalf("wrapped typed-nil class = %q", class)
 	}
 }
 

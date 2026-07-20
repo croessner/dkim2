@@ -3,8 +3,9 @@ package keyresolver
 import (
 	"context"
 	"math"
-	"reflect"
 	"time"
+
+	"github.com/croessner/dkim2/internal/niliface"
 )
 
 // Resolver owns bounded cached DNS TXT lookup, parsing, decoding, and miss coordination.
@@ -59,16 +60,7 @@ func NewResolver(transport TXTTransport, limits Limits, options ...ResolverOptio
 
 // nilTXTTransport reports nil and typed-nil injected transport dependencies.
 func nilTXTTransport(transport TXTTransport) bool {
-	if transport == nil {
-		return true
-	}
-	value := reflect.ValueOf(transport)
-	switch value.Kind() {
-	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
-		return value.IsNil()
-	default:
-		return false
-	}
+	return niliface.IsNil(transport)
 }
 
 // Resolve returns one cached or coalesced TXT key outcome for a validated query.

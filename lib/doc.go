@@ -1,4 +1,4 @@
-// Package dkim2 provides current-message verification for
+// Package dkim2 provides verification and signing for
 // draft-ietf-dkim-dkim2-spec-04.
 //
 // A Verifier requires an injected PublicKeyProvider. VerifyRequest owns cloned
@@ -92,12 +92,38 @@
 // historical content or signature verification. A terminal current nd=
 // requires unmodeled out-of-band trust and therefore returns PERMERROR.
 //
-// The internal recipe subsystem can also generate deterministic conservative
-// decoded JSON that applies to a current state to reconstruct previous recipe
-// semantics. Generation is not exposed by this public facade and does not
-// decide whether hashes require a new Message-Instance. Base64, field
-// formatting, sequence progression, revision signing, and private-key use
-// remain outside the current public API.
+// NewSigner exposes exactly three request paths. SignOriginator creates the
+// initial Message-Instance and DKIM2-Signature. SignExisting consumes only a
+// capability issued by VerifyForRevision and derives hash-unchanged forwarding
+// or revision from the Section 9.1 digest gate; callers cannot select the role.
+// SignNextDomain consumes the same sealed revision evidence plus a fresh,
+// single-use published-next-domain capability and emits one terminal nd=
+// signature. All paths snapshot the raw message plus the independently observed
+// exact outgoing SMTP reverse path and ordered forward paths. Signing requires
+// that envelope observation to equal the authority-issued exact-copy route
+// ticket; it is never inferred from the ticket. All paths also require the
+// closed final_network_form_pre_dot_stuffing transport declaration. Signing
+// profiles contain public verification material and opaque private-key handles;
+// injected private signers receive only one closed algorithm and native SHA-256
+// digest.
+//
+// Fanout planning binds raw pre-sign bytes, envelope paths, disclosure class,
+// route scope, purpose, and revision capability before signing. Signing limits
+// may narrow but never widen the protocol, recipe, verification, route, crypto,
+// and callback owners' hard ceilings. Every successful message is inserted,
+// reparsed, custody-checked, and cryptographically self-verified before its
+// reservation commits to unrestricted completion or the exact
+// restricted-release state.
+//
+// SigningResult is a closed sum. Only UnrestrictedSignedMessage has Bytes.
+// LocalOnlySignedMessage and OutOfBandAcceptanceSignedMessage deliberately have
+// no generic byte, marshal, text, or release surface. Their type-specific
+// release methods atomically consume the same ticket lineage only after proving
+// the exact sealed in-control route or OOB receiver, envelope, and route. A
+// terminal next-domain result remains OOB-restricted until that release or a
+// later authorized ordinary completion. Once an adapter legitimately receives
+// released bytes, it can still duplicate or misroute them; the library does not
+// claim replay prevention outside the bound release arrangement.
 //
 // Supported PASS plus an unknown algorithm may pass; unknown-only coverage is
 // PERMERROR, and a supported signature or current hash mismatch prevents PASS

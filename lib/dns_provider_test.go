@@ -140,10 +140,51 @@ func TestDNSPublicKeyProviderRejectsNilAndInvalidQueries(t *testing.T) {
 	}
 }
 
-// TestDNSPublicKeyProviderDoesNotApplyRSAKeySizePolicy verifies provider structural-only ownership.
-func TestDNSPublicKeyProviderDoesNotApplyRSAKeySizePolicy(t *testing.T) {
-	der := x509.MarshalPKCS1PublicKey(&rsa.PublicKey{N: big.NewInt(65539), E: 3})
-	payload := []byte("v=DKIM1; p=" + base64.StdEncoding.EncodeToString(der))
+// TestDNSPublicKeyProviderDefersRSAPolicyToVerifier proves structural lookup and later policy rejection.
+func TestDNSPublicKeyProviderDefersRSAPolicyToVerifier(t *testing.T) {
+	tests := []struct {
+		name     string
+		bits     int
+		exponent int
+	}{
+		{name: "exponent three", bits: 1024, exponent: 3},
+		{name: "below minimum", bits: 1023, exponent: 65537},
+		{name: "above maximum", bits: 8193, exponent: 65537},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			expected := dnsPolicyBoundaryRSAKey(tt.bits, tt.exponent)
+			payload := []byte("v=DKIM1; p=" + base64.StdEncoding.EncodeToString(x509.MarshalPKCS1PublicKey(expected)))
+			provider, err := NewDNSPublicKeyProvider(txtTransportFunc(func(context.Context, string) (TXTLookupResult, error) {
+				return mustPublicFoundLookup(t, payload), nil
+			}))
+			if err != nil {
+				t.Fatal(err)
+			}
+			result, lookupErr := provider.LookupPublicKey(context.Background(), newPublicKeyQuery("example.test", "selector", AlgorithmRSASHA256))
+			key, found := result.RSAPublicKey()
+			if lookupErr != nil || result.Status() != PublicKeyStatusFound || !found || key == nil ||
+				key.N.BitLen() != tt.bits || key.E != tt.exponent {
+				t.Fatalf("LookupPublicKey() = %q key=%#v error=%v, want found %d-bit e=%d", result.Status(), key, lookupErr, tt.bits, tt.exponent)
+			}
+
+			verifier, constructErr := NewVerifier(provider, WithVerificationClock(func() time.Time { return time.Unix(publicVectorClock, 0) }))
+			if constructErr != nil {
+				t.Fatalf("NewVerifier() error = %v", constructErr)
+			}
+			verified, verifyErr := verifier.Verify(context.Background(), NewVerifyRequest(publicProviderFixture(t), []byte("<>"), [][]byte{[]byte("<rcpt@example.test>")}))
+			signatures := verified.SignatureSets()
+			if verifyErr != nil || verified.State() != ResultStatePERMERROR || verified.PrimaryReason() != ReasonInvalidKey ||
+				len(signatures) != 1 || signatures[0].Status() != SignatureStatusPERMERROR || signatures[0].Reason() != ReasonInvalidKey {
+				t.Fatalf("Verify() = %q/%q signatures=%#v error=%v, want pre-crypto policy rejection", verified.State(), verified.PrimaryReason(), signatures, verifyErr)
+			}
+		})
+	}
+}
+
+// TestDNSPublicKeyProviderRejectsMalformedRSADER verifies structural decoding still fails closed.
+func TestDNSPublicKeyProviderRejectsMalformedRSADER(t *testing.T) {
+	payload := []byte("v=DKIM1; p=" + base64.StdEncoding.EncodeToString([]byte{0x30, 0x01, 0x02}))
 	provider, err := NewDNSPublicKeyProvider(txtTransportFunc(func(context.Context, string) (TXTLookupResult, error) {
 		return mustPublicFoundLookup(t, payload), nil
 	}))
@@ -151,15 +192,23 @@ func TestDNSPublicKeyProviderDoesNotApplyRSAKeySizePolicy(t *testing.T) {
 		t.Fatal(err)
 	}
 	result, lookupErr := provider.LookupPublicKey(context.Background(), newPublicKeyQuery("example.test", "selector", AlgorithmRSASHA256))
-	key, found := result.RSAPublicKey()
-	if lookupErr != nil || result.Status() != PublicKeyStatusFound || !found || key.N.Cmp(big.NewInt(65539)) != 0 {
-		t.Fatalf("LookupPublicKey() = %q key=%#v error=%v", result.Status(), key, lookupErr)
+	if key, found := result.RSAPublicKey(); lookupErr != nil || result.Status() != PublicKeyStatusInvalid || found || key != nil {
+		t.Fatalf("LookupPublicKey() = %q key=%#v error=%v, want invalid", result.Status(), key, lookupErr)
 	}
+}
+
+// dnsPolicyBoundaryRSAKey constructs a structurally valid RSA key outside verifier policy.
+func dnsPolicyBoundaryRSAKey(bits, exponent int) *rsa.PublicKey {
+	modulus := new(big.Int).Lsh(big.NewInt(1), uint(bits-1))
+	modulus.SetBit(modulus, 0, 1)
+	return &rsa.PublicKey{N: modulus, E: exponent}
 }
 
 // TestDNSPublicKeyProviderAcceptsDNSOptionalBase64Padding verifies DNS-04 p= representation.
 func TestDNSPublicKeyProviderAcceptsDNSOptionalBase64Padding(t *testing.T) {
-	rsaDER := x509.MarshalPKCS1PublicKey(&rsa.PublicKey{N: big.NewInt(65539), E: 3})
+	rsaModulus := new(big.Int).Lsh(big.NewInt(1), 1023)
+	rsaModulus.SetBit(rsaModulus, 0, 1)
+	rsaDER := x509.MarshalPKCS1PublicKey(&rsa.PublicKey{N: rsaModulus, E: 65537})
 	edKey := bytes.Repeat([]byte{0x42}, ed25519.PublicKeySize)
 	for _, tt := range []struct {
 		record    string

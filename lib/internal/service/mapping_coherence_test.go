@@ -221,7 +221,8 @@ func TestKnownVerificationErrorCodesAreExhaustivelyRecognized(t *testing.T) {
 		verify.ErrorCodeSequenceInvalid, verify.ErrorCodeMissingTarget, verify.ErrorCodeDuplicateTarget,
 		verify.ErrorCodeHashMismatch, verify.ErrorCodeSignatureMismatch, verify.ErrorCodeTimestampInvalid,
 		verify.ErrorCodeEnvelopeMismatch, verify.ErrorCodeDomainAlignmentMismatch, verify.ErrorCodeNextDomainMismatch,
-		verify.ErrorCodeMissingNextSignature, verify.ErrorCodeOutOfBandRequired, verify.ErrorCodeInternalMisuse,
+		verify.ErrorCodeMissingNextSignature, verify.ErrorCodeCustodyMismatch, verify.ErrorCodeOutOfBandRequired,
+		verify.ErrorCodeInternalMisuse,
 	}
 	for _, code := range codes {
 		if !knownErrorCode(code) {

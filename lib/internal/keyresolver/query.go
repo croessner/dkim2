@@ -1,26 +1,20 @@
 package keyresolver
 
-import "strings"
+import (
+	"strings"
 
-// Algorithm identifies one supported DNS key lookup algorithm.
-type Algorithm string
+	"github.com/croessner/dkim2/internal/signature"
+)
+
+// Algorithm aliases the signature owner's closed algorithm vocabulary.
+type Algorithm = signature.Algorithm
 
 const (
 	// AlgorithmRSASHA256 identifies an RSA-SHA256 key query.
-	AlgorithmRSASHA256 Algorithm = "rsa-sha256"
+	AlgorithmRSASHA256 = signature.AlgorithmRSASHA256
 	// AlgorithmEd25519SHA256 identifies an Ed25519-SHA256 key query.
-	AlgorithmEd25519SHA256 Algorithm = "ed25519-sha256"
+	AlgorithmEd25519SHA256 = signature.AlgorithmEd25519SHA256
 )
-
-// Known reports whether the algorithm belongs to the closed resolver vocabulary.
-func (a Algorithm) Known() bool {
-	switch a {
-	case AlgorithmRSASHA256, AlgorithmEd25519SHA256:
-		return true
-	default:
-		return false
-	}
-}
 
 // Query owns one validated canonical DNS public-key lookup tuple.
 type Query struct {

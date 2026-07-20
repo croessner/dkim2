@@ -18,6 +18,13 @@ const (
 
 type permanentProviderDeadline struct{}
 
+type typedNilPublicKeyProvider struct{}
+
+// LookupPublicKey panics if a typed-nil provider crosses bridge preflight.
+func (*typedNilPublicKeyProvider) LookupPublicKey(context.Context, PublicKeyQuery) (PublicKeyResult, error) {
+	panic("typed-nil public key provider invoked")
+}
+
 // Error returns a bounded provider-owned deadline diagnostic.
 func (permanentProviderDeadline) Error() string { return "provider deadline" }
 
@@ -27,6 +34,22 @@ func (permanentProviderDeadline) Unwrap() error { return context.DeadlineExceede
 // ProviderErrorClass deliberately supplies an invalid permanent deadline classification.
 func (permanentProviderDeadline) ProviderErrorClass() ProviderErrorClass {
 	return ProviderErrorClassPermanent
+}
+
+// TestPublicProviderBridgeRejectsTypedNilProviderBeforeCallback proves direct
+// internal bridge construction cannot bypass the shared typed-nil guard.
+func TestPublicProviderBridgeRejectsTypedNilProviderBeforeCallback(t *testing.T) {
+	var provider *typedNilPublicKeyProvider
+	_, err := (publicKeyBridge{provider: provider}).LookupKey(
+		context.Background(),
+		verify.KeyQuery{
+			Domain: testSigningDomain, Selector: testSelector,
+			Algorithm: verify.AlgorithmRSASHA256,
+		},
+	)
+	if verify.ProviderFailureClassOf(err) != verify.ProviderFailureContract {
+		t.Fatalf("typed-nil provider failure class = %q", verify.ProviderFailureClassOf(err))
+	}
 }
 
 // TestPublicProviderBridgeClassifiesClosedMatrix verifies error classes without text matching.

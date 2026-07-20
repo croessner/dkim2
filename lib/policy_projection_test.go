@@ -2,6 +2,7 @@ package dkim2
 
 import (
 	"context"
+	"encoding/base64"
 	"strings"
 	"testing"
 	"time"
@@ -130,6 +131,50 @@ func TestFacadeSealsSequenceFailuresAsUnavailableTargets(t *testing.T) {
 			if verifyErr != nil || result.State() != ResultStatePERMERROR || result.PrimaryReason() != ReasonSequenceInvalid || result.Target() != (VerificationTarget{}) ||
 				!result.policyProjection.Valid() || result.policyProjection.Form() != policy.TargetUnavailable || result.policyProjection.PreTargetReason() != policy.PreTargetSequenceInvalid {
 				t.Fatalf("Verify() = %q/%q target=%#v projection=%#v error=%v", result.State(), result.PrimaryReason(), result.Target(), result.policyProjection, verifyErr)
+			}
+		})
+	}
+}
+
+// TestFacadeSealsStructuralCustodyFailuresForPolicy proves pre-target chain rejection retains evaluable provenance.
+func TestFacadeSealsStructuralCustodyFailuresForPolicy(t *testing.T) {
+	digest := base64.StdEncoding.EncodeToString([]byte(strings.Repeat("\x11", 32)))
+	signatureText := base64.StdEncoding.EncodeToString([]byte(strings.Repeat("\x22", 128)))
+	ordinaryMismatch := "From: sender@example.test\r\n" +
+		"Message-Instance: m=1; h=sha256:" + digest + ":" + digest + ";\r\n" +
+		"DKIM2-Signature: i=1; m=1; t=1700000000; mf=PGFAb3JpZ2luLnRlc3Q+; rt=PGJAcmVsYXkudGVzdD4=; d=origin.test; s=selector.test:rsa-sha256:" + signatureText + ";\r\n" +
+		"DKIM2-Signature: i=2; m=1; t=1700000000; mf=PGJAZXZpbC50ZXN0Pg==; rt=PGNAZmluYWwudGVzdD4=; d=evil.test; s=selector.test:rsa-sha256:" + signatureText + ";\r\n\r\nbody\r\n"
+	nextDomainMismatch := "From: sender@example.test\r\n" +
+		"Message-Instance: m=1; h=sha256:" + digest + ":" + digest + ";\r\n" +
+		"DKIM2-Signature: i=1; m=1; t=1700000000; nd=wrong.example.test; d=first.example.test; s=selector.test:rsa-sha256:" + signatureText + ";\r\n" +
+		"DKIM2-Signature: i=2; m=1; t=1700000000; mf=PD4=; rt=PHJjcHRAZXhhbXBsZS50ZXN0Pg==; d=next.example.test; s=selector.test:rsa-sha256:" + signatureText + ";\r\n\r\nbody\r\n"
+	verifier, err := NewVerifier(publicProviderFunc(func(context.Context, PublicKeyQuery) (PublicKeyResult, error) {
+		return MissingPublicKey(AlgorithmRSASHA256), nil
+	}), WithVerificationClock(func() time.Time { return time.Unix(1700000000, 0) }))
+	if err != nil {
+		t.Fatalf("NewVerifier() error = %v", err)
+	}
+	tests := []struct {
+		name    string
+		raw     string
+		custody CustodyStructure
+	}{
+		{"ordinary adjacency", ordinaryMismatch, CustodyStructureNotEvaluated},
+		{"next-domain mismatch", nextDomainMismatch, CustodyStructureNDLinksEvaluated},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			result, verifyErr := verifier.Verify(context.Background(), NewVerifyRequest([]byte(test.raw), nil, nil))
+			if verifyErr != nil {
+				t.Fatalf("Verify() error = %v", verifyErr)
+			}
+			if result.State() != ResultStatePERMERROR || result.PrimaryReason() != ReasonMalformedProtocol || result.CustodyStructure() != test.custody || result.Target() != (VerificationTarget{}) ||
+				!result.policyProjection.Valid() || result.policyProjection.Form() != policy.TargetUnavailable || result.policyProjection.PreTargetReason() != policy.PreTargetMalformedProtocol {
+				t.Fatalf("custody result = %q/%q/%q target=%#v projection=%#v", result.State(), result.PrimaryReason(), result.CustodyStructure(), result.Target(), result.policyProjection)
+			}
+			decision, evaluateErr := EvaluatePolicy(result)
+			if evaluateErr != nil || decision.VerificationState() != ResultStatePERMERROR || decision.Verdict() != PolicyVerdictReject || decision.PrimaryReason() != PolicyReasonProtocolPermerror {
+				t.Fatalf("EvaluatePolicy() = state=%q verdict=%q reason=%q error=%v", decision.VerificationState(), decision.Verdict(), decision.PrimaryReason(), evaluateErr)
 			}
 		})
 	}

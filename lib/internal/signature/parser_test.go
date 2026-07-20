@@ -58,7 +58,7 @@ func TestParseAcceptsDKIM2Signature(t *testing.T) {
 	if len(sets) != 1 {
 		t.Fatalf("SignatureSets() length = %d, want 1", len(sets))
 	}
-	if sets[0].Selector() != testSelector || sets[0].Algorithm() != AlgorithmEd25519SHA256 || !sets[0].KnownAlgorithm() {
+	if sets[0].Selector() != testSelector || Algorithm(sets[0].Algorithm()) != AlgorithmEd25519SHA256 || !sets[0].KnownAlgorithm() {
 		t.Fatalf("signature set metadata = %#v", sets[0])
 	}
 	if sets[0].Signature().DecodedLen() != 64 {
@@ -232,11 +232,11 @@ func TestParseRejectsInvalidDomains(t *testing.T) {
 func TestParseRejectsMalformedSignatureSets(t *testing.T) {
 	tests := []string{
 		"",
-		"selector",
-		"selector:ed25519-sha256",
-		"selector:ed25519-sha256:" + base64OfByte(0xaa, 64) + ":extra",
+		signatureTestSelector,
+		signatureTestSelector + ":ed25519-sha256",
+		signatureTestSelector + ":ed25519-sha256:" + base64OfByte(0xaa, 64) + ":extra",
 		":ed25519-sha256:" + base64OfByte(0xaa, 64),
-		"selector::" + base64OfByte(0xaa, 64),
+		signatureTestSelector + "::" + base64OfByte(0xaa, 64),
 	}
 
 	for _, value := range tests {

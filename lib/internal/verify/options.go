@@ -5,16 +5,19 @@ import (
 	"time"
 
 	"github.com/croessner/dkim2/internal/canonical"
+	"github.com/croessner/dkim2/internal/cryptodkim2"
+	"github.com/croessner/dkim2/internal/niliface"
 	"github.com/croessner/dkim2/internal/recipe"
+	"github.com/croessner/dkim2/internal/signature"
 )
 
 const (
 	// DraftBaseline identifies the active DKIM2 verification draft.
 	DraftBaseline = "draft-ietf-dkim-dkim2-spec-04"
 	// AlgorithmRSASHA256 identifies RSA with SHA-256 and PKCS#1 v1.5 verification.
-	AlgorithmRSASHA256 Algorithm = "rsa-sha256"
+	AlgorithmRSASHA256 = signature.AlgorithmRSASHA256
 	// AlgorithmEd25519SHA256 identifies Ed25519 verification over SHA-256 digest bytes.
-	AlgorithmEd25519SHA256 Algorithm = "ed25519-sha256"
+	AlgorithmEd25519SHA256 = signature.AlgorithmEd25519SHA256
 	// AlgorithmUnknown is the bounded result token for algorithms outside the active contract.
 	AlgorithmUnknown Algorithm = "unknown"
 )
@@ -27,8 +30,8 @@ const (
 	defaultMaxSignatureAge       = 14 * 24 * time.Hour
 )
 
-// Algorithm identifies a safe DKIM2 signature algorithm token.
-type Algorithm string
+// Algorithm aliases the signature owner's closed algorithm vocabulary.
+type Algorithm = signature.Algorithm
 
 // Clock returns the verification time used by timestamp policy.
 type Clock func() time.Time
@@ -41,6 +44,8 @@ type Options struct {
 	TimestampPolicy TimestampPolicy
 	// Limits bounds verification result and request dimensions.
 	Limits Limits
+	// RevisionLimits bounds cumulative all-hop revision proof work.
+	RevisionLimits RevisionLimits
 	// Clock supplies deterministic current time for timestamp checks.
 	Clock Clock
 }
@@ -50,10 +55,15 @@ type Option func(*Options)
 
 // Verifier owns validated verification dependencies and policies.
 type Verifier struct {
-	keyProvider KeyProvider
-	options     Options
-	history     HistoryCoordinator
+	keyProvider     KeyProvider
+	options         Options
+	history         HistoryCoordinator
+	revisionHistory HistoryCoordinator
+	revisionOwner   *revisionInstantOwner
 }
+
+// revisionInstantOwner gives copied Verifier values one stable opaque clock identity.
+type revisionInstantOwner struct{ marker byte }
 
 // AlgorithmPolicy contains fail-closed signature algorithm settings.
 type AlgorithmPolicy struct {
@@ -61,6 +71,8 @@ type AlgorithmPolicy struct {
 	AllowedAlgorithms []Algorithm
 	// MinRSABits is the minimum accepted RSA public key size for verification.
 	MinRSABits int
+	// MaxRSABits is the narrowable maximum accepted RSA public key size.
+	MaxRSABits int
 }
 
 // TimestampPolicy contains local timestamp validation settings.
@@ -81,13 +93,40 @@ type Limits struct {
 	MaxEnvelopeRecipients int
 }
 
+// RevisionLimits contains cumulative all-hop proof ceilings.
+type RevisionLimits struct {
+	// MaxProtocolFields bounds inherited Message-Instance and DKIM2-Signature fields.
+	MaxProtocolFields int
+	// MaxTotalSignatureSets bounds sets across all inherited signature fields.
+	MaxTotalSignatureSets int
+	// MaxPublicKeyLookups bounds supported inherited sets and provider calls.
+	MaxPublicKeyLookups int
+	// MaxCanonicalWorkBytes bounds aggregate Section 9.6 canonical input bytes.
+	MaxCanonicalWorkBytes int
+	// MaxSignatureInputBytes bounds one Section 9.6 canonical input.
+	MaxSignatureInputBytes int
+	// MaxDecodedRecipeBytes bounds each inherited decoded recipe.
+	MaxDecodedRecipeBytes int
+}
+
 // DefaultOptions returns restrictive verifier defaults except for the injected key provider.
 func DefaultOptions() Options {
 	return Options{
 		AlgorithmPolicy: DefaultAlgorithmPolicy(),
 		TimestampPolicy: DefaultTimestampPolicy(),
 		Limits:          DefaultLimits(),
+		RevisionLimits:  DefaultRevisionLimits(),
 		Clock:           systemClock,
+	}
+}
+
+// DefaultRevisionLimits returns the signing-contract all-hop hard ceilings.
+func DefaultRevisionLimits() RevisionLimits {
+	return RevisionLimits{
+		MaxProtocolFields: 256, MaxTotalSignatureSets: 256,
+		MaxPublicKeyLookups: 256, MaxCanonicalWorkBytes: 64 * 1024 * 1024,
+		MaxSignatureInputBytes: canonical.DefaultLimits().MaxSignatureInputBytes,
+		MaxDecodedRecipeBytes:  recipe.DefaultLimits().MaxDecodedRecipeBytes,
 	}
 }
 
@@ -96,6 +135,7 @@ func DefaultAlgorithmPolicy() AlgorithmPolicy {
 	return AlgorithmPolicy{
 		AllowedAlgorithms: []Algorithm{AlgorithmRSASHA256, AlgorithmEd25519SHA256},
 		MinRSABits:        defaultRSAMinBits,
+		MaxRSABits:        cryptodkim2.DefaultLimits().MaxRSABits,
 	}
 }
 
@@ -137,6 +177,13 @@ func WithLimits(limits Limits) Option {
 	}
 }
 
+// WithRevisionLimits replaces cumulative all-hop proof ceilings.
+func WithRevisionLimits(limits RevisionLimits) Option {
+	return func(options *Options) {
+		options.RevisionLimits = limits
+	}
+}
+
 // WithClock replaces the verifier clock.
 func WithClock(clock Clock) Option {
 	return func(options *Options) {
@@ -146,7 +193,7 @@ func WithClock(clock Clock) Option {
 
 // NewVerifier constructs a verifier with validated dependencies and policies.
 func NewVerifier(provider KeyProvider, options ...Option) (Verifier, error) {
-	if provider == nil {
+	if nilKeyProvider(provider) {
 		return Verifier{}, invalidOptionError("key_provider", 0)
 	}
 
@@ -159,7 +206,15 @@ func NewVerifier(provider KeyProvider, options ...Option) (Verifier, error) {
 	if err := resolved.Validate(); err != nil {
 		return Verifier{}, err
 	}
-	parser, err := recipe.NewParser(recipe.Limits{})
+	recipeLimits := recipe.DefaultLimits()
+	recipeLimits.MaxDecodedRecipeBytes = resolved.RevisionLimits.MaxDecodedRecipeBytes
+	recipeLimits.MaxTotalLiteralBytes = min(
+		recipeLimits.MaxTotalLiteralBytes, recipeLimits.MaxDecodedRecipeBytes,
+	)
+	recipeLimits.MaxDataStringBytes = min(
+		recipeLimits.MaxDataStringBytes, recipeLimits.MaxTotalLiteralBytes,
+	)
+	revisionParser, err := recipe.NewParser(recipeLimits)
 	if err != nil {
 		return Verifier{}, invalidOptionError("history_parser", 0)
 	}
@@ -171,16 +226,31 @@ func NewVerifier(provider KeyProvider, options ...Option) (Verifier, error) {
 	if err != nil {
 		return Verifier{}, invalidOptionError("history_canonicalizer", 0)
 	}
+	parser, err := recipe.NewParser(recipe.Limits{})
+	if err != nil {
+		return Verifier{}, invalidOptionError("history_parser", 0)
+	}
 	history, err := NewHistoryCoordinator(parser, applier, canonicalizer, HistoryLimits{})
 	if err != nil {
 		return Verifier{}, invalidOptionError("history_coordinator", 0)
 	}
+	revisionHistory, err := NewHistoryCoordinator(revisionParser, applier, canonicalizer, HistoryLimits{})
+	if err != nil {
+		return Verifier{}, invalidOptionError("revision_history_coordinator", 0)
+	}
 
 	return Verifier{
-		keyProvider: provider,
-		options:     resolved.clone(),
-		history:     history,
+		keyProvider:     provider,
+		options:         resolved.clone(),
+		history:         history,
+		revisionHistory: revisionHistory,
+		revisionOwner:   &revisionInstantOwner{marker: 1},
 	}, nil
+}
+
+// nilKeyProvider reports nil and typed-nil key-provider dependencies without invoking them.
+func nilKeyProvider(provider KeyProvider) bool {
+	return niliface.IsNil(provider)
 }
 
 // Validate rejects unsafe verifier options before verification begins.
@@ -197,13 +267,43 @@ func (o Options) Validate() error {
 	if err := o.Limits.Validate(); err != nil {
 		return err
 	}
+	if err := o.RevisionLimits.Validate(); err != nil {
+		return err
+	}
 
+	return nil
+}
+
+// Validate rejects nonpositive or widened all-hop proof ceilings.
+func (l RevisionLimits) Validate() error {
+	hard := DefaultRevisionLimits()
+	values := []struct {
+		name string
+		got  int
+		max  int
+	}{
+		{"max_protocol_fields", l.MaxProtocolFields, hard.MaxProtocolFields},
+		{"max_total_signature_sets", l.MaxTotalSignatureSets, hard.MaxTotalSignatureSets},
+		{"max_public_key_lookups", l.MaxPublicKeyLookups, hard.MaxPublicKeyLookups},
+		{"max_canonical_work_bytes", l.MaxCanonicalWorkBytes, hard.MaxCanonicalWorkBytes},
+		{"max_signature_input_bytes", l.MaxSignatureInputBytes, hard.MaxSignatureInputBytes},
+		{"max_decoded_recipe_bytes", l.MaxDecodedRecipeBytes, hard.MaxDecodedRecipeBytes},
+	}
+	for _, value := range values {
+		if value.got <= 0 || value.got > value.max {
+			return invalidOptionError(value.name, value.got)
+		}
+	}
+	if l.MaxPublicKeyLookups > l.MaxTotalSignatureSets {
+		return invalidOptionError("max_public_key_lookups", l.MaxPublicKeyLookups)
+	}
 	return nil
 }
 
 // Validate rejects unsafe signature algorithm policy settings.
 func (p AlgorithmPolicy) Validate() error {
-	if p.MinRSABits < defaultRSAMinBits {
+	if p.MinRSABits < defaultRSAMinBits || p.MaxRSABits > cryptodkim2.DefaultLimits().MaxRSABits ||
+		p.MaxRSABits < p.MinRSABits {
 		return invalidOptionError("rsa_min_bits", p.MinRSABits)
 	}
 	if len(p.AllowedAlgorithms) == 0 {
@@ -290,12 +390,7 @@ func (o Options) clone() Options {
 
 // knownAlgorithm reports whether algorithm is defined by the active verification contract.
 func knownAlgorithm(algorithm Algorithm) bool {
-	switch algorithm {
-	case AlgorithmRSASHA256, AlgorithmEd25519SHA256:
-		return true
-	default:
-		return false
-	}
+	return algorithm.Known()
 }
 
 // systemClock returns wall-clock time for default timestamp policy.

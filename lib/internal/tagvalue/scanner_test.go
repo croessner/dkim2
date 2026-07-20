@@ -224,6 +224,7 @@ func TestScanRejectsDuplicateKnownAndExtensionTags(t *testing.T) {
 		wantTag string
 	}{
 		{name: "known", in: "m=1; m=2;", wantTag: "m"},
+		{name: "caller-known extension", in: "empty=1; empty=2;", wantTag: "empty"},
 		{name: "extension", in: "x_ext=1; x_ext=2;", wantTag: ""},
 	}
 
@@ -282,8 +283,7 @@ func TestScannerErrorStringIsBoundedAndSecretSafe(t *testing.T) {
 	secretValue := "mf=<secret@example.test>; token=password"
 	err := NewError(ErrorCode(secretValue), ErrorLocation{Offset: 8, TagIndex: 1}, ErrorDetails{
 		Class:     ErrorClassMalformed,
-		TagName:   secretValue,
-		LimitName: secretValue,
+		LimitName: LimitName(secretValue),
 		Limit:     64,
 		Count:     128,
 	})
@@ -294,8 +294,8 @@ func TestScannerErrorStringIsBoundedAndSecretSafe(t *testing.T) {
 			t.Fatalf("error string leaked raw context %q in %q", forbidden, message)
 		}
 	}
-	if !strings.Contains(message, "code=redacted") {
-		t.Fatalf("error string %q does not redact unsafe code", message)
+	if !strings.Contains(message, "code=invalid_options") {
+		t.Fatalf("error string %q does not normalize unsafe code", message)
 	}
 	if !strings.Contains(message, "offset=8") || !strings.Contains(message, "count=128") {
 		t.Fatalf("error string %q does not contain bounded metadata", message)

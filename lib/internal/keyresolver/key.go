@@ -5,9 +5,8 @@ import (
 	"crypto/ed25519"
 	"crypto/rsa"
 	"crypto/x509"
-	"math/big"
 
-	"github.com/croessner/dkim2/internal/verify"
+	"github.com/croessner/dkim2/internal/cryptodkim2"
 )
 
 // KeyOutcomeStatus identifies one closed structural key-decoding result.
@@ -78,7 +77,7 @@ func (o KeyOutcome) Valid() bool {
 		switch o.algorithm {
 		case AlgorithmRSASHA256:
 			key, ok := o.material.(*rsa.PublicKey)
-			return ok && verify.ValidRSAPublicKeyStructure(key)
+			return ok && cryptodkim2.ValidRSAPublicKeyStructure(key)
 		case AlgorithmEd25519SHA256:
 			key, ok := o.material.(ed25519.PublicKey)
 			return ok && len(key) == ed25519.PublicKeySize
@@ -129,12 +128,12 @@ func DecodeKey(record Record, requested Algorithm) (KeyOutcome, error) {
 	switch requested {
 	case AlgorithmRSASHA256:
 		key, err := x509.ParsePKCS1PublicKey(data)
-		if err != nil || !verify.ValidRSAPublicKeyStructure(key) {
+		if err != nil || !cryptodkim2.ValidRSAPublicKeyStructure(key) {
 			base.status = KeyOutcomeInvalid
 			return base, nil
 		}
 		base.status = KeyOutcomeFound
-		base.material = cloneRSAKey(key)
+		base.material = cryptodkim2.ClonePublicKey(key)
 		return base, nil
 	case AlgorithmEd25519SHA256:
 		if len(data) != ed25519.PublicKeySize {
@@ -157,20 +156,5 @@ func keyTypeMatchesAlgorithm(keyType KeyType, algorithm Algorithm) bool {
 
 // cloneKeyMaterial returns a detached copy of supported key material.
 func cloneKeyMaterial(material any) any {
-	switch key := material.(type) {
-	case *rsa.PublicKey:
-		return cloneRSAKey(key)
-	case ed25519.PublicKey:
-		return ed25519.PublicKey(bytes.Clone(key))
-	default:
-		return nil
-	}
-}
-
-// cloneRSAKey returns an independent RSA public key.
-func cloneRSAKey(key *rsa.PublicKey) *rsa.PublicKey {
-	if key == nil || key.N == nil {
-		return nil
-	}
-	return &rsa.PublicKey{N: new(big.Int).Set(key.N), E: key.E}
+	return cryptodkim2.ClonePublicKey(material)
 }

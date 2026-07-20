@@ -63,6 +63,8 @@ const (
 	ErrorCodeNextDomainMismatch ErrorCode = "next_domain_mismatch"
 	// ErrorCodeMissingNextSignature reports nd= without its immediate successor signature.
 	ErrorCodeMissingNextSignature ErrorCode = "missing_next_signature"
+	// ErrorCodeCustodyMismatch reports an invalid ordinary or mixed custody transition.
+	ErrorCodeCustodyMismatch ErrorCode = "custody_mismatch"
 	// ErrorCodeOutOfBandRequired reports terminal nd= requiring unavailable OOB acceptance.
 	ErrorCodeOutOfBandRequired ErrorCode = "out_of_band_required"
 	// ErrorCodeInternalMisuse reports invalid internal verifier API use.
@@ -115,6 +117,8 @@ const (
 	ErrorClassEnvelope ErrorClass = "envelope"
 	// ErrorClassNextDomain classifies nd= chain validation failures.
 	ErrorClassNextDomain ErrorClass = "next_domain"
+	// ErrorClassCustody classifies complete custody-chain validation failures.
+	ErrorClassCustody ErrorClass = "custody"
 	// ErrorClassInternal classifies package misuse not derived from message input.
 	ErrorClassInternal ErrorClass = "internal"
 )
@@ -445,6 +449,8 @@ func classForCode(code ErrorCode) ErrorClass {
 		return ErrorClassEnvelope
 	case ErrorCodeNextDomainMismatch, ErrorCodeMissingNextSignature:
 		return ErrorClassNextDomain
+	case ErrorCodeCustodyMismatch:
+		return ErrorClassCustody
 	case ErrorCodeInternalMisuse, ErrorCodeHistoryInvalidState, ErrorCodeHistoryInternalContract:
 		return ErrorClassInternal
 	case ErrorCodeHistoryInstanceNotAdjacent:

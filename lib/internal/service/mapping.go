@@ -757,7 +757,7 @@ func knownErrorCode(code verify.ErrorCode) bool {
 		verify.ErrorCodeMissingTarget, verify.ErrorCodeDuplicateTarget, verify.ErrorCodeHashMismatch,
 		verify.ErrorCodeSignatureMismatch, verify.ErrorCodeTimestampInvalid, verify.ErrorCodeEnvelopeMismatch,
 		verify.ErrorCodeDomainAlignmentMismatch, verify.ErrorCodeNextDomainMismatch, verify.ErrorCodeMissingNextSignature,
-		verify.ErrorCodeOutOfBandRequired, verify.ErrorCodeInternalMisuse:
+		verify.ErrorCodeCustodyMismatch, verify.ErrorCodeOutOfBandRequired, verify.ErrorCodeInternalMisuse:
 		return true
 	default:
 		return false

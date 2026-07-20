@@ -2,8 +2,8 @@ package dkim2
 
 import (
 	"context"
-	"reflect"
 
+	"github.com/croessner/dkim2/internal/niliface"
 	"github.com/croessner/dkim2/internal/policy"
 	"github.com/croessner/dkim2/internal/service"
 )
@@ -72,14 +72,5 @@ func publicPreflightLimitResult() VerifyResult {
 
 // nilPublicKeyProvider reports nil and typed-nil interface dependencies.
 func nilPublicKeyProvider(provider PublicKeyProvider) bool {
-	if provider == nil {
-		return true
-	}
-	value := reflect.ValueOf(provider)
-	switch value.Kind() {
-	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
-		return value.IsNil()
-	default:
-		return false
-	}
+	return niliface.IsNil(provider)
 }

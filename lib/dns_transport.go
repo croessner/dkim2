@@ -5,10 +5,10 @@ import (
 	"context"
 	"errors"
 	"net"
-	"reflect"
 	"time"
 
 	"github.com/croessner/dkim2/internal/keyresolver"
+	"github.com/croessner/dkim2/internal/niliface"
 )
 
 const hardMaxTXTRecordPayloadBytes = 64 << 10
@@ -181,16 +181,7 @@ func newNetTXTTransport(resolver netTXTLookupResolver) (*NetTXTTransport, error)
 
 // nilTXTLookupResolver reports nil and typed-nil resolver dependencies.
 func nilTXTLookupResolver(resolver netTXTLookupResolver) bool {
-	if resolver == nil {
-		return true
-	}
-	value := reflect.ValueOf(resolver)
-	switch value.Kind() {
-	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
-		return value.IsNil()
-	default:
-		return false
-	}
+	return niliface.IsNil(resolver)
 }
 
 // LookupTXT preserves returned RR boundaries and reports zero TTL provenance.
