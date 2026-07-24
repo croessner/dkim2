@@ -194,7 +194,7 @@ func newPublicSigningFixture(t *testing.T) publicSigningFixture {
 	if err != nil {
 		t.Fatalf("NewPrivateKeyHandle() error = %v", err)
 	}
-	credential, err := NewRSASigningCredential("rsa", &rsaKey.PublicKey, handle)
+	credential, err := NewRSASigningCredential(testRSASelector, &rsaKey.PublicKey, handle)
 	if err != nil {
 		t.Fatalf("NewRSASigningCredential() error = %v", err)
 	}
@@ -325,8 +325,8 @@ func TestPublicOriginatorSigningAlgorithmsAndImmutableBytes(t *testing.T) {
 		profile    func(PrivateKeyHandle, PrivateKeyHandle) (SigningProfile, error)
 		algorithms []Algorithm
 	}{
-		{name: "rsa", algorithms: []Algorithm{AlgorithmRSASHA256}, profile: func(rsaHandle, _ PrivateKeyHandle) (SigningProfile, error) {
-			credential, credentialErr := NewRSASigningCredential("rsa", &rsaKey.PublicKey, rsaHandle)
+		{name: testRSASelector, algorithms: []Algorithm{AlgorithmRSASHA256}, profile: func(rsaHandle, _ PrivateKeyHandle) (SigningProfile, error) {
+			credential, credentialErr := NewRSASigningCredential(testRSASelector, &rsaKey.PublicKey, rsaHandle)
 			if credentialErr != nil {
 				return SigningProfile{}, credentialErr
 			}
@@ -340,7 +340,7 @@ func TestPublicOriginatorSigningAlgorithmsAndImmutableBytes(t *testing.T) {
 			return NewEd25519SigningProfile("example.test", credential)
 		}},
 		{name: "dual", algorithms: []Algorithm{AlgorithmRSASHA256, AlgorithmEd25519SHA256}, profile: func(rsaHandle, edHandle PrivateKeyHandle) (SigningProfile, error) {
-			rsaCredential, credentialErr := NewRSASigningCredential("rsa", &rsaKey.PublicKey, rsaHandle)
+			rsaCredential, credentialErr := NewRSASigningCredential(testRSASelector, &rsaKey.PublicKey, rsaHandle)
 			if credentialErr != nil {
 				return SigningProfile{}, credentialErr
 			}
@@ -444,8 +444,8 @@ func TestPublicInvalidTransportFailsBeforeCallbacksAndRestrictedAPIHasNoBytes(t 
 	if err != nil {
 		t.Fatalf("NewSigner() error = %v", err)
 	}
-	handle, _ := NewPrivateKeyHandle([]byte("rsa"))
-	credential, _ := NewRSASigningCredential("rsa", &rsaKey.PublicKey, handle)
+	handle, _ := NewPrivateKeyHandle([]byte(testRSASelector))
+	credential, _ := NewRSASigningCredential(testRSASelector, &rsaKey.PublicKey, handle)
 	profile, _ := NewRSASigningProfile("example.test", credential)
 	raw := []byte("From: a@example.test\r\n\r\nbody\r\n")
 	source, _ := NewSigningSource(raw)

@@ -238,7 +238,7 @@ func TestResolverRejectsInvalidQueriesBeforeTransport(t *testing.T) {
 		algorithm        Algorithm
 	}{
 		{domain: "bad_domain.test", selector: testSelector, algorithm: AlgorithmRSASHA256},
-		{domain: "example.test", selector: "bad_selector", algorithm: AlgorithmRSASHA256},
+		{domain: testSigningDomain, selector: "bad_selector", algorithm: AlgorithmRSASHA256},
 	} {
 		outcome, resolveErr := resolver.Resolve(context.Background(), request.domain, request.selector, request.algorithm)
 		if resolveErr != nil || outcome.Status() != KeyOutcomeProviderContract {

@@ -13,8 +13,8 @@
 | Language | English |
 | Classification | Internal design draft |
 | Baseline specification | `draft-ietf-dkim-dkim2-spec-04`, dated 2026-07-05 |
-| Related specification | `draft-chuang-dkim2-dns-04`, dated 2026-03-18 |
-| Baseline status check | Datatracker checked 2026-07-10; DKIM2 spec latest and repository behavior baseline are `-04`; DKIM2 DNS latest remains `-04` |
+| Related specification | M11 tested behavior baseline: `draft-chuang-dkim2-dns-04`, dated 2026-03-18; replaced by `draft-ietf-dkim-dkim2-dns-00` on 2026-07-20 |
+| Baseline status check | Datatracker checked 2026-07-24; the repository behavior and vectors remain pinned to `draft-ietf-dkim-dkim2-spec-04` plus the historical DNS `-04` identifier. The active working-group DNS `-00` has a normatively identical body. Identifier/vector migration is deferred to a separately reviewed baseline update. |
 | Change control | While this document is still `0.1.0-draft`, startup decisions may be added without a version bump; after the first committed planning baseline, material architecture changes require a revision-history entry and may require a new version |
 | Supersedes | None |
 | Next planned revision | Before the first public preview, or when the DKIM2 draft changes materially |
@@ -30,6 +30,7 @@
 | 0.1.0-draft | 2026-07-13 | Christian Roessner / Codex | Specified M9 recipe generation as a deterministic bounded inverse operation: canonical-owned header relevance, exact unfolded/header and framed-body semantics, explicit body-unavailable policy, compact decoded JSON, and internal M8 parse/apply proof. Message-Instance formatting and hash-gated signing remain M10 ownership. |
 | 0.1.0-draft | 2026-07-13 | Christian Roessner / Codex | Completed M9 inverse recipe generation with deterministic non-minimal planning, explicit disclosure and body-unavailable policies, compact decoded JSON, strict parse/apply/self-proof, draft-versioned golden/fuzz evidence, abuse/race/privacy/dependency coverage, and unchanged M10 ownership of revision hash gating, Message-Instance formatting, and signing. |
 | 0.1.0-draft | 2026-07-23 | Christian Roessner / Codex | Completed signing and revision support: sealed all-hop revision evidence, exact hash-gated roles, deterministic Message-Instance and DKIM2-Signature generation, opaque RSA/Ed25519 signing, shared custody validation, authority-bound fanout and restricted release, next-domain creation/continuation/completion, public facade integration, and draft-04 vectors/fuzz/privacy/race evidence. |
+| 0.1.0-draft | 2026-07-24 | Christian Roessner / Codex | Completed storage-neutral datasource contracts, immutable memory and confined flat-file providers, the exact opaque-handle signing bridge, LDAP/SQL design mappings, and provider parity/fuzz/race/privacy/dependency evidence. Replay storage remains M12. Recorded the DNS draft rename without silently rebasing behavior or vectors. |
 
 ## 1. Purpose
 
@@ -38,10 +39,15 @@ implementation of DKIM2. The immediate goal is not to freeze a final public API.
 The goal is to establish precise implementation boundaries before protocol code
 is written.
 
-The design assumes the current DKIM2 draft as the working source of truth:
+The design uses these reviewed behavior baselines as its source of truth:
 
 - `draft-ietf-dkim-dkim2-spec-04`
-- `draft-chuang-dkim2-dns-04`
+- `draft-chuang-dkim2-dns-04` for the implemented DNS behavior and vectors.
+
+The IETF replaced the DNS document with the working-group
+`draft-ietf-dkim-dkim2-dns-00` on 2026-07-20. Its normative body is unchanged.
+The repository does not silently rename baselines: durable identifiers and
+versioned vectors migrate together in a separately reviewed update.
 
 The DKIM2 specification is still in draft form. The implementation must
 therefore make draft-version dependencies explicit in code, tests, vectors, and
@@ -620,27 +626,43 @@ Design notes:
 
 ### 5.8 `lib/internal/datasource`
 
-Defines storage-facing abstractions needed by DKIM2 services without binding
-the reference library to LDAP, SQL, flat files, or a specific secret store.
+Defines storage-facing abstractions and first providers without binding
+protocol code to service frameworks, LDAP, SQL, or a specific secret store.
 
 Responsibilities:
 
-- Define context-aware interfaces for retrieving signing profiles, selector
-  policy, private-key handles, domain policy, replay metadata, and tenant-level
-  defaults.
+- Define two context-aware exact lookup operations for immutable signing
+  profiles and administrative tenant/domain/use policies.
+- Own validated opaque profile, tenant, feedback-route, and private-key-handle
+  identifiers plus closed provider states, limits, usage, and typed errors.
+- Return self-contained same-generation results so policy, profile, and handle
+  facts cannot mix across reloads.
+- Provide an immutable static memory provider and a strict bounded JSON
+  flat-file provider.
+- Confine flat-file loading to one owned duplicated directory descriptor and
+  publish complete reload generations atomically.
+- Keep a failed-reload snapshot only for explicit recovery while making every
+  later resolve unavailable until a successful reload.
 - Keep provider-specific types out of protocol packages.
-- Separate read-only protocol lookup paths from operational mutation paths.
-- Represent unavailable, ambiguous, malformed, and unauthorized data as typed
-  errors.
+- Distinguish absence, ambiguity, inactivity, malformed data, limit failures,
+  unavailability, platform limits, cancellation, and internal invariants.
 - Support deterministic fake sources for unit and vector tests.
 
 Design notes:
 
-- The library should define contracts; concrete LDAP, SQL, and flat-file
-  providers belong in service modules or explicit provider packages.
-- Private key material should be exposed through signing handles or callback
-  interfaces, not raw byte slices, unless a test fixture explicitly requires
-  raw key material.
+- `lib/internal/datasource/memory` depends only on datasource core.
+  `lib/internal/datasource/flatfile` additionally composes the immutable memory
+  provider after strict decoding. Neither imports signing or service
+  dependencies. `lib/internal/datasource/signingprofile` is the sole package
+  that imports both datasource and signing.
+- The signing bridge maps exact provider-neutral handle IDs through an
+  immutable registry to existing inert signing handles. Providers never return
+  private-key material, key paths, signers, callbacks, or capabilities.
+- Datasource success is administrative selection only. It does not replace
+  M10's fresh DNS publication check, hash/recipe/custody validation, route
+  authorization, or private signing callback.
+- LDAP and SQL remain design-only and executable providers remain deferred.
+- Replay interfaces, keys, retention, and providers belong entirely to M12.
 - Datasource failures that affect verification or signing correctness should
   fail closed by default.
 
@@ -1175,25 +1197,28 @@ header_hash
 
 ### 7.4 Datasource Provider Model
 
-The implementation will likely need operational data beyond DNS:
+The implemented M11 datasource domain owns these operational facts beyond DNS:
 
 - Signing profiles.
-- Selector-to-key mapping.
-- Private-key handles or key references.
-- Domain and tenant policy.
-- Optional replay or seen-message metadata.
+- Exact selector/algorithm/public-key-to-opaque-handle bindings inside a
+  profile.
+- Exact domain and tenant policy selected by `(tenant, domain, use)`.
 - Optional feedback routing policy.
-- Compatibility or rollout flags.
+- Strict compatibility and closed rollout state.
 
-This should be modeled as datasource interfaces, not as a concrete database
-dependency in the protocol core.
+The provider interface exposes exact `ResolveProfile` and `ResolvePolicy`
+operations. Both return immutable complete same-generation results. There is no
+wildcard, suffix, tenant-default, provider-chain, first-row, or stale-snapshot
+fallback.
 
 General datasource provider classes:
 
 - In-memory provider for tests and examples.
 - Flat-file provider for the first public preview.
-- LDAP provider after the first public preview.
-- SQL provider after the first public preview.
+- LDAP provider after the first public preview; its exact mapping and
+  consistency contract is design-only.
+- SQL provider after the first public preview; its exact mapping and
+  transaction contract is design-only.
 
 Replay storage is modeled separately in the replay-store interface. Valkey is
 the default production replay backend, but it must not become the general
@@ -1203,12 +1228,15 @@ Provider rules:
 
 - Operations are context-aware and bounded.
 - Provider-specific identifiers do not leak into protocol packages.
-- Secrets are returned as protected values or signing handles.
+- Only provider-neutral opaque handle IDs cross provider boundaries as
+  private-key references; no private key or signing capability crosses. The
+  sole signing bridge maps those IDs to inert handles.
 - Missing required data fails closed.
 - Ambiguous data is a distinct error, not a silent fallback.
-- Read-only lookup paths are separated from mutation paths.
-- Unit tests use fake providers; integration tests may use real provider
-  processes.
+- Flat-file reload is explicit, serialized, transactional, and unavailable
+  while degraded; there is no background watch, retry, or stale serving.
+- Memory and flat-file providers share parity and signing-boundary integration
+  evidence.
 
 ### 7.5 Replay Store Model
 
@@ -1748,7 +1776,7 @@ maintainers to understand why behavior exists.
 | M8 - Recipe application | Completed: strict JSON recipe parser, bounded immutable reconstruction, null-body state, previous-instance hash validation, resource abuse/fuzz/race tests, and draft-04 golden fixture | Exact total unavailable; retained prompt spans are recorded in the ignored timing ledger referenced by the durable M8 spec without inferring missing starts | High; completed with independent normative and architecture review |
 | M9 - Recipe generation | Completed: deterministic inverse header/body planning, non-minimal compact decoded JSON, explicit policies, strict self-proof, and draft-versioned golden/fuzz/abuse/race/privacy evidence | Retained exact seven-slice prompt spans are recorded in the ignored timing ledger; active engineering time was not separately tracked | High; completed with independent normative and architecture review |
 | M10 - Signing and revising | Completed: sealed revision verification, Message-Instance and DKIM2-Signature generation, opaque private-key callbacks, shared custody continuity, authority-bound fanout/release, next-domain transitions, public facade, and signing vectors | Retained exact prompt spans are recorded in the ignored timing ledger; missing starts remain unavailable rather than inferred | High; completed with independent normative and architecture review |
-| M11 - Datasource abstraction and general providers | Domain datasource interfaces, in-memory provider, flat-file provider, signing profile lookup, private-key handle model, LDAP/SQL design stubs, provider-state tests | 3 to 7 hours | High |
+| M11 - Datasource abstraction and general providers | Completed: exact storage-neutral profile/policy contracts, immutable memory provider, confined flat-file provider with atomic fail-closed reload, opaque-handle signing bridge, LDAP/SQL design contracts, and parity/fuzz/race/privacy/dependency evidence | Exact nine-prompt wall-clock ledger is recorded in the ignored prompt pack; active engineering time was not separately tracked | High; completed with independent normative and architecture review |
 | M12 - Replay store and Valkey provider | Storage-neutral replay interface, in-memory replay provider, Valkey provider, TTL/first-seen behavior, privacy-preserving keys, degraded-store policy tests | 3 to 8 hours | High |
 | M13 - OpenAPI daemon foundation | `dkim2d` Cobra/Viper config, typed validation, Fx composition, OpenAPI generated server boundary, `/healthz`, `/readyz`, `/v1/process`, request limits, structured errors | 4 to 10 hours | High |
 | M14 - OpenAPI test client | `dkim2ctl` generated client, fixture runner, JSON output, daemon smoke tests, negative request fixtures, reproducible diagnostics | 2 to 5 hours | Medium |
@@ -1927,9 +1955,12 @@ interpretation choices in code.
    state. It must be generated by a strict formatter and must not include raw
    errors, secrets, protected values, raw recipient lists, or unbounded text.
 8. First public preview datasource providers:
-   The first public preview requires only an in-memory general datasource for
-   tests and examples plus a flat-file general datasource for real daemon use.
+   M11 provides an immutable in-memory general datasource for tests, examples,
+   and static deployments plus a confined flat-file general datasource for
+   later daemon use. Both implement the same exact storage-neutral contracts.
    LDAP and SQL providers are deferred until after the first public preview.
+   Their durable mapping, consistency, paging, cancellation, redaction, and
+   migration contracts are design-only and introduce no drivers.
    Replay storage is tracked separately: Valkey is the first production replay
    store backend, behind a storage-neutral replay interface. All datasource and
    replay interfaces must be designed so providers can be added without

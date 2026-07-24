@@ -19,7 +19,7 @@ func TestPublicProviderKeysAreClonedBeforeUse(t *testing.T) {
 		build  func(chan<- struct{}, <-chan struct{}) (PublicKeyProvider, func())
 	}{
 		{
-			name: "rsa", vector: goldenVectorRSAPass,
+			name: testRSASelector, vector: goldenVectorRSAPass,
 			build: func(handoff chan<- struct{}, mutated <-chan struct{}) (PublicKeyProvider, func()) {
 				key := corpus.rsaKey(t)
 				provider := publicProviderFunc(func(context.Context, PublicKeyQuery) (PublicKeyResult, error) {

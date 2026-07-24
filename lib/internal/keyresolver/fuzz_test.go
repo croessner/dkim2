@@ -25,7 +25,7 @@ func FuzzOwnerConstruction(f *testing.F) {
 		{domain: "Example.TEST", selector: testSelector, algorithm: 0},
 		{domain: "mail.example.test", selector: "march.2026", algorithm: 1},
 		{domain: "example..test", selector: testSelector, algorithm: 0},
-		{domain: "example.test", selector: strings.Repeat("a", 64), algorithm: 0},
+		{domain: testSigningDomain, selector: strings.Repeat("a", 64), algorithm: 0},
 		{domain: "TOXIC-DOMAIN.example", selector: "TOXIC-SELECTOR", algorithm: 2},
 		{domain: "exämple.test", selector: testSelector, algorithm: 0},
 	} {

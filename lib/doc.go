@@ -48,8 +48,11 @@
 // provider-owned deadline while the caller context is live is temporary only
 // when explicitly typed temporary; otherwise it is a provider contract error.
 //
-// NewDNSPublicKeyProvider constructs the DNS-backed provider for
-// draft-chuang-dkim2-dns-04. It derives an absolute
+// NewDNSPublicKeyProvider constructs the DNS-backed provider for the tested
+// draft-chuang-dkim2-dns-04 behavior baseline. That document was replaced by
+// draft-ietf-dkim-dkim2-dns-00 without a normative-body change; changing the
+// version identifier remains an explicit reviewed baseline migration. The
+// provider derives an absolute
 // <selector>._domainkey.<signing-domain>. owner from signed values, so transports
 // and callers must treat that name as sensitive diagnostic data. TXTTransport
 // returns already-concatenated bytes for one TXT resource record while retaining
@@ -114,6 +117,17 @@
 // reparsed, custody-checked, and cryptographically self-verified before its
 // reservation commits to unrestricted completion or the exact
 // restricted-release state.
+//
+// Internal datasource providers resolve exact immutable signing profiles and
+// administrative policies without becoming protocol authorities. The
+// datasource/signingprofile package is the only bridge to the signing domain:
+// it validates same-snapshot results and maps provider-neutral key-handle IDs
+// through an immutable registry to existing inert PrivateKeyHandle values.
+// Datasource success never replaces the fresh DNS publication check, signing
+// validation, route authorization, or private signer callback. The confined
+// flat-file provider owns a duplicated directory descriptor, strictly decodes
+// bounded versioned JSON, publishes complete snapshots atomically, and stops
+// serving after a failed reload until explicit recovery.
 //
 // SigningResult is a closed sum. Only UnrestrictedSignedMessage has Bytes.
 // LocalOnlySignedMessage and OutOfBandAcceptanceSignedMessage deliberately have

@@ -1,0 +1,34 @@
+{
+  "version": "dkim2-datasource-v1",
+  "handles": [
+    {
+      "id": "key.example.ed25519"
+    }
+  ],
+  "profiles": [
+    {
+      "id": "profile.example",
+      "domain": "example.test",
+      "status": "active",
+      "credentials": [
+        {
+          "algorithm": "ed25519-sha256",
+          "selector": "s1",
+          "public_key_spki": "MCowBQYDK2VwAyEAIClZTFkgcVVuQpqSIcMJ98ohgPBzN3SrWTX3gbhSofw=",
+          "handle_id": "key.example.ed25519"
+        }
+      ]
+    }
+  ],
+  "policies": [
+    {
+      "tenant_id": "tenant.example",
+      "domain": "example.test",
+      "use": "originator",
+      "profile_id": "profile.example",
+      "status": "active",
+      "rollout": "enforce",
+      "compatibility": "strict"
+    }
+  ]
+}

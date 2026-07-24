@@ -30,12 +30,20 @@ func NewQuery(signingDomain, selector string, algorithm Algorithm, limits Limits
 	if err := limits.Validate(); err != nil || !algorithm.Known() {
 		return Query{}, newResolverError(ErrorClassContract)
 	}
-	domain, domainLabels, ok := canonicalDNSName(signingDomain)
-	if !ok || len(domain) > limits.MaxSigningDomainBytes || domainLabels > limits.MaxSigningDomainLabels {
+	domain, err := CanonicalSigningDomain(
+		signingDomain,
+		limits.MaxSigningDomainBytes,
+		limits.MaxSigningDomainLabels,
+	)
+	if err != nil {
 		return Query{}, newResolverError(ErrorClassContract)
 	}
-	canonicalSelector, selectorLabels, ok := canonicalDNSName(selector)
-	if !ok || len(canonicalSelector) > limits.MaxSelectorBytes || selectorLabels > limits.MaxSelectorLabels {
+	canonicalSelector, err := CanonicalSelector(
+		selector,
+		limits.MaxSelectorBytes,
+		limits.MaxSelectorLabels,
+	)
+	if err != nil {
 		return Query{}, newResolverError(ErrorClassContract)
 	}
 	presentation := canonicalSelector + "._domainkey." + domain
@@ -50,6 +58,28 @@ func NewQuery(signingDomain, selector string, algorithm Algorithm, limits Limits
 		signingDomain: domain, selector: canonicalSelector, algorithm: algorithm,
 		presentationName: presentation, absoluteName: absolute,
 	}, nil
+}
+
+// CanonicalSigningDomain validates and canonicalizes one bounded ASCII DNS signing domain.
+func CanonicalSigningDomain(value string, maxBytes, maxLabels int) (string, error) {
+	return canonicalBoundedDNSName(value, maxBytes, maxLabels)
+}
+
+// CanonicalSelector validates and canonicalizes one bounded ASCII DNS selector.
+func CanonicalSelector(value string, maxBytes, maxLabels int) (string, error) {
+	return canonicalBoundedDNSName(value, maxBytes, maxLabels)
+}
+
+// canonicalBoundedDNSName applies shared DNS grammar and one caller-owned bound pair.
+func canonicalBoundedDNSName(value string, maxBytes, maxLabels int) (string, error) {
+	if maxBytes <= 0 || maxBytes > hardMaxNameBytes || maxLabels <= 0 || maxLabels > hardMaxNameLabels {
+		return "", newResolverError(ErrorClassContract)
+	}
+	domain, labels, ok := canonicalDNSName(value)
+	if !ok || len(domain) > maxBytes || labels > maxLabels {
+		return "", newResolverError(ErrorClassContract)
+	}
+	return domain, nil
 }
 
 // ValidAbsoluteOwner validates a canonical terminal-dot DKIM2 TXT owner using query grammar.
