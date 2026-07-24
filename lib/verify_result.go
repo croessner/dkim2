@@ -1,9 +1,12 @@
 package dkim2
 
 import (
+	"fmt"
+	"io"
 	"slices"
 
 	"github.com/croessner/dkim2/internal/policy"
+	"github.com/croessner/dkim2/internal/service"
 )
 
 // DraftIdentifier identifies the exact DKIM2 behavior baseline implemented by this verification facade.
@@ -313,7 +316,11 @@ type VerifyResult struct {
 	checks               []CheckFact
 	signatures           []SignatureSetFact
 	policyProjection     policy.Projection
+	replayProjection     service.ReplayProjection
+	hasReplayProjection  bool
 }
+
+const verifyResultRedactedText = "dkim2.VerifyResult{redacted}"
 
 type verifyResultData struct {
 	state                ResultState
@@ -347,6 +354,29 @@ func newVerifyResult(data verifyResultData) VerifyResult {
 		signatures:           slices.Clone(data.signatures),
 		policyProjection:     data.policyProjection.Clone(),
 	}
+}
+
+// withReplayProjection attaches one service-owned sealed projection to a coherent PASS result.
+func (r VerifyResult) withReplayProjection(projection service.ReplayProjection, present bool) VerifyResult {
+	if !present || !projection.Valid() || !r.replayEligible() {
+		return r
+	}
+	r.replayProjection = projection
+	r.hasReplayProjection = true
+	return r
+}
+
+// replayEligible validates the complete public aggregate-current-PASS envelope.
+func (r VerifyResult) replayEligible() bool {
+	return r.draft == DraftIdentifier &&
+		r.state == ResultStatePASS &&
+		r.scope == VerificationScopeCurrent &&
+		r.historicalContent == HistoricalStateNotEvaluated &&
+		r.historicalSignatures == HistoricalStateNotEvaluated &&
+		(r.custodyStructure == CustodyStructureNotPresent ||
+			r.custodyStructure == CustodyStructureNDLinksEvaluated) &&
+		r.target.sequence > 0 && r.target.instance > 0 &&
+		r.primaryReason == ReasonNone
 }
 
 // verifyResultDataValid rejects unknown facts and impossible public result combinations.
@@ -468,4 +498,15 @@ func (r VerifyResult) SignatureSets() []SignatureSetFact {
 // SignatureSetCount returns the bounded number of retained signature-set facts.
 func (r VerifyResult) SignatureSetCount() int {
 	return len(r.signatures)
+}
+
+// String returns a constant representation without sealed or message-derived facts.
+func (VerifyResult) String() string { return verifyResultRedactedText }
+
+// GoString returns a constant representation without sealed or message-derived facts.
+func (VerifyResult) GoString() string { return verifyResultRedactedText }
+
+// Format prevents formatting from traversing sealed or message-derived facts.
+func (VerifyResult) Format(state fmt.State, _ rune) {
+	_, _ = io.WriteString(state, verifyResultRedactedText)
 }

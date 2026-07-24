@@ -6,3 +6,6 @@ use (
 	./cmd/dkim2d
 	./lib
 )
+
+// Remove this unpublished-module bootstrap after the first library tag.
+replace github.com/croessner/dkim2 v0.0.0 => ./lib

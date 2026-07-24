@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"unicode"
 )
 
 const (
@@ -97,8 +98,8 @@ func TestDatasourceProductionImportBoundaries(t *testing.T) {
 	}
 }
 
-// expectedProductionDatasourcePackages returns the exact executable provider
-// set while LDAP, SQL, and replay implementations remain deferred.
+// expectedProductionDatasourcePackages returns the exact executable datasource
+// provider set while LDAP and SQL implementations remain deferred.
 func expectedProductionDatasourcePackages() []string {
 	return []string{
 		datasourcePackage,
@@ -128,7 +129,7 @@ func TestPublicFacadeHarnessIsTheOnlyExternalBridgeTest(t *testing.T) {
 }
 
 // TestDependencyGuardClassifiers exercises forbidden cases and allowed
-// near-misses without adding executable provider or replay fixtures.
+// near-misses without adding executable provider fixtures.
 func TestDependencyGuardClassifiers(t *testing.T) {
 	t.Run("signing ownership", testDatasourceSigningOwnershipClassifier)
 	t.Run("provider imports", testDatasourceProviderImportClassifier)
@@ -176,9 +177,9 @@ func TestLibraryExcludesDeferredAndServiceDependencies(t *testing.T) {
 	}
 }
 
-// TestDeferredProvidersAndReplayAPIsRemainAbsent proves future LDAP, SQL, and
-// replay-store work has not entered the datasource production API as a stub.
-func TestDeferredProvidersAndReplayAPIsRemainAbsent(t *testing.T) {
+// TestDeferredProvidersAndDatasourceReplayAPIsRemainAbsent proves future LDAP,
+// SQL, Redis, and Valkey work remains absent while datasource owns no replay API.
+func TestDeferredProvidersAndDatasourceReplayAPIsRemainAbsent(t *testing.T) {
 	for _, source := range collectDependencySources(t) {
 		if source.test {
 			continue
@@ -186,15 +187,18 @@ func TestDeferredProvidersAndReplayAPIsRemainAbsent(t *testing.T) {
 		if deferredRuntimeDirectory(source.directory) {
 			t.Fatalf("deferred executable library package %q exists", source.directory)
 		}
-		if deferredProviderSource(source.relative) {
-			t.Fatalf("datasource package %q contains a deferred provider source", source.directory)
+		datasourceSource := source.directory == "internal/datasource" ||
+			strings.HasPrefix(source.directory, "internal/datasource/")
+		if deferredProviderSource(source.relative) ||
+			datasourceSource && datasourceReplaySource(source.relative) {
+			t.Fatalf("library package %q contains a deferred provider source", source.directory)
 		}
 		for _, declaration := range source.declarations {
 			if deferredProviderDeclaration(declaration) {
 				t.Fatalf("library package %q declares deferred provider symbol %q",
 					source.directory, declaration)
 			}
-			if replayDeclaration(declaration) {
+			if datasourceSource && replayDeclaration(declaration) {
 				t.Fatalf("library package %q declares replay API symbol %q",
 					source.directory, declaration)
 			}
@@ -203,12 +207,11 @@ func TestDeferredProvidersAndReplayAPIsRemainAbsent(t *testing.T) {
 }
 
 // deferredRuntimeDirectory reports package names reserved for design-only
-// datasource providers or replay-store implementations.
+// LDAP, SQL, Redis, or Valkey implementations.
 func deferredRuntimeDirectory(directory string) bool {
 	base := strings.ToLower(filepath.Base(directory))
 	return strings.Contains(base, "ldap") ||
 		strings.Contains(base, "sql") ||
-		strings.Contains(base, "replay") ||
 		strings.Contains(base, "redis") ||
 		strings.Contains(base, "valkey")
 }
@@ -809,14 +812,14 @@ func testProductionDependencyGraphClassifier(t *testing.T) {
 	}
 }
 
-// testDeferredNameClassifiers proves executable provider and replay names are
-// rejected without confusing safe lexical near-misses.
+// testDeferredNameClassifiers proves executable provider and datasource replay
+// names are classified without confusing safe lexical near-misses.
 func testDeferredNameClassifiers(t *testing.T) {
 	t.Helper()
 	directories := map[string]bool{
 		"internal/ldapreader":  true,
 		"internal/sql":         true,
-		"internal/replaystore": true,
+		"internal/replaystore": false,
 		"internal/valkey":      true,
 		"internal/reply":       false,
 		"internal/squirrel":    false,
@@ -829,7 +832,7 @@ func testDeferredNameClassifiers(t *testing.T) {
 	sources := map[string]bool{
 		"ldap_provider.go":  true,
 		"provider_sql.go":   true,
-		"replay_store.go":   true,
+		"replay_store.go":   false,
 		"valkey_backend.go": true,
 		"sqline.go":         false,
 		"reply_store.go":    false,
@@ -839,10 +842,26 @@ func testDeferredNameClassifiers(t *testing.T) {
 			t.Fatalf("source classifier=%t, want %t", got, forbidden)
 		}
 	}
+	for source, forbidden := range map[string]bool{
+		"replay_store.go": true,
+		"reply_store.go":  false,
+		"memory.go":       false,
+	} {
+		if got := datasourceReplaySource(source); got != forbidden {
+			t.Fatalf("datasource replay source classifier=%t, want %t", got, forbidden)
+		}
+	}
 	declarations := map[string]bool{
-		"LDAPProvider": true,
-		"SQLReader":    true,
-		"Profile":      false,
+		"LDAPProvider":     true,
+		"SQLReader":        true,
+		"RedisStore":       true,
+		"RedisishProvider": true,
+		"ValkeyStore":      true,
+		"ValkeyishStore":   true,
+		"SQLiteProvider":   true,
+		"LDAPishProvider":  true,
+		"StoreDisabled":    false,
+		"Profile":          false,
 	}
 	for declaration, forbidden := range declarations {
 		if got := deferredProviderDeclaration(declaration); got != forbidden {
@@ -851,12 +870,15 @@ func testDeferredNameClassifiers(t *testing.T) {
 	}
 	replayNames := map[string]bool{
 		"ReplayStore":      true,
+		"Replayer":         true,
+		"Replayable":       true,
 		"CheckAndRemember": true,
 		"FirstSeen":        true,
 		"SeenMessage":      true,
-		"ValkeyProvider":   true,
+		"ValkeyProvider":   false,
 		"ReplyStore":       false,
 		"CheckAndRender":   false,
+		"Preplayer":        false,
 	}
 	for declaration, forbidden := range replayNames {
 		if got := replayDeclaration(declaration); got != forbidden {
@@ -894,6 +916,7 @@ func testForbiddenDependencyClassifier(t *testing.T) {
 	for imported, reviewed := range map[string]bool{
 		"context": true,
 		dependencyModulePath + "/internal/datasource": true,
+		dependencyModulePath + "/internal/replay":     true,
 		reviewedExternalModulePath + "/unix":          true,
 		"example.com/safe":                            false,
 	} {
@@ -1151,12 +1174,11 @@ func forbiddenLibraryDependency(imported string) (string, bool) {
 		strings.Contains(lower, "kin-openapi"),
 		strings.Contains(lower, "milter"):
 		return "service or adapter runtime", true
-	case strings.Contains(lower, "replay"),
-		strings.Contains(lower, "redis"),
+	case strings.Contains(lower, "redis"),
 		strings.Contains(lower, "valkey"),
 		strings.Contains(lower, "go-redis"),
 		strings.Contains(lower, "rueidis"):
-		return "replay-store runtime", true
+		return "key-value runtime", true
 	default:
 		return "", false
 	}
@@ -1297,8 +1319,23 @@ func deferredProviderSource(relative string) bool {
 	for _, part := range strings.FieldsFunc(name, func(value rune) bool {
 		return value == '_' || value == '-' || value == '.'
 	}) {
-		if part == "ldap" || part == "sql" || part == "replay" ||
-			part == "redis" || part == "valkey" {
+		if part == "ldap" || part == "sql" || part == "redis" || part == "valkey" {
+			return true
+		}
+	}
+	return false
+}
+
+// datasourceReplaySource reports replay storage filenames under datasource ownership.
+func datasourceReplaySource(relative string) bool {
+	name := strings.TrimSuffix(
+		strings.ToLower(filepath.Base(relative)),
+		productionDependencySuffix,
+	)
+	for _, part := range strings.FieldsFunc(name, func(value rune) bool {
+		return value == '_' || value == '-' || value == '.'
+	}) {
+		if part == "replay" {
 			return true
 		}
 	}
@@ -1306,20 +1343,74 @@ func deferredProviderSource(relative string) bool {
 }
 
 // deferredProviderDeclaration reports provider-specific executable symbols
-// that are forbidden while LDAP and SQL remain design-only.
+// that are forbidden while LDAP, SQL, Redis, and Valkey remain outside lib.
 func deferredProviderDeclaration(name string) bool {
 	upper := strings.ToUpper(name)
-	return strings.Contains(upper, "LDAP") || strings.Contains(upper, "SQL")
+	if strings.Contains(upper, "LDAP") || strings.Contains(upper, "SQL") {
+		return true
+	}
+	for _, word := range declarationWords(name) {
+		lower := strings.ToLower(word)
+		if strings.HasPrefix(lower, "redis") || strings.HasPrefix(lower, "valkey") {
+			return true
+		}
+	}
+	return false
 }
 
 // replayDeclaration reports datasource API names that would prematurely add a
 // replay-store interface or replay mutation operation.
 func replayDeclaration(name string) bool {
-	lower := strings.ToLower(name)
-	return strings.Contains(lower, "replay") ||
-		strings.Contains(lower, "redis") ||
-		strings.Contains(lower, "valkey") ||
-		strings.Contains(lower, "firstseen") ||
-		strings.Contains(lower, "seenmessage") ||
-		lower == "checkandremember"
+	words := declarationWords(name)
+	for index, word := range words {
+		lower := strings.ToLower(word)
+		if strings.HasPrefix(lower, "replay") {
+			return true
+		}
+		if index+1 < len(words) {
+			next := strings.ToLower(words[index+1])
+			if lower == "first" && next == "seen" || lower == "seen" && next == "message" {
+				return true
+			}
+		}
+		if index+2 < len(words) &&
+			lower == "check" &&
+			strings.EqualFold(words[index+1], "and") &&
+			strings.EqualFold(words[index+2], "remember") {
+			return true
+		}
+	}
+	return false
+}
+
+// declarationWords splits one Go identifier into exact acronym and camel-case words.
+func declarationWords(name string) []string {
+	runes := []rune(name)
+	words := make([]string, 0, 4)
+	start := -1
+	for index, current := range runes {
+		if current == '_' || !unicode.IsLetter(current) && !unicode.IsDigit(current) {
+			if start >= 0 {
+				words = append(words, string(runes[start:index]))
+				start = -1
+			}
+			continue
+		}
+		if start < 0 {
+			start = index
+			continue
+		}
+		previous := runes[index-1]
+		nextIsLower := index+1 < len(runes) && unicode.IsLower(runes[index+1])
+		if unicode.IsUpper(current) &&
+			(unicode.IsLower(previous) || unicode.IsDigit(previous) ||
+				unicode.IsUpper(previous) && nextIsLower) {
+			words = append(words, string(runes[start:index]))
+			start = index
+		}
+	}
+	if start >= 0 {
+		words = append(words, string(runes[start:]))
+	}
+	return words
 }

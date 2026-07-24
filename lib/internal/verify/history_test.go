@@ -406,6 +406,23 @@ func TestAggregateCurrentPassRejectsForgedFacts(t *testing.T) {
 	if !aggregateCurrentPass(valid) {
 		t.Fatal("coherent PASS rejected")
 	}
+	withIgnored := func() Result {
+		got := historyPassResult(2)
+		got.checks = append(got.checks, CheckResult{
+			Kind: CheckKindSignature, Status: CheckStatusUnsupported,
+			Code: ErrorCodeUnsupportedAlgorithm, Algorithm: AlgorithmUnknown,
+			Target: got.target,
+		})
+		got.signatureSets = append(got.signatureSets, SignatureSetResult{
+			Index: 1, Algorithm: AlgorithmUnknown,
+			Status:    SignatureSetStatusUnsupportedAlgorithm,
+			KeyStatus: KeyStatusUnsupportedAlgorithm,
+		})
+		return got
+	}
+	if !aggregateCurrentPass(withIgnored()) {
+		t.Fatal("coherent PASS with exact ignored unsupported pair rejected")
+	}
 	for _, forged := range []Result{
 		NewResult(valid.target, TargetStatusPass, nil, nil),
 		func() Result { got := valid; got.checks[0].Target.InstanceNumber = 1; return got }(),
@@ -414,6 +431,33 @@ func TestAggregateCurrentPassRejectsForgedFacts(t *testing.T) {
 		func() Result {
 			got := valid
 			got.signatureSets = append(got.signatureSets, SignatureSetResult{Algorithm: AlgorithmRSASHA256, Status: SignatureSetStatusFail})
+			return got
+		}(),
+		func() Result { got := withIgnored(); got.signatureSets = got.signatureSets[:1]; return got }(),
+		func() Result { got := withIgnored(); got.checks = got.checks[:len(got.checks)-1]; return got }(),
+		func() Result {
+			got := withIgnored()
+			got.checks[len(got.checks)-1].Code = ErrorCodeSignatureMismatch
+			return got
+		}(),
+		func() Result {
+			got := withIgnored()
+			got.checks[len(got.checks)-1].Algorithm = AlgorithmRSASHA256
+			return got
+		}(),
+		func() Result {
+			got := withIgnored()
+			got.signatureSets[len(got.signatureSets)-1].KeyStatus = KeyStatusNotChecked
+			return got
+		}(),
+		func() Result {
+			got := withIgnored()
+			got.signatureSets[len(got.signatureSets)-1].Algorithm = AlgorithmRSASHA256
+			return got
+		}(),
+		func() Result {
+			got := withIgnored()
+			got.signatureSets[len(got.signatureSets)-1].KeyPolicy.TestingDeclared = true
 			return got
 		}(),
 	} {

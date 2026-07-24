@@ -289,7 +289,10 @@ func (e Entry) valid() bool {
 		if !validPath(path, false) {
 			return false
 		}
-		key := pathComparisonKey(path)
+		key, canonical := pathComparisonKey(path)
+		if !canonical {
+			return false
+		}
 		if _, duplicate := seen[key]; duplicate {
 			return false
 		}
@@ -1820,16 +1823,13 @@ func validPath(path []byte, allowNull bool) bool {
 	return signature.ValidEnvelopePath(path, allowNull)
 }
 
-// pathComparisonKey preserves local-part case and folds only ASCII domain letters.
-func pathComparisonKey(path []byte) string {
-	cloned := bytes.Clone(path)
-	at := bytes.LastIndexByte(cloned, '@')
-	for index := at + 1; index < len(cloned)-1; index++ {
-		if cloned[index] >= 'A' && cloned[index] <= 'Z' {
-			cloned[index] += 'a' - 'A'
-		}
+// pathComparisonKey delegates exact SMTP Domain normalization to its grammar owner.
+func pathComparisonKey(path []byte) (string, bool) {
+	canonical, valid := signature.CanonicalEnvelopePath(path, false)
+	if !valid {
+		return "", false
 	}
-	return string(cloned)
+	return string(canonical), true
 }
 
 // cloneSlices returns detached nested bytes.

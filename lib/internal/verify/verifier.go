@@ -140,6 +140,9 @@ func (v Verifier) verifyExtracted(ctx context.Context, input verificationInput) 
 	if !aggregateCurrentPass(result) {
 		return result, nil
 	}
+	if projection, ok := buildReplayProjection(input, targetSignature, targetInstance, hashes, digest, result); ok {
+		result = result.withReplayProjection(projection)
+	}
 	return v.attachAuthenticatedHistory(ctx, result, input)
 }
 

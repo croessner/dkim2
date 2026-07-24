@@ -7,7 +7,9 @@ import (
 
 // adaptServiceResult maps the internal coordinator DTO into the immutable public contract.
 func adaptServiceResult(input service.Result) VerifyResult {
-	return adaptServiceResultWithProjection(input, input.PolicyProjection())
+	result := adaptServiceResultWithProjection(input, input.PolicyProjection())
+	replayProjection, present := input.ReplayProjection()
+	return result.withReplayProjection(replayProjection, present)
 }
 
 // adaptServiceResultWithProjection maps one service result with an explicit sealed clone.

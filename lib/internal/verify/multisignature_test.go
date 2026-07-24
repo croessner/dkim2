@@ -98,6 +98,9 @@ func TestVerifierReportsUnknownOnlySignatureSets(t *testing.T) {
 	if result.Status() != TargetStatusUnsupported || !hasSignatureSet(result, AlgorithmUnknown, SignatureSetStatusUnsupportedAlgorithm) {
 		t.Fatalf("result = %#v sets=%#v, want unsupported-only state", result, result.SignatureSets())
 	}
+	if projection, ok := result.ReplayProjection(); ok || projection.Valid() {
+		t.Fatal("unsupported-only result produced replay projection")
+	}
 }
 
 // TestVerifierIgnoresUnknownSignatureSetBesideSupportedPass verifies Section 3.4 aggregation.
@@ -120,6 +123,9 @@ func TestVerifierIgnoresUnknownSignatureSetBesideSupportedPass(t *testing.T) {
 	if !hasSignatureSet(result, AlgorithmRSASHA256, SignatureSetStatusPass) ||
 		!hasSignatureSet(result, AlgorithmUnknown, SignatureSetStatusUnsupportedAlgorithm) {
 		t.Fatalf("sets = %#v, want supported pass plus ignored unknown", result.SignatureSets())
+	}
+	if projection, ok := result.ReplayProjection(); !ok || !projection.Valid() {
+		t.Fatal("supported PASS plus ignored unknown set did not produce replay projection")
 	}
 }
 

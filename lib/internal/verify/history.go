@@ -735,6 +735,7 @@ func aggregateCurrentPass(result Result) bool {
 	headerCount, bodyCount := 0, 0
 	signatureChecks := make(map[Algorithm]int)
 	signatureSets := make(map[Algorithm]int)
+	ignoredChecks, ignoredSets := 0, 0
 	for _, check := range result.checks {
 		if check.Target != result.target {
 			return false
@@ -751,13 +752,12 @@ func aggregateCurrentPass(result Result) bool {
 				return false
 			}
 		case CheckKindSignature:
-			if check.Status == CheckStatusPass {
-				if !knownAlgorithm(check.Algorithm) {
-					return false
-				}
-				signatureChecks[check.Algorithm]++
-			} else {
+			ignored, valid := accountAggregateSignatureCheck(check, signatureChecks)
+			if !valid {
 				return false
+			}
+			if ignored {
+				ignoredChecks++
 			}
 		default:
 			if !validCheckKind(check.Kind) || check.Status != CheckStatusPass && check.Status != CheckStatusNotApplicable {
@@ -766,17 +766,18 @@ func aggregateCurrentPass(result Result) bool {
 		}
 	}
 	for _, set := range result.signatureSets {
-		switch set.Status {
-		case SignatureSetStatusPass:
-			if !knownAlgorithm(set.Algorithm) || set.KeyStatus != KeyStatusFound {
-				return false
-			}
-			signatureSets[set.Algorithm]++
-		default:
+		ignored, valid := accountAggregateSignatureSet(set, signatureSets)
+		if !valid {
 			return false
+		}
+		if ignored {
+			ignoredSets++
 		}
 	}
 	if headerCount != 1 || bodyCount != 1 || len(signatureChecks) == 0 || len(signatureChecks) != len(signatureSets) {
+		return false
+	}
+	if ignoredChecks != ignoredSets {
 		return false
 	}
 	for algorithm, count := range signatureChecks {
@@ -785,6 +786,40 @@ func aggregateCurrentPass(result Result) bool {
 		}
 	}
 	return true
+}
+
+// accountAggregateSignatureCheck admits one exact supported PASS or ignored-unknown check.
+func accountAggregateSignatureCheck(check CheckResult, supported map[Algorithm]int) (bool, bool) {
+	if check.HashStatus != "" || check.TimestampStatus != "" || check.EnvelopeStatus != "" ||
+		check.DomainAlignmentStatus != "" || check.NextDomainStatus != "" ||
+		check.ProviderFailureClass != "" {
+		return false, false
+	}
+	if check.Status == CheckStatusPass && check.Code == "" && knownAlgorithm(check.Algorithm) {
+		supported[check.Algorithm]++
+		return false, true
+	}
+	if check.Status == CheckStatusUnsupported && check.Code == ErrorCodeUnsupportedAlgorithm &&
+		check.Algorithm == AlgorithmUnknown {
+		return true, true
+	}
+	return false, false
+}
+
+// accountAggregateSignatureSet admits one exact supported PASS or ignored-unknown set.
+func accountAggregateSignatureSet(set SignatureSetResult, supported map[Algorithm]int) (bool, bool) {
+	if set.Status == SignatureSetStatusPass && knownAlgorithm(set.Algorithm) &&
+		set.KeyStatus == KeyStatusFound && set.KeyPolicy.Valid() {
+		supported[set.Algorithm]++
+		return false, true
+	}
+	if set.Status == SignatureSetStatusUnsupportedAlgorithm &&
+		set.Algorithm == AlgorithmUnknown &&
+		set.KeyStatus == KeyStatusUnsupportedAlgorithm &&
+		set.KeyPolicy == (KeyPolicyMetadata{}) {
+		return true, true
+	}
+	return false, false
 }
 
 // sealedHistoryStop reports whether stop belongs to a non-result failure lane.

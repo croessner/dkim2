@@ -36,6 +36,34 @@ func TestParseAcceptsRFC5321EnvelopePaths(t *testing.T) {
 	}
 }
 
+// TestCanonicalEnvelopePathNormalizesOnlyGrammarOwnedDomainPositions verifies shared path identity.
+func TestCanonicalEnvelopePathNormalizesOnlyGrammarOwnedDomainPositions(t *testing.T) {
+	input := []byte(`<@ROUTE.Example,@NEXT.Example:"LoC@al"@[X400:A@B]>`)
+	want := []byte(`<@route.example,@next.example:"LoC@al"@[x400:a@b]>`)
+	got, ok := CanonicalEnvelopePath(input, false)
+	if !ok || !bytes.Equal(got, want) {
+		t.Fatalf("CanonicalEnvelopePath() = %q, %t, want %q", got, ok, want)
+	}
+	input[2] = 'x'
+	if !bytes.Equal(got, want) {
+		t.Fatal("caller mutation changed canonical path")
+	}
+
+	for _, invalid := range [][]byte{
+		nil,
+		[]byte("user@example.test"),
+		[]byte("<>"),
+		[]byte("<@route.example,user@example.test>"),
+	} {
+		if canonical, valid := CanonicalEnvelopePath(invalid, false); valid || canonical != nil {
+			t.Fatalf("CanonicalEnvelopePath(%q) = %q, %t, want invalid", invalid, canonical, valid)
+		}
+	}
+	if canonical, valid := CanonicalEnvelopePath([]byte("<>"), true); !valid || !bytes.Equal(canonical, []byte("<>")) {
+		t.Fatalf("CanonicalEnvelopePath(null) = %q, %t", canonical, valid)
+	}
+}
+
 // TestParseRejectsNonRFC5321EnvelopePaths verifies mailbox grammar and ASCII-only draft imports.
 func TestParseRejectsNonRFC5321EnvelopePaths(t *testing.T) {
 	tests := []struct {

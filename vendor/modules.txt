@@ -1,4 +1,12 @@
 ## workspace
+# github.com/croessner/dkim2 v0.0.0 => ./lib
+## explicit; go 1.26
+# github.com/valkey-io/valkey-go v1.0.76
+## explicit; go 1.25.0
+github.com/valkey-io/valkey-go
+github.com/valkey-io/valkey-go/internal/cmds
+github.com/valkey-io/valkey-go/internal/util
 # golang.org/x/sys v0.47.0
 ## explicit; go 1.25.0
+golang.org/x/sys/cpu
 golang.org/x/sys/unix

@@ -14,6 +14,29 @@ import (
 	"github.com/croessner/dkim2/internal/provider"
 )
 
+// TestPathComparisonKeyUsesGrammarOwnedDomainNormalization verifies route identity fidelity.
+func TestPathComparisonKeyUsesGrammarOwnedDomainNormalization(t *testing.T) {
+	for _, pair := range [][2][]byte{
+		{[]byte("<@ROUTE.TEST:Local@EXAMPLE.TEST>"), []byte("<@route.test:Local@example.test>")},
+		{[]byte("<Local@[TAG:A@B]>"), []byte("<Local@[tag:a@b]>")},
+		{[]byte(`<"LoC@al"@EXAMPLE.TEST>`), []byte(`<"LoC@al"@example.test>`)},
+	} {
+		left, leftOK := pathComparisonKey(pair[0])
+		right, rightOK := pathComparisonKey(pair[1])
+		if !leftOK || !rightOK || left != right {
+			t.Fatalf("pathComparisonKey(%q/%q) = %q/%q, %t/%t", pair[0], pair[1], left, right, leftOK, rightOK)
+		}
+	}
+	upperLocal, upperOK := pathComparisonKey([]byte("<Local@example.test>"))
+	lowerLocal, lowerOK := pathComparisonKey([]byte("<local@example.test>"))
+	if !upperOK || !lowerOK || upperLocal == lowerLocal {
+		t.Fatal("path comparison normalized local-part case")
+	}
+	if key, ok := pathComparisonKey([]byte("Local@example.test")); ok || key != "" {
+		t.Fatalf("invalid path produced comparison key %q", key)
+	}
+}
+
 const (
 	testMethodFinalize = "finalize"
 	testRecipientZero  = "<user0@example.test>"

@@ -99,11 +99,23 @@ func mapVerificationResult(input verify.Result, limits Limits) Result {
 	if len(accumulator.completeSignatures) > hardMaxSignatureFacts {
 		return result
 	}
+	var replayProjection ReplayProjection
+	hasReplayProjection := false
+	if source, ok := input.ReplayProjection(); ok && result.state == StatePASS {
+		if projection, mapped := mapReplayProjection(source); mapped {
+			replayProjection = projection
+			hasReplayProjection = true
+		}
+	}
 	projection, err := buildSelectedPolicyProjection(result.state, result.primaryReason, target, input, accumulator.completeSignatures)
 	if err != nil {
 		return result
 	}
-	return result.withPolicyProjection(projection)
+	result = result.withPolicyProjection(projection)
+	if hasReplayProjection && result.policyProjection.Valid() {
+		result = result.withReplayProjection(replayProjection)
+	}
+	return result
 }
 
 // enforceTargetStatus rejects inconsistent aggregate and target-state combinations.

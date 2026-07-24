@@ -1,0 +1,93 @@
+package replay
+
+import (
+	"context"
+	"fmt"
+	"io"
+)
+
+const disabledStoreRedactedText = "replay_disabled_store"
+
+// DisabledStore is an explicit no-storage replay provider.
+type DisabledStore struct {
+	gate *lifecycleGate
+}
+
+// NewDisabledStore constructs one explicit disabled replay provider.
+func NewDisabledStore() *DisabledStore {
+	return &DisabledStore{gate: newLifecycleGate(StoreDisabled)}
+}
+
+// CheckAndRemember returns disabled without inspecting key or retention.
+func (s *DisabledStore) CheckAndRemember(
+	ctx context.Context,
+	_ Key,
+	_ Retention,
+) (Check, error) {
+	if err := PreflightContext(ctx); err != nil {
+		return 0, err
+	}
+	if s == nil || s.gate == nil {
+		return 0, NewError(ErrorCodeMisconfigured)
+	}
+	switch s.gate.State() {
+	case StoreDisabled:
+		return CheckDisabled, nil
+	case StoreClosing, StoreClosed:
+		return 0, NewError(ErrorCodeClosed)
+	default:
+		return 0, NewError(ErrorCodeInternalInvariant)
+	}
+}
+
+// State returns one bounded lock-free lifecycle snapshot.
+func (s *DisabledStore) State() StoreState {
+	if s == nil || s.gate == nil {
+		return 0
+	}
+	return s.gate.State()
+}
+
+// Close atomically closes the disabled provider and is idempotent.
+func (s *DisabledStore) Close(ctx context.Context) (resultErr error) {
+	defer func() {
+		if recover() != nil {
+			resultErr = NewError(ErrorCodeInternalInvariant)
+		}
+	}()
+	if err := PreflightContext(ctx); err != nil {
+		return err
+	}
+	if s == nil || s.gate == nil {
+		return NewError(ErrorCodeMisconfigured)
+	}
+	drained, err := s.gate.beginClose()
+	if err != nil {
+		return err
+	}
+	if err := waitForDrain(ctx, drained); err != nil {
+		return err
+	}
+	return s.gate.publishClosed()
+}
+
+// String returns a constant representation without lifecycle detail.
+func (*DisabledStore) String() string { return disabledStoreRedactedText }
+
+// GoString returns a constant representation without lifecycle detail.
+func (*DisabledStore) GoString() string { return disabledStoreRedactedText }
+
+// Format prevents every formatting verb from exposing provider state.
+func (*DisabledStore) Format(state fmt.State, _ rune) {
+	_, _ = io.WriteString(state, disabledStoreRedactedText)
+}
+
+// MarshalText rejects serialization of disabled-provider state.
+func (*DisabledStore) MarshalText() ([]byte, error) {
+	return nil, NewError(ErrorCodeInvalidRequest)
+}
+
+// MarshalJSON rejects serialization of disabled-provider state.
+func (*DisabledStore) MarshalJSON() ([]byte, error) {
+	return nil, NewError(ErrorCodeInvalidRequest)
+}

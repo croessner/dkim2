@@ -9,8 +9,10 @@ help:
 		'  make race         run race tests for all workspace modules' \
 		'  make vet          run go vet for all workspace modules' \
 		'  make lint         run golangci-lint' \
+		'  make test-valkey  run mandatory hermetic Valkey 9.1.0 integration tests' \
 		'  make govulncheck  run govulncheck for all workspace modules' \
 		'  make check-openapi validate OpenAPI files exist' \
+		'  make check-vendor  verify reproducible workspace vendoring' \
 		'  make guardrails   run the local quality gate'
 
 .PHONY: fmt
@@ -45,6 +47,10 @@ lint:
 		(cd $$module && golangci-lint run ./...); \
 	done
 
+.PHONY: test-valkey
+test-valkey:
+	@scripts/test-valkey.sh
+
 .PHONY: govulncheck
 govulncheck:
 	@set -e; for module in $(MODULES); do \
@@ -58,5 +64,13 @@ check-openapi:
 	@test -s docs/specs/openapi/oapi-codegen.server.yml
 	@test -s docs/specs/openapi/oapi-codegen.client.yml
 
+.PHONY: check-vendor
+check-vendor:
+	@set -eu; \
+	output="$$(mktemp -d /tmp/dkim2-vendor-check.XXXXXX)"; \
+	trap 'rm -rf "$$output"' 0 1 2 15; \
+	GOCACHE="$${GOCACHE:-/tmp/dkim2-go-build-cache}" GOFLAGS= go work vendor -o "$$output"; \
+	diff -qr vendor "$$output"
+
 .PHONY: guardrails
-guardrails: fmt vet lint test race check-openapi govulncheck
+guardrails: fmt vet lint test race check-openapi check-vendor govulncheck

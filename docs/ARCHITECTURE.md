@@ -31,6 +31,7 @@
 | 0.1.0-draft | 2026-07-13 | Christian Roessner / Codex | Completed M9 inverse recipe generation with deterministic non-minimal planning, explicit disclosure and body-unavailable policies, compact decoded JSON, strict parse/apply/self-proof, draft-versioned golden/fuzz evidence, abuse/race/privacy/dependency coverage, and unchanged M10 ownership of revision hash gating, Message-Instance formatting, and signing. |
 | 0.1.0-draft | 2026-07-23 | Christian Roessner / Codex | Completed signing and revision support: sealed all-hop revision evidence, exact hash-gated roles, deterministic Message-Instance and DKIM2-Signature generation, opaque RSA/Ed25519 signing, shared custody validation, authority-bound fanout and restricted release, next-domain creation/continuation/completion, public facade integration, and draft-04 vectors/fuzz/privacy/race evidence. |
 | 0.1.0-draft | 2026-07-24 | Christian Roessner / Codex | Completed storage-neutral datasource contracts, immutable memory and confined flat-file providers, the exact opaque-handle signing bridge, LDAP/SQL design mappings, and provider parity/fuzz/race/privacy/dependency evidence. Replay storage remains M12. Recorded the DNS draft rename without silently rebasing behavior or vectors. |
+| 0.1.0-draft | 2026-07-24 | Christian Roessner / Codex | Specified M12 replay architecture: exact sealed replay inputs, success-only checks with typed failures and separate state, memory and explicit disabled providers, a millisecond-exact Valkey `SET NX PX` backend, and directly addressed standalone-primary authority. This records the specification baseline, not implementation completion. |
 
 ## 1. Purpose
 
@@ -165,6 +166,15 @@ their own `go.mod`; the workspace will select the local `lib` module during
 development. Released command modules should depend on tagged library versions.
 Local `replace` directives should only be needed when an adapter is developed
 outside this workspace.
+
+Before the first library tag only, an adapter that imports the library declares
+the non-releasable sentinel `github.com/croessner/dkim2 v0.0.0`, paired with the
+exact versioned workspace bootstrap
+`replace github.com/croessner/dkim2 v0.0.0 => ./lib` in `go.work`. Command
+modules must not contain this replace. The first library tag requires updating
+each adapter requirement to that tag, removing the workspace bootstrap, then
+proving standalone module resolution and builds with `GOWORK=off` through
+tidy, tests, and builds before any adapter release.
 
 ### 3.3 OOP and DRY in Go Terms
 
@@ -1240,9 +1250,11 @@ Provider rules:
 
 ### 7.5 Replay Store Model
 
-The first daemon release includes datasource-backed replay detection as an
+The first daemon release includes storage-backed replay detection as an
 explicit policy feature. This goes beyond the message-local chain and envelope
 checks by remembering bounded replay keys for a configurable retention window.
+Replay stores remain separate from the M11 signing-profile datasource
+abstraction.
 
 Replay storage requirements:
 
@@ -1255,16 +1267,19 @@ Replay storage requirements:
 - Privacy-preserving keys and values.
 - No raw message bodies, raw recipients, private keys, tokens, or protected
   configuration values in the store.
-- Bounded error classification for unavailable, degraded, ambiguous, and
-  inconsistent store state.
+- Bounded typed failures for unavailable, indeterminate, inconsistent,
+  misconfigured, and other closed error outcomes, with degradation represented
+  separately as store state.
 
-Likely replay key material:
+Replay key material is exact:
 
-- Highest DKIM2 signature identity.
-- Message-Instance hash material.
-- Envelope recipient scope, represented by privacy-preserving digests.
-- Optional signer nonce when present.
-- Draft version and algorithm version for forward compatibility.
+- the selected current Message-Instance SHA-256 header hash;
+- SHA-256 of the exact highest canonical signature input;
+- one privacy-preserving recipient-scope SHA-256 digest;
+- the pinned draft identifier and replay-key algorithm version.
+
+Sender identities, `Message-ID`, selectors, signer nonces, raw recipients, and
+other creator-private facts are not replay-key inputs.
 
 The replay store must be separated from the protocol library. The library
 defines replay-check interfaces and result types; `dkim2d` wires concrete
@@ -1273,15 +1288,16 @@ storage providers and local policy.
 The default production replay backend should be Valkey. Valkey gives the
 reference implementation a permissive open-source baseline, low-latency
 key-value operations, native expiry, and an atomic first-seen operation shaped
-like `SET replay-key replay-value NX EX retention-seconds`. The implementation
+like `SET replay-key replay-value NX PX retention-milliseconds`. The implementation
 must not treat Valkey as a protocol dependency. It is the first production
 provider behind a replay-store interface.
 
 Initial replay provider set:
 
 - `memory`: deterministic test and example provider.
-- `valkey`: default production provider for scalable deployments.
-- `noop`: explicit disabled provider for deployments that choose not to run
+- `valkey`: default production provider; the first secure implementation binds
+  one directly addressed standalone primary.
+- `disabled`: explicit disabled provider for deployments that choose not to run
   replay detection.
 
 Future providers may include PostgreSQL, LDAP-adjacent operational stores,
@@ -1293,18 +1309,23 @@ The replay-store interface should model intent, not Valkey commands:
 
 ```go
 type ReplayStore interface {
-    CheckAndRemember(ctx context.Context, key ReplayKey, retention time.Duration) (ReplayCheck, error)
+    CheckAndRemember(ctx context.Context, key ReplayKey, retention ReplayRetention) (ReplayCheck, error)
 }
 ```
 
-`ReplayCheck` should distinguish first-seen, replayed, unavailable, degraded,
-ambiguous, inconsistent, and misconfigured states. Local policy decides how
-those states map to accept, reject, tempfail, or observe-only behavior.
+`ReplayCheck` is success-only and distinguishes exactly first-seen, replayed,
+and explicitly disabled outcomes. Unavailable, indeterminate, inconsistent,
+misconfigured, limit, context, closed, and invariant outcomes are typed
+failures; degraded is separate store state. Local policy decides how successful
+checks, typed failures, and store state map to accept, reject, tempfail, or
+observe-only behavior.
 
 Valkey-specific design notes:
 
-- Use a single-key first implementation so cluster slot placement remains
-  straightforward.
+- Use a single-key first implementation. Production cluster routing is deferred
+  until an owned audited router can confine every dispatch to an immutable
+  authority set and surface redirects before execution; a dependency-managed
+  MOVED/ASK refresh must never route a replay write to an unaudited node.
 - Prefer privacy-preserving digest keys with a stable namespace prefix and
   algorithm/version marker.
 - Store only bounded metadata needed for diagnosis and policy, never raw
@@ -1965,18 +1986,22 @@ interpretation choices in code.
    store backend, behind a storage-neutral replay interface. All datasource and
    replay interfaces must be designed so providers can be added without
    changing protocol packages or public domain contracts.
-9. Datasource-backed replay detection:
-   Datasource-backed replay detection is part of the first daemon release as an
+9. Storage-backed replay detection:
+   Storage-backed replay detection is part of the first daemon release as an
    explicit policy-capable feature. It must use an open-source storage backend,
    privacy-preserving replay keys, configurable retention windows, bounded error
    handling, and clear policy semantics. It is implemented in daemon/service
    layers rather than as hidden protocol-core behavior.
 10. Default replay store backend:
-    Valkey is the default production replay-store backend for scalable
-    deployments. The architecture still requires a storage-neutral replay-store
-    interface so later PostgreSQL, Cassandra-compatible, LDAP-adjacent, or other
-    open-source providers can be added without changing protocol packages,
-    public result semantics, OpenAPI contracts, or Milter adapter behavior.
+    Valkey is the default production replay-store backend. The first secure
+    implementation supports one directly addressed standalone primary only;
+    Valkey cluster production remains deferred until an owned audited routing
+    boundary prevents redirects or topology refresh from selecting an unaudited
+    authority. The architecture still requires a storage-neutral replay-store
+    interface so later PostgreSQL, Cassandra-compatible, LDAP-adjacent, or
+    other open-source providers can be added without changing protocol
+    packages, public result semantics, OpenAPI contracts, or Milter adapter
+    behavior.
 11. OpenAPI generator:
     The first generated server/client artifacts use `oapi-codegen` pinned to
     `github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.7.1`.

@@ -14,6 +14,11 @@ const MaxEnvelopePathBytes = 256
 // ValidEnvelopePath reports whether exact path bytes satisfy the shared SMTP path contract.
 func ValidEnvelopePath(path []byte, allowNull bool) bool { return validEnvelopePath(path, allowNull) }
 
+// CanonicalEnvelopePath validates and clones a path with every grammar-owned ASCII domain folded.
+func CanonicalEnvelopePath(path []byte, allowNull bool) ([]byte, bool) {
+	return canonicalEnvelopePath(path, allowNull)
+}
+
 // parseEnvelopePath decodes and checks one base64-wrapped SMTP path.
 func parseEnvelopePath(value string, limits tagvalue.Limits, fieldIndex int, recipientIndex int, tagName string) (EnvelopePath, error) {
 	parsed, err := tagvalue.ParseBase64String([]byte(value), limits)
@@ -71,22 +76,44 @@ func parseRecipientPaths(value string, limits Limits, fieldIndex int) ([]Envelop
 
 // validEnvelopePath checks RFC 5321 reverse-path or forward-path syntax.
 func validEnvelopePath(path []byte, allowNull bool) bool {
+	_, valid := canonicalEnvelopePath(path, allowNull)
+	return valid
+}
+
+// canonicalEnvelopePath owns SMTP path parsing and case-insensitive Domain normalization.
+func canonicalEnvelopePath(path []byte, allowNull bool) ([]byte, bool) {
 	if len(path) < 2 || len(path) > MaxEnvelopePathBytes || path[0] != '<' || path[len(path)-1] != '>' {
-		return false
+		return nil, false
 	}
 	inner := path[1 : len(path)-1]
 	if len(inner) == 0 {
-		return allowNull
+		if !allowNull {
+			return nil, false
+		}
+		return bytes.Clone(path), true
 	}
+	mailboxOffset := 1
+	routeEnd := 0
 	if inner[0] == '@' {
 		separator := bytes.IndexByte(inner, ':')
 		if separator <= 1 || !validSourceRoute(inner[:separator]) {
-			return false
+			return nil, false
 		}
+		routeEnd = 1 + separator
+		mailboxOffset += separator + 1
 		inner = inner[separator+1:]
 	}
 
-	return validSMTPMailbox(inner)
+	domainStart, valid := smtpMailboxDomainStart(inner)
+	if !valid {
+		return nil, false
+	}
+	canonical := bytes.Clone(path)
+	if routeEnd > 1 {
+		lowerASCIILetters(canonical[1:routeEnd])
+	}
+	lowerASCIILetters(canonical[mailboxOffset+domainStart : len(canonical)-1])
+	return canonical, true
 }
 
 // validSourceRoute checks the obsolete A-d-l syntax that RFC 5321 requires receivers to accept.
@@ -101,22 +128,22 @@ func validSourceRoute(route []byte) bool {
 	return len(parts) > 0
 }
 
-// validSMTPMailbox checks Local-part followed by Domain or address-literal.
-func validSMTPMailbox(mailbox []byte) bool {
+// smtpMailboxDomainStart validates one mailbox and locates its grammar-owned Domain.
+func smtpMailboxDomainStart(mailbox []byte) (int, bool) {
 	localEnd, ok := smtpLocalPartEnd(mailbox)
 	if !ok || localEnd >= len(mailbox) || mailbox[localEnd] != '@' {
-		return false
+		return 0, false
 	}
 	local := mailbox[:localEnd]
 	domain := mailbox[localEnd+1:]
 	if len(local) > 64 || len(domain) == 0 || len(domain) > 255 {
-		return false
+		return 0, false
 	}
 	if domain[0] == '[' {
-		return validAddressLiteral(domain)
+		return localEnd + 1, validAddressLiteral(domain)
 	}
 
-	return validSMTPDomain(domain)
+	return localEnd + 1, validSMTPDomain(domain)
 }
 
 // smtpLocalPartEnd returns the byte immediately after an RFC 5321 Dot-string or Quoted-string.
@@ -274,6 +301,15 @@ func validGeneralAddressContent(content []byte) bool {
 	}
 
 	return true
+}
+
+// lowerASCIILetters folds only ASCII alphabetic bytes in one grammar-owned Domain span.
+func lowerASCIILetters(value []byte) {
+	for index, item := range value {
+		if item >= 'A' && item <= 'Z' {
+			value[index] = item + ('a' - 'A')
+		}
+	}
 }
 
 // isASCIILetterOrDigit reports whether b is an ASCII letter or digit.

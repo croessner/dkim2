@@ -35,6 +35,8 @@ Current contents:
   datasource results and opaque key-handle bindings to signing profiles.
 - `docs/datasource-ldap-sql-design.md`: design-only LDAP and SQL mappings;
   executable providers and their dependencies remain deferred.
+- `docs/replay-store-valkey.md`: production replay-store topology, ACL,
+  persistence, replication, rotation, integration, and dependency guidance.
 - `docs/specs/openapi`: authoritative source-of-truth OpenAPI contract.
 - `lib/testdata/vectors`: draft-versioned verification, DNS, custody, crypto,
   signing, revision, and insertion vectors.
@@ -53,8 +55,11 @@ same-generation profiles and policies with opaque private-key handle IDs; they
 never return private keys or signing capabilities. The memory provider is the
 static reference implementation. The flat-file provider accepts a strict,
 bounded `dkim2-datasource-v1` JSON snapshot through an owned confined directory
-descriptor and publishes reloads atomically. Replay detection, Valkey, LDAP,
-SQL, service configuration, and daemon wiring are separate later increments.
+descriptor and publishes reloads atomically. Replay detection now has a
+storage-neutral library contract, bounded memory and disabled providers, and a
+daemon-owned standalone-primary Valkey provider using privacy-preserving keys
+and one non-retryable `SET NX PX` operation. LDAP, SQL, service configuration,
+and daemon wiring remain separate later increments.
 
 Useful verification commands:
 
@@ -64,5 +69,6 @@ go test ./cmd/dkim2d/...
 go test ./cmd/dkim2-milter/...
 go test ./cmd/dkim2ctl/...
 make test
+make test-valkey
 make guardrails
 ```

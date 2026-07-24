@@ -2,6 +2,8 @@ package verify
 
 import (
 	"crypto/subtle"
+	"fmt"
+	"io"
 
 	"github.com/croessner/dkim2/internal/canonical"
 	"github.com/croessner/dkim2/internal/instance"
@@ -10,11 +12,26 @@ import (
 
 const sha256DigestLength = 32
 
+const hashCheckResultsRedactedText = "verify.hashCheckResults{redacted}"
+
 type hashCheckResults struct {
-	body          CheckResult
-	header        CheckResult
-	pass          bool
-	canonicalWork int
+	body                    CheckResult
+	header                  CheckResult
+	pass                    bool
+	canonicalWork           int
+	selectedHeaderDigest    [sha256DigestLength]byte
+	hasSelectedHeaderDigest bool
+}
+
+// String returns a constant representation without authenticated digest bytes.
+func (hashCheckResults) String() string { return hashCheckResultsRedactedText }
+
+// GoString returns a constant representation without authenticated digest bytes.
+func (hashCheckResults) GoString() string { return hashCheckResultsRedactedText }
+
+// Format prevents formatting from traversing authenticated digest bytes.
+func (hashCheckResults) Format(state fmt.State, _ rune) {
+	_, _ = io.WriteString(state, hashCheckResultsRedactedText)
 }
 
 // compareTargetHashes compares current SHA-256 hashes with the target instance.
@@ -64,12 +81,17 @@ func compareTargetHashes(canonicalizer canonical.Canonicalizer, message rawmsg.M
 	bodyStatus, bodyCode := compareSHA256Digest(bodyDigest.Bytes(), expectedBodyHash.Decoded())
 	headerStatus, headerCode := compareSHA256Digest(headerDigest.Bytes(), expectedHeaderHash.Decoded())
 
-	return hashCheckResults{
+	results := hashCheckResults{
 		body:          hashCheckResult(CheckKindBodyHash, bodyStatus, bodyCode, hashStatusFromCheck(bodyStatus), target),
 		header:        hashCheckResult(CheckKindHeaderHash, headerStatus, headerCode, hashStatusFromCheck(headerStatus), target),
 		pass:          bodyStatus == CheckStatusPass && headerStatus == CheckStatusPass,
 		canonicalWork: canonicalWorkBytes(bodyResult.CanonicalBytes()) + canonicalWorkBytes(headerResult.CanonicalBytes()),
-	}, nil
+	}
+	if headerStatus == CheckStatusPass {
+		copy(results.selectedHeaderDigest[:], expectedHeaderHash.Decoded())
+		results.hasSelectedHeaderDigest = true
+	}
+	return results, nil
 }
 
 // canonicalWorkBytes charges at least all scanned input even when canonical output collapses.

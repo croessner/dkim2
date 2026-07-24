@@ -1,6 +1,10 @@
 package verify
 
-import "slices"
+import (
+	"fmt"
+	"io"
+	"slices"
+)
 
 // CheckKind identifies one verification check dimension.
 type CheckKind string
@@ -298,16 +302,18 @@ type SignatureSetResult struct {
 
 // Result stores immutable bounded verification facts for service coordination.
 type Result struct {
-	draft          string
-	target         Target
-	status         TargetStatus
-	checks         []CheckResult
-	signatureSets  []SignatureSetResult
-	custody        CustodyStatus
-	targetFlags    TargetFlagCandidate
-	hasTargetFlags bool
-	history        HistoryWalk
-	hasHistory     bool
+	draft               string
+	target              Target
+	status              TargetStatus
+	checks              []CheckResult
+	signatureSets       []SignatureSetResult
+	custody             CustodyStatus
+	targetFlags         TargetFlagCandidate
+	hasTargetFlags      bool
+	history             HistoryWalk
+	hasHistory          bool
+	replayProjection    ReplayProjection
+	hasReplayProjection bool
 }
 
 // TargetFlagCandidate stores bounded parser-owned evidence for the selected target.
@@ -429,6 +435,35 @@ func (r Result) historyWalk() (HistoryWalk, bool) {
 		return HistoryWalk{}, false
 	}
 	return r.history.clone(), true
+}
+
+// withReplayProjection attaches one complete sealed replay projection.
+func (r Result) withReplayProjection(projection ReplayProjection) Result {
+	if !projection.Valid() {
+		return r
+	}
+	r.replayProjection = projection.clone()
+	r.hasReplayProjection = true
+	return r
+}
+
+// ReplayProjection returns one independent sealed replay projection when present.
+func (r Result) ReplayProjection() (ReplayProjection, bool) {
+	if !r.hasReplayProjection || !r.replayProjection.Valid() {
+		return ReplayProjection{}, false
+	}
+	return r.replayProjection.clone(), true
+}
+
+// String returns a constant representation without private verification facts.
+func (Result) String() string { return "verify.Result{redacted}" }
+
+// GoString returns a constant representation without private verification facts.
+func (Result) GoString() string { return "verify.Result{redacted}" }
+
+// Format prevents formatting from traversing private verification facts.
+func (Result) Format(state fmt.State, _ rune) {
+	_, _ = io.WriteString(state, "verify.Result{redacted}")
 }
 
 // Known reports whether status is part of the per-check vocabulary.

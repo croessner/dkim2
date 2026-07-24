@@ -67,12 +67,14 @@ func compareCurrentEnvelope(current Envelope, signed signature.Signature) Envelo
 
 	currentReverse := current.ReversePath()
 	signedReverse := signed.MailFrom().Value()
+	currentReverseCanonical, currentReverseValid := signature.CanonicalEnvelopePath(currentReverse, true)
+	signedReverseCanonical, signedReverseValid := signature.CanonicalEnvelopePath(signedReverse, true)
 	switch {
 	case len(currentReverse) == 0:
 		return EnvelopeStatusMissing
-	case !validReversePathBytes(currentReverse) || !validReversePathBytes(signedReverse):
+	case !currentReverseValid || !signedReverseValid:
 		return EnvelopeStatusInvalid
-	case !equalEnvelopePath(currentReverse, signedReverse):
+	case !bytes.Equal(currentReverseCanonical, signedReverseCanonical):
 		return EnvelopeStatusReversePathMismatch
 	}
 
@@ -84,73 +86,23 @@ func compareCurrentEnvelope(current Envelope, signed signature.Signature) Envelo
 	signedRecipientSet := make(map[string]struct{}, len(signedRecipients))
 	for _, signedRecipient := range signedRecipients {
 		signedPath := signedRecipient.Value()
-		if !validForwardPathBytes(signedPath) {
+		canonical, valid := signature.CanonicalEnvelopePath(signedPath, false)
+		if !valid {
 			return EnvelopeStatusInvalid
 		}
-		signedRecipientSet[envelopePathComparisonKey(signedPath)] = struct{}{}
+		signedRecipientSet[string(canonical)] = struct{}{}
 	}
 	for _, currentRecipient := range currentRecipients {
-		if !validForwardPathBytes(currentRecipient) {
+		canonical, valid := signature.CanonicalEnvelopePath(currentRecipient, false)
+		if !valid {
 			return EnvelopeStatusInvalid
 		}
-		if _, found := signedRecipientSet[envelopePathComparisonKey(currentRecipient)]; !found {
+		if _, found := signedRecipientSet[string(canonical)]; !found {
 			return EnvelopeStatusRecipientValueMismatch
 		}
 	}
 
 	return EnvelopeStatusPass
-}
-
-// equalEnvelopePath compares SMTP paths with ASCII domain case folding and case-sensitive local parts.
-func equalEnvelopePath(left []byte, right []byte) bool {
-	if bytes.Equal(left, right) {
-		return true
-	}
-
-	leftAt := bytes.LastIndexByte(left, '@')
-	rightAt := bytes.LastIndexByte(right, '@')
-	if leftAt <= 0 || rightAt <= 0 || leftAt >= len(left)-1 || rightAt >= len(right)-1 {
-		return false
-	}
-	if !bytes.Equal(left[:leftAt+1], right[:rightAt+1]) {
-		return false
-	}
-
-	leftDomain := left[leftAt+1:]
-	rightDomain := right[rightAt+1:]
-	if len(leftDomain) != len(rightDomain) {
-		return false
-	}
-	for i := range leftDomain {
-		if lowerASCII(leftDomain[i]) != lowerASCII(rightDomain[i]) {
-			return false
-		}
-	}
-
-	return true
-}
-
-// envelopePathComparisonKey returns a map-safe path copy with only ASCII domain bytes lowercased.
-func envelopePathComparisonKey(path []byte) string {
-	normalized := bytes.Clone(path)
-	at := bytes.LastIndexByte(normalized, '@')
-	if at <= 0 || at >= len(normalized)-1 {
-		return string(normalized)
-	}
-	for i := at + 1; i < len(normalized); i++ {
-		normalized[i] = lowerASCII(normalized[i])
-	}
-
-	return string(normalized)
-}
-
-// lowerASCII lowercases one ASCII letter without normalizing non-ASCII bytes.
-func lowerASCII(value byte) byte {
-	if value >= 'A' && value <= 'Z' {
-		return value + ('a' - 'A')
-	}
-
-	return value
 }
 
 // envelopeCheckResult turns envelope detail into a bounded verification fact.
@@ -190,31 +142,4 @@ func envelopeLimitCheckResult(target Target) envelopeEvaluation {
 		},
 		pass: false,
 	}
-}
-
-// validReversePathBytes checks bracketed SMTP reverse-path bytes without parsing addresses.
-func validReversePathBytes(path []byte) bool {
-	return validEnvelopePathBytes(path, true)
-}
-
-// validForwardPathBytes checks bracketed SMTP forward-path bytes without parsing addresses.
-func validForwardPathBytes(path []byte) bool {
-	return validEnvelopePathBytes(path, false)
-}
-
-// validEnvelopePathBytes validates path framing while preserving byte semantics.
-func validEnvelopePathBytes(path []byte, allowNullPath bool) bool {
-	if len(path) == 0 {
-		return false
-	}
-	for _, b := range path {
-		if b == '\r' || b == '\n' || b == 0 {
-			return false
-		}
-	}
-	if bytes.Equal(path, []byte("<>")) {
-		return allowNullPath
-	}
-
-	return len(path) >= 3 && path[0] == '<' && path[len(path)-1] == '>'
 }

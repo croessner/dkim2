@@ -1,6 +1,8 @@
 package service
 
 import (
+	"fmt"
+	"io"
 	"slices"
 
 	"github.com/croessner/dkim2/internal/policy"
@@ -36,6 +38,8 @@ type Result struct {
 	checks               []CheckFact
 	signatures           []SignatureSetFact
 	policyProjection     policy.Projection
+	replayProjection     ReplayProjection
+	hasReplayProjection  bool
 }
 
 // newResult constructs an immutable populated service result.
@@ -141,3 +145,32 @@ func (r Result) SignatureSets() []SignatureSetFact { return slices.Clone(r.signa
 
 // PolicyProjection returns an independent internal facade-transfer clone.
 func (r Result) PolicyProjection() policy.Projection { return r.policyProjection.Clone() }
+
+// withReplayProjection attaches one independently cloned coherent replay projection.
+func (r Result) withReplayProjection(projection ReplayProjection) Result {
+	if !projection.Valid() || r.state != StatePASS {
+		return r
+	}
+	r.replayProjection = projection.clone()
+	r.hasReplayProjection = true
+	return r
+}
+
+// ReplayProjection returns one independent sealed replay projection when present.
+func (r Result) ReplayProjection() (ReplayProjection, bool) {
+	if !r.hasReplayProjection || !r.replayProjection.Valid() || r.state != StatePASS {
+		return ReplayProjection{}, false
+	}
+	return r.replayProjection.clone(), true
+}
+
+// String returns a constant representation without private service facts.
+func (Result) String() string { return "service.Result{redacted}" }
+
+// GoString returns a constant representation without private service facts.
+func (Result) GoString() string { return "service.Result{redacted}" }
+
+// Format prevents formatting from traversing private service facts.
+func (Result) Format(state fmt.State, _ rune) {
+	_, _ = io.WriteString(state, "service.Result{redacted}")
+}
