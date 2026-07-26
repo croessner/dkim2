@@ -59,22 +59,22 @@ func TestServiceMapsOnlySealedPassingReplayProjection(t *testing.T) {
 func TestServiceReplayProjectionFormattingDoesNotExposePrivateFacts(t *testing.T) {
 	var marker [32]byte
 	copy(marker[:], []byte("TOXIC-SERVICE-REPLAY-MARKER"))
-	projection := ReplayProjection{
+	projection := ReplayProjection{state: &replayProjectionState{
 		draft:         replay.DraftIdentifier,
 		messageDigest: marker, hasMessageDigest: true,
 		signatureInputDigest: marker, hasSignatureInputDigest: true,
 		recipientDigests: [][32]byte{marker},
 		sealed:           true,
-	}
+	}}
 	result := Result{replayProjection: projection, hasReplayProjection: true}
 	for _, value := range []any{
 		projection, &projection, result, &result,
 		[]Result{result}, map[string]Result{"result": result},
 	} {
-		formatted := fmt.Sprintf("%v|%+v|%#v|%s|%q|%x", value, value, value, value, value, value)
+		formatted := fmt.Sprintf("%v|%+v|%#v|%s|%q|%x|%p", value, value, value, value, value, value, value)
 		if strings.Contains(formatted, "TOXIC") || strings.Contains(formatted, "544f584943") ||
 			strings.Contains(formatted, "84 79 88 73 67") {
-			t.Fatalf("%T formatting exposed replay facts: %q", value, formatted)
+			t.Fatal("formatting exposed replay facts")
 		}
 		encoded, err := json.Marshal(value)
 		if err != nil || strings.Contains(string(encoded), "TOXIC") ||

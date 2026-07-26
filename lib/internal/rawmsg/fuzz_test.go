@@ -15,6 +15,7 @@ func FuzzParseSmallInputs(f *testing.F) {
 		[]byte(" continuation\r\nA: b\r\n\r\nbody"),
 		[]byte("A b\r\n\r\nbody"),
 		[]byte("A: b\r\n\r\n"),
+		append([]byte("A: b\r\n\r\n"), bytes.Repeat(crlf, 33)...),
 		[]byte{},
 	} {
 		f.Add(seed)
@@ -45,6 +46,7 @@ func smallFuzzParserOptions() ParserOptions {
 	options.MaxHeaderFields = 16
 	options.MaxHeaderFieldBytes = 128
 	options.MaxBodyLineBytes = 128
+	options.MaxBodyLines = 32
 
 	return options
 }
@@ -68,6 +70,12 @@ func assertFuzzParserErrorDeterministic(t *testing.T, data []byte, options Parse
 	}
 	if repeatParserErr.ReasonClass() != parserErr.ReasonClass() {
 		t.Fatalf("reason class changed across parses: first=%s repeat=%s", parserErr.ReasonClass(), repeatParserErr.ReasonClass())
+	}
+	if repeatParserErr.LimitName() != parserErr.LimitName() || repeatParserErr.Limit() != parserErr.Limit() {
+		t.Fatalf("limit changed across parses: first=%s/%d repeat=%s/%d",
+			parserErr.LimitName(), parserErr.Limit(),
+			repeatParserErr.LimitName(), repeatParserErr.Limit(),
+		)
 	}
 }
 

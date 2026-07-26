@@ -32,6 +32,9 @@ func TestDefaultParserOptionsAreRestrictive(t *testing.T) {
 	if opts.MaxBodyLineBytes != 998 {
 		t.Fatalf("MaxBodyLineBytes = %d, want 998", opts.MaxBodyLineBytes)
 	}
+	if opts.MaxBodyLines != HardMaxBodyLines {
+		t.Fatalf("MaxBodyLines = %d, want %d", opts.MaxBodyLines, HardMaxBodyLines)
+	}
 	if opts.RecordNormalizedInput {
 		t.Fatal("RecordNormalizedInput must be false by default")
 	}
@@ -78,6 +81,16 @@ func TestParserOptionsValidateSafeLimits(t *testing.T) {
 			code: ErrorCodeLimitExceeded,
 		},
 		{
+			name: "body lines zero",
+			mut:  func(opts *ParserOptions) { opts.MaxBodyLines = 0 },
+			code: ErrorCodeLimitExceeded,
+		},
+		{
+			name: "body lines negative",
+			mut:  func(opts *ParserOptions) { opts.MaxBodyLines = -1 },
+			code: ErrorCodeLimitExceeded,
+		},
+		{
 			name: "wider header line compatibility",
 			mut:  func(opts *ParserOptions) { opts.MaxHeaderLineBytes = 999 },
 			code: ErrorCodeLimitExceeded,
@@ -85,6 +98,11 @@ func TestParserOptionsValidateSafeLimits(t *testing.T) {
 		{
 			name: "wider body line compatibility",
 			mut:  func(opts *ParserOptions) { opts.MaxBodyLineBytes = 999 },
+			code: ErrorCodeLimitExceeded,
+		},
+		{
+			name: "wider body line count",
+			mut:  func(opts *ParserOptions) { opts.MaxBodyLines = HardMaxBodyLines + 1 },
 			code: ErrorCodeLimitExceeded,
 		},
 		{
@@ -107,6 +125,23 @@ func TestParserOptionsValidateSafeLimits(t *testing.T) {
 				t.Fatalf("Validate error code mismatch: %v", err)
 			}
 		})
+	}
+}
+
+// TestParserOptionsBodyLineCountFailuresNameTheClosedLimit verifies option diagnostics stay bounded and actionable.
+func TestParserOptionsBodyLineCountFailuresNameTheClosedLimit(t *testing.T) {
+	options := DefaultParserOptions()
+	options.MaxBodyLines = HardMaxBodyLines + 1
+
+	err := options.Validate()
+	var parserErr *ParserError
+	if !errors.As(err, &parserErr) {
+		t.Fatalf("Validate error = %T, want ParserError", err)
+	}
+	if parserErr.Code() != ErrorCodeLimitExceeded ||
+		parserErr.LimitName() != limitNameMaxBodyLines ||
+		parserErr.Limit() != HardMaxBodyLines {
+		t.Fatalf("Validate error = %#v, want closed max_body_lines hard maximum", parserErr)
 	}
 }
 

@@ -1,6 +1,10 @@
 package: generated
 generate:
-  client: true
   models: true
-output: ../../../cmd/dkim2ctl/internal/testclient/generated/client.gen.go
-
+  client: true
+compatibility:
+  preserve-original-operation-id-casing-in-embedded-spec: true
+output-options:
+  overlay:
+    path: ../docs/specs/openapi/oapi-codegen.client.overlay.yml
+    strict: true

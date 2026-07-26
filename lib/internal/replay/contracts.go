@@ -13,8 +13,16 @@ const replayKeyRedactedText = "replay_key"
 // Identity construction and key derivation own the nonzero representation.
 // The zero value is intentionally invalid for enabled stores.
 type Key struct {
-	storage [68]byte
+	state *keyState
 }
+
+// keyState owns the protected immutable storage representation.
+type keyState struct {
+	storage [storageKeyByteLength]byte
+}
+
+// Valid reports whether the capability has the exact protected storage grammar.
+func (k Key) Valid() bool { return validStorageKey(k) }
 
 // String returns a constant representation without protected key bytes.
 func (Key) String() string { return replayKeyRedactedText }
@@ -35,6 +43,14 @@ func (Key) MarshalText() ([]byte, error) {
 // MarshalJSON rejects serialization of a protected replay key.
 func (Key) MarshalJSON() ([]byte, error) {
 	return nil, NewError(ErrorCodeInvalidRequest)
+}
+
+// storageValue returns one protected storage representation by value.
+func (k Key) storageValue() ([storageKeyByteLength]byte, bool) {
+	if k.state == nil {
+		return [storageKeyByteLength]byte{}, false
+	}
+	return k.state.storage, true
 }
 
 // Store atomically checks and retains one replay identity.

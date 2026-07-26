@@ -665,13 +665,17 @@ func auditDeadlineError(
 
 // securityAuditPolicyFrom maps immutable attestation into closed live expectations.
 func securityAuditPolicyFrom(attestation OperatorAttestation, username string) securityAuditPolicy {
+	if attestation.values == nil {
+		return securityAuditPolicy{}
+	}
+	values := attestation.values
 	return securityAuditPolicy{
 		applicationUsername:      username,
-		persistenceMode:          persistenceModeToken(attestation.persistenceMode),
-		appendFsyncPolicy:        appendFsyncToken(attestation.appendFsyncPolicy),
-		saveSchedule:             attestation.saveSchedule,
-		minReplicasToWrite:       uint64(attestation.minReplicasToWrite),
-		minReplicasMaxLagSeconds: uint64(attestation.minReplicasMaxLagSeconds),
+		persistenceMode:          persistenceModeToken(values.persistenceMode),
+		appendFsyncPolicy:        appendFsyncToken(values.appendFsyncPolicy),
+		saveSchedule:             values.saveSchedule,
+		minReplicasToWrite:       uint64(values.minReplicasToWrite),
+		minReplicasMaxLagSeconds: uint64(values.minReplicasMaxLagSeconds),
 	}
 }
 

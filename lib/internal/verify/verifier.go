@@ -18,19 +18,34 @@ type verificationInput struct {
 
 // Verify extracts DKIM2 fields from a raw message and verifies the selected target.
 func (v Verifier) Verify(ctx context.Context, request Request) (Result, error) {
+	result, input, err := v.verifyCurrent(ctx, request)
+	if err != nil || !aggregateCurrentPass(result) {
+		return result, err
+	}
+	return v.attachAuthenticatedHistory(ctx, result, input)
+}
+
+// VerifyCurrent verifies authoritative current facts without reconstructing authenticated history.
+func (v Verifier) VerifyCurrent(ctx context.Context, request Request) (Result, error) {
+	result, _, err := v.verifyCurrent(ctx, request)
+	return result, err
+}
+
+// verifyCurrent owns the shared extraction, current verification, and replay-projection path.
+func (v Verifier) verifyCurrent(ctx context.Context, request Request) (Result, verificationInput, error) {
 	if ctx == nil {
-		return Result{}, newError(ErrorCodeInternalMisuse, ErrorLocation{}, ErrorDetails{Class: ErrorClassInternal}, nil)
+		return Result{}, verificationInput{}, newError(ErrorCodeInternalMisuse, ErrorLocation{}, ErrorDetails{Class: ErrorClassInternal}, nil)
 	}
 	input, err := v.extractVerificationInput(request, recipe.DefaultLimits().MaxDecodedRecipeBytes)
 	if err != nil {
-		return Result{}, err
+		return Result{}, verificationInput{}, err
 	}
 
-	result, err := v.verifyExtracted(ctx, input)
+	result, err := v.verifyCurrentExtracted(ctx, input)
 	if typed, ok := err.(*Error); ok && len(input.signatures) == 0 {
 		typed.custody = CustodyStatusNotPresent
 	}
-	return result, err
+	return result, input, err
 }
 
 // extractVerificationInput parses protocol fields once through their authoritative owners.
@@ -94,8 +109,8 @@ func verifierInstanceLimits(maxHashSets int, recipeLimits recipe.Limits) instanc
 	return limits
 }
 
-// verifyExtracted verifies protocol state extracted exclusively from Request.Message.
-func (v Verifier) verifyExtracted(ctx context.Context, input verificationInput) (Result, error) {
+// verifyCurrentExtracted verifies current protocol state extracted exclusively from Request.Message.
+func (v Verifier) verifyCurrentExtracted(ctx context.Context, input verificationInput) (Result, error) {
 	targetSignature, targetInstance, custody, target, err := selectVerificationTarget(input)
 	if err != nil {
 		return Result{}, err
@@ -143,7 +158,7 @@ func (v Verifier) verifyExtracted(ctx context.Context, input verificationInput) 
 	if projection, ok := buildReplayProjection(input, targetSignature, targetInstance, hashes, digest, result); ok {
 		result = result.withReplayProjection(projection)
 	}
-	return v.attachAuthenticatedHistory(ctx, result, input)
+	return result, nil
 }
 
 // attachAuthenticatedHistory runs only after coherent aggregate current PASS.

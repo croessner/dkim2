@@ -86,6 +86,16 @@ func TestIdentitySetRequiresCompleteOrderedProjection(t *testing.T) {
 	if !set.Valid() {
 		t.Fatal("caller mutation changed identity set")
 	}
+	firstIdentity, firstErr := set.Identity(0)
+	secondIdentity, secondErr := set.Identity(0)
+	if firstErr != nil || secondErr != nil || firstIdentity.state == secondIdentity.state {
+		t.Fatal("Identity did not return independent immutable snapshots")
+	}
+	firstIdentity.state.recipientDigest = [32]byte{}
+	if secondIdentity.state.recipientDigest != first ||
+		set.state.identities[0].state.recipientDigest != first {
+		t.Fatal("returned identity mutation changed retained set state")
+	}
 
 	for name, mutate := range map[string]func(*syntheticIdentitySource){
 		"unsealed":          func(s *syntheticIdentitySource) { s.valid = false },
@@ -139,16 +149,20 @@ func TestIdentityFormattingNeverExposesDigestMaterial(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	values := []any{identity, &identity, set, &set, []Identity{identity}, map[Identity]struct{}{identity: {}}}
+	values := []any{
+		identity, &identity, any(identity), []Identity{identity},
+		map[string]Identity{"identity": identity}, map[Identity]struct{}{identity: {}},
+		set, &set, any(set), []IdentitySet{set}, map[string]IdentitySet{"set": set},
+	}
 	for _, value := range values {
-		formatted := fmt.Sprintf("%v|%+v|%#v|%s|%q|%x", value, value, value, value, value, value)
+		formatted := fmt.Sprintf("%v|%+v|%#v|%s|%q|%x|%p", value, value, value, value, value, value, value)
 		if strings.Contains(formatted, "TOXIC") || strings.Contains(formatted, "544f584943") || strings.Contains(formatted, "84 79 88 73 67") {
-			t.Fatalf("%T formatting exposed digest material: %q", value, formatted)
+			t.Fatal("identity formatting exposed digest material")
 		}
 		encoded, err := json.Marshal(value)
 		if strings.Contains(string(encoded), "TOXIC") || strings.Contains(string(encoded), "VE9YSUM") ||
 			err != nil && strings.Contains(err.Error(), "TOXIC") {
-			t.Fatalf("json.Marshal(%T) = %s, %v", value, encoded, err)
+			t.Fatal("identity serialization exposed digest material")
 		}
 	}
 	if _, ok := any(identity).(encoding.TextMarshaler); ok {

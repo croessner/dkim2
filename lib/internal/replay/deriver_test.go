@@ -12,6 +12,8 @@ import (
 	"time"
 )
 
+const privacyDeriverMapKey = "deriver"
+
 // TestDeriverProducesExactPublishedStorageKey verifies byte framing, HMAC, epoch formatting, and base64url.
 func TestDeriverProducesExactPublishedStorageKey(t *testing.T) {
 	secret := sequenceBytes(0xa0)
@@ -156,23 +158,28 @@ func TestDeriverRejectsInvalidSecretsEpochIdentityAndContext(t *testing.T) {
 // TestUseStorageKeyContainsCallbackFailuresAndRunsExactlyOnce verifies the protected capability boundary.
 func TestUseStorageKeyContainsCallbackFailuresAndRunsExactlyOnce(t *testing.T) {
 	key := mustTestKey(t)
+	if !key.Valid() {
+		t.Fatal("derived replay key reported invalid")
+	}
 	neverCalled := func(string) error { t.Fatal("invalid callback invoked"); return nil }
 	if err := UseStorageKey(Key{}, neverCalled); ErrorCodeOf(err) != ErrorCodeInvalidRequest {
 		t.Fatalf("UseStorageKey(zero) error = %v", err)
 	}
 	var forged Key
-	copy(forged.storage[:], []byte("TOXIC-NONZERO-BUT-INVALID-STORAGE-CAPABILITY"))
+	forged.state = &keyState{}
+	copy(forged.state.storage[:], []byte("TOXIC-NONZERO-BUT-INVALID-STORAGE-CAPABILITY"))
 	if err := UseStorageKey(forged, neverCalled); ErrorCodeOf(err) != ErrorCodeInvalidRequest {
 		t.Fatalf("UseStorageKey(forged) error = %v", err)
 	}
 	nonCanonical := key
+	nonCanonical.state = &keyState{storage: key.state.storage}
 	const rawURLAlphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
-	last := len(nonCanonical.storage) - 1
-	index := strings.IndexByte(rawURLAlphabet, nonCanonical.storage[last])
+	last := len(nonCanonical.state.storage) - 1
+	index := strings.IndexByte(rawURLAlphabet, nonCanonical.state.storage[last])
 	if index < 0 || index&3 != 0 {
-		t.Fatalf("canonical key ended in unexpected base64url symbol %q", nonCanonical.storage[last])
+		t.Fatal("canonical key ended in an unexpected base64url symbol")
 	}
-	nonCanonical.storage[last] = rawURLAlphabet[index|1]
+	nonCanonical.state.storage[last] = rawURLAlphabet[index|1]
 	if err := UseStorageKey(nonCanonical, neverCalled); ErrorCodeOf(err) != ErrorCodeInvalidRequest {
 		t.Fatalf("UseStorageKey(noncanonical base64url) error = %v", err)
 	}
@@ -212,20 +219,20 @@ func TestDeriverCloseDrainsConcurrentAdmissionAndClearsOwnedSecret(t *testing.T)
 		t.Fatal(err)
 	}
 	identity := mustTestIdentity(t)
-	deriver.beforeHMAC = make(chan struct{})
-	deriver.continueHMAC = make(chan struct{})
+	deriver.state.beforeHMAC = make(chan struct{})
+	deriver.state.continueHMAC = make(chan struct{})
 
 	deriveDone := make(chan error, 1)
 	go func() {
 		_, deriveErr := deriver.Derive(context.Background(), identity)
 		deriveDone <- deriveErr
 	}()
-	<-deriver.beforeHMAC
+	<-deriver.state.beforeHMAC
 
 	closeContext, cancel := context.WithCancel(context.Background())
 	closeDone := make(chan error, 1)
 	go func() { closeDone <- deriver.Close(closeContext) }()
-	for deriver.gate.State() != StoreClosing {
+	for deriver.state.gate.State() != StoreClosing {
 		runtime.Gosched()
 	}
 	cancel()
@@ -235,14 +242,14 @@ func TestDeriverCloseDrainsConcurrentAdmissionAndClearsOwnedSecret(t *testing.T)
 	if _, err := deriver.Derive(context.Background(), identity); ErrorCodeOf(err) != ErrorCodeClosed {
 		t.Fatalf("derive during closing error = %v", err)
 	}
-	close(deriver.continueHMAC)
+	close(deriver.state.continueHMAC)
 	if err := <-deriveDone; err != nil {
 		t.Fatalf("admitted derive error = %v", err)
 	}
 	if err := deriver.Close(context.Background()); err != nil {
 		t.Fatalf("second Close() error = %v", err)
 	}
-	if deriver.secret != ([32]byte{}) {
+	if deriver.state.secret != ([32]byte{}) {
 		t.Fatal("owned secret was not cleared")
 	}
 	if _, err := deriver.Derive(context.Background(), identity); ErrorCodeOf(err) != ErrorCodeClosed {
@@ -263,24 +270,52 @@ func TestDeriverCloseContainsHostileContextState(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		deriver.beforeHMAC = make(chan struct{})
-		deriver.continueHMAC = make(chan struct{})
+		deriver.state.beforeHMAC = make(chan struct{})
+		deriver.state.continueHMAC = make(chan struct{})
 		identity := mustTestIdentity(t)
 		deriveDone := make(chan error, 1)
 		go func() {
 			_, deriveErr := deriver.Derive(context.Background(), identity)
 			deriveDone <- deriveErr
 		}()
-		<-deriver.beforeHMAC
+		<-deriver.state.beforeHMAC
 		if err := deriver.Close(ctx); ErrorCodeOf(err) != ErrorCodeInternalInvariant {
 			t.Fatalf("Close(%T) error = %v", ctx, err)
 		}
-		close(deriver.continueHMAC)
+		close(deriver.state.continueHMAC)
 		if err := <-deriveDone; err != nil {
 			t.Fatalf("Derive() cleanup error = %v", err)
 		}
 		if err := deriver.Close(context.Background()); err != nil {
 			t.Fatalf("Close() cleanup error = %v", err)
+		}
+	}
+}
+
+// TestDeriverFormattingAndSerializationRemainContentFree verifies every reachable owner surface.
+func TestDeriverFormattingAndSerializationRemainContentFree(t *testing.T) {
+	secret := []byte("TOXIC-DERIVER-SECRET-1234567890!")
+	deriver, err := NewDeriver(secret, 0x544f5849)
+	if err != nil {
+		t.Fatal(err)
+	}
+	value := *deriver
+	surfaces := []any{
+		deriver, value, any(deriver), any(value),
+		[]*Deriver{deriver}, []Deriver{value},
+		map[string]*Deriver{privacyDeriverMapKey: deriver},
+		map[string]Deriver{privacyDeriverMapKey: value},
+	}
+	for _, surface := range surfaces {
+		formatted := fmt.Sprintf("%v|%+v|%#v|%s|%q|%x|%p", surface, surface, surface, surface, surface, surface, surface)
+		if strings.Contains(formatted, "TOXIC") || strings.Contains(formatted, "544f584943") ||
+			strings.Contains(formatted, "84 79 88 73 67") {
+			t.Fatal("deriver formatting exposed protected state")
+		}
+		encoded, marshalErr := json.Marshal(surface)
+		if strings.Contains(string(encoded), "TOXIC") ||
+			marshalErr != nil && strings.Contains(marshalErr.Error(), "TOXIC") {
+			t.Fatal("deriver serialization exposed protected state")
 		}
 	}
 }
@@ -317,7 +352,10 @@ func TestKeyAndDeriverFormattingNeverExposeProtectedMaterial(t *testing.T) {
 		t.Fatal(err)
 	}
 	key := mustTestKey(t)
-	for _, value := range []any{key, &key, deriver, []*Deriver{deriver}, map[string]*Deriver{"deriver": deriver}} {
+	for _, value := range []any{
+		key, &key, deriver, []*Deriver{deriver},
+		map[string]*Deriver{privacyDeriverMapKey: deriver},
+	} {
 		formatted := fmt.Sprintf("%v|%+v|%#v|%s|%q|%x", value, value, value, value, value, value)
 		if strings.Contains(formatted, "TOXIC") || strings.Contains(formatted, "544f584943") || strings.Contains(formatted, "84 79 88 73 67") {
 			t.Fatalf("%T formatting exposed protected material: %q", value, formatted)

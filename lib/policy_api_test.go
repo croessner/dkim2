@@ -47,6 +47,52 @@ func TestEvaluatePolicyPreservesVerificationAndReturnsOneAction(t *testing.T) {
 	}
 }
 
+// TestVerifyResultValidRequiresCompleteSealedProvenance proves the public validity seam remains fail closed.
+func TestVerifyResultValidRequiresCompleteSealedProvenance(t *testing.T) {
+	valid := selectedPolicyResult(t, policy.ProtocolPASS, policy.VerificationReasonNone, ResultStatePASS, ReasonNone, false)
+	if !valid.Valid() {
+		t.Fatal("library-owned result was not valid")
+	}
+	if (VerifyResult{}).Valid() {
+		t.Fatal("zero result was valid")
+	}
+
+	emptyChecks := valid
+	emptyChecks.state = emptyChecks.cloneState()
+	emptyChecks.state.checks = nil
+	if emptyChecks.Valid() {
+		t.Fatal("result without checks was valid")
+	}
+
+	invalidReason := valid
+	invalidReason.state = invalidReason.cloneState()
+	invalidReason.state.primaryReason = ReasonInvalidRequest
+	if invalidReason.Valid() {
+		t.Fatal("error-only invalid_request became a valid result reason")
+	}
+
+	halfTarget := valid
+	halfTarget.state = halfTarget.cloneState()
+	halfTarget.state.target = newVerificationTarget(halfTarget.Target().Sequence(), 0)
+	if halfTarget.Valid() {
+		t.Fatal("half-present target was valid")
+	}
+
+	unavailable := unavailablePolicyResult(t, policy.PreTargetMissingProtocol, ReasonMissingProtocol)
+	if !unavailable.Valid() {
+		t.Fatalf("sealed unavailable result was invalid: provenance=%t state=%q custody=%q pre=%q reason=%q checks=%d",
+			verifyResultPolicyProvenanceValid(unavailable), unavailable.State(), unavailable.CustodyStructure(),
+			unavailable.state.policyProjection.PreTargetReason(), unavailable.PrimaryReason(), unavailable.CheckCount())
+	}
+	actualUnavailable := actualUnavailablePolicyResult(t, policy.PreTargetMissingProtocol, ReasonMissingProtocol)
+	if !actualUnavailable.Valid() {
+		t.Fatalf("actual unavailable result was invalid: provenance=%t state=%q custody=%q pre=%q reason=%q checks=%d signatures=%d",
+			verifyResultPolicyProvenanceValid(actualUnavailable), actualUnavailable.State(), actualUnavailable.CustodyStructure(),
+			actualUnavailable.state.policyProjection.PreTargetReason(), actualUnavailable.PrimaryReason(),
+			actualUnavailable.CheckCount(), actualUnavailable.SignatureSetCount())
+	}
+}
+
 // TestEvaluatePolicyUnavailableMatrix proves every sealed pre-target reason preserves PERMERROR while modes only change local disposition.
 func TestEvaluatePolicyUnavailableMatrix(t *testing.T) {
 	reasons := []struct {
@@ -98,18 +144,63 @@ func TestEvaluatePolicyUnavailableMatrix(t *testing.T) {
 func TestEvaluatePolicyRejectsMissingAndIncoherentProvenance(t *testing.T) {
 	valid := unavailablePolicyResult(t, policy.PreTargetMissingProtocol, ReasonMissingProtocol)
 	for name, result := range map[string]VerifyResult{
-		"zero":               {},
-		"manual":             {draft: DraftIdentifier, state: ResultStatePERMERROR, scope: VerificationScopeCurrent, historicalContent: HistoricalStateNotEvaluated, historicalSignatures: HistoricalStateNotEvaluated, custodyStructure: CustodyStructureNotEvaluated, primaryReason: ReasonMissingProtocol},
-		"reason mismatch":    func() VerifyResult { r := valid; r.primaryReason = ReasonMalformedProtocol; return r }(),
-		"target mismatch":    func() VerifyResult { r := valid; r.target = newVerificationTarget(1, 1); return r }(),
-		"state mismatch":     func() VerifyResult { r := valid; r.state = ResultStateFAIL; return r }(),
-		"scope mismatch":     func() VerifyResult { r := valid; r.scope = futurePolicyValue; return r }(),
-		"history mismatch":   func() VerifyResult { r := valid; r.historicalContent = futurePolicyValue; return r }(),
-		"signature history":  func() VerifyResult { r := valid; r.historicalSignatures = futurePolicyValue; return r }(),
-		"draft mismatch":     func() VerifyResult { r := valid; r.draft = futurePolicyValue; return r }(),
-		"custody mismatch":   func() VerifyResult { r := valid; r.custodyStructure = futurePolicyValue; return r }(),
-		"projection missing": func() VerifyResult { r := valid; r.policyProjection = policy.Projection{}; return r }(),
-		"selected mismatch":  selectedPolicyResult(t, policy.ProtocolPASS, policy.VerificationReasonNone, ResultStateFAIL, ReasonHashMismatch, false),
+		"zero":   {},
+		"manual": {state: &verifyResultState{draft: DraftIdentifier, resultState: ResultStatePERMERROR, scope: VerificationScopeCurrent, historicalContent: HistoricalStateNotEvaluated, historicalSignatures: HistoricalStateNotEvaluated, custodyStructure: CustodyStructureNotEvaluated, primaryReason: ReasonMissingProtocol}},
+		"reason mismatch": func() VerifyResult {
+			r := valid
+			r.state = r.cloneState()
+			r.state.primaryReason = ReasonMalformedProtocol
+			return r
+		}(),
+		"target mismatch": func() VerifyResult {
+			r := valid
+			r.state = r.cloneState()
+			r.state.target = newVerificationTarget(1, 1)
+			return r
+		}(),
+		"state mismatch": func() VerifyResult {
+			r := valid
+			r.state = r.cloneState()
+			r.state.resultState = ResultStateFAIL
+			return r
+		}(),
+		"scope mismatch": func() VerifyResult {
+			r := valid
+			r.state = r.cloneState()
+			r.state.scope = futurePolicyValue
+			return r
+		}(),
+		"history mismatch": func() VerifyResult {
+			r := valid
+			r.state = r.cloneState()
+			r.state.historicalContent = futurePolicyValue
+			return r
+		}(),
+		"signature history": func() VerifyResult {
+			r := valid
+			r.state = r.cloneState()
+			r.state.historicalSignatures = futurePolicyValue
+			return r
+		}(),
+		"draft mismatch": func() VerifyResult {
+			r := valid
+			r.state = r.cloneState()
+			r.state.draft = futurePolicyValue
+			return r
+		}(),
+		"custody mismatch": func() VerifyResult {
+			r := valid
+			r.state = r.cloneState()
+			r.state.custodyStructure = futurePolicyValue
+			return r
+		}(),
+		"projection missing": func() VerifyResult {
+			r := valid
+			r.state = r.cloneState()
+			r.state.policyProjection = policy.Projection{}
+			return r
+		}(),
+		"selected mismatch": selectedPolicyResult(t, policy.ProtocolPASS, policy.VerificationReasonNone, ResultStateFAIL, ReasonHashMismatch, false),
 	} {
 		t.Run(name, func(t *testing.T) {
 			decision, err := EvaluatePolicy(result)
@@ -316,7 +407,7 @@ func TestEvaluatePolicyUsesHiddenPreRetentionDNSFacts(t *testing.T) {
 	}
 	retainedDecision, err := EvaluatePolicy(retained)
 	if err != nil || retainedDecision.DNSTestingEffective() || retainedDecision.Verdict() != PolicyVerdictReject || !policyDecisionHasReason(retainedDecision, PolicyReasonDNSTestingMixed) {
-		t.Fatalf("retained decision = %q/%t/%v reason=%q projection_reason=%q facts=%#v public=%#v", retainedDecision.Verdict(), retainedDecision.DNSTestingEffective(), err, retained.PrimaryReason(), retained.policyProjection.VerificationReason(), retained.policyProjection.SignatureFacts(), retained.SignatureSets())
+		t.Fatalf("retained decision = %q/%t/%v reason=%q projection_reason=%q facts=%#v public=%#v", retainedDecision.Verdict(), retainedDecision.DNSTestingEffective(), err, retained.PrimaryReason(), retained.sealedPolicyProjection().VerificationReason(), retained.sealedPolicyProjection().SignatureFacts(), retained.SignatureSets())
 	}
 }
 
@@ -375,13 +466,18 @@ func TestPublicPolicyVocabulariesAreClosed(t *testing.T) {
 			t.Fatalf("corrupt public action plan %d accepted", index)
 		}
 	}
-	if (PolicyFinding{reason: PolicyReasonProtocolPass, severity: PolicySeverityPermanent, initialized: true}).Valid() ||
-		(PolicyFinding{reason: PolicyReasonFeedbackRequested, severity: PolicySeverityInfo, initialized: true}).Valid() ||
-		(PolicyFinding{reason: PolicyReasonProtocolPass, severity: PolicySeverityInfo, sequence: 1, hasSequence: true, initialized: true}).Valid() ||
-		(PolicyFinding{reason: PolicyReasonInternalContract, severity: PolicySeverityPermanent, initialized: true}).Valid() {
+	if (PolicyFinding{state: &policyFindingState{reason: PolicyReasonProtocolPass, severity: PolicySeverityPermanent, initialized: true}}).Valid() ||
+		(PolicyFinding{state: &policyFindingState{reason: PolicyReasonFeedbackRequested, severity: PolicySeverityInfo, initialized: true}}).Valid() ||
+		(PolicyFinding{state: &policyFindingState{reason: PolicyReasonProtocolPass, severity: PolicySeverityInfo, sequence: 1, hasSequence: true, initialized: true}}).Valid() ||
+		(PolicyFinding{state: &policyFindingState{reason: PolicyReasonInternalContract, severity: PolicySeverityPermanent, initialized: true}}).Valid() {
 		t.Fatal("incoherent public finding accepted")
 	}
-	for _, partial := range []PolicyDecision{{modify: PolicyComplianceNotEvaluated}, {explode: PolicyComplianceNotEvaluated}, {feedback: PolicyFeedbackIntent{initialized: true}}, {dnsEffective: true}} {
+	for _, partial := range []PolicyDecision{
+		{state: &policyDecisionState{modify: PolicyComplianceNotEvaluated}},
+		{state: &policyDecisionState{explode: PolicyComplianceNotEvaluated}},
+		{state: &policyDecisionState{feedback: PolicyFeedbackIntent{state: &policyFeedbackIntentState{initialized: true}}}},
+		{state: &policyDecisionState{dnsEffective: true}},
+	} {
 		if partial.IsZero() {
 			t.Fatal("partially initialized public decision reported zero")
 		}
@@ -498,30 +594,61 @@ func TestPolicyDecisionClonesAndSupportsConcurrentReuse(t *testing.T) {
 		t.Fatal("public decision leaked mutable slice ownership")
 	}
 	contradictions := []PolicyDecision{
-		func() PolicyDecision { got := decision; got.verificationState = ResultStatePASS; return got }(),
-		func() PolicyDecision { got := decision; got.mode = PolicyModeStrict; return got }(),
-		func() PolicyDecision { got := decision; got.verdict = PolicyVerdictAccept; return got }(),
-		func() PolicyDecision { got := decision; got.primaryReason = PolicyReasonInvalidInput; return got }(),
 		func() PolicyDecision {
-			got := decision
-			got.findings = slices.Clone(got.findings)
-			slices.Reverse(got.findings)
+			got := clonePublicPolicyDecision(decision)
+			got.state.verificationState = ResultStatePASS
 			return got
 		}(),
 		func() PolicyDecision {
-			got := decision
-			got.findings = slices.Clone(got.findings)
-			got.findings[0].reason = PolicyReasonProtocolPass
+			got := clonePublicPolicyDecision(decision)
+			got.state.mode = PolicyModeStrict
 			return got
 		}(),
-		func() PolicyDecision { got := decision; got.dnsEffective = true; return got }(),
-		func() PolicyDecision { got := decision; got.modify = PolicyComplianceViolated; return got }(),
-		func() PolicyDecision { got := decision; got.explode = PolicyComplianceViolated; return got }(),
-		func() PolicyDecision { got := decision; got.feedback.requested = true; return got }(),
 		func() PolicyDecision {
-			got := decision
-			got.actionPlan.actions = slices.Clone(got.actionPlan.actions)
-			got.actionPlan.actions[0].kind = PolicyActionReject
+			got := clonePublicPolicyDecision(decision)
+			got.state.verdict = PolicyVerdictAccept
+			return got
+		}(),
+		func() PolicyDecision {
+			got := clonePublicPolicyDecision(decision)
+			got.state.primaryReason = PolicyReasonInvalidInput
+			return got
+		}(),
+		func() PolicyDecision {
+			got := clonePublicPolicyDecision(decision)
+			slices.Reverse(got.state.findings)
+			return got
+		}(),
+		func() PolicyDecision {
+			got := clonePublicPolicyDecision(decision)
+			findingState := *got.state.findings[0].state
+			findingState.reason = PolicyReasonProtocolPass
+			got.state.findings[0].state = &findingState
+			return got
+		}(),
+		func() PolicyDecision {
+			got := clonePublicPolicyDecision(decision)
+			got.state.dnsEffective = true
+			return got
+		}(),
+		func() PolicyDecision {
+			got := clonePublicPolicyDecision(decision)
+			got.state.modify = PolicyComplianceViolated
+			return got
+		}(),
+		func() PolicyDecision {
+			got := clonePublicPolicyDecision(decision)
+			got.state.explode = PolicyComplianceViolated
+			return got
+		}(),
+		func() PolicyDecision {
+			got := clonePublicPolicyDecision(decision)
+			got.state.feedback.state.requested = true
+			return got
+		}(),
+		func() PolicyDecision {
+			got := clonePublicPolicyDecision(decision)
+			got.state.actionPlan.actions[0].kind = PolicyActionReject
 			return got
 		}(),
 	}
@@ -542,6 +669,21 @@ func TestPolicyDecisionClonesAndSupportsConcurrentReuse(t *testing.T) {
 		}()
 	}
 	wait.Wait()
+}
+
+// clonePublicPolicyDecision returns a structurally independent test mutation candidate.
+func clonePublicPolicyDecision(decision PolicyDecision) PolicyDecision {
+	if decision.state == nil {
+		return PolicyDecision{}
+	}
+	state := *decision.state
+	state.findings = slices.Clone(state.findings)
+	state.actionPlan.actions = slices.Clone(state.actionPlan.actions)
+	if state.feedback.state != nil {
+		feedback := *state.feedback.state
+		state.feedback.state = &feedback
+	}
+	return PolicyDecision{state: &state}
 }
 
 // unavailablePolicyResult constructs a library-owned sealed unavailable result for facade contract tests.

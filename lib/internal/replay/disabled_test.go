@@ -91,9 +91,21 @@ func TestDisabledStoreContainsHostileContexts(t *testing.T) {
 // TestDisabledStoreFormattingIsContentFree verifies stable provider privacy.
 func TestDisabledStoreFormattingIsContentFree(t *testing.T) {
 	store := NewDisabledStore()
-	formatted := fmt.Sprintf("%v|%+v|%#v|%s|%q|%x", store, store, store, store, store, store)
-	if strings.Count(formatted, disabledStoreRedactedText) != 6 {
-		t.Fatalf("disabled formatting = %q", formatted)
+	value := *store
+	for _, surface := range []any{
+		store, value, any(store), any(value),
+		[]*DisabledStore{store}, []DisabledStore{value},
+		map[string]*DisabledStore{privacyStoreMapKey: store},
+		map[string]DisabledStore{privacyStoreMapKey: value},
+	} {
+		formatted := fmt.Sprintf("%v|%+v|%#v|%s|%q|%x|%p", surface, surface, surface, surface, surface, surface, surface)
+		if strings.Contains(formatted, "lifecycleGate") {
+			t.Fatal("disabled formatting exposed retained provider state")
+		}
+		encoded, marshalErr := json.Marshal(surface)
+		if encoded != nil || ErrorCodeOf(marshalErr) != ErrorCodeInternalInvariant {
+			t.Fatal("disabled serialization did not fail closed")
+		}
 	}
 	if text, err := store.MarshalText(); text != nil || ErrorCodeOf(err) != ErrorCodeInvalidRequest {
 		t.Fatalf("disabled text = %q, %v", text, err)

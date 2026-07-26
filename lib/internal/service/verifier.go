@@ -69,7 +69,7 @@ func (v Verifier) Verify(ctx context.Context, request Request) (Result, error) {
 		return preExtractionResult(reason), nil
 	}
 
-	coreResult, err := v.core.Verify(ctx, verify.Request{
+	coreResult, err := v.core.VerifyCurrent(ctx, verify.Request{
 		Message: message, Envelope: verify.NewEnvelope(request.ReversePath(), forward), RequireEnvelope: true,
 	})
 	if ctxErr := ctx.Err(); ctxErr != nil {

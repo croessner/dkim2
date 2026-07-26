@@ -61,9 +61,24 @@ func TestRecipeRawMessageLimitsStayAligned(t *testing.T) {
 		recipeLimits.MaxHeaderFieldBytes != rawLimits.MaxHeaderFieldBytes ||
 		recipeLimits.MaxHeaderLineBytes != rawLimits.MaxHeaderLineBytes ||
 		recipeLimits.MaxHeaderBytes != rawLimits.MaxHeaderBytes ||
+		recipeLimits.MaxBodyLines != rawLimits.MaxBodyLines ||
 		recipeLimits.MaxBodyLineBytes != rawLimits.MaxBodyLineBytes ||
 		recipeLimits.MaxStateBytes != rawLimits.MaxMessageBytes {
 		t.Fatalf("recipe/rawmsg ceilings drifted: %#v / %#v", recipeLimits, rawLimits)
+	}
+}
+
+// TestApplierPropagatesNarrowRawMessageLimits verifies reconstruction cannot widen recipe policy.
+func TestApplierPropagatesNarrowRawMessageLimits(t *testing.T) {
+	limits := DefaultLimits()
+	limits.MaxBodyLines = 7
+
+	applier, err := NewApplier(limits)
+	if err != nil {
+		t.Fatalf("NewApplier() error = %v", err)
+	}
+	if applier.rawOptions.MaxBodyLines != limits.MaxBodyLines {
+		t.Fatalf("raw MaxBodyLines = %d, want %d", applier.rawOptions.MaxBodyLines, limits.MaxBodyLines)
 	}
 }
 

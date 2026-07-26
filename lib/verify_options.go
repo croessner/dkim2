@@ -82,6 +82,10 @@ type verificationClock struct{ now func() time.Time }
 
 // Verifier is the public current-verification facade.
 type Verifier struct {
+	state *verifierState
+}
+
+type verifierState struct {
 	service     service.Verifier
 	limits      VerificationLimits
 	initialized bool

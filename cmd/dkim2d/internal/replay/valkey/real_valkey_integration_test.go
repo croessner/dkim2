@@ -64,27 +64,10 @@ func requiredIntegrationSocket(t *testing.T) string {
 // integrationOperatorAttestation constructs the exact synthetic RDB deployment assertion.
 func integrationOperatorAttestation(t *testing.T) OperatorAttestation {
 	t.Helper()
-	attestation, err := NewOperatorAttestation(OperatorAttestationInput{
-		PersistenceMode:          PersistenceModeRDB,
-		AppendFsyncPolicy:        AppendFsyncInactive,
-		SaveSchedule:             integrationSaveSchedule,
-		MinReplicasToWrite:       0,
-		MinReplicasMaxLagSeconds: 10,
-		LossWindowAcceptance:     LossWindowAsynchronousAcknowledged,
-		RotationState:            RotationUnchanged,
-		NoGlobalExactlyOnceClaim: true,
-		DedicatedDeployment:      true,
-		DedicatedDatabaseZero:    true,
-		DirectIPAuthority:        true,
-		NoEndpointSubstitution:   true,
-		StandaloneAuthority:      true,
-		SharedDraft:              true,
-		SharedAlgorithm:          true,
-		SharedNamespace:          true,
-		SharedEpoch:              true,
-		SharedSecretSet:          true,
-		SharedRetention:          true,
-	})
+	input := validOperatorAttestationInput()
+	input.values.SaveSchedule = integrationSaveSchedule
+	input.values.MinReplicasMaxLagSeconds = 10
+	attestation, err := NewOperatorAttestation(input)
 	if err != nil {
 		t.Fatal("synthetic operator attestation construction failed")
 	}

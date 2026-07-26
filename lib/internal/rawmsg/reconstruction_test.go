@@ -64,6 +64,11 @@ func TestReconstructedComponentsRejectZeroAndLimits(t *testing.T) {
 	if _, err := NewReconstructedBody([]byte("four\r\n"), options); !IsParserErrorCode(err, ErrorCodeLimitExceeded) {
 		t.Fatalf("body line error = %v", err)
 	}
+	options = DefaultParserOptions()
+	options.MaxBodyLines = 1
+	if _, err := NewReconstructedBody([]byte("\r\n\r\n"), options); !IsParserErrorCode(err, ErrorCodeLimitExceeded) {
+		t.Fatalf("body line-count error = %v", err)
+	}
 }
 
 // TestReconstructedEmptyStatesMaterializeWithExplicitDelimiter verifies valid empty output is not a zero Message.

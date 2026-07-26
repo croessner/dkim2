@@ -134,14 +134,19 @@ func TestStoreContractsRemainStorageNeutral(t *testing.T) {
 // TestKeyFormattingAndSerializationNeverExposeStorageBytes verifies the opaque contract is protected.
 func TestKeyFormattingAndSerializationNeverExposeStorageBytes(t *testing.T) {
 	var key Key
-	copy(key.storage[:], []byte("TOXIC-PROTECTED-REPLAY-KEY"))
-	formatted := fmt.Sprintf("%v|%+v|%#v|%s|%q|%x|%X", key, key, key, key, key, key, key)
+	key.state = &keyState{}
+	copy(key.state.storage[:], []byte("TOXIC-PROTECTED-REPLAY-KEY"))
+	if key.Valid() || (Key{}).Valid() {
+		t.Fatal("invalid replay key reported valid")
+	}
+	formatted := fmt.Sprintf("%v|%+v|%#v|%s|%q|%x|%X|%p", key, key, key, key, key, key, key, key)
 	if strings.Contains(formatted, "TOXIC") || strings.Contains(formatted, "544f584943") ||
+		strings.Contains(formatted, "84 79 88 73 67") ||
 		strings.Count(formatted, replayKeyRedactedText) != 7 {
-		t.Fatalf("Key formatting was not constant: %q", formatted)
+		t.Fatal("Key formatting was not content-free")
 	}
 	if pointerFormatted := fmt.Sprintf("%p", &key); containsKeyMaterial(pointerFormatted) {
-		t.Fatalf("Key pointer formatting exposed protected bytes: %q", pointerFormatted)
+		t.Fatal("Key pointer formatting exposed protected bytes")
 	}
 	if text, err := key.MarshalText(); text != nil || ErrorCodeOf(err) != ErrorCodeInvalidRequest {
 		t.Fatalf("Key.MarshalText() = %q, %v", text, err)
@@ -154,7 +159,8 @@ func TestKeyFormattingAndSerializationNeverExposeStorageBytes(t *testing.T) {
 // TestKeyContainerAndPointerSurfacesNeverExposeStorageBytes verifies recursive diagnostics.
 func TestKeyContainerAndPointerSurfacesNeverExposeStorageBytes(t *testing.T) {
 	var key Key
-	copy(key.storage[:], []byte("TOXIC-PROTECTED-REPLAY-KEY"))
+	key.state = &keyState{}
+	copy(key.state.storage[:], []byte("TOXIC-PROTECTED-REPLAY-KEY"))
 	slice := []Key{key}
 	structure := struct{ Key Key }{Key: key}
 	stringMap := map[string]Key{"key": key}
@@ -170,10 +176,10 @@ func TestKeyContainerAndPointerSurfacesNeverExposeStorageBytes(t *testing.T) {
 		{keyMap, &keyMap},
 	}
 	for _, surface := range surfaces {
-		formatted := fmt.Sprintf("%v|%+v|%#v|%x", surface.value, surface.value, surface.value, surface.value)
+		formatted := fmt.Sprintf("%v|%+v|%#v|%x|%p", surface.value, surface.value, surface.value, surface.value, surface.value)
 		formatted += "|" + fmt.Sprintf("%p", surface.pointer)
 		if containsKeyMaterial(formatted) {
-			t.Fatalf("%T formatting exposed protected bytes: %q", surface.value, formatted)
+			t.Fatal("nested Key formatting exposed protected bytes")
 		}
 		encoded, err := json.Marshal(surface.value)
 		if err == nil || encoded != nil {

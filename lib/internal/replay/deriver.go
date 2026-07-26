@@ -26,6 +26,11 @@ const (
 
 // Deriver owns one cloned deployment-local HMAC secret and its lifecycle.
 type Deriver struct {
+	state *deriverState
+}
+
+// deriverState owns protected derivation state behind one format-safe handle.
+type deriverState struct {
 	closeOnce    sync.Once
 	gate         *lifecycleGate
 	secret       [32]byte
@@ -40,10 +45,12 @@ func NewDeriver(secret []byte, epoch uint32) (*Deriver, error) {
 		return nil, NewError(ErrorCodeMisconfigured)
 	}
 	deriver := &Deriver{
-		epoch: epoch,
-		gate:  newLifecycleGate(StoreReady),
+		state: &deriverState{
+			epoch: epoch,
+			gate:  newLifecycleGate(StoreReady),
+		},
 	}
-	copy(deriver.secret[:], secret)
+	copy(deriver.state.secret[:], secret)
 	return deriver, nil
 }
 
@@ -52,10 +59,10 @@ func (d *Deriver) Derive(ctx context.Context, identity Identity) (key Key, resul
 	if err := PreflightContext(ctx); err != nil {
 		return Key{}, err
 	}
-	if d == nil {
+	if d == nil || d.state == nil {
 		return Key{}, NewError(ErrorCodeMisconfigured)
 	}
-	if err := d.gate.admit(StoreReady); err != nil {
+	if err := d.state.gate.admit(StoreReady); err != nil {
 		return Key{}, err
 	}
 	defer func() {
@@ -69,25 +76,26 @@ func (d *Deriver) Derive(ctx context.Context, identity Identity) (key Key, resul
 		return Key{}, NewError(ErrorCodeInvalidRequest)
 	}
 
-	if d.beforeHMAC != nil {
-		close(d.beforeHMAC)
+	if d.state.beforeHMAC != nil {
+		close(d.state.beforeHMAC)
 	}
-	if d.continueHMAC != nil {
-		<-d.continueHMAC
+	if d.state.continueHMAC != nil {
+		<-d.state.continueHMAC
 	}
 
 	frame := replayHMACFrame(identity)
-	mac := hmac.New(sha256.New, d.secret[:])
+	mac := hmac.New(sha256.New, d.state.secret[:])
 	if _, err := mac.Write(frame); err != nil {
 		return Key{}, NewError(ErrorCodeInternalInvariant)
 	}
 	digest := mac.Sum(nil)
 	encoded := base64.RawURLEncoding.EncodeToString(digest)
-	storage := fmt.Sprintf("%s%08x:%s", keyNamespacePrefix, d.epoch, encoded)
+	storage := fmt.Sprintf("%s%08x:%s", keyNamespacePrefix, d.state.epoch, encoded)
 	if len(storage) != storageKeyByteLength {
 		return Key{}, NewError(ErrorCodeInternalInvariant)
 	}
-	copy(key.storage[:], storage)
+	key.state = &keyState{}
+	copy(key.state.storage[:], storage)
 	if !validStorageKey(key) {
 		return Key{}, NewError(ErrorCodeInternalInvariant)
 	}
@@ -104,11 +112,11 @@ func (d *Deriver) Close(ctx context.Context) (resultErr error) {
 	if err := PreflightContext(ctx); err != nil {
 		return err
 	}
-	if d == nil {
+	if d == nil || d.state == nil {
 		return NewError(ErrorCodeMisconfigured)
 	}
 
-	drained, err := d.gate.beginClose()
+	drained, err := d.state.gate.beginClose()
 	if err != nil {
 		return err
 	}
@@ -119,32 +127,32 @@ func (d *Deriver) Close(ctx context.Context) (resultErr error) {
 }
 
 // String returns a constant representation without secret or epoch material.
-func (*Deriver) String() string { return deriverRedactedText }
+func (Deriver) String() string { return deriverRedactedText }
 
 // GoString returns a constant representation without secret or epoch material.
-func (*Deriver) GoString() string { return deriverRedactedText }
+func (Deriver) GoString() string { return deriverRedactedText }
 
 // Format prevents every formatting verb from exposing deriver state.
-func (*Deriver) Format(state fmt.State, _ rune) {
+func (Deriver) Format(state fmt.State, _ rune) {
 	_, _ = io.WriteString(state, deriverRedactedText)
 }
 
 // finish releases one derive and performs owner cleanup after a timed-out close.
 func (d *Deriver) finish() {
-	d.gate.finish()
-	if d.gate.drainedNow() {
+	d.state.gate.finish()
+	if d.state.gate.drainedNow() {
 		_ = d.clearAndClose()
 	}
 }
 
 // clearAndClose clears owned secret bytes exactly once and publishes closed.
 func (d *Deriver) clearAndClose() error {
-	d.closeOnce.Do(func() {
-		for index := range d.secret {
-			d.secret[index] = 0
+	d.state.closeOnce.Do(func() {
+		for index := range d.state.secret {
+			d.state.secret[index] = 0
 		}
 	})
-	return d.gate.publishClosed()
+	return d.state.gate.publishClosed()
 }
 
 // UseStorageKey authorizes one synchronous pre-dispatch callback for a protected key.
@@ -157,7 +165,11 @@ func UseStorageKey(key Key, use func(string) error) (resultErr error) {
 	if !validStorageKey(key) || use == nil {
 		return NewError(ErrorCodeInvalidRequest)
 	}
-	if err := use(string(key.storage[:])); err != nil {
+	storage, present := key.storageValue()
+	if !present {
+		return NewError(ErrorCodeInvalidRequest)
+	}
+	if err := use(string(storage[:])); err != nil {
 		if IsTypedError(err) {
 			return err
 		}
@@ -168,16 +180,17 @@ func UseStorageKey(key Key, use func(string) error) (resultErr error) {
 
 // replayHMACFrame builds the exact versioned length-delimited identity input.
 func replayHMACFrame(identity Identity) []byte {
+	state := identity.state
 	frame := make([]byte, 0, 161)
 	frame = append(frame, keyDomainLabel...)
 	frame = append(frame, 0, 1)
 	frame = appendUint32Bytes(frame, []byte(DraftIdentifier))
 	frame = append(frame, 2)
-	frame = appendUint32Bytes(frame, identity.messageDigest[:])
+	frame = appendUint32Bytes(frame, state.messageDigest[:])
 	frame = append(frame, 3)
-	frame = appendUint32Bytes(frame, identity.signatureInputDigest[:])
+	frame = appendUint32Bytes(frame, state.signatureInputDigest[:])
 	frame = append(frame, 4)
-	frame = appendUint32Bytes(frame, identity.recipientDigest[:])
+	frame = appendUint32Bytes(frame, state.recipientDigest[:])
 	return frame
 }
 
@@ -191,7 +204,11 @@ func appendUint32Bytes(output []byte, value []byte) []byte {
 
 // validStorageKey validates the exact fixed namespace and encoding grammar.
 func validStorageKey(key Key) bool {
-	value := string(key.storage[:])
+	storage, present := key.storageValue()
+	if !present {
+		return false
+	}
+	value := string(storage[:])
 	if len(value) != storageKeyByteLength || !strings.HasPrefix(value, keyNamespacePrefix) ||
 		value[24] != ':' {
 		return false

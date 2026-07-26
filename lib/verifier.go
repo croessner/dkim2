@@ -2,11 +2,15 @@ package dkim2
 
 import (
 	"context"
+	"fmt"
+	"io"
 
 	"github.com/croessner/dkim2/internal/niliface"
 	"github.com/croessner/dkim2/internal/policy"
 	"github.com/croessner/dkim2/internal/service"
 )
+
+const verifierRedactedText = "dkim2.Verifier{redacted}"
 
 // NewVerifier constructs a fully initialized current-verification facade.
 func NewVerifier(provider PublicKeyProvider, options ...VerifierOption) (*Verifier, error) {
@@ -31,12 +35,12 @@ func NewVerifier(provider PublicKeyProvider, options ...VerifierOption) (*Verifi
 	if err != nil {
 		return nil, newAPIError(APIErrorCodeInvalidOption)
 	}
-	return &Verifier{service: coordinator, limits: limits, initialized: true}, nil
+	return &Verifier{state: &verifierState{service: coordinator, limits: limits, initialized: true}}, nil
 }
 
 // Verify delegates current-only verification and preserves the disjoint result/error contract.
 func (v *Verifier) Verify(ctx context.Context, request VerifyRequest) (VerifyResult, error) {
-	if v == nil || !v.initialized {
+	if v == nil || v.state == nil || !v.state.initialized {
 		return VerifyResult{}, newAPIError(APIErrorCodeInvalidRequest)
 	}
 	if ctx == nil {
@@ -45,10 +49,11 @@ func (v *Verifier) Verify(ctx context.Context, request VerifyRequest) (VerifyRes
 	if err := ctx.Err(); err != nil {
 		return VerifyResult{}, err
 	}
-	if len(request.rawMessage) > v.limits.MaxRawMessageBytes() || len(request.forwardPaths) > v.limits.MaxRecipients() {
+	rawMessage, reversePath, forwardPaths := request.values()
+	if len(rawMessage) > v.state.limits.MaxRawMessageBytes() || len(forwardPaths) > v.state.limits.MaxRecipients() {
 		return publicPreflightLimitResult(), nil
 	}
-	result, err := v.service.Verify(ctx, service.NewRequest(request.rawMessage, request.reversePath, request.forwardPaths))
+	result, err := v.state.service.Verify(ctx, service.NewRequest(rawMessage, reversePath, forwardPaths))
 	if err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return VerifyResult{}, ctxErr
@@ -56,6 +61,27 @@ func (v *Verifier) Verify(ctx context.Context, request VerifyRequest) (VerifyRes
 		return VerifyResult{}, newAPIError(APIErrorCodeInvalidRequest)
 	}
 	return adaptServiceResult(result), nil
+}
+
+// String returns a constant representation without injected provider state.
+func (Verifier) String() string { return verifierRedactedText }
+
+// GoString returns a constant representation without injected provider state.
+func (Verifier) GoString() string { return verifierRedactedText }
+
+// Format prevents formatting from traversing injected provider state.
+func (Verifier) Format(state fmt.State, _ rune) {
+	_, _ = io.WriteString(state, verifierRedactedText)
+}
+
+// MarshalJSON rejects serialization of retained verifier dependencies.
+func (Verifier) MarshalJSON() ([]byte, error) {
+	return nil, newAPIError(APIErrorCodeInvalidRequest)
+}
+
+// MarshalText rejects diagnostic serialization of retained verifier dependencies.
+func (Verifier) MarshalText() ([]byte, error) {
+	return nil, newAPIError(APIErrorCodeInvalidRequest)
 }
 
 // publicPreflightLimitResult returns bounded current-scope failure before parsing or provider work.

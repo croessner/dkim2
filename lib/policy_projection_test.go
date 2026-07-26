@@ -23,14 +23,14 @@ func TestFacadeTransfersAndClonesSealedPolicyProjection(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Verify() error = %v", err)
 	}
-	projection := result.policyProjection
+	projection := result.sealedPolicyProjection()
 	if !projection.Valid() || projection.Form() != policy.TargetSelected || projection.TargetSequence() != result.Target().Sequence() || len(projection.Hops()) != 0 || len(projection.SignatureFacts()) != 1 {
 		t.Fatalf("facade projection = %#v", projection)
 	}
 	facts := projection.SignatureFacts()
 	facts[0] = policy.SignatureFact{}
 	copyResult := result
-	if !result.policyProjection.Valid() || !copyResult.policyProjection.Valid() || !result.policyProjection.SignatureFacts()[0].Valid() {
+	if !result.sealedPolicyProjection().Valid() || !copyResult.sealedPolicyProjection().Valid() || !result.sealedPolicyProjection().SignatureFacts()[0].Valid() {
 		t.Fatal("facade projection exposed mutable storage")
 	}
 }
@@ -45,7 +45,8 @@ func TestHistoriedCorePassRemainsCurrentOnlyAcrossServiceAndFacade(t *testing.T)
 	if err != nil {
 		t.Fatalf("NewVerifier() error = %v", err)
 	}
-	serviceResult, err := verifier.service.Verify(context.Background(), service.NewRequest(raw, []byte("<>"), [][]byte{[]byte("<rcpt@example.test>")}))
+	coordinator := serviceVerifierForTest(t, verifier)
+	serviceResult, err := coordinator.Verify(context.Background(), service.NewRequest(raw, []byte("<>"), [][]byte{[]byte("<rcpt@example.test>")}))
 	if err != nil || serviceResult.State() != service.StatePASS || serviceResult.Target().Instance != 2 || serviceResult.HistoricalContent() != service.HistoricalNotEvaluated || serviceResult.HistoricalSignatures() != service.HistoricalNotEvaluated {
 		t.Fatalf("service historied PASS = %q target=%#v history=%q/%q error=%v", serviceResult.State(), serviceResult.Target(), serviceResult.HistoricalContent(), serviceResult.HistoricalSignatures(), err)
 	}
@@ -63,7 +64,8 @@ func TestFacadeZerosMismatchedSelectedReasonWithoutRewritingVerification(t *test
 	if err != nil {
 		t.Fatalf("NewVerifier() error = %v", err)
 	}
-	serviceResult, err := verifier.service.Verify(context.Background(), service.NewRequest(publicProviderFixture(t), []byte("<>"), [][]byte{[]byte("<rcpt@example.test>")}))
+	coordinator := serviceVerifierForTest(t, verifier)
+	serviceResult, err := coordinator.Verify(context.Background(), service.NewRequest(publicProviderFixture(t), []byte("<>"), [][]byte{[]byte("<rcpt@example.test>")}))
 	if err != nil {
 		t.Fatalf("service Verify() error = %v", err)
 	}
@@ -77,8 +79,8 @@ func TestFacadeZerosMismatchedSelectedReasonWithoutRewritingVerification(t *test
 		t.Fatalf("NewSelectedProjection(wrong) error = %v", err)
 	}
 	public := adaptServiceResultWithProjection(serviceResult, wrong)
-	if public.State() != ResultStatePERMERROR || public.PrimaryReason() != ReasonMissingKey || !public.policyProjection.IsZero() {
-		t.Fatalf("mismatched selected reason = %q/%q/%#v", public.State(), public.PrimaryReason(), public.policyProjection)
+	if public.State() != ResultStatePERMERROR || public.PrimaryReason() != ReasonMissingKey || !public.sealedPolicyProjection().IsZero() {
+		t.Fatalf("mismatched selected reason = %q/%q/%#v", public.State(), public.PrimaryReason(), public.sealedPolicyProjection())
 	}
 }
 
@@ -129,8 +131,8 @@ func TestFacadeSealsSequenceFailuresAsUnavailableTargets(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			result, verifyErr := verifier.Verify(context.Background(), NewVerifyRequest([]byte(raw), []byte("<>"), [][]byte{[]byte("<rcpt@example.test>")}))
 			if verifyErr != nil || result.State() != ResultStatePERMERROR || result.PrimaryReason() != ReasonSequenceInvalid || result.Target() != (VerificationTarget{}) ||
-				!result.policyProjection.Valid() || result.policyProjection.Form() != policy.TargetUnavailable || result.policyProjection.PreTargetReason() != policy.PreTargetSequenceInvalid {
-				t.Fatalf("Verify() = %q/%q target=%#v projection=%#v error=%v", result.State(), result.PrimaryReason(), result.Target(), result.policyProjection, verifyErr)
+				!result.sealedPolicyProjection().Valid() || result.sealedPolicyProjection().Form() != policy.TargetUnavailable || result.sealedPolicyProjection().PreTargetReason() != policy.PreTargetSequenceInvalid {
+				t.Fatalf("Verify() = %q/%q target=%#v projection=%#v error=%v", result.State(), result.PrimaryReason(), result.Target(), result.sealedPolicyProjection(), verifyErr)
 			}
 		})
 	}
@@ -169,8 +171,8 @@ func TestFacadeSealsStructuralCustodyFailuresForPolicy(t *testing.T) {
 				t.Fatalf("Verify() error = %v", verifyErr)
 			}
 			if result.State() != ResultStatePERMERROR || result.PrimaryReason() != ReasonMalformedProtocol || result.CustodyStructure() != test.custody || result.Target() != (VerificationTarget{}) ||
-				!result.policyProjection.Valid() || result.policyProjection.Form() != policy.TargetUnavailable || result.policyProjection.PreTargetReason() != policy.PreTargetMalformedProtocol {
-				t.Fatalf("custody result = %q/%q/%q target=%#v projection=%#v", result.State(), result.PrimaryReason(), result.CustodyStructure(), result.Target(), result.policyProjection)
+				!result.sealedPolicyProjection().Valid() || result.sealedPolicyProjection().Form() != policy.TargetUnavailable || result.sealedPolicyProjection().PreTargetReason() != policy.PreTargetMalformedProtocol {
+				t.Fatalf("custody result = %q/%q/%q target=%#v projection=%#v", result.State(), result.PrimaryReason(), result.CustodyStructure(), result.Target(), result.sealedPolicyProjection())
 			}
 			decision, evaluateErr := EvaluatePolicy(result)
 			if evaluateErr != nil || decision.VerificationState() != ResultStatePERMERROR || decision.Verdict() != PolicyVerdictReject || decision.PrimaryReason() != PolicyReasonProtocolPermerror {
@@ -212,7 +214,8 @@ func TestFacadeRejectsUnavailableReasonMismatchWithoutRebuildingProvenance(t *te
 	if err != nil {
 		t.Fatalf("NewVerifier() error = %v", err)
 	}
-	serviceResult, err := verifier.service.Verify(context.Background(), service.NewRequest([]byte("malformed"), nil, nil))
+	coordinator := serviceVerifierForTest(t, verifier)
+	serviceResult, err := coordinator.Verify(context.Background(), service.NewRequest([]byte("malformed"), nil, nil))
 	if err != nil || serviceResult.State() != service.StatePERMERROR || serviceResult.PrimaryReason() != service.ReasonMalformedMessage {
 		t.Fatalf("service result = %q/%q error=%v", serviceResult.State(), serviceResult.PrimaryReason(), err)
 	}
@@ -224,23 +227,32 @@ func TestFacadeRejectsUnavailableReasonMismatchWithoutRebuildingProvenance(t *te
 		t.Fatal("facade accepted mismatched unavailable reason")
 	}
 	public := adaptServiceResultWithProjection(serviceResult, wrong)
-	if public.State() != ResultStatePERMERROR || public.PrimaryReason() != ReasonMalformedMessage || !public.policyProjection.IsZero() {
-		t.Fatalf("corrupt projection rewrote verification = %q/%q/%#v", public.State(), public.PrimaryReason(), public.policyProjection)
+	if public.State() != ResultStatePERMERROR || public.PrimaryReason() != ReasonMalformedMessage || !public.sealedPolicyProjection().IsZero() {
+		t.Fatalf("corrupt projection rewrote verification = %q/%q/%#v", public.State(), public.PrimaryReason(), public.sealedPolicyProjection())
 	}
+}
+
+// serviceVerifierForTest reads the concrete coordinator without extending the production boundary.
+func serviceVerifierForTest(t testing.TB, verifier *Verifier) service.Verifier {
+	t.Helper()
+	if verifier == nil || verifier.state == nil || !verifier.state.initialized {
+		t.Fatal("test verifier coordinator unavailable")
+	}
+	return verifier.state.service
 }
 
 // TestFacadePreflightAndManualValuesCannotForgeSelectedProvenance verifies sealed forms.
 func TestFacadePreflightAndManualValuesCannotForgeSelectedProvenance(t *testing.T) {
 	preflight := publicPreflightLimitResult()
-	if !preflight.policyProjection.Valid() || preflight.policyProjection.Form() != policy.TargetUnavailable || preflight.policyProjection.PreTargetReason() != policy.PreTargetLimitExceeded {
-		t.Fatalf("preflight projection = %#v", preflight.policyProjection)
+	if !preflight.sealedPolicyProjection().Valid() || preflight.sealedPolicyProjection().Form() != policy.TargetUnavailable || preflight.sealedPolicyProjection().PreTargetReason() != policy.PreTargetLimitExceeded {
+		t.Fatalf("preflight projection = %#v", preflight.sealedPolicyProjection())
 	}
-	manual := VerifyResult{
-		draft: DraftIdentifier, state: ResultStatePASS, scope: VerificationScopeCurrent,
+	manual := VerifyResult{state: &verifyResultState{
+		draft: DraftIdentifier, resultState: ResultStatePASS, scope: VerificationScopeCurrent,
 		historicalContent: HistoricalStateNotEvaluated, historicalSignatures: HistoricalStateNotEvaluated,
 		custodyStructure: CustodyStructureNotPresent, target: newVerificationTarget(1, 1), primaryReason: ReasonNone,
-	}
-	if !manual.policyProjection.IsZero() || manual.policyProjection.Valid() {
-		t.Fatalf("manual result forged projection = %#v", manual.policyProjection)
+	}}
+	if !manual.sealedPolicyProjection().IsZero() || manual.sealedPolicyProjection().Valid() {
+		t.Fatalf("manual result forged projection = %#v", manual.sealedPolicyProjection())
 	}
 }

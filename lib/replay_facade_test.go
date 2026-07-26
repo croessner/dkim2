@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
+	"encoding"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -33,6 +34,8 @@ const (
 	replayMethodState            = "State"
 	replayMethodString           = "String"
 	replayMethodValid            = "Valid"
+	replayDisabledText           = "disabled"
+	replayPrivacyDeriverMapKey   = "deriver"
 )
 
 // TestReplayFacadeTransfersOnlyAuthenticCurrentPass verifies the sealed service-to-root bridge.
@@ -45,7 +48,8 @@ func TestReplayFacadeTransfersOnlyAuthenticCurrentPass(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewVerifier() error = %v", err)
 	}
-	serviceResult, err := verifier.service.Verify(
+	coordinator := serviceVerifierForTest(t, verifier)
+	serviceResult, err := coordinator.Verify(
 		context.Background(),
 		service.NewRequest(raw, []byte("<>"), [][]byte{[]byte("<rcpt@example.test>")}),
 	)
@@ -74,11 +78,26 @@ func TestReplayFacadeTransfersOnlyAuthenticCurrentPass(t *testing.T) {
 	assertReplayIdentitySet(t, copied, 1)
 
 	for name, mutate := range map[string]func(*VerifyResult){
-		"fail":               func(candidate *VerifyResult) { candidate.state = ResultStateFAIL },
-		"permerror":          func(candidate *VerifyResult) { candidate.state = ResultStatePERMERROR },
-		"wrong scope":        func(candidate *VerifyResult) { candidate.scope = "" },
-		"historical content": func(candidate *VerifyResult) { candidate.historicalContent = "" },
-		"missing projection": func(candidate *VerifyResult) { candidate.hasReplayProjection = false },
+		"fail": func(candidate *VerifyResult) {
+			candidate.state = candidate.cloneState()
+			candidate.state.resultState = ResultStateFAIL
+		},
+		"permerror": func(candidate *VerifyResult) {
+			candidate.state = candidate.cloneState()
+			candidate.state.resultState = ResultStatePERMERROR
+		},
+		"wrong scope": func(candidate *VerifyResult) {
+			candidate.state = candidate.cloneState()
+			candidate.state.scope = ""
+		},
+		"historical content": func(candidate *VerifyResult) {
+			candidate.state = candidate.cloneState()
+			candidate.state.historicalContent = ""
+		},
+		"missing projection": func(candidate *VerifyResult) {
+			candidate.state = candidate.cloneState()
+			candidate.state.hasReplayProjection = false
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			candidate := result
@@ -261,7 +280,8 @@ func TestReplayFacadeContractSurfaceIsExact(t *testing.T) {
 		"Exploded", replayMethodFormat, replayMethodGoString, "Identity", "Len", replayMethodString, replayMethodValid,
 	})
 	assertExactReplayMethods(t, reflect.TypeOf(ReplayKey{}), []string{
-		replayMethodFormat, replayMethodGoString, replayMethodMarshalJSON, replayMethodMarshalText, replayMethodString,
+		replayMethodFormat, replayMethodGoString, replayMethodMarshalJSON, replayMethodMarshalText,
+		replayMethodString, replayMethodValid,
 	})
 	assertExactReplayMethods(t, reflect.TypeOf((*ReplayDeriver)(nil)), []string{
 		replayMethodClose, "Derive", replayMethodFormat, replayMethodGoString, replayMethodString,
@@ -303,11 +323,11 @@ func TestReplayFacadeContractSurfaceIsExact(t *testing.T) {
 	}
 	if ReplayCheckFirstSeen.String() != "first_seen" ||
 		ReplayCheckReplayed.String() != "replayed" ||
-		ReplayCheckDisabled.String() != "disabled" {
+		ReplayCheckDisabled.String() != replayDisabledText {
 		t.Fatal("root replay checks diverged from the closed core vocabulary")
 	}
 	if ReplayStoreReady.String() != "ready" || ReplayStoreDegraded.String() != "degraded" ||
-		ReplayStoreDisabled.String() != "disabled" || ReplayStoreClosing.String() != "closing" ||
+		ReplayStoreDisabled.String() != replayDisabledText || ReplayStoreClosing.String() != "closing" ||
 		ReplayStoreClosed.String() != "closed" {
 		t.Fatal("root replay states diverged from the closed core vocabulary")
 	}
@@ -353,9 +373,17 @@ func TestReplayFacadeConstructorsDelegateClosedCoreBehavior(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() {
+		if closeErr := deriver.Close(context.Background()); closeErr != nil {
+			t.Error("replay deriver cleanup failed")
+		}
+	})
 	key, err := deriver.Derive(context.Background(), identity)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if !key.Valid() || (ReplayKey{}).Valid() {
+		t.Fatal("public replay key validity diverged from protected grammar")
 	}
 	store, err := NewReplayMemoryStore(ReplayMemoryConfig{
 		Clock: ReplayClockFunc(func() time.Time { return time.Unix(1, 0) }),
@@ -455,34 +483,83 @@ func TestReplayFacadePrivacyCoversNestedAndContainerSurfaces(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() {
+		if closeErr := deriver.Close(context.Background()); closeErr != nil {
+			t.Error("replay deriver cleanup failed")
+		}
+	})
 	key, err := deriver.Derive(context.Background(), identity)
 	if err != nil {
 		t.Fatal(err)
 	}
+	memory, err := NewReplayMemoryStore(ReplayMemoryConfig{
+		Clock: ReplayClockFunc(func() time.Time { return time.Unix(1_700_000_000, 0) }),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if closeErr := memory.Close(context.Background()); closeErr != nil {
+			t.Error("replay memory cleanup failed")
+		}
+	})
+	if check, checkErr := memory.CheckAndRemember(
+		context.Background(),
+		key,
+		DefaultReplayRetention(),
+	); checkErr != nil || check != ReplayCheckFirstSeen {
+		t.Fatal("memory store did not retain the protected replay key")
+	}
 	disabled := NewReplayDisabledStore()
+	t.Cleanup(func() {
+		if closeErr := disabled.Close(context.Background()); closeErr != nil {
+			t.Error("replay disabled cleanup failed")
+		}
+	})
+	deriverValue := *deriver
+	memoryValue := *memory
+	disabledValue := *disabled
+	var storage string
+	if err := UseReplayStorageKey(key, func(value string) error {
+		storage = value
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
 	values := []any{
 		result, &result, []VerifyResult{result}, map[string]VerifyResult{"result": result},
 		set, &set, []ReplayIdentitySet{set}, map[string]ReplayIdentitySet{"set": set},
 		identity, &identity, []ReplayIdentity{identity},
 		key, &key, []ReplayKey{key}, map[ReplayKey]struct{}{key: {}},
-		deriver, disabled,
+		deriver, deriverValue, any(deriverValue), []ReplayDeriver{deriverValue},
+		map[string]ReplayDeriver{replayPrivacyDeriverMapKey: deriverValue},
+		memory, memoryValue, any(memoryValue), []ReplayMemoryStore{memoryValue},
+		map[string]ReplayMemoryStore{"memory": memoryValue},
+		disabled, disabledValue, any(disabledValue), []ReplayDisabledStore{disabledValue},
+		map[string]ReplayDisabledStore{replayDisabledText: disabledValue},
 	}
 	for _, value := range values {
-		formatted := fmt.Sprintf("%v|%+v|%#v|%s|%q|%x|%X", value, value, value, value, value, value, value)
+		formatted := fmt.Sprintf("%v|%+v|%#v|%s|%q|%x|%X|%p", value, value, value, value, value, value, value, value)
 		for _, forbidden := range []string{
 			"draft-ietf-dkim-dkim2-spec-04", "rcpt@example.test",
-			"dkim2:replay:v1:", "01020304", "protected callback failure marker",
+			"dkim2:replay:v1:", storage, fmt.Sprintf("%x", storage),
+			fmt.Sprintf("%x", secret), "01020304", "protected callback failure marker",
 		} {
-			if strings.Contains(formatted, forbidden) {
-				t.Fatalf("%T formatting exposed %q: %q", value, forbidden, formatted)
+			if forbidden != "" && strings.Contains(formatted, forbidden) {
+				t.Fatal("public replay formatting exposed protected material")
 			}
 		}
 		encoded, marshalErr := json.Marshal(value)
-		if marshalErr == nil && strings.Contains(string(encoded), "dkim2:replay") {
-			t.Fatalf("json.Marshal(%T) exposed replay key", value)
+		if strings.Contains(string(encoded), storage) ||
+			marshalErr != nil && strings.Contains(marshalErr.Error(), storage) {
+			t.Fatal("public replay JSON serialization exposed protected material")
 		}
-		if marshalErr != nil && strings.Contains(marshalErr.Error(), "dkim2:replay") {
-			t.Fatalf("json.Marshal(%T) error exposed replay key", value)
+		if textMarshaler, ok := value.(encoding.TextMarshaler); ok {
+			text, textErr := textMarshaler.MarshalText()
+			if strings.Contains(string(text), storage) ||
+				textErr != nil && strings.Contains(textErr.Error(), storage) {
+				t.Fatal("public replay text serialization exposed protected material")
+			}
 		}
 	}
 }

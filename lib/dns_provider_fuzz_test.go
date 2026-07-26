@@ -194,13 +194,25 @@ func fuzzPublicLookup(record []byte, shape, dnssecByte byte) (TXTLookupResult, e
 	case 7:
 		return TXTLookupResult{}, nil
 	case 8:
-		return TXTLookupResult{status: TXTLookupStatusFound, records: []TXTRecord{newTXTRecord(record)}, recordCount: 1, absence: TXTAbsenceNXDOMAIN, positiveTTL: time.Minute, dnssec: dnssec}, nil
+		return TXTLookupResult{state: &txtLookupResultState{
+			status: TXTLookupStatusFound, records: []TXTRecord{newTXTRecord(record)},
+			recordCount: 1, absence: TXTAbsenceNXDOMAIN, positiveTTL: time.Minute, dnssec: dnssec,
+		}}, nil
 	case 9:
-		return TXTLookupResult{status: TXTLookupStatusAbsent, records: []TXTRecord{newTXTRecord(record)}, recordCount: 1, absence: TXTAbsenceNODATA, negativeTTL: time.Minute, dnssec: dnssec}, nil
+		return TXTLookupResult{state: &txtLookupResultState{
+			status: TXTLookupStatusAbsent, records: []TXTRecord{newTXTRecord(record)},
+			recordCount: 1, absence: TXTAbsenceNODATA, negativeTTL: time.Minute, dnssec: dnssec,
+		}}, nil
 	case 10:
-		return TXTLookupResult{status: TXTLookupStatus("unknown"), records: []TXTRecord{newTXTRecord(record)}, recordCount: 1, positiveTTL: time.Minute, dnssec: DNSSECStatus("unknown")}, nil
+		return TXTLookupResult{state: &txtLookupResultState{
+			status: TXTLookupStatus("unknown"), records: []TXTRecord{newTXTRecord(record)},
+			recordCount: 1, positiveTTL: time.Minute, dnssec: DNSSECStatus("unknown"),
+		}}, nil
 	default:
-		return TXTLookupResult{status: TXTLookupStatusFound, records: []TXTRecord{newTXTRecord(record)}, recordCount: 2, positiveTTL: time.Minute, negativeTTL: time.Second, dnssec: dnssec}, nil
+		return TXTLookupResult{state: &txtLookupResultState{
+			status: TXTLookupStatusFound, records: []TXTRecord{newTXTRecord(record)},
+			recordCount: 2, positiveTTL: time.Minute, negativeTTL: time.Second, dnssec: dnssec,
+		}}, nil
 	}
 }
 

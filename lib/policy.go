@@ -1,9 +1,17 @@
 package dkim2
 
 import (
+	"fmt"
+	"io"
 	"slices"
 
 	"github.com/croessner/dkim2/internal/policy"
+)
+
+const (
+	policyDecisionRedactedText = "dkim2.PolicyDecision{redacted}"
+	policyFeedbackRedactedText = "dkim2.PolicyFeedbackIntent{redacted}"
+	policyFindingRedactedText  = "dkim2.PolicyFinding{redacted}"
 )
 
 // PolicyMode identifies one explicit local policy posture.
@@ -150,6 +158,11 @@ func (h PolicyHistoryCoverage) Known() bool { return policy.HistoryCoverage(h).K
 
 // PolicyFinding records one immutable bounded policy fact.
 type PolicyFinding struct {
+	state *policyFindingState
+}
+
+// policyFindingState stores the private scalar state of one public finding.
+type policyFindingState struct {
 	reason      PolicyReason
 	severity    PolicyFindingSeverity
 	sequence    uint64
@@ -158,19 +171,60 @@ type PolicyFinding struct {
 }
 
 // Reason returns the closed finding reason.
-func (f PolicyFinding) Reason() PolicyReason { return f.reason }
+func (f PolicyFinding) Reason() PolicyReason {
+	if f.state == nil {
+		return ""
+	}
+	return f.state.reason
+}
 
 // Severity returns the frozen severity for the reason.
-func (f PolicyFinding) Severity() PolicyFindingSeverity { return f.severity }
+func (f PolicyFinding) Severity() PolicyFindingSeverity {
+	if f.state == nil {
+		return ""
+	}
+	return f.state.severity
+}
 
 // Sequence returns an optional authenticated sequence and presence flag.
-func (f PolicyFinding) Sequence() (uint64, bool) { return f.sequence, f.hasSequence }
+func (f PolicyFinding) Sequence() (uint64, bool) {
+	if f.state == nil {
+		return 0, false
+	}
+	return f.state.sequence, f.state.hasSequence
+}
 
 // Valid reports whether the finding came from a coherent internal decision.
 func (f PolicyFinding) Valid() bool {
-	requiresSequence := publicFindingRequiresSequence(f.reason)
-	return f.initialized && publicFindingReasonAllowed(f.reason) && f.severity == publicSeverityForReason(f.reason) &&
-		(requiresSequence && f.hasSequence && f.sequence > 0 || !requiresSequence && !f.hasSequence && f.sequence == 0)
+	if f.state == nil {
+		return false
+	}
+	requiresSequence := publicFindingRequiresSequence(f.state.reason)
+	return f.state.initialized && publicFindingReasonAllowed(f.state.reason) &&
+		f.state.severity == publicSeverityForReason(f.state.reason) &&
+		(requiresSequence && f.state.hasSequence && f.state.sequence > 0 ||
+			!requiresSequence && !f.state.hasSequence && f.state.sequence == 0)
+}
+
+// String returns a constant representation without sequence identifiers.
+func (PolicyFinding) String() string { return policyFindingRedactedText }
+
+// GoString returns a constant representation without sequence identifiers.
+func (PolicyFinding) GoString() string { return policyFindingRedactedText }
+
+// Format prevents formatting from traversing sequence identifiers.
+func (PolicyFinding) Format(state fmt.State, _ rune) {
+	_, _ = io.WriteString(state, policyFindingRedactedText)
+}
+
+// MarshalJSON rejects direct serialization outside generated response DTOs.
+func (PolicyFinding) MarshalJSON() ([]byte, error) {
+	return nil, newAPIError(APIErrorCodeInvalidRequest)
+}
+
+// MarshalText rejects diagnostic serialization of authenticated sequence state.
+func (PolicyFinding) MarshalText() ([]byte, error) {
+	return nil, newAPIError(APIErrorCodeInvalidRequest)
 }
 
 // publicFindingReasonAllowed excludes error-only reasons from immutable findings.
@@ -212,6 +266,11 @@ func publicFindingRequiresSequence(reason PolicyReason) bool {
 
 // PolicyFeedbackIntent stores bounded authenticated feedback routing intent.
 type PolicyFeedbackIntent struct {
+	state *policyFeedbackIntentState
+}
+
+// policyFeedbackIntentState stores the private scalar state of public feedback intent.
+type policyFeedbackIntentState struct {
 	requested     bool
 	relayRequired bool
 	relaySequence uint64
@@ -220,20 +279,57 @@ type PolicyFeedbackIntent struct {
 }
 
 // Requested reports whether authenticated feedback was requested.
-func (i PolicyFeedbackIntent) Requested() bool { return i.requested }
+func (i PolicyFeedbackIntent) Requested() bool {
+	return i.state != nil && i.state.requested
+}
 
 // RelayRequired reports whether an authenticated eligible relay exists.
-func (i PolicyFeedbackIntent) RelayRequired() bool { return i.relayRequired }
+func (i PolicyFeedbackIntent) RelayRequired() bool {
+	return i.state != nil && i.state.relayRequired
+}
 
 // RelaySequence returns the highest eligible relay sequence or zero.
-func (i PolicyFeedbackIntent) RelaySequence() uint64 { return i.relaySequence }
+func (i PolicyFeedbackIntent) RelaySequence() uint64 {
+	if i.state == nil {
+		return 0
+	}
+	return i.state.relaySequence
+}
 
 // HistoryCoverage returns explicit feedback-history coverage.
-func (i PolicyFeedbackIntent) HistoryCoverage() PolicyHistoryCoverage { return i.history }
+func (i PolicyFeedbackIntent) HistoryCoverage() PolicyHistoryCoverage {
+	if i.state == nil {
+		return ""
+	}
+	return i.state.history
+}
 
 // Valid reports whether feedback intent is coherent and initialized.
 func (i PolicyFeedbackIntent) Valid() bool {
-	return i.initialized && i.history.Known() && (i.relayRequired && i.requested && i.relaySequence > 0 || !i.relayRequired && i.relaySequence == 0)
+	return i.state != nil && i.state.initialized && i.state.history.Known() &&
+		(i.state.relayRequired && i.state.requested && i.state.relaySequence > 0 ||
+			!i.state.relayRequired && i.state.relaySequence == 0)
+}
+
+// String returns a constant representation without relay identifiers.
+func (PolicyFeedbackIntent) String() string { return policyFeedbackRedactedText }
+
+// GoString returns a constant representation without relay identifiers.
+func (PolicyFeedbackIntent) GoString() string { return policyFeedbackRedactedText }
+
+// Format prevents formatting from traversing relay identifiers.
+func (PolicyFeedbackIntent) Format(state fmt.State, _ rune) {
+	_, _ = io.WriteString(state, policyFeedbackRedactedText)
+}
+
+// MarshalJSON rejects direct serialization outside generated response DTOs.
+func (PolicyFeedbackIntent) MarshalJSON() ([]byte, error) {
+	return nil, newAPIError(APIErrorCodeInvalidRequest)
+}
+
+// MarshalText rejects diagnostic serialization of authenticated relay state.
+func (PolicyFeedbackIntent) MarshalText() ([]byte, error) {
+	return nil, newAPIError(APIErrorCodeInvalidRequest)
 }
 
 // PolicyActionKind identifies one closed disposition action.
@@ -284,6 +380,11 @@ func (p PolicyActionPlan) Valid() bool {
 
 // PolicyDecision stores one immutable public local-policy outcome.
 type PolicyDecision struct {
+	state *policyDecisionState
+}
+
+// policyDecisionState stores the immutable private projection of one public decision.
+type policyDecisionState struct {
 	verificationState ResultState
 	mode              PolicyMode
 	verdict           PolicyVerdict
@@ -299,85 +400,167 @@ type PolicyDecision struct {
 }
 
 // VerificationState returns the unchanged authoritative verification state.
-func (d PolicyDecision) VerificationState() ResultState { return d.verificationState }
+func (d PolicyDecision) VerificationState() ResultState {
+	if d.state == nil {
+		return ""
+	}
+	return d.state.verificationState
+}
 
 // Mode returns the explicit local policy mode.
-func (d PolicyDecision) Mode() PolicyMode { return d.mode }
+func (d PolicyDecision) Mode() PolicyMode {
+	if d.state == nil {
+		return ""
+	}
+	return d.state.mode
+}
 
 // Verdict returns the local disposition separate from verification.
-func (d PolicyDecision) Verdict() PolicyVerdict { return d.verdict }
+func (d PolicyDecision) Verdict() PolicyVerdict {
+	if d.state == nil {
+		return ""
+	}
+	return d.state.verdict
+}
 
 // PrimaryReason returns the exact deterministic policy reason.
-func (d PolicyDecision) PrimaryReason() PolicyReason { return d.primaryReason }
+func (d PolicyDecision) PrimaryReason() PolicyReason {
+	if d.state == nil {
+		return ""
+	}
+	return d.state.primaryReason
+}
 
 // DoNotModifyCompliance returns aggregate authenticated modification compliance.
-func (d PolicyDecision) DoNotModifyCompliance() PolicyCompliance { return d.modify }
+func (d PolicyDecision) DoNotModifyCompliance() PolicyCompliance {
+	if d.state == nil {
+		return ""
+	}
+	return d.state.modify
+}
 
 // DoNotExplodeCompliance returns aggregate authenticated explosion compliance.
-func (d PolicyDecision) DoNotExplodeCompliance() PolicyCompliance { return d.explode }
+func (d PolicyDecision) DoNotExplodeCompliance() PolicyCompliance {
+	if d.state == nil {
+		return ""
+	}
+	return d.state.explode
+}
 
 // FeedbackIntent returns bounded authenticated feedback intent by value.
-func (d PolicyDecision) FeedbackIntent() PolicyFeedbackIntent { return d.feedback }
+func (d PolicyDecision) FeedbackIntent() PolicyFeedbackIntent {
+	if d.state == nil {
+		return PolicyFeedbackIntent{}
+	}
+	return d.state.feedback
+}
 
 // DNSTestingEffective reports whether eligible DNS testing changed policy treatment.
-func (d PolicyDecision) DNSTestingEffective() bool { return d.dnsEffective }
+func (d PolicyDecision) DNSTestingEffective() bool {
+	return d.state != nil && d.state.dnsEffective
+}
 
 // Findings returns an independent ordered copy of policy findings.
-func (d PolicyDecision) Findings() []PolicyFinding { return slices.Clone(d.findings) }
+func (d PolicyDecision) Findings() []PolicyFinding {
+	if d.state == nil {
+		return nil
+	}
+	return slices.Clone(d.state.findings)
+}
 
 // ActionPlan returns an immutable action plan whose collection accessor clones.
 func (d PolicyDecision) ActionPlan() PolicyActionPlan {
-	return PolicyActionPlan{actions: d.actionPlan.Actions(), initialized: d.actionPlan.initialized}
+	if d.state == nil {
+		return PolicyActionPlan{}
+	}
+	return PolicyActionPlan{actions: d.state.actionPlan.Actions(), initialized: d.state.actionPlan.initialized}
 }
 
 // IsZero reports whether the decision carries no initialized policy state.
 func (d PolicyDecision) IsZero() bool {
-	return !d.initialized && d.verificationState == "" && d.mode == "" && d.verdict == "" && d.primaryReason == "" &&
-		d.modify == "" && d.explode == "" && !d.feedback.initialized && !d.dnsEffective && len(d.findings) == 0 && !d.actionPlan.initialized && len(d.actionPlan.actions) == 0 && d.source.IsZero()
+	return d.state == nil
 }
 
 // Valid reports whether the public decision is initialized and internally coherent.
 func (d PolicyDecision) Valid() bool {
-	if !d.initialized || !d.verificationState.Known() || !d.mode.Known() || !d.verdict.Known() || !d.primaryReason.Known() || !d.modify.Known() || !d.explode.Known() || !d.feedback.Valid() || !d.actionPlan.Valid() || len(d.findings) == 0 {
+	if d.state == nil || !d.state.initialized || !d.state.verificationState.Known() ||
+		!d.state.mode.Known() || !d.state.verdict.Known() || !d.state.primaryReason.Known() ||
+		!d.state.modify.Known() || !d.state.explode.Known() || !d.state.feedback.Valid() ||
+		!d.state.actionPlan.Valid() || len(d.state.findings) == 0 {
 		return false
 	}
-	for _, finding := range d.findings {
+	for _, finding := range d.state.findings {
 		if !finding.Valid() {
 			return false
 		}
 	}
-	return d.actionPlan.actions[0].kind == PolicyActionKind(d.verdict) && publicDecisionMatchesSource(d)
+	return d.state.actionPlan.actions[0].kind == PolicyActionKind(d.state.verdict) &&
+		publicDecisionMatchesSource(d)
+}
+
+// String returns a constant representation without sealed policy facts.
+func (PolicyDecision) String() string { return policyDecisionRedactedText }
+
+// GoString returns a constant representation without sealed policy facts.
+func (PolicyDecision) GoString() string { return policyDecisionRedactedText }
+
+// Format prevents formatting from traversing sealed policy facts.
+func (PolicyDecision) Format(state fmt.State, _ rune) {
+	_, _ = io.WriteString(state, policyDecisionRedactedText)
+}
+
+// MarshalJSON rejects direct serialization outside generated response DTOs.
+func (PolicyDecision) MarshalJSON() ([]byte, error) {
+	return nil, newAPIError(APIErrorCodeInvalidRequest)
+}
+
+// MarshalText rejects diagnostic serialization of sealed policy state.
+func (PolicyDecision) MarshalText() ([]byte, error) {
+	return nil, newAPIError(APIErrorCodeInvalidRequest)
 }
 
 // publicDecisionMatchesSource binds every public field to the validated immutable internal decision.
 func publicDecisionMatchesSource(d PolicyDecision) bool {
-	if !d.source.Valid() || PolicyMode(d.source.Mode()) != d.mode || PolicyVerdict(d.source.Verdict()) != d.verdict ||
-		PolicyReason(d.source.PrimaryReason()) != d.primaryReason || PolicyCompliance(d.source.DoNotModifyCompliance()) != d.modify ||
-		PolicyCompliance(d.source.DoNotExplodeCompliance()) != d.explode || d.source.DNSTestingEffective() != d.dnsEffective {
+	if d.state == nil {
 		return false
 	}
-	protocol, ok := publicPolicyProtocol(d.verificationState)
-	if !ok || d.source.Protocol() != protocol {
+	state := d.state
+	if !state.source.Valid() || PolicyMode(state.source.Mode()) != state.mode ||
+		PolicyVerdict(state.source.Verdict()) != state.verdict ||
+		PolicyReason(state.source.PrimaryReason()) != state.primaryReason ||
+		PolicyCompliance(state.source.DoNotModifyCompliance()) != state.modify ||
+		PolicyCompliance(state.source.DoNotExplodeCompliance()) != state.explode ||
+		state.source.DNSTestingEffective() != state.dnsEffective {
 		return false
 	}
-	feedback := d.source.FeedbackIntent()
-	if d.feedback.requested != feedback.Requested() || d.feedback.relayRequired != feedback.RelayRequired() ||
-		d.feedback.relaySequence != feedback.RelaySequence() || d.feedback.history != PolicyHistoryCoverage(feedback.HistoryCoverage()) {
+	protocol, ok := publicPolicyProtocol(state.verificationState)
+	if !ok || state.source.Protocol() != protocol {
 		return false
 	}
-	sourceFindings := d.source.Findings()
-	if len(sourceFindings) != len(d.findings) {
+	feedback := state.source.FeedbackIntent()
+	if state.feedback.Requested() != feedback.Requested() ||
+		state.feedback.RelayRequired() != feedback.RelayRequired() ||
+		state.feedback.RelaySequence() != feedback.RelaySequence() ||
+		state.feedback.HistoryCoverage() != PolicyHistoryCoverage(feedback.HistoryCoverage()) {
+		return false
+	}
+	sourceFindings := state.source.Findings()
+	if len(sourceFindings) != len(state.findings) {
 		return false
 	}
 	for index, source := range sourceFindings {
 		sequence, present := source.Sequence()
-		finding := d.findings[index]
-		if finding.reason != PolicyReason(source.Reason()) || finding.severity != PolicyFindingSeverity(source.Severity()) || finding.sequence != sequence || finding.hasSequence != present {
+		finding := state.findings[index]
+		findingSequence, findingPresent := finding.Sequence()
+		if finding.Reason() != PolicyReason(source.Reason()) ||
+			finding.Severity() != PolicyFindingSeverity(source.Severity()) ||
+			findingSequence != sequence || findingPresent != present {
 			return false
 		}
 	}
-	sourceActions := d.source.Actions()
-	return len(sourceActions) == 1 && d.actionPlan.actions[0].kind == PolicyActionKind(sourceActions[0].Kind())
+	sourceActions := state.source.Actions()
+	return len(sourceActions) == 1 &&
+		state.actionPlan.actions[0].kind == PolicyActionKind(sourceActions[0].Kind())
 }
 
 // EvaluatePolicy evaluates only the sealed projection embedded by library verification.
@@ -393,11 +576,11 @@ func EvaluatePolicy(result VerifyResult, options ...PolicyOption) (PolicyDecisio
 	if err != nil {
 		return PolicyDecision{}, adaptPolicyError(err)
 	}
-	decision, err := evaluator.EvaluateProjection(result.policyProjection.Clone())
+	decision, err := evaluator.EvaluateProjection(result.state.policyProjection.Clone())
 	if err != nil {
 		return PolicyDecision{}, adaptPolicyError(err)
 	}
-	public, ok := adaptPolicyDecision(result.state, decision)
+	public, ok := adaptPolicyDecision(result.state.resultState, decision)
 	if !ok {
 		return PolicyDecision{}, newPolicyError(PolicyErrorInternalContract)
 	}
@@ -406,18 +589,22 @@ func EvaluatePolicy(result VerifyResult, options ...PolicyOption) (PolicyDecisio
 
 // verifyResultPolicyProvenanceValid binds public state to the sealed projection without reparsing public facts.
 func verifyResultPolicyProvenanceValid(result VerifyResult) bool {
-	data := verifyResultData{state: result.state, scope: result.scope, historicalContent: result.historicalContent, historicalSignatures: result.historicalSignatures, custodyStructure: result.custodyStructure, target: result.target, primaryReason: result.primaryReason, checks: result.checks, signatures: result.signatures, policyProjection: result.policyProjection}
-	if result.draft != DraftIdentifier || !verifyResultDataValid(data) || !result.policyProjection.Valid() {
+	if result.state == nil {
 		return false
 	}
-	protocol, ok := publicPolicyProtocol(result.state)
-	if !ok || result.policyProjection.Protocol() != protocol {
+	state := result.state
+	data := verifyResultData{state: state.resultState, scope: state.scope, historicalContent: state.historicalContent, historicalSignatures: state.historicalSignatures, custodyStructure: state.custodyStructure, target: state.target, primaryReason: state.primaryReason, checks: state.checks, signatures: state.signatures, policyProjection: state.policyProjection}
+	if state.draft != DraftIdentifier || !verifyResultDataValid(data) || !state.policyProjection.Valid() {
 		return false
 	}
-	if result.policyProjection.Form() == policy.TargetUnavailable {
-		return result.state == ResultStatePERMERROR && result.target == (VerificationTarget{}) && unavailableReasonMatches(result.policyProjection.PreTargetReason(), result.primaryReason) && len(result.policyProjection.Hops()) == 0 && len(result.policyProjection.SignatureFacts()) == 0
+	protocol, ok := publicPolicyProtocol(state.resultState)
+	if !ok || state.policyProjection.Protocol() != protocol {
+		return false
 	}
-	return result.policyProjection.Form() == policy.TargetSelected && result.target.Sequence() > 0 && result.target.Instance() > 0 && result.policyProjection.TargetSequence() == result.target.Sequence() && policy.VerificationReason(result.primaryReason) == result.policyProjection.VerificationReason()
+	if state.policyProjection.Form() == policy.TargetUnavailable {
+		return state.resultState == ResultStatePERMERROR && state.target.isZero() && unavailableReasonMatches(state.policyProjection.PreTargetReason(), state.primaryReason) && len(state.policyProjection.Hops()) == 0 && len(state.policyProjection.SignatureFacts()) == 0
+	}
+	return state.policyProjection.Form() == policy.TargetSelected && state.target.Sequence() > 0 && state.target.Instance() > 0 && state.policyProjection.TargetSequence() == state.target.Sequence() && policy.VerificationReason(state.primaryReason) == state.policyProjection.VerificationReason()
 }
 
 // publicPolicyProtocol maps the authoritative four-state result to policy protocol class.
@@ -449,13 +636,31 @@ func adaptPolicyDecision(state ResultState, input policy.Decision) (PolicyDecisi
 	findings := make([]PolicyFinding, 0, len(input.Findings()))
 	for _, finding := range input.Findings() {
 		sequence, present := finding.Sequence()
-		findings = append(findings, PolicyFinding{reason: PolicyReason(finding.Reason()), severity: PolicyFindingSeverity(finding.Severity()), sequence: sequence, hasSequence: present, initialized: true})
+		findings = append(findings, PolicyFinding{state: &policyFindingState{
+			reason: PolicyReason(finding.Reason()), severity: PolicyFindingSeverity(finding.Severity()),
+			sequence: sequence, hasSequence: present, initialized: true,
+		}})
 	}
 	actions := input.Actions()
 	if len(actions) != 1 {
 		return PolicyDecision{}, false
 	}
 	feedback := input.FeedbackIntent()
-	decision := PolicyDecision{verificationState: state, mode: PolicyMode(input.Mode()), verdict: PolicyVerdict(input.Verdict()), primaryReason: PolicyReason(input.PrimaryReason()), modify: PolicyCompliance(input.DoNotModifyCompliance()), explode: PolicyCompliance(input.DoNotExplodeCompliance()), feedback: PolicyFeedbackIntent{requested: feedback.Requested(), relayRequired: feedback.RelayRequired(), relaySequence: feedback.RelaySequence(), history: PolicyHistoryCoverage(feedback.HistoryCoverage()), initialized: true}, dnsEffective: input.DNSTestingEffective(), findings: findings, actionPlan: PolicyActionPlan{actions: []PolicyAction{{kind: PolicyActionKind(actions[0].Kind()), initialized: true}}, initialized: true}, source: input, initialized: true}
+	decision := PolicyDecision{state: &policyDecisionState{
+		verificationState: state, mode: PolicyMode(input.Mode()), verdict: PolicyVerdict(input.Verdict()),
+		primaryReason: PolicyReason(input.PrimaryReason()), modify: PolicyCompliance(input.DoNotModifyCompliance()),
+		explode: PolicyCompliance(input.DoNotExplodeCompliance()), feedback: PolicyFeedbackIntent{
+			state: &policyFeedbackIntentState{
+				requested: feedback.Requested(), relayRequired: feedback.RelayRequired(),
+				relaySequence: feedback.RelaySequence(), history: PolicyHistoryCoverage(feedback.HistoryCoverage()),
+				initialized: true,
+			},
+		}, dnsEffective: input.DNSTestingEffective(), findings: findings,
+		actionPlan: PolicyActionPlan{
+			actions:     []PolicyAction{{kind: PolicyActionKind(actions[0].Kind()), initialized: true}},
+			initialized: true,
+		},
+		source: input, initialized: true,
+	}}
 	return decision, decision.Valid()
 }

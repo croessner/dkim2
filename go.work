@@ -5,6 +5,7 @@ use (
 	./cmd/dkim2ctl
 	./cmd/dkim2d
 	./lib
+	./tools
 )
 
 // Remove this unpublished-module bootstrap after the first library tag.

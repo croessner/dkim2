@@ -228,23 +228,64 @@ func (s SignatureStatus) Known() bool {
 
 // VerificationTarget identifies the current signature sequence and Message-Instance number.
 type VerificationTarget struct {
+	state *verificationTargetState
+}
+
+type verificationTargetState struct {
 	sequence uint64
 	instance uint64
 }
 
+const verificationTargetRedactedText = "dkim2.VerificationTarget{redacted}"
+
 // newVerificationTarget constructs immutable bounded target metadata.
 func newVerificationTarget(sequence, instance uint64) VerificationTarget {
-	return VerificationTarget{sequence: sequence, instance: instance}
+	if sequence == 0 && instance == 0 {
+		return VerificationTarget{}
+	}
+	return VerificationTarget{state: &verificationTargetState{sequence: sequence, instance: instance}}
 }
 
 // Sequence returns the target DKIM2-Signature sequence number.
 func (t VerificationTarget) Sequence() uint64 {
-	return t.sequence
+	if t.state == nil {
+		return 0
+	}
+	return t.state.sequence
 }
 
 // Instance returns the target Message-Instance number.
 func (t VerificationTarget) Instance() uint64 {
-	return t.instance
+	if t.state == nil {
+		return 0
+	}
+	return t.state.instance
+}
+
+// isZero reports whether no target state is present.
+func (t VerificationTarget) isZero() bool {
+	return t.state == nil || t.state.sequence == 0 && t.state.instance == 0
+}
+
+// String returns a constant representation without sequence identifiers.
+func (VerificationTarget) String() string { return verificationTargetRedactedText }
+
+// GoString returns a constant representation without sequence identifiers.
+func (VerificationTarget) GoString() string { return verificationTargetRedactedText }
+
+// Format prevents formatting from traversing sequence identifiers.
+func (VerificationTarget) Format(state fmt.State, _ rune) {
+	_, _ = io.WriteString(state, verificationTargetRedactedText)
+}
+
+// MarshalJSON rejects serialization outside explicit mapped response boundaries.
+func (VerificationTarget) MarshalJSON() ([]byte, error) {
+	return nil, newAPIError(APIErrorCodeInvalidRequest)
+}
+
+// MarshalText rejects diagnostic serialization of sequence identifiers.
+func (VerificationTarget) MarshalText() ([]byte, error) {
+	return nil, newAPIError(APIErrorCodeInvalidRequest)
 }
 
 // CheckFact records one bounded verification check and reason.
@@ -305,8 +346,12 @@ func (f SignatureSetFact) KeyPolicyMetadata() KeyPolicyMetadata { return f.metad
 
 // VerifyResult is an immutable structured current-verification outcome.
 type VerifyResult struct {
+	state *verifyResultState
+}
+
+type verifyResultState struct {
 	draft                string
-	state                ResultState
+	resultState          ResultState
 	scope                VerificationScope
 	historicalContent    HistoricalState
 	historicalSignatures HistoricalState
@@ -341,9 +386,9 @@ func newVerifyResult(data verifyResultData) VerifyResult {
 		return internalContractResult(data.target)
 	}
 
-	return VerifyResult{
+	return VerifyResult{state: &verifyResultState{
 		draft:                DraftIdentifier,
-		state:                data.state,
+		resultState:          data.state,
 		scope:                data.scope,
 		historicalContent:    data.historicalContent,
 		historicalSignatures: data.historicalSignatures,
@@ -353,7 +398,7 @@ func newVerifyResult(data verifyResultData) VerifyResult {
 		checks:               slices.Clone(data.checks),
 		signatures:           slices.Clone(data.signatures),
 		policyProjection:     data.policyProjection.Clone(),
-	}
+	}}
 }
 
 // withReplayProjection attaches one service-owned sealed projection to a coherent PASS result.
@@ -361,22 +406,36 @@ func (r VerifyResult) withReplayProjection(projection service.ReplayProjection, 
 	if !present || !projection.Valid() || !r.replayEligible() {
 		return r
 	}
-	r.replayProjection = projection
-	r.hasReplayProjection = true
-	return r
+	state := r.cloneState()
+	state.replayProjection = projection
+	state.hasReplayProjection = true
+	return VerifyResult{state: state}
 }
 
 // replayEligible validates the complete public aggregate-current-PASS envelope.
 func (r VerifyResult) replayEligible() bool {
-	return r.draft == DraftIdentifier &&
-		r.state == ResultStatePASS &&
-		r.scope == VerificationScopeCurrent &&
-		r.historicalContent == HistoricalStateNotEvaluated &&
-		r.historicalSignatures == HistoricalStateNotEvaluated &&
-		(r.custodyStructure == CustodyStructureNotPresent ||
-			r.custodyStructure == CustodyStructureNDLinksEvaluated) &&
-		r.target.sequence > 0 && r.target.instance > 0 &&
-		r.primaryReason == ReasonNone
+	return r.state != nil &&
+		r.state.draft == DraftIdentifier &&
+		r.state.resultState == ResultStatePASS &&
+		r.state.scope == VerificationScopeCurrent &&
+		r.state.historicalContent == HistoricalStateNotEvaluated &&
+		r.state.historicalSignatures == HistoricalStateNotEvaluated &&
+		(r.state.custodyStructure == CustodyStructureNotPresent ||
+			r.state.custodyStructure == CustodyStructureNDLinksEvaluated) &&
+		r.state.target.Sequence() > 0 && r.state.target.Instance() > 0 &&
+		r.state.primaryReason == ReasonNone
+}
+
+// cloneState returns an independently owned aggregate state.
+func (r VerifyResult) cloneState() *verifyResultState {
+	if r.state == nil {
+		return &verifyResultState{}
+	}
+	state := *r.state
+	state.checks = slices.Clone(r.state.checks)
+	state.signatures = slices.Clone(r.state.signatures)
+	state.policyProjection = r.state.policyProjection.Clone()
+	return &state
 }
 
 // verifyResultDataValid rejects unknown facts and impossible public result combinations.
@@ -420,9 +479,9 @@ func publicResultKeyPolicyCoherent(fact SignatureSetFact) bool {
 
 // internalContractResult returns a bounded fail-closed result for invalid adapter input.
 func internalContractResult(target VerificationTarget) VerifyResult {
-	result := VerifyResult{
+	result := VerifyResult{state: &verifyResultState{
 		draft:                DraftIdentifier,
-		state:                ResultStatePERMERROR,
+		resultState:          ResultStatePERMERROR,
 		scope:                VerificationScopeCurrent,
 		historicalContent:    HistoricalStateNotEvaluated,
 		historicalSignatures: HistoricalStateNotEvaluated,
@@ -432,72 +491,164 @@ func internalContractResult(target VerificationTarget) VerifyResult {
 		checks: []CheckFact{
 			newCheckFact(CheckClassInternalContract, ReasonInternalContract),
 		},
-	}
-	if target == (VerificationTarget{}) {
+	}}
+	if target.isZero() {
 		projection, _ := policy.NewUnavailableProjection(policy.PreTargetInternalContract)
-		result.policyProjection = projection
+		result.state.policyProjection = projection
 	}
 	return result
 }
 
 // PrimaryReason returns the deterministic highest-precedence bounded reason.
 func (r VerifyResult) PrimaryReason() ReasonCode {
-	return r.primaryReason
+	if r.state == nil {
+		return ""
+	}
+	return r.state.primaryReason
 }
 
 // Draft returns the exact DKIM2 draft identifier governing this result.
 func (r VerifyResult) Draft() string {
-	return r.draft
+	if r.state == nil {
+		return ""
+	}
+	return r.state.draft
 }
 
 // State returns one of the four public verification states.
 func (r VerifyResult) State() ResultState {
-	return r.state
+	if r.state == nil {
+		return ""
+	}
+	return r.state.resultState
 }
 
 // Scope returns the current-only verification scope.
 func (r VerifyResult) Scope() VerificationScope {
-	return r.scope
+	if r.state == nil {
+		return ""
+	}
+	return r.state.scope
 }
 
 // HistoricalContent returns the historical content and recipe coverage state.
 func (r VerifyResult) HistoricalContent() HistoricalState {
-	return r.historicalContent
+	if r.state == nil {
+		return ""
+	}
+	return r.state.historicalContent
 }
 
 // HistoricalSignatures returns the historical cryptographic-signature coverage state.
 func (r VerifyResult) HistoricalSignatures() HistoricalState {
-	return r.historicalSignatures
+	if r.state == nil {
+		return ""
+	}
+	return r.state.historicalSignatures
 }
 
 // CustodyStructure returns separately evaluated structural next-domain coverage.
 func (r VerifyResult) CustodyStructure() CustodyStructure {
-	return r.custodyStructure
+	if r.state == nil {
+		return ""
+	}
+	return r.state.custodyStructure
 }
 
 // Target returns the current verification target metadata.
 func (r VerifyResult) Target() VerificationTarget {
-	return r.target
+	if r.state == nil {
+		return VerificationTarget{}
+	}
+	return r.state.target
 }
 
 // Checks returns an independent copy of the bounded check facts.
 func (r VerifyResult) Checks() []CheckFact {
-	return slices.Clone(r.checks)
+	if r.state == nil {
+		return nil
+	}
+	return slices.Clone(r.state.checks)
 }
 
 // CheckCount returns the bounded number of retained check facts.
 func (r VerifyResult) CheckCount() int {
-	return len(r.checks)
+	if r.state == nil {
+		return 0
+	}
+	return len(r.state.checks)
 }
 
 // SignatureSets returns an independent copy of the bounded signature-set facts.
 func (r VerifyResult) SignatureSets() []SignatureSetFact {
-	return slices.Clone(r.signatures)
+	if r.state == nil {
+		return nil
+	}
+	return slices.Clone(r.state.signatures)
 }
 
 // SignatureSetCount returns the bounded number of retained signature-set facts.
 func (r VerifyResult) SignatureSetCount() int {
-	return len(r.signatures)
+	if r.state == nil {
+		return 0
+	}
+	return len(r.state.signatures)
+}
+
+// sealedPolicyProjection returns an independent policy projection for package-internal checks.
+func (r VerifyResult) sealedPolicyProjection() policy.Projection {
+	if r.state == nil {
+		return policy.Projection{}
+	}
+	return r.state.policyProjection.Clone()
+}
+
+// Valid reports whether the result is a complete library-owned current-verification aggregate.
+func (r VerifyResult) Valid() bool {
+	if r.state == nil {
+		return false
+	}
+	if !verifyResultPolicyProvenanceValid(r) ||
+		len(r.state.checks) == 0 || len(r.state.checks) > HardMaxCheckFacts ||
+		len(r.state.signatures) > HardMaxSignatureFacts ||
+		r.state.primaryReason == ReasonInvalidRequest {
+		return false
+	}
+	for _, fact := range r.state.checks {
+		if fact.reason == ReasonInvalidRequest {
+			return false
+		}
+	}
+	for _, fact := range r.state.signatures {
+		if fact.reason == ReasonInvalidRequest {
+			return false
+		}
+	}
+	target := r.state.target
+	if target.isZero() {
+		return r.state.resultState == ResultStatePERMERROR &&
+			unavailableReasonMatches(r.state.policyProjection.PreTargetReason(), r.state.primaryReason)
+	}
+	if target.Sequence() == 0 || target.Instance() == 0 {
+		return false
+	}
+	switch r.state.resultState {
+	case ResultStatePASS:
+		return r.state.primaryReason == ReasonNone &&
+			(r.state.custodyStructure == CustodyStructureNotPresent ||
+				r.state.custodyStructure == CustodyStructureNDLinksEvaluated)
+	case ResultStateFAIL:
+		return r.state.primaryReason == ReasonHashMismatch || r.state.primaryReason == ReasonSignatureMismatch
+	case ResultStateTEMPERROR:
+		return r.state.primaryReason == ReasonProviderTemporary
+	case ResultStatePERMERROR:
+		return r.state.primaryReason != ReasonNone &&
+			r.state.primaryReason != ReasonHashMismatch &&
+			r.state.primaryReason != ReasonSignatureMismatch &&
+			r.state.primaryReason != ReasonProviderTemporary
+	default:
+		return false
+	}
 }
 
 // String returns a constant representation without sealed or message-derived facts.
@@ -509,4 +660,14 @@ func (VerifyResult) GoString() string { return verifyResultRedactedText }
 // Format prevents formatting from traversing sealed or message-derived facts.
 func (VerifyResult) Format(state fmt.State, _ rune) {
 	_, _ = io.WriteString(state, verifyResultRedactedText)
+}
+
+// MarshalJSON rejects serialization outside explicit mapped response boundaries.
+func (VerifyResult) MarshalJSON() ([]byte, error) {
+	return nil, newAPIError(APIErrorCodeInvalidRequest)
+}
+
+// MarshalText rejects diagnostic serialization of sealed verification facts.
+func (VerifyResult) MarshalText() ([]byte, error) {
+	return nil, newAPIError(APIErrorCodeInvalidRequest)
 }

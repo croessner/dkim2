@@ -14,6 +14,8 @@ import (
 	"time"
 )
 
+const privacyStoreMapKey = "store"
+
 // TestMemoryStoreConstructorRejectsClockAndLimitMisconfiguration verifies exact construction bounds.
 func TestMemoryStoreConstructorRejectsClockAndLimitMisconfiguration(t *testing.T) {
 	if store, err := NewMemoryStore(MemoryConfig{}); store != nil || ErrorCodeOf(err) != ErrorCodeMisconfigured {
@@ -105,7 +107,7 @@ func TestMemoryStoreValidationPrecedenceAndClockSuppression(t *testing.T) {
 func TestMemoryStoreDegradedStatePreservesInputValidationPrecedence(t *testing.T) {
 	clock := &countingClock{now: time.Unix(1_700_000_000, 0)}
 	store := newTestMemoryStore(t, Limits{MaxEntries: 1, MaxWaiters: 1, PruneBudget: 1}, clock)
-	store.gate.degrade()
+	store.state.gate.degrade()
 	validKey := testReplayKey(1)
 	validRetention := mustRetention(t, time.Second)
 	if check, err := store.CheckAndRemember(context.Background(), Key{}, validRetention); check != 0 ||
@@ -171,17 +173,17 @@ func TestMemoryStoreCapacityNeverEvictsUnexpiredEntries(t *testing.T) {
 func TestMemoryStoreCancellationAfterTokenPreventsClockAndMutation(t *testing.T) {
 	clock := &countingClock{now: time.Unix(1_700_000_000, 0)}
 	store := newTestMemoryStore(t, Limits{MaxEntries: 1, MaxWaiters: 1, PruneBudget: 1}, clock)
-	store.afterToken = make(chan struct{})
-	store.continueAfterToken = make(chan struct{})
+	store.state.afterToken = make(chan struct{})
+	store.state.continueAfterToken = make(chan struct{})
 	ctx, cancel := context.WithCancel(context.Background())
 	result := make(chan error, 1)
 	go func() {
 		_, err := store.CheckAndRemember(ctx, testReplayKey(1), mustRetention(t, time.Second))
 		result <- err
 	}()
-	<-store.afterToken
+	<-store.state.afterToken
 	cancel()
-	close(store.continueAfterToken)
+	close(store.state.continueAfterToken)
 	if err := <-result; ErrorCodeOf(err) != ErrorCodeCancelled || !errors.Is(err, context.Canceled) {
 		t.Fatalf("post-token cancellation = %v", err)
 	}
@@ -263,7 +265,8 @@ func TestMemoryStoreEqualExpiryOrderingIsDeterministic(t *testing.T) {
 	got := store.testHeapKeys()
 	want := []Key{testReplayKey(1), testReplayKey(2), testReplayKey(3)}
 	for index := range want {
-		if got[index] != want[index] {
+		storage, present := want[index].storageValue()
+		if !present || got[index] != storage {
 			t.Fatalf("equal-expiry heap order differs at %d", index)
 		}
 	}
@@ -349,7 +352,11 @@ func TestMemoryStoreConcurrentSameKeyHasOneWinner(t *testing.T) {
 	clock := newTestClock(time.Unix(1_700_000_000, 0))
 	store := newTestMemoryStore(t, Limits{MaxEntries: 1, MaxWaiters: 64, PruneBudget: 1}, clock)
 	retention := mustRetention(t, time.Second)
-	key := testReplayKey(1)
+	firstHandle := testReplayKey(1)
+	secondHandle := testReplayKey(1)
+	if firstHandle.state == secondHandle.state {
+		t.Fatal("synthetic identical content keys unexpectedly shared one handle")
+	}
 
 	const callers = 64
 	var firstSeen atomic.Int64
@@ -361,7 +368,7 @@ func TestMemoryStoreConcurrentSameKeyHasOneWinner(t *testing.T) {
 		go func() {
 			defer wait.Done()
 			<-start
-			check, err := store.CheckAndRemember(context.Background(), key, retention)
+			check, err := store.CheckAndRemember(context.Background(), testReplayKey(1), retention)
 			if err != nil {
 				t.Errorf("concurrent check = %v", err)
 				return
@@ -414,8 +421,8 @@ func TestMemoryStoreDistinctKeysAreRaceSafe(t *testing.T) {
 // TestMemoryStorePostMutationCancellationKeepsAuthoritativeResult verifies the mutation boundary.
 func TestMemoryStorePostMutationCancellationKeepsAuthoritativeResult(t *testing.T) {
 	store := newTestMemoryStore(t, Limits{MaxEntries: 1, MaxWaiters: 1, PruneBudget: 1}, newTestClock(time.Unix(1_700_000_000, 0)))
-	store.afterMutation = make(chan struct{})
-	store.continueAfterMutation = make(chan struct{})
+	store.state.afterMutation = make(chan struct{})
+	store.state.continueAfterMutation = make(chan struct{})
 	ctx, cancel := context.WithCancel(context.Background())
 	result := make(chan struct {
 		check Check
@@ -428,9 +435,9 @@ func TestMemoryStorePostMutationCancellationKeepsAuthoritativeResult(t *testing.
 			err   error
 		}{check, err}
 	}()
-	<-store.afterMutation
+	<-store.state.afterMutation
 	cancel()
-	close(store.continueAfterMutation)
+	close(store.state.continueAfterMutation)
 	got := <-result
 	if got.check != CheckFirstSeen || got.err != nil {
 		t.Fatalf("post-mutation cancellation = %s, %v", got.check, got.err)
@@ -569,9 +576,26 @@ func TestMemoryStoreFormattingAndSerializationAreContentFree(t *testing.T) {
 	}
 	formatted := fmt.Sprintf("%v|%+v|%#v|%s|%q|%x", store, store, store, store, store, store)
 	if strings.Count(formatted, memoryStoreRedactedText) != 6 || containsKeyMaterial(formatted) {
-		t.Fatalf("memory formatting = %q", formatted)
+		t.Fatal("memory formatting was not content-free")
 	}
-	internal := fmt.Sprintf("%v|%+v|%#v", store.entries, store.expiries, store.expiries)
+	value := *store
+	for _, surface := range []any{
+		store, value, any(store), any(value),
+		[]*MemoryStore{store}, []MemoryStore{value},
+		map[string]*MemoryStore{privacyStoreMapKey: store},
+		map[string]MemoryStore{privacyStoreMapKey: value},
+	} {
+		diagnostic := fmt.Sprintf("%v|%+v|%#v|%s|%q|%x|%p", surface, surface, surface, surface, surface, surface, surface)
+		if strings.Contains(diagnostic, storage) || strings.Contains(diagnostic, fmt.Sprintf("%x", storage)) {
+			t.Fatal("memory owner formatting exposed a protected storage key")
+		}
+		encoded, marshalErr := json.Marshal(surface)
+		if strings.Contains(string(encoded), storage) ||
+			marshalErr != nil && strings.Contains(marshalErr.Error(), storage) {
+			t.Fatal("memory owner serialization exposed a protected storage key")
+		}
+	}
+	internal := fmt.Sprintf("%v|%+v|%#v", store.state.entries, store.state.expiries, store.state.expiries)
 	if strings.Contains(internal, storage) {
 		t.Fatal("memory heap/map formatting exposed a protected storage key")
 	}
@@ -711,7 +735,8 @@ func testReplayKey(seed byte) Key {
 	}
 	storage := "dkim2:replay:v1:00000001:" + base64.RawURLEncoding.EncodeToString(digest[:])
 	var key Key
-	copy(key.storage[:], storage)
+	key.state = &keyState{}
+	copy(key.state.storage[:], storage)
 	return key
 }
 
@@ -760,16 +785,20 @@ func assertMemoryInvariant(t *testing.T, store *MemoryStore) {
 
 // testCounts returns exact map and heap ownership under the serialization token.
 func (s *MemoryStore) testCounts() (int, int) {
-	<-s.token
+	<-s.state.token
 	defer s.releaseToken()
-	return len(s.entries), len(s.expiries)
+	return len(s.state.entries), len(s.state.expiries)
 }
 
 // testExpiry returns one exact retained expiry.
 func (s *MemoryStore) testExpiry(key Key) time.Time {
-	<-s.token
+	<-s.state.token
 	defer s.releaseToken()
-	entry := s.entries[key]
+	storage, present := key.storageValue()
+	if !present {
+		return time.Time{}
+	}
+	entry := s.state.entries[storage]
 	if entry == nil {
 		return time.Time{}
 	}
@@ -777,15 +806,15 @@ func (s *MemoryStore) testExpiry(key Key) time.Time {
 }
 
 // testHeapKeys returns entries in deterministic heap-pop order.
-func (s *MemoryStore) testHeapKeys() []Key {
-	<-s.token
+func (s *MemoryStore) testHeapKeys() [][storageKeyByteLength]byte {
+	<-s.state.token
 	defer s.releaseToken()
-	clone := append(expiryHeap(nil), s.expiries...)
+	clone := append(expiryHeap(nil), s.state.expiries...)
 	for index, entry := range clone {
 		copied := *entry
 		clone[index] = &copied
 	}
-	output := make([]Key, 0, len(clone))
+	output := make([][storageKeyByteLength]byte, 0, len(clone))
 	for len(clone) > 0 {
 		output = append(output, heap.Pop(&clone).(*memoryEntry).key)
 	}
@@ -794,39 +823,39 @@ func (s *MemoryStore) testHeapKeys() []Key {
 
 // testWaiterCount returns the exact number of blocked serialization callers.
 func (s *MemoryStore) testWaiterCount() int {
-	s.waitMu.Lock()
-	defer s.waitMu.Unlock()
-	return s.waiters
+	s.state.waitMu.Lock()
+	defer s.state.waitMu.Unlock()
+	return s.state.waiters
 }
 
 // testClearCount returns the number of terminal retained-state clears.
 func (s *MemoryStore) testClearCount() int {
-	<-s.token
+	<-s.state.token
 	defer s.releaseToken()
-	return s.clearCount
+	return s.state.clearCount
 }
 
 // testValidInvariant verifies map, heap, index, uniqueness, and parent ordering.
 func (s *MemoryStore) testValidInvariant() bool {
-	<-s.token
+	<-s.state.token
 	defer s.releaseToken()
-	if len(s.entries) != len(s.expiries) {
+	if len(s.state.entries) != len(s.state.expiries) {
 		return false
 	}
-	seen := make(map[Key]struct{}, len(s.expiries))
-	for index, entry := range s.expiries {
-		if entry == nil || entry.index != index || s.entries[entry.key] != entry {
+	seen := make(map[[storageKeyByteLength]byte]struct{}, len(s.state.expiries))
+	for index, entry := range s.state.expiries {
+		if entry == nil || entry.index != index || s.state.entries[entry.key] != entry {
 			return false
 		}
 		if _, exists := seen[entry.key]; exists {
 			return false
 		}
 		seen[entry.key] = struct{}{}
-		if index > 0 && s.expiries.Less(index, (index-1)/2) {
+		if index > 0 && s.state.expiries.Less(index, (index-1)/2) {
 			return false
 		}
 	}
-	for key, entry := range s.entries {
+	for key, entry := range s.state.entries {
 		if entry == nil || entry.key != key {
 			return false
 		}

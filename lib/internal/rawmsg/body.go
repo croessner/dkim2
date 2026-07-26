@@ -2,7 +2,10 @@ package rawmsg
 
 import "bytes"
 
-const limitNameMaxBodyLineBytes = "max_body_line_bytes"
+const (
+	limitNameMaxBodyLineBytes = "max_body_line_bytes"
+	limitNameMaxBodyLines     = "max_body_lines"
+)
 
 // Body stores immutable parser-owned body bytes and their line index.
 type Body struct {
@@ -187,7 +190,16 @@ func indexBodyLines(data []byte, options ParserOptions, bodyOffset int) ([]BodyL
 		return nil, nil
 	}
 
-	var lines []BodyLine
+	lineCount, overflowOffset, withinLimit := countBodyLinesWithinLimit(data, options.MaxBodyLines)
+	if !withinLimit {
+		return nil, NewParserError(ErrorCodeLimitExceeded, ErrorLocation{Offset: bodyOffset + overflowOffset}, ParserErrorDetails{
+			Reason:    ErrorReasonLimit,
+			LimitName: limitNameMaxBodyLines,
+			Limit:     options.MaxBodyLines,
+		})
+	}
+
+	lines := make([]BodyLine, 0, lineCount)
 	lineStart := 0
 	for lineIndex := 0; lineStart < len(data); lineIndex++ {
 		lineEndRel := bytes.Index(data[lineStart:], crlf)
@@ -219,6 +231,25 @@ func indexBodyLines(data []byte, options ParserOptions, bodyOffset int) ([]BodyL
 	}
 
 	return lines, nil
+}
+
+// countBodyLinesWithinLimit rejects excess lines before allocating their index.
+func countBodyLinesWithinLimit(data []byte, maxLines int) (lineCount int, overflowOffset int, withinLimit bool) {
+	lineStart := 0
+	for lineStart < len(data) {
+		if lineCount >= maxLines {
+			return lineCount, lineStart, false
+		}
+		lineCount++
+
+		lineEndRel := bytes.Index(data[lineStart:], crlf)
+		if lineEndRel < 0 {
+			return lineCount, 0, true
+		}
+		lineStart += lineEndRel + len(crlf)
+	}
+
+	return lineCount, 0, true
 }
 
 // BodyLineIndex stores immutable body line spans in byte order.

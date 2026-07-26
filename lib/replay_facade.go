@@ -169,9 +169,9 @@ func UseReplayStorageKey(key ReplayKey, use func(storageKey string) error) error
 
 // ReplayIdentities adapts only one coherent verifier-owned aggregate-current-PASS projection.
 func ReplayIdentities(result VerifyResult) (ReplayIdentitySet, error) {
-	if !result.replayEligible() || !result.hasReplayProjection ||
-		!result.replayProjection.Valid() {
+	if !result.replayEligible() || result.state == nil || !result.state.hasReplayProjection ||
+		!result.state.replayProjection.Valid() {
 		return ReplayIdentitySet{}, replay.NewError(replay.ErrorCodeInvalidRequest)
 	}
-	return replay.NewIdentitySet(result.replayProjection)
+	return replay.NewIdentitySet(result.state.replayProjection)
 }

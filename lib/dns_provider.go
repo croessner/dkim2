@@ -5,14 +5,24 @@ import (
 	"crypto/ed25519"
 	"crypto/rsa"
 	"errors"
+	"fmt"
+	"io"
 	"time"
 
 	"github.com/croessner/dkim2/internal/keyresolver"
 	"github.com/croessner/dkim2/internal/niliface"
 )
 
+const dnsPublicKeyProviderRedactedText = "dkim2.DNSPublicKeyProvider{redacted}"
+
 // DNSPublicKeyProvider resolves public verification keys through DNS TXT records.
-type DNSPublicKeyProvider struct{ resolver keyresolver.Resolver }
+type DNSPublicKeyProvider struct {
+	state *dnsPublicKeyProviderState
+}
+
+type dnsPublicKeyProviderState struct {
+	resolver keyresolver.Resolver
+}
 
 // DNSResolverLimits bounds public DNS resolution, caching, and concurrency resources.
 type DNSResolverLimits struct {
@@ -56,7 +66,7 @@ func NewDNSPublicKeyProviderWithConfig(transport TXTTransport, config DNSProvide
 	if err != nil {
 		return nil, newAPIError(APIErrorCodeInvalidProvider)
 	}
-	return &DNSPublicKeyProvider{resolver: resolver}, nil
+	return &DNSPublicKeyProvider{state: &dnsPublicKeyProviderState{resolver: resolver}}, nil
 }
 
 // publicDNSResolverLimits maps internal defaults into the public configuration shape.
@@ -94,14 +104,14 @@ func nilPublicTXTTransport(transport TXTTransport) bool {
 
 // LookupPublicKey resolves one canonical public query without applying verifier key policy.
 func (p *DNSPublicKeyProvider) LookupPublicKey(ctx context.Context, query PublicKeyQuery) (PublicKeyResult, error) {
-	if p == nil || ctx == nil {
+	if p == nil || p.state == nil || ctx == nil {
 		return PublicKeyResult{}, newAPIError(APIErrorCodeInvalidProvider)
 	}
 	algorithm, ok := resolverAlgorithm(query.Algorithm())
 	if !ok {
 		return PublicKeyResult{}, newAPIError(APIErrorCodeInvalidProvider)
 	}
-	outcome, err := p.resolver.Resolve(ctx, query.SigningDomain(), query.Selector(), algorithm)
+	outcome, err := p.state.resolver.Resolve(ctx, query.SigningDomain(), query.Selector(), algorithm)
 	if err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil && errors.Is(err, ctxErr) {
 			return PublicKeyResult{}, ctxErr
@@ -141,6 +151,27 @@ func (p *DNSPublicKeyProvider) LookupPublicKey(ctx context.Context, query Public
 	default:
 		return PublicKeyResult{}, newAPIError(APIErrorCodeInvalidProvider)
 	}
+}
+
+// String returns a constant representation without retained DNS transport state.
+func (DNSPublicKeyProvider) String() string { return dnsPublicKeyProviderRedactedText }
+
+// GoString returns a constant representation without retained DNS transport state.
+func (DNSPublicKeyProvider) GoString() string { return dnsPublicKeyProviderRedactedText }
+
+// Format prevents formatting from traversing the retained DNS resolver.
+func (DNSPublicKeyProvider) Format(state fmt.State, _ rune) {
+	_, _ = io.WriteString(state, dnsPublicKeyProviderRedactedText)
+}
+
+// MarshalJSON rejects serialization of retained DNS resolver dependencies.
+func (DNSPublicKeyProvider) MarshalJSON() ([]byte, error) {
+	return nil, newAPIError(APIErrorCodeInvalidRequest)
+}
+
+// MarshalText rejects diagnostic serialization of retained DNS resolver dependencies.
+func (DNSPublicKeyProvider) MarshalText() ([]byte, error) {
+	return nil, newAPIError(APIErrorCodeInvalidRequest)
 }
 
 // resolverAlgorithm maps a supported public query into resolver ownership.
@@ -214,9 +245,11 @@ func publicTXTLookupShapeValid(result TXTLookupResult) bool {
 		if result.Absence() != "" || result.NegativeTTL() != 0 || result.RecordCount() <= 0 {
 			return false
 		}
-		return result.RecordCount() > 1 && len(result.records) == 0 || result.RecordCount() == 1 && len(result.records) == 1
+		return result.RecordCount() > 1 && result.recordStorageCount() == 0 ||
+			result.RecordCount() == 1 && result.recordStorageCount() == 1
 	case TXTLookupStatusAbsent:
-		return result.Absence().Known() && result.RecordCount() == 0 && len(result.records) == 0 && result.PositiveTTL() == 0
+		return result.Absence().Known() && result.RecordCount() == 0 &&
+			result.recordStorageCount() == 0 && result.PositiveTTL() == 0
 	default:
 		return false
 	}

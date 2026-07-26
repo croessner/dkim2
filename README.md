@@ -58,8 +58,10 @@ bounded `dkim2-datasource-v1` JSON snapshot through an owned confined directory
 descriptor and publishes reloads atomically. Replay detection now has a
 storage-neutral library contract, bounded memory and disabled providers, and a
 daemon-owned standalone-primary Valkey provider using privacy-preserving keys
-and one non-retryable `SET NX PX` operation. LDAP, SQL, service configuration,
-and daemon wiring remain separate later increments.
+and one non-retryable `SET NX PX` operation. The daemon now owns strict typed
+configuration, protected-generation loading, the generated inbound OpenAPI
+boundary, local capability authentication, replay wiring, readiness, and
+bounded Fx lifecycle. LDAP and SQL providers remain deferred.
 
 Useful verification commands:
 

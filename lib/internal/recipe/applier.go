@@ -22,6 +22,7 @@ func NewApplier(limits Limits) (Applier, error) {
 	options.MaxHeaderFieldBytes = resolved.MaxHeaderFieldBytes
 	options.MaxHeaderLineBytes = resolved.MaxHeaderLineBytes
 	options.MaxBodyLineBytes = resolved.MaxBodyLineBytes
+	options.MaxBodyLines = resolved.MaxBodyLines
 	if err := options.Validate(); err != nil {
 		return Applier{}, invalidOptionsError("")
 	}

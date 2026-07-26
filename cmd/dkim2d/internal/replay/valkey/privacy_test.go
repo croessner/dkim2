@@ -14,6 +14,8 @@ import (
 	valkeygo "github.com/valkey-io/valkey-go"
 )
 
+const testNameValue = "value"
+
 // privacyContract freezes the protected formatting and serialization boundary.
 type privacyContract interface {
 	fmt.Stringer
@@ -38,7 +40,9 @@ func TestStorePrivacyCoversPointerAndDereferencedValue(t *testing.T) {
 		tlsServerName: syntheticSecretMarker,
 	}
 	applicationUsername := syntheticSecretMarker
-	attestation := OperatorAttestation{saveSchedule: syntheticSecretMarker}
+	attestation := OperatorAttestation{values: &operatorAttestationValues{
+		saveSchedule: syntheticSecretMarker,
+	}}
 	store.authority = &authority
 	store.applicationUsername = &applicationUsername
 	store.attestation = &attestation
@@ -76,9 +80,9 @@ func TestOperatorAttestationInputPrivacyIsContentFreeAndSerializationRejected(t 
 	requirePrivacyContract[*OperatorAttestationInput]()
 
 	input := validOperatorAttestationInput()
-	input.SaveSchedule = syntheticSecretMarker
+	input.values.SaveSchedule = syntheticSecretMarker
 	for name, value := range map[string]any{
-		"value":         input,
+		testNameValue:   input,
 		testNamePointer: &input,
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -101,6 +105,94 @@ func TestOperatorAttestationInputPrivacyIsContentFreeAndSerializationRejected(t 
 			}
 			if encoded, err := textMarshaler.MarshalText(); err == nil || len(encoded) != 0 {
 				t.Fatal("operator attestation input unexpectedly marshaled as text")
+			}
+		})
+	}
+}
+
+// TestAuthorityInputsRemainStructurallyOpaqueAcrossContainers freezes fmt fallback safety.
+func TestAuthorityInputsRemainStructurallyOpaqueAcrossContainers(t *testing.T) {
+	const (
+		endpointMarker = "203.0.113.77:6379"
+		serverMarker   = "privacy.example"
+		usernameMarker = "privacy_user"
+		passwordMarker = "privacy-password-marker"
+		rootMarker     = "privacy-root-der-marker"
+		policyMarker   = "777 888"
+	)
+	client := ClientConfig{values: &clientConfigValues{
+		Endpoint:            endpointMarker,
+		TLSServerName:       serverMarker,
+		RootCertificatesDER: [][]byte{[]byte(rootMarker)},
+		Username:            usernameMarker,
+		Password:            []byte(passwordMarker),
+	}}
+	auditor := AuditorConfig{values: &auditorConfigValues{
+		Username: usernameMarker,
+		Password: []byte(passwordMarker),
+	}}
+	input := OperatorAttestationInput{values: &operatorAttestationInputValues{
+		SaveSchedule: policyMarker,
+	}}
+	attestation := OperatorAttestation{values: &operatorAttestationValues{
+		saveSchedule: policyMarker,
+	}}
+	markers := []string{
+		endpointMarker,
+		serverMarker,
+		usernameMarker,
+		passwordMarker,
+		rootMarker,
+		policyMarker,
+	}
+	for name, direct := range map[string]any{
+		"client":      client,
+		"auditor":     auditor,
+		"input":       input,
+		"attestation": attestation,
+	} {
+		t.Run(name, func(t *testing.T) {
+			pointer := reflect.ValueOf(direct)
+			ownedPointer := reflect.New(pointer.Type())
+			ownedPointer.Elem().Set(pointer)
+			values := map[string]any{
+				testNameValue:       direct,
+				"pointer":           ownedPointer.Interface(),
+				"any":               direct,
+				"pointer-interface": ownedPointer.Interface(),
+				"nested-struct":     struct{ Value any }{Value: direct},
+				"slice":             []any{direct, ownedPointer.Interface()},
+				"map":               map[string]any{testNameValue: direct},
+			}
+			for valueName, value := range values {
+				for _, format := range []string{
+					"%s", "%q", "%v", "%+v", "%#v", "%x", "%X",
+					"%p", "%#p", "%+p",
+				} {
+					formatted := fmt.Sprintf(format, value)
+					for _, marker := range markers {
+						if strings.Contains(formatted, marker) {
+							t.Fatalf("%s format %q exposed protected marker", valueName, format)
+						}
+					}
+				}
+				if encoded, err := json.Marshal(value); err == nil || len(encoded) != 0 {
+					t.Fatalf("%s unexpectedly marshaled as JSON", valueName)
+				}
+			}
+			textMarshaler, ok := direct.(encoding.TextMarshaler)
+			if !ok {
+				t.Fatal("direct protected value lacks text-marshaling rejection")
+			}
+			if encoded, err := textMarshaler.MarshalText(); err == nil || len(encoded) != 0 {
+				t.Fatal("direct protected value unexpectedly marshaled as text")
+			}
+			pointerTextMarshaler, ok := ownedPointer.Interface().(encoding.TextMarshaler)
+			if !ok {
+				t.Fatal("protected pointer lacks text-marshaling rejection")
+			}
+			if encoded, err := pointerTextMarshaler.MarshalText(); err == nil || len(encoded) != 0 {
+				t.Fatal("protected pointer unexpectedly marshaled as text")
 			}
 		})
 	}

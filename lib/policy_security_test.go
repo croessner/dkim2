@@ -2,6 +2,8 @@ package dkim2
 
 import (
 	"context"
+	"encoding"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -83,12 +85,12 @@ func TestPolicyFormattingOmitsMessageIdentityKeyAndRouteMaterial(t *testing.T) {
 	}
 	formatted := strings.Join(formattedParts, "\n")
 	for _, marker := range []string{
-		"From: sender", "sender@example.test", "selector.test", "example.test", "body line", "<rcpt@example.test>",
+		"From: sender", "sender@example.test", "selector.test", testSigningDomain, "body line", "<rcpt@example.test>",
 		"TOXIC-MESSAGE", "TOXIC-BODY", "TOXIC-IDENTITY", "TOXIC-UNKNOWN",
 		"TOXIC-DNS-KEY", "TOXIC-PROVIDER", "TOXIC-ROUTE", "TOXIC-POLICY-OPTION",
 	} {
 		if strings.Contains(formatted, marker) {
-			t.Fatalf("policy formatting leaked forbidden marker %q", marker)
+			t.Fatal("policy formatting leaked forbidden input material")
 		}
 	}
 	for _, finding := range decision.Findings() {
@@ -103,6 +105,71 @@ func TestPolicyFormattingOmitsMessageIdentityKeyAndRouteMaterial(t *testing.T) {
 	for _, output := range policyExampleOutputBlocks(string(exampleSource)) {
 		if strings.Contains(output, "example.test") || strings.Contains(output, "selector") || strings.Contains(output, "body line") {
 			t.Fatal("runnable example output contains forbidden input material")
+		}
+	}
+}
+
+// TestSequenceBearingPublicValuesFormatWithoutIdentifiers proves typed accessors are the only sequence outlet.
+func TestSequenceBearingPublicValuesFormatWithoutIdentifiers(t *testing.T) {
+	const marker = uint64(18_446_744_073_709_551_615)
+	target := newVerificationTarget(marker, marker-1)
+	finding := PolicyFinding{state: &policyFindingState{
+		reason: PolicyReasonFeedbackRequested, severity: PolicySeverityInfo,
+		sequence: marker, hasSequence: true, initialized: true,
+	}}
+	feedback := PolicyFeedbackIntent{state: &policyFeedbackIntentState{
+		requested: true, relayRequired: true, relaySequence: marker,
+		history: PolicyHistoryNotEvaluated, initialized: true,
+	}}
+	decision := PolicyDecision{state: &policyDecisionState{feedback: feedback, findings: []PolicyFinding{finding}}}
+	values := []any{
+		target, &target, finding, &finding, feedback, &feedback, decision, &decision,
+		[]VerificationTarget{target}, []PolicyFinding{finding},
+		[]PolicyFeedbackIntent{feedback}, []PolicyDecision{decision},
+		map[PolicyFinding]PolicyFeedbackIntent{finding: feedback},
+		map[PolicyDecision]VerificationTarget{decision: target},
+	}
+	var formatted strings.Builder
+	for _, value := range values {
+		fmt.Fprintf(&formatted, "%s %q %v %+v %#v %x %p\n",
+			value, value, value, value, value, value, value)
+	}
+	text := formatted.String()
+	for _, secret := range []string{
+		"18446744073709551615", "18446744073709551614",
+		"ffffffffffffffff", "fffffffffffffffe",
+	} {
+		if strings.Contains(text, secret) {
+			t.Fatal("formatted sequence-bearing values leaked a forbidden identifier")
+		}
+	}
+	for _, expected := range []string{
+		verificationTargetRedactedText, policyFindingRedactedText,
+		policyFeedbackRedactedText, policyDecisionRedactedText,
+	} {
+		if !strings.Contains(text, expected) {
+			t.Fatalf("formatted output omitted redaction %q", expected)
+		}
+	}
+	for _, value := range []any{finding, feedback, decision} {
+		if _, err := json.Marshal(value); err == nil {
+			t.Fatal("protected policy value allowed direct JSON serialization")
+		}
+		marshaler, ok := value.(encoding.TextMarshaler)
+		if !ok {
+			t.Fatal("protected policy value omitted its fail-closed text serialization boundary")
+		}
+		encoded, err := marshaler.MarshalText()
+		if err == nil || len(encoded) != 0 {
+			t.Fatal("protected policy value allowed direct text serialization")
+		}
+		for _, secret := range []string{
+			"18446744073709551615", "18446744073709551614",
+			"ffffffffffffffff", "fffffffffffffffe",
+		} {
+			if strings.Contains(err.Error(), secret) {
+				t.Fatal("protected policy serialization error leaked a forbidden identifier")
+			}
 		}
 	}
 }
@@ -153,7 +220,7 @@ func TestPolicyEvaluationRacesSafelyWithCallerCloneMutation(t *testing.T) {
 			defer wait.Done()
 			for range 32 {
 				checks, signatures := result.Checks(), result.SignatureSets()
-				hops, sealedSignatures := result.policyProjection.Hops(), result.policyProjection.SignatureFacts()
+				hops, sealedSignatures := result.sealedPolicyProjection().Hops(), result.sealedPolicyProjection().SignatureFacts()
 				findings, actions := decision.Findings(), decision.ActionPlan().Actions()
 				if len(checks) > 0 {
 					checks[0] = CheckFact{}
@@ -177,7 +244,7 @@ func TestPolicyEvaluationRacesSafelyWithCallerCloneMutation(t *testing.T) {
 		}()
 	}
 	wait.Wait()
-	if !decision.Valid() || !result.policyProjection.Valid() {
+	if !decision.Valid() || !result.sealedPolicyProjection().Valid() {
 		t.Fatal("caller clone mutation corrupted retained policy state")
 	}
 }

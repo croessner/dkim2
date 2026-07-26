@@ -155,7 +155,7 @@ func assertSigningCloseoutRestrictedPrivacy(t *testing.T, restricted any, protec
 // assertSigningCloseoutValuePrivacy checks every formatting and marshaling surface.
 func assertSigningCloseoutValuePrivacy(t *testing.T, value any) {
 	t.Helper()
-	for _, format := range []string{"%s", "%q", "%x", "%X", "%v", "%+v", "%#v"} {
+	for _, format := range []string{"%s", "%q", "%x", "%X", privacyDefaultFormat, privacyDetailedFormat, privacyGoSyntaxFormat} {
 		assertSigningCloseoutMarkerAbsent(t, fmt.Sprintf(format, value))
 	}
 	assertSigningCloseoutMarkerAbsent(t, fmt.Sprintf("test failure value=%#v", value))

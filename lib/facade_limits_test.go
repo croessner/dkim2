@@ -5,6 +5,8 @@ import (
 	"context"
 	"testing"
 	"time"
+
+	"github.com/croessner/dkim2/internal/policy"
 )
 
 const (
@@ -85,6 +87,78 @@ func TestFacadeWiresPreProviderLimits(t *testing.T) {
 				t.Fatalf("Verify() = %q/%q calls=%d err=%v", result.State(), result.PrimaryReason(), provider.calls, err)
 			}
 		})
+	}
+}
+
+// TestFacadeEnforcesBodyLineCountBeforeDownstreamWork verifies the raw-message index ceiling at the public boundary.
+func TestFacadeEnforcesBodyLineCountBeforeDownstreamWork(t *testing.T) {
+	const maxBodyLines = 65_536
+
+	fixture := publicProviderFixture(t)
+	bodyOffset := bytes.Index(fixture, []byte("\r\n\r\n"))
+	if bodyOffset < 0 {
+		t.Fatal("public provider fixture lacks a header/body delimiter")
+	}
+	bodyOffset += len("\r\n\r\n")
+	prefix := bytes.Clone(fixture[:bodyOffset])
+	rawWithBodyLines := func(lineCount int) []byte {
+		raw := make([]byte, 0, len(prefix)+lineCount*len("\r\n"))
+		raw = append(raw, prefix...)
+		return append(raw, bytes.Repeat([]byte("\r\n"), lineCount)...)
+	}
+
+	exactProvider := &callCountingPublicProvider{}
+	exactVerifier, err := NewVerifier(exactProvider, WithVerificationClock(func() time.Time {
+		return time.Unix(1700000000, 0)
+	}))
+	if err != nil {
+		t.Fatalf("NewVerifier(exact) error = %v", err)
+	}
+	exactRaw := rawWithBodyLines(maxBodyLines)
+	exactSnapshot := bytes.Clone(exactRaw)
+	exactRequest := NewVerifyRequest(exactRaw, []byte("<>"), [][]byte{[]byte("<rcpt@example.test>")})
+	exactResult, err := exactVerifier.Verify(context.Background(), exactRequest)
+	if err != nil ||
+		exactResult.State() != ResultStatePERMERROR ||
+		exactResult.PrimaryReason() != ReasonMissingKey ||
+		exactProvider.calls != 1 {
+		t.Fatalf("exact Verify() = %q/%q calls=%d err=%v",
+			exactResult.State(), exactResult.PrimaryReason(), exactProvider.calls, err,
+		)
+	}
+	if !bytes.Equal(exactRaw, exactSnapshot) || !bytes.Equal(exactRequest.RawMessage(), exactSnapshot) {
+		t.Fatal("exact body-line verification mutated authoritative message bytes")
+	}
+
+	overProvider := &callCountingPublicProvider{}
+	overVerifier, err := NewVerifier(overProvider, WithVerificationClock(func() time.Time {
+		return time.Unix(1700000000, 0)
+	}))
+	if err != nil {
+		t.Fatalf("NewVerifier(one-over) error = %v", err)
+	}
+	overResult, err := overVerifier.Verify(
+		context.Background(),
+		NewVerifyRequest(rawWithBodyLines(maxBodyLines+1), []byte("<>"), [][]byte{[]byte("<rcpt@example.test>")}),
+	)
+	projection := overResult.sealedPolicyProjection()
+	if err != nil ||
+		overResult.State() != ResultStatePERMERROR ||
+		overResult.PrimaryReason() != ReasonLimitExceeded ||
+		overResult.CustodyStructure() != CustodyStructureNotEvaluated ||
+		overResult.Target() != (VerificationTarget{}) ||
+		overResult.SignatureSetCount() != 0 ||
+		overProvider.calls != 0 ||
+		!projection.Valid() ||
+		projection.Form() != policy.TargetUnavailable ||
+		projection.PreTargetReason() != policy.PreTargetLimitExceeded ||
+		overResult.state == nil ||
+		overResult.state.hasReplayProjection {
+		t.Fatalf("one-over Verify() = %q/%q custody=%q target=%#v signatures=%d calls=%d projection=%#v replay=%t err=%v",
+			overResult.State(), overResult.PrimaryReason(), overResult.CustodyStructure(),
+			overResult.Target(), overResult.SignatureSetCount(), overProvider.calls,
+			projection, overResult.state != nil && overResult.state.hasReplayProjection, err,
+		)
 	}
 }
 

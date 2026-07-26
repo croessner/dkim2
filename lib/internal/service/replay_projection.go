@@ -14,6 +14,10 @@ const serviceReplayProjectionRedactedText = "service.ReplayProjection{redacted}"
 
 // ReplayProjection carries sealed replay facts across the trusted root boundary.
 type ReplayProjection struct {
+	state *replayProjectionState
+}
+
+type replayProjectionState struct {
 	draft                   string
 	messageDigest           [32]byte
 	signatureInputDigest    [32]byte
@@ -26,12 +30,12 @@ type ReplayProjection struct {
 
 // Valid reports whether the projection contains complete baseline facts.
 func (p ReplayProjection) Valid() bool {
-	if !p.sealed || p.draft != replay.DraftIdentifier || !p.hasMessageDigest ||
-		!p.hasSignatureInputDigest || len(p.recipientDigests) == 0 {
+	if p.state == nil || !p.state.sealed || p.state.draft != replay.DraftIdentifier || !p.state.hasMessageDigest ||
+		!p.state.hasSignatureInputDigest || len(p.state.recipientDigests) == 0 {
 		return false
 	}
-	for index, digest := range p.recipientDigests {
-		if index > 0 && bytes.Compare(p.recipientDigests[index-1][:], digest[:]) >= 0 {
+	for index, digest := range p.state.recipientDigests {
+		if index > 0 && bytes.Compare(p.state.recipientDigests[index-1][:], digest[:]) >= 0 {
 			return false
 		}
 	}
@@ -43,17 +47,23 @@ func (p ReplayProjection) Draft() string {
 	if !p.Valid() {
 		return ""
 	}
-	return p.draft
+	return p.state.draft
 }
 
 // MessageDigest returns the selected matched Message-Instance header hash by value.
 func (p ReplayProjection) MessageDigest() ([32]byte, bool) {
-	return p.messageDigest, p.Valid() && p.hasMessageDigest
+	if !p.Valid() {
+		return [32]byte{}, false
+	}
+	return p.state.messageDigest, p.state.hasMessageDigest
 }
 
 // SignatureInputDigest returns the highest canonical signature-input digest by value.
 func (p ReplayProjection) SignatureInputDigest() ([32]byte, bool) {
-	return p.signatureInputDigest, p.Valid() && p.hasSignatureInputDigest
+	if !p.Valid() {
+		return [32]byte{}, false
+	}
+	return p.state.signatureInputDigest, p.state.hasSignatureInputDigest
 }
 
 // RecipientCount returns the complete unique current-recipient count.
@@ -61,19 +71,19 @@ func (p ReplayProjection) RecipientCount() int {
 	if !p.Valid() {
 		return 0
 	}
-	return len(p.recipientDigests)
+	return len(p.state.recipientDigests)
 }
 
 // RecipientDigest returns one sorted recipient-scope digest by value.
 func (p ReplayProjection) RecipientDigest(index int) ([32]byte, bool) {
-	if !p.Valid() || index < 0 || index >= len(p.recipientDigests) {
+	if !p.Valid() || index < 0 || index >= len(p.state.recipientDigests) {
 		return [32]byte{}, false
 	}
-	return p.recipientDigests[index], true
+	return p.state.recipientDigests[index], true
 }
 
 // Exploded returns the authenticated complete-current-chain OR fact.
-func (p ReplayProjection) Exploded() bool { return p.Valid() && p.exploded }
+func (p ReplayProjection) Exploded() bool { return p.Valid() && p.state.exploded }
 
 // String returns a constant representation without authenticated digest bytes.
 func (ReplayProjection) String() string { return serviceReplayProjectionRedactedText }
@@ -88,8 +98,12 @@ func (ReplayProjection) Format(state fmt.State, _ rune) {
 
 // clone returns an independent trusted-boundary projection.
 func (p ReplayProjection) clone() ReplayProjection {
-	p.recipientDigests = slices.Clone(p.recipientDigests)
-	return p
+	if p.state == nil {
+		return ReplayProjection{}
+	}
+	state := *p.state
+	state.recipientDigests = slices.Clone(p.state.recipientDigests)
+	return ReplayProjection{state: &state}
 }
 
 // mapReplayProjection clones only one complete verify-owned sealed projection.
@@ -111,7 +125,7 @@ func mapReplayProjection(source verify.ReplayProjection) (ReplayProjection, bool
 		}
 		recipients[index] = digest
 	}
-	projection := ReplayProjection{
+	projection := ReplayProjection{state: &replayProjectionState{
 		draft:                   replay.DraftIdentifier,
 		messageDigest:           message,
 		signatureInputDigest:    signatureInput,
@@ -120,6 +134,6 @@ func mapReplayProjection(source verify.ReplayProjection) (ReplayProjection, bool
 		hasSignatureInputDigest: true,
 		exploded:                source.Exploded(),
 		sealed:                  true,
-	}
+	}}
 	return projection, projection.Valid()
 }

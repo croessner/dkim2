@@ -171,7 +171,7 @@ func (p *orderedSigningProvider) LookupPublicKey(
 	query PublicKeyQuery,
 ) (PublicKeyResult, error) {
 	p.events.add(publicationBoundaryEvent)
-	if query.SigningDomain() != "example.test" ||
+	if query.SigningDomain() != testSigningDomain ||
 		query.Selector() != testRSASelector ||
 		query.Algorithm() != AlgorithmRSASHA256 {
 		return MissingPublicKey(query.Algorithm()), nil

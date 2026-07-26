@@ -7,7 +7,11 @@ const (
 	defaultMaxHeaderFieldBytes = 64 * 1024
 	defaultMaxHeaderLineBytes  = 998
 	defaultMaxBodyLineBytes    = 998
+	defaultMaxBodyLines        = HardMaxBodyLines
 )
+
+// HardMaxBodyLines is the closed ceiling for parser-owned body-line metadata.
+const HardMaxBodyLines = 65_536
 
 // LineEndingPolicy identifies the parser's line-ending handling mode.
 type LineEndingPolicy string
@@ -33,6 +37,8 @@ type ParserOptions struct {
 	MaxHeaderLineBytes int
 	// MaxBodyLineBytes bounds the body line size recorded for indexing.
 	MaxBodyLineBytes int
+	// MaxBodyLines bounds the number of body lines recorded for indexing.
+	MaxBodyLines int
 	// LineEndingPolicy controls strict CRLF handling; compatibility modes are reserved.
 	LineEndingPolicy LineEndingPolicy
 	// RecordNormalizedInput is reserved and rejected until normalization is implemented.
@@ -48,6 +54,7 @@ func DefaultParserOptions() ParserOptions {
 		MaxHeaderFieldBytes:   defaultMaxHeaderFieldBytes,
 		MaxHeaderLineBytes:    defaultMaxHeaderLineBytes,
 		MaxBodyLineBytes:      defaultMaxBodyLineBytes,
+		MaxBodyLines:          defaultMaxBodyLines,
 		LineEndingPolicy:      LineEndingPolicyStrictCRLF,
 		RecordNormalizedInput: false,
 	}
@@ -78,6 +85,12 @@ func (o ParserOptions) Validate() error {
 	}
 	if o.MaxBodyLineBytes > defaultMaxBodyLineBytes {
 		return limitOptionError(limitNameMaxBodyLineBytes, defaultMaxBodyLineBytes)
+	}
+	if o.MaxBodyLines <= 0 {
+		return limitOptionError(limitNameMaxBodyLines, o.MaxBodyLines)
+	}
+	if o.MaxBodyLines > HardMaxBodyLines {
+		return limitOptionError(limitNameMaxBodyLines, HardMaxBodyLines)
 	}
 	if o.LineEndingPolicy != LineEndingPolicyStrictCRLF {
 		return unsupportedPolicyError(string(o.LineEndingPolicy))

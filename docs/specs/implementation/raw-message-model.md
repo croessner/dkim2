@@ -308,7 +308,7 @@ Default behavior is restrictive:
   silently doing nothing.
 - Oversized messages, oversized header blocks, excessive header count,
   excessive field length, excessive physical header line length, and excessive
-  body line length fail with typed resource-limit errors.
+  body line length or count fail with typed resource-limit errors.
 - Parser options must have safe defaults and must not silently disable limits.
 - Error values and test logs must not include raw message bodies, full raw
   header values, recipient lists, sender local parts, private keys, tokens,
@@ -328,6 +328,7 @@ Recommended initial resource limits:
 | Maximum header count | 2,000 |
 | Maximum single header field size, including continuations | 64 KiB |
 | Maximum physical header line size, excluding CRLF | 998 octets |
+| Maximum indexed body line count | 65,536 |
 | Maximum body line length recorded for indexing | 998 octets |
 
 If implementation evidence shows these defaults are not practical, update this
@@ -392,6 +393,9 @@ Unit tests:
   separately specified and implemented.
 - Exact 998-octet physical header and body lines are accepted and preserved;
   999-octet lines fail under the strict defaults.
+- Exactly 65,536 indexed body lines are accepted and preserved; the parser
+  returns a typed `max_body_lines` resource-limit error before appending line
+  65,537.
 - Wider physical line limits fail option validation because M1 has no explicit
   long-line compatibility mode or metadata.
 - Header field, header block, body line, body, and message constructors reject
@@ -455,6 +459,8 @@ document the exact blocker.
   original field bytes, body bytes, and body line indexes are test-covered.
 - Parser errors are structured, bounded, and secret-safe.
 - Resource limits exist with restrictive defaults and test coverage.
+- Raw-message and recipe owners share the hard 65,536 indexed-body-line cap,
+  and the parser checks it before growing the line index.
 - Strict physical header and body line limits enforce the RFC 6532 998-octet
   ceiling, and wider values are rejected during option validation.
 - All constructed domain views prove byte consistency instead of trusting
@@ -516,6 +522,9 @@ this M1 follow-up.
 - Settled: strict physical header and body lines are limited to 998 octets, and
   wider option values are rejected because no explicit compatibility mode or
   metadata exists.
+- Settled: raw-message and recipe indexing share a hard maximum of 65,536 body
+  lines; this local resource ceiling preserves accepted bytes and is reported
+  as a limit rather than malformed RFC 5322 syntax.
 - Settled: valid UTF-8 header values and obsolete ASCII controls are preserved;
   invalid high-octet UTF-8 fails closed and arbitrary body octets remain opaque.
 - Settled: raw-message constructors validate component, line-index, full-byte,

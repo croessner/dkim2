@@ -18,7 +18,6 @@ const (
 	hardMaxDataStrings          = 4_096
 	hardMaxDataStringBytes      = 16_384
 	hardMaxTotalLiteralBytes    = 32_768
-	hardMaxBodyLines            = 65_536
 	hardMaxOperationWorkUnits   = 4_194_304
 )
 
@@ -88,7 +87,7 @@ func DefaultLimits() Limits {
 		MaxDataStringBytes: hardMaxDataStringBytes, MaxTotalLiteralBytes: hardMaxTotalLiteralBytes,
 		MaxHeaderFields: rawLimits.MaxHeaderFields, MaxHeaderFieldBytes: rawLimits.MaxHeaderFieldBytes,
 		MaxHeaderLineBytes: rawLimits.MaxHeaderLineBytes, MaxHeaderBytes: rawLimits.MaxHeaderBytes,
-		MaxBodyLines: hardMaxBodyLines, MaxBodyLineBytes: rawLimits.MaxBodyLineBytes,
+		MaxBodyLines: rawLimits.MaxBodyLines, MaxBodyLineBytes: rawLimits.MaxBodyLineBytes,
 		MaxStateBytes: rawLimits.MaxMessageBytes, MaxOperationWorkUnits: hardMaxOperationWorkUnits,
 	}
 }

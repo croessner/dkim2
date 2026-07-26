@@ -69,12 +69,12 @@ func TestPublicProviderBridgeClassifiesClosedMatrix(t *testing.T) {
 		{name: "nonzero plus error", result: MissingPublicKey(AlgorithmRSASHA256), err: NewTemporaryProviderError(), class: verify.ProviderFailureContract},
 		{name: "zero nil", class: verify.ProviderFailureContract},
 		{name: "algorithm mismatch", result: MissingPublicKey(AlgorithmEd25519SHA256), class: verify.ProviderFailureContract},
-		{name: "unknown status", result: PublicKeyResult{status: PublicKeyStatus("future"), algorithm: AlgorithmRSASHA256}, class: verify.ProviderFailureContract},
+		{name: "unknown status", result: PublicKeyResult{state: &publicKeyResultState{status: PublicKeyStatus("future"), algorithm: AlgorithmRSASHA256}}, class: verify.ProviderFailureContract},
 		{name: "unknown algorithm", result: MissingPublicKey(Algorithm("future")), class: verify.ProviderFailureContract},
-		{name: "found without material", result: PublicKeyResult{status: PublicKeyStatusFound, algorithm: AlgorithmRSASHA256}, class: verify.ProviderFailureContract},
-		{name: "found with wrong variant", result: PublicKeyResult{status: PublicKeyStatusFound, algorithm: AlgorithmRSASHA256, ed25519Key: make(ed25519.PublicKey, ed25519.PublicKeySize)}, class: verify.ProviderFailureContract},
-		{name: "nonfound with material", result: PublicKeyResult{status: PublicKeyStatusMissing, algorithm: AlgorithmRSASHA256, rsaKey: &rsa.PublicKey{N: big.NewInt(3), E: 3}}, class: verify.ProviderFailureContract},
-		{name: "both material variants", result: PublicKeyResult{status: PublicKeyStatusFound, algorithm: AlgorithmRSASHA256, rsaKey: &rsa.PublicKey{N: big.NewInt(3), E: 3}, ed25519Key: make(ed25519.PublicKey, ed25519.PublicKeySize)}, class: verify.ProviderFailureContract},
+		{name: "found without material", result: PublicKeyResult{state: &publicKeyResultState{status: PublicKeyStatusFound, algorithm: AlgorithmRSASHA256}}, class: verify.ProviderFailureContract},
+		{name: "found with wrong variant", result: PublicKeyResult{state: &publicKeyResultState{status: PublicKeyStatusFound, algorithm: AlgorithmRSASHA256, ed25519Key: make(ed25519.PublicKey, ed25519.PublicKeySize)}}, class: verify.ProviderFailureContract},
+		{name: "nonfound with material", result: PublicKeyResult{state: &publicKeyResultState{status: PublicKeyStatusMissing, algorithm: AlgorithmRSASHA256, rsaKey: &rsa.PublicKey{N: big.NewInt(3), E: 3}}}, class: verify.ProviderFailureContract},
+		{name: "both material variants", result: PublicKeyResult{state: &publicKeyResultState{status: PublicKeyStatusFound, algorithm: AlgorithmRSASHA256, rsaKey: &rsa.PublicKey{N: big.NewInt(3), E: 3}, ed25519Key: make(ed25519.PublicKey, ed25519.PublicKeySize)}}, class: verify.ProviderFailureContract},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

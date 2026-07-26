@@ -512,6 +512,35 @@ func (s *Store) State() dkim2.ReplayStoreState {
 	return s.stateAfterRecovery(recovery)
 }
 
+// AuthorityReady reports fresh undegraded provider authority without datastore I/O.
+func (s *Store) AuthorityReady() bool {
+	if s == nil || s.storeCore == nil || s.gate == nil ||
+		!s.securityEnforced || s.clock == nil ||
+		s.lifecycleState() != lifecycleReady {
+		return false
+	}
+	fresh := false
+	err := s.clock.withSample(func(now time.Time) error {
+		var observeErr error
+		fresh, observeErr = s.evidence.observeSample(now)
+		if observeErr == nil && !fresh {
+			s.publishStaleEvidenceFailure()
+		}
+		return observeErr
+	})
+	if err != nil {
+		s.publishFailure(recoveryRestart)
+		return false
+	}
+	if !fresh ||
+		s.lifecycleState() != lifecycleReady ||
+		s.strongestRecovery() != recoveryNone {
+		return false
+	}
+	return s.lifecycleState() == lifecycleReady &&
+		s.strongestRecovery() == recoveryNone
+}
+
 // stateAfterRecovery rechecks terminal lifecycle after the recovery snapshot.
 func (s *Store) stateAfterRecovery(recovery recoveryClass) dkim2.ReplayStoreState {
 	switch s.gate.stateValue() {

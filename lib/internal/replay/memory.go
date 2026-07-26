@@ -31,13 +31,18 @@ type MemoryConfig struct {
 
 // MemoryStore is a deterministic bounded heap-expiring replay provider.
 type MemoryStore struct {
+	state *memoryStoreState
+}
+
+// memoryStoreState owns mutable replay entries behind one format-safe handle.
+type memoryStoreState struct {
 	gate       *lifecycleGate
 	clock      Clock
 	limits     Limits
 	token      chan struct{}
 	waitMu     sync.Mutex
 	waiters    int
-	entries    map[Key]*memoryEntry
+	entries    map[[storageKeyByteLength]byte]*memoryEntry
 	expiries   expiryHeap
 	lastNow    time.Time
 	closeOnce  sync.Once
@@ -59,14 +64,16 @@ func NewMemoryStore(config MemoryConfig) (*MemoryStore, error) {
 		return nil, err
 	}
 	store := &MemoryStore{
-		gate:     newLifecycleGate(StoreReady),
-		clock:    config.Clock,
-		limits:   limits,
-		token:    make(chan struct{}, 1),
-		entries:  make(map[Key]*memoryEntry),
-		expiries: make(expiryHeap, 0),
+		state: &memoryStoreState{
+			gate:     newLifecycleGate(StoreReady),
+			clock:    config.Clock,
+			limits:   limits,
+			token:    make(chan struct{}, 1),
+			entries:  make(map[[storageKeyByteLength]byte]*memoryEntry),
+			expiries: make(expiryHeap, 0),
+		},
 	}
-	store.token <- struct{}{}
+	store.state.token <- struct{}{}
 	return store, nil
 }
 
@@ -82,99 +89,138 @@ func (s *MemoryStore) CheckAndRemember(
 			resultErr = NewError(ErrorCodeInternalInvariant)
 		}
 	}()
-	if err := PreflightContext(ctx); err != nil {
+	storage, err := s.validateCheckRequest(ctx, key, retention)
+	if err != nil {
 		return 0, err
 	}
-	if s == nil || s.gate == nil {
-		return 0, NewError(ErrorCodeMisconfigured)
-	}
-	switch s.gate.State() {
-	case StoreClosing, StoreClosed:
-		return 0, NewError(ErrorCodeClosed)
-	case StoreReady, StoreDegraded:
-	default:
-		return 0, NewError(ErrorCodeInternalInvariant)
-	}
-	if !validStorageKey(key) || !retention.Valid() {
-		return 0, NewError(ErrorCodeInvalidRequest)
-	}
-	if err := s.gate.admit(StoreReady); err != nil {
+	if err := s.state.gate.admit(StoreReady); err != nil {
 		return 0, err
 	}
-	defer s.gate.finish()
+	defer s.state.gate.finish()
 
 	if err := s.acquireToken(ctx); err != nil {
 		return 0, err
 	}
 	defer s.releaseToken()
 
-	if s.afterToken != nil {
-		close(s.afterToken)
-	}
-	if s.continueAfterToken != nil {
-		<-s.continueAfterToken
-	}
-	if err := PreflightContext(ctx); err != nil {
+	now, expiry, err := s.captureOperationTime(ctx, retention)
+	if err != nil {
 		return 0, err
 	}
-	switch s.gate.State() {
+
+	s.state.lastNow = now
+	check, err = s.rememberStorageKey(storage, now, expiry)
+	if err != nil {
+		return 0, err
+	}
+	s.waitAfterMutation()
+	return check, nil
+}
+
+// validateCheckRequest applies exact context, lifecycle, key, and retention precedence.
+func (s *MemoryStore) validateCheckRequest(
+	ctx context.Context,
+	key Key,
+	retention Retention,
+) ([storageKeyByteLength]byte, error) {
+	if err := PreflightContext(ctx); err != nil {
+		return [storageKeyByteLength]byte{}, err
+	}
+	if s == nil || s.state == nil || s.state.gate == nil {
+		return [storageKeyByteLength]byte{}, NewError(ErrorCodeMisconfigured)
+	}
+	switch s.state.gate.State() {
+	case StoreClosing, StoreClosed:
+		return [storageKeyByteLength]byte{}, NewError(ErrorCodeClosed)
+	case StoreReady, StoreDegraded:
+	default:
+		return [storageKeyByteLength]byte{}, NewError(ErrorCodeInternalInvariant)
+	}
+	storage, present := key.storageValue()
+	if !present || !validStorageKey(key) || !retention.Valid() {
+		return [storageKeyByteLength]byte{}, NewError(ErrorCodeInvalidRequest)
+	}
+	return storage, nil
+}
+
+// captureOperationTime rechecks admission state and derives one authoritative expiry.
+func (s *MemoryStore) captureOperationTime(
+	ctx context.Context,
+	retention Retention,
+) (time.Time, time.Time, error) {
+	if s.state.afterToken != nil {
+		close(s.state.afterToken)
+	}
+	if s.state.continueAfterToken != nil {
+		<-s.state.continueAfterToken
+	}
+	if err := PreflightContext(ctx); err != nil {
+		return time.Time{}, time.Time{}, err
+	}
+	switch s.state.gate.State() {
 	case StoreReady:
 	case StoreClosing, StoreClosed:
-		return 0, NewError(ErrorCodeClosed)
-	case StoreDegraded:
-		return 0, NewError(ErrorCodeInternalInvariant)
+		return time.Time{}, time.Time{}, NewError(ErrorCodeClosed)
 	default:
-		return 0, NewError(ErrorCodeInternalInvariant)
+		return time.Time{}, time.Time{}, NewError(ErrorCodeInternalInvariant)
 	}
-
-	now, err := readClock(s.clock)
-	if err != nil || now.IsZero() || !s.lastNow.IsZero() && now.Before(s.lastNow) {
-		s.gate.degrade()
-		return 0, NewError(ErrorCodeInternalInvariant)
+	now, err := readClock(s.state.clock)
+	if err != nil || now.IsZero() || !s.state.lastNow.IsZero() && now.Before(s.state.lastNow) {
+		s.state.gate.degrade()
+		return time.Time{}, time.Time{}, NewError(ErrorCodeInternalInvariant)
 	}
 	expiry, err := retention.AddTo(now)
 	if err != nil {
-		s.gate.degrade()
-		return 0, NewError(ErrorCodeInternalInvariant)
+		s.state.gate.degrade()
+		return time.Time{}, time.Time{}, NewError(ErrorCodeInternalInvariant)
 	}
 	if err := PreflightContext(ctx); err != nil {
-		return 0, err
+		return time.Time{}, time.Time{}, err
 	}
+	return now, expiry, nil
+}
 
-	s.lastNow = now
+// rememberStorageKey applies bounded pruning and one atomic replay classification.
+func (s *MemoryStore) rememberStorageKey(
+	storage [storageKeyByteLength]byte,
+	now time.Time,
+	expiry time.Time,
+) (Check, error) {
 	pruned := s.pruneExpired(now)
-	if existing, exists := s.entries[key]; exists {
+	if existing, exists := s.state.entries[storage]; exists {
 		if existing.expiry.After(now) {
-			check = CheckReplayed
-		} else if pruned >= s.limits.PruneBudget {
-			return 0, NewError(ErrorCodeLimitExceeded)
-		} else {
-			return 0, NewError(ErrorCodeInternalInvariant)
+			return CheckReplayed, nil
 		}
-	} else if len(s.entries) >= s.limits.MaxEntries {
+		if pruned >= s.state.limits.PruneBudget {
+			return 0, NewError(ErrorCodeLimitExceeded)
+		}
+		return 0, NewError(ErrorCodeInternalInvariant)
+	}
+	if len(s.state.entries) >= s.state.limits.MaxEntries {
 		return 0, NewError(ErrorCodeLimitExceeded)
-	} else {
-		entry := &memoryEntry{key: key, expiry: expiry, index: -1}
-		s.entries[key] = entry
-		heap.Push(&s.expiries, entry)
-		check = CheckFirstSeen
 	}
+	entry := &memoryEntry{key: storage, expiry: expiry, index: -1}
+	s.state.entries[storage] = entry
+	heap.Push(&s.state.expiries, entry)
+	return CheckFirstSeen, nil
+}
 
-	if s.afterMutation != nil {
-		close(s.afterMutation)
+// waitAfterMutation runs only the deterministic post-linearization test seam.
+func (s *MemoryStore) waitAfterMutation() {
+	if s.state.afterMutation != nil {
+		close(s.state.afterMutation)
 	}
-	if s.continueAfterMutation != nil {
-		<-s.continueAfterMutation
+	if s.state.continueAfterMutation != nil {
+		<-s.state.continueAfterMutation
 	}
-	return check, nil
 }
 
 // State returns one bounded lock-free lifecycle snapshot.
 func (s *MemoryStore) State() StoreState {
-	if s == nil || s.gate == nil {
+	if s == nil || s.state == nil || s.state.gate == nil {
 		return 0
 	}
-	return s.gate.State()
+	return s.state.gate.State()
 }
 
 // Close publishes closing, drains admitted work, and clears retained state once.
@@ -187,75 +233,75 @@ func (s *MemoryStore) Close(ctx context.Context) (resultErr error) {
 	if err := PreflightContext(ctx); err != nil {
 		return err
 	}
-	if s == nil || s.gate == nil {
+	if s == nil || s.state == nil || s.state.gate == nil {
 		return NewError(ErrorCodeMisconfigured)
 	}
-	drained, err := s.gate.beginClose()
+	drained, err := s.state.gate.beginClose()
 	if err != nil {
 		return err
 	}
 	if err := waitForDrain(ctx, drained); err != nil {
 		return err
 	}
-	s.closeOnce.Do(func() {
-		<-s.token
-		clear(s.entries)
-		for index := range s.expiries {
-			s.expiries[index] = nil
+	s.state.closeOnce.Do(func() {
+		<-s.state.token
+		clear(s.state.entries)
+		for index := range s.state.expiries {
+			s.state.expiries[index] = nil
 		}
-		s.expiries = nil
-		s.lastNow = time.Time{}
-		s.clearCount++
-		s.token <- struct{}{}
+		s.state.expiries = nil
+		s.state.lastNow = time.Time{}
+		s.state.clearCount++
+		s.state.token <- struct{}{}
 	})
-	return s.gate.publishClosed()
+	return s.state.gate.publishClosed()
 }
 
 // String returns a constant representation without keys or provider state.
-func (*MemoryStore) String() string { return memoryStoreRedactedText }
+func (MemoryStore) String() string { return memoryStoreRedactedText }
 
 // GoString returns a constant representation without keys or provider state.
-func (*MemoryStore) GoString() string { return memoryStoreRedactedText }
+func (MemoryStore) GoString() string { return memoryStoreRedactedText }
 
 // Format prevents every formatting verb from exposing retained replay data.
-func (*MemoryStore) Format(state fmt.State, _ rune) {
+func (MemoryStore) Format(state fmt.State, _ rune) {
 	_, _ = io.WriteString(state, memoryStoreRedactedText)
 }
 
 // MarshalText rejects serialization of memory-provider state.
-func (*MemoryStore) MarshalText() ([]byte, error) {
+func (MemoryStore) MarshalText() ([]byte, error) {
 	return nil, NewError(ErrorCodeInvalidRequest)
 }
 
 // MarshalJSON rejects serialization of memory-provider state.
-func (*MemoryStore) MarshalJSON() ([]byte, error) {
+func (MemoryStore) MarshalJSON() ([]byte, error) {
 	return nil, NewError(ErrorCodeInvalidRequest)
 }
 
 // acquireToken enters the bounded context-aware serialization queue.
 func (s *MemoryStore) acquireToken(ctx context.Context) error {
 	select {
-	case <-s.token:
+	case <-s.state.token:
 		return nil
 	default:
 	}
 
-	s.waitMu.Lock()
-	if s.waiters >= s.limits.MaxWaiters {
-		s.waitMu.Unlock()
+	s.state.waitMu.Lock()
+	if s.state.waiters >= s.state.limits.MaxWaiters {
+		s.state.waitMu.Unlock()
 		return NewError(ErrorCodeLimitExceeded)
 	}
-	s.waiters++
-	s.waitMu.Unlock()
+	s.state.waiters++
+	s.state.waitMu.Unlock()
 	defer func() {
-		s.waitMu.Lock()
-		s.waiters--
-		s.waitMu.Unlock()
+		s.state.waitMu.Lock()
+		s.state.waiters--
+		s.state.waitMu.Unlock()
 	}()
 
 	done := ctx.Done()
 	select {
-	case <-s.token:
+	case <-s.state.token:
 		return nil
 	case <-done:
 		if err := PreflightContext(ctx); err != nil {
@@ -266,18 +312,18 @@ func (s *MemoryStore) acquireToken(ctx context.Context) error {
 }
 
 // releaseToken leaves the short serialization critical section.
-func (s *MemoryStore) releaseToken() { s.token <- struct{}{} }
+func (s *MemoryStore) releaseToken() { s.state.token <- struct{}{} }
 
 // pruneExpired removes at most the configured number of expired heap roots.
 func (s *MemoryStore) pruneExpired(now time.Time) int {
 	pruned := 0
-	for pruned < s.limits.PruneBudget && len(s.expiries) > 0 {
-		entry := s.expiries[0]
+	for pruned < s.state.limits.PruneBudget && len(s.state.expiries) > 0 {
+		entry := s.state.expiries[0]
 		if entry.expiry.After(now) {
 			break
 		}
-		removed := heap.Pop(&s.expiries).(*memoryEntry)
-		delete(s.entries, removed.key)
+		removed := heap.Pop(&s.state.expiries).(*memoryEntry)
+		delete(s.state.entries, removed.key)
 		pruned++
 	}
 	return pruned
@@ -296,7 +342,7 @@ func readClock(clock Clock) (now time.Time, resultErr error) {
 
 // memoryEntry is one one-to-one map and heap replay record.
 type memoryEntry struct {
-	key    Key
+	key    [storageKeyByteLength]byte
 	expiry time.Time
 	index  int
 }
@@ -310,7 +356,7 @@ func (h expiryHeap) Len() int { return len(h) }
 // Less orders equal expiries deterministically without exposing key bytes.
 func (h expiryHeap) Less(left, right int) bool {
 	if h[left].expiry.Equal(h[right].expiry) {
-		return bytes.Compare(h[left].key.storage[:], h[right].key.storage[:]) < 0
+		return bytes.Compare(h[left].key[:], h[right].key[:]) < 0
 	}
 	return h[left].expiry.Before(h[right].expiry)
 }

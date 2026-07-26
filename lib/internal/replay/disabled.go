@@ -10,12 +10,17 @@ const disabledStoreRedactedText = "replay_disabled_store"
 
 // DisabledStore is an explicit no-storage replay provider.
 type DisabledStore struct {
+	state *disabledStoreState
+}
+
+// disabledStoreState owns lifecycle state behind one format-safe handle.
+type disabledStoreState struct {
 	gate *lifecycleGate
 }
 
 // NewDisabledStore constructs one explicit disabled replay provider.
 func NewDisabledStore() *DisabledStore {
-	return &DisabledStore{gate: newLifecycleGate(StoreDisabled)}
+	return &DisabledStore{state: &disabledStoreState{gate: newLifecycleGate(StoreDisabled)}}
 }
 
 // CheckAndRemember returns disabled without inspecting key or retention.
@@ -27,10 +32,10 @@ func (s *DisabledStore) CheckAndRemember(
 	if err := PreflightContext(ctx); err != nil {
 		return 0, err
 	}
-	if s == nil || s.gate == nil {
+	if s == nil || s.state == nil || s.state.gate == nil {
 		return 0, NewError(ErrorCodeMisconfigured)
 	}
-	switch s.gate.State() {
+	switch s.state.gate.State() {
 	case StoreDisabled:
 		return CheckDisabled, nil
 	case StoreClosing, StoreClosed:
@@ -42,10 +47,10 @@ func (s *DisabledStore) CheckAndRemember(
 
 // State returns one bounded lock-free lifecycle snapshot.
 func (s *DisabledStore) State() StoreState {
-	if s == nil || s.gate == nil {
+	if s == nil || s.state == nil || s.state.gate == nil {
 		return 0
 	}
-	return s.gate.State()
+	return s.state.gate.State()
 }
 
 // Close atomically closes the disabled provider and is idempotent.
@@ -58,36 +63,36 @@ func (s *DisabledStore) Close(ctx context.Context) (resultErr error) {
 	if err := PreflightContext(ctx); err != nil {
 		return err
 	}
-	if s == nil || s.gate == nil {
+	if s == nil || s.state == nil || s.state.gate == nil {
 		return NewError(ErrorCodeMisconfigured)
 	}
-	drained, err := s.gate.beginClose()
+	drained, err := s.state.gate.beginClose()
 	if err != nil {
 		return err
 	}
 	if err := waitForDrain(ctx, drained); err != nil {
 		return err
 	}
-	return s.gate.publishClosed()
+	return s.state.gate.publishClosed()
 }
 
 // String returns a constant representation without lifecycle detail.
-func (*DisabledStore) String() string { return disabledStoreRedactedText }
+func (DisabledStore) String() string { return disabledStoreRedactedText }
 
 // GoString returns a constant representation without lifecycle detail.
-func (*DisabledStore) GoString() string { return disabledStoreRedactedText }
+func (DisabledStore) GoString() string { return disabledStoreRedactedText }
 
 // Format prevents every formatting verb from exposing provider state.
-func (*DisabledStore) Format(state fmt.State, _ rune) {
+func (DisabledStore) Format(state fmt.State, _ rune) {
 	_, _ = io.WriteString(state, disabledStoreRedactedText)
 }
 
 // MarshalText rejects serialization of disabled-provider state.
-func (*DisabledStore) MarshalText() ([]byte, error) {
+func (DisabledStore) MarshalText() ([]byte, error) {
 	return nil, NewError(ErrorCodeInvalidRequest)
 }
 
 // MarshalJSON rejects serialization of disabled-provider state.
-func (*DisabledStore) MarshalJSON() ([]byte, error) {
+func (DisabledStore) MarshalJSON() ([]byte, error) {
 	return nil, NewError(ErrorCodeInvalidRequest)
 }

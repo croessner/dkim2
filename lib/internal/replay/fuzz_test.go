@@ -137,11 +137,12 @@ func assertFuzzDerivedKeys(t *testing.T, deriver *Deriver, set IdentitySet, coun
 			t.Fatalf("derive index=%d failed with code=%q", index, ErrorCodeOf(deriveErr))
 		}
 		repeated, repeatErr := deriver.Derive(context.Background(), identity)
-		if repeatErr != nil || repeated != key {
-			t.Fatalf("derive index=%d was nondeterministic with code=%q", index, ErrorCodeOf(repeatErr))
+		if repeatErr != nil {
+			t.Fatalf("repeated derive index=%d failed with code=%q", index, ErrorCodeOf(repeatErr))
 		}
 
 		var storage string
+		var repeatedStorage string
 		calls := 0
 		if useErr := UseStorageKey(key, func(value string) error {
 			calls++
@@ -152,6 +153,12 @@ func assertFuzzDerivedKeys(t *testing.T, deriver *Deriver, set IdentitySet, coun
 		}
 		if len(storage) != storageKeyByteLength || !strings.HasPrefix(storage, keyNamespacePrefix) {
 			t.Fatalf("derived key index=%d violated fixed grammar", index)
+		}
+		if useErr := UseStorageKey(repeated, func(value string) error {
+			repeatedStorage = value
+			return nil
+		}); useErr != nil || repeatedStorage != storage {
+			t.Fatalf("derive index=%d was nondeterministic with code=%q", index, ErrorCodeOf(useErr))
 		}
 		if index > 0 && storage == previousStorage {
 			t.Fatalf("distinct recipient index=%d produced duplicate key", index)
@@ -165,7 +172,7 @@ func assertFuzzDerivedKeys(t *testing.T, deriver *Deriver, set IdentitySet, coun
 	if closeErr := deriver.Close(context.Background()); closeErr != nil {
 		t.Fatalf("deriver close failed with code=%q", ErrorCodeOf(closeErr))
 	}
-	if _, deriveErr := deriver.Derive(context.Background(), set.identities[0]); ErrorCodeOf(deriveErr) != ErrorCodeClosed {
+	if _, deriveErr := deriver.Derive(context.Background(), set.state.identities[0]); ErrorCodeOf(deriveErr) != ErrorCodeClosed {
 		t.Fatalf("closed deriver returned code=%q", ErrorCodeOf(deriveErr))
 	}
 }

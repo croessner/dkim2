@@ -3,11 +3,15 @@ package verify
 import (
 	"bytes"
 	"context"
+	"crypto/ed25519"
+	"crypto/sha256"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
 
+	"github.com/croessner/dkim2/internal/canonical"
 	"github.com/croessner/dkim2/internal/rawmsg"
 )
 
@@ -24,11 +28,9 @@ func FuzzVerifyStaticKeyRequest(f *testing.F) {
 		[][]byte{[]byte("<rcpt@example.test>")},
 	)))
 	f.Add([]byte(secretMarkerFuzzSeed()))
+	signedSeed, provider := currentVerificationFuzzSeed(f)
+	f.Add(signedSeed)
 
-	provider, err := NewStaticKeyProvider(nil)
-	if err != nil {
-		f.Fatalf("NewStaticKeyProvider(nil) error = %v", err)
-	}
 	verifier, err := NewVerifier(provider, WithClock(func() time.Time {
 		return time.Unix(int64(testTimestampSeconds), 0)
 	}))
@@ -48,15 +50,98 @@ func FuzzVerifyStaticKeyRequest(f *testing.F) {
 			return
 		}
 
-		result, verifyErr := verifier.Verify(context.Background(), Request{Message: message, Envelope: matchingEnvelope()})
+		current, currentErr := verifier.VerifyCurrent(context.Background(), Request{Message: message, Envelope: matchingEnvelope()})
+		full, fullErr := verifier.Verify(context.Background(), Request{Message: message, Envelope: matchingEnvelope()})
 		if !bytes.Equal(input, original) {
 			t.Fatal("verification mutated caller input")
 		}
-		if verifyErr != nil {
-			assertNoSyntheticSecretMarkers(t, verifyErr.Error())
+		if currentVerificationErrorCode(currentErr) != currentVerificationErrorCode(fullErr) {
+			t.Fatal("current-only and history-capable error classes differ")
 		}
-		assertNoSyntheticSecretMarkers(t, fmt.Sprintf("%#v", result))
+		if currentErr != nil {
+			assertNoSyntheticSecretMarkers(t, currentErr.Error())
+		}
+		if fullErr != nil {
+			assertNoSyntheticSecretMarkers(t, fullErr.Error())
+		}
+		if currentErr == nil && fullErr == nil {
+			assertCurrentVerificationParity(t, current, full)
+		}
+		if _, ok := current.historyWalk(); ok {
+			t.Fatal("current-only fuzz verification retained history")
+		}
+		assertNoSyntheticSecretMarkers(t, fmt.Sprintf("%#v|%#v", current, full))
 	})
+}
+
+// currentVerificationFuzzSeed returns a reproducible passing Ed25519 request and provider.
+func currentVerificationFuzzSeed(f *testing.F) ([]byte, StaticKeyProvider) {
+	f.Helper()
+	seed := sha256.Sum256([]byte("current-verification-fuzz-seed"))
+	privateKey := ed25519.NewKeyFromSeed(seed[:])
+	publicKey := privateKey.Public().(ed25519.PublicKey)
+	canonicalizer, err := canonical.NewCanonicalizer()
+	if err != nil {
+		f.Fatalf("NewCanonicalizer() error = %v", err)
+	}
+	base, err := rawmsg.Parse([]byte(baseVerificationHeaders() + "\r\n" + verificationBody()))
+	if err != nil {
+		f.Fatalf("rawmsg.Parse(base) error = %v", err)
+	}
+	headerHash, err := canonicalizer.HeaderHashFromMessage(base)
+	if err != nil {
+		f.Fatalf("HeaderHashFromMessage() error = %v", err)
+	}
+	bodyHash, err := canonicalizer.BodyHashFromMessage(base)
+	if err != nil {
+		f.Fatalf("BodyHashFromMessage() error = %v", err)
+	}
+	headerDigest, headerOK := headerHash.Digest()
+	bodyDigest, bodyOK := bodyHash.Digest()
+	if !headerOK || !bodyOK {
+		f.Fatal("fuzz seed canonicalization omitted a digest")
+	}
+	placeholder := base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{0xa5}, ed25519.SignatureSize))
+	unsignedRaw := rawWithSignatureSetEnvelopeAt(
+		headerDigest.Base64(), bodyDigest.Base64(), string(AlgorithmEd25519SHA256),
+		placeholder, testTimestampSeconds, []byte("<>"), [][]byte{[]byte("<rcpt@example.test>")},
+	)
+	unsigned, err := rawmsg.Parse([]byte(unsignedRaw))
+	if err != nil {
+		f.Fatalf("rawmsg.Parse(unsigned) error = %v", err)
+	}
+	signatureInput, err := canonicalizer.SignatureInput(canonical.SignatureInputSelection{
+		Headers:        unsigned.Headers(),
+		TargetSequence: 1,
+	})
+	if err != nil {
+		f.Fatalf("SignatureInput() error = %v", err)
+	}
+	digest := sha256.Sum256(signatureInput.Bytes())
+	signedRaw := rawWithSignatureSetEnvelopeAt(
+		headerDigest.Base64(), bodyDigest.Base64(), string(AlgorithmEd25519SHA256),
+		base64.StdEncoding.EncodeToString(ed25519.Sign(privateKey, digest[:])),
+		testTimestampSeconds, []byte("<>"), [][]byte{[]byte("<rcpt@example.test>")},
+	)
+	provider, err := NewStaticKeyProvider([]StaticKey{{
+		Domain: testDomain, Selector: testSelector, Algorithm: AlgorithmEd25519SHA256, Material: publicKey,
+	}})
+	if err != nil {
+		f.Fatalf("NewStaticKeyProvider() error = %v", err)
+	}
+	return []byte(signedRaw), provider
+}
+
+// currentVerificationErrorCode returns a bounded verifier or Go error class.
+func currentVerificationErrorCode(err error) string {
+	if err == nil {
+		return ""
+	}
+	var typed *Error
+	if errors.As(err, &typed) {
+		return string(typed.Code())
+	}
+	return fmt.Sprintf("%T", err)
 }
 
 // secretMarkerFuzzSeed returns a parser-shaped synthetic marker message.

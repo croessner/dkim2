@@ -32,6 +32,11 @@ type IdentitySource interface {
 
 // Identity is one immutable recipient-scoped authenticated replay identity.
 type Identity struct {
+	state *identityState
+}
+
+// identityState owns immutable authenticated digest material.
+type identityState struct {
 	messageDigest           [32]byte
 	signatureInputDigest    [32]byte
 	recipientDigest         [32]byte
@@ -43,7 +48,8 @@ type Identity struct {
 
 // Valid reports whether the identity contains complete sealed baseline facts.
 func (i Identity) Valid() bool {
-	return i.draft == 1 && i.hasMessageDigest && i.hasSignatureInputDigest && i.hasRecipientDigest
+	return i.state != nil && i.state.draft == 1 && i.state.hasMessageDigest &&
+		i.state.hasSignatureInputDigest && i.state.hasRecipientDigest
 }
 
 // String returns a constant representation without authenticated digest bytes.
@@ -59,6 +65,11 @@ func (Identity) Format(state fmt.State, _ rune) {
 
 // IdentitySet is an immutable sorted complete set of recipient-scoped identities.
 type IdentitySet struct {
+	state *identitySetState
+}
+
+// identitySetState owns one immutable complete identity collection.
+type identitySetState struct {
 	identities []Identity
 	exploded   bool
 	valid      bool
@@ -92,31 +103,35 @@ func NewIdentitySet(source IdentitySource) (set IdentitySet, resultErr error) {
 		if index > 0 && bytes.Compare(previous[:], recipient[:]) >= 0 {
 			return IdentitySet{}, NewError(ErrorCodeInvalidRequest)
 		}
-		identities[index] = Identity{
+		identities[index] = Identity{state: &identityState{
 			messageDigest: message, signatureInputDigest: signatureInput,
 			recipientDigest: recipient, hasMessageDigest: true,
 			hasSignatureInputDigest: true, hasRecipientDigest: true, draft: 1,
-		}
+		}}
 		previous = recipient
 	}
 
-	return IdentitySet{
+	return IdentitySet{state: &identitySetState{
 		identities: identities,
 		exploded:   source.Exploded(),
 		valid:      true,
-	}, nil
+	}}, nil
 }
 
 // Valid reports whether the set contains a complete sorted identity collection.
 func (s IdentitySet) Valid() bool {
-	if !s.valid || len(s.identities) == 0 || len(s.identities) > maxIdentityRecipients {
+	if s.state == nil || !s.state.valid || len(s.state.identities) == 0 ||
+		len(s.state.identities) > maxIdentityRecipients {
 		return false
 	}
-	for index, identity := range s.identities {
+	for index, identity := range s.state.identities {
 		if !identity.Valid() {
 			return false
 		}
-		if index > 0 && bytes.Compare(s.identities[index-1].recipientDigest[:], identity.recipientDigest[:]) >= 0 {
+		if index > 0 && bytes.Compare(
+			s.state.identities[index-1].state.recipientDigest[:],
+			identity.state.recipientDigest[:],
+		) >= 0 {
 			return false
 		}
 	}
@@ -128,19 +143,20 @@ func (s IdentitySet) Len() int {
 	if !s.Valid() {
 		return 0
 	}
-	return len(s.identities)
+	return len(s.state.identities)
 }
 
 // Identity returns one immutable identity by value.
 func (s IdentitySet) Identity(index int) (Identity, error) {
-	if !s.Valid() || index < 0 || index >= len(s.identities) {
+	if !s.Valid() || index < 0 || index >= len(s.state.identities) {
 		return Identity{}, NewError(ErrorCodeInvalidRequest)
 	}
-	return s.identities[index], nil
+	state := *s.state.identities[index].state
+	return Identity{state: &state}, nil
 }
 
 // Exploded returns the authenticated complete-chain OR fact for a valid set.
-func (s IdentitySet) Exploded() bool { return s.Valid() && s.exploded }
+func (s IdentitySet) Exploded() bool { return s.Valid() && s.state.exploded }
 
 // String returns a constant representation without authenticated digest bytes.
 func (IdentitySet) String() string { return identitySetRedactedText }

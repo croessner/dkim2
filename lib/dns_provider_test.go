@@ -254,10 +254,10 @@ func TestDNSPublicKeyProviderRejectsStructurallyInvalidRSA(t *testing.T) {
 
 // TestDNSPublicKeyProviderRejectsHugeMixedPublicResultWithoutTraversal verifies O(1) shape validation.
 func TestDNSPublicKeyProviderRejectsHugeMixedPublicResultWithoutTraversal(t *testing.T) {
-	lookup := TXTLookupResult{
+	lookup := TXTLookupResult{state: &txtLookupResultState{
 		status: TXTLookupStatusFound, recordCount: 1_000_000_000,
-		records: []TXTRecord{{payload: []byte("SECRET-MARKER")}}, dnssec: DNSSECStatusUnavailable,
-	}
+		records: []TXTRecord{newTXTRecord([]byte("SECRET-MARKER"))}, dnssec: DNSSECStatusUnavailable,
+	}}
 	provider, err := NewDNSPublicKeyProvider(txtTransportFunc(func(context.Context, string) (TXTLookupResult, error) { return lookup, nil }))
 	if err != nil {
 		t.Fatal(err)
@@ -273,13 +273,13 @@ func TestDNSPublicKeyProviderRejectsContradictoryPublicTransportResults(t *testi
 	record := newTXTRecord([]byte("v=DKIM1; p=QQ=="))
 	tests := []TXTLookupResult{
 		{},
-		{status: TXTLookupStatusFound, dnssec: DNSSECStatusUnavailable},
-		{status: TXTLookupStatusFound, recordCount: 1, dnssec: DNSSECStatusUnavailable},
-		{status: TXTLookupStatusFound, records: []TXTRecord{record}, recordCount: 1, absence: TXTAbsenceNODATA, dnssec: DNSSECStatusUnavailable},
-		{status: TXTLookupStatusFound, records: []TXTRecord{record}, recordCount: 1, negativeTTL: time.Second, dnssec: DNSSECStatusUnavailable},
-		{status: TXTLookupStatusAbsent, records: []TXTRecord{record}, recordCount: 1, absence: TXTAbsenceNODATA, dnssec: DNSSECStatusUnavailable},
-		{status: TXTLookupStatusAbsent, absence: TXTAbsenceNODATA, positiveTTL: time.Second, dnssec: DNSSECStatusUnavailable},
-		{status: TXTLookupStatusAbsent, absence: TXTAbsenceNODATA, dnssec: DNSSECStatus("future")},
+		{state: &txtLookupResultState{status: TXTLookupStatusFound, dnssec: DNSSECStatusUnavailable}},
+		{state: &txtLookupResultState{status: TXTLookupStatusFound, recordCount: 1, dnssec: DNSSECStatusUnavailable}},
+		{state: &txtLookupResultState{status: TXTLookupStatusFound, records: []TXTRecord{record}, recordCount: 1, absence: TXTAbsenceNODATA, dnssec: DNSSECStatusUnavailable}},
+		{state: &txtLookupResultState{status: TXTLookupStatusFound, records: []TXTRecord{record}, recordCount: 1, negativeTTL: time.Second, dnssec: DNSSECStatusUnavailable}},
+		{state: &txtLookupResultState{status: TXTLookupStatusAbsent, records: []TXTRecord{record}, recordCount: 1, absence: TXTAbsenceNODATA, dnssec: DNSSECStatusUnavailable}},
+		{state: &txtLookupResultState{status: TXTLookupStatusAbsent, absence: TXTAbsenceNODATA, positiveTTL: time.Second, dnssec: DNSSECStatusUnavailable}},
+		{state: &txtLookupResultState{status: TXTLookupStatusAbsent, absence: TXTAbsenceNODATA, dnssec: DNSSECStatus("future")}},
 	}
 	for index, lookup := range tests {
 		provider, err := NewDNSPublicKeyProvider(txtTransportFunc(func(context.Context, string) (TXTLookupResult, error) { return lookup, nil }))

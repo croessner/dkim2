@@ -1370,7 +1370,7 @@ func TestPublicSigningFormattingRedactsSeededProtectedValues(t *testing.T) {
 		newSigningError(SigningErrorInvalidRequest),
 	}
 	for _, value := range values {
-		for _, format := range []string{"%v", "%+v", "%#v"} {
+		for _, format := range []string{privacyDefaultFormat, privacyDetailedFormat, privacyGoSyntaxFormat} {
 			if output := fmt.Sprintf(format, value); strings.Contains(output, marker) {
 				t.Fatalf("%T format %s leaked marker: %q", value, format, output)
 			}

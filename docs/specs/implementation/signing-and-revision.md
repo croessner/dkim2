@@ -1355,12 +1355,16 @@ recorded during implementation closeout.
 - M11: datasource contracts and provider-backed signing-profile/private-handle
   lookup, including in-memory and flat-file providers plus LDAP/SQL design.
 - M12: replay-store contracts, in-memory replay, and Valkey behavior.
-- M13: daemon configuration, Fx wiring, OpenAPI server boundary, and HTTP
-  signing behavior.
+- M13: inbound-only daemon configuration, Fx wiring, OpenAPI server boundary,
+  and HTTP verification, policy, and replay behavior.
 - M14: generated-client `dkim2ctl` workflows and service fixtures.
 - M15: concrete `slog`, OpenTelemetry, Prometheus, and exporter integration.
-- M16/M17: Milter and Exim envelope capture, EOM timing, action application,
-  queue behavior, and fail-closed adapter integration.
+- M16: the first production HTTP sign/revise contract, M11
+  datasource-to-signer bridge, private signing backend, generated OpenAPI
+  extension, adapter-safe mutation/action plan, Milter envelope capture, EOM
+  timing, action application, queue behavior, and fail-closed integration.
+- M17: Exim envelope capture and action integration reusing the M16 production
+  signing service contract and adapter-safe mutation plan.
 - M18: broader external conformance corpus beyond this increment's required
   draft-versioned library vectors.
 - M19: repository-wide hardening beyond the focused abuse/fuzz/race/privacy

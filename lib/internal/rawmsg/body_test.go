@@ -3,6 +3,7 @@ package rawmsg
 import (
 	"bytes"
 	"errors"
+	"strings"
 	"testing"
 )
 
@@ -164,6 +165,82 @@ func TestLimitBodyLineBytesIsEnforced(t *testing.T) {
 	}
 	if parserErr.LimitName() != limitNameMaxBodyLineBytes {
 		t.Fatalf("LimitName = %q, want max_body_line_bytes", parserErr.LimitName())
+	}
+}
+
+// TestBodyLineCountHardLimitAcceptsExactAndRejectsOneOver locks the parser memory ceiling.
+func TestBodyLineCountHardLimitAcceptsExactAndRejectsOneOver(t *testing.T) {
+	header := []byte("A: b\r\n\r\n")
+	exactBody := bytes.Repeat(crlf, HardMaxBodyLines)
+	exactRaw := make([]byte, 0, len(header)+len(exactBody))
+	exactRaw = append(exactRaw, header...)
+	exactRaw = append(exactRaw, exactBody...)
+
+	message, err := Parse(exactRaw)
+	if err != nil {
+		t.Fatalf("Parse exact body-line maximum returned error: %v", err)
+	}
+	if got := message.Body().LineCount(); got != HardMaxBodyLines {
+		t.Fatalf("body line count = %d, want %d", got, HardMaxBodyLines)
+	}
+
+	oneOverRaw := make([]byte, 0, len(exactRaw)+len(crlf))
+	oneOverRaw = append(oneOverRaw, exactRaw...)
+	oneOverRaw = append(oneOverRaw, crlf...)
+	_, err = Parse(oneOverRaw)
+	var parserErr *ParserError
+	if !errors.As(err, &parserErr) {
+		t.Fatalf("Parse one-over error = %T, want ParserError", err)
+	}
+	if parserErr.Code() != ErrorCodeLimitExceeded ||
+		parserErr.LimitName() != limitNameMaxBodyLines ||
+		parserErr.Limit() != HardMaxBodyLines {
+		t.Fatalf("Parse one-over error = %#v, want max_body_lines limit", parserErr)
+	}
+	wantOffset := len(header) + len(exactBody)
+	if parserErr.Location().Offset != wantOffset {
+		t.Fatalf("error offset = %d, want %d", parserErr.Location().Offset, wantOffset)
+	}
+}
+
+// TestBodyLineCountNarrowLimitRejectsBeforeIndexConstruction verifies caller narrowing is enforced.
+func TestBodyLineCountNarrowLimitRejectsBeforeIndexConstruction(t *testing.T) {
+	options := DefaultParserOptions()
+	options.MaxBodyLines = 1
+
+	message, err := ParseWithOptions([]byte("A: b\r\n\r\n\r\n"), options)
+	if err != nil {
+		t.Fatalf("Parse exact narrowed body-line maximum returned error: %v", err)
+	}
+	if got := message.Body().LineCount(); got != 1 {
+		t.Fatalf("body line count = %d, want 1", got)
+	}
+
+	_, err = ParseWithOptions([]byte("A: b\r\n\r\n\r\n\r\n"), options)
+	var parserErr *ParserError
+	if !errors.As(err, &parserErr) {
+		t.Fatalf("Parse one-over narrowed error = %T, want ParserError", err)
+	}
+	if parserErr.LimitName() != limitNameMaxBodyLines || parserErr.Limit() != 1 {
+		t.Fatalf("Parse one-over narrowed error = %#v, want max_body_lines=1", parserErr)
+	}
+}
+
+// TestBodyLineCountLimitErrorDoesNotLeakContent verifies bounded diagnostics omit message bytes.
+func TestBodyLineCountLimitErrorDoesNotLeakContent(t *testing.T) {
+	const firstLine = "synthetic-secret-first-body-line"
+	const secondLine = "synthetic-secret-second-body-line"
+	options := DefaultParserOptions()
+	options.MaxBodyLines = 1
+
+	_, err := ParseWithOptions([]byte("A: b\r\n\r\n"+firstLine+"\r\n"+secondLine), options)
+	if !IsParserErrorCode(err, ErrorCodeLimitExceeded) {
+		t.Fatalf("Parse error = %v, want body line-count limit", err)
+	}
+	for _, forbidden := range []string{firstLine, secondLine} {
+		if strings.Contains(err.Error(), forbidden) {
+			t.Fatalf("body line-count error leaked message content %q", forbidden)
+		}
 	}
 }
 

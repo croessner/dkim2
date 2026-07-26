@@ -70,14 +70,14 @@ func TestAuditFactoryReceivesOnlyNarrowPasswordFreeAuthority(t *testing.T) {
 	if err != nil {
 		t.Fatalf("construction with narrow audit authority failed: %v", err)
 	}
-	if observed.endpoint != config.Endpoint ||
-		observed.tlsServerName != config.TLSServerName ||
+	if observed.endpoint != config.values.Endpoint ||
+		observed.tlsServerName != config.values.TLSServerName ||
 		observed.rootCertificates == nil ||
-		observed.dialTimeout != config.DialTimeout ||
-		observed.tcpKeepAlive != config.TCPKeepAlive {
+		observed.dialTimeout != config.values.DialTimeout ||
+		observed.tcpKeepAlive != config.values.TCPKeepAlive {
 		t.Fatal("audit factory received an incomplete authority projection")
 	}
-	if store.applicationUsername == nil || *store.applicationUsername != config.Username {
+	if store.applicationUsername == nil || *store.applicationUsername != config.values.Username {
 		t.Fatal("application policy identity was not retained separately")
 	}
 	if err := store.Close(context.Background()); err != nil {
@@ -2743,17 +2743,14 @@ func newAuditCloseBarrierWire(primary string, onClose func(), closePanic bool) a
 
 // validAuditorConfig returns one bounded credentials-only fixture.
 func validAuditorConfig() AuditorConfig {
-	return AuditorConfig{
-		Username: syntheticAuditUsername,
-		Password: []byte(syntheticAuditPassword),
-	}
+	return NewAuditorConfig(syntheticAuditUsername, []byte(syntheticAuditPassword))
 }
 
 // mustOperatorAttestation constructs one exact trusted policy fixture.
 func mustOperatorAttestation(t *testing.T) OperatorAttestation {
 	t.Helper()
 	input := validOperatorAttestationInput()
-	input.SaveSchedule = "60 1"
+	input.values.SaveSchedule = "60 1"
 	value, err := NewOperatorAttestation(input)
 	if err != nil {
 		t.Fatal(err)

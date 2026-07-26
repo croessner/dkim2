@@ -748,7 +748,7 @@ incoherent combinations are invalid options.
 | recipe `MaxHeaderFieldBytes` | 65,536 | Align with rawmsg defaults |
 | recipe `MaxHeaderLineBytes` | 998 | Align with rawmsg physical-line policy |
 | recipe `MaxHeaderBytes` | 1 MiB | Align with rawmsg defaults |
-| recipe `MaxBodyLines` | 65,536 | Bound indexing and copy loops |
+| recipe `MaxBodyLines` | 65,536 | Align with the rawmsg hard index cap and bound copy loops |
 | recipe `MaxBodyLineBytes` | 998 | Align with rawmsg physical-line policy |
 | recipe `MaxStateBytes` | 32 MiB | Align with rawmsg message default |
 | recipe `MaxOperationWorkUnits` | 4,194,304 | Bound one parse or apply operation |
