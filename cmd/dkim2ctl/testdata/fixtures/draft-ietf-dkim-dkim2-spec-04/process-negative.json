@@ -1,0 +1,29 @@
+{
+  "schema": "dkim2ctl.fixture.v1",
+  "draft": "draft-ietf-dkim-dkim2-spec-04",
+  "fixture": "process-negative",
+  "cases": [
+    {
+      "case": "missing-capability",
+      "kind": "negative",
+      "negative": {
+        "mutation": "missing_capability"
+      },
+      "expect": {
+        "http_status": 403,
+        "error_code": "forbidden"
+      }
+    },
+    {
+      "case": "unsupported-media",
+      "kind": "negative",
+      "negative": {
+        "mutation": "unsupported_media_type"
+      },
+      "expect": {
+        "http_status": 415,
+        "error_code": "unsupported_media_type"
+      }
+    }
+  ]
+}

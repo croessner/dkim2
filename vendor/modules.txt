@@ -5,7 +5,7 @@
 ## explicit; go 1.13
 github.com/dprotaso/go-yit
 # github.com/fsnotify/fsnotify v1.9.0
-## go 1.17
+## explicit; go 1.17
 github.com/fsnotify/fsnotify
 github.com/fsnotify/fsnotify/internal
 # github.com/getkin/kin-openapi v0.135.0

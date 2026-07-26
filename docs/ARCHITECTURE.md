@@ -33,6 +33,8 @@
 | 0.1.0-draft | 2026-07-24 | Christian Roessner / Codex | Completed storage-neutral datasource contracts, immutable memory and confined flat-file providers, the exact opaque-handle signing bridge, LDAP/SQL design mappings, and provider parity/fuzz/race/privacy/dependency evidence. Replay storage remains M12. Recorded the DNS draft rename without silently rebasing behavior or vectors. |
 | 0.1.0-draft | 2026-07-24 | Christian Roessner / Codex | Specified M12 replay architecture: exact sealed replay inputs, success-only checks with typed failures and separate state, memory and explicit disabled providers, a millisecond-exact Valkey `SET NX PX` backend, and directly addressed standalone-primary authority. This records the specification baseline, not implementation completion. |
 | 0.1.0-draft | 2026-07-24 | Christian Roessner / Codex | Completed M12 replay storage: storage-neutral replay contracts, versioned framed HMAC-SHA256 identities, bounded memory and explicit disabled providers, exact Valkey `SET NX PX` behavior, fail-closed indeterminate mutation handling, standalone-primary authority, and parity/fuzz/race/privacy/integration evidence. |
+| 0.1.0-draft | 2026-07-26 | Christian Roessner / Codex | Specified the initial `dkim2ctl` generated-client, fixture, smoke, negative-contract, stable-output, and bounded diagnostic contract. This records the M14 implementation baseline, not implementation completion. |
+| 0.1.0-draft | 2026-07-26 | Christian Roessner / Codex | Implemented the local-only `dkim2ctl` generated-client runtime, strict draft-versioned fixture runner, stable JSON Lines, protected capability ownership, generated smoke and process calls, closed negative-contract mutations, and adversarial test evidence. |
 
 ## 1. Purpose
 

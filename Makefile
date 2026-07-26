@@ -178,6 +178,14 @@ check-protected-platforms:
 		go test -c -o "$$output/freebsd-amd64.test" ./cmd/dkim2d/internal/config; \
 	GOCACHE="$$output/cache" GOOS=windows GOARCH=amd64 CGO_ENABLED=0 \
 		go test -c -o "$$output/windows-amd64.test.exe" ./cmd/dkim2d/internal/config; \
+	GOCACHE="$$output/cache" GOOS=linux GOARCH=amd64 CGO_ENABLED=0 \
+		go test -c -o "$$output/dkim2ctl-linux-amd64.test" ./cmd/dkim2ctl/internal/testclient; \
+	GOCACHE="$$output/cache" GOOS=linux GOARCH=arm64 CGO_ENABLED=0 \
+		go test -c -o "$$output/dkim2ctl-linux-arm64.test" ./cmd/dkim2ctl/internal/testclient; \
+	GOCACHE="$$output/cache" GOOS=freebsd GOARCH=amd64 CGO_ENABLED=0 \
+		go test -c -o "$$output/dkim2ctl-freebsd-amd64.test" ./cmd/dkim2ctl/internal/testclient; \
+	GOCACHE="$$output/cache" GOOS=windows GOARCH=amd64 CGO_ENABLED=0 \
+		go test -c -o "$$output/dkim2ctl-windows-amd64.test.exe" ./cmd/dkim2ctl/internal/testclient; \
 	if test "$$(go env GOOS)" = darwin; then \
 		GOCACHE="$$output/cache" CGO_ENABLED=1 go test ./cmd/dkim2d/internal/config; \
 		GOCACHE="$$output/cache" CGO_ENABLED=0 go test ./cmd/dkim2d/internal/config; \

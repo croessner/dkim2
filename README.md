@@ -63,6 +63,12 @@ configuration, protected-generation loading, the generated inbound OpenAPI
 boundary, local capability authentication, replay wiring, readiness, and
 bounded Fx lifecycle. LDAP and SQL providers remain deferred.
 
+`dkim2ctl` provides a generated-client-backed loopback smoke check and a
+strict draft-versioned fixture runner. It validates every fixture offline
+before protected-file or network access, emits deterministic JSON Lines, and
+keeps credentials, message and envelope bytes, paths, URLs, response bodies,
+and raw errors out of diagnostics.
+
 Useful verification commands:
 
 ```text
