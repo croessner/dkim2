@@ -396,7 +396,7 @@ func TestReplayCoordinatorContinuesEveryOrdinaryFailure(t *testing.T) {
 		{"closed", replayStoreResponse{err: dkim2.NewReplayError(dkim2.ReplayErrorClosed)}, false, 3},
 		{"invalid", replayStoreResponse{err: dkim2.NewReplayError(dkim2.ReplayErrorInvalidRequest)}, true, 3},
 		{"misconfigured", replayStoreResponse{err: dkim2.NewReplayError(dkim2.ReplayErrorMisconfigured)}, true, 3},
-		{"indeterminate", replayStoreResponse{err: dkim2.NewReplayError(dkim2.ReplayErrorIndeterminate)}, true, 3},
+		{telemetryReplayIndeterminate, replayStoreResponse{err: dkim2.NewReplayError(dkim2.ReplayErrorIndeterminate)}, true, 3},
 		{"inconsistent", replayStoreResponse{err: dkim2.NewReplayError(dkim2.ReplayErrorInconsistent)}, true, 3},
 		{"invariant", replayStoreResponse{err: dkim2.NewReplayError(dkim2.ReplayErrorInternalInvariant)}, true, 3},
 		{"live typed cancel", replayStoreResponse{err: dkim2.NewReplayError(dkim2.ReplayErrorCancelled)}, true, 1},

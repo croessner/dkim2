@@ -5,8 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
+	"time"
 
 	"github.com/croessner/dkim2"
+	"github.com/croessner/dkim2/cmd/dkim2d/internal/observability"
+	"go.opentelemetry.io/otel/trace"
 )
 
 const (
@@ -34,8 +38,20 @@ type ReplayService interface {
 
 // InboundProcessor composes verification, policy, and replay without changing their owners.
 type InboundProcessor struct {
-	domain *DomainProcessor
-	replay ReplayService
+	domain  *DomainProcessor
+	replay  ReplayService
+	runtime *observability.Runtime
+}
+
+// attachObservability binds the already acquired instance runtime before publication.
+func (p *InboundProcessor) attachObservability(runtime *observability.Runtime) {
+	if p == nil {
+		return
+	}
+	p.runtime = runtime
+	if p.domain != nil {
+		p.domain.attachObservability(runtime)
+	}
 }
 
 // InboundResult keeps domain and replay truth separate for transport mapping.
@@ -63,19 +79,139 @@ func (p *InboundProcessor) Process(
 	if p == nil || p.domain == nil || p.replay == nil {
 		return InboundResult{}, &InboundProcessorError{}
 	}
-	domain, err := p.domain.Process(ctx, request)
+	started := time.Now()
+	processContext, processSpan := startAppSpan(ctx, p.runtime, "dkim2d.process")
+	outcome := observability.SpanInternalError
+	var processFacts []observability.SpanFact
+	defer func() {
+		observability.EndSpanWithFacts(processSpan, outcome, processFacts...)
+	}()
+	domain, err := p.domain.Process(processContext, request)
 	if err != nil {
+		p.observeProcessFailure(started)
 		return InboundResult{}, err
 	}
-	replay, err := p.replay.Coordinate(ctx, domain)
+	replayContext, replaySpan := startAppSpan(processContext, p.runtime, "dkim2.replay.coordinate")
+	replayStarted := time.Now()
+	storeContext := replayContext
+	var storeSpan trace.Span
+	if replayStoreRequired(domain) {
+		storeContext, storeSpan = startAppSpan(replayContext, p.runtime, "dkim2.replay.store")
+	}
+	replay, err := p.replay.Coordinate(storeContext, domain)
 	if err != nil {
+		internalResult, _ := observability.TextSpanFact(
+			"dkim2.result",
+			telemetryResultInternal,
+		)
+		observability.EndSpanWithFacts(
+			storeSpan,
+			observability.SpanInternalError,
+			internalResult,
+		)
+		observability.EndSpanWithFacts(
+			replaySpan,
+			observability.SpanInternalError,
+			internalResult,
+		)
+		p.observeProcessFailure(started)
 		return InboundResult{}, err
 	}
 	result := InboundResult{domain: domain, replay: replay}
 	if !result.Valid() {
+		observability.EndSpan(storeSpan, observability.SpanInternalError)
+		observability.EndSpan(replaySpan, observability.SpanInternalError)
+		p.observeProcessFailure(started)
 		return InboundResult{}, &InboundProcessorError{}
 	}
+	replayState, _ := replayObservation(replay)
+	replayResult := telemetryResultSuccess
+	if replayState == telemetryReplayIndeterminate {
+		replayResult = telemetryResultTemporary
+	}
+	replayResultFact, _ := observability.TextSpanFact("dkim2.result", replayResult)
+	replayStateFact, _ := observability.TextSpanFact("dkim2.replay_state", replayState)
+	observability.EndSpanWithFacts(
+		storeSpan,
+		observability.SpanCompleted,
+		replayResultFact,
+	)
+	observability.EndSpanWithFacts(
+		replaySpan,
+		observability.SpanCompleted,
+		replayResultFact,
+		replayStateFact,
+	)
+	outcome = observability.SpanCompleted
+	verification, verificationErr := result.domain.Verification()
+	resultClass, verdict := verificationObservation(verification, verificationErr)
+	processResultFact, _ := observability.TextSpanFact("dkim2.result", resultClass)
+	processVerdictFact, _ := observability.TextSpanFact("dkim2.verdict", verdict)
+	processReplayFact, _ := observability.TextSpanFact("dkim2.replay_state", replayState)
+	processFacts = []observability.SpanFact{
+		processResultFact,
+		processVerdictFact,
+		processReplayFact,
+	}
+	p.observeProcessSuccess(result, started, replayStarted)
 	return result, nil
+}
+
+// observeProcessFailure records one bounded internal processing outcome.
+func (p *InboundProcessor) observeProcessFailure(started time.Time) {
+	if p == nil || p.runtime == nil {
+		return
+	}
+	p.runtime.Metrics().ProcessCompleted(
+		"internal", "neutral", "not_checked", "tempfail", time.Since(started),
+	)
+	p.runtime.Logger().Error(
+		"process.completed",
+		slog.String("operation", "process"),
+		slog.String("result", "internal"),
+		slog.String("verdict", "neutral"),
+		slog.String("replay_state", "not_checked"),
+		slog.String("disposition", "tempfail"),
+	)
+}
+
+// observeProcessSuccess records only closed result, replay, and disposition classes.
+func (p *InboundProcessor) observeProcessSuccess(
+	result InboundResult,
+	started time.Time,
+	replayStarted time.Time,
+) {
+	if p == nil || p.runtime == nil {
+		return
+	}
+	verification, verificationErr := result.domain.Verification()
+	resultClass, verdict := verificationObservation(verification, verificationErr)
+	replayState, disposition := replayObservation(result.replay)
+	p.runtime.Metrics().ProcessCompleted(
+		resultClass, verdict, replayState, disposition, time.Since(started),
+	)
+	replayResult := telemetryResultSuccess
+	if replayState == telemetryReplayIndeterminate {
+		replayResult = telemetryResultTemporary
+	}
+	p.runtime.Metrics().ReplayCompleted(replayState, replayResult, time.Since(replayStarted))
+	p.runtime.Logger().Info(
+		"process.completed",
+		slog.String("operation", "process"),
+		slog.String("result", resultClass),
+		slog.String("verdict", verdict),
+		slog.String("replay_state", replayState),
+		slog.String("disposition", disposition),
+	)
+	if p.runtime.DebugEnabled("replay") {
+		p.runtime.Logger().Debug(
+			"replay.coordinate.completed",
+			slog.String("operation", "replay_coordinate"),
+			slog.String("result", replayResult),
+			slog.String("replay_state", replayState),
+			slog.String("disposition", disposition),
+		)
+	}
 }
 
 // Valid reports whether both retained result owners are coherent.

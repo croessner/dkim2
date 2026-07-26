@@ -7,6 +7,7 @@ import (
 	"io"
 
 	"github.com/croessner/dkim2/cmd/dkim2d/internal/config"
+	"github.com/croessner/dkim2/cmd/dkim2d/internal/observability"
 )
 
 const httpAssemblyInputRedacted = "dkim2d_http_assembly_input"
@@ -60,6 +61,7 @@ type HTTPAssemblyInput struct {
 	serveReturn ServeReturnObserver
 	activation  ActivationAuthority
 	baseContext context.Context
+	telemetry   *observability.Runtime
 }
 
 // newHTTPAssemblyInput validates one pure transport-construction input.
@@ -123,6 +125,15 @@ func (i HTTPAssemblyInput) ActivationAuthority() ActivationAuthority { return i.
 
 // BaseContext returns the daemon-owned parent for request contexts.
 func (i HTTPAssemblyInput) BaseContext() context.Context { return i.baseContext }
+
+// Observability returns the optional instance-owned telemetry runtime.
+func (i HTTPAssemblyInput) Observability() *observability.Runtime { return i.telemetry }
+
+// withObservability binds the already acquired telemetry owner to transport assembly.
+func (i HTTPAssemblyInput) withObservability(runtime *observability.Runtime) HTTPAssemblyInput {
+	i.telemetry = runtime
+	return i
+}
 
 // String returns a constant content-free assembly-input representation.
 func (HTTPAssemblyInput) String() string { return httpAssemblyInputRedacted }

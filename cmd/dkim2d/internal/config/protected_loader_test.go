@@ -4,6 +4,7 @@ package config
 
 import (
 	"bytes"
+	"crypto/x509"
 	"encoding/pem"
 	"errors"
 	"net"
@@ -109,6 +110,53 @@ func TestLoadProtectedBackendChildMatrices(t *testing.T) {
 				t.Fatalf("runtime Close() failed with code %s", CodeOf(err))
 			}
 		})
+	}
+}
+
+// TestLoadProtectedTracingCAStaysGenerationBoundAndCallbackScoped proves OTLP trust ownership.
+func TestLoadProtectedTracingCAStaysGenerationBoundAndCallbackScoped(t *testing.T) {
+	fixture := newProtectedBackendFixture(t, ReplayDisabled)
+	makeGenerationWritable(t, fixture.generationPath)
+	certificate := testProtectedCertificateDER(t, 401, true, x509.KeyUsageCertSign)
+	caPath := filepath.Join(fixture.generationPath, "otlp-ca")
+	writeProtectedTestFile(
+		t,
+		caPath,
+		pem.EncodeToMemory(&pem.Block{Type: certificatePEMType, Bytes: certificate}),
+		0o600,
+	)
+	sealGeneration(t, fixture.generationPath)
+	document := string(fixture.yamlBytes) + `
+observability:
+  tracing:
+    exporter: otlp_http
+    endpoint: https://127.0.0.1:4318/v1/traces
+    ca_file: ` + caPath + "\n"
+	writeProtectedTestFile(t, fixture.yamlPath, []byte(document), 0o600)
+	owner, err := LoadProtected(fixture.yamlPath, FlagValues{})
+	if CodeOf(err) == CodeProtectedUnsupported {
+		t.Skip("test filesystem is outside the closed production allowlist")
+	}
+	if err != nil || owner == nil {
+		t.Fatalf("LoadProtected() failed with code %s", CodeOf(err))
+	}
+	defer func() { _ = owner.Close() }()
+	preparation, err := owner.PrepareRuntime()
+	if err != nil {
+		t.Fatal("runtime preparation failed")
+	}
+	var borrowed [][]byte
+	if err := preparation.TracingMaterial().UseRoots(func(roots [][]byte) error {
+		borrowed = roots
+		if len(roots) != 1 || !bytes.Equal(roots[0], certificate) {
+			return newError(CodeInternal)
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("tracing roots borrow failed with code %s", CodeOf(err))
+	}
+	if len(borrowed) != 1 || len(borrowed[0]) != 0 {
+		t.Fatal("tracing roots survived their callback scope")
 	}
 }
 
@@ -684,6 +732,7 @@ func TestProtectedRoleSizeMatrix(t *testing.T) {
 		{role: protectedApplicationPassword, min: 1, max: maxPasswordBytes},
 		{role: protectedAuditorPassword, min: 1, max: maxPasswordBytes},
 		{role: protectedCA, min: 1, max: maxCAPEMBytes},
+		{role: protectedTracingCA, min: 1, max: maxTracingCAPEMBytes},
 	}
 	for _, test := range tests {
 		for _, size := range []int64{test.min - 1, test.min, test.max, test.max + 1} {
@@ -840,6 +889,32 @@ func TestValidateProtectedFileMetadataFreezesRoleLinkAndTypePolicies(t *testing.
 	ca.linkCount = 0
 	if err := validateProtectedFileMetadata(ca, protectedCA, valid.uid); CodeOf(err) != CodeProtectedAccess {
 		t.Fatalf("unlinked CA returned code %s", CodeOf(err))
+	}
+	tracingCA := valid
+	tracingCA.size = 1
+	for _, mode := range []uint32{0o400, 0o600} {
+		tracingCA.modeBits = mode
+		if err := validateProtectedFileMetadata(
+			tracingCA,
+			protectedTracingCA,
+			valid.uid,
+		); err != nil {
+			t.Fatalf("tracing CA mode %o returned code %s", mode, CodeOf(err))
+		}
+	}
+	for _, mutate := range []func(*descriptorMetadata){
+		func(value *descriptorMetadata) { value.modeBits = 0o440 },
+		func(value *descriptorMetadata) { value.linkCount = 2 },
+	} {
+		candidate := tracingCA
+		mutate(&candidate)
+		if err := validateProtectedFileMetadata(
+			candidate,
+			protectedTracingCA,
+			valid.uid,
+		); CodeOf(err) != CodeProtectedAccess {
+			t.Fatalf("invalid tracing CA metadata returned code %s", CodeOf(err))
+		}
 	}
 }
 

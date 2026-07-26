@@ -72,6 +72,8 @@ const (
 
 	canonicalTrue  = "true"
 	canonicalFalse = "false"
+	canonicalInfo  = "info"
+	canonicalNone  = "none"
 
 	pathAttestationNoGlobalExactlyOnce = "replay.valkey.attestation.no_global_exactly_once_claim"
 	pathAttestationDedicatedDeployment = "replay.valkey.attestation.dedicated_deployment"
@@ -85,6 +87,15 @@ const (
 	pathAttestationSharedEpoch         = "replay.valkey.attestation.shared_epoch"
 	pathAttestationSharedSecretSet     = "replay.valkey.attestation.shared_secret_set"
 	pathAttestationSharedRetention     = "replay.valkey.attestation.shared_retention"
+	pathLoggingLevel                   = "observability.logging.level"
+	pathDebugMessageShape              = "observability.debug.message_shape"
+	pathDebugDNS                       = "observability.debug.dns"
+	pathDebugReplay                    = "observability.debug.replay"
+	pathTracingExporter                = "observability.tracing.exporter"
+	pathTracingEndpoint                = "observability.tracing.endpoint"
+	pathTracingCAFile                  = "observability.tracing.ca_file"
+	pathTracingSamplePerMillion        = "observability.tracing.sample_per_million"
+	pathTracingExportTimeout           = "observability.tracing.export_timeout"
 )
 
 // Source identifies the winning configuration layer without retaining its value.
@@ -253,6 +264,15 @@ func stableFieldSpecs() []fieldSpec {
 		{path: pathAttestationSharedEpoch, env: "DKIM2D_REPLAY_VALKEY_ATTESTATION_SHARED_EPOCH", kind: valueBool},
 		{path: pathAttestationSharedSecretSet, env: "DKIM2D_REPLAY_VALKEY_ATTESTATION_SHARED_SECRET_SET", kind: valueBool},
 		{path: pathAttestationSharedRetention, env: "DKIM2D_REPLAY_VALKEY_ATTESTATION_SHARED_RETENTION", kind: valueBool},
+		{path: pathLoggingLevel, env: "DKIM2D_OBSERVABILITY_LOGGING_LEVEL", kind: valueString, defaultVal: canonicalInfo, hasDefault: true},
+		{path: pathDebugMessageShape, env: "DKIM2D_OBSERVABILITY_DEBUG_MESSAGE_SHAPE", kind: valueBool, defaultVal: canonicalFalse, hasDefault: true},
+		{path: pathDebugDNS, env: "DKIM2D_OBSERVABILITY_DEBUG_DNS", kind: valueBool, defaultVal: canonicalFalse, hasDefault: true},
+		{path: pathDebugReplay, env: "DKIM2D_OBSERVABILITY_DEBUG_REPLAY", kind: valueBool, defaultVal: canonicalFalse, hasDefault: true},
+		{path: pathTracingExporter, env: "DKIM2D_OBSERVABILITY_TRACING_EXPORTER", kind: valueString, defaultVal: canonicalNone, hasDefault: true},
+		{path: pathTracingEndpoint, env: "DKIM2D_OBSERVABILITY_TRACING_ENDPOINT", kind: valueString},
+		{path: pathTracingCAFile, env: "DKIM2D_OBSERVABILITY_TRACING_CA_FILE", kind: valueString},
+		{path: pathTracingSamplePerMillion, env: "DKIM2D_OBSERVABILITY_TRACING_SAMPLE_PER_MILLION", kind: valueUint},
+		{path: pathTracingExportTimeout, env: "DKIM2D_OBSERVABILITY_TRACING_EXPORT_TIMEOUT", kind: valueDuration},
 	}
 }
 

@@ -5,20 +5,29 @@ import (
 	"context"
 	"errors"
 	"io"
+	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/croessner/dkim2/cmd/dkim2d/internal/httpjson/generated"
+	"github.com/croessner/dkim2/cmd/dkim2d/internal/observability"
+	"go.opentelemetry.io/otel/trace"
 )
 
 const (
-	statusAllowMethods = "GET, HEAD"
-	processAllowMethod = "POST"
-	serverAllowMethods = "GET, HEAD, POST, OPTIONS"
-	healthPath         = "/healthz"
-	readinessPath      = "/readyz"
-	processPath        = "/v1/process"
+	statusAllowMethods   = "GET, HEAD"
+	processAllowMethod   = "POST"
+	serverAllowMethods   = "GET, HEAD, POST, OPTIONS"
+	healthPath           = "/healthz"
+	readinessPath        = "/readyz"
+	metricsPath          = "/metrics"
+	processPath          = "/v1/process"
+	metricsAllowMethod   = "GET"
+	observationUnmatched = "unmatched"
+	observationProcess   = "process"
+	observationSuccess   = "success"
 )
 
 var errHTTPBoundaryConfig = errors.New("http boundary configuration failure")
@@ -54,6 +63,8 @@ type HTTPBoundary struct {
 	strict    *strictAdapter
 	generated generated.ServerInterface
 	fatal     FatalNotifier
+	metrics   *observability.Metrics
+	telemetry *observability.Runtime
 }
 
 // NewHTTPBoundary constructs one immutable process-local HTTP handler.
@@ -64,6 +75,7 @@ func NewHTTPBoundary(
 	processor inboundProcessService,
 	notifier FatalNotifier,
 	validator *RequestValidator,
+	runtimes ...*observability.Runtime,
 ) (*HTTPBoundary, error) {
 	if config.Authority == "" || strings.ContainsAny(config.Authority, "\r\n/?#@") ||
 		config.RequestDeadline <= 0 || nilInterfaceValue(matcher) ||
@@ -79,7 +91,18 @@ func NewHTTPBoundary(
 	if err != nil {
 		return nil, errHTTPBoundaryConfig
 	}
-	strict, err := newStrictAdapter(readiness, processor)
+	telemetry := firstBoundaryTelemetry(runtimes)
+	var metrics *observability.Metrics
+	if telemetry != nil {
+		metrics = telemetry.Metrics()
+	}
+	if metrics == nil {
+		metrics, err = observability.NewMetrics()
+		if err != nil {
+			return nil, errHTTPBoundaryConfig
+		}
+	}
+	strict, err := newStrictAdapter(readiness, processor, metrics)
 	if err != nil {
 		return nil, errHTTPBoundaryConfig
 	}
@@ -92,6 +115,8 @@ func NewHTTPBoundary(
 		admission: admission,
 		strict:    strict,
 		fatal:     notifier,
+		metrics:   metrics,
+		telemetry: telemetry,
 	}
 	boundary.generated = generated.NewStrictHandlerWithOptions(
 		strict,
@@ -118,6 +143,14 @@ func NewHTTPBoundary(
 		},
 	)
 	return boundary, nil
+}
+
+// firstBoundaryTelemetry accepts exactly one optional runtime.
+func firstBoundaryTelemetry(values []*observability.Runtime) *observability.Runtime {
+	if len(values) != 1 {
+		return nil
+	}
+	return values[0]
 }
 
 // Close rejects new process admission and interrupts ordinary waiters.
@@ -156,6 +189,19 @@ func (h *HTTPBoundary) ServeHTTP(writer http.ResponseWriter, request *http.Reque
 		workingContext.Clear()
 	}()
 	committed := &boundaryWriter{ResponseWriter: writer}
+	observeHTTP := request.URL != nil && request.URL.Path != metricsPath
+	operation, route := httpObservationRoute(request)
+	started := time.Now()
+	var rootSpan trace.Span
+	if observeHTTP {
+		h.metrics.HTTPStarted(operation)
+		rootContext, span := h.startHTTPSpan(request, route)
+		request = request.WithContext(rootContext)
+		rootSpan = span
+		defer h.completeHTTPObservation(
+			committed, operation, httpObservationMethod(request.Method), started, rootSpan,
+		)
+	}
 	clientContext := request.Context()
 	defer func() {
 		recovered := recover()
@@ -187,6 +233,113 @@ func (h *HTTPBoundary) ServeHTTP(writer http.ResponseWriter, request *http.Reque
 		&ownedReservation,
 		&workingContext,
 	)
+}
+
+// startHTTPSpan starts one fresh server root without accepting inbound trace identity.
+func (h *HTTPBoundary) startHTTPSpan(
+	request *http.Request,
+	route string,
+) (context.Context, trace.Span) {
+	if h == nil || h.telemetry == nil || h.telemetry.Tracing() == nil || request == nil {
+		return requestContext(request), trace.SpanFromContext(context.Background())
+	}
+	methodFact, _ := observability.TextSpanFact("http.request.method", httpObservationMethod(request.Method))
+	routeFact, _ := observability.TextSpanFact("http.route", route)
+	return h.telemetry.Tracing().StartRoot(
+		request.Context(), "dkim2d.http.request", methodFact, routeFact,
+	)
+}
+
+// requestContext returns a nonnil context for telemetry fallbacks.
+func requestContext(request *http.Request) context.Context {
+	if request == nil || request.Context() == nil {
+		return context.Background()
+	}
+	return request.Context()
+}
+
+// completeHTTPObservation closes bounded metrics, logs, and the root span.
+func (h *HTTPBoundary) completeHTTPObservation(
+	writer *boundaryWriter,
+	operation string,
+	method string,
+	started time.Time,
+	span trace.Span,
+) {
+	status := http.StatusInternalServerError
+	if writer != nil && writer.status >= 200 && writer.status <= 599 {
+		status = writer.status
+	}
+	statusClass := strconv.Itoa(status/100) + "xx"
+	h.metrics.HTTPCompleted(operation, statusClass, time.Since(started))
+	outcome := observability.SpanCompleted
+	if status >= 500 {
+		outcome = observability.SpanInternalError
+	}
+	observability.EndHTTPSpan(span, status, outcome)
+	if h.telemetry != nil {
+		h.telemetry.Logger().Info(
+			"http.request.completed",
+			slog.String("operation", operation),
+			slog.String("method", method),
+			slog.String("route", httpObservationPath(operation)),
+			slog.String("status_class", statusClass),
+			slog.String("result", httpObservationResult(status)),
+		)
+	}
+}
+
+// httpObservationRoute maps one request target into a closed route and operation.
+func httpObservationRoute(request *http.Request) (string, string) {
+	if request == nil || request.URL == nil {
+		return observationUnmatched, observationUnmatched
+	}
+	switch request.URL.Path {
+	case healthPath:
+		return "health", healthPath
+	case readinessPath:
+		return "readiness", readinessPath
+	case processPath:
+		return observationProcess, processPath
+	default:
+		return observationUnmatched, observationUnmatched
+	}
+}
+
+// httpObservationMethod maps arbitrary methods into a closed vocabulary.
+func httpObservationMethod(method string) string {
+	switch method {
+	case http.MethodGet, http.MethodHead, http.MethodPost, http.MethodOptions:
+		return method
+	default:
+		return "other"
+	}
+}
+
+// httpObservationPath maps a closed operation back to its route label.
+func httpObservationPath(operation string) string {
+	switch operation {
+	case "health":
+		return healthPath
+	case "readiness":
+		return readinessPath
+	case observationProcess:
+		return processPath
+	default:
+		return observationUnmatched
+	}
+}
+
+// httpObservationResult maps one status into a closed operational class.
+func httpObservationResult(status int) string {
+	switch {
+	case status < 400:
+		return observationSuccess
+	case status < 500:
+		return "failure"
+	default:
+		return "internal"
+	}
 }
 
 // notifyFatal contains notifier failure so the original panic owns wire disposition.
@@ -222,6 +375,7 @@ func (h *HTTPBoundary) serveBoundaryRequest(
 	request.RemoteAddr = ""
 	request.Header.Del("X-Dk2E")
 	request.Header.Del("X-DKIM2-Framing-X")
+	traceContextPresent := consumeTraceContext(request.Header)
 	facts := state.Facts()
 	hostValue, hostCount, hostOK := state.ConsumeHost()
 	facts.hostValue = ""
@@ -251,8 +405,7 @@ func (h *HTTPBoundary) serveBoundaryRequest(
 		h.writeHeaderOnly(committed, request, http.StatusRequestURITooLong, true, "")
 		return
 	}
-	if facts.protoMinor == 0 && facts.framing != framingAbsent ||
-		facts.expectObsFold || facts.contentLengthConflict || facts.framing == framingBad {
+	if invalidBoundaryFraming(facts) {
 		h.writeError(committed, request, http.StatusBadRequest,
 			generated.ErrorResponseCodeInvalidContract, generated.Request)
 		return
@@ -286,9 +439,7 @@ func (h *HTTPBoundary) serveBoundaryRequest(
 		h.serveOptions(committed, request, facts)
 		return
 	}
-	switch request.Method {
-	case http.MethodGet, http.MethodHead, http.MethodPost, http.MethodOptions:
-	default:
+	if !supportedBoundaryMethod(request.Method) {
 		h.writeHeaderOnly(committed, request, http.StatusNotImplemented, true, "")
 		return
 	}
@@ -296,6 +447,8 @@ func (h *HTTPBoundary) serveBoundaryRequest(
 	switch request.URL.Path {
 	case healthPath, readinessPath:
 		h.serveStatus(committed, request, facts)
+	case metricsPath:
+		h.serveMetrics(committed, request, facts, traceContextPresent)
 	case processPath:
 		h.serveProcess(
 			committed,
@@ -308,6 +461,87 @@ func (h *HTTPBoundary) serveBoundaryRequest(
 	default:
 		h.writeError(committed, request, http.StatusNotFound,
 			generated.ErrorResponseCodeNotFound, generated.Request)
+	}
+}
+
+// invalidBoundaryFraming rejects ambiguous or unsupported HTTP/1 framing.
+func invalidBoundaryFraming(facts transportFacts) bool {
+	return facts.protoMinor == 0 && facts.framing != framingAbsent ||
+		facts.expectObsFold || facts.contentLengthConflict || facts.framing == framingBad
+}
+
+// consumeTraceContext reports and clears every inbound trace-context channel.
+func consumeTraceContext(header http.Header) bool {
+	present := hasHeader(header, "Traceparent") ||
+		hasHeader(header, "Tracestate") ||
+		hasHeader(header, "Baggage")
+	header.Del("Traceparent")
+	header.Del("Tracestate")
+	header.Del("Baggage")
+	return present
+}
+
+// supportedBoundaryMethod reports whether routing handles one exact method.
+func supportedBoundaryMethod(method string) bool {
+	switch method {
+	case http.MethodGet, http.MethodHead, http.MethodPost, http.MethodOptions:
+		return true
+	default:
+		return false
+	}
+}
+
+// serveMetrics applies the exact specialized scrape contract without tracing or recursion.
+func (h *HTTPBoundary) serveMetrics(
+	writer *boundaryWriter,
+	request *http.Request,
+	facts transportFacts,
+	traceContextPresent bool,
+) {
+	if request.Method != http.MethodGet {
+		date, present := responseDate(request.Context())
+		response, err := newErrorResponse(
+			http.StatusMethodNotAllowed,
+			generated.ErrorResponseCodeMethodNotAllowed,
+			generated.Request,
+			request.Method == http.MethodHead,
+			date,
+			present,
+		)
+		if err == nil {
+			response, err = response.withAllow(metricsAllowMethod)
+		}
+		h.writePrepared(writer, request, response, err)
+		return
+	}
+	if strings.Contains(request.RequestURI, "?") || request.ContentLength > 0 ||
+		facts.framing != framingAbsent || facts.expect != expectNone ||
+		traceContextPresent || hasHeader(request.Header, headerContentType) ||
+		hasHeader(request.Header, "Content-Encoding") ||
+		hasHeader(request.Header, "X-DKIM2-Capability") ||
+		hasHeader(request.Header, "If-Match") ||
+		hasHeader(request.Header, "If-None-Match") ||
+		hasHeader(request.Header, "If-Modified-Since") ||
+		hasHeader(request.Header, "If-Unmodified-Since") ||
+		hasHeader(request.Header, "If-Range") {
+		h.writeError(writer, request, http.StatusBadRequest,
+			generated.ErrorResponseCodeInvalidContract, generated.Request)
+		return
+	}
+	body, err := h.metrics.Gather()
+	if err != nil || len(body) > 256<<10 {
+		h.writeInternal(writer, request)
+		return
+	}
+	header := writer.Header()
+	clear(header)
+	header.Set("Cache-Control", cacheControlNoStore)
+	header.Set(headerContentType, observability.MetricsContentType)
+	header.Set("Content-Length", strconv.Itoa(len(body)))
+	header.Set("X-Content-Type-Options", "nosniff")
+	writer.WriteHeader(http.StatusOK)
+	if _, err := writer.Write(body); err != nil {
+		panic(boundaryAbort)
 	}
 }
 
@@ -371,7 +605,7 @@ func (h *HTTPBoundary) serveOptions(
 			generated.ErrorResponseCodeExpectationFailed, generated.Request)
 		return
 	}
-	if hasHeader(request.Header, "Content-Type") ||
+	if hasHeader(request.Header, headerContentType) ||
 		hasHeader(request.Header, "Content-Encoding") {
 		h.writeError(writer, request, http.StatusBadRequest,
 			generated.ErrorResponseCodeInvalidContract, generated.Request)
@@ -411,7 +645,7 @@ func (h *HTTPBoundary) serveStatus(
 			generated.ErrorResponseCodeExpectationFailed, generated.Request)
 		return
 	}
-	if hasHeader(request.Header, "Content-Type") ||
+	if hasHeader(request.Header, headerContentType) ||
 		hasHeader(request.Header, "Content-Encoding") {
 		h.writeError(writer, request, http.StatusBadRequest,
 			generated.ErrorResponseCodeInvalidContract, generated.Request)
@@ -551,7 +785,7 @@ func (h *HTTPBoundary) prepareProcessRequest(
 			generated.ErrorResponseCodeExpectationFailed, generated.Request)
 		return request, false, false
 	}
-	if !validJSONContentType(request.Header.Values("Content-Type")) ||
+	if !validJSONContentType(request.Header.Values(headerContentType)) ||
 		hasHeader(request.Header, "Content-Encoding") {
 		h.writeError(writer, request, http.StatusUnsupportedMediaType,
 			generated.ErrorResponseCodeUnsupportedMediaType, generated.Request)
@@ -896,7 +1130,7 @@ func (h *HTTPBoundary) writeHeaderOnly(
 	}
 	header := writer.Header()
 	clear(header)
-	header.Set("Cache-Control", "no-store")
+	header.Set("Cache-Control", cacheControlNoStore)
 	header.Set("X-Content-Type-Options", "nosniff")
 	header.Set("Connection", "close")
 	date, present := responseDate(request.Context())
@@ -920,12 +1154,14 @@ func hasHeader(header http.Header, name string) bool {
 type boundaryWriter struct {
 	http.ResponseWriter
 	committed bool
+	status    int
 }
 
 // WriteHeader forwards one status and records only final commitment.
 func (w *boundaryWriter) WriteHeader(status int) {
 	if status >= 200 {
 		w.committed = true
+		w.status = status
 	}
 	w.ResponseWriter.WriteHeader(status)
 }
@@ -933,6 +1169,9 @@ func (w *boundaryWriter) WriteHeader(status int) {
 // Write marks implicit final response commitment.
 func (w *boundaryWriter) Write(value []byte) (int, error) {
 	w.committed = true
+	if w.status == 0 {
+		w.status = http.StatusOK
+	}
 	return w.ResponseWriter.Write(value)
 }
 

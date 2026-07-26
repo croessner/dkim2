@@ -47,9 +47,10 @@ type protectedState struct {
 	hmac       [32]byte
 	hasHMAC    bool
 
-	applicationPassword []byte
-	auditorPassword     []byte
-	rootCertificatesDER [][]byte
+	applicationPassword        []byte
+	auditorPassword            []byte
+	rootCertificatesDER        [][]byte
+	tracingRootCertificatesDER [][]byte
 }
 
 // protectedPhase identifies the single current material owner.
@@ -104,6 +105,12 @@ type RuntimeMaterial struct {
 
 // ProcessCapability is a comparison-only opaque local authorization value.
 type ProcessCapability struct {
+	state *protectedState
+	token *runtimeToken
+}
+
+// TracingStartupMaterial lends only the protected OTLP trust roots during startup.
+type TracingStartupMaterial struct {
 	state *protectedState
 	token *runtimeToken
 }
@@ -208,6 +215,48 @@ func (p *RuntimePreparation) ReplayRuntime() ReplayRuntimePreparation {
 		return ReplayRuntimePreparation{}
 	}
 	return ReplayRuntimePreparation{state: p.state, token: p.token}
+}
+
+// TracingMaterial returns the non-owning startup tracing trust handle.
+func (p *RuntimePreparation) TracingMaterial() TracingStartupMaterial {
+	if p == nil {
+		return TracingStartupMaterial{}
+	}
+	return TracingStartupMaterial{state: p.state, token: p.token}
+}
+
+// UseRoots lends a fresh callback-scoped copy of the tracing trust roots.
+func (m TracingStartupMaterial) UseRoots(use func(rootsDER [][]byte) error) (resultErr error) {
+	if m.state == nil || m.token == nil || use == nil {
+		return newError(CodeProtectedClosed)
+	}
+	m.state.mu.Lock()
+	if m.state.phase != protectedPreparedForRuntime ||
+		m.state.runtimeToken != m.token || m.state.borrowed ||
+		len(m.state.tracingRootCertificatesDER) == 0 {
+		m.state.mu.Unlock()
+		return newError(CodeProtectedClosed)
+	}
+	m.state.borrowed = true
+	roots := cloneProtectedRoots(m.state.tracingRootCertificatesDER)
+	m.state.mu.Unlock()
+	defer func() {
+		panicValue := recover()
+		for index := range roots {
+			clear(roots[index])
+			roots[index] = nil
+		}
+		m.state.mu.Lock()
+		m.state.borrowed = false
+		m.state.mu.Unlock()
+		if panicValue != nil {
+			resultErr = newError(CodeProtectedContent)
+		}
+	}()
+	if err := use(roots); err != nil {
+		return newError(CodeProtectedContent)
+	}
+	return nil
 }
 
 // Snapshot returns the immutable configuration only while startup is prepared.
@@ -414,9 +463,14 @@ func (s *protectedState) clearProtected(releasedBy protectedPhase) {
 		clear(s.rootCertificatesDER[index])
 		s.rootCertificatesDER[index] = nil
 	}
+	for index := range s.tracingRootCertificatesDER {
+		clear(s.tracingRootCertificatesDER[index])
+		s.tracingRootCertificatesDER[index] = nil
+	}
 	s.applicationPassword = nil
 	s.auditorPassword = nil
 	s.rootCertificatesDER = nil
+	s.tracingRootCertificatesDER = nil
 	s.snapshot = Snapshot{}
 	s.releasedBy = releasedBy
 	s.phase = protectedReleased

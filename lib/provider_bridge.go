@@ -4,14 +4,25 @@ import (
 	"context"
 	"crypto/ed25519"
 	"errors"
+	"time"
 
 	"github.com/croessner/dkim2/internal/verify"
 )
 
-type publicKeyBridge struct{ provider PublicKeyProvider }
+type publicKeyBridge struct {
+	provider PublicKeyProvider
+	sink     ObservationSink
+}
 
 // LookupKey adapts the closed public provider matrix into typed protocol-core key facts.
-func (b publicKeyBridge) LookupKey(ctx context.Context, query verify.KeyQuery) (verify.PublicKey, error) {
+func (b publicKeyBridge) LookupKey(
+	ctx context.Context,
+	query verify.KeyQuery,
+) (key verify.PublicKey, resultErr error) {
+	started := time.Now()
+	defer func() {
+		b.observeLookup(ctx, query.Algorithm, key, resultErr, time.Since(started))
+	}()
 	algorithm, ok := publicAlgorithm(query.Algorithm)
 	if !ok || nilPublicKeyProvider(b.provider) {
 		return verify.PublicKey{}, verify.NewProviderFailure(verify.ProviderFailureContract)
@@ -60,6 +71,68 @@ func (b publicKeyBridge) LookupKey(ctx context.Context, query verify.KeyQuery) (
 		return verify.PublicKey{Algorithm: internalAlgorithm, Metadata: verify.KeyMetadata{Status: internalKeyStatus(result.Status()), Policy: internalKeyPolicyMetadata(result.KeyPolicyMetadata())}}, nil
 	default:
 		return verify.PublicKey{}, verify.NewProviderFailure(verify.ProviderFailureContract)
+	}
+}
+
+// observeLookup emits one closed DNS lookup event after bridge validation.
+func (b publicKeyBridge) observeLookup(
+	ctx context.Context,
+	algorithm verify.Algorithm,
+	key verify.PublicKey,
+	err error,
+	duration time.Duration,
+) {
+	result, reason, errorClass := dnsEventOutcome(ctx, key, err)
+	event, ok := NewObservationEvent(
+		ObservationDNSLookupCompleted,
+		ObservationOperationDNSLookup,
+		result,
+		reason,
+		errorClass,
+		observationAlgorithm(algorithm),
+		ObservationCacheNotUsed,
+		observationDurationBucket(duration),
+		ObservationBucketNone,
+		ObservationBucketNone,
+		ObservationBucketNone,
+		ObservationBucketNone,
+	)
+	if ok {
+		Observe(ctx, b.sink, event)
+	}
+}
+
+// dnsEventOutcome maps provider bridge output into closed lookup classes.
+func dnsEventOutcome(
+	ctx context.Context,
+	key verify.PublicKey,
+	err error,
+) (ObservationResult, ObservationReason, ObservationErrorClass) {
+	if err != nil {
+		switch {
+		case ctx != nil && ctx.Err() == context.Canceled:
+			return ObservationResultTemporary, ObservationReasonUnavailable, ObservationErrorCanceled
+		case ctx != nil && ctx.Err() == context.DeadlineExceeded:
+			return ObservationResultTemporary, ObservationReasonUnavailable, ObservationErrorDeadline
+		default:
+			return ObservationResultFailure, ObservationReasonProtocol, ObservationErrorPermanent
+		}
+	}
+	if key.Metadata.Status == verify.KeyStatusFound {
+		return ObservationResultSuccess, ObservationReasonNone, ObservationErrorNone
+	}
+	return ObservationResultFailure, ObservationReasonProtocol, ObservationErrorNone
+}
+
+// observationAlgorithm maps a verifier algorithm into the public telemetry family.
+func observationAlgorithm(algorithm verify.Algorithm) ObservationAlgorithm {
+	switch algorithm {
+	case verify.AlgorithmRSASHA256:
+		return ObservationAlgorithmRSA
+	case verify.AlgorithmEd25519SHA256:
+		return ObservationAlgorithmEd25519
+	default:
+		return ObservationAlgorithmUnknown
 	}
 }
 

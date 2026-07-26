@@ -18,6 +18,7 @@ const (
 	maxErrorResponseBytes   = 4_096
 	maxSuccessResponseBytes = 262_144
 	jsonContentType         = "application/json; charset=utf-8"
+	cacheControlNoStore     = "no-store"
 )
 
 var errWireResponse = errors.New("http response write failure")
@@ -273,7 +274,7 @@ func (r preMarshaledResponse) asNotModified() (preMarshaledResponse, error) {
 // withAllow adds one frozen method inventory to a 405 response.
 func (r preMarshaledResponse) withAllow(value string) (preMarshaledResponse, error) {
 	if r.status != http.StatusMethodNotAllowed ||
-		value != "GET, HEAD" && value != http.MethodPost {
+		value != "GET, HEAD" && value != http.MethodPost && value != http.MethodGet {
 		return preMarshaledResponse{}, errWireResponse
 	}
 	r.allow = value
@@ -312,7 +313,7 @@ func (r preMarshaledResponse) write(writer http.ResponseWriter) error {
 	}
 	header := writer.Header()
 	clear(header)
-	header.Set("Cache-Control", "no-store")
+	header.Set("Cache-Control", cacheControlNoStore)
 	header.Set("Connection", "close")
 	applyResponseDate(header, r.status, r.date, r.datePresent)
 	if r.etag != "" {
@@ -326,7 +327,7 @@ func (r preMarshaledResponse) write(writer http.ResponseWriter) error {
 	}
 	if !r.notModified {
 		header.Set("X-Content-Type-Options", "nosniff")
-		header.Set("Content-Type", jsonContentType)
+		header.Set(headerContentType, jsonContentType)
 		header.Set("Content-Length", strconv.Itoa(len(r.body)))
 	}
 	writer.WriteHeader(r.status)

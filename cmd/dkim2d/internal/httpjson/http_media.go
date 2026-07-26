@@ -2,6 +2,8 @@ package httpjson
 
 import "strings"
 
+const headerContentType = "Content-Type"
+
 // validJSONContentType accepts only the frozen application/json representation.
 func validJSONContentType(values []string) bool {
 	if len(values) != 1 {

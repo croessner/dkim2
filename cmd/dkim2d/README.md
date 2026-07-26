@@ -206,6 +206,7 @@ Exactly these paths are routable:
 
 | Method | Path | Purpose |
 | --- | --- | --- |
+| `GET` | `/metrics` | Bounded process-local Prometheus exposition |
 | `GET`, `HEAD` | `/healthz` | In-process liveness; no dependency I/O |
 | `GET`, `HEAD` | `/readyz` | No-I/O readiness snapshot |
 | `POST` | `/v1/process` | Verification, policy, replay, disposition |
@@ -229,6 +230,59 @@ All request, connection, body, JSON, envelope, DNS, replay, admission, and
 shutdown work is bounded. Error output uses closed status/code mappings and
 does not include request bytes, protected values, endpoints, or raw errors.
 
+## Observability
+
+Every daemon instance owns one central JSON `slog` provider, one fresh
+Prometheus registry, and one OpenTelemetry provider. None of these use global
+registration. Telemetry is nonnormative and cannot change protocol, policy,
+replay, HTTP, health, or readiness results.
+
+The secure default uses `info` logging, all debug modules disabled, and no
+trace exporter:
+
+```yaml
+observability:
+  logging:
+    level: info
+  debug:
+    message_shape: false
+    dns: false
+    replay: false
+  tracing:
+    exporter: none
+```
+
+OTLP/HTTP tracing is explicit and loopback-only:
+
+```yaml
+observability:
+  tracing:
+    exporter: otlp_http
+    endpoint: https://127.0.0.1:4318/v1/traces
+    ca_file: /var/lib/dkim2d/protected/0123456789abcdef0123456789abcdef/otlp-ca
+    sample_per_million: 10000
+    export_timeout: 5s
+```
+
+The endpoint must be canonical loopback HTTPS with `/v1/traces`. The CA is a
+protected generation child. TLS 1.3 is required; proxies, redirects, arbitrary
+headers, environment-driven exporter configuration, compression overrides,
+and remote authorities are rejected.
+
+`GET /metrics` is public on the same loopback listener and does not require
+readiness or the process capability. It accepts no body, query, conditional,
+trace, or capability input. Scrapes are untraced and nonrecursive, use the
+Prometheus 0.0.4 text format, and are capped at 256 KiB. `HEAD /metrics`
+returns `405` with `Allow: GET`.
+
+Logs, trace attributes, and metric labels use closed allowlists. They never
+contain message bytes, headers, identities, domains, selectors, recipients,
+client addresses, request/session/trace IDs, endpoints, DNS payloads, replay
+keys, protected paths or values, certificates, credentials, hashes, or raw
+errors. Debug modules add only documented bucket or result classes; they do
+not enable payload logging. Prometheus labels are fixed low-cardinality enums,
+and the registry deliberately omits standard process/runtime collectors.
+
 ## Lifecycle And Recovery
 
 Startup publishes readiness only after all selected owners and loops are live.
@@ -240,9 +294,10 @@ Shutdown first withdraws readiness and closes admission, then joins the
 listener and serve loop, performs the configured graceful drain, and uses a
 bounded forced close when graceful drain or handler quiescence is not proven.
 Only after handlers join does it stop revalidation, cancel DNS, close replay,
-and release protected material. If an accept or handler owner cannot be joined,
-the daemon reports failure and deliberately retains dependencies rather than
-tearing them down underneath live work.
+flush the instance telemetry provider within five seconds, and release
+protected material. If an accept or handler owner cannot be joined, the daemon
+reports failure and deliberately retains dependencies rather than tearing
+them down underneath live work.
 
 Valkey is audited before readiness and revalidated at the configured interval,
 which must be 10 through 60 seconds. Calls do not overlap. Evidence is valid
@@ -264,14 +319,7 @@ The current daemon does not provide:
 - HTTP/2, h2c, persistent connections, or effective-config output;
 - hot configuration, secret, certificate, capability, or replay-key reload;
 - Valkey cluster, Sentinel, redirects, endpoint discovery, automatic failover,
-  or global exactly-once replay claims; or
-- OpenTelemetry, Prometheus, debug modules, metrics routes, or configurable
-  logging.
-
-Until the central observability runtime is implemented, the daemon is
-intentionally quiet apart from stable command diagnostics and closed HTTP
-representations. Do not infer absent telemetry to mean a failed health or
-readiness probe.
+  or global exactly-once replay claims.
 
 ## Verification
 

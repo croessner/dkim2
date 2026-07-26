@@ -27,6 +27,7 @@ const (
 	protectedApplicationPassword
 	protectedAuditorPassword
 	protectedCA
+	protectedTracingCA
 )
 
 type ownedDescriptor struct {
@@ -233,22 +234,25 @@ func selectedProtectedPaths(snapshot Snapshot) []selectedProtectedPath {
 		role: protectedCapability,
 	}}
 	replay := snapshot.Replay()
-	if !replay.Enabled() {
-		return paths
+	if replay.Enabled() {
+		paths = append(paths, selectedProtectedPath{
+			path: replay.HMACKeyFile(),
+			role: protectedHMAC,
+		})
+		valkey, enabled := replay.Valkey()
+		if enabled {
+			paths = append(paths,
+				selectedProtectedPath{path: valkey.ApplicationPasswordFile(), role: protectedApplicationPassword},
+				selectedProtectedPath{path: valkey.AuditorPasswordFile(), role: protectedAuditorPassword},
+				selectedProtectedPath{path: valkey.CAFile(), role: protectedCA},
+			)
+		}
 	}
-	paths = append(paths, selectedProtectedPath{
-		path: replay.HMACKeyFile(),
-		role: protectedHMAC,
-	})
-	valkey, enabled := replay.Valkey()
-	if !enabled {
-		return paths
+	tracing := snapshot.Observability().Tracing()
+	if tracing.Exporter() == TracingOTLPHTTP {
+		paths = append(paths, selectedProtectedPath{path: tracing.CAFile(), role: protectedTracingCA})
 	}
-	return append(paths,
-		selectedProtectedPath{path: valkey.ApplicationPasswordFile(), role: protectedApplicationPassword},
-		selectedProtectedPath{path: valkey.AuditorPasswordFile(), role: protectedAuditorPassword},
-		selectedProtectedPath{path: valkey.CAFile(), role: protectedCA},
-	)
+	return paths
 }
 
 // readGenerationChildren reads and immediately rechecks every already-open child.
@@ -365,6 +369,12 @@ func buildProtectedState(snapshot Snapshot, files []*retainedProtectedFile) (sta
 				return nil, err
 			}
 			state.rootCertificatesDER = roots
+		case protectedTracingCA:
+			roots, err := parseTracingCertificateRoots(file.data)
+			if err != nil {
+				return nil, err
+			}
+			state.tracingRootCertificatesDER = roots
 		default:
 			return nil, newError(CodeInternal)
 		}
@@ -432,6 +442,8 @@ func validateProtectedFileMetadata(
 		case 0o400, 0o440, 0o444, 0o600, 0o640, 0o644:
 			modeAccepted = true
 		}
+	case protectedTracingCA:
+		modeAccepted = metadata.modeBits == 0o400 || metadata.modeBits == 0o600
 	default:
 		return newError(CodeInternal)
 	}
@@ -466,6 +478,8 @@ func protectedSizeAccepted(role protectedFileRole, size int64) bool {
 		return size >= 1 && size <= maxPasswordBytes
 	case protectedCA:
 		return size >= 1 && size <= maxCAPEMBytes
+	case protectedTracingCA:
+		return size >= 1 && size <= maxTracingCAPEMBytes
 	default:
 		return false
 	}
@@ -482,6 +496,8 @@ func protectedReadCap(role protectedFileRole) int {
 		return maxPasswordBytes
 	case protectedCA:
 		return maxCAPEMBytes
+	case protectedTracingCA:
+		return maxTracingCAPEMBytes
 	default:
 		return 0
 	}

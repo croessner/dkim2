@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/croessner/dkim2/cmd/dkim2d/internal/app"
+	"github.com/croessner/dkim2/cmd/dkim2d/internal/observability"
 )
 
 const serverRuntimeRedacted = "dkim2d_http_server_runtime"
@@ -58,6 +59,7 @@ func (f *ServerFactory) Assemble(input app.HTTPAssemblyInput) (app.HTTPAssembly,
 		input.ActivationAuthority(),
 		input.ServeReturnObserver(),
 		f.listen,
+		input.Observability(),
 	)
 }
 
@@ -120,6 +122,7 @@ func newServerAssembly(
 	activation activationAuthority,
 	serveReturn app.ServeReturnObserver,
 	listen serverListenFunc,
+	telemetry ...*observability.Runtime,
 ) (assembly *serverAssembly, resultErr error) {
 	defer func() {
 		if recover() != nil {
@@ -152,6 +155,7 @@ func newServerAssembly(
 		processor,
 		fatal,
 		validator,
+		firstTelemetryRuntime(telemetry),
 	)
 	if err != nil {
 		return nil, &serverRuntimeError{}
@@ -168,6 +172,14 @@ func newServerAssembly(
 		baseContext: baseContext,
 		listen:      listen,
 	}, nil
+}
+
+// firstTelemetryRuntime returns the sole optional instance runtime.
+func firstTelemetryRuntime(values []*observability.Runtime) *observability.Runtime {
+	if len(values) != 1 {
+		return nil
+	}
+	return values[0]
 }
 
 // Bind performs the assembly's only listener acquisition and transfers exact

@@ -6,6 +6,40 @@ info:
     Inbound-only verification, policy, and replay API for the DKIM2 reference
     daemon. Protocol behavior is pinned to draft-ietf-dkim-dkim2-spec-04.
 paths:
+  /metrics:
+    get:
+      operationId: getMetrics
+      summary: Report process-local Prometheus metrics.
+      description: >
+        Returns one deterministic bounded text exposition from the
+        instance-owned registry. The scrape is unauthenticated, untraced, and
+        independent of service readiness.
+      security: []
+      responses:
+        "200":
+          description: The bounded metrics exposition.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/CacheControl"
+            X-Content-Type-Options:
+              $ref: "#/components/headers/ContentTypeOptions"
+            Content-Length:
+              $ref: "#/components/headers/ContentLength"
+            Connection:
+              $ref: "#/components/headers/Connection"
+            Date:
+              $ref: "#/components/headers/Date"
+          content:
+            text/plain:
+              schema:
+                type: string
+                maxLength: 262144
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "417":
+          $ref: "#/components/responses/ExpectationFailed"
+        "500":
+          $ref: "#/components/responses/InternalError"
   /healthz:
     get:
       operationId: getHealth

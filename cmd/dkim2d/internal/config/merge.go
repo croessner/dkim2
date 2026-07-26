@@ -354,7 +354,7 @@ func viperScalar(value rawValue) (any, error) {
 		switch value.text {
 		case "true":
 			return true, nil
-		case "false":
+		case canonicalFalse:
 			return false, nil
 		default:
 			return nil, newError(CodeInternal)

@@ -41,7 +41,7 @@ func TestAuthenticateLocalCapabilityFreezesClosedCanonicalComparison(t *testing.
 		{name: "wrong length", values: []string{canonical[:42]}},
 		{name: transportTestMalformed, values: []string{canonical[:42] + "*"}},
 		{name: testMismatchName, values: []string{base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{0xb6}, 32))}, calls: 1},
-		{name: "success", values: []string{canonical}, ok: true, calls: 1},
+		{name: observationSuccess, values: []string{canonical}, ok: true, calls: 1},
 	}
 	for _, testCase := range cases {
 		testCase := testCase

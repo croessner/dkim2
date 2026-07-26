@@ -231,7 +231,7 @@ func TestMaximumLegalProductionWorkingSetProof(t *testing.T) {
 		bytes.NewReader(body),
 	)
 	request.Host = boundaryTestAuthority
-	request.Header.Set("Content-Type", testContentTypeJSON)
+	request.Header.Set(headerContentType, testContentTypeJSON)
 	request.Header.Set(
 		localCapabilityHeader,
 		base64.RawURLEncoding.EncodeToString(secret),

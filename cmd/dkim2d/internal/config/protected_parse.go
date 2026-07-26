@@ -11,6 +11,7 @@ const (
 	maxPasswordBytes        = 1_024
 	exactKeyBytes           = 32
 	maxCAPEMBytes           = 524_288
+	maxTracingCAPEMBytes    = 1_048_576
 	maxCertificateCount     = 128
 	maxCertificateDERBytes  = 65_536
 	maxCertificateAggregate = 262_144
@@ -45,7 +46,17 @@ func validateExactKey(value []byte) error {
 
 // parseCertificateRoots validates one strict PEM-only CA trust bundle.
 func parseCertificateRoots(data []byte) ([][]byte, error) {
-	if len(data) == 0 || len(data) > maxCAPEMBytes {
+	return parseCertificateRootsBounded(data, maxCAPEMBytes)
+}
+
+// parseTracingCertificateRoots validates the independently capped OTLP trust bundle.
+func parseTracingCertificateRoots(data []byte) ([][]byte, error) {
+	return parseCertificateRootsBounded(data, maxTracingCAPEMBytes)
+}
+
+// parseCertificateRootsBounded validates one strict PEM-only CA trust bundle.
+func parseCertificateRootsBounded(data []byte, maximum int) ([][]byte, error) {
+	if len(data) == 0 || len(data) > maximum {
 		return nil, newError(CodeProtectedContent)
 	}
 	remaining := data

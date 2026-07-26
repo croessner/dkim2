@@ -840,7 +840,7 @@ func TestHandlerRegistrationGateContainsUncertainTrackedClose(t *testing.T) {
 		wantAbort  bool
 		wantFatal  int32
 	}{
-		{name: "success"},
+		{name: observationSuccess},
 		{name: "error", closeError: true, wantAbort: true, wantFatal: 1},
 		{name: testPanicName, closePanic: true, wantAbort: true, wantFatal: 1},
 	}

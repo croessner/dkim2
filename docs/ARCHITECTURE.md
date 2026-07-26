@@ -35,6 +35,8 @@
 | 0.1.0-draft | 2026-07-24 | Christian Roessner / Codex | Completed M12 replay storage: storage-neutral replay contracts, versioned framed HMAC-SHA256 identities, bounded memory and explicit disabled providers, exact Valkey `SET NX PX` behavior, fail-closed indeterminate mutation handling, standalone-primary authority, and parity/fuzz/race/privacy/integration evidence. |
 | 0.1.0-draft | 2026-07-26 | Christian Roessner / Codex | Specified the initial `dkim2ctl` generated-client, fixture, smoke, negative-contract, stable-output, and bounded diagnostic contract. This records the M14 implementation baseline, not implementation completion. |
 | 0.1.0-draft | 2026-07-26 | Christian Roessner / Codex | Implemented the local-only `dkim2ctl` generated-client runtime, strict draft-versioned fixture runner, stable JSON Lines, protected capability ownership, generated smoke and process calls, closed negative-contract mutations, and adversarial test evidence. |
+| 0.1.0-draft | 2026-07-26 | Christian Roessner / Codex | Planned the central daemon observability specification: secret-safe structured logging, explicit bounded debug modules, an instance-owned OpenTelemetry runtime, a process-local Prometheus registry and metrics endpoint, and strict low-cardinality attribute and label allowlists. This records the specification baseline, not implementation completion. |
+| 0.1.0-draft | 2026-07-26 | Christian Roessner / Codex | Completed the daemon observability foundation with validated injected library events, bounded structured logging, instance-owned OpenTelemetry export, process-local low-cardinality Prometheus metrics, an untraced `GET /metrics` route, protected tracing CA ownership, adversarial tests, and independent review hardening. |
 
 ## 1. Purpose
 
@@ -263,6 +265,9 @@ boundary:
 - OpenTelemetry owns distributed traces through a central observability runtime.
 - Prometheus owns metrics through a process-local registry.
 - OpenAPI owns the HTTP contract and generated client/server DTOs.
+- The pinned OTLP HTTP exporter selects `x/net v0.55.0`; Go 1.26 consequently
+  synchronizes `cmd/dkim2ctl`'s pruned Cobra indirects and module sum, which the
+  workspace stale-metadata check must track.
 - `golangci-lint`, `go vet`, `go test`, race tests, OpenAPI checks, and
   `govulncheck` belong in guardrails.
 

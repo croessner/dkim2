@@ -7,9 +7,11 @@ import (
 	"io"
 	"net"
 	"reflect"
+	"time"
 
 	"github.com/croessner/dkim2"
 	"github.com/croessner/dkim2/cmd/dkim2d/internal/config"
+	"github.com/croessner/dkim2/cmd/dkim2d/internal/observability"
 )
 
 const (
@@ -43,6 +45,14 @@ type DomainProcessor struct {
 type domainProcessorState struct {
 	verifier VerificationService
 	mode     dkim2.PolicyMode
+	runtime  *observability.Runtime
+}
+
+// attachObservability binds the already acquired instance runtime before publication.
+func (p *DomainProcessor) attachObservability(runtime *observability.Runtime) {
+	if p != nil && p.state != nil {
+		p.state.runtime = runtime
+	}
 }
 
 // DomainResult keeps verification and local policy separate for replay coordination.
@@ -52,7 +62,11 @@ type DomainResult struct {
 }
 
 // NewDNSVerifier constructs one instance-owned bounded DNS verifier.
-func NewDNSVerifier(parent context.Context, dnsConfig config.DNSConfig) (*dkim2.Verifier, error) {
+func NewDNSVerifier(
+	parent context.Context,
+	dnsConfig config.DNSConfig,
+	sinks ...dkim2.ObservationSink,
+) (*dkim2.Verifier, error) {
 	providerConfig, err := dnsProviderConfig(parent, dnsConfig)
 	if err != nil {
 		return nil, &DomainError{}
@@ -66,7 +80,11 @@ func NewDNSVerifier(parent context.Context, dnsConfig config.DNSConfig) (*dkim2.
 	if err != nil {
 		return nil, &DomainError{}
 	}
-	verifier, err := dkim2.NewVerifier(provider)
+	options := make([]dkim2.VerifierOption, 0, 1)
+	if len(sinks) == 1 && !nilInterface(sinks[0]) {
+		options = append(options, dkim2.WithObservationSink(sinks[0]))
+	}
+	verifier, err := dkim2.NewVerifier(provider, options...)
 	if err != nil {
 		return nil, &DomainError{}
 	}
@@ -90,26 +108,79 @@ func (p *DomainProcessor) Process(ctx context.Context, request dkim2.VerifyReque
 	if err := domainContextError(ctx); err != nil {
 		return DomainResult{}, err
 	}
-	verification, err := p.state.verifier.Verify(ctx, request)
+	verifyContext, verifySpan := startAppSpan(ctx, p.state.runtime, "dkim2.verify")
+	verifyFinished := false
+	finishVerify := func(
+		outcome observability.SpanOutcome,
+		facts ...observability.SpanFact,
+	) {
+		if !verifyFinished {
+			verifyFinished = true
+			observability.EndSpanWithFacts(verifySpan, outcome, facts...)
+		}
+	}
+	defer finishVerify(observability.SpanInternalError)
+	verification, err := p.state.verifier.Verify(verifyContext, request)
 	if err != nil {
+		finishVerify(observability.SpanInternalError)
 		if contextErr := domainContextError(ctx); contextErr != nil {
 			return DomainResult{}, contextErr
 		}
 		return DomainResult{}, &DomainError{}
 	}
 	if contextErr := domainContextError(ctx); contextErr != nil {
+		finishVerify(observability.SpanInternalError)
 		return DomainResult{}, contextErr
 	}
 	if !verification.Valid() {
+		finishVerify(observability.SpanInternalError)
 		return DomainResult{}, &DomainError{}
 	}
+	verifyResultClass, _ := verificationObservationState(verification.State())
+	verifyResult, _ := observability.TextSpanFact(
+		"dkim2.result",
+		verifyResultClass,
+	)
+	finishVerify(observability.SpanCompleted, verifyResult)
+	_, policySpan := startAppSpan(verifyContext, p.state.runtime, "dkim2.policy.evaluate")
+	policyFinished := false
+	finishPolicy := func(
+		outcome observability.SpanOutcome,
+		facts ...observability.SpanFact,
+	) {
+		if !policyFinished {
+			policyFinished = true
+			observability.EndSpanWithFacts(policySpan, outcome, facts...)
+		}
+	}
+	defer finishPolicy(observability.SpanInternalError)
+	policyStarted := time.Now()
 	policy, err := dkim2.EvaluatePolicy(verification, dkim2.WithPolicyMode(p.state.mode))
 	if contextErr := domainContextError(ctx); contextErr != nil {
+		finishPolicy(observability.SpanInternalError)
 		return DomainResult{}, contextErr
 	}
 	if err != nil || !policy.Valid() || policy.VerificationState() != verification.State() || policy.Mode() != p.state.mode {
+		finishPolicy(observability.SpanInternalError)
 		return DomainResult{}, &DomainError{}
 	}
+	_, verdict := verificationObservationState(policy.VerificationState())
+	policyVerdict, _ := observability.TextSpanFact("dkim2.verdict", verdict)
+	policyMode, _ := observability.TextSpanFact(
+		"dkim2.policy_mode",
+		policyModeClass(policy.Mode()),
+	)
+	policyReason, _ := observability.TextSpanFact(
+		"dkim2.reason_class",
+		policyReasonClass(policy.VerificationState()),
+	)
+	finishPolicy(
+		observability.SpanCompleted,
+		policyVerdict,
+		policyMode,
+		policyReason,
+	)
+	observePolicy(p.state.runtime, policy, time.Since(policyStarted))
 	result := DomainResult{verification: verification, policy: policy}
 	if !result.valid() {
 		return DomainResult{}, &DomainError{}

@@ -336,7 +336,7 @@ func TestHTTPBoundaryRawRoutesPathsMethodsAndHEAD(t *testing.T) {
 	head := rawBoundaryExchange(t, address,
 		"HEAD /healthz HTTP/1.1\r\nHost: "+address+"\r\n\r\n")
 	for _, name := range []string{
-		"Cache-Control", "Content-Length", "Content-Type",
+		"Cache-Control", "Content-Length", headerContentType,
 		"ETag", "X-Content-Type-Options", "Connection",
 	} {
 		if rawResponseHeader(get, name) != rawResponseHeader(head, name) {
@@ -918,7 +918,7 @@ func TestHTTPBoundaryRawStatusConditionals(t *testing.T) {
 		status  string
 	}{
 		{
-			name: "process",
+			name: observationProcess,
 			request: "POST /v1/process HTTP/1.1\r\nHost: " + address +
 				"\r\nContent-Type: application/json\r\nContent-Length: 2\r\n" +
 				"If-None-Match: W/\"unterminated\r\n\r\n{}",
@@ -1216,7 +1216,7 @@ func TestHTTPBoundaryRawFinalResponsesAreSingletonAndNonreflecting(t *testing.T)
 			if got := rawResponseHeader(response, "Content-Length"); testCase.contentLength != "" && got != testCase.contentLength {
 				t.Fatalf("Content-Length = %q, want %q", got, testCase.contentLength)
 			}
-			if (rawResponseHeader(response, "Content-Type") != "") != testCase.contentType ||
+			if (rawResponseHeader(response, headerContentType) != "") != testCase.contentType ||
 				(rawResponseBody(response) != "") != testCase.body {
 				t.Fatal("final content metadata/body shape differs")
 			}

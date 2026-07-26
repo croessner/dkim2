@@ -4,11 +4,13 @@ import (
 	"context"
 	"errors"
 	"math"
+	"os"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/croessner/dkim2/cmd/dkim2d/internal/config"
+	"github.com/croessner/dkim2/cmd/dkim2d/internal/observability"
 )
 
 const (
@@ -81,7 +83,8 @@ type lifecycleDependencies struct {
 	newDetachedParent      func() context.Context
 	initialShutdownTimeout func(*config.Prebootstrap) (time.Duration, error)
 	prepareRuntime         func(*config.Prebootstrap) (*config.RuntimePreparation, error)
-	newDNSVerifier         func(context.Context, *config.RuntimePreparation) (VerificationService, error)
+	newObservability       func(context.Context, *config.RuntimePreparation) (*observability.Runtime, error)
+	newDNSVerifier         func(context.Context, *config.RuntimePreparation, *observability.Runtime) (VerificationService, error)
 	newReplayRuntime       func(
 		context.Context,
 		replayRollbackFactory,
@@ -166,6 +169,7 @@ type lifecycleState struct {
 	activationState     atomic.Uint32
 	startCancel         context.CancelFunc
 	readiness           *Readiness
+	telemetry           *observability.Runtime
 	replay              lifecycleReplay
 	revalidator         lifecycleRevalidator
 	revalidatorStop     context.CancelFunc
@@ -184,6 +188,7 @@ type lifecycleStartup struct {
 	deps            lifecycleDependencies
 	rollback        *lifecycleRollback
 	readiness       *Readiness
+	telemetry       *observability.Runtime
 	replay          lifecycleReplay
 	revalidator     lifecycleRevalidator
 	revalidatorStop context.CancelFunc
@@ -254,7 +259,7 @@ func newLifecycleWithDependencies(
 func (d lifecycleDependencies) valid() bool {
 	return d.withTimeout != nil && d.newDetachedParent != nil &&
 		d.initialShutdownTimeout != nil &&
-		d.prepareRuntime != nil && d.newDNSVerifier != nil &&
+		d.prepareRuntime != nil && d.newObservability != nil && d.newDNSVerifier != nil &&
 		d.newReplayRuntime != nil && d.newApplication != nil &&
 		d.newReadiness != nil && d.newRevalidator != nil &&
 		d.newHTTPInput != nil && d.commitRuntime != nil &&
@@ -279,11 +284,23 @@ func productionLifecycleDependencies() lifecycleDependencies {
 		prepareRuntime: func(owner *config.Prebootstrap) (*config.RuntimePreparation, error) {
 			return owner.PrepareRuntime()
 		},
+		newObservability: func(
+			ctx context.Context,
+			preparation *config.RuntimePreparation,
+		) (*observability.Runtime, error) {
+			return observability.NewRuntime(
+				ctx,
+				preparation.Snapshot().Observability(),
+				os.Stderr,
+				preparation.TracingMaterial(),
+			)
+		},
 		newDNSVerifier: func(
 			parent context.Context,
 			preparation *config.RuntimePreparation,
+			runtime *observability.Runtime,
 		) (VerificationService, error) {
-			return NewDNSVerifier(parent, preparation.Snapshot().DNS())
+			return NewDNSVerifier(parent, preparation.Snapshot().DNS(), runtime)
 		},
 		newReplayRuntime: func(
 			ctx context.Context,
@@ -440,12 +457,17 @@ func (l *Lifecycle) acquireProtocol(
 		return nil, nil, &LifecycleError{}
 	}
 	startup.shutdownLimit = shutdownLimit
+	telemetry, err := l.state.deps.newObservability(acquisition, preparation)
+	if err != nil || telemetry == nil || lifecycleContextFailed(acquisition) {
+		return nil, nil, &LifecycleError{}
+	}
+	startup.telemetry = telemetry
 	if lifecycleContextFailed(acquisition) {
 		return nil, nil, &LifecycleError{}
 	}
 	dnsParent, dnsStop := context.WithCancel(l.state.deps.newDetachedParent())
 	startup.dnsStop = dnsStop
-	verifier, err := l.state.deps.newDNSVerifier(dnsParent, preparation)
+	verifier, err := l.state.deps.newDNSVerifier(dnsParent, preparation, startup.telemetry)
 	if err != nil || nilInterface(verifier) || lifecycleContextFailed(acquisition) {
 		return nil, nil, &LifecycleError{}
 	}
@@ -477,6 +499,7 @@ func (l *Lifecycle) assembleApplication(
 	if err != nil || processor == nil || lifecycleContextFailed(acquisition) {
 		return nil, &LifecycleError{}
 	}
+	processor.attachObservability(startup.telemetry)
 	readiness, err := l.state.deps.newReadiness(startup.replay)
 	if err != nil || readiness == nil {
 		return nil, &LifecycleError{}
@@ -514,6 +537,7 @@ func (l *Lifecycle) bindTransport(
 		l,
 		l,
 	)
+	input = input.withObservability(startup.telemetry)
 	if err != nil || lifecycleContextFailed(acquisition) {
 		return nil, &LifecycleError{}
 	}
@@ -708,6 +732,7 @@ func (l *Lifecycle) publishStartup(
 		return false
 	}
 	l.state.readiness = startup.readiness
+	l.state.telemetry = startup.telemetry
 	l.state.replay = startup.replay
 	l.state.revalidator = startup.revalidator
 	l.state.revalidatorStop = startup.revalidatorStop
@@ -724,6 +749,7 @@ func (l *Lifecycle) publishStartup(
 		l.clearRuntimeLocked()
 		return false
 	}
+	startup.telemetry.SetReady(true)
 	l.finishStartupLocked()
 	return true
 }
@@ -868,6 +894,9 @@ func (l *Lifecycle) transitionFatalLocked() {
 	}
 	if l.state.readiness != nil {
 		l.state.readiness.withdrawReady()
+	}
+	if l.state.telemetry != nil {
+		l.state.telemetry.SetReady(false)
 	}
 	l.state.shutdownOnce.Do(func() { close(l.state.shutdown) })
 }
@@ -1015,6 +1044,9 @@ func (l *Lifecycle) beginStop() (
 		if l.state.readiness != nil {
 			l.state.readiness.beginStopping()
 		}
+		if l.state.telemetry != nil {
+			l.state.telemetry.SetReady(false)
+		}
 		if l.state.fatalPending.Load() {
 			l.state.phase = lifecycleStoppingFatal
 		}
@@ -1023,6 +1055,9 @@ func (l *Lifecycle) beginStop() (
 		l.state.stopping.Store(true)
 		if l.state.readiness != nil {
 			l.state.readiness.beginStopping()
+		}
+		if l.state.telemetry != nil {
+			l.state.telemetry.SetReady(false)
 		}
 	case lifecycleStoppingClean, lifecycleStoppingFatal:
 		return false, l.state.stopDone, false, nil
@@ -1107,6 +1142,9 @@ func (l *Lifecycle) stopOwned(outer context.Context) error {
 	if invokeReplayClose(finalCtx, l.state.replay) != nil {
 		failed = true
 	}
+	if l.state.telemetry != nil && l.state.telemetry.Shutdown(finalCtx) != nil {
+		failed = true
+	}
 	if invokeMaterialClose(finalCtx, l.state.material) != nil {
 		failed = true
 	}
@@ -1133,6 +1171,7 @@ func (l *Lifecycle) finishStop(result error) {
 // clearRuntimeLocked removes an unpublished transfer while startup retains cleanup ownership.
 func (l *Lifecycle) clearRuntimeLocked() {
 	l.state.readiness = nil
+	l.state.telemetry = nil
 	l.state.replay = nil
 	l.state.revalidator = nil
 	l.state.revalidatorStop = nil
@@ -1205,6 +1244,9 @@ func (s *lifecycleStartup) rollbackOwners() error {
 			failed = true
 		}
 		replayCancel()
+	}
+	if s.telemetry != nil && s.telemetry.Shutdown(ctx) != nil {
+		failed = true
 	}
 	if !nilInterface(s.material) {
 		if invokeMaterialClose(ctx, s.material) != nil {

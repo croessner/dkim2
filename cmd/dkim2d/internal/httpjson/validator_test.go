@@ -17,7 +17,7 @@ func TestRequestValidatorUsesEmbeddedContractAndPrivateAuthentication(t *testing
 		t.Fatalf("NewRequestValidator() error = %v", err)
 	}
 	request := httptest.NewRequest(http.MethodPost, "http://127.0.0.1:8080/v1/process", nil)
-	request.Header.Set("Content-Type", testContentTypeJSON)
+	request.Header.Set(headerContentType, testContentTypeJSON)
 	if err := validator.ValidateProcess(request, []byte(validMinimalProcessJSON)); !IsValidationError(err) {
 		t.Fatalf("unauthenticated ValidateProcess() error = %v", err)
 	}
@@ -35,7 +35,7 @@ func TestRequestValidatorClosesSchemaFailuresWithoutDetails(t *testing.T) {
 		t.Fatalf("NewRequestValidator() error = %v", err)
 	}
 	request := httptest.NewRequest(http.MethodPost, "http://127.0.0.1:8080/v1/process", nil)
-	request.Header.Set("Content-Type", testContentTypeJSON)
+	request.Header.Set(headerContentType, testContentTypeJSON)
 	request = request.WithContext(context.WithValue(request.Context(), localCapabilityMarker{}, true))
 	for _, body := range []string{
 		`{}`,
@@ -65,7 +65,7 @@ func TestRequestValidatorBindsOnlyTheExactProcessOperation(t *testing.T) {
 		{method: http.MethodPost, url: "http://127.0.0.1:8080/readyz"},
 	} {
 		request := httptest.NewRequest(target.method, target.url, nil)
-		request.Header.Set("Content-Type", testContentTypeJSON)
+		request.Header.Set(headerContentType, testContentTypeJSON)
 		request = request.WithContext(context.WithValue(request.Context(), localCapabilityMarker{}, true))
 		if err := validator.ValidateProcess(request, []byte(validMinimalProcessJSON)); !IsValidationError(err) {
 			t.Fatalf("%s %s error = %v", target.method, target.url, err)

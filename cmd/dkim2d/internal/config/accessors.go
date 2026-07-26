@@ -30,6 +30,16 @@ type ValkeyConfig struct {
 	state *valkeyState
 }
 
+// ObservabilityConfig is one immutable structurally opaque telemetry configuration view.
+type ObservabilityConfig struct {
+	state *observabilityState
+}
+
+// TracingConfig is one immutable structurally opaque trace configuration view.
+type TracingConfig struct {
+	state *tracingState
+}
+
 // Server returns the immutable HTTP configuration.
 func (s Snapshot) Server() ServerConfig {
 	if s.state == nil {
@@ -52,6 +62,85 @@ func (s Snapshot) Replay() ReplayConfig {
 		return ReplayConfig{}
 	}
 	return ReplayConfig{state: &s.state.replay}
+}
+
+// Observability returns the immutable operational telemetry configuration.
+func (s Snapshot) Observability() ObservabilityConfig {
+	if s.state == nil {
+		return ObservabilityConfig{}
+	}
+	return ObservabilityConfig{state: &s.state.observability}
+}
+
+// LogLevel returns the closed structured-log threshold.
+func (c ObservabilityConfig) LogLevel() LogLevel {
+	if c.state == nil {
+		return 0
+	}
+	return c.state.logLevel
+}
+
+// DebugMessageShape reports whether bounded message-shape buckets are enabled.
+func (c ObservabilityConfig) DebugMessageShape() bool {
+	return c.state != nil && c.state.debugMessageShape
+}
+
+// DebugDNS reports whether bounded DNS completion events are enabled.
+func (c ObservabilityConfig) DebugDNS() bool {
+	return c.state != nil && c.state.debugDNS
+}
+
+// DebugReplay reports whether bounded replay completion events are enabled.
+func (c ObservabilityConfig) DebugReplay() bool {
+	return c.state != nil && c.state.debugReplay
+}
+
+// Tracing returns the immutable tracing configuration.
+func (c ObservabilityConfig) Tracing() TracingConfig {
+	if c.state == nil {
+		return TracingConfig{}
+	}
+	return TracingConfig{state: &c.state.tracing}
+}
+
+// Exporter returns the closed tracing exporter selection.
+func (c TracingConfig) Exporter() TracingExporter {
+	if c.state == nil {
+		return 0
+	}
+	return c.state.exporter
+}
+
+// Endpoint returns the validated loopback OTLP endpoint.
+func (c TracingConfig) Endpoint() string {
+	if c.state == nil {
+		return ""
+	}
+	return c.state.endpoint
+}
+
+// CAFile returns the protected tracing trust-root path.
+func (c TracingConfig) CAFile() string {
+	if c.state == nil {
+		return ""
+	}
+	return c.state.caFile
+}
+
+// SamplePerMillion returns the bounded sampling numerator.
+func (c TracingConfig) SamplePerMillion() uint32 {
+	if c.state == nil {
+		return 0
+	}
+	return c.state.samplePerMillion
+}
+
+// ExportTimeout returns the bounded exporter timeout.
+func (c TracingConfig) ExportTimeout() time.Duration {
+	if c.state == nil {
+		return 0
+	}
+	return c.state.exportTimeout
 }
 
 // Listen returns the canonical loopback listener authority.
@@ -390,6 +479,36 @@ func (ValkeyConfig) MarshalJSON() ([]byte, error) { return nil, newError(CodeSer
 
 // MarshalText rejects serialization of Valkey configuration.
 func (ValkeyConfig) MarshalText() ([]byte, error) { return nil, newError(CodeSerialization) }
+
+// String returns a content-free typed configuration representation.
+func (ObservabilityConfig) String() string { return typedConfigRedactedText }
+
+// GoString returns a content-free typed configuration representation.
+func (ObservabilityConfig) GoString() string { return typedConfigRedactedText }
+
+// Format prevents formatting verbs from exposing observability configuration.
+func (ObservabilityConfig) Format(state fmt.State, _ rune) { writeRedacted(state) }
+
+// MarshalJSON rejects serialization of observability configuration.
+func (ObservabilityConfig) MarshalJSON() ([]byte, error) { return nil, newError(CodeSerialization) }
+
+// MarshalText rejects serialization of observability configuration.
+func (ObservabilityConfig) MarshalText() ([]byte, error) { return nil, newError(CodeSerialization) }
+
+// String returns a content-free typed configuration representation.
+func (TracingConfig) String() string { return typedConfigRedactedText }
+
+// GoString returns a content-free typed configuration representation.
+func (TracingConfig) GoString() string { return typedConfigRedactedText }
+
+// Format prevents formatting verbs from exposing tracing configuration.
+func (TracingConfig) Format(state fmt.State, _ rune) { writeRedacted(state) }
+
+// MarshalJSON rejects serialization of tracing configuration.
+func (TracingConfig) MarshalJSON() ([]byte, error) { return nil, newError(CodeSerialization) }
+
+// MarshalText rejects serialization of tracing configuration.
+func (TracingConfig) MarshalText() ([]byte, error) { return nil, newError(CodeSerialization) }
 
 // writeRedacted emits only the fixed typed-configuration marker.
 func writeRedacted(state fmt.State) {

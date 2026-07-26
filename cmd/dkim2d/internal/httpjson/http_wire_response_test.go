@@ -64,7 +64,7 @@ func TestPreMarshaledStatusResponseFreezesExactTagHeadAnd304Shapes(t *testing.T)
 		t.Fatal("304 required metadata differs")
 	}
 	for _, forbidden := range []string{
-		"Content-Length", "Content-Type", "X-Content-Type-Options", "Last-Modified",
+		"Content-Length", headerContentType, "X-Content-Type-Options", "Last-Modified",
 		"Vary", "Allow", "Retry-After", "Accept-Ranges", "Content-Range",
 	} {
 		if _, present := header[forbidden]; present {

@@ -11,6 +11,7 @@ import (
 
 	"github.com/croessner/dkim2"
 	"github.com/croessner/dkim2/cmd/dkim2d/internal/config"
+	"github.com/croessner/dkim2/cmd/dkim2d/internal/observability"
 )
 
 const (
@@ -20,6 +21,7 @@ const (
 	lifecycleMaterialCloseStep  = "material-close"
 	lifecycleForceCloseStep     = "force-close"
 	lifecycleReplayCloseStep    = "replay-close"
+	lifecycleRejectStep         = "reject"
 )
 
 // lifecycleOrder records one concurrency-safe orchestration trace.
@@ -248,7 +250,7 @@ func (r *lifecycleHTTPRuntimeFake) Activate() error {
 
 // RejectNewRequests records the closed-first handler gate.
 func (r *lifecycleHTTPRuntimeFake) RejectNewRequests() {
-	r.order.add("reject")
+	r.order.add(lifecycleRejectStep)
 	if r.rejectPanic {
 		panic("private reject marker")
 	}
@@ -394,7 +396,15 @@ func lifecycleTestDependencies(
 			order.add("prepare")
 			return &config.RuntimePreparation{}, nil
 		},
-		newDNSVerifier: func(context.Context, *config.RuntimePreparation) (VerificationService, error) {
+		newObservability: func(context.Context, *config.RuntimePreparation) (*observability.Runtime, error) {
+			order.add("observability")
+			return &observability.Runtime{}, nil
+		},
+		newDNSVerifier: func(
+			context.Context,
+			*config.RuntimePreparation,
+			*observability.Runtime,
+		) (VerificationService, error) {
 			order.add("dns")
 			return lifecycleVerifierFake{}, nil
 		},
@@ -513,11 +523,11 @@ func TestLifecycleStartStopOrder(t *testing.T) {
 		t.Fatal("clean Stop left request parent live")
 	}
 	want := []string{
-		"timeout:1m55s", "timeout:1m40s", "prepare", "dns", "replay",
+		"timeout:1m55s", "timeout:1m40s", "prepare", "observability", "dns", "replay",
 		lifecycleAuthorityReadyStep, "application", "readiness", "revalidator",
 		"http-input", "assemble", "bind", "serve", "revalidator-run",
 		lifecycleAuthorityReadyStep, "commit", lifecycleAuthorityReadyStep, "revalidator-activate", "activate",
-		lifecycleAuthorityReadyStep, lifecycleAuthorityReadyStep, "timeout:57s", "reject",
+		lifecycleAuthorityReadyStep, lifecycleAuthorityReadyStep, "timeout:57s", lifecycleRejectStep,
 		lifecycleFiveSecondStep, "listener-close", "serve-exit", "timeout:7s",
 		lifecycleShutdownStep, lifecycleFiveSecondStep, "timeout:30s", "revalidator-exit",
 		lifecycleFiveSecondStep, lifecycleReplayCloseStep, lifecycleMaterialCloseStep,
@@ -1159,7 +1169,7 @@ func TestLifecycleBlockedRejectDoesNotBlockReadinessOrFatalPublication(t *testin
 	stopResult := make(chan error, 1)
 	go func() { stopResult <- lifecycle.Stop(context.Background()) }()
 	for attempts := 0; attempts < 10_000; attempts++ {
-		if containsLifecycleStep(order.snapshot(), "reject") {
+		if containsLifecycleStep(order.snapshot(), lifecycleRejectStep) {
 			break
 		}
 		if attempts == 9_999 {
@@ -1376,7 +1386,7 @@ func TestLifecycleConcurrentStopHasOneOwnerAndOneResult(t *testing.T) {
 	}
 	steps := order.snapshot()
 	for _, step := range []string{
-		"reject", "listener-close", lifecycleShutdownStep, lifecycleReplayCloseStep,
+		lifecycleRejectStep, "listener-close", lifecycleShutdownStep, lifecycleReplayCloseStep,
 		lifecycleMaterialCloseStep,
 	} {
 		count := 0

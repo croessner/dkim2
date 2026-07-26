@@ -392,7 +392,7 @@ func TestHTTPBoundaryFreezesHostTargetAndPrefacePrecedence(t *testing.T) {
 	handler.ServeHTTP(recorder, request)
 	if recorder.Code != http.StatusHTTPVersionNotSupported ||
 		recorder.Header().Get("Content-Length") != "0" ||
-		recorder.Header().Get("Content-Type") != "" || recorder.Body.Len() != 0 {
+		recorder.Header().Get(headerContentType) != "" || recorder.Body.Len() != 0 {
 		t.Fatal("explicit PRI 505 shape differs")
 	}
 }
@@ -438,7 +438,7 @@ func TestHTTPBoundaryRunsGeneratedProcessAfterOASAndMapsCanonicalFailures(t *tes
 	handler, _, processor, secret := newBoundaryFixture(t)
 	body := `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-04","message":{"raw_rfc5322_base64":"*"},"smtp":{"mail_from":"","rcpt_to":[""]}}`
 	request, _ := boundaryRequest(http.MethodPost, "http://"+boundaryTestAuthority+testProcessPath, body, transportFacts{})
-	request.Header.Set("Content-Type", testContentTypeJSON)
+	request.Header.Set(headerContentType, testContentTypeJSON)
 	request.Header.Set(localCapabilityHeader, base64.RawURLEncoding.EncodeToString(secret))
 	recorder := httptest.NewRecorder()
 	handler.ServeHTTP(recorder, request)
@@ -486,7 +486,7 @@ func TestHTTPBoundaryRecoverySeparatesPrivateAndDependencyPanics(t *testing.T) {
 				body,
 				transportFacts{},
 			)
-			request.Header.Set("Content-Type", testContentTypeJSON)
+			request.Header.Set(headerContentType, testContentTypeJSON)
 			request.Header.Set(
 				localCapabilityHeader,
 				base64.RawURLEncoding.EncodeToString(secret),

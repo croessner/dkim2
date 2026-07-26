@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"time"
 
 	"github.com/croessner/dkim2/internal/niliface"
 	"github.com/croessner/dkim2/internal/policy"
@@ -31,15 +32,20 @@ func NewVerifier(provider PublicKeyProvider, options ...VerifierOption) (*Verifi
 		MaxInstanceHashSets: limits.MaxInstanceHashSets(), MaxSignatureSets: limits.MaxSignatureSets(),
 		MaxCheckFacts: limits.MaxCheckFacts(), MaxSignatureFacts: limits.MaxSignatureFacts(),
 	}
-	coordinator, err := service.NewVerifier(publicKeyBridge{provider: provider}, serviceConfig)
+	coordinator, err := service.NewVerifier(
+		publicKeyBridge{provider: provider, sink: config.sink},
+		serviceConfig,
+	)
 	if err != nil {
 		return nil, newAPIError(APIErrorCodeInvalidOption)
 	}
-	return &Verifier{state: &verifierState{service: coordinator, limits: limits, initialized: true}}, nil
+	return &Verifier{state: &verifierState{
+		service: coordinator, limits: limits, sink: config.sink, initialized: true,
+	}}, nil
 }
 
 // Verify delegates current-only verification and preserves the disjoint result/error contract.
-func (v *Verifier) Verify(ctx context.Context, request VerifyRequest) (VerifyResult, error) {
+func (v *Verifier) Verify(ctx context.Context, request VerifyRequest) (output VerifyResult, resultErr error) {
 	if v == nil || v.state == nil || !v.state.initialized {
 		return VerifyResult{}, newAPIError(APIErrorCodeInvalidRequest)
 	}
@@ -50,17 +56,112 @@ func (v *Verifier) Verify(ctx context.Context, request VerifyRequest) (VerifyRes
 		return VerifyResult{}, err
 	}
 	rawMessage, reversePath, forwardPaths := request.values()
+	started := time.Now()
+	defer func() {
+		observeVerification(
+			ctx, v.state.sink, output, resultErr, time.Since(started),
+			len(rawMessage), len(forwardPaths),
+		)
+	}()
 	if len(rawMessage) > v.state.limits.MaxRawMessageBytes() || len(forwardPaths) > v.state.limits.MaxRecipients() {
 		return publicPreflightLimitResult(), nil
 	}
-	result, err := v.state.service.Verify(ctx, service.NewRequest(rawMessage, reversePath, forwardPaths))
+	serviceResult, err := v.state.service.Verify(ctx, service.NewRequest(rawMessage, reversePath, forwardPaths))
 	if err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return VerifyResult{}, ctxErr
 		}
 		return VerifyResult{}, newAPIError(APIErrorCodeInvalidRequest)
 	}
-	return adaptServiceResult(result), nil
+	return adaptServiceResult(serviceResult), nil
+}
+
+// observeVerification emits one closed current-verification event.
+func observeVerification(
+	ctx context.Context,
+	sink ObservationSink,
+	result VerifyResult,
+	err error,
+	duration time.Duration,
+	messageBytes int,
+	recipients int,
+) {
+	resultClass, reason, errorClass := verificationEventOutcome(ctx, result, err)
+	event, ok := NewObservationEvent(
+		ObservationVerifyCompleted,
+		ObservationOperationVerify,
+		resultClass,
+		reason,
+		errorClass,
+		ObservationAlgorithmNone,
+		ObservationCacheNotUsed,
+		observationDurationBucket(duration),
+		observationCountBucket(messageBytes, 1<<10, 1<<20, 10<<20),
+		observationCountBucket(recipients, 1, 10, 100),
+		ObservationBucketNone,
+		ObservationBucketNone,
+	)
+	if ok {
+		Observe(ctx, sink, event)
+	}
+}
+
+// verificationEventOutcome maps the disjoint public result into telemetry classes.
+func verificationEventOutcome(
+	ctx context.Context,
+	result VerifyResult,
+	err error,
+) (ObservationResult, ObservationReason, ObservationErrorClass) {
+	if err != nil {
+		switch {
+		case ctx != nil && ctx.Err() == context.Canceled:
+			return ObservationResultTemporary, ObservationReasonUnavailable, ObservationErrorCanceled
+		case ctx != nil && ctx.Err() == context.DeadlineExceeded:
+			return ObservationResultTemporary, ObservationReasonUnavailable, ObservationErrorDeadline
+		default:
+			return ObservationResultInternal, ObservationReasonUnavailable, ObservationErrorInternal
+		}
+	}
+	switch result.State() {
+	case ResultStatePASS:
+		return ObservationResultSuccess, ObservationReasonNone, ObservationErrorNone
+	case ResultStateTEMPERROR:
+		return ObservationResultTemporary, ObservationReasonUnavailable, ObservationErrorTemporary
+	case ResultStateFAIL, ResultStatePERMERROR:
+		return ObservationResultFailure, ObservationReasonProtocol, ObservationErrorNone
+	default:
+		return ObservationResultInternal, ObservationReasonUnavailable, ObservationErrorInternal
+	}
+}
+
+// observationDurationBucket maps elapsed time into a fixed coarse class.
+func observationDurationBucket(duration time.Duration) ObservationBucket {
+	switch {
+	case duration < 10*time.Millisecond:
+		return ObservationBucketSmall
+	case duration < time.Second:
+		return ObservationBucketMedium
+	case duration < 10*time.Second:
+		return ObservationBucketLarge
+	default:
+		return ObservationBucketOverflow
+	}
+}
+
+// observationCountBucket maps a nonnegative quantity into fixed coarse bounds.
+func observationCountBucket(value, small, medium, large int) ObservationBucket {
+	switch {
+	case value <= 0:
+		return ObservationBucketNone
+	case value <= small:
+		return ObservationBucketSmall
+	case value <= medium:
+		return ObservationBucketMedium
+	case value <= large:
+		return ObservationBucketLarge
+	default:
+		return ObservationBucketOverflow
+	}
 }
 
 // String returns a constant representation without injected provider state.

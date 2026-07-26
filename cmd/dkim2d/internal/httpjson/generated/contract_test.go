@@ -16,6 +16,8 @@ const (
 	testHeaderCacheControl       = "Cache-Control"
 	testHeaderConnection         = "Connection"
 	testHeaderContentTypeOptions = "X-Content-Type-Options"
+	testMethodGet                = "GET"
+	testMetricsPath              = "/metrics"
 	testProcessPath              = "/v1/process"
 	testPropertyAPIVersion       = "api_version"
 	testPropertyClass            = "class"
@@ -56,8 +58,14 @@ func TestEmbeddedOpenAPIContract(t *testing.T) {
 	}
 
 	expected := map[string]map[string]expectedOperation{
+		testMetricsPath: {
+			testMethodGet: {
+				id:        "getMetrics",
+				responses: []string{"200", "400", "417", "500"},
+			},
+		},
 		"/healthz": {
-			"GET": {
+			testMethodGet: {
 				id:        "getHealth",
 				responses: []string{"200", "304", "400", "412", "417", "500"},
 				success:   "HealthResponse",
@@ -69,7 +77,7 @@ func TestEmbeddedOpenAPIContract(t *testing.T) {
 			},
 		},
 		"/readyz": {
-			"GET": {
+			testMethodGet: {
 				id:        "getReadiness",
 				responses: []string{"200", "304", "400", "412", "417", "500", "503"},
 				success:   "ReadinessResponse",
@@ -241,7 +249,7 @@ func requiredResponseHeaders(path string, status string) []string {
 		return append(headers, "ETag")
 	}
 	headers = append(headers, "Content-Length", testHeaderContentTypeOptions)
-	if status == "200" && path != testProcessPath {
+	if status == "200" && path != testProcessPath && path != testMetricsPath {
 		headers = append(headers, "ETag")
 	}
 
@@ -261,6 +269,15 @@ func assertResponseContent(
 	if want.head || status == "304" {
 		if len(response.Content) != 0 {
 			t.Fatalf("bodyless response %s for %s declares content", status, operationID)
+		}
+		return
+	}
+	if operationID == "getMetrics" && status == "200" {
+		media := response.Content["text/plain"]
+		if len(response.Content) != 1 || media == nil || media.Schema == nil ||
+			media.Schema.Value == nil || !media.Schema.Value.Type.Is("string") ||
+			media.Schema.Value.MaxLength == nil || *media.Schema.Value.MaxLength != 262144 {
+			t.Fatal("metrics success response lacks its bounded text schema")
 		}
 		return
 	}

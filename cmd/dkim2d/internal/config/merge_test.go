@@ -178,7 +178,7 @@ func TestStableFieldBindings(t *testing.T) {
 func TestStablePathSetIsExact(t *testing.T) {
 	specs := stableFieldSpecs()
 	golden := stableFieldGoldenContract()
-	if len(specs) != 54 || len(specs) != len(golden) {
+	if len(specs) != 63 || len(specs) != len(golden) {
 		t.Fatal("stable path count changed")
 	}
 	for index, expected := range golden {
@@ -275,6 +275,15 @@ func stableFieldGoldenContract() []stableFieldGolden {
 		{path: "replay.valkey.attestation.shared_epoch", environment: "DKIM2D_REPLAY_VALKEY_ATTESTATION_SHARED_EPOCH"},
 		{path: "replay.valkey.attestation.shared_secret_set", environment: "DKIM2D_REPLAY_VALKEY_ATTESTATION_SHARED_SECRET_SET"},
 		{path: "replay.valkey.attestation.shared_retention", environment: "DKIM2D_REPLAY_VALKEY_ATTESTATION_SHARED_RETENTION"},
+		{path: "observability.logging.level", environment: "DKIM2D_OBSERVABILITY_LOGGING_LEVEL", defaultValue: canonicalInfo, hasDefault: true},
+		{path: "observability.debug.message_shape", environment: "DKIM2D_OBSERVABILITY_DEBUG_MESSAGE_SHAPE", defaultValue: canonicalFalse, hasDefault: true},
+		{path: "observability.debug.dns", environment: "DKIM2D_OBSERVABILITY_DEBUG_DNS", defaultValue: "false", hasDefault: true},
+		{path: "observability.debug.replay", environment: "DKIM2D_OBSERVABILITY_DEBUG_REPLAY", defaultValue: "false", hasDefault: true},
+		{path: "observability.tracing.exporter", environment: "DKIM2D_OBSERVABILITY_TRACING_EXPORTER", defaultValue: canonicalNone, hasDefault: true},
+		{path: "observability.tracing.endpoint", environment: "DKIM2D_OBSERVABILITY_TRACING_ENDPOINT"},
+		{path: "observability.tracing.ca_file", environment: "DKIM2D_OBSERVABILITY_TRACING_CA_FILE"},
+		{path: "observability.tracing.sample_per_million", environment: "DKIM2D_OBSERVABILITY_TRACING_SAMPLE_PER_MILLION"},
+		{path: "observability.tracing.export_timeout", environment: "DKIM2D_OBSERVABILITY_TRACING_EXPORT_TIMEOUT"},
 	}
 }
 

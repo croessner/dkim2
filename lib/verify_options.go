@@ -3,6 +3,7 @@ package dkim2
 import (
 	"time"
 
+	"github.com/croessner/dkim2/internal/niliface"
 	"github.com/croessner/dkim2/internal/service"
 )
 
@@ -76,6 +77,7 @@ func (l VerificationLimits) MaxSignatureFacts() int {
 type verifierConfig struct {
 	limits VerificationLimits
 	clock  *verificationClock
+	sink   ObservationSink
 }
 
 type verificationClock struct{ now func() time.Time }
@@ -89,6 +91,18 @@ type verifierState struct {
 	service     service.Verifier
 	limits      VerificationLimits
 	initialized bool
+	sink        ObservationSink
+}
+
+// WithObservationSink injects one bounded nonnormative observation receiver.
+func WithObservationSink(sink ObservationSink) VerifierOption {
+	return func(config *verifierConfig) error {
+		if config == nil || nilObservationSink(sink) {
+			return newAPIError(APIErrorCodeInvalidOption)
+		}
+		config.sink = sink
+		return nil
+	}
 }
 
 // VerifierOption narrows one validated verifier setting during construction.
@@ -160,7 +174,10 @@ func newLimitOption(limit, hardMaximum int, apply func(*verifierConfig, int)) Ve
 
 // applyVerifierOptions validates all options atomically and returns zero configuration on failure.
 func applyVerifierOptions(options ...VerifierOption) (verifierConfig, error) {
-	config := verifierConfig{limits: DefaultVerificationLimits()}
+	config := verifierConfig{
+		limits: DefaultVerificationLimits(),
+		sink:   NoopObservationSink{},
+	}
 	for _, option := range options {
 		if option == nil {
 			return verifierConfig{}, newAPIError(APIErrorCodeInvalidOption)
@@ -170,4 +187,9 @@ func applyVerifierOptions(options ...VerifierOption) (verifierConfig, error) {
 		}
 	}
 	return config, nil
+}
+
+// nilObservationSink reports nil and typed-nil observation dependencies.
+func nilObservationSink(sink ObservationSink) bool {
+	return niliface.IsNil(sink)
 }

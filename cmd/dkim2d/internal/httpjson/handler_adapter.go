@@ -6,10 +6,12 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 
 	"github.com/croessner/dkim2"
 	"github.com/croessner/dkim2/cmd/dkim2d/internal/app"
 	"github.com/croessner/dkim2/cmd/dkim2d/internal/httpjson/generated"
+	"github.com/croessner/dkim2/cmd/dkim2d/internal/observability"
 )
 
 type strictFailureClass uint8
@@ -50,17 +52,63 @@ type inboundProcessService interface {
 type strictAdapter struct {
 	readiness readinessSource
 	processor inboundProcessService
+	metrics   *observability.Metrics
 }
 
 // newStrictAdapter constructs one generated strict-server implementation.
 func newStrictAdapter(
 	readiness readinessSource,
 	processor inboundProcessService,
+	metricsCandidates ...*observability.Metrics,
 ) (*strictAdapter, error) {
-	if nilInterfaceValue(readiness) || nilInterfaceValue(processor) {
+	if nilInterfaceValue(readiness) || nilInterfaceValue(processor) || len(metricsCandidates) > 1 {
 		return nil, &strictAdapterError{class: strictFailureInternal}
 	}
-	return &strictAdapter{readiness: readiness, processor: processor}, nil
+	var metrics *observability.Metrics
+	if len(metricsCandidates) == 1 {
+		metrics = metricsCandidates[0]
+	} else {
+		var err error
+		metrics, err = observability.NewMetrics()
+		if err != nil {
+			return nil, &strictAdapterError{class: strictFailureInternal}
+		}
+	}
+	if metrics == nil {
+		return nil, &strictAdapterError{class: strictFailureInternal}
+	}
+	return &strictAdapter{readiness: readiness, processor: processor, metrics: metrics}, nil
+}
+
+// GetMetrics returns the generated representation for contract-level callers.
+//
+// The outer boundary owns the stricter wire content type and request policy.
+func (a *strictAdapter) GetMetrics(
+	ctx context.Context,
+	_ generated.GetMetricsRequestObject,
+) (generated.GetMetricsResponseObject, error) {
+	if a == nil || a.metrics == nil {
+		return nil, &strictAdapterError{class: strictFailureInternal}
+	}
+	body, err := a.metrics.Gather()
+	if err != nil {
+		return nil, &strictAdapterError{class: strictFailureInternal}
+	}
+	date, present := responseDate(ctx)
+	var datePointer *string
+	if present {
+		datePointer = &date
+	}
+	return generated.GetMetrics200TextResponse{
+		Body: string(body),
+		Headers: generated.GetMetrics200ResponseHeaders{
+			CacheControl:        cacheControlNoStore,
+			Connection:          "close",
+			ContentLength:       strconv.Itoa(len(body)),
+			Date:                datePointer,
+			XContentTypeOptions: "nosniff",
+		},
+	}, nil
 }
 
 // GetHealth reports content-free process liveness.

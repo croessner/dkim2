@@ -18,6 +18,7 @@ const (
 	duration120s  = "120s"
 	duration121s  = "121s"
 	duration31s   = "31s"
+	duration99ms  = "99ms"
 	duration999ms = "999ms"
 )
 
@@ -451,7 +452,7 @@ func TestScalarLexicalAndRangeTables(t *testing.T) {
 			t.Fatal("duration lexical table decision changed")
 		}
 	}
-	for _, text := range []string{"true", "false"} {
+	for _, text := range []string{canonicalTrue, canonicalFalse} {
 		values := map[string]rawValue{testValuePath: {text: text, kind: scalarString, source: SourceEnvironment}}
 		if _, err := boolValue(values, testValuePath); err != nil {
 			t.Fatal("canonical boolean was rejected")
@@ -517,9 +518,9 @@ func TestScalarLexicalAndRangeTables(t *testing.T) {
 		{path: pathDNSLookupTimeout, min: time.Millisecond, max: 30 * time.Second, minText: "1ms", maxText: defaultReadTimeout, belowText: "0s", aboveText: "30001ms"},
 		{path: pathReplayRetention, min: time.Second, max: 720 * time.Hour, minText: "1s", maxText: "720h", belowText: "0s", aboveText: "721h"},
 		{path: pathReplayRevalidate, min: 10 * time.Second, max: 60 * time.Second, minText: "10s", maxText: defaultDeadline, belowText: "9s", aboveText: "61s"},
-		{path: pathValkeyDialTimeout, min: 100 * time.Millisecond, max: 30 * time.Second, minText: defaultAdmissionWait, maxText: defaultReadTimeout, belowText: "99ms", aboveText: duration31s},
+		{path: pathValkeyDialTimeout, min: 100 * time.Millisecond, max: 30 * time.Second, minText: defaultAdmissionWait, maxText: defaultReadTimeout, belowText: duration99ms, aboveText: duration31s},
 		{path: pathValkeyTCPKeepalive, min: time.Second, max: 5 * time.Minute, minText: "1s", maxText: "5m", belowText: duration999ms, aboveText: "301s"},
-		{path: pathValkeyWriteTimeout, min: 100 * time.Millisecond, max: 30 * time.Second, minText: defaultAdmissionWait, maxText: defaultReadTimeout, belowText: "99ms", aboveText: duration31s},
+		{path: pathValkeyWriteTimeout, min: 100 * time.Millisecond, max: 30 * time.Second, minText: defaultAdmissionWait, maxText: defaultReadTimeout, belowText: duration99ms, aboveText: duration31s},
 	}
 	for _, bounds := range durationRanges {
 		for _, valid := range []string{bounds.minText, bounds.maxText} {

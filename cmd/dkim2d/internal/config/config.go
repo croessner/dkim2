@@ -6,6 +6,7 @@ import (
 	"io"
 	"net"
 	"net/netip"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -46,13 +47,54 @@ const (
 )
 
 type snapshotState struct {
-	version    string
-	generation string
-	server     serverState
-	policy     PolicyMode
-	dns        dnsState
-	replay     replayState
-	presence   map[string]Presence
+	version       string
+	generation    string
+	server        serverState
+	policy        PolicyMode
+	dns           dnsState
+	replay        replayState
+	observability observabilityState
+	presence      map[string]Presence
+}
+
+// LogLevel identifies one closed slog admission threshold.
+type LogLevel uint8
+
+const (
+	// LogLevelDebug admits debug and higher records.
+	LogLevelDebug LogLevel = iota + 1
+	// LogLevelInfo admits informational and higher records.
+	LogLevelInfo
+	// LogLevelWarn admits warning and error records.
+	LogLevelWarn
+	// LogLevelError admits only error records.
+	LogLevelError
+)
+
+// TracingExporter identifies one closed tracing mode.
+type TracingExporter uint8
+
+const (
+	// TracingNone disables the tracing SDK and exporter.
+	TracingNone TracingExporter = iota + 1
+	// TracingOTLPHTTP selects bounded OTLP over loopback TLS.
+	TracingOTLPHTTP
+)
+
+type observabilityState struct {
+	logLevel          LogLevel
+	debugMessageShape bool
+	debugDNS          bool
+	debugReplay       bool
+	tracing           tracingState
+}
+
+type tracingState struct {
+	exporter         TracingExporter
+	endpoint         string
+	caFile           string
+	samplePerMillion uint32
+	exportTimeout    time.Duration
 }
 
 type serverState struct {
@@ -265,15 +307,128 @@ func validateSnapshot(values map[string]rawValue, presence map[string]Presence) 
 	if err != nil {
 		return nil, err
 	}
+	observability, err := parseObservability(values, presence, generation, append([]string{server.capabilityFile}, replayProtectedPaths(replay)...)...)
+	if err != nil {
+		return nil, err
+	}
 	return &snapshotState{
-		version:    configVersion,
-		generation: generation,
-		server:     server,
-		policy:     policy,
-		dns:        dns,
-		replay:     replay,
-		presence:   clonePresence(presence),
+		version:       configVersion,
+		generation:    generation,
+		server:        server,
+		policy:        policy,
+		dns:           dns,
+		replay:        replay,
+		observability: observability,
+		presence:      clonePresence(presence),
 	}, nil
+}
+
+// parseObservability validates logging, debug, and conditional tracing state.
+func parseObservability(values map[string]rawValue, presence map[string]Presence, generation string, protectedPaths ...string) (observabilityState, error) {
+	level, ok := map[string]LogLevel{
+		"debug": LogLevelDebug, canonicalInfo: LogLevelInfo,
+		"warn": LogLevelWarn, "error": LogLevelError,
+	}[text(values, pathLoggingLevel)]
+	if !ok {
+		return observabilityState{}, newError(CodeInvalidField)
+	}
+	messageShape, err := boolValue(values, pathDebugMessageShape)
+	if err != nil {
+		return observabilityState{}, err
+	}
+	dns, err := boolValue(values, pathDebugDNS)
+	if err != nil {
+		return observabilityState{}, err
+	}
+	replay, err := boolValue(values, pathDebugReplay)
+	if err != nil {
+		return observabilityState{}, err
+	}
+	explicitTracing := func(path string) bool {
+		entry, present := presence[path]
+		return present && entry.Explicit()
+	}
+	exporterText := text(values, pathTracingExporter)
+	if exporterText == canonicalNone {
+		for _, path := range []string{pathTracingEndpoint, pathTracingCAFile, pathTracingSamplePerMillion, pathTracingExportTimeout} {
+			if explicitTracing(path) {
+				return observabilityState{}, newError(CodeInvalidField)
+			}
+		}
+		return observabilityState{
+			logLevel: level, debugMessageShape: messageShape,
+			debugDNS: dns, debugReplay: replay,
+			tracing: tracingState{exporter: TracingNone},
+		}, nil
+	}
+	if exporterText != "otlp_http" {
+		return observabilityState{}, newError(CodeInvalidField)
+	}
+	endpoint := text(values, pathTracingEndpoint)
+	caFile := text(values, pathTracingCAFile)
+	if !explicitTracing(pathTracingEndpoint) || !explicitTracing(pathTracingCAFile) ||
+		!validOTLPEndpoint(endpoint) || !sameGenerationPath(generation, caFile) {
+		return observabilityState{}, newError(CodeInvalidField)
+	}
+	for _, path := range protectedPaths {
+		if path == caFile {
+			return observabilityState{}, newError(CodeInvalidField)
+		}
+	}
+	sample := uint64(10_000)
+	if explicitTracing(pathTracingSamplePerMillion) {
+		sample, err = uintValue(values, pathTracingSamplePerMillion, 1, 1_000_000)
+		if err != nil {
+			return observabilityState{}, err
+		}
+	}
+	timeout := 5 * time.Second
+	if explicitTracing(pathTracingExportTimeout) {
+		timeout, err = durationValue(values, pathTracingExportTimeout, 100*time.Millisecond, 10*time.Second, false)
+		if err != nil {
+			return observabilityState{}, err
+		}
+	}
+	return observabilityState{
+		logLevel: level, debugMessageShape: messageShape,
+		debugDNS: dns, debugReplay: replay,
+		tracing: tracingState{
+			exporter: TracingOTLPHTTP, endpoint: endpoint, caFile: caFile,
+			samplePerMillion: uint32(sample), exportTimeout: timeout,
+		},
+	}, nil
+}
+
+// replayProtectedPaths returns the selected replay generation paths.
+func replayProtectedPaths(replay replayState) []string {
+	if !replay.hasReplayConfig {
+		return nil
+	}
+	paths := []string{replay.hmacKeyFile}
+	if replay.hasValkeyConfig {
+		paths = append(paths, replay.valkey.caFile, replay.valkey.applicationPasswordFile, replay.valkey.auditorPasswordFile)
+	}
+	return paths
+}
+
+// validOTLPEndpoint accepts one exact loopback TLS traces endpoint.
+func validOTLPEndpoint(value string) bool {
+	parsed, err := url.Parse(value)
+	if err != nil || parsed.Scheme != "https" || parsed.User != nil ||
+		parsed.RawQuery != "" || parsed.Fragment != "" || parsed.Path != "/v1/traces" ||
+		parsed.RawPath != "" || parsed.Opaque != "" {
+		return false
+	}
+	host := parsed.Hostname()
+	portText := parsed.Port()
+	address, err := netip.ParseAddr(host)
+	if err != nil || !address.IsLoopback() || address.Is4In6() || address.Zone() != "" ||
+		address.String() != host || portText == "" {
+		return false
+	}
+	port, err := strconv.ParseUint(portText, 10, 16)
+	return err == nil && port != 0 && strconv.FormatUint(port, 10) == portText &&
+		net.JoinHostPort(host, portText) == parsed.Host
 }
 
 // clonePresence prevents caller-owned maps from mutating snapshot provenance.
