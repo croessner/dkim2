@@ -37,6 +37,24 @@ type VerificationService interface {
 	Verify(context.Context, dkim2.VerifyRequest) (dkim2.VerifyResult, error)
 }
 
+// DNSVerifier owns one bounded DNS provider and the verifier built from that
+// exact provider so revision signing cannot drift to a second resolver model.
+type DNSVerifier struct {
+	verifier *dkim2.Verifier
+	provider dkim2.PublicKeyProvider
+}
+
+// String returns a constant content-free DNS verifier summary.
+func (DNSVerifier) String() string { return "dkim2d_dns_verifier" }
+
+// GoString returns a constant content-free DNS verifier representation.
+func (DNSVerifier) GoString() string { return "dkim2d_dns_verifier" }
+
+// Format prevents formatting verbs from traversing resolver dependencies.
+func (DNSVerifier) Format(state fmt.State, _ rune) {
+	_, _ = io.WriteString(state, "dkim2d_dns_verifier")
+}
+
 // DomainProcessor owns current verification followed by server-selected local policy.
 type DomainProcessor struct {
 	state *domainProcessorState
@@ -66,7 +84,7 @@ func NewDNSVerifier(
 	parent context.Context,
 	dnsConfig config.DNSConfig,
 	sinks ...dkim2.ObservationSink,
-) (*dkim2.Verifier, error) {
+) (*DNSVerifier, error) {
 	providerConfig, err := dnsProviderConfig(parent, dnsConfig)
 	if err != nil {
 		return nil, &DomainError{}
@@ -88,7 +106,30 @@ func NewDNSVerifier(
 	if err != nil {
 		return nil, &DomainError{}
 	}
-	return verifier, nil
+	return &DNSVerifier{verifier: verifier, provider: provider}, nil
+}
+
+// Verify delegates one immutable request to the instance verifier.
+func (v *DNSVerifier) Verify(
+	ctx context.Context,
+	request dkim2.VerifyRequest,
+) (dkim2.VerifyResult, error) {
+	if v == nil || v.verifier == nil {
+		return dkim2.VerifyResult{}, &DomainError{}
+	}
+	return v.verifier.Verify(ctx, request)
+}
+
+// LookupPublicKey delegates revision publication checks to the same bounded
+// DNS provider used by verification.
+func (v *DNSVerifier) LookupPublicKey(
+	ctx context.Context,
+	query dkim2.PublicKeyQuery,
+) (dkim2.PublicKeyResult, error) {
+	if v == nil || nilInterface(v.provider) {
+		return dkim2.PublicKeyResult{}, dkim2.NewTemporaryProviderError()
+	}
+	return v.provider.LookupPublicKey(ctx, query)
 }
 
 // NewDomainProcessor constructs one immutable verification and policy service.

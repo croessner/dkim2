@@ -35,6 +35,66 @@ func (e APIVersion) Valid() bool {
 	}
 }
 
+// Defines values for AddHeaderActionName.
+const (
+	AuthenticationResults AddHeaderActionName = "Authentication-Results"
+	DKIM2Signature        AddHeaderActionName = "DKIM2-Signature"
+	MessageInstance       AddHeaderActionName = "Message-Instance"
+)
+
+// Valid indicates whether the value is a known member of the AddHeaderActionName enum.
+func (e AddHeaderActionName) Valid() bool {
+	switch e {
+	case AuthenticationResults:
+		return true
+	case DKIM2Signature:
+		return true
+	case MessageInstance:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AddHeaderActionType.
+const (
+	AddHeader AddHeaderActionType = "add_header"
+)
+
+// Valid indicates whether the value is a known member of the AddHeaderActionType enum.
+func (e AddHeaderActionType) Valid() bool {
+	switch e {
+	case AddHeader:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for Disposition.
+const (
+	DispositionAccept   Disposition = "accept"
+	DispositionContinue Disposition = "continue"
+	DispositionReject   Disposition = "reject"
+	DispositionTempfail Disposition = "tempfail"
+)
+
+// Valid indicates whether the value is a known member of the Disposition enum.
+func (e Disposition) Valid() bool {
+	switch e {
+	case DispositionAccept:
+		return true
+	case DispositionContinue:
+		return true
+	case DispositionReject:
+		return true
+	case DispositionTempfail:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for DraftVersion.
 const (
 	DraftIetfDkimDkim2Spec04 DraftVersion = "draft-ietf-dkim-dkim2-spec-04"
@@ -155,6 +215,66 @@ const (
 func (e KeyPolicyResultStrictIdentityApplicable) Valid() bool {
 	switch e {
 	case False:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MessageInputFidelity.
+const (
+	MilterReconstructedCrlf MessageInputFidelity = "milter_reconstructed_crlf"
+	RawRfc5322              MessageInputFidelity = "raw_rfc5322"
+)
+
+// Valid indicates whether the value is a known member of the MessageInputFidelity enum.
+func (e MessageInputFidelity) Valid() bool {
+	switch e {
+	case MilterReconstructedCrlf:
+		return true
+	case RawRfc5322:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for OperationResponseOperation.
+const (
+	Revise OperationResponseOperation = "revise"
+	Sign   OperationResponseOperation = "sign"
+)
+
+// Valid indicates whether the value is a known member of the OperationResponseOperation enum.
+func (e OperationResponseOperation) Valid() bool {
+	switch e {
+	case Revise:
+		return true
+	case Sign:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for OperationResponseResult.
+const (
+	OperationResponseResultFail      OperationResponseResult = "fail"
+	OperationResponseResultPass      OperationResponseResult = "pass"
+	OperationResponseResultPermerror OperationResponseResult = "permerror"
+	OperationResponseResultTemperror OperationResponseResult = "temperror"
+)
+
+// Valid indicates whether the value is a known member of the OperationResponseResult enum.
+func (e OperationResponseResult) Valid() bool {
+	switch e {
+	case OperationResponseResultFail:
+		return true
+	case OperationResponseResultPass:
+		return true
+	case OperationResponseResultPermerror:
+		return true
+	case OperationResponseResultTemperror:
 		return true
 	default:
 		return false
@@ -332,30 +452,6 @@ func (e PolicyResultVerdict) Valid() bool {
 	}
 }
 
-// Defines values for ProcessResponseDisposition.
-const (
-	ProcessResponseDispositionAccept   ProcessResponseDisposition = "accept"
-	ProcessResponseDispositionContinue ProcessResponseDisposition = "continue"
-	ProcessResponseDispositionReject   ProcessResponseDisposition = "reject"
-	ProcessResponseDispositionTempfail ProcessResponseDisposition = "tempfail"
-)
-
-// Valid indicates whether the value is a known member of the ProcessResponseDisposition enum.
-func (e ProcessResponseDisposition) Valid() bool {
-	switch e {
-	case ProcessResponseDispositionAccept:
-		return true
-	case ProcessResponseDispositionContinue:
-		return true
-	case ProcessResponseDispositionReject:
-		return true
-	case ProcessResponseDispositionTempfail:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for ReadinessResponseStatus.
 const (
 	Ready ReadinessResponseStatus = "ready"
@@ -421,25 +517,25 @@ func (e SignatureSetResultAlgorithm) Valid() bool {
 
 // Defines values for SignatureSetResultStatus.
 const (
-	Fail      SignatureSetResultStatus = "fail"
-	Ignored   SignatureSetResultStatus = "ignored"
-	Pass      SignatureSetResultStatus = "pass"
-	Permerror SignatureSetResultStatus = "permerror"
-	Temperror SignatureSetResultStatus = "temperror"
+	SignatureSetResultStatusFail      SignatureSetResultStatus = "fail"
+	SignatureSetResultStatusIgnored   SignatureSetResultStatus = "ignored"
+	SignatureSetResultStatusPass      SignatureSetResultStatus = "pass"
+	SignatureSetResultStatusPermerror SignatureSetResultStatus = "permerror"
+	SignatureSetResultStatusTemperror SignatureSetResultStatus = "temperror"
 )
 
 // Valid indicates whether the value is a known member of the SignatureSetResultStatus enum.
 func (e SignatureSetResultStatus) Valid() bool {
 	switch e {
-	case Fail:
+	case SignatureSetResultStatusFail:
 		return true
-	case Ignored:
+	case SignatureSetResultStatusIgnored:
 		return true
-	case Pass:
+	case SignatureSetResultStatusPass:
 		return true
-	case Permerror:
+	case SignatureSetResultStatusPermerror:
 		return true
-	case Temperror:
+	case SignatureSetResultStatusTemperror:
 		return true
 	default:
 		return false
@@ -674,8 +770,27 @@ func (e VerificationState) Valid() bool {
 // APIVersion defines model for APIVersion.
 type APIVersion string
 
+// ActionPlan defines model for ActionPlan.
+type ActionPlan = []AddHeaderAction
+
+// AddHeaderAction defines model for AddHeaderAction.
+type AddHeaderAction struct {
+	Name  AddHeaderActionName `json:"name"`
+	Type  AddHeaderActionType `json:"type"`
+	Value string              `json:"value"`
+}
+
+// AddHeaderActionName defines model for AddHeaderAction.Name.
+type AddHeaderActionName string
+
+// AddHeaderActionType defines model for AddHeaderAction.Type.
+type AddHeaderActionType string
+
 // CanonicalUint64 defines model for CanonicalUint64.
 type CanonicalUint64 = string
+
+// Disposition defines model for Disposition.
+type Disposition string
 
 // DraftVersion defines model for DraftVersion.
 type DraftVersion string
@@ -716,8 +831,28 @@ type KeyPolicyResultStrictIdentityApplicable bool
 
 // MessageInput defines model for MessageInput.
 type MessageInput struct {
-	RawRfc5322Base64 wire.ProtectedString `json:"raw_rfc5322_base64"`
+	Fidelity         *MessageInputFidelity `json:"fidelity,omitempty"`
+	RawRfc5322Base64 wire.ProtectedString  `json:"raw_rfc5322_base64"`
 }
+
+// MessageInputFidelity defines model for MessageInput.Fidelity.
+type MessageInputFidelity string
+
+// OperationResponse Result and disposition are coherent: pass permits accept or continue, fail and permerror require reject, and temperror requires tempfail. Only accept may carry actions.
+type OperationResponse struct {
+	Actions     ActionPlan                 `json:"actions"`
+	ApiVersion  APIVersion                 `json:"api_version"`
+	Disposition Disposition                `json:"disposition"`
+	Draft       DraftVersion               `json:"draft"`
+	Operation   OperationResponseOperation `json:"operation"`
+	Result      OperationResponseResult    `json:"result"`
+}
+
+// OperationResponseOperation defines model for OperationResponse.Operation.
+type OperationResponseOperation string
+
+// OperationResponseResult defines model for OperationResponse.Result.
+type OperationResponseResult string
 
 // PolicyFeedback defines model for PolicyFeedback.
 type PolicyFeedback struct {
@@ -769,24 +904,23 @@ type PolicyResultVerdict string
 
 // ProcessRequest defines model for ProcessRequest.
 type ProcessRequest struct {
-	ApiVersion APIVersion   `json:"api_version"`
-	Draft      DraftVersion `json:"draft"`
-	Message    MessageInput `json:"message"`
-	Smtp       SMTPInput    `json:"smtp"`
+	ApiVersion APIVersion        `json:"api_version"`
+	Draft      DraftVersion      `json:"draft"`
+	Message    MessageInput      `json:"message"`
+	Reporting  *ReportingContext `json:"reporting,omitempty"`
+	Smtp       SMTPInput         `json:"smtp"`
 }
 
 // ProcessResponse defines model for ProcessResponse.
 type ProcessResponse struct {
-	ApiVersion   APIVersion                 `json:"api_version"`
-	Disposition  ProcessResponseDisposition `json:"disposition"`
-	Draft        DraftVersion               `json:"draft"`
-	Policy       PolicyResult               `json:"policy"`
-	Replay       ReplayResult               `json:"replay"`
-	Verification VerificationResult         `json:"verification"`
+	Actions      ActionPlan         `json:"actions"`
+	ApiVersion   APIVersion         `json:"api_version"`
+	Disposition  Disposition        `json:"disposition"`
+	Draft        DraftVersion       `json:"draft"`
+	Policy       PolicyResult       `json:"policy"`
+	Replay       ReplayResult       `json:"replay"`
+	Verification VerificationResult `json:"verification"`
 }
-
-// ProcessResponseDisposition defines model for ProcessResponse.Disposition.
-type ProcessResponseDisposition string
 
 // ReadinessResponse defines model for ReadinessResponse.
 type ReadinessResponse struct {
@@ -806,10 +940,34 @@ type ReplayResult struct {
 // ReplayResultClass defines model for ReplayResult.Class.
 type ReplayResultClass string
 
+// ReportingContext defines model for ReportingContext.
+type ReportingContext struct {
+	AuthservId string `json:"authserv_id"`
+}
+
+// ReviseRequest defines model for ReviseRequest.
+type ReviseRequest struct {
+	ApiVersion   APIVersion     `json:"api_version"`
+	Context      SigningContext `json:"context"`
+	Draft        DraftVersion   `json:"draft"`
+	IncomingSmtp SMTPInput      `json:"incoming_smtp"`
+	Message      MessageInput   `json:"message"`
+	Smtp         SMTPInput      `json:"smtp"`
+}
+
 // SMTPInput defines model for SMTPInput.
 type SMTPInput struct {
 	MailFrom wire.ProtectedString   `json:"mail_from"`
 	RcptTo   []wire.ProtectedString `json:"rcpt_to"`
+}
+
+// SignRequest defines model for SignRequest.
+type SignRequest struct {
+	ApiVersion APIVersion     `json:"api_version"`
+	Context    SigningContext `json:"context"`
+	Draft      DraftVersion   `json:"draft"`
+	Message    MessageInput   `json:"message"`
+	Smtp       SMTPInput      `json:"smtp"`
 }
 
 // SignatureSetResult defines model for SignatureSetResult.
@@ -825,6 +983,12 @@ type SignatureSetResultAlgorithm string
 
 // SignatureSetResultStatus defines model for SignatureSetResult.Status.
 type SignatureSetResultStatus string
+
+// SigningContext defines model for SigningContext.
+type SigningContext struct {
+	Domain string `json:"domain"`
+	Tenant string `json:"tenant"`
+}
 
 // VerificationCheck defines model for VerificationCheck.
 type VerificationCheck struct {
@@ -904,6 +1068,12 @@ type localCapabilityContextKey string
 
 // ProcessMessageJSONRequestBody defines body for ProcessMessage for application/json ContentType.
 type ProcessMessageJSONRequestBody = ProcessRequest
+
+// ReviseMessageJSONRequestBody defines body for ReviseMessage for application/json ContentType.
+type ReviseMessageJSONRequestBody = ReviseRequest
+
+// SignMessageJSONRequestBody defines body for SignMessage for application/json ContentType.
+type SignMessageJSONRequestBody = SignRequest
 
 // RequestEditorFn  is the function signature for the RequestEditor callback function
 type RequestEditorFn func(ctx context.Context, req *http.Request) error
@@ -997,6 +1167,16 @@ type ClientInterface interface {
 	ProcessMessageWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	ProcessMessage(ctx context.Context, body ProcessMessageJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ReviseMessageWithBody request with any body
+	ReviseMessageWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	ReviseMessage(ctx context.Context, body ReviseMessageJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SignMessageWithBody request with any body
+	SignMessageWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	SignMessage(ctx context.Context, body SignMessageJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 }
 
 func (c *Client) GetHealth(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -1073,6 +1253,54 @@ func (c *Client) ProcessMessageWithBody(ctx context.Context, contentType string,
 
 func (c *Client) ProcessMessage(ctx context.Context, body ProcessMessageJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewProcessMessageRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ReviseMessageWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewReviseMessageRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ReviseMessage(ctx context.Context, body ReviseMessageJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewReviseMessageRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) SignMessageWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSignMessageRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) SignMessage(ctx context.Context, body SignMessageJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSignMessageRequest(c.Server, body)
 	if err != nil {
 		return nil, err
 	}
@@ -1258,6 +1486,86 @@ func NewProcessMessageRequestWithBody(server string, contentType string, body io
 	return req, nil
 }
 
+// NewReviseMessageRequest calls the generic ReviseMessage builder with application/json body
+func NewReviseMessageRequest(server string, body ReviseMessageJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewReviseMessageRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewReviseMessageRequestWithBody generates requests for ReviseMessage with any type of body
+func NewReviseMessageRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/revise")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewSignMessageRequest calls the generic SignMessage builder with application/json body
+func NewSignMessageRequest(server string, body SignMessageJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewSignMessageRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewSignMessageRequestWithBody generates requests for SignMessage with any type of body
+func NewSignMessageRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/sign")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 func (c *Client) applyEditors(ctx context.Context, req *http.Request, additionalEditors []RequestEditorFn) error {
 	for _, r := range c.RequestEditors {
 		if err := r(ctx, req); err != nil {
@@ -1320,6 +1628,16 @@ type ClientWithResponsesInterface interface {
 	ProcessMessageWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ProcessMessageResponse, error)
 
 	ProcessMessageWithResponse(ctx context.Context, body ProcessMessageJSONRequestBody, reqEditors ...RequestEditorFn) (*ProcessMessageResponse, error)
+
+	// ReviseMessageWithBodyWithResponse request with any body
+	ReviseMessageWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ReviseMessageResponse, error)
+
+	ReviseMessageWithResponse(ctx context.Context, body ReviseMessageJSONRequestBody, reqEditors ...RequestEditorFn) (*ReviseMessageResponse, error)
+
+	// SignMessageWithBodyWithResponse request with any body
+	SignMessageWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SignMessageResponse, error)
+
+	SignMessageWithResponse(ctx context.Context, body SignMessageJSONRequestBody, reqEditors ...RequestEditorFn) (*SignMessageResponse, error)
 }
 
 type GetHealthResponse struct {
@@ -1519,6 +1837,82 @@ func (r ProcessMessageResponse) ContentType() string {
 	return ""
 }
 
+type ReviseMessageResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *OperationResponse
+	JSON400      *BadRequest
+	JSON403      *Forbidden
+	JSON408      *RequestTimeout
+	JSON413      *RequestTooLarge
+	JSON415      *UnsupportedMediaType
+	JSON417      *ExpectationFailed
+	JSON500      *InternalError
+	JSON503      *ServiceUnavailable
+}
+
+// Status returns HTTPResponse.Status
+func (r ReviseMessageResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ReviseMessageResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ReviseMessageResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type SignMessageResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *OperationResponse
+	JSON400      *BadRequest
+	JSON403      *Forbidden
+	JSON408      *RequestTimeout
+	JSON413      *RequestTooLarge
+	JSON415      *UnsupportedMediaType
+	JSON417      *ExpectationFailed
+	JSON500      *InternalError
+	JSON503      *ServiceUnavailable
+}
+
+// Status returns HTTPResponse.Status
+func (r SignMessageResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r SignMessageResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r SignMessageResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 // GetHealthWithResponse request returning *GetHealthResponse
 func (c *ClientWithResponses) GetHealthWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetHealthResponse, error) {
 	rsp, err := c.GetHealth(ctx, reqEditors...)
@@ -1579,6 +1973,40 @@ func (c *ClientWithResponses) ProcessMessageWithResponse(ctx context.Context, bo
 		return nil, err
 	}
 	return ParseProcessMessageResponse(rsp)
+}
+
+// ReviseMessageWithBodyWithResponse request with arbitrary body returning *ReviseMessageResponse
+func (c *ClientWithResponses) ReviseMessageWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ReviseMessageResponse, error) {
+	rsp, err := c.ReviseMessageWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseReviseMessageResponse(rsp)
+}
+
+func (c *ClientWithResponses) ReviseMessageWithResponse(ctx context.Context, body ReviseMessageJSONRequestBody, reqEditors ...RequestEditorFn) (*ReviseMessageResponse, error) {
+	rsp, err := c.ReviseMessage(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseReviseMessageResponse(rsp)
+}
+
+// SignMessageWithBodyWithResponse request with arbitrary body returning *SignMessageResponse
+func (c *ClientWithResponses) SignMessageWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SignMessageResponse, error) {
+	rsp, err := c.SignMessageWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSignMessageResponse(rsp)
+}
+
+func (c *ClientWithResponses) SignMessageWithResponse(ctx context.Context, body SignMessageJSONRequestBody, reqEditors ...RequestEditorFn) (*SignMessageResponse, error) {
+	rsp, err := c.SignMessage(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSignMessageResponse(rsp)
 }
 
 // ParseGetHealthResponse parses an HTTP response from a GetHealthWithResponse call
@@ -1784,6 +2212,170 @@ func ParseProcessMessageResponse(rsp *http.Response) (*ProcessMessageResponse, e
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest ProcessResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 408:
+		var dest RequestTimeout
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON408 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest RequestTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 417:
+		var dest ExpectationFailed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON417 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseReviseMessageResponse parses an HTTP response from a ReviseMessageWithResponse call
+func ParseReviseMessageResponse(rsp *http.Response) (*ReviseMessageResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ReviseMessageResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest OperationResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 408:
+		var dest RequestTimeout
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON408 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest RequestTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 417:
+		var dest ExpectationFailed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON417 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseSignMessageResponse parses an HTTP response from a SignMessageWithResponse call
+func ParseSignMessageResponse(rsp *http.Response) (*SignMessageResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &SignMessageResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest OperationResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}

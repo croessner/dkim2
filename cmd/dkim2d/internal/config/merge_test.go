@@ -178,7 +178,7 @@ func TestStableFieldBindings(t *testing.T) {
 func TestStablePathSetIsExact(t *testing.T) {
 	specs := stableFieldSpecs()
 	golden := stableFieldGoldenContract()
-	if len(specs) != 63 || len(specs) != len(golden) {
+	if len(specs) != 70 || len(specs) != len(golden) {
 		t.Fatal("stable path count changed")
 	}
 	for index, expected := range golden {
@@ -225,6 +225,8 @@ func stableFieldGoldenContract() []stableFieldGolden {
 		{path: "protected.generation"},
 		{path: "server.listen", environment: "DKIM2D_SERVER_LISTEN", defaultValue: "127.0.0.1:8080", hasDefault: true},
 		{path: "server.capability_file", environment: "DKIM2D_SERVER_CAPABILITY_FILE"},
+		{path: "server.sign_capability_file", environment: "DKIM2D_SERVER_SIGN_CAPABILITY_FILE"},
+		{path: "server.revise_capability_file", environment: "DKIM2D_SERVER_REVISE_CAPABILITY_FILE"},
 		{path: "server.read_header_timeout", environment: "DKIM2D_SERVER_READ_HEADER_TIMEOUT", defaultValue: "5s", hasDefault: true},
 		{path: "server.read_timeout", environment: "DKIM2D_SERVER_READ_TIMEOUT", defaultValue: "30" + "s", hasDefault: true},
 		{path: "server.write_timeout", environment: "DKIM2D_SERVER_WRITE_TIMEOUT", defaultValue: "65s", hasDefault: true},
@@ -246,6 +248,12 @@ func stableFieldGoldenContract() []stableFieldGolden {
 		{path: "replay.limits.max_in_flight", environment: "DKIM2D_REPLAY_LIMITS_MAX_IN_FLIGHT", defaultValue: "1024", hasDefault: true},
 		{path: "replay.limits.max_admission_waiters", environment: "DKIM2D_REPLAY_LIMITS_MAX_ADMISSION_WAITERS", defaultValue: "1024", hasDefault: true},
 		{path: "replay.revalidate_interval", environment: "DKIM2D_REPLAY_REVALIDATE_INTERVAL", defaultValue: "30" + "s", hasDefault: true},
+		{path: "signing.backend", environment: "DKIM2D_SIGNING_BACKEND", defaultValue: "disabled", hasDefault: true},
+		{path: "signing.datasource_file", environment: "DKIM2D_SIGNING_DATASOURCE_FILE"},
+		{path: "signing.private_manifest_file", environment: "DKIM2D_SIGNING_PRIVATE_MANIFEST_FILE"},
+		{path: "signing.reload_interval", environment: "DKIM2D_SIGNING_RELOAD_INTERVAL", defaultValue: "30" + "s", hasDefault: true},
+		// Keep the golden literal independent of the production default constant.
+		{path: "signing.allow_recipient_group", environment: "DKIM2D_SIGNING_ALLOW_RECIPIENT_GROUP", defaultValue: "false", hasDefault: true}, //nolint:goconst
 		{path: "replay.valkey.address", environment: "DKIM2D_REPLAY_" + "VALKEY_ADDRESS"},
 		{path: "replay.valkey.server_name", environment: "DKIM2D_REPLAY_" + "VALKEY_SERVER_NAME"},
 		{path: "replay.valkey.ca_file", environment: "DKIM2D_REPLAY_" + "VALKEY_CA_FILE"},
@@ -275,11 +283,11 @@ func stableFieldGoldenContract() []stableFieldGolden {
 		{path: "replay.valkey.attestation.shared_epoch", environment: "DKIM2D_REPLAY_VALKEY_ATTESTATION_SHARED_EPOCH"},
 		{path: "replay.valkey.attestation.shared_secret_set", environment: "DKIM2D_REPLAY_VALKEY_ATTESTATION_SHARED_SECRET_SET"},
 		{path: "replay.valkey.attestation.shared_retention", environment: "DKIM2D_REPLAY_VALKEY_ATTESTATION_SHARED_RETENTION"},
-		{path: "observability.logging.level", environment: "DKIM2D_OBSERVABILITY_LOGGING_LEVEL", defaultValue: canonicalInfo, hasDefault: true},
-		{path: "observability.debug.message_shape", environment: "DKIM2D_OBSERVABILITY_DEBUG_MESSAGE_SHAPE", defaultValue: canonicalFalse, hasDefault: true},
+		{path: "observability.logging.level", environment: "DKIM2D_OBSERVABILITY_LOGGING_LEVEL", defaultValue: "info", hasDefault: true},
+		{path: "observability.debug.message_shape", environment: "DKIM2D_OBSERVABILITY_DEBUG_MESSAGE_SHAPE", defaultValue: "false", hasDefault: true},
 		{path: "observability.debug.dns", environment: "DKIM2D_OBSERVABILITY_DEBUG_DNS", defaultValue: "false", hasDefault: true},
 		{path: "observability.debug.replay", environment: "DKIM2D_OBSERVABILITY_DEBUG_REPLAY", defaultValue: "false", hasDefault: true},
-		{path: "observability.tracing.exporter", environment: "DKIM2D_OBSERVABILITY_TRACING_EXPORTER", defaultValue: canonicalNone, hasDefault: true},
+		{path: "observability.tracing.exporter", environment: "DKIM2D_OBSERVABILITY_TRACING_EXPORTER", defaultValue: "none", hasDefault: true},
 		{path: "observability.tracing.endpoint", environment: "DKIM2D_OBSERVABILITY_TRACING_ENDPOINT"},
 		{path: "observability.tracing.ca_file", environment: "DKIM2D_OBSERVABILITY_TRACING_CA_FILE"},
 		{path: "observability.tracing.sample_per_million", environment: "DKIM2D_OBSERVABILITY_TRACING_SAMPLE_PER_MILLION"},

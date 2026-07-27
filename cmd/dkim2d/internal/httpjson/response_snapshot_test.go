@@ -417,7 +417,7 @@ func TestMapDomainResultMapsAuthenticSelectedSignatureAndKeyPolicy(t *testing.T)
 		verification.Target.Instance != generated.CanonicalUint64("1") ||
 		len(verification.SignatureSets) != 1 ||
 		verification.SignatureSets[0].Algorithm != generated.RsaSha256 ||
-		verification.SignatureSets[0].Status != generated.Pass ||
+		verification.SignatureSets[0].Status != generated.SignatureSetResultStatusPass ||
 		verification.SignatureSets[0].Reason != generated.VerificationReasonNone ||
 		!verification.SignatureSets[0].KeyPolicy.TestingDeclared ||
 		!verification.SignatureSets[0].KeyPolicy.StrictIdentityDeclared ||

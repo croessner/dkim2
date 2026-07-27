@@ -6,14 +6,19 @@ OPENAPI_DIR := $(ROOT)/docs/specs/openapi
 OPENAPI_SOURCE := $(OPENAPI_DIR)/dkim2d.yaml
 OPENAPI_SERVER_CONFIG := $(OPENAPI_DIR)/oapi-codegen.server.yml
 OPENAPI_CLIENT_CONFIG := $(OPENAPI_DIR)/oapi-codegen.client.yml
+OPENAPI_MILTER_CONFIG := $(OPENAPI_DIR)/oapi-codegen.milter-client.yml
+OPENAPI_MILTER_TEST_SERVER_CONFIG := $(OPENAPI_DIR)/oapi-codegen.milter-test-server.yml
 OPENAPI_SERVER_OUTPUT := $(ROOT)/cmd/dkim2d/internal/httpjson/generated/server.gen.go
 OPENAPI_CLIENT_OUTPUT := $(ROOT)/cmd/dkim2ctl/internal/testclient/generated/client.gen.go
+OPENAPI_MILTER_OUTPUT := $(ROOT)/cmd/dkim2-milter/internal/daemon/generated/client.gen.go
+OPENAPI_MILTER_TEST_SERVER_OUTPUT := $(ROOT)/cmd/dkim2-milter/internal/integration/generated/server.gen.go
 OPENAPI_SERVER_WIRE := $(ROOT)/cmd/dkim2d/internal/httpjson/wire/protected_string.gen.go
 OPENAPI_CLIENT_WIRE := $(ROOT)/cmd/dkim2ctl/internal/testclient/wire/protected_string.gen.go
+OPENAPI_MILTER_WIRE := $(ROOT)/cmd/dkim2-milter/internal/daemon/wire/protected_string.gen.go
 VENDOR_LF_PATHS := github.com/vmware-labs/yaml-jsonpath/LICENSE github.com/vmware-labs/yaml-jsonpath/NOTICE
 # OTLP's x/net graph makes Go 1.26 synchronize dkim2ctl's pruned module sums.
-WORKSPACE_SYNC_FILES := go.work go.work.sum lib/go.mod lib/go.sum cmd/dkim2d/go.mod cmd/dkim2d/go.sum cmd/dkim2-milter/go.mod cmd/dkim2ctl/go.mod cmd/dkim2ctl/go.sum tools/go.mod tools/go.sum
-WORKSPACE_ABSENT_SUM_FILES := cmd/dkim2-milter/go.sum
+WORKSPACE_SYNC_FILES := go.work go.work.sum lib/go.mod lib/go.sum cmd/dkim2d/go.mod cmd/dkim2d/go.sum cmd/dkim2-milter/go.mod cmd/dkim2-milter/go.sum cmd/dkim2ctl/go.mod cmd/dkim2ctl/go.sum tools/go.mod tools/go.sum
+WORKSPACE_ABSENT_SUM_FILES :=
 
 .PHONY: help
 help:
@@ -86,8 +91,11 @@ generate-openapi:
 	export GOCACHE="$$cache"; \
 	go -C tools run ./cmd/wiregen -package wire -output "$(OPENAPI_SERVER_WIRE)"; \
 	go -C tools run ./cmd/wiregen -package wire -output "$(OPENAPI_CLIENT_WIRE)"; \
+	go -C tools run ./cmd/wiregen -package wire -output "$(OPENAPI_MILTER_WIRE)"; \
 	go -C tools tool oapi-codegen -config "$(OPENAPI_SERVER_CONFIG)" -o "$(OPENAPI_SERVER_OUTPUT)" "$(OPENAPI_SOURCE)"; \
-	go -C tools tool oapi-codegen -config "$(OPENAPI_CLIENT_CONFIG)" -o "$(OPENAPI_CLIENT_OUTPUT)" "$(OPENAPI_SOURCE)"
+	go -C tools tool oapi-codegen -config "$(OPENAPI_CLIENT_CONFIG)" -o "$(OPENAPI_CLIENT_OUTPUT)" "$(OPENAPI_SOURCE)"; \
+	go -C tools tool oapi-codegen -config "$(OPENAPI_MILTER_CONFIG)" -o "$(OPENAPI_MILTER_OUTPUT)" "$(OPENAPI_SOURCE)"; \
+	go -C tools tool oapi-codegen -config "$(OPENAPI_MILTER_TEST_SERVER_CONFIG)" -o "$(OPENAPI_MILTER_TEST_SERVER_OUTPUT)" "$(OPENAPI_SOURCE)"
 
 .PHONY: check-openapi
 check-openapi: check-workspace
@@ -100,24 +108,31 @@ check-openapi: check-workspace
 	GOCACHE="$$output/caller-cache" $(MAKE) generate-openapi \
 		OPENAPI_SERVER_WIRE="$$output/server-wire.go" \
 		OPENAPI_CLIENT_WIRE="$$output/client-wire.go" \
+		OPENAPI_MILTER_WIRE="$$output/milter-wire.go" \
 		OPENAPI_SERVER_OUTPUT="$$output/server.gen.go" \
-		OPENAPI_CLIENT_OUTPUT="$$output/client.gen.go"; \
+		OPENAPI_CLIENT_OUTPUT="$$output/client.gen.go" \
+		OPENAPI_MILTER_OUTPUT="$$output/milter.gen.go" \
+		OPENAPI_MILTER_TEST_SERVER_OUTPUT="$$output/milter-test-server.gen.go"; \
 	export GOCACHE="$$output/cache"; \
 	cmp "$(OPENAPI_SERVER_WIRE)" "$$output/server-wire.go"; \
 	cmp "$(OPENAPI_CLIENT_WIRE)" "$$output/client-wire.go"; \
+	cmp "$(OPENAPI_MILTER_WIRE)" "$$output/milter-wire.go"; \
 	cmp "$(OPENAPI_SERVER_OUTPUT)" "$$output/server.gen.go"; \
 	cmp "$(OPENAPI_CLIENT_OUTPUT)" "$$output/client.gen.go"; \
-	! rg -q '^output:' "$(OPENAPI_SERVER_CONFIG)" "$(OPENAPI_CLIENT_CONFIG)"; \
+	cmp "$(OPENAPI_MILTER_OUTPUT)" "$$output/milter.gen.go"; \
+	cmp "$(OPENAPI_MILTER_TEST_SERVER_OUTPUT)" "$$output/milter-test-server.gen.go"; \
+	! rg -q '^output:' "$(OPENAPI_SERVER_CONFIG)" "$(OPENAPI_CLIENT_CONFIG)" "$(OPENAPI_MILTER_CONFIG)" "$(OPENAPI_MILTER_TEST_SERVER_CONFIG)"; \
 	rg -q '^[[:space:]]*(require[[:space:]]+)?github.com/getkin/kin-openapi v0\.135\.0$$' tools/go.mod; \
 	rg -q '^[[:space:]]*(require[[:space:]]+)?github.com/getkin/kin-openapi v0\.135\.0$$' cmd/dkim2d/go.mod; \
 	rg -q '^[[:space:]]*github.com/oapi-codegen/oapi-codegen/v2 v2\.7\.1( // indirect)?$$' tools/go.mod; \
-	! rg -q 'github.com/oapi-codegen/runtime' cmd/dkim2d/go.mod cmd/dkim2ctl/go.mod; \
-	! rg -q 'github.com/oapi-codegen/runtime' cmd/dkim2d cmd/dkim2ctl --glob '*.go'; \
+	! rg -q 'github.com/oapi-codegen/runtime' cmd/dkim2d/go.mod cmd/dkim2ctl/go.mod cmd/dkim2-milter/go.mod; \
+	! rg -q 'github.com/oapi-codegen/runtime' cmd/dkim2d cmd/dkim2ctl cmd/dkim2-milter --glob '*.go'; \
 	! rg -q 'oapi-codegen|kin-openapi' lib/go.mod lib --glob '*.go' --glob '!*_test.go'; \
 	! rg -q 'oapi-codegen/(nethttp|middleware)' --glob 'go.mod' .; \
 	go -C tools test ./cmd/wiregen; \
 	go -C cmd/dkim2d test ./internal/httpjson/...; \
-	go -C cmd/dkim2ctl test ./internal/testclient/...
+	go -C cmd/dkim2ctl test ./internal/testclient/...; \
+	go -C cmd/dkim2-milter test ./internal/daemon/...
 
 .PHONY: check-workspace
 check-workspace:
@@ -187,9 +202,20 @@ check-protected-platforms:
 		go test -c -o "$$output/dkim2ctl-freebsd-amd64.test" ./cmd/dkim2ctl/internal/testclient; \
 	GOCACHE="$$output/cache" GOOS=windows GOARCH=amd64 CGO_ENABLED=0 \
 		go test -c -o "$$output/dkim2ctl-windows-amd64.test.exe" ./cmd/dkim2ctl/internal/testclient; \
+	GOCACHE="$$output/cache" GOOS=linux GOARCH=amd64 CGO_ENABLED=0 \
+		go build -o "$$output/dkim2-milter-linux-amd64" ./cmd/dkim2-milter; \
+	GOCACHE="$$output/cache" GOOS=linux GOARCH=arm64 CGO_ENABLED=0 \
+		go build -o "$$output/dkim2-milter-linux-arm64" ./cmd/dkim2-milter; \
+	GOCACHE="$$output/cache" GOOS=freebsd GOARCH=amd64 CGO_ENABLED=0 \
+		go test -c -o "$$output/dkim2-milter-freebsd-amd64.test" ./cmd/dkim2-milter/internal/config; \
+	GOCACHE="$$output/cache" GOOS=windows GOARCH=amd64 CGO_ENABLED=0 \
+		go test -c -o "$$output/dkim2-milter-windows-amd64.test.exe" ./cmd/dkim2-milter/internal/config; \
 	if test "$$(go env GOOS)" = darwin; then \
 		GOCACHE="$$output/cache" CGO_ENABLED=1 go test ./cmd/dkim2d/internal/config; \
 		GOCACHE="$$output/cache" CGO_ENABLED=0 go test ./cmd/dkim2d/internal/config; \
+		GOCACHE="$$output/cache" CGO_ENABLED=1 go test ./cmd/dkim2-milter/internal/config ./cmd/dkim2-milter/internal/securefile; \
+		GOCACHE="$$output/cache" CGO_ENABLED=0 go build -o "$$output/dkim2-milter-darwin-nocgo" ./cmd/dkim2-milter; \
+		GOCACHE="$$output/cache" CGO_ENABLED=0 go test -run '^TestDarwinNoCGOProtectedLoadingFailsClosed$$' ./cmd/dkim2-milter/internal/securefile; \
 	fi
 
 .PHONY: guardrails

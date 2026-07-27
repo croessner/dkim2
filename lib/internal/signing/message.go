@@ -35,6 +35,7 @@ func (f SignatureEnvelopeForm) Known() bool {
 // CompletedMessage is one fully proved immutable signing result.
 type CompletedMessage struct {
 	raw             []byte
+	generatedFields [][]byte
 	role            DerivedRole
 	envelopeForm    SignatureEnvelopeForm
 	newInstance     uint64
@@ -238,6 +239,15 @@ func (m CompletedMessage) Algorithms() []Algorithm {
 	return slices.Clone(m.algorithms)
 }
 
+// GeneratedFields returns detached complete fields emitted by the signing
+// coordinator in their insertion order.
+func (m CompletedMessage) GeneratedFields() [][]byte {
+	if !m.Valid() {
+		return nil
+	}
+	return cloneSlices(m.generatedFields)
+}
+
 // BodyUnavailable reports whether the generated revision recipe explicitly used b:null.
 func (m CompletedMessage) BodyUnavailable() bool {
 	return m.Valid() && m.bodyUnavailable
@@ -412,7 +422,8 @@ func (c Coordinator) CompleteMessage(ctx context.Context, completed CompletedSig
 	}
 	restricted := releaseRequirement.Restricted()
 	result := CompletedMessage{
-		raw: inserted.RawBytes(), role: completed.plan.Role(), envelopeForm: completed.envelopeForm,
+		raw: inserted.RawBytes(), generatedFields: cloneSlices(fields),
+		role: completed.plan.Role(), envelopeForm: completed.envelopeForm,
 		newInstance: completed.plan.NewInstanceNumber(), sequence: completed.plan.NextSequence(),
 		algorithms: algorithms, bodyUnavailable: bodyUnavailable,
 		unavailable:   completed.plan.GenerationFacts().BodyUnavailableReason(),

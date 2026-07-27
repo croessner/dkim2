@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/croessner/dkim2/cmd/dkim2d/internal/signingstore"
 	"golang.org/x/sys/unix"
 )
 
@@ -23,6 +24,8 @@ type protectedFileRole uint8
 const (
 	protectedYAML protectedFileRole = iota + 1
 	protectedCapability
+	protectedSignCapability
+	protectedReviseCapability
 	protectedHMAC
 	protectedApplicationPassword
 	protectedAuditorPassword
@@ -178,9 +181,24 @@ func loadProtectedGeneration(
 	); err != nil {
 		return nil, err
 	}
-	state, err := buildProtectedState(snapshot, files)
+	state, err := buildProtectedState(snapshot, files, generation.fd)
 	if err != nil {
 		return nil, err
+	}
+	// Recheck the already-read outer protected files after the optional
+	// compound signing store has finished parsing. This proves an overlapping
+	// immutable interval across capabilities, datasource, manifest, and keys.
+	if err := validateFinalDescriptorStates(
+		files,
+		generation.fd,
+		generationPre,
+		yaml.fd,
+		yamlPre,
+		yamlImmediate,
+		nil,
+	); err != nil {
+		state.clearProtected(protectedOwnedByPrebootstrap)
+		return nil, newError(CodeProtectedAccess)
 	}
 	return &Prebootstrap{state: state}, nil
 }
@@ -233,6 +251,19 @@ func selectedProtectedPaths(snapshot Snapshot) []selectedProtectedPath {
 		path: snapshot.Server().CapabilityFile(),
 		role: protectedCapability,
 	}}
+	if snapshot.Signing().Enabled() {
+		paths = append(
+			paths,
+			selectedProtectedPath{
+				path: snapshot.Server().SignCapabilityFile(),
+				role: protectedSignCapability,
+			},
+			selectedProtectedPath{
+				path: snapshot.Server().ReviseCapabilityFile(),
+				role: protectedReviseCapability,
+			},
+		)
+	}
 	replay := snapshot.Replay()
 	if replay.Enabled() {
 		paths = append(paths, selectedProtectedPath{
@@ -328,7 +359,11 @@ func notifyProtectedObserver(
 }
 
 // buildProtectedState validates content and constructs one exclusive startup owner.
-func buildProtectedState(snapshot Snapshot, files []*retainedProtectedFile) (state *protectedState, resultErr error) {
+func buildProtectedState(
+	snapshot Snapshot,
+	files []*retainedProtectedFile,
+	generationFD int,
+) (state *protectedState, resultErr error) {
 	state = &protectedState{
 		phase:    protectedOwnedByPrebootstrap,
 		snapshot: snapshot,
@@ -347,6 +382,18 @@ func buildProtectedState(snapshot Snapshot, files []*retainedProtectedFile) (sta
 				return nil, err
 			}
 			copy(state.capability[:], file.data)
+		case protectedSignCapability:
+			if err := validateExactKey(file.data); err != nil {
+				return nil, err
+			}
+			copy(state.signCapability[:], file.data)
+			state.hasSigning = true
+		case protectedReviseCapability:
+			if err := validateExactKey(file.data); err != nil {
+				return nil, err
+			}
+			copy(state.reviseCapability[:], file.data)
+			state.hasSigning = true
 		case protectedHMAC:
 			if err := validateExactKey(file.data); err != nil {
 				return nil, err
@@ -378,6 +425,20 @@ func buildProtectedState(snapshot Snapshot, files []*retainedProtectedFile) (sta
 		default:
 			return nil, newError(CodeInternal)
 		}
+	}
+	if snapshot.Signing().Enabled() {
+		if generationFD < 0 || !state.hasSigning {
+			return nil, newError(CodeProtectedContent)
+		}
+		store, err := signingstore.NewRuntime(
+			generationFD,
+			filepath.Base(snapshot.Signing().DatasourceFile()),
+			filepath.Base(snapshot.Signing().PrivateManifestFile()),
+		)
+		if err != nil || store == nil {
+			return nil, newError(CodeProtectedContent)
+		}
+		state.signingStore = store
 	}
 	if err := validateProtectedSeparation(state); err != nil {
 		return nil, err
@@ -434,7 +495,8 @@ func validateProtectedFileMetadata(
 	modeAccepted := false
 	requireSingleLink := role != protectedCA
 	switch role {
-	case protectedYAML, protectedCapability, protectedHMAC,
+	case protectedYAML, protectedCapability, protectedSignCapability,
+		protectedReviseCapability, protectedHMAC,
 		protectedApplicationPassword, protectedAuditorPassword:
 		modeAccepted = metadata.modeBits == 0o400 || metadata.modeBits == 0o600
 	case protectedCA:
@@ -472,7 +534,8 @@ func protectedSizeAccepted(role protectedFileRole, size int64) bool {
 	switch role {
 	case protectedYAML:
 		return size >= 1 && size <= maxYAMLDocumentBytes
-	case protectedCapability, protectedHMAC:
+	case protectedCapability, protectedSignCapability, protectedReviseCapability,
+		protectedHMAC:
 		return size == exactKeyBytes
 	case protectedApplicationPassword, protectedAuditorPassword:
 		return size >= 1 && size <= maxPasswordBytes
@@ -490,7 +553,8 @@ func protectedReadCap(role protectedFileRole) int {
 	switch role {
 	case protectedYAML:
 		return maxYAMLDocumentBytes
-	case protectedCapability, protectedHMAC:
+	case protectedCapability, protectedSignCapability, protectedReviseCapability,
+		protectedHMAC:
 		return exactKeyBytes
 	case protectedApplicationPassword, protectedAuditorPassword:
 		return maxPasswordBytes

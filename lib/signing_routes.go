@@ -356,6 +356,89 @@ type RouteFanoutAuthority interface {
 	ConsumeRelease(context.Context, RouteTicketQuery) (RouteAuthorityResult, error)
 }
 
+type requestRouteAuthority struct {
+	value *routeplan.MemoryAuthority
+}
+
+// NewRequestRouteAuthority constructs one operation-scoped in-memory route
+// authority. Callers must create a fresh value per request and discard it
+// after the resulting signing operation completes.
+func NewRequestRouteAuthority() RouteFanoutAuthority {
+	return &requestRouteAuthority{value: routeplan.NewMemoryAuthority()}
+}
+
+// Finalize issues one bounded request-local route plan.
+func (a *requestRouteAuthority) Finalize(
+	ctx context.Context,
+	query RouteFinalizeQuery,
+) (RouteAuthorityResult, error) {
+	if a == nil || a.value == nil {
+		return RouteAuthorityResult{}, newSigningError(SigningErrorInvalidRequest)
+	}
+	result, err := a.value.Finalize(ctx, query.value)
+	return RouteAuthorityResult{value: result}, err
+}
+
+// Reserve reserves one request-local route ticket.
+func (a *requestRouteAuthority) Reserve(
+	ctx context.Context,
+	query RouteTicketQuery,
+) (RouteAuthorityResult, error) {
+	if a == nil || a.value == nil {
+		return RouteAuthorityResult{}, newSigningError(SigningErrorInvalidRequest)
+	}
+	result, err := a.value.Reserve(ctx, query.value)
+	return RouteAuthorityResult{value: result}, err
+}
+
+// ReleaseReservation releases one pre-boundary request-local reservation.
+func (a *requestRouteAuthority) ReleaseReservation(
+	ctx context.Context,
+	query RouteTicketQuery,
+) (RouteAuthorityResult, error) {
+	if a == nil || a.value == nil {
+		return RouteAuthorityResult{}, newSigningError(SigningErrorInvalidRequest)
+	}
+	result, err := a.value.ReleaseReservation(ctx, query.value)
+	return RouteAuthorityResult{value: result}, err
+}
+
+// Burn commits one request-local route ticket at the external boundary.
+func (a *requestRouteAuthority) Burn(
+	ctx context.Context,
+	query RouteTicketQuery,
+) (RouteAuthorityResult, error) {
+	if a == nil || a.value == nil {
+		return RouteAuthorityResult{}, newSigningError(SigningErrorInvalidRequest)
+	}
+	result, err := a.value.Burn(ctx, query.value)
+	return RouteAuthorityResult{value: result}, err
+}
+
+// Replace acknowledges one same-lineage request-local replacement.
+func (a *requestRouteAuthority) Replace(
+	ctx context.Context,
+	query RouteTicketQuery,
+) (RouteAuthorityResult, error) {
+	if a == nil || a.value == nil {
+		return RouteAuthorityResult{}, newSigningError(SigningErrorInvalidRequest)
+	}
+	result, err := a.value.Replace(ctx, query.value)
+	return RouteAuthorityResult{value: result}, err
+}
+
+// ConsumeRelease consumes one restricted request-local release.
+func (a *requestRouteAuthority) ConsumeRelease(
+	ctx context.Context,
+	query RouteTicketQuery,
+) (RouteAuthorityResult, error) {
+	if a == nil || a.value == nil {
+		return RouteAuthorityResult{}, newSigningError(SigningErrorInvalidRequest)
+	}
+	result, err := a.value.ConsumeRelease(ctx, query.value)
+	return RouteAuthorityResult{value: result}, err
+}
+
 type routeAuthorityBridge struct{ authority RouteFanoutAuthority }
 
 // Finalize adapts one public fanout issuance callback.

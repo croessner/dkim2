@@ -10,6 +10,8 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
+const policyModeStrictClass = "strict"
+
 const (
 	telemetryResultFailure       = "failure"
 	telemetryResultInternal      = "internal"
@@ -146,12 +148,12 @@ func policyReasonClass(state dkim2.ResultState) string {
 func policyModeClass(mode dkim2.PolicyMode) string {
 	switch mode {
 	case dkim2.PolicyModeStrict:
-		return "strict"
+		return policyModeStrictClass
 	case dkim2.PolicyModePermissive:
 		return "permissive"
 	case dkim2.PolicyModeTesting:
 		return "testing"
 	default:
-		return "strict"
+		return policyModeStrictClass
 	}
 }

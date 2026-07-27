@@ -26,6 +26,16 @@ func NewPrivateKeyHandle(identity []byte) (PrivateKeyHandle, error) {
 // Valid reports whether the handle was constructed from a nonempty identity.
 func (h PrivateKeyHandle) Valid() bool { return h.value.Valid() }
 
+// ProjectedPrivateKeyHandle returns the detached internal handle needed by
+// repository-owned datasource bridges. The return type prevents use outside
+// sibling modules that are permitted to import the internal signing package.
+func ProjectedPrivateKeyHandle(handle PrivateKeyHandle) (signing.PrivateKeyHandle, error) {
+	if !handle.Valid() {
+		return signing.PrivateKeyHandle{}, newSigningError(SigningErrorInvalidRequest)
+	}
+	return handle.value, nil
+}
+
 // String returns a constant secret-safe handle summary.
 func (h PrivateKeyHandle) String() string { return "dkim2.PrivateKeyHandle{redacted}" }
 
@@ -98,6 +108,18 @@ func (c Ed25519SigningCredential) Format(state fmt.State, _ rune) {
 // SigningProfile is an immutable canonical signing domain with one or both
 // baseline algorithm credentials.
 type SigningProfile struct{ value signing.Profile }
+
+// NewProjectedSigningProfile seals one already validated internal datasource
+// projection for sibling command modules without rebuilding its credentials.
+//
+// The parameter deliberately remains an internal type: only modules inside
+// this repository may cross this narrow datasource-to-signing bridge.
+func NewProjectedSigningProfile(projected signing.Profile) (SigningProfile, error) {
+	if !projected.Valid() {
+		return SigningProfile{}, newSigningError(SigningErrorInvalidRequest)
+	}
+	return newSigningProfile(projected.Domain(), projected.Credentials())
+}
 
 // NewRSASigningProfile constructs a single-algorithm RSA-SHA256 profile.
 func NewRSASigningProfile(domain string, credential RSASigningCredential) (SigningProfile, error) {

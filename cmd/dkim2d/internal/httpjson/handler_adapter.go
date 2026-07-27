@@ -50,24 +50,40 @@ type inboundProcessService interface {
 
 // strictAdapter maps generated operation objects to immutable app services.
 type strictAdapter struct {
-	readiness readinessSource
-	processor inboundProcessService
-	metrics   *observability.Metrics
+	readiness  readinessSource
+	processor  inboundProcessService
+	operations app.OperationService
+	metrics    *observability.Metrics
 }
 
 // newStrictAdapter constructs one generated strict-server implementation.
 func newStrictAdapter(
 	readiness readinessSource,
 	processor inboundProcessService,
-	metricsCandidates ...*observability.Metrics,
+	dependencies ...any,
 ) (*strictAdapter, error) {
-	if nilInterfaceValue(readiness) || nilInterfaceValue(processor) || len(metricsCandidates) > 1 {
+	if nilInterfaceValue(readiness) || nilInterfaceValue(processor) {
 		return nil, &strictAdapterError{class: strictFailureInternal}
 	}
 	var metrics *observability.Metrics
-	if len(metricsCandidates) == 1 {
-		metrics = metricsCandidates[0]
-	} else {
+	var operations app.OperationService
+	for _, dependency := range dependencies {
+		switch typed := dependency.(type) {
+		case *observability.Metrics:
+			if metrics != nil || typed == nil {
+				return nil, &strictAdapterError{class: strictFailureInternal}
+			}
+			metrics = typed
+		case app.OperationService:
+			if operations != nil || nilInterfaceValue(typed) {
+				return nil, &strictAdapterError{class: strictFailureInternal}
+			}
+			operations = typed
+		default:
+			return nil, &strictAdapterError{class: strictFailureInternal}
+		}
+	}
+	if metrics == nil {
 		var err error
 		metrics, err = observability.NewMetrics()
 		if err != nil {
@@ -77,7 +93,9 @@ func newStrictAdapter(
 	if metrics == nil {
 		return nil, &strictAdapterError{class: strictFailureInternal}
 	}
-	return &strictAdapter{readiness: readiness, processor: processor, metrics: metrics}, nil
+	return &strictAdapter{
+		readiness: readiness, processor: processor, operations: operations, metrics: metrics,
+	}, nil
 }
 
 // GetMetrics returns the generated representation for contract-level callers.
@@ -206,12 +224,79 @@ func (a *strictAdapter) ProcessMessage(
 	if err != nil {
 		return nil, classifyStrictContextFailure(ctx)
 	}
-	response, err := MapInboundResult(result)
+	response, err := MapInboundResult(result, domainRequest.AuthservID())
 	if err != nil {
 		return nil, &strictAdapterError{class: strictFailureInternal}
 	}
 	date, datePresent := responseDate(ctx)
 	return newJSONResponse(http.StatusOK, response, false, date, datePresent)
+}
+
+// SignMessage maps and executes one generated originator operation.
+func (a *strictAdapter) SignMessage(
+	ctx context.Context,
+	request generated.SignMessageRequestObject,
+) (generated.SignMessageResponseObject, error) {
+	if a == nil || a.operations == nil || request.Body == nil {
+		return nil, &strictAdapterError{class: strictFailureInternal}
+	}
+	domainRequest, err := MapSignRequest(*request.Body)
+	if err != nil {
+		return nil, classifyMappingFailure(err)
+	}
+	result, err := executeOperation(ctx, a.operations, domainRequest)
+	if err != nil {
+		return nil, classifyStrictContextFailure(ctx)
+	}
+	response, err := MapOperationResult(result)
+	if err != nil {
+		return nil, &strictAdapterError{class: strictFailureInternal}
+	}
+	date, datePresent := responseDate(ctx)
+	wire, err := newJSONResponse(http.StatusOK, response, false, date, datePresent)
+	if err != nil {
+		return nil, err
+	}
+	return operationSignResponse{wire}, nil
+}
+
+// ReviseMessage maps and executes one generated sealed revision operation.
+func (a *strictAdapter) ReviseMessage(
+	ctx context.Context,
+	request generated.ReviseMessageRequestObject,
+) (generated.ReviseMessageResponseObject, error) {
+	if a == nil || a.operations == nil || request.Body == nil {
+		return nil, &strictAdapterError{class: strictFailureInternal}
+	}
+	domainRequest, err := MapReviseRequest(*request.Body)
+	if err != nil {
+		return nil, classifyMappingFailure(err)
+	}
+	result, err := executeOperation(ctx, a.operations, domainRequest)
+	if err != nil {
+		return nil, classifyStrictContextFailure(ctx)
+	}
+	response, err := MapOperationResult(result)
+	if err != nil {
+		return nil, &strictAdapterError{class: strictFailureInternal}
+	}
+	date, datePresent := responseDate(ctx)
+	wire, err := newJSONResponse(http.StatusOK, response, false, date, datePresent)
+	if err != nil {
+		return nil, err
+	}
+	return operationReviseResponse{wire}, nil
+}
+
+// classifyMappingFailure maps one bounded DTO admission failure.
+func classifyMappingFailure(err error) error {
+	if IsMappingError(err, MappingRequestTooLarge) {
+		return &strictAdapterError{class: strictFailureRequestTooLarge}
+	}
+	if IsMappingError(err, MappingInvalidContract) {
+		return &strictAdapterError{class: strictFailureInvalidContract}
+	}
+	return &strictAdapterError{class: strictFailureInternal}
 }
 
 // readinessResponse selects exactly ready 200 or closed 503.

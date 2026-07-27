@@ -1,14 +1,262 @@
 # dkim2-milter
 
-`dkim2-milter` is planned as the first SMTP integration adapter.
+`dkim2-milter` is the Unix-socket SMTP adapter for the DKIM2 reference
+implementation. It collects one bounded Milter-v6 callback transaction,
+reconstructs an explicitly identified RFC 5322 representation, calls exactly
+one generated `dkim2d` operation at end of message, validates the complete
+response, and applies only the admitted append-only action plan.
+For inbound reporting it also performs the bounded RFC 8601 sanitization
+described below before inserting the daemon-owned trace field.
 
-The Milter should collect SMTP envelope metadata and message content, call the
-HTTP/JSON service at EOM time, and apply the returned action plan. It must not
-contain protocol logic that belongs in the DKIM2 core.
+The adapter is operational glue. DKIM2 parsing, verification, signing,
+revision, recipe, replay, and datasource rules remain in the library and
+daemon. The implemented behavior is pinned to
+`draft-ietf-dkim-dkim2-spec-04` and the repository's historical
+`draft-chuang-dkim2-dns-04` baseline.
 
-This command has its own Go module so future Milter-specific dependencies do not
-become dependencies of library consumers.
+## Runtime requirements
 
-The first implementation should treat Milter fidelity as an explicit runtime
-property. It must report whether the message given to the daemon is raw RFC
-5322 input or a reconstructed representation from Milter callbacks.
+The production listener is an absolute Unix-socket path. The socket parent
+must be owned by root or the effective service identity and must deny mutation
+to other identities. Startup rejects symlinked ancestry, an existing target,
+unsafe directory permissions, ownership drift, and unsupported platforms.
+The process creates the socket with the configured `0660` mode under a
+restrictive umask and removes only the inode it created.
+
+The daemon endpoint must be a canonical literal-loopback HTTP URL such as
+`http://127.0.0.1:8080`. Hostnames, remote addresses, redirects, proxies,
+cookies, ambient credentials, user information, query strings, and fragments
+are rejected. The mode-specific capability is a 32-byte protected regular
+file in an exact `0500` parent. The file must be owned by the effective
+identity, have mode `0400` or `0600`, and have one link. Never place the
+capability in a command line, environment value, log, or configuration value.
+
+On macOS the production protected-file loader requires the native cgo build so
+ACLs can be inspected. A `CGO_ENABLED=0` Darwin binary builds for portability
+evidence but fails protected loading closed. Linux production builds remain
+pure Go and support amd64 and arm64.
+
+## Configuration
+
+The stable root is `dkim2-milter-config-v1`. Configuration is strict: unknown
+or duplicate keys, weak YAML scalar forms, conflicting environment sources,
+missing placeholders, unsafe paths, and invalid conditional fields fail
+startup. Scalar placeholders are expanded before typed validation. The
+canonical environment prefix is `DKIM2_MILTER_`.
+
+Minimal inbound example:
+
+```yaml
+version: dkim2-milter-config-v1
+server:
+  socket: /run/dkim2/milter.sock
+  socket_mode: "0660"
+  shutdown_timeout: 10s
+  max_connections: 128
+  max_in_flight_messages: 64
+  max_buffered_bytes: 268435456
+daemon:
+  endpoint: http://127.0.0.1:8080
+  capability_file: /etc/dkim2/protected/process-capability
+  request_timeout: 2s
+mode: inbound
+failure:
+  mode: tempfail
+limits:
+  message_bytes: 33554432
+  header_bytes: 1048576
+  header_count: 2000
+  header_field_bytes: 65536
+  recipient_count: 2000
+observability:
+  logging:
+    level: info
+```
+
+Signing modes additionally require:
+
+```yaml
+mode: originator # or ordinary_transit
+signing:
+  tenant: tenant-a
+  domain: example.test
+  allow_recipient_group: false
+```
+
+`allow_recipient_group` is reserved and must remain false. Signing stays
+single-recipient until the adapter has trustworthy per-message Bcc
+classification; `true` fails configuration validation.
+
+`max_buffered_bytes` is an aggregate process budget, not only a retained
+message-size limit. Body collection accounts for slice capacity, and EOM
+reserves concurrent raw, Base64, JSON, and HTTP transport copies plus a fixed
+response, DTO, and Milter-frame working set through the terminal socket write.
+The aggregate budget is at least 32 MiB, and configuration proves that it can
+carry twice the configured maximum message, five request copies of that
+message and the maximum envelope, the retained maximum envelope, and the fixed
+response working set. The defaults admit one maximum 32 MiB message plus the
+maximum allowed SMTP envelope while concurrent requests continue to share the
+same cap.
+
+Inbound `Authentication-Results` reporting is disabled by default. When
+enabled, it requires a canonical lower-case RFC 8601 `authserv_id`:
+
+```yaml
+authentication_results:
+  enabled: true
+  authserv_id: mx.example.test
+```
+
+The only emitted value is
+`<authserv-id>; dkim2=<pass|fail|permerror|temperror>`. Pre-existing fields
+claiming the configured service are deleted in descending field-index order,
+and the daemon-owned result is inserted at the top. Fields from other services
+are preserved. A forged local field disables fail-open.
+
+## Modes and actions
+
+| Mode | Generated daemon operation | Allowed accepting action sequence |
+| --- | --- | --- |
+| `inbound` | `POST /v1/process` | none, or one configured `Authentication-Results` |
+| `originator` | `POST /v1/sign` | `Message-Instance`, then `DKIM2-Signature` |
+| `ordinary_transit` | `POST /v1/revise` | `DKIM2-Signature`, optionally preceded by `Message-Instance` |
+
+The adapter negotiates only the Milter-v6 callbacks it needs and the add-header
+and change-header mutation capabilities. It rejects peers that cannot preserve
+after-colon leading whitespace or perform RFC 8601 sanitization. Arbitrary
+header deletion or replacement, body replacement, envelope mutation,
+recipient mutation, quarantine, discard, and arbitrary SMTP replies are not
+supported.
+
+Every daemon response and complete action plan is validated and serialized
+before the first MTA write. Values containing CR, LF, or NUL are rejected.
+Each Milter action frame is bounded by 65,536 bytes and the complete plan by
+three such frames. A transport failure after any possible mutation byte is an
+indeterminate MTA-side outcome: the connection closes and fail-open is
+forbidden.
+
+## Message fidelity
+
+The adapter preserves ordered SMTP envelope callback bytes, including
+recipient duplicates. It does not trim paths, case-fold, normalize Unicode,
+perform IDNA conversion, or derive envelope facts from message headers.
+SMTPUTF8 paths are supported for inbound processing; the pinned signing
+baseline requires ASCII envelope paths for originator and ordinary-transit
+modes.
+
+Headers remain an ordered sequence with duplicate fields and original field
+name casing. Negotiated callback folding is reconstructed as CRLF without
+otherwise normalizing header or body bytes. Body chunks are concatenated in
+callback order. The daemon input fidelity is always
+`milter_reconstructed_crlf`; it is never represented as original raw SMTP
+wire evidence.
+
+## Failure policy
+
+The default `failure.mode: tempfail` maps local ambiguity and dependency
+failure to:
+
+```text
+451 4.7.1 DKIM2 service unavailable
+```
+
+An explicit daemon rejection maps to:
+
+```text
+550 5.7.1 DKIM2 policy rejection
+```
+
+`failure.mode: fail_open` is a compatibility policy, not a verification
+result. It may accept only an unmodified message after a proven pre-write
+daemon unavailability, a timeout before response bytes, or local overload
+before operation start. It never overrides an explicit daemon refusal,
+malformed response, fidelity failure, a forged local reporting assertion,
+signing ambiguity, replay indeterminacy, or possible mutation write. Enabling
+it produces a mandatory bounded startup warning and a low-cardinality outcome
+metric.
+
+## Postfix-style integration
+
+After starting the service and verifying the socket owner, group, and mode,
+configure the MTA to use the Unix socket. A typical Postfix-style declaration
+is:
+
+```text
+smtpd_milters = unix:/run/dkim2/milter.sock
+non_smtpd_milters = unix:/run/dkim2/milter.sock
+milter_protocol = 6
+milter_default_action = tempfail
+```
+
+Apply the adapter only at the SMTP trust boundary matching its configured
+mode. Use separate instances and separate route capabilities for inbound,
+originator, and ordinary-transit paths. Do not share a signing capability with
+an inbound adapter. MTA socket permissions should grant connection access only
+to the intended service group.
+
+Private-key generation ownership belongs to `dkim2d`, not this adapter.
+Signing-enabled daemon configuration loads the signing-profile datasource,
+private-key manifest, and PKCS#8 children as one confined immutable generation.
+The Milter receives only the final generated action plan and never opens
+private keys, selects a key, or receives an opaque key handle.
+
+## Observability
+
+Logs are bounded JSON records with closed event and value vocabularies.
+Prometheus metrics, when configured, bind only to a canonical loopback
+authority. Labels never contain sender, recipient, tenant, domain, message ID,
+session ID, endpoint, socket peer, capability, key identity, raw error, header,
+body, signature, or message bytes. Debug settings cannot enable mail-data or
+secret output.
+
+Readiness means validated configuration, protected capability ownership, the
+public listener, admission controls, and required local resources are live. It
+does not claim that the daemon is reachable at that instant.
+
+## Troubleshooting
+
+- Startup failure: inspect ownership and modes of every configuration,
+  capability, and socket-parent component; reject symlinks and pre-existing
+  socket targets. On macOS verify that the production binary was built with
+  native cgo ACL support.
+- Negotiation disconnect: confirm Milter protocol v6, `add_header`, and
+  leading-header-space support at the MTA.
+- Fixed 451 reply: check daemon availability and operation metrics. The SMTP
+  reply intentionally contains no endpoint, path, identity, or raw error.
+- Signing tempfail: verify that the instance mode, route capability, tenant,
+  domain, recipient-group policy, and daemon signing generation agree. Do not
+  copy private material into the adapter to diagnose it.
+- Socket left after a crash: verify the inode before removal. A running
+  instance deliberately preserves a replacement inode it does not own.
+- Shutdown timeout: find slow MTA connections or daemon requests. Shutdown
+  withdraws readiness first, then closes the listener, cancels remaining
+  workers within the configured bound, and removes only the owned socket.
+
+## Developer verification
+
+The `internal/integration` suite builds the real executable once, starts an
+OpenAPI-generated loopback daemon fixture, and drives the public Unix socket
+with an independent MTA-side frame oracle. It covers all modes, ordered
+actions, exact generated requests, abort and connection reuse, malformed
+frames, overload, slow partial input, daemon unavailability and timeout,
+response overflow, shutdown, cleanup, capability routing, and output privacy.
+
+The owning package suites additionally cover socket replacement, protected-file
+races, immutable signing reload, callback and client panics, partial writes,
+action admission, bounded metrics, and race-safe shutdown. Fuzz targets cover
+wire frames and negotiation, callback sequences, reconstruction, daemon
+actions, SMTPUTF8 envelopes, strict configuration, and private manifests.
+Run repository checks from the root:
+
+```text
+make test
+make vet
+make lint
+make race
+make check-openapi
+make check-workspace
+make check-vendor
+make check-protected-platforms
+make govulncheck
+make guardrails
+```

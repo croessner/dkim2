@@ -53,15 +53,18 @@ type HTTPRuntime interface {
 
 // HTTPAssemblyInput carries only opaque app-owned dependencies into the transport adapter.
 type HTTPAssemblyInput struct {
-	snapshot    config.Snapshot
-	capability  config.ProcessCapability
-	processor   *InboundProcessor
-	readiness   *Readiness
-	fatal       FatalNotifier
-	serveReturn ServeReturnObserver
-	activation  ActivationAuthority
-	baseContext context.Context
-	telemetry   *observability.Runtime
+	snapshot         config.Snapshot
+	capability       config.ProcessCapability
+	signCapability   config.SignCapability
+	reviseCapability config.ReviseCapability
+	processor        *InboundProcessor
+	operation        OperationService
+	readiness        *Readiness
+	fatal            FatalNotifier
+	serveReturn      ServeReturnObserver
+	activation       ActivationAuthority
+	baseContext      context.Context
+	telemetry        *observability.Runtime
 }
 
 // newHTTPAssemblyInput validates one pure transport-construction input.
@@ -87,7 +90,7 @@ func newHTTPAssemblyInput(
 		activation:  activation,
 		baseContext: baseContext,
 	}
-	if !input.Valid() {
+	if !input.baseValid() {
 		return HTTPAssemblyInput{}, &LifecycleError{}
 	}
 	return input, nil
@@ -95,6 +98,16 @@ func newHTTPAssemblyInput(
 
 // Valid reports whether every structurally provable assembly dependency is present.
 func (i HTTPAssemblyInput) Valid() bool {
+	if !i.baseValid() {
+		return false
+	}
+	enabled := i.snapshot.Signing().Enabled()
+	return enabled == !nilInterface(i.operation)
+}
+
+// baseValid reports the transport dependencies that exist before optional
+// signing-service composition.
+func (i HTTPAssemblyInput) baseValid() bool {
 	return i.snapshot.Valid() && i.processor != nil && i.readiness != nil &&
 		!nilInterface(i.fatal) && !nilInterface(i.serveReturn) &&
 		!nilInterface(i.activation) && !nilInterface(i.baseContext)
@@ -107,6 +120,19 @@ func (i HTTPAssemblyInput) Snapshot() config.Snapshot { return i.snapshot }
 func (i HTTPAssemblyInput) ProcessCapability() config.ProcessCapability {
 	return i.capability
 }
+
+// SignCapability returns the opaque prepared originator capability handle.
+func (i HTTPAssemblyInput) SignCapability() config.SignCapability {
+	return i.signCapability
+}
+
+// ReviseCapability returns the opaque prepared revision capability handle.
+func (i HTTPAssemblyInput) ReviseCapability() config.ReviseCapability {
+	return i.reviseCapability
+}
+
+// OperationService returns the optional concrete signing application service.
+func (i HTTPAssemblyInput) OperationService() OperationService { return i.operation }
 
 // Processor returns the immutable inbound application service.
 func (i HTTPAssemblyInput) Processor() *InboundProcessor { return i.processor }
@@ -132,6 +158,18 @@ func (i HTTPAssemblyInput) Observability() *observability.Runtime { return i.tel
 // withObservability binds the already acquired telemetry owner to transport assembly.
 func (i HTTPAssemblyInput) withObservability(runtime *observability.Runtime) HTTPAssemblyInput {
 	i.telemetry = runtime
+	return i
+}
+
+// withOperation binds the same-generation signing service and capabilities.
+func (i HTTPAssemblyInput) withOperation(
+	service OperationService,
+	sign config.SignCapability,
+	revise config.ReviseCapability,
+) HTTPAssemblyInput {
+	i.operation = service
+	i.signCapability = sign
+	i.reviseCapability = revise
 	return i
 }
 

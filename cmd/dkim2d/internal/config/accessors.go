@@ -25,6 +25,11 @@ type ReplayConfig struct {
 	state *replayState
 }
 
+// SigningConfig is one immutable structurally opaque signing configuration view.
+type SigningConfig struct {
+	state *signingState
+}
+
 // ValkeyConfig is one immutable structurally opaque Valkey configuration view.
 type ValkeyConfig struct {
 	state *valkeyState
@@ -62,6 +67,14 @@ func (s Snapshot) Replay() ReplayConfig {
 		return ReplayConfig{}
 	}
 	return ReplayConfig{state: &s.state.replay}
+}
+
+// Signing returns the immutable signing-provider configuration.
+func (s Snapshot) Signing() SigningConfig {
+	if s.state == nil {
+		return SigningConfig{}
+	}
+	return SigningConfig{state: &s.state.signing}
 }
 
 // Observability returns the immutable operational telemetry configuration.
@@ -157,6 +170,64 @@ func (c ServerConfig) CapabilityFile() string {
 		return ""
 	}
 	return c.state.capabilityFile
+}
+
+// SignCapabilityFile returns the protected originator-signing capability path.
+func (c ServerConfig) SignCapabilityFile() string {
+	if c.state == nil {
+		return ""
+	}
+	return c.state.signCapabilityFile
+}
+
+// ReviseCapabilityFile returns the protected revision capability path.
+func (c ServerConfig) ReviseCapabilityFile() string {
+	if c.state == nil {
+		return ""
+	}
+	return c.state.reviseCapabilityFile
+}
+
+// Backend returns the selected signing backend.
+func (c SigningConfig) Backend() SigningBackend {
+	if c.state == nil {
+		return 0
+	}
+	return c.state.backend
+}
+
+// Enabled reports whether daemon signing is configured.
+func (c SigningConfig) Enabled() bool {
+	return c.state != nil && c.state.backend == SigningFlatFile
+}
+
+// DatasourceFile returns the protected signing-profile datasource path.
+func (c SigningConfig) DatasourceFile() string {
+	if c.state == nil {
+		return ""
+	}
+	return c.state.datasourceFile
+}
+
+// PrivateManifestFile returns the protected private-key manifest path.
+func (c SigningConfig) PrivateManifestFile() string {
+	if c.state == nil {
+		return ""
+	}
+	return c.state.privateManifestFile
+}
+
+// ReloadInterval returns the bounded compound-generation reload interval.
+func (c SigningConfig) ReloadInterval() time.Duration {
+	if c.state == nil {
+		return 0
+	}
+	return c.state.reloadInterval
+}
+
+// AllowRecipientGroup reports whether explicit multi-recipient signing is enabled.
+func (c SigningConfig) AllowRecipientGroup() bool {
+	return c.state != nil && c.state.allowRecipientGroup
 }
 
 // ReadHeaderTimeout returns the bounded request-header timeout.

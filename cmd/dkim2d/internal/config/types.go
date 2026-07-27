@@ -11,31 +11,38 @@ const (
 
 	snapshotRedactedText = "dkim2d_config_snapshot"
 
-	pathConfigVersion       = "config.version"
-	pathProtectedGeneration = "protected.generation"
-	pathServerListen        = "server.listen"
-	pathServerCapability    = "server.capability_file"
-	pathServerReadHeader    = "server.read_header_timeout"
-	pathServerRead          = "server.read_timeout"
-	pathServerWrite         = "server.write_timeout"
-	pathServerDeadline      = "server.request_deadline"
-	pathServerShutdown      = "server.shutdown_timeout"
-	pathServerMaxInFlight   = "server.max_in_flight"
-	pathServerMaxWaiters    = "server.max_waiters"
-	pathServerAdmissionWait = "server.admission_wait"
-	pathPolicyMode          = "policy.mode"
-	pathDNSLookupTimeout    = "dns.lookup_timeout"
-	pathDNSMaxConcurrent    = "dns.max_concurrent_lookups"
-	pathReplayBackend       = "replay.backend"
-	pathReplayHMACFile      = "replay.hmac_key_file"
-	pathReplayEpoch         = "replay.epoch"
-	pathReplayRetention     = "replay.retention"
-	pathReplayMaxEntries    = "replay.limits.max_entries"
-	pathReplayMaxWaiters    = "replay.limits.max_waiters"
-	pathReplayPruneBudget   = "replay.limits.prune_budget"
-	pathReplayMaxInFlight   = "replay.limits.max_in_flight"
-	pathReplayMaxAdmission  = "replay.limits.max_admission_waiters"
-	pathReplayRevalidate    = "replay.revalidate_interval"
+	pathConfigVersion          = "config.version"
+	pathProtectedGeneration    = "protected.generation"
+	pathServerListen           = "server.listen"
+	pathServerCapability       = "server.capability_file"
+	pathServerSignCapability   = "server.sign_capability_file"
+	pathServerReviseCapability = "server.revise_capability_file"
+	pathServerReadHeader       = "server.read_header_timeout"
+	pathServerRead             = "server.read_timeout"
+	pathServerWrite            = "server.write_timeout"
+	pathServerDeadline         = "server.request_deadline"
+	pathServerShutdown         = "server.shutdown_timeout"
+	pathServerMaxInFlight      = "server.max_in_flight"
+	pathServerMaxWaiters       = "server.max_waiters"
+	pathServerAdmissionWait    = "server.admission_wait"
+	pathPolicyMode             = "policy.mode"
+	pathDNSLookupTimeout       = "dns.lookup_timeout"
+	pathDNSMaxConcurrent       = "dns.max_concurrent_lookups"
+	pathReplayBackend          = "replay.backend"
+	pathReplayHMACFile         = "replay.hmac_key_file"
+	pathReplayEpoch            = "replay.epoch"
+	pathReplayRetention        = "replay.retention"
+	pathReplayMaxEntries       = "replay.limits.max_entries"
+	pathReplayMaxWaiters       = "replay.limits.max_waiters"
+	pathReplayPruneBudget      = "replay.limits.prune_budget"
+	pathReplayMaxInFlight      = "replay.limits.max_in_flight"
+	pathReplayMaxAdmission     = "replay.limits.max_admission_waiters"
+	pathReplayRevalidate       = "replay.revalidate_interval"
+	pathSigningBackend         = "signing.backend"
+	pathSigningDatasource      = "signing.datasource_file"
+	pathSigningManifest        = "signing.private_manifest_file"
+	pathSigningReload          = "signing.reload_interval"
+	pathSigningAllowGroup      = "signing.allow_recipient_group"
 
 	pathValkeyAddress          = "replay.valkey.address"
 	pathValkeyServerName       = "replay.valkey.server_name"
@@ -62,9 +69,10 @@ const (
 	defaultDeadline      = "60s"
 	defaultAdmissionWait = "100ms"
 
-	valuePolicyStrict   = "strict"
-	valueBackendValkey  = "valkey"
-	valuePersistenceRDB = "rdb"
+	valuePolicyStrict    = "strict"
+	valueBackendValkey   = "valkey"
+	valueBackendDisabled = "disabled"
+	valuePersistenceRDB  = "rdb"
 
 	flagListen        = "listen"
 	flagPolicyMode    = "policy-mode"
@@ -214,6 +222,8 @@ func stableFieldSpecs() []fieldSpec {
 		{path: pathProtectedGeneration, kind: valueString, yamlOnly: true},
 		{path: pathServerListen, env: "DKIM2D_SERVER_LISTEN", flag: flagListen, kind: valueString, defaultVal: defaultListenAddress, hasDefault: true},
 		{path: pathServerCapability, env: "DKIM2D_SERVER_CAPABILITY_FILE", kind: valueString},
+		{path: pathServerSignCapability, env: "DKIM2D_SERVER_SIGN_CAPABILITY_FILE", kind: valueString},
+		{path: pathServerReviseCapability, env: "DKIM2D_SERVER_REVISE_CAPABILITY_FILE", kind: valueString},
 		{path: pathServerReadHeader, env: "DKIM2D_SERVER_READ_HEADER_TIMEOUT", kind: valueDuration, defaultVal: defaultReadHeader, hasDefault: true},
 		{path: pathServerRead, env: "DKIM2D_SERVER_READ_TIMEOUT", kind: valueDuration, defaultVal: defaultReadTimeout, hasDefault: true},
 		{path: pathServerWrite, env: "DKIM2D_SERVER_WRITE_TIMEOUT", kind: valueDuration, defaultVal: defaultWriteTimeout, hasDefault: true},
@@ -235,6 +245,11 @@ func stableFieldSpecs() []fieldSpec {
 		{path: pathReplayMaxInFlight, env: "DKIM2D_REPLAY_LIMITS_MAX_IN_FLIGHT", kind: valueUint, defaultVal: "1024", hasDefault: true},
 		{path: pathReplayMaxAdmission, env: "DKIM2D_REPLAY_LIMITS_MAX_ADMISSION_WAITERS", kind: valueUint, defaultVal: "1024", hasDefault: true},
 		{path: pathReplayRevalidate, env: "DKIM2D_REPLAY_REVALIDATE_INTERVAL", kind: valueDuration, defaultVal: defaultReadTimeout, hasDefault: true},
+		{path: pathSigningBackend, env: "DKIM2D_SIGNING_BACKEND", kind: valueString, defaultVal: valueBackendDisabled, hasDefault: true},
+		{path: pathSigningDatasource, env: "DKIM2D_SIGNING_DATASOURCE_FILE", kind: valueString},
+		{path: pathSigningManifest, env: "DKIM2D_SIGNING_PRIVATE_MANIFEST_FILE", kind: valueString},
+		{path: pathSigningReload, env: "DKIM2D_SIGNING_RELOAD_INTERVAL", kind: valueDuration, defaultVal: defaultReadTimeout, hasDefault: true},
+		{path: pathSigningAllowGroup, env: "DKIM2D_SIGNING_ALLOW_RECIPIENT_GROUP", kind: valueBool, defaultVal: canonicalFalse, hasDefault: true},
 		{path: pathValkeyAddress, env: "DKIM2D_REPLAY_VALKEY_ADDRESS", kind: valueString},
 		{path: pathValkeyServerName, env: "DKIM2D_REPLAY_VALKEY_SERVER_NAME", kind: valueString},
 		{path: pathValkeyCAFile, env: "DKIM2D_REPLAY_VALKEY_CA_FILE", kind: valueString},

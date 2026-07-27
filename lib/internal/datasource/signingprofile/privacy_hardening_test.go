@@ -66,6 +66,19 @@ func TestSigningProfilePrivacyMatrixCoversHandlesRegistryAdapterAndFailures(t *t
 		string(handleContainerJSON) != "[{}]" {
 		t.Fatal("privacy inert handle JSON was not exactly opaque")
 	}
+	credential := fixture.profile.Credentials()[0]
+	binding, err := NewBinding(
+		"tenant."+marker,
+		fixture.profile.SigningDomain(),
+		"originator",
+		"key."+marker,
+		markerHandle,
+		string(credential.Algorithm()),
+		credential.PublicKeySPKISHA256(),
+	)
+	if err != nil {
+		t.Fatal("privacy binding construction failed")
+	}
 	hostileProvider := &adapterProvider{
 		resolveProfile: func(
 			context.Context,
@@ -126,6 +139,7 @@ func TestSigningProfilePrivacyMatrixCoversHandlesRegistryAdapterAndFailures(t *t
 		fixture.handle,
 		markerHandle,
 		fixture.entry,
+		binding,
 		fixture.registry,
 		adapter,
 		projected,

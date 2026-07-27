@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/croessner/dkim2"
 	"github.com/croessner/dkim2/cmd/dkim2d/internal/config"
 	"github.com/croessner/dkim2/cmd/dkim2d/internal/observability"
 )
@@ -200,6 +201,7 @@ type lifecycleStartup struct {
 	serveLive       atomic.Bool
 	revalidatorLive atomic.Bool
 	material        lifecycleMaterial
+	operation       OperationService
 	shutdownLimit   time.Duration
 }
 
@@ -500,6 +502,26 @@ func (l *Lifecycle) assembleApplication(
 		return nil, &LifecycleError{}
 	}
 	processor.attachObservability(startup.telemetry)
+	if preparation.Snapshot().Signing().Enabled() {
+		publicKeys, ok := verifier.(dkim2.PublicKeyProvider)
+		if !ok || nilInterface(publicKeys) {
+			return nil, &LifecycleError{}
+		}
+		operation, operationErr := NewSigningService(
+			publicKeys,
+			preparation.SigningStore(),
+			preparation.Snapshot().Signing().AllowRecipientGroup(),
+		)
+		if operationErr != nil || operation == nil {
+			return nil, &LifecycleError{}
+		}
+		if startErr := preparation.SigningStore().StartReload(
+			preparation.Snapshot().Signing().ReloadInterval(),
+		); startErr != nil {
+			return nil, &LifecycleError{}
+		}
+		startup.operation = operation
+	}
 	readiness, err := l.state.deps.newReadiness(startup.replay)
 	if err != nil || readiness == nil {
 		return nil, &LifecycleError{}
@@ -536,6 +558,11 @@ func (l *Lifecycle) bindTransport(
 		l,
 		l,
 		l,
+	)
+	input = input.withOperation(
+		startup.operation,
+		preparation.SignCapability(),
+		preparation.ReviseCapability(),
 	)
 	input = input.withObservability(startup.telemetry)
 	if err != nil || lifecycleContextFailed(acquisition) {

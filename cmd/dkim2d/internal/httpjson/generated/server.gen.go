@@ -40,6 +40,66 @@ func (e APIVersion) Valid() bool {
 	}
 }
 
+// Defines values for AddHeaderActionName.
+const (
+	AuthenticationResults AddHeaderActionName = "Authentication-Results"
+	DKIM2Signature        AddHeaderActionName = "DKIM2-Signature"
+	MessageInstance       AddHeaderActionName = "Message-Instance"
+)
+
+// Valid indicates whether the value is a known member of the AddHeaderActionName enum.
+func (e AddHeaderActionName) Valid() bool {
+	switch e {
+	case AuthenticationResults:
+		return true
+	case DKIM2Signature:
+		return true
+	case MessageInstance:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AddHeaderActionType.
+const (
+	AddHeader AddHeaderActionType = "add_header"
+)
+
+// Valid indicates whether the value is a known member of the AddHeaderActionType enum.
+func (e AddHeaderActionType) Valid() bool {
+	switch e {
+	case AddHeader:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for Disposition.
+const (
+	DispositionAccept   Disposition = "accept"
+	DispositionContinue Disposition = "continue"
+	DispositionReject   Disposition = "reject"
+	DispositionTempfail Disposition = "tempfail"
+)
+
+// Valid indicates whether the value is a known member of the Disposition enum.
+func (e Disposition) Valid() bool {
+	switch e {
+	case DispositionAccept:
+		return true
+	case DispositionContinue:
+		return true
+	case DispositionReject:
+		return true
+	case DispositionTempfail:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for DraftVersion.
 const (
 	DraftIetfDkimDkim2Spec04 DraftVersion = "draft-ietf-dkim-dkim2-spec-04"
@@ -160,6 +220,66 @@ const (
 func (e KeyPolicyResultStrictIdentityApplicable) Valid() bool {
 	switch e {
 	case False:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MessageInputFidelity.
+const (
+	MilterReconstructedCrlf MessageInputFidelity = "milter_reconstructed_crlf"
+	RawRfc5322              MessageInputFidelity = "raw_rfc5322"
+)
+
+// Valid indicates whether the value is a known member of the MessageInputFidelity enum.
+func (e MessageInputFidelity) Valid() bool {
+	switch e {
+	case MilterReconstructedCrlf:
+		return true
+	case RawRfc5322:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for OperationResponseOperation.
+const (
+	Revise OperationResponseOperation = "revise"
+	Sign   OperationResponseOperation = "sign"
+)
+
+// Valid indicates whether the value is a known member of the OperationResponseOperation enum.
+func (e OperationResponseOperation) Valid() bool {
+	switch e {
+	case Revise:
+		return true
+	case Sign:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for OperationResponseResult.
+const (
+	OperationResponseResultFail      OperationResponseResult = "fail"
+	OperationResponseResultPass      OperationResponseResult = "pass"
+	OperationResponseResultPermerror OperationResponseResult = "permerror"
+	OperationResponseResultTemperror OperationResponseResult = "temperror"
+)
+
+// Valid indicates whether the value is a known member of the OperationResponseResult enum.
+func (e OperationResponseResult) Valid() bool {
+	switch e {
+	case OperationResponseResultFail:
+		return true
+	case OperationResponseResultPass:
+		return true
+	case OperationResponseResultPermerror:
+		return true
+	case OperationResponseResultTemperror:
 		return true
 	default:
 		return false
@@ -337,30 +457,6 @@ func (e PolicyResultVerdict) Valid() bool {
 	}
 }
 
-// Defines values for ProcessResponseDisposition.
-const (
-	ProcessResponseDispositionAccept   ProcessResponseDisposition = "accept"
-	ProcessResponseDispositionContinue ProcessResponseDisposition = "continue"
-	ProcessResponseDispositionReject   ProcessResponseDisposition = "reject"
-	ProcessResponseDispositionTempfail ProcessResponseDisposition = "tempfail"
-)
-
-// Valid indicates whether the value is a known member of the ProcessResponseDisposition enum.
-func (e ProcessResponseDisposition) Valid() bool {
-	switch e {
-	case ProcessResponseDispositionAccept:
-		return true
-	case ProcessResponseDispositionContinue:
-		return true
-	case ProcessResponseDispositionReject:
-		return true
-	case ProcessResponseDispositionTempfail:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for ReadinessResponseStatus.
 const (
 	Ready ReadinessResponseStatus = "ready"
@@ -426,25 +522,25 @@ func (e SignatureSetResultAlgorithm) Valid() bool {
 
 // Defines values for SignatureSetResultStatus.
 const (
-	Fail      SignatureSetResultStatus = "fail"
-	Ignored   SignatureSetResultStatus = "ignored"
-	Pass      SignatureSetResultStatus = "pass"
-	Permerror SignatureSetResultStatus = "permerror"
-	Temperror SignatureSetResultStatus = "temperror"
+	SignatureSetResultStatusFail      SignatureSetResultStatus = "fail"
+	SignatureSetResultStatusIgnored   SignatureSetResultStatus = "ignored"
+	SignatureSetResultStatusPass      SignatureSetResultStatus = "pass"
+	SignatureSetResultStatusPermerror SignatureSetResultStatus = "permerror"
+	SignatureSetResultStatusTemperror SignatureSetResultStatus = "temperror"
 )
 
 // Valid indicates whether the value is a known member of the SignatureSetResultStatus enum.
 func (e SignatureSetResultStatus) Valid() bool {
 	switch e {
-	case Fail:
+	case SignatureSetResultStatusFail:
 		return true
-	case Ignored:
+	case SignatureSetResultStatusIgnored:
 		return true
-	case Pass:
+	case SignatureSetResultStatusPass:
 		return true
-	case Permerror:
+	case SignatureSetResultStatusPermerror:
 		return true
-	case Temperror:
+	case SignatureSetResultStatusTemperror:
 		return true
 	default:
 		return false
@@ -679,8 +775,27 @@ func (e VerificationState) Valid() bool {
 // APIVersion defines model for APIVersion.
 type APIVersion string
 
+// ActionPlan defines model for ActionPlan.
+type ActionPlan = []AddHeaderAction
+
+// AddHeaderAction defines model for AddHeaderAction.
+type AddHeaderAction struct {
+	Name  AddHeaderActionName `json:"name"`
+	Type  AddHeaderActionType `json:"type"`
+	Value string              `json:"value"`
+}
+
+// AddHeaderActionName defines model for AddHeaderAction.Name.
+type AddHeaderActionName string
+
+// AddHeaderActionType defines model for AddHeaderAction.Type.
+type AddHeaderActionType string
+
 // CanonicalUint64 defines model for CanonicalUint64.
 type CanonicalUint64 = string
+
+// Disposition defines model for Disposition.
+type Disposition string
 
 // DraftVersion defines model for DraftVersion.
 type DraftVersion string
@@ -721,8 +836,28 @@ type KeyPolicyResultStrictIdentityApplicable bool
 
 // MessageInput defines model for MessageInput.
 type MessageInput struct {
-	RawRfc5322Base64 wire.ProtectedString `json:"raw_rfc5322_base64"`
+	Fidelity         *MessageInputFidelity `json:"fidelity,omitempty"`
+	RawRfc5322Base64 wire.ProtectedString  `json:"raw_rfc5322_base64"`
 }
+
+// MessageInputFidelity defines model for MessageInput.Fidelity.
+type MessageInputFidelity string
+
+// OperationResponse Result and disposition are coherent: pass permits accept or continue, fail and permerror require reject, and temperror requires tempfail. Only accept may carry actions.
+type OperationResponse struct {
+	Actions     ActionPlan                 `json:"actions"`
+	ApiVersion  APIVersion                 `json:"api_version"`
+	Disposition Disposition                `json:"disposition"`
+	Draft       DraftVersion               `json:"draft"`
+	Operation   OperationResponseOperation `json:"operation"`
+	Result      OperationResponseResult    `json:"result"`
+}
+
+// OperationResponseOperation defines model for OperationResponse.Operation.
+type OperationResponseOperation string
+
+// OperationResponseResult defines model for OperationResponse.Result.
+type OperationResponseResult string
 
 // PolicyFeedback defines model for PolicyFeedback.
 type PolicyFeedback struct {
@@ -774,24 +909,23 @@ type PolicyResultVerdict string
 
 // ProcessRequest defines model for ProcessRequest.
 type ProcessRequest struct {
-	ApiVersion APIVersion   `json:"api_version"`
-	Draft      DraftVersion `json:"draft"`
-	Message    MessageInput `json:"message"`
-	Smtp       SMTPInput    `json:"smtp"`
+	ApiVersion APIVersion        `json:"api_version"`
+	Draft      DraftVersion      `json:"draft"`
+	Message    MessageInput      `json:"message"`
+	Reporting  *ReportingContext `json:"reporting,omitempty"`
+	Smtp       SMTPInput         `json:"smtp"`
 }
 
 // ProcessResponse defines model for ProcessResponse.
 type ProcessResponse struct {
-	ApiVersion   APIVersion                 `json:"api_version"`
-	Disposition  ProcessResponseDisposition `json:"disposition"`
-	Draft        DraftVersion               `json:"draft"`
-	Policy       PolicyResult               `json:"policy"`
-	Replay       ReplayResult               `json:"replay"`
-	Verification VerificationResult         `json:"verification"`
+	Actions      ActionPlan         `json:"actions"`
+	ApiVersion   APIVersion         `json:"api_version"`
+	Disposition  Disposition        `json:"disposition"`
+	Draft        DraftVersion       `json:"draft"`
+	Policy       PolicyResult       `json:"policy"`
+	Replay       ReplayResult       `json:"replay"`
+	Verification VerificationResult `json:"verification"`
 }
-
-// ProcessResponseDisposition defines model for ProcessResponse.Disposition.
-type ProcessResponseDisposition string
 
 // ReadinessResponse defines model for ReadinessResponse.
 type ReadinessResponse struct {
@@ -811,10 +945,34 @@ type ReplayResult struct {
 // ReplayResultClass defines model for ReplayResult.Class.
 type ReplayResultClass string
 
+// ReportingContext defines model for ReportingContext.
+type ReportingContext struct {
+	AuthservId string `json:"authserv_id"`
+}
+
+// ReviseRequest defines model for ReviseRequest.
+type ReviseRequest struct {
+	ApiVersion   APIVersion     `json:"api_version"`
+	Context      SigningContext `json:"context"`
+	Draft        DraftVersion   `json:"draft"`
+	IncomingSmtp SMTPInput      `json:"incoming_smtp"`
+	Message      MessageInput   `json:"message"`
+	Smtp         SMTPInput      `json:"smtp"`
+}
+
 // SMTPInput defines model for SMTPInput.
 type SMTPInput struct {
 	MailFrom wire.ProtectedString   `json:"mail_from"`
 	RcptTo   []wire.ProtectedString `json:"rcpt_to"`
+}
+
+// SignRequest defines model for SignRequest.
+type SignRequest struct {
+	ApiVersion APIVersion     `json:"api_version"`
+	Context    SigningContext `json:"context"`
+	Draft      DraftVersion   `json:"draft"`
+	Message    MessageInput   `json:"message"`
+	Smtp       SMTPInput      `json:"smtp"`
 }
 
 // SignatureSetResult defines model for SignatureSetResult.
@@ -830,6 +988,12 @@ type SignatureSetResultAlgorithm string
 
 // SignatureSetResultStatus defines model for SignatureSetResult.Status.
 type SignatureSetResultStatus string
+
+// SigningContext defines model for SigningContext.
+type SigningContext struct {
+	Domain string `json:"domain"`
+	Tenant string `json:"tenant"`
+}
 
 // VerificationCheck defines model for VerificationCheck.
 type VerificationCheck struct {
@@ -910,6 +1074,12 @@ type localCapabilityContextKey string
 // ProcessMessageJSONRequestBody defines body for ProcessMessage for application/json ContentType.
 type ProcessMessageJSONRequestBody = ProcessRequest
 
+// ReviseMessageJSONRequestBody defines body for ReviseMessage for application/json ContentType.
+type ReviseMessageJSONRequestBody = ReviseRequest
+
+// SignMessageJSONRequestBody defines body for SignMessage for application/json ContentType.
+type SignMessageJSONRequestBody = SignRequest
+
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
 	// Report process liveness.
@@ -930,6 +1100,12 @@ type ServerInterface interface {
 	// Process one inbound DKIM2 message.
 	// (POST /v1/process)
 	ProcessMessage(w http.ResponseWriter, r *http.Request)
+	// Revise one ordinary-transit DKIM2 message.
+	// (POST /v1/revise)
+	ReviseMessage(w http.ResponseWriter, r *http.Request)
+	// Sign one originator DKIM2 message.
+	// (POST /v1/sign)
+	SignMessage(w http.ResponseWriter, r *http.Request)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -1022,6 +1198,46 @@ func (siw *ServerInterfaceWrapper) ProcessMessage(w http.ResponseWriter, r *http
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ProcessMessage(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ReviseMessage operation middleware
+func (siw *ServerInterfaceWrapper) ReviseMessage(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, LocalCapabilityScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReviseMessage(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SignMessage operation middleware
+func (siw *ServerInterfaceWrapper) SignMessage(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, LocalCapabilityScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SignMessage(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1157,6 +1373,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/readyz", wrapper.GetReadiness)
 	m.HandleFunc(http.MethodHead+" "+options.BaseURL+"/readyz", wrapper.HeadReadiness)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/process", wrapper.ProcessMessage)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/revise", wrapper.ReviseMessage)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/sign", wrapper.SignMessage)
 
 	return m
 }
@@ -2207,6 +2425,428 @@ func (response ProcessMessage503JSONResponse) VisitProcessMessageResponse(w http
 	return err
 }
 
+type ReviseMessageRequestObject struct {
+	Body *ReviseMessageJSONRequestBody
+}
+
+type ReviseMessageResponseObject interface {
+	VisitReviseMessageResponse(w http.ResponseWriter) error
+}
+
+type ReviseMessage200ResponseHeaders struct {
+	CacheControl        string
+	Connection          string
+	ContentLength       string
+	Date                *string
+	XContentTypeOptions string
+}
+
+type ReviseMessage200JSONResponse struct {
+	Body    OperationResponse
+	Headers ReviseMessage200ResponseHeaders
+}
+
+func (response ReviseMessage200JSONResponse) VisitReviseMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Connection", fmt.Sprint(response.Headers.Connection))
+	w.Header().Set("Content-Length", fmt.Sprint(response.Headers.ContentLength))
+	if response.Headers.Date != nil {
+		w.Header().Set("Date", fmt.Sprint(*response.Headers.Date))
+	}
+	w.Header().Set("X-Content-Type-Options", fmt.Sprint(response.Headers.XContentTypeOptions))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReviseMessage400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response ReviseMessage400JSONResponse) VisitReviseMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Connection", fmt.Sprint(response.Headers.Connection))
+	w.Header().Set("Content-Length", fmt.Sprint(response.Headers.ContentLength))
+	if response.Headers.Date != nil {
+		w.Header().Set("Date", fmt.Sprint(*response.Headers.Date))
+	}
+	w.Header().Set("X-Content-Type-Options", fmt.Sprint(response.Headers.XContentTypeOptions))
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReviseMessage403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ReviseMessage403JSONResponse) VisitReviseMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Connection", fmt.Sprint(response.Headers.Connection))
+	w.Header().Set("Content-Length", fmt.Sprint(response.Headers.ContentLength))
+	if response.Headers.Date != nil {
+		w.Header().Set("Date", fmt.Sprint(*response.Headers.Date))
+	}
+	w.Header().Set("X-Content-Type-Options", fmt.Sprint(response.Headers.XContentTypeOptions))
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReviseMessage408JSONResponse struct{ RequestTimeoutJSONResponse }
+
+func (response ReviseMessage408JSONResponse) VisitReviseMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Connection", fmt.Sprint(response.Headers.Connection))
+	w.Header().Set("Content-Length", fmt.Sprint(response.Headers.ContentLength))
+	if response.Headers.Date != nil {
+		w.Header().Set("Date", fmt.Sprint(*response.Headers.Date))
+	}
+	w.Header().Set("X-Content-Type-Options", fmt.Sprint(response.Headers.XContentTypeOptions))
+	w.WriteHeader(408)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReviseMessage413JSONResponse struct{ RequestTooLargeJSONResponse }
+
+func (response ReviseMessage413JSONResponse) VisitReviseMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Connection", fmt.Sprint(response.Headers.Connection))
+	w.Header().Set("Content-Length", fmt.Sprint(response.Headers.ContentLength))
+	if response.Headers.Date != nil {
+		w.Header().Set("Date", fmt.Sprint(*response.Headers.Date))
+	}
+	w.Header().Set("X-Content-Type-Options", fmt.Sprint(response.Headers.XContentTypeOptions))
+	w.WriteHeader(413)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReviseMessage415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response ReviseMessage415JSONResponse) VisitReviseMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Connection", fmt.Sprint(response.Headers.Connection))
+	w.Header().Set("Content-Length", fmt.Sprint(response.Headers.ContentLength))
+	if response.Headers.Date != nil {
+		w.Header().Set("Date", fmt.Sprint(*response.Headers.Date))
+	}
+	w.Header().Set("X-Content-Type-Options", fmt.Sprint(response.Headers.XContentTypeOptions))
+	w.WriteHeader(415)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReviseMessage417JSONResponse struct{ ExpectationFailedJSONResponse }
+
+func (response ReviseMessage417JSONResponse) VisitReviseMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Connection", fmt.Sprint(response.Headers.Connection))
+	w.Header().Set("Content-Length", fmt.Sprint(response.Headers.ContentLength))
+	if response.Headers.Date != nil {
+		w.Header().Set("Date", fmt.Sprint(*response.Headers.Date))
+	}
+	w.Header().Set("X-Content-Type-Options", fmt.Sprint(response.Headers.XContentTypeOptions))
+	w.WriteHeader(417)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReviseMessage500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response ReviseMessage500JSONResponse) VisitReviseMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Connection", fmt.Sprint(response.Headers.Connection))
+	w.Header().Set("Content-Length", fmt.Sprint(response.Headers.ContentLength))
+	if response.Headers.Date != nil {
+		w.Header().Set("Date", fmt.Sprint(*response.Headers.Date))
+	}
+	w.Header().Set("X-Content-Type-Options", fmt.Sprint(response.Headers.XContentTypeOptions))
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReviseMessage503JSONResponse struct{ ServiceUnavailableJSONResponse }
+
+func (response ReviseMessage503JSONResponse) VisitReviseMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Connection", fmt.Sprint(response.Headers.Connection))
+	w.Header().Set("Content-Length", fmt.Sprint(response.Headers.ContentLength))
+	if response.Headers.Date != nil {
+		w.Header().Set("Date", fmt.Sprint(*response.Headers.Date))
+	}
+	w.Header().Set("Retry-After", fmt.Sprint(response.Headers.RetryAfter))
+	w.Header().Set("X-Content-Type-Options", fmt.Sprint(response.Headers.XContentTypeOptions))
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SignMessageRequestObject struct {
+	Body *SignMessageJSONRequestBody
+}
+
+type SignMessageResponseObject interface {
+	VisitSignMessageResponse(w http.ResponseWriter) error
+}
+
+type SignMessage200ResponseHeaders struct {
+	CacheControl        string
+	Connection          string
+	ContentLength       string
+	Date                *string
+	XContentTypeOptions string
+}
+
+type SignMessage200JSONResponse struct {
+	Body    OperationResponse
+	Headers SignMessage200ResponseHeaders
+}
+
+func (response SignMessage200JSONResponse) VisitSignMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Connection", fmt.Sprint(response.Headers.Connection))
+	w.Header().Set("Content-Length", fmt.Sprint(response.Headers.ContentLength))
+	if response.Headers.Date != nil {
+		w.Header().Set("Date", fmt.Sprint(*response.Headers.Date))
+	}
+	w.Header().Set("X-Content-Type-Options", fmt.Sprint(response.Headers.XContentTypeOptions))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SignMessage400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response SignMessage400JSONResponse) VisitSignMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Connection", fmt.Sprint(response.Headers.Connection))
+	w.Header().Set("Content-Length", fmt.Sprint(response.Headers.ContentLength))
+	if response.Headers.Date != nil {
+		w.Header().Set("Date", fmt.Sprint(*response.Headers.Date))
+	}
+	w.Header().Set("X-Content-Type-Options", fmt.Sprint(response.Headers.XContentTypeOptions))
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SignMessage403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response SignMessage403JSONResponse) VisitSignMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Connection", fmt.Sprint(response.Headers.Connection))
+	w.Header().Set("Content-Length", fmt.Sprint(response.Headers.ContentLength))
+	if response.Headers.Date != nil {
+		w.Header().Set("Date", fmt.Sprint(*response.Headers.Date))
+	}
+	w.Header().Set("X-Content-Type-Options", fmt.Sprint(response.Headers.XContentTypeOptions))
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SignMessage408JSONResponse struct{ RequestTimeoutJSONResponse }
+
+func (response SignMessage408JSONResponse) VisitSignMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Connection", fmt.Sprint(response.Headers.Connection))
+	w.Header().Set("Content-Length", fmt.Sprint(response.Headers.ContentLength))
+	if response.Headers.Date != nil {
+		w.Header().Set("Date", fmt.Sprint(*response.Headers.Date))
+	}
+	w.Header().Set("X-Content-Type-Options", fmt.Sprint(response.Headers.XContentTypeOptions))
+	w.WriteHeader(408)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SignMessage413JSONResponse struct{ RequestTooLargeJSONResponse }
+
+func (response SignMessage413JSONResponse) VisitSignMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Connection", fmt.Sprint(response.Headers.Connection))
+	w.Header().Set("Content-Length", fmt.Sprint(response.Headers.ContentLength))
+	if response.Headers.Date != nil {
+		w.Header().Set("Date", fmt.Sprint(*response.Headers.Date))
+	}
+	w.Header().Set("X-Content-Type-Options", fmt.Sprint(response.Headers.XContentTypeOptions))
+	w.WriteHeader(413)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SignMessage415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response SignMessage415JSONResponse) VisitSignMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Connection", fmt.Sprint(response.Headers.Connection))
+	w.Header().Set("Content-Length", fmt.Sprint(response.Headers.ContentLength))
+	if response.Headers.Date != nil {
+		w.Header().Set("Date", fmt.Sprint(*response.Headers.Date))
+	}
+	w.Header().Set("X-Content-Type-Options", fmt.Sprint(response.Headers.XContentTypeOptions))
+	w.WriteHeader(415)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SignMessage417JSONResponse struct{ ExpectationFailedJSONResponse }
+
+func (response SignMessage417JSONResponse) VisitSignMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Connection", fmt.Sprint(response.Headers.Connection))
+	w.Header().Set("Content-Length", fmt.Sprint(response.Headers.ContentLength))
+	if response.Headers.Date != nil {
+		w.Header().Set("Date", fmt.Sprint(*response.Headers.Date))
+	}
+	w.Header().Set("X-Content-Type-Options", fmt.Sprint(response.Headers.XContentTypeOptions))
+	w.WriteHeader(417)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SignMessage500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response SignMessage500JSONResponse) VisitSignMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Connection", fmt.Sprint(response.Headers.Connection))
+	w.Header().Set("Content-Length", fmt.Sprint(response.Headers.ContentLength))
+	if response.Headers.Date != nil {
+		w.Header().Set("Date", fmt.Sprint(*response.Headers.Date))
+	}
+	w.Header().Set("X-Content-Type-Options", fmt.Sprint(response.Headers.XContentTypeOptions))
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SignMessage503JSONResponse struct{ ServiceUnavailableJSONResponse }
+
+func (response SignMessage503JSONResponse) VisitSignMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Connection", fmt.Sprint(response.Headers.Connection))
+	w.Header().Set("Content-Length", fmt.Sprint(response.Headers.ContentLength))
+	if response.Headers.Date != nil {
+		w.Header().Set("Date", fmt.Sprint(*response.Headers.Date))
+	}
+	w.Header().Set("Retry-After", fmt.Sprint(response.Headers.RetryAfter))
+	w.Header().Set("X-Content-Type-Options", fmt.Sprint(response.Headers.XContentTypeOptions))
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
 	// Report process liveness.
@@ -2227,6 +2867,12 @@ type StrictServerInterface interface {
 	// Process one inbound DKIM2 message.
 	// (POST /v1/process)
 	ProcessMessage(ctx context.Context, request ProcessMessageRequestObject) (ProcessMessageResponseObject, error)
+	// Revise one ordinary-transit DKIM2 message.
+	// (POST /v1/revise)
+	ReviseMessage(ctx context.Context, request ReviseMessageRequestObject) (ReviseMessageResponseObject, error)
+	// Sign one originator DKIM2 message.
+	// (POST /v1/sign)
+	SignMessage(ctx context.Context, request SignMessageRequestObject) (SignMessageResponseObject, error)
 }
 
 type StrictHandlerFunc func(ctx context.Context, w http.ResponseWriter, r *http.Request, request any) (any, error)
@@ -2409,74 +3055,147 @@ func (sh *strictHandler) ProcessMessage(w http.ResponseWriter, r *http.Request) 
 	}
 }
 
+// ReviseMessage operation middleware
+func (sh *strictHandler) ReviseMessage(w http.ResponseWriter, r *http.Request) {
+	var request ReviseMessageRequestObject
+
+	var body ReviseMessageJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ReviseMessage(ctx, request.(ReviseMessageRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ReviseMessage")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ReviseMessageResponseObject); ok {
+		if err := validResponse.VisitReviseMessageResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SignMessage operation middleware
+func (sh *strictHandler) SignMessage(w http.ResponseWriter, r *http.Request) {
+	var request SignMessageRequestObject
+
+	var body SignMessageJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SignMessage(ctx, request.(SignMessageRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SignMessage")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SignMessageResponseObject); ok {
+		if err := validResponse.VisitSignMessageResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // Base64 encoded, compressed with deflate, json marshaled OpenAPI spec.
 // Stored as a slice of fixed-width chunks rather than one concatenated
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
-	"iyVI9pZl3yYxV2Hq60VLULKY/v8BAAD//w==",
+	"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",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

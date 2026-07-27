@@ -1,0 +1,11 @@
+package: generatedfixture
+generate:
+  models: true
+  std-http-server: true
+  strict-server: true
+compatibility:
+  preserve-original-operation-id-casing-in-embedded-spec: true
+output-options:
+  overlay:
+    path: ../docs/specs/openapi/oapi-codegen.milter-client.overlay.yml
+    strict: true

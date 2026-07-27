@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/croessner/dkim2/cmd/dkim2d/internal/app"
 	"github.com/croessner/dkim2/cmd/dkim2d/internal/httpjson/generated"
 	"github.com/croessner/dkim2/cmd/dkim2d/internal/observability"
 	"go.opentelemetry.io/otel/trace"
@@ -24,6 +25,8 @@ const (
 	readinessPath        = "/readyz"
 	metricsPath          = "/metrics"
 	processPath          = "/v1/process"
+	signPath             = "/v1/sign"
+	revisePath           = "/v1/revise"
 	metricsAllowMethod   = "GET"
 	observationUnmatched = "unmatched"
 	observationProcess   = "process"
@@ -54,17 +57,19 @@ type BoundaryConfig struct {
 
 // HTTPBoundary owns route, admission, validation, and generated-adapter ordering.
 type HTTPBoundary struct {
-	authority string
-	deadline  time.Duration
-	matcher   capabilityMatcher
-	readiness readinessSource
-	validator *RequestValidator
-	admission *processAdmission
-	strict    *strictAdapter
-	generated generated.ServerInterface
-	fatal     FatalNotifier
-	metrics   *observability.Metrics
-	telemetry *observability.Runtime
+	authority     string
+	deadline      time.Duration
+	matcher       capabilityMatcher
+	signMatcher   capabilityMatcher
+	reviseMatcher capabilityMatcher
+	readiness     readinessSource
+	validator     *RequestValidator
+	admission     *processAdmission
+	strict        *strictAdapter
+	generated     generated.ServerInterface
+	fatal         FatalNotifier
+	metrics       *observability.Metrics
+	telemetry     *observability.Runtime
 }
 
 // NewHTTPBoundary constructs one immutable process-local HTTP handler.
@@ -75,7 +80,7 @@ func NewHTTPBoundary(
 	processor inboundProcessService,
 	notifier FatalNotifier,
 	validator *RequestValidator,
-	runtimes ...*observability.Runtime,
+	dependencies ...any,
 ) (*HTTPBoundary, error) {
 	if config.Authority == "" || strings.ContainsAny(config.Authority, "\r\n/?#@") ||
 		config.RequestDeadline <= 0 || nilInterfaceValue(matcher) ||
@@ -91,7 +96,11 @@ func NewHTTPBoundary(
 	if err != nil {
 		return nil, errHTTPBoundaryConfig
 	}
-	telemetry := firstBoundaryTelemetry(runtimes)
+	telemetry, operation, signMatcher, reviseMatcher, dependenciesOK :=
+		parseBoundaryDependencies(dependencies)
+	if !dependenciesOK {
+		return nil, errHTTPBoundaryConfig
+	}
 	var metrics *observability.Metrics
 	if telemetry != nil {
 		metrics = telemetry.Metrics()
@@ -102,21 +111,27 @@ func NewHTTPBoundary(
 			return nil, errHTTPBoundaryConfig
 		}
 	}
-	strict, err := newStrictAdapter(readiness, processor, metrics)
+	strictDependencies := []any{metrics}
+	if !nilInterfaceValue(operation) {
+		strictDependencies = append(strictDependencies, operation)
+	}
+	strict, err := newStrictAdapter(readiness, processor, strictDependencies...)
 	if err != nil {
 		return nil, errHTTPBoundaryConfig
 	}
 	boundary := &HTTPBoundary{
-		authority: config.Authority,
-		deadline:  config.RequestDeadline,
-		matcher:   matcher,
-		readiness: readiness,
-		validator: validator,
-		admission: admission,
-		strict:    strict,
-		fatal:     notifier,
-		metrics:   metrics,
-		telemetry: telemetry,
+		authority:     config.Authority,
+		deadline:      config.RequestDeadline,
+		matcher:       matcher,
+		signMatcher:   signMatcher,
+		reviseMatcher: reviseMatcher,
+		readiness:     readiness,
+		validator:     validator,
+		admission:     admission,
+		strict:        strict,
+		fatal:         notifier,
+		metrics:       metrics,
+		telemetry:     telemetry,
 	}
 	boundary.generated = generated.NewStrictHandlerWithOptions(
 		strict,
@@ -145,12 +160,49 @@ func NewHTTPBoundary(
 	return boundary, nil
 }
 
-// firstBoundaryTelemetry accepts exactly one optional runtime.
-func firstBoundaryTelemetry(values []*observability.Runtime) *observability.Runtime {
-	if len(values) != 1 {
-		return nil
+type signMatcherDependency struct{ capabilityMatcher }
+type reviseMatcherDependency struct{ capabilityMatcher }
+
+// parseBoundaryDependencies accepts at most one optional runtime, operation
+// service, and each named signing capability.
+func parseBoundaryDependencies(
+	values []any,
+) (*observability.Runtime, app.OperationService, capabilityMatcher, capabilityMatcher, bool) {
+	var runtime *observability.Runtime
+	var operation app.OperationService
+	var signMatcher capabilityMatcher
+	var reviseMatcher capabilityMatcher
+	for _, value := range values {
+		switch typed := value.(type) {
+		case *observability.Runtime:
+			if runtime != nil || typed == nil {
+				return nil, nil, nil, nil, false
+			}
+			runtime = typed
+		case app.OperationService:
+			if !nilInterfaceValue(operation) || nilInterfaceValue(typed) {
+				return nil, nil, nil, nil, false
+			}
+			operation = typed
+		case signMatcherDependency:
+			if !nilInterfaceValue(signMatcher) || nilInterfaceValue(typed.capabilityMatcher) {
+				return nil, nil, nil, nil, false
+			}
+			signMatcher = typed.capabilityMatcher
+		case reviseMatcherDependency:
+			if !nilInterfaceValue(reviseMatcher) || nilInterfaceValue(typed.capabilityMatcher) {
+				return nil, nil, nil, nil, false
+			}
+			reviseMatcher = typed.capabilityMatcher
+		default:
+			return nil, nil, nil, nil, false
+		}
 	}
-	return values[0]
+	enabled := !nilInterfaceValue(operation)
+	if enabled != (!nilInterfaceValue(signMatcher) && !nilInterfaceValue(reviseMatcher)) {
+		return nil, nil, nil, nil, false
+	}
+	return runtime, operation, signMatcher, reviseMatcher, true
 }
 
 // Close rejects new process admission and interrupts ordinary waiters.
@@ -301,6 +353,10 @@ func httpObservationRoute(request *http.Request) (string, string) {
 		return "readiness", readinessPath
 	case processPath:
 		return observationProcess, processPath
+	case signPath:
+		return "sign", signPath
+	case revisePath:
+		return "revise", revisePath
 	default:
 		return observationUnmatched, observationUnmatched
 	}
@@ -325,6 +381,10 @@ func httpObservationPath(operation string) string {
 		return readinessPath
 	case observationProcess:
 		return processPath
+	case "sign":
+		return signPath
+	case "revise":
+		return revisePath
 	default:
 		return observationUnmatched
 	}
@@ -449,7 +509,7 @@ func (h *HTTPBoundary) serveBoundaryRequest(
 		h.serveStatus(committed, request, facts)
 	case metricsPath:
 		h.serveMetrics(committed, request, facts, traceContextPresent)
-	case processPath:
+	case processPath, signPath, revisePath:
 		h.serveProcess(
 			committed,
 			request,
@@ -792,7 +852,7 @@ func (h *HTTPBoundary) prepareProcessRequest(
 		return request, false, false
 	}
 	var authenticated bool
-	request, authenticated = authenticateLocalCapability(request, h.matcher)
+	request, authenticated = authenticateLocalCapability(request, h.matcherForPath(request.URL.Path))
 	if !authenticated {
 		h.writeError(writer, request, http.StatusForbidden,
 			generated.ErrorResponseCodeForbidden, generated.Request)
@@ -816,6 +876,20 @@ func (h *HTTPBoundary) prepareProcessRequest(
 		return request, false, false
 	}
 	return request, continueEligible, true
+}
+
+// matcherForPath returns only the capability assigned to the exact operation.
+func (h *HTTPBoundary) matcherForPath(path string) capabilityMatcher {
+	switch path {
+	case processPath:
+		return h.matcher
+	case signPath:
+		return h.signMatcher
+	case revisePath:
+		return h.reviseMatcher
+	default:
+		return nil
+	}
 }
 
 // processReservedRequest consumes and validates one admitted request body.
@@ -881,7 +955,16 @@ func (h *HTTPBoundary) processReservedRequest(
 		h.writeInternal(writer, request)
 		return
 	}
-	h.generated.ProcessMessage(writer, request)
+	switch request.URL.Path {
+	case processPath:
+		h.generated.ProcessMessage(writer, request)
+	case signPath:
+		h.generated.SignMessage(writer, request)
+	case revisePath:
+		h.generated.ReviseMessage(writer, request)
+	default:
+		h.writeInternal(writer, request)
+	}
 	request.Body = http.NoBody
 	request.ContentLength = 0
 }
@@ -928,7 +1011,7 @@ func (h *HTTPBoundary) validateProcessBody(
 		h.writeInternal(writer, request)
 		return false
 	}
-	validationErr := h.validator.ValidateProcess(request, body)
+	validationErr := h.validator.ValidateOperation(request, body)
 	if err := ledger.FinishValidation(); err != nil {
 		h.writeInternal(writer, request)
 		return false

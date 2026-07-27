@@ -201,7 +201,10 @@ func MapDomainResult(result dkim2.VerifyResult, decision dkim2.PolicyDecision) (
 }
 
 // MapInboundResult maps one complete app result into the exact generated process response.
-func MapInboundResult(result app.InboundResult) (generated.ProcessResponse, error) {
+func MapInboundResult(
+	result app.InboundResult,
+	authservID string,
+) (generated.ProcessResponse, error) {
 	if !result.Valid() {
 		return generated.ProcessResponse{}, newMappingError(MappingInternalContract)
 	}
@@ -225,6 +228,14 @@ func MapInboundResult(result app.InboundResult) (generated.ProcessResponse, erro
 	if !ok || !replayOK || !dispositionOK {
 		return generated.ProcessResponse{}, newMappingError(MappingInternalContract)
 	}
+	actions, actionsErr := mapProcessReportActions(
+		verificationDTO.State,
+		disposition,
+		authservID,
+	)
+	if actionsErr != nil {
+		return generated.ProcessResponse{}, actionsErr
+	}
 	return generated.ProcessResponse{
 		ApiVersion:   generated.V1,
 		Draft:        generated.DraftIetfDkimDkim2Spec04,
@@ -232,7 +243,43 @@ func MapInboundResult(result app.InboundResult) (generated.ProcessResponse, erro
 		Policy:       policyDTO,
 		Replay:       generated.ReplayResult{Class: replayClass},
 		Disposition:  disposition,
+		Actions:      actions,
 	}, nil
+}
+
+// mapProcessReportActions constructs the daemon-owned RFC 8601 mutation plan.
+func mapProcessReportActions(
+	state generated.VerificationState,
+	disposition generated.Disposition,
+	authservID string,
+) (generated.ActionPlan, error) {
+	if authservID == "" || disposition != generated.DispositionAccept {
+		return generated.ActionPlan{}, nil
+	}
+	reportResult, resultOK := authenticationResult(state)
+	if !validSigningDomain(authservID) || !resultOK {
+		return nil, newMappingError(MappingInternalContract)
+	}
+	return generated.ActionPlan{{
+		Type: generated.AddHeader, Name: generated.AuthenticationResults,
+		Value: authservID + "; dkim2=" + reportResult,
+	}}, nil
+}
+
+// authenticationResult maps the closed verification vocabulary to RFC 8601.
+func authenticationResult(state generated.VerificationState) (string, bool) {
+	switch state {
+	case generated.PASS:
+		return "pass", true
+	case generated.FAIL:
+		return "fail", true
+	case generated.PERMERROR:
+		return "permerror", true
+	case generated.TEMPERROR:
+		return "temperror", true
+	default:
+		return "", false
+	}
 }
 
 // mapReplayClass maps the privacy-minimal app aggregate without provider detail.
@@ -656,15 +703,15 @@ func mapAlgorithm(value dkim2.Algorithm) (generated.SignatureSetResultAlgorithm,
 func mapSignatureStatus(value dkim2.SignatureStatus) (generated.SignatureSetResultStatus, bool) {
 	switch value {
 	case dkim2.SignatureStatusPASS:
-		return generated.Pass, true
+		return generated.SignatureSetResultStatusPass, true
 	case dkim2.SignatureStatusFAIL:
-		return generated.Fail, true
+		return generated.SignatureSetResultStatusFail, true
 	case dkim2.SignatureStatusPERMERROR:
-		return generated.Permerror, true
+		return generated.SignatureSetResultStatusPermerror, true
 	case dkim2.SignatureStatusTEMPERROR:
-		return generated.Temperror, true
+		return generated.SignatureSetResultStatusTemperror, true
 	case dkim2.SignatureStatusIgnored:
-		return generated.Ignored, true
+		return generated.SignatureSetResultStatusIgnored, true
 	default:
 		return "", false
 	}
@@ -701,16 +748,16 @@ func mapPolicyVerdict(value dkim2.PolicyVerdict) (generated.PolicyResultVerdict,
 }
 
 // mapDisposition maps the daemon outcome without conflating it with policy verdict.
-func mapDisposition(value FinalDisposition) (generated.ProcessResponseDisposition, bool) {
+func mapDisposition(value FinalDisposition) (generated.Disposition, bool) {
 	switch value {
 	case FinalDispositionAccept:
-		return generated.ProcessResponseDispositionAccept, true
+		return generated.DispositionAccept, true
 	case FinalDispositionReject:
-		return generated.ProcessResponseDispositionReject, true
+		return generated.DispositionReject, true
 	case FinalDispositionTempfail:
-		return generated.ProcessResponseDispositionTempfail, true
+		return generated.DispositionTempfail, true
 	case FinalDispositionContinue:
-		return generated.ProcessResponseDispositionContinue, true
+		return generated.DispositionContinue, true
 	default:
 		return "", false
 	}

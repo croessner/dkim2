@@ -3,8 +3,9 @@ info:
   title: DKIM2 Daemon API
   version: 0.1.0-draft
   description: >
-    Inbound-only verification, policy, and replay API for the DKIM2 reference
-    daemon. Protocol behavior is pinned to draft-ietf-dkim-dkim2-spec-04.
+    Verification, signing, revision, policy, and replay API for the DKIM2
+    reference daemon. Protocol behavior is pinned to
+    draft-ietf-dkim-dkim2-spec-04.
 paths:
   /metrics:
     get:
@@ -366,6 +367,104 @@ paths:
           $ref: "#/components/responses/InternalError"
         "503":
           $ref: "#/components/responses/ServiceUnavailable"
+  /v1/sign:
+    post:
+      operationId: signMessage
+      summary: Sign one originator DKIM2 message.
+      description: >
+        Resolves server-owned originator policy and signing material and
+        returns a closed ordered append-only action plan.
+      security:
+        - localCapability: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SignRequest"
+      responses:
+        "200":
+          description: Originator signing completed with a coherent result.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/CacheControl"
+            X-Content-Type-Options:
+              $ref: "#/components/headers/ContentTypeOptions"
+            Content-Length:
+              $ref: "#/components/headers/ContentLength"
+            Connection:
+              $ref: "#/components/headers/Connection"
+            Date:
+              $ref: "#/components/headers/Date"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperationResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "408":
+          $ref: "#/components/responses/RequestTimeout"
+        "413":
+          $ref: "#/components/responses/RequestTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "417":
+          $ref: "#/components/responses/ExpectationFailed"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /v1/revise:
+    post:
+      operationId: reviseMessage
+      summary: Revise one ordinary-transit DKIM2 message.
+      description: >
+        Verifies exact inherited revision evidence before server-owned
+        ordinary-transit signing and returns a closed ordered action plan.
+      security:
+        - localCapability: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReviseRequest"
+      responses:
+        "200":
+          description: Ordinary-transit revision completed coherently.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/CacheControl"
+            X-Content-Type-Options:
+              $ref: "#/components/headers/ContentTypeOptions"
+            Content-Length:
+              $ref: "#/components/headers/ContentLength"
+            Connection:
+              $ref: "#/components/headers/Connection"
+            Date:
+              $ref: "#/components/headers/Date"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperationResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "408":
+          $ref: "#/components/responses/RequestTimeout"
+        "413":
+          $ref: "#/components/responses/RequestTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "417":
+          $ref: "#/components/responses/ExpectationFailed"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
 components:
   securitySchemes:
     localCapability:
@@ -608,6 +707,58 @@ components:
           $ref: "#/components/schemas/MessageInput"
         smtp:
           $ref: "#/components/schemas/SMTPInput"
+        reporting:
+          description: >
+            Optional daemon reporting authority. When supplied for an accepting
+            outcome, the daemon returns the exact Authentication-Results action;
+            adapters must not synthesize it.
+          $ref: "#/components/schemas/ReportingContext"
+    SignRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - api_version
+        - draft
+        - message
+        - smtp
+        - context
+      properties:
+        api_version:
+          $ref: "#/components/schemas/APIVersion"
+        draft:
+          $ref: "#/components/schemas/DraftVersion"
+        message:
+          $ref: "#/components/schemas/MessageInput"
+        smtp:
+          $ref: "#/components/schemas/SMTPInput"
+        context:
+          $ref: "#/components/schemas/SigningContext"
+    ReviseRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - api_version
+        - draft
+        - message
+        - smtp
+        - incoming_smtp
+        - context
+      properties:
+        api_version:
+          $ref: "#/components/schemas/APIVersion"
+        draft:
+          $ref: "#/components/schemas/DraftVersion"
+        message:
+          $ref: "#/components/schemas/MessageInput"
+        smtp:
+          $ref: "#/components/schemas/SMTPInput"
+        incoming_smtp:
+          description: >
+            Exact inherited envelope evidence verified before revision.
+            The smtp member is the distinct outgoing signing envelope.
+          $ref: "#/components/schemas/SMTPInput"
+        context:
+          $ref: "#/components/schemas/SigningContext"
     MessageInput:
       type: object
       additionalProperties: false
@@ -619,6 +770,11 @@ components:
           format: byte
           minLength: 0
           maxLength: 44739244
+        fidelity:
+          type: string
+          enum:
+            - raw_rfc5322
+            - milter_reconstructed_crlf
     SMTPInput:
       type: object
       additionalProperties: false
@@ -649,6 +805,7 @@ components:
         - policy
         - replay
         - disposition
+        - actions
       properties:
         api_version:
           $ref: "#/components/schemas/APIVersion"
@@ -661,12 +818,107 @@ components:
         replay:
           $ref: "#/components/schemas/ReplayResult"
         disposition:
+          $ref: "#/components/schemas/Disposition"
+        actions:
+          $ref: "#/components/schemas/ActionPlan"
+    SigningContext:
+      type: object
+      additionalProperties: false
+      required:
+        - tenant
+        - domain
+      properties:
+        tenant:
+          type: string
+          minLength: 1
+          maxLength: 128
+          pattern: "^[a-z0-9][a-z0-9._-]{0,127}$"
+        domain:
+          type: string
+          minLength: 1
+          maxLength: 253
+          pattern: "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$"
+    ReportingContext:
+      type: object
+      additionalProperties: false
+      required:
+        - authserv_id
+      properties:
+        authserv_id:
+          type: string
+          minLength: 1
+          maxLength: 253
+          pattern: "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$"
+    OperationResponse:
+      type: object
+      additionalProperties: false
+      description: >
+        Result and disposition are coherent: pass permits accept or continue,
+        fail and permerror require reject, and temperror requires tempfail.
+        Only accept may carry actions.
+      required:
+        - api_version
+        - draft
+        - operation
+        - result
+        - disposition
+        - actions
+      properties:
+        api_version:
+          $ref: "#/components/schemas/APIVersion"
+        draft:
+          $ref: "#/components/schemas/DraftVersion"
+        operation:
           type: string
           enum:
-            - accept
-            - reject
-            - tempfail
-            - continue
+            - sign
+            - revise
+        result:
+          type: string
+          enum:
+            - pass
+            - fail
+            - permerror
+            - temperror
+        disposition:
+          $ref: "#/components/schemas/Disposition"
+        actions:
+          $ref: "#/components/schemas/ActionPlan"
+    Disposition:
+      type: string
+      enum:
+        - accept
+        - reject
+        - tempfail
+        - continue
+    ActionPlan:
+      type: array
+      maxItems: 3
+      items:
+        $ref: "#/components/schemas/AddHeaderAction"
+    AddHeaderAction:
+      type: object
+      additionalProperties: false
+      required:
+        - type
+        - name
+        - value
+      properties:
+        type:
+          type: string
+          enum:
+            - add_header
+        name:
+          type: string
+          enum:
+            - Message-Instance
+            - DKIM2-Signature
+            - Authentication-Results
+        value:
+          type: string
+          minLength: 1
+          maxLength: 65535
+          pattern: "^[^\\r\\n\\x00]+$"
     VerificationResult:
       type: object
       additionalProperties: false

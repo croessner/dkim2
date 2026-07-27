@@ -59,12 +59,43 @@ func TestVerificationScalarMappings(t *testing.T) {
 		{dkim2.AlgorithmUnknown, generated.Unknown},
 	})
 	assertScalarMapping(t, "signature status", mapSignatureStatus, []scalarMappingCase[dkim2.SignatureStatus, generated.SignatureSetResultStatus]{
-		{dkim2.SignatureStatusPASS, generated.Pass},
-		{dkim2.SignatureStatusFAIL, generated.Fail},
-		{dkim2.SignatureStatusPERMERROR, generated.Permerror},
-		{dkim2.SignatureStatusTEMPERROR, generated.Temperror},
-		{dkim2.SignatureStatusIgnored, generated.Ignored},
+		{dkim2.SignatureStatusPASS, generated.SignatureSetResultStatusPass},
+		{dkim2.SignatureStatusFAIL, generated.SignatureSetResultStatusFail},
+		{dkim2.SignatureStatusPERMERROR, generated.SignatureSetResultStatusPermerror},
+		{dkim2.SignatureStatusTEMPERROR, generated.SignatureSetResultStatusTemperror},
+		{dkim2.SignatureStatusIgnored, generated.SignatureSetResultStatusIgnored},
 	})
+}
+
+// TestProcessReportActionsAreDaemonOwned proves the daemon constructs the
+// exact accepted RFC 8601 field while non-accepting outcomes remain inert.
+func TestProcessReportActionsAreDaemonOwned(t *testing.T) {
+	actions, err := mapProcessReportActions(
+		generated.PASS,
+		generated.DispositionAccept,
+		"mx.example.test",
+	)
+	if err != nil || len(actions) != 1 ||
+		actions[0].Type != generated.AddHeader ||
+		actions[0].Name != generated.AuthenticationResults ||
+		actions[0].Value != "mx.example.test; dkim2=pass" {
+		t.Fatalf("accepted report actions = %#v/%v", actions, err)
+	}
+	actions, err = mapProcessReportActions(
+		generated.TEMPERROR,
+		generated.DispositionTempfail,
+		"mx.example.test",
+	)
+	if err != nil || len(actions) != 0 {
+		t.Fatalf("non-accepting report actions = %#v/%v", actions, err)
+	}
+	if _, err = mapProcessReportActions(
+		generated.PASS,
+		generated.DispositionAccept,
+		"bad..example",
+	); !IsMappingError(err, MappingInternalContract) {
+		t.Fatalf("invalid reporting authority error = %v", err)
+	}
 }
 
 // TestVerificationReasonMappingExcludesErrorOnlyValue proves REST never serializes public programmer misuse.
@@ -114,11 +145,11 @@ func TestPolicyScalarMappings(t *testing.T) {
 		{dkim2.PolicyVerdictTempfail, generated.PolicyResultVerdictTempfail},
 		{dkim2.PolicyVerdictContinue, generated.PolicyResultVerdictContinue},
 	})
-	assertScalarMapping(t, "disposition", mapDisposition, []scalarMappingCase[FinalDisposition, generated.ProcessResponseDisposition]{
-		{FinalDispositionAccept, generated.ProcessResponseDispositionAccept},
-		{FinalDispositionReject, generated.ProcessResponseDispositionReject},
-		{FinalDispositionTempfail, generated.ProcessResponseDispositionTempfail},
-		{FinalDispositionContinue, generated.ProcessResponseDispositionContinue},
+	assertScalarMapping(t, "disposition", mapDisposition, []scalarMappingCase[FinalDisposition, generated.Disposition]{
+		{FinalDispositionAccept, generated.DispositionAccept},
+		{FinalDispositionReject, generated.DispositionReject},
+		{FinalDispositionTempfail, generated.DispositionTempfail},
+		{FinalDispositionContinue, generated.DispositionContinue},
 	})
 	assertScalarMapping(t, "policy finding severity", mapPolicyFindingSeverity, []scalarMappingCase[dkim2.PolicyFindingSeverity, generated.PolicyFindingSeverity]{
 		{dkim2.PolicySeverityInfo, generated.Info},

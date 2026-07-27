@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 
 	dkim2 "github.com/croessner/dkim2"
 	"github.com/croessner/dkim2/cmd/dkim2d/internal/httpjson/generated"
@@ -71,12 +72,12 @@ func newErrorResponse(
 // newJSONResponse constructs one bounded exact success representation.
 func newJSONResponse(
 	status int,
-	value generated.ProcessResponse,
+	value any,
 	head bool,
 	date string,
 	datePresent bool,
 ) (preMarshaledResponse, error) {
-	if status != http.StatusOK || !validProcessResponse(value) ||
+	if status != http.StatusOK || !validSuccessResponse(value) ||
 		datePresent && !validHTTPDate(date) {
 		return preMarshaledResponse{}, errWireResponse
 	}
@@ -91,6 +92,18 @@ func newJSONResponse(
 		status: status, body: body, head: head,
 		date: date, datePresent: datePresent && status < 500,
 	}, nil
+}
+
+// validSuccessResponse validates the exact generated success union.
+func validSuccessResponse(value any) bool {
+	switch typed := value.(type) {
+	case generated.ProcessResponse:
+		return validProcessResponse(typed)
+	case generated.OperationResponse:
+		return validOperationResponse(typed)
+	default:
+		return false
+	}
 }
 
 // validApplicationError enforces the one closed status, code, and category matrix.
@@ -182,6 +195,7 @@ func validProcessResponse(response generated.ProcessResponse) bool {
 	if response.ApiVersion != generated.V1 ||
 		response.Draft != generated.DraftIetfDkimDkim2Spec04 ||
 		!response.Disposition.Valid() ||
+		!validProcessActions(response) ||
 		!response.Replay.Class.Valid() ||
 		!validVerificationResponse(response.Verification) ||
 		!validPolicyResponse(response.Policy) {
@@ -189,13 +203,82 @@ func validProcessResponse(response generated.ProcessResponse) bool {
 	}
 	switch response.Replay.Class {
 	case generated.Disabled, generated.FirstSeen:
-		return response.Disposition == generated.ProcessResponseDispositionAccept
+		return response.Disposition == generated.DispositionAccept &&
+			response.Verification.State == generated.PASS &&
+			response.Policy.Verdict == generated.PolicyResultVerdictAccept
 	case generated.Replayed:
-		return response.Disposition == generated.ProcessResponseDispositionReject
+		return response.Disposition == generated.DispositionReject &&
+			response.Verification.State == generated.PASS &&
+			response.Policy.Verdict == generated.PolicyResultVerdictAccept
 	case generated.Indeterminate:
-		return response.Disposition == generated.ProcessResponseDispositionTempfail
+		return response.Disposition == generated.DispositionTempfail &&
+			response.Verification.State == generated.PASS &&
+			response.Policy.Verdict == generated.PolicyResultVerdictAccept
 	case generated.NotChecked:
-		return string(response.Disposition) == string(response.Policy.Verdict)
+		return (response.Verification.State != generated.PASS ||
+			response.Policy.Verdict != generated.PolicyResultVerdictAccept) &&
+			string(response.Disposition) == string(response.Policy.Verdict)
+	default:
+		return false
+	}
+}
+
+// validProcessActions validates the sole daemon-owned RFC 8601 projection.
+func validProcessActions(response generated.ProcessResponse) bool {
+	if response.Disposition != generated.DispositionAccept {
+		return len(response.Actions) == 0
+	}
+	if len(response.Actions) == 0 {
+		return true
+	}
+	if len(response.Actions) != 1 {
+		return false
+	}
+	action := response.Actions[0]
+	result, ok := authenticationResult(response.Verification.State)
+	suffix := "; dkim2=" + result
+	if !ok || action.Type != generated.AddHeader ||
+		action.Name != generated.AuthenticationResults ||
+		!strings.HasSuffix(action.Value, suffix) {
+		return false
+	}
+	return validSigningDomain(strings.TrimSuffix(action.Value, suffix))
+}
+
+// validOperationResponse validates one complete sign or revision response.
+func validOperationResponse(response generated.OperationResponse) bool {
+	if response.ApiVersion != generated.V1 ||
+		response.Draft != generated.DraftIetfDkimDkim2Spec04 ||
+		!response.Operation.Valid() || !response.Result.Valid() ||
+		!response.Disposition.Valid() ||
+		!validWireOperationOutcome(response.Result, response.Disposition) ||
+		!validOperationActionMatrix(response.Operation, response.Disposition, response.Actions) {
+		return false
+	}
+	for _, action := range response.Actions {
+		if action.Type != generated.AddHeader || !action.Name.Valid() ||
+			action.Value == "" || len(action.Value) > 65535 ||
+			strings.ContainsAny(action.Value, "\r\n\x00") {
+			return false
+		}
+	}
+	return true
+}
+
+// validWireOperationOutcome enforces the generated result/disposition matrix.
+func validWireOperationOutcome(
+	result generated.OperationResponseResult,
+	disposition generated.Disposition,
+) bool {
+	switch result {
+	case generated.OperationResponseResultPass:
+		return disposition == generated.DispositionAccept ||
+			disposition == generated.DispositionContinue
+	case generated.OperationResponseResultFail,
+		generated.OperationResponseResultPermerror:
+		return disposition == generated.DispositionReject
+	case generated.OperationResponseResultTemperror:
+		return disposition == generated.DispositionTempfail
 	default:
 		return false
 	}
@@ -303,6 +386,20 @@ func (r preMarshaledResponse) VisitHeadReadinessResponse(writer http.ResponseWri
 
 // VisitProcessMessageResponse writes a generated-interface compatible exact response.
 func (r preMarshaledResponse) VisitProcessMessageResponse(writer http.ResponseWriter) error {
+	return r.write(writer)
+}
+
+type operationSignResponse struct{ preMarshaledResponse }
+
+// VisitSignMessageResponse writes one exact generated-interface response.
+func (r operationSignResponse) VisitSignMessageResponse(writer http.ResponseWriter) error {
+	return r.write(writer)
+}
+
+type operationReviseResponse struct{ preMarshaledResponse }
+
+// VisitReviseMessageResponse writes one exact generated-interface response.
+func (r operationReviseResponse) VisitReviseMessageResponse(writer http.ResponseWriter) error {
 	return r.write(writer)
 }
 

@@ -1,0 +1,326 @@
+package milter
+
+import (
+	"bytes"
+	"context"
+	"encoding/binary"
+	"errors"
+	"io"
+	"testing"
+	"time"
+)
+
+const testAdmissionBytes = 64 << 20
+
+type testHandler struct {
+	message Message
+	result  Result
+	err     error
+	calls   int
+}
+
+type retainingHandler struct{ message Message }
+
+// Handle deliberately retains the synchronous snapshot for zeroization evidence.
+func (h *retainingHandler) Handle(_ context.Context, message Message) (Result, error) {
+	h.message = message
+	return Result{
+		Operation: operationProcess, Result: resultPass, Outcome: DispositionContinue,
+	}, nil
+}
+
+// Handle captures one immutable EOM message for independent-oracle tests.
+func (h *testHandler) Handle(_ context.Context, message Message) (Result, error) {
+	h.calls++
+	snapshot, copyErr := NewMessage(message.Raw(), message.ReversePath(), message.Recipients())
+	if copyErr != nil {
+		return Result{}, copyErr
+	}
+	h.message = snapshot
+	return h.result, h.err
+}
+
+type splitStream struct {
+	reader *bytes.Reader
+	writer bytes.Buffer
+}
+
+// Read consumes only prebuilt peer input.
+func (s *splitStream) Read(output []byte) (int, error) { return s.reader.Read(output) }
+
+// Write captures only adapter output.
+func (s *splitStream) Write(input []byte) (int, error) { return s.writer.Write(input) }
+
+// TestSessionReconstructsExactCallbackBytes proves the independent EOM oracle.
+func TestSessionReconstructsExactCallbackBytes(t *testing.T) {
+	handler := &testHandler{result: Result{
+		Operation: operationProcess, Result: resultPass, Outcome: DispositionContinue,
+	}}
+	session := testSession(t, handler, false, modeInbound, "")
+	body := []byte{'b', 0, 'o', 'd', 'y', '\r', '\n'}
+	input := appendPeerFrames(
+		peerFrame(commandNegotiate, negotiationPayload()),
+		peerFrame(commandConnect, []byte("mx\x00U")),
+		peerFrame(commandHelo, []byte("helo.example\x00")),
+		peerFrame(commandMail, []byte("<from@example>\x00SIZE=1\x00")),
+		peerFrame(commandRecipient, []byte("<to@example>\x00")),
+		peerFrame(commandRecipient, []byte("<to@example>\x00")),
+		peerFrame(commandHeader, []byte("X-Duplicate\x00 one\x00")),
+		peerFrame(commandHeader, []byte("x-duplicate\x00\ttwo\n more\x00")),
+		peerFrame(commandEOH, nil),
+		peerFrame(commandBody, body),
+		peerFrame(commandEOM, nil),
+		peerFrame(commandQuit, nil),
+	)
+	stream := &splitStream{reader: bytes.NewReader(input)}
+	if err := session.Serve(context.Background(), stream); err != nil {
+		t.Fatalf("Serve() error = %v", err)
+	}
+	if handler.calls != 1 {
+		t.Fatalf("Handle() calls = %d, want 1", handler.calls)
+	}
+	want := append(
+		[]byte("X-Duplicate: one\r\nx-duplicate:\ttwo\r\n more\r\n\r\n"),
+		body...,
+	)
+	if got := handler.message.Raw(); !bytes.Equal(got, want) {
+		t.Fatalf("Raw() = %q, want exact %q", got, want)
+	}
+	recipients := handler.message.Recipients()
+	if len(recipients) != 2 || !bytes.Equal(recipients[0], recipients[1]) {
+		t.Fatal("duplicate recipients were not retained in callback order")
+	}
+}
+
+// TestSessionAllowsEmptyHeaderAndBodySequence freezes the header-star grammar.
+func TestSessionAllowsEmptyHeaderAndBodySequence(t *testing.T) {
+	handler := &testHandler{result: Result{
+		Operation: operationProcess, Result: resultPass, Outcome: DispositionContinue,
+	}}
+	session := testSession(t, handler, false, modeInbound, "")
+	input := appendPeerFrames(
+		peerFrame(commandNegotiate, negotiationPayload()),
+		peerFrame(commandConnect, []byte("mx\x00U")),
+		peerFrame(commandHelo, []byte("helo\x00")),
+		peerFrame(commandMail, []byte("<>\x00")),
+		peerFrame(commandRecipient, []byte("<to@example>\x00")),
+		peerFrame(commandEOH, nil),
+		peerFrame(commandEOM, nil),
+		peerFrame(commandQuit, nil),
+	)
+	stream := &splitStream{reader: bytes.NewReader(input)}
+	if err := session.Serve(context.Background(), stream); err != nil {
+		t.Fatalf("Serve() error = %v", err)
+	}
+	if got := handler.message.Raw(); !bytes.Equal(got, []byte("\r\n")) {
+		t.Fatalf("Raw() = %q, want empty header separator", got)
+	}
+}
+
+// TestHandlerSnapshotBytesAreClearedAfterReturn proves bounded mail-data lifetime.
+func TestHandlerSnapshotBytesAreClearedAfterReturn(t *testing.T) {
+	handler := &retainingHandler{}
+	message, err := NewMessage(
+		[]byte("From: marker@example.test\r\n\r\nprivate-body"),
+		[]byte("<marker@example.test>"),
+		[][]byte{[]byte("<recipient@example.test>")},
+	)
+	if err != nil {
+		t.Fatal("message construction failed")
+	}
+	if _, err := callHandler(context.Background(), handler, message); err != nil {
+		t.Fatal("handler call failed")
+	}
+	for _, retained := range append(
+		[][]byte{handler.message.Raw(), handler.message.ReversePath()},
+		handler.message.Recipients()...,
+	) {
+		if !allZeroBytes(retained) {
+			t.Fatal("handler-return snapshot retained mail bytes")
+		}
+	}
+}
+
+// allZeroBytes reports whether best-effort clearing erased every retained byte.
+func allZeroBytes(value []byte) bool {
+	for _, current := range value {
+		if current != 0 {
+			return false
+		}
+	}
+	return true
+}
+
+// TestSigningRejectsSMTPUTF8BeforeHandler freezes the ASCII signing envelope gate.
+func TestSigningRejectsSMTPUTF8BeforeHandler(t *testing.T) {
+	handler := &testHandler{}
+	session := testSession(t, handler, false, modeOriginator, "")
+	input := appendPeerFrames(
+		peerFrame(commandNegotiate, negotiationPayload()),
+		peerFrame(commandConnect, []byte("mx\x00U")),
+		peerFrame(commandHelo, []byte("helo\x00")),
+		peerFrame(commandMail, append([]byte("<fröm@example>"), 0)),
+	)
+	stream := &splitStream{reader: bytes.NewReader(input)}
+	var adapterError *Error
+	if err := session.Serve(context.Background(), stream); !errors.As(err, &adapterError) ||
+		adapterError.Class != FailureFidelity || handler.calls != 0 {
+		t.Fatalf("Serve() error = %v, calls = %d", err, handler.calls)
+	}
+}
+
+// TestFailOpenIsNarrowlyLimited freezes timeout and contract behavior.
+func TestFailOpenIsNarrowlyLimited(t *testing.T) {
+	for _, testCase := range []struct {
+		name       string
+		failure    FailureClass
+		wantAccept bool
+	}{
+		{name: "timeout", failure: FailureTimeout, wantAccept: true},
+		{name: "unavailable", failure: FailureUnavailable, wantAccept: true},
+		{name: "capacity after operation start", failure: FailureCapacity, wantAccept: false},
+		{name: "contract", failure: FailureContract, wantAccept: false},
+		{name: "fidelity", failure: FailureFidelity, wantAccept: false},
+		{name: "indeterminate", failure: FailureIndeterminate, wantAccept: false},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			handler := &testHandler{err: &Error{Class: testCase.failure}}
+			session := testSession(t, handler, true, modeInbound, "")
+			if !session.startTransaction(0) {
+				t.Fatal("startTransaction() failed")
+			}
+			session.reverse = []byte("<from@example>")
+			session.recipients = [][]byte{[]byte("<to@example>")}
+			session.headers = []headerField{{name: []byte("From"), value: []byte(" from@example")}}
+			session.headerBytes = int64(len("From: from@example\r\n"))
+			frames, err := session.endMessage(context.Background())
+			if err != nil {
+				t.Fatalf("endMessage() error = %v", err)
+			}
+			accepted := len(frames) == 1 && len(frames[0]) >= 5 && frames[0][4] == replyAccept
+			if accepted != testCase.wantAccept {
+				t.Fatalf("endMessage() accepted=%t, want %t", accepted, testCase.wantAccept)
+			}
+		})
+	}
+}
+
+// TestFailOpenCannotPreserveForgedLocalAuthenticationResults proves an
+// unavailable daemon never admits spoofed local trust assertions unchanged.
+func TestFailOpenCannotPreserveForgedLocalAuthenticationResults(t *testing.T) {
+	handler := &testHandler{err: &Error{Class: FailureUnavailable}}
+	session := testSession(t, handler, true, modeInbound, testAuthservID)
+	if !session.startTransaction(0) {
+		t.Fatal("startTransaction() failed")
+	}
+	session.reverse = []byte("<from@example>")
+	session.recipients = [][]byte{[]byte("<to@example>")}
+	session.headers = []headerField{
+		{name: []byte(headerAuthResults), value: []byte(" mx.example; dkim=pass")},
+		{name: []byte("From"), value: []byte(" from@example")},
+	}
+	session.headerBytes = int64(
+		len("Authentication-Results: mx.example; dkim=pass\r\n") +
+			len("From: from@example\r\n"),
+	)
+	frames, err := session.endMessage(context.Background())
+	if err != nil || len(frames) != 1 || len(frames[0]) < 5 ||
+		frames[0][4] != replyCode ||
+		!bytes.Contains(frames[0], []byte(fixedTempfailReply)) {
+		t.Fatalf("endMessage() frames=%x error=%v", frames, err)
+	}
+}
+
+// TestTypedHandlerFailureSurvivesConcurrentDeadline proves closed classes are authoritative.
+func TestTypedHandlerFailureSurvivesConcurrentDeadline(t *testing.T) {
+	ctx, cancel := context.WithDeadline(context.Background(), time.Unix(1, 0))
+	cancel()
+	for _, class := range []FailureClass{
+		FailureIndeterminate,
+		FailureContract,
+		FailureFidelity,
+		FailureCapacity,
+		FailureUnavailable,
+		FailureTrust,
+		FailureInternal,
+	} {
+		if got := classifyHandlerError(ctx, &Error{Class: class}); got != class {
+			t.Fatalf("classifyHandlerError(%q)=%q, want exact typed class", class, got)
+		}
+	}
+}
+
+type stagedWriter struct {
+	writes int
+}
+
+// Write completes the first frame and fails before the second.
+func (w *stagedWriter) Write(input []byte) (int, error) {
+	w.writes++
+	if w.writes == 1 {
+		return len(input), nil
+	}
+	return 0, io.ErrClosedPipe
+}
+
+// TestWriteFramesClassifiesPriorMutationAsIndeterminate freezes no-rollback semantics.
+func TestWriteFramesClassifiesPriorMutationAsIndeterminate(t *testing.T) {
+	writer := &stagedWriter{}
+	err := writeFrames(writer, [][]byte{
+		encodeFrame(replyAddHeader, []byte("Name\x00value\x00")),
+		encodeFrame(replyAccept, nil),
+	})
+	if !errors.Is(err, &Error{Class: FailureIndeterminate}) {
+		t.Fatalf("writeFrames() error = %v", err)
+	}
+}
+
+// testSession builds one bounded session for state-machine tests.
+func testSession(
+	t *testing.T,
+	handler Handler,
+	failOpen bool,
+	mode string,
+	authservID string,
+) *Session {
+	t.Helper()
+	admission, err := NewAdmission(2, 2, testAdmissionBytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	session, err := NewSession(handler, admission, Limits{
+		MessageBytes: 1 << 16, HeaderBytes: 1 << 15,
+		HeaderCount: 100, HeaderFieldBytes: 1024, RecipientCount: 100,
+	}, time.Second, FailurePolicy{FailOpen: failOpen}, mode, authservID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return session
+}
+
+// negotiationPayload returns the independent peer's required v6 tuple.
+func negotiationPayload() []byte {
+	output := make([]byte, 12)
+	binary.BigEndian.PutUint32(output[:4], 6)
+	binary.BigEndian.PutUint32(output[4:8], requiredActions)
+	binary.BigEndian.PutUint32(output[8:12], requiredProtocol)
+	return output
+}
+
+// peerFrame independently serializes one MTA-side frame.
+func peerFrame(command byte, payload []byte) []byte {
+	output := make([]byte, 5+len(payload))
+	binary.BigEndian.PutUint32(output[:4], uint32(len(payload)+1))
+	output[4] = command
+	copy(output[5:], payload)
+	return output
+}
+
+// appendPeerFrames concatenates independent peer frames.
+func appendPeerFrames(frames ...[]byte) []byte {
+	var output []byte
+	for _, frame := range frames {
+		output = append(output, frame...)
+	}
+	return output
+}

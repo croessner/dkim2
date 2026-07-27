@@ -332,6 +332,15 @@ func (m UnrestrictedSignedMessage) Bytes() []byte {
 	return output
 }
 
+// GeneratedFields returns detached complete RFC 5322 fields in the exact
+// insertion order proved by the signing coordinator.
+func (m UnrestrictedSignedMessage) GeneratedFields() [][]byte {
+	if !m.Valid() {
+		return nil
+	}
+	return m.message.GeneratedFields()
+}
+
 // Facts returns bounded immutable operation facts.
 func (m UnrestrictedSignedMessage) Facts() SignedMessageFacts { return m.facts }
 

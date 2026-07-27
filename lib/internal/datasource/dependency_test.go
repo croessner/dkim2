@@ -24,6 +24,7 @@ const (
 	datasourceMemoryPackage     = "internal/datasource/memory"
 	signingPackage              = "internal/signing"
 	signingProfilePackage       = "internal/datasource/signingprofile"
+	publicFlatfileProvider      = "provider/flatfile"
 	datasourceFuturePackage     = "internal/datasource/future"
 	dependencyTestHelperPackage = "internal/helper"
 	publicFacadeHarness         = "signing_datasource_integration_test.go"
@@ -81,7 +82,8 @@ func TestDatasourceProductionImportBoundaries(t *testing.T) {
 		if invalidSigningDatasourceOwnership(current.directory, current.imports) {
 			t.Fatalf("production signing package %q imports datasource", current.directory)
 		}
-		if !isDatasourceDirectory(current.directory) &&
+		if current.directory != publicFlatfileProvider &&
+			!isDatasourceDirectory(current.directory) &&
 			importsConcreteDatasourceProvider(current.imports) {
 			t.Fatalf("production protocol package %q imports a concrete datasource provider",
 				current.directory)
@@ -400,7 +402,8 @@ func productionDependencyGraphViolation(
 					target,
 				)
 			}
-			if isDatasourceDirectory(root) &&
+			if (isDatasourceDirectory(root) ||
+				root == publicFlatfileProvider) &&
 				isConcreteDatasourceDirectory(target) &&
 				!allowsConcreteDatasourceDependency(root, target) {
 				return fmt.Sprintf(
@@ -409,7 +412,8 @@ func productionDependencyGraphViolation(
 					target,
 				)
 			}
-			if !isDatasourceDirectory(root) &&
+			if root != publicFlatfileProvider &&
+				!isDatasourceDirectory(root) &&
 				isConcreteDatasourceDirectory(target) {
 				return fmt.Sprintf(
 					"production package %q transitively reaches concrete datasource provider %q",
@@ -418,7 +422,9 @@ func productionDependencyGraphViolation(
 				)
 			}
 		}
-		if hasDatasource && hasSigning && root != signingProfilePackage {
+		if hasDatasource && hasSigning &&
+			root != signingProfilePackage &&
+			root != publicFlatfileProvider {
 			return fmt.Sprintf(
 				"production package %q creates an unapproved datasource/signing bridge",
 				root,
@@ -502,6 +508,10 @@ func allowsConcreteDatasourceDependency(root string, target string) bool {
 			target == datasourceMemoryPackage
 	case signingProfilePackage:
 		return target == signingProfilePackage
+	case publicFlatfileProvider:
+		return target == datasourceFlatfilePackage ||
+			target == datasourceMemoryPackage ||
+			target == signingProfilePackage
 	default:
 		return target == root
 	}

@@ -1,0 +1,213 @@
+package httpjson
+
+import (
+	"context"
+	"encoding/base64"
+	"errors"
+	"strings"
+	"testing"
+
+	"github.com/croessner/dkim2/cmd/dkim2d/internal/app"
+	"github.com/croessner/dkim2/cmd/dkim2d/internal/httpjson/generated"
+	"github.com/croessner/dkim2/cmd/dkim2d/internal/httpjson/wire"
+)
+
+// TestMapOperationRequestPreservesExactBytes proves generated DTO isolation and fidelity.
+func TestMapOperationRequestPreservesExactBytes(t *testing.T) {
+	raw := []byte("From: sender@example.test\r\n\r\nbody\r\n")
+	request := operationRequestFixture(t, raw)
+	mapped, err := MapSignRequest(request)
+	if err != nil {
+		t.Fatalf("MapSignRequest() error = %v", err)
+	}
+	if mapped.Operation() != app.OperationSign ||
+		string(mapped.RawMessage()) != string(raw) ||
+		string(mapped.ReversePath()) != "<sender@example.test>" ||
+		len(mapped.Recipients()) != 1 ||
+		string(mapped.Recipients()[0]) != "<recipient@example.net>" ||
+		mapped.Fidelity() != app.FidelityMilterReconstructedCRLF {
+		t.Fatal("mapped operation changed exact request evidence")
+	}
+}
+
+// TestMapReviseRequestPreservesDistinctEnvelopeEvidence proves inherited
+// verification evidence cannot be replaced by the outgoing signing envelope.
+func TestMapReviseRequestPreservesDistinctEnvelopeEvidence(t *testing.T) {
+	sign := operationRequestFixture(t, []byte("From: sender@example.test\r\n\r\nbody\r\n"))
+	incomingReverse, err := wire.NewProtectedString("<original@example.test>")
+	if err != nil {
+		t.Fatal("incoming reverse fixture construction failed")
+	}
+	incomingRecipient, err := wire.NewProtectedString("<original@example.net>")
+	if err != nil {
+		t.Fatal("incoming recipient fixture construction failed")
+	}
+	request := generated.ReviseRequest{
+		ApiVersion: sign.ApiVersion,
+		Context:    sign.Context,
+		Draft:      sign.Draft,
+		Message:    sign.Message,
+		IncomingSmtp: generated.SMTPInput{
+			MailFrom: incomingReverse,
+			RcptTo:   []wire.ProtectedString{incomingRecipient},
+		},
+		Smtp: sign.Smtp,
+	}
+	mapped, err := MapReviseRequest(request)
+	if err != nil {
+		t.Fatalf("MapReviseRequest() error = %v", err)
+	}
+	if mapped.Operation() != app.OperationRevise ||
+		string(mapped.IncomingReversePath()) != "<original@example.test>" ||
+		len(mapped.IncomingRecipients()) != 1 ||
+		string(mapped.IncomingRecipients()[0]) != "<original@example.net>" ||
+		string(mapped.ReversePath()) != "<sender@example.test>" ||
+		len(mapped.Recipients()) != 1 ||
+		string(mapped.Recipients()[0]) != "<recipient@example.net>" {
+		t.Fatal("revision mapper conflated incoming and outgoing envelope evidence")
+	}
+}
+
+// TestMapOperationRequestFailsClosedOnSMTPUTF8Signing proves current signing bounds.
+func TestMapOperationRequestFailsClosedOnSMTPUTF8Signing(t *testing.T) {
+	request := operationRequestFixture(t, []byte("From: sender@example.test\r\n\r\n"))
+	protected, err := wire.NewProtectedString("<séndér@example.test>")
+	if err != nil {
+		t.Fatal("protected fixture construction failed")
+	}
+	request.Smtp.MailFrom = protected
+	if _, err := MapSignRequest(request); !IsMappingError(err, MappingInvalidContract) {
+		t.Fatalf("SMTPUTF8 signing error = %v", err)
+	}
+}
+
+// TestMapOperationRequestRejectsInvalidDNSDomainsBeforeServiceWork proves
+// signing identity uses the authoritative ASCII DNS label grammar.
+func TestMapOperationRequestRejectsInvalidDNSDomainsBeforeServiceWork(t *testing.T) {
+	for _, domain := range []string{
+		"example..test",
+		"a-.example",
+		strings.Repeat("a", 64) + ".example",
+	} {
+		request := operationRequestFixture(t, []byte("From: sender@example.test\r\n\r\n"))
+		request.Context.Domain = domain
+		if _, err := MapSignRequest(request); !IsMappingError(err, MappingInvalidContract) {
+			t.Fatalf("MapSignRequest(domain=%q) error = %v", domain, err)
+		}
+	}
+}
+
+// TestMapOperationResultRequiresExactActionOrder proves full-plan admission.
+func TestMapOperationResultRequiresExactActionOrder(t *testing.T) {
+	instance, _ := app.NewCompletedField([]byte("Message-Instance: m=1; h=sha256:AA==\r\n"))
+	signature, _ := app.NewCompletedField([]byte("DKIM2-Signature: i=1;\r\n b=AA==\r\n"))
+	result, err := app.NewOperationResult(
+		app.OperationSign, app.OperationPass, app.OperationAccept,
+		[]app.CompletedField{instance, signature},
+	)
+	if err != nil {
+		t.Fatal("operation fixture construction failed")
+	}
+	mapped, err := MapOperationResult(result)
+	if err != nil || len(mapped.Actions) != 2 ||
+		mapped.Actions[0].Name != generated.MessageInstance ||
+		mapped.Actions[1].Name != generated.DKIM2Signature ||
+		strings.ContainsAny(mapped.Actions[1].Value, "\r\n") {
+		t.Fatalf("mapped action result = %#v/%v", mapped, err)
+	}
+	reversed, _ := app.NewOperationResult(
+		app.OperationSign, app.OperationPass, app.OperationAccept,
+		[]app.CompletedField{signature, instance},
+	)
+	if _, err := MapOperationResult(reversed); !IsMappingError(err, MappingInternalContract) {
+		t.Fatalf("reversed plan error = %v", err)
+	}
+	incoherent, err := app.NewOperationResult(
+		app.OperationSign, app.OperationTemperror, app.OperationAccept,
+		[]app.CompletedField{instance, signature},
+	)
+	if err == nil {
+		t.Fatal("temperror plus accepting mutation constructed")
+	}
+	if _, mapErr := MapOperationResult(incoherent); !IsMappingError(
+		mapErr,
+		MappingInternalContract,
+	) {
+		t.Fatalf("incoherent result mapping error = %v", mapErr)
+	}
+}
+
+// TestStrictAdapterUsesInjectedOperationService proves HTTP status alone is not authority.
+func TestStrictAdapterUsesInjectedOperationService(t *testing.T) {
+	service := &operationServiceStub{}
+	adapter, err := newStrictAdapter(&adapterReadinessStub{}, &adapterProcessorStub{}, service)
+	if err != nil {
+		t.Fatalf("newStrictAdapter() error = %v", err)
+	}
+	request := operationRequestFixture(t, []byte("From: sender@example.test\r\n\r\n"))
+	response, err := adapter.SignMessage(context.Background(), generated.SignMessageRequestObject{Body: &request})
+	if err != nil || response == nil || service.signCalls != 1 {
+		t.Fatalf("SignMessage() response/calls/error = %v/%d/%v", response, service.signCalls, err)
+	}
+	service.err = errors.New("private marker must not escape")
+	if response, err = adapter.SignMessage(context.Background(), generated.SignMessageRequestObject{Body: &request}); response != nil || err == nil || strings.Contains(err.Error(), "private marker") {
+		t.Fatalf("failed SignMessage() response/error = %v/%v", response, err)
+	}
+}
+
+type operationServiceStub struct {
+	signCalls int
+	err       error
+}
+
+// Sign returns one deterministic signing result.
+func (s *operationServiceStub) Sign(_ context.Context, _ app.OperationRequest) (app.OperationResult, error) {
+	s.signCalls++
+	if s.err != nil {
+		return app.OperationResult{}, s.err
+	}
+	instance, _ := app.NewCompletedField([]byte("Message-Instance: m=1; h=sha256:AA==\r\n"))
+	signature, _ := app.NewCompletedField([]byte("DKIM2-Signature: i=1; b=AA==\r\n"))
+	return app.NewOperationResult(
+		app.OperationSign, app.OperationPass, app.OperationAccept,
+		[]app.CompletedField{instance, signature},
+	)
+}
+
+// Revise returns a closed unmodified completion for interface coverage.
+func (*operationServiceStub) Revise(context.Context, app.OperationRequest) (app.OperationResult, error) {
+	return app.NewOperationResult(
+		app.OperationRevise, app.OperationPass, app.OperationContinue, nil,
+	)
+}
+
+// operationRequestFixture constructs one exact generated signing request.
+func operationRequestFixture(t *testing.T, raw []byte) generated.SignRequest {
+	t.Helper()
+	message, err := wire.NewProtectedString(base64.StdEncoding.EncodeToString(raw))
+	if err != nil {
+		t.Fatal("message fixture construction failed")
+	}
+	reverse, err := wire.NewProtectedString("<sender@example.test>")
+	if err != nil {
+		t.Fatal("reverse fixture construction failed")
+	}
+	recipient, err := wire.NewProtectedString("<recipient@example.net>")
+	if err != nil {
+		t.Fatal("recipient fixture construction failed")
+	}
+	fidelity := generated.MilterReconstructedCrlf
+	return generated.SignRequest{
+		ApiVersion: generated.V1,
+		Draft:      generated.DraftIetfDkimDkim2Spec04,
+		Message: generated.MessageInput{
+			RawRfc5322Base64: message,
+			Fidelity:         &fidelity,
+		},
+		Smtp: generated.SMTPInput{
+			MailFrom: reverse,
+			RcptTo:   []wire.ProtectedString{recipient},
+		},
+		Context: generated.SigningContext{Tenant: "tenant-a", Domain: "example.test"},
+	}
+}

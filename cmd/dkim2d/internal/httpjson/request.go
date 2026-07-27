@@ -60,7 +60,16 @@ func newMappingError(code MappingErrorCode) *MappingError {
 }
 
 type domainRequestState struct {
-	request dkim2.VerifyRequest
+	request    dkim2.VerifyRequest
+	authservID string
+}
+
+// AuthservID returns the optional validated local reporting authority.
+func (r DomainRequest) AuthservID() string {
+	if r.state == nil {
+		return ""
+	}
+	return r.state.authservID
 }
 
 // DomainRequest owns one byte-preserving request mapped away from generated DTOs.
@@ -107,6 +116,13 @@ func MapProcessRequest(input generated.ProcessRequest) (DomainRequest, error) {
 	if input.ApiVersion != generated.V1 || input.Draft != generated.DraftIetfDkimDkim2Spec04 {
 		return DomainRequest{}, newMappingError(MappingInvalidContract)
 	}
+	authservID := ""
+	if input.Reporting != nil {
+		authservID = input.Reporting.AuthservId
+		if !validSigningDomain(authservID) {
+			return DomainRequest{}, newMappingError(MappingInvalidContract)
+		}
+	}
 
 	encoded, err := input.Message.RawRfc5322Base64.Bytes()
 	if err != nil {
@@ -148,7 +164,8 @@ func MapProcessRequest(input generated.ProcessRequest) (DomainRequest, error) {
 	}
 
 	return DomainRequest{state: &domainRequestState{
-		request: dkim2.NewVerifyRequest(rawMessage, reversePath, forwardPaths),
+		request:    dkim2.NewVerifyRequest(rawMessage, reversePath, forwardPaths),
+		authservID: authservID,
 	}}, nil
 }
 

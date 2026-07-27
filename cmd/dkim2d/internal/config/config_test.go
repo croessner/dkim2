@@ -42,6 +42,53 @@ func TestLoadDisabledAppliesOnlyCommonDefaults(t *testing.T) {
 	}
 }
 
+// TestSigningConfigurationIsDefaultDisabledAndConditionallyComplete freezes
+// the no-open configuration authority before protected traversal.
+func TestSigningConfigurationIsDefaultDisabledAndConditionallyComplete(t *testing.T) {
+	clearStableEnvironment(t)
+	disabled, err := Load([]byte(disabledYAML()), FlagValues{})
+	if err != nil || disabled.Signing().Enabled() ||
+		disabled.Server().SignCapabilityFile() != "" ||
+		disabled.Server().ReviseCapabilityFile() != "" {
+		t.Fatal("default-disabled signing configuration widened authority")
+	}
+	enabled, err := Load([]byte(signingYAML()), FlagValues{})
+	if err != nil || !enabled.Signing().Enabled() ||
+		enabled.Signing().Backend() != SigningFlatFile ||
+		enabled.Signing().ReloadInterval() != 30*time.Second ||
+		enabled.Signing().AllowRecipientGroup() {
+		t.Fatalf("enabled signing configuration failed with code %s", CodeOf(err))
+	}
+	for _, mutation := range []string{
+		strings.Replace(signingYAML(), "  private_manifest_file:", "  unknown_private_manifest_file:", 1),
+		strings.Replace(signingYAML(), "  revise_capability_file:", "  unknown_revise_capability_file:", 1),
+		strings.Replace(signingYAML(), "/private-manifest", "/datasource", 1),
+		strings.Replace(signingYAML(), "  backend: flat_file", "  backend: disabled", 1),
+	} {
+		if _, loadErr := Load([]byte(mutation), FlagValues{}); loadErr == nil {
+			t.Fatal("signing conditional matrix accepted an incomplete or conflicting state")
+		}
+	}
+}
+
+// TestSigningConfigurationRejectsRecipientGroups proves the reserved
+// compatibility path cannot enable signing without per-message Bcc evidence.
+func TestSigningConfigurationRejectsRecipientGroups(t *testing.T) {
+	clearStableEnvironment(t)
+	t.Setenv("TEST_ALLOW_RECIPIENT_GROUP", canonicalTrue)
+	document := strings.Replace(
+		signingYAML(),
+		"  backend: flat_file",
+		"  backend: flat_file\n  allow_recipient_group: ${TEST_ALLOW_RECIPIENT_GROUP}",
+		1,
+	)
+	if _, err := Load([]byte(document), FlagValues{}); err == nil {
+		t.Fatal("Load() accepted reserved recipient-group signing")
+	} else if CodeOf(err) != CodeInvalidField {
+		t.Fatalf("Load() returned code %s for reserved recipient-group signing", CodeOf(err))
+	}
+}
+
 // TestLoadMemoryExpandsExactTypedPlaceholders proves one-pass typed expansion.
 func TestLoadMemoryExpandsExactTypedPlaceholders(t *testing.T) {
 	clearStableEnvironment(t)
@@ -632,6 +679,25 @@ server:
   capability_file: /secure/` + testGeneration + `/capability
 replay:
   backend: disabled
+`
+}
+
+// signingYAML returns one complete same-generation flat-file signing document.
+func signingYAML() string {
+	return `config:
+  version: dkim2d-config-v1
+protected:
+  generation: ` + testGeneration + `
+server:
+  capability_file: /secure/` + testGeneration + `/capability
+  sign_capability_file: /secure/` + testGeneration + `/sign-capability
+  revise_capability_file: /secure/` + testGeneration + `/revise-capability
+replay:
+  backend: disabled
+signing:
+  backend: flat_file
+  datasource_file: /secure/` + testGeneration + `/datasource
+  private_manifest_file: /secure/` + testGeneration + `/private-manifest
 `
 }
 

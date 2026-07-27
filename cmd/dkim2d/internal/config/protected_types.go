@@ -2,10 +2,13 @@ package config
 
 import (
 	"bytes"
+	"context"
 	"crypto/subtle"
 	"fmt"
 	"io"
 	"sync"
+
+	"github.com/croessner/dkim2/cmd/dkim2d/internal/signingstore"
 )
 
 const protectedRedactedText = "dkim2d_protected_material"
@@ -43,9 +46,13 @@ type protectedState struct {
 
 	snapshot Snapshot
 
-	capability [32]byte
-	hmac       [32]byte
-	hasHMAC    bool
+	capability       [32]byte
+	signCapability   [32]byte
+	reviseCapability [32]byte
+	hasSigning       bool
+	signingStore     *signingstore.Runtime
+	hmac             [32]byte
+	hasHMAC          bool
 
 	applicationPassword        []byte
 	auditorPassword            []byte
@@ -105,6 +112,18 @@ type RuntimeMaterial struct {
 
 // ProcessCapability is a comparison-only opaque local authorization value.
 type ProcessCapability struct {
+	state *protectedState
+	token *runtimeToken
+}
+
+// SignCapability is a comparison-only opaque originator authorization value.
+type SignCapability struct {
+	state *protectedState
+	token *runtimeToken
+}
+
+// ReviseCapability is a comparison-only opaque revision authorization value.
+type ReviseCapability struct {
 	state *protectedState
 	token *runtimeToken
 }
@@ -207,6 +226,37 @@ func (p *RuntimePreparation) ProcessCapability() ProcessCapability {
 		return ProcessCapability{}
 	}
 	return ProcessCapability{state: p.state, token: p.token}
+}
+
+// SignCapability returns the non-owning post-commit originator capability.
+func (p *RuntimePreparation) SignCapability() SignCapability {
+	if p == nil {
+		return SignCapability{}
+	}
+	return SignCapability{state: p.state, token: p.token}
+}
+
+// ReviseCapability returns the non-owning post-commit revision capability.
+func (p *RuntimePreparation) ReviseCapability() ReviseCapability {
+	if p == nil {
+		return ReviseCapability{}
+	}
+	return ReviseCapability{state: p.state, token: p.token}
+}
+
+// SigningStore returns the same-generation reload runtime only while
+// runtime preparation owns the handoff.
+func (p *RuntimePreparation) SigningStore() *signingstore.Runtime {
+	if p == nil || p.state == nil || p.token == nil {
+		return nil
+	}
+	p.state.mu.Lock()
+	defer p.state.mu.Unlock()
+	if p.state.phase != protectedPreparedForRuntime ||
+		p.state.runtimeToken != p.token || !p.state.hasSigning {
+		return nil
+	}
+	return p.state.signingStore
 }
 
 // ReplayRuntime returns one atomic same-generation replay preparation.
@@ -406,6 +456,54 @@ func (c ProcessCapability) Equal(candidate []byte) bool {
 	return len(candidate) == len(padded) && valueEqual == 1
 }
 
+// Equal performs an exact constant-time originator capability comparison.
+func (c SignCapability) Equal(candidate []byte) bool {
+	return equalProtectedCapability(c.state, c.token, candidate, protectedSign)
+}
+
+// Equal performs an exact constant-time revision capability comparison.
+func (c ReviseCapability) Equal(candidate []byte) bool {
+	return equalProtectedCapability(c.state, c.token, candidate, protectedRevise)
+}
+
+type protectedCapabilityKind uint8
+
+const (
+	protectedSign protectedCapabilityKind = iota + 1
+	protectedRevise
+)
+
+// equalProtectedCapability compares one enabled role without revealing length.
+func equalProtectedCapability(
+	state *protectedState,
+	token *runtimeToken,
+	candidate []byte,
+	kind protectedCapabilityKind,
+) bool {
+	if state == nil || token == nil {
+		return false
+	}
+	state.mu.Lock()
+	defer state.mu.Unlock()
+	if state.phase != protectedOwnedByRuntime ||
+		state.runtimeToken != token || !state.hasSigning {
+		return false
+	}
+	var expected *[32]byte
+	switch kind {
+	case protectedSign:
+		expected = &state.signCapability
+	case protectedRevise:
+		expected = &state.reviseCapability
+	default:
+		return false
+	}
+	var padded [32]byte
+	copy(padded[:], candidate)
+	valueEqual := subtle.ConstantTimeCompare(expected[:], padded[:])
+	return len(candidate) == len(padded) && valueEqual == 1
+}
+
 // releasePrebootstrap clears material while prebootstrap still owns prepared state.
 func (s *protectedState) releasePrebootstrap() error {
 	s.mu.Lock()
@@ -455,6 +553,13 @@ func (s *protectedState) clearProtected(releasedBy protectedPhase) {
 	s.releasedToken = s.runtimeToken
 	s.runtimeToken = nil
 	s.capability = [32]byte{}
+	s.signCapability = [32]byte{}
+	s.reviseCapability = [32]byte{}
+	s.hasSigning = false
+	if s.signingStore != nil {
+		_ = s.signingStore.Close(context.Background())
+		s.signingStore = nil
+	}
 	s.hmac = [32]byte{}
 	s.hasHMAC = false
 	clear(s.applicationPassword)
@@ -508,9 +613,22 @@ func validateProtectedSeparation(state *protectedState) error {
 	if state.hasHMAC && bytes.Equal(state.capability[:], state.hmac[:]) {
 		return newError(CodeProtectedContent)
 	}
+	if state.hasSigning &&
+		(bytes.Equal(state.capability[:], state.signCapability[:]) ||
+			bytes.Equal(state.capability[:], state.reviseCapability[:]) ||
+			bytes.Equal(state.signCapability[:], state.reviseCapability[:])) {
+		return newError(CodeProtectedContent)
+	}
+	if state.hasHMAC && state.hasSigning &&
+		(bytes.Equal(state.hmac[:], state.signCapability[:]) ||
+			bytes.Equal(state.hmac[:], state.reviseCapability[:])) {
+		return newError(CodeProtectedContent)
+	}
 	for _, password := range [][]byte{state.applicationPassword, state.auditorPassword} {
 		if len(password) == exactKeyBytes &&
 			(bytes.Equal(state.capability[:], password) ||
+				state.hasSigning && bytes.Equal(state.signCapability[:], password) ||
+				state.hasSigning && bytes.Equal(state.reviseCapability[:], password) ||
 				state.hasHMAC && bytes.Equal(state.hmac[:], password)) {
 			return newError(CodeProtectedContent)
 		}
@@ -640,6 +758,36 @@ func (ProcessCapability) MarshalJSON() ([]byte, error) { return nil, newError(Co
 
 // MarshalText rejects serialization of capability bytes.
 func (ProcessCapability) MarshalText() ([]byte, error) { return nil, newError(CodeSerialization) }
+
+// String returns a constant content-free signing-capability representation.
+func (SignCapability) String() string { return protectedRedactedText }
+
+// GoString returns a constant content-free signing-capability representation.
+func (SignCapability) GoString() string { return protectedRedactedText }
+
+// Format prevents formatting verbs from exposing signing capability bytes.
+func (SignCapability) Format(state fmt.State, _ rune) { writeProtectedRedacted(state) }
+
+// MarshalJSON rejects serialization of signing capability bytes.
+func (SignCapability) MarshalJSON() ([]byte, error) { return nil, newError(CodeSerialization) }
+
+// MarshalText rejects serialization of signing capability bytes.
+func (SignCapability) MarshalText() ([]byte, error) { return nil, newError(CodeSerialization) }
+
+// String returns a constant content-free revision-capability representation.
+func (ReviseCapability) String() string { return protectedRedactedText }
+
+// GoString returns a constant content-free revision-capability representation.
+func (ReviseCapability) GoString() string { return protectedRedactedText }
+
+// Format prevents formatting verbs from exposing revision capability bytes.
+func (ReviseCapability) Format(state fmt.State, _ rune) { writeProtectedRedacted(state) }
+
+// MarshalJSON rejects serialization of revision capability bytes.
+func (ReviseCapability) MarshalJSON() ([]byte, error) { return nil, newError(CodeSerialization) }
+
+// MarshalText rejects serialization of revision capability bytes.
+func (ReviseCapability) MarshalText() ([]byte, error) { return nil, newError(CodeSerialization) }
 
 // writeProtectedRedacted emits only the fixed protected-material marker.
 func writeProtectedRedacted(state fmt.State) {

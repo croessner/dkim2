@@ -218,7 +218,13 @@ replay:
 	if err != nil || verifier == nil {
 		t.Fatal("DNS verifier rejected the protected parent")
 	}
-	values := []any{*verifier, verifier, any(*verifier), []dkim2.Verifier{*verifier}, map[dkim2.Verifier]bool{*verifier: true}}
+	values := []any{
+		*verifier,
+		verifier,
+		any(*verifier),
+		[]DNSVerifier{*verifier},
+		map[DNSVerifier]bool{*verifier: true},
+	}
 	var formatted strings.Builder
 	for _, value := range values {
 		fmt.Fprintf(&formatted, "%s|%q|%v|%+v|%#v|%x|%p\n", value, value, value, value, value, value, value)

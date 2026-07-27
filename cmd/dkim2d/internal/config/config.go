@@ -46,6 +46,16 @@ const (
 	ReplayDisabled
 )
 
+// SigningBackend identifies one closed daemon signing provider selection.
+type SigningBackend uint8
+
+const (
+	// SigningDisabled keeps sign and revise services unavailable.
+	SigningDisabled SigningBackend = iota + 1
+	// SigningFlatFile selects one same-generation signing-profile provider.
+	SigningFlatFile
+)
+
 type snapshotState struct {
 	version       string
 	generation    string
@@ -53,6 +63,7 @@ type snapshotState struct {
 	policy        PolicyMode
 	dns           dnsState
 	replay        replayState
+	signing       signingState
 	observability observabilityState
 	presence      map[string]Presence
 }
@@ -98,16 +109,26 @@ type tracingState struct {
 }
 
 type serverState struct {
-	listen            string
-	capabilityFile    string
-	readHeaderTimeout time.Duration
-	readTimeout       time.Duration
-	writeTimeout      time.Duration
-	requestDeadline   time.Duration
-	shutdownTimeout   time.Duration
-	maxInFlight       uint8
-	maxWaiters        uint16
-	admissionWait     time.Duration
+	listen               string
+	capabilityFile       string
+	signCapabilityFile   string
+	reviseCapabilityFile string
+	readHeaderTimeout    time.Duration
+	readTimeout          time.Duration
+	writeTimeout         time.Duration
+	requestDeadline      time.Duration
+	shutdownTimeout      time.Duration
+	maxInFlight          uint8
+	maxWaiters           uint16
+	admissionWait        time.Duration
+}
+
+type signingState struct {
+	backend             SigningBackend
+	datasourceFile      string
+	privateManifestFile string
+	reloadInterval      time.Duration
+	allowRecipientGroup bool
 }
 
 type dnsState struct {
@@ -307,7 +328,24 @@ func validateSnapshot(values map[string]rawValue, presence map[string]Presence) 
 	if err != nil {
 		return nil, err
 	}
-	observability, err := parseObservability(values, presence, generation, append([]string{server.capabilityFile}, replayProtectedPaths(replay)...)...)
+	signing, err := parseSigning(values, presence, generation, server)
+	if err != nil {
+		return nil, err
+	}
+	protectedPaths := append([]string{server.capabilityFile}, replayProtectedPaths(replay)...)
+	if signing.backend == SigningFlatFile {
+		protectedPaths = append(
+			protectedPaths,
+			server.signCapabilityFile,
+			server.reviseCapabilityFile,
+			signing.datasourceFile,
+			signing.privateManifestFile,
+		)
+	}
+	if !sameGenerationPaths(generation, protectedPaths...) || !allDistinct(protectedPaths) {
+		return nil, newError(CodeInvalidField)
+	}
+	observability, err := parseObservability(values, presence, generation, protectedPaths...)
 	if err != nil {
 		return nil, err
 	}
@@ -318,6 +356,7 @@ func validateSnapshot(values map[string]rawValue, presence map[string]Presence) 
 		policy:        policy,
 		dns:           dns,
 		replay:        replay,
+		signing:       signing,
 		observability: observability,
 		presence:      clonePresence(presence),
 	}, nil
@@ -476,22 +515,97 @@ func parseServer(values map[string]rawValue) (serverState, error) {
 	}
 	listen := text(values, pathServerListen)
 	capability := text(values, pathServerCapability)
+	signCapability := text(values, pathServerSignCapability)
+	reviseCapability := text(values, pathServerReviseCapability)
 	if !validLoopbackListener(listen) || !validProtectedPath(capability) ||
 		readHeader > read || read > deadline || deadline > time.Duration(1<<63-1)-time.Second ||
 		write < deadline+time.Second {
 		return serverState{}, newError(CodeInvalidField)
 	}
 	return serverState{
-		listen:            listen,
-		capabilityFile:    capability,
-		readHeaderTimeout: readHeader,
-		readTimeout:       read,
-		writeTimeout:      write,
-		requestDeadline:   deadline,
-		shutdownTimeout:   shutdown,
-		maxInFlight:       uint8(maxInFlight),
-		maxWaiters:        uint16(maxWaiters),
-		admissionWait:     admission,
+		listen:               listen,
+		capabilityFile:       capability,
+		signCapabilityFile:   signCapability,
+		reviseCapabilityFile: reviseCapability,
+		readHeaderTimeout:    readHeader,
+		readTimeout:          read,
+		writeTimeout:         write,
+		requestDeadline:      deadline,
+		shutdownTimeout:      shutdown,
+		maxInFlight:          uint8(maxInFlight),
+		maxWaiters:           uint16(maxWaiters),
+		admissionWait:        admission,
+	}, nil
+}
+
+// parseSigning validates the default-disabled signing conditional matrix.
+func parseSigning(
+	values map[string]rawValue,
+	presence map[string]Presence,
+	generation string,
+	server serverState,
+) (signingState, error) {
+	switch text(values, pathSigningBackend) {
+	case valueBackendDisabled:
+		for _, path := range []string{
+			pathSigningDatasource,
+			pathSigningManifest,
+			pathSigningReload,
+			pathSigningAllowGroup,
+			pathServerSignCapability,
+			pathServerReviseCapability,
+		} {
+			if presence[path].Explicit() {
+				return signingState{}, newError(CodeInvalidMatrix)
+			}
+		}
+		return signingState{backend: SigningDisabled}, nil
+	case "flat_file":
+	default:
+		return signingState{}, newError(CodeInvalidField)
+	}
+	for _, path := range []string{
+		pathSigningBackend,
+		pathSigningDatasource,
+		pathSigningManifest,
+		pathServerSignCapability,
+		pathServerReviseCapability,
+	} {
+		if !presence[path].Explicit() {
+			return signingState{}, newError(CodeInvalidMatrix)
+		}
+	}
+	reload, err := durationValue(
+		values, pathSigningReload, time.Second, time.Hour, false,
+	)
+	if err != nil {
+		return signingState{}, err
+	}
+	allowGroup, err := boolValue(values, pathSigningAllowGroup)
+	if err != nil {
+		return signingState{}, err
+	}
+	if allowGroup {
+		return signingState{}, newError(CodeInvalidField)
+	}
+	datasourceFile := text(values, pathSigningDatasource)
+	manifestFile := text(values, pathSigningManifest)
+	paths := []string{
+		server.capabilityFile,
+		server.signCapabilityFile,
+		server.reviseCapabilityFile,
+		datasourceFile,
+		manifestFile,
+	}
+	if !sameGenerationPaths(generation, paths...) || !allDistinct(paths) {
+		return signingState{}, newError(CodeInvalidField)
+	}
+	return signingState{
+		backend:             SigningFlatFile,
+		datasourceFile:      datasourceFile,
+		privateManifestFile: manifestFile,
+		reloadInterval:      reload,
+		allowRecipientGroup: allowGroup,
 	}, nil
 }
 
@@ -804,7 +918,7 @@ func parseBackend(value string) (ReplayBackend, error) {
 		return ReplayValkey, nil
 	case "memory":
 		return ReplayMemory, nil
-	case "disabled":
+	case valueBackendDisabled:
 		return ReplayDisabled, nil
 	default:
 		return 0, newError(CodeInvalidField)

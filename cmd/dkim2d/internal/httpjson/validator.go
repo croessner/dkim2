@@ -62,9 +62,25 @@ func NewRequestValidator() (*RequestValidator, error) {
 
 // ValidateProcess validates one body snapshot through the exact embedded operation.
 func (v *RequestValidator) ValidateProcess(request *http.Request, body []byte) error {
+	if request == nil || request.URL == nil || request.URL.Path != processPath {
+		return &ValidationError{}
+	}
+	return v.ValidateOperation(request, body)
+}
+
+// ValidateOperation validates one body snapshot through its exact embedded
+// process, sign, or revise operation.
+func (v *RequestValidator) ValidateOperation(request *http.Request, body []byte) error {
 	if v == nil || v.router == nil || v.options == nil || request == nil ||
-		request.Method != http.MethodPost || request.URL == nil ||
-		request.URL.Path != processPath {
+		request.Method != http.MethodPost || request.URL == nil {
+		return &ValidationError{}
+	}
+	operationID := map[string]string{
+		processPath: "processMessage",
+		signPath:    "signMessage",
+		revisePath:  "reviseMessage",
+	}[request.URL.Path]
+	if operationID == "" {
 		return &ValidationError{}
 	}
 	validationRequest := request.Clone(request.Context())
@@ -72,7 +88,7 @@ func (v *RequestValidator) ValidateProcess(request *http.Request, body []byte) e
 	validationRequest.ContentLength = int64(len(body))
 	route, pathParameters, err := v.router.FindRoute(validationRequest)
 	if err != nil || route == nil || route.Operation == nil ||
-		route.Operation.OperationID != "processMessage" ||
+		route.Operation.OperationID != operationID ||
 		route.Operation.RequestBody == nil {
 		return &ValidationError{}
 	}

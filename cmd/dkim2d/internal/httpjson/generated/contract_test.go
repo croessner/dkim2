@@ -17,18 +17,28 @@ const (
 	testHeaderConnection         = "Connection"
 	testHeaderContentTypeOptions = "X-Content-Type-Options"
 	testMethodGet                = "GET"
+	testMethodPost               = "POST"
 	testMetricsPath              = "/metrics"
 	testProcessPath              = "/v1/process"
+	testRevisePath               = "/v1/revise"
+	testSignPath                 = "/v1/sign"
 	testPropertyAPIVersion       = "api_version"
 	testPropertyClass            = "class"
 	testPropertyDNSTesting       = "dns_testing_effective"
 	testPropertyDraft            = "draft"
+	testPropertyDisposition      = "disposition"
 	testPropertyMessage          = "message"
+	testPropertyIncomingSMTP     = "incoming_smtp"
+	testPropertyReporting        = "reporting"
+	testPropertySMTP             = "smtp"
+	testPropertyContext          = "context"
+	testPropertyActions          = "actions"
 	testPropertyPrimaryReason    = "primary_reason"
 	testPropertyReason           = "reason"
 	testPropertySequence         = "sequence"
 	testPropertyStatus           = "status"
 	testValueNotEvaluated        = "not_evaluated"
+	testSchemaOperationResponse  = "OperationResponse"
 )
 
 type expectedOperation struct {
@@ -89,10 +99,24 @@ func TestEmbeddedOpenAPIContract(t *testing.T) {
 			},
 		},
 		testProcessPath: {
-			"POST": {
+			testMethodPost: {
 				id:        "processMessage",
 				responses: []string{"200", "400", "403", "408", "413", "415", "417", "500", "503"},
 				success:   "ProcessResponse",
+			},
+		},
+		testSignPath: {
+			testMethodPost: {
+				id:        "signMessage",
+				responses: []string{"200", "400", "403", "408", "413", "415", "417", "500", "503"},
+				success:   testSchemaOperationResponse,
+			},
+		},
+		testRevisePath: {
+			testMethodPost: {
+				id:        "reviseMessage",
+				responses: []string{"200", "400", "403", "408", "413", "415", "417", "500", "503"},
+				success:   testSchemaOperationResponse,
 			},
 		},
 	}
@@ -138,7 +162,7 @@ func assertOperationSecurity(t *testing.T, path string, operation *openapi3.Oper
 	if operation.Security == nil {
 		t.Fatalf("operation %s has no explicit security declaration", operation.OperationID)
 	}
-	if path != testProcessPath {
+	if path != testProcessPath && path != testSignPath && path != testRevisePath {
 		if len(*operation.Security) != 0 {
 			t.Fatalf("status operation %s is unexpectedly protected", operation.OperationID)
 		}
@@ -249,7 +273,7 @@ func requiredResponseHeaders(path string, status string) []string {
 		return append(headers, "ETag")
 	}
 	headers = append(headers, "Content-Length", testHeaderContentTypeOptions)
-	if status == "200" && path != testProcessPath && path != testMetricsPath {
+	if status == "200" && (path == "/healthz" || path == "/readyz") {
 		headers = append(headers, "ETag")
 	}
 
@@ -423,11 +447,19 @@ func assertObjectInventories(t *testing.T, document *openapi3.T) {
 	}
 	expected := map[string]shape{
 		"ProcessRequest": {
-			properties: []string{testPropertyAPIVersion, testPropertyDraft, testPropertyMessage, "smtp"},
-			required:   []string{testPropertyAPIVersion, testPropertyDraft, testPropertyMessage, "smtp"},
+			properties: []string{testPropertyAPIVersion, testPropertyDraft, testPropertyMessage, testPropertyReporting, testPropertySMTP},
+			required:   []string{testPropertyAPIVersion, testPropertyDraft, testPropertyMessage, testPropertySMTP},
+		},
+		"SignRequest": {
+			properties: []string{testPropertyAPIVersion, testPropertyContext, testPropertyDraft, testPropertyMessage, testPropertySMTP},
+			required:   []string{testPropertyAPIVersion, testPropertyContext, testPropertyDraft, testPropertyMessage, testPropertySMTP},
+		},
+		"ReviseRequest": {
+			properties: []string{testPropertyAPIVersion, testPropertyContext, testPropertyDraft, testPropertyIncomingSMTP, testPropertyMessage, testPropertySMTP},
+			required:   []string{testPropertyAPIVersion, testPropertyContext, testPropertyDraft, testPropertyIncomingSMTP, testPropertyMessage, testPropertySMTP},
 		},
 		"MessageInput": {
-			properties: []string{"raw_rfc5322_base64"},
+			properties: []string{"fidelity", "raw_rfc5322_base64"},
 			required:   []string{"raw_rfc5322_base64"},
 		},
 		"SMTPInput": {
@@ -435,8 +467,24 @@ func assertObjectInventories(t *testing.T, document *openapi3.T) {
 			required:   []string{"mail_from", "rcpt_to"},
 		},
 		"ProcessResponse": {
-			properties: []string{testPropertyAPIVersion, "disposition", testPropertyDraft, "policy", "replay", "verification"},
-			required:   []string{testPropertyAPIVersion, "disposition", testPropertyDraft, "policy", "replay", "verification"},
+			properties: []string{testPropertyActions, testPropertyAPIVersion, testPropertyDisposition, testPropertyDraft, "policy", "replay", "verification"},
+			required:   []string{testPropertyActions, testPropertyAPIVersion, testPropertyDisposition, testPropertyDraft, "policy", "replay", "verification"},
+		},
+		"SigningContext": {
+			properties: []string{"domain", "tenant"},
+			required:   []string{"domain", "tenant"},
+		},
+		"ReportingContext": {
+			properties: []string{"authserv_id"},
+			required:   []string{"authserv_id"},
+		},
+		testSchemaOperationResponse: {
+			properties: []string{testPropertyActions, testPropertyAPIVersion, testPropertyDisposition, testPropertyDraft, "operation", "result"},
+			required:   []string{testPropertyActions, testPropertyAPIVersion, testPropertyDisposition, testPropertyDraft, "operation", "result"},
+		},
+		"AddHeaderAction": {
+			properties: []string{"name", "type", "value"},
+			required:   []string{"name", "type", "value"},
 		},
 		"VerificationResult": {
 			properties: []string{

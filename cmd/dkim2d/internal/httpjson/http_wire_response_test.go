@@ -177,6 +177,68 @@ func TestPreMarshaledResponseRejectsForgedStatusCodeCategoryCrossProducts(t *tes
 	}
 }
 
+// TestProcessWireValidationRejectsSkippedReplayAfterPass proves the final
+// response boundary preserves the exact replay coordinator matrix.
+func TestProcessWireValidationRejectsSkippedReplayAfterPass(t *testing.T) {
+	response := validWireProcessResponse()
+	if !validProcessResponse(response) {
+		t.Fatal("valid disabled-replay response was rejected")
+	}
+	response.Replay.Class = generated.NotChecked
+	if validProcessResponse(response) {
+		t.Fatal("PASS plus accept with skipped replay was accepted")
+	}
+	response = validWireProcessResponse()
+	response.Actions = generated.ActionPlan{{
+		Type: generated.AddHeader, Name: generated.AuthenticationResults,
+		Value: "mx.example.test; dkim2=pass",
+	}}
+	if !validProcessResponse(response) {
+		t.Fatal("daemon-owned process report was rejected")
+	}
+	response.Actions[0].Value = "mx.example.test; dkim2=fail"
+	if validProcessResponse(response) {
+		t.Fatal("process report inconsistent with verification was accepted")
+	}
+}
+
+// validWireProcessResponse returns one complete PASS-plus-accept response.
+func validWireProcessResponse() generated.ProcessResponse {
+	return generated.ProcessResponse{
+		Actions:     generated.ActionPlan{},
+		ApiVersion:  generated.V1,
+		Disposition: generated.DispositionAccept,
+		Draft:       generated.DraftIetfDkimDkim2Spec04,
+		Verification: generated.VerificationResult{
+			Checks: []generated.VerificationCheck{{
+				Class:  generated.VerificationCheckClassProtocol,
+				Reason: generated.VerificationReasonNone,
+			}},
+			CustodyStructure:     generated.VerificationResultCustodyStructureNotEvaluated,
+			HistoricalContent:    generated.VerificationResultHistoricalContentNotEvaluated,
+			HistoricalSignatures: generated.VerificationResultHistoricalSignaturesNotEvaluated,
+			PrimaryReason:        generated.VerificationReasonNone,
+			Scope:                generated.Current,
+			SignatureSets:        []generated.SignatureSetResult{},
+			State:                generated.PASS,
+		},
+		Policy: generated.PolicyResult{
+			DoNotExplode: generated.PolicyResultDoNotExplodeNotEvaluated,
+			DoNotModify:  generated.PolicyResultDoNotModifyNotEvaluated,
+			Feedback: generated.PolicyFeedback{
+				HistoryCoverage: generated.PolicyFeedbackHistoryCoverageNotEvaluated,
+			},
+			Findings: []generated.PolicyFinding{{
+				Reason: generated.ProtocolPass, Severity: generated.Info,
+			}},
+			Mode:          generated.Strict,
+			PrimaryReason: generated.ProtocolPass,
+			Verdict:       generated.PolicyResultVerdictAccept,
+		},
+		Replay: generated.ReplayResult{Class: generated.Disabled},
+	}
+}
+
 // TestPreMarshaledResponseBuildersRejectForgedMetadata proves private-type invariants.
 func TestPreMarshaledResponseBuildersRejectForgedMetadata(t *testing.T) {
 	t.Parallel()
