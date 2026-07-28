@@ -10,7 +10,7 @@ permissions:
 jobs:
   full-linux-profile:
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 90
     steps:
       - name: Check out the exact candidate
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
@@ -50,6 +50,17 @@ jobs:
 
       - name: Run merged full profile
         run: make conformance-all
+
+      - name: Install the pinned vulnerability scanner
+        run: go install golang.org/x/vuln/cmd/govulncheck@v1.3.0
+
+      - name: Run the closed security profile
+        run: |
+          make check-security
+          make fuzz-security
+          make race-security
+          make vulnerability-security
+          go -C tools run ./cmd/security -root .. report
 
       - name: Prove generated tree cleanliness
         run: |

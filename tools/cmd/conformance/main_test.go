@@ -2,15 +2,41 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/croessner/dkim2/tools/internal/conformance"
 )
+
+const (
+	testFixtureArtifact = "fixture"
+	testPortableRunner  = "portable_vector"
+)
+
+// TestPublicFailureDiagnosticRejectsHostileContent freezes content-free diagnostics.
+func TestPublicFailureDiagnosticRejectsHostileContent(t *testing.T) {
+	for _, testCase := range []struct {
+		name string
+		err  error
+		want string
+	}{
+		{name: "closed", err: errors.New("runner_failure:closed-producer"), want: "runner_failure:closed-producer"},
+		{name: "raw error", err: errors.New("runner failure /protected/marker"), want: unknownDiagnostic},
+		{name: "nil", err: nil, want: unknownDiagnostic},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			if got := publicFailureDiagnostic(testCase.err); got != testCase.want {
+				t.Fatalf("publicFailureDiagnostic() = %q, want %q", got, testCase.want)
+			}
+		})
+	}
+}
 
 // TestPostfixQualificationReportValidation proves every merge identity and
 // required real-process observation is checked before full-profile admission.
@@ -176,12 +202,12 @@ func TestCandidateMutationAfterRunnerIsRejected(t *testing.T) {
 	runGitCommand(t, root, "init")
 	runGitCommand(t, root, "config", "user.name", "DKIM2 Test")
 	runGitCommand(t, root, "config", "user.email", "test@example.test")
-	path := filepath.Join(root, "fixture")
+	path := filepath.Join(root, testFixtureArtifact)
 	if err := os.WriteFile(path, []byte("before"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	runGitCommand(t, root, "add", "fixture")
-	runGitCommand(t, root, "commit", "-m", "fixture")
+	runGitCommand(t, root, "add", testFixtureArtifact)
+	runGitCommand(t, root, "commit", "-m", testFixtureArtifact)
 	revision := strings.TrimSpace(runGitCommand(t, root, "rev-parse", "HEAD"))
 	snapshot, err := conformance.ProduceSnapshot(root, revision)
 	if err != nil {
@@ -204,7 +230,7 @@ func TestRunnerInventoryRejectsUnexecutedManifestCase(t *testing.T) {
 			cases = append(cases, conformance.ManifestCase{
 				Suite: parts[0], CaseID: parts[1], Class: "draft_normative",
 				Authority: []string{"test authority"}, Provenance: "manual_derivation",
-				Runner: "portable_vector", RequiredPlatform: portableProfile,
+				Runner: testPortableRunner, RequiredPlatform: portableProfile,
 				ExpectedOutcome: passState, Artifacts: runnerCase.artifacts,
 				Producer: definition.name,
 			})
@@ -213,8 +239,8 @@ func TestRunnerInventoryRejectsUnexecutedManifestCase(t *testing.T) {
 	cases = append(cases, conformance.ManifestCase{
 		Suite: "verification", CaseID: "unexecuted", Class: "draft_normative",
 		Authority: []string{"test authority"}, Provenance: "manual_derivation",
-		Runner: "portable_vector", RequiredPlatform: portableProfile,
-		ExpectedOutcome: passState, Artifacts: []string{"fixture"},
+		Runner: testPortableRunner, RequiredPlatform: portableProfile,
+		ExpectedOutcome: passState, Artifacts: []string{testFixtureArtifact},
 		Producer: "missing-runner",
 	})
 	if _, _, err := executeRunners(t.TempDir(), conformance.Manifest{Cases: cases}, portableProfile); err == nil {
@@ -233,6 +259,30 @@ func TestRunnerInventoryRejectsWrongArtifactBinding(t *testing.T) {
 	if _, _, err := executeRunners(t.TempDir(), manifest, portableProfile); err == nil ||
 		err.Error() != "runner_artifact_binding" {
 		t.Fatalf("executeRunners() error = %v, want runner_artifact_binding", err)
+	}
+}
+
+// TestRunnerFailureIdentifiesOnlyTheClosedProducer freezes bounded root-cause diagnostics.
+func TestRunnerFailureIdentifiesOnlyTheClosedProducer(t *testing.T) {
+	original := portableDefinitions
+	t.Cleanup(func() { portableDefinitions = original })
+	portableDefinitions = []runnerDefinition{{
+		name: "closed-producer", module: "missing-module", pkg: ".",
+		timeout: time.Second,
+		cases: []runnerCase{{
+			key: "suite\x00case", artifacts: []string{testFixtureArtifact},
+		}},
+	}}
+	manifest := conformance.Manifest{Cases: []conformance.ManifestCase{{
+		Suite: "suite", CaseID: "case", Class: "local_security_policy",
+		Authority: []string{"repository policy"}, Provenance: "direct_observation",
+		Runner: testPortableRunner, RequiredPlatform: portableProfile,
+		ExpectedOutcome: passState, Artifacts: []string{testFixtureArtifact},
+		Producer: "closed-producer",
+	}}}
+	_, _, err := executeRunners(t.TempDir(), manifest, portableProfile)
+	if err == nil || err.Error() != "runner_build:closed-producer" {
+		t.Fatalf("executeRunners() error = %v, want runner_build:closed-producer", err)
 	}
 }
 

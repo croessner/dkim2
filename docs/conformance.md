@@ -76,3 +76,7 @@ Generated `report.json` and `report.md` files are written below ignored
 `.artifacts/` directories. The machine report records the manifest digest, Git
 base, candidate snapshot, platform/profile, exact producer hashes, ordered
 cases, evidence classes, and explicit Exim deferral.
+
+The separate repository security profile consumes these reports without
+reclassifying their claims. See `docs/security-testing.md` and run
+`make check-security`, `make fuzz-security`, or `make security` as appropriate.

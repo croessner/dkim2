@@ -39,6 +39,9 @@
 | 0.1.0-draft | 2026-07-26 | Christian Roessner / Codex | Completed the daemon observability foundation with validated injected library events, bounded structured logging, instance-owned OpenTelemetry export, process-local low-cardinality Prometheus metrics, an untraced `GET /metrics` route, protected tracing CA ownership, adversarial tests, and independent review hardening. |
 | 0.1.0-draft | 2026-07-26 | Christian Roessner / Codex | Planned the production Milter adapter specification: bounded Milter-v6 message reconstruction, generated daemon sign/revise/process clients, datasource-backed private signing, closed prevalidated action plans, Authentication-Results policy, deterministic failure mapping, Unix-socket lifecycle, and adversarial MTA protocol-peer evidence. This records the specification baseline, not implementation completion. |
 | 0.1.0-draft | 2026-07-27 | Christian Roessner / Codex | Planned the versioned conformance suite: digest-bound positive, negative, replay, OpenAPI, and Milter vectors; deterministic CI reporting; and a real Postfix Docker qualification for SMTP and local submission. Live Exim evidence remains explicitly deferred to M17 while an adapter-neutral future fixture/result schema is frozen. |
+| 0.1.0-draft | 2026-07-28 | Christian Roessner / Codex | Planned the repository-wide security-hardening specification: a closed first-party fuzz inventory, composable resource-limit audit, recipe-bomb and provider abuse campaigns, OpenAPI and Milter hostile-peer fixtures, whole-product telemetry privacy review, repeated race evidence, vulnerability gates, and unchanged-snapshot proof. Exim hardening and live evidence remain explicitly deferred with M17. |
+| 0.1.0-draft | 2026-07-28 | Christian Roessner / Codex | Implemented repository-wide security hardening with a drift-checked first-party fuzz and resource-proof inventory, closed race and vulnerability runners, deterministic snapshot-bound reports, CI gates, privacy-preserving diagnostics, and repeated portable, Valkey, real Postfix, and full-conformance evidence. Exim remains explicitly deferred with M17. |
+| 0.1.0-draft | 2026-07-28 | Christian Roessner / Codex | Reserved the RNS LDAP subtree `1.3.6.1.4.1.31612.1.7` for DKIM2, defined stable attribute and object-class allocations, recorded the secret-safe live OpenDKIM migration baseline, and specified a fail-closed out-of-process bootstrap into immutable DKIM2 generations and opaque signing handles. Executable LDAP/SQL providers and migration tooling remain M22. |
 
 ## 1. Purpose
 
@@ -681,7 +684,9 @@ Design notes:
 - Datasource success is administrative selection only. It does not replace
   M10's fresh DNS publication check, hash/recipe/custody validation, route
   authorization, or private signing callback.
-- LDAP and SQL remain design-only and executable providers remain deferred.
+- LDAP and SQL mappings remain design-only. M22 owns executable providers,
+  schema delivery, and separately reviewed migration tooling after the first
+  public preview.
 - Replay interfaces, keys, retention, and providers belong entirely to M12.
 - Datasource failures that affect verification or signing correctness should
   fail closed by default.
@@ -1265,6 +1270,228 @@ Provider rules:
 - Memory and flat-file providers share parity and signing-boundary integration
   evidence.
 
+#### 7.4.1 RNS LDAP Schema Allocation
+
+The LDAP deployment schema uses the RNS Private Enterprise Number `31612`,
+registered in the
+[IANA Private Enterprise Number registry](https://www.iana.org/assignments/enterprise-numbers/?page=317)
+under the enterprise OID root
+`1.3.6.1.4.1.31612`. Existing RNS schemas reserve `.1` as the LDAP subtree and
+use one application child followed by `.1` for attribute types and `.2` for
+object classes. The next unused application child is reserved for DKIM2:
+
+| Purpose | OID |
+| --- | --- |
+| RNS enterprise root | `1.3.6.1.4.1.31612` |
+| RNS LDAP root | `1.3.6.1.4.1.31612.1` |
+| DKIM2 schema root | `1.3.6.1.4.1.31612.1.7` |
+| DKIM2 attribute types | `1.3.6.1.4.1.31612.1.7.1` |
+| DKIM2 object classes | `1.3.6.1.4.1.31612.1.7.2` |
+
+The schema file should be named `rnsdkim2.schema` and declare these symbolic
+identifiers:
+
+```text
+objectidentifier RNSRoot      1.3.6.1.4.1.31612
+objectidentifier RNSLDAP      RNSRoot:1
+objectidentifier RNSDKIM2     RNSLDAP:7
+objectidentifier RNSDKIM2at   RNSDKIM2:1
+objectidentifier RNSDKIM2oc   RNSDKIM2:2
+```
+
+The logical LDAP attribute names already defined by
+`docs/datasource-ldap-sql-design.md` remain the stable descriptors. Their OIDs
+are reserved as follows and must never be reassigned:
+
+| OID | LDAP descriptor |
+| --- | --- |
+| `RNSDKIM2at:1` | `dkim2SchemaVersion` |
+| `RNSDKIM2at:2` | `dkim2Generation` |
+| `RNSDKIM2at:3` | `dkim2DatasetState` |
+| `RNSDKIM2at:4` | `dkim2HandleID` |
+| `RNSDKIM2at:5` | `dkim2ProfileID` |
+| `RNSDKIM2at:6` | `dkim2SigningDomain` |
+| `RNSDKIM2at:7` | `dkim2RecordStatus` |
+| `RNSDKIM2at:8` | `dkim2NotBefore` |
+| `RNSDKIM2at:9` | `dkim2NotAfter` |
+| `RNSDKIM2at:10` | `dkim2Algorithm` |
+| `RNSDKIM2at:11` | `dkim2Selector` |
+| `RNSDKIM2at:12` | `dkim2PublicKeySPKI` |
+| `RNSDKIM2at:13` | `dkim2TenantID` |
+| `RNSDKIM2at:14` | `dkim2ProfileUse` |
+| `RNSDKIM2at:15` | `dkim2Rollout` |
+| `RNSDKIM2at:16` | `dkim2Compatibility` |
+| `RNSDKIM2at:17` | `dkim2FeedbackRouteID` |
+
+The first object-class allocation is:
+
+| OID | LDAP descriptor | Logical ownership |
+| --- | --- | --- |
+| `RNSDKIM2oc:1` | `dkim2Dataset` | Schema version, generation, and committed publication state |
+| `RNSDKIM2oc:2` | `dkim2Handle` | One opaque handle declaration |
+| `RNSDKIM2oc:3` | `dkim2Profile` | One bounded signing profile |
+| `RNSDKIM2oc:4` | `dkim2Credential` | One selector, algorithm, public SPKI, and handle binding |
+| `RNSDKIM2oc:5` | `dkim2Policy` | One exact tenant, domain, and use policy |
+
+M22 owns the exact LDAP syntaxes, matching rules, `MUST`/`MAY` sets, structural
+layout, indexes, ACL examples, and reproducible `slaptest` fixtures. Those
+deployment details must preserve the existing logical mapping and immutable
+generation contract. A configured base DN and record DNs are provider storage
+mechanics; they are never profile, tenant, policy, or handle identities.
+
+The historical `rnsMSDKIM` object class and its OIDs remain part of the mail
+schema. They are not extended or reused for DKIM2 because they can carry raw
+private-key material and do not represent immutable generations, complete
+profiles, exact tenant/use policies, public SPKI bindings, or opaque handles.
+
+#### 7.4.2 Legacy OpenDKIM Bootstrap Contract
+
+An existing OpenDKIM LDAP deployment may be used as an explicit migration
+source, but it is never a second runtime provider contract and is never read as
+DKIM2 data. The migration is an out-of-process administrative operation that
+creates and validates a new `dkim2-datasource-v1` generation before publication.
+The read-only DKIM2 provider performs no legacy lookup, shape inference,
+backfill, or read-time conversion.
+
+The secret-safe production inventory captured on 2026-07-28 provides the
+initial migration baseline:
+
+- the active source uses the external `DKIM` object class, not `rnsMSDKIM`;
+- 176 complete OpenDKIM objects cover 30 distinct lookup domains;
+- 88 objects declare RSA and 88 declare Ed25519;
+- 60 objects are active and 116 are inactive;
+- every domain has exactly one active RSA and one active Ed25519 object;
+- all 176 selectors are globally distinct;
+- there is no duplicate active `(domain, algorithm)` group;
+- 29 domains have three RSA/Ed25519 rotation pairs and one domain has one pair;
+- all 176 objects contain a private-key attribute, whose values were neither
+  emitted nor retained by the inventory;
+- no live `rnsMSDKIM` object exists in that source;
+- 174 objects use the same logical domain for lookup, signing, and the
+  conventional `@domain` DKIM AUID;
+- one active RSA/Ed25519 pair maps a lookup domain to a different, unrelated
+  signing domain, with the AUID matching the signing domain.
+
+This is a dated migration-planning snapshot, not a runtime invariant. M22 must
+refresh it through the same bounded, read-only, secret-safe inventory immediately
+before an approved migration.
+
+Reusable legacy facts map as follows:
+
+| OpenDKIM fact | DKIM2 migration target | Rule |
+| --- | --- | --- |
+| `associatedDomain` | `dkim2SigningDomain` | Candidate actual signing domain after canonical validation |
+| `DKIMDomain` | Policy lookup evidence only | Must equal the canonical signing domain for automatic migration |
+| `DKIMSelector` | `dkim2Selector` | Reuse only after selector validation and fresh DNS publication proof |
+| `DKIMKeyType=rsa` | `dkim2Algorithm=rsa-sha256` | Closed exact mapping |
+| `DKIMKeyType=ed25519` | `dkim2Algorithm=ed25519-sha256` | Closed exact mapping |
+| `DKIMActive=TRUE` | Active-profile candidate | Does not itself authorize rollout or signing |
+| `DKIMActive=FALSE` | Disabled-history candidate | Never joins the current active profile |
+| `DKIMKey` | Separate signing-registry import | Never written to a DKIM2 datasource record |
+| `createTimestamp` / `modifyTimestamp` | Audit evidence | Never inferred as `not_before` or `not_after` |
+| `DKIMIdentity` | No DKIM2 field | DKIM AUID semantics must not be mapped to numeric DKIM2 `i=` |
+
+One automatically migrated active domain becomes one complete profile with one
+or two credentials. The current dual-algorithm source therefore maps naturally
+to one RSA credential followed by one Ed25519 credential. Historical rotation
+pairs cannot be appended to that profile because the datasource contract permits
+at most two credentials and rejects duplicate algorithms. They remain legacy
+history unless an approved migration creates distinct disabled profiles with
+new profile identities and explicit validity policy.
+
+The migration must assign facts absent from OpenDKIM explicitly:
+
+- `dkim2SchemaVersion`, `dkim2Generation`, and `dkim2DatasetState`;
+- `dkim2TenantID`, `dkim2ProfileID`, and `dkim2ProfileUse`;
+- `dkim2HandleID` declarations and their protected registry bindings;
+- canonical public SPKI DER derived inside the protected key-import boundary;
+- `dkim2Rollout`, `dkim2Compatibility`, and optional feedback-route policy;
+- optional validity intervals based on administrative policy, not LDAP
+  timestamps.
+
+Handle IDs are new provider-neutral opaque identifiers. They must not be LDAP
+DNs, paths, selectors, private-key hashes, database keys, or other
+provider-specific locators. A separately configured signing registry maps each
+handle ID to an inert signing handle. The legacy private key may be imported
+into that registry only inside an approved protected boundary; raw key bytes
+never cross the datasource interface, appear in migration output, or enter the
+new LDAP schema.
+
+Existing selectors and cryptographic keys are compatibility candidates because
+the implemented DKIM2 resolver uses the established
+`selector._domainkey.signing-domain` owner and DKIM1-format key records. They
+are not considered published merely because they exist in LDAP. Before a
+profile becomes active, the migration must perform the same fresh DNS
+publication check required by signing and prove that the unique public DNS key
+matches the canonical SPKI derived from the protected signing handle.
+
+The legacy source permits a SigningTable lookup domain to differ from the
+KeyTable signing domain. The DKIM2 datasource deliberately has no alias,
+wildcard, suffix, parent-domain, or cross-domain fallback, and a policy must
+reference a profile with the same canonical signing domain. A legacy object
+with `DKIMDomain != associatedDomain` is therefore `malformed_data` for
+automatic migration. It requires an explicit operator decision that produces
+an exact DKIM2 policy or a separately reviewed future architecture change; the
+migration must never guess which domain owns the DKIM2 policy.
+
+The bootstrap publication sequence is:
+
+1. Acquire a bounded read-only legacy snapshot over authenticated, verified
+   LDAP transport without requesting private-key values for inventory.
+2. Validate record completeness, unique selectors, one active record per
+   domain and algorithm, exact domain agreement, closed algorithms, and source
+   limits.
+3. Resolve private keys only inside the protected import phase, validate key
+   type and strength, derive canonical public SPKI, and create new opaque
+   handle bindings.
+4. Perform fresh DNS publication checks for every candidate credential.
+5. Require explicit tenant, profile-use, rollout, compatibility, profile-ID,
+   handle-ID, and optional validity inputs.
+6. Build all metadata, handle, profile, credential, and policy records under
+   one new nonzero generation.
+7. Validate the complete generation through the same constructors, limits,
+   cross-reference rules, and immutable indexes used by normal providers.
+8. Produce a redacted dry-run report containing only bounded counts and closed
+   result classes.
+9. Publish `committed` atomically only after the signing registry and complete
+   datasource generation agree; any failure publishes neither.
+
+Source absence is `not_found`; duplicate selectors, active
+domain/algorithm pairs, metadata, or exact identities are `ambiguous`;
+unsupported shapes, domain disagreement, invalid keys, missing explicit
+migration facts, and inconsistent references are `malformed_data`; bound
+violations are `limit_exceeded`; transport, authorization, or signing-registry
+failures are `unavailable`; context termination remains `cancelled` or
+`deadline_exceeded`. No error includes a DN, domain, selector, key, handle,
+query, endpoint, credential, or raw backend error.
+
+The concrete LDAP provider belongs in the daemon/service module, for example
+under `cmd/dkim2d/internal/datasource/ldap`, and implements only the existing
+storage-neutral contracts. The migration command belongs to a command/service
+module but remains separate from the read-only provider and from protocol
+packages. LDAP client types, records, controls, DNs, and schema helpers must
+not enter `lib`, signing, verification, OpenAPI DTOs, Milter code, or Exim
+code.
+
+M22 integration evidence must include:
+
+- synthetic legacy fixtures for single- and dual-algorithm active profiles,
+  rotation history, the observed cross-domain exception shape, missing keys,
+  duplicate selectors, and duplicate active algorithms;
+- proof that DKIM AUID values and LDAP timestamps are never mapped to DKIM2
+  `i=` or validity fields;
+- proof that private-key bytes, DNs, domains, selectors, handles, and backend
+  errors are absent from dry-run output, logs, traces, metrics, CLI output, and
+  test failures;
+- disposable OpenLDAP tests for schema installation, ACLs, paging,
+  cancellation, immutable generation publication, partial failure, rollback
+  publication under a higher generation, and concurrent migration attempts;
+- parity tests proving the migrated dataset resolves identically through
+  memory, flat-file, LDAP, and SQL providers;
+- signing integration tests proving fresh DNS publication validation occurs
+  before the private signing callback and that every migration/provider denial
+  has no partial datasource, signature, route, or release side effect.
+
 ### 7.5 Replay Store Model
 
 The first daemon release includes storage-backed replay detection as an
@@ -1823,9 +2050,10 @@ maintainers to understand why behavior exists.
 | M16 - Milter adapter | SMTP context collection, EOM service call, action application, timeout behavior, fidelity metadata, MTA integration tests, fail-open/fail-closed tests | 5 to 12 hours | High |
 | M17 - Exim adapter | `local_scan()` inbound adapter, `transport_filter` outbound helper, Exim action mapping, fidelity metadata, release compatibility matrix, supported distribution baselines, Exim integration fixtures, fail-closed/tempfail behavior | 4 to 10 agent-days | High |
 | M18 - Test vectors and conformance suite | Implemented: digest-bound draft-versioned positive/negative/replay vectors, generated-client OpenAPI fixtures, portable Milter fixtures, real Postfix Docker qualification, deterministic CI reports, public conformance notes, and an exact future Exim schema with live Exim results deferred to M17 | 4 to 12 hours | High |
-| M19 - Security hardening | Fuzzing, resource limits, logging review, race tests, govulncheck, datasource abuse cases, recipe bombs, OpenAPI abuse fixtures, Milter and Exim abuse fixtures | 5 to 14 hours | High |
-| M20 - Documentation and operator guide | API docs, architecture update, security guide, config reference, datasource guide, replay-store guide, observability guide, Milter and Exim deployment notes, examples | 3 to 8 hours | Medium |
+| M19 - Security hardening | Implemented: closed first-party fuzz inventory, composable resource limits, whole-product logging/privacy review, repeated race tests, govulncheck, datasource/replay abuse, recipe bombs, OpenAPI abuse fixtures, and Milter hostile-peer plus real Postfix regression evidence; Exim remains deferred with M17 | 5 to 14 hours | High |
+| M20 - Packaging, container delivery, documentation, and operator guide | Reproducible Go 1.26 multi-stage Dockerfiles or Containerfiles for `dkim2d`, `dkim2-milter`, and `dkim2ctl`; non-root minimal runtime images; health checks; OCI metadata; multi-architecture build and release automation; image SBOM/provenance and vulnerability gates; example Compose deployment; API docs, architecture update, security/config/datasource/replay/observability guides, Milter and Exim deployment notes, rollback guidance, and examples | 1 to 3 agent-days | High |
 | M21 - Interop and reference polish | External implementation comparison, draft issue log, final API cleanup, conformance report, release candidate | 1 to 3 days | Very high |
+| M22 - LDAP and SQL datasource providers and legacy migration | RNS DKIM2 LDAP schema under `1.3.6.1.4.1.31612.1.7`, bounded read-only LDAP provider, transactionally consistent SQL provider, immutable generation publication, provider parity suites, schema/DDL delivery, secret-safe OpenDKIM bootstrap tooling, protected signer-registry import, fresh DNS publication proof, migration dry-run/rollback, and operator documentation | 2 to 6 agent-days | Very high |
 
 Total rough implementation estimate:
 
@@ -1839,9 +2067,11 @@ Total rough implementation estimate:
 - Operational Exim adapter with datasource/replay integration, inbound
   `local_scan()`, outbound `transport_filter`, and distribution-baseline tests:
   4 to 10 agent-days.
+- Operational LDAP/SQL providers and a protected legacy OpenDKIM migration:
+  2 to 6 agent-days after the first public preview.
 - Reference-quality implementation with vectors, fuzzing, security hardening,
   datasource providers, replay storage, observability, documentation, and
-  interop work: 12 to 30 agent-days.
+  interop work: 14 to 36 agent-days.
 
 ### 15.1 Stabilization And Real-Operation Budget
 
@@ -1874,7 +2104,8 @@ is:
 | Signing and revision support | 3 to 7 agent-days | 4 to 10 beta/RC days |
 | Operational Milter path | 5 to 12 agent-days | 1 to 3 beta/RC weeks |
 | Operational Exim path | 4 to 10 agent-days | 1 to 3 beta/RC weeks |
-| Reference-quality public release | 12 to 30 agent-days | 2 to 6 beta/RC weeks |
+| Operational LDAP/SQL and legacy migration path | 2 to 6 agent-days | 1 to 3 beta/RC weeks |
+| Reference-quality public release | 14 to 36 agent-days | 2 to 6 beta/RC weeks |
 
 The stabilization budget should shrink only after repeated production-like
 runs show low defect rates. It may grow if draft semantics change, if external
@@ -1906,6 +2137,10 @@ M1 --> M2 --> M3 --> M4 --> M5 MVP
                                                     +----------------------+
                                                                            |
 M11 datasource --> M12 replay store --------------------------------------+
+       |
+       +-------------------------> M22 LDAP/SQL providers and migration
+                                      ^
+M13 daemon config/lifecycle ---------+
                                                                            |
 M13/M14/M15/M10/M12 --------------------------------------------------> M16 Milter
                          |
@@ -1914,10 +2149,14 @@ M13/M14/M15/M10/M12 --------------------------------------------------> M16 Milt
 M18 vectors should grow continuously from M1 onward.
 M19 security hardening should run continuously after M2 and becomes mandatory
 before public reference releases.
-M20 documentation should run continuously after M0.
+M20 packaging and documentation should run continuously after M0, with final
+runtime images gated on the daemon and adapter binaries they contain.
 M21 library, daemon, and Milter interop starts once M13, M14, M16, and the M18
 vector suite are useful. Exim interop and compatibility claims remain gated on
 M17 and must stay explicitly deferred until that adapter is completed.
+M22 starts after the M11 contracts and M13 daemon configuration/lifecycle are
+stable. It remains after the first public preview and does not block the
+flat-file-backed preview, M16, or M17.
 M17 Exim starts after the daemon action contract, signing/revision behavior,
 datasource/replay policy, observability, and release compatibility matrix are
 stable enough to test against real Exim baselines.
@@ -1999,9 +2238,10 @@ interpretation choices in code.
    M11 provides an immutable in-memory general datasource for tests, examples,
    and static deployments plus a confined flat-file general datasource for
    later daemon use. Both implement the same exact storage-neutral contracts.
-   LDAP and SQL providers are deferred until after the first public preview.
-   Their durable mapping, consistency, paging, cancellation, redaction, and
-   migration contracts are design-only and introduce no drivers.
+   LDAP and SQL providers are deferred to M22 after the first public preview.
+   Their durable mapping, consistency, paging, cancellation, redaction, RNS
+   LDAP OID allocation, and legacy OpenDKIM bootstrap contracts are
+   architecture-only until M22 and introduce no drivers into the library.
    Replay storage is tracked separately: Valkey is the first production replay
    store backend, behind a storage-neutral replay interface. All datasource and
    replay interfaces must be designed so providers can be added without
@@ -2050,6 +2290,17 @@ interpretation choices in code.
     the distribution's official supported package repositories. Unsupported
     third-party repositories and vendor-unmaintained packages do not define
     support targets.
+15. RNS LDAP schema and legacy OpenDKIM migration:
+    DKIM2 owns the dedicated RNS LDAP subtree
+    `1.3.6.1.4.1.31612.1.7`, with `.1` for attributes and `.2` for object
+    classes. The historical `DKIM` and `rnsMSDKIM` schemas are never runtime
+    compatibility aliases. M22 may bootstrap a new immutable generation from
+    validated active OpenDKIM RSA/Ed25519 pairs through a separate secret-safe
+    migration command. Private keys move only into the signing registry behind
+    new opaque handles; DKIM AUIDs and LDAP timestamps do not become DKIM2
+    fields. Legacy lookup-domain/signing-domain disagreement is rejected for
+    automatic migration because the datasource contract has exact domain
+    identity and no alias or fallback semantics.
 
 ### 18.2 Remaining Open Questions
 

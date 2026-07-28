@@ -66,6 +66,19 @@ func LoadArtifactBytes(root string, artifact Artifact) ([]byte, error) {
 	return input, nil
 }
 
+// ReadConfinedFile reads one bounded stable regular file without following symlinks.
+func ReadConfinedFile(root, path string, limit int64) ([]byte, error) {
+	if err := validateArtifactPath(path); err != nil {
+		return nil, errors.New("artifact_path")
+	}
+	rootHandle, err := os.OpenRoot(root)
+	if err != nil {
+		return nil, errors.New("artifact_root")
+	}
+	defer func() { _ = rootHandle.Close() }()
+	return readConfinedFile(rootHandle, path, limit)
+}
+
 // readConfinedFile reads one stable regular non-symlink path through the fixed root.
 func readConfinedFile(root *os.Root, path string, limit int64) ([]byte, error) {
 	if err := rejectPathSymlinks(root, path); err != nil {

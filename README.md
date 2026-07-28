@@ -40,6 +40,8 @@ Current contents:
 - `docs/conformance.md`: public evidence classes, tested capability boundaries,
   adapter limitations, reproducible report commands, and explicit Exim
   deferral.
+- `docs/security-testing.md`: closed fuzz/resource inventories, abuse-profile
+  commands, deterministic evidence, privacy limits, and vulnerability policy.
 - `docs/specs/openapi`: authoritative source-of-truth OpenAPI contract.
 - `lib/testdata/vectors`: draft-versioned verification, DNS, custody, crypto,
   signing, revision, and insertion vectors.
@@ -85,5 +87,8 @@ make check-conformance
 make conformance
 make conformance-postfix
 make conformance-all
+make check-security
+make fuzz-security
+make security
 make guardrails
 ```

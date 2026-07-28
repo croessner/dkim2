@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.test/dkim2/security/race-report.schema.json",
+  "additionalProperties": false,
+  "properties": {
+    "base_revision": {"const": "5f51ed500351c7efabe0ab70579d9a62639f6f43"},
+    "candidate_snapshot_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+    "go_version": {"pattern": "^go1\\.26\\.[0-9]+$", "type": "string"},
+    "goarch": {"maxLength": 32, "pattern": "^[a-z0-9]+$", "type": "string"},
+    "goos": {"maxLength": 32, "pattern": "^[a-z0-9]+$", "type": "string"},
+    "modules": {
+      "prefixItems": [
+        {"const": "cmd/dkim2-milter"},
+        {"const": "cmd/dkim2ctl"},
+        {"const": "cmd/dkim2d"},
+        {"const": "lib"},
+        {"const": "tools"}
+      ],
+      "items": false,
+      "maxItems": 5,
+      "minItems": 5,
+      "type": "array"
+    },
+    "schema": {"const": "dkim2.security-race-report.v1"},
+    "state": {"const": "pass"}
+  },
+  "required": ["schema", "base_revision", "candidate_snapshot_sha256", "go_version", "goos", "goarch", "modules", "state"],
+  "type": "object"
+}

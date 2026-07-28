@@ -41,6 +41,9 @@ help:
 		'  make conformance   run the portable conformance profile and render reports' \
 		'  make conformance-postfix run the isolated real Postfix qualification' \
 		'  make conformance-all run and render the complete Linux-backed profile' \
+		'  make check-security validate the closed fuzz and resource-owner inventory' \
+		'  make fuzz-security run every first-party fuzz target for at least ten seconds' \
+		'  make security      run the complete security profile and render evidence' \
 		'  make guardrails   run the local quality gate'
 
 .PHONY: fmt
@@ -240,6 +243,33 @@ conformance-postfix:
 conformance-all:
 	@GOCACHE="$${GOCACHE:-/tmp/dkim2-go-build-cache}" \
 		go -C tools run ./cmd/conformance -root .. -profile full report
+
+.PHONY: check-security
+check-security:
+	@GOCACHE="$${GOCACHE:-/tmp/dkim2-go-build-cache}" \
+		go -C tools test ./internal/security ./cmd/security
+	@GOCACHE="$${GOCACHE:-/tmp/dkim2-go-build-cache}" \
+		go -C tools run ./cmd/security -root .. check
+
+.PHONY: fuzz-security
+fuzz-security: check-security
+	@GOCACHE="$${GOCACHE:-/tmp/dkim2-go-build-cache}" \
+		go -C tools run ./cmd/security -root .. fuzz
+
+.PHONY: vulnerability-security
+vulnerability-security:
+	@GOCACHE="$${GOCACHE:-/tmp/dkim2-go-build-cache}" \
+		go -C tools run ./cmd/security -root .. vulnerability
+
+.PHONY: race-security
+race-security:
+	@GOCACHE="$${GOCACHE:-/tmp/dkim2-go-build-cache}" \
+		go -C tools run ./cmd/security -root .. race
+
+.PHONY: security
+security: check-security fuzz-security race-security vulnerability-security conformance conformance-postfix conformance-all
+	@GOCACHE="$${GOCACHE:-/tmp/dkim2-go-build-cache}" \
+		go -C tools run ./cmd/security -root .. report
 
 .PHONY: guardrails
 guardrails: fmt vet lint test race check-protected-platforms check-openapi check-vendor check-conformance conformance govulncheck

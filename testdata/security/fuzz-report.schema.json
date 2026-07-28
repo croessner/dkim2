@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.test/dkim2/security/fuzz-report.schema.json",
+  "$defs": {
+    "target": {
+      "additionalProperties": false,
+      "properties": {
+        "duration_class": {"const": "at_least_10s"},
+        "id": {"maxLength": 256, "pattern": "^[A-Za-z0-9./_-]+:[A-Za-z0-9./_-]*:Fuzz[A-Za-z0-9]+$", "type": "string"},
+        "state": {"const": "pass"}
+      },
+      "required": ["id", "state", "duration_class"],
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "base_revision": {"const": "5f51ed500351c7efabe0ab70579d9a62639f6f43"},
+    "candidate_snapshot_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+    "go_version": {"pattern": "^go1\\.26\\.[0-9]+$", "type": "string"},
+    "goarch": {"maxLength": 32, "pattern": "^[a-z0-9]+$", "type": "string"},
+    "goos": {"maxLength": 32, "pattern": "^[a-z0-9]+$", "type": "string"},
+    "inventory_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+    "overall": {"const": "pass"},
+    "schema": {"const": "dkim2.security-fuzz-report.v1"},
+    "targets": {"items": {"$ref": "#/$defs/target"}, "maxItems": 4096, "minItems": 1, "type": "array"}
+  },
+  "required": ["schema", "base_revision", "candidate_snapshot_sha256", "inventory_sha256", "go_version", "goos", "goarch", "targets", "overall"],
+  "type": "object"
+}
