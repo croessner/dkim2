@@ -18,7 +18,7 @@ import (
 const (
 	maxErrorResponseBytes   = 4_096
 	maxSuccessResponseBytes = 262_144
-	jsonContentType         = "application/json; charset=utf-8"
+	jsonContentType         = "application/json"
 	cacheControlNoStore     = "no-store"
 )
 

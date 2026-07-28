@@ -1412,7 +1412,7 @@ closes the connection after its single application response.
 
 An absent or whitespace-only process body is `invalid_json`. Every body-bearing
 application-controlled JSON success or error sets
-`Content-Type: application/json; charset=utf-8` and `X-Content-Type-Options:
+`Content-Type: application/json` and `X-Content-Type-Options:
 nosniff`, plus `Cache-Control: no-store`.
 
 Every HEAD request that reaches the handler is evaluated exactly as the corresponding

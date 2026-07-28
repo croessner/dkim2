@@ -37,6 +37,9 @@ Current contents:
   executable providers and their dependencies remain deferred.
 - `docs/replay-store-valkey.md`: production replay-store topology, ACL,
   persistence, replication, rotation, integration, and dependency guidance.
+- `docs/conformance.md`: public evidence classes, tested capability boundaries,
+  adapter limitations, reproducible report commands, and explicit Exim
+  deferral.
 - `docs/specs/openapi`: authoritative source-of-truth OpenAPI contract.
 - `lib/testdata/vectors`: draft-versioned verification, DNS, custody, crypto,
   signing, revision, and insertion vectors.
@@ -78,5 +81,9 @@ go test ./cmd/dkim2-milter/...
 go test ./cmd/dkim2ctl/...
 make test
 make test-valkey
+make check-conformance
+make conformance
+make conformance-postfix
+make conformance-all
 make guardrails
 ```

@@ -1,0 +1,13 @@
+**
+!go.work
+!go.work.sum
+!lib/**
+!cmd/dkim2d/**
+!cmd/dkim2-milter/**
+!cmd/dkim2ctl/**
+!tools/**
+!vendor/**
+!contrib/
+!contrib/qualification/
+!contrib/qualification/postfix-milter/
+!contrib/qualification/postfix-milter/**

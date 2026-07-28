@@ -194,6 +194,13 @@ originator, and ordinary-transit paths. Do not share a signing capability with
 an inbound adapter. MTA socket permissions should grant connection access only
 to the intended service group.
 
+Postfix simulates Milter callbacks for `non_smtpd_milters` with unbracketed
+envelope mailboxes. The adapter validates those mailbox bytes with its full RFC
+5321 path grammar and adds only the missing outer angle brackets before calling
+DKIM2. A simulated empty reverse-path becomes `<>`; an empty recipient and
+partial, embedded, or mixed bracket forms fail closed. SMTP callbacks that
+already contain RFC path brackets remain byte-for-byte unchanged.
+
 Private-key generation ownership belongs to `dkim2d`, not this adapter.
 Signing-enabled daemon configuration loads the signing-profile datasource,
 private-key manifest, and PKCS#8 children as one confined immutable generation.

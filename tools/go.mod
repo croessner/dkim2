@@ -4,7 +4,11 @@ go 1.26
 
 tool github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen
 
-require github.com/getkin/kin-openapi v0.135.0
+require (
+	github.com/getkin/kin-openapi v0.135.0
+	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2
+	go.yaml.in/yaml/v3 v3.0.4
+)
 
 require (
 	github.com/dprotaso/go-yit v0.0.0-20220510233725-9ba8df137936 // indirect
@@ -25,7 +29,6 @@ require (
 	github.com/speakeasy-api/openapi v1.19.2 // indirect
 	github.com/vmware-labs/yaml-jsonpath v0.3.2 // indirect
 	github.com/woodsbury/decimal128 v1.4.0 // indirect
-	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	golang.org/x/mod v0.37.0 // indirect
 	golang.org/x/sync v0.21.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect

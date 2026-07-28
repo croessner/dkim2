@@ -47,6 +47,18 @@ func NewRoot(stdout, stderr io.Writer) *cobra.Command {
 	flags.StringVar(&options.ServerURL, "server-url", options.ServerURL, "canonical loopback daemon URL")
 	flags.DurationVar(&options.Timeout, "timeout", options.Timeout, "overall command deadline")
 	flags.StringVar(&options.CapabilityFile, "capability-file", "", "absolute protected capability path")
+	flags.StringVar(
+		&options.SignCapabilityFile,
+		"sign-capability-file",
+		"",
+		"absolute protected sign capability path",
+	)
+	flags.StringVar(
+		&options.ReviseCapabilityFile,
+		"revise-capability-file",
+		"",
+		"absolute protected revise capability path",
+	)
 	flags.StringVar(&options.Output, "output", options.Output, "output format")
 
 	root.AddCommand(newSmokeCommand(application, &options))

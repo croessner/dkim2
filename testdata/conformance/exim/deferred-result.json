@@ -1,0 +1,6 @@
+{
+  "schema": "dkim2.exim-adapter-result.v1",
+  "case_id": "exim-origin-deferred",
+  "state": "deferred",
+  "evidence": {}
+}

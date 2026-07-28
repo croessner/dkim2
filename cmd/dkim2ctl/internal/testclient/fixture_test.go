@@ -24,11 +24,17 @@ func TestCheckedFixtureExamplesRemainStrictAndGloballyUnique(t *testing.T) {
 		"draft-ietf-dkim-dkim2-spec-04")
 	paths := []string{
 		filepath.Join(root, "health.json"),
+		filepath.Join(root, "process-report.json"),
 		filepath.Join(root, "process-negative.json"),
 		filepath.Join(root, "process.json"),
+		filepath.Join(root, "revise.json"),
+		filepath.Join(root, "route-negative.json"),
+		filepath.Join(root, "sign.json"),
 	}
 	plan, err := LoadExecutionPlan(paths)
-	if err != nil || len(plan.cases) != 5 || !plan.requiresCapability {
+	if err != nil || len(plan.cases) != 21 ||
+		!plan.requiresCapability || !plan.requiresSignCapability ||
+		!plan.requiresReviseCapability {
 		t.Fatal("checked fixture examples are invalid")
 	}
 }

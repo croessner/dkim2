@@ -2,6 +2,7 @@ package testclient
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/base64"
 	"fmt"
 	"net/http"
@@ -14,9 +15,10 @@ const capabilityRedacted = "dkim2ctl_protected_capability"
 
 // Capability owns one exact local process capability until Close.
 type Capability struct {
-	mu     sync.Mutex
-	value  [32]byte
-	closed bool
+	mu        sync.Mutex
+	value     [32]byte
+	operation Operation
+	closed    bool
 }
 
 // newCapability validates and takes ownership of one exact opaque value.
@@ -28,12 +30,12 @@ func newCapability(value [32]byte) (*Capability, error) {
 	if nonzero == 0 {
 		return nil, NewExitError(ExitCapability)
 	}
-	return &Capability{value: value}, nil
+	return &Capability{value: value, operation: OperationProcess}, nil
 }
 
 // EditRequest attaches the capability to exactly one otherwise-uncredentialed request.
 func (c *Capability) EditRequest(_ context.Context, request *http.Request) error {
-	if c == nil || !validGeneratedProcessRequest(request) {
+	if c == nil || !validGeneratedOperationRequest(request, c.operation) {
 		return NewExitError(ExitInternal)
 	}
 	c.mu.Lock()
@@ -47,6 +49,52 @@ func (c *Capability) EditRequest(_ context.Context, request *http.Request) error
 	encoded := base64.RawURLEncoding.EncodeToString(c.value[:])
 	request.Header.Add(capabilityHeader, encoded)
 	return nil
+}
+
+// LoadCapabilityForOperation binds protected bytes to exactly one generated route.
+func LoadCapabilityForOperation(path string, operation Operation) (*Capability, error) {
+	if operation != OperationProcess && operation != OperationSign &&
+		operation != OperationRevise {
+		return nil, NewExitError(ExitCapability)
+	}
+	capability, err := LoadCapability(path)
+	if err != nil {
+		return nil, err
+	}
+	capability.mu.Lock()
+	capability.operation = operation
+	capability.mu.Unlock()
+	return capability, nil
+}
+
+// capabilitiesAreDistinct compares protected values without exposing diagnostics.
+func capabilitiesAreDistinct(capabilities ...*Capability) bool {
+	values := make([][32]byte, 0, len(capabilities))
+	for _, capability := range capabilities {
+		if capability == nil {
+			continue
+		}
+		capability.mu.Lock()
+		if capability.closed {
+			capability.mu.Unlock()
+			return false
+		}
+		values = append(values, capability.value)
+		capability.mu.Unlock()
+	}
+	defer func() {
+		for index := range values {
+			values[index] = [32]byte{}
+		}
+	}()
+	for left := range values {
+		for right := left + 1; right < len(values); right++ {
+			if subtle.ConstantTimeCompare(values[left][:], values[right][:]) == 1 {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // editNegativeRequest applies one closed capability mutation without exposing bytes.
@@ -81,15 +129,28 @@ func (c *Capability) editNegativeRequest(request *http.Request, mutation string)
 	return nil
 }
 
-// validGeneratedProcessRequest confines capability editing to the generated
-// typed process request shape over a canonical loopback authority.
-func validGeneratedProcessRequest(request *http.Request) bool {
+// validGeneratedOperationRequest confines editing to one generated operation route.
+func validGeneratedOperationRequest(request *http.Request, operation Operation) bool {
 	if request == nil || request.URL == nil || request.Header == nil ||
-		request.Method != http.MethodPost || request.URL.EscapedPath() != processPath ||
+		request.Method != http.MethodPost ||
 		request.URL.RawQuery != "" || request.URL.Fragment != "" || request.URL.RawPath != "" ||
 		request.URL.Opaque != "" || request.URL.ForceQuery || request.URL.User != nil ||
 		request.Host != request.URL.Host ||
 		!exactHeader(request.Header, "Content-Type", mediaTypeJSON) {
+		return false
+	}
+	expectedPath := ""
+	switch operation {
+	case OperationProcess:
+		expectedPath = processPath
+	case OperationSign:
+		expectedPath = signPath
+	case OperationRevise:
+		expectedPath = revisePath
+	default:
+		return false
+	}
+	if request.URL.EscapedPath() != expectedPath {
 		return false
 	}
 	_, err := ParseServerURL(schemeHTTP + "://" + request.URL.Host)

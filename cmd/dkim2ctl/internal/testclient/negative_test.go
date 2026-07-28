@@ -13,7 +13,7 @@ import (
 const forbiddenResponseBody = `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-04","code":"forbidden","category":"request"}`
 const testForbiddenCode = "forbidden"
 
-const validProcessResponseBody = `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-04","verification":{"state":"PERMERROR","primary_reason":"malformed_message","scope":"current","historical_content":"not_evaluated","historical_signatures":"not_evaluated","custody_structure":"not_present","checks":[{"class":"message","reason":"malformed_message"}],"signature_sets":[]},"policy":{"mode":"strict","verdict":"reject","primary_reason":"protocol_permerror","do_not_modify":"not_evaluated","do_not_explode":"not_evaluated","dns_testing_effective":false,"feedback":{"requested":false,"relay_required":false,"history_coverage":"not_evaluated"},"findings":[{"reason":"protocol_permerror","severity":"permanent"}]},"replay":{"class":"not_checked"},"disposition":"reject"}`
+const validProcessResponseBody = `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-04","verification":{"state":"PERMERROR","primary_reason":"malformed_message","scope":"current","historical_content":"not_evaluated","historical_signatures":"not_evaluated","custody_structure":"not_present","checks":[{"class":"message","reason":"malformed_message"}],"signature_sets":[]},"policy":{"mode":"strict","verdict":"reject","primary_reason":"protocol_permerror","do_not_modify":"not_evaluated","do_not_explode":"not_evaluated","dns_testing_effective":false,"feedback":{"requested":false,"relay_required":false,"history_coverage":"not_evaluated"},"findings":[{"reason":"protocol_permerror","severity":"permanent"}]},"replay":{"class":"not_checked"},"disposition":"reject","actions":[]}`
 
 // captureDoer records one request and returns a deterministic response.
 type captureDoer struct {
@@ -112,7 +112,7 @@ func TestNegativeExpectationIsBoundToMutation(t *testing.T) {
 	}{
 		{mutationMissingCapability, http.StatusInternalServerError, "internal_error"},
 		{mutationUnsupportedMedia, http.StatusForbidden, testForbiddenCode},
-		{"malformed_response", http.StatusBadRequest, "invalid_json"},
+		{"malformed_response", http.StatusBadRequest, expectedInvalidJSONCode},
 	} {
 		if validNegativeExpectation(hostile.mutation, hostile.status, hostile.code) {
 			t.Fatal("mutation-independent expectation accepted")
@@ -152,7 +152,9 @@ func TestNegativeResponseRejectsMalformedAndContradictoryContracts(t *testing.T)
 		buildHostileResponse(http.StatusForbidden, mediaTypeJSON,
 			strings.Replace(forbiddenResponseBody, `"forbidden"`, `"internal_error"`, 1)),
 	} {
-		if _, err := classifyNegativeResponse(response); ExitClassOf(err) != ExitContract {
+		if _, err := classifyNegativeResponse(
+			OperationProcess, response,
+		); ExitClassOf(err) != ExitContract {
 			t.Fatal("malformed negative response accepted")
 		}
 	}
@@ -166,14 +168,18 @@ func TestNegativeResponseRequiresStatusSpecificHeaders(t *testing.T) {
 		`"code":"method_not_allowed","category":"request"}`
 	method := buildHostileResponse(http.StatusMethodNotAllowed, mediaTypeJSON, methodBody)
 	method.Header.Del("Allow")
-	if _, err := classifyNegativeResponse(method); ExitClassOf(err) != ExitContract {
+	if _, err := classifyNegativeResponse(
+		OperationProcess, method,
+	); ExitClassOf(err) != ExitContract {
 		t.Fatal("405 without Allow accepted")
 	}
 	retryBody := `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-04",` +
 		`"code":"service_not_ready","category":"availability"}`
 	retry := buildHostileResponse(http.StatusServiceUnavailable, mediaTypeJSON, retryBody)
 	retry.Header.Del("Retry-After")
-	if _, err := classifyNegativeResponse(retry); ExitClassOf(err) != ExitContract {
+	if _, err := classifyNegativeResponse(
+		OperationProcess, retry,
+	); ExitClassOf(err) != ExitContract {
 		t.Fatal("503 without Retry-After accepted")
 	}
 }
@@ -213,7 +219,7 @@ func TestPositiveProcessUsesGeneratedDTOAndStableProjection(t *testing.T) {
 		},
 	}
 	if class := application.executePlannedCase(
-		t.Context(), runtime, capability, planned,
+		t.Context(), runtime, operationCapabilities{process: capability}, planned,
 	); class != ExitOK {
 		t.Fatal("positive generated process flow failed")
 	}

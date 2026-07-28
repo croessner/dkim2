@@ -11,12 +11,40 @@ readonly auditor_password="synthetic-auditor-password-91"
 TMPDIR=/tmp
 export TMPDIR
 
-if ! command -v valkey-server >/dev/null 2>&1; then
-	echo "test-valkey: valkey-server 9.1.0 is required" >&2
+build_test_binary=false
+case $# in
+0)
+	if ! command -v valkey-server >/dev/null 2>&1; then
+		echo "test-valkey: valkey-server 9.1.0 is required" >&2
+		exit 1
+	fi
+	server_binary="$(realpath "$(command -v valkey-server)")"
+	test_binary=""
+	build_test_binary=true
+	;;
+2)
+	server_binary=$1
+	test_binary=$2
+	;;
+*)
+	echo "test-valkey: expected no arguments or exact server and test binaries" >&2
+	exit 1
+	;;
+esac
+
+case "$server_binary" in
+/*) ;;
+*)
+	echo "test-valkey: exact server path must be absolute" >&2
+	exit 1
+	;;
+esac
+if [ ! -f "$server_binary" ] || [ ! -x "$server_binary" ] || [ -L "$server_binary" ]; then
+	echo "test-valkey: exact regular server binary is required" >&2
 	exit 1
 fi
 
-version_output="$(valkey-server --version 2>&1)" || {
+version_output="$("$server_binary" --version 2>&1)" || {
 	echo "test-valkey: failed to query valkey-server version" >&2
 	exit 1
 }
@@ -36,6 +64,7 @@ log="$workdir/valkey.log"
 server_pid=""
 test_pid=""
 
+# shellcheck disable=SC2329
 stop_and_reap() {
 	cleanup_target_pid=$1
 	if kill -0 "$cleanup_target_pid" 2>/dev/null; then
@@ -53,6 +82,7 @@ stop_and_reap() {
 	wait "$cleanup_target_pid" 2>/dev/null || true
 }
 
+# shellcheck disable=SC2329
 cleanup() {
 	saved_status=$?
 	trap - EXIT HUP INT TERM
@@ -70,6 +100,26 @@ trap cleanup EXIT
 trap 'exit 129' HUP
 trap 'exit 130' INT
 trap 'exit 143' TERM
+
+if [ "$build_test_binary" = true ]; then
+	test_binary="$workdir/valkey-integration.test"
+	GOCACHE="${GOCACHE:-/tmp/dkim2-go-build-cache}" \
+		GOFLAGS="-mod=vendor" \
+		go test -tags=valkeyintegration -c \
+			-o "$test_binary" \
+			./cmd/dkim2d/internal/replay/valkey
+fi
+case "$test_binary" in
+/*) ;;
+*)
+	echo "test-valkey: exact test path must be absolute" >&2
+	exit 1
+	;;
+esac
+if [ ! -f "$test_binary" ] || [ ! -x "$test_binary" ] || [ -L "$test_binary" ]; then
+	echo "test-valkey: exact regular test binary is required" >&2
+	exit 1
+fi
 
 umask 077
 {
@@ -95,7 +145,7 @@ umask 077
 		"user $auditor_user reset on sanitize-payload >$auditor_password -@all resetkeys resetchannels resetdbs +role +config|get +info +acl|getuser +acl|dryrun db=0"
 } >"$config"
 
-valkey-server "$config" &
+"$server_binary" "$config" &
 server_pid=$!
 
 attempt=0
@@ -112,14 +162,15 @@ while [ ! -S "$socket" ]; do
 	sleep 0.05
 done
 
-DKIM2_VALKEY_SOCKET="$socket" \
-	GOCACHE="${GOCACHE:-/tmp/dkim2-go-build-cache}" \
-	GOFLAGS="-mod=vendor" \
-	go test -tags=valkeyintegration \
-		./cmd/dkim2d/internal/replay/valkey \
-		-run '^TestRealValkeyHarness$' \
-		-count=1 \
-		-timeout=45s &
+(
+	cd cmd/dkim2d/internal/replay/valkey
+	DKIM2_VALKEY_SOCKET="$socket" \
+		exec "$test_binary" \
+			-test.run '^TestRealValkeyHarness$' \
+			-test.count=1 \
+			-test.v \
+			-test.timeout=45s
+) &
 test_pid=$!
 test_status=0
 wait "$test_pid" || test_status=$?

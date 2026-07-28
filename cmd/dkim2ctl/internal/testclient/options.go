@@ -18,17 +18,23 @@ const (
 	schemeHTTP       = "http"
 	mediaTypeJSON    = "application/json"
 	processPath      = "/v1/process"
+	signPath         = "/v1/sign"
+	revisePath       = "/v1/revise"
 	cacheNoStore     = "no-store"
 	contentNoSniff   = "nosniff"
 	connectionClose  = "close"
+	healthPath       = "/healthz"
+	readinessPath    = "/readyz"
 )
 
 // Options owns the validated command-wide authority and resource bounds.
 type Options struct {
-	ServerURL      string
-	Timeout        time.Duration
-	CapabilityFile string
-	Output         string
+	ServerURL            string
+	Timeout              time.Duration
+	CapabilityFile       string
+	SignCapabilityFile   string
+	ReviseCapabilityFile string
+	Output               string
 }
 
 // DefaultOptions returns the closed local-only command defaults.
@@ -42,6 +48,11 @@ func DefaultOptions() Options {
 
 // Validate checks all command options before protected-file or network access.
 func (o Options) Validate(requireCapability bool) error {
+	return o.validateRequirements(requireCapability, false, false)
+}
+
+// validateRequirements checks operation-specific protected capability paths.
+func (o Options) validateRequirements(requireProcess, requireSign, requireRevise bool) error {
 	if _, err := ParseServerURL(o.ServerURL); err != nil {
 		return NewExitError(ExitUsage)
 	}
@@ -51,11 +62,28 @@ func (o Options) Validate(requireCapability bool) error {
 	if o.Output != outputJSONL {
 		return NewExitError(ExitUsage)
 	}
-	if o.CapabilityFile != "" && !validCapabilityPath(o.CapabilityFile) {
+	for _, path := range []string{
+		o.CapabilityFile, o.SignCapabilityFile, o.ReviseCapabilityFile,
+	} {
+		if path != "" && !validCapabilityPath(path) {
+			return NewExitError(ExitUsage)
+		}
+	}
+	if requireProcess && o.CapabilityFile == "" ||
+		requireSign && o.SignCapabilityFile == "" ||
+		requireRevise && o.ReviseCapabilityFile == "" {
 		return NewExitError(ExitUsage)
 	}
-	if requireCapability && o.CapabilityFile == "" {
-		return NewExitError(ExitUsage)
+	paths := []string{o.CapabilityFile, o.SignCapabilityFile, o.ReviseCapabilityFile}
+	for left := range paths {
+		if paths[left] == "" {
+			continue
+		}
+		for right := left + 1; right < len(paths); right++ {
+			if paths[left] == paths[right] {
+				return NewExitError(ExitUsage)
+			}
+		}
 	}
 	return nil
 }

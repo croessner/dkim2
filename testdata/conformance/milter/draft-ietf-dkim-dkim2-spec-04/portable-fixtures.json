@@ -1,0 +1,162 @@
+{
+  "schema": "dkim2.milter-fixtures.v1",
+  "message_draft": "draft-ietf-dkim-dkim2-spec-04",
+  "dns_draft": "draft-chuang-dkim2-dns-04",
+  "fidelity": "milter_reconstructed_crlf",
+  "cases": [
+    {
+      "id": "inbound-smtputf8-reporting",
+      "mode": "inbound",
+      "operation": "process",
+      "authentication_results": true,
+      "events": [
+        {"command": "connect", "payload_base64": "bXguZXhhbXBsZS50ZXN0AFU="},
+        {"command": "helo", "payload_base64": "bXguZXhhbXBsZS50ZXN0AA=="},
+        {"command": "mail", "payload_base64": "PGZyw7ZtQGV4YW1wbGUudGVzdD4AU01UUFVURjgA"},
+        {"command": "recipient", "payload_base64": "PHRvQGV4YW1wbGUudGVzdD4A"},
+        {"command": "recipient", "payload_base64": "PHRvQGV4YW1wbGUudGVzdD4A"},
+        {"command": "header", "payload_base64": "QXV0aGVudGljYXRpb24tUmVzdWx0cwAgbXguZXhhbXBsZS50ZXN0OyBka2ltPXBhc3MA"},
+        {"command": "header", "payload_base64": "QXV0aGVudGljYXRpb24tUmVzdWx0cwAgZWRnZS5leGFtcGxlLnRlc3Q7IHNwZj1wYXNzAA=="},
+        {"command": "header", "payload_base64": "WC1EdXBsaWNhdGUAIG9uZQA="},
+        {"command": "header", "payload_base64": "eC1kdXBsaWNhdGUACXR3bwogbW9yZQA="},
+        {"command": "end_headers", "payload_base64": ""},
+        {"command": "body", "payload_base64": "YgA="},
+        {"command": "body", "payload_base64": "b2R5DQo="},
+        {"command": "end_message", "payload_base64": ""}
+      ],
+      "expected_request": {
+        "raw_base64": "QXV0aGVudGljYXRpb24tUmVzdWx0czogbXguZXhhbXBsZS50ZXN0OyBka2ltPXBhc3MNCkF1dGhlbnRpY2F0aW9uLVJlc3VsdHM6IGVkZ2UuZXhhbXBsZS50ZXN0OyBzcGY9cGFzcw0KWC1EdXBsaWNhdGU6IG9uZQ0KeC1kdXBsaWNhdGU6CXR3bw0KIG1vcmUNCg0KYgBvZHkNCg==",
+        "mail_from_base64": "PGZyw7ZtQGV4YW1wbGUudGVzdD4=",
+        "rcpt_to_base64": ["PHRvQGV4YW1wbGUudGVzdD4=", "PHRvQGV4YW1wbGUudGVzdD4="]
+      },
+      "expected_actions": [
+        {"command": "change_header", "index": 1, "name": "Authentication-Results", "value": ""},
+        {"command": "insert_header", "index": 0, "name": "Authentication-Results", "value": "mx.example.test; dkim2=pass"}
+      ],
+      "terminal": "accept"
+    },
+    {
+      "id": "inbound-empty-message",
+      "mode": "inbound",
+      "operation": "process",
+      "authentication_results": false,
+      "events": [
+        {"command": "connect", "payload_base64": "bXguZXhhbXBsZS50ZXN0AFU="},
+        {"command": "helo", "payload_base64": "bXguZXhhbXBsZS50ZXN0AA=="},
+        {"command": "mail", "payload_base64": "PD4A"},
+        {"command": "recipient", "payload_base64": "PHRvQGV4YW1wbGUudGVzdD4A"},
+        {"command": "end_headers", "payload_base64": ""},
+        {"command": "end_message", "payload_base64": ""}
+      ],
+      "expected_request": {
+        "raw_base64": "DQo=",
+        "mail_from_base64": "PD4=",
+        "rcpt_to_base64": ["PHRvQGV4YW1wbGUudGVzdD4="]
+      },
+      "expected_actions": [],
+      "terminal": "accept"
+    },
+    {
+      "id": "inbound-header-only",
+      "mode": "inbound",
+      "operation": "process",
+      "authentication_results": false,
+      "events": [
+        {"command": "connect", "payload_base64": "bXguZXhhbXBsZS50ZXN0AFU="},
+        {"command": "helo", "payload_base64": "bXguZXhhbXBsZS50ZXN0AA=="},
+        {"command": "mail", "payload_base64": "PHNlbmRlckBleGFtcGxlLnRlc3Q+AA=="},
+        {"command": "recipient", "payload_base64": "PHJlY2lwaWVudEBleGFtcGxlLnRlc3Q+AA=="},
+        {"command": "header", "payload_base64": "U3ViamVjdAAJdmFsdWUA"},
+        {"command": "end_headers", "payload_base64": ""},
+        {"command": "end_message", "payload_base64": ""}
+      ],
+      "expected_request": {
+        "raw_base64": "U3ViamVjdDoJdmFsdWUNCg0K",
+        "mail_from_base64": "PHNlbmRlckBleGFtcGxlLnRlc3Q+",
+        "rcpt_to_base64": ["PHJlY2lwaWVudEBleGFtcGxlLnRlc3Q+"]
+      },
+      "expected_actions": [],
+      "terminal": "accept"
+    },
+    {
+      "id": "originator-chunked-body",
+      "mode": "originator",
+      "operation": "sign",
+      "authentication_results": false,
+      "events": [
+        {"command": "connect", "payload_base64": "bXguZXhhbXBsZS50ZXN0AFU="},
+        {"command": "helo", "payload_base64": "bXguZXhhbXBsZS50ZXN0AA=="},
+        {"command": "mail", "payload_base64": "PHNlbmRlckBleGFtcGxlLnRlc3Q+AA=="},
+        {"command": "recipient", "payload_base64": "PHJlY2lwaWVudEBleGFtcGxlLnRlc3Q+AA=="},
+        {"command": "header", "payload_base64": "RnJvbQAgc2VuZGVyQGV4YW1wbGUudGVzdAA="},
+        {"command": "header", "payload_base64": "U3ViamVjdAAgZXhhY3QgdmFsdWUA"},
+        {"command": "end_headers", "payload_base64": ""},
+        {"command": "body", "payload_base64": "YgA="},
+        {"command": "body", "payload_base64": "b2R5DQo="},
+        {"command": "end_message", "payload_base64": ""}
+      ],
+      "expected_request": {
+        "raw_base64": "RnJvbTogc2VuZGVyQGV4YW1wbGUudGVzdA0KU3ViamVjdDogZXhhY3QgdmFsdWUNCg0KYgBvZHkNCg==",
+        "mail_from_base64": "PHNlbmRlckBleGFtcGxlLnRlc3Q+",
+        "rcpt_to_base64": ["PHJlY2lwaWVudEBleGFtcGxlLnRlc3Q+"]
+      },
+      "expected_actions": [
+        {"command": "add_header", "index": 0, "name": "Message-Instance", "value": "v=2; i=fixture"},
+        {"command": "add_header", "index": 0, "name": "DKIM2-Signature", "value": "v=2; s=fixture"}
+      ],
+      "terminal": "accept"
+    },
+    {
+      "id": "originator-postfix-nonsmtp-bare-paths",
+      "mode": "originator",
+      "operation": "sign",
+      "authentication_results": false,
+      "events": [
+        {"command": "connect", "payload_base64": "bG9jYWxob3N0AFU="},
+        {"command": "helo", "payload_base64": "bG9jYWxob3N0AA=="},
+        {"command": "mail", "payload_base64": "c2VuZGVyQGV4YW1wbGUudGVzdAA="},
+        {"command": "recipient", "payload_base64": "cmVjaXBpZW50QGV4YW1wbGUudGVzdAA="},
+        {"command": "header", "payload_base64": "RnJvbQAgc2VuZGVyQGV4YW1wbGUudGVzdAA="},
+        {"command": "header", "payload_base64": "U3ViamVjdAAgbG9jYWwgc3VibWlzc2lvbgA="},
+        {"command": "end_headers", "payload_base64": ""},
+        {"command": "end_message", "payload_base64": ""}
+      ],
+      "expected_request": {
+        "raw_base64": "RnJvbTogc2VuZGVyQGV4YW1wbGUudGVzdA0KU3ViamVjdDogbG9jYWwgc3VibWlzc2lvbg0KDQo=",
+        "mail_from_base64": "PHNlbmRlckBleGFtcGxlLnRlc3Q+",
+        "rcpt_to_base64": ["PHJlY2lwaWVudEBleGFtcGxlLnRlc3Q+"]
+      },
+      "expected_actions": [
+        {"command": "add_header", "index": 0, "name": "Message-Instance", "value": "v=2; i=fixture"},
+        {"command": "add_header", "index": 0, "name": "DKIM2-Signature", "value": "v=2; s=fixture"}
+      ],
+      "terminal": "accept"
+    },
+    {
+      "id": "ordinary-transit-single-action",
+      "mode": "ordinary_transit",
+      "operation": "revise",
+      "authentication_results": false,
+      "events": [
+        {"command": "connect", "payload_base64": "bXguZXhhbXBsZS50ZXN0AFU="},
+        {"command": "helo", "payload_base64": "bXguZXhhbXBsZS50ZXN0AA=="},
+        {"command": "mail", "payload_base64": "PHNlbmRlckBleGFtcGxlLnRlc3Q+AA=="},
+        {"command": "recipient", "payload_base64": "PHJlY2lwaWVudEBleGFtcGxlLnRlc3Q+AA=="},
+        {"command": "header", "payload_base64": "RnJvbQAgc2VuZGVyQGV4YW1wbGUudGVzdAA="},
+        {"command": "header", "payload_base64": "U3ViamVjdAAgZXhhY3QgdmFsdWUA"},
+        {"command": "end_headers", "payload_base64": ""},
+        {"command": "body", "payload_base64": "Ym9keQ0K"},
+        {"command": "end_message", "payload_base64": ""}
+      ],
+      "expected_request": {
+        "raw_base64": "RnJvbTogc2VuZGVyQGV4YW1wbGUudGVzdA0KU3ViamVjdDogZXhhY3QgdmFsdWUNCg0KYm9keQ0K",
+        "mail_from_base64": "PHNlbmRlckBleGFtcGxlLnRlc3Q+",
+        "rcpt_to_base64": ["PHJlY2lwaWVudEBleGFtcGxlLnRlc3Q+"]
+      },
+      "expected_actions": [
+        {"command": "add_header", "index": 0, "name": "DKIM2-Signature", "value": "v=2; s=revision"}
+      ],
+      "terminal": "accept"
+    }
+  ]
+}

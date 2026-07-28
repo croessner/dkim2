@@ -10,6 +10,8 @@ import (
 	"time"
 )
 
+const testEnvelopePath = "<a@example.test>"
+
 // TestNegotiationRequiresExactFidelityCapabilities proves the required v6 subset.
 func TestNegotiationRequiresExactFidelityCapabilities(t *testing.T) {
 	for _, testCase := range []struct {
@@ -133,7 +135,7 @@ func TestEnvelopePathAndESMTPArgumentMatrix(t *testing.T) {
 	}{
 		{path: "<>", allowNull: true, valid: true},
 		{path: "<>", allowNull: false},
-		{path: "<a@example.test>", valid: true},
+		{path: testEnvelopePath, valid: true},
 		{path: "<\"a b\"@example.test>", valid: true},
 		{path: "<@route.test:a@example.test>", valid: true},
 		{path: "<fröm@exämple.test>", valid: true},
@@ -173,6 +175,63 @@ func TestEnvelopePathAndESMTPArgumentMatrix(t *testing.T) {
 		if got := validESMTPArgument([]byte(testCase.argument)); got != testCase.valid {
 			t.Errorf("validESMTPArgument(%q)=%t, want %t", testCase.argument, got, testCase.valid)
 		}
+	}
+	for _, testCase := range []struct {
+		name      string
+		path      string
+		allowNull bool
+		want      string
+		valid     bool
+	}{
+		{name: "framed", path: testEnvelopePath, want: testEnvelopePath, valid: true},
+		{name: "bare Postfix simulation", path: "a@example.test", want: testEnvelopePath, valid: true},
+		{name: "framed null", path: "<>", allowNull: true, want: "<>", valid: true},
+		{name: "bare null", path: "", allowNull: true, want: "<>", valid: true},
+		{name: "bare null recipient", path: ""},
+		{name: "partial opening frame", path: "<a@example.test"},
+		{name: "partial closing frame", path: "a@example.test>"},
+		{name: "embedded frame", path: "a@<example.test>"},
+	} {
+		t.Run("normalize "+testCase.name, func(t *testing.T) {
+			got, ok := normalizeMilterEnvelopePath([]byte(testCase.path), testCase.allowNull)
+			if ok != testCase.valid || string(got) != testCase.want {
+				t.Fatalf(
+					"normalizeMilterEnvelopePath() value=%q valid=%t, want %q/%t",
+					got,
+					ok,
+					testCase.want,
+					testCase.valid,
+				)
+			}
+		})
+	}
+}
+
+// TestPostfixNonSMTPBarePathsAreNormalized proves simulated callbacks reach DKIM2
+// with unambiguous RFC 5321 framing instead of the Postfix-specific wire shape.
+func TestPostfixNonSMTPBarePathsAreNormalized(t *testing.T) {
+	handler := &testHandler{result: Result{
+		Operation: operationSign, Result: resultPass, Outcome: DispositionContinue,
+	}}
+	session := testSession(t, handler, false, modeOriginator, "")
+	input := appendPeerFrames(
+		peerFrame(commandNegotiate, negotiationPayload()),
+		peerFrame(commandConnect, []byte("localhost\x00U")),
+		peerFrame(commandHelo, []byte("localhost\x00")),
+		peerFrame(commandMail, []byte("sender@example.test\x00")),
+		peerFrame(commandRecipient, []byte("recipient@example.test\x00")),
+		peerFrame(commandEOH, nil),
+		peerFrame(commandEOM, nil),
+		peerFrame(commandQuit, nil),
+	)
+	stream := &splitStream{reader: bytes.NewReader(input)}
+	if err := session.Serve(context.Background(), stream); err != nil {
+		t.Fatalf("Serve() error = %v", err)
+	}
+	if handler.calls != 1 ||
+		!bytes.Equal(handler.message.ReversePath(), []byte("<sender@example.test>")) ||
+		!bytes.Equal(handler.message.Recipients()[0], []byte("<recipient@example.test>")) {
+		t.Fatalf("normalized callback path was not retained calls=%d", handler.calls)
 	}
 }
 
@@ -879,7 +938,7 @@ func FuzzReadFrameNeverAllocatesBeyondTheFixedCap(f *testing.F) {
 
 // FuzzEnvelopeAndESMTPValidationNeverPanics exercises byte-preserving syntax admission.
 func FuzzEnvelopeAndESMTPValidationNeverPanics(f *testing.F) {
-	f.Add([]byte("<a@example.test>"), true)
+	f.Add([]byte(testEnvelopePath), true)
 	f.Add([]byte("<fröm@exämple.test>"), false)
 	f.Add([]byte("<>\x00SIZE=1\x00"), true)
 	f.Fuzz(func(_ *testing.T, input []byte, allowNull bool) {

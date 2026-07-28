@@ -8,8 +8,11 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
+	"crypto/x509"
 	"encoding/base64"
+	"encoding/pem"
 	"fmt"
+	"os"
 	"reflect"
 	"slices"
 	"strings"
@@ -21,6 +24,8 @@ import (
 	"github.com/croessner/dkim2/internal/routeplan"
 	internalsigning "github.com/croessner/dkim2/internal/signing"
 )
+
+const publicSigningRSAFixture = "testdata/vectors/draft-ietf-dkim-dkim2-spec-04/signing-test-rsa.pem"
 
 type publicRouteMemoryAuthority struct {
 	value *routeplan.MemoryAuthority
@@ -169,14 +174,9 @@ type publicSigningFixture struct {
 // newPublicSigningFixture constructs one deterministic RSA ordinary signing fixture.
 func newPublicSigningFixture(t *testing.T) publicSigningFixture {
 	t.Helper()
-	rsaKey, err := rsa.GenerateKey(rand.Reader, 1024)
-	if err != nil {
-		t.Fatalf("rsa.GenerateKey() error = %v", err)
-	}
-	_, edKey, err := ed25519.GenerateKey(rand.Reader)
-	if err != nil {
-		t.Fatalf("ed25519.GenerateKey() error = %v", err)
-	}
+	rsaKey := loadPublicSigningRSAKey(t)
+	seed := sha256.Sum256([]byte("dkim2-public-signing-ed25519-test-key"))
+	edKey := ed25519.NewKeyFromSeed(seed[:])
 	provider := &publicSigningProvider{rsaKey: rsaKey, edKey: edKey}
 	authorizer := &authorizeOrdinary{}
 	routeCalls := &atomic.Int64{}
@@ -210,6 +210,24 @@ func newPublicSigningFixture(t *testing.T) publicSigningFixture {
 		facade: facade, provider: provider, profile: profile,
 		existingProfile: existingProfile, authorizer: authorizer, routeCalls: routeCalls,
 	}
+}
+
+// loadPublicSigningRSAKey loads the fixed synthetic key used only by public-facade tests.
+func loadPublicSigningRSAKey(t *testing.T) *rsa.PrivateKey {
+	t.Helper()
+	input, err := os.ReadFile(publicSigningRSAFixture)
+	if err != nil {
+		t.Fatalf("ReadFile(test RSA key) error = %v", err)
+	}
+	block, rest := pem.Decode(input)
+	if block == nil || block.Type != "RSA PRIVATE KEY" || len(rest) != 0 {
+		t.Fatal("test RSA key is not one exact PKCS#1 PEM block")
+	}
+	key, err := x509.ParsePKCS1PrivateKey(block.Bytes)
+	if err != nil || key.Validate() != nil || key.N.BitLen() != 1024 {
+		t.Fatalf("ParsePKCS1PrivateKey(test RSA key) error = %v", err)
+	}
+	return key
 }
 
 // originTicket plans one exact originator route ticket.
@@ -311,14 +329,9 @@ func (f publicSigningFixture) existingInControlTicket(t *testing.T, capability V
 // TestPublicOriginatorSigningAlgorithmsAndImmutableBytes proves all baseline
 // profile shapes through the root facade.
 func TestPublicOriginatorSigningAlgorithmsAndImmutableBytes(t *testing.T) {
-	rsaKey, err := rsa.GenerateKey(rand.Reader, 1024)
-	if err != nil {
-		t.Fatalf("rsa.GenerateKey() error = %v", err)
-	}
-	_, edKey, err := ed25519.GenerateKey(rand.Reader)
-	if err != nil {
-		t.Fatalf("ed25519.GenerateKey() error = %v", err)
-	}
+	rsaKey := loadPublicSigningRSAKey(t)
+	seed := sha256.Sum256([]byte("dkim2-public-originator-ed25519-test-key"))
+	edKey := ed25519.NewKeyFromSeed(seed[:])
 	raw := []byte("From: alice@example.test\r\nTo: bob@example.net\r\nSubject: root facade\r\n\r\nbody\r\n")
 	for _, testCase := range []struct {
 		name       string

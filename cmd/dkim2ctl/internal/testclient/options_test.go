@@ -158,6 +158,26 @@ func TestCapabilityEditorIsConfinedToGeneratedProcessShape(t *testing.T) {
 	}
 }
 
+// TestCapabilityEditorsAreConfinedToDistinctGeneratedRoutes proves separation.
+func TestCapabilityEditorsAreConfinedToDistinctGeneratedRoutes(t *testing.T) {
+	t.Parallel()
+	var value [32]byte
+	value[0] = 1
+	sign, _ := newCapability(value)
+	sign.operation = OperationSign
+	defer func() { _ = sign.Close() }()
+	signRequest := mustRequest(t, http.MethodPost, "http://127.0.0.1:8080/v1/sign")
+	if err := sign.EditRequest(t.Context(), signRequest); err != nil {
+		t.Fatal("sign capability rejected generated sign route")
+	}
+	processRequest := mustRequest(t, http.MethodPost, "http://127.0.0.1:8080/v1/process")
+	if err := sign.EditRequest(
+		t.Context(), processRequest,
+	); ExitClassOf(err) != ExitInternal {
+		t.Fatal("sign capability escaped onto process route")
+	}
+}
+
 // mustRequest constructs one test request and fails without exposing its URL.
 func mustRequest(t *testing.T, method, target string) *http.Request {
 	t.Helper()
@@ -204,5 +224,29 @@ func TestLoadCapabilityValidatesProtectedFile(t *testing.T) {
 	}
 	if _, err := LoadCapability(link); ExitClassOf(err) != ExitCapability {
 		t.Fatal("symlink accepted")
+	}
+	hardlink := filepath.Join(directory, "hardlink")
+	if err := os.Link(path, hardlink); err != nil {
+		t.Fatal("create hardlink fixture")
+	}
+	if _, err := LoadCapability(path); ExitClassOf(err) != ExitCapability {
+		t.Fatal("multiply linked capability accepted")
+	}
+	if _, err := LoadCapability(hardlink); ExitClassOf(err) != ExitCapability {
+		t.Fatal("hardlink capability alias accepted")
+	}
+}
+
+// TestOptionsRejectCapabilityPathAliases proves lexical separation preflight.
+func TestOptionsRejectCapabilityPathAliases(t *testing.T) {
+	t.Parallel()
+	path := filepath.Join(t.TempDir(), "capability")
+	options := DefaultOptions()
+	options.CapabilityFile = path
+	options.SignCapabilityFile = path
+	if ExitClassOf(options.validateRequirements(
+		true, true, false,
+	)) != ExitUsage {
+		t.Fatal("identical capability paths accepted")
 	}
 }

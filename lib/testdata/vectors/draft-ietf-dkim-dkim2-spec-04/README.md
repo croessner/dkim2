@@ -12,6 +12,15 @@ This directory pins protocol evidence to
   one-recipient Bcc-safe copy shape, restriction and derived-flag field shapes,
   the explicit next-domain creation/continuation/completion chain, normal
   insertion, and header-only insertion.
+- `signing-test-rsa.pem` is a synthetic, test-only RSA key for deterministic
+  public-facade evidence under reserved `.test` domains. It is never selected
+  by production configuration, and only its artifact digest may enter reports.
+
+Expected cryptographic values use `cross_primitive` provenance: signing uses
+the standard-library RSA/Ed25519 primitives, while frozen canonical and field
+digests are checked independently from the production facade. Byte-sensitive
+recipe and raw-message expectations use reviewed `manual_derivation`
+provenance against the named draft or RFC sections.
 
 The versioned JSON is exercised by package-owned loaders. Broader exact/one-over
 limits, callback matrices, restricted release, fanout, privacy, concurrency,

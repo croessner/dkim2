@@ -16,12 +16,21 @@ import (
 )
 
 const (
-	statusBodyLimit  = 4 * 1024
-	processBodyLimit = 1024 * 1024
-	durationUnder100 = "under_100ms"
-	durationUnder1S  = "under_1s"
-	durationUnder10S = "under_10s"
-	durationAtLeast  = "at_least_10s"
+	statusBodyLimit   = 4 * 1024
+	processBodyLimit  = 1024 * 1024
+	durationUnder100  = "under_100ms"
+	durationUnder1S   = "under_1s"
+	durationUnder10S  = "under_10s"
+	durationAtLeast   = "at_least_10s"
+	memberActions     = "actions"
+	memberAPIVersion  = "api_version"
+	memberCategory    = "category"
+	memberCode        = "code"
+	memberDisposition = "disposition"
+	memberDraft       = "draft"
+	memberOperation   = "operation"
+	memberResult      = "result"
+	memberStatus      = "status"
 )
 
 // Operation is the closed generated-client operation vocabulary.
@@ -34,6 +43,10 @@ const (
 	OperationReadiness Operation = "readiness"
 	// OperationProcess identifies the generated inbound process call.
 	OperationProcess Operation = "process"
+	// OperationSign identifies the generated originator-signing call.
+	OperationSign Operation = "sign"
+	// OperationRevise identifies the generated ordinary-transit revision call.
+	OperationRevise Operation = "revise"
 )
 
 // ResponseFact is the bounded typed result of one generated operation.
@@ -43,6 +56,8 @@ type ResponseFact struct {
 	Health    *generated.HealthResponse
 	Readiness *generated.ReadinessResponse
 	Process   *generated.ProcessResponse
+	Sign      *generated.OperationResponse
+	Revise    *generated.OperationResponse
 	Error     *generated.ErrorResponse
 }
 
@@ -170,6 +185,40 @@ func (r *Runtime) CallProcess(
 	return classifyResponse(OperationProcess, response)
 }
 
+// CallSign executes and strictly classifies the generated originator operation.
+func (r *Runtime) CallSign(
+	ctx context.Context,
+	request generated.SignRequest,
+	editor generated.RequestEditorFn,
+) (ResponseFact, error) {
+	if r == nil || r.generated == nil || editor == nil {
+		return ResponseFact{}, NewExitError(ExitInternal)
+	}
+	response, err := r.generated.SignMessage(ctx, request, editor)
+	if err != nil {
+		closeResponseOnError(response)
+		return ResponseFact{}, classifyTransportError(err)
+	}
+	return classifyResponse(OperationSign, response)
+}
+
+// CallRevise executes and strictly classifies the generated revision operation.
+func (r *Runtime) CallRevise(
+	ctx context.Context,
+	request generated.ReviseRequest,
+	editor generated.RequestEditorFn,
+) (ResponseFact, error) {
+	if r == nil || r.generated == nil || editor == nil {
+		return ResponseFact{}, NewExitError(ExitInternal)
+	}
+	response, err := r.generated.ReviseMessage(ctx, request, editor)
+	if err != nil {
+		closeResponseOnError(response)
+		return ResponseFact{}, classifyTransportError(err)
+	}
+	return classifyResponse(OperationRevise, response)
+}
+
 // authorityRoundTripper prevents generated requests from drifting off authority.
 type authorityRoundTripper struct {
 	authority string
@@ -185,8 +234,8 @@ func (t *authorityRoundTripper) RoundTrip(request *http.Request) (*http.Response
 	}
 	path := request.URL.EscapedPath()
 	valid := request.Method == http.MethodGet &&
-		(path == "/healthz" || path == "/readyz") && request.URL.RawQuery == ""
-	valid = valid || path == processPath &&
+		(path == healthPath || path == readinessPath) && request.URL.RawQuery == ""
+	valid = valid || (path == processPath || path == signPath || path == revisePath) &&
 		(request.Method == http.MethodPost && (request.URL.RawQuery == "" ||
 			request.URL.RawQuery == "unexpected=1") ||
 			request.Method == http.MethodPut && request.URL.RawQuery == "")
@@ -238,7 +287,8 @@ func classifyResponse(operation Operation, response *http.Response) (ResponseFac
 		return ResponseFact{}, NewExitError(ExitContract)
 	}
 	limit := int64(statusBodyLimit)
-	if operation == OperationProcess {
+	if operation == OperationProcess || operation == OperationSign ||
+		operation == OperationRevise {
 		limit = processBodyLimit
 	}
 	body, err := readAndClose(response.Body, limit)
@@ -275,6 +325,20 @@ func classifyResponse(operation Operation, response *http.Response) (ResponseFac
 				return ResponseFact{}, NewExitError(ExitContract)
 			}
 			fact.Process = &value
+			return fact, nil
+		}
+	case OperationSign, OperationRevise:
+		if response.StatusCode == http.StatusOK {
+			var value generated.OperationResponse
+			if strictResponseJSON(body, &value) != nil ||
+				!validOperation(value, operation) {
+				return ResponseFact{}, NewExitError(ExitContract)
+			}
+			if operation == OperationSign {
+				fact.Sign = &value
+			} else {
+				fact.Revise = &value
+			}
 			return fact, nil
 		}
 	default:
@@ -435,6 +499,10 @@ func validETag(header http.Header) bool {
 
 // strictResponseJSON decodes exactly one known generated representation.
 func strictResponseJSON(data []byte, destination any) error {
+	if validateJSONMembers(data) != nil ||
+		!hasRequiredResponseMembers(data, destination) {
+		return NewExitError(ExitContract)
+	}
 	decoder := json.NewDecoder(strings.NewReader(string(data)))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(destination); err != nil {
@@ -445,6 +513,44 @@ func strictResponseJSON(data []byte, destination any) error {
 		return NewExitError(ExitContract)
 	}
 	return nil
+}
+
+// hasRequiredResponseMembers freezes every generated top-level required field.
+func hasRequiredResponseMembers(data []byte, destination any) bool {
+	var document map[string]json.RawMessage
+	if json.Unmarshal(data, &document) != nil {
+		return false
+	}
+	var required []string
+	switch destination.(type) {
+	case *generated.HealthResponse:
+		required = []string{memberAPIVersion, memberDraft, memberStatus}
+	case *generated.ReadinessResponse:
+		required = []string{memberAPIVersion, memberDraft, memberStatus}
+	case *generated.ProcessResponse:
+		required = []string{
+			memberActions, memberAPIVersion, memberDisposition, memberDraft,
+			"policy", "replay", "verification",
+		}
+	case *generated.OperationResponse:
+		required = []string{
+			memberActions, memberAPIVersion, memberDisposition, memberDraft,
+			memberOperation, memberResult,
+		}
+	case *generated.ErrorResponse:
+		required = []string{memberAPIVersion, memberCategory, memberCode, memberDraft}
+	default:
+		return false
+	}
+	if len(document) != len(required) {
+		return false
+	}
+	for _, name := range required {
+		if _, ok := document[name]; !ok {
+			return false
+		}
+	}
+	return true
 }
 
 // validHealth validates the complete health representation.
@@ -468,10 +574,108 @@ func validProcess(value generated.ProcessResponse) bool {
 		!value.Disposition.Valid() || !value.Verification.State.Valid() ||
 		!value.Policy.Verdict.Valid() || !value.Replay.Class.Valid() ||
 		!validVerificationProjection(value.Verification) ||
-		!validPolicyProjection(value.Policy) {
+		!validPolicyProjection(value.Policy) ||
+		!validProcessActions(value) {
 		return false
 	}
 	return string(value.Disposition) == string(value.Policy.Verdict)
+}
+
+// validProcessActions validates the optional exact RFC 8601 report action.
+func validProcessActions(value generated.ProcessResponse) bool {
+	if value.Disposition != generated.DispositionAccept {
+		return len(value.Actions) == 0
+	}
+	if len(value.Actions) == 0 {
+		return true
+	}
+	if len(value.Actions) != 1 {
+		return false
+	}
+	action := value.Actions[0]
+	suffix := ""
+	switch value.Verification.State {
+	case generated.PASS:
+		suffix = "; dkim2=pass"
+	case generated.FAIL:
+		suffix = "; dkim2=fail"
+	case generated.PERMERROR:
+		suffix = "; dkim2=permerror"
+	case generated.TEMPERROR:
+		suffix = "; dkim2=temperror"
+	default:
+		return false
+	}
+	if action.Type != generated.AddHeader ||
+		action.Name != generated.AuthenticationResults ||
+		!strings.HasSuffix(action.Value, suffix) {
+		return false
+	}
+	return validDomain(strings.TrimSuffix(action.Value, suffix))
+}
+
+// validOperation validates one complete generated sign or revise response.
+func validOperation(value generated.OperationResponse, operation Operation) bool {
+	if value.ApiVersion != generated.V1 ||
+		value.Draft != generated.DraftIetfDkimDkim2Spec04 ||
+		!value.Operation.Valid() || !value.Result.Valid() ||
+		!value.Disposition.Valid() ||
+		operation == OperationSign && value.Operation != generated.Sign ||
+		operation == OperationRevise && value.Operation != generated.Revise ||
+		!validOperationOutcome(value.Result, value.Disposition) ||
+		!validOperationActions(value.Operation, value.Disposition, value.Actions) {
+		return false
+	}
+	for _, action := range value.Actions {
+		if action.Type != generated.AddHeader || !action.Name.Valid() ||
+			action.Value == "" || len(action.Value) > 65535 ||
+			strings.ContainsAny(action.Value, "\r\n\x00") {
+			return false
+		}
+	}
+	return true
+}
+
+// validOperationOutcome enforces the generated result/disposition matrix.
+func validOperationOutcome(
+	result generated.OperationResponseResult,
+	disposition generated.Disposition,
+) bool {
+	switch result {
+	case generated.OperationResponseResultPass:
+		return disposition == generated.DispositionAccept ||
+			disposition == generated.DispositionContinue
+	case generated.OperationResponseResultFail,
+		generated.OperationResponseResultPermerror:
+		return disposition == generated.DispositionReject
+	case generated.OperationResponseResultTemperror:
+		return disposition == generated.DispositionTempfail
+	default:
+		return false
+	}
+}
+
+// validOperationActions enforces the operation-specific append-only order.
+func validOperationActions(
+	operation generated.OperationResponseOperation,
+	disposition generated.Disposition,
+	actions generated.ActionPlan,
+) bool {
+	if disposition != generated.DispositionAccept {
+		return len(actions) == 0
+	}
+	switch operation {
+	case generated.Sign:
+		return len(actions) == 2 &&
+			actions[0].Name == generated.MessageInstance &&
+			actions[1].Name == generated.DKIM2Signature
+	case generated.Revise:
+		return len(actions) == 1 && actions[0].Name == generated.DKIM2Signature ||
+			len(actions) == 2 && actions[0].Name == generated.MessageInstance &&
+				actions[1].Name == generated.DKIM2Signature
+	default:
+		return false
+	}
 }
 
 // validVerificationProjection validates every closed verification enum and bound.
@@ -563,7 +767,7 @@ func allowedErrorStatus(operation Operation, status int) bool {
 		return status == 400 || status == 412 || status == 417 || status == 500
 	case OperationReadiness:
 		return status == 400 || status == 412 || status == 417 || status == 500 || status == 503
-	case OperationProcess:
+	case OperationProcess, OperationSign, OperationRevise:
 		return status == 400 || status == 403 || status == 408 || status == 413 ||
 			status == 415 || status == 417 || status == 500 || status == 503
 	default:

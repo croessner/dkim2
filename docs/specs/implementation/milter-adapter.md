@@ -465,14 +465,20 @@ aggregate budget.
 
 ## Message And Envelope Fidelity
 
-Envelope sender and recipient callback bytes are preserved in callback order,
-including recipient duplicates. Angle-bracket stripping, Unicode
-normalization, case folding, IDNA conversion, mailbox reparsing, and lossy
-string trimming are forbidden. Syntax and size validation occurs without
-changing accepted bytes. SMTPUTF8 octets are preserved for inbound processing
-under RFC 6531/6532, but the pinned M10 signing baseline supports ASCII SMTP
-paths only. Originator and ordinary-transit modes therefore fail closed on any
-non-ASCII envelope path before datasource or private-key access.
+Envelope sender and recipient mailbox bytes are preserved in callback order,
+including recipient duplicates. An RFC 5321-bracketed callback path is retained
+exactly. Postfix emits an unbracketed mailbox, or an empty reverse-path field,
+when it simulates Milter callbacks for non-SMTP submission. The adapter accepts
+that form only when adding the missing outer angle brackets yields a complete
+valid RFC 5321 path under the same grammar; it maps the empty reverse-path to
+`<>`, rejects an empty recipient and every partial, embedded, or mixed bracket
+form, and then supplies the normalized RFC path to DKIM2. No mailbox byte is
+otherwise changed. Angle-bracket stripping, Unicode normalization, case
+folding, IDNA conversion, mailbox reparsing, and lossy string trimming are
+forbidden. SMTPUTF8 octets are preserved for inbound processing under RFC
+6531/6532, but the pinned M10 signing baseline supports ASCII SMTP paths only.
+Originator and ordinary-transit modes therefore fail closed on any non-ASCII
+envelope path before datasource or private-key access.
 
 Headers are stored as an ordered sequence, never in `textproto.MIMEHeader` or a
 map. Duplicate fields and original name casing are preserved. For each callback

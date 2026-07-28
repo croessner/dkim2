@@ -109,7 +109,8 @@ func validOutcome(value string) bool {
 // validOutputOperation checks the exact command and case operation vocabulary.
 func validOutputOperation(value string) bool {
 	switch value {
-	case "validate", "smoke", caseHealth, caseReadiness, caseProcess, caseNegative:
+	case "validate", "smoke", caseHealth, caseReadiness, caseProcess,
+		caseSign, caseRevise, caseNegative:
 		return true
 	default:
 		return false

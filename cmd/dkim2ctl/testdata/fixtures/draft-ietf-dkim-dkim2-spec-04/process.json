@@ -18,7 +18,8 @@
         "disposition": "reject",
         "verification_state": "PERMERROR",
         "policy_verdict": "reject",
-        "replay_class": "not_checked"
+        "replay_class": "not_checked",
+        "actions": []
       }
     }
   ]

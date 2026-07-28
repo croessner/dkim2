@@ -60,7 +60,7 @@ func FuzzResponseClassification(f *testing.F) {
 			return
 		}
 		response := buildHostileResponse(int(status%600), contentType, string(body))
-		_, err := classifyNegativeResponse(response)
+		_, err := classifyNegativeResponse(OperationProcess, response)
 		if err != nil && strings.Contains(err.Error(), "marker-private") {
 			t.Fatal("response bytes escaped stable classification")
 		}

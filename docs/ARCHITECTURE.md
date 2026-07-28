@@ -38,6 +38,7 @@
 | 0.1.0-draft | 2026-07-26 | Christian Roessner / Codex | Planned the central daemon observability specification: secret-safe structured logging, explicit bounded debug modules, an instance-owned OpenTelemetry runtime, a process-local Prometheus registry and metrics endpoint, and strict low-cardinality attribute and label allowlists. This records the specification baseline, not implementation completion. |
 | 0.1.0-draft | 2026-07-26 | Christian Roessner / Codex | Completed the daemon observability foundation with validated injected library events, bounded structured logging, instance-owned OpenTelemetry export, process-local low-cardinality Prometheus metrics, an untraced `GET /metrics` route, protected tracing CA ownership, adversarial tests, and independent review hardening. |
 | 0.1.0-draft | 2026-07-26 | Christian Roessner / Codex | Planned the production Milter adapter specification: bounded Milter-v6 message reconstruction, generated daemon sign/revise/process clients, datasource-backed private signing, closed prevalidated action plans, Authentication-Results policy, deterministic failure mapping, Unix-socket lifecycle, and adversarial MTA protocol-peer evidence. This records the specification baseline, not implementation completion. |
+| 0.1.0-draft | 2026-07-27 | Christian Roessner / Codex | Planned the versioned conformance suite: digest-bound positive, negative, replay, OpenAPI, and Milter vectors; deterministic CI reporting; and a real Postfix Docker qualification for SMTP and local submission. Live Exim evidence remains explicitly deferred to M17 while an adapter-neutral future fixture/result schema is frozen. |
 
 ## 1. Purpose
 
@@ -1821,7 +1822,7 @@ maintainers to understand why behavior exists.
 | M15 - Observability foundation | `slog` provider, debug modules, OpenTelemetry tracing, Prometheus registry, low-cardinality label policy, secret-safe attributes, metrics endpoint, redaction tests | 3 to 8 hours | High |
 | M16 - Milter adapter | SMTP context collection, EOM service call, action application, timeout behavior, fidelity metadata, MTA integration tests, fail-open/fail-closed tests | 5 to 12 hours | High |
 | M17 - Exim adapter | `local_scan()` inbound adapter, `transport_filter` outbound helper, Exim action mapping, fidelity metadata, release compatibility matrix, supported distribution baselines, Exim integration fixtures, fail-closed/tempfail behavior | 4 to 10 agent-days | High |
-| M18 - Test vectors and conformance suite | Draft-versioned vectors, negative vectors, replay cases, OpenAPI fixtures, Milter and Exim adapter fixtures, CI vector report, public conformance notes | 4 to 12 hours | High |
+| M18 - Test vectors and conformance suite | Implemented: digest-bound draft-versioned positive/negative/replay vectors, generated-client OpenAPI fixtures, portable Milter fixtures, real Postfix Docker qualification, deterministic CI reports, public conformance notes, and an exact future Exim schema with live Exim results deferred to M17 | 4 to 12 hours | High |
 | M19 - Security hardening | Fuzzing, resource limits, logging review, race tests, govulncheck, datasource abuse cases, recipe bombs, OpenAPI abuse fixtures, Milter and Exim abuse fixtures | 5 to 14 hours | High |
 | M20 - Documentation and operator guide | API docs, architecture update, security guide, config reference, datasource guide, replay-store guide, observability guide, Milter and Exim deployment notes, examples | 3 to 8 hours | Medium |
 | M21 - Interop and reference polish | External implementation comparison, draft issue log, final API cleanup, conformance report, release candidate | 1 to 3 days | Very high |
@@ -1914,7 +1915,9 @@ M18 vectors should grow continuously from M1 onward.
 M19 security hardening should run continuously after M2 and becomes mandatory
 before public reference releases.
 M20 documentation should run continuously after M0.
-M21 interop starts once M13, M14, M16, M17, and the M18 vector suite are useful.
+M21 library, daemon, and Milter interop starts once M13, M14, M16, and the M18
+vector suite are useful. Exim interop and compatibility claims remain gated on
+M17 and must stay explicitly deferred until that adapter is completed.
 M17 Exim starts after the daemon action contract, signing/revision behavior,
 datasource/replay policy, observability, and release compatibility matrix are
 stable enough to test against real Exim baselines.

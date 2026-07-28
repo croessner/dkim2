@@ -1,0 +1,232 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.test/dkim2/conformance/case.schema.json",
+  "$defs": {
+    "b64": {"maxLength": 22369624, "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$", "type": "string"},
+    "expected": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {"enum": ["pass", "fail", "permerror", "temperror", "first_seen", "replayed", "disabled", "indeterminate"]},
+        "digest": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+        "disposition": {"enum": ["continue", "accept", "reject", "tempfail", "no_mutation"]},
+        "state": {"enum": ["PASS", "FAIL", "PERMERROR", "TEMPERROR", "signed", "revised", "no_mutation", "contract_match", "contract_reject", "accept", "reject", "tempfail", "applied", "generated", "rejected", "found", "invalid", "temporary", "continue", "first_seen", "replayed", "disabled", "indeterminate"]}
+      },
+      "required": ["code", "state"],
+      "type": "object"
+    },
+    "noDigest": {"not": {"required": ["digest"]}},
+    "noDisposition": {"not": {"required": ["disposition"]}},
+    "noOptional": {"allOf": [{"$ref": "#/$defs/noDigest"}, {"$ref": "#/$defs/noDisposition"}]},
+    "mailInput": {
+      "additionalProperties": false,
+      "properties": {
+        "forward_paths_b64": {"items": {"$ref": "#/$defs/b64"}, "maxItems": 1024, "type": "array"},
+        "message_b64": {"$ref": "#/$defs/b64"},
+        "reverse_path_b64": {"$ref": "#/$defs/b64"}
+      },
+      "required": ["message_b64", "reverse_path_b64", "forward_paths_b64"],
+      "type": "object"
+    },
+    "verifyExpected": {
+      "allOf": [
+        {"$ref": "#/$defs/expected"},
+        {"oneOf": [
+          {"allOf": [{"properties": {"code": {"const": "pass"}, "state": {"const": "PASS"}}, "required": ["digest"]}, {"$ref": "#/$defs/noDisposition"}]},
+          {"allOf": [{"properties": {"code": {"const": "fail"}, "state": {"const": "FAIL"}}}, {"$ref": "#/$defs/noOptional"}]},
+          {"allOf": [{"properties": {"code": {"const": "permerror"}, "state": {"const": "PERMERROR"}}}, {"$ref": "#/$defs/noOptional"}]},
+          {"allOf": [{"properties": {"code": {"const": "temperror"}, "state": {"const": "TEMPERROR"}}}, {"$ref": "#/$defs/noOptional"}]}
+        ]}
+      ]
+    },
+    "signExpected": {
+      "allOf": [
+        {"$ref": "#/$defs/expected"},
+        {"oneOf": [
+          {"properties": {"code": {"const": "pass"}, "state": {"const": "signed"}, "disposition": {"const": "continue"}}, "required": ["digest", "disposition"]},
+          {"allOf": [{"properties": {"code": {"enum": ["fail", "permerror", "temperror"]}, "state": {"const": "no_mutation"}, "disposition": {"const": "no_mutation"}}, "required": ["disposition"]}, {"$ref": "#/$defs/noDigest"}]}
+        ]}
+      ]
+    },
+    "reviseExpected": {
+      "allOf": [
+        {"$ref": "#/$defs/expected"},
+        {"oneOf": [
+          {"properties": {"code": {"const": "pass"}, "state": {"const": "revised"}, "disposition": {"const": "continue"}}, "required": ["digest", "disposition"]},
+          {"allOf": [{"properties": {"code": {"enum": ["fail", "permerror", "temperror"]}, "state": {"const": "no_mutation"}, "disposition": {"const": "no_mutation"}}, "required": ["disposition"]}, {"$ref": "#/$defs/noDigest"}]}
+        ]}
+      ]
+    },
+    "mailOperation": {
+      "additionalProperties": false,
+      "properties": {"expected": {"$ref": "#/$defs/verifyExpected"}, "input": {"$ref": "#/$defs/mailInput"}},
+      "required": ["input", "expected"],
+      "type": "object"
+    },
+    "signOperation": {
+      "additionalProperties": false,
+      "properties": {"expected": {"$ref": "#/$defs/signExpected"}, "input": {"$ref": "#/$defs/mailInput"}},
+      "required": ["input", "expected"],
+      "type": "object"
+    },
+    "reviseOperation": {
+      "additionalProperties": false,
+      "properties": {"expected": {"$ref": "#/$defs/reviseExpected"}, "input": {"$ref": "#/$defs/mailInput"}},
+      "required": ["input", "expected"],
+      "type": "object"
+    },
+    "openapiOperation": {
+      "additionalProperties": false,
+      "properties": {
+        "expected": {
+          "allOf": [
+            {"$ref": "#/$defs/expected"},
+            {"oneOf": [
+              {"allOf": [{"properties": {"code": {"const": "pass"}, "state": {"const": "contract_match"}, "disposition": {"const": "no_mutation"}}, "required": ["disposition"]}, {"$ref": "#/$defs/noDigest"}]},
+              {"allOf": [{"properties": {"code": {"const": "fail"}, "state": {"const": "contract_reject"}, "disposition": {"const": "no_mutation"}}, "required": ["disposition"]}, {"$ref": "#/$defs/noDigest"}]}
+            ]}
+          ]
+        },
+        "input": {"$ref": "#/$defs/mailInput"}
+      },
+      "required": ["input", "expected"],
+      "type": "object"
+    },
+    "milterOperation": {
+      "additionalProperties": false,
+      "properties": {
+        "expected": {
+          "allOf": [
+            {"$ref": "#/$defs/expected"},
+            {"oneOf": [
+              {"allOf": [{"properties": {"code": {"const": "pass"}, "state": {"const": "accept"}, "disposition": {"const": "accept"}}, "required": ["disposition"]}, {"$ref": "#/$defs/noDigest"}]},
+              {"allOf": [{"properties": {"code": {"const": "fail"}, "state": {"const": "reject"}, "disposition": {"const": "reject"}}, "required": ["disposition"]}, {"$ref": "#/$defs/noDigest"}]},
+              {"allOf": [{"properties": {"code": {"const": "temperror"}, "state": {"const": "tempfail"}, "disposition": {"const": "tempfail"}}, "required": ["disposition"]}, {"$ref": "#/$defs/noDigest"}]}
+            ]}
+          ]
+        },
+        "input": {"$ref": "#/$defs/mailInput"}
+      },
+      "required": ["input", "expected"],
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "oneOf": [
+    {"required": ["verify"]}, {"required": ["sign"]}, {"required": ["revise"]},
+    {"required": ["recipe_apply"]}, {"required": ["recipe_generate"]},
+    {"required": ["dns_record"]}, {"required": ["policy"]}, {"required": ["replay"]},
+    {"required": ["openapi"]}, {"required": ["milter"]}
+  ],
+  "properties": {
+    "authority": {"items": {"maxLength": 160, "minLength": 1, "type": "string"}, "maxItems": 16, "minItems": 1, "type": "array"},
+    "case_id": {"maxLength": 128, "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$", "type": "string"},
+    "class": {"enum": ["draft_normative", "rfc_normative", "documented_interpretation", "local_security_policy", "openapi_contract", "adapter_contract"]},
+    "dns_draft": {"const": "draft-chuang-dkim2-dns-04"},
+    "dns_record": {
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": {"enum": ["rsa-sha256", "ed25519-sha256"]},
+        "expected": {
+          "allOf": [
+            {"$ref": "#/$defs/expected"},
+            {"oneOf": [
+              {"allOf": [{"properties": {"code": {"const": "pass"}, "state": {"const": "found"}}}, {"$ref": "#/$defs/noOptional"}]},
+              {"allOf": [{"properties": {"code": {"const": "permerror"}, "state": {"const": "invalid"}}}, {"$ref": "#/$defs/noOptional"}]},
+              {"allOf": [{"properties": {"code": {"const": "temperror"}, "state": {"const": "temporary"}}}, {"$ref": "#/$defs/noOptional"}]}
+            ]}
+          ]
+        },
+        "record_b64": {"$ref": "#/$defs/b64"}
+      },
+      "required": ["record_b64", "algorithm", "expected"],
+      "type": "object"
+    },
+    "message_draft": {"const": "draft-ietf-dkim-dkim2-spec-04"},
+    "milter": {"$ref": "#/$defs/milterOperation"},
+    "openapi": {"$ref": "#/$defs/openapiOperation"},
+    "policy": {
+      "additionalProperties": false,
+      "properties": {
+        "expected": {
+          "allOf": [
+            {"$ref": "#/$defs/expected"},
+            {"oneOf": [
+              {"allOf": [{"properties": {"code": {"const": "pass"}, "state": {"const": "accept"}, "disposition": {"const": "accept"}}, "required": ["disposition"]}, {"$ref": "#/$defs/noDigest"}]},
+              {"allOf": [{"properties": {"code": {"const": "pass"}, "state": {"const": "reject"}, "disposition": {"const": "reject"}}, "required": ["disposition"]}, {"$ref": "#/$defs/noDigest"}]},
+              {"allOf": [{"properties": {"code": {"const": "pass"}, "state": {"const": "continue"}, "disposition": {"const": "continue"}}, "required": ["disposition"]}, {"$ref": "#/$defs/noDigest"}]},
+              {"allOf": [{"properties": {"code": {"const": "pass"}, "state": {"const": "tempfail"}, "disposition": {"const": "tempfail"}}, "required": ["disposition"]}, {"$ref": "#/$defs/noDigest"}]}
+            ]}
+          ]
+        },
+        "mode": {"enum": ["strict", "permissive", "testing"]},
+        "verification_state": {"enum": ["PASS", "FAIL", "PERMERROR", "TEMPERROR"]}
+      },
+      "required": ["verification_state", "mode", "expected"],
+      "type": "object"
+    },
+    "provenance": {"enum": ["draft_example", "rfc_example", "independent_oracle", "cross_primitive", "manual_derivation", "regression_reproducer"]},
+    "recipe_apply": {
+      "additionalProperties": false,
+      "properties": {
+        "current_message_b64": {"$ref": "#/$defs/b64"},
+        "expected": {
+          "allOf": [
+            {"$ref": "#/$defs/expected"},
+            {"oneOf": [
+              {"allOf": [{"properties": {"code": {"const": "pass"}, "state": {"const": "applied"}}, "required": ["digest"]}, {"$ref": "#/$defs/noDisposition"}]},
+              {"allOf": [{"properties": {"code": {"const": "permerror"}, "state": {"const": "rejected"}}}, {"$ref": "#/$defs/noOptional"}]}
+            ]}
+          ]
+        },
+        "recipe_b64": {"$ref": "#/$defs/b64"}
+      },
+      "required": ["recipe_b64", "current_message_b64", "expected"],
+      "type": "object"
+    },
+    "recipe_generate": {
+      "additionalProperties": false,
+      "properties": {
+        "after_message_b64": {"$ref": "#/$defs/b64"},
+        "before_message_b64": {"$ref": "#/$defs/b64"},
+        "body_policy": {"enum": ["available", "unavailable"]},
+        "expected": {
+          "allOf": [
+            {"$ref": "#/$defs/expected"},
+            {"oneOf": [
+              {"allOf": [{"properties": {"code": {"const": "pass"}, "state": {"const": "generated"}}, "required": ["digest"]}, {"$ref": "#/$defs/noDisposition"}]},
+              {"allOf": [{"properties": {"code": {"const": "permerror"}, "state": {"const": "rejected"}}}, {"$ref": "#/$defs/noOptional"}]}
+            ]}
+          ]
+        }
+      },
+      "required": ["before_message_b64", "after_message_b64", "body_policy", "expected"],
+      "type": "object"
+    },
+    "replay": {
+      "additionalProperties": false,
+      "properties": {
+        "clock_unix": {"maximum": 9223372036854775807, "minimum": 0, "type": "integer"},
+        "expected": {
+          "allOf": [
+            {"$ref": "#/$defs/expected"},
+            {"oneOf": [
+              {"allOf": [{"properties": {"code": {"const": "first_seen"}, "state": {"const": "first_seen"}}}, {"$ref": "#/$defs/noOptional"}]},
+              {"allOf": [{"properties": {"code": {"const": "replayed"}, "state": {"const": "replayed"}}}, {"$ref": "#/$defs/noOptional"}]},
+              {"allOf": [{"properties": {"code": {"const": "disabled"}, "state": {"const": "disabled"}}}, {"$ref": "#/$defs/noOptional"}]},
+              {"allOf": [{"properties": {"code": {"const": "indeterminate"}, "state": {"const": "indeterminate"}}}, {"$ref": "#/$defs/noOptional"}]}
+            ]}
+          ]
+        },
+        "identity_b64": {"$ref": "#/$defs/b64"}
+      },
+      "required": ["identity_b64", "clock_unix", "expected"],
+      "type": "object"
+    },
+    "revise": {"$ref": "#/$defs/reviseOperation"},
+    "schema": {"const": "dkim2.conformance-case.v1"},
+    "sign": {"$ref": "#/$defs/signOperation"},
+    "verify": {"$ref": "#/$defs/mailOperation"}
+  },
+  "required": ["schema", "case_id", "message_draft", "dns_draft", "class", "authority", "provenance"],
+  "type": "object"
+}

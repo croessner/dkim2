@@ -14,6 +14,20 @@ type Application struct {
 	newRuntime func(Options) (*Runtime, error)
 }
 
+// operationCapabilities owns the separately scoped protected credentials.
+type operationCapabilities struct {
+	process *Capability
+	sign    *Capability
+	revise  *Capability
+}
+
+// Close releases every loaded operation capability.
+func (c operationCapabilities) Close() {
+	_ = c.process.Close()
+	_ = c.sign.Close()
+	_ = c.revise.Close()
+}
+
 // NewApplication constructs one command-scoped test client application.
 func NewApplication(output io.Writer) *Application {
 	return &Application{output: output, newRuntime: NewRuntime}
@@ -43,29 +57,57 @@ func (a *Application) Run(options Options, paths []string) error {
 	if err != nil {
 		return err
 	}
-	if err := options.Validate(plan.requiresCapability); err != nil {
+	if err := options.validateRequirements(
+		plan.requiresCapability,
+		plan.requiresSignCapability,
+		plan.requiresReviseCapability,
+	); err != nil {
 		return err
+	}
+	var capabilities operationCapabilities
+	if plan.requiresCapability {
+		capabilities.process, err = LoadCapabilityForOperation(
+			options.CapabilityFile, OperationProcess,
+		)
+		if err != nil {
+			return err
+		}
+	}
+	if plan.requiresSignCapability {
+		capabilities.sign, err = LoadCapabilityForOperation(
+			options.SignCapabilityFile, OperationSign,
+		)
+		if err != nil {
+			capabilities.Close()
+			return err
+		}
+	}
+	if plan.requiresReviseCapability {
+		capabilities.revise, err = LoadCapabilityForOperation(
+			options.ReviseCapabilityFile, OperationRevise,
+		)
+		if err != nil {
+			capabilities.Close()
+			return err
+		}
+	}
+	defer capabilities.Close()
+	if !capabilitiesAreDistinct(
+		capabilities.process, capabilities.sign, capabilities.revise,
+	) {
+		return NewExitError(ExitCapability)
 	}
 	runtime, err := a.newRuntime(options)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = runtime.Close() }()
-
-	var capability *Capability
-	if plan.requiresCapability {
-		capability, err = LoadCapability(options.CapabilityFile)
-		if err != nil {
-			return err
-		}
-		defer func() { _ = capability.Close() }()
-	}
 	ctx, cancel := context.WithTimeout(context.Background(), options.Timeout)
 	defer cancel()
 
 	resultClass := ExitOK
 	for _, planned := range plan.cases {
-		class := a.executePlannedCase(ctx, runtime, capability, planned)
+		class := a.executePlannedCase(ctx, runtime, capabilities, planned)
 		if class != ExitOK && (resultClass == ExitOK || class < resultClass) {
 			resultClass = class
 		}
@@ -83,7 +125,7 @@ func (a *Application) Run(options Options, paths []string) error {
 func (a *Application) executePlannedCase(
 	ctx context.Context,
 	runtime *Runtime,
-	capability *Capability,
+	capabilities operationCapabilities,
 	planned plannedCase,
 ) ExitClass {
 	started := time.Now()
@@ -99,10 +141,34 @@ func (a *Application) executePlannedCase(
 		var request generated.ProcessRequest
 		request, err = generatedProcessRequest(*testCase.Process)
 		if err == nil {
-			fact, err = runtime.CallProcess(ctx, request, capability.EditRequest)
+			fact, err = runtime.CallProcess(ctx, request, capabilities.process.EditRequest)
+		}
+	case caseSign:
+		var request generated.SignRequest
+		request, err = generatedSignRequest(*testCase.Sign)
+		if err == nil {
+			fact, err = runtime.CallSign(ctx, request, capabilities.sign.EditRequest)
+		}
+	case caseRevise:
+		var request generated.ReviseRequest
+		request, err = generatedReviseRequest(*testCase.Revise)
+		if err == nil {
+			fact, err = runtime.CallRevise(ctx, request, capabilities.revise.EditRequest)
 		}
 	case caseNegative:
-		fact, err = runtime.CallNegative(ctx, testCase.Negative.Mutation, capability)
+		operation := negativeOperation(*testCase.Negative)
+		capability := capabilities.process
+		if testCase.Negative.Mutation != mutationWrongRouteCapability {
+			switch operation {
+			case OperationSign:
+				capability = capabilities.sign
+			case OperationRevise:
+				capability = capabilities.revise
+			}
+		}
+		fact, err = runtime.CallNegativeOperation(
+			ctx, operation, testCase.Negative.Mutation, capability,
+		)
 	default:
 		err = NewExitError(ExitInternal)
 	}
@@ -148,6 +214,14 @@ func resultForCase(planned plannedCase, fact ResponseFact, class ExitClass) Resu
 		record.PolicyVerdict = &policy
 		record.ReplayClass = &replay
 	}
+	if fact.Sign != nil {
+		disposition := string(fact.Sign.Disposition)
+		record.Disposition = &disposition
+	}
+	if fact.Revise != nil {
+		disposition := string(fact.Revise.Disposition)
+		record.Disposition = &disposition
+	}
 	return record
 }
 
@@ -172,12 +246,55 @@ func expectationMatches(expectation fixtureExpectation, fact ResponseFact) bool 
 			expectation.PolicyVerdict != nil &&
 			string(fact.Process.Policy.Verdict) == *expectation.PolicyVerdict &&
 			expectation.ReplayClass != nil &&
-			string(fact.Process.Replay.Class) == *expectation.ReplayClass
+			string(fact.Process.Replay.Class) == *expectation.ReplayClass &&
+			expectedActionsMatch(expectation.Actions, fact.Process.Actions)
+	}
+	if fact.Sign != nil {
+		return expectedOperationMatches(expectation, fact.Sign)
+	}
+	if fact.Revise != nil {
+		return expectedOperationMatches(expectation, fact.Revise)
 	}
 	if fact.Error != nil {
 		return expectation.ErrorCode != nil && string(fact.Error.Code) == *expectation.ErrorCode
 	}
 	return false
+}
+
+// expectedOperationMatches compares every generated operation response fact.
+func expectedOperationMatches(
+	expectation fixtureExpectation,
+	actual *generated.OperationResponse,
+) bool {
+	return actual != nil &&
+		expectation.Operation != nil &&
+		string(actual.Operation) == *expectation.Operation &&
+		expectation.Result != nil &&
+		string(actual.Result) == *expectation.Result &&
+		expectation.Disposition != nil &&
+		string(actual.Disposition) == *expectation.Disposition &&
+		expectedActionsMatch(expectation.Actions, actual.Actions)
+}
+
+// expectedActionsMatch compares exact ordered generated action fields.
+func expectedActionsMatch(
+	expected *[]fixtureExpectedAction,
+	actual generated.ActionPlan,
+) bool {
+	if expected == nil {
+		return len(actual) == 0
+	}
+	if len(*expected) != len(actual) {
+		return false
+	}
+	for index, action := range *expected {
+		if action.Type != string(actual[index].Type) ||
+			action.Name != string(actual[index].Name) ||
+			action.Value != actual[index].Value {
+			return false
+		}
+	}
+	return true
 }
 
 // Smoke performs the generated health and readiness checks.

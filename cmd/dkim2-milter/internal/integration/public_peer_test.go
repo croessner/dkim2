@@ -60,6 +60,8 @@ const (
 	publicStartupTimeout     = 20 * time.Second
 	integrationFailOpen      = "fail_open"
 	integrationTempfailReply = "451 4.7.1 DKIM2 service unavailable\x00"
+	integrationModeInbound   = "inbound"
+	integrationModeOrigin    = "originator"
 )
 
 var executablePath string
@@ -101,7 +103,7 @@ func TestExecutableInboundSuccess(t *testing.T) {
 			return validFixtureProcessResponse()
 		},
 	})
-	process := startExecutable(t, fixture.endpoint, "inbound", "tempfail", 2*time.Second)
+	process := startExecutable(t, fixture.endpoint, integrationModeInbound, "tempfail", 2*time.Second)
 	peer := dialPublicPeer(t, process.socket)
 	defer peer.close()
 
@@ -125,7 +127,7 @@ func TestExecutableSigningModeMatrix(t *testing.T) {
 		wantHeaders []string
 	}{
 		{
-			name: "originator", mode: "originator",
+			name: integrationModeOrigin, mode: integrationModeOrigin,
 			operation: generated.Sign,
 			actions: generated.ActionPlan{
 				{Name: generated.MessageInstance, Type: generated.AddHeader, Value: "v=2; i=1"},
@@ -230,7 +232,7 @@ func TestExecutableFailurePolicyMatrix(t *testing.T) {
 	for _, testCase := range tests {
 		t.Run(testCase.name, func(t *testing.T) {
 			process := startExecutable(
-				t, testCase.endpoint(t), "inbound", testCase.failure, 100*time.Millisecond,
+				t, testCase.endpoint(t), integrationModeInbound, testCase.failure, 100*time.Millisecond,
 			)
 			peer := dialPublicPeer(t, process.socket)
 			frames := peer.standardTransaction(t)
@@ -264,7 +266,7 @@ func TestExecutableDaemonRejectUsesExactFixedReply(t *testing.T) {
 			return response
 		},
 	})
-	process := startExecutable(t, fixture.endpoint, "inbound", "tempfail", time.Second)
+	process := startExecutable(t, fixture.endpoint, integrationModeInbound, "tempfail", time.Second)
 	peer := dialPublicPeer(t, process.socket)
 	frames := peer.standardTransaction(t)
 	if len(frames) != 1 || frames[0].command != adapterReplyCode ||
@@ -312,7 +314,7 @@ func TestExecutablePartialActionDisconnectRecovers(t *testing.T) {
 			})
 		},
 	})
-	process := startExecutable(t, fixture.endpoint, "originator", "fail_open", time.Second)
+	process := startExecutable(t, fixture.endpoint, integrationModeOrigin, "fail_open", time.Second)
 	first := dialPublicPeer(t, process.socket)
 	if unixConnection, ok := first.connection.(*net.UnixConn); ok {
 		_ = unixConnection.SetReadBuffer(1024)
@@ -369,7 +371,7 @@ func TestExecutableAbortReuseAndMalformedDisconnect(t *testing.T) {
 			return validFixtureProcessResponse()
 		},
 	})
-	process := startExecutable(t, fixture.endpoint, "inbound", "tempfail", time.Second)
+	process := startExecutable(t, fixture.endpoint, integrationModeInbound, "tempfail", time.Second)
 
 	malformed := dialPublicPeer(t, process.socket)
 	if _, err := malformed.connection.Write([]byte{0, 0, 0, 0}); err != nil {
@@ -412,7 +414,7 @@ func TestExecutableOverloadAndSlowDisconnect(t *testing.T) {
 		},
 	})
 	process := startExecutable(
-		t, fixture.endpoint, "inbound", "tempfail", time.Second,
+		t, fixture.endpoint, integrationModeInbound, "tempfail", time.Second,
 		"  max_connections: 1\n  max_in_flight_messages: 1\n",
 	)
 	slow := dialPublicPeer(t, process.socket)
@@ -658,7 +660,7 @@ func startExecutable(
 	t.Cleanup(func() { _ = os.Chmod(capabilityParent, 0o700) })
 
 	signing := ""
-	if mode != "inbound" {
+	if mode != integrationModeInbound {
 		signing = "\nsigning:\n  tenant: tenant-a\n  domain: example.test"
 	}
 	document := fmt.Sprintf(`version: dkim2-milter-config-v1

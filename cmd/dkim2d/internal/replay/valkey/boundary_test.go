@@ -171,9 +171,41 @@ func TestWorkspaceBootstrapIsExactAndNonReleasable(t *testing.T) {
 	}
 	if !strings.Contains(makefile, "check-vendor:") ||
 		!strings.Contains(makefile, "go work vendor -o") ||
-		!strings.Contains(makefile, "check-openapi check-vendor govulncheck") {
+		!makeTargetHasPrerequisites(
+			makefile,
+			"guardrails",
+			"check-openapi",
+			"check-vendor",
+			"govulncheck",
+		) {
 		t.Fatal("workspace vendor reproducibility gate is missing from guardrails")
 	}
+}
+
+// makeTargetHasPrerequisites checks exact prerequisite fields without assuming
+// that later guardrails cannot be inserted between established requirements.
+func makeTargetHasPrerequisites(makefile, target string, required ...string) bool {
+	prefix := target + ":"
+	for _, line := range strings.Split(makefile, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) == 0 || fields[0] != prefix {
+			continue
+		}
+		for _, prerequisite := range required {
+			found := false
+			for _, field := range fields[1:] {
+				if field == prerequisite {
+					found = true
+					break
+				}
+			}
+			if !found {
+				return false
+			}
+		}
+		return true
+	}
+	return false
 }
 
 // productionGoFiles recursively returns hand-written and generated production Go files.

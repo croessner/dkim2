@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.test/dkim2/conformance/report.schema.json",
+  "$defs": {
+    "capabilities": {
+      "additionalProperties": false,
+      "properties": {
+        "daemon": {"const": "supported"},
+        "exim": {"const": "deferred_m17"},
+        "library": {"const": "supported"},
+        "milter": {"const": "partial"},
+        "postfix": {"const": "partial_linux"}
+      },
+      "required": ["library", "daemon", "milter", "postfix", "exim"],
+      "type": "object"
+    },
+    "case": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_sha256": {"items": {"pattern": "^[0-9a-f]{64}$", "type": "string"}, "maxItems": 32, "minItems": 1, "type": "array"},
+        "case_id": {"maxLength": 128, "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$", "type": "string"},
+        "class": {"enum": ["draft_normative", "rfc_normative", "documented_interpretation", "local_security_policy", "openapi_contract", "adapter_contract"]},
+        "error": {"enum": ["fixture_invalid", "artifact_tampered", "runner_failure", "timeout", "service_unavailable", "contract_violation", "privacy_violation"]},
+        "producer": {"maxLength": 64, "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$", "type": "string"},
+        "producer_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+        "state": {"enum": ["pass", "fail", "not_run", "not_applicable", "deferred"]},
+        "suite": {"maxLength": 128, "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$", "type": "string"}
+      },
+      "required": ["suite", "case_id", "class", "state", "artifact_sha256"],
+      "type": "object"
+    },
+    "count": {
+      "additionalProperties": false,
+      "properties": {
+        "class": {"enum": ["draft_normative", "rfc_normative", "documented_interpretation", "local_security_policy", "openapi_contract", "adapter_contract"]},
+        "count": {"maximum": 16384, "minimum": 0, "type": "integer"},
+        "state": {"enum": ["pass", "fail", "not_run", "not_applicable", "deferred"]}
+      },
+      "required": ["class", "state", "count"],
+      "type": "object"
+    },
+    "tool": {
+      "additionalProperties": false,
+      "properties": {
+        "digest": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+        "name": {"maxLength": 64, "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$", "type": "string"}
+      },
+      "required": ["name", "digest"],
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "base_revision": {"pattern": "^[0-9a-f]{40}$", "type": "string"},
+    "candidate_snapshot_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+    "capabilities": {"$ref": "#/$defs/capabilities"},
+    "cases": {"items": {"$ref": "#/$defs/case"}, "maxItems": 16384, "type": "array"},
+    "counts": {"items": {"$ref": "#/$defs/count"}, "maxItems": 30, "type": "array"},
+    "dns_draft": {"const": "draft-chuang-dkim2-dns-04"},
+    "manifest_schema": {"const": "dkim2.conformance-manifest.v1"},
+    "manifest_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+    "message_draft": {"const": "draft-ietf-dkim-dkim2-spec-04"},
+    "overall": {"enum": ["pass", "fail"]},
+    "platform": {"enum": ["portable", "linux"]},
+    "profile": {"enum": ["portable", "full"]},
+    "schema": {"const": "dkim2.conformance-report.v1"},
+    "tools": {"items": {"$ref": "#/$defs/tool"}, "maxItems": 64, "minItems": 1, "type": "array"}
+  },
+  "required": ["schema", "message_draft", "dns_draft", "manifest_schema", "manifest_sha256", "base_revision", "candidate_snapshot_sha256", "profile", "platform", "capabilities", "tools", "cases", "counts", "overall"],
+  "type": "object"
+}

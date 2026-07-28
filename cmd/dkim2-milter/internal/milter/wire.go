@@ -326,12 +326,12 @@ func (s *Session) handleHelo(payload []byte) error {
 	return nil
 }
 
-// handleMail admits a transaction before retaining exact reverse-path bytes.
+// handleMail admits a transaction before retaining one normalized RFC 5321 reverse-path.
 func (s *Session) handleMail(payload []byte) error {
-	if s.state != stateHelo || !validESMTPCallback(payload, 256, true) {
+	path, ok := normalizedESMTPCallbackPath(payload, 256, true)
+	if s.state != stateHelo || !ok {
 		return &Error{Class: FailureContract}
 	}
-	path := firstNULField(payload)
 	s.smtpUTF8 = callbackHasParameter(payload, "SMTPUTF8")
 	if !asciiBytes(path) && !s.smtpUTF8 {
 		return &Error{Class: FailureFidelity}
@@ -347,14 +347,13 @@ func (s *Session) handleMail(payload []byte) error {
 	return nil
 }
 
-// handleRecipient validates and retains one ordered envelope recipient.
+// handleRecipient validates and retains one ordered normalized RFC 5321 recipient.
 func (s *Session) handleRecipient(payload []byte) error {
-	if (s.state != stateMail && s.state != stateRecipients) ||
-		!validESMTPCallback(payload, 256, false) ||
+	path, ok := normalizedESMTPCallbackPath(payload, 256, false)
+	if (s.state != stateMail && s.state != stateRecipients) || !ok ||
 		len(s.recipients) >= s.limits.RecipientCount {
 		return &Error{Class: FailureContract}
 	}
-	path := firstNULField(payload)
 	if s.mode != modeInbound && len(s.recipients) >= 1 {
 		return &Error{Class: FailureContract}
 	}
@@ -962,24 +961,69 @@ func reconstructedFoldedValueLength(name, value []byte) (int, bool) {
 
 // validESMTPCallback validates an exact path plus bounded ESMTP arguments.
 func validESMTPCallback(payload []byte, maximum int, allowNull bool) bool {
+	_, ok := validatedESMTPCallbackPath(payload, maximum, allowNull)
+	return ok
+}
+
+// normalizedESMTPCallbackPath validates callback arguments and normalizes Postfix's
+// unbracketed non-SMTP simulation into the RFC 5321 path form used by DKIM2.
+func normalizedESMTPCallbackPath(payload []byte, maximum int, allowNull bool) ([]byte, bool) {
+	path, ok := validatedESMTPCallbackPath(payload, maximum, allowNull)
+	if !ok {
+		return nil, false
+	}
+	return normalizeMilterEnvelopePath(path, allowNull)
+}
+
+// validatedESMTPCallbackPath returns the accepted callback path without
+// allocating or changing its Postfix-specific framing.
+func validatedESMTPCallbackPath(payload []byte, maximum int, allowNull bool) ([]byte, bool) {
 	if len(payload) < 1 || len(payload) > maximum+1+4096 || payload[len(payload)-1] != 0 {
-		return false
+		return nil, false
 	}
 	path, next, ok := nextNULField(payload, 0)
-	if !ok || len(path) > maximum || !validEnvelopePath(path, allowNull) {
-		return false
+	if !ok || len(path) > maximum || !validMilterEnvelopePath(path, allowNull) {
+		return nil, false
 	}
 	for next < len(payload) {
 		argument, following, present := nextNULField(payload, next)
 		if !present {
-			return false
+			return nil, false
 		}
 		if !validESMTPArgument(argument) {
-			return false
+			return nil, false
 		}
 		next = following
 	}
-	return true
+	return path, true
+}
+
+// normalizeMilterEnvelopePath preserves framed paths and unambiguously frames
+// the bare mailbox spelling emitted by Postfix for non-SMTP submissions.
+func normalizeMilterEnvelopePath(path []byte, allowNull bool) ([]byte, bool) {
+	if !validMilterEnvelopePath(path, allowNull) {
+		return nil, false
+	}
+	if len(path) >= 2 && path[0] == '<' && path[len(path)-1] == '>' {
+		return bytes.Clone(path), true
+	}
+	normalized := make([]byte, 0, len(path)+2)
+	normalized = append(normalized, '<')
+	normalized = append(normalized, path...)
+	normalized = append(normalized, '>')
+	return normalized, true
+}
+
+// validMilterEnvelopePath accepts RFC framing or Postfix's unambiguous bare
+// non-SMTP callback spelling without allocating.
+func validMilterEnvelopePath(path []byte, allowNull bool) bool {
+	if validEnvelopePath(path, allowNull) {
+		return true
+	}
+	if bytes.ContainsAny(path, "<>") {
+		return false
+	}
+	return validEnvelopePathInner(path, allowNull)
 }
 
 // validSingleNUL accepts one bounded NUL-terminated value.
@@ -1145,9 +1189,17 @@ func validEnvelopePath(path []byte, allowNull bool) bool {
 	if len(path) < 2 || len(path) > 256 || path[0] != '<' || path[len(path)-1] != '>' {
 		return false
 	}
-	inner := path[1 : len(path)-1]
+	return validEnvelopePathInner(path[1:len(path)-1], allowNull)
+}
+
+// validEnvelopePathInner checks one bounded mailbox or permitted null path
+// after the callback-specific framing decision has been made.
+func validEnvelopePathInner(inner []byte, allowNull bool) bool {
 	if len(inner) == 0 {
 		return allowNull
+	}
+	if len(inner) > 254 {
+		return false
 	}
 	if inner[0] == '@' {
 		separator := bytes.IndexByte(inner, ':')

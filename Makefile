@@ -37,6 +37,10 @@ help:
 		'  make check-protected-platforms verify protected-loader build tags' \
 		'  make vendor       regenerate the workspace vendor tree' \
 		'  make check-vendor  verify reproducible workspace vendoring' \
+		'  make check-conformance validate conformance schemas, manifest, digests, and deferrals' \
+		'  make conformance   run the portable conformance profile and render reports' \
+		'  make conformance-postfix run the isolated real Postfix qualification' \
+		'  make conformance-all run and render the complete Linux-backed profile' \
 		'  make guardrails   run the local quality gate'
 
 .PHONY: fmt
@@ -218,5 +222,24 @@ check-protected-platforms:
 		GOCACHE="$$output/cache" CGO_ENABLED=0 go test -run '^TestDarwinNoCGOProtectedLoadingFailsClosed$$' ./cmd/dkim2-milter/internal/securefile; \
 	fi
 
+.PHONY: check-conformance
+check-conformance:
+	@GOCACHE="$${GOCACHE:-/tmp/dkim2-go-build-cache}" \
+		go -C tools run ./cmd/conformance -root .. check
+
+.PHONY: conformance
+conformance:
+	@GOCACHE="$${GOCACHE:-/tmp/dkim2-go-build-cache}" \
+		go -C tools run ./cmd/conformance -root .. -profile portable report
+
+.PHONY: conformance-postfix
+conformance-postfix:
+	@contrib/qualification/postfix-milter/run.sh .artifacts/conformance-postfix
+
+.PHONY: conformance-all
+conformance-all:
+	@GOCACHE="$${GOCACHE:-/tmp/dkim2-go-build-cache}" \
+		go -C tools run ./cmd/conformance -root .. -profile full report
+
 .PHONY: guardrails
-guardrails: fmt vet lint test race check-protected-platforms check-openapi check-vendor govulncheck
+guardrails: fmt vet lint test race check-protected-platforms check-openapi check-vendor check-conformance conformance govulncheck

@@ -15,6 +15,8 @@ import (
 const daemonProcessBodyLimit = int64(47_878_316)
 
 const fixedNegativeBody = `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-04","message":{"raw_rfc5322_base64":""},"smtp":{"mail_from":"","rcpt_to":[""]}}`
+const fixedNegativeSignBody = `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-04","message":{"raw_rfc5322_base64":""},"smtp":{"mail_from":"","rcpt_to":[""]},"context":{"tenant":"test","domain":"example.test"}}`
+const fixedNegativeReviseBody = `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-04","message":{"raw_rfc5322_base64":""},"smtp":{"mail_from":"","rcpt_to":[""]},"incoming_smtp":{"mail_from":"","rcpt_to":[""]},"context":{"tenant":"test","domain":"example.test"}}`
 
 // CallNegative executes one closed raw-contract mutation.
 func (r *Runtime) CallNegative(
@@ -25,7 +27,25 @@ func (r *Runtime) CallNegative(
 	if r == nil || r.raw == nil || !validNegativeMutation(mutation) || capability == nil {
 		return ResponseFact{}, NewExitError(ExitInternal)
 	}
-	request, err := buildNegativeRequest(ctx, r.serverURL, mutation, capability)
+	return r.CallNegativeOperation(
+		ctx, OperationProcess, mutation, capability,
+	)
+}
+
+// CallNegativeOperation executes one closed raw mutation on one declared route.
+func (r *Runtime) CallNegativeOperation(
+	ctx context.Context,
+	operation Operation,
+	mutation string,
+	capability *Capability,
+) (ResponseFact, error) {
+	if r == nil || r.raw == nil || !validNegativeMutation(mutation) ||
+		capability == nil {
+		return ResponseFact{}, NewExitError(ExitInternal)
+	}
+	request, err := buildNegativeOperationRequest(
+		ctx, r.serverURL, operation, mutation, capability,
+	)
 	if err != nil {
 		return ResponseFact{}, err
 	}
@@ -33,13 +53,26 @@ func (r *Runtime) CallNegative(
 	if err != nil {
 		return ResponseFact{}, classifyTransportError(err)
 	}
-	return classifyNegativeResponse(response)
+	return classifyNegativeResponse(operation, response)
 }
 
 // buildNegativeRequest constructs only one declared route-family mutation.
 func buildNegativeRequest(
 	ctx context.Context,
 	serverURL string,
+	mutation string,
+	capability *Capability,
+) (*http.Request, error) {
+	return buildNegativeOperationRequest(
+		ctx, serverURL, OperationProcess, mutation, capability,
+	)
+}
+
+// buildNegativeOperationRequest constructs one declared route-family mutation.
+func buildNegativeOperationRequest(
+	ctx context.Context,
+	serverURL string,
+	operation Operation,
 	mutation string,
 	capability *Capability,
 ) (*http.Request, error) {
@@ -50,11 +83,16 @@ func buildNegativeRequest(
 	if err != nil || !validNegativeMutation(mutation) {
 		return nil, NewExitError(ExitInternal)
 	}
-	target := parsed.String() + processPath
+	path, fixedBody, ok := negativeRoute(operation)
+	if !ok || mutation == mutationWrongRouteCapability &&
+		operation == OperationProcess {
+		return nil, NewExitError(ExitInternal)
+	}
+	target := parsed.String() + path
 	method := http.MethodPost
 	contentType := mediaTypeJSON
-	var body io.Reader = strings.NewReader(fixedNegativeBody)
-	contentLength := int64(len(fixedNegativeBody))
+	var body io.Reader = strings.NewReader(fixedBody)
+	contentLength := int64(len(fixedBody))
 
 	switch mutation {
 	case mutationUnsupportedMedia:
@@ -63,11 +101,11 @@ func buildNegativeRequest(
 		body = strings.NewReader(`{`)
 		contentLength = 1
 	case mutationUnknownMember:
-		value := strings.TrimSuffix(fixedNegativeBody, "}") + `,"unknown":true}`
+		value := strings.TrimSuffix(fixedBody, "}") + `,"unknown":true}`
 		body = strings.NewReader(value)
 		contentLength = int64(len(value))
 	case mutationTruncatedBody:
-		value := strings.TrimSuffix(fixedNegativeBody, "}")
+		value := strings.TrimSuffix(fixedBody, "}")
 		body = strings.NewReader(value)
 		contentLength = int64(len(value))
 	case mutationBodyOverLimit:
@@ -80,7 +118,7 @@ func buildNegativeRequest(
 	case mutationContaminatedTarget:
 		target += "?unexpected=1"
 	case mutationMissingCapability, mutationDuplicateCapability, mutationEmptyCapability,
-		mutationMismatchingCapability:
+		mutationMismatchingCapability, mutationWrongRouteCapability:
 	default:
 		return nil, NewExitError(ExitInternal)
 	}
@@ -96,17 +134,37 @@ func buildNegativeRequest(
 	if err := capability.editNegativeRequest(request, mutation); err != nil {
 		return nil, err
 	}
-	if !validNegativeRequestShape(request, parsed, mutation) {
+	if !validNegativeRequestShape(request, parsed, operation, mutation) {
 		return nil, NewExitError(ExitInternal)
 	}
 	return request, nil
 }
 
+// negativeRoute returns the fixed generated-family body for one operation.
+func negativeRoute(operation Operation) (string, string, bool) {
+	switch operation {
+	case OperationProcess:
+		return processPath, fixedNegativeBody, true
+	case OperationSign:
+		return signPath, fixedNegativeSignBody, true
+	case OperationRevise:
+		return revisePath, fixedNegativeReviseBody, true
+	default:
+		return "", "", false
+	}
+}
+
 // validNegativeRequestShape proves no mutation escaped its declared authority.
-func validNegativeRequestShape(request *http.Request, authority *url.URL, mutation string) bool {
+func validNegativeRequestShape(
+	request *http.Request,
+	authority *url.URL,
+	operation Operation,
+	mutation string,
+) bool {
+	path, _, ok := negativeRoute(operation)
 	if request == nil || request.URL == nil || authority == nil ||
 		request.URL.Scheme != schemeHTTP || request.URL.Host != authority.Host ||
-		request.URL.Path != processPath || request.URL.Fragment != "" {
+		!ok || request.URL.Path != path || request.URL.Fragment != "" {
 		return false
 	}
 	if mutation == mutationContaminatedTarget {
@@ -116,7 +174,10 @@ func validNegativeRequestShape(request *http.Request, authority *url.URL, mutati
 }
 
 // classifyNegativeResponse validates bounded raw-boundary error metadata.
-func classifyNegativeResponse(response *http.Response) (ResponseFact, error) {
+func classifyNegativeResponse(
+	operation Operation,
+	response *http.Response,
+) (ResponseFact, error) {
 	if response == nil || response.Body == nil {
 		return ResponseFact{}, NewExitError(ExitContract)
 	}
@@ -124,7 +185,7 @@ func classifyNegativeResponse(response *http.Response) (ResponseFact, error) {
 	if err != nil {
 		return ResponseFact{}, err
 	}
-	if !validResponseMetadata(OperationProcess, response, body) {
+	if !validResponseMetadata(operation, response, body) {
 		return ResponseFact{}, NewExitError(ExitContract)
 	}
 	var value generated.ErrorResponse
@@ -133,7 +194,7 @@ func classifyNegativeResponse(response *http.Response) (ResponseFact, error) {
 		return ResponseFact{}, NewExitError(ExitContract)
 	}
 	return ResponseFact{
-		Operation: OperationProcess,
+		Operation: operation,
 		Status:    response.StatusCode,
 		Error:     &value,
 	}, nil

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"sort"
@@ -21,6 +22,8 @@ const (
 	caseHealth                    = "health"
 	caseReadiness                 = "readiness"
 	caseProcess                   = "process"
+	caseSign                      = "sign"
+	caseRevise                    = "revise"
 	caseNegative                  = "negative"
 	mutationMissingCapability     = "missing_capability"
 	mutationDuplicateCapability   = "duplicate_capability"
@@ -33,6 +36,7 @@ const (
 	mutationBodyOverLimit         = "body_over_limit"
 	mutationUnsupportedMethod     = "unsupported_method"
 	mutationContaminatedTarget    = "contaminated_request_target"
+	mutationWrongRouteCapability  = "wrong_route_capability"
 	maxFixtureBytes               = 1024 * 1024
 	maxAggregateBytes             = 32 * 1024 * 1024
 	maxFixtureDepth               = 16
@@ -42,6 +46,7 @@ const (
 	maxRecipients                 = 2000
 	maxEnvelopeText               = 256
 	expectedForbiddenCode         = "forbidden"
+	expectedInvalidJSONCode       = "invalid_json"
 )
 
 // fixtureDocument is the strict test-harness model, not an HTTP response model.
@@ -57,6 +62,8 @@ type fixtureCase struct {
 	Case     string               `json:"case"`
 	Kind     string               `json:"kind"`
 	Process  *fixtureProcessInput `json:"process,omitempty"`
+	Sign     *fixtureSignInput    `json:"sign,omitempty"`
+	Revise   *fixtureReviseInput  `json:"revise,omitempty"`
 	Negative *negativeInput       `json:"negative,omitempty"`
 	Expect   fixtureExpectation   `json:"expect"`
 }
@@ -64,25 +71,60 @@ type fixtureCase struct {
 // fixtureProcessInput holds generated-request-compatible scalar inputs.
 type fixtureProcessInput struct {
 	MessageBase64 string   `json:"raw_rfc5322_base64"`
+	Fidelity      *string  `json:"fidelity,omitempty"`
 	MailFrom      string   `json:"mail_from"`
 	Recipients    []string `json:"rcpt_to"`
+	AuthservID    *string  `json:"authserv_id,omitempty"`
+}
+
+// fixtureSignInput holds protected originator inputs before generated mapping.
+type fixtureSignInput struct {
+	MessageBase64 string   `json:"raw_rfc5322_base64"`
+	Fidelity      *string  `json:"fidelity,omitempty"`
+	MailFrom      string   `json:"mail_from"`
+	Recipients    []string `json:"rcpt_to"`
+	Tenant        string   `json:"tenant"`
+	Domain        string   `json:"domain"`
+}
+
+// fixtureReviseInput holds protected inherited and outgoing revision inputs.
+type fixtureReviseInput struct {
+	MessageBase64      string   `json:"raw_rfc5322_base64"`
+	Fidelity           *string  `json:"fidelity,omitempty"`
+	MailFrom           string   `json:"mail_from"`
+	Recipients         []string `json:"rcpt_to"`
+	IncomingMailFrom   string   `json:"incoming_mail_from"`
+	IncomingRecipients []string `json:"incoming_rcpt_to"`
+	Tenant             string   `json:"tenant"`
+	Domain             string   `json:"domain"`
 }
 
 // negativeInput selects one closed raw-contract mutation.
 type negativeInput struct {
-	Mutation string `json:"mutation"`
+	Mutation  string  `json:"mutation"`
+	Operation *string `json:"operation,omitempty"`
 }
 
 // fixtureExpectation contains only allowlisted typed response assertions.
 type fixtureExpectation struct {
-	HTTPStatus        int     `json:"http_status"`
-	HealthStatus      *string `json:"health_status,omitempty"`
-	ReadinessStatus   *string `json:"readiness_status,omitempty"`
-	ErrorCode         *string `json:"error_code,omitempty"`
-	Disposition       *string `json:"disposition,omitempty"`
-	VerificationState *string `json:"verification_state,omitempty"`
-	PolicyVerdict     *string `json:"policy_verdict,omitempty"`
-	ReplayClass       *string `json:"replay_class,omitempty"`
+	HTTPStatus        int                      `json:"http_status"`
+	HealthStatus      *string                  `json:"health_status,omitempty"`
+	ReadinessStatus   *string                  `json:"readiness_status,omitempty"`
+	ErrorCode         *string                  `json:"error_code,omitempty"`
+	Disposition       *string                  `json:"disposition,omitempty"`
+	VerificationState *string                  `json:"verification_state,omitempty"`
+	PolicyVerdict     *string                  `json:"policy_verdict,omitempty"`
+	ReplayClass       *string                  `json:"replay_class,omitempty"`
+	Operation         *string                  `json:"operation,omitempty"`
+	Result            *string                  `json:"result,omitempty"`
+	Actions           *[]fixtureExpectedAction `json:"actions,omitempty"`
+}
+
+// fixtureExpectedAction freezes one exact ordered generated action.
+type fixtureExpectedAction struct {
+	Type  string `json:"type"`
+	Name  string `json:"name"`
+	Value string `json:"value"`
 }
 
 // plannedCase binds one validated fixture identity to one case.
@@ -93,9 +135,11 @@ type plannedCase struct {
 
 // ExecutionPlan is one immutable deterministic set of validated cases.
 type ExecutionPlan struct {
-	fixtures           []string
-	cases              []plannedCase
-	requiresCapability bool
+	fixtures                 []string
+	cases                    []plannedCase
+	requiresCapability       bool
+	requiresSignCapability   bool
+	requiresReviseCapability bool
 }
 
 // FixtureIdentifiers returns a defensive copy of deterministic fixture IDs.
@@ -157,8 +201,25 @@ func LoadExecutionPlan(paths []string) (ExecutionPlan, error) {
 				return ExecutionPlan{}, NewExitError(ExitFixture)
 			}
 			caseIDs[testCase.Case] = struct{}{}
-			if testCase.Kind == caseProcess || testCase.Kind == caseNegative {
+			if testCase.Kind == caseProcess {
 				plan.requiresCapability = true
+			}
+			if testCase.Kind == caseSign {
+				plan.requiresSignCapability = true
+			}
+			if testCase.Kind == caseRevise {
+				plan.requiresReviseCapability = true
+			}
+			if testCase.Kind == caseNegative {
+				operation := negativeOperation(*testCase.Negative)
+				if testCase.Negative.Mutation == mutationWrongRouteCapability ||
+					operation == OperationProcess {
+					plan.requiresCapability = true
+				} else if operation == OperationSign {
+					plan.requiresSignCapability = true
+				} else if operation == OperationRevise {
+					plan.requiresReviseCapability = true
+				}
 			}
 			plan.cases = append(plan.cases, plannedCase{fixture: document.Fixture, value: testCase})
 		}
@@ -312,28 +373,33 @@ func validateFixtureCase(testCase fixtureCase) (int, error) {
 	}
 	switch testCase.Kind {
 	case caseHealth:
-		if testCase.Process != nil || testCase.Negative != nil ||
-			testCase.Expect.HTTPStatus != 200 ||
-			testCase.Expect.HealthStatus == nil || *testCase.Expect.HealthStatus != "alive" ||
-			expectationPointerCount(testCase.Expect) != 1 {
+		if !validStatusFixture(testCase, caseHealth) {
 			return 0, NewExitError(ExitFixture)
 		}
 	case caseReadiness:
-		if testCase.Process != nil || testCase.Negative != nil ||
-			testCase.Expect.HTTPStatus != 200 ||
-			testCase.Expect.ReadinessStatus == nil || *testCase.Expect.ReadinessStatus != "ready" ||
-			expectationPointerCount(testCase.Expect) != 1 {
+		if !validStatusFixture(testCase, caseReadiness) {
 			return 0, NewExitError(ExitFixture)
 		}
 	case caseProcess:
-		if testCase.Process == nil || testCase.Negative != nil {
+		if testCase.Process == nil || testCase.operationInputCount() != 1 {
 			return 0, NewExitError(ExitFixture)
 		}
 		return validateProcessInput(*testCase.Process, testCase.Expect)
+	case caseSign:
+		if testCase.Sign == nil || testCase.operationInputCount() != 1 {
+			return 0, NewExitError(ExitFixture)
+		}
+		return validateSignInput(*testCase.Sign, testCase.Expect)
+	case caseRevise:
+		if testCase.Revise == nil || testCase.operationInputCount() != 1 {
+			return 0, NewExitError(ExitFixture)
+		}
+		return validateReviseInput(*testCase.Revise, testCase.Expect)
 	case caseNegative:
-		if testCase.Process != nil || testCase.Negative == nil ||
+		if testCase.Negative == nil || testCase.operationInputCount() != 1 ||
 			!validNegativeMutation(testCase.Negative.Mutation) ||
-			testCase.Expect.ErrorCode == nil || expectationPointerCount(testCase.Expect) != 1 ||
+			!validNegativeOperation(*testCase.Negative) ||
+			testCase.Expect.ErrorCode == nil || expectationFieldCount(testCase.Expect) != 1 ||
 			!validNegativeExpectation(
 				testCase.Negative.Mutation,
 				testCase.Expect.HTTPStatus,
@@ -347,17 +413,50 @@ func validateFixtureCase(testCase fixtureCase) (int, error) {
 	return 0, nil
 }
 
+// validStatusFixture checks one unauthenticated generated status expectation.
+func validStatusFixture(testCase fixtureCase, kind string) bool {
+	if testCase.operationInputCount() != 0 ||
+		testCase.Expect.HTTPStatus != http.StatusOK ||
+		expectationFieldCount(testCase.Expect) != 1 {
+		return false
+	}
+	switch kind {
+	case caseHealth:
+		return testCase.Expect.HealthStatus != nil &&
+			*testCase.Expect.HealthStatus == "alive"
+	case caseReadiness:
+		return testCase.Expect.ReadinessStatus != nil &&
+			*testCase.Expect.ReadinessStatus == "ready"
+	default:
+		return false
+	}
+}
+
+// operationInputCount returns the number of mutually exclusive case payloads.
+func (c fixtureCase) operationInputCount() int {
+	count := 0
+	for _, present := range []bool{
+		c.Process != nil, c.Sign != nil, c.Revise != nil, c.Negative != nil,
+	} {
+		if present {
+			count++
+		}
+	}
+	return count
+}
+
 // validNegativeExpectation binds each closed request mutation to the daemon's
 // authoritative OpenAPI error projection.
 func validNegativeExpectation(mutation string, status int, code string) bool {
 	switch mutation {
 	case mutationMissingCapability, mutationDuplicateCapability,
-		mutationEmptyCapability, mutationMismatchingCapability:
+		mutationEmptyCapability, mutationMismatchingCapability,
+		mutationWrongRouteCapability:
 		return status == 403 && code == expectedForbiddenCode
 	case mutationUnsupportedMedia:
 		return status == 415 && code == "unsupported_media_type"
 	case mutationMalformedJSON, mutationTruncatedBody:
-		return status == 400 && code == "invalid_json"
+		return status == 400 && code == expectedInvalidJSONCode
 	case mutationUnknownMember, mutationContaminatedTarget:
 		return status == 400 && code == "invalid_contract"
 	case mutationBodyOverLimit:
@@ -369,46 +468,229 @@ func validNegativeExpectation(mutation string, status int, code string) bool {
 	}
 }
 
-// expectationPointerCount counts explicitly selected allowlisted assertions.
-func expectationPointerCount(expectation fixtureExpectation) int {
+// negativeOperation returns the explicit closed route or the compatible default.
+func negativeOperation(input negativeInput) Operation {
+	if input.Operation == nil {
+		return OperationProcess
+	}
+	return Operation(*input.Operation)
+}
+
+// validNegativeOperation checks route/mutation coherence without protected access.
+func validNegativeOperation(input negativeInput) bool {
+	operation := negativeOperation(input)
+	if operation != OperationProcess && operation != OperationSign &&
+		operation != OperationRevise {
+		return false
+	}
+	return input.Mutation != mutationWrongRouteCapability ||
+		input.Operation != nil &&
+			(operation == OperationSign || operation == OperationRevise)
+}
+
+// expectationFieldCount counts explicitly selected allowlisted assertions.
+func expectationFieldCount(expectation fixtureExpectation) int {
 	count := 0
 	for _, value := range []*string{
 		expectation.HealthStatus, expectation.ReadinessStatus, expectation.ErrorCode,
 		expectation.Disposition, expectation.VerificationState,
 		expectation.PolicyVerdict, expectation.ReplayClass,
+		expectation.Operation, expectation.Result,
 	} {
 		if value != nil {
 			count++
 		}
+	}
+	if expectation.Actions != nil {
+		count++
 	}
 	return count
 }
 
 // validateProcessInput bounds protected request values and expected projections.
 func validateProcessInput(input fixtureProcessInput, expectation fixtureExpectation) (int, error) {
-	decoded, err := base64.StdEncoding.Strict().DecodeString(input.MessageBase64)
-	if err != nil || base64.StdEncoding.EncodeToString(decoded) != input.MessageBase64 ||
-		len(input.MailFrom) > maxEnvelopeText ||
-		len(input.Recipients) == 0 || len(input.Recipients) > maxRecipients {
+	decoded, err := validateMessageAndEnvelope(
+		input.MessageBase64, input.Fidelity, input.MailFrom, input.Recipients,
+	)
+	if err != nil {
 		return 0, NewExitError(ExitFixture)
 	}
-	for _, recipient := range input.Recipients {
-		if len(recipient) > maxEnvelopeText || !utf8.ValidString(recipient) {
-			return 0, NewExitError(ExitFixture)
-		}
+	if input.AuthservID != nil && !validDomain(*input.AuthservID) {
+		return 0, NewExitError(ExitFixture)
 	}
 	if !utf8.ValidString(input.MailFrom) ||
 		expectation.Disposition == nil || expectation.VerificationState == nil ||
 		expectation.PolicyVerdict == nil || expectation.ReplayClass == nil ||
-		expectationPointerCount(expectation) != 4 ||
+		expectation.Actions == nil ||
+		expectationFieldCount(expectation) != 5 ||
 		!validOptionalEnum(expectation.Disposition, "accept", "reject", "tempfail", "continue") ||
 		!validOptionalEnum(expectation.VerificationState, "PASS", "FAIL", "PERMERROR", "TEMPERROR") ||
 		!validOptionalEnum(expectation.PolicyVerdict, "accept", "reject", "tempfail", "continue") ||
 		!validOptionalEnum(expectation.ReplayClass,
-			"not_checked", "disabled", "first_seen", "replayed", "indeterminate") {
+			"not_checked", "disabled", "first_seen", "replayed", "indeterminate") ||
+		!validExpectedActions(expectation.Actions) {
 		return 0, NewExitError(ExitFixture)
 	}
+	return decoded, nil
+}
+
+// validateSignInput checks one originator request and complete response expectation.
+func validateSignInput(input fixtureSignInput, expectation fixtureExpectation) (int, error) {
+	decoded, err := validateMessageAndEnvelope(
+		input.MessageBase64, input.Fidelity, input.MailFrom, input.Recipients,
+	)
+	if err != nil || input.Fidelity == nil ||
+		!validTenant(input.Tenant) || !validDomain(input.Domain) ||
+		!validOperationExpectation(caseSign, expectation) {
+		return 0, NewExitError(ExitFixture)
+	}
+	return decoded, nil
+}
+
+// validateReviseInput checks inherited/outgoing envelopes and revision expectation.
+func validateReviseInput(input fixtureReviseInput, expectation fixtureExpectation) (int, error) {
+	decoded, err := validateMessageAndEnvelope(
+		input.MessageBase64, input.Fidelity, input.MailFrom, input.Recipients,
+	)
+	if err != nil {
+		return 0, err
+	}
+	if _, err := validateMessageAndEnvelope(
+		input.MessageBase64, input.Fidelity,
+		input.IncomingMailFrom, input.IncomingRecipients,
+	); err != nil || input.Fidelity == nil ||
+		!validTenant(input.Tenant) || !validDomain(input.Domain) ||
+		!validOperationExpectation(caseRevise, expectation) {
+		return 0, NewExitError(ExitFixture)
+	}
+	return decoded, nil
+}
+
+// validateMessageAndEnvelope checks canonical Base64, fidelity, and SMTP bounds.
+func validateMessageAndEnvelope(
+	messageBase64 string,
+	fidelity *string,
+	mailFrom string,
+	recipients []string,
+) (int, error) {
+	decoded, err := base64.StdEncoding.Strict().DecodeString(messageBase64)
+	if err != nil || base64.StdEncoding.EncodeToString(decoded) != messageBase64 ||
+		len(mailFrom) > maxEnvelopeText ||
+		len(recipients) == 0 || len(recipients) > maxRecipients ||
+		!utf8.ValidString(mailFrom) {
+		return 0, NewExitError(ExitFixture)
+	}
+	if fidelity != nil && *fidelity != string(generated.RawRfc5322) &&
+		*fidelity != string(generated.MilterReconstructedCrlf) {
+		return 0, NewExitError(ExitFixture)
+	}
+	for _, recipient := range recipients {
+		if len(recipient) > maxEnvelopeText || !utf8.ValidString(recipient) {
+			return 0, NewExitError(ExitFixture)
+		}
+	}
 	return len(decoded), nil
+}
+
+// validOperationExpectation checks exact generated operation result and actions.
+func validOperationExpectation(kind string, expectation fixtureExpectation) bool {
+	if expectation.HTTPStatus != http.StatusOK ||
+		expectation.Operation == nil || *expectation.Operation != kind ||
+		expectation.Result == nil ||
+		expectation.Disposition == nil ||
+		expectation.Actions == nil ||
+		expectationFieldCount(expectation) != 4 ||
+		!validOptionalEnum(expectation.Result, "pass", "fail", "permerror", "temperror") ||
+		!validOptionalEnum(expectation.Disposition, "accept", "reject", "tempfail", "continue") ||
+		!validExpectedActions(expectation.Actions) {
+		return false
+	}
+	result := generated.OperationResponseResult(*expectation.Result)
+	disposition := generated.Disposition(*expectation.Disposition)
+	operation := generated.OperationResponseOperation(*expectation.Operation)
+	actions := make(generated.ActionPlan, len(*expectation.Actions))
+	for index, action := range *expectation.Actions {
+		actions[index] = generated.AddHeaderAction{
+			Type:  generated.AddHeaderActionType(action.Type),
+			Name:  generated.AddHeaderActionName(action.Name),
+			Value: action.Value,
+		}
+	}
+	return validOperationOutcome(result, disposition) &&
+		validOperationActions(operation, disposition, actions)
+}
+
+// validExpectedActions checks bounded exact action fields without interpreting values.
+func validExpectedActions(actions *[]fixtureExpectedAction) bool {
+	if actions == nil {
+		return true
+	}
+	if len(*actions) > 3 {
+		return false
+	}
+	for _, action := range *actions {
+		if action.Type != string(generated.AddHeader) ||
+			!generated.AddHeaderActionName(action.Name).Valid() ||
+			action.Value == "" || len(action.Value) > 65535 ||
+			strings.ContainsAny(action.Value, "\r\n\x00") {
+			return false
+		}
+	}
+	return true
+}
+
+// validTenant accepts one bounded canonical administrative identifier.
+func validTenant(value string) bool {
+	if value == "" || len(value) > 128 {
+		return false
+	}
+	for index, current := range []byte(value) {
+		if (current < 'a' || current > 'z') && (current < '0' || current > '9') &&
+			(index == 0 || current != '.' && current != '_' && current != '-') {
+			return false
+		}
+	}
+	return true
+}
+
+// validDomain accepts one canonical lower-case ASCII domain.
+func validDomain(value string) bool {
+	if value == "" || len(value) > 253 || value != strings.ToLower(value) {
+		return false
+	}
+	for _, label := range strings.Split(value, ".") {
+		if len(label) == 0 || len(label) > 63 ||
+			!asciiAlphanumeric(label[0]) ||
+			!asciiAlphanumeric(label[len(label)-1]) {
+			return false
+		}
+		for index, current := range []byte(label) {
+			if index > 0 && index < len(label)-1 &&
+				!asciiAlphanumeric(current) && current != '-' {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// asciiAlphanumeric reports whether one byte is lower-case DNS alphanumeric.
+func asciiAlphanumeric(value byte) bool {
+	return value >= 'a' && value <= 'z' || value >= '0' && value <= '9'
+}
+
+// generatedMessageInput maps one fixture message into the generated DTO.
+func generatedMessageInput(messageBase64 string, fidelity *string) (generated.MessageInput, error) {
+	message, err := wire.NewProtectedString(messageBase64)
+	if err != nil {
+		return generated.MessageInput{}, NewExitError(ExitFixture)
+	}
+	result := generated.MessageInput{RawRfc5322Base64: message}
+	if fidelity != nil {
+		value := generated.MessageInputFidelity(*fidelity)
+		result.Fidelity = &value
+	}
+	return result, nil
 }
 
 // validIdentifier checks one bounded lowercase ASCII fixture or case identifier.
@@ -431,7 +713,8 @@ func validNegativeMutation(value string) bool {
 	case mutationMissingCapability, mutationDuplicateCapability, mutationEmptyCapability,
 		mutationMismatchingCapability, mutationUnsupportedMedia, mutationMalformedJSON,
 		mutationUnknownMember, mutationTruncatedBody, mutationBodyOverLimit,
-		mutationUnsupportedMethod, mutationContaminatedTarget:
+		mutationUnsupportedMethod, mutationContaminatedTarget,
+		mutationWrongRouteCapability:
 		return true
 	default:
 		return false
@@ -440,25 +723,92 @@ func validNegativeMutation(value string) bool {
 
 // generatedProcessRequest maps protected fixture input only at the client boundary.
 func generatedProcessRequest(input fixtureProcessInput) (generated.ProcessRequest, error) {
-	message, err := wire.NewProtectedString(input.MessageBase64)
+	message, err := generatedMessageInput(input.MessageBase64, input.Fidelity)
 	if err != nil {
 		return generated.ProcessRequest{}, NewExitError(ExitFixture)
 	}
-	mailFrom, err := wire.NewProtectedString(input.MailFrom)
+	smtp, err := generatedSMTPInput(input.MailFrom, input.Recipients)
 	if err != nil {
-		return generated.ProcessRequest{}, NewExitError(ExitFixture)
+		return generated.ProcessRequest{}, err
 	}
-	recipients := make([]wire.ProtectedString, len(input.Recipients))
-	for index, recipient := range input.Recipients {
-		recipients[index], err = wire.NewProtectedString(recipient)
-		if err != nil {
-			return generated.ProcessRequest{}, NewExitError(ExitFixture)
-		}
-	}
-	return generated.ProcessRequest{
+	request := generated.ProcessRequest{
 		ApiVersion: generated.V1,
 		Draft:      generated.DraftIetfDkimDkim2Spec04,
-		Message:    generated.MessageInput{RawRfc5322Base64: message},
-		Smtp:       generated.SMTPInput{MailFrom: mailFrom, RcptTo: recipients},
+		Message:    message,
+		Smtp:       smtp,
+	}
+	if input.AuthservID != nil {
+		request.Reporting = &generated.ReportingContext{AuthservId: *input.AuthservID}
+	}
+	return request, nil
+}
+
+// generatedSignRequest maps one protected sign fixture at the generated boundary.
+func generatedSignRequest(input fixtureSignInput) (generated.SignRequest, error) {
+	message, err := generatedMessageInput(input.MessageBase64, input.Fidelity)
+	if err != nil {
+		return generated.SignRequest{}, err
+	}
+	smtp, err := generatedSMTPInput(input.MailFrom, input.Recipients)
+	if err != nil {
+		return generated.SignRequest{}, err
+	}
+	return generated.SignRequest{
+		ApiVersion: generated.V1,
+		Draft:      generated.DraftIetfDkimDkim2Spec04,
+		Message:    message,
+		Smtp:       smtp,
+		Context: generated.SigningContext{
+			Tenant: input.Tenant,
+			Domain: input.Domain,
+		},
 	}, nil
+}
+
+// generatedReviseRequest maps inherited and outgoing facts at one boundary.
+func generatedReviseRequest(input fixtureReviseInput) (generated.ReviseRequest, error) {
+	message, err := generatedMessageInput(input.MessageBase64, input.Fidelity)
+	if err != nil {
+		return generated.ReviseRequest{}, err
+	}
+	smtp, err := generatedSMTPInput(input.MailFrom, input.Recipients)
+	if err != nil {
+		return generated.ReviseRequest{}, err
+	}
+	incoming, err := generatedSMTPInput(
+		input.IncomingMailFrom, input.IncomingRecipients,
+	)
+	if err != nil {
+		return generated.ReviseRequest{}, err
+	}
+	return generated.ReviseRequest{
+		ApiVersion:   generated.V1,
+		Draft:        generated.DraftIetfDkimDkim2Spec04,
+		Message:      message,
+		Smtp:         smtp,
+		IncomingSmtp: incoming,
+		Context: generated.SigningContext{
+			Tenant: input.Tenant,
+			Domain: input.Domain,
+		},
+	}, nil
+}
+
+// generatedSMTPInput converts one validated envelope without copying DTO types.
+func generatedSMTPInput(
+	mailFromValue string,
+	recipientValues []string,
+) (generated.SMTPInput, error) {
+	mailFrom, err := wire.NewProtectedString(mailFromValue)
+	if err != nil {
+		return generated.SMTPInput{}, NewExitError(ExitFixture)
+	}
+	recipients := make([]wire.ProtectedString, len(recipientValues))
+	for index, recipient := range recipientValues {
+		recipients[index], err = wire.NewProtectedString(recipient)
+		if err != nil {
+			return generated.SMTPInput{}, NewExitError(ExitFixture)
+		}
+	}
+	return generated.SMTPInput{MailFrom: mailFrom, RcptTo: recipients}, nil
 }
