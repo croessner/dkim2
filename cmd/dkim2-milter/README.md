@@ -36,6 +36,27 @@ ACLs can be inspected. A `CGO_ENABLED=0` Darwin binary builds for portability
 evidence but fails protected loading closed. Linux production builds remain
 pure Go and support amd64 and arm64.
 
+Before activation, validate the strict configuration and its exact route
+capability without opening a socket or contacting the daemon:
+
+```text
+dkim2-milter validate --config /absolute/path/to/dkim2-milter.yaml
+```
+
+Validation is silent on success. It uses the same protected-file loader as the
+runtime and never creates, repairs, changes ownership of, or rewrites either
+file.
+
+After activation, the container probe is:
+
+```text
+dkim2-milter probe --config /absolute/path/to/dkim2-milter.yaml
+```
+
+It reloads the strict configuration and checks that its configured socket is a
+single-link Unix socket owned by the effective UID with no permissions for
+other users. It does not open a Milter session or contact the daemon.
+
 ## Configuration
 
 The stable root is `dkim2-milter-config-v1`. Configuration is strict: unknown

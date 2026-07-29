@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -288,6 +289,13 @@ func TestRunnerFailureIdentifiesOnlyTheClosedProducer(t *testing.T) {
 
 // TestConfiguredRunnersEmitExactEvidence proves every configured case has one producer.
 func TestConfiguredRunnersEmitExactEvidence(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Skip("loopback listeners are unavailable in this test environment")
+	}
+	if err := listener.Close(); err != nil {
+		t.Fatal("close loopback capability probe")
+	}
 	root := filepath.Clean(filepath.Join("..", "..", ".."))
 	manifest, _, err := conformance.LoadManifest(root, manifestPath)
 	if err != nil {

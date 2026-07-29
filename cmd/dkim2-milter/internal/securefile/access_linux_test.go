@@ -197,6 +197,41 @@ func TestClassifyLinuxFilesystemTypeRejectsRemoteAndOverlay(t *testing.T) {
 	}
 }
 
+// TestClassifyLinuxRootFilesystemTypeFreezesTheRootOnlyOverlayException.
+func TestClassifyLinuxRootFilesystemTypeFreezesTheRootOnlyOverlayException(t *testing.T) {
+	overlay, err := classifyLinuxRootFilesystemType(unix.OVERLAYFS_SUPER_MAGIC)
+	if err != nil || !overlay {
+		t.Fatal("overlay container root was rejected")
+	}
+	overlay, err = classifyLinuxRootFilesystemType(unix.EXT4_SUPER_MAGIC)
+	if err != nil || overlay {
+		t.Fatal("allowlisted non-overlay root was misclassified")
+	}
+	for _, value := range []int64{unix.NFS_SUPER_MAGIC, unix.CIFS_SUPER_MAGIC, 0} {
+		if _, err := classifyLinuxRootFilesystemType(value); !errorsIsSecure(err) {
+			t.Fatal("unsupported root filesystem was accepted")
+		}
+	}
+}
+
+// TestLinuxTrustedAncestryPolicySeparatesOverlayAncestorsFromProtectedObjects.
+func TestLinuxTrustedAncestryPolicySeparatesOverlayAncestorsFromProtectedObjects(t *testing.T) {
+	if overlay, err := classifyLinuxRootFilesystemType(unix.OVERLAYFS_SUPER_MAGIC); err != nil || !overlay {
+		t.Fatal("overlay root was rejected")
+	}
+	if filesystem, err := classifyLinuxAncestryFilesystemType(unix.OVERLAYFS_SUPER_MAGIC); err != nil ||
+		filesystem != unix.OVERLAYFS_SUPER_MAGIC {
+		t.Fatal("overlay intermediate ancestry was rejected")
+	}
+	if filesystem, err := classifyLinuxAncestryFilesystemType(unix.EXT4_SUPER_MAGIC); err != nil ||
+		filesystem != unix.EXT4_SUPER_MAGIC {
+		t.Fatal("supported mounted final ancestry was rejected")
+	}
+	if _, err := classifyLinuxFilesystemType(unix.OVERLAYFS_SUPER_MAGIC); !errorsIsSecure(err) {
+		t.Fatal("overlay final parent or protected file was accepted")
+	}
+}
+
 // encodeLinuxACLForTest creates one kernel-style little-endian ACL value.
 func encodeLinuxACLForTest(entries ...linuxACLTestEntry) []byte {
 	data := make([]byte, linuxACLHeaderBytes+len(entries)*linuxACLEntryBytes)

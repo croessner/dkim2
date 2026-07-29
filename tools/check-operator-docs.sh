@@ -1,0 +1,135 @@
+#!/bin/sh
+set -eu
+
+guide=docs/operator/postfix-compose.md
+supply=docs/operator/container-supply-chain.md
+daemon=cmd/dkim2d/README.md
+milter=cmd/dkim2-milter/README.md
+client=cmd/dkim2ctl/README.md
+openapi=docs/specs/openapi/dkim2d.yaml
+openapi_readme=docs/specs/openapi/README.md
+containerfile=build/container/Containerfile
+for document in \
+  README.md \
+  "$guide" \
+  "$supply" \
+  "$daemon" \
+  "$milter" \
+  "$client" \
+  "$openapi" \
+  "$openapi_readme" \
+  docs/datasource-ldap-sql-design.md \
+  docs/replay-store-valkey.md \
+  docs/specs/implementation/datasource-providers.md \
+  "$containerfile"; do
+  test -s "$document"
+done
+
+for required in \
+  'draft-ietf-dkim-dkim2-spec-04' \
+  'draft-chuang-dkim2-dns-04' \
+  '127.0.0.1:2525' \
+  'milter_protocol = 6' \
+  'milter_default_action = tempfail' \
+  'Exim' \
+  'M17' \
+  'LDAP' \
+  'SQL' \
+  'M22' \
+  'read-only' \
+  'rollback' \
+  'backup'; do
+  grep -Fq "$required" "$guide"
+done
+
+for reference in \
+  'cmd/dkim2d/README.md' \
+  'cmd/dkim2-milter/README.md' \
+  'cmd/dkim2ctl/README.md' \
+  'docs/operator/container-supply-chain.md' \
+  'docs/specs/openapi/dkim2d.yaml'; do
+  grep -Fq "$reference" README.md
+done
+for reference in \
+  'cmd/dkim2d/README.md' \
+  'cmd/dkim2-milter/README.md' \
+  'cmd/dkim2ctl/README.md' \
+  'docs/operator/container-supply-chain.md'; do
+  grep -Fq "$reference" "$guide"
+done
+
+test "$(sed -n 's|^  \(/[^:]*\):$|\1|p' "$openapi" | wc -l | tr -d ' ')" -eq 6
+for route in /metrics /healthz /readyz /v1/process /v1/sign /v1/revise; do
+  grep -Fq "  $route:" "$openapi"
+  grep -Fq "\`$route\`" "$daemon"
+done
+for operation in processMessage signMessage reviseMessage; do
+  grep -Fq "operationId: $operation" "$openapi"
+done
+for capability in \
+  capability_file \
+  sign_capability_file \
+  revise_capability_file; do
+  grep -Fq "$capability" "$daemon"
+done
+for flag in \
+  --capability-file \
+  --sign-capability-file \
+  --revise-capability-file; do
+  grep -Fq -- "\"${flag#--}\"" cmd/dkim2ctl/internal/command/command.go
+  grep -Fq -- "$flag" "$client"
+done
+for mode in inbound originator ordinary_transit; do
+  grep -Fq "\`$mode\`" "$milter"
+done
+for probe in \
+  'dkim2d probe' \
+  'dkim2-milter probe --config'; do
+  grep -Fq "$probe" "$daemon" "$milter"
+done
+
+for target in check-images images-multiarch image-sbom image-provenance image-vulnerability check-release; do
+  grep -Fq "make $target" "$supply"
+  grep -Fq "make $target" Makefile
+done
+for target in check-deployment deployment-postfix deployment-security; do
+  grep -Fq "make $target" "$guide"
+  grep -Fq "make $target" Makefile
+done
+for target in deployment-postfix deployment-security; do
+  grep -Fq "make $target" README.md
+  grep -Fq "make $target" Makefile
+done
+for platform in amd64 arm64; do
+  grep -Fq "$platform" "$supply"
+done
+for label in \
+  org.opencontainers.image.source \
+  org.opencontainers.image.revision \
+  org.opencontainers.image.version \
+  org.opencontainers.image.created \
+  org.opencontainers.image.vendor \
+  org.opencontainers.image.documentation \
+  org.opencontainers.image.licenses \
+  org.opencontainers.image.title \
+  org.opencontainers.image.description; do
+  grep -Fq "$label" "$containerfile"
+done
+
+for document in README.md "$guide"; do
+  grep -Fq 'Exim is incomplete' "$document"
+  grep -Fq 'M17' "$document"
+  grep -Fq 'M22' "$document"
+  grep -Fq 'LDAP' "$document"
+  grep -Fq 'SQL' "$document"
+done
+
+! grep -En \
+  '(inbound-only|does not sign or revise|signing or revision endpoints|protected generated-client capability loader)' \
+  "$daemon" "$openapi_readme"
+! grep -ERn \
+  '(example\.(com|org|net)|0\.0\.0\.0:2525|image:[[:space:]]+[^[:space:]]*:latest)' \
+  README.md cmd/dkim2d/README.md cmd/dkim2-milter/README.md \
+  cmd/dkim2ctl/README.md docs/operator docs/specs/openapi/README.md \
+  deployments/postfix-compose \
+  --include='*.md' --include='*.yaml' --include='*.cf'

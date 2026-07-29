@@ -712,7 +712,8 @@ components:
             Optional daemon reporting authority. When supplied for an accepting
             outcome, the daemon returns the exact Authentication-Results action;
             adapters must not synthesize it.
-          $ref: "#/components/schemas/ReportingContext"
+          allOf:
+            - $ref: "#/components/schemas/ReportingContext"
     SignRequest:
       type: object
       additionalProperties: false
@@ -756,7 +757,8 @@ components:
           description: >
             Exact inherited envelope evidence verified before revision.
             The smtp member is the distinct outgoing signing envelope.
-          $ref: "#/components/schemas/SMTPInput"
+          allOf:
+            - $ref: "#/components/schemas/SMTPInput"
         context:
           $ref: "#/components/schemas/SigningContext"
     MessageInput:

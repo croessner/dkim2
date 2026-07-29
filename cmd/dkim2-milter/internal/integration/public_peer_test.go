@@ -431,6 +431,7 @@ func TestExecutableOverloadAndSlowDisconnect(t *testing.T) {
 		}
 	} else if !errors.Is(writeErr, syscall.EPIPE) &&
 		!errors.Is(writeErr, syscall.ECONNRESET) &&
+		!errors.Is(writeErr, syscall.ENOTCONN) &&
 		!errors.Is(writeErr, net.ErrClosed) {
 		t.Fatalf("connection-limit rejection write = %v", writeErr)
 	}

@@ -11,19 +11,27 @@ import (
 
 	"github.com/croessner/dkim2/cmd/dkim2-milter/internal/app"
 	"github.com/croessner/dkim2/cmd/dkim2-milter/internal/config"
+	"github.com/croessner/dkim2/cmd/dkim2-milter/internal/daemon"
 	"github.com/spf13/cobra"
 )
 
+var buildVersion = "development"
+
 const (
-	buildVersion     = "development"
-	serveCommandName = "serve"
+	serveCommandName    = "serve"
+	validateCommandName = "validate"
+	probeCommandName    = "probe"
 
 	commandUsage = `Usage:
   dkim2-milter serve --config <absolute-path>
+  dkim2-milter validate --config <absolute-path>
+  dkim2-milter probe --config <absolute-path>
   dkim2-milter --version
 
 Commands:
   serve    Run the DKIM2 Milter adapter
+  validate Validate configuration and route capability without serving
+  probe    Check one owned Unix listener
 
 Flags:
       --config string   absolute path to the configuration document
@@ -50,17 +58,26 @@ type managedApplication interface {
 	Stop(context.Context) error
 }
 
+// protectedCapability owns one loaded route capability during validation.
+type protectedCapability interface {
+	Close() error
+}
+
 // commandDependencies owns deterministic process seams for tests.
 type commandDependencies struct {
-	load        func(string) (config.Snapshot, error)
-	build       func(config.Snapshot, io.Writer) (managedApplication, error)
-	withTimeout func(context.Context, time.Duration) (context.Context, context.CancelFunc)
+	load           func(string) (config.Snapshot, error)
+	loadCapability func(string) (protectedCapability, error)
+	build          func(config.Snapshot, io.Writer) (managedApplication, error)
+	withTimeout    func(context.Context, time.Duration) (context.Context, context.CancelFunc)
 }
 
 // productionDependencies connects the strict loader to the Fx graph.
 func productionDependencies() commandDependencies {
 	return commandDependencies{
 		load: config.Load,
+		loadCapability: func(path string) (protectedCapability, error) {
+			return daemon.LoadCapability(path)
+		},
 		build: func(snapshot config.Snapshot, stderr io.Writer) (managedApplication, error) {
 			return app.New(snapshot, stderr)
 		},
@@ -142,8 +159,120 @@ func newRootCommand(
 		return nil, err
 	}
 	serve.SetHelpFunc(func(*cobra.Command, []string) { writeUsage(stdout) })
-	root.AddCommand(serve)
+	validate, err := newValidateCommand(deps)
+	if err != nil {
+		return nil, err
+	}
+	validate.SetHelpFunc(func(*cobra.Command, []string) { writeUsage(stdout) })
+	root.AddCommand(serve, validate, newProbeCommand(deps.load))
 	return root, nil
+}
+
+// newValidateCommand constructs the non-mutating protected-state validation command.
+func newValidateCommand(deps commandDependencies) (*cobra.Command, error) {
+	var configPath string
+	command := &cobra.Command{
+		Use:           validateCommandName,
+		Short:         "Validate configuration and route capability without serving",
+		Args:          cobra.NoArgs,
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		RunE: func(*cobra.Command, []string) error {
+			return runValidate(configPath, deps)
+		},
+	}
+	command.Flags().StringVar(&configPath, "config", "", "absolute path to the configuration document")
+	if err := command.MarkFlagRequired("config"); err != nil {
+		return nil, errCommandRuntime
+	}
+	return command, nil
+}
+
+// runValidate loads configuration and its exact route capability without starting Fx.
+func runValidate(configPath string, deps commandDependencies) error {
+	if !filepath.IsAbs(configPath) || filepath.Clean(configPath) != configPath ||
+		deps.load == nil || deps.loadCapability == nil {
+		return errCommandRuntime
+	}
+	snapshot, err := loadSnapshot(deps.load, configPath)
+	if err != nil {
+		return errCommandRuntime
+	}
+	capability, err := loadProtectedCapability(
+		deps.loadCapability,
+		snapshot.CapabilityFile(),
+	)
+	if err != nil {
+		if capability != nil {
+			_ = closeProtectedCapability(capability)
+		}
+		return errCommandRuntime
+	}
+	if capability == nil {
+		return errCommandRuntime
+	}
+	if err := closeProtectedCapability(capability); err != nil {
+		return errCommandRuntime
+	}
+	return nil
+}
+
+// loadSnapshot contains strict configuration-loader and injected dependency panics.
+func loadSnapshot(
+	load func(string) (config.Snapshot, error),
+	path string,
+) (snapshot config.Snapshot, resultErr error) {
+	defer func() {
+		if recover() != nil {
+			snapshot = config.Snapshot{}
+			resultErr = errCommandRuntime
+		}
+	}()
+	if load == nil {
+		return config.Snapshot{}, errCommandRuntime
+	}
+	snapshot, err := load(path)
+	if err != nil {
+		return config.Snapshot{}, errCommandRuntime
+	}
+	return snapshot, nil
+}
+
+// loadProtectedCapability contains protected-loader and injected dependency panics.
+func loadProtectedCapability(
+	load func(string) (protectedCapability, error),
+	path string,
+) (capability protectedCapability, resultErr error) {
+	defer func() {
+		if recover() != nil {
+			capability = nil
+			resultErr = errCommandRuntime
+		}
+	}()
+	if load == nil {
+		return nil, errCommandRuntime
+	}
+	capability, err := load(path)
+	if err != nil {
+		return capability, errCommandRuntime
+	}
+	return capability, nil
+}
+
+// closeProtectedCapability contains every validation-side protected release.
+func closeProtectedCapability(capability protectedCapability) (resultErr error) {
+	defer func() {
+		if recover() != nil {
+			resultErr = errCommandRuntime
+		}
+	}()
+	if capability == nil {
+		return errCommandRuntime
+	}
+	if err := capability.Close(); err != nil {
+		return errCommandRuntime
+	}
+	return nil
 }
 
 // newServeCommand constructs the config-only adapter command.
@@ -177,7 +306,7 @@ func runServe(
 		filepath.Clean(configPath) != configPath {
 		return errCommandRuntime
 	}
-	snapshot, err := deps.load(configPath)
+	snapshot, err := loadSnapshot(deps.load, configPath)
 	if err != nil {
 		return errCommandRuntime
 	}

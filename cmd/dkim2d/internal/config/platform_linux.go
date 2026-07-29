@@ -162,6 +162,59 @@ func inspectLinuxFilesystem(fd int) (int64, error) {
 	return classifyLinuxFilesystemType(filesystemType)
 }
 
+// inspectTrustedRootAccess permits only an overlay container root exception.
+func inspectTrustedRootAccess(fd int, acceptedMode uint32) error {
+	var state unix.Statfs_t
+	if err := retryDescriptorOperation(func() error {
+		return unix.Fstatfs(fd, &state)
+	}); err != nil {
+		return err
+	}
+	overlay, err := classifyLinuxTrustedRootFilesystemType(int64(state.Type))
+	if err != nil {
+		return err
+	}
+	if overlay {
+		if acceptedMode != 0o555 && acceptedMode != 0o755 {
+			return newError(CodeProtectedAccess)
+		}
+		return nil
+	}
+	return inspectDescriptorAccess(fd, true, acceptedMode)
+}
+
+// inspectTrustedAncestorAccess permits only immutable root-owned overlay ancestors.
+func inspectTrustedAncestorAccess(fd int, acceptedMode uint32, rootOwned bool) error {
+	var state unix.Statfs_t
+	if err := retryDescriptorOperation(func() error {
+		return unix.Fstatfs(fd, &state)
+	}); err != nil {
+		return err
+	}
+	overlay, err := classifyLinuxTrustedRootFilesystemType(int64(state.Type))
+	if err != nil {
+		return err
+	}
+	if overlay {
+		if !rootOwned || acceptedMode != 0o555 && acceptedMode != 0o755 {
+			return newError(CodeProtectedAccess)
+		}
+		return nil
+	}
+	return inspectDescriptorAccess(fd, true, acceptedMode)
+}
+
+// classifyLinuxTrustedRootFilesystemType isolates the exact root-only overlay exception.
+func classifyLinuxTrustedRootFilesystemType(filesystemType int64) (bool, error) {
+	if filesystemType == unix.OVERLAYFS_SUPER_MAGIC {
+		return true, nil
+	}
+	if _, err := classifyLinuxFilesystemType(filesystemType); err != nil {
+		return false, err
+	}
+	return false, nil
+}
+
 // classifyLinuxFilesystemType applies the exact closed local-filesystem allowlist.
 func classifyLinuxFilesystemType(filesystemType int64) (int64, error) {
 	switch filesystemType {

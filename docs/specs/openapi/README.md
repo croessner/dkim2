@@ -1,9 +1,11 @@
 # DKIM2 Daemon OpenAPI Contract
 
 `dkim2d.yaml` is the authoritative REST contract for the daemon. The current
-contract is inbound-only: it exposes liveness, readiness, and one authenticated
-verification, policy, and replay operation. Signing and revision are not part
-of this contract.
+contract exposes metrics, liveness, readiness, and three authenticated
+operations: inbound process, originator sign, and ordinary-transit revise.
+Each authenticated route uses a distinct generation-bound local capability in
+the implementation even though all three share the contract's
+`X-DKIM2-Capability` header shape.
 
 The repository pins
 `github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen` at `v2.7.1`.
@@ -34,3 +36,9 @@ generation guards are committed. `make check-openapi` must regenerate into a
 private temporary directory, compare output byte-for-byte, validate the
 embedded contract and exact routes, and reject stale type bindings or forbidden
 generated-code imports.
+
+Operator configuration, route ownership, and deployment procedures are not
+duplicated here. Start with
+[`docs/operator/postfix-compose.md`](../../operator/postfix-compose.md), then
+use the daemon, Milter, and generated-client component READMEs for their
+respective runtime boundaries.

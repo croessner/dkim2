@@ -16,6 +16,8 @@ import (
 
 const (
 	serveCommandName          = "serve"
+	validateCommandName       = "validate"
+	probeCommandName          = "probe"
 	helpCommandName           = "help"
 	completionCommandName     = "completion"
 	hiddenCompletionCommand   = "__complete"
@@ -23,13 +25,19 @@ const (
 
 	commandUsage = `Usage:
   dkim2d serve --config <absolute-path> [flags]
+  dkim2d validate --config <absolute-path>
+  dkim2d probe
+  dkim2d --version
 
 Commands:
   serve    Run the DKIM2 HTTP daemon
+  validate Validate configuration and protected state without serving
+  probe    Check local daemon readiness
 
 Flags:
       --config string           absolute path to the configuration document
   -h, --help                    help for dkim2d
+  -v, --version                 version for dkim2d
       --listen string           override server.listen
       --policy-mode string      override policy.mode
       --replay-backend string   override replay.backend
@@ -39,6 +47,7 @@ Flags:
 )
 
 var (
+	buildVersion      = "development"
 	errCommandShape   = errors.New("dkim2d command shape failure")
 	errCommandRuntime = errors.New("dkim2d command runtime failure")
 )
@@ -182,6 +191,7 @@ func newRootCommand(
 	root := &cobra.Command{
 		Use:           "dkim2d",
 		Short:         "DKIM2 HTTP daemon",
+		Version:       buildVersion,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		Args:          cobra.NoArgs,
@@ -191,6 +201,7 @@ func newRootCommand(
 	}
 	root.SetOut(stdout)
 	root.SetErr(stderr)
+	root.SetVersionTemplate("dkim2d {{.Version}}\n")
 	root.CompletionOptions.DisableDefaultCmd = true
 	root.SetHelpFunc(func(*cobra.Command, []string) {
 		writeUsage(stdout)
@@ -203,8 +214,61 @@ func newRootCommand(
 	serve.SetHelpFunc(func(*cobra.Command, []string) {
 		writeUsage(stdout)
 	})
-	root.AddCommand(serve)
+	validate, err := newValidateCommand(deps)
+	if err != nil {
+		return nil, err
+	}
+	validate.SetHelpFunc(func(*cobra.Command, []string) {
+		writeUsage(stdout)
+	})
+	root.AddCommand(serve, validate, newProbeCommand())
 	return root, nil
+}
+
+// newValidateCommand constructs the non-mutating protected-state validation command.
+func newValidateCommand(deps commandDependencies) (*cobra.Command, error) {
+	var configPath string
+	command := &cobra.Command{
+		Use:           validateCommandName,
+		Short:         "Validate configuration and protected state without serving",
+		Args:          cobra.NoArgs,
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		RunE: func(*cobra.Command, []string) error {
+			return runValidate(configPath, deps)
+		},
+	}
+	command.Flags().StringVar(&configPath, "config", "", "absolute path to the configuration document")
+	if err := command.MarkFlagRequired("config"); err != nil {
+		return nil, errCommandRuntime
+	}
+	return command, nil
+}
+
+// runValidate loads and releases one complete immutable protected generation.
+func runValidate(configPath string, deps commandDependencies) error {
+	if !filepath.IsAbs(configPath) || filepath.Clean(configPath) != configPath ||
+		deps.load == nil {
+		return errCommandRuntime
+	}
+	owner, err := loadBootstrap(
+		deps.load,
+		configPath,
+		config.NewFlagValues("", false, "", false, "", false),
+	)
+	if err != nil {
+		if owner != nil {
+			_ = closeBootstrap(owner)
+		}
+		return errCommandRuntime
+	}
+	if owner == nil {
+		return errCommandRuntime
+	}
+	if err := closeBootstrap(owner); err != nil {
+		return errCommandRuntime
+	}
+	return nil
 }
 
 // newServeCommand constructs the zero-argument daemon command.
@@ -252,7 +316,7 @@ func runServe(
 	if startContext == nil || !filepath.IsAbs(configPath) {
 		return errCommandRuntime
 	}
-	owner, err := deps.load(configPath, flags)
+	owner, err := loadBootstrap(deps.load, configPath, flags)
 	if err != nil {
 		if owner != nil {
 			_ = closeBootstrap(owner)
@@ -292,6 +356,28 @@ func runServe(
 		return errCommandRuntime
 	}
 	return waitAndStop(startContext, application, stopTimeout, deps)
+}
+
+// loadBootstrap contains protected-loader and injected dependency panics.
+func loadBootstrap(
+	load func(string, config.FlagValues) (bootstrapOwner, error),
+	path string,
+	flags config.FlagValues,
+) (owner bootstrapOwner, resultErr error) {
+	defer func() {
+		if recover() != nil {
+			owner = nil
+			resultErr = errCommandRuntime
+		}
+	}()
+	if load == nil {
+		return nil, errCommandRuntime
+	}
+	owner, err := load(path, flags)
+	if err != nil {
+		return owner, errCommandRuntime
+	}
+	return owner, nil
 }
 
 // closeBootstrap contains every command-side protected-owner release.

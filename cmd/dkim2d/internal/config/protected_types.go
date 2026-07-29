@@ -49,7 +49,8 @@ type protectedState struct {
 	capability       [32]byte
 	signCapability   [32]byte
 	reviseCapability [32]byte
-	hasSigning       bool
+	hasSign          bool
+	hasRevise        bool
 	signingStore     *signingstore.Runtime
 	hmac             [32]byte
 	hasHMAC          bool
@@ -253,7 +254,8 @@ func (p *RuntimePreparation) SigningStore() *signingstore.Runtime {
 	p.state.mu.Lock()
 	defer p.state.mu.Unlock()
 	if p.state.phase != protectedPreparedForRuntime ||
-		p.state.runtimeToken != p.token || !p.state.hasSigning {
+		p.state.runtimeToken != p.token ||
+		(!p.state.hasSign && !p.state.hasRevise) {
 		return nil
 	}
 	return p.state.signingStore
@@ -486,14 +488,20 @@ func equalProtectedCapability(
 	state.mu.Lock()
 	defer state.mu.Unlock()
 	if state.phase != protectedOwnedByRuntime ||
-		state.runtimeToken != token || !state.hasSigning {
+		state.runtimeToken != token {
 		return false
 	}
 	var expected *[32]byte
 	switch kind {
 	case protectedSign:
+		if !state.hasSign {
+			return false
+		}
 		expected = &state.signCapability
 	case protectedRevise:
+		if !state.hasRevise {
+			return false
+		}
 		expected = &state.reviseCapability
 	default:
 		return false
@@ -555,7 +563,8 @@ func (s *protectedState) clearProtected(releasedBy protectedPhase) {
 	s.capability = [32]byte{}
 	s.signCapability = [32]byte{}
 	s.reviseCapability = [32]byte{}
-	s.hasSigning = false
+	s.hasSign = false
+	s.hasRevise = false
 	if s.signingStore != nil {
 		_ = s.signingStore.Close(context.Background())
 		s.signingStore = nil
@@ -613,22 +622,29 @@ func validateProtectedSeparation(state *protectedState) error {
 	if state.hasHMAC && bytes.Equal(state.capability[:], state.hmac[:]) {
 		return newError(CodeProtectedContent)
 	}
-	if state.hasSigning &&
-		(bytes.Equal(state.capability[:], state.signCapability[:]) ||
-			bytes.Equal(state.capability[:], state.reviseCapability[:]) ||
-			bytes.Equal(state.signCapability[:], state.reviseCapability[:])) {
+	if state.hasSign && bytes.Equal(state.capability[:], state.signCapability[:]) {
 		return newError(CodeProtectedContent)
 	}
-	if state.hasHMAC && state.hasSigning &&
-		(bytes.Equal(state.hmac[:], state.signCapability[:]) ||
-			bytes.Equal(state.hmac[:], state.reviseCapability[:])) {
+	if state.hasRevise && bytes.Equal(state.capability[:], state.reviseCapability[:]) {
+		return newError(CodeProtectedContent)
+	}
+	if state.hasSign && state.hasRevise &&
+		bytes.Equal(state.signCapability[:], state.reviseCapability[:]) {
+		return newError(CodeProtectedContent)
+	}
+	if state.hasHMAC && state.hasSign &&
+		bytes.Equal(state.hmac[:], state.signCapability[:]) {
+		return newError(CodeProtectedContent)
+	}
+	if state.hasHMAC && state.hasRevise &&
+		bytes.Equal(state.hmac[:], state.reviseCapability[:]) {
 		return newError(CodeProtectedContent)
 	}
 	for _, password := range [][]byte{state.applicationPassword, state.auditorPassword} {
 		if len(password) == exactKeyBytes &&
 			(bytes.Equal(state.capability[:], password) ||
-				state.hasSigning && bytes.Equal(state.signCapability[:], password) ||
-				state.hasSigning && bytes.Equal(state.reviseCapability[:], password) ||
+				state.hasSign && bytes.Equal(state.signCapability[:], password) ||
+				state.hasRevise && bytes.Equal(state.reviseCapability[:], password) ||
 				state.hasHMAC && bytes.Equal(state.hmac[:], password)) {
 			return newError(CodeProtectedContent)
 		}

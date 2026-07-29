@@ -74,3 +74,18 @@ func TestUsageFailureProducesNoProtectedDiagnostic(t *testing.T) {
 		t.Fatal("usage validation did not emit only the stable JSONL diagnostic")
 	}
 }
+
+// TestUnknownRootArgumentFailsWithoutEcho freezes fail-closed root dispatch.
+func TestUnknownRootArgumentFailsWithoutEcho(t *testing.T) {
+	t.Parallel()
+	const marker = "privacy-container-output-7f3c9a2d"
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	if code := Execute([]string{marker}, &stdout, &stderr); code != int(testclient.ExitUsage) {
+		t.Fatal("unknown root argument did not fail with usage status")
+	}
+	if bytes.Contains(stdout.Bytes(), []byte(marker)) ||
+		bytes.Contains(stderr.Bytes(), []byte(marker)) {
+		t.Fatal("unknown root argument leaked into command output")
+	}
+}

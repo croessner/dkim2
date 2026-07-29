@@ -1,0 +1,46 @@
+name: Container evidence verification
+
+on:
+  pull_request:
+  push:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+
+      - name: Install Go
+        uses: actions/setup-go@0a12ed9d6a96ab950c8f026ed9f722fe0da7ef32
+        with:
+          go-version: "1.26.5"
+          cache: false
+
+      - name: Prove no publication authority
+        run: |
+          test -z "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}"
+          test -z "${ACTIONS_ID_TOKEN_REQUEST_URL:-}"
+
+      - name: Build and validate the exact candidate evidence
+        run: make check-release
+
+      - name: Retain non-authoritative diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808
+        with:
+          name: dkim2-container-evidence
+          path: |
+            .artifacts/*.oci.tar
+            .artifacts/image-evidence/
+            .artifacts/image-reproducibility/*.json
+            .artifacts/product-binaries/SHA256SUMS
+            .artifacts/product-binaries/build-info
+          if-no-files-found: error
+          retention-days: 14

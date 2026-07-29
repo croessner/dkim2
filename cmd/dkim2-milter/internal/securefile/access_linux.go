@@ -39,6 +39,60 @@ func descriptorAccessFingerprint(fd int, directory bool, acceptedMode uint32) ([
 	if err != nil {
 		return [32]byte{}, err
 	}
+	return linuxAccessFingerprint(fd, filesystemType, directory, acceptedMode)
+}
+
+// ancestryDescriptorAccessFingerprint accepts overlay only for trusted intermediate directories.
+func ancestryDescriptorAccessFingerprint(fd int, acceptedMode uint32) ([32]byte, error) {
+	var filesystem unix.Statfs_t
+	if err := retryOperation(func() error { return unix.Fstatfs(fd, &filesystem) }); err != nil {
+		return [32]byte{}, err
+	}
+	filesystemType, err := classifyLinuxAncestryFilesystemType(int64(filesystem.Type))
+	if err != nil {
+		return [32]byte{}, err
+	}
+	if filesystemType == unix.OVERLAYFS_SUPER_MAGIC {
+		return linuxOverlayAncestryFingerprint(fd, acceptedMode)
+	}
+	return linuxAccessFingerprint(fd, filesystemType, true, acceptedMode)
+}
+
+// linuxOverlayAncestryFingerprint directly proves POSIX ACL state when overlay hides its name list.
+func linuxOverlayAncestryFingerprint(fd int, acceptedMode uint32) ([32]byte, error) {
+	access, accessPresent, err := readLinuxACLXattr(fd, linuxACLAccessName)
+	if err != nil {
+		return [32]byte{}, err
+	}
+	defaultACL, defaultPresent, err := readLinuxACLXattr(fd, linuxACLDefaultName)
+	if err != nil || defaultPresent {
+		return [32]byte{}, &Error{}
+	}
+	if accessPresent {
+		if err := validateLinuxAccessACL(access, acceptedMode); err != nil {
+			return [32]byte{}, err
+		}
+	}
+	hash := sha256.New()
+	_, _ = hash.Write([]byte("dkim2-milter-securefile-linux-overlay-ancestry-v1\x00"))
+	var fixed [12]byte
+	binary.LittleEndian.PutUint64(fixed[:8], uint64(unix.OVERLAYFS_SUPER_MAGIC))
+	binary.LittleEndian.PutUint32(fixed[8:], acceptedMode)
+	_, _ = hash.Write(fixed[:])
+	writeLinuxFingerprintValue(hash, accessPresent, access)
+	writeLinuxFingerprintValue(hash, false, defaultACL)
+	var fingerprint [32]byte
+	copy(fingerprint[:], hash.Sum(nil))
+	return fingerprint, nil
+}
+
+// linuxAccessFingerprint validates ACL state and fingerprints one classified filesystem.
+func linuxAccessFingerprint(
+	fd int,
+	filesystemType int64,
+	directory bool,
+	acceptedMode uint32,
+) ([32]byte, error) {
 	names, err := readLinuxXattrNames(fd)
 	if err != nil {
 		return [32]byte{}, err
@@ -77,6 +131,52 @@ func descriptorAccessFingerprint(fd int, directory bool, acceptedMode uint32) ([
 	var fingerprint [32]byte
 	copy(fingerprint[:], hash.Sum(nil))
 	return fingerprint, nil
+}
+
+// rootDescriptorAccessFingerprint permits only the immutable overlay container root exception.
+func rootDescriptorAccessFingerprint(fd int, acceptedMode uint32) ([32]byte, error) {
+	var filesystem unix.Statfs_t
+	if err := retryOperation(func() error { return unix.Fstatfs(fd, &filesystem) }); err != nil {
+		return [32]byte{}, err
+	}
+	overlay, err := classifyLinuxRootFilesystemType(int64(filesystem.Type))
+	if err != nil {
+		return [32]byte{}, err
+	}
+	if !overlay {
+		return descriptorAccessFingerprint(fd, true, acceptedMode)
+	}
+	if acceptedMode != 0o555 && acceptedMode != 0o755 {
+		return [32]byte{}, &Error{}
+	}
+	hash := sha256.New()
+	_, _ = hash.Write([]byte("dkim2-milter-securefile-linux-overlay-root-v1\x00"))
+	var fixed [12]byte
+	binary.LittleEndian.PutUint64(fixed[:8], uint64(filesystem.Type))
+	binary.LittleEndian.PutUint32(fixed[8:], acceptedMode)
+	_, _ = hash.Write(fixed[:])
+	var fingerprint [32]byte
+	copy(fingerprint[:], hash.Sum(nil))
+	return fingerprint, nil
+}
+
+// classifyLinuxRootFilesystemType isolates the exact root-only overlay exception.
+func classifyLinuxRootFilesystemType(filesystemType int64) (bool, error) {
+	if filesystemType == unix.OVERLAYFS_SUPER_MAGIC {
+		return true, nil
+	}
+	if _, err := classifyLinuxFilesystemType(filesystemType); err != nil {
+		return false, err
+	}
+	return false, nil
+}
+
+// classifyLinuxAncestryFilesystemType accepts overlay only for an intermediate directory.
+func classifyLinuxAncestryFilesystemType(filesystemType int64) (int64, error) {
+	if filesystemType == unix.OVERLAYFS_SUPER_MAGIC {
+		return filesystemType, nil
+	}
+	return classifyLinuxFilesystemType(filesystemType)
 }
 
 // validateLinuxACLState reconciles name-list presence and rejects access extensions.

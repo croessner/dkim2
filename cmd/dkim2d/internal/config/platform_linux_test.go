@@ -5,6 +5,7 @@ package config
 import (
 	"bytes"
 	"encoding/binary"
+	"os"
 	"strconv"
 	"testing"
 
@@ -235,6 +236,63 @@ func TestLinuxFilesystemTypeAllowlist(t *testing.T) {
 	} {
 		if _, err := classifyLinuxFilesystemType(value); CodeOf(err) != CodeProtectedUnsupported {
 			t.Fatalf("unsupported filesystem returned code %s", CodeOf(err))
+		}
+	}
+}
+
+// TestLinuxTrustedRootFilesystemPolicyFreezesTheRootOnlyOverlayException.
+func TestLinuxTrustedRootFilesystemPolicyFreezesTheRootOnlyOverlayException(t *testing.T) {
+	overlay, err := classifyLinuxTrustedRootFilesystemType(unix.OVERLAYFS_SUPER_MAGIC)
+	if err != nil || !overlay {
+		t.Fatalf("overlay root policy = %t, %s", overlay, CodeOf(err))
+	}
+	overlay, err = classifyLinuxTrustedRootFilesystemType(unix.EXT4_SUPER_MAGIC)
+	if err != nil || overlay {
+		t.Fatalf("ext4 root policy = %t, %s", overlay, CodeOf(err))
+	}
+	if _, err := classifyLinuxTrustedRootFilesystemType(
+		unix.NFS_SUPER_MAGIC,
+	); CodeOf(err) != CodeProtectedUnsupported {
+		t.Fatalf("NFS root returned code %s", CodeOf(err))
+	}
+}
+
+// TestLinuxTrustedAncestorPolicyRejectsNonRootOwnedOverlay freezes the
+// container-ancestry exception before descriptor traversal.
+func TestLinuxTrustedAncestorPolicyRejectsNonRootOwnedOverlay(t *testing.T) {
+	file, err := os.Open("/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+	var state unix.Statfs_t
+	if err := unix.Fstatfs(int(file.Fd()), &state); err != nil {
+		t.Fatal(err)
+	}
+	if int64(state.Type) != unix.OVERLAYFS_SUPER_MAGIC {
+		t.Skip("test host root is not overlay")
+	}
+	if err := inspectDescriptorAccess(int(file.Fd()), true, 0o755); CodeOf(err) != CodeProtectedUnsupported {
+		t.Fatalf("strict protected-descriptor path returned code %s for overlay", CodeOf(err))
+	}
+	if err := inspectTrustedAncestorAccess(int(file.Fd()), 0o755, true); err != nil {
+		t.Fatalf("root-owned overlay ancestor was rejected: %s", CodeOf(err))
+	}
+	for _, test := range []struct {
+		mode      uint32
+		rootOwned bool
+	}{
+		{mode: 0o755, rootOwned: false},
+		{mode: 0o775, rootOwned: true},
+		{mode: 0o777, rootOwned: true},
+		{mode: 0o700, rootOwned: true},
+	} {
+		if err := inspectTrustedAncestorAccess(
+			int(file.Fd()),
+			test.mode,
+			test.rootOwned,
+		); err == nil {
+			t.Fatal("unsafe overlay ancestor was accepted")
 		}
 	}
 }

@@ -37,6 +37,115 @@ type applicationFake struct {
 	stopLeft   time.Duration
 }
 
+// capabilityFake records protected capability release during validation.
+type capabilityFake struct {
+	closes       int
+	err          error
+	panicOnClose bool
+}
+
+// Close records one protected capability release.
+func (c *capabilityFake) Close() error {
+	c.closes++
+	if c.panicOnClose {
+		panic("protected capability marker")
+	}
+	return c.err
+}
+
+// TestRunValidateLoadsAndClosesExactCapability proves validation never constructs Fx.
+func TestRunValidateLoadsAndClosesExactCapability(t *testing.T) {
+	t.Parallel()
+	snapshot := commandSnapshot(t)
+	capability := &capabilityFake{}
+	builds := 0
+	if err := runValidate(testConfigPath, commandDependencies{
+		load: func(path string) (config.Snapshot, error) {
+			if path != testConfigPath {
+				t.Fatal("validation used an unexpected path")
+			}
+			return snapshot, nil
+		},
+		loadCapability: func(path string) (protectedCapability, error) {
+			if path != snapshot.CapabilityFile() {
+				t.Fatal("validation used an unexpected capability")
+			}
+			return capability, nil
+		},
+		build: func(config.Snapshot, io.Writer) (managedApplication, error) {
+			builds++
+			return nil, errCommandRuntime
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if capability.closes != 1 || builds != 0 {
+		t.Fatalf("validation closes=%d builds=%d", capability.closes, builds)
+	}
+}
+
+// TestRunValidateRejectsIncompleteProtectedState proves every failure stays closed.
+func TestRunValidateRejectsIncompleteProtectedState(t *testing.T) {
+	t.Parallel()
+	snapshot := commandSnapshot(t)
+	tests := []struct {
+		name       string
+		path       string
+		loadErr    error
+		capability protectedCapability
+		capErr     error
+		loadPanic  bool
+		capPanic   bool
+		wantCloses int
+	}{
+		{name: "relative path", path: "milter.yaml", capability: &capabilityFake{}},
+		{name: "config load", path: testConfigPath, loadErr: errCommandRuntime},
+		{name: "config load panic", path: testConfigPath, loadPanic: true},
+		{name: "capability load", path: testConfigPath, capErr: errCommandRuntime},
+		{
+			name: "ambiguous capability load", path: testConfigPath,
+			capability: &capabilityFake{}, capErr: errCommandRuntime, wantCloses: 1,
+		},
+		{
+			name: "capability load panic", path: testConfigPath,
+			capPanic: true,
+		},
+		{
+			name: "capability close", path: testConfigPath,
+			capability: &capabilityFake{err: errCommandRuntime}, wantCloses: 1,
+		},
+		{
+			name: "capability close panic", path: testConfigPath,
+			capability: &capabilityFake{panicOnClose: true}, wantCloses: 1,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			err := runValidate(test.path, commandDependencies{
+				load: func(string) (config.Snapshot, error) {
+					if test.loadPanic {
+						panic("configuration loader marker")
+					}
+					return snapshot, test.loadErr
+				},
+				loadCapability: func(string) (protectedCapability, error) {
+					if test.capPanic {
+						panic("capability loader marker")
+					}
+					return test.capability, test.capErr
+				},
+			})
+			if !errors.Is(err, errCommandRuntime) {
+				t.Fatalf("runValidate() error = %v", err)
+			}
+			if capability, ok := test.capability.(*capabilityFake); ok &&
+				capability.closes != test.wantCloses {
+				t.Fatalf("capability closes = %d, want %d", capability.closes, test.wantCloses)
+			}
+		})
+	}
+}
+
 // Start records one bounded startup.
 func (a *applicationFake) Start(ctx context.Context) error {
 	a.mu.Lock()

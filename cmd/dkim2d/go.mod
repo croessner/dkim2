@@ -4,7 +4,7 @@ go 1.26
 
 require (
 	github.com/croessner/dkim2 v0.0.0
-	github.com/getkin/kin-openapi v0.135.0
+	github.com/getkin/kin-openapi v0.144.0
 	github.com/prometheus/client_golang v1.23.2
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/viper v1.21.0

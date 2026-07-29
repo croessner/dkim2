@@ -1,0 +1,173 @@
+services:
+  bootstrap:
+    profiles: ["test-only"]
+    image: chrroessner/postfix:3.11.5@sha256:13cd39ff85a2edece32bdf3a4cdaa123c1a7d91db0e296f840c3ffe3d9121a4d
+    entrypoint: ["/testdata/deploymentfixture"]
+    command: ["bootstrap"]
+    network_mode: none
+    read_only: true
+    cap_drop: ["ALL"]
+    cap_add: ["CHOWN", "DAC_OVERRIDE", "FOWNER"]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 32
+    ulimits:
+      nofile:
+        soft: 256
+        hard: 256
+    mem_limit: 64m
+    cpus: 0.25
+    stop_grace_period: 5s
+    restart: "no"
+    volumes:
+      - type: bind
+        source: ../../.artifacts/postfix-deployment/deploymentfixture
+        target: /testdata/deploymentfixture
+        read_only: true
+      - test-daemon-inbound:/state/daemon/inbound
+      - test-daemon-originator:/state/daemon/originator
+      - test-daemon-transit:/state/daemon/transit
+      - test-milter-inbound:/state/milter/inbound
+      - test-milter-originator:/state/milter/originator
+      - test-milter-transit:/state/milter/transit
+      - test-socket-inbound:/state/sockets/inbound
+      - test-socket-originator:/state/sockets/originator
+      - test-socket-transit:/state/sockets/transit
+      - test-dns:/state/dns
+
+  dns-inbound:
+    profiles: ["test-only"]
+    image: chrroessner/postfix:3.11.5@sha256:13cd39ff85a2edece32bdf3a4cdaa123c1a7d91db0e296f840c3ffe3d9121a4d
+    entrypoint: ["/testdata/deploymentfixture"]
+    command: ["dns"]
+    read_only: true
+    cap_drop: ["ALL"]
+    cap_add: ["NET_BIND_SERVICE"]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 32
+    ulimits:
+      nofile:
+        soft: 256
+        hard: 256
+    mem_limit: 64m
+    cpus: 0.25
+    stop_grace_period: 5s
+    restart: "no"
+    volumes:
+      - type: bind
+        source: ../../.artifacts/postfix-deployment/deploymentfixture
+        target: /testdata/deploymentfixture
+        read_only: true
+      - test-dns:/state/dns:ro
+    network_mode: "service:daemon-inbound"
+    depends_on:
+      bootstrap:
+        condition: service_completed_successfully
+      daemon-inbound:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "/testdata/deploymentfixture", "dns-probe"]
+      interval: 1s
+      timeout: 2s
+      retries: 20
+      start_period: 1s
+
+  dns-originator:
+    extends:
+      service: dns-inbound
+    network_mode: "service:daemon-originator"
+    depends_on:
+      bootstrap:
+        condition: service_completed_successfully
+      daemon-originator:
+        condition: service_started
+
+  dns-transit:
+    extends:
+      service: dns-inbound
+    network_mode: "service:daemon-transit"
+    depends_on:
+      bootstrap:
+        condition: service_completed_successfully
+      daemon-transit:
+        condition: service_started
+
+  daemon-inbound:
+    profiles: ["test-only"]
+    command: ["serve", "--config", "/var/lib/dkim2d/config.yaml"]
+    volumes: !override
+      - test-daemon-inbound:/var/lib/dkim2d:ro
+    depends_on:
+      bootstrap:
+        condition: service_completed_successfully
+    dns: ["127.0.0.1"]
+
+  daemon-originator:
+    profiles: ["test-only"]
+    command: ["serve", "--config", "/var/lib/dkim2d/config.yaml"]
+    volumes: !override
+      - test-daemon-originator:/var/lib/dkim2d:ro
+    depends_on:
+      bootstrap:
+        condition: service_completed_successfully
+    dns: ["127.0.0.1"]
+
+  daemon-transit:
+    profiles: ["test-only"]
+    command: ["serve", "--config", "/var/lib/dkim2d/config.yaml"]
+    volumes: !override
+      - test-daemon-transit:/var/lib/dkim2d:ro
+    depends_on:
+      bootstrap:
+        condition: service_completed_successfully
+    dns: ["127.0.0.1"]
+
+  milter-inbound:
+    profiles: ["test-only"]
+    volumes: !override
+      - test-socket-inbound:/run/dkim2
+      - test-milter-inbound:/etc/dkim2-milter:ro
+
+  milter-originator:
+    profiles: ["test-only"]
+    volumes: !override
+      - test-socket-originator:/run/dkim2
+      - test-milter-originator:/etc/dkim2-milter:ro
+
+  milter-transit:
+    profiles: ["test-only"]
+    volumes: !override
+      - test-socket-transit:/run/dkim2
+      - test-milter-transit:/etc/dkim2-milter:ro
+
+  postfix:
+    profiles: ["test-only"]
+    volumes: !override
+      - postfix-queue:/var/spool/postfix
+      - postfix-config:/etc/postfix
+      - test-socket-inbound:/run/dkim2/inbound:ro
+      - test-socket-originator:/run/dkim2/originator:ro
+      - test-socket-transit:/run/dkim2/transit:ro
+      - type: bind
+        source: ./testdata/postfix/main.cf
+        target: /etc/postfix/custom-config/main.cf
+        read_only: true
+      - type: bind
+        source: ./postfix/master.cf
+        target: /etc/postfix/custom-config/master.cf
+        read_only: true
+      - type: bind
+        source: ../../.artifacts/postfix-deployment/deploymentfixture
+        target: /testdata/deploymentfixture
+        read_only: true
+
+volumes:
+  test-daemon-inbound:
+  test-daemon-originator:
+  test-daemon-transit:
+  test-milter-inbound:
+  test-milter-originator:
+  test-milter-transit:
+  test-socket-inbound:
+  test-socket-originator:
+  test-socket-transit:
+  test-dns:

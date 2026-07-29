@@ -1,0 +1,73 @@
+{
+  "schema": "dkim2-image-tool-allowlist-v1",
+  "tools": [
+    {
+      "name": "syft",
+      "version": "1.46.0",
+      "platforms": [
+        {
+          "goos": "darwin",
+          "goarch": "amd64",
+          "asset": "syft_1.46.0_darwin_amd64.tar.gz",
+          "archive_sha256": "5c983db13533de02e5331aae88091116f25365840741f86234084a30166672a7",
+          "binary_sha256": "41c563e6cdcd014779d833d4656f30134d1a9b1499f40a906fa89f4f1237f244"
+        },
+        {
+          "goos": "darwin",
+          "goarch": "arm64",
+          "asset": "syft_1.46.0_darwin_arm64.tar.gz",
+          "archive_sha256": "cd4e2c40e075684a5746d8959f76b6572bb2d2dda8cf6877dbfff1cc0baeea01",
+          "binary_sha256": "6757adfe331f9ee300fe8b442f01cd3d91efc8d0c29bb2f11dc25878255d22fc"
+        },
+        {
+          "goos": "linux",
+          "goarch": "amd64",
+          "asset": "syft_1.46.0_linux_amd64.tar.gz",
+          "archive_sha256": "d654f678b709eb53c393d38519d5ed7d2e57205529404018614cfefa0fb2b5ca",
+          "binary_sha256": "574df1a0862ff88ad933be214e81069e35b17618a13e019f8f1c84fe063222a2"
+        },
+        {
+          "goos": "linux",
+          "goarch": "arm64",
+          "asset": "syft_1.46.0_linux_arm64.tar.gz",
+          "archive_sha256": "9fafef4db4f032ce81008d3a1529985d41ceb6ccdf2b388c9ce2f1ed7d32082e",
+          "binary_sha256": "9640d29da74a63de41d2cc2373ac2092462165ee99709f7d8dc3dea57a748b06"
+        }
+      ]
+    },
+    {
+      "name": "trivy",
+      "version": "0.72.0",
+      "platforms": [
+        {
+          "goos": "darwin",
+          "goarch": "amd64",
+          "asset": "trivy_0.72.0_macOS-64bit.tar.gz",
+          "archive_sha256": "ee5e60df8a98e5b89fd74a6d86f9e5c7e9a266a35002cb1e43291698b3bfee08",
+          "binary_sha256": "83091cbb37cd8fae4890fb494d225fb23e27cdf1d10f9300a3a13dcfcaf12952"
+        },
+        {
+          "goos": "darwin",
+          "goarch": "arm64",
+          "asset": "trivy_0.72.0_macOS-ARM64.tar.gz",
+          "archive_sha256": "88f208680dc05da2b459e19b4f5aa2b4dc7c2117892ba4aab2ae63baba330016",
+          "binary_sha256": "7f8266768e8ba12d17800c67725613855737e9afcfb681ce11f55d7b86632672"
+        },
+        {
+          "goos": "linux",
+          "goarch": "amd64",
+          "asset": "trivy_0.72.0_Linux-64bit.tar.gz",
+          "archive_sha256": "bbb64b9695866ce4a7a8f5c9592002c5961cab378577fa3f8a040df362b9b2ea",
+          "binary_sha256": "0e69edd134a3c338baa1a6806920773615d682b18cbc6a0cba2a3b658ef9b63e"
+        },
+        {
+          "goos": "linux",
+          "goarch": "arm64",
+          "asset": "trivy_0.72.0_Linux-ARM64.tar.gz",
+          "archive_sha256": "2ca2c023109c2db6b2b77366b6717291452d4531167377d95c79547f0c8e3467",
+          "binary_sha256": "829aca12d32bc3cee0b01cbb76197e9377790c6b78eb67a703d8033bcf7b3c3d"
+        }
+      ]
+    }
+  ]
+}

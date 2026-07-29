@@ -1,0 +1,7 @@
+services:
+  postfix:
+    ports:
+      - target: 25
+        published: "2525"
+        host_ip: 127.0.0.1
+        protocol: tcp

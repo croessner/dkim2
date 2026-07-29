@@ -93,6 +93,16 @@ func inspectDescriptorAccess(fd int, directory bool, acceptedMode uint32) error 
 	return err
 }
 
+// inspectTrustedRootAccess applies the standard Darwin root-directory policy.
+func inspectTrustedRootAccess(fd int, acceptedMode uint32) error {
+	return inspectDescriptorAccess(fd, true, acceptedMode)
+}
+
+// inspectTrustedAncestorAccess applies the standard Darwin directory policy.
+func inspectTrustedAncestorAccess(fd int, acceptedMode uint32, _ bool) error {
+	return inspectDescriptorAccess(fd, true, acceptedMode)
+}
+
 // descriptorAccessFingerprint validates and fingerprints the descriptor-native
 // Darwin filesystem and extended-ACL state without reopening a pathname.
 func descriptorAccessFingerprint(fd int, directory bool, acceptedMode uint32) ([32]byte, error) {

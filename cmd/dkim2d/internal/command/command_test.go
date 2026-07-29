@@ -25,6 +25,7 @@ const (
 type commandOwnerFake struct {
 	mu           sync.Mutex
 	closeCalls   int
+	closeError   error
 	stopLimit    time.Duration
 	stopError    error
 	panicOnClose bool
@@ -38,7 +39,7 @@ func (o *commandOwnerFake) Close() error {
 	if o.panicOnClose {
 		panic("protected marker")
 	}
-	return nil
+	return o.closeError
 }
 
 // stopTimeout returns the deterministic fake outer shutdown budget.
@@ -165,6 +166,80 @@ func TestRunServeCancellationStopsWithTheCommandBound(t *testing.T) {
 		application.startRemaining < app.LifecycleStartTimeout-time.Second ||
 		application.startRemaining > app.LifecycleStartTimeout {
 		t.Fatalf("start deadline remaining = %s", application.startRemaining)
+	}
+}
+
+// TestRunValidateLoadsAndReleasesProtectedState proves validation never builds the runtime.
+func TestRunValidateLoadsAndReleasesProtectedState(t *testing.T) {
+	t.Parallel()
+	owner := &commandOwnerFake{}
+	builds := 0
+	deps := commandDependencies{
+		load: func(path string, _ config.FlagValues) (bootstrapOwner, error) {
+			if path != testConfigPath {
+				t.Fatal("validation used an unexpected path")
+			}
+			return owner, nil
+		},
+		build: func(bootstrapOwner, time.Duration) (managedApplication, error) {
+			builds++
+			return nil, errCommandRuntime
+		},
+		withTimeout: context.WithTimeout,
+	}
+	if err := runValidate(testConfigPath, deps); err != nil {
+		t.Fatal(err)
+	}
+	if owner.closes() != 1 || builds != 0 {
+		t.Fatalf("validation closes=%d builds=%d", owner.closes(), builds)
+	}
+}
+
+// TestRunValidateFailsClosed proves invalid paths, load failures, and close failures are rejected.
+func TestRunValidateFailsClosed(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name       string
+		path       string
+		owner      bootstrapOwner
+		err        error
+		loadPanic  bool
+		wantCloses int
+	}{
+		{name: "relative path", path: "dkim2d.yaml", owner: &commandOwnerFake{}},
+		{name: "load failure", path: testConfigPath, err: errCommandRuntime},
+		{
+			name: "ambiguous load", path: testConfigPath,
+			owner: &commandOwnerFake{}, err: errCommandRuntime, wantCloses: 1,
+		},
+		{name: "load panic", path: testConfigPath, loadPanic: true},
+		{
+			name: "close failure", path: testConfigPath,
+			owner: &commandOwnerFake{closeError: errCommandRuntime}, wantCloses: 1,
+		},
+		{
+			name: "close panic", path: testConfigPath,
+			owner: &commandOwnerFake{panicOnClose: true}, wantCloses: 1,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			deps := commandDependencies{
+				load: func(string, config.FlagValues) (bootstrapOwner, error) {
+					if test.loadPanic {
+						panic("protected loader marker")
+					}
+					return test.owner, test.err
+				},
+			}
+			if err := runValidate(test.path, deps); !errors.Is(err, errCommandRuntime) {
+				t.Fatalf("runValidate() error = %v", err)
+			}
+			if owner, ok := test.owner.(*commandOwnerFake); ok &&
+				owner.closes() != test.wantCloses {
+				t.Fatalf("protected closes = %d, want %d", owner.closes(), test.wantCloses)
+			}
+		})
 	}
 }
 

@@ -44,6 +44,23 @@ help:
 		'  make check-security validate the closed fuzz and resource-owner inventory' \
 		'  make fuzz-security run every first-party fuzz target for at least ten seconds' \
 		'  make security      run the complete security profile and render evidence' \
+		'  make check-images  validate image and Compose policy' \
+		'  make product-binaries build reproducible Linux product binaries' \
+		'  make images-multiarch build local amd64/arm64 OCI layouts without publishing' \
+		'  make image-tools fetch exact allowlisted evidence tools' \
+		'  make image-inspect validate exact OCI descriptors and inventories' \
+		'  make image-runtime verify hardened real-container lifecycle behavior' \
+		'  make image-sbom generate SPDX 2.3 image SBOMs' \
+		'  make image-provenance generate subject-bound SLSA provenance' \
+		'  make image-vulnerability scan exact local OCI layouts' \
+		'  make image-reproducibility compare a second semantic OCI build' \
+		'  make image-evidence validate all candidate-bound image evidence' \
+		'  make image-release-evidence run the complete non-publishing image gate' \
+		'  make check-deployment validate the hardened Postfix Compose topology' \
+		'  make deployment-postfix run the complete isolated Postfix deployment proof' \
+		'  make deployment-security prove seeded packaging and runtime privacy' \
+		'  make check-operator-docs validate operator documentation links and deferrals' \
+		'  make check-release run all local packaging and release checks' \
 		'  make guardrails   run the local quality gate'
 
 .PHONY: fmt
@@ -129,8 +146,8 @@ check-openapi: check-workspace
 	cmp "$(OPENAPI_MILTER_OUTPUT)" "$$output/milter.gen.go"; \
 	cmp "$(OPENAPI_MILTER_TEST_SERVER_OUTPUT)" "$$output/milter-test-server.gen.go"; \
 	! rg -q '^output:' "$(OPENAPI_SERVER_CONFIG)" "$(OPENAPI_CLIENT_CONFIG)" "$(OPENAPI_MILTER_CONFIG)" "$(OPENAPI_MILTER_TEST_SERVER_CONFIG)"; \
-	rg -q '^[[:space:]]*(require[[:space:]]+)?github.com/getkin/kin-openapi v0\.135\.0$$' tools/go.mod; \
-	rg -q '^[[:space:]]*(require[[:space:]]+)?github.com/getkin/kin-openapi v0\.135\.0$$' cmd/dkim2d/go.mod; \
+	rg -q '^[[:space:]]*(require[[:space:]]+)?github.com/getkin/kin-openapi v0\.144\.0$$' tools/go.mod; \
+	rg -q '^[[:space:]]*(require[[:space:]]+)?github.com/getkin/kin-openapi v0\.144\.0$$' cmd/dkim2d/go.mod; \
 	rg -q '^[[:space:]]*github.com/oapi-codegen/oapi-codegen/v2 v2\.7\.1( // indirect)?$$' tools/go.mod; \
 	! rg -q 'github.com/oapi-codegen/runtime' cmd/dkim2d/go.mod cmd/dkim2ctl/go.mod cmd/dkim2-milter/go.mod; \
 	! rg -q 'github.com/oapi-codegen/runtime' cmd/dkim2d cmd/dkim2ctl cmd/dkim2-milter --glob '*.go'; \
@@ -273,3 +290,84 @@ security: check-security fuzz-security race-security vulnerability-security conf
 
 .PHONY: guardrails
 guardrails: fmt vet lint test race check-protected-platforms check-openapi check-vendor check-conformance conformance govulncheck
+
+.PHONY: product-binaries
+product-binaries:
+	@scripts/build-products.sh
+
+.PHONY: check-images
+check-images: product-binaries
+	@scripts/check-images.sh
+	@scripts/test-build-contract.sh
+
+.PHONY: images images-multiarch
+images: images-multiarch
+images-multiarch: check-images
+	@scripts/build-images.sh
+
+.PHONY: image-sbom
+image-sbom:
+	@scripts/image-evidence.sh sbom
+
+.PHONY: image-tools
+image-tools:
+	@scripts/fetch-image-tools.sh
+
+.PHONY: image-inspect
+image-inspect:
+	@scripts/inspect-images.sh check
+
+.PHONY: image-runtime
+image-runtime:
+	@scripts/test-image-runtime.sh
+
+.PHONY: image-provenance
+image-provenance:
+	@scripts/image-evidence.sh provenance
+
+.PHONY: image-vulnerability
+image-vulnerability:
+	@scripts/image-evidence.sh vulnerability
+
+.PHONY: image-reproducibility
+image-reproducibility:
+	@scripts/inspect-images.sh reproducibility
+
+.PHONY: image-evidence
+image-evidence:
+	@scripts/image-evidence.sh check
+
+.PHONY: image-release-evidence
+image-release-evidence:
+	@$(MAKE) image-tools
+	@$(MAKE) images-multiarch
+	@$(MAKE) image-inspect
+	@$(MAKE) image-runtime
+	@$(MAKE) image-sbom
+	@$(MAKE) image-provenance
+	@$(MAKE) image-vulnerability
+	@$(MAKE) image-reproducibility
+	@$(MAKE) image-evidence
+
+.PHONY: check-deployment
+check-deployment: check-images
+	@scripts/check-deployment.sh
+
+.PHONY: deployment-postfix
+deployment-postfix: check-deployment conformance-postfix
+	@$(MAKE) images-multiarch
+	@$(MAKE) image-inspect
+	@$(MAKE) image-runtime
+	@scripts/test-postfix-deployment.sh
+
+.PHONY: deployment-security
+deployment-security: image-release-evidence deployment-postfix
+	@scripts/test-privacy-evidence.sh
+
+.PHONY: check-operator-docs
+check-operator-docs:
+	@tools/check-operator-docs.sh
+
+.PHONY: check-release
+check-release: product-binaries check-images check-operator-docs check-workspace check-vendor check-openapi check-conformance check-security
+	@$(MAKE) image-release-evidence

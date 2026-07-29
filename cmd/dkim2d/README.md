@@ -1,14 +1,16 @@
 # dkim2d
 
 `dkim2d` is the local HTTP/JSON daemon around the standalone DKIM2 library.
-The current API is inbound-only: it performs verification, local policy
-evaluation, replay coordination, and disposition projection. It does not sign
-or revise messages.
+The current API performs inbound verification, local policy evaluation, replay
+coordination, and disposition projection, and also performs datasource-backed
+originator signing and ordinary-transit revision.
 
 The daemon is a thin adapter. Raw RFC 5322/RFC 6532 message bytes, SMTP
 envelope evidence, DKIM2 verification, policy, and replay semantics remain
 owned by `github.com/croessner/dkim2`. The authoritative REST contract is
 [`docs/specs/openapi/dkim2d.yaml`](../../docs/specs/openapi/dkim2d.yaml).
+The production navigation and container trust topology start in
+[`docs/operator/postfix-compose.md`](../../docs/operator/postfix-compose.md).
 
 ## Local Security Boundary
 
@@ -22,18 +24,20 @@ addresses, non-loopback addresses, IPv4-mapped IPv6, zone identifiers, Unix
 sockets, port zero, and multiple listeners are rejected. There is no remote
 plaintext compatibility mode.
 
-`/v1/process` additionally requires `X-DKIM2-Capability`. The value is the
-canonical unpadded Base64url encoding of the exact 32 raw bytes in the current
-generation's capability file. Missing, duplicate, malformed, noncanonical, or
-mismatching values all receive the same closed `403` response before
-readiness, body, DNS, policy, or replay work. `/healthz` and `/readyz` do not
-use this header.
+`/v1/process`, `/v1/sign`, and `/v1/revise` each require
+`X-DKIM2-Capability`. The value is the canonical unpadded Base64url encoding
+of the exact 32 raw bytes in that route's current-generation capability file.
+Process, sign, and revise capabilities must be distinct. Missing, duplicate,
+malformed, noncanonical, or mismatching values all receive the same closed
+`403` response before readiness, body, DNS, policy, replay, or signing work.
+`/healthz`, `/readyz`, and `/metrics` do not use this header.
 
 Grant capability-file access only to the daemon UID and approved local
 adapters. Do not place capability bytes or their encoded form in arguments,
 environment variables, logs, traces, metrics, diagnostics, or ordinary
-configuration. The current repository does not yet provide the protected
-client-side capability loader; that adapter-side owner is a separate delivery.
+configuration. `dkim2-milter` and `dkim2ctl` provide protected-file loaders for
+the capabilities they use; they never receive private keys or datasource
+records.
 
 Loopback HTTP is deliberately plaintext and HTTP/1-only. Do not put a reverse
 proxy, TCP forwarder, TLS terminator, container port publication, or other
@@ -46,6 +50,29 @@ Run:
 ```text
 dkim2d serve --config /absolute/path/to/dkim2d.yaml
 ```
+
+Before activation, validate the same configuration and complete protected
+generation without opening a listener:
+
+```text
+dkim2d validate --config /absolute/path/to/dkim2d.yaml
+```
+
+Validation performs the production descriptor-confined load, including the
+selected replay, tracing, datasource, signing-manifest, and PKCS#8 children,
+then releases all protected values. It is silent on success and never creates,
+repairs, changes ownership of, or rewrites protected state.
+
+The container readiness probe is:
+
+```text
+dkim2d probe
+```
+
+It performs one non-proxied, non-retrying, two-second `GET` of the fixed
+`http://127.0.0.1:8080/readyz` endpoint, discards bounded response bytes, and
+succeeds only on `200`. Deployments using the product image health check
+therefore keep the daemon on its default container-local authority.
 
 The command accepts no positional arguments. The only configuration flags are:
 
@@ -98,6 +125,51 @@ replay:
 
 Disabled replay is explicit local policy. It loads no replay HMAC, constructs
 no replay deriver, and does not silently fall back to another backend.
+
+### Flat-file signing and revision
+
+Signing is disabled by default. Enabling the flat-file backend requires one or
+both distinct signing-route capabilities and a datasource, private-key
+manifest, and referenced PKCS#8 children from the same protected generation:
+
+```yaml
+config:
+  version: dkim2d-config-v1
+protected:
+  generation: 0123456789abcdef0123456789abcdef
+server:
+  capability_file: /var/lib/dkim2d/protected/0123456789abcdef0123456789abcdef/capability
+  sign_capability_file: /var/lib/dkim2d/protected/0123456789abcdef0123456789abcdef/sign-capability
+  revise_capability_file: /var/lib/dkim2d/protected/0123456789abcdef0123456789abcdef/revise-capability
+replay:
+  backend: disabled
+signing:
+  backend: flat_file
+  datasource_file: /var/lib/dkim2d/protected/0123456789abcdef0123456789abcdef/datasource
+  private_manifest_file: /var/lib/dkim2d/protected/0123456789abcdef0123456789abcdef/private-manifest
+```
+
+Omit only the unused sign or revise capability. The datasource is the closed
+`dkim2-datasource-v1` format documented in
+[`docs/specs/implementation/datasource-providers.md`](../../docs/specs/implementation/datasource-providers.md).
+The private manifest is `dkim2-private-keys-v1`; every entry binds one exact
+tenant, domain, `originator` or `ordinary_transit` use, opaque datasource
+handle, `rsa-sha256` or
+`ed25519-sha256` algorithm, canonical Base64 SHA-256 digest of the public SPKI,
+and direct-child private-key filename. A private-key child is one unencrypted
+PKCS#8 `PRIVATE KEY` PEM whose derived public key matches that digest,
+algorithm, datasource credential, and handle. Unknown fields, duplicate
+bindings, aliasing children, mixed identities, encrypted or legacy PEM, and
+partial generations fail the complete load. Documentation and test fixtures
+use reserved `.test` identities; operators supply only their own authorized
+production policy.
+
+The reload interval revalidates the same descriptor-confined snapshot; it does
+not authorize editing an active protected generation or switching generation
+selectors. A complete valid candidate is published atomically. An invalid
+candidate is never published: the prior snapshot remains retained only for
+owned in-flight work while the runtime becomes degraded and readiness
+withdraws.
 
 ### Process-local memory replay
 
@@ -210,6 +282,8 @@ Exactly these paths are routable:
 | `GET`, `HEAD` | `/healthz` | In-process liveness; no dependency I/O |
 | `GET`, `HEAD` | `/readyz` | No-I/O readiness snapshot |
 | `POST` | `/v1/process` | Verification, policy, replay, disposition |
+| `POST` | `/v1/sign` | Originator signing and ordered append-only actions |
+| `POST` | `/v1/revise` | Ordinary-transit verification, revision, and ordered actions |
 
 Health and readiness support their declared strong-ETag conditional behavior.
 Readiness is `200` only after immutable configuration and protected loading,
@@ -223,6 +297,14 @@ passes the exact decoded message and UTF-8 envelope spellings to the library;
 it does not normalize headers, MIME, EAI, SMTPUTF8, or envelope values.
 Malformed mail-domain evidence is represented by the library's bounded domain
 result rather than repaired by the HTTP layer.
+
+Sign requests carry the exact outgoing message and SMTP envelope plus a
+server-owned tenant/domain selector. Revise requests additionally carry exact
+incoming SMTP envelope evidence. The daemon resolves policy and private-key
+handles from its current signing snapshot and returns only a closed ordered
+append-only header action plan; it never exposes a private key, capability,
+datasource record, or handle. Generated OpenAPI DTOs remain at this HTTP
+boundary and are not a second protocol model.
 
 Every application response has `Connection: close`. Connection reuse,
 pipelining, HTTP/2, h2c, generic path cleaning, and redirects are not supported.
@@ -310,9 +392,7 @@ restart.
 
 The current daemon does not provide:
 
-- signing or revision endpoints;
 - Milter or Exim action application;
-- a protected generated-client capability loader;
 - remote HTTP exposure, TLS serving, proxy trust, Unix sockets, or multiple
   listeners;
 - OAuth, bearer tokens, request-selected policy, or remote authentication;

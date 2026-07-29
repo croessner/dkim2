@@ -903,11 +903,13 @@ type PolicyResultVerdict string
 
 // ProcessRequest defines model for ProcessRequest.
 type ProcessRequest struct {
-	ApiVersion APIVersion        `json:"api_version"`
-	Draft      DraftVersion      `json:"draft"`
-	Message    MessageInput      `json:"message"`
-	Reporting  *ReportingContext `json:"reporting,omitempty"`
-	Smtp       SMTPInput         `json:"smtp"`
+	ApiVersion APIVersion   `json:"api_version"`
+	Draft      DraftVersion `json:"draft"`
+	Message    MessageInput `json:"message"`
+
+	// Reporting Optional daemon reporting authority. When supplied for an accepting outcome, the daemon returns the exact Authentication-Results action; adapters must not synthesize it.
+	Reporting *ReportingContext `json:"reporting,omitempty"`
+	Smtp      SMTPInput         `json:"smtp"`
 }
 
 // ProcessResponse defines model for ProcessResponse.
@@ -946,12 +948,14 @@ type ReportingContext struct {
 
 // ReviseRequest defines model for ReviseRequest.
 type ReviseRequest struct {
-	ApiVersion   APIVersion     `json:"api_version"`
-	Context      SigningContext `json:"context"`
-	Draft        DraftVersion   `json:"draft"`
-	IncomingSmtp SMTPInput      `json:"incoming_smtp"`
-	Message      MessageInput   `json:"message"`
-	Smtp         SMTPInput      `json:"smtp"`
+	ApiVersion APIVersion     `json:"api_version"`
+	Context    SigningContext `json:"context"`
+	Draft      DraftVersion   `json:"draft"`
+
+	// IncomingSmtp Exact inherited envelope evidence verified before revision. The smtp member is the distinct outgoing signing envelope.
+	IncomingSmtp SMTPInput    `json:"incoming_smtp"`
+	Message      MessageInput `json:"message"`
+	Smtp         SMTPInput    `json:"smtp"`
 }
 
 // SMTPInput defines model for SMTPInput.

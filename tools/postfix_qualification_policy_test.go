@@ -238,15 +238,19 @@ func TestPostfixQualificationPinsBuildInputsAndCleanup(t *testing.T) {
 	if bytes.Contains(composeInput, []byte("m18")) {
 		t.Fatal("qualification Compose file used a transient milestone name")
 	}
-	ignore := readRepositoryFile(t, ".dockerignore", 1<<16)
+	ignore := readQualificationFile(t, "Dockerfile.dockerignore", 1<<16)
 	for _, required := range [][]byte{
 		[]byte("**\n"), []byte("!lib/**"), []byte("!cmd/dkim2d/**"),
 		[]byte("!cmd/dkim2-milter/**"),
-		[]byte("!contrib/qualification/postfix-milter/**"),
+		[]byte("!contrib/qualification/postfix-milter/cmd/qualify/main.go"),
 	} {
 		if !bytes.Contains(ignore, required) {
 			t.Fatal("Docker build context was not closed to qualification inputs")
 		}
+	}
+	productIgnore := readRepositoryFile(t, ".dockerignore", 1<<16)
+	if bytes.Contains(productIgnore, []byte("!contrib/")) {
+		t.Fatal("product image context admitted qualification inputs")
 	}
 }
 

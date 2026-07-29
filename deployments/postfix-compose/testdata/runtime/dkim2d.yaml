@@ -1,0 +1,23 @@
+config:
+  version: dkim2d-config-v1
+protected:
+  generation: 0123456789abcdef0123456789abcdef
+server:
+  listen: 127.0.0.1:8080
+  capability_file: /state/0123456789abcdef0123456789abcdef/capability
+  read_header_timeout: 5s
+  read_timeout: 30s
+  write_timeout: 65s
+  request_deadline: 60s
+  max_in_flight: 2
+replay:
+  backend: disabled
+observability:
+  logging:
+    level: info
+  debug:
+    message_shape: false
+    dns: false
+    replay: false
+  tracing:
+    exporter: none

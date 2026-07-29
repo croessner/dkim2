@@ -334,13 +334,13 @@ func validateSnapshot(values map[string]rawValue, presence map[string]Presence) 
 	}
 	protectedPaths := append([]string{server.capabilityFile}, replayProtectedPaths(replay)...)
 	if signing.backend == SigningFlatFile {
-		protectedPaths = append(
-			protectedPaths,
-			server.signCapabilityFile,
-			server.reviseCapabilityFile,
-			signing.datasourceFile,
-			signing.privateManifestFile,
-		)
+		if server.signCapabilityFile != "" {
+			protectedPaths = append(protectedPaths, server.signCapabilityFile)
+		}
+		if server.reviseCapabilityFile != "" {
+			protectedPaths = append(protectedPaths, server.reviseCapabilityFile)
+		}
+		protectedPaths = append(protectedPaths, signing.datasourceFile, signing.privateManifestFile)
 	}
 	if !sameGenerationPaths(generation, protectedPaths...) || !allDistinct(protectedPaths) {
 		return nil, newError(CodeInvalidField)
@@ -568,12 +568,15 @@ func parseSigning(
 		pathSigningBackend,
 		pathSigningDatasource,
 		pathSigningManifest,
-		pathServerSignCapability,
-		pathServerReviseCapability,
 	} {
 		if !presence[path].Explicit() {
 			return signingState{}, newError(CodeInvalidMatrix)
 		}
+	}
+	signPresent := presence[pathServerSignCapability].Explicit()
+	revisePresent := presence[pathServerReviseCapability].Explicit()
+	if !signPresent && !revisePresent {
+		return signingState{}, newError(CodeInvalidMatrix)
 	}
 	reload, err := durationValue(
 		values, pathSigningReload, time.Second, time.Hour, false,
@@ -590,12 +593,12 @@ func parseSigning(
 	}
 	datasourceFile := text(values, pathSigningDatasource)
 	manifestFile := text(values, pathSigningManifest)
-	paths := []string{
-		server.capabilityFile,
-		server.signCapabilityFile,
-		server.reviseCapabilityFile,
-		datasourceFile,
-		manifestFile,
+	paths := []string{server.capabilityFile, datasourceFile, manifestFile}
+	if signPresent {
+		paths = append(paths, server.signCapabilityFile)
+	}
+	if revisePresent {
+		paths = append(paths, server.reviseCapabilityFile)
 	}
 	if !sameGenerationPaths(generation, paths...) || !allDistinct(paths) {
 		return signingState{}, newError(CodeInvalidField)

@@ -1,0 +1,124 @@
+# Container Build And Supply-Chain Verification
+
+The container delivery is product policy. It does not add requirements to
+`draft-ietf-dkim-dkim2-spec-04` or the tested historical
+`draft-chuang-dkim2-dns-04` DNS baseline.
+
+## Build contract
+
+`build/container/Containerfile` has closed `dkim2d`, `dkim2-milter`, and
+`dkim2ctl` targets. `build/container/build-inputs.json` is the central closed
+policy for the digest-pinned build-only BusyBox metadata validator, Go 1.26.5
+builder, and BuildKit executor. The minimal validator rejects hostile build
+metadata before source or vendor bytes are copied and emits one `/validated`
+dependency consumed by every product build. The final stages are `scratch`,
+run as numeric UID/GID `2000:2000`, and contain one product binary plus the
+read-only deterministic third-party notice bundle at
+`/usr/share/licenses/dkim2/THIRD_PARTY_NOTICES.txt`. The bundle preserves the
+pinned Go toolchain license and patent notice as well as license and notice
+files from the checked-in vendor tree. Images contain neither the validation
+marker nor a shell, package manager, compiler, source, cache, or test material.
+
+Build metadata is accepted only through the closed version, 40-character
+lowercase source revision, clean/dirty state, and decimal
+`SOURCE_DATE_EPOCH` fields. Builds use the checked-in workspace vendor tree,
+`CGO_ENABLED=0`, `-trimpath`, an empty Go build ID, and no VCS embedding.
+Linux `amd64` and `arm64` are the only image platforms.
+
+The checked OCI labels are source, revision, version, creation time, vendor,
+documentation, license, product title, and product description. Their exact
+allowlist and values are enforced by the image policy tool from the
+Containerfile and candidate metadata; this guide does not maintain a parallel
+label table. The production deployment and lifecycle entry point is
+[`docs/operator/postfix-compose.md`](postfix-compose.md).
+
+The repository does not currently declare a root project license. The
+`org.opencontainers.image.licenses=NOASSERTION` label is therefore a deliberate
+non-assertion, and the third-party bundle must not be interpreted as granting a
+license for the DKIM2 project itself.
+
+The byte-reproducibility claim covers the six product binaries and their
+notice bundles when source, toolchain, architecture, vendor tree, and metadata
+are identical. OCI output is compared semantically by descriptors, config,
+filesystem inventory, ownership, modes, entrypoint, user, and labels. OCI
+archive byte identity is not claimed because compression and BuildKit
+attestation ordering can differ.
+
+Run:
+
+```text
+make product-binaries
+make check-images
+make images-multiarch
+```
+
+The OCI layouts remain under ignored `.artifacts/`; these commands neither
+push nor sign.
+
+## SBOM, provenance, and vulnerability evidence
+
+BuildKit's implicit SBOM and provenance exporters are disabled so their
+version-dependent ordering cannot be mistaken for reviewed evidence. The
+repository-owned targets produce and validate explicit evidence instead:
+
+```text
+make image-tools
+make image-inspect
+make image-runtime
+make image-sbom
+make image-provenance
+make image-vulnerability
+make image-reproducibility
+make image-evidence
+make check-release
+```
+
+The local SBOM producer is Syft 1.46.0 and emits SPDX 2.3 JSON. The local
+scanner is Trivy 0.72.0. Tool upgrades are explicit reviewed changes. A
+vulnerability database update is allowed only as part of the scanner's
+documented bounded update step. Each offline scan uses a private copy-on-write
+snapshot created from no-follow, owned, one-link descriptors. The scanner
+executable, OCI layout, metadata, and database bytes are therefore detached
+from mutable workspace paths without copying the 2 GiB-bounded database into
+memory or into a second full allocation. The source layout, database
+descriptors, tool identity, and candidate are checked before and after every
+scan. Scanner execution has a fixed timeout, a minimal credential-free
+environment, bounded output and diagnostics, and no network update path.
+
+Ignored release evidence contains only the portable projection: candidate and
+tool identity, the fixed database limit, metadata/database sizes and SHA-256
+digests, the shared scan time, and the validated database schema and update
+timestamps. The guard rejects a database that is expired at scan or evidence
+verification time, more than 48 hours behind its update time, or implausibly
+future-dated beyond five minutes. Device, inode, owner, mode, and filesystem
+timestamps remain private guard state and are never serialized. Every
+reported vulnerability fails the target irrespective of its severity label;
+`govulncheck` remains an independent required Go reachability gate.
+
+Provenance uses an in-toto Statement v1 with the SLSA provenance v1 predicate
+and binds the exact local OCI archive subject, platform descriptors, source
+revision, metadata-validator image, builder image, and BuildKit image from the
+central input policy. Local and ordinary-CI provenance is explicitly
+`local-test`, demonstrates only the data contract, and is never trusted
+publication evidence.
+
+Pull requests and ordinary pushes have `contents: read` only. They receive no
+package write, OIDC, registry credential, or signing authority.
+`.github/workflows/container-publish.yml` is the separately authorized
+publication route. It is triggered only by a published, non-draft,
+non-prerelease protected release tag, is additionally gated by the
+`container-release` environment, and fixes the GHCR namespace. The workflow
+repeats the complete local release verification, builds from a private
+descriptor-bound candidate context, compares both published platform
+manifests with the reviewed local subjects, and reads the pushed index and
+every version alias back by digest. The pinned `actions/attest` producer then
+uses release-job-only OIDC and attestation permission to sign provenance for
+each exact image-index digest and SPDX evidence for each exact platform
+manifest. The workflow verifies repository, signer-workflow, source revision,
+source ref, hosted-runner policy, subject digest, and predicate type with
+the SHA-256-pinned GitHub CLI 2.94.0 verifier. The exact attestation action,
+archive, extracted verifier binary, and SPDX predicate identities live in
+`build/container/publication-tools.json`; the preinstalled runner `gh` is not
+trusted. `latest` is never produced or used as deployment authority. Defining
+this route does not publish anything; publication occurs only when maintainers
+separately create the protected release and approve its environment gate.

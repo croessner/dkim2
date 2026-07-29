@@ -252,17 +252,18 @@ func selectedProtectedPaths(snapshot Snapshot) []selectedProtectedPath {
 		role: protectedCapability,
 	}}
 	if snapshot.Signing().Enabled() {
-		paths = append(
-			paths,
-			selectedProtectedPath{
+		if snapshot.Server().SignEnabled() {
+			paths = append(paths, selectedProtectedPath{
 				path: snapshot.Server().SignCapabilityFile(),
 				role: protectedSignCapability,
-			},
-			selectedProtectedPath{
+			})
+		}
+		if snapshot.Server().ReviseEnabled() {
+			paths = append(paths, selectedProtectedPath{
 				path: snapshot.Server().ReviseCapabilityFile(),
 				role: protectedReviseCapability,
-			},
-		)
+			})
+		}
 	}
 	replay := snapshot.Replay()
 	if replay.Enabled() {
@@ -387,13 +388,13 @@ func buildProtectedState(
 				return nil, err
 			}
 			copy(state.signCapability[:], file.data)
-			state.hasSigning = true
+			state.hasSign = true
 		case protectedReviseCapability:
 			if err := validateExactKey(file.data); err != nil {
 				return nil, err
 			}
 			copy(state.reviseCapability[:], file.data)
-			state.hasSigning = true
+			state.hasRevise = true
 		case protectedHMAC:
 			if err := validateExactKey(file.data); err != nil {
 				return nil, err
@@ -427,7 +428,10 @@ func buildProtectedState(
 		}
 	}
 	if snapshot.Signing().Enabled() {
-		if generationFD < 0 || !state.hasSigning {
+		if generationFD < 0 ||
+			state.hasSign != snapshot.Server().SignEnabled() ||
+			state.hasRevise != snapshot.Server().ReviseEnabled() ||
+			(!state.hasSign && !state.hasRevise) {
 			return nil, newError(CodeProtectedContent)
 		}
 		store, err := signingstore.NewRuntime(
@@ -648,7 +652,7 @@ func openProtectedPathAndParent(
 	if err != nil {
 		return ownedDescriptor{fd: -1}, ownedDescriptor{fd: -1}, nil, err
 	}
-	current, err := openRootDescriptor(effectiveUID)
+	current, err := openRootDescriptor()
 	if err != nil {
 		return ownedDescriptor{fd: -1}, ownedDescriptor{fd: -1}, nil, err
 	}
@@ -697,17 +701,31 @@ func openProtectedPathAndParent(
 }
 
 // openRootDescriptor opens and validates the filesystem root as the first trusted parent.
-func openRootDescriptor(effectiveUID uint32) (ownedDescriptor, error) {
+func openRootDescriptor() (ownedDescriptor, error) {
 	fd, err := retryOpenat(unix.AT_FDCWD, "/", directoryOpenFlags())
 	if err != nil {
 		return ownedDescriptor{fd: -1}, err
 	}
 	descriptor := newOwnedDescriptor(fd)
-	if err := validateTrustedDirectory(fd, effectiveUID); err != nil {
+	if err := validateTrustedRootDirectory(fd); err != nil {
 		_ = descriptor.close()
 		return ownedDescriptor{fd: -1}, err
 	}
 	return descriptor, nil
+}
+
+// validateTrustedRootDirectory permits only the closed container-root exception.
+func validateTrustedRootDirectory(fd int) error {
+	metadata, err := statDescriptor(fd)
+	if err != nil {
+		return err
+	}
+	if metadata.typeBits != unix.S_IFDIR ||
+		metadata.uid != 0 ||
+		metadata.modeBits&0o022 != 0 {
+		return newError(CodeProtectedAccess)
+	}
+	return inspectTrustedRootAccess(fd, metadata.modeBits)
 }
 
 // openProtectedChild opens a preclassified regular child relative to the generation descriptor.
@@ -755,7 +773,11 @@ func validateTrustedDirectory(fd int, effectiveUID uint32) error {
 		metadata.modeBits&0o022 != 0 {
 		return newError(CodeProtectedAccess)
 	}
-	return inspectDescriptorAccess(fd, true, metadata.modeBits)
+	return inspectTrustedAncestorAccess(
+		fd,
+		metadata.modeBits,
+		metadata.uid == 0,
+	)
 }
 
 // retryOpenat retries interrupted descriptor opens and maps all failures content-free.

@@ -1,0 +1,125 @@
+FROM scratch AS context-audit
+COPY . /context
+
+FROM --platform=$BUILDPLATFORM busybox:1.37.0@sha256:9532d8c39891ca2ecde4d30d7710e01fb739c87a8b9299685c63704296b16028 AS build-metadata
+ARG TARGETARCH
+ARG VERSION
+ARG REVISION
+ARG SOURCE_DATE_EPOCH
+ARG CREATED
+ARG DIRTY
+RUN test "${TARGETARCH}" = amd64 -o "${TARGETARCH}" = arm64
+RUN case "${VERSION}" in \
+      0.0.0-dev) ;; \
+      v*) value="${VERSION#v}"; major="${value%%.*}"; rest="${value#*.}"; \
+          minor="${rest%%.*}"; patch="${rest#*.}"; \
+          test "${rest}" != "${value}" && test "${patch}" != "${rest}" && \
+          test "${patch}" = "${patch%%.*}" && \
+          case "${major}:${minor}:${patch}" in \
+            *[!0-9:]*|:*|*::*|*:) exit 2 ;; \
+          esac && \
+          test "${#major}" -le 10 && test "${#minor}" -le 10 && \
+          test "${#patch}" -le 10 && \
+          case "${major}" in 0|[1-9]*) ;; *) exit 2 ;; esac && \
+          case "${minor}" in 0|[1-9]*) ;; *) exit 2 ;; esac && \
+          case "${patch}" in 0|[1-9]*) ;; *) exit 2 ;; esac ;; \
+      *) exit 2 ;; \
+    esac \
+    && test "${#REVISION}" -eq 40 \
+    && case "${REVISION}" in *[!0-9a-f]*) exit 2;; esac \
+    && case "${SOURCE_DATE_EPOCH}" in ""|*[!0-9]*) exit 2;; esac \
+    && case "${CREATED}" in ????-??-??T??:??:??Z) ;; *) exit 2;; esac \
+    && test "${DIRTY}" = clean -o "${DIRTY}" = dirty \
+    && printf '%s\n' dkim2-build-metadata-v1 > /validated
+
+FROM --platform=$BUILDPLATFORM golang:1.26.5-bookworm@sha256:1ecb7edf62a0408027bd5729dfd6b1b8766e578e8df93995b225dfd0944eb651 AS build
+ARG TARGETARCH
+ARG VERSION
+WORKDIR /src
+COPY --from=build-metadata /validated /validated
+COPY go.work go.work.sum ./
+COPY lib ./lib
+COPY cmd/dkim2d ./cmd/dkim2d
+COPY cmd/dkim2-milter ./cmd/dkim2-milter
+COPY cmd/dkim2ctl ./cmd/dkim2ctl
+COPY tools/go.mod tools/go.sum ./tools/
+COPY vendor ./vendor
+RUN --network=none --mount=type=tmpfs,target=/root/.cache \
+    CGO_ENABLED=0 GOOS=linux GOARCH="${TARGETARCH}" GOFLAGS=-mod=vendor \
+    go build -buildvcs=false -trimpath -ldflags="-buildid= -X github.com/croessner/dkim2/cmd/dkim2d/internal/command.buildVersion=${VERSION}" \
+    -o /out/dkim2d ./cmd/dkim2d
+RUN --network=none --mount=type=tmpfs,target=/root/.cache \
+    CGO_ENABLED=0 GOOS=linux GOARCH="${TARGETARCH}" GOFLAGS=-mod=vendor \
+    go build -buildvcs=false -trimpath -ldflags="-buildid= -X github.com/croessner/dkim2/cmd/dkim2-milter/internal/command.buildVersion=${VERSION}" \
+    -o /out/dkim2-milter ./cmd/dkim2-milter
+RUN --network=none --mount=type=tmpfs,target=/root/.cache \
+    CGO_ENABLED=0 GOOS=linux GOARCH="${TARGETARCH}" GOFLAGS=-mod=vendor \
+    go build -buildvcs=false -trimpath -ldflags="-buildid= -X github.com/croessner/dkim2/cmd/dkim2ctl/internal/command.buildVersion=${VERSION}" \
+    -o /out/dkim2ctl ./cmd/dkim2ctl
+RUN set -eu; \
+    notices=/out/THIRD_PARTY_NOTICES.txt; \
+    printf '%s\n' \
+      'Third-party license and notice files distributed with DKIM2 binaries' \
+      >"${notices}"; \
+    for license in /usr/local/go/LICENSE /usr/local/go/PATENTS; do \
+      test -f "${license}"; \
+      printf '\n===== go/%s =====\n' "${license##*/}" >>"${notices}"; \
+      sed -n '1,$p' "${license}" >>"${notices}"; \
+      printf '\n' >>"${notices}"; \
+    done; \
+    find vendor -type f \
+      \( -name 'LICENSE' -o -name 'LICENSE.*' -o \
+         -name 'LICENCE' -o -name 'LICENCE.*' -o \
+         -name 'COPYING' -o -name 'COPYING.*' -o \
+         -name 'NOTICE' -o -name 'NOTICE.*' \) \
+      -print | LC_ALL=C sort | \
+      while IFS= read -r license; do \
+        printf '\n===== %s =====\n' "${license}" >>"${notices}"; \
+        sed -n '1,$p' "${license}" >>"${notices}"; \
+        printf '\n' >>"${notices}"; \
+      done; \
+    test -s "${notices}"; \
+    for product in dkim2d dkim2-milter dkim2ctl; do \
+      for directory in \
+        usr usr/local usr/local/bin \
+        usr/share usr/share/licenses usr/share/licenses/dkim2; do \
+        install -d -m 0555 "/runtime/${product}/${directory}"; \
+      done; \
+      install -m 0555 "/out/${product}" \
+        "/runtime/${product}/usr/local/bin/${product}"; \
+      install -m 0444 "${notices}" \
+        "/runtime/${product}/usr/share/licenses/dkim2/THIRD_PARTY_NOTICES.txt"; \
+    done
+
+FROM scratch AS runtime-common
+ARG VERSION
+ARG REVISION
+ARG SOURCE_DATE_EPOCH
+ARG CREATED
+LABEL org.opencontainers.image.source="https://github.com/croessner/dkim2" \
+      org.opencontainers.image.revision="${REVISION}" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.created="${CREATED}" \
+      org.opencontainers.image.vendor="DKIM2 reference implementation" \
+      org.opencontainers.image.documentation="https://github.com/croessner/dkim2/tree/main/docs/operator" \
+      org.opencontainers.image.licenses="NOASSERTION"
+USER 2000:2000
+
+FROM runtime-common AS dkim2d
+LABEL org.opencontainers.image.title="dkim2d" \
+      org.opencontainers.image.description="Loopback-only DKIM2 processing daemon"
+COPY --from=build /runtime/dkim2d/ /
+HEALTHCHECK --interval=10s --timeout=3s --retries=3 CMD ["/usr/local/bin/dkim2d", "probe"]
+ENTRYPOINT ["/usr/local/bin/dkim2d"]
+
+FROM runtime-common AS dkim2-milter
+LABEL org.opencontainers.image.title="dkim2-milter" \
+      org.opencontainers.image.description="Unix-socket DKIM2 Milter adapter"
+COPY --from=build /runtime/dkim2-milter/ /
+ENTRYPOINT ["/usr/local/bin/dkim2-milter"]
+
+FROM runtime-common AS dkim2ctl
+LABEL org.opencontainers.image.title="dkim2ctl" \
+      org.opencontainers.image.description="Generated-client DKIM2 conformance utility"
+COPY --from=build /runtime/dkim2ctl/ /
+ENTRYPOINT ["/usr/local/bin/dkim2ctl"]

@@ -1,0 +1,27 @@
+version: dkim2-milter-config-v1
+server:
+  socket: /run/dkim2/runtime.sock
+  socket_mode: "0660"
+  shutdown_timeout: 5s
+  max_connections: 8
+  max_in_flight_messages: 4
+  max_buffered_bytes: 67108864
+daemon:
+  endpoint: http://127.0.0.1:8080
+  capability_file: /etc/dkim2-milter/protected/capability
+  request_timeout: 5s
+mode: inbound
+authentication_results:
+  enabled: true
+  authserv_id: mx.runtime.example.test
+failure:
+  mode: tempfail
+limits:
+  message_bytes: 1048576
+  header_bytes: 131072
+  header_count: 250
+  header_field_bytes: 16384
+  recipient_count: 50
+observability:
+  logging:
+    level: info

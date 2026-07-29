@@ -188,6 +188,16 @@ func (c ServerConfig) ReviseCapabilityFile() string {
 	return c.state.reviseCapabilityFile
 }
 
+// SignEnabled reports whether the originator route has explicit capability authority.
+func (c ServerConfig) SignEnabled() bool {
+	return c.state != nil && c.state.signCapabilityFile != ""
+}
+
+// ReviseEnabled reports whether the revision route has explicit capability authority.
+func (c ServerConfig) ReviseEnabled() bool {
+	return c.state != nil && c.state.reviseCapabilityFile != ""
+}
+
 // Backend returns the selected signing backend.
 func (c SigningConfig) Backend() SigningBackend {
 	if c.state == nil {

@@ -1,0 +1,214 @@
+name: Protected container publication
+
+on:
+  release:
+    types:
+      - published
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    if: >-
+      github.event.release.draft == false &&
+      github.event.release.prerelease == false &&
+      github.ref_protected == true
+    environment: container-release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    steps:
+      - name: Check out exact protected release tag
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.release.tag_name }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install exact Go toolchain
+        uses: actions/setup-go@0a12ed9d6a96ab950c8f026ed9f722fe0da7ef32
+        with:
+          go-version: "1.26.5"
+          cache: false
+
+      - name: Verify exact release candidate and evidence
+        run: make check-release
+
+      - name: Publish exact verified subjects
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: scripts/publish-images.sh
+
+      - name: Establish invocation-owned attestation registry credentials
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -eu
+          directory="$RUNNER_TEMP/dkim2-attestation-docker"
+          test ! -e "$directory"
+          mkdir -m 0700 "$directory"
+          printf 'DOCKER_CONFIG=%s\n' "$directory" >>"$GITHUB_ENV"
+          printf '%s\n' '{"auths":{}}' >"$directory/config.json"
+          printf '%s' "$GITHUB_TOKEN" |
+            DOCKER_CONFIG="$directory" docker login ghcr.io \
+              --username "$GITHUB_ACTOR" --password-stdin >/dev/null
+
+      - name: Load closed publication subjects
+        id: subjects
+        run: |
+          set -eu
+          evidence=.artifacts/image-evidence
+          publication=.artifacts/publication-subjects.json
+          jq -e '
+            .schema == "dkim2-container-publication-subjects-v1" and
+            .workflow == "croessner/dkim2/.github/workflows/container-publish.yml" and
+            all(.products[];
+              .subject_digest | test("^sha256:[0-9a-f]{64}$"))
+          ' "$publication" >/dev/null
+          for product in dkim2d dkim2-milter dkim2ctl; do
+            key=$(printf '%s' "$product" | tr - _)
+            digest=$(jq -er --arg product "$product" \
+              '.products[$product].subject_digest' "$publication")
+            printf '%s=%s\n' "$key" "$digest" >>"$GITHUB_OUTPUT"
+            for architecture in amd64 arm64; do
+              platform="linux/$architecture"
+              digest=$(jq -er --arg platform "$platform" \
+                '.platforms[] |
+                  select(.platform == $platform) |
+                  .manifest_digest' "$evidence/$product.oci.json")
+              printf '%s_%s=%s\n' \
+                "$key" "$architecture" "$digest" >>"$GITHUB_OUTPUT"
+            done
+          done
+
+      - name: Attest dkim2d provenance
+        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6
+        with:
+          subject-name: ghcr.io/croessner/dkim2d
+          subject-digest: ${{ steps.subjects.outputs.dkim2d }}
+          push-to-registry: true
+          create-storage-record: false
+
+      - name: Attest dkim2-milter provenance
+        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6
+        with:
+          subject-name: ghcr.io/croessner/dkim2-milter
+          subject-digest: ${{ steps.subjects.outputs.dkim2_milter }}
+          push-to-registry: true
+          create-storage-record: false
+
+      - name: Attest dkim2ctl provenance
+        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6
+        with:
+          subject-name: ghcr.io/croessner/dkim2ctl
+          subject-digest: ${{ steps.subjects.outputs.dkim2ctl }}
+          push-to-registry: true
+          create-storage-record: false
+
+      - name: Attest dkim2d amd64 SBOM
+        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6
+        with:
+          subject-name: ghcr.io/croessner/dkim2d
+          subject-digest: ${{ steps.subjects.outputs.dkim2d_amd64 }}
+          sbom-path: .artifacts/image-evidence/dkim2d.amd64.spdx.json
+          push-to-registry: true
+          create-storage-record: false
+
+      - name: Attest dkim2d arm64 SBOM
+        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6
+        with:
+          subject-name: ghcr.io/croessner/dkim2d
+          subject-digest: ${{ steps.subjects.outputs.dkim2d_arm64 }}
+          sbom-path: .artifacts/image-evidence/dkim2d.arm64.spdx.json
+          push-to-registry: true
+          create-storage-record: false
+
+      - name: Attest dkim2-milter amd64 SBOM
+        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6
+        with:
+          subject-name: ghcr.io/croessner/dkim2-milter
+          subject-digest: ${{ steps.subjects.outputs.dkim2_milter_amd64 }}
+          sbom-path: .artifacts/image-evidence/dkim2-milter.amd64.spdx.json
+          push-to-registry: true
+          create-storage-record: false
+
+      - name: Attest dkim2-milter arm64 SBOM
+        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6
+        with:
+          subject-name: ghcr.io/croessner/dkim2-milter
+          subject-digest: ${{ steps.subjects.outputs.dkim2_milter_arm64 }}
+          sbom-path: .artifacts/image-evidence/dkim2-milter.arm64.spdx.json
+          push-to-registry: true
+          create-storage-record: false
+
+      - name: Attest dkim2ctl amd64 SBOM
+        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6
+        with:
+          subject-name: ghcr.io/croessner/dkim2ctl
+          subject-digest: ${{ steps.subjects.outputs.dkim2ctl_amd64 }}
+          sbom-path: .artifacts/image-evidence/dkim2ctl.amd64.spdx.json
+          push-to-registry: true
+          create-storage-record: false
+
+      - name: Attest dkim2ctl arm64 SBOM
+        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6
+        with:
+          subject-name: ghcr.io/croessner/dkim2ctl
+          subject-digest: ${{ steps.subjects.outputs.dkim2ctl_arm64 }}
+          sbom-path: .artifacts/image-evidence/dkim2ctl.arm64.spdx.json
+          push-to-registry: true
+          create-storage-record: false
+
+      - name: Install pinned attestation verifier
+        run: scripts/fetch-publication-tools.sh
+
+      - name: Verify exact trusted-workflow attestations
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -eu
+          workflow=croessner/dkim2/.github/workflows/container-publish.yml
+          for product in dkim2d dkim2-milter dkim2ctl; do
+            repository="ghcr.io/croessner/$product"
+            digest=$(jq -er --arg product "$product" \
+              '.products[$product].subject_digest' \
+              .artifacts/publication-subjects.json)
+            .artifacts/publication-tools/gh attestation verify \
+              "oci://$repository@$digest" \
+              --repo croessner/dkim2 \
+              --signer-workflow "$workflow" \
+              --source-digest "$GITHUB_SHA" \
+              --source-ref "$GITHUB_REF" \
+              --deny-self-hosted-runners >/dev/null
+            for architecture in amd64 arm64; do
+              platform="linux/$architecture"
+              digest=$(jq -er --arg platform "$platform" \
+                '.platforms[] |
+                  select(.platform == $platform) |
+                  .manifest_digest' \
+                ".artifacts/image-evidence/$product.oci.json")
+              .artifacts/publication-tools/gh attestation verify \
+                "oci://$repository@$digest" \
+                --repo croessner/dkim2 \
+                --signer-workflow "$workflow" \
+                --source-digest "$GITHUB_SHA" \
+                --source-ref "$GITHUB_REF" \
+                --predicate-type https://spdx.dev/Document/v2.3 \
+              --deny-self-hosted-runners >/dev/null
+            done
+          done
+
+      - name: Remove invocation-owned registry credentials
+        if: always()
+        run: |
+          test -n "${DOCKER_CONFIG:-}"
+          case "$DOCKER_CONFIG" in
+            "$RUNNER_TEMP"/dkim2-attestation-docker) ;;
+            *) exit 1 ;;
+          esac
+          rm -rf -- "$DOCKER_CONFIG"

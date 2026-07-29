@@ -13,6 +13,8 @@ const (
 	commandFixture = "fixture"
 )
 
+var buildVersion = "development"
+
 // Execute runs the closed command surface and returns one stable exit status.
 func Execute(arguments []string, stdout, stderr io.Writer) int {
 	root := NewRoot(stdout, stderr)
@@ -37,12 +39,17 @@ func NewRoot(stdout, stderr io.Writer) *cobra.Command {
 	root := &cobra.Command{
 		Use:           "dkim2ctl",
 		Short:         "Run bounded local DKIM2 daemon conformance checks",
+		Version:       buildVersion,
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		Args:          cobra.NoArgs,
+		RunE: func(_ *cobra.Command, _ []string) error {
+			return testclient.NewExitError(testclient.ExitUsage)
+		},
 	}
 	root.SetOut(stdout)
 	root.SetErr(stderr)
+	root.SetVersionTemplate("dkim2ctl {{.Version}}\n")
 	flags := root.PersistentFlags()
 	flags.StringVar(&options.ServerURL, "server-url", options.ServerURL, "canonical loopback daemon URL")
 	flags.DurationVar(&options.Timeout, "timeout", options.Timeout, "overall command deadline")

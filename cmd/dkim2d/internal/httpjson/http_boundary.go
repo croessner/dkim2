@@ -199,7 +199,8 @@ func parseBoundaryDependencies(
 		}
 	}
 	enabled := !nilInterfaceValue(operation)
-	if enabled != (!nilInterfaceValue(signMatcher) && !nilInterfaceValue(reviseMatcher)) {
+	hasMatcher := !nilInterfaceValue(signMatcher) || !nilInterfaceValue(reviseMatcher)
+	if enabled != hasMatcher {
 		return nil, nil, nil, nil, false
 	}
 	return runtime, operation, signMatcher, reviseMatcher, true

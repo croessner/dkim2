@@ -43,12 +43,19 @@ func (f *ServerFactory) Assemble(input app.HTTPAssemblyInput) (app.HTTPAssembly,
 		dependencies = append(dependencies, input.Observability())
 	}
 	if input.Snapshot().Signing().Enabled() {
-		dependencies = append(
-			dependencies,
-			input.OperationService(),
-			signMatcherDependency{capabilityMatcher: input.SignCapability()},
-			reviseMatcherDependency{capabilityMatcher: input.ReviseCapability()},
-		)
+		dependencies = append(dependencies, input.OperationService())
+		if server.SignEnabled() {
+			dependencies = append(
+				dependencies,
+				signMatcherDependency{capabilityMatcher: input.SignCapability()},
+			)
+		}
+		if server.ReviseEnabled() {
+			dependencies = append(
+				dependencies,
+				reviseMatcherDependency{capabilityMatcher: input.ReviseCapability()},
+			)
+		}
 	}
 	return newServerAssembly(
 		input.BaseContext(),

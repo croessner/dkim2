@@ -7,9 +7,12 @@ sender.
 The client accepts only canonical loopback HTTP authorities, disables proxies,
 redirects, cookies, compression, retries, and connection reuse, and emits
 stable content-free JSON Lines with bounded duration buckets rather than exact
-timings. Ordinary health, readiness, and process calls use the generated
+timings. Health, readiness, process, sign, and revise calls use the generated
 OpenAPI client and DTOs. Negative cases are restricted to a closed
-contract-test mutation vocabulary.
+contract-test mutation vocabulary. The authoritative HTTP contract remains
+[`docs/specs/openapi/dkim2d.yaml`](../../docs/specs/openapi/dkim2d.yaml), and
+the production path starts in
+[`docs/operator/postfix-compose.md`](../../docs/operator/postfix-compose.md).
 
 Commands:
 
@@ -25,19 +28,31 @@ Global options:
 --server-url http://127.0.0.1:8080
 --timeout 10s
 --capability-file /absolute/protected/path
+--sign-capability-file /absolute/protected/sign-path
+--revise-capability-file /absolute/protected/revise-path
 --output jsonl
 ```
 
 `fixture validate` is offline and never reads the capability or opens a
 network connection. `fixture run` validates every path and case before doing
 either. Authenticated process and negative cases require a regular,
-effective-user-owned, single-link 32-byte capability file with mode `0400` or
-`0600`. Credentials, raw messages, envelope values, paths, URLs, headers,
-response bodies, and raw errors never enter output.
+effective-user-owned, single-link 32-byte route capability file with mode
+`0400` or `0600`. Sign and revise fixtures require their corresponding
+distinct capability options. Credentials, raw messages, envelope values,
+paths, URLs, headers, response bodies, and raw errors never enter output.
 
 Checked draft-versioned examples live under
-`testdata/fixtures/draft-ietf-dkim-dkim2-spec-04/`. Their expectations are
-allowlisted typed projections rather than response snapshots.
+`cmd/dkim2ctl/testdata/fixtures/draft-ietf-dkim-dkim2-spec-04/`. Validate the
+complete offline set without protected-file or network access:
+
+```text
+dkim2ctl fixture validate cmd/dkim2ctl/testdata/fixtures/draft-ietf-dkim-dkim2-spec-04/*.json
+```
+
+Their expectations are allowlisted typed projections rather than response
+snapshots. `dkim2ctl smoke` is the non-mutating live health/readiness check;
+authenticated fixture execution is appropriate only after selecting the exact
+route capability files for the test deployment.
 
 Stable exits are `0` for a complete match and `2` through `8` for usage,
 fixture, capability, transport, response-contract, expectation-mismatch, and

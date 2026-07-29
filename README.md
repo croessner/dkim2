@@ -27,8 +27,7 @@ Current contents:
 - `cmd/dkim2ctl`: standalone OpenAPI-backed client and test-client module.
 - `lib/internal/*`: implemented raw-message, parser, canonicalization,
   verification, policy, recipe, signing, revision, route-authority,
-  restricted-release, and datasource foundations plus explicit boundaries for
-  later work.
+  restricted-release, and datasource protocol foundations.
 - `lib/internal/datasource`: storage-neutral exact profile and administrative
   policy contracts with immutable in-memory and confined flat-file providers.
 - `lib/internal/datasource/signingprofile`: the sole bridge from validated
@@ -42,11 +41,40 @@ Current contents:
   deferral.
 - `docs/security-testing.md`: closed fuzz/resource inventories, abuse-profile
   commands, deterministic evidence, privacy limits, and vulnerability policy.
+- `docs/operator/postfix-compose.md`: hardened no-host-exposure-by-default
+  Postfix/Milter deployment, lifecycle, backup, and rollback guide.
+- `docs/operator/container-supply-chain.md`: reproducible product images,
+  multi-architecture layouts, SBOM, provenance, and vulnerability policy.
 - `docs/specs/openapi`: authoritative source-of-truth OpenAPI contract.
 - `lib/testdata/vectors`: draft-versioned verification, DNS, custody, crypto,
   signing, revision, and insertion vectors.
 - `lib/internal/*/testdata`: package-owned canonicalization, recipe application
   and generation, parser, fuzz, and regression fixtures.
+
+## Operator Navigation
+
+Start with
+[`docs/operator/postfix-compose.md`](docs/operator/postfix-compose.md) for the
+implemented hardened Postfix deployment, trust topology, protected state,
+configuration, validation, lifecycle, backup, restore, and troubleshooting.
+Follow
+[`docs/operator/container-supply-chain.md`](docs/operator/container-supply-chain.md)
+for image construction, supported platforms, immutable digest selection, SBOM,
+provenance, vulnerability, reproducibility, and publication evidence. The
+component references are
+[`cmd/dkim2d/README.md`](cmd/dkim2d/README.md),
+[`cmd/dkim2-milter/README.md`](cmd/dkim2-milter/README.md), and
+[`cmd/dkim2ctl/README.md`](cmd/dkim2ctl/README.md); all HTTP request and
+response shapes remain authoritative only in
+[`docs/specs/openapi/dkim2d.yaml`](docs/specs/openapi/dkim2d.yaml).
+
+Exim is incomplete and deferred to M17; no Exim image, package, or
+compatibility result is claimed. Executable LDAP and SQL providers and legacy
+OpenDKIM migration remain unavailable until M22; the current
+[`docs/datasource-ldap-sql-design.md`](docs/datasource-ldap-sql-design.md) is
+design-only.
+
+## Current Behavior
 
 The public library signs origin messages, hash-unchanged forwarding copies,
 recipe-backed revisions, and authorized next-domain transitions. Signing uses
@@ -64,9 +92,10 @@ descriptor and publishes reloads atomically. Replay detection now has a
 storage-neutral library contract, bounded memory and disabled providers, and a
 daemon-owned standalone-primary Valkey provider using privacy-preserving keys
 and one non-retryable `SET NX PX` operation. The daemon now owns strict typed
-configuration, protected-generation loading, the generated inbound OpenAPI
-boundary, local capability authentication, replay wiring, readiness, and
-bounded Fx lifecycle. LDAP and SQL providers remain deferred.
+configuration, protected-generation loading, the generated process, sign, and
+revise OpenAPI boundary, distinct local route-capability authentication,
+replay and signing-store wiring, readiness, and bounded Fx lifecycle. LDAP and
+SQL providers remain deferred.
 
 `dkim2ctl` provides a generated-client-backed loopback smoke check and a
 strict draft-versioned fixture runner. It validates every fixture offline
@@ -90,5 +119,11 @@ make conformance-all
 make check-security
 make fuzz-security
 make security
+make check-images
+make check-deployment
+make deployment-postfix
+make deployment-security
+make check-operator-docs
+make check-release
 make guardrails
 ```

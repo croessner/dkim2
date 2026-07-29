@@ -1,0 +1,26 @@
+{
+  "schema": "dkim2-container-build-inputs-v1",
+  "images": [
+    {
+      "name": "metadata-validator",
+      "uri": "docker-image://docker.io/library/busybox",
+      "reference": "busybox:1.37.0",
+      "digest": "9532d8c39891ca2ecde4d30d7710e01fb739c87a8b9299685c63704296b16028",
+      "purpose": "build-only metadata validation"
+    },
+    {
+      "name": "go-builder",
+      "uri": "docker-image://docker.io/library/golang",
+      "reference": "golang:1.26.5-bookworm",
+      "digest": "1ecb7edf62a0408027bd5729dfd6b1b8766e578e8df93995b225dfd0944eb651",
+      "purpose": "build-only Go compilation"
+    },
+    {
+      "name": "buildkit",
+      "uri": "docker-image://moby/buildkit",
+      "reference": "moby/buildkit:buildx-stable-1",
+      "digest": "0168606be2315b7c807a03b3d8aa79beefdb31c98740cebdffdfeebf31190c9f",
+      "purpose": "isolated BuildKit executor"
+    }
+  ]
+}

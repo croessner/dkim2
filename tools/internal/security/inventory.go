@@ -1,4 +1,6 @@
 // Package security owns the closed repository security-test inventory and evidence.
+//
+//nolint:goconst // The auditable inventory repeats dimension names at their owning entry.
 package security
 
 import (
@@ -22,8 +24,8 @@ const (
 	MessageDraft = "draft-ietf-dkim-dkim2-spec-04"
 	// DNSDraft is the exact historical DNS behavior baseline used by security evidence.
 	DNSDraft = "draft-chuang-dkim2-dns-04"
-	// BaseRevision is the fixed security-hardening implementation base.
-	BaseRevision = "5f51ed500351c7efabe0ab70579d9a62639f6f43"
+	// BaseRevision is the fixed packaging implementation base.
+	BaseRevision = "62a3d8282f65001e24f669be3962cd13474442f1"
 	// FuzzDuration is the minimum unchanged-candidate duration for each target.
 	FuzzDuration = "10s"
 
@@ -149,6 +151,9 @@ func Targets() []FuzzTarget {
 		target("lib/signing_fuzz_test.go", "FuzzSigningFacade", "public signing facade", "draft_normative", "bounded immutable signing and revision request"),
 		target("lib/verification_fuzz_test.go", "FuzzPublicVerify", "public verification facade", "draft_normative", "bounded immutable message envelope and provider work"),
 		target("tools/cmd/conformance/main_test.go", "FuzzPostfixQualificationReportDecoding", "Postfix qualification report", "local_security_policy", "strict bounded content-free report decoding"),
+		target("tools/cmd/deploymentfixture/main_test.go", "FuzzDeploymentFixtureDNSNeverPanicsOrChangesClassification", "Postfix deployment DNS fixture", "local_security_policy", "fixed datagram record and label bounds before deterministic response construction"),
+		target("tools/cmd/ocipolicy/main_test.go", "FuzzReadLayoutArchive", "OCI image layout", "local_security_policy", "bounded non-extracting tar and descriptor validation"),
+		target("tools/internal/strictjson/decode_test.go", "FuzzDecodeNeverPanicsOrChangesClassification", "release evidence JSON", "local_security_policy", "shared depth token duplicate unknown and trailing-document limits"),
 		target("tools/postfix_qualification_policy_test.go", "FuzzPostfixQualificationComposeDecoding", "Postfix qualification configuration", "local_security_policy", "bounded static topology decoding"),
 	}
 	slices.SortFunc(targets, func(left, right FuzzTarget) int {
@@ -163,10 +168,12 @@ func ResourceOwners() []ResourceOwner {
 		resource("config", "cmd/dkim2d/internal/config and cmd/dkim2-milter/internal/config", []string{"file_bytes", "nodes", "depth", "scalars", "placeholders", "path_components", "pem_blocks", "read_attempts"}, "cmd/dkim2d/internal/config/yaml_test.go#TestPreflightYAMLEnforcesResourceBounds", "cmd/dkim2d/internal/config/protected_loader_test.go#TestProtectedRoleSizeMatrix"),
 		resource("conformance", "tools/internal/conformance", []string{"manifest_bytes", "artifacts", "artifact_bytes", "paths", "report_bytes", "captured_output"}, "tools/internal/conformance/conformance_test.go#TestManifestRejectsDuplicateExactArtifactPath", "tools/internal/conformance/conformance_test.go#TestStrictJSONRejectsDuplicateUnknownAndDeepInput"),
 		resource("datasource", "lib/internal/datasource", []string{"identifier_bytes", "records", "profiles", "policies", "handles", "generations", "json_bytes", dimensionJSONDepth}, "lib/internal/datasource/limits_test.go#TestHardAndDefaultLimitsMatchFrozenMaxima", "lib/internal/datasource/limits_test.go#TestUsageRejectsOneOverNegativeOverflowAndInconsistentValues"),
+		resource("deployment", "tools/cmd/deploymentfixture", []string{"dns_query_bytes", "dns_labels", "dns_options", "dns_record_bytes", "smtp_reply_bytes", "queue_identifier_bytes", "captured_message_bytes"}, "tools/cmd/deploymentfixture/main_test.go#TestAnswerDNSBoundsQueriesAndReturnsOnlyBoundTXT", "tools/cmd/deploymentfixture/main_test.go#TestSMTPReplyRequiresExactQueuedAcceptance"),
 		resource("dns", "lib/internal/keyresolver", []string{"owner_bytes", "labels", "rr_count", "txt_bytes", "key_bytes", "lookups", "cache_entries", "flights", dimensionWaiters}, "lib/internal/keyresolver/limits_test.go#TestDefaultLimitsMatchClosedDNSBounds", "lib/internal/keyresolver/flight_test.go#TestFlightWaiterLimitAllowsExactAndRejectsOneOver"),
 		resource("http", "cmd/dkim2d/internal/httpjson", []string{"request_line_bytes", "header_bytes", "body_bytes", dimensionJSONDepth, "json_tokens", "decoded_message_bytes", dimensionEnvelopeByte, "in_flight", dimensionWaiters, "response_bytes"}, "cmd/dkim2d/internal/httpjson/http_boundary_matrix_test.go#TestHTTPBoundaryRawMethodTargetAndHeadLimits", "cmd/dkim2d/internal/httpjson/body_preflight_test.go#TestReadProcessBodyAcceptsExactLimitAndRejectsOneOver"),
 		resource("milter", "cmd/dkim2-milter/internal/milter", []string{"frame_bytes", "connections", "messages", "buffered_bytes", "headers", "recipients", "actions", "daemon_response_bytes", "timeouts"}, "cmd/dkim2-milter/internal/milter/state_matrix_test.go#TestReadFrameEnforcesDefaultAndCommandSpecificCaps", "cmd/dkim2-milter/internal/milter/state_matrix_test.go#TestSessionLimitInvariantsFailAtConstruction"),
 		resource("observability", "lib/internal/observability and cmd/dkim2d/internal/observability", []string{"record_bytes", "attributes", "events", "batch", "queue", "labels", "buckets"}, "cmd/dkim2d/internal/observability/logging_test.go#TestBoundedLoggerRejectsUnknownAndHostileValues", "cmd/dkim2d/internal/observability/metrics_test.go#TestMetricsRejectArbitraryLabels"),
+		resource("packaging", "tools/cmd/buildmeta tools/cmd/ocipolicy tools/cmd/dbguard and repository scripts", []string{"archive_bytes", "archive_entries", "entry_bytes", "platforms", "manifests", "layers", "filesystem_entries", "labels", "candidate_files", "candidate_bytes", "publication_subjects", "publication_tool_bytes", "scanner_database_bytes", "scanner_database_files", "scanner_database_reads", "scanner_layout_bytes", "scanner_layout_entries", "scanner_snapshot_files", "scanner_output_bytes", "scanner_diagnostic_bytes", "scanner_duration", "scanner_clock_skew", "scanner_database_age"}, "tools/cmd/buildmeta/main_test.go#TestMaterializeCandidateRejectsHardlinksAndWritesExactPrivateBytes", "tools/cmd/ocipolicy/main_test.go#TestReadLayoutRejectsDuplicateAndLinkEntries", "tools/cmd/ocipolicy/main_test.go#TestStrictJSONRejectsTrailingDocuments", "tools/cmd/dbguard/main_test.go#TestBuildSnapshotRejectsOversizeSymlinkAndHardlinkDatabase", "tools/cmd/dbguard/main_test.go#TestGuardDatabaseFilesRejectsConcurrentWrite", "tools/cmd/dbguard/main_test.go#TestAddSnapshotFileSurvivesTransientSourceSwap", "tools/cmd/dbguard/main_test.go#TestBoundedWriterRejectsOversizeOutput", "tools/cmd/dbguard/main_test.go#TestValidateMetadataAtRejectsExpiredStaleAndFutureState", "tools/cmd/dbguard/main_test.go#TestParseScanTimeRejectsCallerClockDrift"),
 		resource("raw-message", "lib/internal/rawmsg", []string{"total_bytes", "header_bytes", "header_fields", "line_bytes", "field_bytes", "body_lines"}, "lib/internal/rawmsg/body_test.go#TestBodyLineCountHardLimitAcceptsExactAndRejectsOneOver", "lib/internal/rawmsg/parser_test.go#TestParseRejectsHeaderResourceLimitViolations"),
 		resource("recipe", "lib/internal/recipe", []string{"json_bytes", dimensionJSONDepth, "members", "names", "steps", "ranges", "literals", "state_bytes", "output_bytes", "candidates", "comparisons", "work_units", "history_depth"}, "lib/internal/recipe/limits_test.go#TestEveryRecipeHardMaximumAcceptsExactAndRejectsOneOver", "lib/internal/recipe/generation_limits_test.go#TestEveryGenerationHardMaximumAcceptsExactAndRejectsOneOver"),
 		resource("replay", "lib/internal/replay and cmd/dkim2d/internal/replay/valkey", []string{"identity_bytes", "key_bytes", "value_bytes", "retention", "entries", "prune_budget", "in_flight", dimensionWaiters, "wire_bytes"}, "lib/internal/replay/retention_test.go#TestRetentionCheckedAdditionPreservesExactExpiry", "cmd/dkim2d/internal/replay/valkey/config_test.go#TestClientConfigAdmissionLimitsApplyExactDefaultsAndHardBounds"),

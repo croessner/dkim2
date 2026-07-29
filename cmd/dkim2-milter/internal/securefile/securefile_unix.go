@@ -106,7 +106,7 @@ func Open(path string, rules Rules, observe Observer) (*Handle, error) {
 	if err != nil {
 		return nil, err
 	}
-	current, err := openRoot(rules)
+	current, err := openRoot()
 	if err != nil {
 		return nil, err
 	}
@@ -229,7 +229,7 @@ func cloneRules(rules Rules) Rules {
 }
 
 // openRoot opens the filesystem root as the first trusted descriptor.
-func openRoot(rules Rules) (descriptor, error) {
+func openRoot() (descriptor, error) {
 	fd, err := retryOpen(func() (int, error) {
 		return unix.Open("/", directoryFlags(), 0)
 	})
@@ -237,11 +237,28 @@ func openRoot(rules Rules) (descriptor, error) {
 		return invalidDescriptor(), err
 	}
 	result := descriptor{fd: fd}
-	if _, err := inspectDirectory(fd, rules, false); err != nil {
+	if _, err := inspectRootDirectory(fd); err != nil {
 		_ = result.close()
 		return invalidDescriptor(), err
 	}
 	return result, nil
+}
+
+// inspectRootDirectory applies the container-root exception only to the root descriptor.
+func inspectRootDirectory(fd int) (state, error) {
+	current, err := statDescriptor(fd)
+	if err != nil {
+		return state{}, err
+	}
+	if current.typeBits != unix.S_IFDIR || current.links == 0 || current.uid != 0 ||
+		current.modeBits&0o022 != 0 {
+		return state{}, &Error{}
+	}
+	access, err := rootDescriptorAccessFingerprint(fd, current.modeBits)
+	if err != nil {
+		return state{}, err
+	}
+	return state{metadata: current, access: access}, nil
 }
 
 // openChild proves type and inode equality across no-follow stat and openat.
@@ -292,7 +309,12 @@ func inspectDirectory(fd int, rules Rules, final bool) (state, error) {
 	} else if current.uid != 0 && current.uid != rules.EffectiveUID || current.modeBits&0o022 != 0 {
 		return state{}, &Error{}
 	}
-	access, err := descriptorAccessFingerprint(fd, true, current.modeBits)
+	var access [32]byte
+	if final {
+		access, err = descriptorAccessFingerprint(fd, true, current.modeBits)
+	} else {
+		access, err = ancestryDescriptorAccessFingerprint(fd, current.modeBits)
+	}
 	if err != nil {
 		return state{}, err
 	}

@@ -59,9 +59,27 @@ func TestSigningConfigurationIsDefaultDisabledAndConditionallyComplete(t *testin
 		enabled.Signing().AllowRecipientGroup() {
 		t.Fatalf("enabled signing configuration failed with code %s", CodeOf(err))
 	}
+	signOnly, err := Load(
+		[]byte(removeYAMLField(signingYAML(), "  revise_capability_file:")),
+		FlagValues{},
+	)
+	if err != nil || !signOnly.Server().SignEnabled() || signOnly.Server().ReviseEnabled() {
+		t.Fatalf("sign-only route configuration failed with code %s", CodeOf(err))
+	}
+	reviseOnly, err := Load(
+		[]byte(removeYAMLField(signingYAML(), "  sign_capability_file:")),
+		FlagValues{},
+	)
+	if err != nil || reviseOnly.Server().SignEnabled() || !reviseOnly.Server().ReviseEnabled() {
+		t.Fatalf("revise-only route configuration failed with code %s", CodeOf(err))
+	}
 	for _, mutation := range []string{
 		strings.Replace(signingYAML(), "  private_manifest_file:", "  unknown_private_manifest_file:", 1),
 		strings.Replace(signingYAML(), "  revise_capability_file:", "  unknown_revise_capability_file:", 1),
+		removeYAMLField(
+			removeYAMLField(signingYAML(), "  sign_capability_file:"),
+			"  revise_capability_file:",
+		),
 		strings.Replace(signingYAML(), "/private-manifest", "/datasource", 1),
 		strings.Replace(signingYAML(), "  backend: flat_file", "  backend: disabled", 1),
 	} {
@@ -69,6 +87,17 @@ func TestSigningConfigurationIsDefaultDisabledAndConditionallyComplete(t *testin
 			t.Fatal("signing conditional matrix accepted an incomplete or conflicting state")
 		}
 	}
+}
+
+// removeYAMLField removes one exact single-line test field.
+func removeYAMLField(document, prefix string) string {
+	lines := strings.Split(document, "\n")
+	for index, line := range lines {
+		if strings.HasPrefix(line, prefix) {
+			return strings.Join(append(lines[:index], lines[index+1:]...), "\n")
+		}
+	}
+	return document
 }
 
 // TestSigningConfigurationRejectsRecipientGroups proves the reserved

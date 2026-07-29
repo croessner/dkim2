@@ -101,6 +101,16 @@ func descriptorAccessFingerprint(fd int, directory bool, acceptedMode uint32) ([
 	return fingerprint, nil
 }
 
+// rootDescriptorAccessFingerprint applies the standard Darwin root policy.
+func rootDescriptorAccessFingerprint(fd int, acceptedMode uint32) ([32]byte, error) {
+	return descriptorAccessFingerprint(fd, true, acceptedMode)
+}
+
+// ancestryDescriptorAccessFingerprint applies the standard Darwin directory policy.
+func ancestryDescriptorAccessFingerprint(fd int, acceptedMode uint32) ([32]byte, error) {
+	return descriptorAccessFingerprint(fd, true, acceptedMode)
+}
+
 // inspectDarwinACL rejects every extended entry and every ambiguous libc result.
 func inspectDarwinACL(fd int) error {
 	if C.dkim2_securefile_inspect_acl(C.int(fd)) != C.dkim2_securefile_trivial {
