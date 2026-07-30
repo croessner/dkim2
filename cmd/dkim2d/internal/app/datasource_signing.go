@@ -1,6 +1,7 @@
 package app
 
 import (
+	"bytes"
 	"context"
 	"crypto/x509"
 	"errors"
@@ -259,7 +260,7 @@ func datasourceRootPool(rootsDER [][]byte) (*x509.CertPool, error) {
 	}
 	pool := x509.NewCertPool()
 	for _, encoded := range rootsDER {
-		certificate, err := x509.ParseCertificate(encoded)
+		certificate, err := x509.ParseCertificate(bytes.Clone(encoded))
 		if err != nil {
 			return nil, errors.New("datasource trust unavailable")
 		}
