@@ -172,6 +172,63 @@ func TestImportUsesExactLegacySelectorAfterCanonicalInventory(t *testing.T) {
 	closeImported(imported)
 }
 
+// TestImportKeysNormalizesLegacyRSAPKCS1 proves legacy RSA compatibility
+// without widening the protected registry's canonical PKCS#8 contract.
+func TestImportKeysNormalizesLegacyRSAPKCS1(t *testing.T) {
+	records := []LegacyRecord{{
+		selector: migrationTestSelector, sourceSelector: migrationTestSelector,
+		domain: migrationTestDomain, associated: migrationTestDomain,
+		algorithm: AlgorithmRSA, active: true,
+	}}
+	config := testConfig()
+	client := &keyImportClientFake{values: map[string][]byte{
+		migrationTestSourceKey: rsaPrivatePKCS1PEM(t),
+	}}
+	imported, err := ImportKeys(
+		context.Background(), records, config.Plan, client, &dnsProverFake{},
+	)
+	if err != nil || len(imported) != 1 || imported[0].key == nil {
+		t.Fatal("import legacy RSA PKCS#1 key")
+	}
+	defer closeImported(imported)
+	encoded := imported[0].key.Encoded()
+	defer clear(encoded)
+	block, rest := pem.Decode(encoded)
+	if block == nil || block.Type != privateKeyPEMType ||
+		len(bytes.TrimSpace(rest)) != 0 {
+		t.Fatal("legacy RSA key was not normalized to canonical PKCS#8 PEM")
+	}
+	if _, err := x509.ParsePKCS8PrivateKey(block.Bytes); err != nil {
+		t.Fatal("parse normalized RSA PKCS#8 key")
+	}
+}
+
+// TestNormalizeLegacyPrivateKeyFailsClosed proves compatibility is limited to
+// unencrypted RSA PKCS#1 and does not widen Ed25519 or malformed input.
+func TestNormalizeLegacyPrivateKeyFailsClosed(t *testing.T) {
+	pkcs1 := rsaPrivatePKCS1PEM(t)
+	for _, test := range []struct {
+		name      string
+		encoded   []byte
+		algorithm Algorithm
+	}{
+		{name: "Ed25519 algorithm", encoded: pkcs1, algorithm: AlgorithmEd25519},
+		{name: "trailing data", encoded: append(append([]byte(nil), pkcs1...), []byte("private")...), algorithm: AlgorithmRSA},
+		{name: "PEM headers", encoded: pem.EncodeToMemory(&pem.Block{
+			Type: legacyRSAPrivateKeyType, Headers: map[string]string{"Proc-Type": "4,ENCRYPTED"},
+			Bytes: []byte("private"),
+		}), algorithm: AlgorithmRSA},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			normalized, err := normalizeLegacyPrivateKey(test.encoded, test.algorithm)
+			clear(normalized)
+			if err == nil {
+				t.Fatal("unsupported legacy key input succeeded")
+			}
+		})
+	}
+}
+
 // TestImportKeysFailsClosedBeforeRegistrySideEffects proves denial cleanup.
 func TestImportKeysFailsClosedBeforeRegistrySideEffects(t *testing.T) {
 	privatePEM := rsaPrivatePEM(t)
@@ -265,5 +322,16 @@ func rsaPrivatePEM(t *testing.T) []byte {
 	if err != nil {
 		t.Fatal("marshal RSA key")
 	}
-	return pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der})
+	return pem.EncodeToMemory(&pem.Block{Type: privateKeyPEMType, Bytes: der})
+}
+
+// rsaPrivatePKCS1PEM returns one validated legacy RSA PKCS#1 fixture.
+func rsaPrivatePKCS1PEM(t *testing.T) []byte {
+	t.Helper()
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal("generate legacy RSA key")
+	}
+	der := x509.MarshalPKCS1PrivateKey(key)
+	return pem.EncodeToMemory(&pem.Block{Type: legacyRSAPrivateKeyType, Bytes: der})
 }

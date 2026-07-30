@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/x509"
+	"encoding/pem"
 	"errors"
 
 	"github.com/croessner/dkim2"
@@ -13,6 +14,11 @@ import (
 var keyImportAttributes = []string{
 	legacySelector, legacyDomain, legacyAssociatedDomain, legacyKeyType, legacyKey,
 }
+
+const (
+	privateKeyPEMType       = "PRIVATE KEY"
+	legacyRSAPrivateKeyType = "RSA PRIVATE KEY"
+)
 
 // KeyImportClient is the separate protected principal allowed to read DKIMKey.
 type KeyImportClient interface {
@@ -121,10 +127,16 @@ func ImportKeys(
 			clear(encoded)
 			return nil, errors.New("protected key import unavailable")
 		}
-		key, err := signingstore.InspectImportedPrivateKey(
-			encoded, string(record.algorithm),
-		)
+		normalized, err := normalizeLegacyPrivateKey(encoded, record.algorithm)
 		clear(encoded)
+		if err != nil {
+			clear(normalized)
+			return nil, errors.New("protected key import unavailable")
+		}
+		key, err := signingstore.InspectImportedPrivateKey(
+			normalized, string(record.algorithm),
+		)
+		clear(normalized)
 		if err != nil || key == nil {
 			return nil, errors.New("protected key import unavailable")
 		}
@@ -144,6 +156,43 @@ func ImportKeys(
 	}
 	success = true
 	return imported, nil
+}
+
+// normalizeLegacyPrivateKey converts only bounded unencrypted RSA PKCS#1 PEM
+// into the canonical PKCS#8 representation used by the protected registry.
+func normalizeLegacyPrivateKey(encoded []byte, algorithm Algorithm) ([]byte, error) {
+	block, rest := pem.Decode(encoded)
+	if block == nil || len(block.Headers) != 0 ||
+		len(bytes.TrimSpace(rest)) != 0 {
+		return nil, errors.New("legacy private key unavailable")
+	}
+	if block.Type == privateKeyPEMType {
+		return append([]byte(nil), encoded...), nil
+	}
+	if algorithm != AlgorithmRSA || block.Type != legacyRSAPrivateKeyType {
+		return nil, errors.New("legacy private key unavailable")
+	}
+	privateKey, err := x509.ParsePKCS1PrivateKey(block.Bytes)
+	if err != nil || privateKey.Validate() != nil {
+		return nil, errors.New("legacy private key unavailable")
+	}
+	der, err := x509.MarshalPKCS8PrivateKey(privateKey)
+	privateKey.D.SetInt64(0)
+	for _, prime := range privateKey.Primes {
+		prime.SetInt64(0)
+	}
+	clear(block.Bytes)
+	if err != nil {
+		clear(der)
+		return nil, errors.New("legacy private key unavailable")
+	}
+	normalized := pem.EncodeToMemory(&pem.Block{Type: privateKeyPEMType, Bytes: der})
+	clear(der)
+	if len(normalized) == 0 || len(normalized) > 64<<10 {
+		clear(normalized)
+		return nil, errors.New("legacy private key unavailable")
+	}
+	return normalized, nil
 }
 
 // FreshDNSProver creates one new DNS provider per credential to bypass caches.
