@@ -329,7 +329,7 @@ func TestAbortResetsTransactionWithoutReplyAndAllowsReuse(t *testing.T) {
 	}
 }
 
-// TestAbortBeforeMailAllowsPostfixConnectionReuse proves pre-MAIL cleanup is idempotent.
+// TestAbortBeforeMailAllowsPostfixConnectionReuse proves HELO restart is idempotent.
 func TestAbortBeforeMailAllowsPostfixConnectionReuse(t *testing.T) {
 	handler := &testHandler{result: Result{
 		Operation: operationProcess, Result: resultPass, Outcome: DispositionContinue,
@@ -340,6 +340,7 @@ func TestAbortBeforeMailAllowsPostfixConnectionReuse(t *testing.T) {
 		peerFrame(commandConnect, []byte("mx\x00U")),
 		peerFrame(commandHelo, []byte("helo\x00")),
 		peerFrame(commandAbort, nil),
+		peerFrame(commandHelo, []byte("forwarded-helo\x00")),
 		peerFrame(commandMail, []byte("<sender@example>\x00")),
 		peerFrame(commandRecipient, []byte("<recipient@example>\x00")),
 		peerFrame(commandEOH, nil),
@@ -353,7 +354,7 @@ func TestAbortBeforeMailAllowsPostfixConnectionReuse(t *testing.T) {
 	if handler.calls != 1 {
 		t.Fatalf("handler calls=%d, want 1", handler.calls)
 	}
-	if got := responseCommands(t, stream.writer.Bytes()); !bytes.Equal(got, []byte{'O', 'c', 'c', 'c', 'c', 'c', 'a'}) {
+	if got := responseCommands(t, stream.writer.Bytes()); !bytes.Equal(got, []byte{'O', 'c', 'c', 'c', 'c', 'c', 'c', 'a'}) {
 		t.Fatalf("response commands=%q", got)
 	}
 }

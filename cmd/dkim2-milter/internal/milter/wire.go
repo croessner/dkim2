@@ -317,9 +317,10 @@ func (s *Session) handleConnect(payload []byte) error {
 	return nil
 }
 
-// handleHelo validates the HELO transition without retaining peer identity.
+// handleHelo validates initial and Postfix-restarted HELO without retaining identity.
 func (s *Session) handleHelo(payload []byte) error {
-	if s.state != stateConnected || !validSingleNUL(payload, 255) {
+	if (s.state != stateConnected && s.state != stateHelo) ||
+		!validSingleNUL(payload, 255) {
 		return &Error{Class: FailureContract}
 	}
 	s.state = stateHelo
