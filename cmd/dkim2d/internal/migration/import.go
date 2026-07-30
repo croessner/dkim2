@@ -115,7 +115,7 @@ func ImportKeys(
 		}
 	}()
 	for _, mapping := range plan.Mappings {
-		record, exists := active[mapping.Domain+"\x00"+mapping.Selector]
+		record, exists := active[mapping.Domain+"\x00"+mapping.legacySelector()]
 		if !exists {
 			return nil, errors.New("protected key import unavailable")
 		}
@@ -143,7 +143,7 @@ func ImportKeys(
 		publicDER := key.PublicSPKIDER()
 		if len(publicDER) == 0 ||
 			prover.Prove(
-				ctx, record.domain, record.selector, record.algorithm, publicDER,
+				ctx, record.domain, mapping.Selector, record.algorithm, publicDER,
 			) != nil {
 			clear(publicDER)
 			_ = key.Close()

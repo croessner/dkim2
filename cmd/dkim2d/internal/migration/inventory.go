@@ -118,7 +118,7 @@ func ValidatePlan(
 		return errors.New("migration plan invalid")
 	}
 	for _, mapping := range plan.Mappings {
-		key := mapping.Domain + "\x00" + mapping.Selector
+		key := mapping.Domain + "\x00" + mapping.legacySelector()
 		if _, exists := active[key]; !exists {
 			return errors.New("migration plan invalid")
 		}

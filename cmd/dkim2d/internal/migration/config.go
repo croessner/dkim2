@@ -178,9 +178,12 @@ func validatePlan(plan Plan) error {
 		return errors.New("migration plan invalid")
 	}
 	seenSource := make(map[string]struct{}, len(plan.Mappings))
+	seenTarget := make(map[string]struct{}, len(plan.Mappings))
 	seenHandle := make(map[string]struct{}, len(plan.Mappings))
 	for _, mapping := range plan.Mappings {
+		sourceSelector := mapping.legacySelector()
 		if mapping.Domain == "" || mapping.Domain != strings.ToLower(mapping.Domain) ||
+			sourceSelector == "" || sourceSelector != strings.ToLower(sourceSelector) ||
 			mapping.Selector == "" || mapping.Selector != strings.ToLower(mapping.Selector) ||
 			mapping.TenantID == "" || mapping.ProfileID == "" || mapping.HandleID == "" ||
 			(mapping.ProfileUse != "originator" && mapping.ProfileUse != "ordinary_transit") ||
@@ -190,14 +193,19 @@ func validatePlan(plan Plan) error {
 		if _, _, valid := mapping.validity(); !valid {
 			return errors.New("migration plan invalid")
 		}
-		sourceKey := mapping.Domain + "\x00" + mapping.Selector
+		sourceKey := mapping.Domain + "\x00" + sourceSelector
 		if _, exists := seenSource[sourceKey]; exists {
+			return errors.New("migration plan invalid")
+		}
+		targetKey := mapping.Domain + "\x00" + mapping.Selector
+		if _, exists := seenTarget[targetKey]; exists {
 			return errors.New("migration plan invalid")
 		}
 		if _, exists := seenHandle[mapping.HandleID]; exists {
 			return errors.New("migration plan invalid")
 		}
 		seenSource[sourceKey] = struct{}{}
+		seenTarget[targetKey] = struct{}{}
 		seenHandle[mapping.HandleID] = struct{}{}
 	}
 	return nil

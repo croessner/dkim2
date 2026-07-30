@@ -90,6 +90,7 @@ func (LegacyRecord) MarshalJSON() ([]byte, error) { return []byte("{}"), nil }
 // Mapping supplies every DKIM2 fact that legacy OpenDKIM does not own.
 type Mapping struct {
 	Domain          string `yaml:"domain"`
+	SourceSelector  string `yaml:"source_selector,omitempty"`
 	Selector        string `yaml:"selector"`
 	TenantID        string `yaml:"tenant_id"`
 	ProfileID       string `yaml:"profile_id"`
@@ -100,6 +101,15 @@ type Mapping struct {
 	FeedbackRouteID string `yaml:"feedback_route_id,omitempty"`
 	NotBefore       string `yaml:"not_before,omitempty"`
 	NotAfter        string `yaml:"not_after,omitempty"`
+}
+
+// legacySelector returns the explicit source selector or the target selector
+// for backward-compatible same-selector migrations.
+func (m Mapping) legacySelector() string {
+	if m.SourceSelector != "" {
+		return m.SourceSelector
+	}
+	return m.Selector
 }
 
 // Plan is one exact noninferential mapping plan.

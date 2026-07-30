@@ -44,19 +44,21 @@ func (f *keyImportClientFake) FetchKey(
 }
 
 type dnsProverFake struct {
-	calls int
-	fail  bool
+	calls     int
+	fail      bool
+	selectors []string
 }
 
 // Prove records one synthetic exact canonical SPKI proof.
 func (f *dnsProverFake) Prove(
 	ctx context.Context,
 	_ string,
-	_ string,
+	selector string,
 	_ Algorithm,
 	spki []byte,
 ) error {
 	f.calls++
+	f.selectors = append(f.selectors, selector)
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -170,6 +172,34 @@ func TestImportUsesExactLegacySelectorAfterCanonicalInventory(t *testing.T) {
 		t.Fatal("case-exact legacy import failed")
 	}
 	closeImported(imported)
+}
+
+// TestImportMapsLegacySourceToDistinctDNSSelector proves protected LDAP lookup
+// and public DKIM2 DNS proof remain separate explicit identities.
+func TestImportMapsLegacySourceToDistinctDNSSelector(t *testing.T) {
+	privatePEM := rsaPrivatePEM(t)
+	records := []LegacyRecord{{
+		selector: migrationTestCanonicalSelector, sourceSelector: migrationTestMixedCaseSelector,
+		domain: migrationTestDomain, associated: migrationTestDomain,
+		algorithm: AlgorithmRSA, active: true,
+	}}
+	config := testConfig()
+	config.Plan.Mappings[0].SourceSelector = migrationTestCanonicalSelector
+	config.Plan.Mappings[0].Selector = "dkim2-ab12"
+	client := &keyImportClientFake{values: map[string][]byte{
+		migrationTestDomain + "\x00" + migrationTestMixedCaseSelector: privatePEM,
+	}}
+	prover := &dnsProverFake{}
+	imported, err := ImportKeys(
+		context.Background(), records, config.Plan, client, prover,
+	)
+	if err != nil || len(imported) != 1 {
+		t.Fatal("distinct source and target selector import failed")
+	}
+	closeImported(imported)
+	if !slices.Equal(prover.selectors, []string{"dkim2-ab12"}) {
+		t.Fatal("DNS proof did not use the explicit target selector")
+	}
 }
 
 // TestImportKeysNormalizesLegacyRSAPKCS1 proves legacy RSA compatibility

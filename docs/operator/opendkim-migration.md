@@ -77,7 +77,8 @@ plan:
   registry_root: /secure/generations
   mappings:
     - domain: example.test
-      selector: current
+      source_selector: current
+      selector: dkim2-current
       tenant_id: tenant-production
       profile_id: origin-example-net
       profile_use: originator
@@ -111,20 +112,28 @@ timestamps are count-only legacy facts and are not migrated.
 
 The adapter accepts legacy ASCII selector spelling with uppercase letters
 because selector DNS labels are case-insensitive. Inventory canonicalizes that
-spelling to lowercase for the DKIM2 plan and DNS proof while protected import
-uses the exact original LDAP value against the case-exact legacy schema. Other
-noncanonical selector or domain input remains rejected.
+spelling to lowercase while protected import uses the exact original LDAP
+value against the case-exact legacy schema. A mapping may declare a separate
+canonical `source_selector` and DKIM2 `selector`: protected import resolves the
+former and DNS proof plus the published credential use the latter. Omitting
+`source_selector` preserves the same-selector migration behavior. This explicit
+split is required when an inherited DKIM RSA record contains SPKI DER while
+DNS-04 requires PKCS#1 `RSAPublicKey` DER; operators must publish a distinct
+DKIM2 selector rather than replacing or weakening the existing DKIM record.
+Other noncanonical selector or domain input remains rejected.
 
 An inactive historical row may retain the exact legacy `DKIMDomain: *`
 spelling when its single canonical `associatedDomain` identifies the counted
 domain. It remains in inactive-history counts and can never become a mapping or
 key import. An active wildcard row is ambiguous and still fails closed.
 
-The protected phase then reads each key separately, accepts only one bounded
-unencrypted PKCS#8 RSA or Ed25519 key of the declared type and strength,
-derives canonical SPKI, and performs a fresh DNS lookup through the normal
-DNS key parser. Missing, ambiguous, invalid, revoked, mismatched, timed-out, or
-unavailable DNS evidence prevents publication.
+The protected phase then reads each key separately, accepts one bounded
+unencrypted PKCS#8 RSA or Ed25519 key of the declared type and strength, and
+normalizes an inherited unencrypted RSA PKCS#1 PEM key to canonical PKCS#8.
+No other private-key compatibility input is accepted. It derives canonical
+SPKI and performs a fresh lookup of the explicit DKIM2 selector through the
+normal DNS key parser. Missing, ambiguous, invalid, revoked, mismatched,
+timed-out, or unavailable DNS evidence prevents publication.
 
 For an established target, LDAP publication creates and reads back a complete
 staging subtree, marks its root committed, and changes `cn=current` with one
