@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -177,20 +178,21 @@ func (c *ldapInventoryClient) Search(
 func (c *ldapInventoryClient) FetchKey(
 	ctx context.Context,
 	domain string,
-	selector string,
+	sourceSelector string,
 	attributes []string,
 	maximum int,
 ) ([]byte, error) {
+	canonicalSelector := strings.ToLower(sourceSelector)
 	if c == nil || ctx == nil || maximum != 64<<10 ||
 		!slices.Equal(attributes, keyImportAttributes) ||
 		provider.ValidateDomainSelector(
-			domain, selector, provider.AlgorithmRSASHA256,
+			domain, canonicalSelector, provider.AlgorithmRSASHA256,
 		) != nil {
 		return nil, errors.New("legacy key import unavailable")
 	}
 	filter := "(&(objectClass=DKIM)(DKIMActive=TRUE)(DKIMDomain=" +
 		goldap.EscapeFilter(domain) + ")(DKIMSelector=" +
-		goldap.EscapeFilter(selector) + "))"
+		goldap.EscapeFilter(sourceSelector) + "))"
 	request := goldap.NewSearchRequest(
 		c.baseDN, goldap.ScopeWholeSubtree, goldap.NeverDerefAliases,
 		2, 0, false, filter, attributes, nil,
@@ -230,7 +232,7 @@ func (c *ldapInventoryClient) FetchKey(
 		len(values[legacyKey]) != 1 ||
 		string(values[legacyDomain][0]) != domain ||
 		string(values[legacyAssociatedDomain][0]) != domain ||
-		string(values[legacySelector][0]) != selector ||
+		string(values[legacySelector][0]) != sourceSelector ||
 		(string(values[legacyKeyType][0]) != string(AlgorithmRSA) &&
 			string(values[legacyKeyType][0]) != string(AlgorithmEd25519)) {
 		return nil, errors.New("legacy key import unavailable")

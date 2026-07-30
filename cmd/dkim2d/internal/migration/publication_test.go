@@ -212,7 +212,8 @@ func publicationFixture(
 		}
 	})
 	records := []LegacyRecord{{
-		selector: migrationTestSelector, domain: migrationTestDomain, associated: migrationTestDomain,
+		selector: migrationTestSelector, sourceSelector: migrationTestSelector,
+		domain: migrationTestDomain, associated: migrationTestDomain,
 		algorithm: AlgorithmRSA, active: true,
 	}}
 	imported, err := ImportKeys(

@@ -225,9 +225,10 @@ func mapLegacyEntry(entry RawEntry) (LegacyRecord, error) {
 			return LegacyRecord{}, errors.New("legacy entry malformed")
 		}
 	}
+	sourceSelector := values[legacySelector]
+	canonicalSelector := strings.ToLower(sourceSelector)
 	if values[legacyDomain] != values[legacyAssociatedDomain] ||
-		values[legacyDomain] != strings.ToLower(values[legacyDomain]) ||
-		values[legacySelector] != strings.ToLower(values[legacySelector]) {
+		values[legacyDomain] != strings.ToLower(values[legacyDomain]) {
 		return LegacyRecord{}, errors.New("legacy entry malformed")
 	}
 	var algorithm Algorithm
@@ -243,7 +244,7 @@ func mapLegacyEntry(entry RawEntry) (LegacyRecord, error) {
 		return LegacyRecord{}, errors.New("legacy entry malformed")
 	}
 	if provider.ValidateDomainSelector(
-		values[legacyDomain], values[legacySelector], providerAlgorithm,
+		values[legacyDomain], canonicalSelector, providerAlgorithm,
 	) != nil {
 		return LegacyRecord{}, errors.New("legacy entry malformed")
 	}
@@ -256,8 +257,9 @@ func mapLegacyEntry(entry RawEntry) (LegacyRecord, error) {
 		return LegacyRecord{}, errors.New("legacy entry malformed")
 	}
 	return LegacyRecord{
-		selector: values[legacySelector], domain: values[legacyDomain],
-		associated: values[legacyAssociatedDomain], algorithm: algorithm,
+		selector: canonicalSelector, sourceSelector: sourceSelector,
+		domain: values[legacyDomain], associated: values[legacyAssociatedDomain],
+		algorithm:       algorithm,
 		active:          active,
 		ignoredIdentity: len(entry.Attributes["DKIMIdentity"]) == 1,
 		ignoredCreated:  len(entry.Attributes["createTimestamp"]) == 1,

@@ -107,7 +107,8 @@ func TestImportKeysStagesOneExactInertRegistry(t *testing.T) {
 		t.Fatal("prepare generation sibling")
 	}
 	records := []LegacyRecord{{
-		selector: migrationTestSelector, domain: migrationTestDomain, associated: migrationTestDomain,
+		selector: migrationTestSelector, sourceSelector: migrationTestSelector,
+		domain: migrationTestDomain, associated: migrationTestDomain,
 		algorithm: AlgorithmRSA, active: true,
 	}}
 	client := &keyImportClientFake{values: map[string][]byte{
@@ -148,11 +149,35 @@ func TestImportKeysStagesOneExactInertRegistry(t *testing.T) {
 	}
 }
 
+// TestImportUsesExactLegacySelectorAfterCanonicalInventory proves case-exact
+// LDAP lookup stays separate from the canonical lowercase DKIM2 identity.
+func TestImportUsesExactLegacySelectorAfterCanonicalInventory(t *testing.T) {
+	privatePEM := rsaPrivatePEM(t)
+	records := []LegacyRecord{{
+		selector: migrationTestCanonicalSelector, sourceSelector: migrationTestMixedCaseSelector,
+		domain: migrationTestDomain, associated: migrationTestDomain,
+		algorithm: AlgorithmRSA, active: true,
+	}}
+	config := testConfig()
+	config.Plan.Mappings[0].Selector = migrationTestCanonicalSelector
+	client := &keyImportClientFake{values: map[string][]byte{
+		migrationTestDomain + "\x00" + migrationTestMixedCaseSelector: privatePEM,
+	}}
+	imported, err := ImportKeys(
+		context.Background(), records, config.Plan, client, &dnsProverFake{},
+	)
+	if err != nil || len(imported) != 1 {
+		t.Fatal("case-exact legacy import failed")
+	}
+	closeImported(imported)
+}
+
 // TestImportKeysFailsClosedBeforeRegistrySideEffects proves denial cleanup.
 func TestImportKeysFailsClosedBeforeRegistrySideEffects(t *testing.T) {
 	privatePEM := rsaPrivatePEM(t)
 	records := []LegacyRecord{{
-		selector: migrationTestSelector, domain: migrationTestDomain, associated: migrationTestDomain,
+		selector: migrationTestSelector, sourceSelector: migrationTestSelector,
+		domain: migrationTestDomain, associated: migrationTestDomain,
 		algorithm: AlgorithmRSA, active: true,
 	}}
 	config := testConfig()

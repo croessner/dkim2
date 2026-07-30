@@ -114,7 +114,7 @@ func ImportKeys(
 			return nil, errors.New("protected key import unavailable")
 		}
 		encoded, err := client.FetchKey(
-			ctx, record.domain, record.selector,
+			ctx, record.domain, record.sourceSelector,
 			append([]string(nil), keyImportAttributes...), 64<<10,
 		)
 		if err != nil || len(encoded) == 0 || len(encoded) > 64<<10 {

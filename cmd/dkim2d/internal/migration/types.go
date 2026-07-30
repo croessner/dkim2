@@ -62,6 +62,7 @@ const (
 // LegacyRecord is one validated nonsecret inventory record.
 type LegacyRecord struct {
 	selector        string
+	sourceSelector  string
 	domain          string
 	associated      string
 	algorithm       Algorithm

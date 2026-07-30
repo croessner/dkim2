@@ -109,6 +109,12 @@ OpenDKIM objects, canonical equal `DKIMDomain` and `associatedDomain`, unique
 selectors, and one active domain/algorithm record. `DKIMIdentity` and LDAP
 timestamps are count-only legacy facts and are not migrated.
 
+The adapter accepts legacy ASCII selector spelling with uppercase letters
+because selector DNS labels are case-insensitive. Inventory canonicalizes that
+spelling to lowercase for the DKIM2 plan and DNS proof while protected import
+uses the exact original LDAP value against the case-exact legacy schema. Other
+noncanonical selector or domain input remains rejected.
+
 The protected phase then reads each key separately, accepts only one bounded
 unencrypted PKCS#8 RSA or Ed25519 key of the declared type and strength,
 derives canonical SPKI, and performs a fresh DNS lookup through the normal

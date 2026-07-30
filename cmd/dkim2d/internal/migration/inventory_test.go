@@ -12,13 +12,15 @@ import (
 )
 
 const (
-	migrationTestDomain     = "example.test"
-	migrationTestSelector   = "selector"
-	migrationTestSourceKey  = migrationTestDomain + "\x00" + migrationTestSelector
-	migrationTestAddress    = "127.0.0.1:636"
-	migrationTestCAPath     = "/tmp/ca"
-	migrationTestBaseDN     = "dc=legacy"
-	migrationTestServerName = "ldap.example"
+	migrationTestDomain            = "example.test"
+	migrationTestSelector          = "selector"
+	migrationTestSourceKey         = migrationTestDomain + "\x00" + migrationTestSelector
+	migrationTestAddress           = "127.0.0.1:636"
+	migrationTestCAPath            = "/tmp/ca"
+	migrationTestBaseDN            = "dc=legacy"
+	migrationTestServerName        = "ldap.example"
+	migrationTestMixedCaseSelector = "Selector-AB12"
+	migrationTestCanonicalSelector = "selector-ab12"
 )
 
 type inventoryClientFake struct {
@@ -89,6 +91,24 @@ func TestInventoryRejectsCrossDomainAndDuplicateActiveAlgorithm(t *testing.T) {
 		if err == nil || records != nil || counts != (InventoryCounts{}) {
 			t.Fatal("ambiguous legacy inventory accepted")
 		}
+	}
+}
+
+// TestInventoryCanonicalizesLegacySelectorCase proves LDAP storage spelling
+// cannot escape the canonical lowercase DKIM2 selector namespace.
+func TestInventoryCanonicalizesLegacySelectorCase(t *testing.T) {
+	entry := legacyFixture(migrationTestMixedCaseSelector, migrationTestDomain, true)
+	records, counts, err := Inventory(
+		context.Background(),
+		&inventoryClientFake{entries: []RawEntry{entry}},
+		testConfig().Limits,
+	)
+	if err != nil || len(records) != 1 || counts.Active != 1 {
+		t.Fatal("valid legacy selector case was rejected")
+	}
+	if records[0].selector != migrationTestCanonicalSelector ||
+		records[0].sourceSelector != migrationTestMixedCaseSelector {
+		t.Fatal("legacy selector case was not bounded at the adapter")
 	}
 }
 
