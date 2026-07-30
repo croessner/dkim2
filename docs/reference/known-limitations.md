@@ -17,8 +17,9 @@ certification, or universal interoperability claim.
   telemetry, or deployment behavior.
 - Postfix/Milter qualification is implemented. Exim is reported as
   `deferred_exim` and has no compatibility result.
-- Flat-file and Valkey datasource paths are implemented. LDAP, SQL, and
-  OpenDKIM migration are reported as `deferred_ldap_sql_migration`.
+- Flat-file, LDAP, PostgreSQL, and Valkey datasource paths are implemented.
+  The offline OpenDKIM migration requires separately managed verified-TLS
+  services, explicit mapping, and distinct least-authority principals.
 - Product images are Linux `amd64` and `arm64`; release preparation does not
   publish them or create `latest`, stable, minor, or major aliases.
 

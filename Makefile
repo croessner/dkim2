@@ -64,10 +64,61 @@ help:
 		'  make check-interop validate closed external discovery and evidence contracts' \
 		'  make interop       normalize the closed current external evidence set' \
 		'  make check-reference validate API, issue, OpenAPI, and reference closure' \
+		'  make check-datasource-schema validate LDAP schema and storage mapping contracts' \
+		'  make check-datasource-postgresql validate PostgreSQL DDL and row mapping contracts' \
+		'  make test-datasource-ldap run focused LDAP provider/schema/race evidence' \
+		'  make test-datasource-postgresql run focused PostgreSQL provider/DDL/race evidence' \
+		'  make test-datasource-services run digest-pinned disposable LDAP/PostgreSQL evidence' \
+		'  make test-opendkim-bootstrap run protected migration/publication/race evidence' \
 		'  make reference-module-proof prove standalone modules through the private proxy' \
 		'  make reference-report render the complete candidate-bound report' \
 		'  make release-candidate run the complete local non-publishing candidate gate' \
 		'  make guardrails   run the local quality gate'
+
+.PHONY: check-datasource-schema
+check-datasource-schema:
+	@GOCACHE="$${GOCACHE:-/tmp/dkim2-go-build-cache}" \
+		go -C cmd/dkim2d test ./internal/datasource/ldap
+	@set -eu; \
+	if command -v slaptest >/dev/null 2>&1; then \
+		work="$$(mktemp -d /tmp/dkim2-slaptest.XXXXXX)"; \
+		trap 'rm -rf "$$work"' 0 1 2 15; \
+		core=""; \
+		for candidate in /etc/ldap/schema/core.schema /etc/openldap/schema/core.schema /usr/local/etc/openldap/schema/core.schema /opt/homebrew/etc/openldap/schema/core.schema; do \
+			if test -f "$$candidate"; then core="$$candidate"; break; fi; \
+		done; \
+		test -n "$$core"; \
+		cp contrib/schema/ldap/rnsdkim2.schema "$$work/rnsdkim2.schema"; \
+		sed -e "s|@CORE_SCHEMA@|$$core|" \
+			-e "s|include rnsdkim2.schema|include $$work/rnsdkim2.schema|" \
+			contrib/schema/ldap/slapd.conf > "$$work/slapd.conf"; \
+		slaptest -u -f "$$work/slapd.conf" >/dev/null; \
+	fi
+
+.PHONY: check-datasource-postgresql
+check-datasource-postgresql:
+	@GOCACHE="$${GOCACHE:-/tmp/dkim2-go-build-cache}" \
+		go -C cmd/dkim2d test ./internal/datasource/postgresql
+
+.PHONY: test-datasource-ldap
+test-datasource-ldap: check-datasource-schema
+	@GOCACHE="$${GOCACHE:-/tmp/dkim2-go-build-cache}" \
+		go -C cmd/dkim2d test -race ./internal/datasource/ldap
+
+.PHONY: test-datasource-postgresql
+test-datasource-postgresql: check-datasource-postgresql
+	@GOCACHE="$${GOCACHE:-/tmp/dkim2-go-build-cache}" \
+		go -C cmd/dkim2d test -race ./internal/datasource/postgresql
+
+.PHONY: test-datasource-services
+test-datasource-services:
+	@scripts/test-datasource-services.sh
+
+.PHONY: test-opendkim-bootstrap
+test-opendkim-bootstrap:
+	@GOCACHE="$${GOCACHE:-/tmp/dkim2-go-build-cache}" \
+		go -C cmd/dkim2d test -race \
+			./internal/migration ./internal/signingstore ./internal/command
 
 .PHONY: fmt
 fmt:
@@ -171,15 +222,9 @@ check-workspace:
 
 .PHONY: vendor
 vendor:
-	@set -eu; \
-	GOFLAGS= go work vendor; \
-	for path in $(VENDOR_LF_PATHS); do \
-		source="vendor/$$path"; \
-		normalized="$$source.lf"; \
-		tr -d '\r' < "$$source" > "$$normalized"; \
-		chmod 0644 "$$normalized"; \
-		mv "$$normalized" "$$source"; \
-	done
+	GOCACHE="$${GOCACHE:-/tmp/dkim2-go-build-cache}" \
+		GOFLAGS=-mod=vendor \
+		go -C tools run ./cmd/reference -root .. vendor
 
 .PHONY: check-vendor
 check-vendor:
@@ -271,7 +316,7 @@ security: check-security fuzz-security race-security vulnerability-security conf
 		go -C tools run ./cmd/security -root .. report
 
 .PHONY: guardrails
-guardrails: fmt vet lint test race check-protected-platforms check-openapi check-vendor check-conformance conformance govulncheck
+guardrails: fmt vet lint test race check-protected-platforms check-openapi check-vendor check-conformance conformance govulncheck check-datasource-schema check-datasource-postgresql
 
 .PHONY: product-binaries
 product-binaries:
@@ -394,5 +439,7 @@ release-candidate:
 	@$(MAKE) conformance-all
 	@$(MAKE) security
 	@$(MAKE) deployment-security
+	@$(MAKE) test-datasource-services
+	@$(MAKE) test-opendkim-bootstrap
 	@$(MAKE) reference-module-proof
 	@$(MAKE) reference-report

@@ -36,6 +36,8 @@ type Metrics struct {
 	dnsDuration     *prometheus.HistogramVec
 	replay          *prometheus.CounterVec
 	replayDuration  *prometheus.HistogramVec
+	datasource      *prometheus.CounterVec
+	datasourceTime  *prometheus.HistogramVec
 	dropped         *prometheus.CounterVec
 
 	readyTerminal atomic.Bool
@@ -93,6 +95,15 @@ func NewMetrics() (*Metrics, error) {
 			Help:    "Replay coordination duration.",
 			Buckets: append([]float64(nil), dnsReplayBuckets...),
 		}, []string{keyReplayState}),
+		datasource: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "dkim2d_datasource_operations_total",
+			Help: "Completed bounded datasource operations.",
+		}, []string{keyProvider, keyOperation, keyProviderState, keyResult}),
+		datasourceTime: prometheus.NewHistogramVec(prometheus.HistogramOpts{
+			Name:    "dkim2d_datasource_operation_duration_seconds",
+			Help:    "Bounded datasource operation duration.",
+			Buckets: append([]float64(nil), dnsReplayBuckets...),
+		}, []string{keyProvider, keyOperation, keyResult}),
 		dropped: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "dkim2d_observation_dropped_total",
 			Help: "Contained observation drops.",
@@ -102,7 +113,8 @@ func NewMetrics() (*Metrics, error) {
 		metrics.readiness, metrics.httpRequests, metrics.httpDuration,
 		metrics.httpInFlight, metrics.process, metrics.processDuration,
 		metrics.policy, metrics.dns, metrics.dnsDuration, metrics.replay,
-		metrics.replayDuration, metrics.dropped,
+		metrics.replayDuration, metrics.datasource, metrics.datasourceTime,
+		metrics.dropped,
 	}
 	for _, collector := range collectors {
 		if err := metrics.registry.Register(collector); err != nil {
@@ -111,6 +123,25 @@ func NewMetrics() (*Metrics, error) {
 	}
 	metrics.readiness.Set(0)
 	return metrics, nil
+}
+
+// DatasourceCompleted records one closed provider lifecycle operation.
+func (m *Metrics) DatasourceCompleted(
+	providerClass string,
+	operation string,
+	state string,
+	result string,
+	duration time.Duration,
+) {
+	defer containMetricPanic()
+	if m == nil || !closedMetricValue(keyProvider, providerClass) ||
+		!closedMetricValue(keyOperation, operation) ||
+		!closedMetricValue(keyProviderState, state) ||
+		!closedMetricValue(keyResult, result) || duration < 0 {
+		return
+	}
+	m.datasource.WithLabelValues(providerClass, operation, state, result).Inc()
+	m.datasourceTime.WithLabelValues(providerClass, operation, result).Observe(duration.Seconds())
 }
 
 // SetReady publishes readiness monotonically until terminal shutdown.

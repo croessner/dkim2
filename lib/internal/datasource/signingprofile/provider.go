@@ -41,6 +41,9 @@ func (Binding) Format(state fmt.State, _ rune) {
 // MarshalJSON emits an empty object without selection or key facts.
 func (Binding) MarshalJSON() ([]byte, error) { return []byte("{}"), nil }
 
+// Valid reports whether the binding owns one complete protected projection.
+func (b Binding) Valid() bool { return b.valid }
+
 // NewBinding validates one exact provider-neutral key declaration.
 func NewBinding(
 	tenant string,

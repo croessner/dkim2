@@ -21,6 +21,7 @@ const (
 	releasePlanPath       = "testdata/reference/release-plan.json"
 	releasePlanSchemaPath = "testdata/reference/schemas/release-plan.schema.json"
 	candidateVersion      = "v0.1.0-rc.1"
+	candidateBaseRevision = "25a9944329d0067db4c7c30b0ba69c1028a44b30"
 	maxReleasePlanBytes   = int64(1 << 20)
 )
 
@@ -67,7 +68,7 @@ type PublicationPlan struct {
 	CredentialsAllowed    bool     `json:"credentials_allowed"`
 }
 
-// ReleaseDeferral preserves the two capabilities outside this candidate.
+// ReleaseDeferral preserves closed candidate capability-status values.
 type ReleaseDeferral struct {
 	Exim             string `json:"exim"`
 	LDAPSQLMigration string `json:"ldap_sql_migration"`
@@ -141,7 +142,7 @@ func CheckReleasePlan(root string) error {
 		plan.Publication.RealTagsCreated || plan.Publication.StableWorkflowAllowed ||
 		plan.Publication.CredentialsAllowed || len(plan.Publication.Aliases) != 0 ||
 		plan.Deferrals.Exim != "deferred_exim" ||
-		plan.Deferrals.LDAPSQLMigration != "deferred_ldap_sql_migration" {
+		plan.Deferrals.LDAPSQLMigration != "implemented" {
 		return errors.New("release_plan_contract")
 	}
 	if err := checkModulePlans(root, plan.Modules); err != nil {

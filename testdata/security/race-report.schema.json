@@ -3,7 +3,7 @@
   "$id": "https://example.test/dkim2/security/race-report.schema.json",
   "additionalProperties": false,
   "properties": {
-    "base_revision": {"const": "3803d52c5279f65f5e659fefe996548adfe6d41d"},
+    "base_revision": {"const": "25a9944329d0067db4c7c30b0ba69c1028a44b30"},
     "candidate_snapshot_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
     "go_version": {"pattern": "^go1\\.26\\.[0-9]+$", "type": "string"},
     "goarch": {"maxLength": 32, "pattern": "^[a-z0-9]+$", "type": "string"},

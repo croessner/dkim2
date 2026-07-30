@@ -2,8 +2,8 @@
 
 The prepared product candidate is exactly `v0.1.0-rc.1`. It is a local,
 non-publishing candidate for the pinned Draft-04 and historical DNS-04
-behavior. It is not a stable release, it does not make either draft final, and
-it does not complete the deferred Exim or database-provider work.
+behavior. It is not a stable release and it does not make either draft final.
+Exim remains deferred; the database-provider work is implemented.
 
 The future five-tag plan for one exact maintainer-approved commit is:
 
@@ -34,5 +34,5 @@ agreement is observation only. Current comparison availability and open draft
 issues are stated in the generated report and
 [`draft-issues.md`](draft-issues.md).
 
-Exim is exactly `deferred_exim`. Executable LDAP/SQL providers and legacy
-migration are exactly `deferred_ldap_sql_migration`.
+Exim is exactly `deferred_exim`. LDAP and PostgreSQL providers plus the
+offline legacy migration are implemented.

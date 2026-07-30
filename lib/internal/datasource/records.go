@@ -438,6 +438,11 @@ func profileFactsEqual(left, right Profile) bool {
 	return true
 }
 
+// ProfileFactsEqual reports exact equality for two immutable profile values.
+func ProfileFactsEqual(left, right Profile) bool {
+	return left.Valid() && right.Valid() && profileFactsEqual(left, right)
+}
+
 // cloneProfile returns a detached immutable profile.
 func cloneProfile(input Profile) Profile {
 	credentials := input.credentials

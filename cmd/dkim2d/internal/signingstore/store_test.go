@@ -298,7 +298,7 @@ func newSigningStoreFixture(t *testing.T) signingStoreFixture {
 	if err != nil {
 		t.Fatalf("x509.MarshalPKCS8PrivateKey() error = %v", err)
 	}
-	privatePEM := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: pkcs8})
+	privatePEM := pem.EncodeToMemory(&pem.Block{Type: privateKeyPEMType, Bytes: pkcs8})
 	clear(pkcs8)
 	const datasourceFile = "datasource.json"
 	const manifestFile = "private-manifest.json"

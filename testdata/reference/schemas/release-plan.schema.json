@@ -49,7 +49,7 @@
       "required": ["exim", "ldap_sql_migration"],
       "properties": {
         "exim": {"const": "deferred_exim"},
-        "ldap_sql_migration": {"const": "deferred_ldap_sql_migration"}
+        "ldap_sql_migration": {"const": "implemented"}
       }
     }
   }

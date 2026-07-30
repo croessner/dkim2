@@ -89,6 +89,38 @@ func TestSigningConfigurationIsDefaultDisabledAndConditionallyComplete(t *testin
 	}
 }
 
+// TestNetworkSigningConfigurationIsConditionalAndVerified proves network
+// providers require exact backend-specific fields and reject irrelevant ones.
+func TestNetworkSigningConfigurationIsConditionalAndVerified(t *testing.T) {
+	clearStableEnvironment(t)
+	ldapSnapshot, err := Load([]byte(ldapSigningYAML()), FlagValues{})
+	ldapConfig, ldapEnabled := ldapSnapshot.Signing().LDAP()
+	if err != nil || !ldapEnabled || ldapSnapshot.Signing().Backend() != SigningLDAP ||
+		ldapConfig.Transport() != "starttls" || ldapConfig.PageSize() != 128 ||
+		ldapConfig.LoadDeadline() != 5*time.Second {
+		t.Fatalf("LDAP signing configuration failed with code %s", CodeOf(err))
+	}
+	postgresSnapshot, err := Load([]byte(postgresqlSigningYAML()), FlagValues{})
+	postgresConfig, postgresEnabled := postgresSnapshot.Signing().PostgreSQL()
+	if err != nil || !postgresEnabled ||
+		postgresSnapshot.Signing().Backend() != SigningPostgreSQL ||
+		postgresConfig.MaxConnections() != 2 ||
+		postgresConfig.IdleConnections() != 1 {
+		t.Fatalf("PostgreSQL signing configuration failed with code %s", CodeOf(err))
+	}
+	for _, document := range []string{
+		strings.Replace(ldapSigningYAML(), "    transport: starttls", "    transport: plaintext", 1),
+		strings.Replace(ldapSigningYAML(), "    address: 127.0.0.1:636", "    address: ldap.example:636", 1),
+		strings.Replace(ldapSigningYAML(), "  private_manifest_file:", "  datasource_file: /secure/"+testGeneration+"/datasource\n  private_manifest_file:", 1),
+		strings.Replace(postgresqlSigningYAML(), "    max_connections: 2", "    max_connections: 5", 1),
+		strings.Replace(postgresqlSigningYAML(), "    database: dkim2", "    database: dkim2;drop", 1),
+	} {
+		if _, loadErr := Load([]byte(document), FlagValues{}); loadErr == nil {
+			t.Fatal("network signing matrix accepted unsafe or irrelevant input")
+		}
+	}
+}
+
 // removeYAMLField removes one exact single-line test field.
 func removeYAMLField(document, prefix string) string {
 	lines := strings.Split(document, "\n")
@@ -727,6 +759,57 @@ signing:
   backend: flat_file
   datasource_file: /secure/` + testGeneration + `/datasource
   private_manifest_file: /secure/` + testGeneration + `/private-manifest
+`
+}
+
+// ldapSigningYAML returns one complete verified LDAP signing document.
+func ldapSigningYAML() string {
+	return `config:
+  version: dkim2d-config-v1
+protected:
+  generation: ` + testGeneration + `
+server:
+  capability_file: /secure/` + testGeneration + `/capability
+  sign_capability_file: /secure/` + testGeneration + `/sign-capability
+replay:
+  backend: disabled
+signing:
+  backend: ldap
+  private_manifest_file: /secure/` + testGeneration + `/private-manifest
+  ldap:
+    address: 127.0.0.1:636
+    server_name: ldap.example
+    ca_file: /secure/` + testGeneration + `/ldap-ca
+    transport: starttls
+    bind_dn: cn=runtime,dc=example,dc=test
+    password_file: /secure/` + testGeneration + `/ldap-password
+    base_dn: ou=dkim2,dc=example,dc=test
+`
+}
+
+// postgresqlSigningYAML returns one complete verified PostgreSQL signing document.
+func postgresqlSigningYAML() string {
+	return `config:
+  version: dkim2d-config-v1
+protected:
+  generation: ` + testGeneration + `
+server:
+  capability_file: /secure/` + testGeneration + `/capability
+  sign_capability_file: /secure/` + testGeneration + `/sign-capability
+replay:
+  backend: disabled
+signing:
+  backend: postgresql
+  private_manifest_file: /secure/` + testGeneration + `/private-manifest
+  postgresql:
+    address: 127.0.0.1:5432
+    server_name: postgresql.example
+    ca_file: /secure/` + testGeneration + `/postgresql-ca
+    database: dkim2
+    user: dkim2_runtime
+    password_file: /secure/` + testGeneration + `/postgresql-password
+    max_connections: 2
+    idle_connections: 1
 `
 }
 

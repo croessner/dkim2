@@ -4,6 +4,7 @@ package config
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
@@ -19,6 +20,77 @@ import (
 
 	"golang.org/x/sys/unix"
 )
+
+// TestLoadProtectedNetworkSigningPublishesSeparatedRegistryAndCredentials
+// proves datasource secrets never enter the flat-file signing owner.
+func TestLoadProtectedNetworkSigningPublishesSeparatedRegistryAndCredentials(t *testing.T) {
+	fixture := newProtectedSigningFixture(t)
+	generationPath := filepath.Join(filepath.Dir(fixture.yamlPath), testGeneration)
+	if err := os.Chmod(filepath.Dir(generationPath), 0o700); err != nil {
+		t.Fatal("protect network registry parent")
+	}
+	makeGenerationWritable(t, generationPath)
+	manifestPath := filepath.Join(generationPath, "private-manifest")
+	manifestBytes, err := os.ReadFile(manifestPath)
+	if err != nil {
+		t.Fatal("read registry fixture")
+	}
+	var manifest map[string]any
+	if err := json.Unmarshal(manifestBytes, &manifest); err != nil {
+		t.Fatal("decode registry fixture")
+	}
+	manifest["version"] = "dkim2-private-keys-v2"
+	manifest["generation"] = "1"
+	writeProtectedSigningJSON(t, manifestPath, manifest)
+	writeProtectedTestFile(
+		t, filepath.Join(generationPath, "ldap-password"),
+		[]byte("network-password"), 0o600,
+	)
+	certificate := testProtectedCertificateDER(
+		t, 902, true, x509.KeyUsageCertSign,
+	)
+	writeProtectedTestFile(
+		t, filepath.Join(generationPath, "ldap-ca"),
+		pem.EncodeToMemory(&pem.Block{Type: certificatePEMType, Bytes: certificate}),
+		0o600,
+	)
+	sealGeneration(t, generationPath)
+	document := strings.ReplaceAll(
+		ldapSigningYAML(), "/secure/"+testGeneration, generationPath,
+	)
+	writeProtectedTestFile(t, fixture.yamlPath, []byte(document), 0o600)
+	owner, err := LoadProtected(fixture.yamlPath, FlagValues{})
+	if CodeOf(err) == CodeProtectedUnsupported {
+		t.Skip("test filesystem is outside the closed production allowlist")
+	}
+	if err != nil {
+		t.Fatalf("LoadProtected(network) failed with code %s", CodeOf(err))
+	}
+	preparation, err := owner.PrepareRuntime()
+	if err != nil {
+		t.Fatalf("PrepareRuntime(network) failed with code %s", CodeOf(err))
+	}
+	if preparation.SigningStore() != nil || preparation.SigningRegistry() == nil {
+		t.Fatal("network signing crossed flat-file and registry ownership")
+	}
+	registry, err := preparation.SigningRegistry().Load(context.Background(), 1)
+	if err != nil || registry == nil {
+		t.Fatal("protected registry generation drifted")
+	}
+	defer func() { _ = registry.Close(context.Background()) }()
+	var borrowed bool
+	if err := preparation.SigningDatasource().Use(
+		func(password []byte, roots [][]byte) error {
+			borrowed = string(password) == "network-password" && len(roots) == 1
+			return nil
+		},
+	); err != nil || !borrowed {
+		t.Fatal("network protected material was unavailable")
+	}
+	if err := owner.Close(); err != nil {
+		t.Fatalf("Close(network owner) failed with code %s", CodeOf(err))
+	}
+}
 
 const (
 	protectedSigningDomainField = "domain"

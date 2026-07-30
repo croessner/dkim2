@@ -25,7 +25,7 @@ const (
 	// DNSDraft is the exact historical DNS behavior baseline used by security evidence.
 	DNSDraft = "draft-chuang-dkim2-dns-04"
 	// BaseRevision is the fixed reference-candidate implementation base.
-	BaseRevision = "3803d52c5279f65f5e659fefe996548adfe6d41d"
+	BaseRevision = "25a9944329d0067db4c7c30b0ba69c1028a44b30"
 	// FuzzDuration is the minimum unchanged-candidate duration for each target.
 	FuzzDuration = "10s"
 
@@ -103,11 +103,13 @@ func Targets() []FuzzTarget {
 		target("cmd/dkim2d/internal/httpjson/request_test.go", "FuzzDecodeCanonicalBase64", "OpenAPI message encoding", "openapi_contract", "encoded and decoded caps before allocation"),
 		target("cmd/dkim2d/internal/httpjson/request_test.go", "FuzzMapProcessRequest", "OpenAPI process request", "openapi_contract", "closed generated DTO mapping"),
 		target("cmd/dkim2d/internal/httpjson/response_snapshot_test.go", "FuzzResponseSnapshotMappers", "OpenAPI response snapshot", "openapi_contract", "immutable bounded action response mapping"),
+		target("cmd/dkim2d/internal/migration/inventory_test.go", "FuzzLegacyInventoryNeverPanicsOrRequestsPrivateKeys", "legacy OpenDKIM inventory", "local_security_policy", "bounded read-only projection without private key attributes"),
 		target("cmd/dkim2d/internal/observability/fuzz_test.go", "FuzzMetricLabels", "Prometheus labels", "local_security_policy", "closed low-cardinality vocabulary"),
 		target("cmd/dkim2d/internal/observability/fuzz_test.go", "FuzzOTLPProjection", "OTLP projection", "local_security_policy", "bounded allowlisted trace fields"),
 		target("cmd/dkim2d/internal/observability/fuzz_test.go", "FuzzSlogAdmission", "structured logging", "local_security_policy", "bounded allowlisted log fields"),
 		target("cmd/dkim2d/internal/replay/valkey/fuzz_test.go", "FuzzValkeyResultMapping", "Valkey replay response", "local_security_policy", "bounded RESP and closed mutation authority"),
 		target("cmd/dkim2d/internal/signingstore/manifest_fuzz_test.go", "FuzzPrivateManifestParsingNeverPanics", "private signing manifest", "local_security_policy", "strict bounded same-generation parsing"),
+		target("cmd/dkim2d/internal/signingstore/registry_test.go", "FuzzImportedPrivateKeyNeverLeaksOrPanics", "protected legacy private-key import", "local_security_policy", "bounded exact PKCS8 algorithm and strength validation"),
 		target("lib/dns_provider_fuzz_test.go", "FuzzDNSPublicProvider", "public DNS provider", "draft_normative", "bounded typed resolver projection"),
 		target("lib/dns_provider_fuzz_test.go", "FuzzDNSPublicVerifier", "public DNS verification", "draft_normative", "bounded provider and verification composition"),
 		target("lib/internal/canonical/fuzz_test.go", "FuzzBodyHashInput", "body hash input", "draft_normative", "bounded byte-preserving canonicalization"),
@@ -173,7 +175,7 @@ func ResourceOwners() []ResourceOwner {
 	return []ResourceOwner{
 		resource("config", "cmd/dkim2d/internal/config and cmd/dkim2-milter/internal/config", []string{"file_bytes", "nodes", "depth", "scalars", "placeholders", "path_components", "pem_blocks", "read_attempts"}, "cmd/dkim2d/internal/config/yaml_test.go#TestPreflightYAMLEnforcesResourceBounds", "cmd/dkim2d/internal/config/protected_loader_test.go#TestProtectedRoleSizeMatrix"),
 		resource("conformance", "tools/internal/conformance", []string{"manifest_bytes", "artifacts", "artifact_bytes", "paths", "report_bytes", "captured_output"}, "tools/internal/conformance/conformance_test.go#TestManifestRejectsDuplicateExactArtifactPath", "tools/internal/conformance/conformance_test.go#TestStrictJSONRejectsDuplicateUnknownAndDeepInput"),
-		resource("datasource", "lib/internal/datasource", []string{"identifier_bytes", "records", "profiles", "policies", "handles", "generations", "json_bytes", dimensionJSONDepth}, "lib/internal/datasource/limits_test.go#TestHardAndDefaultLimitsMatchFrozenMaxima", "lib/internal/datasource/limits_test.go#TestUsageRejectsOneOverNegativeOverflowAndInconsistentValues"),
+		resource("datasource", "lib/internal/datasource and cmd/dkim2d/internal/datasource and cmd/dkim2d/internal/migration", []string{"identifier_bytes", "records", "profiles", "policies", "handles", "generations", "json_bytes", dimensionJSONDepth, "backend_bytes", "pages", "responses", "connections", "report_bytes"}, "lib/internal/datasource/limits_test.go#TestHardAndDefaultLimitsMatchFrozenMaxima", "lib/internal/datasource/limits_test.go#TestUsageRejectsOneOverNegativeOverflowAndInconsistentValues", "cmd/dkim2d/internal/migration/inventory_test.go#TestDryRunNeverRequestsKeysOrPublishesIdentity"),
 		resource("deployment", "tools/cmd/deploymentfixture", []string{"dns_query_bytes", "dns_labels", "dns_options", "dns_record_bytes", "smtp_reply_bytes", "queue_identifier_bytes", "captured_message_bytes"}, "tools/cmd/deploymentfixture/main_test.go#TestAnswerDNSBoundsQueriesAndReturnsOnlyBoundTXT", "tools/cmd/deploymentfixture/main_test.go#TestSMTPReplyRequiresExactQueuedAcceptance"),
 		resource("dns", "lib/internal/keyresolver", []string{"owner_bytes", "labels", "rr_count", "txt_bytes", "key_bytes", "lookups", "cache_entries", "flights", dimensionWaiters}, "lib/internal/keyresolver/limits_test.go#TestDefaultLimitsMatchClosedDNSBounds", "lib/internal/keyresolver/flight_test.go#TestFlightWaiterLimitAllowsExactAndRejectsOneOver"),
 		resource("http", "cmd/dkim2d/internal/httpjson", []string{"request_line_bytes", "header_bytes", "body_bytes", dimensionJSONDepth, "json_tokens", "decoded_message_bytes", dimensionEnvelopeByte, "in_flight", dimensionWaiters, "response_bytes"}, "cmd/dkim2d/internal/httpjson/http_boundary_matrix_test.go#TestHTTPBoundaryRawMethodTargetAndHeadLimits", "cmd/dkim2d/internal/httpjson/body_preflight_test.go#TestReadProcessBodyAcceptsExactLimitAndRejectsOneOver"),

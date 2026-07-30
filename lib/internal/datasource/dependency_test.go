@@ -25,6 +25,7 @@ const (
 	signingPackage              = "internal/signing"
 	signingProfilePackage       = "internal/datasource/signingprofile"
 	publicFlatfileProvider      = "provider/flatfile"
+	publicProviderPackage       = "provider"
 	datasourceFuturePackage     = "internal/datasource/future"
 	dependencyTestHelperPackage = "internal/helper"
 	publicFacadeHarness         = "signing_datasource_integration_test.go"
@@ -83,6 +84,7 @@ func TestDatasourceProductionImportBoundaries(t *testing.T) {
 			t.Fatalf("production signing package %q imports datasource", current.directory)
 		}
 		if current.directory != publicFlatfileProvider &&
+			current.directory != publicProviderPackage &&
 			!isDatasourceDirectory(current.directory) &&
 			importsConcreteDatasourceProvider(current.imports) {
 			t.Fatalf("production protocol package %q imports a concrete datasource provider",
@@ -403,7 +405,8 @@ func productionDependencyGraphViolation(
 				)
 			}
 			if (isDatasourceDirectory(root) ||
-				root == publicFlatfileProvider) &&
+				root == publicFlatfileProvider ||
+				root == publicProviderPackage) &&
 				isConcreteDatasourceDirectory(target) &&
 				!allowsConcreteDatasourceDependency(root, target) {
 				return fmt.Sprintf(
@@ -413,6 +416,7 @@ func productionDependencyGraphViolation(
 				)
 			}
 			if root != publicFlatfileProvider &&
+				root != publicProviderPackage &&
 				!isDatasourceDirectory(root) &&
 				isConcreteDatasourceDirectory(target) {
 				return fmt.Sprintf(
@@ -424,7 +428,8 @@ func productionDependencyGraphViolation(
 		}
 		if hasDatasource && hasSigning &&
 			root != signingProfilePackage &&
-			root != publicFlatfileProvider {
+			root != publicFlatfileProvider &&
+			root != publicProviderPackage {
 			return fmt.Sprintf(
 				"production package %q creates an unapproved datasource/signing bridge",
 				root,
@@ -511,6 +516,9 @@ func allowsConcreteDatasourceDependency(root string, target string) bool {
 	case publicFlatfileProvider:
 		return target == datasourceFlatfilePackage ||
 			target == datasourceMemoryPackage ||
+			target == signingProfilePackage
+	case publicProviderPackage:
+		return target == datasourceMemoryPackage ||
 			target == signingProfilePackage
 	default:
 		return target == root

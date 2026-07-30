@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dkim2.invalid/schemas/datasource-integration-report.schema.json",
+  "title": "DKIM2 datasource integration report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema", "base_revision", "candidate_snapshot_sha256", "ldap_image",
+    "postgresql_image", "runs", "checks", "overall"
+  ],
+  "properties": {
+    "schema": {"const": "dkim2.datasource-integration-report.v1"},
+    "base_revision": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "candidate_snapshot_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "ldap_image": {"type": "string", "pattern": "^.+@sha256:[0-9a-f]{64}$"},
+    "postgresql_image": {"type": "string", "pattern": "^.+@sha256:[0-9a-f]{64}$"},
+    "runs": {"const": 2},
+    "checks": {
+      "type": "array",
+      "minItems": 8,
+      "maxItems": 8,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "ldap_parity_and_denials",
+          "postgresql_parity_and_denials",
+          "ldap_absent_to_first_concurrency_fence",
+          "postgresql_absent_to_first_concurrency_fence",
+          "ldap_pointerless_nonempty_denial",
+          "postgresql_pointerless_nonempty_denial",
+          "postgresql_committed_immutability",
+          "postgresql_runtime_write_denial"
+        ]
+      }
+    },
+    "overall": {"const": "pass"}
+  }
+}

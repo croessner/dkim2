@@ -30,6 +30,16 @@ type SigningConfig struct {
 	state *signingState
 }
 
+// LDAPSigningConfig is one immutable structurally opaque LDAP configuration view.
+type LDAPSigningConfig struct {
+	state *ldapSigningState
+}
+
+// PostgreSQLSigningConfig is one immutable structurally opaque PostgreSQL configuration view.
+type PostgreSQLSigningConfig struct {
+	state *postgresqlSigningState
+}
+
 // ValkeyConfig is one immutable structurally opaque Valkey configuration view.
 type ValkeyConfig struct {
 	state *valkeyState
@@ -208,7 +218,175 @@ func (c SigningConfig) Backend() SigningBackend {
 
 // Enabled reports whether daemon signing is configured.
 func (c SigningConfig) Enabled() bool {
-	return c.state != nil && c.state.backend == SigningFlatFile
+	return c.state != nil && c.state.backend != SigningDisabled
+}
+
+// LDAP returns the selected verified LDAP configuration.
+func (c SigningConfig) LDAP() (LDAPSigningConfig, bool) {
+	if c.state == nil || c.state.backend != SigningLDAP {
+		return LDAPSigningConfig{}, false
+	}
+	return LDAPSigningConfig{state: &c.state.ldap}, true
+}
+
+// PostgreSQL returns the selected verified PostgreSQL configuration.
+func (c SigningConfig) PostgreSQL() (PostgreSQLSigningConfig, bool) {
+	if c.state == nil || c.state.backend != SigningPostgreSQL {
+		return PostgreSQLSigningConfig{}, false
+	}
+	return PostgreSQLSigningConfig{state: &c.state.postgresql}, true
+}
+
+// Address returns the direct LDAP endpoint.
+func (c LDAPSigningConfig) Address() string {
+	if c.state == nil {
+		return ""
+	}
+	return c.state.address
+}
+
+// ServerName returns the separately verified LDAP TLS identity.
+func (c LDAPSigningConfig) ServerName() string {
+	if c.state == nil {
+		return ""
+	}
+	return c.state.serverName
+}
+
+// CAFile returns the protected LDAP trust-root path.
+func (c LDAPSigningConfig) CAFile() string {
+	if c.state == nil {
+		return ""
+	}
+	return c.state.caFile
+}
+
+// Transport returns the exact verified LDAP TLS mode.
+func (c LDAPSigningConfig) Transport() string {
+	if c.state == nil {
+		return ""
+	}
+	return c.state.transport
+}
+
+// BindDN returns the protected LDAP bind identity.
+func (c LDAPSigningConfig) BindDN() string {
+	if c.state == nil {
+		return ""
+	}
+	return c.state.bindDN
+}
+
+// PasswordFile returns the protected LDAP bind-secret path.
+func (c LDAPSigningConfig) PasswordFile() string {
+	if c.state == nil {
+		return ""
+	}
+	return c.state.passwordFile
+}
+
+// BaseDN returns the protected exact DKIM2 LDAP base.
+func (c LDAPSigningConfig) BaseDN() string {
+	if c.state == nil {
+		return ""
+	}
+	return c.state.baseDN
+}
+
+// PageSize returns the bounded LDAP page size.
+func (c LDAPSigningConfig) PageSize() uint16 {
+	if c.state == nil {
+		return 0
+	}
+	return c.state.pageSize
+}
+
+// LoadDeadline returns the immutable LDAP load budget.
+func (c LDAPSigningConfig) LoadDeadline() time.Duration {
+	if c.state == nil {
+		return 0
+	}
+	return c.state.loadDeadline
+}
+
+// Address returns the direct PostgreSQL endpoint.
+func (c PostgreSQLSigningConfig) Address() string {
+	if c.state == nil {
+		return ""
+	}
+	return c.state.address
+}
+
+// ServerName returns the separately verified PostgreSQL TLS identity.
+func (c PostgreSQLSigningConfig) ServerName() string {
+	if c.state == nil {
+		return ""
+	}
+	return c.state.serverName
+}
+
+// CAFile returns the protected PostgreSQL trust-root path.
+func (c PostgreSQLSigningConfig) CAFile() string {
+	if c.state == nil {
+		return ""
+	}
+	return c.state.caFile
+}
+
+// Database returns the exact PostgreSQL database.
+func (c PostgreSQLSigningConfig) Database() string {
+	if c.state == nil {
+		return ""
+	}
+	return c.state.database
+}
+
+// User returns the least-privilege PostgreSQL runtime principal.
+func (c PostgreSQLSigningConfig) User() string {
+	if c.state == nil {
+		return ""
+	}
+	return c.state.user
+}
+
+// PasswordFile returns the protected PostgreSQL password path.
+func (c PostgreSQLSigningConfig) PasswordFile() string {
+	if c.state == nil {
+		return ""
+	}
+	return c.state.passwordFile
+}
+
+// PageSize returns the bounded PostgreSQL keyset page size.
+func (c PostgreSQLSigningConfig) PageSize() uint16 {
+	if c.state == nil {
+		return 0
+	}
+	return c.state.pageSize
+}
+
+// LoadDeadline returns the immutable PostgreSQL load budget.
+func (c PostgreSQLSigningConfig) LoadDeadline() time.Duration {
+	if c.state == nil {
+		return 0
+	}
+	return c.state.loadDeadline
+}
+
+// MaxConnections returns the bounded PostgreSQL pool size.
+func (c PostgreSQLSigningConfig) MaxConnections() uint8 {
+	if c.state == nil {
+		return 0
+	}
+	return c.state.maxConnections
+}
+
+// IdleConnections returns the bounded PostgreSQL idle pool size.
+func (c PostgreSQLSigningConfig) IdleConnections() uint8 {
+	if c.state == nil {
+		return 0
+	}
+	return c.state.idleConnections
 }
 
 // DatasourceFile returns the protected signing-profile datasource path.

@@ -43,6 +43,25 @@ const (
 	pathSigningManifest        = "signing.private_manifest_file"
 	pathSigningReload          = "signing.reload_interval"
 	pathSigningAllowGroup      = "signing.allow_recipient_group"
+	pathSigningLDAPAddress     = "signing.ldap.address"
+	pathSigningLDAPServerName  = "signing.ldap.server_name"
+	pathSigningLDAPCAFile      = "signing.ldap.ca_file"
+	pathSigningLDAPTransport   = "signing.ldap.transport"
+	pathSigningLDAPBindDN      = "signing.ldap.bind_dn"
+	pathSigningLDAPPassword    = "signing.ldap.password_file"
+	pathSigningLDAPBaseDN      = "signing.ldap.base_dn"
+	pathSigningLDAPPageSize    = "signing.ldap.page_size"
+	pathSigningLDAPDeadline    = "signing.ldap.load_deadline"
+	pathSigningPGAddress       = "signing.postgresql.address"
+	pathSigningPGServerName    = "signing.postgresql.server_name"
+	pathSigningPGCAFile        = "signing.postgresql.ca_file"
+	pathSigningPGDatabase      = "signing.postgresql.database"
+	pathSigningPGUser          = "signing.postgresql.user"
+	pathSigningPGPassword      = "signing.postgresql.password_file"
+	pathSigningPGPageSize      = "signing.postgresql.page_size"
+	pathSigningPGDeadline      = "signing.postgresql.load_deadline"
+	pathSigningPGMaxConns      = "signing.postgresql.max_connections"
+	pathSigningPGIdleConns     = "signing.postgresql.idle_connections"
 
 	pathValkeyAddress          = "replay.valkey.address"
 	pathValkeyServerName       = "replay.valkey.server_name"
@@ -250,6 +269,25 @@ func stableFieldSpecs() []fieldSpec {
 		{path: pathSigningManifest, env: "DKIM2D_SIGNING_PRIVATE_MANIFEST_FILE", kind: valueString},
 		{path: pathSigningReload, env: "DKIM2D_SIGNING_RELOAD_INTERVAL", kind: valueDuration, defaultVal: defaultReadTimeout, hasDefault: true},
 		{path: pathSigningAllowGroup, env: "DKIM2D_SIGNING_ALLOW_RECIPIENT_GROUP", kind: valueBool, defaultVal: canonicalFalse, hasDefault: true},
+		{path: pathSigningLDAPAddress, env: "DKIM2D_SIGNING_LDAP_ADDRESS", kind: valueString},
+		{path: pathSigningLDAPServerName, env: "DKIM2D_SIGNING_LDAP_SERVER_NAME", kind: valueString},
+		{path: pathSigningLDAPCAFile, env: "DKIM2D_SIGNING_LDAP_CA_FILE", kind: valueString},
+		{path: pathSigningLDAPTransport, env: "DKIM2D_SIGNING_LDAP_TRANSPORT", kind: valueString},
+		{path: pathSigningLDAPBindDN, env: "DKIM2D_SIGNING_LDAP_BIND_DN", kind: valueString},
+		{path: pathSigningLDAPPassword, env: "DKIM2D_SIGNING_LDAP_PASSWORD_FILE", kind: valueString},
+		{path: pathSigningLDAPBaseDN, env: "DKIM2D_SIGNING_LDAP_BASE_DN", kind: valueString},
+		{path: pathSigningLDAPPageSize, env: "DKIM2D_SIGNING_LDAP_PAGE_SIZE", kind: valueUint, defaultVal: "128", hasDefault: true},
+		{path: pathSigningLDAPDeadline, env: "DKIM2D_SIGNING_LDAP_LOAD_DEADLINE", kind: valueDuration, defaultVal: "5s", hasDefault: true},
+		{path: pathSigningPGAddress, env: "DKIM2D_SIGNING_POSTGRESQL_ADDRESS", kind: valueString},
+		{path: pathSigningPGServerName, env: "DKIM2D_SIGNING_POSTGRESQL_SERVER_NAME", kind: valueString},
+		{path: pathSigningPGCAFile, env: "DKIM2D_SIGNING_POSTGRESQL_CA_FILE", kind: valueString},
+		{path: pathSigningPGDatabase, env: "DKIM2D_SIGNING_POSTGRESQL_DATABASE", kind: valueString},
+		{path: pathSigningPGUser, env: "DKIM2D_SIGNING_POSTGRESQL_USER", kind: valueString},
+		{path: pathSigningPGPassword, env: "DKIM2D_SIGNING_POSTGRESQL_PASSWORD_FILE", kind: valueString},
+		{path: pathSigningPGPageSize, env: "DKIM2D_SIGNING_POSTGRESQL_PAGE_SIZE", kind: valueUint, defaultVal: "128", hasDefault: true},
+		{path: pathSigningPGDeadline, env: "DKIM2D_SIGNING_POSTGRESQL_LOAD_DEADLINE", kind: valueDuration, defaultVal: "5s", hasDefault: true},
+		{path: pathSigningPGMaxConns, env: "DKIM2D_SIGNING_POSTGRESQL_MAX_CONNECTIONS", kind: valueUint, defaultVal: "2", hasDefault: true},
+		{path: pathSigningPGIdleConns, env: "DKIM2D_SIGNING_POSTGRESQL_IDLE_CONNECTIONS", kind: valueUint, defaultVal: "1", hasDefault: true},
 		{path: pathValkeyAddress, env: "DKIM2D_REPLAY_VALKEY_ADDRESS", kind: valueString},
 		{path: pathValkeyServerName, env: "DKIM2D_REPLAY_VALKEY_SERVER_NAME", kind: valueString},
 		{path: pathValkeyCAFile, env: "DKIM2D_REPLAY_VALKEY_CA_FILE", kind: valueString},

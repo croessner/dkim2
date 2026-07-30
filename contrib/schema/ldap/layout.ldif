@@ -1,0 +1,21 @@
+dn: ou=dkim2,dc=example,dc=test
+objectClass: organizationalUnit
+ou: dkim2
+
+dn: cn=current,ou=dkim2,dc=example,dc=test
+objectClass: dkim2Dataset
+cn: current
+dkim2SchemaVersion: dkim2-datasource-v1
+dkim2Generation: 1
+dkim2DatasetState: committed
+
+dn: ou=generations,ou=dkim2,dc=example,dc=test
+objectClass: organizationalUnit
+ou: generations
+
+dn: dkim2Generation=1,ou=generations,ou=dkim2,dc=example,dc=test
+objectClass: dkim2Dataset
+cn: generation-1
+dkim2SchemaVersion: dkim2-datasource-v1
+dkim2Generation: 1
+dkim2DatasetState: committed

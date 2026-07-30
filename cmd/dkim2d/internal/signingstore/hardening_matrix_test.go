@@ -22,8 +22,8 @@ import (
 )
 
 const (
-	testEd25519Algorithm = "ed25519-sha256"
-	testPKCS8PEMType     = "PRIVATE KEY"
+	testEd25519Algorithm = manifestEd25519SHA256
+	testPKCS8PEMType     = privateKeyPEMType
 )
 
 type ed25519SigningStorePublicKeys struct {

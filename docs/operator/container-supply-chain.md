@@ -95,6 +95,21 @@ timestamps remain private guard state and are never serialized. Every
 reported vulnerability fails the target irrespective of its severity label;
 `govulncheck` remains an independent required Go reachability gate.
 
+The daemon keeps the upstream, replacement-free go-ldap v3.4.14 module
+contract. A repository-owned, deterministic vendor hardening step relocates
+the sole required `golang.org/x/crypto/md4` package, including its BSD license
+and patent notice, under go-ldap's `internal` boundary. It removes the package
+and source tree while retaining only the explicit module requirement metadata
+needed for Go's vendor-consistency check. The transform accepts only the exact
+reviewed source-tree, import, and module-manifest shape; unexpected files or
+metadata fail closed. Both `make vendor` and
+`make check-vendor` apply the same transform, so the checked-in delta remains
+reproducible without a local module fork or `replace` directive. This keeps
+optional upstream NTLM helpers source-compatible without placing the
+unmaintained OpenPGP packages covered by `GO-2026-5932` in any product image.
+DKIM2 exposes only simple LDAP bind over verified TLS; it does not expose NTLM
+configuration.
+
 Provenance uses an in-toto Statement v1 with the SLSA provenance v1 predicate
 and binds the exact local OCI archive subject, platform descriptors, source
 revision, metadata-validator image, builder image, and BuildKit image from the

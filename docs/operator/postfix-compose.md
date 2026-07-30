@@ -357,7 +357,10 @@ Exim is incomplete and reported as `deferred_exim`. This repository does not
 yet claim a working Exim package, image, `local_scan()`, transport filter, or
 live compatibility result.
 
-Executable LDAP and SQL providers, drivers, pools, schema/DDL delivery,
-immutable database generation loading, and legacy OpenDKIM migration remain
-reported as `deferred_ldap_sql_migration`. The current LDAP/SQL document is
-design-only.
+LDAP and PostgreSQL providers, drivers, pools, schema/DDL delivery, immutable
+generation loading, and the offline legacy OpenDKIM migration are documented
+in
+[`datasource-ldap-postgresql.md`](datasource-ldap-postgresql.md) and
+[`opendkim-migration.md`](opendkim-migration.md). They require separately
+managed verified-TLS services and least-authority credentials; the demo stack
+does not create those external authorities.

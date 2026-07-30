@@ -31,6 +31,8 @@ const (
 	protectedAuditorPassword
 	protectedCA
 	protectedTracingCA
+	protectedDatasourcePassword
+	protectedDatasourceCA
 )
 
 type ownedDescriptor struct {
@@ -258,6 +260,18 @@ func selectedProtectedPaths(snapshot Snapshot) []selectedProtectedPath {
 				role: protectedSignCapability,
 			})
 		}
+		if ldap, enabled := snapshot.Signing().LDAP(); enabled {
+			paths = append(paths,
+				selectedProtectedPath{path: ldap.PasswordFile(), role: protectedDatasourcePassword},
+				selectedProtectedPath{path: ldap.CAFile(), role: protectedDatasourceCA},
+			)
+		}
+		if postgresql, enabled := snapshot.Signing().PostgreSQL(); enabled {
+			paths = append(paths,
+				selectedProtectedPath{path: postgresql.PasswordFile(), role: protectedDatasourcePassword},
+				selectedProtectedPath{path: postgresql.CAFile(), role: protectedDatasourceCA},
+			)
+		}
 		if snapshot.Server().ReviseEnabled() {
 			paths = append(paths, selectedProtectedPath{
 				path: snapshot.Server().ReviseCapabilityFile(),
@@ -360,6 +374,8 @@ func notifyProtectedObserver(
 }
 
 // buildProtectedState validates content and constructs one exclusive startup owner.
+//
+//nolint:gocyclo // Each protected role is handled explicitly to preserve ownership.
 func buildProtectedState(
 	snapshot Snapshot,
 	files []*retainedProtectedFile,
@@ -423,6 +439,17 @@ func buildProtectedState(
 				return nil, err
 			}
 			state.tracingRootCertificatesDER = roots
+		case protectedDatasourcePassword:
+			if err := validatePassword(file.data); err != nil {
+				return nil, err
+			}
+			state.datasourcePassword = append([]byte(nil), file.data...)
+		case protectedDatasourceCA:
+			roots, err := parseCertificateRoots(file.data)
+			if err != nil {
+				return nil, err
+			}
+			state.datasourceRootsDER = roots
 		default:
 			return nil, newError(CodeInternal)
 		}
@@ -434,15 +461,29 @@ func buildProtectedState(
 			(!state.hasSign && !state.hasRevise) {
 			return nil, newError(CodeProtectedContent)
 		}
-		store, err := signingstore.NewRuntime(
-			generationFD,
-			filepath.Base(snapshot.Signing().DatasourceFile()),
-			filepath.Base(snapshot.Signing().PrivateManifestFile()),
-		)
-		if err != nil || store == nil {
-			return nil, newError(CodeProtectedContent)
+		if snapshot.Signing().Backend() == SigningFlatFile {
+			store, err := signingstore.NewRuntime(
+				generationFD,
+				filepath.Base(snapshot.Signing().DatasourceFile()),
+				filepath.Base(snapshot.Signing().PrivateManifestFile()),
+			)
+			if err != nil || store == nil {
+				return nil, newError(CodeProtectedContent)
+			}
+			state.signingStore = store
+		} else {
+			if len(state.datasourcePassword) == 0 || len(state.datasourceRootsDER) == 0 {
+				return nil, newError(CodeProtectedContent)
+			}
+			registry, err := signingstore.NewRegistrySource(
+				generationFD,
+				filepath.Base(snapshot.Signing().PrivateManifestFile()),
+			)
+			if err != nil || registry == nil {
+				return nil, newError(CodeProtectedContent)
+			}
+			state.signingRegistry = registry
 		}
-		state.signingStore = store
 	}
 	if err := validateProtectedSeparation(state); err != nil {
 		return nil, err
@@ -497,13 +538,14 @@ func validateProtectedFileMetadata(
 		return newError(CodeProtectedAccess)
 	}
 	modeAccepted := false
-	requireSingleLink := role != protectedCA
+	requireSingleLink := role != protectedCA && role != protectedDatasourceCA
 	switch role {
 	case protectedYAML, protectedCapability, protectedSignCapability,
 		protectedReviseCapability, protectedHMAC,
-		protectedApplicationPassword, protectedAuditorPassword:
+		protectedApplicationPassword, protectedAuditorPassword,
+		protectedDatasourcePassword:
 		modeAccepted = metadata.modeBits == 0o400 || metadata.modeBits == 0o600
-	case protectedCA:
+	case protectedCA, protectedDatasourceCA:
 		switch metadata.modeBits {
 		case 0o400, 0o440, 0o444, 0o600, 0o640, 0o644:
 			modeAccepted = true
@@ -543,7 +585,9 @@ func protectedSizeAccepted(role protectedFileRole, size int64) bool {
 		return size == exactKeyBytes
 	case protectedApplicationPassword, protectedAuditorPassword:
 		return size >= 1 && size <= maxPasswordBytes
-	case protectedCA:
+	case protectedDatasourcePassword:
+		return size >= 1 && size <= maxPasswordBytes
+	case protectedCA, protectedDatasourceCA:
 		return size >= 1 && size <= maxCAPEMBytes
 	case protectedTracingCA:
 		return size >= 1 && size <= maxTracingCAPEMBytes
@@ -562,7 +606,9 @@ func protectedReadCap(role protectedFileRole) int {
 		return exactKeyBytes
 	case protectedApplicationPassword, protectedAuditorPassword:
 		return maxPasswordBytes
-	case protectedCA:
+	case protectedDatasourcePassword:
+		return maxPasswordBytes
+	case protectedCA, protectedDatasourceCA:
 		return maxCAPEMBytes
 	case protectedTracingCA:
 		return maxTracingCAPEMBytes

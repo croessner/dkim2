@@ -54,6 +54,10 @@ const (
 	SigningDisabled SigningBackend = iota + 1
 	// SigningFlatFile selects one same-generation signing-profile provider.
 	SigningFlatFile
+	// SigningLDAP selects one verified read-only LDAP provider.
+	SigningLDAP
+	// SigningPostgreSQL selects one verified read-only PostgreSQL provider.
+	SigningPostgreSQL
 )
 
 type snapshotState struct {
@@ -129,6 +133,22 @@ type signingState struct {
 	privateManifestFile string
 	reloadInterval      time.Duration
 	allowRecipientGroup bool
+	ldap                ldapSigningState
+	postgresql          postgresqlSigningState
+}
+
+type ldapSigningState struct {
+	address, serverName, caFile, transport, bindDN, passwordFile, baseDN string
+	pageSize                                                             uint16
+	loadDeadline                                                         time.Duration
+}
+
+type postgresqlSigningState struct {
+	address, serverName, caFile, database, user, passwordFile string
+	pageSize                                                  uint16
+	loadDeadline                                              time.Duration
+	maxConnections                                            uint8
+	idleConnections                                           uint8
 }
 
 type dnsState struct {
@@ -539,13 +559,17 @@ func parseServer(values map[string]rawValue) (serverState, error) {
 }
 
 // parseSigning validates the default-disabled signing conditional matrix.
+//
+//nolint:gocyclo // The closed backend-conditional configuration matrix is intentionally explicit.
 func parseSigning(
 	values map[string]rawValue,
 	presence map[string]Presence,
 	generation string,
 	server serverState,
 ) (signingState, error) {
-	switch text(values, pathSigningBackend) {
+	backendText := text(values, pathSigningBackend)
+	var backend SigningBackend
+	switch backendText {
 	case valueBackendDisabled:
 		for _, path := range []string{
 			pathSigningDatasource,
@@ -561,17 +585,49 @@ func parseSigning(
 		}
 		return signingState{backend: SigningDisabled}, nil
 	case "flat_file":
+		backend = SigningFlatFile
+	case "ldap":
+		backend = SigningLDAP
+	case "postgresql":
+		backend = SigningPostgreSQL
 	default:
 		return signingState{}, newError(CodeInvalidField)
 	}
-	for _, path := range []string{
-		pathSigningBackend,
-		pathSigningDatasource,
-		pathSigningManifest,
-	} {
+	required := []string{pathSigningBackend, pathSigningManifest}
+	if backend == SigningFlatFile {
+		required = append(required, pathSigningDatasource)
+	}
+	for _, path := range required {
 		if !presence[path].Explicit() {
 			return signingState{}, newError(CodeInvalidMatrix)
 		}
+	}
+	if backend != SigningFlatFile && presence[pathSigningDatasource].Explicit() {
+		return signingState{}, newError(CodeInvalidMatrix)
+	}
+	if backend == SigningFlatFile &&
+		(explicitPrefix(presence, "signing.ldap.") ||
+			explicitPrefix(presence, "signing.postgresql.")) {
+		return signingState{}, newError(CodeInvalidMatrix)
+	}
+	if backend == SigningLDAP &&
+		(explicitPrefix(presence, "signing.postgresql.") ||
+			!requiredExplicit(presence,
+				pathSigningLDAPAddress, pathSigningLDAPServerName,
+				pathSigningLDAPCAFile, pathSigningLDAPTransport,
+				pathSigningLDAPBindDN, pathSigningLDAPPassword,
+				pathSigningLDAPBaseDN,
+			)) {
+		return signingState{}, newError(CodeInvalidMatrix)
+	}
+	if backend == SigningPostgreSQL &&
+		(explicitPrefix(presence, "signing.ldap.") ||
+			!requiredExplicit(presence,
+				pathSigningPGAddress, pathSigningPGServerName,
+				pathSigningPGCAFile, pathSigningPGDatabase,
+				pathSigningPGUser, pathSigningPGPassword,
+			)) {
+		return signingState{}, newError(CodeInvalidMatrix)
 	}
 	signPresent := presence[pathServerSignCapability].Explicit()
 	revisePresent := presence[pathServerReviseCapability].Explicit()
@@ -593,7 +649,10 @@ func parseSigning(
 	}
 	datasourceFile := text(values, pathSigningDatasource)
 	manifestFile := text(values, pathSigningManifest)
-	paths := []string{server.capabilityFile, datasourceFile, manifestFile}
+	paths := []string{server.capabilityFile, manifestFile}
+	if backend == SigningFlatFile {
+		paths = append(paths, datasourceFile)
+	}
 	if signPresent {
 		paths = append(paths, server.signCapabilityFile)
 	}
@@ -603,13 +662,160 @@ func parseSigning(
 	if !sameGenerationPaths(generation, paths...) || !allDistinct(paths) {
 		return signingState{}, newError(CodeInvalidField)
 	}
-	return signingState{
-		backend:             SigningFlatFile,
+	result := signingState{
+		backend:             backend,
 		datasourceFile:      datasourceFile,
 		privateManifestFile: manifestFile,
 		reloadInterval:      reload,
 		allowRecipientGroup: allowGroup,
+	}
+	if backend == SigningLDAP {
+		ldapConfig, parseErr := parseLDAPSigning(values, generation, paths)
+		if parseErr != nil {
+			return signingState{}, parseErr
+		}
+		result.ldap = ldapConfig
+	}
+	if backend == SigningPostgreSQL {
+		postgresqlConfig, parseErr := parsePostgreSQLSigning(values, generation, paths)
+		if parseErr != nil {
+			return signingState{}, parseErr
+		}
+		result.postgresql = postgresqlConfig
+	}
+	return result, nil
+}
+
+// parseLDAPSigning validates one verified-TLS single-authority LDAP subtree.
+func parseLDAPSigning(
+	values map[string]rawValue,
+	generation string,
+	commonPaths []string,
+) (ldapSigningState, error) {
+	address, serverName := text(values, pathSigningLDAPAddress), text(values, pathSigningLDAPServerName)
+	if !validNetworkAuthority(address, serverName) {
+		return ldapSigningState{}, newError(CodeInvalidField)
+	}
+	transport := text(values, pathSigningLDAPTransport)
+	if transport != "ldaps" && transport != "starttls" {
+		return ldapSigningState{}, newError(CodeInvalidField)
+	}
+	bindDN, baseDN := text(values, pathSigningLDAPBindDN), text(values, pathSigningLDAPBaseDN)
+	if bindDN == "" || baseDN == "" || len(bindDN) > 4096 || len(baseDN) > 4096 {
+		return ldapSigningState{}, newError(CodeInvalidField)
+	}
+	caFile, passwordFile := text(values, pathSigningLDAPCAFile), text(values, pathSigningLDAPPassword)
+	paths := append(append([]string(nil), commonPaths...), caFile, passwordFile)
+	if !sameGenerationPaths(generation, paths...) || !allDistinct(paths) {
+		return ldapSigningState{}, newError(CodeInvalidField)
+	}
+	pageSize, err := uintValue(values, pathSigningLDAPPageSize, 1, 256)
+	if err != nil {
+		return ldapSigningState{}, err
+	}
+	deadline, err := durationValue(values, pathSigningLDAPDeadline, time.Millisecond, 30*time.Second, false)
+	if err != nil {
+		return ldapSigningState{}, err
+	}
+	return ldapSigningState{
+		address: address, serverName: serverName, caFile: caFile,
+		transport: transport, bindDN: bindDN, passwordFile: passwordFile,
+		baseDN: baseDN, pageSize: uint16(pageSize), loadDeadline: deadline,
 	}, nil
+}
+
+// parsePostgreSQLSigning validates one verified-TLS single-authority SQL subtree.
+func parsePostgreSQLSigning(
+	values map[string]rawValue,
+	generation string,
+	commonPaths []string,
+) (postgresqlSigningState, error) {
+	address, serverName := text(values, pathSigningPGAddress), text(values, pathSigningPGServerName)
+	if !validNetworkAuthority(address, serverName) {
+		return postgresqlSigningState{}, newError(CodeInvalidField)
+	}
+	database, user := text(values, pathSigningPGDatabase), text(values, pathSigningPGUser)
+	if !validIdentifier(database, 128) || !validIdentifier(user, 128) {
+		return postgresqlSigningState{}, newError(CodeInvalidField)
+	}
+	caFile, passwordFile := text(values, pathSigningPGCAFile), text(values, pathSigningPGPassword)
+	paths := append(append([]string(nil), commonPaths...), caFile, passwordFile)
+	if !sameGenerationPaths(generation, paths...) || !allDistinct(paths) {
+		return postgresqlSigningState{}, newError(CodeInvalidField)
+	}
+	pageSize, err := uintValue(values, pathSigningPGPageSize, 1, 256)
+	if err != nil {
+		return postgresqlSigningState{}, err
+	}
+	deadline, err := durationValue(values, pathSigningPGDeadline, time.Millisecond, 30*time.Second, false)
+	if err != nil {
+		return postgresqlSigningState{}, err
+	}
+	maxConnections, err := uintValue(values, pathSigningPGMaxConns, 1, 4)
+	if err != nil {
+		return postgresqlSigningState{}, err
+	}
+	idleConnections, err := uintValue(values, pathSigningPGIdleConns, 0, 2)
+	if err != nil || idleConnections > maxConnections {
+		return postgresqlSigningState{}, newError(CodeInvalidField)
+	}
+	return postgresqlSigningState{
+		address: address, serverName: serverName, caFile: caFile,
+		database: database, user: user, passwordFile: passwordFile,
+		pageSize: uint16(pageSize), loadDeadline: deadline,
+		maxConnections: uint8(maxConnections), idleConnections: uint8(idleConnections),
+	}, nil
+}
+
+// explicitPrefix reports whether one backend-specific subtree was supplied.
+func explicitPrefix(presence map[string]Presence, prefix string) bool {
+	for path, source := range presence {
+		if strings.HasPrefix(path, prefix) && source.Explicit() {
+			return true
+		}
+	}
+	return false
+}
+
+// requiredExplicit reports whether every conditional path has operator authority.
+func requiredExplicit(presence map[string]Presence, paths ...string) bool {
+	for _, path := range paths {
+		if !presence[path].Explicit() {
+			return false
+		}
+	}
+	return true
+}
+
+// validNetworkAuthority accepts one direct IP endpoint plus separate TLS name.
+func validNetworkAuthority(address, serverName string) bool {
+	host, port, err := net.SplitHostPort(address)
+	if err != nil || serverName == "" || len(serverName) > 253 {
+		return false
+	}
+	ip, err := netip.ParseAddr(host)
+	if err != nil || ip.IsUnspecified() || ip.IsMulticast() {
+		return false
+	}
+	value, err := strconv.ParseUint(port, 10, 16)
+	return err == nil && value != 0
+}
+
+// validIdentifier validates one bounded backend account or database identifier.
+func validIdentifier(value string, maximum int) bool {
+	if value == "" || len(value) > maximum {
+		return false
+	}
+	for _, character := range value {
+		if character >= 'a' && character <= 'z' ||
+			character >= 'A' && character <= 'Z' ||
+			character >= '0' && character <= '9' ||
+			character == '_' || character == '-' {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 // parseDNS validates only the two permitted DNS overrides.

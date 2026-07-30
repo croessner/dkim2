@@ -11,6 +11,10 @@ owned by `github.com/croessner/dkim2`. The authoritative REST contract is
 [`docs/specs/openapi/dkim2d.yaml`](../../docs/specs/openapi/dkim2d.yaml).
 The production navigation and container trust topology start in
 [`docs/operator/postfix-compose.md`](../../docs/operator/postfix-compose.md).
+LDAP/PostgreSQL installation and migration are documented in
+[`docs/operator/datasource-ldap-postgresql.md`](../../docs/operator/datasource-ldap-postgresql.md)
+and
+[`docs/operator/opendkim-migration.md`](../../docs/operator/opendkim-migration.md).
 
 ## Local Security Boundary
 
@@ -86,6 +90,26 @@ Exit status is `0` for help or a clean shutdown, `2` for command-shape and flag
 errors, and `1` for configuration, startup, dependency, serve, or shutdown
 failure. Runtime diagnostics are stable and content-free; the daemon does not
 print an effective configuration or raw dependency errors.
+
+Offline datasource administration uses separate commands and authorities:
+
+```text
+dkim2d datasource bootstrap-opendkim --config /absolute/migration.yaml
+dkim2d datasource bootstrap-opendkim --config /absolute/migration.yaml --apply
+dkim2d datasource rollback --config /absolute/migration.yaml --generation 43
+```
+
+These commands never start the ordinary daemon graph. Dry-run is the default;
+mutation requires `--apply` or the explicit rollback command.
+
+The first publication into a proven-empty backend uses the exact
+`expected_current: "0"` administrative fence and a nonzero candidate. LDAP
+claims a unique staging current entry before dataset creation and activates it
+with a critical RFC 4528 assertion; PostgreSQL proves all datasource tables
+empty in the serializable publication transaction and uniquely inserts the
+singleton current row. Zero is never runtime-loadable, a nonempty pointerless
+backend fails closed, and later publication requires the exact nonzero current
+generation.
 
 ## Configuration Sources
 
@@ -170,6 +194,17 @@ selectors. A complete valid candidate is published atomically. An invalid
 candidate is never published: the prior snapshot remains retained only for
 owned in-flight work while the runtime becomes degraded and readiness
 withdraws.
+
+### LDAP and PostgreSQL signing
+
+The `ldap` and `postgresql` signing backends replace the flat-file datasource
+with one verified-TLS immutable generation while retaining a
+`dkim2-private-keys-v2` manifest in the protected generation. The backend
+generation and registry generation must match exactly. Initial-load failure
+prevents readiness; a linearized refresh failure makes new leases unavailable
+until a complete higher generation loads. Exact configuration examples,
+schema/DDL installation, role separation, backup, and recovery are in the
+datasource operator guide linked above.
 
 ### Process-local memory replay
 

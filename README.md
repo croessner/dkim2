@@ -32,8 +32,12 @@ Current contents:
   policy contracts with immutable in-memory and confined flat-file providers.
 - `lib/internal/datasource/signingprofile`: the sole bridge from validated
   datasource results and opaque key-handle bindings to signing profiles.
-- `docs/datasource-ldap-sql-design.md`: design-only LDAP and SQL mappings;
-  executable providers and their dependencies remain deferred.
+- `docs/datasource-ldap-sql-design.md`: storage-neutral LDAP and PostgreSQL
+  mapping, consistency, resource, and privacy contract.
+- `docs/operator/datasource-ldap-postgresql.md`: installable schema/DDL,
+  daemon configuration, lifecycle, monitoring, backup, and troubleshooting.
+- `docs/operator/opendkim-migration.md`: protected dry-run, apply, publication,
+  and higher-generation rollback workflow.
 - `docs/replay-store-valkey.md`: production replay-store topology, ACL,
   persistence, replication, rotation, integration, and dependency guidance.
 - `docs/conformance.md`: public evidence classes, tested capability boundaries,
@@ -73,10 +77,10 @@ The preview's public API, compatibility, issue, and limitation entry point is
 [`docs/reference/README.md`](docs/reference/README.md).
 
 Exim is incomplete and reported as `deferred_exim`; no Exim image, package, or
-compatibility result is claimed. Executable LDAP and SQL providers and legacy
-OpenDKIM migration are reported as `deferred_ldap_sql_migration`; the current
-[`docs/datasource-ldap-sql-design.md`](docs/datasource-ldap-sql-design.md) is
-design-only.
+compatibility result is claimed. LDAP and PostgreSQL datasource providers,
+deployable schema artifacts, and the offline legacy OpenDKIM migration are
+implemented. They require operator-supplied verified-TLS services, distinct
+least-authority principals, and generation-matched protected registry state.
 
 ## Current Behavior
 
@@ -99,7 +103,8 @@ and one non-retryable `SET NX PX` operation. The daemon now owns strict typed
 configuration, protected-generation loading, the generated process, sign, and
 revise OpenAPI boundary, distinct local route-capability authentication,
 replay and signing-store wiring, readiness, and bounded Fx lifecycle. LDAP and
-SQL providers remain deferred.
+PostgreSQL providers load immutable committed generations through verified TLS
+and join them to one exact protected signer-registry generation.
 
 `dkim2ctl` provides a generated-client-backed loopback smoke check and a
 strict draft-versioned fixture runner. It validates every fixture offline
@@ -128,6 +133,8 @@ make check-deployment
 make deployment-postfix
 make deployment-security
 make check-operator-docs
+make check-datasource-schema
+make check-datasource-postgresql
 make check-release
 make guardrails
 ```

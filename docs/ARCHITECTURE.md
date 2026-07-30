@@ -44,6 +44,7 @@
 | 0.1.0-draft | 2026-07-28 | Christian Roessner / Codex | Reserved the RNS LDAP subtree `1.3.6.1.4.1.31612.1.7` for DKIM2, defined stable attribute and object-class allocations, recorded the secret-safe live OpenDKIM migration baseline, and specified a fail-closed out-of-process bootstrap into immutable DKIM2 generations and opaque signing handles. Executable LDAP/SQL providers and migration tooling remain M22. |
 | 0.1.0-draft | 2026-07-28 | Christian Roessner / Codex | Specified production packaging and operator delivery: reproducible Go 1.26 multi-stage images for the daemon, Milter adapter, and generated client; digest-pinned hardened runtime inputs; multi-architecture, SBOM, provenance, and vulnerability gates; and a protected, no-host-exposure-by-default Postfix Compose deployment with explicit upgrade and rollback ownership. Exim remains incomplete under M17, and executable LDAP/SQL providers and migration remain M22. |
 | 0.1.0-draft | 2026-07-29 | Christian Roessner / Codex | Specified interoperability and reference-candidate closeout: reproducible external-implementation discovery and comparison or explicit evidence-backed unavailability, a bidirectionally complete Draft-04 issue log, generated-contract and exported-reference review, scoped `v0.1.0-rc.1` preparation without publication, and one candidate-bound report that preserves normative, interpretation, policy, OpenAPI, adapter, and external-evidence claim separation. Exim remains deferred to M17 and executable LDAP/SQL providers plus migration remain M22. |
+| 0.1.0-draft | 2026-07-30 | Christian Roessner / Codex | Implemented M22 daemon-owned LDAP and PostgreSQL datasource providers, exact schema/DDL delivery, generation-matched protected signer registries, serialized readiness and refresh ownership, provider parity, and the offline OpenDKIM dry-run/apply/higher-generation rollback workflow with separate inventory, key-import, DNS-proof, and publication authorities. |
 
 ## 1. Purpose
 
@@ -686,9 +687,9 @@ Design notes:
 - Datasource success is administrative selection only. It does not replace
   M10's fresh DNS publication check, hash/recipe/custody validation, route
   authorization, or private signing callback.
-- LDAP and SQL mappings remain design-only. M22 owns executable providers,
-  schema delivery, and separately reviewed migration tooling after the first
-  public preview.
+- LDAP and PostgreSQL mappings are implemented by daemon-owned providers.
+  Deployable schema, DDL, protected configuration, and the separately
+  authorized migration workflow remain outside the standalone library.
 - Replay interfaces, keys, retention, and providers belong entirely to M12.
 - Datasource failures that affect verification or signing correctness should
   fail closed by default.
@@ -1249,10 +1250,10 @@ General datasource provider classes:
 
 - In-memory provider for tests and examples.
 - Flat-file provider for the first public preview.
-- LDAP provider after the first public preview; its exact mapping and
-  consistency contract is design-only.
-- SQL provider after the first public preview; its exact mapping and
-  transaction contract is design-only.
+- LDAP provider in `cmd/dkim2d`, with verified TLS, critical RFC 2696 paging,
+  immutable generation loading, and RFC 4528 publication fencing.
+- PostgreSQL provider in `cmd/dkim2d`, with verified TLS, fixed keyset queries,
+  repeatable-read loading, and transactional publication fencing.
 
 Replay storage is modeled separately in the replay-store interface. Valkey is
 the default production replay backend, but it must not become the general
@@ -1456,7 +1457,13 @@ The bootstrap publication sequence is:
 8. Produce a redacted dry-run report containing only bounded counts and closed
    result classes.
 9. Publish `committed` atomically only after the signing registry and complete
-   datasource generation agree; any failure publishes neither.
+   datasource generation agree. The first publication requires the explicit
+   canonical zero absence fence: LDAP atomically claims the unique staging
+   current DN and activates it with RFC 4528, while PostgreSQL proves every
+   datasource table empty in a serializable transaction and uniquely inserts
+   the singleton current row. Zero is never a runtime generation, nonempty
+   pointerless state fails closed, and concurrent first publishers cannot both
+   succeed.
 
 Source absence is `not_found`; duplicate selectors, active
 domain/algorithm pairs, metadata, or exact identities are `ambiguous`;

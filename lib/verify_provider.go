@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"io"
 	"math/big"
+
+	"github.com/croessner/dkim2/internal/keyresolver"
 )
 
 const (
@@ -88,6 +90,26 @@ func newPublicKeyQuery(signingDomain, selector string, algorithm Algorithm) Publ
 			algorithm:     algorithm,
 		},
 	}
+}
+
+// NewPublicKeyQuery constructs one canonical explicit DNS lookup query.
+func NewPublicKeyQuery(
+	signingDomain string,
+	selector string,
+	algorithm Algorithm,
+) (PublicKeyQuery, error) {
+	internalAlgorithm, ok := resolverAlgorithm(algorithm)
+	if !ok {
+		return PublicKeyQuery{}, newAPIError(APIErrorCodeInvalidRequest)
+	}
+	query, err := keyresolver.NewQuery(
+		signingDomain, selector, internalAlgorithm, keyresolver.DefaultLimits(),
+	)
+	if err != nil || query.SigningDomain() != signingDomain ||
+		query.Selector() != selector {
+		return PublicKeyQuery{}, newAPIError(APIErrorCodeInvalidRequest)
+	}
+	return newPublicKeyQuery(signingDomain, selector, algorithm), nil
 }
 
 // SigningDomain returns the canonical signing domain required for lookup.

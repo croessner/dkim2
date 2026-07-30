@@ -196,6 +196,44 @@ func (p *Provider) Valid() bool {
 	return true
 }
 
+// Equivalent reports whether two valid immutable providers contain the exact
+// same generation, limits, accounting, handles, profiles, and policies.
+func (p *Provider) Equivalent(other *Provider) bool {
+	if !p.Valid() || !other.Valid() {
+		return false
+	}
+	left := p.snapshot
+	right := other.snapshot
+	if left.generation != right.generation ||
+		left.limits != right.limits ||
+		left.usage != right.usage ||
+		left.credentials != right.credentials ||
+		len(left.handles) != len(right.handles) ||
+		len(left.profiles) != len(right.profiles) ||
+		len(left.policies) != len(right.policies) {
+		return false
+	}
+	for handle := range left.handles {
+		if _, found := right.handles[handle]; !found {
+			return false
+		}
+	}
+	for id, resolved := range left.profiles {
+		otherResolved, found := right.profiles[id]
+		if !found ||
+			resolved.Generation() != otherResolved.Generation() ||
+			!datasource.ProfileFactsEqual(resolved.Profile(), otherResolved.Profile()) {
+			return false
+		}
+	}
+	for key, policy := range left.policies {
+		if otherPolicy, found := right.policies[key]; !found || policy != otherPolicy {
+			return false
+		}
+	}
+	return true
+}
+
 // Usage returns immutable bounded snapshot accounting.
 func (p *Provider) Usage() (datasource.Usage, error) {
 	if !p.Valid() {

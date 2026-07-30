@@ -19,6 +19,8 @@ for document in \
   "$openapi" \
   "$openapi_readme" \
   docs/datasource-ldap-sql-design.md \
+  docs/operator/datasource-ldap-postgresql.md \
+  docs/operator/opendkim-migration.md \
   docs/replay-store-valkey.md \
   docs/reference/README.md \
   docs/reference/compatibility.md \
@@ -44,7 +46,7 @@ for required in \
   'deferred_exim' \
   'LDAP' \
   'SQL' \
-  'deferred_ldap_sql_migration' \
+  'PostgreSQL' \
   'read-only' \
   'rollback' \
   'backup'; do
@@ -56,6 +58,8 @@ for reference in \
   'cmd/dkim2-milter/README.md' \
   'cmd/dkim2ctl/README.md' \
   'docs/operator/container-supply-chain.md' \
+  'docs/operator/datasource-ldap-postgresql.md' \
+  'docs/operator/opendkim-migration.md' \
   'docs/specs/openapi/dkim2d.yaml'; do
   grep -Fq "$reference" README.md
 done
@@ -128,9 +132,9 @@ done
 for document in README.md "$guide"; do
   grep -Fq 'Exim is incomplete' "$document"
   grep -Fq 'deferred_exim' "$document"
-  grep -Fq 'deferred_ldap_sql_migration' "$document"
   grep -Fq 'LDAP' "$document"
   grep -Fq 'SQL' "$document"
+  ! grep -Fq 'deferred_ldap_sql_migration' "$document"
 done
 
 ! grep -En \

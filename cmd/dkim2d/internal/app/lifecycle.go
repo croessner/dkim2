@@ -172,6 +172,7 @@ type lifecycleState struct {
 	readiness           *Readiness
 	telemetry           *observability.Runtime
 	replay              lifecycleReplay
+	signing             *networkSigningRuntime
 	revalidator         lifecycleRevalidator
 	revalidatorStop     context.CancelFunc
 	revalidatorDone     <-chan struct{}
@@ -191,6 +192,8 @@ type lifecycleStartup struct {
 	readiness       *Readiness
 	telemetry       *observability.Runtime
 	replay          lifecycleReplay
+	signing         *networkSigningRuntime
+	authority       AuthorityReadiness
 	revalidator     lifecycleRevalidator
 	revalidatorStop context.CancelFunc
 	revalidatorDone chan struct{}
@@ -487,6 +490,7 @@ func (l *Lifecycle) acquireProtocol(
 	if !sampleStartupAuthority(replay) || lifecycleContextFailed(acquisition) {
 		return nil, nil, &LifecycleError{}
 	}
+	startup.authority = replay
 	return preparation, verifier, nil
 }
 
@@ -507,22 +511,44 @@ func (l *Lifecycle) assembleApplication(
 		if !ok || nilInterface(publicKeys) {
 			return nil, &LifecycleError{}
 		}
-		operation, operationErr := NewSigningService(
-			publicKeys,
-			preparation.SigningStore(),
-			preparation.Snapshot().Signing().AllowRecipientGroup(),
+		var (
+			operation    *SigningService
+			operationErr error
 		)
+		if preparation.Snapshot().Signing().Backend() == config.SigningFlatFile {
+			operation, operationErr = NewSigningService(
+				publicKeys,
+				preparation.SigningStore(),
+				preparation.Snapshot().Signing().AllowRecipientGroup(),
+			)
+		} else {
+			startup.signing, operationErr = newNetworkSigningRuntime(
+				acquisition, preparation, startup.telemetry,
+			)
+			if operationErr == nil && startup.signing != nil {
+				operation, operationErr = NewDatasourceSigningService(
+					publicKeys,
+					startup.signing.runtime,
+					preparation.Snapshot().Signing().AllowRecipientGroup(),
+				)
+				startup.authority = joinedAuthority{
+					replay: startup.replay, signing: startup.signing,
+				}
+			}
+		}
 		if operationErr != nil || operation == nil {
 			return nil, &LifecycleError{}
 		}
-		if startErr := preparation.SigningStore().StartReload(
-			preparation.Snapshot().Signing().ReloadInterval(),
-		); startErr != nil {
-			return nil, &LifecycleError{}
+		if preparation.Snapshot().Signing().Backend() == config.SigningFlatFile {
+			if startErr := preparation.SigningStore().StartReload(
+				preparation.Snapshot().Signing().ReloadInterval(),
+			); startErr != nil {
+				return nil, &LifecycleError{}
+			}
 		}
 		startup.operation = operation
 	}
-	readiness, err := l.state.deps.newReadiness(startup.replay)
+	readiness, err := l.state.deps.newReadiness(startup.authority)
 	if err != nil || readiness == nil {
 		return nil, &LifecycleError{}
 	}
@@ -635,7 +661,7 @@ func (l *Lifecycle) enterCommit(
 		return false
 	}
 	servingBeforeCommit := startup.serveLive.Load()
-	authorityBeforeCommit := sampleStartupAuthority(startup.replay)
+	authorityBeforeCommit := sampleStartupAuthority(startup.authority)
 	servingAfterAuthority := startup.serveLive.Load()
 	acquisitionLiveBeforeCommit := !lifecycleContextFailed(acquisition)
 	l.state.mu.Lock()
@@ -667,7 +693,7 @@ func (l *Lifecycle) commitStartup(
 		startup.material = material
 	}
 	acquisitionLiveAfterCommit := !lifecycleContextFailed(acquisition)
-	authorityAfterCommit := sampleStartupAuthority(startup.replay)
+	authorityAfterCommit := sampleStartupAuthority(startup.authority)
 	l.state.mu.Lock()
 	if l.state.phase != lifecycleCommitting ||
 		!valid || err != nil || nilInterface(material) ||
@@ -739,7 +765,7 @@ func (l *Lifecycle) publishStartup(
 	servingForPublication := startup.serveLive.Load()
 	revalidatorRunningForPublication := nilInterface(startup.revalidator) ||
 		startup.revalidatorLive.Load()
-	authorityForPublication := sampleStartupAuthority(startup.replay)
+	authorityForPublication := sampleStartupAuthority(startup.authority)
 	l.state.deps.beforePublication()
 	acquisitionLiveForPublication := !lifecycleContextFailed(acquisition)
 	l.state.mu.Lock()
@@ -761,6 +787,7 @@ func (l *Lifecycle) publishStartup(
 	l.state.readiness = startup.readiness
 	l.state.telemetry = startup.telemetry
 	l.state.replay = startup.replay
+	l.state.signing = startup.signing
 	l.state.revalidator = startup.revalidator
 	l.state.revalidatorStop = startup.revalidatorStop
 	l.state.revalidatorDone = startup.revalidatorDone
@@ -1169,6 +1196,9 @@ func (l *Lifecycle) stopOwned(outer context.Context) error {
 	if invokeReplayClose(finalCtx, l.state.replay) != nil {
 		failed = true
 	}
+	if l.state.signing != nil && l.state.signing.Close(finalCtx) != nil {
+		failed = true
+	}
 	if l.state.telemetry != nil && l.state.telemetry.Shutdown(finalCtx) != nil {
 		failed = true
 	}
@@ -1200,6 +1230,7 @@ func (l *Lifecycle) clearRuntimeLocked() {
 	l.state.readiness = nil
 	l.state.telemetry = nil
 	l.state.replay = nil
+	l.state.signing = nil
 	l.state.revalidator = nil
 	l.state.revalidatorStop = nil
 	l.state.revalidatorDone = nil
@@ -1271,6 +1302,9 @@ func (s *lifecycleStartup) rollbackOwners() error {
 			failed = true
 		}
 		replayCancel()
+	}
+	if s.signing != nil && s.signing.Close(ctx) != nil {
+		failed = true
 	}
 	if s.telemetry != nil && s.telemetry.Shutdown(ctx) != nil {
 		failed = true

@@ -44,6 +44,7 @@ var reportEvidencePaths = []string{
 	".artifacts/image-evidence/dkim2d.provenance.json",
 	".artifacts/postfix-deployment/run-1/report.json",
 	".artifacts/postfix-deployment/run-2/report.json",
+	".artifacts/datasource-integration/report.json",
 }
 
 var reportEvidenceSchemas = map[string]string{
@@ -65,6 +66,7 @@ var reportEvidenceSchemas = map[string]string{
 	".artifacts/image-evidence/dkim2d.provenance.json":       "https://in-toto.io/Statement/v1",
 	".artifacts/postfix-deployment/run-1/report.json":        "dkim2.postfix-deployment-report.v1",
 	".artifacts/postfix-deployment/run-2/report.json":        "dkim2.postfix-deployment-report.v1",
+	".artifacts/datasource-integration/report.json":          "dkim2.datasource-integration-report.v1",
 }
 
 var generatedOpenAPIPaths = []string{
@@ -139,7 +141,7 @@ func GenerateCandidateReport(root string, now time.Time) (CandidateReport, []byt
 		return CandidateReport{}, nil, nil, err
 	}
 	revision, err := conformance.CurrentRevision(root)
-	if err != nil || revision != "3803d52c5279f65f5e659fefe996548adfe6d41d" {
+	if err != nil || revision != candidateBaseRevision {
 		return CandidateReport{}, nil, nil, errors.New("report_base")
 	}
 	snapshot, err := conformance.ProduceSnapshot(root, revision)
@@ -203,12 +205,13 @@ func GenerateCandidateReport(root string, now time.Time) (CandidateReport, []byt
 		Evidence: evidence,
 		Deferrals: ReleaseDeferral{
 			Exim:             "deferred_exim",
-			LDAPSQLMigration: "deferred_ldap_sql_migration",
+			LDAPSQLMigration: "implemented",
 		},
 		Criteria: []CandidateCriterion{
 			{ID: "api", State: "pass"},
 			{ID: "conformance", State: "pass"},
 			{ID: "deployment", State: "pass"},
+			{ID: "datasources", State: "pass"},
 			{ID: "external", State: "pass"},
 			{ID: "images", State: "pass"},
 			{ID: "issues", State: "pass"},
@@ -265,7 +268,7 @@ func LoadCandidateReport(content []byte) (CandidateReport, error) {
 	}
 	if report.Schema != candidateReportSchema || report.ProductVersion != candidateVersion ||
 		report.MessageDraft != interop.MessageDraft || report.DNSDraft != interop.DNSDraft ||
-		report.Overall != "pass" || len(report.Criteria) != 9 || len(report.Evidence) != len(reportEvidencePaths) {
+		report.Overall != "pass" || len(report.Criteria) != 10 || len(report.Evidence) != len(reportEvidencePaths) {
 		return CandidateReport{}, errors.New("report_contract")
 	}
 	return report, nil
@@ -292,7 +295,7 @@ func renderCandidateReport(report CandidateReport) []byte {
 	fmt.Fprintf(&output, "- External availability: `%s` (%d cases)\n", report.ExternalAvailability, report.ExternalCases)
 	fmt.Fprintf(&output, "- Module proxy: `%s` (%d identities)\n", report.ModuleProxySHA256, report.ModuleCount)
 	fmt.Fprintln(&output, "- Exim: `deferred_exim`")
-	fmt.Fprintln(&output, "- LDAP/SQL migration: `deferred_ldap_sql_migration`")
+	fmt.Fprintln(&output, "- LDAP/PostgreSQL migration: `implemented`")
 	fmt.Fprintln(&output)
 	fmt.Fprintln(&output, "## Criteria")
 	fmt.Fprintln(&output)

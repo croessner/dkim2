@@ -1,7 +1,7 @@
 github.com/chzyer/logex v1.1.10/go.mod h1:+Ywpsq7O8HXn0nuIou7OrIPyXbp3wmkHB+jjWRnGsAI=
 github.com/chzyer/readline v0.0.0-20180603132655-2972be24d48e/go.mod h1:nSuG5e5PlCu98SY8svDHJxuZscDgtXS6KTTbou5AhLI=
 github.com/chzyer/test v0.0.0-20180213035817-a1ea475d72b1/go.mod h1:Q3SI9o4m/ZMnBNeIyt5eFwwo7qiLfzFZmjNmxjkiQlU=
-github.com/croessner/dkim2 v0.1.0-rc.1 h1:N9mA2odra9cIC7ZzAewdifm9nYngC+6E5gPliMCCxH8=
+github.com/croessner/dkim2 v0.1.0-rc.1 h1:RjNIXdE0CN7JaCQXaRSj+XC0WV8nyF3dEDLcXGKrON0=
 github.com/croessner/dkim2 v0.1.0-rc.1/go.mod h1:fr01aFB3g7USkwyf9pPYoEEj8cTdhknsme/VVEswBcI=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=

@@ -22,13 +22,16 @@ import (
 )
 
 const (
-	manifestVersion    = "dkim2-private-keys-v1"
-	manifestOriginator = "originator"
-	manifestRSASHA256  = "rsa-sha256"
-	maxManifestBytes   = 256 << 10
-	maxPrivateBytes    = 64 << 10
-	maxDatasourceBytes = 1 << 20
-	storeRedacted      = "dkim2d_signing_store{redacted}"
+	manifestVersion         = "dkim2-private-keys-v1"
+	manifestOriginator      = "originator"
+	manifestOrdinaryTransit = "ordinary_transit"
+	manifestRSASHA256       = "rsa-sha256"
+	manifestEd25519SHA256   = "ed25519-sha256"
+	privateKeyPEMType       = "PRIVATE KEY"
+	maxManifestBytes        = 256 << 10
+	maxPrivateBytes         = 64 << 10
+	maxDatasourceBytes      = 1 << 20
+	storeRedacted           = "dkim2d_signing_store{redacted}"
 )
 
 // Error is the sole content-free signing-store failure.
@@ -212,6 +215,21 @@ func (g *Generation) SignDigest(
 	credential, found := g.keys[handle]
 	if !found || !credential.publicHandle.Valid() {
 		return dkim2.PrivateKeySignResult{}, dkim2.NewPermanentProviderError()
+	}
+	return signPrivateCredential(ctx, credential, request)
+}
+
+// signPrivateCredential signs one bounded digest through an already-selected key.
+func signPrivateCredential(
+	ctx context.Context,
+	credential privateCredential,
+	request dkim2.PrivateKeySignRequest,
+) (dkim2.PrivateKeySignResult, error) {
+	if ctx == nil || !credential.publicHandle.Valid() || !request.Valid() {
+		return dkim2.PrivateKeySignResult{}, dkim2.NewPermanentProviderError()
+	}
+	if err := ctx.Err(); err != nil {
+		return dkim2.PrivateKeySignResult{}, err
 	}
 	digest := request.Digest()
 	var signature []byte
@@ -441,7 +459,7 @@ func validateManifestEntry(
 	switch entry.Use {
 	case manifestOriginator:
 		use = PolicyOriginator
-	case "ordinary_transit":
+	case manifestOrdinaryTransit:
 		use = PolicyOrdinaryTransit
 	default:
 		return "", dkim2.AlgorithmUnknown, [sha256.Size]byte{}, &Error{}
@@ -450,7 +468,7 @@ func validateManifestEntry(
 	switch entry.Algorithm {
 	case manifestRSASHA256:
 		algorithm = dkim2.AlgorithmRSASHA256
-	case "ed25519-sha256":
+	case manifestEd25519SHA256:
 		algorithm = dkim2.AlgorithmEd25519SHA256
 	default:
 		return "", dkim2.AlgorithmUnknown, [sha256.Size]byte{}, &Error{}
@@ -476,7 +494,7 @@ func parsePrivateKey(
 		return nil, [sha256.Size]byte{}, &Error{}
 	}
 	block, rest := pemDecode(encoded)
-	if block == nil || block.blockType != "PRIVATE KEY" ||
+	if block == nil || block.blockType != privateKeyPEMType ||
 		len(block.headers) != 0 || len(rest) != 0 {
 		return nil, [sha256.Size]byte{}, &Error{}
 	}

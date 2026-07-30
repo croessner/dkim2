@@ -7,7 +7,9 @@ import (
 	"time"
 
 	"github.com/croessner/dkim2"
+	datasourceruntime "github.com/croessner/dkim2/cmd/dkim2d/internal/datasource/runtime"
 	"github.com/croessner/dkim2/cmd/dkim2d/internal/signingstore"
+	"github.com/croessner/dkim2/provider"
 )
 
 const signingRouteScope = "dkim2d-local-signing"
@@ -16,8 +18,36 @@ const signingRouteScope = "dkim2d-local-signing"
 // route, authorization, verification, and private signing.
 type SigningService struct {
 	publicKeys dkim2.PublicKeyProvider
-	store      *signingstore.Runtime
+	store      signingAuthority
 	clock      func() time.Time
+}
+
+type signingAuthority interface {
+	Acquire(context.Context) (signingLease, error)
+}
+
+type signingLease interface {
+	ResolvePolicy(
+		context.Context,
+		string,
+		string,
+		signingstore.PolicyUse,
+		time.Time,
+	) (dkim2.SigningProfile, error)
+	dkim2.PrivateKeySigner
+	Close() error
+}
+
+type flatSigningAuthority struct {
+	runtime *signingstore.Runtime
+}
+
+type datasourceSigningAuthority struct {
+	runtime *datasourceruntime.Runtime
+}
+
+type datasourceSigningLease struct {
+	lease *datasourceruntime.Lease
 }
 
 // NewSigningService constructs one immutable daemon signing application service.
@@ -30,9 +60,86 @@ func NewSigningService(
 		return nil, &DomainError{}
 	}
 	return &SigningService{
-		publicKeys: publicKeys, store: store,
+		publicKeys: publicKeys, store: flatSigningAuthority{runtime: store},
 		clock: time.Now,
 	}, nil
+}
+
+// NewDatasourceSigningService constructs signing over a joined network generation.
+func NewDatasourceSigningService(
+	publicKeys dkim2.PublicKeyProvider,
+	runtime *datasourceruntime.Runtime,
+	allowRecipientGroup bool,
+) (*SigningService, error) {
+	if nilInterface(publicKeys) || runtime == nil || allowRecipientGroup {
+		return nil, &DomainError{}
+	}
+	return &SigningService{
+		publicKeys: publicKeys,
+		store:      datasourceSigningAuthority{runtime: runtime},
+		clock:      time.Now,
+	}, nil
+}
+
+// Acquire pins one flat-file signing generation.
+func (a flatSigningAuthority) Acquire(ctx context.Context) (signingLease, error) {
+	if a.runtime == nil || ctx == nil {
+		return nil, &DomainError{}
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	return a.runtime.Acquire()
+}
+
+// Acquire pins one joined datasource and signer-registry generation.
+func (a datasourceSigningAuthority) Acquire(ctx context.Context) (signingLease, error) {
+	if a.runtime == nil || ctx == nil {
+		return nil, &DomainError{}
+	}
+	lease, err := a.runtime.Acquire(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return datasourceSigningLease{lease: lease}, nil
+}
+
+// ResolvePolicy maps the daemon's closed use onto the storage-neutral bridge.
+func (l datasourceSigningLease) ResolvePolicy(
+	ctx context.Context,
+	tenant string,
+	domain string,
+	use signingstore.PolicyUse,
+	at time.Time,
+) (dkim2.SigningProfile, error) {
+	if l.lease == nil {
+		return dkim2.SigningProfile{}, &DomainError{}
+	}
+	profileUse := provider.ProfileUseOriginator
+	if use == signingstore.PolicyOrdinaryTransit {
+		profileUse = provider.ProfileUseOrdinaryTransit
+	}
+	return l.lease.ResolvePolicy(ctx, tenant, domain, profileUse, at)
+}
+
+// SignDigest delegates to the joined private registry generation.
+func (l datasourceSigningLease) SignDigest(
+	ctx context.Context,
+	handle dkim2.PrivateKeyHandle,
+	request dkim2.PrivateKeySignRequest,
+) (dkim2.PrivateKeySignResult, error) {
+	if l.lease == nil {
+		return dkim2.PrivateKeySignResult{}, dkim2.NewTemporaryProviderError()
+	}
+	return l.lease.SignDigest(ctx, handle, request)
+}
+
+// Close releases the joined generation lease.
+func (l datasourceSigningLease) Close() error {
+	if l.lease == nil {
+		return nil
+	}
+	return l.lease.Close()
 }
 
 // Sign performs exact originator policy resolution and signing.
@@ -76,7 +183,7 @@ func (s *SigningService) execute(
 		use = signingstore.PolicyOrdinaryTransit
 	}
 	operationTime := s.clock().UTC()
-	lease, err := s.store.Acquire()
+	lease, err := s.store.Acquire(ctx)
 	if err != nil {
 		return NewOperationResult(
 			operation, OperationTemperror, OperationTempfail, nil,

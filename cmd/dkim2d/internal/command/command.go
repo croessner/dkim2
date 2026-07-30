@@ -11,6 +11,7 @@ import (
 	"github.com/croessner/dkim2/cmd/dkim2d/internal/app"
 	"github.com/croessner/dkim2/cmd/dkim2d/internal/config"
 	"github.com/croessner/dkim2/cmd/dkim2d/internal/httpjson"
+	"github.com/croessner/dkim2/cmd/dkim2d/internal/migration"
 	"github.com/spf13/cobra"
 )
 
@@ -18,6 +19,9 @@ const (
 	serveCommandName          = "serve"
 	validateCommandName       = "validate"
 	probeCommandName          = "probe"
+	datasourceCommandName     = "datasource"
+	bootstrapCommandName      = "bootstrap-opendkim"
+	rollbackCommandName       = "rollback"
 	helpCommandName           = "help"
 	completionCommandName     = "completion"
 	hiddenCompletionCommand   = "__complete"
@@ -26,12 +30,15 @@ const (
 	commandUsage = `Usage:
   dkim2d serve --config <absolute-path> [flags]
   dkim2d validate --config <absolute-path>
+  dkim2d datasource bootstrap-opendkim --config <absolute-path> [--dry-run|--apply] [--machine]
+  dkim2d datasource rollback --config <absolute-path> --generation <new-generation> [--machine]
   dkim2d probe
   dkim2d --version
 
 Commands:
   serve    Run the DKIM2 HTTP daemon
   validate Validate configuration and protected state without serving
+  datasource Run offline datasource administration
   probe    Check local daemon readiness
 
 Flags:
@@ -73,6 +80,9 @@ type commandDependencies struct {
 	load        func(string, config.FlagValues) (bootstrapOwner, error)
 	build       func(bootstrapOwner, time.Duration) (managedApplication, error)
 	withTimeout func(context.Context, time.Duration) (context.Context, context.CancelFunc)
+	dryRun      func(context.Context, string, bool, string) ([]byte, error)
+	apply       func(context.Context, string, bool, string) ([]byte, error)
+	rollback    func(context.Context, string, string, bool, string) ([]byte, error)
 }
 
 // protectedBootstrap adapts the concrete protected owner without exposing it to tests.
@@ -132,6 +142,9 @@ func productionDependencies() commandDependencies {
 		},
 		build:       newProductionApplication,
 		withTimeout: context.WithTimeout,
+		dryRun:      migration.RunDryRunFile,
+		apply:       migration.RunApplyFile,
+		rollback:    migration.RunRollbackFile,
 	}
 }
 
@@ -221,8 +234,116 @@ func newRootCommand(
 	validate.SetHelpFunc(func(*cobra.Command, []string) {
 		writeUsage(stdout)
 	})
-	root.AddCommand(serve, validate, newProbeCommand())
+	datasource, err := newDatasourceCommand(stdout, deps)
+	if err != nil {
+		return nil, err
+	}
+	root.AddCommand(serve, validate, datasource, newProbeCommand())
 	return root, nil
+}
+
+// newDatasourceCommand constructs the offline administrative command group.
+func newDatasourceCommand(
+	stdout io.Writer,
+	deps commandDependencies,
+) (*cobra.Command, error) {
+	group := &cobra.Command{
+		Use: datasourceCommandName, Short: "Run offline datasource administration",
+		Args: cobra.NoArgs, SilenceUsage: true, SilenceErrors: true,
+		RunE: func(*cobra.Command, []string) error { return errCommandShape },
+	}
+	var configPath string
+	var dryRun bool
+	var apply bool
+	var machine bool
+	bootstrap := &cobra.Command{
+		Use: bootstrapCommandName, Short: "Inventory and migrate legacy OpenDKIM data",
+		Args: cobra.NoArgs, SilenceUsage: true, SilenceErrors: true,
+		RunE: func(command *cobra.Command, _ []string) error {
+			if !filepath.IsAbs(configPath) ||
+				filepath.Clean(configPath) != configPath {
+				return errCommandRuntime
+			}
+			var output []byte
+			var err error
+			switch {
+			case apply && command.Flags().Changed("dry-run"):
+				return errCommandShape
+			case apply && deps.apply != nil:
+				output, err = deps.apply(
+					command.Context(), configPath, machine, buildVersion,
+				)
+			case !apply && dryRun && deps.dryRun != nil:
+				output, err = deps.dryRun(
+					command.Context(), configPath, machine, buildVersion,
+				)
+			default:
+				return errCommandRuntime
+			}
+			if err != nil || len(output) == 0 {
+				return errCommandRuntime
+			}
+			if _, err := stdout.Write(output); err != nil {
+				return errCommandRuntime
+			}
+			return nil
+		},
+	}
+	bootstrap.Flags().StringVar(
+		&configPath, "config", "", "absolute protected migration configuration",
+	)
+	bootstrap.Flags().BoolVar(
+		&dryRun, "dry-run", true, "validate without publication",
+	)
+	bootstrap.Flags().BoolVar(
+		&apply, "apply", false, "publish one exact fenced generation",
+	)
+	bootstrap.Flags().BoolVar(
+		&machine, "machine", false, "emit deterministic machine JSON",
+	)
+	if err := bootstrap.MarkFlagRequired("config"); err != nil {
+		return nil, errCommandRuntime
+	}
+	var rollbackConfigPath string
+	var rollbackGeneration string
+	var rollbackMachine bool
+	rollback := &cobra.Command{
+		Use: rollbackCommandName, Short: "Republish prior content under a higher generation",
+		Args: cobra.NoArgs, SilenceUsage: true, SilenceErrors: true,
+		RunE: func(command *cobra.Command, _ []string) error {
+			if deps.rollback == nil || !filepath.IsAbs(rollbackConfigPath) ||
+				filepath.Clean(rollbackConfigPath) != rollbackConfigPath ||
+				rollbackGeneration == "" {
+				return errCommandRuntime
+			}
+			output, err := deps.rollback(
+				command.Context(), rollbackConfigPath, rollbackGeneration,
+				rollbackMachine, buildVersion,
+			)
+			if err != nil || len(output) == 0 {
+				return errCommandRuntime
+			}
+			if _, err := stdout.Write(output); err != nil {
+				return errCommandRuntime
+			}
+			return nil
+		},
+	}
+	rollback.Flags().StringVar(
+		&rollbackConfigPath, "config", "", "absolute protected migration configuration",
+	)
+	rollback.Flags().StringVar(
+		&rollbackGeneration, "generation", "", "strictly higher publication generation",
+	)
+	rollback.Flags().BoolVar(
+		&rollbackMachine, "machine", false, "emit deterministic machine JSON",
+	)
+	if rollback.MarkFlagRequired("config") != nil ||
+		rollback.MarkFlagRequired("generation") != nil {
+		return nil, errCommandRuntime
+	}
+	group.AddCommand(bootstrap, rollback)
+	return group, nil
 }
 
 // newValidateCommand constructs the non-mutating protected-state validation command.

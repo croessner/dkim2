@@ -52,6 +52,7 @@ type protectedState struct {
 	hasSign          bool
 	hasRevise        bool
 	signingStore     *signingstore.Runtime
+	signingRegistry  *signingstore.RegistrySource
 	hmac             [32]byte
 	hasHMAC          bool
 
@@ -59,6 +60,8 @@ type protectedState struct {
 	auditorPassword            []byte
 	rootCertificatesDER        [][]byte
 	tracingRootCertificatesDER [][]byte
+	datasourcePassword         []byte
+	datasourceRootsDER         [][]byte
 }
 
 // protectedPhase identifies the single current material owner.
@@ -131,6 +134,12 @@ type ReviseCapability struct {
 
 // TracingStartupMaterial lends only the protected OTLP trust roots during startup.
 type TracingStartupMaterial struct {
+	state *protectedState
+	token *runtimeToken
+}
+
+// SigningDatasourceMaterial lends network-provider credentials only during startup.
+type SigningDatasourceMaterial struct {
 	state *protectedState
 	token *runtimeToken
 }
@@ -221,6 +230,51 @@ func (p *RuntimePreparation) ReplayAuditor() ReplayAuditorMaterial {
 	return ReplayAuditorMaterial{state: p.state, token: p.token}
 }
 
+// SigningDatasource returns the non-owning network-provider startup handle.
+func (p *RuntimePreparation) SigningDatasource() SigningDatasourceMaterial {
+	if p == nil {
+		return SigningDatasourceMaterial{}
+	}
+	return SigningDatasourceMaterial{state: p.state, token: p.token}
+}
+
+// Use lends a fresh password and trust-root clone for synchronous construction.
+func (m SigningDatasourceMaterial) Use(
+	use func(password []byte, rootsDER [][]byte) error,
+) (resultErr error) {
+	if m.state == nil || m.token == nil || use == nil {
+		return newError(CodeProtectedClosed)
+	}
+	m.state.mu.Lock()
+	if m.state.phase != protectedPreparedForRuntime ||
+		m.state.runtimeToken != m.token || m.state.borrowed ||
+		len(m.state.datasourcePassword) == 0 || len(m.state.datasourceRootsDER) == 0 {
+		m.state.mu.Unlock()
+		return newError(CodeProtectedContent)
+	}
+	m.state.borrowed = true
+	password := append([]byte(nil), m.state.datasourcePassword...)
+	roots := cloneProtectedRoots(m.state.datasourceRootsDER)
+	m.state.mu.Unlock()
+	defer func() {
+		panicValue := recover()
+		clear(password)
+		for index := range roots {
+			clear(roots[index])
+		}
+		m.state.mu.Lock()
+		m.state.borrowed = false
+		m.state.mu.Unlock()
+		if panicValue != nil {
+			resultErr = newError(CodeProtectedContent)
+		}
+	}()
+	if err := use(password, roots); err != nil {
+		return newError(CodeProtectedContent)
+	}
+	return nil
+}
+
 // ProcessCapability returns the non-owning post-commit capability handle.
 func (p *RuntimePreparation) ProcessCapability() ProcessCapability {
 	if p == nil {
@@ -259,6 +313,21 @@ func (p *RuntimePreparation) SigningStore() *signingstore.Runtime {
 		return nil
 	}
 	return p.state.signingStore
+}
+
+// SigningRegistry returns the protected generation-registry source.
+func (p *RuntimePreparation) SigningRegistry() *signingstore.RegistrySource {
+	if p == nil || p.state == nil || p.token == nil {
+		return nil
+	}
+	p.state.mu.Lock()
+	defer p.state.mu.Unlock()
+	if p.state.phase != protectedPreparedForRuntime ||
+		p.state.runtimeToken != p.token ||
+		(!p.state.hasSign && !p.state.hasRevise) {
+		return nil
+	}
+	return p.state.signingRegistry
 }
 
 // ReplayRuntime returns one atomic same-generation replay preparation.
@@ -569,6 +638,10 @@ func (s *protectedState) clearProtected(releasedBy protectedPhase) {
 		_ = s.signingStore.Close(context.Background())
 		s.signingStore = nil
 	}
+	if s.signingRegistry != nil {
+		_ = s.signingRegistry.Close(context.Background())
+		s.signingRegistry = nil
+	}
 	s.hmac = [32]byte{}
 	s.hasHMAC = false
 	clear(s.applicationPassword)
@@ -577,6 +650,11 @@ func (s *protectedState) clearProtected(releasedBy protectedPhase) {
 		clear(s.rootCertificatesDER[index])
 		s.rootCertificatesDER[index] = nil
 	}
+	clear(s.datasourcePassword)
+	for index := range s.datasourceRootsDER {
+		clear(s.datasourceRootsDER[index])
+		s.datasourceRootsDER[index] = nil
+	}
 	for index := range s.tracingRootCertificatesDER {
 		clear(s.tracingRootCertificatesDER[index])
 		s.tracingRootCertificatesDER[index] = nil
@@ -584,6 +662,8 @@ func (s *protectedState) clearProtected(releasedBy protectedPhase) {
 	s.applicationPassword = nil
 	s.auditorPassword = nil
 	s.rootCertificatesDER = nil
+	s.datasourcePassword = nil
+	s.datasourceRootsDER = nil
 	s.tracingRootCertificatesDER = nil
 	s.snapshot = Snapshot{}
 	s.releasedBy = releasedBy
@@ -611,6 +691,8 @@ func clearReplayBorrow(hmac, applicationPassword, auditorPassword []byte, rootsD
 }
 
 // validateProtectedSeparation rejects equal secrets across distinct roles.
+//
+//nolint:gocyclo // Explicit pairwise secret-separation checks are security invariants.
 func validateProtectedSeparation(state *protectedState) error {
 	if state == nil {
 		return newError(CodeInternal)
@@ -640,7 +722,19 @@ func validateProtectedSeparation(state *protectedState) error {
 		bytes.Equal(state.hmac[:], state.reviseCapability[:]) {
 		return newError(CodeProtectedContent)
 	}
-	for _, password := range [][]byte{state.applicationPassword, state.auditorPassword} {
+	passwords := [][]byte{
+		state.applicationPassword,
+		state.auditorPassword,
+		state.datasourcePassword,
+	}
+	for left := range passwords {
+		for right := left + 1; right < len(passwords); right++ {
+			if len(passwords[left]) > 0 && bytes.Equal(passwords[left], passwords[right]) {
+				return newError(CodeProtectedContent)
+			}
+		}
+	}
+	for _, password := range passwords {
 		if len(password) == exactKeyBytes &&
 			(bytes.Equal(state.capability[:], password) ||
 				state.hasSign && bytes.Equal(state.signCapability[:], password) ||

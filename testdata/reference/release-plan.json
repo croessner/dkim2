@@ -24,6 +24,6 @@
   },
   "deferrals": {
     "exim": "deferred_exim",
-    "ldap_sql_migration": "deferred_ldap_sql_migration"
+    "ldap_sql_migration": "implemented"
   }
 }

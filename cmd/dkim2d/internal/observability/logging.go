@@ -19,11 +19,14 @@ const (
 	maxLogAttributes   = 16
 	keyEventID         = "event_id"
 	keyMethod          = "method"
+	keyProvider        = "provider"
+	keyProviderState   = "provider_state"
 	keyCacheResult     = "cache_result"
 	keyDNSResult       = "dns_result"
 	keyOperation       = "operation"
 	keyPolicyMode      = "policy_mode"
 	keyReasonClass     = "reason_class"
+	keyReady           = "ready"
 	keyReplayState     = "replay_state"
 	keyResult          = "result"
 	keyStatusClass     = "status_class"
@@ -75,7 +78,7 @@ var allowedLogKeys = []string{
 	keyCacheResult, "chain_length_bucket", "debug_module", keyDisposition,
 	keyDNSResult, "draft", "duration_bucket", "error_class", keyEventID,
 	"lifecycle_state", "message_size_bucket", keyMethod, keyOperation,
-	keyPolicyMode, "ready", keyReasonClass, "recipient_count_bucket",
+	keyPolicyMode, keyProvider, keyProviderState, keyReady, keyReasonClass, "recipient_count_bucket",
 	keyReplayState, "replay_store_result", keyResult, "route",
 	"signature_count_bucket", keyStatusClass, "tracing_exporter", keyVerdict,
 }
@@ -87,11 +90,13 @@ var allowedLogValues = map[string][]string{
 	keyDNSResult:             {valueFound, "missing", valueInvalid, "ambiguous", valueTemporary, valueInternal},
 	"draft":                  {"draft-ietf-dkim-dkim2-spec-04"},
 	"error_class":            {valueNone, "canceled", "deadline", valueTimeout, valueTransport, "tls", "encoding", "shutdown", valueInternal},
-	keyEventID:               {"config.accepted", "lifecycle.transition", "readiness.transition", "http.request.completed", "process.completed", "dns.lookup.completed", "replay.coordinate.completed", "telemetry.export.failed"},
+	keyEventID:               {"config.accepted", "lifecycle.transition", "readiness.transition", "http.request.completed", "process.completed", "dns.lookup.completed", "replay.coordinate.completed", "datasource.operation.completed", "telemetry.export.failed"},
 	"lifecycle_state":        {"starting", "active", "stopping", "stopped", "failed"},
 	keyMethod:                {"GET", "HEAD", "POST", "OPTIONS", "other"},
-	keyOperation:             {"config", "lifecycle", "readiness", "health", "metrics", "process", "verify", "dns_lookup", valuePolicy, "replay_coordinate", "replay_store", "telemetry_export", valueUnmatched},
+	keyOperation:             {"config", "lifecycle", "readiness", "health", "metrics", "process", "verify", "dns_lookup", valuePolicy, "replay_coordinate", "replay_store", "datasource_initial_load", "datasource_refresh", "datasource_resolve", "telemetry_export", valueUnmatched},
 	keyPolicyMode:            {valueStrict, valuePermissive, valueTesting},
+	keyProvider:              {"flat_file", "memory", "ldap", "postgresql"},
+	keyProviderState:         {"initializing", "ready", "degraded", "closed"},
 	keyReasonClass:           {valueNone, valueProtocol, valuePolicy, valueAvailability, "invalid_request", keyMethod, valueInternal},
 	keyReplayState:           {valueNotChecked, valueDisabled, valueFirstSeen, valueReplayed, valueIndeterminate},
 	"replay_store_result":    {"not_used", valueSuccess, valueTemporary, valueInternal},

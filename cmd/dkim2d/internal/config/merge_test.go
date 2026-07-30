@@ -178,7 +178,7 @@ func TestStableFieldBindings(t *testing.T) {
 func TestStablePathSetIsExact(t *testing.T) {
 	specs := stableFieldSpecs()
 	golden := stableFieldGoldenContract()
-	if len(specs) != 70 || len(specs) != len(golden) {
+	if len(specs) != 89 || len(specs) != len(golden) {
 		t.Fatal("stable path count changed")
 	}
 	for index, expected := range golden {
@@ -254,6 +254,25 @@ func stableFieldGoldenContract() []stableFieldGolden {
 		{path: "signing.reload_interval", environment: "DKIM2D_SIGNING_RELOAD_INTERVAL", defaultValue: "30" + "s", hasDefault: true},
 		// Keep the golden literal independent of the production default constant.
 		{path: "signing.allow_recipient_group", environment: "DKIM2D_SIGNING_ALLOW_RECIPIENT_GROUP", defaultValue: "false", hasDefault: true}, //nolint:goconst
+		{path: "signing.ldap.address", environment: "DKIM2D_SIGNING_LDAP_ADDRESS"},
+		{path: "signing.ldap.server_name", environment: "DKIM2D_SIGNING_LDAP_SERVER_NAME"},
+		{path: "signing.ldap.ca_file", environment: "DKIM2D_SIGNING_LDAP_CA_FILE"},
+		{path: "signing.ldap.transport", environment: "DKIM2D_SIGNING_LDAP_TRANSPORT"},
+		{path: "signing.ldap.bind_dn", environment: "DKIM2D_SIGNING_LDAP_BIND_DN"},
+		{path: "signing.ldap.password_file", environment: "DKIM2D_SIGNING_LDAP_PASSWORD_FILE"},
+		{path: "signing.ldap.base_dn", environment: "DKIM2D_SIGNING_LDAP_BASE_DN"},
+		{path: "signing.ldap.page_size", environment: "DKIM2D_SIGNING_LDAP_PAGE_SIZE", defaultValue: "128", hasDefault: true},
+		{path: "signing.ldap.load_deadline", environment: "DKIM2D_SIGNING_LDAP_LOAD_DEADLINE", defaultValue: "5s", hasDefault: true},
+		{path: "signing.postgresql.address", environment: "DKIM2D_SIGNING_POSTGRESQL_ADDRESS"},
+		{path: "signing.postgresql.server_name", environment: "DKIM2D_SIGNING_POSTGRESQL_SERVER_NAME"},
+		{path: "signing.postgresql.ca_file", environment: "DKIM2D_SIGNING_POSTGRESQL_CA_FILE"},
+		{path: "signing.postgresql.database", environment: "DKIM2D_SIGNING_POSTGRESQL_DATABASE"},
+		{path: "signing.postgresql.user", environment: "DKIM2D_SIGNING_POSTGRESQL_USER"},
+		{path: "signing.postgresql.password_file", environment: "DKIM2D_SIGNING_POSTGRESQL_PASSWORD_FILE"},
+		{path: "signing.postgresql.page_size", environment: "DKIM2D_SIGNING_POSTGRESQL_PAGE_SIZE", defaultValue: "128", hasDefault: true},
+		{path: "signing.postgresql.load_deadline", environment: "DKIM2D_SIGNING_POSTGRESQL_LOAD_DEADLINE", defaultValue: "5s", hasDefault: true},
+		{path: "signing.postgresql.max_connections", environment: "DKIM2D_SIGNING_POSTGRESQL_MAX_CONNECTIONS", defaultValue: "2", hasDefault: true},
+		{path: "signing.postgresql.idle_connections", environment: "DKIM2D_SIGNING_POSTGRESQL_IDLE_CONNECTIONS", defaultValue: "1", hasDefault: true},
 		{path: "replay.valkey.address", environment: "DKIM2D_REPLAY_" + "VALKEY_ADDRESS"},
 		{path: "replay.valkey.server_name", environment: "DKIM2D_REPLAY_" + "VALKEY_SERVER_NAME"},
 		{path: "replay.valkey.ca_file", environment: "DKIM2D_REPLAY_" + "VALKEY_CA_FILE"},

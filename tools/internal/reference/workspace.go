@@ -33,6 +33,59 @@ var vendorLFPaths = []string{
 	"github.com/vmware-labs/yaml-jsonpath/NOTICE",
 }
 
+// WriteVendorTree regenerates and installs the hardened vendor tree through
+// the candidate-bound private proxy without ambient network or module state.
+func WriteVendorTree(root string) error {
+	root, err := filepath.Abs(root)
+	if err != nil {
+		return errors.New("vendor_root")
+	}
+	proof, proxy, cleanup, err := BuildPrivateProxy(root)
+	if err != nil {
+		return err
+	}
+	cleanupDone := false
+	defer func() {
+		if !cleanupDone {
+			_ = cleanup()
+		}
+	}()
+	snapshot, err := conformance.ProduceSnapshot(root, proof.BaseRevision)
+	if err != nil || snapshot.SHA256 != proof.CandidateSnapshotSHA256 {
+		return errors.New("vendor_candidate")
+	}
+	work := filepath.Dir(proxy)
+	repository := filepath.Join(work, "vendor-workspace")
+	if err := copyCandidateSnapshot(root, repository, snapshot); err != nil {
+		return err
+	}
+	output := filepath.Join(work, "vendor-output")
+	if err := runWorkspaceCommand(
+		repository, proxy, filepath.Join(work, "vendor-state"),
+		"work", "vendor", "-o", output,
+	); err != nil {
+		return err
+	}
+	if err := hardenVendorTree(output); err != nil {
+		return err
+	}
+	if err := normalizeVendorLF(output); err != nil {
+		return err
+	}
+	current, err := conformance.ProduceSnapshot(root, proof.BaseRevision)
+	if err != nil || current.SHA256 != proof.CandidateSnapshotSHA256 {
+		return errors.New("vendor_candidate")
+	}
+	if err := installVendorTree(root, output); err != nil {
+		return err
+	}
+	if err := cleanup(); err != nil {
+		return err
+	}
+	cleanupDone = true
+	return nil
+}
+
 // CheckWorkspaceMetadata proves go work sync is stable through the private proxy.
 func CheckWorkspaceMetadata(root string) error {
 	proof, proxy, cleanup, err := BuildPrivateProxy(root)
@@ -84,6 +137,9 @@ func CheckVendorTree(root string) error {
 		repository, proxy, filepath.Join(filepath.Dir(proxy), "vendor-state"),
 		"work", "vendor", "-o", output,
 	); err != nil {
+		return err
+	}
+	if err := hardenVendorTree(output); err != nil {
 		return err
 	}
 	if err := normalizeVendorLF(output); err != nil {
@@ -145,6 +201,34 @@ func normalizeVendorLF(root string) error {
 		if err := os.WriteFile(target, content, 0o644); err != nil {
 			return errors.New("vendor_normalize")
 		}
+	}
+	return nil
+}
+
+// installVendorTree swaps one generated tree into the repository while keeping
+// the previous tree recoverable inside invocation-owned ignored state.
+func installVendorTree(root, generated string) error {
+	current := filepath.Join(root, "vendor")
+	currentInfo, err := os.Lstat(current)
+	if err != nil || !currentInfo.IsDir() || currentInfo.Mode()&os.ModeSymlink != 0 {
+		return errors.New("vendor_install")
+	}
+	generatedInfo, err := os.Lstat(generated)
+	if err != nil || !generatedInfo.IsDir() || generatedInfo.Mode()&os.ModeSymlink != 0 {
+		return errors.New("vendor_install")
+	}
+	previous := filepath.Join(filepath.Dir(generated), "vendor-previous")
+	if _, err := os.Lstat(previous); !os.IsNotExist(err) {
+		return errors.New("vendor_install")
+	}
+	if err := os.Rename(current, previous); err != nil {
+		return errors.New("vendor_install")
+	}
+	if err := os.Rename(generated, current); err != nil {
+		if restoreErr := os.Rename(previous, current); restoreErr != nil {
+			return errors.New("vendor_restore")
+		}
+		return errors.New("vendor_install")
 	}
 	return nil
 }

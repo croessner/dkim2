@@ -124,7 +124,7 @@ func CheckAPI(root string) error {
 		return errors.New("api_baseline")
 	}
 	if baseline.Schema != apiSchemaName ||
-		baseline.BaseRevision != "3803d52c5279f65f5e659fefe996548adfe6d41d" ||
+		baseline.BaseRevision != candidateBaseRevision ||
 		baseline.Declarations < 1 {
 		return errors.New("api_baseline")
 	}

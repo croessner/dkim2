@@ -1,12 +1,13 @@
 # LDAP And SQL Datasource Provider Design
 
-Status: design contract; no executable LDAP or SQL provider is included.
+Status: implemented contract for daemon-owned LDAP and PostgreSQL providers.
 
-This document defines how future LDAP and SQL readers map persisted
+This document defines how LDAP and PostgreSQL readers map persisted
 administrative data into the existing storage-neutral contracts in
-`lib/internal/datasource`. It does not define a deployment schema, an LDAP
-object-class installation, SQL DDL, queries, a migration runner, connection
-configuration, or daemon wiring.
+`lib/internal/datasource`. Deployable schema and DDL live in `contrib/schema`;
+installation, daemon configuration, and migration procedures live in
+`docs/operator/datasource-ldap-postgresql.md` and
+`docs/operator/opendkim-migration.md`.
 
 The provider boundary remains:
 
@@ -76,18 +77,24 @@ its serialization boundary. A preflight rejection or cancellation while
 waiting for that boundary does not change provider state. Once a refresh
 linearizes and begins backend work, any failure retains the last snapshot only
 for diagnosis, publishes the provider state as degraded, and makes every
-subsequent resolve return `unavailable`. A later successful refresh atomically
-publishes the new generation and clears degraded state. Serving the retained
-snapshot while degraded is forbidden.
+subsequent resolve return `unavailable`. A complete refresh of the unchanged
+current generation while ready is a successful health no-op only when every
+immutable dataset fact and protected registry binding is exactly equal after
+both sides have been revalidated. Changed facts under the current generation
+degrade the runtime; an exact no-op does not republish or replace the current
+snapshot. A later successful higher-generation refresh
+atomically publishes the new generation and clears degraded state. Serving the
+retained snapshot while degraded is forbidden.
 
 The source generation becomes the `Generation()` of every
 `ResolvedProfile` and `ResolvedPolicy`. A provider accepts a first nonzero
 generation and thereafter requires each published refresh to have a strictly
-higher generation. A first generation equal to the maximum unsigned 64-bit
+higher generation. Revalidation of the exact current generation while ready is
+not a published refresh. A first generation equal to the maximum unsigned 64-bit
 value is valid and terminal. A provider already at that generation rejects a
 later refresh during preflight with `limit_exceeded`, before serialization,
 backend access, or provider-state mutation, and remains ready and available.
-For every other generation, source generation reuse, rollback, mixed
+For every other generation, attempted source generation republication, rollback, mixed
 generations, a zero or out-of-range generation, or a non-committed dataset
 discovered after the refresh linearizes is `malformed_data`; the provider
 becomes degraded and the externally visible resolve state is `unavailable`.
@@ -501,11 +508,11 @@ accepts only the exact version above. Mixed-version records reject the
 generation. Rollback publishes restored content under a new higher generation
 rather than moving the metadata pointer backwards.
 
-## Future Integration Evidence
+## Integration Evidence
 
-Provider implementation is not complete until one shared conformance harness
-can run the same logical dataset and requests against memory, flat-file, LDAP,
-and SQL providers and prove identical logically shared resolve behavior:
+The shared conformance harness runs the same logical dataset and requests
+against memory, flat-file, LDAP, and PostgreSQL projections and proves
+identical logically shared resolve behavior:
 
 - complete profile and policy facts;
 - generation agreement within each result;
@@ -553,6 +560,6 @@ Dependency tests must prove:
 - datasource core and concrete providers do not import signing;
 - `datasource/signingprofile` is the sole datasource/signing bridge;
 - signing and other protocol packages do not import datasource providers;
-- LDAP and SQL drivers remain outside the standalone library until concrete
-  service-owned providers are implemented;
+- LDAP and PostgreSQL drivers remain outside the standalone library and are
+  owned by the daemon service module;
 - no replay interface, operation, or provider is introduced by this design.

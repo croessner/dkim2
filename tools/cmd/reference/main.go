@@ -50,6 +50,10 @@ func run(arguments []string) error {
 		return referencecheck.CheckWorkspaceMetadata(*root)
 	case "check-vendor":
 		return referencecheck.CheckVendorTree(*root)
+	case "harden-vendor":
+		return referencecheck.HardenVendorTree(*root)
+	case "vendor":
+		return referencecheck.WriteVendorTree(*root)
 	case "module-proxy":
 		proof, _, cleanup, err := referencecheck.BuildPrivateProxy(*root)
 		if err != nil {

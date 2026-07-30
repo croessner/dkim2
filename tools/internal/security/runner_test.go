@@ -39,6 +39,14 @@ func TestFuzzArgumentsCannotSelectCommandsFlagsOrPaths(t *testing.T) {
 	}
 }
 
+// TestFuzzCacheArgumentsCannotSelectPaths freezes the candidate-isolation step.
+func TestFuzzCacheArgumentsCannotSelectPaths(t *testing.T) {
+	want := []string{"clean", "-fuzzcache"}
+	if got := fuzzCacheArguments(); !slices.Equal(got, want) {
+		t.Fatalf("fuzzCacheArguments() = %#v, want %#v", got, want)
+	}
+}
+
 // TestFuzzReportRejectsSkipMissingTamperAndStaleSnapshot protects required closure.
 func TestFuzzReportRejectsSkipMissingTamperAndStaleSnapshot(t *testing.T) {
 	report := validFuzzReportForTest()

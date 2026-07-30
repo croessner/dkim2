@@ -133,6 +133,9 @@ func RunFuzz(root, outputPath string) (FuzzReport, error) {
 	if err != nil {
 		return FuzzReport{}, err
 	}
+	if err := cleanFuzzCache(root, goExecutable); err != nil {
+		return FuzzReport{}, err
+	}
 	snapshot, err := currentSnapshot(root)
 	if err != nil {
 		return FuzzReport{}, err
@@ -706,6 +709,29 @@ func runFuzzTarget(root, goExecutable string, target FuzzTarget) error {
 		return classifyFuzzFailure(err, output.String())
 	}
 	return nil
+}
+
+// cleanFuzzCache removes unversioned discoveries from earlier candidates
+// before the closed inventory starts while preserving the shared build cache.
+func cleanFuzzCache(root, goExecutable string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	command := exec.CommandContext(ctx, goExecutable, fuzzCacheArguments()...)
+	command.Dir = root
+	command.Env = appendClosedGoEnvironment(os.Environ(), root)
+	output := &boundedOutput{limit: 4096}
+	command.Stdout = output
+	command.Stderr = output
+	if err := command.Run(); err != nil || ctx.Err() != nil ||
+		strings.TrimSpace(output.String()) != "" {
+		return errors.New("fuzz_cache")
+	}
+	return nil
+}
+
+// fuzzCacheArguments returns the exact non-extensible Go cache operation.
+func fuzzCacheArguments() []string {
+	return []string{"clean", "-fuzzcache"}
 }
 
 // classifyFuzzFailure maps process and test failures to content-free diagnostics.
