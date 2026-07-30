@@ -169,6 +169,43 @@ func TestSigningRejectsSMTPUTF8BeforeHandler(t *testing.T) {
 	}
 }
 
+// TestMessageSigningDomainUsesOnlyCanonicalEnvelopeSenderDNS proves exact bounded derivation.
+func TestMessageSigningDomainUsesOnlyCanonicalEnvelopeSenderDNS(t *testing.T) {
+	const exampleDomain = "example.test"
+	tests := []struct {
+		name    string
+		reverse string
+		want    string
+		ok      bool
+	}{
+		{name: "lowercase", reverse: "<sender@example.test>", want: exampleDomain, ok: true},
+		{name: "canonicalizes ASCII DNS case", reverse: "<sender@Example.TEST>", want: exampleDomain, ok: true},
+		{name: "quoted local part", reverse: "<\"a@b\"@example.test>", want: exampleDomain, ok: true},
+		{name: "source route", reverse: "<@relay.test:sender@example.test>", want: exampleDomain, ok: true},
+		{name: "null sender", reverse: "<>"},
+		{name: "domain literal", reverse: "<sender@[192.0.2.1]>"},
+		{name: "SMTPUTF8 domain", reverse: "<sender@exämple.test>"},
+		{name: "unframed", reverse: "sender@example.test"},
+		{name: "malformed", reverse: "<sender@example.test"},
+	}
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			message, err := NewMessage(
+				[]byte("From: sender@example.test\r\n\r\nbody"),
+				[]byte(testCase.reverse),
+				[][]byte{[]byte("<recipient@example.test>")},
+			)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got, ok := message.SigningDomain()
+			if got != testCase.want || ok != testCase.ok {
+				t.Fatalf("SigningDomain()=(%q,%t), want (%q,%t)", got, ok, testCase.want, testCase.ok)
+			}
+		})
+	}
+}
+
 // TestFailOpenIsNarrowlyLimited freezes timeout and contract behavior.
 func TestFailOpenIsNarrowlyLimited(t *testing.T) {
 	for _, testCase := range []struct {

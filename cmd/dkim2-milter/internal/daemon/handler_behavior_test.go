@@ -61,7 +61,8 @@ func TestHandlerUsesOneExactGeneratedOperation(t *testing.T) {
 			defer server.Close()
 			capability := testCapability(t)
 			handler, err := NewHandler(
-				server.URL, capability, testCase.mode, "tenant", "example.test", "",
+				server.URL, capability, testCase.mode, "tenant", "example.test",
+				milter.DomainSourceStatic, "",
 			)
 			if err != nil {
 				t.Fatal("handler construction failed")
@@ -112,7 +113,8 @@ func TestHandlerUsesExactInboundGeneratedOperation(t *testing.T) {
 	}))
 	defer server.Close()
 	handler, err := NewHandler(
-		server.URL, testCapability(t), modeInbound, "", "", "mx.example.test",
+		server.URL, testCapability(t), modeInbound, "", "", milter.DomainSourceStatic,
+		"mx.example.test",
 	)
 	if err != nil {
 		t.Fatal("inbound handler construction failed")
@@ -138,7 +140,8 @@ func TestHandlerNonOKResponseIsContractFailure(t *testing.T) {
 	}))
 	defer server.Close()
 	handler, err := NewHandler(
-		server.URL, testCapability(t), modeOriginator, "tenant", "example.test", "",
+		server.URL, testCapability(t), modeOriginator, "tenant", "example.test",
+		milter.DomainSourceStatic, "",
 	)
 	if err != nil {
 		t.Fatal("handler construction failed")
@@ -146,6 +149,59 @@ func TestHandlerNonOKResponseIsContractFailure(t *testing.T) {
 	t.Cleanup(func() { _ = handler.Close() })
 	_, err = handler.Handle(t.Context(), testMessage(t))
 	assertFailureClass(t, err, milter.FailureContract)
+}
+
+// TestHandlerDerivesOriginatorDomainFromEnvelopeSender proves per-message exact selection.
+func TestHandlerDerivesOriginatorDomainFromEnvelopeSender(t *testing.T) {
+	calls := 0
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		calls++
+		var document map[string]any
+		if err := json.NewDecoder(request.Body).Decode(&document); err != nil {
+			t.Error("generated request body was not JSON")
+		}
+		contextValue, _ := document["context"].(map[string]any)
+		if contextValue["tenant"] != "tenant" || contextValue["domain"] != "example.test" {
+			t.Error("envelope sender domain was not mapped exactly")
+		}
+		writer.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(writer).Encode(validOperationResponse(generated.Sign))
+	}))
+	defer server.Close()
+	handler, err := NewHandler(
+		server.URL, testCapability(t), modeOriginator, "tenant", "",
+		milter.DomainSourceEnvelopeSender, "",
+	)
+	if err != nil {
+		t.Fatal("handler construction failed")
+	}
+	t.Cleanup(func() { _ = handler.Close() })
+	message, err := milter.NewMessage(
+		[]byte("From: sender@example.test\r\n\r\nbody"),
+		[]byte("<sender@Example.TEST>"),
+		[][]byte{[]byte("<recipient@example.test>")},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := handler.Handle(t.Context(), message); err != nil || calls != 1 {
+		t.Fatalf("Handle() error=%v, calls=%d", err, calls)
+	}
+	for _, reverse := range []string{"<>", "<sender@[192.0.2.1]>"} {
+		message, err := milter.NewMessage(
+			[]byte("From: sender@example.test\r\n\r\nbody"),
+			[]byte(reverse),
+			[][]byte{[]byte("<recipient@example.test>")},
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = handler.Handle(t.Context(), message)
+		assertFailureClass(t, err, milter.FailureContract)
+	}
+	if calls != 1 {
+		t.Fatalf("invalid envelope domains reached daemon: calls=%d", calls)
+	}
 }
 
 // TestOperationEvidenceClassifiesIndeterminateBoundaries proves no retry after effects.

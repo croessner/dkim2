@@ -104,6 +104,26 @@ signing:
   allow_recipient_group: false
 ```
 
+An originator instance that serves multiple exact LDAP signing domains may
+derive the domain from the already validated ASCII SMTP reverse-path while
+retaining one fixed tenant:
+
+```yaml
+mode: originator
+signing:
+  tenant: tenant-a
+  domain_source: envelope_sender
+  allow_recipient_group: false
+```
+
+`domain_source` defaults to `static`. `envelope_sender` is accepted only for
+`originator`, requires `domain` to be absent, lowercases ASCII DNS-domain
+casing, and performs no alias, wildcard, parent-domain, header, tenant, or
+datasource fallback. A null reverse-path, address literal, SMTPUTF8 domain, or
+malformed path fails closed before daemon I/O. Do not attach this route to a
+mail path that must originate null-sender messages; give such a path an exact
+static-domain policy or keep it outside this signing instance.
+
 `allow_recipient_group` is reserved and must remain false. Signing stays
 single-recipient until the adapter has trustworthy per-message Bcc
 classification; `true` fails configuration validation.

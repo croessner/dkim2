@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/croessner/dkim2/cmd/dkim2-milter/internal/milter"
 	"github.com/croessner/dkim2/cmd/dkim2-milter/internal/testsupport"
 )
 
@@ -68,12 +69,32 @@ func TestLoadModeMatrixAndDefaults(t *testing.T) {
 			t.Fatalf("unexpected defaults for %s: %#v", mode, snapshot.Effective())
 		}
 		if mode == ModeInbound {
-			if snapshot.Tenant() != "" || snapshot.Domain() != "" {
+			if snapshot.Tenant() != "" || snapshot.Domain() != "" ||
+				snapshot.DomainSource() != milter.DomainSourceStatic {
 				t.Fatal("inbound mode retained signing identity")
 			}
-		} else if snapshot.Tenant() != "tenant-a" || snapshot.Domain() != "example.test" {
+		} else if snapshot.Tenant() != "tenant-a" || snapshot.Domain() != "example.test" ||
+			snapshot.DomainSource() != milter.DomainSourceStatic {
 			t.Fatal("signing mode lost its required identity")
 		}
+	}
+}
+
+// TestLoadAcceptsOriginatorEnvelopeSenderDomainSelection proves the bounded multi-domain route.
+func TestLoadAcceptsOriginatorEnvelopeSenderDomainSelection(t *testing.T) {
+	document := strings.Replace(
+		validConfig(ModeOriginator),
+		"  domain: example.test",
+		"  domain_source: envelope_sender",
+		1,
+	)
+	snapshot, err := Load(writeConfig(t, document))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snapshot.Tenant() != "tenant-a" || snapshot.Domain() != "" ||
+		snapshot.DomainSource() != milter.DomainSourceEnvelopeSender {
+		t.Fatal("originator envelope-sender selection was not retained exactly")
 	}
 }
 
@@ -200,6 +221,26 @@ func TestLoadRejectsConditionalMatrixViolations(t *testing.T) {
 		),
 		"signing missing domain": strings.Replace(
 			validConfig(ModeOrdinaryTransit), "  domain: example.test", "", 1,
+		),
+		"originator dynamic domain with static domain": strings.Replace(
+			validConfig(ModeOriginator),
+			"  domain: example.test",
+			"  domain: example.test\n  domain_source: envelope_sender",
+			1,
+		),
+		"transit dynamic domain": strings.Replace(
+			validConfig(ModeOrdinaryTransit),
+			"  domain: example.test",
+			"  domain_source: envelope_sender",
+			1,
+		),
+		"inbound explicit domain source": validConfig(ModeInbound) +
+			"signing:\n  domain_source: static\n",
+		"unknown domain source": strings.Replace(
+			validConfig(ModeOriginator),
+			"  domain: example.test",
+			"  domain_source: sender_header",
+			1,
 		),
 		"inbound group policy": validConfig(ModeInbound) +
 			"signing:\n  allow_recipient_group: true\n",

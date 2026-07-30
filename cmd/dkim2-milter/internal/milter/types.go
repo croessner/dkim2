@@ -18,6 +18,16 @@ const (
 	FidelityReconstructedCRLF Fidelity = "milter_reconstructed_crlf"
 )
 
+// DomainSource selects one fail-closed originator signing-domain source.
+type DomainSource string
+
+const (
+	// DomainSourceStatic uses the exact configured signing domain.
+	DomainSourceStatic DomainSource = "static"
+	// DomainSourceEnvelopeSender derives a canonical DNS domain from MAIL FROM.
+	DomainSourceEnvelopeSender DomainSource = "envelope_sender"
+)
+
 // Message is one immutable EOM snapshot.
 type Message struct {
 	raw        []byte
@@ -57,6 +67,39 @@ func (m Message) Raw() []byte { return bytes.Clone(m.raw) }
 
 // ReversePath returns an isolated copy of exact callback bytes.
 func (m Message) ReversePath() []byte { return bytes.Clone(m.reverse) }
+
+// SigningDomain derives one canonical ASCII DNS domain from a valid reverse-path.
+func (m Message) SigningDomain() (string, bool) {
+	path := m.reverse
+	if !validEnvelopePath(path, true) || len(path) == 2 {
+		return "", false
+	}
+	mailbox := path[1 : len(path)-1]
+	if mailbox[0] == '@' {
+		separator := bytes.IndexByte(mailbox, ':')
+		if separator < 2 || !validSourceRoute(mailbox[:separator]) {
+			return "", false
+		}
+		mailbox = mailbox[separator+1:]
+	}
+	localEnd, ok := smtpLocalEnd(mailbox)
+	if !ok || localEnd >= len(mailbox) || mailbox[localEnd] != '@' {
+		return "", false
+	}
+	domain := mailbox[localEnd+1:]
+	if len(domain) == 0 || domain[0] == '[' || !asciiBytes(domain) ||
+		!validSMTPDomain(domain) {
+		return "", false
+	}
+	canonical := make([]byte, len(domain))
+	for index, current := range domain {
+		if current >= 'A' && current <= 'Z' {
+			current += 'a' - 'A'
+		}
+		canonical[index] = current
+	}
+	return string(canonical), true
+}
 
 // Recipients returns isolated ordered callback bytes including duplicates.
 func (m Message) Recipients() [][]byte {

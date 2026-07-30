@@ -32,6 +32,8 @@ import (
 )
 
 const (
+	integrationTenant = "tenant-a"
+
 	peerAbort     byte = 'A'
 	peerBody      byte = 'B'
 	peerConnect   byte = 'C'
@@ -641,6 +643,21 @@ func startExecutable(
 	requestTimeout time.Duration,
 	extraServer ...string,
 ) *executableProcess {
+	return startExecutableWithSigning(
+		t, endpoint, mode, failure, requestTimeout, "", extraServer...,
+	)
+}
+
+// startExecutableWithSigning starts the real adapter with an optional signing block.
+func startExecutableWithSigning(
+	t *testing.T,
+	endpoint string,
+	mode string,
+	failure string,
+	requestTimeout time.Duration,
+	signingOverride string,
+	extraServer ...string,
+) *executableProcess {
 	t.Helper()
 	root := testsupport.TrustedTempDirectory(t)
 
@@ -662,7 +679,10 @@ func startExecutable(
 
 	signing := ""
 	if mode != integrationModeInbound {
-		signing = "\nsigning:\n  tenant: tenant-a\n  domain: example.test"
+		signing = "\nsigning:\n  tenant: " + integrationTenant + "\n  domain: example.test"
+	}
+	if signingOverride != "" {
+		signing = signingOverride
 	}
 	document := fmt.Sprintf(`version: dkim2-milter-config-v1
 server:
@@ -720,6 +740,50 @@ limits:
 	})
 	waitForSocket(t, socketPath, command, logPath)
 	return process
+}
+
+// TestOriginatorEnvelopeSenderDomainSelectionRunsThroughPublicSocket proves the full route.
+func TestOriginatorEnvelopeSenderDomainSelectionRunsThroughPublicSocket(t *testing.T) {
+	const exampleDomain = "example.test"
+	service := &generatedDaemonService{
+		sign: func(body generatedfixture.SignRequest) generatedfixture.OperationResponse {
+			if body.Context.Tenant != integrationTenant || body.Context.Domain != exampleDomain {
+				t.Fatal("public route did not derive the canonical envelope sender domain")
+			}
+			return fixtureOperationResponse("sign", generated.ActionPlan{
+				{Name: generated.MessageInstance, Type: generated.AddHeader, Value: "v=2; i=1"},
+				{Name: generated.DKIM2Signature, Type: generated.AddHeader, Value: "v=2; s=1"},
+			})
+		},
+	}
+	fixture := newGeneratedDaemonFixture(t, service)
+	process := startExecutableWithSigning(
+		t,
+		fixture.endpoint,
+		integrationModeOrigin,
+		"tempfail",
+		2*time.Second,
+		"\nsigning:\n  tenant: "+integrationTenant+"\n  domain_source: envelope_sender",
+	)
+	peer := dialPublicPeer(t, process.socket)
+	peer.negotiate(t)
+	peer.callback(t, peerConnect, []byte("mx.example.test\x00U"))
+	peer.callback(t, peerHelo, []byte("mx.example.test\x00"))
+	peer.callback(t, peerMail, []byte("<sender@Example.TEST>\x00"))
+	peer.callback(t, peerRecipient, []byte("<recipient@example.test>\x00"))
+	peer.callback(t, peerHeader, []byte("From\x00 sender@example.test\x00"))
+	peer.callback(t, peerEOH, nil)
+	peer.callback(t, peerBody, []byte("body\r\n"))
+	peer.send(t, peerEOM, nil)
+	frames := []adapterFrame{peer.receive(t), peer.receive(t), peer.receive(t)}
+	if len(frames) != 3 || frames[0].command != adapterAddHeader ||
+		frames[1].command != adapterAddHeader || frames[2].command != adapterAccept {
+		t.Fatalf("dynamic originator EOM frames = %#v", frames)
+	}
+	peer.send(t, peerQuit, nil)
+	peer.close()
+	process.stop(t)
+	assertPrivateOutputAbsent(t, process.log)
 }
 
 // waitForSocket waits for readiness evidence at the public path.
@@ -962,7 +1026,7 @@ func assertFixtureMessage(
 // assertFixtureSigningContext checks exact configured identity at the generated boundary.
 func assertFixtureSigningContext(t *testing.T, value generatedfixture.SigningContext) {
 	t.Helper()
-	if value.Tenant != "tenant-a" || value.Domain != "example.test" {
+	if value.Tenant != integrationTenant || value.Domain != "example.test" {
 		t.Error("generated signing context differed from fixed configuration")
 	}
 }
@@ -1057,7 +1121,7 @@ func splitHeaderAction(payload []byte) (string, string, bool) {
 func containsPrivateMarker(data []byte) bool {
 	for _, marker := range []string{
 		"sender@example.test", "recipient@example.test", "exact value", "body\r\n",
-		"tenant-a", "example.test",
+		integrationTenant, "example.test",
 	} {
 		if strings.Contains(string(data), marker) {
 			return true

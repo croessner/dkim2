@@ -429,6 +429,11 @@ var portableDefinitions = []runnerDefinition{
 				artifacts: []string{milterPublicPeerArtifact},
 			},
 			{
+				key:       "milter\x00envelope-domain-originator",
+				testName:  "TestOriginatorEnvelopeSenderDomainSelectionRunsThroughPublicSocket",
+				artifacts: []string{milterPublicPeerArtifact},
+			},
+			{
 				key:       "milter\x00overload-disconnect",
 				testName:  "TestExecutableOverloadAndSlowDisconnect",
 				artifacts: []string{milterPublicPeerArtifact},

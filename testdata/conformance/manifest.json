@@ -112,13 +112,13 @@
     {
       "id": "milter-negative-source",
       "path": "cmd/dkim2-milter/internal/milter/state_matrix_test.go",
-      "sha256": "ee6eb670bd9820ac23c35897d5cff00fc251d577725e5b74352085aef94a7998",
+      "sha256": "e40a0d514ced6f4a4184117576d912b2a5b9e13a2f65872140e9d165c9747533",
       "module": "cmd/dkim2-milter"
     },
     {
       "id": "milter-public-peer-source",
       "path": "cmd/dkim2-milter/internal/integration/public_peer_test.go",
-      "sha256": "5f7c95dc766d600ea03799dad00566adf309c88ae2ecf2a1855be6cf3d1acb73",
+      "sha256": "5e7ff9cf14528467e34ba72bbf6ebdb1d4cd1d7e17a05e56050057757c9266c3",
       "module": "cmd/dkim2-milter"
     },
     {
@@ -428,6 +428,18 @@
       "expected_outcome": "pass",
       "artifacts": ["milter-negative-source"],
       "producer": "milter-negative-tests"
+    },
+    {
+      "suite": "milter",
+      "case_id": "envelope-domain-originator",
+      "class": "adapter_contract",
+      "authority": ["RFC 5321 Section 4.1.2", "docs/specs/implementation/milter-adapter.md End-Of-Message Flow"],
+      "provenance": "regression_reproducer",
+      "runner": "milter_fixture",
+      "required_platform": "portable",
+      "expected_outcome": "pass",
+      "artifacts": ["milter-public-peer-source"],
+      "producer": "milter-public-fixture-tests"
     },
     {
       "suite": "milter",

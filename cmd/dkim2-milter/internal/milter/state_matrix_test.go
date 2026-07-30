@@ -944,6 +944,8 @@ func FuzzEnvelopeAndESMTPValidationNeverPanics(f *testing.F) {
 	f.Fuzz(func(_ *testing.T, input []byte, allowNull bool) {
 		_ = validEnvelopePath(input, allowNull)
 		_ = validESMTPCallback(input, 256, allowNull)
+		message := Message{reverse: bytes.Clone(input)}
+		_, _ = message.SigningDomain()
 	})
 }
 

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/croessner/dkim2/cmd/dkim2-milter/internal/endpoint"
+	"github.com/croessner/dkim2/cmd/dkim2-milter/internal/milter"
 	"github.com/croessner/dkim2/cmd/dkim2-milter/internal/resource"
 	"github.com/spf13/viper"
 	"go.yaml.in/yaml/v3"
@@ -146,6 +147,7 @@ type snapshotState struct {
 	mode                Mode
 	tenant              string
 	domain              string
+	domainSource        milter.DomainSource
 	allowRecipientGroup bool
 	authResultsEnabled  bool
 	authservID          string
@@ -161,24 +163,25 @@ type snapshotState struct {
 
 // Effective is the bounded non-sensitive operator view of a Snapshot.
 type Effective struct {
-	Version               string      `json:"version"`
-	Mode                  Mode        `json:"mode"`
-	FailureMode           FailureMode `json:"failure_mode"`
-	SocketMode            string      `json:"socket_mode"`
-	ShutdownTimeout       string      `json:"shutdown_timeout"`
-	MaxConnections        int         `json:"max_connections"`
-	MaxInFlightMessages   int         `json:"max_in_flight_messages"`
-	MaxBufferedBytes      int64       `json:"max_buffered_bytes"`
-	RequestTimeout        string      `json:"request_timeout"`
-	AllowRecipientGroup   bool        `json:"allow_recipient_group"`
-	AuthenticationResults bool        `json:"authentication_results"`
-	MessageBytes          int64       `json:"message_bytes"`
-	HeaderBytes           int64       `json:"header_bytes"`
-	HeaderCount           int         `json:"header_count"`
-	HeaderFieldBytes      int         `json:"header_field_bytes"`
-	RecipientCount        int         `json:"recipient_count"`
-	LogLevel              string      `json:"log_level"`
-	MetricsEnabled        bool        `json:"metrics_enabled"`
+	Version               string              `json:"version"`
+	Mode                  Mode                `json:"mode"`
+	FailureMode           FailureMode         `json:"failure_mode"`
+	SocketMode            string              `json:"socket_mode"`
+	ShutdownTimeout       string              `json:"shutdown_timeout"`
+	MaxConnections        int                 `json:"max_connections"`
+	MaxInFlightMessages   int                 `json:"max_in_flight_messages"`
+	MaxBufferedBytes      int64               `json:"max_buffered_bytes"`
+	RequestTimeout        string              `json:"request_timeout"`
+	SigningDomainSource   milter.DomainSource `json:"signing_domain_source"`
+	AllowRecipientGroup   bool                `json:"allow_recipient_group"`
+	AuthenticationResults bool                `json:"authentication_results"`
+	MessageBytes          int64               `json:"message_bytes"`
+	HeaderBytes           int64               `json:"header_bytes"`
+	HeaderCount           int                 `json:"header_count"`
+	HeaderFieldBytes      int                 `json:"header_field_bytes"`
+	RecipientCount        int                 `json:"recipient_count"`
+	LogLevel              string              `json:"log_level"`
+	MetricsEnabled        bool                `json:"metrics_enabled"`
 }
 
 // Load reads one strict YAML file and validates all stable paths.
@@ -222,6 +225,10 @@ func stableFieldSpecs() []fieldSpec {
 		{path: "mode", kind: valueString},
 		{path: "signing.tenant", kind: valueString},
 		{path: "signing.domain", kind: valueString},
+		{
+			path: "signing.domain_source", kind: valueString,
+			defaultValue: string(milter.DomainSourceStatic),
+		},
 		{path: "signing.allow_recipient_group", kind: valueBool, defaultValue: canonicalFalse},
 		{path: "authentication_results.enabled", kind: valueBool, defaultValue: canonicalFalse},
 		{path: "authentication_results.authserv_id", kind: valueString},
@@ -597,6 +604,7 @@ func validateValues(values map[string]rawValue) (Snapshot, error) {
 		return Snapshot{}, &Error{}
 	}
 	tenant, domain := text("signing.tenant"), text("signing.domain")
+	domainSource := milter.DomainSource(text("signing.domain_source"))
 	authservID := text("authentication_results.authserv_id")
 	return Snapshot{state: &snapshotState{
 		socket: text("server.socket"), socketMode: parsed.socketMode,
@@ -604,6 +612,7 @@ func validateValues(values map[string]rawValue) (Snapshot, error) {
 		maxInFlightMessages: parsed.maxInFlight, maxBufferedBytes: parsed.maxBuffered,
 		daemonEndpoint: text("daemon.endpoint"), capabilityFile: text("daemon.capability_file"),
 		requestTimeout: parsed.requestTimeout, mode: mode, tenant: tenant, domain: domain,
+		domainSource:        domainSource,
 		allowRecipientGroup: parsed.allowRecipientGroup,
 		authResultsEnabled:  parsed.authResultsEnabled, authservID: authservID,
 		failureMode: failure, messageBytes: parsed.messageBytes,
@@ -702,15 +711,24 @@ func validConditionalMatrix(
 ) bool {
 	tenantValue := values["signing.tenant"]
 	domainValue := values["signing.domain"]
+	domainSourceValue := values["signing.domain_source"]
 	groupValue := values["signing.allow_recipient_group"]
 	enabledValue := values["authentication_results.enabled"]
 	authservValue := values["authentication_results.authserv_id"]
 	tenant, domain, authservID := tenantValue.text, domainValue.text, authservValue.text
+	domainSource := milter.DomainSource(domainSourceValue.text)
 	signing := mode != ModeInbound
-	signingFields := tenantValue.explicit && domainValue.explicit &&
-		validTenant(tenant) && validDomain(domain)
+	staticDomain := domainSource == milter.DomainSourceStatic &&
+		domainValue.explicit && validDomain(domain)
+	envelopeSenderDomain := mode == ModeOriginator &&
+		domainSource == milter.DomainSourceEnvelopeSender &&
+		domainSourceValue.explicit && !domainValue.explicit && domain == ""
+	signingFields := tenantValue.explicit && validTenant(tenant) &&
+		(staticDomain || envelopeSenderDomain)
 	inboundFields := !tenantValue.explicit && !domainValue.explicit &&
-		!groupValue.explicit && tenant == "" && domain == "" && !allowRecipientGroup
+		!domainSourceValue.explicit && !groupValue.explicit &&
+		tenant == "" && domain == "" && domainSource == milter.DomainSourceStatic &&
+		!allowRecipientGroup
 	reportingMode := mode == ModeInbound ||
 		(!enabledValue.explicit && !authservValue.explicit && !authResultsEnabled)
 	return ((signing && signingFields) || (!signing && inboundFields)) &&
@@ -991,6 +1009,14 @@ func (s Snapshot) Domain() string {
 	return s.state.domain
 }
 
+// DomainSource returns the validated originator signing-domain selection policy.
+func (s Snapshot) DomainSource() milter.DomainSource {
+	if s.state == nil {
+		return ""
+	}
+	return s.state.domainSource
+}
+
 // AllowRecipientGroup reports explicit multi-recipient authorization.
 func (s Snapshot) AllowRecipientGroup() bool {
 	return s.state != nil && s.state.allowRecipientGroup
@@ -1083,6 +1109,7 @@ func (s Snapshot) Effective() Effective {
 		SocketMode: "0660", ShutdownTimeout: s.state.shutdownTimeout.String(),
 		MaxConnections: s.state.maxConnections, MaxInFlightMessages: s.state.maxInFlightMessages,
 		MaxBufferedBytes: s.state.maxBufferedBytes, RequestTimeout: s.state.requestTimeout.String(),
+		SigningDomainSource:   s.state.domainSource,
 		AllowRecipientGroup:   s.state.allowRecipientGroup,
 		AuthenticationResults: s.state.authResultsEnabled,
 		MessageBytes:          s.state.messageBytes, HeaderBytes: s.state.headerBytes,

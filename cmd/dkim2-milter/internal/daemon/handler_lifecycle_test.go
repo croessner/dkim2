@@ -25,6 +25,7 @@ func TestHandlerCloseIsIdempotentAndPreventsOperations(t *testing.T) {
 		modeOriginator,
 		"private-tenant-marker",
 		"example.test",
+		milter.DomainSourceStatic,
 		"",
 	)
 	if err != nil {
@@ -74,6 +75,7 @@ func TestHandlerCloseIsIdempotentAndPreventsOperations(t *testing.T) {
 	}
 	if state.client != nil || state.transport != nil || state.capability != nil ||
 		state.mode != "" || state.tenant != "" || state.domain != "" ||
+		state.domainSource != "" ||
 		state.authservID != "" {
 		t.Fatal("handler Close retained runtime or protected identity references")
 	}

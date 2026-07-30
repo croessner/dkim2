@@ -320,6 +320,15 @@ because Milter callbacks do not prove which recipients are blind; a global
 group switch could violate the draft's Bcc non-disclosure MUST. Ambiguous
 routes, recipients, policies, keys, algorithms, or signer state fail closed.
 
+An originator route may select its signing domain from the strictly validated
+ASCII SMTP reverse-path while retaining one statically configured tenant. This
+is adapter-local route selection, not datasource fallback: it strips a valid
+obsolete source route if present, rejects the null path, address literals,
+SMTPUTF8 domains, and malformed framing, canonicalizes only ASCII DNS case, and
+sends the resulting exact tenant/domain pair through the unchanged daemon
+authorization and datasource lookup. The option is unavailable to inbound and
+ordinary-transit modes. Static domain selection remains the default.
+
 ## Authentication-Results Policy
 
 `Authentication-Results` is non-normative DKIM2 reporting at the SMTP trust
@@ -372,7 +381,8 @@ The initial stable paths include:
 | `daemon.request_timeout` | `2s` | 100ms..10s |
 | `mode` | required | `inbound`, `originator`, `ordinary_transit` |
 | `signing.tenant` | conditional | required for signing/revision modes |
-| `signing.domain` | conditional | required for both signing/revision modes |
+| `signing.domain` | conditional | required for static signing/revision; absent for envelope-derived originator signing |
+| `signing.domain_source` | `static` | `static`, or `envelope_sender` for originator only |
 | `signing.allow_recipient_group` | `false` | reserved; `true` is rejected until per-message Bcc evidence exists |
 | `authentication_results.enabled` | `false` | inbound mode only |
 | `authentication_results.authserv_id` | absent | required exactly when enabled |

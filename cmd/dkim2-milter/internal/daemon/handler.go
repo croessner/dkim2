@@ -51,15 +51,16 @@ type handlerState struct {
 
 // handlerGuard owns transport and sensitive request identity.
 type handlerGuard struct {
-	client     *generated.ClientWithResponses
-	transport  *http.Transport
-	capability *Capability
-	mu         *sync.RWMutex
-	closed     bool
-	mode       string
-	tenant     string
-	domain     string
-	authservID string
+	client       *generated.ClientWithResponses
+	transport    *http.Transport
+	capability   *Capability
+	mu           *sync.RWMutex
+	closed       bool
+	mode         string
+	tenant       string
+	domain       string
+	domainSource milter.DomainSource
+	authservID   string
 }
 
 // NewHandler constructs a generated-client boundary with a confined transport.
@@ -69,11 +70,12 @@ func NewHandler(
 	mode string,
 	tenant string,
 	domain string,
+	domainSource milter.DomainSource,
 	authservID string,
 ) (*Handler, error) {
 	if capability == nil ||
 		(mode != modeInbound && mode != modeOriginator && mode != modeOrdinaryTransit) ||
-		(mode == modeInbound) != (tenant == "" && domain == "") ||
+		!validSigningIdentity(mode, tenant, domain, domainSource) ||
 		(mode != modeInbound && authservID != "") {
 		return nil, &Error{}
 	}
@@ -116,9 +118,29 @@ func NewHandler(
 	}
 	return &Handler{state: &handlerState{guard: &handlerGuard{
 		client: client, transport: transport, capability: capability, mode: mode,
-		mu: &sync.RWMutex{}, tenant: tenant, domain: domain, authservID: authservID,
+		mu: &sync.RWMutex{}, tenant: tenant, domain: domain,
+		domainSource: domainSource, authservID: authservID,
 	},
 	}}, nil
+}
+
+// validSigningIdentity enforces static and envelope-derived route ownership.
+func validSigningIdentity(
+	mode, tenant, domain string,
+	domainSource milter.DomainSource,
+) bool {
+	switch mode {
+	case modeInbound:
+		return tenant == "" && domain == "" && domainSource == milter.DomainSourceStatic
+	case modeOriginator:
+		return tenant != "" &&
+			(domainSource == milter.DomainSourceStatic && domain != "" ||
+				domainSource == milter.DomainSourceEnvelopeSender && domain == "")
+	case modeOrdinaryTransit:
+		return tenant != "" && domain != "" && domainSource == milter.DomainSourceStatic
+	default:
+		return false
+	}
 }
 
 // capabilityRoute maps one validated adapter mode to its sole credentialed route.
@@ -147,6 +169,14 @@ func (h *Handler) Handle(ctx context.Context, message milter.Message) (milter.Re
 		state.capability == nil || ctx == nil ||
 		message.Fidelity() != milter.FidelityReconstructedCRLF {
 		return milter.Result{}, &milter.Error{Class: milter.FailureContract}
+	}
+	signingDomain := state.domain
+	if state.mode == modeOriginator {
+		var err error
+		signingDomain, err = state.signingDomain(message)
+		if err != nil {
+			return milter.Result{}, err
+		}
 	}
 	request, err := mapMessage(message)
 	if err != nil {
@@ -183,7 +213,7 @@ func (h *Handler) Handle(ctx context.Context, message milter.Message) (milter.Re
 				Message:    request.message,
 				Smtp:       request.smtp,
 				Context: generated.SigningContext{
-					Tenant: state.tenant, Domain: state.domain,
+					Tenant: state.tenant, Domain: signingDomain,
 				},
 			},
 		)
@@ -211,6 +241,28 @@ func (h *Handler) Handle(ctx context.Context, message milter.Message) (milter.Re
 		return mapRevisionResponse(response, "revise")
 	default:
 		return milter.Result{}, &milter.Error{Class: milter.FailureContract}
+	}
+}
+
+// signingDomain resolves the configured exact originator domain without fallback.
+func (guard *handlerGuard) signingDomain(message milter.Message) (string, error) {
+	if guard == nil {
+		return "", &milter.Error{Class: milter.FailureContract}
+	}
+	switch guard.domainSource {
+	case milter.DomainSourceStatic:
+		if guard.domain == "" {
+			return "", &milter.Error{Class: milter.FailureContract}
+		}
+		return guard.domain, nil
+	case milter.DomainSourceEnvelopeSender:
+		domain, ok := message.SigningDomain()
+		if !ok {
+			return "", &milter.Error{Class: milter.FailureContract}
+		}
+		return domain, nil
+	default:
+		return "", &milter.Error{Class: milter.FailureContract}
 	}
 }
 
@@ -243,6 +295,7 @@ func (h *Handler) Close() error {
 	state.mode = ""
 	state.tenant = ""
 	state.domain = ""
+	state.domainSource = ""
 	state.authservID = ""
 	return nil
 }
