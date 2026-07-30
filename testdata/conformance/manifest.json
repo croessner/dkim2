@@ -22,7 +22,7 @@
     "daemon": "supported",
     "milter": "partial",
     "postfix": "partial_linux",
-    "exim": "deferred_m17"
+    "exim": "deferred_exim"
   },
   "artifacts": [
     {
@@ -250,7 +250,7 @@
     {
       "id": "signature-negative-source",
       "path": "lib/internal/signature/parser_test.go",
-      "sha256": "da130ddb3ffed22d6b728eaf79e4c05f4e05167a85d9412c6e4e1ee1cc120e89",
+      "sha256": "8392ca0a5fb879e9c61a926d7b6dd54d688e96733ebcfbef4ef0f63dc32be07f",
       "module": "lib"
     },
     {
@@ -992,6 +992,21 @@
       "class": "draft_normative",
       "authority": ["draft-ietf-dkim-dkim2-spec-04 Section 8"],
       "provenance": "regression_reproducer",
+      "runner": "portable_vector",
+      "required_platform": "portable",
+      "expected_outcome": "pass",
+      "artifacts": ["signature-negative-source"],
+      "producer": "signature-tests"
+    },
+    {
+      "suite": "signing",
+      "case_id": "tag-case-interpretation",
+      "class": "documented_interpretation",
+      "authority": [
+        "draft-ietf-dkim-dkim2-spec-04 Sections 5 and 8",
+        "docs/specs/implementation/dkim2-tag-parsers.md Shared Parsing Rules"
+      ],
+      "provenance": "manual_derivation",
       "runner": "portable_vector",
       "required_platform": "portable",
       "expected_outcome": "pass",

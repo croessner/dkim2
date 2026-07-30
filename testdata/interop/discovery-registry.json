@@ -1,0 +1,84 @@
+{
+  "schema": "dkim2.interop-discovery-registry.v1",
+  "message_draft": "draft-ietf-dkim-dkim2-spec-04",
+  "dns_draft": "draft-chuang-dkim2-dns-04",
+  "max_age_hours": 168,
+  "retrieval_policy": {
+    "max_redirects": 2,
+    "max_response_bytes": 8388608,
+    "max_files": 16384,
+    "max_file_bytes": 33554432,
+    "max_total_bytes": 268435456,
+    "max_path_bytes": 1024,
+    "max_depth": 32,
+    "timeout_seconds": 60
+  },
+  "sources": [
+    {
+      "id": "github-dkim2-search",
+      "kind": "source_forge_search",
+      "url": "https://github.com/search",
+      "query": "repositories with exact term DKIM2 in name or description sorted by updated time",
+      "required": true
+    },
+    {
+      "id": "github-dkim2wg-interop",
+      "kind": "source_repository",
+      "url": "https://github.com/dkim2wg/interop",
+      "query": "exact repository identity and immutable default-branch revision",
+      "required": true,
+      "candidate_hint": "dkim2wg-interop"
+    },
+    {
+      "id": "github-dkim2wg-repositories",
+      "kind": "source_forge_search",
+      "url": "https://github.com/orgs/dkim2wg/repositories",
+      "query": "all public repositories owned by the DKIM2 working-group organization",
+      "required": true
+    },
+    {
+      "id": "github-stalwart-mail-auth",
+      "kind": "source_repository",
+      "url": "https://github.com/stalwartlabs/mail-auth",
+      "query": "exact repository identity and immutable default-branch revision",
+      "required": true,
+      "candidate_hint": "stalwart-mail-auth"
+    },
+    {
+      "id": "ietf-dkim-archive-index",
+      "kind": "ietf_mail_archive",
+      "url": "https://mailarchive.ietf.org/arch/browse/ietf-dkim",
+      "query": "complete current working-group implementation references through observation cutoff",
+      "required": true
+    },
+    {
+      "id": "ietf-dkim-interop-announcement",
+      "kind": "ietf_mail_archive",
+      "url": "https://mailarchive.ietf.org/arch/msg/ietf-dkim/LKutLi03M6QvjgAxV0ktjqpdOzQ",
+      "query": "exact implementation announcement dated 2026-07-04",
+      "required": true
+    },
+    {
+      "id": "ietf-dkim2-dns-04",
+      "kind": "ietf_draft",
+      "url": "https://www.ietf.org/archive/id/draft-chuang-dkim2-dns-04.txt",
+      "query": "exact historical DNS behavior baseline bytes",
+      "required": true
+    },
+    {
+      "id": "ietf-dkim2-spec-04",
+      "kind": "ietf_draft",
+      "url": "https://www.ietf.org/archive/id/draft-ietf-dkim-dkim2-spec-04.txt",
+      "query": "exact pinned message draft bytes published 2026-07-05",
+      "required": true
+    },
+    {
+      "id": "turscar-dkim2",
+      "kind": "source_repository",
+      "url": "https://forge.turscar.ie/turscar/dkim2",
+      "query": "exact repository identity and immutable default-branch revision",
+      "required": true,
+      "candidate_hint": "turscar-dkim2"
+    }
+  ]
+}

@@ -66,6 +66,19 @@ func TestParseAcceptsDKIM2Signature(t *testing.T) {
 	}
 }
 
+// TestParseAcceptsInteropFWSAndMixedCaseTags freezes the documented header-tag interpretation.
+func TestParseAcceptsInteropFWSAndMixedCaseTags(t *testing.T) {
+	value := strings.Replace(validSignatureValue(), "i=2", "I = 2", 1)
+	value = strings.Replace(value, "m=3", "m = 3", 1)
+	parsed, err := Parse(dkim2SignatureField(t, 0, value))
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	if parsed.Sequence() != 2 || parsed.InstanceNumber() != 3 {
+		t.Fatalf("Parse() sequence/instance = %d/%d", parsed.Sequence(), parsed.InstanceNumber())
+	}
+}
+
 // TestParseRejectsMissingFinalSemicolon reproduces the draft-04 DKIM2-Signature terminator rule.
 func TestParseRejectsMissingFinalSemicolon(t *testing.T) {
 	if _, err := Parse(headerField(t, 0, "DKIM2-Signature", validSignatureValue())); err == nil {

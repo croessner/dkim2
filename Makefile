@@ -61,6 +61,12 @@ help:
 		'  make deployment-security prove seeded packaging and runtime privacy' \
 		'  make check-operator-docs validate operator documentation links and deferrals' \
 		'  make check-release run all local packaging and release checks' \
+		'  make check-interop validate closed external discovery and evidence contracts' \
+		'  make interop       normalize the closed current external evidence set' \
+		'  make check-reference validate API, issue, OpenAPI, and reference closure' \
+		'  make reference-module-proof prove standalone modules through the private proxy' \
+		'  make reference-report render the complete candidate-bound report' \
+		'  make release-candidate run the complete local non-publishing candidate gate' \
 		'  make guardrails   run the local quality gate'
 
 .PHONY: fmt
@@ -160,22 +166,8 @@ check-openapi: check-workspace
 
 .PHONY: check-workspace
 check-workspace:
-	@set -eu; \
-	output="$$(mktemp -d /tmp/dkim2-workspace-check.XXXXXX)"; \
-	chmod 0700 "$$output"; \
-	trap 'rm -rf "$$output"' 0 1 2 15; \
-	mkdir -m 0700 "$$output/repo"; \
-	tar -cf - --exclude=.git --exclude=temp --exclude=vendor . | \
-		tar -xf - -C "$$output/repo"; \
-	(cd "$$output/repo" && GOCACHE="$${GOCACHE:-/tmp/dkim2-go-build-cache}" GOFLAGS= go work sync); \
-	for file in $(WORKSPACE_ABSENT_SUM_FILES); do \
-		test ! -s "$$output/repo/$$file"; \
-		rm -f "$$output/repo/$$file"; \
-		test ! -e "$$file"; \
-	done; \
-	for file in $(WORKSPACE_SYNC_FILES); do \
-		cmp "$$file" "$$output/repo/$$file"; \
-	done
+	@GOCACHE="$${GOCACHE:-/tmp/dkim2-go-build-cache}" \
+		go -C tools run ./cmd/reference -root .. check-workspace
 
 .PHONY: vendor
 vendor:
@@ -191,18 +183,8 @@ vendor:
 
 .PHONY: check-vendor
 check-vendor:
-	@set -eu; \
-	output="$$(mktemp -d /tmp/dkim2-vendor-check.XXXXXX)"; \
-	trap 'rm -rf "$$output"' 0 1 2 15; \
-	GOCACHE="$${GOCACHE:-/tmp/dkim2-go-build-cache}" GOFLAGS= go work vendor -o "$$output"; \
-	for path in $(VENDOR_LF_PATHS); do \
-		source="$$output/$$path"; \
-		normalized="$$source.lf"; \
-		tr -d '\r' < "$$source" > "$$normalized"; \
-		chmod 0644 "$$normalized"; \
-		mv "$$normalized" "$$source"; \
-	done; \
-	diff -qr vendor "$$output"
+	@GOCACHE="$${GOCACHE:-/tmp/dkim2-go-build-cache}" \
+		go -C tools run ./cmd/reference -root .. check-vendor
 
 .PHONY: check-protected-platforms
 check-protected-platforms:
@@ -371,3 +353,46 @@ check-operator-docs:
 .PHONY: check-release
 check-release: product-binaries check-images check-operator-docs check-workspace check-vendor check-openapi check-conformance check-security
 	@$(MAKE) image-release-evidence
+
+.PHONY: check-interop
+check-interop:
+	@GOCACHE="$${GOCACHE:-/tmp/dkim2-go-build-cache}" \
+		go -C tools run ./cmd/interop -root .. check
+
+.PHONY: interop
+interop: check-interop
+	@GOCACHE="$${GOCACHE:-/tmp/dkim2-go-build-cache}" \
+		go -C tools run ./cmd/interop -root .. current
+
+.PHONY: check-reference
+check-reference: check-interop check-openapi check-operator-docs
+	@GOCACHE="$${GOCACHE:-/tmp/dkim2-go-build-cache}" \
+		go -C tools run ./cmd/reference -root .. check-api
+	@GOCACHE="$${GOCACHE:-/tmp/dkim2-go-build-cache}" \
+		go -C tools run ./cmd/reference -root .. check-issues
+	@GOCACHE="$${GOCACHE:-/tmp/dkim2-go-build-cache}" \
+		go -C tools run ./cmd/reference -root .. check-release
+	@GOCACHE="$${GOCACHE:-/tmp/dkim2-go-build-cache}" \
+		go -C tools run ./cmd/reference -root .. module-proxy >/dev/null
+
+.PHONY: reference-module-proof
+reference-module-proof: check-reference
+	@GOCACHE="$${GOCACHE:-/tmp/dkim2-go-build-cache}" \
+		go -C tools run ./cmd/reference -root .. module-proof
+
+.PHONY: reference-report
+reference-report: check-reference
+	@GOCACHE="$${GOCACHE:-/tmp/dkim2-go-build-cache}" \
+		go -C tools run ./cmd/reference -root .. report
+
+.PHONY: release-candidate
+release-candidate:
+	@$(MAKE) check-reference
+	@$(MAKE) interop
+	@$(MAKE) conformance
+	@$(MAKE) conformance-postfix
+	@$(MAKE) conformance-all
+	@$(MAKE) security
+	@$(MAKE) deployment-security
+	@$(MAKE) reference-module-proof
+	@$(MAKE) reference-report

@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.test/dkim2/interop/candidate-catalog.schema.json",
+  "$defs": {
+    "sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+    "candidate": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {"pattern": "^[a-z][a-z0-9-]{0,63}$", "type": "string"},
+        "canonical_location": {"format": "uri", "maxLength": 512, "type": "string"},
+        "revision": {"pattern": "^[0-9a-f]{40}$", "type": "string"},
+        "tree_sha": {"pattern": "^([0-9a-f]{40}|[0-9a-f]{64})$", "type": "string"},
+        "source_sha256": {"$ref": "#/$defs/sha256"},
+        "inventory_sha256": {"$ref": "#/$defs/sha256"},
+        "build_sha256": {"$ref": "#/$defs/sha256"},
+        "dependency_sha256": {"$ref": "#/$defs/sha256"},
+        "license": {"maxLength": 64, "pattern": "^[A-Za-z0-9.+-]+$", "type": "string"},
+        "claimed_draft": {"maxLength": 96, "type": "string"},
+        "operations": {
+          "items": {"pattern": "^[a-z][a-z0-9-]{0,63}$", "type": "string"},
+          "maxItems": 32,
+          "type": "array"
+        },
+        "state": {
+          "enum": [
+            "eligible_runnable",
+            "eligible_vectors_only",
+            "ineligible_not_dkim2",
+            "ineligible_not_independent",
+            "ineligible_no_immutable_source",
+            "ineligible_license_unknown",
+            "ineligible_unsafe_execution",
+            "ineligible_no_overlap",
+            "source_unavailable",
+            "malformed_evidence"
+          ],
+          "type": "string"
+        },
+        "reason": {"pattern": "^[a-z][a-z0-9-]{0,63}$", "type": "string"},
+        "evidence_sources": {
+          "items": {"pattern": "^[a-z][a-z0-9-]{0,63}$", "type": "string"},
+          "maxItems": 16,
+          "minItems": 1,
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "canonical_location",
+        "operations",
+        "state",
+        "reason",
+        "evidence_sources"
+      ],
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema": {"const": "dkim2.interop-candidate-catalog.v1"},
+    "candidates": {
+      "items": {"$ref": "#/$defs/candidate"},
+      "maxItems": 64,
+      "minItems": 1,
+      "type": "array"
+    }
+  },
+  "required": ["schema", "candidates"],
+  "type": "object"
+}

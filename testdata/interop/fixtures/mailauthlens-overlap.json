@@ -1,0 +1,23 @@
+{
+  "schema": "dkim2.interop-fixtures.v1",
+  "cases": [
+    {
+      "id": "dns-key-fws",
+      "operation": "dns-key-parse",
+      "input": "v = DKIM1; k = ed25519; p = AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=;",
+      "expected": "accept"
+    },
+    {
+      "id": "signature-fws",
+      "operation": "signature-parse",
+      "input": "i = 1; m = 1; n = peer-case; t = 1720000000; mf = PHNlbmRlckBzZW5kZXIuZXhhbXBsZS50ZXN0Pg==; rt = PHVzZXJAZXhhbXBsZS50ZXN0Pg==; d = sender.example.test; s = selector:rsa-sha256:AA==;",
+      "expected": "accept"
+    },
+    {
+      "id": "signature-mixed-case",
+      "operation": "signature-parse",
+      "input": "I=1; m=1; n=peer-case; t=1720000000; mf=PHNlbmRlckBzZW5kZXIuZXhhbXBsZS50ZXN0Pg==; rt=PHVzZXJAZXhhbXBsZS50ZXN0Pg==; d=sender.example.test; s=selector:rsa-sha256:AA==;",
+      "expected": "documented-interpretation"
+    }
+  ]
+}

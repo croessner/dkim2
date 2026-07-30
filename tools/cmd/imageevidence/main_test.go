@@ -15,6 +15,62 @@ import (
 	"time"
 )
 
+// TestWriteImageReleaseReportsUsesRepositoryRelativeArtifacts freezes safe path resolution.
+func TestWriteImageReleaseReportsUsesRepositoryRelativeArtifacts(t *testing.T) {
+	root := t.TempDir()
+	directory := filepath.Join(root, evidenceDirectory)
+	if err := os.MkdirAll(directory, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	product := "dkim2d"
+	paths := []string{
+		"runtime-policy.json",
+		"trivy-database.json",
+		product + ".oci.json",
+		product + ".provenance.json",
+		product + ".amd64.sbom-binding.json",
+		product + ".arm64.sbom-binding.json",
+		product + ".amd64.trivy-binding.json",
+		product + ".arm64.trivy-binding.json",
+	}
+	for _, name := range paths {
+		if err := os.WriteFile(
+			filepath.Join(directory, name),
+			[]byte(name),
+			0o600,
+		); err != nil {
+			t.Fatal(err)
+		}
+	}
+	revision := strings.Repeat("1", 40)
+	candidate := strings.Repeat("2", 64)
+	if err := writeImageReleaseReports(
+		root,
+		revision,
+		candidate,
+		[]string{product},
+	); err != nil {
+		t.Fatal(err)
+	}
+	content, err := os.ReadFile(filepath.Join(directory, product+".release.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var report imageReleaseReport
+	if err := json.Unmarshal(content, &report); err != nil {
+		t.Fatal(err)
+	}
+	if report.Schema != "dkim2-image-release-report-v1" ||
+		report.BaseRevision != revision ||
+		report.CandidateSnapshotSHA256 != candidate ||
+		report.Product != product ||
+		report.State != "pass" ||
+		len(report.SBOMBindings) != 2 ||
+		len(report.VulnerabilityBindings) != 2 {
+		t.Fatalf("unexpected release report: %#v", report)
+	}
+}
+
 // TestLoadToolRejectsJointBinaryAndIdentitySubstitution freezes the durable allowlist authority.
 func TestLoadToolRejectsJointBinaryAndIdentitySubstitution(t *testing.T) {
 	if runtime.GOOS != "darwin" && runtime.GOOS != "linux" {

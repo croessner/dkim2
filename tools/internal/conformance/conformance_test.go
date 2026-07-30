@@ -201,7 +201,7 @@ func assertCaseParity(t *testing.T, root string, input []byte, want bool) {
 	}
 }
 
-// TestDeferredEximResultRejectsFabricatedExecution freezes the M18 deferral.
+// TestDeferredEximResultRejectsFabricatedExecution freezes the closed Exim deferral.
 func TestDeferredEximResultRejectsFabricatedExecution(t *testing.T) {
 	for _, input := range []string{
 		`{"schema":"dkim2.exim-adapter-result.v1","case_id":"x","state":"pass","evidence":{}}`,

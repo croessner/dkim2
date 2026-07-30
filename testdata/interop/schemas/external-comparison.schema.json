@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.test/dkim2/interop/external-comparison.schema.json",
+  "$defs": {
+    "sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+    "case": {
+      "additionalProperties": false,
+      "properties": {
+        "candidate_id": {"pattern": "^[a-z][a-z0-9-]{0,63}$", "type": "string"},
+        "case_id": {"pattern": "^[a-z][a-z0-9-]{0,63}$", "type": "string"},
+        "operation": {"pattern": "^[a-z][a-z0-9-]{0,63}$", "type": "string"},
+        "claim_class": {
+          "enum": [
+            "draft_normative",
+            "rfc_normative",
+            "documented_interpretation",
+            "local_security_policy",
+            "openapi_contract",
+            "adapter_contract",
+            "external_observation",
+            "release_policy"
+          ],
+          "type": "string"
+        },
+        "fixture_sha256": {"$ref": "#/$defs/sha256"},
+        "local_producer_sha256": {"$ref": "#/$defs/sha256"},
+        "external_producer_sha256": {"$ref": "#/$defs/sha256"},
+        "state": {"enum": ["agreement", "disagreement", "unsupported", "not_runnable"], "type": "string"},
+        "classification": {"pattern": "^[a-z][a-z0-9-]{0,63}$", "type": "string"},
+        "limitation": {"maxLength": 128, "type": "string"}
+      },
+      "required": [
+        "candidate_id",
+        "case_id",
+        "operation",
+        "claim_class",
+        "fixture_sha256",
+        "local_producer_sha256",
+        "external_producer_sha256",
+        "state"
+      ],
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema": {"const": "dkim2.external-comparison.v1"},
+    "message_draft": {"const": "draft-ietf-dkim-dkim2-spec-04"},
+    "dns_draft": {"const": "draft-chuang-dkim2-dns-04"},
+    "base_revision": {"pattern": "^[0-9a-f]{40}$", "type": "string"},
+    "candidate_snapshot_sha256": {"$ref": "#/$defs/sha256"},
+    "registry_sha256": {"$ref": "#/$defs/sha256"},
+    "evidence_sha256": {"$ref": "#/$defs/sha256"},
+    "observation_cutoff": {"format": "date-time", "type": "string"},
+    "cases": {"items": {"$ref": "#/$defs/case"}, "maxItems": 4096, "type": "array"},
+    "availability": {
+      "enum": [
+        "compared",
+        "no_eligible_candidate",
+        "eligible_not_runnable",
+        "disagreement",
+        "discovery_unavailable",
+        "evidence_invalid"
+      ],
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema",
+    "message_draft",
+    "dns_draft",
+    "base_revision",
+    "candidate_snapshot_sha256",
+    "registry_sha256",
+    "evidence_sha256",
+    "observation_cutoff",
+    "cases",
+    "availability"
+  ],
+  "type": "object"
+}

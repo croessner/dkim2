@@ -35,7 +35,7 @@ documented RFC 6531 interpretation.
 | Milter inbound, originator, and ordinary-transit modes | partial | Public Milter-v6 socket fixtures; messages are callback reconstructions, not original SMTP wire images |
 | Postfix SMTP and local `sendmail(1)` intake | partial | Linux Docker profile with Postfix 3.11.5 and exact immutable image identities |
 | Replay detection | supported local policy | Memory and Valkey evidence; replay outcome is deliberately separate from DKIM2 cryptographic verification |
-| Exim | deferred | Frozen future fixture/result schemas only; live M17 execution and compatibility evidence are absent |
+| Exim | deferred | Frozen future fixture/result schemas only; live execution and compatibility evidence are absent |
 
 Postfix prepends its own `Received` field outside the bytes visible to Milters.
 The final queued message therefore contains that field while the daemon input

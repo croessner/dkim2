@@ -353,10 +353,11 @@ disabled/memory/Valkey replay, observability, Milter modes, fidelity,
 Authentication-Results, and failure policy are documented in the component
 READMEs and linked durable specs.
 
-Exim is incomplete and deferred to M17. This repository does not yet claim a
-working Exim package, image, `local_scan()`, transport filter, or live
-compatibility result.
+Exim is incomplete and reported as `deferred_exim`. This repository does not
+yet claim a working Exim package, image, `local_scan()`, transport filter, or
+live compatibility result.
 
 Executable LDAP and SQL providers, drivers, pools, schema/DDL delivery,
 immutable database generation loading, and legacy OpenDKIM migration remain
-unavailable until M22. The current LDAP/SQL document is design-only.
+reported as `deferred_ldap_sql_migration`. The current LDAP/SQL document is
+design-only.

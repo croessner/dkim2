@@ -225,7 +225,7 @@ func TestProveSerializedGenerationFailsClosed(t *testing.T) {
 		t.Fatalf("b:null metadata fallback: valid=%t json=%d code=%s", proof.Valid(), counter.usage().JSONBytes(), recipeTestErrorCode(err))
 	}
 
-	toxic := "PROMPT05-TOXIC-CONTENT"
+	toxic := "PLANNING-LABEL-TOXIC-CONTENT"
 	counter = newGenerationCounter(generator.limits)
 	serialized = serializedGenerationPlan{
 		bodyOutcome: BodyGenerationUnchanged, decodedJSON: []byte(`{"h":{"subject":[{"d":["` + toxic + `\r"]}]}}`),

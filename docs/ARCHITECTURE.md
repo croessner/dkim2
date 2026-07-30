@@ -43,6 +43,7 @@
 | 0.1.0-draft | 2026-07-28 | Christian Roessner / Codex | Implemented repository-wide security hardening with a drift-checked first-party fuzz and resource-proof inventory, closed race and vulnerability runners, deterministic snapshot-bound reports, CI gates, privacy-preserving diagnostics, and repeated portable, Valkey, real Postfix, and full-conformance evidence. Exim remains explicitly deferred with M17. |
 | 0.1.0-draft | 2026-07-28 | Christian Roessner / Codex | Reserved the RNS LDAP subtree `1.3.6.1.4.1.31612.1.7` for DKIM2, defined stable attribute and object-class allocations, recorded the secret-safe live OpenDKIM migration baseline, and specified a fail-closed out-of-process bootstrap into immutable DKIM2 generations and opaque signing handles. Executable LDAP/SQL providers and migration tooling remain M22. |
 | 0.1.0-draft | 2026-07-28 | Christian Roessner / Codex | Specified production packaging and operator delivery: reproducible Go 1.26 multi-stage images for the daemon, Milter adapter, and generated client; digest-pinned hardened runtime inputs; multi-architecture, SBOM, provenance, and vulnerability gates; and a protected, no-host-exposure-by-default Postfix Compose deployment with explicit upgrade and rollback ownership. Exim remains incomplete under M17, and executable LDAP/SQL providers and migration remain M22. |
+| 0.1.0-draft | 2026-07-29 | Christian Roessner / Codex | Specified interoperability and reference-candidate closeout: reproducible external-implementation discovery and comparison or explicit evidence-backed unavailability, a bidirectionally complete Draft-04 issue log, generated-contract and exported-reference review, scoped `v0.1.0-rc.1` preparation without publication, and one candidate-bound report that preserves normative, interpretation, policy, OpenAPI, adapter, and external-evidence claim separation. Exim remains deferred to M17 and executable LDAP/SQL providers plus migration remain M22. |
 
 ## 1. Purpose
 
@@ -178,14 +179,14 @@ development. Released command modules should depend on tagged library versions.
 Local `replace` directives should only be needed when an adapter is developed
 outside this workspace.
 
-Before the first library tag only, an adapter that imports the library declares
-the non-releasable sentinel `github.com/croessner/dkim2 v0.0.0`, paired with the
-exact versioned workspace bootstrap
-`replace github.com/croessner/dkim2 v0.0.0 => ./lib` in `go.work`. Command
-modules must not contain this replace. The first library tag requires updating
-each adapter requirement to that tag, removing the workspace bootstrap, then
-proving standalone module resolution and builds with `GOWORK=off` through
-tidy, tests, and builds before any adapter release.
+Before candidate preparation, an adapter that imported the unpublished library
+used the non-releasable sentinel `github.com/croessner/dkim2 v0.0.0` and one
+exact workspace bootstrap. The `v0.1.0-rc.1` candidate boundary replaces that
+sentinel with `github.com/croessner/dkim2 v0.1.0-rc.1` and removes the
+workspace bootstrap. Before a public library tag exists, a private deterministic GOPROXY
+built from exact candidate bytes proves standalone resolution with
+`GOWORK=off`, checksum-database and network access disabled, tidy readback,
+tests, vet, and builds. Command modules never contain local replace directives.
 
 ### 3.3 OOP and DRY in Go Terms
 

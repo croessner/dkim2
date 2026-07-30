@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dkim2.invalid/schemas/release-plan.schema.json",
+  "title": "DKIM2 release-candidate plan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "product_version", "openapi_version", "wire_version", "planned_tags", "modules", "publication", "deferrals"],
+  "properties": {
+    "schema": {"const": "dkim2.release-plan.v1"},
+    "product_version": {"const": "v0.1.0-rc.1"},
+    "openapi_version": {"const": "0.1.0-rc.1"},
+    "wire_version": {"const": "v1"},
+    "planned_tags": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "uniqueItems": true,
+      "items": {"type": "string", "maxLength": 64}
+    },
+    "modules": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "directory", "tag"],
+        "properties": {
+          "path": {"type": "string", "maxLength": 128},
+          "directory": {"type": "string", "maxLength": 64},
+          "tag": {"type": "string", "maxLength": 64}
+        }
+      }
+    },
+    "publication": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["real_tags_created", "stable_workflow_allowed", "aliases", "credentials_allowed"],
+      "properties": {
+        "real_tags_created": {"const": false},
+        "stable_workflow_allowed": {"const": false},
+        "aliases": {"type": "array", "maxItems": 0},
+        "credentials_allowed": {"const": false}
+      }
+    },
+    "deferrals": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["exim", "ldap_sql_migration"],
+      "properties": {
+        "exim": {"const": "deferred_exim"},
+        "ldap_sql_migration": {"const": "deferred_ldap_sql_migration"}
+      }
+    }
+  }
+}

@@ -139,8 +139,8 @@ func TestStalePublicationRemainsInsideClockTransaction(t *testing.T) {
 	}
 }
 
-// TestWorkspaceBootstrapIsExactAndNonReleasable guards the pre-tag module boundary.
-func TestWorkspaceBootstrapIsExactAndNonReleasable(t *testing.T) {
+// TestReleaseCandidateModuleBoundaryIsExact guards the prepared standalone module.
+func TestReleaseCandidateModuleBoundaryIsExact(t *testing.T) {
 	root := filepath.Clean("../../../../..")
 	commandModule := readPolicyFile(t, filepath.Join(root, "cmd/dkim2d/go.mod"))
 	workspace := readPolicyFile(t, filepath.Join(root, "go.work"))
@@ -149,28 +149,30 @@ func TestWorkspaceBootstrapIsExactAndNonReleasable(t *testing.T) {
 	attributes := readPolicyFile(t, filepath.Join(root, ".gitattributes"))
 	makefile := readPolicyFile(t, filepath.Join(root, "Makefile"))
 
-	const sentinel = "github.com/croessner/dkim2 v0.0.0"
-	const bootstrap = "replace github.com/croessner/dkim2 v0.0.0 => ./lib"
-	if strings.Count(commandModule, sentinel) != 1 ||
+	const candidate = "github.com/croessner/dkim2 v0.1.0-rc.1"
+	if strings.Count(commandModule, candidate) != 1 ||
 		strings.Contains(commandModule, "replace github.com/croessner/dkim2") {
-		t.Fatal("command module does not declare the exact replace-free root sentinel")
+		t.Fatal("command module does not declare the exact replace-free candidate")
 	}
-	if strings.Count(workspace, bootstrap) != 1 {
-		t.Fatal("workspace does not contain the exact versioned root bootstrap")
+	if strings.Contains(workspace, "replace github.com/croessner/dkim2") ||
+		strings.Contains(workspace, "v0.0.0") {
+		t.Fatal("workspace retained the unpublished root bootstrap")
 	}
-	if !strings.Contains(architecture, "non-releasable sentinel") ||
+	if !strings.Contains(architecture, candidate) ||
+		!strings.Contains(architecture, "private deterministic GOPROXY") ||
 		!strings.Contains(architecture, "GOWORK=off") {
-		t.Fatal("architecture does not document the non-releasable bootstrap closeout")
+		t.Fatal("architecture does not document the candidate module closeout")
 	}
-	if !strings.Contains(vendorModules, "# "+sentinel+" => ./lib") {
-		t.Fatal("workspace vendor metadata does not record the exact root bootstrap")
+	if !strings.Contains(vendorModules, "# "+candidate) ||
+		strings.Contains(vendorModules, "# "+candidate+" =>") {
+		t.Fatal("workspace vendor metadata does not record the exact candidate")
 	}
 	const whitespaceException = "vendor/golang.org/x/sys/unix/symaddr_zos_s390x.s whitespace=-blank-at-eol,-blank-at-eof\n"
 	if attributes != whitespaceException {
 		t.Fatal("vendor whitespace exception is not exact and path-scoped")
 	}
 	if !strings.Contains(makefile, "check-vendor:") ||
-		!strings.Contains(makefile, "go work vendor -o") ||
+		!strings.Contains(makefile, "go -C tools run ./cmd/reference -root .. check-vendor") ||
 		!makeTargetHasPrerequisites(
 			makefile,
 			"guardrails",

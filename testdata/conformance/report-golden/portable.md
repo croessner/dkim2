@@ -10,7 +10,7 @@
 
 ## Scope
 
-- Supported surfaces: library `supported`; daemon `supported`; Milter `partial`; Postfix `partial_linux`; Exim `deferred_m17`.
+- Supported surfaces: library `supported`; daemon `supported`; Milter `partial`; Postfix `partial_linux`; Exim `deferred_exim`.
 - Tested suites: `exim`, `verification`.
 - Claim limit: results apply only to the exact base revision, candidate snapshot, pinned drafts, manifest, producers, profile, and case inventory shown by this report.
 - A pass is not a claim of original SMTP-wire fidelity, external interoperability, DNSSEC validation, or unexecuted platform behavior.

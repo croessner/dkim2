@@ -15,7 +15,7 @@ and keep adapter behavior separate from the protocol engine.
 Current contents:
 
 - `docs/ARCHITECTURE.md`: current architecture, ownership boundaries, and
-  milestone plan.
+  implementation plan.
 - `AGENTS.md` and `POLICY.md`: repository development rules and engineering
   policy.
 - `Makefile` and `.golangci.yml`: repository-wide local guardrails.
@@ -41,6 +41,8 @@ Current contents:
   deferral.
 - `docs/security-testing.md`: closed fuzz/resource inventories, abuse-profile
   commands, deterministic evidence, privacy limits, and vulnerability policy.
+- `docs/reference/README.md`: public API, compatibility, issue, external
+  evidence, and known-limitation navigation for the preview candidate.
 - `docs/operator/postfix-compose.md`: hardened no-host-exposure-by-default
   Postfix/Milter deployment, lifecycle, backup, and rollback guide.
 - `docs/operator/container-supply-chain.md`: reproducible product images,
@@ -67,10 +69,12 @@ component references are
 [`cmd/dkim2ctl/README.md`](cmd/dkim2ctl/README.md); all HTTP request and
 response shapes remain authoritative only in
 [`docs/specs/openapi/dkim2d.yaml`](docs/specs/openapi/dkim2d.yaml).
+The preview's public API, compatibility, issue, and limitation entry point is
+[`docs/reference/README.md`](docs/reference/README.md).
 
-Exim is incomplete and deferred to M17; no Exim image, package, or
+Exim is incomplete and reported as `deferred_exim`; no Exim image, package, or
 compatibility result is claimed. Executable LDAP and SQL providers and legacy
-OpenDKIM migration remain unavailable until M22; the current
+OpenDKIM migration are reported as `deferred_ldap_sql_migration`; the current
 [`docs/datasource-ldap-sql-design.md`](docs/datasource-ldap-sql-design.md) is
 design-only.
 

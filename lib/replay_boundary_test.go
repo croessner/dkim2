@@ -228,7 +228,7 @@ func parseProductionGoTree(t *testing.T, root string) []parsedReplayFile {
 		}
 		if entry.IsDir() {
 			if entry.Name() == ".git" || entry.Name() == "vendor" ||
-				entry.Name() == "temp" && exactRepositoryScratchTemp(root, path) {
+				exactRepositoryIgnoredEvidence(root, path) {
 				return filepath.SkipDir
 			}
 			return nil
@@ -249,14 +249,16 @@ func parseProductionGoTree(t *testing.T, root string) []parsedReplayFile {
 	return files
 }
 
-// exactRepositoryScratchTemp reports only the ignored repository-root temp directory.
-func exactRepositoryScratchTemp(scanRoot, path string) bool {
+// exactRepositoryIgnoredEvidence reports only root temp and artifact directories.
+func exactRepositoryIgnoredEvidence(scanRoot, path string) bool {
 	repositoryRoot := filepath.Clean(scanRoot)
 	switch filepath.Base(repositoryRoot) {
 	case "lib", "cmd":
 		repositoryRoot = filepath.Dir(repositoryRoot)
 	}
-	return filepath.Clean(path) == filepath.Join(repositoryRoot, "temp")
+	cleaned := filepath.Clean(path)
+	return cleaned == filepath.Join(repositoryRoot, "temp") ||
+		cleaned == filepath.Join(repositoryRoot, ".artifacts")
 }
 
 // importAliases returns exact local aliases for one parsed source file.

@@ -1,0 +1,119 @@
+{
+  "schema": "dkim2.interop-candidate-catalog.v1",
+  "candidates": [
+    {
+      "id": "darkglobe-suite",
+      "canonical_location": "https://github.com/darkglobe-project/darkglobe-suite",
+      "revision": "8f9af523e3cf24053c8f83a447e353b47705f694",
+      "tree_sha": "8b3d4a2b68d22263655bcf490e9a1bf6c8b513c6",
+      "source_sha256": "0bf5091aade63026b016f641966e73c0b8e77b20e29b54e6d91887df5698d7e5",
+      "inventory_sha256": "4891227ccdbe681ada47f1629e33cfd019a5efcd4f3dac20ac266384124d319b",
+      "license": "Mixed",
+      "claimed_draft": "draft-moccia-dkim2-deployment-profile-04",
+      "operations": [],
+      "state": "ineligible_no_overlap",
+      "reason": "distinct-deployment-profile",
+      "evidence_sources": ["github-dkim2-search"]
+    },
+    {
+      "id": "dkim2wg-interop",
+      "canonical_location": "https://github.com/dkim2wg/interop",
+      "revision": "46484c422ae6026d1f475f6960245cf8e597c66e",
+      "tree_sha": "21899a3e167429ed5ac6cd7cc6324d9b6d925e6b",
+      "source_sha256": "852c91a12315e4caee29a08c87471ee95e75cd4bae08809a1f5e84139555f733",
+      "inventory_sha256": "95a781bac17c209bbfdae41525137926cdb526714ff7b8e77ffc78870593e90b",
+      "claimed_draft": "draft-ietf-dkim-dkim2-spec-04",
+      "operations": ["message-instance", "signature-parse", "signature-verify"],
+      "state": "ineligible_license_unknown",
+      "reason": "no-repository-license",
+      "evidence_sources": [
+        "github-dkim2wg-interop",
+        "github-dkim2wg-repositories",
+        "ietf-dkim-interop-announcement"
+      ]
+    },
+    {
+      "id": "dkim2wg-spec",
+      "canonical_location": "https://github.com/dkim2wg/spec",
+      "revision": "f88c50debef607e17dc9ce6ea199bb808378b438",
+      "tree_sha": "0cfd26604724199949224d30fbec7ade06a381bd",
+      "source_sha256": "93a28c7f81510a478c3ce7c2589fc547ac154833787e461589ebd6139428be51",
+      "inventory_sha256": "331188e41ce8c6dfaa12d5fbff8acb30fd74f61ac46b4cb2a1513f23d4bcb85b",
+      "operations": [],
+      "state": "ineligible_no_overlap",
+      "reason": "draft-source-only",
+      "evidence_sources": [
+        "github-dkim2wg-repositories",
+        "ietf-dkim2-spec-04"
+      ]
+    },
+    {
+      "id": "mailauthlens",
+      "canonical_location": "https://github.com/EdgarOrtegaRamirez/mailauthlens",
+      "revision": "5526c6c64b3f2707b9ac999745557afca787d021",
+      "tree_sha": "53c3e347cf54ecffa463ae8337d46473e7931e05",
+      "source_sha256": "62a12df345c581b39a07400f03b2c4174203da507e070ef645a70bc3819afc18",
+      "inventory_sha256": "34077bfd03cc79f8b86dbd99851ecb959ac6537f8dbc72d04b67f917671d724b",
+      "build_sha256": "512ad5ce8881162792386304a82fdc426b435f268b278b8047b767c765666e54",
+      "license": "MIT",
+      "claimed_draft": "draft-ietf-dkim-dkim2-spec-04",
+      "operations": ["dns-key-parse", "signature-parse"],
+      "state": "eligible_runnable",
+      "reason": "reviewed-parser-sandbox",
+      "evidence_sources": ["github-dkim2-search"]
+    },
+    {
+      "id": "stalwart-mail-auth",
+      "canonical_location": "https://github.com/stalwartlabs/mail-auth",
+      "revision": "0e93300e5c77b5e83ea5562d9a7e781278514fa2",
+      "tree_sha": "81a2891aef2fe76385dfbe03582add10d85d5f34",
+      "source_sha256": "57ae16bd616b829012cceafc4d0b2b8086ab020ecf31adb72b1d70e5eb8b90f5",
+      "inventory_sha256": "d74af68dfcdca6a14f4cd52cfcd188eaf41ba56ac14713a2adb8dc0635276a08",
+      "build_sha256": "03c83c00e608d805df82bb4451c761ce3c7108079f06ae1b400911d9de149746",
+      "license": "Apache-2.0+MIT",
+      "claimed_draft": "draft-ietf-dkim-dkim2-spec-03",
+      "operations": [
+        "message-instance",
+        "signature-parse",
+        "signature-sign",
+        "signature-verify"
+      ],
+      "state": "eligible_vectors_only",
+      "reason": "dependency-closure-unavailable",
+      "evidence_sources": [
+        "github-stalwart-mail-auth",
+        "ietf-dkim-interop-announcement"
+      ]
+    },
+    {
+      "id": "turscar-dkim2",
+      "canonical_location": "https://forge.turscar.ie/turscar/dkim2",
+      "revision": "84e6a0dfb05195c63b766adafc50df22dd5e2e95",
+      "source_sha256": "b6efc90dd10488de27ecf88a8211cecf59ae0cd4efc68c553597535984f56c9c",
+      "inventory_sha256": "a58659b888ce6df3bbc391c80f8c5f1fadfcaf36265daadcc410e4f88876f4a5",
+      "build_sha256": "01a612cc01c9db73231710770f3e7f07d1189d2c795b45bd117352dd3735d56f",
+      "dependency_sha256": "3e37627e5db35321095f9275077c2fabaf3e559197f1e640735dd8db19685b3e",
+      "license": "BSD-2-Clause",
+      "claimed_draft": "draft-ietf-dkim-dkim2-spec-02",
+      "operations": ["signature-parse"],
+      "state": "eligible_runnable",
+      "reason": "reviewed-offline-parser",
+      "evidence_sources": [
+        "ietf-dkim-interop-announcement",
+        "turscar-dkim2"
+      ]
+    },
+    {
+      "id": "turscar-dkim2play",
+      "canonical_location": "https://github.com/turscar/dkim2play",
+      "revision": "95d1b6473155b5eb9136223b6a970c212e8c0095",
+      "tree_sha": "aa64b313fa124a4d1c29f759feb902dba512b5ba",
+      "source_sha256": "2e4328710dcb6eb4f310434af6685e5f2d172d2f9f7cd76b3d767916bf47d9f8",
+      "inventory_sha256": "4030d12e5a344f6122e8239db6cf002dceb6da6bed715b3ff1a20b73239d0dfb",
+      "operations": [],
+      "state": "ineligible_no_overlap",
+      "reason": "playground-wrapper-only",
+      "evidence_sources": ["github-dkim2-search"]
+    }
+  ]
+}

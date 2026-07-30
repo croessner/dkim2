@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: DKIM2 Daemon API
-  version: 0.1.0-draft
+  version: 0.1.0-rc.1
   description: >
     Verification, signing, revision, policy, and replay API for the DKIM2
     reference daemon. Protocol behavior is pinned to

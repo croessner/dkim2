@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dkim2.invalid/schemas/candidate-report.schema.json",
+  "title": "DKIM2 reference candidate report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema", "base_revision", "candidate_snapshot_sha256", "product_version",
+    "message_draft", "dns_draft", "release_plan_sha256", "api_sha256",
+    "api_declarations", "openapi", "issue_log_sha256", "issue_count",
+    "external_evidence_sha256", "external_comparison_sha256",
+    "external_availability", "external_cases", "module_proof_sha256",
+    "module_proxy_sha256", "module_count", "evidence", "deferrals",
+    "criteria", "overall"
+  ],
+  "properties": {
+    "schema": {"const": "dkim2.reference-candidate-report.v1"},
+    "base_revision": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "candidate_snapshot_sha256": {"$ref": "#/$defs/digest"},
+    "product_version": {"const": "v0.1.0-rc.1"},
+    "message_draft": {"const": "draft-ietf-dkim-dkim2-spec-04"},
+    "dns_draft": {"const": "draft-chuang-dkim2-dns-04"},
+    "release_plan_sha256": {"$ref": "#/$defs/digest"},
+    "api_sha256": {"$ref": "#/$defs/digest"},
+    "api_declarations": {"type": "integer", "minimum": 1},
+    "openapi": {"type": "array", "minItems": 5, "maxItems": 5, "items": {"$ref": "#/$defs/artifact"}},
+    "issue_log_sha256": {"$ref": "#/$defs/digest"},
+    "issue_count": {"type": "integer", "minimum": 1, "maximum": 256},
+    "external_evidence_sha256": {"$ref": "#/$defs/digest"},
+    "external_comparison_sha256": {"$ref": "#/$defs/digest"},
+    "external_availability": {"type": "string", "maxLength": 64},
+    "external_cases": {"type": "integer", "minimum": 1, "maximum": 1024},
+    "module_proof_sha256": {"$ref": "#/$defs/digest"},
+    "module_proxy_sha256": {"$ref": "#/$defs/digest"},
+    "module_count": {"type": "integer", "minimum": 2, "maximum": 1024},
+    "evidence": {"type": "array", "minItems": 18, "maxItems": 18, "items": {"$ref": "#/$defs/artifact"}},
+    "deferrals": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["exim", "ldap_sql_migration"],
+      "properties": {
+        "exim": {"const": "deferred_exim"},
+        "ldap_sql_migration": {"const": "deferred_ldap_sql_migration"}
+      }
+    },
+    "criteria": {
+      "type": "array",
+      "minItems": 9,
+      "maxItems": 9,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "state"],
+        "properties": {
+          "id": {"type": "string", "pattern": "^[a-z][a-z0-9_-]{0,63}$"},
+          "state": {"const": "pass"}
+        }
+      }
+    },
+    "overall": {"const": "pass"}
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "schema", "sha256"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1, "maxLength": 256},
+        "schema": {"type": "string", "minLength": 1, "maxLength": 128},
+        "sha256": {"$ref": "#/$defs/digest"}
+      }
+    }
+  }
+}

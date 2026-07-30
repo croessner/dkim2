@@ -356,6 +356,33 @@ func TestClosedGoEnvironmentRejectsCallerToolchainAndDatabaseSelection(t *testin
 	}
 }
 
+// TestRaceEnvironmentUsesOnlyTheProofOwnedOfflineProxy prevents cache-dependent race results.
+func TestRaceEnvironmentUsesOnlyTheProofOwnedOfflineProxy(t *testing.T) {
+	environment := appendRaceEnvironment([]string{
+		"GOPROXY=https://hostile.invalid,direct",
+		"GOSUMDB=https://hostile.invalid",
+		"GONOSUMDB=hostile.invalid",
+		"GONOPROXY=hostile.invalid",
+		"GOPRIVATE=hostile.invalid",
+	}, "/repository", "/repository/.artifacts/reference/.module-proof.123/proxy")
+	values := make(map[string]string)
+	for _, current := range environment {
+		key, value, _ := strings.Cut(current, "=")
+		values[key] = value
+	}
+	for key, want := range map[string]string{
+		"GOPROXY":   "file:///repository/.artifacts/reference/.module-proof.123/proxy",
+		"GOSUMDB":   "off",
+		"GONOSUMDB": "*",
+		"GONOPROXY": "",
+		"GOPRIVATE": "",
+	} {
+		if got := values[key]; got != want {
+			t.Fatalf("%s = %q, want %q", key, got, want)
+		}
+	}
+}
+
 // TestSecuritySchemasAcceptExactEvidenceAndRejectUnknownMembers freezes JSON closure.
 func TestSecuritySchemasAcceptExactEvidenceAndRejectUnknownMembers(t *testing.T) {
 	root := filepath.Clean(filepath.Join("..", "..", ".."))

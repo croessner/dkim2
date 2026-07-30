@@ -203,6 +203,25 @@ type provenanceStatement struct {
 	} `json:"predicate"`
 }
 
+type releaseArtifact struct {
+	Path   string `json:"path"`
+	SHA256 string `json:"sha256"`
+}
+
+type imageReleaseReport struct {
+	Schema                  string            `json:"schema"`
+	BaseRevision            string            `json:"base_revision"`
+	CandidateSnapshotSHA256 string            `json:"candidate_snapshot_sha256"`
+	Product                 string            `json:"product"`
+	OCI                     releaseArtifact   `json:"oci"`
+	Provenance              releaseArtifact   `json:"provenance"`
+	RuntimePolicy           releaseArtifact   `json:"runtime_policy"`
+	VulnerabilityDatabase   releaseArtifact   `json:"vulnerability_database"`
+	SBOMBindings            []releaseArtifact `json:"sbom_bindings"`
+	VulnerabilityBindings   []releaseArtifact `json:"vulnerability_bindings"`
+	State                   string            `json:"state"`
+}
+
 type spdxDocument struct {
 	SPDXVersion       string `json:"spdxVersion"`
 	DataLicense       string `json:"dataLicense"`
@@ -425,7 +444,115 @@ func main() {
 	if err := scanPrivacy(root); err != nil {
 		fail()
 	}
+	if err := writeImageReleaseReports(root, revision, snapshot.SHA256, products); err != nil {
+		fail()
+	}
 	fmt.Println("image evidence verified")
+}
+
+// writeImageReleaseReports binds every validated product image, SBOM, provenance, and scan input.
+func writeImageReleaseReports(
+	root string,
+	revision string,
+	candidate string,
+	products []string,
+) error {
+	runtimePath := filepath.Join(evidenceDirectory, "runtime-policy.json")
+	runtimeSHA, err := fileSHA256(root, filepath.Join(root, runtimePath), 1<<20)
+	if err != nil {
+		return errors.New("release evidence")
+	}
+	databasePath := filepath.Join(evidenceDirectory, "trivy-database.json")
+	databaseSHA, err := fileSHA256(root, filepath.Join(root, databasePath), 1<<20)
+	if err != nil {
+		return errors.New("release evidence")
+	}
+	for _, product := range products {
+		report := imageReleaseReport{
+			Schema:                  "dkim2-image-release-report-v1",
+			BaseRevision:            revision,
+			CandidateSnapshotSHA256: candidate,
+			Product:                 product,
+			RuntimePolicy: releaseArtifact{
+				Path:   runtimePath,
+				SHA256: runtimeSHA,
+			},
+			VulnerabilityDatabase: releaseArtifact{
+				Path:   databasePath,
+				SHA256: databaseSHA,
+			},
+			State: "pass",
+		}
+		for _, item := range []struct {
+			target *releaseArtifact
+			path   string
+		}{
+			{target: &report.OCI, path: filepath.Join(evidenceDirectory, product+".oci.json")},
+			{
+				target: &report.Provenance,
+				path:   filepath.Join(evidenceDirectory, product+".provenance.json"),
+			},
+		} {
+			digest, err := fileSHA256(root, filepath.Join(root, item.path), 64<<20)
+			if err != nil {
+				return errors.New("release evidence")
+			}
+			*item.target = releaseArtifact{Path: filepath.ToSlash(item.path), SHA256: digest}
+		}
+		for _, architecture := range []string{"amd64", "arm64"} {
+			prefix := product + "." + architecture
+			sbomPath := filepath.Join(evidenceDirectory, prefix+".sbom-binding.json")
+			sbomSHA, err := fileSHA256(root, filepath.Join(root, sbomPath), 1<<20)
+			if err != nil {
+				return errors.New("release evidence")
+			}
+			report.SBOMBindings = append(report.SBOMBindings, releaseArtifact{
+				Path: filepath.ToSlash(sbomPath), SHA256: sbomSHA,
+			})
+			vulnerabilityPath := filepath.Join(
+				evidenceDirectory,
+				prefix+".trivy-binding.json",
+			)
+			vulnerabilitySHA, err := fileSHA256(
+				root,
+				filepath.Join(root, vulnerabilityPath),
+				1<<20,
+			)
+			if err != nil {
+				return errors.New("release evidence")
+			}
+			report.VulnerabilityBindings = append(
+				report.VulnerabilityBindings,
+				releaseArtifact{
+					Path:   filepath.ToSlash(vulnerabilityPath),
+					SHA256: vulnerabilitySHA,
+				},
+			)
+		}
+		content, err := json.MarshalIndent(report, "", "  ")
+		if err != nil {
+			return errors.New("release evidence")
+		}
+		content = append(content, '\n')
+		target := filepath.Join(root, evidenceDirectory, product+".release.json")
+		temporary, err := os.CreateTemp(filepath.Dir(target), ".release.")
+		if err != nil {
+			return errors.New("release evidence")
+		}
+		name := temporary.Name()
+		if err := temporary.Chmod(0o600); err != nil {
+			_ = temporary.Close()
+			_ = os.Remove(name)
+			return errors.New("release evidence")
+		}
+		_, writeErr := temporary.Write(content)
+		closeErr := temporary.Close()
+		if writeErr != nil || closeErr != nil || os.Rename(name, target) != nil {
+			_ = os.Remove(name)
+			return errors.New("release evidence")
+		}
+	}
+	return nil
 }
 
 // validateTrivyDatabase verifies the exact scanner database inventory and tool binding.

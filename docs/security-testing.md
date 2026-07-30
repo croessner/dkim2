@@ -52,7 +52,7 @@ The complete report binds:
 - current portable and full conformance reports;
 - two current real-Postfix qualification reports;
 - zero unresolved findings; and
-- the exact `deferred_m17` Exim capability.
+- the exact `deferred_exim` Exim capability.
 
 Evidence readers reject duplicate JSON members, symlinked paths, partial
 identity-only reports, unexpected evidence paths, and reports that fail their

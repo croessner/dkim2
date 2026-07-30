@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.test/dkim2/interop/discovery-registry.schema.json",
+  "additionalProperties": false,
+  "properties": {
+    "schema": {"const": "dkim2.interop-discovery-registry.v1"},
+    "message_draft": {"const": "draft-ietf-dkim-dkim2-spec-04"},
+    "dns_draft": {"const": "draft-chuang-dkim2-dns-04"},
+    "max_age_hours": {"maximum": 168, "minimum": 1, "type": "integer"},
+    "retrieval_policy": {
+      "additionalProperties": false,
+      "properties": {
+        "max_redirects": {"maximum": 4, "minimum": 0, "type": "integer"},
+        "max_response_bytes": {"maximum": 16777216, "minimum": 1024, "type": "integer"},
+        "max_files": {"maximum": 32768, "minimum": 1, "type": "integer"},
+        "max_file_bytes": {"maximum": 67108864, "minimum": 1024, "type": "integer"},
+        "max_total_bytes": {"maximum": 536870912, "minimum": 1024, "type": "integer"},
+        "max_path_bytes": {"maximum": 4096, "minimum": 64, "type": "integer"},
+        "max_depth": {"maximum": 64, "minimum": 1, "type": "integer"},
+        "timeout_seconds": {"maximum": 120, "minimum": 1, "type": "integer"}
+      },
+      "required": [
+        "max_redirects",
+        "max_response_bytes",
+        "max_files",
+        "max_file_bytes",
+        "max_total_bytes",
+        "max_path_bytes",
+        "max_depth",
+        "timeout_seconds"
+      ],
+      "type": "object"
+    },
+    "sources": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {"pattern": "^[a-z][a-z0-9-]{0,63}$", "type": "string"},
+          "kind": {
+            "enum": ["ietf_draft", "ietf_mail_archive", "source_repository", "source_forge_search"],
+            "type": "string"
+          },
+          "url": {"format": "uri", "maxLength": 512, "type": "string"},
+          "query": {"maxLength": 256, "minLength": 1, "type": "string"},
+          "required": {"const": true},
+          "candidate_hint": {"pattern": "^[a-z][a-z0-9-]{0,63}$", "type": "string"}
+        },
+        "required": ["id", "kind", "url", "query", "required"],
+        "type": "object"
+      },
+      "maxItems": 64,
+      "minItems": 5,
+      "type": "array"
+    }
+  },
+  "required": ["schema", "message_draft", "dns_draft", "max_age_hours", "retrieval_policy", "sources"],
+  "type": "object"
+}

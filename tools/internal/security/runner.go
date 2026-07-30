@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/croessner/dkim2/tools/internal/conformance"
+	referencecheck "github.com/croessner/dkim2/tools/internal/reference"
 )
 
 const (
@@ -269,12 +270,19 @@ func RunRace(root, outputPath string) (RaceReport, error) {
 	if err != nil {
 		return RaceReport{}, err
 	}
+	proxyProof, proxyRoot, cleanupProxy, err := referencecheck.BuildPrivateProxy(root)
+	if err != nil || proxyProof.CandidateSnapshotSHA256 != snapshot.SHA256 {
+		return RaceReport{}, errors.New("race_dependency")
+	}
+	defer func() {
+		_ = cleanupProxy()
+	}()
 	modules := workspaceModules()
 	for index, module := range modules {
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
 		command := exec.CommandContext(ctx, goExecutable, "test", "-race", "./...")
 		command.Dir = filepath.Join(root, module)
-		command.Env = appendClosedGoEnvironment(os.Environ(), root)
+		command.Env = appendRaceEnvironment(os.Environ(), root, proxyRoot)
 		output := &boundedOutput{limit: maxRunnerOutput}
 		command.Stdout = output
 		command.Stderr = output
@@ -657,6 +665,27 @@ func expectedEvidenceIdentities() []EvidenceDigest {
 		return strings.Compare(left.ID, right.ID)
 	})
 	return result
+}
+
+// appendRaceEnvironment binds race subprocesses to the proof-owned offline module proxy.
+func appendRaceEnvironment(environment []string, root, proxyRoot string) []string {
+	filtered := make([]string, 0, len(environment)+4)
+	for _, current := range appendClosedGoEnvironment(environment, root) {
+		key, _, _ := strings.Cut(current, "=")
+		if key == "GOPROXY" || key == "GOSUMDB" || key == "GONOSUMDB" ||
+			key == "GONOPROXY" || key == "GOPRIVATE" {
+			continue
+		}
+		filtered = append(filtered, current)
+	}
+	return append(
+		filtered,
+		"GOPROXY=file://"+filepath.ToSlash(proxyRoot),
+		"GOSUMDB=off",
+		"GONOSUMDB=*",
+		"GONOPROXY=",
+		"GOPRIVATE=",
+	)
 }
 
 // runFuzzTarget executes one fixed package and exact function without caller selection.

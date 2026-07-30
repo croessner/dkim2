@@ -20,9 +20,18 @@ for document in \
   "$openapi_readme" \
   docs/datasource-ldap-sql-design.md \
   docs/replay-store-valkey.md \
+  docs/reference/README.md \
+  docs/reference/compatibility.md \
+  docs/reference/draft-issues.md \
+  docs/reference/known-limitations.md \
   docs/specs/implementation/datasource-providers.md \
   "$containerfile"; do
   test -s "$document"
+done
+
+grep -Fq 'docs/reference/README.md' README.md
+for reference in draft-issues.md compatibility.md known-limitations.md; do
+  grep -Fq "$reference" docs/reference/README.md
 done
 
 for required in \
@@ -32,10 +41,10 @@ for required in \
   'milter_protocol = 6' \
   'milter_default_action = tempfail' \
   'Exim' \
-  'M17' \
+  'deferred_exim' \
   'LDAP' \
   'SQL' \
-  'M22' \
+  'deferred_ldap_sql_migration' \
   'read-only' \
   'rollback' \
   'backup'; do
@@ -118,8 +127,8 @@ done
 
 for document in README.md "$guide"; do
   grep -Fq 'Exim is incomplete' "$document"
-  grep -Fq 'M17' "$document"
-  grep -Fq 'M22' "$document"
+  grep -Fq 'deferred_exim' "$document"
+  grep -Fq 'deferred_ldap_sql_migration' "$document"
   grep -Fq 'LDAP' "$document"
   grep -Fq 'SQL' "$document"
 done

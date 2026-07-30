@@ -147,6 +147,13 @@ grep -Fq 'run: make check-release' .github/workflows/container-release.yml
 ! grep -Eq '(id-token|packages):[[:space:]]*write' .github/workflows/container-release.yml
 ! grep -Eq 'provenance-ci|trusted-ci-build' \
   .github/workflows/container-release.yml scripts/image-evidence.sh
+grep -Fq '"$repository/$tools_dir/trivy" image \' scripts/image-evidence.sh
+grep -Fq -- '--cache-dir "$repository/$tools_dir/trivy-cache" \' \
+  scripts/image-evidence.sh
+grep -Fq 'DOCKER_CONFIG="$repository/$docker_config" \' \
+  scripts/image-evidence.sh
+grep -Fq 'HOME="$repository/$work" \' scripts/image-evidence.sh
+grep -Fq 'TMPDIR="$repository/$work" \' scripts/image-evidence.sh
 jq -e '
   .schema == "dkim2-image-tool-allowlist-v1" and
   [.tools[].name] == ["syft","trivy"] and

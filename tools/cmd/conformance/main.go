@@ -500,6 +500,7 @@ var portableDefinitions = []runnerDefinition{
 		cases: []runnerCase{
 			{key: "signing\x00custody-transitions", testName: "TestDraft04CustodyGoldenVectors", artifacts: []string{"custody-positive-source", signingProvenanceArtifact}},
 			{key: "signing\x00signature-grammar-negative", testName: "TestParseRejectsSharedTagSyntaxErrors", artifacts: []string{"signature-negative-source"}},
+			{key: "signing\x00tag-case-interpretation", testName: "TestParseAcceptsInteropFWSAndMixedCaseTags", artifacts: []string{"signature-negative-source"}},
 		},
 	},
 }

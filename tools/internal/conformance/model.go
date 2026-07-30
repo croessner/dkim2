@@ -25,7 +25,7 @@ const (
 	// SnapshotSchema identifies the candidate snapshot framing.
 	SnapshotSchema = "dkim2.candidate-snapshot.v1"
 	// EximDeferred is the only Exim capability state allowed by this suite.
-	EximDeferred = "deferred_m17"
+	EximDeferred = "deferred_exim"
 	maxJSONDepth = 16
 )
 

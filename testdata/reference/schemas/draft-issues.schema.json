@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.test/dkim2/reference/draft-issues.schema.json",
+  "$defs": {
+    "identifier": {"pattern": "^[a-z][a-z0-9-]{0,63}$", "type": "string"},
+    "issue": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {"pattern": "^DKIM2-ISSUE-[0-9]{4}$", "type": "string"},
+        "title": {"maxLength": 128, "minLength": 1, "type": "string"},
+        "sections": {
+          "items": {"maxLength": 192, "minLength": 1, "type": "string"},
+          "maxItems": 8,
+          "minItems": 1,
+          "type": "array"
+        },
+        "class": {
+          "enum": ["ambiguity", "discrepancy", "external_disagreement", "tba"],
+          "type": "string"
+        },
+        "local_status": {
+          "enum": [
+            "open_blocks_candidate",
+            "implemented_interpretation",
+            "not_implemented",
+            "not_applicable",
+            "superseded_by_baseline",
+            "resolved_local_defect"
+          ],
+          "type": "string"
+        },
+        "upstream_status": {
+          "enum": [
+            "not_reported",
+            "reporting_requires_authorization",
+            "reported",
+            "acknowledged",
+            "resolved_in_later_draft",
+            "not_upstream_issue"
+          ],
+          "type": "string"
+        },
+        "behavior_owner": {"maxLength": 192, "minLength": 1, "type": "string"},
+        "conformance_cases": {
+          "items": {"pattern": "^[a-z0-9-]+/[a-z0-9-]+$", "type": "string"},
+          "maxItems": 16,
+          "type": "array"
+        },
+        "test_refs": {
+          "items": {"pattern": "^[A-Za-z0-9_./-]+#[A-Za-z0-9_]+$", "type": "string"},
+          "maxItems": 16,
+          "type": "array"
+        },
+        "external_cases": {
+          "items": {"pattern": "^[a-z][a-z0-9-]{0,63}/[a-z][a-z0-9-]{0,63}$", "type": "string"},
+          "maxItems": 16,
+          "type": "array"
+        },
+        "public_effect": {"$ref": "#/$defs/identifier"},
+        "resolution_criterion": {"$ref": "#/$defs/identifier"},
+        "claim_classes": {
+          "items": {
+            "enum": [
+              "adapter_contract",
+              "documented_interpretation",
+              "draft_normative",
+              "external_observation",
+              "local_security_policy",
+              "release_policy"
+            ],
+            "type": "string"
+          },
+          "maxItems": 8,
+          "minItems": 1,
+          "type": "array"
+        },
+        "upstream_reference": {"format": "uri", "maxLength": 512, "type": "string"},
+        "observation_date": {"format": "date", "type": "string"}
+      },
+      "required": [
+        "id",
+        "title",
+        "sections",
+        "class",
+        "local_status",
+        "upstream_status",
+        "behavior_owner",
+        "conformance_cases",
+        "test_refs",
+        "external_cases",
+        "public_effect",
+        "resolution_criterion",
+        "claim_classes"
+      ],
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema": {"const": "dkim2.draft-issues.v1"},
+    "message_draft": {"const": "draft-ietf-dkim-dkim2-spec-04"},
+    "dns_draft": {"const": "draft-chuang-dkim2-dns-04"},
+    "issues": {
+      "items": {"$ref": "#/$defs/issue"},
+      "maxItems": 256,
+      "minItems": 1,
+      "type": "array"
+    }
+  },
+  "required": ["schema", "message_draft", "dns_draft", "issues"],
+  "type": "object"
+}

@@ -213,15 +213,15 @@ case "$action" in
     mkdir -m 0700 "$docker_config"
     printf '%s\n' '{"auths":{}}' >"$docker_config/config.json"
     env -i \
-      DOCKER_CONFIG="$docker_config" \
-      HOME="$work" \
+      DOCKER_CONFIG="$repository/$docker_config" \
+      HOME="$repository/$work" \
       LANG=C \
       LC_ALL=C \
       PATH=/usr/bin:/bin \
-      TMPDIR="$work" \
+      TMPDIR="$repository/$work" \
       TZ=UTC \
-      "$tools_dir/trivy" image \
-        --cache-dir "$tools_dir/trivy-cache" \
+      "$repository/$tools_dir/trivy" image \
+        --cache-dir "$repository/$tools_dir/trivy-cache" \
         --no-progress --disable-telemetry --skip-version-check \
         --download-db-only
     scan_time=$(date -u '+%Y-%m-%dT%H:%M:%SZ')

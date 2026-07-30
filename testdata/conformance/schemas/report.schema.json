@@ -6,7 +6,7 @@
       "additionalProperties": false,
       "properties": {
         "daemon": {"const": "supported"},
-        "exim": {"const": "deferred_m17"},
+        "exim": {"const": "deferred_exim"},
         "library": {"const": "supported"},
         "milter": {"const": "partial"},
         "postfix": {"const": "partial_linux"}

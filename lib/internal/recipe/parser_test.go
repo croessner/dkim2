@@ -29,7 +29,7 @@ const (
 	testTwoRangesRecipe          = `{"b":[{"c":[1,1]},{"c":[2,2]}]}`
 )
 
-// TestParserAcceptsDraftRecipeForms verifies the complete Prompt 02 schema surface.
+// TestParserAcceptsDraftRecipeForms verifies the complete draft recipe schema surface.
 func TestParserAcceptsDraftRecipeForms(t *testing.T) {
 	tests := []struct {
 		name       string

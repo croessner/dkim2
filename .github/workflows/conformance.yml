@@ -43,6 +43,7 @@ jobs:
       - name: Validate and run portable profile
         run: |
           make check-conformance
+          make check-reference
           make conformance
 
       - name: Run real Postfix profile
