@@ -112,6 +112,33 @@ func TestInventoryCanonicalizesLegacySelectorCase(t *testing.T) {
 	}
 }
 
+// TestInventoryAcceptsOnlyInactiveLegacyWildcardHistory proves historical
+// wildcard rows remain count-only and can never become DKIM2 mappings.
+func TestInventoryAcceptsOnlyInactiveLegacyWildcardHistory(t *testing.T) {
+	inactive := legacyFixture("Old-Wildcard", "*", false)
+	inactive.Attributes[legacyAssociatedDomain] = [][]byte{[]byte(migrationTestDomain)}
+	records, counts, err := Inventory(
+		context.Background(),
+		&inventoryClientFake{entries: []RawEntry{inactive}},
+		testConfig().Limits,
+	)
+	if err != nil || len(records) != 1 || counts.Inactive != 1 ||
+		records[0].domain != migrationTestDomain {
+		t.Fatal("inactive legacy wildcard history was rejected")
+	}
+
+	active := legacyFixture("Active-Wildcard", "*", true)
+	active.Attributes[legacyAssociatedDomain] = [][]byte{[]byte(migrationTestDomain)}
+	records, counts, err = Inventory(
+		context.Background(),
+		&inventoryClientFake{entries: []RawEntry{active}},
+		testConfig().Limits,
+	)
+	if err == nil || records != nil || counts != (InventoryCounts{}) {
+		t.Fatal("active legacy wildcard was accepted")
+	}
+}
+
 // TestInventoryIgnoresAUIDAndTimestampsWithoutMapping proves historical fields
 // are count-only and cannot become plan facts.
 func TestInventoryIgnoresAUIDAndTimestampsWithoutMapping(t *testing.T) {

@@ -227,6 +227,17 @@ func mapLegacyEntry(entry RawEntry) (LegacyRecord, error) {
 	}
 	sourceSelector := values[legacySelector]
 	canonicalSelector := strings.ToLower(sourceSelector)
+	active := false
+	switch values[legacyActive] {
+	case "TRUE":
+		active = true
+	case "FALSE":
+	default:
+		return LegacyRecord{}, errors.New("legacy entry malformed")
+	}
+	if values[legacyDomain] == "*" && !active {
+		values[legacyDomain] = values[legacyAssociatedDomain]
+	}
 	if values[legacyDomain] != values[legacyAssociatedDomain] ||
 		values[legacyDomain] != strings.ToLower(values[legacyDomain]) {
 		return LegacyRecord{}, errors.New("legacy entry malformed")
@@ -246,14 +257,6 @@ func mapLegacyEntry(entry RawEntry) (LegacyRecord, error) {
 	if provider.ValidateDomainSelector(
 		values[legacyDomain], canonicalSelector, providerAlgorithm,
 	) != nil {
-		return LegacyRecord{}, errors.New("legacy entry malformed")
-	}
-	active := false
-	switch values[legacyActive] {
-	case "TRUE":
-		active = true
-	case "FALSE":
-	default:
 		return LegacyRecord{}, errors.New("legacy entry malformed")
 	}
 	return LegacyRecord{

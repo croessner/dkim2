@@ -115,6 +115,11 @@ spelling to lowercase for the DKIM2 plan and DNS proof while protected import
 uses the exact original LDAP value against the case-exact legacy schema. Other
 noncanonical selector or domain input remains rejected.
 
+An inactive historical row may retain the exact legacy `DKIMDomain: *`
+spelling when its single canonical `associatedDomain` identifies the counted
+domain. It remains in inactive-history counts and can never become a mapping or
+key import. An active wildcard row is ambiguous and still fails closed.
+
 The protected phase then reads each key separately, accepts only one bounded
 unencrypted PKCS#8 RSA or Ed25519 key of the declared type and strength,
 derives canonical SPKI, and performs a fresh DNS lookup through the normal
