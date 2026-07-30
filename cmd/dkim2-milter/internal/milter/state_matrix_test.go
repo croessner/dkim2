@@ -329,6 +329,35 @@ func TestAbortResetsTransactionWithoutReplyAndAllowsReuse(t *testing.T) {
 	}
 }
 
+// TestAbortBeforeMailAllowsPostfixConnectionReuse proves pre-MAIL cleanup is idempotent.
+func TestAbortBeforeMailAllowsPostfixConnectionReuse(t *testing.T) {
+	handler := &testHandler{result: Result{
+		Operation: operationProcess, Result: resultPass, Outcome: DispositionContinue,
+	}}
+	session := testSession(t, handler, false, modeInbound, "")
+	input := appendPeerFrames(
+		peerFrame(commandNegotiate, negotiationPayload()),
+		peerFrame(commandConnect, []byte("mx\x00U")),
+		peerFrame(commandHelo, []byte("helo\x00")),
+		peerFrame(commandAbort, nil),
+		peerFrame(commandMail, []byte("<sender@example>\x00")),
+		peerFrame(commandRecipient, []byte("<recipient@example>\x00")),
+		peerFrame(commandEOH, nil),
+		peerFrame(commandEOM, nil),
+		peerFrame(commandQuit, nil),
+	)
+	stream := &splitStream{reader: bytes.NewReader(input)}
+	if err := session.Serve(context.Background(), stream); err != nil {
+		t.Fatalf("Serve() error=%v", err)
+	}
+	if handler.calls != 1 {
+		t.Fatalf("handler calls=%d, want 1", handler.calls)
+	}
+	if got := responseCommands(t, stream.writer.Bytes()); !bytes.Equal(got, []byte{'O', 'c', 'c', 'c', 'c', 'c', 'a'}) {
+		t.Fatalf("response commands=%q", got)
+	}
+}
+
 // TestTerminalReplyIsSingleFrameAndConnectionRemainsSynchronized proves EOM reuse.
 func TestTerminalReplyIsSingleFrameAndConnectionRemainsSynchronized(t *testing.T) {
 	handler := &sequenceHandler{results: []Result{
@@ -699,16 +728,6 @@ func TestNoReplyCommandsCloseWithoutOutOfPhaseFailureFrame(t *testing.T) {
 				peerFrame(commandMacro, []byte{'X'}),
 			),
 			want: []byte{'O'},
-		},
-		{
-			name: "malformed abort",
-			input: appendPeerFrames(
-				peerFrame(commandNegotiate, negotiationPayload()),
-				peerFrame(commandConnect, []byte("mx\x00U")),
-				peerFrame(commandHelo, []byte("helo\x00")),
-				peerFrame(commandAbort, nil),
-			),
-			want: []byte{'O', 'c', 'c'},
 		},
 		{
 			name: "malformed quit",

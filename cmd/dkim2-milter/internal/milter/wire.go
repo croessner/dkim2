@@ -428,12 +428,14 @@ func (s *Session) handleEOM(ctx context.Context, payload []byte) (bool, [][]byte
 	return false, response, err
 }
 
-// handleAbort clears a live transaction without emitting a callback reply.
+// handleAbort clears any live transaction and tolerates Postfix pre-MAIL aborts.
 func (s *Session) handleAbort(payload []byte) error {
-	if len(payload) != 0 || s.state < stateMail {
+	if len(payload) != 0 || s.state < stateHelo {
 		return &Error{Class: FailureContract}
 	}
-	s.resetTransaction()
+	if s.state >= stateMail {
+		s.resetTransaction()
+	}
 	s.state = stateHelo
 	return nil
 }
