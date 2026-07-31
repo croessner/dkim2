@@ -9,6 +9,7 @@ input_root=${DKIM2_EXIM_REAL_MATRIX_INPUT_ROOT:-}
 evidence_root=${DKIM2_EXIM_REAL_MATRIX_EVIDENCE_ROOT:-}
 executor="$script_dir/execute-real-matrix-linux.sh"
 verifier="$script_dir/run-real-matrix.sh"
+input_verifier="$script_dir/verify-real-matrix-build-input.sh"
 contract="$script_dir/real-matrix-contract.sh"
 go_binary=/usr/local/go/bin/go
 
@@ -42,6 +43,7 @@ chmod 0711 "$input_root"
 [[ $evidence_root == /* && ! -e $evidence_root && ! -L $evidence_root ]] || fail
 require_direct_executable "$executor"
 require_direct_executable "$verifier"
+require_direct_executable "$input_verifier"
 require_direct_executable "$go_binary"
 [[ ! -L $contract && -s $contract ]] || fail
 # shellcheck disable=SC1090,SC1091
@@ -73,6 +75,19 @@ for row in "${rows[@]}"; do
   done
   current_adapter_sha256=$(sha256_file "$row_root/dkim2-exim")
   current_daemon_sha256=$(sha256_file "$row_root/dkim2d")
+  current_binary_sha256=$(sha256_file "$row_root/exim")
+  source_manifest="$repository_root/cmd/dkim2-exim/exim/fixtures/$row/source-manifest-v1.txt"
+  expected_source_sha256=$(awk -F= '$1 == "source_sha256" { print $2 }' "$source_manifest")
+  expected_patch_sha256=$(awk -F= '$1 == "transport_filter_patch_sha256" { print $2 }' "$source_manifest")
+  current_patch_sha256=$(sha256_file \
+    "$repository_root/cmd/dkim2-exim/packaging/exim/dkim2-transport-filter-return-path.patch")
+  [[ $expected_source_sha256 =~ ^[0-9a-f]{64}$ &&
+    $expected_patch_sha256 == "$current_patch_sha256" ]] || fail
+  "$input_verifier" "$row_root/build-input-v1.txt" \
+    "$candidate_base_revision" "$candidate_snapshot_sha256" \
+    "$current_adapter_sha256" "$current_daemon_sha256" \
+    "$current_binary_sha256" "$expected_source_sha256" \
+    "$current_patch_sha256" || fail
   if [[ -z $adapter_sha256 ]]; then
     adapter_sha256=$current_adapter_sha256
     daemon_sha256=$current_daemon_sha256
@@ -81,7 +96,7 @@ for row in "${rows[@]}"; do
       $daemon_sha256 == "$current_daemon_sha256" ]] || fail
   fi
   run_material+=$'\n'
-  run_material+="$row:$(sha256_file "$row_root/exim"):$current_adapter_sha256:$current_daemon_sha256"
+  run_material+="$row:$current_binary_sha256:$current_adapter_sha256:$current_daemon_sha256"
 done
 run_id=$(printf '%s' "$run_material" | sha256sum | awk '{ print $1 }')
 mkdir -m 0700 "$evidence_root"

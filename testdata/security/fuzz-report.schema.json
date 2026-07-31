@@ -15,7 +15,7 @@
   },
   "additionalProperties": false,
   "properties": {
-    "base_revision": {"const": "b3979123febbc333fb8ed85c8c1801ba5caf5def"},
+    "base_revision": {"const": "24d7b4eb85430bbc49e3a6ef43889d1be8cd0718"},
     "candidate_snapshot_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
     "go_version": {"pattern": "^go1\\.26\\.[0-9]+$", "type": "string"},
     "goarch": {"maxLength": 32, "pattern": "^[a-z0-9]+$", "type": "string"},

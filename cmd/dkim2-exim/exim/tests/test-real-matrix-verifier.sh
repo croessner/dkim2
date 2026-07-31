@@ -6,6 +6,7 @@ script_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)
 repository_root=$(CDPATH='' cd -- "$script_dir/../../../.." && pwd -P)
 fixtures="$repository_root/cmd/dkim2-exim/exim/fixtures"
 verifier="$script_dir/run-real-matrix.sh"
+build_input_verifier="$script_dir/verify-real-matrix-build-input.sh"
 # shellcheck disable=SC1090,SC1091
 source "$script_dir/real-matrix-contract.sh"
 work=$(mktemp -d "${TMPDIR:-/tmp}/dkim2-exim-real-matrix-verifier.XXXXXX")
@@ -16,11 +17,14 @@ mapfile -t rows < <(real_matrix_rows)
 
 # sha256_file computes one portable lowercase SHA-256 digest.
 sha256_file() {
+  local digest
   if command -v sha256sum >/dev/null 2>&1; then
-    sha256sum "$1" | awk '{ print $1 }'
+    read -r digest _ < <(sha256sum "$1") || return 1
   else
-    shasum -a 256 "$1" | awk '{ print $1 }'
+    read -r digest _ < <(shasum -a 256 "$1") || return 1
   fi
+  [[ $digest =~ ^[0-9a-f]{64}$ ]] || return 1
+  printf '%s\n' "$digest"
 }
 
 # synthetic_live_observation returns deterministic values for verifier tests only.
@@ -121,6 +125,19 @@ expect_rejection() {
   fi
 }
 
+# expect_build_input_rejection requires one mutated build record to fail closed.
+expect_build_input_rejection() {
+  local path=$1
+  if "$build_input_verifier" "$path" \
+    "$candidate_base_revision" "$candidate_snapshot_sha256" \
+    "$adapter_sha256" "$daemon_sha256" "$binary_sha256" \
+    "$binary_sha256" "$transport_filter_patch_sha256" \
+    >/dev/null 2>&1; then
+    printf 'build-input verifier accepted negative case: %s\n' "$path" >&2
+    exit 1
+  fi
+}
+
 # replace_transcript_observation rebinds one synthetic negative artifact chain.
 replace_transcript_observation() {
   local root=$1 row=$2 category=$3 logical_case=$4 component=$5 observation=$6
@@ -158,6 +175,84 @@ candidate_snapshot_sha256=$(go -C "$repository_root/tools" run ./cmd/candidateid
 [[ $candidate_base_revision =~ ^[0-9a-f]{40}$ &&
   $candidate_snapshot_sha256 =~ ^[0-9a-f]{64}$ ]] || exit 1
 
+build_input="$work/build-input-v1.txt"
+printf '%s\n' \
+  'format=dkim2-exim-container-build-input-v1' \
+  'image=golang@sha256:ae5a2316d12f3e78fd99177dad452e6ad4f240af2d71d57b480c3477f250fec6' \
+  'platform=linux-amd64' \
+  'mta_uid=999' \
+  "base_revision=$candidate_base_revision" \
+  "candidate_snapshot_sha256=$candidate_snapshot_sha256" \
+  "source_archive_sha256=$binary_sha256" \
+  "transport_filter_patch_sha256=$transport_filter_patch_sha256" \
+  "compiler_sha256=$binary_sha256" \
+  "adapter_sha256=$adapter_sha256" \
+  "daemon_sha256=$daemon_sha256" \
+  "binary_sha256=$binary_sha256" \
+  'input_state=complete' >"$build_input"
+"$build_input_verifier" "$build_input" \
+  "$candidate_base_revision" "$candidate_snapshot_sha256" \
+  "$adapter_sha256" "$daemon_sha256" "$binary_sha256" \
+  "$binary_sha256" "$transport_filter_patch_sha256"
+
+cp "$build_input" "$work/build-input-stale-candidate"
+sed -i.bak \
+  's/^candidate_snapshot_sha256=.*/candidate_snapshot_sha256=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/' \
+  "$work/build-input-stale-candidate"
+rm "$work/build-input-stale-candidate.bak"
+expect_build_input_rejection "$work/build-input-stale-candidate"
+
+cp "$build_input" "$work/build-input-stale-base"
+sed -i.bak \
+  's/^base_revision=.*/base_revision=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/' \
+  "$work/build-input-stale-base"
+rm "$work/build-input-stale-base.bak"
+expect_build_input_rejection "$work/build-input-stale-base"
+
+cp "$build_input" "$work/build-input-stale-daemon"
+sed -i.bak \
+  's/^daemon_sha256=.*/daemon_sha256=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/' \
+  "$work/build-input-stale-daemon"
+rm "$work/build-input-stale-daemon.bak"
+expect_build_input_rejection "$work/build-input-stale-daemon"
+
+cp "$build_input" "$work/build-input-stale-source"
+sed -i.bak \
+  's/^source_archive_sha256=.*/source_archive_sha256=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb/' \
+  "$work/build-input-stale-source"
+rm "$work/build-input-stale-source.bak"
+expect_build_input_rejection "$work/build-input-stale-source"
+
+cp "$build_input" "$work/build-input-stale-patch"
+sed -i.bak \
+  's/^transport_filter_patch_sha256=.*/transport_filter_patch_sha256=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/' \
+  "$work/build-input-stale-patch"
+rm "$work/build-input-stale-patch.bak"
+expect_build_input_rejection "$work/build-input-stale-patch"
+
+cp "$build_input" "$work/build-input-duplicate"
+printf '%s\n' 'input_state=complete' >>"$work/build-input-duplicate"
+expect_build_input_rejection "$work/build-input-duplicate"
+
+cp "$build_input" "$work/build-input-reordered"
+sed -i.bak '4{h;d;};5{p;g;d;}' "$work/build-input-reordered"
+rm "$work/build-input-reordered.bak"
+expect_build_input_rejection "$work/build-input-reordered"
+
+build_input_content=$(<"$build_input")
+printf '%s' "$build_input_content" >"$work/build-input-unterminated"
+expect_build_input_rejection "$work/build-input-unterminated"
+
+cp "$build_input" "$work/build-input-nul"
+printf '\0' >>"$work/build-input-nul"
+expect_build_input_rejection "$work/build-input-nul"
+
+cp "$build_input" "$work/build-input-oversize"
+for _ in {1..80}; do
+  printf '%064d\n' 0 >>"$work/build-input-oversize"
+done
+expect_build_input_rejection "$work/build-input-oversize"
+
 mkdir "$work/evidence"
 chmod 0700 "$work/evidence"
 printf '%s\n' \
@@ -190,7 +285,7 @@ for row in "${rows[@]}"; do
       )
       contract=$(real_matrix_expected_contract "$category" "$logical_case")
       read -r proof exim_assertion adapter_assertion dkim2d_assertion \
-        fault_assertion readback_assertion <<<"$contract"
+        fault_assertion readback_assertion < <(printf '%s\n' "$contract")
       declare -A artifact_hashes=()
       for component in exim adapter dkim2d fault readback; do
         case "$component" in
@@ -340,11 +435,17 @@ for row in "${rows[@]}"; do
   chmod 0600 "$work/evidence/$row/result-v1.txt"
 done
 
+verification_started=$SECONDS
 DKIM2_EXIM_REAL_MATRIX_EVIDENCE_ROOT="$work/evidence" \
   DKIM2_EXIM_REAL_MATRIX_RUN_ID="$run_id" \
   DKIM2_EXIM_REAL_MATRIX_ADAPTER_SHA256="$adapter_sha256" \
   DKIM2_EXIM_REAL_MATRIX_DAEMON_SHA256="$daemon_sha256" \
   "$verifier" >/dev/null
+verification_elapsed=$((SECONDS - verification_started))
+[[ $verification_elapsed -lt 240 ]] || {
+  printf 'real matrix verifier exceeded the four-minute regression bound\n' >&2
+  exit 1
+}
 
 cp -R "$work/evidence" "$work/tampered-build"
 sed -i.bak \
@@ -406,6 +507,24 @@ cp -R "$work/evidence" "$work/duplicate-field"
 printf '%s\n' 'status=passed' \
   >>"$work/duplicate-field/upstream-4.99.5/smtp--lf.case"
 expect_rejection duplicate-field
+
+cp -R "$work/evidence" "$work/reordered-field"
+sed -i.bak \
+  '1{h;d;};2{p;g;d;}' \
+  "$work/reordered-field/upstream-4.99.5/smtp--lf.case"
+rm "$work/reordered-field/upstream-4.99.5/smtp--lf.case.bak"
+expect_rejection reordered-field
+
+cp -R "$work/evidence" "$work/unterminated-field"
+unterminated_path="$work/unterminated-field/upstream-4.99.5/smtp--lf.case"
+unterminated_input=$(<"$unterminated_path")
+printf '%s' "$unterminated_input" >"$unterminated_path"
+expect_rejection unterminated-field
+
+cp -R "$work/evidence" "$work/nul-field"
+printf '\0' \
+  >>"$work/nul-field/upstream-4.99.5/smtp--lf.case"
+expect_rejection nul-field
 
 cp -R "$work/evidence" "$work/privacy-marker"
 sed -i.bak 's/^proof=.*/proof=subject@example.test/' \

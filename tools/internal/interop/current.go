@@ -390,6 +390,7 @@ func peerBuildArguments(
 	script += "go test -c -vet=off -o /output/" + peer.id + ".test " + peer.packagePath
 	arguments := []string{
 		"run", "--rm", "--pull", "never",
+		"--platform", "linux/amd64",
 		"--network", "none",
 		"--read-only",
 		"--cap-drop", "ALL",
@@ -491,6 +492,7 @@ func currentDockerHost() (string, error) {
 func peerContainerArguments(binary string, tests string) []string {
 	return []string{
 		"run", "--rm", "--pull", "never",
+		"--platform", "linux/amd64",
 		"--network", "none",
 		"--read-only",
 		"--cap-drop", "ALL",

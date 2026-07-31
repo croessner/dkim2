@@ -19,6 +19,10 @@ test "$(grep -c '^USER 2000:2000$' "$containerfile")" -eq 1
 test "$(grep -c '^COPY --from=build /runtime/dkim2d/ /$' "$containerfile")" -eq 1
 test "$(grep -c '^COPY --from=build /runtime/dkim2-milter/ /$' "$containerfile")" -eq 1
 test "$(grep -c '^COPY --from=build /runtime/dkim2ctl/ /$' "$containerfile")" -eq 1
+test "$(grep -c '^COPY cmd/dkim2-exim/go.mod cmd/dkim2-exim/go.sum ./cmd/dkim2-exim/$' "$containerfile")" -eq 1
+test "$(grep -c '^!cmd/dkim2-exim/$' .dockerignore)" -eq 1
+test "$(grep -c '^!cmd/dkim2-exim/go.mod$' .dockerignore)" -eq 1
+test "$(grep -c '^!cmd/dkim2-exim/go.sum$' .dockerignore)" -eq 1
 test "$(grep -c 'notices=/out/THIRD_PARTY_NOTICES.txt' "$containerfile")" -eq 1
 test "$(grep -c '/usr/local/go/LICENSE /usr/local/go/PATENTS' "$containerfile")" -eq 1
 test "$(grep -c 'find vendor -type f' "$containerfile")" -eq 1

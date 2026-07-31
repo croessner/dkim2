@@ -194,7 +194,7 @@ func (s *SigningService) execute(
 		ctx, request.Tenant(), request.Domain(), use, operationTime,
 	)
 	if err != nil {
-		if dkim2.ProviderErrorClassOf(err) == dkim2.ProviderErrorClassPermanent {
+		if permanentPolicyResolutionFailure(err) {
 			return NewOperationResult(
 				operation, OperationPermerror, OperationReject, nil,
 			)
@@ -216,6 +216,25 @@ func (s *SigningService) execute(
 	return completeOperation(
 		ctx, request, operation, signer, profile, recipients, disclosure,
 	)
+}
+
+// permanentPolicyResolutionFailure recognizes only explicit permanent signing
+// and exact datasource absence classes; every ambiguous class remains retryable.
+func permanentPolicyResolutionFailure(err error) (permanent bool) {
+	defer func() {
+		if recover() != nil {
+			permanent = false
+		}
+	}()
+	if dkim2.ProviderErrorClassOf(err) == dkim2.ProviderErrorClassPermanent {
+		return true
+	}
+	switch provider.ErrorCodeOf(err) {
+	case provider.ErrorCodeNotFound, provider.ErrorCodeInactive:
+		return true
+	default:
+		return false
+	}
 }
 
 // completeOperation verifies revision evidence, plans one request-local route,

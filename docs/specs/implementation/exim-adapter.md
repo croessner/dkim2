@@ -1309,11 +1309,16 @@ their pending matrix fields:
 
 - all five authenticated rows passed all 43 cases;
 - the fail-closed privacy verifier passed;
-- the matrix run ID is
-  `0487837fbec882979f6cf290e2d1ccb36d37a07558f03e64f77fa0cc5a7cca6b`;
+- the matrix run ID is retained in candidate-bound generated full-profile
+  evidence rather than duplicated in durable prose;
 - the candidate-bound `run-v1.txt` SHA-256 is retained in the imported
   full-profile evidence rather than embedded in this candidate document,
   avoiding a self-referential snapshot digest;
+- every row's bounded build-input record is bound to the exact Git base,
+  candidate snapshot, authenticated source archive, transport-filter patch,
+  adapter binary, daemon binary, and source-matched Exim binary; the Linux
+  driver rejects stale, reordered, duplicated, oversized, non-printable, or
+  mismatched records before executing a case;
 - the qualified rows are upstream Exim 4.99.5, Debian
   4.98.2-1+deb13u3/u4, and Ubuntu 4.99.1-1ubuntu1.3/u1.4.
 

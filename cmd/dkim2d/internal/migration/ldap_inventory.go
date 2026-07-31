@@ -1,6 +1,7 @@
 package migration
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
@@ -53,13 +54,9 @@ func NewLDAPInventoryClient(
 	if ctx == nil || len(password) == 0 || len(password) > 16<<10 {
 		return nil, nil, errors.New("legacy inventory unavailable")
 	}
-	roots := x509.NewCertPool()
-	for _, encoded := range rootsDER {
-		certificate, err := x509.ParseCertificate(encoded)
-		if err != nil {
-			return nil, nil, errors.New("legacy inventory unavailable")
-		}
-		roots.AddCert(certificate)
+	roots, err := migrationRootPool(rootsDER)
+	if err != nil {
+		return nil, nil, errors.New("legacy inventory unavailable")
 	}
 	deadline, found := ctx.Deadline()
 	if !found {
@@ -100,6 +97,22 @@ func NewLDAPInventoryClient(
 		return nil, nil, errors.New("legacy inventory unavailable")
 	}
 	return client, client.Close, nil
+}
+
+// migrationRootPool validates and owns principal-scoped trust roots.
+func migrationRootPool(rootsDER [][]byte) (*x509.CertPool, error) {
+	if len(rootsDER) == 0 {
+		return nil, errors.New("migration trust unavailable")
+	}
+	roots := x509.NewCertPool()
+	for _, encoded := range rootsDER {
+		certificate, err := x509.ParseCertificate(bytes.Clone(encoded))
+		if err != nil {
+			return nil, errors.New("migration trust unavailable")
+		}
+		roots.AddCert(certificate)
+	}
+	return roots, nil
 }
 
 // Search reads all bounded legacy records with critical RFC 2696 paging.

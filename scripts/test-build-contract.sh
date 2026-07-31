@@ -94,6 +94,8 @@ docker buildx build --file build/container/Containerfile \
   --target context-audit --output "type=local,dest=$context" . >/dev/null
 test -f "$context/context/go.work"
 test -f "$context/context/cmd/dkim2d/main.go"
+test -f "$context/context/cmd/dkim2-exim/go.mod"
+test -f "$context/context/cmd/dkim2-exim/go.sum"
 ! grep -aFRq -- "$build_context_marker" "$context"
 (
 	cd "$context/context"

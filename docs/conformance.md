@@ -98,7 +98,10 @@ record the Linux-only Exim case as `not_applicable` and never open or claim an
 Exim evidence path. Full reports rerun the strict real-matrix verifier and
 admit only a bounded import summary bound to the current manifest, Git base,
 candidate snapshot, and verifier digest. Missing or stale evidence fails the
-full profile closed.
+full profile closed. Source-matched matrix execution additionally verifies
+each bounded build-input record against that base and snapshot, the
+authenticated row source and patch digests, and the exact adapter, daemon, and
+Exim binaries before any case runs.
 
 The separate repository security profile consumes these reports without
 reclassifying their claims. See `docs/security-testing.md` and run

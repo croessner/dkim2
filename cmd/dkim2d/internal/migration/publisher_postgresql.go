@@ -3,7 +3,6 @@ package migration
 import (
 	"context"
 	"crypto/tls"
-	"crypto/x509"
 	"errors"
 	"net"
 	"strconv"
@@ -94,13 +93,9 @@ func NewPostgreSQLPublisherClient(
 	if err != nil || datasourcepostgresql.RejectEnvironment() != nil {
 		return nil, nil, errors.New("postgresql publication unavailable")
 	}
-	roots := x509.NewCertPool()
-	for _, encoded := range rootsDER {
-		certificate, parseErr := x509.ParseCertificate(encoded)
-		if parseErr != nil {
-			return nil, nil, errors.New("postgresql publication unavailable")
-		}
-		roots.AddCert(certificate)
+	roots, err := migrationRootPool(rootsDER)
+	if err != nil {
+		return nil, nil, errors.New("postgresql publication unavailable")
 	}
 	poolConfig.ConnConfig.Host = host
 	poolConfig.ConnConfig.Port = uint16(portNumber)

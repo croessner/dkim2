@@ -42,8 +42,7 @@ The preceding Exim deferral records this earlier conformance milestone and is
 not the current capability state. M17 subsequently qualified the source-linked
 Exim adapter on Linux across five authenticated upstream, Debian, and Ubuntu
 rows, with all 43 cases passing per row and the fail-closed privacy verifier
-passing under run ID
-`0487837fbec882979f6cf290e2d1ccb36d37a07558f03e64f77fa0cc5a7cca6b`.
+passing. The candidate-bound run ID remains in generated full-profile evidence.
 The active model is `qualified_linux`: portable reports mark Exim execution not
 applicable, while full reports require an explicit evidence root and import
 only a bounded summary bound to the current manifest, base revision, candidate

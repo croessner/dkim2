@@ -68,9 +68,27 @@
       "module": "lib"
     },
     {
+      "id": "exim-qualification-builder",
+      "path": "cmd/dkim2-exim/exim/tests/build-real-matrix-inputs-container.sh",
+      "sha256": "975fdb52f6c543c05ee9b4946da53d5afad4aeaacb7c3e3d05a586b323805a5e",
+      "module": "cmd/dkim2-exim"
+    },
+    {
+      "id": "exim-qualification-container-driver",
+      "path": "cmd/dkim2-exim/exim/tests/run-real-matrix-container.sh",
+      "sha256": "b1f6552fed8eca75e1ff3e5efb01e03d7bb79d3df9465a9d387c98243a95e583",
+      "module": "cmd/dkim2-exim"
+    },
+    {
       "id": "exim-qualification-contract",
       "path": "cmd/dkim2-exim/exim/tests/real-matrix-contract.sh",
       "sha256": "dcf0f843e4c5ce44b46a5b9276eb3fb2feb9f9a889870fbe18786820c63f216c",
+      "module": "cmd/dkim2-exim"
+    },
+    {
+      "id": "exim-qualification-driver",
+      "path": "cmd/dkim2-exim/exim/tests/run-real-matrix-linux.sh",
+      "sha256": "f5f9e41dac999ae341215e2aaba4cd9e56d2c9b1fc7d0443f21899274b8d367a",
       "module": "cmd/dkim2-exim"
     },
     {
@@ -86,6 +104,12 @@
       "module": "cmd/dkim2-exim"
     },
     {
+      "id": "exim-qualification-input-verifier",
+      "path": "cmd/dkim2-exim/exim/tests/verify-real-matrix-build-input.sh",
+      "sha256": "8c1b08327291b31a66ee377b14426f2bfed22964995da8c3a1341d0199308b12",
+      "module": "cmd/dkim2-exim"
+    },
+    {
       "id": "exim-qualification-schema",
       "path": "testdata/conformance/exim/qualification.schema.json",
       "sha256": "850739772ee29387f198fbf4cd62933050a1312128462d82d470b7a162182880",
@@ -94,7 +118,7 @@
     {
       "id": "exim-qualification-verifier",
       "path": "cmd/dkim2-exim/exim/tests/run-real-matrix.sh",
-      "sha256": "9569e5a1c606c24f7fe8e9925de140666af13614689ac72e516f537911577abb",
+      "sha256": "6b0ef3e117ba049430fc493e2b0fe21e5bd242054b51a187f727ccaac44f2be8",
       "module": "cmd/dkim2-exim"
     },
     {
@@ -112,7 +136,7 @@
     {
       "id": "milter-negative-source",
       "path": "cmd/dkim2-milter/internal/milter/state_matrix_test.go",
-      "sha256": "e40a0d514ced6f4a4184117576d912b2a5b9e13a2f65872140e9d165c9747533",
+      "sha256": "018081c53698262339b37d42bd89546188c98fea7223a7d4c49ece0cf354aab5",
       "module": "cmd/dkim2-milter"
     },
     {
@@ -402,7 +426,7 @@
       "runner": "exim_qualification",
       "required_platform": "linux",
       "expected_outcome": "pass",
-      "artifacts": ["exim-qualification-contract", "exim-qualification-executor", "exim-qualification-helper", "exim-qualification-schema", "exim-qualification-verifier"],
+      "artifacts": ["exim-qualification-builder", "exim-qualification-container-driver", "exim-qualification-contract", "exim-qualification-driver", "exim-qualification-executor", "exim-qualification-helper", "exim-qualification-input-verifier", "exim-qualification-schema", "exim-qualification-verifier"],
       "producer": "exim-qualification-verifier"
     },
     {
@@ -433,7 +457,7 @@
       "suite": "milter",
       "case_id": "envelope-domain-originator",
       "class": "adapter_contract",
-      "authority": ["RFC 5321 Section 4.1.2", "docs/specs/implementation/milter-adapter.md End-Of-Message Flow"],
+      "authority": ["RFC 5321 Section 4.1.2", "docs/specs/implementation/milter-adapter.md Datasource And Private Signing Backend"],
       "provenance": "regression_reproducer",
       "runner": "milter_fixture",
       "required_platform": "portable",
@@ -470,6 +494,18 @@
       "case_id": "partial-mutation-negative",
       "class": "adapter_contract",
       "authority": ["docs/specs/implementation/milter-adapter.md End-Of-Message Flow"],
+      "provenance": "regression_reproducer",
+      "runner": "portable_vector",
+      "required_platform": "portable",
+      "expected_outcome": "pass",
+      "artifacts": ["milter-negative-source"],
+      "producer": "milter-negative-tests"
+    },
+    {
+      "suite": "milter",
+      "case_id": "pre-mail-abort-helo-reuse",
+      "class": "adapter_contract",
+      "authority": ["docs/specs/implementation/milter-adapter.md Milter Wire Runtime"],
       "provenance": "regression_reproducer",
       "runner": "portable_vector",
       "required_platform": "portable",

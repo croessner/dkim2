@@ -226,6 +226,11 @@ func mapLegacyEntry(entry RawEntry) (LegacyRecord, error) {
 		}
 	}
 	sourceSelector := values[legacySelector]
+	for index := range len(sourceSelector) {
+		if sourceSelector[index] > 0x7f {
+			return LegacyRecord{}, errors.New("legacy entry malformed")
+		}
+	}
 	canonicalSelector := strings.ToLower(sourceSelector)
 	active := false
 	switch values[legacyActive] {

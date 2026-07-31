@@ -657,7 +657,8 @@ assuming its counts. It validates:
 
 - supported external `DKIM` object shape;
 - complete required fields;
-- unique selectors;
+- unique canonical lowercase ASCII selector identities while retaining each
+  exact LDAP spelling solely for protected legacy lookup;
 - no duplicate active `(domain, algorithm)`;
 - exact closed RSA/Ed25519 key types;
 - canonical `associatedDomain`;
@@ -671,10 +672,21 @@ ignored legacy field and never becomes DKIM2 `i=` or another identity.
 `createTimestamp` and `modifyTimestamp` are counted only as ignored audit
 presence and never become validity instants.
 
+An active wildcard `DKIMDomain` is ambiguous and fails closed. A bounded
+inactive wildcard-domain row may contribute only to count-only historical
+inventory; it never becomes a profile, credential, key lookup, DNS name, or
+fallback.
+Other inactive rotation history remains counted and skipped unless a later
+separately reviewed plan defines a disabled-profile import.
+
 An exact protected mapping plan supplies facts absent from OpenDKIM:
 generation, expected current generation, tenant, profile ID, profile use,
 opaque handle IDs, rollout, strict compatibility, optional feedback route,
-optional explicit validity, and target backend. IDs are explicit canonical
+optional explicit validity, a canonical legacy source-selector identity, a
+distinct canonical DKIM2 target selector, and target backend. The inventory
+retains exact LDAP spelling internally for lookup; it is never accepted as a
+plan alias. Backward-compatible same-selector plans remain explicit; the
+implementation never infers selector aliases. IDs are explicit canonical
 inputs and are never derived from DNs, selectors, paths, primary keys, key
 hashes, or private material.
 
@@ -695,6 +707,13 @@ for the explicit opaque handle. Raw key bytes never enter a datasource record,
 report, log, trace, metric, error, CLI output, test failure, temporary
 world-readable file, process argument, or environment variable.
 
+Legacy RSA input may be one bounded, unencrypted PKCS#1 PEM block. The importer
+parses and validates that exact form, proves the declared RSA algorithm and
+minimum strength, and serializes canonical PKCS#8 for the protected registry.
+Encrypted PEM, additional blocks, trailing material, malformed RSA, algorithm
+mismatch, and legacy Ed25519 conversion fail closed; no generic key-format
+fallback is permitted.
+
 The importer stages private material and manifests under the existing
 descriptor-confined root using no-follow relative opens, restrictive
 ownership/mode checks, atomic rename, file and directory synchronization, and
@@ -704,11 +723,13 @@ idempotently; any mismatch fails closed.
 
 Every candidate credential then performs a fresh DNS lookup through the same
 key-record parser and public-key validation owner used by signing, with cache
-bypass and a bounded caller deadline. Exactly one usable
-`selector._domainkey.signing-domain` record must match algorithm and canonical
-SPKI. Missing, ambiguous, invalid, revoked, mismatched, unavailable, or stale
-evidence prevents publication. Migration proof supplements but never removes
-the normal signing-time fresh DNS publication check.
+bypass and a bounded caller deadline. The lookup uses only the explicit
+canonical DKIM2 target selector, never the exact-case legacy source selector.
+Exactly one usable `selector._domainkey.signing-domain` record must match
+algorithm and canonical SPKI. Missing, ambiguous, invalid, revoked, mismatched,
+unavailable, or stale evidence prevents publication. Migration proof
+supplements but never removes the normal signing-time fresh DNS publication
+check.
 
 ### Dry-run report
 

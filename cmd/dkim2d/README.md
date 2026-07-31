@@ -132,6 +132,32 @@ Map keys are never expanded. Missing variables fail closed. Secret bytes are
 never configuration or environment values; only protected absolute paths may
 be supplied.
 
+### Inbound policy mode
+
+`policy.mode` defaults to `strict`; omitting it enables enforcement. Operators
+must select a compatibility policy explicitly when the Draft-04 verifier is
+introduced beside an existing inbound path:
+
+- `strict` accepts `PASS`, rejects `FAIL` and `PERMERROR`, and temporarily
+  defers `TEMPERROR`;
+- `permissive` accepts `FAIL` and `PERMERROR` for rollout compatibility while
+  preserving temporary deferral for `TEMPERROR`; and
+- `testing` returns non-terminal `continue` for every coherent verification
+  state so the daemon can report results without controlling delivery.
+
+The verification state remains unchanged in every mode. `testing` is the
+delivery-neutral pilot choice; `permissive` is useful when an accepting
+disposition must also authorize the optional Milter `Authentication-Results`
+action. Neither mode converts local daemon ambiguity, invalid responses,
+unavailable dependencies, or Milter fidelity failures into success.
+
+Originator signing has a separate authorization boundary and does not inherit
+the inbound policy mode. An absent or inactive exact signing policy is a
+permanent refusal; an unavailable datasource remains temporary. Route an
+envelope-derived originator Milter only to domains with exact active profiles.
+Its documented null-sender rejection also requires a separate static-domain
+route or an MTA bypass for delivery-status notifications.
+
 ### Explicitly disabled replay
 
 This is the smallest valid document:

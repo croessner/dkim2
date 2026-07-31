@@ -457,6 +457,7 @@ var portableDefinitions = []runnerDefinition{
 			{key: "milter\x00callback-order-negative", testName: "TestIllegalCallbackOrderFailsClosed", artifacts: []string{milterNegativeArtifact}},
 			{key: "milter\x00frame-limit-negative", testName: "TestReadFrameEnforcesDefaultAndCommandSpecificCaps", artifacts: []string{milterNegativeArtifact}},
 			{key: "milter\x00partial-mutation-negative", testName: "TestWriteFramesClassifiesWriterPanicAsIndeterminate", artifacts: []string{milterNegativeArtifact}},
+			{key: "milter\x00pre-mail-abort-helo-reuse", testName: "TestAbortBeforeMailAllowsPostfixConnectionReuse", artifacts: []string{milterNegativeArtifact}},
 			{key: "milter\x00timeout-privacy-negative", testName: "TestHandlerDeadlineMapsToFixedTempfail", artifacts: []string{milterNegativeArtifact}},
 		},
 	},
@@ -517,9 +518,13 @@ var portableDefinitions = []runnerDefinition{
 		cases: []runnerCase{{
 			key: "exim\x00linux-real-matrix",
 			artifacts: []string{
+				"exim-qualification-builder",
+				"exim-qualification-container-driver",
 				"exim-qualification-contract",
+				"exim-qualification-driver",
 				"exim-qualification-executor",
 				"exim-qualification-helper",
+				"exim-qualification-input-verifier",
 				"exim-qualification-schema",
 				"exim-qualification-verifier",
 			},

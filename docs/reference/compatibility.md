@@ -7,8 +7,8 @@ is a reviewed behavior migration, not an automatic compatibility update.
 ## Public surfaces
 
 - The exported root library API is unchanged from the exact reviewed base
-  `b3979123febbc333fb8ed85c8c1801ba5caf5def` except for the reviewed public
-  datasource-provider bridge required by the LDAP/PostgreSQL adapters. The
+  `24d7b4eb85430bbc49e3a6ef43889d1be8cd0718`. This includes the reviewed public
+  datasource-provider bridge used by the LDAP/PostgreSQL adapters. The
   deterministic API manifest has 645 declarations and SHA-256
   `2d755de5b0941bc8a1b12270fd43e86a4ace9a8b432d94a77b260d9f5901988f`.
 - Daemon HTTP shapes and bounds are authoritative only in

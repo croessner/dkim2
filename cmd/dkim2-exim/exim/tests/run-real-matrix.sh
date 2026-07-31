@@ -11,6 +11,7 @@ expected_adapter_sha256=${DKIM2_EXIM_REAL_MATRIX_ADAPTER_SHA256:-}
 expected_daemon_sha256=${DKIM2_EXIM_REAL_MATRIX_DAEMON_SHA256:-}
 # shellcheck disable=SC1090,SC1091
 source "$script_dir/real-matrix-contract.sh"
+shopt -s dotglob nullglob
 
 # fail emits one content-free matrix verification failure.
 fail() {
@@ -27,28 +28,44 @@ require_regular_file() {
 
 # require_exact_line proves one fixture-derived field without accepting aliases.
 require_exact_line() {
-  local path=$1 line=$2
-  grep -Fqx -- "$line" "$path" ||
-    fail "evidence value does not match its authenticated fixture"
+  local path=$1 line=$2 current
+  while IFS= read -r current; do
+    if [[ $current == "$line" ]]; then
+      return
+    fi
+  done <"$path"
+  fail "evidence value does not match its authenticated fixture"
 }
 
 # manifest_value returns one unique non-empty key from an exact record.
 manifest_value() {
-  local path=$1 key=$2 value
-  value=$(awk -F= -v key="$key" \
-    '$1 == key { count++; value = substr($0, length(key) + 2) }
-     END { if (count == 1) print value }' "$path")
-  [[ -n $value ]] || fail "evidence has a missing or duplicate field"
+  local path=$1 key=$2 line line_key value='' count=0
+  while IFS= read -r line; do
+    [[ $line == *=* ]] || continue
+    line_key=${line%%=*}
+    if [[ $line_key == "$key" ]]; then
+      count=$((count + 1))
+      value=${line#*=}
+    fi
+  done <"$path"
+  [[ $count -eq 1 && -n $value ]] ||
+    fail "evidence has a missing or duplicate field"
   printf '%s\n' "$value"
 }
 
 # sha256_file computes one portable lowercase SHA-256 digest.
 sha256_file() {
+  local digest
   if command -v sha256sum >/dev/null 2>&1; then
-    sha256sum "$1" | awk '{ print $1 }'
+    read -r digest _ < <(sha256sum "$1") ||
+      fail "evidence digest is unavailable"
   else
-    shasum -a 256 "$1" | awk '{ print $1 }'
+    read -r digest _ < <(shasum -a 256 "$1") ||
+      fail "evidence digest is unavailable"
   fi
+  [[ $digest =~ ^[0-9a-f]{64}$ ]] ||
+    fail "evidence digest is not canonical"
+  printf '%s\n' "$digest"
 }
 
 # go_binary returns the container-pinned toolchain or the host Go executable.
@@ -165,7 +182,7 @@ validate_live_observation() {
 observation_token_value() {
   local observation=$1 key=$2 token value='' count=0
   local -a tokens
-  IFS=',' read -r -a tokens <<<"$observation"
+  IFS=',' read -r -a tokens < <(printf '%s\n' "$observation")
   for token in "${tokens[@]}"; do
     if [[ $token == "$key-"* ]]; then
       value=${token#"$key-"}
@@ -232,17 +249,33 @@ validate_exact_grammar() {
   local path=$1
   shift
   local expected_count=$#
-  [[ $(wc -l <"$path" | tr -d ' ') == "$expected_count" ]] ||
+  local -a ordered=("$@")
+  local line key value count=0
+  while IFS= read -r line; do
+    [[ $count -lt $expected_count && $line == *=* &&
+      $line != *$'\r'* ]] ||
+      fail "evidence record grammar is not exact"
+    key=${line%%=*}
+    value=${line#*=}
+    [[ -n $key && $key == "${ordered[$count]}" && -n $value ]] ||
+      fail "evidence record grammar is not exact"
+    count=$((count + 1))
+  done <"$path"
+  [[ -z $line ]] ||
+    fail "evidence record grammar is not exact"
+  [[ $count -eq $expected_count ]] ||
     fail "evidence record does not have the exact line count"
-  awk -v expected="$expected_count" -v keys="$*" '
-    BEGIN { split(keys, ordered, " ") }
-    {
-      separator = index($0, "=")
-      if (separator < 2 || substr($0, 1, separator - 1) != ordered[NR]) exit 1
-      if (substr($0, separator + 1) == "") exit 1
-    }
-    END { if (NR != expected) exit 1 }
-  ' "$path" || fail "evidence record grammar is not exact"
+}
+
+# direct_entry_inventory emits one direct directory inventory without subprocesses.
+direct_entry_inventory() {
+  local directory=$1 suffix=${2:-} path name
+  for path in "$directory"/*; do
+    name=${path##*/}
+    if [[ -z $suffix || $name == *"$suffix" ]]; then
+      printf '%s\n' "$name"
+    fi
+  done
 }
 
 mapfile -t rows < <(real_matrix_rows)
@@ -429,27 +462,24 @@ for row in "${rows[@]}"; do
   require_exact_line "$result" 'status=passed'
 
   actual_cases=$(
-    find "$row_directory" -mindepth 1 -maxdepth 1 -name '*.case' \
-      -exec basename {} \; | sort
+    direct_entry_inventory "$row_directory" .case | sort
   )
   [[ $actual_cases == "$expected_cases" ]] ||
     fail "row case inventory is not exact"
   expected_artifacts=$(expected_artifact_inventory | sort)
   actual_artifacts=$(
-    find "$row_directory" -mindepth 1 -maxdepth 1 -name '*.artifact' \
-      -exec basename {} \; | sort
+    direct_entry_inventory "$row_directory" .artifact | sort
   )
   [[ $actual_artifacts == "$expected_artifacts" ]] ||
     fail "row live artifact inventory is not exact"
   expected_transcripts=$(expected_transcript_inventory | sort)
   actual_transcripts=$(
-    find "$row_directory" -mindepth 1 -maxdepth 1 -name '*.transcript' \
-      -exec basename {} \; | sort
+    direct_entry_inventory "$row_directory" .transcript | sort
   )
   [[ $actual_transcripts == "$expected_transcripts" ]] ||
     fail "row sanitized transcript inventory is not exact"
   row_entries=$(
-    find "$row_directory" -mindepth 1 -maxdepth 1 -exec basename {} \; | sort
+    direct_entry_inventory "$row_directory" | sort
   )
   expected_row_entries=$(
     printf '%s\n%s\n%s\n%s\n%s\n' \
@@ -486,7 +516,7 @@ for row in "${rows[@]}"; do
     contract=$(real_matrix_expected_contract "$category" "$logical_case") ||
       fail "case has no proof contract"
     read -r expected_proof expected_exim expected_adapter expected_dkim2d \
-      expected_fault expected_readback <<<"$contract"
+      expected_fault expected_readback < <(printf '%s\n' "$contract")
     proof=$(manifest_value "$case_path" proof)
     [[ $proof == "$expected_proof" ]] ||
       fail "case proof class does not match its exact contract"
@@ -593,11 +623,11 @@ for row in "${rows[@]}"; do
     require_exact_line "$case_path" "binary_sha256=$binary_hash"
     require_exact_line "$case_path" "run_id=$expected_run_id"
     require_exact_line "$case_path" 'status=passed'
-  done <<<"$expected_cases"
+  done < <(printf '%s\n' "$expected_cases")
 done
 
 actual_entries=$(
-  find "$evidence_root" -mindepth 1 -maxdepth 1 -exec basename {} \; | sort
+  direct_entry_inventory "$evidence_root" | sort
 )
 expected_entries=$(
   {
@@ -607,6 +637,16 @@ expected_entries=$(
 )
 [[ $actual_entries == "$expected_entries" ]] ||
   fail "evidence root inventory is not exact"
+
+set +e
+LC_ALL=C grep -r -q '[^ -~]' "$evidence_root"
+character_status=$?
+set -e
+case "$character_status" in
+  0) fail "evidence contains a non-printable or non-ASCII byte" ;;
+  1) ;;
+  *) fail "evidence character scan could not inspect the evidence root" ;;
+esac
 
 set +e
 LC_ALL=C grep -E -i -R -n \

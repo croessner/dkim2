@@ -5,6 +5,9 @@
 !cmd/dkim2d/**
 !cmd/dkim2-milter/**
 !cmd/dkim2ctl/**
+!cmd/dkim2-exim/
+!cmd/dkim2-exim/go.mod
+!cmd/dkim2-exim/go.sum
 !tools/
 !tools/go.mod
 !tools/go.sum

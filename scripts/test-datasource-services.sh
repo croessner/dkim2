@@ -338,7 +338,7 @@ candidate="$(GOCACHE="${GOCACHE:-/tmp/dkim2-go-build-cache}" \
 	printf '%s\n' \
 		'{' \
 		'  "schema": "dkim2.datasource-integration-report.v1",' \
-		'  "base_revision": "b3979123febbc333fb8ed85c8c1801ba5caf5def",' \
+		'  "base_revision": "24d7b4eb85430bbc49e3a6ef43889d1be8cd0718",' \
 		"  \"candidate_snapshot_sha256\": \"$candidate\"," \
 		"  \"ldap_image\": \"$ldap_image\"," \
 		"  \"postgresql_image\": \"$postgresql_image\"," \

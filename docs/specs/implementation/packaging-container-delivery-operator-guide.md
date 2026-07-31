@@ -13,8 +13,8 @@ policy. They must not be described as new DKIM2 protocol requirements.
 This document's later Exim deferral rows remain historical M20 acceptance
 records. M17 subsequently qualified the source-linked Exim adapter on Linux
 across five authenticated upstream, Debian, and Ubuntu rows, with all 43 cases
-passing per row and the fail-closed privacy verifier passing under run ID
-`0487837fbec882979f6cf290e2d1ccb36d37a07558f03e64f77fa0cc5a7cca6b`.
+passing per row and the fail-closed privacy verifier passing. The
+candidate-bound run ID remains in generated full-profile evidence.
 That `qualified_linux` result is source-row qualification, not a claim that a
 portable universal Exim object or container image exists. Current packaging
 and operator boundaries are documented in `docs/operations/exim.md`,

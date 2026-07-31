@@ -151,7 +151,8 @@ func TestCanonicalJSONIsDeterministic(t *testing.T) {
 func TestPeerContainerArgumentsEnforceTheClosedSandbox(t *testing.T) {
 	arguments := peerContainerArguments("/safe/peer.test", "^TestPeer$")
 	for _, required := range []string{
-		"--pull", "never", "--network", "none", "--read-only",
+		"--pull", "never", "--platform", "linux/amd64",
+		"--network", "none", "--read-only",
 		"--cap-drop", "ALL", "--security-opt", "no-new-privileges",
 		"--pids-limit", "32", "--memory", "256m", "--cpus", "1",
 		"--ulimit", "nofile=64:64", "fsize=16777216:16777216",
@@ -184,7 +185,8 @@ func TestPeerBuildArgumentsEnforceTheClosedSandbox(t *testing.T) {
 		},
 	)
 	for _, required := range []string{
-		"--pull", "never", "--network", "none", "--read-only",
+		"--pull", "never", "--platform", "linux/amd64",
+		"--network", "none", "--read-only",
 		"--cap-drop", "ALL", "--security-opt", "no-new-privileges",
 		"--user", "65534:65534", "GOPROXY=off", "GOSUMDB=off",
 		"--ulimit", "nofile=64:64", "fsize=134217728:134217728",

@@ -112,6 +112,20 @@ func TestInventoryCanonicalizesLegacySelectorCase(t *testing.T) {
 	}
 }
 
+// TestInventoryRejectsUnicodeSelectorConfusables proves canonicalization never
+// maps non-ASCII LDAP spelling into the ASCII DKIM2 selector namespace.
+func TestInventoryRejectsUnicodeSelectorConfusables(t *testing.T) {
+	entry := legacyFixture("sele\u212Aor", migrationTestDomain, true)
+	records, counts, err := Inventory(
+		context.Background(),
+		&inventoryClientFake{entries: []RawEntry{entry}},
+		testConfig().Limits,
+	)
+	if err == nil || records != nil || counts != (InventoryCounts{}) {
+		t.Fatal("Unicode legacy selector confusable was accepted")
+	}
+}
+
 // TestInventoryAcceptsOnlyInactiveLegacyWildcardHistory proves historical
 // wildcard rows remain count-only and can never become DKIM2 mappings.
 func TestInventoryAcceptsOnlyInactiveLegacyWildcardHistory(t *testing.T) {

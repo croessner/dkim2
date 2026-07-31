@@ -42,6 +42,7 @@ COPY lib ./lib
 COPY cmd/dkim2d ./cmd/dkim2d
 COPY cmd/dkim2-milter ./cmd/dkim2-milter
 COPY cmd/dkim2ctl ./cmd/dkim2ctl
+COPY cmd/dkim2-exim/go.mod cmd/dkim2-exim/go.sum ./cmd/dkim2-exim/
 COPY tools/go.mod tools/go.sum ./tools/
 COPY vendor ./vendor
 RUN --network=none --mount=type=tmpfs,target=/root/.cache \

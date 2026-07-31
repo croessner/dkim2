@@ -3,9 +3,11 @@ package migration
 import (
 	"bytes"
 	"context"
+	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
 	"errors"
+	"math/big"
 
 	"github.com/croessner/dkim2"
 	"github.com/croessner/dkim2/cmd/dkim2d/internal/signingstore"
@@ -162,7 +164,11 @@ func ImportKeys(
 // into the canonical PKCS#8 representation used by the protected registry.
 func normalizeLegacyPrivateKey(encoded []byte, algorithm Algorithm) ([]byte, error) {
 	block, rest := pem.Decode(encoded)
-	if block == nil || len(block.Headers) != 0 ||
+	if block == nil {
+		return nil, errors.New("legacy private key unavailable")
+	}
+	defer clear(block.Bytes)
+	if len(block.Headers) != 0 ||
 		len(bytes.TrimSpace(rest)) != 0 {
 		return nil, errors.New("legacy private key unavailable")
 	}
@@ -173,15 +179,14 @@ func normalizeLegacyPrivateKey(encoded []byte, algorithm Algorithm) ([]byte, err
 		return nil, errors.New("legacy private key unavailable")
 	}
 	privateKey, err := x509.ParsePKCS1PrivateKey(block.Bytes)
-	if err != nil || privateKey.Validate() != nil {
+	if err != nil {
+		return nil, errors.New("legacy private key unavailable")
+	}
+	defer clearRSAPrivateKey(privateKey)
+	if privateKey.Validate() != nil {
 		return nil, errors.New("legacy private key unavailable")
 	}
 	der, err := x509.MarshalPKCS8PrivateKey(privateKey)
-	privateKey.D.SetInt64(0)
-	for _, prime := range privateKey.Primes {
-		prime.SetInt64(0)
-	}
-	clear(block.Bytes)
 	if err != nil {
 		clear(der)
 		return nil, errors.New("legacy private key unavailable")
@@ -193,6 +198,39 @@ func normalizeLegacyPrivateKey(encoded []byte, algorithm Algorithm) ([]byte, err
 		return nil, errors.New("legacy private key unavailable")
 	}
 	return normalized, nil
+}
+
+// clearRSAPrivateKey clears exported RSA secret integers owned by an imported
+// compatibility key after validation and canonical serialization.
+func clearRSAPrivateKey(privateKey *rsa.PrivateKey) {
+	if privateKey == nil {
+		return
+	}
+	if privateKey.D != nil {
+		privateKey.D.SetInt64(0)
+	}
+	for _, prime := range privateKey.Primes {
+		if prime != nil {
+			prime.SetInt64(0)
+		}
+	}
+	for _, value := range []*big.Int{
+		privateKey.Precomputed.Dp,
+		privateKey.Precomputed.Dq,
+		privateKey.Precomputed.Qinv,
+	} {
+		if value != nil {
+			value.SetInt64(0)
+		}
+	}
+	for index := range privateKey.Precomputed.CRTValues { //nolint:staticcheck // Secret erasure must include deprecated multi-prime CRT storage.
+		value := &privateKey.Precomputed.CRTValues[index] //nolint:staticcheck // See the erasure invariant above.
+		for _, secret := range []*big.Int{value.Exp, value.Coeff, value.R} {
+			if secret != nil {
+				secret.SetInt64(0)
+			}
+		}
+	}
 }
 
 // FreshDNSProver creates one new DNS provider per credential to bypass caches.

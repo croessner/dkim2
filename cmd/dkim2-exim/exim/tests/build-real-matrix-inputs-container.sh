@@ -18,9 +18,17 @@ fail() {
 [[ $source_root == /* && -d $source_root && ! -L $source_root ]] || fail
 [[ $input_root == /* && ! -e $input_root && ! -L $input_root ]] || fail
 command -v docker >/dev/null 2>&1 || fail
+base_revision=$(git -C "$repository_root" rev-parse HEAD)
+candidate_snapshot_sha256=$(
+  go -C "$repository_root/tools" run ./cmd/candidateid -root ..
+)
+[[ $base_revision =~ ^[0-9a-f]{40}$ &&
+  $candidate_snapshot_sha256 =~ ^[0-9a-f]{64}$ ]] || fail
 mkdir -m 0700 "$input_root"
 
 docker run --rm --platform linux/amd64 \
+  --env "DKIM2_BUILD_BASE_REVISION=$base_revision" \
+  --env "DKIM2_BUILD_CANDIDATE_SNAPSHOT_SHA256=$candidate_snapshot_sha256" \
   --volume "$repository_root:/workspace:ro" \
   --volume "$source_root:/sources:ro" \
   --volume "$input_root:/output" \
@@ -60,6 +68,11 @@ docker run --rm --platform linux/amd64 \
       esac
       test -f "$archive"
       archive_sha=$(sha256sum "$archive" | awk "{print \$1}")
+      source_manifest="/workspace/cmd/dkim2-exim/exim/fixtures/$row/source-manifest-v1.txt"
+      expected_archive_sha=$(awk -F= "\$1 == \"source_sha256\" { print \$2 }" "$source_manifest")
+      expected_patch_sha=$(awk -F= "\$1 == \"transport_filter_patch_sha256\" { print \$2 }" "$source_manifest")
+      test "$archive_sha" = "$expected_archive_sha"
+      test "$patch_sha" = "$expected_patch_sha"
       work=/build/$row
       mkdir -p "$work"
       tar -C "$work" -xJf "$archive"
@@ -103,12 +116,15 @@ docker run --rm --platform linux/amd64 \
         image=golang@sha256:ae5a2316d12f3e78fd99177dad452e6ad4f240af2d71d57b480c3477f250fec6 \
         platform=linux-amd64 \
         mta_uid=999 \
+        base_revision="$DKIM2_BUILD_BASE_REVISION" \
+        candidate_snapshot_sha256="$DKIM2_BUILD_CANDIDATE_SNAPSHOT_SHA256" \
         source_archive_sha256="$archive_sha" \
         transport_filter_patch_sha256="$patch_sha" \
         compiler_sha256="$compiler_sha" \
         adapter_sha256="$adapter_sha" \
         daemon_sha256="$daemon_sha" \
         binary_sha256="$binary_sha" \
+        input_state=complete \
         >"/output/$row/build-input-v1.txt"
       chmod 0600 "/output/$row/build-input-v1.txt"
       ) >"$row_log" 2>&1
@@ -117,3 +133,9 @@ docker run --rm --platform linux/amd64 \
     rm -rf /output/.go-cache
     rm -f /output/dkim2-exim /output/dkim2d
   '
+
+[[ $(git -C "$repository_root" rev-parse HEAD) == "$base_revision" ]] || fail
+current_candidate_snapshot_sha256=$(
+  go -C "$repository_root/tools" run ./cmd/candidateid -root ..
+)
+[[ $current_candidate_snapshot_sha256 == "$candidate_snapshot_sha256" ]] || fail

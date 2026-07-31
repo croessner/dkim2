@@ -81,9 +81,9 @@ The preview's public API, compatibility, issue, and limitation entry point is
 The source-linked Exim adapter, packaging validators, operations guide, and
 five-row qualification runner are implemented with capability
 `qualified_linux`. The
-unchanged matrix passed all five supported rows with 43 cases per row under run
-ID `0487837fbec882979f6cf290e2d1ccb36d37a07558f03e64f77fa0cc5a7cca6b`;
-portable reports still mark Exim execution not applicable. No prebuilt
+unchanged matrix passed all five supported rows with 43 cases per row; the
+candidate-bound run ID remains in generated full-profile evidence. Portable
+reports still mark Exim execution not applicable. No prebuilt
 universal Exim binary or container image is claimed. LDAP
 and PostgreSQL datasource providers,
 deployable schema artifacts, and the offline legacy OpenDKIM migration are

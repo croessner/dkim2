@@ -359,6 +359,56 @@ func TestAbortBeforeMailAllowsPostfixConnectionReuse(t *testing.T) {
 	}
 }
 
+// TestPreMailRecoveryRejectsMalformedTransitions proves the narrow Postfix
+// compatibility path cannot reset or bypass a live SMTP transaction.
+func TestPreMailRecoveryRejectsMalformedTransitions(t *testing.T) {
+	tests := []struct {
+		name     string
+		commands [][]byte
+	}{
+		{
+			name: "abort before HELO",
+			commands: [][]byte{
+				peerFrame(commandNegotiate, negotiationPayload()),
+				peerFrame(commandConnect, []byte("mx\x00U")),
+				peerFrame(commandAbort, nil),
+			},
+		},
+		{
+			name: "non-empty abort",
+			commands: [][]byte{
+				peerFrame(commandNegotiate, negotiationPayload()),
+				peerFrame(commandConnect, []byte("mx\x00U")),
+				peerFrame(commandHelo, []byte("helo\x00")),
+				peerFrame(commandAbort, []byte("unexpected")),
+			},
+		},
+		{
+			name: "HELO during live MAIL",
+			commands: [][]byte{
+				peerFrame(commandNegotiate, negotiationPayload()),
+				peerFrame(commandConnect, []byte("mx\x00U")),
+				peerFrame(commandHelo, []byte("helo\x00")),
+				peerFrame(commandMail, []byte("<sender@example>\x00")),
+				peerFrame(commandHelo, []byte("replacement\x00")),
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			session := testSession(t, &testHandler{}, false, modeInbound, "")
+			stream := &splitStream{reader: bytes.NewReader(
+				appendPeerFrames(test.commands...),
+			)}
+			var adapterError *Error
+			if err := session.Serve(context.Background(), stream); !errors.As(err, &adapterError) ||
+				adapterError.Class != FailureContract {
+				t.Fatalf("Serve() error=%v", err)
+			}
+		})
+	}
+}
+
 // TestTerminalReplyIsSingleFrameAndConnectionRemainsSynchronized proves EOM reuse.
 func TestTerminalReplyIsSingleFrameAndConnectionRemainsSynchronized(t *testing.T) {
 	handler := &sequenceHandler{results: []Result{

@@ -4,8 +4,8 @@ This report records the authenticated five-row implementation inputs and the
 completed Linux runtime qualification. The strict verifier accepted all
 5 × 43 cases and the final fail-closed privacy scan.
 
-- Matrix run ID:
-  `0487837fbec882979f6cf290e2d1ccb36d37a07558f03e64f77fa0cc5a7cca6b`
+- Matrix run ID: retained in the generated full-profile evidence so source or
+  product corrections cannot leave a stale durable identifier.
 - Candidate-bound run manifest: retained in the generated full-profile
   evidence rather than embedded in this candidate document, avoiding a
   self-referential snapshot digest.
@@ -21,7 +21,9 @@ completed Linux runtime qualification. The strict verifier accepted all
 
 The runner accepts only bounded status, count, version, and hash records. Raw
 mail, SMTP paths, capability material, and protected configuration content are
-not evidence artifacts.
+not evidence artifacts. Before execution, every source-row build record must
+match the current Git base and candidate snapshot, authenticated source and
+patch digests, and exact adapter, daemon, and Exim binaries.
 
 The previous Ubuntu u1.4 pre-patch observation is superseded by the
 source-matched passing row above. The `qualified_linux` claim is limited to

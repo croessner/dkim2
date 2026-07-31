@@ -49,6 +49,7 @@
 | 0.1.0-draft | 2026-07-30 | Christian Roessner / Codex | Implemented the M17 Exim adapter candidate: source-linked and version-probed `local_scan()`, bounded same-UID IPC, daemon-backed sign/revise transport filters, authenticated evidence, protected configuration, packaging validators, and a strict five-row upstream/Debian/Ubuntu qualification runner. Release compatibility remains gated on final unchanged-candidate matrix evidence; the RC remains unpublished and Draft-04 limitations are unchanged. |
 | 0.1.0-draft | 2026-07-30 | Christian Roessner / Codex | Added fail-closed multi-domain originator routing in the Milter: one static tenant may derive an exact canonical ASCII signing domain from the validated SMTP reverse-path, while null senders, literals, SMTPUTF8 domains, transit use, and every fallback remain rejected. |
 | 0.1.0-draft | 2026-07-31 | Christian Roessner / Codex | Qualified the M17 Exim adapter on Linux across all five authenticated upstream, Debian, and Ubuntu rows with 43 passing cases per row and a passing fail-closed privacy scan. Replaced the historical portable deferral with a Linux-only conformance producer: portable reports record not applicable, while full reports require explicit verified evidence imported under current manifest, base-revision, candidate-snapshot, and verifier bindings. |
+| 0.1.0-draft | 2026-07-31 | Christian Roessner / Codex | Integrated production corrections for the Postfix Milter and legacy migration: idempotent pre-MAIL abort/HELO restart, exact legacy selector lookup with a separate DKIM2 target selector, bounded inactive-wildcard history, canonical RSA PKCS#1-to-PKCS#8 import, and retained verified-TLS trust bytes across datasource reload cleanup. |
 
 ## 1. Purpose
 
@@ -1389,7 +1390,7 @@ Reusable legacy facts map as follows:
 | --- | --- | --- |
 | `associatedDomain` | `dkim2SigningDomain` | Candidate actual signing domain after canonical validation |
 | `DKIMDomain` | Policy lookup evidence only | Must equal the canonical signing domain for automatic migration |
-| `DKIMSelector` | `dkim2Selector` | Reuse only after selector validation and fresh DNS publication proof |
+| `DKIMSelector` | Canonical legacy source identity plus explicit `dkim2Selector` | Retain exact LDAP spelling internally only for protected lookup; assign a separately validated canonical DKIM2 DNS selector |
 | `DKIMKeyType=rsa` | `dkim2Algorithm=rsa-sha256` | Closed exact mapping |
 | `DKIMKeyType=ed25519` | `dkim2Algorithm=ed25519-sha256` | Closed exact mapping |
 | `DKIMActive=TRUE` | Active-profile candidate | Does not itself authorize rollout or signing |
@@ -1410,6 +1411,8 @@ The migration must assign facts absent from OpenDKIM explicitly:
 
 - `dkim2SchemaVersion`, `dkim2Generation`, and `dkim2DatasetState`;
 - `dkim2TenantID`, `dkim2ProfileID`, and `dkim2ProfileUse`;
+- canonical legacy source identities and explicit canonical DKIM2 target
+  selectors, while exact LDAP spelling remains inventory-owned lookup state;
 - `dkim2HandleID` declarations and their protected registry bindings;
 - canonical public SPKI DER derived inside the protected key-import boundary;
 - `dkim2Rollout`, `dkim2Compatibility`, and optional feedback-route policy;
@@ -1424,13 +1427,16 @@ into that registry only inside an approved protected boundary; raw key bytes
 never cross the datasource interface, appear in migration output, or enter the
 new LDAP schema.
 
-Existing selectors and cryptographic keys are compatibility candidates because
-the implemented DKIM2 resolver uses the established
-`selector._domainkey.signing-domain` owner and DKIM1-format key records. They
-are not considered published merely because they exist in LDAP. Before a
-profile becomes active, the migration must perform the same fresh DNS
-publication check required by signing and prove that the unique public DNS key
-matches the canonical SPKI derived from the protected signing handle.
+Existing cryptographic keys are compatibility candidates, but legacy selectors
+are source lookup facts rather than implicit DKIM2 DNS identities. A protected
+plan must assign an explicit canonical DKIM2 target selector, even when it
+deliberately equals the validated lowercase source selector. Before a profile
+becomes active, the migration performs the same fresh DKIM2 DNS publication
+check required by signing at
+`target-selector._domainkey.signing-domain` and proves that the unique public
+DNS key matches the canonical public key derived from the protected signing
+handle. It never proves publication at an inferred alias or at the exact-case
+legacy source selector.
 
 The legacy source permits a SigningTable lookup domain to differ from the
 KeyTable signing domain. The DKIM2 datasource deliberately has no alias,

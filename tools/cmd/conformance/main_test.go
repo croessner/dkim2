@@ -313,8 +313,8 @@ func TestConfiguredRunnersEmitExactEvidence(t *testing.T) {
 	if err != nil {
 		t.Fatalf("executeRunners() error = %v", err)
 	}
-	if len(evidence) != 57 {
-		t.Fatalf("executeRunners() evidence count = %d, want 57", len(evidence))
+	if len(evidence) != 59 {
+		t.Fatalf("executeRunners() evidence count = %d, want 59", len(evidence))
 	}
 }
 
@@ -328,9 +328,13 @@ func TestFullProfileRejectsMissingEximEvidence(t *testing.T) {
 			Provenance: "independent_oracle", Runner: eximRunner,
 			RequiredPlatform: linuxPlatform, ExpectedOutcome: passState,
 			Artifacts: []string{
+				"exim-qualification-builder",
+				"exim-qualification-container-driver",
 				"exim-qualification-contract",
+				"exim-qualification-driver",
 				"exim-qualification-executor",
 				"exim-qualification-helper",
+				"exim-qualification-input-verifier",
 				"exim-qualification-schema",
 				"exim-qualification-verifier",
 			},

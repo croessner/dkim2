@@ -22,8 +22,9 @@ marker nor a shell, package manager, compiler, source, cache, or test material.
 Build metadata is accepted only through the closed version, 40-character
 lowercase source revision, clean/dirty state, and decimal
 `SOURCE_DATE_EPOCH` fields. Builds use the checked-in workspace vendor tree,
-`CGO_ENABLED=0`, `-trimpath`, an empty Go build ID, and no VCS embedding.
-Linux `amd64` and `arm64` are the only image platforms.
+include every `go.work` module manifest needed to load that workspace,
+`CGO_ENABLED=0`, `-trimpath`, an empty Go build ID, and no VCS embedding. Linux
+`amd64` and `arm64` are the only image platforms.
 
 The checked OCI labels are source, revision, version, creation time, vendor,
 documentation, license, product title, and product description. Their exact

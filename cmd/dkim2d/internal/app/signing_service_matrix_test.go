@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -19,6 +20,7 @@ import (
 
 	"github.com/croessner/dkim2"
 	"github.com/croessner/dkim2/cmd/dkim2d/internal/signingstore"
+	"github.com/croessner/dkim2/provider"
 	"golang.org/x/sys/unix"
 )
 
@@ -59,6 +61,50 @@ type signingServiceFixture struct {
 	runtime    *signingstore.Runtime
 	publicKeys signingServicePublicKeys
 }
+
+type policyFailureAuthority struct {
+	err error
+}
+
+// Acquire returns one lease whose policy resolution exposes the configured failure.
+func (a policyFailureAuthority) Acquire(context.Context) (signingLease, error) {
+	return policyFailureLease(a), nil
+}
+
+type policyFailureLease struct {
+	err error
+}
+
+type hostilePolicyFailure struct{}
+
+// Error returns a bounded diagnostic for the hostile traversal fixture.
+func (hostilePolicyFailure) Error() string { return "hostile policy failure" }
+
+// As panics if production attempts open-interface error traversal.
+func (hostilePolicyFailure) As(any) bool { panic("hostile error traversal") }
+
+// ResolvePolicy returns the configured storage-neutral resolution failure.
+func (l policyFailureLease) ResolvePolicy(
+	context.Context,
+	string,
+	string,
+	signingstore.PolicyUse,
+	time.Time,
+) (dkim2.SigningProfile, error) {
+	return dkim2.SigningProfile{}, l.err
+}
+
+// SignDigest fails if a policy-resolution regression reaches private signing.
+func (policyFailureLease) SignDigest(
+	context.Context,
+	dkim2.PrivateKeyHandle,
+	dkim2.PrivateKeySignRequest,
+) (dkim2.PrivateKeySignResult, error) {
+	return dkim2.PrivateKeySignResult{}, dkim2.NewTemporaryProviderError()
+}
+
+// Close releases the stateless test lease.
+func (policyFailureLease) Close() error { return nil }
 
 type recordingExactAuthorizer struct {
 	exact    exactSigningAuthorizer
@@ -147,6 +193,112 @@ func TestSigningServiceMapsMissingPolicyToPermanentRefusal(t *testing.T) {
 			result.Disposition(),
 			len(result.Fields()),
 		)
+	}
+}
+
+// TestSigningServiceClassifiesDatasourcePolicyFailures proves an absent exact
+// network policy is permanent while an unavailable datasource remains retryable.
+func TestSigningServiceClassifiesDatasourcePolicyFailures(t *testing.T) {
+	fixture := newSigningServiceFixture(t)
+	request := newSigningServiceRequest(
+		t,
+		OperationSign,
+		signingServiceRawMessage(),
+		[][]byte{[]byte("<recipient@example.net>")},
+	)
+	tests := []struct {
+		name        string
+		err         error
+		result      OperationResultClass
+		disposition OperationDisposition
+	}{
+		{
+			name: "not found", err: provider.NewError(provider.ErrorCodeNotFound),
+			result: OperationPermerror, disposition: OperationReject,
+		},
+		{
+			name: "inactive", err: provider.NewError(provider.ErrorCodeInactive),
+			result: OperationPermerror, disposition: OperationReject,
+		},
+		{
+			name: "explicit permanent provider", err: dkim2.NewPermanentProviderError(),
+			result: OperationPermerror, disposition: OperationReject,
+		},
+		{
+			name: "explicit temporary provider", err: dkim2.NewTemporaryProviderError(),
+			result: OperationTemperror, disposition: OperationTempfail,
+		},
+		{
+			name: "unavailable", err: provider.NewError(provider.ErrorCodeUnavailable),
+			result: OperationTemperror, disposition: OperationTempfail,
+		},
+		{
+			name: "invalid request", err: provider.NewError(provider.ErrorCodeInvalidRequest),
+			result: OperationTemperror, disposition: OperationTempfail,
+		},
+		{
+			name: "ambiguous", err: provider.NewError(provider.ErrorCodeAmbiguous),
+			result: OperationTemperror, disposition: OperationTempfail,
+		},
+		{
+			name: "malformed data", err: provider.NewError(provider.ErrorCodeMalformedData),
+			result: OperationTemperror, disposition: OperationTempfail,
+		},
+		{
+			name: "limit exceeded", err: provider.NewError(provider.ErrorCodeLimitExceeded),
+			result: OperationTemperror, disposition: OperationTempfail,
+		},
+		{
+			name: "unsupported platform", err: provider.NewError(provider.ErrorCodeUnsupportedPlatform),
+			result: OperationTemperror, disposition: OperationTempfail,
+		},
+		{
+			name: "cancelled", err: provider.NewError(provider.ErrorCodeCancelled),
+			result: OperationTemperror, disposition: OperationTempfail,
+		},
+		{
+			name: "deadline exceeded", err: provider.NewError(provider.ErrorCodeDeadlineExceeded),
+			result: OperationTemperror, disposition: OperationTempfail,
+		},
+		{
+			name: "internal invariant", err: provider.NewError(provider.ErrorCodeInternalInvariant),
+			result: OperationTemperror, disposition: OperationTempfail,
+		},
+		{
+			name:   "wrapped not found",
+			err:    fmt.Errorf("wrapped policy failure: %w", provider.NewError(provider.ErrorCodeNotFound)),
+			result: OperationTemperror, disposition: OperationTempfail,
+		},
+		{
+			name:   "wrapped inactive",
+			err:    fmt.Errorf("wrapped policy failure: %w", provider.NewError(provider.ErrorCodeInactive)),
+			result: OperationTemperror, disposition: OperationTempfail,
+		},
+		{
+			name: "hostile traversal", err: hostilePolicyFailure{},
+			result: OperationTemperror, disposition: OperationTempfail,
+		},
+	}
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			service := &SigningService{
+				publicKeys: fixture.publicKeys,
+				store:      policyFailureAuthority{err: testCase.err},
+				clock:      time.Now,
+			}
+			result, err := service.Sign(context.Background(), request)
+			if err != nil || !result.Valid() || result.Result() != testCase.result ||
+				result.Disposition() != testCase.disposition || len(result.Fields()) != 0 {
+				t.Fatalf(
+					"Sign() error=%v valid=%t result=%q disposition=%q fields=%d",
+					err,
+					result.Valid(),
+					result.Result(),
+					result.Disposition(),
+					len(result.Fields()),
+				)
+			}
+		})
 	}
 }
 

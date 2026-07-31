@@ -444,11 +444,14 @@ negotiate -> connect -> helo -> mail -> rcpt* -> header* -> eoh -> body* -> eom
 
 `connect` and `helo` are bounded shape/diagnostic facts only. SMTP evidence
 comes from `MAIL FROM` and ordered `RCPT TO` callbacks. Abort resets the current
-transaction without ending the connection; successful or failed EOM also
-resets it. Quit ends the connection. Illegal order, duplicate singleton
-callbacks, callbacks after EOM, nested transactions, excess recipients, and
-state reuse fail closed. Connection-owned state has no package-level mutable
-data.
+transaction without ending the connection; an empty abort after HELO and before
+MAIL is an idempotent Postfix cleanup event and returns the connection to the
+HELO-ready state. A subsequent bounded HELO restart is permitted only while no
+MAIL transaction is live. Successful or failed EOM also resets transaction
+state. Quit ends the connection. Illegal order, duplicate singleton callbacks
+other than that pre-MAIL HELO restart, callbacks after EOM, nested
+transactions, excess recipients, and live-message state reuse fail closed.
+Connection-owned state has no package-level mutable data.
 
 Admission is bounded before launching per-connection work. A process-wide byte
 reservation is acquired before message collection and grows only within the

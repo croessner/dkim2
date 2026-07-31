@@ -259,6 +259,28 @@ func TestNormalizeLegacyPrivateKeyFailsClosed(t *testing.T) {
 	}
 }
 
+// TestClearRSAPrivateKeyClearsCRTSecrets proves compatibility conversion
+// cleanup includes parsed and precomputed mutable private integers.
+func TestClearRSAPrivateKeyClearsCRTSecrets(t *testing.T) {
+	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	privateKey.Precompute()
+	if privateKey.D.Sign() == 0 || privateKey.Primes[0].Sign() == 0 ||
+		privateKey.Precomputed.Dp == nil || privateKey.Precomputed.Dp.Sign() == 0 {
+		t.Fatal("RSA fixture did not contain private CRT material")
+	}
+	clearRSAPrivateKey(privateKey)
+	if privateKey.D.Sign() != 0 || privateKey.Primes[0].Sign() != 0 ||
+		privateKey.Primes[1].Sign() != 0 ||
+		privateKey.Precomputed.Dp.Sign() != 0 ||
+		privateKey.Precomputed.Dq.Sign() != 0 ||
+		privateKey.Precomputed.Qinv.Sign() != 0 {
+		t.Fatal("RSA private material survived compatibility cleanup")
+	}
+}
+
 // TestImportKeysFailsClosedBeforeRegistrySideEffects proves denial cleanup.
 func TestImportKeysFailsClosedBeforeRegistrySideEffects(t *testing.T) {
 	privatePEM := rsaPrivatePEM(t)

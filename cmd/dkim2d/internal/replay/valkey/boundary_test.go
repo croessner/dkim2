@@ -169,9 +169,13 @@ func TestReleaseCandidateModuleBoundaryIsExact(t *testing.T) {
 	}
 	const whitespaceExceptions = "" +
 		"vendor/golang.org/x/sys/unix/symaddr_zos_s390x.s whitespace=-blank-at-eol,-blank-at-eof\n" +
-		"cmd/dkim2-exim/exim/fixtures/debian-4.98.2-1+deb13u3/local_scan.patch whitespace=-blank-at-eol,-space-before-tab\n"
+		"cmd/dkim2-exim/exim/fixtures/debian-4.98.2-1+deb13u3/local_scan.patch whitespace=-blank-at-eol,-space-before-tab\n" +
+		"cmd/dkim2-exim/exim/fixtures/ubuntu-4.99.1-1ubuntu1.3/include/functions.h whitespace=-blank-at-eol\n" +
+		"cmd/dkim2-exim/exim/fixtures/ubuntu-4.99.1-1ubuntu1.4/include/functions.h whitespace=-blank-at-eol\n" +
+		"cmd/dkim2-exim/exim/fixtures/upstream-4.99.5/local_scan-expand-string.patch whitespace=-blank-at-eol,-space-before-tab\n" +
+		"cmd/dkim2-exim/packaging/exim/dkim2-transport-filter-return-path.patch whitespace=-blank-at-eol\n"
 	if attributes != whitespaceExceptions {
-		t.Fatal("vendor whitespace exception is not exact and path-scoped")
+		t.Fatal("whitespace exceptions are not exact and path-scoped")
 	}
 	if !strings.Contains(makefile, "check-vendor:") ||
 		!strings.Contains(makefile, "go -C tools run ./cmd/reference -root .. check-vendor") ||
