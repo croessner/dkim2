@@ -15,8 +15,10 @@ certification, or universal interoperability claim.
   reserved synthetic inputs. It does not cover another implementation's full
   signing, verification, recipe, custody, SMTP, replay, daemon, OpenAPI,
   telemetry, or deployment behavior.
-- Postfix/Milter qualification is implemented. Exim is reported as
-  `deferred_exim` and has no compatibility result.
+- Postfix/Milter qualification is implemented. Exim is Linux-qualified only for
+  the five source-linked upstream, Debian, and Ubuntu rows recorded in the
+  compatibility report. There is no portable Exim execution claim, universal
+  local-scan binary, or Exim container image.
 - Flat-file, LDAP, PostgreSQL, and Valkey datasource paths are implemented.
   The offline OpenDKIM migration requires separately managed verified-TLS
   services, explicit mapping, and distinct least-authority principals.

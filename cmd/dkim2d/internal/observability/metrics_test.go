@@ -149,6 +149,28 @@ func TestMetricsRejectArbitraryLabels(t *testing.T) {
 	}
 }
 
+// TestMetricsRecordEverySupportedOperation proves all implemented HTTP routes are observable.
+func TestMetricsRecordEverySupportedOperation(t *testing.T) {
+	metrics, err := NewMetrics()
+	if err != nil {
+		t.Fatal("metrics construction failed")
+	}
+	for _, operation := range []string{valueProcess, valueSign, valueRevise} {
+		metrics.HTTPStarted(operation)
+		metrics.HTTPCompleted(operation, valueStatus2XX, time.Millisecond)
+	}
+	output, err := metrics.Gather()
+	if err != nil {
+		t.Fatal("metrics gather failed")
+	}
+	for _, operation := range []string{valueProcess, valueSign, valueRevise} {
+		want := []byte(`dkim2d_http_requests_total{operation="` + operation + `",status_class="2xx"} 1`)
+		if !bytes.Contains(output, want) {
+			t.Fatalf("missing completed HTTP series for %q", operation)
+		}
+	}
+}
+
 // TestMetricsConcurrentUpdatesAreRaceSafe proves collector ownership under load.
 func TestMetricsConcurrentUpdatesAreRaceSafe(t *testing.T) {
 	metrics, err := NewMetrics()

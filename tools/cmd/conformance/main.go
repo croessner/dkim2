@@ -27,40 +27,43 @@ import (
 const manifestPath = "testdata/conformance/manifest.json"
 
 const (
-	unknownDiagnostic          = "unknown"
-	portableProfile            = "portable"
-	fullProfile                = "full"
-	linuxPlatform              = "linux"
-	eximRunner                 = "exim_deferred"
-	passState                  = "pass"
-	libraryModule              = "lib"
-	daemonModule               = "cmd/dkim2d"
-	manifestSchemaPath         = "testdata/conformance/schemas/manifest.schema.json"
-	caseSchemaPath             = "testdata/conformance/schemas/case.schema.json"
-	reportSchemaPath           = "testdata/conformance/schemas/report.schema.json"
-	eximFixtureSchemaPath      = "testdata/conformance/exim/fixture.schema.json"
-	eximResultSchemaPath       = "testdata/conformance/exim/result.schema.json"
-	signingFacadeArtifact      = "signing-facade-source"
-	signingProvenanceArtifact  = "signing-provenance"
-	signingPublicArtifact      = "signing-public"
-	signingTestKeyArtifact     = "signing-test-key"
-	daemonReplayArtifact       = "daemon-replay-source"
-	milterNegativeArtifact     = "milter-negative-source"
-	openAPINegativeArtifact    = "openapi-negative-source"
-	openAPIOperationArtifact   = "openapi-operation-source"
-	openAPIProcessFixture      = "openapi-process-report-fixture"
-	openAPIReviseFixture       = "openapi-revise-fixture"
-	openAPISignFixture         = "openapi-sign-fixture"
-	postfixRunnerName          = "postfix-qualification-runner"
-	postfixProfile             = "postfix"
-	postfixFragmentSchema      = "dkim2.postfix-qualification-fragment.v1"
-	milterPublicPeerArtifact   = "milter-public-peer-source"
-	postfixComposeArtifact     = "postfix-qualification-compose"
-	postfixDockerfileArtifact  = "postfix-qualification-dockerfile"
-	postfixRuntimeArtifact     = "postfix-qualification-runtime"
-	valkeyRunnerName           = "valkey-tests"
-	verificationGoldenTest     = "TestPublicDraft04GoldenVectors"
-	verificationPublicArtifact = "verification-public"
+	unknownDiagnostic           = "unknown"
+	portableProfile             = "portable"
+	fullProfile                 = "full"
+	linuxPlatform               = "linux"
+	eximRunner                  = "exim_qualification"
+	passState                   = "pass"
+	libraryModule               = "lib"
+	daemonModule                = "cmd/dkim2d"
+	manifestSchemaPath          = "testdata/conformance/schemas/manifest.schema.json"
+	caseSchemaPath              = "testdata/conformance/schemas/case.schema.json"
+	reportSchemaPath            = "testdata/conformance/schemas/report.schema.json"
+	eximQualificationSchemaPath = "testdata/conformance/exim/qualification.schema.json"
+	signingFacadeArtifact       = "signing-facade-source"
+	signingProvenanceArtifact   = "signing-provenance"
+	signingPublicArtifact       = "signing-public"
+	signingTestKeyArtifact      = "signing-test-key"
+	daemonReplayArtifact        = "daemon-replay-source"
+	milterNegativeArtifact      = "milter-negative-source"
+	openAPINegativeArtifact     = "openapi-negative-source"
+	openAPIOperationArtifact    = "openapi-operation-source"
+	openAPIProcessFixture       = "openapi-process-report-fixture"
+	openAPIReviseFixture        = "openapi-revise-fixture"
+	openAPISignFixture          = "openapi-sign-fixture"
+	postfixRunnerName           = "postfix-qualification-runner"
+	postfixProfile              = "postfix"
+	postfixFragmentSchema       = "dkim2.postfix-qualification-fragment.v1"
+	milterPublicPeerArtifact    = "milter-public-peer-source"
+	postfixComposeArtifact      = "postfix-qualification-compose"
+	postfixDockerfileArtifact   = "postfix-qualification-dockerfile"
+	postfixRuntimeArtifact      = "postfix-qualification-runtime"
+	eximRunnerName              = "exim-qualification-verifier"
+	valkeyRunnerName            = "valkey-tests"
+	environmentHomeTmp          = "HOME=/tmp"
+	environmentLangC            = "LANG=C"
+	environmentLocaleC          = "LC_ALL=C"
+	verificationGoldenTest      = "TestPublicDraft04GoldenVectors"
+	verificationPublicArtifact  = "verification-public"
 )
 
 // main executes one closed conformance operation.
@@ -88,6 +91,11 @@ func run(arguments []string) error {
 	flags := flag.NewFlagSet("conformance", flag.ContinueOnError)
 	root := flags.String("root", ".", "repository root")
 	profile := flags.String("profile", portableProfile, "portable or full")
+	eximEvidence := flags.String(
+		"exim-evidence",
+		"",
+		"absolute verified real-Exim evidence root required by the full profile",
+	)
 	if err := flags.Parse(arguments); err != nil || flags.NArg() != 1 {
 		return errors.New("arguments")
 	}
@@ -108,13 +116,13 @@ func run(arguments []string) error {
 		if *profile != portableProfile && *profile != fullProfile {
 			return errors.New("arguments")
 		}
-		return report(*root, *profile)
+		return report(*root, *profile, *eximEvidence)
 	default:
 		return errors.New("arguments")
 	}
 }
 
-// check validates strict schemas, manifest closure, and Exim deferral.
+// check validates strict schemas, manifest closure, and artifact bindings.
 func check(root string) error {
 	if err := conformance.ValidateSchemaClosure(root); err != nil {
 		return err
@@ -134,24 +142,6 @@ func check(root string) error {
 			return errors.New("artifact_read")
 		}
 		switch {
-		case artifact.ID == "exim-deferred-fixture":
-			if validateErr := conformance.ValidateJSONSchema(
-				root, eximFixtureSchemaPath, input, 24<<20,
-			); validateErr != nil {
-				return validateErr
-			}
-			if validateErr := conformance.ValidateDeferredEximFixture(input); validateErr != nil {
-				return validateErr
-			}
-		case artifact.ID == "exim-deferred-result":
-			if validateErr := conformance.ValidateJSONSchema(
-				root, eximResultSchemaPath, input, 1<<20,
-			); validateErr != nil {
-				return validateErr
-			}
-			if validateErr := conformance.ValidateDeferredEximResult(input); validateErr != nil {
-				return validateErr
-			}
 		case filepath.Ext(artifact.Path) == ".json" &&
 			len(artifact.Path) >= len(".case.json") &&
 			artifact.Path[len(artifact.Path)-len(".case.json"):] == ".case.json":
@@ -169,7 +159,7 @@ func check(root string) error {
 }
 
 // report renders one profile only after the same candidate passes closure.
-func report(root, profile string) error {
+func report(root, profile, eximEvidence string) error {
 	if err := check(root); err != nil {
 		return err
 	}
@@ -185,7 +175,17 @@ func report(root, profile string) error {
 	if err != nil {
 		return err
 	}
-	runnerEvidence, runnerTools, err := executeRunners(root, manifest, profile)
+	runnerEvidence, runnerTools, err := executeRunners(
+		root,
+		manifest,
+		profile,
+		qualificationBinding{
+			manifestDigest: manifestDigest,
+			revision:       revision,
+			snapshotDigest: snapshot.SHA256,
+			eximEvidence:   eximEvidence,
+		},
+	)
 	if err != nil {
 		return err
 	}
@@ -194,10 +194,7 @@ func report(root, profile string) error {
 		state := "not_run"
 		errorClass := "runner_failure"
 		producer := conformance.ToolIdentity{}
-		if manifestCase.Runner == eximRunner {
-			state = "deferred"
-			errorClass = ""
-		} else if profile == portableProfile && manifestCase.RequiredPlatform == linuxPlatform {
+		if profile == portableProfile && manifestCase.RequiredPlatform == linuxPlatform {
 			state = "not_applicable"
 			errorClass = ""
 		} else if evidence := runnerEvidence[caseKey(manifestCase.Suite, manifestCase.CaseID)]; evidence.Digest != "" {
@@ -278,6 +275,13 @@ type runnerCase struct {
 	key       string
 	testName  string
 	artifacts []string
+}
+
+type qualificationBinding struct {
+	manifestDigest string
+	revision       string
+	snapshotDigest string
+	eximEvidence   string
 }
 
 var portableDefinitions = []runnerDefinition{
@@ -503,6 +507,19 @@ var portableDefinitions = []runnerDefinition{
 			{key: "signing\x00tag-case-interpretation", testName: "TestParseAcceptsInteropFWSAndMixedCaseTags", artifacts: []string{"signature-negative-source"}},
 		},
 	},
+	{
+		name: eximRunnerName, module: "cmd/dkim2-exim", timeout: 5 * time.Minute,
+		cases: []runnerCase{{
+			key: "exim\x00linux-real-matrix",
+			artifacts: []string{
+				"exim-qualification-contract",
+				"exim-qualification-executor",
+				"exim-qualification-helper",
+				"exim-qualification-schema",
+				"exim-qualification-verifier",
+			},
+		}},
+	},
 }
 
 var valkeyVersionPattern = regexp.MustCompile(
@@ -521,15 +538,20 @@ func executeRunners(
 	root string,
 	manifest conformance.Manifest,
 	profile string,
+	binding qualificationBinding,
 ) (map[string]conformance.ToolIdentity, []conformance.ToolIdentity, error) {
 	required := make(map[string]struct{})
 	manifestCases := make(map[string]conformance.ManifestCase)
 	for _, manifestCase := range manifest.Cases {
 		key := caseKey(manifestCase.Suite, manifestCase.CaseID)
 		manifestCases[key] = manifestCase
-		if manifestCase.Runner != eximRunner &&
-			(profile != portableProfile || manifestCase.RequiredPlatform != linuxPlatform) {
+		if profile != portableProfile || manifestCase.RequiredPlatform != linuxPlatform {
 			required[key] = struct{}{}
+		}
+	}
+	if profile == fullProfile {
+		if _, err := validateEximEvidenceRoot(binding.eximEvidence); err != nil {
+			return nil, nil, fmt.Errorf("%w:%s", err, eximRunnerName)
 		}
 	}
 	defined := make(map[string]struct{})
@@ -591,6 +613,12 @@ func executeRunners(
 				root,
 				selected,
 			)
+		case eximRunnerName:
+			digest, passedCases, extraTools, runErr = executeEximQualification(
+				root,
+				selected,
+				binding,
+			)
 		default:
 			digest, passedCases, runErr = executeTestBinary(root, directory, selected)
 		}
@@ -642,13 +670,13 @@ func executePostfixQualification(
 	command.Dir = root
 	command.Env = []string{
 		"PATH=" + os.Getenv("PATH"),
-		"HOME=/tmp",
+		environmentHomeTmp,
 		"TMPDIR=/tmp",
 		"GOCACHE=/tmp/dkim2-conformance-go-cache",
 		"GOENV=off",
 		"GOTOOLCHAIN=local",
-		"LANG=C",
-		"LC_ALL=C",
+		environmentLangC,
+		environmentLocaleC,
 	}
 	dockerHost, err := qualificationDockerHostEnvironment()
 	if err != nil {
@@ -856,13 +884,13 @@ func executeValkeyHarness(
 	command.Dir = root
 	command.Env = []string{
 		"PATH=" + os.Getenv("PATH"),
-		"HOME=/tmp",
+		environmentHomeTmp,
 		"TMPDIR=/tmp",
 		"GOCACHE=/tmp/dkim2-conformance-go-cache",
 		"GOENV=off",
 		"GOTOOLCHAIN=local",
-		"LANG=C",
-		"LC_ALL=C",
+		environmentLangC,
+		environmentLocaleC,
 	}
 	command.Stdout = output
 	command.Stderr = output

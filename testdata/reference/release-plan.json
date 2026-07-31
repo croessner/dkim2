@@ -5,6 +5,7 @@
   "wire_version": "v1",
   "planned_tags": [
     "cmd/dkim2-milter/v0.1.0-rc.1",
+    "cmd/dkim2-exim/v0.1.0-rc.1",
     "cmd/dkim2ctl/v0.1.0-rc.1",
     "cmd/dkim2d/v0.1.0-rc.1",
     "lib/v0.1.0-rc.1",
@@ -13,6 +14,7 @@
   "modules": [
     {"path": "github.com/croessner/dkim2", "directory": "lib", "tag": "lib/v0.1.0-rc.1"},
     {"path": "github.com/croessner/dkim2/cmd/dkim2-milter", "directory": "cmd/dkim2-milter", "tag": "cmd/dkim2-milter/v0.1.0-rc.1"},
+    {"path": "github.com/croessner/dkim2/cmd/dkim2-exim", "directory": "cmd/dkim2-exim", "tag": "cmd/dkim2-exim/v0.1.0-rc.1"},
     {"path": "github.com/croessner/dkim2/cmd/dkim2ctl", "directory": "cmd/dkim2ctl", "tag": "cmd/dkim2ctl/v0.1.0-rc.1"},
     {"path": "github.com/croessner/dkim2/cmd/dkim2d", "directory": "cmd/dkim2d", "tag": "cmd/dkim2d/v0.1.0-rc.1"}
   ],
@@ -22,8 +24,8 @@
     "aliases": [],
     "credentials_allowed": false
   },
-  "deferrals": {
-    "exim": "deferred_exim",
+  "capabilities": {
+    "exim": "qualified_linux",
     "ldap_sql_migration": "implemented"
   }
 }

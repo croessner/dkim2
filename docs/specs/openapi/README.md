@@ -1,11 +1,12 @@
 # DKIM2 Daemon OpenAPI Contract
 
 `dkim2d.yaml` is the authoritative REST contract for the daemon. The current
-contract exposes metrics, liveness, readiness, and three authenticated
-operations: inbound process, originator sign, and ordinary-transit revise.
-Each authenticated route uses a distinct generation-bound local capability in
-the implementation even though all three share the contract's
-`X-DKIM2-Capability` header shape.
+contract exposes metrics, liveness, readiness, inbound verification/policy/replay
+processing, originator signing, and ordinary-transit revision. Each authenticated
+route uses a distinct generation-bound local capability in the implementation even
+though all three share the contract's `X-DKIM2-Capability` header shape.
+Adapter-specific message fidelity values describe how message bytes were obtained;
+they do not create adapter-specific routes or parallel DTOs.
 
 The repository pins
 `github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen` at `v2.7.1`.
@@ -17,14 +18,17 @@ make generate-openapi
 make check-openapi
 ```
 
-The server and client configurations intentionally contain no output path.
+The daemon server, test-client, Milter client/test-server, and Exim
+client/test-server configurations intentionally contain no output path.
 The Makefile supplies absolute input, configuration, and output paths so a
 different working directory cannot redirect generated artifacts.
 
-The server configuration generates models, the embedded specification, the
-standard-library HTTP server, and the strict-server boundary. The client
-configuration generates models and the generated client used by `dkim2ctl`.
-Both configurations preserve the original lower-camel operation identifiers.
+The daemon server configuration generates models, the embedded specification,
+the standard-library HTTP server, and the strict-server boundary. Client
+configurations generate models and generated clients for `dkim2ctl`, the
+Milter adapter, and the Exim adapter. Independent strict test servers support
+the Milter and Exim public integration boundaries. All configurations preserve
+the original lower-camel operation identifiers.
 
 The target-specific overlays change only the Go bindings for the protected raw
 message, reverse path, and forward paths. Each generated package uses its own

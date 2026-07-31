@@ -473,6 +473,7 @@ func contextGoldenInboundProcessor(
 		testDraftName: dkim2.DraftIdentifier,
 		"message": map[string]any{
 			"raw_rfc5322_base64": vector.Raw,
+			"fidelity":           "raw_rfc5322",
 		},
 		"smtp": map[string]any{
 			"mail_from": string(reverse),

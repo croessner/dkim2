@@ -98,7 +98,7 @@ type CandidateReport struct {
 	ModuleProxySHA256        string               `json:"module_proxy_sha256"`
 	ModuleCount              int                  `json:"module_count"`
 	Evidence                 []ArtifactIdentity   `json:"evidence"`
-	Deferrals                ReleaseDeferral      `json:"deferrals"`
+	Capabilities             ReleaseCapability    `json:"capabilities"`
 	Criteria                 []CandidateCriterion `json:"criteria"`
 	Overall                  string               `json:"overall"`
 }
@@ -203,8 +203,8 @@ func GenerateCandidateReport(root string, now time.Time) (CandidateReport, []byt
 		ModuleProofSHA256: interop.SHA256(moduleBytes),
 		ModuleProxySHA256: moduleProof.ProxySHA256, ModuleCount: len(moduleProof.Modules),
 		Evidence: evidence,
-		Deferrals: ReleaseDeferral{
-			Exim:             "deferred_exim",
+		Capabilities: ReleaseCapability{
+			Exim:             "qualified_linux",
 			LDAPSQLMigration: "implemented",
 		},
 		Criteria: []CandidateCriterion{
@@ -294,7 +294,7 @@ func renderCandidateReport(report CandidateReport) []byte {
 	fmt.Fprintf(&output, "- Result: `%s`\n", strings.ToUpper(report.Overall))
 	fmt.Fprintf(&output, "- External availability: `%s` (%d cases)\n", report.ExternalAvailability, report.ExternalCases)
 	fmt.Fprintf(&output, "- Module proxy: `%s` (%d identities)\n", report.ModuleProxySHA256, report.ModuleCount)
-	fmt.Fprintln(&output, "- Exim: `deferred_exim`")
+	fmt.Fprintln(&output, "- Exim: `qualified_linux`")
 	fmt.Fprintln(&output, "- LDAP/PostgreSQL migration: `implemented`")
 	fmt.Fprintln(&output)
 	fmt.Fprintln(&output, "## Criteria")

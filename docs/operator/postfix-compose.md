@@ -353,9 +353,12 @@ disabled/memory/Valkey replay, observability, Milter modes, fidelity,
 Authentication-Results, and failure policy are documented in the component
 READMEs and linked durable specs.
 
-Exim is incomplete and reported as `deferred_exim`. This repository does not
-yet claim a working Exim package, image, `local_scan()`, transport filter, or
-live compatibility result.
+The source-linked Exim adapter, `local_scan()`, transport filter, packaging
+validation, and five-row qualification matrix runner are implemented separately from
+this Postfix deployment. Exim is `qualified_linux` for the exact five
+source-linked rows in its compatibility report; that evidence does not extend
+this Postfix deployment and no universal binary package or Exim image is
+claimed.
 
 LDAP and PostgreSQL providers, drivers, pools, schema/DDL delivery, immutable
 generation loading, and the offline legacy OpenDKIM migration are documented

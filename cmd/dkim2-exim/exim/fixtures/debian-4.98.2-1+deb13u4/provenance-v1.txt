@@ -1,0 +1,8 @@
+format=dkim2-exim-provenance-v1
+retrieved_at=2026-07-27
+source_authority=https://security.debian.org/debian-security
+archive_suite=stable-security
+archive_codename=trixie-security
+archive_date=2026-07-26
+license=GPL-2.0-or-later
+artifact_role=authenticated-security-refresh-source

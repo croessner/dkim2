@@ -1,0 +1,67 @@
+Description: Permit one source-bound outgoing return-path filter token
+Author: DKIM2 reference implementation maintainers
+Forwarded: not-needed
+--- a/src/macros.h
++++ b/src/macros.h
+@@ -1187,6 +1187,7 @@
+ #define TSUC_EXPAND_ARGS	BIT(0)
+ #define TSUC_ALLOW_TAINTED_ARGS	BIT(1)
+ #define TSUC_ALLOW_RECIPIENTS	BIT(2)
++#define TSUC_ALLOW_DKIM2_RETURN_PATH BIT(3)
+ 
+ /* Flags for smtp_printf */
+ #define SP_MORE		TRUE
+--- a/src/transport.c
++++ b/src/transport.c
+@@ -2193,7 +2193,7 @@
+   const uschar * etext, uschar ** errptr)
+ {
+ const uschar ** argv, * s;
+-int address_count = 0, argcount = 0, max_args;
++int address_count = 0, argcount = 0, max_args, dkim2_return_path_count = 0;
+ 
+ /* Get store in which to build an argument list. Count the number of addresses
+ supplied, and allow for that many arguments, plus an additional 60, which
+@@ -2276,7 +2276,35 @@
+ 
+     /* Handle special fudge for passing an address list */
+ 
+-    if (addr &&
++    if (  (flags & TSUC_ALLOW_DKIM2_RETURN_PATH)
++       && Ustrcmp(argv[i], "$dkim2_transport_filter_return_path") == 0)
++      {
++      if (++dkim2_return_path_count != 1)
++        {
++        uschar * msg = US"DKIM2 transport-filter return path is repeated";
++        if (addr)
++          {
++          addr->transport_return = expand_failed;
++          addr->message = msg;
++          }
++        else *errptr = msg;
++        return FALSE;
++        }
++      if (!return_path)
++        {
++        uschar * msg = US"DKIM2 transport-filter return path is unavailable";
++        if (addr)
++          {
++          addr->transport_return = expand_failed;
++          addr->message = msg;
++          }
++        else *errptr = msg;
++        return FALSE;
++        }
++      argv[i] = string_copy_taint(return_path, GET_UNTAINTED);
++      }
++
++    else if (addr &&
+         (Ustrcmp(argv[i], "$pipe_addresses") == 0 ||
+          Ustrcmp(argv[i], "${pipe_addresses}") == 0))
+       {
+--- a/src/transports/smtp.c
++++ b/src/transports/smtp.c
+@@ -3876 +3876,2 @@
+-	tblock->filter_command, TSUC_EXPAND_ARGS, DEFER, addrlist,
++	tblock->filter_command,
++	TSUC_EXPAND_ARGS | TSUC_ALLOW_DKIM2_RETURN_PATH, DEFER, addrlist,

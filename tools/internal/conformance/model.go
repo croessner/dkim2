@@ -24,9 +24,9 @@ const (
 	ReportSchema = "dkim2.conformance-report.v1"
 	// SnapshotSchema identifies the candidate snapshot framing.
 	SnapshotSchema = "dkim2.candidate-snapshot.v1"
-	// EximDeferred is the only Exim capability state allowed by this suite.
-	EximDeferred = "deferred_exim"
-	maxJSONDepth = 16
+	// EximQualifiedLinux identifies the release-qualified Linux adapter surface.
+	EximQualifiedLinux = "qualified_linux"
+	maxJSONDepth       = 16
 )
 
 var (
@@ -36,21 +36,21 @@ var (
 	)
 	knownRunners = stringSet(
 		"portable_vector", "openapi_fixture", "milter_fixture",
-		"postfix_qualification", "exim_deferred",
+		"postfix_qualification", "exim_qualification",
 	)
 	knownPlatforms = stringSet("portable", "linux")
-	knownOutcomes  = stringSet("pass", "fail", "not_run", "not_applicable", "deferred")
+	knownOutcomes  = stringSet("pass", "fail", "not_run", "not_applicable")
 )
 
 const (
 	statePass              = "pass"
 	stateFail              = "fail"
 	stateNotRun            = "not_run"
-	stateDeferred          = "deferred"
+	stateNotApplicable     = "not_applicable"
 	profilePortable        = "portable"
 	profileFull            = "full"
 	platformLinux          = "linux"
-	runnerExim             = "exim_deferred"
+	runnerExim             = "exim_qualification"
 	classAdapter           = "adapter_contract"
 	moduleConformance      = "testdata/conformance"
 	capLibrary             = "library"
@@ -255,17 +255,13 @@ func (r Report) validateCases(manifest Manifest) error {
 				(result.ProducerSHA256 != "" || result.Producer != "") {
 			return errors.New("report_producer")
 		}
-		if (result.State == statePass || result.State == stateDeferred ||
-			result.State == "not_applicable") != (result.Error == "") {
+		if (result.State == statePass ||
+			result.State == stateNotApplicable) != (result.Error == "") {
 			return errors.New("report_error")
 		}
 		switch {
-		case manifestCase.Runner == runnerExim:
-			if result.State != stateDeferred {
-				return errors.New("report_exim_state")
-			}
 		case manifestCase.RequiredPlatform == platformLinux && r.Profile == profilePortable:
-			if result.State != "not_applicable" {
+			if result.State != stateNotApplicable {
 				return errors.New("report_platform_state")
 			}
 		default:
@@ -373,7 +369,11 @@ func (r Report) RenderText() []byte {
 	output.WriteString("- Milter evidence uses byte-exact callback reconstruction, not an original SMTP wire image. Postfix prepends its own `Received` field outside Milter-visible message bytes.\n")
 	output.WriteString("- Postfix execution is Linux-only and covers the pinned qualification image, explicit Milter-v6 timeouts, SMTP intake, and simulated non-SMTP callbacks.\n")
 	output.WriteString("- Replay detection is a restrictive local security policy layered after protocol verification; it is not a DKIM2 cryptographic result.\n")
-	output.WriteString("- Exim execution is deferred; no live Exim conformance or compatibility claim is made.\n")
+	if r.Profile == profilePortable {
+		output.WriteString("- Exim qualification is Linux-only and is not executed or claimed by this portable report.\n")
+	} else {
+		output.WriteString("- Exim execution is admitted only from a separately verified five-row, 43-case-per-row Linux evidence import bound to this candidate.\n")
+	}
 	output.WriteString("- Draft-04 architecture references, EAI considerations, IANA considerations, and security considerations remain `TBA`; implemented interpretations are reported separately from normative claims.\n\n")
 	output.WriteString("## Reproduce\n\n```text\nmake check-conformance\nmake conformance\n")
 	if r.Profile == profileFull {

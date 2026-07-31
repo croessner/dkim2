@@ -18,7 +18,8 @@ The manifest keeps the source of every claim visible:
 - `local_security_policy` covers restrictive implementation policy, including
   replay handling; it is not protocol verification.
 - `openapi_contract` covers the generated daemon HTTP boundary.
-- `adapter_contract` covers Milter and real Postfix integration behavior.
+- `adapter_contract` covers Milter, real Postfix, and source-linked real Exim
+  integration behavior.
 
 Draft-04 still marks architecture references, EAI considerations, IANA
 considerations, and security considerations as `TBA`. The implementation does
@@ -37,7 +38,15 @@ documented RFC 6531 interpretation.
 | Replay detection | supported local policy | Memory and Valkey evidence; replay outcome is deliberately separate from DKIM2 cryptographic verification |
 | LDAP and PostgreSQL signing datasources | supported local policy | Exact schema/DDL, shared provider parity, verified-TLS loaders, immutable generation and protected-registry tests |
 | Offline OpenDKIM migration | supported administrative policy | Bounded inventory, protected key import, fresh DNS proof, fenced publication, and higher-generation rollback tests |
-| Exim | deferred | Frozen future fixture/result schemas only; live execution and compatibility evidence are absent |
+| Exim | qualified on Linux | Source-linked module and strict imported five-row matrix: upstream 4.99.5, Debian 4.98.2 security revisions, and Ubuntu 4.99.1 updates/security revisions; 43 cases passed per row |
+
+Exim rewrites the timestamp in its first generated `Received` field after
+`local_scan()` returns. Exim fidelity evidence therefore requires that field
+on both sides, excludes exactly that first field from the stable comparison,
+and proves the remaining headers, header boundary, and body byte-for-byte.
+Later `Received` fields are not removed. This matches DKIM2 canonicalization,
+which excludes `Received`, while preserving the pre-acceptance Exim-observed
+message sent to the daemon.
 
 Postfix prepends its own `Received` field outside the bytes visible to Milters.
 The final queued message therefore contains that field while the daemon input
@@ -67,17 +76,29 @@ make check-conformance
 make conformance
 ```
 
-The real Postfix profile additionally requires Docker with Compose:
+The real Postfix profile additionally requires Docker with Compose. The full
+profile also requires the absolute preserved Exim evidence root:
 
 ```text
 make conformance-postfix
-make conformance-all
+make conformance-all EXIM_EVIDENCE_ROOT=/absolute/path/to/exim-evidence
 ```
+
+`make conformance-all` fails before report production when
+`EXIM_EVIDENCE_ROOT` is empty. The Make target passes that absolute directory
+to the conformance command as
+`-exim-evidence /absolute/path/to/exim-evidence`; no implicit discovery or
+portable-profile fallback is permitted.
 
 Generated `report.json` and `report.md` files are written below ignored
 `.artifacts/` directories. The machine report records the manifest digest, Git
 base, candidate snapshot, platform/profile, exact producer hashes, ordered
-cases, evidence classes, and explicit Exim deferral.
+cases, evidence classes, and the explicit release capability. Portable reports
+record the Linux-only Exim case as `not_applicable` and never open or claim an
+Exim evidence path. Full reports rerun the strict real-matrix verifier and
+admit only a bounded import summary bound to the current manifest, Git base,
+candidate snapshot, and verifier digest. Missing or stale evidence fails the
+full profile closed.
 
 The separate repository security profile consumes these reports without
 reclassifying their claims. See `docs/security-testing.md` and run

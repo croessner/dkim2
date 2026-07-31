@@ -44,7 +44,7 @@ var allowedSpanValues = map[string][]string{
 	"dkim2.reason_class":  {valueNone, valueProtocol, valuePolicy, valueAvailability, valueInternal},
 	"dkim2.error_class":   {valueNone, "canceled", "deadline", valueTemporary, valueInternal},
 	"http.request.method": {"GET", "HEAD", "POST", "OPTIONS", "other"},
-	"http.route":          {"/healthz", "/readyz", "/metrics", "/v1/process", valueUnmatched},
+	"http.route":          {"/healthz", "/readyz", "/metrics", "/v1/process", "/v1/sign", "/v1/revise", valueUnmatched},
 }
 
 // SpanOutcome identifies whether one completed span represents an invariant failure.

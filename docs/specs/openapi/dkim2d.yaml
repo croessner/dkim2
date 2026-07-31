@@ -777,6 +777,8 @@ components:
           enum:
             - raw_rfc5322
             - milter_reconstructed_crlf
+            - exim_local_scan_observed_crlf
+            - exim_transport_filter_crlf
     SMTPInput:
       type: object
       additionalProperties: false

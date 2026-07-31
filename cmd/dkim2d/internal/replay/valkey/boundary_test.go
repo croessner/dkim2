@@ -167,8 +167,10 @@ func TestReleaseCandidateModuleBoundaryIsExact(t *testing.T) {
 		strings.Contains(vendorModules, "# "+candidate+" =>") {
 		t.Fatal("workspace vendor metadata does not record the exact candidate")
 	}
-	const whitespaceException = "vendor/golang.org/x/sys/unix/symaddr_zos_s390x.s whitespace=-blank-at-eol,-blank-at-eof\n"
-	if attributes != whitespaceException {
+	const whitespaceExceptions = "" +
+		"vendor/golang.org/x/sys/unix/symaddr_zos_s390x.s whitespace=-blank-at-eol,-blank-at-eof\n" +
+		"cmd/dkim2-exim/exim/fixtures/debian-4.98.2-1+deb13u3/local_scan.patch whitespace=-blank-at-eol,-space-before-tab\n"
+	if attributes != whitespaceExceptions {
 		t.Fatal("vendor whitespace exception is not exact and path-scoped")
 	}
 	if !strings.Contains(makefile, "check-vendor:") ||

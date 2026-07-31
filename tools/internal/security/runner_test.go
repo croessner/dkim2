@@ -134,7 +134,7 @@ func TestSecurityReportRejectsFindingOverclaimAndEvidenceTamper(t *testing.T) {
 		GoVersion: testGoVersion, GOOS: testGOOS, GOARCH: testGOARCH,
 		Race: racePassState, FuzzTargets: len(Targets()), FuzzState: passState,
 		VulnerabilityState: passState, Evidence: evidence,
-		Exim: conformance.EximDeferred, Overall: passState,
+		Exim: conformance.EximQualifiedLinux, Overall: passState,
 	}
 	if err := report.Validate(); err != nil {
 		t.Fatal(err)
@@ -148,7 +148,7 @@ func TestSecurityReportRejectsFindingOverclaimAndEvidenceTamper(t *testing.T) {
 	if err := report.Validate(); err == nil {
 		t.Fatal("Exim overclaim was accepted")
 	}
-	report.Exim = conformance.EximDeferred
+	report.Exim = conformance.EximQualifiedLinux
 	report.Evidence[0].SHA256 = "marker-private-key"
 	if err := report.Validate(); err == nil {
 		t.Fatal("tampered evidence was accepted")
@@ -445,7 +445,7 @@ func TestSecuritySchemasAcceptExactEvidenceAndRejectUnknownMembers(t *testing.T)
 		GoVersion: testGoVersion, GOOS: testGOOS, GOARCH: testGOARCH,
 		Race: racePassState, FuzzTargets: len(Targets()), FuzzState: passState,
 		VulnerabilityState: passState, Evidence: evidence,
-		Exim: conformance.EximDeferred, Overall: passState,
+		Exim: conformance.EximQualifiedLinux, Overall: passState,
 	}
 	if err := validateSchemaValue(
 		root,

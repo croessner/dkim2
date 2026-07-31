@@ -1,0 +1,18 @@
+#!/usr/bin/make -f
+
+daemons = exim4-daemon-light exim4-daemon-heavy
+
+unpack-configs-stamp:
+
+bdir-stamp:
+
+override_dh_auto_configure: unpack-configs-stamp bdir-stamp
+	@for i in $(daemons) ; do \
+		mkdir -p b-$$i/Local; \
+		touch EDITME.`echo $$i | sed -e s/exim4-daemon/exim4/` EDITME.eximon; \
+		cp EDITME.`echo $$i | sed -e s/exim4-daemon/exim4/` \
+		b-$$i/Local/Makefile && \
+		cp EDITME.eximon b-$$i/Local/eximon.conf ;\
+		done
+
+override_dh_auto_build:

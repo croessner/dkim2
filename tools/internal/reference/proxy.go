@@ -33,7 +33,7 @@ const (
 	maxModuleBytes    = int64(256 << 20)
 )
 
-var proofModules = []string{"cmd/dkim2-milter", "cmd/dkim2ctl", "cmd/dkim2d", "tools"}
+var proofModules = []string{"cmd/dkim2-milter", "cmd/dkim2-exim", "cmd/dkim2ctl", "cmd/dkim2d", "tools"}
 
 // ModuleIdentity records one exact private-proxy module artifact.
 type ModuleIdentity struct {

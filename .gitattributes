@@ -1,1 +1,6 @@
 vendor/golang.org/x/sys/unix/symaddr_zos_s390x.s whitespace=-blank-at-eol,-blank-at-eof
+cmd/dkim2-exim/exim/fixtures/debian-4.98.2-1+deb13u3/local_scan.patch whitespace=-blank-at-eol,-space-before-tab
+cmd/dkim2-exim/exim/fixtures/ubuntu-4.99.1-1ubuntu1.3/include/functions.h whitespace=-blank-at-eol
+cmd/dkim2-exim/exim/fixtures/ubuntu-4.99.1-1ubuntu1.4/include/functions.h whitespace=-blank-at-eol
+cmd/dkim2-exim/exim/fixtures/upstream-4.99.5/local_scan-expand-string.patch whitespace=-blank-at-eol,-space-before-tab
+cmd/dkim2-exim/packaging/exim/dkim2-transport-filter-return-path.patch whitespace=-blank-at-eol

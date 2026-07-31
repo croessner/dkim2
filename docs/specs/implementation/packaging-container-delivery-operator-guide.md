@@ -8,6 +8,19 @@ historical `draft-chuang-dkim2-dns-04` behavior baseline. Packaging, deployment,
 health probes, supply-chain evidence, and operator procedures are local product
 policy. They must not be described as new DKIM2 protocol requirements.
 
+## Later M17 Qualification Addendum (2026-07-31)
+
+This document's later Exim deferral rows remain historical M20 acceptance
+records. M17 subsequently qualified the source-linked Exim adapter on Linux
+across five authenticated upstream, Debian, and Ubuntu rows, with all 43 cases
+passing per row and the fail-closed privacy verifier passing under run ID
+`0487837fbec882979f6cf290e2d1ccb36d37a07558f03e64f77fa0cc5a7cca6b`.
+That `qualified_linux` result is source-row qualification, not a claim that a
+portable universal Exim object or container image exists. Current packaging
+and operator boundaries are documented in `docs/operations/exim.md`,
+`docs/reports/exim-compatibility-2026-07-27.md`, and
+`docs/reference/known-limitations.md`.
+
 ## Source Documents And Precedence
 
 This specification is governed, in order, by:

@@ -1,0 +1,4 @@
+#ifndef DKIM2_EXIM_BUILD_ID_V1_H
+#define DKIM2_EXIM_BUILD_ID_V1_H
+#define DKIM2_EXIM_BUILD_ID_V1 "1e4e45acc2eb7088d52b8a5bc3b60f9023053b68ba6f4e0bb1b36a98cedc25bd"
+#endif

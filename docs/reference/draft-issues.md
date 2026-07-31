@@ -26,8 +26,10 @@ is independently observed.
 ## Adapter and preview limitations
 
 - `DKIM2-ISSUE-0015` keeps Milter/SMTP fidelity in the adapter claim class.
-- `DKIM2-ISSUE-0016` keeps Exim deferred. The first preview does not claim
-  Exim qualification or compatibility.
+- `DKIM2-ISSUE-0016` records the completed Exim qualification boundary. The
+  Linux-only claim requires the verified five-row evidence import to match the
+  current manifest, base revision, candidate snapshot, and verifier producer;
+  portable reports mark the case not applicable.
 
 The repository has not filed, commented on, or modified any upstream issue as
 part of this release-candidate work.

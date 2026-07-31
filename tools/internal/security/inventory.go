@@ -25,11 +25,12 @@ const (
 	// DNSDraft is the exact historical DNS behavior baseline used by security evidence.
 	DNSDraft = "draft-chuang-dkim2-dns-04"
 	// BaseRevision is the fixed reference-candidate implementation base.
-	BaseRevision = "25a9944329d0067db4c7c30b0ba69c1028a44b30"
+	BaseRevision = "b3979123febbc333fb8ed85c8c1801ba5caf5def"
 	// FuzzDuration is the minimum unchanged-candidate duration for each target.
 	FuzzDuration = "10s"
 
 	moduleMilter          = "cmd/dkim2-milter"
+	moduleExim            = "cmd/dkim2-exim"
 	moduleControl         = "cmd/dkim2ctl"
 	moduleDaemon          = "cmd/dkim2d"
 	moduleLibrary         = "lib"
@@ -80,6 +81,16 @@ type ResourceOwner struct {
 // Targets returns the immutable closed first-party fuzz inventory.
 func Targets() []FuzzTarget {
 	targets := []FuzzTarget{
+		target("cmd/dkim2-exim/internal/config/config_test.go", "FuzzDecode", "Exim adapter configuration", "local_security_policy", "bounded strict adapter configuration decoding"),
+		target("cmd/dkim2-exim/internal/daemon/admission_test.go", "FuzzOperationAdmission", "Exim daemon operation admission", "openapi_contract", "bounded closed operation request admission"),
+		target("cmd/dkim2-exim/internal/daemon/mapping_test.go", "FuzzMapTransportFilterMessage", "Exim transport message projection", "adapter_contract", "bounded byte-preserving CRLF reconstruction"),
+		target("cmd/dkim2-exim/internal/evidence/manifest_test.go", "FuzzStoreManifest", "Exim evidence manifest", "local_security_policy", "bounded strict durable manifest decoding"),
+		target("cmd/dkim2-exim/internal/evidence/readiness_test.go", "FuzzDecodeReadiness", "Exim evidence readiness", "local_security_policy", "bounded strict readiness decoding"),
+		target("cmd/dkim2-exim/internal/evidence/record_test.go", "FuzzDecode", "Exim evidence record", "adapter_contract", "bounded authenticated record decoding"),
+		target("cmd/dkim2-exim/internal/filter/input_test.go", "FuzzInvocationParsing", "Exim filter invocation", "adapter_contract", "bounded exact direct argument admission"),
+		target("cmd/dkim2-exim/internal/filter/rewrite_test.go", "FuzzTransform", "Exim filter rewriting", "adapter_contract", "bounded complete message transformation"),
+		target("cmd/dkim2-exim/internal/ipc/codec_test.go", "FuzzRequestCodec", "Exim IPC request", "adapter_contract", "bounded framed request decoding"),
+		target("cmd/dkim2-exim/internal/ipc/codec_test.go", "FuzzResponseCodec", "Exim IPC response", "adapter_contract", "bounded framed response decoding"),
 		target("cmd/dkim2-milter/internal/config/config_test.go", "FuzzConfigurationManifestParsingNeverPanics", "protected Milter configuration", "local_security_policy", "strict bounded YAML and protected-file validation"),
 		target("cmd/dkim2-milter/internal/daemon/handler_behavior_test.go", "FuzzRawDaemonResponseAndActionAdmissionNeverPanics", "Milter daemon response", "openapi_contract", "bounded response and closed action admission"),
 		target("cmd/dkim2-milter/internal/integration/milter_fixture_test.go", "FuzzMilterFixtureDecoding", "portable Milter fixture", "adapter_contract", "bounded strict fixture decoding"),
@@ -178,6 +189,7 @@ func ResourceOwners() []ResourceOwner {
 		resource("datasource", "lib/internal/datasource and cmd/dkim2d/internal/datasource and cmd/dkim2d/internal/migration", []string{"identifier_bytes", "records", "profiles", "policies", "handles", "generations", "json_bytes", dimensionJSONDepth, "backend_bytes", "pages", "responses", "connections", "report_bytes"}, "lib/internal/datasource/limits_test.go#TestHardAndDefaultLimitsMatchFrozenMaxima", "lib/internal/datasource/limits_test.go#TestUsageRejectsOneOverNegativeOverflowAndInconsistentValues", "cmd/dkim2d/internal/migration/inventory_test.go#TestDryRunNeverRequestsKeysOrPublishesIdentity"),
 		resource("deployment", "tools/cmd/deploymentfixture", []string{"dns_query_bytes", "dns_labels", "dns_options", "dns_record_bytes", "smtp_reply_bytes", "queue_identifier_bytes", "captured_message_bytes"}, "tools/cmd/deploymentfixture/main_test.go#TestAnswerDNSBoundsQueriesAndReturnsOnlyBoundTXT", "tools/cmd/deploymentfixture/main_test.go#TestSMTPReplyRequiresExactQueuedAcceptance"),
 		resource("dns", "lib/internal/keyresolver", []string{"owner_bytes", "labels", "rr_count", "txt_bytes", "key_bytes", "lookups", "cache_entries", "flights", dimensionWaiters}, "lib/internal/keyresolver/limits_test.go#TestDefaultLimitsMatchClosedDNSBounds", "lib/internal/keyresolver/flight_test.go#TestFlightWaiterLimitAllowsExactAndRejectsOneOver"),
+		resource("exim", "cmd/dkim2-exim", []string{"message_bytes", "header_bytes", "header_fields", "recipients", "envelope_bytes", "ipc_frame_bytes", "evidence_records", "evidence_bytes"}, "cmd/dkim2-exim/internal/filter/input_test.go#TestBuildRequestValidatesMessageBeforeEvidence", "cmd/dkim2-exim/internal/ipc/codec_test.go#TestRequestRejectsHeaderAggregateBeforeNextAllocation"),
 		resource("http", "cmd/dkim2d/internal/httpjson", []string{"request_line_bytes", "header_bytes", "body_bytes", dimensionJSONDepth, "json_tokens", "decoded_message_bytes", dimensionEnvelopeByte, "in_flight", dimensionWaiters, "response_bytes"}, "cmd/dkim2d/internal/httpjson/http_boundary_matrix_test.go#TestHTTPBoundaryRawMethodTargetAndHeadLimits", "cmd/dkim2d/internal/httpjson/body_preflight_test.go#TestReadProcessBodyAcceptsExactLimitAndRejectsOneOver"),
 		resource("interop", "tools/internal/interop", []string{"registry_bytes", "json_depth", "json_tokens", "sources", "response_bytes", "redirects", "files", "file_bytes", "total_bytes", "path_bytes", "tree_depth", "timeout", "candidates", "operations", "comparison_cases"}, "tools/internal/interop/model_test.go#TestRegistryRejectsCommandAuthorityAndUnsafeURLs", "tools/internal/interop/model_test.go#TestDiscoveryOutageCannotBecomeCandidateAbsence"),
 		resource("milter", "cmd/dkim2-milter/internal/milter", []string{"frame_bytes", "connections", "messages", "buffered_bytes", "headers", "recipients", "actions", "daemon_response_bytes", "timeouts"}, "cmd/dkim2-milter/internal/milter/state_matrix_test.go#TestReadFrameEnforcesDefaultAndCommandSpecificCaps", "cmd/dkim2-milter/internal/milter/state_matrix_test.go#TestSessionLimitInvariantsFailAtConstruction"),
@@ -300,7 +312,7 @@ func moduleAndPackage(source string) (string, string) {
 
 // workspaceModules returns the fixed ordered workspace module inventory.
 func workspaceModules() []string {
-	return []string{moduleMilter, moduleControl, moduleDaemon, moduleLibrary, moduleTools}
+	return []string{moduleExim, moduleMilter, moduleControl, moduleDaemon, moduleLibrary, moduleTools}
 }
 
 // validateTargetRecords rejects duplicate, malformed, command-selecting, or incomplete targets.

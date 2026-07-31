@@ -244,7 +244,9 @@ func TestRunnerInventoryRejectsUnexecutedManifestCase(t *testing.T) {
 		ExpectedOutcome: passState, Artifacts: []string{testFixtureArtifact},
 		Producer: "missing-runner",
 	})
-	if _, _, err := executeRunners(t.TempDir(), conformance.Manifest{Cases: cases}, portableProfile); err == nil {
+	if _, _, err := executeRunners(
+		t.TempDir(), conformance.Manifest{Cases: cases}, portableProfile, qualificationBinding{},
+	); err == nil {
 		t.Fatal("executeRunners accepted an unexecuted manifest case")
 	}
 }
@@ -257,7 +259,9 @@ func TestRunnerInventoryRejectsWrongArtifactBinding(t *testing.T) {
 		t.Fatal(err)
 	}
 	manifest.Cases[0].Artifacts = []string{"canonical-header"}
-	if _, _, err := executeRunners(t.TempDir(), manifest, portableProfile); err == nil ||
+	if _, _, err := executeRunners(
+		t.TempDir(), manifest, portableProfile, qualificationBinding{},
+	); err == nil ||
 		err.Error() != "runner_artifact_binding" {
 		t.Fatalf("executeRunners() error = %v, want runner_artifact_binding", err)
 	}
@@ -281,7 +285,9 @@ func TestRunnerFailureIdentifiesOnlyTheClosedProducer(t *testing.T) {
 		ExpectedOutcome: passState, Artifacts: []string{testFixtureArtifact},
 		Producer: "closed-producer",
 	}}}
-	_, _, err := executeRunners(t.TempDir(), manifest, portableProfile)
+	_, _, err := executeRunners(
+		t.TempDir(), manifest, portableProfile, qualificationBinding{},
+	)
 	if err == nil || err.Error() != "runner_build:closed-producer" {
 		t.Fatalf("executeRunners() error = %v, want runner_build:closed-producer", err)
 	}
@@ -301,12 +307,114 @@ func TestConfiguredRunnersEmitExactEvidence(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	evidence, _, err := executeRunners(root, manifest, portableProfile)
+	evidence, _, err := executeRunners(
+		root, manifest, portableProfile, qualificationBinding{},
+	)
 	if err != nil {
 		t.Fatalf("executeRunners() error = %v", err)
 	}
 	if len(evidence) != 57 {
 		t.Fatalf("executeRunners() evidence count = %d, want 57", len(evidence))
+	}
+}
+
+// TestFullProfileRejectsMissingEximEvidence freezes the mandatory import boundary.
+func TestFullProfileRejectsMissingEximEvidence(t *testing.T) {
+	_, _, err := executeRunners(
+		t.TempDir(),
+		conformance.Manifest{Cases: []conformance.ManifestCase{{
+			Suite: "exim", CaseID: "linux-real-matrix",
+			Class: "adapter_contract", Authority: []string{"Exim adapter contract"},
+			Provenance: "independent_oracle", Runner: eximRunner,
+			RequiredPlatform: linuxPlatform, ExpectedOutcome: passState,
+			Artifacts: []string{
+				"exim-qualification-contract",
+				"exim-qualification-executor",
+				"exim-qualification-helper",
+				"exim-qualification-schema",
+				"exim-qualification-verifier",
+			},
+			Producer: eximRunnerName,
+		}}},
+		fullProfile,
+		qualificationBinding{},
+	)
+	if err == nil || err.Error() != "runner_dependency:exim-qualification-verifier" {
+		t.Fatalf("executeRunners() error = %v", err)
+	}
+}
+
+// TestEximQualificationImportsVerifiedEvidence exercises the opt-in real-matrix import boundary.
+func TestEximQualificationImportsVerifiedEvidence(t *testing.T) {
+	evidenceRoot := os.Getenv("DKIM2_EXIM_REAL_MATRIX_EVIDENCE_ROOT")
+	if evidenceRoot == "" {
+		t.Skip("set DKIM2_EXIM_REAL_MATRIX_EVIDENCE_ROOT to verified real-matrix evidence")
+	}
+	root := filepath.Clean(filepath.Join("..", "..", ".."))
+	_, manifestDigest, err := conformance.LoadManifest(root, manifestPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	revision, err := conformance.CurrentRevision(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := conformance.ProduceSnapshot(root, revision)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var definition runnerDefinition
+	for _, candidate := range portableDefinitions {
+		if candidate.name == eximRunnerName {
+			definition = candidate
+			break
+		}
+	}
+	if definition.name == "" {
+		t.Fatal("Exim qualification runner definition is missing")
+	}
+	binding := qualificationBinding{
+		manifestDigest: manifestDigest,
+		revision:       revision,
+		snapshotDigest: snapshot.SHA256,
+		eximEvidence:   evidenceRoot,
+	}
+	producerDigest, passed, identities, err := executeEximQualification(
+		root,
+		definition,
+		binding,
+	)
+	if err != nil {
+		t.Fatalf("executeEximQualification() error = %v", err)
+	}
+	if len(passed) != 1 || passed[0] != "exim\x00linux-real-matrix" ||
+		len(identities) != 3 {
+		t.Fatalf(
+			"executeEximQualification() passed=%v identities=%v",
+			passed,
+			identities,
+		)
+	}
+	input, err := os.ReadFile(filepath.Join(root, ".artifacts", "conformance-exim", "import.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var summary conformance.EximQualificationSummary
+	if err := conformance.DecodeStrictJSON(input, 1<<20, &summary); err != nil {
+		t.Fatal(err)
+	}
+	if err := conformance.ValidateEximQualificationSummary(
+		summary,
+		manifestDigest,
+		revision,
+		snapshot.SHA256,
+		producerDigest,
+	); err != nil {
+		t.Fatal(err)
+	}
+	if expected := os.Getenv("DKIM2_EXIM_REAL_MATRIX_RUN_ID"); expected != "" &&
+		summary.RunID != expected {
+		t.Fatalf("imported run ID = %q, want %q", summary.RunID, expected)
 	}
 }
 

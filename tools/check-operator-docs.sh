@@ -43,7 +43,7 @@ for required in \
   'milter_protocol = 6' \
   'milter_default_action = tempfail' \
   'Exim' \
-  'deferred_exim' \
+  'qualified_linux' \
   'LDAP' \
   'SQL' \
   'PostgreSQL' \
@@ -130,8 +130,9 @@ for label in \
 done
 
 for document in README.md "$guide"; do
-  grep -Fq 'Exim is incomplete' "$document"
-  grep -Fq 'deferred_exim' "$document"
+  grep -Fq 'Exim adapter' "$document"
+  grep -Fq 'matrix' "$document"
+  grep -Fq 'qualified_linux' "$document"
   grep -Fq 'LDAP' "$document"
   grep -Fq 'SQL' "$document"
   ! grep -Fq 'deferred_ldap_sql_migration' "$document"

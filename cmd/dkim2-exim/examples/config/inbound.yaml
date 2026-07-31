@@ -1,0 +1,40 @@
+version: dkim2-exim-config-v1
+inbound:
+  socket: /run/dkim2-exim/local-scan.sock
+  socket_mode: "0600"
+  peer_uid: ${DKIM2_EXIM_UID}
+  allowed_build_ids:
+    - aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+  request_timeout: 3s
+  max_connections: 128
+  max_in_flight_messages: 64
+  max_buffered_bytes: 268435456
+daemon:
+  endpoint: http://127.0.0.1:8080
+  process_capability_file: /etc/dkim2/process-secret/process.cap
+  request_timeout: 2s
+authentication_results:
+  enabled: true
+  authserv_id: auth.example
+failure:
+  inbound: tempfail
+evidence:
+  enabled: true
+  root: /var/lib/dkim2-exim/evidence
+  key_file: /etc/dkim2/evidence-secret/evidence.key
+  readiness_file: /run/dkim2-exim-readiness/state
+  retention: 14d
+  max_records: 100000
+  max_bytes: 536870912
+limits:
+  message_bytes: 33554432
+  header_bytes: 1048576
+  header_count: 2000
+  header_field_bytes: 65536
+  recipient_count: 2000
+observability:
+  logging:
+    level: info
+    destination: stderr
+  metrics:
+    endpoint: 127.0.0.1:9465

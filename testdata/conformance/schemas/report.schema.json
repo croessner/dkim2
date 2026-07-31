@@ -6,7 +6,7 @@
       "additionalProperties": false,
       "properties": {
         "daemon": {"const": "supported"},
-        "exim": {"const": "deferred_exim"},
+        "exim": {"const": "qualified_linux"},
         "library": {"const": "supported"},
         "milter": {"const": "partial"},
         "postfix": {"const": "partial_linux"}
@@ -23,7 +23,7 @@
         "error": {"enum": ["fixture_invalid", "artifact_tampered", "runner_failure", "timeout", "service_unavailable", "contract_violation", "privacy_violation"]},
         "producer": {"maxLength": 64, "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$", "type": "string"},
         "producer_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
-        "state": {"enum": ["pass", "fail", "not_run", "not_applicable", "deferred"]},
+        "state": {"enum": ["pass", "fail", "not_run", "not_applicable"]},
         "suite": {"maxLength": 128, "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$", "type": "string"}
       },
       "required": ["suite", "case_id", "class", "state", "artifact_sha256"],
@@ -34,7 +34,7 @@
       "properties": {
         "class": {"enum": ["draft_normative", "rfc_normative", "documented_interpretation", "local_security_policy", "openapi_contract", "adapter_contract"]},
         "count": {"maximum": 16384, "minimum": 0, "type": "integer"},
-        "state": {"enum": ["pass", "fail", "not_run", "not_applicable", "deferred"]}
+        "state": {"enum": ["pass", "fail", "not_run", "not_applicable"]}
       },
       "required": ["class", "state", "count"],
       "type": "object"

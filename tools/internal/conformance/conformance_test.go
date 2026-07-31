@@ -201,15 +201,63 @@ func assertCaseParity(t *testing.T, root string, input []byte, want bool) {
 	}
 }
 
-// TestDeferredEximResultRejectsFabricatedExecution freezes the closed Exim deferral.
-func TestDeferredEximResultRejectsFabricatedExecution(t *testing.T) {
-	for _, input := range []string{
-		`{"schema":"dkim2.exim-adapter-result.v1","case_id":"x","state":"pass","evidence":{}}`,
-		`{"schema":"dkim2.exim-adapter-result.v1","case_id":"x","state":"deferred","evidence":{"transcript":"forged"}}`,
-	} {
-		if err := ValidateDeferredEximResult([]byte(input)); err == nil {
-			t.Fatalf("ValidateDeferredEximResult(%s) succeeded", input)
-		}
+// TestEximQualificationSummaryRejectsStaleCandidateBinding freezes the import boundary.
+func TestEximQualificationSummaryRejectsStaleCandidateBinding(t *testing.T) {
+	summary := validEximQualificationSummaryForTest()
+	if err := ValidateEximQualificationSummary(
+		summary,
+		strings.Repeat("a", 64),
+		strings.Repeat("b", 40),
+		strings.Repeat("c", 64),
+		strings.Repeat("d", 64),
+	); err != nil {
+		t.Fatalf("ValidateEximQualificationSummary() error = %v", err)
+	}
+	summary.CandidateSnapshotSHA256 = strings.Repeat("e", 64)
+	if err := ValidateEximQualificationSummary(
+		summary,
+		strings.Repeat("a", 64),
+		strings.Repeat("b", 40),
+		strings.Repeat("c", 64),
+		strings.Repeat("d", 64),
+	); err == nil {
+		t.Fatal("ValidateEximQualificationSummary accepted stale candidate binding")
+	}
+}
+
+// validEximQualificationSummaryForTest returns one exact synthetic matrix import.
+func validEximQualificationSummaryForTest() EximQualificationSummary {
+	names := []string{
+		"debian-4.98.2-1+deb13u3",
+		"debian-4.98.2-1+deb13u4",
+		"ubuntu-4.99.1-1ubuntu1.3",
+		"ubuntu-4.99.1-1ubuntu1.4",
+		"upstream-4.99.5",
+	}
+	versions := []string{
+		"4.98.2-1+deb13u3",
+		"4.98.2-1+deb13u4",
+		"4.99.1-1ubuntu1.3",
+		"4.99.1-1ubuntu1.4",
+		"4.99.5",
+	}
+	rows := make([]EximQualificationRow, 0, len(names))
+	for index := range names {
+		rows = append(rows, EximQualificationRow{
+			Name: names[index], EximVersion: versions[index],
+			ResultSHA256: strings.Repeat("f", 64), CaseCount: 43, State: statePass,
+		})
+	}
+	return EximQualificationSummary{
+		Schema:       "dkim2.exim-linux-qualification.v1",
+		MessageDraft: MessageDraft, DNSDraft: DNSDraft,
+		BaseRevision:            strings.Repeat("b", 40),
+		CandidateSnapshotSHA256: strings.Repeat("c", 64),
+		ManifestSHA256:          strings.Repeat("a", 64),
+		Profile:                 eximQualificationProfile, Platform: platformLinux,
+		ProducerSHA256: strings.Repeat("d", 64), State: statePass,
+		RunID: strings.Repeat("e", 64), RunManifestSHA256: strings.Repeat("f", 64),
+		Rows: rows, TotalCases: 215, PrivacyScan: "passed",
 	}
 }
 
@@ -375,7 +423,7 @@ func testManifest(artifacts ...Artifact) Manifest {
 		Capabilities: map[string]string{
 			capLibrary: supportedCapability, capDaemon: supportedCapability,
 			capMilter: partialCapability, capPostfix: partialLinuxCapability,
-			capExim: EximDeferred,
+			capExim: EximQualifiedLinux,
 		},
 		Artifacts: artifacts, Cases: cases,
 	}
@@ -408,7 +456,7 @@ func runGit(t *testing.T, root string, arguments ...string) string {
 func TestReportJSONIsDeterministic(t *testing.T) {
 	report := Report{
 		Schema: ReportSchema, MessageDraft: MessageDraft, DNSDraft: DNSDraft,
-		Capabilities: map[string]string{"exim": EximDeferred},
+		Capabilities: map[string]string{"exim": EximQualifiedLinux},
 	}
 	first, err := json.Marshal(report)
 	if err != nil {
@@ -428,7 +476,7 @@ func TestHumanReportGolden(t *testing.T) {
 		Capabilities: map[string]string{
 			capLibrary: supportedCapability, capDaemon: supportedCapability,
 			capMilter: partialCapability, capPostfix: partialLinuxCapability,
-			capExim: EximDeferred,
+			capExim: EximQualifiedLinux,
 		},
 		Artifacts: []Artifact{
 			{ID: capExim, SHA256: strings.Repeat("5", 64)},
@@ -436,10 +484,10 @@ func TestHumanReportGolden(t *testing.T) {
 		},
 		Cases: []ManifestCase{
 			{
-				Suite: capExim, CaseID: stateDeferred, Class: classAdapter,
+				Suite: capExim, CaseID: "linux-real-matrix", Class: classAdapter,
 				Authority: []string{testAuthority}, Provenance: manualProvenance,
 				Runner: runnerExim, RequiredPlatform: platformLinux,
-				ExpectedOutcome: stateDeferred, Artifacts: []string{capExim}, Producer: "none",
+				ExpectedOutcome: statePass, Artifacts: []string{capExim}, Producer: "exim-runner",
 			},
 			{
 				Suite: verificationSuite, CaseID: "public", Class: "draft_normative",
@@ -460,8 +508,8 @@ func TestHumanReportGolden(t *testing.T) {
 				Producer: runnerName, ProducerSHA256: strings.Repeat("4", 64),
 			},
 			{
-				Suite: capExim, CaseID: stateDeferred, Class: classAdapter,
-				State: stateDeferred, ArtifactSHA256: []string{strings.Repeat("5", 64)},
+				Suite: capExim, CaseID: "linux-real-matrix", Class: classAdapter,
+				State: stateNotApplicable, ArtifactSHA256: []string{strings.Repeat("5", 64)},
 			},
 		},
 	)
@@ -477,11 +525,11 @@ func TestHumanReportGolden(t *testing.T) {
 	if got := report.RenderText(); string(got) != string(golden) {
 		t.Fatalf("RenderText() drifted:\n%s", got)
 	}
-	report.Cases[1].State = stateDeferred
+	report.Cases[1].State = stateNotApplicable
 	report.Cases[1].Producer = ""
 	report.Cases[1].ProducerSHA256 = ""
 	report.Counts = countCases(report.Cases)
 	if err := report.Validate(manifest); err == nil {
-		t.Fatal("Validate accepted deferred state for an ordinary portable case")
+		t.Fatal("Validate accepted platform state for an ordinary portable case")
 	}
 }

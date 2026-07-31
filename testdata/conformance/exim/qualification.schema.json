@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.test/dkim2/conformance/exim/qualification.schema.json",
+  "$defs": {
+    "sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+    "row": {
+      "additionalProperties": false,
+      "properties": {
+        "case_count": {"const": 43},
+        "exim_version": {"maxLength": 128, "minLength": 1, "pattern": "^[0-9][0-9A-Za-z.+:~_-]*$", "type": "string"},
+        "name": {"enum": ["debian-4.98.2-1+deb13u3", "debian-4.98.2-1+deb13u4", "ubuntu-4.99.1-1ubuntu1.3", "ubuntu-4.99.1-1ubuntu1.4", "upstream-4.99.5"]},
+        "result_sha256": {"$ref": "#/$defs/sha256"},
+        "state": {"const": "pass"}
+      },
+      "required": ["name", "exim_version", "result_sha256", "case_count", "state"],
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "base_revision": {"pattern": "^[0-9a-f]{40}$", "type": "string"},
+    "candidate_snapshot_sha256": {"$ref": "#/$defs/sha256"},
+    "dns_draft": {"const": "draft-chuang-dkim2-dns-04"},
+    "manifest_sha256": {"$ref": "#/$defs/sha256"},
+    "message_draft": {"const": "draft-ietf-dkim-dkim2-spec-04"},
+    "platform": {"const": "linux"},
+    "privacy_scan": {"const": "passed"},
+    "producer_sha256": {"$ref": "#/$defs/sha256"},
+    "profile": {"const": "exim"},
+    "rows": {"items": {"$ref": "#/$defs/row"}, "maxItems": 5, "minItems": 5, "type": "array"},
+    "run_id": {"$ref": "#/$defs/sha256"},
+    "run_manifest_sha256": {"$ref": "#/$defs/sha256"},
+    "schema": {"const": "dkim2.exim-linux-qualification.v1"},
+    "state": {"const": "pass"},
+    "total_cases": {"const": 215}
+  },
+  "required": ["schema", "message_draft", "dns_draft", "base_revision", "candidate_snapshot_sha256", "manifest_sha256", "profile", "platform", "producer_sha256", "state", "run_id", "run_manifest_sha256", "rows", "total_cases", "privacy_scan"],
+  "type": "object"
+}

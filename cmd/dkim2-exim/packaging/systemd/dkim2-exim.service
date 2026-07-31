@@ -1,0 +1,24 @@
+[Unit]
+Description=DKIM2 Exim local-scan service
+After=network.target
+
+[Service]
+Type=simple
+User=Debian-exim
+Group=Debian-exim
+EnvironmentFile=-/etc/default/dkim2-exim
+ExecStart=/usr/libexec/dkim2-exim --config /etc/dkim2/exim.yaml serve
+RuntimeDirectory=dkim2-exim dkim2-exim-readiness
+RuntimeDirectoryMode=0700
+StateDirectory=dkim2-exim
+StateDirectoryMode=0700
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/run/dkim2-exim /run/dkim2-exim-readiness /var/lib/dkim2-exim
+TimeoutStopSec=15s
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

@@ -186,8 +186,7 @@ func ValidateSchemaClosure(root string) error {
 		"testdata/conformance/schemas/manifest.schema.json",
 		"testdata/conformance/schemas/case.schema.json",
 		"testdata/conformance/schemas/report.schema.json",
-		"testdata/conformance/exim/fixture.schema.json",
-		"testdata/conformance/exim/result.schema.json",
+		"testdata/conformance/exim/qualification.schema.json",
 	}
 	rootHandle, err := os.OpenRoot(root)
 	if err != nil {
@@ -388,78 +387,6 @@ func knownProvenance(value string) bool {
 		"draft_example", "rfc_example", "independent_oracle",
 		"cross_primitive", "manual_derivation", "regression_reproducer",
 	)[value]
-}
-
-// ValidateDeferredEximResult rejects any checked-in executed Exim evidence.
-func ValidateDeferredEximResult(input []byte) error {
-	var result struct {
-		Schema   string         `json:"schema"`
-		CaseID   string         `json:"case_id"`
-		State    string         `json:"state"`
-		Evidence map[string]any `json:"evidence"`
-	}
-	if err := DecodeStrictJSON(input, maxManifestBytes, &result); err != nil {
-		return err
-	}
-	if result.Schema != "dkim2.exim-adapter-result.v1" ||
-		!caseIDPattern.MatchString(result.CaseID) || result.State != "deferred" ||
-		len(result.Evidence) != 0 {
-		return errors.New("exim_not_deferred")
-	}
-	return nil
-}
-
-// ValidateDeferredEximFixture validates one adapter-neutral future fixture.
-func ValidateDeferredEximFixture(input []byte) error {
-	var fixture struct {
-		Schema       string `json:"schema"`
-		CaseID       string `json:"case_id"`
-		MessageDraft string `json:"message_draft"`
-		DNSDraft     string `json:"dns_draft"`
-		Class        string `json:"class"`
-		Path         string `json:"path"`
-		Operation    string `json:"operation"`
-		MessageB64   string `json:"message_b64"`
-		SMTP         struct {
-			ReversePathB64  string   `json:"reverse_path_b64"`
-			ForwardPathsB64 []string `json:"forward_paths_b64"`
-		} `json:"smtp"`
-		Expected struct {
-			EximOutcome string `json:"exim_outcome"`
-			Operation   string `json:"operation"`
-			Fidelity    string `json:"fidelity"`
-		} `json:"expected"`
-		EvidenceState string `json:"evidence_state"`
-	}
-	if err := DecodeStrictJSON(input, maxVectorBytes, &fixture); err != nil {
-		return err
-	}
-	if fixture.Schema != "dkim2.exim-adapter-fixture.v1" ||
-		!caseIDPattern.MatchString(fixture.CaseID) ||
-		fixture.MessageDraft != MessageDraft || fixture.DNSDraft != DNSDraft ||
-		fixture.Class != classAdapter || fixture.EvidenceState != stateDeferred ||
-		!stringSet("local_scan", "transport_filter")[fixture.Path] ||
-		!stringSet("process", "sign", "revise")[fixture.Operation] ||
-		fixture.Expected.Operation != fixture.Operation ||
-		!stringSet("accept", "reject", "tempfail")[fixture.Expected.EximOutcome] ||
-		fixture.Expected.Fidelity != "exim_"+fixture.Path {
-		return errors.New("exim_fixture_invalid")
-	}
-	if _, err := decodePadded(fixture.MessageB64, maxVectorBytes); err != nil {
-		return err
-	}
-	if _, err := decodePadded(fixture.SMTP.ReversePathB64, 1<<20); err != nil {
-		return err
-	}
-	if len(fixture.SMTP.ForwardPathsB64) > 1024 {
-		return errors.New("exim_fixture_invalid")
-	}
-	for _, path := range fixture.SMTP.ForwardPathsB64 {
-		if _, err := decodePadded(path, 1<<20); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 // LoadPortableCase reads one already manifest-verified case through a confined root.

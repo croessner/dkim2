@@ -6,7 +6,7 @@
       "additionalProperties": false,
       "properties": {
         "id": {"maxLength": 128, "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$", "type": "string"},
-        "module": {"enum": ["lib", "cmd/dkim2d", "cmd/dkim2ctl", "cmd/dkim2-milter", "testdata/conformance", "contrib/qualification/postfix-milter", "scripts", "tools"]},
+        "module": {"enum": ["lib", "cmd/dkim2d", "cmd/dkim2ctl", "cmd/dkim2-milter", "cmd/dkim2-exim", "testdata/conformance", "contrib/qualification/postfix-milter", "scripts", "tools"]},
         "path": {"maxLength": 4096, "minLength": 1, "type": "string"},
         "sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"}
       },
@@ -20,11 +20,11 @@
         "authority": {"items": {"maxLength": 160, "minLength": 1, "pattern": "^[^\\r\\n\u0000]+$", "type": "string"}, "maxItems": 16, "minItems": 1, "type": "array"},
         "case_id": {"maxLength": 128, "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$", "type": "string"},
         "class": {"enum": ["draft_normative", "rfc_normative", "documented_interpretation", "local_security_policy", "openapi_contract", "adapter_contract"]},
-        "expected_outcome": {"enum": ["pass", "deferred"]},
+        "expected_outcome": {"const": "pass"},
         "producer": {"maxLength": 64, "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$", "type": "string"},
         "provenance": {"enum": ["draft_example", "rfc_example", "independent_oracle", "cross_primitive", "manual_derivation", "regression_reproducer"]},
         "required_platform": {"enum": ["portable", "linux"]},
-        "runner": {"enum": ["portable_vector", "openapi_fixture", "milter_fixture", "postfix_qualification", "exim_deferred"]},
+        "runner": {"enum": ["portable_vector", "openapi_fixture", "milter_fixture", "postfix_qualification", "exim_qualification"]},
         "suite": {"maxLength": 128, "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$", "type": "string"}
       },
       "required": ["suite", "case_id", "class", "authority", "provenance", "runner", "required_platform", "expected_outcome", "artifacts", "producer"],
@@ -34,7 +34,7 @@
       "additionalProperties": false,
       "properties": {
         "daemon": {"const": "supported"},
-        "exim": {"const": "deferred_exim"},
+        "exim": {"const": "qualified_linux"},
         "library": {"const": "supported"},
         "milter": {"const": "partial"},
         "postfix": {"const": "partial_linux"}

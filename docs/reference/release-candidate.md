@@ -3,15 +3,17 @@
 The prepared product candidate is exactly `v0.1.0-rc.1`. It is a local,
 non-publishing candidate for the pinned Draft-04 and historical DNS-04
 behavior. It is not a stable release and it does not make either draft final.
-Exim remains deferred; the database-provider work is implemented.
+The Exim implementation is `qualified_linux` through the completed five-row,
+43-case-per-row source-linked matrix; the database-provider work is implemented.
 
-The future five-tag plan for one exact maintainer-approved commit is:
+The future six-tag plan for one exact maintainer-approved commit is:
 
 ```text
 v0.1.0-rc.1
 lib/v0.1.0-rc.1
 cmd/dkim2d/v0.1.0-rc.1
 cmd/dkim2-milter/v0.1.0-rc.1
+cmd/dkim2-exim/v0.1.0-rc.1
 cmd/dkim2ctl/v0.1.0-rc.1
 ```
 
@@ -34,5 +36,7 @@ agreement is observation only. Current comparison availability and open draft
 issues are stated in the generated report and
 [`draft-issues.md`](draft-issues.md).
 
-Exim is exactly `deferred_exim`. LDAP and PostgreSQL providers plus the
-offline legacy migration are implemented.
+Exim is exactly `qualified_linux` in the unpublished candidate report. Portable
+conformance remains truthful by recording the Linux-only case as not
+applicable; the full report requires the separately verified evidence import.
+LDAP and PostgreSQL providers plus the offline legacy migration are implemented.

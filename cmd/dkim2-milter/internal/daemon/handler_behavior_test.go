@@ -314,6 +314,19 @@ func TestProcessResponseValidationRejectsNestedContractDrift(t *testing.T) {
 	}
 }
 
+// TestProcessContractAdmitsPermerrorPolicyAcceptance proves parity with the Exim inbound boundary.
+func TestProcessContractAdmitsPermerrorPolicyAcceptance(t *testing.T) {
+	value := validProcessResponse()
+	value.Actions[0].Value = testAuthservID + "; dkim2=permerror"
+	value.Replay.Class = generated.NotChecked
+	value.Verification.State = generated.PERMERROR
+	value.Verification.PrimaryReason = generated.VerificationReasonMalformedProtocol
+	value.Verification.Checks[0].Reason = generated.VerificationReasonMalformedProtocol
+	if !validProcessContract(&value, testAuthservID) {
+		t.Fatal("permissive process response was rejected")
+	}
+}
+
 // TestRequiredResponseMembersRejectZeroValueAmbiguity proves absent required facts fail closed.
 func TestRequiredResponseMembersRejectZeroValueAmbiguity(t *testing.T) {
 	processBody, err := json.Marshal(validProcessResponse())

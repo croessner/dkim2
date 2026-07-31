@@ -45,23 +45,21 @@ jobs:
           make check-conformance
           make check-reference
           make conformance
+          go -C tools test ./cmd/conformance \
+            -run '^TestFullProfileRejectsMissingEximEvidence$'
 
       - name: Run real Postfix profile
         run: make conformance-postfix
 
-      - name: Run merged full profile
-        run: make conformance-all
-
       - name: Install the pinned vulnerability scanner
         run: go install golang.org/x/vuln/cmd/govulncheck@v1.3.0
 
-      - name: Run the closed security profile
+      - name: Run portable security gates
         run: |
           make check-security
           make fuzz-security
           make race-security
           make vulnerability-security
-          go -C tools run ./cmd/security -root .. report
 
       - name: Prove generated tree cleanliness
         run: |

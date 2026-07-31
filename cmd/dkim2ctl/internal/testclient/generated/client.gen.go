@@ -223,13 +223,19 @@ func (e KeyPolicyResultStrictIdentityApplicable) Valid() bool {
 
 // Defines values for MessageInputFidelity.
 const (
-	MilterReconstructedCrlf MessageInputFidelity = "milter_reconstructed_crlf"
-	RawRfc5322              MessageInputFidelity = "raw_rfc5322"
+	EximLocalScanObservedCrlf MessageInputFidelity = "exim_local_scan_observed_crlf"
+	EximTransportFilterCrlf   MessageInputFidelity = "exim_transport_filter_crlf"
+	MilterReconstructedCrlf   MessageInputFidelity = "milter_reconstructed_crlf"
+	RawRfc5322                MessageInputFidelity = "raw_rfc5322"
 )
 
 // Valid indicates whether the value is a known member of the MessageInputFidelity enum.
 func (e MessageInputFidelity) Valid() bool {
 	switch e {
+	case EximLocalScanObservedCrlf:
+		return true
+	case EximTransportFilterCrlf:
+		return true
 	case MilterReconstructedCrlf:
 		return true
 	case RawRfc5322:

@@ -1,3 +1,4 @@
+//nolint:goconst // Exact envelope fixtures remain local to independent mapper assertions.
 package httpjson
 
 import (
@@ -27,6 +28,22 @@ func TestMapOperationRequestPreservesExactBytes(t *testing.T) {
 		string(mapped.Recipients()[0]) != "<recipient@example.net>" ||
 		mapped.Fidelity() != app.FidelityMilterReconstructedCRLF {
 		t.Fatal("mapped operation changed exact request evidence")
+	}
+}
+
+// TestMapOperationRequestAdmitsOnlyTransportFilterEximFidelity proves route compatibility.
+func TestMapOperationRequestAdmitsOnlyTransportFilterEximFidelity(t *testing.T) {
+	request := operationRequestFixture(t, []byte("From: sender@example.test\r\n\r\nbody\r\n"))
+	transport := generated.EximTransportFilterCrlf
+	request.Message.Fidelity = &transport
+	if mapped, err := MapSignRequest(request); err != nil ||
+		mapped.Fidelity() != app.FidelityEximTransportFilterCRLF {
+		t.Fatal("Exim transport-filter fidelity was not mapped")
+	}
+	localScan := generated.EximLocalScanObservedCrlf
+	request.Message.Fidelity = &localScan
+	if _, err := MapSignRequest(request); !IsMappingError(err, MappingInvalidContract) {
+		t.Fatal("Exim local-scan fidelity crossed into sign")
 	}
 }
 

@@ -241,16 +241,16 @@
     },
     {
       "id": "DKIM2-ISSUE-0016",
-      "title": "Exim integration remains deferred from the first preview",
+      "title": "Exim release qualification requires candidate-bound Linux evidence",
       "sections": ["Architecture Section 17 Draft Baseline Risks"],
       "class": "ambiguity",
-      "local_status": "not_implemented",
+      "local_status": "resolved_local_defect",
       "upstream_status": "not_upstream_issue",
-      "behavior_owner": "contrib/qualification/exim",
+      "behavior_owner": "cmd/dkim2-exim/exim/tests",
       "conformance_cases": [],
-      "test_refs": ["tools/internal/conformance/conformance_test.go#TestDeferredEximResultRejectsFabricatedExecution"],
+      "test_refs": ["tools/internal/conformance/conformance_test.go#TestEximQualificationSummaryRejectsStaleCandidateBinding"],
       "external_cases": [],
-      "public_effect": "exim-deferred",
+      "public_effect": "exim-qualified-linux",
       "resolution_criterion": "exim-adapter-completed-and-qualified",
       "claim_classes": ["adapter_contract", "release_policy"]
     }

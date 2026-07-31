@@ -21,12 +21,13 @@ const (
 	releasePlanPath       = "testdata/reference/release-plan.json"
 	releasePlanSchemaPath = "testdata/reference/schemas/release-plan.schema.json"
 	candidateVersion      = "v0.1.0-rc.1"
-	candidateBaseRevision = "25a9944329d0067db4c7c30b0ba69c1028a44b30"
+	candidateBaseRevision = "b3979123febbc333fb8ed85c8c1801ba5caf5def"
 	maxReleasePlanBytes   = int64(1 << 20)
 )
 
 var plannedCandidateTags = []string{
 	"cmd/dkim2-milter/v0.1.0-rc.1",
+	"cmd/dkim2-exim/v0.1.0-rc.1",
 	"cmd/dkim2ctl/v0.1.0-rc.1",
 	"cmd/dkim2d/v0.1.0-rc.1",
 	"lib/v0.1.0-rc.1",
@@ -43,14 +44,14 @@ type RCVersion struct {
 
 // ReleasePlan freezes intended versions, tags, modules, and authority.
 type ReleasePlan struct {
-	Schema         string          `json:"schema"`
-	ProductVersion string          `json:"product_version"`
-	OpenAPIVersion string          `json:"openapi_version"`
-	WireVersion    string          `json:"wire_version"`
-	PlannedTags    []string        `json:"planned_tags"`
-	Modules        []ReleaseModule `json:"modules"`
-	Publication    PublicationPlan `json:"publication"`
-	Deferrals      ReleaseDeferral `json:"deferrals"`
+	Schema         string            `json:"schema"`
+	ProductVersion string            `json:"product_version"`
+	OpenAPIVersion string            `json:"openapi_version"`
+	WireVersion    string            `json:"wire_version"`
+	PlannedTags    []string          `json:"planned_tags"`
+	Modules        []ReleaseModule   `json:"modules"`
+	Publication    PublicationPlan   `json:"publication"`
+	Capabilities   ReleaseCapability `json:"capabilities"`
 }
 
 // ReleaseModule binds one nested module to its exact future tag.
@@ -68,8 +69,8 @@ type PublicationPlan struct {
 	CredentialsAllowed    bool     `json:"credentials_allowed"`
 }
 
-// ReleaseDeferral preserves closed candidate capability-status values.
-type ReleaseDeferral struct {
+// ReleaseCapability preserves closed candidate capability-status values.
+type ReleaseCapability struct {
 	Exim             string `json:"exim"`
 	LDAPSQLMigration string `json:"ldap_sql_migration"`
 }
@@ -141,8 +142,8 @@ func CheckReleasePlan(root string) error {
 		!slices.Equal(plan.PlannedTags, plannedCandidateTags) ||
 		plan.Publication.RealTagsCreated || plan.Publication.StableWorkflowAllowed ||
 		plan.Publication.CredentialsAllowed || len(plan.Publication.Aliases) != 0 ||
-		plan.Deferrals.Exim != "deferred_exim" ||
-		plan.Deferrals.LDAPSQLMigration != "implemented" {
+		plan.Capabilities.Exim != "qualified_linux" ||
+		plan.Capabilities.LDAPSQLMigration != "implemented" {
 		return errors.New("release_plan_contract")
 	}
 	if err := checkModulePlans(root, plan.Modules); err != nil {
@@ -184,6 +185,7 @@ func checkModulePlans(root string, modules []ReleaseModule) error {
 	expected := []ReleaseModule{
 		{Path: "github.com/croessner/dkim2", Directory: "lib", Tag: "lib/" + candidateVersion},
 		{Path: "github.com/croessner/dkim2/cmd/dkim2-milter", Directory: "cmd/dkim2-milter", Tag: "cmd/dkim2-milter/" + candidateVersion},
+		{Path: "github.com/croessner/dkim2/cmd/dkim2-exim", Directory: "cmd/dkim2-exim", Tag: "cmd/dkim2-exim/" + candidateVersion},
 		{Path: "github.com/croessner/dkim2/cmd/dkim2ctl", Directory: "cmd/dkim2ctl", Tag: "cmd/dkim2ctl/" + candidateVersion},
 		{Path: "github.com/croessner/dkim2/cmd/dkim2d", Directory: "cmd/dkim2d", Tag: "cmd/dkim2d/" + candidateVersion},
 	}

@@ -12,13 +12,16 @@ limitations without creating a second protocol model.
 - [Known limitations](known-limitations.md) states incomplete or unavailable
   capabilities without converting them into passing evidence.
 - [Preview release candidate](release-candidate.md) freezes the intended
-  version, five-tag plan, non-publication boundary, and capability status.
+  version, six-tag plan, non-publication boundary, and capability status.
 - [Conformance](../conformance.md) defines claim classes and exact report
   profiles.
 - [Security testing](../security-testing.md) defines resource, privacy, fuzz,
   race, and vulnerability evidence.
 - [Postfix deployment](../operator/postfix-compose.md) is the implemented
   adapter qualification and operator path.
+- [Exim operations](../operations/exim-adapter.md) and the
+  [compatibility matrix](../reports/exim-compatibility-2026-07-27.md) describe
+  the source-rebuild deployment and separate five-row qualification boundary.
 - [LDAP/PostgreSQL datasources](../operator/datasource-ldap-postgresql.md) and
   [OpenDKIM migration](../operator/opendkim-migration.md) define the
   implemented database-provider and offline administration boundaries.

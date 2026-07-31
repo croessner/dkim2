@@ -22,7 +22,8 @@ const (
 var caseIDPattern = regexp.MustCompile(`^[a-z0-9]+(?:[._-][a-z0-9]+)*$`)
 var knownModules = stringSet(
 	"lib", "cmd/dkim2d", "cmd/dkim2ctl", "cmd/dkim2-milter",
-	"testdata/conformance", "contrib/qualification/postfix-milter", "scripts", "tools",
+	"cmd/dkim2-exim", "testdata/conformance",
+	"contrib/qualification/postfix-milter", "scripts", "tools",
 )
 
 // LoadManifest loads, validates, and digest-binds the exact repository manifest.
@@ -139,7 +140,7 @@ func (m Manifest) validateIdentity() (map[string]bool, error) {
 	requiredCapabilities := map[string]string{
 		capLibrary: supportedCapability, capDaemon: supportedCapability,
 		capMilter: partialCapability, capPostfix: partialLinuxCapability,
-		capExim: EximDeferred,
+		capExim: EximQualifiedLinux,
 	}
 	if !equalMap(m.Capabilities, requiredCapabilities) {
 		return nil, errors.New("manifest_capabilities")
@@ -215,10 +216,8 @@ func (m Manifest) validateCases(
 			len(manifestCase.Authority) == 0 || len(manifestCase.Authority) > 16 ||
 			!knownProvenance(manifestCase.Provenance) ||
 			!knownPlatforms[manifestCase.RequiredPlatform] ||
-			(manifestCase.ExpectedOutcome != statePass && manifestCase.ExpectedOutcome != stateDeferred) ||
-			manifestCase.Runner == runnerExim != (manifestCase.ExpectedOutcome == stateDeferred) ||
+			manifestCase.ExpectedOutcome != statePass ||
 			!caseIDPattern.MatchString(manifestCase.Producer) ||
-			(manifestCase.Runner == runnerExim) != (manifestCase.Producer == "none") ||
 			len(manifestCase.Artifacts) == 0 || len(manifestCase.Artifacts) > 32 ||
 			!sortedUnique(manifestCase.Artifacts) {
 			return errors.New("manifest_case")

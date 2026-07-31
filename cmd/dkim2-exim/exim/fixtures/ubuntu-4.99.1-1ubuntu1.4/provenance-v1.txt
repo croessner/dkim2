@@ -1,0 +1,8 @@
+format=dkim2-exim-provenance-v1
+retrieved_at=2026-07-27
+source_authority=https://archive.ubuntu.com/ubuntu
+archive_suite=resolute-updates
+archive_codename=resolute
+license=GPL-2.0-or-later
+artifact_role=authenticated-security-refresh-source
+notice=include/local_scan.h and include/functions.h

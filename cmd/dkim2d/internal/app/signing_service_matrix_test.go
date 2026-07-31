@@ -286,6 +286,137 @@ func TestSigningServiceSelectsPoliciesAndFailsClosedOnRevisionVerification(t *te
 	}
 }
 
+// TestSigningServiceRevisesDistinctEximEnvelopeAfterReceivedAddition proves an
+// excluded Exim receipt header does not block a distinct-envelope revision.
+func TestSigningServiceRevisesDistinctEximEnvelopeAfterReceivedAddition(t *testing.T) {
+	fixture := newSigningServiceFixture(t)
+	service, err := NewSigningService(fixture.publicKeys, fixture.runtime, false)
+	if err != nil {
+		t.Fatalf("NewSigningService() error = %v", err)
+	}
+	service.clock = func() time.Time { return time.Unix(1_700_000_000, 0) }
+	incomingReverse := []byte("<sender@origin.example.test>")
+	incomingRecipients := [][]byte{[]byte("<recipient@origin.example.test>")}
+	raw := signingServiceRawMessage()
+	signRequest, err := NewOperationRequest(
+		OperationSign,
+		raw,
+		incomingReverse,
+		incomingRecipients,
+		signingServiceTestTenant,
+		signingServiceOriginDomain,
+		FidelityEximTransportFilterCRLF,
+	)
+	if err != nil {
+		t.Fatalf("NewOperationRequest() error = %v", err)
+	}
+	signed, err := service.Sign(context.Background(), signRequest)
+	assertSigningServicePass(t, signed, err, signingServiceOriginSelector)
+	inherited := insertSigningServiceFields(signed.Fields(), raw)
+	withReceived := append(
+		[]byte("Received: from matrix.example.test by mx.example.test; Tue, 30 Jul 2026 20:00:00 +0000\r\n"),
+		inherited...,
+	)
+	outgoingReverse := []byte("<forwarded@origin.example.test>")
+	outgoingRecipients := [][]byte{[]byte("<forwarded@revise.test>")}
+	reviseRequest, err := NewRevisionOperationRequest(
+		withReceived,
+		incomingReverse,
+		incomingRecipients,
+		outgoingReverse,
+		outgoingRecipients,
+		signingServiceTestTenant,
+		signingServiceTransitDomain,
+		FidelityEximTransportFilterCRLF,
+	)
+	if err != nil {
+		t.Fatalf("NewRevisionOperationRequest() error = %v", err)
+	}
+	lease, err := fixture.runtime.Acquire()
+	if err != nil {
+		t.Fatalf("Acquire() error = %v", err)
+	}
+	defer func() { _ = lease.Close() }()
+	signer, err := dkim2.NewSigner(
+		fixture.publicKeys,
+		dkim2.NewRequestRouteAuthority(),
+		exactSigningAuthorizer{recipients: outgoingRecipients},
+		lease,
+		dkim2.WithSigningClock(func() time.Time { return time.Unix(1_700_000_000, 0) }),
+	)
+	if err != nil {
+		t.Fatalf("NewSigner() error = %v", err)
+	}
+	verification, capability, verifyErr := signer.VerifyForRevision(
+		context.Background(),
+		dkim2.NewVerifyRequest(withReceived, incomingReverse, incomingRecipients),
+	)
+	if verifyErr != nil || verification.Status() != dkim2.RevisionVerificationVerified ||
+		!capability.Valid() {
+		t.Fatalf(
+			"VerifyForRevision() status=%q capability=%t error=%v",
+			verification.Status(), capability.Valid(), verifyErr,
+		)
+	}
+	profile, err := lease.ResolvePolicy(
+		context.Background(),
+		signingServiceTestTenant,
+		signingServiceTransitDomain,
+		signingstore.PolicyOrdinaryTransit,
+		time.Unix(1_700_000_000, 0).UTC(),
+	)
+	if err != nil {
+		t.Fatalf("ResolvePolicy() error = %v", err)
+	}
+	source, err := dkim2.NewSigningSource(withReceived)
+	if err != nil {
+		t.Fatalf("NewSigningSource() error = %v", err)
+	}
+	entry, err := dkim2.NewExistingRouteEntry(
+		capability,
+		source,
+		outgoingReverse,
+		outgoingRecipients,
+		dkim2.RouteDisclosureSingle,
+		[]byte(signingRouteScope),
+	)
+	if err != nil {
+		t.Fatalf("NewExistingRouteEntry() error = %v", err)
+	}
+	fanout, err := dkim2.NewRouteFanoutRequest([]dkim2.RouteEntry{entry})
+	if err != nil {
+		t.Fatalf("NewRouteFanoutRequest() error = %v", err)
+	}
+	_, tickets, err := signer.PlanRouteFanout(context.Background(), fanout)
+	if err != nil || len(tickets) != 1 {
+		t.Fatalf("PlanRouteFanout() tickets=%d error=%v", len(tickets), err)
+	}
+	_, _, err = signer.SignExisting(
+		context.Background(),
+		dkim2.NewExistingSigningRequest(
+			capability,
+			withReceived,
+			outgoingReverse,
+			outgoingRecipients,
+			tickets[0],
+			profile,
+			dkim2.SigningMetadata{},
+			dkim2.SigningTransportFinalNetworkPreDotStuffing,
+			dkim2.RejectUnavailableBody,
+			dkim2.RecipeCopyOnly,
+		),
+	)
+	if err != nil {
+		var signingErr *dkim2.SigningError
+		if errors.As(err, &signingErr) {
+			t.Fatalf("SignExisting() code=%q", signingErr.Code())
+		}
+		t.Fatalf("SignExisting() error = %v", err)
+	}
+	revised, err := service.Revise(context.Background(), reviseRequest)
+	assertSigningServicePass(t, revised, err, signingServiceTransitSelector)
+}
+
 // signSigningServiceOriginator runs one group-signing request through a supplied authorizer.
 func signSigningServiceOriginator(
 	t *testing.T,

@@ -10,7 +10,7 @@
     "api_declarations", "openapi", "issue_log_sha256", "issue_count",
     "external_evidence_sha256", "external_comparison_sha256",
     "external_availability", "external_cases", "module_proof_sha256",
-    "module_proxy_sha256", "module_count", "evidence", "deferrals",
+    "module_proxy_sha256", "module_count", "evidence", "capabilities",
     "criteria", "overall"
   ],
   "properties": {
@@ -34,12 +34,12 @@
     "module_proxy_sha256": {"$ref": "#/$defs/digest"},
     "module_count": {"type": "integer", "minimum": 2, "maximum": 1024},
     "evidence": {"type": "array", "minItems": 19, "maxItems": 19, "items": {"$ref": "#/$defs/artifact"}},
-    "deferrals": {
+    "capabilities": {
       "type": "object",
       "additionalProperties": false,
       "required": ["exim", "ldap_sql_migration"],
       "properties": {
-        "exim": {"const": "deferred_exim"},
+        "exim": {"const": "qualified_linux"},
         "ldap_sql_migration": {"const": "implemented"}
       }
     },

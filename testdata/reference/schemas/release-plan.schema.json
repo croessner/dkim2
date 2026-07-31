@@ -4,7 +4,7 @@
   "title": "DKIM2 release-candidate plan",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema", "product_version", "openapi_version", "wire_version", "planned_tags", "modules", "publication", "deferrals"],
+  "required": ["schema", "product_version", "openapi_version", "wire_version", "planned_tags", "modules", "publication", "capabilities"],
   "properties": {
     "schema": {"const": "dkim2.release-plan.v1"},
     "product_version": {"const": "v0.1.0-rc.1"},
@@ -12,15 +12,15 @@
     "wire_version": {"const": "v1"},
     "planned_tags": {
       "type": "array",
-      "minItems": 5,
-      "maxItems": 5,
+      "minItems": 6,
+      "maxItems": 6,
       "uniqueItems": true,
       "items": {"type": "string", "maxLength": 64}
     },
     "modules": {
       "type": "array",
-      "minItems": 4,
-      "maxItems": 4,
+      "minItems": 5,
+      "maxItems": 5,
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -43,12 +43,12 @@
         "credentials_allowed": {"const": false}
       }
     },
-    "deferrals": {
+    "capabilities": {
       "type": "object",
       "additionalProperties": false,
       "required": ["exim", "ldap_sql_migration"],
       "properties": {
-        "exim": {"const": "deferred_exim"},
+        "exim": {"const": "qualified_linux"},
         "ldap_sql_migration": {"const": "implemented"}
       }
     }

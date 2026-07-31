@@ -701,7 +701,7 @@ func buildMaximumLegalProcessBody(t testing.TB) []byte {
 	body.Grow(int(maxProcessBodyBytes))
 	body.WriteString(`{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-04","message":{"raw_rfc5322_base64":"`)
 	body.WriteString(encoded)
-	body.WriteString(`"},"smtp":{"mail_from":"`)
+	body.WriteString(`","fidelity":"raw_rfc5322"},"smtp":{"mail_from":"`)
 	body.Write(escapedPath)
 	body.WriteString(`","rcpt_to":[`)
 	for index := 0; index < dkim2.HardMaxRecipients; index++ {

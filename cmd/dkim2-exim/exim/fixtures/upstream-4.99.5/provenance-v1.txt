@@ -1,0 +1,6 @@
+format=dkim2-exim-provenance-v1
+retrieved_at=2026-07-27
+source_authority=https://downloads.exim.org/exim4/
+license=GPL-2.0-or-later
+notice=local_scan.h
+artifact_role=public-api-compile-fixture

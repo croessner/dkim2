@@ -24,6 +24,8 @@ Current contents:
   `github.com/croessner/dkim2`.
 - `cmd/dkim2d`: standalone HTTP/JSON daemon module.
 - `cmd/dkim2-milter`: standalone Milter adapter module.
+- `cmd/dkim2-exim`: source-linked Exim `local_scan()` and transport-filter
+  adapter module.
 - `cmd/dkim2ctl`: standalone OpenAPI-backed client and test-client module.
 - `lib/internal/*`: implemented raw-message, parser, canonicalization,
   verification, policy, recipe, signing, revision, route-authority,
@@ -41,8 +43,8 @@ Current contents:
 - `docs/replay-store-valkey.md`: production replay-store topology, ACL,
   persistence, replication, rotation, integration, and dependency guidance.
 - `docs/conformance.md`: public evidence classes, tested capability boundaries,
-  adapter limitations, reproducible report commands, and explicit Exim
-  deferral.
+  adapter limitations, reproducible report commands, and the separate real
+  Exim qualification boundary.
 - `docs/security-testing.md`: closed fuzz/resource inventories, abuse-profile
   commands, deterministic evidence, privacy limits, and vulnerability policy.
 - `docs/reference/README.md`: public API, compatibility, issue, external
@@ -76,8 +78,14 @@ response shapes remain authoritative only in
 The preview's public API, compatibility, issue, and limitation entry point is
 [`docs/reference/README.md`](docs/reference/README.md).
 
-Exim is incomplete and reported as `deferred_exim`; no Exim image, package, or
-compatibility result is claimed. LDAP and PostgreSQL datasource providers,
+The source-linked Exim adapter, packaging validators, operations guide, and
+five-row qualification runner are implemented with capability
+`qualified_linux`. The
+unchanged matrix passed all five supported rows with 43 cases per row under run
+ID `0487837fbec882979f6cf290e2d1ccb36d37a07558f03e64f77fa0cc5a7cca6b`;
+portable reports still mark Exim execution not applicable. No prebuilt
+universal Exim binary or container image is claimed. LDAP
+and PostgreSQL datasource providers,
 deployable schema artifacts, and the offline legacy OpenDKIM migration are
 implemented. They require operator-supplied verified-TLS services, distinct
 least-authority principals, and generation-matched protected registry state.
@@ -124,7 +132,7 @@ make test-valkey
 make check-conformance
 make conformance
 make conformance-postfix
-make conformance-all
+make conformance-all EXIM_EVIDENCE_ROOT=/absolute/path/to/exim-evidence
 make check-security
 make fuzz-security
 make security

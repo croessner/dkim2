@@ -8,6 +8,7 @@ COPY go.work go.work.sum ./
 COPY lib ./lib
 COPY cmd/dkim2d ./cmd/dkim2d
 COPY cmd/dkim2-milter ./cmd/dkim2-milter
+COPY cmd/dkim2-exim/go.mod cmd/dkim2-exim/go.sum ./cmd/dkim2-exim/
 COPY cmd/dkim2ctl ./cmd/dkim2ctl
 COPY tools ./tools
 COPY vendor ./vendor

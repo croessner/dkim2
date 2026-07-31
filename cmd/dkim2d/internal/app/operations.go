@@ -27,7 +27,26 @@ const (
 	FidelityRawRFC5322 MessageFidelity = "raw_rfc5322"
 	// FidelityMilterReconstructedCRLF identifies exact callback reconstruction.
 	FidelityMilterReconstructedCRLF MessageFidelity = "milter_reconstructed_crlf"
+	// FidelityEximLocalScanObservedCRLF identifies Exim receive-time observed bytes.
+	FidelityEximLocalScanObservedCRLF MessageFidelity = "exim_local_scan_observed_crlf"
+	// FidelityEximTransportFilterCRLF identifies Exim transport-filter network-form bytes.
+	FidelityEximTransportFilterCRLF MessageFidelity = "exim_transport_filter_crlf"
 )
+
+// AdmitsProcessFidelity reports whether receive-time verification may consume the representation.
+func AdmitsProcessFidelity(fidelity MessageFidelity) bool {
+	return fidelity == FidelityRawRFC5322 ||
+		fidelity == FidelityMilterReconstructedCRLF ||
+		fidelity == FidelityEximLocalScanObservedCRLF
+}
+
+// AdmitsOperationFidelity reports whether signing or revision may consume the representation.
+func AdmitsOperationFidelity(operation Operation, fidelity MessageFidelity) bool {
+	return (operation == OperationSign || operation == OperationRevise) &&
+		(fidelity == FidelityRawRFC5322 ||
+			fidelity == FidelityMilterReconstructedCRLF ||
+			fidelity == FidelityEximTransportFilterCRLF)
+}
 
 // OperationRequest is one immutable generated-DTO-free service request.
 type OperationRequest struct {
@@ -114,7 +133,7 @@ func newOperationRequest(
 ) (OperationRequest, error) {
 	if (operation != OperationSign && operation != OperationRevise) ||
 		len(raw) == 0 || len(recipients) == 0 || tenant == "" || domain == "" ||
-		(fidelity != FidelityRawRFC5322 && fidelity != FidelityMilterReconstructedCRLF) {
+		!AdmitsOperationFidelity(operation, fidelity) {
 		return OperationRequest{}, &DomainError{}
 	}
 	clonedRecipients := make([][]byte, len(recipients))

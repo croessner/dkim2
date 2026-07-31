@@ -14,6 +14,19 @@ The Exim adapter remains deferred. No Exim worktree, stash, package, binary,
 fixture execution, or live compatibility evidence is part of this increment.
 The conformance capability remains exactly `deferred_m17`.
 
+## Later M17 Qualification Addendum (2026-07-31)
+
+The preceding deferral remains the historical scope boundary of this security
+increment. M17 later qualified the source-linked Exim adapter on Linux across
+five authenticated upstream, Debian, and Ubuntu rows, with all 43 cases passing
+per row and the fail-closed privacy verifier passing under run ID
+`0487837fbec882979f6cf290e2d1ccb36d37a07558f03e64f77fa0cc5a7cca6b`.
+The active capability is `qualified_linux`; portable security and conformance
+reports do not claim Exim execution, and full reports fail closed unless the
+separate imported qualification summary is bound to the current manifest, base
+revision, candidate snapshot, and verifier digest. See
+`docs/security-testing.md` and `docs/conformance.md`.
+
 ## Source Documents And Precedence
 
 This specification is governed, in order, by:

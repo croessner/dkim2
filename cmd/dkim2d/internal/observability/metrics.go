@@ -280,7 +280,9 @@ func closedMetricValue(key, value string) bool {
 
 // httpOperations returns one fresh route-operation allowlist.
 func httpOperations() []string {
-	return []string{"health", "readiness", "metrics", "process", valueUnmatched}
+	return []string{
+		"health", "readiness", "metrics", valueProcess, valueSign, valueRevise, valueUnmatched,
+	}
 }
 
 // containMetricPanic prevents collector defects from crossing telemetry boundaries.

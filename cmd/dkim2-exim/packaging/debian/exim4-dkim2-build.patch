@@ -1,0 +1,21 @@
+Description: Add DKIM2 local_scan inputs to each actual Exim daemon tree
+Author: DKIM2 reference implementation maintainers
+Forwarded: not-needed
+--- a/debian/rules
++++ b/debian/rules
+@@ -143,7 +143,16 @@ override_dh_auto_configure: unpack-configs-stamp bdir-stamp
+		cp EDITME.`echo $$i | sed -e s/exim4-daemon/exim4/` \
+		b-$$i/Local/Makefile && \
+		cp EDITME.eximon b-$$i/Local/eximon.conf ;\
+		done
++	set -e; for i in $(daemons) ; do \
++		install -m 0644 debian/dkim2/dkim2.mk b-$$i/Local/dkim2.mk; \
++		install -m 0644 debian/dkim2/dkim2_local_scan.c b-$$i/Local/dkim2_local_scan.c; \
++		install -m 0644 debian/dkim2/build-id-v1.h b-$$i/Local/build-id-v1.h; \
++		grep -qxF 'include ../Local/dkim2.mk' b-$$i/Local/Makefile || \
++			printf '%s\n' 'include ../Local/dkim2.mk' >> b-$$i/Local/Makefile; \
++		grep -qxF 'LOCAL_SCAN_HAS_OPTIONS=yes' b-$$i/Local/Makefile || \
++			printf '%s\n' 'LOCAL_SCAN_HAS_OPTIONS=yes' >> b-$$i/Local/Makefile; \
++	done
+
+ override_dh_auto_build:

@@ -26,11 +26,11 @@
   },
   "additionalProperties": false,
   "properties": {
-    "base_revision": {"const": "25a9944329d0067db4c7c30b0ba69c1028a44b30"},
+    "base_revision": {"const": "b3979123febbc333fb8ed85c8c1801ba5caf5def"},
     "candidate_snapshot_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
     "dns_draft": {"const": "draft-chuang-dkim2-dns-04"},
     "evidence": {"items": {"$ref": "#/$defs/evidence"}, "maxItems": 7, "minItems": 7, "type": "array"},
-    "exim": {"const": "deferred_exim"},
+    "exim": {"const": "qualified_linux"},
     "fuzz_state": {"const": "pass"},
     "fuzz_targets": {"maximum": 4096, "minimum": 1, "type": "integer"},
     "go_version": {"pattern": "^go1\\.26\\.[0-9]+$", "type": "string"},

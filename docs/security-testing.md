@@ -52,7 +52,8 @@ The complete report binds:
 - current portable and full conformance reports;
 - two current real-Postfix qualification reports;
 - zero unresolved findings; and
-- the exact `deferred_exim` Exim capability.
+- the exact `qualified_linux` Exim capability through the candidate-bound full
+  conformance report and its separately verified five-row evidence import.
 
 Evidence readers reject duplicate JSON members, symlinked paths, partial
 identity-only reports, unexpected evidence paths, and reports that fail their
@@ -93,5 +94,7 @@ make govulncheck
 make guardrails
 ```
 
-Exim execution is not part of this profile. Its adapter and live evidence
-remain deferred until the taint-safe envelope-authority design is resolved.
+The security runner does not re-execute Exim. It accepts Exim only through the
+current full conformance report, whose producer must rerun the strict matrix
+verifier over explicit imported evidence and bind the result to the same
+candidate.

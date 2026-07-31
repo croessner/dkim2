@@ -22,6 +22,8 @@ var workspaceMetadataPaths = []string{
 	"cmd/dkim2d/go.sum",
 	"cmd/dkim2-milter/go.mod",
 	"cmd/dkim2-milter/go.sum",
+	"cmd/dkim2-exim/go.mod",
+	"cmd/dkim2-exim/go.sum",
 	"cmd/dkim2ctl/go.mod",
 	"cmd/dkim2ctl/go.sum",
 	"tools/go.mod",

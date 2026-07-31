@@ -9,6 +9,8 @@ Thumbs.db
 /bin/
 /dist/
 /coverage/
+__pycache__/
+*.py[cod]
 coverage.out
 *.coverprofile
 *.test

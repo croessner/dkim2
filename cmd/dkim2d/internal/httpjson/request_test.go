@@ -1,3 +1,4 @@
+//nolint:goconst // Exact envelope fixtures remain local to independent mapper assertions.
 package httpjson
 
 import (
@@ -287,6 +288,25 @@ func TestMapProcessRequestFormattingIsContentFree(t *testing.T) {
 	}
 }
 
+// TestMapProcessRequestAdmitsOnlyLocalScanEximFidelity proves exact receive-time ownership.
+func TestMapProcessRequestAdmitsOnlyLocalScanEximFidelity(t *testing.T) {
+	request := processRequestFixture(t, []byte("From: sender@example.test\r\n\r\nbody\r\n"), "<sender@example.test>", []string{"<recipient@example.net>"})
+	localScan := generated.EximLocalScanObservedCrlf
+	request.Message.Fidelity = &localScan
+	if _, err := MapProcessRequest(request); err != nil {
+		t.Fatal("Exim local-scan fidelity was rejected")
+	}
+	transport := generated.EximTransportFilterCrlf
+	request.Message.Fidelity = &transport
+	if _, err := MapProcessRequest(request); !IsMappingError(err, MappingInvalidContract) {
+		t.Fatal("Exim transport-filter fidelity crossed into process")
+	}
+	request.Message.Fidelity = nil
+	if _, err := MapProcessRequest(request); err != nil {
+		t.Fatal("absent process fidelity did not preserve direct-raw compatibility")
+	}
+}
+
 // TestDecodeCanonicalBase64Maximum proves the exact raw-message bound and its next canonical spelling.
 func TestDecodeCanonicalBase64Maximum(t *testing.T) {
 	raw := make([]byte, dkim2.HardMaxRawMessageBytes)
@@ -368,10 +388,11 @@ func processRequestFixture(t testing.TB, raw []byte, reverse string, recipients 
 			t.Fatalf("NewProtectedString(rcpt_to) error = %v", err)
 		}
 	}
+	fidelity := generated.RawRfc5322
 	return generated.ProcessRequest{
 		ApiVersion: generated.V1,
 		Draft:      generated.DraftIetfDkimDkim2Spec04,
-		Message:    generated.MessageInput{RawRfc5322Base64: message},
+		Message:    generated.MessageInput{RawRfc5322Base64: message, Fidelity: &fidelity},
 		Smtp:       generated.SMTPInput{MailFrom: mailFrom, RcptTo: rcptTo},
 	}
 }

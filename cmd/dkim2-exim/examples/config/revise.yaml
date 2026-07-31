@@ -1,0 +1,26 @@
+version: dkim2-exim-config-v1
+daemon:
+  endpoint: http://127.0.0.1:8080
+  revise_capability_file: /etc/dkim2/revise-secret/revise.cap
+  request_timeout: 2s
+signing:
+  tenant: tenant-a
+  domain: example.test
+evidence:
+  enabled: true
+  root: /var/lib/dkim2-exim/evidence
+  key_file: /etc/dkim2/evidence-secret/evidence.key
+  readiness_file: /run/dkim2-exim-readiness/state
+  retention: 14d
+  max_records: 100000
+  max_bytes: 536870912
+limits:
+  message_bytes: 33554432
+  header_bytes: 1048576
+  header_count: 2000
+  header_field_bytes: 65536
+  recipient_count: 1
+observability:
+  logging:
+    level: info
+    destination: none

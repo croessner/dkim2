@@ -9,6 +9,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/croessner/dkim2"
+	"github.com/croessner/dkim2/cmd/dkim2d/internal/app"
 	"github.com/croessner/dkim2/cmd/dkim2d/internal/httpjson/generated"
 )
 
@@ -113,7 +114,12 @@ func (DomainRequest) MarshalText() ([]byte, error) {
 // Base64 spellings. This mapper validates the decoded canonical Base64 value and
 // preserves exact message and SMTP bytes.
 func MapProcessRequest(input generated.ProcessRequest) (DomainRequest, error) {
-	if input.ApiVersion != generated.V1 || input.Draft != generated.DraftIetfDkimDkim2Spec04 {
+	fidelity := app.FidelityRawRFC5322
+	if input.Message.Fidelity != nil {
+		fidelity = app.MessageFidelity(*input.Message.Fidelity)
+	}
+	if input.ApiVersion != generated.V1 || input.Draft != generated.DraftIetfDkimDkim2Spec04 ||
+		!app.AdmitsProcessFidelity(fidelity) {
 		return DomainRequest{}, newMappingError(MappingInvalidContract)
 	}
 	authservID := ""

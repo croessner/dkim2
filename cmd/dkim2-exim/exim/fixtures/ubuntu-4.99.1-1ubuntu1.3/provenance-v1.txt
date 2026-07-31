@@ -1,0 +1,6 @@
+format=dkim2-exim-provenance-v1
+retrieved_at=2026-07-27
+source_authority=https://launchpad.net/ubuntu/+archive/primary/+files/exim4_4.99.1.orig.tar.xz
+license=GPL-2.0-or-later
+notice=include/local_scan.h and include/functions.h
+artifact_role=authenticated-exact-public-api-compile-fixture

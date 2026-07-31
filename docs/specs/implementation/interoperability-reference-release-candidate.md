@@ -15,6 +15,20 @@ datasource, and Valkey replay surfaces. It is not a claim that the DKIM2 drafts
 are final, that all DKIM2 implementations interoperate, or that deferred Exim,
 LDAP, SQL, and migration work exists.
 
+## Later M17 Qualification Addendum (2026-07-31)
+
+The preceding release-candidate scope and later deferred-Exim acceptance rows
+remain historical M21 records. M17 subsequently qualified the source-linked
+Exim adapter on Linux across five authenticated upstream, Debian, and Ubuntu
+rows, with all 43 cases passing per row and the fail-closed privacy verifier
+passing under run ID
+`0487837fbec882979f6cf290e2d1ccb36d37a07558f03e64f77fa0cc5a7cca6b`.
+The current reference capability is `qualified_linux`: portable reports record
+not applicable and full reports require a candidate-bound imported summary.
+This qualification does not make either draft final or claim interoperability
+with an independent DKIM2 implementation. See
+`docs/reference/release-candidate.md` and `docs/reference/compatibility.md`.
+
 ## Source Documents And Precedence
 
 Authority order is:
@@ -615,6 +629,7 @@ v0.1.0-rc.1
 lib/v0.1.0-rc.1
 cmd/dkim2d/v0.1.0-rc.1
 cmd/dkim2-milter/v0.1.0-rc.1
+cmd/dkim2-exim/v0.1.0-rc.1
 cmd/dkim2ctl/v0.1.0-rc.1
 ```
 
@@ -841,7 +856,7 @@ observation window.
 
 - exact stable and `-rc.N` semantic-version normal/negative tests;
 - no RC stable/minor/major/latest publication aliases;
-- exact five-tag plan without creating tags;
+- exact six-tag plan without creating tags;
 - command requirements on `v0.1.0-rc.1` and absence of sentinel/bootstrap
   leakage;
 - canonical private module proxy and hostile zip/path negatives;

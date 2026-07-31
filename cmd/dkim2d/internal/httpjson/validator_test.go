@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-const validMinimalProcessJSON = `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-04","message":{"raw_rfc5322_base64":""},"smtp":{"mail_from":"","rcpt_to":[""]}}`
+const validMinimalProcessJSON = `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-04","message":{"raw_rfc5322_base64":"","fidelity":"raw_rfc5322"},"smtp":{"mail_from":"","rcpt_to":[""]}}`
 
 // TestRequestValidatorUsesEmbeddedContractAndPrivateAuthentication proves the runtime seam.
 func TestRequestValidatorUsesEmbeddedContractAndPrivateAuthentication(t *testing.T) {

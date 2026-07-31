@@ -181,6 +181,12 @@ func TestPostfixQualificationPinsBuildInputsAndCleanup(t *testing.T) {
 			t.Fatal("Dockerfile used a mutable or network package input")
 		}
 	}
+	if !bytes.Contains(
+		dockerfile,
+		[]byte("COPY cmd/dkim2-exim/go.mod cmd/dkim2-exim/go.sum ./cmd/dkim2-exim/"),
+	) {
+		t.Fatal("Dockerfile omitted Exim module metadata required by go.work")
+	}
 	run := readQualificationFile(t, "run.sh", 1<<16)
 	for _, required := range [][]byte{
 		[]byte("project=dkim2-postfix-qualification"),
@@ -242,6 +248,8 @@ func TestPostfixQualificationPinsBuildInputsAndCleanup(t *testing.T) {
 	for _, required := range [][]byte{
 		[]byte("**\n"), []byte("!lib/**"), []byte("!cmd/dkim2d/**"),
 		[]byte("!cmd/dkim2-milter/**"),
+		[]byte("!cmd/dkim2-exim/go.mod"),
+		[]byte("!cmd/dkim2-exim/go.sum"),
 		[]byte("!contrib/qualification/postfix-milter/cmd/qualify/main.go"),
 	} {
 		if !bytes.Contains(ignore, required) {

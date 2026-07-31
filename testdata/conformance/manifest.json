@@ -22,7 +22,7 @@
     "daemon": "supported",
     "milter": "partial",
     "postfix": "partial_linux",
-    "exim": "deferred_exim"
+    "exim": "qualified_linux"
   },
   "artifacts": [
     {
@@ -68,16 +68,34 @@
       "module": "lib"
     },
     {
-      "id": "exim-deferred-fixture",
-      "path": "testdata/conformance/exim/deferred-origin.json",
-      "sha256": "41bf8a91c7dc4ee50db1612b31d3639556e8f12202d9e960d6f490a834b864c8",
+      "id": "exim-qualification-contract",
+      "path": "cmd/dkim2-exim/exim/tests/real-matrix-contract.sh",
+      "sha256": "dcf0f843e4c5ce44b46a5b9276eb3fb2feb9f9a889870fbe18786820c63f216c",
+      "module": "cmd/dkim2-exim"
+    },
+    {
+      "id": "exim-qualification-executor",
+      "path": "cmd/dkim2-exim/exim/tests/execute-real-matrix-linux.sh",
+      "sha256": "6963f830d61001758f7a00a9c75b73759602ee25def7972f0741801669411da3",
+      "module": "cmd/dkim2-exim"
+    },
+    {
+      "id": "exim-qualification-helper",
+      "path": "cmd/dkim2-exim/exim/tests/real_matrix_service.py",
+      "sha256": "be92640857651edb158ed710d57a18321422854061605cde2612c1129dae0e27",
+      "module": "cmd/dkim2-exim"
+    },
+    {
+      "id": "exim-qualification-schema",
+      "path": "testdata/conformance/exim/qualification.schema.json",
+      "sha256": "850739772ee29387f198fbf4cd62933050a1312128462d82d470b7a162182880",
       "module": "testdata/conformance"
     },
     {
-      "id": "exim-deferred-result",
-      "path": "testdata/conformance/exim/deferred-result.json",
-      "sha256": "5087b6a38806466895eac2b2f325e5a33ff2c0b3a498d5695deaf7759293e0f9",
-      "module": "testdata/conformance"
+      "id": "exim-qualification-verifier",
+      "path": "cmd/dkim2-exim/exim/tests/run-real-matrix.sh",
+      "sha256": "9569e5a1c606c24f7fe8e9925de140666af13614689ac72e516f537911577abb",
+      "module": "cmd/dkim2-exim"
     },
     {
       "id": "milter-fixture-data",
@@ -178,13 +196,13 @@
     {
       "id": "postfix-qualification-dockerfile",
       "path": "contrib/qualification/postfix-milter/Dockerfile",
-      "sha256": "0255430bcc462a0aeed17a1bf0623410111b23f643c03948eaffc4efc25668f2",
+      "sha256": "fa90221105199edfae35442d6a42e8bf3cce7b07af4794baad5f6998a2cafc8f",
       "module": "contrib/qualification/postfix-milter"
     },
     {
       "id": "postfix-qualification-policy-source",
       "path": "tools/postfix_qualification_policy_test.go",
-      "sha256": "439159efbd4c6cea8174d09a9e783ce688a6c0c309b784fd4972dbacbebfa6bc",
+      "sha256": "9401c441f41fda635755a4caae06af9a9c51d332e0b86d43e0493d722cd04220",
       "module": "tools"
     },
     {
@@ -377,15 +395,15 @@
     },
     {
       "suite": "exim",
-      "case_id": "exim-origin-deferred",
+      "case_id": "linux-real-matrix",
       "class": "adapter_contract",
-      "authority": ["docs/specs/implementation/test-vectors-and-conformance-suite.md Exim Adapter Contract"],
-      "provenance": "manual_derivation",
-      "runner": "exim_deferred",
+      "authority": ["docs/specs/implementation/exim-adapter.md Real Exim Qualification Matrix"],
+      "provenance": "independent_oracle",
+      "runner": "exim_qualification",
       "required_platform": "linux",
-      "expected_outcome": "deferred",
-      "artifacts": ["exim-deferred-fixture", "exim-deferred-result"],
-      "producer": "none"
+      "expected_outcome": "pass",
+      "artifacts": ["exim-qualification-contract", "exim-qualification-executor", "exim-qualification-helper", "exim-qualification-schema", "exim-qualification-verifier"],
+      "producer": "exim-qualification-verifier"
     },
     {
       "suite": "milter",

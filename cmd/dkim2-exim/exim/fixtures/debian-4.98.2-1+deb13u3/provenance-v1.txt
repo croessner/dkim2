@@ -1,0 +1,6 @@
+format=dkim2-exim-provenance-v1
+retrieved_at=2026-07-27
+source_authority=https://sources.debian.org/src/exim4/4.98.2-1%2Bdeb13u3/
+license=GPL-2.0-or-later
+notice=../upstream-4.99.5/local_scan.h
+artifact_role=patched-public-api-compile-fixture
