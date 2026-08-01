@@ -1,12 +1,20 @@
 # LDAP And SQL Datasource Providers And Legacy Migration
 
-Status: implemented.
+Status: completed historical delivery; current runtime custody is superseded as
+described below.
 
 Custody note: the public-provider and legacy-inventory work remains historical
 implementation evidence, but its local-registry policy is superseded by
 `docs/specs/implementation/native-datasource-key-custody.md`. LDAP and
 PostgreSQL runtime generations now require `dkim2-datasource-v2` native key
-material and have no local-manifest or legacy fallback.
+material and have no local-manifest or legacy fallback. The deployable LDAP
+schema now has 18 attributes and six object classes. The original 17/5 and
+public-only statements below describe the superseded first delivery, not the
+current runtime or operator contract.
+
+MySQL and MariaDB support was added later under
+`docs/specs/implementation/mysql-mariadb-datasource.md`; the canonical current
+operator contract for all backends is `docs/operator/datasource-backends.md`.
 
 This specification turns the storage mappings and migration contract in
 `docs/datasource-ldap-sql-design.md` into executable daemon-owned LDAP and
@@ -104,7 +112,8 @@ Deliver production-capable LDAP and PostgreSQL datasource paths that:
   ambiguous identities;
 - carry only provider-neutral opaque `KeyHandleID` values across the
   datasource boundary;
-- never store private keys in LDAP or SQL;
+- originally kept private keys outside LDAP and SQL; this requirement is
+  superseded by native v2 custody;
 - bind a loaded datasource generation to one exact protected signing registry
   generation before readiness or signing;
 - use authenticated, verified, least-privilege backend connections with
@@ -1058,7 +1067,7 @@ Fill after implementation:
 | Area | Soll | Ist | Status | Notes |
 | --- | --- | --- | --- | --- |
 | Bridge | Service-owned providers reuse one storage-neutral library owner | Public provider bridge over authoritative datasource constructors | complete | No concrete driver or backend DTO enters `lib` |
-| LDAP schema | Exact 17 attributes, five classes, layout, indexes, ACL, `slaptest` | Exact allocation and deployable schema bundle | complete | Host and disposable OpenLDAP validation |
+| LDAP schema | Original 17 attributes and five classes | Superseded by the native v2 18-attribute/six-class schema | historical | Current truth is the native-custody spec and LDAP schema reference |
 | LDAP runtime | Bounded verified paged snapshot and degraded recovery | Verified TLS, fixed projection, exact paging/fence, finite snapshot lifecycle | complete | Referrals, hostile BER lengths, stale and malformed generations fail closed |
 | PostgreSQL DDL | Full-generation constraints, roles, immutability, publication | Transactional DDL, split roles, immutable committed generations, forward-only current | complete | Real role and transition denials included |
 | PostgreSQL runtime | Repeatable-read keyset snapshot and degraded recovery | Typed connection, read-only transaction, fixed keyset queries, final fence | complete | Environment/service/password fallback rejected |
@@ -1081,9 +1090,9 @@ Fill after implementation:
 - Settled: LDAP and PostgreSQL are daemon-owned concrete providers and use a
   narrow public library bridge because Go's `internal` rule prevents direct
   command-module access.
-- Settled: the LDAP schema uses exactly 17 new attributes and five new object
-  classes; standard `cn` is storage-only and no sixth class or eighteenth
-  attribute is allocated.
+- Superseded: the original LDAP schema used 17 attributes and five object
+  classes. Native v2 custody permanently adds attribute 18 and object class 6;
+  standard `cn` remains storage-only.
 - Settled: validity is canonical RFC3339Nano IA5 text, not LDAP Generalized
   Time.
 - Settled: runtime providers are read-only; mutation exists only in the

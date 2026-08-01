@@ -36,6 +36,66 @@ func TestDriverConfigIsSingleAuthorityVerifiedTLS(t *testing.T) {
 	}
 }
 
+// TestLeastPrivilegeGrantTemplateMatchesPublisherContract proves the operator
+// grant example gives runtime only dataset reads and gives the publisher only
+// the fixed staging and singleton-lock privileges.
+func TestLeastPrivilegeGrantTemplateMatchesPublisherContract(t *testing.T) {
+	t.Parallel()
+	path := filepath.Join(
+		"..", "..", "..", "..", "..", "contrib", "schema", "mysql",
+		"002_least_privilege_grants.sql.example",
+	)
+	document, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal("read committed MySQL grant template")
+	}
+	text := string(document)
+	datasetTables := []string{
+		"dkim2_dataset_generations", "dkim2_current_generation", "dkim2_handles",
+		"dkim2_profiles", "dkim2_credentials", "dkim2_policies", "dkim2_key_material",
+	}
+	for _, table := range datasetTables {
+		if !strings.Contains(text, "GRANT SELECT ON __DATABASE__."+table+" TO __RUNTIME_ACCOUNT__;") {
+			t.Fatal("MySQL runtime grant template is incomplete")
+		}
+	}
+	requiredPublisher := []string{
+		"GRANT SELECT ON __DATABASE__.dkim2_publication_lock TO __PUBLISHER_ACCOUNT__;",
+		"GRANT SELECT, INSERT, UPDATE ON __DATABASE__.dkim2_dataset_generations TO __PUBLISHER_ACCOUNT__;",
+		"GRANT SELECT, INSERT, UPDATE ON __DATABASE__.dkim2_current_generation TO __PUBLISHER_ACCOUNT__;",
+		"GRANT UPDATE ON __DATABASE__.dkim2_publication_lock TO __PUBLISHER_ACCOUNT__;",
+	}
+	for _, table := range datasetTables[2:] {
+		requiredPublisher = append(requiredPublisher,
+			"GRANT SELECT, INSERT ON __DATABASE__."+table+" TO __PUBLISHER_ACCOUNT__;",
+		)
+	}
+	for _, required := range requiredPublisher {
+		if !strings.Contains(text, required) {
+			t.Fatal("MySQL publisher grant template is incomplete")
+		}
+	}
+	statements := make([]string, 0)
+	for _, line := range strings.Split(text, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "--") {
+			continue
+		}
+		statements = append(statements, line)
+	}
+	if len(statements) != len(datasetTables)+len(requiredPublisher) {
+		t.Fatal("MySQL grant template contains an unexpected executable statement")
+	}
+	upper := strings.ToUpper(strings.Join(statements, "\n"))
+	for _, forbidden := range []string{
+		"GRANT ALL", "GRANT DELETE", " ON *.* ", " FILE ", "CREATE USER", "IDENTIFIED BY",
+	} {
+		if strings.Contains(upper, forbidden) {
+			t.Fatal("MySQL grant template widens authority or owns credentials")
+		}
+	}
+}
+
 // TestConnectionConfigRedactsAllFormatting proves backend facts cannot escape
 // through common formatting or JSON paths.
 func TestConnectionConfigRedactsAllFormatting(t *testing.T) {

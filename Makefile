@@ -115,10 +115,15 @@ check-datasource-schema:
 		done; \
 		test -n "$$core"; \
 		cp contrib/schema/ldap/rnsdkim2.schema "$$work/rnsdkim2.schema"; \
+		cp contrib/schema/ldap/acl.conf "$$work/acl.conf"; \
 		sed -e "s|@CORE_SCHEMA@|$$core|" \
 			-e "s|include rnsdkim2.schema|include $$work/rnsdkim2.schema|" \
+			-e "s|include acl.conf|include $$work/acl.conf|" \
 			contrib/schema/ldap/slapd.conf > "$$work/slapd.conf"; \
 		slaptest -u -f "$$work/slapd.conf" >/dev/null; \
+		if command -v ldapadd >/dev/null 2>&1; then \
+			ldapadd -n -f contrib/schema/ldap/layout.ldif >/dev/null; \
+		fi; \
 	fi
 
 .PHONY: check-datasource-postgresql

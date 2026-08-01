@@ -3,6 +3,9 @@ set -eu
 
 guide=docs/operator/postfix-compose.md
 supply=docs/operator/container-supply-chain.md
+datasources=docs/operator/datasource-backends.md
+ldap_reference=docs/operator/ldap-schema-reference.md
+rotation=docs/operator/datasource-key-rotation.md
 daemon=cmd/dkim2d/README.md
 milter=cmd/dkim2-milter/README.md
 client=cmd/dkim2ctl/README.md
@@ -19,8 +22,15 @@ for document in \
   "$openapi" \
   "$openapi_readme" \
   docs/datasource-ldap-sql-design.md \
+  "$datasources" \
+  "$ldap_reference" \
+  "$rotation" \
   docs/operator/datasource-ldap-postgresql.md \
   docs/operator/opendkim-migration.md \
+  docs/operator/examples/dkim2d-signing-ldap.yaml \
+  docs/operator/examples/dkim2d-signing-postgresql.yaml \
+  docs/operator/examples/dkim2d-signing-mysql.yaml \
+  contrib/schema/mysql/002_least_privilege_grants.sql.example \
   docs/replay-store-valkey.md \
   docs/reference/README.md \
   docs/reference/compatibility.md \
@@ -58,11 +68,52 @@ for reference in \
   'cmd/dkim2-milter/README.md' \
   'cmd/dkim2ctl/README.md' \
   'docs/operator/container-supply-chain.md' \
-  'docs/operator/datasource-ldap-postgresql.md' \
+  'docs/operator/datasource-backends.md' \
+  'docs/operator/ldap-schema-reference.md' \
+  'docs/operator/datasource-key-rotation.md' \
   'docs/operator/opendkim-migration.md' \
   'docs/specs/openapi/dkim2d.yaml'; do
   grep -Fq "$reference" README.md
 done
+
+for required in \
+  'signing.reload_interval' \
+  'dkim2-datasource-v2' \
+  'dkim2PrivateKeyPKCS8' \
+  'dkim2KeyMaterial' \
+  'PostgreSQL' \
+  'MySQL' \
+  'MariaDB' \
+  'higher generation' \
+  'rollback'; do
+  grep -Fq "$required" "$datasources" "$ldap_reference" "$rotation"
+done
+
+for command in \
+  'datasource bootstrap-opendkim' \
+  'datasource rollback'; do
+  grep -Fq "$command" "$rotation"
+  grep -Fq "$command" cmd/dkim2d/internal/command/command.go
+done
+for subject in \
+  'OpenLDAP `2.6.13-r4`' \
+  'PostgreSQL `18.3-alpine`' \
+  'MySQL `8.4`' \
+  'MariaDB `10.11`' \
+  'Valkey `9.1.0`'; do
+  grep -Fq "$subject" docs/reference/compatibility.md
+done
+
+! grep -Fq 'refresh_interval' "$datasources" docs/operator/examples/*.yaml
+! grep -Fq 'response_bytes' "$datasources" docs/operator/examples/*.yaml
+! grep -Fq 'dkim2-datasource-v1' contrib/schema/ldap/layout.ldif
+! grep -Fq 'LDAP and SQL providers are deferred to M22' docs/ARCHITECTURE.md
+! grep -Fq 'architecture-only until M22' docs/ARCHITECTURE.md
+
+GOCACHE="${GOCACHE:-/tmp/dkim2-go-build-cache}" \
+  go -C cmd/dkim2d test \
+    -run '^(TestOperatorDatasourceExamplesValidate|TestOperatorLDAPBundleMatchesNativeCustody|TestLeastPrivilegeGrantTemplateMatchesPublisherContract)$' \
+    ./internal/config ./internal/datasource/ldap ./internal/datasource/mysql
 for reference in \
   'cmd/dkim2d/README.md' \
   'cmd/dkim2-milter/README.md' \

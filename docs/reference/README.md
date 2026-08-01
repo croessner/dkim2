@@ -22,9 +22,11 @@ limitations without creating a second protocol model.
 - [Exim operations](../operations/exim-adapter.md) and the
   [compatibility matrix](../reports/exim-compatibility-2026-07-27.md) describe
   the source-rebuild deployment and separate five-row qualification boundary.
-- [LDAP and SQL datasources](../operator/datasource-ldap-postgresql.md) and
+- [Signing datasource backends](../operator/datasource-backends.md), the
+  [LDAP schema reference](../operator/ldap-schema-reference.md), the
+  [key-rotation runbook](../operator/datasource-key-rotation.md), and
   [OpenDKIM migration](../operator/opendkim-migration.md) define the
-  implemented database-provider and offline administration boundaries.
+  implemented storage and offline administration boundaries.
 - [Container supply chain](../operator/container-supply-chain.md) defines
   image, SBOM, provenance, and publication boundaries.
 - [OpenAPI source](../specs/openapi/dkim2d.yaml) is authoritative for daemon

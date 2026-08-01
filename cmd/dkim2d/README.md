@@ -12,7 +12,7 @@ owned by `github.com/croessner/dkim2`. The authoritative REST contract is
 The production navigation and container trust topology start in
 [`docs/operator/postfix-compose.md`](../../docs/operator/postfix-compose.md).
 LDAP/PostgreSQL/MySQL/MariaDB installation and migration are documented in
-[`docs/operator/datasource-ldap-postgresql.md`](../../docs/operator/datasource-ldap-postgresql.md)
+[`docs/operator/datasource-backends.md`](../../docs/operator/datasource-backends.md)
 and
 [`docs/operator/opendkim-migration.md`](../../docs/operator/opendkim-migration.md).
 
@@ -253,6 +253,10 @@ until a complete higher generation loads. Exact configuration examples,
 schema/DDL installation, role separation, backup, and recovery are in the
 datasource operator guide linked above. MariaDB uses the `mysql` selector and
 the same typed, verified-TLS provider contract.
+The LDAP tree and attributes are documented in the
+[`LDAP schema reference`](../../docs/operator/ldap-schema-reference.md); normal
+generation replacement and retirement are documented in the
+[`key-rotation runbook`](../../docs/operator/datasource-key-rotation.md).
 
 ### Process-local memory replay
 

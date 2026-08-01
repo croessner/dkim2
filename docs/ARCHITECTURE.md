@@ -7,8 +7,8 @@
 | Document ID | DKIM2-ARCH-0001 |
 | Title | DKIM2 Reference Implementation Architecture |
 | Version | 0.1.0-draft |
-| Status | Planning baseline |
-| Date | 2026-06-24 |
+| Status | Living implementation baseline |
+| Date | 2026-08-01 |
 | Owner | Christian Roessner / Codex |
 | Language | English |
 | Classification | Internal design draft |
@@ -45,7 +45,7 @@
 | 0.1.0-draft | 2026-07-28 | Christian Roessner / Codex | Reserved the RNS LDAP subtree `1.3.6.1.4.1.31612.1.7` for DKIM2, defined stable attribute and object-class allocations, recorded the secret-safe live OpenDKIM migration baseline, and specified a fail-closed out-of-process bootstrap into immutable DKIM2 generations and opaque signing handles. Executable LDAP/SQL providers and migration tooling remain M22. |
 | 0.1.0-draft | 2026-07-28 | Christian Roessner / Codex | Specified production packaging and operator delivery: reproducible Go 1.26 multi-stage images for the daemon, Milter adapter, and generated client; digest-pinned hardened runtime inputs; multi-architecture, SBOM, provenance, and vulnerability gates; and a protected, no-host-exposure-by-default Postfix Compose deployment with explicit upgrade and rollback ownership. Exim remains incomplete under M17, and executable LDAP/SQL providers and migration remain M22. |
 | 0.1.0-draft | 2026-07-29 | Christian Roessner / Codex | Specified interoperability and reference-candidate closeout: reproducible external-implementation discovery and comparison or explicit evidence-backed unavailability, a bidirectionally complete Draft-04 issue log, generated-contract and exported-reference review, scoped `v0.1.0-rc.1` preparation without publication, and one candidate-bound report that preserves normative, interpretation, policy, OpenAPI, adapter, and external-evidence claim separation. Exim remains deferred to M17 and executable LDAP/SQL providers plus migration remain M22. |
-| 0.1.0-draft | 2026-07-30 | Christian Roessner / Codex | Implemented M22 daemon-owned LDAP and PostgreSQL datasource providers, exact schema/DDL delivery, generation-matched protected signer registries, serialized readiness and refresh ownership, provider parity, and the offline OpenDKIM dry-run/apply/higher-generation rollback workflow with separate inventory, key-import, DNS-proof, and publication authorities. |
+| 0.1.0-draft | 2026-07-30 | Christian Roessner / Codex | Implemented the original M22 LDAP/PostgreSQL delivery with generation-matched protected signer registries; the 2026-08-01 native-v2 custody revision below supersedes that local-registry design while retaining its serialized readiness, provider parity, and offline OpenDKIM publication authorities. |
 | 0.1.0-draft | 2026-07-30 | Christian Roessner / Codex | Implemented the M17 Exim adapter candidate: source-linked and version-probed `local_scan()`, bounded same-UID IPC, daemon-backed sign/revise transport filters, authenticated evidence, protected configuration, packaging validators, and a strict five-row upstream/Debian/Ubuntu qualification runner. Release compatibility remains gated on final unchanged-candidate matrix evidence; the RC remains unpublished and Draft-04 limitations are unchanged. |
 | 0.1.0-draft | 2026-07-30 | Christian Roessner / Codex | Added fail-closed multi-domain originator routing in the Milter: one static tenant may derive an exact canonical ASCII signing domain from the validated SMTP reverse-path, while null senders, literals, SMTPUTF8 domains, transit use, and every fallback remain rejected. |
 | 0.1.0-draft | 2026-07-31 | Christian Roessner / Codex | Qualified the M17 Exim adapter on Linux across all five authenticated upstream, Debian, and Ubuntu rows with 43 passing cases per row and a passing fail-closed privacy scan. Replaced the historical portable deferral with a Linux-only conformance producer: portable reports record not applicable, while full reports require explicit verified evidence imported under current manifest, base-revision, candidate-snapshot, and verifier bindings. |
@@ -55,6 +55,7 @@
 | 0.1.0-draft | 2026-08-01 | Christian Roessner / Codex | Deferred null-reverse-path DSN signing: the originator Milter tempfails before daemon I/O until an executable trusted gate authenticates RFC 3462 structure, Draft-04 Section 12.1 embedded verification, and Section 12.1.2 alignment evidence. |
 | 0.1.0-draft | 2026-08-01 | Christian Roessner / Codex | Moved LDAP and PostgreSQL signing-key custody into immutable `dkim2-datasource-v2` generations, preserving opaque handles and in-memory signing while removing network-backend local manifests and REST key surfaces. |
 | 0.1.0-draft | 2026-08-01 | Christian Roessner / Codex | Added daemon-owned MySQL 8.4 and MariaDB 10.11 datasource support through one typed verified-TLS adapter, a shared SQL snapshot core, immutable InnoDB generations, transactionally fenced offline publication, and digest-pinned parity evidence for both server families. |
+| 0.1.0-draft | 2026-08-01 | Christian Roessner / Codex | Reconciled the operator documentation with native v2 custody: completed the 18-attribute/six-class LDAP allocation, marked M22 implemented across LDAP and three SQL server families, added parser-checked configuration examples, and made installation, grants, rotation, backup, and legacy isolation one navigable operator contract. |
 
 ## 1. Purpose
 
@@ -1364,6 +1365,7 @@ are reserved as follows and must never be reassigned:
 | `RNSDKIM2at:15` | `dkim2Rollout` |
 | `RNSDKIM2at:16` | `dkim2Compatibility` |
 | `RNSDKIM2at:17` | `dkim2FeedbackRouteID` |
+| `RNSDKIM2at:18` | `dkim2PrivateKeyPKCS8` |
 
 The first object-class allocation is:
 
@@ -1374,12 +1376,13 @@ The first object-class allocation is:
 | `RNSDKIM2oc:3` | `dkim2Profile` | One bounded signing profile |
 | `RNSDKIM2oc:4` | `dkim2Credential` | One selector, algorithm, public SPKI, and handle binding |
 | `RNSDKIM2oc:5` | `dkim2Policy` | One exact tenant, domain, and use policy |
+| `RNSDKIM2oc:6` | `dkim2KeyMaterial` | One native private key and its exact generation, policy, handle, algorithm, and public-SPKI binding |
 
-M22 owns the exact LDAP syntaxes, matching rules, `MUST`/`MAY` sets, structural
-layout, indexes, ACL examples, and reproducible `slaptest` fixtures. Those
-deployment details must preserve the existing logical mapping and immutable
-generation contract. A configured base DN and record DNs are provider storage
-mechanics; they are never profile, tenant, policy, or handle identities.
+The deployable schema owns the exact LDAP syntaxes, matching rules,
+`MUST`/`MAY` sets, structural layout, indexes, ACL examples, and reproducible
+validation fixtures. Those deployment details preserve the logical mapping and
+immutable generation contract. A configured base DN and record DNs are provider
+storage mechanics; they are never profile, tenant, policy, or handle identities.
 
 The historical `rnsMSDKIM` object class and its OIDs remain part of the mail
 schema. They are not extended or reused for DKIM2 because they can carry raw
@@ -2119,16 +2122,16 @@ maintainers to understand why behavior exists.
 | M10 - Signing and revising | Completed: sealed revision verification, Message-Instance and DKIM2-Signature generation, opaque private-key callbacks, shared custody continuity, authority-bound fanout/release, next-domain transitions, public facade, and signing vectors | Retained exact prompt spans are recorded in the ignored timing ledger; missing starts remain unavailable rather than inferred | High; completed with independent normative and architecture review |
 | M11 - Datasource abstraction and general providers | Completed: exact storage-neutral profile/policy contracts, immutable memory provider, confined flat-file provider with atomic fail-closed reload, opaque-handle signing bridge, LDAP/SQL design contracts, and parity/fuzz/race/privacy/dependency evidence | Exact nine-prompt wall-clock ledger is recorded in the ignored prompt pack; active engineering time was not separately tracked | High; completed with independent normative and architecture review |
 | M12 - Replay store and Valkey provider | Completed: storage-neutral replay contracts, versioned privacy-preserving identities, bounded memory and disabled providers, exact Valkey first-seen behavior, fail-closed lifecycle and authority checks, and parity/fuzz/race/privacy/integration evidence | measured 8h47m27s before terminal closeout review; active engineering time was not separately retained for all prompts | High; completed with independent normative, security, architecture, and implementation review |
-| M13 - OpenAPI daemon foundation | `dkim2d` Cobra/Viper config, typed validation, Fx composition, OpenAPI generated server boundary, `/healthz`, `/readyz`, `/v1/process`, request limits, structured errors | 4 to 10 hours | High |
-| M14 - OpenAPI test client | `dkim2ctl` generated client, fixture runner, JSON output, daemon smoke tests, negative request fixtures, reproducible diagnostics | 2 to 5 hours | Medium |
-| M15 - Observability foundation | `slog` provider, debug modules, OpenTelemetry tracing, Prometheus registry, low-cardinality label policy, secret-safe attributes, metrics endpoint, redaction tests | 3 to 8 hours | High |
-| M16 - Milter adapter | SMTP context collection, EOM service call, action application, timeout behavior, fidelity metadata, MTA integration tests, fail-open/fail-closed tests | 5 to 12 hours | High |
+| M13 - OpenAPI daemon foundation | Implemented: `dkim2d` Cobra/Viper configuration, typed validation, Fx composition, generated OpenAPI server boundary, health/readiness/process/sign/revise routes, request limits, and structured errors | original estimate 4 to 10 hours; historical | High; completed with generated-contract and boundary evidence |
+| M14 - OpenAPI test client | Implemented: generated-client `dkim2ctl`, fixture runner, bounded output, daemon smoke tests, negative request fixtures, capability authentication, and reproducible diagnostics | original estimate 2 to 5 hours; historical | Medium; completed with generated-client evidence |
+| M15 - Observability foundation | Implemented: central `slog`, OpenTelemetry, Prometheus, low-cardinality label policy, secret-safe attributes, metrics endpoint, redaction, lifecycle, and abuse tests | original estimate 3 to 8 hours; historical | High; completed with privacy and cardinality evidence |
+| M16 - Milter adapter | Implemented: SMTP context collection, EOM daemon call, action application, timeout and fail-closed behavior, byte-fidelity metadata, portable fixtures, and real Postfix qualification | original estimate 5 to 12 hours; historical | High; completed with adapter and MTA integration evidence |
 | M17 - Exim adapter | Completed and Linux-qualified: source-linked `local_scan()` inbound adapter, daemon-backed sign/revise `transport_filter`, exact action/fidelity/evidence contracts, protected runtime and packaging validation, and 5 × 43 passing authenticated upstream/Debian/Ubuntu matrix cases with passing privacy verification | 4 to 10 agent-days | High; completed with candidate-bound evidence import |
 | M18 - Test vectors and conformance suite | Implemented: digest-bound draft-versioned positive/negative/replay vectors, generated-client OpenAPI fixtures, portable Milter fixtures, real Postfix Docker qualification, deterministic CI reports, and a separate Linux Exim qualification producer. Portable reports never claim Exim execution; full reports fail closed without verified imported evidence bound to the current candidate | 4 to 12 hours | High |
 | M19 - Security hardening | Implemented: closed first-party fuzz inventory, composable resource limits, whole-product logging/privacy review, repeated race tests, govulncheck, datasource/replay abuse, recipe bombs, OpenAPI abuse fixtures, Milter hostile-peer and real Postfix regression evidence, plus the candidate-bound Exim qualification capability consumed through full conformance | 5 to 14 hours | High |
-| M20 - Packaging, container delivery, documentation, and operator guide | Reproducible Go 1.26 multi-stage Dockerfiles or Containerfiles for `dkim2d`, `dkim2-milter`, and `dkim2ctl`; non-root minimal runtime images; health checks; OCI metadata; multi-architecture build and release automation; image SBOM/provenance and vulnerability gates; example Compose deployment; API docs, architecture update, security/config/datasource/replay/observability guides, Milter and Exim deployment notes, rollback guidance, and examples | 1 to 3 agent-days | High |
-| M21 - Interop and reference polish | External implementation comparison, draft issue log, final API cleanup, conformance report, release candidate | 1 to 3 days | Very high |
-| M22 - LDAP and SQL datasource providers and legacy migration | RNS DKIM2 LDAP schema under `1.3.6.1.4.1.31612.1.7`, bounded read-only LDAP provider, transactionally consistent SQL provider, immutable generation publication, provider parity suites, schema/DDL delivery, secret-safe OpenDKIM bootstrap tooling, protected signer-registry import, fresh DNS publication proof, migration dry-run/rollback, and operator documentation | 2 to 6 agent-days | Very high |
+| M20 - Packaging, container delivery, documentation, and operator guide | Implemented: reproducible Go 1.26 product containers, non-root runtime, health checks, OCI metadata, multi-architecture build automation, SBOM/provenance/vulnerability gates, Compose deployment, API/architecture/security/config/datasource/replay/observability/operator guides, rollback, and parser-checked examples | original estimate 1 to 3 agent-days; historical | High; completed with supply-chain and operator-documentation gates |
+| M21 - Interop and reference polish | Implemented through candidate preparation: external comparison, draft issue log, public API review, conformance and compatibility reports, candidate-bound evidence, and release gates. Tag and artifact publication remain separately authorized release operations | original estimate 1 to 3 days; historical | Very high; candidate work completed, publication not implied |
+| M22 - LDAP and SQL datasource providers and legacy migration | Completed: RNS DKIM2 LDAP schema under `1.3.6.1.4.1.31612.1.7`, native v2 key custody, bounded LDAP and PostgreSQL/MySQL/MariaDB readers, immutable generation publication, provider parity, deployable schema/DDL, secret-safe OpenDKIM bootstrap, fresh DNS proof, forward-only rollback, and operator documentation | measured implementation and rollout evidence is retained in the completed implementation specifications | Very high; completed with production LDAP and disposable multi-database evidence |
 
 Total rough implementation estimate:
 
@@ -2143,7 +2146,7 @@ Total rough implementation estimate:
   `local_scan()`, outbound `transport_filter`, and distribution-baseline tests:
   4 to 10 agent-days.
 - Operational LDAP/SQL providers and a protected legacy OpenDKIM migration:
-  2 to 6 agent-days after the first public preview.
+  completed under M22; the original 2-to-6-agent-day estimate is historical.
 - Reference-quality implementation with vectors, fuzzing, security hardening,
   datasource providers, replay storage, observability, documentation, and
   interop work: 14 to 36 agent-days.
@@ -2310,14 +2313,16 @@ interpretation choices in code.
    trust-boundary reporting and is not part of DKIM2 protocol verification
    state. It must be generated by a strict formatter and must not include raw
    errors, secrets, protected values, raw recipient lists, or unbounded text.
-8. First public preview datasource providers:
+8. Implemented datasource providers:
    M11 provides an immutable in-memory general datasource for tests, examples,
-   and static deployments plus a confined flat-file general datasource for
-   later daemon use. Both implement the same exact storage-neutral contracts.
-   LDAP and SQL providers are deferred to M22 after the first public preview.
-   Their durable mapping, consistency, paging, cancellation, redaction, RNS
-   LDAP OID allocation, and legacy OpenDKIM bootstrap contracts are
-   architecture-only until M22 and introduce no drivers into the library.
+   and static deployments plus the confined flat-file daemon backend. M22 adds
+   daemon-owned LDAP, PostgreSQL, MySQL, and MariaDB providers behind the same
+   exact storage-neutral contracts. Network providers load one native
+   `dkim2-datasource-v2` public/private generation and build an in-memory signer;
+   flat-file alone uses a local protected private manifest. Their mapping,
+   consistency, paging, cancellation, redaction, RNS LDAP OID allocation, and
+   legacy OpenDKIM bootstrap contracts are implemented without introducing a
+   driver into the standalone library.
    Replay storage is tracked separately: Valkey is the first production replay
    store backend, behind a storage-neutral replay interface. All datasource and
    replay interfaces must be designed so providers can be added without

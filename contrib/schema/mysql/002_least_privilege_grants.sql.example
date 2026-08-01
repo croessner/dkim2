@@ -1,0 +1,30 @@
+-- Replace __DATABASE__, __RUNTIME_ACCOUNT__, and __PUBLISHER_ACCOUNT__ before
+-- execution. Account placeholders are complete quoted account expressions,
+-- for example 'dkim2_runtime_login'@'192.0.2.40'. Create those accounts first
+-- through the site's secret-management workflow with REQUIRE SSL and no global
+-- privileges. This file deliberately creates no account and contains no
+-- password.
+
+GRANT SELECT ON __DATABASE__.dkim2_dataset_generations TO __RUNTIME_ACCOUNT__;
+GRANT SELECT ON __DATABASE__.dkim2_current_generation TO __RUNTIME_ACCOUNT__;
+GRANT SELECT ON __DATABASE__.dkim2_handles TO __RUNTIME_ACCOUNT__;
+GRANT SELECT ON __DATABASE__.dkim2_profiles TO __RUNTIME_ACCOUNT__;
+GRANT SELECT ON __DATABASE__.dkim2_credentials TO __RUNTIME_ACCOUNT__;
+GRANT SELECT ON __DATABASE__.dkim2_policies TO __RUNTIME_ACCOUNT__;
+GRANT SELECT ON __DATABASE__.dkim2_key_material TO __RUNTIME_ACCOUNT__;
+
+GRANT SELECT ON __DATABASE__.dkim2_publication_lock TO __PUBLISHER_ACCOUNT__;
+GRANT SELECT, INSERT, UPDATE ON __DATABASE__.dkim2_dataset_generations TO __PUBLISHER_ACCOUNT__;
+GRANT SELECT, INSERT, UPDATE ON __DATABASE__.dkim2_current_generation TO __PUBLISHER_ACCOUNT__;
+GRANT SELECT, INSERT ON __DATABASE__.dkim2_handles TO __PUBLISHER_ACCOUNT__;
+GRANT SELECT, INSERT ON __DATABASE__.dkim2_profiles TO __PUBLISHER_ACCOUNT__;
+GRANT SELECT, INSERT ON __DATABASE__.dkim2_credentials TO __PUBLISHER_ACCOUNT__;
+GRANT SELECT, INSERT ON __DATABASE__.dkim2_policies TO __PUBLISHER_ACCOUNT__;
+GRANT SELECT, INSERT ON __DATABASE__.dkim2_key_material TO __PUBLISHER_ACCOUNT__;
+GRANT UPDATE ON __DATABASE__.dkim2_publication_lock TO __PUBLISHER_ACCOUNT__;
+
+-- Read back the effective table grants before deploying either credential:
+-- SELECT GRANTEE, TABLE_NAME, PRIVILEGE_TYPE
+--   FROM information_schema.TABLE_PRIVILEGES
+--  WHERE TABLE_SCHEMA = '__DATABASE__'
+--  ORDER BY GRANTEE, TABLE_NAME, PRIVILEGE_TYPE;

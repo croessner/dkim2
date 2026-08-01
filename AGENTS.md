@@ -23,7 +23,7 @@ before substantial work in its area:
 - `dkim2-openapi-service` for `dkim2d`, OpenAPI, generated server/client code,
   and `dkim2ctl`.
 - `dkim2-datasource-provider` for datasource contracts, Valkey replay storage,
-  flat-file providers, and future LDAP/SQL providers.
+  and flat-file, LDAP, PostgreSQL, MySQL, and MariaDB providers.
 - `dkim2-observability` for `slog`, OpenTelemetry, Prometheus, debug modules,
   labels, and redaction.
 - `dkim2-milter-adapter` for Milter EOM flow, daemon calls, action plans, and

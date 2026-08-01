@@ -4,6 +4,12 @@
 the HTTP server, Milter, replay store, metrics endpoint, tracing exporter, or
 normal daemon provider. Dry-run is the safe default:
 
+This guide covers initial import and forward publication from an existing
+OpenDKIM LDAP source. Routine DNS overlap, generation activation, retirement,
+and recovery are defined in
+[`datasource-key-rotation.md`](datasource-key-rotation.md). The normal daemon
+never reads the legacy source.
+
 ```text
 dkim2d datasource bootstrap-opendkim --config /secure/migration.yaml
 dkim2d datasource bootstrap-opendkim --config /secure/migration.yaml --machine

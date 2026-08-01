@@ -1,0 +1,23 @@
+config:
+  version: dkim2d-config-v1
+protected:
+  generation: 0123456789abcdef0123456789abcdef
+server:
+  capability_file: /var/lib/dkim2d/protected/0123456789abcdef0123456789abcdef/capability
+  sign_capability_file: /var/lib/dkim2d/protected/0123456789abcdef0123456789abcdef/sign-capability
+replay:
+  backend: disabled
+signing:
+  backend: mysql
+  reload_interval: 1m
+  mysql:
+    address: 192.0.2.30:3306
+    server_name: mysql.datasource.example.test
+    ca_file: /var/lib/dkim2d/protected/0123456789abcdef0123456789abcdef/mysql-ca.pem
+    database: dkim2
+    user: dkim2_runtime
+    password_file: /var/lib/dkim2d/protected/0123456789abcdef0123456789abcdef/mysql-password
+    page_size: 128
+    load_deadline: 5s
+    max_connections: 2
+    idle_connections: 1

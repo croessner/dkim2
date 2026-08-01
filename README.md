@@ -37,8 +37,13 @@ Current contents:
 - `docs/datasource-ldap-sql-design.md`: storage-neutral LDAP, PostgreSQL,
   MySQL, and MariaDB
   mapping, consistency, resource, and privacy contract.
-- `docs/operator/datasource-ldap-postgresql.md`: installable LDAP and SQL schema/DDL,
-  daemon configuration, lifecycle, monitoring, backup, and troubleshooting.
+- `docs/operator/datasource-backends.md`: canonical flat-file, LDAP,
+  PostgreSQL, MySQL, and MariaDB installation, configuration, lifecycle,
+  monitoring, backup, and troubleshooting guide.
+- `docs/operator/ldap-schema-reference.md`: operator-facing LDAP tree,
+  object-class, attribute, ACL, publication, and legacy-isolation reference.
+- `docs/operator/datasource-key-rotation.md`: DNS overlap, higher-generation
+  activation, retirement, and rollback runbook.
 - `docs/operator/opendkim-migration.md`: protected dry-run, apply, publication,
   and higher-generation rollback workflow.
 - `docs/replay-store-valkey.md`: production replay-store topology, ACL,
@@ -88,8 +93,9 @@ reports still mark Exim execution not applicable. No prebuilt
 universal Exim binary or container image is claimed. LDAP, PostgreSQL, MySQL,
 and MariaDB datasource providers,
 deployable schema artifacts, and the offline legacy OpenDKIM migration are
-implemented. They require operator-supplied verified-TLS services, distinct
-least-authority principals, and generation-matched protected registry state.
+implemented. They require operator-supplied verified-TLS services and distinct
+least-authority principals. Each network backend owns one complete native v2
+generation containing its public facts and private key material.
 
 ## Current Behavior
 
@@ -112,8 +118,9 @@ and one non-retryable `SET NX PX` operation. The daemon now owns strict typed
 configuration, protected-generation loading, the generated process, sign, and
 revise OpenAPI boundary, distinct local route-capability authentication,
 replay and signing-store wiring, readiness, and bounded Fx lifecycle. LDAP,
-PostgreSQL, MySQL, and MariaDB providers load immutable committed generations through verified TLS
-and join them to one exact protected signer-registry generation.
+PostgreSQL, MySQL, and MariaDB providers load immutable committed native v2
+generations through verified TLS and build a validated in-memory signer from
+the same generation. They use no local private manifest.
 
 `dkim2ctl` provides a generated-client-backed loopback smoke check and a
 strict draft-versioned fixture runner. It validates every fixture offline

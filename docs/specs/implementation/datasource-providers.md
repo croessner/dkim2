@@ -4,9 +4,12 @@ Status: completed; implementation and completion evidence recorded.
 
 This specification defines the storage-neutral datasource boundary used to
 resolve DKIM2 signing profiles and opaque private-key handles. It is the
-durable contract for the general datasource-provider milestone. It adds an
-in-memory provider and a strict flat-file provider while preserving explicit
-seams for later LDAP and SQL providers.
+durable contract for the original in-memory and flat-file provider milestone.
+LDAP and SQL were follow-on seams in this document and are now implemented
+under [`ldap-sql-datasource-legacy-migration.md`](ldap-sql-datasource-legacy-migration.md),
+[`native-datasource-key-custody.md`](native-datasource-key-custody.md), and
+[`mysql-mariadb-datasource.md`](mysql-mariadb-datasource.md). Current operator
+truth lives in [`../../operator/datasource-backends.md`](../../operator/datasource-backends.md).
 
 ## Source Documents
 
@@ -560,10 +563,10 @@ cancelled, unavailable, ambiguous, or invalid datasource result causes no
 partial DKIM2 field, recipe, custody transition, route release, or replay-side
 effect.
 
-## LDAP And SQL Design Contracts
+## LDAP And SQL Follow-On Contract
 
-Durable design notes define how future LDAP and SQL providers satisfy the same
-domain contract. They include:
+Durable design notes defined how the now-implemented LDAP and SQL providers
+satisfy the same domain contract. They include:
 
 - exact attribute/column-to-domain mapping;
 - one-record uniqueness and ambiguity behavior;

@@ -371,7 +371,7 @@ claimed.
 LDAP, PostgreSQL, MySQL, and MariaDB providers, drivers, pools, schema/DDL delivery, immutable
 generation loading, and the offline legacy OpenDKIM migration are documented
 in
-[`datasource-ldap-postgresql.md`](datasource-ldap-postgresql.md) and
+[`datasource-backends.md`](datasource-backends.md) and
 [`opendkim-migration.md`](opendkim-migration.md). They require separately
 managed verified-TLS services and least-authority credentials; the demo stack
 does not create those external authorities.

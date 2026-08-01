@@ -1,6 +1,6 @@
 ---
 name: dkim2-datasource-provider
-description: Design and review DKIM2 datasource and replay-store providers. Use when work touches signing profiles, selector-to-key mapping, private-key handles, domain or tenant policy, Valkey replay storage, flat-file providers, future LDAP or SQL providers, provider errors, context bounds, redaction, or fail-closed datasource behavior.
+description: Design and review DKIM2 datasource and replay-store providers. Use when work touches signing profiles, selector-to-key mapping, private-key handles, domain or tenant policy, Valkey replay storage, flat-file, LDAP, PostgreSQL, MySQL, or MariaDB providers, provider errors, context bounds, redaction, or fail-closed datasource behavior.
 ---
 
 # DKIM2 Datasource Provider

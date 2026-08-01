@@ -28,6 +28,8 @@ The backend selector is `signing.backend: mysql`. The backend-specific subtree
 is `signing.mysql.*` with direct `address`, separate TLS `server_name`, protected
 `ca_file` and `password_file`, exact `database` and `user`, bounded `page_size`,
 `load_deadline`, `max_connections`, and `idle_connections`.
+The common `signing.reload_interval` controls refresh scheduling for every
+enabled signing backend and is not a member of the MySQL subtree.
 
 The driver is configured through typed fields, never a caller-provided DSN.
 Only one direct TCP authority is accepted. TLS 1.2 or newer with hostname and
@@ -37,8 +39,10 @@ environment configuration are not enabled.
 
 ## SQL Contract
 
-`contrib/schema/mysql/001_dkim2_datasource.sql` is the installable MySQL 8 and
-MariaDB 10.11-or-newer schema. It uses InnoDB, binary UTF-8 collation for exact
+`contrib/schema/mysql/001_dkim2_datasource.sql` is qualified against the exact
+digest-pinned MySQL 8.4 and MariaDB 10.11 service lines. Other releases and
+compatible forks are unqualified until the same evidence passes. The schema
+uses InnoDB, binary UTF-8 collation for exact
 identifier ordering, `DECIMAL(20,0)` for the full unsigned generation range,
 foreign keys for complete references, and triggers for immutable committed
 generations.
@@ -76,6 +80,10 @@ The offline OpenDKIM migration command accepts `target: mysql` plus one
 provider-neutral SQL row set used for PostgreSQL. Apply and higher-generation
 rollback preserve the existing inventory, key import, fresh DNS proof, report,
 and explicit-generation contracts.
+
+Normal DNS overlap, forward generation replacement, retirement, and emergency
+recovery are documented in
+[`../../operator/datasource-key-rotation.md`](../../operator/datasource-key-rotation.md).
 
 ## Required Evidence
 

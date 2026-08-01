@@ -8,6 +8,12 @@ keeps flat-file custody available only for the flat-file backend, removes the
 network-backend dependency on a local private-key manifest, and preserves the
 existing signing, Milter, and REST contracts.
 
+MySQL and MariaDB were implemented afterward with the same native v2 custody
+contract under
+[`mysql-mariadb-datasource.md`](mysql-mariadb-datasource.md). Statements scoped
+to LDAP and PostgreSQL below record this delivery's original acceptance
+boundary, not an exclusion of the later MySQL-family provider.
+
 ## Source Documents
 
 This specification is governed by:

@@ -27,6 +27,30 @@ is a reviewed behavior migration, not an automatic compatibility update.
   rows in the dated compatibility report. It does not imply a portable Exim
   report, universal local-scan ABI binary, binary package, or container image.
 
+## Qualified storage services
+
+The table distinguishes executable qualification from a broader product-family
+assumption. The digest-pinned subjects in
+[`scripts/test-datasource-services.sh`](../../scripts/test-datasource-services.sh)
+and the exact Valkey binary check are authoritative for the current candidate.
+A nearby patch, later minor, vendor rebuild, proxy, managed service, fork, or
+wire-compatible product is unqualified until the same security and parity
+evidence passes.
+
+| Facility | Exact qualified line | Evidence boundary | Broader claim |
+| --- | --- | --- | --- |
+| LDAP signing datasource | OpenLDAP `2.6.13-r4` image at the pinned digest | schema install, verified TLS, paging, native v2 load, migration publication, parity, and denials | no generic LDAP server claim |
+| PostgreSQL signing datasource | PostgreSQL `18.3-alpine` image at the pinned digest | DDL, roles, verified TLS, repeatable-read loading, publication, parity, and denials | no automatic older/newer PostgreSQL claim |
+| MySQL signing datasource | MySQL `8.4` image at the pinned digest | DDL, exact grants, verified TLS, read-only loading, publication lock, parity, and denials | no generic MySQL 8 claim |
+| MariaDB signing datasource | MariaDB `10.11` image at the pinned digest | common MySQL contract, exact grants, verified TLS, read-only loading, publication lock, parity, and denials | no other MariaDB line or MySQL-compatible fork claim |
+| Valkey replay | Valkey `9.1.0` exact binary | TLS/authority policy, ACL audit, persistence and topology attestation, atomic command, parity, and recovery | no cluster, Sentinel, managed, or alternate-version claim |
+| Flat-file signing datasource | current supported Linux and macOS filesystem implementations | descriptor confinement, ownership/mode/link checks, atomic reload, race and abuse evidence | unsupported platforms return `unsupported_platform` |
+
+MySQL and MariaDB deliberately share `signing.backend: mysql`; qualification is
+still recorded separately because their server implementations and privilege
+semantics are independently exercised. Signing SQL backends do not imply an
+SQL replay backend.
+
 No public Go or HTTP breaking migration is introduced by this candidate. If the final
 candidate cleanup exposes one, its source change, call-site migration, and
 operator note must land together before the candidate is approved.

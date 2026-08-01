@@ -27,6 +27,11 @@ certification, or universal interoperability claim.
 - Flat-file, LDAP, PostgreSQL, MySQL, MariaDB, and Valkey datasource paths are implemented.
   The offline OpenDKIM migration requires separately managed verified-TLS
   services, explicit mapping, and distinct least-authority principals.
+- The online daemon has no key-generation, DNS-mutation, or datasource-write
+  surface. The current end-to-end publisher imports an explicitly mapped
+  OpenDKIM LDAP source through the protected offline command. A native-only
+  key-manager integration remains a separate project; manual LDAP/SQL key
+  mutation is unsupported.
 - Product images are Linux `amd64` and `arm64`; release preparation does not
   publish them or create `latest`, stable, minor, or major aliases.
 

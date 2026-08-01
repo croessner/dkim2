@@ -1,0 +1,22 @@
+config:
+  version: dkim2d-config-v1
+protected:
+  generation: 0123456789abcdef0123456789abcdef
+server:
+  capability_file: /var/lib/dkim2d/protected/0123456789abcdef0123456789abcdef/capability
+  sign_capability_file: /var/lib/dkim2d/protected/0123456789abcdef0123456789abcdef/sign-capability
+replay:
+  backend: disabled
+signing:
+  backend: ldap
+  reload_interval: 1m
+  ldap:
+    address: 192.0.2.10:636
+    server_name: ldap.datasource.example.test
+    ca_file: /var/lib/dkim2d/protected/0123456789abcdef0123456789abcdef/ldap-ca.pem
+    transport: ldaps
+    bind_dn: cn=dkim2-runtime,ou=services,dc=example,dc=test
+    password_file: /var/lib/dkim2d/protected/0123456789abcdef0123456789abcdef/ldap-password
+    base_dn: ou=dkim2,dc=example,dc=test
+    page_size: 128
+    load_deadline: 5s

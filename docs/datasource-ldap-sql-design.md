@@ -6,7 +6,7 @@ This document defines how LDAP, PostgreSQL, MySQL, and MariaDB readers map persi
 administrative data into the existing storage-neutral contracts in
 `lib/internal/datasource`. Deployable schema and DDL live in `contrib/schema`;
 installation, daemon configuration, and migration procedures live in
-`docs/operator/datasource-ldap-postgresql.md` and
+`docs/operator/datasource-backends.md` and
 `docs/operator/opendkim-migration.md`.
 
 The provider boundary remains:
@@ -517,7 +517,7 @@ rather than moving the metadata pointer backwards.
 ## Integration Evidence
 
 The shared conformance harness runs the same logical dataset and requests
-against memory, flat-file, LDAP, and PostgreSQL projections and proves
+against memory, flat-file, LDAP, PostgreSQL, MySQL, and MariaDB projections and proves
 identical logically shared resolve behavior:
 
 - complete profile and policy facts;
@@ -538,7 +538,7 @@ Disposable LDAP integration tests must cover page boundaries, smaller pages,
 the exact echo of repeated opaque cookies, empty pages with nonempty cookies,
 empty-cookie completion, local response-budget exhaustion, bounded RFC 2696
 abandonment and connection discard on incomplete cleanup, server size limits,
-duplicate entries, partial generations, manifest publication, failed
+duplicate entries, partial generations, native key-material publication, failed
 refresh/degraded state/recovery, strict transport and authorization failures,
 cancellation at each network boundary, and concurrent publication attempts.
 

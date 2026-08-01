@@ -1,9 +1,11 @@
--- DKIM2 native datasource v2 for MySQL 8 and MariaDB 10.11 or newer.
+-- DKIM2 native datasource v2. The qualified service releases are documented
+-- in docs/reference/compatibility.md; this artifact makes no broader version
+-- compatibility claim.
 -- Install in one dedicated database using an administrative connection.
--- Grant dkim2_runtime SELECT only. Grant dkim2_publisher SELECT and INSERT on
--- generation data, plus UPDATE on dkim2_dataset_generations and
--- dkim2_current_generation. Neither role receives DELETE, DDL, FILE, or global
--- privileges.
+-- Apply the separately reviewed 002_least_privilege_grants.sql.example after
+-- creating TLS-required site accounts. The publisher also needs narrowly
+-- scoped UPDATE on dkim2_publication_lock to acquire its singleton row lock.
+-- Neither account receives DELETE, DDL, FILE, or global privileges.
 
 SET NAMES utf8mb4 COLLATE utf8mb4_bin;
 
