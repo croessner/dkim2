@@ -156,16 +156,32 @@ func (p *LDAPPublisher) Publish(
 		}
 		return nil
 	}
-	fence := goldap.NewModifyRequest(currentDN, []goldap.Control{
-		ldapAssertionControl{filter: "(dkim2Generation=" + strconv.FormatUint(expected, 10) + ")"},
-	})
-	fence.Replace(ldapGenerationAttribute, []string{generation})
+	fence := newEstablishedCurrentFenceRequest(currentDN, expected, generation)
 	if err := p.client.call(ctx, func() error {
 		return p.client.connection.Modify(fence)
 	}); err != nil {
 		return errors.New("ldap publication unavailable")
 	}
 	return nil
+}
+
+// newEstablishedCurrentFenceRequest upgrades the schema and generation under
+// one exact committed v1-or-v2 assertion so mixed current metadata is impossible.
+func newEstablishedCurrentFenceRequest(
+	currentDN string,
+	expected uint64,
+	generation string,
+) *goldap.ModifyRequest {
+	filter := "(&(" + ldapGenerationAttribute + "=" + strconv.FormatUint(expected, 10) + ")(" +
+		ldapDatasetStateAttribute + "=" + datasourceStateCommitted + ")(|(" +
+		ldapSchemaVersionAttribute + "=dkim2-datasource-v1)(" +
+		ldapSchemaVersionAttribute + "=" + migrationSchemaVersion + ")))"
+	fence := goldap.NewModifyRequest(currentDN, []goldap.Control{
+		ldapAssertionControl{filter: filter},
+	})
+	fence.Replace(ldapGenerationAttribute, []string{generation})
+	fence.Replace(ldapSchemaVersionAttribute, []string{migrationSchemaVersion})
+	return fence
 }
 
 // claimBootstrap atomically reserves an absent current DN in noncurrent staging state.

@@ -47,6 +47,34 @@ func TestPublicationFenceAcceptsOnlyV1MigrationOrV2(t *testing.T) {
 	}
 }
 
+// TestEstablishedLDAPFenceUpgradesSchemaWithGeneration proves an existing v1
+// current pointer cannot retain its legacy schema while activating v2 data.
+func TestEstablishedLDAPFenceUpgradesSchemaWithGeneration(t *testing.T) {
+	request := newEstablishedCurrentFenceRequest(
+		"cn=current,dc=example,dc=test", 7, "8",
+	)
+	if request == nil || len(request.Controls) != 1 || len(request.Changes) != 2 {
+		t.Fatal("established LDAP fence did not replace generation and schema atomically")
+	}
+	control, ok := request.Controls[0].(ldapAssertionControl)
+	wantFilter := "(&(dkim2Generation=7)(dkim2DatasetState=committed)" +
+		"(|(dkim2SchemaVersion=dkim2-datasource-v1)" +
+		"(dkim2SchemaVersion=dkim2-datasource-v2)))"
+	if !ok || control.filter != wantFilter {
+		t.Fatal("established LDAP fence did not assert the complete upgrade boundary")
+	}
+	changes := make(map[string][]string, len(request.Changes))
+	for _, change := range request.Changes {
+		changes[change.Modification.Type] = change.Modification.Vals
+	}
+	if len(changes[ldapGenerationAttribute]) != 1 ||
+		changes[ldapGenerationAttribute][0] != "8" ||
+		len(changes[ldapSchemaVersionAttribute]) != 1 ||
+		changes[ldapSchemaVersionAttribute][0] != migrationSchemaVersion {
+		t.Fatal("established LDAP fence retained a mixed schema generation")
+	}
+}
+
 // Current returns the exact synchronized synthetic fence.
 func (p *memoryPublisher) Current(ctx context.Context) (uint64, error) {
 	if p == nil || ctx == nil {
