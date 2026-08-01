@@ -182,7 +182,7 @@ func TestLoadConfigRequiresStrictOwnerOnlyShape(t *testing.T) {
 	passwordPath := filepath.Join(root, "password")
 	importPasswordPath := filepath.Join(root, "import-password")
 	publishPasswordPath := filepath.Join(root, "publish-password")
-	document := []byte(`version: dkim2-opendkim-migration-v1
+	document := []byte(`version: dkim2-opendkim-migration-v2
 deadline: 5s
 source:
   address: 127.0.0.1:636
@@ -215,7 +215,6 @@ plan:
   generation: "2"
   expected_current: "1"
   target: ldap
-  registry_root: ` + root + `
   mappings:
     - domain: example.test
       selector: selector
@@ -306,7 +305,6 @@ func testConfig() Config {
 		LDAPPublish: &publisher,
 		Plan: Plan{
 			Generation: "2", ExpectedCurrent: "1", Target: TargetLDAP,
-			RegistryRoot: "/tmp/registry",
 			Mappings: []Mapping{{
 				Domain: migrationTestDomain, Selector: migrationTestSelector, TenantID: "tenant",
 				ProfileID: "profile", ProfileUse: "originator", HandleID: "handle",

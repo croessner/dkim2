@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	configVersion  = "dkim2-opendkim-migration-v1"
+	configVersion  = "dkim2-opendkim-migration-v2"
 	maxConfigBytes = 256 << 10
 )
 
@@ -99,8 +99,6 @@ func (c *Config) validate(configPath string) error {
 		c.Limits.Records == 0 || c.Limits.Records > 4096 ||
 		c.Limits.ResponseBytes == 0 || c.Limits.ResponseBytes > 32<<20 ||
 		c.Limits.ReportBytes == 0 || c.Limits.ReportBytes > maxConfigBytes ||
-		!filepath.IsAbs(c.Plan.RegistryRoot) ||
-		filepath.Clean(c.Plan.RegistryRoot) != c.Plan.RegistryRoot ||
 		len(c.Plan.Mappings) == 0 || len(c.Plan.Mappings) > int(c.Limits.Records) {
 		return errors.New("migration configuration invalid")
 	}

@@ -3,8 +3,6 @@ package migration
 import (
 	"context"
 	"errors"
-	"os"
-	"path/filepath"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -35,6 +33,17 @@ func TestLDAPAssertionControlIsCriticalRFC4528(t *testing.T) {
 	decoded, err := ber.DecodePacketErr([]byte(value))
 	if err != nil || decoded == nil {
 		t.Fatal("RFC 4528 assertion filter was not BER")
+	}
+}
+
+// TestPublicationFenceAcceptsOnlyV1MigrationOrV2 proves the offline publisher
+// can replace an existing v1 current generation without widening runtime reads.
+func TestPublicationFenceAcceptsOnlyV1MigrationOrV2(t *testing.T) {
+	if !supportedPublicationFenceVersion("dkim2-datasource-v1") ||
+		!supportedPublicationFenceVersion("dkim2-datasource-v2") ||
+		supportedPublicationFenceVersion("dkim2-datasource-v3") ||
+		supportedPublicationFenceVersion("") {
+		t.Fatal("publication fence version policy drifted")
 	}
 }
 
@@ -165,8 +174,7 @@ func TestPublicationFailureAndHigherGenerationRollbackPreserveAtomicFence(t *tes
 	)
 	if err != nil || report.Mode != "rollback" ||
 		!report.Publication.Completed || publisher.current != 3 {
-		entries, _ := os.ReadDir(plan.RegistryRoot)
-		t.Fatalf("higher-generation rollback failed: report=%s failure=%s err=%v current=%d entries=%d", report.Result, report.FailureClass, err, publisher.current, len(entries))
+		t.Fatalf("higher-generation rollback failed: report=%s failure=%s err=%v current=%d", report.Result, report.FailureClass, err, publisher.current)
 	}
 	plan.Generation = "1"
 	plan.ExpectedCurrent = "3"
@@ -202,15 +210,6 @@ func publicationFixture(
 ) ([]LegacyRecord, Plan, []*ImportedCredential) {
 	t.Helper()
 	plan := testConfig().Plan
-	plan.RegistryRoot = t.TempDir()
-	if err := os.Chmod(plan.RegistryRoot, 0o700); err != nil {
-		t.Fatal("protect publication parent")
-	}
-	t.Cleanup(func() {
-		for _, generation := range []string{"2", "3"} {
-			_ = os.Chmod(filepath.Join(plan.RegistryRoot, generation), 0o700)
-		}
-	})
 	records := []LegacyRecord{{
 		selector: migrationTestSelector, sourceSelector: migrationTestSelector,
 		domain: migrationTestDomain, associated: migrationTestDomain,

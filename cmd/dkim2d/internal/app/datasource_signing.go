@@ -55,7 +55,7 @@ func newNetworkSigningRuntime(
 	preparation *config.RuntimePreparation,
 	telemetry *observability.Runtime,
 ) (*networkSigningRuntime, error) {
-	if ctx == nil || preparation == nil || preparation.SigningRegistry() == nil {
+	if ctx == nil || preparation == nil {
 		return nil, &LifecycleError{}
 	}
 	snapshot := preparation.Snapshot()
@@ -68,7 +68,6 @@ func newNetworkSigningRuntime(
 				constructionErr = err
 				return nil
 			}
-			registry := preparation.SigningRegistry()
 			switch snapshot.Signing().Backend() {
 			case config.SigningLDAP:
 				ldapConfig, ok := snapshot.Signing().LDAP()
@@ -89,7 +88,7 @@ func newNetworkSigningRuntime(
 					return nil
 				}
 				loader, loaderErr := datasourceldap.NewLoader(
-					connector, registry, provider.DefaultLimits(),
+					connector, provider.DefaultLimits(),
 					int(ldapConfig.PageSize()), datasourceLoadBytes,
 					ldapConfig.LoadDeadline(),
 				)
@@ -125,7 +124,7 @@ func newNetworkSigningRuntime(
 					return nil
 				}
 				loader, loaderErr := datasourcepostgresql.NewLoader(
-					pool, registry, provider.DefaultLimits(),
+					pool, provider.DefaultLimits(),
 					int(postgresqlConfig.PageSize()), datasourceLoadBytes,
 					postgresqlConfig.LoadDeadline(),
 				)

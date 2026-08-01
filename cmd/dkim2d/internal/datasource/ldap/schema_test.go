@@ -23,7 +23,7 @@ func TestSchemaOwnsExactPermanentAllocation(t *testing.T) {
 	classPattern := regexp.MustCompile(`objectclass \( RNSDKIM2oc:(\d+) NAME '([^']+)'`)
 	attributes := attributePattern.FindAllStringSubmatch(text, -1)
 	classes := classPattern.FindAllStringSubmatch(text, -1)
-	if len(attributes) != 17 || len(classes) != 5 {
+	if len(attributes) != 18 || len(classes) != 6 {
 		t.Fatal("unexpected LDAP allocation count")
 	}
 	expectedAttributes := []string{
@@ -32,7 +32,7 @@ func TestSchemaOwnsExactPermanentAllocation(t *testing.T) {
 		attrRecordStatus, attrNotBefore, attrNotAfter,
 		attrAlgorithm, attrSelector, attrPublicSPKI,
 		attrTenantID, attrProfileUse, attrRollout,
-		attrCompatibility, attrFeedbackRouteID,
+		attrCompatibility, attrFeedbackRouteID, attrPrivatePKCS8,
 	}
 	for index, match := range attributes {
 		if match[1] != strconv.Itoa(index+1) || match[2] != expectedAttributes[index] {
@@ -41,13 +41,14 @@ func TestSchemaOwnsExactPermanentAllocation(t *testing.T) {
 	}
 	expectedClasses := []string{
 		"dkim2Dataset", "dkim2Handle", "dkim2Profile", "dkim2Credential", "dkim2Policy",
+		"dkim2KeyMaterial",
 	}
 	for index, match := range classes {
 		if match[1] != strconv.Itoa(index+1) || match[2] != expectedClasses[index] {
 			t.Fatal("LDAP object-class allocation changed")
 		}
 	}
-	if strings.Count(text, " SINGLE-VALUE )") != 17 {
+	if strings.Count(text, " SINGLE-VALUE )") != 18 {
 		t.Fatal("every allocated attribute must be single-valued")
 	}
 }

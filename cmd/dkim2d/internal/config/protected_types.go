@@ -52,7 +52,6 @@ type protectedState struct {
 	hasSign          bool
 	hasRevise        bool
 	signingStore     *signingstore.Runtime
-	signingRegistry  *signingstore.RegistrySource
 	hmac             [32]byte
 	hasHMAC          bool
 
@@ -313,21 +312,6 @@ func (p *RuntimePreparation) SigningStore() *signingstore.Runtime {
 		return nil
 	}
 	return p.state.signingStore
-}
-
-// SigningRegistry returns the protected generation-registry source.
-func (p *RuntimePreparation) SigningRegistry() *signingstore.RegistrySource {
-	if p == nil || p.state == nil || p.token == nil {
-		return nil
-	}
-	p.state.mu.Lock()
-	defer p.state.mu.Unlock()
-	if p.state.phase != protectedPreparedForRuntime ||
-		p.state.runtimeToken != p.token ||
-		(!p.state.hasSign && !p.state.hasRevise) {
-		return nil
-	}
-	return p.state.signingRegistry
 }
 
 // ReplayRuntime returns one atomic same-generation replay preparation.
@@ -637,10 +621,6 @@ func (s *protectedState) clearProtected(releasedBy protectedPhase) {
 	if s.signingStore != nil {
 		_ = s.signingStore.Close(context.Background())
 		s.signingStore = nil
-	}
-	if s.signingRegistry != nil {
-		_ = s.signingRegistry.Close(context.Background())
-		s.signingRegistry = nil
 	}
 	s.hmac = [32]byte{}
 	s.hasHMAC = false

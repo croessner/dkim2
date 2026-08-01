@@ -53,6 +53,7 @@
 | 0.1.0-draft | 2026-07-31 | Christian Roessner / Codex | Separated inbound DKIM2 applicability from verification: messages with neither protocol field family make no DNS call and return a bodyless non-terminal process result, while partial or malformed claims retain strict four-state verification and policy handling. |
 | 0.1.0-draft | 2026-07-31 | Christian Roessner / Codex | Separated originator applicability from signing results: unsupported reverse-path domain evidence and authoritative absent or inactive exact profiles continue without mutation, while datasource ambiguity, unavailability, malformed active data, and signing failures remain fail-closed. |
 | 0.1.0-draft | 2026-08-01 | Christian Roessner / Codex | Deferred null-reverse-path DSN signing: the originator Milter tempfails before daemon I/O until an executable trusted gate authenticates RFC 3462 structure, Draft-04 Section 12.1 embedded verification, and Section 12.1.2 alignment evidence. |
+| 0.1.0-draft | 2026-08-01 | Christian Roessner / Codex | Moved LDAP and PostgreSQL signing-key custody into immutable `dkim2-datasource-v2` generations, preserving opaque handles and in-memory signing while removing network-backend local manifests and REST key surfaces. |
 
 ## 1. Purpose
 
@@ -689,9 +690,11 @@ Design notes:
   provider after strict decoding. Neither imports signing or service
   dependencies. `lib/internal/datasource/signingprofile` is the sole package
   that imports both datasource and signing.
-- The signing bridge maps exact provider-neutral handle IDs through an
-  immutable registry to existing inert signing handles. Providers never return
-  private-key material, key paths, signers, callbacks, or capabilities.
+- The library signing bridge maps exact provider-neutral handle IDs through an
+  immutable registry to inert signing handles. Concrete daemon LDAP and SQL
+  providers may load private bytes into that registry, but private material,
+  provider rows, paths, signers, callbacks, and capabilities never cross into
+  library datasource or REST models.
 - Datasource success is administrative selection only. It does not replace
   M10's fresh DNS publication check, hash/recipe/custody validation, route
   authorization, or private signing callback.
@@ -1284,9 +1287,10 @@ Provider rules:
 
 - Operations are context-aware and bounded.
 - Provider-specific identifiers do not leak into protocol packages.
-- Only provider-neutral opaque handle IDs cross provider boundaries as
-  private-key references; no private key or signing capability crosses. The
-  sole signing bridge maps those IDs to inert handles.
+- Only provider-neutral opaque handle IDs cross into protocol packages. The
+  daemon-owned LDAP/SQL boundary may read native keys, validates them against
+  public credentials, and maps the handles to an in-memory signer. No private
+  key or signing capability crosses into protocol or HTTP models.
 - Missing required data fails closed.
 - Ambiguous data is a distinct error, not a silent fallback.
 - Flat-file reload is explicit, serialized, transactional, and unavailable
@@ -1382,7 +1386,7 @@ profiles, exact tenant/use policies, public SPKI bindings, or opaque handles.
 An existing OpenDKIM LDAP deployment may be used as an explicit migration
 source, but it is never a second runtime provider contract and is never read as
 DKIM2 data. The migration is an out-of-process administrative operation that
-creates and validates a new `dkim2-datasource-v1` generation before publication.
+creates and validates a new `dkim2-datasource-v2` generation before publication.
 The read-only DKIM2 provider performs no legacy lookup, shape inference,
 backfill, or read-time conversion.
 
@@ -1420,7 +1424,7 @@ Reusable legacy facts map as follows:
 | `DKIMKeyType=ed25519` | `dkim2Algorithm=ed25519-sha256` | Closed exact mapping |
 | `DKIMActive=TRUE` | Active-profile candidate | Does not itself authorize rollout or signing |
 | `DKIMActive=FALSE` | Disabled-history candidate | Never joins the current active profile |
-| `DKIMKey` | Separate signing-registry import | Never written to a DKIM2 datasource record |
+| `DKIMKey` | Native `dkim2PrivateKeyPKCS8` / `private_key_pkcs8` import | Offline source only; canonical PKCS#8 DER is written to v2 |
 | `createTimestamp` / `modifyTimestamp` | Audit evidence | Never inferred as `not_before` or `not_after` |
 | `DKIMIdentity` | No DKIM2 field | DKIM AUID semantics must not be mapped to numeric DKIM2 `i=` |
 
@@ -1438,7 +1442,7 @@ The migration must assign facts absent from OpenDKIM explicitly:
 - `dkim2TenantID`, `dkim2ProfileID`, and `dkim2ProfileUse`;
 - canonical legacy source identities and explicit canonical DKIM2 target
   selectors, while exact LDAP spelling remains inventory-owned lookup state;
-- `dkim2HandleID` declarations and their protected registry bindings;
+- `dkim2HandleID` declarations and their native key-material bindings;
 - canonical public SPKI DER derived inside the protected key-import boundary;
 - `dkim2Rollout`, `dkim2Compatibility`, and optional feedback-route policy;
 - optional validity intervals based on administrative policy, not LDAP
@@ -1446,11 +1450,10 @@ The migration must assign facts absent from OpenDKIM explicitly:
 
 Handle IDs are new provider-neutral opaque identifiers. They must not be LDAP
 DNs, paths, selectors, private-key hashes, database keys, or other
-provider-specific locators. A separately configured signing registry maps each
-handle ID to an inert signing handle. The legacy private key may be imported
-into that registry only inside an approved protected boundary; raw key bytes
-never cross the datasource interface, appear in migration output, or enter the
-new LDAP schema.
+provider-specific locators. The native v2 generation maps each handle ID to an
+inert in-memory signing handle. Legacy private keys are imported only inside an
+approved offline boundary as canonical PKCS#8 DER; raw key bytes never cross
+the library datasource interface or appear in migration output.
 
 Existing cryptographic keys are compatibility candidates, but legacy selectors
 are source lookup facts rather than implicit DKIM2 DNS identities. A protected
@@ -1485,14 +1488,14 @@ The bootstrap publication sequence is:
 4. Perform fresh DNS publication checks for every candidate credential.
 5. Require explicit tenant, profile-use, rollout, compatibility, profile-ID,
    handle-ID, and optional validity inputs.
-6. Build all metadata, handle, profile, credential, and policy records under
-   one new nonzero generation.
+6. Build all metadata, handle, profile, credential, policy, and native
+   key-material records under one new nonzero generation.
 7. Validate the complete generation through the same constructors, limits,
    cross-reference rules, and immutable indexes used by normal providers.
 8. Produce a redacted dry-run report containing only bounded counts and closed
    result classes.
-9. Publish `committed` atomically only after the signing registry and complete
-   datasource generation agree. The first publication requires the explicit
+9. Publish `committed` atomically only after public rows and native key material
+   agree as one complete datasource generation. The first publication requires the explicit
    canonical zero absence fence: LDAP atomically claims the unique staging
    current DN and activates it with RFC 4528, while PostgreSQL proves every
    datasource table empty in a serializable transaction and uniquely inserts
@@ -1504,7 +1507,7 @@ Source absence is `not_found`; duplicate selectors, active
 domain/algorithm pairs, metadata, or exact identities are `ambiguous`;
 unsupported shapes, domain disagreement, invalid keys, missing explicit
 migration facts, and inconsistent references are `malformed_data`; bound
-violations are `limit_exceeded`; transport, authorization, or signing-registry
+violations are `limit_exceeded`; transport, authorization, or native-key
 failures are `unavailable`; context termination remains `cancelled` or
 `deadline_exceeded`. No error includes a DN, domain, selector, key, handle,
 query, endpoint, credential, or raw backend error.
@@ -2361,8 +2364,8 @@ interpretation choices in code.
     classes. The historical `DKIM` and `rnsMSDKIM` schemas are never runtime
     compatibility aliases. M22 may bootstrap a new immutable generation from
     validated active OpenDKIM RSA/Ed25519 pairs through a separate secret-safe
-    migration command. Private keys move only into the signing registry behind
-    new opaque handles; DKIM AUIDs and LDAP timestamps do not become DKIM2
+    migration command. Private keys move only into native v2 key-material
+    records behind new opaque handles; DKIM AUIDs and LDAP timestamps do not become DKIM2
     fields. Legacy lookup-domain/signing-domain disagreement is rejected for
     automatic migration because the datasource contract has exact domain
     identity and no alias or fallback semantics.

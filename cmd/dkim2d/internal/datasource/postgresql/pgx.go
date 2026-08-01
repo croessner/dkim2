@@ -310,6 +310,38 @@ func (t *pgxTransaction) PolicyPage(
 	return output, nil
 }
 
+// KeyMaterialPage reads one deterministic native-key keyset page.
+func (t *pgxTransaction) KeyMaterialPage(
+	ctx context.Context,
+	afterHandle string,
+	limit int,
+) ([]KeyMaterialRow, error) {
+	rows, err := t.transaction.Query(
+		ctx, queryKeyMaterial, t.generation, afterHandle, limit,
+	)
+	if err != nil {
+		return nil, errors.New("postgresql page unavailable")
+	}
+	defer rows.Close()
+	output := make([]KeyMaterialRow, 0, limit)
+	for rows.Next() {
+		var row KeyMaterialRow
+		if err := rows.Scan(
+			&row.Generation, &row.TenantID, &row.Domain, &row.Use,
+			&row.HandleID, &row.Algorithm, &row.PublicSPKI, &row.PrivatePKCS8,
+		); err != nil {
+			clearKeyMaterialRows(output)
+			return nil, errors.New("postgresql page unavailable")
+		}
+		output = append(output, row)
+	}
+	if rows.Err() != nil {
+		clearKeyMaterialRows(output)
+		return nil, errors.New("postgresql page unavailable")
+	}
+	return output, nil
+}
+
 // Commit completes the read-only snapshot before local publication.
 func (t *pgxTransaction) Commit(ctx context.Context) error {
 	if t == nil || t.transaction == nil {

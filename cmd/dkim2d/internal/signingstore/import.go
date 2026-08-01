@@ -85,6 +85,25 @@ func (k *ImportedPrivateKey) Encoded() []byte {
 	return append([]byte(nil), k.encoded...)
 }
 
+// NativePKCS8DER returns detached canonical unencrypted PKCS#8 DER for an
+// offline native-datasource publication candidate.
+func (k *ImportedPrivateKey) NativePKCS8DER() []byte {
+	if k == nil || k.closed || len(k.encoded) == 0 {
+		return nil
+	}
+	key, _, err := parsePrivateKey(k.encoded, k.algorithm)
+	if err != nil {
+		return nil
+	}
+	encoded, err := x509.MarshalPKCS8PrivateKey(key)
+	clearPrivateKey(key)
+	if err != nil || len(encoded) == 0 || len(encoded) > maxPrivateBytes {
+		clear(encoded)
+		return nil
+	}
+	return encoded
+}
+
 // Algorithm returns the validated signing algorithm.
 func (k *ImportedPrivateKey) Algorithm() dkim2.Algorithm {
 	if k == nil || k.closed {

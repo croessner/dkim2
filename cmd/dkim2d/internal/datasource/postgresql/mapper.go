@@ -5,10 +5,11 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/croessner/dkim2/cmd/dkim2d/internal/signingstore"
 	"github.com/croessner/dkim2/provider"
 )
 
-const schemaVersion = "dkim2-datasource-v1"
+const schemaVersion = "dkim2-datasource-v2"
 
 // MetadataRow is one explicit dataset metadata projection.
 type MetadataRow struct {
@@ -56,6 +57,18 @@ type PolicyRow struct {
 	FeedbackRouteID *string
 }
 
+// KeyMaterialRow is one explicit native private-key projection.
+type KeyMaterialRow struct {
+	Generation   string
+	TenantID     string
+	Domain       string
+	Use          string
+	HandleID     string
+	Algorithm    string
+	PublicSPKI   []byte
+	PrivatePKCS8 []byte
+}
+
 // DatasetRows contains one transactionally fenced exact generation.
 type DatasetRows struct {
 	Current     MetadataRow
@@ -64,6 +77,65 @@ type DatasetRows struct {
 	Profiles    []ProfileRow
 	Credentials []CredentialRow
 	Policies    []PolicyRow
+	KeyMaterial []KeyMaterialRow
+}
+
+// MapNativeKeyMaterial validates and detaches one exact native SQL key set.
+func MapNativeKeyMaterial(
+	rows []KeyMaterialRow,
+	generation uint64,
+) ([]*signingstore.NativeKeyMaterial, error) {
+	if generation == 0 || len(rows) == 0 || len(rows) > provider.HardLimits().MaxHandles {
+		return nil, provider.NewError(provider.ErrorCodeMalformedData)
+	}
+	materials := make([]*signingstore.NativeKeyMaterial, 0, len(rows))
+	success := false
+	defer func() {
+		if !success {
+			closeNativeMaterials(materials)
+		}
+	}()
+	for _, row := range rows {
+		rowGeneration, err := parseGeneration(row.Generation)
+		if err != nil || rowGeneration != generation {
+			return nil, provider.NewError(provider.ErrorCodeMalformedData)
+		}
+		use, err := provider.ParseProfileUse(row.Use)
+		if err != nil {
+			return nil, provider.NewError(provider.ErrorCodeMalformedData)
+		}
+		algorithm, err := parseAlgorithm(row.Algorithm)
+		if err != nil {
+			return nil, provider.NewError(provider.ErrorCodeMalformedData)
+		}
+		material, err := signingstore.NewNativeKeyMaterial(
+			generation, row.TenantID, row.Domain, use, row.HandleID, algorithm,
+			row.PublicSPKI, row.PrivatePKCS8,
+		)
+		if err != nil {
+			return nil, provider.NewError(provider.ErrorCodeMalformedData)
+		}
+		materials = append(materials, material)
+	}
+	success = true
+	return materials, nil
+}
+
+// closeNativeMaterials clears every retained native SQL key value.
+func closeNativeMaterials(materials []*signingstore.NativeKeyMaterial) {
+	for _, material := range materials {
+		_ = material.Close()
+	}
+}
+
+// clearKeyMaterialRows clears detached SQL public and private key buffers.
+func clearKeyMaterialRows(rows []KeyMaterialRow) {
+	for index := range rows {
+		clear(rows[index].PublicSPKI)
+		clear(rows[index].PrivatePKCS8)
+		rows[index].PublicSPKI = nil
+		rows[index].PrivatePKCS8 = nil
+	}
 }
 
 type assembledProfile struct {

@@ -25,9 +25,11 @@ attributetype ( RNSDKIM2at:14 NAME 'dkim2ProfileUse' DESC 'Closed administrative
 attributetype ( RNSDKIM2at:15 NAME 'dkim2Rollout' DESC 'Closed administrative rollout state' EQUALITY caseExactIA5Match SYNTAX 1.3.6.1.4.1.1466.115.121.1.26 SINGLE-VALUE )
 attributetype ( RNSDKIM2at:16 NAME 'dkim2Compatibility' DESC 'Closed compatibility policy' EQUALITY caseExactIA5Match SYNTAX 1.3.6.1.4.1.1466.115.121.1.26 SINGLE-VALUE )
 attributetype ( RNSDKIM2at:17 NAME 'dkim2FeedbackRouteID' DESC 'Opaque future-service feedback route identifier' EQUALITY caseExactIA5Match SYNTAX 1.3.6.1.4.1.1466.115.121.1.26 SINGLE-VALUE )
+attributetype ( RNSDKIM2at:18 NAME 'dkim2PrivateKeyPKCS8' DESC 'Canonical unencrypted private key PKCS8 DER' EQUALITY octetStringMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.40 SINGLE-VALUE )
 
 objectclass ( RNSDKIM2oc:1 NAME 'dkim2Dataset' DESC 'Immutable datasource generation metadata or current reference' SUP top STRUCTURAL MUST ( cn $ dkim2SchemaVersion $ dkim2Generation $ dkim2DatasetState ) )
 objectclass ( RNSDKIM2oc:2 NAME 'dkim2Handle' DESC 'One provider-neutral opaque handle declaration' SUP top STRUCTURAL MUST ( cn $ dkim2Generation $ dkim2HandleID ) )
 objectclass ( RNSDKIM2oc:3 NAME 'dkim2Profile' DESC 'One bounded immutable signing profile' SUP top STRUCTURAL MUST ( cn $ dkim2Generation $ dkim2ProfileID $ dkim2SigningDomain $ dkim2RecordStatus ) MAY ( dkim2NotBefore $ dkim2NotAfter ) )
 objectclass ( RNSDKIM2oc:4 NAME 'dkim2Credential' DESC 'One public signing credential and opaque handle binding' SUP top STRUCTURAL MUST ( cn $ dkim2Generation $ dkim2ProfileID $ dkim2Algorithm $ dkim2Selector $ dkim2PublicKeySPKI $ dkim2HandleID ) )
 objectclass ( RNSDKIM2oc:5 NAME 'dkim2Policy' DESC 'One exact tenant domain and profile-use policy' SUP top STRUCTURAL MUST ( cn $ dkim2Generation $ dkim2TenantID $ dkim2SigningDomain $ dkim2ProfileUse $ dkim2ProfileID $ dkim2RecordStatus $ dkim2Rollout $ dkim2Compatibility ) MAY dkim2FeedbackRouteID )
+objectclass ( RNSDKIM2oc:6 NAME 'dkim2KeyMaterial' DESC 'One native immutable private signing key and exact binding' SUP top STRUCTURAL MUST ( cn $ dkim2Generation $ dkim2TenantID $ dkim2SigningDomain $ dkim2ProfileUse $ dkim2HandleID $ dkim2Algorithm $ dkim2PublicKeySPKI $ dkim2PrivateKeyPKCS8 ) )

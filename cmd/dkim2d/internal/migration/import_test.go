@@ -11,8 +11,6 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -88,26 +86,11 @@ func (f *txtTransportFake) LookupTXT(
 	return f.lookup, nil
 }
 
-// TestImportKeysStagesOneExactInertRegistry proves protected ordering and bytes.
-func TestImportKeysStagesOneExactInertRegistry(t *testing.T) {
+// TestImportKeysBuildsOneExactNativeCandidate proves protected import and DNS
+// proof produce canonical datasource-owned key material without local staging.
+func TestImportKeysBuildsOneExactNativeCandidate(t *testing.T) {
 	privatePEM := rsaPrivatePEM(t)
 	config := testConfig()
-	config.Plan.RegistryRoot = t.TempDir()
-	t.Cleanup(func() {
-		_ = os.Chmod(filepath.Join(config.Plan.RegistryRoot, "2"), 0o700)
-	})
-	if err := os.Chmod(config.Plan.RegistryRoot, 0o700); err != nil {
-		t.Fatal("protect registry parent")
-	}
-	preparedGeneration := filepath.Join(config.Plan.RegistryRoot, "2")
-	if err := os.Mkdir(preparedGeneration, 0o700); err != nil {
-		t.Fatal("prepare protected generation")
-	}
-	if err := os.WriteFile(
-		filepath.Join(preparedGeneration, "capability"), []byte("prepared"), 0o600,
-	); err != nil {
-		t.Fatal("prepare generation sibling")
-	}
 	records := []LegacyRecord{{
 		selector: migrationTestSelector, sourceSelector: migrationTestSelector,
 		domain: migrationTestDomain, associated: migrationTestDomain,
@@ -131,24 +114,12 @@ func TestImportKeysStagesOneExactInertRegistry(t *testing.T) {
 		imported[0].mapping != config.Plan.Mappings[0] {
 		t.Fatal("imported credential binding drifted")
 	}
-	manifestPath, err := StageImportedRegistry(config.Plan, imported)
-	if err != nil || manifestPath != "2/private-manifest.json" {
-		entries, _ := os.ReadDir(config.Plan.RegistryRoot)
-		t.Fatalf("stage exact registry: %v entries=%d", err, len(entries))
+	candidate, err := BuildPublicationCandidate(config.Plan, imported)
+	if err != nil || len(candidate.rows.KeyMaterial) != 1 ||
+		len(candidate.rows.KeyMaterial[0].PrivatePKCS8) == 0 {
+		t.Fatal("native publication candidate unavailable")
 	}
-	generationPath := filepath.Join(config.Plan.RegistryRoot, "2")
-	info, err := os.Stat(generationPath)
-	if err != nil || info.Mode().Perm() != 0o500 {
-		t.Fatal("staged registry was not sealed")
-	}
-	if sibling, err := os.ReadFile(
-		filepath.Join(generationPath, "capability"),
-	); err != nil || string(sibling) != "prepared" {
-		t.Fatal("registry staging changed prepared generation siblings")
-	}
-	if _, err := StageImportedRegistry(config.Plan, imported); err != nil {
-		t.Fatal("exact-byte staging was not idempotent")
-	}
+	clearCandidateRows(&candidate.rows)
 }
 
 // TestImportUsesExactLegacySelectorAfterCanonicalInventory proves case-exact

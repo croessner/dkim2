@@ -7,10 +7,14 @@ import (
 	"time"
 
 	datasourceruntime "github.com/croessner/dkim2/cmd/dkim2d/internal/datasource/runtime"
+	"github.com/croessner/dkim2/cmd/dkim2d/internal/signingstore"
 	"github.com/croessner/dkim2/provider"
 )
 
-const loaderRedacted = "postgresql_loader{redacted}"
+const (
+	loaderRedacted          = "postgresql_loader{redacted}"
+	repeatableReadIsolation = "repeatable read"
+)
 
 // Transaction is one fixed-query read-only stable-snapshot boundary.
 type Transaction interface {
@@ -20,6 +24,7 @@ type Transaction interface {
 	ProfilePage(context.Context, string, int) ([]ProfileRow, error)
 	CredentialPage(context.Context, string, string, int) ([]CredentialRow, error)
 	PolicyPage(context.Context, string, string, string, int) ([]PolicyRow, error)
+	KeyMaterialPage(context.Context, string, int) ([]KeyMaterialRow, error)
 	Commit(context.Context) error
 	Rollback(context.Context) error
 }
@@ -33,7 +38,6 @@ type Pool interface {
 // Loader reads one repeatable-read PostgreSQL generation into an immutable snapshot.
 type Loader struct {
 	pool        Pool
-	registry    datasourceruntime.RegistrySource
 	limits      provider.Limits
 	pageSize    int
 	maxBytes    int
@@ -43,20 +47,19 @@ type Loader struct {
 // NewLoader validates one bounded PostgreSQL loader configuration.
 func NewLoader(
 	pool Pool,
-	registry datasourceruntime.RegistrySource,
 	limits provider.Limits,
 	pageSize int,
 	maxBytes int,
 	maxDeadline time.Duration,
 ) (*Loader, error) {
-	if pool == nil || registry == nil || limits.Validate() != nil ||
+	if pool == nil || limits.Validate() != nil ||
 		pageSize <= 0 || pageSize > 256 ||
 		maxBytes <= 0 || maxBytes > 32<<20 ||
 		maxDeadline <= 0 || maxDeadline > 30*time.Second {
 		return nil, provider.NewError(provider.ErrorCodeInvalidRequest)
 	}
 	return &Loader{
-		pool: pool, registry: registry, limits: limits, pageSize: pageSize,
+		pool: pool, limits: limits, pageSize: pageSize,
 		maxBytes: maxBytes, maxDeadline: maxDeadline,
 	}, nil
 }
@@ -87,7 +90,7 @@ func (l *Loader) Load(ctx context.Context) (candidate datasourceruntime.Candidat
 	}()
 	isolation, readOnly, err := transaction.Isolation(ctx)
 	if err != nil || !readOnly ||
-		isolation != "repeatable read" && isolation != "serializable" {
+		isolation != repeatableReadIsolation && isolation != "serializable" {
 		return datasourceruntime.Candidate{}, provider.NewError(provider.ErrorCodeUnavailable)
 	}
 	current, err := transaction.ReadCurrent(ctx)
@@ -113,10 +116,15 @@ func (l *Loader) Load(ctx context.Context) (candidate datasourceruntime.Candidat
 		bytesRead += credentialBytes(rows.Credentials)
 		rows.Policies, err = l.loadPolicies(ctx, transaction)
 	}
+	if err == nil {
+		bytesRead += policyBytes(rows.Policies)
+		rows.KeyMaterial, err = l.loadKeyMaterial(ctx, transaction)
+	}
 	if err != nil {
 		return datasourceruntime.Candidate{}, err
 	}
-	bytesRead += policyBytes(rows.Policies)
+	defer clearKeyMaterialRows(rows.KeyMaterial)
+	bytesRead += keyMaterialBytes(rows.KeyMaterial)
 	if bytesRead < 0 || bytesRead > l.maxBytes {
 		return datasourceruntime.Candidate{}, provider.NewError(provider.ErrorCodeLimitExceeded)
 	}
@@ -128,9 +136,14 @@ func (l *Loader) Load(ctx context.Context) (candidate datasourceruntime.Candidat
 	if err != nil {
 		return datasourceruntime.Candidate{}, err
 	}
-	registry, err := l.registry.Load(ctx, generation)
+	materials, err := MapNativeKeyMaterial(rows.KeyMaterial, generation)
 	if err != nil {
-		return datasourceruntime.Candidate{}, classifyBoundary(ctx)
+		return datasourceruntime.Candidate{}, err
+	}
+	defer closeNativeMaterials(materials)
+	registry, err := signingstore.OpenNativeRegistry(generation, materials)
+	if err != nil {
+		return datasourceruntime.Candidate{}, provider.NewError(provider.ErrorCodeMalformedData)
 	}
 	closeRegistry := true
 	defer func() {
@@ -157,6 +170,48 @@ func (l *Loader) Load(ctx context.Context) (candidate datasourceruntime.Candidat
 		Dataset: dataset, RegistryGeneration: registryGeneration,
 		Bindings: registry.Bindings(), Registry: registry,
 	}, nil
+}
+
+// loadKeyMaterial reads deterministic native-key handle pages.
+func (l *Loader) loadKeyMaterial(
+	ctx context.Context,
+	tx Transaction,
+) ([]KeyMaterialRow, error) {
+	output := make([]KeyMaterialRow, 0)
+	cursor := ""
+	bytesRead := 0
+	for responses := 0; responses <= l.limits.MaxHandles; responses++ {
+		page, err := tx.KeyMaterialPage(ctx, cursor, l.pageSize)
+		if err != nil {
+			clearKeyMaterialRows(output)
+			return nil, classifyBoundary(ctx)
+		}
+		if len(page) == 0 {
+			return output, nil
+		}
+		if len(page) > l.pageSize || len(output) > l.limits.MaxHandles-len(page) {
+			clearKeyMaterialRows(page)
+			clearKeyMaterialRows(output)
+			return nil, provider.NewError(provider.ErrorCodeLimitExceeded)
+		}
+		pageBytes := keyMaterialBytes(page)
+		if pageBytes < 0 || bytesRead > l.maxBytes-pageBytes {
+			clearKeyMaterialRows(page)
+			clearKeyMaterialRows(output)
+			return nil, provider.NewError(provider.ErrorCodeLimitExceeded)
+		}
+		next := page[len(page)-1].HandleID
+		if next <= cursor {
+			clearKeyMaterialRows(page)
+			clearKeyMaterialRows(output)
+			return nil, provider.NewError(provider.ErrorCodeLimitExceeded)
+		}
+		output = append(output, page...)
+		bytesRead += pageBytes
+		cursor = next
+	}
+	clearKeyMaterialRows(output)
+	return nil, provider.NewError(provider.ErrorCodeLimitExceeded)
 }
 
 // loadHandles reads deterministic handle keyset pages.
@@ -380,6 +435,17 @@ func policyBytes(rows []PolicyRow) int {
 		if row.FeedbackRouteID != nil {
 			total += len(*row.FeedbackRouteID)
 		}
+	}
+	return total
+}
+
+// keyMaterialBytes returns aggregate native-key row bytes.
+func keyMaterialBytes(rows []KeyMaterialRow) int {
+	total := 0
+	for _, row := range rows {
+		total += len(row.Generation) + len(row.TenantID) + len(row.Domain) +
+			len(row.Use) + len(row.HandleID) + len(row.Algorithm) +
+			len(row.PublicSPKI) + len(row.PrivatePKCS8)
 	}
 	return total
 }

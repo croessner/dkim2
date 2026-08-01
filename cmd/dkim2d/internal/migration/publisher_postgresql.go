@@ -19,7 +19,7 @@ FROM dkim2_datasource.current_generation AS current
 JOIN dkim2_datasource.dataset_generations AS dataset
   ON dataset.generation = current.generation
 WHERE current.singleton = TRUE
-  AND dataset.schema_version = 'dkim2-datasource-v1'
+  AND dataset.schema_version IN ('dkim2-datasource-v1', 'dkim2-datasource-v2')
   AND dataset.dataset_state = 'committed'`
 	queryPublicationCurrentLocked = queryPublicationCurrent + `
 FOR UPDATE OF current`
@@ -29,10 +29,11 @@ FOR UPDATE OF current`
   AND NOT EXISTS (SELECT 1 FROM dkim2_datasource.handles)
   AND NOT EXISTS (SELECT 1 FROM dkim2_datasource.profiles)
   AND NOT EXISTS (SELECT 1 FROM dkim2_datasource.credentials)
-  AND NOT EXISTS (SELECT 1 FROM dkim2_datasource.policies)`
+  AND NOT EXISTS (SELECT 1 FROM dkim2_datasource.policies)
+  AND NOT EXISTS (SELECT 1 FROM dkim2_datasource.key_material)`
 	queryInsertGeneration = `INSERT INTO dkim2_datasource.dataset_generations
 (generation, schema_version, dataset_state)
-VALUES ($1::numeric, 'dkim2-datasource-v1', 'staging')`
+VALUES ($1::numeric, 'dkim2-datasource-v2', 'staging')`
 	queryInsertHandle = `INSERT INTO dkim2_datasource.handles
 (generation, handle_id) VALUES ($1::numeric, $2)`
 	queryInsertProfile = `INSERT INTO dkim2_datasource.profiles
@@ -45,11 +46,16 @@ VALUES ($1::numeric, $2, $3, $4, $5, $6)`
 (generation, tenant_id, signing_domain, profile_use, profile_id, record_status,
  rollout, compatibility, feedback_route_id)
 VALUES ($1::numeric, $2, $3, $4, $5, $6, $7, $8, $9)`
+	queryInsertKeyMaterial = `INSERT INTO dkim2_datasource.key_material
+(generation, tenant_id, signing_domain, profile_use, handle_id, algorithm,
+ public_key_spki, private_key_pkcs8)
+VALUES ($1::numeric, $2, $3, $4, $5, $6, $7, $8)`
 	queryValidatePublication = `SELECT
   (SELECT count(*) FROM dkim2_datasource.handles WHERE generation = $1::numeric),
   (SELECT count(*) FROM dkim2_datasource.profiles WHERE generation = $1::numeric),
   (SELECT count(*) FROM dkim2_datasource.credentials WHERE generation = $1::numeric),
-  (SELECT count(*) FROM dkim2_datasource.policies WHERE generation = $1::numeric)`
+  (SELECT count(*) FROM dkim2_datasource.policies WHERE generation = $1::numeric),
+  (SELECT count(*) FROM dkim2_datasource.key_material WHERE generation = $1::numeric)`
 	queryCommitPublication = `UPDATE dkim2_datasource.dataset_generations
 SET dataset_state = 'committed'
 WHERE generation = $1::numeric AND dataset_state = 'staging'`
@@ -249,12 +255,22 @@ func (p *PostgreSQLPublisher) Publish(
 			return errors.New("postgresql publication unavailable")
 		}
 	}
-	var handles, profiles, credentials, policies int
+	for _, row := range rows.KeyMaterial {
+		if _, err := transaction.Exec(
+			ctx, queryInsertKeyMaterial,
+			row.Generation, row.TenantID, row.Domain, row.Use, row.HandleID,
+			row.Algorithm, row.PublicSPKI, row.PrivatePKCS8,
+		); err != nil {
+			return errors.New("postgresql publication unavailable")
+		}
+	}
+	var handles, profiles, credentials, policies, keyMaterial int
 	if err := transaction.QueryRow(
 		ctx, queryValidatePublication, rows.Current.Generation,
-	).Scan(&handles, &profiles, &credentials, &policies); err != nil ||
+	).Scan(&handles, &profiles, &credentials, &policies, &keyMaterial); err != nil ||
 		handles != len(rows.Handles) || profiles != len(rows.Profiles) ||
-		credentials != len(rows.Credentials) || policies != len(rows.Policies) {
+		credentials != len(rows.Credentials) || policies != len(rows.Policies) ||
+		keyMaterial != len(rows.KeyMaterial) {
 		return errors.New("postgresql publication unavailable")
 	}
 	tag, err := transaction.Exec(ctx, queryCommitPublication, rows.Current.Generation)

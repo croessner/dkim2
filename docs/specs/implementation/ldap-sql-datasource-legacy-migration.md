@@ -2,6 +2,12 @@
 
 Status: implemented.
 
+Custody note: the public-provider and legacy-inventory work remains historical
+implementation evidence, but its local-registry policy is superseded by
+`docs/specs/implementation/native-datasource-key-custody.md`. LDAP and
+PostgreSQL runtime generations now require `dkim2-datasource-v2` native key
+material and have no local-manifest or legacy fallback.
+
 This specification turns the storage mappings and migration contract in
 `docs/datasource-ldap-sql-design.md` into executable daemon-owned LDAP and
 PostgreSQL providers, deployable schema artifacts, and a separate

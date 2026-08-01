@@ -5,40 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/croessner/dkim2"
-	datasourceruntime "github.com/croessner/dkim2/cmd/dkim2d/internal/datasource/runtime"
 	"github.com/croessner/dkim2/provider"
 )
-
-type staticRegistry uint64
-
-// Load returns one synthetic exact protected generation.
-func (g staticRegistry) Load(
-	context.Context,
-	uint64,
-) (datasourceruntime.Registry, error) {
-	return g, nil
-}
-
-// Generation returns the injected protected registry generation.
-func (g staticRegistry) Generation(context.Context) (uint64, error) {
-	return uint64(g), nil
-}
-
-// Bindings returns no signing bindings for mapper-only loader tests.
-func (staticRegistry) Bindings() []provider.Binding { return nil }
-
-// Close completes the synthetic registry lifecycle.
-func (staticRegistry) Close(context.Context) error { return nil }
-
-// SignDigest is unreachable in mapper-only loader tests.
-func (staticRegistry) SignDigest(
-	context.Context,
-	dkim2.PrivateKeyHandle,
-	dkim2.PrivateKeySignRequest,
-) (dkim2.PrivateKeySignResult, error) {
-	return dkim2.PrivateKeySignResult{}, dkim2.NewTemporaryProviderError()
-}
 
 type fakePool struct {
 	transaction *fakeTransaction
@@ -115,6 +83,18 @@ func (t *fakeTransaction) PolicyPage(
 	return t.rows.Policies, nil
 }
 
+// KeyMaterialPage returns one native-key page and then completion.
+func (t *fakeTransaction) KeyMaterialPage(
+	_ context.Context,
+	afterHandle string,
+	_ int,
+) ([]KeyMaterialRow, error) {
+	if afterHandle != "" {
+		return nil, nil
+	}
+	return t.rows.KeyMaterial, nil
+}
+
 // Commit marks the read-only transaction complete.
 func (t *fakeTransaction) Commit(context.Context) error {
 	t.committed = true
@@ -132,7 +112,7 @@ func TestLoaderRequiresProvenStableReadOnlySnapshot(t *testing.T) {
 		rows: minimalRows(t), isolation: "read committed", readOnly: true,
 	}
 	loader, err := NewLoader(
-		fakePool{transaction: transaction}, staticRegistry(1),
+		fakePool{transaction: transaction},
 		provider.DefaultLimits(), 2, 1<<20, 2*time.Second,
 	)
 	if err != nil {
@@ -150,10 +130,10 @@ func TestLoaderRequiresProvenStableReadOnlySnapshot(t *testing.T) {
 func TestLoaderCommitsCompleteGenerationBeforePublication(t *testing.T) {
 	t.Parallel()
 	transaction := &fakeTransaction{
-		rows: minimalRows(t), isolation: "repeatable read", readOnly: true,
+		rows: minimalRows(t), isolation: repeatableReadIsolation, readOnly: true,
 	}
 	loader, err := NewLoader(
-		fakePool{transaction: transaction}, staticRegistry(1),
+		fakePool{transaction: transaction},
 		provider.DefaultLimits(), 2, 1<<20, 2*time.Second,
 	)
 	if err != nil {
@@ -164,5 +144,27 @@ func TestLoaderCommitsCompleteGenerationBeforePublication(t *testing.T) {
 	candidate, err := loader.Load(ctx)
 	if err != nil || !candidate.Valid() || !transaction.committed {
 		t.Fatal("complete stable snapshot did not publish")
+	}
+}
+
+// TestLoaderRejectsMissingNativeKeyMaterial proves a public-only transaction
+// cannot publish a network signing candidate.
+func TestLoaderRejectsMissingNativeKeyMaterial(t *testing.T) {
+	rows := minimalRows(t)
+	rows.KeyMaterial = nil
+	transaction := &fakeTransaction{
+		rows: rows, isolation: repeatableReadIsolation, readOnly: true,
+	}
+	loader, err := NewLoader(
+		fakePool{transaction: transaction}, provider.DefaultLimits(),
+		2, 1<<20, 2*time.Second,
+	)
+	if err != nil {
+		t.Fatal("construct loader")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if _, err := loader.Load(ctx); provider.ErrorCodeOf(err) != provider.ErrorCodeMalformedData {
+		t.Fatal("PostgreSQL loader accepted missing native key material")
 	}
 }

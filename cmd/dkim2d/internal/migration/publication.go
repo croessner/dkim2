@@ -5,8 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"time"
 
 	datasourcepostgresql "github.com/croessner/dkim2/cmd/dkim2d/internal/datasource/postgresql"
+	"github.com/croessner/dkim2/cmd/dkim2d/internal/signingstore"
 	"github.com/croessner/dkim2/provider"
 )
 
@@ -69,7 +71,10 @@ func BuildPublicationCandidate(
 		}
 		mapping := credential.mapping
 		publicSPKI := credential.key.PublicSPKIDER()
-		if len(publicSPKI) == 0 {
+		privatePKCS8 := credential.key.NativePKCS8DER()
+		if len(publicSPKI) == 0 || len(privatePKCS8) == 0 {
+			clear(publicSPKI)
+			clear(privatePKCS8)
 			return PublicationCandidate{}, errors.New("migration candidate unavailable")
 		}
 		algorithm := string(provider.AlgorithmRSASHA256)
@@ -77,6 +82,7 @@ func BuildPublicationCandidate(
 			algorithm = string(provider.AlgorithmEd25519SHA256)
 		} else if credential.key.Algorithm() != "rsa-sha256" {
 			clear(publicSPKI)
+			clear(privatePKCS8)
 			return PublicationCandidate{}, errors.New("migration candidate unavailable")
 		}
 		rows.Handles = append(rows.Handles, datasourcepostgresql.HandleRow{
@@ -86,6 +92,13 @@ func BuildPublicationCandidate(
 			Generation: generationText, ProfileID: mapping.ProfileID,
 			Algorithm: algorithm, Selector: mapping.Selector,
 			PublicKeySPKI: publicSPKI, HandleID: mapping.HandleID,
+		})
+		rows.KeyMaterial = append(rows.KeyMaterial, datasourcepostgresql.KeyMaterialRow{
+			Generation: generationText, TenantID: mapping.TenantID,
+			Domain: mapping.Domain, Use: mapping.ProfileUse,
+			HandleID: mapping.HandleID, Algorithm: algorithm,
+			PublicSPKI:   append([]byte(nil), publicSPKI...),
+			PrivatePKCS8: privatePKCS8,
 		})
 		if profilePosition, exists := profileIndex[mapping.ProfileID]; exists {
 			profile := rows.Profiles[profilePosition]
@@ -130,6 +143,24 @@ func BuildPublicationCandidate(
 		clearCandidateRows(&rows)
 		return PublicationCandidate{}, errors.New("migration candidate unavailable")
 	}
+	materials, err := datasourcepostgresql.MapNativeKeyMaterial(rows.KeyMaterial, generation)
+	if err != nil {
+		clearCandidateRows(&rows)
+		return PublicationCandidate{}, errors.New("migration candidate unavailable")
+	}
+	defer closePublicationMaterials(materials)
+	registry, err := signingstore.OpenNativeRegistry(generation, materials)
+	if err != nil {
+		clearCandidateRows(&rows)
+		return PublicationCandidate{}, errors.New("migration candidate unavailable")
+	}
+	defer func() { _ = registry.Close(context.Background()) }()
+	resolver, err := dataset.NewSigningResolver(registry.Bindings(), time.Now().UTC())
+	if err != nil || resolver == nil {
+		clearCandidateRows(&rows)
+		return PublicationCandidate{}, errors.New("migration candidate unavailable")
+	}
+	_ = resolver.Close(context.Background())
 	return PublicationCandidate{generation: generation, rows: rows}, nil
 }
 
@@ -164,11 +195,7 @@ func Apply(
 	if err != nil || current != expected {
 		return failedPublicationReport(report, "conflict")
 	}
-	report.RegistryStage.Attempted = true
-	if _, err := StageImportedRegistry(plan, imported); err != nil {
-		return failedPublicationReport(report, "unavailable")
-	}
-	report.RegistryStage.Completed = true
+	report.KeyMaterialStage = PhaseState{Attempted: true, Completed: true}
 	report.DatasetStage.Attempted = true
 	report.Publication.Attempted = true
 	if err := publisher.Publish(ctx, expected, candidate); err != nil {
@@ -226,5 +253,18 @@ func clearCandidateRows(rows *datasourcepostgresql.DatasetRows) {
 	for index := range rows.Credentials {
 		clear(rows.Credentials[index].PublicKeySPKI)
 		rows.Credentials[index].PublicKeySPKI = nil
+	}
+	for index := range rows.KeyMaterial {
+		clear(rows.KeyMaterial[index].PublicSPKI)
+		clear(rows.KeyMaterial[index].PrivatePKCS8)
+		rows.KeyMaterial[index].PublicSPKI = nil
+		rows.KeyMaterial[index].PrivatePKCS8 = nil
+	}
+}
+
+// closePublicationMaterials clears one native publication validation set.
+func closePublicationMaterials(materials []*signingstore.NativeKeyMaterial) {
+	for _, material := range materials {
+		_ = material.Close()
 	}
 }

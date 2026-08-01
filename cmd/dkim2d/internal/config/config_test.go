@@ -111,7 +111,8 @@ func TestNetworkSigningConfigurationIsConditionalAndVerified(t *testing.T) {
 	for _, document := range []string{
 		strings.Replace(ldapSigningYAML(), "    transport: starttls", "    transport: plaintext", 1),
 		strings.Replace(ldapSigningYAML(), "    address: 127.0.0.1:636", "    address: ldap.example:636", 1),
-		strings.Replace(ldapSigningYAML(), "  private_manifest_file:", "  datasource_file: /secure/"+testGeneration+"/datasource\n  private_manifest_file:", 1),
+		strings.Replace(ldapSigningYAML(), "  backend: ldap", "  backend: ldap\n  private_manifest_file: /secure/"+testGeneration+"/private-manifest", 1),
+		strings.Replace(ldapSigningYAML(), "  backend: ldap", "  backend: ldap\n  datasource_file: /secure/"+testGeneration+"/datasource", 1),
 		strings.Replace(postgresqlSigningYAML(), "    max_connections: 2", "    max_connections: 5", 1),
 		strings.Replace(postgresqlSigningYAML(), "    database: dkim2", "    database: dkim2;drop", 1),
 	} {
@@ -775,7 +776,6 @@ replay:
   backend: disabled
 signing:
   backend: ldap
-  private_manifest_file: /secure/` + testGeneration + `/private-manifest
   ldap:
     address: 127.0.0.1:636
     server_name: ldap.example
@@ -800,7 +800,6 @@ replay:
   backend: disabled
 signing:
   backend: postgresql
-  private_manifest_file: /secure/` + testGeneration + `/private-manifest
   postgresql:
     address: 127.0.0.1:5432
     server_name: postgresql.example

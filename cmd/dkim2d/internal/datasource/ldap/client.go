@@ -187,6 +187,9 @@ func (c *goLDAPClient) SearchPage(
 		c.Discard()
 		return Page{}, errors.New("ldap search unavailable")
 	}
+	if class == RecordClassKeyMaterial {
+		defer clearLDAPPrivateAttributeBytes(result.Entries)
+	}
 	responseControl := goldap.FindControl(result.Controls, goldap.ControlTypePaging)
 	responsePaging, ok := responseControl.(*goldap.ControlPaging)
 	if !ok || responsePaging == nil {
@@ -197,6 +200,12 @@ func (c *goLDAPClient) SearchPage(
 		return Page{}, errors.New("ldap paging unavailable")
 	}
 	page := Page{Cookie: append([]byte(nil), responsePaging.Cookie...)}
+	success := false
+	defer func() {
+		if class == RecordClassKeyMaterial && !success {
+			clearEntries(page.Entries)
+		}
+	}()
 	for _, source := range result.Entries {
 		entry, convertErr := convertEntry(class, source)
 		if convertErr != nil {
@@ -208,7 +217,32 @@ func (c *goLDAPClient) SearchPage(
 		}
 		page.Entries = append(page.Entries, entry)
 	}
+	success = true
 	return page, nil
+}
+
+// clearLDAPPrivateAttributeBytes destroys private values retained by go-ldap
+// entries after the strict detached projection has been created.
+func clearLDAPPrivateAttributeBytes(entries []*goldap.Entry) {
+	for _, entry := range entries {
+		if entry == nil {
+			continue
+		}
+		for _, attribute := range entry.Attributes {
+			if attribute == nil || attribute.Name != attrPrivatePKCS8 {
+				continue
+			}
+			for index := range attribute.ByteValues {
+				clear(attribute.ByteValues[index])
+				attribute.ByteValues[index] = nil
+			}
+			attribute.ByteValues = nil
+			for index := range attribute.Values {
+				attribute.Values[index] = ""
+			}
+			attribute.Values = nil
+		}
+	}
 }
 
 // Abandon sends one page-size-zero request with the last accepted cookie.
@@ -312,6 +346,11 @@ func (c *goLDAPClient) searchShape(
 			[]string{attrGeneration, attrTenantID, attrSigningDomain,
 				attrProfileUse, attrProfileID, attrRecordStatus,
 				attrRollout, attrCompatibility, attrFeedbackRouteID}, nil
+	case RecordClassKeyMaterial:
+		return "ou=key-material," + root, "dkim2KeyMaterial",
+			[]string{attrGeneration, attrTenantID, attrSigningDomain,
+				attrProfileUse, attrHandleID, attrAlgorithm, attrPublicSPKI,
+				attrPrivatePKCS8}, nil
 	default:
 		return "", "", nil, errors.New("ldap search unavailable")
 	}
@@ -392,6 +431,12 @@ func convertEntry(class RecordClass, source *goldap.Entry) (Entry, error) {
 		return Entry{}, errors.New("ldap entry unavailable")
 	}
 	entry := Entry{Class: class, Attributes: make(map[string][][]byte, len(source.Attributes))}
+	success := false
+	defer func() {
+		if class == RecordClassKeyMaterial && !success {
+			clearEntries([]Entry{entry})
+		}
+	}()
 	for _, attribute := range source.Attributes {
 		if attribute == nil || len(attribute.Name) == 0 || len(attribute.Name) > 128 ||
 			len(attribute.ByteValues) == 0 || len(attribute.ByteValues) > 4 {
@@ -399,7 +444,11 @@ func convertEntry(class RecordClass, source *goldap.Entry) (Entry, error) {
 		}
 		values := make([][]byte, len(attribute.ByteValues))
 		for index := range attribute.ByteValues {
-			if len(attribute.ByteValues[index]) > 4096 {
+			maximum := 4096
+			if attribute.Name == attrPrivatePKCS8 {
+				maximum = maxPrivateAttributeBytes
+			}
+			if len(attribute.ByteValues[index]) > maximum {
 				return Entry{}, errors.New("ldap entry unavailable")
 			}
 			values[index] = append([]byte(nil), attribute.ByteValues[index]...)
@@ -409,5 +458,6 @@ func convertEntry(class RecordClass, source *goldap.Entry) (Entry, error) {
 		}
 		entry.Attributes[attribute.Name] = values
 	}
+	success = true
 	return entry, nil
 }

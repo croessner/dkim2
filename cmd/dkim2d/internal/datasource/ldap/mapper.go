@@ -6,10 +6,11 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/croessner/dkim2/cmd/dkim2d/internal/signingstore"
 	"github.com/croessner/dkim2/provider"
 )
 
-const schemaVersion = "dkim2-datasource-v1"
+const schemaVersion = "dkim2-datasource-v2"
 
 const (
 	attrObjectClass     = "objectClass"
@@ -30,6 +31,7 @@ const (
 	attrRollout         = "dkim2Rollout"
 	attrCompatibility   = "dkim2Compatibility"
 	attrFeedbackRouteID = "dkim2FeedbackRouteID"
+	attrPrivatePKCS8    = "dkim2PrivateKeyPKCS8"
 )
 
 // RecordClass identifies one closed LDAP record mapping.
@@ -46,6 +48,8 @@ const (
 	RecordClassCredential RecordClass = "credential"
 	// RecordClassPolicy identifies one exact administrative policy.
 	RecordClassPolicy RecordClass = "policy"
+	// RecordClassKeyMaterial identifies one native private signing key.
+	RecordClassKeyMaterial RecordClass = "key_material"
 )
 
 // Entry is one bounded backend record with only explicitly requested attributes.
@@ -62,6 +66,96 @@ type DatasetRecords struct {
 	Profiles    []Entry
 	Credentials []Entry
 	Policies    []Entry
+	KeyMaterial []Entry
+}
+
+// MapNativeKeyMaterial validates and detaches one exact native LDAP key set.
+func MapNativeKeyMaterial(
+	entries []Entry,
+	generation uint64,
+) ([]*signingstore.NativeKeyMaterial, error) {
+	if generation == 0 || len(entries) == 0 ||
+		len(entries) > provider.HardLimits().MaxHandles {
+		return nil, provider.NewError(provider.ErrorCodeMalformedData)
+	}
+	materials := make([]*signingstore.NativeKeyMaterial, 0, len(entries))
+	success := false
+	defer func() {
+		if !success {
+			closeNativeMaterials(materials)
+		}
+	}()
+	for _, entry := range entries {
+		entryGeneration, material, err := mapNativeKeyMaterial(entry)
+		if err != nil || entryGeneration != generation {
+			return nil, classifyMappingError(err)
+		}
+		materials = append(materials, material)
+	}
+	success = true
+	return materials, nil
+}
+
+// mapNativeKeyMaterial validates one exact LDAP native-key record.
+func mapNativeKeyMaterial(
+	entry Entry,
+) (uint64, *signingstore.NativeKeyMaterial, error) {
+	values, err := exactAttributesWithLimit(entry, RecordClassKeyMaterial, []string{
+		attrGeneration, attrTenantID, attrSigningDomain, attrProfileUse,
+		attrHandleID, attrAlgorithm, attrPublicSPKI, attrPrivatePKCS8,
+	}, nil, maxPrivateAttributeBytes)
+	if err != nil {
+		return 0, nil, err
+	}
+	defer clearAttributeValues(values)
+	generation, err := parseGeneration(values[attrGeneration])
+	if err != nil {
+		return 0, nil, err
+	}
+	use, err := provider.ParseProfileUse(string(values[attrProfileUse]))
+	if err != nil {
+		return 0, nil, err
+	}
+	algorithm, err := parseLDAPAlgorithm(values[attrAlgorithm])
+	if err != nil {
+		return 0, nil, err
+	}
+	material, err := signingstore.NewNativeKeyMaterial(
+		generation, string(values[attrTenantID]), string(values[attrSigningDomain]),
+		use, string(values[attrHandleID]), algorithm,
+		values[attrPublicSPKI], values[attrPrivatePKCS8],
+	)
+	if err != nil {
+		return 0, nil, provider.NewError(provider.ErrorCodeMalformedData)
+	}
+	return generation, material, nil
+}
+
+// parseLDAPAlgorithm maps one exact native signing algorithm.
+func parseLDAPAlgorithm(value []byte) (provider.Algorithm, error) {
+	switch string(value) {
+	case string(provider.AlgorithmRSASHA256):
+		return provider.AlgorithmRSASHA256, nil
+	case string(provider.AlgorithmEd25519SHA256):
+		return provider.AlgorithmEd25519SHA256, nil
+	default:
+		return "", provider.NewError(provider.ErrorCodeMalformedData)
+	}
+}
+
+// closeNativeMaterials clears every retained native-key value.
+func closeNativeMaterials(materials []*signingstore.NativeKeyMaterial) {
+	for _, material := range materials {
+		_ = material.Close()
+	}
+}
+
+// clearAttributeValues clears detached LDAP attribute buffers.
+func clearAttributeValues(values map[string][]byte) {
+	for name, value := range values {
+		clear(value)
+		delete(values, name)
+	}
 }
 
 type profileRecord struct {
@@ -292,6 +386,20 @@ func exactAttributes(
 	required []string,
 	optional []string,
 ) (map[string][]byte, error) {
+	return exactAttributesWithLimit(entry, class, required, optional, 4096)
+}
+
+const maxPrivateAttributeBytes = 64 << 10
+
+// exactAttributesWithLimit validates one closed attribute projection with an
+// explicit per-value bound for protected native key records.
+func exactAttributesWithLimit(
+	entry Entry,
+	class RecordClass,
+	required []string,
+	optional []string,
+	maximumValueBytes int,
+) (map[string][]byte, error) {
 	if entry.Class != class || len(entry.Attributes) > 18 {
 		return nil, provider.NewError(provider.ErrorCodeMalformedData)
 	}
@@ -308,7 +416,7 @@ func exactAttributes(
 		if !allowed[name] || len(values) != 1 || values[0] == nil {
 			return nil, provider.NewError(provider.ErrorCodeMalformedData)
 		}
-		if len(values[0]) > 4096 || total > (1<<20)-len(values[0]) {
+		if len(values[0]) > maximumValueBytes || total > (1<<20)-len(values[0]) {
 			return nil, provider.NewError(provider.ErrorCodeLimitExceeded)
 		}
 		total += len(values[0])

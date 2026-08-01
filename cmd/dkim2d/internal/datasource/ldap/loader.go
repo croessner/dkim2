@@ -7,6 +7,7 @@ import (
 	"time"
 
 	datasourceruntime "github.com/croessner/dkim2/cmd/dkim2d/internal/datasource/runtime"
+	"github.com/croessner/dkim2/cmd/dkim2d/internal/signingstore"
 	"github.com/croessner/dkim2/provider"
 )
 
@@ -37,7 +38,6 @@ type Connector interface {
 // Loader reads one fenced LDAP generation into an immutable local snapshot.
 type Loader struct {
 	connector   Connector
-	registry    datasourceruntime.RegistrySource
 	limits      provider.Limits
 	pageSize    int
 	maxBytes    int
@@ -47,20 +47,19 @@ type Loader struct {
 // NewLoader validates one bounded LDAP loader configuration.
 func NewLoader(
 	connector Connector,
-	registry datasourceruntime.RegistrySource,
 	limits provider.Limits,
 	pageSize int,
 	maxBytes int,
 	maxDeadline time.Duration,
 ) (*Loader, error) {
-	if connector == nil || registry == nil || limits.Validate() != nil ||
+	if connector == nil || limits.Validate() != nil ||
 		pageSize <= 0 || pageSize > 256 ||
 		maxBytes <= 0 || maxBytes > 32<<20 ||
 		maxDeadline <= 0 || maxDeadline > 30*time.Second {
 		return nil, provider.NewError(provider.ErrorCodeInvalidRequest)
 	}
 	return &Loader{
-		connector: connector, registry: registry, limits: limits,
+		connector: connector, limits: limits,
 		pageSize: pageSize, maxBytes: maxBytes, maxDeadline: maxDeadline,
 	}, nil
 }
@@ -102,6 +101,7 @@ func (l *Loader) Load(ctx context.Context) (candidate datasourceruntime.Candidat
 		return datasourceruntime.Candidate{}, classifyBoundary(ctx)
 	}
 	records := DatasetRecords{Current: current, Root: root}
+	defer func() { clearEntries(records.KeyMaterial) }()
 	aggregateBytes := entryBytes(current) + entryBytes(root)
 	classes := []struct {
 		class       RecordClass
@@ -112,6 +112,7 @@ func (l *Loader) Load(ctx context.Context) (candidate datasourceruntime.Candidat
 		{RecordClassProfile, l.limits.MaxProfiles, &records.Profiles},
 		{RecordClassCredential, l.limits.MaxProfiles * l.limits.MaxCredentialsPerProfile, &records.Credentials},
 		{RecordClassPolicy, l.limits.MaxPolicies, &records.Policies},
+		{RecordClassKeyMaterial, l.limits.MaxHandles, &records.KeyMaterial},
 	}
 	for _, item := range classes {
 		entries, bytesRead, loadErr := l.loadClass(
@@ -138,9 +139,14 @@ func (l *Loader) Load(ctx context.Context) (candidate datasourceruntime.Candidat
 	if err != nil {
 		return datasourceruntime.Candidate{}, err
 	}
-	registry, err := l.registry.Load(ctx, generation)
+	materials, err := MapNativeKeyMaterial(records.KeyMaterial, generation)
 	if err != nil {
-		return datasourceruntime.Candidate{}, classifyBoundary(ctx)
+		return datasourceruntime.Candidate{}, err
+	}
+	defer closeNativeMaterials(materials)
+	registry, err := signingstore.OpenNativeRegistry(generation, materials)
+	if err != nil {
+		return datasourceruntime.Candidate{}, provider.NewError(provider.ErrorCodeMalformedData)
 	}
 	closeRegistry := true
 	defer func() {
@@ -173,6 +179,13 @@ func (l *Loader) loadClass(
 	cookie := []byte(nil)
 	acceptedCookie := false
 	entries := make([]Entry, 0, min(l.pageSize, maximum))
+	sensitive := class == RecordClassKeyMaterial
+	success := false
+	defer func() {
+		if sensitive && !success {
+			clearEntries(entries)
+		}
+	}()
 	bytesRead := 0
 	pageSize := min(l.pageSize, maximum)
 	for responses := 0; responses <= maximum; responses++ {
@@ -186,18 +199,28 @@ func (l *Loader) loadClass(
 		if page.Bytes < 0 || page.Bytes > 4<<20 ||
 			len(page.Cookie) > 4096 || len(page.Entries) > maximum+1 ||
 			bytesRead > l.maxBytes-page.Bytes {
+			if sensitive {
+				clearEntries(page.Entries)
+			}
 			l.cleanupPaging(ctx, client, class, generation, cookie, acceptedCookie)
 			return nil, 0, provider.NewError(provider.ErrorCodeLimitExceeded)
 		}
 		bytesRead += page.Bytes
 		for _, entry := range page.Entries {
 			if len(entries) >= maximum {
+				if sensitive {
+					clearEntries(page.Entries)
+				}
 				l.cleanupPaging(ctx, client, class, generation, cookie, acceptedCookie)
 				return nil, 0, provider.NewError(provider.ErrorCodeLimitExceeded)
 			}
 			entries = append(entries, cloneEntry(entry))
 		}
+		if sensitive {
+			clearEntries(page.Entries)
+		}
 		if len(page.Cookie) == 0 {
+			success = true
 			return entries, bytesRead, nil
 		}
 		cookie = append(cookie[:0], page.Cookie...)
@@ -282,6 +305,20 @@ func cloneEntry(input Entry) Entry {
 		output.Attributes[name] = detached
 	}
 	return output
+}
+
+// clearEntries destroys every detached attribute value and releases its map.
+func clearEntries(entries []Entry) {
+	for index := range entries {
+		for name, values := range entries[index].Attributes {
+			for valueIndex := range values {
+				clear(values[valueIndex])
+				values[valueIndex] = nil
+			}
+			delete(entries[index].Attributes, name)
+		}
+		entries[index].Attributes = nil
+	}
 }
 
 // entryBytes returns checked decoded bytes for one record.

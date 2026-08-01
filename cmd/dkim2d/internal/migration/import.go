@@ -38,41 +38,6 @@ type ImportedCredential struct {
 	key     *signingstore.ImportedPrivateKey
 }
 
-// StageImportedRegistry creates one inert exact generation registry.
-func StageImportedRegistry(
-	plan Plan,
-	imported []*ImportedCredential,
-) (string, error) {
-	generation, err := parseGeneration(plan.Generation)
-	if err != nil || len(imported) != len(plan.Mappings) ||
-		len(imported) == 0 || plan.RegistryRoot == "" {
-		return "", errors.New("protected registry staging unavailable")
-	}
-	entries := make([]signingstore.RegistryStagingEntry, 0, len(imported))
-	for index, credential := range imported {
-		if credential == nil || credential.key == nil ||
-			credential.mapping != plan.Mappings[index] {
-			return "", errors.New("protected registry staging unavailable")
-		}
-		entry, entryErr := signingstore.NewRegistryStagingEntry(
-			credential.mapping.TenantID,
-			credential.mapping.Domain,
-			credential.mapping.ProfileUse,
-			credential.mapping.HandleID,
-			credential.key,
-		)
-		if entryErr != nil {
-			return "", errors.New("protected registry staging unavailable")
-		}
-		entries = append(entries, entry)
-	}
-	path, err := signingstore.StageRegistry(plan.RegistryRoot, generation, entries)
-	if err != nil {
-		return "", errors.New("protected registry staging unavailable")
-	}
-	return path, nil
-}
-
 // Close clears the retained protected key.
 func (c *ImportedCredential) Close() error {
 	if c == nil || c.key == nil {

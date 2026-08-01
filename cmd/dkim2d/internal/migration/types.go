@@ -10,8 +10,8 @@ import (
 const redacted = "dkim2d_migration{redacted}"
 
 const (
-	migrationReportSchema      = "dkim2.opendkim-bootstrap-report.v1"
-	migrationSchemaVersion     = "dkim2-datasource-v1"
+	migrationReportSchema      = "dkim2.opendkim-bootstrap-report.v2"
+	migrationSchemaVersion     = "dkim2-datasource-v2"
 	migrationResultSuccess     = "success"
 	migrationResultFailure     = "failure"
 	migrationFailureNone       = "none"
@@ -37,6 +37,7 @@ const (
 	ldapProfileUseAttribute    = "dkim2ProfileUse"
 	ldapRolloutAttribute       = "dkim2Rollout"
 	ldapCompatibilityAttribute = "dkim2Compatibility"
+	ldapPrivatePKCS8Attribute  = "dkim2PrivateKeyPKCS8"
 )
 
 // Target identifies one closed DKIM2 publication backend.
@@ -117,7 +118,6 @@ type Plan struct {
 	Generation      string    `yaml:"generation"`
 	ExpectedCurrent string    `yaml:"expected_current"`
 	Target          Target    `yaml:"target"`
-	RegistryRoot    string    `yaml:"registry_root"`
 	Mappings        []Mapping `yaml:"mappings"`
 }
 
@@ -142,20 +142,20 @@ type PhaseState struct {
 
 // Report is the deterministic secret-safe migration result.
 type Report struct {
-	Schema        string          `json:"schema"`
-	ToolVersion   string          `json:"tool_version"`
-	Target        Target          `json:"target"`
-	Mode          string          `json:"mode"`
-	Result        string          `json:"result"`
-	FailureClass  string          `json:"failure_class"`
-	Counts        InventoryCounts `json:"counts"`
-	Inventory     PhaseState      `json:"inventory"`
-	Plan          PhaseState      `json:"plan"`
-	KeyValidation PhaseState      `json:"key_validation"`
-	DNSProof      PhaseState      `json:"dns_proof"`
-	RegistryStage PhaseState      `json:"registry_stage"`
-	DatasetStage  PhaseState      `json:"dataset_stage"`
-	Publication   PhaseState      `json:"publication"`
+	Schema           string          `json:"schema"`
+	ToolVersion      string          `json:"tool_version"`
+	Target           Target          `json:"target"`
+	Mode             string          `json:"mode"`
+	Result           string          `json:"result"`
+	FailureClass     string          `json:"failure_class"`
+	Counts           InventoryCounts `json:"counts"`
+	Inventory        PhaseState      `json:"inventory"`
+	Plan             PhaseState      `json:"plan"`
+	KeyValidation    PhaseState      `json:"key_validation"`
+	DNSProof         PhaseState      `json:"dns_proof"`
+	KeyMaterialStage PhaseState      `json:"key_material_stage"`
+	DatasetStage     PhaseState      `json:"dataset_stage"`
+	Publication      PhaseState      `json:"publication"`
 }
 
 // String returns a constant protected report representation.

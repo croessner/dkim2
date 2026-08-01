@@ -475,14 +475,6 @@ func buildProtectedState(
 			if len(state.datasourcePassword) == 0 || len(state.datasourceRootsDER) == 0 {
 				return nil, newError(CodeProtectedContent)
 			}
-			registry, err := signingstore.NewRegistrySource(
-				generationFD,
-				filepath.Base(snapshot.Signing().PrivateManifestFile()),
-			)
-			if err != nil || registry == nil {
-				return nil, newError(CodeProtectedContent)
-			}
-			state.signingRegistry = registry
 		}
 	}
 	if err := validateProtectedSeparation(state); err != nil {

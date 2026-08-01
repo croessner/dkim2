@@ -4,7 +4,6 @@ package config
 
 import (
 	"bytes"
-	"context"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
@@ -21,27 +20,15 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-// TestLoadProtectedNetworkSigningPublishesSeparatedRegistryAndCredentials
-// proves datasource secrets never enter the flat-file signing owner.
-func TestLoadProtectedNetworkSigningPublishesSeparatedRegistryAndCredentials(t *testing.T) {
+// TestLoadProtectedNetworkSigningPublishesOnlyDatasourceCredentials proves
+// native network custody does not construct a local signer registry.
+func TestLoadProtectedNetworkSigningPublishesOnlyDatasourceCredentials(t *testing.T) {
 	fixture := newProtectedSigningFixture(t)
 	generationPath := filepath.Join(filepath.Dir(fixture.yamlPath), testGeneration)
 	if err := os.Chmod(filepath.Dir(generationPath), 0o700); err != nil {
 		t.Fatal("protect network registry parent")
 	}
 	makeGenerationWritable(t, generationPath)
-	manifestPath := filepath.Join(generationPath, "private-manifest")
-	manifestBytes, err := os.ReadFile(manifestPath)
-	if err != nil {
-		t.Fatal("read registry fixture")
-	}
-	var manifest map[string]any
-	if err := json.Unmarshal(manifestBytes, &manifest); err != nil {
-		t.Fatal("decode registry fixture")
-	}
-	manifest["version"] = "dkim2-private-keys-v2"
-	manifest["generation"] = "1"
-	writeProtectedSigningJSON(t, manifestPath, manifest)
 	writeProtectedTestFile(
 		t, filepath.Join(generationPath, "ldap-password"),
 		[]byte("network-password"), 0o600,
@@ -70,14 +57,9 @@ func TestLoadProtectedNetworkSigningPublishesSeparatedRegistryAndCredentials(t *
 	if err != nil {
 		t.Fatalf("PrepareRuntime(network) failed with code %s", CodeOf(err))
 	}
-	if preparation.SigningStore() != nil || preparation.SigningRegistry() == nil {
-		t.Fatal("network signing crossed flat-file and registry ownership")
+	if preparation.SigningStore() != nil {
+		t.Fatal("network signing constructed a local signing store")
 	}
-	registry, err := preparation.SigningRegistry().Load(context.Background(), 1)
-	if err != nil || registry == nil {
-		t.Fatal("protected registry generation drifted")
-	}
-	defer func() { _ = registry.Close(context.Background()) }()
 	var borrowed bool
 	if err := preparation.SigningDatasource().Use(
 		func(password []byte, roots [][]byte) error {

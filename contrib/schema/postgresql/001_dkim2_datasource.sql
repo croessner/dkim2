@@ -16,7 +16,7 @@ CREATE DOMAIN dkim2_datasource.validity_text AS text COLLATE "C"
 CREATE TABLE dkim2_datasource.dataset_generations (
   generation dkim2_datasource.generation_number PRIMARY KEY,
   schema_version text COLLATE "C" NOT NULL
-    CHECK (schema_version = 'dkim2-datasource-v1'),
+    CHECK (schema_version IN ('dkim2-datasource-v1', 'dkim2-datasource-v2')),
   dataset_state text COLLATE "C" NOT NULL
     CHECK (dataset_state IN ('staging', 'committed'))
 );
@@ -60,6 +60,7 @@ CREATE TABLE dkim2_datasource.credentials (
   PRIMARY KEY (generation, profile_id, algorithm),
   UNIQUE (generation, profile_id, selector),
   UNIQUE (generation, handle_id),
+  UNIQUE (generation, handle_id, algorithm, public_key_spki),
   FOREIGN KEY (generation, profile_id)
     REFERENCES dkim2_datasource.profiles(generation, profile_id),
   FOREIGN KEY (generation, handle_id)
@@ -84,12 +85,35 @@ CREATE TABLE dkim2_datasource.policies (
     REFERENCES dkim2_datasource.profiles(generation, profile_id, signing_domain)
 );
 
+CREATE TABLE dkim2_datasource.key_material (
+  generation dkim2_datasource.generation_number NOT NULL,
+  tenant_id dkim2_datasource.identifier NOT NULL,
+  signing_domain dkim2_datasource.domain_name NOT NULL,
+  profile_use text COLLATE "C" NOT NULL
+    CHECK (profile_use IN ('originator', 'ordinary_transit', 'next_domain_transit')),
+  handle_id dkim2_datasource.identifier NOT NULL,
+  algorithm text COLLATE "C" NOT NULL
+    CHECK (algorithm IN ('rsa-sha256', 'ed25519-sha256')),
+  public_key_spki bytea NOT NULL
+    CHECK (octet_length(public_key_spki) BETWEEN 1 AND 2048),
+  private_key_pkcs8 bytea NOT NULL
+    CHECK (octet_length(private_key_pkcs8) BETWEEN 1 AND 65536),
+  PRIMARY KEY (generation, handle_id),
+  UNIQUE (generation, tenant_id, signing_domain, profile_use, algorithm),
+  FOREIGN KEY (generation, handle_id, algorithm, public_key_spki)
+    REFERENCES dkim2_datasource.credentials
+      (generation, handle_id, algorithm, public_key_spki)
+);
+
 CREATE INDEX profiles_domain_idx
   ON dkim2_datasource.profiles (generation, signing_domain);
 CREATE INDEX credentials_selector_idx
   ON dkim2_datasource.credentials (generation, selector);
 CREATE INDEX policies_profile_idx
   ON dkim2_datasource.policies (generation, profile_id);
+CREATE INDEX key_material_selection_idx
+  ON dkim2_datasource.key_material
+    (generation, tenant_id, signing_domain, profile_use);
 
 CREATE FUNCTION dkim2_datasource.deny_committed_mutation()
 RETURNS trigger
@@ -160,6 +184,9 @@ CREATE TRIGGER credentials_immutable
   FOR EACH ROW EXECUTE FUNCTION dkim2_datasource.deny_committed_mutation();
 CREATE TRIGGER policies_immutable
   BEFORE UPDATE OR DELETE ON dkim2_datasource.policies
+  FOR EACH ROW EXECUTE FUNCTION dkim2_datasource.deny_committed_mutation();
+CREATE TRIGGER key_material_immutable
+  BEFORE UPDATE OR DELETE ON dkim2_datasource.key_material
   FOR EACH ROW EXECUTE FUNCTION dkim2_datasource.deny_committed_mutation();
 
 DO $$

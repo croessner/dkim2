@@ -593,16 +593,17 @@ func parseSigning(
 	default:
 		return signingState{}, newError(CodeInvalidField)
 	}
-	required := []string{pathSigningBackend, pathSigningManifest}
+	required := []string{pathSigningBackend}
 	if backend == SigningFlatFile {
-		required = append(required, pathSigningDatasource)
+		required = append(required, pathSigningDatasource, pathSigningManifest)
 	}
 	for _, path := range required {
 		if !presence[path].Explicit() {
 			return signingState{}, newError(CodeInvalidMatrix)
 		}
 	}
-	if backend != SigningFlatFile && presence[pathSigningDatasource].Explicit() {
+	if backend != SigningFlatFile &&
+		(presence[pathSigningDatasource].Explicit() || presence[pathSigningManifest].Explicit()) {
 		return signingState{}, newError(CodeInvalidMatrix)
 	}
 	if backend == SigningFlatFile &&
@@ -649,9 +650,9 @@ func parseSigning(
 	}
 	datasourceFile := text(values, pathSigningDatasource)
 	manifestFile := text(values, pathSigningManifest)
-	paths := []string{server.capabilityFile, manifestFile}
+	paths := []string{server.capabilityFile}
 	if backend == SigningFlatFile {
-		paths = append(paths, datasourceFile)
+		paths = append(paths, datasourceFile, manifestFile)
 	}
 	if signPresent {
 		paths = append(paths, server.signCapabilityFile)

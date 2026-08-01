@@ -16,8 +16,10 @@ import (
 )
 
 const (
-	assertionControlOID    = "1.3.6.1.1.12"
-	ldapDatasetObjectClass = "dkim2Dataset"
+	assertionControlOID        = "1.3.6.1.1.12"
+	ldapDatasetObjectClass     = "dkim2Dataset"
+	ldapAlgorithmAttribute     = "dkim2Algorithm"
+	ldapPublicKeySPKIAttribute = "dkim2PublicKeySPKI"
 )
 
 // ldapAssertionControl encodes one critical RFC 4528 assertion filter.
@@ -93,7 +95,7 @@ func (p *LDAPPublisher) Current(ctx context.Context) (uint64, error) {
 	stateValues := entry.GetRawAttributeValues(ldapDatasetStateAttribute)
 	if len(schemaValues) != 1 || len(generationValues) != 1 ||
 		len(stateValues) != 1 ||
-		string(schemaValues[0]) != migrationSchemaVersion ||
+		!supportedPublicationFenceVersion(string(schemaValues[0])) ||
 		string(stateValues[0]) != datasourceStateCommitted {
 		return 0, errors.New("ldap publication unavailable")
 	}
@@ -102,6 +104,12 @@ func (p *LDAPPublisher) Current(ctx context.Context) (uint64, error) {
 		return 0, errors.New("ldap publication unavailable")
 	}
 	return generation, nil
+}
+
+// supportedPublicationFenceVersion permits an administrative v1 current
+// fence only so one complete v2 generation can replace it without fallback.
+func supportedPublicationFenceVersion(version string) bool {
+	return version == "dkim2-datasource-v1" || version == migrationSchemaVersion
 }
 
 // Publish stages, validates, commits, and assertion-fences one LDAP generation.
@@ -198,7 +206,7 @@ func (p *LDAPPublisher) addCandidate(
 			ldapGenerationAttribute:    {generation}, ldapDatasetStateAttribute: {datasourceStateStaging},
 		}),
 	}
-	for _, unit := range []string{"handles", "profiles", "credentials", "policies"} {
+	for _, unit := range []string{"handles", "profiles", "credentials", "policies", "key-material"} {
 		requests = append(requests, newLDAPAdd(
 			"ou="+unit+","+rootDN,
 			map[string][]string{legacyObjectClass: {ldapTopObjectClass, "organizationalUnit"}, "ou": {unit}},
@@ -235,9 +243,9 @@ func (p *LDAPPublisher) addCandidate(
 		request.Attribute("cn", []string{ldapRecordCN(index)})
 		request.Attribute(ldapGenerationAttribute, []string{row.Generation})
 		request.Attribute(ldapProfileAttribute, []string{row.ProfileID})
-		request.Attribute("dkim2Algorithm", []string{row.Algorithm})
+		request.Attribute(ldapAlgorithmAttribute, []string{row.Algorithm})
 		request.Attribute("dkim2Selector", []string{row.Selector})
-		request.Attribute("dkim2PublicKeySPKI", []string{string(row.PublicKeySPKI)})
+		request.Attribute(ldapPublicKeySPKIAttribute, []string{string(row.PublicKeySPKI)})
 		request.Attribute(ldapHandleAttribute, []string{row.HandleID})
 		requests = append(requests, request)
 	}
@@ -255,6 +263,22 @@ func (p *LDAPPublisher) addCandidate(
 		requests = append(requests, newLDAPAdd(
 			ldapRecordDN(index, "policies", rootDN), attributes,
 		))
+	}
+	for index, row := range candidate.rows.KeyMaterial {
+		request := goldap.NewAddRequest(
+			ldapRecordDN(index, "key-material", rootDN), nil,
+		)
+		request.Attribute(legacyObjectClass, []string{ldapTopObjectClass, "dkim2KeyMaterial"})
+		request.Attribute("cn", []string{ldapRecordCN(index)})
+		request.Attribute(ldapGenerationAttribute, []string{row.Generation})
+		request.Attribute(ldapTenantAttribute, []string{row.TenantID})
+		request.Attribute(ldapSigningDomainAttribute, []string{row.Domain})
+		request.Attribute(ldapProfileUseAttribute, []string{row.Use})
+		request.Attribute(ldapHandleAttribute, []string{row.HandleID})
+		request.Attribute(ldapAlgorithmAttribute, []string{row.Algorithm})
+		request.Attribute(ldapPublicKeySPKIAttribute, []string{string(row.PublicSPKI)})
+		request.Attribute(ldapPrivatePKCS8Attribute, []string{string(row.PrivatePKCS8)})
+		requests = append(requests, request)
 	}
 	for _, request := range requests {
 		current := request
@@ -277,14 +301,16 @@ func (p *LDAPPublisher) validateCandidateReadback(
 	attributes := []string{
 		legacyObjectClass, "ou", ldapSchemaVersionAttribute, ldapGenerationAttribute, ldapDatasetStateAttribute,
 		ldapHandleAttribute, ldapProfileAttribute, ldapSigningDomainAttribute,
-		ldapRecordStatusAttribute, "dkim2NotBefore", "dkim2NotAfter", "dkim2Algorithm",
-		"dkim2Selector", "dkim2PublicKeySPKI", ldapTenantAttribute, ldapProfileUseAttribute,
+		ldapRecordStatusAttribute, "dkim2NotBefore", "dkim2NotAfter", ldapAlgorithmAttribute,
+		"dkim2Selector", ldapPublicKeySPKIAttribute, ldapTenantAttribute, ldapProfileUseAttribute,
 		ldapRolloutAttribute, ldapCompatibilityAttribute, "dkim2FeedbackRouteID",
+		ldapPrivatePKCS8Attribute,
 	}
 	request := goldap.NewSearchRequest(
 		rootDN, goldap.ScopeWholeSubtree, goldap.NeverDerefAliases,
 		len(candidate.rows.Handles)+len(candidate.rows.Profiles)+
-			len(candidate.rows.Credentials)+len(candidate.rows.Policies)+6,
+			len(candidate.rows.Credentials)+len(candidate.rows.Policies)+
+			len(candidate.rows.KeyMaterial)+7,
 		0, false, "(objectClass=*)", attributes, nil,
 	)
 	var result *goldap.SearchResult
@@ -294,7 +320,8 @@ func (p *LDAPPublisher) validateCandidateReadback(
 		return searchErr
 	}); err != nil || result == nil || len(result.Referrals) != 0 ||
 		len(result.Entries) != len(candidate.rows.Handles)+len(candidate.rows.Profiles)+
-			len(candidate.rows.Credentials)+len(candidate.rows.Policies)+5 {
+			len(candidate.rows.Credentials)+len(candidate.rows.Policies)+
+			len(candidate.rows.KeyMaterial)+6 {
 		return errors.New("ldap publication readback unavailable")
 	}
 	records, err := publicationLDAPRecords(result.Entries, generation)
@@ -321,7 +348,7 @@ func publicationLDAPRecords(
 ) (datasourceldap.DatasetRecords, error) {
 	records := datasourceldap.DatasetRecords{}
 	rootSeen := false
-	units := make(map[string]struct{}, 4)
+	units := make(map[string]struct{}, 5)
 	metadata := datasourceldap.Entry{
 		Class: datasourceldap.RecordClassDataset,
 		Attributes: map[string][][]byte{
@@ -340,7 +367,7 @@ func publicationLDAPRecords(
 		recognized := 0
 		for _, expected := range []string{
 			ldapDatasetObjectClass, "dkim2Handle", "dkim2Profile",
-			"dkim2Credential", "dkim2Policy",
+			"dkim2Credential", "dkim2Policy", "dkim2KeyMaterial",
 		} {
 			if containsLDAPValue(classes, expected) {
 				recognized++
@@ -350,7 +377,7 @@ func publicationLDAPRecords(
 		case recognized != 1 && containsLDAPValue(classes, "organizationalUnit"):
 			values := entry.GetAttributeValues("ou")
 			if recognized != 0 || len(values) != 1 ||
-				!slices.Contains([]string{"handles", "profiles", "credentials", "policies"}, values[0]) {
+				!slices.Contains([]string{"handles", "profiles", "credentials", "policies", "key-material"}, values[0]) {
 				return datasourceldap.DatasetRecords{}, errors.New("ldap publication readback unit malformed")
 			}
 			if _, duplicate := units[values[0]]; duplicate {
@@ -370,6 +397,8 @@ func publicationLDAPRecords(
 			class = datasourceldap.RecordClassCredential
 		case containsLDAPValue(classes, "dkim2Policy"):
 			class = datasourceldap.RecordClassPolicy
+		case containsLDAPValue(classes, "dkim2KeyMaterial"):
+			class = datasourceldap.RecordClassKeyMaterial
 		}
 		mapped := datasourceldap.Entry{
 			Class: class, Attributes: make(map[string][][]byte),
@@ -404,10 +433,12 @@ func publicationLDAPRecords(
 				records.Credentials = append(records.Credentials, mapped)
 			case datasourceldap.RecordClassPolicy:
 				records.Policies = append(records.Policies, mapped)
+			case datasourceldap.RecordClassKeyMaterial:
+				records.KeyMaterial = append(records.KeyMaterial, mapped)
 			}
 		}
 	}
-	if !rootSeen || len(units) != 4 {
+	if !rootSeen || len(units) != 5 {
 		return datasourceldap.DatasetRecords{}, errors.New("ldap publication readback structure incomplete")
 	}
 	return records, nil
@@ -422,7 +453,8 @@ func candidateLDAPReadbackMatches(
 	return ldapEntrySetMatches(actual.Handles, expected.Handles) &&
 		ldapEntrySetMatches(actual.Profiles, expected.Profiles) &&
 		ldapEntrySetMatches(actual.Credentials, expected.Credentials) &&
-		ldapEntrySetMatches(actual.Policies, expected.Policies)
+		ldapEntrySetMatches(actual.Policies, expected.Policies) &&
+		ldapEntrySetMatches(actual.KeyMaterial, expected.KeyMaterial)
 }
 
 // candidateLDAPRecords projects exact expected LDAP attributes from SQL-neutral rows.
@@ -481,6 +513,21 @@ func candidateLDAPRecords(candidate PublicationCandidate) datasourceldap.Dataset
 		}
 		records.Policies = append(records.Policies, ldapExpectedEntry(
 			datasourceldap.RecordClassPolicy, attributes,
+		))
+	}
+	for _, row := range candidate.rows.KeyMaterial {
+		records.KeyMaterial = append(records.KeyMaterial, ldapExpectedEntry(
+			datasourceldap.RecordClassKeyMaterial,
+			map[string][][]byte{
+				ldapGenerationAttribute:    {[]byte(row.Generation)},
+				ldapTenantAttribute:        {[]byte(row.TenantID)},
+				ldapSigningDomainAttribute: {[]byte(row.Domain)},
+				ldapProfileUseAttribute:    {[]byte(row.Use)},
+				ldapHandleAttribute:        {[]byte(row.HandleID)},
+				"dkim2Algorithm":           {[]byte(row.Algorithm)},
+				"dkim2PublicKeySPKI":       {append([]byte(nil), row.PublicSPKI...)},
+				ldapPrivatePKCS8Attribute:  {append([]byte(nil), row.PrivatePKCS8...)},
+			},
 		))
 	}
 	return records

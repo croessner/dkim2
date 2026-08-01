@@ -30,18 +30,16 @@ separate inventory, key-import, and publication principals. Inventory cannot
 read `DKIMKey`; only the key-import principal can read it. The target runtime
 principal remains read-only.
 
-Before apply, create `<registry_root>/<generation>` as owner-only mode `0700`
-and place the new generation's capability, datasource CA, and datasource
-password files there as mode `0600`. The importer adds sequence-named private
-key files plus `private-manifest.json`, synchronizes them, and seals the
-directory to `0500`. Existing registry names are never overwritten. An exact
-sealed prior result is recognized idempotently; mismatched or partial registry
-material fails closed.
+The import principal reads each selected legacy key only after inventory and
+plan validation. Apply writes canonical PKCS#8 DER directly into the target
+v2 generation. No local registry root, private manifest, or private-key child
+is created. Target backups and the publisher connection must therefore be
+handled as key material.
 
 Example LDAP-target configuration:
 
 ```yaml
-version: dkim2-opendkim-migration-v1
+version: dkim2-opendkim-migration-v2
 deadline: 30s
 source:
   address: 192.0.2.10:636
@@ -74,7 +72,6 @@ plan:
   generation: "42"
   expected_current: "41"
   target: ldap
-  registry_root: /secure/generations
   mappings:
     - domain: example.test
       source_selector: current
@@ -146,9 +143,9 @@ For an established target, PostgreSQL holds the singleton row lock in one
 serializable transaction. First publication instead proves all datasource
 tables empty in that transaction and uniquely inserts the singleton pointer
 after inserting, validating, and committing the generation. Conflicts are not
-retried, and concurrent first publishers cannot both commit. Registry material
-is installed first and remains inert until the matching datasource current
-generation is selected.
+retried, and concurrent first publishers cannot both commit. Public rows and
+native private-key rows remain inert until the complete datasource generation
+becomes current.
 
 Machine and human reports contain closed states and counts only. They contain
 no DN, domain, selector, tenant, profile, handle, path, endpoint, key, SPKI,
@@ -163,8 +160,8 @@ with that same new generation. Keys and DNS are revalidated and the normal
 publication protocol is used.
 
 A failed or interrupted apply does not claim success. Unreferenced staging
-backend generations and incomplete mode-`0700` registry directories are
-inert. Inspect them with protected authority. Remove only a generation proven
+backend generations are inert. Inspect them with protected authority. Remove
+only a generation proven
 not current, not committed for retention, and not needed for rollback. Never
 delete by guessed age or identity, and never emit its contained identifiers.
 An interrupted LDAP first publication may leave the unique current claim in

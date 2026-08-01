@@ -4,69 +4,26 @@ package parity
 
 import (
 	"context"
-	"crypto/sha256"
 	"crypto/x509"
-	"encoding/base64"
 	"errors"
 	"os"
 	"strconv"
 	"testing"
 	"time"
 
-	"github.com/croessner/dkim2"
 	datasourceldap "github.com/croessner/dkim2/cmd/dkim2d/internal/datasource/ldap"
 	datasourcepostgresql "github.com/croessner/dkim2/cmd/dkim2d/internal/datasource/postgresql"
 	datasourceruntime "github.com/croessner/dkim2/cmd/dkim2d/internal/datasource/runtime"
 	"github.com/croessner/dkim2/provider"
 )
 
-type integrationRegistry struct {
-	generation uint64
-	bindings   []provider.Binding
-}
-
-// Load returns the exact synthetic protected registry requested by the loader.
-func (r integrationRegistry) Load(
-	_ context.Context,
-	generation uint64,
-) (datasourceruntime.Registry, error) {
-	if generation != r.generation {
-		return nil, errors.New("synthetic registry generation mismatch")
-	}
-	return r, nil
-}
-
-// Generation returns the exact synthetic protected-registry generation.
-func (r integrationRegistry) Generation(context.Context) (uint64, error) {
-	return r.generation, nil
-}
-
-// Bindings returns a detached copy of the synthetic registry bindings.
-func (r integrationRegistry) Bindings() []provider.Binding {
-	return append([]provider.Binding(nil), r.bindings...)
-}
-
-// Close completes the synthetic registry lifecycle.
-func (integrationRegistry) Close(context.Context) error { return nil }
-
-// SignDigest is unreachable because the integration qualification resolves but
-// never signs with the synthetic public-only credential.
-func (integrationRegistry) SignDigest(
-	context.Context,
-	dkim2.PrivateKeyHandle,
-	dkim2.PrivateKeySignRequest,
-) (dkim2.PrivateKeySignResult, error) {
-	return dkim2.PrivateKeySignResult{}, dkim2.NewTemporaryProviderError()
-}
-
 // TestDisposableNetworkProviderParity qualifies both verified-TLS provider
 // clients against invocation-owned services and one shared logical dataset.
 func TestDisposableNetworkProviderParity(t *testing.T) {
 	rootCAs := integrationRoots(t)
-	registry := integrationRegistryValue(t)
-	ldapLoader := integrationLDAPLoader(t, rootCAs, registry, integrationPassword(t, "DKIM2_LDAP_PASSWORD"))
+	ldapLoader := integrationLDAPLoader(t, rootCAs, integrationPassword(t, "DKIM2_LDAP_PASSWORD"))
 	postgresqlLoader := integrationPostgreSQLLoader(
-		t, rootCAs, registry, integrationPassword(t, "DKIM2_POSTGRESQL_PASSWORD"),
+		t, rootCAs, integrationPassword(t, "DKIM2_POSTGRESQL_PASSWORD"),
 	)
 
 	first := loadIntegrationCandidate(t, ldapLoader)
@@ -106,26 +63,25 @@ func TestDisposableNetworkProviderParity(t *testing.T) {
 // server identity, and caller cancellation fail closed without backend detail.
 func TestDisposableNetworkProviderDenials(t *testing.T) {
 	rootCAs := integrationRoots(t)
-	registry := integrationRegistryValue(t)
 	t.Run("ldap_authentication", func(t *testing.T) {
-		loader := integrationLDAPLoader(t, rootCAs, registry, []byte("wrong-password"))
+		loader := integrationLDAPLoader(t, rootCAs, []byte("wrong-password"))
 		requireUnavailableIntegrationLoad(t, loader)
 	})
 	t.Run("postgresql_authentication", func(t *testing.T) {
-		loader := integrationPostgreSQLLoader(t, rootCAs, registry, []byte("wrong-password"))
+		loader := integrationPostgreSQLLoader(t, rootCAs, []byte("wrong-password"))
 		requireUnavailableIntegrationLoad(t, loader)
 	})
 	t.Run("ldap_server_identity", func(t *testing.T) {
 		t.Setenv("DKIM2_LDAP_SERVER_NAME", "wrong.integration.test")
 		loader := integrationLDAPLoader(
-			t, rootCAs, registry, integrationPassword(t, "DKIM2_LDAP_PASSWORD"),
+			t, rootCAs, integrationPassword(t, "DKIM2_LDAP_PASSWORD"),
 		)
 		requireUnavailableIntegrationLoad(t, loader)
 	})
 	t.Run("postgresql_server_identity", func(t *testing.T) {
 		t.Setenv("DKIM2_POSTGRESQL_SERVER_NAME", "wrong.integration.test")
 		loader := integrationPostgreSQLLoader(
-			t, rootCAs, registry, integrationPassword(t, "DKIM2_POSTGRESQL_PASSWORD"),
+			t, rootCAs, integrationPassword(t, "DKIM2_POSTGRESQL_PASSWORD"),
 		)
 		requireUnavailableIntegrationLoad(t, loader)
 	})
@@ -133,12 +89,12 @@ func TestDisposableNetworkProviderDenials(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
 		if _, err := integrationLDAPLoader(
-			t, rootCAs, registry, integrationPassword(t, "DKIM2_LDAP_PASSWORD"),
+			t, rootCAs, integrationPassword(t, "DKIM2_LDAP_PASSWORD"),
 		).Load(ctx); provider.ErrorCodeOf(err) != provider.ErrorCodeCancelled {
 			t.Fatal("LDAP cancellation was not preserved")
 		}
 		if _, err := integrationPostgreSQLLoader(
-			t, rootCAs, registry, integrationPassword(t, "DKIM2_POSTGRESQL_PASSWORD"),
+			t, rootCAs, integrationPassword(t, "DKIM2_POSTGRESQL_PASSWORD"),
 		).Load(ctx); provider.ErrorCodeOf(err) != provider.ErrorCodeCancelled {
 			t.Fatal("PostgreSQL cancellation was not preserved")
 		}
@@ -159,35 +115,10 @@ func integrationRoots(t *testing.T) *x509.CertPool {
 	return pool
 }
 
-// integrationRegistryValue constructs the exact opaque registry binding shared
-// by the two network providers.
-func integrationRegistryValue(t *testing.T) integrationRegistry {
-	t.Helper()
-	spki, err := base64.StdEncoding.Strict().DecodeString(
-		integrationEnvironment(t, "DKIM2_DATASOURCE_SPKI"),
-	)
-	if err != nil {
-		t.Fatal("decode integration SPKI")
-	}
-	handle, err := dkim2.NewPrivateKeyHandle([]byte(testHandle))
-	if err != nil {
-		t.Fatal("construct integration handle")
-	}
-	binding, err := provider.NewBinding(
-		testTenant, testDomain, provider.ProfileUseOriginator, testHandle,
-		handle, provider.AlgorithmEd25519SHA256, sha256.Sum256(spki),
-	)
-	if err != nil {
-		t.Fatal("construct integration binding")
-	}
-	return integrationRegistry{generation: 1, bindings: []provider.Binding{binding}}
-}
-
 // integrationLDAPLoader builds one verified-TLS, deadline-bounded LDAP loader.
 func integrationLDAPLoader(
 	t *testing.T,
 	rootCAs *x509.CertPool,
-	registry integrationRegistry,
 	password []byte,
 ) *datasourceldap.Loader {
 	t.Helper()
@@ -202,7 +133,7 @@ func integrationLDAPLoader(
 		t.Fatal("construct LDAP connector")
 	}
 	loader, err := datasourceldap.NewLoader(
-		connector, registry, provider.DefaultLimits(), 1, 4<<20, 10*time.Second,
+		connector, provider.DefaultLimits(), 1, 4<<20, 10*time.Second,
 	)
 	if err != nil {
 		t.Fatal("construct LDAP loader")
@@ -214,7 +145,6 @@ func integrationLDAPLoader(
 func integrationPostgreSQLLoader(
 	t *testing.T,
 	rootCAs *x509.CertPool,
-	registry integrationRegistry,
 	password []byte,
 ) *datasourcepostgresql.Loader {
 	t.Helper()
@@ -231,7 +161,7 @@ func integrationPostgreSQLLoader(
 		t.Fatal("construct PostgreSQL pool")
 	}
 	loader, err := datasourcepostgresql.NewLoader(
-		pool, registry, provider.DefaultLimits(), 1, 4<<20, 10*time.Second,
+		pool, provider.DefaultLimits(), 1, 4<<20, 10*time.Second,
 	)
 	if err != nil {
 		pool.Close()

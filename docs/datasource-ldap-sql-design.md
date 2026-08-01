@@ -29,8 +29,9 @@ become dependencies of the standalone library or protocol packages.
 
 `lib/internal/datasource/signingprofile` remains the only bridge from a
 datasource result to the signing profile. A provider returns only an opaque
-`KeyHandleID`; the separately configured registry maps that identifier to an
-inert signing handle. A datasource success does not authorize a route, replace
+`KeyHandleID`; for LDAP and PostgreSQL v2, the same immutable generation maps
+that identifier to canonical PKCS#8 DER and an inert in-memory signing handle.
+Flat-file retains its separately protected local registry. A datasource success does not authorize a route, replace
 the fresh DNS publication lookup, perform a signature, or make a cryptographic
 or protocol verdict.
 
@@ -45,7 +46,7 @@ failure semantics.
 LDAP and SQL expose one committed, immutable logical dataset at a time. A
 dataset has:
 
-- the exact schema version `dkim2-datasource-v1`;
+- the exact network schema version `dkim2-datasource-v2`;
 - one nonzero, monotonically increasing unsigned generation;
 - a closed publication state whose only readable value is `committed`;
 - zero or more handle declarations;
@@ -79,7 +80,7 @@ linearizes and begins backend work, any failure retains the last snapshot only
 for diagnosis, publishes the provider state as degraded, and makes every
 subsequent resolve return `unavailable`. A complete refresh of the unchanged
 current generation while ready is a successful health no-op only when every
-immutable dataset fact and protected registry binding is exactly equal after
+immutable dataset fact and native key binding is exactly equal after
 both sides have been revalidated. Changed facts under the current generation
 degrade the runtime; an exact no-op does not republish or replace the current
 snapshot. A later successful higher-generation refresh
@@ -110,9 +111,14 @@ database namespace.
 
 | LDAP attribute | SQL column | Required representation | Datasource use |
 | --- | --- | --- | --- |
-| `dkim2SchemaVersion` | `schema_version` | Exact ASCII text `dkim2-datasource-v1` | Selects the one supported mapping contract |
+| `dkim2SchemaVersion` | `schema_version` | Exact ASCII text `dkim2-datasource-v2` | Selects native network key custody |
 | `dkim2Generation` | `generation` | Nonzero unsigned 64-bit integer | Passed to `NewResolvedProfile` and `NewResolvedPolicy` |
 | `dkim2DatasetState` | `dataset_state` | Exact ASCII text `committed` | Makes the generation eligible for loading |
+
+The v2 native key record adds generation, tenant, signing domain, profile use,
+handle, algorithm, canonical public SPKI DER, and canonical unencrypted private
+PKCS#8 DER. Concrete providers validate it against the public credential before
+constructing an in-memory signer. Private bytes never enter the library model.
 
 There is exactly one metadata record for a published generation. Absence is
 `not_found`; more than one current metadata record is `ambiguous`; an unknown
@@ -488,7 +494,7 @@ names selected by an implementation are protected operational identifiers.
 
 ## Versioning And Migration Policy
 
-Readers accept exactly `dkim2-datasource-v1`. An absent version is
+Network readers accept exactly `dkim2-datasource-v2`. An absent version is
 `malformed_data`; an unsupported older or newer version is
 `malformed_data`. Readers do not infer a version from record shape and do not
 apply compatibility aliases.

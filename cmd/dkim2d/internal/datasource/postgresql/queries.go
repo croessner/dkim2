@@ -26,4 +26,9 @@ FROM dkim2_datasource.policies
 WHERE generation = $1 AND (tenant_id, signing_domain, profile_use) > ($2, $3, $4)
 ORDER BY tenant_id, signing_domain, profile_use
 LIMIT $5`
+	queryKeyMaterial = `SELECT generation::text, tenant_id, signing_domain, profile_use, handle_id, algorithm, public_key_spki, private_key_pkcs8
+FROM dkim2_datasource.key_material
+WHERE generation = $1 AND handle_id > $2
+ORDER BY handle_id
+LIMIT $3`
 )

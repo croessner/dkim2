@@ -1,44 +1,13 @@
 package ldap
 
 import (
+	"bytes"
 	"context"
 	"testing"
 	"time"
 
-	"github.com/croessner/dkim2"
-	datasourceruntime "github.com/croessner/dkim2/cmd/dkim2d/internal/datasource/runtime"
 	"github.com/croessner/dkim2/provider"
 )
-
-type staticRegistry uint64
-
-// Load returns one synthetic exact protected generation.
-func (g staticRegistry) Load(
-	context.Context,
-	uint64,
-) (datasourceruntime.Registry, error) {
-	return g, nil
-}
-
-// Generation returns the injected protected registry generation.
-func (g staticRegistry) Generation(context.Context) (uint64, error) {
-	return uint64(g), nil
-}
-
-// Bindings returns no signing bindings for mapper-only loader tests.
-func (staticRegistry) Bindings() []provider.Binding { return nil }
-
-// Close completes the synthetic registry lifecycle.
-func (staticRegistry) Close(context.Context) error { return nil }
-
-// SignDigest is unreachable in mapper-only loader tests.
-func (staticRegistry) SignDigest(
-	context.Context,
-	dkim2.PrivateKeyHandle,
-	dkim2.PrivateKeySignRequest,
-) (dkim2.PrivateKeySignResult, error) {
-	return dkim2.PrivateKeySignResult{}, dkim2.NewTemporaryProviderError()
-}
 
 type fakeConnector struct {
 	client *fakeClient
@@ -102,13 +71,14 @@ func TestLoaderAcceptsRepeatedAndEmptyOpaquePages(t *testing.T) {
 			{Cookie: []byte("opaque"), Bytes: 1},
 			{Entries: records.Handles, Bytes: 64},
 		},
-		RecordClassProfile:    {{Entries: records.Profiles, Bytes: 64}},
-		RecordClassCredential: {{Entries: records.Credentials, Bytes: 256}},
-		RecordClassPolicy:     {{Entries: records.Policies, Bytes: 128}},
+		RecordClassProfile:     {{Entries: records.Profiles, Bytes: 64}},
+		RecordClassCredential:  {{Entries: records.Credentials, Bytes: 256}},
+		RecordClassPolicy:      {{Entries: records.Policies, Bytes: 128}},
+		RecordClassKeyMaterial: {{Entries: records.KeyMaterial, Bytes: 256}},
 	}
 	client := &fakeClient{records: records, pages: pages, positions: make(map[RecordClass]int)}
 	loader, err := NewLoader(
-		fakeConnector{client: client}, staticRegistry(1), provider.DefaultLimits(),
+		fakeConnector{client: client}, provider.DefaultLimits(),
 		1, 1<<20, 2*time.Second,
 	)
 	if err != nil {
@@ -116,10 +86,24 @@ func TestLoaderAcceptsRepeatedAndEmptyOpaquePages(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
+	privateValue := records.KeyMaterial[0].Attributes[attrPrivatePKCS8][0]
+	privateCopy := bytes.Clone(privateValue)
 	candidate, err := loader.Load(ctx)
 	if err != nil || !candidate.Valid() {
 		t.Fatal("load complete opaque paging sequence")
 	}
+	if bytes.Equal(privateValue, privateCopy) {
+		t.Fatal("LDAP loader retained a private page buffer")
+	}
+	for _, value := range privateValue {
+		if value != 0 {
+			t.Fatal("LDAP loader did not clear a private page buffer")
+		}
+	}
+	if err := candidate.Registry.Close(context.Background()); err != nil {
+		t.Fatalf("Registry.Close() error = %v", err)
+	}
+	clear(privateCopy)
 }
 
 // TestLoaderRejectsOversizedCookieWithoutEcho proves unaccepted control data
@@ -135,7 +119,7 @@ func TestLoaderRejectsOversizedCookieWithoutEcho(t *testing.T) {
 		positions: make(map[RecordClass]int),
 	}
 	loader, err := NewLoader(
-		fakeConnector{client: client}, staticRegistry(1), provider.DefaultLimits(),
+		fakeConnector{client: client}, provider.DefaultLimits(),
 		1, 1<<20, 2*time.Second,
 	)
 	if err != nil {
@@ -148,5 +132,31 @@ func TestLoaderRejectsOversizedCookieWithoutEcho(t *testing.T) {
 	}
 	if client.abandoned != 0 || !client.discarded {
 		t.Fatal("unaccepted cookie must never be echoed")
+	}
+}
+
+// TestLoaderRejectsMissingNativeKeyMaterial proves a public-only generation
+// never becomes a valid network signing candidate.
+func TestLoaderRejectsMissingNativeKeyMaterial(t *testing.T) {
+	records := minimalRecords(t)
+	pages := map[RecordClass][]Page{
+		RecordClassHandle:      {{Entries: records.Handles, Bytes: 64}},
+		RecordClassProfile:     {{Entries: records.Profiles, Bytes: 64}},
+		RecordClassCredential:  {{Entries: records.Credentials, Bytes: 256}},
+		RecordClassPolicy:      {{Entries: records.Policies, Bytes: 128}},
+		RecordClassKeyMaterial: {{}},
+	}
+	client := &fakeClient{records: records, pages: pages, positions: make(map[RecordClass]int)}
+	loader, err := NewLoader(
+		fakeConnector{client: client}, provider.DefaultLimits(),
+		2, 1<<20, 2*time.Second,
+	)
+	if err != nil {
+		t.Fatal("construct loader")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if _, err := loader.Load(ctx); provider.ErrorCodeOf(err) != provider.ErrorCodeMalformedData {
+		t.Fatal("LDAP loader accepted missing native key material")
 	}
 }

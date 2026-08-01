@@ -244,9 +244,10 @@ withdraws.
 ### LDAP and PostgreSQL signing
 
 The `ldap` and `postgresql` signing backends replace the flat-file datasource
-with one verified-TLS immutable generation while retaining a
-`dkim2-private-keys-v2` manifest in the protected generation. The backend
-generation and registry generation must match exactly. Initial-load failure
+with one verified-TLS immutable `dkim2-datasource-v2` generation containing
+the canonical PKCS#8 DER keys for its opaque handles. These backends reject
+`private_manifest_file`; no local private-key tree is mounted. The public
+dataset and native keys must validate as one exact generation. Initial-load failure
 prevents readiness; a linearized refresh failure makes new leases unavailable
 until a complete higher generation loads. Exact configuration examples,
 schema/DDL installation, role separation, backup, and recovery are in the

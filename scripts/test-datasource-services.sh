@@ -61,8 +61,12 @@ issue_server_certificate postgresql.integration.test
 openssl genpkey -algorithm ED25519 -out "$work/credential.key" >/dev/null 2>&1
 openssl pkey -in "$work/credential.key" -pubout -outform DER \
 	-out "$work/credential.spki"
+openssl pkey -in "$work/credential.key" -outform DER \
+	-out "$work/credential.pkcs8"
 spki_base64="$(base64 <"$work/credential.spki" | tr -d '\r\n')"
 spki_hex="$(od -An -tx1 -v "$work/credential.spki" | tr -d ' \n')"
+private_pkcs8_base64="$(base64 <"$work/credential.pkcs8" | tr -d '\r\n')"
+private_pkcs8_hex="$(od -An -tx1 -v "$work/credential.pkcs8" | tr -d ' \n')"
 
 cp contrib/schema/ldap/rnsdkim2.schema "$work/ldap-schema/rnsdkim2.schema"
 cp contrib/schema/postgresql/001_dkim2_datasource.sql \
@@ -107,14 +111,14 @@ chmod 0600 "$work/certs/"*.key "$work/ca.key" "$work/credential.key"
 		'dn: dkim2Generation=1,ou=generations,ou=dkim2-corrupt,dc=integration,dc=test' \
 		'objectClass: dkim2Dataset' \
 		'cn: generation-1' \
-		'dkim2SchemaVersion: dkim2-datasource-v1' \
+		'dkim2SchemaVersion: dkim2-datasource-v2' \
 		'dkim2Generation: 1' \
 		'dkim2DatasetState: committed' \
 		'' \
 		'dn: cn=current,ou=dkim2,dc=integration,dc=test' \
 		'objectClass: dkim2Dataset' \
 		'cn: current' \
-		'dkim2SchemaVersion: dkim2-datasource-v1' \
+		'dkim2SchemaVersion: dkim2-datasource-v2' \
 		'dkim2Generation: 1' \
 		'dkim2DatasetState: committed' \
 		'' \
@@ -125,7 +129,7 @@ chmod 0600 "$work/certs/"*.key "$work/ca.key" "$work/credential.key"
 		'dn: dkim2Generation=1,ou=generations,ou=dkim2,dc=integration,dc=test' \
 		'objectClass: dkim2Dataset' \
 		'cn: generation-1' \
-		'dkim2SchemaVersion: dkim2-datasource-v1' \
+		'dkim2SchemaVersion: dkim2-datasource-v2' \
 		'dkim2Generation: 1' \
 		'dkim2DatasetState: committed' \
 		'' \
@@ -179,7 +183,23 @@ chmod 0600 "$work/certs/"*.key "$work/ca.key" "$work/credential.key"
 		'dkim2ProfileID: profile' \
 		'dkim2RecordStatus: active' \
 		'dkim2Rollout: enforce' \
-		'dkim2Compatibility: strict'
+		'dkim2Compatibility: strict' \
+		'' \
+		'dn: ou=key-material,dkim2Generation=1,ou=generations,ou=dkim2,dc=integration,dc=test' \
+		'objectClass: organizationalUnit' \
+		'ou: key-material' \
+		'' \
+		'dn: cn=key,ou=key-material,dkim2Generation=1,ou=generations,ou=dkim2,dc=integration,dc=test' \
+		'objectClass: dkim2KeyMaterial' \
+		'cn: key' \
+		'dkim2Generation: 1' \
+		'dkim2TenantID: tenant' \
+		'dkim2SigningDomain: example.test' \
+		'dkim2ProfileUse: originator' \
+		'dkim2HandleID: handle' \
+		'dkim2Algorithm: ed25519-sha256' \
+		"dkim2PublicKeySPKI:: $spki_base64" \
+		"dkim2PrivateKeyPKCS8:: $private_pkcs8_base64"
 } >"$work/ldap-init/10-dataset.ldif"
 chmod 0644 "$work/ldap-init/10-dataset.ldif"
 
@@ -214,12 +234,13 @@ chmod 0644 "$work/postgresql-bootstrap.sql"
 		"CREATE ROLE dkim2_publisher_login LOGIN PASSWORD 'synthetic-postgresql-publisher-password';" \
 		'GRANT dkim2_publisher TO dkim2_publisher_login;' \
 		'GRANT dkim2_runtime TO dkim2_runtime_login;' \
-		"INSERT INTO dkim2_datasource.dataset_generations VALUES (1, 'dkim2-datasource-v1', 'committed');" \
+		"INSERT INTO dkim2_datasource.dataset_generations VALUES (1, 'dkim2-datasource-v2', 'committed');" \
 		'INSERT INTO dkim2_datasource.current_generation VALUES (TRUE, 1);' \
 		"INSERT INTO dkim2_datasource.handles VALUES (1, 'handle');" \
 		"INSERT INTO dkim2_datasource.profiles VALUES (1, 'profile', 'example.test', 'active', NULL, NULL);" \
 		"INSERT INTO dkim2_datasource.credentials VALUES (1, 'profile', 'ed25519-sha256', 'selector', decode('$spki_hex', 'hex'), 'handle');" \
 		"INSERT INTO dkim2_datasource.policies VALUES (1, 'tenant', 'example.test', 'originator', 'profile', 'active', 'enforce', 'strict', NULL);" \
+		"INSERT INTO dkim2_datasource.key_material VALUES (1, 'tenant', 'example.test', 'originator', 'handle', 'ed25519-sha256', decode('$spki_hex', 'hex'), decode('$private_pkcs8_hex', 'hex'));" \
 		'\connect dkim2_empty' \
 		'CREATE SCHEMA IF NOT EXISTS dkim2_datasource;' \
 		'\ir /run/dkim2/001_dkim2_datasource.sql' \
@@ -227,7 +248,7 @@ chmod 0644 "$work/postgresql-bootstrap.sql"
 		'\connect dkim2_corrupt' \
 		'CREATE SCHEMA IF NOT EXISTS dkim2_datasource;' \
 		'\ir /run/dkim2/001_dkim2_datasource.sql' \
-		"INSERT INTO dkim2_datasource.dataset_generations VALUES (1, 'dkim2-datasource-v1', 'committed');" \
+		"INSERT INTO dkim2_datasource.dataset_generations VALUES (1, 'dkim2-datasource-v2', 'committed');" \
 		'GRANT dkim2_publisher TO dkim2_publisher_login;'
 } >"$work/postgresql-dataset.sql"
 chmod 0644 "$work/postgresql-dataset.sql"
@@ -294,7 +315,6 @@ test -n "$ldap_port" && test -n "$postgresql_port"
 
 run_qualification() {
 	DKIM2_DATASOURCE_CA="$work/certs/ca.crt" \
-	DKIM2_DATASOURCE_SPKI="$spki_base64" \
 	DKIM2_LDAP_PORT="$ldap_port" \
 	DKIM2_LDAP_SERVER_NAME='ldap.integration.test' \
 	DKIM2_LDAP_PASSWORD="$ldap_password" \

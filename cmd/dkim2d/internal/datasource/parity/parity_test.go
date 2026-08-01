@@ -201,7 +201,7 @@ func ldapRecords(spki []byte) datasourceldap.DatasetRecords {
 		return datasourceldap.Entry{
 			Class: datasourceldap.RecordClassDataset,
 			Attributes: map[string][][]byte{
-				"dkim2SchemaVersion":        value("dkim2-datasource-v1"),
+				"dkim2SchemaVersion":        value("dkim2-datasource-v2"),
 				testLDAPGenerationAttribute: value("1"),
 				"dkim2DatasetState":         value("committed"),
 			},
@@ -246,7 +246,7 @@ func ldapRecords(spki []byte) datasourceldap.DatasetRecords {
 // postgresqlRows projects the shared corpus into exact SQL rows.
 func postgresqlRows(spki []byte) datasourcepostgresql.DatasetRows {
 	metadata := datasourcepostgresql.MetadataRow{
-		Generation: "1", SchemaVersion: "dkim2-datasource-v1",
+		Generation: "1", SchemaVersion: "dkim2-datasource-v2",
 		DatasetState: "committed",
 	}
 	return datasourcepostgresql.DatasetRows{
