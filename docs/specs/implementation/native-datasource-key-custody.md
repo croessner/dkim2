@@ -1,6 +1,6 @@
 # Native Datasource Private-Key Custody
 
-Status: in-progress.
+Status: complete.
 
 This specification moves DKIM2 signing-key custody for the LDAP and
 PostgreSQL datasource backends into the selected datasource generation. It
@@ -99,16 +99,9 @@ Risk notes:
 
 Measured effort is filled during closeout:
 
-| Prompt | Started At | Completed At | Wall-Clock Duration | Active Engineering Time | Notes |
+| Work Pack | Started At | Completed At | Wall-Clock Duration | Active Engineering Time | Notes |
 | --- | --- | --- | --- | --- | --- |
-| `01-native-key-contract.md` | 2026-08-01T10:50:31+02:00 |  |  |  |  |
-| `02-ldap-native-custody.md` |  |  |  |  |  |
-| `03-postgresql-native-custody.md` |  |  |  |  |  |
-| `04-config-and-composition.md` |  |  |  |  |  |
-| `05-publication-and-migration.md` |  |  |  |  |  |
-| `06-security-and-release-gates.md` |  |  |  |  |  |
-| `07-mailstack-and-live-rollout.md` |  |  |  |  |  |
-| `08-independent-review-and-closeout.md` |  |  |  |  |  |
+| Prompts 01-08 | 2026-08-01T10:50:31+02:00 | 2026-08-01T13:06:23+02:00 | 2h 15m 52s | not independently metered | Executed as one continuous implementation and production rollout; prompt boundaries were interleaved and no separate active-time clock was recorded. |
 
 ## Scope
 
@@ -290,23 +283,48 @@ Final gates:
 
 ## Completion Evidence
 
-- Focused tests: pending.
-- Generated checks: pending.
-- Guardrails: pending.
-- Live rollout: pending.
-- `git status --short`: pending.
-- Skipped checks: none planned.
+- Focused tests: LDAP, PostgreSQL, signing-store, configuration, application,
+  publication, migration, rollback, privacy, and race tests passed. The LDAP
+  publication-fence reproducer failed before the fix and passes afterward.
+- Generated checks: OpenAPI remained unchanged; datasource schema, migration,
+  OpenDKIM-bootstrap, image-publication, and Mailstack render checks passed.
+- Guardrails: all module vet and lint checks passed with zero findings, and all
+  product-module tests passed. The repository-wide `make guardrails` run then
+  stopped in the pre-existing fixed reference-snapshot checks
+  `TestBuildPrivateProxyIsDeterministicAndConfined` (`module_base`) and
+  `TestCurrentSnapshotRequiresTheFixedBaseAndEmptyIndex` (`security_base`).
+  The release authority was deliberately not rewritten as part of this
+  datasource change.
+- Live rollout: Provider and consumer expose committed
+  `dkim2-datasource-v2` generation 3. The runtime principal sees 58 native key
+  records; the inventory principal sees no private-key values. All four
+  digest-pinned DKIM2 services load without a local manifest and remain
+  healthy with zero restarts across refresh cycles.
+- Mailflow: one DKIM2 field contained RSA-SHA256 and Ed25519-SHA256 signature
+  sets, and a byte-preserving inbound MX loop produced `dkim2=pass`. Submission,
+  MX, and relay queues were empty; both OpenDKIM services remained at `1/1`.
+- Key-path closure: the active protected generation contains only the two
+  capabilities, LDAP CA, and LDAP password. Three prior filesystem key
+  generations and the former migration registry were moved into the exact
+  root-only rollback archive.
+- Operational safety: KVM snapshot and provider/target backups were retained,
+  provider support credentials were rotated and verified, and no protected
+  value entered Git, logs, reports, or command output.
+- `git status --short`: clean after the implementation and publication-fence
+  commits; this specification closeout is the only subsequent DKIM2 change.
+- Skipped checks: none in scope. The two fixed release-snapshot failures above
+  are recorded gate exceptions, not skipped checks.
 
 ## Review Matrix
 
 | Area | Soll | Ist | Status | Notes |
 | --- | --- | --- | --- | --- |
-| Scope | Native LDAP/SQL custody; no OpenDKIM manager work |  | in-progress |  |
-| Behavior | Atomic v2 generation contains public and private material |  | in-progress |  |
-| Tests | Unit, disposable integration, and live proofs exist |  | in-progress |  |
-| Security | Least privilege, fail closed, and secret safe |  | in-progress |  |
-| Boundaries | No REST or protocol model leakage |  | in-progress |  |
-| Effort | Prompt timings are measured |  | in-progress |  |
+| Scope | Native LDAP/SQL custody; no OpenDKIM manager work | LDAP and PostgreSQL delivered; `opendkim-manage-go` untouched | done | Flat-file custody remains local by design. |
+| Behavior | Atomic v2 generation contains public and private material | Complete immutable publication with atomic schema/generation fence | done | Live provider and consumer are committed at generation 3. |
+| Tests | Unit, disposable integration, and live proofs exist | Focused, race, schema, render, and production mailflow proofs passed | done | Two unrelated fixed release-snapshot checks remain as documented above. |
+| Security | Least privilege, fail closed, and secret safe | Attribute ACL split, TLS, exact principals, bounded loaders, key clearing, and protected backups proved | done | Inventory access to private values is denied. |
+| Boundaries | No REST or protocol model leakage | OpenAPI unchanged; generated DTOs and protocol packages do not own key custody | done | No key-management endpoint was added. |
+| Effort | Prompt timings are measured | Continuous wall-clock interval recorded; per-prompt active time was not instrumented | done | No unsupported precision is claimed. |
 
 ## Decisions And Open Questions
 
@@ -318,6 +336,9 @@ Final gates:
 - Settled: flat-file retains its protected local manifest contract.
 - Settled: the online daemon reads keys but never creates, rotates, publishes,
   or returns them.
+- Settled: an established LDAP publication upgrades the current schema and
+  generation under one committed v1-or-v2 assertion; changing only the
+  generation would create a mixed metadata fence and is forbidden.
 - Settled: `opendkim-manage-go` is a separate future repository change.
 - Open: none that blocks implementation; exact live ACL principal names are
   resolved from the rendered Mailstack and current provider configuration.
