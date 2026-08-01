@@ -676,10 +676,7 @@ func startMilter(
 		os.Chmod(protected, 0o500) != nil {
 		return nil, errQualification
 	}
-	signing := ""
-	if mode != "inbound" {
-		signing = "\nsigning:\n  tenant: tenant-a\n  domain: " + signingDomain
-	}
+	signing := milterSigningBlock(mode)
 	reporting := ""
 	if authenticationResults {
 		reporting = "\nauthentication_results:\n  enabled: true\n  authserv_id: " + authservID
@@ -744,6 +741,19 @@ observability:
 		return nil, err
 	}
 	return command, nil
+}
+
+// milterSigningBlock renders only the signing authority owned by one adapter
+// mode and gives originator qualification an explicit aligned DSN authority.
+func milterSigningBlock(mode string) string {
+	if mode == "inbound" {
+		return ""
+	}
+	block := "\nsigning:\n  tenant: tenant-a\n  domain: " + signingDomain
+	if mode == "originator" {
+		block += "\n  dsn_domain: " + signingDomain
+	}
+	return block
 }
 
 // preparePostfix copies pinned defaults into tmpfs and applies closed overrides.

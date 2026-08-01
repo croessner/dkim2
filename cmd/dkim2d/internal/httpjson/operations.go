@@ -258,21 +258,26 @@ func asciiEnvelopePath(value []byte) bool {
 	return true
 }
 
-// executeOperation dispatches exactly one application method.
-func executeOperation(
+// executeSignOperation invokes only the originator applicability boundary.
+func executeSignOperation(
+	ctx context.Context,
+	service app.OperationService,
+	request app.OperationRequest,
+) (app.SigningAssessment, error) {
+	if service == nil || request.Operation() != app.OperationSign {
+		return app.SigningAssessment{}, &strictAdapterError{class: strictFailureInvalidContract}
+	}
+	return service.Sign(ctx, request)
+}
+
+// executeRevisionOperation invokes only the applicable ordinary-transit boundary.
+func executeRevisionOperation(
 	ctx context.Context,
 	service app.OperationService,
 	request app.OperationRequest,
 ) (app.OperationResult, error) {
-	if service == nil {
-		return app.OperationResult{}, &strictAdapterError{class: strictFailureInternal}
-	}
-	switch request.Operation() {
-	case app.OperationSign:
-		return service.Sign(ctx, request)
-	case app.OperationRevise:
-		return service.Revise(ctx, request)
-	default:
+	if service == nil || request.Operation() != app.OperationRevise {
 		return app.OperationResult{}, &strictAdapterError{class: strictFailureInvalidContract}
 	}
+	return service.Revise(ctx, request)
 }

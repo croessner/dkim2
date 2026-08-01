@@ -22,6 +22,7 @@ const (
 	maxSignatureSets        = 16
 	daemonOperationSign     = "sign"
 	daemonOperationRevise   = "revise"
+	daemonOperationProcess  = "process"
 )
 
 // AdmitOperationJSON strictly decodes and validates one sign or revise response.

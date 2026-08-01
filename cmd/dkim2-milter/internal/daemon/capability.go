@@ -125,7 +125,7 @@ func validCapabilityRequest(request *http.Request) bool {
 	return exactHeader(request.Header, "Content-Type", "application/json") &&
 		exactHeader(request.Header, "User-Agent", fixedUserAgent) &&
 		exactHeader(request.Header, "Accept", "application/json") &&
-		exactHeader(request.Header, "Cache-Control", "no-store")
+		exactHeader(request.Header, "Cache-Control", cacheControlNoStore)
 }
 
 // exactHeader recognizes one canonical single-valued generated header.

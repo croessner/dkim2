@@ -146,8 +146,15 @@ func (l datasourceSigningLease) Close() error {
 func (s *SigningService) Sign(
 	ctx context.Context,
 	request OperationRequest,
-) (OperationResult, error) {
-	return s.execute(ctx, request, OperationSign)
+) (SigningAssessment, error) {
+	execution, err := s.execute(ctx, request, OperationSign)
+	if err != nil {
+		return SigningAssessment{}, err
+	}
+	if !execution.applicable {
+		return NewNotApplicableSigningAssessment(), nil
+	}
+	return NewApplicableSigningAssessment(execution.result)
 }
 
 // Revise verifies inherited evidence before exact ordinary-transit signing.
@@ -155,7 +162,35 @@ func (s *SigningService) Revise(
 	ctx context.Context,
 	request OperationRequest,
 ) (OperationResult, error) {
-	return s.execute(ctx, request, OperationRevise)
+	execution, err := s.execute(ctx, request, OperationRevise)
+	if err != nil {
+		return OperationResult{}, err
+	}
+	if !execution.applicable || !execution.result.Valid() {
+		return OperationResult{}, &DomainError{}
+	}
+	return execution.result, nil
+}
+
+type operationExecution struct {
+	applicable bool
+	result     OperationResult
+}
+
+// applicableOperationExecution seals one applicable operation result.
+func applicableOperationExecution(result OperationResult) (operationExecution, error) {
+	if !result.Valid() {
+		return operationExecution{}, &DomainError{}
+	}
+	return operationExecution{applicable: true, result: result}, nil
+}
+
+// notApplicableOperationExecution constructs the originator-only no-op variant.
+func notApplicableOperationExecution(operation Operation) (operationExecution, error) {
+	if operation != OperationSign {
+		return operationExecution{}, &DomainError{}
+	}
+	return operationExecution{}, nil
 }
 
 // execute owns the shared bounded ordinary route and signing sequence.
@@ -163,20 +198,15 @@ func (s *SigningService) execute(
 	ctx context.Context,
 	request OperationRequest,
 	operation Operation,
-) (OperationResult, error) {
+) (operationExecution, error) {
 	if s == nil || ctx == nil || request.Operation() != operation ||
 		s.store == nil || nilInterface(s.publicKeys) || s.clock == nil {
-		return OperationResult{}, &DomainError{}
+		return operationExecution{}, &DomainError{}
 	}
 	if err := ctx.Err(); err != nil {
-		return OperationResult{}, err
+		return operationExecution{}, err
 	}
 	recipients := request.Recipients()
-	if len(recipients) != 1 {
-		return NewOperationResult(
-			operation, OperationPermerror, OperationReject, nil,
-		)
-	}
 	disclosure := dkim2.RouteDisclosureSingle
 	use := signingstore.PolicyOriginator
 	if operation == OperationRevise {
@@ -185,23 +215,47 @@ func (s *SigningService) execute(
 	operationTime := s.clock().UTC()
 	lease, err := s.store.Acquire(ctx)
 	if err != nil {
-		return NewOperationResult(
+		result, resultErr := NewOperationResult(
 			operation, OperationTemperror, OperationTempfail, nil,
 		)
+		if resultErr != nil {
+			return operationExecution{}, resultErr
+		}
+		return applicableOperationExecution(result)
 	}
 	defer func() { _ = lease.Close() }()
 	profile, err := lease.ResolvePolicy(
 		ctx, request.Tenant(), request.Domain(), use, operationTime,
 	)
 	if err != nil {
+		if operation == OperationSign && absentSigningPolicy(err) {
+			return notApplicableOperationExecution(operation)
+		}
 		if permanentPolicyResolutionFailure(err) {
-			return NewOperationResult(
+			result, resultErr := NewOperationResult(
 				operation, OperationPermerror, OperationReject, nil,
 			)
+			if resultErr != nil {
+				return operationExecution{}, resultErr
+			}
+			return applicableOperationExecution(result)
 		}
-		return NewOperationResult(
+		result, resultErr := NewOperationResult(
 			operation, OperationTemperror, OperationTempfail, nil,
 		)
+		if resultErr != nil {
+			return operationExecution{}, resultErr
+		}
+		return applicableOperationExecution(result)
+	}
+	if len(recipients) != 1 {
+		result, resultErr := NewOperationResult(
+			operation, OperationPermerror, OperationReject, nil,
+		)
+		if resultErr != nil {
+			return operationExecution{}, resultErr
+		}
+		return applicableOperationExecution(result)
 	}
 	signer, err := dkim2.NewSigner(
 		s.publicKeys,
@@ -211,30 +265,50 @@ func (s *SigningService) execute(
 		dkim2.WithSigningClock(func() time.Time { return operationTime }),
 	)
 	if err != nil {
-		return OperationResult{}, &DomainError{}
+		return operationExecution{}, &DomainError{}
 	}
-	return completeOperation(
+	result, err := completeOperation(
 		ctx, request, operation, signer, profile, recipients, disclosure,
 	)
+	if err != nil {
+		return operationExecution{}, err
+	}
+	return applicableOperationExecution(result)
 }
 
-// permanentPolicyResolutionFailure recognizes only explicit permanent signing
-// and exact datasource absence classes; every ambiguous class remains retryable.
-func permanentPolicyResolutionFailure(err error) (permanent bool) {
+// absentSigningPolicy recognizes only healthy authoritative originator absence.
+func absentSigningPolicy(err error) (absent bool) {
 	defer func() {
 		if recover() != nil {
-			permanent = false
+			absent = false
 		}
 	}()
-	if dkim2.ProviderErrorClassOf(err) == dkim2.ProviderErrorClassPermanent {
-		return true
-	}
 	switch provider.ErrorCodeOf(err) {
 	case provider.ErrorCodeNotFound, provider.ErrorCodeInactive:
 		return true
 	default:
 		return false
 	}
+}
+
+// permanentPolicyResolutionFailure recognizes malformed active configuration
+// and explicit permanent signing failures; every ambiguous class remains retryable.
+func permanentPolicyResolutionFailure(err error) (permanent bool) {
+	defer func() {
+		if recover() != nil {
+			permanent = false
+		}
+	}()
+	if _, granular := err.(interface{ Code() provider.ErrorCode }); granular {
+		switch provider.ErrorCodeOf(err) {
+		case provider.ErrorCodeInvalidRequest, provider.ErrorCodeNotFound,
+			provider.ErrorCodeInactive, provider.ErrorCodeMalformedData:
+			return true
+		default:
+			return false
+		}
+	}
+	return dkim2.ProviderErrorClassOf(err) == dkim2.ProviderErrorClassPermanent
 }
 
 // completeOperation verifies revision evidence, plans one request-local route,

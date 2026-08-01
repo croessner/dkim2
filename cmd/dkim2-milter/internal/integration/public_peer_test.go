@@ -64,6 +64,8 @@ const (
 	integrationTempfailReply = "451 4.7.1 DKIM2 service unavailable\x00"
 	integrationModeInbound   = "inbound"
 	integrationModeOrigin    = "originator"
+	testMessageInstanceValue = "v=2; i=1"
+	testSignatureValue       = "v=2; s=1"
 )
 
 var executablePath string
@@ -132,8 +134,8 @@ func TestExecutableSigningModeMatrix(t *testing.T) {
 			name: integrationModeOrigin, mode: integrationModeOrigin,
 			operation: generated.Sign,
 			actions: generated.ActionPlan{
-				{Name: generated.MessageInstance, Type: generated.AddHeader, Value: "v=2; i=1"},
-				{Name: generated.DKIM2Signature, Type: generated.AddHeader, Value: "v=2; s=1"},
+				{Name: generated.MessageInstance, Type: generated.AddHeader, Value: testMessageInstanceValue},
+				{Name: generated.DKIM2Signature, Type: generated.AddHeader, Value: testSignatureValue},
 			},
 			wantHeaders: []string{"Message-Instance", "DKIM2-Signature"},
 		},
@@ -680,6 +682,9 @@ func startExecutableWithSigning(
 	signing := ""
 	if mode != integrationModeInbound {
 		signing = "\nsigning:\n  tenant: " + integrationTenant + "\n  domain: example.test"
+		if mode == integrationModeOrigin {
+			signing += "\n  dsn_domain: dsn.example.test"
+		}
 	}
 	if signingOverride != "" {
 		signing = signingOverride
@@ -751,8 +756,8 @@ func TestOriginatorEnvelopeSenderDomainSelectionRunsThroughPublicSocket(t *testi
 				t.Fatal("public route did not derive the canonical envelope sender domain")
 			}
 			return fixtureOperationResponse("sign", generated.ActionPlan{
-				{Name: generated.MessageInstance, Type: generated.AddHeader, Value: "v=2; i=1"},
-				{Name: generated.DKIM2Signature, Type: generated.AddHeader, Value: "v=2; s=1"},
+				{Name: generated.MessageInstance, Type: generated.AddHeader, Value: testMessageInstanceValue},
+				{Name: generated.DKIM2Signature, Type: generated.AddHeader, Value: testSignatureValue},
 			})
 		},
 	}
@@ -763,7 +768,8 @@ func TestOriginatorEnvelopeSenderDomainSelectionRunsThroughPublicSocket(t *testi
 		integrationModeOrigin,
 		"tempfail",
 		2*time.Second,
-		"\nsigning:\n  tenant: "+integrationTenant+"\n  domain_source: envelope_sender",
+		"\nsigning:\n  tenant: "+integrationTenant+
+			"\n  domain_source: envelope_sender\n  dsn_domain: dsn.example.test",
 	)
 	peer := dialPublicPeer(t, process.socket)
 	peer.negotiate(t)
@@ -779,6 +785,46 @@ func TestOriginatorEnvelopeSenderDomainSelectionRunsThroughPublicSocket(t *testi
 	if len(frames) != 3 || frames[0].command != adapterAddHeader ||
 		frames[1].command != adapterAddHeader || frames[2].command != adapterAccept {
 		t.Fatalf("dynamic originator EOM frames = %#v", frames)
+	}
+	peer.send(t, peerQuit, nil)
+	peer.close()
+	process.stop(t)
+	assertPrivateOutputAbsent(t, process.log)
+}
+
+// TestOriginatorNullSenderTempfailsBeforeDaemonThroughPublicSocket proves the
+// adapter stays closed until it can authenticate Draft-04 DSN prerequisites.
+func TestOriginatorNullSenderTempfailsBeforeDaemonThroughPublicSocket(t *testing.T) {
+	const dsnDomain = "dsn.example.test"
+	service := &generatedDaemonService{
+		sign: func(generatedfixture.SignRequest) generatedfixture.OperationResponse {
+			t.Fatal("null-sender message reached daemon without trusted DSN gate")
+			return generatedfixture.OperationResponse{}
+		},
+	}
+	fixture := newGeneratedDaemonFixture(t, service)
+	process := startExecutableWithSigning(
+		t,
+		fixture.endpoint,
+		integrationModeOrigin,
+		"tempfail",
+		2*time.Second,
+		"\nsigning:\n  tenant: "+integrationTenant+
+			"\n  domain_source: envelope_sender\n  dsn_domain: "+dsnDomain,
+	)
+	peer := dialPublicPeer(t, process.socket)
+	peer.negotiate(t)
+	peer.callback(t, peerConnect, []byte("mx.example.test\x00U"))
+	peer.callback(t, peerHelo, []byte("mx.example.test\x00"))
+	peer.callback(t, peerMail, []byte("<>\x00"))
+	peer.callback(t, peerRecipient, []byte("<sender@example.test>\x00"))
+	peer.callback(t, peerHeader, []byte("From\x00 mailer-daemon@example.test\x00"))
+	peer.callback(t, peerEOH, nil)
+	peer.callback(t, peerBody, []byte("body\r\n"))
+	peer.send(t, peerEOM, nil)
+	frame := peer.receive(t)
+	if frame.command != adapterReplyCode || string(frame.payload) != integrationTempfailReply {
+		t.Fatalf("null-sender originator EOM frame = %#v", frame)
 	}
 	peer.send(t, peerQuit, nil)
 	peer.close()

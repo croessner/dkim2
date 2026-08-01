@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -17,7 +18,10 @@ const signAcceptResponse = `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-s
 const reviseContinueResponse = `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-04","operation":"revise","result":"pass","disposition":"continue","actions":[]}`
 const operationFixtureMessageBase64 = "U3ViamVjdDogdGVzdA0KDQpib2R5DQo="
 const operationFixtureRecipient = "<recipient@example.test>"
+const operationFixtureSender = "<sender@example.test>"
+const operationFixtureTenant = "tenant-a"
 const operationFixtureDomain = "example.test"
+const operationChunkedEncoding = "chunked"
 
 // TestGeneratedSignAndReviseRequestsPreserveDistinctFacts proves generated DTO use.
 func TestGeneratedSignAndReviseRequestsPreserveDistinctFacts(t *testing.T) {
@@ -35,8 +39,8 @@ func TestGeneratedSignAndReviseRequestsPreserveDistinctFacts(t *testing.T) {
 			call: func(runtime *Runtime, capability *Capability) (ResponseFact, error) {
 				request, err := generatedSignRequest(fixtureSignInput{
 					MessageBase64: operationFixtureMessageBase64,
-					MailFrom:      "<sender@example.test>", Recipients: []string{operationFixtureRecipient},
-					Tenant: "tenant-a", Domain: operationFixtureDomain,
+					MailFrom:      operationFixtureSender, Recipients: []string{operationFixtureRecipient},
+					Tenant: operationFixtureTenant, Domain: operationFixtureDomain,
 				})
 				if err != nil {
 					return ResponseFact{}, err
@@ -53,7 +57,7 @@ func TestGeneratedSignAndReviseRequestsPreserveDistinctFacts(t *testing.T) {
 					MailFrom:      "<out@example.test>", Recipients: []string{operationFixtureRecipient},
 					IncomingMailFrom:   "<in@example.test>",
 					IncomingRecipients: []string{operationFixtureRecipient},
-					Tenant:             "tenant-a", Domain: operationFixtureDomain,
+					Tenant:             operationFixtureTenant, Domain: operationFixtureDomain,
 				})
 				if err != nil {
 					return ResponseFact{}, err
@@ -226,6 +230,181 @@ func TestOperationResponseAcceptsDocumentedNoMutationAndRevisePlans(t *testing.T
 		if _, err := classifyResponse(testCase.operation, response); err != nil {
 			t.Fatal("documented operation outcome rejected")
 		}
+	}
+}
+
+// TestOperationResponseAcceptsDocumentedNoContentApplicability proves generated
+// process and sign clients retain the bodyless OpenAPI variants exactly.
+func TestOperationResponseAcceptsDocumentedNoContentApplicability(t *testing.T) {
+	for _, operation := range []Operation{OperationProcess, OperationSign} {
+		response := &http.Response{
+			StatusCode: http.StatusNoContent,
+			Close:      true,
+			ProtoMajor: 1,
+			ProtoMinor: 1,
+			Header: http.Header{
+				headerCacheControl: {cacheNoStore},
+			},
+			Body: io.NopCloser(strings.NewReader("")),
+		}
+		fact, err := classifyResponse(operation, response)
+		if err != nil || fact.Operation != operation || fact.Status != http.StatusNoContent ||
+			fact.Process != nil || fact.Sign != nil || fact.Error != nil {
+			t.Fatalf("classifyResponse(%q)=%#v error=%v", operation, fact, err)
+		}
+	}
+}
+
+// TestOperationResponseRejectsMalformedNoContent proves 204 cannot smuggle a
+// body, representation metadata, or an unsupported revise no-op variant.
+func TestOperationResponseRejectsMalformedNoContent(t *testing.T) {
+	for _, testCase := range []struct {
+		name      string
+		operation Operation
+		body      string
+		extra     http.Header
+	}{
+		{name: "body", operation: OperationProcess, body: "{}"},
+		{name: "content type", operation: OperationSign, extra: http.Header{headerContentType: {mediaTypeJSON}}},
+		{name: "content length", operation: OperationProcess, extra: http.Header{headerContentLength: {"0"}}},
+		{name: "invalid date", operation: OperationSign, extra: http.Header{"Date": {"not-a-date"}}},
+		{name: "wrong connection", operation: OperationProcess, extra: http.Header{headerConnection: {"keep-alive"}}},
+		{name: "duplicate connection", operation: OperationSign, extra: http.Header{headerConnection: {connectionClose, connectionClose}}},
+		{name: "revise", operation: OperationRevise},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			headers := http.Header{
+				headerCacheControl: {cacheNoStore},
+				headerConnection:   {connectionClose},
+			}
+			for name, values := range testCase.extra {
+				headers[name] = values
+			}
+			response := &http.Response{
+				StatusCode: http.StatusNoContent, Close: true, ProtoMajor: 1, ProtoMinor: 1,
+				Header: headers, Body: io.NopCloser(strings.NewReader(testCase.body)),
+			}
+			if _, err := classifyResponse(testCase.operation, response); ExitClassOf(err) != ExitContract {
+				t.Fatal("malformed 204 response accepted")
+			}
+		})
+	}
+	response := &http.Response{
+		StatusCode: http.StatusNoContent, Close: false,
+		Header: http.Header{headerCacheControl: {cacheNoStore}},
+		Body:   io.NopCloser(strings.NewReader("")),
+	}
+	if _, err := classifyResponse(OperationProcess, response); ExitClassOf(err) != ExitContract {
+		t.Fatal("204 response without a close projection accepted")
+	}
+	for _, candidate := range []*http.Response{
+		{
+			StatusCode: http.StatusNoContent, Close: true,
+			Header: http.Header{headerCacheControl: {cacheNoStore}},
+			Body:   io.NopCloser(strings.NewReader("")),
+		},
+		{
+			StatusCode: http.StatusNoContent, Close: true, ProtoMajor: 2,
+			Header: http.Header{headerCacheControl: {cacheNoStore}},
+			Body:   io.NopCloser(strings.NewReader("")),
+		},
+		{
+			StatusCode: http.StatusNoContent, Close: true, ProtoMajor: 2,
+			Header: http.Header{
+				headerCacheControl: {cacheNoStore},
+				headerConnection:   {connectionClose},
+			},
+			Body: io.NopCloser(strings.NewReader("")),
+		},
+	} {
+		if _, err := classifyResponse(OperationProcess, candidate); ExitClassOf(err) != ExitContract {
+			t.Fatal("204 response without a proven HTTP/1.1 close projection accepted")
+		}
+	}
+	for _, candidate := range []*http.Response{
+		{
+			StatusCode: http.StatusNoContent, Close: true, ProtoMajor: 1, ProtoMinor: 1,
+			Header: http.Header{headerCacheControl: {cacheNoStore}},
+			Body:   io.NopCloser(strings.NewReader("")), TransferEncoding: []string{operationChunkedEncoding},
+		},
+		{
+			StatusCode: http.StatusNoContent, Close: true, ProtoMajor: 1, ProtoMinor: 1,
+			Header: http.Header{headerCacheControl: {cacheNoStore}, "transfer-encoding": {operationChunkedEncoding}},
+			Body:   io.NopCloser(strings.NewReader("")),
+		},
+		{
+			StatusCode: http.StatusNoContent, Close: true, ProtoMajor: 1, ProtoMinor: 1,
+			Header: http.Header{headerCacheControl: {cacheNoStore}},
+			Body:   io.NopCloser(strings.NewReader("")), Trailer: http.Header{"Digest": {"sha-256=synthetic"}},
+		},
+		{
+			StatusCode: http.StatusNoContent, Close: true, ProtoMajor: 1, ProtoMinor: 1,
+			Header: http.Header{headerCacheControl: {cacheNoStore}, "trailer": {"Digest"}},
+			Body:   io.NopCloser(strings.NewReader("")),
+		},
+		{
+			StatusCode: http.StatusNoContent, Close: true, ProtoMajor: 1, ProtoMinor: 1,
+			Header: http.Header{
+				headerCacheControl:  {cacheNoStore},
+				headerConnection:    {connectionClose},
+				"transfer-encoding": {operationChunkedEncoding},
+			},
+			Body: io.NopCloser(strings.NewReader("")),
+		},
+		{
+			StatusCode: http.StatusNoContent, Close: true, ProtoMajor: 1, ProtoMinor: 1, ContentLength: 1,
+			Header: http.Header{
+				headerCacheControl: {cacheNoStore},
+				headerConnection:   {connectionClose},
+			},
+			Body: io.NopCloser(strings.NewReader("")),
+		},
+	} {
+		if _, err := classifyResponse(OperationSign, candidate); ExitClassOf(err) != ExitContract {
+			t.Fatal("204 response with transfer or trailer metadata accepted")
+		}
+	}
+}
+
+// TestRuntimeAcceptsRealNoContentApplicability proves net/http's projected
+// Connection-close representation preserves the two bodyless OpenAPI variants.
+func TestRuntimeAcceptsRealNoContentApplicability(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		defer func() { _ = request.Body.Close() }()
+		writer.Header().Set(headerCacheControl, cacheNoStore)
+		writer.Header().Set(headerConnection, connectionClose)
+		writer.WriteHeader(http.StatusNoContent)
+	}))
+	t.Cleanup(server.Close)
+	runtime, err := NewRuntime(Options{ServerURL: server.URL, Timeout: time.Second})
+	if err != nil {
+		t.Fatal("runtime construction failed")
+	}
+	t.Cleanup(func() { _ = runtime.Close() })
+	processRequest, err := generatedProcessRequest(fixtureProcessInput{
+		MessageBase64: operationFixtureMessageBase64,
+		MailFrom:      operationFixtureSender,
+		Recipients:    []string{operationFixtureRecipient},
+	})
+	if err != nil {
+		t.Fatal("process request construction failed")
+	}
+	signRequest, err := generatedSignRequest(fixtureSignInput{
+		MessageBase64: operationFixtureMessageBase64,
+		MailFrom:      operationFixtureSender,
+		Recipients:    []string{operationFixtureRecipient},
+		Tenant:        operationFixtureTenant,
+		Domain:        operationFixtureDomain,
+	})
+	if err != nil {
+		t.Fatal("sign request construction failed")
+	}
+	editor := func(context.Context, *http.Request) error { return nil }
+	processFact, processErr := runtime.CallProcess(t.Context(), processRequest, editor)
+	signFact, signErr := runtime.CallSign(t.Context(), signRequest, editor)
+	if processErr != nil || signErr != nil || processFact.Status != http.StatusNoContent ||
+		signFact.Status != http.StatusNoContent {
+		t.Fatalf("real 204 process=%#v/%v sign=%#v/%v", processFact, processErr, signFact, signErr)
 	}
 }
 

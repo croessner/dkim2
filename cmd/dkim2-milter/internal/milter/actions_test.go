@@ -39,6 +39,15 @@ func TestValidResultEnforcesModeDispositionAndActionMatrix(t *testing.T) {
 			valid:  true,
 		},
 		{
+			name: "originator not applicable", mode: modeOriginator,
+			result: Result{Operation: operationSign, Result: resultNone, Outcome: DispositionContinue},
+			valid:  true,
+		},
+		{
+			name: "originator not applicable cannot mutate", mode: modeOriginator,
+			result: Result{Operation: operationSign, Result: resultNone, Outcome: DispositionContinue, Actions: originator},
+		},
+		{
 			name: "originator wrong order", mode: modeOriginator,
 			result: Result{Operation: operationSign, Result: resultPass, Outcome: DispositionAccept, Actions: []Action{originator[1], originator[0]}},
 		},

@@ -103,7 +103,7 @@ for product in dkim2d dkim2-milter dkim2ctl; do
     --tag "$repository:$version" \
     --tag "$repository:$minor" \
     --tag "$repository:$major" \
-    --push \
+    --output "type=registry,oci-mediatypes=true,rewrite-timestamp=true" \
     "$context"
   published_digest=$(jq -er '."containerimage.digest"' "$metadata")
   jq -e '."containerimage.digest" | test("^sha256:[0-9a-f]{64}$")' \

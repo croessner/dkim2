@@ -36,7 +36,12 @@ const (
 	routeSign           = "/v1/sign"
 	routeRevise         = "/v1/revise"
 	redactedHandler     = "dkim2_milter_daemon_handler{redacted}"
+	operationProcess    = "process"
+	operationSign       = "sign"
 	verificationPass    = "pass"
+	verificationNone    = "none"
+	cacheControlNoStore = "no-store"
+	connectionClose     = "close"
 )
 
 // Handler calls exactly one generated daemon operation for each EOM snapshot.
@@ -60,6 +65,7 @@ type handlerGuard struct {
 	tenant       string
 	domain       string
 	domainSource milter.DomainSource
+	dsnDomain    string
 	authservID   string
 }
 
@@ -71,11 +77,12 @@ func NewHandler(
 	tenant string,
 	domain string,
 	domainSource milter.DomainSource,
+	dsnDomain string,
 	authservID string,
 ) (*Handler, error) {
 	if capability == nil ||
 		(mode != modeInbound && mode != modeOriginator && mode != modeOrdinaryTransit) ||
-		!validSigningIdentity(mode, tenant, domain, domainSource) ||
+		!validSigningIdentity(mode, tenant, domain, domainSource, dsnDomain) ||
 		(mode != modeInbound && authservID != "") {
 		return nil, &Error{}
 	}
@@ -119,7 +126,7 @@ func NewHandler(
 	return &Handler{state: &handlerState{guard: &handlerGuard{
 		client: client, transport: transport, capability: capability, mode: mode,
 		mu: &sync.RWMutex{}, tenant: tenant, domain: domain,
-		domainSource: domainSource, authservID: authservID,
+		domainSource: domainSource, dsnDomain: dsnDomain, authservID: authservID,
 	},
 	}}, nil
 }
@@ -128,16 +135,21 @@ func NewHandler(
 func validSigningIdentity(
 	mode, tenant, domain string,
 	domainSource milter.DomainSource,
+	dsnDomain string,
 ) bool {
 	switch mode {
 	case modeInbound:
-		return tenant == "" && domain == "" && domainSource == milter.DomainSourceStatic
+		return tenant == "" && domain == "" && dsnDomain == "" &&
+			domainSource == milter.DomainSourceStatic
 	case modeOriginator:
-		return tenant != "" &&
-			(domainSource == milter.DomainSourceStatic && domain != "" ||
+		return tenant != "" && milter.ValidSigningDomainAuthority(dsnDomain) &&
+			(domainSource == milter.DomainSourceStatic &&
+				milter.ValidSigningDomainAuthority(domain) ||
 				domainSource == milter.DomainSourceEnvelopeSender && domain == "")
 	case modeOrdinaryTransit:
-		return tenant != "" && domain != "" && domainSource == milter.DomainSourceStatic
+		return tenant != "" && dsnDomain == "" &&
+			milter.ValidSigningDomainAuthority(domain) &&
+			domainSource == milter.DomainSourceStatic
 	default:
 		return false
 	}
@@ -173,9 +185,16 @@ func (h *Handler) Handle(ctx context.Context, message milter.Message) (milter.Re
 	signingDomain := state.domain
 	if state.mode == modeOriginator {
 		var err error
-		signingDomain, err = state.signingDomain(message)
+		var applicable bool
+		signingDomain, applicable, err = state.signingDomain(message)
 		if err != nil {
 			return milter.Result{}, err
+		}
+		if !applicable {
+			return milter.Result{
+				Operation: operationSign, Result: verificationNone,
+				Outcome: milter.DispositionContinue,
+			}, nil
 		}
 	}
 	request, err := mapMessage(message)
@@ -244,25 +263,30 @@ func (h *Handler) Handle(ctx context.Context, message milter.Message) (milter.Re
 	}
 }
 
-// signingDomain resolves the configured exact originator domain without fallback.
-func (guard *handlerGuard) signingDomain(message milter.Message) (string, error) {
+// signingDomain assesses supported reverse-path evidence and resolves one exact
+// originator domain without fallback. Null senders fail closed until the
+// adapter can authenticate the complete Draft-04 DSN prerequisites itself.
+func (guard *handlerGuard) signingDomain(message milter.Message) (string, bool, error) {
 	if guard == nil {
-		return "", &milter.Error{Class: milter.FailureContract}
+		return "", false, &milter.Error{Class: milter.FailureContract}
+	}
+	if message.NullReversePath() {
+		return "", false, &milter.Error{Class: milter.FailureContract}
+	}
+	envelopeDomain, applicable := message.SigningDomain()
+	if !applicable {
+		return "", false, nil
 	}
 	switch guard.domainSource {
 	case milter.DomainSourceStatic:
 		if guard.domain == "" {
-			return "", &milter.Error{Class: milter.FailureContract}
+			return "", false, &milter.Error{Class: milter.FailureContract}
 		}
-		return guard.domain, nil
+		return guard.domain, true, nil
 	case milter.DomainSourceEnvelopeSender:
-		domain, ok := message.SigningDomain()
-		if !ok {
-			return "", &milter.Error{Class: milter.FailureContract}
-		}
-		return domain, nil
+		return envelopeDomain, true, nil
 	default:
-		return "", &milter.Error{Class: milter.FailureContract}
+		return "", false, &milter.Error{Class: milter.FailureContract}
 	}
 }
 
@@ -296,6 +320,7 @@ func (h *Handler) Close() error {
 	state.tenant = ""
 	state.domain = ""
 	state.domainSource = ""
+	state.dsnDomain = ""
 	state.authservID = ""
 	return nil
 }
@@ -406,6 +431,11 @@ func (guard *handlerGuard) mapProcess(response *generated.ProcessMessageResponse
 	if response != nil {
 		defer clear(response.Body)
 	}
+	if validNoContentProcessResponse(response) {
+		return milter.Result{
+			Operation: operationProcess, Result: verificationNone, Outcome: milter.DispositionContinue,
+		}, nil
+	}
 	if response == nil || !validJSONResponseShape(
 		response.HTTPResponse,
 		response.Body,
@@ -433,9 +463,18 @@ func (guard *handlerGuard) mapProcess(response *generated.ProcessMessageResponse
 		}
 	}
 	return milter.Result{
-		Operation: "process", Result: result,
+		Operation: operationProcess, Result: result,
 		Outcome: milter.Disposition(value.Disposition), Actions: actions,
 	}, nil
+}
+
+// validNoContentProcessResponse validates the exact unsigned applicability response.
+func validNoContentProcessResponse(response *generated.ProcessMessageResponse) bool {
+	return response != nil && validNoContentResponseShape(
+		response.HTTPResponse,
+		response.Body,
+		response.JSON200 != nil,
+	) && validNoContentRequest(response.HTTPResponse.Request, routeProcess)
 }
 
 // mapOperationResponse validates one sign response including its raw JSON envelope.
@@ -445,6 +484,15 @@ func mapOperationResponse(
 ) (milter.Result, error) {
 	if response != nil {
 		defer clear(response.Body)
+	}
+	if validNoContentSignResponse(response) {
+		if operation != operationSign {
+			return milter.Result{}, &milter.Error{Class: milter.FailureContract}
+		}
+		return milter.Result{
+			Operation: operationSign, Result: verificationNone,
+			Outcome: milter.DispositionContinue,
+		}, nil
 	}
 	if response == nil || !validJSONResponseShape(
 		response.HTTPResponse,
@@ -459,6 +507,64 @@ func mapOperationResponse(
 		return milter.Result{}, &milter.Error{Class: milter.FailureContract}
 	}
 	return mapOperation(&value, operation)
+}
+
+// validNoContentSignResponse validates the authoritative originator no-op response.
+func validNoContentSignResponse(response *generated.SignMessageResponse) bool {
+	return response != nil && validNoContentResponseShape(
+		response.HTTPResponse,
+		response.Body,
+		response.JSON200 != nil,
+	) && validNoContentRequest(response.HTTPResponse.Request, routeSign)
+}
+
+// validNoContentResponseShape enforces the exact OpenAPI 204 transport envelope.
+func validNoContentResponseShape(response *http.Response, body []byte, hasJSONDocument bool) bool {
+	if response == nil || response.StatusCode != http.StatusNoContent ||
+		response.Request == nil || len(body) != 0 || hasJSONDocument ||
+		response.ContentLength != 0 || !response.Close ||
+		response.ProtoMajor != 1 || response.ProtoMinor != 1 ||
+		len(response.TransferEncoding) != 0 || len(response.Trailer) != 0 {
+		return false
+	}
+	header := response.Header
+	if len(header.Values("Cache-Control")) != 1 ||
+		header.Get("Cache-Control") != cacheControlNoStore ||
+		len(header.Values("Connection")) != 1 ||
+		header.Get("Connection") != connectionClose ||
+		len(header.Values("Content-Length")) != 0 ||
+		len(header.Values("Content-Type")) != 0 ||
+		len(header.Values("X-Content-Type-Options")) != 0 ||
+		headerNamePresent(header, "Transfer-Encoding") ||
+		headerNamePresent(header, "Trailer") {
+		return false
+	}
+	dateValues := header.Values("Date")
+	if len(dateValues) == 0 {
+		return true
+	}
+	if len(dateValues) != 1 {
+		return false
+	}
+	parsed, err := time.Parse(http.TimeFormat, dateValues[0])
+	return err == nil && parsed.Format(http.TimeFormat) == dateValues[0]
+}
+
+// validNoContentRequest binds a bodyless result to its generated POST route.
+func validNoContentRequest(request *http.Request, route string) bool {
+	return request != nil && request.Method == http.MethodPost &&
+		request.URL != nil && request.URL.Path == route &&
+		request.URL.RawQuery == "" && request.URL.Fragment == ""
+}
+
+// headerNamePresent reports any case-insensitive spelling of one response field.
+func headerNamePresent(header http.Header, name string) bool {
+	for current := range header {
+		if strings.EqualFold(current, name) {
+			return true
+		}
+	}
+	return false
 }
 
 // mapOperationResponse validates one revise response including its raw JSON envelope.
@@ -965,7 +1071,7 @@ func editFixedRequest(_ context.Context, request *http.Request) error {
 	}
 	request.Header.Set("User-Agent", fixedUserAgent)
 	request.Header.Set("Accept", "application/json")
-	request.Header.Set("Cache-Control", "no-store")
+	request.Header.Set("Cache-Control", cacheControlNoStore)
 	request.Close = false
 	return nil
 }
@@ -1009,12 +1115,25 @@ func (t responseLimitTransport) RoundTrip(
 		}
 		return nil, &Error{}
 	}
+	restoreProjectedConnectionHeader(response)
 	response.Body = &limitedResponseBody{
 		reader: io.LimitReader(response.Body, t.max+1),
 		body:   response.Body,
 		remain: t.max,
 	}
 	return response, nil
+}
+
+// restoreProjectedConnectionHeader preserves an explicit HTTP/1.1 close token
+// that net/http projects into Response.Close and removes from Response.Header.
+func restoreProjectedConnectionHeader(response *http.Response) {
+	if response == nil || response.Header == nil ||
+		response.StatusCode != http.StatusNoContent || !response.Close ||
+		response.ProtoMajor != 1 || response.ProtoMinor != 1 ||
+		len(response.Header.Values("Connection")) != 0 {
+		return
+	}
+	response.Header.Set("Connection", connectionClose)
 }
 
 type limitedResponseBody struct {

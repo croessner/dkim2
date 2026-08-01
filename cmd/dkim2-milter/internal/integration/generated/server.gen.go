@@ -2258,6 +2258,26 @@ func (response ProcessMessage200JSONResponse) VisitProcessMessageResponse(w http
 	return err
 }
 
+type ProcessMessage204ResponseHeaders struct {
+	CacheControl string
+	Connection   string
+	Date         *string
+}
+
+type ProcessMessage204Response struct {
+	Headers ProcessMessage204ResponseHeaders
+}
+
+func (response ProcessMessage204Response) VisitProcessMessageResponse(w http.ResponseWriter) error {
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Connection", fmt.Sprint(response.Headers.Connection))
+	if response.Headers.Date != nil {
+		w.Header().Set("Date", fmt.Sprint(*response.Headers.Date))
+	}
+	w.WriteHeader(204)
+	return nil
+}
+
 type ProcessMessage400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response ProcessMessage400JSONResponse) VisitProcessMessageResponse(w http.ResponseWriter) error {
@@ -2678,6 +2698,26 @@ func (response SignMessage200JSONResponse) VisitSignMessageResponse(w http.Respo
 	w.WriteHeader(200)
 	_, err := buf.WriteTo(w)
 	return err
+}
+
+type SignMessage204ResponseHeaders struct {
+	CacheControl string
+	Connection   string
+	Date         *string
+}
+
+type SignMessage204Response struct {
+	Headers SignMessage204ResponseHeaders
+}
+
+func (response SignMessage204Response) VisitSignMessageResponse(w http.ResponseWriter) error {
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Connection", fmt.Sprint(response.Headers.Connection))
+	if response.Headers.Date != nil {
+		w.Header().Set("Date", fmt.Sprint(*response.Headers.Date))
+	}
+	w.WriteHeader(204)
+	return nil
 }
 
 type SignMessage400JSONResponse struct{ BadRequestJSONResponse }

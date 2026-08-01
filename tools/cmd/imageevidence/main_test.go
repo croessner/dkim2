@@ -198,6 +198,9 @@ func TestLoadOCIReportRejectsClosedMetadataAndPlatformVersionDrift(t *testing.T)
 	if _, err := loadOCIReport(root, "dkim2d", revision); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := loadOCIReport(root, "dkim2d", strings.Repeat("9", 40)); err == nil {
+		t.Fatal("stale OCI report revision was accepted")
+	}
 	report.Platforms[0].Labels["unexpected"] = "value"
 	writeReport()
 	if _, err := loadOCIReport(root, "dkim2d", revision); err == nil {

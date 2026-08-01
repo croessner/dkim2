@@ -1216,7 +1216,7 @@ func (h *HTTPBoundary) writeHeaderOnly(
 	clear(header)
 	header.Set("Cache-Control", cacheControlNoStore)
 	header.Set("X-Content-Type-Options", "nosniff")
-	header.Set("Connection", "close")
+	header.Set("Connection", connectionCloseValue)
 	date, present := responseDate(request.Context())
 	applyResponseDate(header, status, date, present)
 	if contentLength {

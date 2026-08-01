@@ -5,13 +5,29 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
+	"github.com/croessner/dkim2"
 	"github.com/croessner/dkim2/cmd/dkim2d/internal/app"
+	"github.com/croessner/dkim2/cmd/dkim2d/internal/config"
 	"github.com/croessner/dkim2/cmd/dkim2d/internal/httpjson/generated"
 	"github.com/croessner/dkim2/cmd/dkim2d/internal/httpjson/wire"
 )
+
+type noOperationPublicKeyProvider struct{ calls int }
+
+// LookupPublicKey records any forbidden lookup from unsigned wire processing.
+func (p *noOperationPublicKeyProvider) LookupPublicKey(
+	context.Context,
+	dkim2.PublicKeyQuery,
+) (dkim2.PublicKeyResult, error) {
+	p.calls++
+	return dkim2.PublicKeyResult{}, errors.New("unexpected public key lookup")
+}
 
 // TestMapOperationRequestPreservesExactBytes proves generated DTO isolation and fidelity.
 func TestMapOperationRequestPreservesExactBytes(t *testing.T) {
@@ -172,23 +188,167 @@ func TestStrictAdapterUsesInjectedOperationService(t *testing.T) {
 	}
 }
 
+// TestStrictAdapterReturnsBodylessOriginatorNotApplicable proves the distinct
+// absent-policy wire variant cannot carry a result or mutation plan.
+func TestStrictAdapterReturnsBodylessOriginatorNotApplicable(t *testing.T) {
+	service := &operationServiceStub{notApplicable: true}
+	adapter, err := newStrictAdapter(&adapterReadinessStub{}, &adapterProcessorStub{}, service)
+	if err != nil {
+		t.Fatalf("newStrictAdapter() error = %v", err)
+	}
+	request := operationRequestFixture(t, []byte("From: sender@example.test\r\n\r\n"))
+	response, err := adapter.SignMessage(context.Background(), generated.SignMessageRequestObject{Body: &request})
+	if err != nil || service.signCalls != 1 {
+		t.Fatalf("SignMessage() response/calls/error = %v/%d/%v", response, service.signCalls, err)
+	}
+	if _, ok := response.(generated.SignMessage204Response); !ok {
+		t.Fatalf("SignMessage() response type = %T", response)
+	}
+}
+
+// TestGeneratedStrictHandlerWritesBodylessNotApplicableResponses crosses the
+// real HTTP transport for both inbound and originator applicability variants.
+func TestGeneratedStrictHandlerWritesBodylessNotApplicableResponses(t *testing.T) {
+	provider := &noOperationPublicKeyProvider{}
+	verifier, err := dkim2.NewVerifier(provider)
+	if err != nil {
+		t.Fatalf("NewVerifier() error = %v", err)
+	}
+	domain, err := app.NewDomainProcessor(verifier, config.PolicyStrict)
+	if err != nil {
+		t.Fatalf("NewDomainProcessor() error = %v", err)
+	}
+	processor, err := app.NewInboundProcessor(domain, app.NewDisabledReplayCoordinator())
+	if err != nil {
+		t.Fatalf("NewInboundProcessor() error = %v", err)
+	}
+	operations := &operationServiceStub{notApplicable: true}
+	adapter, err := newStrictAdapter(&adapterReadinessStub{}, processor, operations)
+	if err != nil {
+		t.Fatalf("newStrictAdapter() error = %v", err)
+	}
+	workingSetMiddleware := func(
+		next generated.StrictHandlerFunc,
+		_ string,
+	) generated.StrictHandlerFunc {
+		return func(
+			ctx context.Context,
+			writer http.ResponseWriter,
+			request *http.Request,
+			input any,
+		) (any, error) {
+			ledger, ledgerErr := newWorkingSetLedger(processWorkingSetUnitBytes)
+			if ledgerErr != nil {
+				return nil, &strictAdapterError{class: strictFailureInternal}
+			}
+			defer ledger.ReleaseAll()
+			if ledgerErr = ledger.Claim(
+				workingSetFixedStorage,
+				maximumFixedRequestStorageBytes,
+			); ledgerErr != nil {
+				return nil, &strictAdapterError{class: strictFailureInternal}
+			}
+			for _, transition := range []func() error{
+				ledger.BeginBodyRead,
+				ledger.FinishBodyRead,
+				ledger.BeginValidation,
+				ledger.FinishValidation,
+				ledger.BeginGeneratedProcessing,
+			} {
+				if ledgerErr = transition(); ledgerErr != nil {
+					return nil, &strictAdapterError{class: strictFailureInternal}
+				}
+			}
+			workingContext, holder, contextErr := withWorkingSetContext(ctx, ledger)
+			if contextErr != nil {
+				return nil, &strictAdapterError{class: strictFailureInternal}
+			}
+			defer holder.Clear()
+			return next(workingContext, writer, request, input)
+		}
+	}
+	server := httptest.NewServer(generated.Handler(generated.NewStrictHandler(
+		adapter,
+		[]generated.StrictMiddlewareFunc{workingSetMiddleware},
+	)))
+	t.Cleanup(server.Close)
+
+	raw := base64.StdEncoding.EncodeToString(
+		[]byte("From: sender@example.test\r\nSubject: unsigned\r\n\r\nbody\r\n"),
+	)
+	processBody := `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-04",` +
+		`"message":{"raw_rfc5322_base64":"` + raw + `","fidelity":"milter_reconstructed_crlf"},` +
+		`"smtp":{"mail_from":"<sender@example.test>","rcpt_to":["<recipient@example.test>"]}}`
+	signBody := `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-04",` +
+		`"message":{"raw_rfc5322_base64":"` + raw + `","fidelity":"milter_reconstructed_crlf"},` +
+		`"smtp":{"mail_from":"<sender@example.test>","rcpt_to":["<recipient@example.test>"]},` +
+		`"context":{"tenant":"tenant-a","domain":"example.test"}}`
+	for _, testCase := range []struct {
+		name string
+		path string
+		body string
+	}{
+		{name: "inbound", path: "/v1/process", body: processBody},
+		{name: "originator", path: "/v1/sign", body: signBody},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			request, requestErr := http.NewRequestWithContext(
+				t.Context(), http.MethodPost, server.URL+testCase.path,
+				strings.NewReader(testCase.body),
+			)
+			if requestErr != nil {
+				t.Fatalf("NewRequestWithContext() error = %v", requestErr)
+			}
+			request.Header.Set("Content-Type", "application/json")
+			response, requestErr := server.Client().Do(request)
+			if requestErr != nil {
+				t.Fatalf("Do() error = %v", requestErr)
+			}
+			body, readErr := io.ReadAll(response.Body)
+			closeErr := response.Body.Close()
+			if readErr != nil || closeErr != nil || response.StatusCode != http.StatusNoContent ||
+				len(body) != 0 || response.Header.Get("Content-Type") != "" ||
+				response.Header.Get("Content-Length") != "" ||
+				response.Header.Get("Cache-Control") != cacheControlNoStore || !response.Close {
+				t.Fatalf(
+					"wire response status=%d body=%q type=%q length=%q cache=%q close=%t read=%v close_err=%v",
+					response.StatusCode, body, response.Header.Get("Content-Type"),
+					response.Header.Get("Content-Length"), response.Header.Get("Cache-Control"),
+					response.Close, readErr, closeErr,
+				)
+			}
+		})
+	}
+	if provider.calls != 0 || operations.signCalls != 1 {
+		t.Fatalf("forbidden work: DNS calls=%d sign calls=%d", provider.calls, operations.signCalls)
+	}
+}
+
 type operationServiceStub struct {
-	signCalls int
-	err       error
+	signCalls     int
+	err           error
+	notApplicable bool
 }
 
 // Sign returns one deterministic signing result.
-func (s *operationServiceStub) Sign(_ context.Context, _ app.OperationRequest) (app.OperationResult, error) {
+func (s *operationServiceStub) Sign(_ context.Context, _ app.OperationRequest) (app.SigningAssessment, error) {
 	s.signCalls++
 	if s.err != nil {
-		return app.OperationResult{}, s.err
+		return app.SigningAssessment{}, s.err
+	}
+	if s.notApplicable {
+		return app.NewNotApplicableSigningAssessment(), nil
 	}
 	instance, _ := app.NewCompletedField([]byte("Message-Instance: m=1; h=sha256:AA==\r\n"))
 	signature, _ := app.NewCompletedField([]byte("DKIM2-Signature: i=1; b=AA==\r\n"))
-	return app.NewOperationResult(
+	result, err := app.NewOperationResult(
 		app.OperationSign, app.OperationPass, app.OperationAccept,
 		[]app.CompletedField{instance, signature},
 	)
+	if err != nil {
+		return app.SigningAssessment{}, err
+	}
+	return app.NewApplicableSigningAssessment(result)
 }
 
 // Revise returns a closed unmodified completion for interface coverage.

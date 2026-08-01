@@ -513,6 +513,8 @@ const (
 	ResultPermerror
 	// ResultTemperror identifies temporary processing failure.
 	ResultTemperror
+	// ResultNone identifies an operation-owned not-applicable result.
+	ResultNone
 )
 
 // Plan is one complete admitted daemon outcome and ordered mutation list.
@@ -552,7 +554,7 @@ func newPlan(
 	disposition Disposition,
 	actions []Action,
 ) (Plan, error) {
-	if result < ResultPass || result > ResultTemperror ||
+	if result < ResultPass || result > ResultNone ||
 		disposition < DispositionAccept || disposition > DispositionTempfail ||
 		!validPlanActions(operation, result, disposition, actions) {
 		return Plan{}, NewError(FailureContract)
@@ -572,6 +574,10 @@ func validPlanActions(
 ) bool {
 	if !validPlanActionFraming(disposition, actions) {
 		return false
+	}
+	if result == ResultNone {
+		return (operation == OperationProcess || operation == OperationSign) &&
+			disposition == DispositionContinue && len(actions) == 0
 	}
 	if operation == OperationProcess {
 		return validProcessPlanActions(actions)

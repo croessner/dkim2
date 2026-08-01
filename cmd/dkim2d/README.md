@@ -145,6 +145,18 @@ introduced beside an existing inbound path:
 - `testing` returns non-terminal `continue` for every coherent verification
   state so the daemon can report results without controlling delivery.
 
+These modes apply only when at least one DKIM2 protocol field family is
+present. A syntactically valid message with neither `Message-Instance` nor
+`DKIM2-Signature` is not a failed verification: `/v1/process` returns HTTP 204
+with no body, performs no DNS lookup, policy evaluation, replay check, or
+daemon-requested mutation, and the Milter continues delivery without a DKIM2
+result action. Independently, an enabled Milter trust boundary still removes
+forged local `Authentication-Results` fields as required by RFC 8601. A message
+containing only one field family, malformed fields, missing referenced fields, or
+inconsistent sequences remains an applicable `PERMERROR`; `strict` may reject
+it. There is no domain-wide DNS participation probe because the selector and
+signing domain needed for key lookup come from a present DKIM2 signature.
+
 The verification state remains unchanged in every mode. `testing` is the
 delivery-neutral pilot choice; `permissive` is useful when an accepting
 disposition must also authorize the optional Milter `Authentication-Results`
@@ -152,11 +164,19 @@ action. Neither mode converts local daemon ambiguity, invalid responses,
 unavailable dependencies, or Milter fidelity failures into success.
 
 Originator signing has a separate authorization boundary and does not inherit
-the inbound policy mode. An absent or inactive exact signing policy is a
-permanent refusal; an unavailable datasource remains temporary. Route an
-envelope-derived originator Milter only to domains with exact active profiles.
-Its documented null-sender rejection also requires a separate static-domain
-route or an MTA bypass for delivery-status notifications.
+the inbound policy mode. A healthy authoritative absent or inactive exact
+signing policy returns bodyless HTTP 204: signing is not applicable and the
+caller continues without mutation. An unavailable, degraded, ambiguous, or
+inconsistent datasource remains temporary; malformed active configuration
+remains permanent. HTTP 204 is never an availability fallback.
+
+Null senders are classified by the originator Milter before daemon I/O and
+tempfail until an executable trusted gate can prove the complete Draft-04
+delivery-status-notification prerequisites. Address literals and otherwise
+unsupported valid SMTPUTF8 envelopes remain not applicable and continue
+unchanged. Malformed Milter callback syntax remains fail-closed. The
+implementation does not infer DSN signing authority from message headers, HELO,
+recipients, suffixes, wildcards, or tenant defaults.
 
 ### Explicitly disabled replay
 

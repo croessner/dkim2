@@ -11,6 +11,25 @@ import (
 	"time"
 )
 
+type panickingProviderCodeError struct{}
+
+// Error returns one bounded hostile-classifier diagnostic.
+func (*panickingProviderCodeError) Error() string { return "provider code failure" }
+
+// Code panics if the public classifier does not contain injected behavior.
+func (*panickingProviderCodeError) Code() ErrorCode { panic("provider code panic") }
+
+// TestErrorCodeOfContainsHostileDirectClassifiers proves the dual classifier
+// neither traverses wrapped errors nor permits panics or typed nil calls.
+func TestErrorCodeOfContainsHostileDirectClassifiers(t *testing.T) {
+	var typedNil *panickingProviderCodeError
+	for _, err := range []error{typedNil, &panickingProviderCodeError{}} {
+		if code := ErrorCodeOf(err); code != ErrorCodeInternalInvariant {
+			t.Fatalf("ErrorCodeOf(hostile)=%q", code)
+		}
+	}
+}
+
 // TestDatasetBridgeDelegatesValidation proves the public bridge uses the
 // authoritative constructors and preserves exact lookup semantics.
 func TestDatasetBridgeDelegatesValidation(t *testing.T) {

@@ -91,6 +91,40 @@ func (p *InboundProcessor) Process(
 		p.observeProcessFailure(started)
 		return InboundResult{}, err
 	}
+	if !domain.Applicable() {
+		result := InboundResult{
+			domain: domain,
+			replay: newReplayOutcome(
+				ReplayResultNotChecked,
+				FinalDispositionContinue,
+				false,
+			),
+		}
+		if !result.Valid() {
+			p.observeProcessFailure(started)
+			return InboundResult{}, &InboundProcessorError{}
+		}
+		outcome = observability.SpanCompleted
+		processResultFact, _ := observability.TextSpanFact(
+			"dkim2.result",
+			telemetryResultSuccess,
+		)
+		processVerdictFact, _ := observability.TextSpanFact(
+			"dkim2.verdict",
+			telemetryVerdictNeutral,
+		)
+		processReplayFact, _ := observability.TextSpanFact(
+			"dkim2.replay_state",
+			"not_checked",
+		)
+		processFacts = []observability.SpanFact{
+			processResultFact,
+			processVerdictFact,
+			processReplayFact,
+		}
+		p.observeProcessSuccess(result, started, time.Time{})
+		return result, nil
+	}
 	replayContext, replaySpan := startAppSpan(processContext, p.runtime, "dkim2.replay.coordinate")
 	replayStarted := time.Now()
 	storeContext := replayContext
@@ -143,8 +177,11 @@ func (p *InboundProcessor) Process(
 		replayStateFact,
 	)
 	outcome = observability.SpanCompleted
-	verification, verificationErr := result.domain.Verification()
-	resultClass, verdict := verificationObservation(verification, verificationErr)
+	resultClass, verdict := telemetryResultSuccess, telemetryVerdictNeutral
+	if result.domain.Applicable() {
+		verification, verificationErr := result.domain.Verification()
+		resultClass, verdict = verificationObservation(verification, verificationErr)
+	}
 	processResultFact, _ := observability.TextSpanFact("dkim2.result", resultClass)
 	processVerdictFact, _ := observability.TextSpanFact("dkim2.verdict", verdict)
 	processReplayFact, _ := observability.TextSpanFact("dkim2.replay_state", replayState)
@@ -184,17 +221,15 @@ func (p *InboundProcessor) observeProcessSuccess(
 	if p == nil || p.runtime == nil {
 		return
 	}
-	verification, verificationErr := result.domain.Verification()
-	resultClass, verdict := verificationObservation(verification, verificationErr)
+	resultClass, verdict := telemetryResultSuccess, telemetryVerdictNeutral
+	if result.domain.Applicable() {
+		verification, verificationErr := result.domain.Verification()
+		resultClass, verdict = verificationObservation(verification, verificationErr)
+	}
 	replayState, disposition := replayObservation(result.replay)
 	p.runtime.Metrics().ProcessCompleted(
 		resultClass, verdict, replayState, disposition, time.Since(started),
 	)
-	replayResult := telemetryResultSuccess
-	if replayState == telemetryReplayIndeterminate {
-		replayResult = telemetryResultTemporary
-	}
-	p.runtime.Metrics().ReplayCompleted(replayState, replayResult, time.Since(replayStarted))
 	p.runtime.Logger().Info(
 		"process.completed",
 		slog.String("operation", "process"),
@@ -203,6 +238,14 @@ func (p *InboundProcessor) observeProcessSuccess(
 		slog.String("replay_state", replayState),
 		slog.String("disposition", disposition),
 	)
+	if !result.domain.Applicable() {
+		return
+	}
+	replayResult := telemetryResultSuccess
+	if replayState == telemetryReplayIndeterminate {
+		replayResult = telemetryResultTemporary
+	}
+	p.runtime.Metrics().ReplayCompleted(replayState, replayResult, time.Since(replayStarted))
 	if p.runtime.DebugEnabled("replay") {
 		p.runtime.Logger().Debug(
 			"replay.coordinate.completed",
@@ -218,6 +261,9 @@ func (p *InboundProcessor) observeProcessSuccess(
 func (r InboundResult) Valid() bool {
 	return r.domain.valid() && r.replay.Valid()
 }
+
+// Applicable reports whether this inbound result contains an actual DKIM2 verification.
+func (r InboundResult) Applicable() bool { return r.Valid() && r.domain.Applicable() }
 
 // Domain returns the immutable verification and policy result.
 func (r InboundResult) Domain() (DomainResult, error) {

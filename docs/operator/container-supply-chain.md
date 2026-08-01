@@ -56,6 +56,42 @@ make images-multiarch
 The OCI layouts remain under ignored `.artifacts/`; these commands neither
 push nor sign.
 
+An explicitly approved internal development publication uses the separate
+`publish-dev-images` target. It is not a release path and accepts only a clean,
+untagged commit whose build metadata version is `0.0.0-dev`. The fixed registry
+is `docker.roessner-net.de/mail`; the sole content-bound tag is derived as
+`0.0.0-dev-<full-40-hex-commit>`. No mutable alias is written. Before any
+registry mutation, the target rebuilds all three products from its private
+descriptor-bound candidate context, exercises their runtime policy, validates
+every local index and platform descriptor, and preflights all three final tags.
+An existing identical tag is an idempotent success; an existing different tag
+or an ambiguous registry lookup during the complete preflight fails closed
+before any push. This client-side check does not establish server-side tag
+immutability or remove the race between preflight and publication. The target
+then
+publishes `dkim2d`, `dkim2-milter`, and `dkim2ctl` for Linux amd64 and arm64,
+compares every pushed index and platform manifest with the preflighted local
+OCI evidence, and reads the tag back by digest. Registry publication across
+three repositories is not transactional, so a transport failure can require an
+idempotent retry; no local or tag-collision preflight failure can cause a
+partial push. Both this path and the
+protected stable publisher use an explicit registry exporter with OCI media
+types and `SOURCE_DATE_EPOCH` timestamp rewriting. These settings are part of
+the digest contract: the registry index, platform manifests, configs, and
+layers must be byte-identical to the locally inspected OCI subject. The
+development path requires existing Docker credentials and the explicit
+invocation gate:
+
+```text
+DKIM2_DEV_PUBLISH_APPROVED=true make publish-dev-images
+```
+
+The resulting ignored `.artifacts/dev-publication-subjects.json` binds the
+exact revision, candidate snapshot, content-bound tag, repositories, and index
+digests. Internal development publication does not create trusted GitHub OIDC
+attestations and must be deployed only by exact digest. Stable releases remain
+exclusive to the protected release workflow below.
+
 ## SBOM, provenance, and vulnerability evidence
 
 BuildKit's implicit SBOM and provenance exporters are disabled so their

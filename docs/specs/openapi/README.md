@@ -30,6 +30,21 @@ Milter adapter, and the Exim adapter. Independent strict test servers support
 the Milter and Exim public integration boundaries. All configurations preserve
 the original lower-camel operation identifiers.
 
+The inbound process operation has two success variants. HTTP 200 carries an
+applicable DKIM2 verification with one of the four Draft-04 states plus policy,
+replay, disposition, and actions. HTTP 204 is bodyless and means both DKIM2
+protocol field families were absent, so verification, DNS, policy, replay, and
+mutation were not applicable. Generated server and both client boundaries must
+retain this distinction.
+
+The originator sign operation also has two success variants, with independent
+local-policy semantics. HTTP 200 carries an applicable signing result and its
+closed action plan. HTTP 204 is bodyless and means the authoritative exact
+signing policy or profile was absent or inactive, so signing was not applicable
+and the message continues unchanged. Datasource ambiguity, unavailability,
+degradation, malformed active data, and signing failures are never represented
+by this 204 variant.
+
 The target-specific overlays change only the Go bindings for the protected raw
 message, reverse path, and forward paths. Each generated package uses its own
 opaque `wire.ProtectedString`; generated DTOs are never shared with or imported

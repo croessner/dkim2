@@ -63,6 +63,79 @@ func TestInboundRecipientGroupsRemainProtocolEvidence(t *testing.T) {
 	}
 }
 
+// TestUnsignedInboundEOMContinuesWithoutActions proves the not-applicable action plan.
+func TestUnsignedInboundEOMContinuesWithoutActions(t *testing.T) {
+	handler := &testHandler{result: Result{
+		Operation: operationProcess, Result: resultNone, Outcome: DispositionContinue,
+	}}
+	session := policySession(t, handler, modeInbound, FailurePolicy{})
+	stream := &splitStream{reader: bytes.NewReader(completeTwoRecipientMessage())}
+	if err := session.Serve(context.Background(), stream); err != nil || handler.calls != 1 {
+		t.Fatalf("Serve() error=%v calls=%d", err, handler.calls)
+	}
+	commands := responseCommands(t, stream.writer.Bytes())
+	if len(commands) == 0 || commands[len(commands)-1] != replyAccept {
+		t.Fatalf("response commands=%q", commands)
+	}
+	for _, command := range commands {
+		if command == replyAddHeader || command == replyChangeHeader || command == replyReject || command == replyTempfail {
+			t.Fatalf("unsigned EOM emitted terminal or mutation command %q", command)
+		}
+	}
+}
+
+// TestUnsignedInboundEOMRemovesForgedLocalAuthenticationResults proves the
+// RFC 8601 trust-boundary scrub remains mandatory when DKIM2 is not applicable.
+func TestUnsignedInboundEOMRemovesForgedLocalAuthenticationResults(t *testing.T) {
+	handler := &testHandler{result: Result{
+		Operation: operationProcess, Result: resultNone, Outcome: DispositionContinue,
+	}}
+	session := testSession(t, handler, false, modeInbound, testAuthservID)
+	input := appendPeerFrames(
+		peerFrame(commandNegotiate, negotiationPayload()),
+		peerFrame(commandConnect, []byte("mx\x00U")),
+		peerFrame(commandHelo, []byte("helo\x00")),
+		peerFrame(commandMail, []byte("<a@example.test>\x00")),
+		peerFrame(commandRecipient, []byte("<b@example.test>\x00")),
+		peerFrame(commandHeader, []byte("Authentication-Results\x00 mx.example; dkim=pass\x00")),
+		peerFrame(commandEOH, nil),
+		peerFrame(commandEOM, nil),
+		peerFrame(commandQuit, nil),
+	)
+	stream := &splitStream{reader: bytes.NewReader(input)}
+	if err := session.Serve(context.Background(), stream); err != nil || handler.calls != 1 {
+		t.Fatalf("Serve() error=%v calls=%d", err, handler.calls)
+	}
+	commands := responseCommands(t, stream.writer.Bytes())
+	if len(commands) < 2 || commands[len(commands)-2] != replyChangeHeader ||
+		commands[len(commands)-1] != replyAccept {
+		t.Fatalf("response commands=%q, want local-header deletion then accept", commands)
+	}
+}
+
+// TestOriginatorNotApplicableEOMContinuesWithoutActions proves the no-profile
+// outcome cannot mutate headers or emit reject/tempfail commands.
+func TestOriginatorNotApplicableEOMContinuesWithoutActions(t *testing.T) {
+	handler := &testHandler{result: Result{
+		Operation: operationSign, Result: resultNone, Outcome: DispositionContinue,
+	}}
+	session := policySession(t, handler, modeOriginator, FailurePolicy{})
+	stream := &splitStream{reader: bytes.NewReader(completeOriginatorMessage())}
+	if err := session.Serve(context.Background(), stream); err != nil || handler.calls != 1 {
+		t.Fatalf("Serve() error=%v calls=%d", err, handler.calls)
+	}
+	commands := responseCommands(t, stream.writer.Bytes())
+	if len(commands) == 0 || commands[len(commands)-1] != replyAccept {
+		t.Fatalf("response commands=%q", commands)
+	}
+	for _, command := range commands {
+		if command == replyAddHeader || command == replyChangeHeader ||
+			command == replyReject || command == replyTempfail {
+			t.Fatalf("originator no-op emitted terminal or mutation command %q", command)
+		}
+	}
+}
+
 // TestNewSessionRejectsInvalidAuthenticationAuthority freezes the public gate.
 func TestNewSessionRejectsInvalidAuthenticationAuthority(t *testing.T) {
 	admission, err := NewAdmission(1, 1, testAdmissionBytes)
@@ -170,6 +243,20 @@ func completeTwoRecipientMessage() []byte {
 		peerFrame(commandMail, []byte("<a@example.test>\x00")),
 		peerFrame(commandRecipient, []byte("<b@example.test>\x00")),
 		peerFrame(commandRecipient, []byte("<c@example.test>\x00")),
+		peerFrame(commandEOH, nil),
+		peerFrame(commandEOM, nil),
+		peerFrame(commandQuit, nil),
+	)
+}
+
+// completeOriginatorMessage returns one single-recipient originator callback stream.
+func completeOriginatorMessage() []byte {
+	return appendPeerFrames(
+		peerFrame(commandNegotiate, negotiationPayload()),
+		peerFrame(commandConnect, []byte("mx\x00U")),
+		peerFrame(commandHelo, []byte("helo\x00")),
+		peerFrame(commandMail, []byte("<a@example.test>\x00")),
+		peerFrame(commandRecipient, []byte("<b@example.test>\x00")),
 		peerFrame(commandEOH, nil),
 		peerFrame(commandEOM, nil),
 		peerFrame(commandQuit, nil),

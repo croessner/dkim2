@@ -45,6 +45,29 @@ func (*pointerPublicProvider) LookupPublicKey(_ context.Context, query PublicKey
 	return MissingPublicKey(query.Algorithm()), nil
 }
 
+// TestAssessUnsignedReturnsNoVerificationAndMakesNoProviderCall proves the public applicability boundary.
+func TestAssessUnsignedReturnsNoVerificationAndMakesNoProviderCall(t *testing.T) {
+	calls := 0
+	verifier, err := NewVerifier(publicProviderFunc(func(context.Context, PublicKeyQuery) (PublicKeyResult, error) {
+		calls++
+		return PublicKeyResult{}, errors.New("unexpected lookup")
+	}))
+	if err != nil {
+		t.Fatalf("NewVerifier() error = %v", err)
+	}
+	assessment, err := verifier.Assess(context.Background(), NewVerifyRequest(
+		[]byte("From: sender@example.test\r\n\r\nunsigned\r\n"),
+		[]byte("<sender@example.test>"),
+		[][]byte{[]byte("<recipient@example.test>")},
+	))
+	if err != nil || !assessment.Valid() || assessment.Applicable() || calls != 0 {
+		t.Fatalf("Assess() = valid=%t applicable=%t calls=%d err=%v", assessment.Valid(), assessment.Applicable(), calls, err)
+	}
+	if _, ok := assessment.Verification(); ok {
+		t.Fatal("unsigned assessment exposed a verification result")
+	}
+}
+
 // TestNewVerifierRejectsInvalidDependencies verifies constructor-only valid state.
 func TestNewVerifierRejectsInvalidDependencies(t *testing.T) {
 	var typedNil *pointerPublicProvider

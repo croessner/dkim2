@@ -23,7 +23,7 @@
     "release_plan_sha256": {"$ref": "#/$defs/digest"},
     "api_sha256": {"$ref": "#/$defs/digest"},
     "api_declarations": {"type": "integer", "minimum": 1},
-    "openapi": {"type": "array", "minItems": 5, "maxItems": 5, "items": {"$ref": "#/$defs/artifact"}},
+    "openapi": {"type": "array", "minItems": 7, "maxItems": 7, "items": {"$ref": "#/$defs/artifact"}},
     "issue_log_sha256": {"$ref": "#/$defs/digest"},
     "issue_count": {"type": "integer", "minimum": 1, "maximum": 256},
     "external_evidence_sha256": {"$ref": "#/$defs/digest"},

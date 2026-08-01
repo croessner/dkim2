@@ -7,6 +7,7 @@ import (
 	"mime"
 	"net"
 	"net/http"
+	"strings"
 
 	"github.com/croessner/dkim2/cmd/dkim2-exim/internal/adapter"
 	"github.com/croessner/dkim2/cmd/dkim2-exim/internal/daemon/generated"
@@ -102,11 +103,16 @@ func (p *Processor) Process(ctx context.Context, input adapter.LocalScanRequest)
 	if err != nil {
 		return p.handleProcessFailure(ctx, input, response, err)
 	}
-	body, err := readProcessResponse(response)
+	body, notApplicable, err := readOperationResponse(response, daemonOperationProcess)
 	if err != nil {
 		return ipc.Response{}, err
 	}
-	plan, err := AdmitProcessJSON(body, p.authservID)
+	var plan adapter.Plan
+	if notApplicable {
+		plan, err = adapter.NewPlan(adapter.ResultNone, adapter.DispositionContinue, nil)
+	} else {
+		plan, err = AdmitProcessJSON(body, p.authservID)
+	}
 	clear(body)
 	if err != nil {
 		return ipc.Response{}, err
@@ -247,28 +253,122 @@ func classifyProcessError(ctx context.Context, err error) error {
 	return adapter.NewError(adapter.FailureUnavailable)
 }
 
-// readProcessResponse admits only one bounded successful generated JSON response.
-func readProcessResponse(response *http.Response) ([]byte, error) {
+// readOperationResponse admits one operation-bound JSON or applicability response.
+func readOperationResponse(response *http.Response, operation string) ([]byte, bool, error) {
 	if response == nil || response.Body == nil {
-		return nil, adapter.NewError(adapter.FailureContract)
+		return nil, false, adapter.NewError(adapter.FailureContract)
+	}
+	if response.StatusCode == http.StatusNoContent {
+		body, readErr := io.ReadAll(io.LimitReader(response.Body, maxResponseBytes+1))
+		closeErr := response.Body.Close()
+		if readErr != nil || closeErr != nil {
+			clear(body)
+			return nil, false, adapter.NewError(adapter.FailureUnavailable)
+		}
+		if !validNoContentResponse(response, body, operation) {
+			clear(body)
+			return nil, false, adapter.NewError(adapter.FailureContract)
+		}
+		clear(body)
+		return nil, true, nil
 	}
 	mediaType, _, mediaErr := mime.ParseMediaType(response.Header.Get(contentTypeHeader))
 	if response.StatusCode != http.StatusOK || mediaErr != nil ||
 		mediaType != jsonMediaType {
 		_ = response.Body.Close()
-		return nil, adapter.NewError(adapter.FailureContract)
+		return nil, false, adapter.NewError(adapter.FailureContract)
 	}
 	body, readErr := io.ReadAll(io.LimitReader(response.Body, maxResponseBytes+1))
 	closeErr := response.Body.Close()
 	if readErr != nil || closeErr != nil {
 		clear(body)
-		return nil, adapter.NewError(adapter.FailureUnavailable)
+		return nil, false, adapter.NewError(adapter.FailureUnavailable)
 	}
 	if len(body) == 0 || len(body) > maxResponseBytes {
 		clear(body)
-		return nil, adapter.NewError(adapter.FailureResource)
+		return nil, false, adapter.NewError(adapter.FailureResource)
 	}
-	return body, nil
+	return body, false, nil
+}
+
+// validNoContentResponse enforces the exact operation-owned OpenAPI 204 envelope.
+func validNoContentResponse(response *http.Response, body []byte, operation string) bool {
+	if response == nil || response.StatusCode != http.StatusNoContent || len(body) != 0 ||
+		response.ContentLength != 0 || !response.Close || len(response.TransferEncoding) != 0 ||
+		len(response.Trailer) != 0 || !validNoContentRequest(response.Request, operation) {
+		return false
+	}
+	if operation != daemonOperationProcess && operation != daemonOperationSign ||
+		!exactResponseHeader(response.Header, "Cache-Control", "no-store") ||
+		!validConnectionCloseProjection(response) ||
+		responseHeaderPresent(response.Header, "Content-Length") ||
+		responseHeaderPresent(response.Header, contentTypeHeader) ||
+		responseHeaderPresent(response.Header, "X-Content-Type-Options") ||
+		responseHeaderPresent(response.Header, "Transfer-Encoding") ||
+		responseHeaderPresent(response.Header, "Trailer") {
+		return false
+	}
+	date, present, valid := optionalResponseHeader(response.Header, "Date")
+	if !valid || !present {
+		return valid
+	}
+	parsed, err := http.ParseTime(date)
+	return err == nil && parsed.UTC().Format(http.TimeFormat) == date
+}
+
+// validNoContentRequest binds a bodyless result to its generated POST route.
+func validNoContentRequest(request *http.Request, operation string) bool {
+	if request == nil || request.Method != http.MethodPost || request.URL == nil ||
+		request.URL.RawQuery != "" || request.URL.Fragment != "" {
+		return false
+	}
+	wantPath := "/v1/" + operation
+	return request.URL.Path == wantPath
+}
+
+// validConnectionCloseProjection accepts net/http's consumed Connection field.
+func validConnectionCloseProjection(response *http.Response) bool {
+	if response == nil || !response.Close ||
+		response.ProtoMajor != 1 || response.ProtoMinor != 1 {
+		return false
+	}
+	if !responseHeaderPresent(response.Header, "Connection") {
+		return true
+	}
+	return exactResponseHeader(response.Header, "Connection", "close")
+}
+
+// exactResponseHeader accepts one exact field value across case variants.
+func exactResponseHeader(header http.Header, name, value string) bool {
+	current, present, valid := optionalResponseHeader(header, name)
+	return valid && present && current == value
+}
+
+// optionalResponseHeader returns at most one value across case variants.
+func optionalResponseHeader(header http.Header, name string) (string, bool, bool) {
+	var values []string
+	for current, currentValues := range header {
+		if strings.EqualFold(current, name) {
+			values = append(values, currentValues...)
+		}
+	}
+	if len(values) == 0 {
+		return "", false, true
+	}
+	if len(values) != 1 {
+		return "", true, false
+	}
+	return values[0], true, true
+}
+
+// responseHeaderPresent reports any case-insensitive field spelling.
+func responseHeaderPresent(header http.Header, name string) bool {
+	for current := range header {
+		if strings.EqualFold(current, name) {
+			return true
+		}
+	}
+	return false
 }
 
 // responseFromPlan translates the complete admitted inbound plan to DXI1.
@@ -295,7 +395,7 @@ func responseFromPlan(
 			return ipc.Response{}, adapter.NewError(adapter.FailureContract)
 		}
 	case adapter.DispositionContinue:
-		removals = nil
+		// Continue preserves adapter-local RFC 8601 removals without adding a field.
 	case adapter.DispositionReject:
 		decision, reason, removals = ipc.DecisionReject, ipc.ReasonPolicyReject, nil
 	case adapter.DispositionTempfail:

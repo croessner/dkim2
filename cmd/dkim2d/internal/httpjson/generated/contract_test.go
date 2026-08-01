@@ -101,14 +101,14 @@ func TestEmbeddedOpenAPIContract(t *testing.T) {
 		testProcessPath: {
 			testMethodPost: {
 				id:        "processMessage",
-				responses: []string{"200", "400", "403", "408", "413", "415", "417", "500", "503"},
+				responses: []string{"200", "204", "400", "403", "408", "413", "415", "417", "500", "503"},
 				success:   "ProcessResponse",
 			},
 		},
 		testSignPath: {
 			testMethodPost: {
 				id:        "signMessage",
-				responses: []string{"200", "400", "403", "408", "413", "415", "417", "500", "503"},
+				responses: []string{"200", "204", "400", "403", "408", "413", "415", "417", "500", "503"},
 				success:   testSchemaOperationResponse,
 			},
 		},
@@ -272,6 +272,9 @@ func requiredResponseHeaders(path string, status string) []string {
 	if status == "304" {
 		return append(headers, "ETag")
 	}
+	if status == "204" && (path == testProcessPath || path == testSignPath) {
+		return headers
+	}
 	headers = append(headers, "Content-Length", testHeaderContentTypeOptions)
 	if status == "200" && (path == "/healthz" || path == "/readyz") {
 		headers = append(headers, "ETag")
@@ -290,7 +293,7 @@ func assertResponseContent(
 ) {
 	t.Helper()
 
-	if want.head || status == "304" {
+	if want.head || status == "304" || status == "204" {
 		if len(response.Content) != 0 {
 			t.Fatalf("bodyless response %s for %s declares content", status, operationID)
 		}

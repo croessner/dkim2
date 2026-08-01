@@ -47,9 +47,9 @@ func (o *lifecycleOrder) snapshot() []string {
 // lifecycleVerifierFake satisfies the construction-only verification seam.
 type lifecycleVerifierFake struct{}
 
-// Verify is unreachable in lifecycle orchestration tests.
-func (lifecycleVerifierFake) Verify(context.Context, dkim2.VerifyRequest) (dkim2.VerifyResult, error) {
-	return dkim2.VerifyResult{}, errors.New("unreachable")
+// Assess is unreachable in lifecycle orchestration tests.
+func (lifecycleVerifierFake) Assess(context.Context, dkim2.VerifyRequest) (dkim2.VerificationAssessment, error) {
+	return dkim2.VerificationAssessment{}, errors.New("unreachable")
 }
 
 // lifecycleReplayFake owns deterministic readiness and cleanup observations.

@@ -32,9 +32,9 @@ func (*DomainError) Is(target error) bool {
 	return ok
 }
 
-// VerificationService is the narrow public-library verification boundary.
+// VerificationService is the narrow public-library applicability and verification boundary.
 type VerificationService interface {
-	Verify(context.Context, dkim2.VerifyRequest) (dkim2.VerifyResult, error)
+	Assess(context.Context, dkim2.VerifyRequest) (dkim2.VerificationAssessment, error)
 }
 
 // DNSVerifier owns one bounded DNS provider and the verifier built from that
@@ -75,6 +75,8 @@ func (p *DomainProcessor) attachObservability(runtime *observability.Runtime) {
 
 // DomainResult keeps verification and local policy separate for replay coordination.
 type DomainResult struct {
+	initialized  bool
+	applicable   bool
 	verification dkim2.VerifyResult
 	policy       dkim2.PolicyDecision
 }
@@ -120,6 +122,17 @@ func (v *DNSVerifier) Verify(
 	return v.verifier.Verify(ctx, request)
 }
 
+// Assess delegates applicability classification and verification to the instance verifier.
+func (v *DNSVerifier) Assess(
+	ctx context.Context,
+	request dkim2.VerifyRequest,
+) (dkim2.VerificationAssessment, error) {
+	if v == nil || v.verifier == nil {
+		return dkim2.VerificationAssessment{}, &DomainError{}
+	}
+	return v.verifier.Assess(ctx, request)
+}
+
 // LookupPublicKey delegates revision publication checks to the same bounded
 // DNS provider used by verification.
 func (v *DNSVerifier) LookupPublicKey(
@@ -149,41 +162,27 @@ func (p *DomainProcessor) Process(ctx context.Context, request dkim2.VerifyReque
 	if err := domainContextError(ctx); err != nil {
 		return DomainResult{}, err
 	}
-	verifyContext, verifySpan := startAppSpan(ctx, p.state.runtime, "dkim2.verify")
-	verifyFinished := false
-	finishVerify := func(
-		outcome observability.SpanOutcome,
-		facts ...observability.SpanFact,
-	) {
-		if !verifyFinished {
-			verifyFinished = true
-			observability.EndSpanWithFacts(verifySpan, outcome, facts...)
-		}
-	}
-	defer finishVerify(observability.SpanInternalError)
-	verification, err := p.state.verifier.Verify(verifyContext, request)
+	assessment, err := p.state.verifier.Assess(ctx, request)
 	if err != nil {
-		finishVerify(observability.SpanInternalError)
 		if contextErr := domainContextError(ctx); contextErr != nil {
 			return DomainResult{}, contextErr
 		}
 		return DomainResult{}, &DomainError{}
 	}
 	if contextErr := domainContextError(ctx); contextErr != nil {
-		finishVerify(observability.SpanInternalError)
 		return DomainResult{}, contextErr
 	}
-	if !verification.Valid() {
-		finishVerify(observability.SpanInternalError)
+	if !assessment.Valid() {
 		return DomainResult{}, &DomainError{}
 	}
-	verifyResultClass, _ := verificationObservationState(verification.State())
-	verifyResult, _ := observability.TextSpanFact(
-		"dkim2.result",
-		verifyResultClass,
-	)
-	finishVerify(observability.SpanCompleted, verifyResult)
-	_, policySpan := startAppSpan(verifyContext, p.state.runtime, "dkim2.policy.evaluate")
+	if !assessment.Applicable() {
+		return DomainResult{initialized: true}, nil
+	}
+	verification, ok := assessment.Verification()
+	if !ok || !verification.Valid() {
+		return DomainResult{}, &DomainError{}
+	}
+	_, policySpan := startAppSpan(ctx, p.state.runtime, "dkim2.policy.evaluate")
 	policyFinished := false
 	finishPolicy := func(
 		outcome observability.SpanOutcome,
@@ -222,12 +221,15 @@ func (p *DomainProcessor) Process(ctx context.Context, request dkim2.VerifyReque
 		policyReason,
 	)
 	observePolicy(p.state.runtime, policy, time.Since(policyStarted))
-	result := DomainResult{verification: verification, policy: policy}
+	result := DomainResult{initialized: true, applicable: true, verification: verification, policy: policy}
 	if !result.valid() {
 		return DomainResult{}, &DomainError{}
 	}
 	return result, nil
 }
+
+// Applicable reports whether protocol fields caused a DKIM2 verification.
+func (r DomainResult) Applicable() bool { return r.valid() && r.applicable }
 
 // String returns a content-free domain-processor representation.
 func (DomainProcessor) String() string { return domainProcessorRedacted }
@@ -250,17 +252,17 @@ func (DomainProcessor) MarshalText() ([]byte, error) {
 	return nil, &DomainError{}
 }
 
-// Verification returns the immutable current-verification result.
+// Verification returns the immutable current-verification result only when applicable.
 func (r DomainResult) Verification() (dkim2.VerifyResult, error) {
-	if !r.valid() {
+	if !r.valid() || !r.applicable {
 		return dkim2.VerifyResult{}, &DomainError{}
 	}
 	return r.verification, nil
 }
 
-// Policy returns the immutable server-owned local-policy result.
+// Policy returns the immutable server-owned local-policy result only when applicable.
 func (r DomainResult) Policy() (dkim2.PolicyDecision, error) {
-	if !r.valid() {
+	if !r.valid() || !r.applicable {
 		return dkim2.PolicyDecision{}, &DomainError{}
 	}
 	return r.policy, nil
@@ -268,6 +270,12 @@ func (r DomainResult) Policy() (dkim2.PolicyDecision, error) {
 
 // valid reports whether verification and policy form one coherent immutable pair.
 func (r DomainResult) valid() bool {
+	if !r.initialized {
+		return false
+	}
+	if !r.applicable {
+		return !r.verification.Valid() && !r.policy.Valid()
+	}
 	return r.verification.Valid() && r.policy.Valid() &&
 		r.policy.VerificationState() == r.verification.State()
 }

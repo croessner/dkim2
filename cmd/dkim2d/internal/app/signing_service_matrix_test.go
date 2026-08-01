@@ -34,6 +34,8 @@ const (
 	signingServiceTransitSelector = "transit"
 	signingServiceDomainField     = "domain"
 	signingServiceStrictValue     = "strict"
+	signingServiceNotFoundCase    = "not found"
+	signingServiceInactiveCase    = "inactive"
 )
 
 type signingServicePublicKeys struct {
@@ -83,6 +85,20 @@ func (hostilePolicyFailure) Error() string { return "hostile policy failure" }
 // As panics if production attempts open-interface error traversal.
 func (hostilePolicyFailure) As(any) bool { panic("hostile error traversal") }
 
+type dualPolicyFailure struct {
+	code  provider.ErrorCode
+	class dkim2.ProviderErrorClass
+}
+
+// Error returns one bounded dual-classification diagnostic.
+func (dualPolicyFailure) Error() string { return "dual policy failure" }
+
+// Code returns the exact granular datasource classification.
+func (e dualPolicyFailure) Code() provider.ErrorCode { return e.code }
+
+// ProviderErrorClass returns the compatibility provider classification.
+func (e dualPolicyFailure) ProviderErrorClass() dkim2.ProviderErrorClass { return e.class }
+
 // ResolvePolicy returns the configured storage-neutral resolution failure.
 func (l policyFailureLease) ResolvePolicy(
 	context.Context,
@@ -120,13 +136,10 @@ func (a *recordingExactAuthorizer) Authorize(
 	return a.exact.Authorize(ctx, query)
 }
 
-// TestSigningServiceRejectsRecipientGroupBeforeStoreAccess proves the
-// configuration gate precedes generation acquisition and policy resolution.
-func TestSigningServiceRejectsRecipientGroupBeforeStoreAccess(t *testing.T) {
+// TestSigningServiceRejectsRecipientGroupForActivePolicy proves the
+// recipient-disclosure gate rejects an otherwise applicable signing request.
+func TestSigningServiceRejectsRecipientGroupForActivePolicy(t *testing.T) {
 	fixture := newSigningServiceFixture(t)
-	if err := fixture.runtime.Close(context.Background()); err != nil {
-		t.Fatalf("Close(runtime) error = %v", err)
-	}
 	if service, err := NewSigningService(
 		fixture.publicKeys,
 		fixture.runtime,
@@ -147,9 +160,13 @@ func TestSigningServiceRejectsRecipientGroupBeforeStoreAccess(t *testing.T) {
 			[]byte("<second@example.net>"),
 		},
 	)
-	result, signErr := service.Sign(context.Background(), request)
+	assessment, signErr := service.Sign(context.Background(), request)
 	if signErr != nil {
 		t.Fatalf("Sign() error = %v", signErr)
+	}
+	result, ok := assessment.Result()
+	if !ok {
+		t.Fatal("recipient-group refusal was not applicable")
 	}
 	if !result.Valid() || result.Result() != OperationPermerror ||
 		result.Disposition() != OperationReject || len(result.Fields()) != 0 {
@@ -160,9 +177,53 @@ func TestSigningServiceRejectsRecipientGroupBeforeStoreAccess(t *testing.T) {
 	}
 }
 
-// TestSigningServiceMapsMissingPolicyToPermanentRefusal proves static
-// datasource selection failures cannot cause indefinite SMTP deferral.
-func TestSigningServiceMapsMissingPolicyToPermanentRefusal(t *testing.T) {
+// TestSigningServiceClassifiesAbsentRecipientGroupsAsNotApplicable proves
+// recipient-group safety does not turn authoritative originator absence into rejection.
+func TestSigningServiceClassifiesAbsentRecipientGroupsAsNotApplicable(t *testing.T) {
+	fixture := newSigningServiceFixture(t)
+	request := newSigningServiceRequest(
+		t,
+		OperationSign,
+		signingServiceRawMessage(),
+		[][]byte{
+			[]byte("<first@example.net>"),
+			[]byte("<second@example.net>"),
+		},
+	)
+	for _, testCase := range []struct {
+		name string
+		code provider.ErrorCode
+	}{
+		{name: signingServiceNotFoundCase, code: provider.ErrorCodeNotFound},
+		{name: signingServiceInactiveCase, code: provider.ErrorCodeInactive},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			service := &SigningService{
+				publicKeys: fixture.publicKeys,
+				store: policyFailureAuthority{
+					err: provider.NewError(testCase.code),
+				},
+				clock: time.Now,
+			}
+			assessment, err := service.Sign(context.Background(), request)
+			if err != nil || !assessment.Valid() || assessment.Applicable() {
+				t.Fatalf(
+					"Sign() error=%v valid=%t applicable=%t",
+					err,
+					assessment.Valid(),
+					assessment.Applicable(),
+				)
+			}
+			if result, ok := assessment.Result(); ok || result.Valid() {
+				t.Fatal("absent recipient-group policy exposed an operation result")
+			}
+		})
+	}
+}
+
+// TestSigningServiceMapsMissingPolicyToNotApplicable proves authoritative
+// absence never rejects or indefinitely defers an unlisted originator domain.
+func TestSigningServiceMapsMissingPolicyToNotApplicable(t *testing.T) {
 	fixture := newSigningServiceFixture(t)
 	service, err := NewSigningService(fixture.publicKeys, fixture.runtime, false)
 	if err != nil {
@@ -180,24 +241,20 @@ func TestSigningServiceMapsMissingPolicyToPermanentRefusal(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewOperationRequest() error = %v", err)
 	}
-	result, err := service.Sign(context.Background(), request)
+	assessment, err := service.Sign(context.Background(), request)
 	if err != nil {
 		t.Fatalf("Sign() error = %v", err)
 	}
-	if !result.Valid() || result.Result() != OperationPermerror ||
-		result.Disposition() != OperationReject || len(result.Fields()) != 0 {
-		t.Fatalf(
-			"Sign() valid=%t result=%q disposition=%q fields=%d",
-			result.Valid(),
-			result.Result(),
-			result.Disposition(),
-			len(result.Fields()),
-		)
+	if !assessment.Valid() || assessment.Applicable() {
+		t.Fatalf("Sign() valid/applicable=%t/%t", assessment.Valid(), assessment.Applicable())
+	}
+	if result, ok := assessment.Result(); ok || result.Valid() {
+		t.Fatal("not-applicable signing exposed an operation result")
 	}
 }
 
-// TestSigningServiceClassifiesDatasourcePolicyFailures proves an absent exact
-// network policy is permanent while an unavailable datasource remains retryable.
+// TestSigningServiceClassifiesDatasourcePolicyFailures proves originator
+// absence is not applicable while ambiguous or unavailable state fails closed.
 func TestSigningServiceClassifiesDatasourcePolicyFailures(t *testing.T) {
 	fixture := newSigningServiceFixture(t)
 	request := newSigningServiceRequest(
@@ -209,74 +266,82 @@ func TestSigningServiceClassifiesDatasourcePolicyFailures(t *testing.T) {
 	tests := []struct {
 		name        string
 		err         error
+		applicable  bool
 		result      OperationResultClass
 		disposition OperationDisposition
 	}{
 		{
-			name: "not found", err: provider.NewError(provider.ErrorCodeNotFound),
-			result: OperationPermerror, disposition: OperationReject,
+			name: signingServiceNotFoundCase, err: provider.NewError(provider.ErrorCodeNotFound),
+			applicable: false,
 		},
 		{
-			name: "inactive", err: provider.NewError(provider.ErrorCodeInactive),
-			result: OperationPermerror, disposition: OperationReject,
+			name: signingServiceInactiveCase, err: provider.NewError(provider.ErrorCodeInactive),
+			applicable: false,
 		},
 		{
 			name: "explicit permanent provider", err: dkim2.NewPermanentProviderError(),
-			result: OperationPermerror, disposition: OperationReject,
+			applicable: true, result: OperationPermerror, disposition: OperationReject,
 		},
 		{
 			name: "explicit temporary provider", err: dkim2.NewTemporaryProviderError(),
-			result: OperationTemperror, disposition: OperationTempfail,
+			applicable: true, result: OperationTemperror, disposition: OperationTempfail,
 		},
 		{
 			name: "unavailable", err: provider.NewError(provider.ErrorCodeUnavailable),
-			result: OperationTemperror, disposition: OperationTempfail,
-		},
-		{
-			name: "invalid request", err: provider.NewError(provider.ErrorCodeInvalidRequest),
-			result: OperationTemperror, disposition: OperationTempfail,
+			applicable: true, result: OperationTemperror, disposition: OperationTempfail,
 		},
 		{
 			name: "ambiguous", err: provider.NewError(provider.ErrorCodeAmbiguous),
-			result: OperationTemperror, disposition: OperationTempfail,
+			applicable: true, result: OperationTemperror, disposition: OperationTempfail,
+		},
+		{
+			name: "dual ambiguous",
+			err: dualPolicyFailure{
+				code: provider.ErrorCodeAmbiguous, class: dkim2.ProviderErrorClassPermanent,
+			},
+			applicable: true, result: OperationTemperror, disposition: OperationTempfail,
+		},
+		{
+			name: "invalid request", err: provider.NewError(provider.ErrorCodeInvalidRequest),
+			applicable: true, result: OperationPermerror, disposition: OperationReject,
 		},
 		{
 			name: "malformed data", err: provider.NewError(provider.ErrorCodeMalformedData),
-			result: OperationTemperror, disposition: OperationTempfail,
+			applicable: true, result: OperationPermerror, disposition: OperationReject,
 		},
 		{
 			name: "limit exceeded", err: provider.NewError(provider.ErrorCodeLimitExceeded),
-			result: OperationTemperror, disposition: OperationTempfail,
+			applicable: true, result: OperationTemperror, disposition: OperationTempfail,
 		},
 		{
 			name: "unsupported platform", err: provider.NewError(provider.ErrorCodeUnsupportedPlatform),
-			result: OperationTemperror, disposition: OperationTempfail,
+			applicable: true, result: OperationTemperror, disposition: OperationTempfail,
 		},
 		{
 			name: "cancelled", err: provider.NewError(provider.ErrorCodeCancelled),
-			result: OperationTemperror, disposition: OperationTempfail,
+			applicable: true, result: OperationTemperror, disposition: OperationTempfail,
 		},
 		{
 			name: "deadline exceeded", err: provider.NewError(provider.ErrorCodeDeadlineExceeded),
-			result: OperationTemperror, disposition: OperationTempfail,
+			applicable: true, result: OperationTemperror, disposition: OperationTempfail,
 		},
 		{
 			name: "internal invariant", err: provider.NewError(provider.ErrorCodeInternalInvariant),
-			result: OperationTemperror, disposition: OperationTempfail,
+			applicable: true, result: OperationTemperror, disposition: OperationTempfail,
 		},
 		{
-			name:   "wrapped not found",
-			err:    fmt.Errorf("wrapped policy failure: %w", provider.NewError(provider.ErrorCodeNotFound)),
-			result: OperationTemperror, disposition: OperationTempfail,
+			name:       "wrapped not found",
+			err:        fmt.Errorf("wrapped policy failure: %w", provider.NewError(provider.ErrorCodeNotFound)),
+			applicable: true, result: OperationTemperror, disposition: OperationTempfail,
 		},
 		{
-			name:   "wrapped inactive",
-			err:    fmt.Errorf("wrapped policy failure: %w", provider.NewError(provider.ErrorCodeInactive)),
-			result: OperationTemperror, disposition: OperationTempfail,
+			name:       "wrapped inactive",
+			err:        fmt.Errorf("wrapped policy failure: %w", provider.NewError(provider.ErrorCodeInactive)),
+			applicable: true, result: OperationTemperror, disposition: OperationTempfail,
 		},
 		{
 			name: "hostile traversal", err: hostilePolicyFailure{},
-			result: OperationTemperror, disposition: OperationTempfail,
+			applicable: true, result: OperationTemperror, disposition: OperationTempfail,
 		},
 	}
 	for _, testCase := range tests {
@@ -286,11 +351,63 @@ func TestSigningServiceClassifiesDatasourcePolicyFailures(t *testing.T) {
 				store:      policyFailureAuthority{err: testCase.err},
 				clock:      time.Now,
 			}
-			result, err := service.Sign(context.Background(), request)
-			if err != nil || !result.Valid() || result.Result() != testCase.result ||
+			assessment, err := service.Sign(context.Background(), request)
+			if err != nil || !assessment.Valid() || assessment.Applicable() != testCase.applicable {
+				t.Fatalf("Sign() error=%v valid=%t applicable=%t", err, assessment.Valid(), assessment.Applicable())
+			}
+			if !testCase.applicable {
+				if result, ok := assessment.Result(); ok || result.Valid() {
+					t.Fatal("not-applicable policy exposed a result")
+				}
+				return
+			}
+			result, ok := assessment.Result()
+			if !ok || result.Result() != testCase.result ||
 				result.Disposition() != testCase.disposition || len(result.Fields()) != 0 {
 				t.Fatalf(
 					"Sign() error=%v valid=%t result=%q disposition=%q fields=%d",
+					err,
+					result.Valid(),
+					result.Result(),
+					result.Disposition(),
+					len(result.Fields()),
+				)
+			}
+		})
+	}
+}
+
+// TestSigningServiceRejectsAbsentRevisionPolicy proves transit revision never
+// inherits the originator-only not-applicable policy classification.
+func TestSigningServiceRejectsAbsentRevisionPolicy(t *testing.T) {
+	fixture := newSigningServiceFixture(t)
+	request := newSigningServiceRequest(
+		t,
+		OperationRevise,
+		signingServiceRawMessage(),
+		[][]byte{[]byte("<recipient@example.net>")},
+	)
+	for _, testCase := range []struct {
+		name string
+		code provider.ErrorCode
+	}{
+		{name: signingServiceNotFoundCase, code: provider.ErrorCodeNotFound},
+		{name: signingServiceInactiveCase, code: provider.ErrorCodeInactive},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			service := &SigningService{
+				publicKeys: fixture.publicKeys,
+				store: policyFailureAuthority{
+					err: provider.NewError(testCase.code),
+				},
+				clock: time.Now,
+			}
+			result, err := service.Revise(context.Background(), request)
+			if err != nil || !result.Valid() || result.Operation() != OperationRevise ||
+				result.Result() != OperationPermerror || result.Disposition() != OperationReject ||
+				len(result.Fields()) != 0 {
+				t.Fatalf(
+					"Revise() error=%v valid=%t result=%q disposition=%q fields=%d",
 					err,
 					result.Valid(),
 					result.Result(),
@@ -377,7 +494,11 @@ func TestSigningServiceSelectsPoliciesAndFailsClosedOnRevisionVerification(t *te
 	raw := signingServiceRawMessage()
 	recipients := [][]byte{[]byte("<recipient@origin.example.test>")}
 	signRequest := newSigningServiceRequest(t, OperationSign, raw, recipients)
-	signed, err := service.Sign(context.Background(), signRequest)
+	assessment, err := service.Sign(context.Background(), signRequest)
+	signed, ok := assessment.Result()
+	if !ok {
+		t.Fatal("active originator signing was not applicable")
+	}
 	assertSigningServicePass(t, signed, err, signingServiceOriginSelector)
 
 	inherited := insertSigningServiceFields(signed.Fields(), raw)
@@ -462,7 +583,11 @@ func TestSigningServiceRevisesDistinctEximEnvelopeAfterReceivedAddition(t *testi
 	if err != nil {
 		t.Fatalf("NewOperationRequest() error = %v", err)
 	}
-	signed, err := service.Sign(context.Background(), signRequest)
+	assessment, err := service.Sign(context.Background(), signRequest)
+	signed, ok := assessment.Result()
+	if !ok {
+		t.Fatal("active originator signing was not applicable")
+	}
 	assertSigningServicePass(t, signed, err, signingServiceOriginSelector)
 	inherited := insertSigningServiceFields(signed.Fields(), raw)
 	withReceived := append(

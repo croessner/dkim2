@@ -190,7 +190,7 @@ func (s *conformanceService) ServeHTTP(writer http.ResponseWriter, request *http
 		s.writeError(writer, http.StatusForbidden, expectedForbiddenCode)
 		return
 	}
-	if request.Header.Get("Content-Type") != mediaTypeJSON {
+	if request.Header.Get(headerContentType) != mediaTypeJSON {
 		s.writeError(writer, http.StatusUnsupportedMediaType, "unsupported_media_type")
 		return
 	}
@@ -284,11 +284,11 @@ func (*conformanceService) writeJSON(
 	body string,
 	etag bool,
 ) {
-	writer.Header().Set("Cache-Control", cacheNoStore)
+	writer.Header().Set(headerCacheControl, cacheNoStore)
 	writer.Header().Set("X-Content-Type-Options", contentNoSniff)
-	writer.Header().Set("Content-Type", mediaTypeJSON)
-	writer.Header().Set("Content-Length", strconv.Itoa(len(body)))
-	writer.Header().Set("Connection", connectionClose)
+	writer.Header().Set(headerContentType, mediaTypeJSON)
+	writer.Header().Set(headerContentLength, strconv.Itoa(len(body)))
+	writer.Header().Set(headerConnection, connectionClose)
 	if etag {
 		writer.Header().Set(
 			"ETag",

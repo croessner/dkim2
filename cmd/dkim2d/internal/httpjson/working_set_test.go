@@ -202,6 +202,9 @@ func TestMaximumLegalWorkingSetProof(t *testing.T) {
 // TestMaximumLegalProductionWorkingSetProof drives one exact maximum JSON body
 // through lexical, OpenAPI, generated, mapping, and domain-seam production code.
 func TestMaximumLegalProductionWorkingSetProof(t *testing.T) {
+	if raceDetectorEnabled {
+		t.Skip("production allocation proof excludes race instrumentation")
+	}
 	body := buildMaximumLegalProcessBody(t)
 	if int64(len(body)) != maxProcessBodyBytes {
 		t.Fatalf("maximum process body length = %d, want %d", len(body), maxProcessBodyBytes)

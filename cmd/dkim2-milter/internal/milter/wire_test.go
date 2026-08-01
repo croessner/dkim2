@@ -151,21 +151,50 @@ func allZeroBytes(value []byte) bool {
 	return true
 }
 
-// TestSigningRejectsSMTPUTF8BeforeHandler freezes the ASCII signing envelope gate.
-func TestSigningRejectsSMTPUTF8BeforeHandler(t *testing.T) {
-	handler := &testHandler{}
-	session := testSession(t, handler, false, modeOriginator, "")
-	input := appendPeerFrames(
-		peerFrame(commandNegotiate, negotiationPayload()),
-		peerFrame(commandConnect, []byte("mx\x00U")),
-		peerFrame(commandHelo, []byte("helo\x00")),
-		peerFrame(commandMail, append([]byte("<fröm@example>"), 0)),
-	)
-	stream := &splitStream{reader: bytes.NewReader(input)}
-	var adapterError *Error
-	if err := session.Serve(context.Background(), stream); !errors.As(err, &adapterError) ||
-		adapterError.Class != FailureFidelity || handler.calls != 0 {
-		t.Fatalf("Serve() error = %v, calls = %d", err, handler.calls)
+// TestOriginatorSMTPUTF8ReachesApplicabilityBoundary proves valid EAI envelope
+// evidence is retained for a mutation-free signing applicability decision.
+func TestOriginatorSMTPUTF8ReachesApplicabilityBoundary(t *testing.T) {
+	for _, testCase := range []struct {
+		name      string
+		mail      []byte
+		recipient []byte
+	}{
+		{
+			name:      "sender local part",
+			mail:      append([]byte("<fröm@example.test>\x00SMTPUTF8"), 0),
+			recipient: append([]byte("<recipient@example.test>"), 0),
+		},
+		{
+			name:      "sender domain",
+			mail:      append([]byte("<sender@exämple.test>\x00SMTPUTF8"), 0),
+			recipient: append([]byte("<recipient@example.test>"), 0),
+		},
+		{
+			name:      "recipient",
+			mail:      append([]byte("<sender@example.test>\x00SMTPUTF8"), 0),
+			recipient: append([]byte("<tö@example.test>"), 0),
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			handler := &testHandler{result: Result{
+				Operation: operationSign, Result: resultNone, Outcome: DispositionContinue,
+			}}
+			session := testSession(t, handler, false, modeOriginator, "")
+			input := appendPeerFrames(
+				peerFrame(commandNegotiate, negotiationPayload()),
+				peerFrame(commandConnect, []byte("mx\x00U")),
+				peerFrame(commandHelo, []byte("helo\x00")),
+				peerFrame(commandMail, testCase.mail),
+				peerFrame(commandRecipient, testCase.recipient),
+				peerFrame(commandEOH, nil),
+				peerFrame(commandEOM, nil),
+				peerFrame(commandQuit, nil),
+			)
+			stream := &splitStream{reader: bytes.NewReader(input)}
+			if err := session.Serve(context.Background(), stream); err != nil || handler.calls != 1 {
+				t.Fatalf("Serve() error = %v, calls = %d", err, handler.calls)
+			}
+		})
 	}
 }
 
@@ -184,6 +213,7 @@ func TestMessageSigningDomainUsesOnlyCanonicalEnvelopeSenderDNS(t *testing.T) {
 		{name: "source route", reverse: "<@relay.test:sender@example.test>", want: exampleDomain, ok: true},
 		{name: "null sender", reverse: "<>"},
 		{name: "domain literal", reverse: "<sender@[192.0.2.1]>"},
+		{name: "SMTPUTF8 local part", reverse: "<séndér@example.test>"},
 		{name: "SMTPUTF8 domain", reverse: "<sender@exämple.test>"},
 		{name: "unframed", reverse: "sender@example.test"},
 		{name: "malformed", reverse: "<sender@example.test"},

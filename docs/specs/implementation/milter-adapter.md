@@ -155,9 +155,10 @@ Successful operation responses contain:
 - one ordered action plan.
 
 The closed dispositions are `accept`, `reject`, `tempfail`, and `continue`.
-`continue` means no final SMTP refusal and no mutation; at EOM the adapter maps
-it to successful unmodified completion. A response cannot contain both a
-rejecting disposition and mutation actions.
+`continue` means no final SMTP refusal and no daemon-requested mutation. At EOM
+the adapter maps it to successful completion, while still performing mandatory
+local `Authentication-Results` trust-boundary scrubbing when configured. A
+response cannot contain both a rejecting disposition and mutation actions.
 
 Operation result and disposition form one exact matrix:
 
@@ -323,11 +324,24 @@ routes, recipients, policies, keys, algorithms, or signer state fail closed.
 An originator route may select its signing domain from the strictly validated
 ASCII SMTP reverse-path while retaining one statically configured tenant. This
 is adapter-local route selection, not datasource fallback: it strips a valid
-obsolete source route if present, rejects the null path, address literals,
+obsolete source route if present, rejects address literals,
 SMTPUTF8 domains, and malformed framing, canonicalizes only ASCII DNS case, and
 sends the resulting exact tenant/domain pair through the unchanged daemon
 authorization and datasource lookup. The option is unavailable to inbound and
 ordinary-transit modes. Static domain selection remains the default.
+
+Every originator route also retains one separate canonical
+`signing.dsn_domain`. This stable configuration path is a reserved prerequisite
+for future DSN support, not sufficient signing authority.
+
+The current adapter tempfails every exact null reverse-path `<>` before daemon,
+datasource, or private-key access. Milter callbacks and the current daemon
+request contract cannot authenticate a valid RFC 3462 three-part
+`multipart/report` DSN, Draft-04 Section 12.1 verification of all relevant
+embedded fields, or Section 12.1.2 alignment with the embedded original
+recipient. An upstream route assertion cannot satisfy the missing executable
+trust boundary. Null-sender signing remains deferred until a trusted
+prevalidated evidence gate is implemented and qualified.
 
 ## Authentication-Results Policy
 
@@ -347,12 +361,14 @@ address, message ID, request ID, trace ID, or vendor diagnostic is appended.
 The result vocabulary is a closed local projection of the daemon's bounded
 outcome.
 
-Before adding its result, the adapter finds every pre-existing
+For every accepted inbound message, including a not-applicable unsigned
+message, the adapter finds every pre-existing
 `Authentication-Results` field with the configured `authserv-id`, records its
 one-based field-name occurrence index, and pre-serializes deletion in
-descending index order. It then inserts its own field at index zero. This
-implements RFC 8601 Sections 4.1 and 5 without reordering fields from other
-authentication services. If required change/insert capabilities are absent,
+descending index order. When DKIM2 is applicable, it then inserts its own field
+at index zero. This implements RFC 8601 Sections 4.1 and 5 without reordering
+fields from other authentication services. If required change/insert
+capabilities are absent,
 or any replacement write is indeterminate, the adapter fails closed. A forged
 local field also disables fail-open because accepting the original message
 would preserve a spoofed trust assertion.
@@ -383,6 +399,7 @@ The initial stable paths include:
 | `signing.tenant` | conditional | required for signing/revision modes |
 | `signing.domain` | conditional | required for static signing/revision; absent for envelope-derived originator signing |
 | `signing.domain_source` | `static` | `static`, or `envelope_sender` for originator only |
+| `signing.dsn_domain` | originator required | reserved canonical DNS prerequisite for deferred null-reverse-path DSN support; forbidden in other modes and not currently sufficient to authorize signing |
 | `signing.allow_recipient_group` | `false` | reserved; `true` is rejected until per-message Bcc evidence exists |
 | `authentication_results.enabled` | `false` | inbound mode only |
 | `authentication_results.authserv_id` | absent | required exactly when enabled |
@@ -490,8 +507,13 @@ otherwise changed. Angle-bracket stripping, Unicode normalization, case
 folding, IDNA conversion, mailbox reparsing, and lossy string trimming are
 forbidden. SMTPUTF8 octets are preserved for inbound processing under RFC
 6531/6532, but the pinned M10 signing baseline supports ASCII SMTP paths only.
-Originator and ordinary-transit modes therefore fail closed on any non-ASCII
-envelope path before datasource or private-key access.
+An originator non-null, non-ASCII reverse path cannot select an exact signing
+domain and is therefore not applicable; it continues before daemon,
+datasource, or private-key access. Every null sender fails closed before those
+boundaries until the trusted DSN evidence gate exists. Ordinary-transit mode
+still fails closed on every non-ASCII
+envelope path before those boundaries because revision cannot discard inherited
+custody evidence.
 
 Headers are stored as an ordered sequence, never in `textproto.MIMEHeader` or a
 map. Duplicate fields and original name casing are preserved. For each callback

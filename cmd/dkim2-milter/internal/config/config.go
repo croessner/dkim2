@@ -148,6 +148,7 @@ type snapshotState struct {
 	tenant              string
 	domain              string
 	domainSource        milter.DomainSource
+	dsnDomain           string
 	allowRecipientGroup bool
 	authResultsEnabled  bool
 	authservID          string
@@ -173,6 +174,7 @@ type Effective struct {
 	MaxBufferedBytes      int64               `json:"max_buffered_bytes"`
 	RequestTimeout        string              `json:"request_timeout"`
 	SigningDomainSource   milter.DomainSource `json:"signing_domain_source"`
+	DSNSigningAuthority   bool                `json:"dsn_signing_authority"`
 	AllowRecipientGroup   bool                `json:"allow_recipient_group"`
 	AuthenticationResults bool                `json:"authentication_results"`
 	MessageBytes          int64               `json:"message_bytes"`
@@ -225,6 +227,7 @@ func stableFieldSpecs() []fieldSpec {
 		{path: "mode", kind: valueString},
 		{path: "signing.tenant", kind: valueString},
 		{path: "signing.domain", kind: valueString},
+		{path: "signing.dsn_domain", kind: valueString},
 		{
 			path: "signing.domain_source", kind: valueString,
 			defaultValue: string(milter.DomainSourceStatic),
@@ -604,6 +607,7 @@ func validateValues(values map[string]rawValue) (Snapshot, error) {
 		return Snapshot{}, &Error{}
 	}
 	tenant, domain := text("signing.tenant"), text("signing.domain")
+	dsnDomain := text("signing.dsn_domain")
 	domainSource := milter.DomainSource(text("signing.domain_source"))
 	authservID := text("authentication_results.authserv_id")
 	return Snapshot{state: &snapshotState{
@@ -612,7 +616,7 @@ func validateValues(values map[string]rawValue) (Snapshot, error) {
 		maxInFlightMessages: parsed.maxInFlight, maxBufferedBytes: parsed.maxBuffered,
 		daemonEndpoint: text("daemon.endpoint"), capabilityFile: text("daemon.capability_file"),
 		requestTimeout: parsed.requestTimeout, mode: mode, tenant: tenant, domain: domain,
-		domainSource:        domainSource,
+		domainSource: domainSource, dsnDomain: dsnDomain,
 		allowRecipientGroup: parsed.allowRecipientGroup,
 		authResultsEnabled:  parsed.authResultsEnabled, authservID: authservID,
 		failureMode: failure, messageBytes: parsed.messageBytes,
@@ -709,31 +713,82 @@ func validConditionalMatrix(
 	allowRecipientGroup bool,
 	authResultsEnabled bool,
 ) bool {
+	return validModeOwnedSigningFields(values, mode, allowRecipientGroup) &&
+		validModeOwnedReportingFields(values, mode, authResultsEnabled)
+}
+
+// validModeOwnedSigningFields enforces the exact inbound, originator, and
+// transit identity matrix without sharing authority between modes.
+func validModeOwnedSigningFields(
+	values map[string]rawValue,
+	mode Mode,
+	allowRecipientGroup bool,
+) bool {
+	if mode == ModeInbound {
+		return validInboundSigningFields(values, allowRecipientGroup)
+	}
+	return validOutboundSigningFields(values, mode, allowRecipientGroup)
+}
+
+// validInboundSigningFields rejects every signing authority on an inbound-only
+// adapter instance.
+func validInboundSigningFields(values map[string]rawValue, allowRecipientGroup bool) bool {
 	tenantValue := values["signing.tenant"]
 	domainValue := values["signing.domain"]
+	dsnDomainValue := values["signing.dsn_domain"]
 	domainSourceValue := values["signing.domain_source"]
 	groupValue := values["signing.allow_recipient_group"]
-	enabledValue := values["authentication_results.enabled"]
-	authservValue := values["authentication_results.authserv_id"]
-	tenant, domain, authservID := tenantValue.text, domainValue.text, authservValue.text
+	return !tenantValue.explicit && !domainValue.explicit &&
+		!dsnDomainValue.explicit && !domainSourceValue.explicit && !groupValue.explicit &&
+		tenantValue.text == "" && domainValue.text == "" &&
+		milter.DomainSource(domainSourceValue.text) == milter.DomainSourceStatic &&
+		dsnDomainValue.text == "" && !allowRecipientGroup
+}
+
+// validOutboundSigningFields requires one exact route and confines the DSN
+// authority to originator mode.
+func validOutboundSigningFields(
+	values map[string]rawValue,
+	mode Mode,
+	allowRecipientGroup bool,
+) bool {
+	tenantValue := values["signing.tenant"]
+	domainValue := values["signing.domain"]
+	dsnDomainValue := values["signing.dsn_domain"]
+	domainSourceValue := values["signing.domain_source"]
 	domainSource := milter.DomainSource(domainSourceValue.text)
-	signing := mode != ModeInbound
 	staticDomain := domainSource == milter.DomainSourceStatic &&
-		domainValue.explicit && validDomain(domain)
+		domainValue.explicit && validDomain(domainValue.text)
 	envelopeSenderDomain := mode == ModeOriginator &&
 		domainSource == milter.DomainSourceEnvelopeSender &&
-		domainSourceValue.explicit && !domainValue.explicit && domain == ""
-	signingFields := tenantValue.explicit && validTenant(tenant) &&
-		(staticDomain || envelopeSenderDomain)
-	inboundFields := !tenantValue.explicit && !domainValue.explicit &&
-		!domainSourceValue.explicit && !groupValue.explicit &&
-		tenant == "" && domain == "" && domainSource == milter.DomainSourceStatic &&
-		!allowRecipientGroup
+		domainSourceValue.explicit && !domainValue.explicit && domainValue.text == ""
+	if !tenantValue.explicit || !validTenant(tenantValue.text) ||
+		allowRecipientGroup || !staticDomain && !envelopeSenderDomain {
+		return false
+	}
+	switch mode {
+	case ModeOriginator:
+		return dsnDomainValue.explicit && validDomain(dsnDomainValue.text)
+	case ModeOrdinaryTransit:
+		return !dsnDomainValue.explicit && dsnDomainValue.text == ""
+	default:
+		return false
+	}
+}
+
+// validModeOwnedReportingFields confines Authentication-Results identity to
+// inbound mode and requires exact enabled/value provenance.
+func validModeOwnedReportingFields(
+	values map[string]rawValue,
+	mode Mode,
+	authResultsEnabled bool,
+) bool {
+	enabledValue := values["authentication_results.enabled"]
+	authservValue := values["authentication_results.authserv_id"]
+	authservID := authservValue.text
 	reportingMode := mode == ModeInbound ||
 		(!enabledValue.explicit && !authservValue.explicit && !authResultsEnabled)
-	return ((signing && signingFields) || (!signing && inboundFields)) &&
-		!allowRecipientGroup &&
-		reportingMode &&
+	return reportingMode &&
 		authservValue.explicit == authResultsEnabled &&
 		authResultsEnabled == (authservID != "") &&
 		(!authResultsEnabled || (authservValue.explicit && validAuthservID(authservID)))
@@ -878,28 +933,7 @@ func identifierEdge(value byte) bool {
 
 // validDomain accepts one canonical lower-case ASCII DNS name.
 func validDomain(value string) bool {
-	if value == "" || value != strings.ToLower(value) || len(value) > 253 ||
-		strings.HasPrefix(value, ".") || strings.HasSuffix(value, ".") ||
-		strings.ContainsAny(value, " \t\r\n\x00") {
-		return false
-	}
-	for _, label := range strings.Split(value, ".") {
-		if label == "" || len(label) > 63 || strings.HasPrefix(label, "-") ||
-			strings.HasSuffix(label, "-") {
-			return false
-		}
-		for _, char := range label {
-			if !domainByte(char) {
-				return false
-			}
-		}
-	}
-	return true
-}
-
-// domainByte reports whether one rune is allowed in the narrow ASCII label grammar.
-func domainByte(value rune) bool {
-	return value >= 'a' && value <= 'z' || value >= '0' && value <= '9' || value == '-'
+	return milter.ValidSigningDomainAuthority(value)
 }
 
 // validAuthservID accepts the intentionally narrow RFC 8601 token form.
@@ -1017,6 +1051,14 @@ func (s Snapshot) DomainSource() milter.DomainSource {
 	return s.state.domainSource
 }
 
+// DSNDomain returns the exact originator null-sender signing authority.
+func (s Snapshot) DSNDomain() string {
+	if s.state == nil {
+		return ""
+	}
+	return s.state.dsnDomain
+}
+
 // AllowRecipientGroup reports explicit multi-recipient authorization.
 func (s Snapshot) AllowRecipientGroup() bool {
 	return s.state != nil && s.state.allowRecipientGroup
@@ -1110,6 +1152,7 @@ func (s Snapshot) Effective() Effective {
 		MaxConnections: s.state.maxConnections, MaxInFlightMessages: s.state.maxInFlightMessages,
 		MaxBufferedBytes: s.state.maxBufferedBytes, RequestTimeout: s.state.requestTimeout.String(),
 		SigningDomainSource:   s.state.domainSource,
+		DSNSigningAuthority:   s.state.dsnDomain != "",
 		AllowRecipientGroup:   s.state.allowRecipientGroup,
 		AuthenticationResults: s.state.authResultsEnabled,
 		MessageBytes:          s.state.messageBytes, HeaderBytes: s.state.headerBytes,

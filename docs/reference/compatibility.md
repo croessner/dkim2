@@ -6,11 +6,13 @@ is a reviewed behavior migration, not an automatic compatibility update.
 
 ## Public surfaces
 
-- The exported root library API is unchanged from the exact reviewed base
-  `24d7b4eb85430bbc49e3a6ef43889d1be8cd0718`. This includes the reviewed public
-  datasource-provider bridge used by the LDAP/PostgreSQL adapters. The
-  deterministic API manifest has 645 declarations and SHA-256
-  `2d755de5b0941bc8a1b12270fd43e86a4ace9a8b432d94a77b260d9f5901988f`.
+- The exported root library API is reviewed against the exact base
+  `f30fecbd35ae3afd1b590ddfe55ee45f0cf6555a`. The candidate retains the public
+  datasource-provider bridge and adds closed, nonbreaking verification and
+  signing applicability assessments so protocol absence is not represented as
+  a four-state result. The
+  deterministic API manifest has 655 declarations and SHA-256
+  `6f75cb7845f19721de7f6ca60b003c31f620217f186255b18224318523678607`.
 - Daemon HTTP shapes and bounds are authoritative only in
   `docs/specs/openapi/dkim2d.yaml`. The wire `api_version` remains `v1`;
   product prerelease versioning does not alter that field.

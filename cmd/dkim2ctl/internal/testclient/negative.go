@@ -129,7 +129,7 @@ func buildNegativeOperationRequest(
 	}
 	request.ContentLength = contentLength
 	if body != nil {
-		request.Header.Set("Content-Type", contentType)
+		request.Header.Set(headerContentType, contentType)
 	}
 	if err := capability.editNegativeRequest(request, mutation); err != nil {
 		return nil, err
@@ -228,11 +228,11 @@ func buildHostileResponse(status int, contentType string, body string) *http.Res
 		StatusCode: status,
 		Close:      true,
 		Header: http.Header{
-			"Cache-Control":          {cacheNoStore},
+			headerCacheControl:       {cacheNoStore},
 			"X-Content-Type-Options": {contentNoSniff},
-			"Connection":             {connectionClose},
-			"Content-Type":           {contentType},
-			"Content-Length":         {strconv.Itoa(len(body))},
+			headerConnection:         {connectionClose},
+			headerContentType:        {contentType},
+			headerContentLength:      {strconv.Itoa(len(body))},
 		},
 		Body: io.NopCloser(bytes.NewBufferString(body)),
 	}

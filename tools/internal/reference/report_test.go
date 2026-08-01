@@ -86,6 +86,44 @@ func TestEvidenceSchemaCannotLaunderHostileMarkers(t *testing.T) {
 	}
 }
 
+// TestCollectOpenAPIIdentitiesBindsClosedGeneratedInventory freezes every release boundary.
+func TestCollectOpenAPIIdentitiesBindsClosedGeneratedInventory(t *testing.T) {
+	root := t.TempDir()
+	paths := []string{
+		"docs/specs/openapi/dkim2d.yaml",
+		"cmd/dkim2-exim/internal/daemon/generated/client.gen.go",
+		"cmd/dkim2-exim/internal/integration/generated/server.gen.go",
+		"cmd/dkim2-milter/internal/daemon/generated/client.gen.go",
+		"cmd/dkim2-milter/internal/integration/generated/server.gen.go",
+		"cmd/dkim2ctl/internal/testclient/generated/client.gen.go",
+		"cmd/dkim2d/internal/httpjson/generated/server.gen.go",
+	}
+	for _, path := range paths {
+		target := filepath.Join(root, filepath.FromSlash(path))
+		if err := os.MkdirAll(filepath.Dir(target), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(target, []byte(path), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	identities, err := collectOpenAPIIdentities(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(identities) != len(paths) || len(generatedOpenAPIPaths) != len(paths)-1 {
+		t.Fatalf("OpenAPI identity inventory is not closed over seven artifacts: got %d", len(identities))
+	}
+	for index, path := range paths {
+		identity := identities[index]
+		if identity.Path != path || identity.Schema != "openapi_source_or_generated" ||
+			identity.SHA256 != interop.SHA256([]byte(path)) {
+			t.Fatalf("unexpected OpenAPI identity at %d: %+v", index, identity)
+		}
+	}
+}
+
 // TestValidateImageReleaseReportRejectsMissingOrChangedChildren prevents stale image evidence laundering.
 func TestValidateImageReleaseReportRejectsMissingOrChangedChildren(t *testing.T) {
 	root := t.TempDir()

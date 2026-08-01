@@ -1,6 +1,62 @@
 package app
 
-import "testing"
+import (
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"strings"
+	"testing"
+)
+
+// TestSigningAssessmentRejectsDiagnosticTraversal proves the applicability
+// wrapper cannot expose generated signing fields through formatting or encoding.
+func TestSigningAssessmentRejectsDiagnosticTraversal(t *testing.T) {
+	t.Parallel()
+	const marker = "PRIVATE-SIGNING-ASSESSMENT-FIELD"
+	fieldBytes := []byte("DKIM2-Signature: b=" + marker + "\r\n")
+	field, err := NewCompletedField(fieldBytes)
+	if err != nil {
+		t.Fatal("protected completed field rejected")
+	}
+	result, err := NewOperationResult(
+		OperationSign,
+		OperationPass,
+		OperationAccept,
+		[]CompletedField{field},
+	)
+	if err != nil {
+		t.Fatal("protected operation result rejected")
+	}
+	assessment, err := NewApplicableSigningAssessment(result)
+	if err != nil {
+		t.Fatal("protected signing assessment rejected")
+	}
+
+	formatted := fmt.Sprintf(
+		"%s|%q|%v|%+v|%#v|%x|%X|%p",
+		assessment, assessment, assessment, assessment,
+		assessment, assessment, assessment, &assessment,
+	)
+	if strings.Contains(formatted, marker) ||
+		strings.Contains(formatted, hex.EncodeToString(fieldBytes)) ||
+		strings.Contains(formatted, strings.ToUpper(hex.EncodeToString(fieldBytes))) ||
+		!strings.Contains(formatted, operationRedacted) {
+		t.Fatal("signing assessment formatting traversed protected result state")
+	}
+
+	textMarshaler, ok := any(assessment).(interface {
+		MarshalText() ([]byte, error)
+	})
+	if !ok {
+		t.Fatal("signing assessment does not reject text serialization")
+	}
+	if encoded, marshalErr := textMarshaler.MarshalText(); marshalErr == nil || len(encoded) != 0 {
+		t.Fatal("signing assessment allowed text serialization")
+	}
+	if encoded, marshalErr := json.Marshal(assessment); marshalErr == nil || len(encoded) != 0 {
+		t.Fatal("signing assessment allowed JSON serialization")
+	}
+}
 
 // TestOriginatorConstructorRejectsRevisionWithoutIncomingEvidence proves a
 // revision cannot enter the service through the single-envelope constructor.

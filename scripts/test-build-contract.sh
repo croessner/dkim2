@@ -2,10 +2,8 @@
 set -eu
 
 test_root=.artifacts/build-contract-negative
-for path in "$test_root"; do
-	test ! -e "$path"
-	test ! -L "$path"
-done
+test ! -e "$test_root"
+test ! -L "$test_root"
 mkdir -m 0700 "$test_root"
 trap 'rm -rf -- "$test_root"' EXIT HUP INT TERM
 build_context_marker=privacy-build-context-7f3c9a2d
@@ -40,6 +38,56 @@ if GITHUB_EVENT_NAME=pull_request \
   scripts/publish-images.sh >/dev/null 2>&1; then
 	exit 1
 fi
+if DKIM2_DEV_PUBLISH_APPROVED=false \
+  DKIM2_DEV_REGISTRY=docker.roessner-net.de/mail \
+  scripts/publish-dev-images.sh >/dev/null 2>&1; then
+	exit 1
+fi
+grep -Fq 'registry=docker.roessner-net.de/mail' scripts/publish-dev-images.sh
+grep -Fq 'test "${DKIM2_DEV_PUBLISH_APPROVED:-}" = true' \
+  scripts/publish-dev-images.sh
+grep -Fq 'test -z "$(git status --porcelain --untracked-files=all)"' \
+  scripts/publish-dev-images.sh
+grep -Fq 'test "${#revision}" -eq 40' scripts/publish-dev-images.sh
+grep -Fq 'case "$revision" in *[!0-9a-f]*) exit 2 ;; esac' \
+  scripts/publish-dev-images.sh
+grep -Fq 'tag="$version-$revision"' scripts/publish-dev-images.sh
+! grep -Fq 'short_revision' scripts/publish-dev-images.sh
+grep -Fq 'scripts/build-images.sh' scripts/publish-dev-images.sh
+grep -Fq 'scripts/inspect-images.sh check' scripts/publish-dev-images.sh
+grep -Fq 'scripts/test-image-runtime.sh' scripts/publish-dev-images.sh
+test "$(grep -Fc 'for product in dkim2d dkim2-milter dkim2ctl; do' \
+  scripts/publish-dev-images.sh)" -eq 3
+grep -Fq 'remote_states="$work/remote-states.jsonl"' \
+  scripts/publish-dev-images.sh
+grep -Fq 'state=present_identical' scripts/publish-dev-images.sh
+grep -Fq "LC_ALL=C grep -Eiq '(manifest unknown|not found)'" \
+  scripts/publish-dev-images.sh
+local_preflight_line=$(grep -nF 'remote_states="$work/remote-states.jsonl"' \
+  scripts/publish-dev-images.sh | cut -d: -f1)
+registry_export_line=$(grep -nF \
+  '--output "type=registry,name=$repository:$tag,oci-mediatypes=true,rewrite-timestamp=true"' \
+  scripts/publish-dev-images.sh | cut -d: -f1)
+test "$local_preflight_line" -lt "$registry_export_line"
+remote_preflight_complete_line=$(awk \
+  -v start="$local_preflight_line" -v finish="$registry_export_line" \
+  'NR > start && NR < finish && $0 ~ /^[[:space:]]*assert_candidate$/ { line = NR }
+   END { print line }' scripts/publish-dev-images.sh)
+test -n "$remote_preflight_complete_line"
+test "$remote_preflight_complete_line" -lt "$registry_export_line"
+grep -Fq -- '--platform linux/amd64,linux/arm64' scripts/publish-dev-images.sh
+grep -Fq -- '--output "type=registry,name=$repository:$tag,oci-mediatypes=true,rewrite-timestamp=true"' \
+  scripts/publish-dev-images.sh
+! grep -Fq -- '--tag ' scripts/publish-dev-images.sh
+! grep -Fq -- '--push' scripts/publish-dev-images.sh
+grep -Fq -- '--output "type=registry,oci-mediatypes=true,rewrite-timestamp=true"' \
+  scripts/publish-images.sh
+grep -Fq -- '--tag "$repository:$version"' scripts/publish-images.sh
+grep -Fq -- '--tag "$repository:$minor"' scripts/publish-images.sh
+grep -Fq -- '--tag "$repository:$major"' scripts/publish-images.sh
+! grep -Fq -- '--push' scripts/publish-images.sh
+! grep -Eq '(^|[^[:alnum:]_-])latest([^[:alnum:]_-]|$)' \
+  scripts/publish-dev-images.sh
 grep -Fq 'release:' .github/workflows/container-publish.yml
 grep -Fq 'types:' .github/workflows/container-publish.yml
 grep -Fq -- '- published' .github/workflows/container-publish.yml

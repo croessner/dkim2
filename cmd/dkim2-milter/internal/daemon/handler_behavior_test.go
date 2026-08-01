@@ -21,6 +21,12 @@ import (
 const (
 	handlerPrivacyMarker = "toxic-handler-private-marker"
 	testAuthservID       = "mx.example.test"
+	testDSNDomain        = "dsn.example.test"
+	testTenant           = "tenant"
+	testCaseWrongMethod  = "wrong method"
+	testCaseWrongRoute   = "wrong route"
+	testCaseQuery        = "query"
+	validResponseDate    = "Mon, 02 Jan 2006 15:04:05 GMT"
 )
 
 // TestHandlerUsesOneExactGeneratedOperation proves route, headers, DTOs, and no retry.
@@ -40,7 +46,7 @@ func TestHandlerUsesOneExactGeneratedOperation(t *testing.T) {
 				if request.Method != http.MethodPost || request.URL.String() != testCase.route ||
 					request.Header.Get("User-Agent") != fixedUserAgent ||
 					request.Header.Get("Accept") != "application/json" ||
-					request.Header.Get("Cache-Control") != "no-store" ||
+					request.Header.Get("Cache-Control") != cacheControlNoStore ||
 					request.Header.Get(capabilityHeader) == "" ||
 					request.Header.Get("Cookie") != "" ||
 					request.Header.Get("Authorization") != "" {
@@ -52,7 +58,7 @@ func TestHandlerUsesOneExactGeneratedOperation(t *testing.T) {
 					t.Error("generated request body was not JSON")
 				}
 				contextValue, _ := document["context"].(map[string]any)
-				if contextValue["tenant"] != "tenant" || contextValue["domain"] != "example.test" {
+				if contextValue["tenant"] != testTenant || contextValue["domain"] != "example.test" {
 					t.Error("generated signing context was not mapped exactly")
 				}
 				writer.Header().Set("Content-Type", "application/json")
@@ -61,8 +67,9 @@ func TestHandlerUsesOneExactGeneratedOperation(t *testing.T) {
 			defer server.Close()
 			capability := testCapability(t)
 			handler, err := NewHandler(
-				server.URL, capability, testCase.mode, "tenant", "example.test",
-				milter.DomainSourceStatic, "",
+				server.URL, capability, testCase.mode, testTenant, "example.test",
+				milter.DomainSourceStatic,
+				map[string]string{modeOriginator: testDSNDomain}[testCase.mode], "",
 			)
 			if err != nil {
 				t.Fatal("handler construction failed")
@@ -114,20 +121,252 @@ func TestHandlerUsesExactInboundGeneratedOperation(t *testing.T) {
 	defer server.Close()
 	handler, err := NewHandler(
 		server.URL, testCapability(t), modeInbound, "", "", milter.DomainSourceStatic,
-		"mx.example.test",
+		"", "mx.example.test",
 	)
 	if err != nil {
 		t.Fatal("inbound handler construction failed")
 	}
 	t.Cleanup(func() { _ = handler.Close() })
 	result, err := handler.Handle(t.Context(), message)
-	if err != nil || calls != 1 || result.Operation != "process" ||
+	if err != nil || calls != 1 || result.Operation != operationProcess ||
 		result.Result != verificationPass || result.Outcome != milter.DispositionAccept ||
 		len(result.Actions) != 1 ||
 		result.Actions[0].Kind != milter.ActionAddHeader ||
 		result.Actions[0].Name != "Authentication-Results" ||
 		result.Actions[0].Value != "mx.example.test; dkim2=pass" {
 		t.Fatalf("Handle()=(%v,%v), calls=%d", result, err, calls)
+	}
+}
+
+// TestHandlerAcceptsUnsignedNoContent proves the generated client preserves the
+// exact applicability response through the real HTTP transport.
+func TestHandlerAcceptsUnsignedNoContent(t *testing.T) {
+	testHandlerAcceptsNoContent(
+		t, modeInbound, "", "", routeProcess, operationProcess,
+	)
+}
+
+// testHandlerAcceptsNoContent proves one generated client preserves an exact
+// applicability response through real HTTP transport.
+func testHandlerAcceptsNoContent(
+	t *testing.T,
+	mode string,
+	tenant string,
+	domain string,
+	route string,
+	operation string,
+) {
+	t.Helper()
+	calls := 0
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		calls++
+		if request.Method != http.MethodPost || request.URL.String() != route {
+			t.Error("no-content request escaped the fixed route contract")
+		}
+		writer.Header().Set("Cache-Control", cacheControlNoStore)
+		writer.Header().Set("Connection", "close")
+		writer.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+	handler, err := NewHandler(
+		server.URL, testCapability(t), mode, tenant, domain, milter.DomainSourceStatic,
+		map[string]string{modeOriginator: testDSNDomain}[mode], "",
+	)
+	if err != nil {
+		t.Fatal("no-content handler construction failed")
+	}
+	t.Cleanup(func() { _ = handler.Close() })
+	result, err := handler.Handle(t.Context(), testMessage(t))
+	if err != nil || calls != 1 || result.Operation != operation || result.Result != verificationNone ||
+		result.Outcome != milter.DispositionContinue || len(result.Actions) != 0 {
+		t.Fatalf("Handle()=(%v,%v), calls=%d", result, err, calls)
+	}
+}
+
+// TestMapProcessAcceptsOnlyExactUnsignedNoContent proves the applicability wire variant.
+func TestMapProcessAcceptsOnlyExactUnsignedNoContent(t *testing.T) {
+	request := &http.Request{Method: http.MethodPost, URL: &url.URL{Path: routeProcess}}
+	response := &generated.ProcessMessageResponse{
+		HTTPResponse: &http.Response{
+			StatusCode: http.StatusNoContent,
+			Request:    request,
+			Close:      true,
+			ProtoMajor: 1,
+			ProtoMinor: 1,
+			Header: http.Header{
+				"Cache-Control": []string{cacheControlNoStore},
+				"Connection":    []string{connectionClose},
+				"Date":          []string{validResponseDate},
+			},
+			ContentLength: 0,
+		},
+	}
+	guard := &handlerGuard{authservID: testAuthservID}
+	result, err := guard.mapProcess(response)
+	if err != nil || result.Operation != operationProcess || result.Result != verificationNone ||
+		result.Outcome != milter.DispositionContinue || len(result.Actions) != 0 {
+		t.Fatalf("mapProcess() = %#v, %v", result, err)
+	}
+	withoutDate := *response
+	withoutDateHTTP := *response.HTTPResponse
+	withoutDateHTTP.Header = response.HTTPResponse.Header.Clone()
+	withoutDateHTTP.Header.Del("Date")
+	withoutDate.HTTPResponse = &withoutDateHTTP
+	if _, withoutDateErr := guard.mapProcess(&withoutDate); withoutDateErr != nil {
+		t.Fatal("optional Date header was required")
+	}
+	for _, testCase := range []struct {
+		name   string
+		mutate func(*http.Request)
+	}{
+		{name: testCaseWrongMethod, mutate: func(value *http.Request) { value.Method = http.MethodGet }},
+		{name: testCaseWrongRoute, mutate: func(value *http.Request) { value.URL.Path = routeSign }},
+		{name: testCaseQuery, mutate: func(value *http.Request) { value.URL.RawQuery = "unexpected=true" }},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			candidate := *response
+			candidateHTTP := *response.HTTPResponse
+			candidateRequest := *response.HTTPResponse.Request
+			candidateURL := *response.HTTPResponse.Request.URL
+			candidateRequest.URL = &candidateURL
+			testCase.mutate(&candidateRequest)
+			candidateHTTP.Request = &candidateRequest
+			candidate.HTTPResponse = &candidateHTTP
+			if _, err := guard.mapProcess(&candidate); err == nil {
+				t.Fatal("misbound process response was accepted")
+			}
+		})
+	}
+	assertRejectsMalformedNoContent(t, response.HTTPResponse)
+}
+
+// TestMapSignAcceptsOnlyExactNotApplicableNoContent proves the originator
+// applicability wire variant is bodyless, mutation-free, and operation-bound.
+func TestMapSignAcceptsOnlyExactNotApplicableNoContent(t *testing.T) {
+	request := &http.Request{Method: http.MethodPost, URL: &url.URL{Path: routeSign}}
+	response := &generated.SignMessageResponse{
+		HTTPResponse: &http.Response{
+			StatusCode: http.StatusNoContent,
+			Request:    request,
+			Close:      true,
+			ProtoMajor: 1,
+			ProtoMinor: 1,
+			Header: http.Header{
+				"Cache-Control": []string{cacheControlNoStore},
+				"Connection":    []string{connectionClose},
+				"Date":          []string{validResponseDate},
+			},
+			ContentLength: 0,
+		},
+	}
+	result, err := mapOperationResponse(response, operationSign)
+	if err != nil || result.Operation != operationSign || result.Result != verificationNone ||
+		result.Outcome != milter.DispositionContinue || len(result.Actions) != 0 {
+		t.Fatalf("mapOperationResponse() = %#v, %v", result, err)
+	}
+	withoutDate := *response
+	withoutDateHTTP := *response.HTTPResponse
+	withoutDateHTTP.Header = response.HTTPResponse.Header.Clone()
+	withoutDateHTTP.Header.Del("Date")
+	withoutDate.HTTPResponse = &withoutDateHTTP
+	if _, withoutDateErr := mapOperationResponse(&withoutDate, operationSign); withoutDateErr != nil {
+		t.Fatal("optional Date header was required")
+	}
+	for _, testCase := range []struct {
+		name   string
+		mutate func(*http.Request)
+	}{
+		{name: testCaseWrongMethod, mutate: func(value *http.Request) { value.Method = http.MethodGet }},
+		{name: testCaseWrongRoute, mutate: func(value *http.Request) { value.URL.Path = routeProcess }},
+		{name: testCaseQuery, mutate: func(value *http.Request) { value.URL.RawQuery = "unexpected=true" }},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			candidate := *response
+			candidateHTTP := *response.HTTPResponse
+			candidateRequest := *response.HTTPResponse.Request
+			candidateURL := *response.HTTPResponse.Request.URL
+			candidateRequest.URL = &candidateURL
+			testCase.mutate(&candidateRequest)
+			candidateHTTP.Request = &candidateRequest
+			candidate.HTTPResponse = &candidateHTTP
+			if _, err := mapOperationResponse(&candidate, operationSign); err == nil {
+				t.Fatal("misbound sign response was accepted")
+			}
+		})
+	}
+	assertRejectsMalformedNoContent(t, response.HTTPResponse)
+}
+
+// assertRejectsMalformedNoContent exercises the shared strict 204 envelope
+// against representation, framing, and date mutations.
+func assertRejectsMalformedNoContent(t *testing.T, response *http.Response) {
+	t.Helper()
+	for _, testCase := range []struct {
+		name   string
+		mutate func(*http.Response, *[]byte, *bool)
+	}{
+		{name: "body", mutate: func(_ *http.Response, body *[]byte, _ *bool) { *body = []byte("{}") }},
+		{name: "JSON document", mutate: func(_ *http.Response, _ *[]byte, document *bool) { *document = true }},
+		{name: "content type", mutate: func(value *http.Response, _ *[]byte, _ *bool) {
+			value.Header.Set("Content-Type", "application/json")
+		}},
+		{name: "content length zero", mutate: func(value *http.Response, _ *[]byte, _ *bool) {
+			value.Header.Set("Content-Length", "0")
+		}},
+		{name: "transfer encoding", mutate: func(value *http.Response, _ *[]byte, _ *bool) {
+			value.TransferEncoding = []string{"chunked"}
+		}},
+		{name: "transfer encoding declaration", mutate: func(value *http.Response, _ *[]byte, _ *bool) {
+			value.Header.Set("transfer-encoding", "chunked")
+		}},
+		{name: "raw transfer encoding declaration", mutate: func(value *http.Response, _ *[]byte, _ *bool) {
+			value.Header["tRaNsFeR-EnCoDiNg"] = []string{"chunked"}
+		}},
+		{name: "trailer projection", mutate: func(value *http.Response, _ *[]byte, _ *bool) {
+			value.Trailer = http.Header{"Digest": {"sha-256=synthetic"}}
+		}},
+		{name: "trailer declaration", mutate: func(value *http.Response, _ *[]byte, _ *bool) {
+			value.Header.Set("trailer", "Digest")
+		}},
+		{name: "missing cache control", mutate: func(value *http.Response, _ *[]byte, _ *bool) {
+			value.Header.Del("Cache-Control")
+		}},
+		{name: "missing connection", mutate: func(value *http.Response, _ *[]byte, _ *bool) {
+			value.Header.Del("Connection")
+		}},
+		{name: "duplicate connection", mutate: func(value *http.Response, _ *[]byte, _ *bool) {
+			value.Header.Add("Connection", connectionClose)
+		}},
+		{name: "invalid date", mutate: func(value *http.Response, _ *[]byte, _ *bool) {
+			value.Header.Set("Date", "Monday, 02-Jan-06 15:04:05 GMT")
+		}},
+		{name: "mismatched date weekday", mutate: func(value *http.Response, _ *[]byte, _ *bool) {
+			value.Header.Set("Date", "Tue, 02 Jan 2006 15:04:05 GMT")
+		}},
+		{name: "duplicate date", mutate: func(value *http.Response, _ *[]byte, _ *bool) {
+			value.Header.Add("Date", validResponseDate)
+		}},
+		{name: "open projected connection", mutate: func(value *http.Response, _ *[]byte, _ *bool) {
+			value.Close = false
+		}},
+		{name: "HTTP/2 explicit connection close", mutate: func(value *http.Response, _ *[]byte, _ *bool) {
+			value.ProtoMajor = 2
+			value.ProtoMinor = 0
+		}},
+		{name: "wrong status", mutate: func(value *http.Response, _ *[]byte, _ *bool) {
+			value.StatusCode = http.StatusOK
+		}},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			candidate := *response
+			candidate.Header = response.Header.Clone()
+			var body []byte
+			hasJSONDocument := false
+			testCase.mutate(&candidate, &body, &hasJSONDocument)
+			if validNoContentResponseShape(&candidate, body, hasJSONDocument) {
+				t.Fatal("malformed no-content response was accepted")
+			}
+		})
 	}
 }
 
@@ -140,8 +379,8 @@ func TestHandlerNonOKResponseIsContractFailure(t *testing.T) {
 	}))
 	defer server.Close()
 	handler, err := NewHandler(
-		server.URL, testCapability(t), modeOriginator, "tenant", "example.test",
-		milter.DomainSourceStatic, "",
+		server.URL, testCapability(t), modeOriginator, testTenant, "example.test",
+		milter.DomainSourceStatic, testDSNDomain, "",
 	)
 	if err != nil {
 		t.Fatal("handler construction failed")
@@ -161,7 +400,7 @@ func TestHandlerDerivesOriginatorDomainFromEnvelopeSender(t *testing.T) {
 			t.Error("generated request body was not JSON")
 		}
 		contextValue, _ := document["context"].(map[string]any)
-		if contextValue["tenant"] != "tenant" || contextValue["domain"] != "example.test" {
+		if contextValue["tenant"] != testTenant || contextValue["domain"] != "example.test" {
 			t.Error("envelope sender domain was not mapped exactly")
 		}
 		writer.Header().Set("Content-Type", "application/json")
@@ -169,8 +408,8 @@ func TestHandlerDerivesOriginatorDomainFromEnvelopeSender(t *testing.T) {
 	}))
 	defer server.Close()
 	handler, err := NewHandler(
-		server.URL, testCapability(t), modeOriginator, "tenant", "",
-		milter.DomainSourceEnvelopeSender, "",
+		server.URL, testCapability(t), modeOriginator, testTenant, "",
+		milter.DomainSourceEnvelopeSender, testDSNDomain, "",
 	)
 	if err != nil {
 		t.Fatal("handler construction failed")
@@ -187,7 +426,7 @@ func TestHandlerDerivesOriginatorDomainFromEnvelopeSender(t *testing.T) {
 	if _, err := handler.Handle(t.Context(), message); err != nil || calls != 1 {
 		t.Fatalf("Handle() error=%v, calls=%d", err, calls)
 	}
-	for _, reverse := range []string{"<>", "<sender@[192.0.2.1]>"} {
+	for _, reverse := range []string{"<sender@[192.0.2.1]>", "<séndér@example.test>", "<sender@täst.example>"} {
 		message, err := milter.NewMessage(
 			[]byte("From: sender@example.test\r\n\r\nbody"),
 			[]byte(reverse),
@@ -196,12 +435,86 @@ func TestHandlerDerivesOriginatorDomainFromEnvelopeSender(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		_, err = handler.Handle(t.Context(), message)
-		assertFailureClass(t, err, milter.FailureContract)
+		result, handleErr := handler.Handle(t.Context(), message)
+		if handleErr != nil || result.Operation != operationSign ||
+			result.Result != verificationNone || result.Outcome != milter.DispositionContinue ||
+			len(result.Actions) != 0 {
+			t.Fatalf("Handle(%q)=(%v,%v)", reverse, result, handleErr)
+		}
+	}
+	message, err = milter.NewMessage(
+		[]byte("From: sender@example.test\r\n\r\nbody"),
+		[]byte("<sender@example.test>"),
+		[][]byte{[]byte("<réçipient@example.test>")},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, handleErr := handler.Handle(t.Context(), message)
+	if handleErr != nil || result.Operation != operationSign ||
+		result.Result != verificationNone || result.Outcome != milter.DispositionContinue ||
+		len(result.Actions) != 0 {
+		t.Fatalf("Handle(EAI recipient)=(%v,%v)", result, handleErr)
 	}
 	if calls != 1 {
 		t.Fatalf("invalid envelope domains reached daemon: calls=%d", calls)
 	}
+}
+
+// TestHandlerTempfailsNullReversePathUntilPrevalidatedDSNGateExists reproduces
+// the missing Draft-04 Section 12.1 trusted-evidence gate.
+func TestHandlerTempfailsNullReversePathUntilPrevalidatedDSNGateExists(t *testing.T) {
+	calls := 0
+	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		calls++
+	}))
+	defer server.Close()
+	handler, err := NewHandler(
+		server.URL, testCapability(t), modeOriginator, testTenant, "",
+		milter.DomainSourceEnvelopeSender, testDSNDomain, "",
+	)
+	if err != nil {
+		t.Fatal("handler construction failed")
+	}
+	t.Cleanup(func() { _ = handler.Close() })
+	message, err := milter.NewMessage(
+		[]byte("From: mailer-daemon@example.test\r\n\r\nbody"),
+		[]byte("<>"),
+		[][]byte{[]byte("<sender@example.test>")},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = handler.Handle(t.Context(), message)
+	assertFailureClass(t, err, milter.FailureContract)
+	if calls != 0 {
+		t.Fatalf("null-sender message reached daemon without trusted DSN gate: calls=%d", calls)
+	}
+}
+
+// TestHandlerRejectsIncompleteDSNSigningAuthority proves null-sender signing
+// cannot fall back to other message or route evidence.
+func TestHandlerRejectsIncompleteDSNSigningAuthority(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		t.Fatal("invalid DSN signing state reached the daemon")
+	}))
+	defer server.Close()
+	for _, authority := range []string{"", "DSN.example.test", "recipient@example.test"} {
+		if handler, err := NewHandler(
+			server.URL, testCapability(t), modeOriginator, testTenant, "example.test",
+			milter.DomainSourceStatic, authority, "",
+		); err == nil || handler != nil {
+			t.Fatalf("NewHandler() accepted DSN authority %q", authority)
+		}
+	}
+}
+
+// TestHandlerAcceptsOriginatorNoContent proves absent policy remains a no-op
+// through the generated client and exact HTTP response validator.
+func TestHandlerAcceptsOriginatorNoContent(t *testing.T) {
+	testHandlerAcceptsNoContent(
+		t, modeOriginator, testTenant, "example.test", routeSign, operationSign,
+	)
 }
 
 // TestOperationEvidenceClassifiesIndeterminateBoundaries proves no retry after effects.

@@ -15,6 +15,29 @@ type Verifier struct {
 	initialized bool
 }
 
+// Assessment is one closed inbound applicability decision with an optional verification result.
+type Assessment struct {
+	result      Result
+	applicable  bool
+	initialized bool
+}
+
+// Valid reports whether the assessment is either not applicable or owns one valid result.
+func (a Assessment) Valid() bool {
+	return a.initialized && (!a.applicable || a.result.State().Known())
+}
+
+// Applicable reports whether DKIM2 protocol fields required an actual verification.
+func (a Assessment) Applicable() bool { return a.initialized && a.applicable }
+
+// Verification returns the four-state result only when verification was applicable.
+func (a Assessment) Verification() (Result, bool) {
+	if !a.Valid() || !a.applicable {
+		return Result{}, false
+	}
+	return a.result, true
+}
+
 // NewVerifier constructs a service coordinator with immutable validated policy.
 func NewVerifier(provider verify.KeyProvider, config Config) (Verifier, error) {
 	if nilKeyProvider(provider) || config.Limits.Validate() != nil || config.Clock == nil {
@@ -43,19 +66,46 @@ func nilKeyProvider(provider verify.KeyProvider) bool {
 
 // Verify parses raw input, delegates protocol verification, and returns one disjoint outcome.
 func (v Verifier) Verify(ctx context.Context, request Request) (Result, error) {
+	return v.verify(ctx, request, false)
+}
+
+// Assess classifies complete protocol absence before starting DKIM2 verification.
+func (v Verifier) Assess(ctx context.Context, request Request) (Assessment, error) {
+	result, applicable, err := v.assess(ctx, request)
+	return Assessment{
+		result: result, applicable: applicable, initialized: err == nil || applicable,
+	}, err
+}
+
+// verify preserves the explicit four-state verification entry point.
+func (v Verifier) verify(ctx context.Context, request Request, classifyAbsence bool) (Result, error) {
+	result, _, err := v.assessWithAbsencePolicy(ctx, request, classifyAbsence)
+	if err != nil {
+		return Result{}, err
+	}
+	return result, nil
+}
+
+// assess owns parsing, applicability classification, and current verification.
+func (v Verifier) assess(ctx context.Context, request Request) (Result, bool, error) {
+	return v.assessWithAbsencePolicy(ctx, request, true)
+}
+
+// assessWithAbsencePolicy shares all preflight work without changing explicit Verify semantics.
+func (v Verifier) assessWithAbsencePolicy(ctx context.Context, request Request, classifyAbsence bool) (Result, bool, error) {
 	if !v.initialized || v.limits.Validate() != nil {
-		return Result{}, newError(ErrorInvalidConfig)
+		return Result{}, false, newError(ErrorInvalidConfig)
 	}
 	if ctx == nil {
-		return Result{}, newError(ErrorInvalidRequest)
+		return Result{}, false, newError(ErrorInvalidRequest)
 	}
 	if err := ctx.Err(); err != nil {
-		return Result{}, err
+		return Result{}, false, err
 	}
 	raw := request.RawMessage()
 	forward := request.ForwardPaths()
 	if len(raw) > v.limits.MaxRawMessageBytes || len(forward) > v.limits.MaxRecipients {
-		return preExtractionResult(ReasonLimitExceeded), nil
+		return preExtractionResult(ReasonLimitExceeded), true, nil
 	}
 
 	options := rawmsg.DefaultParserOptions()
@@ -66,19 +116,22 @@ func (v Verifier) Verify(ctx context.Context, request Request) (Result, error) {
 		if rawmsg.IsParserErrorCode(err, rawmsg.ErrorCodeLimitExceeded) {
 			reason = ReasonLimitExceeded
 		}
-		return preExtractionResult(reason), nil
+		return preExtractionResult(reason), true, nil
+	}
+	if classifyAbsence && !verify.ProtocolApplicable(message) {
+		return Result{}, false, nil
 	}
 
 	coreResult, err := v.core.VerifyCurrent(ctx, verify.Request{
 		Message: message, Envelope: verify.NewEnvelope(request.ReversePath(), forward), RequireEnvelope: true,
 	})
 	if ctxErr := ctx.Err(); ctxErr != nil {
-		return Result{}, ctxErr
+		return Result{}, true, ctxErr
 	}
 	if err != nil {
-		return mapVerificationError(err), nil
+		return mapVerificationError(err), true, nil
 	}
-	return mapVerificationResult(coreResult, v.limits), nil
+	return mapVerificationResult(coreResult, v.limits), true, nil
 }
 
 // preExtractionResult returns truthful indeterminate custody after early failure.

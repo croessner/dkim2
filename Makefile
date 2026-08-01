@@ -521,6 +521,10 @@ images: images-multiarch
 images-multiarch: check-images
 	@scripts/build-images.sh
 
+.PHONY: publish-dev-images
+publish-dev-images:
+	@scripts/publish-dev-images.sh
+
 .PHONY: image-sbom
 image-sbom:
 	@scripts/image-evidence.sh sbom

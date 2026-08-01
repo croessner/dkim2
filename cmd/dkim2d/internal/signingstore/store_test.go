@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/croessner/dkim2"
+	"github.com/croessner/dkim2/provider"
 	"golang.org/x/sys/unix"
 )
 
@@ -90,10 +91,12 @@ func TestStoreComposesDatasourceProjectionAndOpaqueSigner(t *testing.T) {
 		PolicyOrdinaryTransit,
 		time.Now().UTC(),
 	); otherErr == nil || other.Valid() ||
+		provider.ErrorCodeOf(otherErr) != provider.ErrorCodeNotFound ||
 		dkim2.ProviderErrorClassOf(otherErr) != dkim2.ProviderErrorClassPermanent {
 		t.Fatalf(
-			"ResolvePolicy() undeclared use valid=%t class=%q",
+			"ResolvePolicy() undeclared use valid=%t code=%q public_class=%q",
 			other.Valid(),
+			provider.ErrorCodeOf(otherErr),
 			dkim2.ProviderErrorClassOf(otherErr),
 		)
 	}

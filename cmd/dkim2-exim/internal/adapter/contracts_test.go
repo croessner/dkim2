@@ -427,6 +427,7 @@ func TestPlanOperationMatrices(t *testing.T) {
 	}{
 		{FilterSign, OperationSign, ResultPass, DispositionAccept, []Action{instance, signature}},
 		{FilterSign, OperationSign, ResultPass, DispositionContinue, nil},
+		{FilterSign, OperationSign, ResultNone, DispositionContinue, nil},
 		{FilterSign, OperationSign, ResultFail, DispositionReject, nil},
 		{FilterSign, OperationSign, ResultTemperror, DispositionTempfail, nil},
 		{FilterRevise, OperationRevise, ResultPass, DispositionAccept, []Action{signature}},
@@ -470,6 +471,45 @@ func TestPlanOperationMatrices(t *testing.T) {
 	}
 	if _, err := NewPlan(ResultFail, DispositionReject, []Action{auth}); err == nil {
 		t.Fatal("process plan admitted a report action on a non-accepting outcome")
+	}
+}
+
+// TestNotApplicablePlansRemainOperationBound proves bodyless applicability
+// cannot authorize mutations, terminal outcomes, or a revise operation.
+func TestNotApplicablePlansRemainOperationBound(t *testing.T) {
+	process, err := NewPlan(ResultNone, DispositionContinue, nil)
+	if err != nil || process.Operation() != OperationProcess ||
+		process.Result() != ResultNone || process.Disposition() != DispositionContinue ||
+		len(process.Actions()) != 0 {
+		t.Fatal("valid process not-applicable plan failed")
+	}
+	sign, err := NewFilterPlan(FilterSign, ResultNone, DispositionContinue, nil)
+	if err != nil || sign.Operation() != OperationSign ||
+		sign.Result() != ResultNone || sign.Disposition() != DispositionContinue ||
+		len(sign.Actions()) != 0 {
+		t.Fatal("valid sign not-applicable plan failed")
+	}
+	action, _ := NewAction(ActionAddHeader, headerAuthenticationResults, "mx.example; dkim2=pass")
+	for _, candidate := range []struct {
+		operation   FilterOperation
+		disposition Disposition
+		actions     []Action
+	}{
+		{FilterSign, DispositionAccept, nil},
+		{FilterSign, DispositionContinue, []Action{action}},
+		{FilterRevise, DispositionContinue, nil},
+	} {
+		if _, candidateErr := NewFilterPlan(
+			candidate.operation, ResultNone, candidate.disposition, candidate.actions,
+		); candidateErr == nil {
+			t.Fatal("invalid filter not-applicable plan succeeded")
+		}
+	}
+	if _, err = NewPlan(ResultNone, DispositionAccept, nil); err == nil {
+		t.Fatal("terminal process not-applicable plan succeeded")
+	}
+	if _, err = NewPlan(ResultNone, DispositionContinue, []Action{action}); err == nil {
+		t.Fatal("mutating process not-applicable plan succeeded")
 	}
 }
 

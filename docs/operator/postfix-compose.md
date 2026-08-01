@@ -127,6 +127,14 @@ separately operated directly addressed Valkey replay backend. Originator uses
 the sign capability. Ordinary transit uses the revise capability. Only the
 daemon loads the flat-file datasource, private manifest, and PKCS#8 children.
 
+The current originator Milter tempfails every `MAIL FROM <>` message before
+daemon I/O. Its callbacks and request contract cannot authenticate the RFC 3462
+three-part DSN structure, Draft-04 Section 12.1 embedded verification, and
+Section 12.1.2 recipient alignment evidence. `signing.dsn_domain` is retained
+only as a stable, reserved prerequisite and is not sufficient authorization.
+Do not route null-sender traffic to the originator socket until an executable
+trusted DSN gate is implemented and qualified.
+
 Validate every route through the final read-only mounts. The daemon validation
 performs the complete protected generation, replay/Valkey, OTLP CA, datasource,
 signing manifest, PKCS#8, selector, ownership, ACL, link-count, and filesystem

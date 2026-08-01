@@ -20,6 +20,7 @@ const (
 	maxSuccessResponseBytes = 262_144
 	jsonContentType         = "application/json"
 	cacheControlNoStore     = "no-store"
+	connectionCloseValue    = "close"
 )
 
 var errWireResponse = errors.New("http response write failure")
@@ -411,7 +412,7 @@ func (r preMarshaledResponse) write(writer http.ResponseWriter) error {
 	header := writer.Header()
 	clear(header)
 	header.Set("Cache-Control", cacheControlNoStore)
-	header.Set("Connection", "close")
+	header.Set("Connection", connectionCloseValue)
 	applyResponseDate(header, r.status, r.date, r.datePresent)
 	if r.etag != "" {
 		header.Set("ETag", r.etag)

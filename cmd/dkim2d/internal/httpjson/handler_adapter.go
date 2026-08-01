@@ -121,7 +121,7 @@ func (a *strictAdapter) GetMetrics(
 		Body: string(body),
 		Headers: generated.GetMetrics200ResponseHeaders{
 			CacheControl:        cacheControlNoStore,
-			Connection:          "close",
+			Connection:          connectionCloseValue,
 			ContentLength:       strconv.Itoa(len(body)),
 			Date:                datePointer,
 			XContentTypeOptions: "nosniff",
@@ -224,6 +224,21 @@ func (a *strictAdapter) ProcessMessage(
 	if err != nil {
 		return nil, classifyStrictContextFailure(ctx)
 	}
+	if !result.Valid() {
+		return nil, &strictAdapterError{class: strictFailureInternal}
+	}
+	if !result.Applicable() {
+		date, datePresent := responseDate(ctx)
+		var dateHeader *string
+		if datePresent {
+			dateHeader = &date
+		}
+		return generated.ProcessMessage204Response{Headers: generated.ProcessMessage204ResponseHeaders{
+			CacheControl: cacheControlNoStore,
+			Connection:   connectionCloseValue,
+			Date:         dateHeader,
+		}}, nil
+	}
 	response, err := MapInboundResult(result, domainRequest.AuthservID())
 	if err != nil {
 		return nil, &strictAdapterError{class: strictFailureInternal}
@@ -244,9 +259,28 @@ func (a *strictAdapter) SignMessage(
 	if err != nil {
 		return nil, classifyMappingFailure(err)
 	}
-	result, err := executeOperation(ctx, a.operations, domainRequest)
+	assessment, err := executeSignOperation(ctx, a.operations, domainRequest)
 	if err != nil {
 		return nil, classifyStrictContextFailure(ctx)
+	}
+	if !assessment.Valid() {
+		return nil, &strictAdapterError{class: strictFailureInternal}
+	}
+	if !assessment.Applicable() {
+		date, datePresent := responseDate(ctx)
+		var dateHeader *string
+		if datePresent {
+			dateHeader = &date
+		}
+		return generated.SignMessage204Response{Headers: generated.SignMessage204ResponseHeaders{
+			CacheControl: cacheControlNoStore,
+			Connection:   connectionCloseValue,
+			Date:         dateHeader,
+		}}, nil
+	}
+	result, ok := assessment.Result()
+	if !ok {
+		return nil, &strictAdapterError{class: strictFailureInternal}
 	}
 	response, err := MapOperationResult(result)
 	if err != nil {
@@ -272,7 +306,7 @@ func (a *strictAdapter) ReviseMessage(
 	if err != nil {
 		return nil, classifyMappingFailure(err)
 	}
-	result, err := executeOperation(ctx, a.operations, domainRequest)
+	result, err := executeRevisionOperation(ctx, a.operations, domainRequest)
 	if err != nil {
 		return nil, classifyStrictContextFailure(ctx)
 	}

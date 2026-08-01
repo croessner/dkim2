@@ -191,7 +191,7 @@ func (r *Runtime) Observe(ctx context.Context, event dkim2.ObservationEvent) {
 	case dkim2.ObservationDNSLookupCompleted:
 		r.observeDNS(ctx, event)
 	case dkim2.ObservationVerifyCompleted:
-		r.observeVerification(event)
+		r.observeVerification(ctx, event)
 	default:
 		r.metrics.ObservationDropped("metric", "invalid")
 	}
@@ -221,15 +221,24 @@ func (r *Runtime) observeDNS(ctx context.Context, event dkim2.ObservationEvent) 
 	}
 }
 
-// observeVerification emits optional bounded message-shape diagnostics.
-func (r *Runtime) observeVerification(event dkim2.ObservationEvent) {
+// observeVerification records one authentic applicable verification and emits
+// optional bounded message-shape diagnostics.
+func (r *Runtime) observeVerification(ctx context.Context, event dkim2.ObservationEvent) {
+	result := observationResult(event.Result())
+	resultFact, _ := TextSpanFact("dkim2.result", result)
+	_, span := r.tracing.StartChild(ctx, "dkim2.verify", resultFact)
+	outcome := SpanCompleted
+	if event.Result() == dkim2.ObservationResultInternal {
+		outcome = SpanInternalError
+	}
+	EndSpan(span, outcome)
 	if !r.DebugEnabled("message_shape") {
 		return
 	}
 	r.Logger().Debug(
 		"process.completed",
 		slog.String("operation", "verify"),
-		slog.String("result", observationResult(event.Result())),
+		slog.String("result", result),
 		slog.String("verdict", "neutral"),
 		slog.String("message_size_bucket", observationMessageBucket(event.MessageSizeBucket())),
 		slog.String("recipient_count_bucket", observationRecipientBucket(event.RecipientCountBucket())),

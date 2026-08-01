@@ -538,12 +538,21 @@ The Go service always calls generated `POST /v1/process`. It may request the
 daemon-owned RFC 8601 action only when reporting is explicitly enabled with a
 canonical configured `authserv-id`.
 
+An exact bodyless `204` with the OpenAPI-defined no-store and connection-close
+envelope means inbound DKIM2 verification is not applicable. The Go adapter
+maps it to an operation-owned `none`/`continue` plan with no daemon-requested
+DKIM2 action. This does not bypass the separate RFC 8601 trust boundary:
+untrusted local `Authentication-Results` claims are still removed before Exim
+accepts the message. Malformed `204` metadata, a body, representation or
+framing fields, a non-canonical date, or a cross-operation response fails
+closed.
+
 The exact mapping is:
 
 | Daemon disposition | C return | Mutation |
 | --- | --- | --- |
 | `accept` | `LOCAL_SCAN_ACCEPT` | apply the fully validated inbound plan |
-| `continue` | `LOCAL_SCAN_ACCEPT` | none |
+| `continue` | `LOCAL_SCAN_ACCEPT` | mandatory local `Authentication-Results` removals only |
 | `reject` | `LOCAL_SCAN_REJECT_NOLOGHDR` | none |
 | `tempfail` | `LOCAL_SCAN_TEMPREJECT_NOLOGHDR` | none |
 
@@ -894,10 +903,14 @@ The exact result mapping is:
 | --- | --- | --- |
 | `pass` | `accept` | write the transformed complete message, exit 0 |
 | `pass` | `continue` | write the original complete message, exit 0 |
+| `none` (sign only) | `continue` | write the original complete message, exit 0 |
 | `fail` or `permerror` | `reject` | write no message, exit 75 |
 | `temperror` | `tempfail` | write no message, exit 75 |
 
 Any incoherent pair is a contract failure and exits 75 with zero output.
+`none` is produced only by the OpenAPI `204` response from `POST /v1/sign`;
+`POST /v1/revise` has no bodyless not-applicable result, so every revision
+`204` is rejected as contract drift.
 Transport filters cannot bounce a message; official Exim behavior defers on
 non-zero status. Outbound fail-open is not supported: delivering an unsigned
 or un-revised message is not a safe compatibility action.

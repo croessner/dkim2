@@ -130,8 +130,6 @@ func main() {
 		err = verifyInboundMessage()
 	case "smtp-inbound":
 		err = runSMTPProbe(25, false, 250)
-	case "smtp-reject":
-		err = runSMTPProbe(25, false, 550)
 	case "smtp-inbound-file":
 		err = runSMTPProbe(25, true, 250)
 	case "smtp-transit":
@@ -228,10 +226,6 @@ func runSMTPProbe(port int, fromFile bool, expected int) error {
 	reply, err := submitSMTP(port, message, reverseDomain)
 	if err != nil || reply.code != expected {
 		return errFixture
-	}
-	if expected == 550 {
-		fmt.Println("SMTP permanent rejection passed")
-		return nil
 	}
 	if expected != 250 {
 		return errFixture
@@ -809,6 +803,9 @@ func writeMilterState(
 signing:
   tenant: %s
   domain: %s`, privacyTenant, signing.domain)
+		if mode == "originator" {
+			extra += fmt.Sprintf("\n  dsn_domain: %s", signing.domain)
+		}
 	}
 	if mode == "inbound" {
 		extra = `

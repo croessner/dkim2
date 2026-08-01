@@ -142,19 +142,19 @@
     {
       "id": "milter-public-peer-source",
       "path": "cmd/dkim2-milter/internal/integration/public_peer_test.go",
-      "sha256": "5e7ff9cf14528467e34ba72bbf6ebdb1d4cd1d7e17a05e56050057757c9266c3",
+      "sha256": "31016012eaa93688ac62dac770c1759140d9ec5208154bc5476d916855c0c462",
       "module": "cmd/dkim2-milter"
     },
     {
       "id": "openapi-daemon-boundary-source",
       "path": "cmd/dkim2d/internal/httpjson/dkim2ctl_integration_test.go",
-      "sha256": "b61a729d99706f3e0bcb1d1942faa5e8fc50c99b72144a20763c62a6cb538a83",
+      "sha256": "431e88419dd1aeed36a6a206a31ee47fc7ecc2caa0304434490c28dc8811d265",
       "module": "cmd/dkim2d"
     },
     {
       "id": "openapi-independent-oracle-source",
       "path": "cmd/dkim2ctl/internal/testclient/public_socket_test.go",
-      "sha256": "8d6c82840c805c042c62e347ce78524e29737014fe00654a2e3367b8af21a9a2",
+      "sha256": "007ad7142def6ddbb35472987f6cbc78b7e3580a005a2356d172224adf196b27",
       "module": "cmd/dkim2ctl"
     },
     {
@@ -166,7 +166,7 @@
     {
       "id": "openapi-operation-source",
       "path": "cmd/dkim2ctl/internal/testclient/operations_test.go",
-      "sha256": "16191d7dcde79d00337357735dd57ffdfd31a9ed6edddfe65020cb9703908e34",
+      "sha256": "b886dbdd2e1ce91b50e4cfd5fa060c01b47f8b9a9930f02792c7e57964f64a5f",
       "module": "cmd/dkim2ctl"
     },
     {
@@ -202,7 +202,7 @@
     {
       "id": "openapi-wire-response-source",
       "path": "cmd/dkim2d/internal/httpjson/http_wire_response.go",
-      "sha256": "976794a8f76cec06cafc2fab113619c14adaecc8774529cf11c2f7e78fe2ab5b",
+      "sha256": "004ec25c7c0ca69678e609b0083b2bf5e02dacbb6b8b2f42b195e9b9be06e36a",
       "module": "cmd/dkim2d"
     },
     {
@@ -226,7 +226,7 @@
     {
       "id": "postfix-qualification-policy-source",
       "path": "tools/postfix_qualification_policy_test.go",
-      "sha256": "9401c441f41fda635755a4caae06af9a9c51d332e0b86d43e0493d722cd04220",
+      "sha256": "16bce14da2a9b3242a3016ec11fca574fc60b6d1fe92c5078567975cccec9ebb",
       "module": "tools"
     },
     {
@@ -238,7 +238,7 @@
     {
       "id": "postfix-qualification-runtime",
       "path": "contrib/qualification/postfix-milter/cmd/qualify/main.go",
-      "sha256": "77a1db5f636a6d9bfc936482af564fe2bee8c522f628c0f15482274c11d3142a",
+      "sha256": "dc0e073ebe3f90a75af63ad7beeebbb0f5104ebb44c8811a32a89b14a34a7e49",
       "module": "contrib/qualification/postfix-milter"
     },
     {

@@ -146,6 +146,7 @@ func newDaemonHandler(
 		snapshot.Tenant(),
 		snapshot.Domain(),
 		snapshot.DomainSource(),
+		snapshot.DSNDomain(),
 		snapshot.AuthservID(),
 	)
 	if err != nil {

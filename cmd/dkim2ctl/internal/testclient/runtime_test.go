@@ -93,7 +93,7 @@ func TestRuntimeAcceptsNetHTTPConnectionCloseProjection(t *testing.T) {
 	if err != nil {
 		t.Fatal("parse exact wire response")
 	}
-	if response.Header.Get("Connection") != "" || !response.Close {
+	if response.Header.Get(headerConnection) != "" || !response.Close {
 		t.Fatal("net/http connection-close projection changed")
 	}
 	runtime, _ := NewRuntimeWithDoer(
@@ -244,13 +244,13 @@ func TestRuntimeRejectsMissingOrMultipleRequiredMetadata(t *testing.T) {
 		{
 			name: "duplicate cache control",
 			mutate: func(response *http.Response) {
-				response.Header["Cache-Control"] = []string{"no-store", "no-store"}
+				response.Header[headerCacheControl] = []string{"no-store", "no-store"}
 			},
 		},
 		{
 			name: "noncanonical content length",
 			mutate: func(response *http.Response) {
-				response.Header.Set("Content-Length", "00")
+				response.Header.Set(headerContentLength, "00")
 			},
 		},
 	}
@@ -309,11 +309,11 @@ func validJSONResponse(status int, body *countingBody) *http.Response {
 		StatusCode: status,
 		Close:      true,
 		Header: http.Header{
-			"Cache-Control":          {cacheNoStore},
+			headerCacheControl:       {cacheNoStore},
 			"X-Content-Type-Options": {contentNoSniff},
-			"Connection":             {connectionClose},
-			"Content-Type":           {mediaTypeJSON},
-			"Content-Length":         {strconv.Itoa(len(payload))},
+			headerConnection:         {connectionClose},
+			headerContentType:        {mediaTypeJSON},
+			headerContentLength:      {strconv.Itoa(len(payload))},
 		},
 		Body: body,
 	}

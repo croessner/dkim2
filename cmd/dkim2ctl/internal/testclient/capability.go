@@ -136,7 +136,7 @@ func validGeneratedOperationRequest(request *http.Request, operation Operation) 
 		request.URL.RawQuery != "" || request.URL.Fragment != "" || request.URL.RawPath != "" ||
 		request.URL.Opaque != "" || request.URL.ForceQuery || request.URL.User != nil ||
 		request.Host != request.URL.Host ||
-		!exactHeader(request.Header, "Content-Type", mediaTypeJSON) {
+		!exactHeader(request.Header, headerContentType, mediaTypeJSON) {
 		return false
 	}
 	expectedPath := ""

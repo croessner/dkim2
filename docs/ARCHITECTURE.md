@@ -50,6 +50,9 @@
 | 0.1.0-draft | 2026-07-30 | Christian Roessner / Codex | Added fail-closed multi-domain originator routing in the Milter: one static tenant may derive an exact canonical ASCII signing domain from the validated SMTP reverse-path, while null senders, literals, SMTPUTF8 domains, transit use, and every fallback remain rejected. |
 | 0.1.0-draft | 2026-07-31 | Christian Roessner / Codex | Qualified the M17 Exim adapter on Linux across all five authenticated upstream, Debian, and Ubuntu rows with 43 passing cases per row and a passing fail-closed privacy scan. Replaced the historical portable deferral with a Linux-only conformance producer: portable reports record not applicable, while full reports require explicit verified evidence imported under current manifest, base-revision, candidate-snapshot, and verifier bindings. |
 | 0.1.0-draft | 2026-07-31 | Christian Roessner / Codex | Integrated production corrections for the Postfix Milter and legacy migration: idempotent pre-MAIL abort/HELO restart, exact legacy selector lookup with a separate DKIM2 target selector, bounded inactive-wildcard history, canonical RSA PKCS#1-to-PKCS#8 import, and retained verified-TLS trust bytes across datasource reload cleanup. |
+| 0.1.0-draft | 2026-07-31 | Christian Roessner / Codex | Separated inbound DKIM2 applicability from verification: messages with neither protocol field family make no DNS call and return a bodyless non-terminal process result, while partial or malformed claims retain strict four-state verification and policy handling. |
+| 0.1.0-draft | 2026-07-31 | Christian Roessner / Codex | Separated originator applicability from signing results: unsupported reverse-path domain evidence and authoritative absent or inactive exact profiles continue without mutation, while datasource ambiguity, unavailability, malformed active data, and signing failures remain fail-closed. |
+| 0.1.0-draft | 2026-08-01 | Christian Roessner / Codex | Deferred null-reverse-path DSN signing: the originator Milter tempfails before daemon I/O until an executable trusted gate authenticates RFC 3462 structure, Draft-04 Section 12.1 embedded verification, and Section 12.1.2 alignment evidence. |
 
 ## 1. Purpose
 
@@ -739,6 +742,12 @@ Design notes:
   verification state remains unchanged.
 - The result model must preserve that distinction.
 
+Applicability is decided before this policy engine. A parsed message containing
+neither `Message-Instance` nor `DKIM2-Signature` has not started DKIM2
+verification and therefore has no four-state result to evaluate. This is not a
+permissive override. Partial or malformed DKIM2 protocol state remains
+applicable and reaches normal fail-closed verification and policy.
+
 ### 5.11 `lib/internal/service`
 
 Coordinates domain packages into use cases.
@@ -951,6 +960,13 @@ POST /v1/process
 GET  /healthz
 GET  /readyz
 ```
+
+`POST /v1/process` returns HTTP 204 with no body when the parsed message has
+neither DKIM2 protocol field family. That response means verification was not
+applicable: no DNS lookup, local DKIM2 policy projection, replay check,
+Authentication-Results action, or terminal MTA decision occurred. Applicable
+messages retain the HTTP 200 response with the exact four-state verification,
+policy, replay, disposition, and action plan.
 
 `/v1/process` can combine verify, revise, sign, and action planning for Milter
 use. The narrower endpoints are useful for tests and operational tools.
@@ -1277,6 +1293,15 @@ Provider rules:
   while degraded; there is no background watch, retry, or stale serving.
 - Memory and flat-file providers share parity and signing-boundary integration
   evidence.
+
+The originator application boundary distinguishes a healthy authoritative
+absence from missing data inside an active profile. Exact policy/profile
+`not_found` and `inactive` mean local signing is not applicable and produce no
+signing result or mutation. Missing, malformed, or inconsistent material after
+an active profile was selected remains fail-closed. Ambiguity, datasource
+unavailability, and degraded snapshots remain temporary failures; they are
+never converted to absence. Concrete runtime generation pinning and degraded
+state rules remain authoritative and do not gain a stale fallback.
 
 #### 7.4.1 RNS LDAP Schema Allocation
 
@@ -1713,21 +1738,25 @@ unless a release plan names them explicitly.
 Inbound verification should follow the draft order closely:
 
 1. Parse raw message.
-2. Extract and validate DKIM2 header fields.
-3. Validate Message-Instance numbering.
-4. Validate DKIM2-Signature numbering.
-5. Check the latest signature against the current SMTP envelope.
-6. Check timestamp policy.
-7. Resolve public keys for required signatures.
-8. Verify signatures over canonical DKIM2 protocol fields.
-9. Validate current body and header hashes.
-10. Apply recipes where requested to reconstruct previous instances.
-11. Validate previous instance hashes.
-12. Check chain-of-custody relationships.
-13. Evaluate flags such as `donotmodify` and `donotexplode`.
-14. Produce protocol findings.
-15. Apply local policy.
-16. Produce an action plan.
+2. If both DKIM2 protocol field families are absent, classify verification as
+   not applicable and stop without DNS, policy, replay, or DKIM2 action-plan
+   work. A Milter trust boundary still removes forged local
+   `Authentication-Results` fields as required by RFC 8601.
+3. Extract and validate every present DKIM2 header field.
+4. Validate Message-Instance numbering.
+5. Validate DKIM2-Signature numbering.
+6. Check the latest signature against the current SMTP envelope.
+7. Check timestamp policy.
+8. Resolve public keys for required signatures.
+9. Verify signatures over canonical DKIM2 protocol fields.
+10. Validate current body and header hashes.
+11. Apply recipes where requested to reconstruct previous instances.
+12. Validate previous instance hashes.
+13. Check chain-of-custody relationships.
+14. Evaluate flags such as `donotmodify` and `donotexplode`.
+15. Produce protocol findings.
+16. Apply local policy.
+17. Produce an action plan.
 
 The implementation should support partial verification modes for debugging, but
 the default inbound mode should verify the latest signature and current message
@@ -1737,15 +1766,31 @@ hashes before accepting the message.
 
 Outbound signing:
 
-1. Parse or receive a controlled message representation.
-2. Compute current body hash.
-3. Compute current header hash.
-4. Add `Message-Instance: m=1` when needed.
-5. Build `DKIM2-Signature: i=1`.
-6. Include current SMTP envelope in `mf=` and `rt=`.
-7. Resolve the configured private key and selector.
-8. Canonicalize DKIM2 protocol fields for signing.
-9. Insert signature values.
+1. Assess whether the non-null SMTP reverse-path provides one supported exact
+   local signing domain and whether the complete valid envelope fits the
+   current signing boundary. Address literals and unsupported non-null
+   SMTPUTF8 envelopes are not applicable. Every null sender fails closed before
+   daemon I/O until an executable trusted DSN evidence gate exists.
+2. Resolve the exact authoritative policy and profile. `not_found` or
+   `inactive` is a mutation-free local no-op; ambiguity and unavailability fail
+   temporarily, while malformed active configuration fails permanently.
+3. Parse or receive a controlled message representation.
+4. Compute current body hash.
+5. Compute current header hash.
+6. Add `Message-Instance: m=1` when needed.
+7. Build `DKIM2-Signature: i=1`.
+8. Include current SMTP envelope in `mf=` and `rt=`.
+9. Resolve the configured private key and selector.
+10. Canonicalize DKIM2 protocol fields for signing.
+11. Insert signature values.
+
+Signing a delivery-status notification with null reverse-path is deferred. The
+current Milter cannot authenticate the RFC 3462 three-part structure, Draft-04
+Section 12.1 verification of relevant embedded fields, or Section 12.1.2
+alignment evidence through callbacks or the daemon request contract. A
+configured DSN domain and dedicated upstream route are not sufficient to cross
+that trust boundary. Every null sender tempfails before daemon I/O until an
+executable trusted prevalidated evidence gate is implemented and qualified.
 
 Revision signing:
 

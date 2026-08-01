@@ -76,6 +76,53 @@ func (v *Verifier) Verify(ctx context.Context, request VerifyRequest) (output Ve
 	return adaptServiceResult(serviceResult), nil
 }
 
+// Assess classifies complete DKIM2 protocol absence before starting verification.
+func (v *Verifier) Assess(ctx context.Context, request VerifyRequest) (output VerificationAssessment, resultErr error) {
+	if v == nil || v.state == nil || !v.state.initialized || ctx == nil {
+		return VerificationAssessment{}, newAPIError(APIErrorCodeInvalidRequest)
+	}
+	if err := ctx.Err(); err != nil {
+		return VerificationAssessment{}, err
+	}
+	rawMessage, reversePath, forwardPaths := request.values()
+	started := time.Now()
+	applicable := false
+	var observedResult VerifyResult
+	defer func() {
+		if applicable {
+			observeVerification(
+				ctx, v.state.sink, observedResult, resultErr, time.Since(started),
+				len(rawMessage), len(forwardPaths),
+			)
+		}
+	}()
+	assessment, err := v.state.service.Assess(ctx, service.NewRequest(rawMessage, reversePath, forwardPaths))
+	if err != nil {
+		applicable = assessment.Applicable()
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return VerificationAssessment{}, ctxErr
+		}
+		return VerificationAssessment{}, newAPIError(APIErrorCodeInvalidRequest)
+	}
+	if !assessment.Valid() {
+		return VerificationAssessment{}, newAPIError(APIErrorCodeInvalidRequest)
+	}
+	if !assessment.Applicable() {
+		return newVerificationAssessment(false, VerifyResult{}), nil
+	}
+	applicable = true
+	serviceResult, ok := assessment.Verification()
+	if !ok {
+		return VerificationAssessment{}, newAPIError(APIErrorCodeInvalidRequest)
+	}
+	result := adaptServiceResult(serviceResult)
+	observedResult = result
+	if !result.Valid() {
+		return VerificationAssessment{}, newAPIError(APIErrorCodeInvalidRequest)
+	}
+	return newVerificationAssessment(true, result), nil
+}
+
 // observeVerification emits one closed current-verification event.
 func observeVerification(
 	ctx context.Context,

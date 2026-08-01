@@ -341,7 +341,7 @@ func (s *Session) handleMail(payload []byte) error {
 		return &Error{Class: FailureCapacity}
 	}
 	s.reverse = bytes.Clone(path)
-	if s.mode != modeInbound && !asciiBytes(s.reverse) {
+	if s.mode == modeTransit && !asciiBytes(s.reverse) {
 		return &Error{Class: FailureFidelity}
 	}
 	s.state = stateMail
@@ -359,7 +359,7 @@ func (s *Session) handleRecipient(payload []byte) error {
 		return &Error{Class: FailureContract}
 	}
 	if (!asciiBytes(path) && !s.smtpUTF8) ||
-		(s.mode != modeInbound && !asciiBytes(path)) {
+		(s.mode == modeTransit && !asciiBytes(path)) {
 		return &Error{Class: FailureFidelity}
 	}
 	if !s.reserve(int64(len(path))) {
@@ -635,46 +635,55 @@ func (s *Session) serializeResult(
 	}
 	switch result.Outcome {
 	case DispositionContinue:
-		return oneFrame(replyAccept, nil), nil
+		return s.serializeAcceptance(nil, localAuthenticationResults), nil
 	case DispositionReject:
 		return failureFrames(fixedRejectReply), nil
 	case DispositionTempfail:
 		return failureFrames(fixedTempfailReply), nil
 	case DispositionAccept:
-		frames := make(
-			[][]byte,
-			0,
-			len(localAuthenticationResults)+len(result.Actions)+1,
-		)
-		for index := len(localAuthenticationResults); index > 0; index-- {
-			payload := make([]byte, 4, 4+len(headerAuthResults)+2)
-			binary.BigEndian.PutUint32(payload, localAuthenticationResults[index-1])
-			payload = append(payload, headerAuthResults...)
-			payload = append(payload, 0, 0)
-			frames = append(frames, encodeFrame(replyChangeHeader, payload))
-		}
-		for _, action := range result.Actions {
-			prefix := 0
-			command := replyAddHeader
-			if s.mode == modeInbound && action.Name == headerAuthResults {
-				prefix = 4
-				command = replyInsertHeader
-			}
-			payload := make([]byte, prefix, prefix+len(action.Name)+len(action.Value)+2)
-			payload = append(payload, action.Name...)
-			payload = append(payload, 0)
-			payload = append(payload, action.Value...)
-			payload = append(payload, 0)
-			frames = append(frames, encodeFrame(command, payload))
-		}
-		frames = append(frames, encodeFrame(replyAccept, nil))
-		if len(result.Actions) > 0 || len(localAuthenticationResults) > 0 {
-			s.mutationMayRun = true
-		}
-		return frames, nil
+		return s.serializeAcceptance(result.Actions, localAuthenticationResults), nil
 	default:
 		return nil, &Error{Class: FailureContract}
 	}
+}
+
+// serializeAcceptance emits trust-boundary scrubbing before approved actions
+// and the terminal acceptance frame.
+func (s *Session) serializeAcceptance(
+	actions []Action,
+	localAuthenticationResults []uint32,
+) [][]byte {
+	frames := make(
+		[][]byte,
+		0,
+		len(localAuthenticationResults)+len(actions)+1,
+	)
+	for index := len(localAuthenticationResults); index > 0; index-- {
+		payload := make([]byte, 4, 4+len(headerAuthResults)+2)
+		binary.BigEndian.PutUint32(payload, localAuthenticationResults[index-1])
+		payload = append(payload, headerAuthResults...)
+		payload = append(payload, 0, 0)
+		frames = append(frames, encodeFrame(replyChangeHeader, payload))
+	}
+	for _, action := range actions {
+		prefix := 0
+		command := replyAddHeader
+		if s.mode == modeInbound && action.Name == headerAuthResults {
+			prefix = 4
+			command = replyInsertHeader
+		}
+		payload := make([]byte, prefix, prefix+len(action.Name)+len(action.Value)+2)
+		payload = append(payload, action.Name...)
+		payload = append(payload, 0)
+		payload = append(payload, action.Value...)
+		payload = append(payload, 0)
+		frames = append(frames, encodeFrame(command, payload))
+	}
+	frames = append(frames, encodeFrame(replyAccept, nil))
+	if len(actions) > 0 || len(localAuthenticationResults) > 0 {
+		s.mutationMayRun = true
+	}
+	return frames
 }
 
 // resetTransaction releases all retained callback state exactly once.

@@ -29,6 +29,26 @@ func TestTransformInsertsOnlyTheAdmittedOrderedFields(t *testing.T) {
 	}
 }
 
+// TestTransformPreservesNotApplicableSignBytes proves a sign 204 can only
+// produce a detached unchanged copy of the complete transport message.
+func TestTransformPreservesNotApplicableSignBytes(t *testing.T) {
+	plan, err := adapter.NewFilterPlan(
+		adapter.FilterSign, adapter.ResultNone, adapter.DispositionContinue, nil,
+	)
+	if err != nil {
+		t.Fatal("not-applicable sign plan failed")
+	}
+	message := []byte("Subject: unsigned\n\nbinary\x00body\n")
+	output, err := Transform(message, plan)
+	if err != nil || !bytes.Equal(output, message) {
+		t.Fatal("not-applicable sign changed complete-message bytes")
+	}
+	output[0] = 'X'
+	if message[0] != 'S' {
+		t.Fatal("not-applicable sign output aliases protected input")
+	}
+}
+
 // TestTransformDoesNotInventPostColonWhitespace proves action values remain
 // byte-exact after the field-name colon.
 func TestTransformDoesNotInventPostColonWhitespace(t *testing.T) {

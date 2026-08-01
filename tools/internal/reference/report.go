@@ -70,6 +70,8 @@ var reportEvidenceSchemas = map[string]string{
 }
 
 var generatedOpenAPIPaths = []string{
+	"cmd/dkim2-exim/internal/daemon/generated/client.gen.go",
+	"cmd/dkim2-exim/internal/integration/generated/server.gen.go",
 	"cmd/dkim2-milter/internal/daemon/generated/client.gen.go",
 	"cmd/dkim2-milter/internal/integration/generated/server.gen.go",
 	"cmd/dkim2ctl/internal/testclient/generated/client.gen.go",

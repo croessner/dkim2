@@ -283,7 +283,7 @@ func observationResultForFailure(class FailureClass) string {
 // observationResultForDaemon maps one closed daemon result to an outcome class.
 func observationResultForDaemon(result string) string {
 	switch result {
-	case resultPass:
+	case resultPass, resultNone:
 		return observationSuccess
 	case resultTemperror:
 		return observationTemporary

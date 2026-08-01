@@ -182,6 +182,57 @@ func TestObserverReceivesCompleteClosedEOMFacts(t *testing.T) {
 	}
 }
 
+// TestObserverClassifiesNotApplicableMessagesAsSuccessfulContinuation proves
+// normal inbound and originator no-ops never inflate operational failures.
+func TestObserverClassifiesNotApplicableMessagesAsSuccessfulContinuation(t *testing.T) {
+	for _, testCase := range []struct {
+		name      string
+		mode      string
+		operation string
+		input     []byte
+	}{
+		{name: "unsigned inbound", mode: modeInbound, operation: operationProcess, input: completeTwoRecipientMessage()},
+		{name: "absent originator profile", mode: modeOriginator, operation: operationSign, input: completeOriginatorMessage()},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			observer := &recordingObserver{}
+			admission, err := NewAdmission(2, 2, testAdmissionBytes)
+			if err != nil || admission.SetObserver(observer) != nil || admission.ActivateObserver() != nil {
+				t.Fatal("observed admission construction failed")
+			}
+			t.Cleanup(func() {
+				admission.Stop()
+				_ = admission.CloseObserver()
+			})
+			handler := &testHandler{result: Result{
+				Operation: testCase.operation, Result: resultNone, Outcome: DispositionContinue,
+			}}
+			session, err := NewSession(handler, admission, Limits{
+				MessageBytes: 1 << 16, HeaderBytes: 1 << 15,
+				HeaderCount: 100, HeaderFieldBytes: 1024, RecipientCount: 100,
+			}, time.Second, FailurePolicy{}, testCase.mode, "")
+			if err != nil {
+				t.Fatal("session construction failed")
+			}
+			stream := &splitStream{reader: bytes.NewReader(testCase.input)}
+			if err := session.Serve(context.Background(), stream); err != nil {
+				t.Fatalf("Serve() error=%v", err)
+			}
+			if !waitForObservations(observer, 1, 1, 1) {
+				t.Fatal("bounded observer did not deliver no-op outcome")
+			}
+			observer.mu.Lock()
+			defer observer.mu.Unlock()
+			if len(observer.messages) != 1 ||
+				observer.messages[0].disposition != string(DispositionContinue) ||
+				observer.messages[0].result != observationSuccess ||
+				observer.messages[0].failure != observationNoFailure {
+				t.Fatalf("no-op observation=%#v", observer.messages)
+			}
+		})
+	}
+}
+
 // waitForObservations waits only in tests for the local asynchronous seam.
 func waitForObservations(
 	observer *recordingObserver,

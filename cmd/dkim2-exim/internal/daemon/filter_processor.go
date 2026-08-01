@@ -61,11 +61,18 @@ func (p *FilterProcessor) Process(ctx context.Context, input adapter.FilterReque
 		}
 		return adapter.Plan{}, classifyProcessError(ctx, err)
 	}
-	body, err := readProcessResponse(response)
+	operation := operationName(input.Operation())
+	body, notApplicable, err := readOperationResponse(response, operation)
 	if err != nil {
 		return adapter.Plan{}, err
 	}
-	plan, err := AdmitOperationJSON(body, operationName(input.Operation()))
+	if notApplicable {
+		plan, planErr := adapter.NewFilterPlan(
+			input.Operation(), adapter.ResultNone, adapter.DispositionContinue, nil,
+		)
+		return plan, planErr
+	}
+	plan, err := AdmitOperationJSON(body, operation)
 	clear(body)
 	return plan, err
 }

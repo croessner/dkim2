@@ -16,21 +16,25 @@ import (
 )
 
 const (
-	statusBodyLimit   = 4 * 1024
-	processBodyLimit  = 1024 * 1024
-	durationUnder100  = "under_100ms"
-	durationUnder1S   = "under_1s"
-	durationUnder10S  = "under_10s"
-	durationAtLeast   = "at_least_10s"
-	memberActions     = "actions"
-	memberAPIVersion  = "api_version"
-	memberCategory    = "category"
-	memberCode        = "code"
-	memberDisposition = "disposition"
-	memberDraft       = "draft"
-	memberOperation   = "operation"
-	memberResult      = "result"
-	memberStatus      = "status"
+	statusBodyLimit     = 4 * 1024
+	processBodyLimit    = 1024 * 1024
+	durationUnder100    = "under_100ms"
+	durationUnder1S     = "under_1s"
+	durationUnder10S    = "under_10s"
+	durationAtLeast     = "at_least_10s"
+	memberActions       = "actions"
+	memberAPIVersion    = "api_version"
+	memberCategory      = "category"
+	memberCode          = "code"
+	memberDisposition   = "disposition"
+	memberDraft         = "draft"
+	memberOperation     = "operation"
+	memberResult        = "result"
+	memberStatus        = "status"
+	headerCacheControl  = "Cache-Control"
+	headerConnection    = "Connection"
+	headerContentLength = "Content-Length"
+	headerContentType   = "Content-Type"
 )
 
 // Operation is the closed generated-client operation vocabulary.
@@ -299,6 +303,9 @@ func classifyResponse(operation Operation, response *http.Response) (ResponseFac
 		return ResponseFact{}, NewExitError(ExitContract)
 	}
 	fact := ResponseFact{Operation: operation, Status: response.StatusCode}
+	if response.StatusCode == http.StatusNoContent {
+		return fact, nil
+	}
 	switch operation {
 	case OperationHealth:
 		if response.StatusCode == http.StatusOK {
@@ -374,12 +381,17 @@ func readAndClose(body io.ReadCloser, limit int64) ([]byte, error) {
 // OpenAPI and RFC header invariants.
 func validResponseMetadata(operation Operation, response *http.Response, body []byte) bool {
 	if response.StatusCode < 100 || response.StatusCode > 599 ||
-		!exactHeader(response.Header, "Cache-Control", cacheNoStore) ||
-		!exactHeader(response.Header, "X-Content-Type-Options", contentNoSniff) ||
+		!exactHeader(response.Header, headerCacheControl, cacheNoStore) ||
 		!validConnectionClose(response) {
 		return false
 	}
-	contentType, ok := singleHeader(response.Header, "Content-Type")
+	if response.StatusCode == http.StatusNoContent {
+		return validNoContentResponseMetadata(operation, response, body)
+	}
+	if !exactHeader(response.Header, "X-Content-Type-Options", contentNoSniff) {
+		return false
+	}
+	contentType, ok := singleHeader(response.Header, headerContentType)
 	if !ok {
 		return false
 	}
@@ -387,7 +399,7 @@ func validResponseMetadata(operation Operation, response *http.Response, body []
 	if err != nil || mediaType != mediaTypeJSON || len(parameters) != 0 {
 		return false
 	}
-	contentLength, ok := singleHeader(response.Header, "Content-Length")
+	contentLength, ok := singleHeader(response.Header, headerContentLength)
 	if !ok {
 		return false
 	}
@@ -408,13 +420,47 @@ func validResponseMetadata(operation Operation, response *http.Response, body []
 		!exactHeader(response.Header, "Allow", http.MethodPost) {
 		return false
 	}
-	if date, present := optionalSingleHeader(response.Header, "Date"); present {
-		parsedDate, dateErr := http.ParseTime(date)
-		if dateErr != nil || parsedDate.UTC().Format(http.TimeFormat) != date {
-			return false
-		}
+	return validOptionalDate(response.Header)
+}
+
+// validNoContentResponseMetadata binds an applicability response to HTTP/1.1
+// and rejects every representation or transfer-framing projection.
+func validNoContentResponseMetadata(
+	operation Operation,
+	response *http.Response,
+	body []byte,
+) bool {
+	if response.ProtoMajor != 1 || response.ProtoMinor != 1 ||
+		response.ContentLength != 0 || len(response.TransferEncoding) != 0 ||
+		len(response.Trailer) != 0 ||
+		headerPresent(response.Header, "Transfer-Encoding") ||
+		headerPresent(response.Header, "Trailer") {
+		return false
 	}
-	return true
+	return validNoContentMetadata(operation, response.Header, body)
+}
+
+// validNoContentMetadata accepts only the two OpenAPI operations with an
+// explicit bodyless applicability result and rejects representation metadata.
+func validNoContentMetadata(operation Operation, header http.Header, body []byte) bool {
+	if operation != OperationProcess && operation != OperationSign {
+		return false
+	}
+	if len(body) != 0 || headerPresent(header, "X-Content-Type-Options") ||
+		headerPresent(header, headerContentType) || headerPresent(header, headerContentLength) {
+		return false
+	}
+	return validOptionalDate(header)
+}
+
+// validOptionalDate accepts an absent Date field or one canonical HTTP-date.
+func validOptionalDate(header http.Header) bool {
+	date, present := optionalSingleHeader(header, "Date")
+	if !present {
+		return true
+	}
+	parsedDate, err := http.ParseTime(date)
+	return err == nil && parsedDate.UTC().Format(http.TimeFormat) == date
 }
 
 // validConnectionClose accepts either an exact injected field or net/http's
@@ -423,11 +469,11 @@ func validConnectionClose(response *http.Response) bool {
 	if response == nil {
 		return false
 	}
-	if headerPresent(response.Header, "Connection") {
+	if headerPresent(response.Header, headerConnection) {
 		return response.Close &&
-			exactHeader(response.Header, "Connection", connectionClose)
+			exactHeader(response.Header, headerConnection, connectionClose)
 	}
-	return response.Close
+	return response.Close && response.ProtoMajor == 1 && response.ProtoMinor == 1
 }
 
 // headerPresent reports whether any case-insensitive map spelling exists.

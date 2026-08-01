@@ -18,6 +18,7 @@ const (
 	resultFail        = "fail"
 	resultPermerror   = "permerror"
 	resultTemperror   = "temperror"
+	resultNone        = "none"
 	headerAuthResults = "Authentication-Results"
 	headerMessage     = "Message-Instance"
 	headerDKIM2       = "DKIM2-Signature"
@@ -26,19 +27,20 @@ const (
 // validResult proves the complete operation/action matrix without side effects.
 func validResult(result Result, mode, authservID string) bool {
 	wantOperation, ok := operationForMode(mode)
-	if !ok || result.Operation != wantOperation || !validResultStatus(result.Result) ||
+	if !ok || result.Operation != wantOperation ||
 		!validDisposition(result.Outcome) ||
 		!validActions(result) {
 		return false
 	}
 	switch mode {
 	case modeInbound:
-		return validInboundResult(result, authservID)
+		return (validResultStatus(result.Result) || result.Result == resultNone) &&
+			validInboundResult(result, authservID)
 	case modeOriginator:
-		return validResultOutcome(result.Result, result.Outcome) &&
+		return (validResultStatus(result.Result) || result.Result == resultNone) &&
 			validOriginatorResult(result)
 	case modeTransit:
-		return validResultOutcome(result.Result, result.Outcome) &&
+		return validResultStatus(result.Result) && validResultOutcome(result.Result, result.Outcome) &&
 			validTransitResult(result)
 	}
 	return false
@@ -109,6 +111,9 @@ func validActions(result Result) bool {
 
 // validInboundResult enforces the optional single authoritative report action.
 func validInboundResult(result Result, authservID string) bool {
+	if result.Result == resultNone {
+		return result.Outcome == DispositionContinue && len(result.Actions) == 0
+	}
 	if result.Outcome != DispositionAccept || authservID == "" {
 		return len(result.Actions) == 0
 	}
@@ -120,6 +125,12 @@ func validInboundResult(result Result, authservID string) bool {
 
 // validOriginatorResult enforces the exact ordered signing mutation.
 func validOriginatorResult(result Result) bool {
+	if result.Result == resultNone {
+		return result.Outcome == DispositionContinue && len(result.Actions) == 0
+	}
+	if !validResultOutcome(result.Result, result.Outcome) {
+		return false
+	}
 	if result.Outcome != DispositionAccept {
 		return len(result.Actions) == 0
 	}

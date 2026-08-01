@@ -471,23 +471,31 @@ type dkim2ctlOperationService struct {
 func (s *dkim2ctlOperationService) Sign(
 	_ context.Context,
 	request app.OperationRequest,
-) (app.OperationResult, error) {
+) (app.SigningAssessment, error) {
 	if s != nil && s.facts != nil {
 		s.facts.signCalls.Add(1)
 	}
 	if request.Tenant() == "tenant-no-mutation" {
-		return app.NewOperationResult(
+		result, err := app.NewOperationResult(
 			app.OperationSign,
 			app.OperationPass,
 			app.OperationContinue,
 			nil,
 		)
+		if err != nil {
+			return app.SigningAssessment{}, err
+		}
+		return app.NewApplicableSigningAssessment(result)
 	}
-	return newDKIM2ctlOperationResult(
+	result, err := newDKIM2ctlOperationResult(
 		app.OperationSign,
 		"Message-Instance:v=1; i=1; h=sha256:synthetic\r\n",
 		"DKIM2-Signature:v=1; a=ed25519-sha256; d=example.test; s=test; b=synthetic\r\n",
 	)
+	if err != nil {
+		return app.SigningAssessment{}, err
+	}
+	return app.NewApplicableSigningAssessment(result)
 }
 
 // Revise returns deterministic changed- and unchanged-content mutation plans.

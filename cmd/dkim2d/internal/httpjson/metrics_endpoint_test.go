@@ -80,7 +80,7 @@ func TestMetricsEndpointPublicSocketContract(t *testing.T) {
 	if !strings.HasPrefix(success, "HTTP/1.1 200 OK\r\n") ||
 		rawResponseHeader(success, headerContentType) != observability.MetricsContentType ||
 		rawResponseHeader(success, "Cache-Control") != cacheControlNoStore ||
-		rawResponseHeader(success, "Connection") != "close" ||
+		rawResponseHeader(success, "Connection") != connectionCloseValue ||
 		!strings.Contains(rawResponseBody(success), "dkim2d_readiness") {
 		t.Fatal("public metrics success shape changed")
 	}

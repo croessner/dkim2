@@ -1139,8 +1139,10 @@ run_once() {
 
   printf 'deployment phase: mail-flow-%s\n' "$number"
   assert_empty_queue
-  test "$(run_postfix_fixture smtp-reject)" = "SMTP permanent rejection passed"
-  assert_empty_queue
+  unsigned_inbound_result=$(run_postfix_fixture smtp-inbound)
+  unsigned_inbound_id=$(smtp_queue_id "$unsigned_inbound_result")
+  test "$(sole_queue_id)" = "$unsigned_inbound_id"
+  clear_queue
 
   test -z "$(queue_ids)"
   test "$(docker exec "$postfix" /testdata/deploymentfixture local-submit)" = \
@@ -1440,7 +1442,7 @@ run_once() {
       transit_listener:"postfix_container_loopback_only",
       cases:[
         "protected_state_validation",
-        "smtp_unsigned_inbound_permanent_reject",
+        "smtp_unsigned_inbound_queue_acceptance",
         "local_originator_sign_public_verify",
         "ordinary_transit_revise_chain_public_verify","inbound_process_action",
         "signed_inbound_process_queue",

@@ -17,6 +17,7 @@ import (
 	"github.com/croessner/dkim2/internal/datasource/memory"
 	"github.com/croessner/dkim2/internal/datasource/signingprofile"
 	"github.com/croessner/dkim2/internal/keyresolver"
+	"github.com/croessner/dkim2/internal/niliface"
 )
 
 const redacted = "dkim2.provider{redacted}"
@@ -49,8 +50,23 @@ const (
 	ErrorCodeInternalInvariant = datasource.ErrorCodeInternalInvariant
 )
 
-// ErrorCodeOf returns the stable class for one storage-neutral provider error.
-func ErrorCodeOf(err error) ErrorCode { return datasource.ErrorCodeOf(err) }
+// ErrorCodeOf returns the stable direct class for one storage-neutral provider error.
+func ErrorCodeOf(err error) (code ErrorCode) {
+	code = datasource.ErrorCodeInternalInvariant
+	coded, ok := err.(interface{ Code() ErrorCode })
+	if !ok || niliface.IsNil(coded) {
+		return code
+	}
+	defer func() {
+		if recover() != nil {
+			code = datasource.ErrorCodeInternalInvariant
+		}
+	}()
+	if candidate := coded.Code(); candidate.Known() {
+		return candidate
+	}
+	return code
+}
 
 // NewError constructs one content-free storage-neutral provider failure.
 func NewError(code ErrorCode) error { return datasource.NewError(code) }

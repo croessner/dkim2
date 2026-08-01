@@ -74,7 +74,7 @@ func TestCapabilityLifecycleAndPrivacy(t *testing.T) {
 		}
 	}
 	request, _ := http.NewRequest(http.MethodPost, "http://127.0.0.1:8080/v1/process", nil)
-	request.Header.Set("Content-Type", mediaTypeJSON)
+	request.Header.Set(headerContentType, mediaTypeJSON)
 	if err := capability.EditRequest(t.Context(), request); err != nil {
 		t.Fatal("request editing failed")
 	}
@@ -88,7 +88,7 @@ func TestCapabilityLifecycleAndPrivacy(t *testing.T) {
 		t.Fatal("capability close failed")
 	}
 	fresh, _ := http.NewRequest(http.MethodPost, "http://127.0.0.1:8080/v1/process", nil)
-	fresh.Header.Set("Content-Type", mediaTypeJSON)
+	fresh.Header.Set(headerContentType, mediaTypeJSON)
 	if err := capability.EditRequest(t.Context(), fresh); ExitClassOf(err) != ExitCapability {
 		t.Fatal("closed capability remained usable")
 	}
@@ -131,7 +131,7 @@ func TestCapabilityEditorRejectsNoncanonicalExistingHeader(t *testing.T) {
 	capability, _ := newCapability(value)
 	defer func() { _ = capability.Close() }()
 	request, _ := http.NewRequest(http.MethodPost, "http://127.0.0.1:8080/v1/process", nil)
-	request.Header.Set("Content-Type", mediaTypeJSON)
+	request.Header.Set(headerContentType, mediaTypeJSON)
 	request.Header["x-dkim2-capability"] = []string{"forged"}
 	if err := capability.EditRequest(t.Context(), request); ExitClassOf(err) != ExitCapability {
 		t.Fatal("noncanonical capability collision accepted")
@@ -185,7 +185,7 @@ func mustRequest(t *testing.T, method, target string) *http.Request {
 	if err != nil {
 		t.Fatal("construct request")
 	}
-	request.Header.Set("Content-Type", mediaTypeJSON)
+	request.Header.Set(headerContentType, mediaTypeJSON)
 	return request
 }
 

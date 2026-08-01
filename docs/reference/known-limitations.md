@@ -19,6 +19,11 @@ certification, or universal interoperability claim.
   the five source-linked upstream, Debian, and Ubuntu rows recorded in the
   compatibility report. There is no portable Exim execution claim, universal
   local-scan binary, or Exim container image.
+- Null-reverse-path DSN signing is deferred. The originator Milter tempfails
+  every null sender before daemon I/O because its callbacks and current request
+  contract cannot authenticate the RFC 3462 three-part structure, Draft-04
+  Section 12.1 embedded verification, and Section 12.1.2 alignment evidence.
+  The reserved configured DSN domain does not authorize signing by itself.
 - Flat-file, LDAP, PostgreSQL, and Valkey datasource paths are implemented.
   The offline OpenDKIM migration requires separately managed verified-TLS
   services, explicit mapping, and distinct least-authority principals.

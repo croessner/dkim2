@@ -25,7 +25,7 @@ const (
 	// DNSDraft is the exact historical DNS behavior baseline used by security evidence.
 	DNSDraft = "draft-chuang-dkim2-dns-04"
 	// BaseRevision is the fixed reference-candidate implementation base.
-	BaseRevision = "24d7b4eb85430bbc49e3a6ef43889d1be8cd0718"
+	BaseRevision = "f30fecbd35ae3afd1b590ddfe55ee45f0cf6555a"
 	// FuzzDuration is the minimum unchanged-candidate duration for each target.
 	FuzzDuration = "10s"
 

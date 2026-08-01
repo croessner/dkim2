@@ -1,6 +1,7 @@
 package app
 
 import (
+	"bytes"
 	"context"
 	"crypto/rsa"
 	"encoding/base64"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/croessner/dkim2"
 	"github.com/croessner/dkim2/cmd/dkim2d/internal/config"
+	"github.com/croessner/dkim2/cmd/dkim2d/internal/observability"
 )
 
 type noLookupProvider struct{}
@@ -22,6 +24,141 @@ type noLookupProvider struct{}
 // LookupPublicKey fails the test when malformed-message processing reaches DNS.
 func (noLookupProvider) LookupPublicKey(context.Context, dkim2.PublicKeyQuery) (dkim2.PublicKeyResult, error) {
 	return dkim2.PublicKeyResult{}, errors.New("unexpected lookup")
+}
+
+type countingNoLookupProvider struct{ calls int }
+
+// LookupPublicKey records an unexpected unsigned-message DNS lookup.
+func (p *countingNoLookupProvider) LookupPublicKey(context.Context, dkim2.PublicKeyQuery) (dkim2.PublicKeyResult, error) {
+	p.calls++
+	return dkim2.PublicKeyResult{}, errors.New("unexpected lookup")
+}
+
+type rejectingReplayService struct{ calls int }
+
+// Coordinate records forbidden replay work for a non-applicable message.
+func (s *rejectingReplayService) Coordinate(context.Context, DomainResult) (ReplayOutcome, error) {
+	s.calls++
+	return ReplayOutcome{}, errors.New("unexpected replay coordination")
+}
+
+// TestUnsignedInboundSkipsPolicyReplayAndDNSInEveryMode proves the daemon applicability contract.
+func TestUnsignedInboundSkipsPolicyReplayAndDNSInEveryMode(t *testing.T) {
+	for _, mode := range []config.PolicyMode{config.PolicyStrict, config.PolicyPermissive, config.PolicyTesting} {
+		t.Run(string(mode), func(t *testing.T) {
+			snapshot, err := config.Load([]byte(`config:
+  version: dkim2d-config-v1
+protected:
+  generation: 0123456789abcdef0123456789abcdef
+server:
+  capability_file: /secure/0123456789abcdef0123456789abcdef/capability
+replay:
+  backend: disabled
+observability:
+  logging:
+    level: debug
+  debug:
+    replay: true
+`), config.FlagValues{})
+			if err != nil {
+				t.Fatalf("config.Load() error = %v", err)
+			}
+			var logs bytes.Buffer
+			runtime, err := observability.NewRuntime(
+				context.Background(),
+				snapshot.Observability(),
+				&logs,
+				config.TracingStartupMaterial{},
+			)
+			if err != nil {
+				t.Fatalf("observability.NewRuntime() error = %v", err)
+			}
+			t.Cleanup(func() { _ = runtime.Shutdown(context.Background()) })
+			provider := &countingNoLookupProvider{}
+			verifier, err := dkim2.NewVerifier(provider)
+			if err != nil {
+				t.Fatalf("NewVerifier() error = %v", err)
+			}
+			domain, err := NewDomainProcessor(verifier, mode)
+			if err != nil {
+				t.Fatalf("NewDomainProcessor() error = %v", err)
+			}
+			replay := &rejectingReplayService{}
+			processor, err := NewInboundProcessor(domain, replay)
+			if err != nil {
+				t.Fatalf("NewInboundProcessor() error = %v", err)
+			}
+			processor.attachObservability(runtime)
+			result, err := processor.Process(context.Background(), dkim2.NewVerifyRequest(
+				[]byte("From: sender@example.test\r\nSubject: unsigned\r\n\r\nbody\r\n"),
+				[]byte("<sender@example.test>"),
+				[][]byte{[]byte("<recipient@example.test>")},
+			))
+			if err != nil || !result.Valid() || result.Applicable() || provider.calls != 0 || replay.calls != 0 {
+				t.Fatalf("Process() = valid=%t applicable=%t DNS=%d replay=%d err=%v", result.Valid(), result.Applicable(), provider.calls, replay.calls, err)
+			}
+			domainResult, err := result.Domain()
+			if err != nil {
+				t.Fatal("valid non-applicable result lost its domain owner")
+			}
+			verification, verificationErr := domainResult.Verification()
+			policy, policyErr := domainResult.Policy()
+			if verification.Valid() || policy.Valid() || !IsDomainError(verificationErr) || !IsDomainError(policyErr) {
+				t.Fatal("non-applicable domain result exposed absent verification or policy values")
+			}
+			replayResult, err := result.Replay()
+			if err != nil || replayResult.Class() != ReplayResultNotChecked || replayResult.Disposition() != FinalDispositionContinue {
+				t.Fatalf("Replay() = %q/%q err=%v", replayResult.Class(), replayResult.Disposition(), err)
+			}
+			metrics, err := runtime.Metrics().Gather()
+			if err != nil {
+				t.Fatalf("Metrics().Gather() error = %v", err)
+			}
+			if !bytes.Contains(metrics, []byte(`dkim2d_process_total{disposition="continue",replay_state="not_checked",result="success",verdict="neutral"} 1`)) {
+				t.Fatal("unsigned inbound processing omitted the process outcome metric")
+			}
+			if bytes.Contains(metrics, []byte("dkim2d_replay_coordinates_total")) ||
+				bytes.Contains(logs.Bytes(), []byte(`"event_id":"replay.coordinate.completed"`)) {
+				t.Fatal("unsigned inbound processing emitted replay telemetry")
+			}
+		})
+	}
+}
+
+// TestPartialInboundProtocolRemainsApplicableInEveryMode proves absence handling is not fail-open.
+func TestPartialInboundProtocolRemainsApplicableInEveryMode(t *testing.T) {
+	tests := []struct {
+		mode    config.PolicyMode
+		verdict dkim2.PolicyVerdict
+	}{
+		{config.PolicyStrict, dkim2.PolicyVerdictReject},
+		{config.PolicyPermissive, dkim2.PolicyVerdictAccept},
+		{config.PolicyTesting, dkim2.PolicyVerdictContinue},
+	}
+	for _, testCase := range tests {
+		t.Run(string(testCase.mode), func(t *testing.T) {
+			provider := &countingNoLookupProvider{}
+			verifier, err := dkim2.NewVerifier(provider)
+			if err != nil {
+				t.Fatalf("NewVerifier() error = %v", err)
+			}
+			processor, err := NewDomainProcessor(verifier, testCase.mode)
+			if err != nil {
+				t.Fatalf("NewDomainProcessor() error = %v", err)
+			}
+			result, err := processor.Process(context.Background(), dkim2.NewVerifyRequest(
+				[]byte("From: sender@example.test\r\nMessage-Instance: m=1; h=sha256:AA==:AA==;\r\n\r\nbody\r\n"),
+				nil,
+				nil,
+			))
+			verification, verificationErr := result.Verification()
+			policy, policyErr := result.Policy()
+			if err != nil || !result.Applicable() || verificationErr != nil || policyErr != nil ||
+				verification.State() != dkim2.ResultStatePERMERROR || policy.Verdict() != testCase.verdict || provider.calls != 0 {
+				t.Fatalf("Process() = applicable=%t state=%q verdict=%q calls=%d errors=%v/%v/%v", result.Applicable(), verification.State(), policy.Verdict(), provider.calls, err, verificationErr, policyErr)
+			}
+		})
+	}
 }
 
 // TestDomainProcessorMapsServerOwnedPolicyModes proves request data cannot select policy.
@@ -84,16 +221,16 @@ func TestDomainProcessorFailsClosed(t *testing.T) {
 
 type zeroVerifier struct{}
 
-// Verify returns a zero result for fail-closed service tests.
-func (zeroVerifier) Verify(context.Context, dkim2.VerifyRequest) (dkim2.VerifyResult, error) {
-	return dkim2.VerifyResult{}, nil
+// Assess returns a zero assessment for fail-closed service tests.
+func (zeroVerifier) Assess(context.Context, dkim2.VerifyRequest) (dkim2.VerificationAssessment, error) {
+	return dkim2.VerificationAssessment{}, nil
 }
 
 type errorVerifier struct{ err error }
 
-// Verify returns one injected toxic dependency error for privacy tests.
-func (v errorVerifier) Verify(context.Context, dkim2.VerifyRequest) (dkim2.VerifyResult, error) {
-	return dkim2.VerifyResult{}, v.err
+// Assess returns one injected toxic dependency error for privacy tests.
+func (v errorVerifier) Assess(context.Context, dkim2.VerifyRequest) (dkim2.VerificationAssessment, error) {
+	return dkim2.VerificationAssessment{}, v.err
 }
 
 type cancelingVerifier struct {
@@ -101,9 +238,9 @@ type cancelingVerifier struct {
 	cancel context.CancelFunc
 }
 
-// Verify returns an authentic result while making cancellation visible at the next stage boundary.
-func (v cancelingVerifier) Verify(ctx context.Context, request dkim2.VerifyRequest) (dkim2.VerifyResult, error) {
-	result, err := v.inner.Verify(ctx, request)
+// Assess returns an authentic assessment while making cancellation visible at the next stage boundary.
+func (v cancelingVerifier) Assess(ctx context.Context, request dkim2.VerifyRequest) (dkim2.VerificationAssessment, error) {
+	result, err := v.inner.Assess(ctx, request)
 	v.cancel()
 	return result, err
 }

@@ -24,6 +24,45 @@ func (p *countingProvider) LookupKey(context.Context, verify.KeyQuery) (verify.P
 	return verify.PublicKey{Metadata: verify.KeyMetadata{Status: verify.KeyStatusMissing}}, verify.NewProviderFailure(verify.ProviderFailurePermanent)
 }
 
+// TestAssessClassifiesUnsignedBeforeVerification proves protocol absence is not a fifth result.
+func TestAssessClassifiesUnsignedBeforeVerification(t *testing.T) {
+	provider := &countingProvider{}
+	verifier, err := NewVerifier(provider, DefaultConfig())
+	if err != nil {
+		t.Fatalf("NewVerifier() error = %v", err)
+	}
+	assessment, err := verifier.Assess(context.Background(), NewRequest(
+		[]byte("From: sender@example.test\r\nSubject: unsigned\r\n\r\nbody\r\n"),
+		[]byte("<sender@example.test>"),
+		[][]byte{[]byte("<recipient@example.test>")},
+	))
+	if err != nil || !assessment.Valid() || assessment.Applicable() || provider.calls != 0 {
+		t.Fatalf("Assess() = valid=%t applicable=%t calls=%d err=%v", assessment.Valid(), assessment.Applicable(), provider.calls, err)
+	}
+	if _, ok := assessment.Verification(); ok {
+		t.Fatal("unsigned assessment fabricated a verification result")
+	}
+}
+
+// TestAssessKeepsPartialProtocolApplicable proves malformed claims remain fail closed.
+func TestAssessKeepsPartialProtocolApplicable(t *testing.T) {
+	provider := &countingProvider{}
+	verifier, err := NewVerifier(provider, DefaultConfig())
+	if err != nil {
+		t.Fatalf("NewVerifier() error = %v", err)
+	}
+	assessment, err := verifier.Assess(context.Background(), NewRequest(
+		[]byte("From: sender@example.test\r\nMessage-Instance: m=1; h=sha256:AA==:AA==;\r\n\r\nbody\r\n"),
+		nil,
+		nil,
+	))
+	result, ok := assessment.Verification()
+	if err != nil || !assessment.Valid() || !assessment.Applicable() || !ok ||
+		result.State() != StatePERMERROR || provider.calls != 0 {
+		t.Fatalf("Assess() = applicable=%t result=%q ok=%t calls=%d err=%v", assessment.Applicable(), result.State(), ok, provider.calls, err)
+	}
+}
+
 // TestVerifierMapsSequenceExtractionFailureToUnevaluatedCustody verifies failed extraction makes no nd= claim.
 func TestVerifierMapsSequenceExtractionFailureToUnevaluatedCustody(t *testing.T) {
 	const timestamp = uint64(1700000000)

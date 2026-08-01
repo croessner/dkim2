@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 )
 
@@ -17,6 +18,13 @@ const (
 	// FidelityReconstructedCRLF declares Milter callback reconstruction.
 	FidelityReconstructedCRLF Fidelity = "milter_reconstructed_crlf"
 )
+
+// ValidSigningDomainAuthority reports whether value is one canonical lower-case
+// ASCII DNS name suitable for an exact daemon signing route.
+func ValidSigningDomainAuthority(value string) bool {
+	return value != "" && len(value) <= 253 && value == strings.ToLower(value) &&
+		asciiBytes([]byte(value)) && value[0] != '[' && validSMTPDomain([]byte(value))
+}
 
 // DomainSource selects one fail-closed originator signing-domain source.
 type DomainSource string
@@ -68,10 +76,11 @@ func (m Message) Raw() []byte { return bytes.Clone(m.raw) }
 // ReversePath returns an isolated copy of exact callback bytes.
 func (m Message) ReversePath() []byte { return bytes.Clone(m.reverse) }
 
-// SigningDomain derives one canonical ASCII DNS domain from a valid reverse-path.
+// SigningDomain derives one canonical ASCII DNS domain only when the complete
+// originator envelope fits the current ASCII signing boundary.
 func (m Message) SigningDomain() (string, bool) {
 	path := m.reverse
-	if !validEnvelopePath(path, true) || len(path) == 2 {
+	if !m.SupportsASCIISigningEnvelope() || len(path) == 2 {
 		return "", false
 	}
 	mailbox := path[1 : len(path)-1]
@@ -99,6 +108,24 @@ func (m Message) SigningDomain() (string, bool) {
 		canonical[index] = current
 	}
 	return string(canonical), true
+}
+
+// NullReversePath reports whether the exact normalized SMTP sender is null.
+func (m Message) NullReversePath() bool { return bytes.Equal(m.reverse, []byte("<>")) }
+
+// SupportsASCIISigningEnvelope reports whether every exact SMTP path fits the
+// pinned originator signing boundary without normalization or inference.
+func (m Message) SupportsASCIISigningEnvelope() bool {
+	if len(m.recipients) == 0 || !asciiBytes(m.reverse) ||
+		!validEnvelopePath(m.reverse, true) {
+		return false
+	}
+	for _, recipient := range m.recipients {
+		if !asciiBytes(recipient) || !validEnvelopePath(recipient, false) {
+			return false
+		}
+	}
+	return true
 }
 
 // Recipients returns isolated ordered callback bytes including duplicates.

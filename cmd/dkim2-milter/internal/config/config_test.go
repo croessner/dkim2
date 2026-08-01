@@ -38,6 +38,9 @@ func validConfig(mode Mode) string {
 	signing := ""
 	if mode != ModeInbound {
 		signing = "\nsigning:\n  tenant: tenant-a\n  domain: example.test"
+		if mode == ModeOriginator {
+			signing += "\n  dsn_domain: dsn.example.test"
+		}
 	}
 	return fmt.Sprintf(`version: dkim2-milter-config-v1
 server:
@@ -77,6 +80,12 @@ func TestLoadModeMatrixAndDefaults(t *testing.T) {
 			snapshot.DomainSource() != milter.DomainSourceStatic {
 			t.Fatal("signing mode lost its required identity")
 		}
+		if mode == ModeOriginator && snapshot.DSNDomain() != "dsn.example.test" {
+			t.Fatal("originator mode lost its explicit DSN signing authority")
+		}
+		if mode != ModeOriginator && snapshot.DSNDomain() != "" {
+			t.Fatal("non-originator mode retained a DSN signing authority")
+		}
 	}
 }
 
@@ -93,7 +102,8 @@ func TestLoadAcceptsOriginatorEnvelopeSenderDomainSelection(t *testing.T) {
 		t.Fatal(err)
 	}
 	if snapshot.Tenant() != "tenant-a" || snapshot.Domain() != "" ||
-		snapshot.DomainSource() != milter.DomainSourceEnvelopeSender {
+		snapshot.DomainSource() != milter.DomainSourceEnvelopeSender ||
+		snapshot.DSNDomain() != "dsn.example.test" {
 		t.Fatal("originator envelope-sender selection was not retained exactly")
 	}
 }
@@ -222,6 +232,20 @@ func TestLoadRejectsConditionalMatrixViolations(t *testing.T) {
 		"signing missing domain": strings.Replace(
 			validConfig(ModeOrdinaryTransit), "  domain: example.test", "", 1,
 		),
+		"originator missing DSN authority": strings.Replace(
+			validConfig(ModeOriginator), "  dsn_domain: dsn.example.test\n", "", 1,
+		),
+		"originator noncanonical DSN authority": strings.Replace(
+			validConfig(ModeOriginator), "dsn.example.test", "DSN.example.test", 1,
+		),
+		"transit DSN authority": strings.Replace(
+			validConfig(ModeOrdinaryTransit),
+			"  domain: example.test",
+			"  domain: example.test\n  dsn_domain: dsn.example.test",
+			1,
+		),
+		"inbound DSN authority": validConfig(ModeInbound) +
+			"signing:\n  dsn_domain: dsn.example.test\n",
 		"originator dynamic domain with static domain": strings.Replace(
 			validConfig(ModeOriginator),
 			"  domain: example.test",

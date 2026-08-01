@@ -226,6 +226,7 @@ func TestPostfixQualificationPinsBuildInputsAndCleanup(t *testing.T) {
 		[]byte(`os.ReadFile("/proc/net/tcp6")`),
 		[]byte(`context.WithTimeout(context.Background(), 10*time.Second)`),
 		[]byte(`exec.CommandContext(`),
+		[]byte(`block += "\n  dsn_domain: " + signingDomain`),
 	} {
 		if !bytes.Contains(runtime, required) {
 			t.Fatal("daemon runtime omitted chroot or privilege-drop evidence")

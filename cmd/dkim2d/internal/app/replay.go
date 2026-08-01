@@ -125,6 +125,9 @@ func (c *ReplayCoordinator) Coordinate(ctx context.Context, domain DomainResult)
 	if err := replayContextError(ctx); err != nil {
 		return ReplayOutcome{}, err
 	}
+	if !domain.Applicable() {
+		return newReplayOutcome(ReplayResultNotChecked, FinalDispositionContinue, false), nil
+	}
 	verification, verificationErr := domain.Verification()
 	policy, policyErr := domain.Policy()
 	if verificationErr != nil || policyErr != nil ||

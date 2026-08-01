@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/croessner/dkim2"
+	"github.com/croessner/dkim2/provider"
 	signingflatfile "github.com/croessner/dkim2/provider/flatfile"
 )
 
@@ -188,6 +189,13 @@ func (g *Generation) ResolvePolicy(
 			return dkim2.SigningProfile{}, contextError
 		}
 		if dkim2.ProviderErrorClassOf(err).Known() {
+			return dkim2.SigningProfile{}, err
+		}
+		var datasourceFailure interface {
+			error
+			Code() provider.ErrorCode
+		}
+		if errors.As(err, &datasourceFailure) && datasourceFailure != nil {
 			return dkim2.SigningProfile{}, err
 		}
 		return dkim2.SigningProfile{}, &Error{}

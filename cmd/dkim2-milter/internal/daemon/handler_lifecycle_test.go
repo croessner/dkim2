@@ -26,6 +26,7 @@ func TestHandlerCloseIsIdempotentAndPreventsOperations(t *testing.T) {
 		"private-tenant-marker",
 		"example.test",
 		milter.DomainSourceStatic,
+		"dsn.example.test",
 		"",
 	)
 	if err != nil {

@@ -121,10 +121,47 @@ func (r *Resolver) ResolvePolicy(
 	return dkim2.NewProjectedSigningProfile(projected)
 }
 
-// classifyResolutionError projects the internal datasource taxonomy onto the
-// public temporary-or-permanent provider boundary.
+// resolutionError preserves the internal datasource code while exposing the
+// legacy public temporary-or-permanent provider classification.
+type resolutionError struct {
+	code  datasource.ErrorCode
+	class dkim2.ProviderErrorClass
+}
+
+// Error returns the stable public provider diagnostic without datasource detail.
+func (e resolutionError) Error() string {
+	switch e.class {
+	case dkim2.ProviderErrorClassPermanent:
+		return dkim2.NewPermanentProviderError().Error()
+	case dkim2.ProviderErrorClassTemporary:
+		return dkim2.NewTemporaryProviderError().Error()
+	default:
+		return dkim2.NewTemporaryProviderError().Error()
+	}
+}
+
+// ProviderErrorClass returns the legacy public provider failure projection.
+func (e resolutionError) ProviderErrorClass() dkim2.ProviderErrorClass {
+	if e.class.Known() {
+		return e.class
+	}
+	return dkim2.ProviderErrorClassTemporary
+}
+
+// Code returns the granular datasource class for trusted daemon consumers.
+func (e resolutionError) Code() datasource.ErrorCode {
+	if e.code.Known() {
+		return e.code
+	}
+	return datasource.ErrorCodeInternalInvariant
+}
+
+// classifyResolutionError preserves the datasource taxonomy and projects the
+// documented public temporary-or-permanent provider compatibility class.
 func classifyResolutionError(err error) error {
-	switch datasource.ErrorCodeOf(err) {
+	code := datasource.ErrorCodeOf(err)
+	class := dkim2.ProviderErrorClassTemporary
+	switch code {
 	case datasource.ErrorCodeInvalidRequest,
 		datasource.ErrorCodeNotFound,
 		datasource.ErrorCodeAmbiguous,
@@ -132,15 +169,16 @@ func classifyResolutionError(err error) error {
 		datasource.ErrorCodeMalformedData,
 		datasource.ErrorCodeLimitExceeded,
 		datasource.ErrorCodeUnsupportedPlatform:
-		return dkim2.NewPermanentProviderError()
+		class = dkim2.ProviderErrorClassPermanent
 	case datasource.ErrorCodeUnavailable,
 		datasource.ErrorCodeCancelled,
 		datasource.ErrorCodeDeadlineExceeded,
 		datasource.ErrorCodeInternalInvariant:
-		return dkim2.NewTemporaryProviderError()
+		class = dkim2.ProviderErrorClassTemporary
 	default:
-		return dkim2.NewTemporaryProviderError()
+		code = datasource.ErrorCodeInternalInvariant
 	}
+	return resolutionError{code: code, class: class}
 }
 
 // Close releases the immutable provider projection.

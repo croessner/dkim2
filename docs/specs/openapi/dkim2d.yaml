@@ -322,9 +322,12 @@ paths:
       operationId: processMessage
       summary: Process one inbound DKIM2 message.
       description: >
-        Verifies the current message instance, applies server-owned policy,
-        performs the configured replay check, and returns a closed final
-        disposition. This operation neither signs nor revises a message.
+        Classifies DKIM2 applicability before verification. A message with no
+        Message-Instance and no DKIM2-Signature fields returns 204 without
+        starting verification, policy, replay, DNS, or mutation work. An
+        applicable message is verified, receives server-owned policy and the
+        configured replay check, and returns a closed final disposition. This
+        operation neither signs nor revises a message.
       security:
         - localCapability: []
       requestBody:
@@ -351,6 +354,18 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ProcessResponse"
+        "204":
+          description: >
+            DKIM2 verification is not applicable because both DKIM2 protocol
+            field families are absent. The caller continues without a
+            terminal decision or mutation.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/CacheControl"
+            Connection:
+              $ref: "#/components/headers/Connection"
+            Date:
+              $ref: "#/components/headers/Date"
         "400":
           $ref: "#/components/responses/BadRequest"
         "403":
@@ -400,6 +415,18 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/OperationResponse"
+        "204":
+          description: >
+            Originator signing is not applicable because the authoritative
+            exact signing policy or profile is absent or inactive. The caller
+            continues without a terminal decision or mutation.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/CacheControl"
+            Connection:
+              $ref: "#/components/headers/Connection"
+            Date:
+              $ref: "#/components/headers/Date"
         "400":
           $ref: "#/components/responses/BadRequest"
         "403":

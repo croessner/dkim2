@@ -198,11 +198,11 @@ func TestCapabilityRejectsUnboundOrDriftingGeneratedRequests(t *testing.T) {
 		name   string
 		mutate func(*http.Request)
 	}{
-		{name: "wrong route", mutate: func(request *http.Request) { request.URL.Path = routeSign }},
+		{name: testCaseWrongRoute, mutate: func(request *http.Request) { request.URL.Path = routeSign }},
 		{name: "wrong authority", mutate: func(request *http.Request) { request.URL.Host = "127.0.0.1:8081" }},
 		{name: "authority override", mutate: func(request *http.Request) { request.Host = "127.0.0.1:8081" }},
-		{name: "wrong method", mutate: func(request *http.Request) { request.Method = http.MethodGet }},
-		{name: "query", mutate: func(request *http.Request) { request.URL.RawQuery = "x=1" }},
+		{name: testCaseWrongMethod, mutate: func(request *http.Request) { request.Method = http.MethodGet }},
+		{name: testCaseQuery, mutate: func(request *http.Request) { request.URL.RawQuery = "x=1" }},
 		{name: "empty body", mutate: func(request *http.Request) {
 			request.Body = io.NopCloser(bytes.NewReader(nil))
 			request.ContentLength = 0

@@ -300,6 +300,61 @@ type OperationResult struct {
 	valid       bool
 }
 
+// SigningAssessment separates originator applicability from an applicable
+// signing result so authoritative absence never becomes protocol failure.
+type SigningAssessment struct {
+	initialized bool
+	applicable  bool
+	result      OperationResult
+}
+
+// NewNotApplicableSigningAssessment constructs a mutation-free originator no-op.
+func NewNotApplicableSigningAssessment() SigningAssessment {
+	return SigningAssessment{initialized: true}
+}
+
+// NewApplicableSigningAssessment seals exactly one valid originator result.
+func NewApplicableSigningAssessment(result OperationResult) (SigningAssessment, error) {
+	if !result.Valid() || result.Operation() != OperationSign {
+		return SigningAssessment{}, &DomainError{}
+	}
+	return SigningAssessment{initialized: true, applicable: true, result: result}, nil
+}
+
+// Valid reports whether the assessment is one coherent closed variant.
+func (a SigningAssessment) Valid() bool {
+	return a.initialized && (a.applicable == a.result.Valid()) &&
+		(!a.applicable || a.result.Operation() == OperationSign)
+}
+
+// Applicable reports whether exact originator signing was attempted.
+func (a SigningAssessment) Applicable() bool { return a.Valid() && a.applicable }
+
+// Result returns the sole applicable signing result.
+func (a SigningAssessment) Result() (OperationResult, bool) {
+	if !a.Valid() || !a.applicable {
+		return OperationResult{}, false
+	}
+	return a.result, true
+}
+
+// String returns a content-free signing applicability assessment.
+func (SigningAssessment) String() string { return operationRedacted }
+
+// GoString returns a content-free Go representation.
+func (SigningAssessment) GoString() string { return operationRedacted }
+
+// Format prevents formatting from traversing the protected operation result.
+func (SigningAssessment) Format(state fmt.State, _ rune) {
+	_, _ = io.WriteString(state, operationRedacted)
+}
+
+// MarshalJSON rejects serialization outside the package-owned response mapper.
+func (SigningAssessment) MarshalJSON() ([]byte, error) { return nil, &DomainError{} }
+
+// MarshalText rejects diagnostic serialization of protected signing state.
+func (SigningAssessment) MarshalText() ([]byte, error) { return nil, &DomainError{} }
+
 // NewOperationResult constructs one closed coherent outcome.
 func NewOperationResult(
 	operation Operation,
@@ -369,6 +424,6 @@ func (OperationResult) Format(state fmt.State, _ rune) {
 
 // OperationService is the narrow sign and revision application seam.
 type OperationService interface {
-	Sign(context.Context, OperationRequest) (OperationResult, error)
+	Sign(context.Context, OperationRequest) (SigningAssessment, error)
 	Revise(context.Context, OperationRequest) (OperationResult, error)
 }

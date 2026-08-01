@@ -94,15 +94,20 @@ observability:
     level: info
 ```
 
-Signing modes additionally require:
+Static originator mode additionally requires:
 
 ```yaml
-mode: originator # or ordinary_transit
+mode: originator
 signing:
   tenant: tenant-a
   domain: example.test
+  dsn_domain: dsn.example.test
   allow_recipient_group: false
 ```
+
+Ordinary-transit mode uses the same tenant and static `domain`, but forbids
+`dsn_domain` because it revises existing messages rather than originating new
+messages.
 
 An originator instance that serves multiple exact LDAP signing domains may
 derive the domain from the already validated ASCII SMTP reverse-path while
@@ -113,16 +118,29 @@ mode: originator
 signing:
   tenant: tenant-a
   domain_source: envelope_sender
+  dsn_domain: dsn.example.test
   allow_recipient_group: false
 ```
 
 `domain_source` defaults to `static`. `envelope_sender` is accepted only for
 `originator`, requires `domain` to be absent, lowercases ASCII DNS-domain
 casing, and performs no alias, wildcard, parent-domain, header, tenant, or
-datasource fallback. A null reverse-path, address literal, SMTPUTF8 domain, or
-malformed path fails closed before daemon I/O. Do not attach this route to a
-mail path that must originate null-sender messages; give such a path an exact
-static-domain policy or keep it outside this signing instance.
+datasource fallback. Every originator configuration also retains one exact
+canonical `dsn_domain` as a stable, reserved prerequisite for future DSN
+support. It is not signing authority by itself.
+
+The current adapter tempfails every null reverse-path before daemon I/O. Milter
+callbacks do not provide authenticated evidence for the RFC 3462 three-part
+DSN structure, the Draft-04 Section 12.1 verification of relevant embedded
+fields, or the Section 12.1.2 recipient alignment proof. Upstream routing alone
+cannot transfer those assertions through the current request contract. Null-
+sender signing remains deferred until an executable trusted evidence gate is
+implemented and tested; do not route `MAIL FROM <>` to this originator socket.
+
+For non-null senders, an address literal or otherwise unsupported SMTPUTF8
+envelope is not applicable and continues without daemon I/O or mutation,
+including on a static-domain route. Malformed Milter callback syntax remains a
+fail-closed adapter-contract failure.
 
 `allow_recipient_group` is reserved and must remain false. Signing stays
 single-recipient until the adapter has trustworthy per-message Bcc
@@ -150,9 +168,27 @@ authentication_results:
 
 The only emitted value is
 `<authserv-id>; dkim2=<pass|fail|permerror|temperror>`. Pre-existing fields
-claiming the configured service are deleted in descending field-index order,
-and the daemon-owned result is inserted at the top. Fields from other services
+claiming the configured service are deleted in descending field-index order
+for every accepted inbound message, including unsigned messages for which
+DKIM2 processing is not applicable. This mandatory RFC 8601 trust-boundary
+scrub remains separate from the daemon action plan. Applicable messages then
+receive the daemon-owned local result field at the top. Fields from other services
 are preserved. A forged local field disables fail-open.
+
+An inbound HTTP 204 response is the separate `not_applicable` variant for a
+message containing neither DKIM2 protocol field family. The adapter accepts it
+only with the exact bodyless daemon response contract, emits one Milter EOM
+continue response, requests no DKIM2 result action, and never fabricates
+`dkim2=none` as a four-state verification result. Mandatory removal of a
+pre-existing local `Authentication-Results` field still occurs at the RFC 8601
+trust boundary. Partial or malformed DKIM2 state continues through the normal
+fail-closed HTTP 200 result contract.
+
+An originator HTTP 204 response is independently the authoritative absent or
+inactive exact-profile variant. It maps to `none`/`continue` with zero actions.
+Availability, ambiguity, malformed active data, and signing failures remain
+HTTP 200 failure results or transport failures. HTTP 204 is invalid for
+revision, and malformed no-content responses fail closed.
 
 ## Modes and actions
 
@@ -181,9 +217,11 @@ forbidden.
 The adapter preserves ordered SMTP envelope callback bytes, including
 recipient duplicates. It does not trim paths, case-fold, normalize Unicode,
 perform IDNA conversion, or derive envelope facts from message headers.
-SMTPUTF8 paths are supported for inbound processing; the pinned signing
-baseline requires ASCII envelope paths for originator and ordinary-transit
-modes.
+SMTPUTF8 paths are supported for inbound processing. In originator mode a valid
+SMTPUTF8 envelope reaches the applicability boundary and continues unchanged
+because the pinned signing baseline requires an entirely ASCII envelope.
+Ordinary-transit mode remains fail-closed for SMTPUTF8 until revision signing
+can preserve and verify that evidence.
 
 Headers remain an ordered sequence with duplicate fields and original field
 name casing. Negotiated callback folding is reconstructed as CRLF without
