@@ -421,22 +421,28 @@ observability:
     exporter: none
 ```
 
-OTLP/HTTP tracing is explicit and loopback-only:
+OTLP/HTTP tracing is explicit and may use a direct local or remote HTTPS
+collector:
 
 ```yaml
 observability:
   tracing:
     exporter: otlp_http
-    endpoint: https://127.0.0.1:4318/v1/traces
+    endpoint: https://collector.example:4318/v1/traces
     ca_file: /var/lib/dkim2d/protected/0123456789abcdef0123456789abcdef/otlp-ca
     sample_per_million: 10000
     export_timeout: 5s
 ```
 
-The endpoint must be canonical loopback HTTPS with `/v1/traces`. The CA is a
-protected generation child. TLS 1.3 is required; proxies, redirects, arbitrary
-headers, environment-driven exporter configuration, compression overrides,
-and remote authorities are rejected.
+The endpoint must use a canonical lowercase ASCII DNS name or canonical IP
+literal, an explicit nonzero decimal port, HTTPS, and exactly `/v1/traces`.
+The CA is a protected generation child. The URL hostname is the sole TLS peer
+identity; normal certificate and hostname/IP verification applies, so there is
+no separate `server_name` override. Exactly TLS 1.3 is permitted. Proxies,
+redirects, arbitrary headers, environment-driven exporter configuration,
+compression overrides, userinfo, queries, and fragments remain rejected.
+Loopback HTTPS endpoints remain supported. Remote export does not relax the
+daemon HTTP listener's separate loopback-only contract.
 
 `GET /metrics` is public on the same loopback listener and does not require
 readiness or the process capability. It accepts no body, query, conditional,

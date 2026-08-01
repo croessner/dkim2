@@ -140,7 +140,7 @@ func (c TracingConfig) Exporter() TracingExporter {
 	return c.state.exporter
 }
 
-// Endpoint returns the validated loopback OTLP endpoint.
+// Endpoint returns the validated direct HTTPS OTLP endpoint.
 func (c TracingConfig) Endpoint() string {
 	if c.state == nil {
 		return ""

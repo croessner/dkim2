@@ -94,7 +94,7 @@ type TracingExporter uint8
 const (
 	// TracingNone disables the tracing SDK and exporter.
 	TracingNone TracingExporter = iota + 1
-	// TracingOTLPHTTP selects bounded OTLP over loopback TLS.
+	// TracingOTLPHTTP selects bounded OTLP over direct HTTPS with strict TLS.
 	TracingOTLPHTTP
 )
 
@@ -473,24 +473,57 @@ func replayProtectedPaths(replay replayState) []string {
 	return paths
 }
 
-// validOTLPEndpoint accepts one exact loopback TLS traces endpoint.
+// validOTLPEndpoint accepts one canonical HTTPS authority and the exact traces path.
 func validOTLPEndpoint(value string) bool {
 	parsed, err := url.Parse(value)
 	if err != nil || parsed.Scheme != "https" || parsed.User != nil ||
-		parsed.RawQuery != "" || parsed.Fragment != "" || parsed.Path != "/v1/traces" ||
-		parsed.RawPath != "" || parsed.Opaque != "" {
+		parsed.RawQuery != "" || parsed.ForceQuery || parsed.Fragment != "" || parsed.RawFragment != "" ||
+		parsed.Path != "/v1/traces" || parsed.RawPath != "" || parsed.Opaque != "" || parsed.String() != value {
 		return false
 	}
 	host := parsed.Hostname()
 	portText := parsed.Port()
 	address, err := netip.ParseAddr(host)
-	if err != nil || !address.IsLoopback() || address.Is4In6() || address.Zone() != "" ||
-		address.String() != host || portText == "" {
+	if err == nil {
+		if address.IsUnspecified() || address.IsMulticast() || address.Is4In6() ||
+			address.Zone() != "" || address.String() != host {
+			return false
+		}
+	} else if !validCanonicalDNSName(host) {
+		return false
+	}
+	if portText == "" {
 		return false
 	}
 	port, err := strconv.ParseUint(portText, 10, 16)
 	return err == nil && port != 0 && strconv.FormatUint(port, 10) == portText &&
 		net.JoinHostPort(host, portText) == parsed.Host
+}
+
+// validCanonicalDNSName proves one lowercase ASCII DNS hostname without a root dot.
+func validCanonicalDNSName(name string) bool {
+	if len(name) < 1 || len(name) > 253 || strings.HasSuffix(name, ".") {
+		return false
+	}
+	for _, label := range strings.Split(name, ".") {
+		if len(label) < 1 || len(label) > 63 ||
+			!lowercaseDNSLetterOrDigit(label[0]) ||
+			!lowercaseDNSLetterOrDigit(label[len(label)-1]) {
+			return false
+		}
+		for index := range len(label) {
+			value := label[index]
+			if !lowercaseDNSLetterOrDigit(value) && value != '-' {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// lowercaseDNSLetterOrDigit reports the canonical endpoint DNS alphabet.
+func lowercaseDNSLetterOrDigit(value byte) bool {
+	return value >= 'a' && value <= 'z' || value >= '0' && value <= '9'
 }
 
 // clonePresence prevents caller-owned maps from mutating snapshot provenance.

@@ -122,6 +122,11 @@ state/milter/originator/originator.yaml
 state/milter/transit/transit.yaml
 ```
 
+Optional OTLP/HTTP export may use a canonical remote HTTPS collector as
+documented in the daemon README. Provide the selected generation's protected
+CA child and only the required outbound DNS/HTTPS reachability. This does not
+authorize publishing or proxying the daemon's loopback-only HTTP listener.
+
 Inbound uses the process capability and may use disabled, memory, or a
 separately operated directly addressed Valkey replay backend. Originator uses
 the sign capability. Ordinary transit uses the revise capability. Only the

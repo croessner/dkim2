@@ -2,7 +2,16 @@ package observability
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/tls"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"math/big"
+	"net/http"
 	"testing"
+	"time"
 
 	"github.com/croessner/dkim2/cmd/dkim2d/internal/config"
 	"go.opentelemetry.io/otel"
@@ -101,14 +110,64 @@ func TestOTLPExporterRejectsEnvironmentOverrides(t *testing.T) {
 	}
 }
 
+// TestEndpointHTTPClientUsesURLHostnameForStrictTLS proves the URL is the sole TLS identity authority.
+func TestEndpointHTTPClientUsesURLHostnameForStrictTLS(t *testing.T) {
+	settings := testTracingSettingsForEndpoint(t, "https://metrics.roessner-net.de:4318/v1/traces")
+	client, err := endpointHTTPClient(settings, [][]byte{testRootCertificateDER(t)})
+	if err != nil {
+		t.Fatal("remote endpoint HTTP client construction failed")
+	}
+	transport, ok := client.Transport.(*http.Transport)
+	if !ok || transport.Proxy != nil || transport.TLSClientConfig == nil {
+		t.Fatal("endpoint transport authority widened")
+	}
+	tlsConfig := transport.TLSClientConfig
+	if tlsConfig.ServerName != "metrics.roessner-net.de" || tlsConfig.InsecureSkipVerify ||
+		tlsConfig.MinVersion != tls.VersionTLS13 || tlsConfig.MaxVersion != tls.VersionTLS13 ||
+		tlsConfig.RootCAs == nil {
+		t.Fatal("strict URL-hostname TLS verification changed")
+	}
+	if client.CheckRedirect == nil || client.CheckRedirect(nil, nil) == nil {
+		t.Fatal("redirect rejection changed")
+	}
+}
+
+// testRootCertificateDER returns one valid in-memory trust anchor without opening a listener.
+func testRootCertificateDER(t *testing.T) []byte {
+	t.Helper()
+	privateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal("test CA key generation failed")
+	}
+	template := &x509.Certificate{
+		SerialNumber:          big.NewInt(1),
+		Subject:               pkix.Name{CommonName: "test-root"},
+		NotBefore:             time.Unix(0, 0),
+		NotAfter:              time.Unix(4_102_444_800, 0),
+		IsCA:                  true,
+		BasicConstraintsValid: true,
+		KeyUsage:              x509.KeyUsageCertSign,
+	}
+	der, err := x509.CreateCertificate(rand.Reader, template, template, &privateKey.PublicKey, privateKey)
+	if err != nil {
+		t.Fatal("test CA certificate generation failed")
+	}
+	return der
+}
+
 // testTracingSettings returns a fully sampled validated trace configuration.
 func testTracingSettings(t *testing.T) config.TracingConfig {
+	return testTracingSettingsForEndpoint(t, "https://127.0.0.1:4318/v1/traces")
+}
+
+// testTracingSettingsForEndpoint returns validated tracing settings for one canonical endpoint.
+func testTracingSettingsForEndpoint(t *testing.T, endpoint string) config.TracingConfig {
 	t.Helper()
 	document := testObservabilityConfig + `
 observability:
   tracing:
     exporter: otlp_http
-    endpoint: https://127.0.0.1:4318/v1/traces
+    endpoint: ` + endpoint + `
     ca_file: /secure/0123456789abcdef0123456789abcdef/otlp-ca
     sample_per_million: 1000000
     export_timeout: 5s

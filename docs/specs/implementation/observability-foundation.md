@@ -83,10 +83,17 @@ aggregate-size, unknown-key, stable-path, and redacted-error rules apply.
 
 Exporter `none` forbids explicit endpoint, CA, sampling, or timeout leaves and
 builds no SDK processor. `otlp_http` requires endpoint and CA. The endpoint is
-exactly `https` to canonical `127.0.0.1` or `[::1]`, a canonical nonzero port,
-and `/v1/traces`; userinfo, query, fragment, zones, mapped IPv6, hostnames,
-proxy, redirects, arbitrary headers, and compression overrides are forbidden.
-TLS uses the endpoint IP, supplied CA pool, and TLS 1.3 minimum.
+exactly `https` to a canonical lowercase ASCII DNS name or canonical IP
+literal, a canonical nonzero port, and `/v1/traces`; userinfo, query, fragment,
+zones, mapped IPv6, unspecified or multicast IPs, proxies, redirects, arbitrary
+headers, and compression overrides are forbidden. Existing canonical loopback
+IP endpoints remain valid.
+
+The URL hostname is the sole TLS identity authority. No separate
+`server_name` field exists: certificate and hostname/IP verification derive
+from the validated endpoint and the supplied generation-protected CA pool.
+The transport permits exactly TLS 1.3. Remote export does not change the
+daemon HTTP server's separate loopback-only listener contract.
 
 The CA is a direct child of the selected protected generation and inherits
 same-generation descriptor ownership, modes 0400/0600, link-count-one, local

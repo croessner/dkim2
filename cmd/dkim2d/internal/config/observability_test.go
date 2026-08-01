@@ -55,18 +55,55 @@ observability:
 	}
 }
 
+// TestObservabilityTracingAcceptsCanonicalRemoteHTTPS proves remote collectors use the stable endpoint field.
+func TestObservabilityTracingAcceptsCanonicalRemoteHTTPS(t *testing.T) {
+	clearStableEnvironment(t)
+	caPath := "/secure/" + testGeneration + "/otlp-ca"
+	for _, endpoint := range []string{
+		"https://metrics.roessner-net.de:4318/v1/traces",
+		"https://192.0.2.10:4318/v1/traces",
+		"https://[2001:db8::10]:4318/v1/traces",
+		"https://127.0.0.1:4318/v1/traces",
+		"https://[::1]:4318/v1/traces",
+	} {
+		document := disabledYAML() + `
+observability:
+  tracing:
+    exporter: otlp_http
+    endpoint: ` + endpoint + `
+    ca_file: ` + caPath + "\n"
+		snapshot, err := Load([]byte(document), FlagValues{})
+		if err != nil {
+			t.Fatalf("Load() rejected canonical HTTPS endpoint with code %s", CodeOf(err))
+		}
+		if snapshot.Observability().Tracing().Endpoint() != endpoint {
+			t.Fatal("validated remote endpoint changed")
+		}
+	}
+}
+
 // TestObservabilityTracingRejectsForbiddenAuthoritiesAndDisabledLeaves freezes fail-closed grammar.
 func TestObservabilityTracingRejectsForbiddenAuthoritiesAndDisabledLeaves(t *testing.T) {
 	clearStableEnvironment(t)
 	base := disabledYAML()
 	for _, endpoint := range []string{
 		"http://127.0.0.1:4318/v1/traces",
-		"https://localhost:4318/v1/traces",
+		"https://Metrics.example:4318/v1/traces",
+		"https://metrics.example.:4318/v1/traces",
+		"https://-metrics.example:4318/v1/traces",
+		"https://metrics..example:4318/v1/traces",
+		"https://métrics.example:4318/v1/traces",
+		"https://metrics.example/v1/traces",
 		"https://127.0.0.1:4318/",
 		"https://127.0.0.1:04318/v1/traces",
 		"https://127.0.0.1:4318/v1/traces?token=x",
+		"https://127.0.0.1:4318/v1/traces?",
+		"https://127.0.0.1:4318/v1/traces#",
 		"https://user@127.0.0.1:4318/v1/traces",
 		"https://[::ffff:127.0.0.1]:4318/v1/traces",
+		"https://[fe80::1%25eth0]:4318/v1/traces",
+		"https://[::]:4318/v1/traces",
+		"https://224.0.0.1:4318/v1/traces",
 	} {
 		document := base + `
 observability:
@@ -85,6 +122,16 @@ observability:
     endpoint: https://127.0.0.1:4318/v1/traces
 `), FlagValues{}); CodeOf(err) != CodeInvalidField {
 		t.Fatal("disabled tracing accepted an explicit conditional leaf")
+	}
+	if _, err := Load([]byte(base+`
+observability:
+  tracing:
+    exporter: otlp_http
+    endpoint: https://metrics.example:4318/v1/traces
+    server_name: other.example
+    ca_file: /secure/`+testGeneration+`/otlp-ca
+`), FlagValues{}); CodeOf(err) != CodeInvalidYAML {
+		t.Fatalf("tracing server_name returned code %s", CodeOf(err))
 	}
 }
 

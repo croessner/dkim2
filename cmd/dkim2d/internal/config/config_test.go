@@ -711,6 +711,13 @@ func FuzzLoadStrict(f *testing.F) {
 	f.Add([]byte(disabledYAML()))
 	f.Add([]byte(memoryYAML("1", "capability")))
 	f.Add([]byte(valkeyYAML()))
+	f.Add([]byte(disabledYAML() + `
+observability:
+  tracing:
+    exporter: otlp_http
+    endpoint: https://metrics.example:4318/v1/traces
+    ca_file: /secure/` + testGeneration + `/otlp-ca
+`))
 	f.Add([]byte("config: ["))
 	f.Fuzz(func(t *testing.T, data []byte) {
 		snapshot, err := Load(data, FlagValues{})

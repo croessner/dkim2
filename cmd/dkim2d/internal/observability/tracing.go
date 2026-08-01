@@ -89,7 +89,7 @@ type TraceRuntime struct {
 	shutdownErr  error
 }
 
-// NewTraceRuntime constructs disabled or bounded loopback OTLP tracing.
+// NewTraceRuntime constructs disabled or bounded direct HTTPS OTLP tracing.
 func NewTraceRuntime(ctx context.Context, settings config.TracingConfig, rootsDER [][]byte) (*TraceRuntime, error) {
 	return newTraceRuntime(ctx, settings, rootsDER, nil)
 }
@@ -164,7 +164,7 @@ func newSDKTraceRuntime(settings config.TracingConfig, processor sdktrace.SpanPr
 	return &TraceRuntime{provider: provider, sdkProvider: provider}, nil
 }
 
-// newOTLPExporter creates a proxy-free, redirect-free loopback TLS exporter.
+// newOTLPExporter creates a proxy-free, redirect-free HTTPS exporter.
 func newOTLPExporter(ctx context.Context, settings config.TracingConfig, rootsDER [][]byte) (sdktrace.SpanExporter, error) {
 	if !exporterEnvironmentClean() {
 		return nil, errRejectedRecord
@@ -347,6 +347,7 @@ func endpointHTTPClient(settings config.TracingConfig, rootsDER [][]byte) (*http
 	}
 	tlsConfig := &tls.Config{
 		MinVersion: tls.VersionTLS13,
+		MaxVersion: tls.VersionTLS13,
 		RootCAs:    pool,
 		ServerName: endpoint.Hostname(),
 	}

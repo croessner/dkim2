@@ -56,6 +56,7 @@
 | 0.1.0-draft | 2026-08-01 | Christian Roessner / Codex | Moved LDAP and PostgreSQL signing-key custody into immutable `dkim2-datasource-v2` generations, preserving opaque handles and in-memory signing while removing network-backend local manifests and REST key surfaces. |
 | 0.1.0-draft | 2026-08-01 | Christian Roessner / Codex | Added daemon-owned MySQL 8.4 and MariaDB 10.11 datasource support through one typed verified-TLS adapter, a shared SQL snapshot core, immutable InnoDB generations, transactionally fenced offline publication, and digest-pinned parity evidence for both server families. |
 | 0.1.0-draft | 2026-08-01 | Christian Roessner / Codex | Reconciled the operator documentation with native v2 custody: completed the 18-attribute/six-class LDAP allocation, marked M22 implemented across LDAP and three SQL server families, added parser-checked configuration examples, and made installation, grants, rotation, backup, and legacy isolation one navigable operator contract. |
+| 0.1.0-draft | 2026-08-01 | Christian Roessner / Codex | Extended the existing OTLP/HTTP exporter to canonical remote HTTPS collectors while retaining generation-protected trust roots, URL-derived certificate identity, exact TLS 1.3, proxy/redirect/environment rejection, bounded export behavior, and the independent loopback-only daemon listener. |
 
 ## 1. Purpose
 
@@ -1124,6 +1125,13 @@ Observability should follow a central-provider model:
 - Prometheus is used for metrics.
 - The daemon owns exporters, registries, handlers, and lifecycle.
 - The library emits bounded observation events through injected interfaces.
+
+The daemon's OTLP/HTTP exporter may address a canonical local or remote HTTPS
+collector. The validated URL hostname is the sole TLS peer identity; a
+separate server-name override would create ambiguous authority and is not part
+of the stable config. The exporter uses only its generation-protected CA pool,
+exact TLS 1.3, and a proxy-free, redirect-free bounded client. This outbound
+authority does not widen the daemon's loopback-only inbound HTTP listener.
 
 Telemetry uses a tiered allowlist. Default telemetry is intentionally boring
 and low-cardinality. Richer DKIM2-specific diagnostics are available only
