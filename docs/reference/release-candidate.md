@@ -39,4 +39,4 @@ issues are stated in the generated report and
 Exim is exactly `qualified_linux` in the unpublished candidate report. Portable
 conformance remains truthful by recording the Linux-only case as not
 applicable; the full report requires the separately verified evidence import.
-LDAP and PostgreSQL providers plus the offline legacy migration are implemented.
+LDAP, PostgreSQL, MySQL, and MariaDB providers plus the offline legacy migration are implemented.

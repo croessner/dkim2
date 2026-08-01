@@ -34,9 +34,10 @@ Current contents:
   policy contracts with immutable in-memory and confined flat-file providers.
 - `lib/internal/datasource/signingprofile`: the sole bridge from validated
   datasource results and opaque key-handle bindings to signing profiles.
-- `docs/datasource-ldap-sql-design.md`: storage-neutral LDAP and PostgreSQL
+- `docs/datasource-ldap-sql-design.md`: storage-neutral LDAP, PostgreSQL,
+  MySQL, and MariaDB
   mapping, consistency, resource, and privacy contract.
-- `docs/operator/datasource-ldap-postgresql.md`: installable schema/DDL,
+- `docs/operator/datasource-ldap-postgresql.md`: installable LDAP and SQL schema/DDL,
   daemon configuration, lifecycle, monitoring, backup, and troubleshooting.
 - `docs/operator/opendkim-migration.md`: protected dry-run, apply, publication,
   and higher-generation rollback workflow.
@@ -84,8 +85,8 @@ five-row qualification runner are implemented with capability
 unchanged matrix passed all five supported rows with 43 cases per row; the
 candidate-bound run ID remains in generated full-profile evidence. Portable
 reports still mark Exim execution not applicable. No prebuilt
-universal Exim binary or container image is claimed. LDAP
-and PostgreSQL datasource providers,
+universal Exim binary or container image is claimed. LDAP, PostgreSQL, MySQL,
+and MariaDB datasource providers,
 deployable schema artifacts, and the offline legacy OpenDKIM migration are
 implemented. They require operator-supplied verified-TLS services, distinct
 least-authority principals, and generation-matched protected registry state.
@@ -110,8 +111,8 @@ daemon-owned standalone-primary Valkey provider using privacy-preserving keys
 and one non-retryable `SET NX PX` operation. The daemon now owns strict typed
 configuration, protected-generation loading, the generated process, sign, and
 revise OpenAPI boundary, distinct local route-capability authentication,
-replay and signing-store wiring, readiness, and bounded Fx lifecycle. LDAP and
-PostgreSQL providers load immutable committed generations through verified TLS
+replay and signing-store wiring, readiness, and bounded Fx lifecycle. LDAP,
+PostgreSQL, MySQL, and MariaDB providers load immutable committed generations through verified TLS
 and join them to one exact protected signer-registry generation.
 
 `dkim2ctl` provides a generated-client-backed loopback smoke check and a
@@ -143,6 +144,8 @@ make deployment-security
 make check-operator-docs
 make check-datasource-schema
 make check-datasource-postgresql
+make check-datasource-mysql
+make test-datasource-services
 make check-release
 make guardrails
 ```

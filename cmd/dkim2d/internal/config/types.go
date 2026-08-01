@@ -62,6 +62,16 @@ const (
 	pathSigningPGDeadline      = "signing.postgresql.load_deadline"
 	pathSigningPGMaxConns      = "signing.postgresql.max_connections"
 	pathSigningPGIdleConns     = "signing.postgresql.idle_connections"
+	pathSigningMySQLAddress    = "signing.mysql.address"
+	pathSigningMySQLServerName = "signing.mysql.server_name"
+	pathSigningMySQLCAFile     = "signing.mysql.ca_file"
+	pathSigningMySQLDatabase   = "signing.mysql.database"
+	pathSigningMySQLUser       = "signing.mysql.user"
+	pathSigningMySQLPassword   = "signing.mysql.password_file"
+	pathSigningMySQLPageSize   = "signing.mysql.page_size"
+	pathSigningMySQLDeadline   = "signing.mysql.load_deadline"
+	pathSigningMySQLMaxConns   = "signing.mysql.max_connections"
+	pathSigningMySQLIdleConns  = "signing.mysql.idle_connections"
 
 	pathValkeyAddress          = "replay.valkey.address"
 	pathValkeyServerName       = "replay.valkey.server_name"
@@ -288,6 +298,16 @@ func stableFieldSpecs() []fieldSpec {
 		{path: pathSigningPGDeadline, env: "DKIM2D_SIGNING_POSTGRESQL_LOAD_DEADLINE", kind: valueDuration, defaultVal: "5s", hasDefault: true},
 		{path: pathSigningPGMaxConns, env: "DKIM2D_SIGNING_POSTGRESQL_MAX_CONNECTIONS", kind: valueUint, defaultVal: "2", hasDefault: true},
 		{path: pathSigningPGIdleConns, env: "DKIM2D_SIGNING_POSTGRESQL_IDLE_CONNECTIONS", kind: valueUint, defaultVal: "1", hasDefault: true},
+		{path: pathSigningMySQLAddress, env: "DKIM2D_SIGNING_MYSQL_ADDRESS", kind: valueString},
+		{path: pathSigningMySQLServerName, env: "DKIM2D_SIGNING_MYSQL_SERVER_NAME", kind: valueString},
+		{path: pathSigningMySQLCAFile, env: "DKIM2D_SIGNING_MYSQL_CA_FILE", kind: valueString},
+		{path: pathSigningMySQLDatabase, env: "DKIM2D_SIGNING_MYSQL_DATABASE", kind: valueString},
+		{path: pathSigningMySQLUser, env: "DKIM2D_SIGNING_MYSQL_USER", kind: valueString},
+		{path: pathSigningMySQLPassword, env: "DKIM2D_SIGNING_MYSQL_PASSWORD_FILE", kind: valueString},
+		{path: pathSigningMySQLPageSize, env: "DKIM2D_SIGNING_MYSQL_PAGE_SIZE", kind: valueUint, defaultVal: "128", hasDefault: true},
+		{path: pathSigningMySQLDeadline, env: "DKIM2D_SIGNING_MYSQL_LOAD_DEADLINE", kind: valueDuration, defaultVal: "5s", hasDefault: true},
+		{path: pathSigningMySQLMaxConns, env: "DKIM2D_SIGNING_MYSQL_MAX_CONNECTIONS", kind: valueUint, defaultVal: "2", hasDefault: true},
+		{path: pathSigningMySQLIdleConns, env: "DKIM2D_SIGNING_MYSQL_IDLE_CONNECTIONS", kind: valueUint, defaultVal: "1", hasDefault: true},
 		{path: pathValkeyAddress, env: "DKIM2D_REPLAY_VALKEY_ADDRESS", kind: valueString},
 		{path: pathValkeyServerName, env: "DKIM2D_REPLAY_VALKEY_SERVER_NAME", kind: valueString},
 		{path: pathValkeyCAFile, env: "DKIM2D_REPLAY_VALKEY_CA_FILE", kind: valueString},

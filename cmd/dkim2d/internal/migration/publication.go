@@ -7,7 +7,7 @@ import (
 	"io"
 	"time"
 
-	datasourcepostgresql "github.com/croessner/dkim2/cmd/dkim2d/internal/datasource/postgresql"
+	"github.com/croessner/dkim2/cmd/dkim2d/internal/datasource/sqlsnapshot"
 	"github.com/croessner/dkim2/cmd/dkim2d/internal/signingstore"
 	"github.com/croessner/dkim2/provider"
 )
@@ -15,7 +15,7 @@ import (
 // PublicationCandidate owns one complete provider-neutral public generation.
 type PublicationCandidate struct {
 	generation uint64
-	rows       datasourcepostgresql.DatasetRows
+	rows       sqlsnapshot.DatasetRows
 }
 
 // Generation returns the exact immutable candidate generation.
@@ -52,12 +52,12 @@ func BuildPublicationCandidate(
 		return PublicationCandidate{}, errors.New("migration candidate unavailable")
 	}
 	generationText := plan.Generation
-	rows := datasourcepostgresql.DatasetRows{
-		Current: datasourcepostgresql.MetadataRow{
+	rows := sqlsnapshot.DatasetRows{
+		Current: sqlsnapshot.MetadataRow{
 			Generation: generationText, SchemaVersion: migrationSchemaVersion,
 			DatasetState: datasourceStateCommitted,
 		},
-		Final: datasourcepostgresql.MetadataRow{
+		Final: sqlsnapshot.MetadataRow{
 			Generation: generationText, SchemaVersion: migrationSchemaVersion,
 			DatasetState: datasourceStateCommitted,
 		},
@@ -85,15 +85,15 @@ func BuildPublicationCandidate(
 			clear(privatePKCS8)
 			return PublicationCandidate{}, errors.New("migration candidate unavailable")
 		}
-		rows.Handles = append(rows.Handles, datasourcepostgresql.HandleRow{
+		rows.Handles = append(rows.Handles, sqlsnapshot.HandleRow{
 			Generation: generationText, HandleID: mapping.HandleID,
 		})
-		rows.Credentials = append(rows.Credentials, datasourcepostgresql.CredentialRow{
+		rows.Credentials = append(rows.Credentials, sqlsnapshot.CredentialRow{
 			Generation: generationText, ProfileID: mapping.ProfileID,
 			Algorithm: algorithm, Selector: mapping.Selector,
 			PublicKeySPKI: publicSPKI, HandleID: mapping.HandleID,
 		})
-		rows.KeyMaterial = append(rows.KeyMaterial, datasourcepostgresql.KeyMaterialRow{
+		rows.KeyMaterial = append(rows.KeyMaterial, sqlsnapshot.KeyMaterialRow{
 			Generation: generationText, TenantID: mapping.TenantID,
 			Domain: mapping.Domain, Use: mapping.ProfileUse,
 			HandleID: mapping.HandleID, Algorithm: algorithm,
@@ -114,7 +114,7 @@ func BuildPublicationCandidate(
 				notBefore, notAfter = &before, &after
 			}
 			profileIndex[mapping.ProfileID] = len(rows.Profiles)
-			rows.Profiles = append(rows.Profiles, datasourcepostgresql.ProfileRow{
+			rows.Profiles = append(rows.Profiles, sqlsnapshot.ProfileRow{
 				Generation: generationText, ProfileID: mapping.ProfileID,
 				Domain: mapping.Domain, Status: "active",
 				NotBeforeUTC: notBefore, NotAfterUTC: notAfter,
@@ -128,7 +128,7 @@ func BuildPublicationCandidate(
 				value := mapping.FeedbackRouteID
 				feedback = &value
 			}
-			rows.Policies = append(rows.Policies, datasourcepostgresql.PolicyRow{
+			rows.Policies = append(rows.Policies, sqlsnapshot.PolicyRow{
 				Generation: generationText, TenantID: mapping.TenantID,
 				Domain: mapping.Domain, Use: mapping.ProfileUse,
 				ProfileID: mapping.ProfileID, Status: "active",
@@ -137,13 +137,13 @@ func BuildPublicationCandidate(
 			})
 		}
 	}
-	dataset, err := datasourcepostgresql.MapDataset(rows, provider.DefaultLimits())
+	dataset, err := sqlsnapshot.MapDataset(rows, provider.DefaultLimits())
 	if err != nil || dataset == nil || !dataset.Valid() ||
 		dataset.Generation() != generation {
 		clearCandidateRows(&rows)
 		return PublicationCandidate{}, errors.New("migration candidate unavailable")
 	}
-	materials, err := datasourcepostgresql.MapNativeKeyMaterial(rows.KeyMaterial, generation)
+	materials, err := sqlsnapshot.MapNativeKeyMaterial(rows.KeyMaterial, generation)
 	if err != nil {
 		clearCandidateRows(&rows)
 		return PublicationCandidate{}, errors.New("migration candidate unavailable")
@@ -246,7 +246,7 @@ func textPointerValue(value *string) string {
 }
 
 // clearCandidateRows clears detached public-key bytes retained by a candidate.
-func clearCandidateRows(rows *datasourcepostgresql.DatasetRows) {
+func clearCandidateRows(rows *sqlsnapshot.DatasetRows) {
 	if rows == nil {
 		return
 	}

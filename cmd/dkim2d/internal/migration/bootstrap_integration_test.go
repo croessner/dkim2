@@ -14,7 +14,7 @@ import (
 )
 
 // TestDisposableMigrationBootstrapPublishers proves real absent-to-first
-// publication fencing against digest-pinned LDAP and PostgreSQL services.
+// publication fencing against digest-pinned LDAP, PostgreSQL, MySQL, and MariaDB services.
 func TestDisposableMigrationBootstrapPublishers(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 40*time.Second)
 	defer cancel()
@@ -72,6 +72,41 @@ func TestDisposableMigrationBootstrapPublishers(t *testing.T) {
 			t.Fatal("PostgreSQL bootstrap did not publish generation one")
 		}
 	})
+	for _, backend := range []struct {
+		name       string
+		port       string
+		serverName string
+		password   string
+	}{
+		{"mysql", "DKIM2_MYSQL_PORT", "mysql.integration.test", "synthetic-mysql-publisher-password"},
+		{"mariadb", "DKIM2_MARIADB_PORT", "mariadb.integration.test", "synthetic-mariadb-publisher-password"},
+	} {
+		current := backend
+		t.Run(current.name+"-pointerless-nonempty", func(t *testing.T) {
+			publisher, closePublisher := integrationMySQLPublisher(
+				t, ctx, roots, current.port, current.serverName, current.password, "dkim2_corrupt",
+			)
+			defer func() { _ = closePublisher() }()
+			if current, err := publisher.Current(ctx); err == nil || current != 0 {
+				t.Fatal("MySQL-family pointerless nonempty backend was accepted as empty")
+			}
+		})
+		t.Run(current.name, func(t *testing.T) {
+			first, closeFirst := integrationMySQLPublisher(
+				t, ctx, roots, current.port, current.serverName, current.password, "dkim2_empty",
+			)
+			defer func() { _ = closeFirst() }()
+			second, closeSecond := integrationMySQLPublisher(
+				t, ctx, roots, current.port, current.serverName, current.password, "dkim2_empty",
+			)
+			defer func() { _ = closeSecond() }()
+			assertConcurrentBootstrapWinner(t, ctx, first, second, candidate)
+			published, err := first.Current(ctx)
+			if err != nil || published != 1 {
+				t.Fatal("MySQL-family bootstrap did not publish generation one")
+			}
+		})
+	}
 }
 
 // assertConcurrentBootstrapWinner requires one and only one first publisher.
@@ -161,6 +196,38 @@ func integrationPostgreSQLPublisher(
 	)
 	if err != nil {
 		t.Fatal("open PostgreSQL bootstrap publisher")
+	}
+	return publisher, closePublisher
+}
+
+// integrationMySQLPublisher opens one disposable least-authority MySQL-family connection.
+func integrationMySQLPublisher(
+	t *testing.T,
+	ctx context.Context,
+	roots [][]byte,
+	portName string,
+	serverName string,
+	password string,
+	database string,
+) (*MySQLPublisher, func() error) {
+	t.Helper()
+	port := os.Getenv(portName)
+	if port == "" {
+		t.Fatal("MySQL-family integration port unavailable")
+	}
+	publisher, closePublisher, err := NewMySQLPublisherClient(
+		ctx,
+		MySQLPublicationConfig{
+			Address:    net.JoinHostPort("127.0.0.1", port),
+			ServerName: serverName,
+			Database:   database, User: "dkim2_publisher_login",
+			CAFile: "/protected/ca", PasswordFile: "/protected/password",
+		},
+		[]byte(password),
+		roots,
+	)
+	if err != nil {
+		t.Fatal("open MySQL-family bootstrap publisher")
 	}
 	return publisher, closePublisher
 }

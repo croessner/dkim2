@@ -147,6 +147,13 @@ unmaintained OpenPGP packages covered by `GO-2026-5932` in any product image.
 DKIM2 exposes only simple LDAP bind over verified TLS; it does not expose NTLM
 configuration.
 
+The daemon's MySQL/MariaDB adapter uses the upstream
+`github.com/go-sql-driver/mysql` v1.10.0 module and its Ed25519 helper
+dependency. The connector is built from typed fields only: verified TLS is
+mandatory, while DSN input, local infile, multi-statements, plaintext and old
+password fallbacks, and interpolated parameters remain disabled. Both modules
+are included in the reproducible workspace vendor check and image SBOM.
+
 Provenance uses an in-toto Statement v1 with the SLSA provenance v1 predicate
 and binds the exact local OCI archive subject, platform descriptors, source
 revision, metadata-validator image, builder image, and BuildKit image from the

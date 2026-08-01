@@ -41,8 +41,8 @@ type Limits struct {
 	ReportBytes   uint32 `yaml:"report_bytes"`
 }
 
-// PostgreSQLPublicationConfig owns one verified single-host SQL publisher.
-type PostgreSQLPublicationConfig struct {
+// SQLPublicationConfig owns one verified single-host SQL publisher.
+type SQLPublicationConfig struct {
 	Address      string `yaml:"address"`
 	ServerName   string `yaml:"server_name"`
 	CAFile       string `yaml:"ca_file"`
@@ -50,6 +50,12 @@ type PostgreSQLPublicationConfig struct {
 	User         string `yaml:"user"`
 	PasswordFile string `yaml:"password_file"`
 }
+
+// PostgreSQLPublicationConfig is the PostgreSQL publication authority.
+type PostgreSQLPublicationConfig = SQLPublicationConfig
+
+// MySQLPublicationConfig is the MySQL or MariaDB publication authority.
+type MySQLPublicationConfig = SQLPublicationConfig
 
 // Config is one immutable-by-ownership offline migration configuration.
 type Config struct {
@@ -60,6 +66,7 @@ type Config struct {
 	Import       SourceConfig                 `yaml:"import"`
 	LDAPPublish  *SourceConfig                `yaml:"ldap_publish,omitempty"`
 	PGPublish    *PostgreSQLPublicationConfig `yaml:"postgresql_publish,omitempty"`
+	MySQLPublish *MySQLPublicationConfig      `yaml:"mysql_publish,omitempty"`
 	Plan         Plan                         `yaml:"plan"`
 	Limits       Limits                       `yaml:"limits"`
 }
@@ -92,7 +99,8 @@ func LoadConfig(path string) (Config, error) {
 //nolint:gocyclo // The offline authority matrix is intentionally closed and explicit.
 func (c *Config) validate(configPath string) error {
 	if c == nil || c.Version != configVersion ||
-		(c.Plan.Target != TargetLDAP && c.Plan.Target != TargetPostgreSQL) ||
+		(c.Plan.Target != TargetLDAP && c.Plan.Target != TargetPostgreSQL &&
+			c.Plan.Target != TargetMySQL) ||
 		!validSource(c.Source) || !validSource(c.Import) ||
 		c.Source.BindDN == c.Import.BindDN ||
 		c.Source.PasswordFile == c.Import.PasswordFile ||
@@ -103,7 +111,7 @@ func (c *Config) validate(configPath string) error {
 		return errors.New("migration configuration invalid")
 	}
 	if c.Plan.Target == TargetLDAP {
-		if c.LDAPPublish == nil || c.PGPublish != nil ||
+		if c.LDAPPublish == nil || c.PGPublish != nil || c.MySQLPublish != nil ||
 			!validSource(*c.LDAPPublish) ||
 			c.LDAPPublish.BindDN == c.Source.BindDN ||
 			c.LDAPPublish.BindDN == c.Import.BindDN ||
@@ -111,8 +119,13 @@ func (c *Config) validate(configPath string) error {
 			c.LDAPPublish.PasswordFile == c.Import.PasswordFile {
 			return errors.New("migration configuration invalid")
 		}
-	} else if c.LDAPPublish != nil || c.PGPublish == nil ||
-		!validPostgreSQLPublication(*c.PGPublish) {
+	} else if c.Plan.Target == TargetPostgreSQL {
+		if c.LDAPPublish != nil || c.PGPublish == nil || c.MySQLPublish != nil ||
+			!validSQLPublication(*c.PGPublish) {
+			return errors.New("migration configuration invalid")
+		}
+	} else if c.LDAPPublish != nil || c.PGPublish != nil || c.MySQLPublish == nil ||
+		!validSQLPublication(*c.MySQLPublish) {
 		return errors.New("migration configuration invalid")
 	}
 	deadline, err := time.ParseDuration(c.DeadlineText)
@@ -139,6 +152,10 @@ func (c *Config) validate(configPath string) error {
 		publicationPaths = []string{
 			c.PGPublish.CAFile, c.PGPublish.PasswordFile,
 		}
+	} else if c.MySQLPublish != nil {
+		publicationPaths = []string{
+			c.MySQLPublish.CAFile, c.MySQLPublish.PasswordFile,
+		}
 	}
 	for _, path := range publicationPaths {
 		if !filepath.IsAbs(path) || filepath.Clean(path) != path ||
@@ -157,8 +174,8 @@ func validSource(source SourceConfig) bool {
 		source.PageSize > 0 && source.PageSize <= 256
 }
 
-// validPostgreSQLPublication validates one exact non-DSN SQL authority.
-func validPostgreSQLPublication(config PostgreSQLPublicationConfig) bool {
+// validSQLPublication validates one exact non-DSN SQL authority.
+func validSQLPublication(config SQLPublicationConfig) bool {
 	return validAuthority(config.Address, config.ServerName) &&
 		config.Database != "" && len(config.Database) <= 128 &&
 		config.User != "" && len(config.User) <= 128 &&

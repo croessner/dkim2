@@ -58,6 +58,8 @@ const (
 	SigningLDAP
 	// SigningPostgreSQL selects one verified read-only PostgreSQL provider.
 	SigningPostgreSQL
+	// SigningMySQL selects one verified read-only MySQL or MariaDB provider.
+	SigningMySQL
 )
 
 type snapshotState struct {
@@ -134,7 +136,8 @@ type signingState struct {
 	reloadInterval      time.Duration
 	allowRecipientGroup bool
 	ldap                ldapSigningState
-	postgresql          postgresqlSigningState
+	postgresql          sqlSigningState
+	mysql               sqlSigningState
 }
 
 type ldapSigningState struct {
@@ -143,7 +146,7 @@ type ldapSigningState struct {
 	loadDeadline                                                         time.Duration
 }
 
-type postgresqlSigningState struct {
+type sqlSigningState struct {
 	address, serverName, caFile, database, user, passwordFile string
 	pageSize                                                  uint16
 	loadDeadline                                              time.Duration
@@ -571,6 +574,11 @@ func parseSigning(
 	var backend SigningBackend
 	switch backendText {
 	case valueBackendDisabled:
+		if explicitPrefix(presence, "signing.ldap.") ||
+			explicitPrefix(presence, "signing.postgresql.") ||
+			explicitPrefix(presence, "signing.mysql.") {
+			return signingState{}, newError(CodeInvalidMatrix)
+		}
 		for _, path := range []string{
 			pathSigningDatasource,
 			pathSigningManifest,
@@ -590,6 +598,8 @@ func parseSigning(
 		backend = SigningLDAP
 	case "postgresql":
 		backend = SigningPostgreSQL
+	case "mysql":
+		backend = SigningMySQL
 	default:
 		return signingState{}, newError(CodeInvalidField)
 	}
@@ -608,11 +618,13 @@ func parseSigning(
 	}
 	if backend == SigningFlatFile &&
 		(explicitPrefix(presence, "signing.ldap.") ||
-			explicitPrefix(presence, "signing.postgresql.")) {
+			explicitPrefix(presence, "signing.postgresql.") ||
+			explicitPrefix(presence, "signing.mysql.")) {
 		return signingState{}, newError(CodeInvalidMatrix)
 	}
 	if backend == SigningLDAP &&
 		(explicitPrefix(presence, "signing.postgresql.") ||
+			explicitPrefix(presence, "signing.mysql.") ||
 			!requiredExplicit(presence,
 				pathSigningLDAPAddress, pathSigningLDAPServerName,
 				pathSigningLDAPCAFile, pathSigningLDAPTransport,
@@ -623,10 +635,21 @@ func parseSigning(
 	}
 	if backend == SigningPostgreSQL &&
 		(explicitPrefix(presence, "signing.ldap.") ||
+			explicitPrefix(presence, "signing.mysql.") ||
 			!requiredExplicit(presence,
 				pathSigningPGAddress, pathSigningPGServerName,
 				pathSigningPGCAFile, pathSigningPGDatabase,
 				pathSigningPGUser, pathSigningPGPassword,
+			)) {
+		return signingState{}, newError(CodeInvalidMatrix)
+	}
+	if backend == SigningMySQL &&
+		(explicitPrefix(presence, "signing.ldap.") ||
+			explicitPrefix(presence, "signing.postgresql.") ||
+			!requiredExplicit(presence,
+				pathSigningMySQLAddress, pathSigningMySQLServerName,
+				pathSigningMySQLCAFile, pathSigningMySQLDatabase,
+				pathSigningMySQLUser, pathSigningMySQLPassword,
 			)) {
 		return signingState{}, newError(CodeInvalidMatrix)
 	}
@@ -678,11 +701,36 @@ func parseSigning(
 		result.ldap = ldapConfig
 	}
 	if backend == SigningPostgreSQL {
-		postgresqlConfig, parseErr := parsePostgreSQLSigning(values, generation, paths)
+		postgresqlConfig, parseErr := parseSQLSigning(
+			values, generation, paths,
+			sqlSigningPaths{
+				address: pathSigningPGAddress, serverName: pathSigningPGServerName,
+				caFile: pathSigningPGCAFile, database: pathSigningPGDatabase,
+				user: pathSigningPGUser, password: pathSigningPGPassword,
+				pageSize: pathSigningPGPageSize, deadline: pathSigningPGDeadline,
+				maxConnections: pathSigningPGMaxConns, idleConnections: pathSigningPGIdleConns,
+			},
+		)
 		if parseErr != nil {
 			return signingState{}, parseErr
 		}
 		result.postgresql = postgresqlConfig
+	}
+	if backend == SigningMySQL {
+		mysqlConfig, parseErr := parseSQLSigning(
+			values, generation, paths,
+			sqlSigningPaths{
+				address: pathSigningMySQLAddress, serverName: pathSigningMySQLServerName,
+				caFile: pathSigningMySQLCAFile, database: pathSigningMySQLDatabase,
+				user: pathSigningMySQLUser, password: pathSigningMySQLPassword,
+				pageSize: pathSigningMySQLPageSize, deadline: pathSigningMySQLDeadline,
+				maxConnections: pathSigningMySQLMaxConns, idleConnections: pathSigningMySQLIdleConns,
+			},
+		)
+		if parseErr != nil {
+			return signingState{}, parseErr
+		}
+		result.mysql = mysqlConfig
 	}
 	return result, nil
 }
@@ -725,42 +773,48 @@ func parseLDAPSigning(
 	}, nil
 }
 
-// parsePostgreSQLSigning validates one verified-TLS single-authority SQL subtree.
-func parsePostgreSQLSigning(
+type sqlSigningPaths struct {
+	address, serverName, caFile, database, user, password string
+	pageSize, deadline, maxConnections, idleConnections   string
+}
+
+// parseSQLSigning validates one verified-TLS single-authority SQL subtree.
+func parseSQLSigning(
 	values map[string]rawValue,
 	generation string,
 	commonPaths []string,
-) (postgresqlSigningState, error) {
-	address, serverName := text(values, pathSigningPGAddress), text(values, pathSigningPGServerName)
+	selected sqlSigningPaths,
+) (sqlSigningState, error) {
+	address, serverName := text(values, selected.address), text(values, selected.serverName)
 	if !validNetworkAuthority(address, serverName) {
-		return postgresqlSigningState{}, newError(CodeInvalidField)
+		return sqlSigningState{}, newError(CodeInvalidField)
 	}
-	database, user := text(values, pathSigningPGDatabase), text(values, pathSigningPGUser)
+	database, user := text(values, selected.database), text(values, selected.user)
 	if !validIdentifier(database, 128) || !validIdentifier(user, 128) {
-		return postgresqlSigningState{}, newError(CodeInvalidField)
+		return sqlSigningState{}, newError(CodeInvalidField)
 	}
-	caFile, passwordFile := text(values, pathSigningPGCAFile), text(values, pathSigningPGPassword)
+	caFile, passwordFile := text(values, selected.caFile), text(values, selected.password)
 	paths := append(append([]string(nil), commonPaths...), caFile, passwordFile)
 	if !sameGenerationPaths(generation, paths...) || !allDistinct(paths) {
-		return postgresqlSigningState{}, newError(CodeInvalidField)
+		return sqlSigningState{}, newError(CodeInvalidField)
 	}
-	pageSize, err := uintValue(values, pathSigningPGPageSize, 1, 256)
+	pageSize, err := uintValue(values, selected.pageSize, 1, 256)
 	if err != nil {
-		return postgresqlSigningState{}, err
+		return sqlSigningState{}, err
 	}
-	deadline, err := durationValue(values, pathSigningPGDeadline, time.Millisecond, 30*time.Second, false)
+	deadline, err := durationValue(values, selected.deadline, time.Millisecond, 30*time.Second, false)
 	if err != nil {
-		return postgresqlSigningState{}, err
+		return sqlSigningState{}, err
 	}
-	maxConnections, err := uintValue(values, pathSigningPGMaxConns, 1, 4)
+	maxConnections, err := uintValue(values, selected.maxConnections, 1, 4)
 	if err != nil {
-		return postgresqlSigningState{}, err
+		return sqlSigningState{}, err
 	}
-	idleConnections, err := uintValue(values, pathSigningPGIdleConns, 0, 2)
+	idleConnections, err := uintValue(values, selected.idleConnections, 0, 2)
 	if err != nil || idleConnections > maxConnections {
-		return postgresqlSigningState{}, newError(CodeInvalidField)
+		return sqlSigningState{}, newError(CodeInvalidField)
 	}
-	return postgresqlSigningState{
+	return sqlSigningState{
 		address: address, serverName: serverName, caFile: caFile,
 		database: database, user: user, passwordFile: passwordFile,
 		pageSize: uint16(pageSize), loadDeadline: deadline,

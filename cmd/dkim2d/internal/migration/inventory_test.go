@@ -252,6 +252,27 @@ limits:
 	}
 }
 
+// TestConfigAcceptsOnlyExactMySQLPublicationAuthority proves closed target selection.
+func TestConfigAcceptsOnlyExactMySQLPublicationAuthority(t *testing.T) {
+	config := testConfig()
+	publication := MySQLPublicationConfig{
+		Address: "127.0.0.1:3306", ServerName: "mysql.example.test",
+		CAFile: "/tmp/mysql-ca", Database: "dkim2", User: "dkim2_publisher",
+		PasswordFile: "/tmp/mysql-password",
+	}
+	config.Plan.Target = TargetMySQL
+	config.LDAPPublish = nil
+	config.MySQLPublish = &publication
+	if err := config.validate("/tmp/migration.yaml"); err != nil {
+		t.Fatal("valid MySQL publication target rejected")
+	}
+	postgresql := publication
+	config.PGPublish = &postgresql
+	if err := config.validate("/tmp/migration.yaml"); err == nil {
+		t.Fatal("mixed MySQL and PostgreSQL publication authorities accepted")
+	}
+}
+
 // TestReadProtectedRejectsHardLinkedMaterial proves protected migration input
 // cannot acquire a second mutable filesystem name.
 func TestReadProtectedRejectsHardLinkedMaterial(t *testing.T) {

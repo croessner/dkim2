@@ -48,6 +48,8 @@ const (
 	TargetLDAP Target = "ldap"
 	// TargetPostgreSQL selects the versioned PostgreSQL datasource.
 	TargetPostgreSQL Target = "postgresql"
+	// TargetMySQL selects the versioned MySQL or MariaDB datasource.
+	TargetMySQL Target = "mysql"
 )
 
 // Algorithm identifies one closed legacy key class.

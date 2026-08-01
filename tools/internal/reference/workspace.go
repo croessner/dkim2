@@ -35,6 +35,10 @@ var vendorLFPaths = []string{
 	"github.com/vmware-labs/yaml-jsonpath/NOTICE",
 }
 
+var vendorTrailingWhitespacePaths = []string{
+	"github.com/go-sql-driver/mysql/LICENSE",
+}
+
 // WriteVendorTree regenerates and installs the hardened vendor tree through
 // the candidate-bound private proxy without ambient network or module state.
 func WriteVendorTree(root string) error {
@@ -191,7 +195,7 @@ func runWorkspaceCommand(root, proxy, state string, arguments ...string) error {
 	return nil
 }
 
-// normalizeVendorLF applies the repository's two exact upstream text exceptions.
+// normalizeVendorLF applies the repository's exact upstream text exceptions.
 func normalizeVendorLF(root string) error {
 	for _, path := range vendorLFPaths {
 		target := filepath.Join(root, filepath.FromSlash(path))
@@ -201,6 +205,20 @@ func normalizeVendorLF(root string) error {
 		}
 		content = bytes.ReplaceAll(content, []byte("\r"), nil)
 		if err := os.WriteFile(target, content, 0o644); err != nil {
+			return errors.New("vendor_normalize")
+		}
+	}
+	for _, path := range vendorTrailingWhitespacePaths {
+		target := filepath.Join(root, filepath.FromSlash(path))
+		content, err := readStableRegular(target, 4<<20)
+		if err != nil {
+			return errors.New("vendor_normalize")
+		}
+		lines := bytes.Split(content, []byte("\n"))
+		for index := range lines {
+			lines[index] = bytes.TrimRight(lines[index], " \t")
+		}
+		if err := os.WriteFile(target, bytes.Join(lines, []byte("\n")), 0o644); err != nil {
 			return errors.New("vendor_normalize")
 		}
 	}

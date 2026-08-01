@@ -178,7 +178,7 @@ func TestStableFieldBindings(t *testing.T) {
 func TestStablePathSetIsExact(t *testing.T) {
 	specs := stableFieldSpecs()
 	golden := stableFieldGoldenContract()
-	if len(specs) != 89 || len(specs) != len(golden) {
+	if len(specs) != 99 || len(specs) != len(golden) {
 		t.Fatal("stable path count changed")
 	}
 	for index, expected := range golden {
@@ -273,6 +273,16 @@ func stableFieldGoldenContract() []stableFieldGolden {
 		{path: "signing.postgresql.load_deadline", environment: "DKIM2D_SIGNING_POSTGRESQL_LOAD_DEADLINE", defaultValue: "5s", hasDefault: true},
 		{path: "signing.postgresql.max_connections", environment: "DKIM2D_SIGNING_POSTGRESQL_MAX_CONNECTIONS", defaultValue: "2", hasDefault: true},
 		{path: "signing.postgresql.idle_connections", environment: "DKIM2D_SIGNING_POSTGRESQL_IDLE_CONNECTIONS", defaultValue: "1", hasDefault: true},
+		{path: "signing.mysql.address", environment: "DKIM2D_SIGNING_MYSQL_ADDRESS"},
+		{path: "signing.mysql.server_name", environment: "DKIM2D_SIGNING_MYSQL_SERVER_NAME"},
+		{path: "signing.mysql.ca_file", environment: "DKIM2D_SIGNING_MYSQL_CA_FILE"},
+		{path: "signing.mysql.database", environment: "DKIM2D_SIGNING_MYSQL_DATABASE"},
+		{path: "signing.mysql.user", environment: "DKIM2D_SIGNING_MYSQL_USER"},
+		{path: "signing.mysql.password_file", environment: "DKIM2D_SIGNING_MYSQL_PASSWORD_FILE"},
+		{path: "signing.mysql.page_size", environment: "DKIM2D_SIGNING_MYSQL_PAGE_SIZE", defaultValue: "128", hasDefault: true},
+		{path: "signing.mysql.load_deadline", environment: "DKIM2D_SIGNING_MYSQL_LOAD_DEADLINE", defaultValue: "5s", hasDefault: true},
+		{path: "signing.mysql.max_connections", environment: "DKIM2D_SIGNING_MYSQL_MAX_CONNECTIONS", defaultValue: "2", hasDefault: true},
+		{path: "signing.mysql.idle_connections", environment: "DKIM2D_SIGNING_MYSQL_IDLE_CONNECTIONS", defaultValue: "1", hasDefault: true},
 		{path: "replay.valkey.address", environment: "DKIM2D_REPLAY_" + "VALKEY_ADDRESS"},
 		{path: "replay.valkey.server_name", environment: "DKIM2D_REPLAY_" + "VALKEY_SERVER_NAME"},
 		{path: "replay.valkey.ca_file", environment: "DKIM2D_REPLAY_" + "VALKEY_CA_FILE"},

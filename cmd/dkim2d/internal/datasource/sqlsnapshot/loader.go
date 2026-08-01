@@ -1,4 +1,4 @@
-package postgresql
+package sqlsnapshot
 
 import (
 	"context"
@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	loaderRedacted          = "postgresql_loader{redacted}"
+	loaderRedacted          = "sql_snapshot_loader{redacted}"
 	repeatableReadIsolation = "repeatable read"
 )
 
@@ -35,7 +35,7 @@ type Pool interface {
 	Close()
 }
 
-// Loader reads one repeatable-read PostgreSQL generation into an immutable snapshot.
+// Loader reads one repeatable-read SQL generation into an immutable snapshot.
 type Loader struct {
 	pool        Pool
 	limits      provider.Limits
@@ -44,7 +44,7 @@ type Loader struct {
 	maxDeadline time.Duration
 }
 
-// NewLoader validates one bounded PostgreSQL loader configuration.
+// NewLoader validates one bounded SQL loader configuration.
 func NewLoader(
 	pool Pool,
 	limits provider.Limits,

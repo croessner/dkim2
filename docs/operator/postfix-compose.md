@@ -368,7 +368,7 @@ source-linked rows in its compatibility report; that evidence does not extend
 this Postfix deployment and no universal binary package or Exim image is
 claimed.
 
-LDAP and PostgreSQL providers, drivers, pools, schema/DDL delivery, immutable
+LDAP, PostgreSQL, MySQL, and MariaDB providers, drivers, pools, schema/DDL delivery, immutable
 generation loading, and the offline legacy OpenDKIM migration are documented
 in
 [`datasource-ldap-postgresql.md`](datasource-ldap-postgresql.md) and

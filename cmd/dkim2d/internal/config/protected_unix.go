@@ -272,6 +272,12 @@ func selectedProtectedPaths(snapshot Snapshot) []selectedProtectedPath {
 				selectedProtectedPath{path: postgresql.CAFile(), role: protectedDatasourceCA},
 			)
 		}
+		if mysql, enabled := snapshot.Signing().MySQL(); enabled {
+			paths = append(paths,
+				selectedProtectedPath{path: mysql.PasswordFile(), role: protectedDatasourcePassword},
+				selectedProtectedPath{path: mysql.CAFile(), role: protectedDatasourceCA},
+			)
+		}
 		if snapshot.Server().ReviseEnabled() {
 			paths = append(paths, selectedProtectedPath{
 				path: snapshot.Server().ReviseCapabilityFile(),

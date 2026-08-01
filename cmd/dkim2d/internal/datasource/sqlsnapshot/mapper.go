@@ -1,5 +1,5 @@
-// Package postgresql maps fixed PostgreSQL rows into storage-neutral datasets.
-package postgresql
+// Package sqlsnapshot maps fixed SQL rows into storage-neutral datasets.
+package sqlsnapshot
 
 import (
 	"strconv"
@@ -136,6 +136,11 @@ func clearKeyMaterialRows(rows []KeyMaterialRow) {
 		rows[index].PublicSPKI = nil
 		rows[index].PrivatePKCS8 = nil
 	}
+}
+
+// ClearKeyMaterialRows clears detached SQL public and private key buffers.
+func ClearKeyMaterialRows(rows []KeyMaterialRow) {
+	clearKeyMaterialRows(rows)
 }
 
 type assembledProfile struct {

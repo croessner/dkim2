@@ -108,6 +108,14 @@ func TestNetworkSigningConfigurationIsConditionalAndVerified(t *testing.T) {
 		postgresConfig.IdleConnections() != 1 {
 		t.Fatalf("PostgreSQL signing configuration failed with code %s", CodeOf(err))
 	}
+	mysqlSnapshot, err := Load([]byte(mysqlSigningYAML()), FlagValues{})
+	mysqlConfig, mysqlEnabled := mysqlSnapshot.Signing().MySQL()
+	if err != nil || !mysqlEnabled ||
+		mysqlSnapshot.Signing().Backend() != SigningMySQL ||
+		mysqlConfig.ServerName() != "mysql.example" ||
+		mysqlConfig.MaxConnections() != 2 || mysqlConfig.IdleConnections() != 1 {
+		t.Fatalf("MySQL signing configuration failed with code %s", CodeOf(err))
+	}
 	for _, document := range []string{
 		strings.Replace(ldapSigningYAML(), "    transport: starttls", "    transport: plaintext", 1),
 		strings.Replace(ldapSigningYAML(), "    address: 127.0.0.1:636", "    address: ldap.example:636", 1),
@@ -115,6 +123,10 @@ func TestNetworkSigningConfigurationIsConditionalAndVerified(t *testing.T) {
 		strings.Replace(ldapSigningYAML(), "  backend: ldap", "  backend: ldap\n  datasource_file: /secure/"+testGeneration+"/datasource", 1),
 		strings.Replace(postgresqlSigningYAML(), "    max_connections: 2", "    max_connections: 5", 1),
 		strings.Replace(postgresqlSigningYAML(), "    database: dkim2", "    database: dkim2;drop", 1),
+		strings.Replace(mysqlSigningYAML(), "    max_connections: 2", "    max_connections: 5", 1),
+		strings.Replace(mysqlSigningYAML(), "    database: dkim2", "    database: dkim2;drop", 1),
+		strings.Replace(mysqlSigningYAML(), "  backend: mysql", "  backend: mysql\n  postgresql:\n    address: 127.0.0.1:5432", 1),
+		strings.Replace(mysqlSigningYAML(), "  backend: mysql", "  backend: disabled", 1),
 	} {
 		if _, loadErr := Load([]byte(document), FlagValues{}); loadErr == nil {
 			t.Fatal("network signing matrix accepted unsafe or irrelevant input")
@@ -807,6 +819,31 @@ signing:
     database: dkim2
     user: dkim2_runtime
     password_file: /secure/` + testGeneration + `/postgresql-password
+    max_connections: 2
+    idle_connections: 1
+`
+}
+
+// mysqlSigningYAML returns one complete verified MySQL signing document.
+func mysqlSigningYAML() string {
+	return `config:
+  version: dkim2d-config-v1
+protected:
+  generation: ` + testGeneration + `
+server:
+  capability_file: /secure/` + testGeneration + `/capability
+  sign_capability_file: /secure/` + testGeneration + `/sign-capability
+replay:
+  backend: disabled
+signing:
+  backend: mysql
+  mysql:
+    address: 127.0.0.1:3306
+    server_name: mysql.example
+    ca_file: /secure/` + testGeneration + `/mysql-ca
+    database: dkim2
+    user: dkim2_runtime
+    password_file: /secure/` + testGeneration + `/mysql-password
     max_connections: 2
     idle_connections: 1
 `

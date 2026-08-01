@@ -54,6 +54,7 @@
 | 0.1.0-draft | 2026-07-31 | Christian Roessner / Codex | Separated originator applicability from signing results: unsupported reverse-path domain evidence and authoritative absent or inactive exact profiles continue without mutation, while datasource ambiguity, unavailability, malformed active data, and signing failures remain fail-closed. |
 | 0.1.0-draft | 2026-08-01 | Christian Roessner / Codex | Deferred null-reverse-path DSN signing: the originator Milter tempfails before daemon I/O until an executable trusted gate authenticates RFC 3462 structure, Draft-04 Section 12.1 embedded verification, and Section 12.1.2 alignment evidence. |
 | 0.1.0-draft | 2026-08-01 | Christian Roessner / Codex | Moved LDAP and PostgreSQL signing-key custody into immutable `dkim2-datasource-v2` generations, preserving opaque handles and in-memory signing while removing network-backend local manifests and REST key surfaces. |
+| 0.1.0-draft | 2026-08-01 | Christian Roessner / Codex | Added daemon-owned MySQL 8.4 and MariaDB 10.11 datasource support through one typed verified-TLS adapter, a shared SQL snapshot core, immutable InnoDB generations, transactionally fenced offline publication, and digest-pinned parity evidence for both server families. |
 
 ## 1. Purpose
 
@@ -698,7 +699,7 @@ Design notes:
 - Datasource success is administrative selection only. It does not replace
   M10's fresh DNS publication check, hash/recipe/custody validation, route
   authorization, or private signing callback.
-- LDAP and PostgreSQL mappings are implemented by daemon-owned providers.
+- LDAP, PostgreSQL, MySQL, and MariaDB mappings are implemented by daemon-owned providers.
   Deployable schema, DDL, protected configuration, and the separately
   authorized migration workflow remain outside the standalone library.
 - Replay interfaces, keys, retention, and providers belong entirely to M12.
@@ -1278,6 +1279,10 @@ General datasource provider classes:
   immutable generation loading, and RFC 4528 publication fencing.
 - PostgreSQL provider in `cmd/dkim2d`, with verified TLS, fixed keyset queries,
   repeatable-read loading, and transactional publication fencing.
+- MySQL/MariaDB provider in `cmd/dkim2d`, with typed verified-TLS driver
+  configuration, fixed keyset queries, explicit read-only repeatable-read
+  sessions, immutable InnoDB generations, and singleton-lock publication
+  fencing.
 
 Replay storage is modeled separately in the replay-store interface. Valkey is
 the default production replay backend, but it must not become the general
@@ -1499,7 +1504,10 @@ The bootstrap publication sequence is:
    canonical zero absence fence: LDAP atomically claims the unique staging
    current DN and activates it with RFC 4528, while PostgreSQL proves every
    datasource table empty in a serializable transaction and uniquely inserts
-   the singleton current row. Zero is never a runtime generation, nonempty
+   the singleton current row. MySQL and MariaDB first lock a permanent
+   singleton publication row, then perform the same empty-or-expected fence,
+   complete staging validation, commit-state transition, and forward pointer
+   update in one serializable transaction. Zero is never a runtime generation, nonempty
    pointerless state fails closed, and concurrent first publishers cannot both
    succeed.
 

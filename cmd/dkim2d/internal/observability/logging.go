@@ -98,7 +98,7 @@ var allowedLogValues = map[string][]string{
 	keyMethod:                {"GET", "HEAD", "POST", "OPTIONS", "other"},
 	keyOperation:             {"config", "lifecycle", "readiness", "health", "metrics", valueProcess, valueSign, valueRevise, "verify", "dns_lookup", valuePolicy, "replay_coordinate", "replay_store", "datasource_initial_load", "datasource_refresh", "datasource_resolve", "telemetry_export", valueUnmatched},
 	keyPolicyMode:            {valueStrict, valuePermissive, valueTesting},
-	keyProvider:              {"flat_file", "memory", "ldap", "postgresql"},
+	keyProvider:              {"flat_file", "memory", "ldap", "postgresql", "mysql"},
 	keyProviderState:         {"initializing", "ready", "degraded", "closed"},
 	keyReasonClass:           {valueNone, valueProtocol, valuePolicy, valueAvailability, "invalid_request", keyMethod, valueInternal},
 	keyReplayState:           {valueNotChecked, valueDisabled, valueFirstSeen, valueReplayed, valueIndeterminate},

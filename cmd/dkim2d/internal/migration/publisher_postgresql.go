@@ -78,7 +78,7 @@ func NewPostgreSQLPublisherClient(
 	password []byte,
 	rootsDER [][]byte,
 ) (*PostgreSQLPublisher, func() error, error) {
-	if ctx == nil || !validPostgreSQLPublication(config) ||
+	if ctx == nil || !validSQLPublication(config) ||
 		len(password) == 0 || len(password) > 16<<10 || len(rootsDER) == 0 {
 		return nil, nil, errors.New("postgresql publication unavailable")
 	}

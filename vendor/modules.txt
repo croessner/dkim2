@@ -1,4 +1,8 @@
 ## workspace
+# filippo.io/edwards25519 v1.2.0
+## explicit; go 1.24.0
+filippo.io/edwards25519
+filippo.io/edwards25519/field
 # github.com/Azure/go-ntlmssp v0.1.1
 ## explicit; go 1.24
 github.com/Azure/go-ntlmssp
@@ -50,6 +54,9 @@ github.com/go-openapi/jsonpointer
 # github.com/go-openapi/swag/jsonname v0.25.5
 ## explicit; go 1.24.0
 github.com/go-openapi/swag/jsonname
+# github.com/go-sql-driver/mysql v1.10.0
+## explicit; go 1.24.0
+github.com/go-sql-driver/mysql
 # github.com/go-viper/mapstructure/v2 v2.4.0
 ## explicit; go 1.18
 github.com/go-viper/mapstructure/v2

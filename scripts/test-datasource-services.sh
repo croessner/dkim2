@@ -4,8 +4,12 @@ set -eu
 
 readonly ldap_image='chrroessner/openldap:2.6.13-r4@sha256:17f2e3485dae92122051da6acdb1091e6d9f1f64d30fd76fd3da3c261c6c778f'
 readonly postgresql_image='postgres:18.3-alpine@sha256:54451ecb8ab38c24c3ec123f2fd501303a3a1856a5c66e98cecf2460d5e1e9d7'
+readonly mysql_image='mysql:8.4@sha256:b3b90af2a6552ae30c266fdb7d5dd55f3afb72404bb78d37fe8a23eb857fd3fb'
+readonly mariadb_image='mariadb:10.11@sha256:be981e4113326ada8d6004174dd09eeaefc03094037f811182a52d4f2e737350'
 readonly ldap_password='synthetic-ldap-runtime-password'
 readonly postgresql_password='synthetic-postgresql-runtime-password'
+readonly mysql_password='synthetic-mysql-runtime-password'
+readonly mariadb_password='synthetic-mariadb-runtime-password'
 
 command -v docker >/dev/null 2>&1 || {
 	echo 'datasource integration: Docker is required' >&2
@@ -20,12 +24,14 @@ work="$(mktemp -d /tmp/dkim2-datasource-integration.XXXXXX)"
 chmod 0700 "$work"
 ldap_name="dkim2-ldap-$PPID-$$"
 postgresql_name="dkim2-postgresql-$PPID-$$"
+mysql_name="dkim2-mysql-$PPID-$$"
+mariadb_name="dkim2-mariadb-$PPID-$$"
 
 # cleanup removes only invocation-owned containers and ignored state.
 cleanup() {
 	status=$?
 	trap - EXIT HUP INT TERM
-	docker rm -f "$ldap_name" "$postgresql_name" >/dev/null 2>&1 || true
+	docker rm -f "$ldap_name" "$postgresql_name" "$mysql_name" "$mariadb_name" >/dev/null 2>&1 || true
 	rm -rf "$work"
 	exit "$status"
 }
@@ -58,6 +64,8 @@ issue_server_certificate() {
 
 issue_server_certificate ldap.integration.test
 issue_server_certificate postgresql.integration.test
+issue_server_certificate mysql.integration.test
+issue_server_certificate mariadb.integration.test
 openssl genpkey -algorithm ED25519 -out "$work/credential.key" >/dev/null 2>&1
 openssl pkey -in "$work/credential.key" -pubout -outform DER \
 	-out "$work/credential.spki"
@@ -71,9 +79,12 @@ private_pkcs8_hex="$(od -An -tx1 -v "$work/credential.pkcs8" | tr -d ' \n')"
 cp contrib/schema/ldap/rnsdkim2.schema "$work/ldap-schema/rnsdkim2.schema"
 cp contrib/schema/postgresql/001_dkim2_datasource.sql \
 	"$work/certs/001_dkim2_datasource.sql"
+cp contrib/schema/mysql/001_dkim2_datasource.sql \
+	"$work/certs/001_dkim2_mysql_datasource.sql"
 chmod 0755 "$work" "$work/certs" "$work/ldap-init" "$work/ldap-schema"
 chmod 0644 "$work/certs/"*.crt \
 	"$work/certs/001_dkim2_datasource.sql" "$work/ldap-schema/rnsdkim2.schema"
+chmod 0644 "$work/certs/001_dkim2_mysql_datasource.sql"
 chmod 0600 "$work/certs/"*.key "$work/ca.key" "$work/credential.key"
 
 {
@@ -253,6 +264,83 @@ chmod 0644 "$work/postgresql-bootstrap.sql"
 } >"$work/postgresql-dataset.sql"
 chmod 0644 "$work/postgresql-dataset.sql"
 
+{
+	printf '%s\n' \
+		'#!/bin/sh' \
+		'set -eu' \
+		'test -n "${DKIM2_TLS_NAME:-}"' \
+		'cp "/run/dkim2/$DKIM2_TLS_NAME.crt" /tmp/dkim2-mysql.crt' \
+		'cp "/run/dkim2/$DKIM2_TLS_NAME.key" /tmp/dkim2-mysql.key' \
+		'cp /run/dkim2/ca.crt /tmp/dkim2-ca.crt' \
+		'chown mysql:mysql /tmp/dkim2-mysql.crt /tmp/dkim2-mysql.key /tmp/dkim2-ca.crt' \
+		'chmod 0600 /tmp/dkim2-mysql.key' \
+		'exec docker-entrypoint.sh "$@"'
+} >"$work/mysql-entrypoint.sh"
+chmod 0755 "$work/mysql-entrypoint.sh"
+
+# write_mysql_dataset creates one server-specific least-authority bootstrap.
+write_mysql_dataset() {
+	runtime_password=$1
+	publisher_password=$2
+	output=$3
+	{
+		printf '%s\n' \
+			"CREATE USER 'dkim2_runtime_login'@'%' IDENTIFIED BY '$runtime_password' REQUIRE SSL;" \
+			"CREATE USER 'dkim2_publisher_login'@'%' IDENTIFIED BY '$publisher_password' REQUIRE SSL;"
+		for database in dkim2 dkim2_empty dkim2_corrupt; do
+			printf '%s\n' \
+				"CREATE DATABASE $database CHARACTER SET utf8mb4 COLLATE utf8mb4_bin;" \
+				"USE $database;" \
+				'SOURCE /run/dkim2/001_dkim2_mysql_datasource.sql;'
+		done
+		for table in dkim2_dataset_generations dkim2_current_generation \
+			dkim2_handles dkim2_profiles dkim2_credentials dkim2_policies \
+			dkim2_key_material; do
+			printf '%s\n' \
+				"GRANT SELECT ON dkim2.$table TO 'dkim2_runtime_login'@'%';"
+		done
+		for database in dkim2_empty dkim2_corrupt; do
+			for table in dkim2_publication_lock dkim2_dataset_generations \
+				dkim2_current_generation dkim2_handles dkim2_profiles \
+				dkim2_credentials dkim2_policies dkim2_key_material; do
+				printf '%s\n' \
+					"GRANT SELECT ON $database.$table TO 'dkim2_publisher_login'@'%';"
+			done
+			for table in dkim2_dataset_generations dkim2_current_generation \
+				dkim2_handles dkim2_profiles dkim2_credentials dkim2_policies \
+				dkim2_key_material; do
+				printf '%s\n' \
+					"GRANT INSERT ON $database.$table TO 'dkim2_publisher_login'@'%';"
+			done
+			printf '%s\n' \
+				"GRANT UPDATE ON $database.dkim2_publication_lock TO 'dkim2_publisher_login'@'%';" \
+				"GRANT UPDATE ON $database.dkim2_dataset_generations TO 'dkim2_publisher_login'@'%';" \
+				"GRANT UPDATE ON $database.dkim2_current_generation TO 'dkim2_publisher_login'@'%';"
+		done
+		printf '%s\n' \
+			'USE dkim2;' \
+			"INSERT INTO dkim2_dataset_generations VALUES (1, 'dkim2-datasource-v2', 'staging');" \
+			"INSERT INTO dkim2_handles VALUES (1, 'handle');" \
+			"INSERT INTO dkim2_profiles VALUES (1, 'profile', 'example.test', 'active', NULL, NULL);" \
+			"INSERT INTO dkim2_credentials VALUES (1, 'profile', 'ed25519-sha256', 'selector', UNHEX('$spki_hex'), 'handle');" \
+			"INSERT INTO dkim2_policies VALUES (1, 'tenant', 'example.test', 'originator', 'profile', 'active', 'enforce', 'strict', NULL);" \
+			"INSERT INTO dkim2_key_material VALUES (1, 'tenant', 'example.test', 'originator', 'handle', 'ed25519-sha256', UNHEX('$spki_hex'), UNHEX('$private_pkcs8_hex'));" \
+			"UPDATE dkim2_dataset_generations SET dataset_state = 'committed' WHERE generation = 1;" \
+			'INSERT INTO dkim2_current_generation VALUES (1, 1);' \
+			'USE dkim2_corrupt;' \
+			"INSERT INTO dkim2_dataset_generations VALUES (1, 'dkim2-datasource-v2', 'staging');" \
+			"INSERT INTO dkim2_handles VALUES (1, 'orphan');" \
+			"UPDATE dkim2_dataset_generations SET dataset_state = 'committed' WHERE generation = 1;" \
+			'FLUSH PRIVILEGES;'
+	} >"$output"
+	chmod 0644 "$output"
+}
+
+write_mysql_dataset "$mysql_password" 'synthetic-mysql-publisher-password' \
+	"$work/mysql-dataset.sql"
+write_mysql_dataset "$mariadb_password" 'synthetic-mariadb-publisher-password' \
+	"$work/mariadb-dataset.sql"
+
 docker run -d --name "$ldap_name" \
 	-p 127.0.0.1::636 \
 	-e LDAP_BASE_DN='dc=integration,dc=test' \
@@ -285,6 +373,30 @@ docker run -d --name "$postgresql_name" \
 	-c ssl=on -c ssl_cert_file=/tmp/postgresql.crt -c ssl_key_file=/tmp/postgresql.key \
 	-c password_encryption=scram-sha-256 >/dev/null
 
+docker run -d --name "$mysql_name" \
+	-p 127.0.0.1::3306 \
+	-e MYSQL_ROOT_PASSWORD='synthetic-mysql-admin-password' \
+	-e DKIM2_TLS_NAME='mysql.integration.test' \
+	-v "$work/certs:/run/dkim2:ro" \
+	-v "$work/mysql-entrypoint.sh:/usr/local/bin/dkim2-entrypoint.sh:ro" \
+	-v "$work/mysql-dataset.sql:/docker-entrypoint-initdb.d/30-dataset.sql:ro" \
+	--entrypoint /usr/local/bin/dkim2-entrypoint.sh \
+	"$mysql_image" mysqld \
+	--ssl-ca=/tmp/dkim2-ca.crt --ssl-cert=/tmp/dkim2-mysql.crt \
+	--ssl-key=/tmp/dkim2-mysql.key --require-secure-transport=ON >/dev/null
+
+docker run -d --name "$mariadb_name" \
+	-p 127.0.0.1::3306 \
+	-e MARIADB_ROOT_PASSWORD='synthetic-mariadb-admin-password' \
+	-e DKIM2_TLS_NAME='mariadb.integration.test' \
+	-v "$work/certs:/run/dkim2:ro" \
+	-v "$work/mysql-entrypoint.sh:/usr/local/bin/dkim2-entrypoint.sh:ro" \
+	-v "$work/mariadb-dataset.sql:/docker-entrypoint-initdb.d/30-dataset.sql:ro" \
+	--entrypoint /usr/local/bin/dkim2-entrypoint.sh \
+	"$mariadb_image" mariadbd \
+	--ssl-ca=/tmp/dkim2-ca.crt --ssl-cert=/tmp/dkim2-mysql.crt \
+	--ssl-key=/tmp/dkim2-mysql.key --require-secure-transport=ON >/dev/null
+
 # wait_healthy rejects exited, unhealthy, and unbounded service startup.
 wait_healthy() {
 	container=$1
@@ -309,9 +421,35 @@ wait_healthy() {
 
 wait_healthy "$ldap_name"
 wait_healthy "$postgresql_name"
+wait_healthy "$mysql_name"
+wait_healthy "$mariadb_name"
+
+# wait_mysql_family waits for completed init scripts, not only a running process.
+wait_mysql_family() {
+	container=$1
+	password=$2
+	client=$3
+	attempt=0
+	while [ "$attempt" -lt 120 ]; do
+		if docker exec "$container" "$client" -uroot "-p$password" -NBe \
+			'SELECT COUNT(*) FROM dkim2.dkim2_current_generation' 2>/dev/null | grep -qx 1; then
+			return 0
+		fi
+		attempt=$((attempt + 1))
+		sleep 0.25
+	done
+	docker logs "$container" >&2 || true
+	return 1
+}
+
+wait_mysql_family "$mysql_name" 'synthetic-mysql-admin-password' mysql
+wait_mysql_family "$mariadb_name" 'synthetic-mariadb-admin-password' mariadb
 ldap_port="$(docker port "$ldap_name" 636/tcp | sed -n 's/.*://p')"
 postgresql_port="$(docker port "$postgresql_name" 5432/tcp | sed -n 's/.*://p')"
-test -n "$ldap_port" && test -n "$postgresql_port"
+mysql_port="$(docker port "$mysql_name" 3306/tcp | sed -n 's/.*://p')"
+mariadb_port="$(docker port "$mariadb_name" 3306/tcp | sed -n 's/.*://p')"
+test -n "$ldap_port" && test -n "$postgresql_port" && \
+	test -n "$mysql_port" && test -n "$mariadb_port"
 
 run_qualification() {
 	DKIM2_DATASOURCE_CA="$work/certs/ca.crt" \
@@ -321,6 +459,12 @@ run_qualification() {
 	DKIM2_POSTGRESQL_PORT="$postgresql_port" \
 	DKIM2_POSTGRESQL_SERVER_NAME='postgresql.integration.test' \
 	DKIM2_POSTGRESQL_PASSWORD="$postgresql_password" \
+	DKIM2_MYSQL_PORT="$mysql_port" \
+	DKIM2_MYSQL_SERVER_NAME='mysql.integration.test' \
+	DKIM2_MYSQL_PASSWORD="$mysql_password" \
+	DKIM2_MARIADB_PORT="$mariadb_port" \
+	DKIM2_MARIADB_SERVER_NAME='mariadb.integration.test' \
+	DKIM2_MARIADB_PASSWORD="$mariadb_password" \
 	GOCACHE="${GOCACHE:-/tmp/dkim2-go-build-cache}" \
 		go -C cmd/dkim2d test -tags=datasourceintegration \
 			-run '^TestDisposableNetworkProvider' -count=1 -timeout=45s \
@@ -333,6 +477,8 @@ run_qualification
 DKIM2_DATASOURCE_CA="$work/certs/ca.crt" \
 DKIM2_LDAP_PORT="$ldap_port" \
 DKIM2_POSTGRESQL_PORT="$postgresql_port" \
+DKIM2_MYSQL_PORT="$mysql_port" \
+DKIM2_MARIADB_PORT="$mariadb_port" \
 GOCACHE="${GOCACHE:-/tmp/dkim2-go-build-cache}" \
 	go -C cmd/dkim2d test -tags=datasourceintegration \
 		-run '^TestDisposableMigrationBootstrapPublishers$' -count=1 -timeout=50s \
@@ -344,6 +490,35 @@ if docker exec "$postgresql_name" psql -v ON_ERROR_STOP=1 -U postgres -d dkim2 \
 	echo 'datasource integration: committed PostgreSQL generation was mutable' >&2
 	exit 1
 fi
+
+for tuple in \
+	"$mysql_name:mysql:synthetic-mysql-admin-password:$mysql_password" \
+	"$mariadb_name:mariadb:synthetic-mariadb-admin-password:$mariadb_password"; do
+	container=${tuple%%:*}
+	remainder=${tuple#*:}
+	client=${remainder%%:*}
+	password_pair=${remainder#*:}
+	password=${password_pair%%:*}
+	runtime_password=${password_pair#*:}
+	runtime_grants="$(docker exec "$container" "$client" -uroot "-p$password" -NBe \
+		"SELECT SUM(PRIVILEGE_TYPE = 'SELECT'), SUM(PRIVILEGE_TYPE <> 'SELECT') FROM information_schema.TABLE_PRIVILEGES WHERE TABLE_SCHEMA = 'dkim2' AND GRANTEE = CONCAT(CHAR(39), 'dkim2_runtime_login', CHAR(39), '@', CHAR(39), '%', CHAR(39))" 2>/dev/null)"
+	test "$runtime_grants" = "7	0"
+	publisher_grants="$(docker exec "$container" "$client" -uroot "-p$password" -NBe \
+		"SELECT SUM(PRIVILEGE_TYPE = 'SELECT'), SUM(PRIVILEGE_TYPE = 'INSERT'), SUM(PRIVILEGE_TYPE = 'UPDATE'), SUM(PRIVILEGE_TYPE NOT IN ('SELECT', 'INSERT', 'UPDATE')) FROM information_schema.TABLE_PRIVILEGES WHERE TABLE_SCHEMA = 'dkim2_empty' AND GRANTEE = CONCAT(CHAR(39), 'dkim2_publisher_login', CHAR(39), '@', CHAR(39), '%', CHAR(39))" 2>/dev/null)"
+	test "$publisher_grants" = "8	7	3	0"
+	if docker exec "$container" "$client" -uroot "-p$password" dkim2 -NBe \
+		"UPDATE dkim2_dataset_generations SET dataset_state = 'staging' WHERE generation = 1" \
+		>/dev/null 2>&1; then
+		echo 'datasource integration: committed MySQL-family generation was mutable' >&2
+		exit 1
+	fi
+	if docker exec "$container" "$client" \
+		-udkim2_runtime_login "-p$runtime_password" dkim2 -NBe \
+		"INSERT INTO dkim2_handles VALUES (1, 'forbidden')" >/dev/null 2>&1; then
+		echo 'datasource integration: MySQL-family runtime role acquired write authority' >&2
+		exit 1
+	fi
+done
 if docker exec "$postgresql_name" psql -v ON_ERROR_STOP=1 -U postgres -d dkim2 \
 	-c "SET ROLE dkim2_runtime; INSERT INTO dkim2_datasource.handles VALUES (1, 'forbidden');" \
 	>/dev/null 2>&1; then
@@ -362,16 +537,26 @@ candidate="$(GOCACHE="${GOCACHE:-/tmp/dkim2-go-build-cache}" \
 		"  \"candidate_snapshot_sha256\": \"$candidate\"," \
 		"  \"ldap_image\": \"$ldap_image\"," \
 		"  \"postgresql_image\": \"$postgresql_image\"," \
+		"  \"mysql_image\": \"$mysql_image\"," \
+		"  \"mariadb_image\": \"$mariadb_image\"," \
 		'  "runs": 2,' \
 		'  "checks": [' \
 		'    "ldap_parity_and_denials",' \
 		'    "postgresql_parity_and_denials",' \
+		'    "mysql_parity_and_denials",' \
+		'    "mariadb_parity_and_denials",' \
 		'    "ldap_absent_to_first_concurrency_fence",' \
 		'    "postgresql_absent_to_first_concurrency_fence",' \
 		'    "ldap_pointerless_nonempty_denial",' \
 		'    "postgresql_pointerless_nonempty_denial",' \
+		'    "mysql_absent_to_first_concurrency_fence",' \
+		'    "mariadb_absent_to_first_concurrency_fence",' \
+		'    "mysql_pointerless_nonempty_denial",' \
+		'    "mariadb_pointerless_nonempty_denial",' \
 		'    "postgresql_committed_immutability",' \
-		'    "postgresql_runtime_write_denial"' \
+		'    "postgresql_runtime_write_denial",' \
+		'    "mysql_committed_immutability_and_runtime_write_denial",' \
+		'    "mariadb_committed_immutability_and_runtime_write_denial"' \
 		'  ],' \
 		'  "overall": "pass"' \
 		'}'

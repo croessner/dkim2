@@ -35,10 +35,16 @@ type LDAPSigningConfig struct {
 	state *ldapSigningState
 }
 
-// PostgreSQLSigningConfig is one immutable structurally opaque PostgreSQL configuration view.
-type PostgreSQLSigningConfig struct {
-	state *postgresqlSigningState
+// SQLSigningConfig is one immutable structurally opaque network SQL configuration view.
+type SQLSigningConfig struct {
+	state *sqlSigningState
 }
+
+// PostgreSQLSigningConfig is the PostgreSQL-specific SQL configuration view.
+type PostgreSQLSigningConfig = SQLSigningConfig
+
+// MySQLSigningConfig is the MySQL and MariaDB-specific SQL configuration view.
+type MySQLSigningConfig = SQLSigningConfig
 
 // ValkeyConfig is one immutable structurally opaque Valkey configuration view.
 type ValkeyConfig struct {
@@ -237,6 +243,14 @@ func (c SigningConfig) PostgreSQL() (PostgreSQLSigningConfig, bool) {
 	return PostgreSQLSigningConfig{state: &c.state.postgresql}, true
 }
 
+// MySQL returns the selected verified MySQL or MariaDB configuration.
+func (c SigningConfig) MySQL() (MySQLSigningConfig, bool) {
+	if c.state == nil || c.state.backend != SigningMySQL {
+		return MySQLSigningConfig{}, false
+	}
+	return MySQLSigningConfig{state: &c.state.mysql}, true
+}
+
 // Address returns the direct LDAP endpoint.
 func (c LDAPSigningConfig) Address() string {
 	if c.state == nil {
@@ -309,80 +323,80 @@ func (c LDAPSigningConfig) LoadDeadline() time.Duration {
 	return c.state.loadDeadline
 }
 
-// Address returns the direct PostgreSQL endpoint.
-func (c PostgreSQLSigningConfig) Address() string {
+// Address returns the direct network SQL endpoint.
+func (c SQLSigningConfig) Address() string {
 	if c.state == nil {
 		return ""
 	}
 	return c.state.address
 }
 
-// ServerName returns the separately verified PostgreSQL TLS identity.
-func (c PostgreSQLSigningConfig) ServerName() string {
+// ServerName returns the separately verified network SQL TLS identity.
+func (c SQLSigningConfig) ServerName() string {
 	if c.state == nil {
 		return ""
 	}
 	return c.state.serverName
 }
 
-// CAFile returns the protected PostgreSQL trust-root path.
-func (c PostgreSQLSigningConfig) CAFile() string {
+// CAFile returns the protected network SQL trust-root path.
+func (c SQLSigningConfig) CAFile() string {
 	if c.state == nil {
 		return ""
 	}
 	return c.state.caFile
 }
 
-// Database returns the exact PostgreSQL database.
-func (c PostgreSQLSigningConfig) Database() string {
+// Database returns the exact network SQL database.
+func (c SQLSigningConfig) Database() string {
 	if c.state == nil {
 		return ""
 	}
 	return c.state.database
 }
 
-// User returns the least-privilege PostgreSQL runtime principal.
-func (c PostgreSQLSigningConfig) User() string {
+// User returns the least-privilege network SQL runtime principal.
+func (c SQLSigningConfig) User() string {
 	if c.state == nil {
 		return ""
 	}
 	return c.state.user
 }
 
-// PasswordFile returns the protected PostgreSQL password path.
-func (c PostgreSQLSigningConfig) PasswordFile() string {
+// PasswordFile returns the protected network SQL password path.
+func (c SQLSigningConfig) PasswordFile() string {
 	if c.state == nil {
 		return ""
 	}
 	return c.state.passwordFile
 }
 
-// PageSize returns the bounded PostgreSQL keyset page size.
-func (c PostgreSQLSigningConfig) PageSize() uint16 {
+// PageSize returns the bounded network SQL keyset page size.
+func (c SQLSigningConfig) PageSize() uint16 {
 	if c.state == nil {
 		return 0
 	}
 	return c.state.pageSize
 }
 
-// LoadDeadline returns the immutable PostgreSQL load budget.
-func (c PostgreSQLSigningConfig) LoadDeadline() time.Duration {
+// LoadDeadline returns the immutable network SQL load budget.
+func (c SQLSigningConfig) LoadDeadline() time.Duration {
 	if c.state == nil {
 		return 0
 	}
 	return c.state.loadDeadline
 }
 
-// MaxConnections returns the bounded PostgreSQL pool size.
-func (c PostgreSQLSigningConfig) MaxConnections() uint8 {
+// MaxConnections returns the bounded network SQL pool size.
+func (c SQLSigningConfig) MaxConnections() uint8 {
 	if c.state == nil {
 		return 0
 	}
 	return c.state.maxConnections
 }
 
-// IdleConnections returns the bounded PostgreSQL idle pool size.
-func (c PostgreSQLSigningConfig) IdleConnections() uint8 {
+// IdleConnections returns the bounded network SQL idle pool size.
+func (c SQLSigningConfig) IdleConnections() uint8 {
 	if c.state == nil {
 		return 0
 	}

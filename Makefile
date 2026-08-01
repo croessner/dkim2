@@ -90,9 +90,11 @@ help:
 		'  make check-reference validate API, issue, OpenAPI, and reference closure' \
 		'  make check-datasource-schema validate LDAP schema and storage mapping contracts' \
 		'  make check-datasource-postgresql validate PostgreSQL DDL and row mapping contracts' \
+		'  make check-datasource-mysql validate MySQL/MariaDB DDL and row mapping contracts' \
 		'  make test-datasource-ldap run focused LDAP provider/schema/race evidence' \
 		'  make test-datasource-postgresql run focused PostgreSQL provider/DDL/race evidence' \
-		'  make test-datasource-services run digest-pinned disposable LDAP/PostgreSQL evidence' \
+		'  make test-datasource-mysql run focused MySQL/MariaDB provider/DDL/race evidence' \
+		'  make test-datasource-services run digest-pinned disposable LDAP/PostgreSQL/MySQL/MariaDB evidence' \
 		'  make test-opendkim-bootstrap run protected migration/publication/race evidence' \
 		'  make reference-module-proof prove standalone modules through the private proxy' \
 		'  make reference-report render the complete candidate-bound report' \
@@ -124,6 +126,12 @@ check-datasource-postgresql:
 	@GOCACHE="$${GOCACHE:-/tmp/dkim2-go-build-cache}" \
 		go -C cmd/dkim2d test ./internal/datasource/postgresql
 
+.PHONY: check-datasource-mysql
+check-datasource-mysql:
+	@GOCACHE="$${GOCACHE:-/tmp/dkim2-go-build-cache}" \
+		go -C cmd/dkim2d test \
+			./internal/datasource/mysql ./internal/datasource/sqlsnapshot
+
 .PHONY: test-datasource-ldap
 test-datasource-ldap: check-datasource-schema
 	@GOCACHE="$${GOCACHE:-/tmp/dkim2-go-build-cache}" \
@@ -133,6 +141,12 @@ test-datasource-ldap: check-datasource-schema
 test-datasource-postgresql: check-datasource-postgresql
 	@GOCACHE="$${GOCACHE:-/tmp/dkim2-go-build-cache}" \
 		go -C cmd/dkim2d test -race ./internal/datasource/postgresql
+
+.PHONY: test-datasource-mysql
+test-datasource-mysql: check-datasource-mysql
+	@GOCACHE="$${GOCACHE:-/tmp/dkim2-go-build-cache}" \
+		go -C cmd/dkim2d test -race \
+			./internal/datasource/mysql ./internal/datasource/sqlsnapshot
 
 .PHONY: test-datasource-services
 test-datasource-services:
@@ -505,7 +519,7 @@ security: check-security fuzz-security race-security vulnerability-security conf
 		go -C tools run ./cmd/security -root .. report
 
 .PHONY: guardrails
-guardrails: fmt vet lint test race check-protected-platforms check-openapi check-vendor check-conformance conformance govulncheck check-datasource-schema check-datasource-postgresql check-exim-matrix-prep check-boundaries
+guardrails: fmt vet lint test race check-protected-platforms check-openapi check-vendor check-conformance conformance govulncheck check-datasource-schema check-datasource-postgresql check-datasource-mysql check-exim-matrix-prep check-boundaries
 
 .PHONY: product-binaries
 product-binaries:

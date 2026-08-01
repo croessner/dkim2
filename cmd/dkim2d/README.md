@@ -11,7 +11,7 @@ owned by `github.com/croessner/dkim2`. The authoritative REST contract is
 [`docs/specs/openapi/dkim2d.yaml`](../../docs/specs/openapi/dkim2d.yaml).
 The production navigation and container trust topology start in
 [`docs/operator/postfix-compose.md`](../../docs/operator/postfix-compose.md).
-LDAP/PostgreSQL installation and migration are documented in
+LDAP/PostgreSQL/MySQL/MariaDB installation and migration are documented in
 [`docs/operator/datasource-ldap-postgresql.md`](../../docs/operator/datasource-ldap-postgresql.md)
 and
 [`docs/operator/opendkim-migration.md`](../../docs/operator/opendkim-migration.md).
@@ -241,9 +241,9 @@ candidate is never published: the prior snapshot remains retained only for
 owned in-flight work while the runtime becomes degraded and readiness
 withdraws.
 
-### LDAP and PostgreSQL signing
+### LDAP, PostgreSQL, MySQL, and MariaDB signing
 
-The `ldap` and `postgresql` signing backends replace the flat-file datasource
+The `ldap`, `postgresql`, and `mysql` signing backends replace the flat-file datasource
 with one verified-TLS immutable `dkim2-datasource-v2` generation containing
 the canonical PKCS#8 DER keys for its opaque handles. These backends reject
 `private_manifest_file`; no local private-key tree is mounted. The public
@@ -251,7 +251,8 @@ dataset and native keys must validate as one exact generation. Initial-load fail
 prevents readiness; a linearized refresh failure makes new leases unavailable
 until a complete higher generation loads. Exact configuration examples,
 schema/DDL installation, role separation, backup, and recovery are in the
-datasource operator guide linked above.
+datasource operator guide linked above. MariaDB uses the `mysql` selector and
+the same typed, verified-TLS provider contract.
 
 ### Process-local memory replay
 

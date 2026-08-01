@@ -12,6 +12,7 @@ import (
 	"time"
 
 	datasourceldap "github.com/croessner/dkim2/cmd/dkim2d/internal/datasource/ldap"
+	datasourcemysql "github.com/croessner/dkim2/cmd/dkim2d/internal/datasource/mysql"
 	datasourcepostgresql "github.com/croessner/dkim2/cmd/dkim2d/internal/datasource/postgresql"
 	datasourceruntime "github.com/croessner/dkim2/cmd/dkim2d/internal/datasource/runtime"
 	"github.com/croessner/dkim2/provider"
@@ -25,11 +26,21 @@ func TestDisposableNetworkProviderParity(t *testing.T) {
 	postgresqlLoader := integrationPostgreSQLLoader(
 		t, rootCAs, integrationPassword(t, "DKIM2_POSTGRESQL_PASSWORD"),
 	)
+	mysqlLoader := integrationMySQLLoader(
+		t, rootCAs, "DKIM2_MYSQL_PORT", "DKIM2_MYSQL_SERVER_NAME",
+		integrationPassword(t, "DKIM2_MYSQL_PASSWORD"),
+	)
+	mariaDBLoader := integrationMySQLLoader(
+		t, rootCAs, "DKIM2_MARIADB_PORT", "DKIM2_MARIADB_SERVER_NAME",
+		integrationPassword(t, "DKIM2_MARIADB_PASSWORD"),
+	)
 
 	first := loadIntegrationCandidate(t, ldapLoader)
 	second := loadIntegrationCandidate(t, postgresqlLoader)
+	third := loadIntegrationCandidate(t, mysqlLoader)
+	fourth := loadIntegrationCandidate(t, mariaDBLoader)
 	for name, candidate := range map[string]datasourceruntime.Candidate{
-		"ldap": first, "postgresql": second,
+		"ldap": first, "postgresql": second, "mysql": third, "mariadb": fourth,
 	} {
 		t.Run(name, func(t *testing.T) {
 			if !candidate.Valid() || candidate.Dataset.Generation() != 1 {
@@ -71,6 +82,29 @@ func TestDisposableNetworkProviderDenials(t *testing.T) {
 		loader := integrationPostgreSQLLoader(t, rootCAs, []byte("wrong-password"))
 		requireUnavailableIntegrationLoad(t, loader)
 	})
+	for _, backend := range []struct {
+		name       string
+		port       string
+		serverName string
+		password   string
+	}{
+		{"mysql", "DKIM2_MYSQL_PORT", "DKIM2_MYSQL_SERVER_NAME", "DKIM2_MYSQL_PASSWORD"},
+		{"mariadb", "DKIM2_MARIADB_PORT", "DKIM2_MARIADB_SERVER_NAME", "DKIM2_MARIADB_PASSWORD"},
+	} {
+		current := backend
+		t.Run(current.name+"_authentication", func(t *testing.T) {
+			requireUnavailableIntegrationMySQLOpen(
+				t, rootCAs, current.port, current.serverName, []byte("wrong-password"),
+			)
+		})
+		t.Run(current.name+"_server_identity", func(t *testing.T) {
+			t.Setenv(current.serverName, "wrong.integration.test")
+			requireUnavailableIntegrationMySQLOpen(
+				t, rootCAs, current.port, current.serverName,
+				integrationPassword(t, current.password),
+			)
+		})
+	}
 	t.Run("ldap_server_identity", func(t *testing.T) {
 		t.Setenv("DKIM2_LDAP_SERVER_NAME", "wrong.integration.test")
 		loader := integrationLDAPLoader(
@@ -97,6 +131,22 @@ func TestDisposableNetworkProviderDenials(t *testing.T) {
 			t, rootCAs, integrationPassword(t, "DKIM2_POSTGRESQL_PASSWORD"),
 		).Load(ctx); provider.ErrorCodeOf(err) != provider.ErrorCodeCancelled {
 			t.Fatal("PostgreSQL cancellation was not preserved")
+		}
+		for _, backend := range []struct {
+			name       string
+			port       string
+			serverName string
+			password   string
+		}{
+			{"MySQL", "DKIM2_MYSQL_PORT", "DKIM2_MYSQL_SERVER_NAME", "DKIM2_MYSQL_PASSWORD"},
+			{"MariaDB", "DKIM2_MARIADB_PORT", "DKIM2_MARIADB_SERVER_NAME", "DKIM2_MARIADB_PASSWORD"},
+		} {
+			if _, err := integrationMySQLLoader(
+				t, rootCAs, backend.port, backend.serverName,
+				integrationPassword(t, backend.password),
+			).Load(ctx); provider.ErrorCodeOf(err) != provider.ErrorCodeCancelled {
+				t.Fatalf("%s cancellation was not preserved", backend.name)
+			}
 		}
 	})
 }
@@ -169,6 +219,65 @@ func integrationPostgreSQLLoader(
 	}
 	t.Cleanup(loader.Close)
 	return loader
+}
+
+// integrationMySQLLoader builds one verified-TLS, repeatable-read MySQL-family loader.
+func integrationMySQLLoader(
+	t *testing.T,
+	rootCAs *x509.CertPool,
+	portName string,
+	serverName string,
+	password []byte,
+) *datasourcemysql.Loader {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	pool, err := datasourcemysql.OpenPool(ctx, datasourcemysql.ConnectionConfig{
+		Address:    integrationAddress(t, portName),
+		ServerName: integrationEnvironment(t, serverName),
+		Database:   "dkim2", User: "dkim2_runtime_login", Password: password,
+		RootCAs: rootCAs, ConnectTimeout: 5 * time.Second,
+		MaxConnections: 2, IdleConnections: 0,
+	})
+	if err != nil {
+		t.Fatal("construct MySQL-family pool")
+	}
+	loader, err := datasourcemysql.NewLoader(
+		pool, provider.DefaultLimits(), 1, 4<<20, 10*time.Second,
+	)
+	if err != nil {
+		pool.Close()
+		t.Fatal("construct MySQL-family loader")
+	}
+	t.Cleanup(loader.Close)
+	return loader
+}
+
+// requireUnavailableIntegrationMySQLOpen requires one content-free connection denial.
+func requireUnavailableIntegrationMySQLOpen(
+	t *testing.T,
+	rootCAs *x509.CertPool,
+	portName string,
+	serverName string,
+	password []byte,
+) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	pool, err := datasourcemysql.OpenPool(ctx, datasourcemysql.ConnectionConfig{
+		Address:    integrationAddress(t, portName),
+		ServerName: integrationEnvironment(t, serverName),
+		Database:   "dkim2", User: "dkim2_runtime_login", Password: password,
+		RootCAs: rootCAs, ConnectTimeout: 2 * time.Second,
+		MaxConnections: 1, IdleConnections: 0,
+	})
+	if pool != nil {
+		pool.Close()
+		t.Fatal("denied MySQL-family connection returned a pool")
+	}
+	if err == nil || err.Error() != "mysql pool unavailable" {
+		t.Fatal("denied MySQL-family connection did not fail closed")
+	}
 }
 
 // loadIntegrationCandidate loads one complete candidate with a finite deadline.

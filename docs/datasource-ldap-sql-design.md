@@ -1,8 +1,8 @@
 # LDAP And SQL Datasource Provider Design
 
-Status: implemented contract for daemon-owned LDAP and PostgreSQL providers.
+Status: implemented contract for daemon-owned LDAP, PostgreSQL, MySQL, and MariaDB providers.
 
-This document defines how LDAP and PostgreSQL readers map persisted
+This document defines how LDAP, PostgreSQL, MySQL, and MariaDB readers map persisted
 administrative data into the existing storage-neutral contracts in
 `lib/internal/datasource`. Deployable schema and DDL live in `contrib/schema`;
 installation, daemon configuration, and migration procedures live in
@@ -29,7 +29,7 @@ become dependencies of the standalone library or protocol packages.
 
 `lib/internal/datasource/signingprofile` remains the only bridge from a
 datasource result to the signing profile. A provider returns only an opaque
-`KeyHandleID`; for LDAP and PostgreSQL v2, the same immutable generation maps
+`KeyHandleID`; for every network datasource v2 provider, the same immutable generation maps
 that identifier to canonical PKCS#8 DER and an inert in-memory signing handle.
 Flat-file retains its separately protected local registry. A datasource success does not authorize a route, replace
 the fresh DNS publication lookup, perform a signature, or make a cryptographic
@@ -566,6 +566,6 @@ Dependency tests must prove:
 - datasource core and concrete providers do not import signing;
 - `datasource/signingprofile` is the sole datasource/signing bridge;
 - signing and other protocol packages do not import datasource providers;
-- LDAP and PostgreSQL drivers remain outside the standalone library and are
+- LDAP, PostgreSQL, MySQL, and MariaDB drivers remain outside the standalone library and are
   owned by the daemon service module;
 - no replay interface, operation, or provider is introduced by this design.

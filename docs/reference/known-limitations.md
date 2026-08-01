@@ -24,7 +24,7 @@ certification, or universal interoperability claim.
   contract cannot authenticate the RFC 3462 three-part structure, Draft-04
   Section 12.1 embedded verification, and Section 12.1.2 alignment evidence.
   The reserved configured DSN domain does not authorize signing by itself.
-- Flat-file, LDAP, PostgreSQL, and Valkey datasource paths are implemented.
+- Flat-file, LDAP, PostgreSQL, MySQL, MariaDB, and Valkey datasource paths are implemented.
   The offline OpenDKIM migration requires separately managed verified-TLS
   services, explicit mapping, and distinct least-authority principals.
 - Product images are Linux `amd64` and `arm64`; release preparation does not

@@ -100,6 +100,19 @@ postgresql_publish:
   password_file: /secure/postgresql-publisher-password
 ```
 
+For MySQL or MariaDB, set `plan.target: mysql`, omit `ldap_publish` and
+`postgresql_publish`, and add:
+
+```yaml
+mysql_publish:
+  address: 192.0.2.30:3306
+  server_name: mysql.example.test
+  ca_file: /secure/mysql-ca.pem
+  database: dkim2
+  user: dkim2_publisher_login
+  password_file: /secure/mysql-publisher-password
+```
+
 ## Validation And Publication
 
 Inventory requests no private key values. It requires complete active
@@ -146,6 +159,12 @@ after inserting, validating, and committing the generation. Conflicts are not
 retried, and concurrent first publishers cannot both commit. Public rows and
 native private-key rows remain inert until the complete datasource generation
 becomes current.
+
+MySQL and MariaDB use the same serializable staging and validation sequence,
+but first lock the permanent `dkim2_publication_lock` singleton row. The
+publisher account needs narrowly scoped `UPDATE` authority on that table for
+the locking read, plus the documented dataset `INSERT` and pointer/state
+`UPDATE` grants. It receives no delete, DDL, file, or global authority.
 
 Machine and human reports contain closed states and counts only. They contain
 no DN, domain, selector, tenant, profile, handle, path, endpoint, key, SPKI,

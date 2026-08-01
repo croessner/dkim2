@@ -1,3 +1,4 @@
+// Package postgresql tests the daemon-owned PostgreSQL datasource adapter.
 package postgresql
 
 import (

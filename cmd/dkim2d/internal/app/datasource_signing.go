@@ -10,6 +10,7 @@ import (
 
 	"github.com/croessner/dkim2/cmd/dkim2d/internal/config"
 	datasourceldap "github.com/croessner/dkim2/cmd/dkim2d/internal/datasource/ldap"
+	datasourcemysql "github.com/croessner/dkim2/cmd/dkim2d/internal/datasource/mysql"
 	datasourcepostgresql "github.com/croessner/dkim2/cmd/dkim2d/internal/datasource/postgresql"
 	datasourceruntime "github.com/croessner/dkim2/cmd/dkim2d/internal/datasource/runtime"
 	"github.com/croessner/dkim2/cmd/dkim2d/internal/observability"
@@ -21,6 +22,13 @@ const datasourceLoadBytes = 16 << 20
 type datasourcePool interface {
 	Close()
 }
+
+type sqlSigningFactory func(
+	context.Context,
+	config.SQLSigningConfig,
+	[]byte,
+	*x509.CertPool,
+) (datasourceruntime.Loader, datasourcePool, error)
 
 // networkSigningRuntime owns one selected loader, refresh worker, and backend pool.
 type networkSigningRuntime struct {
@@ -106,36 +114,21 @@ func newNetworkSigningRuntime(
 					constructionErr = &LifecycleError{}
 					return nil
 				}
-				pool, poolErr := datasourcepostgresql.OpenPool(
-					ctx,
-					datasourcepostgresql.ConnectionConfig{
-						Address:    postgresqlConfig.Address(),
-						ServerName: postgresqlConfig.ServerName(),
-						Database:   postgresqlConfig.Database(),
-						User:       postgresqlConfig.User(),
-						Password:   password, RootCAs: roots,
-						ConnectTimeout:  postgresqlConfig.LoadDeadline(),
-						MaxConnections:  int32(postgresqlConfig.MaxConnections()),
-						IdleConnections: int32(postgresqlConfig.IdleConnections()),
-					},
-				)
-				if poolErr != nil {
-					constructionErr = poolErr
-					return nil
-				}
-				loader, loaderErr := datasourcepostgresql.NewLoader(
-					pool, provider.DefaultLimits(),
-					int(postgresqlConfig.PageSize()), datasourceLoadBytes,
-					postgresqlConfig.LoadDeadline(),
-				)
-				if loaderErr != nil {
-					pool.Close()
-					constructionErr = loaderErr
-					return nil
-				}
-				output, constructionErr = startNetworkSigningRuntime(
-					ctx, loader, pool, postgresqlConfig.LoadDeadline(),
+				output, constructionErr = startSQLSigningRuntime(
+					ctx, postgresqlConfig, password, roots,
 					snapshot.Signing().ReloadInterval(), "postgresql", telemetry,
+					newPostgreSQLSigningComponents,
+				)
+			case config.SigningMySQL:
+				mysqlConfig, ok := snapshot.Signing().MySQL()
+				if !ok {
+					constructionErr = &LifecycleError{}
+					return nil
+				}
+				output, constructionErr = startSQLSigningRuntime(
+					ctx, mysqlConfig, password, roots,
+					snapshot.Signing().ReloadInterval(), "mysql", telemetry,
+					newMySQLSigningComponents,
 				)
 			default:
 				constructionErr = &LifecycleError{}
@@ -147,6 +140,88 @@ func newNetworkSigningRuntime(
 		return nil, &LifecycleError{}
 	}
 	return output, nil
+}
+
+// startSQLSigningRuntime constructs one SQL provider and performs its initial load.
+func startSQLSigningRuntime(
+	ctx context.Context,
+	providerConfig config.SQLSigningConfig,
+	password []byte,
+	roots *x509.CertPool,
+	refreshInterval time.Duration,
+	providerClass string,
+	telemetry *observability.Runtime,
+	factory sqlSigningFactory,
+) (*networkSigningRuntime, error) {
+	if factory == nil {
+		return nil, &LifecycleError{}
+	}
+	loader, pool, err := factory(ctx, providerConfig, password, roots)
+	if err != nil {
+		return nil, err
+	}
+	return startNetworkSigningRuntime(
+		ctx, loader, pool, providerConfig.LoadDeadline(), refreshInterval,
+		providerClass, telemetry,
+	)
+}
+
+// newPostgreSQLSigningComponents opens one bounded PostgreSQL loader and pool.
+func newPostgreSQLSigningComponents(
+	ctx context.Context,
+	providerConfig config.SQLSigningConfig,
+	password []byte,
+	roots *x509.CertPool,
+) (datasourceruntime.Loader, datasourcePool, error) {
+	pool, err := datasourcepostgresql.OpenPool(ctx, datasourcepostgresql.ConnectionConfig{
+		Address: providerConfig.Address(), ServerName: providerConfig.ServerName(),
+		Database: providerConfig.Database(), User: providerConfig.User(),
+		Password: password, RootCAs: roots,
+		ConnectTimeout:  providerConfig.LoadDeadline(),
+		MaxConnections:  int32(providerConfig.MaxConnections()),
+		IdleConnections: int32(providerConfig.IdleConnections()),
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+	loader, err := datasourcepostgresql.NewLoader(
+		pool, provider.DefaultLimits(), int(providerConfig.PageSize()),
+		datasourceLoadBytes, providerConfig.LoadDeadline(),
+	)
+	if err != nil {
+		pool.Close()
+		return nil, nil, err
+	}
+	return loader, pool, nil
+}
+
+// newMySQLSigningComponents opens one bounded MySQL-family loader and pool.
+func newMySQLSigningComponents(
+	ctx context.Context,
+	providerConfig config.SQLSigningConfig,
+	password []byte,
+	roots *x509.CertPool,
+) (datasourceruntime.Loader, datasourcePool, error) {
+	pool, err := datasourcemysql.OpenPool(ctx, datasourcemysql.ConnectionConfig{
+		Address: providerConfig.Address(), ServerName: providerConfig.ServerName(),
+		Database: providerConfig.Database(), User: providerConfig.User(),
+		Password: password, RootCAs: roots,
+		ConnectTimeout:  providerConfig.LoadDeadline(),
+		MaxConnections:  int(providerConfig.MaxConnections()),
+		IdleConnections: int(providerConfig.IdleConnections()),
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+	loader, err := datasourcemysql.NewLoader(
+		pool, provider.DefaultLimits(), int(providerConfig.PageSize()),
+		datasourceLoadBytes, providerConfig.LoadDeadline(),
+	)
+	if err != nil {
+		pool.Close()
+		return nil, nil, err
+	}
+	return loader, pool, nil
 }
 
 // startNetworkSigningRuntime performs the complete initial load before starting refresh.

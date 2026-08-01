@@ -188,12 +188,26 @@ func openPublisher(
 		return publisher, closePublisher, nil
 	}
 	if config.Plan.Target == TargetPostgreSQL && config.PGPublish != nil {
-		password, roots, err := loadPostgreSQLPrincipal(*config.PGPublish)
+		password, roots, err := loadSQLPrincipal(*config.PGPublish)
 		if err != nil {
 			return nil, nil, errors.New("migration publication failed")
 		}
 		publisher, closePublisher, err := NewPostgreSQLPublisherClient(
 			ctx, *config.PGPublish, password, roots,
+		)
+		clearPrincipal(password, roots)
+		if err != nil {
+			return nil, nil, errors.New("migration publication failed")
+		}
+		return publisher, closePublisher, nil
+	}
+	if config.Plan.Target == TargetMySQL && config.MySQLPublish != nil {
+		password, roots, err := loadSQLPrincipal(*config.MySQLPublish)
+		if err != nil {
+			return nil, nil, errors.New("migration publication failed")
+		}
+		publisher, closePublisher, err := NewMySQLPublisherClient(
+			ctx, *config.MySQLPublish, password, roots,
 		)
 		clearPrincipal(password, roots)
 		if err != nil {
@@ -209,9 +223,9 @@ func loadPrincipal(source SourceConfig) ([]byte, [][]byte, error) {
 	return loadProtectedPrincipal(source.PasswordFile, source.CAFile)
 }
 
-// loadPostgreSQLPrincipal reads one SQL principal password and strict CA bundle.
-func loadPostgreSQLPrincipal(
-	source PostgreSQLPublicationConfig,
+// loadSQLPrincipal reads one SQL principal password and strict CA bundle.
+func loadSQLPrincipal(
+	source SQLPublicationConfig,
 ) ([]byte, [][]byte, error) {
 	return loadProtectedPrincipal(source.PasswordFile, source.CAFile)
 }
