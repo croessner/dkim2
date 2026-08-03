@@ -17,9 +17,11 @@ The permanent enterprise allocation is:
 | DKIM2 attributes | `1.3.6.1.4.1.31612.1.7.1` |
 | DKIM2 object classes | `1.3.6.1.4.1.31612.1.7.2` |
 
-The native network schema identifier is exactly `dkim2-datasource-v2`. A v2
-loader does not accept v1, infer a version from entry shape, read a partially
-upgraded generation, or fall back to legacy OpenDKIM entries.
+The native network schema identifiers are exactly `dkim2-datasource-v2` and
+`dkim2-datasource-v3`. A loader does not accept v1, infer a version from entry
+shape, mix v2/v3 metadata, read a partially upgraded generation, or fall back
+to legacy OpenDKIM entries. V2 remains a read-only source for one forward v3
+publication; all new administrative publication uses v3.
 
 ## Tree Shape
 
@@ -28,7 +30,7 @@ container. The offline publisher creates every generation-specific child and
 the current fence:
 
 ```text
-ou=dkim2,<suffix>
+ou=dkim2,<suffix> [dkim2AdministrationLock]
 ├── cn=current
 └── ou=generations
     └── dkim2Generation=<N>
@@ -48,10 +50,12 @@ ou=dkim2,<suffix>
 profile, selector, policy, handle, domain, or key identity. The corresponding
 `dkim2*` attributes carry the validated domain identities.
 
-`cn=current` and the generation root both use `dkim2Dataset`. The current entry
-is the activation fence; it is not an alias or referral. All children of one
-generation carry the same nonzero `dkim2Generation` value. Committed generation
-entries are immutable.
+`cn=current` and the generation root both use `dkim2Dataset`. V3 roots and
+current additionally use `dkim2AdministrativeMetadata`; roots require operation
+and digest while current requires digest and forbids operation/history. The
+current entry is the activation fence, not an alias or referral. All children
+of one generation carry the same nonzero `dkim2Generation` value. Committed
+generation entries are immutable.
 
 ## Object Classes
 
@@ -63,6 +67,8 @@ entries are immutable.
 | `dkim2Credential` | `RNSDKIM2oc:4` | one public selector/algorithm binding | profile, algorithm, selector, public SPKI, handle |
 | `dkim2Policy` | `RNSDKIM2oc:5` | one exact tenant/domain/use policy | tenant, domain, use, profile, status, rollout, compatibility |
 | `dkim2KeyMaterial` | `RNSDKIM2oc:6` | one native private signing key binding | tenant, domain, use, handle, algorithm, public SPKI, private PKCS#8 |
+| `dkim2AdministrativeMetadata` | `RNSDKIM2oc:7` | auxiliary v3 generation/current metadata | digest plus generation-root operation and optional history evidence |
+| `dkim2AdministrationLock` | `RNSDKIM2oc:8` | auxiliary backend mutation lock on the DKIM2 base | revision and optional operation owner |
 
 The service validates relationships across all entries after loading. LDAP
 schema acceptance alone does not make a generation valid. A policy must point
@@ -72,11 +78,11 @@ Duplicate or surplus objects reject the complete generation.
 
 ## Attributes
 
-All 18 attributes are single-valued.
+All 23 attributes are single-valued.
 
 | Attribute | OID suffix | Representation | Meaning |
 | --- | ---: | --- | --- |
-| `dkim2SchemaVersion` | `RNSDKIM2at:1` | exact IA5 text | `dkim2-datasource-v2` |
+| `dkim2SchemaVersion` | `RNSDKIM2at:1` | exact IA5 text | `dkim2-datasource-v2` or `dkim2-datasource-v3` |
 | `dkim2Generation` | `RNSDKIM2at:2` | LDAP integer | nonzero unsigned 64-bit generation |
 | `dkim2DatasetState` | `RNSDKIM2at:3` | exact IA5 text | closed staging or committed publication state |
 | `dkim2HandleID` | `RNSDKIM2at:4` | exact IA5 text | provider-neutral opaque signing handle |
@@ -94,6 +100,11 @@ All 18 attributes are single-valued.
 | `dkim2Compatibility` | `RNSDKIM2at:16` | exact IA5 text | currently exactly `strict` |
 | `dkim2FeedbackRouteID` | `RNSDKIM2at:17` | exact IA5 text | optional opaque future-service route |
 | `dkim2PrivateKeyPKCS8` | `RNSDKIM2at:18` | octet string | canonical unencrypted private-key PKCS#8 DER |
+| `dkim2CandidateDigest` | `RNSDKIM2at:19` | octet string | exact 32-byte canonical v3 candidate-content digest |
+| `dkim2OperationID` | `RNSDKIM2at:20` | exact IA5 text | canonical protected onboarding operation binding on a v3 generation root |
+| `dkim2WasActive` | `RNSDKIM2at:21` | LDAP boolean | optional exact `TRUE` monotonic history evidence on a generation root |
+| `dkim2AdminLockOwner` | `RNSDKIM2at:22` | exact IA5 text | optional canonical owner of the persistent administration lock |
+| `dkim2AdminRevision` | `RNSDKIM2at:23` | LDAP integer | nonzero revision of the persistent administration lock |
 
 Validity attributes are both absent or both present and require
 `not_before < not_after`. Public and private binary attributes are DER bytes, not
@@ -108,11 +119,14 @@ and route capability must also authorize signing.
 
 ## Publication And Read Semantics
 
-The publisher builds a new generation below `ou=generations`, validates exact
-entry counts and relationships, marks the generation committed, and only then
-advances `cn=current` with a critical RFC 4528 assertion over the expected
-schema, generation, and state. It never edits a committed generation in place
-or moves the pointer backward.
+The v3 stager builds a new generation below `ou=generations`, reads every public
+and private value back canonically, validates the content digest, and seals only
+the exact operation/digest-bound staging root. It does not move `cn=current`.
+After a fresh committed readback, the activator marks the exact old current root
+`dkim2WasActive=TRUE` and advances an existing current entry with a critical
+RFC 4528 assertion over its complete metadata. Empty bootstrap uses one atomic
+Add and has no placeholder current. Ambiguous outcomes require reconciliation;
+no committed content is retried or edited.
 
 The runtime reads the current fence, loads every required class through critical
 RFC 2696 paging from that exact generation subtree, validates the public and
@@ -123,14 +137,16 @@ and blocks new signing leases until a complete higher generation loads.
 
 ## ACL Model
 
-Keep four authorities separate:
+Keep the runtime and five administrative authorities separate:
 
-| Authority | Legacy `DKIMKey` | Native public v2 data | Native private v2 key | Writes v2 |
-| --- | --- | --- | --- | --- |
-| runtime | deny | read | read | deny |
-| publisher | deny unless separately required | read plus bounded add/fence change | read plus add | forward publication only |
-| legacy inventory | deny | deny unless explicitly needed | deny | deny |
-| protected legacy import | read | deny unless explicitly needed | deny | deny |
+| Authority | Native public data | Native private key | Mutation authority |
+| --- | --- | --- | --- |
+| runtime | read current generation | read | none |
+| snapshot | read bounded inventory/snapshots | read | none |
+| stager | read | read/write only while exact v3 root is staging | lock claim/release, candidate Add, exact seal |
+| activator | read | read for fresh canonical inspection | monotonic old-root history plus current Add/Modify only |
+| legacy v2 publisher | read v2 staging data | read/add only under exact v2 staging root | v2 forward publication; all v3 metadata writes denied |
+| protected legacy import | deny native unless separately required | deny | legacy `DKIMKey` read only in the source directory |
 
 Anonymous, monitoring, ordinary authenticated directory readers, and unrelated
 service accounts must not read either private-key attribute. Place the
@@ -139,16 +155,19 @@ general read rule cannot widen access. Replication consumers and backups that
 carry the DKIM2 subtree become key-custody systems even when their normal
 application role is read-only.
 
-Bootstrap additionally needs only the LDAP add privilege (`=a`) on the
-`children` pseudo-attribute of the native base container so the publisher can
-create `cn=current`. Do not widen that rule to write or delete: committed
-generations and the current fence are forward-only publication state.
+Bootstrap additionally gives only LDAP add privilege (`=a`) on the relevant
+`children` and `entry` pseudo-attributes. Current attribute replacement is a
+separate activator rule; neither activator nor legacy publisher has current
+entry delete/rename authority. Generation descendants use the captured numeric
+root and a `set.expand` predicate over exact schema, generation, staging state,
+operation, and digest. Once sealed, the predicate becomes empty.
 
-The example uses explicit privileges for the publisher. `=dcsra` permits
-disclosure, compare, search, read, and add without delete; `=dcsraz` is
-restricted to the dataset-state and current-fence attributes that
-must replace a value. No rule gives the publisher delete privilege on an entry
-or on a parent's `children` pseudo-attribute.
+`=dcsra` permits disclosure, compare, search, read, and add without delete;
+`=dcsraz` is restricted to attributes whose old value must be replaced. No
+entry or parent-children rule grants delete (`z`) to a publication principal.
+The DKIM2 base carries `dkim2AdminRevision` and optional lock owner; critical
+RFC 4528 claim/release makes crash-held ownership persistent and same-operation
+only.
 
 The reviewed native-target starting point is
 [`contrib/schema/ldap/acl.conf`](../../contrib/schema/ldap/acl.conf). Replace
@@ -189,10 +208,13 @@ make check-datasource-schema
 make test-datasource-services
 ```
 
-The first target verifies the permanent 18/6 allocation plus committed layout
-and ACL contracts. The Docker-backed qualification installs the schema in a
-disposable OpenLDAP service and proves v2 load, native-key validation,
-publication fencing, bounded paging, provider parity, and denial behavior. A
+The first target verifies the permanent 23/8 allocation plus committed layout
+and ACL contracts. `make test-datasource-ldap` also starts a disposable
+OpenLDAP service and binds every role to prove state-conditioned positive and
+negative ACL behavior, RFC 4528 lock/current fences, bootstrap one-winner,
+post-commit immutability, and v2 publisher/v3 denial. The Docker-backed
+qualification proves provider parity, native-key validation, bounded paging,
+and legacy migration behavior. A
 production installation additionally requires site-specific rendered-config,
 replication, backup, restore, runtime/publisher ACL, readiness, and real signing
 proofs.

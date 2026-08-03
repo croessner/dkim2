@@ -20,7 +20,11 @@ import (
 	driver "github.com/go-sql-driver/mysql"
 )
 
-const loaderRedacted = "mysql_loader{redacted}"
+const (
+	loaderRedacted          = "mysql_loader{redacted}"
+	repeatableReadIsolation = "repeatable read"
+	serializableIsolation   = "serializable"
+)
 
 // Loader is the shared immutable SQL snapshot loader used by this adapter.
 type Loader = sqlsnapshot.Loader
@@ -95,7 +99,9 @@ func newDriverConfig(config ConnectionConfig) (*driver.Config, error) {
 	}
 	driverConfig := driver.NewConfig()
 	driverConfig.User = config.User
-	driverConfig.Passwd = string(config.Password)
+	password := append([]byte(nil), config.Password...)
+	driverConfig.Passwd = string(password)
+	clear(password)
 	driverConfig.Net = "tcp"
 	driverConfig.Addr = config.Address
 	driverConfig.DBName = config.Database
@@ -108,7 +114,7 @@ func newDriverConfig(config ConnectionConfig) (*driver.Config, error) {
 	driverConfig.TLS = &tls.Config{
 		MinVersion: tls.VersionTLS12,
 		ServerName: config.ServerName,
-		RootCAs:    config.RootCAs,
+		RootCAs:    config.RootCAs.Clone(),
 	}
 	driverConfig.TLSConfig = ""
 	driverConfig.AllowAllFiles = false
@@ -242,7 +248,7 @@ func readIsolation(ctx context.Context, transaction *sql.Tx, query string) (stri
 // normalizeIsolation maps server spellings to the shared closed isolation value.
 func normalizeIsolation(value string) string {
 	value = strings.ToLower(strings.ReplaceAll(value, "-", " "))
-	if value != "repeatable read" {
+	if value != repeatableReadIsolation {
 		return ""
 	}
 	return value
@@ -256,6 +262,7 @@ func (t *sqlTransaction) ReadCurrent(ctx context.Context) (sqlsnapshot.MetadataR
 	}
 	err := t.transaction.QueryRowContext(ctx, queryCurrent).Scan(
 		&row.Generation, &row.SchemaVersion, &row.DatasetState,
+		&row.OperationID, &row.CandidateDigest, &row.PointerDigest, &row.WasActive,
 	)
 	if err != nil {
 		return sqlsnapshot.MetadataRow{}, errors.New("mysql metadata unavailable")

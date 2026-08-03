@@ -6,6 +6,7 @@ supply=docs/operator/container-supply-chain.md
 datasources=docs/operator/datasource-backends.md
 ldap_reference=docs/operator/ldap-schema-reference.md
 rotation=docs/operator/datasource-key-rotation.md
+onboarding=docs/operator/native-domain-onboarding.md
 daemon=cmd/dkim2d/README.md
 milter=cmd/dkim2-milter/README.md
 client=cmd/dkim2ctl/README.md
@@ -25,11 +26,14 @@ for document in \
   "$datasources" \
   "$ldap_reference" \
   "$rotation" \
+  "$onboarding" \
   docs/operator/datasource-ldap-postgresql.md \
   docs/operator/opendkim-migration.md \
   docs/operator/examples/dkim2d-signing-ldap.yaml \
   docs/operator/examples/dkim2d-signing-postgresql.yaml \
   docs/operator/examples/dkim2d-signing-mysql.yaml \
+  docs/operator/examples/dkim2d-domain-admin-ldap.yaml \
+  docs/operator/examples/dkim2d-domain-intent.yaml \
   contrib/schema/mysql/002_least_privilege_grants.sql.example \
   docs/replay-store-valkey.md \
   docs/reference/README.md \
@@ -39,6 +43,78 @@ for document in \
   docs/specs/implementation/datasource-providers.md \
   "$containerfile"; do
   test -s "$document"
+done
+
+for reference in \
+  'docs/operator/native-domain-onboarding.md' \
+  'docs/operator/examples/dkim2d-domain-admin-ldap.yaml' \
+  'docs/operator/examples/dkim2d-domain-intent.yaml'; do
+  grep -Fq "$reference" README.md
+done
+for reference in \
+  'examples/dkim2d-domain-admin-ldap.yaml' \
+  'examples/dkim2d-domain-intent.yaml'; do
+  grep -Fq "$reference" "$onboarding"
+done
+
+for command in \
+  'datasource domain plan' \
+  'datasource domain prepare' \
+  'datasource domain dns export' \
+  'datasource domain prove' \
+  'datasource domain activate' \
+  'datasource domain status' \
+  'datasource domain reconcile' \
+  'datasource domain abort'; do
+  grep -Fq "$command" "$onboarding"
+  grep -Fq "$command" cmd/dkim2d/internal/command/command.go
+done
+
+for invariant in \
+  'receipt-before-Claim' \
+  'not a public lifecycle state' \
+  'ownerless unchanged `R` never closes `release_required`' \
+  'authoritative ownerless exact' \
+  'performs no `Release`' \
+  'no persisted verified state' \
+  'fresh recursive resolver path' \
+  'not an authoritative DNS query' \
+  'prepared-without-backend' \
+  'key_recovery_unavailable' \
+  'higher-generation rollback' \
+  'runtime_smoke_required'; do
+  grep -Fqi "$invariant" "$onboarding"
+done
+
+! grep -Fq 'no operator CLI for that workflow is released' README.md
+! grep -Fq 'currently accept only `dkim2-datasource-v2`' cmd/dkim2d/README.md
+! grep -Fq 'unique staging current entry' cmd/dkim2d/README.md
+! grep -Fq 'LDAP atomically claims and later activates the unique `cn=current`' "$datasources"
+! grep -Fq '18/6 schema allocation' "$datasources"
+! grep -Fq 'stable v2 current fence' "$datasources"
+! grep -Fq 'not yet exposed as an operator command' "$rotation"
+! grep -Fq 'Until the native domain-onboarding command surface is wired and qualified' "$rotation"
+grep -Fq 'native v2 or v3 generation' README.md
+grep -Fq 'LDAP, PostgreSQL, MySQL, and' cmd/dkim2d/README.md
+grep -Fq 'MariaDB accept an exact complete' cmd/dkim2d/README.md
+grep -Fq 'atomic LDAP Add with no placeholder current' cmd/dkim2d/README.md
+grep -Fq 'creates `cn=current` through one atomic Add' "$datasources"
+grep -Fq '23-attribute/eight-class' "$datasources"
+grep -Fq 'native-domain-onboarding.md' "$rotation"
+! grep -Fq 'key-manager integration remains a separate project' docs/reference/known-limitations.md
+for document in \
+  docs/reference/README.md \
+  docs/reference/compatibility.md \
+  docs/reference/known-limitations.md; do
+  grep -Fq 'native-domain-onboarding.md' "$document"
+done
+grep -Fq 'native-domain onboarding implementation is a later local closeout' docs/reference/release-candidate.md
+for evidence in \
+  'dkim2.datasource-integration-report.v2' \
+  'four qualification runs' \
+  '54 unique allowlisted checks' \
+  'exactly twelve backend-by-result-class PASS'; do
+  grep -Fq "$evidence" docs/security-testing.md
 done
 
 grep -Fq 'docs/reference/README.md' README.md
@@ -112,8 +188,8 @@ done
 
 GOCACHE="${GOCACHE:-/tmp/dkim2-go-build-cache}" \
   go -C cmd/dkim2d test \
-    -run '^(TestOperatorDatasourceExamplesValidate|TestOperatorLDAPBundleMatchesNativeCustody|TestLeastPrivilegeGrantTemplateMatchesPublisherContract)$' \
-    ./internal/config ./internal/datasource/ldap ./internal/datasource/mysql
+    -run '^(TestOperatorDatasourceExamplesValidate|TestOperatorDomainExamplesValidate|TestOperatorLDAPBundleMatchesNativeCustody|TestLeastPrivilegeGrantTemplateMatchesPublisherContract)$' \
+    ./internal/config ./internal/domainadmin ./internal/datasource/ldap ./internal/datasource/mysql
 for reference in \
   'cmd/dkim2d/README.md' \
   'cmd/dkim2-milter/README.md' \

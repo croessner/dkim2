@@ -6,6 +6,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"regexp"
 	"time"
@@ -46,6 +47,12 @@ func run(arguments []string) error {
 		return referencecheck.CheckCurrentIssueEvidence(*root, time.Now())
 	case "check-release":
 		return referencecheck.CheckReleasePlan(*root)
+	case "check-datasource-report":
+		content, err := readDatasourceReport()
+		if err != nil {
+			return err
+		}
+		return referencecheck.CheckDatasourceIntegrationReport(*root, content)
 	case "check-workspace":
 		return referencecheck.CheckWorkspaceMetadata(*root)
 	case "check-vendor":
@@ -78,6 +85,16 @@ func run(arguments []string) error {
 	default:
 		return errors.New("arguments")
 	}
+}
+
+// readDatasourceReport reads one bounded report candidate from standard input.
+func readDatasourceReport() ([]byte, error) {
+	const maximum = int64(1 << 20)
+	content, err := io.ReadAll(io.LimitReader(os.Stdin, maximum+1))
+	if err != nil || int64(len(content)) > maximum {
+		return nil, errors.New("report_evidence_schema")
+	}
+	return content, nil
 }
 
 // writeJSON emits one deterministic bounded command result.

@@ -103,11 +103,13 @@ func newPoolConfig(config ConnectionConfig) (*pgxpool.Config, error) {
 	poolConfig.ConnConfig.Port = uint16(portNumber)
 	poolConfig.ConnConfig.Database = config.Database
 	poolConfig.ConnConfig.User = config.User
-	poolConfig.ConnConfig.Password = string(config.Password)
+	password := append([]byte(nil), config.Password...)
+	poolConfig.ConnConfig.Password = string(password)
+	clear(password)
 	poolConfig.ConnConfig.ConnectTimeout = config.ConnectTimeout
 	poolConfig.ConnConfig.TLSConfig = &tls.Config{
 		MinVersion: tls.VersionTLS12, ServerName: config.ServerName,
-		RootCAs: config.RootCAs,
+		RootCAs: config.RootCAs.Clone(),
 	}
 	poolConfig.ConnConfig.Fallbacks = nil
 	poolConfig.ConnConfig.RuntimeParams = map[string]string{
@@ -183,6 +185,7 @@ func (t *pgxTransaction) ReadCurrent(ctx context.Context) (MetadataRow, error) {
 	}
 	err := t.transaction.QueryRow(ctx, queryCurrent).Scan(
 		&row.Generation, &row.SchemaVersion, &row.DatasetState,
+		&row.OperationID, &row.CandidateDigest, &row.PointerDigest, &row.WasActive,
 	)
 	if err != nil {
 		return MetadataRow{}, errors.New("postgresql metadata unavailable")

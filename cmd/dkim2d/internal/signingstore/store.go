@@ -591,6 +591,9 @@ func clearPrivateKey(key crypto.PrivateKey) {
 	}
 }
 
+// ClearPrivateKey best-effort clears mutable private-key storage owned by offline callers.
+func ClearPrivateKey(key crypto.PrivateKey) { clearPrivateKey(key) }
+
 // clearCredentials best-effort clears every private key in a failed candidate.
 func clearCredentials(credentials map[dkim2.PrivateKeyHandle]privateCredential) {
 	for handle, credential := range credentials {

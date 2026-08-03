@@ -40,3 +40,8 @@ Exim is exactly `qualified_linux` in the unpublished candidate report. Portable
 conformance remains truthful by recording the Linux-only case as not
 applicable; the full report requires the separately verified evidence import.
 LDAP, PostgreSQL, MySQL, and MariaDB providers plus the offline legacy migration are implemented.
+
+The native-domain onboarding implementation is a later local closeout
+candidate. It enters no RC scope, tag, image, or compatibility window until its
+unchanged-snapshot gates, fresh independent review, and explicit maintainer
+approval are complete. Its presence in a worktree is not release authorization.

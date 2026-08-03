@@ -1,0 +1,24 @@
+version: dkim2-domain-admin-v1
+authority_id: aaaaaaaaaaaaaaaaaaaaaaaaae
+backend: ldap
+deadline: 10s
+endpoint:
+  address: 192.0.2.10:636
+  server_name: ldap.example.test
+  ca_file: /run/dkim2/domain-admin/ca.pem
+dns:
+  resolver_class: system
+  resolver_endpoints: []
+  export_ttl_seconds: 300
+  proof_lifetime_seconds: 300
+ldap:
+  base_dn: ou=dkim2,dc=example,dc=test
+  snapshot:
+    principal: cn=snapshot,ou=services,dc=example,dc=test
+    password_file: /run/dkim2/domain-admin/snapshot.password
+  staging:
+    principal: cn=stager,ou=services,dc=example,dc=test
+    password_file: /run/dkim2/domain-admin/staging.password
+  activation:
+    principal: cn=activator,ou=services,dc=example,dc=test
+    password_file: /run/dkim2/domain-admin/activation.password

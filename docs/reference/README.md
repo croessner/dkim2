@@ -27,6 +27,9 @@ limitations without creating a second protocol model.
   [key-rotation runbook](../operator/datasource-key-rotation.md), and
   [OpenDKIM migration](../operator/opendkim-migration.md) define the
   implemented storage and offline administration boundaries.
+- [Native domain onboarding](../operator/native-domain-onboarding.md) defines
+  the protected offline plan, DNS export/proof, activation, recovery, and
+  external runtime-verification workflow.
 - [Container supply chain](../operator/container-supply-chain.md) defines
   image, SBOM, provenance, and publication boundaries.
 - [OpenAPI source](../specs/openapi/dkim2d.yaml) is authoritative for daemon

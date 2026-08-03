@@ -10,49 +10,16 @@ import (
 	"strconv"
 
 	datasourceldap "github.com/croessner/dkim2/cmd/dkim2d/internal/datasource/ldap"
+	"github.com/croessner/dkim2/cmd/dkim2d/internal/datasource/sqlsnapshot"
 	"github.com/croessner/dkim2/provider"
-	ber "github.com/go-asn1-ber/asn1-ber"
 	goldap "github.com/go-ldap/ldap/v3"
 )
 
 const (
-	assertionControlOID        = "1.3.6.1.1.12"
 	ldapDatasetObjectClass     = "dkim2Dataset"
 	ldapAlgorithmAttribute     = "dkim2Algorithm"
 	ldapPublicKeySPKIAttribute = "dkim2PublicKeySPKI"
 )
-
-// ldapAssertionControl encodes one critical RFC 4528 assertion filter.
-type ldapAssertionControl struct {
-	filter string
-}
-
-// GetControlType returns the RFC 4528 assertion-control OID.
-func (ldapAssertionControl) GetControlType() string { return assertionControlOID }
-
-// Encode emits one critical assertion control with the compiled filter value.
-func (c ldapAssertionControl) Encode() *ber.Packet {
-	control := ber.Encode(ber.ClassUniversal, ber.TypeConstructed, ber.TagSequence, nil, "Control")
-	control.AppendChild(ber.NewString(
-		ber.ClassUniversal, ber.TypePrimitive, ber.TagOctetString,
-		assertionControlOID, "Control Type",
-	))
-	control.AppendChild(ber.NewBoolean(
-		ber.ClassUniversal, ber.TypePrimitive, ber.TagBoolean, true, "Criticality",
-	))
-	filter, err := goldap.CompileFilter(c.filter)
-	if err != nil {
-		return control
-	}
-	control.AppendChild(ber.NewString(
-		ber.ClassUniversal, ber.TypePrimitive, ber.TagOctetString,
-		string(filter.Bytes()), "Control Value",
-	))
-	return control
-}
-
-// String returns only the closed RFC 4528 control name.
-func (ldapAssertionControl) String() string { return "Assertion Control" }
 
 // LDAPPublisher owns one verified, authenticated LDAP publication connection.
 type LDAPPublisher struct {
@@ -118,19 +85,21 @@ func (p *LDAPPublisher) Publish(
 	expected uint64,
 	candidate PublicationCandidate,
 ) error {
-	if p == nil || p.client == nil || ctx == nil || candidate.generation == 0 ||
-		candidate.generation <= expected {
+	if p == nil || p.client == nil || ctx == nil || candidate.Generation() == 0 ||
+		candidate.Generation() <= expected {
 		return errors.New("ldap publication unavailable")
 	}
-	generation := strconv.FormatUint(candidate.generation, 10)
-	if candidate.rows.Current.Generation != generation {
+	rows, rowsErr := candidate.detachedRows(ctx)
+	if rowsErr != nil {
 		return errors.New("ldap publication unavailable")
 	}
+	defer clearCandidateRows(&rows)
+	generation := strconv.FormatUint(candidate.Generation(), 10)
 	if expected == 0 && p.claimBootstrap(ctx, generation) != nil {
 		return errors.New("ldap publication unavailable")
 	}
-	if p.addCandidate(ctx, candidate) != nil ||
-		p.validateCandidateReadback(ctx, candidate) != nil {
+	if p.addCandidate(ctx, rows) != nil ||
+		p.validateCandidateReadback(ctx, candidate.Generation(), rows) != nil {
 		return errors.New("ldap publication unavailable")
 	}
 	rootDN := p.generationRoot(generation)
@@ -143,10 +112,16 @@ func (p *LDAPPublisher) Publish(
 	}
 	currentDN := "cn=current," + p.client.baseDN
 	if expected == 0 {
+		assertion, assertionErr := datasourceldap.NewCriticalAssertionControl(
+			"(&(" + ldapSchemaVersionAttribute + "=" + migrationSchemaVersion + ")(" +
+				ldapGenerationAttribute + "=" + generation + ")(" +
+				ldapDatasetStateAttribute + "=" + datasourceStateStaging + "))",
+		)
+		if assertionErr != nil {
+			return errors.New("ldap publication unavailable")
+		}
 		activate := goldap.NewModifyRequest(currentDN, []goldap.Control{
-			ldapAssertionControl{filter: "(&(" + ldapSchemaVersionAttribute + "=" +
-				migrationSchemaVersion + ")(" + ldapGenerationAttribute + "=" + generation +
-				")(" + ldapDatasetStateAttribute + "=" + datasourceStateStaging + "))"},
+			assertion,
 		})
 		activate.Replace(ldapDatasetStateAttribute, []string{datasourceStateCommitted})
 		if err := p.client.call(ctx, func() error {
@@ -156,7 +131,10 @@ func (p *LDAPPublisher) Publish(
 		}
 		return nil
 	}
-	fence := newEstablishedCurrentFenceRequest(currentDN, expected, generation)
+	fence, err := newEstablishedCurrentFenceRequest(currentDN, expected, generation)
+	if err != nil {
+		return errors.New("ldap publication unavailable")
+	}
 	if err := p.client.call(ctx, func() error {
 		return p.client.connection.Modify(fence)
 	}); err != nil {
@@ -171,17 +149,19 @@ func newEstablishedCurrentFenceRequest(
 	currentDN string,
 	expected uint64,
 	generation string,
-) *goldap.ModifyRequest {
+) (*goldap.ModifyRequest, error) {
 	filter := "(&(" + ldapGenerationAttribute + "=" + strconv.FormatUint(expected, 10) + ")(" +
 		ldapDatasetStateAttribute + "=" + datasourceStateCommitted + ")(|(" +
 		ldapSchemaVersionAttribute + "=dkim2-datasource-v1)(" +
 		ldapSchemaVersionAttribute + "=" + migrationSchemaVersion + ")))"
-	fence := goldap.NewModifyRequest(currentDN, []goldap.Control{
-		ldapAssertionControl{filter: filter},
-	})
+	assertion, err := datasourceldap.NewCriticalAssertionControl(filter)
+	if err != nil {
+		return nil, errors.New("ldap publication unavailable")
+	}
+	fence := goldap.NewModifyRequest(currentDN, []goldap.Control{assertion})
 	fence.Replace(ldapGenerationAttribute, []string{generation})
 	fence.Replace(ldapSchemaVersionAttribute, []string{migrationSchemaVersion})
-	return fence
+	return fence, nil
 }
 
 // claimBootstrap atomically reserves an absent current DN in noncurrent staging state.
@@ -210,9 +190,9 @@ func (p *LDAPPublisher) claimBootstrap(ctx context.Context, generation string) e
 // addCandidate creates one complete staging subtree without editing prior content.
 func (p *LDAPPublisher) addCandidate(
 	ctx context.Context,
-	candidate PublicationCandidate,
+	rows sqlsnapshot.DatasetRows,
 ) error {
-	generation := candidate.rows.Current.Generation
+	generation := rows.Current.Generation
 	rootDN := p.generationRoot(generation)
 	requests := []*goldap.AddRequest{
 		newLDAPAdd(rootDN, map[string][]string{
@@ -228,7 +208,7 @@ func (p *LDAPPublisher) addCandidate(
 			map[string][]string{legacyObjectClass: {ldapTopObjectClass, "organizationalUnit"}, "ou": {unit}},
 		))
 	}
-	for index, row := range candidate.rows.Handles {
+	for index, row := range rows.Handles {
 		requests = append(requests, newLDAPAdd(
 			ldapRecordDN(index, "handles", rootDN),
 			map[string][]string{
@@ -237,7 +217,7 @@ func (p *LDAPPublisher) addCandidate(
 			},
 		))
 	}
-	for index, row := range candidate.rows.Profiles {
+	for index, row := range rows.Profiles {
 		attributes := map[string][]string{
 			legacyObjectClass: {ldapTopObjectClass, "dkim2Profile"}, "cn": {ldapRecordCN(index)},
 			ldapGenerationAttribute: {row.Generation}, ldapProfileAttribute: {row.ProfileID},
@@ -251,7 +231,7 @@ func (p *LDAPPublisher) addCandidate(
 			ldapRecordDN(index, "profiles", rootDN), attributes,
 		))
 	}
-	for index, row := range candidate.rows.Credentials {
+	for index, row := range rows.Credentials {
 		request := goldap.NewAddRequest(
 			ldapRecordDN(index, "credentials", rootDN), nil,
 		)
@@ -265,7 +245,7 @@ func (p *LDAPPublisher) addCandidate(
 		request.Attribute(ldapHandleAttribute, []string{row.HandleID})
 		requests = append(requests, request)
 	}
-	for index, row := range candidate.rows.Policies {
+	for index, row := range rows.Policies {
 		attributes := map[string][]string{
 			legacyObjectClass: {ldapTopObjectClass, "dkim2Policy"}, "cn": {ldapRecordCN(index)},
 			ldapGenerationAttribute: {row.Generation}, ldapTenantAttribute: {row.TenantID},
@@ -280,7 +260,7 @@ func (p *LDAPPublisher) addCandidate(
 			ldapRecordDN(index, "policies", rootDN), attributes,
 		))
 	}
-	for index, row := range candidate.rows.KeyMaterial {
+	for index, row := range rows.KeyMaterial {
 		request := goldap.NewAddRequest(
 			ldapRecordDN(index, "key-material", rootDN), nil,
 		)
@@ -310,9 +290,10 @@ func (p *LDAPPublisher) addCandidate(
 // validateCandidateReadback maps the complete staged subtree through the runtime owner.
 func (p *LDAPPublisher) validateCandidateReadback(
 	ctx context.Context,
-	candidate PublicationCandidate,
+	candidateGeneration uint64,
+	rows sqlsnapshot.DatasetRows,
 ) error {
-	generation := candidate.rows.Current.Generation
+	generation := rows.Current.Generation
 	rootDN := p.generationRoot(generation)
 	attributes := []string{
 		legacyObjectClass, "ou", ldapSchemaVersionAttribute, ldapGenerationAttribute, ldapDatasetStateAttribute,
@@ -324,9 +305,9 @@ func (p *LDAPPublisher) validateCandidateReadback(
 	}
 	request := goldap.NewSearchRequest(
 		rootDN, goldap.ScopeWholeSubtree, goldap.NeverDerefAliases,
-		len(candidate.rows.Handles)+len(candidate.rows.Profiles)+
-			len(candidate.rows.Credentials)+len(candidate.rows.Policies)+
-			len(candidate.rows.KeyMaterial)+7,
+		len(rows.Handles)+len(rows.Profiles)+
+			len(rows.Credentials)+len(rows.Policies)+
+			len(rows.KeyMaterial)+7,
 		0, false, "(objectClass=*)", attributes, nil,
 	)
 	var result *goldap.SearchResult
@@ -335,9 +316,9 @@ func (p *LDAPPublisher) validateCandidateReadback(
 		result, searchErr = p.client.connection.Search(request)
 		return searchErr
 	}); err != nil || result == nil || len(result.Referrals) != 0 ||
-		len(result.Entries) != len(candidate.rows.Handles)+len(candidate.rows.Profiles)+
-			len(candidate.rows.Credentials)+len(candidate.rows.Policies)+
-			len(candidate.rows.KeyMaterial)+6 {
+		len(result.Entries) != len(rows.Handles)+len(rows.Profiles)+
+			len(rows.Credentials)+len(rows.Policies)+
+			len(rows.KeyMaterial)+6 {
 		return errors.New("ldap publication readback unavailable")
 	}
 	records, err := publicationLDAPRecords(result.Entries, generation)
@@ -346,10 +327,10 @@ func (p *LDAPPublisher) validateCandidateReadback(
 	}
 	dataset, err := datasourceldap.MapDataset(records, provider.DefaultLimits())
 	if err != nil || dataset == nil || !dataset.Valid() ||
-		dataset.Generation() != candidate.generation {
+		dataset.Generation() != candidateGeneration {
 		return errors.New("ldap publication readback invalid")
 	}
-	if !candidateLDAPReadbackMatches(candidate, records) {
+	if !candidateLDAPReadbackMatches(rows, records) {
 		return errors.New("ldap publication readback mismatched")
 	}
 	return nil
@@ -462,10 +443,10 @@ func publicationLDAPRecords(
 
 // candidateLDAPReadbackMatches proves staged public records equal the plan.
 func candidateLDAPReadbackMatches(
-	candidate PublicationCandidate,
+	rows sqlsnapshot.DatasetRows,
 	actual datasourceldap.DatasetRecords,
 ) bool {
-	expected := candidateLDAPRecords(candidate)
+	expected := candidateLDAPRecords(rows)
 	return ldapEntrySetMatches(actual.Handles, expected.Handles) &&
 		ldapEntrySetMatches(actual.Profiles, expected.Profiles) &&
 		ldapEntrySetMatches(actual.Credentials, expected.Credentials) &&
@@ -474,9 +455,9 @@ func candidateLDAPReadbackMatches(
 }
 
 // candidateLDAPRecords projects exact expected LDAP attributes from SQL-neutral rows.
-func candidateLDAPRecords(candidate PublicationCandidate) datasourceldap.DatasetRecords {
+func candidateLDAPRecords(rows sqlsnapshot.DatasetRows) datasourceldap.DatasetRecords {
 	records := datasourceldap.DatasetRecords{}
-	for _, row := range candidate.rows.Handles {
+	for _, row := range rows.Handles {
 		records.Handles = append(records.Handles, ldapExpectedEntry(
 			datasourceldap.RecordClassHandle,
 			map[string][][]byte{
@@ -485,7 +466,7 @@ func candidateLDAPRecords(candidate PublicationCandidate) datasourceldap.Dataset
 			},
 		))
 	}
-	for _, row := range candidate.rows.Profiles {
+	for _, row := range rows.Profiles {
 		attributes := map[string][][]byte{
 			ldapGenerationAttribute:    {[]byte(row.Generation)},
 			ldapProfileAttribute:       {[]byte(row.ProfileID)},
@@ -500,7 +481,7 @@ func candidateLDAPRecords(candidate PublicationCandidate) datasourceldap.Dataset
 			datasourceldap.RecordClassProfile, attributes,
 		))
 	}
-	for _, row := range candidate.rows.Credentials {
+	for _, row := range rows.Credentials {
 		records.Credentials = append(records.Credentials, ldapExpectedEntry(
 			datasourceldap.RecordClassCredential,
 			map[string][][]byte{
@@ -513,7 +494,7 @@ func candidateLDAPRecords(candidate PublicationCandidate) datasourceldap.Dataset
 			},
 		))
 	}
-	for _, row := range candidate.rows.Policies {
+	for _, row := range rows.Policies {
 		attributes := map[string][][]byte{
 			ldapGenerationAttribute:    {[]byte(row.Generation)},
 			ldapTenantAttribute:        {[]byte(row.TenantID)},
@@ -531,7 +512,7 @@ func candidateLDAPRecords(candidate PublicationCandidate) datasourceldap.Dataset
 			datasourceldap.RecordClassPolicy, attributes,
 		))
 	}
-	for _, row := range candidate.rows.KeyMaterial {
+	for _, row := range rows.KeyMaterial {
 		records.KeyMaterial = append(records.KeyMaterial, ldapExpectedEntry(
 			datasourceldap.RecordClassKeyMaterial,
 			map[string][][]byte{

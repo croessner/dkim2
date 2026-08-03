@@ -1,14 +1,34 @@
 package migration
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"sync"
 	"sync/atomic"
 	"testing"
 
+	datasourceldap "github.com/croessner/dkim2/cmd/dkim2d/internal/datasource/ldap"
+	"github.com/croessner/dkim2/cmd/dkim2d/internal/datasourceadmin"
 	ber "github.com/go-asn1-ber/asn1-ber"
+	goldap "github.com/go-ldap/ldap/v3"
 )
+
+// TestPublicationCandidateUsesNeutralContentOwner freezes operation-free v2 migration custody.
+func TestPublicationCandidateUsesNeutralContentOwner(t *testing.T) {
+	_, plan, imported := publicationFixture(t)
+	candidate, err := BuildPublicationCandidate(plan, imported)
+	if err != nil {
+		t.Fatal("migration publication candidate rejected")
+	}
+	defer candidate.Close() //nolint:errcheck // Test cleanup has no recovery action.
+	assertNeutralContent := func(content *datasourceadmin.CandidateContent) {
+		if content == nil || content.Generation() != candidate.Generation() {
+			t.Fatal("migration did not retain the shared neutral content owner")
+		}
+	}
+	assertNeutralContent(candidate.content)
+}
 
 type memoryPublisher struct {
 	mu        sync.Mutex
@@ -18,11 +38,14 @@ type memoryPublisher struct {
 
 // TestLDAPAssertionControlIsCriticalRFC4528 freezes the publication fence.
 func TestLDAPAssertionControlIsCriticalRFC4528(t *testing.T) {
-	control := ldapAssertionControl{filter: "(dkim2Generation=7)"}
+	control, err := datasourceldap.NewCriticalAssertionControl("(dkim2Generation=7)")
+	if err != nil {
+		t.Fatal("construct shared LDAP assertion control")
+	}
 	packet := control.Encode()
-	if control.GetControlType() != assertionControlOID || packet == nil ||
+	if control.GetControlType() != "1.3.6.1.1.12" || packet == nil ||
 		len(packet.Children) != 3 ||
-		packet.Children[0].Value != assertionControlOID ||
+		packet.Children[0].Value != "1.3.6.1.1.12" ||
 		packet.Children[1].Value != true {
 		t.Fatal("RFC 4528 assertion control shape drifted")
 	}
@@ -50,17 +73,19 @@ func TestPublicationFenceAcceptsOnlyV1MigrationOrV2(t *testing.T) {
 // TestEstablishedLDAPFenceUpgradesSchemaWithGeneration proves an existing v1
 // current pointer cannot retain its legacy schema while activating v2 data.
 func TestEstablishedLDAPFenceUpgradesSchemaWithGeneration(t *testing.T) {
-	request := newEstablishedCurrentFenceRequest(
+	request, err := newEstablishedCurrentFenceRequest(
 		"cn=current,dc=example,dc=test", 7, "8",
 	)
-	if request == nil || len(request.Controls) != 1 || len(request.Changes) != 2 {
+	if err != nil || request == nil || len(request.Controls) != 1 || len(request.Changes) != 2 {
 		t.Fatal("established LDAP fence did not replace generation and schema atomically")
 	}
-	control, ok := request.Controls[0].(ldapAssertionControl)
 	wantFilter := "(&(dkim2Generation=7)(dkim2DatasetState=committed)" +
 		"(|(dkim2SchemaVersion=dkim2-datasource-v1)" +
 		"(dkim2SchemaVersion=dkim2-datasource-v2)))"
-	if !ok || control.filter != wantFilter {
+	compiled, compileErr := goldap.CompileFilter(wantFilter)
+	packet := request.Controls[0].Encode()
+	value, ok := packet.Children[2].Value.(string)
+	if compileErr != nil || !ok || !bytes.Equal([]byte(value), compiled.Bytes()) {
 		t.Fatal("established LDAP fence did not assert the complete upgrade boundary")
 	}
 	changes := make(map[string][]string, len(request.Changes))
@@ -94,7 +119,7 @@ func (p *memoryPublisher) Publish(
 	expected uint64,
 	candidate PublicationCandidate,
 ) error {
-	if p == nil || ctx == nil || candidate.generation <= expected {
+	if p == nil || ctx == nil || candidate.Generation() <= expected {
 		return errors.New("publication unavailable")
 	}
 	if err := ctx.Err(); err != nil {
@@ -105,7 +130,7 @@ func (p *memoryPublisher) Publish(
 	if p.current != expected || p.failAfter {
 		return errors.New("publication unavailable")
 	}
-	p.current = candidate.generation
+	p.current = candidate.Generation()
 	return nil
 }
 
@@ -221,14 +246,39 @@ func TestLDAPReadbackMustEqualPublicationCandidate(t *testing.T) {
 	if err != nil {
 		t.Fatal("build publication candidate")
 	}
-	defer clearCandidateRows(&candidate.rows)
-	readback := candidateLDAPRecords(candidate)
-	if !candidateLDAPReadbackMatches(candidate, readback) {
+	defer candidate.Close() //nolint:errcheck // Test cleanup has no recovery.
+	rows, rowsErr := candidate.detachedRows(context.Background())
+	if rowsErr != nil {
+		t.Fatal("detach publication candidate")
+	}
+	defer clearCandidateRows(&rows)
+	readback := candidateLDAPRecords(rows)
+	if !candidateLDAPReadbackMatches(rows, readback) {
 		t.Fatal("exact LDAP publication readback rejected")
 	}
 	readback.Handles[0].Attributes[ldapHandleAttribute][0] = []byte("different-handle")
-	if candidateLDAPReadbackMatches(candidate, readback) {
+	if candidateLDAPReadbackMatches(rows, readback) {
 		t.Fatal("different valid LDAP publication readback accepted")
+	}
+}
+
+// TestLDAPClosedCandidateFailsBeforeConnectionUse freezes pre-mutation detachment.
+func TestLDAPClosedCandidateFailsBeforeConnectionUse(t *testing.T) {
+	_, plan, imported := publicationFixture(t)
+	candidate, err := BuildPublicationCandidate(plan, imported)
+	if err != nil {
+		t.Fatal("build publication candidate")
+	}
+	if err := candidate.Close(); err != nil {
+		t.Fatal("close publication candidate")
+	}
+	var calls atomic.Uint64
+	publisher := &LDAPPublisher{client: &ldapInventoryClient{callCount: &calls}}
+	if err := publisher.Publish(context.Background(), 1, candidate); err == nil {
+		t.Fatal("closed candidate reached LDAP publication")
+	}
+	if calls.Load() != 0 {
+		t.Fatal("closed candidate invoked the LDAP client")
 	}
 }
 

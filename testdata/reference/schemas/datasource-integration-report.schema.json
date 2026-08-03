@@ -1,26 +1,27 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://dkim2.invalid/schemas/datasource-integration-report.schema.json",
-  "title": "DKIM2 datasource integration report",
+  "title": "DKIM2 datasource integration report v2",
   "type": "object",
   "additionalProperties": false,
   "required": [
     "schema", "base_revision", "candidate_snapshot_sha256", "ldap_image",
-    "postgresql_image", "mysql_image", "mariadb_image", "runs", "checks", "overall"
+    "postgresql_image", "mysql_image", "mariadb_image",
+    "runtime_qualification_runs", "checks", "results", "overall"
   ],
   "properties": {
-    "schema": {"const": "dkim2.datasource-integration-report.v1"},
+    "schema": {"const": "dkim2.datasource-integration-report.v2"},
     "base_revision": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
     "candidate_snapshot_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
-    "ldap_image": {"type": "string", "pattern": "^.+@sha256:[0-9a-f]{64}$"},
-    "postgresql_image": {"type": "string", "pattern": "^.+@sha256:[0-9a-f]{64}$"},
-    "mysql_image": {"type": "string", "pattern": "^.+@sha256:[0-9a-f]{64}$"},
-    "mariadb_image": {"type": "string", "pattern": "^.+@sha256:[0-9a-f]{64}$"},
-    "runs": {"const": 2},
+    "ldap_image": {"const": "chrroessner/openldap:2.6.13-r4@sha256:17f2e3485dae92122051da6acdb1091e6d9f1f64d30fd76fd3da3c261c6c778f"},
+    "postgresql_image": {"const": "postgres:18.3-alpine@sha256:54451ecb8ab38c24c3ec123f2fd501303a3a1856a5c66e98cecf2460d5e1e9d7"},
+    "mysql_image": {"const": "mysql:8.4@sha256:b3b90af2a6552ae30c266fdb7d5dd55f3afb72404bb78d37fe8a23eb857fd3fb"},
+    "mariadb_image": {"const": "mariadb:10.11@sha256:be981e4113326ada8d6004174dd09eeaefc03094037f811182a52d4f2e737350"},
+    "runtime_qualification_runs": {"const": 4},
     "checks": {
       "type": "array",
-      "minItems": 16,
-      "maxItems": 16,
+      "minItems": 54,
+      "maxItems": 54,
       "uniqueItems": true,
       "items": {
         "enum": [
@@ -36,11 +37,73 @@
           "mariadb_absent_to_first_concurrency_fence",
           "mysql_pointerless_nonempty_denial",
           "mariadb_pointerless_nonempty_denial",
+          "postgresql_v2_to_v3_upgrade_and_two_rotations",
+          "mysql_v2_to_v3_upgrade_and_two_rotations",
+          "mariadb_v2_to_v3_upgrade_and_two_rotations",
+          "postgresql_v3_observed_lock_contention_activation_race",
+          "mysql_v3_observed_lock_contention_activation_race",
+          "mariadb_v3_observed_lock_contention_activation_race",
+          "postgresql_fresh_v3_bootstrap_and_rotation",
+          "mysql_fresh_v3_bootstrap_and_rotation",
+          "mariadb_fresh_v3_bootstrap_and_rotation",
+          "sql_stage_replay_and_canonical_inspection",
+          "sql_v3_runtime_digest_and_private_readback",
+          "postgresql_exact_definer_routine_audit",
+          "postgresql_exact_definer_acl_audit",
+          "postgresql_direct_candidate_root_lock_denial",
+          "mysql_fresh_and_upgrade_grant_routine_sets",
+          "mariadb_fresh_and_upgrade_grant_routine_sets",
+          "mysql_exact_publisher_and_admin_routine_allowlists",
+          "mariadb_exact_publisher_and_admin_routine_allowlists",
+          "mysql_fixed_routine_definer_allowlist",
+          "mariadb_fixed_routine_definer_allowlist",
+          "mysql_v2_publisher_singleton_column_lock_compatibility",
+          "mariadb_v2_publisher_singleton_column_lock_compatibility",
+          "mysql_v2_publisher_lock_metadata_write_denials",
+          "mariadb_v2_publisher_lock_metadata_write_denials",
+          "postgresql_stager_and_activator_denials",
+          "mysql_stager_and_activator_denials",
+          "mariadb_stager_and_activator_denials",
+          "postgresql_direct_lock_table_denials",
+          "mysql_direct_lock_table_denials",
+          "mariadb_direct_lock_table_denials",
+          "postgresql_snapshot_physical_lock_denial",
+          "mysql_snapshot_physical_lock_denial",
+          "mariadb_snapshot_physical_lock_denial",
+          "postgresql_activator_claim_denial",
+          "mysql_activator_claim_denial",
+          "mariadb_activator_claim_denial",
+          "mysql_operation_and_digest_coercion_denials",
+          "mariadb_operation_and_digest_coercion_denials",
           "postgresql_committed_immutability",
           "postgresql_runtime_write_denial",
           "mysql_committed_immutability_and_runtime_write_denial",
           "mariadb_committed_immutability_and_runtime_write_denial"
         ]
+      }
+    },
+    "results": {
+      "type": "array",
+      "minItems": 12,
+      "maxItems": 12,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["image", "backend", "check", "result"],
+        "properties": {
+          "image": {
+            "enum": [
+              "chrroessner/openldap:2.6.13-r4@sha256:17f2e3485dae92122051da6acdb1091e6d9f1f64d30fd76fd3da3c261c6c778f",
+              "postgres:18.3-alpine@sha256:54451ecb8ab38c24c3ec123f2fd501303a3a1856a5c66e98cecf2460d5e1e9d7",
+              "mysql:8.4@sha256:b3b90af2a6552ae30c266fdb7d5dd55f3afb72404bb78d37fe8a23eb857fd3fb",
+              "mariadb:10.11@sha256:be981e4113326ada8d6004174dd09eeaefc03094037f811182a52d4f2e737350"
+            ]
+          },
+          "backend": {"enum": ["ldap", "postgresql", "mysql", "mariadb"]},
+          "check": {"enum": ["domain_onboarding_full_flow", "activated_runtime_signing", "app_signing_service_parity"]},
+          "result": {"const": "pass"}
+        }
       }
     },
     "overall": {"const": "pass"}

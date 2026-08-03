@@ -92,10 +92,11 @@ func (l *Loader) Load(ctx context.Context) (candidate datasourceruntime.Candidat
 	if err != nil {
 		return datasourceruntime.Candidate{}, classifyBoundary(ctx)
 	}
-	generation, err := mapMetadata(current)
+	currentMetadata, err := mapCurrentMetadata(current)
 	if err != nil {
 		return datasourceruntime.Candidate{}, err
 	}
+	generation := currentMetadata.generation
 	root, err := client.ReadGenerationRoot(ctx, generation)
 	if err != nil {
 		return datasourceruntime.Candidate{}, classifyBoundary(ctx)
@@ -131,8 +132,8 @@ func (l *Loader) Load(ctx context.Context) (candidate datasourceruntime.Candidat
 	if err != nil {
 		return datasourceruntime.Candidate{}, classifyBoundary(ctx)
 	}
-	finalGeneration, err := mapMetadata(finalCurrent)
-	if err != nil || finalGeneration != generation {
+	finalMetadata, err := mapCurrentMetadata(finalCurrent)
+	if err != nil || !currentMetadata.equal(finalMetadata) {
 		return datasourceruntime.Candidate{}, provider.NewError(provider.ErrorCodeUnavailable)
 	}
 	dataset, err := MapDataset(records, l.limits)

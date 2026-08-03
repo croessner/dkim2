@@ -27,7 +27,7 @@ type KeyImportClient interface {
 	FetchKey(context.Context, string, string, []string, int) ([]byte, error)
 }
 
-// DNSProver performs one cache-bypassed exact DNS/SPKI proof.
+// DNSProver performs one fresh resolver-path exact DNS/SPKI proof.
 type DNSProver interface {
 	Prove(context.Context, string, string, Algorithm, []byte) error
 }
@@ -198,12 +198,12 @@ func clearRSAPrivateKey(privateKey *rsa.PrivateKey) {
 	}
 }
 
-// FreshDNSProver creates one new DNS provider per credential to bypass caches.
+// FreshDNSProver creates one new provider per credential without claiming upstream cache bypass.
 type FreshDNSProver struct {
 	transport dkim2.TXTTransport
 }
 
-// NewFreshDNSProver constructs one exact injected DNS proof owner.
+// NewFreshDNSProver constructs one exact injected recursive-path DNS proof owner.
 func NewFreshDNSProver(transport dkim2.TXTTransport) (*FreshDNSProver, error) {
 	if transport == nil {
 		return nil, errors.New("migration dns unavailable")

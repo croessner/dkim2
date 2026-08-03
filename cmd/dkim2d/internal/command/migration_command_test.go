@@ -94,7 +94,7 @@ func TestDatasourceApplyAndRollbackUseOnlyOfflineMutationDependencies(t *testing
 	}{
 		{
 			name: "apply",
-			args: []string{datasourceCommandName, bootstrapCommandName, testConfigFlag, migrationTestConfigPath, "--apply"},
+			args: []string{datasourceCommandName, bootstrapCommandName, testConfigFlag, migrationTestConfigPath, applyToken},
 			deps: func(calls *int) commandDependencies {
 				return commandDependencies{apply: func(
 					context.Context, string, bool, string,

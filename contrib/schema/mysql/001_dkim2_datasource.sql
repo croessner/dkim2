@@ -4,7 +4,7 @@
 -- Install in one dedicated database using an administrative connection.
 -- Apply the separately reviewed 002_least_privilege_grants.sql.example after
 -- creating TLS-required site accounts. The publisher also needs narrowly
--- scoped UPDATE on dkim2_publication_lock to acquire its singleton row lock.
+-- scoped UPDATE(singleton) on dkim2_publication_lock to acquire its row lock.
 -- Neither account receives DELETE, DDL, FILE, or global privileges.
 
 SET NAMES utf8mb4 COLLATE utf8mb4_bin;
@@ -213,6 +213,6 @@ DELIMITER ;
 
 -- Least-privilege role names used by the operator grant procedure:
 -- dkim2_runtime: SELECT on the seven datasource tables only.
--- dkim2_publisher: SELECT and INSERT on generation data, UPDATE only on
--- dkim2_dataset_generations and dkim2_current_generation, and SELECT on plus
--- UPDATE of dkim2_publication_lock solely to acquire its row lock.
+-- dkim2_publisher: publication authority is granted by the separately reviewed
+-- template; after the v3 transition it retains fixed v2 procedures and only
+-- UPDATE(singleton) on dkim2_publication_lock for its locking read.

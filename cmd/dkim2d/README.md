@@ -102,14 +102,114 @@ dkim2d datasource rollback --config /absolute/migration.yaml --generation 43
 These commands never start the ordinary daemon graph. Dry-run is the default;
 mutation requires `--apply` or the explicit rollback command.
 
+### Native domain onboarding
+
+Native domain onboarding is a separate one-shot offline workflow. Its complete
+stable command tree is:
+
+```text
+dkim2d datasource domain plan --config /abs/admin.yaml --intent /abs/domain.yaml --operation /abs/op.json
+dkim2d datasource domain prepare --config /abs/admin.yaml --operation /abs/op.json
+dkim2d datasource domain dns export --config /abs/admin.yaml --operation /abs/op.json --output /abs/records.txt
+dkim2d datasource domain prove --config /abs/admin.yaml --operation /abs/op.json
+dkim2d datasource domain activate --config /abs/admin.yaml --operation /abs/op.json --apply
+dkim2d datasource domain status --config /abs/admin.yaml --operation /abs/op.json
+dkim2d datasource domain reconcile --config /abs/admin.yaml --operation /abs/op.json
+dkim2d datasource domain abort --config /abs/admin.yaml --operation /abs/op.json
+```
+
+The complete operator sequence, recovery matrix, backup requirements,
+higher-generation rollback, and parser-checked configuration and intent
+examples are in
+[`docs/operator/native-domain-onboarding.md`](../../docs/operator/native-domain-onboarding.md).
+
+Only the single bare token `--apply` authorizes activation. Missing `--apply`,
+`--apply=false`, `--apply=true`, aliases, short forms, repeated forms, and
+tokens after `--` fail as command-shape errors. `status` does not update the
+journal or backend and opens only an already-existing operation lock. A status
+request for a missing operation therefore creates neither a journal nor a lock
+artifact. `reconcile` is the sole command that may update journal knowledge
+from an exact backend inspection. There is no `verify` command and no persisted
+verified state.
+
+All paths must be clean absolute paths beneath trusted owner-only directories.
+The administration document, intent, operation journal, DNS export, CA bundle,
+and three credential files must not overlap. Protected documents and secrets
+are regular owner-only `0600` files with no links. DNS material is written only
+to the explicitly requested protected export artifact and never to stdout,
+logs, traces, or metrics. Export is create-only: an exact existing artifact is
+an idempotent success, while any different existing content is a conflict and
+is never replaced. A create whose final outcome cannot be proved exactly fails
+as ambiguous and must be retried against the same path.
+
+The administration schema is `dkim2-domain-admin-v1`. It requires a random,
+deployment-unique, nonzero 128-bit `authority_id` in canonical lower-case
+unpadded Base32, one direct verified-TLS endpoint, one protected CA bundle,
+and distinct snapshot, staging, and activation identities and credential
+files. LDAP uses `ldap` plus a canonical base DN and three canonical service
+DNs. PostgreSQL uses `postgresql`, database plus the fixed
+`dkim2_datasource` schema, and three roles. MySQL and MariaDB use their exact
+backend class, and `schema` must equal `database`. The legacy
+`dkim2_publisher` role is never a v3 administration authority. Generic DSNs,
+shared roles, shared credential contents, insecure transport, and provider
+fallbacks are rejected.
+
+Scalar values support one nonrecursive `${NAME}` environment expansion pass
+before typed validation. Plain whole placeholders are resolved through native
+YAML scalar typing; quoted placeholders remain strings. Missing or malformed
+variables fail closed, map keys are never expanded, and secret bytes remain in
+their protected files.
+
+`dns export` produces DNS-04 records for operator publication. `prove` and
+`activate` use a fresh configured recursive resolver path and compare exact
+SPKI material. This is not a direct authoritative-server observation and does
+not claim recursive-cache bypass. After activation, whether completed directly
+by `activate` or recovered authoritatively by `reconcile`, the successful
+report says `runtime_smoke_required=true`: operators must perform the existing
+external runtime signing and mailflow smoke. The flag is mandatory for exactly
+those two successful activated results and forbidden everywhere else. The
+offline command never claims that runtime behavior is verified.
+
+Complete human and `--machine` operation reports contain only bounded state,
+backend, phase, result, failure, boolean classes, expected/candidate generation
+numbers, total/RSA/Ed25519 credential counts, and a current generation only
+when it is authoritatively known. Expected, candidate, and credential-count
+facts remain present for every complete-plan result. A known zero current for
+first publication remains explicit, while a failure without authoritative
+current evidence omits the entire current field rather than printing zero. A
+successful terminal-conflict `reconcile` is the sole nonactivated success that
+reports a current different from the expected generation: it preserves the
+authoritatively observed third-party value, distinct from both expected and
+candidate. All other successful nonactivated workflows report the exact
+expected current. A bounded workflow failure report is written before the fixed
+content-free runtime diagnostic, while the process still exits `1`.
+Receipt reports are a distinct projection and expose no state, generation,
+credential count, revision, operation identity, authority, paths, selectors,
+DNS content, or digests. `release_required` and `unresolved` direct the operator
+to `status` and explicit `reconcile`; repeated abort of a `closed` receipt is an
+idempotent success.
+
+Every offline domain command constructs one command-local, exporter-free
+observer. Exactly one bounded event must match the command result or status;
+missing, duplicate, invalid, or contradictory evidence fails the command. This
+path does not construct the daemon Fx graph, listeners, OpenTelemetry exporters,
+or Prometheus endpoints and emits no observation payload to stdout or stderr.
+
 The first publication into a proven-empty backend uses the exact
 `expected_current: "0"` administrative fence and a nonzero candidate. LDAP
-claims a unique staging current entry before dataset creation and activates it
-with a critical RFC 4528 assertion; PostgreSQL proves all datasource tables
-empty in the serializable publication transaction and uniquely inserts the
-singleton current row. Zero is never runtime-loadable, a nonempty pointerless
-backend fails closed, and later publication requires the exact nonzero current
-generation.
+proves the subtree empty and publishes current only at Activate through one
+atomic LDAP Add with no placeholder current. PostgreSQL proves all datasource
+tables empty in the serializable activation transaction and uniquely inserts
+the singleton current row. Zero is never runtime-loadable, a nonempty
+pointerless backend fails closed, and later publication requires the exact
+nonzero current generation.
+
+The internal receipt-before-Claim boundary is recovery evidence, not another
+public state. `release_required` is write-ahead authorization for explicit
+reconcile only: ownerless unchanged revision does not close it. An unresolved
+receipt may close directly only from authoritative ownerless exact-revision
+evidence and performs no Release. Receipt or journal ambiguity never
+authorizes another backend mutation from an in-memory result.
 
 ## Configuration Sources
 
@@ -243,9 +343,11 @@ withdraws.
 
 ### LDAP, PostgreSQL, MySQL, and MariaDB signing
 
-The `ldap`, `postgresql`, and `mysql` signing backends replace the flat-file datasource
-with one verified-TLS immutable `dkim2-datasource-v2` generation containing
-the canonical PKCS#8 DER keys for its opaque handles. These backends reject
+The `ldap`, `postgresql`, and `mysql` signing backends replace the flat-file
+datasource with one verified-TLS immutable committed generation containing the
+canonical PKCS#8 DER keys for its opaque handles. LDAP, PostgreSQL, MySQL, and
+MariaDB accept an exact complete `dkim2-datasource-v2` or
+`dkim2-datasource-v3` generation. These backends reject
 `private_manifest_file`; no local private-key tree is mounted. The public
 dataset and native keys must validate as one exact generation. Initial-load failure
 prevents readiness; a linearized refresh failure makes new leases unavailable
@@ -253,6 +355,7 @@ until a complete higher generation loads. Exact configuration examples,
 schema/DDL installation, role separation, backup, and recovery are in the
 datasource operator guide linked above. MariaDB uses the `mysql` selector and
 the same typed, verified-TLS provider contract.
+
 The LDAP tree and attributes are documented in the
 [`LDAP schema reference`](../../docs/operator/ldap-schema-reference.md); normal
 generation replacement and retirement are documented in the

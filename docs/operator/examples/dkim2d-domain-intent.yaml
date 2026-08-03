@@ -1,0 +1,9 @@
+version: dkim2-domain-intent-v1
+domain: mail.example.test
+tenant_id: outbound
+profile_use: originator
+algorithms:
+  - ed25519-sha256
+  - rsa-sha256
+rollout: enforce
+compatibility: strict

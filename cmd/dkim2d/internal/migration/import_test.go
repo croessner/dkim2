@@ -115,11 +115,13 @@ func TestImportKeysBuildsOneExactNativeCandidate(t *testing.T) {
 		t.Fatal("imported credential binding drifted")
 	}
 	candidate, err := BuildPublicationCandidate(config.Plan, imported)
-	if err != nil || len(candidate.rows.KeyMaterial) != 1 ||
-		len(candidate.rows.KeyMaterial[0].PrivatePKCS8) == 0 {
+	rows, rowsErr := candidate.detachedRows(context.Background())
+	if err != nil || rowsErr != nil || len(rows.KeyMaterial) != 1 ||
+		len(rows.KeyMaterial[0].PrivatePKCS8) == 0 {
 		t.Fatal("native publication candidate unavailable")
 	}
-	clearCandidateRows(&candidate.rows)
+	clearCandidateRows(&rows)
+	_ = candidate.Close()
 }
 
 // TestImportUsesExactLegacySelectorAfterCanonicalInventory proves case-exact
@@ -297,7 +299,7 @@ func TestImportKeysFailsClosedBeforeRegistrySideEffects(t *testing.T) {
 	}
 }
 
-// TestFreshDNSProverRequiresExactCanonicalSPKI proves cache-bypassed DNS parsing.
+// TestFreshDNSProverRequiresExactCanonicalSPKI proves fresh provider-path DNS parsing.
 func TestFreshDNSProverRequiresExactCanonicalSPKI(t *testing.T) {
 	public, _, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {

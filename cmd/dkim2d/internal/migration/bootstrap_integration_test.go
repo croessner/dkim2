@@ -26,7 +26,7 @@ func TestDisposableMigrationBootstrapPublishers(t *testing.T) {
 	if err != nil {
 		t.Fatal("build bootstrap publication candidate")
 	}
-	defer clearCandidateRows(&candidate.rows)
+	defer candidate.Close() //nolint:errcheck // Test cleanup has no recovery.
 
 	t.Run("ldap-pointerless-nonempty", func(t *testing.T) {
 		publisher, closePublisher := integrationLDAPPublisher(

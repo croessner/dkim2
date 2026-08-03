@@ -28,10 +28,18 @@ certification, or universal interoperability claim.
   The offline OpenDKIM migration requires separately managed verified-TLS
   services, explicit mapping, and distinct least-authority principals.
 - The online daemon has no key-generation, DNS-mutation, or datasource-write
-  surface. The current end-to-end publisher imports an explicitly mapped
-  OpenDKIM LDAP source through the protected offline command. A native-only
-  key-manager integration remains a separate project; manual LDAP/SQL key
-  mutation is unsupported.
+  surface. Native key generation and onboarding exist only in the protected
+  offline `dkim2d datasource domain` workflow. It exports DNS records but does
+  not publish them, proves only a fresh configured recursive resolver path,
+  makes no authoritative-query or cache-bypass claim, persists no
+  runtime-verified state, and performs no automatic candidate deletion. At
+  most eight outstanding candidates are permitted; retained or ambiguous
+  candidates require separately authorized cleanup. Rollback republishes
+  known-good content under a higher generation, and activation still requires
+  external runtime/mailflow smoke evidence. Manual LDAP/SQL key mutation
+  remains unsupported. This implementation candidate is pending final review
+  and is not a release claim. See the
+  [native-domain runbook](../operator/native-domain-onboarding.md).
 - Product images are Linux `amd64` and `arm64`; release preparation does not
   publish them or create `latest`, stable, minor, or major aliases.
 

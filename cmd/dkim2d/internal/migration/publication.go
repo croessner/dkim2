@@ -5,21 +5,35 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"time"
+	"strconv"
 
 	"github.com/croessner/dkim2/cmd/dkim2d/internal/datasource/sqlsnapshot"
-	"github.com/croessner/dkim2/cmd/dkim2d/internal/signingstore"
+	"github.com/croessner/dkim2/cmd/dkim2d/internal/datasourceadmin"
 	"github.com/croessner/dkim2/provider"
 )
 
-// PublicationCandidate owns one complete provider-neutral public generation.
+// PublicationCandidate owns one protected complete provider-neutral generation.
 type PublicationCandidate struct {
-	generation uint64
-	rows       sqlsnapshot.DatasetRows
+	content *datasourceadmin.CandidateContent
 }
 
 // Generation returns the exact immutable candidate generation.
-func (c PublicationCandidate) Generation() uint64 { return c.generation }
+func (c PublicationCandidate) Generation() uint64 {
+	if c.content == nil {
+		return 0
+	}
+	return c.content.Generation()
+}
+
+// Close destroys the shared protected candidate owner.
+func (c *PublicationCandidate) Close() error {
+	if c == nil || c.content == nil {
+		return nil
+	}
+	err := c.content.Close()
+	c.content = nil
+	return err
+}
 
 // String returns a constant protected publication-candidate summary.
 func (PublicationCandidate) String() string { return redacted }
@@ -62,6 +76,7 @@ func BuildPublicationCandidate(
 			DatasetState: datasourceStateCommitted,
 		},
 	}
+	defer clearCandidateRows(&rows)
 	profileIndex := make(map[string]int, len(imported))
 	policyIndex := make(map[string]struct{}, len(imported))
 	for index, credential := range imported {
@@ -137,31 +152,18 @@ func BuildPublicationCandidate(
 			})
 		}
 	}
-	dataset, err := sqlsnapshot.MapDataset(rows, provider.DefaultLimits())
-	if err != nil || dataset == nil || !dataset.Valid() ||
-		dataset.Generation() != generation {
-		clearCandidateRows(&rows)
-		return PublicationCandidate{}, errors.New("migration candidate unavailable")
-	}
-	materials, err := sqlsnapshot.MapNativeKeyMaterial(rows.KeyMaterial, generation)
+	neutral := neutralRows(rows)
+	content, err := datasourceadmin.NewSnapshot(datasourceadmin.SchemaVersionV2, generation, neutral)
+	clearNeutralRows(&neutral)
 	if err != nil {
-		clearCandidateRows(&rows)
 		return PublicationCandidate{}, errors.New("migration candidate unavailable")
 	}
-	defer closePublicationMaterials(materials)
-	registry, err := signingstore.OpenNativeRegistry(generation, materials)
+	candidate, err := datasourceadmin.NewCandidateContent(content)
 	if err != nil {
-		clearCandidateRows(&rows)
+		_ = content.Close()
 		return PublicationCandidate{}, errors.New("migration candidate unavailable")
 	}
-	defer func() { _ = registry.Close(context.Background()) }()
-	resolver, err := dataset.NewSigningResolver(registry.Bindings(), time.Now().UTC())
-	if err != nil || resolver == nil {
-		clearCandidateRows(&rows)
-		return PublicationCandidate{}, errors.New("migration candidate unavailable")
-	}
-	_ = resolver.Close(context.Background())
-	return PublicationCandidate{generation: generation, rows: rows}, nil
+	return PublicationCandidate{content: candidate}, nil
 }
 
 // Apply publishes one proven generation pair or returns no success claim.
@@ -186,7 +188,7 @@ func Apply(
 	if err != nil {
 		return failedPublicationReport(report, "malformed_data")
 	}
-	defer clearCandidateRows(&candidate.rows)
+	defer candidate.Close() //nolint:errcheck // Candidate cleanup cannot restore publication.
 	expected, err := parseExpectedCurrent(plan.ExpectedCurrent)
 	if err != nil {
 		return failedPublicationReport(report, "invalid_request")
@@ -262,9 +264,78 @@ func clearCandidateRows(rows *sqlsnapshot.DatasetRows) {
 	}
 }
 
-// closePublicationMaterials clears one native publication validation set.
-func closePublicationMaterials(materials []*signingstore.NativeKeyMaterial) {
-	for _, material := range materials {
-		_ = material.Close()
+// neutralRows translates legacy DTOs into the shared protected owner boundary.
+func neutralRows(rows sqlsnapshot.DatasetRows) datasourceadmin.Rows {
+	result := datasourceadmin.Rows{}
+	for _, row := range rows.Handles {
+		result.Handles = append(result.Handles, datasourceadmin.HandleRow{ID: row.HandleID})
 	}
+	for _, row := range rows.Profiles {
+		result.Profiles = append(result.Profiles, datasourceadmin.ProfileRow{ID: row.ProfileID, Domain: row.Domain, Status: row.Status, NotBeforeUTC: row.NotBeforeUTC, NotAfterUTC: row.NotAfterUTC})
+	}
+	for _, row := range rows.Credentials {
+		result.Credentials = append(result.Credentials, datasourceadmin.CredentialRow{ProfileID: row.ProfileID, Algorithm: row.Algorithm, Selector: row.Selector, PublicSPKI: append([]byte(nil), row.PublicKeySPKI...), HandleID: row.HandleID})
+	}
+	for _, row := range rows.Policies {
+		result.Policies = append(result.Policies, datasourceadmin.PolicyRow{TenantID: row.TenantID, Domain: row.Domain, Use: row.Use, ProfileID: row.ProfileID, Status: row.Status, Rollout: row.Rollout, Compatibility: row.Compatibility, FeedbackRouteID: row.FeedbackRouteID})
+	}
+	for _, row := range rows.KeyMaterial {
+		result.KeyMaterial = append(result.KeyMaterial, datasourceadmin.KeyMaterialRow{TenantID: row.TenantID, Domain: row.Domain, Use: row.Use, HandleID: row.HandleID, Algorithm: row.Algorithm, PublicSPKI: append([]byte(nil), row.PublicSPKI...), PrivatePKCS8: append([]byte(nil), row.PrivatePKCS8...)})
+	}
+	return result
+}
+
+// detachedRows obtains one transient legacy adapter projection from the shared owner.
+func (c PublicationCandidate) detachedRows(ctx context.Context) (sqlsnapshot.DatasetRows, error) {
+	generation := c.Generation()
+	if c.content == nil || generation == 0 {
+		return sqlsnapshot.DatasetRows{}, errors.New("migration candidate unavailable")
+	}
+	var rows sqlsnapshot.DatasetRows
+	err := c.content.WithRows(ctx, func(neutral datasourceadmin.Rows) error {
+		rows = legacyRows(generation, neutral)
+		return nil
+	})
+	if err != nil {
+		clearCandidateRows(&rows)
+		return sqlsnapshot.DatasetRows{}, errors.New("migration candidate unavailable")
+	}
+	return rows, nil
+}
+
+// legacyRows translates a detached neutral projection at the legacy adapter boundary.
+func legacyRows(generation uint64, rows datasourceadmin.Rows) sqlsnapshot.DatasetRows {
+	text := strconv.FormatUint(generation, 10)
+	result := sqlsnapshot.DatasetRows{Current: sqlsnapshot.MetadataRow{Generation: text, SchemaVersion: migrationSchemaVersion, DatasetState: datasourceStateCommitted}, Final: sqlsnapshot.MetadataRow{Generation: text, SchemaVersion: migrationSchemaVersion, DatasetState: datasourceStateCommitted}}
+	for _, row := range rows.Handles {
+		result.Handles = append(result.Handles, sqlsnapshot.HandleRow{Generation: text, HandleID: row.ID})
+	}
+	for _, row := range rows.Profiles {
+		result.Profiles = append(result.Profiles, sqlsnapshot.ProfileRow{Generation: text, ProfileID: row.ID, Domain: row.Domain, Status: row.Status, NotBeforeUTC: row.NotBeforeUTC, NotAfterUTC: row.NotAfterUTC})
+	}
+	for _, row := range rows.Credentials {
+		result.Credentials = append(result.Credentials, sqlsnapshot.CredentialRow{Generation: text, ProfileID: row.ProfileID, Algorithm: row.Algorithm, Selector: row.Selector, PublicKeySPKI: append([]byte(nil), row.PublicSPKI...), HandleID: row.HandleID})
+	}
+	for _, row := range rows.Policies {
+		result.Policies = append(result.Policies, sqlsnapshot.PolicyRow{Generation: text, TenantID: row.TenantID, Domain: row.Domain, Use: row.Use, ProfileID: row.ProfileID, Status: row.Status, Rollout: row.Rollout, Compatibility: row.Compatibility, FeedbackRouteID: row.FeedbackRouteID})
+	}
+	for _, row := range rows.KeyMaterial {
+		result.KeyMaterial = append(result.KeyMaterial, sqlsnapshot.KeyMaterialRow{Generation: text, TenantID: row.TenantID, Domain: row.Domain, Use: row.Use, HandleID: row.HandleID, Algorithm: row.Algorithm, PublicSPKI: append([]byte(nil), row.PublicSPKI...), PrivatePKCS8: append([]byte(nil), row.PrivatePKCS8...)})
+	}
+	return result
+}
+
+// clearNeutralRows erases private and public bytes in a transient neutral projection.
+func clearNeutralRows(rows *datasourceadmin.Rows) {
+	if rows == nil {
+		return
+	}
+	for index := range rows.Credentials {
+		clear(rows.Credentials[index].PublicSPKI)
+	}
+	for index := range rows.KeyMaterial {
+		clear(rows.KeyMaterial[index].PublicSPKI)
+		clear(rows.KeyMaterial[index].PrivatePKCS8)
+	}
+	*rows = datasourceadmin.Rows{}
 }

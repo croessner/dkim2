@@ -3,6 +3,7 @@ package parity
 import (
 	"context"
 	"crypto/ed25519"
+	"crypto/rand"
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/base64"
@@ -26,6 +27,8 @@ const (
 	testLDAPGenerationAttribute = "dkim2Generation"
 	testLDAPProfileAttribute    = "dkim2ProfileID"
 	testActiveStatus            = "active"
+	testAlgorithm               = "ed25519-sha256"
+	testProfileUse              = "originator"
 )
 
 type resolver interface {
@@ -67,12 +70,20 @@ func (r flatResolver) Resolve(
 // TestSharedProviderParity runs one normalized exact-resolution contract over
 // memory, flat-file, LDAP, and PostgreSQL projections.
 func TestSharedProviderParity(t *testing.T) {
-	public := ed25519.PublicKey(make([]byte, ed25519.PublicKeySize))
-	public[0] = 1
+	public, private, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal("generate shared key")
+	}
 	spki, err := x509.MarshalPKIXPublicKey(public)
 	if err != nil {
 		t.Fatal("encode public key")
 	}
+	pkcs8, err := x509.MarshalPKCS8PrivateKey(private)
+	clear(private)
+	if err != nil {
+		t.Fatal("encode private key")
+	}
+	defer clear(pkcs8)
 	at := time.Now().UTC()
 	handle, err := dkim2.NewPrivateKeyHandle([]byte(testHandle))
 	if err != nil {
@@ -104,7 +115,7 @@ func TestSharedProviderParity(t *testing.T) {
 		t.Fatal("construct LDAP dataset")
 	}
 	postgresqlDataset, err := datasourcepostgresql.MapDataset(
-		postgresqlRows(spki), provider.DefaultLimits(),
+		postgresqlRows(spki, pkcs8), provider.DefaultLimits(),
 	)
 	if err != nil {
 		t.Fatal("construct PostgreSQL dataset")
@@ -226,7 +237,7 @@ func ldapRecords(spki []byte) datasourceldap.DatasetRecords {
 			Class: datasourceldap.RecordClassCredential,
 			Attributes: map[string][][]byte{
 				testLDAPGenerationAttribute: value("1"), testLDAPProfileAttribute: value(testProfile),
-				"dkim2Algorithm": value("ed25519-sha256"), "dkim2Selector": value(testSelector),
+				"dkim2Algorithm": value(testAlgorithm), "dkim2Selector": value(testSelector),
 				"dkim2PublicKeySPKI": [][]byte{append([]byte(nil), spki...)},
 				"dkim2HandleID":      value(testHandle),
 			},
@@ -235,7 +246,7 @@ func ldapRecords(spki []byte) datasourceldap.DatasetRecords {
 			Class: datasourceldap.RecordClassPolicy,
 			Attributes: map[string][][]byte{
 				testLDAPGenerationAttribute: value("1"), "dkim2TenantID": value(testTenant),
-				"dkim2SigningDomain": value(testDomain), "dkim2ProfileUse": value("originator"),
+				"dkim2SigningDomain": value(testDomain), "dkim2ProfileUse": value(testProfileUse),
 				testLDAPProfileAttribute: value(testProfile), "dkim2RecordStatus": value(testActiveStatus),
 				"dkim2Rollout": value("enforce"), "dkim2Compatibility": value("strict"),
 			},
@@ -244,7 +255,7 @@ func ldapRecords(spki []byte) datasourceldap.DatasetRecords {
 }
 
 // postgresqlRows projects the shared corpus into exact SQL rows.
-func postgresqlRows(spki []byte) datasourcepostgresql.DatasetRows {
+func postgresqlRows(spki, pkcs8 []byte) datasourcepostgresql.DatasetRows {
 	metadata := datasourcepostgresql.MetadataRow{
 		Generation: "1", SchemaVersion: "dkim2-datasource-v2",
 		DatasetState: "committed",
@@ -258,14 +269,19 @@ func postgresqlRows(spki []byte) datasourcepostgresql.DatasetRows {
 			Generation: "1", ProfileID: testProfile, Domain: testDomain, Status: testActiveStatus,
 		}},
 		Credentials: []datasourcepostgresql.CredentialRow{{
-			Generation: "1", ProfileID: testProfile, Algorithm: "ed25519-sha256",
+			Generation: "1", ProfileID: testProfile, Algorithm: testAlgorithm,
 			Selector: testSelector, PublicKeySPKI: append([]byte(nil), spki...),
 			HandleID: testHandle,
 		}},
 		Policies: []datasourcepostgresql.PolicyRow{{
 			Generation: "1", TenantID: testTenant, Domain: testDomain,
-			Use: "originator", ProfileID: testProfile, Status: testActiveStatus,
+			Use: testProfileUse, ProfileID: testProfile, Status: testActiveStatus,
 			Rollout: "enforce", Compatibility: "strict",
+		}},
+		KeyMaterial: []datasourcepostgresql.KeyMaterialRow{{
+			Generation: "1", TenantID: testTenant, Domain: testDomain,
+			Use: testProfileUse, HandleID: testHandle, Algorithm: testAlgorithm,
+			PublicSPKI: append([]byte(nil), spki...), PrivatePKCS8: append([]byte(nil), pkcs8...),
 		}},
 	}
 }
@@ -279,13 +295,13 @@ func flatDocument(t *testing.T, spki []byte) []byte {
 		"profiles": []any{map[string]any{
 			"id": testProfile, "domain": testDomain, "status": testActiveStatus,
 			"credentials": []any{map[string]any{
-				"algorithm": "ed25519-sha256", "selector": testSelector,
+				"algorithm": testAlgorithm, "selector": testSelector,
 				"public_key_spki": base64.StdEncoding.EncodeToString(spki),
 				"handle_id":       testHandle,
 			}},
 		}},
 		"policies": []any{map[string]any{
-			"tenant_id": testTenant, "domain": testDomain, "use": "originator",
+			"tenant_id": testTenant, "domain": testDomain, "use": testProfileUse,
 			"profile_id": testProfile, "status": testActiveStatus, "rollout": "enforce",
 			"compatibility": "strict",
 		}},

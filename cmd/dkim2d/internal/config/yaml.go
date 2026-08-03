@@ -3,16 +3,104 @@ package config
 import (
 	"bytes"
 	"io"
+	"os"
 	"strings"
 
 	"go.yaml.in/yaml/v3"
 )
+
+// ExpandYAMLScalarPlaceholders expands environment placeholders only in scalar mapping values and sequence elements.
+func ExpandYAMLScalarPlaceholders(document []byte) ([]byte, error) {
+	if len(document) == 0 || len(document) > yamlMaxDocumentBytes {
+		return nil, newError(CodeInvalidYAML)
+	}
+	decoder := yaml.NewDecoder(bytes.NewReader(document))
+	var root yaml.Node
+	if err := decoder.Decode(&root); err != nil {
+		return nil, newError(CodeInvalidYAML)
+	}
+	var trailing any
+	if decoder.Decode(&trailing) != io.EOF || expandYAMLNode(&root, false) != nil {
+		return nil, newError(CodeInvalidPlaceholder)
+	}
+	expanded, err := yaml.Marshal(&root)
+	if err != nil || len(expanded) == 0 || len(expanded) > yamlMaxDocumentBytes {
+		clear(expanded)
+		return nil, newError(CodeInvalidPlaceholder)
+	}
+	return expanded, nil
+}
+
+// expandYAMLNode performs one value-only nonrecursive placeholder pass.
+func expandYAMLNode(node *yaml.Node, mapKey bool) error {
+	if node == nil || node.Kind == yaml.AliasNode || node.Anchor != "" {
+		return newError(CodeInvalidPlaceholder)
+	}
+	if node.Kind == yaml.ScalarNode {
+		if !strings.Contains(node.Value, "${") {
+			return nil
+		}
+		if mapKey || node.Tag != yamlStringTag {
+			return newError(CodeInvalidPlaceholder)
+		}
+		wholePlain := node.Style == 0 && isWholePlaceholder(node.Value)
+		expanded, err := expandPlaceholders(node.Value, os.LookupEnv)
+		if err != nil {
+			return err
+		}
+		if wholePlain {
+			if strings.Contains(expanded, "${") {
+				node.Tag = yamlStringTag
+			} else {
+				tag, resolveErr := resolveExpandedPlainScalar(expanded)
+				if resolveErr != nil {
+					return resolveErr
+				}
+				node.Tag = tag
+			}
+		}
+		node.Value = expanded
+		return nil
+	}
+	if node.Kind == yaml.MappingNode {
+		if len(node.Content)%2 != 0 {
+			return newError(CodeInvalidYAML)
+		}
+		for index := 0; index < len(node.Content); index += 2 {
+			if err := expandYAMLNode(node.Content[index], true); err != nil {
+				return err
+			}
+			if err := expandYAMLNode(node.Content[index+1], false); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	for _, child := range node.Content {
+		if err := expandYAMLNode(child, false); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// resolveExpandedPlainScalar applies YAML typing only to a whole unquoted placeholder result.
+func resolveExpandedPlainScalar(value string) (string, error) {
+	var resolved yaml.Node
+	if yaml.Unmarshal([]byte(value+"\n"), &resolved) != nil || len(resolved.Content) != 1 ||
+		resolved.Content[0].Kind != yaml.ScalarNode || len(resolved.Content[0].Content) != 0 ||
+		resolved.Content[0].Value != value {
+		return "", newError(CodeInvalidPlaceholder)
+	}
+	return resolved.Content[0].Tag, nil
+}
 
 const (
 	yamlMaxDocumentBytes = 262_144
 	yamlMaxNodeDepth     = 32
 	yamlMaxNodes         = 4_096
 	yamlMaxScalarBytes   = 65_536
+	yamlStringTag        = "!!str"
 )
 
 type yamlSchemaNode struct {
@@ -159,7 +247,7 @@ func collectYAMLMapping(
 	for index := 0; index < len(node.Content); index += 2 {
 		keyNode := node.Content[index]
 		valueNode := node.Content[index+1]
-		if keyNode.Kind != yaml.ScalarNode || keyNode.Tag != "!!str" {
+		if keyNode.Kind != yaml.ScalarNode || keyNode.Tag != yamlStringTag {
 			return newError(CodeInvalidYAML)
 		}
 		key := keyNode.Value
@@ -222,7 +310,7 @@ func collectYAMLMapping(
 // rejects every YAML coercion outside the typed configuration contract.
 func classifyYAMLScalar(node *yaml.Node) (scalarKind, error) {
 	switch node.Tag {
-	case "!!str":
+	case yamlStringTag:
 		return scalarString, nil
 	case "!!bool":
 		return scalarBool, nil

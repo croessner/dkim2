@@ -66,7 +66,7 @@ var reportEvidenceSchemas = map[string]string{
 	".artifacts/image-evidence/dkim2d.provenance.json":       "https://in-toto.io/Statement/v1",
 	".artifacts/postfix-deployment/run-1/report.json":        "dkim2.postfix-deployment-report.v1",
 	".artifacts/postfix-deployment/run-2/report.json":        "dkim2.postfix-deployment-report.v1",
-	".artifacts/datasource-integration/report.json":          "dkim2.datasource-integration-report.v1",
+	".artifacts/datasource-integration/report.json":          datasourceIntegrationReportSchema,
 }
 
 var generatedOpenAPIPaths = []string{
@@ -342,6 +342,10 @@ func collectReportEvidence(root, revision, candidate string) ([]ArtifactIdentity
 		}
 		schema := evidenceSchema(value)
 		if expected := reportEvidenceSchemas[path]; expected == "" || schema != expected {
+			return nil, errors.New("report_evidence_schema")
+		}
+		if schema == datasourceIntegrationReportSchema &&
+			validateDatasourceIntegrationReport(root, content, revision, candidate) != nil {
 			return nil, errors.New("report_evidence_schema")
 		}
 		if schema != "dkim2-oci-policy-v1" &&

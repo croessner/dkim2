@@ -1,11 +1,13 @@
-# Empty DKIM2 datasource v2 base. Adapt only the suffix before installation.
+# Empty DKIM2 datasource v2/v3 base. Adapt only the suffix before installation.
 # Do not pre-create cn=current or a generation. The offline publisher proves
 # the target is empty, creates every generation child including key-material,
 # and activates the first complete nonzero generation with an assertion fence.
 
 dn: ou=dkim2,dc=example,dc=test
 objectClass: organizationalUnit
+objectClass: dkim2AdministrationLock
 ou: dkim2
+dkim2AdminRevision: 1
 
 dn: ou=generations,ou=dkim2,dc=example,dc=test
 objectClass: organizationalUnit

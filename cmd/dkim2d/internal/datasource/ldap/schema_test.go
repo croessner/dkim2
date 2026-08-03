@@ -23,7 +23,7 @@ func TestSchemaOwnsExactPermanentAllocation(t *testing.T) {
 	classPattern := regexp.MustCompile(`objectclass \( RNSDKIM2oc:(\d+) NAME '([^']+)'`)
 	attributes := attributePattern.FindAllStringSubmatch(text, -1)
 	classes := classPattern.FindAllStringSubmatch(text, -1)
-	if len(attributes) != 18 || len(classes) != 6 {
+	if len(attributes) != 23 || len(classes) != 8 {
 		t.Fatal("unexpected LDAP allocation count")
 	}
 	expectedAttributes := []string{
@@ -33,6 +33,8 @@ func TestSchemaOwnsExactPermanentAllocation(t *testing.T) {
 		attrAlgorithm, attrSelector, attrPublicSPKI,
 		attrTenantID, attrProfileUse, attrRollout,
 		attrCompatibility, attrFeedbackRouteID, attrPrivatePKCS8,
+		"dkim2CandidateDigest", "dkim2OperationID", "dkim2WasActive",
+		"dkim2AdminLockOwner", "dkim2AdminRevision",
 	}
 	for index, match := range attributes {
 		if match[1] != strconv.Itoa(index+1) || match[2] != expectedAttributes[index] {
@@ -40,22 +42,21 @@ func TestSchemaOwnsExactPermanentAllocation(t *testing.T) {
 		}
 	}
 	expectedClasses := []string{
-		"dkim2Dataset", "dkim2Handle", "dkim2Profile", "dkim2Credential", "dkim2Policy",
-		"dkim2KeyMaterial",
+		datasetObjectClass, handleObjectClass, profileObjectClass, credentialObjectClass, policyObjectClass,
+		keyMaterialObjectClass, administrativeMetadataObjectClass, administrationLockObjectClass,
 	}
 	for index, match := range classes {
 		if match[1] != strconv.Itoa(index+1) || match[2] != expectedClasses[index] {
 			t.Fatal("LDAP object-class allocation changed")
 		}
 	}
-	if strings.Count(text, " SINGLE-VALUE )") != 18 {
+	if strings.Count(text, " SINGLE-VALUE )") != 23 {
 		t.Fatal("every allocated attribute must be single-valued")
 	}
 }
 
-// TestOperatorLDAPBundleMatchesNativeCustody proves the committed empty layout,
-// ACL example, operator reference, and architecture all describe the exact v2
-// private-key custody allocation without a legacy runtime generation.
+// TestOperatorLDAPBundleMatchesNativeCustody proves the deployable v2/v3 layout,
+// role-separated ACL, operator reference, and architecture stay aligned.
 func TestOperatorLDAPBundleMatchesNativeCustody(t *testing.T) {
 	t.Parallel()
 	root := filepath.Join("..", "..", "..", "..", "..")
@@ -81,9 +82,20 @@ func TestOperatorLDAPBundleMatchesNativeCustody(t *testing.T) {
 		"dn: ou=dkim2,dc=example,dc=test",
 		"dn: ou=generations,ou=dkim2,dc=example,dc=test",
 		"Do not pre-create cn=current or a generation",
+		"objectClass: dkim2AdministrationLock",
+		"dkim2AdminRevision: 1",
 	} {
 		if !strings.Contains(layout, required) {
 			t.Fatal("empty LDAP layout is missing its v2 bootstrap contract")
+		}
+	}
+	indexes := read("contrib", "schema", "ldap", "indexes.conf")
+	for _, required := range []string{
+		"dkim2CandidateDigest,dkim2OperationID,dkim2WasActive eq",
+		"dkim2AdminLockOwner,dkim2AdminRevision eq",
+	} {
+		if !strings.Contains(indexes, required) {
+			t.Fatal("LDAP index example is missing v3 administration metadata")
 		}
 	}
 
@@ -92,38 +104,46 @@ func TestOperatorLDAPBundleMatchesNativeCustody(t *testing.T) {
 		t.Fatal("native LDAP ACL contains a legacy OpenDKIM attribute")
 	}
 	privateRule := strings.Index(acl, "attrs=dkim2PrivateKeyPKCS8")
-	publicRule := strings.Index(acl, "attrs=entry,children,objectClass")
+	publicRule := strings.Index(acl, "attrs=entry,objectClass,cn,ou")
 	if privateRule < 0 || publicRule < 0 || privateRule >= publicRule {
 		t.Fatal("LDAP private-key ACL does not precede the public datasource rule")
 	}
 	for _, required := range []string{
 		`cn=dkim2-runtime,ou=services,dc=example,dc=test" read`,
-		`cn=dkim2-publisher,ou=services,dc=example,dc=test" =dcsra`,
+		`cn=dkim2-snapshot,ou=services,dc=example,dc=test" read`,
+		`cn=dkim2-activator,ou=services,dc=example,dc=test" read`,
+		`by set.expand="(user & [cn=dkim2-stager,ou=services,dc=example,dc=test])`,
 		"by * none",
 	} {
 		if !strings.Contains(acl[privateRule:publicRule], required) {
 			t.Fatal("LDAP private-key ACL is missing a closed authority rule")
 		}
 	}
-	if strings.Contains(acl, `cn=dkim2-publisher,ou=services,dc=example,dc=test" write`) {
+	if strings.Contains(acl, `cn=dkim2-publisher,ou=services,dc=example,dc=test" write`) ||
+		strings.Contains(acl, `cn=dkim2-stager,ou=services,dc=example,dc=test" write`) {
 		t.Fatal("LDAP publisher ACL uses a broad write level")
 	}
 	for _, required := range []string{
-		`access to dn.exact="ou=dkim2,dc=example,dc=test"`,
+		`access to dn.exact="ou=generations,ou=dkim2,dc=example,dc=test"`,
 		"attrs=children",
-		`cn=dkim2-publisher,ou=services,dc=example,dc=test" =a`,
+		`cn=dkim2-stager,ou=services,dc=example,dc=test" =dcsra`,
+		"attrs=dkim2AdminLockOwner,dkim2AdminRevision",
+		"attrs=dkim2CandidateDigest,dkim2OperationID",
+		"attrs=dkim2WasActive",
 	} {
 		if !strings.Contains(acl, required) {
-			t.Fatal("LDAP bootstrap ACL is missing its add-only parent privilege")
+			t.Fatal("LDAP bootstrap ACL is missing its bounded create/read privilege")
 		}
 	}
 
 	reference := read("docs", "operator", "ldap-schema-reference.md")
 	architecture := read("docs", "ARCHITECTURE.md")
 	for _, required := range []string{
-		"All 18 attributes are single-valued",
+		"All 23 attributes are single-valued",
 		"`dkim2PrivateKeyPKCS8` | `RNSDKIM2at:18`",
 		"`dkim2KeyMaterial` | `RNSDKIM2oc:6`",
+		"`dkim2CandidateDigest` | `RNSDKIM2at:19`",
+		"`dkim2AdministrationLock` | `RNSDKIM2oc:8`",
 	} {
 		if !strings.Contains(reference, required) {
 			t.Fatal("LDAP operator reference is missing native custody allocation")
@@ -131,7 +151,9 @@ func TestOperatorLDAPBundleMatchesNativeCustody(t *testing.T) {
 	}
 	for _, required := range []string{
 		"| `RNSDKIM2at:18` | `dkim2PrivateKeyPKCS8` |",
+		"| `RNSDKIM2at:23` | `dkim2AdminRevision` |",
 		"| `RNSDKIM2oc:6` | `dkim2KeyMaterial` |",
+		"| `RNSDKIM2oc:8` | `dkim2AdministrationLock` |",
 	} {
 		if !strings.Contains(architecture, required) {
 			t.Fatal("architecture is missing native LDAP allocation")

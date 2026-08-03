@@ -2,7 +2,9 @@ package postgresql
 
 const (
 	queryIsolation = `SELECT current_setting('transaction_isolation'), current_setting('transaction_read_only')`
-	queryCurrent   = `SELECT generation::text, schema_version, dataset_state
+	queryCurrent   = `SELECT current.generation::text, dataset.schema_version, dataset.dataset_state,
+	       dataset.operation_id, dataset.candidate_digest, current.candidate_digest,
+	       dataset.was_active
 FROM dkim2_datasource.current_generation AS current
 JOIN dkim2_datasource.dataset_generations AS dataset USING (generation)
 WHERE current.singleton = TRUE`

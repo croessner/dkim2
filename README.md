@@ -75,6 +75,13 @@ Follow
 [`docs/operator/container-supply-chain.md`](docs/operator/container-supply-chain.md)
 for image construction, supported platforms, immutable digest selection, SBOM,
 provenance, vulnerability, reproducibility, and publication evidence. The
+offline native-domain workflow is documented in
+[`docs/operator/native-domain-onboarding.md`](docs/operator/native-domain-onboarding.md),
+with parser-checked starting documents in
+[`docs/operator/examples/dkim2d-domain-admin-ldap.yaml`](docs/operator/examples/dkim2d-domain-admin-ldap.yaml)
+and
+[`docs/operator/examples/dkim2d-domain-intent.yaml`](docs/operator/examples/dkim2d-domain-intent.yaml).
+The
 component references are
 [`cmd/dkim2d/README.md`](cmd/dkim2d/README.md),
 [`cmd/dkim2-milter/README.md`](cmd/dkim2-milter/README.md), and
@@ -94,8 +101,11 @@ universal Exim binary or container image is claimed. LDAP, PostgreSQL, MySQL,
 and MariaDB datasource providers,
 deployable schema artifacts, and the offline legacy OpenDKIM migration are
 implemented. They require operator-supplied verified-TLS services and distinct
-least-authority principals. Each network backend owns one complete native v2
-generation containing its public facts and private key material.
+least-authority principals. Every network runtime accepts one complete
+committed native v2 or v3 generation. The offline
+`dkim2d datasource domain` CLI implements native onboarding across all four
+network backends, but this worktree is an implementation candidate pending
+fresh independent review; it is not a release or production-rollout claim.
 
 ## Current Behavior
 
@@ -117,10 +127,11 @@ daemon-owned standalone-primary Valkey provider using privacy-preserving keys
 and one non-retryable `SET NX PX` operation. The daemon now owns strict typed
 configuration, protected-generation loading, the generated process, sign, and
 revise OpenAPI boundary, distinct local route-capability authentication,
-replay and signing-store wiring, readiness, and bounded Fx lifecycle. LDAP,
-PostgreSQL, MySQL, and MariaDB providers load immutable committed native v2
-generations through verified TLS and build a validated in-memory signer from
-the same generation. They use no local private manifest.
+replay and signing-store wiring, readiness, and bounded Fx lifecycle. LDAP
+loads an immutable committed native v2 or v3 generation through verified TLS.
+PostgreSQL, MySQL, and MariaDB also load immutable committed native v2 or v3
+generations through verified TLS. Every network provider builds a validated
+in-memory signer from the same generation and uses no local private manifest.
 
 `dkim2ctl` provides a generated-client-backed loopback smoke check and a
 strict draft-versioned fixture runner. It validates every fixture offline

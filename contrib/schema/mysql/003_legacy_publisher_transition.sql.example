@@ -1,0 +1,30 @@
+-- Apply only while upgrading a deployed v2 publisher account that already
+-- owns the v2 direct grants. Fresh installations do not apply this file.
+-- Replace the database and complete quoted publisher account placeholders.
+
+REVOKE INSERT, UPDATE ON __DATABASE__.dkim2_dataset_generations FROM __PUBLISHER_ACCOUNT__;
+REVOKE INSERT, UPDATE ON __DATABASE__.dkim2_current_generation FROM __PUBLISHER_ACCOUNT__;
+REVOKE INSERT ON __DATABASE__.dkim2_handles FROM __PUBLISHER_ACCOUNT__;
+REVOKE INSERT ON __DATABASE__.dkim2_profiles FROM __PUBLISHER_ACCOUNT__;
+REVOKE INSERT ON __DATABASE__.dkim2_credentials FROM __PUBLISHER_ACCOUNT__;
+REVOKE INSERT ON __DATABASE__.dkim2_policies FROM __PUBLISHER_ACCOUNT__;
+REVOKE INSERT ON __DATABASE__.dkim2_key_material FROM __PUBLISHER_ACCOUNT__;
+REVOKE UPDATE ON __DATABASE__.dkim2_publication_lock FROM __PUBLISHER_ACCOUNT__;
+GRANT SELECT ON __DATABASE__.dkim2_publication_lock TO __PUBLISHER_ACCOUNT__;
+GRANT UPDATE (singleton) ON __DATABASE__.dkim2_publication_lock TO __PUBLISHER_ACCOUNT__;
+GRANT SELECT ON __DATABASE__.dkim2_dataset_generations TO __PUBLISHER_ACCOUNT__;
+GRANT SELECT ON __DATABASE__.dkim2_current_generation TO __PUBLISHER_ACCOUNT__;
+GRANT SELECT ON __DATABASE__.dkim2_handles TO __PUBLISHER_ACCOUNT__;
+GRANT SELECT ON __DATABASE__.dkim2_profiles TO __PUBLISHER_ACCOUNT__;
+GRANT SELECT ON __DATABASE__.dkim2_credentials TO __PUBLISHER_ACCOUNT__;
+GRANT SELECT ON __DATABASE__.dkim2_policies TO __PUBLISHER_ACCOUNT__;
+GRANT SELECT ON __DATABASE__.dkim2_key_material TO __PUBLISHER_ACCOUNT__;
+GRANT EXECUTE ON PROCEDURE __DATABASE__.dkim2_v2_insert_generation TO __PUBLISHER_ACCOUNT__;
+GRANT EXECUTE ON PROCEDURE __DATABASE__.dkim2_v2_insert_handle TO __PUBLISHER_ACCOUNT__;
+GRANT EXECUTE ON PROCEDURE __DATABASE__.dkim2_v2_insert_profile TO __PUBLISHER_ACCOUNT__;
+GRANT EXECUTE ON PROCEDURE __DATABASE__.dkim2_v2_insert_credential TO __PUBLISHER_ACCOUNT__;
+GRANT EXECUTE ON PROCEDURE __DATABASE__.dkim2_v2_insert_policy TO __PUBLISHER_ACCOUNT__;
+GRANT EXECUTE ON PROCEDURE __DATABASE__.dkim2_v2_insert_key_material TO __PUBLISHER_ACCOUNT__;
+GRANT EXECUTE ON PROCEDURE __DATABASE__.dkim2_v2_seal_generation TO __PUBLISHER_ACCOUNT__;
+GRANT EXECUTE ON PROCEDURE __DATABASE__.dkim2_v2_insert_current TO __PUBLISHER_ACCOUNT__;
+GRANT EXECUTE ON PROCEDURE __DATABASE__.dkim2_v2_update_current TO __PUBLISHER_ACCOUNT__;

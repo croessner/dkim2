@@ -32,6 +32,12 @@ const (
 	CodeProtectedUnsupported Code = "config_protected_unsupported"
 	// CodeProtectedClosed identifies use after protected ownership was released.
 	CodeProtectedClosed Code = "config_protected_closed"
+	// CodeProtectedAmbiguous identifies a replacement whose durability or serialization fence became uncertain.
+	CodeProtectedAmbiguous Code = "config_protected_ambiguous"
+	// CodeProtectedBusy identifies an already-held stable protected transaction lock.
+	CodeProtectedBusy Code = "config_protected_busy"
+	// CodeProtectedConflict identifies a protected entry that changed since its exact read view.
+	CodeProtectedConflict Code = "config_protected_conflict"
 	// CodeProtectedTransferred identifies an invalid ownership transfer or owner use after transfer.
 	CodeProtectedTransferred Code = "config_protected_transferred"
 )

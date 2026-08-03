@@ -3,12 +3,53 @@ package config
 import (
 	"strings"
 	"testing"
+
+	"go.yaml.in/yaml/v3"
 )
+
+// TestExpandYAMLScalarPlaceholdersFreezesTypedValueOnlyBoundary covers the exported config owner.
+func TestExpandYAMLScalarPlaceholdersFreezesTypedValueOnlyBoundary(t *testing.T) {
+	t.Setenv("DKIM2_TEST_COUNT", "42")
+	t.Setenv("DKIM2_TEST_ITEM", expandedAlpha)
+	t.Setenv("DKIM2_TEST_RECURSIVE", "${DKIM2_TEST_MISSING}")
+	document := []byte("count: ${DKIM2_TEST_COUNT}\nquoted: \"${DKIM2_TEST_COUNT}\"\nitems:\n  - ${DKIM2_TEST_ITEM}\none_pass: ${DKIM2_TEST_RECURSIVE}\n")
+	expanded, err := ExpandYAMLScalarPlaceholders(document)
+	if err != nil {
+		t.Fatal("expand typed scalar document")
+	}
+	defer clear(expanded)
+	var decoded struct {
+		Count   uint64   `yaml:"count"`
+		Quoted  string   `yaml:"quoted"`
+		Items   []string `yaml:"items"`
+		OnePass string   `yaml:"one_pass"`
+	}
+	if yaml.Unmarshal(expanded, &decoded) != nil || decoded.Count != 42 || decoded.Quoted != "42" ||
+		len(decoded.Items) != 1 || decoded.Items[0] != expandedAlpha || decoded.OnePass != "${DKIM2_TEST_MISSING}" {
+		t.Fatal("typed, quoted, sequence, or one-pass placeholder semantics drifted")
+	}
+
+	t.Setenv("DKIM2_TEST_KEY", "value")
+	invalid := map[string]string{
+		"missing":      "value: ${DKIM2_TEST_ABSENT}\n",
+		"map-key":      "${DKIM2_TEST_KEY}: literal\n",
+		"anchor-alias": "value: &shared literal\nother: *shared\n",
+		"trailing-doc": "value: literal\n---\nvalue: other\n",
+	}
+	for name, input := range invalid {
+		t.Run(name, func(t *testing.T) {
+			if value, expandErr := ExpandYAMLScalarPlaceholders([]byte(input)); expandErr == nil || len(value) != 0 {
+				t.Fatal("unsafe exported YAML expansion input was accepted")
+			}
+		})
+	}
+}
 
 const (
 	recursivePlaceholder = "${A}"
 	literalScalar        = "literal"
 	emptyPlaceholder     = "${}"
+	expandedAlpha        = "alpha"
 )
 
 // TestPreflightYAMLAcceptsDeclaredScalars proves the node preflight retains
@@ -150,7 +191,7 @@ func TestExpandPlaceholders(t *testing.T) {
 	t.Parallel()
 
 	environment := map[string]string{
-		"A":         "alpha",
+		"A":         expandedAlpha,
 		"B_2":       "beta",
 		"EMPTY":     "",
 		"RECURSIVE": recursivePlaceholder,
@@ -167,7 +208,7 @@ func TestExpandPlaceholders(t *testing.T) {
 		want  string
 	}{
 		{name: literalScalar, input: literalScalar, want: literalScalar},
-		{name: "one", input: recursivePlaceholder, want: "alpha"},
+		{name: "one", input: recursivePlaceholder, want: expandedAlpha},
 		{name: "multiple", input: "x-${A}-${B_2}-y", want: "x-alpha-beta-y"},
 		{name: "adjacent", input: "${A}${B_2}", want: "alphabeta"},
 		{name: "present empty", input: "x${EMPTY}y", want: "xy"},

@@ -178,10 +178,15 @@ func (p *PostgreSQLPublisher) Publish(
 	expected uint64,
 	candidate PublicationCandidate,
 ) (resultErr error) {
-	if p == nil || p.pool == nil || ctx == nil || candidate.generation == 0 ||
-		candidate.generation <= expected {
+	if p == nil || p.pool == nil || ctx == nil || candidate.Generation() == 0 ||
+		candidate.Generation() <= expected {
 		return errors.New("postgresql publication unavailable")
 	}
+	rows, rowsErr := candidate.detachedRows(ctx)
+	if rowsErr != nil {
+		return errors.New("postgresql publication unavailable")
+	}
+	defer clearCandidateRows(&rows)
 	transaction, err := p.pool.BeginTx(ctx, pgx.TxOptions{
 		IsoLevel: pgx.Serializable, AccessMode: pgx.ReadWrite,
 	})
@@ -211,7 +216,6 @@ func (p *PostgreSQLPublisher) Publish(
 			return errors.New("postgresql publication unavailable")
 		}
 	}
-	rows := candidate.rows
 	if rows.Current.Generation != rows.Final.Generation ||
 		rows.Current.Generation != candidateGenerationText(candidate) {
 		return errors.New("postgresql publication unavailable")
@@ -298,8 +302,8 @@ func (p *PostgreSQLPublisher) Publish(
 
 // candidateGenerationText returns one canonical candidate generation.
 func candidateGenerationText(candidate PublicationCandidate) string {
-	if candidate.generation == 0 {
+	if candidate.Generation() == 0 {
 		return ""
 	}
-	return strconv.FormatUint(candidate.generation, 10)
+	return strconv.FormatUint(candidate.Generation(), 10)
 }

@@ -29,39 +29,21 @@ FOR UPDATE`
   AND NOT EXISTS (SELECT 1 FROM dkim2_credentials)
   AND NOT EXISTS (SELECT 1 FROM dkim2_policies)
   AND NOT EXISTS (SELECT 1 FROM dkim2_key_material)`
-	queryMySQLInsertGeneration = `INSERT INTO dkim2_dataset_generations
-(generation, schema_version, dataset_state)
-VALUES (?, 'dkim2-datasource-v2', 'staging')`
-	queryMySQLInsertHandle = `INSERT INTO dkim2_handles
-(generation, handle_id) VALUES (?, ?)`
-	queryMySQLInsertProfile = `INSERT INTO dkim2_profiles
-(generation, profile_id, signing_domain, record_status, not_before_utc, not_after_utc)
-VALUES (?, ?, ?, ?, ?, ?)`
-	queryMySQLInsertCredential = `INSERT INTO dkim2_credentials
-(generation, profile_id, algorithm, selector, public_key_spki, handle_id)
-VALUES (?, ?, ?, ?, ?, ?)`
-	queryMySQLInsertPolicy = `INSERT INTO dkim2_policies
-(generation, tenant_id, signing_domain, profile_use, profile_id, record_status,
- rollout, compatibility, feedback_route_id)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-	queryMySQLInsertKeyMaterial = `INSERT INTO dkim2_key_material
-(generation, tenant_id, signing_domain, profile_use, handle_id, algorithm,
- public_key_spki, private_key_pkcs8)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+	queryMySQLInsertGeneration    = `CALL dkim2_v2_insert_generation(?)`
+	queryMySQLInsertHandle        = `CALL dkim2_v2_insert_handle(?, ?)`
+	queryMySQLInsertProfile       = `CALL dkim2_v2_insert_profile(?, ?, ?, ?, ?, ?)`
+	queryMySQLInsertCredential    = `CALL dkim2_v2_insert_credential(?, ?, ?, ?, ?, ?)`
+	queryMySQLInsertPolicy        = `CALL dkim2_v2_insert_policy(?, ?, ?, ?, ?, ?, ?, ?, ?)`
+	queryMySQLInsertKeyMaterial   = `CALL dkim2_v2_insert_key_material(?, ?, ?, ?, ?, ?, ?, ?)`
 	queryMySQLValidatePublication = `SELECT
   (SELECT count(*) FROM dkim2_handles WHERE generation = ?),
   (SELECT count(*) FROM dkim2_profiles WHERE generation = ?),
   (SELECT count(*) FROM dkim2_credentials WHERE generation = ?),
   (SELECT count(*) FROM dkim2_policies WHERE generation = ?),
   (SELECT count(*) FROM dkim2_key_material WHERE generation = ?)`
-	queryMySQLCommitPublication = `UPDATE dkim2_dataset_generations
-SET dataset_state = 'committed'
-WHERE generation = ? AND dataset_state = 'staging'`
-	queryMySQLFencePublication = `UPDATE dkim2_current_generation
-SET generation = ?
-WHERE singleton = 1 AND generation = ?`
-	queryMySQLFenceBootstrap = `INSERT INTO dkim2_current_generation
-(singleton, generation) VALUES (1, ?)`
+	queryMySQLCommitPublication = `CALL dkim2_v2_seal_generation(?)`
+	queryMySQLFencePublication  = `CALL dkim2_v2_update_current(?, ?)`
+	queryMySQLFenceBootstrap    = `CALL dkim2_v2_insert_current(?)`
 )
 
 // MySQLPublisher owns one transactionally fenced MySQL or MariaDB writer.
@@ -152,10 +134,15 @@ func (p *MySQLPublisher) Publish(
 	expected uint64,
 	candidate PublicationCandidate,
 ) (resultErr error) {
-	if p == nil || p.database == nil || ctx == nil || candidate.generation == 0 ||
-		candidate.generation <= expected {
+	if p == nil || p.database == nil || ctx == nil || candidate.Generation() == 0 ||
+		candidate.Generation() <= expected {
 		return errors.New("mysql publication unavailable")
 	}
+	rows, rowsErr := candidate.detachedRows(ctx)
+	if rowsErr != nil {
+		return errors.New("mysql publication unavailable")
+	}
+	defer clearCandidateRows(&rows)
 	transaction, err := p.database.BeginTx(ctx, &sql.TxOptions{
 		Isolation: sql.LevelSerializable,
 		ReadOnly:  false,
@@ -187,7 +174,6 @@ func (p *MySQLPublisher) Publish(
 			return errors.New("mysql publication unavailable")
 		}
 	}
-	rows := candidate.rows
 	if rows.Current.Generation != rows.Final.Generation ||
 		rows.Current.Generation != candidateGenerationText(candidate) {
 		return errors.New("mysql publication unavailable")
@@ -245,16 +231,16 @@ func (p *MySQLPublisher) Publish(
 		keyMaterial != len(rows.KeyMaterial) {
 		return errors.New("mysql publication unavailable")
 	}
-	result, err := transaction.ExecContext(ctx, queryMySQLCommitPublication, generation)
-	if err != nil || !exactlyOneRow(result) {
+	_, err = transaction.ExecContext(ctx, queryMySQLCommitPublication, generation)
+	if err != nil {
 		return errors.New("mysql publication unavailable")
 	}
 	if expected == 0 {
-		result, err = transaction.ExecContext(ctx, queryMySQLFenceBootstrap, generation)
+		_, err = transaction.ExecContext(ctx, queryMySQLFenceBootstrap, generation)
 	} else {
-		result, err = transaction.ExecContext(ctx, queryMySQLFencePublication, generation, currentText)
+		_, err = transaction.ExecContext(ctx, queryMySQLFencePublication, generation, currentText)
 	}
-	if err != nil || !exactlyOneRow(result) {
+	if err != nil {
 		return errors.New("mysql publication unavailable")
 	}
 	if err := transaction.Commit(); err != nil {
@@ -262,13 +248,4 @@ func (p *MySQLPublisher) Publish(
 	}
 	transaction = nil
 	return nil
-}
-
-// exactlyOneRow proves one singleton mutation affected exactly one row.
-func exactlyOneRow(result sql.Result) bool {
-	if result == nil {
-		return false
-	}
-	count, err := result.RowsAffected()
-	return err == nil && count == 1
 }

@@ -14,6 +14,9 @@ import (
 const (
 	loaderRedacted          = "sql_snapshot_loader{redacted}"
 	repeatableReadIsolation = "repeatable read"
+	serializableIsolation   = "serializable"
+	datasetStateStaging     = "staging"
+	datasetStateCommitted   = "committed"
 )
 
 // Transaction is one fixed-query read-only stable-snapshot boundary.
@@ -90,7 +93,7 @@ func (l *Loader) Load(ctx context.Context) (candidate datasourceruntime.Candidat
 	}()
 	isolation, readOnly, err := transaction.Isolation(ctx)
 	if err != nil || !readOnly ||
-		isolation != repeatableReadIsolation && isolation != "serializable" {
+		isolation != repeatableReadIsolation && isolation != serializableIsolation {
 		return datasourceruntime.Candidate{}, provider.NewError(provider.ErrorCodeUnavailable)
 	}
 	current, err := transaction.ReadCurrent(ctx)
@@ -388,7 +391,12 @@ func tupleGreater(a, b, c, x, y, z string) bool {
 
 // metadataBytes returns bounded row-accounting bytes.
 func metadataBytes(row MetadataRow) int {
-	return len(row.Generation) + len(row.SchemaVersion) + len(row.DatasetState)
+	total := len(row.Generation) + len(row.SchemaVersion) + len(row.DatasetState) +
+		len(row.CandidateDigest) + len(row.PointerDigest)
+	if row.OperationID != nil {
+		total += len(*row.OperationID)
+	}
+	return total
 }
 
 // handleBytes returns aggregate encoded handle-row bytes.

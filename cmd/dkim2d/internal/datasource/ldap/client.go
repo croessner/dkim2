@@ -56,16 +56,44 @@ func (ConnectionConfig) MarshalJSON() ([]byte, error) { return []byte("{}"), nil
 
 // GoLDAPConnector opens one verified-TLS go-ldap connection without fallback.
 type GoLDAPConnector struct {
-	config ConnectionConfig
+	config    ConnectionConfig
+	authority AdministrationAuthority
 }
 
-// NewGoLDAPConnector validates one exact LDAP connection authority.
+// NewGoLDAPConnector validates one syntactic LDAP connection and derives an
+// administration authority only for the closed canonical service-DN grammar.
 func NewGoLDAPConnector(config ConnectionConfig) (*GoLDAPConnector, error) {
 	if err := config.Validate(); err != nil {
 		return nil, err
 	}
+	parsed, err := goldap.ParseDN(config.BindDN)
+	if err != nil || parsed == nil || len(parsed.RDNs) == 0 {
+		return nil, errors.New("invalid ldap connection configuration")
+	}
+	authority, _ := newAdministrationAuthority(config.BindDN)
 	config.Password = append([]byte(nil), config.Password...)
-	return &GoLDAPConnector{config: config}, nil
+	config.RootCAs = config.RootCAs.Clone()
+	return &GoLDAPConnector{config: config, authority: authority}, nil
+}
+
+// AdministrationAuthority returns the connector's opaque canonical bind
+// identity without exposing the configured DN.
+func (c *GoLDAPConnector) AdministrationAuthority() AdministrationAuthority {
+	if c == nil {
+		return AdministrationAuthority{}
+	}
+	return c.authority
+}
+
+// Close clears retained connector credentials after the one-shot offline workflow.
+func (c *GoLDAPConnector) Close() error {
+	if c == nil {
+		return nil
+	}
+	clear(c.config.Password)
+	c.config = ConnectionConfig{}
+	c.authority = AdministrationAuthority{}
+	return nil
 }
 
 // Connect establishes TLS before simple bind and returns one owned client.
@@ -145,7 +173,10 @@ func (c *goLDAPClient) readMetadata(ctx context.Context, base string) (Entry, er
 	request := goldap.NewSearchRequest(
 		base, goldap.ScopeBaseObject, goldap.NeverDerefAliases, 2, 0, false,
 		"(objectClass=dkim2Dataset)",
-		[]string{attrSchemaVersion, attrGeneration, attrDatasetState},
+		[]string{
+			attrSchemaVersion, attrGeneration, attrDatasetState,
+			attrCandidateDigest, attrOperationID, attrWasActive,
+		},
 		nil,
 	)
 	request.EnforceSizeLimit = true
@@ -154,6 +185,7 @@ func (c *goLDAPClient) readMetadata(ctx context.Context, base string) (Entry, er
 		len(result.Referrals) != 0 || len(result.Entries) != 1 {
 		return Entry{}, errors.New("ldap metadata unavailable")
 	}
+	defer clearLDAPProtectedAttributeBytes(result.Entries)
 	entry, err := convertEntry(RecordClassDataset, result.Entries[0])
 	if err != nil {
 		return Entry{}, errors.New("ldap metadata unavailable")
@@ -224,12 +256,22 @@ func (c *goLDAPClient) SearchPage(
 // clearLDAPPrivateAttributeBytes destroys private values retained by go-ldap
 // entries after the strict detached projection has been created.
 func clearLDAPPrivateAttributeBytes(entries []*goldap.Entry) {
+	clearLDAPAttributes(entries, attrPrivatePKCS8)
+}
+
+// clearLDAPProtectedAttributeBytes destroys all administration-sensitive source values.
+func clearLDAPProtectedAttributeBytes(entries []*goldap.Entry) {
+	clearLDAPAttributes(entries, attrPrivatePKCS8, attrCandidateDigest, attrOperationID, attrAdminLockOwner)
+}
+
+// clearLDAPAttributes destroys selected values still owned by go-ldap entries.
+func clearLDAPAttributes(entries []*goldap.Entry, names ...string) {
 	for _, entry := range entries {
 		if entry == nil {
 			continue
 		}
 		for _, attribute := range entry.Attributes {
-			if attribute == nil || attribute.Name != attrPrivatePKCS8 {
+			if attribute == nil || !containsFold(names, attribute.Name) {
 				continue
 			}
 			for index := range attribute.ByteValues {
@@ -331,23 +373,23 @@ func (c *goLDAPClient) searchShape(
 		",ou=generations," + c.baseDN
 	switch class {
 	case RecordClassHandle:
-		return "ou=handles," + root, "dkim2Handle",
+		return "ou=" + handlesUnit + "," + root, handleObjectClass,
 			[]string{attrGeneration, attrHandleID}, nil
 	case RecordClassProfile:
-		return "ou=profiles," + root, "dkim2Profile",
+		return "ou=" + profilesUnit + "," + root, profileObjectClass,
 			[]string{attrGeneration, attrProfileID, attrSigningDomain,
 				attrRecordStatus, attrNotBefore, attrNotAfter}, nil
 	case RecordClassCredential:
-		return "ou=credentials," + root, "dkim2Credential",
+		return "ou=" + credentialsUnit + "," + root, credentialObjectClass,
 			[]string{attrGeneration, attrProfileID, attrAlgorithm,
 				attrSelector, attrPublicSPKI, attrHandleID}, nil
 	case RecordClassPolicy:
-		return "ou=policies," + root, "dkim2Policy",
+		return "ou=" + policiesUnit + "," + root, policyObjectClass,
 			[]string{attrGeneration, attrTenantID, attrSigningDomain,
 				attrProfileUse, attrProfileID, attrRecordStatus,
 				attrRollout, attrCompatibility, attrFeedbackRouteID}, nil
 	case RecordClassKeyMaterial:
-		return "ou=key-material," + root, "dkim2KeyMaterial",
+		return "ou=" + keyMaterialUnit + "," + root, keyMaterialObjectClass,
 			[]string{attrGeneration, attrTenantID, attrSigningDomain,
 				attrProfileUse, attrHandleID, attrAlgorithm, attrPublicSPKI,
 				attrPrivatePKCS8}, nil
@@ -426,15 +468,17 @@ func (c *goLDAPClient) Close() error {
 }
 
 // convertEntry copies only requested LDAP attributes into the strict mapper shape.
-func convertEntry(class RecordClass, source *goldap.Entry) (Entry, error) {
+func convertEntry(class RecordClass, source *goldap.Entry) (entry Entry, resultErr error) {
 	if source == nil || len(source.DN) > 4096 || len(source.Attributes) > 24 {
 		return Entry{}, errors.New("ldap entry unavailable")
 	}
-	entry := Entry{Class: class, Attributes: make(map[string][][]byte, len(source.Attributes))}
+	entry = Entry{Class: class, Attributes: make(map[string][][]byte, len(source.Attributes))}
 	success := false
 	defer func() {
-		if class == RecordClassKeyMaterial && !success {
+		if !success {
 			clearEntries([]Entry{entry})
+			clearLDAPProtectedAttributeBytes([]*goldap.Entry{source})
+			entry = Entry{}
 		}
 	}()
 	for _, attribute := range source.Attributes {
@@ -449,11 +493,17 @@ func convertEntry(class RecordClass, source *goldap.Entry) (Entry, error) {
 				maximum = maxPrivateAttributeBytes
 			}
 			if len(attribute.ByteValues[index]) > maximum {
+				for valueIndex := range values {
+					clear(values[valueIndex])
+				}
 				return Entry{}, errors.New("ldap entry unavailable")
 			}
 			values[index] = append([]byte(nil), attribute.ByteValues[index]...)
 		}
 		if _, duplicate := entry.Attributes[attribute.Name]; duplicate {
+			for index := range values {
+				clear(values[index])
+			}
 			return Entry{}, errors.New("ldap entry unavailable")
 		}
 		entry.Attributes[attribute.Name] = values

@@ -5,18 +5,22 @@ retirement, and recovery contract for LDAP, PostgreSQL, MySQL, and MariaDB
 signing datasources. It does not grant a new mutation surface.
 
 `dkim2d` is an online reader and signer. It never generates keys, edits DNS,
-publishes datasource records, or returns private material through REST. The
-repository currently provides one end-to-end administrative publisher:
-`dkim2d datasource`, whose protected input is an explicitly mapped OpenDKIM
-LDAP inventory. A future native key manager may implement the same publication
-contract, but direct hand-written LDAP or SQL mutation is unsupported.
+publishes datasource records, or returns private material through REST. For a
+previously absent domain, the primary native key-generation and publication
+workflow is
+[`docs/operator/native-domain-onboarding.md`](native-domain-onboarding.md)
+under the offline `dkim2d datasource domain` command. It does not rotate an
+already-present domain or retire an old selector automatically. The protected
+OpenDKIM import below remains a separate legacy bridge for explicitly mapped
+existing key custody. Direct hand-written LDAP or SQL mutation remains
+unsupported.
 
 ## Rotation States
 
 | State | DNS | Datasource | Runtime |
 | --- | --- | --- | --- |
 | prepare | old selector remains valid; new selector is published | current generation remains unchanged | signs with old generation |
-| prove | authoritative DNS serves one valid new key | complete candidate is dry-run validated but inactive | remains ready on old generation |
+| prove | the configured recursive resolver path returns one valid new key | complete candidate is dry-run validated but inactive | remains ready on old generation |
 | activate | old and new DNS records overlap | strictly higher complete generation becomes current | refreshes atomically to new generation |
 | observe | both selectors remain published | new generation remains current; old generation retained | signs only with new generation |
 | retire | old DNS record is removed after the approved overlap | old generation retained or archived under key policy | remains on new generation |
@@ -45,22 +49,28 @@ Before any mutation:
    record, handle ID, and datasource credential must all refer to that exact
    selector and key pair.
 
-## Current OpenDKIM-Bridge Procedure
+## Legacy OpenDKIM-Bridge Procedure
 
-Until the separate key-management project publishes native DKIM2 generations,
-the supported repository workflow imports a selected active OpenDKIM key through
-the protected offline boundary. This does not create a legacy runtime path:
-normal LDAP/SQL loading still accepts only native v2 records.
+The legacy bridge imports a selected active OpenDKIM key through the protected
+offline boundary. Use it only when OpenDKIM remains the authorized source of
+the exact key being migrated; use native onboarding for a previously absent
+domain. The bridge does not create a legacy runtime path:
+the bridge continues to publish native v2 generations. LDAP, PostgreSQL,
+MySQL, and MariaDB runtime loading accepts exact complete committed native v2
+or v3 generations. Neither workflow authorizes in-place rotation of an active
+generation.
 
 1. Generate and stage the new key through the authorized OpenDKIM key lifecycle
    system. Keep its private material confined to the existing protected source.
 2. Publish a distinct DKIM2 DNS record for the explicit target selector. Do not
    overwrite the old selector. The record must use the DKIM2 DNS format and
    public-key representation expected by the pinned DNS draft.
-3. Wait until the authoritative DNS service and the resolver path used by the
-   administrative command return exactly one valid new record. Honor the site's
-   DNS TTL and negative-cache policy; do not substitute a local hosts entry or
-   unverified resolver result.
+3. Separately confirm authoritative publication, then wait until the recursive
+   resolver path used by the administrative command returns exactly one valid
+   new record. The command creates a fresh process-local provider but does not
+   claim to bypass positive or negative caches inside that resolver. Honor the
+   site's DNS TTL and negative-cache policy; do not substitute a local hosts
+   entry or unverified resolver result.
 4. Prepare a new migration plan based on
    [`opendkim-migration.md`](opendkim-migration.md):
    - set `generation` to the strictly higher candidate;
@@ -135,10 +145,33 @@ collector.
   through a critical RFC 4528 assertion over exact expected schema, generation,
   and state.
 - PostgreSQL uses one serializable transaction, singleton row lock, complete
-  staging/readback, commit-state transition, and forward current-pointer update.
+  staging/readback, commit-state transition, exact committed candidate-root
+  lock, and forward current-pointer update.
 - MySQL and MariaDB first lock `dkim2_publication_lock`, then perform the same
-  empty-or-expected proof, staging/readback, commit transition, and forward
-  pointer update in one serializable transaction.
+  empty-or-expected proof, lock the exact committed candidate root through the
+  fixed activation procedure, perform canonical readback, and advance the
+  pointer in one serializable transaction.
+
+For established SQL backends, require this observed order in test or audit
+evidence: physical singleton lock, locked current read, exact candidate-root
+lock, canonical full-generation readback, mutation. A v2 current pointer must
+carry no operation or digest metadata. A v3 current pointer must match the
+root's valid operation and equal nonzero 32-byte root/pointer digests. A stale
+current digest, missing candidate root, foreign operation, changed candidate
+digest, or stale administration revision must fail before mutation. Qualify
+each SQL family with two simultaneous activators on separate physical
+connectors. Qualification must deterministically observe the holder after the
+ordered reads, capture both physical transaction identities, dispatch the
+waiter's locked read, and use a separate disposable privileged connection to
+prove the exact server-side waiter-to-holder edge before releasing the holder.
+Use `pg_blocking_pids` plus lock-wait state on PostgreSQL, Performance Schema
+data-lock waits on MySQL 8.4, and InnoDB lock waits on MariaDB 10.11. Exactly
+one may win, the loser must return `CodeConflict`, and the committed current
+and candidate readback must remain coherent. PostgreSQL may classify SQLSTATE
+`40001` as that conflict only for the live locked administration/current fence
+read of an activation transaction. Candidate-root, unlocked, nonactivation,
+canceled, deadline-expired, deadlock, and generic backend failures remain
+unavailable.
 
 Publishers do not automatically retry conflicts, serialization failures,
 disconnects, deadlocks, or uncertain commits. Re-read authoritative state and
@@ -176,22 +209,28 @@ new DNS record, activate a higher generation, remove the compromised DNS record
 under the incident policy, rotate credentials, audit replicas/backups, and do
 not reuse the compromised key.
 
-## Native Key-Manager Boundary
+## Native Domain-Onboarding Operator Boundary
 
-A future key manager can replace the temporary OpenDKIM import source only if it
-owns all of the following as one reviewed operation:
+The boundary below is implemented by the offline
+[`docs/operator/native-domain-onboarding.md`](native-domain-onboarding.md)
+workflow. Its implementation candidate still requires independent closeout
+review and does not itself authorize a release or production rollout.
+
+The native domain-onboarding operator surface can replace the temporary
+OpenDKIM import source only when it owns all of the following as one reviewed
+operation:
 
 - protected RSA/Ed25519 key generation and storage;
 - canonical public SPKI and private PKCS#8 production;
 - distinct selector allocation and DNS publication;
-- authoritative fresh DNS/SPKI proof;
+- separately confirmed authoritative publication and fresh recursive-path
+  DNS/SPKI proof;
 - complete provider-neutral profile, policy, credential, handle, and key rows;
 - backend-specific atomic publication and exact readback;
 - dry-run, approval, audit, bounded reporting, conflict handling, and
   higher-generation rollback.
 
-It must not add a normal REST key API, write through the online daemon, accept a
-generic DSN, create a legacy runtime fallback, or emit private material. Until
-that owner exists, native-only key creation outside the documented offline
-publisher is unsupported rather than silently delegated to manual LDAP/SQL
-edits.
+It does not add a normal REST key API, write through the online daemon, accept a
+generic DSN, create a legacy runtime fallback, or emit private material.
+Native-only key creation outside the documented offline workflow remains
+unsupported rather than silently delegated to manual LDAP/SQL edits.

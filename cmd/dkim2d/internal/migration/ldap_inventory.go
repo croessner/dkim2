@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	datasourceldap "github.com/croessner/dkim2/cmd/dkim2d/internal/datasource/ldap"
@@ -23,6 +24,7 @@ type ldapInventoryClient struct {
 	baseDN     string
 	pageSize   int
 	closed     bool
+	callCount  *atomic.Uint64
 }
 
 // NewLDAPKeyImportClient opens one separate verified-TLS protected-key principal.
@@ -260,6 +262,9 @@ func (c *ldapInventoryClient) call(
 ) error {
 	if c == nil || ctx == nil || operation == nil {
 		return errors.New("legacy inventory unavailable")
+	}
+	if c.callCount != nil {
+		c.callCount.Add(1)
 	}
 	deadline, found := ctx.Deadline()
 	if !found {

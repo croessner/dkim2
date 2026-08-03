@@ -8,7 +8,7 @@
 | Title | DKIM2 Reference Implementation Architecture |
 | Version | 0.1.0-draft |
 | Status | Living implementation baseline |
-| Date | 2026-08-01 |
+| Date | 2026-08-02 |
 | Owner | Christian Roessner / Codex |
 | Language | English |
 | Classification | Internal design draft |
@@ -57,6 +57,9 @@
 | 0.1.0-draft | 2026-08-01 | Christian Roessner / Codex | Added daemon-owned MySQL 8.4 and MariaDB 10.11 datasource support through one typed verified-TLS adapter, a shared SQL snapshot core, immutable InnoDB generations, transactionally fenced offline publication, and digest-pinned parity evidence for both server families. |
 | 0.1.0-draft | 2026-08-01 | Christian Roessner / Codex | Reconciled the operator documentation with native v2 custody: completed the 18-attribute/six-class LDAP allocation, marked M22 implemented across LDAP and three SQL server families, added parser-checked configuration examples, and made installation, grants, rotation, backup, and legacy isolation one navigable operator contract. |
 | 0.1.0-draft | 2026-08-01 | Christian Roessner / Codex | Extended the existing OTLP/HTTP exporter to canonical remote HTTPS collectors while retaining generation-protected trust roots, URL-derived certificate identity, exact TLS 1.3, proxy/redirect/environment rejection, bounded export behavior, and the independent loopback-only daemon listener. |
+| 0.1.0-draft | 2026-08-02 | Christian Roessner / Codex | Planned M23 native domain onboarding as an offline privileged `dkim2d datasource domain` workflow with full-generation cloning, native RSA/Ed25519 generation, protected resumable journals, export-only DNS integration, fresh resolver-path DNS/SPKI proof, and digest-bound forward activation across LDAP, PostgreSQL, MySQL, and MariaDB. This records the implementation baseline, not completion. |
+| 0.1.0-draft | 2026-08-02 | Christian Roessner / Codex | Corrected the M23 pre-plan recovery boundary: a protected internal planning receipt containing the generated operation identity and expected administration revision is synced before any backend claim, atomically promotes to the full `planned` journal, and supports exact observe/release recovery without adding a public lifecycle state. |
+| 0.1.0-draft | 2026-08-03 | Christian Roessner / Codex | Implemented the M23 offline native-domain onboarding candidate across LDAP, PostgreSQL, MySQL, and MariaDB with v3 metadata, receipt-before-Claim recovery, deterministic DNS export, fresh recursive proof, exact stage/readback/activation fences, bounded reports, and disposable four-backend runtime-signing evidence. Independent final closeout review and release authorization remain separate. |
 
 ## 1. Purpose
 
@@ -1321,7 +1324,198 @@ unavailability, and degraded snapshots remain temporary failures; they are
 never converted to absence. Concrete runtime generation pinning and degraded
 state rules remain authoritative and do not gain a stale fallback.
 
-#### 7.4.1 RNS LDAP Schema Allocation
+#### 7.4.1 Offline Datasource Administration
+
+The online daemon is a read-and-sign process. Privileged datasource mutation
+belongs to one-shot offline commands under `dkim2d datasource`; it is never a
+normal REST/OpenAPI route and is not part of the generated `dkim2ctl`
+conformance client.
+
+`cmd/dkim2d/internal/datasourceadmin` owns provider-neutral protected snapshots,
+complete candidates, validation, digests, staging, inspection, and activation.
+`cmd/dkim2d/internal/domainadmin` owns native domain intent, selector and key
+generation, protected operation journals, deterministic DNS export, fresh DNS
+proof, and the onboarding state machine. Version-neutral protected snapshot,
+candidate-content, validation, and readback primitives do not require an
+operation ID. The OpenDKIM migration adapter reuses only those primitives and
+retains its existing v2 `PublicationCandidate` and one-shot publisher. A later
+v3 migration publisher requires its own stable operation journal and
+reconciliation contract.
+
+`cmd/dkim2d/internal/domainruntime` owns the one-shot concrete provider wiring,
+three-role protected authority handoff, command-local observation, and bounded
+report encoding. `cmd/dkim2d/internal/command` remains a thin Cobra boundary.
+Neither package constructs the online Fx graph or changes OpenAPI and
+`dkim2ctl` ownership.
+
+An active generation is never delta-mutated. Adding one domain reads and
+validates a stable complete current generation `N`, clones every public and
+native-key record into a complete higher candidate, adds the new exact domain,
+validates the whole candidate through the runtime-owned datasource and signing
+invariants, stages and reads it back, proves each DNS key freshly, and activates
+only through an exact `expected_current=N` and candidate-digest fence.
+
+Administrative operation journals contain no private key material. Native keys
+exist only in bounded in-memory owners and inactive or committed datasource
+generations. Versioned metadata separately binds an operation ID, publication
+state, and immutable candidate-content digest. The digest excludes lifecycle
+state and monotonic `was active` evidence; prepared and staged evidence carry
+equal digest bytes. Stage seals a complete candidate as committed and
+noncurrent before DNS export. Activation monotonically marks the observed old
+current as having been active and then changes the current pointer and active
+digest; it never edits candidate content. The runtime recomputes
+the content digest before readiness. This is the `dkim2-datasource-v3`
+publication contract;
+v2 remains readable only as the current source for one forward v3 publication.
+Every operation also binds a protected deployment-unique `authority_id` and
+canonical provider authority descriptor; every command rejects same-class
+backend substitution before I/O.
+DNS mutation is outside the initial native onboarding contract. The tool
+exports deterministic DNS-04 records through a create-only protected-document
+primitive: exact existing bytes are idempotent, foreign existing bytes are a
+conflict, and no export path is ever replaced. A racing create is accepted only
+after an exact descriptor-native readback proves the installed artifact;
+otherwise the outcome is ambiguous and the operator retries the same export.
+The workflow requires a fresh configured recursive-resolver-path proof before
+activation. This does not claim direct authoritative-server observation or
+recursive-cache bypass. Conflicts, serialization failures, assertion failures,
+timeouts, uncertain commits, partial generations, changed DNS, and digest
+mismatches fail without automatic retry or `--force` and enter explicit
+read-only reconciliation when necessary.
+
+The protected journal is atomically replaced while a separate stable sibling
+lock file serializes the operation; the replaceable journal inode is never the
+lock target. Before the first backend Claim, the same protected operation file
+contains a synced internal planning receipt with the random operation identity,
+authority, intent, and expected administration revision. Receipt and complete
+journal are a closed tagged union; atomic promotion creates the first public
+state, `planned`. An ambiguous receipt save permits no backend mutation.
+Receipt-based exact owner/revision observation closes Claim, Release, and
+promotion crash windows without trusting backend owner evidence by itself. A
+prepared content digest is synced before backend Stage. Because private keys
+are not escrowed locally, a crash with prepared evidence but no backend
+candidate ends that operation and requires a new plan. Versioned SQL upgrade
+migrations, rather than edits only to bootstrap DDL, carry deployed v2 schemas
+forward before v3 publication is enabled.
+
+Status uses a separate read-only journal opener. It may lock and inspect an
+existing protected lock/journal pair while preserving the same ownership,
+mode, link, inode, and replacement fences, but it never creates the sibling
+lock. Consequently, status of a missing operation leaves the directory exactly
+unchanged.
+
+Operation reporting is a closed union. A complete-operation projection always
+carries bounded expected and candidate generations plus bounded total, RSA,
+and Ed25519 credential counts derived from immutable plan identities. Current
+generation has independent explicit presence and appears only after an
+authoritative observation or a successful workflow invariant establishes it;
+numeric zero never implies presence. Known zero remains explicit for a proven
+empty first publication, while failures or reconciliation outcomes without
+authoritative current evidence omit the field in both machine and human
+output. Full status requires an authoritative current and preserves third-party
+values. A receipt projection carries none of those facts and exposes no state,
+revision, operation identity, authority, path, selector, DNS content, or
+digest. Result invariants bind successful pre-activation current generation to
+the expected generation and successful activation current generation to the
+candidate. The single exception is a successful `reconcile` that has durably
+classified terminal conflict: its Reconcile-specific result path retains the
+authoritative observed third-party current, which must differ from both
+expected and candidate. The generic success builder never fabricates that
+value. Runtime smoke is a separate exact invariant: it is required if and only
+if a successful complete workflow is activated and the command is `activate`
+or `reconcile`. Thus authoritative activation recovery retains the same
+operator duty as direct activation; nonactivated and unrelated results cannot
+claim it.
+
+The offline runner injects a mandatory command-scoped local observer into the
+real onboarding coordinator. It accepts exactly one valid bounded observation,
+retains only a duration bucket and bounded counters, and requires the event to
+match the returned workflow or status result before reporting success or a
+bounded workflow failure. Missing, duplicate, invalid, or contradictory events
+fail closed. The implementation is local and exporter-free: it constructs no
+daemon Fx graph, listener, OpenTelemetry exporter, Prometheus registry, or
+global telemetry state.
+
+SQL administration uses three pairwise-distinct authorities. Snapshot remains
+read-only. Collision inventory deliberately uses the staging authority in one
+serializable read-write transaction, obtains the same physical singleton lock
+used by Stage and Activate before reading complete candidates, and rechecks the
+owner and revision before commit. PostgreSQL exposes fixed-search-path
+`SECURITY DEFINER` observe, `FOR UPDATE`, claim, and release primitives; the
+MySQL family exposes equivalent fixed `SQL SECURITY DEFINER` procedures.
+Snapshot may only observe; stager may observe, physically lock, claim, release,
+and stage; activator may observe, physically lock, and activate. None of these
+three authorities receives direct singleton-lock table privileges. PostgreSQL
+candidate content remains protected by narrow column grants, RLS, and immutable
+transition triggers, while MySQL and MariaDB content mutation remains confined
+to fixed operation-bound procedures.
+
+SQL activation has one closed lock order: physical administration singleton,
+locked current pointer, exact committed candidate root, canonical full-candidate
+readback, then current mutation. The shared administrator validates current
+metadata before any write: v2 current rows carry no operation or digest
+metadata, while v3 current rows carry equal nonzero 32-byte root and pointer
+digests plus a valid operation-bound root. The candidate-root lock binds
+generation, operation, digest, and administration revision. PostgreSQL exposes
+only the exact fixed-search-path `candidate_root_for_update` definer function
+to the activator; MySQL and MariaDB expose only
+`dkim2_v3_lock_candidate_root`. Missing, malformed, foreign-operation,
+changed-digest, or stale-revision evidence conflicts before readback or
+mutation. The current update separately compares the old pointer digest, so
+neither root locking nor pointer fencing can replace the other.
+
+Current-pointer and candidate-root fences expose protected operation and
+digest bytes only through bounded callbacks over detached copies. Their
+formatters are constant-redacted and JSON serialization is rejected; no raw
+protected getter is part of the administration boundary. Backend absence and
+authoritative metadata mismatch are typed conflicts, while backend read,
+locking, cancellation, deadline, and generic serialization failures remain
+unavailable. PostgreSQL maps SQLSTATE `40001` to conflict only when it is
+returned by the locked administration/current fence read of a live activation
+transaction with an unexpired context. Deterministic integration-only
+contention gates capture both activation transactions' exact physical
+connection identities, pause the holder after all ordered reads, and dispatch
+the waiter's locked read. A separate disposable privileged observer must then
+prove the exact server-side waiter-to-holder edge before release:
+`pg_blocking_pids` plus a lock wait for PostgreSQL, Performance Schema data-lock
+waits for MySQL 8.4, and InnoDB lock waits for MariaDB 10.11. Only that predicate
+supports the observed-contention report claim; the completed race must then
+produce one successful activation, one exact conflict, and coherent post-state.
+Connection identities remain test-local and never enter output or telemetry.
+The gate and observers are excluded from normal builds and change no production
+API.
+
+LDAP administration uses distinct snapshot, staging, and activation bind
+identities. An administrative authority exists only for an exact canonical
+service DN with simple RDNs in the closed sequence `cn`, one or more `ou`, then
+one or more `dc`. Attribute descriptors and values are lowercase ASCII; each
+value is a 1-to-63-byte letter-digit-hyphen label without a leading or trailing
+hyphen. The raw DN must equal that reconstruction byte for byte. OID and
+descriptor aliases, case variants, whitespace, escapes, Unicode, multivalued
+RDNs, and other attribute types therefore receive no administration authority;
+the implementation does not claim schema-free LDAP DN equivalence. A general
+runtime or migration connector may still use another syntactically valid bind
+DN, but the administrator rejects its invalid authority or pairwise-equal role
+authorities during construction, before any LDAP I/O. Each connector owns
+clones of its password and trust pool. Raw DNs and derived identities cannot be
+formatted or serialized. A deployable
+OpenLDAP `set.expand` ACL resolves the captured generation root and grants
+content writes only while exact v3 metadata remains `staging`; the broad legacy
+v2 publisher is denied v3 writes. After the root is committed, the stager
+cannot add, modify, rename, or delete any content. The activator can only mark
+the observed old current root as having been active and create or fence
+`cn=current`. Empty bootstrap creates current by one atomic Add; established
+activation uses critical RFC 4528 on the current entry. Supported OpenLDAP
+releases require disposable positive and negative ACL proof.
+One revisioned owner field on the DKIM2 base is the persistent LDAP
+administration lock. Stage and activation claim it with RFC 4528 before
+rechecking inventory/current; a crash blocks other mutations until the same
+protected operation is exactly reconciled. Noncurrent v2 roots lack reliable
+history evidence and conservatively count against the ceiling. The exact old
+v2 current alone may receive the additive monotonic was-active attribute during
+the forward v3 activation; no generation-order backfill is inferred.
+
+#### 7.4.2 RNS LDAP Schema Allocation
 
 The LDAP deployment schema uses the RNS Private Enterprise Number `31612`,
 registered in the
@@ -1374,17 +1568,29 @@ are reserved as follows and must never be reassigned:
 | `RNSDKIM2at:16` | `dkim2Compatibility` |
 | `RNSDKIM2at:17` | `dkim2FeedbackRouteID` |
 | `RNSDKIM2at:18` | `dkim2PrivateKeyPKCS8` |
+| `RNSDKIM2at:19` | `dkim2CandidateDigest` |
+| `RNSDKIM2at:20` | `dkim2OperationID` |
+| `RNSDKIM2at:21` | `dkim2WasActive` |
+| `RNSDKIM2at:22` | `dkim2AdminLockOwner` |
+| `RNSDKIM2at:23` | `dkim2AdminRevision` |
 
 The first object-class allocation is:
 
 | OID | LDAP descriptor | Logical ownership |
 | --- | --- | --- |
-| `RNSDKIM2oc:1` | `dkim2Dataset` | Schema version, generation, and committed publication state |
+| `RNSDKIM2oc:1` | `dkim2Dataset` | Schema version, generation, and closed staging/committed publication state |
 | `RNSDKIM2oc:2` | `dkim2Handle` | One opaque handle declaration |
 | `RNSDKIM2oc:3` | `dkim2Profile` | One bounded signing profile |
 | `RNSDKIM2oc:4` | `dkim2Credential` | One selector, algorithm, public SPKI, and handle binding |
 | `RNSDKIM2oc:5` | `dkim2Policy` | One exact tenant, domain, and use policy |
 | `RNSDKIM2oc:6` | `dkim2KeyMaterial` | One native private key and its exact generation, policy, handle, algorithm, and public-SPKI binding |
+| `RNSDKIM2oc:7` | `dkim2AdministrativeMetadata` | V3 lifecycle/content metadata: operation plus digest and optional monotonic was-active evidence on generation roots, digest only on current, enforced by application validation |
+| `RNSDKIM2oc:8` | `dkim2AdministrationLock` | Revisioned same-operation LDAP Stage/Activate serialization on the configured DKIM2 base |
+
+The v2 `dkim2Dataset` class adds only `dkim2WasActive` to its `MAY` set so the
+exact old v2 current can receive monotonic lifecycle evidence during forward v3
+activation. Existing v2 content/MUST semantics do not change. Noncurrent v2
+roots are never backfilled from ordering and remain conservatively outstanding.
 
 The deployable schema owns the exact LDAP syntaxes, matching rules,
 `MUST`/`MAY` sets, structural layout, indexes, ACL examples, and reproducible
@@ -1397,7 +1603,7 @@ schema. They are not extended or reused for DKIM2 because they can carry raw
 private-key material and do not represent immutable generations, complete
 profiles, exact tenant/use policies, public SPKI bindings, or opaque handles.
 
-#### 7.4.2 Legacy OpenDKIM Bootstrap Contract
+#### 7.4.3 Legacy OpenDKIM Bootstrap Contract
 
 An existing OpenDKIM LDAP deployment may be used as an explicit migration
 source, but it is never a second runtime provider contract and is never read as
@@ -2140,6 +2346,7 @@ maintainers to understand why behavior exists.
 | M20 - Packaging, container delivery, documentation, and operator guide | Implemented: reproducible Go 1.26 product containers, non-root runtime, health checks, OCI metadata, multi-architecture build automation, SBOM/provenance/vulnerability gates, Compose deployment, API/architecture/security/config/datasource/replay/observability/operator guides, rollback, and parser-checked examples | original estimate 1 to 3 agent-days; historical | High; completed with supply-chain and operator-documentation gates |
 | M21 - Interop and reference polish | Implemented through candidate preparation: external comparison, draft issue log, public API review, conformance and compatibility reports, candidate-bound evidence, and release gates. Tag and artifact publication remain separately authorized release operations | original estimate 1 to 3 days; historical | Very high; candidate work completed, publication not implied |
 | M22 - LDAP and SQL datasource providers and legacy migration | Completed: RNS DKIM2 LDAP schema under `1.3.6.1.4.1.31612.1.7`, native v2 key custody, bounded LDAP and PostgreSQL/MySQL/MariaDB readers, immutable generation publication, provider parity, deployable schema/DDL, secret-safe OpenDKIM bootstrap, fresh DNS proof, forward-only rollback, and operator documentation | measured implementation and rollout evidence is retained in the completed implementation specifications | Very high; completed with production LDAP and disposable multi-database evidence |
+| M23 - Native domain onboarding | Implemented candidate: offline domain intent, complete-generation cloning, native RSA/Ed25519 generation, protected receipt/journal recovery, export-only DNS records, fresh DNS/SPKI proof, and digest-bound stage/readback/activation parity for LDAP, PostgreSQL, MySQL, and MariaDB | Exact Prompt 01-11 spans and review/rework variance are retained in the ignored execution ledger; the original 6-to-14-hour estimate excluded production DNS and rollout | Very high; four-backend disposable evidence and Prompt 01-10 reviews complete, fresh final closeout review still required |
 
 Total rough implementation estimate:
 
@@ -2225,8 +2432,8 @@ M1 --> M2 --> M3 --> M4 --> M5 MVP
 M11 datasource --> M12 replay store --------------------------------------+
        |
        +-------------------------> M22 LDAP/SQL providers and migration
-                                      ^
-M13 daemon config/lifecycle ---------+
+                                      ^                         |
+M13 daemon config/lifecycle ---------+                         +--> M23 native domain onboarding
                                                                            |
 M13/M14/M15/M10/M12 --------------------------------------------------> M16 Milter
                          |
@@ -2244,6 +2451,13 @@ evidence.
 M22 starts after the M11 contracts and M13 daemon configuration/lifecycle are
 stable. It remains after the first public preview and does not block the
 flat-file-backed preview, M16, or M17.
+M23 is implemented after M22 native custody and publication and reuses the
+M13 command/config, M15 privacy, M19 hardening, and M20 operator-delivery
+contracts. Its operation file is a closed protected union: before the first
+public `planned` state it may contain only an internal planning receipt, which
+is synced before the revisioned backend claim and atomically promoted to the
+full operation journal. It does not add a REST administration path or change
+`dkim2ctl`.
 M17 Exim starts after the daemon action contract, signing/revision behavior,
 datasource/replay policy, observability, and release compatibility matrix are
 stable enough to test against real Exim baselines.
@@ -2360,10 +2574,10 @@ interpretation choices in code.
 12. `dkim2ctl` initial role:
     `dkim2ctl` starts as an OpenAPI-backed test and conformance client with
     fixture execution, daemon smoke checks, negative API request tests, stable
-    JSON output, and rich transport diagnostics. It may later become the
-    operator CLI, but early commands must avoid privileged mutation APIs and the
-    command layout must reserve room for future authenticated, authorized,
-    audited, and redacted operational subcommands.
+    JSON output, and rich transport diagnostics. Privileged datasource and key
+    administration remains outside its generated REST client boundary. Native
+    domain onboarding belongs to the offline `dkim2d datasource domain`
+    control plane rather than a normal authenticated mutation API.
 13. DKIM2 telemetry attributes:
     DKIM2 telemetry uses a tiered allowlist. Default logs, traces, and metrics
     carry only low-cardinality operational facts. Richer diagnostics require
@@ -2390,6 +2604,47 @@ interpretation choices in code.
     fields. Legacy lookup-domain/signing-domain disagreement is rejected for
     automatic migration because the datasource contract has exact domain
     identity and no alias or fallback semantics.
+16. Native domain onboarding:
+    M23 adds an offline privileged workflow that clones one complete native
+    generation, adds one exact domain with freshly generated RSA and/or
+    Ed25519 credentials, exports DNS-04 records, proves the configured fresh
+    recursive resolver path against staged SPKI, and activates only through
+    exact current, state, readback, and
+    candidate-content-digest fences. Publication state is fenced separately
+    from the digest; candidates are committed and noncurrent before DNS, and
+    activation changes only monotonic old-current evidence plus current. Empty
+    LDAP bootstrap uses atomic Add rather than a placeholder. Active generations are never delta-mutated,
+    private keys never enter the operation journal, DNS mutation remains
+    external, and LDAP/PostgreSQL/MySQL/MariaDB expose the same administrative
+    semantics. Operation identity allocation is separated from claimed
+    collision allocation: the tool first persists an owner-only internal
+    planning receipt containing the random operation identity, authority, and
+    expected administration revision, and only then may claim the backend.
+    The receipt and full journal are a closed tagged union at one protected
+    operation path; atomic promotion to `planned` preserves the public state
+    machine beginning at `planned`. Exact lock observation and same-operation
+    release can recover every pre-plan crash. Closed internal receipt phases
+    distinguish claim-pending, allocation-resumable, release-required,
+    unresolved, and closed evidence; only release-required reconciliation may
+    retry an ambiguous Release. Explicit reconciliation may directly close
+    unresolved evidence after authoritative ownerless exact-revision proof,
+    without Release or an artificial release-required transition. Conversely,
+    release-required plus ownerless unchanged revision remains open until exact
+    owned cleanup or ownerless next-revision proof. After an ambiguous receipt
+    save, the fresh union reload is authoritative for result and telemetry even
+    when its receipt phase differs from the attempted in-memory transition; the
+    differing phase forbids further backend mutation. Failed, absent, malformed,
+    or journal-only receipt readback reports no receipt presence or phase and
+    remains reconciliation-gated. Closed receipts are retained as idempotent
+    tombstones and may be replaced by a new operation only through exact
+    ownerless-revision CAS.
+    Ambiguous receipt-to-journal promotion accepts a fresh planned journal only
+    when plan digest, typed operation, administration revision, authority, and
+    pristine planned state exactly match the attempted journal; document
+    revision is the sole permitted CAS difference. A fresh receipt must match
+    the attempted receipt recovery phase exactly. The weaker intent/DNS request
+    comparison is reserved for a new idempotent operator retry and cannot
+    recover an ambiguous promotion.
 
 ### 18.2 Remaining Open Questions
 

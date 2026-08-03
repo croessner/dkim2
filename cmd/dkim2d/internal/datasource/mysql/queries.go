@@ -5,7 +5,9 @@ const (
 	querySessionReadOnly  = `SET SESSION TRANSACTION READ ONLY`
 	queryIsolation        = `SELECT @@transaction_isolation, @@transaction_read_only`
 	queryLegacyIsolation  = `SELECT @@tx_isolation, @@tx_read_only`
-	queryCurrent          = `SELECT CAST(current_generation.generation AS CHAR), dataset.schema_version, dataset.dataset_state
+	queryCurrent          = `SELECT CAST(current_generation.generation AS CHAR), dataset.schema_version, dataset.dataset_state,
+	       dataset.operation_id, dataset.candidate_digest,
+	       current_generation.candidate_digest, dataset.was_active
 FROM dkim2_current_generation AS current_generation
 JOIN dkim2_dataset_generations AS dataset USING (generation)
 WHERE current_generation.singleton = 1`

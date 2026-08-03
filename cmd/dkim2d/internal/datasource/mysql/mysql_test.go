@@ -1,14 +1,20 @@
 package mysql
 
 import (
+	"context"
 	"crypto/x509"
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/croessner/dkim2/cmd/dkim2d/internal/datasourceadmin"
+	driver "github.com/go-sql-driver/mysql"
 )
 
 // TestDriverConfigIsSingleAuthorityVerifiedTLS proves the driver is built from
@@ -37,8 +43,7 @@ func TestDriverConfigIsSingleAuthorityVerifiedTLS(t *testing.T) {
 }
 
 // TestLeastPrivilegeGrantTemplateMatchesPublisherContract proves the operator
-// grant example gives runtime only dataset reads and gives the publisher only
-// the fixed staging and singleton-lock privileges.
+// grant example separates runtime, legacy-v2, snapshot, staging, and activation.
 func TestLeastPrivilegeGrantTemplateMatchesPublisherContract(t *testing.T) {
 	t.Parallel()
 	path := filepath.Join(
@@ -59,34 +64,50 @@ func TestLeastPrivilegeGrantTemplateMatchesPublisherContract(t *testing.T) {
 			t.Fatal("MySQL runtime grant template is incomplete")
 		}
 	}
-	requiredPublisher := []string{
-		"GRANT SELECT ON __DATABASE__.dkim2_publication_lock TO __PUBLISHER_ACCOUNT__;",
-		"GRANT SELECT, INSERT, UPDATE ON __DATABASE__.dkim2_dataset_generations TO __PUBLISHER_ACCOUNT__;",
-		"GRANT SELECT, INSERT, UPDATE ON __DATABASE__.dkim2_current_generation TO __PUBLISHER_ACCOUNT__;",
-		"GRANT UPDATE ON __DATABASE__.dkim2_publication_lock TO __PUBLISHER_ACCOUNT__;",
-	}
-	for _, table := range datasetTables[2:] {
-		requiredPublisher = append(requiredPublisher,
-			"GRANT SELECT, INSERT ON __DATABASE__."+table+" TO __PUBLISHER_ACCOUNT__;",
-		)
-	}
-	for _, required := range requiredPublisher {
+	for _, required := range []string{
+		"GRANT EXECUTE ON PROCEDURE __DATABASE__.dkim2_v3_lock_observe TO __SNAPSHOT_ACCOUNT__;",
+		"GRANT EXECUTE ON PROCEDURE __DATABASE__.dkim2_v3_claim_lock TO __STAGING_ACCOUNT__;",
+		"GRANT EXECUTE ON PROCEDURE __DATABASE__.dkim2_v3_lock_for_update TO __STAGING_ACCOUNT__;",
+		"GRANT EXECUTE ON PROCEDURE __DATABASE__.dkim2_v3_insert_generation TO __STAGING_ACCOUNT__;",
+		"GRANT EXECUTE ON PROCEDURE __DATABASE__.dkim2_v3_lock_for_update TO __ACTIVATION_ACCOUNT__;",
+		"GRANT EXECUTE ON PROCEDURE __DATABASE__.dkim2_v3_current_for_update TO __ACTIVATION_ACCOUNT__;",
+		"GRANT EXECUTE ON PROCEDURE __DATABASE__.dkim2_v3_lock_candidate_root TO __ACTIVATION_ACCOUNT__;",
+		"GRANT EXECUTE ON PROCEDURE __DATABASE__.dkim2_v3_activate TO __ACTIVATION_ACCOUNT__;",
+	} {
 		if !strings.Contains(text, required) {
 			t.Fatal("MySQL publisher grant template is incomplete")
 		}
 	}
-	statements := make([]string, 0)
-	for _, line := range strings.Split(text, "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" || strings.HasPrefix(line, "--") {
-			continue
+	if strings.Contains(text, "REVOKE ") {
+		t.Fatal("fresh MySQL-family grant template revokes nonexistent privileges")
+	}
+	for _, role := range []string{"__SNAPSHOT_ACCOUNT__", "__STAGING_ACCOUNT__", "__ACTIVATION_ACCOUNT__"} {
+		if strings.Contains(text, "GRANT SELECT ON __DATABASE__.dkim2_publication_lock TO "+role) {
+			t.Fatal("MySQL administration roles received direct singleton-table authority")
 		}
-		statements = append(statements, line)
 	}
-	if len(statements) != len(datasetTables)+len(requiredPublisher) {
-		t.Fatal("MySQL grant template contains an unexpected executable statement")
+	legacyPath := filepath.Join(
+		"..", "..", "..", "..", "..", "contrib", "schema", "mysql",
+		"003_legacy_publisher_transition.sql.example",
+	)
+	legacy, err := os.ReadFile(legacyPath)
+	if err != nil {
+		t.Fatal("read legacy MySQL-family publisher transition")
 	}
-	upper := strings.ToUpper(strings.Join(statements, "\n"))
+	for _, required := range []string{
+		"REVOKE INSERT, UPDATE ON __DATABASE__.dkim2_dataset_generations FROM __PUBLISHER_ACCOUNT__;",
+		"GRANT UPDATE (singleton) ON __DATABASE__.dkim2_publication_lock TO __PUBLISHER_ACCOUNT__;",
+		"GRANT EXECUTE ON PROCEDURE __DATABASE__.dkim2_v2_insert_generation TO __PUBLISHER_ACCOUNT__;",
+	} {
+		if !strings.Contains(string(legacy), required) {
+			t.Fatal("legacy MySQL-family publisher transition is incomplete")
+		}
+	}
+	if strings.Contains(text, "GRANT UPDATE ON __DATABASE__.dkim2_publication_lock") ||
+		strings.Contains(string(legacy), "GRANT UPDATE ON __DATABASE__.dkim2_publication_lock") {
+		t.Fatal("MySQL compatibility publisher received broad lock-table update authority")
+	}
+	upper := strings.ToUpper(text)
 	for _, forbidden := range []string{
 		"GRANT ALL", "GRANT DELETE", " ON *.* ", " FILE ", "CREATE USER", "IDENTIFIED BY",
 	} {
@@ -143,7 +164,7 @@ func TestQueriesAreFixedKeysetProjections(t *testing.T) {
 func TestNormalizeIsolationAcceptsOnlyRepeatableRead(t *testing.T) {
 	t.Parallel()
 	for _, value := range []string{"REPEATABLE-READ", "REPEATABLE READ", "repeatable-read"} {
-		if normalizeIsolation(value) != "repeatable read" {
+		if normalizeIsolation(value) != repeatableReadIsolation {
 			t.Fatal("repeatable-read spelling was not normalized")
 		}
 	}
@@ -181,5 +202,78 @@ func TestDDLDefinesMySQLAndMariaDBContract(t *testing.T) {
 		if !strings.Contains(text, required) {
 			t.Fatal("MySQL and MariaDB DDL contract incomplete")
 		}
+	}
+}
+
+// TestNativeDomainOnboardingUpgradeDefinesV3Contract proves deployed v2
+// MySQL-family databases receive exact metadata and three-role authority.
+func TestNativeDomainOnboardingUpgradeDefinesV3Contract(t *testing.T) {
+	t.Parallel()
+	path := filepath.Join(
+		"..", "..", "..", "..", "..", "contrib", "schema", "mysql",
+		"003_native_domain_onboarding.sql",
+	)
+	document, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal("read MySQL-family native-domain onboarding upgrade")
+	}
+	text := string(document)
+	for _, required := range []string{
+		"dkim2-datasource-v3", "operation_id", "candidate_digest", "was_active",
+		"lock_revision", "lock_operation_id", "dkim2_dataset_update",
+		"forward-only", "implicit commit", "CREATE PROCEDURE dkim2_v3_lock_candidate_root(",
+		"SQL SECURITY DEFINER MODIFIES SQL DATA",
+		"lock_revision = selected_revision",
+		"lock_operation_id = selected_operation FOR UPDATE",
+		"schema_version = 'dkim2-datasource-v3'",
+		"dataset_state = 'committed'",
+		"candidate_digest = selected_digest FOR UPDATE",
+	} {
+		if !strings.Contains(text, required) {
+			t.Fatal("MySQL-family v3 upgrade contract incomplete")
+		}
+	}
+	grantsPath := filepath.Join(
+		"..", "..", "..", "..", "..", "contrib", "schema", "mysql",
+		"002_least_privilege_grants.sql.example",
+	)
+	grants, err := os.ReadFile(grantsPath)
+	if err != nil {
+		t.Fatal("read MySQL-family least-privilege grants")
+	}
+	grantText := string(grants)
+	for _, required := range []string{
+		"__SNAPSHOT_ACCOUNT__", "__STAGING_ACCOUNT__", "__ACTIVATION_ACCOUNT__",
+		"dkim2_v3_insert_generation", "dkim2_v3_seal_generation",
+		"dkim2_v3_lock_candidate_root", "dkim2_v3_activate",
+	} {
+		if !strings.Contains(grantText, required) {
+			t.Fatal("MySQL-family v3 role grant contract incomplete")
+		}
+	}
+}
+
+// TestCandidateRootLockClassifiesAbsenceAndBackendFailure proves only an
+// authoritative empty result or exact denial signal is a conflict.
+func TestCandidateRootLockClassifiesAbsenceAndBackendFailure(t *testing.T) {
+	denied := &driver.MySQLError{
+		Number: 1644, SQLState: [5]byte{'4', '5', '0', '0', '0'},
+		Message: candidateRootDeniedMessage,
+	}
+	for _, test := range []struct {
+		name string
+		err  error
+		want datasourceadmin.ErrorCode
+	}{
+		{name: "no row", err: sql.ErrNoRows, want: datasourceadmin.CodeConflict},
+		{name: "exact denial", err: denied, want: datasourceadmin.CodeConflict},
+		{name: "cancellation", err: context.Canceled, want: datasourceadmin.CodeUnavailable},
+		{name: "backend failure", err: errors.New("synthetic backend failure"), want: datasourceadmin.CodeUnavailable},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if got := datasourceadmin.CodeOf(candidateRootMySQLError(test.err)); got != test.want {
+				t.Fatalf("candidate-root error class = %s, want %s", got, test.want)
+			}
+		})
 	}
 }

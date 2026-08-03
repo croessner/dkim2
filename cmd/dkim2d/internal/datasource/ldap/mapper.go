@@ -3,14 +3,16 @@ package ldap
 
 import (
 	"bytes"
+	"context"
 	"strconv"
 	"time"
 
+	"github.com/croessner/dkim2/cmd/dkim2d/internal/datasourceadmin"
 	"github.com/croessner/dkim2/cmd/dkim2d/internal/signingstore"
 	"github.com/croessner/dkim2/provider"
 )
 
-const schemaVersion = "dkim2-datasource-v2"
+const schemaVersion = datasourceadmin.SchemaVersionV2
 
 const (
 	attrObjectClass     = "objectClass"
@@ -32,6 +34,11 @@ const (
 	attrCompatibility   = "dkim2Compatibility"
 	attrFeedbackRouteID = "dkim2FeedbackRouteID"
 	attrPrivatePKCS8    = "dkim2PrivateKeyPKCS8"
+	attrCandidateDigest = "dkim2CandidateDigest"
+	attrOperationID     = "dkim2OperationID"
+	attrWasActive       = "dkim2WasActive"
+	attrAdminLockOwner  = "dkim2AdminLockOwner"
+	attrAdminRevision   = "dkim2AdminRevision"
 )
 
 // RecordClass identifies one closed LDAP record mapping.
@@ -176,14 +183,15 @@ func MapDataset(records DatasetRecords, limits provider.Limits) (*provider.Datas
 	if err := limits.Validate(); err != nil {
 		return nil, err
 	}
-	currentGeneration, err := mapMetadata(records.Current)
+	current, err := mapCurrentMetadata(records.Current)
 	if err != nil {
 		return nil, err
 	}
-	rootGeneration, err := mapMetadata(records.Root)
-	if err != nil || currentGeneration != rootGeneration {
+	root, err := mapGenerationMetadata(records.Root)
+	if err != nil || !current.matchesRoot(root) {
 		return nil, provider.NewError(provider.ErrorCodeMalformedData)
 	}
+	currentGeneration := current.generation
 	handleIDs := make([]string, 0, len(records.Handles))
 	for _, entry := range records.Handles {
 		generation, handle, mapErr := mapHandle(entry)
@@ -233,19 +241,272 @@ func MapDataset(records DatasetRecords, limits provider.Limits) (*provider.Datas
 		}
 		policies = append(policies, policy)
 	}
-	return provider.NewDataset(currentGeneration, handleIDs, profiles, policies, limits)
+	dataset, err := provider.NewDataset(currentGeneration, handleIDs, profiles, policies, limits)
+	if err != nil {
+		return nil, err
+	}
+	if current.schema == datasourceadmin.SchemaVersionV3 && verifyV3CandidateDigest(records, root) != nil {
+		return nil, provider.NewError(provider.ErrorCodeMalformedData)
+	}
+	return dataset, nil
 }
 
-// mapMetadata validates one exact committed datasource metadata entry.
-func mapMetadata(entry Entry) (uint64, error) {
+type datasetMetadata struct {
+	schema     string
+	generation uint64
+	state      datasourceadmin.GenerationState
+	operation  datasourceadmin.OperationBinding
+	digest     datasourceadmin.CandidateContentDigest
+	wasActive  bool
+}
+
+// equal proves two bounded metadata reads are the same exact fence.
+func (m datasetMetadata) equal(other datasetMetadata) bool {
+	return m.schema == other.schema && m.generation == other.generation && m.state == other.state &&
+		m.wasActive == other.wasActive && m.operation.Initialized() == other.operation.Initialized() &&
+		(!m.operation.Initialized() || m.operation.Equal(other.operation)) &&
+		m.digest.Valid() == other.digest.Valid() && (!m.digest.Valid() || m.digest.Equal(other.digest))
+}
+
+// mapCurrentMetadata validates one exact v2 or v3 committed current fence.
+func mapCurrentMetadata(entry Entry) (datasetMetadata, error) {
+	metadata, err := mapDatasetMetadata(entry, false)
+	if err != nil || metadata.state != datasourceadmin.StateCommitted || metadata.wasActive ||
+		metadata.schema == datasourceadmin.SchemaVersionV3 && metadata.operation.Initialized() {
+		return datasetMetadata{}, provider.NewError(provider.ErrorCodeMalformedData)
+	}
+	return metadata, nil
+}
+
+// mapGenerationMetadata validates one exact v2 or v3 generation root.
+func mapGenerationMetadata(entry Entry) (datasetMetadata, error) {
+	return mapDatasetMetadata(entry, true)
+}
+
+// mapDatasetMetadata owns the closed v2/v3 LDAP metadata combinations.
+func mapDatasetMetadata(entry Entry, root bool) (datasetMetadata, error) {
 	values, err := exactAttributes(entry, RecordClassDataset, []string{
 		attrSchemaVersion, attrGeneration, attrDatasetState,
-	}, nil)
-	if err != nil || string(values[attrSchemaVersion]) != schemaVersion ||
-		string(values[attrDatasetState]) != "committed" {
-		return 0, provider.NewError(provider.ErrorCodeMalformedData)
+	}, []string{attrCandidateDigest, attrOperationID, attrWasActive})
+	if err != nil {
+		return datasetMetadata{}, err
 	}
-	return parseGeneration(values[attrGeneration])
+	defer clearAttributeValues(values)
+	metadata := datasetMetadata{schema: string(values[attrSchemaVersion])}
+	metadata.generation, err = parseGeneration(values[attrGeneration])
+	if err != nil {
+		return datasetMetadata{}, err
+	}
+	switch string(values[attrDatasetState]) {
+	case string(datasourceadmin.StateStaging):
+		metadata.state = datasourceadmin.StateStaging
+	case string(datasourceadmin.StateCommitted):
+		metadata.state = datasourceadmin.StateCommitted
+	default:
+		return datasetMetadata{}, provider.NewError(provider.ErrorCodeMalformedData)
+	}
+	wasActive, wasActivePresent := values[attrWasActive]
+	if wasActivePresent {
+		if !root || metadata.state != datasourceadmin.StateCommitted || string(wasActive) != "TRUE" {
+			return datasetMetadata{}, provider.NewError(provider.ErrorCodeMalformedData)
+		}
+		metadata.wasActive = true
+	}
+	digestBytes, digestPresent := values[attrCandidateDigest]
+	operationBytes, operationPresent := values[attrOperationID]
+	switch metadata.schema {
+	case datasourceadmin.SchemaVersionV2:
+		if digestPresent || operationPresent || metadata.state != datasourceadmin.StateCommitted {
+			return datasetMetadata{}, provider.NewError(provider.ErrorCodeMalformedData)
+		}
+	case datasourceadmin.SchemaVersionV3:
+		if !digestPresent || root != operationPresent {
+			return datasetMetadata{}, provider.NewError(provider.ErrorCodeMalformedData)
+		}
+		metadata.digest, err = datasourceadmin.ParseCandidateContentDigest(digestBytes)
+		if err != nil {
+			return datasetMetadata{}, provider.NewError(provider.ErrorCodeMalformedData)
+		}
+		if root {
+			metadata.operation, err = datasourceadmin.NewOperationBinding(string(operationBytes))
+			if err != nil {
+				return datasetMetadata{}, provider.NewError(provider.ErrorCodeMalformedData)
+			}
+		}
+	default:
+		return datasetMetadata{}, provider.NewError(provider.ErrorCodeMalformedData)
+	}
+	return metadata, nil
+}
+
+// matchesRoot proves current and generation metadata form one nonmixed committed fence.
+func (m datasetMetadata) matchesRoot(root datasetMetadata) bool {
+	if m.schema != root.schema || m.generation != root.generation ||
+		m.state != datasourceadmin.StateCommitted || root.state != datasourceadmin.StateCommitted {
+		return false
+	}
+	if m.schema == datasourceadmin.SchemaVersionV3 {
+		return m.digest.Valid() && root.digest.Valid() && m.digest.Equal(root.digest) &&
+			root.operation.Initialized()
+	}
+	return !m.digest.Valid() && !root.digest.Valid() && !root.operation.Initialized()
+}
+
+// verifyV3CandidateDigest recomputes protected content from canonical LDAP readback.
+func verifyV3CandidateDigest(records DatasetRecords, metadata datasetMetadata) error {
+	rows, err := mapAdministrativeRows(records, metadata.generation)
+	if err != nil {
+		return err
+	}
+	defer clearAdministrativeRows(&rows)
+	snapshot, err := datasourceadmin.NewSnapshot(
+		datasourceadmin.SchemaVersionV3, metadata.generation, rows,
+	)
+	if err != nil {
+		return provider.NewError(provider.ErrorCodeMalformedData)
+	}
+	content, err := datasourceadmin.NewCandidateContent(snapshot)
+	if err != nil {
+		_ = snapshot.Close()
+		return provider.NewError(provider.ErrorCodeMalformedData)
+	}
+	var candidate *datasourceadmin.PublicationEnvelope
+	if err := metadata.operation.WithValue(context.Background(), func(value string) error {
+		var candidateErr error
+		candidate, candidateErr = datasourceadmin.NewPublicationEnvelope(value, content)
+		return candidateErr
+	}); err != nil || candidate == nil {
+		_ = content.Close()
+		return provider.NewError(provider.ErrorCodeMalformedData)
+	}
+	defer candidate.Close() //nolint:errcheck // Protected verification cleanup has no recovery action.
+	if !candidate.Digest().Equal(metadata.digest) {
+		return provider.NewError(provider.ErrorCodeMalformedData)
+	}
+	return nil
+}
+
+// mapAdministrativeRows maps every exact LDAP content class into neutral protected rows.
+func mapAdministrativeRows(records DatasetRecords, generation uint64) (datasourceadmin.Rows, error) {
+	rows := datasourceadmin.Rows{}
+	success := false
+	defer func() {
+		if !success {
+			clearAdministrativeRows(&rows)
+		}
+	}()
+	for _, entry := range records.Handles {
+		values, err := exactAttributes(entry, RecordClassHandle, []string{attrGeneration, attrHandleID}, nil)
+		if err != nil || !generationValueMatches(values, generation) {
+			clearAttributeValues(values)
+			return datasourceadmin.Rows{}, provider.NewError(provider.ErrorCodeMalformedData)
+		}
+		rows.Handles = append(rows.Handles, datasourceadmin.HandleRow{ID: string(values[attrHandleID])})
+		clearAttributeValues(values)
+	}
+	for _, entry := range records.Profiles {
+		values, err := exactAttributes(entry, RecordClassProfile, []string{
+			attrGeneration, attrProfileID, attrSigningDomain, attrRecordStatus,
+		}, []string{attrNotBefore, attrNotAfter})
+		if err != nil || !generationValueMatches(values, generation) {
+			clearAttributeValues(values)
+			return datasourceadmin.Rows{}, provider.NewError(provider.ErrorCodeMalformedData)
+		}
+		row := datasourceadmin.ProfileRow{
+			ID: string(values[attrProfileID]), Domain: string(values[attrSigningDomain]),
+			Status: string(values[attrRecordStatus]),
+		}
+		if value, present := values[attrNotBefore]; present {
+			text := string(value)
+			row.NotBeforeUTC = &text
+		}
+		if value, present := values[attrNotAfter]; present {
+			text := string(value)
+			row.NotAfterUTC = &text
+		}
+		rows.Profiles = append(rows.Profiles, row)
+		clearAttributeValues(values)
+	}
+	for _, entry := range records.Credentials {
+		values, err := exactAttributes(entry, RecordClassCredential, []string{
+			attrGeneration, attrProfileID, attrAlgorithm, attrSelector, attrPublicSPKI, attrHandleID,
+		}, nil)
+		if err != nil || !generationValueMatches(values, generation) {
+			clearAttributeValues(values)
+			return datasourceadmin.Rows{}, provider.NewError(provider.ErrorCodeMalformedData)
+		}
+		rows.Credentials = append(rows.Credentials, datasourceadmin.CredentialRow{
+			ProfileID: string(values[attrProfileID]), Algorithm: string(values[attrAlgorithm]),
+			Selector: string(values[attrSelector]), PublicSPKI: bytes.Clone(values[attrPublicSPKI]),
+			HandleID: string(values[attrHandleID]),
+		})
+		clearAttributeValues(values)
+	}
+	for _, entry := range records.Policies {
+		values, err := exactAttributes(entry, RecordClassPolicy, []string{
+			attrGeneration, attrTenantID, attrSigningDomain, attrProfileUse, attrProfileID,
+			attrRecordStatus, attrRollout, attrCompatibility,
+		}, []string{attrFeedbackRouteID})
+		if err != nil || !generationValueMatches(values, generation) {
+			clearAttributeValues(values)
+			return datasourceadmin.Rows{}, provider.NewError(provider.ErrorCodeMalformedData)
+		}
+		row := datasourceadmin.PolicyRow{
+			TenantID: string(values[attrTenantID]), Domain: string(values[attrSigningDomain]),
+			Use: string(values[attrProfileUse]), ProfileID: string(values[attrProfileID]),
+			Status: string(values[attrRecordStatus]), Rollout: string(values[attrRollout]),
+			Compatibility: string(values[attrCompatibility]),
+		}
+		if value, present := values[attrFeedbackRouteID]; present {
+			text := string(value)
+			row.FeedbackRouteID = &text
+		}
+		rows.Policies = append(rows.Policies, row)
+		clearAttributeValues(values)
+	}
+	for _, entry := range records.KeyMaterial {
+		values, err := exactAttributesWithLimit(entry, RecordClassKeyMaterial, []string{
+			attrGeneration, attrTenantID, attrSigningDomain, attrProfileUse, attrHandleID,
+			attrAlgorithm, attrPublicSPKI, attrPrivatePKCS8,
+		}, nil, maxPrivateAttributeBytes)
+		if err != nil || !generationValueMatches(values, generation) {
+			clearAttributeValues(values)
+			return datasourceadmin.Rows{}, provider.NewError(provider.ErrorCodeMalformedData)
+		}
+		rows.KeyMaterial = append(rows.KeyMaterial, datasourceadmin.KeyMaterialRow{
+			TenantID: string(values[attrTenantID]), Domain: string(values[attrSigningDomain]),
+			Use: string(values[attrProfileUse]), HandleID: string(values[attrHandleID]),
+			Algorithm: string(values[attrAlgorithm]), PublicSPKI: bytes.Clone(values[attrPublicSPKI]),
+			PrivatePKCS8: bytes.Clone(values[attrPrivatePKCS8]),
+		})
+		clearAttributeValues(values)
+	}
+	success = true
+	return rows, nil
+}
+
+// generationValueMatches validates one canonical row generation.
+func generationValueMatches(values map[string][]byte, generation uint64) bool {
+	parsed, err := parseGeneration(values[attrGeneration])
+	return err == nil && parsed == generation
+}
+
+// clearAdministrativeRows destroys every detached LDAP public/private key buffer.
+func clearAdministrativeRows(rows *datasourceadmin.Rows) {
+	if rows == nil {
+		return
+	}
+	for index := range rows.Credentials {
+		clear(rows.Credentials[index].PublicSPKI)
+		rows.Credentials[index].PublicSPKI = nil
+	}
+	for index := range rows.KeyMaterial {
+		clear(rows.KeyMaterial[index].PublicSPKI)
+		clear(rows.KeyMaterial[index].PrivatePKCS8)
+		rows.KeyMaterial[index].PublicSPKI = nil
+		rows.KeyMaterial[index].PrivatePKCS8 = nil
+	}
+	*rows = datasourceadmin.Rows{}
 }
 
 // mapHandle validates one exact opaque handle declaration.
@@ -399,7 +660,7 @@ func exactAttributesWithLimit(
 	required []string,
 	optional []string,
 	maximumValueBytes int,
-) (map[string][]byte, error) {
+) (output map[string][]byte, resultErr error) {
 	if entry.Class != class || len(entry.Attributes) > 18 {
 		return nil, provider.NewError(provider.ErrorCodeMalformedData)
 	}
@@ -410,7 +671,13 @@ func exactAttributesWithLimit(
 	for _, name := range optional {
 		allowed[name] = true
 	}
-	output := make(map[string][]byte, len(entry.Attributes))
+	output = make(map[string][]byte, len(entry.Attributes))
+	defer func() {
+		if resultErr != nil {
+			clearAttributeValues(output)
+			output = nil
+		}
+	}()
 	total := 0
 	for name, values := range entry.Attributes {
 		if !allowed[name] || len(values) != 1 || values[0] == nil {

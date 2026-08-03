@@ -64,6 +64,18 @@ database is explicitly pinned to `https://vuln.go.dev`.
 Any durable change invalidates prior fuzz, vulnerability, conformance, Postfix,
 security, and review evidence.
 
+Offline native-domain administration additionally treats protected admin,
+intent, receipt/journal, DNS export, candidate readback, and datasource report
+inputs as hostile. Package-owned abuse and race tests prove bounded parsing,
+receipt-before-Claim recovery, no-mutation ambiguity handling, canonical
+private readback, role separation, and secret-safe observations. The
+digest-pinned four-backend report is separate candidate-bound evidence under
+the closed `dkim2.datasource-integration-report.v2` producer, JSON Schema, Go
+validator, CLI, and collector chain. It requires four qualification runs, 54 unique allowlisted checks,
+and exactly twelve backend-by-result-class PASS objects. It does not expose
+protected identities, raw DNS, private material, or service logs and does not
+replace or extend the repository security-report closure.
+
 ## Commands
 
 Run the deterministic inventory and abuse checks without network or Docker:

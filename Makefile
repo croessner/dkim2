@@ -83,7 +83,7 @@ help:
 		'  make check-deployment validate the hardened Postfix Compose topology' \
 		'  make deployment-postfix run the complete isolated Postfix deployment proof' \
 		'  make deployment-security prove seeded packaging and runtime privacy' \
-		'  make check-operator-docs validate operator documentation links and deferrals' \
+		'  make check-operator-docs validate operator links, examples, workflow, and recovery claims' \
 		'  make check-release run all local packaging and release checks' \
 		'  make check-interop validate closed external discovery and evidence contracts' \
 		'  make interop       normalize the closed current external evidence set' \
@@ -137,8 +137,12 @@ check-datasource-mysql:
 		go -C cmd/dkim2d test \
 			./internal/datasource/mysql ./internal/datasource/sqlsnapshot
 
+.PHONY: test-datasource-ldap-acl
+test-datasource-ldap-acl:
+	@scripts/test-datasource-ldap-acl.sh
+
 .PHONY: test-datasource-ldap
-test-datasource-ldap: check-datasource-schema
+test-datasource-ldap: check-datasource-schema test-datasource-ldap-acl
 	@GOCACHE="$${GOCACHE:-/tmp/dkim2-go-build-cache}" \
 		go -C cmd/dkim2d test -race ./internal/datasource/ldap
 
@@ -524,7 +528,7 @@ security: check-security fuzz-security race-security vulnerability-security conf
 		go -C tools run ./cmd/security -root .. report
 
 .PHONY: guardrails
-guardrails: fmt vet lint test race check-protected-platforms check-openapi check-vendor check-conformance conformance govulncheck check-datasource-schema check-datasource-postgresql check-datasource-mysql check-exim-matrix-prep check-boundaries
+guardrails: fmt vet lint test race check-protected-platforms check-openapi check-vendor check-conformance conformance govulncheck check-datasource-schema check-datasource-postgresql check-datasource-mysql check-exim-matrix-prep check-boundaries check-operator-docs
 
 .PHONY: product-binaries
 product-binaries:

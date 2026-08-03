@@ -1,9 +1,7 @@
--- Replace __DATABASE__, __RUNTIME_ACCOUNT__, and __PUBLISHER_ACCOUNT__ before
--- execution. Account placeholders are complete quoted account expressions,
--- for example 'dkim2_runtime_login'@'192.0.2.40'. Create those accounts first
--- through the site's secret-management workflow with REQUIRE SSL and no global
--- privileges. This file deliberately creates no account and contains no
--- password.
+-- Replace the database and complete quoted account placeholders before use.
+-- Accounts are site-owned, TLS-required, and created outside this file.
+-- The publisher and three v3 accounts must be distinct. No account receives DELETE, DDL,
+-- FILE, global, credential-management, or role-administration authority.
 
 GRANT SELECT ON __DATABASE__.dkim2_dataset_generations TO __RUNTIME_ACCOUNT__;
 GRANT SELECT ON __DATABASE__.dkim2_current_generation TO __RUNTIME_ACCOUNT__;
@@ -13,18 +11,69 @@ GRANT SELECT ON __DATABASE__.dkim2_credentials TO __RUNTIME_ACCOUNT__;
 GRANT SELECT ON __DATABASE__.dkim2_policies TO __RUNTIME_ACCOUNT__;
 GRANT SELECT ON __DATABASE__.dkim2_key_material TO __RUNTIME_ACCOUNT__;
 
+-- The compatibility publisher retains v2-only publication through fixed
+-- definer procedures. Its sole direct mutation privilege is UPDATE(singleton)
+-- for the v2 locking read; it has no v3 procedure or v3 lock-metadata update.
 GRANT SELECT ON __DATABASE__.dkim2_publication_lock TO __PUBLISHER_ACCOUNT__;
-GRANT SELECT, INSERT, UPDATE ON __DATABASE__.dkim2_dataset_generations TO __PUBLISHER_ACCOUNT__;
-GRANT SELECT, INSERT, UPDATE ON __DATABASE__.dkim2_current_generation TO __PUBLISHER_ACCOUNT__;
-GRANT SELECT, INSERT ON __DATABASE__.dkim2_handles TO __PUBLISHER_ACCOUNT__;
-GRANT SELECT, INSERT ON __DATABASE__.dkim2_profiles TO __PUBLISHER_ACCOUNT__;
-GRANT SELECT, INSERT ON __DATABASE__.dkim2_credentials TO __PUBLISHER_ACCOUNT__;
-GRANT SELECT, INSERT ON __DATABASE__.dkim2_policies TO __PUBLISHER_ACCOUNT__;
-GRANT SELECT, INSERT ON __DATABASE__.dkim2_key_material TO __PUBLISHER_ACCOUNT__;
-GRANT UPDATE ON __DATABASE__.dkim2_publication_lock TO __PUBLISHER_ACCOUNT__;
+GRANT UPDATE (singleton) ON __DATABASE__.dkim2_publication_lock TO __PUBLISHER_ACCOUNT__;
+GRANT SELECT ON __DATABASE__.dkim2_dataset_generations TO __PUBLISHER_ACCOUNT__;
+GRANT SELECT ON __DATABASE__.dkim2_current_generation TO __PUBLISHER_ACCOUNT__;
+GRANT SELECT ON __DATABASE__.dkim2_handles TO __PUBLISHER_ACCOUNT__;
+GRANT SELECT ON __DATABASE__.dkim2_profiles TO __PUBLISHER_ACCOUNT__;
+GRANT SELECT ON __DATABASE__.dkim2_credentials TO __PUBLISHER_ACCOUNT__;
+GRANT SELECT ON __DATABASE__.dkim2_policies TO __PUBLISHER_ACCOUNT__;
+GRANT SELECT ON __DATABASE__.dkim2_key_material TO __PUBLISHER_ACCOUNT__;
+GRANT EXECUTE ON PROCEDURE __DATABASE__.dkim2_v2_insert_generation TO __PUBLISHER_ACCOUNT__;
+GRANT EXECUTE ON PROCEDURE __DATABASE__.dkim2_v2_insert_handle TO __PUBLISHER_ACCOUNT__;
+GRANT EXECUTE ON PROCEDURE __DATABASE__.dkim2_v2_insert_profile TO __PUBLISHER_ACCOUNT__;
+GRANT EXECUTE ON PROCEDURE __DATABASE__.dkim2_v2_insert_credential TO __PUBLISHER_ACCOUNT__;
+GRANT EXECUTE ON PROCEDURE __DATABASE__.dkim2_v2_insert_policy TO __PUBLISHER_ACCOUNT__;
+GRANT EXECUTE ON PROCEDURE __DATABASE__.dkim2_v2_insert_key_material TO __PUBLISHER_ACCOUNT__;
+GRANT EXECUTE ON PROCEDURE __DATABASE__.dkim2_v2_seal_generation TO __PUBLISHER_ACCOUNT__;
+GRANT EXECUTE ON PROCEDURE __DATABASE__.dkim2_v2_insert_current TO __PUBLISHER_ACCOUNT__;
+GRANT EXECUTE ON PROCEDURE __DATABASE__.dkim2_v2_update_current TO __PUBLISHER_ACCOUNT__;
 
--- Read back the effective table grants before deploying either credential:
--- SELECT GRANTEE, TABLE_NAME, PRIVILEGE_TYPE
---   FROM information_schema.TABLE_PRIVILEGES
---  WHERE TABLE_SCHEMA = '__DATABASE__'
---  ORDER BY GRANTEE, TABLE_NAME, PRIVILEGE_TYPE;
+GRANT EXECUTE ON PROCEDURE __DATABASE__.dkim2_v3_lock_observe TO __SNAPSHOT_ACCOUNT__;
+GRANT SELECT ON __DATABASE__.dkim2_dataset_generations TO __SNAPSHOT_ACCOUNT__;
+GRANT SELECT ON __DATABASE__.dkim2_current_generation TO __SNAPSHOT_ACCOUNT__;
+GRANT SELECT ON __DATABASE__.dkim2_handles TO __SNAPSHOT_ACCOUNT__;
+GRANT SELECT ON __DATABASE__.dkim2_profiles TO __SNAPSHOT_ACCOUNT__;
+GRANT SELECT ON __DATABASE__.dkim2_credentials TO __SNAPSHOT_ACCOUNT__;
+GRANT SELECT ON __DATABASE__.dkim2_policies TO __SNAPSHOT_ACCOUNT__;
+GRANT SELECT ON __DATABASE__.dkim2_key_material TO __SNAPSHOT_ACCOUNT__;
+
+GRANT SELECT ON __DATABASE__.dkim2_dataset_generations TO __STAGING_ACCOUNT__;
+GRANT SELECT ON __DATABASE__.dkim2_current_generation TO __STAGING_ACCOUNT__;
+GRANT SELECT ON __DATABASE__.dkim2_handles TO __STAGING_ACCOUNT__;
+GRANT SELECT ON __DATABASE__.dkim2_profiles TO __STAGING_ACCOUNT__;
+GRANT SELECT ON __DATABASE__.dkim2_credentials TO __STAGING_ACCOUNT__;
+GRANT SELECT ON __DATABASE__.dkim2_policies TO __STAGING_ACCOUNT__;
+GRANT SELECT ON __DATABASE__.dkim2_key_material TO __STAGING_ACCOUNT__;
+GRANT EXECUTE ON PROCEDURE __DATABASE__.dkim2_v3_claim_lock TO __STAGING_ACCOUNT__;
+GRANT EXECUTE ON PROCEDURE __DATABASE__.dkim2_v3_lock_observe TO __STAGING_ACCOUNT__;
+GRANT EXECUTE ON PROCEDURE __DATABASE__.dkim2_v3_lock_for_update TO __STAGING_ACCOUNT__;
+GRANT EXECUTE ON PROCEDURE __DATABASE__.dkim2_v3_release_lock TO __STAGING_ACCOUNT__;
+GRANT EXECUTE ON PROCEDURE __DATABASE__.dkim2_v3_insert_generation TO __STAGING_ACCOUNT__;
+GRANT EXECUTE ON PROCEDURE __DATABASE__.dkim2_v3_insert_handle TO __STAGING_ACCOUNT__;
+GRANT EXECUTE ON PROCEDURE __DATABASE__.dkim2_v3_insert_profile TO __STAGING_ACCOUNT__;
+GRANT EXECUTE ON PROCEDURE __DATABASE__.dkim2_v3_insert_credential TO __STAGING_ACCOUNT__;
+GRANT EXECUTE ON PROCEDURE __DATABASE__.dkim2_v3_insert_policy TO __STAGING_ACCOUNT__;
+GRANT EXECUTE ON PROCEDURE __DATABASE__.dkim2_v3_insert_key_material TO __STAGING_ACCOUNT__;
+GRANT EXECUTE ON PROCEDURE __DATABASE__.dkim2_v3_seal_generation TO __STAGING_ACCOUNT__;
+
+GRANT SELECT ON __DATABASE__.dkim2_dataset_generations TO __ACTIVATION_ACCOUNT__;
+GRANT SELECT ON __DATABASE__.dkim2_current_generation TO __ACTIVATION_ACCOUNT__;
+GRANT SELECT ON __DATABASE__.dkim2_handles TO __ACTIVATION_ACCOUNT__;
+GRANT SELECT ON __DATABASE__.dkim2_profiles TO __ACTIVATION_ACCOUNT__;
+GRANT SELECT ON __DATABASE__.dkim2_credentials TO __ACTIVATION_ACCOUNT__;
+GRANT SELECT ON __DATABASE__.dkim2_policies TO __ACTIVATION_ACCOUNT__;
+GRANT SELECT ON __DATABASE__.dkim2_key_material TO __ACTIVATION_ACCOUNT__;
+GRANT EXECUTE ON PROCEDURE __DATABASE__.dkim2_v3_activate TO __ACTIVATION_ACCOUNT__;
+GRANT EXECUTE ON PROCEDURE __DATABASE__.dkim2_v3_lock_observe TO __ACTIVATION_ACCOUNT__;
+GRANT EXECUTE ON PROCEDURE __DATABASE__.dkim2_v3_lock_for_update TO __ACTIVATION_ACCOUNT__;
+GRANT EXECUTE ON PROCEDURE __DATABASE__.dkim2_v3_current_for_update TO __ACTIVATION_ACCOUNT__;
+GRANT EXECUTE ON PROCEDURE __DATABASE__.dkim2_v3_lock_candidate_root TO __ACTIVATION_ACCOUNT__;
+
+-- Read back TABLE_PRIVILEGES and COLUMN_PRIVILEGES plus the exact per-routine
+-- Execute rows from mysql.procs_priv before deploying credentials. Do not use
+-- an unavailable INFORMATION_SCHEMA routine-privilege view as passing proof.
