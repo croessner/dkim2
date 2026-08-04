@@ -16,6 +16,7 @@ func TestClosedEnumsRecognizeOnlyDeclaredValues(t *testing.T) {
 		ProfileUseOriginator,
 		ProfileUseOrdinaryTransit,
 		ProfileUseNextDomainTransit,
+		ProfileUseDeliveryStatus,
 		RecordStatusActive,
 		RecordStatusDisabled,
 		RolloutEnforce,
@@ -66,6 +67,7 @@ func TestClosedEnumParsersAcceptOnlyExactCanonicalStrings(t *testing.T) {
 		profileUseOriginatorText:        ProfileUseOriginator,
 		profileUseOrdinaryTransitText:   ProfileUseOrdinaryTransit,
 		profileUseNextDomainTransitText: ProfileUseNextDomainTransit,
+		profileUseDeliveryStatusText:    ProfileUseDeliveryStatus,
 	}
 	for input, want := range profileUses {
 		got, err := ParseProfileUse(input)
@@ -118,6 +120,7 @@ func TestClosedEnumsMarshalOnlyKnownStableStrings(t *testing.T) {
 		ProfileUseOriginator,
 		ProfileUseOrdinaryTransit,
 		ProfileUseNextDomainTransit,
+		ProfileUseDeliveryStatus,
 		RecordStatusActive,
 		RecordStatusDisabled,
 		RolloutEnforce,

@@ -115,18 +115,19 @@ type tracingState struct {
 }
 
 type serverState struct {
-	listen               string
-	capabilityFile       string
-	signCapabilityFile   string
-	reviseCapabilityFile string
-	readHeaderTimeout    time.Duration
-	readTimeout          time.Duration
-	writeTimeout         time.Duration
-	requestDeadline      time.Duration
-	shutdownTimeout      time.Duration
-	maxInFlight          uint8
-	maxWaiters           uint16
-	admissionWait        time.Duration
+	listen                string
+	capabilityFile        string
+	signCapabilityFile    string
+	reviseCapabilityFile  string
+	dsnSignCapabilityFile string
+	readHeaderTimeout     time.Duration
+	readTimeout           time.Duration
+	writeTimeout          time.Duration
+	requestDeadline       time.Duration
+	shutdownTimeout       time.Duration
+	maxInFlight           uint8
+	maxWaiters            uint16
+	admissionWait         time.Duration
 }
 
 type signingState struct {
@@ -356,13 +357,18 @@ func validateSnapshot(values map[string]rawValue, presence map[string]Presence) 
 		return nil, err
 	}
 	protectedPaths := append([]string{server.capabilityFile}, replayProtectedPaths(replay)...)
-	if signing.backend == SigningFlatFile {
+	if signing.backend != SigningDisabled {
 		if server.signCapabilityFile != "" {
 			protectedPaths = append(protectedPaths, server.signCapabilityFile)
 		}
 		if server.reviseCapabilityFile != "" {
 			protectedPaths = append(protectedPaths, server.reviseCapabilityFile)
 		}
+		if server.dsnSignCapabilityFile != "" {
+			protectedPaths = append(protectedPaths, server.dsnSignCapabilityFile)
+		}
+	}
+	if signing.backend == SigningFlatFile {
 		protectedPaths = append(protectedPaths, signing.datasourceFile, signing.privateManifestFile)
 	}
 	if !sameGenerationPaths(generation, protectedPaths...) || !allDistinct(protectedPaths) {
@@ -573,24 +579,26 @@ func parseServer(values map[string]rawValue) (serverState, error) {
 	capability := text(values, pathServerCapability)
 	signCapability := text(values, pathServerSignCapability)
 	reviseCapability := text(values, pathServerReviseCapability)
+	dsnSignCapability := text(values, pathServerDSNSignCapability)
 	if !validLoopbackListener(listen) || !validProtectedPath(capability) ||
 		readHeader > read || read > deadline || deadline > time.Duration(1<<63-1)-time.Second ||
 		write < deadline+time.Second {
 		return serverState{}, newError(CodeInvalidField)
 	}
 	return serverState{
-		listen:               listen,
-		capabilityFile:       capability,
-		signCapabilityFile:   signCapability,
-		reviseCapabilityFile: reviseCapability,
-		readHeaderTimeout:    readHeader,
-		readTimeout:          read,
-		writeTimeout:         write,
-		requestDeadline:      deadline,
-		shutdownTimeout:      shutdown,
-		maxInFlight:          uint8(maxInFlight),
-		maxWaiters:           uint16(maxWaiters),
-		admissionWait:        admission,
+		listen:                listen,
+		capabilityFile:        capability,
+		signCapabilityFile:    signCapability,
+		reviseCapabilityFile:  reviseCapability,
+		dsnSignCapabilityFile: dsnSignCapability,
+		readHeaderTimeout:     readHeader,
+		readTimeout:           read,
+		writeTimeout:          write,
+		requestDeadline:       deadline,
+		shutdownTimeout:       shutdown,
+		maxInFlight:           uint8(maxInFlight),
+		maxWaiters:            uint16(maxWaiters),
+		admissionWait:         admission,
 	}, nil
 }
 
@@ -619,6 +627,7 @@ func parseSigning(
 			pathSigningAllowGroup,
 			pathServerSignCapability,
 			pathServerReviseCapability,
+			pathServerDSNSignCapability,
 		} {
 			if presence[path].Explicit() {
 				return signingState{}, newError(CodeInvalidMatrix)
@@ -688,7 +697,8 @@ func parseSigning(
 	}
 	signPresent := presence[pathServerSignCapability].Explicit()
 	revisePresent := presence[pathServerReviseCapability].Explicit()
-	if !signPresent && !revisePresent {
+	dsnSignPresent := presence[pathServerDSNSignCapability].Explicit()
+	if !signPresent && !revisePresent && !dsnSignPresent {
 		return signingState{}, newError(CodeInvalidMatrix)
 	}
 	reload, err := durationValue(
@@ -715,6 +725,9 @@ func parseSigning(
 	}
 	if revisePresent {
 		paths = append(paths, server.reviseCapabilityFile)
+	}
+	if dsnSignPresent {
+		paths = append(paths, server.dsnSignCapabilityFile)
 	}
 	if !sameGenerationPaths(generation, paths...) || !allDistinct(paths) {
 		return signingState{}, newError(CodeInvalidField)

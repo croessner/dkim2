@@ -60,6 +60,15 @@ type generatedDaemonService struct {
 	revise func(generatedfixture.ReviseRequest) generatedfixture.OperationResponse
 }
 
+// SignDeliveryStatus rejects DSN signing because this Exim fixture has no
+// delivery-status evidence source or DSN capability.
+func (*generatedDaemonService) SignDeliveryStatus(
+	context.Context,
+	generatedfixture.SignDeliveryStatusRequestObject,
+) (generatedfixture.SignDeliveryStatusResponseObject, error) {
+	return nil, errors.New("unexpected fixture operation")
+}
+
 // GetHealth rejects an operation outside the filter fixture.
 func (*generatedDaemonService) GetHealth(
 	context.Context,

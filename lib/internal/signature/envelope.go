@@ -19,6 +19,32 @@ func CanonicalEnvelopePath(path []byte, allowNull bool) ([]byte, bool) {
 	return canonicalEnvelopePath(path, allowNull)
 }
 
+// CanonicalEnvelopeDomain returns the canonical DNS mailbox domain from one
+// validated SMTP path. It rejects null paths and address literals because they
+// do not provide a DNS identity suitable for domain-bound protocol checks.
+func CanonicalEnvelopeDomain(path []byte, allowNull bool) (string, bool) {
+	canonical, valid := canonicalEnvelopePath(path, allowNull)
+	if !valid || len(canonical) < 4 {
+		return "", false
+	}
+	mailbox := canonical[1 : len(canonical)-1]
+	if len(mailbox) == 0 {
+		return "", false
+	}
+	if mailbox[0] == '@' {
+		separator := bytes.IndexByte(mailbox, ':')
+		if separator <= 1 || separator == len(mailbox)-1 {
+			return "", false
+		}
+		mailbox = mailbox[separator+1:]
+	}
+	domainStart, valid := smtpMailboxDomainStart(mailbox)
+	if !valid || domainStart >= len(mailbox) {
+		return "", false
+	}
+	return canonicalDNSName(mailbox[domainStart:])
+}
+
 // parseEnvelopePath decodes and checks one base64-wrapped SMTP path.
 func parseEnvelopePath(value string, limits tagvalue.Limits, fieldIndex int, recipientIndex int, tagName string) (EnvelopePath, error) {
 	parsed, err := tagvalue.ParseBase64String([]byte(value), limits)

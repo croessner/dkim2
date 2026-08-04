@@ -51,6 +51,8 @@ const (
 	OperationSign Operation = "sign"
 	// OperationRevise identifies the generated ordinary-transit revision call.
 	OperationRevise Operation = "revise"
+	// OperationDSNSign identifies the dedicated delivery-status signing call.
+	OperationDSNSign Operation = "sign_dsn"
 )
 
 // ResponseFact is the bounded typed result of one generated operation.
@@ -62,6 +64,7 @@ type ResponseFact struct {
 	Process   *generated.ProcessResponse
 	Sign      *generated.OperationResponse
 	Revise    *generated.OperationResponse
+	DSNSign   *generated.OperationResponse
 	Error     *generated.ErrorResponse
 }
 
@@ -223,6 +226,23 @@ func (r *Runtime) CallRevise(
 	return classifyResponse(OperationRevise, response)
 }
 
+// CallDSNSign executes and strictly classifies dedicated delivery-status signing.
+func (r *Runtime) CallDSNSign(
+	ctx context.Context,
+	request generated.DSNSignRequest,
+	editor generated.RequestEditorFn,
+) (ResponseFact, error) {
+	if r == nil || r.generated == nil || editor == nil {
+		return ResponseFact{}, NewExitError(ExitInternal)
+	}
+	response, err := r.generated.SignDeliveryStatus(ctx, request, editor)
+	if err != nil {
+		closeResponseOnError(response)
+		return ResponseFact{}, classifyTransportError(err)
+	}
+	return classifyResponse(OperationDSNSign, response)
+}
+
 // authorityRoundTripper prevents generated requests from drifting off authority.
 type authorityRoundTripper struct {
 	authority string
@@ -239,7 +259,7 @@ func (t *authorityRoundTripper) RoundTrip(request *http.Request) (*http.Response
 	path := request.URL.EscapedPath()
 	valid := request.Method == http.MethodGet &&
 		(path == healthPath || path == readinessPath) && request.URL.RawQuery == ""
-	valid = valid || (path == processPath || path == signPath || path == revisePath) &&
+	valid = valid || (path == processPath || path == signPath || path == revisePath || path == dsnSignPath) &&
 		(request.Method == http.MethodPost && (request.URL.RawQuery == "" ||
 			request.URL.RawQuery == "unexpected=1") ||
 			request.Method == http.MethodPut && request.URL.RawQuery == "")
@@ -290,12 +310,7 @@ func classifyResponse(operation Operation, response *http.Response) (ResponseFac
 	if response == nil || response.Body == nil {
 		return ResponseFact{}, NewExitError(ExitContract)
 	}
-	limit := int64(statusBodyLimit)
-	if operation == OperationProcess || operation == OperationSign ||
-		operation == OperationRevise {
-		limit = processBodyLimit
-	}
-	body, err := readAndClose(response.Body, limit)
+	body, err := readAndClose(response.Body, responseBodyLimit(operation))
 	if err != nil {
 		return ResponseFact{}, err
 	}
@@ -334,20 +349,8 @@ func classifyResponse(operation Operation, response *http.Response) (ResponseFac
 			fact.Process = &value
 			return fact, nil
 		}
-	case OperationSign, OperationRevise:
-		if response.StatusCode == http.StatusOK {
-			var value generated.OperationResponse
-			if strictResponseJSON(body, &value) != nil ||
-				!validOperation(value, operation) {
-				return ResponseFact{}, NewExitError(ExitContract)
-			}
-			if operation == OperationSign {
-				fact.Sign = &value
-			} else {
-				fact.Revise = &value
-			}
-			return fact, nil
-		}
+	case OperationSign, OperationRevise, OperationDSNSign:
+		return classifyOperationResponse(operation, response.StatusCode, body, fact)
 	default:
 		return ResponseFact{}, NewExitError(ExitInternal)
 	}
@@ -357,6 +360,53 @@ func classifyResponse(operation Operation, response *http.Response) (ResponseFac
 	var value generated.ErrorResponse
 	if strictResponseJSON(body, &value) != nil || !validError(value) ||
 		!coherentErrorStatus(response.StatusCode, value) {
+		return ResponseFact{}, NewExitError(ExitContract)
+	}
+	fact.Error = &value
+	return fact, nil
+}
+
+// responseBodyLimit selects the closed response size bound for one operation.
+func responseBodyLimit(operation Operation) int64 {
+	switch operation {
+	case OperationProcess, OperationSign, OperationRevise, OperationDSNSign:
+		return processBodyLimit
+	default:
+		return int64(statusBodyLimit)
+	}
+}
+
+// classifyOperationResponse decodes one successful mutation response or its
+// bounded typed error response without conflating signing operation facts.
+func classifyOperationResponse(
+	operation Operation,
+	status int,
+	body []byte,
+	fact ResponseFact,
+) (ResponseFact, error) {
+	if status == http.StatusOK {
+		var value generated.OperationResponse
+		if strictResponseJSON(body, &value) != nil || !validOperation(value, operation) {
+			return ResponseFact{}, NewExitError(ExitContract)
+		}
+		switch operation {
+		case OperationSign:
+			fact.Sign = &value
+		case OperationRevise:
+			fact.Revise = &value
+		case OperationDSNSign:
+			fact.DSNSign = &value
+		default:
+			return ResponseFact{}, NewExitError(ExitInternal)
+		}
+		return fact, nil
+	}
+	if !allowedErrorStatus(operation, status) {
+		return ResponseFact{}, NewExitError(ExitContract)
+	}
+	var value generated.ErrorResponse
+	if strictResponseJSON(body, &value) != nil || !validError(value) ||
+		!coherentErrorStatus(status, value) {
 		return ResponseFact{}, NewExitError(ExitContract)
 	}
 	fact.Error = &value
@@ -660,7 +710,7 @@ func validProcessActions(value generated.ProcessResponse) bool {
 	return validDomain(strings.TrimSuffix(action.Value, suffix))
 }
 
-// validOperation validates one complete generated sign or revise response.
+// validOperation validates one complete generated signing or revision response.
 func validOperation(value generated.OperationResponse, operation Operation) bool {
 	if value.ApiVersion != generated.V1 ||
 		value.Draft != generated.DraftIetfDkimDkim2Spec04 ||
@@ -668,6 +718,7 @@ func validOperation(value generated.OperationResponse, operation Operation) bool
 		!value.Disposition.Valid() ||
 		operation == OperationSign && value.Operation != generated.Sign ||
 		operation == OperationRevise && value.Operation != generated.Revise ||
+		operation == OperationDSNSign && value.Operation != generated.DeliveryStatus ||
 		!validOperationOutcome(value.Result, value.Disposition) ||
 		!validOperationActions(value.Operation, value.Disposition, value.Actions) {
 		return false
@@ -712,6 +763,10 @@ func validOperationActions(
 	}
 	switch operation {
 	case generated.Sign:
+		return len(actions) == 2 &&
+			actions[0].Name == generated.MessageInstance &&
+			actions[1].Name == generated.DKIM2Signature
+	case generated.DeliveryStatus:
 		return len(actions) == 2 &&
 			actions[0].Name == generated.MessageInstance &&
 			actions[1].Name == generated.DKIM2Signature
@@ -813,7 +868,7 @@ func allowedErrorStatus(operation Operation, status int) bool {
 		return status == 400 || status == 412 || status == 417 || status == 500
 	case OperationReadiness:
 		return status == 400 || status == 412 || status == 417 || status == 500 || status == 503
-	case OperationProcess, OperationSign, OperationRevise:
+	case OperationProcess, OperationSign, OperationRevise, OperationDSNSign:
 		return status == 400 || status == 403 || status == 408 || status == 413 ||
 			status == 415 || status == 417 || status == 500 || status == 503
 	default:

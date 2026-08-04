@@ -62,7 +62,10 @@ Local `sendmail(1)` intake is asynchronous: successful handoff to `postdrop(1)`
 is followed by a bounded assertion that exactly one unsigned message remains
 held in the `maildrop` queue because cleanup cannot reach the Milter.
 
-No mature external DKIM2 interoperability corpus is currently authoritative.
+No external DKIM2 corpus is authoritative for this Draft-04 implementation.
+The retained Turscar Draft-02-labelled corpus is offline provenance and strict
+parser-refusal evidence only: every retained signed fixture omits a mandatory
+tag terminator, so none is counted as a verification or interoperability PASS.
 The positive values in this repository come from reviewed draft examples,
 independent derivations, generated contract fixtures, and local synthetic
 oracles as recorded in the manifest.

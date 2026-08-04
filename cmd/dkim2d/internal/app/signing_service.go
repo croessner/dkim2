@@ -116,8 +116,11 @@ func (l datasourceSigningLease) ResolvePolicy(
 		return dkim2.SigningProfile{}, &DomainError{}
 	}
 	profileUse := provider.ProfileUseOriginator
-	if use == signingstore.PolicyOrdinaryTransit {
+	switch use {
+	case signingstore.PolicyOrdinaryTransit:
 		profileUse = provider.ProfileUseOrdinaryTransit
+	case signingstore.PolicyDeliveryStatus:
+		profileUse = provider.ProfileUseDeliveryStatus
 	}
 	return l.lease.ResolvePolicy(ctx, tenant, domain, profileUse, at)
 }

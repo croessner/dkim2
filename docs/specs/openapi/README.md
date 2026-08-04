@@ -2,9 +2,11 @@
 
 `dkim2d.yaml` is the authoritative REST contract for the daemon. The current
 contract exposes metrics, liveness, readiness, inbound verification/policy/replay
-processing, originator signing, and ordinary-transit revision. Each authenticated
-route uses a distinct generation-bound local capability in the implementation even
-though all three share the contract's `X-DKIM2-Capability` header shape.
+processing, originator signing, ordinary-transit revision, and authenticated
+outgoing delivery-status signing. Each authenticated route uses a distinct
+generation-bound local capability in the implementation. Process, originator
+signing, and revision share the contract's `X-DKIM2-Capability` header shape;
+delivery-status signing uses `X-DKIM2-DSN-Sign-Capability`.
 Adapter-specific message fidelity values describe how message bytes were obtained;
 they do not create adapter-specific routes or parallel DTOs.
 
@@ -44,6 +46,14 @@ signing policy or profile was absent or inactive, so signing was not applicable
 and the message continues unchanged. Datasource ambiguity, unavailability,
 degradation, malformed active data, and signing failures are never represented
 by this 204 variant.
+
+The delivery-status signing operation requires a strict RFC 3462 report and
+separate protected outer and original SMTP contexts. It is intentionally not a
+general process route: the daemon first authenticates the embedded original
+message's highest `mf=` identity, then applies the separate delivery-status
+policy and signing profile. It uses the same 200/204 applicability distinction
+as originator signing; malformed or unauthenticated delivery status reports are
+explicit failures, not 204 results.
 
 The target-specific overlays change only the Go bindings for the protected raw
 message, reverse path, and forward paths. Each generated package uses its own

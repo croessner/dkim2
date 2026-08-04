@@ -185,7 +185,8 @@ internals, route ticket, replay key, DNS TXT, or raw error.
 
 The existing `server.capability_file` remains the process capability and stable
 path. Signing-enabled daemon configuration adds protected direct-child
-`server.sign_capability_file` and `server.revise_capability_file`. Each is
+`server.sign_capability_file`, `server.revise_capability_file`, and optional
+`server.dsn_sign_capability_file`. Each is
 exactly scoped to one route and must be distinct from every other capability,
 private key, replay secret, datasource credential, and protected token.
 
@@ -195,7 +196,8 @@ datasource lookup, verification, replay, or signing. Missing, malformed,
 duplicated, cross-route, and mismatched credentials produce the same closed
 403 shape. The header is removed before generated handlers run. A Milter
 instance loads only the capability for its fixed mode, so compromise of an
-inbound adapter cannot authorize sign or revise.
+inbound adapter cannot authorize sign, revise, or delivery-status signing. The
+current Milter does not load the DSN capability and continues to tempfail `<>`.
 
 ## Closed Action Plan
 

@@ -12,6 +12,7 @@ import (
 	"io"
 	"strings"
 
+	"github.com/croessner/dkim2/internal/dsn"
 	"github.com/croessner/dkim2/internal/instance"
 	"github.com/croessner/dkim2/internal/rawmsg"
 	"github.com/croessner/dkim2/internal/signature"
@@ -53,6 +54,27 @@ func (s RevisionVerificationStatus) Known() bool {
 	default:
 		return false
 	}
+}
+
+// EvaluateDeliveryStatus verifies one parsed DSN embedded original through the
+// dedicated DSN evidence path. It never issues a revision capability.
+func (v RevisionVerifier) EvaluateDeliveryStatus(
+	ctx context.Context,
+	report dsn.Report,
+	originalEnvelope verify.Envelope,
+) (dsn.Evidence, error) {
+	if ctx == nil || !v.valid() {
+		return dsn.Evidence{}, newError(ErrorCodeInvalidRequest, ErrorLocation{Phase: PhasePreflight}, ErrorDetails{})
+	}
+	evaluator, err := dsn.NewEvidenceEvaluator(v.verifier)
+	if err != nil {
+		return dsn.Evidence{}, newError(ErrorCodeInternalInvariant, ErrorLocation{Phase: PhasePreflight}, ErrorDetails{})
+	}
+	evidence, err := evaluator.Evaluate(ctx, dsn.EvidenceRequest{Report: report, OriginalEnvelope: originalEnvelope})
+	if err != nil {
+		return dsn.Evidence{}, err
+	}
+	return evidence, nil
 }
 
 // RevisionVerification stores one initialized closed outcome without message content.

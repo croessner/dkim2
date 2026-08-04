@@ -6,7 +6,10 @@ import (
 	"net/http"
 )
 
-const localCapabilityHeader = "X-DKIM2-Capability"
+const (
+	localCapabilityHeader   = "X-DKIM2-Capability"
+	dsnSignCapabilityHeader = "X-DKIM2-DSN-Sign-Capability"
+)
 
 type localCapabilityMarker struct{}
 
@@ -20,11 +23,21 @@ func authenticateLocalCapability(
 	request *http.Request,
 	matcher capabilityMatcher,
 ) (*http.Request, bool) {
+	return authenticateCapability(request, localCapabilityHeader, matcher)
+}
+
+// authenticateCapability validates and removes one operation-specific local capability.
+func authenticateCapability(
+	request *http.Request,
+	header string,
+	matcher capabilityMatcher,
+) (*http.Request, bool) {
 	if request == nil {
 		return request, false
 	}
-	values := request.Header.Values(localCapabilityHeader)
+	values := request.Header.Values(header)
 	request.Header.Del(localCapabilityHeader)
+	request.Header.Del(dsnSignCapabilityHeader)
 	if nilInterfaceValue(matcher) || len(values) != 1 || len(values[0]) != 43 {
 		return request, false
 	}

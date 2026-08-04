@@ -387,6 +387,9 @@ func (s *Signer) SignOriginator(ctx context.Context, request OriginatorSigningRe
 		!request.profile.value.ValidForLimits(s.limits) || !request.metadata.value.Valid() {
 		return SigningResult{}, SigningRecovery{}, newSigningError(SigningErrorInvalidRequest)
 	}
+	if bytes.Equal(request.reversePath, []byte("<>")) {
+		return SigningResult{}, SigningRecovery{}, newSigningError(SigningErrorInvalidRequest)
+	}
 	message, err := rawmsg.Parse(request.raw)
 	if err != nil {
 		return SigningResult{}, SigningRecovery{}, newSigningError(SigningErrorMalformedInput)
@@ -419,6 +422,9 @@ func (s *Signer) SignExisting(ctx context.Context, request ExistingSigningReques
 		!request.ticket.Valid() ||
 		!request.ticket.value.MatchesEnvelope(request.reversePath, request.forwardPaths) ||
 		!request.profile.value.ValidForLimits(s.limits) || !request.metadata.value.Valid() {
+		return SigningResult{}, SigningRecovery{}, newSigningError(SigningErrorInvalidRequest)
+	}
+	if bytes.Equal(request.reversePath, []byte("<>")) {
 		return SigningResult{}, SigningRecovery{}, newSigningError(SigningErrorInvalidRequest)
 	}
 	message, err := rawmsg.Parse(request.raw)

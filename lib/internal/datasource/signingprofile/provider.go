@@ -193,6 +193,8 @@ func parseBindingUse(value string) (datasource.ProfileUse, bool) {
 		return datasource.ProfileUseOriginator, true
 	case "ordinary_transit":
 		return datasource.ProfileUseOrdinaryTransit, true
+	case "delivery_status":
+		return datasource.ProfileUseDeliveryStatus, true
 	default:
 		return 0, false
 	}

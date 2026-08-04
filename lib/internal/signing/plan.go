@@ -343,7 +343,8 @@ func (p UnsignedOperationPlan) Valid() bool {
 // validOriginator verifies origin-only progression, generation, and size invariants.
 func (p UnsignedOperationPlan) validOriginator() bool {
 	return p.highestInstance == 0 && p.newInstance == 1 && p.signatureInstance == 1 &&
-		p.binding.purpose == routeplan.PurposeOrigin && !p.binding.hasCapability &&
+		(p.binding.purpose == routeplan.PurposeOrigin || p.binding.purpose == routeplan.PurposeDeliveryStatus) &&
+		!p.binding.hasCapability &&
 		p.nextSequence == 1 && p.instance.Number() == 1 && len(p.renderedInstance) > 0 &&
 		p.generation.outcome == recipe.GenerationOutcomeUnchanged &&
 		p.generation.bodyOutcome == recipe.BodyGenerationUnchanged && p.generation.canonical > 0 &&
@@ -525,7 +526,23 @@ func (c HashPlanCoordinator) Format(state fmt.State, _ rune) {
 
 // PlanOriginator derives the sole legal origin plan without invoking external services.
 func (c HashPlanCoordinator) PlanOriginator(ctx context.Context, request OriginatorPlanRequest) (UnsignedOperationPlan, error) {
-	if err := c.validateBase(ctx, request.Message, request.Ticket, routeplan.PurposeOrigin); err != nil {
+	return c.planInitial(ctx, request, routeplan.PurposeOrigin)
+}
+
+// PlanDeliveryStatus derives an initial DSN plan after a dedicated evidence
+// boundary has authorized its otherwise null reverse-path envelope.
+func (c HashPlanCoordinator) PlanDeliveryStatus(ctx context.Context, request OriginatorPlanRequest) (UnsignedOperationPlan, error) {
+	return c.planInitial(ctx, request, routeplan.PurposeDeliveryStatus)
+}
+
+// planInitial derives one initial instance under the exact route purpose that
+// has already authorized the otherwise identical hash and signature plan.
+func (c HashPlanCoordinator) planInitial(
+	ctx context.Context,
+	request OriginatorPlanRequest,
+	purpose routeplan.Purpose,
+) (UnsignedOperationPlan, error) {
+	if err := c.validateBase(ctx, request.Message, request.Ticket, purpose); err != nil {
 		return UnsignedOperationPlan{}, err
 	}
 	if len(revisionProtocolFields(request.Message)) != 0 {
@@ -556,8 +573,7 @@ func (c HashPlanCoordinator) PlanOriginator(ctx context.Context, request Origina
 		role: RoleOriginator, newInstance: 1, nextSequence: 1, signatureInstance: 1,
 		hashes: hashes, generation: unchangedPlanGenerationFacts(
 			canonicalWork, canonicalWork, recipe.RejectUnavailableBody, recipe.CopyOnly,
-		), instance: model,
-		renderedInstance: rendered, sizes: sizes,
+		), instance: model, renderedInstance: rendered, sizes: sizes,
 		binding: newOperationPlanBinding(request.Message, request.Ticket, VerifiedRevisionInput{}),
 		instant: instant, initialized: true,
 	}, nil
@@ -785,7 +801,7 @@ func (c HashPlanCoordinator) validateBase(ctx context.Context, message rawmsg.Me
 		return limitError(LimitNameMaxMessageBytes, c.limits.MaxMessageBytes, metadata.StoredBytes)
 	}
 	generatedFields := 1
-	if purpose == routeplan.PurposeOrigin {
+	if purpose == routeplan.PurposeOrigin || purpose == routeplan.PurposeDeliveryStatus {
 		generatedFields = 2
 	}
 	finalHeaderFields, ok := checkedAdd(metadata.HeaderFields, generatedFields)

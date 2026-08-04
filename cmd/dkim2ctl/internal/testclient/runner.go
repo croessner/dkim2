@@ -19,6 +19,7 @@ type operationCapabilities struct {
 	process *Capability
 	sign    *Capability
 	revise  *Capability
+	dsnSign *Capability
 }
 
 // Close releases every loaded operation capability.
@@ -26,6 +27,7 @@ func (c operationCapabilities) Close() {
 	_ = c.process.Close()
 	_ = c.sign.Close()
 	_ = c.revise.Close()
+	_ = c.dsnSign.Close()
 }
 
 // NewApplication constructs one command-scoped test client application.
@@ -61,6 +63,7 @@ func (a *Application) Run(options Options, paths []string) error {
 		plan.requiresCapability,
 		plan.requiresSignCapability,
 		plan.requiresReviseCapability,
+		plan.requiresDSNSignCapability,
 	); err != nil {
 		return err
 	}
@@ -91,9 +94,18 @@ func (a *Application) Run(options Options, paths []string) error {
 			return err
 		}
 	}
+	if plan.requiresDSNSignCapability {
+		capabilities.dsnSign, err = LoadCapabilityForOperation(
+			options.DSNSignCapabilityFile, OperationDSNSign,
+		)
+		if err != nil {
+			capabilities.Close()
+			return err
+		}
+	}
 	defer capabilities.Close()
 	if !capabilitiesAreDistinct(
-		capabilities.process, capabilities.sign, capabilities.revise,
+		capabilities.process, capabilities.sign, capabilities.revise, capabilities.dsnSign,
 	) {
 		return NewExitError(ExitCapability)
 	}
@@ -154,6 +166,12 @@ func (a *Application) executePlannedCase(
 		request, err = generatedReviseRequest(*testCase.Revise)
 		if err == nil {
 			fact, err = runtime.CallRevise(ctx, request, capabilities.revise.EditRequest)
+		}
+	case caseDSNSign:
+		var request generated.DSNSignRequest
+		request, err = generatedDSNSignRequest(*testCase.DSNSign)
+		if err == nil {
+			fact, err = runtime.CallDSNSign(ctx, request, capabilities.dsnSign.EditRequest)
 		}
 	case caseNegative:
 		operation := negativeOperation(*testCase.Negative)
@@ -222,6 +240,10 @@ func resultForCase(planned plannedCase, fact ResponseFact, class ExitClass) Resu
 		disposition := string(fact.Revise.Disposition)
 		record.Disposition = &disposition
 	}
+	if fact.DSNSign != nil {
+		disposition := string(fact.DSNSign.Disposition)
+		record.Disposition = &disposition
+	}
 	return record
 }
 
@@ -254,6 +276,9 @@ func expectationMatches(expectation fixtureExpectation, fact ResponseFact) bool 
 	}
 	if fact.Revise != nil {
 		return expectedOperationMatches(expectation, fact.Revise)
+	}
+	if fact.DSNSign != nil {
+		return expectedOperationMatches(expectation, fact.DSNSign)
 	}
 	if fact.Error != nil {
 		return expectation.ErrorCode != nil && string(fact.Error.Code) == *expectation.ErrorCode

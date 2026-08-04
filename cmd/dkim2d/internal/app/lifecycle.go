@@ -589,6 +589,7 @@ func (l *Lifecycle) bindTransport(
 		startup.operation,
 		preparation.SignCapability(),
 		preparation.ReviseCapability(),
+		preparation.DSNSignCapability(),
 	)
 	input = input.withObservability(startup.telemetry)
 	if err != nil || lifecycleContextFailed(acquisition) {

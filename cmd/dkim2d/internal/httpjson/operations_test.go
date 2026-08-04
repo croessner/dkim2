@@ -63,6 +63,73 @@ func TestMapOperationRequestAdmitsOnlyTransportFilterEximFidelity(t *testing.T) 
 	}
 }
 
+// TestGenericOperationRequestsRejectNullReversePath reserves null paths for DSN operations.
+func TestGenericOperationRequestsRejectNullReversePath(t *testing.T) {
+	request := operationRequestFixture(t, []byte("From: sender@example.test\r\n\r\nbody\r\n"))
+	nullPath, err := wire.NewProtectedString("<>")
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Smtp.MailFrom = nullPath
+	if _, err := MapSignRequest(request); !IsMappingError(err, MappingInvalidContract) {
+		t.Fatalf("MapSignRequest(null) error = %v", err)
+	}
+
+	revise := generated.ReviseRequest{
+		ApiVersion: request.ApiVersion, Draft: request.Draft, Message: request.Message,
+		Smtp: request.Smtp, IncomingSmtp: request.Smtp, Context: request.Context,
+	}
+	if _, err := MapReviseRequest(revise); !IsMappingError(err, MappingInvalidContract) {
+		t.Fatalf("MapReviseRequest(null) error = %v", err)
+	}
+}
+
+// TestMapDeliveryStatusRequestReservesExactNullSenderEvidence proves only the
+// dedicated route can admit a raw DSN envelope, before profile resolution.
+func TestMapDeliveryStatusRequestReservesExactNullSenderEvidence(t *testing.T) {
+	base := operationRequestFixture(t, []byte("From: postmaster@example.test\r\n\r\nDSN\r\n"))
+	originalReverse, err := wire.NewProtectedString("<alice@example.test>")
+	if err != nil {
+		t.Fatal(err)
+	}
+	originalRecipient, err := wire.NewProtectedString("<bob@example.test>")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rawFidelity := generated.RawRfc5322
+	request := generated.DSNSignRequest{
+		ApiVersion: base.ApiVersion,
+		Draft:      base.Draft,
+		Message: generated.MessageInput{
+			RawRfc5322Base64: base.Message.RawRfc5322Base64,
+			Fidelity:         &rawFidelity,
+		},
+		OuterSmtp: generated.SMTPInput{
+			MailFrom: mustProtectedString(t, "<>"),
+			RcptTo:   []wire.ProtectedString{mustProtectedString(t, "<postmaster@example.test>")},
+		},
+		OriginalSmtp: generated.SMTPInput{
+			MailFrom: originalReverse,
+			RcptTo:   []wire.ProtectedString{originalRecipient},
+		},
+		Context: base.Context,
+	}
+	mapped, err := MapDeliveryStatusRequest(request)
+	if err != nil || string(mapped.OuterReversePath()) != "<>" ||
+		string(mapped.OriginalReversePath()) != "<alice@example.test>" {
+		t.Fatalf("MapDeliveryStatusRequest() request=%v error=%v", mapped, err)
+	}
+	request.OuterSmtp.MailFrom = mustProtectedString(t, "<sender@example.test>")
+	if _, err := MapDeliveryStatusRequest(request); !IsMappingError(err, MappingInvalidContract) {
+		t.Fatalf("non-null outer path error = %v", err)
+	}
+	request.OuterSmtp.MailFrom = mustProtectedString(t, "<>")
+	request.OuterSmtp.RcptTo = append(request.OuterSmtp.RcptTo, mustProtectedString(t, "<second@example.test>"))
+	if _, err := MapDeliveryStatusRequest(request); !IsMappingError(err, MappingInvalidContract) {
+		t.Fatalf("multiple outer recipients error = %v", err)
+	}
+}
+
 // TestMapReviseRequestPreservesDistinctEnvelopeEvidence proves inherited
 // verification evidence cannot be replaced by the outgoing signing envelope.
 func TestMapReviseRequestPreservesDistinctEnvelopeEvidence(t *testing.T) {
@@ -356,6 +423,26 @@ func (*operationServiceStub) Revise(context.Context, app.OperationRequest) (app.
 	return app.NewOperationResult(
 		app.OperationRevise, app.OperationPass, app.OperationContinue, nil,
 	)
+}
+
+// SignDeliveryStatus keeps this focused ordinary-operation stub closed for DSN requests.
+func (*operationServiceStub) SignDeliveryStatus(
+	context.Context,
+	app.DeliveryStatusRequest,
+) (app.OperationResult, error) {
+	return app.NewOperationResult(
+		app.OperationDeliveryStatus, app.OperationPermerror, app.OperationReject, nil,
+	)
+}
+
+// mustProtectedString constructs one test-only protected wire scalar.
+func mustProtectedString(t *testing.T, value string) wire.ProtectedString {
+	t.Helper()
+	protected, err := wire.NewProtectedString(value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return protected
 }
 
 // operationRequestFixture constructs one exact generated signing request.

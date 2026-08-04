@@ -519,6 +519,16 @@ func (s *dkim2ctlOperationService) Revise(
 	)
 }
 
+// SignDeliveryStatus keeps the ordinary dkim2ctl integration fixture closed for DSN requests.
+func (*dkim2ctlOperationService) SignDeliveryStatus(
+	context.Context,
+	app.DeliveryStatusRequest,
+) (app.OperationResult, error) {
+	return app.NewOperationResult(
+		app.OperationDeliveryStatus, app.OperationPermerror, app.OperationReject, nil,
+	)
+}
+
 // newDKIM2ctlOperationResult constructs one exact successful operation plan.
 func newDKIM2ctlOperationResult(
 	operation app.Operation,

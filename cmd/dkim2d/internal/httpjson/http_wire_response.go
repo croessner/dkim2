@@ -404,6 +404,13 @@ func (r operationReviseResponse) VisitReviseMessageResponse(writer http.Response
 	return r.write(writer)
 }
 
+type operationDeliveryStatusResponse struct{ preMarshaledResponse }
+
+// VisitSignDeliveryStatusResponse writes one exact generated-interface response.
+func (r operationDeliveryStatusResponse) VisitSignDeliveryStatusResponse(writer http.ResponseWriter) error {
+	return r.write(writer)
+}
+
 // write commits the frozen headers and writes all selected body bytes.
 func (r preMarshaledResponse) write(writer http.ResponseWriter) error {
 	if writer == nil || r.status < 100 || r.status > 599 {

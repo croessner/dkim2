@@ -24,6 +24,7 @@ const (
 	caseProcess                   = "process"
 	caseSign                      = "sign"
 	caseRevise                    = "revise"
+	caseDSNSign                   = "sign_dsn"
 	caseNegative                  = "negative"
 	mutationMissingCapability     = "missing_capability"
 	mutationDuplicateCapability   = "duplicate_capability"
@@ -64,6 +65,7 @@ type fixtureCase struct {
 	Process  *fixtureProcessInput `json:"process,omitempty"`
 	Sign     *fixtureSignInput    `json:"sign,omitempty"`
 	Revise   *fixtureReviseInput  `json:"revise,omitempty"`
+	DSNSign  *fixtureDSNSignInput `json:"sign_dsn,omitempty"`
 	Negative *negativeInput       `json:"negative,omitempty"`
 	Expect   fixtureExpectation   `json:"expect"`
 }
@@ -95,6 +97,18 @@ type fixtureReviseInput struct {
 	Recipients         []string `json:"rcpt_to"`
 	IncomingMailFrom   string   `json:"incoming_mail_from"`
 	IncomingRecipients []string `json:"incoming_rcpt_to"`
+	Tenant             string   `json:"tenant"`
+	Domain             string   `json:"domain"`
+}
+
+// fixtureDSNSignInput holds delivery-status inputs before generated mapping.
+type fixtureDSNSignInput struct {
+	OuterMessageBase64 string   `json:"outer_raw_rfc5322_base64"`
+	OuterFidelity      *string  `json:"outer_fidelity,omitempty"`
+	OuterMailFrom      string   `json:"outer_mail_from"`
+	OuterRecipients    []string `json:"outer_rcpt_to"`
+	OriginalMailFrom   string   `json:"original_mail_from"`
+	OriginalRecipients []string `json:"original_rcpt_to"`
 	Tenant             string   `json:"tenant"`
 	Domain             string   `json:"domain"`
 }
@@ -135,11 +149,12 @@ type plannedCase struct {
 
 // ExecutionPlan is one immutable deterministic set of validated cases.
 type ExecutionPlan struct {
-	fixtures                 []string
-	cases                    []plannedCase
-	requiresCapability       bool
-	requiresSignCapability   bool
-	requiresReviseCapability bool
+	fixtures                  []string
+	cases                     []plannedCase
+	requiresCapability        bool
+	requiresSignCapability    bool
+	requiresReviseCapability  bool
+	requiresDSNSignCapability bool
 }
 
 // FixtureIdentifiers returns a defensive copy of deterministic fixture IDs.
@@ -209,6 +224,9 @@ func LoadExecutionPlan(paths []string) (ExecutionPlan, error) {
 			}
 			if testCase.Kind == caseRevise {
 				plan.requiresReviseCapability = true
+			}
+			if testCase.Kind == caseDSNSign {
+				plan.requiresDSNSignCapability = true
 			}
 			if testCase.Kind == caseNegative {
 				operation := negativeOperation(*testCase.Negative)
@@ -395,6 +413,11 @@ func validateFixtureCase(testCase fixtureCase) (int, error) {
 			return 0, NewExitError(ExitFixture)
 		}
 		return validateReviseInput(*testCase.Revise, testCase.Expect)
+	case caseDSNSign:
+		if testCase.DSNSign == nil || testCase.operationInputCount() != 1 {
+			return 0, NewExitError(ExitFixture)
+		}
+		return validateDSNSignInput(*testCase.DSNSign, testCase.Expect)
 	case caseNegative:
 		if testCase.Negative == nil || testCase.operationInputCount() != 1 ||
 			!validNegativeMutation(testCase.Negative.Mutation) ||
@@ -436,7 +459,7 @@ func validStatusFixture(testCase fixtureCase, kind string) bool {
 func (c fixtureCase) operationInputCount() int {
 	count := 0
 	for _, present := range []bool{
-		c.Process != nil, c.Sign != nil, c.Revise != nil, c.Negative != nil,
+		c.Process != nil, c.Sign != nil, c.Revise != nil, c.DSNSign != nil, c.Negative != nil,
 	} {
 		if present {
 			count++
@@ -566,6 +589,39 @@ func validateReviseInput(input fixtureReviseInput, expectation fixtureExpectatio
 	return decoded, nil
 }
 
+// validateDSNSignInput checks the distinct DSN outer and original envelopes.
+func validateDSNSignInput(input fixtureDSNSignInput, expectation fixtureExpectation) (int, error) {
+	decoded, err := validateMessageAndEnvelope(
+		input.OuterMessageBase64, input.OuterFidelity, input.OuterMailFrom, input.OuterRecipients,
+	)
+	if err != nil || input.OuterFidelity == nil || input.OuterMailFrom != "<>" ||
+		len(input.OuterRecipients) != 1 ||
+		*input.OuterFidelity != string(generated.RawRfc5322) ||
+		!validTenant(input.Tenant) || !validDomain(input.Domain) ||
+		!validOperationExpectation(string(OperationDSNSign), expectation) {
+		return 0, NewExitError(ExitFixture)
+	}
+	if !validSMTPEnvelope(input.OriginalMailFrom, input.OriginalRecipients) ||
+		input.OriginalMailFrom == "<>" {
+		return 0, NewExitError(ExitFixture)
+	}
+	return decoded, nil
+}
+
+// validSMTPEnvelope checks bounded scalar SMTP envelope facts.
+func validSMTPEnvelope(mailFrom string, recipients []string) bool {
+	if len(mailFrom) > maxEnvelopeText || len(recipients) == 0 ||
+		len(recipients) > maxRecipients || !utf8.ValidString(mailFrom) {
+		return false
+	}
+	for _, recipient := range recipients {
+		if len(recipient) > maxEnvelopeText || !utf8.ValidString(recipient) {
+			return false
+		}
+	}
+	return true
+}
+
 // validateMessageAndEnvelope checks canonical Base64, fidelity, and SMTP bounds.
 func validateMessageAndEnvelope(
 	messageBase64 string,
@@ -575,27 +631,23 @@ func validateMessageAndEnvelope(
 ) (int, error) {
 	decoded, err := base64.StdEncoding.Strict().DecodeString(messageBase64)
 	if err != nil || base64.StdEncoding.EncodeToString(decoded) != messageBase64 ||
-		len(mailFrom) > maxEnvelopeText ||
-		len(recipients) == 0 || len(recipients) > maxRecipients ||
-		!utf8.ValidString(mailFrom) {
+		!validSMTPEnvelope(mailFrom, recipients) {
 		return 0, NewExitError(ExitFixture)
 	}
-	if fidelity != nil && *fidelity != string(generated.RawRfc5322) &&
-		*fidelity != string(generated.MilterReconstructedCrlf) {
+	if fidelity != nil && !generated.MessageInputFidelity(*fidelity).Valid() {
 		return 0, NewExitError(ExitFixture)
-	}
-	for _, recipient := range recipients {
-		if len(recipient) > maxEnvelopeText || !utf8.ValidString(recipient) {
-			return 0, NewExitError(ExitFixture)
-		}
 	}
 	return len(decoded), nil
 }
 
 // validOperationExpectation checks exact generated operation result and actions.
 func validOperationExpectation(kind string, expectation fixtureExpectation) bool {
+	expectedOperation := kind
+	if kind == string(OperationDSNSign) {
+		expectedOperation = string(generated.DeliveryStatus)
+	}
 	if expectation.HTTPStatus != http.StatusOK ||
-		expectation.Operation == nil || *expectation.Operation != kind ||
+		expectation.Operation == nil || *expectation.Operation != expectedOperation ||
 		expectation.Result == nil ||
 		expectation.Disposition == nil ||
 		expectation.Actions == nil ||
@@ -787,6 +839,33 @@ func generatedReviseRequest(input fixtureReviseInput) (generated.ReviseRequest, 
 		Message:      message,
 		Smtp:         smtp,
 		IncomingSmtp: incoming,
+		Context: generated.SigningContext{
+			Tenant: input.Tenant,
+			Domain: input.Domain,
+		},
+	}, nil
+}
+
+// generatedDSNSignRequest maps the isolated delivery-status fixture boundary.
+func generatedDSNSignRequest(input fixtureDSNSignInput) (generated.DSNSignRequest, error) {
+	message, err := generatedMessageInput(input.OuterMessageBase64, input.OuterFidelity)
+	if err != nil {
+		return generated.DSNSignRequest{}, err
+	}
+	outer, err := generatedSMTPInput(input.OuterMailFrom, input.OuterRecipients)
+	if err != nil {
+		return generated.DSNSignRequest{}, err
+	}
+	original, err := generatedSMTPInput(input.OriginalMailFrom, input.OriginalRecipients)
+	if err != nil {
+		return generated.DSNSignRequest{}, err
+	}
+	return generated.DSNSignRequest{
+		ApiVersion:   generated.V1,
+		Draft:        generated.DraftIetfDkimDkim2Spec04,
+		Message:      message,
+		OuterSmtp:    outer,
+		OriginalSmtp: original,
 		Context: generated.SigningContext{
 			Tenant: input.Tenant,
 			Domain: input.Domain,

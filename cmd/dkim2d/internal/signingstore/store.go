@@ -26,6 +26,7 @@ const (
 	manifestVersion         = "dkim2-private-keys-v1"
 	manifestOriginator      = "originator"
 	manifestOrdinaryTransit = "ordinary_transit"
+	manifestDeliveryStatus  = "delivery_status"
 	manifestRSASHA256       = "rsa-sha256"
 	manifestEd25519SHA256   = "ed25519-sha256"
 	privateKeyPEMType       = "PRIVATE KEY"
@@ -469,6 +470,8 @@ func validateManifestEntry(
 		use = PolicyOriginator
 	case manifestOrdinaryTransit:
 		use = PolicyOrdinaryTransit
+	case manifestDeliveryStatus:
+		use = PolicyDeliveryStatus
 	default:
 		return "", dkim2.AlgorithmUnknown, [sha256.Size]byte{}, &Error{}
 	}

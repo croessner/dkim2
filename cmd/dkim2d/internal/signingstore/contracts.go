@@ -11,4 +11,6 @@ const (
 	PolicyOriginator = signingflatfile.PolicyOriginator
 	// PolicyOrdinaryTransit selects the ordinary-transit policy.
 	PolicyOrdinaryTransit = signingflatfile.PolicyOrdinaryTransit
+	// PolicyDeliveryStatus selects the delivery-status policy.
+	PolicyDeliveryStatus = signingflatfile.PolicyDeliveryStatus
 )

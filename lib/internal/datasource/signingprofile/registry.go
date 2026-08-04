@@ -315,7 +315,7 @@ func (e Entry) matches(
 
 // canonicalUses validates, deduplicates, and orders the complete allowed-use set.
 func canonicalUses(input []datasource.ProfileUse) ([]datasource.ProfileUse, error) {
-	if len(input) == 0 || len(input) > 3 {
+	if len(input) == 0 || len(input) > 4 {
 		return nil, datasource.NewError(datasource.ErrorCodeInvalidRequest)
 	}
 	seen := make(map[datasource.ProfileUse]struct{}, len(input))
@@ -333,6 +333,7 @@ func canonicalUses(input []datasource.ProfileUse) ([]datasource.ProfileUse, erro
 		datasource.ProfileUseOriginator,
 		datasource.ProfileUseOrdinaryTransit,
 		datasource.ProfileUseNextDomainTransit,
+		datasource.ProfileUseDeliveryStatus,
 	} {
 		if _, present := seen[use]; present {
 			output = append(output, use)

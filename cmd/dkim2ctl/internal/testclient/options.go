@@ -20,6 +20,7 @@ const (
 	processPath      = "/v1/process"
 	signPath         = "/v1/sign"
 	revisePath       = "/v1/revise"
+	dsnSignPath      = "/v1/dsn/sign"
 	cacheNoStore     = "no-store"
 	contentNoSniff   = "nosniff"
 	connectionClose  = "close"
@@ -29,12 +30,13 @@ const (
 
 // Options owns the validated command-wide authority and resource bounds.
 type Options struct {
-	ServerURL            string
-	Timeout              time.Duration
-	CapabilityFile       string
-	SignCapabilityFile   string
-	ReviseCapabilityFile string
-	Output               string
+	ServerURL             string
+	Timeout               time.Duration
+	CapabilityFile        string
+	SignCapabilityFile    string
+	ReviseCapabilityFile  string
+	DSNSignCapabilityFile string
+	Output                string
 }
 
 // DefaultOptions returns the closed local-only command defaults.
@@ -48,11 +50,11 @@ func DefaultOptions() Options {
 
 // Validate checks all command options before protected-file or network access.
 func (o Options) Validate(requireCapability bool) error {
-	return o.validateRequirements(requireCapability, false, false)
+	return o.validateRequirements(requireCapability, false, false, false)
 }
 
 // validateRequirements checks operation-specific protected capability paths.
-func (o Options) validateRequirements(requireProcess, requireSign, requireRevise bool) error {
+func (o Options) validateRequirements(requireProcess, requireSign, requireRevise, requireDSNSign bool) error {
 	if _, err := ParseServerURL(o.ServerURL); err != nil {
 		return NewExitError(ExitUsage)
 	}
@@ -63,7 +65,7 @@ func (o Options) validateRequirements(requireProcess, requireSign, requireRevise
 		return NewExitError(ExitUsage)
 	}
 	for _, path := range []string{
-		o.CapabilityFile, o.SignCapabilityFile, o.ReviseCapabilityFile,
+		o.CapabilityFile, o.SignCapabilityFile, o.ReviseCapabilityFile, o.DSNSignCapabilityFile,
 	} {
 		if path != "" && !validCapabilityPath(path) {
 			return NewExitError(ExitUsage)
@@ -71,10 +73,13 @@ func (o Options) validateRequirements(requireProcess, requireSign, requireRevise
 	}
 	if requireProcess && o.CapabilityFile == "" ||
 		requireSign && o.SignCapabilityFile == "" ||
-		requireRevise && o.ReviseCapabilityFile == "" {
+		requireRevise && o.ReviseCapabilityFile == "" ||
+		requireDSNSign && o.DSNSignCapabilityFile == "" {
 		return NewExitError(ExitUsage)
 	}
-	paths := []string{o.CapabilityFile, o.SignCapabilityFile, o.ReviseCapabilityFile}
+	paths := []string{
+		o.CapabilityFile, o.SignCapabilityFile, o.ReviseCapabilityFile, o.DSNSignCapabilityFile,
+	}
 	for left := range paths {
 		if paths[left] == "" {
 			continue

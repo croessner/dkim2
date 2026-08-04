@@ -22,7 +22,8 @@ import (
 )
 
 const (
-	LocalCapabilityScopes localCapabilityContextKey = "localCapability.Scopes"
+	DsnSignCapabilityScopes dsnSignCapabilityContextKey = "dsnSignCapability.Scopes"
+	LocalCapabilityScopes   localCapabilityContextKey   = "localCapability.Scopes"
 )
 
 // Defines values for APIVersion.
@@ -252,13 +253,16 @@ func (e MessageInputFidelity) Valid() bool {
 
 // Defines values for OperationResponseOperation.
 const (
-	Revise OperationResponseOperation = "revise"
-	Sign   OperationResponseOperation = "sign"
+	DeliveryStatus OperationResponseOperation = "delivery_status"
+	Revise         OperationResponseOperation = "revise"
+	Sign           OperationResponseOperation = "sign"
 )
 
 // Valid indicates whether the value is a known member of the OperationResponseOperation enum.
 func (e OperationResponseOperation) Valid() bool {
 	switch e {
+	case DeliveryStatus:
+		return true
 	case Revise:
 		return true
 	case Sign:
@@ -800,6 +804,22 @@ type AddHeaderActionType string
 // CanonicalUint64 defines model for CanonicalUint64.
 type CanonicalUint64 = string
 
+// DSNSignRequest defines model for DSNSignRequest.
+type DSNSignRequest struct {
+	ApiVersion APIVersion     `json:"api_version"`
+	Context    SigningContext `json:"context"`
+	Draft      DraftVersion   `json:"draft"`
+
+	// Message Exact received RFC 5322 DSN bytes. Only raw_rfc5322 fidelity is accepted; callback reconstruction is not delivery-status evidence.
+	Message MessageInput `json:"message"`
+
+	// OriginalSmtp Independently observed envelope for the originally transmitted message embedded by the DSN. It must not be inferred from DSN text.
+	OriginalSmtp SMTPInput `json:"original_smtp"`
+
+	// OuterSmtp Exact observed envelope of the DSN itself. mail_from must be <> and rcpt_to must contain exactly one recipient.
+	OuterSmtp SMTPInput `json:"outer_smtp"`
+}
+
 // Disposition defines model for Disposition.
 type Disposition string
 
@@ -1078,8 +1098,14 @@ type ServiceUnavailable = ErrorResponse
 // UnsupportedMediaType defines model for UnsupportedMediaType.
 type UnsupportedMediaType = ErrorResponse
 
+// dsnSignCapabilityContextKey is the context key for dsnSignCapability security scheme
+type dsnSignCapabilityContextKey string
+
 // localCapabilityContextKey is the context key for localCapability security scheme
 type localCapabilityContextKey string
+
+// SignDeliveryStatusJSONRequestBody defines body for SignDeliveryStatus for application/json ContentType.
+type SignDeliveryStatusJSONRequestBody = DSNSignRequest
 
 // ProcessMessageJSONRequestBody defines body for ProcessMessage for application/json ContentType.
 type ProcessMessageJSONRequestBody = ProcessRequest
@@ -1107,6 +1133,9 @@ type ServerInterface interface {
 	// Report service readiness without a response body.
 	// (HEAD /readyz)
 	HeadReadiness(w http.ResponseWriter, r *http.Request)
+	// Sign one delivery-status notification.
+	// (POST /v1/dsn/sign)
+	SignDeliveryStatus(w http.ResponseWriter, r *http.Request)
 	// Process one inbound DKIM2 message.
 	// (POST /v1/process)
 	ProcessMessage(w http.ResponseWriter, r *http.Request)
@@ -1188,6 +1217,26 @@ func (siw *ServerInterfaceWrapper) HeadReadiness(w http.ResponseWriter, r *http.
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.HeadReadiness(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SignDeliveryStatus operation middleware
+func (siw *ServerInterfaceWrapper) SignDeliveryStatus(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, DsnSignCapabilityScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SignDeliveryStatus(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1382,6 +1431,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/metrics", wrapper.GetMetrics)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/readyz", wrapper.GetReadiness)
 	m.HandleFunc(http.MethodHead+" "+options.BaseURL+"/readyz", wrapper.HeadReadiness)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/dsn/sign", wrapper.SignDeliveryStatus)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/process", wrapper.ProcessMessage)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/revise", wrapper.ReviseMessage)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/sign", wrapper.SignMessage)
@@ -2224,6 +2274,217 @@ func (response HeadReadiness503Response) VisitHeadReadinessResponse(w http.Respo
 	return nil
 }
 
+type SignDeliveryStatusRequestObject struct {
+	Body *SignDeliveryStatusJSONRequestBody
+}
+
+type SignDeliveryStatusResponseObject interface {
+	VisitSignDeliveryStatusResponse(w http.ResponseWriter) error
+}
+
+type SignDeliveryStatus200ResponseHeaders struct {
+	CacheControl        string
+	Connection          string
+	ContentLength       string
+	Date                *string
+	XContentTypeOptions string
+}
+
+type SignDeliveryStatus200JSONResponse struct {
+	Body    OperationResponse
+	Headers SignDeliveryStatus200ResponseHeaders
+}
+
+func (response SignDeliveryStatus200JSONResponse) VisitSignDeliveryStatusResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Connection", fmt.Sprint(response.Headers.Connection))
+	w.Header().Set("Content-Length", fmt.Sprint(response.Headers.ContentLength))
+	if response.Headers.Date != nil {
+		w.Header().Set("Date", fmt.Sprint(*response.Headers.Date))
+	}
+	w.Header().Set("X-Content-Type-Options", fmt.Sprint(response.Headers.XContentTypeOptions))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SignDeliveryStatus400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response SignDeliveryStatus400JSONResponse) VisitSignDeliveryStatusResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Connection", fmt.Sprint(response.Headers.Connection))
+	w.Header().Set("Content-Length", fmt.Sprint(response.Headers.ContentLength))
+	if response.Headers.Date != nil {
+		w.Header().Set("Date", fmt.Sprint(*response.Headers.Date))
+	}
+	w.Header().Set("X-Content-Type-Options", fmt.Sprint(response.Headers.XContentTypeOptions))
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SignDeliveryStatus403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response SignDeliveryStatus403JSONResponse) VisitSignDeliveryStatusResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Connection", fmt.Sprint(response.Headers.Connection))
+	w.Header().Set("Content-Length", fmt.Sprint(response.Headers.ContentLength))
+	if response.Headers.Date != nil {
+		w.Header().Set("Date", fmt.Sprint(*response.Headers.Date))
+	}
+	w.Header().Set("X-Content-Type-Options", fmt.Sprint(response.Headers.XContentTypeOptions))
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SignDeliveryStatus408JSONResponse struct{ RequestTimeoutJSONResponse }
+
+func (response SignDeliveryStatus408JSONResponse) VisitSignDeliveryStatusResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Connection", fmt.Sprint(response.Headers.Connection))
+	w.Header().Set("Content-Length", fmt.Sprint(response.Headers.ContentLength))
+	if response.Headers.Date != nil {
+		w.Header().Set("Date", fmt.Sprint(*response.Headers.Date))
+	}
+	w.Header().Set("X-Content-Type-Options", fmt.Sprint(response.Headers.XContentTypeOptions))
+	w.WriteHeader(408)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SignDeliveryStatus413JSONResponse struct{ RequestTooLargeJSONResponse }
+
+func (response SignDeliveryStatus413JSONResponse) VisitSignDeliveryStatusResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Connection", fmt.Sprint(response.Headers.Connection))
+	w.Header().Set("Content-Length", fmt.Sprint(response.Headers.ContentLength))
+	if response.Headers.Date != nil {
+		w.Header().Set("Date", fmt.Sprint(*response.Headers.Date))
+	}
+	w.Header().Set("X-Content-Type-Options", fmt.Sprint(response.Headers.XContentTypeOptions))
+	w.WriteHeader(413)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SignDeliveryStatus415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response SignDeliveryStatus415JSONResponse) VisitSignDeliveryStatusResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Connection", fmt.Sprint(response.Headers.Connection))
+	w.Header().Set("Content-Length", fmt.Sprint(response.Headers.ContentLength))
+	if response.Headers.Date != nil {
+		w.Header().Set("Date", fmt.Sprint(*response.Headers.Date))
+	}
+	w.Header().Set("X-Content-Type-Options", fmt.Sprint(response.Headers.XContentTypeOptions))
+	w.WriteHeader(415)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SignDeliveryStatus417JSONResponse struct{ ExpectationFailedJSONResponse }
+
+func (response SignDeliveryStatus417JSONResponse) VisitSignDeliveryStatusResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Connection", fmt.Sprint(response.Headers.Connection))
+	w.Header().Set("Content-Length", fmt.Sprint(response.Headers.ContentLength))
+	if response.Headers.Date != nil {
+		w.Header().Set("Date", fmt.Sprint(*response.Headers.Date))
+	}
+	w.Header().Set("X-Content-Type-Options", fmt.Sprint(response.Headers.XContentTypeOptions))
+	w.WriteHeader(417)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SignDeliveryStatus500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response SignDeliveryStatus500JSONResponse) VisitSignDeliveryStatusResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Connection", fmt.Sprint(response.Headers.Connection))
+	w.Header().Set("Content-Length", fmt.Sprint(response.Headers.ContentLength))
+	if response.Headers.Date != nil {
+		w.Header().Set("Date", fmt.Sprint(*response.Headers.Date))
+	}
+	w.Header().Set("X-Content-Type-Options", fmt.Sprint(response.Headers.XContentTypeOptions))
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SignDeliveryStatus503JSONResponse struct{ ServiceUnavailableJSONResponse }
+
+func (response SignDeliveryStatus503JSONResponse) VisitSignDeliveryStatusResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Connection", fmt.Sprint(response.Headers.Connection))
+	w.Header().Set("Content-Length", fmt.Sprint(response.Headers.ContentLength))
+	if response.Headers.Date != nil {
+		w.Header().Set("Date", fmt.Sprint(*response.Headers.Date))
+	}
+	w.Header().Set("Retry-After", fmt.Sprint(response.Headers.RetryAfter))
+	w.Header().Set("X-Content-Type-Options", fmt.Sprint(response.Headers.XContentTypeOptions))
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ProcessMessageRequestObject struct {
 	Body *ProcessMessageJSONRequestBody
 }
@@ -2914,6 +3175,9 @@ type StrictServerInterface interface {
 	// Report service readiness without a response body.
 	// (HEAD /readyz)
 	HeadReadiness(ctx context.Context, request HeadReadinessRequestObject) (HeadReadinessResponseObject, error)
+	// Sign one delivery-status notification.
+	// (POST /v1/dsn/sign)
+	SignDeliveryStatus(ctx context.Context, request SignDeliveryStatusRequestObject) (SignDeliveryStatusResponseObject, error)
 	// Process one inbound DKIM2 message.
 	// (POST /v1/process)
 	ProcessMessage(ctx context.Context, request ProcessMessageRequestObject) (ProcessMessageResponseObject, error)
@@ -3074,6 +3338,37 @@ func (sh *strictHandler) HeadReadiness(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// SignDeliveryStatus operation middleware
+func (sh *strictHandler) SignDeliveryStatus(w http.ResponseWriter, r *http.Request) {
+	var request SignDeliveryStatusRequestObject
+
+	var body SignDeliveryStatusJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SignDeliveryStatus(ctx, request.(SignDeliveryStatusRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SignDeliveryStatus")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SignDeliveryStatusResponseObject); ok {
+		if err := validResponse.VisitSignDeliveryStatusResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // ProcessMessage operation middleware
 func (sh *strictHandler) ProcessMessage(w http.ResponseWriter, r *http.Request) {
 	var request ProcessMessageRequestObject
@@ -3172,86 +3467,93 @@ func (sh *strictHandler) SignMessage(w http.ResponseWriter, r *http.Request) {
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
+	"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",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

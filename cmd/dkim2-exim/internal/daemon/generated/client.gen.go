@@ -17,7 +17,8 @@ import (
 )
 
 const (
-	LocalCapabilityScopes localCapabilityContextKey = "localCapability.Scopes"
+	DsnSignCapabilityScopes dsnSignCapabilityContextKey = "dsnSignCapability.Scopes"
+	LocalCapabilityScopes   localCapabilityContextKey   = "localCapability.Scopes"
 )
 
 // Defines values for APIVersion.
@@ -247,13 +248,16 @@ func (e MessageInputFidelity) Valid() bool {
 
 // Defines values for OperationResponseOperation.
 const (
-	Revise OperationResponseOperation = "revise"
-	Sign   OperationResponseOperation = "sign"
+	DeliveryStatus OperationResponseOperation = "delivery_status"
+	Revise         OperationResponseOperation = "revise"
+	Sign           OperationResponseOperation = "sign"
 )
 
 // Valid indicates whether the value is a known member of the OperationResponseOperation enum.
 func (e OperationResponseOperation) Valid() bool {
 	switch e {
+	case DeliveryStatus:
+		return true
 	case Revise:
 		return true
 	case Sign:
@@ -795,6 +799,22 @@ type AddHeaderActionType string
 // CanonicalUint64 defines model for CanonicalUint64.
 type CanonicalUint64 = string
 
+// DSNSignRequest defines model for DSNSignRequest.
+type DSNSignRequest struct {
+	ApiVersion APIVersion     `json:"api_version"`
+	Context    SigningContext `json:"context"`
+	Draft      DraftVersion   `json:"draft"`
+
+	// Message Exact received RFC 5322 DSN bytes. Only raw_rfc5322 fidelity is accepted; callback reconstruction is not delivery-status evidence.
+	Message MessageInput `json:"message"`
+
+	// OriginalSmtp Independently observed envelope for the originally transmitted message embedded by the DSN. It must not be inferred from DSN text.
+	OriginalSmtp SMTPInput `json:"original_smtp"`
+
+	// OuterSmtp Exact observed envelope of the DSN itself. mail_from must be <> and rcpt_to must contain exactly one recipient.
+	OuterSmtp SMTPInput `json:"outer_smtp"`
+}
+
 // Disposition defines model for Disposition.
 type Disposition string
 
@@ -1073,8 +1093,14 @@ type ServiceUnavailable = ErrorResponse
 // UnsupportedMediaType defines model for UnsupportedMediaType.
 type UnsupportedMediaType = ErrorResponse
 
+// dsnSignCapabilityContextKey is the context key for dsnSignCapability security scheme
+type dsnSignCapabilityContextKey string
+
 // localCapabilityContextKey is the context key for localCapability security scheme
 type localCapabilityContextKey string
+
+// SignDeliveryStatusJSONRequestBody defines body for SignDeliveryStatus for application/json ContentType.
+type SignDeliveryStatusJSONRequestBody = DSNSignRequest
 
 // ProcessMessageJSONRequestBody defines body for ProcessMessage for application/json ContentType.
 type ProcessMessageJSONRequestBody = ProcessRequest
@@ -1173,6 +1199,11 @@ type ClientInterface interface {
 	// HeadReadiness request
 	HeadReadiness(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// SignDeliveryStatusWithBody request with any body
+	SignDeliveryStatusWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	SignDeliveryStatus(ctx context.Context, body SignDeliveryStatusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ProcessMessageWithBody request with any body
 	ProcessMessageWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -1239,6 +1270,30 @@ func (c *Client) GetReadiness(ctx context.Context, reqEditors ...RequestEditorFn
 
 func (c *Client) HeadReadiness(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewHeadReadinessRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) SignDeliveryStatusWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSignDeliveryStatusRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) SignDeliveryStatus(ctx context.Context, body SignDeliveryStatusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSignDeliveryStatusRequest(c.Server, body)
 	if err != nil {
 		return nil, err
 	}
@@ -1456,6 +1511,46 @@ func NewHeadReadinessRequest(server string) (*http.Request, error) {
 	return req, nil
 }
 
+// NewSignDeliveryStatusRequest calls the generic SignDeliveryStatus builder with application/json body
+func NewSignDeliveryStatusRequest(server string, body SignDeliveryStatusJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewSignDeliveryStatusRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewSignDeliveryStatusRequestWithBody generates requests for SignDeliveryStatus with any type of body
+func NewSignDeliveryStatusRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/dsn/sign")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 // NewProcessMessageRequest calls the generic ProcessMessage builder with application/json body
 func NewProcessMessageRequest(server string, body ProcessMessageJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
@@ -1634,6 +1729,11 @@ type ClientWithResponsesInterface interface {
 	// HeadReadinessWithResponse request
 	HeadReadinessWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*HeadReadinessResponse, error)
 
+	// SignDeliveryStatusWithBodyWithResponse request with any body
+	SignDeliveryStatusWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SignDeliveryStatusResponse, error)
+
+	SignDeliveryStatusWithResponse(ctx context.Context, body SignDeliveryStatusJSONRequestBody, reqEditors ...RequestEditorFn) (*SignDeliveryStatusResponse, error)
+
 	// ProcessMessageWithBodyWithResponse request with any body
 	ProcessMessageWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ProcessMessageResponse, error)
 
@@ -1809,6 +1909,44 @@ func (r HeadReadinessResponse) ContentType() string {
 	return ""
 }
 
+type SignDeliveryStatusResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *OperationResponse
+	JSON400      *BadRequest
+	JSON403      *Forbidden
+	JSON408      *RequestTimeout
+	JSON413      *RequestTooLarge
+	JSON415      *UnsupportedMediaType
+	JSON417      *ExpectationFailed
+	JSON500      *InternalError
+	JSON503      *ServiceUnavailable
+}
+
+// Status returns HTTPResponse.Status
+func (r SignDeliveryStatusResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r SignDeliveryStatusResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r SignDeliveryStatusResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type ProcessMessageResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -1966,6 +2104,23 @@ func (c *ClientWithResponses) HeadReadinessWithResponse(ctx context.Context, req
 		return nil, err
 	}
 	return ParseHeadReadinessResponse(rsp)
+}
+
+// SignDeliveryStatusWithBodyWithResponse request with arbitrary body returning *SignDeliveryStatusResponse
+func (c *ClientWithResponses) SignDeliveryStatusWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SignDeliveryStatusResponse, error) {
+	rsp, err := c.SignDeliveryStatusWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSignDeliveryStatusResponse(rsp)
+}
+
+func (c *ClientWithResponses) SignDeliveryStatusWithResponse(ctx context.Context, body SignDeliveryStatusJSONRequestBody, reqEditors ...RequestEditorFn) (*SignDeliveryStatusResponse, error) {
+	rsp, err := c.SignDeliveryStatus(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSignDeliveryStatusResponse(rsp)
 }
 
 // ProcessMessageWithBodyWithResponse request with arbitrary body returning *ProcessMessageResponse
@@ -2201,6 +2356,88 @@ func ParseHeadReadinessResponse(rsp *http.Response) (*HeadReadinessResponse, err
 	response := &HeadReadinessResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
+	}
+
+	return response, nil
+}
+
+// ParseSignDeliveryStatusResponse parses an HTTP response from a SignDeliveryStatusWithResponse call
+func ParseSignDeliveryStatusResponse(rsp *http.Response) (*SignDeliveryStatusResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &SignDeliveryStatusResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest OperationResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 408:
+		var dest RequestTimeout
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON408 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest RequestTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 417:
+		var dest ExpectationFailed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON417 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil

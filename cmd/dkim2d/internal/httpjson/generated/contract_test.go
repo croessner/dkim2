@@ -19,6 +19,7 @@ const (
 	testMethodGet                = "GET"
 	testMethodPost               = "POST"
 	testMetricsPath              = "/metrics"
+	testDSNSignPath              = "/v1/dsn/sign"
 	testProcessPath              = "/v1/process"
 	testRevisePath               = "/v1/revise"
 	testSignPath                 = "/v1/sign"
@@ -48,8 +49,8 @@ type expectedOperation struct {
 	head      bool
 }
 
-// TestEmbeddedOpenAPIContract locks the generated server to the approved
-// inbound-only OpenAPI source.
+// TestEmbeddedOpenAPIContract locks the generated server to the approved daemon
+// OpenAPI source.
 func TestEmbeddedOpenAPIContract(t *testing.T) {
 	t.Parallel()
 
@@ -119,6 +120,13 @@ func TestEmbeddedOpenAPIContract(t *testing.T) {
 				success:   testSchemaOperationResponse,
 			},
 		},
+		testDSNSignPath: {
+			testMethodPost: {
+				id:        "signDeliveryStatus",
+				responses: []string{"200", "400", "403", "408", "413", "415", "417", "500", "503"},
+				success:   testSchemaOperationResponse,
+			},
+		},
 	}
 	if document.Paths.Len() != len(expected) {
 		t.Fatalf("unexpected path count %d", document.Paths.Len())
@@ -148,6 +156,7 @@ func TestEmbeddedOpenAPIContract(t *testing.T) {
 
 	assertLocalCapability(t, document)
 	assertProcessRequestBody(t, document)
+	assertDeliveryStatusRequestBody(t, document)
 	assertClosedObjectSchemas(t, document)
 	assertFrozenSchemaShapes(t, document)
 	assertFrozenEnums(t, document)
@@ -162,7 +171,7 @@ func assertOperationSecurity(t *testing.T, path string, operation *openapi3.Oper
 	if operation.Security == nil {
 		t.Fatalf("operation %s has no explicit security declaration", operation.OperationID)
 	}
-	if path != testProcessPath && path != testSignPath && path != testRevisePath {
+	if path != testProcessPath && path != testSignPath && path != testRevisePath && path != testDSNSignPath {
 		if len(*operation.Security) != 0 {
 			t.Fatalf("status operation %s is unexpectedly protected", operation.OperationID)
 		}
@@ -172,9 +181,13 @@ func assertOperationSecurity(t *testing.T, path string, operation *openapi3.Oper
 		t.Fatalf("process operation has %d security alternatives", len(*operation.Security))
 	}
 	requirement := (*operation.Security)[0]
-	scopes, ok := requirement["localCapability"]
+	schemeName := "localCapability"
+	if path == testDSNSignPath {
+		schemeName = "dsnSignCapability"
+	}
+	scopes, ok := requirement[schemeName]
 	if !ok || len(requirement) != 1 || len(scopes) != 0 {
-		t.Fatal("process operation does not require only localCapability")
+		t.Fatalf("operation %s does not require only %s", operation.OperationID, schemeName)
 	}
 }
 
@@ -393,12 +406,27 @@ func assertProcessRequestBody(t *testing.T, document *openapi3.T) {
 	}
 }
 
+// assertDeliveryStatusRequestBody locks the dedicated DSN request to protected
+// shared raw-message and SMTP DTOs without caller-supplied evidence claims.
+func assertDeliveryStatusRequestBody(t *testing.T, document *openapi3.T) {
+	t.Helper()
+	operation := document.Paths.Value(testDSNSignPath).Post
+	if operation == nil || operation.RequestBody == nil || operation.RequestBody.Value == nil ||
+		!operation.RequestBody.Value.Required || len(operation.RequestBody.Value.Content) != 1 {
+		t.Fatal("DSN operation lacks one required request body")
+	}
+	media := operation.RequestBody.Value.Content["application/json"]
+	if media == nil || media.Schema == nil || media.Schema.Ref != "#/components/schemas/DSNSignRequest" {
+		t.Fatal("DSN operation request body is not DSNSignRequest JSON")
+	}
+}
+
 // assertLocalCapability locks the repository-local API-key scheme and rejects
 // an accidental Bearer interpretation.
 func assertLocalCapability(t *testing.T, document *openapi3.T) {
 	t.Helper()
 
-	if document.Components == nil || len(document.Components.SecuritySchemes) != 1 {
+	if document.Components == nil || len(document.Components.SecuritySchemes) != 2 {
 		t.Fatal("unexpected security-scheme inventory")
 	}
 	reference := document.Components.SecuritySchemes["localCapability"]
@@ -409,6 +437,12 @@ func assertLocalCapability(t *testing.T, document *openapi3.T) {
 	if scheme.Type != "apiKey" || scheme.In != "header" ||
 		scheme.Name != "X-DKIM2-Capability" || scheme.Scheme != "" {
 		t.Fatal("localCapability is not the approved local API-key scheme")
+	}
+	dsnReference := document.Components.SecuritySchemes["dsnSignCapability"]
+	if dsnReference == nil || dsnReference.Value == nil || dsnReference.Value.Type != "apiKey" ||
+		dsnReference.Value.In != "header" || dsnReference.Value.Name != "X-DKIM2-DSN-Sign-Capability" ||
+		dsnReference.Value.Scheme != "" {
+		t.Fatal("dsnSignCapability is not the approved dedicated API-key scheme")
 	}
 }
 
@@ -460,6 +494,10 @@ func assertObjectInventories(t *testing.T, document *openapi3.T) {
 		"ReviseRequest": {
 			properties: []string{testPropertyAPIVersion, testPropertyContext, testPropertyDraft, testPropertyIncomingSMTP, testPropertyMessage, testPropertySMTP},
 			required:   []string{testPropertyAPIVersion, testPropertyContext, testPropertyDraft, testPropertyIncomingSMTP, testPropertyMessage, testPropertySMTP},
+		},
+		"DSNSignRequest": {
+			properties: []string{testPropertyAPIVersion, testPropertyContext, testPropertyDraft, testPropertyMessage, "original_smtp", "outer_smtp"},
+			required:   []string{testPropertyAPIVersion, testPropertyContext, testPropertyDraft, testPropertyMessage, "original_smtp", "outer_smtp"},
 		},
 		"MessageInput": {
 			properties: []string{"fidelity", "raw_rfc5322_base64"},
@@ -709,6 +747,8 @@ func assertFrozenEnums(t *testing.T, document *openapi3.T) {
 		"request_timeout", "request_deadline", "expectation_failed", "precondition_failed",
 		"internal_error",
 	})
+	assertPropertyEnum(t, document, testSchemaOperationResponse, "operation",
+		[]string{"sign", "revise", "delivery_status"})
 }
 
 // assertPropertyEnum compares one inline property enum without sorting because

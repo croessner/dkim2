@@ -7,7 +7,7 @@ sender.
 The client accepts only canonical loopback HTTP authorities, disables proxies,
 redirects, cookies, compression, retries, and connection reuse, and emits
 stable content-free JSON Lines with bounded duration buckets rather than exact
-timings. Health, readiness, process, sign, and revise calls use the generated
+timings. Health, readiness, process, sign, revise, and delivery-status sign calls use the generated
 OpenAPI client and DTOs. Negative cases are restricted to a closed
 contract-test mutation vocabulary. The authoritative HTTP contract remains
 [`docs/specs/openapi/dkim2d.yaml`](../../docs/specs/openapi/dkim2d.yaml), and
@@ -30,6 +30,7 @@ Global options:
 --capability-file /absolute/protected/path
 --sign-capability-file /absolute/protected/sign-path
 --revise-capability-file /absolute/protected/revise-path
+--dsn-sign-capability-file /absolute/protected/dsn-sign-path
 --output jsonl
 ```
 
@@ -37,8 +38,11 @@ Global options:
 network connection. `fixture run` validates every path and case before doing
 either. Authenticated process and negative cases require a regular,
 effective-user-owned, single-link 32-byte route capability file with mode
-`0400` or `0600`. Sign and revise fixtures require their corresponding
-distinct capability options. Credentials, raw messages, envelope values,
+`0400` or `0600`. Sign, revise, and `sign_dsn` fixtures require their corresponding
+distinct capability options. A `sign_dsn` fixture contains the byte-preserving
+outer DSN message, `outer_fidelity` set to `raw_rfc5322`, the exact null outer
+envelope, the independently observed non-null original envelope, tenant, and
+domain; its expected response operation is `delivery_status`. Credentials, raw messages, envelope values,
 paths, URLs, headers, response bodies, and raw errors never enter output.
 
 Checked draft-versioned examples live under

@@ -492,6 +492,58 @@ paths:
           $ref: "#/components/responses/InternalError"
         "503":
           $ref: "#/components/responses/ServiceUnavailable"
+  /v1/dsn/sign:
+    post:
+      operationId: signDeliveryStatus
+      summary: Sign one delivery-status notification.
+      description: >
+        Authenticates a byte-preserving RFC 3462 delivery-status notification,
+        requires its exact null reverse-path envelope and independently
+        observed original SMTP envelope, and returns an append-only DKIM2
+        signing action plan. This dedicated operation never accepts an
+        ordinary sign or revision capability.
+      security:
+        - dsnSignCapability: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DSNSignRequest"
+      responses:
+        "200":
+          description: Delivery-status signing completed with a coherent result.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/CacheControl"
+            X-Content-Type-Options:
+              $ref: "#/components/headers/ContentTypeOptions"
+            Content-Length:
+              $ref: "#/components/headers/ContentLength"
+            Connection:
+              $ref: "#/components/headers/Connection"
+            Date:
+              $ref: "#/components/headers/Date"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperationResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "408":
+          $ref: "#/components/responses/RequestTimeout"
+        "413":
+          $ref: "#/components/responses/RequestTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "417":
+          $ref: "#/components/responses/ExpectationFailed"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
 components:
   securitySchemes:
     localCapability:
@@ -501,6 +553,14 @@ components:
       description: >
         Generation-bound local process capability. This credential is not an
         OAuth bearer token and is not intended for remote transport.
+    dsnSignCapability:
+      type: apiKey
+      in: header
+      name: X-DKIM2-DSN-Sign-Capability
+      description: >
+        Generation-bound local delivery-status signing capability. This
+        credential is distinct from process, originator-signing, and revision
+        capabilities and is not intended for remote transport.
   headers:
     CacheControl:
       description: Prevent storage of every daemon response.
@@ -788,6 +848,41 @@ components:
             - $ref: "#/components/schemas/SMTPInput"
         context:
           $ref: "#/components/schemas/SigningContext"
+    DSNSignRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - api_version
+        - draft
+        - message
+        - outer_smtp
+        - original_smtp
+        - context
+      properties:
+        api_version:
+          $ref: "#/components/schemas/APIVersion"
+        draft:
+          $ref: "#/components/schemas/DraftVersion"
+        message:
+          description: >
+            Exact received RFC 5322 DSN bytes. Only raw_rfc5322 fidelity is
+            accepted; callback reconstruction is not delivery-status evidence.
+          allOf:
+            - $ref: "#/components/schemas/MessageInput"
+        outer_smtp:
+          description: >
+            Exact observed envelope of the DSN itself. mail_from must be <> and
+            rcpt_to must contain exactly one recipient.
+          allOf:
+            - $ref: "#/components/schemas/SMTPInput"
+        original_smtp:
+          description: >
+            Independently observed envelope for the originally transmitted
+            message embedded by the DSN. It must not be inferred from DSN text.
+          allOf:
+            - $ref: "#/components/schemas/SMTPInput"
+        context:
+          $ref: "#/components/schemas/SigningContext"
     MessageInput:
       type: object
       additionalProperties: false
@@ -904,6 +999,7 @@ components:
           enum:
             - sign
             - revise
+            - delivery_status
         result:
           type: string
           enum:

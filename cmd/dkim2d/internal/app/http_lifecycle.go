@@ -53,18 +53,19 @@ type HTTPRuntime interface {
 
 // HTTPAssemblyInput carries only opaque app-owned dependencies into the transport adapter.
 type HTTPAssemblyInput struct {
-	snapshot         config.Snapshot
-	capability       config.ProcessCapability
-	signCapability   config.SignCapability
-	reviseCapability config.ReviseCapability
-	processor        *InboundProcessor
-	operation        OperationService
-	readiness        *Readiness
-	fatal            FatalNotifier
-	serveReturn      ServeReturnObserver
-	activation       ActivationAuthority
-	baseContext      context.Context
-	telemetry        *observability.Runtime
+	snapshot          config.Snapshot
+	capability        config.ProcessCapability
+	signCapability    config.SignCapability
+	reviseCapability  config.ReviseCapability
+	dsnSignCapability config.DSNSignCapability
+	processor         *InboundProcessor
+	operation         OperationService
+	readiness         *Readiness
+	fatal             FatalNotifier
+	serveReturn       ServeReturnObserver
+	activation        ActivationAuthority
+	baseContext       context.Context
+	telemetry         *observability.Runtime
 }
 
 // newHTTPAssemblyInput validates one pure transport-construction input.
@@ -131,6 +132,11 @@ func (i HTTPAssemblyInput) ReviseCapability() config.ReviseCapability {
 	return i.reviseCapability
 }
 
+// DSNSignCapability returns the opaque prepared delivery-status capability handle.
+func (i HTTPAssemblyInput) DSNSignCapability() config.DSNSignCapability {
+	return i.dsnSignCapability
+}
+
 // OperationService returns the optional concrete signing application service.
 func (i HTTPAssemblyInput) OperationService() OperationService { return i.operation }
 
@@ -166,10 +172,12 @@ func (i HTTPAssemblyInput) withOperation(
 	service OperationService,
 	sign config.SignCapability,
 	revise config.ReviseCapability,
+	dsnSign config.DSNSignCapability,
 ) HTTPAssemblyInput {
 	i.operation = service
 	i.signCapability = sign
 	i.reviseCapability = revise
+	i.dsnSignCapability = dsnSign
 	return i
 }
 

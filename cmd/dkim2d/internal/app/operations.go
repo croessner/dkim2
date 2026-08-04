@@ -17,6 +17,8 @@ const (
 	OperationSign Operation = "sign"
 	// OperationRevise selects ordinary-transit revision.
 	OperationRevise Operation = "revise"
+	// OperationDeliveryStatus selects dedicated DSN signing.
+	OperationDeliveryStatus Operation = "delivery_status"
 )
 
 // MessageFidelity identifies the admitted HTTP evidence source.
@@ -133,7 +135,7 @@ func newOperationRequest(
 ) (OperationRequest, error) {
 	if (operation != OperationSign && operation != OperationRevise) ||
 		len(raw) == 0 || len(recipients) == 0 || tenant == "" || domain == "" ||
-		!AdmitsOperationFidelity(operation, fidelity) {
+		!AdmitsOperationFidelity(operation, fidelity) || bytes.Equal(reverse, []byte("<>")) {
 		return OperationRequest{}, &DomainError{}
 	}
 	clonedRecipients := make([][]byte, len(recipients))
@@ -362,7 +364,7 @@ func NewOperationResult(
 	disposition OperationDisposition,
 	fields []CompletedField,
 ) (OperationResult, error) {
-	if (operation != OperationSign && operation != OperationRevise) ||
+	if (operation != OperationSign && operation != OperationRevise && operation != OperationDeliveryStatus) ||
 		(result != OperationPass && result != OperationFail &&
 			result != OperationPermerror && result != OperationTemperror) ||
 		(disposition != OperationAccept && disposition != OperationContinue &&
@@ -422,8 +424,9 @@ func (OperationResult) Format(state fmt.State, _ rune) {
 	_, _ = io.WriteString(state, operationRedacted)
 }
 
-// OperationService is the narrow sign and revision application seam.
+// OperationService is the narrow signing-application seam.
 type OperationService interface {
 	Sign(context.Context, OperationRequest) (SigningAssessment, error)
 	Revise(context.Context, OperationRequest) (OperationResult, error)
+	SignDeliveryStatus(context.Context, DeliveryStatusRequest) (OperationResult, error)
 }

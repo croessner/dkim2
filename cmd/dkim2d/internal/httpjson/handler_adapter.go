@@ -322,6 +322,34 @@ func (a *strictAdapter) ReviseMessage(
 	return operationReviseResponse{wire}, nil
 }
 
+// SignDeliveryStatus maps and executes one generated dedicated DSN operation.
+func (a *strictAdapter) SignDeliveryStatus(
+	ctx context.Context,
+	request generated.SignDeliveryStatusRequestObject,
+) (generated.SignDeliveryStatusResponseObject, error) {
+	if a == nil || a.operations == nil || request.Body == nil {
+		return nil, &strictAdapterError{class: strictFailureInternal}
+	}
+	domainRequest, err := MapDeliveryStatusRequest(*request.Body)
+	if err != nil {
+		return nil, classifyMappingFailure(err)
+	}
+	result, err := a.operations.SignDeliveryStatus(ctx, domainRequest)
+	if err != nil {
+		return nil, classifyStrictContextFailure(ctx)
+	}
+	response, err := MapOperationResult(result)
+	if err != nil {
+		return nil, &strictAdapterError{class: strictFailureInternal}
+	}
+	date, datePresent := responseDate(ctx)
+	wire, err := newJSONResponse(http.StatusOK, response, false, date, datePresent)
+	if err != nil {
+		return nil, err
+	}
+	return operationDeliveryStatusResponse{wire}, nil
+}
+
 // classifyMappingFailure maps one bounded DTO admission failure.
 func classifyMappingFailure(err error) error {
 	if IsMappingError(err, MappingRequestTooLarge) {

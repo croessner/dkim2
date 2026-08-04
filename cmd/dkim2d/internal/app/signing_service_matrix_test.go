@@ -30,8 +30,10 @@ const (
 	signingServiceTestTenant      = "tenant-a"
 	signingServiceOriginHandle    = "origin-key"
 	signingServiceTransitHandle   = "transit-key"
+	signingServiceDSNHandle       = "dsn-key"
 	signingServiceOriginSelector  = "origin"
 	signingServiceTransitSelector = "transit"
+	signingServiceDSNSelector     = "dsn"
 	signingServiceDomainField     = "domain"
 	signingServiceStrictValue     = "strict"
 	signingServiceNotFoundCase    = "not found"
@@ -877,13 +879,16 @@ func newSigningServiceFixture(t *testing.T) signingServiceFixture {
 	root := t.TempDir()
 	originKey := newSigningServiceRSAKey(t)
 	transitKey := newSigningServiceRSAKey(t)
+	dsnKey := newSigningServiceRSAKey(t)
 	originSPKI := signingServiceSPKI(t, &originKey.PublicKey)
 	transitSPKI := signingServiceSPKI(t, &transitKey.PublicKey)
+	dsnSPKI := signingServiceSPKI(t, &dsnKey.PublicKey)
 	datasource := map[string]any{
 		"version": "dkim2-datasource-v1",
 		"handles": []any{
 			map[string]any{"id": signingServiceOriginHandle},
 			map[string]any{"id": signingServiceTransitHandle},
+			map[string]any{"id": signingServiceDSNHandle},
 		},
 		"profiles": []any{
 			signingServiceProfile(
@@ -900,6 +905,13 @@ func newSigningServiceFixture(t *testing.T) signingServiceFixture {
 				signingServiceTransitSelector,
 				transitSPKI,
 			),
+			signingServiceProfile(
+				"dsn-profile",
+				signingServiceOriginDomain,
+				signingServiceDSNHandle,
+				signingServiceDSNSelector,
+				dsnSPKI,
+			),
 		},
 		"policies": []any{
 			signingServicePolicy(
@@ -907,6 +919,9 @@ func newSigningServiceFixture(t *testing.T) signingServiceFixture {
 			),
 			signingServicePolicy(
 				signingServiceTransitDomain, "ordinary_transit", "transit-profile",
+			),
+			signingServicePolicy(
+				signingServiceOriginDomain, "delivery_status", "dsn-profile",
 			),
 		},
 	}
@@ -927,12 +942,20 @@ func newSigningServiceFixture(t *testing.T) signingServiceFixture {
 				"transit.pem",
 				transitSPKI,
 			),
+			signingServiceManifestEntry(
+				signingServiceOriginDomain,
+				signingServiceDSNHandle,
+				"delivery_status",
+				"dsn.pem",
+				dsnSPKI,
+			),
 		},
 	}
 	writeSigningServiceJSON(t, filepath.Join(root, "datasource.json"), datasource)
 	writeSigningServiceJSON(t, filepath.Join(root, "manifest.json"), manifest)
 	writeSigningServicePrivateKey(t, filepath.Join(root, "origin.pem"), originKey)
 	writeSigningServicePrivateKey(t, filepath.Join(root, "transit.pem"), transitKey)
+	writeSigningServicePrivateKey(t, filepath.Join(root, "dsn.pem"), dsnKey)
 	if err := os.Chmod(root, 0o500); err != nil {
 		t.Fatalf("os.Chmod(root) error = %v", err)
 	}
@@ -954,6 +977,7 @@ func newSigningServiceFixture(t *testing.T) signingServiceFixture {
 		publicKeys: signingServicePublicKeys{keys: map[string]*rsa.PublicKey{
 			signingServiceOriginSelector:  &originKey.PublicKey,
 			signingServiceTransitSelector: &transitKey.PublicKey,
+			signingServiceDSNSelector:     &dsnKey.PublicKey,
 		}},
 	}
 }

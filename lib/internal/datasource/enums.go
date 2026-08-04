@@ -10,6 +10,7 @@ const (
 	profileUseOriginatorText        = "originator"
 	profileUseOrdinaryTransitText   = "ordinary_transit"
 	profileUseNextDomainTransitText = "next_domain_transit"
+	profileUseDeliveryStatusText    = "delivery_status"
 	recordStatusActiveText          = "active"
 	recordStatusDisabledText        = "disabled"
 	rolloutEnforceText              = "enforce"
@@ -29,6 +30,8 @@ const (
 	ProfileUseOrdinaryTransit
 	// ProfileUseNextDomainTransit selects an administrative next-domain profile.
 	ProfileUseNextDomainTransit
+	// ProfileUseDeliveryStatus selects an administrative delivery-status profile.
+	ProfileUseDeliveryStatus
 )
 
 // ParseProfileUse parses one exact closed profile-use value.
@@ -40,6 +43,8 @@ func ParseProfileUse(value string) (ProfileUse, error) {
 		return ProfileUseOrdinaryTransit, nil
 	case profileUseNextDomainTransitText:
 		return ProfileUseNextDomainTransit, nil
+	case profileUseDeliveryStatusText:
+		return ProfileUseDeliveryStatus, nil
 	default:
 		return 0, NewError(ErrorCodeMalformedData)
 	}
@@ -47,7 +52,8 @@ func ParseProfileUse(value string) (ProfileUse, error) {
 
 // Known reports whether the use belongs to the closed vocabulary.
 func (u ProfileUse) Known() bool {
-	return u == ProfileUseOriginator || u == ProfileUseOrdinaryTransit || u == ProfileUseNextDomainTransit
+	return u == ProfileUseOriginator || u == ProfileUseOrdinaryTransit ||
+		u == ProfileUseNextDomainTransit || u == ProfileUseDeliveryStatus
 }
 
 // String returns the stable profile-use value or a constant unknown marker.
@@ -59,6 +65,8 @@ func (u ProfileUse) String() string {
 		return profileUseOrdinaryTransitText
 	case ProfileUseNextDomainTransit:
 		return profileUseNextDomainTransitText
+	case ProfileUseDeliveryStatus:
+		return profileUseDeliveryStatusText
 	default:
 		return unknownEnumText
 	}

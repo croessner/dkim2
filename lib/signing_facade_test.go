@@ -276,6 +276,38 @@ func (f publicSigningFixture) signOrigin(t *testing.T, raw []byte, disclosure Ro
 	return signed.Bytes()
 }
 
+// TestGenericSigningRejectsNullReversePath reserves null senders for the DSN boundary.
+func TestGenericSigningRejectsNullReversePath(t *testing.T) {
+	fixture := newPublicSigningFixture(t)
+	raw := []byte("From: sender@example.test\r\n\r\nbody\r\n")
+	source, err := NewSigningSource(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	entry, err := NewOriginatorRouteEntry(
+		source, []byte("<>"), [][]byte{[]byte("<recipient@example.test>")},
+		RouteDisclosureSingle, []byte("dsn-boundary-test"),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request, err := NewRouteFanoutRequest([]RouteEntry{entry})
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan, tickets, err := fixture.facade.PlanRouteFanout(t.Context(), request)
+	if err != nil || !plan.Valid() || len(tickets) != 1 {
+		t.Fatalf("PlanRouteFanout() = valid:%t tickets:%d err:%v", plan.Valid(), len(tickets), err)
+	}
+	result, recovery, signErr := fixture.facade.SignOriginator(t.Context(), NewOriginatorSigningRequest(
+		raw, []byte("<>"), [][]byte{[]byte("<recipient@example.test>")},
+		tickets[0], fixture.profile, SigningMetadata{}, SigningTransportFinalNetworkPreDotStuffing,
+	))
+	if signErr == nil || result.Valid() || recovery.Valid() {
+		t.Fatalf("SignOriginator(null) = result:%t recovery:%t err:%v", result.Valid(), recovery.Valid(), signErr)
+	}
+}
+
 // existingTicket plans one exact capability-bound ordinary ticket.
 func (f publicSigningFixture) existingTicket(t *testing.T, capability VerifiedRevisionInput, raw []byte, disclosure RouteDisclosure) RouteCopyTicket {
 	t.Helper()

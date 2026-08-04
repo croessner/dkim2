@@ -110,6 +110,8 @@ const (
 	ProfileUseOrdinaryTransit = datasource.ProfileUseOrdinaryTransit
 	// ProfileUseNextDomainTransit selects a next-domain profile.
 	ProfileUseNextDomainTransit = datasource.ProfileUseNextDomainTransit
+	// ProfileUseDeliveryStatus selects a delivery-status profile.
+	ProfileUseDeliveryStatus = datasource.ProfileUseDeliveryStatus
 )
 
 // ParseProfileUse parses one exact closed profile-use value.

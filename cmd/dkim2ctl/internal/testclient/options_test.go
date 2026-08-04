@@ -245,7 +245,7 @@ func TestOptionsRejectCapabilityPathAliases(t *testing.T) {
 	options.CapabilityFile = path
 	options.SignCapabilityFile = path
 	if ExitClassOf(options.validateRequirements(
-		true, true, false,
+		true, true, false, false,
 	)) != ExitUsage {
 		t.Fatal("identical capability paths accepted")
 	}

@@ -9,6 +9,7 @@ import (
 	"github.com/croessner/dkim2"
 	"github.com/croessner/dkim2/cmd/dkim2d/internal/app"
 	"github.com/croessner/dkim2/cmd/dkim2d/internal/httpjson/generated"
+	"github.com/croessner/dkim2/cmd/dkim2d/internal/httpjson/wire"
 )
 
 // MapSignRequest maps one generated originator request to domain-owned values.
@@ -25,6 +26,62 @@ func MapReviseRequest(input generated.ReviseRequest) (app.OperationRequest, erro
 		app.OperationRevise, input.ApiVersion, input.Draft,
 		input.Message, input.Smtp, &input.IncomingSmtp, input.Context,
 	)
+}
+
+// MapDeliveryStatusRequest maps one generated DSN-sign request to the
+// dedicated daemon-owned evidence request.
+func MapDeliveryStatusRequest(input generated.DSNSignRequest) (app.DeliveryStatusRequest, error) {
+	if input.ApiVersion != generated.V1 || input.Draft != generated.DraftIetfDkimDkim2Spec04 ||
+		input.Message.Fidelity == nil || *input.Message.Fidelity != generated.RawRfc5322 ||
+		!validTenant(input.Context.Tenant) || !validSigningDomain(input.Context.Domain) {
+		return app.DeliveryStatusRequest{}, newMappingError(MappingInvalidContract)
+	}
+	encoded, err := input.Message.RawRfc5322Base64.Bytes()
+	if err != nil {
+		return app.DeliveryStatusRequest{}, newMappingError(MappingInvalidContract)
+	}
+	raw, err := decodeCanonicalBase64(encoded)
+	if err != nil || len(raw) == 0 {
+		return app.DeliveryStatusRequest{}, newMappingError(MappingInvalidContract)
+	}
+	outerReverse, err := input.OuterSmtp.MailFrom.Bytes()
+	if err != nil {
+		return app.DeliveryStatusRequest{}, newMappingError(MappingInvalidContract)
+	}
+	if !bytes.Equal(outerReverse, []byte("<>")) || len(input.OuterSmtp.RcptTo) != 1 {
+		return app.DeliveryStatusRequest{}, newMappingError(MappingInvalidContract)
+	}
+	outerRecipients, err := mapDSNOuterRecipients(input.OuterSmtp.RcptTo)
+	if err != nil {
+		return app.DeliveryStatusRequest{}, err
+	}
+	originalReverse, originalRecipients, err := mapSigningSMTP(input.OriginalSmtp)
+	if err != nil || bytes.Equal(originalReverse, []byte("<>")) {
+		return app.DeliveryStatusRequest{}, newMappingError(MappingInvalidContract)
+	}
+	request, err := app.NewDeliveryStatusRequest(
+		raw, outerReverse, outerRecipients, originalReverse, originalRecipients,
+		input.Context.Tenant, input.Context.Domain, app.FidelityRawRFC5322,
+	)
+	if err != nil {
+		return app.DeliveryStatusRequest{}, newMappingError(MappingInvalidContract)
+	}
+	return request, nil
+}
+
+// mapDSNOuterRecipients validates the single exact ASCII outer DSN recipient.
+func mapDSNOuterRecipients(values []wire.ProtectedString) ([][]byte, error) {
+	if len(values) != 1 {
+		return nil, newMappingError(MappingInvalidContract)
+	}
+	path, err := values[0].Bytes()
+	if err != nil {
+		return nil, newMappingError(MappingInvalidContract)
+	}
+	if len(path) == 0 || len(path) > maxSMTPPathBytes || !utf8.Valid(path) || !asciiEnvelopePath(path) {
+		return nil, newMappingError(MappingInvalidContract)
+	}
+	return [][]byte{bytes.Clone(path)}, nil
 }
 
 // mapOperationRequest owns the shared exact request admission rules.
@@ -54,8 +111,14 @@ func mapOperationRequest(
 	if err != nil {
 		return app.OperationRequest{}, err
 	}
+	if operation == app.OperationSign && bytes.Equal(reverse, []byte("<>")) {
+		return app.OperationRequest{}, newMappingError(MappingInvalidContract)
+	}
 	fidelity := app.MessageFidelity(*message.Fidelity)
 	if operation == app.OperationRevise {
+		if bytes.Equal(reverse, []byte("<>")) {
+			return app.OperationRequest{}, newMappingError(MappingInvalidContract)
+		}
 		if incomingSMTP == nil {
 			return app.OperationRequest{}, newMappingError(MappingInvalidContract)
 		}
@@ -202,6 +265,9 @@ func validOperationActionMatrix(
 		return len(actions) == 1 && actions[0].Name == generated.DKIM2Signature ||
 			len(actions) == 2 && actions[0].Name == generated.MessageInstance &&
 				actions[1].Name == generated.DKIM2Signature
+	case generated.DeliveryStatus:
+		return len(actions) == 2 && actions[0].Name == generated.MessageInstance &&
+			actions[1].Name == generated.DKIM2Signature
 	default:
 		return false
 	}

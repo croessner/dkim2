@@ -26,6 +26,7 @@ const (
 	protectedCapability
 	protectedSignCapability
 	protectedReviseCapability
+	protectedDSNSignCapability
 	protectedHMAC
 	protectedApplicationPassword
 	protectedAuditorPassword
@@ -284,6 +285,12 @@ func selectedProtectedPaths(snapshot Snapshot) []selectedProtectedPath {
 				role: protectedReviseCapability,
 			})
 		}
+		if snapshot.Server().DSNSignEnabled() {
+			paths = append(paths, selectedProtectedPath{
+				path: snapshot.Server().DSNSignCapabilityFile(),
+				role: protectedDSNSignCapability,
+			})
+		}
 	}
 	replay := snapshot.Replay()
 	if replay.Enabled() {
@@ -417,6 +424,12 @@ func buildProtectedState(
 			}
 			copy(state.reviseCapability[:], file.data)
 			state.hasRevise = true
+		case protectedDSNSignCapability:
+			if err := validateExactKey(file.data); err != nil {
+				return nil, err
+			}
+			copy(state.dsnSignCapability[:], file.data)
+			state.hasDSNSign = true
 		case protectedHMAC:
 			if err := validateExactKey(file.data); err != nil {
 				return nil, err
@@ -464,7 +477,8 @@ func buildProtectedState(
 		if generationFD < 0 ||
 			state.hasSign != snapshot.Server().SignEnabled() ||
 			state.hasRevise != snapshot.Server().ReviseEnabled() ||
-			(!state.hasSign && !state.hasRevise) {
+			state.hasDSNSign != snapshot.Server().DSNSignEnabled() ||
+			(!state.hasSign && !state.hasRevise && !state.hasDSNSign) {
 			return nil, newError(CodeProtectedContent)
 		}
 		if snapshot.Signing().Backend() == SigningFlatFile {
@@ -539,7 +553,7 @@ func validateProtectedFileMetadata(
 	requireSingleLink := role != protectedCA && role != protectedDatasourceCA
 	switch role {
 	case protectedYAML, protectedCapability, protectedSignCapability,
-		protectedReviseCapability, protectedHMAC,
+		protectedReviseCapability, protectedDSNSignCapability, protectedHMAC,
 		protectedApplicationPassword, protectedAuditorPassword,
 		protectedDatasourcePassword:
 		modeAccepted = metadata.modeBits == 0o400 || metadata.modeBits == 0o600
@@ -579,6 +593,7 @@ func protectedSizeAccepted(role protectedFileRole, size int64) bool {
 	case protectedYAML:
 		return size >= 1 && size <= maxYAMLDocumentBytes
 	case protectedCapability, protectedSignCapability, protectedReviseCapability,
+		protectedDSNSignCapability,
 		protectedHMAC:
 		return size == exactKeyBytes
 	case protectedApplicationPassword, protectedAuditorPassword:
@@ -600,6 +615,7 @@ func protectedReadCap(role protectedFileRole) int {
 	case protectedYAML:
 		return maxYAMLDocumentBytes
 	case protectedCapability, protectedSignCapability, protectedReviseCapability,
+		protectedDSNSignCapability,
 		protectedHMAC:
 		return exactKeyBytes
 	case protectedApplicationPassword, protectedAuditorPassword:

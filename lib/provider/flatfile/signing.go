@@ -24,11 +24,13 @@ const (
 	PolicyOriginator PolicyUse = "originator"
 	// PolicyOrdinaryTransit selects an ordinary-transit signing policy.
 	PolicyOrdinaryTransit PolicyUse = "ordinary_transit"
+	// PolicyDeliveryStatus selects a delivery-status signing policy.
+	PolicyDeliveryStatus PolicyUse = "delivery_status"
 )
 
 // Known reports whether the use is supported by the provider adapter.
 func (u PolicyUse) Known() bool {
-	return u == PolicyOriginator || u == PolicyOrdinaryTransit
+	return u == PolicyOriginator || u == PolicyOrdinaryTransit || u == PolicyDeliveryStatus
 }
 
 // Binding is one opaque manifest-to-public-profile declaration.

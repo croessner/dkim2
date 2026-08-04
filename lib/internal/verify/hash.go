@@ -94,6 +94,40 @@ func compareTargetHashes(canonicalizer canonical.Canonicalizer, message rawmsg.M
 	return results, nil
 }
 
+// compareTargetHeaderHash validates only the retained header hash for an RFC
+// 3462 text/rfc822-headers DSN original. Its caller must enforce header-only
+// framing so absent body bytes are never interpreted as an empty body.
+func compareTargetHeaderHash(canonicalizer canonical.Canonicalizer, message rawmsg.Message, targetInstance instance.MessageInstance, target Target) (headerHashCheckResult, error) {
+	hashSet, hashState := targetSHA256HashSet(targetInstance)
+	if hashState != HashStatusPass {
+		status, code := checkStatusForHashState(hashState)
+		return headerHashCheckResult{check: hashCheckResult(CheckKindHeaderHash, status, code, hashState, target)}, nil
+	}
+	headerResult, err := canonicalizer.HeaderHashFromMessage(message)
+	if err != nil {
+		return headerHashCheckResult{}, malformedStateError(CheckKindHeaderHash, target, err)
+	}
+	headerDigest, ok := headerResult.Digest()
+	if !ok {
+		return headerHashCheckResult{}, malformedStateError(CheckKindHeaderHash, target, nil)
+	}
+	expectedHeaderHash, ok := hashSet.HeaderHash()
+	if !ok {
+		return headerHashCheckResult{check: hashCheckResult(CheckKindHeaderHash, CheckStatusFail, ErrorCodeMalformedState, HashStatusInvalid, target)}, nil
+	}
+	status, code := compareSHA256Digest(headerDigest.Bytes(), expectedHeaderHash.Decoded())
+	return headerHashCheckResult{
+		check: hashCheckResult(CheckKindHeaderHash, status, code, hashStatusFromCheck(status), target),
+		pass:  status == CheckStatusPass,
+	}, nil
+}
+
+// headerHashCheckResult stores the restricted header-only hash outcome.
+type headerHashCheckResult struct {
+	check CheckResult
+	pass  bool
+}
+
 // canonicalWorkBytes charges at least all scanned input even when canonical output collapses.
 func canonicalWorkBytes(input canonical.ByteInput) int {
 	return max(input.Len(), input.Metadata().InputBytes)

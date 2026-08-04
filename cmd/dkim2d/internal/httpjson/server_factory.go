@@ -38,7 +38,7 @@ func (f *ServerFactory) Assemble(input app.HTTPAssemblyInput) (app.HTTPAssembly,
 		return nil, &serverRuntimeError{}
 	}
 	server := input.Snapshot().Server()
-	dependencies := make([]any, 0, 4)
+	dependencies := make([]any, 0, 5)
 	if input.Observability() != nil {
 		dependencies = append(dependencies, input.Observability())
 	}
@@ -54,6 +54,12 @@ func (f *ServerFactory) Assemble(input app.HTTPAssemblyInput) (app.HTTPAssembly,
 			dependencies = append(
 				dependencies,
 				reviseMatcherDependency{capabilityMatcher: input.ReviseCapability()},
+			)
+		}
+		if server.DSNSignEnabled() {
+			dependencies = append(
+				dependencies,
+				dsnSignMatcherDependency{capabilityMatcher: input.DSNSignCapability()},
 			)
 		}
 	}

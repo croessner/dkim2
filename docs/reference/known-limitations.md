@@ -11,6 +11,12 @@ certification, or universal interoperability claim.
   Stalwart's observed source revision has no `Cargo.lock`, so no immutable
   transitive build closure can be reproduced. The aggregate evidence is
   `eligible_not_runnable`, not interoperability PASS.
+- The retained Turscar `dkim2tests` corpus is public-only, licensed external
+  evidence, not an external implementation candidate. Its 42 signed inputs at
+  revision `9c48edf1b19bd4db69cd5f27e8732a5a61826739` omit the mandatory final
+  semicolon from both DKIM2 tag-list field families. They are therefore
+  classified as upstream fixture nonconformance and prove strict local refusal,
+  not Draft-04 verification, conformance, or runtime interoperability.
 - Runtime comparison covers only explicitly equivalent parser operations and
   reserved synthetic inputs. It does not cover another implementation's full
   signing, verification, recipe, custody, SMTP, replay, daemon, OpenAPI,
@@ -19,11 +25,12 @@ certification, or universal interoperability claim.
   the five source-linked upstream, Debian, and Ubuntu rows recorded in the
   compatibility report. There is no portable Exim execution claim, universal
   local-scan binary, or Exim container image.
-- Null-reverse-path DSN signing is deferred. The originator Milter tempfails
-  every null sender before daemon I/O because its callbacks and current request
-  contract cannot authenticate the RFC 3462 three-part structure, Draft-04
-  Section 12.1 embedded verification, and Section 12.1.2 alignment evidence.
-  The reserved configured DSN domain does not authorize signing by itself.
+- The daemon and library support outgoing null-reverse-path DSN signing only
+  through the dedicated raw-byte evidence boundary, `delivery_status` profile,
+  route ticket, and protected DSN capability. The originator Milter remains a
+  deliberate gap: it tempfails every null sender before daemon I/O because its
+  callbacks cannot supply equivalent trustworthy evidence. Received-DSN
+  processing and DSN propagation are also deferred.
 - Flat-file, LDAP, PostgreSQL, MySQL, MariaDB, and Valkey datasource paths are implemented.
   The offline OpenDKIM migration requires separately managed verified-TLS
   services, explicit mapping, and distinct least-authority principals.

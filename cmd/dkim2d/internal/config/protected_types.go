@@ -46,14 +46,16 @@ type protectedState struct {
 
 	snapshot Snapshot
 
-	capability       [32]byte
-	signCapability   [32]byte
-	reviseCapability [32]byte
-	hasSign          bool
-	hasRevise        bool
-	signingStore     *signingstore.Runtime
-	hmac             [32]byte
-	hasHMAC          bool
+	capability        [32]byte
+	signCapability    [32]byte
+	reviseCapability  [32]byte
+	dsnSignCapability [32]byte
+	hasSign           bool
+	hasRevise         bool
+	hasDSNSign        bool
+	signingStore      *signingstore.Runtime
+	hmac              [32]byte
+	hasHMAC           bool
 
 	applicationPassword        []byte
 	auditorPassword            []byte
@@ -127,6 +129,12 @@ type SignCapability struct {
 
 // ReviseCapability is a comparison-only opaque revision authorization value.
 type ReviseCapability struct {
+	state *protectedState
+	token *runtimeToken
+}
+
+// DSNSignCapability is a comparison-only opaque delivery-status authorization value.
+type DSNSignCapability struct {
 	state *protectedState
 	token *runtimeToken
 }
@@ -298,6 +306,14 @@ func (p *RuntimePreparation) ReviseCapability() ReviseCapability {
 	return ReviseCapability{state: p.state, token: p.token}
 }
 
+// DSNSignCapability returns the non-owning post-commit delivery-status capability.
+func (p *RuntimePreparation) DSNSignCapability() DSNSignCapability {
+	if p == nil {
+		return DSNSignCapability{}
+	}
+	return DSNSignCapability{state: p.state, token: p.token}
+}
+
 // SigningStore returns the same-generation reload runtime only while
 // runtime preparation owns the handoff.
 func (p *RuntimePreparation) SigningStore() *signingstore.Runtime {
@@ -308,7 +324,7 @@ func (p *RuntimePreparation) SigningStore() *signingstore.Runtime {
 	defer p.state.mu.Unlock()
 	if p.state.phase != protectedPreparedForRuntime ||
 		p.state.runtimeToken != p.token ||
-		(!p.state.hasSign && !p.state.hasRevise) {
+		(!p.state.hasSign && !p.state.hasRevise && !p.state.hasDSNSign) {
 		return nil
 	}
 	return p.state.signingStore
@@ -521,11 +537,17 @@ func (c ReviseCapability) Equal(candidate []byte) bool {
 	return equalProtectedCapability(c.state, c.token, candidate, protectedRevise)
 }
 
+// Equal performs an exact constant-time delivery-status capability comparison.
+func (c DSNSignCapability) Equal(candidate []byte) bool {
+	return equalProtectedCapability(c.state, c.token, candidate, protectedDSNSign)
+}
+
 type protectedCapabilityKind uint8
 
 const (
 	protectedSign protectedCapabilityKind = iota + 1
 	protectedRevise
+	protectedDSNSign
 )
 
 // equalProtectedCapability compares one enabled role without revealing length.
@@ -556,6 +578,11 @@ func equalProtectedCapability(
 			return false
 		}
 		expected = &state.reviseCapability
+	case protectedDSNSign:
+		if !state.hasDSNSign {
+			return false
+		}
+		expected = &state.dsnSignCapability
 	default:
 		return false
 	}
@@ -616,8 +643,10 @@ func (s *protectedState) clearProtected(releasedBy protectedPhase) {
 	s.capability = [32]byte{}
 	s.signCapability = [32]byte{}
 	s.reviseCapability = [32]byte{}
+	s.dsnSignCapability = [32]byte{}
 	s.hasSign = false
 	s.hasRevise = false
+	s.hasDSNSign = false
 	if s.signingStore != nil {
 		_ = s.signingStore.Close(context.Background())
 		s.signingStore = nil
@@ -694,12 +723,27 @@ func validateProtectedSeparation(state *protectedState) error {
 		bytes.Equal(state.signCapability[:], state.reviseCapability[:]) {
 		return newError(CodeProtectedContent)
 	}
+	if state.hasSign && state.hasDSNSign &&
+		bytes.Equal(state.signCapability[:], state.dsnSignCapability[:]) {
+		return newError(CodeProtectedContent)
+	}
+	if state.hasRevise && state.hasDSNSign &&
+		bytes.Equal(state.reviseCapability[:], state.dsnSignCapability[:]) {
+		return newError(CodeProtectedContent)
+	}
+	if state.hasDSNSign && bytes.Equal(state.capability[:], state.dsnSignCapability[:]) {
+		return newError(CodeProtectedContent)
+	}
 	if state.hasHMAC && state.hasSign &&
 		bytes.Equal(state.hmac[:], state.signCapability[:]) {
 		return newError(CodeProtectedContent)
 	}
 	if state.hasHMAC && state.hasRevise &&
 		bytes.Equal(state.hmac[:], state.reviseCapability[:]) {
+		return newError(CodeProtectedContent)
+	}
+	if state.hasHMAC && state.hasDSNSign &&
+		bytes.Equal(state.hmac[:], state.dsnSignCapability[:]) {
 		return newError(CodeProtectedContent)
 	}
 	passwords := [][]byte{
@@ -719,6 +763,7 @@ func validateProtectedSeparation(state *protectedState) error {
 			(bytes.Equal(state.capability[:], password) ||
 				state.hasSign && bytes.Equal(state.signCapability[:], password) ||
 				state.hasRevise && bytes.Equal(state.reviseCapability[:], password) ||
+				state.hasDSNSign && bytes.Equal(state.dsnSignCapability[:], password) ||
 				state.hasHMAC && bytes.Equal(state.hmac[:], password)) {
 			return newError(CodeProtectedContent)
 		}
@@ -878,6 +923,21 @@ func (ReviseCapability) MarshalJSON() ([]byte, error) { return nil, newError(Cod
 
 // MarshalText rejects serialization of revision capability bytes.
 func (ReviseCapability) MarshalText() ([]byte, error) { return nil, newError(CodeSerialization) }
+
+// String returns a constant content-free delivery-status capability representation.
+func (DSNSignCapability) String() string { return protectedRedactedText }
+
+// GoString returns a constant content-free delivery-status capability representation.
+func (DSNSignCapability) GoString() string { return protectedRedactedText }
+
+// Format prevents formatting verbs from exposing the delivery-status capability.
+func (DSNSignCapability) Format(state fmt.State, _ rune) { writeProtectedRedacted(state) }
+
+// MarshalJSON rejects serialization of the delivery-status capability.
+func (DSNSignCapability) MarshalJSON() ([]byte, error) { return nil, newError(CodeSerialization) }
+
+// MarshalText rejects text serialization of the delivery-status capability.
+func (DSNSignCapability) MarshalText() ([]byte, error) { return nil, newError(CodeSerialization) }
 
 // writeProtectedRedacted emits only the fixed protected-material marker.
 func writeProtectedRedacted(state fmt.State) {

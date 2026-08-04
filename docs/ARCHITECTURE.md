@@ -60,6 +60,8 @@
 | 0.1.0-draft | 2026-08-02 | Christian Roessner / Codex | Planned M23 native domain onboarding as an offline privileged `dkim2d datasource domain` workflow with full-generation cloning, native RSA/Ed25519 generation, protected resumable journals, export-only DNS integration, fresh resolver-path DNS/SPKI proof, and digest-bound forward activation across LDAP, PostgreSQL, MySQL, and MariaDB. This records the implementation baseline, not completion. |
 | 0.1.0-draft | 2026-08-02 | Christian Roessner / Codex | Corrected the M23 pre-plan recovery boundary: a protected internal planning receipt containing the generated operation identity and expected administration revision is synced before any backend claim, atomically promotes to the full `planned` journal, and supports exact observe/release recovery without adding a public lifecycle state. |
 | 0.1.0-draft | 2026-08-03 | Christian Roessner / Codex | Implemented the M23 offline native-domain onboarding candidate across LDAP, PostgreSQL, MySQL, and MariaDB with v3 metadata, receipt-before-Claim recovery, deterministic DNS export, fresh recursive proof, exact stage/readback/activation fences, bounded reports, and disposable four-backend runtime-signing evidence. Independent final closeout review and release authorization remain separate. |
+| 0.1.0-draft | 2026-08-04 | Christian Roessner / Codex | Completed M24 external-vector-corpus intake: immutable public-only Turscar fixture retention, license/archive/file identity checks, strict Draft-02 source-format classification, offline parser-refusal evidence, and no change to Draft-04 conformance or runtime-interoperability claims. |
+| 0.1.0-draft | 2026-08-04 | Christian Roessner / Codex | Completed M25 outgoing delivery-status signing: byte-preserving RFC 3462 framing, Draft-04 Section 12.1 embedded verification, Section 12.1.2 exact local alignment, a dedicated `delivery_status` datasource use and route ticket, separate protected daemon capability and OpenAPI/generated-client workflow. Ordinary sign/revise paths reject `<>`; the Milter-specific null-sender deferral remains explicit. |
 
 ## 1. Purpose
 
@@ -1997,8 +1999,9 @@ Outbound signing:
 1. Assess whether the non-null SMTP reverse-path provides one supported exact
    local signing domain and whether the complete valid envelope fits the
    current signing boundary. Address literals and unsupported non-null
-   SMTPUTF8 envelopes are not applicable. Every null sender fails closed before
-   daemon I/O until an executable trusted DSN evidence gate exists.
+   SMTPUTF8 envelopes are not applicable. The originator Milter fails every
+   null sender closed before daemon I/O until it has an adapter-qualified DSN
+   evidence gate; the daemon's separate DSN route is not a Milter fallback.
 2. Resolve the exact authoritative policy and profile. `not_found` or
    `inactive` is a mutation-free local no-op; ambiguity and unavailability fail
    temporarily, while malformed active configuration fails permanently.
@@ -2012,13 +2015,13 @@ Outbound signing:
 10. Canonicalize DKIM2 protocol fields for signing.
 11. Insert signature values.
 
-Signing a delivery-status notification with null reverse-path is deferred. The
-current Milter cannot authenticate the RFC 3462 three-part structure, Draft-04
-Section 12.1 verification of relevant embedded fields, or Section 12.1.2
-alignment evidence through callbacks or the daemon request contract. A
-configured DSN domain and dedicated upstream route are not sufficient to cross
-that trust boundary. Every null sender tempfails before daemon I/O until an
-executable trusted prevalidated evidence gate is implemented and qualified.
+The daemon supports outgoing delivery-status signing only through its dedicated
+raw-byte DSN request, separately protected capability, and `delivery_status`
+policy use. The current Milter cannot authenticate the RFC 3462 three-part
+structure, Draft-04 Section 12.1 verification of relevant embedded fields, or
+Section 12.1.2 alignment evidence through callbacks. Its null sender therefore
+continues to tempfail before daemon I/O; it cannot use the daemon DSN route as
+a fallback.
 
 Revision signing:
 
@@ -2347,6 +2350,7 @@ maintainers to understand why behavior exists.
 | M21 - Interop and reference polish | Implemented through candidate preparation: external comparison, draft issue log, public API review, conformance and compatibility reports, candidate-bound evidence, and release gates. Tag and artifact publication remain separately authorized release operations | original estimate 1 to 3 days; historical | Very high; candidate work completed, publication not implied |
 | M22 - LDAP and SQL datasource providers and legacy migration | Completed: RNS DKIM2 LDAP schema under `1.3.6.1.4.1.31612.1.7`, native v2 key custody, bounded LDAP and PostgreSQL/MySQL/MariaDB readers, immutable generation publication, provider parity, deployable schema/DDL, secret-safe OpenDKIM bootstrap, fresh DNS proof, forward-only rollback, and operator documentation | measured implementation and rollout evidence is retained in the completed implementation specifications | Very high; completed with production LDAP and disposable multi-database evidence |
 | M23 - Native domain onboarding | Implemented candidate: offline domain intent, complete-generation cloning, native RSA/Ed25519 generation, protected receipt/journal recovery, export-only DNS records, fresh DNS/SPKI proof, and digest-bound stage/readback/activation parity for LDAP, PostgreSQL, MySQL, and MariaDB | Exact Prompt 01-11 spans and review/rework variance are retained in the ignored execution ledger; the original 6-to-14-hour estimate excluded production DNS and rollout | Very high; four-backend disposable evidence and Prompt 01-10 reviews complete, fresh final closeout review still required |
+| M24 - External vector corpus | Completed: retained public-only Turscar Draft-02-labelled fixture bytes at one immutable revision, BSD-2-Clause provenance, strict per-file identities, and an offline parser-refusal lane. All 42 retained inputs omit mandatory tag terminators and are classified as upstream fixture nonconformance; none contributes to Draft-04 conformance or runtime interoperability | measured in the M24 ignored execution ledger | High; completed with no production semantic change |
 
 Total rough implementation estimate:
 

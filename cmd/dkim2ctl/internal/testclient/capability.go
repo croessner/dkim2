@@ -10,7 +10,10 @@ import (
 	"sync"
 )
 
-const capabilityHeader = "X-DKIM2-Capability"
+const (
+	capabilityHeader        = "X-DKIM2-Capability"
+	dsnSignCapabilityHeader = "X-DKIM2-DSN-Sign-Capability"
+)
 const capabilityRedacted = "dkim2ctl_protected_capability"
 
 // Capability owns one exact local process capability until Close.
@@ -18,6 +21,7 @@ type Capability struct {
 	mu        sync.Mutex
 	value     [32]byte
 	operation Operation
+	header    string
 	closed    bool
 }
 
@@ -30,7 +34,7 @@ func newCapability(value [32]byte) (*Capability, error) {
 	if nonzero == 0 {
 		return nil, NewExitError(ExitCapability)
 	}
-	return &Capability{value: value, operation: OperationProcess}, nil
+	return &Capability{value: value, operation: OperationProcess, header: capabilityHeader}, nil
 }
 
 // EditRequest attaches the capability to exactly one otherwise-uncredentialed request.
@@ -43,18 +47,18 @@ func (c *Capability) EditRequest(_ context.Context, request *http.Request) error
 	if c.closed {
 		return NewExitError(ExitCapability)
 	}
-	if hasCapabilityHeader(request.Header) {
+	if hasAnyCapabilityHeader(request.Header) {
 		return NewExitError(ExitCapability)
 	}
 	encoded := base64.RawURLEncoding.EncodeToString(c.value[:])
-	request.Header.Add(capabilityHeader, encoded)
+	request.Header.Add(c.header, encoded)
 	return nil
 }
 
 // LoadCapabilityForOperation binds protected bytes to exactly one generated route.
 func LoadCapabilityForOperation(path string, operation Operation) (*Capability, error) {
 	if operation != OperationProcess && operation != OperationSign &&
-		operation != OperationRevise {
+		operation != OperationRevise && operation != OperationDSNSign {
 		return nil, NewExitError(ExitCapability)
 	}
 	capability, err := LoadCapability(path)
@@ -63,6 +67,7 @@ func LoadCapabilityForOperation(path string, operation Operation) (*Capability, 
 	}
 	capability.mu.Lock()
 	capability.operation = operation
+	capability.header = capabilityHeaderForOperation(operation)
 	capability.mu.Unlock()
 	return capability, nil
 }
@@ -104,27 +109,27 @@ func (c *Capability) editNegativeRequest(request *http.Request, mutation string)
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if c.closed || hasCapabilityHeader(request.Header) {
+	if c.closed || hasAnyCapabilityHeader(request.Header) {
 		return NewExitError(ExitCapability)
 	}
 	switch mutation {
 	case mutationMissingCapability:
 		return nil
 	case mutationEmptyCapability:
-		request.Header.Add(capabilityHeader, "")
+		request.Header.Add(c.header, "")
 	case mutationMismatchingCapability:
 		mismatch := c.value
 		mismatch[0] ^= 1
-		request.Header.Add(capabilityHeader, base64.RawURLEncoding.EncodeToString(mismatch[:]))
+		request.Header.Add(c.header, base64.RawURLEncoding.EncodeToString(mismatch[:]))
 		for index := range mismatch {
 			mismatch[index] = 0
 		}
 	case mutationDuplicateCapability:
 		encoded := base64.RawURLEncoding.EncodeToString(c.value[:])
-		request.Header.Add(capabilityHeader, encoded)
-		request.Header.Add(capabilityHeader, encoded)
+		request.Header.Add(c.header, encoded)
+		request.Header.Add(c.header, encoded)
 	default:
-		request.Header.Add(capabilityHeader, base64.RawURLEncoding.EncodeToString(c.value[:]))
+		request.Header.Add(c.header, base64.RawURLEncoding.EncodeToString(c.value[:]))
 	}
 	return nil
 }
@@ -147,6 +152,8 @@ func validGeneratedOperationRequest(request *http.Request, operation Operation) 
 		expectedPath = signPath
 	case OperationRevise:
 		expectedPath = revisePath
+	case OperationDSNSign:
+		expectedPath = dsnSignPath
 	default:
 		return false
 	}
@@ -157,11 +164,23 @@ func validGeneratedOperationRequest(request *http.Request, operation Operation) 
 	return err == nil && request.URL.Scheme == schemeHTTP
 }
 
-// hasCapabilityHeader detects an existing capability field independent of
-// canonical map spelling.
-func hasCapabilityHeader(header http.Header) bool {
-	for name := range header {
-		if strings.EqualFold(name, capabilityHeader) {
+// capabilityHeaderForOperation returns the exact isolated credential header.
+func capabilityHeaderForOperation(operation Operation) string {
+	if operation == OperationDSNSign {
+		return dsnSignCapabilityHeader
+	}
+	return capabilityHeader
+}
+
+// hasAnyCapabilityHeader detects every operation capability field.
+func hasAnyCapabilityHeader(header http.Header) bool {
+	return hasHeader(header, capabilityHeader) || hasHeader(header, dsnSignCapabilityHeader)
+}
+
+// hasHeader detects an existing field independent of canonical map spelling.
+func hasHeader(header http.Header, name string) bool {
+	for headerName := range header {
+		if strings.EqualFold(headerName, name) {
 			return true
 		}
 	}

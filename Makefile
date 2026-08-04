@@ -62,6 +62,8 @@ help:
 		'  make vendor       regenerate the workspace vendor tree' \
 		'  make check-vendor  verify reproducible workspace vendoring' \
 		'  make check-conformance validate conformance schemas, manifest, and digests' \
+		'  make check-external-vectors validate the retained public-only external vector corpus' \
+		'  make conformance-external prove the local parser-refusal classification of external vectors' \
 		'  make conformance   run the portable conformance profile and render reports' \
 		'  make conformance-postfix run the isolated real Postfix qualification' \
 		'  make conformance-all run the complete Linux profile with EXIM_EVIDENCE_ROOT' \
@@ -477,9 +479,19 @@ check-protected-platforms:
 	fi
 
 .PHONY: check-conformance
-check-conformance:
+check-conformance: check-external-vectors
 	@GOCACHE="$${GOCACHE:-/tmp/dkim2-go-build-cache}" \
 		go -C tools run ./cmd/conformance -root .. check
+
+.PHONY: check-external-vectors
+check-external-vectors:
+	@GOCACHE="$${GOCACHE:-/tmp/dkim2-go-build-cache}" \
+		go -C tools run ./cmd/externalvectors -root .. check
+
+.PHONY: conformance-external
+conformance-external: check-external-vectors
+	@GOCACHE="$${GOCACHE:-/tmp/dkim2-go-build-cache}" \
+		go -C lib test -run '^TestTurscarDKIM2TestsParserRefusal$$' .
 
 .PHONY: conformance
 conformance:

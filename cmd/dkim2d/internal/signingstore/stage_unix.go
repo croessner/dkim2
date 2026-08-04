@@ -49,7 +49,7 @@ func NewRegistryStagingEntry(
 	key *ImportedPrivateKey,
 ) (RegistryStagingEntry, error) {
 	if tenantID == "" || domain == "" || handleID == "" || key == nil ||
-		(use != manifestOriginator && use != manifestOrdinaryTransit) ||
+		(use != manifestOriginator && use != manifestOrdinaryTransit && use != manifestDeliveryStatus) ||
 		len(key.Encoded()) == 0 || len(key.PublicSPKIDER()) == 0 {
 		return RegistryStagingEntry{}, &Error{}
 	}
@@ -187,7 +187,7 @@ func prepareRegistryStage(
 	for index, input := range inputs {
 		if input.tenantID == "" || input.domain == "" || input.handleID == "" ||
 			input.key == nil || (input.use != manifestOriginator &&
-			input.use != manifestOrdinaryTransit) {
+			input.use != manifestOrdinaryTransit && input.use != manifestDeliveryStatus) {
 			return nil, nil, &Error{}
 		}
 		if _, duplicate := handles[input.handleID]; duplicate {

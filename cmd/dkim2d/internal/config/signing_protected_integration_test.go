@@ -101,6 +101,7 @@ func TestLoadProtectedSigningPublishesCompleteReloadRuntime(t *testing.T) {
 	}
 	signCapability := preparation.SignCapability()
 	reviseCapability := preparation.ReviseCapability()
+	dsnSignCapability := preparation.DSNSignCapability()
 	lease, err := store.Acquire()
 	if err != nil {
 		t.Fatalf("Acquire() error = %v", err)
@@ -116,8 +117,46 @@ func TestLoadProtectedSigningPublishesCompleteReloadRuntime(t *testing.T) {
 		t.Fatalf("CommitRuntime() failed with code %s", CodeOf(err))
 	}
 	if !signCapability.Equal(fixture.signCapability) ||
-		!reviseCapability.Equal(fixture.reviseCapability) {
+		!reviseCapability.Equal(fixture.reviseCapability) ||
+		!dsnSignCapability.Equal(fixture.dsnSignCapability) {
 		t.Fatal("committed runtime omitted separated signing capabilities")
+	}
+	if err := runtime.Close(); err != nil {
+		t.Fatalf("Close(runtime) failed with code %s", CodeOf(err))
+	}
+}
+
+// TestLoadProtectedDSNOnlySigningPublishesOnlyDSNCapability proves a dedicated
+// delivery-status deployment does not require originator or revision authority.
+func TestLoadProtectedDSNOnlySigningPublishesOnlyDSNCapability(t *testing.T) {
+	fixture := newProtectedSigningFixture(t)
+	document, err := os.ReadFile(fixture.yamlPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	document = []byte(removeYAMLField(
+		removeYAMLField(string(document), "  sign_capability_file:"),
+		"  revise_capability_file:",
+	))
+	writeProtectedTestFile(t, fixture.yamlPath, document, 0o600)
+	owner, err := LoadProtected(fixture.yamlPath, FlagValues{})
+	if CodeOf(err) == CodeProtectedUnsupported {
+		t.Skip("test filesystem is outside the closed production allowlist")
+	}
+	if err != nil {
+		t.Fatalf("LoadProtected() failed with code %s", CodeOf(err))
+	}
+	preparation, err := owner.PrepareRuntime()
+	if err != nil {
+		t.Fatalf("PrepareRuntime() failed with code %s", CodeOf(err))
+	}
+	capability := preparation.DSNSignCapability()
+	runtime, err := owner.CommitRuntime(preparation)
+	if err != nil {
+		t.Fatalf("CommitRuntime() failed with code %s", CodeOf(err))
+	}
+	if !capability.Equal(fixture.dsnSignCapability) {
+		t.Fatal("DSN-only runtime did not retain its dedicated capability")
 	}
 	if err := runtime.Close(); err != nil {
 		t.Fatalf("Close(runtime) failed with code %s", CodeOf(err))
@@ -134,6 +173,7 @@ func TestLoadProtectedDisabledDoesNotOpenSigningChildren(t *testing.T) {
 	for _, name := range []string{
 		"sign-capability",
 		"revise-capability",
+		"dsn-sign-capability",
 		"datasource",
 		"private-manifest",
 		"private-key",
@@ -160,14 +200,36 @@ func TestLoadProtectedDisabledDoesNotOpenSigningChildren(t *testing.T) {
 	}
 }
 
+// TestLoadProtectedDSNSignCapabilityRejectsReusedSigningBytes preserves the
+// separate delivery-status authority even when both protected files exist.
+func TestLoadProtectedDSNSignCapabilityRejectsReusedSigningBytes(t *testing.T) {
+	fixture := newProtectedSigningFixture(t)
+	makeGenerationWritable(t, filepath.Dir(fixture.signCapabilityPath))
+	writeProtectedTestFile(
+		t,
+		fixture.dsnSignCapabilityPath,
+		fixture.signCapability,
+		0o600,
+	)
+	sealGeneration(t, filepath.Dir(fixture.signCapabilityPath))
+	owner, err := LoadProtected(fixture.yamlPath, FlagValues{})
+	if owner != nil || CodeOf(err) != CodeProtectedContent {
+		t.Fatalf("LoadProtected() owner=%v code=%s, want protected content failure", owner, CodeOf(err))
+	}
+}
+
 type protectedSigningFixture struct {
-	yamlPath         string
-	signCapability   []byte
-	reviseCapability []byte
+	yamlPath              string
+	signCapabilityPath    string
+	dsnSignCapabilityPath string
+	signCapability        []byte
+	reviseCapability      []byte
+	dsnSignCapability     []byte
 }
 
 // newProtectedSigningFixture creates one complete same-generation daemon
-// signing bundle with independent process, sign, and revise capabilities.
+// signing bundle with independent process, originator, revision, and
+// delivery-status capabilities.
 func newProtectedSigningFixture(t *testing.T) protectedSigningFixture {
 	t.Helper()
 	base, err := filepath.EvalSymlinks(t.TempDir())
@@ -192,6 +254,7 @@ func newProtectedSigningFixture(t *testing.T) protectedSigningFixture {
 	processCapability := bytes.Repeat([]byte{0xa5}, exactKeyBytes)
 	signCapability := bytes.Repeat([]byte{0xb6}, exactKeyBytes)
 	reviseCapability := bytes.Repeat([]byte{0xc7}, exactKeyBytes)
+	dsnSignCapability := bytes.Repeat([]byte{0xd8}, exactKeyBytes)
 	writeProtectedTestFile(
 		t, filepath.Join(generationPath, "capability"),
 		processCapability, 0o600,
@@ -204,6 +267,10 @@ func newProtectedSigningFixture(t *testing.T) protectedSigningFixture {
 		t, filepath.Join(generationPath, "revise-capability"),
 		reviseCapability, 0o600,
 	)
+	writeProtectedTestFile(
+		t, filepath.Join(generationPath, "dsn-sign-capability"),
+		dsnSignCapability, 0o600,
+	)
 	writeProtectedSigningStoreFiles(t, generationPath)
 	sealGeneration(t, generationPath)
 	document := strings.ReplaceAll(
@@ -212,9 +279,12 @@ func newProtectedSigningFixture(t *testing.T) protectedSigningFixture {
 	yamlPath := filepath.Join(base, "dkim2d.yaml")
 	writeProtectedTestFile(t, yamlPath, []byte(document), 0o600)
 	return protectedSigningFixture{
-		yamlPath:         yamlPath,
-		signCapability:   bytes.Clone(signCapability),
-		reviseCapability: bytes.Clone(reviseCapability),
+		yamlPath:              yamlPath,
+		signCapabilityPath:    filepath.Join(generationPath, "sign-capability"),
+		dsnSignCapabilityPath: filepath.Join(generationPath, "dsn-sign-capability"),
+		signCapability:        bytes.Clone(signCapability),
+		reviseCapability:      bytes.Clone(reviseCapability),
+		dsnSignCapability:     bytes.Clone(dsnSignCapability),
 	}
 }
 

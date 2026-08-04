@@ -204,6 +204,14 @@ func (c ServerConfig) ReviseCapabilityFile() string {
 	return c.state.reviseCapabilityFile
 }
 
+// DSNSignCapabilityFile returns the protected delivery-status signing capability path.
+func (c ServerConfig) DSNSignCapabilityFile() string {
+	if c.state == nil {
+		return ""
+	}
+	return c.state.dsnSignCapabilityFile
+}
+
 // SignEnabled reports whether the originator route has explicit capability authority.
 func (c ServerConfig) SignEnabled() bool {
 	return c.state != nil && c.state.signCapabilityFile != ""
@@ -212,6 +220,11 @@ func (c ServerConfig) SignEnabled() bool {
 // ReviseEnabled reports whether the revision route has explicit capability authority.
 func (c ServerConfig) ReviseEnabled() bool {
 	return c.state != nil && c.state.reviseCapabilityFile != ""
+}
+
+// DSNSignEnabled reports whether delivery-status signing has explicit capability authority.
+func (c ServerConfig) DSNSignEnabled() bool {
+	return c.state != nil && c.state.dsnSignCapabilityFile != ""
 }
 
 // Backend returns the selected signing backend.

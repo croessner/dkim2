@@ -44,3 +44,9 @@ reconstructed semantics, and Section 6 canonical evidence. Package-local fuzz,
 abuse, privacy, dependency, and race tests complement the retained vectors.
 Generation remains internal because Message-Instance base64 and formatting,
 revision hash gating, and signing are intentionally deferred.
+
+The retained external Turscar corpus lives under
+`lib/testdata/vectors/external/turscar-dkim2tests/`. It is a public-only,
+hash-pinned external source with a separate upstream Draft-02 claim. Its local
+manifest classifies every retained input before any execution; it does not
+silently convert external fixtures into Draft-04 conformance evidence.

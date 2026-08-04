@@ -16,7 +16,8 @@ import (
 )
 
 const (
-	LocalCapabilityScopes localCapabilityContextKey = "localCapability.Scopes"
+	DsnSignCapabilityScopes dsnSignCapabilityContextKey = "dsnSignCapability.Scopes"
+	LocalCapabilityScopes   localCapabilityContextKey   = "localCapability.Scopes"
 )
 
 // Defines values for APIVersion.
@@ -246,13 +247,16 @@ func (e MessageInputFidelity) Valid() bool {
 
 // Defines values for OperationResponseOperation.
 const (
-	Revise OperationResponseOperation = "revise"
-	Sign   OperationResponseOperation = "sign"
+	DeliveryStatus OperationResponseOperation = "delivery_status"
+	Revise         OperationResponseOperation = "revise"
+	Sign           OperationResponseOperation = "sign"
 )
 
 // Valid indicates whether the value is a known member of the OperationResponseOperation enum.
 func (e OperationResponseOperation) Valid() bool {
 	switch e {
+	case DeliveryStatus:
+		return true
 	case Revise:
 		return true
 	case Sign:
@@ -794,6 +798,22 @@ type AddHeaderActionType string
 // CanonicalUint64 defines model for CanonicalUint64.
 type CanonicalUint64 = string
 
+// DSNSignRequest defines model for DSNSignRequest.
+type DSNSignRequest struct {
+	ApiVersion APIVersion     `json:"api_version"`
+	Context    SigningContext `json:"context"`
+	Draft      DraftVersion   `json:"draft"`
+
+	// Message Exact received RFC 5322 DSN bytes. Only raw_rfc5322 fidelity is accepted; callback reconstruction is not delivery-status evidence.
+	Message MessageInput `json:"message"`
+
+	// OriginalSmtp Independently observed envelope for the originally transmitted message embedded by the DSN. It must not be inferred from DSN text.
+	OriginalSmtp SMTPInput `json:"original_smtp"`
+
+	// OuterSmtp Exact observed envelope of the DSN itself. mail_from must be <> and rcpt_to must contain exactly one recipient.
+	OuterSmtp SMTPInput `json:"outer_smtp"`
+}
+
 // Disposition defines model for Disposition.
 type Disposition string
 
@@ -1072,8 +1092,14 @@ type ServiceUnavailable = ErrorResponse
 // UnsupportedMediaType defines model for UnsupportedMediaType.
 type UnsupportedMediaType = ErrorResponse
 
+// dsnSignCapabilityContextKey is the context key for dsnSignCapability security scheme
+type dsnSignCapabilityContextKey string
+
 // localCapabilityContextKey is the context key for localCapability security scheme
 type localCapabilityContextKey string
+
+// SignDeliveryStatusJSONRequestBody defines body for SignDeliveryStatus for application/json ContentType.
+type SignDeliveryStatusJSONRequestBody = DSNSignRequest
 
 // ProcessMessageJSONRequestBody defines body for ProcessMessage for application/json ContentType.
 type ProcessMessageJSONRequestBody = ProcessRequest
@@ -1101,6 +1127,9 @@ type ServerInterface interface {
 	// Report service readiness without a response body.
 	// (HEAD /readyz)
 	HeadReadiness(w http.ResponseWriter, r *http.Request)
+	// Sign one delivery-status notification.
+	// (POST /v1/dsn/sign)
+	SignDeliveryStatus(w http.ResponseWriter, r *http.Request)
 	// Process one inbound DKIM2 message.
 	// (POST /v1/process)
 	ProcessMessage(w http.ResponseWriter, r *http.Request)
@@ -1182,6 +1211,26 @@ func (siw *ServerInterfaceWrapper) HeadReadiness(w http.ResponseWriter, r *http.
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.HeadReadiness(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SignDeliveryStatus operation middleware
+func (siw *ServerInterfaceWrapper) SignDeliveryStatus(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, DsnSignCapabilityScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SignDeliveryStatus(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1376,6 +1425,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/metrics", wrapper.GetMetrics)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/readyz", wrapper.GetReadiness)
 	m.HandleFunc(http.MethodHead+" "+options.BaseURL+"/readyz", wrapper.HeadReadiness)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/dsn/sign", wrapper.SignDeliveryStatus)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/process", wrapper.ProcessMessage)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/revise", wrapper.ReviseMessage)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/sign", wrapper.SignMessage)
@@ -2218,6 +2268,217 @@ func (response HeadReadiness503Response) VisitHeadReadinessResponse(w http.Respo
 	return nil
 }
 
+type SignDeliveryStatusRequestObject struct {
+	Body *SignDeliveryStatusJSONRequestBody
+}
+
+type SignDeliveryStatusResponseObject interface {
+	VisitSignDeliveryStatusResponse(w http.ResponseWriter) error
+}
+
+type SignDeliveryStatus200ResponseHeaders struct {
+	CacheControl        string
+	Connection          string
+	ContentLength       string
+	Date                *string
+	XContentTypeOptions string
+}
+
+type SignDeliveryStatus200JSONResponse struct {
+	Body    OperationResponse
+	Headers SignDeliveryStatus200ResponseHeaders
+}
+
+func (response SignDeliveryStatus200JSONResponse) VisitSignDeliveryStatusResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Connection", fmt.Sprint(response.Headers.Connection))
+	w.Header().Set("Content-Length", fmt.Sprint(response.Headers.ContentLength))
+	if response.Headers.Date != nil {
+		w.Header().Set("Date", fmt.Sprint(*response.Headers.Date))
+	}
+	w.Header().Set("X-Content-Type-Options", fmt.Sprint(response.Headers.XContentTypeOptions))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SignDeliveryStatus400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response SignDeliveryStatus400JSONResponse) VisitSignDeliveryStatusResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Connection", fmt.Sprint(response.Headers.Connection))
+	w.Header().Set("Content-Length", fmt.Sprint(response.Headers.ContentLength))
+	if response.Headers.Date != nil {
+		w.Header().Set("Date", fmt.Sprint(*response.Headers.Date))
+	}
+	w.Header().Set("X-Content-Type-Options", fmt.Sprint(response.Headers.XContentTypeOptions))
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SignDeliveryStatus403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response SignDeliveryStatus403JSONResponse) VisitSignDeliveryStatusResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Connection", fmt.Sprint(response.Headers.Connection))
+	w.Header().Set("Content-Length", fmt.Sprint(response.Headers.ContentLength))
+	if response.Headers.Date != nil {
+		w.Header().Set("Date", fmt.Sprint(*response.Headers.Date))
+	}
+	w.Header().Set("X-Content-Type-Options", fmt.Sprint(response.Headers.XContentTypeOptions))
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SignDeliveryStatus408JSONResponse struct{ RequestTimeoutJSONResponse }
+
+func (response SignDeliveryStatus408JSONResponse) VisitSignDeliveryStatusResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Connection", fmt.Sprint(response.Headers.Connection))
+	w.Header().Set("Content-Length", fmt.Sprint(response.Headers.ContentLength))
+	if response.Headers.Date != nil {
+		w.Header().Set("Date", fmt.Sprint(*response.Headers.Date))
+	}
+	w.Header().Set("X-Content-Type-Options", fmt.Sprint(response.Headers.XContentTypeOptions))
+	w.WriteHeader(408)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SignDeliveryStatus413JSONResponse struct{ RequestTooLargeJSONResponse }
+
+func (response SignDeliveryStatus413JSONResponse) VisitSignDeliveryStatusResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Connection", fmt.Sprint(response.Headers.Connection))
+	w.Header().Set("Content-Length", fmt.Sprint(response.Headers.ContentLength))
+	if response.Headers.Date != nil {
+		w.Header().Set("Date", fmt.Sprint(*response.Headers.Date))
+	}
+	w.Header().Set("X-Content-Type-Options", fmt.Sprint(response.Headers.XContentTypeOptions))
+	w.WriteHeader(413)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SignDeliveryStatus415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response SignDeliveryStatus415JSONResponse) VisitSignDeliveryStatusResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Connection", fmt.Sprint(response.Headers.Connection))
+	w.Header().Set("Content-Length", fmt.Sprint(response.Headers.ContentLength))
+	if response.Headers.Date != nil {
+		w.Header().Set("Date", fmt.Sprint(*response.Headers.Date))
+	}
+	w.Header().Set("X-Content-Type-Options", fmt.Sprint(response.Headers.XContentTypeOptions))
+	w.WriteHeader(415)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SignDeliveryStatus417JSONResponse struct{ ExpectationFailedJSONResponse }
+
+func (response SignDeliveryStatus417JSONResponse) VisitSignDeliveryStatusResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Connection", fmt.Sprint(response.Headers.Connection))
+	w.Header().Set("Content-Length", fmt.Sprint(response.Headers.ContentLength))
+	if response.Headers.Date != nil {
+		w.Header().Set("Date", fmt.Sprint(*response.Headers.Date))
+	}
+	w.Header().Set("X-Content-Type-Options", fmt.Sprint(response.Headers.XContentTypeOptions))
+	w.WriteHeader(417)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SignDeliveryStatus500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response SignDeliveryStatus500JSONResponse) VisitSignDeliveryStatusResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Connection", fmt.Sprint(response.Headers.Connection))
+	w.Header().Set("Content-Length", fmt.Sprint(response.Headers.ContentLength))
+	if response.Headers.Date != nil {
+		w.Header().Set("Date", fmt.Sprint(*response.Headers.Date))
+	}
+	w.Header().Set("X-Content-Type-Options", fmt.Sprint(response.Headers.XContentTypeOptions))
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SignDeliveryStatus503JSONResponse struct{ ServiceUnavailableJSONResponse }
+
+func (response SignDeliveryStatus503JSONResponse) VisitSignDeliveryStatusResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Connection", fmt.Sprint(response.Headers.Connection))
+	w.Header().Set("Content-Length", fmt.Sprint(response.Headers.ContentLength))
+	if response.Headers.Date != nil {
+		w.Header().Set("Date", fmt.Sprint(*response.Headers.Date))
+	}
+	w.Header().Set("Retry-After", fmt.Sprint(response.Headers.RetryAfter))
+	w.Header().Set("X-Content-Type-Options", fmt.Sprint(response.Headers.XContentTypeOptions))
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ProcessMessageRequestObject struct {
 	Body *ProcessMessageJSONRequestBody
 }
@@ -2908,6 +3169,9 @@ type StrictServerInterface interface {
 	// Report service readiness without a response body.
 	// (HEAD /readyz)
 	HeadReadiness(ctx context.Context, request HeadReadinessRequestObject) (HeadReadinessResponseObject, error)
+	// Sign one delivery-status notification.
+	// (POST /v1/dsn/sign)
+	SignDeliveryStatus(ctx context.Context, request SignDeliveryStatusRequestObject) (SignDeliveryStatusResponseObject, error)
 	// Process one inbound DKIM2 message.
 	// (POST /v1/process)
 	ProcessMessage(ctx context.Context, request ProcessMessageRequestObject) (ProcessMessageResponseObject, error)
@@ -3061,6 +3325,37 @@ func (sh *strictHandler) HeadReadiness(w http.ResponseWriter, r *http.Request) {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(HeadReadinessResponseObject); ok {
 		if err := validResponse.VisitHeadReadinessResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SignDeliveryStatus operation middleware
+func (sh *strictHandler) SignDeliveryStatus(w http.ResponseWriter, r *http.Request) {
+	var request SignDeliveryStatusRequestObject
+
+	var body SignDeliveryStatusJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SignDeliveryStatus(ctx, request.(SignDeliveryStatusRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SignDeliveryStatus")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SignDeliveryStatusResponseObject); ok {
+		if err := validResponse.VisitSignDeliveryStatusResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

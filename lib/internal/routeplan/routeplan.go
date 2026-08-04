@@ -53,11 +53,14 @@ const (
 	PurposeRevision Purpose = "revision"
 	// PurposeNextDomain identifies a terminal next-domain copy.
 	PurposeNextDomain Purpose = "next_domain"
+	// PurposeDeliveryStatus identifies a DSN copy authorized by dedicated evidence.
+	PurposeDeliveryStatus Purpose = "delivery_status"
 )
 
 // Known reports whether purpose belongs to the closed route vocabulary.
 func (p Purpose) Known() bool {
-	return p == PurposeOrigin || p == PurposeRevision || p == PurposeNextDomain
+	return p == PurposeOrigin || p == PurposeRevision || p == PurposeNextDomain ||
+		p == PurposeDeliveryStatus
 }
 
 // DisclosureClass identifies the recipient-disclosure policy of one copy.
@@ -271,14 +274,14 @@ func (e Entry) valid() bool {
 		return false
 	}
 	if (e.routeClass == RouteOutOfBand) != (len(e.outboundReceiverBinding) > 0) ||
-		e.purpose == PurposeOrigin &&
+		(e.purpose == PurposeOrigin || e.purpose == PurposeDeliveryStatus) &&
 			(e.routeClass != RouteExternal || len(e.inboundReceiverBinding) > 0) ||
 		e.purpose == PurposeRevision &&
 			(e.routeClass == RouteOutOfBand || len(e.outboundReceiverBinding) > 0) ||
 		e.purpose == PurposeNextDomain && e.routeClass != RouteOutOfBand {
 		return false
 	}
-	if (e.purpose != PurposeOrigin) != (len(e.revisionBinding) > 0) {
+	if (e.purpose != PurposeOrigin && e.purpose != PurposeDeliveryStatus) != (len(e.revisionBinding) > 0) {
 		return false
 	}
 	if len(e.forwardPaths) > hardCopies {
@@ -389,7 +392,7 @@ func (q FinalizeQuery) Valid() bool {
 			!binding.routeClass.Known() || len(binding.forwardPaths) == 0 ||
 			len(binding.route) == 0 ||
 			(binding.routeClass == RouteOutOfBand) != (len(binding.outboundReceiver) > 0) ||
-			binding.purpose == PurposeOrigin &&
+			(binding.purpose == PurposeOrigin || binding.purpose == PurposeDeliveryStatus) &&
 				(binding.routeClass != RouteExternal || len(binding.inboundReceiver) > 0) ||
 			binding.purpose == PurposeRevision &&
 				(binding.routeClass == RouteOutOfBand || len(binding.outboundReceiver) > 0) ||

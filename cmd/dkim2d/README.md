@@ -271,12 +271,13 @@ inconsistent datasource remains temporary; malformed active configuration
 remains permanent. HTTP 204 is never an availability fallback.
 
 Null senders are classified by the originator Milter before daemon I/O and
-tempfail until an executable trusted gate can prove the complete Draft-04
-delivery-status-notification prerequisites. Address literals and otherwise
-unsupported valid SMTPUTF8 envelopes remain not applicable and continue
-unchanged. Malformed Milter callback syntax remains fail-closed. The
-implementation does not infer DSN signing authority from message headers, HELO,
-recipients, suffixes, wildcards, or tenant defaults.
+continue to tempfail until that adapter can supply the complete trusted
+Draft-04 delivery-status-notification evidence. The separate daemon DSN route
+does not weaken that Milter boundary. Address literals and otherwise unsupported
+valid SMTPUTF8 envelopes remain not applicable and continue unchanged. Malformed
+Milter callback syntax remains fail-closed. The implementation does not infer
+DSN signing authority from message headers, HELO, recipients, suffixes,
+wildcards, or tenant defaults.
 
 ### Explicitly disabled replay
 
@@ -296,10 +297,10 @@ replay:
 Disabled replay is explicit local policy. It loads no replay HMAC, constructs
 no replay deriver, and does not silently fall back to another backend.
 
-### Flat-file signing and revision
+### Flat-file signing, revision, and delivery status
 
 Signing is disabled by default. Enabling the flat-file backend requires one or
-both distinct signing-route capabilities and a datasource, private-key
+more distinct signing-route capabilities and a datasource, private-key
 manifest, and referenced PKCS#8 children from the same protected generation:
 
 ```yaml
@@ -311,6 +312,7 @@ server:
   capability_file: /var/lib/dkim2d/protected/0123456789abcdef0123456789abcdef/capability
   sign_capability_file: /var/lib/dkim2d/protected/0123456789abcdef0123456789abcdef/sign-capability
   revise_capability_file: /var/lib/dkim2d/protected/0123456789abcdef0123456789abcdef/revise-capability
+  dsn_sign_capability_file: /var/lib/dkim2d/protected/0123456789abcdef0123456789abcdef/dsn-sign-capability
 replay:
   backend: disabled
 signing:
@@ -319,11 +321,13 @@ signing:
   private_manifest_file: /var/lib/dkim2d/protected/0123456789abcdef0123456789abcdef/private-manifest
 ```
 
-Omit only the unused sign or revise capability. The datasource is the closed
+Omit every unused route capability. `dsn_sign_capability_file` authorizes only
+`/v1/dsn/sign`; it is distinct from process, sign, revise, replay, and
+all other protected material. The datasource is the closed
 `dkim2-datasource-v1` format documented in
 [`docs/specs/implementation/datasource-providers.md`](../../docs/specs/implementation/datasource-providers.md).
 The private manifest is `dkim2-private-keys-v1`; every entry binds one exact
-tenant, domain, `originator` or `ordinary_transit` use, opaque datasource
+tenant, domain, `originator`, `ordinary_transit`, or `delivery_status` use, opaque datasource
 handle, `rsa-sha256` or
 `ed25519-sha256` algorithm, canonical Base64 SHA-256 digest of the public SPKI,
 and direct-child private-key filename. A private-key child is one unencrypted
@@ -474,6 +478,7 @@ Exactly these paths are routable:
 | `POST` | `/v1/process` | Verification, policy, replay, disposition |
 | `POST` | `/v1/sign` | Originator signing and ordered append-only actions |
 | `POST` | `/v1/revise` | Ordinary-transit verification, revision, and ordered actions |
+| `POST` | `/v1/dsn/sign` | Authenticated outgoing delivery-status signing |
 
 Health and readiness support their declared strong-ETag conditional behavior.
 Readiness is `200` only after immutable configuration and protected loading,

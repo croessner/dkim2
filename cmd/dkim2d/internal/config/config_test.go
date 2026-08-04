@@ -49,7 +49,8 @@ func TestSigningConfigurationIsDefaultDisabledAndConditionallyComplete(t *testin
 	disabled, err := Load([]byte(disabledYAML()), FlagValues{})
 	if err != nil || disabled.Signing().Enabled() ||
 		disabled.Server().SignCapabilityFile() != "" ||
-		disabled.Server().ReviseCapabilityFile() != "" {
+		disabled.Server().ReviseCapabilityFile() != "" ||
+		disabled.Server().DSNSignCapabilityFile() != "" {
 		t.Fatal("default-disabled signing configuration widened authority")
 	}
 	enabled, err := Load([]byte(signingYAML()), FlagValues{})
@@ -60,25 +61,54 @@ func TestSigningConfigurationIsDefaultDisabledAndConditionallyComplete(t *testin
 		t.Fatalf("enabled signing configuration failed with code %s", CodeOf(err))
 	}
 	signOnly, err := Load(
-		[]byte(removeYAMLField(signingYAML(), "  revise_capability_file:")),
+		[]byte(removeYAMLField(
+			removeYAMLField(signingYAML(), "  revise_capability_file:"),
+			"  dsn_sign_capability_file:",
+		)),
 		FlagValues{},
 	)
-	if err != nil || !signOnly.Server().SignEnabled() || signOnly.Server().ReviseEnabled() {
+	if err != nil || !signOnly.Server().SignEnabled() || signOnly.Server().ReviseEnabled() ||
+		signOnly.Server().DSNSignEnabled() {
 		t.Fatalf("sign-only route configuration failed with code %s", CodeOf(err))
 	}
 	reviseOnly, err := Load(
-		[]byte(removeYAMLField(signingYAML(), "  sign_capability_file:")),
+		[]byte(removeYAMLField(
+			removeYAMLField(signingYAML(), "  sign_capability_file:"),
+			"  dsn_sign_capability_file:",
+		)),
 		FlagValues{},
 	)
-	if err != nil || reviseOnly.Server().SignEnabled() || !reviseOnly.Server().ReviseEnabled() {
+	if err != nil || reviseOnly.Server().SignEnabled() || !reviseOnly.Server().ReviseEnabled() ||
+		reviseOnly.Server().DSNSignEnabled() {
 		t.Fatalf("revise-only route configuration failed with code %s", CodeOf(err))
+	}
+	dsnOnly, err := Load(
+		[]byte(removeYAMLField(
+			removeYAMLField(signingYAML(), "  sign_capability_file:"),
+			"  revise_capability_file:",
+		)),
+		FlagValues{},
+	)
+	if err != nil || dsnOnly.Server().SignEnabled() || dsnOnly.Server().ReviseEnabled() ||
+		!dsnOnly.Server().DSNSignEnabled() {
+		t.Fatalf("DSN-only route configuration failed with code %s", CodeOf(err))
 	}
 	for _, mutation := range []string{
 		strings.Replace(signingYAML(), "  private_manifest_file:", "  unknown_private_manifest_file:", 1),
 		strings.Replace(signingYAML(), "  revise_capability_file:", "  unknown_revise_capability_file:", 1),
+		strings.Replace(signingYAML(), "  dsn_sign_capability_file:", "  unknown_dsn_sign_capability_file:", 1),
 		removeYAMLField(
-			removeYAMLField(signingYAML(), "  sign_capability_file:"),
-			"  revise_capability_file:",
+			removeYAMLField(
+				removeYAMLField(signingYAML(), "  sign_capability_file:"),
+				"  revise_capability_file:",
+			),
+			"  dsn_sign_capability_file:",
+		),
+		strings.Replace(
+			signingYAML(),
+			"  dsn_sign_capability_file: /secure/"+testGeneration+"/dsn-sign-capability",
+			"  dsn_sign_capability_file: /secure/"+testGeneration+"/sign-capability",
+			1,
 		),
 		strings.Replace(signingYAML(), "/private-manifest", "/datasource", 1),
 		strings.Replace(signingYAML(), "  backend: flat_file", "  backend: disabled", 1),
@@ -773,6 +803,7 @@ server:
   capability_file: /secure/` + testGeneration + `/capability
   sign_capability_file: /secure/` + testGeneration + `/sign-capability
   revise_capability_file: /secure/` + testGeneration + `/revise-capability
+  dsn_sign_capability_file: /secure/` + testGeneration + `/dsn-sign-capability
 replay:
   backend: disabled
 signing:

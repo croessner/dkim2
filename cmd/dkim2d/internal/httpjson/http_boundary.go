@@ -27,9 +27,11 @@ const (
 	processPath          = "/v1/process"
 	signPath             = "/v1/sign"
 	revisePath           = "/v1/revise"
+	dsnSignPath          = "/v1/dsn/sign"
 	metricsAllowMethod   = "GET"
 	observationUnmatched = "unmatched"
 	observationProcess   = "process"
+	observationDSNSign   = "dsn_sign"
 	observationSuccess   = "success"
 )
 
@@ -57,19 +59,20 @@ type BoundaryConfig struct {
 
 // HTTPBoundary owns route, admission, validation, and generated-adapter ordering.
 type HTTPBoundary struct {
-	authority     string
-	deadline      time.Duration
-	matcher       capabilityMatcher
-	signMatcher   capabilityMatcher
-	reviseMatcher capabilityMatcher
-	readiness     readinessSource
-	validator     *RequestValidator
-	admission     *processAdmission
-	strict        *strictAdapter
-	generated     generated.ServerInterface
-	fatal         FatalNotifier
-	metrics       *observability.Metrics
-	telemetry     *observability.Runtime
+	authority      string
+	deadline       time.Duration
+	matcher        capabilityMatcher
+	signMatcher    capabilityMatcher
+	reviseMatcher  capabilityMatcher
+	dsnSignMatcher capabilityMatcher
+	readiness      readinessSource
+	validator      *RequestValidator
+	admission      *processAdmission
+	strict         *strictAdapter
+	generated      generated.ServerInterface
+	fatal          FatalNotifier
+	metrics        *observability.Metrics
+	telemetry      *observability.Runtime
 }
 
 // NewHTTPBoundary constructs one immutable process-local HTTP handler.
@@ -96,7 +99,7 @@ func NewHTTPBoundary(
 	if err != nil {
 		return nil, errHTTPBoundaryConfig
 	}
-	telemetry, operation, signMatcher, reviseMatcher, dependenciesOK :=
+	telemetry, operation, signMatcher, reviseMatcher, dsnSignMatcher, dependenciesOK :=
 		parseBoundaryDependencies(dependencies)
 	if !dependenciesOK {
 		return nil, errHTTPBoundaryConfig
@@ -120,18 +123,19 @@ func NewHTTPBoundary(
 		return nil, errHTTPBoundaryConfig
 	}
 	boundary := &HTTPBoundary{
-		authority:     config.Authority,
-		deadline:      config.RequestDeadline,
-		matcher:       matcher,
-		signMatcher:   signMatcher,
-		reviseMatcher: reviseMatcher,
-		readiness:     readiness,
-		validator:     validator,
-		admission:     admission,
-		strict:        strict,
-		fatal:         notifier,
-		metrics:       metrics,
-		telemetry:     telemetry,
+		authority:      config.Authority,
+		deadline:       config.RequestDeadline,
+		matcher:        matcher,
+		signMatcher:    signMatcher,
+		reviseMatcher:  reviseMatcher,
+		dsnSignMatcher: dsnSignMatcher,
+		readiness:      readiness,
+		validator:      validator,
+		admission:      admission,
+		strict:         strict,
+		fatal:          notifier,
+		metrics:        metrics,
+		telemetry:      telemetry,
 	}
 	boundary.generated = generated.NewStrictHandlerWithOptions(
 		strict,
@@ -162,48 +166,55 @@ func NewHTTPBoundary(
 
 type signMatcherDependency struct{ capabilityMatcher }
 type reviseMatcherDependency struct{ capabilityMatcher }
+type dsnSignMatcherDependency struct{ capabilityMatcher }
 
 // parseBoundaryDependencies accepts at most one optional runtime, operation
 // service, and each named signing capability.
 func parseBoundaryDependencies(
 	values []any,
-) (*observability.Runtime, app.OperationService, capabilityMatcher, capabilityMatcher, bool) {
+) (*observability.Runtime, app.OperationService, capabilityMatcher, capabilityMatcher, capabilityMatcher, bool) {
 	var runtime *observability.Runtime
 	var operation app.OperationService
 	var signMatcher capabilityMatcher
 	var reviseMatcher capabilityMatcher
+	var dsnSignMatcher capabilityMatcher
 	for _, value := range values {
 		switch typed := value.(type) {
 		case *observability.Runtime:
 			if runtime != nil || typed == nil {
-				return nil, nil, nil, nil, false
+				return nil, nil, nil, nil, nil, false
 			}
 			runtime = typed
 		case app.OperationService:
 			if !nilInterfaceValue(operation) || nilInterfaceValue(typed) {
-				return nil, nil, nil, nil, false
+				return nil, nil, nil, nil, nil, false
 			}
 			operation = typed
 		case signMatcherDependency:
 			if !nilInterfaceValue(signMatcher) || nilInterfaceValue(typed.capabilityMatcher) {
-				return nil, nil, nil, nil, false
+				return nil, nil, nil, nil, nil, false
 			}
 			signMatcher = typed.capabilityMatcher
 		case reviseMatcherDependency:
 			if !nilInterfaceValue(reviseMatcher) || nilInterfaceValue(typed.capabilityMatcher) {
-				return nil, nil, nil, nil, false
+				return nil, nil, nil, nil, nil, false
 			}
 			reviseMatcher = typed.capabilityMatcher
+		case dsnSignMatcherDependency:
+			if !nilInterfaceValue(dsnSignMatcher) || nilInterfaceValue(typed.capabilityMatcher) {
+				return nil, nil, nil, nil, nil, false
+			}
+			dsnSignMatcher = typed.capabilityMatcher
 		default:
-			return nil, nil, nil, nil, false
+			return nil, nil, nil, nil, nil, false
 		}
 	}
 	enabled := !nilInterfaceValue(operation)
-	hasMatcher := !nilInterfaceValue(signMatcher) || !nilInterfaceValue(reviseMatcher)
+	hasMatcher := !nilInterfaceValue(signMatcher) || !nilInterfaceValue(reviseMatcher) || !nilInterfaceValue(dsnSignMatcher)
 	if enabled != hasMatcher {
-		return nil, nil, nil, nil, false
+		return nil, nil, nil, nil, nil, false
 	}
-	return runtime, operation, signMatcher, reviseMatcher, true
+	return runtime, operation, signMatcher, reviseMatcher, dsnSignMatcher, true
 }
 
 // Close rejects new process admission and interrupts ordinary waiters.
@@ -358,6 +369,8 @@ func httpObservationRoute(request *http.Request) (string, string) {
 		return "sign", signPath
 	case revisePath:
 		return "revise", revisePath
+	case dsnSignPath:
+		return observationDSNSign, dsnSignPath
 	default:
 		return observationUnmatched, observationUnmatched
 	}
@@ -386,6 +399,8 @@ func httpObservationPath(operation string) string {
 		return signPath
 	case "revise":
 		return revisePath
+	case observationDSNSign:
+		return dsnSignPath
 	default:
 		return observationUnmatched
 	}
@@ -510,7 +525,7 @@ func (h *HTTPBoundary) serveBoundaryRequest(
 		h.serveStatus(committed, request, facts)
 	case metricsPath:
 		h.serveMetrics(committed, request, facts, traceContextPresent)
-	case processPath, signPath, revisePath:
+	case processPath, signPath, revisePath, dsnSignPath:
 		h.serveProcess(
 			committed,
 			request,
@@ -888,6 +903,8 @@ func (h *HTTPBoundary) matcherForPath(path string) capabilityMatcher {
 		return h.signMatcher
 	case revisePath:
 		return h.reviseMatcher
+	case dsnSignPath:
+		return h.dsnSignMatcher
 	default:
 		return nil
 	}
@@ -963,6 +980,8 @@ func (h *HTTPBoundary) processReservedRequest(
 		h.generated.SignMessage(writer, request)
 	case revisePath:
 		h.generated.ReviseMessage(writer, request)
+	case dsnSignPath:
+		h.generated.SignDeliveryStatus(writer, request)
 	default:
 		h.writeInternal(writer, request)
 	}

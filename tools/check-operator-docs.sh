@@ -198,24 +198,26 @@ for reference in \
   grep -Fq "$reference" "$guide"
 done
 
-test "$(sed -n 's|^  \(/[^:]*\):$|\1|p' "$openapi" | wc -l | tr -d ' ')" -eq 6
-for route in /metrics /healthz /readyz /v1/process /v1/sign /v1/revise; do
+test "$(sed -n 's|^  \(/[^:]*\):$|\1|p' "$openapi" | wc -l | tr -d ' ')" -eq 7
+for route in /metrics /healthz /readyz /v1/process /v1/sign /v1/revise /v1/dsn/sign; do
   grep -Fq "  $route:" "$openapi"
   grep -Fq "\`$route\`" "$daemon"
 done
-for operation in processMessage signMessage reviseMessage; do
+for operation in processMessage signMessage reviseMessage signDeliveryStatus; do
   grep -Fq "operationId: $operation" "$openapi"
 done
 for capability in \
   capability_file \
   sign_capability_file \
-  revise_capability_file; do
+  revise_capability_file \
+  dsn_sign_capability_file; do
   grep -Fq "$capability" "$daemon"
 done
 for flag in \
   --capability-file \
   --sign-capability-file \
-  --revise-capability-file; do
+  --revise-capability-file \
+  --dsn-sign-capability-file; do
   grep -Fq -- "\"${flag#--}\"" cmd/dkim2ctl/internal/command/command.go
   grep -Fq -- "$flag" "$client"
 done

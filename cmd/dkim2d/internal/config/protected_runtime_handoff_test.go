@@ -199,6 +199,9 @@ func TestProtectedReleaseClearsOwnedBackingBytes(t *testing.T) {
 		state.phase = protectedOwnedByPrebootstrap
 		owner := &Prebootstrap{state: state}
 		capabilityAlias := state.capability[:]
+		state.dsnSignCapability = [exactKeyBytes]byte{0xd8}
+		state.hasDSNSign = true
+		dsnSignCapabilityAlias := state.dsnSignCapability[:]
 		hmacAlias := state.hmac[:]
 		applicationAlias := state.applicationPassword
 		auditorAlias := state.auditorPassword
@@ -221,7 +224,8 @@ func TestProtectedReleaseClearsOwnedBackingBytes(t *testing.T) {
 		if err != nil {
 			t.Fatalf("release runtimeOwned=%t failed with code %s", runtimeOwned, CodeOf(err))
 		}
-		if !allZeroBytes(capabilityAlias) || !allZeroBytes(hmacAlias) ||
+		if !allZeroBytes(capabilityAlias) || !allZeroBytes(dsnSignCapabilityAlias) ||
+			!allZeroBytes(hmacAlias) ||
 			!allZeroBytes(applicationAlias) || !allZeroBytes(auditorAlias) {
 			t.Fatalf("release runtimeOwned=%t retained password bytes", runtimeOwned)
 		}

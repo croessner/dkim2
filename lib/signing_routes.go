@@ -68,6 +68,20 @@ func NewOriginatorRouteEntry(source SigningSource, reversePath []byte, forwardPa
 	return RouteEntry{value: value}, nil
 }
 
+// NewDeliveryStatusRouteEntry constructs one exact DSN route descriptor.
+// It is purpose-separated from originator tickets so a generic signing ticket
+// cannot authorize a null reverse-path delivery-status operation.
+func NewDeliveryStatusRouteEntry(source SigningSource, reversePath []byte, forwardPaths [][]byte, disclosure RouteDisclosure, routeScope []byte) (RouteEntry, error) {
+	value, err := routeplan.NewEntry(
+		source.value, routeplan.PurposeDeliveryStatus, reversePath, forwardPaths,
+		routeplan.DisclosureClass(disclosure), routeScope, nil,
+	)
+	if err != nil {
+		return RouteEntry{}, mapRouteError(err)
+	}
+	return RouteEntry{value: value}, nil
+}
+
 // NewExistingRouteEntry constructs one exact forwarding or revision route
 // descriptor bound to a verified revision capability.
 func NewExistingRouteEntry(capability VerifiedRevisionInput, source SigningSource, reversePath []byte, forwardPaths [][]byte, disclosure RouteDisclosure, routeScope []byte) (RouteEntry, error) {
