@@ -12,6 +12,39 @@ The first design goal is precision: the core implementation must work from a
 controlled RFC 5322 message representation, preserve wire-significant details,
 and keep adapter behavior separate from the protocol engine.
 
+## Architecture
+
+```mermaid
+flowchart LR
+    subgraph mta["Mail transfer agents"]
+        postfix["Postfix"]
+        exim["Exim"]
+    end
+
+    subgraph adapters["MTA adapters"]
+        milter["dkim2-milter\nMilter-v6 Unix-socket adapter"]
+        eximAdapter["dkim2-exim\nlocal_scan and transport-filter adapter"]
+    end
+
+    client["dkim2ctl\nOpenAPI client and conformance runner"]
+    daemon["dkim2d\nlocal HTTP/JSON daemon"]
+    library["github.com/croessner/dkim2\nstandalone DKIM2 library"]
+
+    postfix -->|"Milter-v6 over Unix socket"| milter
+    exim -->|"local_scan and transport_filter"| eximAdapter
+    milter -->|"generated OpenAPI client\nloopback HTTP with route capability"| daemon
+    eximAdapter -->|"generated OpenAPI client\nloopback HTTP with route capability"| daemon
+    client -->|"generated OpenAPI client\nsmoke and fixture requests"| daemon
+    daemon -->|"domain requests and action plans"| library
+```
+
+The arrows show the runtime request flow. `dkim2-milter` and `dkim2-exim` are
+transport adapters: they collect MTA-specific message and envelope evidence,
+call `dkim2d`, validate its response, and apply only the admitted action plan.
+`dkim2ctl` uses the same local OpenAPI boundary for smoke and conformance
+workflows. `dkim2d` is the service layer around the standalone library, which
+owns DKIM2 protocol semantics.
+
 Current contents:
 
 - `docs/ARCHITECTURE.md`: current architecture, ownership boundaries, and
