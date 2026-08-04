@@ -12,7 +12,8 @@ policy for the digest-pinned build-only BusyBox metadata validator, Go 1.26.5
 builder, and BuildKit executor. The minimal validator rejects hostile build
 metadata before source or vendor bytes are copied and emits one `/validated`
 dependency consumed by every product build. The final stages are `scratch`,
-run as numeric UID/GID `2000:2000`, and contain one product binary plus the
+run as numeric UID/GID `2000:2000`, and contain one product binary, the
+Apache-2.0 project license at `/usr/share/licenses/dkim2/LICENSE`, and the
 read-only deterministic third-party notice bundle at
 `/usr/share/licenses/dkim2/THIRD_PARTY_NOTICES.txt`. The bundle preserves the
 pinned Go toolchain license and patent notice as well as license and notice
@@ -33,10 +34,11 @@ Containerfile and candidate metadata; this guide does not maintain a parallel
 label table. The production deployment and lifecycle entry point is
 [`docs/operator/postfix-compose.md`](postfix-compose.md).
 
-The repository does not currently declare a root project license. The
-`org.opencontainers.image.licenses=NOASSERTION` label is therefore a deliberate
-non-assertion, and the third-party bundle must not be interpreted as granting a
-license for the DKIM2 project itself.
+DKIM2 is licensed under the Apache License 2.0; see the root
+[`LICENSE`](../../LICENSE). The
+`org.opencontainers.image.licenses=Apache-2.0` label declares this project
+license. The third-party notice bundle remains attribution evidence for its
+included dependencies and does not modify the DKIM2 project license.
 
 The byte-reproducibility claim covers the six product binaries and their
 notice bundles when source, toolchain, architecture, vendor tree, and metadata

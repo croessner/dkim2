@@ -162,7 +162,7 @@ func verifyLoadedImage(
 	} else if inspection.Config.Healthcheck != nil {
 		return errors.New("healthcheck")
 	}
-	if len(selected.Files) != 2 {
+	if len(selected.Files) != 3 {
 		return errors.New("inventory")
 	}
 	exportContent, err := artifactpath.ReadFile("..", exportPath, 128<<20)
@@ -177,7 +177,7 @@ func verifyExportedFiles(content []byte, expected []fileRecord) error {
 	if len(content) == 0 || len(content) > 128<<20 {
 		return errors.New("export")
 	}
-	if len(expected) != 2 {
+	if len(expected) != 3 {
 		return errors.New("inventory")
 	}
 	expectedByPath := make(map[string]fileRecord, len(expected))

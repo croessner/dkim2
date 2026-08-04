@@ -827,7 +827,7 @@ func loadOCIReport(root string, product string, revision string) (ociReport, err
 			"org.opencontainers.image.created":       candidate.Created,
 			"org.opencontainers.image.vendor":        "DKIM2 reference implementation",
 			"org.opencontainers.image.documentation": "https://github.com/croessner/dkim2/tree/main/docs/operator",
-			"org.opencontainers.image.licenses":      "NOASSERTION",
+			"org.opencontainers.image.licenses":      "Apache-2.0",
 			"org.opencontainers.image.title":         product,
 			"org.opencontainers.image.description":   descriptions[product],
 		}
@@ -836,7 +836,7 @@ func loadOCIReport(root string, product string, revision string) (ociReport, err
 			!validDigest(candidate.ConfigDigest) ||
 			!validDigest(candidate.LayerDigest) ||
 			!validDigest(candidate.DiffIDDigest) ||
-			len(candidate.Files) != 2 ||
+			len(candidate.Files) != 3 ||
 			candidate.Revision != revision ||
 			!validContainerVersion(candidate.Version) ||
 			!validExactRFC3339(candidate.Created) ||
@@ -934,17 +934,31 @@ func validOCINotice(file ociFileReport) bool {
 		file.Build.Trimpath == ""
 }
 
+// validOCIProjectLicense verifies the fixed project license projection.
+func validOCIProjectLicense(file ociFileReport) bool {
+	return file.Path == "/usr/share/licenses/dkim2/LICENSE" &&
+		file.Mode == 0o444 && file.UID == 0 && file.GID == 0 &&
+		file.Size > 0 && file.Size <= 32<<10 &&
+		validSHA256(file.SHA256) && file.Typeflag == tar.TypeReg &&
+		file.Build.GoVersion == "" && file.Build.Main.Path == "" &&
+		file.Build.Main.Version == "" && file.Build.Main.Sum == "" &&
+		len(file.Build.Deps) == 0 && file.Build.GOOS == "" &&
+		file.Build.GOARCH == "" && file.Build.CGO == "" &&
+		file.Build.Trimpath == ""
+}
+
 // validOCIInventory returns the uniquely validated binary and notice records.
 func validOCIInventory(
 	files []ociFileReport,
 	product string,
 	platform string,
 ) (ociFileReport, ociFileReport, bool) {
-	if len(files) != 2 {
+	if len(files) != 3 {
 		return ociFileReport{}, ociFileReport{}, false
 	}
 	var binary ociFileReport
 	var notice ociFileReport
+	licenseFound := false
 	binaryFound := false
 	noticeFound := false
 	for _, file := range files {
@@ -961,11 +975,16 @@ func validOCIInventory(
 			}
 			notice = file
 			noticeFound = true
+		case validOCIProjectLicense(file):
+			if licenseFound {
+				return ociFileReport{}, ociFileReport{}, false
+			}
+			licenseFound = true
 		default:
 			return ociFileReport{}, ociFileReport{}, false
 		}
 	}
-	return binary, notice, binaryFound && noticeFound
+	return binary, notice, binaryFound && noticeFound && licenseFound
 }
 
 // validOCIHealthcheck verifies exact daemon-only probe behavior.

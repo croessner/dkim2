@@ -29,14 +29,15 @@ import (
 )
 
 const (
-	imageIndexMediaType    = "application/vnd.oci.image.index.v1+json"
-	imageManifestMediaType = "application/vnd.oci.image.manifest.v1+json"
-	imageConfigMediaType   = "application/vnd.oci.image.config.v1+json"
-	layerGzipMediaType     = "application/vnd.oci.image.layer.v1.tar+gzip"
-	maximumOCIArchiveBytes = int64(256 << 20)
-	maximumOCIBlobBytes    = int64(128 << 20)
-	runtimeNoticePath      = "usr/share/licenses/dkim2/THIRD_PARTY_NOTICES.txt"
-	runtimeNoticeHeader    = "Third-party license and notice files distributed with DKIM2 binaries"
+	imageIndexMediaType       = "application/vnd.oci.image.index.v1+json"
+	imageManifestMediaType    = "application/vnd.oci.image.manifest.v1+json"
+	imageConfigMediaType      = "application/vnd.oci.image.config.v1+json"
+	layerGzipMediaType        = "application/vnd.oci.image.layer.v1.tar+gzip"
+	maximumOCIArchiveBytes    = int64(256 << 20)
+	maximumOCIBlobBytes       = int64(128 << 20)
+	runtimeProjectLicensePath = "usr/share/licenses/dkim2/LICENSE"
+	runtimeNoticePath         = "usr/share/licenses/dkim2/THIRD_PARTY_NOTICES.txt"
+	runtimeNoticeHeader       = "Third-party license and notice files distributed with DKIM2 binaries"
 )
 
 type descriptor struct {
@@ -584,7 +585,7 @@ func validateConfig(product string, platformName string, config imageConfig) err
 		"org.opencontainers.image.created":       config.Created,
 		"org.opencontainers.image.vendor":        "DKIM2 reference implementation",
 		"org.opencontainers.image.documentation": "https://github.com/croessner/dkim2/tree/main/docs/operator",
-		"org.opencontainers.image.licenses":      "NOASSERTION",
+		"org.opencontainers.image.licenses":      "Apache-2.0",
 		"org.opencontainers.image.title":         product,
 		"org.opencontainers.image.description":   descriptions[product],
 	}
@@ -627,7 +628,7 @@ func validHistory(product string, config imageConfig, created time.Time) bool {
 		"org.opencontainers.image.created=" + config.Created + " " +
 		"org.opencontainers.image.vendor=DKIM2 reference implementation " +
 		"org.opencontainers.image.documentation=https://github.com/croessner/dkim2/tree/main/docs/operator " +
-		"org.opencontainers.image.licenses=NOASSERTION"
+		"org.opencontainers.image.licenses=Apache-2.0"
 	expected := []struct {
 		command string
 		empty   bool
@@ -839,6 +840,7 @@ func inspectLayerInventory(
 	tarReader := tar.NewReader(source)
 	var files []fileRecord
 	var binary []byte
+	projectLicenseFound := false
 	seen := make(map[string]bool)
 	expectedDirectories := map[string]bool{
 		"usr": false, "usr/local": false, "usr/local/bin": false,
@@ -897,6 +899,12 @@ func inspectLayerInventory(
 				!validRuntimeNotice(content) {
 				return nil, nil, errors.New("invalid notice inventory")
 			}
+		case runtimeProjectLicensePath:
+			if header.Mode != 0o444 || header.Size > 32<<10 ||
+				!validRuntimeProjectLicense(content) {
+				return nil, nil, errors.New("invalid project license inventory")
+			}
+			projectLicenseFound = true
 		default:
 			return nil, nil, errors.New("invalid layer inventory")
 		}
@@ -911,7 +919,7 @@ func inspectLayerInventory(
 			Typeflag: header.Typeflag,
 		})
 	}
-	if len(files) != 2 || binary == nil {
+	if len(files) != 3 || binary == nil || !projectLicenseFound {
 		return nil, nil, errors.New("unexpected filesystem inventory")
 	}
 	for _, present := range expectedDirectories {
@@ -932,6 +940,16 @@ func inspectLayerInventory(
 		return files[left].Path < files[right].Path
 	})
 	return files, binary, nil
+}
+
+// validRuntimeProjectLicense verifies the Apache-2.0 license distributed with binaries.
+func validRuntimeProjectLicense(content []byte) bool {
+	return len(content) > 0 && len(content) <= 32<<10 &&
+		bytes.HasPrefix(content, []byte("Copyright 2026 Christian Roessner\n\nApache License\n")) &&
+		bytes.Contains(content, []byte("Version 2.0, January 2004")) &&
+		bytes.Contains(content, []byte("http://www.apache.org/licenses/")) &&
+		bytes.Contains(content, []byte("END OF TERMS AND CONDITIONS")) &&
+		bytes.IndexByte(content, 0) < 0
 }
 
 // validRuntimeNotice verifies the minimum closed license-notice sections.

@@ -31,6 +31,15 @@ Go patents
 Dependency license
 `)
 
+var testRuntimeProjectLicense = []byte(`Copyright 2026 Christian Roessner
+
+Apache License
+                           Version 2.0, January 2004
+                        http://www.apache.org/licenses/
+
+   END OF TERMS AND CONDITIONS
+`)
+
 // TestExportOCIPlatformLayoutWritesOnlyValidatedBlobsToANewConfinedDirectory freezes export ownership.
 func TestExportOCIPlatformLayoutWritesOnlyValidatedBlobsToANewConfinedDirectory(t *testing.T) {
 	configBytes := []byte(`{"architecture":"amd64","os":"linux"}`)
@@ -247,7 +256,7 @@ func testImageConfig(product string) imageConfig {
 		"org.opencontainers.image.created":       created,
 		"org.opencontainers.image.vendor":        "DKIM2 reference implementation",
 		"org.opencontainers.image.documentation": "https://github.com/croessner/dkim2/tree/main/docs/operator",
-		"org.opencontainers.image.licenses":      "NOASSERTION",
+		"org.opencontainers.image.licenses":      "Apache-2.0",
 		"org.opencontainers.image.title":         product,
 		"org.opencontainers.image.description":   "Loopback-only DKIM2 processing daemon",
 	}
@@ -266,7 +275,7 @@ func testImageConfig(product string) imageConfig {
 		"org.opencontainers.image.created=" + created + " " +
 		"org.opencontainers.image.vendor=DKIM2 reference implementation " +
 		"org.opencontainers.image.documentation=https://github.com/croessner/dkim2/tree/main/docs/operator " +
-		"org.opencontainers.image.licenses=NOASSERTION"
+		"org.opencontainers.image.licenses=Apache-2.0"
 	commands := []struct {
 		command string
 		empty   bool
@@ -320,7 +329,11 @@ func TestInspectLayerRejectsAmbiguousExtractionSemantics(t *testing.T) {
 		Name: runtimeNoticePath, Mode: 0o444, Uid: 0, Gid: 0,
 		Size: int64(len(testRuntimeNotice)), Typeflag: tar.TypeReg, ModTime: created,
 	}
-	validHeaders := append(append([]*tar.Header{}, directories...), binary, notice)
+	projectLicense := &tar.Header{
+		Name: runtimeProjectLicensePath, Mode: 0o444, Uid: 0, Gid: 0,
+		Size: int64(len(testRuntimeProjectLicense)), Typeflag: tar.TypeReg, ModTime: created,
+	}
+	validHeaders := append(append([]*tar.Header{}, directories...), binary, notice, projectLicense)
 	valid := writeLayer(t, validHeaders, nil)
 	if _, _, err := inspectLayerInventory(valid, "dkim2d", created); err != nil {
 		t.Fatal(err)
@@ -410,6 +423,7 @@ func TestVerifyExportedFilesRequiresClosedDockerParity(t *testing.T) {
 	content := []byte("binary")
 	sum := sha256.Sum256(content)
 	noticeSum := sha256.Sum256(testRuntimeNotice)
+	projectLicenseSum := sha256.Sum256(testRuntimeProjectLicense)
 	expected := []fileRecord{
 		{
 			Path: "/usr/local/bin/dkim2d", Mode: 0o555, UID: 0, GID: 0,
@@ -420,6 +434,12 @@ func TestVerifyExportedFilesRequiresClosedDockerParity(t *testing.T) {
 			Path: "/" + runtimeNoticePath, Mode: 0o444, UID: 0, GID: 0,
 			Size:     int64(len(testRuntimeNotice)),
 			SHA256:   hex.EncodeToString(noticeSum[:]),
+			Typeflag: tar.TypeReg,
+		},
+		{
+			Path: "/" + runtimeProjectLicensePath, Mode: 0o444, UID: 0, GID: 0,
+			Size:     int64(len(testRuntimeProjectLicense)),
+			SHA256:   hex.EncodeToString(projectLicenseSum[:]),
 			Typeflag: tar.TypeReg,
 		},
 	}
@@ -440,9 +460,14 @@ func TestVerifyExportedFilesRequiresClosedDockerParity(t *testing.T) {
 			Name: runtimeNoticePath, Mode: 0o444,
 			Size: int64(len(testRuntimeNotice)), Typeflag: tar.TypeReg,
 		},
+		{
+			Name: runtimeProjectLicensePath, Mode: 0o444,
+			Size: int64(len(testRuntimeProjectLicense)), Typeflag: tar.TypeReg,
+		},
 	}, map[string][]byte{
-		"usr/local/bin/dkim2d": content,
-		runtimeNoticePath:      testRuntimeNotice,
+		"usr/local/bin/dkim2d":    content,
+		runtimeNoticePath:         testRuntimeNotice,
+		runtimeProjectLicensePath: testRuntimeProjectLicense,
 	})
 	if err := verifyExportedFiles(valid, expected); err != nil {
 		t.Fatal(err)
@@ -477,9 +502,11 @@ func TestVerifyExportedFilesRequiresClosedDockerParity(t *testing.T) {
 		{Name: "usr/share/licenses/dkim2", Mode: 0o555, Typeflag: tar.TypeDir},
 		{Name: "usr/local/bin/dkim2d", Mode: 0o555, Size: int64(len(content)), Typeflag: tar.TypeReg},
 		{Name: runtimeNoticePath, Mode: 0o444, Size: int64(len(wrongNotice)), Typeflag: tar.TypeReg},
+		{Name: runtimeProjectLicensePath, Mode: 0o444, Size: int64(len(testRuntimeProjectLicense)), Typeflag: tar.TypeReg},
 	}, map[string][]byte{
-		"usr/local/bin/dkim2d": content,
-		runtimeNoticePath:      wrongNotice,
+		"usr/local/bin/dkim2d":    content,
+		runtimeNoticePath:         wrongNotice,
+		runtimeProjectLicensePath: testRuntimeProjectLicense,
 	})
 	if err := verifyExportedFiles(tampered, expected); err == nil {
 		t.Fatal("tampered public notice was accepted")
@@ -576,8 +603,11 @@ func writeLayer(t *testing.T, headers []*tar.Header, trailer []byte) []byte {
 		}
 		if copyHeader.Typeflag == tar.TypeReg && copyHeader.Size > 0 {
 			content := bytes.Repeat([]byte{'x'}, int(copyHeader.Size))
-			if copyHeader.Name == runtimeNoticePath {
+			switch copyHeader.Name {
+			case runtimeNoticePath:
 				content = testRuntimeNotice
+			case runtimeProjectLicensePath:
+				content = testRuntimeProjectLicense
 			}
 			if _, err := writer.Write(content); err != nil {
 				t.Fatal(err)

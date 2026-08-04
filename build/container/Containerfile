@@ -38,6 +38,7 @@ ARG VERSION
 WORKDIR /src
 COPY --from=build-metadata /validated /validated
 COPY go.work go.work.sum ./
+COPY LICENSE ./LICENSE
 COPY lib ./lib
 COPY cmd/dkim2d ./cmd/dkim2d
 COPY cmd/dkim2-milter ./cmd/dkim2-milter
@@ -90,6 +91,8 @@ RUN set -eu; \
         "/runtime/${product}/usr/local/bin/${product}"; \
       install -m 0444 "${notices}" \
         "/runtime/${product}/usr/share/licenses/dkim2/THIRD_PARTY_NOTICES.txt"; \
+      install -m 0444 LICENSE \
+        "/runtime/${product}/usr/share/licenses/dkim2/LICENSE"; \
     done
 
 FROM scratch AS runtime-common
@@ -103,7 +106,7 @@ LABEL org.opencontainers.image.source="https://github.com/croessner/dkim2" \
       org.opencontainers.image.created="${CREATED}" \
       org.opencontainers.image.vendor="DKIM2 reference implementation" \
       org.opencontainers.image.documentation="https://github.com/croessner/dkim2/tree/main/docs/operator" \
-      org.opencontainers.image.licenses="NOASSERTION"
+      org.opencontainers.image.licenses="Apache-2.0"
 USER 2000:2000
 
 FROM runtime-common AS dkim2d

@@ -1,6 +1,7 @@
 **
 !go.work
 !go.work.sum
+!LICENSE
 !lib/**
 !cmd/dkim2d/**
 !cmd/dkim2-milter/**

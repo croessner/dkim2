@@ -238,7 +238,7 @@ func testOCIReport(revision string, version string) ociReport {
 			"org.opencontainers.image.created":       created,
 			"org.opencontainers.image.vendor":        "DKIM2 reference implementation",
 			"org.opencontainers.image.documentation": "https://github.com/croessner/dkim2/tree/main/docs/operator",
-			"org.opencontainers.image.licenses":      "NOASSERTION",
+			"org.opencontainers.image.licenses":      "Apache-2.0",
 			"org.opencontainers.image.title":         "dkim2d",
 			"org.opencontainers.image.description":   "Loopback-only DKIM2 processing daemon",
 		}
@@ -280,6 +280,11 @@ func testOCIReport(revision string, version string) ociReport {
 				{
 					Path: "/usr/share/licenses/dkim2/THIRD_PARTY_NOTICES.txt",
 					Mode: 0o444, Size: 4096, SHA256: strings.Repeat("b", 64),
+					Typeflag: tar.TypeReg,
+				},
+				{
+					Path: "/usr/share/licenses/dkim2/LICENSE",
+					Mode: 0o444, Size: 1024, SHA256: strings.Repeat("c", 64),
 					Typeflag: tar.TypeReg,
 				},
 			},
