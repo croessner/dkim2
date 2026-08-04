@@ -24,7 +24,7 @@ const (
 	MessageDraft = "draft-ietf-dkim-dkim2-spec-04"
 	// DNSDraft is the exact historical DNS behavior baseline used by security evidence.
 	DNSDraft = "draft-chuang-dkim2-dns-04"
-	// BaseRevision is the fixed reference-candidate implementation base.
+	// BaseRevision is the fixed trusted implementation anchor for candidate admission.
 	BaseRevision = "f30fecbd35ae3afd1b590ddfe55ee45f0cf6555a"
 	// FuzzDuration is the minimum unchanged-candidate duration for each target.
 	FuzzDuration = "10s"
@@ -132,6 +132,7 @@ func Targets() []FuzzTarget {
 		target("lib/internal/datasource/fuzz_test.go", "FuzzIdentifierAndLookupFacts", "datasource identifiers", "local_security_policy", "bounded exact lookup facts"),
 		target("lib/internal/datasource/memory/fuzz_test.go", "FuzzSnapshotMapping", "memory datasource snapshot", "local_security_policy", "immutable generation projection"),
 		target("lib/internal/datasource/signingprofile/fuzz_test.go", "FuzzSigningProjection", "signing profile projection", "local_security_policy", "opaque handle and public key coherence"),
+		target("lib/internal/dsn/parser_test.go", "FuzzParse", "delivery status notification parser", "rfc_normative", "bounded multipart parsing without caller-byte mutation"),
 		target("lib/internal/instance/fuzz_test.go", "FuzzParseMessageInstance", "Message-Instance parser", "draft_normative", "bounded strict tag and Base64 parsing"),
 		target("lib/internal/instance/render_fuzz_test.go", "FuzzMessageInstanceRender", "Message-Instance rendering", "draft_normative", "bounded deterministic field rendering"),
 		target("lib/internal/keyresolver/fuzz_test.go", "FuzzDNSKeyRecord", "DNS key record", "draft_normative", "bounded strict DNS-04 tag parsing"),

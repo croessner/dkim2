@@ -142,13 +142,13 @@
     {
       "id": "milter-public-peer-source",
       "path": "cmd/dkim2-milter/internal/integration/public_peer_test.go",
-      "sha256": "31016012eaa93688ac62dac770c1759140d9ec5208154bc5476d916855c0c462",
+      "sha256": "a86fb5bafe0dd805cf8dfe21fdced5fd59b352bc5acfcf207161f4aca7975358",
       "module": "cmd/dkim2-milter"
     },
     {
       "id": "openapi-daemon-boundary-source",
       "path": "cmd/dkim2d/internal/httpjson/dkim2ctl_integration_test.go",
-      "sha256": "431e88419dd1aeed36a6a206a31ee47fc7ecc2caa0304434490c28dc8811d265",
+      "sha256": "b67e29d6e44e686cbfa78a932ed80566ce549516e591eb70360ed2a2ed98b9b5",
       "module": "cmd/dkim2d"
     },
     {
@@ -202,7 +202,7 @@
     {
       "id": "openapi-wire-response-source",
       "path": "cmd/dkim2d/internal/httpjson/http_wire_response.go",
-      "sha256": "004ec25c7c0ca69678e609b0083b2bf5e02dacbb6b8b2f42b195e9b9be06e36a",
+      "sha256": "23acc6cb4ad064c5651c120b6f5f97398259b94df18a5f9c6876f99fb014c45a",
       "module": "cmd/dkim2d"
     },
     {
@@ -304,7 +304,7 @@
     {
       "id": "signing-facade-source",
       "path": "lib/signing_facade_test.go",
-      "sha256": "c0c9590b3a2f3b11b267f6d037df53ab6880d916986a33d52195d88e5a3eef10",
+      "sha256": "af3d1d62b1f82ec9f576ffcc496b1bceeb9383ea1dda48188bf4839a728b3614",
       "module": "lib"
     },
     {

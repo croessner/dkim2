@@ -156,12 +156,12 @@ func RunFuzz(root, outputPath string) (FuzzReport, error) {
 		return FuzzReport{}, errors.New("security_go_dependency")
 	}
 	report := FuzzReport{
-		Schema: fuzzReportSchema, BaseRevision: BaseRevision,
+		Schema: fuzzReportSchema, BaseRevision: snapshot.BaseRevision,
 		CandidateSnapshotSHA256: snapshot.SHA256,
 		InventorySHA256:         InventorySHA256(), GoVersion: runtime.Version(),
 		GOOS: runtime.GOOS, GOARCH: runtime.GOARCH, Targets: results, Overall: passState,
 	}
-	if err := report.Validate(); err != nil {
+	if err := report.Validate(snapshot.BaseRevision); err != nil {
 		return FuzzReport{}, err
 	}
 	if err := validateSchemaValue(
@@ -237,12 +237,12 @@ func RunVulnerabilityScan(root, outputPath string) (VulnerabilityReport, error) 
 		return VulnerabilityReport{}, err
 	}
 	report := VulnerabilityReport{
-		Schema: vulnerabilityReportSchema, BaseRevision: BaseRevision,
+		Schema: vulnerabilityReportSchema, BaseRevision: snapshot.BaseRevision,
 		CandidateSnapshotSHA256: snapshot.SHA256, Scanner: version,
 		ScannerSHA256: scannerDigest, Database: vulnerabilityDatabase,
 		Modules: modules, ReachableFindings: 0, State: passState,
 	}
-	if err := report.Validate(); err != nil {
+	if err := report.Validate(snapshot.BaseRevision); err != nil {
 		return VulnerabilityReport{}, err
 	}
 	if err := validateSchemaValue(
@@ -306,12 +306,12 @@ func RunRace(root, outputPath string) (RaceReport, error) {
 		return RaceReport{}, errors.New("security_go_dependency")
 	}
 	report := RaceReport{
-		Schema: raceReportSchema, BaseRevision: BaseRevision,
+		Schema: raceReportSchema, BaseRevision: snapshot.BaseRevision,
 		CandidateSnapshotSHA256: snapshot.SHA256,
 		GoVersion:               runtime.Version(), GOOS: runtime.GOOS, GOARCH: runtime.GOARCH,
 		Modules: modules, State: passState,
 	}
-	if err := report.Validate(); err != nil {
+	if err := report.Validate(snapshot.BaseRevision); err != nil {
 		return RaceReport{}, err
 	}
 	if err := validateSchemaValue(
@@ -346,12 +346,13 @@ func BuildReport(root, fuzzPath, racePath, vulnerabilityPath, outputPath string)
 		fuzzPath,
 		racePath,
 		vulnerabilityPath,
+		snapshot.BaseRevision,
 		snapshot.SHA256,
 	)
 	if err != nil {
 		return Report{}, err
 	}
-	evidence, err := collectExternalEvidence(root, snapshot.SHA256)
+	evidence, err := collectExternalEvidence(root, snapshot.BaseRevision, snapshot.SHA256)
 	if err != nil {
 		return Report{}, err
 	}
@@ -370,14 +371,14 @@ func BuildReport(root, fuzzPath, racePath, vulnerabilityPath, outputPath string)
 	})
 	report := Report{
 		Schema: securityReportSchema, MessageDraft: MessageDraft, DNSDraft: DNSDraft,
-		BaseRevision: BaseRevision, CandidateSnapshotSHA256: snapshot.SHA256,
+		BaseRevision: snapshot.BaseRevision, CandidateSnapshotSHA256: snapshot.SHA256,
 		Profile: securityProfile, InventorySHA256: InventorySHA256(),
 		GoVersion: runtime.Version(), GOOS: runtime.GOOS, GOARCH: runtime.GOARCH,
 		Race: racePassState, FuzzTargets: len(local.fuzz.Targets), FuzzState: passState,
 		VulnerabilityState: passState, Evidence: evidence, Findings: FindingCounts{},
 		Exim: conformance.EximQualifiedLinux, Overall: passState,
 	}
-	if err := report.Validate(); err != nil {
+	if err := report.Validate(snapshot.BaseRevision); err != nil {
 		return Report{}, err
 	}
 	if err := validateSchemaValue(
@@ -403,14 +404,14 @@ type localEvidence struct {
 	vulnerability VulnerabilityReport
 }
 
-// loadLocalEvidence validates strict fuzz, race, and vulnerability reports.
+// loadLocalEvidence validates strict fuzz, race, and vulnerability reports for one exact candidate.
 func loadLocalEvidence(
-	root, fuzzPath, racePath, vulnerabilityPath, candidate string,
+	root, fuzzPath, racePath, vulnerabilityPath, revision, candidate string,
 ) (localEvidence, error) {
 	var result localEvidence
 	fuzz := &result.fuzz
 	if err := readJSON(root, fuzzPath, 8<<20, fuzz); err != nil ||
-		fuzz.Validate() != nil ||
+		fuzz.Validate(revision) != nil ||
 		fuzz.GoVersion != runtime.Version() ||
 		fuzz.GOOS != runtime.GOOS ||
 		fuzz.GOARCH != runtime.GOARCH ||
@@ -424,7 +425,7 @@ func loadLocalEvidence(
 	}
 	vulnerability := &result.vulnerability
 	if err := readJSON(root, vulnerabilityPath, 1<<20, vulnerability); err != nil ||
-		vulnerability.Validate() != nil ||
+		vulnerability.Validate(revision) != nil ||
 		validateSchemaValue(
 			root,
 			"testdata/security/vulnerability-report.schema.json",
@@ -439,7 +440,7 @@ func loadLocalEvidence(
 	}
 	race := &result.race
 	if err := readJSON(root, racePath, 1<<20, race); err != nil ||
-		race.Validate() != nil ||
+		race.Validate(revision) != nil ||
 		race.GoVersion != runtime.Version() ||
 		race.GOOS != runtime.GOOS ||
 		race.GOARCH != runtime.GOARCH ||
@@ -455,8 +456,8 @@ func loadLocalEvidence(
 	return result, nil
 }
 
-// collectExternalEvidence validates complete conformance and Postfix reports.
-func collectExternalEvidence(root, candidate string) ([]EvidenceDigest, error) {
+// collectExternalEvidence validates complete conformance and Postfix reports for one exact candidate.
+func collectExternalEvidence(root, revision, candidate string) ([]EvidenceDigest, error) {
 	evidencePaths := externalEvidenceExpectations()
 	manifest, manifestDigest, err := conformance.LoadManifest(
 		root,
@@ -484,6 +485,7 @@ func collectExternalEvidence(root, candidate string) ([]EvidenceDigest, error) {
 				root,
 				current.path,
 				current.profile,
+				revision,
 				candidate,
 				manifest,
 				manifestDigest,
@@ -492,6 +494,7 @@ func collectExternalEvidence(root, candidate string) ([]EvidenceDigest, error) {
 			digest, err = validatePostfixReport(
 				root,
 				current.path,
+				revision,
 				candidate,
 				manifestDigest,
 				postfixProducerDigest,
@@ -546,9 +549,9 @@ func validateSchemaValue(root, schemaPath string, value any, limit int) error {
 }
 
 // Validate enforces exact fuzz evidence identity and complete target closure.
-func (r FuzzReport) Validate() error {
+func (r FuzzReport) Validate(revision string) error {
 	targets := Targets()
-	if r.Schema != fuzzReportSchema || r.BaseRevision != BaseRevision ||
+	if !isRevision(revision) || r.Schema != fuzzReportSchema || r.BaseRevision != revision ||
 		!isSHA256(r.CandidateSnapshotSHA256) ||
 		r.InventorySHA256 != InventorySHA256() ||
 		!strings.HasPrefix(r.GoVersion, "go1.26.") ||
@@ -566,9 +569,9 @@ func (r FuzzReport) Validate() error {
 }
 
 // Validate enforces exact vulnerability evidence identity and clean result state.
-func (r VulnerabilityReport) Validate() error {
+func (r VulnerabilityReport) Validate(revision string) error {
 	expectedModules := workspaceModules()
-	if r.Schema != vulnerabilityReportSchema || r.BaseRevision != BaseRevision ||
+	if !isRevision(revision) || r.Schema != vulnerabilityReportSchema || r.BaseRevision != revision ||
 		!isSHA256(r.CandidateSnapshotSHA256) ||
 		!strings.HasPrefix(r.Scanner, "govulncheck@v") ||
 		!isSHA256(r.ScannerSHA256) || r.Database != vulnerabilityDatabase ||
@@ -580,9 +583,9 @@ func (r VulnerabilityReport) Validate() error {
 }
 
 // Validate enforces exact full-workspace race evidence identity and clean state.
-func (r RaceReport) Validate() error {
+func (r RaceReport) Validate(revision string) error {
 	expectedModules := workspaceModules()
-	if r.Schema != raceReportSchema || r.BaseRevision != BaseRevision ||
+	if !isRevision(revision) || r.Schema != raceReportSchema || r.BaseRevision != revision ||
 		!isSHA256(r.CandidateSnapshotSHA256) ||
 		!strings.HasPrefix(r.GoVersion, "go1.26.") ||
 		r.GOOS == "" || r.GOARCH == "" ||
@@ -593,9 +596,9 @@ func (r RaceReport) Validate() error {
 }
 
 // Validate enforces exact complete security evidence identity and closure.
-func (r Report) Validate() error {
+func (r Report) Validate(revision string) error {
 	if r.Schema != securityReportSchema || r.MessageDraft != MessageDraft ||
-		r.DNSDraft != DNSDraft || r.BaseRevision != BaseRevision ||
+		!isRevision(revision) || r.DNSDraft != DNSDraft || r.BaseRevision != revision ||
 		!isSHA256(r.CandidateSnapshotSHA256) || r.Profile != securityProfile ||
 		r.InventorySHA256 != InventorySHA256() ||
 		!strings.HasPrefix(r.GoVersion, "go1.26.") ||
@@ -852,7 +855,7 @@ func scannerVersion(scanner string) (string, error) {
 
 // validateConformanceReport proves one complete strict conformance report.
 func validateConformanceReport(
-	root, path, profile, candidate string,
+	root, path, profile, revision, candidate string,
 	manifest conformance.Manifest,
 	manifestDigest string,
 ) (string, error) {
@@ -863,7 +866,7 @@ func validateConformanceReport(
 	var report conformance.Report
 	if err := conformance.DecodeStrictJSON(input, 8<<20, &report); err != nil ||
 		report.Validate(manifest) != nil ||
-		report.BaseRevision != BaseRevision ||
+		report.BaseRevision != revision ||
 		report.CandidateSnapshotSHA256 != candidate ||
 		report.ManifestSHA256 != manifestDigest ||
 		report.Profile != profile ||
@@ -883,7 +886,7 @@ func validateConformanceReport(
 
 // validatePostfixReport proves one complete strict real-Postfix report.
 func validatePostfixReport(
-	root, path, candidate, manifestDigest, producerDigest string,
+	root, path, revision, candidate, manifestDigest, producerDigest string,
 ) (string, error) {
 	input, err := conformance.ReadConfinedFile(root, path, 1<<20)
 	if err != nil {
@@ -894,7 +897,7 @@ func validatePostfixReport(
 		conformance.ValidatePostfixQualificationReport(
 			report,
 			manifestDigest,
-			BaseRevision,
+			revision,
 			candidate,
 			producerDigest,
 		) != nil {
@@ -926,10 +929,10 @@ func readRegularFileBounded(path string, limit int64) ([]byte, error) {
 	return input, nil
 }
 
-// currentSnapshot returns the exact empty-index durable candidate.
+// currentSnapshot returns the exact empty-index candidate rooted in the fixed trusted base.
 func currentSnapshot(root string) (conformance.Snapshot, error) {
 	revision, err := conformance.CurrentRevision(root)
-	if err != nil || revision != BaseRevision {
+	if err != nil || conformance.IsRevisionAncestor(root, BaseRevision, revision) != nil {
 		return conformance.Snapshot{}, errors.New("security_base")
 	}
 	snapshot, err := conformance.ProduceSnapshot(root, revision)
@@ -1088,6 +1091,15 @@ func digestRegularFile(path string) (string, error) {
 // isSHA256 reports whether value is exact lowercase hexadecimal SHA-256.
 func isSHA256(value string) bool {
 	if len(value) != sha256.Size*2 {
+		return false
+	}
+	_, err := hex.DecodeString(value)
+	return err == nil && value == strings.ToLower(value)
+}
+
+// isRevision reports whether value is an exact lowercase Git object identity.
+func isRevision(value string) bool {
+	if len(value) != 40 {
 		return false
 	}
 	_, err := hex.DecodeString(value)

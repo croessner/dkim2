@@ -58,6 +58,17 @@ func CurrentRevision(root string) (string, error) {
 	return revision, nil
 }
 
+// IsRevisionAncestor proves that ancestor is reachable from descendant in the local Git history.
+func IsRevisionAncestor(root, ancestor, descendant string) error {
+	if !isRevision(ancestor) || !isRevision(descendant) {
+		return errors.New("snapshot_base")
+	}
+	if _, err := gitOutput(root, "merge-base", "--is-ancestor", ancestor, descendant); err != nil {
+		return errors.New("snapshot_base")
+	}
+	return nil
+}
+
 // ProduceSnapshot hashes the exact tracked and non-ignored untracked durable tree.
 func ProduceSnapshot(root, expectedBase string) (Snapshot, error) {
 	if !isRevision(expectedBase) {

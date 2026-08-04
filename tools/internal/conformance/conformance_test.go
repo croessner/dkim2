@@ -405,6 +405,32 @@ func TestSnapshotHandlesTrackedDeletion(t *testing.T) {
 	}
 }
 
+// TestIsRevisionAncestorRejectsDescendantAndMalformedRevisions freezes the trust-anchor check.
+func TestIsRevisionAncestorRejectsDescendantAndMalformedRevisions(t *testing.T) {
+	root := t.TempDir()
+	runGit(t, root, "init")
+	runGit(t, root, "config", "user.name", "DKIM2 Test")
+	runGit(t, root, "config", "user.email", "test@example.test")
+	mustWriteFile(t, filepath.Join(root, "one"), []byte("one"))
+	runGit(t, root, "add", "one")
+	runGit(t, root, "commit", "-m", "first")
+	first := strings.TrimSpace(runGit(t, root, "rev-parse", "HEAD"))
+	mustWriteFile(t, filepath.Join(root, "two"), []byte("two"))
+	runGit(t, root, "add", "two")
+	runGit(t, root, "commit", "-m", "second")
+	second := strings.TrimSpace(runGit(t, root, "rev-parse", "HEAD"))
+
+	if err := IsRevisionAncestor(root, first, second); err != nil {
+		t.Fatalf("IsRevisionAncestor() error = %v", err)
+	}
+	if err := IsRevisionAncestor(root, second, first); err == nil {
+		t.Fatal("IsRevisionAncestor accepted a descendant as an ancestor")
+	}
+	if err := IsRevisionAncestor(root, "not-a-revision", second); err == nil {
+		t.Fatal("IsRevisionAncestor accepted a malformed revision")
+	}
+}
+
 // testManifest returns the minimal closed manifest around artifacts.
 func testManifest(artifacts ...Artifact) Manifest {
 	cases := make([]ManifestCase, 0, len(artifacts))

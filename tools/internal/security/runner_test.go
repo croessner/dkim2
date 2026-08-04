@@ -15,6 +15,7 @@ const (
 	testGoVersion = "go1.26.5"
 	testGOARCH    = "amd64"
 	testGOOS      = "linux"
+	testScanner   = "govulncheck@v1.3.0"
 )
 
 // TestFuzzArgumentsCannotSelectCommandsFlagsOrPaths freezes the closed runner.
@@ -50,7 +51,7 @@ func TestFuzzCacheArgumentsCannotSelectPaths(t *testing.T) {
 // TestFuzzReportRejectsSkipMissingTamperAndStaleSnapshot protects required closure.
 func TestFuzzReportRejectsSkipMissingTamperAndStaleSnapshot(t *testing.T) {
 	report := validFuzzReportForTest()
-	if err := report.Validate(); err != nil {
+	if err := report.Validate(report.BaseRevision); err != nil {
 		t.Fatal(err)
 	}
 	cases := []struct {
@@ -67,7 +68,7 @@ func TestFuzzReportRejectsSkipMissingTamperAndStaleSnapshot(t *testing.T) {
 			changed := report
 			changed.Targets = append([]FuzzResult(nil), report.Targets...)
 			testCase.mutate(&changed)
-			if err := changed.Validate(); err == nil {
+			if err := changed.Validate(report.BaseRevision); err == nil {
 				t.Fatal("invalid fuzz evidence was accepted")
 			}
 		})
@@ -79,21 +80,21 @@ func TestVulnerabilityReportRejectsFindingAndScannerDrift(t *testing.T) {
 	report := VulnerabilityReport{
 		Schema: vulnerabilityReportSchema, BaseRevision: BaseRevision,
 		CandidateSnapshotSHA256: strings.Repeat("a", 64),
-		Scanner:                 "govulncheck@v1.3.0", ScannerSHA256: strings.Repeat("b", 64),
+		Scanner:                 testScanner, ScannerSHA256: strings.Repeat("b", 64),
 		Database: vulnerabilityDatabase,
 		Modules:  workspaceModules(),
 		State:    passState,
 	}
-	if err := report.Validate(); err != nil {
+	if err := report.Validate(BaseRevision); err != nil {
 		t.Fatal(err)
 	}
 	report.ReachableFindings = 1
-	if err := report.Validate(); err == nil {
+	if err := report.Validate(BaseRevision); err == nil {
 		t.Fatal("reachable vulnerability finding was accepted")
 	}
 	report.ReachableFindings = 0
 	report.Scanner = "other"
-	if err := report.Validate(); err == nil {
+	if err := report.Validate(BaseRevision); err == nil {
 		t.Fatal("unknown scanner was accepted")
 	}
 }
@@ -107,16 +108,16 @@ func TestRaceReportRejectsMissingModulesAndNonPassState(t *testing.T) {
 		Modules: workspaceModules(),
 		State:   passState,
 	}
-	if err := report.Validate(); err != nil {
+	if err := report.Validate(BaseRevision); err != nil {
 		t.Fatal(err)
 	}
 	report.Modules = report.Modules[1:]
-	if err := report.Validate(); err == nil {
+	if err := report.Validate(BaseRevision); err == nil {
 		t.Fatal("incomplete race module inventory was accepted")
 	}
 	report.Modules = workspaceModules()
 	report.State = "skipped"
-	if err := report.Validate(); err == nil {
+	if err := report.Validate(BaseRevision); err == nil {
 		t.Fatal("skipped race state was accepted")
 	}
 }
@@ -136,26 +137,26 @@ func TestSecurityReportRejectsFindingOverclaimAndEvidenceTamper(t *testing.T) {
 		VulnerabilityState: passState, Evidence: evidence,
 		Exim: conformance.EximQualifiedLinux, Overall: passState,
 	}
-	if err := report.Validate(); err != nil {
+	if err := report.Validate(BaseRevision); err != nil {
 		t.Fatal(err)
 	}
 	report.Findings.Medium = 1
-	if err := report.Validate(); err == nil {
+	if err := report.Validate(BaseRevision); err == nil {
 		t.Fatal("unresolved finding was accepted")
 	}
 	report.Findings = FindingCounts{}
 	report.Exim = passState
-	if err := report.Validate(); err == nil {
+	if err := report.Validate(BaseRevision); err == nil {
 		t.Fatal("Exim overclaim was accepted")
 	}
 	report.Exim = conformance.EximQualifiedLinux
 	report.Evidence[0].SHA256 = "marker-private-key"
-	if err := report.Validate(); err == nil {
+	if err := report.Validate(BaseRevision); err == nil {
 		t.Fatal("tampered evidence was accepted")
 	}
 	report.Evidence[0].SHA256 = strings.Repeat("1", 64)
 	report.Evidence[0].Path = ".artifacts/security/substitute.json"
-	if err := report.Validate(); err == nil {
+	if err := report.Validate(BaseRevision); err == nil {
 		t.Fatal("substituted evidence path was accepted")
 	}
 }
@@ -234,6 +235,7 @@ func TestPostfixEvidenceRejectsIdentityOnlyReports(t *testing.T) {
 	if _, err := validatePostfixReport(
 		root,
 		path,
+		BaseRevision,
 		candidate,
 		strings.Repeat("b", 64),
 		strings.Repeat("c", 64),
@@ -242,15 +244,58 @@ func TestPostfixEvidenceRejectsIdentityOnlyReports(t *testing.T) {
 	}
 }
 
-// TestCurrentSnapshotRequiresTheFixedBaseAndEmptyIndex documents candidate ownership.
+// TestReportValidatorsRequireExactCandidateRevision rejects evidence from another admitted candidate.
+func TestReportValidatorsRequireExactCandidateRevision(t *testing.T) {
+	candidateRevision := strings.Repeat("b", 40)
+	fuzz := validFuzzReportForTest()
+	fuzz.BaseRevision = candidateRevision
+	if err := fuzz.Validate(candidateRevision); err != nil {
+		t.Fatalf("FuzzReport.Validate() error = %v", err)
+	}
+	if err := fuzz.Validate(BaseRevision); err == nil {
+		t.Fatal("FuzzReport accepted another candidate revision")
+	}
+
+	vulnerability := VulnerabilityReport{
+		Schema: vulnerabilityReportSchema, BaseRevision: candidateRevision,
+		CandidateSnapshotSHA256: strings.Repeat("a", 64),
+		Scanner:                 testScanner, ScannerSHA256: strings.Repeat("b", 64),
+		Database: vulnerabilityDatabase, Modules: workspaceModules(), State: passState,
+	}
+	if err := vulnerability.Validate(candidateRevision); err != nil {
+		t.Fatalf("VulnerabilityReport.Validate() error = %v", err)
+	}
+	if err := vulnerability.Validate(BaseRevision); err == nil {
+		t.Fatal("VulnerabilityReport accepted another candidate revision")
+	}
+
+	race := RaceReport{
+		Schema: raceReportSchema, BaseRevision: candidateRevision,
+		CandidateSnapshotSHA256: strings.Repeat("a", 64),
+		GoVersion:               testGoVersion, GOOS: testGOOS, GOARCH: testGOARCH,
+		Modules: workspaceModules(), State: passState,
+	}
+	if err := race.Validate(candidateRevision); err != nil {
+		t.Fatalf("RaceReport.Validate() error = %v", err)
+	}
+	if err := race.Validate(BaseRevision); err == nil {
+		t.Fatal("RaceReport accepted another candidate revision")
+	}
+}
+
+// TestCurrentSnapshotRequiresTheFixedBaseAndEmptyIndex documents anchored candidate ownership.
 func TestCurrentSnapshotRequiresTheFixedBaseAndEmptyIndex(t *testing.T) {
 	root := filepath.Clean(filepath.Join("..", "..", ".."))
 	snapshot, err := currentSnapshot(root)
 	if err != nil {
 		t.Fatalf("currentSnapshot() error = %v", err)
 	}
-	if snapshot.BaseRevision != BaseRevision {
-		t.Fatalf("base = %q, want %q", snapshot.BaseRevision, BaseRevision)
+	revision, err := conformance.CurrentRevision(root)
+	if err != nil {
+		t.Fatalf("CurrentRevision() error = %v", err)
+	}
+	if snapshot.BaseRevision != revision {
+		t.Fatalf("base = %q, want %q", snapshot.BaseRevision, revision)
 	}
 }
 
@@ -403,10 +448,19 @@ func TestSecuritySchemasAcceptExactEvidenceAndRejectUnknownMembers(t *testing.T)
 	); err != nil {
 		t.Fatal(err)
 	}
+	fuzz.BaseRevision = strings.Repeat("b", 40)
+	if err := validateSchemaValue(
+		root,
+		"testdata/security/fuzz-report.schema.json",
+		fuzz,
+		8<<20,
+	); err != nil {
+		t.Fatal(err)
+	}
 	vulnerability := VulnerabilityReport{
 		Schema: vulnerabilityReportSchema, BaseRevision: BaseRevision,
 		CandidateSnapshotSHA256: strings.Repeat("a", 64),
-		Scanner:                 "govulncheck@v1.3.0", ScannerSHA256: strings.Repeat("b", 64),
+		Scanner:                 testScanner, ScannerSHA256: strings.Repeat("b", 64),
 		Database: vulnerabilityDatabase,
 		Modules:  workspaceModules(),
 		State:    passState,

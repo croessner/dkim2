@@ -45,7 +45,7 @@ keys, DNS data, capabilities, secrets, raw commands, or raw errors.
 
 The complete report binds:
 
-- the fixed Git base and exact durable candidate snapshot;
+- the exact candidate revision and durable snapshot, after admission as a descendant of the fixed Git trust anchor;
 - the pinned DKIM2 and DNS draft identifiers;
 - the closed fuzz/resource inventory digest;
 - Go, platform, fuzz, race, and vulnerability state;
