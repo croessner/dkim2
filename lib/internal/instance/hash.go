@@ -152,14 +152,9 @@ func canonicalHashName(input []byte) (string, bool) {
 	return string(output), true
 }
 
-// validUnknownHashComponent rejects control-bearing hash components while permitting WSP.
-//
-// Draft-04 Section 7.3 defines header-hash and body-hash as base64string, and
-// Section 2 admits FWS inside a base64string with the value ignored when used.
-// Unfolding a folded header leaves the fold's WSP in the value, so HTAB is a
-// legitimate interior byte here and rejecting it would refuse any
-// Message-Instance whose hashes were folded with a tab. Alphabet and padding
-// remain owned by tagvalue.ParseBase64String, which strips WSP before decoding.
+// validUnknownHashComponent rejects control-bearing hash components while permitting WSP,
+// which draft-04 admits inside a base64string. Alphabet and padding remain owned
+// by tagvalue.ParseBase64String, which strips WSP before decoding.
 func validUnknownHashComponent(input []byte) bool {
 	for _, b := range input {
 		if (b < 32 && !isWSP(b)) || b == 127 {
