@@ -26,8 +26,10 @@
 // bits remain mandatory. Strict identity remains inapplicable while DKIM2 i=
 // is numeric.
 //
-// DecodeKey accepts only PKCS#1 RSAPublicKey DER or exactly 32 raw Ed25519
-// public-key bytes and keeps requested-algorithm mismatch distinct. Resolver
+// DecodeKey accepts PKCS#1 RSAPublicKey or SubjectPublicKeyInfo DER, or exactly
+// 32 raw Ed25519 public-key bytes, and keeps requested-algorithm mismatch
+// distinct. Accepting both RSA containers is a documented interoperability
+// allowance; it relaxes no structural or crypto-policy check. Resolver
 // outcomes form a closed found, missing, revoked, invalid, ambiguous,
 // unsupported-key-type, algorithm-mismatch, temporary, permanent, and contract
 // matrix. All material and result accessors return detached copies.

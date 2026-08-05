@@ -17,7 +17,7 @@ var dnsRecordTags = tagvalue.MustKnownTags("v", "h", "k", "n", "p", "s", "t")
 type KeyType string
 
 const (
-	// KeyTypeRSA identifies PKCS#1 RSA public-key data.
+	// KeyTypeRSA identifies RSA public-key data as PKCS#1 or SubjectPublicKeyInfo DER.
 	KeyTypeRSA KeyType = "rsa"
 	// KeyTypeEd25519 identifies raw Ed25519 public-key data.
 	KeyTypeEd25519 KeyType = "ed25519"

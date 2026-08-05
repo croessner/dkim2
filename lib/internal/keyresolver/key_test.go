@@ -61,13 +61,10 @@ func TestDecodeKeyAcceptsStructurallyValidRSAOutsideCryptoPolicy(t *testing.T) {
 	}
 }
 
-// TestDecodeKeyRejectsWrongRSAContainersAndShape verifies strict full PKCS#1 structural decoding.
+// TestDecodeKeyRejectsWrongRSAContainersAndShape verifies strict structural public-key decoding.
+// RSAPublicKey and SubjectPublicKeyInfo are both accepted; every other container is not.
 func TestDecodeKeyRejectsWrongRSAContainersAndShape(t *testing.T) {
 	valid := syntheticRSAKey(1024, 65537)
-	spki, err := x509.MarshalPKIXPublicKey(valid)
-	if err != nil {
-		t.Fatalf("MarshalPKIXPublicKey() error = %v", err)
-	}
 	private := &rsa.PrivateKey{PublicKey: *valid, D: big.NewInt(2753), Primes: []*big.Int{big.NewInt(61), big.NewInt(53)}}
 	negativeModulus, err := asn1.Marshal(struct {
 		N *big.Int
@@ -91,7 +88,6 @@ func TestDecodeKeyRejectsWrongRSAContainersAndShape(t *testing.T) {
 		name string
 		der  []byte
 	}{
-		{name: "spki", der: spki},
 		{name: "certificate", der: certificate},
 		{name: "pem", der: pemPublic},
 		{name: "private", der: x509.MarshalPKCS1PrivateKey(private)},
@@ -234,4 +230,27 @@ func TestDecodeKeyRejectsUnknownContractsWithoutMaterial(t *testing.T) {
 // keyDataRecord constructs parser-owned key data for decode-focused tests.
 func keyDataRecord(keyType KeyType, publicKey []byte, metadata Metadata) Record {
 	return Record{draft: DNSDraftIdentifier, status: RecordStatusKeyData, keyType: keyType, publicKey: bytes.Clone(publicKey), metadata: metadata, initialized: true}
+}
+
+// TestDecodeKeyAcceptsSubjectPublicKeyInfoRSA verifies the container deployed signers publish.
+func TestDecodeKeyAcceptsSubjectPublicKeyInfoRSA(t *testing.T) {
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("GenerateKey() error = %v", err)
+	}
+	subjectPublicKeyInfo, err := x509.MarshalPKIXPublicKey(&key.PublicKey)
+	if err != nil {
+		t.Fatalf("MarshalPKIXPublicKey() error = %v", err)
+	}
+	outcome, err := DecodeKey(keyDataRecord(KeyTypeRSA, subjectPublicKeyInfo, newMetadata(false, false)), AlgorithmRSASHA256)
+	if err != nil {
+		t.Fatalf("DecodeKey() error = %v", err)
+	}
+	if outcome.Status() != KeyOutcomeFound || !outcome.Valid() {
+		t.Fatalf("DecodeKey() status = %q valid = %v, want found", outcome.Status(), outcome.Valid())
+	}
+	decoded, ok := outcome.Material().(*rsa.PublicKey)
+	if !ok || decoded.N.Cmp(key.N) != 0 || decoded.E != key.E {
+		t.Fatalf("Material() = %#v, want the published SubjectPublicKeyInfo RSA key", outcome.Material())
+	}
 }

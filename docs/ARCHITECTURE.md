@@ -644,8 +644,9 @@ Responsibilities:
 - Parse DNS-04 records through `internal/tagvalue`, including revocation,
   ignored extension/retired tags, DNS-optional terminal Base64 padding with
   canonical pad bits, and bounded `t=y`/`t=s` metadata.
-- Decode PKCS#1 RSA public DER and raw 32-byte Ed25519 public keys while reusing
-  `internal/verify` as the authoritative crypto/key-validation owner.
+- Decode RSA public DER as either PKCS#1 `RSAPublicKey` or `SubjectPublicKeyInfo`,
+  and raw 32-byte Ed25519 public keys, while reusing `internal/verify` as the
+  authoritative crypto/key-validation owner.
 - Distinguish missing, revoked, invalid, ambiguous, unsupported key type,
   algorithm mismatch, temporary, permanent, and provider-contract states.
 - Cache only TTL-backed stable results under bounded deterministic LRU policy.
@@ -2086,8 +2087,10 @@ DNS resolver behavior must distinguish:
 - Permanent transport and provider-contract failure.
 
 TXT character-string chunks are concatenated within one RR without added
-whitespace; RR boundaries are never concatenated. RSA records contain PKCS#1
-public DER and Ed25519 records contain exactly 32 raw public bytes. The resolver
+whitespace; RR boundaries are never concatenated. RSA records contain either
+PKCS#1 `RSAPublicKey` or `SubjectPublicKeyInfo` public DER: the DNS draft
+specifies the former, deployed signers publish the latter (RFC 6376 errata 3017,
+6674, 7001). Ed25519 records contain exactly 32 raw public bytes. The resolver
 supports context cancellation, bounded TTL/LRU caching, bounded coalescing, and
 non-blocking saturation. DNSSEC remains diagnostic-only and does not alter
 verification or cache behavior.

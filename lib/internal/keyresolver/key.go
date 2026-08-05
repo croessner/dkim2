@@ -127,8 +127,8 @@ func DecodeKey(record Record, requested Algorithm) (KeyOutcome, error) {
 	data := record.PublicKeyData()
 	switch requested {
 	case AlgorithmRSASHA256:
-		key, err := x509.ParsePKCS1PublicKey(data)
-		if err != nil || !cryptodkim2.ValidRSAPublicKeyStructure(key) {
+		key, ok := parseRSAPublicKeyContainer(data)
+		if !ok || !cryptodkim2.ValidRSAPublicKeyStructure(key) {
 			base.status = KeyOutcomeInvalid
 			return base, nil
 		}
@@ -146,6 +146,25 @@ func DecodeKey(record Record, requested Algorithm) (KeyOutcome, error) {
 	default:
 		return KeyOutcome{}, newResolverError(ErrorClassContract)
 	}
+}
+
+// parseRSAPublicKeyContainer decodes a k=rsa p= value as RSAPublicKey or SubjectPublicKeyInfo.
+// The DNS draft specifies the former, deployed signers publish the latter, and the
+// two grammars are not confusable. See RFC 6376 errata 3017, 6674, and 7001.
+func parseRSAPublicKeyContainer(data []byte) (*rsa.PublicKey, bool) {
+	if key, err := x509.ParsePKCS1PublicKey(data); err == nil {
+		return key, true
+	}
+	parsed, err := x509.ParsePKIXPublicKey(data)
+	if err != nil {
+		return nil, false
+	}
+	key, ok := parsed.(*rsa.PublicKey)
+	if !ok {
+		return nil, false
+	}
+
+	return key, true
 }
 
 // keyTypeMatchesAlgorithm reports exact supported algorithm and DNS k= coherence.

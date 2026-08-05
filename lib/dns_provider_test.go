@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/ed25519"
+	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/base64"
@@ -388,4 +389,29 @@ func mustPublicAmbiguousLookup(t *testing.T) TXTLookupResult {
 		t.Fatal(err)
 	}
 	return result
+}
+
+// TestDNSPublicKeyProviderResolvesSubjectPublicKeyInfoRSA verifies deployed RSA records resolve.
+func TestDNSPublicKeyProviderResolvesSubjectPublicKeyInfoRSA(t *testing.T) {
+	expected, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("GenerateKey() error = %v", err)
+	}
+	subjectPublicKeyInfo, err := x509.MarshalPKIXPublicKey(&expected.PublicKey)
+	if err != nil {
+		t.Fatalf("MarshalPKIXPublicKey() error = %v", err)
+	}
+	payload := []byte("v=DKIM1; k=rsa; p=" + base64.StdEncoding.EncodeToString(subjectPublicKeyInfo))
+	provider, err := NewDNSPublicKeyProvider(txtTransportFunc(func(context.Context, string) (TXTLookupResult, error) {
+		return mustPublicFoundLookup(t, payload), nil
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, lookupErr := provider.LookupPublicKey(context.Background(), newPublicKeyQuery("example.test", "selector", AlgorithmRSASHA256))
+	key, found := result.RSAPublicKey()
+	if lookupErr != nil || result.Status() != PublicKeyStatusFound || !found || key == nil ||
+		key.N.Cmp(expected.N) != 0 || key.E != expected.E {
+		t.Fatalf("LookupPublicKey() = %q key=%#v error=%v, want the published SubjectPublicKeyInfo key", result.Status(), key, lookupErr)
+	}
 }

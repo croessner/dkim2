@@ -286,3 +286,49 @@ func headerField(t *testing.T, index int, name string, value string) rawmsg.Head
 func base64OfByte(b byte, count int) string {
 	return base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{b}, count))
 }
+
+// TestParseAcceptsFoldedWhitespaceInHashBase64 verifies WSP inside hash base64 is ignored.
+//
+// Draft-04 Section 7.3 defines header-hash and body-hash as base64string, and
+// Section 2 states that base64string admits FWS which "will be ignored when
+// their value is being used". Unfolding a folded header leaves the fold's WSP in
+// the value, so both SP and HTAB must be tolerated inside a hash component. The
+// DKIM2-Signature s= path already accepts both.
+func TestParseAcceptsFoldedWhitespaceInHashBase64(t *testing.T) {
+	headerHash := base64OfByte(0x11, 32)
+	bodyHash := base64OfByte(0x22, 32)
+	for _, test := range []struct {
+		name string
+		wsp  string
+	}{
+		{name: "space", wsp: " "},
+		{name: "htab", wsp: "\t"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			split := func(value string) string {
+				return value[:8] + test.wsp + value[8:]
+			}
+			field := messageInstanceField(t, 1, "m=1; h=sha256:"+split(headerHash)+":"+split(bodyHash))
+			parsed, err := Parse(field)
+			if err != nil {
+				t.Fatalf("Parse() error = %v, want folded hash acceptance", err)
+			}
+			hashes := parsed.HashSets()
+			if len(hashes) != 1 || hashes[0].Name() != HashAlgorithmSHA256 {
+				t.Fatalf("HashSets() = %#v, want one sha256 set", hashes)
+			}
+			decodedHeader, ok := hashes[0].HeaderHash()
+			if !ok || decodedHeader.DecodedLen() != 32 {
+				t.Fatalf("HeaderHash() ok=%v decoded_len=%d, want known 32", ok, decodedHeader.DecodedLen())
+			}
+			decodedBody, ok := hashes[0].BodyHash()
+			if !ok || decodedBody.DecodedLen() != 32 {
+				t.Fatalf("BodyHash() ok=%v decoded_len=%d, want known 32", ok, decodedBody.DecodedLen())
+			}
+			if string(decodedHeader.Encoded()) != headerHash || string(decodedBody.Encoded()) != bodyHash {
+				t.Fatalf("canonical encodings = %q/%q, want the unfolded values %q/%q",
+					decodedHeader.Encoded(), decodedBody.Encoded(), headerHash, bodyHash)
+			}
+		})
+	}
+}
