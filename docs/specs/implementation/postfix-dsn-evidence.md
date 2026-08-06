@@ -97,9 +97,9 @@ accepts the caller's `MAIL_ATTR_FLAGS` value without peer-origin evidence.
    service and its callers remain unchanged.
 2. `src/cleanup/cleanup.c`: retain whether the request arrived through
    `dsn_cleanup` and pass that authority into per-message cleanup state.
-3. `src/global/cleanup_user.h`: reserve one internal cleanup state flag for an
-   authorized DSN evidence submission. Reject that flag on the ordinary public
-   cleanup service; it is not caller authority.
+3. `src/cleanup/cleanup.h` and `cleanup_state.c`: retain private-service
+   authority and transient evidence in per-message cleanup state, and free it
+   with that state. No caller-provided cleanup flag represents authority.
 4. `src/global/post_mail.[ch]`: add a narrow DSN posting helper that connects
    to `private/dsn_cleanup` and writes the original queue ID and envelope
    evidence before `REC_TYPE_MESG`; ordinary `post_mail_fopen*()` calls cannot
