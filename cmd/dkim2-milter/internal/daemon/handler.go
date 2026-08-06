@@ -170,7 +170,10 @@ func capabilityRoute(mode string) string {
 }
 
 // Handle maps immutable Milter input into one generated request and response.
-func (h *Handler) Handle(ctx context.Context, message milter.Message) (milter.Result, error) {
+func (h *Handler) Handle(
+	ctx context.Context,
+	message milter.Message,
+) (result milter.Result, resultErr error) {
 	state := h.privateState()
 	if state == nil {
 		return milter.Result{}, &milter.Error{Class: milter.FailureContract}
@@ -182,6 +185,9 @@ func (h *Handler) Handle(ctx context.Context, message milter.Message) (milter.Re
 		message.Fidelity() != milter.FidelityReconstructedCRLF {
 		return milter.Result{}, &milter.Error{Class: milter.FailureContract}
 	}
+	defer func() {
+		result.Domains = observedDomains(state, message)
+	}()
 	signingDomain := state.domain
 	if state.mode == modeOriginator {
 		var err error
@@ -261,6 +267,32 @@ func (h *Handler) Handle(ctx context.Context, message milter.Message) (milter.Re
 	default:
 		return milter.Result{}, &milter.Error{Class: milter.FailureContract}
 	}
+}
+
+// observedDomains resolves the same exact operational authority used by the
+// selected route while keeping mailbox local parts out of logs.
+func observedDomains(state *handlerGuard, message milter.Message) milter.DomainObservation {
+	if state == nil {
+		return milter.DomainObservation{}
+	}
+	if state.mode == modeInbound {
+		return message.RecipientDomainObservation()
+	}
+	var signingDomain string
+	if state.mode == modeOrdinaryTransit {
+		signingDomain = state.domain
+	} else {
+		domain, applicable, err := state.signingDomain(message)
+		if err != nil || !applicable {
+			return milter.DomainObservation{}
+		}
+		signingDomain = domain
+	}
+	observation, ok := milter.NewSigningDomainObservation(signingDomain)
+	if !ok {
+		return milter.DomainObservation{}
+	}
+	return observation
 }
 
 // signingDomain assesses supported reverse-path evidence and resolves one exact

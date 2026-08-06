@@ -15,6 +15,7 @@ import (
 type recordedMessageObservation struct {
 	mode, disposition, result, failure string
 	failOpen                           bool
+	domains                            DomainObservation
 }
 
 type recordingObserver struct {
@@ -43,6 +44,7 @@ func (*privateObserver) RecordCallback(string, string, string, time.Duration) {}
 // RecordMessage is an inert private formatting seam.
 func (*privateObserver) RecordMessage(
 	string, string, string, string, time.Duration, uint64, uint64, bool,
+	DomainObservation,
 ) {
 }
 
@@ -64,6 +66,7 @@ func (o *blockingObserver) RecordCallback(string, string, string, time.Duration)
 // RecordMessage blocks at the injected latency seam.
 func (o *blockingObserver) RecordMessage(
 	string, string, string, string, time.Duration, uint64, uint64, bool,
+	DomainObservation,
 ) {
 	o.block()
 }
@@ -97,6 +100,7 @@ func (o *recordingObserver) RecordMessage(
 	_ time.Duration,
 	_, _ uint64,
 	failOpen bool,
+	domains DomainObservation,
 ) {
 	if o.panicNow {
 		panic("private observer marker")
@@ -105,7 +109,7 @@ func (o *recordingObserver) RecordMessage(
 	defer o.mu.Unlock()
 	o.messages = append(o.messages, recordedMessageObservation{
 		mode: mode, disposition: disposition, result: result,
-		failure: failure, failOpen: failOpen,
+		failure: failure, failOpen: failOpen, domains: domains,
 	})
 }
 
@@ -141,6 +145,7 @@ func TestObserverReceivesCompleteClosedEOMFacts(t *testing.T) {
 			{Kind: ActionAddHeader, Name: headerMessage, Value: testActionValue},
 			{Kind: ActionAddHeader, Name: headerDKIM2, Value: testActionValue},
 		},
+		Domains: mustTestDomainObservation(t, domainRoleSigning, "example.test", 1, false),
 	}}
 	session, err := NewSession(handler, admission, Limits{
 		MessageBytes: 1 << 16, HeaderBytes: 1 << 15,
@@ -173,6 +178,7 @@ func TestObserverReceivesCompleteClosedEOMFacts(t *testing.T) {
 		observer.messages[0].disposition != "accept" ||
 		observer.messages[0].result != "success" ||
 		observer.messages[0].failure != "none" ||
+		observer.messages[0].domains.Domains() != "example.test" ||
 		observer.messages[0].failOpen ||
 		!containsObservation(observer.callbacks, "eom/") ||
 		!containsObservation(observer.actions, "add_header/success") ||
@@ -180,6 +186,21 @@ func TestObserverReceivesCompleteClosedEOMFacts(t *testing.T) {
 		t.Fatalf("incomplete closed observations: %#v %#v %#v",
 			observer.messages, observer.callbacks, observer.actions)
 	}
+}
+
+// mustTestDomainObservation constructs one validated observation for adapter tests.
+func mustTestDomainObservation(
+	t *testing.T,
+	role, domains string,
+	count uint64,
+	truncated bool,
+) DomainObservation {
+	t.Helper()
+	observation, ok := NewDomainObservation(role, domains, count, truncated)
+	if !ok {
+		t.Fatal("domain observation construction failed")
+	}
+	return observation
 }
 
 // TestObserverClassifiesNotApplicableMessagesAsSuccessfulContinuation proves

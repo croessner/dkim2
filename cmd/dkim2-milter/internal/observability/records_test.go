@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"testing"
 	"time"
+
+	"github.com/croessner/dkim2/cmd/dkim2-milter/internal/milter"
 )
 
 // TestRuntimeRecordsAllClosedAdapterFacts proves log and metric projection.
@@ -19,6 +21,7 @@ func TestRuntimeRecordsAllClosedAdapterFacts(t *testing.T) {
 	runtime.RecordMessage(
 		valueModeInbound, valueAccept, valueSuccess, valueNone,
 		2*time.Millisecond, 2_000, 2, false,
+		mustDomainObservation(t, "recipient", "example.test,example.org", 2, false),
 	)
 	runtime.RecordAction("add_header", valueSuccess)
 	runtime.RecordAction("change_header", valueSuccess)
@@ -34,6 +37,7 @@ func TestRuntimeRecordsAllClosedAdapterFacts(t *testing.T) {
 		}
 	}
 	if !bytes.Contains(output.Bytes(), []byte(`"daemon_operation":"process"`)) ||
+		!bytes.Contains(output.Bytes(), []byte(`"processed_domains":"example.test,example.org"`)) ||
 		!bytes.Contains(output.Bytes(), []byte(`"callback_class":"macro"`)) ||
 		!bytes.Contains(output.Bytes(), []byte(`"action_kind":"change_header"`)) ||
 		!bytes.Contains(output.Bytes(), []byte(`"action_kind":"insert_header"`)) {
@@ -58,6 +62,21 @@ func TestRuntimeRecordsAllClosedAdapterFacts(t *testing.T) {
 	}
 }
 
+// mustDomainObservation constructs one test-only validated domain observation.
+func mustDomainObservation(
+	t *testing.T,
+	role, domains string,
+	count uint64,
+	truncated bool,
+) milter.DomainObservation {
+	t.Helper()
+	observation, ok := milter.NewDomainObservation(role, domains, count, truncated)
+	if !ok {
+		t.Fatal("domain observation construction failed")
+	}
+	return observation
+}
+
 // TestRuntimeRejectsIncoherentMessageOutcomesWithoutPartialTelemetry proves cohesion.
 func TestRuntimeRejectsIncoherentMessageOutcomesWithoutPartialTelemetry(t *testing.T) {
 	var output bytes.Buffer
@@ -79,7 +98,7 @@ func TestRuntimeRejectsIncoherentMessageOutcomesWithoutPartialTelemetry(t *testi
 	} {
 		runtime.RecordMessage(
 			valueModeInbound, outcome.disposition, outcome.result, outcome.failure,
-			time.Millisecond, 1, 1, outcome.failOpen,
+			time.Millisecond, 1, 1, outcome.failOpen, milter.DomainObservation{},
 		)
 	}
 	after, err := runtime.Gather()
@@ -98,6 +117,7 @@ func TestSuccessfulMessageDoesNotIncrementFailureMetric(t *testing.T) {
 	runtime.RecordMessage(
 		"originator", valueAccept, valueSuccess, valueNone,
 		time.Millisecond, 1, 1, false,
+		mustDomainObservation(t, "signing", "example.test", 1, false),
 	)
 	exposition, err := runtime.Gather()
 	if err != nil {
@@ -124,11 +144,11 @@ func TestRuntimeRejectsInvalidObservationsAtomically(t *testing.T) {
 	runtime.RecordCallback(privacyMarker, "terminal", valueSuccess, time.Second)
 	runtime.RecordMessage(
 		privacyMarker, valueAccept, valueSuccess, valueNone,
-		time.Second, 1, 1, false,
+		time.Second, 1, 1, false, milter.DomainObservation{},
 	)
 	runtime.RecordMessage(
 		valueModeInbound, valueAccept, valueSuccess, valueNone,
-		time.Second, maxObservedMessageBytes+1, 1, false,
+		time.Second, maxObservedMessageBytes+1, 1, false, milter.DomainObservation{},
 	)
 	runtime.RecordAction(privacyMarker, valueSuccess)
 	after, err := runtime.Gather()

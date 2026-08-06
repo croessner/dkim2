@@ -11,6 +11,13 @@ import (
 
 const redacted = "dkim2_milter_message{redacted}"
 
+const (
+	domainRoleNone      = "none"
+	domainRoleRecipient = "recipient"
+	domainRoleSigning   = "signing"
+	maxObservedDomains  = 8
+)
+
 // Fidelity is the exact daemon evidence declaration for callback reconstruction.
 type Fidelity string
 
@@ -35,6 +42,94 @@ const (
 	// DomainSourceEnvelopeSender derives a canonical DNS domain from MAIL FROM.
 	DomainSourceEnvelopeSender DomainSource = "envelope_sender"
 )
+
+// DomainObservation is one bounded operator-visible projection of processed
+// domains without mailbox local parts or metric-label authority.
+type DomainObservation struct {
+	role      string
+	domains   string
+	count     uint64
+	truncated bool
+}
+
+// NewDomainObservation validates one bounded comma-separated domain projection.
+func NewDomainObservation(
+	role string,
+	domains string,
+	count uint64,
+	truncated bool,
+) (DomainObservation, bool) {
+	if role == domainRoleNone {
+		if domains != "" || count != 0 || truncated {
+			return DomainObservation{}, false
+		}
+		return DomainObservation{}, true
+	}
+	if role != domainRoleRecipient && role != domainRoleSigning {
+		return DomainObservation{}, false
+	}
+	values := strings.Split(domains, ",")
+	if domains == "" || len(values) > maxObservedDomains || count > hardRecipientCount ||
+		count < uint64(len(values)) ||
+		truncated != (count > uint64(len(values))) {
+		return DomainObservation{}, false
+	}
+	seen := make(map[string]struct{}, len(values))
+	for _, value := range values {
+		if !ValidSigningDomainAuthority(value) {
+			return DomainObservation{}, false
+		}
+		if _, duplicate := seen[value]; duplicate {
+			return DomainObservation{}, false
+		}
+		seen[value] = struct{}{}
+	}
+	if role == domainRoleSigning && (len(values) != 1 || count != 1 || truncated) {
+		return DomainObservation{}, false
+	}
+	return DomainObservation{
+		role: role, domains: domains, count: count, truncated: truncated,
+	}, true
+}
+
+// NewSigningDomainObservation constructs one exact selected signing-domain fact.
+func NewSigningDomainObservation(domain string) (DomainObservation, bool) {
+	return NewDomainObservation(domainRoleSigning, domain, 1, false)
+}
+
+// Role returns the closed operational relationship for the domains.
+func (d DomainObservation) Role() string {
+	if d.role == "" {
+		return domainRoleNone
+	}
+	return d.role
+}
+
+// Domains returns the bounded comma-separated canonical domain list.
+func (d DomainObservation) Domains() string { return d.domains }
+
+// Count returns the exact number of distinct canonical domains observed.
+func (d DomainObservation) Count() uint64 { return d.count }
+
+// Truncated reports whether the visible list omits additional distinct domains.
+func (d DomainObservation) Truncated() bool { return d.truncated }
+
+// ValidForMode proves that the domain role matches the adapter operation.
+func (d DomainObservation) ValidForMode(mode string) bool {
+	validated, ok := NewDomainObservation(
+		d.Role(), d.domains, d.count, d.truncated,
+	)
+	if !ok || validated.Role() != d.Role() {
+		return false
+	}
+	if d.Role() == domainRoleNone {
+		return true
+	}
+	if mode == modeInbound {
+		return d.Role() == domainRoleRecipient
+	}
+	return (mode == modeOriginator || mode == modeTransit) && d.Role() == domainRoleSigning
+}
 
 // Message is one immutable EOM snapshot.
 type Message struct {
@@ -79,8 +174,49 @@ func (m Message) ReversePath() []byte { return bytes.Clone(m.reverse) }
 // SigningDomain derives one canonical ASCII DNS domain only when the complete
 // originator envelope fits the current ASCII signing boundary.
 func (m Message) SigningDomain() (string, bool) {
-	path := m.reverse
-	if !m.SupportsASCIISigningEnvelope() || len(path) == 2 {
+	if !m.SupportsASCIISigningEnvelope() {
+		return "", false
+	}
+	return canonicalASCIIEnvelopeDomain(m.reverse, true)
+}
+
+// RecipientDomainObservation derives distinct canonical ASCII DNS domains from
+// exact validated recipient paths and bounds only their operator-visible list.
+func (m Message) RecipientDomainObservation() DomainObservation {
+	seen := make(map[string]struct{}, len(m.recipients))
+	visible := make([]string, 0, maxObservedDomains)
+	for _, recipient := range m.recipients {
+		domain, ok := canonicalASCIIEnvelopeDomain(recipient, false)
+		if !ok {
+			continue
+		}
+		if _, duplicate := seen[domain]; duplicate {
+			continue
+		}
+		seen[domain] = struct{}{}
+		if len(visible) < maxObservedDomains {
+			visible = append(visible, domain)
+		}
+	}
+	if len(seen) == 0 {
+		return DomainObservation{}
+	}
+	observation, ok := NewDomainObservation(
+		domainRoleRecipient,
+		strings.Join(visible, ","),
+		uint64(len(seen)),
+		len(seen) > len(visible),
+	)
+	if !ok {
+		return DomainObservation{}
+	}
+	return observation
+}
+
+// canonicalASCIIEnvelopeDomain returns the mailbox DNS domain without its local
+// part, address literals, SMTPUTF8 normalization, aliases, or fallback.
+func canonicalASCIIEnvelopeDomain(path []byte, allowNull bool) (string, bool) {
+	if len(path) == 2 || !asciiBytes(path) || !validEnvelopePath(path, allowNull) {
 		return "", false
 	}
 	mailbox := path[1 : len(path)-1]
@@ -217,6 +353,7 @@ type Result struct {
 	Result    string
 	Outcome   Disposition
 	Actions   []Action
+	Domains   DomainObservation
 }
 
 // String returns a content-free result diagnostic.
@@ -242,7 +379,10 @@ type Handler interface {
 type Observer interface {
 	RecordConnectionAdmission(string)
 	RecordCallback(string, string, string, time.Duration)
-	RecordMessage(string, string, string, string, time.Duration, uint64, uint64, bool)
+	RecordMessage(
+		string, string, string, string, time.Duration, uint64, uint64, bool,
+		DomainObservation,
+	)
 	RecordAction(string, string)
 }
 

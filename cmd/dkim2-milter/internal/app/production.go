@@ -28,7 +28,10 @@ type lifecycleTelemetry interface {
 	RecordReady() bool
 	RecordConnectionAdmission(string)
 	RecordCallback(string, string, string, time.Duration)
-	RecordMessage(string, string, string, string, time.Duration, uint64, uint64, bool)
+	RecordMessage(
+		string, string, string, string, time.Duration, uint64, uint64, bool,
+		milter.DomainObservation,
+	)
 	RecordAction(string, string)
 }
 

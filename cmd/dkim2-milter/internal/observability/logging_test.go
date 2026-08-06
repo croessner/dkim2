@@ -28,6 +28,10 @@ func TestBoundedLoggerEmitsExactClosedJSON(t *testing.T) {
 		slog.String("duration_bucket", "lt_10ms"),
 		slog.String("message_size_bucket", "lt_10k"),
 		slog.String("recipient_count_bucket", "2_10"),
+		slog.String("domain_role", "recipient"),
+		slog.String("processed_domains", "example.test,example.org"),
+		slog.Uint64("processed_domain_count", 2),
+		slog.Bool("processed_domains_truncated", false),
 		slog.Bool("fail_open", false),
 	)
 	var document map[string]any
@@ -37,6 +41,7 @@ func TestBoundedLoggerEmitsExactClosedJSON(t *testing.T) {
 	if document["msg"] != eventMessageCompleted ||
 		document["event_id"] != eventMessageCompleted ||
 		document["mode"] != valueModeInbound ||
+		document["processed_domains"] != "example.test,example.org" ||
 		document["time"] == "" || document["level"] != "INFO" {
 		t.Fatalf("unexpected admitted record: %#v", document)
 	}
@@ -59,6 +64,7 @@ func TestBoundedLoggerRejectsUnknownValuesAndDangerousKinds(t *testing.T) {
 		{name: "error any", message: eventMessageCompleted, attributes: []slog.Attr{slog.Any(keyFailureClass, errors.New(privacyMarker))}},
 		{name: "bytes any", message: eventMessageCompleted, attributes: []slog.Attr{slog.Any(keyMode, []byte(privacyMarker))}},
 		{name: "integer", message: eventMessageCompleted, attributes: []slog.Attr{slog.Int(keyMode, 1)}},
+		{name: "local part in domain", message: eventMessageCompleted, attributes: []slog.Attr{slog.String("processed_domains", privacyMarker)}},
 		{name: "duplicate", message: eventMessageCompleted, attributes: []slog.Attr{slog.String(keyMode, valueModeInbound), slog.String(keyMode, valueModeInbound)}},
 		{name: "missing required fields", message: eventConfigAccepted, attributes: []slog.Attr{slog.String(keyOperation, "config")}},
 		{name: "wrong event operation", message: eventConfigAccepted, attributes: []slog.Attr{
@@ -86,6 +92,33 @@ func TestBoundedLoggerRejectsUnknownValuesAndDangerousKinds(t *testing.T) {
 				t.Fatal("rejected record reached the destination")
 			}
 		})
+	}
+}
+
+// TestBoundedLoggerRejectsMailboxLocalPartsInCompleteDomainRecords proves the
+// final sink validates domain syntax even when every other field is coherent.
+func TestBoundedLoggerRejectsMailboxLocalPartsInCompleteDomainRecords(t *testing.T) {
+	var output bytes.Buffer
+	logger := slog.New(newBoundedJSONHandler(&output, slog.LevelInfo))
+	logger.Info(
+		eventMessageCompleted,
+		slog.String(keyOperation, "message"),
+		slog.String(keyDaemonOperation, "process"),
+		slog.String(keyMode, valueModeInbound),
+		slog.String(keyDisposition, valueAccept),
+		slog.String(keyResultClass, valueSuccess),
+		slog.String(keyFailureClass, valueNone),
+		slog.String(keyDurationBucket, "lt_10ms"),
+		slog.String(keyMessageSizeBucket, "lt_10k"),
+		slog.String(keyRecipientBucket, "1"),
+		slog.String(keyDomainRole, "recipient"),
+		slog.String(keyDomains, privacyMarker),
+		slog.Uint64(keyDomainCount, 1),
+		slog.Bool(keyDomainsTruncated, false),
+		slog.Bool(keyFailOpen, false),
+	)
+	if output.Len() != 0 {
+		t.Fatal("mailbox local part reached the logging sink")
 	}
 }
 

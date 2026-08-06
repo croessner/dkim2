@@ -23,6 +23,7 @@ type messageObservation struct {
 	messageBytes uint64
 	recipients   uint64
 	failOpen     bool
+	domains      DomainObservation
 }
 
 // setPreOperationFailOpen records the sole local-overload compatibility outcome.
@@ -87,6 +88,7 @@ func (s *Session) finishMessageObservation() {
 		observation.messageBytes,
 		observation.recipients,
 		observation.failOpen,
+		observation.domains,
 	)
 }
 
@@ -134,6 +136,7 @@ func (s *Session) observeMessage(
 	messageBytes uint64,
 	recipients uint64,
 	failOpen bool,
+	domains DomainObservation,
 ) {
 	if s == nil || s.admission == nil {
 		return
@@ -149,6 +152,7 @@ func (s *Session) observeMessage(
 			messageBytes,
 			recipients,
 			failOpen,
+			domains,
 		)
 	}, observer)
 }

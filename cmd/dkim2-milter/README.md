@@ -295,6 +295,14 @@ session ID, endpoint, socket peer, capability, key identity, raw error, header,
 body, signature, or message bytes. Debug settings cannot enable mail-data or
 secret output.
 
+`message.completed` exposes the processed domains needed for local operation.
+Inbound records use distinct canonical ASCII DNS recipient domains with mailbox
+local parts removed. Originator and ordinary-transit records use the exact
+selected signing domain. `processed_domains` renders at most eight domains;
+`processed_domain_count` and `processed_domains_truncated` retain explicit
+multi-domain state. These values are local log fields only and never become
+Prometheus labels or remote trace attributes.
+
 Readiness means validated configuration, protected capability ownership, the
 public listener, admission controls, and required local resources are live. It
 does not claim that the daemon is reachable at that instant.

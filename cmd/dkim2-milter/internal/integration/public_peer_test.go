@@ -1174,6 +1174,7 @@ func splitHeaderAction(payload []byte) (string, string, bool) {
 
 // containsPrivateMarker reports accidental identity or message disclosure.
 func containsPrivateMarker(data []byte) bool {
+	data = outputWithoutAllowedDomainProjection(data)
 	for _, marker := range []string{
 		"sender@example.test", "recipient@example.test", "exact value", "body\r\n",
 		integrationTenant, "example.test",
@@ -1183,6 +1184,38 @@ func containsPrivateMarker(data []byte) bool {
 		}
 	}
 	return false
+}
+
+// outputWithoutAllowedDomainProjection removes only the validated operator domain field.
+func outputWithoutAllowedDomainProjection(data []byte) []byte {
+	lines := bytes.Split(data, []byte{'\n'})
+	filtered := make([]byte, 0, len(data))
+	for _, line := range lines {
+		var document map[string]any
+		if json.Unmarshal(line, &document) == nil {
+			if domains, ok := document["processed_domains"].(string); ok && safeDomainProjection(domains) {
+				delete(document, "processed_domains")
+				line, _ = json.Marshal(document)
+			}
+		}
+		filtered = append(filtered, line...)
+		filtered = append(filtered, '\n')
+	}
+	return filtered
+}
+
+// safeDomainProjection recognizes the intentionally visible ASCII domain list grammar.
+func safeDomainProjection(value string) bool {
+	if value == "" {
+		return false
+	}
+	for _, domain := range strings.Split(value, ",") {
+		if domain == "" || strings.Trim(domain, "abcdefghijklmnopqrstuvwxyz0123456789.-") != "" ||
+			strings.HasPrefix(domain, ".") || strings.HasSuffix(domain, ".") || strings.Contains(domain, "..") {
+			return false
+		}
+	}
+	return true
 }
 
 // assertPrivateOutputAbsent proves logs do not disclose message or signing identity.

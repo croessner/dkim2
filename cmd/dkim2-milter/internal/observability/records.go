@@ -3,6 +3,8 @@ package observability
 import (
 	"log/slog"
 	"time"
+
+	"github.com/croessner/dkim2/cmd/dkim2-milter/internal/milter"
 )
 
 // RecordConnectionAdmission records one bounded connection admission outcome.
@@ -57,6 +59,7 @@ func (r *Runtime) RecordMessage(
 	messageBytes uint64,
 	recipients uint64,
 	failOpen bool,
+	domains milter.DomainObservation,
 ) {
 	operation, operationOK := daemonOperationForMode(mode)
 	if r == nil || duration < 0 ||
@@ -66,6 +69,7 @@ func (r *Runtime) RecordMessage(
 		!closedMetricValue(keyDisposition, disposition) ||
 		!closedMetricValue(keyResultClass, resultClass) ||
 		!closedMetricValue(keyFailureClass, failureClass) ||
+		!domains.ValidForMode(mode) ||
 		!operationOK ||
 		!validMessageOutcome(disposition, resultClass, failureClass, failOpen) {
 		return
@@ -74,6 +78,10 @@ func (r *Runtime) RecordMessage(
 		eventMessageCompleted,
 		slog.String(keyDaemonOperation, operation),
 		slog.String(keyDisposition, disposition),
+		slog.Uint64(keyDomainCount, domains.Count()),
+		slog.String(keyDomainRole, domains.Role()),
+		slog.String(keyDomains, domains.Domains()),
+		slog.Bool(keyDomainsTruncated, domains.Truncated()),
 		slog.String(keyDurationBucket, durationBucket(duration)),
 		slog.Bool(keyFailOpen, failOpen),
 		slog.String(keyFailureClass, failureClass),

@@ -5,7 +5,9 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
+	"strings"
 	"testing"
 	"time"
 )
@@ -233,6 +235,61 @@ func TestMessageSigningDomainUsesOnlyCanonicalEnvelopeSenderDNS(t *testing.T) {
 				t.Fatalf("SigningDomain()=(%q,%t), want (%q,%t)", got, ok, testCase.want, testCase.ok)
 			}
 		})
+	}
+}
+
+// TestMessageDomainObservationsPreserveOnlyCanonicalOperationalDomains proves
+// that operator logging exposes domains without retaining mailbox local parts.
+func TestMessageDomainObservationsPreserveOnlyCanonicalOperationalDomains(t *testing.T) {
+	message, err := NewMessage(
+		[]byte("Subject: test\r\n\r\nbody\r\n"),
+		[]byte("<sender@Origin.Example>"),
+		[][]byte{
+			[]byte("<first@Target.Example>"),
+			[]byte("<second@target.example>"),
+			[]byte("<third@other.example>"),
+		},
+	)
+	if err != nil {
+		t.Fatal("message construction failed")
+	}
+	observation := message.RecipientDomainObservation()
+	if observation.Role() != domainRoleRecipient ||
+		observation.Domains() != "target.example,other.example" ||
+		observation.Count() != 2 || observation.Truncated() {
+		t.Fatalf("recipient domain observation=%#v", observation)
+	}
+	signing, ok := NewSigningDomainObservation("origin.example")
+	if !ok || signing.Role() != domainRoleSigning ||
+		signing.Domains() != "origin.example" || signing.Count() != 1 ||
+		signing.Truncated() {
+		t.Fatalf("signing domain observation=%#v ok=%t", signing, ok)
+	}
+	if strings.Contains(observation.Domains(), "first") ||
+		strings.Contains(observation.Domains(), "second") {
+		t.Fatal("mailbox local part escaped domain observation")
+	}
+}
+
+// TestMessageDomainObservationBoundsLargeRecipientSets proves that logs remain
+// bounded while retaining the exact distinct canonical domain count.
+func TestMessageDomainObservationBoundsLargeRecipientSets(t *testing.T) {
+	recipients := make([][]byte, 0, maxObservedDomains+2)
+	for index := range maxObservedDomains + 2 {
+		recipients = append(recipients, []byte(fmt.Sprintf("<user@d%d.example>", index)))
+	}
+	message, err := NewMessage(
+		[]byte("Subject: test\r\n\r\nbody\r\n"),
+		[]byte("<sender@origin.example>"),
+		recipients,
+	)
+	if err != nil {
+		t.Fatal("message construction failed")
+	}
+	observation := message.RecipientDomainObservation()
+	if observation.Count() != maxObservedDomains+2 || !observation.Truncated() ||
+		len(strings.Split(observation.Domains(), ",")) != maxObservedDomains {
+		t.Fatalf("bounded domain observation=%#v", observation)
 	}
 }
 

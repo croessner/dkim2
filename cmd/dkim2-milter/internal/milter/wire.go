@@ -505,11 +505,13 @@ func (s *Session) endMessage(ctx context.Context) (frames [][]byte, resultErr er
 	resultClass := observationFailure
 	failureClass := string(FailureInternal)
 	failOpen := false
+	domains := DomainObservation{}
 	defer func() {
 		s.observation = &messageObservation{
 			mode: s.mode, disposition: disposition, resultClass: resultClass,
 			failureClass: failureClass, duration: time.Since(started),
 			messageBytes: messageBytes, recipients: recipients, failOpen: failOpen,
+			domains: domains,
 		}
 	}()
 	localAuthenticationResults := localAuthenticationResultOccurrences(
@@ -572,6 +574,7 @@ func (s *Session) endMessage(ctx context.Context) (frames [][]byte, resultErr er
 	operationContext, cancel := context.WithTimeout(ctx, s.timeout)
 	defer cancel()
 	result, err := callHandler(operationContext, s.handler, message)
+	domains = result.Domains
 	if err != nil {
 		class := classifyHandlerError(operationContext, err)
 		failureClass = string(class)

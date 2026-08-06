@@ -1167,6 +1167,14 @@ Default logs and traces may carry:
 - Signature count bucket.
 - Chain length bucket.
 
+The local Milter operator log additionally carries a bounded, independently
+validated processed-domain projection on `message.completed`. Inbound uses
+distinct canonical ASCII DNS recipient domains; originator and ordinary transit use
+the exact selected signing domain. The projection never includes mailbox local
+parts, is capped at eight visible domains with an exact distinct count and
+truncation flag, and is never promoted to a Prometheus label or remote trace
+attribute.
+
 Default Prometheus labels must be stricter than logs and traces. They may use
 only stable low-cardinality labels. Buckets belong in histogram or summary
 measurements, not in high-cardinality labels.
@@ -2120,13 +2128,16 @@ logs should include:
 - Replay state.
 - Duration.
 - Error code.
+- For the local Milter only, the bounded processed-domain role, list, exact
+  distinct count, and truncation state.
 
 Default logs should not include:
 
 - Full raw messages.
 - Full body content.
 - Raw header values.
-- Raw signing domains.
+- Unbounded domain sets or domains outside the local Milter's validated
+  processed-domain projection.
 - Raw selectors.
 - Raw sender or recipient local parts.
 - Raw message IDs.

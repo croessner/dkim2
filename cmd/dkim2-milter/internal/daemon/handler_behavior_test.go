@@ -21,6 +21,7 @@ import (
 const (
 	handlerPrivacyMarker = "toxic-handler-private-marker"
 	testAuthservID       = "mx.example.test"
+	testDomain           = "example.test"
 	testDSNDomain        = "dsn.example.test"
 	testTenant           = "tenant"
 	testCaseWrongMethod  = "wrong method"
@@ -58,7 +59,7 @@ func TestHandlerUsesOneExactGeneratedOperation(t *testing.T) {
 					t.Error("generated request body was not JSON")
 				}
 				contextValue, _ := document["context"].(map[string]any)
-				if contextValue["tenant"] != testTenant || contextValue["domain"] != "example.test" {
+				if contextValue["tenant"] != testTenant || contextValue["domain"] != testDomain {
 					t.Error("generated signing context was not mapped exactly")
 				}
 				writer.Header().Set("Content-Type", "application/json")
@@ -67,7 +68,7 @@ func TestHandlerUsesOneExactGeneratedOperation(t *testing.T) {
 			defer server.Close()
 			capability := testCapability(t)
 			handler, err := NewHandler(
-				server.URL, capability, testCase.mode, testTenant, "example.test",
+				server.URL, capability, testCase.mode, testTenant, testDomain,
 				milter.DomainSourceStatic,
 				map[string]string{modeOriginator: testDSNDomain}[testCase.mode], "",
 			)
@@ -379,7 +380,7 @@ func TestHandlerNonOKResponseIsContractFailure(t *testing.T) {
 	}))
 	defer server.Close()
 	handler, err := NewHandler(
-		server.URL, testCapability(t), modeOriginator, testTenant, "example.test",
+		server.URL, testCapability(t), modeOriginator, testTenant, testDomain,
 		milter.DomainSourceStatic, testDSNDomain, "",
 	)
 	if err != nil {
@@ -400,7 +401,7 @@ func TestHandlerDerivesOriginatorDomainFromEnvelopeSender(t *testing.T) {
 			t.Error("generated request body was not JSON")
 		}
 		contextValue, _ := document["context"].(map[string]any)
-		if contextValue["tenant"] != testTenant || contextValue["domain"] != "example.test" {
+		if contextValue["tenant"] != testTenant || contextValue["domain"] != testDomain {
 			t.Error("envelope sender domain was not mapped exactly")
 		}
 		writer.Header().Set("Content-Type", "application/json")
@@ -423,8 +424,10 @@ func TestHandlerDerivesOriginatorDomainFromEnvelopeSender(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := handler.Handle(t.Context(), message); err != nil || calls != 1 {
-		t.Fatalf("Handle() error=%v, calls=%d", err, calls)
+	result, err := handler.Handle(t.Context(), message)
+	if err != nil || calls != 1 || result.Domains.Role() != "signing" ||
+		result.Domains.Domains() != testDomain {
+		t.Fatalf("Handle() result=%v error=%v, calls=%d", result, err, calls)
 	}
 	for _, reverse := range []string{"<sender@[192.0.2.1]>", "<séndér@example.test>", "<sender@täst.example>"} {
 		message, err := milter.NewMessage(
@@ -458,6 +461,34 @@ func TestHandlerDerivesOriginatorDomainFromEnvelopeSender(t *testing.T) {
 	}
 	if calls != 1 {
 		t.Fatalf("invalid envelope domains reached daemon: calls=%d", calls)
+	}
+}
+
+// TestObservedDomainsMatchesAuthoritativeRouteSelection proves that operator
+// logging follows inbound envelope targets and the selected originator domain.
+func TestObservedDomainsMatchesAuthoritativeRouteSelection(t *testing.T) {
+	message, err := milter.NewMessage(
+		[]byte("Subject: test\r\n\r\nbody\r\n"),
+		[]byte("<sender@Origin.Example>"),
+		[][]byte{
+			[]byte("<first@Target.Example>"),
+			[]byte("<second@target.example>"),
+		},
+	)
+	if err != nil {
+		t.Fatal("message construction failed")
+	}
+	inbound := observedDomains(&handlerGuard{mode: modeInbound}, message)
+	if inbound.Role() != "recipient" || inbound.Domains() != "target.example" ||
+		inbound.Count() != 1 || inbound.Truncated() {
+		t.Fatalf("inbound domains=%#v", inbound)
+	}
+	originator := observedDomains(&handlerGuard{
+		mode: modeOriginator, domainSource: milter.DomainSourceEnvelopeSender,
+	}, message)
+	if originator.Role() != "signing" || originator.Domains() != "origin.example" ||
+		originator.Count() != 1 || originator.Truncated() {
+		t.Fatalf("originator domains=%#v", originator)
 	}
 }
 
@@ -501,7 +532,7 @@ func TestHandlerRejectsIncompleteDSNSigningAuthority(t *testing.T) {
 	defer server.Close()
 	for _, authority := range []string{"", "DSN.example.test", "recipient@example.test"} {
 		if handler, err := NewHandler(
-			server.URL, testCapability(t), modeOriginator, testTenant, "example.test",
+			server.URL, testCapability(t), modeOriginator, testTenant, testDomain,
 			milter.DomainSourceStatic, authority, "",
 		); err == nil || handler != nil {
 			t.Fatalf("NewHandler() accepted DSN authority %q", authority)
@@ -513,7 +544,7 @@ func TestHandlerRejectsIncompleteDSNSigningAuthority(t *testing.T) {
 // through the generated client and exact HTTP response validator.
 func TestHandlerAcceptsOriginatorNoContent(t *testing.T) {
 	testHandlerAcceptsNoContent(
-		t, modeOriginator, testTenant, "example.test", routeSign, operationSign,
+		t, modeOriginator, testTenant, testDomain, routeSign, operationSign,
 	)
 }
 

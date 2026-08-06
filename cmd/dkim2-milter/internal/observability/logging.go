@@ -6,8 +6,11 @@ import (
 	"io"
 	"log/slog"
 	"slices"
+	"strings"
 	"sync"
 	"time"
+
+	"github.com/croessner/dkim2/cmd/dkim2-milter/internal/milter"
 )
 
 const (
@@ -26,6 +29,10 @@ const (
 	keyCallbackClass         = "callback_class"
 	keyDaemonOperation       = "daemon_operation"
 	keyDisposition           = "disposition"
+	keyDomainCount           = "processed_domain_count"
+	keyDomainRole            = "domain_role"
+	keyDomains               = "processed_domains"
+	keyDomainsTruncated      = "processed_domains_truncated"
 	keyDurationBucket        = "duration_bucket"
 	keyFailOpen              = "fail_open"
 	keyFailureClass          = "failure_class"
@@ -160,7 +167,17 @@ func admitAttributes(eventID string, attributes []slog.Attr) (map[string]any, er
 			continue
 		}
 		switch attribute.Key {
-		case keyFailOpen, "ready":
+		case keyDomains:
+			if attribute.Value.Kind() != slog.KindString {
+				return nil, errConfiguration
+			}
+			fields[attribute.Key] = attribute.Value.String()
+		case keyDomainCount:
+			if attribute.Value.Kind() != slog.KindUint64 {
+				return nil, errConfiguration
+			}
+			fields[attribute.Key] = attribute.Value.Uint64()
+		case keyFailOpen, keyDomainsTruncated, "ready":
 			if attribute.Value.Kind() != slog.KindBool {
 				return nil, errConfiguration
 			}
@@ -184,7 +201,25 @@ func admitAttributes(eventID string, attributes []slog.Attr) (map[string]any, er
 	if fields[keyOperation] != operation {
 		return nil, errConfiguration
 	}
+	if eventID == eventMessageCompleted && !validDomainFields(fields) {
+		return nil, errConfiguration
+	}
 	return fields, nil
+}
+
+// validDomainFields independently revalidates the operator-visible domain set
+// at the final logging sink.
+func validDomainFields(fields map[string]any) bool {
+	role, roleOK := fields[keyDomainRole].(string)
+	domains, domainsOK := fields[keyDomains].(string)
+	count, countOK := fields[keyDomainCount].(uint64)
+	truncated, truncatedOK := fields[keyDomainsTruncated].(bool)
+	if !roleOK || !domainsOK || !countOK || !truncatedOK ||
+		strings.ContainsAny(domains, "@\r\n\x00") {
+		return false
+	}
+	_, ok := milter.NewDomainObservation(role, domains, count, truncated)
+	return ok
 }
 
 // allowedEventID admits only the fixed adapter event inventory.
@@ -228,6 +263,8 @@ func closedVocabulary(key string) []string {
 		return []string{"process", "revise", "sign"}
 	case keyDisposition:
 		return []string{valueAccept, valueClose, valueContinue, valueReject, valueTempfail}
+	case keyDomainRole:
+		return []string{"none", "recipient", "signing"}
 	case keyDurationBucket:
 		return []string{
 			valueDurationLT1ms, valueDurationLT5ms, "lt_10ms", "lt_25ms",
@@ -285,8 +322,8 @@ func eventRequirements(eventID string) (string, []string, bool) {
 	case eventMessageCompleted:
 		return "message", []string{
 			keyDaemonOperation, keyDisposition, keyDurationBucket, keyFailOpen, keyFailureClass,
-			keyMessageSizeBucket, keyMode, keyOperation, keyRecipientBucket,
-			keyResultClass,
+			keyMessageSizeBucket, keyMode, keyOperation, keyRecipientBucket, keyResultClass,
+			keyDomainRole, keyDomains, keyDomainCount, keyDomainsTruncated,
 		}, true
 	case eventReadinessTransition:
 		return "readiness", []string{keyOperation, "ready", keyResultClass}, true

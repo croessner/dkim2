@@ -131,6 +131,7 @@ func (*orderedTelemetry) RecordMessage(
 	uint64,
 	uint64,
 	bool,
+	milter.DomainObservation,
 ) {
 }
 

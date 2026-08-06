@@ -25,6 +25,7 @@ type observationEvent struct {
 	duration                     time.Duration
 	messageBytes, recipients     uint64
 	failOpen                     bool
+	domains                      DomainObservation
 }
 
 // wait joins delivery only within the caller's authoritative shutdown budget.
@@ -120,11 +121,13 @@ func (d *observerDispatcher) RecordMessage(
 	duration time.Duration,
 	messageBytes, recipients uint64,
 	failOpen bool,
+	domains DomainObservation,
 ) {
 	d.submit(observationEvent{
 		kind: observationMessage, first: mode, second: disposition,
 		third: result, fourth: failure, duration: duration,
 		messageBytes: messageBytes, recipients: recipients, failOpen: failOpen,
+		domains: domains,
 	})
 }
 
@@ -189,6 +192,7 @@ func (d *observerDispatcher) deliver(event observationEvent) {
 		d.target.RecordMessage(
 			event.first, event.second, event.third, event.fourth,
 			event.duration, event.messageBytes, event.recipients, event.failOpen,
+			event.domains,
 		)
 	case observationAction:
 		d.target.RecordAction(event.first, event.second)

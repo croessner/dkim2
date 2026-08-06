@@ -614,14 +614,22 @@ Prometheus registry. It may reuse daemon-owned policy patterns but not daemon
 internal packages or global telemetry state. Required facts are operation,
 mode, disposition, result class, failure class, callback/state class,
 duration/size/recipient buckets, readiness, connection admission, action kind,
-and fail-open use.
+fail-open use, and the bounded processed-domain projection needed by local
+operators. Inbound records use canonical distinct ASCII DNS recipient domains;
+originator and ordinary-transit records use the exact selected signing domain.
+At most eight domains are rendered while the exact distinct count and a
+truncation flag preserve multi-domain visibility.
 
-Logs and metrics never contain raw or hashed sender/recipient/domain/tenant,
-message/header/body, signature, Message-Instance, Authentication-Results,
-capability, key handle/path/material, daemon URL, socket peer, client address,
-request/session/queue/trace ID, protected config, raw error, or arbitrary
-string. Labels and field values use closed allowlists. Debug modules cannot
-enable mail-data or secret output.
+Local bounded JSON logs may contain only those validated canonical domains and
+their closed role/count metadata. They never contain mailbox local parts,
+complete sender or recipient paths, tenant values, message/header/body,
+signature, Message-Instance, Authentication-Results, capability, key
+handle/path/material, daemon URL, socket peer, client address,
+request/session/queue/trace ID, protected config, raw error, or another
+arbitrary string. Metrics never contain raw or hashed sender, recipient,
+domain, or tenant values; Prometheus labels remain on the unchanged closed
+low-cardinality allowlist. Debug modules cannot enable additional mail-data or
+secret output.
 
 The observation sink is non-authoritative and cannot block or alter protocol
 decisions. Its bounded dispatcher remains dormant until socket ownership and
