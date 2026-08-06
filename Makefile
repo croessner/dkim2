@@ -472,7 +472,8 @@ check-protected-platforms:
 		go test -c -o "$$output/dkim2-milter-windows-amd64.test.exe" ./cmd/dkim2-milter/internal/config; \
 	if test "$$(go env GOOS)" = darwin; then \
 		GOCACHE="$$output/cache" CGO_ENABLED=1 go test ./cmd/dkim2d/internal/config; \
-		GOCACHE="$$output/cache" CGO_ENABLED=0 go test ./cmd/dkim2d/internal/config; \
+		GOCACHE="$$output/cache" CGO_ENABLED=0 go build -o "$$output/dkim2d-darwin-nocgo" ./cmd/dkim2d; \
+		GOCACHE="$$output/cache" CGO_ENABLED=0 go test -run '^TestDarwinNoCGOProtectedConfigurationFailsClosed$$' ./cmd/dkim2d/internal/config; \
 		GOCACHE="$$output/cache" CGO_ENABLED=1 go test ./cmd/dkim2-milter/internal/config ./cmd/dkim2-milter/internal/securefile; \
 		GOCACHE="$$output/cache" CGO_ENABLED=0 go build -o "$$output/dkim2-milter-darwin-nocgo" ./cmd/dkim2-milter; \
 		GOCACHE="$$output/cache" CGO_ENABLED=0 go test -run '^TestDarwinNoCGOProtectedLoadingFailsClosed$$' ./cmd/dkim2-milter/internal/securefile; \
