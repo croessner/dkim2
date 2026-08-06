@@ -15,25 +15,39 @@ import (
 	"time"
 )
 
-// TestDecodeKeyAcceptsStrictRSAAndClonesMaterial verifies PKCS#1 decoding with fixed crypto policy.
-func TestDecodeKeyAcceptsStrictRSAAndClonesMaterial(t *testing.T) {
+// TestDecodeKeyAcceptsRSACompatibilityRepresentations verifies PKCS#1 and SPKI decoding with detached material.
+func TestDecodeKeyAcceptsRSACompatibilityRepresentations(t *testing.T) {
 	key := syntheticRSAKey(1024, 65537)
-	record := keyDataRecord(KeyTypeRSA, x509.MarshalPKCS1PublicKey(key), newMetadata(true, true))
-	outcome, err := DecodeKey(record, AlgorithmRSASHA256)
+	spki, err := x509.MarshalPKIXPublicKey(key)
 	if err != nil {
-		t.Fatalf("DecodeKey() error = %v", err)
+		t.Fatalf("MarshalPKIXPublicKey() error = %v", err)
 	}
-	if outcome.Status() != KeyOutcomeFound || !outcome.Valid() || !outcome.Metadata().TestingDeclared() || !outcome.Metadata().StrictIdentityDeclared() {
-		t.Fatalf("outcome = status %q valid=%v metadata=%#v", outcome.Status(), outcome.Valid(), outcome.Metadata())
-	}
-	decoded, ok := outcome.Material().(*rsa.PublicKey)
-	if !ok || decoded.N.Cmp(key.N) != 0 || decoded.E != key.E {
-		t.Fatalf("Material() = %#v, want detached RSA key", outcome.Material())
-	}
-	decoded.N.SetInt64(99)
-	again := outcome.Material().(*rsa.PublicKey)
-	if again.N.Cmp(key.N) != 0 {
-		t.Fatal("Material() exposed mutable RSA modulus storage")
+	for _, tt := range []struct {
+		name string
+		der  []byte
+	}{
+		{name: "PKCS#1 RSAPublicKey", der: x509.MarshalPKCS1PublicKey(key)},
+		{name: "X.509 SubjectPublicKeyInfo", der: spki},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			record := keyDataRecord(KeyTypeRSA, tt.der, newMetadata(true, true))
+			outcome, decodeErr := DecodeKey(record, AlgorithmRSASHA256)
+			if decodeErr != nil {
+				t.Fatalf("DecodeKey() error = %v", decodeErr)
+			}
+			if outcome.Status() != KeyOutcomeFound || !outcome.Valid() || !outcome.Metadata().TestingDeclared() || !outcome.Metadata().StrictIdentityDeclared() {
+				t.Fatalf("outcome = status %q valid=%v metadata=%#v", outcome.Status(), outcome.Valid(), outcome.Metadata())
+			}
+			decoded, ok := outcome.Material().(*rsa.PublicKey)
+			if !ok || decoded.N.Cmp(key.N) != 0 || decoded.E != key.E {
+				t.Fatalf("Material() = %#v, want detached RSA key", outcome.Material())
+			}
+			decoded.N.SetInt64(99)
+			again := outcome.Material().(*rsa.PublicKey)
+			if again.N.Cmp(key.N) != 0 {
+				t.Fatal("Material() exposed mutable RSA modulus storage")
+			}
+		})
 	}
 }
 
@@ -61,10 +75,10 @@ func TestDecodeKeyAcceptsStructurallyValidRSAOutsideCryptoPolicy(t *testing.T) {
 	}
 }
 
-// TestDecodeKeyRejectsWrongRSAContainersAndShape verifies strict full PKCS#1 structural decoding.
+// TestDecodeKeyRejectsWrongRSAContainersAndShape verifies strict full DER and RSA-only SPKI decoding.
 func TestDecodeKeyRejectsWrongRSAContainersAndShape(t *testing.T) {
 	valid := syntheticRSAKey(1024, 65537)
-	spki, err := x509.MarshalPKIXPublicKey(valid)
+	ed25519SPKI, err := x509.MarshalPKIXPublicKey(ed25519.PublicKey(bytes.Repeat([]byte{0x42}, ed25519.PublicKeySize)))
 	if err != nil {
 		t.Fatalf("MarshalPKIXPublicKey() error = %v", err)
 	}
@@ -91,7 +105,7 @@ func TestDecodeKeyRejectsWrongRSAContainersAndShape(t *testing.T) {
 		name string
 		der  []byte
 	}{
-		{name: "spki", der: spki},
+		{name: "non-RSA SPKI", der: ed25519SPKI},
 		{name: "certificate", der: certificate},
 		{name: "pem", der: pemPublic},
 		{name: "private", der: x509.MarshalPKCS1PrivateKey(private)},

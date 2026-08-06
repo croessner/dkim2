@@ -204,29 +204,38 @@ func dnsPolicyBoundaryRSAKey(bits, exponent int) *rsa.PublicKey {
 	return &rsa.PublicKey{N: modulus, E: exponent}
 }
 
-// TestDNSPublicKeyProviderAcceptsDNSOptionalBase64Padding verifies DNS-04 p= representation.
-func TestDNSPublicKeyProviderAcceptsDNSOptionalBase64Padding(t *testing.T) {
+// TestDNSPublicKeyProviderAcceptsDNSCompatibleKeyRepresentations verifies DNS-04 padding and RSA container compatibility.
+func TestDNSPublicKeyProviderAcceptsDNSCompatibleKeyRepresentations(t *testing.T) {
 	rsaModulus := new(big.Int).Lsh(big.NewInt(1), 1023)
 	rsaModulus.SetBit(rsaModulus, 0, 1)
-	rsaDER := x509.MarshalPKCS1PublicKey(&rsa.PublicKey{N: rsaModulus, E: 65537})
+	rsaKey := &rsa.PublicKey{N: rsaModulus, E: 65537}
+	rsaPKCS1 := x509.MarshalPKCS1PublicKey(rsaKey)
+	rsaSPKI, err := x509.MarshalPKIXPublicKey(rsaKey)
+	if err != nil {
+		t.Fatalf("MarshalPKIXPublicKey() error = %v", err)
+	}
 	edKey := bytes.Repeat([]byte{0x42}, ed25519.PublicKeySize)
 	for _, tt := range []struct {
+		name      string
 		record    string
 		algorithm Algorithm
 	}{
-		{record: "p=" + base64.RawStdEncoding.EncodeToString(rsaDER), algorithm: AlgorithmRSASHA256},
-		{record: "k=ed25519; p=" + base64.RawStdEncoding.EncodeToString(edKey), algorithm: AlgorithmEd25519SHA256},
+		{name: "unpadded PKCS#1 RSA", record: "p=" + base64.RawStdEncoding.EncodeToString(rsaPKCS1), algorithm: AlgorithmRSASHA256},
+		{name: "unpadded SPKI RSA", record: "p=" + base64.RawStdEncoding.EncodeToString(rsaSPKI), algorithm: AlgorithmRSASHA256},
+		{name: "unpadded raw Ed25519", record: "k=ed25519; p=" + base64.RawStdEncoding.EncodeToString(edKey), algorithm: AlgorithmEd25519SHA256},
 	} {
-		provider, err := NewDNSPublicKeyProvider(txtTransportFunc(func(context.Context, string) (TXTLookupResult, error) {
-			return mustPublicFoundLookup(t, []byte(tt.record)), nil
-		}))
-		if err != nil {
-			t.Fatal(err)
-		}
-		result, lookupErr := provider.LookupPublicKey(context.Background(), newPublicKeyQuery("example.test", "selector", tt.algorithm))
-		if lookupErr != nil || result.Status() != PublicKeyStatusFound {
-			t.Fatalf("unpadded DNS key = %q error=%v", result.Status(), lookupErr)
-		}
+		t.Run(tt.name, func(t *testing.T) {
+			provider, constructErr := NewDNSPublicKeyProvider(txtTransportFunc(func(context.Context, string) (TXTLookupResult, error) {
+				return mustPublicFoundLookup(t, []byte(tt.record)), nil
+			}))
+			if constructErr != nil {
+				t.Fatal(constructErr)
+			}
+			result, lookupErr := provider.LookupPublicKey(context.Background(), newPublicKeyQuery("example.test", "selector", tt.algorithm))
+			if lookupErr != nil || result.Status() != PublicKeyStatusFound {
+				t.Fatalf("DNS key = %q error=%v", result.Status(), lookupErr)
+			}
+		})
 	}
 }
 

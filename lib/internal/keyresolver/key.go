@@ -127,8 +127,8 @@ func DecodeKey(record Record, requested Algorithm) (KeyOutcome, error) {
 	data := record.PublicKeyData()
 	switch requested {
 	case AlgorithmRSASHA256:
-		key, err := x509.ParsePKCS1PublicKey(data)
-		if err != nil || !cryptodkim2.ValidRSAPublicKeyStructure(key) {
+		key := decodeRSAPublicKey(data)
+		if key == nil {
 			base.status = KeyOutcomeInvalid
 			return base, nil
 		}
@@ -146,6 +146,27 @@ func DecodeKey(record Record, requested Algorithm) (KeyOutcome, error) {
 	default:
 		return KeyOutcome{}, newResolverError(ErrorClassContract)
 	}
+}
+
+// decodeRSAPublicKey accepts the DNS RSA compatibility representations and rejects every other key container.
+func decodeRSAPublicKey(data []byte) *rsa.PublicKey {
+	key, err := x509.ParsePKCS1PublicKey(data)
+	if err == nil {
+		if cryptodkim2.ValidRSAPublicKeyStructure(key) {
+			return key
+		}
+		return nil
+	}
+
+	material, err := x509.ParsePKIXPublicKey(data)
+	if err != nil {
+		return nil
+	}
+	key, ok := material.(*rsa.PublicKey)
+	if !ok || !cryptodkim2.ValidRSAPublicKeyStructure(key) {
+		return nil
+	}
+	return key
 }
 
 // keyTypeMatchesAlgorithm reports exact supported algorithm and DNS k= coherence.
