@@ -140,8 +140,7 @@ func (s *Signer) EvaluateDSNForSigning(ctx context.Context, request DSNSigningEv
 		return DSNSigningEvidence{}, mapDSNEvidenceError(ctx, err)
 	}
 	if !bytes.Equal(request.outerForwardPaths[0], evidence.MailFrom()) ||
-		evidence.SigningDomain() != request.identity.domain ||
-		!dsnRecipientMatchesIdentity(evidence, request.identity) {
+		evidence.SigningDomain() != request.identity.domain {
 		return DSNSigningEvidence{}, newSigningError(SigningErrorAuthorizationDenied)
 	}
 	return DSNSigningEvidence{
@@ -178,16 +177,6 @@ func (s *Signer) SignDSN(ctx context.Context, request DSNSigningRequest) (Signin
 		Profile: request.profile.value, Metadata: request.metadata.value, Transport: rawmsg.TransportForm(request.transport),
 		EnvelopeForm: signing.SignatureEnvelopeOrdinary,
 	})
-}
-
-// dsnRecipientMatchesIdentity enforces the local exact canonical recipient-domain interpretation.
-func dsnRecipientMatchesIdentity(evidence dsn.Evidence, identity DSNIdentity) bool {
-	for _, domain := range evidence.RecipientDomains() {
-		if domain == identity.domain {
-			return true
-		}
-	}
-	return false
 }
 
 // mapDSNEvidenceError preserves cancellation and converts content-free DSN outcomes into the public signing vocabulary.

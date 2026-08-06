@@ -2024,12 +2024,12 @@ Outbound signing:
 11. Insert signature values.
 
 The daemon supports outgoing delivery-status signing only through its dedicated
-raw-byte DSN request, separately protected capability, and `delivery_status`
-policy use. The current Milter cannot authenticate the RFC 3462 three-part
-structure, Draft-04 Section 12.1 verification of relevant embedded fields, or
-Section 12.1.2 alignment evidence through callbacks. Its null sender therefore
-continues to tempfail before daemon I/O; it cannot use the daemon DSN route as
-a fallback.
+DSN request, separately protected capability, and `delivery_status` policy use.
+It accepts exact raw RFC 5322 bytes or the distinct
+`postfix_dsn_milter_reconstructed_crlf` fidelity after the Postfix-only adapter
+has validated non-persistent EOD evidence. A generic reconstructed Milter
+message remains insufficient. The originator Milter continues to reject null
+senders and cannot use the daemon DSN route as a fallback.
 
 Revision signing:
 

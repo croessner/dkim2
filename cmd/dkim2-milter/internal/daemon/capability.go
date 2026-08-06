@@ -13,7 +13,10 @@ import (
 	"github.com/croessner/dkim2/cmd/dkim2-milter/internal/endpoint"
 )
 
-const capabilityHeader = "X-DKIM2-Capability"
+const (
+	capabilityHeader    = "X-DKIM2-Capability"
+	dsnCapabilityHeader = "X-DKIM2-DSN-Sign-Capability"
+)
 
 const redactedCapability = "dkim2_milter_capability{redacted}"
 
@@ -33,6 +36,7 @@ type capabilityGuard struct {
 	value  [32]byte
 	closed bool
 	target string
+	header string
 }
 
 // newCapability takes ownership of one nonzero protected value.
@@ -59,12 +63,15 @@ func (c *Capability) bindRequestTarget(endpoint, route string) error {
 		return &Error{}
 	}
 	target := endpoint + route
+	header := capabilityHeaderForRoute(route)
 	guard.mu.Lock()
 	defer guard.mu.Unlock()
-	if guard.closed || guard.target != "" && guard.target != target {
+	if guard.closed || guard.target != "" &&
+		(guard.target != target || guard.header != header) {
 		return &Error{}
 	}
 	guard.target = target
+	guard.header = header
 	return nil
 }
 
@@ -75,7 +82,17 @@ func validCapabilityEndpoint(value string) bool {
 
 // supportedCapabilityRoute recognizes only mode-specific generated operations.
 func supportedCapabilityRoute(route string) bool {
-	return route == routeProcess || route == routeSign || route == routeRevise
+	return route == routeProcess || route == routeSign || route == routeRevise ||
+		route == routeDeliveryStatus
+}
+
+// capabilityHeaderForRoute selects the OpenAPI-declared credential field for
+// one already validated operation route.
+func capabilityHeaderForRoute(route string) string {
+	if route == routeDeliveryStatus {
+		return dsnCapabilityHeader
+	}
+	return capabilityHeader
 }
 
 // EditRequest adds the credential only to the exact bound generated request.
@@ -86,10 +103,11 @@ func (c *Capability) EditRequest(ctx context.Context, request *http.Request) err
 	}
 	guard.mu.Lock()
 	defer guard.mu.Unlock()
-	if guard.closed || guard.target == "" || request.URL.String() != guard.target {
+	if guard.closed || guard.target == "" || guard.header == "" ||
+		request.URL.String() != guard.target {
 		return &Error{}
 	}
-	request.Header.Set(capabilityHeader, base64.RawURLEncoding.EncodeToString(guard.value[:]))
+	request.Header.Set(guard.header, base64.RawURLEncoding.EncodeToString(guard.value[:]))
 	return nil
 }
 
@@ -115,7 +133,8 @@ func validCapabilityRequest(request *http.Request) bool {
 		return false
 	}
 	for name := range request.Header {
-		if strings.EqualFold(name, capabilityHeader) {
+		if strings.EqualFold(name, capabilityHeader) ||
+			strings.EqualFold(name, dsnCapabilityHeader) {
 			return false
 		}
 	}
@@ -145,6 +164,7 @@ func (c *Capability) Close() error {
 	if !guard.closed {
 		clear(guard.value[:])
 		guard.target = ""
+		guard.header = ""
 		guard.closed = true
 	}
 	return nil

@@ -868,7 +868,10 @@ func (h *HTTPBoundary) prepareProcessRequest(
 		return request, false, false
 	}
 	var authenticated bool
-	request, authenticated = authenticateLocalCapability(request, h.matcherForPath(request.URL.Path))
+	request, authenticated = authenticateOperationCapability(
+		request,
+		h.matcherForPath(request.URL.Path),
+	)
 	if !authenticated {
 		h.writeError(writer, request, http.StatusForbidden,
 			generated.ErrorResponseCodeForbidden, generated.Request)
@@ -892,6 +895,18 @@ func (h *HTTPBoundary) prepareProcessRequest(
 		return request, false, false
 	}
 	return request, continueEligible, true
+}
+
+// authenticateOperationCapability selects the credential field assigned by
+// the OpenAPI contract to one already validated operation path.
+func authenticateOperationCapability(
+	request *http.Request,
+	matcher capabilityMatcher,
+) (*http.Request, bool) {
+	if request != nil && request.URL != nil && request.URL.Path == dsnSignPath {
+		return authenticateCapability(request, dsnSignCapabilityHeader, matcher)
+	}
+	return authenticateLocalCapability(request, matcher)
 }
 
 // matcherForPath returns only the capability assigned to the exact operation.

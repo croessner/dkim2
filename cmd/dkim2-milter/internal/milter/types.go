@@ -24,6 +24,9 @@ type Fidelity string
 const (
 	// FidelityReconstructedCRLF declares Milter callback reconstruction.
 	FidelityReconstructedCRLF Fidelity = "milter_reconstructed_crlf"
+	// FidelityPostfixDSNReconstructedCRLF declares Postfix-qualified DSN
+	// reconstruction after exact local EOD evidence validation.
+	FidelityPostfixDSNReconstructedCRLF Fidelity = "postfix_dsn_milter_reconstructed_crlf"
 )
 
 // ValidSigningDomainAuthority reports whether value is one canonical lower-case
@@ -128,7 +131,8 @@ func (d DomainObservation) ValidForMode(mode string) bool {
 	if mode == modeInbound {
 		return d.Role() == domainRoleRecipient
 	}
-	return (mode == modeOriginator || mode == modeTransit) && d.Role() == domainRoleSigning
+	return (mode == modeOriginator || mode == modeTransit || mode == modePostfixDSN) &&
+		d.Role() == domainRoleSigning
 }
 
 // Message is one immutable EOM snapshot.
@@ -137,6 +141,7 @@ type Message struct {
 	reverse    []byte
 	recipients [][]byte
 	fidelity   Fidelity
+	postfixDSN *PostfixDSNEvidence
 }
 
 // NewMessage snapshots one reconstructed request for an injected handler.
@@ -163,6 +168,22 @@ func newOwnedMessage(raw, reverse []byte, recipients [][]byte) (Message, error) 
 		raw: raw, reverse: reverse, recipients: recipients,
 		fidelity: FidelityReconstructedCRLF,
 	}, nil
+}
+
+// newOwnedPostfixDSNMessage transfers isolated callback and Postfix evidence
+// buffers into the one synchronous delivery-status handler snapshot.
+func newOwnedPostfixDSNMessage(
+	raw, reverse []byte,
+	recipients [][]byte,
+	evidence PostfixDSNEvidence,
+) (Message, error) {
+	message, err := newOwnedMessage(raw, reverse, recipients)
+	if err != nil {
+		return Message{}, err
+	}
+	message.postfixDSN = &evidence
+	message.fidelity = FidelityPostfixDSNReconstructedCRLF
+	return message, nil
 }
 
 // Raw returns an isolated copy of reconstructed RFC 5322 bytes.
@@ -276,6 +297,15 @@ func (m Message) Recipients() [][]byte {
 // Fidelity returns the exact reconstruction declaration.
 func (m Message) Fidelity() Fidelity { return m.fidelity }
 
+// PostfixDSNEvidence returns an isolated Postfix-specific DSN provenance
+// record only for the dedicated local adapter mode.
+func (m Message) PostfixDSNEvidence() (PostfixDSNEvidence, bool) {
+	if m.postfixDSN == nil {
+		return PostfixDSNEvidence{}, false
+	}
+	return m.postfixDSN.clone(), true
+}
+
 // clear erases one synchronous handler snapshot after the call returns.
 func (m *Message) clear() {
 	if m == nil {
@@ -286,10 +316,14 @@ func (m *Message) clear() {
 	for index := range m.recipients {
 		clear(m.recipients[index])
 	}
+	if m.postfixDSN != nil {
+		m.postfixDSN.clear()
+	}
 	m.raw = nil
 	m.reverse = nil
 	m.recipients = nil
 	m.fidelity = ""
+	m.postfixDSN = nil
 }
 
 // String returns a content-free diagnostic.

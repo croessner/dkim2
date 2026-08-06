@@ -304,6 +304,23 @@ func TestRecordConfigAcceptedEmitsBoundedFailOpenWarning(t *testing.T) {
 	}
 }
 
+// TestRecordConfigAcceptedAdmitsPostfixDSN proves the mode remains bounded.
+func TestRecordConfigAcceptedAdmitsPostfixDSN(t *testing.T) {
+	var output bytes.Buffer
+	runtime, err := New(observabilitySnapshot(t, "info"), &output)
+	if err != nil || runtime.Activate() != nil {
+		t.Fatal("runtime construction failed")
+	}
+	if err := runtime.RecordConfigAccepted(valueModePostfixDSN, false); err != nil {
+		t.Fatal("bounded Postfix DSN configuration fact failed")
+	}
+	if !bytes.Contains(output.Bytes(), []byte(`"event_id":"`+eventConfigAccepted+`"`)) ||
+		!bytes.Contains(output.Bytes(), []byte(`"mode":"`+valueModePostfixDSN+`"`)) ||
+		bytes.Contains(output.Bytes(), []byte(privacyMarker)) {
+		t.Fatal("Postfix DSN configuration fact was not bounded")
+	}
+}
+
 // TestConfigRecordRejectsInvalidModeWithoutPublishing proves closed startup facts.
 func TestConfigRecordRejectsInvalidModeWithoutPublishing(t *testing.T) {
 	var output bytes.Buffer

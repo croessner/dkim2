@@ -93,3 +93,15 @@ func TestEximFidelityCompatibilityRejectsCrossRouteEvidence(t *testing.T) {
 		t.Fatal("Exim transport-filter sign fidelity was rejected")
 	}
 }
+
+// TestPostfixDSNFidelityIsConfinedToDeliveryStatus proves a qualified null-
+// sender representation cannot cross into process, sign, or revision routes.
+func TestPostfixDSNFidelityIsConfinedToDeliveryStatus(t *testing.T) {
+	fidelity := FidelityPostfixDSNMilterReconstructedCRLF
+	if AdmitsProcessFidelity(fidelity) ||
+		AdmitsOperationFidelity(OperationSign, fidelity) ||
+		AdmitsOperationFidelity(OperationRevise, fidelity) ||
+		!AdmitsDeliveryStatusFidelity(fidelity) {
+		t.Fatal("Postfix DSN fidelity route confinement drifted")
+	}
+}

@@ -52,6 +52,8 @@ const (
 	ModeOriginator Mode = "originator"
 	// ModeOrdinaryTransit selects ordinary-transit revision.
 	ModeOrdinaryTransit Mode = "ordinary_transit"
+	// ModePostfixDSN selects Postfix-qualified delivery-status signing.
+	ModePostfixDSN Mode = "postfix_dsn"
 )
 
 // FailureMode selects the explicit local dependency-failure policy.
@@ -696,8 +698,10 @@ func validScalarMatrix(values map[string]rawValue, mode Mode, failure FailureMod
 	text := func(path string) string { return values[path].text }
 	metrics := text("observability.metrics.endpoint")
 	return text("version") == configVersion &&
-		(mode == ModeInbound || mode == ModeOriginator || mode == ModeOrdinaryTransit) &&
+		(mode == ModeInbound || mode == ModeOriginator || mode == ModeOrdinaryTransit ||
+			mode == ModePostfixDSN) &&
 		(failure == FailureTempfail || failure == FailureOpen) &&
+		(mode != ModePostfixDSN || failure == FailureTempfail) &&
 		validSocketPath(text("server.socket")) &&
 		validLoopbackURL(text("daemon.endpoint")) &&
 		validAbsolutePath(text("daemon.capability_file")) &&
@@ -717,8 +721,8 @@ func validConditionalMatrix(
 		validModeOwnedReportingFields(values, mode, authResultsEnabled)
 }
 
-// validModeOwnedSigningFields enforces the exact inbound, originator, and
-// transit identity matrix without sharing authority between modes.
+// validModeOwnedSigningFields enforces exact per-mode identity without sharing
+// authority between inbound, originator, transit, and Postfix DSN operations.
 func validModeOwnedSigningFields(
 	values map[string]rawValue,
 	mode Mode,
@@ -745,8 +749,8 @@ func validInboundSigningFields(values map[string]rawValue, allowRecipientGroup b
 		dsnDomainValue.text == "" && !allowRecipientGroup
 }
 
-// validOutboundSigningFields requires one exact route and confines the DSN
-// authority to originator mode.
+// validOutboundSigningFields requires one exact route and confines the legacy
+// dsn_domain prerequisite to originator mode.
 func validOutboundSigningFields(
 	values map[string]rawValue,
 	mode Mode,
@@ -769,7 +773,7 @@ func validOutboundSigningFields(
 	switch mode {
 	case ModeOriginator:
 		return dsnDomainValue.explicit && validDomain(dsnDomainValue.text)
-	case ModeOrdinaryTransit:
+	case ModeOrdinaryTransit, ModePostfixDSN:
 		return !dsnDomainValue.explicit && dsnDomainValue.text == ""
 	default:
 		return false
@@ -1051,7 +1055,7 @@ func (s Snapshot) DomainSource() milter.DomainSource {
 	return s.state.domainSource
 }
 
-// DSNDomain returns the exact originator null-sender signing authority.
+// DSNDomain returns the reserved legacy originator DSN-domain prerequisite.
 func (s Snapshot) DSNDomain() string {
 	if s.state == nil {
 		return ""
@@ -1152,7 +1156,7 @@ func (s Snapshot) Effective() Effective {
 		MaxConnections: s.state.maxConnections, MaxInFlightMessages: s.state.maxInFlightMessages,
 		MaxBufferedBytes: s.state.maxBufferedBytes, RequestTimeout: s.state.requestTimeout.String(),
 		SigningDomainSource:   s.state.domainSource,
-		DSNSigningAuthority:   s.state.dsnDomain != "",
+		DSNSigningAuthority:   s.state.dsnDomain != "" || s.state.mode == ModePostfixDSN,
 		AllowRecipientGroup:   s.state.allowRecipientGroup,
 		AuthenticationResults: s.state.authResultsEnabled,
 		MessageBytes:          s.state.messageBytes, HeaderBytes: s.state.headerBytes,

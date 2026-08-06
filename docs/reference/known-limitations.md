@@ -25,11 +25,12 @@ certification, or universal interoperability claim.
   the five source-linked upstream, Debian, and Ubuntu rows recorded in the
   compatibility report. There is no portable Exim execution claim, universal
   local-scan binary, or Exim container image.
-- The daemon and library support outgoing null-reverse-path DSN signing only
-  through the dedicated raw-byte evidence boundary, `delivery_status` profile,
-  route ticket, and protected DSN capability. The originator Milter remains a
-  deliberate gap: it tempfails every null sender before daemon I/O because its
-  callbacks cannot supply equivalent trustworthy evidence. Received-DSN
+- The daemon and library support outgoing null-reverse-path DSN signing through
+  exact raw bytes or the separately authorized Postfix-qualified Milter
+  reconstruction, the `delivery_status` profile, route ticket, and protected
+  DSN capability. The originator Milter deliberately tempfails every null
+  sender. The dedicated `postfix_dsn` adapter exists but requires the proposed
+  non-persistent Postfix EOD evidence patch before deployment. Received-DSN
   processing and DSN propagation are also deferred.
 - Flat-file, LDAP, PostgreSQL, MySQL, MariaDB, and Valkey datasource paths are implemented.
   The offline OpenDKIM migration requires separately managed verified-TLS

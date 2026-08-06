@@ -94,3 +94,40 @@ func TestAuthenticateLocalCapabilityRejectsTypedNilMatcherWithoutRetainingHeader
 		t.Fatal("typed-nil matcher authenticated or retained capability")
 	}
 }
+
+// TestAuthenticateOperationCapabilityUsesDedicatedDSNHeader proves the DSN
+// route cannot authenticate with the ordinary operation credential field.
+func TestAuthenticateOperationCapabilityUsesDedicatedDSNHeader(t *testing.T) {
+	t.Parallel()
+	secret := bytes.Repeat([]byte{0xa5}, 32)
+	canonical := base64.RawURLEncoding.EncodeToString(secret)
+	for _, testCase := range []struct {
+		name   string
+		header string
+		ok     bool
+	}{
+		{name: "dedicated header", header: dsnSignCapabilityHeader, ok: true},
+		{name: "ordinary header", header: localCapabilityHeader},
+	} {
+		testCase := testCase
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+			request := httptest.NewRequest(http.MethodPost, dsnSignPath, nil)
+			request.Header.Set(testCase.header, canonical)
+			matcher := &testCapabilityMatcher{value: secret}
+			result, ok := authenticateOperationCapability(request, matcher)
+			if ok != testCase.ok || matcher.calls != boolInt(testCase.ok) ||
+				len(result.Header.Values(localCapabilityHeader)) != 0 ||
+				len(result.Header.Values(dsnSignCapabilityHeader)) != 0 {
+				t.Fatalf("authenticateOperationCapability() = (%v, calls %d)", ok, matcher.calls)
+			}
+		})
+	}
+}
+
+func boolInt(value bool) int {
+	if value {
+		return 1
+	}
+	return 0
+}

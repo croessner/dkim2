@@ -4,10 +4,15 @@ Status: M25 implemented; outgoing initial DSN signing is enabled only through
 the dedicated daemon and library boundary.
 
 M25 defines a bounded, byte-preserving implementation of the Draft-04 Section
-12 delivery-status-notification (DSN) initial-signing boundary. It does not
-make the Milter a DSN source: the Milter continues to tempfail every null
-reverse-path before daemon I/O until a later adapter qualification provides
-equivalent trustworthy evidence.
+12 delivery-status-notification (DSN) initial-signing boundary. The originator
+Milter continues to tempfail every null reverse-path. The follow-on
+`postfix_dsn` mode is a distinct qualified source and remains undeployable
+until the corresponding Postfix patch and harness are complete.
+
+The follow-on Postfix-specific adapter contract is defined in
+[`postfix-dsn-evidence.md`](postfix-dsn-evidence.md). It deliberately retains
+the default null-sender rejection until the Postfix patch and its qualification
+evidence are complete.
 
 ## Source Documents
 
@@ -217,7 +222,7 @@ Daemon and client tests:
 - positive and negative DSN HTTP fixtures with spies proving invalid DSNs never
   reach datasource or signer access;
 - `dkim2ctl fixture validate` and generated loopback execution for DSN routes;
-- unchanged Milter null-sender tempfail test as an explicit compatibility
+- unchanged originator-Milter null-sender tempfail test as an explicit compatibility
   control.
 
 Final gate:
@@ -249,24 +254,24 @@ Measured effort is recorded in the ignored prompt ledger during execution.
 - All REST changes originate in OpenAPI and generated artifacts are current.
 - `dkim2ctl` executes draft-versioned DSN positive and negative fixtures over
   the generated client with separate protected capabilities.
-- The Milter remains an explicit safe temporary gap rather than a partial DSN
-  implementation claim.
+- The Postfix patch and live qualification remain an explicit deployment gap;
+  the generic originator path remains closed.
 
 ## Completion Evidence
 
 M25 closure requires the authoritative OpenAPI schema and generated artifacts,
 dedicated daemon and generated-client integration tests, independent security
 and specification reviews, and repository guardrails. The recorded review also
-verifies that Milter behavior remains unchanged: it tempfails a null sender
-before daemon I/O.
+verifies that originator Milter behavior remains unchanged while the dedicated
+Postfix mode cannot be confused with it.
 
 ## Review Matrix
 
 | Area | Required result | Status |
 | --- | --- | --- |
-| Scope | Outgoing initial DSN signing is complete; Milter integration, received DSNs, and propagation remain deferred | complete |
+| Scope | Outgoing initial DSN signing and the DKIM2-side Postfix adapter are complete; the Postfix patch, received DSNs, and propagation remain deferred | complete |
 | Protocol | Draft-04 Section 12 and RFC 3462/3464 evidence is explicit, including exact highest `mf=` recipient binding | complete |
 | Security | Generic null-path bypass is closed; identity, evidence, profile, ticket, and capability are purpose-separated | complete |
-| Boundaries | Library, daemon, generated OpenAPI client, and `dkim2ctl` are complete; Milter has no DSN path | complete |
+| Boundaries | Library, daemon, generated OpenAPI client, `dkim2ctl`, and dedicated Postfix Milter path are purpose-separated | complete |
 | Tests | Parser, fuzz, race, evidence, capability, daemon, client, and adapter-regression coverage exists | complete |
 | Documentation | Architecture, configuration, limitations, and implementation scope agree | complete |

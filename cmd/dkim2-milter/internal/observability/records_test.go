@@ -129,6 +129,28 @@ func TestSuccessfulMessageDoesNotIncrementFailureMetric(t *testing.T) {
 	}
 }
 
+// TestPostfixDSNMessageUsesDedicatedOperation proves low-cardinality routing.
+func TestPostfixDSNMessageUsesDedicatedOperation(t *testing.T) {
+	var output bytes.Buffer
+	runtime, err := New(observabilitySnapshot(t, "info"), &output)
+	if err != nil {
+		t.Fatal("runtime construction failed")
+	}
+	runtime.RecordMessage(
+		valueModePostfixDSN, valueAccept, valueSuccess, valueNone,
+		time.Millisecond, 1, 1, false,
+		mustDomainObservation(t, "signing", "example.test", 1, false),
+	)
+	exposition, err := runtime.Gather()
+	if err != nil {
+		t.Fatal("gather failed")
+	}
+	if !bytes.Contains(output.Bytes(), []byte(`"daemon_operation":"`+valueOperationDSN+`"`)) ||
+		!bytes.Contains(exposition, []byte(`daemon_operation="`+valueOperationDSN+`"`)) {
+		t.Fatal("Postfix DSN outcome lost its dedicated operation")
+	}
+}
+
 // TestRuntimeRejectsInvalidObservationsAtomically proves no partial projection.
 func TestRuntimeRejectsInvalidObservationsAtomically(t *testing.T) {
 	var output bytes.Buffer

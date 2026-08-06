@@ -119,6 +119,13 @@ func TestMapDeliveryStatusRequestReservesExactNullSenderEvidence(t *testing.T) {
 		string(mapped.OriginalReversePath()) != "<alice@example.test>" {
 		t.Fatalf("MapDeliveryStatusRequest() request=%v error=%v", mapped, err)
 	}
+	postfixFidelity := generated.PostfixDsnMilterReconstructedCrlf
+	request.Message.Fidelity = &postfixFidelity
+	mapped, err = MapDeliveryStatusRequest(request)
+	if err != nil || mapped.Fidelity() != app.FidelityPostfixDSNMilterReconstructedCRLF {
+		t.Fatalf("Postfix-qualified MapDeliveryStatusRequest() request=%v error=%v", mapped, err)
+	}
+	request.Message.Fidelity = &rawFidelity
 	request.OuterSmtp.MailFrom = mustProtectedString(t, "<sender@example.test>")
 	if _, err := MapDeliveryStatusRequest(request); !IsMappingError(err, MappingInvalidContract) {
 		t.Fatalf("non-null outer path error = %v", err)

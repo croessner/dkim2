@@ -190,14 +190,16 @@ path. Signing-enabled daemon configuration adds protected direct-child
 exactly scoped to one route and must be distinct from every other capability,
 private key, replay secret, datasource credential, and protected token.
 
-The common bounded preflight authenticates the route-specific
-`X-DKIM2-Capability` in constant time before readiness, body allocation,
-datasource lookup, verification, replay, or signing. Missing, malformed,
-duplicated, cross-route, and mismatched credentials produce the same closed
-403 shape. The header is removed before generated handlers run. A Milter
-instance loads only the capability for its fixed mode, so compromise of an
-inbound adapter cannot authorize sign, revise, or delivery-status signing. The
-current Milter does not load the DSN capability and continues to tempfail `<>`.
+The common bounded preflight authenticates the route-specific capability in
+constant time before readiness, body allocation, datasource lookup,
+verification, replay, or signing. Delivery-status signing uses
+`X-DKIM2-DSN-Sign-Capability`; the other Milter operations use
+`X-DKIM2-Capability`. Missing, malformed, duplicated, cross-route, and
+mismatched credentials produce the same closed 403 shape. The header is
+removed before generated handlers run. A Milter instance loads only the
+capability for its fixed mode, so compromise of an inbound adapter cannot
+authorize sign, revise, or delivery-status signing. Originator continues to
+tempfail `<>`; only `postfix_dsn` may load and use the DSN capability.
 
 ## Closed Action Plan
 
@@ -397,15 +399,15 @@ The initial stable paths include:
 | `daemon.endpoint` | required | canonical loopback-literal HTTP URL |
 | `daemon.capability_file` | required | protected direct child |
 | `daemon.request_timeout` | `2s` | 100ms..10s |
-| `mode` | required | `inbound`, `originator`, `ordinary_transit` |
+| `mode` | required | `inbound`, `originator`, `ordinary_transit`, `postfix_dsn` |
 | `signing.tenant` | conditional | required for signing/revision modes |
-| `signing.domain` | conditional | required for static signing/revision; absent for envelope-derived originator signing |
+| `signing.domain` | conditional | required for static signing/revision and Postfix DSN signing; absent for envelope-derived originator signing |
 | `signing.domain_source` | `static` | `static`, or `envelope_sender` for originator only |
-| `signing.dsn_domain` | originator required | reserved canonical DNS prerequisite for deferred null-reverse-path DSN support; forbidden in other modes and not currently sufficient to authorize signing |
+| `signing.dsn_domain` | originator required | reserved legacy originator prerequisite; forbidden in other modes and never sufficient to authorize null-sender signing |
 | `signing.allow_recipient_group` | `false` | reserved; `true` is rejected until per-message Bcc evidence exists |
 | `authentication_results.enabled` | `false` | inbound mode only |
 | `authentication_results.authserv_id` | absent | required exactly when enabled |
-| `failure.mode` | `tempfail` | `tempfail` or `fail_open` |
+| `failure.mode` | `tempfail` | `tempfail` or `fail_open`; `postfix_dsn` requires `tempfail` |
 | `limits.message_bytes` | `33554432` | may only narrow |
 | `limits.header_bytes` | `1048576` | may only narrow |
 | `limits.header_count` | `2000` | may only narrow |
@@ -554,6 +556,7 @@ Mode selects exactly one daemon operation:
 | `inbound` | `process` | optional `Authentication-Results` |
 | `originator` | `sign` | M10-generated originator fields |
 | `ordinary_transit` | `revise` | M10-generated revision fields |
+| `postfix_dsn` | `delivery_status` | validated DSN signing fields |
 
 At EOM the adapter freezes immutable envelope/message input, releases no bytes
 until the operation completes, calls the generated client under the configured

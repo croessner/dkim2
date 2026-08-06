@@ -32,7 +32,8 @@ import (
 )
 
 const (
-	integrationTenant = "tenant-a"
+	integrationTenant        = "tenant-a"
+	integrationExampleDomain = "example.test"
 
 	peerAbort     byte = 'A'
 	peerBody      byte = 'B'
@@ -40,6 +41,7 @@ const (
 	peerEOM       byte = 'E'
 	peerHelo      byte = 'H'
 	peerHeader    byte = 'L'
+	peerMacro     byte = 'D'
 	peerMail      byte = 'M'
 	peerEOH       byte = 'N'
 	peerNegotiate byte = 'O'
@@ -54,18 +56,21 @@ const (
 	peerVersion6        uint32 = 6
 	peerAddHeaders      uint32 = 0x00000001
 	peerChangeHeaders   uint32 = 0x00000010
+	peerSetSymbolList   uint32 = 0x00000100
+	peerMacroClassEOH   uint32 = 6
 	peerNoUnknown       uint32 = 0x00000100
 	peerNoData          uint32 = 0x00000200
 	peerHeaderLeadSpace uint32 = 0x00100000
 
-	publicTestTimeout        = 8 * time.Second
-	publicStartupTimeout     = 20 * time.Second
-	integrationFailOpen      = "fail_open"
-	integrationTempfailReply = "451 4.7.1 DKIM2 service unavailable\x00"
-	integrationModeInbound   = "inbound"
-	integrationModeOrigin    = "originator"
-	testMessageInstanceValue = "v=2; i=1"
-	testSignatureValue       = "v=2; s=1"
+	publicTestTimeout         = 8 * time.Second
+	publicStartupTimeout      = 20 * time.Second
+	integrationFailOpen       = "fail_open"
+	integrationTempfailReply  = "451 4.7.1 DKIM2 service unavailable\x00"
+	integrationModeInbound    = "inbound"
+	integrationModeOrigin     = "originator"
+	integrationModePostfixDSN = "postfix_dsn"
+	testMessageInstanceValue  = "v=2; i=1"
+	testSignatureValue        = "v=2; s=1"
 )
 
 var executablePath string
@@ -460,15 +465,23 @@ type generatedDaemonService struct {
 	process func(generatedfixture.ProcessRequest) generatedfixture.ProcessResponse
 	sign    func(generatedfixture.SignRequest) generatedfixture.OperationResponse
 	revise  func(generatedfixture.ReviseRequest) generatedfixture.OperationResponse
+	dsn     func(generatedfixture.DSNSignRequest) generatedfixture.OperationResponse
 }
 
-// SignDeliveryStatus rejects DSN signing because this Milter fixture must not
-// gain a null-sender daemon path merely from generated-interface evolution.
-func (*generatedDaemonService) SignDeliveryStatus(
-	context.Context,
-	generatedfixture.SignDeliveryStatusRequestObject,
+// SignDeliveryStatus returns one test-owned response through generated serialization.
+func (s *generatedDaemonService) SignDeliveryStatus(
+	_ context.Context,
+	request generatedfixture.SignDeliveryStatusRequestObject,
 ) (generatedfixture.SignDeliveryStatusResponseObject, error) {
-	return nil, errors.New("unexpected fixture operation")
+	if s == nil || s.dsn == nil || request.Body == nil {
+		return nil, errors.New("unexpected fixture operation")
+	}
+	body := s.dsn(*request.Body)
+	return generatedfixture.SignDeliveryStatus200JSONResponse{
+		Body: body, Headers: generatedfixture.SignDeliveryStatus200ResponseHeaders{
+			ContentLength: strconv.Itoa(encodedFixtureLength(body)),
+		},
+	}, nil
 }
 
 // GetHealth rejects an operation outside the fixture's Milter scope.
@@ -588,9 +601,10 @@ func newGeneratedDaemonFixture(
 			input any,
 		) (any, error) {
 			route := map[string]string{
-				"ProcessMessage": "/v1/process",
-				"ReviseMessage":  "/v1/revise",
-				"SignMessage":    "/v1/sign",
+				"SignDeliveryStatus": "/v1/dsn/sign",
+				"ProcessMessage":     "/v1/process",
+				"ReviseMessage":      "/v1/revise",
+				"SignMessage":        "/v1/sign",
 			}[operationID]
 			assertFixedDaemonRequest(t, request, route)
 			return next(ctx, writer, request, input)
@@ -758,10 +772,9 @@ limits:
 
 // TestOriginatorEnvelopeSenderDomainSelectionRunsThroughPublicSocket proves the full route.
 func TestOriginatorEnvelopeSenderDomainSelectionRunsThroughPublicSocket(t *testing.T) {
-	const exampleDomain = "example.test"
 	service := &generatedDaemonService{
 		sign: func(body generatedfixture.SignRequest) generatedfixture.OperationResponse {
-			if body.Context.Tenant != integrationTenant || body.Context.Domain != exampleDomain {
+			if body.Context.Tenant != integrationTenant || body.Context.Domain != integrationExampleDomain {
 				t.Fatal("public route did not derive the canonical envelope sender domain")
 			}
 			return fixtureOperationResponse("sign", generated.ActionPlan{
@@ -839,6 +852,106 @@ func TestOriginatorNullSenderTempfailsBeforeDaemonThroughPublicSocket(t *testing
 	peer.close()
 	process.stop(t)
 	assertPrivateOutputAbsent(t, process.log)
+}
+
+// TestPostfixDSNEvidenceRunsDedicatedRouteThroughPublicSocket proves the real
+// binary binds exact EOD evidence to the separate DSN capability and request.
+func TestPostfixDSNEvidenceRunsDedicatedRouteThroughPublicSocket(t *testing.T) {
+	service := &generatedDaemonService{
+		dsn: func(body generatedfixture.DSNSignRequest) generatedfixture.OperationResponse {
+			assertPostfixDSNRequest(t, body)
+			return fixtureOperationResponse("delivery_status", generated.ActionPlan{
+				{Name: generated.MessageInstance, Type: generated.AddHeader, Value: testMessageInstanceValue},
+				{Name: generated.DKIM2Signature, Type: generated.AddHeader, Value: testSignatureValue},
+			})
+		},
+	}
+	fixture := newGeneratedDaemonFixture(t, service)
+	process := startExecutable(
+		t, fixture.endpoint, integrationModePostfixDSN, "tempfail", 2*time.Second,
+	)
+	peer := dialPublicPeer(t, process.socket)
+	peer.negotiatePostfixDSN(t)
+	peer.callback(t, peerConnect, []byte("localhost\x00U"))
+	peer.callback(t, peerHelo, []byte("localhost\x00"))
+	peer.callback(t, peerMail, []byte("<>\x00"))
+	peer.callback(t, peerRecipient, []byte("<sender@example.test>\x00"))
+	peer.callback(t, peerHeader, []byte("From\x00 mailer-daemon@example.test\x00"))
+	peer.send(t, peerMacro, postfixDSNMacroPayload(
+		[]byte("original@example.test"),
+		[][]byte{[]byte("failed@example.test"), []byte("second@example.test")},
+	))
+	peer.callback(t, peerEOH, nil)
+	peer.callback(t, peerBody, []byte("delivery status\r\n"))
+	peer.send(t, peerEOM, nil)
+	frames := []adapterFrame{peer.receive(t), peer.receive(t), peer.receive(t)}
+	if frames[0].command != adapterAddHeader || frames[1].command != adapterAddHeader ||
+		frames[2].command != adapterAccept {
+		t.Fatalf("Postfix DSN EOM frames = %#v", frames)
+	}
+	peer.send(t, peerQuit, nil)
+	peer.close()
+	process.stop(t)
+	assertPrivateOutputAbsent(t, process.log)
+}
+
+// postfixDSNMacroPayload builds the independent v1 EOD evidence representation.
+func postfixDSNMacroPayload(originalSender []byte, originalRecipients [][]byte) []byte {
+	record := []byte{1}
+	record = appendLengthPrefixedPath(record, originalSender)
+	count := make([]byte, 2)
+	binary.BigEndian.PutUint16(count, uint16(len(originalRecipients)))
+	record = append(record, count...)
+	for _, recipient := range originalRecipients {
+		record = appendLengthPrefixedPath(record, recipient)
+	}
+	encoded := base64.RawURLEncoding.EncodeToString(record)
+	clear(record)
+	payload := []byte{peerEOH}
+	for _, pair := range [][2]string{
+		{"{postfix_dsn_evidence}", "postfix-dsn-evidence-v1"},
+		{"{postfix_dsn_original_queue_id}", "ABC123"},
+		{"{postfix_dsn_original_envelope}", encoded},
+	} {
+		payload = append(payload, pair[0]...)
+		payload = append(payload, 0)
+		payload = append(payload, pair[1]...)
+		payload = append(payload, 0)
+	}
+	return payload
+}
+
+// appendLengthPrefixedPath appends one test-owned Postfix queue-address record.
+func appendLengthPrefixedPath(record, path []byte) []byte {
+	length := make([]byte, 2)
+	binary.BigEndian.PutUint16(length, uint16(len(path)))
+	record = append(record, length...)
+	return append(record, path...)
+}
+
+// assertPostfixDSNRequest checks fidelity, both envelopes, and signing context.
+func assertPostfixDSNRequest(t *testing.T, body generatedfixture.DSNSignRequest) {
+	t.Helper()
+	if body.Message.Fidelity == nil ||
+		*body.Message.Fidelity != generatedfixture.PostfixDsnMilterReconstructedCrlf ||
+		body.Context.Tenant != integrationTenant || body.Context.Domain != integrationExampleDomain {
+		t.Fatal("Postfix DSN fidelity or signing context changed")
+	}
+	outerSender, err := body.OuterSmtp.MailFrom.Bytes()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer clear(outerSender)
+	originalSender, err := body.OriginalSmtp.MailFrom.Bytes()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer clear(originalSender)
+	if !bytes.Equal(outerSender, []byte("<>")) || len(body.OuterSmtp.RcptTo) != 1 ||
+		!bytes.Equal(originalSender, []byte("<original@example.test>")) ||
+		len(body.OriginalSmtp.RcptTo) != 2 {
+		t.Fatal("Postfix DSN envelope evidence changed")
+	}
 }
 
 // waitForSocket waits for readiness evidence at the public path.
@@ -920,6 +1033,31 @@ func (p *protocolPeer) negotiate(t *testing.T) {
 	response := p.receive(t)
 	if response.command != peerNegotiate || !bytes.Equal(response.payload, payload) {
 		t.Fatalf("negotiation response = %q %x", response.command, response.payload)
+	}
+}
+
+// negotiatePostfixDSN proves the standard EOH macro-list secondary handshake.
+func (p *protocolPeer) negotiatePostfixDSN(t *testing.T) {
+	t.Helper()
+	payload := make([]byte, 12)
+	binary.BigEndian.PutUint32(payload[:4], peerVersion6)
+	binary.BigEndian.PutUint32(
+		payload[4:8],
+		peerAddHeaders|peerChangeHeaders|peerSetSymbolList,
+	)
+	binary.BigEndian.PutUint32(
+		payload[8:],
+		peerNoUnknown|peerNoData|peerHeaderLeadSpace,
+	)
+	p.send(t, peerNegotiate, payload)
+	response := p.receive(t)
+	const macroList = "{postfix_dsn_evidence} {postfix_dsn_original_queue_id} {postfix_dsn_original_envelope}"
+	if response.command != peerNegotiate || len(response.payload) != 12+4+len(macroList)+1 ||
+		!bytes.Equal(response.payload[:12], payload) ||
+		binary.BigEndian.Uint32(response.payload[12:16]) != peerMacroClassEOH ||
+		!bytes.Equal(response.payload[16:len(response.payload)-1], []byte(macroList)) ||
+		response.payload[len(response.payload)-1] != 0 {
+		t.Fatalf("Postfix DSN negotiation response = %q %x", response.command, response.payload)
 	}
 }
 
@@ -1081,7 +1219,7 @@ func assertFixtureMessage(
 // assertFixtureSigningContext checks exact configured identity at the generated boundary.
 func assertFixtureSigningContext(t *testing.T, value generatedfixture.SigningContext) {
 	t.Helper()
-	if value.Tenant != integrationTenant || value.Domain != "example.test" {
+	if value.Tenant != integrationTenant || value.Domain != integrationExampleDomain {
 		t.Error("generated signing context differed from fixed configuration")
 	}
 }
@@ -1112,13 +1250,19 @@ func fixtureOperationResponse(
 func assertFixedDaemonRequest(t *testing.T, request *http.Request, route string) {
 	t.Helper()
 	wantCapability := base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{0xa5}, 32))
+	capabilityHeader := "X-DKIM2-Capability"
+	otherCapabilityHeader := "X-DKIM2-DSN-Sign-Capability"
+	if route == "/v1/dsn/sign" {
+		capabilityHeader, otherCapabilityHeader = otherCapabilityHeader, capabilityHeader
+	}
 	if request.Method != http.MethodPost || request.URL.Path != route ||
 		request.URL.RawQuery != "" ||
 		request.Header.Get("Content-Type") != "application/json" ||
 		request.Header.Get("Accept") != "application/json" ||
 		request.Header.Get("Cache-Control") != "no-store" ||
 		request.Header.Get("User-Agent") != "dkim2-milter/1" ||
-		request.Header.Get("X-DKIM2-Capability") != wantCapability ||
+		request.Header.Get(capabilityHeader) != wantCapability ||
+		request.Header.Get(otherCapabilityHeader) != "" ||
 		request.Header.Get("Authorization") != "" || request.Header.Get("Cookie") != "" {
 		t.Error("daemon request escaped the generated fixed capability contract")
 	}
@@ -1177,7 +1321,7 @@ func containsPrivateMarker(data []byte) bool {
 	data = outputWithoutAllowedDomainProjection(data)
 	for _, marker := range []string{
 		"sender@example.test", "recipient@example.test", "exact value", "body\r\n",
-		integrationTenant, "example.test",
+		integrationTenant, integrationExampleDomain,
 	} {
 		if strings.Contains(string(data), marker) {
 			return true

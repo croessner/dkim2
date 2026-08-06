@@ -109,6 +109,25 @@ Ordinary-transit mode uses the same tenant and static `domain`, but forbids
 `dsn_domain` because it revises existing messages rather than originating new
 messages.
 
+Postfix delivery-status mode uses the separately protected daemon DSN
+capability and one fixed delivery-status signing identity:
+
+```yaml
+daemon:
+  capability_file: /etc/dkim2/protected/dsn-sign-capability
+mode: postfix_dsn
+signing:
+  tenant: tenant-a
+  domain: dsn.example.test
+failure:
+  mode: tempfail
+```
+
+This mode requires the Postfix `postfix-dsn-evidence-v1` patch described in
+`docs/specs/implementation/postfix-dsn-evidence.md`. It rejects fail-open,
+ordinary null-sender submission, absent or malformed EOH evidence, and more
+than one outer DSN recipient.
+
 An originator instance that serves multiple exact LDAP signing domains may
 derive the domain from the already validated ASCII SMTP reverse-path while
 retaining one fixed tenant:
@@ -129,13 +148,10 @@ datasource fallback. Every originator configuration also retains one exact
 canonical `dsn_domain` as a stable, reserved prerequisite for future DSN
 support. It is not signing authority by itself.
 
-The current adapter tempfails every null reverse-path before daemon I/O. Milter
-callbacks do not provide authenticated evidence for the RFC 3462 three-part
-DSN structure, the Draft-04 Section 12.1 verification of relevant embedded
-fields, or the Section 12.1.2 recipient alignment proof. Upstream routing alone
-cannot transfer those assertions through the current request contract. Null-
-sender signing remains deferred until an executable trusted evidence gate is
-implemented and tested; do not route `MAIL FROM <>` to this originator socket.
+The originator adapter tempfails every null reverse-path before daemon I/O.
+Generic Milter callbacks remain insufficient evidence. Only a separate
+`postfix_dsn` instance may accept `MAIL FROM <>`, after exact Postfix-only EOH
+evidence validation; do not route null senders to the originator socket.
 
 For non-null senders, an address literal or otherwise unsupported SMTPUTF8
 envelope is not applicable and continues without daemon I/O or mutation,
@@ -197,10 +213,13 @@ revision, and malformed no-content responses fail closed.
 | `inbound` | `POST /v1/process` | none, or one configured `Authentication-Results` |
 | `originator` | `POST /v1/sign` | `Message-Instance`, then `DKIM2-Signature` |
 | `ordinary_transit` | `POST /v1/revise` | `DKIM2-Signature`, optionally preceded by `Message-Instance` |
+| `postfix_dsn` | `POST /v1/dsn/sign` | `Message-Instance`, then `DKIM2-Signature` |
 
 The adapter negotiates only the Milter-v6 callbacks it needs and the add-header
-and change-header mutation capabilities. It rejects peers that cannot preserve
-after-colon leading whitespace or perform RFC 8601 sanitization. Arbitrary
+and change-header mutation capabilities. A `postfix_dsn` instance additionally
+requires standard symbol-list negotiation for its three EOH macros. It rejects
+peers that cannot preserve after-colon leading whitespace or perform RFC 8601
+sanitization. Arbitrary
 header deletion or replacement, body replacement, envelope mutation,
 recipient mutation, quarantine, discard, and arbitrary SMTP replies are not
 supported.
@@ -226,9 +245,10 @@ can preserve and verify that evidence.
 Headers remain an ordered sequence with duplicate fields and original field
 name casing. Negotiated callback folding is reconstructed as CRLF without
 otherwise normalizing header or body bytes. Body chunks are concatenated in
-callback order. The daemon input fidelity is always
-`milter_reconstructed_crlf`; it is never represented as original raw SMTP
-wire evidence.
+callback order. The ordinary daemon input fidelity is
+`milter_reconstructed_crlf`; a validated Postfix DSN uses
+`postfix_dsn_milter_reconstructed_crlf`. Neither is represented as original
+raw SMTP wire evidence.
 
 ## Failure policy
 
@@ -269,9 +289,9 @@ milter_default_action = tempfail
 
 Apply the adapter only at the SMTP trust boundary matching its configured
 mode. Use separate instances and separate route capabilities for inbound,
-originator, and ordinary-transit paths. Do not share a signing capability with
-an inbound adapter. MTA socket permissions should grant connection access only
-to the intended service group.
+originator, ordinary-transit, and Postfix DSN paths. Do not share a signing or
+DSN capability with another adapter mode. MTA socket permissions should grant
+connection access only to the intended service group.
 
 Postfix simulates Milter callbacks for `non_smtpd_milters` with unbracketed
 envelope mailboxes. The adapter validates those mailbox bytes with its full RFC

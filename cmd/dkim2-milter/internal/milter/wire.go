@@ -41,6 +41,7 @@ const (
 	milterVersion6         uint32 = 6
 	actionAddHeaders       uint32 = 0x00000001
 	actionChangeHeaders    uint32 = 0x00000010
+	actionSetSymbolList    uint32 = 0x00000100
 	requiredActions               = actionAddHeaders | actionChangeHeaders
 	protocolNoUnknown      uint32 = 0x00000100
 	protocolNoData         uint32 = 0x00000200
@@ -110,6 +111,7 @@ type Session struct {
 	smtpUTF8       bool
 	observation    *messageObservation
 	transactionAt  time.Time
+	postfixDSN     postfixDSNMacroState
 }
 
 type headerField struct {
@@ -135,7 +137,8 @@ func NewSession(
 		int64(limits.HeaderFieldBytes) > limits.HeaderBytes ||
 		limits.HeaderBytes+2 > limits.MessageBytes ||
 		policy.AllowRecipientGroup ||
-		(mode != modeInbound && mode != modeOriginator && mode != modeTransit) ||
+		(mode != modeInbound && mode != modeOriginator && mode != modeTransit &&
+			mode != modePostfixDSN) ||
 		(mode != modeInbound && authservID != "") {
 		return nil, &Error{Class: FailureContract}
 	}
@@ -441,9 +444,24 @@ func (s *Session) handleAbort(payload []byte) error {
 	return nil
 }
 
-// handleMacro validates bounded metadata while intentionally retaining none of it.
+// handleMacro retains only the EOD record of the dedicated Postfix DSN mode.
 func (s *Session) handleMacro(payload []byte) error {
-	if !validMacro(payload) {
+	valid := validMacro(payload)
+	if s.mode == modePostfixDSN {
+		valid = validPostfixDSNMacroPayload(payload)
+	}
+	if !valid {
+		return &Error{Class: FailureContract}
+	}
+	if s.mode != modePostfixDSN {
+		return nil
+	}
+	retained, ok := s.postfixDSN.accept(payload, s.state, s.reservation != nil)
+	// Postfix sends ordinary connection macros before MAIL has opened a
+	// transaction. Only retained DSN proof bytes need transaction accounting.
+	if !ok || retained > int64(^uint64(0)>>1) ||
+		(retained > 0 && !s.reserve(retained)) {
+		s.postfixDSN.clear()
 		return &Error{Class: FailureContract}
 	}
 	return nil
@@ -466,13 +484,25 @@ func (s *Session) negotiate(payload []byte) ([][]byte, error) {
 	actions := binary.BigEndian.Uint32(payload[4:8])
 	protocol := binary.BigEndian.Uint32(payload[8:12])
 	if version < milterVersion6 || actions&requiredActions != requiredActions ||
+		(s.mode == modePostfixDSN && actions&actionSetSymbolList == 0) ||
 		protocol&requiredProtocol != requiredProtocol {
 		return nil, &Error{Class: FailureFidelity}
 	}
-	reply := make([]byte, 12)
+	replyActions := requiredActions
+	if s.mode == modePostfixDSN {
+		replyActions |= actionSetSymbolList
+	}
+	reply := make([]byte, 12, 12+4+len(postfixDSNEOHMacroList)+1)
 	binary.BigEndian.PutUint32(reply[:4], milterVersion6)
-	binary.BigEndian.PutUint32(reply[4:8], requiredActions)
+	binary.BigEndian.PutUint32(reply[4:8], replyActions)
 	binary.BigEndian.PutUint32(reply[8:12], requiredProtocol)
+	if s.mode == modePostfixDSN {
+		macroType := make([]byte, 4)
+		binary.BigEndian.PutUint32(macroType, postfixDSNMacroClassEOH)
+		reply = append(reply, macroType...)
+		reply = append(reply, postfixDSNEOHMacroList...)
+		reply = append(reply, 0)
+	}
 	s.state = stateNegotiated
 	return oneFrame(commandNegotiate, reply), nil
 }
@@ -551,11 +581,26 @@ func (s *Session) endMessage(ctx context.Context) (frames [][]byte, resultErr er
 	for index := range s.recipients {
 		envelopeBytes += int64(len(s.recipients[index]))
 	}
-	message, err := newOwnedMessage(raw, s.reverse, s.recipients)
+	var message Message
+	var err error
+	if s.mode == modePostfixDSN {
+		evidence, valid := s.postfixDSN.take(s.reverse, s.recipients)
+		if !valid {
+			clear(raw)
+			failureClass = string(FailureContract)
+			return nil, &Error{Class: FailureContract}
+		}
+		message, err = newOwnedPostfixDSNMessage(raw, s.reverse, s.recipients, evidence)
+	} else {
+		message, err = newOwnedMessage(raw, s.reverse, s.recipients)
+	}
 	if err != nil {
 		clear(raw)
 		failureClass = string(FailureContract)
 		return nil, err
+	}
+	if message.postfixDSN != nil {
+		envelopeBytes += message.postfixDSN.retainedBytes()
 	}
 	s.reverse = nil
 	s.recipients = nil
@@ -700,6 +745,7 @@ func (s *Session) resetTransaction() {
 		clear(s.headers[index].value)
 	}
 	clear(s.body)
+	s.postfixDSN.clear()
 	s.reverse = nil
 	s.recipients = nil
 	s.headers = nil

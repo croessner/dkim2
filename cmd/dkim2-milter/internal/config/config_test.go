@@ -54,38 +54,49 @@ mode: %s%s
 
 // TestLoadModeMatrixAndDefaults proves every supported mode and its conditional fields.
 func TestLoadModeMatrixAndDefaults(t *testing.T) {
-	for _, mode := range []Mode{ModeInbound, ModeOriginator, ModeOrdinaryTransit} {
+	for _, mode := range []Mode{ModeInbound, ModeOriginator, ModeOrdinaryTransit, ModePostfixDSN} {
 		snapshot, err := Load(writeConfig(t, validConfig(mode)))
 		if err != nil {
 			t.Fatalf("Load(%s): %v", mode, err)
 		}
-		if snapshot.Version() != configVersion || snapshot.Mode() != mode ||
-			snapshot.SocketMode() != 0o660 || snapshot.ShutdownTimeout() != 10*time.Second ||
-			snapshot.MaxConnections() != 128 || snapshot.MaxInFlightMessages() != 64 ||
-			snapshot.MaxBufferedBytes() != 268_435_456 ||
-			snapshot.RequestTimeout() != 2*time.Second ||
-			snapshot.MaxBufferedBytes()/8 < snapshot.MessageBytes() ||
-			snapshot.FailureMode() != FailureTempfail ||
-			snapshot.MessageBytes() != 33_554_432 || snapshot.HeaderBytes() != 1_048_576 ||
-			snapshot.HeaderCount() != 2000 || snapshot.HeaderFieldBytes() != 65_536 ||
-			snapshot.RecipientCount() != 2000 || snapshot.LogLevel() != defaultLogLevel {
-			t.Fatalf("unexpected defaults for %s: %#v", mode, snapshot.Effective())
-		}
-		if mode == ModeInbound {
-			if snapshot.Tenant() != "" || snapshot.Domain() != "" ||
-				snapshot.DomainSource() != milter.DomainSourceStatic {
-				t.Fatal("inbound mode retained signing identity")
-			}
-		} else if snapshot.Tenant() != "tenant-a" || snapshot.Domain() != "example.test" ||
+		assertModeDefaults(t, snapshot, mode)
+	}
+}
+
+// assertModeDefaults checks the complete operator-visible mode matrix without
+// inflating the table-driven loader test's control-flow complexity.
+func assertModeDefaults(t *testing.T, snapshot Snapshot, mode Mode) {
+	t.Helper()
+	if snapshot.Version() != configVersion || snapshot.Mode() != mode ||
+		snapshot.SocketMode() != 0o660 || snapshot.ShutdownTimeout() != 10*time.Second ||
+		snapshot.MaxConnections() != 128 || snapshot.MaxInFlightMessages() != 64 ||
+		snapshot.MaxBufferedBytes() != 268_435_456 ||
+		snapshot.RequestTimeout() != 2*time.Second ||
+		snapshot.MaxBufferedBytes()/8 < snapshot.MessageBytes() ||
+		snapshot.FailureMode() != FailureTempfail ||
+		snapshot.MessageBytes() != 33_554_432 || snapshot.HeaderBytes() != 1_048_576 ||
+		snapshot.HeaderCount() != 2000 || snapshot.HeaderFieldBytes() != 65_536 ||
+		snapshot.RecipientCount() != 2000 || snapshot.LogLevel() != defaultLogLevel {
+		t.Fatalf("unexpected defaults for %s: %#v", mode, snapshot.Effective())
+	}
+	if mode == ModeInbound {
+		if snapshot.Tenant() != "" || snapshot.Domain() != "" ||
 			snapshot.DomainSource() != milter.DomainSourceStatic {
-			t.Fatal("signing mode lost its required identity")
+			t.Fatal("inbound mode retained signing identity")
 		}
-		if mode == ModeOriginator && snapshot.DSNDomain() != "dsn.example.test" {
-			t.Fatal("originator mode lost its explicit DSN signing authority")
-		}
-		if mode != ModeOriginator && snapshot.DSNDomain() != "" {
-			t.Fatal("non-originator mode retained a DSN signing authority")
-		}
+	} else if snapshot.Tenant() != "tenant-a" || snapshot.Domain() != "example.test" ||
+		snapshot.DomainSource() != milter.DomainSourceStatic {
+		t.Fatal("signing mode lost its required identity")
+	}
+	if mode == ModeOriginator && snapshot.DSNDomain() != "dsn.example.test" {
+		t.Fatal("originator mode lost its explicit DSN signing authority")
+	}
+	if mode != ModeOriginator && snapshot.DSNDomain() != "" {
+		t.Fatal("non-originator mode retained a DSN signing authority")
+	}
+	wantDSNAuthority := mode == ModeOriginator || mode == ModePostfixDSN
+	if snapshot.Effective().DSNSigningAuthority != wantDSNAuthority {
+		t.Fatal("effective DSN authority did not match the configured mode")
 	}
 }
 
@@ -244,6 +255,14 @@ func TestLoadRejectsConditionalMatrixViolations(t *testing.T) {
 			"  domain: example.test\n  dsn_domain: dsn.example.test",
 			1,
 		),
+		"Postfix DSN legacy authority": strings.Replace(
+			validConfig(ModePostfixDSN),
+			"  domain: example.test",
+			"  domain: example.test\n  dsn_domain: dsn.example.test",
+			1,
+		),
+		"Postfix DSN fail open": validConfig(ModePostfixDSN) +
+			"failure:\n  mode: fail_open\n",
 		"inbound DSN authority": validConfig(ModeInbound) +
 			"signing:\n  dsn_domain: dsn.example.test\n",
 		"originator dynamic domain with static domain": strings.Replace(

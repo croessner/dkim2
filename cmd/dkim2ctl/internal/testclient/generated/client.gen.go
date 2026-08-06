@@ -224,10 +224,11 @@ func (e KeyPolicyResultStrictIdentityApplicable) Valid() bool {
 
 // Defines values for MessageInputFidelity.
 const (
-	EximLocalScanObservedCrlf MessageInputFidelity = "exim_local_scan_observed_crlf"
-	EximTransportFilterCrlf   MessageInputFidelity = "exim_transport_filter_crlf"
-	MilterReconstructedCrlf   MessageInputFidelity = "milter_reconstructed_crlf"
-	RawRfc5322                MessageInputFidelity = "raw_rfc5322"
+	EximLocalScanObservedCrlf         MessageInputFidelity = "exim_local_scan_observed_crlf"
+	EximTransportFilterCrlf           MessageInputFidelity = "exim_transport_filter_crlf"
+	MilterReconstructedCrlf           MessageInputFidelity = "milter_reconstructed_crlf"
+	PostfixDsnMilterReconstructedCrlf MessageInputFidelity = "postfix_dsn_milter_reconstructed_crlf"
+	RawRfc5322                        MessageInputFidelity = "raw_rfc5322"
 )
 
 // Valid indicates whether the value is a known member of the MessageInputFidelity enum.
@@ -238,6 +239,8 @@ func (e MessageInputFidelity) Valid() bool {
 	case EximTransportFilterCrlf:
 		return true
 	case MilterReconstructedCrlf:
+		return true
+	case PostfixDsnMilterReconstructedCrlf:
 		return true
 	case RawRfc5322:
 		return true
@@ -805,7 +808,7 @@ type DSNSignRequest struct {
 	Context    SigningContext `json:"context"`
 	Draft      DraftVersion   `json:"draft"`
 
-	// Message Exact received RFC 5322 DSN bytes. Only raw_rfc5322 fidelity is accepted; callback reconstruction is not delivery-status evidence.
+	// Message RFC 5322 DSN bytes. Only raw_rfc5322 or the separately authorized postfix_dsn_milter_reconstructed_crlf fidelity is accepted.
 	Message MessageInput `json:"message"`
 
 	// OriginalSmtp Independently observed envelope for the originally transmitted message embedded by the DSN. It must not be inferred from DSN text.

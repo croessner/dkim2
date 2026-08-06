@@ -113,6 +113,8 @@ func daemonOperationForMode(mode string) (string, bool) {
 		return "sign", true
 	case "ordinary_transit":
 		return "revise", true
+	case valueModePostfixDSN:
+		return valueOperationDSN, true
 	default:
 		return "", false
 	}

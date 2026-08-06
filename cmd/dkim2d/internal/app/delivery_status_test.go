@@ -39,6 +39,15 @@ func TestNewDeliveryStatusRequestRejectsUntrustedShapes(t *testing.T) {
 	if !bytes.Equal(request.OuterReversePath(), []byte("<>")) || len(request.OuterRecipients()) != 1 {
 		t.Fatal("valid request did not retain exact outer DSN envelope")
 	}
+	postfixRequest, err := NewDeliveryStatusRequest(
+		[]byte("From: postmaster@example.test\r\n\r\n"),
+		[]byte("<>"), validOuterRecipient, []byte("<alice@example.test>"),
+		validOriginalRecipient, "tenant-a", "example.test",
+		FidelityPostfixDSNMilterReconstructedCRLF,
+	)
+	if err != nil || postfixRequest.Fidelity() != FidelityPostfixDSNMilterReconstructedCRLF {
+		t.Fatalf("Postfix-qualified request fidelity/error = %q/%v", postfixRequest.Fidelity(), err)
+	}
 	for _, testCase := range []struct {
 		name   string
 		mutate func() (DeliveryStatusRequest, error)

@@ -31,13 +31,16 @@ const (
 	modeInbound         = "inbound"
 	modeOriginator      = "originator"
 	modeOrdinaryTransit = "ordinary_transit"
+	modePostfixDSN      = "postfix_dsn"
 	daemonScheme        = "http"
 	routeProcess        = "/v1/process"
 	routeSign           = "/v1/sign"
 	routeRevise         = "/v1/revise"
+	routeDeliveryStatus = "/v1/dsn/sign"
 	redactedHandler     = "dkim2_milter_daemon_handler{redacted}"
 	operationProcess    = "process"
 	operationSign       = "sign"
+	operationDSNSign    = "delivery_status"
 	verificationPass    = "pass"
 	verificationNone    = "none"
 	cacheControlNoStore = "no-store"
@@ -81,7 +84,8 @@ func NewHandler(
 	authservID string,
 ) (*Handler, error) {
 	if capability == nil ||
-		(mode != modeInbound && mode != modeOriginator && mode != modeOrdinaryTransit) ||
+		(mode != modeInbound && mode != modeOriginator && mode != modeOrdinaryTransit &&
+			mode != modePostfixDSN) ||
 		!validSigningIdentity(mode, tenant, domain, domainSource, dsnDomain) ||
 		(mode != modeInbound && authservID != "") {
 		return nil, &Error{}
@@ -150,6 +154,10 @@ func validSigningIdentity(
 		return tenant != "" && dsnDomain == "" &&
 			milter.ValidSigningDomainAuthority(domain) &&
 			domainSource == milter.DomainSourceStatic
+	case modePostfixDSN:
+		return tenant != "" && dsnDomain == "" &&
+			milter.ValidSigningDomainAuthority(domain) &&
+			domainSource == milter.DomainSourceStatic
 	default:
 		return false
 	}
@@ -164,6 +172,8 @@ func capabilityRoute(mode string) string {
 		return routeSign
 	case modeOrdinaryTransit:
 		return routeRevise
+	case modePostfixDSN:
+		return routeDeliveryStatus
 	default:
 		return ""
 	}
@@ -182,7 +192,7 @@ func (h *Handler) Handle(
 	defer state.mu.RUnlock()
 	if state.closed || state.client == nil || state.transport == nil ||
 		state.capability == nil || ctx == nil ||
-		message.Fidelity() != milter.FidelityReconstructedCRLF {
+		!validMessageFidelityForMode(state.mode, message.Fidelity()) {
 		return milter.Result{}, &milter.Error{Class: milter.FailureContract}
 	}
 	defer func() {
@@ -264,9 +274,47 @@ func (h *Handler) Handle(
 			return milter.Result{}, classifyCallError(ctx, callErr, evidence)
 		}
 		return mapRevisionResponse(response, "revise")
+	case modePostfixDSN:
+		postfixEvidence, ok := message.PostfixDSNEvidence()
+		if !ok {
+			return milter.Result{}, &milter.Error{Class: milter.FailureContract}
+		}
+		defer postfixEvidence.Clear()
+		originalReverse, originalRecipients := postfixEvidence.OriginalEnvelope()
+		defer clearMessageCopies(nil, originalReverse, originalRecipients)
+		originalSMTP, mapErr := mapSMTPInput(originalReverse, originalRecipients)
+		if mapErr != nil {
+			return milter.Result{}, mapErr
+		}
+		response, callErr := state.client.SignDeliveryStatusWithResponse(
+			operationContext,
+			generated.SignDeliveryStatusJSONRequestBody{
+				ApiVersion:   generated.V1,
+				Draft:        generated.DraftIetfDkimDkim2Spec04,
+				Message:      request.message,
+				OuterSmtp:    request.smtp,
+				OriginalSmtp: originalSMTP,
+				Context: generated.SigningContext{
+					Tenant: state.tenant, Domain: state.domain,
+				},
+			},
+		)
+		if callErr != nil {
+			return milter.Result{}, classifyCallError(ctx, callErr, evidence)
+		}
+		return mapDeliveryStatusResponse(response)
 	default:
 		return milter.Result{}, &milter.Error{Class: milter.FailureContract}
 	}
+}
+
+// validMessageFidelityForMode confines Postfix-qualified callback bytes to
+// the dedicated adapter and preserves the established fidelity elsewhere.
+func validMessageFidelityForMode(mode string, fidelity milter.Fidelity) bool {
+	if mode == modePostfixDSN {
+		return fidelity == milter.FidelityPostfixDSNReconstructedCRLF
+	}
+	return fidelity == milter.FidelityReconstructedCRLF
 }
 
 // observedDomains resolves the same exact operational authority used by the
@@ -279,7 +327,7 @@ func observedDomains(state *handlerGuard, message milter.Message) milter.DomainO
 		return message.RecipientDomainObservation()
 	}
 	var signingDomain string
-	if state.mode == modeOrdinaryTransit {
+	if state.mode == modeOrdinaryTransit || state.mode == modePostfixDSN {
 		signingDomain = state.domain
 	} else {
 		domain, applicable, err := state.signingDomain(message)
@@ -419,34 +467,54 @@ func mapMessage(message milter.Message) (mappedRequest, error) {
 	reverse := message.ReversePath()
 	recipients := message.Recipients()
 	defer clearMessageCopies(raw, reverse, recipients)
-	if len(raw) == 0 || !utf8.Valid(reverse) || len(recipients) == 0 {
+	if len(raw) == 0 {
 		return mappedRequest{}, &milter.Error{Class: milter.FailureFidelity}
 	}
 	rawValue, err := wire.NewProtectedString(base64.StdEncoding.EncodeToString(raw))
 	if err != nil {
 		return mappedRequest{}, &milter.Error{Class: milter.FailureContract}
 	}
-	reverseValue, err := wire.NewProtectedString(string(reverse))
+	smtp, err := mapSMTPInput(reverse, recipients)
 	if err != nil {
+		return mappedRequest{}, err
+	}
+	var fidelity generated.MessageInputFidelity
+	switch message.Fidelity() {
+	case milter.FidelityReconstructedCRLF:
+		fidelity = generated.MilterReconstructedCrlf
+	case milter.FidelityPostfixDSNReconstructedCRLF:
+		fidelity = generated.PostfixDsnMilterReconstructedCrlf
+	default:
 		return mappedRequest{}, &milter.Error{Class: milter.FailureFidelity}
 	}
-	recipientValues := make([]wire.ProtectedString, len(recipients))
-	for index := range recipients {
-		if !utf8.Valid(recipients[index]) {
-			return mappedRequest{}, &milter.Error{Class: milter.FailureFidelity}
-		}
-		recipientValues[index], err = wire.NewProtectedString(string(recipients[index]))
-		if err != nil {
-			return mappedRequest{}, &milter.Error{Class: milter.FailureFidelity}
-		}
-	}
-	fidelity := generated.MilterReconstructedCrlf
 	return mappedRequest{
 		message: generated.MessageInput{
 			Fidelity: &fidelity, RawRfc5322Base64: rawValue,
 		},
-		smtp: generated.SMTPInput{MailFrom: reverseValue, RcptTo: recipientValues},
+		smtp: smtp,
 	}, nil
+}
+
+// mapSMTPInput maps one exact UTF-8 SMTP envelope into protected generated DTOs.
+func mapSMTPInput(reverse []byte, recipients [][]byte) (generated.SMTPInput, error) {
+	if !utf8.Valid(reverse) || len(recipients) == 0 {
+		return generated.SMTPInput{}, &milter.Error{Class: milter.FailureFidelity}
+	}
+	reverseValue, err := wire.NewProtectedString(string(reverse))
+	if err != nil {
+		return generated.SMTPInput{}, &milter.Error{Class: milter.FailureFidelity}
+	}
+	recipientValues := make([]wire.ProtectedString, len(recipients))
+	for index := range recipients {
+		if !utf8.Valid(recipients[index]) {
+			return generated.SMTPInput{}, &milter.Error{Class: milter.FailureFidelity}
+		}
+		recipientValues[index], err = wire.NewProtectedString(string(recipients[index]))
+		if err != nil {
+			return generated.SMTPInput{}, &milter.Error{Class: milter.FailureFidelity}
+		}
+	}
+	return generated.SMTPInput{MailFrom: reverseValue, RcptTo: recipientValues}, nil
 }
 
 // clearMessageCopies erases every temporary byte copy created by DTO mapping.
@@ -620,6 +688,29 @@ func mapRevisionResponse(
 		return milter.Result{}, &milter.Error{Class: milter.FailureContract}
 	}
 	return mapOperation(&value, operation)
+}
+
+// mapDeliveryStatusResponse validates one dedicated DSN response including
+// its exact generated-client HTTP envelope.
+func mapDeliveryStatusResponse(
+	response *generated.SignDeliveryStatusResponse,
+) (milter.Result, error) {
+	if response != nil {
+		defer clear(response.Body)
+	}
+	if response == nil || !validJSONResponseShape(
+		response.HTTPResponse,
+		response.Body,
+		http.StatusOK,
+	) {
+		return milter.Result{}, &milter.Error{Class: milter.FailureContract}
+	}
+	var value generated.OperationResponse
+	if response.JSON200 == nil || !validOperationRequiredMembers(response.Body) ||
+		!strictDecodeResponse(response.Body, &value) {
+		return milter.Result{}, &milter.Error{Class: milter.FailureContract}
+	}
+	return mapOperation(&value, operationDSNSign)
 }
 
 // validOperationRequiredMembers proves presence of every required response member.

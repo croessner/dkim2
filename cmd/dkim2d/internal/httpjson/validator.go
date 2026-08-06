@@ -79,6 +79,7 @@ func (v *RequestValidator) ValidateOperation(request *http.Request, body []byte)
 		processPath: "processMessage",
 		signPath:    "signMessage",
 		revisePath:  "reviseMessage",
+		dsnSignPath: "signDeliveryStatus",
 	}[request.URL.Path]
 	if operationID == "" {
 		return &ValidationError{}

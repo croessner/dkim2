@@ -54,7 +54,9 @@ const (
 	valueClose          = "close"
 	valueContinue       = "continue"
 	valueModeInbound    = "inbound"
+	valueModePostfixDSN = "postfix_dsn"
 	valueNone           = "none"
+	valueOperationDSN   = "delivery_status"
 	valueReject         = "reject"
 	valueTempfail       = "tempfail"
 	valueTemporary      = "temporary"
@@ -260,7 +262,7 @@ func closedVocabulary(key string) []string {
 			"macro", "negotiate", "quit", "recipient",
 		}
 	case keyDaemonOperation:
-		return []string{"process", "revise", "sign"}
+		return []string{valueOperationDSN, "process", "revise", "sign"}
 	case keyDisposition:
 		return []string{valueAccept, valueClose, valueContinue, valueReject, valueTempfail}
 	case keyDomainRole:
@@ -283,7 +285,7 @@ func closedVocabulary(key string) []string {
 			"0", "lt_1k", valueSizeLT10k, "lt_100k", "lt_1m", "lt_10m", "gte_10m",
 		}
 	case keyMode:
-		return []string{valueModeInbound, "ordinary_transit", "originator"}
+		return []string{valueModeInbound, "ordinary_transit", "originator", valueModePostfixDSN}
 	case keyOperation:
 		return []string{
 			"action", "callback", "config", "connection", "lifecycle", "message",

@@ -11,9 +11,11 @@ const (
 	modeInbound       = "inbound"
 	modeOriginator    = "originator"
 	modeTransit       = "ordinary_transit"
+	modePostfixDSN    = "postfix_dsn"
 	operationProcess  = "process"
 	operationSign     = "sign"
 	operationRevise   = "revise"
+	operationDSNSign  = "delivery_status"
 	resultPass        = "pass"
 	resultFail        = "fail"
 	resultPermerror   = "permerror"
@@ -36,7 +38,7 @@ func validResult(result Result, mode, authservID string) bool {
 	case modeInbound:
 		return (validResultStatus(result.Result) || result.Result == resultNone) &&
 			validInboundResult(result, authservID)
-	case modeOriginator:
+	case modeOriginator, modePostfixDSN:
 		return (validResultStatus(result.Result) || result.Result == resultNone) &&
 			validOriginatorResult(result)
 	case modeTransit:
@@ -70,6 +72,8 @@ func operationForMode(mode string) (string, bool) {
 		return operationSign, true
 	case modeTransit:
 		return operationRevise, true
+	case modePostfixDSN:
+		return operationDSNSign, true
 	default:
 		return "", false
 	}

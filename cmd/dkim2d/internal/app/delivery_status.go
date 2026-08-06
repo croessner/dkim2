@@ -35,11 +35,12 @@ func (deliveryStatusEvidencePrivateKeySigner) SignDigest(
 	return dkim2.PrivateKeySignResult{}, dkim2.NewTemporaryProviderError()
 }
 
-// NewDeliveryStatusRequest snapshots one raw-RFC5322 DSN request and its
+// NewDeliveryStatusRequest snapshots one admitted DSN representation and its
 // independently observed original SMTP envelope.
 func NewDeliveryStatusRequest(raw, outerReverse []byte, outerRecipients [][]byte, originalReverse []byte, originalRecipients [][]byte, tenant, domain string, fidelity MessageFidelity) (DeliveryStatusRequest, error) {
 	if len(raw) == 0 || !bytes.Equal(outerReverse, []byte("<>")) || len(outerRecipients) != 1 ||
-		len(originalRecipients) == 0 || tenant == "" || domain == "" || fidelity != FidelityRawRFC5322 {
+		len(originalRecipients) == 0 || tenant == "" || domain == "" ||
+		!AdmitsDeliveryStatusFidelity(fidelity) {
 		return DeliveryStatusRequest{}, &DomainError{}
 	}
 	return DeliveryStatusRequest{
@@ -87,7 +88,7 @@ func (r DeliveryStatusRequest) GoString() string { return r.String() }
 // use, library evidence boundary, and route purpose.
 func (s *SigningService) SignDeliveryStatus(ctx context.Context, request DeliveryStatusRequest) (OperationResult, error) {
 	if s == nil || ctx == nil || s.store == nil || nilInterface(s.publicKeys) || s.clock == nil ||
-		request.Fidelity() != FidelityRawRFC5322 {
+		!AdmitsDeliveryStatusFidelity(request.Fidelity()) {
 		return OperationResult{}, &DomainError{}
 	}
 	if err := ctx.Err(); err != nil {

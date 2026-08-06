@@ -271,10 +271,11 @@ inconsistent datasource remains temporary; malformed active configuration
 remains permanent. HTTP 204 is never an availability fallback.
 
 Null senders are classified by the originator Milter before daemon I/O and
-continue to tempfail until that adapter can supply the complete trusted
-Draft-04 delivery-status-notification evidence. The separate daemon DSN route
-does not weaken that Milter boundary. Address literals and otherwise unsupported
-valid SMTPUTF8 envelopes remain not applicable and continue unchanged. Malformed
+continue to tempfail there. The separate `postfix_dsn` adapter may call the DSN
+route only after exact Postfix-only EOD evidence validation and declares
+`postfix_dsn_milter_reconstructed_crlf`; it requires the corresponding Postfix
+patch before deployment. Address literals and otherwise unsupported valid
+SMTPUTF8 envelopes remain not applicable and continue unchanged. Malformed
 Milter callback syntax remains fail-closed. The implementation does not infer
 DSN signing authority from message headers, HELO, recipients, suffixes,
 wildcards, or tenant defaults.

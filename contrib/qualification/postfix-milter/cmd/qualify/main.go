@@ -43,6 +43,7 @@ const (
 	milterJail            = "/milter-jail"
 	originSocket          = "/milter-jail/run/milter/origin/milter.sock"
 	inboundSocket         = "/milter-jail/run/milter/inbound/milter.sock"
+	dsnSocket             = "/milter-jail/run/milter/dsn/milter.sock"
 	daemonEndpoint        = "http://127.0.0.1:8080"
 	inboundDaemonEndpoint = "http://127.0.0.1:8081"
 	signingDomain         = "origin.example.test"
@@ -104,7 +105,7 @@ func bootstrapCapabilities() error {
 			return errQualification
 		}
 	}
-	for _, operation := range []string{"process", "sign", "revise"} {
+	for _, operation := range []string{"process", "sign", "revise", "dsn-sign"} {
 		value := make([]byte, 32)
 		if _, err := io.ReadFull(rand.Reader, value); err != nil {
 			return errQualification
@@ -187,16 +188,17 @@ func runDaemon() error {
 	if err := os.MkdirAll(generation, 0o700); err != nil {
 		return errQualification
 	}
-	for _, operation := range []string{"process", "sign", "revise"} {
+	for _, operation := range []string{"process", "sign", "revise", "dsn-sign"} {
 		source := filepath.Join("/capabilities/daemon", operation)
 		name := map[string]string{
 			"process": "capability", "sign": "sign-capability", "revise": "revise-capability",
+			"dsn-sign": "dsn-sign-capability",
 		}[operation]
 		if err := copyProtectedFile(source, filepath.Join(generation, name), 0o600); err != nil {
 			return err
 		}
 	}
-	txt, err := writeSigningGeneration(generation)
+	dnsRecords, err := writeSigningGeneration(generation)
 	if err != nil {
 		return err
 	}
@@ -215,6 +217,7 @@ server:
   capability_file: %s/capability
   sign_capability_file: %s/sign-capability
   revise_capability_file: %s/revise-capability
+  dsn_sign_capability_file: %s/dsn-sign-capability
   read_header_timeout: 5s
   read_timeout: 30s
   write_timeout: 65s
@@ -232,6 +235,7 @@ signing:
 		runtimeGeneration,
 		runtimeGeneration,
 		runtimeGeneration,
+		runtimeGeneration,
 	)
 	if err := os.WriteFile(configPath, []byte(config), 0o600); err != nil {
 		return errQualification
@@ -242,7 +246,7 @@ signing:
 	if err := syscall.Chroot(jail); err != nil || os.Chdir("/") != nil {
 		return errQualification
 	}
-	dns, err := startDNSAuthority("s1._domainkey."+signingDomain+".", txt)
+	dns, err := startDNSAuthority(dnsRecords)
 	if err != nil {
 		return err
 	}
@@ -399,18 +403,29 @@ func bindGenerationOwnership(generation string) error {
 }
 
 // writeSigningGeneration creates one synthetic RSA profile and private manifest.
-func writeSigningGeneration(generation string) (string, error) {
+func writeSigningGeneration(generation string) (map[string]string, error) {
 	key, err := rsa.GenerateKey(rand.Reader, 1024)
 	if err != nil {
-		return "", errQualification
+		return nil, errQualification
 	}
 	spki, err := x509.MarshalPKIXPublicKey(&key.PublicKey)
 	if err != nil {
-		return "", errQualification
+		return nil, errQualification
+	}
+	dsnKey, err := rsa.GenerateKey(rand.Reader, 1024)
+	if err != nil {
+		return nil, errQualification
+	}
+	dsnSPKI, err := x509.MarshalPKIXPublicKey(&dsnKey.PublicKey)
+	if err != nil {
+		return nil, errQualification
 	}
 	datasource := map[string]any{
 		"version": "dkim2-datasource-v1",
-		"handles": []any{map[string]any{"id": "origin-key"}},
+		"handles": []any{
+			map[string]any{"id": "origin-key"},
+			map[string]any{"id": "dsn-key"},
+		},
 		"profiles": []any{map[string]any{
 			"id": "origin-profile", "domain": signingDomain, "status": "active",
 			"credentials": []any{map[string]any{
@@ -418,15 +433,28 @@ func writeSigningGeneration(generation string) (string, error) {
 				"public_key_spki": base64.StdEncoding.EncodeToString(spki),
 				"handle_id":       "origin-key",
 			}},
+		}, map[string]any{
+			"id": "dsn-profile", "domain": signingDomain, "status": "active",
+			"credentials": []any{map[string]any{
+				"algorithm": "rsa-sha256", "selector": "dsn1",
+				"public_key_spki": base64.StdEncoding.EncodeToString(dsnSPKI),
+				"handle_id":       "dsn-key",
+			}},
 		}},
 		"policies": []any{map[string]any{
 			"tenant_id": "tenant-a", "domain": signingDomain,
 			"use": "originator", "profile_id": "origin-profile",
 			"status": "active", "rollout": "enforce",
 			"compatibility": "strict",
+		}, map[string]any{
+			"tenant_id": "tenant-a", "domain": signingDomain,
+			"use": "delivery_status", "profile_id": "dsn-profile",
+			"status": "active", "rollout": "enforce",
+			"compatibility": "strict",
 		}},
 	}
 	digest := sha256.Sum256(spki)
+	dsnDigest := sha256.Sum256(dsnSPKI)
 	manifest := map[string]any{
 		"version": "dkim2-private-keys-v1",
 		"entries": []any{map[string]any{
@@ -435,27 +463,48 @@ func writeSigningGeneration(generation string) (string, error) {
 			"algorithm":          "rsa-sha256",
 			"public_spki_sha256": base64.StdEncoding.EncodeToString(digest[:]),
 			"private_key_file":   "origin.pem",
+		}, map[string]any{
+			"tenant_id": "tenant-a", "domain": signingDomain,
+			"use": "delivery_status", "handle_id": "dsn-key",
+			"algorithm":          "rsa-sha256",
+			"public_spki_sha256": base64.StdEncoding.EncodeToString(dsnDigest[:]),
+			"private_key_file":   "dsn.pem",
 		}},
 	}
 	if err := writeProtectedJSON(filepath.Join(generation, "datasource"), datasource); err != nil {
-		return "", err
+		return nil, err
 	}
 	if err := writeProtectedJSON(filepath.Join(generation, "private-manifest"), manifest); err != nil {
-		return "", err
+		return nil, err
 	}
 	pkcs8, err := x509.MarshalPKCS8PrivateKey(key)
 	if err != nil {
-		return "", errQualification
+		return nil, errQualification
 	}
 	privatePEM := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: pkcs8})
 	clear(pkcs8)
 	if err := os.WriteFile(filepath.Join(generation, "origin.pem"), privatePEM, 0o600); err != nil {
 		clear(privatePEM)
-		return "", errQualification
+		return nil, errQualification
 	}
 	clear(privatePEM)
+	dsnPKCS8, err := x509.MarshalPKCS8PrivateKey(dsnKey)
+	if err != nil {
+		return nil, errQualification
+	}
+	dsnPEM := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: dsnPKCS8})
+	clear(dsnPKCS8)
+	if err := os.WriteFile(filepath.Join(generation, "dsn.pem"), dsnPEM, 0o600); err != nil {
+		clear(dsnPEM)
+		return nil, errQualification
+	}
+	clear(dsnPEM)
 	dnsKey := x509.MarshalPKCS1PublicKey(&key.PublicKey)
-	return "v=DKIM1; k=rsa; p=" + base64.StdEncoding.EncodeToString(dnsKey), nil
+	dsnDNSKey := x509.MarshalPKCS1PublicKey(&dsnKey.PublicKey)
+	return map[string]string{
+		"s1._domainkey." + signingDomain + ".":   "v=DKIM1; k=rsa; p=" + base64.StdEncoding.EncodeToString(dnsKey),
+		"dsn1._domainkey." + signingDomain + ".": "v=DKIM1; k=rsa; p=" + base64.StdEncoding.EncodeToString(dsnDNSKey),
+	}, nil
 }
 
 // writeProtectedJSON writes one owner-only compact JSON generation child.
@@ -505,18 +554,18 @@ type dnsAuthority struct {
 }
 
 // startDNSAuthority starts one exact reserved-name TXT authority on loopback.
-func startDNSAuthority(owner, txt string) (*dnsAuthority, error) {
+func startDNSAuthority(records map[string]string) (*dnsAuthority, error) {
 	packet, err := net.ListenPacket("udp4", "127.0.0.1:53")
 	if err != nil {
 		return nil, errQualification
 	}
 	authority := &dnsAuthority{packet: packet, done: make(chan struct{})}
-	go authority.serve(owner, txt)
+	go authority.serve(records)
 	return authority, nil
 }
 
 // serve answers one closed TXT owner and NXDOMAINs every other question.
-func (d *dnsAuthority) serve(owner, txt string) {
+func (d *dnsAuthority) serve(records map[string]string) {
 	defer close(d.done)
 	buffer := make([]byte, 512)
 	for {
@@ -524,7 +573,7 @@ func (d *dnsAuthority) serve(owner, txt string) {
 		if err != nil {
 			return
 		}
-		response := buildDNSResponse(buffer[:count], owner, txt)
+		response := buildDNSResponse(buffer[:count], records)
 		if len(response) > 0 {
 			_, _ = d.packet.WriteTo(response, address)
 		}
@@ -541,7 +590,7 @@ func (d *dnsAuthority) close() {
 }
 
 // buildDNSResponse constructs one bounded DNS TXT response without shared parser code.
-func buildDNSResponse(query []byte, owner, txt string) []byte {
+func buildDNSResponse(query []byte, records map[string]string) []byte {
 	if len(query) < 17 {
 		return nil
 	}
@@ -568,7 +617,8 @@ func buildDNSResponse(query []byte, owner, txt string) []byte {
 	questionEnd := offset + 4
 	name := strings.ToLower(strings.Join(labels, ".")) + "."
 	qtype := binary.BigEndian.Uint16(query[offset : offset+2])
-	found := name == strings.ToLower(owner) && qtype == 16
+	txt, found := records[name]
+	found = found && qtype == 16
 	response := make([]byte, 12, 512)
 	copy(response[:2], query[:2])
 	flags := uint16(0x8180)
@@ -624,6 +674,16 @@ func runStack() error {
 		return err
 	}
 	defer stopCommand(inbound)
+	dsn, err := startMilter("dsn", "dsn-sign", "postfix_dsn", daemonEndpoint, false)
+	if err != nil {
+		return err
+	}
+	defer stopCommand(dsn)
+	failureSMTP, err := startFailureSMTP()
+	if err != nil {
+		return err
+	}
+	defer failureSMTP.close()
 	if err := preparePostfix(); err != nil {
 		return err
 	}
@@ -756,6 +816,79 @@ func milterSigningBlock(mode string) string {
 	return block
 }
 
+type failureSMTP struct {
+	listener net.Listener
+	done     chan struct{}
+}
+
+// startFailureSMTP starts one loopback-only downstream that permanently
+// rejects recipients after Postfix has already accepted the original message.
+func startFailureSMTP() (*failureSMTP, error) {
+	listener, err := net.Listen("tcp4", "127.0.0.1:2998")
+	if err != nil {
+		return nil, errQualification
+	}
+	server := &failureSMTP{listener: listener, done: make(chan struct{})}
+	go server.serve()
+	return server, nil
+}
+
+func (s *failureSMTP) serve() {
+	defer close(s.done)
+	for {
+		connection, err := s.listener.Accept()
+		if err != nil {
+			return
+		}
+		s.handle(connection)
+	}
+}
+
+func (*failureSMTP) handle(connection net.Conn) {
+	defer func() { _ = connection.Close() }()
+	_ = connection.SetDeadline(time.Now().Add(10 * time.Second))
+	reader := bufio.NewReader(io.LimitReader(connection, 64<<10))
+	writer := bufio.NewWriter(connection)
+	_, _ = writer.WriteString("220 failure.example.test ESMTP\r\n")
+	_ = writer.Flush()
+	for {
+		line, err := reader.ReadString('\n')
+		if err != nil {
+			return
+		}
+		command := strings.ToUpper(strings.TrimSpace(line))
+		switch {
+		case strings.HasPrefix(command, "EHLO "):
+			_, _ = writer.WriteString("250-failure.example.test\r\n250 8BITMIME\r\n")
+		case strings.HasPrefix(command, "HELO "):
+			_, _ = writer.WriteString("250 failure.example.test\r\n")
+		case strings.HasPrefix(command, "MAIL FROM:"):
+			_, _ = writer.WriteString("250 2.1.0 sender ok\r\n")
+		case strings.HasPrefix(command, "RCPT TO:"):
+			_, _ = writer.WriteString("550 5.1.1 forced qualification failure\r\n")
+		case command == "RSET":
+			_, _ = writer.WriteString("250 2.0.0 reset\r\n")
+		case command == "QUIT":
+			_, _ = writer.WriteString("221 2.0.0 bye\r\n")
+			_ = writer.Flush()
+			return
+		default:
+			_, _ = writer.WriteString("502 5.5.2 unsupported\r\n")
+		}
+		if writer.Flush() != nil {
+			return
+		}
+	}
+}
+
+func (s *failureSMTP) close() {
+	if s == nil {
+		return
+	}
+	_ = s.listener.Close()
+	<-s.done
+}
+
 // preparePostfix copies pinned defaults into tmpfs and applies closed overrides.
 func preparePostfix() error {
 	if err := copyDirectory("/etc/postfix", postfixConfig); err != nil {
@@ -779,11 +912,12 @@ func preparePostfix() error {
 		"myorigin=" + signingDomain,
 		"mydestination=",
 		"mynetworks=127.0.0.0/8",
-		"relay_domains=receiver.example.test",
+		"relay_domains=receiver.example.test, " + signingDomain + ", failed.example.test",
 		"smtpd_relay_restrictions=permit_mynetworks,reject_unauth_destination",
 		"smtpd_recipient_restrictions=permit_mynetworks,reject_unauth_destination",
 		"smtpd_milters=unix:" + originSocket,
 		"non_smtpd_milters=unix:" + originSocket,
+		"internal_mail_filter_classes=bounce",
 		"milter_protocol=6",
 		"milter_default_action=tempfail",
 		"milter_connect_timeout=2s",
@@ -791,6 +925,7 @@ func preparePostfix() error {
 		"milter_content_timeout=5s",
 		"default_transport=smtp",
 		"relay_transport=smtp",
+		"transport_maps=inline:{failed.example.test=smtp-failure:[127.0.0.1]:2998}",
 		"relayhost=[127.0.0.1]:2999",
 		"defer_transports=smtp",
 		"enable_long_queue_ids=yes",
@@ -801,6 +936,12 @@ func preparePostfix() error {
 	arguments := []string{"-c", postfixConfig, "-e"}
 	arguments = append(arguments, settings...)
 	if err := runCommand("/usr/sbin/postconf", arguments...); err != nil {
+		return err
+	}
+	if err := runCommand(
+		"/usr/sbin/postconf", "-c", postfixConfig, "-P",
+		"dsn_cleanup/unix/non_smtpd_milters=unix:"+dsnSocket,
+	); err != nil {
 		return err
 	}
 	masterPath := filepath.Join(postfixConfig, "master.cf")
@@ -823,7 +964,15 @@ func preparePostfix() error {
   -o milter_connect_timeout=2s
   -o milter_command_timeout=5s
   -o milter_content_timeout=5s
-`, originSocket, inboundSocket)
+2527 inet n - n - - smtpd
+  -o smtpd_milters=unix:%s
+  -o milter_protocol=6
+  -o milter_default_action=tempfail
+  -o milter_connect_timeout=2s
+  -o milter_command_timeout=5s
+  -o milter_content_timeout=5s
+smtp-failure unix - - n - - smtp
+`, originSocket, inboundSocket, dsnSocket)
 	closeErr := master.Close()
 	if writeErr != nil || closeErr != nil {
 		return errQualification
@@ -931,13 +1080,94 @@ func runSuccessQualification() error {
 		) {
 		return errQualification
 	}
+	beforeDSN, err := queueIDs()
+	if err != nil {
+		return err
+	}
+	failureMessage := []byte(
+		"From: sender@" + signingDomain + "\r\n" +
+			"To: recipient@failed.example.test\r\n" +
+			"Subject: forced delivery failure\r\n\r\nbody\r\n",
+	)
+	if _, err := smtpSubmit(
+		2525,
+		"<sender@"+signingDomain+">",
+		[]string{"<recipient@failed.example.test>"},
+		failureMessage,
+		true,
+	); err != nil {
+		return err
+	}
+	dsnRaw, err := waitForQueuedDSN(beforeDSN, 15*time.Second)
+	if err != nil ||
+		countHeader(dsnRaw, "Message-Instance") != 1 ||
+		countHeader(dsnRaw, "DKIM2-Signature") != 1 ||
+		validateSignedMessage(
+			dsnRaw,
+			"<>",
+			[]string{"<sender@" + signingDomain + ">"},
+		) != nil {
+		return errQualification
+	}
+	beforeInjected, err := queueIDs()
+	if err != nil {
+		return err
+	}
+	injected := []byte(
+		"From: postmaster@" + signingDomain + "\r\n" +
+			"To: sender@" + signingDomain + "\r\n" +
+			"Subject: injected null sender\r\n\r\nnot a trusted DSN\r\n",
+	)
+	if _, err := smtpSubmit(
+		2527,
+		"<>",
+		[]string{"<sender@" + signingDomain + ">"},
+		injected,
+		false,
+	); err != nil {
+		return err
+	}
+	afterInjected, err := queueIDs()
+	if err != nil || !sameQueueIDs(beforeInjected, afterInjected) {
+		return errQualification
+	}
 	return emitCaseFragment([]string{
 		"daemon_loopback_topology",
+		"injected_null_sender_has_no_dsn_evidence",
 		"inbound_cryptographic_pass",
 		"local_sendmail_signing",
+		"postfix_bounce_dsn_evidence_signing",
 		"postfix_received_visibility",
 		"smtp_origin_signing",
 	})
+}
+
+// waitForQueuedDSN waits for one newly generated signed delivery-status report.
+func waitForQueuedDSN(before map[string]struct{}, timeout time.Duration) ([]byte, error) {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		after, err := queueInventory()
+		if err != nil {
+			return nil, err
+		}
+		for id := range after {
+			if _, existed := before[id]; existed {
+				continue
+			}
+			raw, readErr := readQueuedMessage(id)
+			if readErr != nil {
+				continue
+			}
+			lower := strings.ToLower(string(raw))
+			if countHeader(raw, "DKIM2-Signature") == 1 &&
+				strings.Contains(lower, "multipart/report") &&
+				strings.Contains(lower, "message/delivery-status") {
+				return raw, nil
+			}
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	return nil, errQualification
 }
 
 // observedDaemonReceivedCount reads only the content-free qualification observation.
@@ -1456,11 +1686,19 @@ func verifyTopology() error {
 			return errQualification
 		}
 	}
-	for _, socket := range []string{originSocket, inboundSocket} {
+	for _, socket := range []string{originSocket, inboundSocket, dsnSocket} {
 		state, err := os.Lstat(socket)
 		if err != nil || state.Mode()&os.ModeSocket == 0 || state.Mode().Perm() != 0o660 {
 			return errQualification
 		}
+	}
+	serviceCommand := exec.Command(
+		"/usr/sbin/postconf", "-c", postfixConfig, "-Ph",
+		"dsn_cleanup/unix/non_smtpd_milters",
+	)
+	serviceOutput, err := serviceCommand.Output()
+	if err != nil || strings.TrimSpace(string(serviceOutput)) != "unix:"+dsnSocket {
+		return errQualification
 	}
 	input, err := os.ReadFile("/proc/net/tcp")
 	if err != nil {
@@ -1478,7 +1716,7 @@ func verifyTopology() error {
 			return errQualification
 		}
 		switch port {
-		case "0019", "09DD", "09DE", "1F90", "1F91":
+		case "0019", "09DD", "09DE", "09DF", "0BB6", "1F90", "1F91":
 			if address != "0100007F" {
 				return errQualification
 			}
@@ -1532,7 +1770,7 @@ func checkDaemonHealth() error {
 
 // checkStackHealth requires both sockets and the running Postfix master.
 func checkStackHealth() error {
-	for _, path := range []string{originSocket, inboundSocket} {
+	for _, path := range []string{originSocket, inboundSocket, dsnSocket} {
 		state, err := os.Lstat(path)
 		if err != nil || state.Mode()&os.ModeSocket == 0 {
 			return errQualification

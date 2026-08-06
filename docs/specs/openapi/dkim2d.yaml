@@ -497,11 +497,12 @@ paths:
       operationId: signDeliveryStatus
       summary: Sign one delivery-status notification.
       description: >
-        Authenticates a byte-preserving RFC 3462 delivery-status notification,
-        requires its exact null reverse-path envelope and independently
-        observed original SMTP envelope, and returns an append-only DKIM2
-        signing action plan. This dedicated operation never accepts an
-        ordinary sign or revision capability.
+        Authenticates an RFC 3462 delivery-status notification supplied either
+        as exact raw RFC 5322 bytes or as Postfix-qualified Milter CRLF
+        reconstruction, requires its exact null reverse-path envelope and
+        independently observed original SMTP envelope, and returns an
+        append-only DKIM2 signing action plan. This dedicated operation never
+        accepts an ordinary sign or revision capability.
       security:
         - dsnSignCapability: []
       requestBody:
@@ -865,8 +866,8 @@ components:
           $ref: "#/components/schemas/DraftVersion"
         message:
           description: >
-            Exact received RFC 5322 DSN bytes. Only raw_rfc5322 fidelity is
-            accepted; callback reconstruction is not delivery-status evidence.
+            RFC 5322 DSN bytes. Only raw_rfc5322 or the separately authorized
+            postfix_dsn_milter_reconstructed_crlf fidelity is accepted.
           allOf:
             - $ref: "#/components/schemas/MessageInput"
         outer_smtp:
@@ -899,6 +900,7 @@ components:
           enum:
             - raw_rfc5322
             - milter_reconstructed_crlf
+            - postfix_dsn_milter_reconstructed_crlf
             - exim_local_scan_observed_crlf
             - exim_transport_filter_crlf
     SMTPInput:
