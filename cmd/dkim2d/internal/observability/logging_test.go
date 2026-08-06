@@ -32,6 +32,22 @@ func TestBoundedLoggerEmitsExactJSON(t *testing.T) {
 	}
 }
 
+// TestBoundedLoggerAcceptsDSNSigningRoute freezes the dedicated delivery-status
+// HTTP observation vocabulary.
+func TestBoundedLoggerAcceptsDSNSigningRoute(t *testing.T) {
+	var output bytes.Buffer
+	handler := &boundedJSONHandler{destination: &output, level: slog.LevelInfo, mu: &sync.Mutex{}}
+	record := slog.NewRecord(time.Now(), slog.LevelInfo, "http.request.completed", 0)
+	record.AddAttrs(
+		slog.String("operation", valueDSNSign),
+		slog.String("route", "/v1/dsn/sign"),
+		slog.String("result", valueSuccess),
+	)
+	if err := handler.Handle(context.Background(), record); err != nil || output.Len() == 0 {
+		t.Fatal("delivery-status HTTP observation was rejected")
+	}
+}
+
 type hostileLogValuer struct{}
 
 // LogValue injects a panic that admission must not evaluate.

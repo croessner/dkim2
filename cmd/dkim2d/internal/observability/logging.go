@@ -51,6 +51,7 @@ const (
 	valuePermerror     = "permerror"
 	valueRevise        = "revise"
 	valueSign          = "sign"
+	valueDSNSign       = "dsn_sign"
 	valueExport        = "export"
 	valueFirstSeen     = "first_seen"
 	valueOverflow      = "overflow"
@@ -96,7 +97,7 @@ var allowedLogValues = map[string][]string{
 	keyEventID:               {"config.accepted", "lifecycle.transition", "readiness.transition", "http.request.completed", "process.completed", "dns.lookup.completed", "replay.coordinate.completed", "datasource.operation.completed", "telemetry.export.failed"},
 	"lifecycle_state":        {"starting", "active", "stopping", "stopped", "failed"},
 	keyMethod:                {"GET", "HEAD", "POST", "OPTIONS", "other"},
-	keyOperation:             {"config", "lifecycle", "readiness", "health", "metrics", valueProcess, valueSign, valueRevise, "verify", "dns_lookup", valuePolicy, "replay_coordinate", "replay_store", "datasource_initial_load", "datasource_refresh", "datasource_resolve", "telemetry_export", valueUnmatched},
+	keyOperation:             {"config", "lifecycle", "readiness", "health", "metrics", valueProcess, valueSign, valueRevise, valueDSNSign, "verify", "dns_lookup", valuePolicy, "replay_coordinate", "replay_store", "datasource_initial_load", "datasource_refresh", "datasource_resolve", "telemetry_export", valueUnmatched},
 	keyPolicyMode:            {valueStrict, valuePermissive, valueTesting},
 	keyProvider:              {"flat_file", "memory", "ldap", "postgresql", "mysql"},
 	keyProviderState:         {"initializing", "ready", "degraded", "closed"},
@@ -104,7 +105,7 @@ var allowedLogValues = map[string][]string{
 	keyReplayState:           {valueNotChecked, valueDisabled, valueFirstSeen, valueReplayed, valueIndeterminate},
 	"replay_store_result":    {"not_used", valueSuccess, valueTemporary, valueInternal},
 	keyResult:                {valueSuccess, valueFailure, valueTemporary, valueInternal},
-	"route":                  {"/healthz", "/readyz", "/metrics", "/v1/process", "/v1/sign", "/v1/revise", valueUnmatched},
+	"route":                  {"/healthz", "/readyz", "/metrics", "/v1/process", "/v1/sign", "/v1/revise", "/v1/dsn/sign", valueUnmatched},
 	keyStatusClass:           {valueStatus2XX, valueStatus3XX, valueStatus4XX, valueStatus5XX},
 	"tracing_exporter":       {valueNone, "otlp_http"},
 	keyVerdict:               {valuePass, valueFail, valueNeutral, valueTemperror, valuePermerror},

@@ -763,7 +763,7 @@ func validOutboundSigningFields(
 	domainSource := milter.DomainSource(domainSourceValue.text)
 	staticDomain := domainSource == milter.DomainSourceStatic &&
 		domainValue.explicit && validDomain(domainValue.text)
-	envelopeSenderDomain := mode == ModeOriginator &&
+	envelopeSenderDomain := (mode == ModeOriginator || mode == ModePostfixDSN) &&
 		domainSource == milter.DomainSourceEnvelopeSender &&
 		domainSourceValue.explicit && !domainValue.explicit && domainValue.text == ""
 	if !tenantValue.explicit || !validTenant(tenantValue.text) ||

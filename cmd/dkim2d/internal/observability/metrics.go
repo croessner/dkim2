@@ -281,7 +281,7 @@ func closedMetricValue(key, value string) bool {
 // httpOperations returns one fresh route-operation allowlist.
 func httpOperations() []string {
 	return []string{
-		"health", "readiness", "metrics", valueProcess, valueSign, valueRevise, valueUnmatched,
+		"health", "readiness", "metrics", valueProcess, valueSign, valueRevise, valueDSNSign, valueUnmatched,
 	}
 }
 

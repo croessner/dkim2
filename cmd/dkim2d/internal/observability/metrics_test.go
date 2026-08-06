@@ -3,6 +3,7 @@ package observability
 import (
 	"bytes"
 	"reflect"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -69,6 +70,9 @@ func TestMetricsDescriptorsAndBucketsMatchDurableContract(t *testing.T) {
 		.001, .0025, .005, .01, .025, .05, .1, .25, .5, 1, 2, 5,
 	}) {
 		t.Fatal("histogram bucket contract changed")
+	}
+	if !slices.Contains(httpOperations(), valueDSNSign) {
+		t.Fatal("delivery-status HTTP operation is absent from metrics")
 	}
 }
 

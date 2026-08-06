@@ -859,7 +859,7 @@ func TestOriginatorNullSenderTempfailsBeforeDaemonThroughPublicSocket(t *testing
 func TestPostfixDSNEvidenceRunsDedicatedRouteThroughPublicSocket(t *testing.T) {
 	service := &generatedDaemonService{
 		dsn: func(body generatedfixture.DSNSignRequest) generatedfixture.OperationResponse {
-			assertPostfixDSNRequest(t, body)
+			assertPostfixDSNRequest(t, body, "derived.example", "<original@Derived.Example>")
 			return fixtureOperationResponse("delivery_status", generated.ActionPlan{
 				{Name: generated.MessageInstance, Type: generated.AddHeader, Value: testMessageInstanceValue},
 				{Name: generated.DKIM2Signature, Type: generated.AddHeader, Value: testSignatureValue},
@@ -867,8 +867,9 @@ func TestPostfixDSNEvidenceRunsDedicatedRouteThroughPublicSocket(t *testing.T) {
 		},
 	}
 	fixture := newGeneratedDaemonFixture(t, service)
-	process := startExecutable(
+	process := startExecutableWithSigning(
 		t, fixture.endpoint, integrationModePostfixDSN, "tempfail", 2*time.Second,
+		"\nsigning:\n  tenant: "+integrationTenant+"\n  domain_source: envelope_sender",
 	)
 	peer := dialPublicPeer(t, process.socket)
 	peer.negotiatePostfixDSN(t)
@@ -878,7 +879,7 @@ func TestPostfixDSNEvidenceRunsDedicatedRouteThroughPublicSocket(t *testing.T) {
 	peer.callback(t, peerRecipient, []byte("<sender@example.test>\x00"))
 	peer.callback(t, peerHeader, []byte("From\x00 mailer-daemon@example.test\x00"))
 	peer.send(t, peerMacro, postfixDSNMacroPayload(
-		[]byte("original@example.test"),
+		[]byte("original@Derived.Example"),
 		[][]byte{[]byte("failed@example.test"), []byte("second@example.test")},
 	))
 	peer.callback(t, peerEOH, nil)
@@ -930,11 +931,16 @@ func appendLengthPrefixedPath(record, path []byte) []byte {
 }
 
 // assertPostfixDSNRequest checks fidelity, both envelopes, and signing context.
-func assertPostfixDSNRequest(t *testing.T, body generatedfixture.DSNSignRequest) {
+func assertPostfixDSNRequest(
+	t *testing.T,
+	body generatedfixture.DSNSignRequest,
+	expectedDomain string,
+	expectedOriginalSender string,
+) {
 	t.Helper()
 	if body.Message.Fidelity == nil ||
 		*body.Message.Fidelity != generatedfixture.PostfixDsnMilterReconstructedCrlf ||
-		body.Context.Tenant != integrationTenant || body.Context.Domain != integrationExampleDomain {
+		body.Context.Tenant != integrationTenant || body.Context.Domain != expectedDomain {
 		t.Fatal("Postfix DSN fidelity or signing context changed")
 	}
 	outerSender, err := body.OuterSmtp.MailFrom.Bytes()
@@ -948,7 +954,7 @@ func assertPostfixDSNRequest(t *testing.T, body generatedfixture.DSNSignRequest)
 	}
 	defer clear(originalSender)
 	if !bytes.Equal(outerSender, []byte("<>")) || len(body.OuterSmtp.RcptTo) != 1 ||
-		!bytes.Equal(originalSender, []byte("<original@example.test>")) ||
+		!bytes.Equal(originalSender, []byte(expectedOriginalSender)) ||
 		len(body.OriginalSmtp.RcptTo) != 2 {
 		t.Fatal("Postfix DSN envelope evidence changed")
 	}

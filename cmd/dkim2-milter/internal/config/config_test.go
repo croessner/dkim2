@@ -67,6 +67,7 @@ func TestLoadModeMatrixAndDefaults(t *testing.T) {
 // inflating the table-driven loader test's control-flow complexity.
 func assertModeDefaults(t *testing.T, snapshot Snapshot, mode Mode) {
 	t.Helper()
+	const wantTenant = "tenant-a"
 	if snapshot.Version() != configVersion || snapshot.Mode() != mode ||
 		snapshot.SocketMode() != 0o660 || snapshot.ShutdownTimeout() != 10*time.Second ||
 		snapshot.MaxConnections() != 128 || snapshot.MaxInFlightMessages() != 64 ||
@@ -84,7 +85,7 @@ func assertModeDefaults(t *testing.T, snapshot Snapshot, mode Mode) {
 			snapshot.DomainSource() != milter.DomainSourceStatic {
 			t.Fatal("inbound mode retained signing identity")
 		}
-	} else if snapshot.Tenant() != "tenant-a" || snapshot.Domain() != "example.test" ||
+	} else if snapshot.Tenant() != wantTenant || snapshot.Domain() != "example.test" ||
 		snapshot.DomainSource() != milter.DomainSourceStatic {
 		t.Fatal("signing mode lost its required identity")
 	}
@@ -116,6 +117,27 @@ func TestLoadAcceptsOriginatorEnvelopeSenderDomainSelection(t *testing.T) {
 		snapshot.DomainSource() != milter.DomainSourceEnvelopeSender ||
 		snapshot.DSNDomain() != "dsn.example.test" {
 		t.Fatal("originator envelope-sender selection was not retained exactly")
+	}
+}
+
+// TestLoadAcceptsPostfixDSNEnvelopeSenderDomainSelection proves the dedicated
+// adapter may derive its per-message identity only from trusted original
+// Postfix envelope evidence.
+func TestLoadAcceptsPostfixDSNEnvelopeSenderDomainSelection(t *testing.T) {
+	document := strings.Replace(
+		validConfig(ModePostfixDSN),
+		"  domain: example.test",
+		"  domain_source: envelope_sender",
+		1,
+	)
+	snapshot, err := Load(writeConfig(t, document))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snapshot.Tenant() != "tenant-a" || snapshot.Domain() != "" ||
+		snapshot.DomainSource() != milter.DomainSourceEnvelopeSender ||
+		snapshot.DSNDomain() != "" {
+		t.Fatal("Postfix DSN envelope-sender selection was not retained exactly")
 	}
 }
 

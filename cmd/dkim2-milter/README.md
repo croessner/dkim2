@@ -118,7 +118,7 @@ daemon:
 mode: postfix_dsn
 signing:
   tenant: tenant-a
-  domain: dsn.example.test
+  domain_source: envelope_sender
 failure:
   mode: tempfail
 ```
@@ -127,6 +127,13 @@ This mode requires the Postfix `postfix-dsn-evidence-v1` patch described in
 `docs/specs/implementation/postfix-dsn-evidence.md`. It rejects fail-open,
 ordinary null-sender submission, absent or malformed EOH evidence, and more
 than one outer DSN recipient.
+
+`domain_source: envelope_sender` derives the candidate DSN identity only from
+the Postfix-qualified original reverse-path, never from the outer null sender
+or message headers. The daemon still verifies that candidate against the
+embedded original's authenticated highest `d=` before resolving a
+`delivery_status` profile. A static `domain` remains available only for a
+deliberately single-domain deployment.
 
 An originator instance that serves multiple exact LDAP signing domains may
 derive the domain from the already validated ASCII SMTP reverse-path while

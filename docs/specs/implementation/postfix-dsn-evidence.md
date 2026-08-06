@@ -131,7 +131,10 @@ retains only the three macro values above, only for the EOH callback that
 belongs to the active message, and consumes them only at EOM. The mode rejects every duplicate, partial,
 wrong-stage, or malformed record. It maps the outer callbacks and decoded
 original envelope to the generated `DSNSignRequest` and sends them with a
-dedicated capability.
+dedicated capability. In multi-domain mode it derives the candidate signing
+domain only from the trusted original reverse-path; the daemon must still bind
+that candidate to the embedded original's verified highest `d=` before policy
+or private-key access.
 
 `cmd/dkim2d` gains one explicitly local fidelity value,
 `postfix_dsn_milter_reconstructed_crlf`. It is accepted solely by the

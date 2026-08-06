@@ -326,12 +326,17 @@ group switch could violate the draft's Bcc non-disclosure MUST. Ambiguous
 routes, recipients, policies, keys, algorithms, or signer state fail closed.
 
 An originator route may select its signing domain from the strictly validated
-ASCII SMTP reverse-path while retaining one statically configured tenant. This
+ASCII SMTP reverse-path while retaining one statically configured tenant. A
+`postfix_dsn` route may apply the same selection only to the independently
+authenticated original reverse-path carried by `postfix-dsn-evidence-v1`; it
+never derives authority from the outer null sender. This
 is adapter-local route selection, not datasource fallback: it strips a valid
 obsolete source route if present, rejects address literals,
 SMTPUTF8 domains, and malformed framing, canonicalizes only ASCII DNS case, and
 sends the resulting exact tenant/domain pair through the unchanged daemon
-authorization and datasource lookup. The option is unavailable to inbound and
+authorization and datasource lookup. For a DSN, the daemon additionally
+requires exact equality with the embedded original's verified highest `d=`
+before policy resolution. The option is unavailable to inbound and
 ordinary-transit modes. Static domain selection remains the default.
 
 Every originator route also retains one separate canonical
@@ -401,8 +406,8 @@ The initial stable paths include:
 | `daemon.request_timeout` | `2s` | 100ms..10s |
 | `mode` | required | `inbound`, `originator`, `ordinary_transit`, `postfix_dsn` |
 | `signing.tenant` | conditional | required for signing/revision modes |
-| `signing.domain` | conditional | required for static signing/revision and Postfix DSN signing; absent for envelope-derived originator signing |
-| `signing.domain_source` | `static` | `static`, or `envelope_sender` for originator only |
+| `signing.domain` | conditional | required for static signing/revision and Postfix DSN signing; absent for envelope-derived originator or trusted-original DSN signing |
+| `signing.domain_source` | `static` | `static`, or `envelope_sender` for originator and `postfix_dsn`; the latter uses only trusted original-envelope evidence |
 | `signing.dsn_domain` | originator required | reserved legacy originator prerequisite; forbidden in other modes and never sufficient to authorize null-sender signing |
 | `signing.allow_recipient_group` | `false` | reserved; `true` is rejected until per-message Bcc evidence exists |
 | `authentication_results.enabled` | `false` | inbound mode only |

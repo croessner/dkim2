@@ -38,6 +38,43 @@ func TestDecodePostfixDSNOriginalEnvelope(t *testing.T) {
 	}
 }
 
+// TestPostfixDSNEvidenceDerivesOriginalSigningDomain proves dynamic DSN
+// identity comes only from the complete trusted original SMTP envelope.
+func TestPostfixDSNEvidenceDerivesOriginalSigningDomain(t *testing.T) {
+	for _, testCase := range []struct {
+		name       string
+		sender     []byte
+		recipients [][]byte
+		want       string
+		ok         bool
+	}{
+		{
+			name: "canonicalized domain", sender: []byte("<sender@Example.TEST>"),
+			recipients: [][]byte{[]byte("<recipient@remote.example>")},
+			want:       "example.test", ok: true,
+		},
+		{
+			name: "null original sender", sender: []byte("<>"),
+			recipients: [][]byte{[]byte("<recipient@example.test>")},
+		},
+		{
+			name: "EAI recipient", sender: []byte("<sender@example.test>"),
+			recipients: [][]byte{[]byte("<récipient@example.test>")},
+		},
+		{name: "missing recipient", sender: []byte("<sender@example.test>")},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			evidence := PostfixDSNEvidence{original: postfixDSNOriginalEnvelope{
+				sender: testCase.sender, recipients: testCase.recipients,
+			}}
+			got, ok := evidence.OriginalSigningDomain()
+			if got != testCase.want || ok != testCase.ok {
+				t.Fatalf("OriginalSigningDomain()=(%q,%t), want (%q,%t)", got, ok, testCase.want, testCase.ok)
+			}
+		})
+	}
+}
+
 // TestDecodePostfixDSNOriginalEnvelopeRejectsAmbiguity proves v1 has no
 // permissive alternate encoding, null sender, partial record, or recipient
 // count ambiguity.

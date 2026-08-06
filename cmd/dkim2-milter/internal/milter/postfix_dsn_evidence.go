@@ -31,6 +31,22 @@ func (e PostfixDSNEvidence) OriginalEnvelope() ([]byte, [][]byte) {
 	return bytes.Clone(e.original.sender), recipients
 }
 
+// OriginalSigningDomain derives one canonical signing domain from the exact
+// Postfix-owned original envelope. It applies the same ASCII envelope boundary
+// as originator signing and never falls back to outer DSN message fields.
+func (e PostfixDSNEvidence) OriginalSigningDomain() (string, bool) {
+	if !asciiBytes(e.original.sender) || !validEnvelopePath(e.original.sender, true) ||
+		len(e.original.sender) == 2 || len(e.original.recipients) == 0 {
+		return "", false
+	}
+	for _, recipient := range e.original.recipients {
+		if !asciiBytes(recipient) || !validEnvelopePath(recipient, false) {
+			return "", false
+		}
+	}
+	return canonicalASCIIEnvelopeDomain(e.original.sender, true)
+}
+
 // Clear erases one detached evidence copy after daemon request mapping.
 func (e *PostfixDSNEvidence) Clear() { e.clear() }
 
