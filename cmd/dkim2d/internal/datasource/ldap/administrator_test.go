@@ -322,6 +322,49 @@ func TestGenerationRootPagingRequiresCriticalOpaqueGlobalInventory(t *testing.T)
 	}
 }
 
+// TestGenerationRootPagingRetainsCommittedV1History proves transport paging
+// uses the same conservative legacy grammar as allocation inventory.
+func TestGenerationRootPagingRetainsCommittedV1History(t *testing.T) {
+	base := "ou=generations,ou=dkim2,dc=example,dc=test"
+	legacy := generationRootLDAPSource(base, 1)
+	for _, attribute := range legacy.Attributes {
+		if attribute.Name == attrSchemaVersion {
+			attribute.Values = []string{datasourceadmin.SchemaVersionV1}
+			attribute.ByteValues = [][]byte{[]byte(datasourceadmin.SchemaVersionV1)}
+		}
+	}
+	if !sourceInventoryRootClassesValid(legacy) {
+		t.Fatal("v1 inventory root class grammar rejected")
+	}
+	projected, _, projectionErr := mapGenerationRootSourceWithNumber(base, legacy)
+	if projectionErr != nil {
+		t.Fatalf("v1 source projection rejected: %v", projectionErr)
+	}
+	clearEntry(&projected)
+	page, _, err := mapGenerationRootPage(base, []*goldap.Entry{legacy})
+	if err != nil || len(page) != 1 {
+		t.Fatalf("v1 inventory root projection rejected: %v", err)
+	}
+	if _, err := mapInventoryGenerationMetadata(page[0]); err != nil {
+		clearEntries(page)
+		t.Fatal("v1 inventory root metadata rejected")
+	}
+	clearEntries(page)
+	search := func(_ context.Context, _ *goldap.SearchRequest) (*goldap.SearchResult, error) {
+		return &goldap.SearchResult{Entries: []*goldap.Entry{legacy}, Controls: []goldap.Control{&goldap.ControlPaging{PagingSize: 256}}}, nil
+	}
+	limits := datasourceadmin.GenerationLimits{MaxGenerations: 16, MaxOutstandingCandidates: 8, MaxSnapshotRows: 64, MaxSnapshotBytes: 1 << 20, BackendDeadline: time.Second}
+	entries, err := listGenerationRoots(t.Context(), base, limits, search)
+	if err != nil || len(entries) != 1 {
+		t.Fatal("committed metadata-free v1 history was rejected by paging")
+	}
+	defer clearEntries(entries)
+	metadata, err := mapInventoryGenerationMetadata(entries[0])
+	if err != nil || metadata.schema != datasourceadmin.SchemaVersionV1 || metadata.generation != 1 {
+		t.Fatal("paged v1 history lost its conservative inventory projection")
+	}
+}
+
 // generationRootLDAPSource constructs one exact direct v2 root source for
 // bounded paging tests.
 func generationRootLDAPSource(base string, generation uint64) *goldap.Entry {

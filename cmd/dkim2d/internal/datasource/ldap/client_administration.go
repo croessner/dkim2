@@ -133,7 +133,7 @@ func listGenerationRoots(
 				clearEntries(pageEntries)
 				return nil, errors.New("ldap inventory unavailable")
 			}
-			metadata, metadataErr := mapGenerationMetadata(entry)
+			metadata, metadataErr := mapInventoryGenerationMetadata(entry)
 			if metadataErr != nil {
 				clearEntries(pageEntries)
 				return nil, errors.New("ldap inventory unavailable")
@@ -194,7 +194,7 @@ func listRetentionGenerationRoots(ctx context.Context, base string, limits datas
 				clearEntries(pageEntries)
 				return nil, errors.New("ldap recovery inventory unavailable")
 			}
-			metadata, metadataErr := mapGenerationMetadata(entry)
+			metadata, metadataErr := mapInventoryGenerationMetadata(entry)
 			if metadataErr != nil {
 				clearEntries(pageEntries)
 				return nil, errors.New("ldap recovery inventory unavailable")
@@ -272,7 +272,7 @@ func mapGenerationRootSource(base string, source *goldap.Entry) (Entry, error) {
 
 // mapGenerationRootSourceWithNumber returns one exact detached root and its RDN number.
 func mapGenerationRootSourceWithNumber(base string, source *goldap.Entry) (Entry, uint64, error) {
-	if source == nil || !sourceRootClassesValid(source) {
+	if source == nil || !sourceInventoryRootClassesValid(source) {
 		return Entry{}, 0, errLDAPPartial
 	}
 	dn, dnErr := goldap.ParseDN(source.DN)
@@ -294,7 +294,7 @@ func mapGenerationRootSourceWithNumber(base string, source *goldap.Entry) (Entry
 	if err != nil {
 		return Entry{}, 0, err
 	}
-	metadata, err := mapGenerationMetadata(entry)
+	metadata, err := mapInventoryGenerationMetadata(entry)
 	if err != nil || metadata.generation != generation {
 		clearEntry(&entry)
 		return Entry{}, 0, errLDAPPartial
@@ -800,6 +800,16 @@ func sourceHasOnlyClasses(entry *goldap.Entry, names ...string) bool {
 		}
 	}
 	return true
+}
+
+// sourceInventoryRootClassesValid admits exact v1 roots only for conservative
+// history enumeration; full generation reads remain v2/v3-only.
+func sourceInventoryRootClassesValid(entry *goldap.Entry) bool {
+	schema := entry.GetAttributeValues(attrSchemaVersion)
+	if len(schema) == 1 && schema[0] == datasourceadmin.SchemaVersionV1 {
+		return sourceHasOnlyClasses(entry, topObjectClass, datasetObjectClass)
+	}
+	return sourceRootClassesValid(entry)
 }
 
 // sourceRootClassesValid accepts only the exact v2 or v3 root class set.
