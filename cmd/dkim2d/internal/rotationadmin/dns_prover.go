@@ -8,7 +8,10 @@ import (
 	"github.com/croessner/dkim2/cmd/dkim2d/internal/domainadmin"
 )
 
-const explicitRecursiveResolver = "explicit_recursive"
+const (
+	explicitRecursiveResolver  = "explicit_recursive"
+	canonicalRecursiveResolver = "recursive"
+)
 
 // DNSBatchProver adapts immutable campaign batches to the production DNS
 // resolver/parser/proof owner. It has no DNS write capability.
@@ -56,7 +59,7 @@ func (p *DNSBatchProver) ExportBatchDNS(ctx context.Context, path string, prepar
 // authority. DNS writes, TSIG, and zone transfer credentials are intentionally
 // absent: campaign DNS publication remains an operator action.
 func NewDNSBatchProver(policy datasourceadmin.DNSPolicy, lookupTimeout time.Duration) (*DNSBatchProver, error) {
-	if datasourceadmin.ValidateDNSPolicy(policy) != nil || policy.ResolverClass != explicitRecursiveResolver ||
+	if datasourceadmin.ValidateDNSPolicy(policy) != nil || policy.ResolverClass != canonicalRecursiveResolver ||
 		len(policy.ResolverEndpoints) == 0 || lookupTimeout <= 0 || lookupTimeout > 30*time.Second {
 		return nil, errInvalid
 	}

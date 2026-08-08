@@ -81,7 +81,7 @@ func TestLoadConfigAcceptsProtectedTLSBundle(t *testing.T) {
 		t.Fatal(err)
 	}
 	configPath := filepath.Join(directory, "rotation.yaml")
-	document := "version: dkim2-rotation-admin-v1\nauthority_id: aaaaaaaaaaaaaaaaaaaaaaaaae\nbackend: ldap\ndeadline: 30s\nlimits:\n  max_work_items: 16\n  max_dns_batch_records: 4\n  max_dns_batches: 4\nroles:\n  snapshot:\n    name: snapshot\n    secret_file: " + secretPaths[0] + "\n  staging:\n    name: staging\n    secret_file: " + secretPaths[1] + "\n  activation:\n    name: activation\n    secret_file: " + secretPaths[2] + "\n  purge:\n    name: purge\n    secret_file: " + secretPaths[3] + "\n  closer:\n    name: closer\n    secret_file: " + secretPaths[4] + "\ntransport:\n  ldap:\n    address: 127.0.0.1:636\n    server_name: ldap.example.test\n    base_dn: dc=example,dc=test\n    ca_file: " + caPath + "\n    starttls: false\n"
+	document := "version: dkim2-rotation-admin-v1\nauthority_id: aaaaaaaaaaaaaaaaaaaaaaaaae\nbackend: ldap\ndeadline: 30s\nlimits:\n  max_work_items: 16\n  max_dns_batch_records: 4\n  max_dns_batches: 4\nroles:\n  snapshot:\n    name: snapshot\n    secret_file: " + secretPaths[0] + "\n  staging:\n    name: staging\n    secret_file: " + secretPaths[1] + "\n  activation:\n    name: activation\n    secret_file: " + secretPaths[2] + "\n  purge:\n    name: purge\n    secret_file: " + secretPaths[3] + "\n  closer:\n    name: closer\n    secret_file: " + secretPaths[4] + "\ntransport:\n  ldap:\n    address: 127.0.0.1:636\n    server_name: ldap.example.test\n    base_dn: dc=example,dc=test\n    ca_file: " + caPath + "\n    starttls: false\ndns:\n  resolver_class: explicit_recursive\n  resolver_endpoints:\n    - 127.0.0.1:53\n  export_ttl_seconds: 300\n  proof_lifetime_seconds: 60\n  lookup_timeout: 2s\n"
 	if err := os.WriteFile(configPath, []byte(document), 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -92,6 +92,13 @@ func TestLoadConfigAcceptsProtectedTLSBundle(t *testing.T) {
 	defer loaded.Close() //nolint:errcheck // Test cleanup cannot affect the assertion.
 	if _, err := LoadTrustRoots(caPath); err != nil {
 		t.Fatal("runtime trust-root read rejected")
+	}
+	policy, timeout, ok := loaded.DNSProofPolicy()
+	if !ok || policy.ResolverClass != canonicalRecursiveResolver || timeout != 2*time.Second {
+		t.Fatal("explicit recursive config was not normalized to canonical proof policy")
+	}
+	if prover, err := NewDNSBatchProver(policy, timeout); err != nil || prover == nil {
+		t.Fatal("canonical campaign DNS prover rejected")
 	}
 }
 

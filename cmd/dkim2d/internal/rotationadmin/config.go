@@ -184,8 +184,8 @@ func (d configDocument) load(path string) (*Config, error) { //nolint:gocyclo //
 	configuration := &Config{authorityID: d.AuthorityID, backend: d.Backend, deadline: deadline, limits: limits, roles: roles}
 	if d.DNS.ResolverClass != "" || len(d.DNS.ResolverEndpoints) != 0 || d.DNS.ExportTTLSeconds != 0 || d.DNS.ProofLifetimeSeconds != 0 || d.DNS.LookupTimeout != "" {
 		lookupTimeout, parseErr := time.ParseDuration(d.DNS.LookupTimeout)
-		policy := datasourceadmin.DNSPolicy{ResolverClass: d.DNS.ResolverClass, ResolverEndpoints: append([]string(nil), d.DNS.ResolverEndpoints...), ExportTTLSeconds: d.DNS.ExportTTLSeconds, ProofLifetimeSeconds: d.DNS.ProofLifetimeSeconds}
-		if parseErr != nil || lookupTimeout <= 0 || lookupTimeout > 30*time.Second || policy.ResolverClass != explicitRecursiveResolver || datasourceadmin.ValidateDNSPolicy(policy) != nil {
+		policy := datasourceadmin.DNSPolicy{ResolverClass: canonicalRecursiveResolver, ResolverEndpoints: append([]string(nil), d.DNS.ResolverEndpoints...), ExportTTLSeconds: d.DNS.ExportTTLSeconds, ProofLifetimeSeconds: d.DNS.ProofLifetimeSeconds}
+		if parseErr != nil || lookupTimeout <= 0 || lookupTimeout > 30*time.Second || d.DNS.ResolverClass != explicitRecursiveResolver || datasourceadmin.ValidateDNSPolicy(policy) != nil {
 			return nil, errInvalid
 		}
 		configuration.dns = dnsProofTransport{policy: policy, lookupTimeout: lookupTimeout}
@@ -336,7 +336,7 @@ func authorityScheme(backend datasourceadmin.BackendClass) string {
 // DNSProofPolicy returns the explicitly configured proof-only recursive DNS
 // authority. A missing policy deliberately leaves campaign mutation unavailable.
 func (c *Config) DNSProofPolicy() (datasourceadmin.DNSPolicy, time.Duration, bool) {
-	if c == nil || c.dns.lookupTimeout <= 0 || c.dns.policy.ResolverClass != explicitRecursiveResolver || datasourceadmin.ValidateDNSPolicy(c.dns.policy) != nil {
+	if c == nil || c.dns.lookupTimeout <= 0 || c.dns.policy.ResolverClass != canonicalRecursiveResolver || datasourceadmin.ValidateDNSPolicy(c.dns.policy) != nil {
 		return datasourceadmin.DNSPolicy{}, 0, false
 	}
 	policy := datasourceadmin.DNSPolicy{ResolverClass: c.dns.policy.ResolverClass, ResolverEndpoints: append([]string(nil), c.dns.policy.ResolverEndpoints...), ExportTTLSeconds: c.dns.policy.ExportTTLSeconds, ProofLifetimeSeconds: c.dns.policy.ProofLifetimeSeconds}
