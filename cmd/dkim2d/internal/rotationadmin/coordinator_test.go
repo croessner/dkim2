@@ -39,17 +39,20 @@ func (*publicationBackendFake) ReadCollisionInventory(context.Context, datasourc
 }
 
 type resumeLockerFake struct {
-	claims int
-	fail   bool
+	claims        int
+	claimRevision uint64
+	fail          bool
+	observed      datasourceadmin.AdministrationLockObservation
 }
 
 // Claim returns one fresh unique lock or simulates an unavailable post-crash fence.
-func (f *resumeLockerFake) Claim(_ context.Context, operation datasourceadmin.OperationBinding, _ uint64) (datasourceadmin.AdministrationLock, error) {
+func (f *resumeLockerFake) Claim(_ context.Context, operation datasourceadmin.OperationBinding, revision uint64) (datasourceadmin.AdministrationLock, error) {
 	f.claims++
+	f.claimRevision = revision
 	if f.fail {
 		return datasourceadmin.AdministrationLock{}, errors.New("claim unavailable")
 	}
-	return datasourceadmin.NewAdministrationLock(operation, uint64(f.claims))
+	return datasourceadmin.NewAdministrationLock(operation, revision)
 }
 
 // Release has no test-side authority.
@@ -57,9 +60,29 @@ func (*resumeLockerFake) Release(context.Context, datasourceadmin.Administration
 	return 0, nil
 }
 
-// ObserveAdministrationLock is unused by lifecycle resume.
-func (*resumeLockerFake) ObserveAdministrationLock(context.Context) (datasourceadmin.AdministrationLockObservation, error) {
-	return datasourceadmin.AdministrationLockObservation{}, errConflict
+// ObserveAdministrationLock returns the exact ownerless backend revision.
+func (f *resumeLockerFake) ObserveAdministrationLock(context.Context) (datasourceadmin.AdministrationLockObservation, error) {
+	if f.observed.Valid() {
+		return f.observed, nil
+	}
+	return datasourceadmin.NewAdministrationLockObservation(7, datasourceadmin.OperationBinding{}, false)
+}
+
+// TestCoordinatorClaimObservedLockUsesExactRevision freezes the provider fence
+// and rejects a foreign owner before any claim mutation.
+func TestCoordinatorClaimObservedLockUsesExactRevision(t *testing.T) {
+	operation, _ := datasourceadmin.NewOperationBinding("aibqibiga4eascqlbqgzav3y4m")
+	locker := &resumeLockerFake{}
+	coordinator := &Coordinator{locker: locker}
+	lock, err := coordinator.claimObservedLock(t.Context(), operation)
+	if err != nil || !lock.ValidFor(operation) || locker.claims != 1 || locker.claimRevision != 7 {
+		t.Fatal("claim did not use the exact observed positive revision")
+	}
+	foreign, _ := datasourceadmin.NewOperationBinding("aebagbafaydqqcikbmga2dqpca")
+	locker.observed, _ = datasourceadmin.NewAdministrationLockObservation(8, foreign, true)
+	if _, err := coordinator.claimObservedLock(t.Context(), operation); err == nil || locker.claims != 1 {
+		t.Fatal("foreign owner reached the mutating claim")
+	}
 }
 
 type resumeProofFake struct {
@@ -254,7 +277,7 @@ func TestCoordinatorResumeReclaimsFenceBeforeProof(t *testing.T) {
 		t.Fatal("resume coordinator rejected")
 	}
 	report, err := coordinator.Run(t.Context(), store, plan.intent)
-	if err != nil || report.State != StateActivated || locker.claims != 1 || proof.calls != 1 || backend.stageCalls != 1 || backend.activateCalls != 1 {
+	if err != nil || report.State != StateActivated || locker.claims != 1 || locker.claimRevision != 7 || proof.calls != 1 || backend.stageCalls != 1 || backend.activateCalls != 1 {
 		t.Fatal("resume did not use one fresh fence and one existing candidate")
 	}
 	if _, err := coordinator.Run(t.Context(), store, plan.intent); err == nil || backend.stageCalls != 1 || backend.activateCalls != 1 {

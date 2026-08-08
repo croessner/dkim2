@@ -54,7 +54,7 @@ func (c *Coordinator) Run(ctx context.Context, store *JournalStore, intent Inten
 		return Report{}, errBackend
 	}
 	if !exists {
-		lock, claimErr := c.locker.Claim(ctx, intent.operation, 0)
+		lock, claimErr := c.claimObservedLock(ctx, intent.operation)
 		if claimErr != nil {
 			return Report{}, errBackend
 		}
@@ -122,7 +122,7 @@ func (c *Coordinator) Run(ctx context.Context, store *JournalStore, intent Inten
 	}
 	// A restart must reclaim the datasource fence before it consumes the
 	// candidate or records another DNS proof. The journal lock is local only.
-	lock, claimErr := c.locker.Claim(ctx, operation, 0)
+	lock, claimErr := c.claimObservedLock(ctx, operation)
 	if claimErr != nil {
 		return journal.Report(), errBackend
 	}
@@ -140,6 +140,25 @@ func (c *Coordinator) Run(ctx context.Context, store *JournalStore, intent Inten
 	}
 	defer publishedPrepared.Close() //nolint:errcheck
 	return c.resumeAndActivate(ctx, store, journal, publishedPrepared, lock)
+}
+
+// claimObservedLock binds every mutation to one exact positive backend revision.
+func (c *Coordinator) claimObservedLock(
+	ctx context.Context,
+	operation datasourceadmin.OperationBinding,
+) (datasourceadmin.AdministrationLock, error) {
+	observed, err := c.locker.ObserveAdministrationLock(ctx)
+	if err != nil || !observed.Valid() {
+		return datasourceadmin.AdministrationLock{}, errBackend
+	}
+	if observed.Claimed() && !observed.Owner().Equal(operation) {
+		return datasourceadmin.AdministrationLock{}, errConflict
+	}
+	lock, err := c.locker.Claim(ctx, operation, observed.Revision())
+	if err != nil {
+		return datasourceadmin.AdministrationLock{}, errBackend
+	}
+	return lock, nil
 }
 
 // resumeAndActivate uses one freshly claimed lock for all post-crash work.
