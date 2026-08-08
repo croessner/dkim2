@@ -264,7 +264,7 @@ func (p *Preparer) replaceBindings(ctx context.Context, rows *datasourceadmin.Ro
 		}
 		profileID := derivedIdentity("profile", operation, generation, ordinal, "")
 		policy.ProfileID = profileID
-		rows.Profiles = append(rows.Profiles, datasourceadmin.ProfileRow{ID: profileID, Domain: binding.item.Domain, Status: "active"})
+		rows.Profiles = append(rows.Profiles, datasourceadmin.ProfileRow{ID: profileID, Domain: binding.item.Domain, Status: profileStatusActive})
 		for _, algorithm := range binding.item.Algorithms {
 			generated, err := p.keys.Generate(ctx, algorithm)
 			if err != nil || len(generated.PublicSPKI) == 0 || len(generated.PrivatePKCS8) == 0 {

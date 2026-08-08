@@ -10,6 +10,7 @@ import (
 // State is the public closed campaign state vocabulary.
 type State = admincontract.State
 
+// State values expose the closed campaign-state vocabulary.
 const (
 	StatePlanned           = admincontract.StatePlanned
 	StatePreparing         = admincontract.StatePreparing

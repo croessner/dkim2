@@ -3,10 +3,10 @@ package datasourceadmin
 import (
 	"context"
 	"crypto/sha256"
-	"encoding/hex"
 	"encoding/binary"
-	"hash"
+	"encoding/hex"
 	"fmt"
+	"hash"
 	"io"
 	"slices"
 	"strings"
@@ -17,6 +17,8 @@ import (
 const maxRetentionInventory = 16384
 
 const retentionAuthorityDomain = "DKIM2-RETENTION-AUTHORITY-V1\x00"
+
+const retentionPolicyVersion = "retention-v1"
 
 // RetentionOwnership classifies the authority that supplied one generation's metadata.
 type RetentionOwnership string
@@ -33,6 +35,7 @@ const (
 // RetentionReason is the closed provider-neutral result of one retention decision.
 type RetentionReason string
 
+// RetentionReason values classify every closed retention outcome.
 const (
 	RetentionReasonCurrent             RetentionReason = "current"
 	RetentionReasonOpenCampaign        RetentionReason = "open_campaign"
@@ -62,7 +65,7 @@ type RetentionPolicy struct {
 // DefaultRetentionPolicy returns restrictive finite production defaults.
 func DefaultRetentionPolicy() RetentionPolicy {
 	return RetentionPolicy{
-		Version: "retention-v1", MaxTotalGenerations: 128, MinActiveRollbackGenerations: 8,
+		Version: retentionPolicyVersion, MaxTotalGenerations: 128, MinActiveRollbackGenerations: 8,
 		MaxClosedNeverActiveGenerations: 4, MaxAuditReceipts: 1024, MaxPurgeBatch: 64,
 	}
 }
@@ -79,16 +82,16 @@ func (p RetentionPolicy) Validate() error {
 
 // RetentionGeneration is key-free lifecycle metadata for one inventory generation.
 type RetentionGeneration struct {
-	Generation    uint64
-	Operation     OperationBinding
+	Generation       uint64
+	Operation        OperationBinding
 	SourceGeneration uint64
-	Schema        string
-	State         GenerationState
-	WasActive     bool
-	Complete      bool
-	Closed        bool
-	Ownership     RetentionOwnership
-	ContentDigest admincontract.Digest
+	Schema           string
+	State            GenerationState
+	WasActive        bool
+	Complete         bool
+	Closed           bool
+	Ownership        RetentionOwnership
+	ContentDigest    admincontract.Digest
 }
 
 // JoinTerminalRecovery applies only exact immutable terminal evidence. A v3
@@ -145,11 +148,15 @@ type RetentionRecoveryLimits struct {
 }
 
 // DefaultRetentionRecoveryLimits returns the fixed finite recovery window.
-func DefaultRetentionRecoveryLimits() RetentionRecoveryLimits { return RetentionRecoveryLimits{MaxGenerations: 16384, PageSize: 1024, MaxReadBytes: 1 << 30} }
+func DefaultRetentionRecoveryLimits() RetentionRecoveryLimits {
+	return RetentionRecoveryLimits{MaxGenerations: 16384, PageSize: 1024, MaxReadBytes: 1 << 30}
+}
 
 // Validate rejects widened or unbounded recovery reads.
 func (l RetentionRecoveryLimits) Validate() error {
-	if l.MaxGenerations == 0 || l.MaxGenerations > 16384 || l.PageSize == 0 || l.PageSize > 1024 || l.PageSize > l.MaxGenerations || l.MaxReadBytes == 0 || l.MaxReadBytes > 1<<30 { return newError(CodeInvalid) }
+	if l.MaxGenerations == 0 || l.MaxGenerations > 16384 || l.PageSize == 0 || l.PageSize > 1024 || l.PageSize > l.MaxGenerations || l.MaxReadBytes == 0 || l.MaxReadBytes > 1<<30 {
+		return newError(CodeInvalid)
+	}
 	return nil
 }
 
@@ -161,27 +168,48 @@ type RetentionRecoveryReader interface {
 
 // ReadRetentionRecoveryInventory builds a stable full recovery inventory without allocation limits.
 func ReadRetentionRecoveryInventory(ctx context.Context, reader RetentionRecoveryReader, limits RetentionRecoveryLimits) (RetentionInventory, error) {
-	if ctx == nil || ctx.Err() != nil || reader == nil || limits.Validate() != nil { return RetentionInventory{}, newError(CodeInvalid) }
+	if ctx == nil || ctx.Err() != nil || reader == nil || limits.Validate() != nil {
+		return RetentionInventory{}, newError(CodeInvalid)
+	}
 	first, err := reader.RetentionCurrent(ctx)
-	if err != nil || first == 0 { return RetentionInventory{}, newError(CodeUnavailable) }
+	if err != nil || first == 0 {
+		return RetentionInventory{}, newError(CodeUnavailable)
+	}
 	rows := make([]RetentionGeneration, 0)
 	cursor := uint64(0)
 	for {
 		page, pageErr := reader.RetentionPage(ctx, cursor, limits.PageSize)
-		if pageErr != nil { return RetentionInventory{}, newError(CodeUnavailable) }
-		if len(page) == 0 { break }
-		if len(page) > int(limits.PageSize) || len(rows)+len(page) > int(limits.MaxGenerations) { return RetentionInventory{}, newError(CodeLimitExceeded) }
+		if pageErr != nil {
+			return RetentionInventory{}, newError(CodeUnavailable)
+		}
+		if len(page) == 0 {
+			break
+		}
+		if len(page) > int(limits.PageSize) || len(rows)+len(page) > int(limits.MaxGenerations) {
+			return RetentionInventory{}, newError(CodeLimitExceeded)
+		}
 		for _, row := range page {
-			if row.Generation == 0 || row.Generation <= cursor { return RetentionInventory{}, newError(CodeConflict) }
+			if row.Generation == 0 || row.Generation <= cursor {
+				return RetentionInventory{}, newError(CodeConflict)
+			}
 			cursor = row.Generation
 			rows = append(rows, row)
 		}
 	}
 	found := false
-	for _, row := range rows { if row.Generation == first { found = true; break } }
-	if !found { return RetentionInventory{}, newError(CodeConflict) }
+	for _, row := range rows {
+		if row.Generation == first {
+			found = true
+			break
+		}
+	}
+	if !found {
+		return RetentionInventory{}, newError(CodeConflict)
+	}
 	final, finalErr := reader.RetentionCurrent(ctx)
-	if finalErr != nil || final != first { return RetentionInventory{}, newError(CodeConflict) }
+	if finalErr != nil || final != first {
+		return RetentionInventory{}, newError(CodeConflict)
+	}
 	return RetentionInventory{Version: "recovery-inventory-v1", Current: first, Generations: rows}, nil
 }
 
@@ -309,7 +337,7 @@ func classifyCandidates(generations []RetentionGeneration, current uint64, outpu
 			output.add(generation.Generation, RetentionReasonUnknown, false)
 			output.unresolved++
 			protected = append(protected, generation)
-		case generation.Schema != "dkim2-datasource-v2" && generation.Schema != "dkim2-datasource-v3" || generation.State != StateCommitted:
+		case generation.Schema != SchemaVersionV2 && generation.Schema != SchemaVersionV3 || generation.State != StateCommitted:
 			output.add(generation.Generation, RetentionReasonMalformed, false)
 			output.unresolved++
 			protected = append(protected, generation)
@@ -478,12 +506,16 @@ func retentionInventoryCommitment(inventory RetentionInventory, policyVersion st
 	slices.SortFunc(ordered, func(left, right RetentionGeneration) int { return compareUint64(left.Generation, right.Generation) })
 	hash := sha256.New()
 	_, _ = hash.Write([]byte("DKIM2-RETENTION-INVENTORY-V1\x00"))
-	for _, value := range []string{inventory.Version, policyVersion} { writeRetentionString(hash, value) }
+	for _, value := range []string{inventory.Version, policyVersion} {
+		writeRetentionString(hash, value)
+	}
 	var current [8]byte
 	binary.BigEndian.PutUint64(current[:], inventory.Current)
 	_, _ = hash.Write(current[:])
 	for index, row := range ordered {
-		if row.Generation == 0 || index > 0 && row.Generation == ordered[index-1].Generation { return "", newError(CodeConflict) }
+		if row.Generation == 0 || index > 0 && row.Generation == ordered[index-1].Generation {
+			return "", newError(CodeConflict)
+		}
 		var generation [8]byte
 		binary.BigEndian.PutUint64(generation[:], row.Generation)
 		_, _ = hash.Write(generation[:])
@@ -499,10 +531,24 @@ func retentionInventoryCommitment(inventory RetentionInventory, policyVersion st
 		} else {
 			writeRetentionString(hash, "")
 		}
-		for _, value := range []string{row.Schema, string(row.State), string(row.Ownership)} { writeRetentionString(hash, value) }
-		if row.WasActive { _, _ = hash.Write([]byte{1}) } else { _, _ = hash.Write([]byte{0}) }
-		if row.Complete { _, _ = hash.Write([]byte{1}) } else { _, _ = hash.Write([]byte{0}) }
-		if row.Closed { _, _ = hash.Write([]byte{1}) } else { _, _ = hash.Write([]byte{0}) }
+		for _, value := range []string{row.Schema, string(row.State), string(row.Ownership)} {
+			writeRetentionString(hash, value)
+		}
+		if row.WasActive {
+			_, _ = hash.Write([]byte{1})
+		} else {
+			_, _ = hash.Write([]byte{0})
+		}
+		if row.Complete {
+			_, _ = hash.Write([]byte{1})
+		} else {
+			_, _ = hash.Write([]byte{0})
+		}
+		if row.Closed {
+			_, _ = hash.Write([]byte{1})
+		} else {
+			_, _ = hash.Write([]byte{0})
+		}
 		_, _ = hash.Write(row.ContentDigest.Bytes())
 	}
 	return "inventory-" + hex.EncodeToString(hash.Sum(nil)), nil

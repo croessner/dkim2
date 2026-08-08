@@ -19,7 +19,12 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-const runtimeRedacted = "campaign_runtime{redacted}"
+const (
+	runtimeRedacted       = "campaign_runtime{redacted}"
+	backendLDAP           = "ldap"
+	resultUnavailable     = "unavailable"
+	resultArtifactInvalid = "artifact_invalid"
+)
 
 // CampaignRuntime composes the one real provider-backed offline campaign owner.
 type CampaignRuntime struct {
@@ -93,7 +98,7 @@ func NewCampaignRuntime(ctx context.Context, configuration *rotationadmin.Config
 		return nil, errUnavailable
 	}
 	switch configuration.Backend() {
-	case "ldap":
+	case backendLDAP:
 		return openLDAPRuntime(ctx, configuration, paths, closerPath, limits, proof)
 	case "postgresql":
 		return openPostgreSQLRuntime(ctx, configuration, paths, closerPath, limits, proof)
@@ -106,7 +111,7 @@ func NewCampaignRuntime(ctx context.Context, configuration *rotationadmin.Config
 
 // Run executes the one complete coordinator only after its strict proof
 // authority has been constructed. DNS publication itself remains external.
-func (r *CampaignRuntime) Run(ctx context.Context, request Request, configuration *rotationadmin.Config) (rotationadmin.CommandReport, error) {
+func (r *CampaignRuntime) Run(ctx context.Context, request Request, configuration *rotationadmin.Config) (rotationadmin.CommandReport, error) { //nolint:gocyclo // One runtime owner serializes all protected command classes.
 	if r == nil || r.backend == nil || r.coord == nil || ctx == nil || ctx.Err() != nil || configuration == nil || r.class != configuration.Backend() {
 		return rotationadmin.CommandReport{}, errUnavailable
 	}
@@ -170,16 +175,16 @@ func (r *CampaignRuntime) Run(ctx context.Context, request Request, configuratio
 		if request.Command == CommandDNSExport {
 			batches, batchErr := rotationadmin.BuildDNSBatches(ctx, prepared, configuration.Limits().MaxDNSBatchRecords, configuration.Limits())
 			if batchErr != nil || request.Batch > uint32(len(batches)) {
-				return commandReport(request.Command, journal, r.class, "unavailable"), errUnavailable
+				return commandReport(request.Command, journal, r.class, resultUnavailable), errUnavailable
 			}
 			if _, exportErr := r.prover.ExportBatchDNS(ctx, request.Output, prepared, batches[request.Batch-1]); exportErr != nil {
-				return commandReport(request.Command, journal, r.class, "unavailable"), errUnavailable
+				return commandReport(request.Command, journal, r.class, resultUnavailable), errUnavailable
 			}
 			return commandReport(request.Command, journal, r.class, "success"), nil
 		}
 	}
 	if request.Command != CommandStatus && request.Command != CommandReconcile {
-		return commandReport(request.Command, journal, r.class, "unavailable"), errUnavailable
+		return commandReport(request.Command, journal, r.class, resultUnavailable), errUnavailable
 	}
 	if journal.State() == rotationadmin.StateReconcileRequired {
 		return commandReport(request.Command, journal, r.class, "reconcile_required"), errUnavailable
@@ -194,7 +199,7 @@ func (r *CampaignRuntime) planPurge(ctx context.Context, request Request) (rotat
 	}
 	inventory, inventoryErr := datasourceadmin.ReadRetentionRecoveryInventory(ctx, r.recovery, datasourceadmin.DefaultRetentionRecoveryLimits())
 	if inventoryErr != nil {
-		return rotationadmin.CommandReport{Command: string(request.Command), Backend: r.class, ResultClass: "unavailable"}, errUnavailable
+		return rotationadmin.CommandReport{Command: string(request.Command), Backend: r.class, ResultClass: resultUnavailable}, errUnavailable
 	}
 	classification, classificationErr := datasourceadmin.ClassifyRetention(inventory, datasourceadmin.DefaultRetentionPolicy())
 	if classificationErr != nil || classification.EligibleCount() == 0 {
@@ -206,7 +211,7 @@ func (r *CampaignRuntime) planPurge(ctx context.Context, request Request) (rotat
 	}
 	plan, planErr := rotationadmin.NewPurgePlan(datasourceadmin.BackendClass(r.class), r.authority, classification)
 	if planErr != nil {
-		return rotationadmin.CommandReport{Command: string(request.Command), Backend: r.class, RetainedCount: classification.RetainedCount(), UnresolvedCount: classification.UnresolvedCount(), ResultClass: "unavailable"}, errUnavailable
+		return rotationadmin.CommandReport{Command: string(request.Command), Backend: r.class, RetainedCount: classification.RetainedCount(), UnresolvedCount: classification.UnresolvedCount(), ResultClass: resultUnavailable}, errUnavailable
 	}
 	defer plan.Close() //nolint:errcheck // Artifact creation is the only durable action.
 	document, marshalErr := rotationadmin.MarshalPurgePlanArtifact(plan)
@@ -228,21 +233,21 @@ func (r *CampaignRuntime) applyPurge(ctx context.Context, request Request) (rota
 	}
 	document, readErr := config.ReadProtectedDocument(request.Plan, 262144)
 	if readErr != nil {
-		return rotationadmin.CommandReport{Command: string(request.Command), Backend: r.class, ResultClass: "artifact_invalid"}, errUnavailable
+		return rotationadmin.CommandReport{Command: string(request.Command), Backend: r.class, ResultClass: resultArtifactInvalid}, errUnavailable
 	}
 	defer clear(document)
 	plan, parseErr := rotationadmin.ParsePurgePlanArtifact(document)
 	if parseErr != nil {
-		return rotationadmin.CommandReport{Command: string(request.Command), Backend: r.class, ResultClass: "artifact_invalid"}, errUnavailable
+		return rotationadmin.CommandReport{Command: string(request.Command), Backend: r.class, ResultClass: resultArtifactInvalid}, errUnavailable
 	}
 	defer plan.Close() //nolint:errcheck // Parsed protected targets must not escape this apply attempt.
 	apply, applyErr := rotationadmin.NewPurgeApplyRequest(plan, true)
 	if applyErr != nil {
-		return rotationadmin.CommandReport{Command: string(request.Command), Backend: r.class, ResultClass: "artifact_invalid"}, errUnavailable
+		return rotationadmin.CommandReport{Command: string(request.Command), Backend: r.class, ResultClass: resultArtifactInvalid}, errUnavailable
 	}
 	inventory, inventoryErr := datasourceadmin.ReadRetentionRecoveryInventory(ctx, r.recovery, datasourceadmin.DefaultRetentionRecoveryLimits())
 	if inventoryErr != nil {
-		return rotationadmin.CommandReport{Command: string(request.Command), Backend: r.class, ResultClass: "unavailable"}, errUnavailable
+		return rotationadmin.CommandReport{Command: string(request.Command), Backend: r.class, ResultClass: resultUnavailable}, errUnavailable
 	}
 	result, executeErr := rotationadmin.ExecutePurge(ctx, apply, datasourceadmin.BackendClass(r.class), r.authority, inventory, r.purge)
 	if executeErr != nil || !result.Committed || result.Unknown {
@@ -322,7 +327,7 @@ func commandReport(command Command, journal *rotationadmin.Journal, backend, res
 }
 
 // openLDAPRuntime builds three lifecycle connectors plus the independent purge connector.
-func openLDAPRuntime(ctx context.Context, configuration *rotationadmin.Config, paths [4]string, closerPath string, limits datasourceadmin.GenerationLimits, proof *rotationadmin.DNSBatchProver) (*CampaignRuntime, error) {
+func openLDAPRuntime(_ context.Context, configuration *rotationadmin.Config, paths [4]string, closerPath string, limits datasourceadmin.GenerationLimits, proof *rotationadmin.DNSBatchProver) (*CampaignRuntime, error) {
 	address, serverName, baseDN, caFile, startTLS, ok := configuration.LDAPTransport()
 	if !ok {
 		return nil, errUnavailable
@@ -404,7 +409,7 @@ func openLDAPRuntime(ctx context.Context, configuration *rotationadmin.Config, p
 		_ = connectors[3].Close()
 		return nil, errUnavailable
 	}
-	return newComposedRuntime(administrator, purger, newRetentionRecoveryAdapter(administrator, terminal), terminal, "ldap", limits, authority, configuration, proof)
+	return newComposedRuntime(administrator, purger, newRetentionRecoveryAdapter(administrator, terminal), terminal, backendLDAP, limits, authority, configuration, proof)
 }
 
 // openPostgreSQLRuntime builds three lifecycle pools plus the independent purge pool.
@@ -449,16 +454,34 @@ func openPostgreSQLRuntime(ctx context.Context, configuration *rotationadmin.Con
 	}
 	closerConfig := postgresql.ConnectionConfig{Address: address, ServerName: serverName, Database: database, User: closerCredential.User, Password: closerPassword, RootCAs: roots, ConnectTimeout: timeout, MaxConnections: int32(maximum), IdleConnections: int32(idle)}
 	defer clear(closerConfig.Password)
-	administrator, err := postgresql.OpenAdministrator(ctx, configs[0], configs[1], configs[2], provider.ProductionLimits(), limits, pageSize)
+	providerCtx, cancelProvider, contextErr := providerContext(ctx, limits.BackendDeadline)
+	if contextErr != nil {
+		return nil, errUnavailable
+	}
+	administrator, err := postgresql.OpenAdministrator(providerCtx, configs[0], configs[1], configs[2], provider.ProductionLimits(), limits, pageSize)
+	cancelProvider()
 	if err != nil {
 		return nil, errUnavailable
 	}
-	purger, err := postgresql.OpenPurgeExecutor(ctx, configs[3])
+	providerCtx, cancelProvider, contextErr = providerContext(ctx, limits.BackendDeadline)
+	if contextErr != nil {
+		administrator.Close()
+		return nil, errUnavailable
+	}
+	purger, err := postgresql.OpenPurgeExecutor(providerCtx, configs[3])
+	cancelProvider()
 	if err != nil {
 		administrator.Close()
 		return nil, errUnavailable
 	}
-	terminal, terminalErr := postgresql.OpenTerminalExecutor(ctx, closerConfig)
+	providerCtx, cancelProvider, contextErr = providerContext(ctx, limits.BackendDeadline)
+	if contextErr != nil {
+		administrator.Close()
+		purger.Close()
+		return nil, errUnavailable
+	}
+	terminal, terminalErr := postgresql.OpenTerminalExecutor(providerCtx, closerConfig)
+	cancelProvider()
 	if terminalErr != nil {
 		administrator.Close()
 		purger.Close()
@@ -517,16 +540,34 @@ func openMySQLRuntime(ctx context.Context, configuration *rotationadmin.Config, 
 	}
 	closerConfig := mysql.ConnectionConfig{Address: address, ServerName: serverName, Database: database, User: closerCredential.User, Password: closerPassword, RootCAs: roots, ConnectTimeout: timeout, MaxConnections: maximum, IdleConnections: idle}
 	defer clear(closerConfig.Password)
-	administrator, err := mysql.OpenAdministrator(ctx, configs[0], configs[1], configs[2], provider.ProductionLimits(), limits, pageSize)
+	providerCtx, cancelProvider, contextErr := providerContext(ctx, limits.BackendDeadline)
+	if contextErr != nil {
+		return nil, errUnavailable
+	}
+	administrator, err := mysql.OpenAdministrator(providerCtx, configs[0], configs[1], configs[2], provider.ProductionLimits(), limits, pageSize)
+	cancelProvider()
 	if err != nil {
 		return nil, errUnavailable
 	}
-	purger, err := mysql.OpenPurgeExecutor(ctx, configs[3])
+	providerCtx, cancelProvider, contextErr = providerContext(ctx, limits.BackendDeadline)
+	if contextErr != nil {
+		administrator.Close()
+		return nil, errUnavailable
+	}
+	purger, err := mysql.OpenPurgeExecutor(providerCtx, configs[3])
+	cancelProvider()
 	if err != nil {
 		administrator.Close()
 		return nil, errUnavailable
 	}
-	terminal, terminalErr := mysql.OpenTerminalExecutor(ctx, closerConfig)
+	providerCtx, cancelProvider, contextErr = providerContext(ctx, limits.BackendDeadline)
+	if contextErr != nil {
+		administrator.Close()
+		purger.Close()
+		return nil, errUnavailable
+	}
+	terminal, terminalErr := mysql.OpenTerminalExecutor(providerCtx, closerConfig)
+	cancelProvider()
 	if terminalErr != nil {
 		administrator.Close()
 		purger.Close()
@@ -553,15 +594,19 @@ func newComposedRuntime(backend campaignBackend, purge rotationadmin.PurgeExecut
 	if !ok {
 		return nil, errUnavailable
 	}
-	terminalBackend, terminalErr := rotationadmin.NewTerminalBackend(backend, backend, terminal)
+	boundedBackend := &deadlineCampaignBackend{backend: backend, maximum: generations.BackendDeadline}
+	boundedTerminal := &deadlineTerminalRecorder{recorder: terminal, maximum: generations.BackendDeadline}
+	boundedPurge := &deadlinePurgeExecutor{executor: purge, maximum: generations.BackendDeadline}
+	boundedRecovery := &deadlineRetentionRecoveryReader{reader: recovery, maximum: generations.BackendDeadline}
+	terminalBackend, terminalErr := rotationadmin.NewTerminalBackend(boundedBackend, boundedBackend, boundedTerminal)
 	if terminalErr != nil {
 		return nil, errUnavailable
 	}
-	coordinator, err := rotationadmin.NewCoordinator(terminalBackend, terminalBackend, backend, rotationadmin.NativeKeyFactory{RSABits: 3072}, proof, configuration.Limits(), generations, time.Duration(policy.ProofLifetimeSeconds)*time.Second)
+	coordinator, err := rotationadmin.NewCoordinator(terminalBackend, terminalBackend, boundedBackend, rotationadmin.NativeKeyFactory{RSABits: 3072}, proof, configuration.Limits(), generations, time.Duration(policy.ProofLifetimeSeconds)*time.Second)
 	if err != nil {
 		return nil, errUnavailable
 	}
-	return &CampaignRuntime{backend: backend, purge: purge, recovery: recovery, terminal: terminal, coord: coordinator, prover: proof, class: class, limits: generations, authority: authority}, nil
+	return &CampaignRuntime{backend: boundedBackend, purge: boundedPurge, recovery: boundedRecovery, terminal: boundedTerminal, coord: coordinator, prover: proof, class: class, limits: generations, authority: authority}, nil
 }
 
 // newIntent creates a fresh opaque operation identity only for a new command.

@@ -223,8 +223,8 @@ func planFixture(current *PlanSource, expected, candidate uint64) PlanProjection
 		Backend: BackendLDAP,
 		Authority: AuthorityDescriptor{
 			AuthorityID:       digestTestID,
-			Endpoints:         []AuthorityEndpoint{{Scheme: "ldaps", Host: "ldap.example.test", Port: 636, TLSServerName: "ldap.example.test"}},
-			LDAP:              &LDAPAuthority{BaseDN: "dc=example,dc=test", SnapshotPrincipal: "snapshot", StagingPrincipal: "staging", ActivationPrincipal: "activation"},
+			Endpoints:         []AuthorityEndpoint{{Scheme: authoritySchemeLDAPS, Host: testLDAPAuthorityHost, Port: 636, TLSServerName: testLDAPAuthorityHost}},
+			LDAP:              &LDAPAuthority{BaseDN: "dc=example,dc=test", SnapshotPrincipal: "snapshot", StagingPrincipal: testStagingPrincipal, ActivationPrincipal: "activation"},
 			TrustFingerprints: [][32]byte{trust},
 		},
 		ExpectedCurrent:     expected,

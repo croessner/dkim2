@@ -14,6 +14,7 @@ var errUnavailable = errors.New("rotation runtime unavailable")
 // Command is one closed offline campaign action.
 type Command string
 
+// Command values enumerate the closed offline campaign actions.
 const (
 	CommandRun        Command = "run"
 	CommandEmergency  Command = "emergency"
@@ -78,7 +79,7 @@ func RunFile(ctx context.Context, request Request, coordinator Coordinator) ([]b
 }
 
 // Validate rejects ambiguous command intent before protected configuration or coordinator access.
-func (r Request) Validate() error {
+func (r Request) Validate() error { //nolint:gocyclo // Closed CLI command combinations are validated in one authoritative matrix.
 	if !cleanAbsolute(r.Config) || !cleanAbsolute(r.Journal) || r.Config == r.Journal || !knownCommand(r.Command) || r.DryRun && r.Apply {
 		return errUnavailable
 	}

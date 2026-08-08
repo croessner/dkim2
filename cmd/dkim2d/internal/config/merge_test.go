@@ -255,7 +255,7 @@ func stableFieldGoldenContract() []stableFieldGolden {
 		{path: "signing.reload_interval", environment: "DKIM2D_SIGNING_RELOAD_INTERVAL", defaultValue: "30" + "s", hasDefault: true},
 		// Keep the golden literal independent of the production default constant.
 		{path: "signing.allow_recipient_group", environment: "DKIM2D_SIGNING_ALLOW_RECIPIENT_GROUP", defaultValue: "false", hasDefault: true}, //nolint:goconst
-		{path: "signing.limit_profile", environment: "DKIM2D_SIGNING_LIMIT_PROFILE", defaultValue: "small", hasDefault: true},
+		{path: "signing.limit_profile", environment: "DKIM2D_SIGNING_LIMIT_PROFILE", defaultValue: limitProfileSmall, hasDefault: true},
 		{path: "signing.max_load_bytes", environment: "DKIM2D_SIGNING_MAX_LOAD_BYTES", defaultValue: "16777216", hasDefault: true},
 		{path: "signing.ldap.address", environment: "DKIM2D_SIGNING_LDAP_ADDRESS"},
 		{path: "signing.ldap.server_name", environment: "DKIM2D_SIGNING_LDAP_SERVER_NAME"},

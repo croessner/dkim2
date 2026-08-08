@@ -163,12 +163,12 @@ func (*CandidateContent) MarshalJSON() ([]byte, error) { return nil, newError(Co
 
 // PublicationEnvelope owns one operation-bound v3 candidate and its immutable digest.
 type PublicationEnvelope struct {
-	mu        sync.Mutex
-	operation OperationBinding
+	mu               sync.Mutex
+	operation        OperationBinding
 	sourceGeneration uint64
-	content   *CandidateContent
-	digest    CandidateContentDigest
-	closed    bool
+	content          *CandidateContent
+	digest           CandidateContentDigest
+	closed           bool
 }
 
 // NewPublicationEnvelope takes content ownership on success and leaves rejected content caller-owned.
@@ -209,9 +209,14 @@ func newPublicationEnvelope(operation string, sourceGeneration uint64, content *
 // SourceGeneration returns the immutable frozen source generation, or zero
 // for legacy v3 envelopes that must remain unknown/retained.
 func (e *PublicationEnvelope) SourceGeneration() uint64 {
-	if e == nil { return 0 }
-	e.mu.Lock(); defer e.mu.Unlock()
-	if e.closed || e.content == nil { return 0 }
+	if e == nil {
+		return 0
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.closed || e.content == nil {
+		return 0
+	}
 	return e.sourceGeneration
 }
 

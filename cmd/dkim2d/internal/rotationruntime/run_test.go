@@ -14,10 +14,10 @@ type coordinatorFake struct{ calls int }
 // Run records only that the thin adapter reached its sole coordinator owner.
 func (f *coordinatorFake) Run(_ context.Context, request Request, configuration *rotationadmin.Config) (rotationadmin.CommandReport, error) {
 	f.calls++
-	if request.Command != CommandRun || !request.Automatic || configuration.Backend() != "ldap" {
+	if request.Command != CommandRun || !request.Automatic || configuration.Backend() != backendLDAP {
 		return rotationadmin.CommandReport{}, errUnavailable
 	}
-	return rotationadmin.CommandReport{Command: "run", Mode: "normal", State: rotationadmin.StatePrepared, Backend: "ldap", WorkCount: 4, RecordCount: 8, BatchCount: 2, ResultClass: "success"}, nil
+	return rotationadmin.CommandReport{Command: "run", Mode: "normal", State: rotationadmin.StatePrepared, Backend: backendLDAP, WorkCount: 4, RecordCount: 8, BatchCount: 2, ResultClass: "success"}, nil
 }
 
 // TestRunFileInvokesOnlyTheCoordinator proves the command adapter does not own a parallel campaign flow.

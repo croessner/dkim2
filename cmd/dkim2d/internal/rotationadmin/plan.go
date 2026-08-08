@@ -32,7 +32,7 @@ type Plan struct {
 }
 
 // Freeze enumerates every eligible active binding under one stable snapshot.
-func Freeze(ctx context.Context, source *datasourceadmin.Snapshot, candidateGeneration uint64, intent Intent, limits Limits) (*Plan, error) {
+func Freeze(ctx context.Context, source *datasourceadmin.Snapshot, candidateGeneration uint64, intent Intent, limits Limits) (*Plan, error) { //nolint:gocyclo // One immutable freeze owns the complete campaign work-set validation.
 	if ctx == nil || ctx.Err() != nil || source == nil || limits.Validate() != nil ||
 		candidateGeneration <= source.Generation() || !intent.operation.Initialized() {
 		return nil, errInvalid
@@ -54,7 +54,7 @@ func Freeze(ctx context.Context, source *datasourceadmin.Snapshot, candidateGene
 			algorithms[credential.ProfileID] = append(algorithms[credential.ProfileID], credential.Algorithm)
 		}
 		for index, policy := range rows.Policies {
-			if policy.Status != "active" || policy.Rollout != "enforce" {
+			if policy.Status != profileStatusActive || policy.Rollout != "enforce" {
 				continue
 			}
 			if intent.mode == admincontract.ModeEmergency && (policy.TenantID != intent.emergencyBinding.Tenant ||
@@ -65,7 +65,7 @@ func Freeze(ctx context.Context, source *datasourceadmin.Snapshot, candidateGene
 			profile, found := profiles[policy.ProfileID]
 			ordered := append([]string(nil), algorithms[policy.ProfileID]...)
 			slices.Sort(ordered)
-			if !found || profile.Status != "active" || profile.Domain != policy.Domain || len(ordered) == 0 {
+			if !found || profile.Status != profileStatusActive || profile.Domain != policy.Domain || len(ordered) == 0 {
 				return errConflict
 			}
 			work = append(work, frozenBinding{policyIndex: index, item: admincontract.WorkItem{

@@ -17,7 +17,14 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-const rotationConfigVersion = "dkim2-rotation-admin-v1"
+const (
+	rotationConfigVersion       = "dkim2-rotation-admin-v1"
+	backendLDAP                 = "ldap"
+	profileStatusActive         = "active"
+	bindingUseOriginator        = "originator"
+	purgeLifecycleNeverActive   = "never_active"
+	purgeLifecycleActiveHistory = "active_history"
+)
 
 // Config is the protected, closed offline campaign configuration.
 type Config struct {
@@ -139,12 +146,12 @@ func LoadConfig(path string) (*Config, error) {
 }
 
 // load validates finite policy, role separation, and protected secret readability.
-func (d configDocument) load(path string) (*Config, error) {
+func (d configDocument) load(path string) (*Config, error) { //nolint:gocyclo // Strict closed-document validation is intentionally centralized.
 	if d.Version != rotationConfigVersion || d.AuthorityID == "" || !knownBackend(d.Backend) {
 		return nil, errInvalid
 	}
 	deadline, err := time.ParseDuration(d.Deadline)
-	if err != nil || deadline <= 0 || deadline > 5*time.Minute {
+	if err != nil || deadline <= 0 || deadline > 24*time.Hour {
 		return nil, errInvalid
 	}
 	limits := Limits{MaxWorkItems: d.Limits.MaxWorkItems, MaxDNSBatchRecords: d.Limits.MaxDNSBatchRecords, MaxDNSBatches: d.Limits.MaxDNSBatches}
@@ -182,7 +189,7 @@ func (d configDocument) load(path string) (*Config, error) {
 		}
 		configuration.dns = dnsProofTransport{policy: policy, lookupTimeout: lookupTimeout}
 	}
-	if d.Backend == "ldap" {
+	if d.Backend == backendLDAP {
 		transport := d.Transport.LDAP
 		if transport.Address == "" && transport.ServerName == "" && transport.BaseDN == "" && transport.CAFile == "" {
 			return configuration, nil
@@ -354,7 +361,7 @@ func (c *Config) ClosurePath() string {
 
 // LDAPTransport returns the validated LDAP descriptor without credential material.
 func (c *Config) LDAPTransport() (address, serverName, baseDN, caFile string, startTLS bool, ok bool) {
-	if c == nil || c.backend != "ldap" || c.ldap.address == "" {
+	if c == nil || c.backend != backendLDAP || c.ldap.address == "" {
 		return "", "", "", "", false, false
 	}
 	return c.ldap.address, c.ldap.serverName, c.ldap.baseDN, c.ldap.caFile, c.ldap.startTLS, true
@@ -362,7 +369,7 @@ func (c *Config) LDAPTransport() (address, serverName, baseDN, caFile string, st
 
 // SQLTransport returns the validated SQL descriptor without credential material.
 func (c *Config) SQLTransport() (address, serverName, database, caFile string, timeout time.Duration, maxConnections, idleConnections, pageSize int, ok bool) {
-	if c == nil || c.backend == "ldap" || c.sql.address == "" {
+	if c == nil || c.backend == backendLDAP || c.sql.address == "" {
 		return "", "", "", "", 0, 0, 0, 0, false
 	}
 	return c.sql.address, c.sql.serverName, c.sql.database, c.sql.caFile, c.sql.connectTimeout, c.sql.maxConnections, c.sql.idleConnections, c.sql.pageSize, true
@@ -430,7 +437,7 @@ func cleanAbsolute(path string) bool { return filepath.IsAbs(path) && filepath.C
 
 // knownBackend accepts only the four native v3 backend classes.
 func knownBackend(value string) bool {
-	return value == "ldap" || value == "postgresql" || value == "mysql" || value == "mariadb"
+	return value == backendLDAP || value == "postgresql" || value == "mysql" || value == "mariadb"
 }
 
 // validRoleName accepts a bounded nonidentity role class.

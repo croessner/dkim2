@@ -44,7 +44,7 @@ func OpenTerminalExecutor(ctx context.Context, config ConnectionConfig) (*Termin
 	if err := pool.QueryRow(ctx, `SELECT current_user, session_user`).Scan(&user, &session); err != nil || user != config.User || session != config.User {
 		return nil, datasourceadmin.NewError(datasourceadmin.CodeUnavailable)
 	}
-	for role, want := range map[string]bool{"dkim2_closer": true, "dkim2_purger": false, "dkim2_snapshot": false, "dkim2_stager": false, "dkim2_activator": false} {
+	for role, want := range map[string]bool{"dkim2_closer": true, "dkim2_purger": false, roleSnapshot: false, roleStager: false, roleActivator: false} {
 		var member bool
 		if err := pool.QueryRow(ctx, `SELECT pg_has_role(current_user,$1,'MEMBER')`, role).Scan(&member); err != nil || member != want {
 			return nil, datasourceadmin.NewError(datasourceadmin.CodeUnavailable)

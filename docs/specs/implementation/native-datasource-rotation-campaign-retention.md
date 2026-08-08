@@ -386,6 +386,12 @@ limits include profiles, handles, policies, aggregate records, decoded bytes,
 backend load bytes, page size, load deadline, campaign work items, DNS batch
 records/concurrency, generations, and protected report/document sizes.
 
+The protected offline command has a finite deployment deadline no greater
+than 24 hours. This whole-campaign bound is deliberately separate from the
+shorter per-provider operation deadlines: a large RSA campaign may require
+more than five minutes even though every LDAP or SQL request remains narrowly
+bounded. Zero, negative, unparsable, and longer values fail closed.
+
 The supported production profile must include at least 10,000 domains with two
 algorithms for one active use, plus documented headroom for multiple uses. The
 exact hard maxima and defaults are settled during implementation from measured

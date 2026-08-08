@@ -48,45 +48,78 @@ type administrationClient interface {
 func (a *Administrator) RetentionRecoveryInventory(ctx context.Context) (datasourceadmin.RetentionInventory, error) {
 	limits := datasourceadmin.DefaultRetentionRecoveryLimits()
 	client, closeClient, err := a.connect(ctx, a.snapshot, a.generations)
-	if err != nil { return datasourceadmin.RetentionInventory{}, err }
+	if err != nil {
+		return datasourceadmin.RetentionInventory{}, err
+	}
 	defer closeClient()
 	first, present, err := client.ReadCurrentOptional(ctx)
-	if err != nil || !present { return datasourceadmin.RetentionInventory{}, datasourceadminError(datasourceadmin.CodeUnavailable) }
+	if err != nil || !present {
+		return datasourceadmin.RetentionInventory{}, datasourceadminError(datasourceadmin.CodeUnavailable)
+	}
 	defer clearEntry(&first)
 	current, err := mapCurrentMetadata(first)
-	if err != nil { return datasourceadmin.RetentionInventory{}, datasourceadminError(datasourceadmin.CodeConflict) }
+	if err != nil {
+		return datasourceadmin.RetentionInventory{}, datasourceadminError(datasourceadmin.CodeConflict)
+	}
 	roots, err := client.ListRetentionGenerationRoots(ctx, limits)
-	if err != nil { return datasourceadmin.RetentionInventory{}, datasourceadminError(datasourceadmin.CodeUnavailable) }
+	if err != nil {
+		return datasourceadmin.RetentionInventory{}, datasourceadminError(datasourceadmin.CodeUnavailable)
+	}
 	defer clearEntries(roots)
 	rows := make([]datasourceadmin.RetentionGeneration, 0, len(roots))
 	bytesRead := 0
 	currentMatches := 0
 	for _, root := range roots {
 		metadata, mapErr := mapGenerationMetadata(root)
-		if mapErr != nil { return datasourceadmin.RetentionInventory{}, datasourceadminError(datasourceadmin.CodeConflict) }
+		if mapErr != nil {
+			return datasourceadmin.RetentionInventory{}, datasourceadminError(datasourceadmin.CodeConflict)
+		}
 		records, recordPresent, readErr := client.ReadGenerationRecords(ctx, metadata.generation, a.limits, a.generations)
-		if readErr != nil || !recordPresent { clearDatasetRecords(&records); return datasourceadmin.RetentionInventory{}, datasourceadminError(datasourceadmin.CodeUnavailable) }
+		if readErr != nil || !recordPresent {
+			clearDatasetRecords(&records)
+			return datasourceadmin.RetentionInventory{}, datasourceadminError(datasourceadmin.CodeUnavailable)
+		}
 		readBytes := datasetRecordsDecodedBytes(records)
-		if readBytes > int(limits.MaxReadBytes) || bytesRead > int(limits.MaxReadBytes)-readBytes { clearDatasetRecords(&records); return datasourceadmin.RetentionInventory{}, datasourceadminError(datasourceadmin.CodeLimitExceeded) }
+		if readBytes > int(limits.MaxReadBytes) || bytesRead > int(limits.MaxReadBytes)-readBytes {
+			clearDatasetRecords(&records)
+			return datasourceadmin.RetentionInventory{}, datasourceadminError(datasourceadmin.CodeLimitExceeded)
+		}
 		bytesRead += readBytes
 		snapshot, verified, verifyErr := snapshotFromRecords(records)
 		clearDatasetRecords(&records)
-		if verifyErr != nil || !metadata.equal(verified) { _ = snapshot.Close(); return datasourceadmin.RetentionInventory{}, datasourceadminError(datasourceadmin.CodeConflict) }
+		if verifyErr != nil || !metadata.equal(verified) {
+			_ = snapshot.Close()
+			return datasourceadmin.RetentionInventory{}, datasourceadminError(datasourceadmin.CodeConflict)
+		}
 		_ = snapshot.Close()
 		row := datasourceadmin.RetentionGeneration{Generation: verified.generation, Operation: verified.operation, SourceGeneration: verified.sourceGeneration, Schema: verified.schema, State: verified.state, WasActive: verified.wasActive, Ownership: datasourceadmin.RetentionOwnershipTrusted}
 		if verified.schema == datasourceadmin.SchemaVersionV3 && verified.digest.Valid() {
-			digest, digestErr := admincontract.ParseDigest(verified.digest.Bytes()); if digestErr != nil { return datasourceadmin.RetentionInventory{}, datasourceadminError(datasourceadmin.CodeConflict) }
+			digest, digestErr := admincontract.ParseDigest(verified.digest.Bytes())
+			if digestErr != nil {
+				return datasourceadmin.RetentionInventory{}, datasourceadminError(datasourceadmin.CodeConflict)
+			}
 			row.ContentDigest, row.Complete = digest, true
 		}
-		if verified.generation == current.generation { if !current.matchesRoot(verified) { return datasourceadmin.RetentionInventory{}, datasourceadminError(datasourceadmin.CodeConflict) }; currentMatches++ }
+		if verified.generation == current.generation {
+			if !current.matchesRoot(verified) {
+				return datasourceadmin.RetentionInventory{}, datasourceadminError(datasourceadmin.CodeConflict)
+			}
+			currentMatches++
+		}
 		rows = append(rows, row)
 	}
-	if currentMatches != 1 { return datasourceadmin.RetentionInventory{}, datasourceadminError(datasourceadmin.CodeConflict) }
+	if currentMatches != 1 {
+		return datasourceadmin.RetentionInventory{}, datasourceadminError(datasourceadmin.CodeConflict)
+	}
 	final, finalPresent, finalErr := client.ReadCurrentOptional(ctx)
-	if finalErr != nil || !finalPresent { return datasourceadmin.RetentionInventory{}, datasourceadminError(datasourceadmin.CodeUnavailable) }
+	if finalErr != nil || !finalPresent {
+		return datasourceadmin.RetentionInventory{}, datasourceadminError(datasourceadmin.CodeUnavailable)
+	}
 	defer clearEntry(&final)
 	finalMetadata, finalMapErr := mapCurrentMetadata(final)
-	if finalMapErr != nil || !current.equal(finalMetadata) { return datasourceadmin.RetentionInventory{}, datasourceadminError(datasourceadmin.CodeConflict) }
+	if finalMapErr != nil || !current.equal(finalMetadata) {
+		return datasourceadmin.RetentionInventory{}, datasourceadminError(datasourceadmin.CodeConflict)
+	}
 	return datasourceadmin.RetentionInventory{Version: "ldap-recovery-v1", Current: current.generation, Generations: rows}, nil
 }
 

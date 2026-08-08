@@ -38,9 +38,13 @@ func (terminalRuntimeRecorder) ReadTerminal(context.Context, datasourceadmin.Ope
 	return datasourceadmin.TerminalRecord{}, false, nil
 }
 
-type terminalRuntimeRecord struct{ record datasourceadmin.TerminalRecord }
+type terminalRuntimeRecord struct {
+	record datasourceadmin.TerminalRecord
+}
 
-func (terminalRuntimeRecord) RecordTerminal(context.Context, datasourceadmin.TerminalRecord) error { return nil }
+func (terminalRuntimeRecord) RecordTerminal(context.Context, datasourceadmin.TerminalRecord) error {
+	return nil
+}
 
 func (r terminalRuntimeRecord) ReadTerminal(context.Context, datasourceadmin.OperationBinding) (datasourceadmin.TerminalRecord, bool, error) {
 	return r.record, true, nil
@@ -116,7 +120,7 @@ func TestPurgePlanAndApplyUseFreshInventoryAndTheDedicatedExecutor(t *testing.T)
 	backend := &retentionInventoryBackend{inventory: retentionRuntimeInventory(t, 10000)}
 	executor := &purgeRuntimeExecutor{}
 	runtime := &CampaignRuntime{
-		backend: backend, purge: executor, recovery: newRetentionRecoveryAdapter(backend, terminalRuntimeRecorder{}), class: "ldap", limits: retentionRuntimeLimits(), authority: retentionRuntimeAuthority(),
+		backend: backend, purge: executor, recovery: newRetentionRecoveryAdapter(backend, terminalRuntimeRecorder{}), class: backendLDAP, limits: retentionRuntimeLimits(), authority: retentionRuntimeAuthority(),
 	}
 	artifact := filepath.Join(directory, "purge-plan.yaml")
 	planned, err := runtime.planPurge(t.Context(), Request{Command: CommandPurgePlan, Output: artifact})
@@ -180,7 +184,7 @@ func TestPurgePlanFailsClosedWithoutEligibleRetention(t *testing.T) {
 		t.Fatal("protect test directory")
 	}
 	runtime := &CampaignRuntime{
-		backend: &retentionInventoryBackend{inventory: retentionRuntimeInventory(t, 8)}, class: "ldap", limits: retentionRuntimeLimits(), authority: retentionRuntimeAuthority(),
+		backend: &retentionInventoryBackend{inventory: retentionRuntimeInventory(t, 8)}, class: backendLDAP, limits: retentionRuntimeLimits(), authority: retentionRuntimeAuthority(),
 	}
 	artifact := filepath.Join(directory, "purge-plan.yaml")
 	runtime.recovery = newRetentionRecoveryAdapter(runtime.backend.(*retentionInventoryBackend), terminalRuntimeRecorder{})
@@ -197,7 +201,7 @@ func TestPurgePlanFailsClosedWithoutEligibleRetention(t *testing.T) {
 // from bypassing the CLI's one bare destructive authorization token.
 func TestPurgeApplyRequiresTheExplicitApplyFence(t *testing.T) {
 	backend := &retentionInventoryBackend{inventory: retentionRuntimeInventory(t, 130)}
-	runtime := &CampaignRuntime{backend: backend, purge: &purgeRuntimeExecutor{}, recovery: newRetentionRecoveryAdapter(backend, terminalRuntimeRecorder{}), class: "ldap", limits: retentionRuntimeLimits(), authority: retentionRuntimeAuthority()}
+	runtime := &CampaignRuntime{backend: backend, purge: &purgeRuntimeExecutor{}, recovery: newRetentionRecoveryAdapter(backend, terminalRuntimeRecorder{}), class: backendLDAP, limits: retentionRuntimeLimits(), authority: retentionRuntimeAuthority()}
 	if _, err := runtime.applyPurge(t.Context(), Request{Command: CommandPurgeApply, Plan: "/tmp/plan"}); err == nil {
 		t.Fatal("purge apply without the explicit apply fence was accepted")
 	}

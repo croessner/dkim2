@@ -48,7 +48,7 @@ func OpenPurgeExecutor(ctx context.Context, config ConnectionConfig) (*PurgeExec
 	if err := pool.QueryRow(ctx, `SELECT current_user, session_user`).Scan(&currentUser, &sessionUser); err != nil || currentUser != config.User || sessionUser != config.User {
 		return nil, datasourceadmin.NewError(datasourceadmin.CodeUnavailable)
 	}
-	for role, expected := range map[string]bool{"dkim2_purger": true, "dkim2_snapshot": false, "dkim2_stager": false, "dkim2_activator": false, "dkim2_publisher": false} {
+	for role, expected := range map[string]bool{"dkim2_purger": true, roleSnapshot: false, roleStager: false, roleActivator: false, "dkim2_publisher": false} {
 		var member bool
 		if err := pool.QueryRow(ctx, `SELECT pg_has_role(current_user, $1, 'MEMBER')`, role).Scan(&member); err != nil || member != expected {
 			return nil, datasourceadmin.NewError(datasourceadmin.CodeUnavailable)

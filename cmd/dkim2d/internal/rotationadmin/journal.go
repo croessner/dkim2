@@ -242,9 +242,10 @@ func (j *Journal) Report() Report {
 	j.mu.Lock()
 	defer j.mu.Unlock()
 	result := "in_progress"
-	if j.state == StateActivated {
+	switch j.state {
+	case StateActivated:
 		result = "success"
-	} else if j.state == StateConflict || j.state == StateFailed || j.state == StateAborted || j.state == StateReconcileRequired {
+	case StateConflict, StateFailed, StateAborted, StateReconcileRequired:
 		result = "closed"
 	}
 	return Report{State: j.state, Mode: j.mode, WorkCount: j.workCount, RecordCount: j.recordCount, BatchCount: uint32(len(j.batches)), ResultClass: result}
@@ -520,7 +521,7 @@ func decodeJournal(document []byte) (*Journal, error) {
 }
 
 // validateDecodedJournal replays structural state invariants without mutation.
-func validateDecodedJournal(journal *Journal) error {
+func validateDecodedJournal(journal *Journal) error { //nolint:gocyclo // Protected wire validation checks the complete state matrix centrally.
 	if journal == nil || journal.sourceGeneration == 0 || journal.candidateGeneration <= journal.sourceGeneration || journal.workCount == 0 || journal.recordCount == 0 || journal.recordCount < journal.workCount || len(journal.work) != int(journal.workCount) || journal.rotationPolicy == "" || journal.dnsPolicy == "" || journal.retentionPolicy == "" || journal.limitProfile == "" {
 		return errInvalid
 	}

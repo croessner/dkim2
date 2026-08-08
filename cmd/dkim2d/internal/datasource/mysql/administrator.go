@@ -14,9 +14,11 @@ import (
 )
 
 const (
-	queryAdminLock          = `CALL dkim2_v3_lock_observe()`
-	queryAdminLockForUpdate = `CALL dkim2_v3_lock_for_update()`
-	queryAdminCurrent       = `SELECT CAST(current_generation.generation AS CHAR), dataset.schema_version,
+	mysqlInactiveRole        = "NONE"
+	mysqlLockOperationColumn = "lock_operation_id"
+	queryAdminLock           = `CALL dkim2_v3_lock_observe()`
+	queryAdminLockForUpdate  = `CALL dkim2_v3_lock_for_update()`
+	queryAdminCurrent        = `SELECT CAST(current_generation.generation AS CHAR), dataset.schema_version,
        dataset.dataset_state, dataset.operation_id, dataset.candidate_digest, CAST(dataset.source_generation AS CHAR),
        current_generation.candidate_digest, dataset.was_active
 FROM dkim2_current_generation AS current_generation
@@ -103,7 +105,7 @@ func openAdministrationConnector(
 		return nil, datasourceadmin.NewError(datasourceadmin.CodeUnavailable)
 	}
 	user, _, present := strings.Cut(effectiveUser, "@")
-	roleInactive := !effectiveRole.Valid || strings.ToUpper(effectiveRole.String) == "NONE"
+	roleInactive := !effectiveRole.Valid || strings.ToUpper(effectiveRole.String) == mysqlInactiveRole
 	if !present || user != config.User || !roleInactive {
 		_ = database.Close()
 		return nil, datasourceadmin.NewError(datasourceadmin.CodeUnavailable)

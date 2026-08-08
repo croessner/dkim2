@@ -78,7 +78,7 @@ func TestNativeDomainOnboardingUpgradeDefinesV3Contract(t *testing.T) {
 	for _, required := range []string{
 		"dkim2-datasource-v3", "operation_id", "candidate_digest", "was_active",
 		"administration_lock", "lock_revision", "lock_operation_id",
-		"SERIALIZABLE", "dkim2_snapshot", "dkim2_stager", "dkim2_activator",
+		"SERIALIZABLE", roleSnapshot, roleStager, roleActivator,
 		"administration_lock_observe", "administration_lock_for_update",
 		"candidate_root_for_update",
 		"administration_lock_claim", "administration_lock_release",

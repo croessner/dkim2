@@ -186,6 +186,8 @@ func startSQLSigningRuntime(
 }
 
 // newPostgreSQLSigningComponents opens one bounded PostgreSQL loader and pool.
+//
+//nolint:dupl // Provider-specific pool types deliberately keep separate constructors.
 func newPostgreSQLSigningComponents(
 	ctx context.Context,
 	providerConfig config.SQLSigningConfig,
@@ -217,6 +219,8 @@ func newPostgreSQLSigningComponents(
 }
 
 // newMySQLSigningComponents opens one bounded MySQL-family loader and pool.
+//
+//nolint:dupl // Provider-specific pool types deliberately keep separate constructors.
 func newMySQLSigningComponents(
 	ctx context.Context,
 	providerConfig config.SQLSigningConfig,

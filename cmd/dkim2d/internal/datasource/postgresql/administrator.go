@@ -14,6 +14,9 @@ import (
 )
 
 const (
+	roleSnapshot        = "dkim2_snapshot"
+	roleStager          = "dkim2_stager"
+	roleActivator       = "dkim2_activator"
 	queryAdminIsolation = `SELECT current_setting('transaction_isolation'), current_setting('transaction_read_only')`
 	queryAdminLock      = `SELECT lock_revision, lock_operation_id
 FROM dkim2_datasource.administration_lock_observe()`
@@ -139,9 +142,9 @@ func openAdministrationConnector(
 		return nil, datasourceadmin.NewError(datasourceadmin.CodeUnavailable)
 	}
 	capabilities := map[sqlsnapshot.AdministrationMode]string{
-		sqlsnapshot.AdministrationSnapshot:   "dkim2_snapshot",
-		sqlsnapshot.AdministrationStaging:    "dkim2_stager",
-		sqlsnapshot.AdministrationActivation: "dkim2_activator",
+		sqlsnapshot.AdministrationSnapshot:   roleSnapshot,
+		sqlsnapshot.AdministrationStaging:    roleStager,
+		sqlsnapshot.AdministrationActivation: roleActivator,
 	}
 	for candidateMode, role := range capabilities {
 		var member bool

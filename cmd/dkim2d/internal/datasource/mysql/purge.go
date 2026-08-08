@@ -27,7 +27,7 @@ FROM dkim2_purge_audit_receipts WHERE generation = ?`
 type PurgeExecutor struct{ database *sql.DB }
 
 // OpenPurgeExecutor opens and verifies a distinct direct MySQL/MariaDB login.
-func OpenPurgeExecutor(ctx context.Context, config ConnectionConfig) (*PurgeExecutor, error) {
+func OpenPurgeExecutor(ctx context.Context, config ConnectionConfig) (*PurgeExecutor, error) { //nolint:dupl // Purger and closer retain distinct authority constructors.
 	database, err := OpenDatabase(ctx, config)
 	if err != nil {
 		return nil, datasourceadmin.NewError(datasourceadmin.CodeUnavailable)
@@ -44,7 +44,7 @@ func OpenPurgeExecutor(ctx context.Context, config ConnectionConfig) (*PurgeExec
 		return nil, datasourceadmin.NewError(datasourceadmin.CodeUnavailable)
 	}
 	user, _, present := strings.Cut(effectiveUser, "@")
-	if !present || user != config.User || (effectiveRole.Valid && strings.ToUpper(effectiveRole.String) != "NONE") {
+	if !present || user != config.User || (effectiveRole.Valid && strings.ToUpper(effectiveRole.String) != mysqlInactiveRole) {
 		return nil, datasourceadmin.NewError(datasourceadmin.CodeUnavailable)
 	}
 	valid = true

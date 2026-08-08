@@ -14,14 +14,14 @@ import (
 
 // MetadataRow is one explicit dataset metadata projection.
 type MetadataRow struct {
-	Generation      string
-	SchemaVersion   string
-	DatasetState    string
-	OperationID     *string
-	CandidateDigest []byte
+	Generation       string
+	SchemaVersion    string
+	DatasetState     string
+	OperationID      *string
+	CandidateDigest  []byte
 	SourceGeneration string
-	PointerDigest   []byte
-	WasActive       bool
+	PointerDigest    []byte
+	WasActive        bool
 }
 
 // HandleRow is one explicit opaque handle projection.
@@ -339,13 +339,15 @@ func verifyProtectedGeneration(rows DatasetRows, generation uint64) error {
 		context.Background(),
 		func(operation string) error {
 			var candidateErr error
-		if rows.Current.SourceGeneration != "" {
-			source, sourceErr := parseGeneration(rows.Current.SourceGeneration)
-			if sourceErr != nil { return sourceErr }
-			candidate, candidateErr = datasourceadmin.NewCampaignPublicationEnvelope(operation, source, content)
-		} else {
-			candidate, candidateErr = datasourceadmin.NewPublicationEnvelope(operation, content)
-		}
+			if rows.Current.SourceGeneration != "" {
+				source, sourceErr := parseGeneration(rows.Current.SourceGeneration)
+				if sourceErr != nil {
+					return sourceErr
+				}
+				candidate, candidateErr = datasourceadmin.NewCampaignPublicationEnvelope(operation, source, content)
+			} else {
+				candidate, candidateErr = datasourceadmin.NewPublicationEnvelope(operation, content)
+			}
 			return candidateErr
 		},
 	)

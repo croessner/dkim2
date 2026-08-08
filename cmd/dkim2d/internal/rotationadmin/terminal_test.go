@@ -42,8 +42,8 @@ func terminalRecordsEqual(left, right datasourceadmin.TerminalRecord) bool {
 // durable abort evidence while an uncertain write never aborts the journal.
 func TestAbortWithTerminalIsEvidenceFirstAndIdempotent(t *testing.T) {
 	plan, prepared := preparedCampaign(t, 1)
-	defer plan.Close()
-	defer prepared.Close()
+	defer plan.Close()     //nolint:errcheck // Test-owned protected values are closed best-effort.
+	defer prepared.Close() //nolint:errcheck // Test-owned protected values are closed best-effort.
 	journal, err := NewJournal(plan)
 	if err != nil || journal.BeginPreparing() != nil || journal.RecordPrepared(prepared) != nil || journal.RecordStaged(mustCandidateDigest(t, prepared)) != nil {
 		t.Fatal("prepare staged journal")
@@ -59,8 +59,8 @@ func TestAbortWithTerminalIsEvidenceFirstAndIdempotent(t *testing.T) {
 
 func TestAbortWithTerminalUnknownOutcomeRequiresReconciliation(t *testing.T) {
 	plan, prepared := preparedCampaign(t, 1)
-	defer plan.Close()
-	defer prepared.Close()
+	defer plan.Close()     //nolint:errcheck // Test-owned protected values are closed best-effort.
+	defer prepared.Close() //nolint:errcheck // Test-owned protected values are closed best-effort.
 	journal, _ := NewJournal(plan)
 	_ = journal.BeginPreparing()
 	_ = journal.RecordPrepared(prepared)

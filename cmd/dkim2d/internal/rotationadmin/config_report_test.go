@@ -30,8 +30,22 @@ func TestLoadConfigRequiresFiveDistinctProtectedRoles(t *testing.T) {
 		t.Fatal("five distinct protected roles rejected")
 	}
 	defer loaded.Close() //nolint:errcheck // Test cleanup cannot affect the assertion.
-	if loaded.Backend() != "ldap" || loaded.Limits().MaxWorkItems != 16 {
+	if loaded.Backend() != backendLDAP || loaded.Limits().MaxWorkItems != 16 {
 		t.Fatal("configuration facts drifted")
+	}
+	if err := os.WriteFile(configPath, []byte(strings.Replace(document, "deadline: 30s", "deadline: 24h", 1)), 0600); err != nil {
+		t.Fatal(err)
+	}
+	longCampaign, longErr := LoadConfig(configPath)
+	if longErr != nil || longCampaign.Deadline().Hours() != 24 {
+		t.Fatal("bounded large-campaign deadline rejected")
+	}
+	_ = longCampaign.Close()
+	if err := os.WriteFile(configPath, []byte(strings.Replace(document, "deadline: 30s", "deadline: 24h0m1s", 1)), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if overlong, overlongErr := LoadConfig(configPath); overlongErr == nil || overlong != nil {
+		t.Fatal("deadline beyond the compiled campaign bound accepted")
 	}
 	if err := os.WriteFile(configPath, []byte(strings.Replace(document, "name: purge", "name: staging", 1)), 0600); err != nil {
 		t.Fatal(err)
@@ -43,7 +57,7 @@ func TestLoadConfigRequiresFiveDistinctProtectedRoles(t *testing.T) {
 
 // TestEncodeCommandReportRejectsIdentityMarkers freezes report privacy and stable output shape.
 func TestEncodeCommandReportRejectsIdentityMarkers(t *testing.T) {
-	report := CommandReport{Command: "status", State: StatePrepared, Backend: "ldap", WorkCount: 4, RecordCount: 8, BatchCount: 2, ResultClass: "success"}
+	report := CommandReport{Command: "status", State: StatePrepared, Backend: backendLDAP, WorkCount: 4, RecordCount: 8, BatchCount: 2, ResultClass: "success"}
 	for _, machine := range []bool{false, true} {
 		encoded, err := EncodeCommandReport(report, machine)
 		if err != nil || len(encoded) == 0 {
@@ -55,7 +69,7 @@ func TestEncodeCommandReportRejectsIdentityMarkers(t *testing.T) {
 			}
 		}
 	}
-	if encoded, err := EncodeCommandReport(CommandReport{Command: "status", Backend: "ldap", ResultClass: "example.test"}, true); err == nil || encoded != nil {
+	if encoded, err := EncodeCommandReport(CommandReport{Command: "status", Backend: backendLDAP, ResultClass: "example.test"}, true); err == nil || encoded != nil {
 		t.Fatal("identity-shaped result class accepted")
 	}
 }

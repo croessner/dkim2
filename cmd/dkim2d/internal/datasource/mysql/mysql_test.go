@@ -221,7 +221,7 @@ func TestNativeDomainOnboardingUpgradeDefinesV3Contract(t *testing.T) {
 	text := string(document)
 	for _, required := range []string{
 		"dkim2-datasource-v3", "operation_id", "candidate_digest", "was_active",
-		"lock_revision", "lock_operation_id", "dkim2_dataset_update",
+		"lock_revision", mysqlLockOperationColumn, "dkim2_dataset_update",
 		"forward-only", "implicit commit", "CREATE PROCEDURE dkim2_v3_lock_candidate_root(",
 		"SQL SECURITY DEFINER MODIFIES SQL DATA",
 		"lock_revision = selected_revision",

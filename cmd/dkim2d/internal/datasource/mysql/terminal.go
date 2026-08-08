@@ -14,7 +14,7 @@ import (
 type TerminalExecutor struct{ database *sql.DB }
 
 // OpenTerminalExecutor verifies a distinct closer login.
-func OpenTerminalExecutor(ctx context.Context, config ConnectionConfig) (*TerminalExecutor, error) {
+func OpenTerminalExecutor(ctx context.Context, config ConnectionConfig) (*TerminalExecutor, error) { //nolint:dupl // Closer and purger retain distinct authority constructors.
 	db, err := OpenDatabase(ctx, config)
 	if err != nil {
 		return nil, datasourceadmin.NewError(datasourceadmin.CodeUnavailable)
@@ -31,7 +31,7 @@ func OpenTerminalExecutor(ctx context.Context, config ConnectionConfig) (*Termin
 		return nil, datasourceadmin.NewError(datasourceadmin.CodeUnavailable)
 	}
 	name, _, ok := strings.Cut(user, "@")
-	if !ok || name != config.User || (role.Valid && strings.ToUpper(role.String) != "NONE") {
+	if !ok || name != config.User || (role.Valid && strings.ToUpper(role.String) != mysqlInactiveRole) {
 		return nil, datasourceadmin.NewError(datasourceadmin.CodeUnavailable)
 	}
 	good = true

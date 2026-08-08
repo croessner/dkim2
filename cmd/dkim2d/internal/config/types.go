@@ -7,7 +7,9 @@ import (
 )
 
 const (
-	configVersion = "dkim2d-config-v1"
+	limitProfileSmall      = "small"
+	limitProfileProduction = "production"
+	configVersion          = "dkim2d-config-v1"
 
 	snapshotRedactedText = "dkim2d_config_snapshot"
 
@@ -283,7 +285,7 @@ func stableFieldSpecs() []fieldSpec {
 		{path: pathSigningManifest, env: "DKIM2D_SIGNING_PRIVATE_MANIFEST_FILE", kind: valueString},
 		{path: pathSigningReload, env: "DKIM2D_SIGNING_RELOAD_INTERVAL", kind: valueDuration, defaultVal: defaultReadTimeout, hasDefault: true},
 		{path: pathSigningAllowGroup, env: "DKIM2D_SIGNING_ALLOW_RECIPIENT_GROUP", kind: valueBool, defaultVal: canonicalFalse, hasDefault: true},
-		{path: pathSigningLimitProfile, env: "DKIM2D_SIGNING_LIMIT_PROFILE", kind: valueString, defaultVal: "small", hasDefault: true},
+		{path: pathSigningLimitProfile, env: "DKIM2D_SIGNING_LIMIT_PROFILE", kind: valueString, defaultVal: limitProfileSmall, hasDefault: true},
 		{path: pathSigningMaxLoadBytes, env: "DKIM2D_SIGNING_MAX_LOAD_BYTES", kind: valueUint, defaultVal: "16777216", hasDefault: true},
 		{path: pathSigningLDAPAddress, env: "DKIM2D_SIGNING_LDAP_ADDRESS", kind: valueString},
 		{path: pathSigningLDAPServerName, env: "DKIM2D_SIGNING_LDAP_SERVER_NAME", kind: valueString},

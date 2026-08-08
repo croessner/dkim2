@@ -138,7 +138,9 @@ func (c *goLDAPClient) readTerminal(ctx context.Context, operation datasourceadm
 		return datasourceadmin.TerminalRecord{}, false, err
 	}
 	sourceSchema, err := parse("dkim2SourceSchema")
-	if err != nil { return datasourceadmin.TerminalRecord{}, false, err }
+	if err != nil {
+		return datasourceadmin.TerminalRecord{}, false, err
+	}
 	sourceText, err := parse("dkim2SourceGeneration")
 	if err != nil {
 		return datasourceadmin.TerminalRecord{}, false, err
@@ -166,7 +168,7 @@ func (c *goLDAPClient) readTerminal(ctx context.Context, operation datasourceadm
 	source, sourceErr := strconv.ParseUint(sourceText, 10, 64)
 	candidate, candidateErr := strconv.ParseUint(candidateText, 10, 64)
 	current, currentErr := strconv.ParseUint(currentText, 10, 64)
-	digest, digestErr := datasourceadmin.ParseCandidateContentDigest([]byte(e.GetRawAttributeValue(attrCandidateDigest)))
+	digest, digestErr := datasourceadmin.ParseCandidateContentDigest(e.GetRawAttributeValue(attrCandidateDigest))
 	when, timeErr := time.Parse("20060102150405.000000Z", timestamp)
 	if sourceErr != nil || candidateErr != nil || currentErr != nil || digestErr != nil || timeErr != nil {
 		return datasourceadmin.TerminalRecord{}, false, errors.New("terminal unavailable")

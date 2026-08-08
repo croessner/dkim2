@@ -156,11 +156,17 @@ func listGenerationRoots(
 
 // listRetentionGenerationRoots keeps recovery pagination independent of allocation ceilings.
 func listRetentionGenerationRoots(ctx context.Context, base string, limits datasourceadmin.RetentionRecoveryLimits, search ldapSearchOperation) ([]Entry, error) {
-	if ctx == nil || base == "" || limits.Validate() != nil || search == nil { return nil, errors.New("ldap recovery inventory unavailable") }
+	if ctx == nil || base == "" || limits.Validate() != nil || search == nil {
+		return nil, errors.New("ldap recovery inventory unavailable")
+	}
 	entries := make([]Entry, 0, min(int(limits.MaxGenerations), 64))
 	seen := make(map[uint64]struct{}, min(int(limits.MaxGenerations), 64))
 	success := false
-	defer func() { if !success { clearEntries(entries) } }()
+	defer func() {
+		if !success {
+			clearEntries(entries)
+		}
+	}()
 	cookie := []byte(nil)
 	bytesRead := 0
 	for pages := uint32(0); pages <= limits.MaxGenerations; pages++ {
@@ -168,22 +174,42 @@ func listRetentionGenerationRoots(ctx context.Context, base string, limits datas
 		request := goldap.NewSearchRequest(base, goldap.ScopeSingleLevel, goldap.NeverDerefAliases, int(limits.MaxGenerations), 0, false, "(objectClass=*)", []string{"*"}, []goldap.Control{control})
 		request.EnforceSizeLimit = true
 		result, err := search(ctx, request)
-		if err != nil || result == nil || len(result.Referrals) != 0 { return nil, errors.New("ldap recovery inventory unavailable") }
+		if err != nil || result == nil || len(result.Referrals) != 0 {
+			return nil, errors.New("ldap recovery inventory unavailable")
+		}
 		pageEntries, pageBytes, mapErr := mapGenerationRootPage(base, result.Entries)
 		clearLDAPProtectedAttributeBytes(result.Entries)
-		if mapErr != nil || pageBytes > int(limits.MaxReadBytes) || bytesRead > int(limits.MaxReadBytes)-pageBytes { clearEntries(pageEntries); return nil, errors.New("ldap recovery inventory unavailable") }
+		if mapErr != nil || pageBytes > int(limits.MaxReadBytes) || bytesRead > int(limits.MaxReadBytes)-pageBytes {
+			clearEntries(pageEntries)
+			return nil, errors.New("ldap recovery inventory unavailable")
+		}
 		bytesRead += pageBytes
 		paging, ok := goldap.FindControl(result.Controls, goldap.ControlTypePaging).(*goldap.ControlPaging)
-		if !ok || paging == nil || len(paging.Cookie) > 4096 { clearEntries(pageEntries); return nil, errors.New("ldap recovery inventory unavailable") }
+		if !ok || paging == nil || len(paging.Cookie) > 4096 {
+			clearEntries(pageEntries)
+			return nil, errors.New("ldap recovery inventory unavailable")
+		}
 		for _, entry := range pageEntries {
-			if len(entries) >= int(limits.MaxGenerations) { clearEntries(pageEntries); return nil, errors.New("ldap recovery inventory unavailable") }
+			if len(entries) >= int(limits.MaxGenerations) {
+				clearEntries(pageEntries)
+				return nil, errors.New("ldap recovery inventory unavailable")
+			}
 			metadata, metadataErr := mapGenerationMetadata(entry)
-			if metadataErr != nil { clearEntries(pageEntries); return nil, errors.New("ldap recovery inventory unavailable") }
-			if _, duplicate := seen[metadata.generation]; duplicate { clearEntries(pageEntries); return nil, errors.New("ldap recovery inventory unavailable") }
+			if metadataErr != nil {
+				clearEntries(pageEntries)
+				return nil, errors.New("ldap recovery inventory unavailable")
+			}
+			if _, duplicate := seen[metadata.generation]; duplicate {
+				clearEntries(pageEntries)
+				return nil, errors.New("ldap recovery inventory unavailable")
+			}
 			seen[metadata.generation] = struct{}{}
 			entries = append(entries, entry)
 		}
-		if len(paging.Cookie) == 0 { success = true; return entries, nil }
+		if len(paging.Cookie) == 0 {
+			success = true
+			return entries, nil
+		}
 		cookie = append(cookie[:0], paging.Cookie...)
 	}
 	return nil, errors.New("ldap recovery inventory unavailable")
@@ -816,7 +842,9 @@ func candidateAddRequests(
 		attrGeneration: {generation}, attrDatasetState: {string(datasourceadmin.StateStaging)},
 		attrOperationID: {operation}, attrCandidateDigest: {string(digest)},
 	}
-	if source != 0 { metadata[attrSourceGeneration] = []string{strconv.FormatUint(source, 10)} }
+	if source != 0 {
+		metadata[attrSourceGeneration] = []string{strconv.FormatUint(source, 10)}
+	}
 	requests := []*goldap.AddRequest{newAdminAdd(root, metadata)}
 	for _, unit := range generationUnits {
 		requests = append(requests, newAdminAdd("ou="+unit+","+root, map[string][]string{

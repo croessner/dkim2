@@ -13,6 +13,8 @@ const (
 	rotationTestConfig  = "/tmp/rotation-config.yaml"
 	rotationTestJournal = "/tmp/rotation-journal.json"
 	rotationTestPlan    = "/tmp/rotation-purge-plan.json"
+	rotationAutomatic   = "--automatic"
+	rotationJournalFlag = "--journal"
 )
 
 // TestRotationCommandTreeHasNoAdditionalSurface freezes the closed campaign command vocabulary.
@@ -39,18 +41,18 @@ func TestRotationCommandTreeHasNoAdditionalSurface(t *testing.T) {
 
 // TestRotationNormalRequiresAutomaticAndExplicitApplyForMutation proves normal rotation is not a hidden default mutation.
 func TestRotationNormalRequiresAutomaticAndExplicitApplyForMutation(t *testing.T) {
-	base := []string{datasourceCommandName, rotationCommandName, rotationRunCommandName, "--config", rotationTestConfig, "--journal", rotationTestJournal}
+	base := []string{datasourceCommandName, rotationCommandName, rotationRunCommandName, testConfigFlag, rotationTestConfig, rotationJournalFlag, rotationTestJournal}
 	for _, test := range []struct {
 		name      string
 		tail      []string
 		wantCalls int
 		wantExit  int
 	}{
-		{"automatic_dry_run", []string{"--automatic"}, 1, 0},
-		{"automatic_apply", []string{"--automatic", "--apply"}, 1, 0},
+		{"automatic_dry_run", []string{rotationAutomatic}, 1, 0},
+		{"automatic_apply", []string{rotationAutomatic, applyToken}, 1, 0},
 		{"no_automatic", nil, 0, 2},
-		{"apply_without_automatic", []string{"--apply"}, 0, 2},
-		{"conflicting_dry_run_apply", []string{"--automatic", "--dry-run", "--apply"}, 0, 2},
+		{"apply_without_automatic", []string{applyToken}, 0, 2},
+		{"conflicting_dry_run_apply", []string{rotationAutomatic, "--dry-run", applyToken}, 0, 2},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			var stdout, stderr bytes.Buffer
@@ -80,12 +82,12 @@ func TestRotationNormalRequiresAutomaticAndExplicitApplyForMutation(t *testing.T
 // TestRotationEmergencyAndPurgeApplyRequireOneExactBareApplyToken proves destructive paths reject aliases and values.
 func TestRotationEmergencyAndPurgeApplyRequireOneExactBareApplyToken(t *testing.T) {
 	tests := [][]string{
-		{datasourceCommandName, rotationCommandName, rotationEmergencyName, "--config", rotationTestConfig, "--journal", rotationTestJournal, "--tenant", "t", "--domain", "d", "--use", "u", "--profile", "p", "--reason", "incident"},
-		{datasourceCommandName, rotationCommandName, rotationPurgeName, rotationPurgeApplyName, "--config", rotationTestConfig, "--journal", rotationTestJournal, "--plan", rotationTestPlan},
-		{datasourceCommandName, rotationCommandName, domainAbortCommandName, "--config", rotationTestConfig, "--journal", rotationTestJournal},
+		{datasourceCommandName, rotationCommandName, rotationEmergencyName, testConfigFlag, rotationTestConfig, rotationJournalFlag, rotationTestJournal, "--tenant", "t", "--domain", "d", "--use", "u", "--profile", "p", "--reason", "incident"},
+		{datasourceCommandName, rotationCommandName, rotationPurgeName, rotationPurgeApplyName, testConfigFlag, rotationTestConfig, rotationJournalFlag, rotationTestJournal, "--plan", rotationTestPlan},
+		{datasourceCommandName, rotationCommandName, domainAbortCommandName, testConfigFlag, rotationTestConfig, rotationJournalFlag, rotationTestJournal},
 	}
 	for _, base := range tests {
-		for _, tail := range [][]string{nil, {"--apply=false"}, {"--apply=true"}, {"--apply", "--apply"}, {"--apply"}} {
+		for _, tail := range [][]string{nil, {applyToken + "=false"}, {applyToken + "=true"}, {applyToken, applyToken}, {applyToken}} {
 			var stdout, stderr bytes.Buffer
 			calls := 0
 			deps := domainTestDependencies(t)
@@ -94,7 +96,7 @@ func TestRotationEmergencyAndPurgeApplyRequireOneExactBareApplyToken(t *testing.
 				return []byte("result=success\n"), nil
 			}
 			exit := executeWithDependencies(append(base, tail...), &stdout, &stderr, deps)
-			wantCall := len(tail) == 1 && tail[0] == "--apply"
+			wantCall := len(tail) == 1 && tail[0] == applyToken
 			if (exit == 0) != wantCall || (calls == 1) != wantCall {
 				t.Fatalf("tail=%v exit=%d calls=%d", tail, exit, calls)
 			}

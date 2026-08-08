@@ -1,3 +1,4 @@
+// Package rotationadmin tests the protected global campaign lifecycle.
 package rotationadmin
 
 import (
@@ -14,7 +15,11 @@ import (
 	"github.com/croessner/dkim2/provider"
 )
 
-const campaignOperation = "aebagbafaydqqcikbmga2dqpca"
+const (
+	campaignOperation    = "aebagbafaydqqcikbmga2dqpca"
+	testInventoryVersion = "inventory-v1"
+	testTenantID         = "tenant"
+)
 
 type deterministicKeyFactory struct{ next byte }
 
@@ -94,7 +99,7 @@ func TestNormalCampaignPreparesOneCompleteCandidateOnce(t *testing.T) {
 func TestEmergencyCampaignRotatesOnlyTheExactSelectedBinding(t *testing.T) {
 	source := campaignSource(t, 2)
 	defer source.Close() //nolint:errcheck // Test cleanup has no recovery.
-	selector := BindingSelector{Tenant: "tenant", Domain: "d00001.example.test", Use: "originator", Profile: "profile-1"}
+	selector := BindingSelector{Tenant: testTenantID, Domain: "d00001.example.test", Use: bindingUseOriginator, Profile: "profile-1"}
 	intent, err := NewEmergencyIntent(campaignOperation, "compromise", selector)
 	if err != nil {
 		t.Fatal("emergency intent rejected")
@@ -172,10 +177,10 @@ func campaignSource(t *testing.T, count int) *datasourceadmin.Snapshot {
 			t.Fatal("marshal source public key")
 		}
 		rows.Handles = append(rows.Handles, datasourceadmin.HandleRow{ID: handleID})
-		rows.Profiles = append(rows.Profiles, datasourceadmin.ProfileRow{ID: profileID, Domain: domain, Status: "active"})
+		rows.Profiles = append(rows.Profiles, datasourceadmin.ProfileRow{ID: profileID, Domain: domain, Status: profileStatusActive})
 		rows.Credentials = append(rows.Credentials, datasourceadmin.CredentialRow{ProfileID: profileID, Algorithm: "ed25519-sha256", Selector: fmt.Sprintf("s%d", index), PublicSPKI: publicSPKI, HandleID: handleID})
-		rows.Policies = append(rows.Policies, datasourceadmin.PolicyRow{TenantID: "tenant", Domain: domain, Use: "originator", ProfileID: profileID, Status: "active", Rollout: "enforce", Compatibility: "strict"})
-		rows.KeyMaterial = append(rows.KeyMaterial, datasourceadmin.KeyMaterialRow{TenantID: "tenant", Domain: domain, Use: "originator", HandleID: handleID, Algorithm: "ed25519-sha256", PublicSPKI: append([]byte(nil), publicSPKI...), PrivatePKCS8: privatePKCS8})
+		rows.Policies = append(rows.Policies, datasourceadmin.PolicyRow{TenantID: testTenantID, Domain: domain, Use: bindingUseOriginator, ProfileID: profileID, Status: profileStatusActive, Rollout: "enforce", Compatibility: "strict"})
+		rows.KeyMaterial = append(rows.KeyMaterial, datasourceadmin.KeyMaterialRow{TenantID: testTenantID, Domain: domain, Use: bindingUseOriginator, HandleID: handleID, Algorithm: "ed25519-sha256", PublicSPKI: append([]byte(nil), publicSPKI...), PrivatePKCS8: privatePKCS8})
 	}
 	snapshot, err := datasourceadmin.NewSnapshotWithLimits(datasourceadmin.SchemaVersionV3, 7, rows, provider.ProductionLimits())
 	clearAdminRows(&rows)

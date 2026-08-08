@@ -9,6 +9,12 @@ import (
 	"github.com/croessner/dkim2/admincontract"
 )
 
+const (
+	testInventoryVersion  = "inventory-v1"
+	testLDAPAuthorityHost = "ldap.example.test"
+	testStagingPrincipal  = "staging"
+)
+
 // TestJoinTerminalRecoveryRequiresExactFrozenCampaignBinding proves recovery
 // cannot infer terminal closure from a current pointer or a near-match record.
 func TestJoinTerminalRecoveryRequiresExactFrozenCampaignBinding(t *testing.T) {
@@ -69,7 +75,10 @@ func (f retentionReaderFake) Inventory(context.Context, GenerationLimits) (Inven
 	return f.inventory, nil
 }
 
-type recoveryReaderFake struct{ rows []RetentionGeneration; current uint64 }
+type recoveryReaderFake struct {
+	rows    []RetentionGeneration
+	current uint64
+}
 
 // RetentionCurrent returns the stable synthetic current pointer.
 func (f recoveryReaderFake) RetentionCurrent(context.Context) (uint64, error) { return f.current, nil }
@@ -77,22 +86,37 @@ func (f recoveryReaderFake) RetentionCurrent(context.Context) (uint64, error) { 
 // RetentionPage returns one ordered synthetic evidence page after the cursor.
 func (f recoveryReaderFake) RetentionPage(_ context.Context, after uint64, limit uint32) ([]RetentionGeneration, error) {
 	result := make([]RetentionGeneration, 0, limit)
-	for _, row := range f.rows { if row.Generation > after { result = append(result, row); if len(result) == int(limit) { break } } }
+	for _, row := range f.rows {
+		if row.Generation > after {
+			result = append(result, row)
+			if len(result) == int(limit) {
+				break
+			}
+		}
+	}
 	return result, nil
 }
 
 // TestReadRetentionRecoveryInventoryExceedsAllocationHistory freezes the separate 10k recovery window.
 func TestReadRetentionRecoveryInventoryExceedsAllocationHistory(t *testing.T) {
 	rows := make([]RetentionGeneration, 0, 16384)
-	for generation := uint64(1); generation <= 16384; generation++ { rows = append(rows, retentionGeneration(t, generation, true)) }
+	for generation := uint64(1); generation <= 16384; generation++ {
+		rows = append(rows, retentionGeneration(t, generation, true))
+	}
 	view, err := ReadRetentionRecoveryInventory(t.Context(), recoveryReaderFake{rows: rows, current: 16384}, DefaultRetentionRecoveryLimits())
-	if err != nil || len(view.Generations) != 16384 || view.Current != 16384 { t.Fatal("separate recovery reader retained allocation ceiling") }
+	if err != nil || len(view.Generations) != 16384 || view.Current != 16384 {
+		t.Fatal("separate recovery reader retained allocation ceiling")
+	}
 }
 
 func TestReadRetentionRecoveryInventoryRejectsOverLimitHistory(t *testing.T) {
 	rows := make([]RetentionGeneration, 0, 16385)
-	for generation := uint64(1); generation <= 16385; generation++ { rows = append(rows, retentionGeneration(t, generation, true)) }
-	if _, err := ReadRetentionRecoveryInventory(t.Context(), recoveryReaderFake{rows: rows, current: 16385}, DefaultRetentionRecoveryLimits()); err == nil { t.Fatal("over-limit recovery history was accepted") }
+	for generation := uint64(1); generation <= 16385; generation++ {
+		rows = append(rows, retentionGeneration(t, generation, true))
+	}
+	if _, err := ReadRetentionRecoveryInventory(t.Context(), recoveryReaderFake{rows: rows, current: 16385}, DefaultRetentionRecoveryLimits()); err == nil {
+		t.Fatal("over-limit recovery history was accepted")
+	}
 }
 
 // TestReadRetentionInventoryPreservesOnlyProviderProvenFacts freezes metadata projection.
@@ -118,14 +142,14 @@ func TestRetentionAuthorityRequiresDedicatedPurger(t *testing.T) {
 	trust[0] = 1
 	authority := AuthorityDescriptor{
 		AuthorityID:       "aebagbafaydqqcikbmga2dqpca",
-		Endpoints:         []AuthorityEndpoint{{Scheme: "ldaps", Host: "ldap.example.test", Port: 636, TLSServerName: "ldap.example.test"}},
-		LDAP:              &LDAPAuthority{BaseDN: "dc=example,dc=test", SnapshotPrincipal: "snapshot", StagingPrincipal: "staging", ActivationPrincipal: "activation"},
+		Endpoints:         []AuthorityEndpoint{{Scheme: authoritySchemeLDAPS, Host: testLDAPAuthorityHost, Port: 636, TLSServerName: testLDAPAuthorityHost}},
+		LDAP:              &LDAPAuthority{BaseDN: "dc=example,dc=test", SnapshotPrincipal: "snapshot", StagingPrincipal: testStagingPrincipal, ActivationPrincipal: "activation"},
 		TrustFingerprints: [][sha256.Size]byte{trust},
 	}
 	if _, err := RetentionAuthorityCommitment(BackendLDAP, authority); err == nil {
 		t.Fatal("three-role authority unexpectedly authorized purge planning")
 	}
-	authority.LDAP.PurgePrincipal = "staging"
+	authority.LDAP.PurgePrincipal = testStagingPrincipal
 	if _, err := RetentionAuthorityCommitment(BackendLDAP, authority); err == nil {
 		t.Fatal("reused staging principal unexpectedly authorized purge planning")
 	}
@@ -142,10 +166,10 @@ func TestClassifyRetentionProtectsCurrentAndSelectsOldestRecoverableHistory(t *t
 	policy.MinActiveRollbackGenerations = 1
 	policy.MaxClosedNeverActiveGenerations = 0
 	policy.MaxPurgeBatch = 2
-	policy.Version = "retention-v1"
+	policy.Version = retentionPolicyVersion
 
 	classification, err := ClassifyRetention(RetentionInventory{
-		Version: "inventory-v1", Current: 4,
+		Version: testInventoryVersion, Current: 4,
 		Generations: []RetentionGeneration{
 			retentionGeneration(t, 1, true), retentionGeneration(t, 2, true),
 			retentionGeneration(t, 3, false), retentionGeneration(t, 4, true),
@@ -166,11 +190,11 @@ func TestClassifyRetentionProtectsCurrentAndSelectsOldestRecoverableHistory(t *t
 func TestClassifyRetentionFailsClosedForAmbiguousLifecycle(t *testing.T) {
 	policy := DefaultRetentionPolicy()
 	classification, err := ClassifyRetention(RetentionInventory{
-		Version: "inventory-v1", Current: 4,
+		Version: testInventoryVersion, Current: 4,
 		Generations: []RetentionGeneration{
 			retentionGeneration(t, 1, true),
-			{Generation: 2, Schema: "dkim2-datasource-v3", State: StateStaging, Complete: true, Ownership: RetentionOwnershipTrusted},
-			{Generation: 3, Schema: "dkim2-datasource-v3", State: StateCommitted, Complete: false, Ownership: RetentionOwnershipTrusted},
+			{Generation: 2, Schema: SchemaVersionV3, State: StateStaging, Complete: true, Ownership: RetentionOwnershipTrusted},
+			{Generation: 3, Schema: SchemaVersionV3, State: StateCommitted, Complete: false, Ownership: RetentionOwnershipTrusted},
 			retentionGeneration(t, 4, true),
 		},
 	}, policy)
@@ -192,7 +216,7 @@ func TestClassifyRetentionPagesRecoversPastAllocationCeilings(t *testing.T) {
 		row.ContentDigest = retentionDigest(t, generation)
 		pages[(generation-1)/100] = append(pages[(generation-1)/100], row)
 	}
-	classification, err := ClassifyRetentionPages("inventory-v1", 300, pages, policy)
+	classification, err := ClassifyRetentionPages(testInventoryVersion, 300, pages, policy)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -209,7 +233,7 @@ func retentionGeneration(t *testing.T, generation uint64, active bool) Retention
 		t.Fatal("zero digest accepted")
 	}
 	digest = retentionDigest(t, generation)
-	return RetentionGeneration{Generation: generation, Schema: "dkim2-datasource-v3", State: StateCommitted, WasActive: active, Complete: true, Ownership: RetentionOwnershipTrusted, ContentDigest: digest, Closed: !active}
+	return RetentionGeneration{Generation: generation, Schema: SchemaVersionV3, State: StateCommitted, WasActive: active, Complete: true, Ownership: RetentionOwnershipTrusted, ContentDigest: digest, Closed: !active}
 }
 
 // retentionDigest creates a nonzero detached test digest for arbitrary generation values.

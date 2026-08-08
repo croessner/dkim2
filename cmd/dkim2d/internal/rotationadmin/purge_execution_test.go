@@ -81,7 +81,7 @@ func purgeExecutionFixture(t *testing.T) (*PurgeApplyRequest, datasourceadmin.Au
 	t.Helper()
 	policy := datasourceadmin.DefaultRetentionPolicy()
 	policy.MaxTotalGenerations, policy.MinActiveRollbackGenerations, policy.MaxClosedNeverActiveGenerations, policy.MaxPurgeBatch = 1, 0, 0, 1
-	inventory := datasourceadmin.RetentionInventory{Version: "inventory-v1", Current: 2, Generations: []datasourceadmin.RetentionGeneration{purgeGeneration(t, 1), purgeGeneration(t, 2)}}
+	inventory := datasourceadmin.RetentionInventory{Version: testInventoryVersion, Current: 2, Generations: []datasourceadmin.RetentionGeneration{purgeGeneration(t, 1), purgeGeneration(t, 2)}}
 	classification, err := datasourceadmin.ClassifyRetention(inventory, policy)
 	if err != nil {
 		t.Fatal(err)

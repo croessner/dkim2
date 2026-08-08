@@ -313,31 +313,55 @@ func (a *Administrator) Inventory(
 
 // RetentionRecoveryInventory reads and verifies complete historical evidence without allocation ceilings.
 func (a *Administrator) RetentionRecoveryInventory(ctx context.Context) (datasourceadmin.RetentionInventory, error) {
-	if a == nil || ctx == nil || ctx.Err() != nil { return datasourceadmin.RetentionInventory{}, datasourceadmin.NewError(datasourceadmin.CodeInvalid) }
+	if a == nil || ctx == nil || ctx.Err() != nil {
+		return datasourceadmin.RetentionInventory{}, datasourceadmin.NewError(datasourceadmin.CodeInvalid)
+	}
 	tx, finish, err := a.begin(ctx, a.snapshot, AdministrationSnapshot, a.generations)
-	if err != nil { return datasourceadmin.RetentionInventory{}, err }
+	if err != nil {
+		return datasourceadmin.RetentionInventory{}, err
+	}
 	defer finish(false)
 	current, present, err := tx.ReadCurrentOptional(ctx, false)
-	if err != nil || !present || validateCurrentRetentionMetadata(current) != nil { return datasourceadmin.RetentionInventory{}, datasourceadmin.NewError(datasourceadmin.CodeConflict) }
+	if err != nil || !present || validateCurrentRetentionMetadata(current) != nil {
+		return datasourceadmin.RetentionInventory{}, datasourceadmin.NewError(datasourceadmin.CodeConflict)
+	}
 	currentGeneration, err := parseGeneration(current.Generation)
-	if err != nil { return datasourceadmin.RetentionInventory{}, datasourceadmin.NewError(datasourceadmin.CodeConflict) }
+	if err != nil {
+		return datasourceadmin.RetentionInventory{}, datasourceadmin.NewError(datasourceadmin.CodeConflict)
+	}
 	rows := make([]datasourceadmin.RetentionGeneration, 0)
 	cursor := ""
 	for {
 		page, pageErr := tx.GenerationPage(ctx, cursor, 1024, false)
-		if pageErr != nil { return datasourceadmin.RetentionInventory{}, datasourceadmin.NewError(datasourceadmin.CodeUnavailable) }
-		if len(page) == 0 { break }
-		if len(page) > 1024 || len(rows)+len(page) > 16384 { return datasourceadmin.RetentionInventory{}, datasourceadmin.NewError(datasourceadmin.CodeLimitExceeded) }
+		if pageErr != nil {
+			return datasourceadmin.RetentionInventory{}, datasourceadmin.NewError(datasourceadmin.CodeUnavailable)
+		}
+		if len(page) == 0 {
+			break
+		}
+		if len(page) > 1024 || len(rows)+len(page) > 16384 {
+			return datasourceadmin.RetentionInventory{}, datasourceadmin.NewError(datasourceadmin.CodeLimitExceeded)
+		}
 		for _, metadata := range page {
-			if compareGenerationText(metadata.Generation, cursor) <= 0 { return datasourceadmin.RetentionInventory{}, datasourceadmin.NewError(datasourceadmin.CodeConflict) }
+			if compareGenerationText(metadata.Generation, cursor) <= 0 {
+				return datasourceadmin.RetentionInventory{}, datasourceadmin.NewError(datasourceadmin.CodeConflict)
+			}
 			snapshot, verified, readErr := a.readGeneration(ctx, tx, metadata.Generation, a.generations)
-			if readErr != nil || !metadataEqual(metadata, verified) { _ = snapshot.Close(); return datasourceadmin.RetentionInventory{}, datasourceadmin.NewError(datasourceadmin.CodeConflict) }
+			if readErr != nil || !metadataEqual(metadata, verified) {
+				_ = snapshot.Close()
+				return datasourceadmin.RetentionInventory{}, datasourceadmin.NewError(datasourceadmin.CodeConflict)
+			}
 			_ = snapshot.Close()
 			info, mapErr := generationInfoFromMetadata(verified, verified.Generation == current.Generation)
-			if mapErr != nil { return datasourceadmin.RetentionInventory{}, mapErr }
+			if mapErr != nil {
+				return datasourceadmin.RetentionInventory{}, mapErr
+			}
 			row := datasourceadmin.RetentionGeneration{Generation: info.Generation, Operation: info.Operation, SourceGeneration: info.SourceGeneration, Schema: info.Schema, State: info.State, WasActive: info.WasActive, Ownership: datasourceadmin.RetentionOwnershipTrusted}
 			if info.Schema == datasourceadmin.SchemaVersionV3 && info.ContentDigest.Valid() {
-				digest, digestErr := admincontract.ParseDigest(info.ContentDigest.Bytes()); if digestErr != nil { return datasourceadmin.RetentionInventory{}, datasourceadmin.NewError(datasourceadmin.CodeConflict) }
+				digest, digestErr := admincontract.ParseDigest(info.ContentDigest.Bytes())
+				if digestErr != nil {
+					return datasourceadmin.RetentionInventory{}, datasourceadmin.NewError(datasourceadmin.CodeConflict)
+				}
 				row.ContentDigest, row.Complete = digest, true
 			}
 			rows = append(rows, row)
@@ -345,14 +369,21 @@ func (a *Administrator) RetentionRecoveryInventory(ctx context.Context) (datasou
 		}
 	}
 	final, finalPresent, finalErr := tx.ReadCurrentOptional(ctx, false)
-	if finalErr != nil || !finalPresent || !metadataEqual(current, final) { return datasourceadmin.RetentionInventory{}, datasourceadmin.NewError(datasourceadmin.CodeConflict) }
-	if err := tx.Commit(ctx); err != nil { return datasourceadmin.RetentionInventory{}, datasourceadmin.NewError(datasourceadmin.CodeUnavailable) }
+	if finalErr != nil || !finalPresent || !metadataEqual(current, final) {
+		return datasourceadmin.RetentionInventory{}, datasourceadmin.NewError(datasourceadmin.CodeConflict)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return datasourceadmin.RetentionInventory{}, datasourceadmin.NewError(datasourceadmin.CodeUnavailable)
+	}
 	finish(true)
 	return datasourceadmin.RetentionInventory{Version: "sqlsnapshot-recovery-v1", Current: currentGeneration, Generations: rows}, nil
 }
 
 // validateCurrentRetentionMetadata reuses the current fence while retaining a bounded error mapping.
-func validateCurrentRetentionMetadata(metadata MetadataRow) error { _, err := validateCurrentMetadata(metadata); return err }
+func validateCurrentRetentionMetadata(metadata MetadataRow) error {
+	_, err := validateCurrentMetadata(metadata)
+	return err
+}
 
 // Current returns the exact current classification or proven empty state.
 func (a *Administrator) Current(
@@ -482,6 +513,8 @@ func (a *Administrator) Release(
 }
 
 // Stage writes, rereads, verifies, and seals one exact candidate without moving current.
+//
+//nolint:gocyclo // Atomic staging keeps all fail-closed fences in one transaction owner.
 func (a *Administrator) Stage(
 	ctx context.Context,
 	lock datasourceadmin.AdministrationLock,
@@ -1112,13 +1145,15 @@ func candidateFromSnapshot(
 	}
 	err = binding.WithValue(ctx, func(value string) error {
 		var candidateErr error
-			if metadata.SourceGeneration != "" {
-				source, sourceErr := parseGeneration(metadata.SourceGeneration)
-				if sourceErr != nil { return sourceErr }
-				candidate, candidateErr = datasourceadmin.NewCampaignPublicationEnvelope(value, source, content)
-			} else {
-				candidate, candidateErr = datasourceadmin.NewPublicationEnvelope(value, content)
+		if metadata.SourceGeneration != "" {
+			source, sourceErr := parseGeneration(metadata.SourceGeneration)
+			if sourceErr != nil {
+				return sourceErr
 			}
+			candidate, candidateErr = datasourceadmin.NewCampaignPublicationEnvelope(value, source, content)
+		} else {
+			candidate, candidateErr = datasourceadmin.NewPublicationEnvelope(value, content)
+		}
 		return candidateErr
 	})
 	if err != nil || candidate == nil || !candidate.Digest().Equal(stored) {

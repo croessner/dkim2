@@ -44,7 +44,7 @@ func TestLoadDisabledAppliesOnlyCommonDefaults(t *testing.T) {
 
 // TestSigningConfigurationIsDefaultDisabledAndConditionallyComplete freezes
 // the no-open configuration authority before protected traversal.
-func TestSigningConfigurationIsDefaultDisabledAndConditionallyComplete(t *testing.T) {
+func TestSigningConfigurationIsDefaultDisabledAndConditionallyComplete(t *testing.T) { //nolint:gocyclo // One table-like test covers the closed configuration matrix.
 	clearStableEnvironment(t)
 	disabled, err := Load([]byte(disabledYAML()), FlagValues{})
 	if err != nil || disabled.Signing().Enabled() ||
@@ -58,7 +58,7 @@ func TestSigningConfigurationIsDefaultDisabledAndConditionallyComplete(t *testin
 		enabled.Signing().Backend() != SigningFlatFile ||
 		enabled.Signing().ReloadInterval() != 30*time.Second ||
 		enabled.Signing().AllowRecipientGroup() ||
-		enabled.Signing().LimitProfile() != "small" ||
+		enabled.Signing().LimitProfile() != limitProfileSmall ||
 		enabled.Signing().MaxLoadBytes() != 16<<20 {
 		t.Fatalf("enabled signing configuration failed with code %s", CodeOf(err))
 	}
@@ -67,7 +67,7 @@ func TestSigningConfigurationIsDefaultDisabledAndConditionallyComplete(t *testin
 		"  backend: flat_file\n  limit_profile: production\n  max_load_bytes: 134217728", 1,
 	)
 	production, err := Load([]byte(productionDocument), FlagValues{})
-	if err != nil || production.Signing().LimitProfile() != "production" || production.Signing().MaxLoadBytes() != 128<<20 {
+	if err != nil || production.Signing().LimitProfile() != limitProfileProduction || production.Signing().MaxLoadBytes() != 128<<20 {
 		t.Fatalf("production signing limits failed with code %s", CodeOf(err))
 	}
 	for _, unsafeLimits := range []string{

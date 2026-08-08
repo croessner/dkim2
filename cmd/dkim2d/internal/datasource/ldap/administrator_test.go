@@ -410,7 +410,9 @@ func (c *administrationClientFake) ListGenerationRoots(context.Context, datasour
 
 // ListRetentionGenerationRoots returns detached roots under the independent recovery limit.
 func (c *administrationClientFake) ListRetentionGenerationRoots(_ context.Context, limits datasourceadmin.RetentionRecoveryLimits) ([]Entry, error) {
-	if len(c.roots) > int(limits.MaxGenerations) { return nil, errLDAPPartial }
+	if len(c.roots) > int(limits.MaxGenerations) {
+		return nil, errLDAPPartial
+	}
 	return c.ListGenerationRoots(context.Background(), datasourceadmin.GenerationLimits{MaxGenerations: 1, MaxOutstandingCandidates: 1, MaxSnapshotRows: 1, MaxSnapshotBytes: 1, BackendDeadline: time.Second})
 }
 

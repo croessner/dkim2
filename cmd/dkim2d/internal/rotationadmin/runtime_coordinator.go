@@ -45,7 +45,7 @@ func (c *Coordinator) Limits() Limits {
 
 // Run starts or resumes exactly one normal/emergency campaign under the
 // protected journal lock. Every durable state edge is saved before the next.
-func (c *Coordinator) Run(ctx context.Context, store *JournalStore, intent Intent) (Report, error) {
+func (c *Coordinator) Run(ctx context.Context, store *JournalStore, intent Intent) (Report, error) { //nolint:gocyclo // The sole lifecycle owner keeps crash edges explicit and serial.
 	if c == nil || ctx == nil || ctx.Err() != nil || store == nil || !intent.operation.Initialized() {
 		return Report{}, errInvalid
 	}

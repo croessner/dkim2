@@ -14,7 +14,7 @@ func TestTerminalMigrationOwnsOnlyFixedCloserAuthority(t *testing.T) {
 		t.Fatal(err)
 	}
 	text := string(b)
-	for _, want := range []string{"dkim2_campaign_terminals", "dkim2_v3_record_campaign_terminal", "lock_operation_id", "SQL SECURITY DEFINER"} {
+	for _, want := range []string{"dkim2_campaign_terminals", "dkim2_v3_record_campaign_terminal", mysqlLockOperationColumn, "SQL SECURITY DEFINER"} {
 		if !strings.Contains(text, want) {
 			t.Fatal("terminal migration missing fixed closer fence")
 		}

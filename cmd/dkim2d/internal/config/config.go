@@ -717,11 +717,11 @@ func parseSigning(
 		return signingState{}, newError(CodeInvalidField)
 	}
 	limitProfile := text(values, pathSigningLimitProfile)
-	if limitProfile != "small" && limitProfile != "production" {
+	if limitProfile != limitProfileSmall && limitProfile != limitProfileProduction {
 		return signingState{}, newError(CodeInvalidField)
 	}
 	maxLoadBytes, err := uintValue(values, pathSigningMaxLoadBytes, 1<<20, 512<<20)
-	if err != nil || limitProfile == "production" && maxLoadBytes < 64<<20 {
+	if err != nil || limitProfile == limitProfileProduction && maxLoadBytes < 64<<20 {
 		return signingState{}, newError(CodeInvalidField)
 	}
 	datasourceFile := text(values, pathSigningDatasource)

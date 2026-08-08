@@ -15,31 +15,31 @@ import (
 const schemaVersion = datasourceadmin.SchemaVersionV2
 
 const (
-	attrObjectClass     = "objectClass"
-	attrSchemaVersion   = "dkim2SchemaVersion"
-	attrGeneration      = "dkim2Generation"
-	attrDatasetState    = "dkim2DatasetState"
-	attrHandleID        = "dkim2HandleID"
-	attrProfileID       = "dkim2ProfileID"
-	attrSigningDomain   = "dkim2SigningDomain"
-	attrRecordStatus    = "dkim2RecordStatus"
-	attrNotBefore       = "dkim2NotBefore"
-	attrNotAfter        = "dkim2NotAfter"
-	attrAlgorithm       = "dkim2Algorithm"
-	attrSelector        = "dkim2Selector"
-	attrPublicSPKI      = "dkim2PublicKeySPKI"
-	attrTenantID        = "dkim2TenantID"
-	attrProfileUse      = "dkim2ProfileUse"
-	attrRollout         = "dkim2Rollout"
-	attrCompatibility   = "dkim2Compatibility"
-	attrFeedbackRouteID = "dkim2FeedbackRouteID"
-	attrPrivatePKCS8    = "dkim2PrivateKeyPKCS8"
-	attrCandidateDigest = "dkim2CandidateDigest"
-	attrOperationID     = "dkim2OperationID"
+	attrObjectClass      = "objectClass"
+	attrSchemaVersion    = "dkim2SchemaVersion"
+	attrGeneration       = "dkim2Generation"
+	attrDatasetState     = "dkim2DatasetState"
+	attrHandleID         = "dkim2HandleID"
+	attrProfileID        = "dkim2ProfileID"
+	attrSigningDomain    = "dkim2SigningDomain"
+	attrRecordStatus     = "dkim2RecordStatus"
+	attrNotBefore        = "dkim2NotBefore"
+	attrNotAfter         = "dkim2NotAfter"
+	attrAlgorithm        = "dkim2Algorithm"
+	attrSelector         = "dkim2Selector"
+	attrPublicSPKI       = "dkim2PublicKeySPKI"
+	attrTenantID         = "dkim2TenantID"
+	attrProfileUse       = "dkim2ProfileUse"
+	attrRollout          = "dkim2Rollout"
+	attrCompatibility    = "dkim2Compatibility"
+	attrFeedbackRouteID  = "dkim2FeedbackRouteID"
+	attrPrivatePKCS8     = "dkim2PrivateKeyPKCS8"
+	attrCandidateDigest  = "dkim2CandidateDigest"
+	attrOperationID      = "dkim2OperationID"
 	attrSourceGeneration = "dkim2SourceGeneration"
-	attrWasActive       = "dkim2WasActive"
-	attrAdminLockOwner  = "dkim2AdminLockOwner"
-	attrAdminRevision   = "dkim2AdminRevision"
+	attrWasActive        = "dkim2WasActive"
+	attrAdminLockOwner   = "dkim2AdminLockOwner"
+	attrAdminRevision    = "dkim2AdminRevision"
 )
 
 // RecordClass identifies one closed LDAP record mapping.
@@ -253,13 +253,13 @@ func MapDataset(records DatasetRecords, limits provider.Limits) (*provider.Datas
 }
 
 type datasetMetadata struct {
-	schema     string
-	generation uint64
-	state      datasourceadmin.GenerationState
-	operation  datasourceadmin.OperationBinding
-	digest     datasourceadmin.CandidateContentDigest
+	schema           string
+	generation       uint64
+	state            datasourceadmin.GenerationState
+	operation        datasourceadmin.OperationBinding
+	digest           datasourceadmin.CandidateContentDigest
 	sourceGeneration uint64
-	wasActive  bool
+	wasActive        bool
 }
 
 // equal proves two bounded metadata reads are the same exact fence.
@@ -314,7 +314,7 @@ func mapDatasetMetadata(entry Entry, root bool) (datasetMetadata, error) {
 		}
 		metadata.wasActive = true
 	}
-		digestBytes, digestPresent := values[attrCandidateDigest]
+	digestBytes, digestPresent := values[attrCandidateDigest]
 	operationBytes, operationPresent := values[attrOperationID]
 	sourceBytes, sourcePresent := values[attrSourceGeneration]
 	switch metadata.schema {
@@ -337,7 +337,9 @@ func mapDatasetMetadata(entry Entry, root bool) (datasetMetadata, error) {
 			}
 			if sourcePresent {
 				metadata.sourceGeneration, err = parseGeneration(sourceBytes)
-				if err != nil || metadata.sourceGeneration >= metadata.generation { return datasetMetadata{}, provider.NewError(provider.ErrorCodeMalformedData) }
+				if err != nil || metadata.sourceGeneration >= metadata.generation {
+					return datasetMetadata{}, provider.NewError(provider.ErrorCodeMalformedData)
+				}
 			}
 		}
 	default:

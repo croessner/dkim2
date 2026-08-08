@@ -19,18 +19,19 @@ import (
 )
 
 const (
-	planDigestDomain       = "DKIM2-DOMAIN-PLAN-V1\x00"
-	candidateDigestDomain  = "DKIM2-CANDIDATE-CONTENT-V1\x00"
+	planDigestDomain              = "DKIM2-DOMAIN-PLAN-V1\x00"
+	candidateDigestDomain         = "DKIM2-CANDIDATE-CONTENT-V1\x00"
 	campaignCandidateDigestDomain = "DKIM2-CAMPAIGN-CANDIDATE-CONTENT-V2\x00"
-	domainIntentVersionV1  = "dkim2-domain-intent-v1"
-	recordStatusActive     = "active"
-	resolverClassSystem    = "system"
-	resolverClassRecursive = "recursive"
-	algorithmEd25519SHA256 = string(provider.AlgorithmEd25519SHA256)
-	algorithmRSASHA256     = string(provider.AlgorithmRSASHA256)
-	profileUseOriginator   = "originator"
-	rolloutEnforce         = "enforce"
-	compatibilityStrict    = "strict"
+	domainIntentVersionV1         = "dkim2-domain-intent-v1"
+	recordStatusActive            = "active"
+	resolverClassSystem           = "system"
+	resolverClassRecursive        = "recursive"
+	algorithmEd25519SHA256        = string(provider.AlgorithmEd25519SHA256)
+	algorithmRSASHA256            = string(provider.AlgorithmRSASHA256)
+	profileUseOriginator          = "originator"
+	rolloutEnforce                = "enforce"
+	compatibilityStrict           = "strict"
+	authoritySchemeLDAPS          = "ldaps"
 )
 
 // PlanDigest is the key-free operation-plan identity.
@@ -344,7 +345,7 @@ func validPurgeAuthority(backend BackendClass, descriptor AuthorityDescriptor) b
 
 // validAuthorityEndpoint enforces canonical endpoint and TLS identity syntax.
 func validAuthorityEndpoint(backend BackendClass, endpoint AuthorityEndpoint) bool {
-	wantScheme := map[BackendClass]string{BackendLDAP: "ldaps", BackendPostgreSQL: "postgresql", BackendMySQL: "mysql", BackendMariaDB: "mariadb"}[backend]
+	wantScheme := map[BackendClass]string{BackendLDAP: authoritySchemeLDAPS, BackendPostgreSQL: "postgresql", BackendMySQL: "mysql", BackendMariaDB: "mariadb"}[backend]
 	if endpoint.Scheme != wantScheme || endpoint.Port == 0 || endpoint.Host == "" || endpoint.Host != strings.ToLower(endpoint.Host) ||
 		endpoint.TLSServerName == "" || endpoint.TLSServerName != strings.ToLower(endpoint.TLSServerName) || len(endpoint.TLSServerName) > 253 {
 		return false

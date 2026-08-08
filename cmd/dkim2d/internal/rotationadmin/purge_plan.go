@@ -49,9 +49,9 @@ func NewPurgePlan(backend datasourceadmin.BackendClass, authority datasourceadmi
 	}
 	targets := make([]admincontract.PurgeTarget, 0, classification.EligibleCount())
 	for _, generation := range classification.EligibleTargets() {
-		lifecycle := "never_active"
+		lifecycle := purgeLifecycleNeverActive
 		if generation.WasActive {
-			lifecycle = "active_history"
+			lifecycle = purgeLifecycleActiveHistory
 		}
 		targets = append(targets, admincontract.PurgeTarget{Generation: generation.Generation, Schema: generation.Schema, Lifecycle: lifecycle, ContentDigest: generation.ContentDigest})
 	}
@@ -162,10 +162,14 @@ func (r *PurgeApplyRequest) VerifyReadback(backend datasourceadmin.BackendClass,
 	versionInventory := inventory
 	if fence.absent != 0 {
 		versionInventory.Generations = append([]datasourceadmin.RetentionGeneration(nil), inventory.Generations...)
-		for _, target := range r.plan.targets { versionInventory.Generations = append(versionInventory.Generations, purgeTargetGeneration(target)) }
+		for _, target := range r.plan.targets {
+			versionInventory.Generations = append(versionInventory.Generations, purgeTargetGeneration(target))
+		}
 	}
 	inventoryVersion, inventoryErr := datasourceadmin.RetentionInventoryVersion(versionInventory, r.plan.policyVersion)
-	if inventoryErr != nil || inventoryVersion != r.plan.inventoryVersion { return PurgeApplyFence{}, errConflict }
+	if inventoryErr != nil || inventoryVersion != r.plan.inventoryVersion {
+		return PurgeApplyFence{}, errConflict
+	}
 	return fence, nil
 }
 
@@ -229,15 +233,15 @@ func matchesTarget(generation datasourceadmin.RetentionGeneration, target adminc
 		generation.Ownership != datasourceadmin.RetentionOwnershipTrusted || !generation.Complete || !generation.ContentDigest.Equal(target.ContentDigest) {
 		return false
 	}
-	if target.Lifecycle == "active_history" {
+	if target.Lifecycle == purgeLifecycleActiveHistory {
 		return generation.WasActive
 	}
-	return target.Lifecycle == "never_active" && !generation.WasActive && generation.Closed
+	return target.Lifecycle == purgeLifecycleNeverActive && !generation.WasActive && generation.Closed
 }
 
 // purgeTargetGeneration reconstructs only exact key-free target facts for all-absent idempotency proof.
 func purgeTargetGeneration(target admincontract.PurgeTarget) datasourceadmin.RetentionGeneration {
-	return datasourceadmin.RetentionGeneration{Generation: target.Generation, Schema: target.Schema, State: datasourceadmin.StateCommitted, WasActive: target.Lifecycle == "active_history", Complete: true, Closed: target.Lifecycle == "never_active", Ownership: datasourceadmin.RetentionOwnershipTrusted, ContentDigest: target.ContentDigest}
+	return datasourceadmin.RetentionGeneration{Generation: target.Generation, Schema: target.Schema, State: datasourceadmin.StateCommitted, WasActive: target.Lifecycle == purgeLifecycleActiveHistory, Complete: true, Closed: target.Lifecycle == purgeLifecycleNeverActive, Ownership: datasourceadmin.RetentionOwnershipTrusted, ContentDigest: target.ContentDigest}
 }
 
 // newPurgeArtifactDigest binds the provider-neutral plan to exact authority and expected counts.
