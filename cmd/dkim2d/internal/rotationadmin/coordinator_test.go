@@ -14,14 +14,15 @@ import (
 )
 
 type publicationBackendFake struct {
-	readback      *datasourceadmin.PublicationEnvelope
-	operation     datasourceadmin.OperationBinding
-	staged        datasourceadmin.StagedEvidence
-	current       uint64
-	stageCalls    int
-	activateCalls int
-	terminalCalls int
-	failStage     bool
+	readback       *datasourceadmin.PublicationEnvelope
+	operation      datasourceadmin.OperationBinding
+	staged         datasourceadmin.StagedEvidence
+	current        uint64
+	stageCalls     int
+	activateCalls  int
+	terminalCalls  int
+	terminalRecord datasourceadmin.TerminalRecord
+	failStage      bool
 }
 
 // ReadCurrent is unused by resume tests and rejects accidental new-campaign work.
@@ -151,6 +152,17 @@ func (b *publicationBackendFake) RecordTerminal(_ context.Context, record dataso
 	if !record.Valid() || record.CurrentGeneration() != b.current {
 		return errConflict
 	}
+	if b.terminalRecord.Valid() {
+		if !b.terminalRecord.Operation().Equal(record.Operation()) ||
+			b.terminalRecord.CurrentGeneration() != record.CurrentGeneration() ||
+			b.terminalRecord.CandidateGeneration() != record.CandidateGeneration() ||
+			b.terminalRecord.RecordedAt() != record.RecordedAt() ||
+			!b.terminalRecord.CandidateDigest().Equal(record.CandidateDigest()) {
+			return errConflict
+		}
+		return nil
+	}
+	b.terminalRecord = record
 	b.terminalCalls++
 	return nil
 }
@@ -304,6 +316,16 @@ func TestCoordinatorResumeReclaimsFenceBeforeProof(t *testing.T) {
 // crash after authoritative current movement resumes with exact readback and
 // terminal closure, never a second pointer mutation.
 func TestCoordinatorResumeAfterCurrentMoveClosesWithoutSecondActivation(t *testing.T) {
+	testCoordinatorResumeAfterCurrentMove(t, false)
+}
+
+// TestCoordinatorResumeAfterTerminalWriteUsesStableReceipt proves a crash
+// after terminal persistence reuses the write-ahead activation timestamp.
+func TestCoordinatorResumeAfterTerminalWriteUsesStableReceipt(t *testing.T) {
+	testCoordinatorResumeAfterCurrentMove(t, true)
+}
+
+func testCoordinatorResumeAfterCurrentMove(t *testing.T, terminalPresent bool) {
 	plan, prepared := preparedCampaign(t, 2)
 	defer plan.Close()     //nolint:errcheck
 	defer prepared.Close() //nolint:errcheck
@@ -329,6 +351,12 @@ func TestCoordinatorResumeAfterCurrentMoveClosesWithoutSecondActivation(t *testi
 		t.Fatal("activation checkpoint rejected")
 	}
 	backend.current = plan.candidateGeneration
+	if terminalPresent {
+		record, recordErr := datasourceadmin.NewTerminalRecord(plan.intent.operation, datasourceadmin.SchemaVersionV3, journal.sourceSchema, journal.sourceGeneration, journal.candidateGeneration, journal.candidateGeneration, backend.staged.Digest(), datasourceadmin.TerminalClosed, "activated", time.Unix(journal.activationUnix, 0).UTC())
+		if recordErr != nil || backend.RecordTerminal(t.Context(), record) != nil {
+			t.Fatal("persisted terminal fixture rejected")
+		}
+	}
 	directory, directoryErr := filepath.EvalSymlinks(t.TempDir())
 	if directoryErr != nil || os.Chmod(directory, 0o700) != nil {
 		t.Fatal("protect journal directory")

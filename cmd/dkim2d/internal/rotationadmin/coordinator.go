@@ -121,7 +121,7 @@ func Activate(
 		return errConflict
 	}
 	if recorder, ok := backend.(datasourceadmin.TerminalRecorder); ok {
-		record, recordErr := terminalRecordForActivation(journal, published, time.Now().UTC())
+		record, recordErr := terminalRecordForActivation(journal, published)
 		if recordErr != nil || recorder.RecordTerminal(ctx, record) != nil {
 			requireBackendReconciliation(journal, "terminal_close")
 			return errBackend
@@ -135,13 +135,17 @@ func Activate(
 
 // terminalRecordForActivation derives immutable closure evidence only while
 // Activate holds the published lock after authoritative current readback.
-func terminalRecordForActivation(journal *Journal, published *Published, when time.Time) (datasourceadmin.TerminalRecord, error) {
-	if journal == nil || published == nil || when.IsZero() || when.Location() != time.UTC {
+func terminalRecordForActivation(journal *Journal, published *Published) (datasourceadmin.TerminalRecord, error) {
+	if journal == nil || published == nil {
 		return datasourceadmin.TerminalRecord{}, errInvalid
 	}
 	journal.mu.Lock()
-	schema, source, candidate := journal.sourceSchema, journal.sourceGeneration, journal.candidateGeneration
+	schema, source, candidate, activationUnix := journal.sourceSchema, journal.sourceGeneration, journal.candidateGeneration, journal.activationUnix
 	journal.mu.Unlock()
+	if activationUnix <= 0 {
+		return datasourceadmin.TerminalRecord{}, errInvalid
+	}
+	when := time.Unix(activationUnix, 0).UTC()
 	operation, current, digest := published.operation, published.candidate, published.staged.Digest()
 	return datasourceadmin.NewTerminalRecord(operation, datasourceadmin.SchemaVersionV3, schema, source, candidate, current, digest, datasourceadmin.TerminalClosed, "activated", when)
 }

@@ -48,6 +48,7 @@ type Journal struct {
 	retentionPolicy     string
 	limitProfile        string
 	batches             []batchReceipt
+	activationUnix      int64
 	failureClass        string
 	closed              bool
 }
@@ -163,6 +164,7 @@ func (j *Journal) BeginActivation(now time.Time, maximumProofAge time.Duration) 
 		}
 	}
 	j.state = StateActivating
+	j.activationUnix = now.Unix()
 	return nil
 }
 
@@ -273,6 +275,7 @@ func (j *Journal) Close() error {
 	j.work = nil
 	j.planDigest, j.frozenDigest, j.candidateDigest = admincontract.Digest{}, admincontract.Digest{}, admincontract.Digest{}
 	j.batches = nil
+	j.activationUnix = 0
 	j.closed = true
 	return nil
 }
@@ -319,6 +322,7 @@ type journalWire struct {
 	WorkCount           uint32                   `json:"work_count"`
 	RecordCount         uint32                   `json:"record_count"`
 	Batches             []batchWire              `json:"batches"`
+	ActivationUnix      int64                    `json:"activation_unix,omitempty"`
 	FailureClass        string                   `json:"failure_class,omitempty"`
 	Work                []admincontract.WorkItem `json:"work"`
 	RotationPolicy      string                   `json:"rotation_policy"`
@@ -463,7 +467,7 @@ func encodeJournal(journal *Journal, revision uint64) ([]byte, error) {
 	if journal.closed || !admincontract.ValidState(journal.state) {
 		return nil, errConflict
 	}
-	wire := journalWire{Version: journalVersion, Revision: revision, State: journal.state, Mode: journal.mode, Operation: journal.operation, EmergencyReason: journal.emergencyReason, SourceSchema: journal.sourceSchema, SourceGeneration: journal.sourceGeneration, CandidateGeneration: journal.candidateGeneration, PlanDigest: journal.planDigest.Hex(), FrozenDigest: journal.frozenDigest.Hex(), CandidateDigest: journal.candidateDigest.Hex(), WorkCount: journal.workCount, RecordCount: journal.recordCount, FailureClass: journal.failureClass, Work: cloneJournalItems(journal.work), RotationPolicy: journal.rotationPolicy, DNSPolicy: journal.dnsPolicy, RetentionPolicy: journal.retentionPolicy, LimitProfile: journal.limitProfile, Batches: make([]batchWire, len(journal.batches))}
+	wire := journalWire{Version: journalVersion, Revision: revision, State: journal.state, Mode: journal.mode, Operation: journal.operation, EmergencyReason: journal.emergencyReason, SourceSchema: journal.sourceSchema, SourceGeneration: journal.sourceGeneration, CandidateGeneration: journal.candidateGeneration, PlanDigest: journal.planDigest.Hex(), FrozenDigest: journal.frozenDigest.Hex(), CandidateDigest: journal.candidateDigest.Hex(), WorkCount: journal.workCount, RecordCount: journal.recordCount, ActivationUnix: journal.activationUnix, FailureClass: journal.failureClass, Work: cloneJournalItems(journal.work), RotationPolicy: journal.rotationPolicy, DNSPolicy: journal.dnsPolicy, RetentionPolicy: journal.retentionPolicy, LimitProfile: journal.limitProfile, Batches: make([]batchWire, len(journal.batches))}
 	for index, receipt := range journal.batches {
 		wire.Batches[index] = batchWire{Ordinal: receipt.batch.Ordinal, Start: receipt.batch.Start, End: receipt.batch.End, Total: receipt.batch.Total, Digest: receipt.batch.digest.Hex(), CompletedUnix: receipt.completedUnix, ProofPolicy: receipt.proofPolicy}
 	}
@@ -504,7 +508,7 @@ func decodeJournal(document []byte) (*Journal, error) {
 			return nil, errInvalid
 		}
 	}
-	journal := &Journal{revision: wire.Revision, state: wire.State, mode: wire.Mode, operation: wire.Operation, emergencyReason: wire.EmergencyReason, sourceSchema: wire.SourceSchema, sourceGeneration: wire.SourceGeneration, candidateGeneration: wire.CandidateGeneration, planDigest: plan, frozenDigest: frozen, candidateDigest: candidate, workCount: wire.WorkCount, recordCount: wire.RecordCount, failureClass: wire.FailureClass, work: cloneJournalItems(wire.Work), rotationPolicy: wire.RotationPolicy, dnsPolicy: wire.DNSPolicy, retentionPolicy: wire.RetentionPolicy, limitProfile: wire.LimitProfile}
+	journal := &Journal{revision: wire.Revision, state: wire.State, mode: wire.Mode, operation: wire.Operation, emergencyReason: wire.EmergencyReason, sourceSchema: wire.SourceSchema, sourceGeneration: wire.SourceGeneration, candidateGeneration: wire.CandidateGeneration, planDigest: plan, frozenDigest: frozen, candidateDigest: candidate, workCount: wire.WorkCount, recordCount: wire.RecordCount, activationUnix: wire.ActivationUnix, failureClass: wire.FailureClass, work: cloneJournalItems(wire.Work), rotationPolicy: wire.RotationPolicy, dnsPolicy: wire.DNSPolicy, retentionPolicy: wire.RetentionPolicy, limitProfile: wire.LimitProfile}
 	for _, receipt := range wire.Batches {
 		digest, parseErr := admincontract.ParseDigestHex(receipt.Digest)
 		if parseErr != nil {
@@ -533,6 +537,10 @@ func validateDecodedJournal(journal *Journal) error { //nolint:gocyclo // Protec
 		return errInvalid
 	}
 	if journal.mode == admincontract.ModeNormal && journal.emergencyReason != "" || journal.mode == admincontract.ModeEmergency && journal.emergencyReason == "" {
+		return errInvalid
+	}
+	if (journal.state == StateActivating || journal.state == StateActivated) && journal.activationUnix <= 0 ||
+		journal.state != StateActivating && journal.state != StateActivated && journal.state != StateReconcileRequired && journal.activationUnix != 0 {
 		return errInvalid
 	}
 	if journal.state == StatePlanned || journal.state == StatePreparing {
