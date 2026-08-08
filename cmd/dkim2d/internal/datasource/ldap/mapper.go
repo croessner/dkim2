@@ -285,6 +285,36 @@ func mapGenerationMetadata(entry Entry) (datasetMetadata, error) {
 	return mapDatasetMetadata(entry, true)
 }
 
+// mapInventoryGenerationMetadata accepts a committed v1 root only as
+// conservative legacy history; normal current and snapshot paths remain v2/v3.
+func mapInventoryGenerationMetadata(entry Entry) (datasetMetadata, error) {
+	metadata, err := mapGenerationMetadata(entry)
+	if err == nil {
+		return metadata, nil
+	}
+	values, legacyErr := exactAttributes(entry, RecordClassDataset, []string{
+		attrSchemaVersion, attrGeneration, attrDatasetState,
+	}, []string{attrCandidateDigest, attrOperationID, attrSourceGeneration, attrWasActive})
+	if legacyErr != nil {
+		return datasetMetadata{}, legacyErr
+	}
+	defer clearAttributeValues(values)
+	if string(values[attrSchemaVersion]) != datasourceadmin.SchemaVersionV1 ||
+		string(values[attrDatasetState]) != string(datasourceadmin.StateCommitted) {
+		return datasetMetadata{}, provider.NewError(provider.ErrorCodeMalformedData)
+	}
+	for _, attribute := range []string{attrCandidateDigest, attrOperationID, attrSourceGeneration, attrWasActive} {
+		if _, present := values[attribute]; present {
+			return datasetMetadata{}, provider.NewError(provider.ErrorCodeMalformedData)
+		}
+	}
+	generation, generationErr := parseGeneration(values[attrGeneration])
+	if generationErr != nil {
+		return datasetMetadata{}, generationErr
+	}
+	return datasetMetadata{schema: datasourceadmin.SchemaVersionV1, generation: generation, state: datasourceadmin.StateCommitted}, nil
+}
+
 // mapDatasetMetadata owns the closed v2/v3 LDAP metadata combinations.
 func mapDatasetMetadata(entry Entry, root bool) (datasetMetadata, error) {
 	values, err := exactAttributes(entry, RecordClassDataset, []string{

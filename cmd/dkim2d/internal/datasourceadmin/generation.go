@@ -38,7 +38,16 @@ type Inventory struct {
 
 // Outstanding reports whether this exact noncurrent generation retains candidate material.
 func (g GenerationInfo) Outstanding() bool {
-	return !g.Current && (g.State != StateCommitted || !g.WasActive)
+	if g.Current {
+		return false
+	}
+	if g.State != StateCommitted {
+		return true
+	}
+	if g.Schema == SchemaVersionV1 || g.Schema == SchemaVersionV2 {
+		return false
+	}
+	return !g.WasActive
 }
 
 // Equivalent reports whether two bounded inventories contain identical ordered evidence.
@@ -176,7 +185,7 @@ func validateInventory(inventory Inventory, limits GenerationLimits) (uint64, ui
 			if generation.Generation != inventory.Current || generation.State != StateCommitted {
 				return 0, 0, newError(CodeConflict)
 			}
-		} else if generation.State == StateStaging || !generation.WasActive {
+		} else if generation.Outstanding() {
 			outstanding++
 		}
 	}

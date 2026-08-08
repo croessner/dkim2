@@ -70,9 +70,16 @@ func (a *Administrator) RetentionRecoveryInventory(ctx context.Context) (datasou
 	bytesRead := 0
 	currentMatches := 0
 	for _, root := range roots {
-		metadata, mapErr := mapGenerationMetadata(root)
+		metadata, mapErr := mapInventoryGenerationMetadata(root)
 		if mapErr != nil {
 			return datasourceadmin.RetentionInventory{}, datasourceadminError(datasourceadmin.CodeConflict)
+		}
+		if metadata.schema == datasourceadmin.SchemaVersionV1 {
+			rows = append(rows, datasourceadmin.RetentionGeneration{
+				Generation: metadata.generation, Schema: metadata.schema, State: metadata.state,
+				Ownership: datasourceadmin.RetentionOwnershipUnknown,
+			})
+			continue
 		}
 		records, recordPresent, readErr := client.ReadGenerationRecords(ctx, metadata.generation, a.limits, a.generations)
 		if readErr != nil || !recordPresent {
@@ -908,7 +915,7 @@ func (a *Administrator) readStableInventory(
 	currentMatches := 0
 	seen := make(map[uint64]struct{}, len(roots))
 	for _, entry := range roots {
-		metadata, mapErr := mapGenerationMetadata(entry)
+		metadata, mapErr := mapInventoryGenerationMetadata(entry)
 		if mapErr != nil {
 			return datasourceadmin.Inventory{}, datasourceadminError(datasourceadmin.CodeConflict)
 		}

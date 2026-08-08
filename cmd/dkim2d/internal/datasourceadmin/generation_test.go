@@ -18,6 +18,28 @@ func TestAllocateGenerationInventoriesAllObservedValues(t *testing.T) {
 	}
 }
 
+// TestAllocateGenerationRetainsLegacyHistory proves deployed v1/v2 history
+// neither blocks a global campaign nor becomes an outstanding v3 candidate.
+func TestAllocateGenerationRetainsLegacyHistory(t *testing.T) {
+	inventory := Inventory{Current: 36}
+	for generation := uint64(1); generation <= 36; generation++ {
+		schema := SchemaVersionV2
+		if generation == 1 {
+			schema = SchemaVersionV1
+		}
+		inventory.Generations = append(inventory.Generations, GenerationInfo{
+			Generation: generation,
+			Current:    generation == inventory.Current,
+			State:      StateCommitted,
+			Schema:     schema,
+		})
+	}
+	allocated, err := AllocateGeneration(inventory, testGenerationLimits())
+	if err != nil || allocated != 37 {
+		t.Fatal("legacy committed history blocked the next global generation")
+	}
+}
+
 // TestAllocateGenerationFailsClosedOnCeilingAndOverflow freezes resource limits.
 func TestAllocateGenerationFailsClosedOnCeilingAndOverflow(t *testing.T) {
 	limits := testGenerationLimits()

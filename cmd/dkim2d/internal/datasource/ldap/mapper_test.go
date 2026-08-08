@@ -54,6 +54,20 @@ func TestMapDatasetRejectsVersionOne(t *testing.T) {
 	}
 }
 
+// TestInventoryMapperRetainsV1WithoutAdmittingItAsCurrent freezes the narrow
+// legacy-history exception used only by bounded inventory and retention.
+func TestInventoryMapperRetainsV1WithoutAdmittingItAsCurrent(t *testing.T) {
+	records := minimalRecords(t)
+	records.Root.Attributes[attrSchemaVersion] = [][]byte{[]byte(datasourceadmin.SchemaVersionV1)}
+	metadata, err := mapInventoryGenerationMetadata(records.Root)
+	if err != nil || metadata.schema != datasourceadmin.SchemaVersionV1 || metadata.state != datasourceadmin.StateCommitted {
+		t.Fatal("v1 history root was not retained conservatively")
+	}
+	if _, err := mapGenerationMetadata(records.Root); err == nil {
+		t.Fatal("v1 history was admitted as a usable source generation")
+	}
+}
+
 // TestMapDatasetAcceptsOnlyExactV3Metadata freezes runtime digest and version fencing.
 func TestMapDatasetAcceptsOnlyExactV3Metadata(t *testing.T) {
 	records := minimalRecords(t)

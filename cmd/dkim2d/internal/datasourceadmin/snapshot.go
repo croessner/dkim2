@@ -12,6 +12,9 @@ import (
 )
 
 const (
+	// SchemaVersionV1 identifies retained public-only legacy history. It is
+	// never accepted as a signing or campaign source snapshot.
+	SchemaVersionV1 = "dkim2-datasource-v1"
 	// SchemaVersionV2 identifies the deployed native custody schema.
 	SchemaVersionV2 = "dkim2-datasource-v2"
 	// SchemaVersionV3 identifies operation-bound administrative generations.
