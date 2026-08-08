@@ -51,7 +51,6 @@ func (p *DNSBatchProver) ExportBatchDNS(ctx context.Context, path string, prepar
 	}()
 	limits := domainadmin.DefaultLimits()
 	limits.MaxDNSRecords = 256
-	limits.MaxDNSExportBytes = 1 << 20
 	return domainadmin.ExportCanonicalDNSBatch(ctx, path, inputs, p.policy.ExportTTLSeconds, limits)
 }
 
