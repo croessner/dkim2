@@ -129,7 +129,7 @@ func TestOperatorLDAPBundleMatchesNativeCustody(t *testing.T) {
 		"attrs=children",
 		`cn=dkim2-stager,ou=services,dc=example,dc=test" =dcsra`,
 		"attrs=dkim2AdminLockOwner,dkim2AdminRevision",
-		"attrs=dkim2CandidateDigest,dkim2OperationID",
+		"attrs=dkim2CandidateDigest,dkim2OperationID,dkim2SourceGeneration",
 		"attrs=dkim2WasActive",
 		`cn=dkim2-purger,ou=services,dc=example,dc=test]) + ([cn=current,ou=dkim2,dc=example,dc=test]/dkim2Generation & [$2])" none`,
 		`dkim2DatasetState & [committed])" =dcsr`,

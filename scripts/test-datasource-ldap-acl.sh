@@ -377,6 +377,7 @@ dkim2Generation: 2
 dkim2DatasetState: staging
 dkim2OperationID: aibqibiga4eascqlbqgzav3y4n
 dkim2CandidateDigest: 22222222222222222222222222222222
+dkim2SourceGeneration: 1
 EOF
 role stager "$ldapadd_bin" -f "$work/generation-2.ldif" >/dev/null
 cat >"$work/unit-2.ldif" <<'EOF'
