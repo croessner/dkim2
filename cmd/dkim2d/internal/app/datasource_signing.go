@@ -17,8 +17,6 @@ import (
 	"github.com/croessner/dkim2/provider"
 )
 
-const datasourceLoadBytes = 16 << 20
-
 type datasourcePool interface {
 	Close()
 }
@@ -28,6 +26,8 @@ type sqlSigningFactory func(
 	config.SQLSigningConfig,
 	[]byte,
 	*x509.CertPool,
+	provider.Limits,
+	int,
 ) (datasourceruntime.Loader, datasourcePool, error)
 
 // networkSigningRuntime owns one selected loader, refresh worker, and backend pool.
@@ -45,6 +45,18 @@ type networkSigningRuntime struct {
 type joinedAuthority struct {
 	replay  AuthorityReadiness
 	signing AuthorityReadiness
+}
+
+// selectedDatasourceLimits maps one closed atomic profile without per-field bypass.
+func selectedDatasourceLimits(signing config.SigningConfig) (provider.Limits, error) {
+	switch signing.LimitProfile() {
+	case "small":
+		return provider.DefaultLimits(), nil
+	case "production":
+		return provider.ProductionLimits(), nil
+	default:
+		return provider.Limits{}, errors.New("invalid datasource limit profile")
+	}
 }
 
 // AuthorityReady reports one no-I/O conjunction of replay and signing authority.
@@ -67,6 +79,11 @@ func newNetworkSigningRuntime(
 		return nil, &LifecycleError{}
 	}
 	snapshot := preparation.Snapshot()
+	datasourceLimits, limitsErr := selectedDatasourceLimits(snapshot.Signing())
+	if limitsErr != nil {
+		return nil, &LifecycleError{}
+	}
+	maxLoadBytes := int(snapshot.Signing().MaxLoadBytes())
 	var output *networkSigningRuntime
 	var constructionErr error
 	borrowErr := preparation.SigningDatasource().Use(
@@ -96,8 +113,8 @@ func newNetworkSigningRuntime(
 					return nil
 				}
 				loader, loaderErr := datasourceldap.NewLoader(
-					connector, provider.DefaultLimits(),
-					int(ldapConfig.PageSize()), datasourceLoadBytes,
+					connector, datasourceLimits,
+					int(ldapConfig.PageSize()), maxLoadBytes,
 					ldapConfig.LoadDeadline(),
 				)
 				if loaderErr != nil {
@@ -117,7 +134,7 @@ func newNetworkSigningRuntime(
 				output, constructionErr = startSQLSigningRuntime(
 					ctx, postgresqlConfig, password, roots,
 					snapshot.Signing().ReloadInterval(), "postgresql", telemetry,
-					newPostgreSQLSigningComponents,
+					datasourceLimits, maxLoadBytes, newPostgreSQLSigningComponents,
 				)
 			case config.SigningMySQL:
 				mysqlConfig, ok := snapshot.Signing().MySQL()
@@ -128,7 +145,7 @@ func newNetworkSigningRuntime(
 				output, constructionErr = startSQLSigningRuntime(
 					ctx, mysqlConfig, password, roots,
 					snapshot.Signing().ReloadInterval(), "mysql", telemetry,
-					newMySQLSigningComponents,
+					datasourceLimits, maxLoadBytes, newMySQLSigningComponents,
 				)
 			default:
 				constructionErr = &LifecycleError{}
@@ -151,12 +168,14 @@ func startSQLSigningRuntime(
 	refreshInterval time.Duration,
 	providerClass string,
 	telemetry *observability.Runtime,
+	limits provider.Limits,
+	maxLoadBytes int,
 	factory sqlSigningFactory,
 ) (*networkSigningRuntime, error) {
 	if factory == nil {
 		return nil, &LifecycleError{}
 	}
-	loader, pool, err := factory(ctx, providerConfig, password, roots)
+	loader, pool, err := factory(ctx, providerConfig, password, roots, limits, maxLoadBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -172,6 +191,8 @@ func newPostgreSQLSigningComponents(
 	providerConfig config.SQLSigningConfig,
 	password []byte,
 	roots *x509.CertPool,
+	limits provider.Limits,
+	maxLoadBytes int,
 ) (datasourceruntime.Loader, datasourcePool, error) {
 	pool, err := datasourcepostgresql.OpenPool(ctx, datasourcepostgresql.ConnectionConfig{
 		Address: providerConfig.Address(), ServerName: providerConfig.ServerName(),
@@ -185,8 +206,8 @@ func newPostgreSQLSigningComponents(
 		return nil, nil, err
 	}
 	loader, err := datasourcepostgresql.NewLoader(
-		pool, provider.DefaultLimits(), int(providerConfig.PageSize()),
-		datasourceLoadBytes, providerConfig.LoadDeadline(),
+		pool, limits, int(providerConfig.PageSize()),
+		maxLoadBytes, providerConfig.LoadDeadline(),
 	)
 	if err != nil {
 		pool.Close()
@@ -201,6 +222,8 @@ func newMySQLSigningComponents(
 	providerConfig config.SQLSigningConfig,
 	password []byte,
 	roots *x509.CertPool,
+	limits provider.Limits,
+	maxLoadBytes int,
 ) (datasourceruntime.Loader, datasourcePool, error) {
 	pool, err := datasourcemysql.OpenPool(ctx, datasourcemysql.ConnectionConfig{
 		Address: providerConfig.Address(), ServerName: providerConfig.ServerName(),
@@ -214,8 +237,8 @@ func newMySQLSigningComponents(
 		return nil, nil, err
 	}
 	loader, err := datasourcemysql.NewLoader(
-		pool, provider.DefaultLimits(), int(providerConfig.PageSize()),
-		datasourceLoadBytes, providerConfig.LoadDeadline(),
+		pool, limits, int(providerConfig.PageSize()),
+		maxLoadBytes, providerConfig.LoadDeadline(),
 	)
 	if err != nil {
 		pool.Close()

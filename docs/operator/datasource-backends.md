@@ -122,7 +122,7 @@ pointer and monotonic old-current history under the documented assertions.
 Fresh installations apply
 [`001_dkim2_datasource.sql`](../../contrib/schema/postgresql/001_dkim2_datasource.sql)
 and every ordered forward migration through
-[`003_native_domain_onboarding.sql`](../../contrib/schema/postgresql/003_native_domain_onboarding.sql)
+[`006_campaign_source_binding.sql`](../../contrib/schema/postgresql/006_campaign_source_binding.sql)
 through a schema administrator. Existing v1 installations apply
 [`002_native_key_custody.sql`](../../contrib/schema/postgresql/002_native_key_custody.sql),
 then publish a complete higher v2 generation before restarting a v2 daemon.
@@ -131,7 +131,8 @@ The DDL creates runtime, compatibility-publisher, snapshot, staging, and
 activation `NOLOGIN` roles. Create separate TLS-authenticated login roles
 through the site's credential workflow and grant each login exactly one role.
 Runtime receives read-only dataset access. The legacy publisher remains v2-only.
-The three v3 administration roles invoke narrow fixed-search-path
+The five isolated lifecycle roles, including purge and the terminal-only closer,
+invoke narrow fixed-search-path
 `SECURITY DEFINER` lock primitives and receive no direct access to the
 singleton lock table. Snapshot only observes; staging may physically lock,
 claim, release, and write inactive v3 content under RLS; activation may
@@ -140,9 +141,9 @@ the fenced current transition. The candidate lock is bound to generation,
 operation, digest, and claimed administration revision. The only nonowner
 grantee of `candidate_root_for_update(generation_number,text,bytea)` is the
 activation role; the function has a fixed
-`search_path=pg_catalog, dkim2_datasource`. Audit all eight administration
+`search_path=pg_catalog, dkim2_datasource`. Audit all nine administration
 definer primitives for exact owner, kind, signature, `SECURITY DEFINER`, fixed
-search path, and the closed 21 role/routine `EXECUTE` pairs. Also prove that a
+search path, and the closed 23 role/routine `EXECUTE` pairs. Also prove that a
 direct activation-role `SELECT ... FOR UPDATE` of the candidate root returns no
 authorized row under RLS. Any missing or additional primitive, grantee, or
 PUBLIC execution authority is a deployment failure. This data-layer
@@ -158,14 +159,14 @@ unsupported.
 Fresh installations apply
 [`001_dkim2_datasource.sql`](../../contrib/schema/mysql/001_dkim2_datasource.sql)
 and every ordered forward migration through
-[`003_native_domain_onboarding.sql`](../../contrib/schema/mysql/003_native_domain_onboarding.sql)
+[`006_campaign_source_binding.sql`](../../contrib/schema/mysql/006_campaign_source_binding.sql)
 inside one dedicated database. The exact disposable qualification versions are
 MySQL 8.4 and MariaDB 10.11; see the
 [`compatibility statement`](../reference/compatibility.md#qualified-storage-services)
 before assuming another release is supported.
 
-Create distinct runtime, compatibility-publisher, snapshot, staging, and
-activation site accounts with exact source restrictions, mandatory TLS,
+Create distinct runtime, compatibility-publisher, snapshot, staging,
+activation, purge, and terminal-only closer site accounts with exact source restrictions, mandatory TLS,
 independently managed passwords, and no global privileges. Replace every
 placeholder in
 [`002_least_privilege_grants.sql.example`](../../contrib/schema/mysql/002_least_privilege_grants.sql.example),
@@ -179,9 +180,11 @@ apply it. The required grants are:
 | snapshot | read-only seven dataset tables | lock observation only | physical lock, claim/release, writes |
 | staging | read-only seven dataset tables | observe, physical lock, claim/release, fixed v3 staging/seal | direct lock/content writes, activation |
 | activation | read-only seven dataset tables | observe, physical singleton/current locks, exact candidate-root lock, fixed activation | claim/release, direct lock/content writes |
+| purge | exact generation/current/receipt readback only | fixed v3 purge procedure only | direct table delete, lock/current mutation, staging, activation |
+| closer | terminal evidence readback only | fixed v3 terminal-record procedure only | generation/current/lock mutation and staging/activation/purge |
 
 The migration owner remains the fixed definer of the closed procedures. None
-of the three v3 administration accounts receives direct privilege on
+of the five isolated lifecycle accounts receives direct privilege on
 `dkim2_publication_lock`; a locking read is performed by the narrow definer
 primitive. Read back `TABLE_PRIVILEGES`, `COLUMN_PRIVILEGES`, the exact
 per-routine `Execute` rows from `mysql.procs_priv`, and each routine definer
@@ -302,7 +305,8 @@ destruction controls as any other signing-key backup.
 
 Restore never moves the current pointer backward. Validate retained logical
 content and republish it as a complete strictly higher generation. Routine key
-replacement, DNS overlap, activation, retirement, and emergency recovery are in
+replacement, global campaigns, DNS overlap, activation, retention, purge, and
+emergency recovery are in
 [`datasource-key-rotation.md`](datasource-key-rotation.md).
 
 ## Troubleshooting

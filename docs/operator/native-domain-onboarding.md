@@ -280,8 +280,10 @@ material remains. A noncurrent committed v3 generation with exact `was active`
 evidence is retained rollback history and does not consume the onboarding
 ceiling.
 
-Cleanup is not part of onboarding. When the ceiling is reached, stop and use a
-separately reviewed retention/destruction procedure with verified backups.
+Cleanup is not part of onboarding. When the ceiling is reached, stop and use
+the separately reviewed protected retention/purge workflow in
+[`datasource-key-rotation.md`](datasource-key-rotation.md#retirement), with
+verified backups and its distinct purge authority.
 Rollback is always higher-generation rollback: republish known-good prior
 content under a new generation greater than current through the documented
 `dkim2d datasource rollback` workflow. Never move the pointer backward and

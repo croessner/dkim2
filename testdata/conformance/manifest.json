@@ -58,7 +58,7 @@
     {
       "id": "dns-negative-source",
       "path": "lib/dns_provider_test.go",
-      "sha256": "4b9fa6c6344328cfc6699efed4cf8259f7a8053e29380e4c83b796a5cc89c13c",
+      "sha256": "955d8bf495f6fdffd8bfc69ffa2f2d27e5bb99282775f916c825cc08a2b7f74d",
       "module": "lib"
     },
     {
@@ -142,7 +142,7 @@
     {
       "id": "milter-public-peer-source",
       "path": "cmd/dkim2-milter/internal/integration/public_peer_test.go",
-      "sha256": "a86fb5bafe0dd805cf8dfe21fdced5fd59b352bc5acfcf207161f4aca7975358",
+      "sha256": "775996368ec165aa30ea2aa6716c0ed06870b7f20a8441b495f1b84463fde8de",
       "module": "cmd/dkim2-milter"
     },
     {
@@ -238,7 +238,7 @@
     {
       "id": "postfix-qualification-runtime",
       "path": "contrib/qualification/postfix-milter/cmd/qualify/main.go",
-      "sha256": "dc0e073ebe3f90a75af63ad7beeebbb0f5104ebb44c8811a32a89b14a34a7e49",
+      "sha256": "85afa52f8a8a26b9bdc8dd9aed1202dfb4417444ea23b6ae01678b92473c89a9",
       "module": "contrib/qualification/postfix-milter"
     },
     {

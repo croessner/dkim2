@@ -366,6 +366,36 @@ The LDAP tree and attributes are documented in the
 generation replacement and retirement are documented in the
 [`key-rotation runbook`](../../docs/operator/datasource-key-rotation.md).
 
+### Offline global rotation campaigns
+
+`dkim2d datasource rotation` is a closed offline command surface. A scheduled
+normal run always means the complete frozen active-binding inventory: it creates
+one immutable candidate and moves `current` once only after every bounded DNS
+batch has fresh proof. It never creates one generation per domain.
+
+```text
+dkim2d datasource rotation run --config /path/to/rotation.yaml --journal /path/to/campaign.json --automatic
+dkim2d datasource rotation run --config /path/to/rotation.yaml --journal /path/to/campaign.json --automatic --apply
+dkim2d datasource rotation emergency --config /path/to/rotation.yaml --journal /path/to/campaign.json --tenant <exact> --domain <exact> --use <exact> --profile <exact> --reason <bounded-class> --apply
+dkim2d datasource rotation abort --config /path/to/rotation.yaml --journal /path/to/campaign.json --apply
+dkim2d datasource rotation purge plan --config /path/to/rotation.yaml --journal /path/to/campaign.json --output /path/to/purge.json
+dkim2d datasource rotation purge apply --config /path/to/rotation.yaml --journal /path/to/campaign.json --plan /path/to/purge.json --apply
+```
+
+`--automatic` is mandatory for a normal campaign. Emergency selection, pointer
+mutation, and purge destruction are never defaults: they require their explicit
+subcommand and one exact bare `--apply`. The normal command defaults to
+read-only `--dry-run`; `--dry-run` and `--apply` are mutually exclusive.
+Human and machine reports contain only counts, backend class, command, state,
+and closed result classes; they never contain domains, DNs, selectors, plan
+digests, DNS content, provider errors, or key material.
+
+The protected campaign configuration uses five distinct role credentials:
+snapshot, staging, activation, purge, and the terminal-only closer. All configured limits are finite and
+below compiled maxima. The selected public compatibility contract is
+[`admincontract`](../../lib/admincontract), whose strict synthetic fixture is
+checked by `make check-admin-contract` before a consumer binds the owner API.
+
 ### Process-local memory replay
 
 ```yaml

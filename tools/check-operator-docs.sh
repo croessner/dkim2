@@ -33,6 +33,7 @@ for document in \
   docs/operator/examples/dkim2d-signing-postgresql.yaml \
   docs/operator/examples/dkim2d-signing-mysql.yaml \
   docs/operator/examples/dkim2d-domain-admin-ldap.yaml \
+  docs/operator/examples/dkim2d-rotation-admin-ldap.yaml \
   docs/operator/examples/dkim2d-domain-intent.yaml \
   contrib/schema/mysql/002_least_privilege_grants.sql.example \
   docs/replay-store-valkey.md \

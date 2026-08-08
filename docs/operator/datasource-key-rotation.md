@@ -1,8 +1,9 @@
 # Native Datasource Key Rotation
 
 This runbook defines the supported generation replacement, DNS overlap, key
-retirement, and recovery contract for LDAP, PostgreSQL, MySQL, and MariaDB
-signing datasources. It does not grant a new mutation surface.
+retirement, bounded retention, and recovery contract for LDAP, PostgreSQL,
+MySQL, and MariaDB signing datasources. It does not grant an online mutation
+surface.
 
 `dkim2d` is an online reader and signer. It never generates keys, edits DNS,
 publishes datasource records, or returns private material through REST. For a
@@ -28,6 +29,23 @@ unsupported.
 Never reuse a selector with different key material. Never move the datasource
 pointer backward, edit a committed generation, repair an active key in place,
 or remove the old DNS record before the new generation is proven active.
+
+## Scheduled Global Campaign
+
+`dkim2d datasource rotation run` is the offline normal rotation path. It
+freezes every eligible active binding from one exact current generation,
+prepares and seals one complete higher immutable candidate, then exports and
+proves its DNS records in bounded batches. DNS batches never create additional
+generations. `current` advances exactly once only after every frozen binding
+has fresh proof; a partial batch, stale proof, changed current pointer, or
+ambiguous backend result stops in reconciliation and cannot activate.
+
+The command is dry-run by default. A normal mutation requires both
+`--automatic` and one bare `--apply`. The separately named `emergency` command
+requires one exact binding, a closed incident reason, and one bare `--apply`.
+It never becomes normal-campaign progress. A fresh datasource administration
+lock serializes normal and emergency ownership, so either path conflicts while
+the other remains open.
 
 ## Preconditions
 
@@ -132,12 +150,22 @@ Remove the old DNS selector only after all of these are true:
 - no active route or retained queued message still depends on the old selector;
 - a restorable protected backup and higher-generation rollback plan exist.
 
-Datasource generations are not deleted by guessed age. Retain or archive them
-according to the signing-key retention policy. A deletion tool or manual DBA
-action must independently prove that the generation is not current, not needed
-by an in-flight load, not retained for rollback or audit, and authorized for
-destruction. This repository provides no automatic generation garbage
-collector.
+Datasources are never deleted by guessed age or as an activation side effect.
+Use `dkim2d datasource rotation purge plan` to create a protected, read-only
+plan from an exact inventory, then separately review it before
+`dkim2d datasource rotation purge apply --plan <path> --apply`. Purge requires
+its own distinct provider authority, the exact plan and inventory/current
+fence, verified backups, and compact receipt reconciliation. It cannot select
+the current generation, an open/partial/foreign generation, required rollback
+history, or legacy history without explicit compatibility policy. LDAP removes
+only exact noncurrent subtrees leaf-first; SQL invokes one fixed definer
+routine and reconciles uncertain commits through exact target/receipt readback.
+No automatic periodic purge is claimed by this reference candidate.
+
+An operator can retire a verified nonactivating campaign only with
+`dkim2d datasource rotation abort --config <path> --journal <path> --apply`.
+The bare `--apply` token is required; it first records exact immutable terminal
+abort evidence through the closer authority, then persists the journal abort.
 
 ## Backend Activation Fences
 

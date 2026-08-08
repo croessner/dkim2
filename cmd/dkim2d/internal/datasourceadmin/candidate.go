@@ -165,6 +165,7 @@ func (*CandidateContent) MarshalJSON() ([]byte, error) { return nil, newError(Co
 type PublicationEnvelope struct {
 	mu        sync.Mutex
 	operation OperationBinding
+	sourceGeneration uint64
 	content   *CandidateContent
 	digest    CandidateContentDigest
 	closed    bool
@@ -172,6 +173,19 @@ type PublicationEnvelope struct {
 
 // NewPublicationEnvelope takes content ownership on success and leaves rejected content caller-owned.
 func NewPublicationEnvelope(operation string, content *CandidateContent) (*PublicationEnvelope, error) {
+	return newPublicationEnvelope(operation, 0, content)
+}
+
+// NewCampaignPublicationEnvelope binds a new campaign candidate to its exact
+// frozen source generation. The source is immutable and part of the digest.
+func NewCampaignPublicationEnvelope(operation string, sourceGeneration uint64, content *CandidateContent) (*PublicationEnvelope, error) {
+	if sourceGeneration == 0 || content == nil || content.Generation() <= sourceGeneration {
+		return nil, newError(CodeInvalid)
+	}
+	return newPublicationEnvelope(operation, sourceGeneration, content)
+}
+
+func newPublicationEnvelope(operation string, sourceGeneration uint64, content *CandidateContent) (*PublicationEnvelope, error) {
 	binding, bindingErr := NewOperationBinding(operation)
 	if bindingErr != nil || content == nil || content.schemaVersion() != SchemaVersionV3 {
 		return nil, newError(CodeInvalid)
@@ -179,13 +193,26 @@ func NewPublicationEnvelope(operation string, content *CandidateContent) (*Publi
 	generation := content.Generation()
 	var digest CandidateContentDigest
 	err := content.WithRows(context.Background(), func(rows Rows) error {
-		digest = digestCandidate(SchemaVersionV3, generation, binding.value, rows)
+		if sourceGeneration == 0 {
+			digest = digestCandidate(SchemaVersionV3, generation, binding.value, rows)
+		} else {
+			digest = digestCampaignCandidate(SchemaVersionV3, sourceGeneration, generation, binding.value, rows)
+		}
 		return nil
 	})
 	if err != nil || !digest.Valid() {
 		return nil, newError(CodeInvalid)
 	}
-	return &PublicationEnvelope{operation: binding, content: content, digest: digest}, nil
+	return &PublicationEnvelope{operation: binding, sourceGeneration: sourceGeneration, content: content, digest: digest}, nil
+}
+
+// SourceGeneration returns the immutable frozen source generation, or zero
+// for legacy v3 envelopes that must remain unknown/retained.
+func (e *PublicationEnvelope) SourceGeneration() uint64 {
+	if e == nil { return 0 }
+	e.mu.Lock(); defer e.mu.Unlock()
+	if e.closed || e.content == nil { return 0 }
+	return e.sourceGeneration
 }
 
 // Generation returns the candidate generation or zero after close.
@@ -230,7 +257,7 @@ func (e *PublicationEnvelope) Binding() OperationBinding {
 // WithMetadata supplies protected operation and digest metadata to a bounded provider callback.
 func (e *PublicationEnvelope) WithMetadata(
 	ctx context.Context,
-	use func(OperationBinding, CandidateContentDigest) error,
+	use func(OperationBinding, uint64, CandidateContentDigest) error,
 ) error {
 	if e == nil || ctx == nil || use == nil || ctx.Err() != nil {
 		return newError(CodeInvalid)
@@ -240,9 +267,9 @@ func (e *PublicationEnvelope) WithMetadata(
 		e.mu.Unlock()
 		return newError(CodeInvalid)
 	}
-	operation, digest := e.operation, e.digest
+	operation, source, digest := e.operation, e.sourceGeneration, e.digest
 	e.mu.Unlock()
-	if err := use(operation, digest); err != nil {
+	if err := use(operation, source, digest); err != nil {
 		return newError(CodeUnavailable)
 	}
 	return nil
@@ -281,6 +308,7 @@ func (e *PublicationEnvelope) Close() error {
 	content := e.content
 	e.content = nil
 	e.operation = OperationBinding{}
+	e.sourceGeneration = 0
 	e.digest = CandidateContentDigest{}
 	e.closed = true
 	e.mu.Unlock()

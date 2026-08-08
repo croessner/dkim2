@@ -45,7 +45,7 @@ func (c *goLDAPClient) readOptionalMetadata(ctx context.Context, base string) (E
 		"(objectClass=dkim2Dataset)",
 		[]string{
 			attrSchemaVersion, attrGeneration, attrDatasetState,
-			attrCandidateDigest, attrOperationID, attrWasActive,
+			attrCandidateDigest, attrOperationID, attrSourceGeneration, attrWasActive,
 		}, nil,
 	)
 	request.EnforceSizeLimit = true
@@ -70,6 +70,11 @@ func (c *goLDAPClient) ListGenerationRoots(
 	limits datasourceadmin.GenerationLimits,
 ) ([]Entry, error) {
 	return listGenerationRoots(ctx, "ou=generations,"+c.baseDN, limits, c.search)
+}
+
+// ListRetentionGenerationRoots reads the separate bounded historical-recovery inventory.
+func (c *goLDAPClient) ListRetentionGenerationRoots(ctx context.Context, limits datasourceadmin.RetentionRecoveryLimits) ([]Entry, error) {
+	return listRetentionGenerationRoots(ctx, "ou=generations,"+c.baseDN, limits, c.search)
 }
 
 // ldapSearchOperation is the narrow transport seam owned by bounded
@@ -149,6 +154,41 @@ func listGenerationRoots(
 	return nil, errors.New("ldap inventory unavailable")
 }
 
+// listRetentionGenerationRoots keeps recovery pagination independent of allocation ceilings.
+func listRetentionGenerationRoots(ctx context.Context, base string, limits datasourceadmin.RetentionRecoveryLimits, search ldapSearchOperation) ([]Entry, error) {
+	if ctx == nil || base == "" || limits.Validate() != nil || search == nil { return nil, errors.New("ldap recovery inventory unavailable") }
+	entries := make([]Entry, 0, min(int(limits.MaxGenerations), 64))
+	seen := make(map[uint64]struct{}, min(int(limits.MaxGenerations), 64))
+	success := false
+	defer func() { if !success { clearEntries(entries) } }()
+	cookie := []byte(nil)
+	bytesRead := 0
+	for pages := uint32(0); pages <= limits.MaxGenerations; pages++ {
+		control := newCriticalPagingControl(limits.PageSize, cookie)
+		request := goldap.NewSearchRequest(base, goldap.ScopeSingleLevel, goldap.NeverDerefAliases, int(limits.MaxGenerations), 0, false, "(objectClass=*)", []string{"*"}, []goldap.Control{control})
+		request.EnforceSizeLimit = true
+		result, err := search(ctx, request)
+		if err != nil || result == nil || len(result.Referrals) != 0 { return nil, errors.New("ldap recovery inventory unavailable") }
+		pageEntries, pageBytes, mapErr := mapGenerationRootPage(base, result.Entries)
+		clearLDAPProtectedAttributeBytes(result.Entries)
+		if mapErr != nil || pageBytes > int(limits.MaxReadBytes) || bytesRead > int(limits.MaxReadBytes)-pageBytes { clearEntries(pageEntries); return nil, errors.New("ldap recovery inventory unavailable") }
+		bytesRead += pageBytes
+		paging, ok := goldap.FindControl(result.Controls, goldap.ControlTypePaging).(*goldap.ControlPaging)
+		if !ok || paging == nil || len(paging.Cookie) > 4096 { clearEntries(pageEntries); return nil, errors.New("ldap recovery inventory unavailable") }
+		for _, entry := range pageEntries {
+			if len(entries) >= int(limits.MaxGenerations) { clearEntries(pageEntries); return nil, errors.New("ldap recovery inventory unavailable") }
+			metadata, metadataErr := mapGenerationMetadata(entry)
+			if metadataErr != nil { clearEntries(pageEntries); return nil, errors.New("ldap recovery inventory unavailable") }
+			if _, duplicate := seen[metadata.generation]; duplicate { clearEntries(pageEntries); return nil, errors.New("ldap recovery inventory unavailable") }
+			seen[metadata.generation] = struct{}{}
+			entries = append(entries, entry)
+		}
+		if len(paging.Cookie) == 0 { success = true; return entries, nil }
+		cookie = append(cookie[:0], paging.Cookie...)
+	}
+	return nil, errors.New("ldap recovery inventory unavailable")
+}
+
 // mapGenerationRootPage validates and detaches one complete inventory page.
 func mapGenerationRootPage(base string, sources []*goldap.Entry) ([]Entry, int, error) {
 	entries := make([]Entry, 0, len(sources))
@@ -223,7 +263,7 @@ func mapGenerationRootSourceWithNumber(base string, source *goldap.Entry) (Entry
 	}
 	entry, err := projectSourceEntry(RecordClassDataset, source, []string{
 		attrSchemaVersion, attrGeneration, attrDatasetState,
-		attrCandidateDigest, attrOperationID, attrWasActive,
+		attrCandidateDigest, attrOperationID, attrSourceGeneration, attrWasActive,
 	})
 	if err != nil {
 		return Entry{}, 0, err
@@ -403,7 +443,9 @@ func (c *goLDAPClient) AddCandidate(
 	}
 	var operation string
 	var digest []byte
-	if err := candidate.WithMetadata(ctx, func(binding datasourceadmin.OperationBinding, value datasourceadmin.CandidateContentDigest) error {
+	var source uint64
+	if err := candidate.WithMetadata(ctx, func(binding datasourceadmin.OperationBinding, frozen uint64, value datasourceadmin.CandidateContentDigest) error {
+		source = frozen
 		digest = value.Bytes()
 		return binding.WithValue(ctx, func(text string) error {
 			operation = text
@@ -417,7 +459,7 @@ func (c *goLDAPClient) AddCandidate(
 	generation := strconv.FormatUint(candidate.Generation(), 10)
 	root := c.generationRoot(candidate.Generation())
 	if err := candidate.WithRows(ctx, func(rows datasourceadmin.Rows) error {
-		requests := candidateAddRequests(root, generation, operation, digest, rows)
+		requests := candidateAddRequests(root, generation, operation, source, digest, rows)
 		for _, request := range requests {
 			current := request
 			if err := c.call(ctx, func() error { return c.connection.Add(current) }); err != nil {
@@ -554,7 +596,7 @@ func mapCompleteGenerationEntries(
 			}
 			mapped, err := projectSourceEntry(RecordClassDataset, entry, []string{
 				attrSchemaVersion, attrGeneration, attrDatasetState,
-				attrCandidateDigest, attrOperationID, attrWasActive,
+				attrCandidateDigest, attrOperationID, attrSourceGeneration, attrWasActive,
 			})
 			if err != nil {
 				return DatasetRecords{}, err
@@ -764,15 +806,18 @@ func candidateAddRequests(
 	root string,
 	generation string,
 	operation string,
+	source uint64,
 	digest []byte,
 	rows datasourceadmin.Rows,
 ) []*goldap.AddRequest {
-	requests := []*goldap.AddRequest{newAdminAdd(root, map[string][]string{
+	metadata := map[string][]string{
 		attrObjectClass: {topObjectClass, datasetObjectClass, administrativeMetadataObjectClass},
 		"cn":            {"generation-" + generation}, attrSchemaVersion: {datasourceadmin.SchemaVersionV3},
 		attrGeneration: {generation}, attrDatasetState: {string(datasourceadmin.StateStaging)},
 		attrOperationID: {operation}, attrCandidateDigest: {string(digest)},
-	})}
+	}
+	if source != 0 { metadata[attrSourceGeneration] = []string{strconv.FormatUint(source, 10)} }
+	requests := []*goldap.AddRequest{newAdminAdd(root, metadata)}
 	for _, unit := range generationUnits {
 		requests = append(requests, newAdminAdd("ou="+unit+","+root, map[string][]string{
 			attrObjectClass: {topObjectClass, "organizationalUnit"}, "ou": {unit},

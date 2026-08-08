@@ -44,6 +44,8 @@ const (
 	pathSigningManifest         = "signing.private_manifest_file"
 	pathSigningReload           = "signing.reload_interval"
 	pathSigningAllowGroup       = "signing.allow_recipient_group"
+	pathSigningLimitProfile     = "signing.limit_profile"
+	pathSigningMaxLoadBytes     = "signing.max_load_bytes"
 	pathSigningLDAPAddress      = "signing.ldap.address"
 	pathSigningLDAPServerName   = "signing.ldap.server_name"
 	pathSigningLDAPCAFile       = "signing.ldap.ca_file"
@@ -281,6 +283,8 @@ func stableFieldSpecs() []fieldSpec {
 		{path: pathSigningManifest, env: "DKIM2D_SIGNING_PRIVATE_MANIFEST_FILE", kind: valueString},
 		{path: pathSigningReload, env: "DKIM2D_SIGNING_RELOAD_INTERVAL", kind: valueDuration, defaultVal: defaultReadTimeout, hasDefault: true},
 		{path: pathSigningAllowGroup, env: "DKIM2D_SIGNING_ALLOW_RECIPIENT_GROUP", kind: valueBool, defaultVal: canonicalFalse, hasDefault: true},
+		{path: pathSigningLimitProfile, env: "DKIM2D_SIGNING_LIMIT_PROFILE", kind: valueString, defaultVal: "small", hasDefault: true},
+		{path: pathSigningMaxLoadBytes, env: "DKIM2D_SIGNING_MAX_LOAD_BYTES", kind: valueUint, defaultVal: "16777216", hasDefault: true},
 		{path: pathSigningLDAPAddress, env: "DKIM2D_SIGNING_LDAP_ADDRESS", kind: valueString},
 		{path: pathSigningLDAPServerName, env: "DKIM2D_SIGNING_LDAP_SERVER_NAME", kind: valueString},
 		{path: pathSigningLDAPCAFile, env: "DKIM2D_SIGNING_LDAP_CA_FILE", kind: valueString},

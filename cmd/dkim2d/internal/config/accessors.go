@@ -445,6 +445,22 @@ func (c SigningConfig) AllowRecipientGroup() bool {
 	return c.state != nil && c.state.allowRecipientGroup
 }
 
+// LimitProfile returns the exact atomic datasource limit profile name.
+func (c SigningConfig) LimitProfile() string {
+	if c.state == nil {
+		return ""
+	}
+	return c.state.limitProfile
+}
+
+// MaxLoadBytes returns the bounded complete network snapshot byte budget.
+func (c SigningConfig) MaxLoadBytes() uint32 {
+	if c.state == nil {
+		return 0
+	}
+	return c.state.maxLoadBytes
+}
+
 // ReadHeaderTimeout returns the bounded request-header timeout.
 func (c ServerConfig) ReadHeaderTimeout() time.Duration {
 	if c.state == nil {

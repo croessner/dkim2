@@ -24,6 +24,10 @@ type GenerationInfo struct {
 	State      GenerationState
 	WasActive  bool
 	Operation  OperationBinding
+	// SourceGeneration is the immutable current generation frozen for a v3 campaign.
+	SourceGeneration uint64
+	Schema           string
+	ContentDigest    CandidateContentDigest
 }
 
 // Inventory contains one stable current pointer and every bounded generation.
@@ -46,6 +50,7 @@ func (i Inventory) Equivalent(other Inventory) bool {
 		left, right := i.Generations[index], other.Generations[index]
 		if left.Generation != right.Generation || left.Current != right.Current ||
 			left.State != right.State || left.WasActive != right.WasActive ||
+			left.SourceGeneration != right.SourceGeneration ||
 			left.Operation.Initialized() != right.Operation.Initialized() ||
 			left.Operation.Initialized() && !left.Operation.Equal(right.Operation) {
 			return false
@@ -111,9 +116,9 @@ type GenerationLimits struct {
 func (l GenerationLimits) Validate() error {
 	if l.MaxGenerations == 0 || l.MaxGenerations > 4096 ||
 		l.MaxOutstandingCandidates == 0 || l.MaxOutstandingCandidates > 8 ||
-		l.MaxSnapshotRows == 0 || l.MaxSnapshotRows > 65536 ||
-		l.MaxSnapshotBytes == 0 || l.MaxSnapshotBytes > 256<<20 ||
-		l.BackendDeadline <= 0 || l.BackendDeadline > 30*time.Second {
+		l.MaxSnapshotRows == 0 || l.MaxSnapshotRows > 1<<20 ||
+		l.MaxSnapshotBytes == 0 || l.MaxSnapshotBytes > 1<<30 ||
+		l.BackendDeadline <= 0 || l.BackendDeadline > 2*time.Minute {
 		return newError(CodeLimitExceeded)
 	}
 	return nil

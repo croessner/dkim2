@@ -21,6 +21,7 @@ import (
 const (
 	planDigestDomain       = "DKIM2-DOMAIN-PLAN-V1\x00"
 	candidateDigestDomain  = "DKIM2-CANDIDATE-CONTENT-V1\x00"
+	campaignCandidateDigestDomain = "DKIM2-CAMPAIGN-CANDIDATE-CONTENT-V2\x00"
 	domainIntentVersionV1  = "dkim2-domain-intent-v1"
 	recordStatusActive     = "active"
 	resolverClassSystem    = "system"
@@ -92,6 +93,7 @@ type LDAPAuthority struct {
 	SnapshotPrincipal   string
 	StagingPrincipal    string
 	ActivationPrincipal string
+	PurgePrincipal      string
 }
 
 // SQLAuthority is the exact database/schema and three-role administrative binding.
@@ -101,6 +103,7 @@ type SQLAuthority struct {
 	SnapshotRole   string
 	StagingRole    string
 	ActivationRole string
+	PurgeRole      string
 }
 
 // AuthorityDescriptor is one protected canonical provider authority binding.
@@ -116,6 +119,15 @@ type AuthorityDescriptor struct {
 // ValidateAuthority rejects a backend descriptor outside the canonical authority grammar.
 func ValidateAuthority(backend BackendClass, descriptor AuthorityDescriptor) error {
 	if !validAuthority(backend, descriptor) {
+		return newError(CodeInvalid)
+	}
+	return nil
+}
+
+// ValidatePurgeAuthority rejects a descriptor that does not bind a fourth,
+// pairwise-distinct destructive authority for the selected backend.
+func ValidatePurgeAuthority(backend BackendClass, descriptor AuthorityDescriptor) error {
+	if !validAuthority(backend, descriptor) || !validPurgeAuthority(backend, descriptor) {
 		return newError(CodeInvalid)
 	}
 	return nil
@@ -299,11 +311,35 @@ func validAuthority(backend BackendClass, descriptor AuthorityDescriptor) bool {
 	if backend == BackendLDAP {
 		return descriptor.LDAP != nil && descriptor.SQL == nil &&
 			validBoundedIdentity(descriptor.LDAP.BaseDN, 4096) &&
-			validDistinctAuthorities(descriptor.LDAP.SnapshotPrincipal, descriptor.LDAP.StagingPrincipal, descriptor.LDAP.ActivationPrincipal, 4096)
+			validThreeAuthorities(descriptor.LDAP.SnapshotPrincipal, descriptor.LDAP.StagingPrincipal, descriptor.LDAP.ActivationPrincipal, 4096)
 	}
 	return descriptor.SQL != nil && descriptor.LDAP == nil &&
 		validBoundedIdentity(descriptor.SQL.Database, 128) && validBoundedIdentity(descriptor.SQL.Schema, 128) &&
-		validDistinctAuthorities(descriptor.SQL.SnapshotRole, descriptor.SQL.StagingRole, descriptor.SQL.ActivationRole, 128)
+		validThreeAuthorities(descriptor.SQL.SnapshotRole, descriptor.SQL.StagingRole, descriptor.SQL.ActivationRole, 128)
+}
+
+// validPurgeAuthority validates the destructive role without changing the
+// three-role publication descriptor accepted by existing normal workflows.
+func validPurgeAuthority(backend BackendClass, descriptor AuthorityDescriptor) bool {
+	if backend == BackendLDAP && descriptor.LDAP != nil {
+		return validFourAuthorities(
+			descriptor.LDAP.SnapshotPrincipal,
+			descriptor.LDAP.StagingPrincipal,
+			descriptor.LDAP.ActivationPrincipal,
+			descriptor.LDAP.PurgePrincipal,
+			4096,
+		)
+	}
+	if (backend == BackendPostgreSQL || backend == BackendMySQL || backend == BackendMariaDB) && descriptor.SQL != nil {
+		return validFourAuthorities(
+			descriptor.SQL.SnapshotRole,
+			descriptor.SQL.StagingRole,
+			descriptor.SQL.ActivationRole,
+			descriptor.SQL.PurgeRole,
+			128,
+		)
+	}
+	return false
 }
 
 // validAuthorityEndpoint enforces canonical endpoint and TLS identity syntax.
@@ -334,9 +370,15 @@ func validBoundedIdentity(value string, maximum int) bool {
 }
 
 // validDistinctAuthorities validates the least-privilege three-principal split.
-func validDistinctAuthorities(snapshot, staging, activation string, maximum int) bool {
+func validThreeAuthorities(snapshot, staging, activation string, maximum int) bool {
 	return validBoundedIdentity(snapshot, maximum) && validBoundedIdentity(staging, maximum) && validBoundedIdentity(activation, maximum) &&
 		snapshot != staging && snapshot != activation && staging != activation
+}
+
+// validFourAuthorities validates the complete least-privilege administration split.
+func validFourAuthorities(snapshot, staging, activation, purge string, maximum int) bool {
+	return validThreeAuthorities(snapshot, staging, activation, maximum) && validBoundedIdentity(purge, maximum) &&
+		purge != snapshot && purge != staging && purge != activation
 }
 
 // validPlanIntent reuses authoritative datasource vocabularies and identity validation.
@@ -450,6 +492,21 @@ func digestCandidate(schema string, generation uint64, operation string, rows Ro
 	hash := sha256.New()
 	_, _ = hash.Write([]byte(candidateDigestDomain))
 	writeFramedString(hash, schema)
+	writeUint64(hash, generation)
+	writeFramedString(hash, operation)
+	writeCandidateRows(hash, rows, true)
+	var value [sha256.Size]byte
+	copy(value[:], hash.Sum(nil))
+	return CandidateContentDigest{value: value}
+}
+
+// digestCampaignCandidate binds immutable frozen source generation into new
+// campaign candidate content without reinterpreting legacy v3 digests.
+func digestCampaignCandidate(schema string, source, generation uint64, operation string, rows Rows) CandidateContentDigest {
+	hash := sha256.New()
+	_, _ = hash.Write([]byte(campaignCandidateDigestDomain))
+	writeFramedString(hash, schema)
+	writeUint64(hash, source)
 	writeUint64(hash, generation)
 	writeFramedString(hash, operation)
 	writeCandidateRows(hash, rows, true)

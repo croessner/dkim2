@@ -17,7 +17,7 @@ const (
 	queryAdminLock          = `CALL dkim2_v3_lock_observe()`
 	queryAdminLockForUpdate = `CALL dkim2_v3_lock_for_update()`
 	queryAdminCurrent       = `SELECT CAST(current_generation.generation AS CHAR), dataset.schema_version,
-       dataset.dataset_state, dataset.operation_id, dataset.candidate_digest,
+       dataset.dataset_state, dataset.operation_id, dataset.candidate_digest, CAST(dataset.source_generation AS CHAR),
        current_generation.candidate_digest, dataset.was_active
 FROM dkim2_current_generation AS current_generation
 JOIN dkim2_dataset_generations AS dataset USING (generation)
@@ -25,7 +25,7 @@ WHERE current_generation.singleton = 1`
 	queryAdminCurrentForUpdate       = `CALL dkim2_v3_current_for_update()`
 	queryAdminCandidateRootForUpdate = `CALL dkim2_v3_lock_candidate_root(?, ?, ?, ?)`
 	queryAdminGenerations            = `SELECT CAST(generation AS CHAR), schema_version, dataset_state,
-       operation_id, candidate_digest, was_active
+       operation_id, candidate_digest, CAST(source_generation AS CHAR), was_active
 FROM dkim2_dataset_generations WHERE generation > ? ORDER BY generation LIMIT ?`
 	queryAdminGenerationsForUpdate = queryAdminGenerations + ` FOR UPDATE`
 	queryAdminClaim                = `CALL dkim2_v3_claim_lock(?, ?)`
@@ -245,7 +245,7 @@ func (t *sqlAdministrationTransaction) ReadCurrentOptional(ctx context.Context, 
 	var row sqlsnapshot.MetadataRow
 	err := t.queryRow(ctx, query).Scan(
 		&row.Generation, &row.SchemaVersion, &row.DatasetState, &row.OperationID,
-		&row.CandidateDigest, &row.PointerDigest, &row.WasActive,
+		&row.CandidateDigest, &row.SourceGeneration, &row.PointerDigest, &row.WasActive,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return sqlsnapshot.MetadataRow{}, false, nil
@@ -269,7 +269,7 @@ func (t *sqlAdministrationTransaction) LockCandidateRoot(
 			operation, digest, strconv.FormatUint(fence.Revision(), 10),
 		).Scan(
 			&row.Generation, &row.SchemaVersion, &row.DatasetState,
-			&row.OperationID, &row.CandidateDigest, &row.WasActive,
+			&row.OperationID, &row.CandidateDigest, &row.SourceGeneration, &row.WasActive,
 		))
 		return nil
 	}); err != nil {
@@ -308,7 +308,7 @@ func (t *sqlAdministrationTransaction) GenerationPage(ctx context.Context, after
 	output := make([]sqlsnapshot.MetadataRow, 0, limit)
 	for rows.Next() {
 		var row sqlsnapshot.MetadataRow
-		if err := rows.Scan(&row.Generation, &row.SchemaVersion, &row.DatasetState, &row.OperationID, &row.CandidateDigest, &row.WasActive); err != nil {
+		if err := rows.Scan(&row.Generation, &row.SchemaVersion, &row.DatasetState, &row.OperationID, &row.CandidateDigest, &row.SourceGeneration, &row.WasActive); err != nil {
 			return nil, datasourceadmin.NewError(datasourceadmin.CodeUnavailable)
 		}
 		output = append(output, row)
@@ -432,7 +432,7 @@ func (t *sqlAdministrationTransaction) InsertGeneration(ctx context.Context, row
 		return datasourceadmin.NewError(datasourceadmin.CodeConflict)
 	}
 	t.lockOperation, t.candidateDigest = *row.OperationID, append([]byte(nil), row.CandidateDigest...)
-	_, err := t.exec(ctx, queryAdminInsertGeneration, row.Generation, t.lockOperation, t.candidateDigest, strconv.FormatUint(t.lockRevision, 10))
+	_, err := t.exec(ctx, queryAdminInsertGeneration, row.Generation, t.lockOperation, t.candidateDigest, row.SourceGeneration, strconv.FormatUint(t.lockRevision, 10))
 	return adminMySQLError(err)
 }
 

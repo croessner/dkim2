@@ -137,7 +137,7 @@ and blocks new signing leases until a complete higher generation loads.
 
 ## ACL Model
 
-Keep the runtime and five administrative authorities separate:
+Keep the runtime and six administrative authorities separate:
 
 | Authority | Native public data | Native private key | Mutation authority |
 | --- | --- | --- | --- |
@@ -145,6 +145,7 @@ Keep the runtime and five administrative authorities separate:
 | snapshot | read bounded inventory/snapshots | read | none |
 | stager | read | read/write only while exact v3 root is staging | lock claim/release, candidate Add, exact seal |
 | activator | read | read for fresh canonical inspection | monotonic old-root history plus current Add/Modify only |
+| purger | exact noncurrent committed target/current/lock/receipt readback | read only while reconciling an exact target | leaf-first/root-last deletion of an exact noncurrent target only |
 | legacy v2 publisher | read v2 staging data | read/add only under exact v2 staging root | v2 forward publication; all v3 metadata writes denied |
 | protected legacy import | deny native unless separately required | deny | legacy `DKIMKey` read only in the source directory |
 
@@ -165,6 +166,9 @@ operation, and digest. Once sealed, the predicate becomes empty.
 `=dcsra` permits disclosure, compare, search, read, and add without delete;
 `=dcsraz` is restricted to attributes whose old value must be replaced. No
 entry or parent-children rule grants delete (`z`) to a publication principal.
+Only the distinct purger has state-conditioned delete access below one exact
+committed noncurrent v3 root; it cannot delete the current subtree or mutate a
+current pointer, lock, candidate content, or activation history.
 The DKIM2 base carries `dkim2AdminRevision` and optional lock owner; critical
 RFC 4528 claim/release makes crash-held ownership persistent and same-operation
 only.

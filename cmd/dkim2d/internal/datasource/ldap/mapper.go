@@ -36,6 +36,7 @@ const (
 	attrPrivatePKCS8    = "dkim2PrivateKeyPKCS8"
 	attrCandidateDigest = "dkim2CandidateDigest"
 	attrOperationID     = "dkim2OperationID"
+	attrSourceGeneration = "dkim2SourceGeneration"
 	attrWasActive       = "dkim2WasActive"
 	attrAdminLockOwner  = "dkim2AdminLockOwner"
 	attrAdminRevision   = "dkim2AdminRevision"
@@ -257,6 +258,7 @@ type datasetMetadata struct {
 	state      datasourceadmin.GenerationState
 	operation  datasourceadmin.OperationBinding
 	digest     datasourceadmin.CandidateContentDigest
+	sourceGeneration uint64
 	wasActive  bool
 }
 
@@ -287,7 +289,7 @@ func mapGenerationMetadata(entry Entry) (datasetMetadata, error) {
 func mapDatasetMetadata(entry Entry, root bool) (datasetMetadata, error) {
 	values, err := exactAttributes(entry, RecordClassDataset, []string{
 		attrSchemaVersion, attrGeneration, attrDatasetState,
-	}, []string{attrCandidateDigest, attrOperationID, attrWasActive})
+	}, []string{attrCandidateDigest, attrOperationID, attrSourceGeneration, attrWasActive})
 	if err != nil {
 		return datasetMetadata{}, err
 	}
@@ -312,11 +314,12 @@ func mapDatasetMetadata(entry Entry, root bool) (datasetMetadata, error) {
 		}
 		metadata.wasActive = true
 	}
-	digestBytes, digestPresent := values[attrCandidateDigest]
+		digestBytes, digestPresent := values[attrCandidateDigest]
 	operationBytes, operationPresent := values[attrOperationID]
+	sourceBytes, sourcePresent := values[attrSourceGeneration]
 	switch metadata.schema {
 	case datasourceadmin.SchemaVersionV2:
-		if digestPresent || operationPresent || metadata.state != datasourceadmin.StateCommitted {
+		if digestPresent || operationPresent || sourcePresent || metadata.state != datasourceadmin.StateCommitted {
 			return datasetMetadata{}, provider.NewError(provider.ErrorCodeMalformedData)
 		}
 	case datasourceadmin.SchemaVersionV3:
@@ -331,6 +334,10 @@ func mapDatasetMetadata(entry Entry, root bool) (datasetMetadata, error) {
 			metadata.operation, err = datasourceadmin.NewOperationBinding(string(operationBytes))
 			if err != nil {
 				return datasetMetadata{}, provider.NewError(provider.ErrorCodeMalformedData)
+			}
+			if sourcePresent {
+				metadata.sourceGeneration, err = parseGeneration(sourceBytes)
+				if err != nil || metadata.sourceGeneration >= metadata.generation { return datasetMetadata{}, provider.NewError(provider.ErrorCodeMalformedData) }
 			}
 		}
 	default:
@@ -373,7 +380,11 @@ func verifyV3CandidateDigest(records DatasetRecords, metadata datasetMetadata) e
 	var candidate *datasourceadmin.PublicationEnvelope
 	if err := metadata.operation.WithValue(context.Background(), func(value string) error {
 		var candidateErr error
-		candidate, candidateErr = datasourceadmin.NewPublicationEnvelope(value, content)
+		if metadata.sourceGeneration != 0 {
+			candidate, candidateErr = datasourceadmin.NewCampaignPublicationEnvelope(value, metadata.sourceGeneration, content)
+		} else {
+			candidate, candidateErr = datasourceadmin.NewPublicationEnvelope(value, content)
+		}
 		return candidateErr
 	}); err != nil || candidate == nil {
 		_ = content.Close()

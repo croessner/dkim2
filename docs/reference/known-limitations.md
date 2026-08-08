@@ -40,9 +40,11 @@ certification, or universal interoperability claim.
   offline `dkim2d datasource domain` workflow. It exports DNS records but does
   not publish them, proves only a fresh configured recursive resolver path,
   makes no authoritative-query or cache-bypass claim, persists no
-  runtime-verified state, and performs no automatic candidate deletion. At
-  most eight outstanding candidates are permitted; retained or ambiguous
-  candidates require separately authorized cleanup. Rollback republishes
+  runtime-verified state, and performs no automatic candidate deletion. Normal
+  scheduled rotation is an offline one-candidate global campaign; retention
+  plans and explicit purge applies remain separately authorized, provider-role
+  fenced operations. Retained or ambiguous candidates require reconciliation
+  rather than implicit cleanup. Rollback republishes
   known-good content under a higher generation, and activation still requires
   external runtime/mailflow smoke evidence. Manual LDAP/SQL key mutation
   remains unsupported. This implementation candidate is pending final review

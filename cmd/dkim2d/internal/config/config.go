@@ -136,6 +136,8 @@ type signingState struct {
 	privateManifestFile string
 	reloadInterval      time.Duration
 	allowRecipientGroup bool
+	limitProfile        string
+	maxLoadBytes        uint32
 	ldap                ldapSigningState
 	postgresql          sqlSigningState
 	mysql               sqlSigningState
@@ -714,6 +716,14 @@ func parseSigning(
 	if allowGroup {
 		return signingState{}, newError(CodeInvalidField)
 	}
+	limitProfile := text(values, pathSigningLimitProfile)
+	if limitProfile != "small" && limitProfile != "production" {
+		return signingState{}, newError(CodeInvalidField)
+	}
+	maxLoadBytes, err := uintValue(values, pathSigningMaxLoadBytes, 1<<20, 512<<20)
+	if err != nil || limitProfile == "production" && maxLoadBytes < 64<<20 {
+		return signingState{}, newError(CodeInvalidField)
+	}
 	datasourceFile := text(values, pathSigningDatasource)
 	manifestFile := text(values, pathSigningManifest)
 	paths := []string{server.capabilityFile}
@@ -738,6 +748,8 @@ func parseSigning(
 		privateManifestFile: manifestFile,
 		reloadInterval:      reload,
 		allowRecipientGroup: allowGroup,
+		limitProfile:        limitProfile,
+		maxLoadBytes:        uint32(maxLoadBytes),
 	}
 	if backend == SigningLDAP {
 		ldapConfig, parseErr := parseLDAPSigning(values, generation, paths)

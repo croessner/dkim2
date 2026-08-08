@@ -6,9 +6,9 @@ import (
 	"testing"
 )
 
-// TestHardAndDefaultLimitsMatchFrozenMaxima verifies every declared datasource ceiling.
-func TestHardAndDefaultLimitsMatchFrozenMaxima(t *testing.T) {
-	want := Limits{
+// TestLimitProfilesMatchFrozenMaxima verifies every declared datasource ceiling.
+func TestLimitProfilesMatchFrozenMaxima(t *testing.T) {
+	wantDefault := Limits{
 		MaxIdentifierBytes: 128, MaxDomainBytes: 253, MaxDomainLabels: 127,
 		MaxSelectorBytes: 253, MaxSelectorLabels: 127, MaxProfiles: 1024,
 		MaxCredentialsPerProfile: 2, MaxHandles: 2048, MaxPolicies: 4096,
@@ -16,10 +16,16 @@ func TestHardAndDefaultLimitsMatchFrozenMaxima(t *testing.T) {
 		MaxDecodedStringBytes: 1_048_576, MaxDecodedPublicKeyBytes: 2_048,
 		MaxRecords: 9_216,
 	}
-	if hard, defaults := HardLimits(), DefaultLimits(); hard != want || defaults != want {
-		t.Fatalf("HardLimits()=%+v DefaultLimits()=%+v want=%+v", hard, defaults, want)
+	wantProduction := wantDefault
+	wantProduction.MaxProfiles, wantProduction.MaxHandles, wantProduction.MaxPolicies = 32768, 65536, 65536
+	wantProduction.MaxJSONFileBytes, wantProduction.MaxDecodedStringBytes, wantProduction.MaxRecords = 128<<20, 128<<20, 229376
+	wantHard := wantDefault
+	wantHard.MaxProfiles, wantHard.MaxHandles, wantHard.MaxPolicies = 131072, 262144, 262144
+	wantHard.MaxJSONFileBytes, wantHard.MaxDecodedStringBytes, wantHard.MaxRecords = 512<<20, 512<<20, 1<<20
+	if hard, defaults, production := HardLimits(), DefaultLimits(), ProductionLimits(); hard != wantHard || defaults != wantDefault || production != wantProduction {
+		t.Fatalf("limit profile drift")
 	}
-	if err := want.Validate(); err != nil {
+	if err := wantHard.Validate(); err != nil {
 		t.Fatalf("hard limits rejected: %v", err)
 	}
 }
@@ -87,9 +93,9 @@ func TestUsageConstructionDerivesExactRecordCountAndKeepsFieldsPrivate(t *testin
 	if err != nil {
 		t.Fatalf("NewUsage(exact maxima) error = %v", err)
 	}
-	if usage.Profiles() != 1024 || usage.Credentials() != 2048 ||
-		usage.Handles() != 2048 || usage.Policies() != 4096 ||
-		usage.Records() != 9216 || usage.Bytes() != 1_048_576 {
+	if usage.Profiles() != limits.MaxProfiles || usage.Credentials() != limits.MaxProfiles*limits.MaxCredentialsPerProfile ||
+		usage.Handles() != limits.MaxHandles || usage.Policies() != limits.MaxPolicies ||
+		usage.Records() != 917504 || usage.Bytes() != limits.MaxDecodedStringBytes {
 		t.Fatalf("usage maxima = profiles=%d credentials=%d handles=%d policies=%d records=%d bytes=%d",
 			usage.Profiles(), usage.Credentials(), usage.Handles(), usage.Policies(), usage.Records(), usage.Bytes())
 	}
@@ -125,11 +131,11 @@ func TestUsageRejectsOneOverNegativeOverflowAndInconsistentValues(t *testing.T) 
 		})
 	}
 
-	left, err := NewUsage(600, 0, 0, 0, 0, limits)
+	left, err := NewUsage(limits.MaxProfiles-1, 0, 0, 0, 0, limits)
 	if err != nil {
 		t.Fatal(err)
 	}
-	right, err := NewUsage(425, 0, 0, 0, 0, limits)
+	right, err := NewUsage(2, 0, 0, 0, 0, limits)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -14,6 +14,7 @@ import (
 	"github.com/croessner/dkim2/cmd/dkim2d/internal/domainruntime"
 	"github.com/croessner/dkim2/cmd/dkim2d/internal/httpjson"
 	"github.com/croessner/dkim2/cmd/dkim2d/internal/migration"
+	"github.com/croessner/dkim2/cmd/dkim2d/internal/rotationruntime"
 	"github.com/spf13/cobra"
 )
 
@@ -25,6 +26,13 @@ const (
 	bootstrapCommandName      = "bootstrap-opendkim"
 	rollbackCommandName       = "rollback"
 	domainCommandName         = "domain"
+	rotationCommandName       = "rotation"
+	rotationRunCommandName    = "run"
+	rotationEmergencyName     = "emergency"
+	rotationDNSExportName     = "dns-export"
+	rotationPurgeName         = "purge"
+	rotationPurgePlanName     = "plan"
+	rotationPurgeApplyName    = "apply"
 	domainPlanCommandName     = "plan"
 	domainPrepareCommandName  = "prepare"
 	domainDNSCommandName      = "dns"
@@ -34,6 +42,7 @@ const (
 	domainStatusCommandName   = "status"
 	domainReconcileName       = "reconcile"
 	domainAbortCommandName    = "abort"
+	automaticFlagName         = "automatic"
 	applyFlagName             = "apply"
 	applyToken                = "--apply"
 	helpCommandName           = "help"
@@ -54,6 +63,13 @@ const (
   dkim2d datasource domain status --config <absolute-path> --operation <absolute-path> [--machine]
   dkim2d datasource domain reconcile --config <absolute-path> --operation <absolute-path> [--machine]
   dkim2d datasource domain abort --config <absolute-path> --operation <absolute-path> [--machine]
+  dkim2d datasource rotation run --config <absolute-path> --journal <absolute-path> --automatic [--dry-run|--apply] [--machine]
+  dkim2d datasource rotation emergency --config <absolute-path> --journal <absolute-path> --tenant <value> --domain <value> --use <value> --profile <value> --reason <value> --apply [--machine]
+  dkim2d datasource rotation status --config <absolute-path> --journal <absolute-path> [--machine]
+  dkim2d datasource rotation reconcile --config <absolute-path> --journal <absolute-path> [--machine]
+  dkim2d datasource rotation abort --config <absolute-path> --journal <absolute-path> --apply [--machine]
+  dkim2d datasource rotation purge plan --config <absolute-path> --journal <absolute-path> --output <absolute-path> [--machine]
+  dkim2d datasource rotation purge apply --config <absolute-path> --journal <absolute-path> --plan <absolute-path> --apply [--machine]
   dkim2d probe
   dkim2d --version
 
@@ -106,6 +122,7 @@ type commandDependencies struct {
 	apply       func(context.Context, string, bool, string) ([]byte, error)
 	rollback    func(context.Context, string, string, bool, string) ([]byte, error)
 	domain      func(context.Context, domainadmin.CommandRequest) ([]byte, error)
+	rotation    func(context.Context, rotationruntime.Request) ([]byte, error)
 }
 
 // protectedBootstrap adapts the concrete protected owner without exposing it to tests.
@@ -169,6 +186,9 @@ func productionDependencies() commandDependencies {
 		apply:       migration.RunApplyFile,
 		rollback:    migration.RunRollbackFile,
 		domain:      domainruntime.RunCommandFile,
+		rotation: func(ctx context.Context, request rotationruntime.Request) ([]byte, error) {
+			return rotationruntime.RunFile(ctx, request, nil)
+		},
 	}
 }
 
@@ -196,7 +216,7 @@ func executeWithDependencies(
 		return 1
 	}
 	root.SetArgs(args)
-	if isDomainActivation(args) && !hasExactApplyToken(args) {
+	if (isDomainActivation(args) || isRotationApply(args)) && !hasExactApplyToken(args) {
 		writeDiagnostic(stderr, commandShapeDiagnostic)
 		writeUsage(stderr)
 		return 2
@@ -375,7 +395,11 @@ func newDatasourceCommand(
 	if err != nil {
 		return nil, err
 	}
-	group.AddCommand(bootstrap, rollback, domain)
+	rotation, err := newRotationCommand(stdout, deps)
+	if err != nil {
+		return nil, err
+	}
+	group.AddCommand(bootstrap, rollback, domain, rotation)
 	return group, nil
 }
 
@@ -383,6 +407,12 @@ func newDatasourceCommand(
 func isDomainActivation(args []string) bool {
 	return len(args) >= 3 && args[0] == datasourceCommandName &&
 		args[1] == domainCommandName && args[2] == domainActivateCommandName
+}
+
+// isRotationApply recognizes only destructive campaign command prefixes.
+func isRotationApply(args []string) bool {
+	return len(args) >= 3 && args[0] == datasourceCommandName && args[1] == rotationCommandName &&
+		(args[2] == rotationEmergencyName || args[2] == domainAbortCommandName || len(args) >= 4 && args[2] == rotationPurgeName && args[3] == rotationPurgeApplyName)
 }
 
 // hasExactApplyToken accepts exactly one bare authorization token and no variant.

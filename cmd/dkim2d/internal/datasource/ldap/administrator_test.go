@@ -8,7 +8,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/croessner/dkim2/admincontract"
 	"github.com/croessner/dkim2/cmd/dkim2d/internal/datasourceadmin"
+	"github.com/croessner/dkim2/cmd/dkim2d/internal/rotationadmin"
 	"github.com/croessner/dkim2/provider"
 	goldap "github.com/go-ldap/ldap/v3"
 )
@@ -149,7 +151,7 @@ func TestCompleteGenerationProjectionRejectsStructuralAmbiguity(t *testing.T) {
 		defer clear(digest)
 		for _, request := range candidateAddRequests(
 			"dkim2Generation=2,ou=generations,ou=dkim2,dc=example,dc=test",
-			"2", operationValue, digest, rows,
+			"2", operationValue, 0, digest, rows,
 		) {
 			entry := &goldap.Entry{DN: request.DN}
 			for _, attribute := range request.Attributes {
@@ -406,6 +408,12 @@ func (c *administrationClientFake) ListGenerationRoots(context.Context, datasour
 	return result, nil
 }
 
+// ListRetentionGenerationRoots returns detached roots under the independent recovery limit.
+func (c *administrationClientFake) ListRetentionGenerationRoots(_ context.Context, limits datasourceadmin.RetentionRecoveryLimits) ([]Entry, error) {
+	if len(c.roots) > int(limits.MaxGenerations) { return nil, errLDAPPartial }
+	return c.ListGenerationRoots(context.Background(), datasourceadmin.GenerationLimits{MaxGenerations: 1, MaxOutstandingCandidates: 1, MaxSnapshotRows: 1, MaxSnapshotBytes: 1, BackendDeadline: time.Second})
+}
+
 // ReadGenerationRecords returns one detached complete synthetic subtree.
 func (c *administrationClientFake) ReadGenerationRecords(
 	_ context.Context,
@@ -483,6 +491,11 @@ func (c *administrationClientFake) SealCandidate(
 	for generation, records := range c.generations {
 		records.Root.Attributes[attrDatasetState] = [][]byte{[]byte("committed")}
 		c.generations[generation] = records
+	}
+	for index := range c.roots {
+		if values := c.roots[index].Attributes[attrDatasetState]; len(values) == 1 && string(values[0]) == "staging" {
+			c.roots[index].Attributes[attrDatasetState] = [][]byte{[]byte("committed")}
+		}
 	}
 	return nil
 }
@@ -588,6 +601,77 @@ func TestAdministratorStagesCanonicalReadbackBeforeSeal(t *testing.T) {
 		client.sealCalls != 0 {
 		t.Fatal("mismatched private readback reached staging seal")
 	}
+}
+
+// TestAdministratorPublishesOneCompleteRotationCampaignCandidate freezes LDAP campaign composition.
+func TestAdministratorPublishesOneCompleteRotationCampaignCandidate(t *testing.T) {
+	currentRecords := minimalRecords(t)
+	rows, err := mapAdministrativeRows(currentRecords, 1)
+	if err != nil {
+		t.Fatal("map campaign source rows")
+	}
+	source, err := datasourceadmin.NewSnapshotWithLimits(datasourceadmin.SchemaVersionV3, 1, rows, provider.ProductionLimits())
+	clearAdministrativeRows(&rows)
+	if err != nil {
+		t.Fatal("construct campaign source")
+	}
+	defer source.Close() //nolint:errcheck // Test cleanup has no recovery.
+	operationID := "aibqibiga4eascqlbqgzav3y4m"
+	intent, err := rotationadmin.NewIntent(admincontract.ModeNormal, operationID, "")
+	if err != nil {
+		t.Fatal("construct campaign intent")
+	}
+	plan, err := rotationadmin.Freeze(t.Context(), source, 2, intent, rotationadmin.DefaultLimits())
+	if err != nil {
+		t.Fatal("freeze complete LDAP campaign")
+	}
+	defer plan.Close() //nolint:errcheck // Test cleanup has no recovery.
+	preparer, err := rotationadmin.NewPreparer(rotationadmin.NativeKeyFactory{RSABits: 2048}, provider.ProductionLimits())
+	if err != nil {
+		t.Fatal("construct campaign preparer")
+	}
+	prepared, err := preparer.Prepare(t.Context(), plan, source)
+	if err != nil {
+		t.Fatal("prepare complete LDAP candidate")
+	}
+	defer prepared.Close() //nolint:errcheck // Test cleanup has no recovery.
+	var stageRecords DatasetRecords
+	if err := prepared.WithEnvelope(t.Context(), func(candidate *datasourceadmin.PublicationEnvelope) error {
+		stageRecords = ldapRecordsForCampaignCandidate(t, candidate)
+		return nil
+	}); err != nil {
+		t.Fatal("project campaign candidate")
+	}
+	claimed, _ := datasourceadmin.NewAdministrationLockObservation(1, sourceOperation(t, operationID), true)
+	client := &administrationClientFake{
+		fakeClient: &fakeClient{}, lock: claimed, current: cloneEntry(currentRecords.Current), currentPresent: true,
+		roots: []Entry{cloneEntry(currentRecords.Root)}, generations: map[uint64]DatasetRecords{1: currentRecords},
+		stageRecords: stageRecords,
+	}
+	administrator := newAdministratorFixture(t, client)
+	journal, _ := rotationadmin.NewJournal(plan)
+	_ = journal.BeginPreparing()
+	_ = journal.RecordPrepared(prepared)
+	operation := sourceOperation(t, operationID)
+	lock, _ := datasourceadmin.NewAdministrationLock(operation, 1)
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+	defer cancel()
+	// Seed one exact durable candidate to reproduce a crash before journal stage acknowledgement.
+	var stageErr error
+	if err := prepared.WithEnvelope(ctx, func(candidate *datasourceadmin.PublicationEnvelope) error {
+		if !lock.ValidFor(operation) || !candidate.Binding().Equal(operation) || candidate.Generation() != 2 || !candidate.Digest().Valid() {
+			t.Fatal("campaign fixture violated LDAP stage preconditions")
+		}
+		_, stageErr = administrator.Stage(ctx, lock, operation, candidate)
+		return nil
+	}); err != nil || stageErr != nil {
+		t.Fatalf("direct LDAP campaign stage rejected: callback=%v code=%s", err, datasourceadmin.CodeOf(stageErr))
+	}
+	published, err := rotationadmin.Publish(ctx, plan, prepared, journal, administrator, lock, administrator.generations)
+	if err != nil || published == nil || journal.State() != rotationadmin.StateStaged || client.stageCalls != 1 || client.sealCalls != 1 {
+		t.Fatalf("LDAP did not publish and prove exactly one complete campaign candidate: err=%v state=%s stage=%d seal=%d", err, journal.State(), client.stageCalls, client.sealCalls)
+	}
+	_ = published.Close()
 }
 
 // TestAdministratorResumesOnlyExactSameOperationCandidate freezes crash-safe staging idempotency.
@@ -1108,6 +1192,53 @@ func cloneDatasetRecords(records DatasetRecords) DatasetRecords {
 	result.Credentials, result.Policies = clone(records.Credentials), clone(records.Policies)
 	result.KeyMaterial = clone(records.KeyMaterial)
 	return result
+}
+
+// sourceOperation constructs one protected operation fixture.
+func sourceOperation(t *testing.T, operationID string) datasourceadmin.OperationBinding {
+	t.Helper()
+	operation, err := datasourceadmin.NewOperationBinding(operationID)
+	if err != nil {
+		t.Fatal("construct operation fixture")
+	}
+	return operation
+}
+
+// ldapRecordsForCampaignCandidate projects one complete envelope through the LDAP add mapper.
+func ldapRecordsForCampaignCandidate(t *testing.T, candidate *datasourceadmin.PublicationEnvelope) DatasetRecords {
+	t.Helper()
+	operation := candidate.Binding()
+	var operationValue string
+	if err := operation.WithValue(t.Context(), func(value string) error { operationValue = value; return nil }); err != nil {
+		t.Fatal("read candidate operation")
+	}
+	digest := candidate.Digest().Bytes()
+	defer clear(digest)
+	root := "dkim2Generation=2,ou=generations,ou=dkim2,dc=example,dc=test"
+	var entries []*goldap.Entry
+	if err := candidate.WithRows(t.Context(), func(rows datasourceadmin.Rows) error {
+		for _, request := range candidateAddRequests(root, "2", operationValue, candidate.SourceGeneration(), digest, rows) {
+			entry := &goldap.Entry{DN: request.DN}
+			for _, attribute := range request.Attributes {
+				projected := &goldap.EntryAttribute{Name: attribute.Type}
+				for _, value := range attribute.Vals {
+					projected.Values = append(projected.Values, value)
+					projected.ByteValues = append(projected.ByteValues, []byte(value))
+				}
+				entry.Attributes = append(entry.Attributes, projected)
+			}
+			entries = append(entries, entry)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal("project candidate add requests")
+	}
+	defer clearLDAPProtectedAttributeBytes(entries)
+	records, err := mapCompleteGenerationEntries(entries, root, 2)
+	if err != nil {
+		t.Fatal("map complete campaign generation")
+	}
+	return records
 }
 
 // currentEntry projects exact v3 current metadata without operation or history fields.

@@ -1,6 +1,6 @@
 -- Replace the database and complete quoted account placeholders before use.
 -- Accounts are site-owned, TLS-required, and created outside this file.
--- The publisher and three v3 accounts must be distinct. No account receives DELETE, DDL,
+-- The publisher, three v3 accounts, and distinct purge account must be pairwise distinct. No account receives DELETE, DDL,
 -- FILE, global, credential-management, or role-administration authority.
 
 GRANT SELECT ON __DATABASE__.dkim2_dataset_generations TO __RUNTIME_ACCOUNT__;
@@ -73,6 +73,18 @@ GRANT EXECUTE ON PROCEDURE __DATABASE__.dkim2_v3_lock_observe TO __ACTIVATION_AC
 GRANT EXECUTE ON PROCEDURE __DATABASE__.dkim2_v3_lock_for_update TO __ACTIVATION_ACCOUNT__;
 GRANT EXECUTE ON PROCEDURE __DATABASE__.dkim2_v3_current_for_update TO __ACTIVATION_ACCOUNT__;
 GRANT EXECUTE ON PROCEDURE __DATABASE__.dkim2_v3_lock_candidate_root TO __ACTIVATION_ACCOUNT__;
+
+-- The purge account gets no table DML or current/lock mutation. It invokes one
+-- fixed definer routine after the application has supplied an exact protected plan.
+GRANT SELECT ON __DATABASE__.dkim2_dataset_generations TO __PURGE_ACCOUNT__;
+GRANT SELECT ON __DATABASE__.dkim2_current_generation TO __PURGE_ACCOUNT__;
+GRANT SELECT ON __DATABASE__.dkim2_purge_audit_receipts TO __PURGE_ACCOUNT__;
+GRANT EXECUTE ON PROCEDURE __DATABASE__.dkim2_v3_purge_generation TO __PURGE_ACCOUNT__;
+
+-- The closer has no generation/current/lock table DML. It can read its own
+-- immutable receipt and invoke only the fixed terminal closure procedure.
+GRANT SELECT ON __DATABASE__.dkim2_campaign_terminals TO __CLOSER_ACCOUNT__;
+GRANT EXECUTE ON PROCEDURE __DATABASE__.dkim2_v3_record_campaign_terminal TO __CLOSER_ACCOUNT__;
 
 -- Read back TABLE_PRIVILEGES and COLUMN_PRIVILEGES plus the exact per-routine
 -- Execute rows from mysql.procs_priv before deploying credentials. Do not use

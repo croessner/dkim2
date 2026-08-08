@@ -76,30 +76,36 @@ type Snapshot struct {
 	mu         sync.Mutex
 	schema     string
 	generation uint64
+	limits     provider.Limits
 	rows       Rows
 	closed     bool
 }
 
 // NewSnapshot validates and takes detached ownership of one complete generation.
 func NewSnapshot(schema string, generation uint64, rows Rows) (*Snapshot, error) {
+	return NewSnapshotWithLimits(schema, generation, rows, provider.DefaultLimits())
+}
+
+// NewSnapshotWithLimits validates and owns one complete generation under an exact finite profile.
+func NewSnapshotWithLimits(schema string, generation uint64, rows Rows, limits provider.Limits) (*Snapshot, error) {
 	if (schema != SchemaVersionV2 && schema != SchemaVersionV3) || generation == 0 {
 		return nil, newError(CodeInvalid)
 	}
 	owned := cloneRows(rows)
-	if err := validateRows(generation, owned); err != nil {
+	if err := validateRows(generation, owned, limits); err != nil {
 		clearRows(&owned)
 		return nil, err
 	}
-	return &Snapshot{schema: schema, generation: generation, rows: owned}, nil
+	return &Snapshot{schema: schema, generation: generation, limits: limits, rows: owned}, nil
 }
 
 // validateRows reuses runtime datasource and native-custody validators.
-func validateRows(generation uint64, rows Rows) error {
-	dataset, err := mapRuntimeDataset(generation, rows)
+func validateRows(generation uint64, rows Rows, limits provider.Limits) error {
+	dataset, err := mapRuntimeDataset(generation, rows, limits)
 	if err != nil || dataset == nil || !dataset.Valid() || dataset.Generation() != generation {
 		return newError(CodeInvalid)
 	}
-	materials, err := mapNativeMaterials(generation, rows.KeyMaterial)
+	materials, err := mapNativeMaterials(generation, rows.KeyMaterial, limits)
 	if err != nil {
 		return newError(CodeInvalid)
 	}
@@ -125,8 +131,10 @@ func validateRows(generation uint64, rows Rows) error {
 
 // mapRuntimeDataset validates the protected administrative rows through the
 // same provider constructors used by runtime datasource adapters.
-func mapRuntimeDataset(generation uint64, rows Rows) (*provider.Dataset, error) {
-	limits := provider.DefaultLimits()
+func mapRuntimeDataset(generation uint64, rows Rows, limits provider.Limits) (*provider.Dataset, error) {
+	if limits.Validate() != nil {
+		return nil, newError(CodeInvalid)
+	}
 	handles := make([]string, 0, len(rows.Handles))
 	for _, row := range rows.Handles {
 		handles = append(handles, row.ID)
@@ -136,8 +144,13 @@ func mapRuntimeDataset(generation uint64, rows Rows) (*provider.Dataset, error) 
 		credentials []provider.Credential
 	}
 	profiles := make([]profileAssembly, len(rows.Profiles))
+	profileIndex := make(map[string]int, len(rows.Profiles))
 	for index, row := range rows.Profiles {
+		if _, duplicate := profileIndex[row.ID]; duplicate {
+			return nil, newError(CodeInvalid)
+		}
 		profiles[index].row = row
+		profileIndex[row.ID] = index
 	}
 	for _, row := range rows.Credentials {
 		algorithm, err := parseAdministrativeAlgorithm(row.Algorithm)
@@ -150,16 +163,11 @@ func mapRuntimeDataset(generation uint64, rows Rows) (*provider.Dataset, error) 
 		if err != nil {
 			return nil, err
 		}
-		matches := 0
-		for index := range profiles {
-			if profiles[index].row.ID == row.ProfileID {
-				profiles[index].credentials = append(profiles[index].credentials, credential)
-				matches++
-			}
-		}
-		if matches != 1 {
+		index, found := profileIndex[row.ProfileID]
+		if !found {
 			return nil, newError(CodeInvalid)
 		}
+		profiles[index].credentials = append(profiles[index].credentials, credential)
 	}
 	neutralProfiles := make([]provider.Profile, 0, len(profiles))
 	for _, assembly := range profiles {
@@ -220,8 +228,9 @@ func mapRuntimeDataset(generation uint64, rows Rows) (*provider.Dataset, error) 
 func mapNativeMaterials(
 	generation uint64,
 	rows []KeyMaterialRow,
+	limits provider.Limits,
 ) ([]*signingstore.NativeKeyMaterial, error) {
-	if generation == 0 || len(rows) == 0 || len(rows) > provider.HardLimits().MaxHandles {
+	if generation == 0 || limits.Validate() != nil || len(rows) == 0 || len(rows) > limits.MaxHandles {
 		return nil, newError(CodeInvalid)
 	}
 	materials := make([]*signingstore.NativeKeyMaterial, 0, len(rows))
@@ -342,7 +351,7 @@ func (s *Snapshot) CloneTo(schema string, generation uint64) (*Snapshot, error) 
 	if s.closed || generation <= s.generation {
 		return nil, newError(CodeConflict)
 	}
-	return NewSnapshot(schema, generation, s.rows)
+	return NewSnapshotWithLimits(schema, generation, s.rows, s.limits)
 }
 
 // Close destroys all retained public and private key bytes and invalidates the snapshot.
@@ -358,6 +367,7 @@ func (s *Snapshot) Close() error {
 	clearRows(&s.rows)
 	s.schema = ""
 	s.generation = 0
+	s.limits = provider.Limits{}
 	s.closed = true
 	return nil
 }

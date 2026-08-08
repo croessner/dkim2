@@ -1,0 +1,48 @@
+{
+  "schema": "dkim2.admin-contract-fixture.v1",
+  "contract_version": "dkim2-admin-contract-v1",
+  "work": [
+    {
+      "tenant": "tenant-a",
+      "domain": "a.example.test",
+      "use": "originator",
+      "profile": "profile-a",
+      "algorithms": ["ed25519-sha256", "rsa-sha256"]
+    },
+    {
+      "tenant": "tenant-b",
+      "domain": "b.example.test",
+      "use": "originator",
+      "profile": "profile-b",
+      "algorithms": ["ed25519-sha256", "rsa-sha256"]
+    }
+  ],
+  "source_schema": "dkim2-datasource-v3",
+  "source_generation": 7,
+  "candidate_generation": 8,
+  "operation_id": "aebagbafaydqqcikbmga2dqpca",
+  "candidate_digest": "df6f03fc47b8f22a8ac3bf8312dda6f364de0ad21827f6e24e0363f14f14d6df",
+  "rotation_policy_version": "rotation-v1",
+  "dns_policy_version": "dns-v1",
+  "retention_policy_version": "retention-v1",
+  "limit_profile_version": "production-v1",
+  "purge_content_digest": "15f765eaa2e2b99b3f5b454d05072c10f93c70ac5c2c54cddc21b877ebaf7e2a",
+  "destroyed_at": "2026-08-06T12:00:00Z",
+  "expected": {
+    "frozen_work_digest": "ca4d375d4a2a90d4871391a0f79bfb5bbe5ec5db9590c97ba3a0d6f9ff0b9a50",
+    "campaign_plan_digest": "487d2eae00a6b2d1efc2c866ef14376f4a1ff814a7b41e72d11573d0d0ceb9db",
+    "dns_batch_digest": "1bd32c6f89a1a6e844ddc9fa2c078a2f6845740623fe3490c827d6a262dcdadb",
+    "purge_plan_digest": "a3a032b14018c577a7cda689996bc18194150f9947a8344c2df8bef7dcf4f0f1",
+    "audit_commitment": "1c7cf31e4a77050ef2ba412c7ae4e10e972747b1dd9e96f2904695640812be8e"
+  },
+  "negative_cases": [
+    "reordered_work",
+    "missing_work",
+    "duplicate_work",
+    "wrong_candidate_generation",
+    "foreign_operation",
+    "stale_candidate_digest",
+    "invalid_lifecycle",
+    "unsafe_current_purge_target"
+  ]
+}

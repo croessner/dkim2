@@ -23,15 +23,36 @@ type Limits struct {
 func HardLimits() Limits {
 	return Limits{
 		MaxIdentifierBytes: 128, MaxDomainBytes: 253, MaxDomainLabels: 127,
-		MaxSelectorBytes: 253, MaxSelectorLabels: 127, MaxProfiles: 1024,
-		MaxCredentialsPerProfile: 2, MaxHandles: 2048, MaxPolicies: 4096,
-		MaxJSONFileBytes: 1 << 20, MaxJSONDepth: 16, MaxJSONStringBytes: 16 << 10,
-		MaxDecodedStringBytes: 1 << 20, MaxDecodedPublicKeyBytes: 2048, MaxRecords: 9216,
+		MaxSelectorBytes: 253, MaxSelectorLabels: 127, MaxProfiles: 131072,
+		MaxCredentialsPerProfile: 2, MaxHandles: 262144, MaxPolicies: 262144,
+		MaxJSONFileBytes: 512 << 20, MaxJSONDepth: 16, MaxJSONStringBytes: 16 << 10,
+		MaxDecodedStringBytes: 512 << 20, MaxDecodedPublicKeyBytes: 2048, MaxRecords: 1 << 20,
 	}
 }
 
 // DefaultLimits returns the restrictive default datasource limits.
-func DefaultLimits() Limits { return HardLimits() }
+func DefaultLimits() Limits {
+	limits := HardLimits()
+	limits.MaxProfiles = 1024
+	limits.MaxHandles = 2048
+	limits.MaxPolicies = 4096
+	limits.MaxJSONFileBytes = 1 << 20
+	limits.MaxDecodedStringBytes = 1 << 20
+	limits.MaxRecords = 9216
+	return limits
+}
+
+// ProductionLimits returns the finite large-installation profile.
+func ProductionLimits() Limits {
+	limits := HardLimits()
+	limits.MaxProfiles = 32768
+	limits.MaxHandles = 65536
+	limits.MaxPolicies = 65536
+	limits.MaxJSONFileBytes = 128 << 20
+	limits.MaxDecodedStringBytes = 128 << 20
+	limits.MaxRecords = 229376
+	return limits
+}
 
 // Validate rejects zero, negative, or widened limits.
 func (l Limits) Validate() error {

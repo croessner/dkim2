@@ -61,7 +61,7 @@ func TestStoredDigestParsingAndMetadataAccessFreezeProviderRoundTrip(t *testing.
 		}
 	}
 	called := false
-	if err := candidate.WithMetadata(t.Context(), func(operation OperationBinding, digest CandidateContentDigest) error {
+	if err := candidate.WithMetadata(t.Context(), func(operation OperationBinding, _ uint64, digest CandidateContentDigest) error {
 		called = operation.Equal(candidate.Binding()) && digest.Equal(candidate.Digest())
 		return nil
 	}); err != nil || !called {

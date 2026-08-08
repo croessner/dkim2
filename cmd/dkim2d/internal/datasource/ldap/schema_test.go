@@ -23,7 +23,7 @@ func TestSchemaOwnsExactPermanentAllocation(t *testing.T) {
 	classPattern := regexp.MustCompile(`objectclass \( RNSDKIM2oc:(\d+) NAME '([^']+)'`)
 	attributes := attributePattern.FindAllStringSubmatch(text, -1)
 	classes := classPattern.FindAllStringSubmatch(text, -1)
-	if len(attributes) != 23 || len(classes) != 8 {
+	if len(attributes) != 29 || len(classes) != 9 {
 		t.Fatal("unexpected LDAP allocation count")
 	}
 	expectedAttributes := []string{
@@ -34,7 +34,8 @@ func TestSchemaOwnsExactPermanentAllocation(t *testing.T) {
 		attrTenantID, attrProfileUse, attrRollout,
 		attrCompatibility, attrFeedbackRouteID, attrPrivatePKCS8,
 		"dkim2CandidateDigest", "dkim2OperationID", "dkim2WasActive",
-		"dkim2AdminLockOwner", "dkim2AdminRevision",
+		"dkim2AdminLockOwner", "dkim2AdminRevision", "dkim2TerminalState",
+		"dkim2TerminalReason", "dkim2TerminalTime", "dkim2SourceGeneration", "dkim2CurrentGeneration", "dkim2SourceSchema",
 	}
 	for index, match := range attributes {
 		if match[1] != strconv.Itoa(index+1) || match[2] != expectedAttributes[index] {
@@ -43,14 +44,14 @@ func TestSchemaOwnsExactPermanentAllocation(t *testing.T) {
 	}
 	expectedClasses := []string{
 		datasetObjectClass, handleObjectClass, profileObjectClass, credentialObjectClass, policyObjectClass,
-		keyMaterialObjectClass, administrativeMetadataObjectClass, administrationLockObjectClass,
+		keyMaterialObjectClass, administrativeMetadataObjectClass, administrationLockObjectClass, "dkim2CampaignTerminal",
 	}
 	for index, match := range classes {
 		if match[1] != strconv.Itoa(index+1) || match[2] != expectedClasses[index] {
 			t.Fatal("LDAP object-class allocation changed")
 		}
 	}
-	if strings.Count(text, " SINGLE-VALUE )") != 23 {
+	if strings.Count(text, " SINGLE-VALUE )") != 29 {
 		t.Fatal("every allocated attribute must be single-valued")
 	}
 }
@@ -130,6 +131,8 @@ func TestOperatorLDAPBundleMatchesNativeCustody(t *testing.T) {
 		"attrs=dkim2AdminLockOwner,dkim2AdminRevision",
 		"attrs=dkim2CandidateDigest,dkim2OperationID",
 		"attrs=dkim2WasActive",
+		`cn=dkim2-purger,ou=services,dc=example,dc=test]) + ([cn=current,ou=dkim2,dc=example,dc=test]/dkim2Generation & [$2])" none`,
+		`dkim2DatasetState & [committed])" =dcsr`,
 	} {
 		if !strings.Contains(acl, required) {
 			t.Fatal("LDAP bootstrap ACL is missing its bounded create/read privilege")

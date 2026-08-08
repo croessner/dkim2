@@ -211,10 +211,16 @@ cp contrib/schema/postgresql/001_dkim2_datasource.sql \
 	"$work/certs/001_dkim2_datasource.sql"
 cp contrib/schema/postgresql/003_native_domain_onboarding.sql \
 	"$work/certs/003_dkim2_postgresql_onboarding.sql"
+cp contrib/schema/postgresql/004_rotation_campaign_retention.sql "$work/certs/004_dkim2_postgresql_rotation.sql"
+cp contrib/schema/postgresql/005_campaign_terminal_closure.sql "$work/certs/005_dkim2_postgresql_terminal.sql"
+cp contrib/schema/postgresql/006_campaign_source_binding.sql "$work/certs/006_dkim2_postgresql_source.sql"
 cp contrib/schema/mysql/001_dkim2_datasource.sql \
 	"$work/certs/001_dkim2_mysql_datasource.sql"
 cp contrib/schema/mysql/003_native_domain_onboarding.sql \
 	"$work/certs/003_dkim2_mysql_onboarding.sql"
+cp contrib/schema/mysql/004_rotation_campaign_retention.sql "$work/certs/004_dkim2_mysql_rotation.sql"
+cp contrib/schema/mysql/005_campaign_terminal_closure.sql "$work/certs/005_dkim2_mysql_terminal.sql"
+cp contrib/schema/mysql/006_campaign_source_binding.sql "$work/certs/006_dkim2_mysql_source.sql"
 sed \
 	-e 's/__DATABASE__/dkim2_fresh/g' \
 	-e "s/__RUNTIME_ACCOUNT__/'dkim2_runtime_login'@'%'/g" \
@@ -222,6 +228,8 @@ sed \
 	-e "s/__SNAPSHOT_ACCOUNT__/'dkim2_snapshot_login'@'%'/g" \
 	-e "s/__STAGING_ACCOUNT__/'dkim2_staging_login'@'%'/g" \
 	-e "s/__ACTIVATION_ACCOUNT__/'dkim2_activation_login'@'%'/g" \
+	-e "s/__PURGE_ACCOUNT__/'dkim2_purger_login'@'%'/g" \
+	-e "s/__CLOSER_ACCOUNT__/'dkim2_closer_login'@'%'/g" \
 	contrib/schema/mysql/002_least_privilege_grants.sql.example \
 	>"$work/certs/002_dkim2_mysql_fresh_grants.sql"
 chmod 0755 "$work" "$work/certs" "$work/ldap-init" "$work/ldap-schema"
@@ -383,7 +391,9 @@ chmod 0755 "$work/postgresql-entrypoint.sh"
 		"CREATE ROLE dkim2_runtime_login LOGIN PASSWORD '$postgresql_password';" \
 		"CREATE ROLE dkim2_snapshot_login LOGIN PASSWORD 'synthetic-sql-snapshot-password';" \
 		"CREATE ROLE dkim2_staging_login LOGIN PASSWORD 'synthetic-sql-staging-password';" \
-		"CREATE ROLE dkim2_activation_login LOGIN PASSWORD 'synthetic-sql-activation-password';"
+		"CREATE ROLE dkim2_activation_login LOGIN PASSWORD 'synthetic-sql-activation-password';" \
+		"CREATE ROLE dkim2_purger_login LOGIN PASSWORD 'synthetic-sql-purger-password';" \
+		"CREATE ROLE dkim2_closer_login LOGIN PASSWORD 'synthetic-sql-closer-password';"
 } >"$work/postgresql-bootstrap.sql"
 chmod 0644 "$work/postgresql-bootstrap.sql"
 
@@ -404,6 +414,11 @@ chmod 0644 "$work/postgresql-bootstrap.sql"
 		"INSERT INTO dkim2_datasource.policies VALUES (1, 'tenant', 'example.test', 'originator', 'profile', 'active', 'enforce', 'strict', NULL);" \
 		"INSERT INTO dkim2_datasource.key_material VALUES (1, 'tenant', 'example.test', 'originator', 'handle', 'ed25519-sha256', decode('$spki_hex', 'hex'), decode('$private_pkcs8_hex', 'hex'));" \
 		'\ir /run/dkim2/003_dkim2_postgresql_onboarding.sql' \
+		'\ir /run/dkim2/004_dkim2_postgresql_rotation.sql' \
+		'\ir /run/dkim2/005_dkim2_postgresql_terminal.sql' \
+		'\ir /run/dkim2/006_dkim2_postgresql_source.sql' \
+		'GRANT dkim2_purger TO dkim2_purger_login;' \
+		'GRANT dkim2_closer TO dkim2_closer_login;' \
 		'GRANT dkim2_snapshot TO dkim2_snapshot_login;' \
 		'GRANT dkim2_stager TO dkim2_staging_login;' \
 		'GRANT dkim2_activator TO dkim2_activation_login;' \
@@ -411,17 +426,26 @@ chmod 0644 "$work/postgresql-bootstrap.sql"
 		'CREATE SCHEMA IF NOT EXISTS dkim2_datasource;' \
 		'\ir /run/dkim2/001_dkim2_datasource.sql' \
 		'\ir /run/dkim2/003_dkim2_postgresql_onboarding.sql' \
+		'\ir /run/dkim2/004_dkim2_postgresql_rotation.sql' \
+		'\ir /run/dkim2/005_dkim2_postgresql_terminal.sql' \
+		'\ir /run/dkim2/006_dkim2_postgresql_source.sql' \
 		'GRANT dkim2_publisher TO dkim2_publisher_login;' \
 		'\connect dkim2_corrupt' \
 		'CREATE SCHEMA IF NOT EXISTS dkim2_datasource;' \
 		'\ir /run/dkim2/001_dkim2_datasource.sql' \
 		"INSERT INTO dkim2_datasource.dataset_generations VALUES (1, 'dkim2-datasource-v2', 'committed');" \
 		'\ir /run/dkim2/003_dkim2_postgresql_onboarding.sql' \
+		'\ir /run/dkim2/004_dkim2_postgresql_rotation.sql' \
+		'\ir /run/dkim2/005_dkim2_postgresql_terminal.sql' \
+		'\ir /run/dkim2/006_dkim2_postgresql_source.sql' \
 		'GRANT dkim2_publisher TO dkim2_publisher_login;' \
 		'\connect dkim2_fresh' \
 		'CREATE SCHEMA IF NOT EXISTS dkim2_datasource;' \
 		'\ir /run/dkim2/001_dkim2_datasource.sql' \
-		'\ir /run/dkim2/003_dkim2_postgresql_onboarding.sql'
+		'\ir /run/dkim2/003_dkim2_postgresql_onboarding.sql' \
+		'\ir /run/dkim2/004_dkim2_postgresql_rotation.sql' \
+		'\ir /run/dkim2/005_dkim2_postgresql_terminal.sql' \
+		'\ir /run/dkim2/006_dkim2_postgresql_source.sql'
 } >"$work/postgresql-dataset.sql"
 chmod 0644 "$work/postgresql-dataset.sql"
 
@@ -450,7 +474,9 @@ write_mysql_dataset() {
 			"CREATE USER 'dkim2_publisher_login'@'%' IDENTIFIED BY '$publisher_password' REQUIRE SSL;" \
 			"CREATE USER 'dkim2_snapshot_login'@'%' IDENTIFIED BY 'synthetic-sql-snapshot-password' REQUIRE SSL;" \
 			"CREATE USER 'dkim2_staging_login'@'%' IDENTIFIED BY 'synthetic-sql-staging-password' REQUIRE SSL;" \
-			"CREATE USER 'dkim2_activation_login'@'%' IDENTIFIED BY 'synthetic-sql-activation-password' REQUIRE SSL;"
+			"CREATE USER 'dkim2_activation_login'@'%' IDENTIFIED BY 'synthetic-sql-activation-password' REQUIRE SSL;" \
+			"CREATE USER 'dkim2_purger_login'@'%' IDENTIFIED BY 'synthetic-sql-purger-password' REQUIRE SSL;" \
+			"CREATE USER 'dkim2_closer_login'@'%' IDENTIFIED BY 'synthetic-sql-closer-password' REQUIRE SSL;"
 		for database in dkim2 dkim2_empty dkim2_corrupt; do
 			printf '%s\n' \
 				"CREATE DATABASE $database CHARACTER SET utf8mb4 COLLATE utf8mb4_bin;" \
@@ -499,7 +525,10 @@ write_mysql_dataset() {
 		for database in dkim2 dkim2_empty dkim2_corrupt; do
 			printf '%s\n' \
 				"USE $database;" \
-				'SOURCE /run/dkim2/003_dkim2_mysql_onboarding.sql;'
+				'SOURCE /run/dkim2/003_dkim2_mysql_onboarding.sql;' \
+				'SOURCE /run/dkim2/004_dkim2_mysql_rotation.sql;' \
+				'SOURCE /run/dkim2/005_dkim2_mysql_terminal.sql;' \
+				'SOURCE /run/dkim2/006_dkim2_mysql_source.sql;'
 			for table in dkim2_dataset_generations dkim2_current_generation \
 				dkim2_handles dkim2_profiles dkim2_credentials dkim2_policies \
 				dkim2_key_material; do
@@ -551,6 +580,9 @@ write_mysql_dataset() {
 			'USE dkim2_fresh;' \
 			'SOURCE /run/dkim2/001_dkim2_mysql_datasource.sql;' \
 			'SOURCE /run/dkim2/003_dkim2_mysql_onboarding.sql;' \
+			'SOURCE /run/dkim2/004_dkim2_mysql_rotation.sql;' \
+			'SOURCE /run/dkim2/005_dkim2_mysql_terminal.sql;' \
+			'SOURCE /run/dkim2/006_dkim2_mysql_source.sql;' \
 			'SOURCE /run/dkim2/002_dkim2_mysql_fresh_grants.sql;' \
 			'CREATE TABLE dkim2_integration_ready (singleton BOOLEAN PRIMARY KEY);' \
 			'INSERT INTO dkim2_integration_ready VALUES (TRUE);'
@@ -697,6 +729,47 @@ capture_ldap_admin_failure() {
 	echo "datasource integration: OpenLDAP administration unavailable class=$error_class exit=$exit_code log_sha256=$log_digest" >&2
 }
 
+# capture_service_failure persists only a bounded class and digest for an exited disposable service.
+capture_service_failure() {
+	container=$1
+	label=$2
+	exit_code=$3
+	raw_log="$work/service-failure.raw.log"
+	docker logs "$container" >"$raw_log" 2>&1 || true
+	log_digest=unavailable
+	error_class=process_lifecycle
+	if test -f "$raw_log"; then
+		if command -v sha256sum >/dev/null 2>&1; then
+			log_digest="$(sha256sum "$raw_log" | awk '{print $1}')"
+		else
+			log_digest="$(shasum -a 256 "$raw_log" | awk '{print $1}')"
+		fi
+		if grep -Eqi 'TLS.*(error|failed|unable)|permission denied.*(key|certificate)' "$raw_log"; then
+			error_class=tls_initialization
+		elif grep -Eqi 'schema.*(error|failed|invalid)|objectClass.*(error|failed|invalid)' "$raw_log"; then
+			error_class=schema_initialization
+		elif grep -Eqi 'permission denied|operation not permitted' "$raw_log"; then
+			error_class=filesystem_authority
+		elif grep -Eqi 'not found|no such file|unknown option|invalid option' "$raw_log"; then
+			error_class=image_contract
+		elif grep -Eqi 'database.*(error|failed)|mdb.*(error|failed)' "$raw_log"; then
+			error_class=database_open
+		elif grep -Eqi 'config.*(error|failed)|bad configuration' "$raw_log"; then
+			error_class=configuration
+		fi
+	fi
+	mkdir -p .artifacts/datasource-integration
+	printf '%s\n' \
+		"phase=$label" \
+		"exit=$exit_code" \
+		"error_class=$error_class" \
+		"raw_log_sha256=$log_digest" \
+		>.artifacts/datasource-integration/service-failure.txt
+	grep -Eiv 'password|secret|private|credential|key|certificate|token' "$raw_log" 2>/dev/null | \
+		head -n 20 | cut -c 1-160 >.artifacts/datasource-integration/service-failure-sanitized.txt || true
+	echo "datasource integration: $label unavailable class=$error_class exit=$exit_code log_sha256=$log_digest" >&2
+}
+
 # wait_ldap_admin proves the exact exec'd PID1, verified TLS identity, and role bind.
 wait_ldap_admin() {
 	attempt=0
@@ -806,6 +879,7 @@ wait_healthy() {
 			;;
 		exited*|dead*)
 			exit_code="$(docker inspect --format '{{.State.ExitCode}}' "$container" 2>/dev/null || printf '%s' unavailable)"
+			capture_service_failure "$container" "$label" "$exit_code"
 			echo "datasource integration: $label startup failed state=$state exit=$exit_code" >&2
 			return 1
 			;;
@@ -965,7 +1039,8 @@ WITH expected(name, kind, arguments) AS (
     ('administration_lock_release', 'p', 'dkim2_datasource.generation_number, text'),
     ('administration_lock_owned_by', 'f', 'text'),
     ('administration_lock_is_owned', 'f', ''),
-    ('generation_is_version', 'f', 'dkim2_datasource.generation_number, text')
+    ('generation_is_version', 'f', 'dkim2_datasource.generation_number, text'),
+    ('record_campaign_terminal', 'p', 'text, text, text, dkim2_datasource.generation_number, dkim2_datasource.generation_number, dkim2_datasource.generation_number, bytea, text, text, timestamp with time zone')
 ), actual AS (
   SELECT routine.oid, routine.proname AS name, routine.prokind::text AS kind,
          oidvectortypes(routine.proargtypes) AS arguments,
@@ -986,7 +1061,7 @@ SELECT concat_ws('|',
   (SELECT count(*) FROM expected LEFT JOIN valid USING (name, kind, arguments)
     WHERE valid.oid IS NULL)
 );" 2>/dev/null)" || postgresql_definer_audit=unavailable
-expect_equal postgresql-definer-routines "$postgresql_definer_audit" "8|0|0"
+expect_equal postgresql-definer-routines "$postgresql_definer_audit" "9|0|0"
 
 postgresql_acl_audit="$(docker exec "$postgresql_name" psql -v ON_ERROR_STOP=1 \
 	-U postgres -d dkim2 -Atqc "
@@ -999,7 +1074,8 @@ WITH expected_routine(name, kind, arguments) AS (
     ('administration_lock_release', 'p', 'dkim2_datasource.generation_number, text'),
     ('administration_lock_owned_by', 'f', 'text'),
     ('administration_lock_is_owned', 'f', ''),
-    ('generation_is_version', 'f', 'dkim2_datasource.generation_number, text')
+    ('generation_is_version', 'f', 'dkim2_datasource.generation_number, text'),
+    ('record_campaign_terminal', 'p', 'text, text, text, dkim2_datasource.generation_number, dkim2_datasource.generation_number, dkim2_datasource.generation_number, bytea, text, text, timestamp with time zone')
 ), expected_acl(name, grantee) AS (
   VALUES
     ('administration_lock_observe', 'postgres'),
@@ -1022,7 +1098,9 @@ WITH expected_routine(name, kind, arguments) AS (
     ('administration_lock_is_owned', 'dkim2_activator'),
     ('generation_is_version', 'postgres'),
     ('generation_is_version', 'dkim2_publisher'),
-    ('generation_is_version', 'dkim2_stager')
+    ('generation_is_version', 'dkim2_stager'),
+    ('record_campaign_terminal', 'postgres'),
+    ('record_campaign_terminal', 'dkim2_closer')
 ), routines AS (
   SELECT routine.oid, routine.proname AS name, routine.proowner,
          routine.proacl
@@ -1050,7 +1128,7 @@ SELECT concat_ws('|',
   (SELECT count(*) FROM expected_acl LEFT JOIN actual_acl USING (name, grantee)
     WHERE actual_acl.name IS NULL OR privilege_type <> 'EXECUTE')
 );" 2>/dev/null)" || postgresql_acl_audit=unavailable
-expect_equal postgresql-definer-acls "$postgresql_acl_audit" "21|0|0"
+expect_equal postgresql-definer-acls "$postgresql_acl_audit" "23|0|0"
 
 DKIM2_DATASOURCE_CA="$work/certs/ca.crt" \
 DKIM2_LDAP_PORT="$ldap_port" \

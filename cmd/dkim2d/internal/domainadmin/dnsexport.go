@@ -316,6 +316,22 @@ func newDNSRecord(
 	return record, nil
 }
 
+// ValidateCanonicalDNSRecord proves one native credential through the production DNS-04 parser path.
+func ValidateCanonicalDNSRecord(
+	ctx context.Context,
+	domain string,
+	selector string,
+	algorithm provider.Algorithm,
+	publicSPKI []byte,
+) error {
+	record, err := newDNSRecord(ctx, domain, selector, algorithm, publicSPKI)
+	if err != nil {
+		return err
+	}
+	clearDNSRecord(&record)
+	return nil
+}
+
 // dkim2Algorithm maps only the two supported staged algorithm families.
 func dkim2Algorithm(algorithm provider.Algorithm) dkim2.Algorithm {
 	if algorithm == provider.AlgorithmEd25519SHA256 {
@@ -484,6 +500,46 @@ func (DNSRecord) MarshalJSON() ([]byte, error) { return nil, newError(CodeProtec
 type DNSExportResult struct {
 	Records uint32
 	Bytes   uint32
+}
+
+// ExportCanonicalDNSBatch writes one bounded owner-only DNS artifact from
+// already validated campaign proof inputs. It deliberately has no DNS write
+// transport and returns counts only.
+func ExportCanonicalDNSBatch(ctx context.Context, path string, inputs []DNSProofInput, ttl uint64, limits Limits) (DNSExportResult, error) {
+	if ctx == nil || ctx.Err() != nil || limits.Validate() != nil || len(inputs) == 0 || len(inputs) > int(limits.MaxDNSRecords) || ttl == 0 || ttl > 604800 {
+		return DNSExportResult{}, newError(CodeProtectedInput)
+	}
+	records := make([]DNSRecord, 0, len(inputs))
+	for _, input := range inputs {
+		record, err := newDNSRecord(ctx, input.domain, input.selector, input.algorithm, input.publicSPKI)
+		if err != nil {
+			clearDNSRecords(records)
+			return DNSExportResult{}, err
+		}
+		records = append(records, record)
+	}
+	defer clearDNSRecords(records)
+	document, err := formatDNSExport(records, ttl, int(limits.MaxDNSExportBytes))
+	if err != nil {
+		return DNSExportResult{}, err
+	}
+	defer clear(document)
+	result := DNSExportResult{Records: uint32(len(records)), Bytes: uint32(len(document))}
+	existing, exists, readErr := config.ReadProtectedDocumentIfExists(path, int(limits.MaxDNSExportBytes))
+	if readErr != nil {
+		return DNSExportResult{}, mapDNSStoreError(readErr)
+	}
+	defer clear(existing)
+	if exists {
+		if !bytes.Equal(existing, document) {
+			return DNSExportResult{}, newError(CodeConflict)
+		}
+		return result, nil
+	}
+	if err := config.CreateProtectedDocument(ctx, path, document, int(limits.MaxDNSExportBytes)); err != nil {
+		return DNSExportResult{}, mapDNSStoreError(err)
+	}
+	return result, nil
 }
 
 // ExportDNS atomically writes one explicit owner-only deterministic zone-file artifact.

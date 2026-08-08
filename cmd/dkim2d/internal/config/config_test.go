@@ -57,8 +57,27 @@ func TestSigningConfigurationIsDefaultDisabledAndConditionallyComplete(t *testin
 	if err != nil || !enabled.Signing().Enabled() ||
 		enabled.Signing().Backend() != SigningFlatFile ||
 		enabled.Signing().ReloadInterval() != 30*time.Second ||
-		enabled.Signing().AllowRecipientGroup() {
+		enabled.Signing().AllowRecipientGroup() ||
+		enabled.Signing().LimitProfile() != "small" ||
+		enabled.Signing().MaxLoadBytes() != 16<<20 {
 		t.Fatalf("enabled signing configuration failed with code %s", CodeOf(err))
+	}
+	productionDocument := strings.Replace(
+		signingYAML(), "  backend: flat_file",
+		"  backend: flat_file\n  limit_profile: production\n  max_load_bytes: 134217728", 1,
+	)
+	production, err := Load([]byte(productionDocument), FlagValues{})
+	if err != nil || production.Signing().LimitProfile() != "production" || production.Signing().MaxLoadBytes() != 128<<20 {
+		t.Fatalf("production signing limits failed with code %s", CodeOf(err))
+	}
+	for _, unsafeLimits := range []string{
+		strings.Replace(signingYAML(), "  backend: flat_file", "  backend: flat_file\n  limit_profile: unlimited", 1),
+		strings.Replace(signingYAML(), "  backend: flat_file", "  backend: flat_file\n  limit_profile: production", 1),
+		strings.Replace(signingYAML(), "  backend: flat_file", "  backend: flat_file\n  max_load_bytes: 536870913", 1),
+	} {
+		if _, loadErr := Load([]byte(unsafeLimits), FlagValues{}); loadErr == nil {
+			t.Fatal("unsafe datasource limit profile accepted")
+		}
 	}
 	signOnly, err := Load(
 		[]byte(removeYAMLField(

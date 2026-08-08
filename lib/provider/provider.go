@@ -80,6 +80,9 @@ func HardLimits() Limits { return datasource.HardLimits() }
 // DefaultLimits returns the restrictive default datasource limits.
 func DefaultLimits() Limits { return datasource.DefaultLimits() }
 
+// ProductionLimits returns the finite large-installation datasource profile.
+func ProductionLimits() Limits { return datasource.ProductionLimits() }
+
 // ValidateDomainSelector validates one canonical DNS signing identity.
 func ValidateDomainSelector(domain, selector string, algorithm Algorithm) error {
 	limits := keyresolver.DefaultLimits()

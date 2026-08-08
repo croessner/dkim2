@@ -73,6 +73,7 @@ func TestLeastPrivilegeGrantTemplateMatchesPublisherContract(t *testing.T) {
 		"GRANT EXECUTE ON PROCEDURE __DATABASE__.dkim2_v3_current_for_update TO __ACTIVATION_ACCOUNT__;",
 		"GRANT EXECUTE ON PROCEDURE __DATABASE__.dkim2_v3_lock_candidate_root TO __ACTIVATION_ACCOUNT__;",
 		"GRANT EXECUTE ON PROCEDURE __DATABASE__.dkim2_v3_activate TO __ACTIVATION_ACCOUNT__;",
+		"GRANT EXECUTE ON PROCEDURE __DATABASE__.dkim2_v3_purge_generation TO __PURGE_ACCOUNT__;",
 	} {
 		if !strings.Contains(text, required) {
 			t.Fatal("MySQL publisher grant template is incomplete")
@@ -81,7 +82,7 @@ func TestLeastPrivilegeGrantTemplateMatchesPublisherContract(t *testing.T) {
 	if strings.Contains(text, "REVOKE ") {
 		t.Fatal("fresh MySQL-family grant template revokes nonexistent privileges")
 	}
-	for _, role := range []string{"__SNAPSHOT_ACCOUNT__", "__STAGING_ACCOUNT__", "__ACTIVATION_ACCOUNT__"} {
+	for _, role := range []string{"__SNAPSHOT_ACCOUNT__", "__STAGING_ACCOUNT__", "__ACTIVATION_ACCOUNT__", "__PURGE_ACCOUNT__"} {
 		if strings.Contains(text, "GRANT SELECT ON __DATABASE__.dkim2_publication_lock TO "+role) {
 			t.Fatal("MySQL administration roles received direct singleton-table authority")
 		}
@@ -249,6 +250,62 @@ func TestNativeDomainOnboardingUpgradeDefinesV3Contract(t *testing.T) {
 	} {
 		if !strings.Contains(grantText, required) {
 			t.Fatal("MySQL-family v3 role grant contract incomplete")
+		}
+	}
+}
+
+// TestRotationCampaignUpgradeDefinesForwardCandidateFence proves the
+// forward-only campaign upgrade preserves immutable v3 rows and rejects a
+// candidate that is not strictly above the current generation.
+func TestRotationCampaignUpgradeDefinesForwardCandidateFence(t *testing.T) {
+	t.Parallel()
+	path := filepath.Join(
+		"..", "..", "..", "..", "..", "contrib", "schema", "mysql",
+		"004_rotation_campaign_retention.sql",
+	)
+	document, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal("read MySQL-family rotation campaign upgrade")
+	}
+	text := string(document)
+	for _, required := range []string{
+		"Forward-only", "dkim2_campaign_upgrade_requires_v3", "dkim2_v3_insert_generation",
+		"dkim2 v3 candidate generation denied", "selected_generation <= generation",
+		"dkim2-datasource-v3", "dataset_state NOT IN ('staging', 'committed')", "candidate_digest",
+	} {
+		if !strings.Contains(text, required) {
+			t.Fatal("MySQL-family rotation campaign upgrade contract incomplete")
+		}
+	}
+	upper := strings.ToUpper(text)
+	for _, required := range []string{
+		"CREATE TABLE dkim2_purge_audit_receipts", "CREATE PROCEDURE dkim2_v3_purge_generation",
+		"selected_generation = selected_current", "lock_operation_id", "DELETE FROM dkim2_key_material",
+		"DELETE FROM dkim2_dataset_generations",
+	} {
+		if !strings.Contains(text, required) {
+			t.Fatal("MySQL-family purge authority contract incomplete")
+		}
+	}
+	for _, forbidden := range []string{"DROP TABLE", "GRANT DELETE", "UPDATE DKIM2_DATASET_GENERATIONS"} {
+		if strings.Contains(upper, forbidden) {
+			t.Fatal("MySQL-family campaign upgrade widened mutation authority")
+		}
+	}
+}
+
+// TestCampaignSourceBindingMigrationKeepsFrozenSourceInProviderMetadata proves
+// the MySQL-family routines cannot stage a candidate without its frozen source.
+func TestCampaignSourceBindingMigrationKeepsFrozenSourceInProviderMetadata(t *testing.T) {
+	t.Parallel()
+	path := filepath.Join("..", "..", "..", "..", "..", "contrib", "schema", "mysql", "006_campaign_source_binding.sql")
+	document, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal("read MySQL-family source-binding migration")
+	}
+	for _, required := range []string{"source_generation", "selected_source", "selected_source = 0", "source_generation < generation", "dkim2_v3_lock_candidate_root", "REVOKE EXECUTE ON PROCEDURE dkim2_v3_lock_candidate_root FROM PUBLIC", "GRANT EXECUTE ON PROCEDURE dkim2_v3_lock_candidate_root TO dkim2_activator", "REVOKE EXECUTE ON PROCEDURE dkim2_v3_insert_generation FROM PUBLIC", "GRANT EXECUTE ON PROCEDURE dkim2_v3_insert_generation TO dkim2_stager"} {
+		if !strings.Contains(string(document), required) {
+			t.Fatal("MySQL-family source-binding migration contract incomplete")
 		}
 	}
 }

@@ -112,13 +112,69 @@ func TestNativeDomainOnboardingUpgradeDefinesV3Contract(t *testing.T) {
 	}
 }
 
+// TestRotationCampaignUpgradeDefinesForwardCandidateFence proves the
+// forward-only campaign upgrade preserves immutable v3 authority and rejects
+// candidates that are not strictly above the current generation.
+func TestRotationCampaignUpgradeDefinesForwardCandidateFence(t *testing.T) {
+	t.Parallel()
+	path := filepath.Join(
+		"..", "..", "..", "..", "..", "contrib", "schema", "postgresql",
+		"004_rotation_campaign_retention.sql",
+	)
+	document, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal("read PostgreSQL rotation campaign upgrade")
+	}
+	text := string(document)
+	for _, required := range []string{
+		"Forward-only", "campaign_candidate_generation_is_forward", "dataset_stage_v3",
+		"administration_lock_owned_by(operation_id)",
+		"dkim2-datasource-v3", "dataset_state = 'staging'", "candidate_digest",
+	} {
+		if !strings.Contains(text, required) {
+			t.Fatal("PostgreSQL rotation campaign upgrade contract incomplete")
+		}
+	}
+	for _, required := range []string{
+		"CREATE TABLE dkim2_datasource.purge_audit_receipts", "CREATE PROCEDURE dkim2_datasource.purge_generation",
+		"lock_operation_id IS NULL", "selected_generation = selected_current", "DELETE FROM dkim2_datasource.key_material",
+		"DELETE FROM dkim2_datasource.dataset_generations", "GRANT EXECUTE ON PROCEDURE dkim2_datasource.purge_generation",
+		"TO dkim2_purger",
+	} {
+		if !strings.Contains(text, required) {
+			t.Fatal("PostgreSQL purge authority contract incomplete")
+		}
+	}
+	upper := strings.ToUpper(text)
+	for _, forbidden := range []string{"DROP TABLE", "GRANT DELETE", "UPDATE DKIM2_DATASOURCE.DATASET_GENERATIONS"} {
+		if strings.Contains(upper, forbidden) {
+			t.Fatal("PostgreSQL campaign upgrade widened mutation authority")
+		}
+	}
+}
+
+// TestCampaignSourceBindingMigrationKeepsFrozenSourceInProviderMetadata proves
+// the forward migration carries the recovery binding through SQL primitives.
+func TestCampaignSourceBindingMigrationKeepsFrozenSourceInProviderMetadata(t *testing.T) {
+	t.Parallel()
+	path := filepath.Join("..", "..", "..", "..", "..", "contrib", "schema", "postgresql", "006_campaign_source_binding.sql")
+	document, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal("read PostgreSQL source-binding migration")
+	}
+	for _, required := range []string{"source_generation", "source_generation < generation", "candidate_root_for_update", "source_generation::text", "TO dkim2_activator"} {
+		if !strings.Contains(string(document), required) {
+			t.Fatal("PostgreSQL source-binding migration contract incomplete")
+		}
+	}
+}
+
 // TestActivationQueriesFenceCurrentPointerAndCandidateRoot proves activation
 // locks exact candidate metadata and compares the previously read pointer.
 func TestActivationQueriesFenceCurrentPointerAndCandidateRoot(t *testing.T) {
 	t.Parallel()
-	if queryAdminCandidateRootForUpdate != `SELECT generation, schema_version, dataset_state,
-       operation_id, candidate_digest, was_active
-FROM dkim2_datasource.candidate_root_for_update($1, $2, $3)` {
+	if !strings.Contains(queryAdminCandidateRootForUpdate, "FROM dkim2_datasource.candidate_root_for_update($1, $2, $3)") ||
+		!strings.Contains(queryAdminCandidateRootForUpdate, "source_generation::text") {
 		t.Fatal("PostgreSQL adapter does not use the exact candidate-root primitive")
 	}
 	if !strings.Contains(queryAdminUpdateCurrent, "candidate_digest IS NOT DISTINCT FROM $4") {

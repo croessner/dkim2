@@ -11,6 +11,8 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/croessner/dkim2/provider"
 )
 
 const (
@@ -86,7 +88,7 @@ func TestSnapshotRejectsDuplicateNativeIdentityBeyondRowMapping(t *testing.T) {
 	duplicate.PublicSPKI = append([]byte(nil), duplicate.PublicSPKI...)
 	duplicate.PrivatePKCS8 = append([]byte(nil), duplicate.PrivatePKCS8...)
 	rows.KeyMaterial = append(rows.KeyMaterial, duplicate)
-	materials, err := mapNativeMaterials(7, rows.KeyMaterial)
+	materials, err := mapNativeMaterials(7, rows.KeyMaterial, provider.DefaultLimits())
 	if err != nil {
 		t.Fatal("row-level native mapping did not isolate registry-level duplicate")
 	}

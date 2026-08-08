@@ -20,25 +20,25 @@ FROM dkim2_datasource.administration_lock_observe()`
 	queryAdminLockForUpdate = `SELECT lock_revision, lock_operation_id
 FROM dkim2_datasource.administration_lock_for_update()`
 	queryAdminCurrent = `SELECT current.generation::text, dataset.schema_version, dataset.dataset_state,
-       dataset.operation_id, dataset.candidate_digest, current.candidate_digest,
+       dataset.operation_id, dataset.candidate_digest, dataset.source_generation::text, current.candidate_digest,
        dataset.was_active
 FROM dkim2_datasource.current_generation AS current
 JOIN dkim2_datasource.dataset_generations AS dataset USING (generation)
 WHERE current.singleton = TRUE`
 	queryAdminCurrentForUpdate = queryAdminCurrent + ` FOR UPDATE OF current, dataset`
 	queryAdminGenerations      = `SELECT generation::text, schema_version, dataset_state,
-       operation_id, candidate_digest, was_active
+       operation_id, candidate_digest, source_generation::text, was_active
 FROM dkim2_datasource.dataset_generations
 WHERE generation > $1 ORDER BY generation LIMIT $2`
 	queryAdminGenerationsForUpdate   = queryAdminGenerations + ` FOR UPDATE`
 	queryAdminCandidateRootForUpdate = `SELECT generation, schema_version, dataset_state,
-       operation_id, candidate_digest, was_active
+       operation_id, candidate_digest, source_generation::text, was_active
 FROM dkim2_datasource.candidate_root_for_update($1, $2, $3)`
 	queryAdminClaim            = `CALL dkim2_datasource.administration_lock_claim($1, $2)`
 	queryAdminRelease          = `CALL dkim2_datasource.administration_lock_release($1, $2)`
 	queryAdminInsertGeneration = `INSERT INTO dkim2_datasource.dataset_generations
-(generation, schema_version, dataset_state, operation_id, candidate_digest, was_active)
-VALUES ($1, 'dkim2-datasource-v3', 'staging', $2, $3, FALSE)`
+(generation, schema_version, dataset_state, operation_id, candidate_digest, source_generation, was_active)
+VALUES ($1, 'dkim2-datasource-v3', 'staging', $2, $3, $4::dkim2_datasource.generation_number, FALSE)`
 	queryAdminInsertHandle  = `INSERT INTO dkim2_datasource.handles (generation, handle_id) VALUES ($1, $2)`
 	queryAdminInsertProfile = `INSERT INTO dkim2_datasource.profiles
 (generation, profile_id, signing_domain, record_status, not_before_utc, not_after_utc)
@@ -261,7 +261,7 @@ func (t *pgxAdministrationTransaction) ReadCurrentOptional(ctx context.Context, 
 	var row MetadataRow
 	err := t.tx.QueryRow(ctx, query).Scan(
 		&row.Generation, &row.SchemaVersion, &row.DatasetState, &row.OperationID,
-		&row.CandidateDigest, &row.PointerDigest, &row.WasActive,
+		&row.CandidateDigest, &row.SourceGeneration, &row.PointerDigest, &row.WasActive,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return MetadataRow{}, false, nil
@@ -284,7 +284,7 @@ func (t *pgxAdministrationTransaction) LockCandidateRoot(
 			ctx, queryAdminCandidateRootForUpdate, fence.Generation(), operation, digest,
 		).Scan(
 			&row.Generation, &row.SchemaVersion, &row.DatasetState,
-			&row.OperationID, &row.CandidateDigest, &row.WasActive,
+			&row.OperationID, &row.CandidateDigest, &row.SourceGeneration, &row.WasActive,
 		))
 		return nil
 	}); err != nil {
@@ -352,7 +352,7 @@ func (t *pgxAdministrationTransaction) GenerationPage(ctx context.Context, after
 		var row MetadataRow
 		if err := rows.Scan(
 			&row.Generation, &row.SchemaVersion, &row.DatasetState,
-			&row.OperationID, &row.CandidateDigest, &row.WasActive,
+			&row.OperationID, &row.CandidateDigest, &row.SourceGeneration, &row.WasActive,
 		); err != nil {
 			return nil, datasourceadmin.NewError(datasourceadmin.CodeUnavailable)
 		}
@@ -401,7 +401,7 @@ func (t *pgxAdministrationTransaction) ReleaseLock(ctx context.Context, revision
 
 // InsertGeneration inserts one exact v3 staging root.
 func (t *pgxAdministrationTransaction) InsertGeneration(ctx context.Context, row MetadataRow) error {
-	_, err := t.tx.Exec(ctx, queryAdminInsertGeneration, row.Generation, row.OperationID, row.CandidateDigest)
+	_, err := t.tx.Exec(ctx, queryAdminInsertGeneration, row.Generation, row.OperationID, row.CandidateDigest, row.SourceGeneration)
 	return adminPGError(err)
 }
 

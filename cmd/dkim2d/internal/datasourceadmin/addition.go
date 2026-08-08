@@ -3,6 +3,8 @@ package datasourceadmin
 import (
 	"fmt"
 	"sync"
+
+	"github.com/croessner/dkim2/provider"
 )
 
 // DomainCredential contains one complete generated selector and native key pair.
@@ -73,7 +75,7 @@ func NewDomainAddition(
 			PrivatePKCS8: append([]byte(nil), credential.PrivatePKCS8...),
 		})
 	}
-	if !validPlanIntent(intent, profileID, allocated) || validateRows(1, rows) != nil {
+	if !validPlanIntent(intent, profileID, allocated) || validateRows(1, rows, provider.DefaultLimits()) != nil {
 		clearRows(&rows)
 		return nil, newError(CodeInvalid)
 	}

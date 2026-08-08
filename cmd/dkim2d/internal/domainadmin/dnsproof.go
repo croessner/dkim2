@@ -12,6 +12,7 @@ import (
 
 	"github.com/croessner/dkim2"
 	"github.com/croessner/dkim2/cmd/dkim2d/internal/datasourceadmin"
+	"github.com/croessner/dkim2/provider"
 )
 
 // ResolverPathClass identifies the actual operational recursive lookup boundary.
@@ -43,6 +44,43 @@ type DNSProofEngine struct {
 	clock   func() time.Time
 	factory dnsProviderFactory
 }
+
+// DNSProofInput owns one canonical public DKIM DNS expectation for an offline
+// batch proof. It cannot be formatted or serialized as a DNS record.
+type DNSProofInput struct {
+	domain, selector string
+	algorithm        provider.Algorithm
+	publicSPKI       []byte
+}
+
+// NewDNSProofInput validates and copies one exact public-key DNS expectation.
+func NewDNSProofInput(ctx context.Context, domain, selector string, algorithm provider.Algorithm, publicSPKI []byte) (DNSProofInput, error) {
+	if err := ValidateCanonicalDNSRecord(ctx, domain, selector, algorithm, publicSPKI); err != nil {
+		return DNSProofInput{}, err
+	}
+	return DNSProofInput{domain: domain, selector: selector, algorithm: algorithm, publicSPKI: append([]byte(nil), publicSPKI...)}, nil
+}
+
+// Close erases the detached proof input after one bounded proof attempt.
+func (i *DNSProofInput) Close() error {
+	if i != nil {
+		clear(i.publicSPKI)
+		*i = DNSProofInput{}
+	}
+	return nil
+}
+
+// String prevents canonical DNS record material from entering generic output.
+func (DNSProofInput) String() string { return redacted }
+
+// GoString prevents canonical DNS record material from entering generic output.
+func (DNSProofInput) GoString() string { return redacted }
+
+// Format prevents canonical DNS record material from entering generic output.
+func (DNSProofInput) Format(state fmt.State, _ rune) { _, _ = io.WriteString(state, redacted) }
+
+// MarshalJSON rejects persistence or generic export of a proof input.
+func (DNSProofInput) MarshalJSON() ([]byte, error) { return nil, newError(CodeProtectedInput) }
 
 // NewDNSProofEngine constructs the production recursive resolver-path proof owner.
 func NewDNSProofEngine(limits Limits) (*DNSProofEngine, error) {
@@ -143,6 +181,72 @@ func (e *DNSProofEngine) Prove(ctx context.Context, set *StagedDNSSet) (*DNSProo
 		plan: plan, staged: staged, completed: completed, expires: expires, path: path,
 		cacheResponsibility: DNSCacheOperatorManaged, recordCount: uint32(len(records)),
 	}, nil
+}
+
+// ProveCanonicalBatch proves exact public records through the same fresh
+// resolver, transport, parser, and SPKI comparison owner as onboarding. It
+// returns only a bounded completion timestamp; it does not mint an activation
+// capability because campaign evidence is journal-bound instead.
+func (e *DNSProofEngine) ProveCanonicalBatch(ctx context.Context, policy datasourceadmin.DNSPolicy, inputs []DNSProofInput) (time.Time, error) {
+	if e == nil || ctx == nil || ctx.Err() != nil || e.factory == nil || e.clock == nil || e.limits.Validate() != nil || datasourceadmin.ValidateDNSPolicy(policy) != nil || len(inputs) == 0 || len(inputs) > int(e.limits.MaxDNSRecords) {
+		return time.Time{}, newError(CodeUnavailable)
+	}
+	records := make([]DNSProofInput, len(inputs))
+	for index := range inputs {
+		if err := ValidateCanonicalDNSRecord(ctx, inputs[index].domain, inputs[index].selector, inputs[index].algorithm, inputs[index].publicSPKI); err != nil {
+			clearProofInputs(records)
+			return time.Time{}, newError(CodeDNSInvalid)
+		}
+		records[index] = DNSProofInput{domain: inputs[index].domain, selector: inputs[index].selector, algorithm: inputs[index].algorithm, publicSPKI: append([]byte(nil), inputs[index].publicSPKI...)}
+	}
+	defer clearProofInputs(records)
+	bounded, cancel := context.WithTimeout(ctx, e.limits.BackendDeadline)
+	defer cancel()
+	providerValue, err := e.factory(bounded, policy)
+	if err != nil || providerValue == nil {
+		return time.Time{}, newError(CodeUnavailable)
+	}
+	for _, record := range records {
+		if bounded.Err() != nil {
+			return time.Time{}, newError(CodeUnavailable)
+		}
+		query, queryErr := dkim2.NewPublicKeyQuery(record.domain, record.selector, dkim2Algorithm(record.algorithm))
+		if queryErr != nil {
+			return time.Time{}, newError(CodeDNSInvalid)
+		}
+		result, lookupErr := providerValue.LookupPublicKey(bounded, query)
+		if lookupErr != nil {
+			return time.Time{}, newError(CodeUnavailable)
+		}
+		if result.Status() != dkim2.PublicKeyStatusFound {
+			return time.Time{}, dnsStatusError(result.Status())
+		}
+		if result.Algorithm() != query.Algorithm() {
+			return time.Time{}, newError(CodeDNSAlgorithmMismatch)
+		}
+		actualSPKI, spkiErr := resultSPKI(result)
+		if spkiErr != nil {
+			return time.Time{}, spkiErr
+		}
+		matched := bytes.Equal(actualSPKI, record.publicSPKI)
+		clear(actualSPKI)
+		if !matched {
+			return time.Time{}, newError(CodeDNSSPKIMismatch)
+		}
+	}
+	completed := e.clock().UTC().Truncate(time.Second)
+	if completed.Unix() <= 0 || bounded.Err() != nil {
+		return time.Time{}, newError(CodeUnavailable)
+	}
+	return completed, nil
+}
+
+// clearProofInputs erases all public-key buffers owned by a temporary batch.
+func clearProofInputs(inputs []DNSProofInput) {
+	for index := range inputs {
+		_ = inputs[index].Close()
+	}
+	clear(inputs)
 }
 
 // dnsStatusError maps the full public resolver result matrix to bounded proof failures.

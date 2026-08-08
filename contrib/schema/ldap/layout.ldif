@@ -12,3 +12,7 @@ dkim2AdminRevision: 1
 dn: ou=generations,ou=dkim2,dc=example,dc=test
 objectClass: organizationalUnit
 ou: generations
+
+dn: ou=campaign-terminals,ou=dkim2,dc=example,dc=test
+objectClass: organizationalUnit
+ou: campaign-terminals

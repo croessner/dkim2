@@ -479,8 +479,13 @@ check-protected-platforms:
 		GOCACHE="$$output/cache" CGO_ENABLED=0 go test -run '^TestDarwinNoCGOProtectedLoadingFailsClosed$$' ./cmd/dkim2-milter/internal/securefile; \
 	fi
 
+.PHONY: check-admin-contract
+check-admin-contract:
+	@GOCACHE="$${GOCACHE:-/tmp/dkim2-go-build-cache}" \
+		go -C lib test -count=1 ./admincontract
+
 .PHONY: check-conformance
-check-conformance: check-external-vectors
+check-conformance: check-external-vectors check-admin-contract
 	@GOCACHE="$${GOCACHE:-/tmp/dkim2-go-build-cache}" \
 		go -C tools run ./cmd/conformance -root .. check
 

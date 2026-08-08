@@ -133,6 +133,12 @@ objectClass: simpleSecurityObject
 cn: dkim2-publisher
 userPassword: synthetic-role-password
 
+dn: cn=dkim2-purger,ou=services,dc=example,dc=test
+objectClass: organizationalRole
+objectClass: simpleSecurityObject
+cn: dkim2-purger
+userPassword: synthetic-role-password
+
 dn: ou=dkim2,dc=example,dc=test
 objectClass: organizationalUnit
 objectClass: dkim2AdministrationLock
@@ -411,6 +417,22 @@ require_failure_code 'stale current assertion' 'Assertion Failed|result: 122' \
 	-D 'cn=dkim2-snapshot,ou=services,dc=example,dc=test' -w synthetic-role-password \
 	-LLL -b 'cn=current,ou=dkim2,dc=example,dc=test' -s base '(objectClass=dkim2Dataset)' \
 	dkim2Generation 2>/dev/null | grep -q '^dkim2Generation: 2$'
+
+# Direct purger-bind abuse proof: it cannot touch current or unrelated entries,
+# while an explicit interrupted noncurrent v3 tree is safely completed leaf-first.
+require_denied 'purger current generation delete' \
+	"$ldapdelete_bin" -x -H "$uri" -D 'cn=dkim2-purger,ou=services,dc=example,dc=test' \
+	-w synthetic-role-password 'dkim2Generation=2,ou=generations,ou=dkim2,dc=example,dc=test'
+require_denied 'purger unrelated service delete' \
+	"$ldapdelete_bin" -x -H "$uri" -D 'cn=dkim2-purger,ou=services,dc=example,dc=test' \
+	-w synthetic-role-password 'cn=dkim2-runtime,ou=services,dc=example,dc=test'
+role purger "$ldapdelete_bin" 'cn=record-1,ou=handles,dkim2Generation=1,ou=generations,ou=dkim2,dc=example,dc=test' >/dev/null
+role purger "$ldapdelete_bin" 'cn=record-1,ou=key-material,dkim2Generation=1,ou=generations,ou=dkim2,dc=example,dc=test' >/dev/null
+role purger "$ldapdelete_bin" 'ou=handles,dkim2Generation=1,ou=generations,ou=dkim2,dc=example,dc=test' >/dev/null
+role purger "$ldapdelete_bin" 'ou=key-material,dkim2Generation=1,ou=generations,ou=dkim2,dc=example,dc=test' >/dev/null
+role purger "$ldapdelete_bin" 'dkim2Generation=1,ou=generations,ou=dkim2,dc=example,dc=test' >/dev/null
+require_failure_code 'purger root absence after leaf-first reconciliation' 'No such object|result: 32' \
+	role purger "$ldapsearch_bin" -LLL -b 'dkim2Generation=1,ou=generations,ou=dkim2,dc=example,dc=test' -s base '(objectClass=*)' 1.1
 
 cat >"$work/generation-3-v2.ldif" <<'EOF'
 dn: dkim2Generation=3,ou=generations,ou=dkim2,dc=example,dc=test

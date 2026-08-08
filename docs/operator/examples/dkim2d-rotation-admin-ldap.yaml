@@ -1,0 +1,24 @@
+version: dkim2-rotation-admin-v1
+authority_id: aaaaaaaaaaaaaaaaaaaaaaaaae
+backend: ldap
+deadline: 30s
+limits:
+  max_work_items: 32768
+  max_dns_batch_records: 256
+  max_dns_batches: 1024
+roles:
+  snapshot:
+    name: snapshot
+    secret_file: /path/to/snapshot.secret
+  staging:
+    name: staging
+    secret_file: /path/to/staging.secret
+  activation:
+    name: activation
+    secret_file: /path/to/activation.secret
+  purge:
+    name: purge
+    secret_file: /path/to/purge.secret
+  closer:
+    name: closer
+    secret_file: /path/to/closer.secret

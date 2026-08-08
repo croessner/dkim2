@@ -19,6 +19,7 @@ type MetadataRow struct {
 	DatasetState    string
 	OperationID     *string
 	CandidateDigest []byte
+	SourceGeneration string
 	PointerDigest   []byte
 	WasActive       bool
 }
@@ -338,7 +339,13 @@ func verifyProtectedGeneration(rows DatasetRows, generation uint64) error {
 		context.Background(),
 		func(operation string) error {
 			var candidateErr error
+		if rows.Current.SourceGeneration != "" {
+			source, sourceErr := parseGeneration(rows.Current.SourceGeneration)
+			if sourceErr != nil { return sourceErr }
+			candidate, candidateErr = datasourceadmin.NewCampaignPublicationEnvelope(operation, source, content)
+		} else {
 			candidate, candidateErr = datasourceadmin.NewPublicationEnvelope(operation, content)
+		}
 			return candidateErr
 		},
 	)
