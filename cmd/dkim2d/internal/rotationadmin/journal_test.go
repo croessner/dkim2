@@ -65,6 +65,46 @@ func TestJournalRequiresDeterministicCompleteFreshDNSProgress(t *testing.T) {
 	}
 }
 
+// TestJournalLegacyActivatingWithoutTimestampRequiresReconciliation preserves
+// the v1 read contract without granting legacy crash journals retry authority.
+func TestJournalLegacyActivatingWithoutTimestampRequiresReconciliation(t *testing.T) {
+	plan, prepared := preparedCampaign(t, 1)
+	defer plan.Close()     //nolint:errcheck
+	defer prepared.Close() //nolint:errcheck
+	journal, _ := NewJournal(plan)
+	_ = journal.BeginPreparing()
+	_ = journal.RecordPrepared(prepared)
+	_ = journal.RecordStaged(mustCandidateDigest(t, prepared))
+	now := time.Unix(2_000_000_000, 0).UTC()
+	batches, _ := BuildDNSBatches(t.Context(), prepared, DefaultLimits().MaxDNSBatchRecords, DefaultLimits())
+	for _, batch := range batches {
+		_ = journal.RecordBatchProof(batch, now, "dns-v1")
+	}
+	if journal.BeginActivation(now, time.Minute) != nil {
+		t.Fatal("activation fixture rejected")
+	}
+	document, err := encodeJournal(journal, 1)
+	if err != nil {
+		t.Fatal("journal encode rejected")
+	}
+	marker := []byte(`,"activation_unix":`)
+	start := bytes.Index(document, marker)
+	end := -1
+	if start >= 0 {
+		if relative := bytes.IndexByte(document[start+len(marker):], ','); relative >= 0 {
+			end = start + len(marker) + relative
+		}
+	}
+	if start < 0 || end < 0 {
+		t.Fatal("activation timestamp wire field missing")
+	}
+	legacy := append(append([]byte(nil), document[:start]...), document[end:]...)
+	decoded, decodeErr := decodeJournal(legacy)
+	if decodeErr != nil || decoded == nil || decoded.State() != StateReconcileRequired || decoded.failureClass != "legacy_activation_timestamp" {
+		t.Fatal("legacy activating journal was rejected or gained retry authority")
+	}
+}
+
 // TestJournalProtectedStoreRoundTripAndConflict freezes resume and mutual exclusion.
 func TestJournalProtectedStoreRoundTripAndConflict(t *testing.T) {
 	plan, prepared := preparedCampaign(t, 1)

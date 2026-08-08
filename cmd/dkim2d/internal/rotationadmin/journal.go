@@ -490,6 +490,12 @@ func decodeJournal(document []byte) (*Journal, error) {
 	if decoder.Decode(&wire) != nil || decoder.Decode(&struct{}{}) != io.EOF || wire.Version != journalVersion || wire.Revision == 0 || !admincontract.ValidState(wire.State) {
 		return nil, errInvalid
 	}
+	// Legacy v1 activating journals predate the write-ahead terminal timestamp.
+	// They remain observable but never gain automatic retry authority.
+	if wire.State == StateActivating && wire.ActivationUnix == 0 {
+		wire.State = StateReconcileRequired
+		wire.FailureClass = "legacy_activation_timestamp"
+	}
 	if _, err := datasourceadmin.NewOperationBinding(wire.Operation); err != nil {
 		return nil, errInvalid
 	}
@@ -539,7 +545,7 @@ func validateDecodedJournal(journal *Journal) error { //nolint:gocyclo // Protec
 	if journal.mode == admincontract.ModeNormal && journal.emergencyReason != "" || journal.mode == admincontract.ModeEmergency && journal.emergencyReason == "" {
 		return errInvalid
 	}
-	if (journal.state == StateActivating || journal.state == StateActivated) && journal.activationUnix <= 0 ||
+	if journal.state == StateActivating && journal.activationUnix <= 0 ||
 		journal.state != StateActivating && journal.state != StateActivated && journal.state != StateReconcileRequired && journal.activationUnix != 0 {
 		return errInvalid
 	}
