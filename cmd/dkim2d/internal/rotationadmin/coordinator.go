@@ -11,7 +11,7 @@ import (
 	"github.com/croessner/dkim2/cmd/dkim2d/internal/datasourceadmin"
 )
 
-// Published owns exact backend evidence for one immutable committed noncurrent candidate.
+// Published owns exact backend evidence for one immutable committed candidate.
 type Published struct {
 	mu              sync.Mutex
 	lock            datasourceadmin.AdministrationLock
@@ -20,6 +20,7 @@ type Published struct {
 	candidate       uint64
 	prepared        datasourceadmin.PreparedEvidence
 	staged          datasourceadmin.StagedEvidence
+	currentMoved    bool
 	closed          bool
 }
 
@@ -103,9 +104,11 @@ func Activate(
 	if err != nil {
 		return errConflict
 	}
-	if err := backend.Activate(ctx, activation); err != nil {
-		requireBackendReconciliation(journal, "activation_outcome")
-		return errBackend
+	if !published.currentMoved {
+		if err := backend.Activate(ctx, activation); err != nil {
+			requireBackendReconciliation(journal, "activation_outcome")
+			return errBackend
+		}
 	}
 	observation, err := backend.Observe(
 		ctx, published.operation, published.candidate, published.expectedCurrent, limits,
@@ -130,8 +133,8 @@ func Activate(
 	return nil
 }
 
-// terminalRecordForActivation derives immutable closure evidence only after
-// authoritative candidate-current readback and before journal success is saved.
+// terminalRecordForActivation derives immutable closure evidence only while
+// Activate holds the published lock after authoritative current readback.
 func terminalRecordForActivation(journal *Journal, published *Published, when time.Time) (datasourceadmin.TerminalRecord, error) {
 	if journal == nil || published == nil || when.IsZero() || when.Location() != time.UTC {
 		return datasourceadmin.TerminalRecord{}, errInvalid
@@ -139,9 +142,7 @@ func terminalRecordForActivation(journal *Journal, published *Published, when ti
 	journal.mu.Lock()
 	schema, source, candidate := journal.sourceSchema, journal.sourceGeneration, journal.candidateGeneration
 	journal.mu.Unlock()
-	published.mu.Lock()
 	operation, current, digest := published.operation, published.candidate, published.staged.Digest()
-	published.mu.Unlock()
 	return datasourceadmin.NewTerminalRecord(operation, datasourceadmin.SchemaVersionV3, schema, source, candidate, current, digest, datasourceadmin.TerminalClosed, "activated", when)
 }
 
@@ -163,7 +164,7 @@ func RehydratePublished(ctx context.Context, journal *Journal, backend datasourc
 		return nil, errConflict
 	}
 	envelope, info, err := backend.Inspect(ctx, operation, candidate, expected, limits)
-	if err != nil || envelope == nil || info.Generation != candidate || info.Current || info.State != datasourceadmin.StateCommitted || !info.Operation.Equal(operation) {
+	if err != nil || envelope == nil || info.Generation != candidate || info.State != datasourceadmin.StateCommitted || !info.Operation.Equal(operation) {
 		return nil, errBackend
 	}
 	actualBytes := envelope.Digest().Bytes()
@@ -176,7 +177,7 @@ func RehydratePublished(ctx context.Context, journal *Journal, backend datasourc
 	prepared := envelope.PreparedEvidence()
 	staged := datasourceadmin.NewStagedEvidence(envelope.Digest())
 	_ = envelope.Close()
-	return &Published{lock: lock, operation: operation, expectedCurrent: expected, candidate: candidate, prepared: prepared, staged: staged}, nil
+	return &Published{lock: lock, operation: operation, expectedCurrent: expected, candidate: candidate, prepared: prepared, staged: staged, currentMoved: info.Current}, nil
 }
 
 // Close erases protected backend evidence.
@@ -190,6 +191,7 @@ func (p *Published) Close() error {
 	p.operation = datasourceadmin.OperationBinding{}
 	p.prepared = datasourceadmin.PreparedEvidence{}
 	p.staged = datasourceadmin.StagedEvidence{}
+	p.currentMoved = false
 	p.closed = true
 	return nil
 }

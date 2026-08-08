@@ -124,6 +124,13 @@ func TestOperatorLDAPBundleMatchesNativeCustody(t *testing.T) {
 		strings.Contains(acl, `cn=dkim2-stager,ou=services,dc=example,dc=test" write`) {
 		t.Fatal("LDAP publisher ACL uses a broad write level")
 	}
+	currentObjectClass := strings.Index(acl, "attrs=objectClass")
+	passwordRule := strings.Index(acl, "attrs=userPassword")
+	if currentObjectClass < 0 || passwordRule < 0 || currentObjectClass > passwordRule ||
+		!strings.Contains(acl[currentObjectClass:passwordRule], `cn=dkim2-activator,ou=services,dc=example,dc=test" =dcsraz`) ||
+		strings.Contains(acl[currentObjectClass:passwordRule], `cn=dkim2-publisher,ou=services,dc=example,dc=test" =dcsraz`) {
+		t.Fatal("LDAP v2-to-v3 current objectClass ACL is missing or ordered after broader rules")
+	}
 	for _, required := range []string{
 		`access to dn.exact="ou=generations,ou=dkim2,dc=example,dc=test"`,
 		"attrs=children",

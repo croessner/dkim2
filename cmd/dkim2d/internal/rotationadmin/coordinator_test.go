@@ -20,6 +20,7 @@ type publicationBackendFake struct {
 	current       uint64
 	stageCalls    int
 	activateCalls int
+	terminalCalls int
 	failStage     bool
 }
 
@@ -124,7 +125,7 @@ func (b *publicationBackendFake) Inspect(ctx context.Context, operation datasour
 	if err != nil {
 		return nil, datasourceadmin.GenerationInfo{}, err
 	}
-	return clone, datasourceadmin.GenerationInfo{Generation: generation, State: datasourceadmin.StateCommitted, Operation: operation}, nil
+	return clone, datasourceadmin.GenerationInfo{Generation: generation, Current: b.current == generation, State: datasourceadmin.StateCommitted, Operation: operation}, nil
 }
 
 // Observe returns exact candidate-current state after activation.
@@ -143,6 +144,20 @@ func (b *publicationBackendFake) Activate(_ context.Context, activation datasour
 	}
 	b.current = activation.CandidateGeneration()
 	return nil
+}
+
+// RecordTerminal records one immutable close receipt after current readback.
+func (b *publicationBackendFake) RecordTerminal(_ context.Context, record datasourceadmin.TerminalRecord) error {
+	if !record.Valid() || record.CurrentGeneration() != b.current {
+		return errConflict
+	}
+	b.terminalCalls++
+	return nil
+}
+
+// ReadTerminal is unused by campaign activation tests.
+func (*publicationBackendFake) ReadTerminal(context.Context, datasourceadmin.OperationBinding) (datasourceadmin.TerminalRecord, bool, error) {
+	return datasourceadmin.TerminalRecord{}, false, nil
 }
 
 // Close erases the fake backend candidate.
@@ -282,6 +297,56 @@ func TestCoordinatorResumeReclaimsFenceBeforeProof(t *testing.T) {
 	}
 	if _, err := coordinator.Run(t.Context(), store, plan.intent); err == nil || backend.stageCalls != 1 || backend.activateCalls != 1 {
 		t.Fatal("activated journal permitted duplicate publication or activation")
+	}
+}
+
+// TestCoordinatorResumeAfterCurrentMoveClosesWithoutSecondActivation proves a
+// crash after authoritative current movement resumes with exact readback and
+// terminal closure, never a second pointer mutation.
+func TestCoordinatorResumeAfterCurrentMoveClosesWithoutSecondActivation(t *testing.T) {
+	plan, prepared := preparedCampaign(t, 2)
+	defer plan.Close()     //nolint:errcheck
+	defer prepared.Close() //nolint:errcheck
+	journal, _ := NewJournal(plan)
+	_ = journal.BeginPreparing()
+	_ = journal.RecordPrepared(prepared)
+	backend := &publicationBackendFake{current: 7}
+	defer backend.Close() //nolint:errcheck
+	lock, _ := datasourceadmin.NewAdministrationLock(plan.intent.operation, 7)
+	published, err := Publish(t.Context(), plan, prepared, journal, backend, lock, campaignGenerationLimits())
+	if err != nil {
+		t.Fatal("stage fixture rejected")
+	}
+	_ = published.Close()
+	batches, _ := BuildDNSBatches(t.Context(), prepared, 2, DefaultLimits())
+	now := time.Now().UTC()
+	for _, batch := range batches {
+		if journal.RecordBatchProof(batch, now, "dns-v1") != nil {
+			t.Fatal("proof fixture rejected")
+		}
+	}
+	if journal.BeginActivation(now, time.Minute) != nil {
+		t.Fatal("activation checkpoint rejected")
+	}
+	backend.current = plan.candidateGeneration
+	directory, directoryErr := filepath.EvalSymlinks(t.TempDir())
+	if directoryErr != nil || os.Chmod(directory, 0o700) != nil {
+		t.Fatal("protect journal directory")
+	}
+	store, storeErr := OpenJournalStore(t.Context(), filepath.Join(directory, "campaign.json"))
+	if storeErr != nil {
+		t.Fatal("open journal fixture")
+	}
+	if _, exists, loadErr := store.Load(t.Context()); loadErr != nil || exists || store.Save(t.Context(), journal) != nil {
+		t.Fatal("persist activating journal")
+	}
+	coordinator, coordinatorErr := NewCoordinator(backend, backend, &resumeLockerFake{}, &deterministicKeyFactory{}, &resumeProofFake{now: now}, DefaultLimits(), campaignGenerationLimits(), time.Minute)
+	if coordinatorErr != nil {
+		t.Fatal("resume coordinator rejected")
+	}
+	report, runErr := coordinator.Run(t.Context(), store, plan.intent)
+	if runErr != nil || report.State != StateActivated || backend.activateCalls != 0 || backend.terminalCalls != 1 {
+		t.Fatal("post-current resume repeated activation or missed terminal closure")
 	}
 }
 

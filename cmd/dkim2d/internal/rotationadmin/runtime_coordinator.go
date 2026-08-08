@@ -251,13 +251,14 @@ func (c *Coordinator) verifyExpectedCurrent(ctx context.Context, journal *Journa
 		return errInvalid
 	}
 	journal.mu.Lock()
-	expected, closed := journal.sourceGeneration, journal.closed
+	expected, candidate, state, closed := journal.sourceGeneration, journal.candidateGeneration, journal.state, journal.closed
 	journal.mu.Unlock()
 	if closed || expected == 0 {
 		return errConflict
 	}
 	current, err := c.publisher.Current(ctx, c.generations)
-	if err != nil || !current.Current || current.State != datasourceadmin.StateCommitted || current.Generation != expected {
+	if err != nil || !current.Current || current.State != datasourceadmin.StateCommitted ||
+		(current.Generation != expected && (state != StateActivating || current.Generation != candidate)) {
 		return errConflict
 	}
 	return nil
