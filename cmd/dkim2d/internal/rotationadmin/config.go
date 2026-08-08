@@ -19,6 +19,7 @@ import (
 
 const (
 	rotationConfigVersion       = "dkim2-rotation-admin-v1"
+	maxTrustBundleBytes         = 262_144
 	backendLDAP                 = "ldap"
 	profileStatusActive         = "active"
 	bindingUseOriginator        = "originator"
@@ -289,7 +290,7 @@ func (c *Config) Authority(identities [4]string) (datasourceadmin.BackendClass, 
 
 // authorityTrust derives exact certificate fingerprints rather than accepting a path as authority evidence.
 func authorityTrust(path string) ([][sha256.Size]byte, error) {
-	document, err := config.ReadProtectedDocument(path, 1<<20)
+	document, err := config.ReadProtectedDocument(path, maxTrustBundleBytes)
 	if err != nil {
 		return nil, errInvalid
 	}
@@ -380,7 +381,7 @@ func LoadTrustRoots(path string) (*x509.CertPool, error) { return loadRoots(path
 
 // loadRoots accepts only a protected nonempty CA PEM bundle.
 func loadRoots(path string) (*x509.CertPool, error) {
-	document, err := config.ReadProtectedDocument(path, 1<<20)
+	document, err := config.ReadProtectedDocument(path, maxTrustBundleBytes)
 	if err != nil || len(document) == 0 {
 		clear(document)
 		return nil, errInvalid

@@ -1,10 +1,17 @@
 package rotationadmin
 
 import (
+	"crypto/ed25519"
+	"crypto/rand"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/pem"
+	"math/big"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // TestLoadConfigRequiresFiveDistinctProtectedRoles freezes the purge and closer authority boundaries.
@@ -53,6 +60,53 @@ func TestLoadConfigRequiresFiveDistinctProtectedRoles(t *testing.T) {
 	if duplicate, duplicateErr := LoadConfig(configPath); duplicateErr == nil || duplicate != nil {
 		t.Fatal("duplicate authority role accepted")
 	}
+}
+
+// TestLoadConfigAcceptsProtectedTLSBundle proves the configured CA read stays
+// within the central protected-document ceiling used by production runtimes.
+func TestLoadConfigAcceptsProtectedTLSBundle(t *testing.T) {
+	directory, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil || os.Chmod(directory, 0700) != nil {
+		t.Fatal("protect test directory")
+	}
+	secretPaths := make([]string, 5)
+	for index := range secretPaths {
+		secretPaths[index] = filepath.Join(directory, "role-"+string(rune('a'+index)))
+		if err := os.WriteFile(secretPaths[index], []byte("secret"), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	caPath := filepath.Join(directory, "ca.pem")
+	if err := os.WriteFile(caPath, testCAPEM(t), 0600); err != nil {
+		t.Fatal(err)
+	}
+	configPath := filepath.Join(directory, "rotation.yaml")
+	document := "version: dkim2-rotation-admin-v1\nauthority_id: aaaaaaaaaaaaaaaaaaaaaaaaae\nbackend: ldap\ndeadline: 30s\nlimits:\n  max_work_items: 16\n  max_dns_batch_records: 4\n  max_dns_batches: 4\nroles:\n  snapshot:\n    name: snapshot\n    secret_file: " + secretPaths[0] + "\n  staging:\n    name: staging\n    secret_file: " + secretPaths[1] + "\n  activation:\n    name: activation\n    secret_file: " + secretPaths[2] + "\n  purge:\n    name: purge\n    secret_file: " + secretPaths[3] + "\n  closer:\n    name: closer\n    secret_file: " + secretPaths[4] + "\ntransport:\n  ldap:\n    address: 127.0.0.1:636\n    server_name: ldap.example.test\n    base_dn: dc=example,dc=test\n    ca_file: " + caPath + "\n    starttls: false\n"
+	if err := os.WriteFile(configPath, []byte(document), 0600); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := LoadConfig(configPath)
+	if err != nil {
+		t.Fatal("protected TLS bundle rejected")
+	}
+	defer loaded.Close() //nolint:errcheck // Test cleanup cannot affect the assertion.
+	if _, err := LoadTrustRoots(caPath); err != nil {
+		t.Fatal("runtime trust-root read rejected")
+	}
+}
+
+func testCAPEM(t *testing.T) []byte {
+	t.Helper()
+	public, private, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	template := &x509.Certificate{SerialNumber: big.NewInt(1), Subject: pkix.Name{CommonName: "test root"}, NotBefore: time.Now().Add(-time.Hour), NotAfter: time.Now().Add(time.Hour), IsCA: true, BasicConstraintsValid: true, KeyUsage: x509.KeyUsageCertSign}
+	encoded, err := x509.CreateCertificate(rand.Reader, template, template, public, private)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: encoded})
 }
 
 // TestEncodeCommandReportRejectsIdentityMarkers freezes report privacy and stable output shape.
