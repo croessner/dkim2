@@ -29,12 +29,16 @@ func TestPurgePlanArtifactRoundTripRejectsTampering(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if fence, verifyErr := apply.VerifyReadback(datasourceadmin.BackendLDAP, authority, inventory); verifyErr != nil || !fence.Ready() {
+	if fence, verifyErr := apply.VerifyReadback(datasourceadmin.BackendLDAP, authority, purgeExecutionPolicy(), inventory); verifyErr != nil || !fence.Ready() {
 		t.Fatal("recovered artifact did not retain fresh-readback fence")
 	}
 	tampered := bytes.Replace(document, []byte(`"current":2`), []byte(`"current":3`), 1)
 	if _, err := ParsePurgePlanArtifact(tampered); err == nil {
 		t.Fatal("tampered artifact accepted")
+	}
+	tampered = bytes.Replace(document, []byte(`"policy_commitment":"`), []byte(`"policy_commitment":"0`), 1)
+	if _, err := ParsePurgePlanArtifact(tampered); err == nil {
+		t.Fatal("tampered policy commitment accepted")
 	}
 	if _, err := ParsePurgePlanArtifact(append(document, '\n')); err == nil {
 		t.Fatal("noncanonical artifact accepted")

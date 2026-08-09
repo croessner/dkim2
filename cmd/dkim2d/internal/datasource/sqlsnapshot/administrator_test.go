@@ -810,6 +810,19 @@ func TestMapDatasetV3RequiresExactPointerDigestAndPrivateReadback(t *testing.T) 
 	}
 }
 
+// TestRecoveryGenerationLimitsRejectsExhaustedBudgetBeforeRead proves a
+// metadata-near-exhausted recovery call cannot start another full snapshot.
+func TestRecoveryGenerationLimitsRejectsExhaustedBudgetBeforeRead(t *testing.T) {
+	base := testGenerationLimits()
+	limited, ok := recoveryGenerationLimits(base, retentionReadBudget{remaining: 1})
+	if !ok || limited.MaxSnapshotBytes != 1 {
+		t.Fatal("one remaining byte was not passed as the pre-read snapshot limit")
+	}
+	if _, ok := recoveryGenerationLimits(base, retentionReadBudget{}); ok {
+		t.Fatal("exhausted recovery budget started another generation read")
+	}
+}
+
 // TestAdministratorRejectsAliasedAuthoritiesAndOutstandingCeiling proves
 // construction-time role separation and bounded inactive-candidate allocation.
 func TestAdministratorRejectsAliasedAuthoritiesAndOutstandingCeiling(t *testing.T) {

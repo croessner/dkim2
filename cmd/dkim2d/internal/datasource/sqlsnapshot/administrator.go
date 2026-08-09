@@ -312,50 +312,81 @@ func (a *Administrator) Inventory(
 }
 
 // RetentionRecoveryInventory reads and verifies complete historical evidence without allocation ceilings.
-func (a *Administrator) RetentionRecoveryInventory(ctx context.Context) (datasourceadmin.RetentionInventory, error) {
-	if a == nil || ctx == nil || ctx.Err() != nil {
+func (a *Administrator) RetentionRecoveryInventory(ctx context.Context, limits datasourceadmin.RetentionRecoveryLimits) (datasourceadmin.RetentionInventory, error) {
+	if a == nil || ctx == nil || ctx.Err() != nil || limits.Validate() != nil {
 		return datasourceadmin.RetentionInventory{}, datasourceadmin.NewError(datasourceadmin.CodeInvalid)
 	}
 	current, present, err := a.readRetentionCurrent(ctx)
 	if err != nil || !present || validateCurrentRetentionMetadata(current) != nil {
 		return datasourceadmin.RetentionInventory{}, datasourceadmin.NewError(datasourceadmin.CodeConflict)
 	}
+	budget := retentionReadBudget{remaining: uint64(limits.MaxReadBytes)}
+	if !budget.consume(metadataRowBytes(current)) {
+		return datasourceadmin.RetentionInventory{}, datasourceadmin.NewError(datasourceadmin.CodeLimitExceeded)
+	}
 	currentGeneration, err := parseGeneration(current.Generation)
 	if err != nil {
 		return datasourceadmin.RetentionInventory{}, datasourceadmin.NewError(datasourceadmin.CodeConflict)
 	}
+	rows, rowsErr := a.readRetentionRows(ctx, current, limits, &budget)
+	if rowsErr != nil {
+		return datasourceadmin.RetentionInventory{}, rowsErr
+	}
+	final, finalPresent, finalErr := a.readRetentionCurrent(ctx)
+	if finalErr != nil || !finalPresent || !metadataEqual(current, final) {
+		return datasourceadmin.RetentionInventory{}, datasourceadmin.NewError(datasourceadmin.CodeConflict)
+	}
+	if !budget.consume(metadataRowBytes(final)) {
+		return datasourceadmin.RetentionInventory{}, datasourceadmin.NewError(datasourceadmin.CodeLimitExceeded)
+	}
+	return datasourceadmin.RetentionInventory{Version: "sqlsnapshot-recovery-v1", Current: currentGeneration, Generations: rows}, nil
+}
+
+// readRetentionRows verifies every paged SQL generation under one shared budget.
+func (a *Administrator) readRetentionRows(ctx context.Context, current MetadataRow, limits datasourceadmin.RetentionRecoveryLimits, budget *retentionReadBudget) ([]datasourceadmin.RetentionGeneration, error) {
 	rows := make([]datasourceadmin.RetentionGeneration, 0)
 	cursor := ""
 	for {
-		page, pageErr := a.readRetentionGenerationPage(ctx, cursor)
+		page, pageErr := a.readRetentionGenerationPage(ctx, cursor, limits.PageSize)
 		if pageErr != nil {
-			return datasourceadmin.RetentionInventory{}, datasourceadmin.NewError(datasourceadmin.CodeUnavailable)
+			return nil, datasourceadmin.NewError(datasourceadmin.CodeUnavailable)
 		}
 		if len(page) == 0 {
 			break
 		}
-		if len(page) > 1024 || len(rows)+len(page) > 16384 {
-			return datasourceadmin.RetentionInventory{}, datasourceadmin.NewError(datasourceadmin.CodeLimitExceeded)
+		if len(page) > int(limits.PageSize) || len(rows)+len(page) > int(limits.MaxGenerations) {
+			return nil, datasourceadmin.NewError(datasourceadmin.CodeLimitExceeded)
+		}
+		if !budget.consume(metadataRowsBytes(page)) {
+			return nil, datasourceadmin.NewError(datasourceadmin.CodeLimitExceeded)
 		}
 		for _, metadata := range page {
 			if compareGenerationText(metadata.Generation, cursor) <= 0 {
-				return datasourceadmin.RetentionInventory{}, datasourceadmin.NewError(datasourceadmin.CodeConflict)
+				return nil, datasourceadmin.NewError(datasourceadmin.CodeConflict)
 			}
-			snapshot, verified, readErr := a.readRetentionGeneration(ctx, metadata.Generation)
+			readLimits, allowed := recoveryGenerationLimits(a.generations, *budget)
+			if !allowed {
+				return nil, datasourceadmin.NewError(datasourceadmin.CodeLimitExceeded)
+			}
+			snapshot, verified, readErr := a.readRetentionGeneration(ctx, metadata.Generation, readLimits)
 			if readErr != nil || !metadataEqual(metadata, verified) {
 				_ = snapshot.Close()
-				return datasourceadmin.RetentionInventory{}, datasourceadmin.NewError(datasourceadmin.CodeConflict)
+				return nil, datasourceadmin.NewError(datasourceadmin.CodeConflict)
 			}
+			readBytes, bytesErr := retentionSnapshotBytes(ctx, snapshot)
 			_ = snapshot.Close()
+			if bytesErr != nil || !budget.consume(readBytes) || !budget.consume(metadataRowBytes(verified)) {
+				return nil, datasourceadmin.NewError(datasourceadmin.CodeLimitExceeded)
+			}
 			info, mapErr := generationInfoFromMetadata(verified, verified.Generation == current.Generation)
 			if mapErr != nil {
-				return datasourceadmin.RetentionInventory{}, mapErr
+				return nil, mapErr
 			}
 			row := datasourceadmin.RetentionGeneration{Generation: info.Generation, Operation: info.Operation, SourceGeneration: info.SourceGeneration, Schema: info.Schema, State: info.State, WasActive: info.WasActive, Ownership: datasourceadmin.RetentionOwnershipTrusted}
 			if info.Schema == datasourceadmin.SchemaVersionV3 && info.ContentDigest.Valid() {
 				digest, digestErr := admincontract.ParseDigest(info.ContentDigest.Bytes())
 				if digestErr != nil {
-					return datasourceadmin.RetentionInventory{}, datasourceadmin.NewError(datasourceadmin.CodeConflict)
+					return nil, datasourceadmin.NewError(datasourceadmin.CodeConflict)
 				}
 				row.ContentDigest, row.Complete = digest, true
 			}
@@ -363,11 +394,97 @@ func (a *Administrator) RetentionRecoveryInventory(ctx context.Context) (datasou
 			cursor = metadata.Generation
 		}
 	}
-	final, finalPresent, finalErr := a.readRetentionCurrent(ctx)
-	if finalErr != nil || !finalPresent || !metadataEqual(current, final) {
-		return datasourceadmin.RetentionInventory{}, datasourceadmin.NewError(datasourceadmin.CodeConflict)
+	return rows, nil
+}
+
+// retentionReadBudget bounds all SQL response material in one recovery call.
+type retentionReadBudget struct{ remaining uint64 }
+
+func (b *retentionReadBudget) consume(size uint64) bool {
+	if b == nil || size > b.remaining {
+		return false
 	}
-	return datasourceadmin.RetentionInventory{Version: "sqlsnapshot-recovery-v1", Current: currentGeneration, Generations: rows}, nil
+	b.remaining -= size
+	return true
+}
+
+// recoveryGenerationLimits clips one complete-generation read before it starts.
+func recoveryGenerationLimits(base datasourceadmin.GenerationLimits, budget retentionReadBudget) (datasourceadmin.GenerationLimits, bool) {
+	if budget.remaining == 0 {
+		return datasourceadmin.GenerationLimits{}, false
+	}
+	if uint64(base.MaxSnapshotBytes) > budget.remaining {
+		base.MaxSnapshotBytes = uint32(budget.remaining)
+	}
+	return base, base.Validate() == nil
+}
+
+func metadataRowsBytes(rows []MetadataRow) uint64 {
+	var total uint64
+	for _, row := range rows {
+		total += metadataRowBytes(row)
+	}
+	return total
+}
+
+func metadataRowBytes(row MetadataRow) uint64 {
+	total := uint64(len(row.Generation) + len(row.SchemaVersion) + len(row.DatasetState) + len(row.SourceGeneration) + len(row.CandidateDigest) + len(row.PointerDigest))
+	if row.OperationID != nil {
+		total += uint64(len(*row.OperationID))
+	}
+	return total
+}
+
+// retentionSnapshotBytes accounts complete provider-owned readback bytes
+// without exposing any protected row values outside this package.
+func retentionSnapshotBytes(ctx context.Context, snapshot *datasourceadmin.Snapshot) (uint64, error) {
+	var total uint64
+	err := snapshot.WithRows(ctx, func(rows datasourceadmin.Rows) error {
+		addString := func(value string) { total += uint64(len(value)) }
+		for _, row := range rows.Handles {
+			addString(row.ID)
+		}
+		for _, row := range rows.Profiles {
+			addString(row.ID)
+			addString(row.Domain)
+			addString(row.Status)
+			if row.NotBeforeUTC != nil {
+				addString(*row.NotBeforeUTC)
+			}
+			if row.NotAfterUTC != nil {
+				addString(*row.NotAfterUTC)
+			}
+		}
+		for _, row := range rows.Credentials {
+			addString(row.ProfileID)
+			addString(row.Algorithm)
+			addString(row.Selector)
+			addString(row.HandleID)
+			total += uint64(len(row.PublicSPKI))
+		}
+		for _, row := range rows.Policies {
+			addString(row.TenantID)
+			addString(row.Domain)
+			addString(row.Use)
+			addString(row.ProfileID)
+			addString(row.Status)
+			addString(row.Rollout)
+			addString(row.Compatibility)
+			if row.FeedbackRouteID != nil {
+				addString(*row.FeedbackRouteID)
+			}
+		}
+		for _, row := range rows.KeyMaterial {
+			addString(row.TenantID)
+			addString(row.Domain)
+			addString(row.Use)
+			addString(row.HandleID)
+			addString(row.Algorithm)
+			total += uint64(len(row.PublicSPKI) + len(row.PrivatePKCS8))
+		}
+		return nil
+	})
+	return total, err
 }
 
 // retentionSnapshot executes one short repeatable-read provider interaction.
@@ -408,23 +525,26 @@ func (a *Administrator) readRetentionCurrent(ctx context.Context) (MetadataRow, 
 }
 
 // readRetentionGenerationPage reads one bounded root-metadata page.
-func (a *Administrator) readRetentionGenerationPage(ctx context.Context, after string) ([]MetadataRow, error) {
+func (a *Administrator) readRetentionGenerationPage(ctx context.Context, after string, limit uint32) ([]MetadataRow, error) {
+	if limit == 0 || limit > 1024 {
+		return nil, datasourceadmin.NewError(datasourceadmin.CodeInvalid)
+	}
 	var rows []MetadataRow
 	err := a.retentionSnapshot(ctx, func(call context.Context, tx AdministrationTransaction) error {
 		var readErr error
-		rows, readErr = tx.GenerationPage(call, after, 1024, false)
+		rows, readErr = tx.GenerationPage(call, after, int(limit), false)
 		return readErr
 	})
 	return rows, err
 }
 
 // readRetentionGeneration independently verifies one complete generation.
-func (a *Administrator) readRetentionGeneration(ctx context.Context, generation string) (*datasourceadmin.Snapshot, MetadataRow, error) {
+func (a *Administrator) readRetentionGeneration(ctx context.Context, generation string, limits datasourceadmin.GenerationLimits) (*datasourceadmin.Snapshot, MetadataRow, error) {
 	var snapshot *datasourceadmin.Snapshot
 	var metadata MetadataRow
 	err := a.retentionSnapshot(ctx, func(call context.Context, tx AdministrationTransaction) error {
 		var readErr error
-		snapshot, metadata, readErr = a.readGeneration(call, tx, generation, a.generations)
+		snapshot, metadata, readErr = a.readGeneration(call, tx, generation, limits)
 		return readErr
 	})
 	if err != nil && snapshot != nil {

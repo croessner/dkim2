@@ -23,7 +23,7 @@ type administrationClient interface {
 	Client
 	ReadCurrentOptional(context.Context) (Entry, bool, error)
 	ListGenerationRoots(context.Context, datasourceadmin.GenerationLimits) ([]Entry, error)
-	ListRetentionGenerationRoots(context.Context, datasourceadmin.RetentionRecoveryLimits) ([]Entry, error)
+	ListRetentionGenerationRoots(context.Context, datasourceadmin.RetentionRecoveryLimits, *retentionReadBudget) ([]Entry, error)
 	ReadGenerationRecords(
 		context.Context,
 		uint64,
@@ -46,8 +46,10 @@ type administrationClient interface {
 }
 
 // RetentionRecoveryInventory reads complete historical LDAP evidence without allocation ceilings.
-func (a *Administrator) RetentionRecoveryInventory(ctx context.Context) (datasourceadmin.RetentionInventory, error) {
-	limits := datasourceadmin.DefaultRetentionRecoveryLimits()
+func (a *Administrator) RetentionRecoveryInventory(ctx context.Context, limits datasourceadmin.RetentionRecoveryLimits) (datasourceadmin.RetentionInventory, error) {
+	if limits.Validate() != nil {
+		return datasourceadmin.RetentionInventory{}, datasourceadminError(datasourceadmin.CodeInvalid)
+	}
 	call, cancel, err := retentionLDAPContext(ctx, a.generations.BackendDeadline)
 	if err != nil {
 		return datasourceadmin.RetentionInventory{}, err
@@ -68,6 +70,10 @@ func (a *Administrator) RetentionRecoveryInventory(ctx context.Context) (datasou
 		return datasourceadmin.RetentionInventory{}, datasourceadminError(datasourceadmin.CodeUnavailable)
 	}
 	defer clearEntry(&first)
+	budget := newRetentionReadBudget(limits.MaxReadBytes)
+	if !budget.consume(entryBytes(first)) {
+		return datasourceadmin.RetentionInventory{}, datasourceadminError(datasourceadmin.CodeLimitExceeded)
+	}
 	current, err := mapCurrentMetadata(first)
 	if err != nil {
 		return datasourceadmin.RetentionInventory{}, datasourceadminError(datasourceadmin.CodeConflict)
@@ -76,68 +82,15 @@ func (a *Administrator) RetentionRecoveryInventory(ctx context.Context) (datasou
 	if err != nil {
 		return datasourceadmin.RetentionInventory{}, err
 	}
-	roots, err := client.ListRetentionGenerationRoots(call, limits)
+	roots, err := client.ListRetentionGenerationRoots(call, limits, budget)
 	cancel()
 	if err != nil {
 		return datasourceadmin.RetentionInventory{}, datasourceadminError(datasourceadmin.CodeUnavailable)
 	}
 	defer clearEntries(roots)
-	rows := make([]datasourceadmin.RetentionGeneration, 0, len(roots))
-	bytesRead := 0
-	currentMatches := 0
-	for _, root := range roots {
-		metadata, mapErr := mapInventoryGenerationMetadata(root)
-		if mapErr != nil {
-			return datasourceadmin.RetentionInventory{}, datasourceadminError(datasourceadmin.CodeConflict)
-		}
-		if metadata.schema == datasourceadmin.SchemaVersionV1 {
-			rows = append(rows, datasourceadmin.RetentionGeneration{
-				Generation: metadata.generation, Schema: metadata.schema, State: metadata.state,
-				Ownership: datasourceadmin.RetentionOwnershipUnknown,
-			})
-			continue
-		}
-		call, cancel, contextErr := retentionLDAPContext(ctx, a.generations.BackendDeadline)
-		if contextErr != nil {
-			return datasourceadmin.RetentionInventory{}, contextErr
-		}
-		records, recordPresent, readErr := client.ReadGenerationRecords(call, metadata.generation, a.limits, a.generations)
-		cancel()
-		if readErr != nil || !recordPresent {
-			clearDatasetRecords(&records)
-			return datasourceadmin.RetentionInventory{}, datasourceadminError(datasourceadmin.CodeUnavailable)
-		}
-		readBytes := datasetRecordsDecodedBytes(records)
-		if readBytes > int(limits.MaxReadBytes) || bytesRead > int(limits.MaxReadBytes)-readBytes {
-			clearDatasetRecords(&records)
-			return datasourceadmin.RetentionInventory{}, datasourceadminError(datasourceadmin.CodeLimitExceeded)
-		}
-		bytesRead += readBytes
-		snapshot, verified, verifyErr := snapshotFromRecords(records)
-		clearDatasetRecords(&records)
-		if verifyErr != nil || !metadata.equal(verified) {
-			_ = snapshot.Close()
-			return datasourceadmin.RetentionInventory{}, datasourceadminError(datasourceadmin.CodeConflict)
-		}
-		_ = snapshot.Close()
-		row := datasourceadmin.RetentionGeneration{Generation: verified.generation, Operation: verified.operation, SourceGeneration: verified.sourceGeneration, Schema: verified.schema, State: verified.state, WasActive: verified.wasActive, Ownership: datasourceadmin.RetentionOwnershipTrusted}
-		if verified.schema == datasourceadmin.SchemaVersionV3 && verified.digest.Valid() {
-			digest, digestErr := admincontract.ParseDigest(verified.digest.Bytes())
-			if digestErr != nil {
-				return datasourceadmin.RetentionInventory{}, datasourceadminError(datasourceadmin.CodeConflict)
-			}
-			row.ContentDigest, row.Complete = digest, true
-		}
-		if verified.generation == current.generation {
-			if !current.matchesRoot(verified) {
-				return datasourceadmin.RetentionInventory{}, datasourceadminError(datasourceadmin.CodeConflict)
-			}
-			currentMatches++
-		}
-		rows = append(rows, row)
-	}
-	if currentMatches != 1 {
-		return datasourceadmin.RetentionInventory{}, datasourceadminError(datasourceadmin.CodeConflict)
+	rows, rowsErr := a.readRetentionRows(ctx, client, roots, current, budget)
+	if rowsErr != nil {
+		return datasourceadmin.RetentionInventory{}, rowsErr
 	}
 	call, cancel, err = retentionLDAPContext(ctx, a.generations.BackendDeadline)
 	if err != nil {
@@ -149,11 +102,93 @@ func (a *Administrator) RetentionRecoveryInventory(ctx context.Context) (datasou
 		return datasourceadmin.RetentionInventory{}, datasourceadminError(datasourceadmin.CodeUnavailable)
 	}
 	defer clearEntry(&final)
+	if !budget.consume(entryBytes(final)) {
+		return datasourceadmin.RetentionInventory{}, datasourceadminError(datasourceadmin.CodeLimitExceeded)
+	}
 	finalMetadata, finalMapErr := mapCurrentMetadata(final)
 	if finalMapErr != nil || !current.equal(finalMetadata) {
 		return datasourceadmin.RetentionInventory{}, datasourceadminError(datasourceadmin.CodeConflict)
 	}
 	return datasourceadmin.RetentionInventory{Version: "ldap-recovery-v1", Current: current.generation, Generations: rows}, nil
+}
+
+// readRetentionRows verifies complete LDAP generation evidence under one shared budget.
+func (a *Administrator) readRetentionRows(ctx context.Context, client administrationClient, roots []Entry, current datasetMetadata, budget *retentionReadBudget) ([]datasourceadmin.RetentionGeneration, error) {
+	rows := make([]datasourceadmin.RetentionGeneration, 0, len(roots))
+	currentMatches := 0
+	for _, root := range roots {
+		metadata, mapErr := mapInventoryGenerationMetadata(root)
+		if mapErr != nil {
+			return nil, datasourceadminError(datasourceadmin.CodeConflict)
+		}
+		if metadata.schema == datasourceadmin.SchemaVersionV1 {
+			rows = append(rows, datasourceadmin.RetentionGeneration{
+				Generation: metadata.generation, Schema: metadata.schema, State: metadata.state,
+				Ownership: datasourceadmin.RetentionOwnershipUnknown,
+			})
+			continue
+		}
+		call, cancel, contextErr := retentionLDAPContext(ctx, a.generations.BackendDeadline)
+		if contextErr != nil {
+			return nil, contextErr
+		}
+		readLimits := a.generations
+		if uint64(readLimits.MaxSnapshotBytes) > budget.remaining {
+			readLimits.MaxSnapshotBytes = uint32(budget.remaining)
+		}
+		records, recordPresent, readErr := client.ReadGenerationRecords(call, metadata.generation, a.limits, readLimits)
+		cancel()
+		if readErr != nil || !recordPresent {
+			clearDatasetRecords(&records)
+			return nil, datasourceadminError(datasourceadmin.CodeUnavailable)
+		}
+		readBytes := datasetRecordsDecodedBytes(records)
+		if !budget.consume(readBytes) {
+			clearDatasetRecords(&records)
+			return nil, datasourceadminError(datasourceadmin.CodeLimitExceeded)
+		}
+		snapshot, verified, verifyErr := snapshotFromRecords(records)
+		clearDatasetRecords(&records)
+		if verifyErr != nil || !metadata.equal(verified) {
+			_ = snapshot.Close()
+			return nil, datasourceadminError(datasourceadmin.CodeConflict)
+		}
+		_ = snapshot.Close()
+		row := datasourceadmin.RetentionGeneration{Generation: verified.generation, Operation: verified.operation, SourceGeneration: verified.sourceGeneration, Schema: verified.schema, State: verified.state, WasActive: verified.wasActive, Ownership: datasourceadmin.RetentionOwnershipTrusted}
+		if verified.schema == datasourceadmin.SchemaVersionV3 && verified.digest.Valid() {
+			digest, digestErr := admincontract.ParseDigest(verified.digest.Bytes())
+			if digestErr != nil {
+				return nil, datasourceadminError(datasourceadmin.CodeConflict)
+			}
+			row.ContentDigest, row.Complete = digest, true
+		}
+		if verified.generation == current.generation {
+			if !current.matchesRoot(verified) {
+				return nil, datasourceadminError(datasourceadmin.CodeConflict)
+			}
+			currentMatches++
+		}
+		rows = append(rows, row)
+	}
+	if currentMatches != 1 {
+		return nil, datasourceadminError(datasourceadmin.CodeConflict)
+	}
+	return rows, nil
+}
+
+// retentionReadBudget bounds all LDAP response material in one recovery call.
+type retentionReadBudget struct{ remaining uint64 }
+
+func newRetentionReadBudget(maximum uint32) *retentionReadBudget {
+	return &retentionReadBudget{remaining: uint64(maximum)}
+}
+
+func (b *retentionReadBudget) consume(size int) bool {
+	if b == nil || size < 0 || uint64(size) > b.remaining {
+		return false
+	}
+	b.remaining -= uint64(size)
+	return true
 }
 
 // retentionLDAPContext bounds one LDAP recovery interaction while the outer

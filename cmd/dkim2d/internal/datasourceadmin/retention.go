@@ -18,6 +18,8 @@ const maxRetentionInventory = 16384
 
 const retentionAuthorityDomain = "DKIM2-RETENTION-AUTHORITY-V1\x00"
 
+const retentionPolicyDomain = "DKIM2-RETENTION-POLICY-V1\x00"
+
 const retentionPolicyVersion = "retention-v1"
 
 // RetentionOwnership classifies the authority that supplied one generation's metadata.
@@ -51,13 +53,12 @@ const (
 	RetentionReasonEligibleNeverActive RetentionReason = "eligible_never_active"
 )
 
-// RetentionPolicy bounds selection and audit retention independently of allocation limits.
+// RetentionPolicy bounds purge selection independently of allocation limits.
 type RetentionPolicy struct {
 	Version                         string
 	MaxTotalGenerations             uint32
 	MinActiveRollbackGenerations    uint32
 	MaxClosedNeverActiveGenerations uint32
-	MaxAuditReceipts                uint32
 	MaxPurgeBatch                   uint32
 	AllowLegacyV2                   bool
 }
@@ -66,7 +67,7 @@ type RetentionPolicy struct {
 func DefaultRetentionPolicy() RetentionPolicy {
 	return RetentionPolicy{
 		Version: retentionPolicyVersion, MaxTotalGenerations: 128, MinActiveRollbackGenerations: 8,
-		MaxClosedNeverActiveGenerations: 4, MaxAuditReceipts: 1024, MaxPurgeBatch: 64,
+		MaxClosedNeverActiveGenerations: 4, MaxPurgeBatch: 64,
 	}
 }
 
@@ -74,10 +75,31 @@ func DefaultRetentionPolicy() RetentionPolicy {
 func (p RetentionPolicy) Validate() error {
 	if !validRetentionVersion(p.Version) || p.MaxTotalGenerations == 0 || p.MaxTotalGenerations > maxRetentionInventory ||
 		p.MinActiveRollbackGenerations > p.MaxTotalGenerations || p.MaxClosedNeverActiveGenerations > p.MaxTotalGenerations ||
-		p.MaxAuditReceipts == 0 || p.MaxAuditReceipts > maxRetentionInventory || p.MaxPurgeBatch == 0 || p.MaxPurgeBatch > 4096 {
+		p.MaxPurgeBatch == 0 || p.MaxPurgeBatch > 4096 {
 		return newError(CodeInvalid)
 	}
 	return nil
+}
+
+// RetentionPolicyCommitment canonically binds every effective purge setting.
+func RetentionPolicyCommitment(policy RetentionPolicy) (admincontract.Digest, error) {
+	if policy.Validate() != nil {
+		return admincontract.Digest{}, newError(CodeInvalid)
+	}
+	output := sha256.New()
+	_, _ = output.Write([]byte(retentionPolicyDomain))
+	writeRetentionString(output, policy.Version)
+	for _, value := range []uint32{policy.MaxTotalGenerations, policy.MinActiveRollbackGenerations, policy.MaxClosedNeverActiveGenerations, policy.MaxPurgeBatch} {
+		var encoded [4]byte
+		binary.BigEndian.PutUint32(encoded[:], value)
+		_, _ = output.Write(encoded[:])
+	}
+	if policy.AllowLegacyV2 {
+		_, _ = output.Write([]byte{1})
+	} else {
+		_, _ = output.Write([]byte{0})
+	}
+	return admincontract.ParseDigest(output.Sum(nil))
 }
 
 // RetentionGeneration is key-free lifecycle metadata for one inventory generation.

@@ -42,6 +42,38 @@ type terminalRuntimeRecord struct {
 	record datasourceadmin.TerminalRecord
 }
 
+// TestRetentionSettingsUsesValidatedConfiguredBounds proves runtime planning
+// and apply share the protected configuration rather than production defaults.
+func TestRetentionSettingsUsesValidatedConfiguredBounds(t *testing.T) {
+	policy := datasourceadmin.DefaultRetentionPolicy()
+	policy.MaxTotalGenerations = 12
+	policy.MinActiveRollbackGenerations = 2
+	policy.MaxClosedNeverActiveGenerations = 0
+	recovery := datasourceadmin.DefaultRetentionRecoveryLimits()
+	recovery.MaxGenerations = 128
+	recovery.PageSize = 64
+	recovery.MaxReadBytes = 1 << 20
+	runtime := &CampaignRuntime{retention: policy, recoveryLimits: recovery}
+	gotPolicy, gotRecovery := runtime.retentionSettings()
+	if gotPolicy != policy || gotRecovery != recovery {
+		t.Fatal("runtime discarded validated configured retention bounds")
+	}
+}
+
+// TestRecoveryAdapterPassesConfiguredBoundsToProvider proves the provider
+// cannot silently substitute its historic 16k/1024 recovery defaults.
+func TestRecoveryAdapterPassesConfiguredBoundsToProvider(t *testing.T) {
+	backend := &retentionInventoryBackend{inventory: retentionRuntimeInventory(t, 3)}
+	limits := datasourceadmin.RetentionRecoveryLimits{MaxGenerations: 2, PageSize: 2, MaxReadBytes: 1 << 20}
+	reader := newRetentionRecoveryAdapter(backend, terminalRuntimeRecorder{}, limits)
+	if reader == nil {
+		t.Fatal("configured recovery adapter rejected")
+	}
+	if _, err := datasourceadmin.ReadRetentionRecoveryInventory(t.Context(), reader, limits); err == nil {
+		t.Fatal("provider ignored configured recovery generation bound")
+	}
+}
+
 func (terminalRuntimeRecord) RecordTerminal(context.Context, datasourceadmin.TerminalRecord) error {
 	return nil
 }
@@ -51,7 +83,10 @@ func (r terminalRuntimeRecord) ReadTerminal(context.Context, datasourceadmin.Ope
 }
 
 // RetentionRecoveryInventory returns the next provider observation.
-func (s *retentionRecoverySequence) RetentionRecoveryInventory(context.Context) (datasourceadmin.RetentionInventory, error) {
+func (s *retentionRecoverySequence) RetentionRecoveryInventory(_ context.Context, limits datasourceadmin.RetentionRecoveryLimits) (datasourceadmin.RetentionInventory, error) {
+	if limits.Validate() != nil {
+		return datasourceadmin.RetentionInventory{}, errUnavailable
+	}
 	if s == nil || len(s.views) == 0 {
 		return datasourceadmin.RetentionInventory{}, errUnavailable
 	}
@@ -64,7 +99,10 @@ func (s *retentionRecoverySequence) RetentionRecoveryInventory(context.Context) 
 }
 
 // RetentionRecoveryInventory returns full key-free historical evidence without allocation ceilings.
-func (b *retentionInventoryBackend) RetentionRecoveryInventory(_ context.Context) (datasourceadmin.RetentionInventory, error) {
+func (b *retentionInventoryBackend) RetentionRecoveryInventory(_ context.Context, limits datasourceadmin.RetentionRecoveryLimits) (datasourceadmin.RetentionInventory, error) {
+	if limits.Validate() != nil || len(b.inventory.Generations) > int(limits.MaxGenerations) {
+		return datasourceadmin.RetentionInventory{}, errUnavailable
+	}
 	rows := make([]datasourceadmin.RetentionGeneration, 0, len(b.inventory.Generations))
 	for _, generation := range b.inventory.Generations {
 		digest, err := admincontract.ParseDigest(generation.ContentDigest.Bytes())
@@ -120,7 +158,7 @@ func TestPurgePlanAndApplyUseFreshInventoryAndTheDedicatedExecutor(t *testing.T)
 	backend := &retentionInventoryBackend{inventory: retentionRuntimeInventory(t, 10000)}
 	executor := &purgeRuntimeExecutor{}
 	runtime := &CampaignRuntime{
-		backend: backend, purge: executor, recovery: newRetentionRecoveryAdapter(backend, terminalRuntimeRecorder{}), class: backendLDAP, limits: retentionRuntimeLimits(), authority: retentionRuntimeAuthority(),
+		backend: backend, purge: executor, recovery: newRetentionRecoveryAdapter(backend, terminalRuntimeRecorder{}, datasourceadmin.DefaultRetentionRecoveryLimits()), class: backendLDAP, limits: retentionRuntimeLimits(), authority: retentionRuntimeAuthority(),
 	}
 	artifact := filepath.Join(directory, "purge-plan.yaml")
 	planned, err := runtime.planPurge(t.Context(), Request{Command: CommandPurgePlan, Output: artifact})
@@ -169,7 +207,7 @@ func TestRecoveryAdapterUsesDedicatedTerminalReader(t *testing.T) {
 		{Generation: 7, Schema: datasourceadmin.SchemaVersionV3, State: datasourceadmin.StateCommitted, WasActive: true, Complete: true, Ownership: datasourceadmin.RetentionOwnershipTrusted, ContentDigest: contractDigest},
 		{Generation: 8, Operation: operation, SourceGeneration: 7, Schema: datasourceadmin.SchemaVersionV3, State: datasourceadmin.StateCommitted, Complete: true, Ownership: datasourceadmin.RetentionOwnershipTrusted, ContentDigest: contractDigest},
 	}}
-	reader := newRetentionRecoveryAdapter(&retentionRecoverySequence{views: []datasourceadmin.RetentionInventory{view}}, terminalRuntimeRecord{record: record})
+	reader := newRetentionRecoveryAdapter(&retentionRecoverySequence{views: []datasourceadmin.RetentionInventory{view}}, terminalRuntimeRecord{record: record}, datasourceadmin.DefaultRetentionRecoveryLimits())
 	result, err := datasourceadmin.ReadRetentionRecoveryInventory(t.Context(), reader, datasourceadmin.DefaultRetentionRecoveryLimits())
 	if err != nil || !result.Generations[1].Closed || result.Generations[1].Ownership != datasourceadmin.RetentionOwnershipTrusted {
 		t.Fatal("runtime recovery did not join exact dedicated terminal evidence")
@@ -187,7 +225,7 @@ func TestPurgePlanFailsClosedWithoutEligibleRetention(t *testing.T) {
 		backend: &retentionInventoryBackend{inventory: retentionRuntimeInventory(t, 8)}, class: backendLDAP, limits: retentionRuntimeLimits(), authority: retentionRuntimeAuthority(),
 	}
 	artifact := filepath.Join(directory, "purge-plan.yaml")
-	runtime.recovery = newRetentionRecoveryAdapter(runtime.backend.(*retentionInventoryBackend), terminalRuntimeRecorder{})
+	runtime.recovery = newRetentionRecoveryAdapter(runtime.backend.(*retentionInventoryBackend), terminalRuntimeRecorder{}, datasourceadmin.DefaultRetentionRecoveryLimits())
 	report, planErr := runtime.planPurge(t.Context(), Request{Command: CommandPurgePlan, Output: artifact})
 	if planErr == nil || report.ResultClass != "no_eligible" {
 		t.Fatal("ineligible retention inventory was accepted")
@@ -201,7 +239,7 @@ func TestPurgePlanFailsClosedWithoutEligibleRetention(t *testing.T) {
 // from bypassing the CLI's one bare destructive authorization token.
 func TestPurgeApplyRequiresTheExplicitApplyFence(t *testing.T) {
 	backend := &retentionInventoryBackend{inventory: retentionRuntimeInventory(t, 130)}
-	runtime := &CampaignRuntime{backend: backend, purge: &purgeRuntimeExecutor{}, recovery: newRetentionRecoveryAdapter(backend, terminalRuntimeRecorder{}), class: backendLDAP, limits: retentionRuntimeLimits(), authority: retentionRuntimeAuthority()}
+	runtime := &CampaignRuntime{backend: backend, purge: &purgeRuntimeExecutor{}, recovery: newRetentionRecoveryAdapter(backend, terminalRuntimeRecorder{}, datasourceadmin.DefaultRetentionRecoveryLimits()), class: backendLDAP, limits: retentionRuntimeLimits(), authority: retentionRuntimeAuthority()}
 	if _, err := runtime.applyPurge(t.Context(), Request{Command: CommandPurgeApply, Plan: "/tmp/plan"}); err == nil {
 		t.Fatal("purge apply without the explicit apply fence was accepted")
 	}
@@ -211,7 +249,7 @@ func TestPurgeApplyRequiresTheExplicitApplyFence(t *testing.T) {
 // not overlook a changed historical record merely because it is not a target.
 func TestRetentionRecoveryRejectsStaleNonTargetChange(t *testing.T) {
 	backend := &retentionInventoryBackend{inventory: retentionRuntimeInventory(t, 10000)}
-	first, err := backend.RetentionRecoveryInventory(t.Context())
+	first, err := backend.RetentionRecoveryInventory(t.Context(), datasourceadmin.DefaultRetentionRecoveryLimits())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -224,7 +262,7 @@ func TestRetentionRecoveryRejectsStaleNonTargetChange(t *testing.T) {
 		t.Fatal(err)
 	}
 	second.Generations[len(second.Generations)-1].ContentDigest = digest
-	reader := newRetentionRecoveryAdapter(&retentionRecoverySequence{views: []datasourceadmin.RetentionInventory{first, second}}, terminalRuntimeRecorder{})
+	reader := newRetentionRecoveryAdapter(&retentionRecoverySequence{views: []datasourceadmin.RetentionInventory{first, second}}, terminalRuntimeRecorder{}, datasourceadmin.DefaultRetentionRecoveryLimits())
 	if _, err := datasourceadmin.ReadRetentionRecoveryInventory(t.Context(), reader, datasourceadmin.DefaultRetentionRecoveryLimits()); err == nil {
 		t.Fatal("stale non-target recovery change was accepted")
 	}

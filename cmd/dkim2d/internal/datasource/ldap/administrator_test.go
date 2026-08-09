@@ -454,9 +454,14 @@ func (c *administrationClientFake) ListGenerationRoots(context.Context, datasour
 }
 
 // ListRetentionGenerationRoots returns detached roots under the independent recovery limit.
-func (c *administrationClientFake) ListRetentionGenerationRoots(_ context.Context, limits datasourceadmin.RetentionRecoveryLimits) ([]Entry, error) {
+func (c *administrationClientFake) ListRetentionGenerationRoots(_ context.Context, limits datasourceadmin.RetentionRecoveryLimits, budget *retentionReadBudget) ([]Entry, error) {
 	if len(c.roots) > int(limits.MaxGenerations) {
 		return nil, errLDAPPartial
+	}
+	for _, root := range c.roots {
+		if !budget.consume(entryBytes(root)) {
+			return nil, errLDAPPartial
+		}
 	}
 	return c.ListGenerationRoots(context.Background(), datasourceadmin.GenerationLimits{MaxGenerations: 1, MaxOutstandingCandidates: 1, MaxSnapshotRows: 1, MaxSnapshotBytes: 1, BackendDeadline: time.Second})
 }
@@ -647,6 +652,23 @@ func TestAdministratorStagesCanonicalReadbackBeforeSeal(t *testing.T) {
 	if _, err := administrator.Stage(ctx, lock, operation, candidate); datasourceadmin.CodeOf(err) != datasourceadmin.CodeReconcileRequired ||
 		client.sealCalls != 0 {
 		t.Fatal("mismatched private readback reached staging seal")
+	}
+}
+
+// TestRetentionRecoveryBudgetCombinesRootAndRecordBytes proves the recovery
+// ceiling applies to every LDAP response, not only complete child readback.
+func TestRetentionRecoveryBudgetCombinesRootAndRecordBytes(t *testing.T) {
+	records := minimalRecords(t)
+	client := &administrationClientFake{
+		fakeClient: &fakeClient{}, current: cloneEntry(records.Current), currentPresent: true,
+		roots: []Entry{cloneEntry(records.Root)}, generations: map[uint64]DatasetRecords{1: records},
+	}
+	administrator := newAdministratorFixture(t, client)
+	total := entryBytes(records.Current) + entryBytes(records.Root) + datasetRecordsDecodedBytes(records) + entryBytes(records.Current)
+	limits := datasourceadmin.DefaultRetentionRecoveryLimits()
+	limits.MaxReadBytes = uint32(total - 1)
+	if _, err := administrator.RetentionRecoveryInventory(t.Context(), limits); datasourceadmin.CodeOf(err) != datasourceadmin.CodeLimitExceeded {
+		t.Fatal("LDAP recovery accepted root and record bytes beyond one shared limit")
 	}
 }
 

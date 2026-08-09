@@ -73,8 +73,8 @@ func (c *goLDAPClient) ListGenerationRoots(
 }
 
 // ListRetentionGenerationRoots reads the separate bounded historical-recovery inventory.
-func (c *goLDAPClient) ListRetentionGenerationRoots(ctx context.Context, limits datasourceadmin.RetentionRecoveryLimits) ([]Entry, error) {
-	return listRetentionGenerationRoots(ctx, "ou=generations,"+c.baseDN, limits, c.search)
+func (c *goLDAPClient) ListRetentionGenerationRoots(ctx context.Context, limits datasourceadmin.RetentionRecoveryLimits, budget *retentionReadBudget) ([]Entry, error) {
+	return listRetentionGenerationRoots(ctx, "ou=generations,"+c.baseDN, limits, budget, c.search)
 }
 
 // ldapSearchOperation is the narrow transport seam owned by bounded
@@ -155,8 +155,8 @@ func listGenerationRoots(
 }
 
 // listRetentionGenerationRoots keeps recovery pagination independent of allocation ceilings.
-func listRetentionGenerationRoots(ctx context.Context, base string, limits datasourceadmin.RetentionRecoveryLimits, search ldapSearchOperation) ([]Entry, error) {
-	if ctx == nil || base == "" || limits.Validate() != nil || search == nil {
+func listRetentionGenerationRoots(ctx context.Context, base string, limits datasourceadmin.RetentionRecoveryLimits, budget *retentionReadBudget, search ldapSearchOperation) ([]Entry, error) {
+	if ctx == nil || base == "" || limits.Validate() != nil || budget == nil || search == nil {
 		return nil, errors.New("ldap recovery inventory unavailable")
 	}
 	entries := make([]Entry, 0, min(int(limits.MaxGenerations), 64))
@@ -168,7 +168,6 @@ func listRetentionGenerationRoots(ctx context.Context, base string, limits datas
 		}
 	}()
 	cookie := []byte(nil)
-	bytesRead := 0
 	for pages := uint32(0); pages <= limits.MaxGenerations; pages++ {
 		control := newCriticalPagingControl(limits.PageSize, cookie)
 		request := goldap.NewSearchRequest(base, goldap.ScopeSingleLevel, goldap.NeverDerefAliases, int(limits.MaxGenerations), 0, false, "(objectClass=*)", []string{"*"}, []goldap.Control{control})
@@ -179,11 +178,10 @@ func listRetentionGenerationRoots(ctx context.Context, base string, limits datas
 		}
 		pageEntries, pageBytes, mapErr := mapGenerationRootPage(base, result.Entries)
 		clearLDAPProtectedAttributeBytes(result.Entries)
-		if mapErr != nil || pageBytes > int(limits.MaxReadBytes) || bytesRead > int(limits.MaxReadBytes)-pageBytes {
+		if mapErr != nil || !budget.consume(pageBytes) {
 			clearEntries(pageEntries)
 			return nil, errors.New("ldap recovery inventory unavailable")
 		}
-		bytesRead += pageBytes
 		paging, ok := goldap.FindControl(result.Controls, goldap.ControlTypePaging).(*goldap.ControlPaging)
 		if !ok || paging == nil || len(paging.Cookie) > 4096 {
 			clearEntries(pageEntries)

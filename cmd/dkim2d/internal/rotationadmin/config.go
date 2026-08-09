@@ -37,6 +37,8 @@ type Config struct {
 	ldap        ldapTransport
 	sql         sqlTransport
 	dns         dnsProofTransport
+	retention   datasourceadmin.RetentionPolicy
+	recovery    datasourceadmin.RetentionRecoveryLimits
 }
 
 type role struct {
@@ -108,6 +110,15 @@ type configDocument struct {
 		ProofLifetimeSeconds uint64   `yaml:"proof_lifetime_seconds"`
 		LookupTimeout        string   `yaml:"lookup_timeout"`
 	} `yaml:"dns"`
+	Retention struct {
+		MaxTotalGenerations             *uint32 `yaml:"max_total_generations"`
+		MinActiveRollbackGenerations    *uint32 `yaml:"min_active_rollback_generations"`
+		MaxClosedNeverActiveGenerations *uint32 `yaml:"max_closed_never_active_generations"`
+		MaxPurgeBatch                   *uint32 `yaml:"max_purge_batch"`
+		MaxRecoveryGenerations          *uint32 `yaml:"max_recovery_generations"`
+		RecoveryPageSize                *uint32 `yaml:"recovery_page_size"`
+		MaxRecoveryReadBytes            *uint32 `yaml:"max_recovery_read_bytes"`
+	} `yaml:"retention"`
 }
 
 type roleDocument struct {
@@ -181,7 +192,33 @@ func (d configDocument) load(path string) (*Config, error) { //nolint:gocyclo //
 		seenNames[entry.Name], seenPaths[entry.SecretFile] = struct{}{}, struct{}{}
 		roles[index] = role{name: entry.Name, secretPath: entry.SecretFile}
 	}
-	configuration := &Config{authorityID: d.AuthorityID, backend: d.Backend, deadline: deadline, limits: limits, roles: roles}
+	policy := datasourceadmin.DefaultRetentionPolicy()
+	recovery := datasourceadmin.DefaultRetentionRecoveryLimits()
+	if d.Retention.MaxTotalGenerations != nil {
+		policy.MaxTotalGenerations = *d.Retention.MaxTotalGenerations
+	}
+	if d.Retention.MinActiveRollbackGenerations != nil {
+		policy.MinActiveRollbackGenerations = *d.Retention.MinActiveRollbackGenerations
+	}
+	if d.Retention.MaxClosedNeverActiveGenerations != nil {
+		policy.MaxClosedNeverActiveGenerations = *d.Retention.MaxClosedNeverActiveGenerations
+	}
+	if d.Retention.MaxPurgeBatch != nil {
+		policy.MaxPurgeBatch = *d.Retention.MaxPurgeBatch
+	}
+	if d.Retention.MaxRecoveryGenerations != nil {
+		recovery.MaxGenerations = *d.Retention.MaxRecoveryGenerations
+	}
+	if d.Retention.RecoveryPageSize != nil {
+		recovery.PageSize = *d.Retention.RecoveryPageSize
+	}
+	if d.Retention.MaxRecoveryReadBytes != nil {
+		recovery.MaxReadBytes = *d.Retention.MaxRecoveryReadBytes
+	}
+	if policy.Validate() != nil || recovery.Validate() != nil {
+		return nil, errInvalid
+	}
+	configuration := &Config{authorityID: d.AuthorityID, backend: d.Backend, deadline: deadline, limits: limits, roles: roles, retention: policy, recovery: recovery}
 	if d.DNS.ResolverClass != "" || len(d.DNS.ResolverEndpoints) != 0 || d.DNS.ExportTTLSeconds != 0 || d.DNS.ProofLifetimeSeconds != 0 || d.DNS.LookupTimeout != "" {
 		lookupTimeout, parseErr := time.ParseDuration(d.DNS.LookupTimeout)
 		policy := datasourceadmin.DNSPolicy{ResolverClass: canonicalRecursiveResolver, ResolverEndpoints: append([]string(nil), d.DNS.ResolverEndpoints...), ExportTTLSeconds: d.DNS.ExportTTLSeconds, ProofLifetimeSeconds: d.DNS.ProofLifetimeSeconds}
@@ -243,6 +280,14 @@ func (c *Config) Limits() Limits {
 	return c.limits
 }
 
+// Retention returns the validated finite purge policy and recovery bounds.
+func (c *Config) Retention() (datasourceadmin.RetentionPolicy, datasourceadmin.RetentionRecoveryLimits) {
+	if c == nil {
+		return datasourceadmin.RetentionPolicy{}, datasourceadmin.RetentionRecoveryLimits{}
+	}
+	return c.retention, c.recovery
+}
+
 // Close clears retained protected configuration references.
 func (c *Config) Close() error {
 	if c == nil {
@@ -251,6 +296,7 @@ func (c *Config) Close() error {
 	c.authorityID, c.backend, c.deadline, c.limits = "", "", 0, Limits{}
 	c.roles = [5]role{}
 	c.ldap, c.sql, c.dns = ldapTransport{}, sqlTransport{}, dnsProofTransport{}
+	c.retention, c.recovery = datasourceadmin.RetentionPolicy{}, datasourceadmin.RetentionRecoveryLimits{}
 	return nil
 }
 

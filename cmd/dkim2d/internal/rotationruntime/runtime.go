@@ -28,21 +28,23 @@ const (
 
 // CampaignRuntime composes the one real provider-backed offline campaign owner.
 type CampaignRuntime struct {
-	backend   campaignBackend
-	purge     rotationadmin.PurgeExecutor
-	recovery  datasourceadmin.RetentionRecoveryReader
-	terminal  datasourceadmin.TerminalRecorder
-	coord     *rotationadmin.Coordinator
-	prover    *rotationadmin.DNSBatchProver
-	class     string
-	limits    datasourceadmin.GenerationLimits
-	authority datasourceadmin.AuthorityDescriptor
+	backend        campaignBackend
+	purge          rotationadmin.PurgeExecutor
+	recovery       datasourceadmin.RetentionRecoveryReader
+	terminal       datasourceadmin.TerminalRecorder
+	coord          *rotationadmin.Coordinator
+	prover         *rotationadmin.DNSBatchProver
+	class          string
+	limits         datasourceadmin.GenerationLimits
+	authority      datasourceadmin.AuthorityDescriptor
+	retention      datasourceadmin.RetentionPolicy
+	recoveryLimits datasourceadmin.RetentionRecoveryLimits
 }
 
 // retentionRecoverySource is the concrete provider path for bounded full
 // historical evidence; it is deliberately separate from allocation inventory.
 type retentionRecoverySource interface {
-	RetentionRecoveryInventory(context.Context) (datasourceadmin.RetentionInventory, error)
+	RetentionRecoveryInventory(context.Context, datasourceadmin.RetentionRecoveryLimits) (datasourceadmin.RetentionInventory, error)
 }
 
 // retentionRecoveryAdapter supplies the paged recovery interface from one
@@ -53,6 +55,7 @@ type retentionRecoveryAdapter struct {
 	inventory datasourceadmin.RetentionInventory
 	loaded    bool
 	completed bool
+	limits    datasourceadmin.RetentionRecoveryLimits
 }
 
 // campaignBackend is the narrow common provider seam used by the coordinator.
@@ -60,6 +63,15 @@ type campaignBackend interface {
 	datasourceadmin.SnapshotReader
 	datasourceadmin.GenerationPublisher
 	datasourceadmin.AdministrationLocker
+}
+
+// retentionSettings preserves restrictive defaults for isolated test seams;
+// every production constructor supplies validated protected configuration.
+func (r *CampaignRuntime) retentionSettings() (datasourceadmin.RetentionPolicy, datasourceadmin.RetentionRecoveryLimits) {
+	if r != nil && r.retention.Validate() == nil && r.recoveryLimits.Validate() == nil {
+		return r.retention, r.recoveryLimits
+	}
+	return datasourceadmin.DefaultRetentionPolicy(), datasourceadmin.DefaultRetentionRecoveryLimits()
 }
 
 type ldapCredential struct {
@@ -197,11 +209,12 @@ func (r *CampaignRuntime) planPurge(ctx context.Context, request Request) (rotat
 	if r == nil || r.recovery == nil || request.Command != CommandPurgePlan || request.Output == "" {
 		return rotationadmin.CommandReport{}, errUnavailable
 	}
-	inventory, inventoryErr := datasourceadmin.ReadRetentionRecoveryInventory(ctx, r.recovery, datasourceadmin.DefaultRetentionRecoveryLimits())
+	policy, recoveryLimits := r.retentionSettings()
+	inventory, inventoryErr := datasourceadmin.ReadRetentionRecoveryInventory(ctx, r.recovery, recoveryLimits)
 	if inventoryErr != nil {
 		return rotationadmin.CommandReport{Command: string(request.Command), Backend: r.class, ResultClass: resultUnavailable}, errUnavailable
 	}
-	classification, classificationErr := datasourceadmin.ClassifyRetention(inventory, datasourceadmin.DefaultRetentionPolicy())
+	classification, classificationErr := datasourceadmin.ClassifyRetention(inventory, policy)
 	if classificationErr != nil || classification.EligibleCount() == 0 {
 		retained, unresolved := uint32(0), uint32(0)
 		if classification != nil {
@@ -245,11 +258,12 @@ func (r *CampaignRuntime) applyPurge(ctx context.Context, request Request) (rota
 	if applyErr != nil {
 		return rotationadmin.CommandReport{Command: string(request.Command), Backend: r.class, ResultClass: resultArtifactInvalid}, errUnavailable
 	}
-	inventory, inventoryErr := datasourceadmin.ReadRetentionRecoveryInventory(ctx, r.recovery, datasourceadmin.DefaultRetentionRecoveryLimits())
+	policy, recoveryLimits := r.retentionSettings()
+	inventory, inventoryErr := datasourceadmin.ReadRetentionRecoveryInventory(ctx, r.recovery, recoveryLimits)
 	if inventoryErr != nil {
 		return rotationadmin.CommandReport{Command: string(request.Command), Backend: r.class, ResultClass: resultUnavailable}, errUnavailable
 	}
-	result, executeErr := rotationadmin.ExecutePurge(ctx, apply, datasourceadmin.BackendClass(r.class), r.authority, inventory, r.purge)
+	result, executeErr := rotationadmin.ExecutePurge(ctx, apply, datasourceadmin.BackendClass(r.class), r.authority, policy, inventory, r.purge)
 	if executeErr != nil || !result.Committed || result.Unknown {
 		return rotationadmin.CommandReport{Command: string(request.Command), Backend: r.class, ResultClass: "reconcile_required"}, errUnavailable
 	}
@@ -597,7 +611,11 @@ func newComposedRuntime(backend campaignBackend, purge rotationadmin.PurgeExecut
 	boundedBackend := &deadlineCampaignBackend{backend: backend, maximum: generations.BackendDeadline}
 	boundedTerminal := &deadlineTerminalRecorder{recorder: terminal, maximum: generations.BackendDeadline}
 	boundedPurge := &deadlinePurgeExecutor{executor: purge, maximum: generations.BackendDeadline}
-	recoveryAdapter := newRetentionRecoveryAdapter(recovery, boundedTerminal)
+	retention, recoveryLimits := configuration.Retention()
+	if retention.Validate() != nil || recoveryLimits.Validate() != nil {
+		return nil, errUnavailable
+	}
+	recoveryAdapter := newRetentionRecoveryAdapter(recovery, boundedTerminal, recoveryLimits)
 	if recoveryAdapter == nil {
 		return nil, errUnavailable
 	}
@@ -610,7 +628,7 @@ func newComposedRuntime(backend campaignBackend, purge rotationadmin.PurgeExecut
 	if err != nil {
 		return nil, errUnavailable
 	}
-	return &CampaignRuntime{backend: boundedBackend, purge: boundedPurge, recovery: boundedRecovery, terminal: boundedTerminal, coord: coordinator, prover: proof, class: class, limits: generations, authority: authority}, nil
+	return &CampaignRuntime{backend: boundedBackend, purge: boundedPurge, recovery: boundedRecovery, terminal: boundedTerminal, coord: coordinator, prover: proof, class: class, limits: generations, authority: authority, retention: retention, recoveryLimits: recoveryLimits}, nil
 }
 
 // newIntent creates a fresh opaque operation identity only for a new command.
@@ -675,11 +693,11 @@ func loadSQLCredential(path string) (sqlCredential, error) {
 
 // newRetentionRecoveryAdapter refuses to expose any allocation inventory as a
 // retention source; only a concrete provider recovery reader is accepted.
-func newRetentionRecoveryAdapter(source retentionRecoverySource, terminal datasourceadmin.TerminalRecorder) datasourceadmin.RetentionRecoveryReader {
-	if source == nil || terminal == nil {
+func newRetentionRecoveryAdapter(source retentionRecoverySource, terminal datasourceadmin.TerminalRecorder, limits datasourceadmin.RetentionRecoveryLimits) datasourceadmin.RetentionRecoveryReader {
+	if source == nil || terminal == nil || limits.Validate() != nil {
 		return nil
 	}
-	return &retentionRecoveryAdapter{source: source, terminal: terminal}
+	return &retentionRecoveryAdapter{source: source, terminal: terminal, limits: limits}
 }
 
 // RetentionCurrent begins and completes one stable recovery read.
@@ -690,7 +708,7 @@ func (a *retentionRecoveryAdapter) RetentionCurrent(ctx context.Context) (uint64
 	if a.completed {
 		a.inventory, a.loaded, a.completed = datasourceadmin.RetentionInventory{}, false, false
 	}
-	fresh, err := a.source.RetentionRecoveryInventory(ctx)
+	fresh, err := a.source.RetentionRecoveryInventory(ctx, a.limits)
 	if err != nil || fresh.Current == 0 {
 		return 0, errUnavailable
 	}

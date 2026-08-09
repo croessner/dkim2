@@ -197,6 +197,18 @@ read it from the candidate root; it is never inferred from a later `current`
 pointer. A legacy candidate without this field is unknown for terminal/purge
 recovery and remains retained.
 
+### Configured Retention Bounds
+
+The protected rotation configuration owns finite retention policy and recovery
+read limits. Operators may narrow or raise each value only within the compiled
+validator ceiling: total generations, rollback history, closed never-active
+history, purge batch size, recovery generations/page size/read bytes. Omitted fields use the
+restrictive production defaults. Explicit zero is preserved for the two
+non-negative history windows; zero for a required positive bound is rejected.
+Current, open, partial, foreign, unknown, and legacy records remain fail-closed
+until the separate Prompt 12 commitment
+contract is completely implemented and independently reviewed.
+
 Preparation constructs one complete immutable candidate. Implementations may
 use bounded memory or a protected owner-only temporary spool when necessary,
 but the spool is not the journal, is never generic output, is never committed,
@@ -287,16 +299,16 @@ Required invariants:
 Retention is a selection policy; purge is a separate destructive operation.
 Neither is an implicit tail of rotation or startup.
 
-The configuration exposes finite values under hard maxima, including:
+The v3 configuration exposes finite values under hard maxima, including:
 
 - maximum total retained generations;
 - minimum active rollback generations to retain;
 - maximum closed never-active/aborted generations to retain;
-- purge batch size;
-- optional minimum retention interval when trustworthy lifecycle timestamps
-  are implemented; and
-- whether legacy v2 history is eligible. The restrictive default keeps legacy
-  v2 history and requires explicit compatibility authorization to destroy it.
+- purge batch bounds; and
+- recovery generations, page size, and aggregate read bytes.
+
+Legacy v1/v2 eligibility is not configurable in this release. Those records
+remain retained until the separate immutable commitment contract is complete.
 
 At minimum, purge selection must classify:
 
@@ -312,30 +324,35 @@ At minimum, purge selection must classify:
 - noncurrent v2 without exact activation history: retained by default;
 - already absent generation: idempotent success only for the exact purge plan.
 
-A purge plan binds authority, stable inventory/current, retention-policy
-version, exact ordered targets, reason classes, expected row/byte counts when
-available, and a domain-separated plan digest. Planning is read-only. Apply
-requires an explicit destructive flag, the protected plan artifact, exact
-digest/readback, and the separate purge authority. Generic output reports only
-counts and closed reason/result classes.
+A purge plan binds authority, stable inventory/current, every effective
+retention-policy value through a canonical policy commitment, exact ordered
+targets, reason classes, expected row/byte counts when available, and a
+domain-separated plan digest. Planning is read-only. Apply requires an explicit
+destructive flag, the protected plan artifact, exact digest/readback, an exact
+current-policy commitment, and the separate purge authority. A policy change
+between plan and apply is fail-closed. Generic output reports only counts and
+closed reason/result classes.
 
 Purge keeps a compact key-free audit receipt containing generation number,
 schema class, prior lifecycle class, operation class where safe, content-digest
 commitment, destruction time/result, policy version, and purge-plan
 commitment. It retains no domain, selector, handle, DNS TXT, private PKCS#8,
-password, DN, SQL text, or full generation snapshot. Audit metadata has its own
-bounded retention policy so it also cannot grow without limit.
+password, DN, SQL text, or full generation snapshot.
 
 ### Recovery Inventory And Closure Evidence
 
 Retention recovery has a separate provider-owned read contract. It is not an
 allocation read and must not inherit `MaxGenerations`: LDAP and SQL readers
-page a stable, exact inventory up to 16,384 roots, bind an exact current
+receive the configured recovery generation/page/byte bounds (each constrained
+by compiled ceilings). One shared byte budget includes initial/final current
+metadata, every root/page metadata response, and each complete generation
+readback; a provider clips the next complete read to the remaining budget and
+refuses it at zero. Readers page a stable exact inventory, bind an exact current
 reread, and independently verify every referenced generation before it becomes
 complete trusted retention evidence. Root metadata alone is not proof of a
 complete sealed content set. A missing child, partial record set, mismatched
-content commitment, foreign owner, changed current, page gap, duplicate, or
-unstable reread is unresolved and never eligible.
+content commitment, foreign owner, changed current, page gap, duplicate, limit
+exhaustion, or unstable reread is unresolved and never eligible.
 
 The recovery inventory commitment includes the policy version, current pointer,
 and every observed generation lifecycle and content fact. Apply recomputes that
@@ -512,7 +529,8 @@ Unit tests:
 - state/command matrix, resume, abort, conflict, and activating lineage;
 - normal versus emergency separation;
 - retention classification for current, newest rollback history, old history,
-  never-active, aborted, open, partial, unknown, absent, and legacy v2;
+  never-active, aborted, open, partial, unknown, absent, and fail-closed
+  legacy v2;
 - protected purge plan digest, exact apply fence, compact receipt, and privacy;
 - toxic formatting/JSON/log/metric/report markers;
 - cancellation, deadlines, integer exhaustion, and erasure.
@@ -636,6 +654,36 @@ Prompt 10 closeout recorded the following exact candidate evidence:
 | Effort | Exact prompt spans retained | ignored execution ledger | done | Prompt 10 records known timing limitations |
 
 ## Decisions And Open Questions
+
+### Legacy Retention Commitment Follow-On Contract
+
+Legacy v1/v2 destruction is a distinct follow-on lifecycle, not a relaxation
+of v3 candidate evidence. A dedicated migration owner, separate from snapshot,
+staging, activation, purge, and closer identities, may read one complete
+committed noncurrent legacy generation and create exactly one immutable,
+generation-bound legacy-retention commitment. The commitment grammar is
+canonical, schema-tagged, includes every retained child record and private
+custody row where that schema has one, and is domain-separated from candidate
+digests. It is never emitted through a report, DNS export, journal, or generic
+API.
+
+The writer first reads the exact root/current/lock fence and complete bounded
+child set, computes the commitment, then performs create-only insertion. An
+existing equal row is idempotent success; an existing mismatch, changed
+current, open root, partial child set, foreign ownership, or ambiguous write is
+fail-closed. The purger reads only schema, generation, committed state,
+was-active evidence and the immutable commitment. It never obtains private-key
+attributes. Apply rereads that exact metadata/commitment/current fence and may
+delete only an explicitly configured, noncurrent, trusted legacy target.
+
+LDAP uses an auxiliary immutable commitment object and an ACL that grants the
+migration owner read/one create-only write while granting the purger only its
+metadata read. PostgreSQL/MySQL/MariaDB use forward-only commitment tables and
+fixed definer routines with equivalent create/read/purge fences. A schema with
+no complete canonical child grammar remains unknown and retained; no provider
+may invent v1 facts. Prompt execution order is: contract/golden vectors,
+LDAP writer/read/apply, SQL writer/read/apply, command/config, then service
+and independent review gates.
 
 - Settled: normal automatic rotation is global and produces one candidate,
   never one generation per binding.

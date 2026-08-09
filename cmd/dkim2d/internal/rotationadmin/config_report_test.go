@@ -12,6 +12,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/croessner/dkim2/cmd/dkim2d/internal/datasourceadmin"
 )
 
 // TestLoadConfigRequiresFiveDistinctProtectedRoles freezes the purge and closer authority boundaries.
@@ -59,6 +61,50 @@ func TestLoadConfigRequiresFiveDistinctProtectedRoles(t *testing.T) {
 	}
 	if duplicate, duplicateErr := LoadConfig(configPath); duplicateErr == nil || duplicate != nil {
 		t.Fatal("duplicate authority role accepted")
+	}
+}
+
+// TestLoadConfigRetentionPresencePreservesExplicitZero proves optional
+// retention values retain YAML presence: zero is meaningful for the two
+// non-negative history windows, while omitted fields retain safe defaults.
+func TestLoadConfigRetentionPresencePreservesExplicitZero(t *testing.T) {
+	directory, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil || os.Chmod(directory, 0700) != nil {
+		t.Fatal("protect test directory")
+	}
+	secretPaths := make([]string, 5)
+	for index := range secretPaths {
+		secretPaths[index] = filepath.Join(directory, "role-"+string(rune('a'+index)))
+		if err := os.WriteFile(secretPaths[index], []byte("secret"), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	configPath := filepath.Join(directory, "rotation.yaml")
+	document := "version: dkim2-rotation-admin-v1\nauthority_id: aaaaaaaaaaaaaaaaaaaaaaaaae\nbackend: ldap\ndeadline: 30s\nlimits:\n  max_work_items: 16\n  max_dns_batch_records: 4\n  max_dns_batches: 4\nroles:\n  snapshot:\n    name: snapshot\n    secret_file: " + secretPaths[0] + "\n  staging:\n    name: staging\n    secret_file: " + secretPaths[1] + "\n  activation:\n    name: activation\n    secret_file: " + secretPaths[2] + "\n  purge:\n    name: purge\n    secret_file: " + secretPaths[3] + "\n  closer:\n    name: closer\n    secret_file: " + secretPaths[4] + "\nretention:\n  min_active_rollback_generations: 0\n  max_closed_never_active_generations: 0\n"
+	if err := os.WriteFile(configPath, []byte(document), 0600); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := LoadConfig(configPath)
+	if err != nil {
+		t.Fatal("explicit zero retention windows rejected")
+	}
+	defer loaded.Close() //nolint:errcheck // Test cleanup cannot affect the assertion.
+	policy, recovery := loaded.Retention()
+	defaults := datasourceadmin.DefaultRetentionPolicy()
+	if policy.MinActiveRollbackGenerations != 0 || policy.MaxClosedNeverActiveGenerations != 0 || policy.MaxTotalGenerations != defaults.MaxTotalGenerations || recovery != datasourceadmin.DefaultRetentionRecoveryLimits() {
+		t.Fatal("retention presence or defaults drifted")
+	}
+	if err := os.WriteFile(configPath, []byte(document+"  max_purge_batch: 0\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if invalid, invalidErr := LoadConfig(configPath); invalidErr == nil || invalid != nil {
+		t.Fatal("explicit invalid retention limit accepted")
+	}
+	if err := os.WriteFile(configPath, []byte(document+"  allow_legacy_v1_v2: true\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if invalid, invalidErr := LoadConfig(configPath); invalidErr == nil || invalid != nil {
+		t.Fatal("unimplemented legacy eligibility opt-in accepted")
 	}
 }
 

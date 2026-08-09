@@ -28,14 +28,19 @@ func TestPurgePlanRequiresExactAuthorityAndDestructiveIntent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fence, err := request.VerifyReadback(datasourceadmin.BackendLDAP, authority, datasourceadmin.RetentionInventory{Version: testInventoryVersion, Current: 2, Generations: []datasourceadmin.RetentionGeneration{purgeGeneration(t, 1), purgeGeneration(t, 2)}})
+	fence, err := request.VerifyReadback(datasourceadmin.BackendLDAP, authority, policy, datasourceadmin.RetentionInventory{Version: testInventoryVersion, Current: 2, Generations: []datasourceadmin.RetentionGeneration{purgeGeneration(t, 1), purgeGeneration(t, 2)}})
 	if err != nil || !fence.Ready() {
 		t.Fatal("exact protected plan did not survive readback")
 	}
-	if _, err := request.VerifyReadback(datasourceadmin.BackendLDAP, authority, datasourceadmin.RetentionInventory{Version: "inventory-v2", Current: 2, Generations: []datasourceadmin.RetentionGeneration{purgeGeneration(t, 1), purgeGeneration(t, 2)}}); err == nil {
+	changedPolicy := policy
+	changedPolicy.MaxPurgeBatch = 2
+	if _, err := request.VerifyReadback(datasourceadmin.BackendLDAP, authority, changedPolicy, datasourceadmin.RetentionInventory{Version: testInventoryVersion, Current: 2, Generations: []datasourceadmin.RetentionGeneration{purgeGeneration(t, 1), purgeGeneration(t, 2)}}); err == nil {
+		t.Fatal("policy change between plan and apply accepted")
+	}
+	if _, err := request.VerifyReadback(datasourceadmin.BackendLDAP, authority, policy, datasourceadmin.RetentionInventory{Version: "inventory-v2", Current: 2, Generations: []datasourceadmin.RetentionGeneration{purgeGeneration(t, 1), purgeGeneration(t, 2)}}); err == nil {
 		t.Fatal("stale inventory version accepted")
 	}
-	fence, err = request.VerifyReadback(datasourceadmin.BackendLDAP, authority, datasourceadmin.RetentionInventory{Version: testInventoryVersion, Current: 2, Generations: []datasourceadmin.RetentionGeneration{purgeGeneration(t, 2)}})
+	fence, err = request.VerifyReadback(datasourceadmin.BackendLDAP, authority, policy, datasourceadmin.RetentionInventory{Version: testInventoryVersion, Current: 2, Generations: []datasourceadmin.RetentionGeneration{purgeGeneration(t, 2)}})
 	if err != nil || !fence.IdempotentAbsent() {
 		t.Fatal("exact all-absent retry was not idempotent")
 	}

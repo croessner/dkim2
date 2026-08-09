@@ -22,6 +22,7 @@ type purgeArtifactWire struct {
 	Current            uint64                       `json:"current"`
 	InventoryVersion   string                       `json:"inventory_version"`
 	PolicyVersion      string                       `json:"policy_version"`
+	PolicyCommitment   string                       `json:"policy_commitment"`
 	Targets            []purgeTargetWire            `json:"targets"`
 	PlanDigest         string                       `json:"plan_digest"`
 	ArtifactDigest     string                       `json:"artifact_digest"`
@@ -121,7 +122,7 @@ func purgePlanWireFromPlan(plan *PurgePlan) (purgeArtifactWire, error) {
 	for index, target := range plan.targets {
 		targets[index] = purgeTargetWire{Generation: target.Generation, Schema: target.Schema, Lifecycle: target.Lifecycle, ContentDigest: target.ContentDigest.Hex()}
 	}
-	return purgeArtifactWire{Version: purgeArtifactVersion, Backend: plan.backend, Authority: authority, Current: plan.current, InventoryVersion: plan.inventoryVersion, PolicyVersion: plan.policyVersion, Targets: targets, PlanDigest: plan.digest.Hex(), ArtifactDigest: plan.artifactDigest.Hex(), ExpectedRetained: plan.expectedRetained, ExpectedUnresolved: plan.expectedUnresolved}, nil
+	return purgeArtifactWire{Version: purgeArtifactVersion, Backend: plan.backend, Authority: authority, Current: plan.current, InventoryVersion: plan.inventoryVersion, PolicyVersion: plan.policyVersion, PolicyCommitment: plan.policyCommitment.Hex(), Targets: targets, PlanDigest: plan.digest.Hex(), ArtifactDigest: plan.artifactDigest.Hex(), ExpectedRetained: plan.expectedRetained, ExpectedUnresolved: plan.expectedUnresolved}, nil
 }
 
 // purgePlanFromWire reconstructs and recomputes every protected artifact commitment.
@@ -145,7 +146,11 @@ func purgePlanFromWire(wire purgeArtifactWire) (*PurgePlan, error) {
 		}
 		targets[index] = admincontract.PurgeTarget{Generation: target.Generation, Schema: target.Schema, Lifecycle: target.Lifecycle, ContentDigest: digest}
 	}
-	digest, err := admincontract.PurgePlanDigest(admincontract.PurgePlan{Version: admincontract.ContractVersion, CurrentGeneration: wire.Current, InventoryVersion: wire.InventoryVersion, PolicyVersion: wire.PolicyVersion, Targets: targets})
+	policyCommitment, err := admincontract.ParseDigestHex(wire.PolicyCommitment)
+	if err != nil {
+		return nil, errInvalid
+	}
+	digest, err := newPurgePlanDigest(wire.Current, wire.InventoryVersion, wire.PolicyVersion, policyCommitment, targets)
 	if err != nil {
 		return nil, errInvalid
 	}
@@ -153,7 +158,7 @@ func purgePlanFromWire(wire purgeArtifactWire) (*PurgePlan, error) {
 	if err != nil || !wantPlan.Equal(digest) {
 		return nil, errInvalid
 	}
-	artifact, err := newPurgeArtifactDigest(authorityCommitment, digest, uint32(len(targets)), wire.ExpectedRetained, wire.ExpectedUnresolved)
+	artifact, err := newPurgeArtifactDigest(authorityCommitment, policyCommitment, digest, uint32(len(targets)), wire.ExpectedRetained, wire.ExpectedUnresolved)
 	if err != nil {
 		return nil, errInvalid
 	}
@@ -161,7 +166,7 @@ func purgePlanFromWire(wire purgeArtifactWire) (*PurgePlan, error) {
 	if err != nil || !wantArtifact.Equal(artifact) {
 		return nil, errInvalid
 	}
-	return &PurgePlan{backend: wire.Backend, authority: authority, authorityCommitment: authorityCommitment, current: wire.Current, inventoryVersion: wire.InventoryVersion, policyVersion: wire.PolicyVersion, targets: targets, digest: digest, artifactDigest: artifact, expectedRetained: wire.ExpectedRetained, expectedUnresolved: wire.ExpectedUnresolved}, nil
+	return &PurgePlan{backend: wire.Backend, authority: authority, authorityCommitment: authorityCommitment, current: wire.Current, inventoryVersion: wire.InventoryVersion, policyVersion: wire.PolicyVersion, policyCommitment: policyCommitment, targets: targets, digest: digest, artifactDigest: artifact, expectedRetained: wire.ExpectedRetained, expectedUnresolved: wire.ExpectedUnresolved}, nil
 }
 
 // purgeAuthorityWireFromDescriptor converts protected authority evidence without generic JSON exposure.

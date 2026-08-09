@@ -21,6 +21,7 @@ type PurgePlan struct {
 	current             uint64
 	inventoryVersion    string
 	policyVersion       string
+	policyCommitment    admincontract.Digest
 	targets             []admincontract.PurgeTarget
 	digest              admincontract.Digest
 	artifactDigest      admincontract.Digest
@@ -65,15 +66,19 @@ func NewPurgePlan(backend datasourceadmin.BackendClass, authority datasourceadmi
 		return 0
 	})
 	policy := classification.Policy()
-	digest, err := admincontract.PurgePlanDigest(admincontract.PurgePlan{Version: admincontract.ContractVersion, CurrentGeneration: classification.CurrentGeneration(), InventoryVersion: classification.InventoryVersion(), PolicyVersion: policy.Version, Targets: targets})
+	policyCommitment, err := datasourceadmin.RetentionPolicyCommitment(policy)
 	if err != nil {
 		return nil, errConflict
 	}
-	artifactDigest, err := newPurgeArtifactDigest(authorityCommitment, digest, uint32(len(targets)), classification.RetainedCount(), classification.UnresolvedCount())
+	digest, err := newPurgePlanDigest(classification.CurrentGeneration(), classification.InventoryVersion(), policy.Version, policyCommitment, targets)
 	if err != nil {
 		return nil, errConflict
 	}
-	return &PurgePlan{backend: backend, authority: authority, authorityCommitment: authorityCommitment, current: classification.CurrentGeneration(), inventoryVersion: classification.InventoryVersion(), policyVersion: policy.Version, targets: targets, digest: digest, artifactDigest: artifactDigest, expectedRetained: classification.RetainedCount(), expectedUnresolved: classification.UnresolvedCount()}, nil
+	artifactDigest, err := newPurgeArtifactDigest(authorityCommitment, policyCommitment, digest, uint32(len(targets)), classification.RetainedCount(), classification.UnresolvedCount())
+	if err != nil {
+		return nil, errConflict
+	}
+	return &PurgePlan{backend: backend, authority: authority, authorityCommitment: authorityCommitment, current: classification.CurrentGeneration(), inventoryVersion: classification.InventoryVersion(), policyVersion: policy.Version, policyCommitment: policyCommitment, targets: targets, digest: digest, artifactDigest: artifactDigest, expectedRetained: classification.RetainedCount(), expectedUnresolved: classification.UnresolvedCount()}, nil
 }
 
 // Digest returns the exact provider-neutral destructive target commitment.
@@ -125,12 +130,16 @@ type PurgeApplyRequest struct {
 }
 
 // VerifyReadback rejects stale plans and classifies exact all-absent retries as idempotent.
-func (r *PurgeApplyRequest) VerifyReadback(backend datasourceadmin.BackendClass, authority datasourceadmin.AuthorityDescriptor, inventory datasourceadmin.RetentionInventory) (PurgeApplyFence, error) {
+func (r *PurgeApplyRequest) VerifyReadback(backend datasourceadmin.BackendClass, authority datasourceadmin.AuthorityDescriptor, policy datasourceadmin.RetentionPolicy, inventory datasourceadmin.RetentionInventory) (PurgeApplyFence, error) {
 	if r == nil || r.plan == nil || r.plan.closed || r.plan.backend != backend || inventory.Current != r.plan.current {
 		return PurgeApplyFence{}, errConflict
 	}
 	commitment, err := datasourceadmin.RetentionAuthorityCommitment(backend, canonicalPurgeAuthority(authority))
 	if err != nil || !commitment.Equal(r.authorityCommitment) || !r.digest.Equal(r.plan.digest) || !r.artifactDigest.Equal(r.plan.artifactDigest) {
+		return PurgeApplyFence{}, errConflict
+	}
+	policyCommitment, policyErr := datasourceadmin.RetentionPolicyCommitment(policy)
+	if policyErr != nil || !policyCommitment.Equal(r.plan.policyCommitment) {
 		return PurgeApplyFence{}, errConflict
 	}
 	byGeneration := make(map[uint64]datasourceadmin.RetentionGeneration, len(inventory.Generations))
@@ -199,7 +208,7 @@ func (p *PurgePlan) Close() error {
 	p.authority = datasourceadmin.AuthorityDescriptor{}
 	clear(p.targets)
 	p.targets = nil
-	p.digest, p.authorityCommitment, p.artifactDigest = admincontract.Digest{}, admincontract.Digest{}, admincontract.Digest{}
+	p.digest, p.authorityCommitment, p.policyCommitment, p.artifactDigest = admincontract.Digest{}, admincontract.Digest{}, admincontract.Digest{}, admincontract.Digest{}
 	p.closed = true
 	return nil
 }
@@ -244,14 +253,31 @@ func purgeTargetGeneration(target admincontract.PurgeTarget) datasourceadmin.Ret
 	return datasourceadmin.RetentionGeneration{Generation: target.Generation, Schema: target.Schema, State: datasourceadmin.StateCommitted, WasActive: target.Lifecycle == purgeLifecycleActiveHistory, Complete: true, Closed: target.Lifecycle == purgeLifecycleNeverActive, Ownership: datasourceadmin.RetentionOwnershipTrusted, ContentDigest: target.ContentDigest}
 }
 
-// newPurgeArtifactDigest binds the provider-neutral plan to exact authority and expected counts.
-func newPurgeArtifactDigest(authority, plan admincontract.Digest, targets, retained, unresolved uint32) (admincontract.Digest, error) {
-	if !authority.Valid() || !plan.Valid() || targets == 0 {
+// newPurgePlanDigest binds exact ordered targets to every effective retention policy value.
+func newPurgePlanDigest(current uint64, inventoryVersion, policyVersion string, policy admincontract.Digest, targets []admincontract.PurgeTarget) (admincontract.Digest, error) {
+	if !policy.Valid() {
+		return admincontract.Digest{}, errInvalid
+	}
+	base, err := admincontract.PurgePlanDigest(admincontract.PurgePlan{Version: admincontract.ContractVersion, CurrentGeneration: current, InventoryVersion: inventoryVersion, PolicyVersion: policyVersion, Targets: targets})
+	if err != nil {
+		return admincontract.Digest{}, err
+	}
+	output := sha256.New()
+	_, _ = output.Write([]byte("DKIM2-PURGE-PLAN-POLICY-V1\x00"))
+	_, _ = output.Write(base.Bytes())
+	_, _ = output.Write(policy.Bytes())
+	return admincontract.ParseDigest(output.Sum(nil))
+}
+
+// newPurgeArtifactDigest binds the provider-neutral plan to exact authority, policy, and expected counts.
+func newPurgeArtifactDigest(authority, policy, plan admincontract.Digest, targets, retained, unresolved uint32) (admincontract.Digest, error) {
+	if !authority.Valid() || !policy.Valid() || !plan.Valid() || targets == 0 {
 		return admincontract.Digest{}, errInvalid
 	}
 	output := sha256.New()
 	_, _ = output.Write([]byte(purgeArtifactDomain))
 	_, _ = output.Write(authority.Bytes())
+	_, _ = output.Write(policy.Bytes())
 	_, _ = output.Write(plan.Bytes())
 	for _, value := range []uint32{targets, retained, unresolved} {
 		var encoded [4]byte

@@ -12,7 +12,7 @@ import (
 func TestExecutePurgeRejectsUnknownResultWithoutRetry(t *testing.T) {
 	request, authority, inventory := purgeExecutionFixture(t)
 	executor := &purgeExecutionFake{result: PurgeExecutionResult{Unknown: true}}
-	if _, err := ExecutePurge(t.Context(), request, datasourceadmin.BackendLDAP, authority, inventory, executor); err == nil {
+	if _, err := ExecutePurge(t.Context(), request, datasourceadmin.BackendLDAP, authority, purgeExecutionPolicy(), inventory, executor); err == nil {
 		t.Fatal("unknown destruction result was accepted")
 	}
 	if executor.calls != 1 {
@@ -24,7 +24,7 @@ func TestExecutePurgeRejectsUnknownResultWithoutRetry(t *testing.T) {
 func TestExecutePurgePassesOnlyExactProtectedTargets(t *testing.T) {
 	request, authority, inventory := purgeExecutionFixture(t)
 	executor := &purgeExecutionFake{result: PurgeExecutionResult{Committed: true}}
-	result, err := ExecutePurge(context.Background(), request, datasourceadmin.BackendLDAP, authority, inventory, executor)
+	result, err := ExecutePurge(context.Background(), request, datasourceadmin.BackendLDAP, authority, purgeExecutionPolicy(), inventory, executor)
 	if err != nil || !result.Committed || executor.calls != 1 || executor.targets != 1 || executor.current != 2 {
 		t.Fatal("exact protected purge command was not dispatched")
 	}
@@ -36,7 +36,7 @@ func TestExecutePurgeRequiresReceiptReconciliationForAbsentTargets(t *testing.T)
 	request, authority, inventory := purgeExecutionFixture(t)
 	absent := datasourceadmin.RetentionInventory{Version: inventory.Version, Current: inventory.Current, Generations: []datasourceadmin.RetentionGeneration{purgeGeneration(t, 2)}}
 	executor := &purgeExecutionFake{result: PurgeExecutionResult{Committed: true}, reconcileResult: PurgeExecutionResult{Committed: true}}
-	result, err := ExecutePurge(t.Context(), request, datasourceadmin.BackendLDAP, authority, absent, executor)
+	result, err := ExecutePurge(t.Context(), request, datasourceadmin.BackendLDAP, authority, purgeExecutionPolicy(), absent, executor)
 	if err != nil || !result.Committed || executor.calls != 0 || executor.reconcileCalls != 1 {
 		t.Fatal("absent target bypassed provider receipt reconciliation")
 	}
@@ -79,8 +79,7 @@ func (f *purgeExecutionFake) Purge(ctx context.Context, command PurgeCommand) (P
 // purgeExecutionFixture constructs one exact eligible committed target.
 func purgeExecutionFixture(t *testing.T) (*PurgeApplyRequest, datasourceadmin.AuthorityDescriptor, datasourceadmin.RetentionInventory) {
 	t.Helper()
-	policy := datasourceadmin.DefaultRetentionPolicy()
-	policy.MaxTotalGenerations, policy.MinActiveRollbackGenerations, policy.MaxClosedNeverActiveGenerations, policy.MaxPurgeBatch = 1, 0, 0, 1
+	policy := purgeExecutionPolicy()
 	inventory := datasourceadmin.RetentionInventory{Version: testInventoryVersion, Current: 2, Generations: []datasourceadmin.RetentionGeneration{purgeGeneration(t, 1), purgeGeneration(t, 2)}}
 	classification, err := datasourceadmin.ClassifyRetention(inventory, policy)
 	if err != nil {
@@ -96,4 +95,10 @@ func purgeExecutionFixture(t *testing.T) (*PurgeApplyRequest, datasourceadmin.Au
 		t.Fatal(err)
 	}
 	return request, authority, inventory
+}
+
+func purgeExecutionPolicy() datasourceadmin.RetentionPolicy {
+	policy := datasourceadmin.DefaultRetentionPolicy()
+	policy.MaxTotalGenerations, policy.MinActiveRollbackGenerations, policy.MaxClosedNeverActiveGenerations, policy.MaxPurgeBatch = 1, 0, 0, 1
+	return policy
 }

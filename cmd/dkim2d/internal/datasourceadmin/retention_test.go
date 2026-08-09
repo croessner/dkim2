@@ -109,6 +109,31 @@ func TestReadRetentionRecoveryInventoryExceedsAllocationHistory(t *testing.T) {
 	}
 }
 
+// TestRetentionPolicyCommitmentBindsEveryEffectiveField rejects a plan/apply
+// comparison that would accidentally omit one policy control.
+func TestRetentionPolicyCommitmentBindsEveryEffectiveField(t *testing.T) {
+	policy := DefaultRetentionPolicy()
+	baseline, err := RetentionPolicyCommitment(policy)
+	if err != nil || !baseline.Valid() {
+		t.Fatal("default retention policy commitment rejected")
+	}
+	changes := []func(*RetentionPolicy){
+		func(value *RetentionPolicy) { value.MaxTotalGenerations-- },
+		func(value *RetentionPolicy) { value.MinActiveRollbackGenerations-- },
+		func(value *RetentionPolicy) { value.MaxClosedNeverActiveGenerations-- },
+		func(value *RetentionPolicy) { value.MaxPurgeBatch-- },
+		func(value *RetentionPolicy) { value.AllowLegacyV2 = true },
+	}
+	for _, change := range changes {
+		changed := policy
+		change(&changed)
+		commitment, commitmentErr := RetentionPolicyCommitment(changed)
+		if commitmentErr != nil || commitment.Equal(baseline) {
+			t.Fatal("effective retention policy field was not committed")
+		}
+	}
+}
+
 func TestReadRetentionRecoveryInventoryRejectsOverLimitHistory(t *testing.T) {
 	rows := make([]RetentionGeneration, 0, 16385)
 	for generation := uint64(1); generation <= 16385; generation++ {

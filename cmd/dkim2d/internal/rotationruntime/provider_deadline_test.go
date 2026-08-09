@@ -172,7 +172,7 @@ func TestRetentionRecoveryBoundsEachTerminalRead(t *testing.T) {
 	const maximum = 20 * time.Millisecond
 	terminalProbe := &deadlineTerminalRecoveryProbe{}
 	terminal := &deadlineTerminalRecorder{recorder: terminalProbe, maximum: maximum}
-	reader := newRetentionRecoveryAdapter(&retentionRecoverySequence{views: []datasourceadmin.RetentionInventory{view}}, terminal)
+	reader := newRetentionRecoveryAdapter(&retentionRecoverySequence{views: []datasourceadmin.RetentionInventory{view}}, terminal, datasourceadmin.DefaultRetentionRecoveryLimits())
 	if _, err := datasourceadmin.ReadRetentionRecoveryInventory(outer, reader, datasourceadmin.DefaultRetentionRecoveryLimits()); err != nil {
 		t.Fatalf("retention recovery: %v", err)
 	}

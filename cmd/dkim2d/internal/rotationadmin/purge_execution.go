@@ -72,13 +72,14 @@ func ExecutePurge(
 	request *PurgeApplyRequest,
 	backend datasourceadmin.BackendClass,
 	authority datasourceadmin.AuthorityDescriptor,
+	policy datasourceadmin.RetentionPolicy,
 	inventory datasourceadmin.RetentionInventory,
 	executor PurgeExecutor,
 ) (PurgeExecutionResult, error) {
 	if ctx == nil || ctx.Err() != nil || request == nil || executor == nil {
 		return PurgeExecutionResult{}, errInvalid
 	}
-	fence, err := request.VerifyReadback(backend, authority, inventory)
+	fence, err := request.VerifyReadback(backend, authority, policy, inventory)
 	if err != nil {
 		return PurgeExecutionResult{}, err
 	}
@@ -104,13 +105,14 @@ func ReconcilePurge(
 	request *PurgeApplyRequest,
 	backend datasourceadmin.BackendClass,
 	authority datasourceadmin.AuthorityDescriptor,
+	policy datasourceadmin.RetentionPolicy,
 	inventory datasourceadmin.RetentionInventory,
 	executor PurgeReconciler,
 ) (PurgeExecutionResult, error) {
 	if ctx == nil || ctx.Err() != nil || request == nil || executor == nil {
 		return PurgeExecutionResult{}, errInvalid
 	}
-	fence, err := request.VerifyReadback(backend, authority, inventory)
+	fence, err := request.VerifyReadback(backend, authority, policy, inventory)
 	if err != nil || (!fence.Ready() && !fence.IdempotentAbsent()) || request.plan == nil || request.plan.closed {
 		return PurgeExecutionResult{}, errConflict
 	}
