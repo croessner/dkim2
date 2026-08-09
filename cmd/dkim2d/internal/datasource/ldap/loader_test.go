@@ -160,3 +160,19 @@ func TestLoaderRejectsMissingNativeKeyMaterial(t *testing.T) {
 		t.Fatal("LDAP loader accepted missing native key material")
 	}
 }
+
+// TestRuntimeMetadataProjectionIncludesCampaignSource freezes the immutable
+// source-generation input required to recompute a v3 campaign digest.
+func TestRuntimeMetadataProjectionIncludesCampaignSource(t *testing.T) {
+	t.Parallel()
+	projection := metadataProjection()
+	seen := 0
+	for _, attribute := range projection {
+		if attribute == attrSourceGeneration {
+			seen++
+		}
+	}
+	if seen != 1 {
+		t.Fatal("runtime metadata projection lost the campaign source fence")
+	}
+}

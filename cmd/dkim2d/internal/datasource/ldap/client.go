@@ -173,10 +173,7 @@ func (c *goLDAPClient) readMetadata(ctx context.Context, base string) (Entry, er
 	request := goldap.NewSearchRequest(
 		base, goldap.ScopeBaseObject, goldap.NeverDerefAliases, 2, 0, false,
 		"(objectClass=dkim2Dataset)",
-		[]string{
-			attrSchemaVersion, attrGeneration, attrDatasetState,
-			attrCandidateDigest, attrOperationID, attrWasActive,
-		},
+		metadataProjection(),
 		nil,
 	)
 	request.EnforceSizeLimit = true
@@ -191,6 +188,15 @@ func (c *goLDAPClient) readMetadata(ctx context.Context, base string) (Entry, er
 		return Entry{}, errors.New("ldap metadata unavailable")
 	}
 	return entry, nil
+}
+
+// metadataProjection returns every immutable fence needed to verify current
+// and source-bound campaign generation metadata.
+func metadataProjection() []string {
+	return []string{
+		attrSchemaVersion, attrGeneration, attrDatasetState,
+		attrCandidateDigest, attrOperationID, attrSourceGeneration, attrWasActive,
+	}
 }
 
 // SearchPage performs one critical simple-paged exact-generation search.
