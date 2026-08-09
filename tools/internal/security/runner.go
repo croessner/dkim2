@@ -826,11 +826,31 @@ func resolveGoExecutable() (string, string, error) {
 	if err := command.Run(); err != nil || ctx.Err() != nil {
 		return "", "", errors.New("security_go_dependency")
 	}
-	expected := "go version " + runtime.Version() + " " + runtime.GOOS + "/" + runtime.GOARCH
+	runtimeVersion, err := runtimeToolchainVersion(runtime.Version())
+	if err != nil {
+		return "", "", err
+	}
+	expected := "go version " + runtimeVersion + " " + runtime.GOOS + "/" + runtime.GOARCH
 	if strings.TrimSpace(output.String()) != expected {
 		return "", "", errors.New("security_go_dependency")
 	}
 	return executable, digest, nil
+}
+
+// runtimeToolchainVersion separates the closed runtime experiment suffix from
+// the underlying Go toolchain version reported by the compiler executable.
+func runtimeToolchainVersion(value string) (string, error) {
+	base, experiments, present := strings.Cut(value, "-X:")
+	if !present {
+		if value == "" || strings.ContainsAny(value, " \t\r\n") {
+			return "", errors.New("security_go_dependency")
+		}
+		return value, nil
+	}
+	if base == "" || experiments == "" || strings.ContainsAny(base+experiments, " \t\r\n") || strings.Contains(experiments, "-X:") {
+		return "", errors.New("security_go_dependency")
+	}
+	return base, nil
 }
 
 // scannerVersion returns the bounded scanner identity without database URL material.
