@@ -206,12 +206,13 @@ type deadlineRetentionRecoveryReader struct {
 }
 
 func (r *deadlineRetentionRecoveryReader) RetentionCurrent(ctx context.Context) (uint64, error) {
-	child, cancel, err := providerContext(ctx, r.maximum)
-	if err != nil {
-		return 0, err
+	if ctx == nil || ctx.Err() != nil || r.maximum <= 0 {
+		return 0, errUnavailable
 	}
-	defer cancel()
-	return r.reader.RetentionCurrent(child)
+	// A recovery inventory can contain 16,384 fully verified generations. Keep
+	// the campaign-wide deadline here; the concrete provider gives each network
+	// or database interaction its own bounded child context.
+	return r.reader.RetentionCurrent(ctx)
 }
 
 func (r *deadlineRetentionRecoveryReader) RetentionPage(ctx context.Context, after uint64, limit uint32) ([]datasourceadmin.RetentionGeneration, error) {

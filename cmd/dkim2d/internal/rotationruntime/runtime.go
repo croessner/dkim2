@@ -409,7 +409,7 @@ func openLDAPRuntime(_ context.Context, configuration *rotationadmin.Config, pat
 		_ = connectors[3].Close()
 		return nil, errUnavailable
 	}
-	return newComposedRuntime(administrator, purger, newRetentionRecoveryAdapter(administrator, terminal), terminal, backendLDAP, limits, authority, configuration, proof)
+	return newComposedRuntime(administrator, purger, administrator, terminal, backendLDAP, limits, authority, configuration, proof)
 }
 
 // openPostgreSQLRuntime builds three lifecycle pools plus the independent purge pool.
@@ -495,7 +495,7 @@ func openPostgreSQLRuntime(ctx context.Context, configuration *rotationadmin.Con
 		terminal.Close()
 		return nil, errUnavailable
 	}
-	return newComposedRuntime(administrator, purger, newRetentionRecoveryAdapter(administrator, terminal), terminal, "postgresql", limits, authority, configuration, proof)
+	return newComposedRuntime(administrator, purger, administrator, terminal, "postgresql", limits, authority, configuration, proof)
 }
 
 // openMySQLRuntime builds three lifecycle pools plus the independent purge pool.
@@ -582,11 +582,11 @@ func openMySQLRuntime(ctx context.Context, configuration *rotationadmin.Config, 
 		terminal.Close()
 		return nil, errUnavailable
 	}
-	return newComposedRuntime(administrator, purger, newRetentionRecoveryAdapter(administrator, terminal), terminal, configuration.Backend(), limits, authority, configuration, proof)
+	return newComposedRuntime(administrator, purger, administrator, terminal, configuration.Backend(), limits, authority, configuration, proof)
 }
 
 // newComposedRuntime is the sole production constructor for lifecycle mutation.
-func newComposedRuntime(backend campaignBackend, purge rotationadmin.PurgeExecutor, recovery datasourceadmin.RetentionRecoveryReader, terminal datasourceadmin.TerminalRecorder, class string, generations datasourceadmin.GenerationLimits, authority datasourceadmin.AuthorityDescriptor, configuration *rotationadmin.Config, proof *rotationadmin.DNSBatchProver) (*CampaignRuntime, error) {
+func newComposedRuntime(backend campaignBackend, purge rotationadmin.PurgeExecutor, recovery retentionRecoverySource, terminal datasourceadmin.TerminalRecorder, class string, generations datasourceadmin.GenerationLimits, authority datasourceadmin.AuthorityDescriptor, configuration *rotationadmin.Config, proof *rotationadmin.DNSBatchProver) (*CampaignRuntime, error) {
 	if backend == nil || purge == nil || recovery == nil || terminal == nil || configuration == nil || proof == nil || datasourceadmin.ValidatePurgeAuthority(datasourceadmin.BackendClass(class), authority) != nil {
 		return nil, errUnavailable
 	}
@@ -597,7 +597,11 @@ func newComposedRuntime(backend campaignBackend, purge rotationadmin.PurgeExecut
 	boundedBackend := &deadlineCampaignBackend{backend: backend, maximum: generations.BackendDeadline}
 	boundedTerminal := &deadlineTerminalRecorder{recorder: terminal, maximum: generations.BackendDeadline}
 	boundedPurge := &deadlinePurgeExecutor{executor: purge, maximum: generations.BackendDeadline}
-	boundedRecovery := &deadlineRetentionRecoveryReader{reader: recovery, maximum: generations.BackendDeadline}
+	recoveryAdapter := newRetentionRecoveryAdapter(recovery, boundedTerminal)
+	if recoveryAdapter == nil {
+		return nil, errUnavailable
+	}
+	boundedRecovery := &deadlineRetentionRecoveryReader{reader: recoveryAdapter, maximum: generations.BackendDeadline}
 	terminalBackend, terminalErr := rotationadmin.NewTerminalBackend(boundedBackend, boundedBackend, boundedTerminal)
 	if terminalErr != nil {
 		return nil, errUnavailable

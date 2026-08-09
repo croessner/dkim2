@@ -316,12 +316,7 @@ func (a *Administrator) RetentionRecoveryInventory(ctx context.Context) (datasou
 	if a == nil || ctx == nil || ctx.Err() != nil {
 		return datasourceadmin.RetentionInventory{}, datasourceadmin.NewError(datasourceadmin.CodeInvalid)
 	}
-	tx, finish, err := a.begin(ctx, a.snapshot, AdministrationSnapshot, a.generations)
-	if err != nil {
-		return datasourceadmin.RetentionInventory{}, err
-	}
-	defer finish(false)
-	current, present, err := tx.ReadCurrentOptional(ctx, false)
+	current, present, err := a.readRetentionCurrent(ctx)
 	if err != nil || !present || validateCurrentRetentionMetadata(current) != nil {
 		return datasourceadmin.RetentionInventory{}, datasourceadmin.NewError(datasourceadmin.CodeConflict)
 	}
@@ -332,7 +327,7 @@ func (a *Administrator) RetentionRecoveryInventory(ctx context.Context) (datasou
 	rows := make([]datasourceadmin.RetentionGeneration, 0)
 	cursor := ""
 	for {
-		page, pageErr := tx.GenerationPage(ctx, cursor, 1024, false)
+		page, pageErr := a.readRetentionGenerationPage(ctx, cursor)
 		if pageErr != nil {
 			return datasourceadmin.RetentionInventory{}, datasourceadmin.NewError(datasourceadmin.CodeUnavailable)
 		}
@@ -346,7 +341,7 @@ func (a *Administrator) RetentionRecoveryInventory(ctx context.Context) (datasou
 			if compareGenerationText(metadata.Generation, cursor) <= 0 {
 				return datasourceadmin.RetentionInventory{}, datasourceadmin.NewError(datasourceadmin.CodeConflict)
 			}
-			snapshot, verified, readErr := a.readGeneration(ctx, tx, metadata.Generation, a.generations)
+			snapshot, verified, readErr := a.readRetentionGeneration(ctx, metadata.Generation)
 			if readErr != nil || !metadataEqual(metadata, verified) {
 				_ = snapshot.Close()
 				return datasourceadmin.RetentionInventory{}, datasourceadmin.NewError(datasourceadmin.CodeConflict)
@@ -368,15 +363,89 @@ func (a *Administrator) RetentionRecoveryInventory(ctx context.Context) (datasou
 			cursor = metadata.Generation
 		}
 	}
-	final, finalPresent, finalErr := tx.ReadCurrentOptional(ctx, false)
+	final, finalPresent, finalErr := a.readRetentionCurrent(ctx)
 	if finalErr != nil || !finalPresent || !metadataEqual(current, final) {
 		return datasourceadmin.RetentionInventory{}, datasourceadmin.NewError(datasourceadmin.CodeConflict)
 	}
-	if err := tx.Commit(ctx); err != nil {
-		return datasourceadmin.RetentionInventory{}, datasourceadmin.NewError(datasourceadmin.CodeUnavailable)
+	return datasourceadmin.RetentionInventory{Version: "sqlsnapshot-recovery-v1", Current: currentGeneration, Generations: rows}, nil
+}
+
+// retentionSnapshot executes one short repeatable-read provider interaction.
+func (a *Administrator) retentionSnapshot(
+	ctx context.Context,
+	read func(context.Context, AdministrationTransaction) error,
+) error {
+	call, cancel, err := retentionSQLContext(ctx, a.generations.BackendDeadline)
+	if err != nil {
+		return err
+	}
+	defer cancel()
+	tx, finish, err := a.begin(call, a.snapshot, AdministrationSnapshot, a.generations)
+	if err != nil {
+		return err
+	}
+	defer finish(false)
+	if err := read(call, tx); err != nil {
+		return err
+	}
+	if err := tx.Commit(call); err != nil {
+		return datasourceadmin.NewError(datasourceadmin.CodeUnavailable)
 	}
 	finish(true)
-	return datasourceadmin.RetentionInventory{Version: "sqlsnapshot-recovery-v1", Current: currentGeneration, Generations: rows}, nil
+	return nil
+}
+
+// readRetentionCurrent reads one current fence in an independently bounded snapshot.
+func (a *Administrator) readRetentionCurrent(ctx context.Context) (MetadataRow, bool, error) {
+	var row MetadataRow
+	var present bool
+	err := a.retentionSnapshot(ctx, func(call context.Context, tx AdministrationTransaction) error {
+		var readErr error
+		row, present, readErr = tx.ReadCurrentOptional(call, false)
+		return readErr
+	})
+	return row, present, err
+}
+
+// readRetentionGenerationPage reads one bounded root-metadata page.
+func (a *Administrator) readRetentionGenerationPage(ctx context.Context, after string) ([]MetadataRow, error) {
+	var rows []MetadataRow
+	err := a.retentionSnapshot(ctx, func(call context.Context, tx AdministrationTransaction) error {
+		var readErr error
+		rows, readErr = tx.GenerationPage(call, after, 1024, false)
+		return readErr
+	})
+	return rows, err
+}
+
+// readRetentionGeneration independently verifies one complete generation.
+func (a *Administrator) readRetentionGeneration(ctx context.Context, generation string) (*datasourceadmin.Snapshot, MetadataRow, error) {
+	var snapshot *datasourceadmin.Snapshot
+	var metadata MetadataRow
+	err := a.retentionSnapshot(ctx, func(call context.Context, tx AdministrationTransaction) error {
+		var readErr error
+		snapshot, metadata, readErr = a.readGeneration(call, tx, generation, a.generations)
+		return readErr
+	})
+	if err != nil && snapshot != nil {
+		_ = snapshot.Close()
+		snapshot = nil
+	}
+	return snapshot, metadata, err
+}
+
+// retentionSQLContext bounds one database interaction without shortening the
+// campaign-wide historical recovery context.
+func retentionSQLContext(parent context.Context, maximum time.Duration) (context.Context, context.CancelFunc, error) {
+	if parent == nil || parent.Err() != nil || maximum <= 0 {
+		return nil, nil, datasourceadmin.NewError(datasourceadmin.CodeInvalid)
+	}
+	if deadline, present := parent.Deadline(); present && time.Until(deadline) <= maximum {
+		child, cancel := context.WithCancel(parent)
+		return child, cancel, nil
+	}
+	child, cancel := context.WithTimeout(parent, maximum)
+	return child, cancel, nil
 }
 
 // validateCurrentRetentionMetadata reuses the current fence while retaining a bounded error mapping.

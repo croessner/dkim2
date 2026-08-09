@@ -15,6 +15,8 @@ import (
 	goldap "github.com/go-ldap/ldap/v3"
 )
 
+const testGenerationBaseDN = "ou=generations,ou=dkim2,dc=example,dc=test"
+
 type administrationConnectorFake struct {
 	client    Client
 	authority AdministrationAuthority
@@ -257,7 +259,7 @@ func TestCompleteGenerationProjectionRejectsStructuralAmbiguity(t *testing.T) {
 // TestGenerationRootPagingRequiresCriticalOpaqueGlobalInventory freezes two
 // pages, cookie propagation, and cross-page duplicate/foreign-child denial.
 func TestGenerationRootPagingRequiresCriticalOpaqueGlobalInventory(t *testing.T) {
-	base := "ou=generations,ou=dkim2,dc=example,dc=test"
+	base := testGenerationBaseDN
 	limits := datasourceadmin.GenerationLimits{
 		MaxGenerations: 300, MaxOutstandingCandidates: 8,
 		MaxSnapshotRows: 4096, MaxSnapshotBytes: 32 << 20,
@@ -325,7 +327,7 @@ func TestGenerationRootPagingRequiresCriticalOpaqueGlobalInventory(t *testing.T)
 // TestGenerationRootPagingRetainsCommittedV1History proves transport paging
 // uses the same conservative legacy grammar as allocation inventory.
 func TestGenerationRootPagingRetainsCommittedV1History(t *testing.T) {
-	base := "ou=generations,ou=dkim2,dc=example,dc=test"
+	base := testGenerationBaseDN
 	legacy := generationRootLDAPSource(base, 1)
 	for _, attribute := range legacy.Attributes {
 		if attribute.Name == attrSchemaVersion {
@@ -954,7 +956,7 @@ func TestAdministratorObservationBindsExpectedCurrentAfterActivation(t *testing.
 // TestGenerationRootProjectionRejectsEveryForeignDirectChild reproduces the
 // inventory hole caused by filtering the enumeration to dataset roots.
 func TestGenerationRootProjectionRejectsEveryForeignDirectChild(t *testing.T) {
-	base := "ou=generations,ou=dkim2,dc=example,dc=test"
+	base := testGenerationBaseDN
 	root := &goldap.Entry{DN: "dkim2Generation=9," + base, Attributes: []*goldap.EntryAttribute{
 		{Name: attrObjectClass, Values: []string{topObjectClass, datasetObjectClass}, ByteValues: [][]byte{[]byte(topObjectClass), []byte(datasetObjectClass)}},
 		{Name: "cn", Values: []string{"generation-9"}, ByteValues: [][]byte{[]byte("generation-9")}},

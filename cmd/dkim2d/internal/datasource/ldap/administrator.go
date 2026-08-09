@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"time"
 
 	"github.com/croessner/dkim2/admincontract"
 	"github.com/croessner/dkim2/cmd/dkim2d/internal/datasourceadmin"
@@ -47,12 +48,22 @@ type administrationClient interface {
 // RetentionRecoveryInventory reads complete historical LDAP evidence without allocation ceilings.
 func (a *Administrator) RetentionRecoveryInventory(ctx context.Context) (datasourceadmin.RetentionInventory, error) {
 	limits := datasourceadmin.DefaultRetentionRecoveryLimits()
-	client, closeClient, err := a.connect(ctx, a.snapshot, a.generations)
+	call, cancel, err := retentionLDAPContext(ctx, a.generations.BackendDeadline)
+	if err != nil {
+		return datasourceadmin.RetentionInventory{}, err
+	}
+	client, closeClient, err := a.connect(call, a.snapshot, a.generations)
+	cancel()
 	if err != nil {
 		return datasourceadmin.RetentionInventory{}, err
 	}
 	defer closeClient()
-	first, present, err := client.ReadCurrentOptional(ctx)
+	call, cancel, err = retentionLDAPContext(ctx, a.generations.BackendDeadline)
+	if err != nil {
+		return datasourceadmin.RetentionInventory{}, err
+	}
+	first, present, err := client.ReadCurrentOptional(call)
+	cancel()
 	if err != nil || !present {
 		return datasourceadmin.RetentionInventory{}, datasourceadminError(datasourceadmin.CodeUnavailable)
 	}
@@ -61,7 +72,12 @@ func (a *Administrator) RetentionRecoveryInventory(ctx context.Context) (datasou
 	if err != nil {
 		return datasourceadmin.RetentionInventory{}, datasourceadminError(datasourceadmin.CodeConflict)
 	}
-	roots, err := client.ListRetentionGenerationRoots(ctx, limits)
+	call, cancel, err = retentionLDAPContext(ctx, a.generations.BackendDeadline)
+	if err != nil {
+		return datasourceadmin.RetentionInventory{}, err
+	}
+	roots, err := client.ListRetentionGenerationRoots(call, limits)
+	cancel()
 	if err != nil {
 		return datasourceadmin.RetentionInventory{}, datasourceadminError(datasourceadmin.CodeUnavailable)
 	}
@@ -81,7 +97,12 @@ func (a *Administrator) RetentionRecoveryInventory(ctx context.Context) (datasou
 			})
 			continue
 		}
-		records, recordPresent, readErr := client.ReadGenerationRecords(ctx, metadata.generation, a.limits, a.generations)
+		call, cancel, contextErr := retentionLDAPContext(ctx, a.generations.BackendDeadline)
+		if contextErr != nil {
+			return datasourceadmin.RetentionInventory{}, contextErr
+		}
+		records, recordPresent, readErr := client.ReadGenerationRecords(call, metadata.generation, a.limits, a.generations)
+		cancel()
 		if readErr != nil || !recordPresent {
 			clearDatasetRecords(&records)
 			return datasourceadmin.RetentionInventory{}, datasourceadminError(datasourceadmin.CodeUnavailable)
@@ -118,7 +139,12 @@ func (a *Administrator) RetentionRecoveryInventory(ctx context.Context) (datasou
 	if currentMatches != 1 {
 		return datasourceadmin.RetentionInventory{}, datasourceadminError(datasourceadmin.CodeConflict)
 	}
-	final, finalPresent, finalErr := client.ReadCurrentOptional(ctx)
+	call, cancel, err = retentionLDAPContext(ctx, a.generations.BackendDeadline)
+	if err != nil {
+		return datasourceadmin.RetentionInventory{}, err
+	}
+	final, finalPresent, finalErr := client.ReadCurrentOptional(call)
+	cancel()
 	if finalErr != nil || !finalPresent {
 		return datasourceadmin.RetentionInventory{}, datasourceadminError(datasourceadmin.CodeUnavailable)
 	}
@@ -128,6 +154,20 @@ func (a *Administrator) RetentionRecoveryInventory(ctx context.Context) (datasou
 		return datasourceadmin.RetentionInventory{}, datasourceadminError(datasourceadmin.CodeConflict)
 	}
 	return datasourceadmin.RetentionInventory{Version: "ldap-recovery-v1", Current: current.generation, Generations: rows}, nil
+}
+
+// retentionLDAPContext bounds one LDAP recovery interaction while the outer
+// campaign context remains available for the complete historical scan.
+func retentionLDAPContext(parent context.Context, maximum time.Duration) (context.Context, context.CancelFunc, error) {
+	if parent == nil || parent.Err() != nil || maximum <= 0 {
+		return nil, nil, datasourceadminError(datasourceadmin.CodeInvalid)
+	}
+	if deadline, present := parent.Deadline(); present && time.Until(deadline) <= maximum {
+		child, cancel := context.WithCancel(parent)
+		return child, cancel, nil
+	}
+	child, cancel := context.WithTimeout(parent, maximum)
+	return child, cancel, nil
 }
 
 // AdministrationConnector opens one LDAP session and exposes only an opaque
