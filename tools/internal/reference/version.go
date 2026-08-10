@@ -21,7 +21,7 @@ const (
 	releasePlanPath       = "testdata/reference/release-plan.json"
 	releasePlanSchemaPath = "testdata/reference/schemas/release-plan.schema.json"
 	candidateVersion      = "v0.1.0-rc.1"
-	candidateBaseRevision = "f30fecbd35ae3afd1b590ddfe55ee45f0cf6555a"
+	candidateBaseRevision = "8716654e2a8cbee4c2f2ebc8a1960335eb27e417"
 	maxReleasePlanBytes   = int64(1 << 20)
 )
 

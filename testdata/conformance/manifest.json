@@ -220,19 +220,19 @@
     {
       "id": "postfix-qualification-dockerfile",
       "path": "contrib/qualification/postfix-milter/Dockerfile",
-      "sha256": "fa90221105199edfae35442d6a42e8bf3cce7b07af4794baad5f6998a2cafc8f",
+      "sha256": "0014ea58833cf9594e96b2f264186e733c18800ac20fd45e35d906b903e9f865",
       "module": "contrib/qualification/postfix-milter"
     },
     {
       "id": "postfix-qualification-policy-source",
       "path": "tools/postfix_qualification_policy_test.go",
-      "sha256": "16bce14da2a9b3242a3016ec11fca574fc60b6d1fe92c5078567975cccec9ebb",
+      "sha256": "ffd12f74e4c4808e2c6fdc83e11eeb3647caeb7f77dcdcac88a0bfbebae8d16a",
       "module": "tools"
     },
     {
       "id": "postfix-qualification-runner",
       "path": "contrib/qualification/postfix-milter/run.sh",
-      "sha256": "065837c2f9c348782011eb2ac94296be7f5615e8d2a87df53e5a2732bb31ca92",
+      "sha256": "90f398daabe1a8a43f41b6e641eb4ee8dcfbcd1d1327ad5053e45e036823ce28",
       "module": "contrib/qualification/postfix-milter"
     },
     {

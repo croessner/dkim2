@@ -100,7 +100,7 @@ func validatePostfixReportBinding(
 	if len(report.ImageIdentities) != 3 ||
 		report.ImageIdentities["debian"] != "debian@sha256:4e401d95de7083948053197a9c3913343cd06b706bf15eb6a0c3ccd26f436a0e" ||
 		report.ImageIdentities["golang"] != "golang@sha256:ae5a2316d12f3e78fd99177dad452e6ad4f240af2d71d57b480c3477f250fec6" ||
-		report.ImageIdentities["postfix"] != "chrroessner/postfix@sha256:13cd39ff85a2edece32bdf3a4cdaa123c1a7d91db0e296f840c3ffe3d9121a4d" {
+		report.ImageIdentities["postfix"] != "chrroessner/postfix@sha256:8ccda0e26bb241116c7df5e0fb2bcdbc6a77b409b085d87e7ad4d0c23b0c41fd" {
 		return errors.New("runner_identity")
 	}
 	return nil
@@ -109,7 +109,7 @@ func validatePostfixReportBinding(
 // validatePostfixRuntimeIdentity checks the exact runtime and executable set.
 func validatePostfixRuntimeIdentity(report PostfixQualificationReport) error {
 	if report.RuntimeIdentity.Schema != "dkim2.postfix-qualification-identity.v1" ||
-		report.RuntimeIdentity.PostfixVersion != "3.11.5" ||
+		report.RuntimeIdentity.PostfixVersion != "3.11.6" ||
 		len(report.RuntimeIdentity.Executables) != 3 {
 		return errors.New("runner_identity")
 	}

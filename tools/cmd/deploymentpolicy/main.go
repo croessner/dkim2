@@ -345,7 +345,7 @@ func validateRoute(project composeProject, route, root string) error {
 // validatePostfixService checks queue, socket, image, and capability ownership.
 func validatePostfixService(service composeService, root string) error {
 	if service.User != "" || service.ReadOnly ||
-		service.Image != "chrroessner/postfix:3.11.5@sha256:13cd39ff85a2edece32bdf3a4cdaa123c1a7d91db0e296f840c3ffe3d9121a4d" ||
+		service.Image != "chrroessner/postfix:3.11.6-r1@sha256:8ccda0e26bb241116c7df5e0fb2bcdbc6a77b409b085d87e7ad4d0c23b0c41fd" ||
 		!reflect.DeepEqual(service.CapAdd, []string{
 			"CHOWN", "DAC_OVERRIDE", "FOWNER", "NET_BIND_SERVICE",
 			"SETGID", "SETUID", "SYS_CHROOT",

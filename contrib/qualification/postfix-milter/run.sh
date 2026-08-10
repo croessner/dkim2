@@ -74,8 +74,8 @@ ensure_image \
   sha256:49f0bb6384d2a743d631148b80de7644055e0f7fc9fe3f493872dbddb77a747d \
   linux/amd64
 ensure_image \
-  chrroessner/postfix@sha256:13cd39ff85a2edece32bdf3a4cdaa123c1a7d91db0e296f840c3ffe3d9121a4d \
-  sha256:b2ed358c188a57f1a01b5f6af7bb390263d04137881ef15e58451a964c1885de \
+  chrroessner/postfix@sha256:8ccda0e26bb241116c7df5e0fb2bcdbc6a77b409b085d87e7ad4d0c23b0c41fd \
+  sha256:15369ce6d6adc2f67a77a5d65c88956c63ac4ca9864685605eefb9c77a102fcd \
   linux/amd64
 
 docker tag \
@@ -85,7 +85,7 @@ docker tag \
   debian@sha256:4e401d95de7083948053197a9c3913343cd06b706bf15eb6a0c3ccd26f436a0e \
   dkim2-postfix-qualification-daemon:verified
 docker tag \
-  chrroessner/postfix@sha256:13cd39ff85a2edece32bdf3a4cdaa123c1a7d91db0e296f840c3ffe3d9121a4d \
+  chrroessner/postfix@sha256:8ccda0e26bb241116c7df5e0fb2bcdbc6a77b409b085d87e7ad4d0c23b0c41fd \
   dkim2-postfix-qualification-postfix:verified
 
 assert_project_removed() {
@@ -174,7 +174,7 @@ run_once() {
   jq -e '
     keys == ["executables", "postfix_version", "schema"] and
     .schema == "dkim2.postfix-qualification-identity.v1" and
-    .postfix_version == "3.11.5" and
+    .postfix_version == "3.11.6" and
     (.executables | keys == ["dkim2-milter", "qualify"])
   ' "$run_root/identity.json" >/dev/null
   jq -e '
@@ -219,7 +219,7 @@ run_once() {
     --arg base_revision "$base_revision" \
     --arg manifest "$manifest" \
     --arg producer "$producer" \
-    --arg postfix_image "chrroessner/postfix@sha256:13cd39ff85a2edece32bdf3a4cdaa123c1a7d91db0e296f840c3ffe3d9121a4d" \
+    --arg postfix_image "chrroessner/postfix@sha256:8ccda0e26bb241116c7df5e0fb2bcdbc6a77b409b085d87e7ad4d0c23b0c41fd" \
     --arg golang_image "golang@sha256:ae5a2316d12f3e78fd99177dad452e6ad4f240af2d71d57b480c3477f250fec6" \
     --arg debian_image "debian@sha256:4e401d95de7083948053197a9c3913343cd06b706bf15eb6a0c3ccd26f436a0e" \
     --slurpfile success "$run_root/success.json" \

@@ -34,7 +34,7 @@ documented RFC 6531 interpretation.
 | Library verification, origin signing, and authorized revision | supported | Draft-versioned public, negative, recipe, DNS, custody, and cryptographic vectors |
 | `dkim2d` process, sign, and revise operations | supported | Generated OpenAPI clients and real daemon sockets |
 | Milter inbound, originator, ordinary-transit, and Postfix DSN modes | partial | Public Milter-v6 socket fixtures; Postfix DSN covers exact EOD evidence and dedicated daemon capability, but still requires the upstream Postfix patch and qualification harness |
-| Postfix SMTP and local `sendmail(1)` intake | partial | Linux Docker profile with Postfix 3.11.5 and exact immutable image identities |
+| Postfix SMTP and local `sendmail(1)` intake | partial | Linux Docker profile with Postfix 3.11.6 and exact immutable image identities |
 | Replay detection | supported local policy | Memory and Valkey evidence; replay outcome is deliberately separate from DKIM2 cryptographic verification |
 | LDAP and PostgreSQL signing datasources | supported local policy | Exact schema/DDL, shared provider parity, verified-TLS loaders, immutable generation and protected-registry tests |
 | Offline OpenDKIM migration | supported administrative policy | Bounded inventory, protected key import, fresh DNS proof, fenced publication, and higher-generation rollback tests |
