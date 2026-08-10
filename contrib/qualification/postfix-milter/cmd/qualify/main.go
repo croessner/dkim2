@@ -938,12 +938,6 @@ func preparePostfix() error {
 	if err := runCommand("/usr/sbin/postconf", arguments...); err != nil {
 		return err
 	}
-	if err := runCommand(
-		"/usr/sbin/postconf", "-c", postfixConfig, "-P",
-		"dsn_cleanup/unix/non_smtpd_milters=unix:"+dsnSocket,
-	); err != nil {
-		return err
-	}
 	masterPath := filepath.Join(postfixConfig, "master.cf")
 	master, err := os.OpenFile(masterPath, os.O_APPEND|os.O_WRONLY, 0)
 	if err != nil {
@@ -1084,6 +1078,9 @@ func runSuccessQualification() error {
 	if err != nil {
 		return err
 	}
+	if err := selectNonSMTPMilter(dsnSocket); err != nil {
+		return err
+	}
 	failureMessage := []byte(
 		"From: sender@" + signingDomain + "\r\n" +
 			"To: recipient@failed.example.test\r\n" +
@@ -1137,9 +1134,36 @@ func runSuccessQualification() error {
 		"inbound_cryptographic_pass",
 		"local_sendmail_signing",
 		"postfix_bounce_dsn_evidence_signing",
+		"postfix_normal_cleanup_dsn_routing",
 		"postfix_received_visibility",
 		"smtp_origin_signing",
 	})
+}
+
+// selectNonSMTPMilter switches the ordinary cleanup service from local
+// originator signing to the dedicated bounce DSN adapter before failure.
+func selectNonSMTPMilter(socket string) error {
+	if socket != originSocket && socket != dsnSocket {
+		return errQualification
+	}
+	value := "unix:" + socket
+	if err := runCommand(
+		"/usr/sbin/postconf", "-c", postfixConfig, "-e",
+		"non_smtpd_milters="+value,
+	); err != nil {
+		return err
+	}
+	if err := runCommand("/usr/sbin/postfix", "-c", postfixConfig, "reload"); err != nil {
+		return err
+	}
+	command := exec.Command(
+		"/usr/sbin/postconf", "-c", postfixConfig, "-h", "non_smtpd_milters",
+	)
+	output, err := command.Output()
+	if err != nil || strings.TrimSpace(string(output)) != value {
+		return errQualification
+	}
+	return nil
 }
 
 // waitForQueuedDSN waits for one newly generated signed delivery-status report.
@@ -1691,14 +1715,6 @@ func verifyTopology() error {
 		if err != nil || state.Mode()&os.ModeSocket == 0 || state.Mode().Perm() != 0o660 {
 			return errQualification
 		}
-	}
-	serviceCommand := exec.Command(
-		"/usr/sbin/postconf", "-c", postfixConfig, "-Ph",
-		"dsn_cleanup/unix/non_smtpd_milters",
-	)
-	serviceOutput, err := serviceCommand.Output()
-	if err != nil || strings.TrimSpace(string(serviceOutput)) != "unix:"+dsnSocket {
-		return errQualification
 	}
 	input, err := os.ReadFile("/proc/net/tcp")
 	if err != nil {

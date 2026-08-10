@@ -30,7 +30,8 @@ certification, or universal interoperability claim.
   reconstruction, the `delivery_status` profile, route ticket, and protected
   DSN capability. The originator Milter deliberately tempfails every null
   sender. The dedicated `postfix_dsn` adapter exists but requires the proposed
-  non-persistent Postfix EOD evidence patch before deployment. Received-DSN
+  non-persistent Postfix normal-cleanup evidence patch before deployment.
+  Received-DSN
   processing and DSN propagation are also deferred.
 - Flat-file, LDAP, PostgreSQL, MySQL, MariaDB, and Valkey datasource paths are implemented.
   The offline OpenDKIM migration requires separately managed verified-TLS

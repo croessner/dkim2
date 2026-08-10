@@ -911,7 +911,6 @@ func postfixDSNMacroPayload(originalSender []byte, originalRecipients [][]byte) 
 	payload := []byte{peerEOH}
 	for _, pair := range [][2]string{
 		{"{postfix_dsn_evidence}", "postfix-dsn-evidence-v1"},
-		{"{postfix_dsn_original_queue_id}", "ABC123"},
 		{"{postfix_dsn_original_envelope}", encoded},
 	} {
 		payload = append(payload, pair[0]...)
@@ -1057,7 +1056,7 @@ func (p *protocolPeer) negotiatePostfixDSN(t *testing.T) {
 	)
 	p.send(t, peerNegotiate, payload)
 	response := p.receive(t)
-	const macroList = "{postfix_dsn_evidence} {postfix_dsn_original_queue_id} {postfix_dsn_original_envelope}"
+	const macroList = "{postfix_dsn_evidence} {postfix_dsn_original_envelope}"
 	if response.command != peerNegotiate || len(response.payload) != 12+4+len(macroList)+1 ||
 		!bytes.Equal(response.payload[:12], payload) ||
 		binary.BigEndian.Uint32(response.payload[12:16]) != peerMacroClassEOH ||

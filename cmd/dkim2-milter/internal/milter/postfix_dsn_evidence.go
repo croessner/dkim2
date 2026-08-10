@@ -15,12 +15,8 @@ const (
 // PostfixDSNEvidence is the non-persistent local proof that Postfix's
 // bounce(8) path produced the outer DSN and retained its original envelope.
 type PostfixDSNEvidence struct {
-	originalQueueID []byte
-	original        postfixDSNOriginalEnvelope
+	original postfixDSNOriginalEnvelope
 }
-
-// OriginalQueueID returns an isolated original Postfix queue identifier.
-func (e PostfixDSNEvidence) OriginalQueueID() []byte { return bytes.Clone(e.originalQueueID) }
 
 // OriginalEnvelope returns isolated exact original SMTP envelope paths.
 func (e PostfixDSNEvidence) OriginalEnvelope() ([]byte, [][]byte) {
@@ -52,7 +48,7 @@ func (e *PostfixDSNEvidence) Clear() { e.clear() }
 
 // retainedBytes returns the exact evidence payload covered by EOM transport accounting.
 func (e PostfixDSNEvidence) retainedBytes() int64 {
-	total := int64(len(e.originalQueueID) + len(e.original.sender))
+	total := int64(len(e.original.sender))
 	for _, recipient := range e.original.recipients {
 		total += int64(len(recipient))
 	}
@@ -63,8 +59,7 @@ func (e PostfixDSNEvidence) retainedBytes() int64 {
 func (e PostfixDSNEvidence) clone() PostfixDSNEvidence {
 	sender, recipients := e.OriginalEnvelope()
 	return PostfixDSNEvidence{
-		originalQueueID: bytes.Clone(e.originalQueueID),
-		original:        postfixDSNOriginalEnvelope{sender: sender, recipients: recipients},
+		original: postfixDSNOriginalEnvelope{sender: sender, recipients: recipients},
 	}
 }
 
@@ -73,10 +68,8 @@ func (e *PostfixDSNEvidence) clear() {
 	if e == nil {
 		return
 	}
-	clear(e.originalQueueID)
 	clear(e.original.sender)
 	clearPostfixDSNRecipients(e.original.recipients)
-	e.originalQueueID = nil
 	e.original.sender = nil
 	e.original.recipients = nil
 }

@@ -11,25 +11,22 @@ const (
 	postfixDSNMacroClassEOH    uint32 = 6
 	postfixDSNMarker                  = "postfix-dsn-evidence-v1"
 	postfixDSNMacroMarker             = "{postfix_dsn_evidence}"
-	postfixDSNMacroQueueID            = "{postfix_dsn_original_queue_id}"
 	postfixDSNMacroEnvelope           = "{postfix_dsn_original_envelope}"
 	postfixDSNEOHMacroList            = postfixDSNMacroMarker + " " +
-		postfixDSNMacroQueueID + " " + postfixDSNMacroEnvelope
+		postfixDSNMacroEnvelope
 )
 
 const (
 	postfixDSNMacroSeenMarker uint8 = 1 << iota
-	postfixDSNMacroSeenQueueID
 	postfixDSNMacroSeenEnvelope
 	postfixDSNMacroSeenAll = postfixDSNMacroSeenMarker |
-		postfixDSNMacroSeenQueueID | postfixDSNMacroSeenEnvelope
+		postfixDSNMacroSeenEnvelope
 )
 
 // postfixDSNMacroState owns at most one complete Postfix-only EOH record.
 type postfixDSNMacroState struct {
 	seen         uint8
 	confirmedEOH bool
-	queueID      []byte
 	envelope     postfixDSNOriginalEnvelope
 }
 
@@ -121,7 +118,6 @@ func validPostfixDSNMacroValue(name, value []byte) bool {
 // isPostfixDSNMacro identifies the closed macro namespace owned by this mode.
 func isPostfixDSNMacro(name []byte) bool {
 	return bytes.Equal(name, []byte(postfixDSNMacroMarker)) ||
-		bytes.Equal(name, []byte(postfixDSNMacroQueueID)) ||
 		bytes.Equal(name, []byte(postfixDSNMacroEnvelope))
 }
 
@@ -143,16 +139,6 @@ func (s *postfixDSNMacroState) acceptValue(name, value []byte) (int64, bool) {
 		}
 		s.seen |= postfixDSNMacroSeenMarker
 		return 0, true
-	case postfixDSNMacroQueueID:
-		if !validPostfixDSNQueueID(value) {
-			return 0, false
-		}
-		if s.seen&postfixDSNMacroSeenQueueID != 0 {
-			return 0, bytes.Equal(s.queueID, value)
-		}
-		s.queueID = bytes.Clone(value)
-		s.seen |= postfixDSNMacroSeenQueueID
-		return int64(len(s.queueID)), true
 	case postfixDSNMacroEnvelope:
 		envelope, ok := decodePostfixDSNOriginalEnvelope(value)
 		if !ok {
@@ -192,10 +178,9 @@ func (s *postfixDSNMacroState) take(reverse []byte, recipients [][]byte) (Postfi
 		len(recipients) != 1 {
 		return PostfixDSNEvidence{}, false
 	}
-	evidence := PostfixDSNEvidence{originalQueueID: s.queueID, original: s.envelope}
+	evidence := PostfixDSNEvidence{original: s.envelope}
 	s.seen = 0
 	s.confirmedEOH = false
-	s.queueID = nil
 	s.envelope = postfixDSNOriginalEnvelope{}
 	return evidence, true
 }
@@ -205,26 +190,9 @@ func (s *postfixDSNMacroState) clear() {
 	if s == nil {
 		return
 	}
-	clear(s.queueID)
 	clear(s.envelope.sender)
 	clearPostfixDSNRecipients(s.envelope.recipients)
 	s.seen = 0
 	s.confirmedEOH = false
-	s.queueID = nil
 	s.envelope = postfixDSNOriginalEnvelope{}
-}
-
-// validPostfixDSNQueueID allows the opaque Postfix queue-ID alphabet only.
-func validPostfixDSNQueueID(value []byte) bool {
-	if len(value) == 0 || len(value) > 255 {
-		return false
-	}
-	for _, current := range value {
-		if current >= 'A' && current <= 'Z' || current >= 'a' && current <= 'z' ||
-			current >= '0' && current <= '9' {
-			continue
-		}
-		return false
-	}
-	return true
 }

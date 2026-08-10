@@ -224,7 +224,7 @@ revision, and malformed no-content responses fail closed.
 
 The adapter negotiates only the Milter-v6 callbacks it needs and the add-header
 and change-header mutation capabilities. A `postfix_dsn` instance additionally
-requires standard symbol-list negotiation for its three EOH macros. It rejects
+requires standard symbol-list negotiation for its two EOH macros. It rejects
 peers that cannot preserve after-colon leading whitespace or perform RFC 8601
 sanitization. Arbitrary
 header deletion or replacement, body replacement, envelope mutation,

@@ -142,7 +142,7 @@
     {
       "id": "milter-public-peer-source",
       "path": "cmd/dkim2-milter/internal/integration/public_peer_test.go",
-      "sha256": "775996368ec165aa30ea2aa6716c0ed06870b7f20a8441b495f1b84463fde8de",
+      "sha256": "37afe69740d0aee85e0909f7338ace929bb5455d15a42ac0645e3d31b8960f64",
       "module": "cmd/dkim2-milter"
     },
     {
@@ -238,7 +238,7 @@
     {
       "id": "postfix-qualification-runtime",
       "path": "contrib/qualification/postfix-milter/cmd/qualify/main.go",
-      "sha256": "85afa52f8a8a26b9bdc8dd9aed1202dfb4417444ea23b6ae01678b92473c89a9",
+      "sha256": "49b75a0597d8c021da215a558d130a1fd9c09a280c5b02ed29234aa3cad75d78",
       "module": "contrib/qualification/postfix-milter"
     },
     {

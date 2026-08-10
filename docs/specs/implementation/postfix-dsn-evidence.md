@@ -22,19 +22,22 @@ Those facts are insufficient and remain insufficient.
 The only admissible Milter DSN path is:
 
 ```text
-bounce(8) -> private/dsn_cleanup -> cleanup(8) -> Milter callbacks
-          mail_owner-only channel    non-persistent evidence
-                                      -> dkim2-milter dedicated DSN capability
-                                      -> dkim2d /v1/dsn/sign
+bounce(8) -> normal cleanup(8) record stream -> Milter callbacks
+          bounce-only capability flag          non-persistent evidence
+                                                -> dkim2-milter dedicated DSN capability
+                                                -> dkim2d /v1/dsn/sign
 ```
 
 The Milter accepts the path only when every condition below holds:
 
-1. `bounce(8)` posts the DSN through a dedicated cleanup service in Postfix's
-   `private` directory. That directory is owned by `mail_owner` with mode
-   `0700`; the ordinary `public/cleanup` socket is not an evidence channel.
-2. `cleanup(8)` accepts the evidence records only when invoked for that private
-   service and removes them before writing the new queue file.
+1. `bounce(8)` uses a dedicated posting helper that accepts only a null sender,
+   the bounce source class, and a complete encoded original envelope. The
+   helper sets a new internal cleanup capability flag and writes the evidence
+   through Postfix's normal cleanup record protocol; it does not create a
+   second cleanup service.
+2. `cleanup(8)` accepts the evidence record only with that capability flag,
+   exactly once, with valid unpadded base64url syntax, and for a null-sender
+   message. It removes the record before writing the new queue file.
 3. The marker and exact original-envelope record are emitted only as requested
    EOH Milter macros.
 4. The Milter receives exactly one complete evidence record immediately before
@@ -57,7 +60,6 @@ The Milter requests these names at `SMFIM_EOH` with the existing standard
 | Macro | Value | Meaning |
 | --- | --- | --- |
 | `{postfix_dsn_evidence}` | `postfix-dsn-evidence-v1` | Fixed, exact provenance/version marker. |
-| `{postfix_dsn_original_queue_id}` | Postfix queue ID | Original message identity; never logged or exported. |
 | `{postfix_dsn_original_envelope}` | unpadded base64url | Exact original SMTP envelope record below. |
 
 The envelope record is a NUL-free transport value after base64url encoding. Its
@@ -87,38 +89,34 @@ partial record.
 
 ## Postfix Changes
 
-The upstream patch must be small and self-contained. A caller-provided cleanup
-flag on `public/cleanup` is explicitly insufficient: Postfix creates public
-listener endpoints for general submission, and `cleanup_service()` otherwise
-accepts the caller's `MAIL_ATTR_FLAGS` value without peer-origin evidence.
+The upstream patch is small and self-contained. It does not add a service,
+Milter protocol version, or Milter command.
 
-1. `conf/master.cf`: add a narrowly named private `dsn_cleanup` service that
-   runs the existing `cleanup(8)` command. The existing public `cleanup`
-   service and its callers remain unchanged.
-2. `src/cleanup/cleanup.c`: retain whether the request arrived through
-   `dsn_cleanup` and pass that authority into per-message cleanup state.
-3. `src/cleanup/cleanup.h` and `cleanup_state.c`: retain private-service
-   authority and transient evidence in per-message cleanup state, and free it
-   with that state. No caller-provided cleanup flag represents authority.
-4. `src/global/post_mail.[ch]`: add a narrow DSN posting helper that connects
-   to `private/dsn_cleanup` and writes the original queue ID and envelope
-   evidence before `REC_TYPE_MESG`; ordinary `post_mail_fopen*()` calls cannot
-   select this path or set its authority.
-5. `src/global/mail_proto.h`: define names for the initial internal evidence
-   attributes. These records are an internal handoff, not queue metadata.
-6. `src/bounce/bounce_notify_util.[ch]`: retain the exact unquoted original
+1. `src/global/cleanup_user.h` and `cleanup_strflags.c`: add the internal
+   `CLEANUP_FLAG_DSN_ORIGIN` cleanup capability and its diagnostic name.
+2. `src/global/post_mail.[ch]`: add a narrow DSN posting helper that requires
+   the bounce source class and a null sender, sets that capability, connects to
+   the normal cleanup service, and writes the encoded original envelope before
+   `REC_TYPE_MESG`; ordinary `post_mail_fopen*()` calls cannot set it.
+3. `src/global/mail_proto.h`: define the internal evidence attribute name.
+   This record is an internal handoff, not queue metadata.
+4. `src/bounce/bounce_notify_util.[ch]`: retain the exact unquoted original
    sender and all original recipient queue records needed to encode the
    envelope. Do not derive evidence from rendered DSN text or quoted headers.
-7. `src/bounce/bounce_notify_service.c`, `bounce_warn_service.c`,
+5. `src/bounce/bounce_notify_service.c`, `bounce_warn_service.c`,
    `bounce_one_service.c`, and `bounce_notify_verp.c`: use the DSN helper only
    for the actual null-sender DSN path. Postmaster notices, double bounces, and
    trace notifications keep the ordinary posting path.
-8. `src/cleanup/cleanup_envelope.c`: accept and validate the attributes only
-   while private-service authority is present and before `REC_TYPE_MESG`;
-   retain them in cleanup state and never call `cleanup_out()` for them.
-9. `src/cleanup/cleanup_milter.c`: expose the three macro values only for an
-   evidence-bearing transaction and only through the EOH macro list. Existing
+6. `src/cleanup/cleanup.h`, `cleanup_state.c`, and `cleanup_envelope.c`: accept
+   and validate the attribute only with the internal capability and before
+   `REC_TYPE_MESG`; require the null sender, retain the evidence in cleanup
+   state, free it with that state, and never call `cleanup_out()` for it.
+7. `src/cleanup/cleanup_milter.c`: expose the two macro values only for an
+   evidence-bearing transaction requested through the Milter macro list. Existing
    macro names and callbacks remain unchanged.
+8. `proto/MILTER_README.html` and its generated HTML/plain-text forms: document
+   configuration, trust semantics, record framing, consumer requirements, and
+   backward-compatible capability negotiation.
 
 The patch must not introduce a new Milter protocol version or command. It
 extends only Postfix's macro value provider, using a standardized opt-in macro
@@ -127,7 +125,7 @@ mechanism that older Milters ignore.
 ## DKIM2 Changes
 
 `cmd/dkim2-milter` gains a dedicated `postfix_dsn` mode. It requests and
-retains only the three macro values above, only for the EOH callback that
+retains only the two macro values above, only for the EOH callback that
 belongs to the active message, and consumes them only at EOM. The mode rejects every duplicate, partial,
 wrong-stage, or malformed record. It maps the outer callbacks and decoded
 original envelope to the generated `DSNSignRequest` and sends them with a

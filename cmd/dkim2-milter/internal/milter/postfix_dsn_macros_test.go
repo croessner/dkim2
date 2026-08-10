@@ -8,8 +8,6 @@ import (
 	"testing"
 )
 
-const testPostfixDSNQueueID = "ABC123"
-
 // postfixDSNEvidenceHandler captures only detached evidence required to prove
 // the Postfix-only Milter callback contract.
 type postfixDSNEvidenceHandler struct {
@@ -81,13 +79,11 @@ func TestPostfixDSNEOMTransfersExactEvidence(t *testing.T) {
 		peerFrame(commandRecipient, []byte("<report@example.test>\x00")),
 		peerFrame(commandMacro, postfixDSNMacroPayload(commandHeader,
 			postfixDSNMacroMarker, postfixDSNMarker,
-			postfixDSNMacroQueueID, testPostfixDSNQueueID,
 			postfixDSNMacroEnvelope, string(encodedPostfixDSNEnvelope(postfixDSNEnvelopeRecord(queueSender, queueRecipients))),
 		)),
 		peerFrame(commandHeader, []byte("Subject\x00 Delivery Status\x00")),
 		peerFrame(commandMacro, postfixDSNMacroPayload(commandEOH,
 			postfixDSNMacroMarker, postfixDSNMarker,
-			postfixDSNMacroQueueID, testPostfixDSNQueueID,
 			postfixDSNMacroEnvelope, string(encodedPostfixDSNEnvelope(postfixDSNEnvelopeRecord(queueSender, queueRecipients))),
 		)),
 		peerFrame(commandEOH, nil),
@@ -101,9 +97,6 @@ func TestPostfixDSNEOMTransfersExactEvidence(t *testing.T) {
 	if handler.calls != 1 || !handler.hasProof ||
 		handler.fidelity != FidelityPostfixDSNReconstructedCRLF {
 		t.Fatalf("handler calls/proof/fidelity = %d/%t/%q", handler.calls, handler.hasProof, handler.fidelity)
-	}
-	if got := handler.evidence.OriginalQueueID(); !bytes.Equal(got, []byte(testPostfixDSNQueueID)) {
-		t.Fatalf("OriginalQueueID()=%q", got)
 	}
 	sender, recipients := handler.evidence.OriginalEnvelope()
 	if !bytes.Equal(sender, originalSender) || len(recipients) != len(originalRecipients) {
@@ -128,18 +121,21 @@ func TestPostfixDSNEOMRejectsIncompleteOrAmbiguousProof(t *testing.T) {
 		pairs []string
 	}{
 		{name: "missing original envelope", stage: commandEOH, pairs: []string{
-			postfixDSNMacroMarker, postfixDSNMarker, postfixDSNMacroQueueID, testPostfixDSNQueueID,
+			postfixDSNMacroMarker, postfixDSNMarker,
 		}},
-		{name: "duplicate original queue id", stage: commandEOH, pairs: []string{
-			postfixDSNMacroMarker, postfixDSNMarker, postfixDSNMacroQueueID, testPostfixDSNQueueID,
-			postfixDSNMacroQueueID, "DEF456", postfixDSNMacroEnvelope, validEnvelope,
+		{name: "duplicate original envelope", stage: commandEOH, pairs: []string{
+			postfixDSNMacroMarker, postfixDSNMarker,
+			postfixDSNMacroEnvelope, validEnvelope,
+			postfixDSNMacroEnvelope, string(encodedPostfixDSNEnvelope(postfixDSNEnvelopeRecord(
+				[]byte("other@example.test"), [][]byte{[]byte("recipient@example.test")},
+			))),
 		}},
 		{name: "wrong macro stage", stage: commandEOM, pairs: []string{
-			postfixDSNMacroMarker, postfixDSNMarker, postfixDSNMacroQueueID, testPostfixDSNQueueID,
+			postfixDSNMacroMarker, postfixDSNMarker,
 			postfixDSNMacroEnvelope, validEnvelope,
 		}},
 		{name: "unexpected local proof member", stage: commandEOH, pairs: []string{
-			postfixDSNMacroMarker, postfixDSNMarker, postfixDSNMacroQueueID, testPostfixDSNQueueID,
+			postfixDSNMacroMarker, postfixDSNMarker,
 			postfixDSNMacroEnvelope, validEnvelope, "{postfix_dsn_extra}", "x",
 		}},
 	} {
