@@ -174,7 +174,8 @@ func TestReleaseCandidateModuleBoundaryIsExact(t *testing.T) {
 		"cmd/dkim2-exim/exim/fixtures/ubuntu-4.99.1-1ubuntu1.4/include/functions.h whitespace=-blank-at-eol\n" +
 		"cmd/dkim2-exim/exim/fixtures/upstream-4.99.5/local_scan-expand-string.patch whitespace=-blank-at-eol,-space-before-tab\n" +
 		"cmd/dkim2-exim/packaging/exim/dkim2-transport-filter-return-path.patch whitespace=-blank-at-eol\n" +
-		"lib/testdata/vectors/external/turscar-dkim2tests/9c48edf1b19bd4db69cd5f27e8732a5a61826739/LICENSE whitespace=-blank-at-eol\n"
+		"lib/testdata/vectors/external/turscar-dkim2tests/9c48edf1b19bd4db69cd5f27e8732a5a61826739/LICENSE whitespace=-blank-at-eol\n" +
+		"lib/testdata/vectors/external/turscar-dkim2tests/9c48edf1b19bd4db69cd5f27e8732a5a61826739/messages/* text eol=crlf\n"
 	if attributes != whitespaceExceptions {
 		t.Fatal("whitespace exceptions are not exact and path-scoped")
 	}
