@@ -584,6 +584,13 @@ func (s *Session) endMessage(ctx context.Context) (frames [][]byte, resultErr er
 	var message Message
 	var err error
 	if s.mode == modePostfixDSN {
+		if !s.postfixDSN.present() {
+			clear(raw)
+			disposition = string(DispositionAccept)
+			resultClass = observationSuccess
+			failureClass = observationNoFailure
+			return oneFrame(replyAccept, nil), nil
+		}
 		evidence, valid := s.postfixDSN.take(s.reverse, s.recipients)
 		if !valid {
 			clear(raw)

@@ -916,7 +916,7 @@ func preparePostfix() error {
 		"smtpd_relay_restrictions=permit_mynetworks,reject_unauth_destination",
 		"smtpd_recipient_restrictions=permit_mynetworks,reject_unauth_destination",
 		"smtpd_milters=unix:" + originSocket,
-		"non_smtpd_milters=unix:" + originSocket,
+		"non_smtpd_milters=unix:" + dsnSocket,
 		"internal_mail_filter_classes=bounce",
 		"milter_protocol=6",
 		"milter_default_action=tempfail",
@@ -938,12 +938,20 @@ func preparePostfix() error {
 	if err := runCommand("/usr/sbin/postconf", arguments...); err != nil {
 		return err
 	}
+	if err := runCommand(
+		"/usr/sbin/postconf", "-c", postfixConfig, "-P",
+		"pickup/unix/cleanup_service_name=local_cleanup",
+	); err != nil {
+		return err
+	}
 	masterPath := filepath.Join(postfixConfig, "master.cf")
 	master, err := os.OpenFile(masterPath, os.O_APPEND|os.O_WRONLY, 0)
 	if err != nil {
 		return errQualification
 	}
 	_, writeErr := fmt.Fprintf(master, `
+local_cleanup unix n - n - 0 cleanup
+  -o non_smtpd_milters=unix:%s
 2525 inet n - n - - smtpd
   -o smtpd_milters=unix:%s
   -o milter_protocol=6
@@ -966,7 +974,7 @@ func preparePostfix() error {
   -o milter_command_timeout=5s
   -o milter_content_timeout=5s
 smtp-failure unix - - n - - smtp
-`, originSocket, inboundSocket, dsnSocket)
+`, originSocket, originSocket, inboundSocket, dsnSocket)
 	closeErr := master.Close()
 	if writeErr != nil || closeErr != nil {
 		return errQualification
@@ -1078,9 +1086,6 @@ func runSuccessQualification() error {
 	if err != nil {
 		return err
 	}
-	if err := selectNonSMTPMilter(dsnSocket); err != nil {
-		return err
-	}
 	failureMessage := []byte(
 		"From: sender@" + signingDomain + "\r\n" +
 			"To: recipient@failed.example.test\r\n" +
@@ -1106,26 +1111,26 @@ func runSuccessQualification() error {
 		) != nil {
 		return errQualification
 	}
-	beforeInjected, err := queueIDs()
-	if err != nil {
-		return err
-	}
 	injected := []byte(
 		"From: postmaster@" + signingDomain + "\r\n" +
 			"To: sender@" + signingDomain + "\r\n" +
 			"Subject: injected null sender\r\n\r\nnot a trusted DSN\r\n",
 	)
-	if _, err := smtpSubmit(
+	injectedID, err := smtpSubmit(
 		2527,
 		"<>",
 		[]string{"<sender@" + signingDomain + ">"},
 		injected,
-		false,
-	); err != nil {
+		true,
+	)
+	if err != nil {
 		return err
 	}
-	afterInjected, err := queueIDs()
-	if err != nil || !sameQueueIDs(beforeInjected, afterInjected) {
+	injectedRaw, err := queuedMessage(injectedID)
+	if err != nil ||
+		countHeader(injectedRaw, "Message-Instance") != 0 ||
+		countHeader(injectedRaw, "DKIM2-Signature") != 0 ||
+		!headerHasExactValue(injectedRaw, "Subject", "injected null sender") {
 		return errQualification
 	}
 	return emitCaseFragment([]string{
@@ -1138,32 +1143,6 @@ func runSuccessQualification() error {
 		"postfix_received_visibility",
 		"smtp_origin_signing",
 	})
-}
-
-// selectNonSMTPMilter switches the ordinary cleanup service from local
-// originator signing to the dedicated bounce DSN adapter before failure.
-func selectNonSMTPMilter(socket string) error {
-	if socket != originSocket && socket != dsnSocket {
-		return errQualification
-	}
-	value := "unix:" + socket
-	if err := runCommand(
-		"/usr/sbin/postconf", "-c", postfixConfig, "-e",
-		"non_smtpd_milters="+value,
-	); err != nil {
-		return err
-	}
-	if err := runCommand("/usr/sbin/postfix", "-c", postfixConfig, "reload"); err != nil {
-		return err
-	}
-	command := exec.Command(
-		"/usr/sbin/postconf", "-c", postfixConfig, "-h", "non_smtpd_milters",
-	)
-	output, err := command.Output()
-	if err != nil || strings.TrimSpace(string(output)) != value {
-		return errQualification
-	}
-	return nil
 }
 
 // waitForQueuedDSN waits for one newly generated signed delivery-status report.
@@ -1532,7 +1511,7 @@ func sameQueueIDs(before, after map[string]struct{}) bool {
 // waitForNewQueuedMessage waits until exactly one new local-submission queue
 // identity is both visible and readable across Postfix queue-directory moves.
 func waitForNewQueuedMessage(before map[string]struct{}, timeout time.Duration) ([]byte, error) {
-	return waitForNewQueuedMessageInQueue(before, "", timeout)
+	return waitForNewQueuedMessageInQueue(before, "deferred", timeout)
 }
 
 // waitForNewQueuedMessageInQueue waits for exactly one readable new message
@@ -1701,10 +1680,21 @@ func verifyTopology() error {
 		"milter_command_timeout": "5s",
 		"milter_content_timeout": "5s",
 		"smtpd_milters":          "unix:" + originSocket,
-		"non_smtpd_milters":      "unix:" + originSocket,
+		"non_smtpd_milters":      "unix:" + dsnSocket,
 	}
 	for name, want := range values {
 		command := exec.Command("/usr/sbin/postconf", "-c", postfixConfig, "-h", name)
+		output, err := command.Output()
+		if err != nil || strings.TrimSpace(string(output)) != want {
+			return errQualification
+		}
+	}
+	masterValues := map[string]string{
+		"pickup/unix/cleanup_service_name":     "local_cleanup",
+		"local_cleanup/unix/non_smtpd_milters": "unix:" + originSocket,
+	}
+	for name, want := range masterValues {
+		command := exec.Command("/usr/sbin/postconf", "-c", postfixConfig, "-Ph", name)
 		output, err := command.Output()
 		if err != nil || strings.TrimSpace(string(output)) != want {
 			return errQualification

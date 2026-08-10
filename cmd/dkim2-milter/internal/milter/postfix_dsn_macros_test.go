@@ -59,6 +59,37 @@ func TestPostfixDSNNegotiationRequiresMacroListCapability(t *testing.T) {
 	}
 }
 
+// TestPostfixDSNWithoutEvidenceContinues proves the shared non-SMTP Milter
+// chain leaves ordinary local mail and unauthenticated null-sender input
+// unchanged without invoking the delivery-status handler.
+func TestPostfixDSNWithoutEvidenceContinues(t *testing.T) {
+	for _, reverse := range []string{"<sender@example.test>", "<>"} {
+		t.Run(reverse, func(t *testing.T) {
+			handler := &postfixDSNEvidenceHandler{}
+			session := testSession(t, handler, false, modePostfixDSN, "")
+			input := appendPeerFrames(
+				peerFrame(commandNegotiate, postfixDSNNegotiationPayload()),
+				peerFrame(commandConnect, []byte("localhost\x00U")),
+				peerFrame(commandHelo, []byte("localhost\x00")),
+				peerFrame(commandMail, []byte(reverse+"\x00")),
+				peerFrame(commandRecipient, []byte("<recipient@example.test>\x00")),
+				peerFrame(commandHeader, []byte("Subject\x00 ordinary local mail\x00")),
+				peerFrame(commandEOH, nil),
+				peerFrame(commandEOM, nil),
+				peerFrame(commandQuit, nil),
+			)
+			stream := &splitStream{reader: bytes.NewReader(input)}
+			if err := session.Serve(context.Background(), stream); err != nil || handler.calls != 0 {
+				t.Fatalf("Serve() error/calls = %v/%d", err, handler.calls)
+			}
+			commands := responseCommands(t, stream.writer.Bytes())
+			if len(commands) == 0 || commands[len(commands)-1] != replyAccept {
+				t.Fatalf("missing accept response: %q", commands)
+			}
+		})
+	}
+}
+
 // TestPostfixDSNEOMTransfersExactEvidence proves a complete one-recipient
 // null-sender DSN is the sole path that reaches the delivery-status handler.
 func TestPostfixDSNEOMTransfersExactEvidence(t *testing.T) {

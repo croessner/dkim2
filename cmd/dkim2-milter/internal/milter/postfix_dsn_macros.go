@@ -171,6 +171,13 @@ func equalPostfixDSNEnvelope(left, right postfixDSNOriginalEnvelope) bool {
 	return true
 }
 
+// present reports whether this transaction supplied any member of the
+// trusted Postfix DSN namespace. An entirely absent record is inapplicable;
+// once any member is present, take() must validate the complete record.
+func (s *postfixDSNMacroState) present() bool {
+	return s != nil && s.seen != 0
+}
+
 // take transfers a complete record only when the outer DSN shape is exact.
 func (s *postfixDSNMacroState) take(reverse []byte, recipients [][]byte) (PostfixDSNEvidence, bool) {
 	if s == nil || s.seen != postfixDSNMacroSeenAll || !s.confirmedEOH ||

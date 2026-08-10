@@ -48,9 +48,13 @@ The Milter accepts the path only when every condition below holds:
 6. The daemon parses and validates the DSN bytes and embedded DKIM2 evidence
    before any policy or private-key access.
 
-If evidence is absent, malformed, duplicated, oversized, unexpected, or from
-any other Milter stage, the DSN path is not applicable. It must never fall back
-to originator signing.
+If the complete Postfix DSN macro namespace is absent, the transaction is not
+applicable and continues without daemon I/O or mutation. This lets the
+dedicated adapter share the normal `non_smtpd_milters` chain with local
+submissions and Postmaster notifications. Once any namespace member appears,
+malformed, partial, duplicated, oversized, unexpected, or wrong-stage evidence
+is a fail-closed adapter-contract error. Neither case can fall back to
+originator signing.
 
 ## Postfix Macro Contract: `postfix-dsn-evidence-v1`
 

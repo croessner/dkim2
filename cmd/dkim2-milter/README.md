@@ -158,7 +158,11 @@ support. It is not signing authority by itself.
 The originator adapter tempfails every null reverse-path before daemon I/O.
 Generic Milter callbacks remain insufficient evidence. Only a separate
 `postfix_dsn` instance may accept `MAIL FROM <>`, after exact Postfix-only EOH
-evidence validation; do not route null senders to the originator socket.
+evidence validation; do not route null senders to the originator socket. A
+`postfix_dsn` instance may share the normal non-SMTP Milter chain: when the
+entire Postfix DSN evidence namespace is absent it continues without daemon
+I/O or mutation. Once any namespace member is present, partial, duplicate,
+wrong-stage, or malformed evidence remains a fail-closed contract error.
 
 For non-null senders, an address literal or otherwise unsupported SMTPUTF8
 envelope is not applicable and continues without daemon I/O or mutation,

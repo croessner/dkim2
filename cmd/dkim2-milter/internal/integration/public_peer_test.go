@@ -854,6 +854,41 @@ func TestOriginatorNullSenderTempfailsBeforeDaemonThroughPublicSocket(t *testing
 	assertPrivateOutputAbsent(t, process.log)
 }
 
+// TestPostfixDSNWithoutEvidenceContinuesThroughPublicSocket proves the
+// dedicated adapter can share the normal non-SMTP Milter chain without
+// granting DSN authority or rejecting an unrelated transaction.
+func TestPostfixDSNWithoutEvidenceContinuesThroughPublicSocket(t *testing.T) {
+	service := &generatedDaemonService{
+		dsn: func(generatedfixture.DSNSignRequest) generatedfixture.OperationResponse {
+			t.Fatal("message without Postfix evidence reached the daemon")
+			return generatedfixture.OperationResponse{}
+		},
+	}
+	fixture := newGeneratedDaemonFixture(t, service)
+	process := startExecutableWithSigning(
+		t, fixture.endpoint, integrationModePostfixDSN, "tempfail", 2*time.Second,
+		"\nsigning:\n  tenant: "+integrationTenant+"\n  domain_source: envelope_sender",
+	)
+	peer := dialPublicPeer(t, process.socket)
+	peer.negotiatePostfixDSN(t)
+	peer.callback(t, peerConnect, []byte("localhost\x00U"))
+	peer.callback(t, peerHelo, []byte("localhost\x00"))
+	peer.callback(t, peerMail, []byte("<>\x00"))
+	peer.callback(t, peerRecipient, []byte("<sender@example.test>\x00"))
+	peer.callback(t, peerHeader, []byte("From\x00 mailer-daemon@example.test\x00"))
+	peer.callback(t, peerEOH, nil)
+	peer.callback(t, peerBody, []byte("not a trusted DSN\r\n"))
+	peer.send(t, peerEOM, nil)
+	frame := peer.receive(t)
+	if frame.command != adapterAccept || len(frame.payload) != 0 {
+		t.Fatalf("evidence-free Postfix DSN EOM frame = %#v", frame)
+	}
+	peer.send(t, peerQuit, nil)
+	peer.close()
+	process.stop(t)
+	assertPrivateOutputAbsent(t, process.log)
+}
+
 // TestPostfixDSNEvidenceRunsDedicatedRouteThroughPublicSocket proves the real
 // binary binds exact EOD evidence to the separate DSN capability and request.
 func TestPostfixDSNEvidenceRunsDedicatedRouteThroughPublicSocket(t *testing.T) {
