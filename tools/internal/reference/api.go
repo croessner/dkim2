@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	"github.com/croessner/dkim2/tools/internal/artifactpath"
+	"github.com/croessner/dkim2/tools/internal/conformance"
 	"github.com/croessner/dkim2/tools/internal/interop"
 	"github.com/croessner/dkim2/tools/internal/strictjson"
 	"golang.org/x/mod/modfile"
@@ -23,6 +24,7 @@ import (
 const (
 	apiSchemaName   = "dkim2.go-api.v1"
 	apiBaselinePath = "testdata/reference/go-api-base.json"
+	apiBaseRevision = "74b18fd2a685a9e0a7e53bd015dd2a8fdadec393"
 	maxAPIBytes     = int64(2 << 20)
 )
 
@@ -123,8 +125,10 @@ func CheckAPI(root string) error {
 	if err := strictjson.Decode(content, &baseline, 8, 128); err != nil {
 		return errors.New("api_baseline")
 	}
+	currentRevision, revisionErr := conformance.CurrentRevision(root)
 	if baseline.Schema != apiSchemaName ||
-		baseline.BaseRevision != candidateBaseRevision ||
+		baseline.BaseRevision != apiBaseRevision || revisionErr != nil ||
+		conformance.IsRevisionAncestor(root, baseline.BaseRevision, currentRevision) != nil ||
 		baseline.Declarations < 1 {
 		return errors.New("api_baseline")
 	}
