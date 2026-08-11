@@ -104,6 +104,42 @@ func TestDSNEvidenceAllowsAuthenticatedForeignOriginalRecipient(t *testing.T) {
 	}
 }
 
+// TestDSNEvidenceAllowsTrustedPostSigningRecipientExpansion proves that a
+// local MTA may add an archival recipient after DKIM2 originator signing. The
+// authenticated rt= set must remain a subset of the independently observed
+// Postfix envelope; an unsigned recipient must never replace signed evidence.
+func TestDSNEvidenceAllowsTrustedPostSigningRecipientExpansion(t *testing.T) {
+	fixture := newPublicSigningFixture(t)
+	originalRecipient := []byte("<bob@remote.example.test>")
+	original := signDSNOriginalForRecipient(t, fixture, originalRecipient)
+	outer := []byte("From: postmaster@example.test\r\n" +
+		"Content-Type: multipart/report; report-type=delivery-status; boundary=dsn\r\n\r\n" +
+		"--dsn\r\nContent-Type: text/plain\r\n\r\nhuman\r\n" +
+		"--dsn\r\nContent-Type: message/delivery-status\r\n\r\nReporting-MTA: dns; example.test\r\n\r\n" +
+		"--dsn\r\nContent-Type: message/rfc822\r\n\r\n" + string(original) + "\r\n--dsn--\r\n")
+	identity, err := NewDSNIdentity("example.test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	evidence, err := fixture.facade.EvaluateDSNForSigning(context.Background(), NewDSNSigningEvidenceRequest(
+		outer, []byte("<>"), [][]byte{[]byte("<alice@example.test>")},
+		[]byte("<alice@example.test>"), [][]byte{
+			originalRecipient,
+			[]byte("<archive@archive.example.test>"),
+		}, identity,
+	))
+	if err != nil || !evidence.Valid() {
+		t.Fatalf("EvaluateDSNForSigning(expanded envelope) evidence=%t error=%v", evidence.Valid(), err)
+	}
+	_, err = fixture.facade.EvaluateDSNForSigning(context.Background(), NewDSNSigningEvidenceRequest(
+		outer, []byte("<>"), [][]byte{[]byte("<alice@example.test>")},
+		[]byte("<alice@example.test>"), [][]byte{[]byte("<archive@archive.example.test>")}, identity,
+	))
+	if !errors.Is(err, newSigningError(SigningErrorAuthorizationDenied)) {
+		t.Fatalf("EvaluateDSNForSigning(replaced signed recipient) error=%v", err)
+	}
+}
+
 // signDSNOriginal produces one authenticated original whose highest d= and rt=
 // domains bind to the local DSN identity used by the test.
 func signDSNOriginal(t *testing.T, fixture publicSigningFixture) []byte {

@@ -61,6 +61,20 @@ func cloneByteSlices(input [][]byte) [][]byte {
 
 // compareCurrentEnvelope matches current SMTP paths against parser-owned signature paths.
 func compareCurrentEnvelope(current Envelope, signed signature.Signature) EnvelopeStatus {
+	return compareEnvelope(current, signed, false)
+}
+
+// compareDeliveryStatusOriginalEnvelope admits only post-signing recipient
+// expansion by a trusted local MTA. Every authenticated rt= path must still be
+// present in the independently observed original envelope; unsigned paths may
+// be additional recipients but can never replace signed evidence.
+func compareDeliveryStatusOriginalEnvelope(current Envelope, signed signature.Signature) EnvelopeStatus {
+	return compareEnvelope(current, signed, true)
+}
+
+// compareEnvelope applies the selected closed recipient-set relation after
+// exact reverse-path comparison.
+func compareEnvelope(current Envelope, signed signature.Signature, allowPostSigningRecipientExpansion bool) EnvelopeStatus {
 	if current.IsZero() {
 		return EnvelopeStatusMissing
 	}
@@ -91,6 +105,22 @@ func compareCurrentEnvelope(current Envelope, signed signature.Signature) Envelo
 			return EnvelopeStatusInvalid
 		}
 		signedRecipientSet[string(canonical)] = struct{}{}
+	}
+	if allowPostSigningRecipientExpansion {
+		currentRecipientSet := make(map[string]struct{}, len(currentRecipients))
+		for _, currentRecipient := range currentRecipients {
+			canonical, valid := signature.CanonicalEnvelopePath(currentRecipient, false)
+			if !valid {
+				return EnvelopeStatusInvalid
+			}
+			currentRecipientSet[string(canonical)] = struct{}{}
+		}
+		for signedRecipient := range signedRecipientSet {
+			if _, found := currentRecipientSet[signedRecipient]; !found {
+				return EnvelopeStatusRecipientValueMismatch
+			}
+		}
+		return EnvelopeStatusPass
 	}
 	for _, currentRecipient := range currentRecipients {
 		canonical, valid := signature.CanonicalEnvelopePath(currentRecipient, false)

@@ -159,7 +159,7 @@ func (e EvidenceEvaluator) Evaluate(ctx context.Context, request EvidenceRequest
 	}
 	switch original.ContentType() {
 	case ContentTypeRFC822:
-		result, verifyErr := e.verifier.VerifyCurrent(ctx, verificationRequest)
+		result, verifyErr := e.verifier.VerifyDeliveryStatusComplete(ctx, verificationRequest)
 		if verifyErr != nil {
 			return Evidence{}, newEvidenceError(EvidenceErrorCodeVerificationFailed, verifyErr)
 		}

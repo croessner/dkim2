@@ -18,7 +18,7 @@ type verificationInput struct {
 
 // Verify extracts DKIM2 fields from a raw message and verifies the selected target.
 func (v Verifier) Verify(ctx context.Context, request Request) (Result, error) {
-	result, input, err := v.verifyCurrent(ctx, request)
+	result, input, err := v.verifyCurrent(ctx, request, false)
 	if err != nil || !aggregateCurrentPass(result) {
 		return result, err
 	}
@@ -27,12 +27,24 @@ func (v Verifier) Verify(ctx context.Context, request Request) (Result, error) {
 
 // VerifyCurrent verifies authoritative current facts without reconstructing authenticated history.
 func (v Verifier) VerifyCurrent(ctx context.Context, request Request) (Result, error) {
-	result, _, err := v.verifyCurrent(ctx, request)
+	result, _, err := v.verifyCurrent(ctx, request, false)
+	return result, err
+}
+
+// VerifyDeliveryStatusComplete verifies a complete embedded DSN original. It
+// keeps exact reverse-path binding while allowing only trusted local-MTA
+// recipient expansion after originator signing.
+func (v Verifier) VerifyDeliveryStatusComplete(ctx context.Context, request Request) (Result, error) {
+	if request.TargetSequence != 0 || request.SkipEnvelopeForNonCurrentTarget ||
+		!request.RequireEnvelope || request.Envelope.IsZero() {
+		return Result{}, newError(ErrorCodeInvalidRequest, ErrorLocation{}, ErrorDetails{Class: ErrorClassRequest}, nil)
+	}
+	result, _, err := v.verifyCurrent(ctx, request, true)
 	return result, err
 }
 
 // verifyCurrent owns the shared extraction, current verification, and replay-projection path.
-func (v Verifier) verifyCurrent(ctx context.Context, request Request) (Result, verificationInput, error) {
+func (v Verifier) verifyCurrent(ctx context.Context, request Request, deliveryStatusEnvelope bool) (Result, verificationInput, error) {
 	if ctx == nil {
 		return Result{}, verificationInput{}, newError(ErrorCodeInternalMisuse, ErrorLocation{}, ErrorDetails{Class: ErrorClassInternal}, nil)
 	}
@@ -41,7 +53,7 @@ func (v Verifier) verifyCurrent(ctx context.Context, request Request) (Result, v
 		return Result{}, verificationInput{}, err
 	}
 
-	result, err := v.verifyCurrentExtracted(ctx, input)
+	result, err := v.verifyCurrentExtracted(ctx, input, deliveryStatusEnvelope)
 	if typed, ok := err.(*Error); ok && len(input.signatures) == 0 {
 		typed.custody = CustodyStatusNotPresent
 	}
@@ -110,7 +122,7 @@ func verifierInstanceLimits(maxHashSets int, recipeLimits recipe.Limits) instanc
 }
 
 // verifyCurrentExtracted verifies current protocol state extracted exclusively from Request.Message.
-func (v Verifier) verifyCurrentExtracted(ctx context.Context, input verificationInput) (Result, error) {
+func (v Verifier) verifyCurrentExtracted(ctx context.Context, input verificationInput, deliveryStatusEnvelope bool) (Result, error) {
 	targetSignature, targetInstance, custody, target, err := selectVerificationTarget(input)
 	if err != nil {
 		return Result{}, err
@@ -139,7 +151,7 @@ func (v Verifier) verifyCurrentExtracted(ctx context.Context, input verification
 	}
 	timestamp := v.checkTimestamp(targetSignature, target)
 	nextDomain := checkNextDomain(targetSignature, target, currentSequence)
-	envelope := v.checkEnvelope(input.request, targetSignature, target, currentSequence)
+	envelope := v.checkEnvelope(input.request, targetSignature, target, currentSequence, deliveryStatusEnvelope)
 	domainAlignment, err := checkDomainAlignment(custody, target)
 	if err != nil {
 		return Result{}, err
@@ -386,7 +398,7 @@ func targetStatus(hashPass bool, timestampPass bool, envelopePass bool, domainAl
 }
 
 // checkEnvelope applies current-envelope matching semantics for the selected target.
-func (v Verifier) checkEnvelope(request Request, targetSignature signature.Signature, target Target, currentSequence uint64) envelopeEvaluation {
+func (v Verifier) checkEnvelope(request Request, targetSignature signature.Signature, target Target, currentSequence uint64, deliveryStatusEnvelope bool) envelopeEvaluation {
 	if targetSignature.HasNextDomain() {
 		return envelopeCheckResult(target, EnvelopeStatusNotApplicable)
 	}
@@ -397,6 +409,9 @@ func (v Verifier) checkEnvelope(request Request, targetSignature signature.Signa
 		return envelopeLimitCheckResult(target)
 	}
 
+	if deliveryStatusEnvelope {
+		return envelopeCheckResult(target, compareDeliveryStatusOriginalEnvelope(request.Envelope, targetSignature))
+	}
 	return envelopeCheckResult(target, compareCurrentEnvelope(request.Envelope, targetSignature))
 }
 
