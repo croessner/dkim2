@@ -103,6 +103,14 @@ grep -Fq 'id-token: write' .github/workflows/container-publish.yml
 grep -Fq 'attestations: write' .github/workflows/container-publish.yml
 grep -Fq 'run: make release-guardrails' \
   .github/workflows/container-publish.yml
+grep -Fq 'if test -z "${DOCKER_CONFIG:-}"; then' \
+  .github/workflows/container-publish.yml
+grep -Fq 'expected="$RUNNER_TEMP/dkim2-attestation-docker"' \
+  .github/workflows/container-publish.yml
+grep -Fq 'test "$DOCKER_CONFIG" = "$expected"' \
+  .github/workflows/container-publish.yml
+grep -Fq 'test ! -L "$DOCKER_CONFIG"' \
+  .github/workflows/container-publish.yml
 test "$(grep -Ec \
   'uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6$' \
   .github/workflows/container-publish.yml)" -eq 9

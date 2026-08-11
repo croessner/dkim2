@@ -219,9 +219,12 @@ jobs:
       - name: Remove invocation-owned registry credentials
         if: always()
         run: |
-          test -n "${DOCKER_CONFIG:-}"
-          case "$DOCKER_CONFIG" in
-            "$RUNNER_TEMP"/dkim2-attestation-docker) ;;
-            *) exit 1 ;;
-          esac
+          set -eu
+          if test -z "${DOCKER_CONFIG:-}"; then
+            exit 0
+          fi
+          expected="$RUNNER_TEMP/dkim2-attestation-docker"
+          test "$DOCKER_CONFIG" = "$expected"
+          test -d "$DOCKER_CONFIG"
+          test ! -L "$DOCKER_CONFIG"
           rm -rf -- "$DOCKER_CONFIG"
