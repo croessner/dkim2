@@ -65,7 +65,7 @@ grep -Fq "LC_ALL=C grep -Eiq '(manifest unknown|not found)'" \
   scripts/publish-dev-images.sh
 local_preflight_line=$(grep -nF 'remote_states="$work/remote-states.jsonl"' \
   scripts/publish-dev-images.sh | cut -d: -f1)
-registry_export_line=$(grep -nF \
+registry_export_line=$(grep -nF -- \
   '--output "type=registry,name=$repository:$tag,oci-mediatypes=true,rewrite-timestamp=true"' \
   scripts/publish-dev-images.sh | cut -d: -f1)
 test "$local_preflight_line" -lt "$registry_export_line"
@@ -92,6 +92,7 @@ grep -Fq 'release:' .github/workflows/container-publish.yml
 grep -Fq 'types:' .github/workflows/container-publish.yml
 grep -Fq -- '- published' .github/workflows/container-publish.yml
 grep -Fq 'environment: container-release' .github/workflows/container-publish.yml
+! grep -Fq 'github.ref_protected' .github/workflows/container-publish.yml
 grep -Fq 'packages: write' .github/workflows/container-publish.yml
 grep -Fq 'id-token: write' .github/workflows/container-publish.yml
 grep -Fq 'attestations: write' .github/workflows/container-publish.yml
@@ -106,6 +107,10 @@ grep -Fq -- '--source-digest "$GITHUB_SHA"' \
   .github/workflows/container-publish.yml
 ! grep -Eq 'artifact-metadata:[[:space:]]*write' \
   .github/workflows/container-publish.yml
+grep -Fq 'test "$(git cat-file -t "$GITHUB_REF_NAME")" = tag' \
+  scripts/publish-images.sh
+grep -Fq 'test "$(git rev-parse "$GITHUB_REF_NAME^{commit}")" = "$(git rev-parse HEAD)"' \
+  scripts/publish-images.sh
 grep -Fq '.artifacts/publication-tools/gh attestation verify' \
   .github/workflows/container-publish.yml
 ! grep -Eq '^[[:space:]]*gh[[:space:]]+attestation[[:space:]]+verify' \

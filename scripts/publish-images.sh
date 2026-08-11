@@ -5,10 +5,11 @@ umask 077
 test "$#" -eq 0
 test "${GITHUB_EVENT_NAME:-}" = release
 test "${GITHUB_REF_TYPE:-}" = tag
-test "${GITHUB_REF_PROTECTED:-}" = true
 test "${GITHUB_REPOSITORY:-}" = croessner/dkim2
 test -n "${GITHUB_REF_NAME:-}"
 test -n "${GITHUB_TOKEN:-}"
+test "$(git cat-file -t "$GITHUB_REF_NAME")" = tag
+test "$(git rev-parse "$GITHUB_REF_NAME^{commit}")" = "$(git rev-parse HEAD)"
 
 GOCACHE="${GOCACHE:-/tmp/dkim2-go-build-cache}" \
   go -C tools run ./cmd/safepath -root .. -directory .artifacts

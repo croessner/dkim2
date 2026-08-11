@@ -167,8 +167,11 @@ Pull requests and ordinary pushes have `contents: read` only. They receive no
 package write, OIDC, registry credential, or signing authority.
 `.github/workflows/container-publish.yml` is the separately authorized
 publication route. It is triggered only by a published, non-draft,
-non-prerelease protected release tag, is additionally gated by the
-`container-release` environment, and fixes the GHCR namespace. The workflow
+non-prerelease GitHub release whose annotated tag object resolves exactly to
+the checked-out commit, is scoped to the `container-release` environment, and
+fixes the GHCR namespace. The repository is private and its current GitHub plan
+does not provide tag rulesets, so the workflow does not make an unavailable
+ref-protection claim. The workflow
 repeats the complete local release verification, builds from a private
 descriptor-bound candidate context, compares both published platform
 manifests with the reviewed local subjects, and reads the pushed index and
@@ -182,4 +185,4 @@ archive, extracted verifier binary, and SPDX predicate identities live in
 `build/container/publication-tools.json`; the preinstalled runner `gh` is not
 trusted. `latest` is never produced or used as deployment authority. Defining
 this route does not publish anything; publication occurs only when maintainers
-separately create the protected release and approve its environment gate.
+separately create and publish the stable annotated release.

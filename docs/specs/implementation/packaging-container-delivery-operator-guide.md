@@ -392,8 +392,9 @@ maintainer policy as M19; agents cannot invent one. Scanner output never
 substitutes for `govulncheck`, dependency review, minimal-filesystem
 inspection, or behavior tests.
 
-Publication, when separately authorized, occurs only from a protected release
-ref and trusted workflow. It publishes immutable digests plus conventional
+Publication, when separately authorized, occurs only from a published stable
+GitHub release whose annotated tag resolves exactly to the checked-out commit,
+through the dedicated trusted workflow. It publishes immutable digests plus conventional
 version aliases, verifies the registry digest after push, attaches SBOM and
 provenance to the exact digest, and never uses `latest` as deployment
 authority. Pull requests and ordinary branch pushes build and verify without

@@ -12,8 +12,7 @@ jobs:
   publish:
     if: >-
       github.event.release.draft == false &&
-      github.event.release.prerelease == false &&
-      github.ref_protected == true
+      github.event.release.prerelease == false
     environment: container-release
     runs-on: ubuntu-24.04
     timeout-minutes: 180
@@ -23,7 +22,7 @@ jobs:
       id-token: write
       attestations: write
     steps:
-      - name: Check out exact protected release tag
+      - name: Check out exact authorized annotated release tag
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           ref: ${{ github.event.release.tag_name }}
