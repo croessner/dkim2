@@ -143,7 +143,8 @@ func GenerateCandidateReport(root string, now time.Time) (CandidateReport, []byt
 		return CandidateReport{}, nil, nil, err
 	}
 	revision, err := conformance.CurrentRevision(root)
-	if err != nil || revision != candidateBaseRevision {
+	if err != nil ||
+		conformance.IsRevisionAncestor(root, candidateBaseRevision, revision) != nil {
 		return CandidateReport{}, nil, nil, errors.New("report_base")
 	}
 	snapshot, err := conformance.ProduceSnapshot(root, revision)

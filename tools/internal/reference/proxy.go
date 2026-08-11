@@ -72,7 +72,8 @@ func BuildPrivateProxy(root string) (ModuleProof, string, func() error, error) {
 		return ModuleProof{}, "", nil, errors.New("module_root")
 	}
 	revision, err := conformance.CurrentRevision(root)
-	if err != nil || revision != candidateBaseRevision {
+	if err != nil ||
+		conformance.IsRevisionAncestor(root, candidateBaseRevision, revision) != nil {
 		return ModuleProof{}, "", nil, errors.New("module_base")
 	}
 	snapshot, err := conformance.ProduceSnapshot(root, revision)
