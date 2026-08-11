@@ -52,6 +52,7 @@ Current contents:
 - `AGENTS.md` and `POLICY.md`: repository development rules and engineering
   policy.
 - `Makefile` and `.golangci.yml`: repository-wide local guardrails.
+- `docs/ci.md`: GitHub Actions lanes, privilege boundaries, and release gates.
 - `go.work`: local development workspace.
 - `lib`: standalone DKIM2 library module at
   `github.com/croessner/dkim2`.
@@ -197,6 +198,9 @@ make check-datasource-schema
 make check-datasource-postgresql
 make check-datasource-mysql
 make test-datasource-services
+make check-ci
+make check-container-release
 make check-release
 make guardrails
+make release-guardrails
 ```

@@ -1,0 +1,68 @@
+name: Guardrails
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - features
+      - release/**
+  pull_request:
+    branches:
+      - main
+      - features
+      - release/**
+
+permissions:
+  contents: read
+
+concurrency:
+  group: guardrails-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  ACTIONLINT_VERSION: v1.7.12
+  GOLANGCI_LINT_VERSION: v2.12.2
+  GOVULNCHECK_VERSION: v1.3.0
+
+jobs:
+  quality-gates:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - name: Check out the exact candidate
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install exact Go toolchain
+        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
+        with:
+          go-version: "1.26.5"
+          cache-dependency-path: |
+            go.work.sum
+            lib/go.sum
+            cmd/dkim2d/go.sum
+            cmd/dkim2-milter/go.sum
+            cmd/dkim2-exim/go.sum
+            cmd/dkim2ctl/go.sum
+            tools/go.sum
+
+      - name: Install pinned quality tools
+        run: |
+          GOBIN="$(go env GOPATH)/bin" \
+            go install "github.com/rhysd/actionlint/cmd/actionlint@${ACTIONLINT_VERSION}"
+          GOBIN="$(go env GOPATH)/bin" \
+            go install "github.com/golangci/golangci-lint/v2/cmd/golangci-lint@${GOLANGCI_LINT_VERSION}"
+          GOBIN="$(go env GOPATH)/bin" \
+            go install "golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}"
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+      - name: Run complete repository guardrails
+        run: make guardrails
+
+      - name: Prove guardrails did not mutate the candidate
+        run: |
+          git diff --exit-code
+          test -z "$(git status --porcelain --untracked-files=all)"

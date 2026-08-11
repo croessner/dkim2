@@ -23,20 +23,34 @@ jobs:
       attestations: write
     steps:
       - name: Check out exact authorized annotated release tag
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ github.event.release.tag_name }}
           fetch-depth: 0
           persist-credentials: false
 
       - name: Install exact Go toolchain
-        uses: actions/setup-go@0a12ed9d6a96ab950c8f026ed9f722fe0da7ef32
+        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
         with:
           go-version: "1.26.5"
           cache: false
 
-      - name: Verify exact release candidate and evidence
-        run: make check-release
+      - name: Install pinned release quality tools
+        env:
+          ACTIONLINT_VERSION: v1.7.12
+          GOLANGCI_LINT_VERSION: v2.12.2
+          GOVULNCHECK_VERSION: v1.3.0
+        run: |
+          GOBIN="$(go env GOPATH)/bin" \
+            go install "github.com/rhysd/actionlint/cmd/actionlint@${ACTIONLINT_VERSION}"
+          GOBIN="$(go env GOPATH)/bin" \
+            go install "github.com/golangci/golangci-lint/v2/cmd/golangci-lint@${GOLANGCI_LINT_VERSION}"
+          GOBIN="$(go env GOPATH)/bin" \
+            go install "golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}"
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+      - name: Verify complete release guardrails and evidence
+        run: make release-guardrails
 
       - name: Publish exact verified subjects
         env:

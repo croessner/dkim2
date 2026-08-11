@@ -8,8 +8,10 @@ case "$architecture" in
   aarch64|arm64) platform=linux/arm64 ;;
   *) exit 2 ;;
 esac
-candidate=$(GOCACHE="${GOCACHE:-/tmp/dkim2-go-build-cache}" \
-  go -C tools run ./cmd/candidateid -root ..)
+metadata=$(GOCACHE="${GOCACHE:-/tmp/dkim2-go-build-cache}" \
+  go -C tools run ./cmd/buildmeta -root ..)
+candidate=$(printf '%s\n' "$metadata" | jq -er .candidate_snapshot_sha256)
+version=$(printf '%s\n' "$metadata" | jq -er .version)
 run_id=$(od -An -N8 -tx1 /dev/urandom | tr -d ' \n')
 case "$run_id" in
   ????????) ;;
@@ -180,7 +182,7 @@ for product in dkim2d dkim2-milter dkim2ctl; do
       .HostConfig.Privileged == false and
       .HostConfig.PidsLimit == 64
     ' >/dev/null
-  docker start -a "$container" | grep -Eq '^dkim2(d|-milter|ctl) 0\.0\.0-dev$'
+  test "$(docker start -a "$container")" = "$product $version"
   test "$(docker inspect --format '{{.State.ExitCode}}' "$container")" -eq 0
   if docker run --rm --read-only --cap-drop ALL \
     --security-opt no-new-privileges \

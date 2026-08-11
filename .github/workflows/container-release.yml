@@ -1,11 +1,24 @@
 name: Container evidence verification
 
 on:
-  pull_request:
+  workflow_dispatch:
   push:
+    branches:
+      - main
+      - features
+      - release/**
+  pull_request:
+    branches:
+      - main
+      - features
+      - release/**
 
 permissions:
   contents: read
+
+concurrency:
+  group: container-evidence-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   verify:
@@ -13,12 +26,12 @@ jobs:
     timeout-minutes: 120
     steps:
       - name: Check out exact candidate
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
 
       - name: Install Go
-        uses: actions/setup-go@0a12ed9d6a96ab950c8f026ed9f722fe0da7ef32
+        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
         with:
           go-version: "1.26.5"
           cache: false
@@ -29,11 +42,11 @@ jobs:
           test -z "${ACTIONS_ID_TOKEN_REQUEST_URL:-}"
 
       - name: Build and validate the exact candidate evidence
-        run: make check-release
+        run: make check-container-release
 
       - name: Retain non-authoritative diagnostic evidence
         if: always()
-        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: dkim2-container-evidence
           path: |

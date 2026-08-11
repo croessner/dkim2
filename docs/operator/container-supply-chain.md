@@ -109,7 +109,8 @@ make image-provenance
 make image-vulnerability
 make image-reproducibility
 make image-evidence
-make check-release
+make check-container-release
+make release-guardrails
 ```
 
 The local SBOM producer is Syft 1.46.0 and emits SPDX 2.3 JSON. The local
@@ -165,14 +166,24 @@ publication evidence.
 
 Pull requests and ordinary pushes have `contents: read` only. They receive no
 package write, OIDC, registry credential, or signing authority.
+The ordinary `Guardrails`, `Unit tests`, `Conformance`, and `Container evidence
+verification` lanes cover the full repository gate, fast unit feedback, the
+real Linux conformance profile, and non-authoritative container evidence
+respectively. `CodeQL` independently analyzes GitHub Actions, Go, and the Exim
+C adapter. All ordinary lanes are branch-scoped, manually dispatchable, and
+cancel stale work for the same branch or pull request. `make check-ci` validates
+their syntax, immutable action pins, toolchain version, trigger scope,
+permissions, and release-gate wiring.
+
 `.github/workflows/container-publish.yml` is the separately authorized
 publication route. It is triggered only by a published, non-draft,
 non-prerelease GitHub release whose annotated tag object resolves exactly to
 the checked-out commit, is scoped to the `container-release` environment, and
 fixes the GHCR namespace. The repository is private and its current GitHub plan
 does not provide tag rulesets, so the workflow does not make an unavailable
-ref-protection claim. The workflow
-repeats the complete local release verification, builds from a private
+ref-protection claim. The workflow runs `make release-guardrails`, which joins
+the repository guardrails, reference closure, and container-release evidence
+in one fail-closed Make dependency graph. It then builds from a private
 descriptor-bound candidate context, compares both published platform
 manifests with the reviewed local subjects, and reads the pushed index and
 every version alias back by digest. The pinned `actions/attest` producer then

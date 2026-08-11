@@ -25,6 +25,11 @@ actual_candidate=$(sed -n \
   's/^candidate_snapshot_sha256=\([0-9a-f][0-9a-f]*\)$/\1/p' \
   .artifacts/product-binaries/build-info)
 test "$actual_candidate" = "$expected_candidate"
+grep -Fq 'version=$(printf' scripts/test-image-runtime.sh
+grep -Fq 'jq -er .version' scripts/test-image-runtime.sh
+grep -Fq 'test "$(docker start -a "$container")" = "$product $version"' \
+  scripts/test-image-runtime.sh
+! grep -Fq "0\\.0\\.0-dev" scripts/test-image-runtime.sh
 DKIM2_REVISION=hostile-revision \
 SOURCE_DATE_EPOCH=hostile-epoch \
 DKIM2_CREATED=hostile-created \
@@ -96,6 +101,8 @@ grep -Fq 'environment: container-release' .github/workflows/container-publish.ym
 grep -Fq 'packages: write' .github/workflows/container-publish.yml
 grep -Fq 'id-token: write' .github/workflows/container-publish.yml
 grep -Fq 'attestations: write' .github/workflows/container-publish.yml
+grep -Fq 'run: make release-guardrails' \
+  .github/workflows/container-publish.yml
 test "$(grep -Ec \
   'uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6$' \
   .github/workflows/container-publish.yml)" -eq 9

@@ -144,10 +144,10 @@ jq -e '
   $ports[0].target == 25
 ' "$render" >/dev/null
 
-test "$(grep -Ec 'uses: [^@[:space:]]+@[0-9a-f]{40}$' .github/workflows/container-release.yml)" -ge 3
+test "$(grep -Ec 'uses: [^@[:space:]]+@[0-9a-f]{40}([[:space:]]+#.*)?$' .github/workflows/container-release.yml)" -ge 3
 ! grep -Eq 'uses: [^@[:space:]]+@(main|master|v[0-9]+([.]|$))' .github/workflows/container-release.yml
 grep -Fq 'go-version: "1.26.5"' .github/workflows/container-release.yml
-grep -Fq 'run: make check-release' .github/workflows/container-release.yml
+grep -Fq 'run: make check-container-release' .github/workflows/container-release.yml
 ! grep -Eq '(id-token|packages):[[:space:]]*write' .github/workflows/container-release.yml
 ! grep -Eq 'provenance-ci|trusted-ci-build' \
   .github/workflows/container-release.yml scripts/image-evidence.sh

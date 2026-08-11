@@ -42,6 +42,7 @@ help:
 		'  make lint         run golangci-lint' \
 		'  make test-valkey  run mandatory hermetic Valkey 9.1.0 integration tests' \
 		'  make govulncheck  run govulncheck for all workspace modules' \
+		'  make check-ci      validate GitHub Actions syntax and CI policy' \
 		'  make generate-openapi regenerate OpenAPI and protected wire artifacts' \
 		'  make generate-exim-build regenerate Exim ABI compatibility artifacts' \
 		'  make generate-exim-row-builds regenerate all pinned Exim row build identifiers' \
@@ -86,7 +87,9 @@ help:
 		'  make deployment-postfix run the complete isolated Postfix deployment proof' \
 		'  make deployment-security prove seeded packaging and runtime privacy' \
 		'  make check-operator-docs validate operator links, examples, workflow, and recovery claims' \
-		'  make check-release run all local packaging and release checks' \
+		'  make check-container-release run non-publishing container evidence checks' \
+		'  make check-release run the complete local release gate' \
+		'  make release-guardrails run the complete stable-release gate' \
 		'  make check-interop validate closed external discovery and evidence contracts' \
 		'  make interop       normalize the closed current external evidence set' \
 		'  make check-reference validate API, issue, OpenAPI, and reference closure' \
@@ -346,6 +349,10 @@ govulncheck:
 		(cd $$module && govulncheck ./...); \
 	done
 
+.PHONY: check-ci
+check-ci:
+	@scripts/check-ci.sh
+
 .PHONY: generate-openapi
 generate-openapi:
 	@set -eu; \
@@ -546,7 +553,7 @@ security: check-security fuzz-security race-security vulnerability-security conf
 		go -C tools run ./cmd/security -root .. report
 
 .PHONY: guardrails
-guardrails: fmt vet lint test race check-protected-platforms check-openapi check-vendor check-conformance conformance govulncheck check-datasource-schema check-datasource-postgresql check-datasource-mysql check-exim-matrix-prep check-boundaries check-operator-docs
+guardrails: check-ci fmt vet lint test race check-protected-platforms check-openapi check-vendor check-conformance conformance govulncheck check-datasource-schema check-datasource-postgresql check-datasource-mysql check-exim-matrix-prep check-boundaries check-operator-docs
 
 .PHONY: product-binaries
 product-binaries:
@@ -629,9 +636,15 @@ deployment-security: image-release-evidence deployment-postfix
 check-operator-docs:
 	@tools/check-operator-docs.sh
 
-.PHONY: check-release
-check-release: product-binaries check-images check-operator-docs check-workspace check-vendor check-openapi check-conformance check-security
+.PHONY: check-container-release
+check-container-release: product-binaries check-images check-operator-docs check-workspace check-vendor check-openapi check-conformance check-security
 	@$(MAKE) image-release-evidence
+
+.PHONY: check-release
+check-release: guardrails check-reference check-container-release
+
+.PHONY: release-guardrails
+release-guardrails: check-release
 
 .PHONY: check-interop
 check-interop:

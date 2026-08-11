@@ -6,6 +6,13 @@ behavior. It is not a stable release and it does not make either draft final.
 The Exim implementation is `qualified_linux` through the completed five-row,
 43-case-per-row source-linked matrix; the database-provider work is implemented.
 
+This document and `testdata/reference/release-plan.json` are retained as the
+pre-publication snapshot for that preview candidate. The stable `v0.1.0`
+GitHub release was separately created on 2026-08-11 under maintainer authority;
+that later release does not rewrite this snapshot's deliberately false
+publication-authority fields. Stable publication now requires the independent
+`make release-guardrails` gate documented in the container supply-chain guide.
+
 The future six-tag plan for one exact maintainer-approved commit is:
 
 ```text

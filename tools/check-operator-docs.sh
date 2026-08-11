@@ -1,6 +1,25 @@
 #!/bin/sh
 set -eu
 
+protected_test_tmp=
+if test "$(uname -s)" = Linux; then
+  artifacts=.artifacts
+  if test ! -e "$artifacts"; then
+    mkdir -m 0700 "$artifacts"
+  fi
+  test -d "$artifacts"
+  test ! -L "$artifacts"
+  protected_test_tmp=$(mktemp -d "$artifacts/.operator-docs-tmp.XXXXXX")
+  chmod 0700 "$protected_test_tmp"
+  cleanup() {
+    status=$?
+    trap - EXIT HUP INT TERM
+    rm -rf -- "$protected_test_tmp" || status=1
+    exit "$status"
+  }
+  trap cleanup EXIT HUP INT TERM
+fi
+
 guide=docs/operator/postfix-compose.md
 supply=docs/operator/container-supply-chain.md
 datasources=docs/operator/datasource-backends.md
@@ -187,10 +206,17 @@ done
 ! grep -Fq 'LDAP and SQL providers are deferred to M22' docs/ARCHITECTURE.md
 ! grep -Fq 'architecture-only until M22' docs/ARCHITECTURE.md
 
-GOCACHE="${GOCACHE:-/tmp/dkim2-go-build-cache}" \
-  go -C cmd/dkim2d test \
-    -run '^(TestOperatorDatasourceExamplesValidate|TestOperatorDomainExamplesValidate|TestOperatorLDAPBundleMatchesNativeCustody|TestLeastPrivilegeGrantTemplateMatchesPublisherContract)$' \
-    ./internal/config ./internal/domainadmin ./internal/datasource/ldap ./internal/datasource/mysql
+run_operator_example_tests() {
+  GOCACHE="${GOCACHE:-/tmp/dkim2-go-build-cache}" \
+    go -C cmd/dkim2d test \
+      -run '^(TestOperatorDatasourceExamplesValidate|TestOperatorDomainExamplesValidate|TestOperatorLDAPBundleMatchesNativeCustody|TestLeastPrivilegeGrantTemplateMatchesPublisherContract)$' \
+      ./internal/config ./internal/domainadmin ./internal/datasource/ldap ./internal/datasource/mysql
+}
+if test -n "$protected_test_tmp"; then
+  TMPDIR="$(pwd -P)/$protected_test_tmp" run_operator_example_tests
+else
+  run_operator_example_tests
+fi
 for reference in \
   'cmd/dkim2d/README.md' \
   'cmd/dkim2-milter/README.md' \
@@ -231,7 +257,7 @@ for probe in \
   grep -Fq "$probe" "$daemon" "$milter"
 done
 
-for target in check-images images-multiarch image-sbom image-provenance image-vulnerability check-release; do
+for target in check-images images-multiarch image-sbom image-provenance image-vulnerability check-container-release release-guardrails; do
   grep -Fq "make $target" "$supply"
   grep -Fq "make $target" Makefile
 done
