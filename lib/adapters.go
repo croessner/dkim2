@@ -17,8 +17,8 @@ func adaptServiceResultWithProjection(input service.Result, projection policy.Pr
 	state, okState := adaptState(input.State())
 	custody, okCustody := adaptCustody(input.Custody())
 	reason, okReason := adaptReason(input.PrimaryReason())
-	if input.Draft() != DraftIdentifier || input.Scope() != service.ScopeCurrent ||
-		input.HistoricalContent() != service.HistoricalNotEvaluated || input.HistoricalSignatures() != service.HistoricalNotEvaluated ||
+	if input.Draft() != DraftIdentifier || !input.Scope().Known() ||
+		!input.HistoricalContent().Known() || !input.HistoricalSignatures().Known() ||
 		!okState || !okCustody || !okReason {
 		return internalContractResult(newVerificationTarget(input.Target().Sequence, input.Target().Instance))
 	}
@@ -53,13 +53,34 @@ func adaptServiceResultWithProjection(input service.Result, projection policy.Pr
 		}
 		publicSignatures = append(publicSignatures, newSignatureSetFact(algorithm, status, factReason, metadata))
 	}
+	scope, content, historicalSignatures, ok := adaptHistory(input)
+	if !ok {
+		return internalContractResult(newVerificationTarget(input.Target().Sequence, input.Target().Instance))
+	}
 	return newVerifyResult(verifyResultData{
-		state: state, scope: VerificationScopeCurrent,
-		historicalContent: HistoricalStateNotEvaluated, historicalSignatures: HistoricalStateNotEvaluated,
+		state: state, scope: scope,
+		historicalContent: content, historicalSignatures: historicalSignatures,
 		custodyStructure: custody, target: newVerificationTarget(input.Target().Sequence, input.Target().Instance),
 		primaryReason: reason, checks: publicChecks, signatures: publicSignatures,
 		policyProjection: projection,
 	})
+}
+
+func adaptHistory(input service.Result) (VerificationScope, HistoricalState, HistoricalState, bool) {
+	if input.Scope() == service.ScopeCurrent && input.HistoricalContent() == service.HistoricalNotEvaluated && input.HistoricalSignatures() == service.HistoricalNotEvaluated {
+		return VerificationScopeCurrent, HistoricalStateNotEvaluated, HistoricalStateNotEvaluated, true
+	}
+	if input.Scope() != service.ScopeChain || input.HistoricalSignatures() != service.HistoricalComplete {
+		return "", "", "", false
+	}
+	switch input.HistoricalContent() {
+	case service.HistoricalComplete:
+		return VerificationScopeChain, HistoricalStateComplete, HistoricalStateComplete, true
+	case service.HistoricalPartial:
+		return VerificationScopeChain, HistoricalStatePartial, HistoricalStateComplete, true
+	default:
+		return "", "", "", false
+	}
 }
 
 // projectionMatchesServiceResult validates facade transfer without rebuilding provenance.

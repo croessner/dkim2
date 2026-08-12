@@ -233,6 +233,9 @@ func validVerification(value generated.VerificationResult) bool {
 			(!canonicalUint64(value.Target.Instance) || !canonicalUint64(value.Target.Sequence)) {
 		return false
 	}
+	if !verificationCoverageCoherent(value.State, value.Scope, value.HistoricalContent, value.HistoricalSignatures) {
+		return false
+	}
 	for _, check := range value.Checks {
 		if !check.Class.Valid() || !check.Reason.Valid() {
 			return false
@@ -245,6 +248,15 @@ func validVerification(value generated.VerificationResult) bool {
 		}
 	}
 	return true
+}
+
+func verificationCoverageCoherent(state generated.VerificationState, scope generated.VerificationResultScope, content generated.VerificationResultHistoricalContent, signatures generated.VerificationResultHistoricalSignatures) bool {
+	if state == generated.PASS {
+		return scope == generated.Chain &&
+			(content == generated.VerificationResultHistoricalContentComplete || content == generated.VerificationResultHistoricalContentPartial) &&
+			signatures == generated.VerificationResultHistoricalSignaturesComplete
+	}
+	return scope == generated.Current && content == generated.VerificationResultHistoricalContentNotEvaluated && signatures == generated.VerificationResultHistoricalSignaturesNotEvaluated
 }
 
 // validPolicy validates every bounded generated policy fact.

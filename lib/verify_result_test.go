@@ -11,10 +11,10 @@ func TestPublicVerificationVocabulariesAreClosed(t *testing.T) {
 		{string(ResultStateTEMPERROR), ResultStateTEMPERROR.Known()},
 	}, func(value string) bool { return ResultState(value).Known() })
 
-	testKnownStrings(t, "scope", []knownString{{string(VerificationScopeCurrent), VerificationScopeCurrent.Known()}}, func(value string) bool {
+	testKnownStrings(t, "scope", []knownString{{string(VerificationScopeCurrent), VerificationScopeCurrent.Known()}, {string(VerificationScopeChain), VerificationScopeChain.Known()}}, func(value string) bool {
 		return VerificationScope(value).Known()
 	})
-	testKnownStrings(t, "historical state", []knownString{{string(HistoricalStateNotEvaluated), HistoricalStateNotEvaluated.Known()}}, func(value string) bool {
+	testKnownStrings(t, "historical state", []knownString{{string(HistoricalStateNotEvaluated), HistoricalStateNotEvaluated.Known()}, {string(HistoricalStateComplete), HistoricalStateComplete.Known()}, {string(HistoricalStatePartial), HistoricalStatePartial.Known()}}, func(value string) bool {
 		return HistoricalState(value).Known()
 	})
 	testKnownStrings(t, "custody structure", []knownString{

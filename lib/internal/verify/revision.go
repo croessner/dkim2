@@ -27,6 +27,10 @@ const (
 	RevisionProofTerminalNextDomainAuthorizationRequired RevisionProofOutcome = "terminal_next_domain_authorization_required"
 	// RevisionProofProtocolRejected reports malformed, mismatched, expired, or otherwise failed protocol evidence.
 	RevisionProofProtocolRejected RevisionProofOutcome = "protocol_rejected"
+	// RevisionProofHashMismatch reports a supported current or historical hash mismatch.
+	RevisionProofHashMismatch RevisionProofOutcome = "hash_mismatch"
+	// RevisionProofSignatureMismatch reports a supported inherited signature mismatch.
+	RevisionProofSignatureMismatch RevisionProofOutcome = "signature_mismatch"
 	// RevisionProofUnsupported reports an unsupported-only inherited signature field or hash tuple.
 	RevisionProofUnsupported RevisionProofOutcome = "unsupported"
 	// RevisionProofProviderTemporary reports retryable public-key provider failure.
@@ -43,7 +47,8 @@ const (
 func (o RevisionProofOutcome) Known() bool {
 	switch o {
 	case RevisionProofVerified, RevisionProofTerminalNextDomainAuthorizationRequired,
-		RevisionProofProtocolRejected, RevisionProofUnsupported, RevisionProofProviderTemporary,
+		RevisionProofProtocolRejected, RevisionProofHashMismatch, RevisionProofSignatureMismatch,
+		RevisionProofUnsupported, RevisionProofProviderTemporary,
 		RevisionProofProviderRejected, RevisionProofProviderContract, RevisionProofLimitExceeded:
 		return true
 	default:
@@ -314,6 +319,22 @@ func (v Verifier) VerifyRevisionProof(ctx context.Context, request Request) (Rev
 	return v.VerifyRevisionProofAt(ctx, request, instant)
 }
 
+// VerifyRevisionProofAfterCurrent completes all-hop proof without repeating the already verified current key lookup.
+func (v Verifier) VerifyRevisionProofAfterCurrent(ctx context.Context, request Request, current Result) (RevisionProofOutcome, RevisionProof, error) {
+	if !aggregateCurrentPass(current) {
+		return "", RevisionProof{}, newError(ErrorCodeInternalMisuse, ErrorLocation{}, ErrorDetails{Class: ErrorClassInternal}, nil)
+	}
+	instant, err := v.CaptureRevisionInstant()
+	if err != nil {
+		return "", RevisionProof{}, err
+	}
+	outcome, prepared, err := v.PrepareRevisionProofAt(ctx, request, instant)
+	if err != nil || outcome != "" {
+		return outcome, RevisionProof{}, err
+	}
+	return v.executePreparedRevisionProof(ctx, prepared, &current)
+}
+
 // CaptureRevisionInstant captures one representable nonnegative operation time.
 func (v Verifier) CaptureRevisionInstant() (RevisionInstant, error) {
 	if !v.valid() || !revisionTimestampPolicySafe(v.options.TimestampPolicy) {
@@ -373,6 +394,10 @@ func (v Verifier) PrepareRevisionProofAt(ctx context.Context, request Request, i
 
 // ExecutePreparedRevisionProof performs only fixed-order provider lookup and signature verification.
 func (v Verifier) ExecutePreparedRevisionProof(ctx context.Context, prepared PreparedRevisionProof) (RevisionProofOutcome, RevisionProof, error) {
+	return v.executePreparedRevisionProof(ctx, prepared, nil)
+}
+
+func (v Verifier) executePreparedRevisionProof(ctx context.Context, prepared PreparedRevisionProof, current *Result) (RevisionProofOutcome, RevisionProof, error) {
 	if ctx == nil || !v.valid() || !prepared.Valid() || prepared.owner != v.revisionOwner {
 		return "", RevisionProof{}, newError(ErrorCodeInternalMisuse, ErrorLocation{}, ErrorDetails{Class: ErrorClassInternal}, nil)
 	}
@@ -391,6 +416,15 @@ func (v Verifier) ExecutePreparedRevisionProof(ctx context.Context, prepared Pre
 	for _, candidate := range prepared.prepared {
 		if err := ctx.Err(); err != nil {
 			return "", RevisionProof{}, err
+		}
+		if current != nil && candidate.fact.sequence == current.Target().Sequence {
+			sets, ok := revisionSetsFromCurrent(*current, len(candidate.parsed.SignatureSets()))
+			if !ok || candidate.fact.instance != current.Target().InstanceNumber {
+				return "", RevisionProof{}, newError(ErrorCodeInternalMisuse, ErrorLocation{}, ErrorDetails{Class: ErrorClassInternal}, nil)
+			}
+			candidate.fact.sets = sets
+			signatures.facts[candidate.fact.sequence-1] = candidate.fact
+			continue
 		}
 		evaluation := v.evaluateRevisionSignatureSets(ctx, candidate.parsed, candidate.digest, Target{
 			Sequence: candidate.fact.sequence, InstanceNumber: candidate.fact.instance,
@@ -414,6 +448,30 @@ func (v Verifier) ExecutePreparedRevisionProof(ctx context.Context, prepared Pre
 		signatures.facts[candidate.fact.sequence-1] = candidate.fact
 	}
 	return v.completePreparedRevisionProof(prepared.input, prepared.base, signatures)
+}
+
+func revisionSetsFromCurrent(current Result, count int) ([]RevisionSetFact, bool) {
+	sets := current.SignatureSets()
+	if len(sets) != count {
+		return nil, false
+	}
+	result := make([]RevisionSetFact, len(sets))
+	passes := 0
+	for index, set := range sets {
+		if set.Index != index {
+			return nil, false
+		}
+		switch set.Status {
+		case SignatureSetStatusPass:
+			result[index] = RevisionSetFact{index: index, algorithm: set.Algorithm, state: RevisionSetSupportedPass}
+			passes++
+		case SignatureSetStatusUnsupportedAlgorithm:
+			result[index] = RevisionSetFact{index: index, algorithm: AlgorithmUnknown, state: RevisionSetIgnoredUnknown}
+		default:
+			return nil, false
+		}
+	}
+	return result, passes > 0
 }
 
 // revisionTimestampPolicySafe enforces exact 14-day age and non-widened future tolerance.
@@ -591,7 +649,7 @@ func (v Verifier) verifyRevisionBase(ctx context.Context, input verificationInpu
 		return revisionBaseProof{}, RevisionProofLimitExceeded, nil
 	}
 	if !revisionEnvelopeShapeValid(input.request.Envelope, highestSignature.HasNextDomain()) {
-		return revisionBaseProof{}, RevisionProofProtocolRejected, nil
+		return revisionBaseProof{}, RevisionProofHashMismatch, nil
 	}
 	if !custody.Evaluated() {
 		return revisionBaseProof{}, RevisionProofProtocolRejected, nil
@@ -638,23 +696,37 @@ func (v Verifier) verifyRevisionBase(ctx context.Context, input verificationInpu
 		}
 		return revisionBaseProof{}, "", newError(ErrorCodeInternalMisuse, ErrorLocation{}, ErrorDetails{Class: ErrorClassInternal}, nil)
 	}
-	if !revisionHistoryAccepted(walk) {
-		if walk.Valid() && walk.StopReason() == HistoryStopOriginReached && walk.ReachedInstance() == 1 && len(walk.Transitions()) != int(walk.TargetInstance()-1) {
-			return revisionBaseProof{}, RevisionProofLimitExceeded, nil
-		}
-		if walk.Valid() && walk.StopReason() == HistoryStopLimitExceeded {
-			return revisionBaseProof{}, RevisionProofLimitExceeded, nil
-		}
-		if walk.Valid() && walk.StopReason() == HistoryStopHashUnsupported {
-			return revisionBaseProof{}, RevisionProofUnsupported, nil
-		}
-		return revisionBaseProof{}, RevisionProofProtocolRejected, nil
+	if outcome := rejectedRevisionHistoryOutcome(walk); outcome != "" {
+		return revisionBaseProof{}, outcome, nil
 	}
 	if walk.Usage().CanonicalBytes() > limits.MaxCanonicalWorkBytes-canonicalWork {
 		return revisionBaseProof{}, RevisionProofLimitExceeded, nil
 	}
 	canonicalWork += walk.Usage().CanonicalBytes()
 	return revisionBaseProof{highestSignature: highestSignature, highestInstance: highestInstance, custody: custody, history: walk, canonicalWork: canonicalWork, currentCanonicalWork: currentCanonicalWork}, "", nil
+}
+
+// rejectedRevisionHistoryOutcome maps every incomplete authenticated walk to one closed result.
+func rejectedRevisionHistoryOutcome(walk HistoryWalk) RevisionProofOutcome {
+	if revisionHistoryAccepted(walk) {
+		return ""
+	}
+	if !walk.Valid() {
+		return RevisionProofProtocolRejected
+	}
+	switch walk.StopReason() {
+	case HistoryStopLimitExceeded:
+		return RevisionProofLimitExceeded
+	case HistoryStopHashUnsupported:
+		return RevisionProofUnsupported
+	case HistoryStopHashMismatch:
+		return RevisionProofHashMismatch
+	case HistoryStopOriginReached:
+		if walk.ReachedInstance() == 1 && len(walk.Transitions()) != int(walk.TargetInstance()-1) {
+			return RevisionProofLimitExceeded
+		}
+	}
+	return RevisionProofProtocolRejected
 }
 
 // preflightRevisionSignatures proves every local all-hop timestamp, limit, and canonical-input invariant before provider callbacks.
@@ -853,7 +925,7 @@ func revisionSignatureInputDigest(message rawmsg.Message, target Target, remaini
 
 // revisionSignatureOutcome folds one inherited field without accepting mixed known failures.
 func revisionSignatureOutcome(evaluation signatureEvaluation) RevisionProofOutcome {
-	hasTemporary, hasPermanent := false, false
+	hasTemporary, hasPermanent, hasMismatch := false, false, false
 	for _, set := range evaluation.sets {
 		switch set.Status {
 		case SignatureSetStatusPass, SignatureSetStatusUnsupportedAlgorithm:
@@ -861,6 +933,8 @@ func revisionSignatureOutcome(evaluation signatureEvaluation) RevisionProofOutco
 			return RevisionProofProviderContract
 		case SignatureSetStatusProviderTemporary:
 			hasTemporary = true
+		case SignatureSetStatusFail:
+			hasMismatch = true
 		case SignatureSetStatusProviderPermanent, SignatureSetStatusMissingKey, SignatureSetStatusInvalidKey,
 			SignatureSetStatusAmbiguousKey, SignatureSetStatusRevokedKey, SignatureSetStatusUnsupportedKeyType,
 			SignatureSetStatusKeyAlgorithmMismatch, SignatureSetStatusWrongKeyType, SignatureSetStatusKeyPolicyRejected,
@@ -875,6 +949,9 @@ func revisionSignatureOutcome(evaluation signatureEvaluation) RevisionProofOutco
 	}
 	if hasTemporary {
 		return RevisionProofProviderTemporary
+	}
+	if hasMismatch {
+		return RevisionProofSignatureMismatch
 	}
 	if evaluation.pass == 0 {
 		return RevisionProofUnsupported

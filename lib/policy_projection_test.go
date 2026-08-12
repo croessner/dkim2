@@ -35,8 +35,8 @@ func TestFacadeTransfersAndClonesSealedPolicyProjection(t *testing.T) {
 	}
 }
 
-// TestHistoriedCorePassRemainsCurrentOnlyAcrossServiceAndFacade locks the M8 compatibility boundary.
-func TestHistoriedCorePassRemainsCurrentOnlyAcrossServiceAndFacade(t *testing.T) {
+// TestMalformedHistoriedMessageFailsClosedAcrossServiceAndFacade locks the authenticated-chain boundary.
+func TestMalformedHistoriedMessageFailsClosedAcrossServiceAndFacade(t *testing.T) {
 	const timestamp = int64(1700000000)
 	raw, key := signedPublicHistoriedMessage(t, timestamp)
 	verifier, err := NewVerifier(publicProviderFunc(func(context.Context, PublicKeyQuery) (PublicKeyResult, error) {
@@ -47,12 +47,12 @@ func TestHistoriedCorePassRemainsCurrentOnlyAcrossServiceAndFacade(t *testing.T)
 	}
 	coordinator := serviceVerifierForTest(t, verifier)
 	serviceResult, err := coordinator.Verify(context.Background(), service.NewRequest(raw, []byte("<>"), [][]byte{[]byte("<rcpt@example.test>")}))
-	if err != nil || serviceResult.State() != service.StatePASS || serviceResult.Target().Instance != 2 || serviceResult.HistoricalContent() != service.HistoricalNotEvaluated || serviceResult.HistoricalSignatures() != service.HistoricalNotEvaluated {
-		t.Fatalf("service historied PASS = %q target=%#v history=%q/%q error=%v", serviceResult.State(), serviceResult.Target(), serviceResult.HistoricalContent(), serviceResult.HistoricalSignatures(), err)
+	if err != nil || serviceResult.State() != service.StatePERMERROR || serviceResult.PrimaryReason() != service.ReasonMalformedProtocol || serviceResult.Target().Instance != 2 {
+		t.Fatalf("service historied result = %q/%q target=%#v error=%v", serviceResult.State(), serviceResult.PrimaryReason(), serviceResult.Target(), err)
 	}
 	publicResult, err := verifier.Verify(context.Background(), NewVerifyRequest(raw, []byte("<>"), [][]byte{[]byte("<rcpt@example.test>")}))
-	if err != nil || publicResult.State() != ResultStatePASS || publicResult.Target().Instance() != 2 || publicResult.Scope() != VerificationScopeCurrent || publicResult.HistoricalContent() != HistoricalStateNotEvaluated || publicResult.HistoricalSignatures() != HistoricalStateNotEvaluated {
-		t.Fatalf("facade historied PASS = %q target=%#v scope=%q history=%q/%q error=%v", publicResult.State(), publicResult.Target(), publicResult.Scope(), publicResult.HistoricalContent(), publicResult.HistoricalSignatures(), err)
+	if err != nil || publicResult.State() != ResultStatePERMERROR || publicResult.PrimaryReason() != ReasonMalformedProtocol || publicResult.Target().Instance() != 2 {
+		t.Fatalf("facade historied result = %q/%q target=%#v error=%v", publicResult.State(), publicResult.PrimaryReason(), publicResult.Target(), err)
 	}
 }
 

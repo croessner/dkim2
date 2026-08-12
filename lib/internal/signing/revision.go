@@ -512,6 +512,8 @@ func mapRevisionProofOutcome(outcome verify.RevisionProofOutcome) (RevisionVerif
 		return RevisionVerificationTerminalNextDomainAuthorizationRequired, true
 	case verify.RevisionProofProtocolRejected:
 		return RevisionVerificationProtocolRejected, true
+	case verify.RevisionProofHashMismatch, verify.RevisionProofSignatureMismatch:
+		return RevisionVerificationProtocolRejected, true
 	case verify.RevisionProofUnsupported:
 		return RevisionVerificationUnsupported, true
 	case verify.RevisionProofProviderTemporary:

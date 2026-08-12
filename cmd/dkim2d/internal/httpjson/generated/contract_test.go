@@ -696,11 +696,11 @@ func assertFrozenEnums(t *testing.T, document *openapi3.T) {
 
 	assertPropertyEnum(t, document, "ProcessResponse", "disposition",
 		[]string{"accept", "reject", "tempfail", "continue"})
-	assertPropertyEnum(t, document, "VerificationResult", "scope", []string{"current"})
+	assertPropertyEnum(t, document, "VerificationResult", "scope", []string{"current", "chain"})
 	assertPropertyEnum(t, document, "VerificationResult", "historical_content",
-		[]string{testValueNotEvaluated})
+		[]string{testValueNotEvaluated, "complete", "partial"})
 	assertPropertyEnum(t, document, "VerificationResult", "historical_signatures",
-		[]string{testValueNotEvaluated})
+		[]string{testValueNotEvaluated, "complete"})
 	assertPropertyEnum(t, document, "VerificationResult", "custody_structure",
 		[]string{testValueNotEvaluated, "not_present", "nd_links_evaluated", "terminal_nd_requires_oob"})
 	assertPropertyEnum(t, document, "VerificationCheck", "class", []string{

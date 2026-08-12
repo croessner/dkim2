@@ -144,7 +144,6 @@ func TestZeroPublicKeyResultIsNotSuccess(t *testing.T) {
 func TestPublicProviderTypesContainNoOpenEndedMaterial(t *testing.T) {
 	typeOfResult := reflect.TypeFor[PublicKeyResult]()
 	for field := range typeOfResult.Fields() {
-		field := field
 		if field.Type.Kind() == reflect.Interface {
 			t.Fatalf("PublicKeyResult field %q is open-ended interface material", field.Name)
 		}

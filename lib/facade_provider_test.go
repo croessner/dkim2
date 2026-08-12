@@ -44,8 +44,8 @@ func TestFacadeVerifiesEd25519WithClonedProviderKey(t *testing.T) {
 	if err != nil || result.State() != ResultStatePASS || result.PrimaryReason() != ReasonNone {
 		t.Fatalf("Verify() = %q/%q, %v", result.State(), result.PrimaryReason(), err)
 	}
-	if result.Draft() != DraftIdentifier || result.Scope() != VerificationScopeCurrent ||
-		result.HistoricalContent() != HistoricalStateNotEvaluated || result.HistoricalSignatures() != HistoricalStateNotEvaluated ||
+	if result.Draft() != DraftIdentifier || result.Scope() != VerificationScopeChain ||
+		result.HistoricalContent() != HistoricalStateComplete || result.HistoricalSignatures() != HistoricalStateComplete ||
 		result.CustodyStructure() != CustodyStructureNotPresent || result.Target().Sequence() != 1 || result.Target().Instance() != 1 {
 		t.Fatalf("result coverage = %q/%q/%q/%q/%q target=%d/%d", result.Draft(), result.Scope(), result.HistoricalContent(), result.HistoricalSignatures(), result.CustodyStructure(), result.Target().Sequence(), result.Target().Instance())
 	}

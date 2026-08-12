@@ -41,7 +41,7 @@ const (
 // TestReplayFacadeTransfersOnlyAuthenticCurrentPass verifies the sealed service-to-root bridge.
 func TestReplayFacadeTransfersOnlyAuthenticCurrentPass(t *testing.T) {
 	const timestamp = int64(1700000000)
-	raw, key := signedPublicHistoriedMessage(t, timestamp)
+	raw, key := signedPublicReplayMessage(t, timestamp, [][]byte{[]byte("<rcpt@example.test>")})
 	verifier, err := NewVerifier(publicProviderFunc(func(context.Context, PublicKeyQuery) (PublicKeyResult, error) {
 		return FoundRSAPublicKey(key), nil
 	}), WithVerificationClock(func() time.Time { return time.Unix(timestamp, 0) }))
@@ -587,7 +587,7 @@ func assertReplayIdentitySet(t *testing.T, result VerifyResult, want int) {
 func authenticReplayResult(t *testing.T) VerifyResult {
 	t.Helper()
 	const timestamp = int64(1700000000)
-	raw, key := signedPublicHistoriedMessage(t, timestamp)
+	raw, key := signedPublicReplayMessage(t, timestamp, [][]byte{[]byte("<rcpt@example.test>")})
 	verifier, err := NewVerifier(publicProviderFunc(func(context.Context, PublicKeyQuery) (PublicKeyResult, error) {
 		return FoundRSAPublicKey(key), nil
 	}), WithVerificationClock(func() time.Time { return time.Unix(timestamp, 0) }))
@@ -763,7 +763,6 @@ func assertExactReplayFields(t *testing.T, value reflect.Type, want []replayFiel
 func assertNoExportedReplayFields(t *testing.T, value reflect.Type) {
 	t.Helper()
 	for field := range value.Fields() {
-		field := field
 		if field.IsExported() {
 			t.Fatalf("%s exposes field %s", value, field.Name)
 		}

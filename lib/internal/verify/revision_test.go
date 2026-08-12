@@ -67,8 +67,31 @@ func TestVerifyRevisionProofChecksEveryInheritedSignature(t *testing.T) {
 	}
 	lookups = 0
 	outcome, proof, err = verifier.VerifyRevisionProof(context.Background(), Request{Message: tampered.message, Envelope: matchingEnvelope()})
-	if err != nil || outcome != RevisionProofProtocolRejected || proof.Valid() || lookups != 1 {
+	if err != nil || outcome != RevisionProofSignatureMismatch || proof.Valid() || lookups != 1 {
 		t.Fatalf("tampered outcome/proof/error/lookups = %q/%v/%v/%d", outcome, proof.Valid(), err, lookups)
+	}
+}
+
+// TestVerifyRevisionProofAfterCurrentDoesNotRepeatCurrentLookup proves one provider call per inherited signature.
+func TestVerifyRevisionProofAfterCurrentDoesNotRepeatCurrentLookup(t *testing.T) {
+	fixture := newNextDomainChainFixture(t, strings.ToUpper(nextHopDomain))
+	lookups := 0
+	provider := providerFunc(func(_ context.Context, query KeyQuery) (PublicKey, error) {
+		lookups++
+		return publicKeyResult(query.Algorithm, fixture.rsaKey, KeyStatusFound), nil
+	})
+	verifier, err := NewVerifier(provider, testClockOption())
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := Request{Message: fixture.message, Envelope: matchingEnvelope()}
+	current, err := verifier.VerifyCurrent(context.Background(), request)
+	if err != nil || current.Status() != TargetStatusPass || lookups != 1 {
+		t.Fatalf("VerifyCurrent() = %q/%v lookups=%d", current.Status(), err, lookups)
+	}
+	outcome, proof, err := verifier.VerifyRevisionProofAfterCurrent(context.Background(), request, current)
+	if err != nil || outcome != RevisionProofVerified || !proof.Valid() || lookups != 2 {
+		t.Fatalf("VerifyRevisionProofAfterCurrent() = %q/%t/%v lookups=%d", outcome, proof.Valid(), err, lookups)
 	}
 }
 
@@ -343,7 +366,7 @@ func TestVerifyRevisionProofRequiresEveryKnownSetAndIgnoresOnlyMixedUnknownExten
 	keys[1].Material = fixture.wrongEd25519
 	verifier := mustVerifierWithKeys(t, keys)
 	outcome, proof, err := verifier.VerifyRevisionProof(context.Background(), Request{Message: fixture.message, Envelope: matchingEnvelope()})
-	if err != nil || outcome != RevisionProofProtocolRejected || proof.Valid() {
+	if err != nil || outcome != RevisionProofSignatureMismatch || proof.Valid() {
 		t.Fatalf("one-known-failure outcome/proof/error = %q/%v/%v", outcome, proof.Valid(), err)
 	}
 }

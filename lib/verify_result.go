@@ -16,7 +16,7 @@ const DraftIdentifier = "draft-ietf-dkim-dkim2-spec-04"
 type ResultState string
 
 const (
-	// ResultStatePASS reports complete success for the declared current-only scope.
+	// ResultStatePASS reports complete success for the declared authenticated scope.
 	ResultStatePASS ResultState = "PASS"
 	// ResultStateFAIL reports a supported integrity mismatch.
 	ResultStateFAIL ResultState = "FAIL"
@@ -42,11 +42,13 @@ type VerificationScope string
 const (
 	// VerificationScopeCurrent limits the result to the highest current signature and instance.
 	VerificationScopeCurrent VerificationScope = "current"
+	// VerificationScopeChain reports authenticated verification through every inherited revision.
+	VerificationScopeChain VerificationScope = "chain"
 )
 
 // Known reports whether the scope belongs to the closed public vocabulary.
 func (s VerificationScope) Known() bool {
-	return s == VerificationScopeCurrent
+	return s == VerificationScopeCurrent || s == VerificationScopeChain
 }
 
 // HistoricalState identifies whether one historical verification dimension was evaluated.
@@ -55,11 +57,15 @@ type HistoricalState string
 const (
 	// HistoricalStateNotEvaluated reports that the historical dimension was not evaluated.
 	HistoricalStateNotEvaluated HistoricalState = "not_evaluated"
+	// HistoricalStateComplete reports authenticated coverage through the origin.
+	HistoricalStateComplete HistoricalState = "complete"
+	// HistoricalStatePartial reports authenticated coverage with an explicit unavailable body.
+	HistoricalStatePartial HistoricalState = "partial"
 )
 
 // Known reports whether the historical state belongs to the closed public vocabulary.
 func (s HistoricalState) Known() bool {
-	return s == HistoricalStateNotEvaluated
+	return s == HistoricalStateNotEvaluated || s == HistoricalStateComplete || s == HistoricalStatePartial
 }
 
 // CustodyStructure identifies the separately evaluated structural next-domain coverage.
@@ -417,9 +423,8 @@ func (r VerifyResult) replayEligible() bool {
 	return r.state != nil &&
 		r.state.draft == DraftIdentifier &&
 		r.state.resultState == ResultStatePASS &&
-		r.state.scope == VerificationScopeCurrent &&
-		r.state.historicalContent == HistoricalStateNotEvaluated &&
-		r.state.historicalSignatures == HistoricalStateNotEvaluated &&
+		((r.state.scope == VerificationScopeCurrent && r.state.historicalContent == HistoricalStateNotEvaluated && r.state.historicalSignatures == HistoricalStateNotEvaluated) ||
+			r.state.scope == VerificationScopeChain && (r.state.historicalContent == HistoricalStateComplete || r.state.historicalContent == HistoricalStatePartial) && r.state.historicalSignatures == HistoricalStateComplete) &&
 		(r.state.custodyStructure == CustodyStructureNotPresent ||
 			r.state.custodyStructure == CustodyStructureNDLinksEvaluated) &&
 		r.state.target.Sequence() > 0 && r.state.target.Instance() > 0 &&
@@ -523,7 +528,7 @@ func (r VerifyResult) State() ResultState {
 	return r.state.resultState
 }
 
-// Scope returns the current-only verification scope.
+// Scope returns the authenticated verification scope.
 func (r VerifyResult) Scope() VerificationScope {
 	if r.state == nil {
 		return ""

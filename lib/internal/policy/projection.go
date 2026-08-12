@@ -307,13 +307,18 @@ func NewUnavailableProjection(reason PreTargetReason) (Projection, error) {
 	return projection, nil
 }
 
-// newHistoricalProjection constructs a test and future-adapter seam for explicit history.
-func newHistoricalProjection(target uint64, coverage HistoryCoverage, hops []HopFact, limits Limits) (Projection, error) {
+// NewHistoricalProjection constructs an authenticated all-hop policy projection.
+func NewHistoricalProjection(target uint64, coverage HistoryCoverage, hops []HopFact, limits Limits) (Projection, error) {
 	projection := Projection{form: TargetSelected, protocol: ProtocolPASS, verificationReason: VerificationReasonNone, targetSequence: target, history: coverage, hops: slices.Clone(hops)}
 	if err := projection.validate(limits); err != nil {
 		return Projection{}, err
 	}
 	return projection, nil
+}
+
+// newHistoricalProjection retains the package-local test seam.
+func newHistoricalProjection(target uint64, coverage HistoryCoverage, hops []HopFact, limits Limits) (Projection, error) {
+	return NewHistoricalProjection(target, coverage, hops, limits)
 }
 
 // validate enforces projection form, resource, and provenance invariants.

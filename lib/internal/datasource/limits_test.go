@@ -77,7 +77,7 @@ func TestLimitsAllowNarrowingAndRejectZeroNegativeOrWidenedValues(t *testing.T) 
 func TestUsageConstructionDerivesExactRecordCountAndKeepsFieldsPrivate(t *testing.T) {
 	usageType := reflect.TypeFor[Usage]()
 	for field := range usageType.Fields() {
-		if field := field; field.IsExported() {
+		if field.IsExported() {
 			t.Fatalf("Usage field %q is exported", field.Name)
 		}
 	}

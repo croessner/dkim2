@@ -298,6 +298,9 @@ func validVerificationResponse(response generated.VerificationResult) bool {
 		(!validCanonicalUint64(response.Target.Sequence) || !validCanonicalUint64(response.Target.Instance)) {
 		return false
 	}
+	if !verificationCoverageCoherent(response.State, response.Scope, response.HistoricalContent, response.HistoricalSignatures) {
+		return false
+	}
 	for _, check := range response.Checks {
 		if !check.Class.Valid() || !check.Reason.Valid() {
 			return false
@@ -310,6 +313,15 @@ func validVerificationResponse(response generated.VerificationResult) bool {
 		}
 	}
 	return true
+}
+
+func verificationCoverageCoherent(state generated.VerificationState, scope generated.VerificationResultScope, content generated.VerificationResultHistoricalContent, signatures generated.VerificationResultHistoricalSignatures) bool {
+	if state == generated.PASS {
+		return scope == generated.Chain &&
+			(content == generated.VerificationResultHistoricalContentComplete || content == generated.VerificationResultHistoricalContentPartial) &&
+			signatures == generated.VerificationResultHistoricalSignaturesComplete
+	}
+	return scope == generated.Current && content == generated.VerificationResultHistoricalContentNotEvaluated && signatures == generated.VerificationResultHistoricalSignaturesNotEvaluated
 }
 
 // validPolicyResponse validates one complete generated local-policy projection.

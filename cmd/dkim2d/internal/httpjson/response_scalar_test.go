@@ -26,12 +26,16 @@ func TestVerificationScalarMappings(t *testing.T) {
 	})
 	assertScalarMapping(t, "verification scope", mapVerificationScope, []scalarMappingCase[dkim2.VerificationScope, generated.VerificationResultScope]{
 		{dkim2.VerificationScopeCurrent, generated.Current},
+		{dkim2.VerificationScopeChain, generated.Chain},
 	})
 	assertScalarMapping(t, "historical state", mapHistoricalState, []scalarMappingCase[dkim2.HistoricalState, generated.VerificationResultHistoricalContent]{
 		{dkim2.HistoricalStateNotEvaluated, generated.VerificationResultHistoricalContentNotEvaluated},
+		{dkim2.HistoricalStateComplete, generated.VerificationResultHistoricalContentComplete},
+		{dkim2.HistoricalStatePartial, generated.VerificationResultHistoricalContentPartial},
 	})
 	assertScalarMapping(t, "historical signatures", mapHistoricalSignatures, []scalarMappingCase[dkim2.HistoricalState, generated.VerificationResultHistoricalSignatures]{
 		{dkim2.HistoricalStateNotEvaluated, generated.VerificationResultHistoricalSignaturesNotEvaluated},
+		{dkim2.HistoricalStateComplete, generated.VerificationResultHistoricalSignaturesComplete},
 	})
 	assertScalarMapping(t, "custody structure", mapCustodyStructure, []scalarMappingCase[dkim2.CustodyStructure, generated.VerificationResultCustodyStructure]{
 		{dkim2.CustodyStructureNotEvaluated, generated.VerificationResultCustodyStructureNotEvaluated},

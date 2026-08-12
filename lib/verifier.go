@@ -44,7 +44,7 @@ func NewVerifier(provider PublicKeyProvider, options ...VerifierOption) (*Verifi
 	}}, nil
 }
 
-// Verify delegates current-only verification and preserves the disjoint result/error contract.
+// Verify delegates chain-authenticated verification and preserves the disjoint result/error contract.
 func (v *Verifier) Verify(ctx context.Context, request VerifyRequest) (output VerifyResult, resultErr error) {
 	if v == nil || v.state == nil || !v.state.initialized {
 		return VerifyResult{}, newAPIError(APIErrorCodeInvalidRequest)

@@ -96,8 +96,13 @@ func snapshotPublicFuzzResult(result VerifyResult) publicFuzzSnapshot {
 // assertBoundedPublicFuzzResult checks closed vocabularies, coverage, and fact caps.
 func assertBoundedPublicFuzzResult(t *testing.T, result VerifyResult) {
 	t.Helper()
-	if result.Draft() != DraftIdentifier || !result.State().Known() || result.Scope() != VerificationScopeCurrent ||
-		result.HistoricalContent() != HistoricalStateNotEvaluated || result.HistoricalSignatures() != HistoricalStateNotEvaluated ||
+	coverageValid := result.Scope() == VerificationScopeCurrent && result.HistoricalContent() == HistoricalStateNotEvaluated && result.HistoricalSignatures() == HistoricalStateNotEvaluated
+	if result.State() == ResultStatePASS {
+		coverageValid = result.Scope() == VerificationScopeChain &&
+			(result.HistoricalContent() == HistoricalStateComplete || result.HistoricalContent() == HistoricalStatePartial) &&
+			result.HistoricalSignatures() == HistoricalStateComplete
+	}
+	if result.Draft() != DraftIdentifier || !result.State().Known() || !coverageValid ||
 		!result.CustodyStructure().Known() || !result.PrimaryReason().Known() ||
 		result.CheckCount() > HardMaxCheckFacts || result.SignatureSetCount() > HardMaxSignatureFacts {
 		t.Fatal("public fuzz result violated bounded contract")

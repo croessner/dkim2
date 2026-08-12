@@ -613,28 +613,42 @@ func mapVerificationReason(value dkim2.ReasonCode) (generated.VerificationReason
 	}
 }
 
-// mapVerificationScope maps the singleton current scope.
+// mapVerificationScope maps current diagnostic and authenticated-chain scope.
 func mapVerificationScope(value dkim2.VerificationScope) (generated.VerificationResultScope, bool) {
-	if value != dkim2.VerificationScopeCurrent {
+	switch value {
+	case dkim2.VerificationScopeCurrent:
+		return generated.Current, true
+	case dkim2.VerificationScopeChain:
+		return generated.Chain, true
+	default:
 		return "", false
 	}
-	return generated.Current, true
 }
 
-// mapHistoricalContent maps the current-only content-history state.
+// mapHistoricalContent maps authenticated content-history coverage.
 func mapHistoricalContent(value dkim2.HistoricalState) (generated.VerificationResultHistoricalContent, bool) {
-	if value != dkim2.HistoricalStateNotEvaluated {
+	switch value {
+	case dkim2.HistoricalStateNotEvaluated:
+		return generated.VerificationResultHistoricalContentNotEvaluated, true
+	case dkim2.HistoricalStateComplete:
+		return generated.VerificationResultHistoricalContentComplete, true
+	case dkim2.HistoricalStatePartial:
+		return generated.VerificationResultHistoricalContentPartial, true
+	default:
 		return "", false
 	}
-	return generated.VerificationResultHistoricalContentNotEvaluated, true
 }
 
-// mapHistoricalSignatures maps the current-only signature-history state.
+// mapHistoricalSignatures maps authenticated signature-history coverage.
 func mapHistoricalSignatures(value dkim2.HistoricalState) (generated.VerificationResultHistoricalSignatures, bool) {
-	if value != dkim2.HistoricalStateNotEvaluated {
+	switch value {
+	case dkim2.HistoricalStateNotEvaluated:
+		return generated.VerificationResultHistoricalSignaturesNotEvaluated, true
+	case dkim2.HistoricalStateComplete:
+		return generated.VerificationResultHistoricalSignaturesComplete, true
+	default:
 		return "", false
 	}
-	return generated.VerificationResultHistoricalSignaturesNotEvaluated, true
 }
 
 // mapCustodyStructure maps the structural next-domain vocabulary.

@@ -21,7 +21,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/croessner/dkim2/internal/canonical"
+	"github.com/croessner/dkim2/internal/rawmsg"
 	"github.com/croessner/dkim2/internal/routeplan"
+	"github.com/croessner/dkim2/internal/signature"
 	internalsigning "github.com/croessner/dkim2/internal/signing"
 )
 
@@ -276,6 +279,176 @@ func (f publicSigningFixture) signOrigin(t *testing.T, raw []byte, disclosure Ro
 	return signed.Bytes()
 }
 
+// assertPublicChainPass proves the normal verification facade authenticates every instance.
+func (f publicSigningFixture) assertPublicChainPass(t *testing.T, raw, reversePath []byte, forwardPaths [][]byte, instances uint64) {
+	t.Helper()
+	verifier, err := NewVerifier(f.provider, WithVerificationClock(func() time.Time { return time.Unix(1_700_000_000, 0) }))
+	if err != nil {
+		t.Fatalf("NewVerifier() error = %v", err)
+	}
+	result, err := verifier.Verify(t.Context(), NewVerifyRequest(raw, reversePath, forwardPaths))
+	if err != nil || result.State() != ResultStatePASS || result.Scope() != VerificationScopeChain ||
+		result.HistoricalContent() != HistoricalStateComplete || result.HistoricalSignatures() != HistoricalStateComplete ||
+		result.Target().Instance() != instances {
+		t.Fatalf("Verify() = state:%q scope:%q content:%q signatures:%q instance:%d error:%v",
+			result.State(), result.Scope(), result.HistoricalContent(), result.HistoricalSignatures(), result.Target().Instance(), err)
+	}
+}
+
+// assertPublicChainRejected proves one current-signature-valid historical fraud cannot aggregate to PASS.
+func (f publicSigningFixture) assertPublicChainRejected(t *testing.T, raw, reversePath []byte, forwardPaths [][]byte) {
+	t.Helper()
+	verifier, err := NewVerifier(f.provider, WithVerificationClock(func() time.Time { return time.Unix(1_700_000_000, 0) }))
+	if err != nil {
+		t.Fatalf("NewVerifier() error = %v", err)
+	}
+	beforeLookups := f.provider.lookups.Load()
+	result, err := verifier.Verify(
+		t.Context(), NewVerifyRequest(raw, reversePath, forwardPaths),
+	)
+	if err != nil || result.State() == ResultStatePASS || result.Scope() != VerificationScopeCurrent ||
+		result.HistoricalContent() != HistoricalStateNotEvaluated || result.HistoricalSignatures() != HistoricalStateNotEvaluated {
+		t.Fatalf("Verify(fraud) = state:%q scope:%q content:%q signatures:%q target:%d/%d lookups:%d error:%v",
+			result.State(), result.Scope(), result.HistoricalContent(), result.HistoricalSignatures(),
+			result.Target().Sequence(), result.Target().Instance(), f.provider.lookups.Load()-beforeLookups, err)
+	}
+}
+
+// replacePublicRevisionRecipe changes or removes the m=2 recipe without touching other fields.
+func replacePublicRevisionRecipe(t *testing.T, raw []byte, replacement []byte) []byte {
+	t.Helper()
+	updated := bytes.Clone(raw)
+	lineStart := bytes.Index(updated, []byte("Message-Instance: m=2;"))
+	if lineStart < 0 {
+		t.Fatal("m=2 Message-Instance field absent")
+	}
+	fieldEnd := bytes.Index(updated[lineStart:], []byte("DKIM2-Signature:"))
+	if fieldEnd < 0 {
+		t.Fatal("m=2 Message-Instance field is unterminated")
+	}
+	fieldEnd += lineStart
+	recipeStart := bytes.Index(updated[lineStart:fieldEnd], []byte("\tr="))
+	if recipeStart < 0 {
+		t.Fatal("m=2 recipe absent")
+	}
+	recipeStart += lineStart
+	recipeEnd := bytes.Index(updated[recipeStart:fieldEnd], []byte(";\r\n"))
+	if recipeEnd < 0 {
+		t.Fatal("m=2 recipe is unterminated")
+	}
+	recipeEnd += recipeStart + 3
+	field := []byte(nil)
+	if replacement != nil {
+		field = []byte("\tr=" + base64.StdEncoding.EncodeToString(replacement) + ";\r\n")
+	}
+	return append(append(append([]byte(nil), updated[:recipeStart]...), field...), updated[recipeEnd:]...)
+}
+
+// corruptPublicInheritedSignature invalidates i=1 while leaving its shape parser-valid.
+func corruptPublicInheritedSignature(t *testing.T, raw []byte) []byte {
+	t.Helper()
+	message, err := rawmsg.Parse(raw)
+	if err != nil {
+		t.Fatalf("rawmsg.Parse() error = %v", err)
+	}
+	signatures, err := signature.Extract(message)
+	if err != nil || len(signatures) < 2 {
+		t.Fatalf("signature.Extract() count=%d error=%v", len(signatures), err)
+	}
+	var inherited signature.Signature
+	for _, candidate := range signatures {
+		if candidate.Sequence() == 1 {
+			inherited = candidate
+			break
+		}
+	}
+	if len(inherited.SignatureSets()) != 1 {
+		t.Fatal("i=1 signature set absent")
+	}
+	original := inherited.SignatureSets()[0].Signature()
+	corrupt := original.Decoded()
+	corrupt[0] ^= 1
+	updated := replacePublicSignatureField(t, raw, message, inherited, base64.StdEncoding.EncodeToString(corrupt))
+	parsed, parseErr := rawmsg.Parse(updated)
+	if parseErr != nil {
+		t.Fatalf("rawmsg.Parse(corrupt) error = %v", parseErr)
+	}
+	parsedSignatures, extractErr := signature.Extract(parsed)
+	if extractErr != nil {
+		t.Fatalf("signature.Extract(corrupt) error = %v", extractErr)
+	}
+	for _, candidate := range parsedSignatures {
+		if candidate.Sequence() == 1 && bytes.Equal(candidate.SignatureSets()[0].Signature().Decoded(), original.Decoded()) {
+			t.Fatal("i=1 signature mutation did not reach the protocol field")
+		}
+	}
+	return updated
+}
+
+// resignPublicCurrentSequence authenticates a mutated history with the fixture's current key.
+func (f publicSigningFixture) resignPublicCurrentSequence(t *testing.T, raw []byte, sequence uint64) []byte {
+	t.Helper()
+	message, err := rawmsg.Parse(raw)
+	if err != nil {
+		t.Fatalf("rawmsg.Parse() error = %v", err)
+	}
+	signatures, err := signature.Extract(message)
+	if err != nil || int(sequence) > len(signatures) {
+		t.Fatalf("signature.Extract() count=%d sequence=%d error=%v", len(signatures), sequence, err)
+	}
+	var current signature.Signature
+	for _, candidate := range signatures {
+		if candidate.Sequence() == sequence {
+			current = candidate
+			break
+		}
+	}
+	if len(current.SignatureSets()) != 1 {
+		t.Fatalf("i=%d signature set absent", sequence)
+	}
+	canonicalizer, err := canonical.NewCanonicalizer()
+	if err != nil {
+		t.Fatalf("canonical.NewCanonicalizer() error = %v", err)
+	}
+	input, err := canonicalizer.SignatureInput(canonical.SignatureInputSelection{Headers: message.Headers(), TargetSequence: sequence})
+	if err != nil {
+		t.Fatalf("SignatureInput() error = %v", err)
+	}
+	digest := sha256.Sum256(input.Bytes())
+	signed, err := rsa.SignPKCS1v15(rand.Reader, f.provider.rsaKey, crypto.SHA256, digest[:])
+	if err != nil {
+		t.Fatalf("rsa.SignPKCS1v15() error = %v", err)
+	}
+	return replacePublicSignatureField(t, raw, message, current, base64.StdEncoding.EncodeToString(signed))
+}
+
+// replacePublicSignatureField replaces signature material only inside the selected physical field.
+func replacePublicSignatureField(t *testing.T, raw []byte, message rawmsg.Message, selected signature.Signature, replacement string) []byte {
+	t.Helper()
+	field, ok := message.Headers().Field(selected.HeaderIndex())
+	if !ok {
+		t.Fatal("selected signature field absent")
+	}
+	originalField := field.OriginalBytes()
+	sets := selected.SignatureSets()
+	if len(sets) != 1 {
+		t.Fatal("selected signature does not have one set")
+	}
+	marker := []byte(":" + sets[0].Algorithm() + ":")
+	valueStart := bytes.Index(originalField, marker)
+	if valueStart < 0 {
+		t.Fatal("selected signature algorithm marker absent")
+	}
+	valueStart += len(marker)
+	valueEnd := bytes.IndexByte(originalField[valueStart:], ';')
+	if valueEnd < 0 {
+		t.Fatal("selected signature material is unterminated")
+	}
+	valueEnd += valueStart
+	updatedField := append(append(append([]byte(nil), originalField[:valueStart]...), replacement...), originalField[valueEnd:]...)
+	return bytes.Replace(raw, originalField, updatedField, 1)
+}
+
 // TestGenericSigningRejectsNullReversePath reserves null senders for the DSN boundary.
 func TestGenericSigningRejectsNullReversePath(t *testing.T) {
 	fixture := newPublicSigningFixture(t)
@@ -310,13 +483,20 @@ func TestGenericSigningRejectsNullReversePath(t *testing.T) {
 
 // existingTicket plans one exact capability-bound ordinary ticket.
 func (f publicSigningFixture) existingTicket(t *testing.T, capability VerifiedRevisionInput, raw []byte, disclosure RouteDisclosure) RouteCopyTicket {
+	return f.existingTicketFor(
+		t, capability, raw, []byte("<relay@example.net>"), [][]byte{[]byte("<carol@next.test>")}, disclosure,
+	)
+}
+
+// existingTicketFor plans one capability-bound route with an explicit custody transition.
+func (f publicSigningFixture) existingTicketFor(t *testing.T, capability VerifiedRevisionInput, raw, reversePath []byte, forwardPaths [][]byte, disclosure RouteDisclosure) RouteCopyTicket {
 	t.Helper()
 	source, err := NewSigningSource(raw)
 	if err != nil {
 		t.Fatalf("NewSigningSource() error = %v", err)
 	}
 	entry, err := NewExistingRouteEntry(
-		capability, source, []byte("<relay@example.net>"), [][]byte{[]byte("<carol@next.test>")},
+		capability, source, reversePath, forwardPaths,
 		disclosure, []byte("local-route"),
 	)
 	if err != nil {
@@ -591,14 +771,47 @@ func TestPublicExistingSigningDerivesForwarderAndReviser(t *testing.T) {
 		bytes.Count(reviser.Bytes(), []byte("DKIM2-Signature:")) != 2 {
 		t.Fatal("revision emitted the wrong protocol field counts")
 	}
-	reverified, _, err := fixture.facade.VerifyForRevision(
+	fixture.assertPublicChainPass(
+		t, reviser.Bytes(), []byte("<relay@example.net>"), [][]byte{[]byte("<carol@next.test>")}, 2,
+	)
+	reverified, secondCapability, err := fixture.facade.VerifyForRevision(
 		context.Background(), NewVerifyRequest(
 			reviser.Bytes(), []byte("<relay@example.net>"), [][]byte{[]byte("<carol@next.test>")},
 		),
 	)
-	if err != nil || reverified.Status() != RevisionVerificationVerified {
+	if err != nil || reverified.Status() != RevisionVerificationVerified || !secondCapability.Valid() {
 		t.Fatalf("final VerifyForRevision() status=%q error=%v", reverified.Status(), err)
 	}
+	thirdRaw := bytes.Replace(reviser.Bytes(), []byte("Subject: after\r\n"), []byte("Subject: final\r\n"), 1)
+	thirdHandle, err := NewPrivateKeyHandle([]byte("fixture-rsa-third"))
+	if err != nil {
+		t.Fatalf("NewPrivateKeyHandle(third) error = %v", err)
+	}
+	thirdCredential, err := NewRSASigningCredential(testRSASelector, &fixture.provider.rsaKey.PublicKey, thirdHandle)
+	if err != nil {
+		t.Fatalf("NewRSASigningCredential(third) error = %v", err)
+	}
+	thirdProfile, err := NewRSASigningProfile("next.test", thirdCredential)
+	if err != nil {
+		t.Fatalf("NewRSASigningProfile(third) error = %v", err)
+	}
+	thirdResult, thirdRecovery, err := fixture.facade.SignExisting(
+		context.Background(),
+		NewExistingSigningRequest(
+			secondCapability, thirdRaw, []byte("<relay@next.test>"), [][]byte{[]byte("<dave@final.test>")},
+			fixture.existingTicketFor(t, secondCapability, thirdRaw, []byte("<relay@next.test>"), [][]byte{[]byte("<dave@final.test>")}, RouteDisclosureSingle),
+			thirdProfile, SigningMetadata{}, SigningTransportFinalNetworkPreDotStuffing,
+			RejectUnavailableBody, RecipeAllowLiterals,
+		),
+	)
+	third, thirdOK := thirdResult.Unrestricted()
+	if err != nil || thirdRecovery.Valid() || !thirdOK || bytes.Count(third.Bytes(), []byte("Message-Instance:")) != 3 {
+		t.Fatalf("third SignExisting() valid=%t recovery=%t instances=%d error=%v",
+			thirdOK, thirdRecovery.Valid(), bytes.Count(third.Bytes(), []byte("Message-Instance:")), err)
+	}
+	fixture.assertPublicChainPass(
+		t, third.Bytes(), []byte("<relay@next.test>"), [][]byte{[]byte("<dave@final.test>")}, 3,
+	)
 
 	bodyRevised := append(append([]byte(nil), origin...), []byte("additional\r\n")...)
 	bodyResult, recovery, err := fixture.facade.SignExisting(
@@ -617,6 +830,17 @@ func TestPublicExistingSigningDerivesForwarderAndReviser(t *testing.T) {
 	if !ok || bodySigned.Facts().Role() != SigningRoleReviser ||
 		bodySigned.Facts().BodyUnavailable() {
 		t.Fatalf("body revision facts=%#v", bodySigned.Facts())
+	}
+	for name, fraud := range map[string][]byte{
+		"missing recipe with changed body": replacePublicRevisionRecipe(t, bodySigned.Bytes(), nil),
+		"malformed recipe":                 replacePublicRevisionRecipe(t, reviser.Bytes(), []byte("{")),
+	} {
+		t.Run(name, func(t *testing.T) {
+			fixture.assertPublicChainRejected(
+				t, fixture.resignPublicCurrentSequence(t, fraud, 2),
+				[]byte("<relay@example.net>"), [][]byte{[]byte("<carol@next.test>")},
+			)
+		})
 	}
 }
 
@@ -920,6 +1144,10 @@ func TestPublicNextDomainCreationReleaseAndCompletion(t *testing.T) {
 	if !ok || completed.Facts().EnvelopeForm() != SigningEnvelopeOrdinary {
 		t.Fatalf("completion result ok=%t facts=%#v", ok, completed.Facts())
 	}
+	fixture.assertPublicChainRejected(
+		t, fixture.resignPublicCurrentSequence(t, corruptPublicInheritedSignature(t, completed.Bytes()), 3),
+		[]byte("<relay@next.example.test>"), [][]byte{[]byte("<final@example.org>")},
+	)
 	finalOutcome, _, err := fixture.facade.VerifyForRevision(
 		ctx, NewVerifyRequest(
 			completed.Bytes(), []byte("<relay@next.example.test>"),

@@ -12,13 +12,12 @@ import (
 	"time"
 
 	"github.com/croessner/dkim2/internal/canonical"
-	"github.com/croessner/dkim2/internal/policy"
 	"github.com/croessner/dkim2/internal/rawmsg"
 	"github.com/croessner/dkim2/internal/verify"
 )
 
-// TestServiceUsesCurrentOnlyVerification proves post-current history cancellation is not service state.
-func TestServiceUsesCurrentOnlyVerification(t *testing.T) {
+// TestServiceRequiresAuthenticatedHistory proves post-current cancellation cannot yield PASS.
+func TestServiceRequiresAuthenticatedHistory(t *testing.T) {
 	const timestamp = uint64(1700000000)
 	raw, key := signedMalformedHistoryMessage(t, timestamp)
 	config := DefaultConfig()
@@ -49,15 +48,8 @@ func TestServiceUsesCurrentOnlyVerification(t *testing.T) {
 	// on the next check is therefore reachable only through history descent.
 	ctx := &serviceCancellationContext{cancelAt: counting.calls + 3}
 	result, err := coordinator.Verify(ctx, NewRequest(raw, []byte("<>"), [][]byte{[]byte("<rcpt@example.test>")}))
-	if err != nil || result.State() != StatePASS {
+	if err != context.Canceled || result.State() != "" {
 		t.Fatalf("service Verify() state=%q error=%v", result.State(), err)
-	}
-	projection := result.PolicyProjection()
-	if result.Scope() != ScopeCurrent ||
-		result.HistoricalContent() != HistoricalNotEvaluated ||
-		result.HistoricalSignatures() != HistoricalNotEvaluated ||
-		!projection.Valid() || projection.HistoryCoverage() != policy.HistoryNotEvaluated {
-		t.Fatal("service result did not preserve the current-only historical projection")
 	}
 }
 

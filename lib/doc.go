@@ -21,9 +21,9 @@
 // non-terminal and is neither PASS nor accept. Every successful evaluation
 // returns exactly one matching disposition action.
 //
-// The public verifier authenticates current-signature flags only on aggregate
-// PASS. Current scope therefore reports donotmodify and donotexplode history as
-// not_evaluated and never infers historical honor. Feedback output is bounded
+// The public verifier authenticates every inherited signature flag on aggregate
+// PASS. Complete history can therefore evaluate donotmodify and donotexplode
+// across the authenticated chain. Feedback output is bounded
 // intent without a destination or route. DNS t=y is authenticated key metadata,
 // not the local testing mode; coherent all-set testing makes PASS and the
 // closed eligible failure rows non-terminal without rewriting verification
@@ -82,12 +82,11 @@
 // hold that final caller and its single bounded flight slot; no helper goroutine
 // is created to pretend arbitrary Go code can be forcibly canceled.
 //
-// Every populated public result reports scope=current, historical content and
-// recipes not_evaluated, and historical signatures not_evaluated. The internal
-// verifier may reconstruct and hash-check bounded Message-Instance history only
-// after current PASS, but that internal content evidence is intentionally not
-// projected through this public facade and never authenticates historical
-// signatures or policy flags. Custody structure is
+// Aggregate PASS reports scope=chain, authenticated content coverage as complete
+// or partial only for explicit unavailable-body history, and historical
+// signatures as complete. Non-PASS results retain scope=current and do not claim
+// historical coverage. The verifier reconstructs bounded Message-Instance
+// history and verifies every inherited signature after current PASS. Custody structure is
 // reported separately as not_evaluated, not_present, nd_links_evaluated, or
 // terminal_nd_requires_oob. Pre-extraction parser or early-limit uncertainty is
 // not_evaluated, never not_present; not_present is reported only after

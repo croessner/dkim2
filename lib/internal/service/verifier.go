@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/croessner/dkim2/internal/niliface"
+	"github.com/croessner/dkim2/internal/policy"
 	"github.com/croessner/dkim2/internal/rawmsg"
 	"github.com/croessner/dkim2/internal/verify"
 )
@@ -122,16 +123,98 @@ func (v Verifier) assessWithAbsencePolicy(ctx context.Context, request Request, 
 		return Result{}, false, nil
 	}
 
-	coreResult, err := v.core.VerifyCurrent(ctx, verify.Request{
+	coreRequest := verify.Request{
 		Message: message, Envelope: verify.NewEnvelope(request.ReversePath(), forward), RequireEnvelope: true,
-	})
+	}
+	coreResult, err := v.core.VerifyCurrent(ctx, coreRequest)
 	if ctxErr := ctx.Err(); ctxErr != nil {
 		return Result{}, true, ctxErr
 	}
 	if err != nil {
 		return mapVerificationError(err), true, nil
 	}
-	return mapVerificationResult(coreResult, v.limits), true, nil
+	current := mapVerificationResult(coreResult, v.limits)
+	if current.State() != StatePASS {
+		return current, true, nil
+	}
+	if current.Target().Sequence == 1 && current.Target().Instance == 1 {
+		return current.withAuthenticatedOrigin(), true, nil
+	}
+	outcome, proof, err := v.core.VerifyRevisionProofAfterCurrent(ctx, coreRequest, coreResult)
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return Result{}, true, ctxErr
+	}
+	if err != nil {
+		return Result{}, true, err
+	}
+	if outcome != verify.RevisionProofVerified {
+		return mapRevisionProofFailure(current, outcome), true, nil
+	}
+	return attachRevisionProof(current, proof), true, nil
+}
+
+// mapRevisionProofFailure prevents a current-only PASS from escaping after all-hop rejection.
+func mapRevisionProofFailure(current Result, outcome verify.RevisionProofOutcome) Result {
+	state, reason, class := StatePERMERROR, ReasonMalformedProtocol, CheckProtocol
+	switch outcome {
+	case verify.RevisionProofHashMismatch:
+		state, reason, class = StateFAIL, ReasonHashMismatch, CheckBodyHash
+	case verify.RevisionProofSignatureMismatch:
+		state, reason, class = StateFAIL, ReasonSignatureMismatch, CheckSignature
+	case verify.RevisionProofUnsupported:
+		reason = ReasonUnsupportedAlgorithm
+	case verify.RevisionProofProviderTemporary:
+		state, reason, class = StateTEMPERROR, ReasonProviderTemporary, CheckProvider
+	case verify.RevisionProofProviderRejected:
+		reason, class = ReasonProviderPermanent, CheckProvider
+	case verify.RevisionProofProviderContract:
+		reason, class = ReasonProviderContract, CheckProvider
+	case verify.RevisionProofLimitExceeded:
+		reason = ReasonLimitExceeded
+	case verify.RevisionProofTerminalNextDomainAuthorizationRequired:
+		reason, class = ReasonOutOfBandRequired, CheckNextDomain
+	case verify.RevisionProofProtocolRejected:
+	default:
+		return internalContractResult(current.Target())
+	}
+	return newResult(state, current.Custody(), current.Target(), reason, []CheckFact{{Class: class, Reason: reason}}, nil)
+}
+
+// attachRevisionProof projects only immutable authenticated all-hop facts.
+func attachRevisionProof(current Result, proof verify.RevisionProof) Result {
+	if !proof.Valid() || proof.State() != verify.RevisionProofVerified {
+		return internalContractResult(current.Target())
+	}
+	facts := proof.Facts()
+	if !facts.Valid() || facts.HighestSequence() != current.Target().Sequence || facts.HighestInstance() != current.Target().Instance {
+		return internalContractResult(current.Target())
+	}
+	history := HistoricalComplete
+	policyCoverage := policy.HistoryComplete
+	if facts.HistoryHasUnavailableBody() {
+		history = HistoricalPartial
+		policyCoverage = policy.HistoryIndeterminate
+	}
+	signatures := facts.Signatures()
+	hops := make([]policy.HopFact, len(signatures))
+	for index, signatureFact := range signatures {
+		transition := policy.TransitionIndeterminate
+		if index == 0 {
+			transition = policy.TransitionOrigin
+		}
+		flags := signatureFact.Flags()
+		hop, err := policy.NewAuthenticatedHopFact(signatureFact.Sequence(), transition,
+			flags.DoNotModify(), flags.DoNotExplode(), flags.Feedback(), flags.FeedHere(), flags.Exploded())
+		if err != nil {
+			return internalContractResult(current.Target())
+		}
+		hops[index] = hop
+	}
+	projection, err := policy.NewHistoricalProjection(current.Target().Sequence, policyCoverage, hops, policy.DefaultLimits())
+	if err != nil {
+		return internalContractResult(current.Target())
+	}
+	return current.withAuthenticatedHistory(history, projection)
 }
 
 // preExtractionResult returns truthful indeterminate custody after early failure.

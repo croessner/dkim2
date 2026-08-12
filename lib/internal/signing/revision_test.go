@@ -443,6 +443,8 @@ func TestRevisionProofOutcomeMappingIsClosedAndExhaustive(t *testing.T) {
 		verify.RevisionProofVerified:                                RevisionVerificationVerified,
 		verify.RevisionProofTerminalNextDomainAuthorizationRequired: RevisionVerificationTerminalNextDomainAuthorizationRequired,
 		verify.RevisionProofProtocolRejected:                        RevisionVerificationProtocolRejected,
+		verify.RevisionProofHashMismatch:                            RevisionVerificationProtocolRejected,
+		verify.RevisionProofSignatureMismatch:                       RevisionVerificationProtocolRejected,
 		verify.RevisionProofUnsupported:                             RevisionVerificationUnsupported,
 		verify.RevisionProofProviderTemporary:                       RevisionVerificationProviderTemporary,
 		verify.RevisionProofProviderRejected:                        RevisionVerificationProviderRejected,

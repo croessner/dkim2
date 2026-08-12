@@ -1069,14 +1069,18 @@ components:
           type: string
           enum:
             - current
+            - chain
         historical_content:
           type: string
           enum:
             - not_evaluated
+            - complete
+            - partial
         historical_signatures:
           type: string
           enum:
             - not_evaluated
+            - complete
         custody_structure:
           type: string
           enum:

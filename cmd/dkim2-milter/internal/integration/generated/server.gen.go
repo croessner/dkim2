@@ -712,13 +712,19 @@ func (e VerificationResultCustodyStructure) Valid() bool {
 
 // Defines values for VerificationResultHistoricalContent.
 const (
+	VerificationResultHistoricalContentComplete     VerificationResultHistoricalContent = "complete"
 	VerificationResultHistoricalContentNotEvaluated VerificationResultHistoricalContent = "not_evaluated"
+	VerificationResultHistoricalContentPartial      VerificationResultHistoricalContent = "partial"
 )
 
 // Valid indicates whether the value is a known member of the VerificationResultHistoricalContent enum.
 func (e VerificationResultHistoricalContent) Valid() bool {
 	switch e {
+	case VerificationResultHistoricalContentComplete:
+		return true
 	case VerificationResultHistoricalContentNotEvaluated:
+		return true
+	case VerificationResultHistoricalContentPartial:
 		return true
 	default:
 		return false
@@ -727,12 +733,15 @@ func (e VerificationResultHistoricalContent) Valid() bool {
 
 // Defines values for VerificationResultHistoricalSignatures.
 const (
+	VerificationResultHistoricalSignaturesComplete     VerificationResultHistoricalSignatures = "complete"
 	VerificationResultHistoricalSignaturesNotEvaluated VerificationResultHistoricalSignatures = "not_evaluated"
 )
 
 // Valid indicates whether the value is a known member of the VerificationResultHistoricalSignatures enum.
 func (e VerificationResultHistoricalSignatures) Valid() bool {
 	switch e {
+	case VerificationResultHistoricalSignaturesComplete:
+		return true
 	case VerificationResultHistoricalSignaturesNotEvaluated:
 		return true
 	default:
@@ -742,12 +751,15 @@ func (e VerificationResultHistoricalSignatures) Valid() bool {
 
 // Defines values for VerificationResultScope.
 const (
+	Chain   VerificationResultScope = "chain"
 	Current VerificationResultScope = "current"
 )
 
 // Valid indicates whether the value is a known member of the VerificationResultScope enum.
 func (e VerificationResultScope) Valid() bool {
 	switch e {
+	case Chain:
+		return true
 	case Current:
 		return true
 	default:

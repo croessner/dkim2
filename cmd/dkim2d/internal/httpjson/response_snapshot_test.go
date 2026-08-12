@@ -501,10 +501,13 @@ func assertAuthenticMappedCell(t *testing.T, result dkim2.VerifyResult, testCase
 	wantVerdict, _ := mapPolicyVerdict(decision.Verdict())
 	wantPolicyReason, _ := mapPolicyReason(decision.PrimaryReason())
 	wantCustody, _ := mapCustodyStructure(result.CustodyStructure())
+	wantScope, _ := mapVerificationScope(result.Scope())
+	wantContent, _ := mapHistoricalContent(result.HistoricalContent())
+	wantSignatures, _ := mapHistoricalSignatures(result.HistoricalSignatures())
 	if !valid || verification.State != wantState || verification.PrimaryReason != wantReason ||
-		verification.Scope != generated.Current ||
-		verification.HistoricalContent != generated.VerificationResultHistoricalContentNotEvaluated ||
-		verification.HistoricalSignatures != generated.VerificationResultHistoricalSignaturesNotEvaluated ||
+		verification.Scope != wantScope ||
+		verification.HistoricalContent != wantContent ||
+		verification.HistoricalSignatures != wantSignatures ||
 		verification.CustodyStructure != wantCustody ||
 		verification.Target == nil || verification.Target.Sequence != generated.CanonicalUint64("1") ||
 		verification.Target.Instance != generated.CanonicalUint64("1") ||

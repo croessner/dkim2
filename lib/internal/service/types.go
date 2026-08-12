@@ -15,7 +15,7 @@ const hardMaxSignatureFacts = 16
 type State string
 
 const (
-	// StatePASS reports complete success for the declared current-only scope.
+	// StatePASS reports complete success for the declared authenticated scope.
 	StatePASS State = "PASS"
 	// StateFAIL reports a supported integrity mismatch.
 	StateFAIL State = "FAIL"
@@ -36,10 +36,12 @@ type Scope string
 const (
 	// ScopeCurrent limits verification to the highest current target.
 	ScopeCurrent Scope = "current"
+	// ScopeChain reports authenticated verification through every inherited revision.
+	ScopeChain Scope = "chain"
 )
 
 // Known reports whether scope belongs to the closed service vocabulary.
-func (s Scope) Known() bool { return s == ScopeCurrent }
+func (s Scope) Known() bool { return s == ScopeCurrent || s == ScopeChain }
 
 // HistoricalState identifies one deliberately unevaluated historical dimension.
 type HistoricalState string
@@ -47,10 +49,16 @@ type HistoricalState string
 const (
 	// HistoricalNotEvaluated reports that historical reconstruction or crypto did not run.
 	HistoricalNotEvaluated HistoricalState = "not_evaluated"
+	// HistoricalComplete reports authenticated coverage through the origin.
+	HistoricalComplete HistoricalState = "complete"
+	// HistoricalPartial reports authenticated coverage with an explicit unavailable body.
+	HistoricalPartial HistoricalState = "partial"
 )
 
 // Known reports whether historical state belongs to the closed service vocabulary.
-func (s HistoricalState) Known() bool { return s == HistoricalNotEvaluated }
+func (s HistoricalState) Known() bool {
+	return s == HistoricalNotEvaluated || s == HistoricalComplete || s == HistoricalPartial
+}
 
 // Custody identifies bounded structural next-domain coverage.
 type Custody string

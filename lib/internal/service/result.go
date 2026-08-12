@@ -113,13 +113,36 @@ func (r Result) withPolicyProjection(projection policy.Projection) Result {
 	return r
 }
 
+// withAuthenticatedHistory seals successful all-hop coverage.
+func (r Result) withAuthenticatedHistory(content HistoricalState, projection policy.Projection) Result {
+	if r.state != StatePASS || !content.Known() || content == HistoricalNotEvaluated || !projection.Valid() {
+		return internalContractResult(r.target)
+	}
+	r.scope = ScopeChain
+	r.historicalContent = content
+	r.historicalSignatures = HistoricalComplete
+	r.policyProjection = projection.Clone()
+	return r
+}
+
+// withAuthenticatedOrigin upgrades an m=1 current proof without a second key lookup.
+func (r Result) withAuthenticatedOrigin() Result {
+	if r.state != StatePASS || r.target.Sequence != 1 || r.target.Instance != 1 || !r.policyProjection.Valid() {
+		return internalContractResult(r.target)
+	}
+	r.scope = ScopeChain
+	r.historicalContent = HistoricalComplete
+	r.historicalSignatures = HistoricalComplete
+	return r
+}
+
 // Draft returns the exact active behavior baseline.
 func (r Result) Draft() string { return r.draft }
 
 // State returns one of the four service states.
 func (r Result) State() State { return r.state }
 
-// Scope returns the current-only verification scope.
+// Scope returns the authenticated verification scope.
 func (r Result) Scope() Scope { return r.scope }
 
 // HistoricalContent returns historical content coverage.

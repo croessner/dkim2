@@ -266,6 +266,9 @@ func TestExecutableDaemonRejectUsesExactFixedReply(t *testing.T) {
 			response.Verification.State = generatedfixture.FAIL
 			response.Verification.PrimaryReason = generatedfixture.VerificationReasonMissingProtocol
 			response.Verification.Checks[0].Reason = generatedfixture.VerificationReasonMissingProtocol
+			response.Verification.Scope = generatedfixture.Current
+			response.Verification.HistoricalContent = generatedfixture.VerificationResultHistoricalContentNotEvaluated
+			response.Verification.HistoricalSignatures = generatedfixture.VerificationResultHistoricalSignaturesNotEvaluated
 			response.Policy.Verdict = generatedfixture.PolicyResultVerdictReject
 			response.Policy.PrimaryReason = generatedfixture.ProtocolFail
 			response.Policy.Findings[0] = generatedfixture.PolicyFinding{
@@ -1320,13 +1323,13 @@ func validFixtureProcessResponse() generatedfixture.ProcessResponse {
 				Class:  generatedfixture.VerificationCheckClassProtocol,
 				Reason: generatedfixture.VerificationReasonNone,
 			}},
-			CustodyStructure: generatedfixture.VerificationResultCustodyStructureNotEvaluated,
+			CustodyStructure: generatedfixture.VerificationResultCustodyStructureNotPresent,
 			HistoricalContent: generatedfixture.
-				VerificationResultHistoricalContentNotEvaluated,
+				VerificationResultHistoricalContentComplete,
 			HistoricalSignatures: generatedfixture.
-				VerificationResultHistoricalSignaturesNotEvaluated,
+				VerificationResultHistoricalSignaturesComplete,
 			PrimaryReason: generatedfixture.VerificationReasonNone,
-			Scope:         generatedfixture.Current,
+			Scope:         generatedfixture.Chain,
 			SignatureSets: []generatedfixture.SignatureSetResult{},
 			State:         generatedfixture.PASS,
 		},

@@ -113,7 +113,7 @@ type publicGoldenSignatureFact struct {
 	reason    ReasonCode
 }
 
-// TestPublicDraft04GoldenVectors proves current verification through the root facade.
+// TestPublicDraft04GoldenVectors proves chain-authenticated verification through the root facade.
 func TestPublicDraft04GoldenVectors(t *testing.T) {
 	corpus := loadPublicGoldenCorpus(t)
 	cases := publicGoldenCases(corpus)
@@ -302,7 +302,11 @@ func expectedPublicGoldenChecks(testCase publicGoldenCase) []publicGoldenCheckFa
 // assertPublicGoldenResult checks bounded state, coverage, target, facts, and immutability.
 func assertPublicGoldenResult(t *testing.T, result VerifyResult, expected publicGoldenCase) {
 	t.Helper()
-	if result.Draft() != DraftIdentifier || result.State() != expected.state || result.PrimaryReason() != expected.reason || result.Scope() != VerificationScopeCurrent || result.HistoricalContent() != HistoricalStateNotEvaluated || result.HistoricalSignatures() != HistoricalStateNotEvaluated || result.CustodyStructure() != expected.custody || result.Target().Sequence() != expected.sequence || result.Target().Instance() != expected.instance {
+	scope, content, signatures := VerificationScopeCurrent, HistoricalStateNotEvaluated, HistoricalStateNotEvaluated
+	if expected.state == ResultStatePASS {
+		scope, content, signatures = VerificationScopeChain, HistoricalStateComplete, HistoricalStateComplete
+	}
+	if result.Draft() != DraftIdentifier || result.State() != expected.state || result.PrimaryReason() != expected.reason || result.Scope() != scope || result.HistoricalContent() != content || result.HistoricalSignatures() != signatures || result.CustodyStructure() != expected.custody || result.Target().Sequence() != expected.sequence || result.Target().Instance() != expected.instance {
 		t.Fatalf("structured result mismatch for %s: state=%q reason=%q custody=%q target=%d/%d", expected.name, result.State(), result.PrimaryReason(), result.CustodyStructure(), result.Target().Sequence(), result.Target().Instance())
 	}
 	assertPublicGoldenFacts(t, result, expected)

@@ -722,6 +722,9 @@ func TestProcessContractAdmitsPermerrorPolicyAcceptance(t *testing.T) {
 	value.Verification.State = generated.PERMERROR
 	value.Verification.PrimaryReason = generated.VerificationReasonMalformedProtocol
 	value.Verification.Checks[0].Reason = generated.VerificationReasonMalformedProtocol
+	value.Verification.Scope = generated.Current
+	value.Verification.HistoricalContent = generated.VerificationResultHistoricalContentNotEvaluated
+	value.Verification.HistoricalSignatures = generated.VerificationResultHistoricalSignaturesNotEvaluated
 	if !validProcessContract(&value, testAuthservID) {
 		t.Fatal("permissive process response was rejected")
 	}
@@ -865,11 +868,11 @@ func validProcessResponse() generated.ProcessResponse {
 				Class:  generated.VerificationCheckClassProtocol,
 				Reason: generated.VerificationReasonNone,
 			}},
-			CustodyStructure:     generated.VerificationResultCustodyStructureNotEvaluated,
-			HistoricalContent:    generated.VerificationResultHistoricalContentNotEvaluated,
-			HistoricalSignatures: generated.VerificationResultHistoricalSignaturesNotEvaluated,
+			CustodyStructure:     generated.VerificationResultCustodyStructureNotPresent,
+			HistoricalContent:    generated.VerificationResultHistoricalContentComplete,
+			HistoricalSignatures: generated.VerificationResultHistoricalSignaturesComplete,
 			PrimaryReason:        generated.VerificationReasonNone,
-			Scope:                generated.Current,
+			Scope:                generated.Chain,
 			SignatureSets:        []generated.SignatureSetResult{},
 			State:                generated.PASS,
 		},
