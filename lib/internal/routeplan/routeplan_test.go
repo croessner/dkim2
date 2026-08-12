@@ -248,7 +248,7 @@ func TestSameRecipientAcrossDistinctCopiesCountsEveryCopy(t *testing.T) {
 	entries := make([]Entry, hardCopies)
 	for index := range entries {
 		entry, err := NewEntry(source, PurposeOrigin, []byte("<sender@example.test>"),
-			[][]byte{[]byte("<same@example.test>")}, DisclosureSingle, []byte(fmt.Sprintf("route-%d", index)), nil)
+			[][]byte{[]byte("<same@example.test>")}, DisclosureSingle, fmt.Appendf(nil, "route-%d", index), nil)
 		if err != nil {
 			t.Fatalf("NewEntry(%d) error = %v", index, err)
 		}
@@ -278,15 +278,13 @@ func TestPlanRequestSnapshotsEntryOrderAndSupportsConcurrentReuse(t *testing.T) 
 	var wait sync.WaitGroup
 	var failures atomic.Int32
 	for range workers {
-		wait.Add(1)
-		go func() {
-			defer wait.Done()
+		wait.Go(func() {
 			parent, tickets, err := coordinator.Finalize(context.Background(), request)
 			if err != nil || parent.CopyCount() != 2 || len(tickets) != 2 ||
 				string(tickets[0].DisclosureRecipients()[0]) != testRecipientZero {
 				failures.Add(1)
 			}
-		}()
+		})
 	}
 	wait.Wait()
 	if failures.Load() != 0 {
@@ -311,15 +309,13 @@ func TestTicketLifecycleIsAtomicAndRequiresReplacementAfterBoundary(t *testing.T
 	start := make(chan struct{})
 	winners := make(chan Reservation, racers)
 	for range racers {
-		wait.Add(1)
-		go func() {
-			defer wait.Done()
+		wait.Go(func() {
 			<-start
 			if reservation, reserveErr := coordinator.Reserve(context.Background(), ticket); reserveErr == nil {
 				won.Add(1)
 				winners <- reservation
 			}
-		}()
+		})
 	}
 	close(start)
 	wait.Wait()
@@ -721,12 +717,10 @@ func TestMemoryAuthorityRejectsConcurrentIdentityReuse(t *testing.T) {
 	results := make(chan error, 2)
 	var workers sync.WaitGroup
 	for range 2 {
-		workers.Add(1)
-		go func() {
-			defer workers.Done()
+		workers.Go(func() {
 			_, _, err := coordinator.Finalize(context.Background(), request)
 			results <- err
-		}()
+		})
 	}
 	workers.Wait()
 	close(results)
@@ -1235,8 +1229,8 @@ func mustSource(t *testing.T, raw []byte) ImmutableSource {
 func mustEntry(t *testing.T, source ImmutableSource, index int) Entry {
 	t.Helper()
 	entry, err := NewEntry(source, PurposeOrigin, []byte("<sender@example.test>"),
-		[][]byte{[]byte(fmt.Sprintf("<user%d@example.test>", index))}, DisclosureSingle,
-		[]byte(fmt.Sprintf("route-%d", index)), nil)
+		[][]byte{fmt.Appendf(nil, "<user%d@example.test>", index)}, DisclosureSingle,
+		fmt.Appendf(nil, "route-%d", index), nil)
 	if err != nil {
 		t.Fatalf("NewEntry() error = %v", err)
 	}
@@ -1266,8 +1260,8 @@ func mustClassifiedEntry(
 	}
 	entry, err := NewClassifiedEntry(
 		source, purpose, []byte("<sender@example.test>"),
-		[][]byte{[]byte(fmt.Sprintf("<user%d@example.test>", index))},
-		DisclosureSingle, routeClass, []byte(fmt.Sprintf("route-%d", index)),
+		[][]byte{fmt.Appendf(nil, "<user%d@example.test>", index)},
+		DisclosureSingle, routeClass, fmt.Appendf(nil, "route-%d", index),
 		receiver, revision,
 	)
 	if err != nil {

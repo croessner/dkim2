@@ -24,7 +24,7 @@ func TestTrackedListenerEnforcesFixedConnectionCapAndRecoversTokens(t *testing.T
 		t.Fatalf("newTrackedListener() failed: %v", err)
 	}
 	accepted := make([]net.Conn, 0, testConnectionLimit)
-	for index := 0; index < testConnectionLimit; index++ {
+	for index := range testConnectionLimit {
 		rawConn := newTransportRecordingConn(nil)
 		raw.enqueue(rawConn)
 		connection, acceptErr := listener.Accept()
@@ -90,7 +90,7 @@ func TestTrackedListenerCloseInterruptsRefusalBackoff(t *testing.T) {
 	if err != nil {
 		t.Fatalf("newTrackedListener() failed: %v", err)
 	}
-	for index := 0; index < testConnectionLimit; index++ {
+	for index := range testConnectionLimit {
 		raw.enqueue(newTransportRecordingConn(nil))
 		if _, acceptErr := listener.Accept(); acceptErr != nil {
 			t.Fatalf("Accept(%d) failed: %v", index, acceptErr)
@@ -489,13 +489,11 @@ func TestTrackedConnConcurrentCloseReleasesExactlyOnce(t *testing.T) {
 	connection := newTrackedConn(raw, state, func() { releases.Add(1) })
 	state.connection.Store(connection)
 	var group sync.WaitGroup
-	for index := 0; index < 64; index++ {
-		group.Add(1)
-		go func() {
-			defer group.Done()
+	for range 64 {
+		group.Go(func() {
 			_ = connection.Close()
 			_ = state.Close()
-		}()
+		})
 	}
 	group.Wait()
 	if raw.closeCalls.Load() != 1 || releases.Load() != 1 {
@@ -667,7 +665,6 @@ func TestTrackedConnResponseOutcomesReleaseAttachedReservation(t *testing.T) {
 		},
 	}
 	for _, testCase := range tests {
-		testCase := testCase
 		t.Run(testCase.name, func(t *testing.T) {
 			raw := newTransportRecordingConn(nil)
 			testCase.configure(raw)

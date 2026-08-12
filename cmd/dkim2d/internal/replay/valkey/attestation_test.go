@@ -57,7 +57,7 @@ func TestOperatorAttestationAcceptsEveryExactPersistenceCombination(t *testing.T
 
 // TestOperatorAttestationRejectsEveryInvalidEnumCombinationAndAssertion proves fail-closed input.
 func TestOperatorAttestationRejectsEveryInvalidEnumCombinationAndAssertion(t *testing.T) {
-	inputType := reflect.TypeOf(OperatorAttestationInput{})
+	inputType := reflect.TypeFor[OperatorAttestationInput]()
 	if inputType.NumField() != 1 || inputType.Field(0).Name != "values" ||
 		inputType.Field(0).Type.Kind() != reflect.Pointer {
 		t.Fatal("operator attestation input is not structurally opaque")
@@ -116,7 +116,6 @@ func TestOperatorAttestationRejectsEveryInvalidEnumCombinationAndAssertion(t *te
 		{name: "shared retention", clear: func(i *OperatorAttestationInput) { i.values.SharedRetention = false }},
 	}
 	for _, assertion := range requiredAssertions {
-		assertion := assertion
 		tests = append(tests, struct {
 			name   string
 			mutate func(*OperatorAttestationInput)

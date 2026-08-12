@@ -1227,7 +1227,7 @@ func reviewedLibraryImport(imported string) bool {
 func parseModuleDependencies(content string) ([]string, bool) {
 	dependencies := make([]string, 0, 8)
 	block := ""
-	for _, rawLine := range strings.Split(content, "\n") {
+	for rawLine := range strings.SplitSeq(content, "\n") {
 		line, _, _ := strings.Cut(rawLine, "//")
 		fields := strings.Fields(line)
 		if len(fields) == 0 {
@@ -1350,14 +1350,9 @@ func datasourceReplaySource(relative string) bool {
 		strings.ToLower(filepath.Base(relative)),
 		productionDependencySuffix,
 	)
-	for _, part := range strings.FieldsFunc(name, func(value rune) bool {
+	return slices.Contains(strings.FieldsFunc(name, func(value rune) bool {
 		return value == '_' || value == '-' || value == '.'
-	}) {
-		if part == "replay" {
-			return true
-		}
-	}
-	return false
+	}), "replay")
 }
 
 // deferredProviderDeclaration reports provider-specific executable symbols

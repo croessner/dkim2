@@ -609,7 +609,7 @@ func dkim2ctlClosedEnvironment(t *testing.T, repository string) []string {
 // dkim2ctlOutputFailureClass extracts only one closed class and status from a
 // subprocess record without publishing any retained record content.
 func dkim2ctlOutputFailureClass(output []byte) (string, int) {
-	for _, line := range bytes.Split(output, []byte{'\n'}) {
+	for line := range bytes.SplitSeq(output, []byte{'\n'}) {
 		if len(line) == 0 {
 			continue
 		}

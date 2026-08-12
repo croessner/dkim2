@@ -228,12 +228,12 @@ func TestPublicProviderTriggeredCallerCancellationRemainsGoControlFlow(t *testin
 
 // TestPublicProviderModelCannotRepresentPrivateOrSignerMaterial proves the closed compile-time key boundary.
 func TestPublicProviderModelCannotRepresentPrivateOrSignerMaterial(t *testing.T) {
-	resultType := reflect.TypeOf(PublicKeyResult{})
-	signerType := reflect.TypeOf((*crypto.Signer)(nil)).Elem()
-	privateType := reflect.TypeOf(rsa.PrivateKey{})
+	resultType := reflect.TypeFor[PublicKeyResult]()
+	signerType := reflect.TypeFor[crypto.Signer]()
+	privateType := reflect.TypeFor[rsa.PrivateKey]()
 	privatePointerType := reflect.PointerTo(privateType)
-	for index := 0; index < resultType.NumField(); index++ {
-		fieldType := resultType.Field(index).Type
+	for field := range resultType.Fields() {
+		fieldType := field.Type
 		if fieldType.Kind() == reflect.Interface || fieldType == privateType || fieldType == privatePointerType || fieldType.Implements(signerType) || reflect.PointerTo(fieldType).Implements(signerType) {
 			t.Fatal("public provider result exposes open, private, or signer material")
 		}

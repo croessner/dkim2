@@ -710,7 +710,7 @@ func validDomain(value string) bool {
 	if value == "" || len(value) > 253 || value != strings.ToLower(value) {
 		return false
 	}
-	for _, label := range strings.Split(value, ".") {
+	for label := range strings.SplitSeq(value, ".") {
 		if len(label) == 0 || len(label) > 63 ||
 			!asciiAlphanumeric(label[0]) ||
 			!asciiAlphanumeric(label[len(label)-1]) {

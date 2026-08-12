@@ -381,10 +381,10 @@ func assertAllowedDatasourceSigning(
 	for name, adapter := range fixture.allowed {
 		t.Run(name, func(t *testing.T) {
 			fixture.events.reset()
-			raw := []byte(fmt.Sprintf(
+			raw := fmt.Appendf(nil,
 				"From: alice@example.test\r\nTo: bob@example.net\r\nSubject: datasource %s\r\n\r\nbody\r\n",
 				name,
-			))
+			)
 			result, recovery, err := resolveAndSignDatasourceProfile(
 				context.Background(),
 				adapter,
@@ -546,7 +546,7 @@ func newDatasourceSigningIntegrationFixture(t *testing.T) datasourceSigningInteg
 	if err != nil {
 		t.Fatalf("memory.New() error = %v", err)
 	}
-	document := []byte(fmt.Sprintf(`{
+	document := fmt.Appendf(nil, `{
   "version": "dkim2-datasource-v1",
   "handles": [{"id": "key.datasource.rsa"}],
   "profiles": [{
@@ -562,7 +562,7 @@ func newDatasourceSigningIntegrationFixture(t *testing.T) datasourceSigningInteg
   }],
   "policies": []
 }
-`, base64.StdEncoding.EncodeToString(spki)))
+`, base64.StdEncoding.EncodeToString(spki))
 	rootPath := t.TempDir()
 	if err := os.Chmod(rootPath, 0o700); err != nil {
 		t.Fatalf("os.Chmod(root) error = %v", err)

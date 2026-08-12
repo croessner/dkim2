@@ -38,7 +38,7 @@ func TestProductionLimitsLoadTenThousandDualAlgorithmDomains(t *testing.T) {
 	handles := make([]string, 0, largeDomainCount*2)
 	profiles := make([]Profile, 0, largeDomainCount)
 	policies := make([]Policy, 0, largeDomainCount)
-	for index := 0; index < largeDomainCount; index++ {
+	for index := range largeDomainCount {
 		domain := fmt.Sprintf("d%05d.example.test", index)
 		profileID := fmt.Sprintf("profile-%05d", index)
 		edHandle, rsaHandle := fmt.Sprintf("ed-%05d", index), fmt.Sprintf("rsa-%05d", index)

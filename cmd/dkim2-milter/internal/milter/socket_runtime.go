@@ -300,10 +300,7 @@ func (r *socketRuntimeGuard) closeRuntime(ctx context.Context) error {
 	if callerDeadline, ok := ctx.Deadline(); ok && callerDeadline.Before(shutdownDeadline) {
 		shutdownDeadline = callerDeadline
 	}
-	remaining := time.Until(shutdownDeadline)
-	if remaining < 0 {
-		remaining = 0
-	}
+	remaining := max(time.Until(shutdownDeadline), 0)
 	graceTimer := time.NewTimer(remaining * 3 / 4)
 	joined := false
 	select {

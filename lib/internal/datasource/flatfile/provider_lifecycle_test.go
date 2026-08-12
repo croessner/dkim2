@@ -148,7 +148,6 @@ func TestInjectedProviderConstructorClosesEveryOwnedDescriptorOnFailure(t *testi
 		},
 	}
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			ops := newScriptedFilesystem(mustFlatfileDocument(t))
 			test.configure(ops)
@@ -471,7 +470,6 @@ func TestInjectedCleanupFailureAppliesOrdinaryAndPanicPrecedence(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			ops := newScriptedFilesystem([]byte(`{"malformed":true}`))
 			ops.fileCloseFailure = test.fileClose
@@ -1182,7 +1180,6 @@ func TestInjectedProviderRejectsCorruptPublicationsAcrossEveryReadSurface(t *tes
 		}},
 	}
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			ops := newScriptedFilesystem(mustFlatfileDocument(t))
 			provider := mustNewInjectedProvider(t, ops)
@@ -1218,7 +1215,6 @@ func TestInjectedProviderRejectsNilTypedNilAndPanickingContexts(t *testing.T) {
 		{name: "panic", ctx: flatfileProviderPanicContext{}, code: datasource.ErrorCodeInternalInvariant},
 	}
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			ops := newScriptedFilesystem(mustFlatfileDocument(t))
 			provider := mustNewInjectedProvider(t, ops)
@@ -1258,15 +1254,13 @@ func TestInjectedConcurrentReloadResolveAndCloseHasOneClosedTerminalState(t *tes
 
 	const readers = 32
 	var wait sync.WaitGroup
-	for index := 0; index < readers; index++ {
-		wait.Add(1)
-		go func() {
-			defer wait.Done()
+	for range readers {
+		wait.Go(func() {
 			result, err := provider.ResolveProfile(context.Background(), request)
 			if err != nil || !result.Valid() || result.Generation() != 1 {
 				t.Error("resolve before concurrent publication failed")
 			}
-		}()
+		})
 	}
 	wait.Wait()
 	closeResult := make(chan error, 1)

@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -98,10 +99,8 @@ func protectedGenerationTestExpression(expression ast.Expr) bool {
 		if protectedGenerationTestExpression(value.Fun) {
 			return true
 		}
-		for _, argument := range value.Args {
-			if protectedGenerationTestExpression(argument) {
-				return true
-			}
+		if slices.ContainsFunc(value.Args, protectedGenerationTestExpression) {
+			return true
 		}
 	case *ast.IndexExpr:
 		return protectedGenerationTestExpression(value.X)

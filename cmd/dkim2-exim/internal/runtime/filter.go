@@ -216,8 +216,8 @@ func openSnapshotFilterRuntime(configPath string, operation adapter.FilterOperat
 	var sink *unixgramSink
 	var sinkIdentity securefile.Identity
 	_, destination := snapshot.Logging()
-	if strings.HasPrefix(destination, "unixgram:") {
-		sink, sinkIdentity, err = openUnixgramSink(strings.TrimPrefix(destination, "unixgram:"))
+	if after, ok := strings.CutPrefix(destination, "unixgram:"); ok {
+		sink, sinkIdentity, err = openUnixgramSink(after)
 		if err != nil || protectedIdentitiesAlias(snapshot.ConfigIdentity(), sinkIdentity) ||
 			protectedIdentitiesAlias(identity, sinkIdentity) {
 			if sink != nil {

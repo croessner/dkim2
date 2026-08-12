@@ -61,10 +61,7 @@ func (s *Session) setTerminalTransactionFailure(command byte, err error) {
 	if !s.transactionAt.IsZero() {
 		duration = time.Since(s.transactionAt)
 	}
-	messageBytes := s.headerBytes + 2 + int64(len(s.body))
-	if messageBytes < 0 {
-		messageBytes = 0
-	}
+	messageBytes := max(s.headerBytes+2+int64(len(s.body)), 0)
 	s.observation = &messageObservation{
 		mode: s.mode, disposition: disposition,
 		resultClass: observationResultForFailure(class), failureClass: string(class),

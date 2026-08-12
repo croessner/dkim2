@@ -238,7 +238,7 @@ func TestResolverCacheUsesExactPositiveNegativeAndStableTTLProvenance(t *testing
 			if err != nil {
 				t.Fatal(err)
 			}
-			for index := 0; index < 2; index++ {
+			for range 2 {
 				outcome, resolveErr := resolver.Resolve(context.Background(), "example.test", testSelector, tt.algorithm)
 				if resolveErr != nil || outcome.Status() != tt.status {
 					t.Fatalf("Resolve() = %q/%v", outcome.Status(), resolveErr)
@@ -371,7 +371,7 @@ func TestResolverCacheRejectsZeroAbsurdTemporaryAndContractLifetimes(t *testing.
 			if err != nil {
 				t.Fatal(err)
 			}
-			for index := 0; index < 2; index++ {
+			for range 2 {
 				if _, resolveErr := resolver.Resolve(context.Background(), "example.test", testSelector, AlgorithmEd25519SHA256); resolveErr != nil {
 					t.Fatal(resolveErr)
 				}
@@ -402,7 +402,7 @@ func TestResolverCacheAnchorsExpiryAndAdmitsOnceBeforeFlightPublication(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
-	for index := 0; index < 2; index++ {
+	for range 2 {
 		if _, resolveErr := resolver.Resolve(context.Background(), "example.test", testSelector, AlgorithmRSASHA256); resolveErr != nil {
 			t.Fatal(resolveErr)
 		}
@@ -429,7 +429,7 @@ func TestResolverCacheAnchorsExpiryAndAdmitsOnceBeforeFlightPublication(t *testi
 		t.Fatal(err)
 	}
 	results := make(chan error, 2)
-	for index := 0; index < 2; index++ {
+	for index := range 2 {
 		go func() {
 			_, resolveErr := resolver.Resolve(context.Background(), "example.test", testSelector, AlgorithmRSASHA256)
 			results <- resolveErr
@@ -441,7 +441,7 @@ func TestResolverCacheAnchorsExpiryAndAdmitsOnceBeforeFlightPublication(t *testi
 	key := cacheKey{owner: resolverTestOwner, algorithm: AlgorithmRSASHA256}
 	waitForFlightWaiters(t, resolver.flights, key, 2)
 	close(release)
-	for index := 0; index < 2; index++ {
+	for range 2 {
 		if err := <-results; err != nil {
 			t.Fatal(err)
 		}

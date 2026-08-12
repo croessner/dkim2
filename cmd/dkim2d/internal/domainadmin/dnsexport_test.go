@@ -100,13 +100,11 @@ func TestExportDNSConcurrentExactRetriesDoNotReplaceArtifact(t *testing.T) {
 	results := make(chan DNSExportResult, workers)
 	var group sync.WaitGroup
 	for range workers {
-		group.Add(1)
-		go func() {
-			defer group.Done()
+		group.Go(func() {
 			result, exportErr := ExportDNS(t.Context(), path, set, DefaultLimits())
 			errorsFound <- exportErr
 			results <- result
-		}()
+		})
 	}
 	group.Wait()
 	close(errorsFound)

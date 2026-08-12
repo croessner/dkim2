@@ -50,7 +50,6 @@ func TestJSONPreflightRejectsMalformedTexts(t *testing.T) {
 		{name: "trailing comma array", input: validJSONPreflightPrefix() + `"x":[0,]}`},
 	}
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 			assertJSONPreflightCode(t, []byte(test.input), jsonPreflightInvalidJSON)
@@ -208,7 +207,6 @@ func TestJSONPreflightConstantBoundaries(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 			input := `{"api_version":` + strconv.Quote(test.api) +
@@ -261,7 +259,6 @@ func TestJSONPreflightConstantClassification(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 			assertJSONPreflightCode(t, []byte(test.input), test.code)
@@ -341,7 +338,6 @@ func TestJSONPreflightExposesOnlyRawMessageTokenMetadata(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 

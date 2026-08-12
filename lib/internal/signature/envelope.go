@@ -208,7 +208,7 @@ func smtpLocalPartEnd(mailbox []byte) (int, bool) {
 
 // validDotString checks one or more non-empty RFC 5321 Atom components.
 func validDotString(local []byte) bool {
-	for _, atom := range bytes.Split(local, []byte{'.'}) {
+	for atom := range bytes.SplitSeq(local, []byte{'.'}) {
 		if len(atom) == 0 {
 			return false
 		}
@@ -241,7 +241,7 @@ func validSMTPDomain(domain []byte) bool {
 	if len(domain) == 0 || len(domain) > 255 {
 		return false
 	}
-	for _, label := range bytes.Split(domain, []byte{'.'}) {
+	for label := range bytes.SplitSeq(domain, []byte{'.'}) {
 		if len(label) == 0 || len(label) > 63 || !isASCIILetterOrDigit(label[0]) || !isASCIILetterOrDigit(label[len(label)-1]) {
 			return false
 		}

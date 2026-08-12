@@ -402,7 +402,7 @@ func (s *jsonScanner) parseHexRune() (uint16, error) {
 		return 0, s.syntaxError()
 	}
 	var value uint16
-	for index := 0; index < 4; index++ {
+	for index := range 4 {
 		digit, ok := hexValue(s.input[s.offset+index])
 		if !ok {
 			return 0, s.syntaxError()

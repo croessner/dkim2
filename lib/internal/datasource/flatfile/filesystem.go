@@ -95,8 +95,8 @@ func validateFilename(filename string) error {
 		return datasource.NewError(datasource.ErrorCodeInvalidRequest)
 	}
 	for _, prefix := range []string{"COM", "LPT"} {
-		if strings.HasPrefix(upperStem, prefix) {
-			switch strings.TrimPrefix(upperStem, prefix) {
+		if after, ok := strings.CutPrefix(upperStem, prefix); ok {
+			switch after {
 			case "¹", "²", "³":
 				return datasource.NewError(datasource.ErrorCodeInvalidRequest)
 			}

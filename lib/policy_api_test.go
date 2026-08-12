@@ -659,14 +659,12 @@ func TestPolicyDecisionClonesAndSupportsConcurrentReuse(t *testing.T) {
 	}
 	var wait sync.WaitGroup
 	for range 16 {
-		wait.Add(1)
-		go func() {
-			defer wait.Done()
+		wait.Go(func() {
 			got, evaluateErr := EvaluatePolicy(result, WithPolicyMode(PolicyModeTesting))
 			if evaluateErr != nil || got.Verdict() != PolicyVerdictContinue {
 				t.Errorf("EvaluatePolicy() = %q, %v", got.Verdict(), evaluateErr)
 			}
-		}()
+		})
 	}
 	wait.Wait()
 }

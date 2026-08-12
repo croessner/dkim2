@@ -244,16 +244,14 @@ func checkVersionSeparation(root string) error {
 		!strings.Contains(string(openapi), "- v1") {
 		return errors.New("release_openapi_version")
 	}
-	workflow, err := artifactpath.ReadFile(root, ".github/workflows/container-publish.yml", 1<<20)
+	workflow, err := artifactpath.ReadFile(root, ".github/workflows/release.yml", 1<<20)
 	if err != nil || !strings.Contains(
 		string(workflow), "github.event.release.prerelease == false",
-	) {
+	) || !strings.Contains(string(workflow), "git cat-file -t") ||
+		!strings.Contains(string(workflow), "git rev-parse \"$RELEASE_TAG^{commit}\"") ||
+		strings.Contains(string(workflow), "github.ref_protected") ||
+		strings.Contains(string(workflow), "latest") {
 		return errors.New("release_stable_workflow")
-	}
-	publish, err := artifactpath.ReadFile(root, "scripts/publish-images.sh", 1<<20)
-	if err != nil || strings.Contains(string(publish), "latest") ||
-		!strings.Contains(string(publish), `for alias in "$version" "$minor" "$major"`) {
-		return errors.New("release_stable_aliases")
 	}
 	return nil
 }

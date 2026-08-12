@@ -121,7 +121,7 @@ func FuzzCrossReferences(f *testing.F) {
 // FuzzProviderParity proves memory and pure flat-file snapshots return the
 // same exact closed outcomes for bounded exact and missing lookup facts.
 func FuzzProviderParity(f *testing.F) {
-	for scenario := uint8(0); scenario < 8; scenario++ {
+	for scenario := range uint8(8) {
 		f.Add([]byte{scenario}, scenario)
 	}
 

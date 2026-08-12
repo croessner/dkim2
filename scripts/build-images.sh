@@ -74,7 +74,7 @@ for target in dkim2d dkim2-milter dkim2ctl; do
   archive="$work/$target.oci.tar"
   DOCKER_CONFIG="$docker_config" DOCKER_HOST="$docker_host" docker buildx build \
     --builder "$builder" \
-    --file "$context/build/container/Containerfile" \
+    --file "$context/build/container/Dockerfile" \
     --target "$target" \
     --platform linux/amd64,linux/arm64 \
     --network none \

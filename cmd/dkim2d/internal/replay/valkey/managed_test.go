@@ -18,7 +18,7 @@ import (
 
 // TestAuditFactoryReceivesOnlyNarrowPasswordFreeAuthority freezes the credential boundary.
 func TestAuditFactoryReceivesOnlyNarrowPasswordFreeAuthority(t *testing.T) {
-	authorityType := reflect.TypeOf(auditAuthority{})
+	authorityType := reflect.TypeFor[auditAuthority]()
 	wantFields := []string{
 		"endpoint",
 		"tlsServerName",

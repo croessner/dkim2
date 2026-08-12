@@ -28,7 +28,6 @@ func TestDarwinACLIterationAndCleanupPolicy(t *testing.T) {
 		{name: "cleanup failure dominates empty", terminalErrno: int(syscall.EINVAL), cleanupResult: -1},
 	}
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			err := classifyDarwinACLIteration(
 				test.entries,

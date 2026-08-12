@@ -27,7 +27,7 @@ func TestFlightGroupCoalescesConcurrentSameKey(t *testing.T) {
 	}
 	results := make(chan flightResult, 2)
 	errorsCh := make(chan error, 2)
-	for index := 0; index < 2; index++ {
+	for index := range 2 {
 		go func() {
 			result, saturated, err := group.do(context.Background(), key, work)
 			if saturated {
@@ -44,7 +44,7 @@ func TestFlightGroupCoalescesConcurrentSameKey(t *testing.T) {
 	waitForFlightWaiters(t, group, key, 2)
 	close(release)
 	var received [2]flightResult
-	for index := 0; index < 2; index++ {
+	for index := range 2 {
 		result := <-results
 		if err := <-errorsCh; err != nil || result.outcome.Status() != KeyOutcomeFound {
 			t.Fatalf("flight result/error = %q/%v", result.outcome.Status(), err)
@@ -78,12 +78,10 @@ func TestFlightWaiterLimitAllowsExactAndRejectsOneOver(t *testing.T) {
 		return flightResult{outcome: newStatusOutcome(KeyOutcomeMissing, AlgorithmRSASHA256, newMetadata(false, false))}
 	}
 	var waiters sync.WaitGroup
-	for index := 0; index < 2; index++ {
-		waiters.Add(1)
-		go func() {
-			defer waiters.Done()
+	for index := range 2 {
+		waiters.Go(func() {
 			_, _, _ = group.do(context.Background(), key, work)
-		}()
+		})
 		if index == 0 {
 			<-entered
 		}
@@ -191,7 +189,7 @@ func TestFlightWaiterAndGlobalSaturationAreImmediate(t *testing.T) {
 
 // TestFlightCompletionCancellationRacePrefersCaller verifies deterministic outer control flow.
 func TestFlightCompletionCancellationRacePrefersCaller(t *testing.T) {
-	for iteration := 0; iteration < 64; iteration++ {
+	for iteration := range 64 {
 		group := newFlightGroup(context.Background(), 1, 1, time.Second)
 		key := cacheKey{owner: cacheOwner('r'), algorithm: AlgorithmRSASHA256}
 		release := make(chan struct{})

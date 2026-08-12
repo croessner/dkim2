@@ -85,13 +85,11 @@ func TestCompleteMessageSerializesDuplicateFinalization(t *testing.T) {
 	outcomes := make(chan outcome, 2)
 	var workers sync.WaitGroup
 	for range 2 {
-		workers.Add(1)
-		go func() {
-			defer workers.Done()
+		workers.Go(func() {
 			<-start
 			result, duplicateRecovery, duplicateErr := coordinator.CompleteMessage(context.Background(), field)
 			outcomes <- outcome{result: result, recovery: duplicateRecovery, err: duplicateErr}
-		}()
+		})
 	}
 	close(start)
 	workers.Wait()

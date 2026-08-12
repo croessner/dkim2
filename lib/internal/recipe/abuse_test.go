@@ -115,9 +115,7 @@ func TestConcurrentParserAndApplierReuseIsImmutable(t *testing.T) {
 	var wait sync.WaitGroup
 	errors := make(chan string, workers)
 	for range workers {
-		wait.Add(1)
-		go func() {
-			defer wait.Done()
+		wait.Go(func() {
 			parsed, _, parseErr := parser.Parse(input)
 			if parseErr != nil || !parsed.Valid() {
 				errors <- "parse"
@@ -132,7 +130,7 @@ func TestConcurrentParserAndApplierReuseIsImmutable(t *testing.T) {
 			if materializeErr != nil || !bytes.Equal(message.RawBytes(), wantMessage.RawBytes()) {
 				errors <- "result"
 			}
-		}()
+		})
 	}
 	wait.Wait()
 	close(errors)

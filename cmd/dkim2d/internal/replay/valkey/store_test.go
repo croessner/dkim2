@@ -958,9 +958,7 @@ func TestRecoveryPublicationIsMonotonicUnderConcurrency(t *testing.T) {
 	store := mustCommandStore(t, &fakeCommandClient{})
 	var wait sync.WaitGroup
 	for index := range 128 {
-		wait.Add(1)
-		go func() {
-			defer wait.Done()
+		wait.Go(func() {
 			switch index % 4 {
 			case 0:
 				store.publishSuccess()
@@ -971,7 +969,7 @@ func TestRecoveryPublicationIsMonotonicUnderConcurrency(t *testing.T) {
 			default:
 				store.publishFailure(recoveryRestart)
 			}
-		}()
+		})
 	}
 	wait.Wait()
 	if got := store.strongestRecovery(); got != recoveryRestart {
@@ -1307,10 +1305,10 @@ func clusterSlot(key string) uint16 {
 
 // TestTestSeamsRemainNarrow prevents accidental provider-shaped surface growth.
 func TestTestSeamsRemainNarrow(t *testing.T) {
-	if got := reflect.TypeOf((*commandClient)(nil)).Elem().NumMethod(); got != 2 {
+	if got := reflect.TypeFor[commandClient]().NumMethod(); got != 2 {
 		t.Fatalf("commandClient methods = %d, want 2", got)
 	}
-	if got := reflect.TypeOf((*resultReader)(nil)).Elem().NumMethod(); got != 3 {
+	if got := reflect.TypeFor[resultReader]().NumMethod(); got != 3 {
 		t.Fatalf("resultReader methods = %d, want 3", got)
 	}
 }

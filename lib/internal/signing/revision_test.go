@@ -420,9 +420,7 @@ func TestRevisionCapabilityTranscriptIsUnambiguousImmutableConcurrentAndRedacted
 	var wait sync.WaitGroup
 	failures := make(chan string, workers)
 	for range workers {
-		wait.Add(1)
-		go func() {
-			defer wait.Done()
+		wait.Go(func() {
 			got, issued, verifyErr := verifier.VerifyForRevision(context.Background(), RevisionRequest{
 				Message: fixture.message, Envelope: fixture.envelope,
 			})
@@ -430,7 +428,7 @@ func TestRevisionCapabilityTranscriptIsUnambiguousImmutableConcurrentAndRedacted
 				verifier.ConsumeVerifiedRevisionInput(context.Background(), issued, fixture.message) != nil {
 				failures <- "revision"
 			}
-		}()
+		})
 	}
 	wait.Wait()
 	close(failures)

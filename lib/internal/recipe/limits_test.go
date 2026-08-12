@@ -14,7 +14,7 @@ func TestEveryRecipeHardMaximumAcceptsExactAndRejectsOneOver(t *testing.T) {
 	if err := exact.Validate(); err != nil {
 		t.Fatalf("exact hard maxima rejected: %v", err)
 	}
-	typeOfLimits := reflect.TypeOf(exact)
+	typeOfLimits := reflect.TypeFor[Limits]()
 	for index := 0; index < typeOfLimits.NumField(); index++ {
 		field := typeOfLimits.Field(index)
 		t.Run(field.Name, func(t *testing.T) {

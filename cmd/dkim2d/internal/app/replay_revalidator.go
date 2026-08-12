@@ -223,10 +223,7 @@ func (r *ReplayRevalidator) awaitScheduledStart(
 	if !valid || now.IsZero() || now.Before(cadence.lastObserved) {
 		return revalidationCadence{}, &ReplayRuntimeError{}
 	}
-	delay := cadence.nextScheduled.Sub(now)
-	if delay < 0 {
-		delay = 0
-	}
+	delay := max(cadence.nextScheduled.Sub(now), 0)
 	elapsed, valid := replayScheduleWait(r.state.schedule, done, delay)
 	if !valid {
 		return revalidationCadence{}, &ReplayRuntimeError{}

@@ -75,9 +75,9 @@ func TestLimitsAllowNarrowingAndRejectZeroNegativeOrWidenedValues(t *testing.T) 
 
 // TestUsageConstructionDerivesExactRecordCountAndKeepsFieldsPrivate verifies immutable checked accounting.
 func TestUsageConstructionDerivesExactRecordCountAndKeepsFieldsPrivate(t *testing.T) {
-	usageType := reflect.TypeOf(Usage{})
-	for index := 0; index < usageType.NumField(); index++ {
-		if field := usageType.Field(index); field.IsExported() {
+	usageType := reflect.TypeFor[Usage]()
+	for field := range usageType.Fields() {
+		if field := field; field.IsExported() {
 			t.Fatalf("Usage field %q is exported", field.Name)
 		}
 	}

@@ -329,14 +329,12 @@ func TestDeriverConcurrentDeriveAndCloseIsRaceSafe(t *testing.T) {
 	identity := mustTestIdentity(t)
 	var wait sync.WaitGroup
 	for range 32 {
-		wait.Add(1)
-		go func() {
-			defer wait.Done()
+		wait.Go(func() {
 			_, deriveErr := deriver.Derive(context.Background(), identity)
 			if deriveErr != nil && ErrorCodeOf(deriveErr) != ErrorCodeClosed {
 				t.Errorf("Derive() error = %v", deriveErr)
 			}
-		}()
+		})
 	}
 	if err := deriver.Close(context.Background()); err != nil {
 		t.Fatalf("Close() error = %v", err)

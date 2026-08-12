@@ -437,7 +437,7 @@ func testRouteTicket(t *testing.T, multiplicity int, firstRecipients [][]byte) r
 	}
 	entries := make([]routeplan.Entry, multiplicity)
 	for index := range entries {
-		recipients := [][]byte{[]byte(fmt.Sprintf("<user%d@example.test>", index))}
+		recipients := [][]byte{fmt.Appendf(nil, "<user%d@example.test>", index)}
 		class := routeplan.DisclosureSingle
 		if index == 0 && len(firstRecipients) > 0 {
 			recipients = firstRecipients
@@ -446,7 +446,7 @@ func testRouteTicket(t *testing.T, multiplicity int, firstRecipients [][]byte) r
 			}
 		}
 		entries[index], err = routeplan.NewEntry(source, routeplan.PurposeOrigin,
-			[]byte("<sender@example.test>"), recipients, class, []byte(fmt.Sprintf("route-%d", index)), nil)
+			[]byte("<sender@example.test>"), recipients, class, fmt.Appendf(nil, "route-%d", index), nil)
 		if err != nil {
 			t.Fatalf("routeplan.NewEntry() error = %v", err)
 		}

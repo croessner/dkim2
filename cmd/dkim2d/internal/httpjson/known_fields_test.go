@@ -12,12 +12,12 @@ func knownFieldBody(mailFrom string, recipients []string, raw string) []byte {
 	for index, recipient := range recipients {
 		quotedRecipients[index] = fmt.Sprintf("%q", recipient)
 	}
-	return []byte(fmt.Sprintf(
+	return fmt.Appendf(nil,
 		`{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-04","message":{"raw_rfc5322_base64":"%s"},"smtp":{"mail_from":%q,"rcpt_to":[%s]}}`,
 		raw,
 		mailFrom,
 		strings.Join(quotedRecipients, ","),
-	))
+	)
 }
 
 // TestKnownFieldPreflightEnforcesResourceLimitsBeforeSchema proves exact local maxima.

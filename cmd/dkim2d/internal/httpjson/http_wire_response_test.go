@@ -123,7 +123,6 @@ func TestApplyResponseDateFreezesValidatedStatusPolicy(t *testing.T) {
 		{name: "505 provider", status: http.StatusHTTPVersionNotSupported, present: true},
 		{name: "204 unavailable", status: http.StatusNoContent},
 	} {
-		testCase := testCase
 		t.Run(testCase.name, func(t *testing.T) {
 			t.Parallel()
 			header := make(http.Header)

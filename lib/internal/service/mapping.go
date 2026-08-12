@@ -175,7 +175,7 @@ func boundedSetIndexDefect(sets []verify.SignatureSetResult) bool {
 		seen[set.Index] = true
 	}
 	if len(sets) <= hardMaxSignatureFacts {
-		for index := 0; index < len(sets); index++ {
+		for index := range sets {
 			if !seen[index] {
 				return true
 			}
@@ -600,7 +600,7 @@ func (a *mappingAccumulator) requireCompleteCurrentChecks() {
 
 // requireContiguousSetIndices enforces zero-origin signature-set positions without gaps.
 func (a *mappingAccumulator) requireContiguousSetIndices(count int) {
-	for index := 0; index < count; index++ {
+	for index := range count {
 		if !a.setIndices[index] {
 			a.addFact(CheckInternalContract, severityPermanent, ReasonInternalContract)
 			return

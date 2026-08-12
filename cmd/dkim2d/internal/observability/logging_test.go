@@ -139,15 +139,13 @@ func TestBoundedLoggerSerializesConcurrentWrites(t *testing.T) {
 	handler := &boundedJSONHandler{destination: &output, level: slog.LevelDebug, mu: &sync.Mutex{}}
 	var workers sync.WaitGroup
 	for range 32 {
-		workers.Add(1)
-		go func() {
-			defer workers.Done()
+		workers.Go(func() {
 			record := slog.NewRecord(time.Now(), slog.LevelInfo, "lifecycle.transition", 0)
 			record.AddAttrs(slog.String("operation", "lifecycle"), slog.String("lifecycle_state", "active"))
 			if err := handler.Handle(context.Background(), record); err != nil {
 				t.Error("concurrent record rejected")
 			}
-		}()
+		})
 	}
 	workers.Wait()
 	lines := bytes.Split(bytes.TrimSpace(output.Bytes()), []byte{'\n'})

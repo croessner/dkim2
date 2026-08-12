@@ -322,7 +322,7 @@ func fuzzLookupResult(payload []byte, shape, dnssecByte, absenceByte byte, recor
 // fuzzUniqueTagRecord constructs a bounded record with genuinely distinct tag names.
 func fuzzUniqueTagRecord(count int) []byte {
 	var builder strings.Builder
-	for index := 0; index < count; index++ {
+	for index := range count {
 		builder.WriteString("x")
 		builder.WriteString(strconv.Itoa(index))
 		builder.WriteString("=a;")

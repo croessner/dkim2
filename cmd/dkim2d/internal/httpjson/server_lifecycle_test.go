@@ -396,9 +396,7 @@ func TestServerListenerRejectsForeignConnections(t *testing.T) {
 	var workers sync.WaitGroup
 	var sentinelCount atomic.Int32
 	for range attempts {
-		workers.Add(1)
-		go func() {
-			defer workers.Done()
+		workers.Go(func() {
 			if recovered := invokeConnContext(
 				context.Background(),
 				connContext,
@@ -406,7 +404,7 @@ func TestServerListenerRejectsForeignConnections(t *testing.T) {
 			); recovered == errServerConnContext {
 				sentinelCount.Add(1)
 			}
-		}()
+		})
 	}
 	workers.Wait()
 	if sentinelCount.Load() != attempts ||
@@ -648,9 +646,7 @@ func TestHandlerRegistrationGateAddCloseRace(t *testing.T) {
 	var workers sync.WaitGroup
 	var refused atomic.Int32
 	for range attempts {
-		workers.Add(1)
-		go func() {
-			defer workers.Done()
+		workers.Go(func() {
 			connection, raw := newGateTrackedConnection()
 			<-start
 			recovered := invokeGate(
@@ -666,7 +662,7 @@ func TestHandlerRegistrationGateAddCloseRace(t *testing.T) {
 			} else if recovered != nil {
 				t.Error("admitted race entry panicked")
 			}
-		}()
+		})
 	}
 	close(start)
 	gate.Close()
@@ -845,7 +841,6 @@ func TestHandlerRegistrationGateContainsUncertainTrackedClose(t *testing.T) {
 		{name: testPanicName, closePanic: true, wantAbort: true, wantFatal: 1},
 	}
 	for _, testCase := range tests {
-		testCase := testCase
 		t.Run(testCase.name, func(t *testing.T) {
 			t.Parallel()
 			recording := newTransportRecordingConn(nil)
@@ -921,7 +916,6 @@ func TestHandlerRegistrationGateRequiresActivationAuthority(t *testing.T) {
 		{name: "authority panic", panicValue: "activation-private-panic-marker"},
 	}
 	for _, testCase := range tests {
-		testCase := testCase
 		t.Run(testCase.name, func(t *testing.T) {
 			t.Parallel()
 			activation := &gateActivationAuthority{panicVal: testCase.panicValue}

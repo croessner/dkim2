@@ -47,9 +47,7 @@ func TestCanonicalHeaderRelevanceIsConcurrentSafe(t *testing.T) {
 	relevance := canonical.NewHeaderRelevance()
 	var wait sync.WaitGroup
 	for range 16 {
-		wait.Add(1)
-		go func() {
-			defer wait.Done()
+		wait.Go(func() {
 			for range 100 {
 				if relevant, err := relevance.IsRelevantHeader("subject"); err != nil || !relevant {
 					t.Error("signed header classification changed")
@@ -60,7 +58,7 @@ func TestCanonicalHeaderRelevanceIsConcurrentSafe(t *testing.T) {
 					return
 				}
 			}
-		}()
+		})
 	}
 	wait.Wait()
 }

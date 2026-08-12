@@ -4,6 +4,7 @@ import (
 	"crypto/subtle"
 	"fmt"
 	"io"
+	"slices"
 
 	"github.com/croessner/dkim2/internal/datasource"
 	"github.com/croessner/dkim2/internal/keyresolver"
@@ -344,12 +345,7 @@ func canonicalUses(input []datasource.ProfileUse) ([]datasource.ProfileUse, erro
 
 // containsUse reports exact membership in one canonical use set.
 func containsUse(uses []datasource.ProfileUse, expected datasource.ProfileUse) bool {
-	for _, use := range uses {
-		if use == expected {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(uses, expected)
 }
 
 // equalUses compares two canonical use sets.

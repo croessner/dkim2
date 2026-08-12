@@ -351,7 +351,7 @@ func TestRESP2DecoderEnforcesContainerDepth(t *testing.T) {
 	if err != nil {
 		t.Fatal("six container levels were rejected")
 	}
-	for level := 0; level < 6; level++ {
+	for level := range 6 {
 		if value.kind != resp2Array || len(value.values) != 1 {
 			t.Fatalf("container level %d decoded incorrectly", level+1)
 		}

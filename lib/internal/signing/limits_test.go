@@ -51,7 +51,7 @@ func TestDefaultLimitsMatchDurableSigningContract(t *testing.T) {
 		t.Fatalf("zero limits normalization: code=%s equal=%t", testErrorCode(err), got == want)
 	}
 
-	typ := reflect.TypeOf(want)
+	typ := reflect.TypeFor[Limits]()
 	if _, ok := typ.FieldByName("MaxParentCopies"); ok {
 		t.Fatal("separate parent-copy limit must not exist")
 	}

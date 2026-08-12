@@ -183,9 +183,7 @@ func TestMetricsConcurrentUpdatesAreRaceSafe(t *testing.T) {
 	}
 	var workers sync.WaitGroup
 	for range 32 {
-		workers.Add(1)
-		go func() {
-			defer workers.Done()
+		workers.Go(func() {
 			for range 50 {
 				metrics.HTTPStarted("process")
 				metrics.HTTPCompleted("process", valueStatus2XX, time.Millisecond)
@@ -194,7 +192,7 @@ func TestMetricsConcurrentUpdatesAreRaceSafe(t *testing.T) {
 				metrics.DNSCompleted(valueFound, valueHit, time.Millisecond)
 				metrics.ReplayCompleted("first_seen", "success", time.Millisecond)
 			}
-		}()
+		})
 	}
 	workers.Wait()
 	if _, err := metrics.Gather(); err != nil {

@@ -609,7 +609,7 @@ func validLDHName(value string) bool {
 	if len(value) > 253 || strings.HasSuffix(value, ".") {
 		return false
 	}
-	for _, label := range strings.Split(value, ".") {
+	for label := range strings.SplitSeq(value, ".") {
 		if !validLDHLabel(label) {
 			return false
 		}

@@ -10,7 +10,7 @@ import (
 
 // TestDomainObservationHasExactLowCardinalityAllowlist freezes the local no-exporter event shape.
 func TestDomainObservationHasExactLowCardinalityAllowlist(t *testing.T) {
-	typeOf := reflect.TypeOf(domainadmin.OnboardingObservation{})
+	typeOf := reflect.TypeFor[domainadmin.OnboardingObservation]()
 	want := []string{"Command", "State", "Backend", "Result", "Failure", "Receipt"}
 	if typeOf.NumField() != len(want) {
 		t.Fatal("domain observation field cardinality drifted")

@@ -174,7 +174,7 @@ func TestKeyOutcomeMaterialSupportsConcurrentCallerMutation(t *testing.T) {
 		t.Fatalf("DecodeKey(Ed25519) error = %v", err)
 	}
 	var callers sync.WaitGroup
-	for index := 0; index < 32; index++ {
+	for index := range 32 {
 		callers.Add(2)
 		go func(value int64) {
 			defer callers.Done()

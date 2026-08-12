@@ -55,7 +55,7 @@ func splitHeader(header []byte) (string, []byte, bool) {
 // unfoldHeaderValue removes only legal Exim LF folding delimiters.
 func unfoldHeaderValue(value []byte) string {
 	output := make([]byte, 0, len(value))
-	for index := 0; index < len(value); index++ {
+	for index := range value {
 		if value[index] == '\n' && index+1 < len(value) &&
 			(value[index+1] == ' ' || value[index+1] == '\t') {
 			continue
@@ -164,7 +164,7 @@ func validAuthservID(value string) bool {
 	if value == "" || value != strings.ToLower(value) || len(value) > 253 {
 		return false
 	}
-	for _, label := range strings.Split(value, ".") {
+	for label := range strings.SplitSeq(value, ".") {
 		if len(label) == 0 || len(label) > 63 || label[0] == '-' || label[len(label)-1] == '-' {
 			return false
 		}

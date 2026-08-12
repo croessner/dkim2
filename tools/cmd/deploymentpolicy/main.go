@@ -452,7 +452,7 @@ func validBuild(
 ) bool {
 	return build != nil &&
 		build.Context == root &&
-		build.Dockerfile == "build/container/Containerfile" &&
+		build.Dockerfile == "build/container/Dockerfile" &&
 		build.Target == target &&
 		reflect.DeepEqual(build.Arguments, arguments)
 }

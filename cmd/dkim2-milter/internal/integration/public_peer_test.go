@@ -1393,7 +1393,7 @@ func safeDomainProjection(value string) bool {
 	if value == "" {
 		return false
 	}
-	for _, domain := range strings.Split(value, ",") {
+	for domain := range strings.SplitSeq(value, ",") {
 		if domain == "" || strings.Trim(domain, "abcdefghijklmnopqrstuvwxyz0123456789.-") != "" ||
 			strings.HasPrefix(domain, ".") || strings.HasSuffix(domain, ".") || strings.Contains(domain, "..") {
 			return false

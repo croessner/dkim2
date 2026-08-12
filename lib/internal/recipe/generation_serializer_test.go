@@ -345,9 +345,7 @@ func TestSerializeGenerationPlanIsRepeatableAndConcurrent(t *testing.T) {
 	var wait sync.WaitGroup
 	errorsSeen := make(chan error, workers)
 	for range workers {
-		wait.Add(1)
-		go func() {
-			defer wait.Done()
+		wait.Go(func() {
 			got, _, serializeErr := serializeGenerationPlanForTest(plan, GenerationLimits{})
 			if serializeErr != nil {
 				errorsSeen <- serializeErr
@@ -356,7 +354,7 @@ func TestSerializeGenerationPlanIsRepeatableAndConcurrent(t *testing.T) {
 			if !bytes.Equal(got.decodedJSON, wantJSON) {
 				errorsSeen <- errors.New("non-deterministic JSON")
 			}
-		}()
+		})
 	}
 	wait.Wait()
 	close(errorsSeen)

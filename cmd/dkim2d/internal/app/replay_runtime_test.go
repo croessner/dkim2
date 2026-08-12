@@ -1270,21 +1270,17 @@ func TestReplayRuntimeSupportsConcurrentReadinessRevalidationAndClose(t *testing
 	}
 	var group sync.WaitGroup
 	start := make(chan struct{})
-	for index := 0; index < 24; index++ {
-		group.Add(1)
-		go func() {
-			defer group.Done()
+	for range 24 {
+		group.Go(func() {
 			<-start
 			_ = runtime.AuthorityReady()
 			_ = runtime.Revalidate(context.Background())
-		}()
+		})
 	}
-	group.Add(1)
-	go func() {
-		defer group.Done()
+	group.Go(func() {
 		<-start
 		_ = closeReplayRuntimeBounded(runtime)
-	}()
+	})
 	close(start)
 	group.Wait()
 	if authority.closeCalls != 1 {

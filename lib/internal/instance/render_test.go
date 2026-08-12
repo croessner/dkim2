@@ -76,7 +76,7 @@ func TestMessageInstanceRecipeLimitAndFolding(t *testing.T) {
 	if len(rendered) > 64*1024 {
 		t.Fatalf("rendered field size = %d", len(rendered))
 	}
-	for _, line := range strings.Split(strings.TrimSuffix(string(rendered), "\r\n"), "\r\n") {
+	for line := range strings.SplitSeq(strings.TrimSuffix(string(rendered), "\r\n"), "\r\n") {
 		if len(line) > 998 {
 			t.Fatalf("physical line length = %d", len(line))
 		}

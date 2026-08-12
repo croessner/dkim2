@@ -35,74 +35,23 @@ EXIM_MATRIX_ROWS := upstream-4.99.5 debian-4.98.2-1+deb13u3 debian-4.98.2-1+deb1
 help:
 	@printf '%s\n' \
 		'Targets:' \
-		'  make fmt          format Go files' \
-		'  make test         run unit tests for all workspace modules' \
-		'  make race         run race tests for all workspace modules' \
-		'  make vet          run go vet for all workspace modules' \
-		'  make lint         run golangci-lint' \
-		'  make test-valkey  run mandatory hermetic Valkey 9.1.0 integration tests' \
-		'  make govulncheck  run govulncheck for all workspace modules' \
-		'  make check-ci      validate GitHub Actions syntax and CI policy' \
-		'  make generate-openapi regenerate OpenAPI and protected wire artifacts' \
-		'  make generate-exim-build regenerate Exim ABI compatibility artifacts' \
-		'  make generate-exim-row-builds regenerate all pinned Exim row build identifiers' \
-		'  make check-exim-transport-filter-source-patch verify the exact source patch against supplied official trees' \
-		'  make check-openapi verify generated OpenAPI and wire artifacts' \
-		'  make check-exim-build verify Exim ABI fixtures and generated artifacts' \
-		'  make test-exim-local-scan run the independent strict C ABI harness' \
-		'  make check-exim-upstream-patch verify the complete upstream compatibility patch against EXIM_UPSTREAM_SOURCE' \
-		'  make test-exim-packaging run hermetic deployment-validator tests' \
-		'  make check-exim-matrix-prep verify pinned matrix preparation artifacts' \
-		'  make check-exim-real-matrix-evidence-schema verify fixture-bound matrix evidence syntax' \
-		'  make test-exim-real-matrix run the five-row source-matched Linux qualification' \
-		'  make test-exim-real-matrix-helper test the qualification evidence oracle' \
-		'  make check-exim-c-linux-cross compile local_scan for Linux amd64 and arm64' \
-		'  make check-workspace verify synchronized workspace module metadata' \
-		'  make check-boundaries verify module dependency direction' \
-		'  make check-protected-platforms verify protected-loader build tags' \
-		'  make vendor       regenerate the workspace vendor tree' \
-		'  make check-vendor  verify reproducible workspace vendoring' \
-		'  make check-conformance validate conformance schemas, manifest, and digests' \
-		'  make conformance   run the portable conformance profile and render reports' \
-		'  make conformance-postfix run the isolated real Postfix qualification' \
-		'  make conformance-all run the complete Linux profile with EXIM_EVIDENCE_ROOT' \
-		'  make check-security validate the closed fuzz and resource-owner inventory' \
-		'  make fuzz-security run every first-party fuzz target for at least ten seconds' \
-		'  make security      run the complete security profile and render evidence' \
-		'  make check-images  validate image and Compose policy' \
-		'  make product-binaries build reproducible Linux product binaries' \
-		'  make images-multiarch build local amd64/arm64 OCI layouts without publishing' \
-		'  make image-tools fetch exact allowlisted evidence tools' \
-		'  make image-inspect validate exact OCI descriptors and inventories' \
-		'  make image-runtime verify hardened real-container lifecycle behavior' \
-		'  make image-sbom generate SPDX 2.3 image SBOMs' \
-		'  make image-provenance generate subject-bound SLSA provenance' \
-		'  make image-vulnerability scan exact local OCI layouts' \
-		'  make image-reproducibility compare a second semantic OCI build' \
-		'  make image-evidence validate all candidate-bound image evidence' \
-		'  make image-release-evidence run the complete non-publishing image gate' \
-		'  make check-deployment validate the hardened Postfix Compose topology' \
-		'  make deployment-postfix run the complete isolated Postfix deployment proof' \
-		'  make deployment-security prove seeded packaging and runtime privacy' \
-		'  make check-operator-docs validate operator links, examples, workflow, and recovery claims' \
-		'  make check-container-release run non-publishing container evidence checks' \
-		'  make check-release run the complete local release gate' \
-		'  make release-guardrails run the complete stable-release gate' \
-		'  make check-interop validate closed external discovery and evidence contracts' \
-		'  make interop       normalize the closed current external evidence set' \
-		'  make check-reference validate API, issue, OpenAPI, and reference closure' \
-		'  make check-datasource-schema validate LDAP schema and storage mapping contracts' \
-		'  make check-datasource-postgresql validate PostgreSQL DDL and row mapping contracts' \
-		'  make check-datasource-mysql validate MySQL/MariaDB DDL and row mapping contracts' \
-		'  make test-datasource-ldap run focused LDAP provider/schema/race evidence' \
-		'  make test-datasource-postgresql run focused PostgreSQL provider/DDL/race evidence' \
-		'  make test-datasource-mysql run focused MySQL/MariaDB provider/DDL/race evidence' \
-		'  make test-datasource-services run digest-pinned disposable LDAP/PostgreSQL/MySQL/MariaDB evidence' \
-		'  make test-opendkim-bootstrap run protected migration/publication/race evidence' \
-		'  make reference-module-proof prove standalone modules through the private proxy' \
-		'  make reference-report render the complete candidate-bound report' \
-		'  make release-candidate run the complete local non-publishing candidate gate' \
-		'  make guardrails   run the local quality gate'
+		'  make fix                     modernize Go source' \
+		'  make fmt                     format Go source' \
+		'  make vet                     run Go vet' \
+		'  make lint                    run golangci-lint' \
+		'  make test                    run Go unit tests only' \
+		'  make race                    run race-enabled Go unit tests only' \
+		'  make build-check             build all product surfaces' \
+		'  make check-generated         verify generated OpenAPI and adapter artifacts' \
+		'  make check-conformance       verify conformance contracts' \
+		'  make conformance             run portable protocol conformance' \
+		'  make integration-valkey      run Valkey integration' \
+		'  make integration-datasources run LDAP and SQL service integration' \
+		'  make integration-postfix     run real Postfix/Milter qualification' \
+		'  make integration-exim        run Exim ABI and version qualification' \
+		'  make container-smoke         build images and run hardened runtime smoke' \
+		'  make guardrails              run normal product quality once' \
+		'  make release-guardrails      run release quality and conformance'
 
 .PHONY: check-datasource-schema
 check-datasource-schema:
@@ -174,9 +123,16 @@ test-opendkim-bootstrap:
 fmt:
 	@gofmt -w lib cmd tools
 
+.PHONY: fix
+fix:
+	@set -e; for module in $(PRODUCT_MODULES); do \
+		echo "==> go fix $$module/..."; \
+		(cd $$module && go fix ./...); \
+	done
+
 .PHONY: test
-test: test-exim-local-scan
-	@set -e; for module in $(MODULES); do \
+test:
+	@set -e; for module in $(PRODUCT_MODULES); do \
 		echo "==> go test $$module/..."; \
 		(cd $$module && go test ./...); \
 	done
@@ -300,7 +256,7 @@ generate-exim-build: test-exim-local-scan
 		-source "$(EXIM_SOURCE_MANIFEST)"
 
 .PHONY: check-exim-build
-check-exim-build: test-exim-local-scan
+check-exim-build:
 	@set -eu; \
 	output="$$(mktemp -d /tmp/dkim2-exim-build-check.XXXXXX)"; \
 	chmod 0700 "$$output"; \
@@ -317,23 +273,30 @@ check-exim-build: test-exim-local-scan
 
 .PHONY: race
 race:
-	@set -e; for module in $(MODULES); do \
+	@set -e; for module in $(PRODUCT_MODULES); do \
 		echo "==> go test -race $$module/..."; \
 		(cd $$module && go test -race ./...); \
 	done
 
 .PHONY: vet
 vet:
-	@set -e; for module in $(MODULES); do \
+	@set -e; for module in $(PRODUCT_MODULES); do \
 		echo "==> go vet $$module/..."; \
 		(cd $$module && go vet ./...); \
 	done
 
 .PHONY: lint
 lint:
-	@set -e; for module in $(MODULES); do \
+	@set -e; for module in $(PRODUCT_MODULES); do \
 		echo "==> golangci-lint $$module/..."; \
 		(cd $$module && golangci-lint run ./...); \
+	done
+
+.PHONY: build-check
+build-check:
+	@set -e; for module in $(PRODUCT_MODULES); do \
+		echo "==> go build $$module/..."; \
+		(cd $$module && go build ./...); \
 	done
 
 .PHONY: test-valkey
@@ -412,6 +375,9 @@ check-openapi: check-workspace
 	go -C cmd/dkim2ctl test ./internal/testclient/...; \
 	go -C cmd/dkim2-milter test ./internal/daemon/...; \
 	go -C cmd/dkim2-exim test ./internal/daemon/...
+
+.PHONY: check-generated
+check-generated: check-openapi check-exim-build check-exim-row-builds
 
 .PHONY: check-workspace
 check-workspace:
@@ -540,8 +506,20 @@ security: check-security fuzz-security race-security vulnerability-security conf
 	@GOCACHE="$${GOCACHE:-/tmp/dkim2-go-build-cache}" \
 		go -C tools run ./cmd/security -root .. report
 
+.PHONY: integration-valkey
+integration-valkey: test-valkey
+
+.PHONY: integration-datasources
+integration-datasources: test-datasource-services
+
+.PHONY: integration-postfix
+integration-postfix: conformance-postfix
+
+.PHONY: integration-exim
+integration-exim: test-exim-local-scan check-exim-matrix-prep check-exim-c-linux-cross test-exim-real-matrix
+
 .PHONY: guardrails
-guardrails: check-ci fmt vet lint test race check-protected-platforms check-openapi check-vendor check-conformance conformance govulncheck check-datasource-schema check-datasource-postgresql check-datasource-mysql check-exim-matrix-prep check-boundaries check-operator-docs
+guardrails: check-ci fix fmt vet lint test race build-check check-generated check-vendor check-protected-platforms check-boundaries check-operator-docs
 
 .PHONY: product-binaries
 product-binaries:
@@ -576,6 +554,9 @@ image-inspect:
 .PHONY: image-runtime
 image-runtime:
 	@scripts/test-image-runtime.sh
+
+.PHONY: container-smoke
+container-smoke: check-images image-runtime
 
 .PHONY: image-provenance
 image-provenance:
@@ -632,7 +613,7 @@ check-container-release: product-binaries check-images check-operator-docs check
 check-release: guardrails check-reference check-container-release
 
 .PHONY: release-guardrails
-release-guardrails: check-release
+release-guardrails: guardrails govulncheck check-conformance conformance
 
 .PHONY: check-interop
 check-interop:

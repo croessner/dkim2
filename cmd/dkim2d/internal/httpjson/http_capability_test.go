@@ -44,7 +44,6 @@ func TestAuthenticateLocalCapabilityFreezesClosedCanonicalComparison(t *testing.
 		{name: observationSuccess, values: []string{canonical}, ok: true, calls: 1},
 	}
 	for _, testCase := range cases {
-		testCase := testCase
 		t.Run(testCase.name, func(t *testing.T) {
 			t.Parallel()
 			request := httptest.NewRequest(http.MethodPost, testProcessPath, nil)
@@ -109,7 +108,6 @@ func TestAuthenticateOperationCapabilityUsesDedicatedDSNHeader(t *testing.T) {
 		{name: "dedicated header", header: dsnSignCapabilityHeader, ok: true},
 		{name: "ordinary header", header: localCapabilityHeader},
 	} {
-		testCase := testCase
 		t.Run(testCase.name, func(t *testing.T) {
 			t.Parallel()
 			request := httptest.NewRequest(http.MethodPost, dsnSignPath, nil)

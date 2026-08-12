@@ -129,7 +129,7 @@ func TestConcurrentRegistryAndAdapterProjectionKeepsDistinctHandlesIsolated(t *t
 			expectedDomain: "shared.test", expectedSelector: "shared",
 		},
 	}
-	for worker := 0; worker < workers; worker++ {
+	for worker := range workers {
 		test := cases[worker%len(cases)]
 		go func() {
 			<-start
@@ -190,7 +190,7 @@ func TestConcurrentRegistryAndAdapterProjectionKeepsDistinctHandlesIsolated(t *t
 		}()
 	}
 	close(start)
-	for worker := 0; worker < workers; worker++ {
+	for range workers {
 		if !<-results {
 			t.Fatal("concurrent projection crossed or aliased logical handle facts")
 		}

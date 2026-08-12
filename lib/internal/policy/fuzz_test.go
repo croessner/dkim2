@@ -308,10 +308,7 @@ func fuzzPostKeyPermanentReason(reason VerificationReason) bool {
 // boundedFuzzIndex maps arbitrary signed fuzz input into a nonnegative closed index.
 func boundedFuzzIndex(value, size int) int {
 	if value < 0 {
-		value = -value
-		if value < 0 {
-			value = 0
-		}
+		value = max(-value, 0)
 	}
 	return value % size
 }

@@ -276,7 +276,7 @@ func TestMessageDomainObservationsPreserveOnlyCanonicalOperationalDomains(t *tes
 func TestMessageDomainObservationBoundsLargeRecipientSets(t *testing.T) {
 	recipients := make([][]byte, 0, maxObservedDomains+2)
 	for index := range maxObservedDomains + 2 {
-		recipients = append(recipients, []byte(fmt.Sprintf("<user@d%d.example>", index)))
+		recipients = append(recipients, fmt.Appendf(nil, "<user@d%d.example>", index))
 	}
 	message, err := NewMessage(
 		[]byte("Subject: test\r\n\r\nbody\r\n"),

@@ -284,16 +284,14 @@ func TestGenerationAndUsageAreImmutableConcurrentValues(t *testing.T) {
 
 	var wait sync.WaitGroup
 	for range 16 {
-		wait.Add(1)
-		go func() {
-			defer wait.Done()
+		wait.Go(func() {
 			for range 100 {
 				jsonCopy := generation.DecodedJSON()
 				jsonCopy[0] ^= 1
 				_, _ = generation.Recipe()
 				_ = usage.WorkUnits()
 			}
-		}()
+		})
 	}
 	wait.Wait()
 }
@@ -312,9 +310,7 @@ func TestGeneratorAndImmutableRelevanceAreConcurrentSafe(t *testing.T) {
 	}
 	var wait sync.WaitGroup
 	for range 16 {
-		wait.Add(1)
-		go func() {
-			defer wait.Done()
+		wait.Go(func() {
 			for range 100 {
 				if !generator.Valid() || generator.validateRequest(request) != nil {
 					t.Error("concurrent generator contract changed")
@@ -326,7 +322,7 @@ func TestGeneratorAndImmutableRelevanceAreConcurrentSafe(t *testing.T) {
 				}
 				_ = generator.Limits()
 			}
-		}()
+		})
 	}
 	wait.Wait()
 }

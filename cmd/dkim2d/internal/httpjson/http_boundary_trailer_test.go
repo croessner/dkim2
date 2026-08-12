@@ -256,7 +256,6 @@ func TestHTTPBoundaryRawTrailerInertMatrix(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			server := startRawTrailerServer(t, 2*time.Second)
 			response := rawBoundaryExchange(t, server.address, processTrailerRequest(
@@ -340,7 +339,6 @@ func TestHTTPBoundaryRawTrailerCannotSupplyProtectedHeaders(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			server := startRawTrailerServer(t, 2*time.Second)
 			initialFields := test.initialFields
@@ -415,7 +413,6 @@ func TestHTTPBoundaryRawTrailerFailureMatrix(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			server := startRawTrailerServer(t, 2*time.Second)
 			response := rawBoundaryExchange(t, server.address, processTrailerRequest(

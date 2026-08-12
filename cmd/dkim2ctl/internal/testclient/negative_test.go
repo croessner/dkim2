@@ -56,7 +56,6 @@ func TestNegativeBuilderFreezesClosedMutationShapes(t *testing.T) {
 		mutationUnknownMember, mutationTruncatedBody, mutationBodyOverLimit,
 		mutationUnsupportedMethod, mutationContaminatedTarget,
 	} {
-		mutation := mutation
 		t.Run(mutation, func(t *testing.T) {
 			t.Parallel()
 			capability, _ := newCapability(secret)
@@ -271,7 +270,6 @@ func TestSmokeUsesGeneratedHealthAndReadiness(t *testing.T) {
 				`{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-04","code":"service_not_ready","category":"availability"}`),
 		},
 	} {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 			doer := &sequenceDoer{responses: []*http.Response{

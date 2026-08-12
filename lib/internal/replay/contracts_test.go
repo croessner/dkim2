@@ -112,7 +112,7 @@ func TestValidateCheckOutcomeRejectsEveryContradictoryPair(t *testing.T) {
 
 // TestStoreContractsRemainStorageNeutral verifies the interfaces expose no backend vocabulary.
 func TestStoreContractsRemainStorageNeutral(t *testing.T) {
-	storeType := reflect.TypeOf((*Store)(nil)).Elem()
+	storeType := reflect.TypeFor[Store]()
 	if storeType.NumMethod() != 1 {
 		t.Fatalf("Store methods = %d", storeType.NumMethod())
 	}
@@ -120,7 +120,7 @@ func TestStoreContractsRemainStorageNeutral(t *testing.T) {
 	if !ok || method.Type.NumIn() != 3 || method.Type.NumOut() != 2 {
 		t.Fatalf("CheckAndRemember signature = %#v", method)
 	}
-	managedType := reflect.TypeOf((*ManagedStore)(nil)).Elem()
+	managedType := reflect.TypeFor[ManagedStore]()
 	if managedType.NumMethod() != 3 {
 		t.Fatalf("ManagedStore methods = %d", managedType.NumMethod())
 	}

@@ -405,7 +405,7 @@ func TestClientAndAuditorConfigPrivacyRejectsFormattingAndSerialization(t *testi
 
 // TestAuditorConfigIsCredentialsOnlyAndBounded freezes its narrow redacted contract.
 func TestAuditorConfigIsCredentialsOnlyAndBounded(t *testing.T) {
-	auditorType := reflect.TypeOf(AuditorConfig{})
+	auditorType := reflect.TypeFor[AuditorConfig]()
 	if auditorType.NumField() != 1 ||
 		auditorType.Field(0).Name != "values" ||
 		auditorType.Field(0).Type.Kind() != reflect.Pointer {

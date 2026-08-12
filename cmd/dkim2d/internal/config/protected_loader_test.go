@@ -63,7 +63,6 @@ func TestLoadProtectedDisabledOwnsAndTransfersOneImmutableGeneration(t *testing.
 // TestLoadProtectedBackendChildMatrices loads the exact disabled, memory, and Valkey inventories.
 func TestLoadProtectedBackendChildMatrices(t *testing.T) {
 	for _, backend := range []ReplayBackend{ReplayDisabled, ReplayMemory, ReplayValkey} {
-		backend := backend
 		t.Run(strconv.Itoa(int(backend)), func(t *testing.T) {
 			fixture := newProtectedBackendFixture(t, backend)
 			owner, err := LoadProtected(fixture.yamlPath, FlagValues{})
@@ -205,7 +204,6 @@ func TestLoadProtectedRejectsCrossRoleEqualityAndChildIdentityCollisions(t *test
 		},
 	}
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			fixture := newProtectedBackendFixture(t, ReplayValkey)
 			test.mutate(t, fixture)
@@ -410,7 +408,6 @@ func TestProtectedLoadDetectsSameInodeAndYAMLRewrites(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			fixture := newProtectedBackendFixture(t, ReplayMemory)
 			mutated := false
@@ -489,7 +486,6 @@ func TestProtectedLoadDetectsImmediateAndFinalMetadataMutations(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			fixture := newProtectedBackendFixture(t, ReplayMemory)
 			mutated := false
@@ -655,7 +651,6 @@ func TestLoadProtectedRejectsDescriptorAndContentViolations(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			fixture := newProtectedLoaderFixture(t, bytes.Repeat([]byte{0xa5}, exactKeyBytes))
 			test.mutate(t, fixture)
@@ -812,7 +807,6 @@ func TestLoadProtectedRejectsPerRoleAdjacentSizeFixtures(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			fixture := newProtectedBackendFixture(t, test.backend)
 			writeProtectedFileWithoutModeChange(test.path(fixture), bytes.Repeat([]byte{'x'}, test.size))
@@ -933,7 +927,6 @@ func TestOpenPreclassifiedChildRejectsDevice(t *testing.T) {
 // TestLoadProtectedEnforcesExactCapabilityReadBounds covers cap-minus/exact/plus-one bytes.
 func TestLoadProtectedEnforcesExactCapabilityReadBounds(t *testing.T) {
 	for _, size := range []int{exactKeyBytes - 1, exactKeyBytes, exactKeyBytes + 1} {
-		size := size
 		t.Run(strconv.Itoa(size), func(t *testing.T) {
 			fixture := newProtectedLoaderFixture(t, bytes.Repeat([]byte{0xa5}, size))
 			owner, err := LoadProtected(fixture.yamlPath, FlagValues{})
@@ -1082,7 +1075,6 @@ func makeRepeatedComponents(count int, value string) []string {
 // TestLoadProtectedRejectsYAMLInsideGenerationAncestry covers direct and nested descendants.
 func TestLoadProtectedRejectsYAMLInsideGenerationAncestry(t *testing.T) {
 	for _, nested := range []bool{false, true} {
-		nested := nested
 		t.Run(strconv.FormatBool(nested), func(t *testing.T) {
 			fixture := newProtectedLoaderFixture(t, bytes.Repeat([]byte{0xa5}, exactKeyBytes))
 			makeGenerationWritable(t, fixture.generationPath)
@@ -1178,7 +1170,6 @@ func TestCloseRetainedFilesAttemptsEveryOwnerOnce(t *testing.T) {
 	calls := make([]int, 3)
 	files := make([]*retainedProtectedFile, len(calls))
 	for index := range files {
-		index := index
 		files[index] = &retainedProtectedFile{descriptor: ownedDescriptor{
 			fd: index + 10,
 			closeFn: func(int) error {

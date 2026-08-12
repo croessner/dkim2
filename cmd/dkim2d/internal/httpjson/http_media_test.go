@@ -37,7 +37,6 @@ func TestValidJSONContentTypeFreezesSemanticMediaParsing(t *testing.T) {
 		{name: "missing value", values: []string{"application/json;charset="}},
 	}
 	for _, testCase := range cases {
-		testCase := testCase
 		t.Run(testCase.name, func(t *testing.T) {
 			t.Parallel()
 			if result := validJSONContentType(testCase.values); result != testCase.valid {

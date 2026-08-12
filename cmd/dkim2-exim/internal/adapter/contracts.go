@@ -934,7 +934,7 @@ func validHeaderWithoutFinalLF(value []byte) bool {
 	if len(value) == 0 || bytes.ContainsAny(value, "\x00\r") {
 		return false
 	}
-	for index := 0; index < len(value); index++ {
+	for index := range value {
 		if value[index] == '\n' &&
 			(index+1 >= len(value) ||
 				value[index+1] != ' ' && value[index+1] != '\t') {

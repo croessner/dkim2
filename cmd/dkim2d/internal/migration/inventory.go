@@ -176,12 +176,12 @@ func EncodeMachineReport(report Report, maximum uint32) ([]byte, error) {
 
 // EncodeHumanReport returns one bounded nonidentity summary.
 func EncodeHumanReport(report Report, maximum uint32) ([]byte, error) {
-	document := []byte(fmt.Sprintf(
+	document := fmt.Appendf(nil,
 		"mode=%s result=%s target=%s records=%d active=%d inactive=%d mappings=%d\n",
 		report.Mode, report.Result, report.Target, report.Counts.Records,
 		report.Counts.Active, report.Counts.Inactive,
 		report.Counts.ValidatedPlanMappings,
-	))
+	)
 	if maximum == 0 || len(document) > int(maximum) {
 		return nil, errors.New("migration report unavailable")
 	}

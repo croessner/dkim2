@@ -36,7 +36,7 @@ func TestUnsignedTargetAndCompleteFieldRemainDistinct(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewUnsignedTarget() code=%s", signatureTestErrorCode(err))
 	}
-	if _, ok := reflect.TypeOf(target).MethodByName("Bytes"); ok {
+	if _, ok := reflect.TypeFor[UnsignedTarget]().MethodByName("Bytes"); ok {
 		t.Fatal("unsigned target exposes complete-field Bytes method")
 	}
 	unsigned := string(target.UnsignedBytes())
@@ -390,7 +390,7 @@ func foldSignatureBase64ForTest(encoded string) string {
 // longestPhysicalLine returns the longest CRLF-delimited line excluding CRLF.
 func longestPhysicalLine(field []byte) int {
 	longest := 0
-	for _, line := range bytes.Split(bytes.TrimSuffix(field, []byte("\r\n")), []byte("\r\n")) {
+	for line := range bytes.SplitSeq(bytes.TrimSuffix(field, []byte("\r\n")), []byte("\r\n")) {
 		longest = max(longest, len(line))
 	}
 	return longest
@@ -403,7 +403,7 @@ func TestTargetLimitsAndFormattingFailClosed(t *testing.T) {
 		MailFrom: []byte("<secret-sender@example.test>"), Domain: signatureTestDomain,
 		Sets: []SetPlan{{Selector: "secret-selector", Algorithm: AlgorithmRSASHA256}},
 	}
-	for index := 0; index < 129; index++ {
+	for range 129 {
 		request.Recipients = append(request.Recipients, []byte("<user@example.test>"))
 	}
 	if _, err := NewUnsignedTarget(request, RenderLimits{}); !IsErrorCode(err, ErrorCodeLimitExceeded) {
@@ -444,7 +444,7 @@ func TestTargetUsesFrozenFlagOrder(t *testing.T) {
 // TestAggregateEnvelopeAndFieldPreflightLimits verifies exact and one-over rejection before render.
 func TestAggregateEnvelopeAndFieldPreflightLimits(t *testing.T) {
 	recipients := make([][]byte, 0, 128)
-	for index := 0; index < 127; index++ {
+	for index := range 127 {
 		recipients = append(recipients, syntheticPath(index, 256))
 	}
 	recipients = append(recipients, syntheticPath(127, 254))

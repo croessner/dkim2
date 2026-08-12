@@ -312,7 +312,7 @@ func (s *scanner) readHexQuad() (uint16, bool) {
 		return 0, false
 	}
 	var value uint16
-	for count := 0; count < 4; count++ {
+	for range 4 {
 		digit, ok := hexValue(s.data[s.position])
 		if !ok {
 			return 0, false

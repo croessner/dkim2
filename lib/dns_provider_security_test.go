@@ -123,9 +123,9 @@ func TestDNSProviderConcurrentMutationIsolation(t *testing.T) {
 			edSource[index] ^= byte(index + 1)
 		}
 	}()
-	for worker := 0; worker < 16; worker++ {
+	for range 16 {
 		workers.Go(func() {
-			for iteration := 0; iteration < 32; iteration++ {
+			for range 32 {
 				for _, tt := range []struct {
 					query  PublicKeyQuery
 					lookup TXTLookupResult

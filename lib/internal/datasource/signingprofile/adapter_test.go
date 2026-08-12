@@ -1758,7 +1758,7 @@ func parityAdaptersForSnapshot(
 	for index, credential := range credentials {
 		handles[index] = credential.KeyHandleID()
 		handle, err := signing.NewPrivateKeyHandle(
-			[]byte(fmt.Sprintf("parity-handle-%d", index)),
+			fmt.Appendf(nil, "parity-handle-%d", index),
 		)
 		if err != nil {
 			t.Fatalf("signing.NewPrivateKeyHandle() error = %v", err)

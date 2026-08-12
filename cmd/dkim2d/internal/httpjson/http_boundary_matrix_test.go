@@ -175,7 +175,6 @@ func TestHTTPBoundaryRawVersionHostAndTargetForms(t *testing.T) {
 		},
 	}
 	for _, testCase := range tests {
-		testCase := testCase
 		t.Run(testCase.name, func(t *testing.T) {
 			response := rawBoundaryExchange(t, address, testCase.request)
 			if !strings.HasPrefix(response, testCase.statusLine) {
@@ -274,7 +273,6 @@ func TestHTTPBoundaryRawRequestLineReleaseAndSplitEdges(t *testing.T) {
 		},
 	}
 	for _, testCase := range tests {
-		testCase := testCase
 		t.Run(testCase.name, func(t *testing.T) {
 			response := rawBoundaryChunkedExchange(t, address, testCase.chunks)
 			if !strings.HasPrefix(response, testCase.statusLine) {
@@ -314,7 +312,6 @@ func TestHTTPBoundaryRawRoutesPathsMethodsAndHEAD(t *testing.T) {
 		{name: "lowercase", method: "get", target: testHealthPath, statusLine: testHTTP11NotImplementedLine},
 	}
 	for _, testCase := range tests {
-		testCase := testCase
 		t.Run(testCase.name, func(t *testing.T) {
 			response := rawBoundaryExchange(t, address,
 				testCase.method+" "+testCase.target+" HTTP/1.1\r\nHost: "+
@@ -388,9 +385,7 @@ func TestHTTPBoundaryRawUnsupportedVersionTransferPrecedence(t *testing.T) {
 		{name: "generic major", line: "GET /healthz HTTP/2.0"},
 	}
 	for _, requestLine := range requestLines {
-		requestLine := requestLine
 		for _, transferCase := range transferCases {
-			transferCase := transferCase
 			t.Run(requestLine.name+"_"+transferCase.name, func(t *testing.T) {
 				response := rawBoundaryExchange(t, address,
 					requestLine.line+"\r\nHost: "+address+"\r\n"+
@@ -429,9 +424,7 @@ func TestHTTPBoundaryRawPRIPrefaceHostAndTransferMatrix(t *testing.T) {
 		{name: testObsFoldName, fields: "Transfer-Encoding: chunked\r\n gzip\r\n", status: testStatusNotImplemented},
 	}
 	for _, hostCase := range hostCases {
-		hostCase := hostCase
 		for _, transferCase := range transferCases {
-			transferCase := transferCase
 			t.Run(hostCase.name+"_"+transferCase.name, func(t *testing.T) {
 				want := hostCase.status
 				if (want == testHTTPVersionNotSupported ||
@@ -479,7 +472,6 @@ func TestHTTPBoundaryRawTransferAndExpectClasses(t *testing.T) {
 		{name: testTransferPlusLengthName, fields: testChunkedWithLengthFields, status: testBadRequestReason},
 	}
 	for _, testCase := range transferCases {
-		testCase := testCase
 		t.Run("TE_"+testCase.name, func(t *testing.T) {
 			response := rawBoundaryExchange(t, address,
 				"GET /healthz HTTP/1.1\r\nHost: "+address+"\r\n"+
@@ -509,7 +501,6 @@ func TestHTTPBoundaryRawTransferAndExpectClasses(t *testing.T) {
 		{name: testObsFoldName, fields: "Expect: 100-continue\r\n other\r\n", status: testBadRequestReason},
 	}
 	for _, testCase := range expectCases {
-		testCase := testCase
 		t.Run("Expect_"+testCase.name, func(t *testing.T) {
 			response := rawBoundaryExchange(t, address,
 				"GET /healthz HTTP/1.1\r\nHost: "+address+"\r\n"+
@@ -555,7 +546,6 @@ func TestHTTPBoundaryRawTransferAndExpectClasses(t *testing.T) {
 		{name: "Expect obs fold", fields: "Expect: 100-continue\r\n other\r\n", status: testBadRequestReason},
 	}
 	for _, testCase := range http10Cases {
-		testCase := testCase
 		t.Run("HTTP10_"+testCase.name, func(t *testing.T) {
 			response := rawBoundaryExchange(t, address,
 				"GET /healthz HTTP/1.0\r\nHost: "+address+"\r\n"+
@@ -576,7 +566,6 @@ func TestHTTPBoundaryRawTransferAndExpectClasses(t *testing.T) {
 		{name: "mixed case multiple fields", fields: "Transfer-Encoding: \r\nTransfer-Encoding: Chunked\r\n"},
 	}
 	for _, testCase := range multiChunkedCases {
-		testCase := testCase
 		t.Run("semantic_single_chunked_"+testCase.name, func(t *testing.T) {
 			response := rawBoundaryExchange(t, address,
 				"GET /healthz HTTP/1.1\r\nHost: "+address+"\r\n"+
@@ -632,7 +621,6 @@ func TestHTTPBoundaryRawTransferAndExpectClasses(t *testing.T) {
 		},
 	}
 	for _, testCase := range precedenceCases {
-		testCase := testCase
 		t.Run(testCase.name, func(t *testing.T) {
 			response := rawBoundaryExchange(t, address, testCase.request)
 			if strings.Contains(response, "100 Continue") ||
@@ -668,7 +656,6 @@ func TestHTTPBoundaryRawAdmittedExpectIsSingletonAndInertAtLowerLayer(t *testing
 		},
 	}
 	for _, testCase := range tests {
-		testCase := testCase
 		t.Run(testCase.name, func(t *testing.T) {
 			response := rawBoundaryExchange(t, address,
 				"POST /v1/process HTTP/1.1\r\n"+
@@ -727,7 +714,6 @@ func TestHTTPBoundaryRawContentTypeAndCapabilityMatrices(t *testing.T) {
 		{name: "missing value", fields: "Content-Type: application/json;charset=\r\n", status: testUnsupportedMediaTypeReason},
 	}
 	for _, testCase := range mediaCases {
-		testCase := testCase
 		t.Run("media_"+testCase.name, func(t *testing.T) {
 			response := rawBoundaryExchange(t, address,
 				"POST /v1/process HTTP/1.1\r\nHost: "+address+"\r\n"+
@@ -756,7 +742,6 @@ func TestHTTPBoundaryRawContentTypeAndCapabilityMatrices(t *testing.T) {
 		{name: "canonical", fields: "X-DKIM2-Capability: " + secret + "\r\n", status: testBadRequestReason},
 	}
 	for _, testCase := range capabilityCases {
-		testCase := testCase
 		t.Run("capability_"+testCase.name, func(t *testing.T) {
 			response := rawBoundaryExchange(t, address,
 				"POST /v1/process HTTP/1.1\r\nHost: "+address+"\r\n"+
@@ -944,7 +929,6 @@ func TestHTTPBoundaryRawStatusConditionals(t *testing.T) {
 		},
 	}
 	for _, testCase := range ignoredCases {
-		testCase := testCase
 		t.Run("ignored_"+testCase.name, func(t *testing.T) {
 			response := rawBoundaryExchange(t, address, testCase.request)
 			if !strings.HasPrefix(response, "HTTP/1.1 "+testCase.status) {
@@ -971,7 +955,6 @@ func assertRawConditionalCases(
 ) {
 	t.Helper()
 	for _, testCase := range tests {
-		testCase := testCase
 		t.Run(testCase.name, func(t *testing.T) {
 			response := rawBoundaryExchange(t, address,
 				"GET /healthz HTTP/1.1\r\nHost: "+address+"\r\n"+
@@ -1106,7 +1089,6 @@ func TestHTTPBoundaryRawGETHEADParity(t *testing.T) {
 		},
 	}
 	for _, testCase := range tests {
-		testCase := testCase
 		t.Run(testCase.name, func(t *testing.T) {
 			readiness.ready.Store(true)
 			if testCase.before != nil {
@@ -1201,7 +1183,6 @@ func TestHTTPBoundaryRawFinalResponsesAreSingletonAndNonreflecting(t *testing.T)
 		},
 	}
 	for _, testCase := range tests {
-		testCase := testCase
 		t.Run(testCase.name, func(t *testing.T) {
 			response := rawBoundaryExchange(t, address, testCase.request)
 			lower := strings.ToLower(response)
@@ -1261,7 +1242,6 @@ func TestHTTPBoundaryRawHeaderOnlyDatePolicy(t *testing.T) {
 		},
 	}
 	for _, provider := range providers {
-		provider := provider
 		t.Run(provider.name, func(t *testing.T) {
 			address, _ := startRawBoundaryServerWithDate(t, provider.provider)
 			tests := []struct {
@@ -1295,7 +1275,6 @@ func TestHTTPBoundaryRawHeaderOnlyDatePolicy(t *testing.T) {
 				},
 			}
 			for _, testCase := range tests {
-				testCase := testCase
 				t.Run(testCase.name, func(t *testing.T) {
 					response := rawBoundaryExchange(t, address, testCase.request)
 					date := rawResponseHeader(response, "Date")
@@ -1315,7 +1294,7 @@ func TestHTTPBoundaryRawHeaderOnlyDatePolicy(t *testing.T) {
 // rawResponseHeader returns one exact response header value.
 func rawResponseHeader(response string, name string) string {
 	prefix := strings.ToLower(name) + ":"
-	for _, line := range strings.Split(response, "\r\n") {
+	for line := range strings.SplitSeq(response, "\r\n") {
 		if strings.HasPrefix(strings.ToLower(line), prefix) {
 			return strings.TrimSpace(line[len(prefix):])
 		}

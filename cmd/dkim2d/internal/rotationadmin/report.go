@@ -43,7 +43,7 @@ func EncodeCommandReport(report CommandReport, machine bool) ([]byte, error) {
 		}
 		return append(encoded, '\n'), nil
 	}
-	return []byte(fmt.Sprintf("schema=dkim2-rotation-report-v1 command=%s mode=%s state=%s backend=%s work_count=%d record_count=%d batch_count=%d retained_count=%d unresolved_count=%d result=%s\n", report.Command, report.Mode, report.State, report.Backend, report.WorkCount, report.RecordCount, report.BatchCount, report.RetainedCount, report.UnresolvedCount, report.ResultClass)), nil
+	return fmt.Appendf(nil, "schema=dkim2-rotation-report-v1 command=%s mode=%s state=%s backend=%s work_count=%d record_count=%d batch_count=%d retained_count=%d unresolved_count=%d result=%s\n", report.Command, report.Mode, report.State, report.Backend, report.WorkCount, report.RecordCount, report.BatchCount, report.RetainedCount, report.UnresolvedCount, report.ResultClass), nil
 }
 
 // validCommandReport enforces the closed identity-free report vocabulary.

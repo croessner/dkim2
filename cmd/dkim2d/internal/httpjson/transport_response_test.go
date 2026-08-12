@@ -436,18 +436,14 @@ func TestResponseHeadFilterExternalCloseIsImmediatelyTerminal(t *testing.T) {
 func TestResponseHeadFilterConcurrentPartialWritesAndCloseDoNotDeadlock(t *testing.T) {
 	filter, raw, state, releases := newResponseFilterFixture(nil)
 	var group sync.WaitGroup
-	for index := 0; index < 32; index++ {
-		group.Add(1)
-		go func() {
-			defer group.Done()
+	for range 32 {
+		group.Go(func() {
 			_, _ = filter.Write([]byte("HTTP/1.1 200"))
-		}()
+		})
 	}
-	group.Add(1)
-	go func() {
-		defer group.Done()
+	group.Go(func() {
 		_ = state.Close()
-	}()
+	})
 	done := make(chan struct{})
 	go func() {
 		group.Wait()
@@ -472,18 +468,13 @@ func TestResponseHeadFilterConcurrentContinueFinalAndShutdownReleasesOnce(t *tes
 		[]byte("HTTP/1.1 100 Continue\r\n\r\n"),
 		[]byte("HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n"),
 	} {
-		input := input
-		group.Add(1)
-		go func() {
-			defer group.Done()
+		group.Go(func() {
 			_, _ = filter.Write(input)
-		}()
+		})
 	}
-	group.Add(1)
-	go func() {
-		defer group.Done()
+	group.Go(func() {
 		_ = state.Close()
-	}()
+	})
 	group.Wait()
 	if raw.closeCalls.Load() != 1 || releases.Load() != 1 || !filter.Terminal() {
 		t.Fatal("continue/final/shutdown race did not terminate exactly once")

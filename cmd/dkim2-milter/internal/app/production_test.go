@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -494,12 +495,7 @@ func TestProductionRuntimeOwnsAmbiguousConstructorResultsBeforeRollback(t *testi
 
 // containsEvent reports whether one deterministic lifecycle event was recorded.
 func containsEvent(events []string, want string) bool {
-	for _, event := range events {
-		if event == want {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(events, want)
 }
 
 // TestProductionRuntimeUnexpectedSocketExitWithdrawsReadiness proves liveness feedback.

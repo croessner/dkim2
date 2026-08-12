@@ -270,7 +270,7 @@ func parsedMetadata(field tagvalue.Field) (Metadata, error) {
 	}
 	testing := false
 	strict := false
-	for _, raw := range strings.Split(tag.Value(), ":") {
+	for raw := range strings.SplitSeq(tag.Value(), ":") {
 		flag := strings.Trim(raw, " \t")
 		if !validHyphenatedWord(flag) {
 			return Metadata{}, newRecordError(RecordErrorInvalidFlags)

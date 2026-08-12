@@ -153,7 +153,6 @@ func TestFilesystemOpsAvailabilityRejectsContradictoryFactoryResults(t *testing.
 		},
 	}
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			err := filesystemOpsAvailable(test.ops, test.err)
 			if test.code == "" {

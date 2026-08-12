@@ -22,7 +22,7 @@ type projectionFuzzCase struct {
 // FuzzSigningProjection proves pure datasource-to-signing projection is
 // deterministic, exact, detached, and closed under authorization drift.
 func FuzzSigningProjection(f *testing.F) {
-	for scenario := uint8(0); scenario < 5; scenario++ {
+	for scenario := range uint8(5) {
 		f.Add([]byte{scenario}, scenario)
 	}
 

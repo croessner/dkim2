@@ -642,12 +642,7 @@ func ldapRecordCN(index int) string { return strconv.Itoa(index + 1) }
 
 // containsLDAPValue reports exact membership in one small attribute set.
 func containsLDAPValue(values []string, expected string) bool {
-	for _, value := range values {
-		if value == expected {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(values, expected)
 }
 
 // cloneLDAPValues detaches one bounded readback attribute.

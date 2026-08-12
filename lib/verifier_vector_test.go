@@ -432,8 +432,8 @@ func corruptGoldenSignature(t *testing.T, raw []byte) []byte {
 func malformedGoldenProtocol(t *testing.T, raw []byte) []byte {
 	t.Helper()
 	marker := []byte("DKIM2-Signature: i=1; m=1;")
-	start := bytes.Index(raw, marker)
-	if start < 0 {
+	found := bytes.Contains(raw, marker)
+	if !found {
 		t.Fatal("DKIM2 signature marker absent")
 	}
 	return bytes.Replace(raw, marker, []byte("DKIM2-Signature: i=1; m=1; m=1;"), 1)

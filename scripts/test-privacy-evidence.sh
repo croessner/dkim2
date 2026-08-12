@@ -149,7 +149,7 @@ if ! timeout -k 5 60 env \
   DOCKER_CONFIG="$docker_config" DOCKER_HOST="$docker_host" \
   docker buildx build \
   --builder "$builder" \
-  --file build/container/Containerfile \
+  --file build/container/Dockerfile \
   --target context-audit \
   --output "type=local,dest=$work/context" \
   . >"$work/context.stdout" 2>"$work/context.stderr"; then
@@ -170,7 +170,7 @@ for architecture in amd64 arm64; do
       DOCKER_CONFIG="$docker_config" DOCKER_HOST="$docker_host" \
       docker buildx build \
       --builder "$builder" \
-      --file build/container/Containerfile \
+      --file build/container/Dockerfile \
       --target "$target" \
       --platform "linux/$architecture" \
       --network none \

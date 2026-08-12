@@ -37,7 +37,6 @@ func TestEvaluateStatusPreconditionsFreezesStrongWeakAndLazyOrder(t *testing.T) 
 		{name: "if-match precedence", match: []string{`"other"`}, none: []string{`W/"unterminated`}, outcome: preconditionFailed},
 	}
 	for _, testCase := range cases {
-		testCase := testCase
 		t.Run(testCase.name, func(t *testing.T) {
 			t.Parallel()
 			header := make(http.Header)

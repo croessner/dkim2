@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -66,7 +67,6 @@ func TestGeneratedSignAndReviseRequestsPreserveDistinctFacts(t *testing.T) {
 			},
 		},
 	} {
-		testCase := testCase
 		t.Run(testCase.name, func(t *testing.T) {
 			t.Parallel()
 			doer := &captureDoer{response: func(_ *http.Request) *http.Response {
@@ -277,9 +277,7 @@ func TestOperationResponseRejectsMalformedNoContent(t *testing.T) {
 				headerCacheControl: {cacheNoStore},
 				headerConnection:   {connectionClose},
 			}
-			for name, values := range testCase.extra {
-				headers[name] = values
-			}
+			maps.Copy(headers, testCase.extra)
 			response := &http.Response{
 				StatusCode: http.StatusNoContent, Close: true, ProtoMajor: 1, ProtoMinor: 1,
 				Header: headers, Body: io.NopCloser(strings.NewReader(testCase.body)),

@@ -49,16 +49,14 @@ func TestVerifyCurrentConcurrentParity(t *testing.T) {
 	fullResults := make([]Result, workers)
 	errs := make([]error, workers*2)
 	var wait sync.WaitGroup
-	for index := 0; index < workers; index++ {
-		wait.Add(1)
-		go func() {
-			defer wait.Done()
+	for index := range workers {
+		wait.Go(func() {
 			currentResults[index], errs[index] = verifier.VerifyCurrent(context.Background(), request)
 			fullResults[index], errs[workers+index] = verifier.Verify(context.Background(), request)
-		}()
+		})
 	}
 	wait.Wait()
-	for index := 0; index < workers; index++ {
+	for index := range workers {
 		if errs[index] != nil || errs[workers+index] != nil {
 			t.Fatalf("concurrent verification errors at %d: current=%v full=%v", index, errs[index], errs[workers+index])
 		}

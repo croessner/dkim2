@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"maps"
 	"net"
 	"net/netip"
 	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -420,10 +422,8 @@ func parseObservability(values map[string]rawValue, presence map[string]Presence
 	}
 	exporterText := text(values, pathTracingExporter)
 	if exporterText == canonicalNone {
-		for _, path := range []string{pathTracingEndpoint, pathTracingCAFile, pathTracingSamplePerMillion, pathTracingExportTimeout} {
-			if explicitTracing(path) {
-				return observabilityState{}, newError(CodeInvalidField)
-			}
+		if slices.ContainsFunc([]string{pathTracingEndpoint, pathTracingCAFile, pathTracingSamplePerMillion, pathTracingExportTimeout}, explicitTracing) {
+			return observabilityState{}, newError(CodeInvalidField)
 		}
 		return observabilityState{
 			logLevel: level, debugMessageShape: messageShape,
@@ -440,10 +440,8 @@ func parseObservability(values map[string]rawValue, presence map[string]Presence
 		!validOTLPEndpoint(endpoint) || !sameGenerationPath(generation, caFile) {
 		return observabilityState{}, newError(CodeInvalidField)
 	}
-	for _, path := range protectedPaths {
-		if path == caFile {
-			return observabilityState{}, newError(CodeInvalidField)
-		}
+	if slices.Contains(protectedPaths, caFile) {
+		return observabilityState{}, newError(CodeInvalidField)
 	}
 	sample := uint64(10_000)
 	if explicitTracing(pathTracingSamplePerMillion) {
@@ -513,7 +511,7 @@ func validCanonicalDNSName(name string) bool {
 	if len(name) < 1 || len(name) > 253 || strings.HasSuffix(name, ".") {
 		return false
 	}
-	for _, label := range strings.Split(name, ".") {
+	for label := range strings.SplitSeq(name, ".") {
 		if len(label) < 1 || len(label) > 63 ||
 			!lowercaseDNSLetterOrDigit(label[0]) ||
 			!lowercaseDNSLetterOrDigit(label[len(label)-1]) {
@@ -537,9 +535,7 @@ func lowercaseDNSLetterOrDigit(value byte) bool {
 // clonePresence prevents caller-owned maps from mutating snapshot provenance.
 func clonePresence(input map[string]Presence) map[string]Presence {
 	cloned := make(map[string]Presence, len(input))
-	for key, value := range input {
-		cloned[key] = value
-	}
+	maps.Copy(cloned, input)
 	return cloned
 }
 

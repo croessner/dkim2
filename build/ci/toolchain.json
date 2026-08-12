@@ -1,37 +1,7 @@
 {
   "schema": "dkim2-ci-toolchain-v1",
-  "runner": {
-    "image": "ubuntu-24.04"
-  },
   "go": {
     "version": "1.26.5"
-  },
-  "actions": {
-    "checkout": {
-      "repository": "actions/checkout",
-      "version": "v7.0.1",
-      "commit": "3d3c42e5aac5ba805825da76410c181273ba90b1"
-    },
-    "setup_go": {
-      "repository": "actions/setup-go",
-      "version": "v7.0.0",
-      "commit": "b7ad1dad31e06c5925ef5d2fc7ad053ef454303e"
-    },
-    "upload_artifact": {
-      "repository": "actions/upload-artifact",
-      "version": "v7.0.1",
-      "commit": "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
-    },
-    "codeql": {
-      "repository": "github/codeql-action",
-      "version": "v4.37.6",
-      "commit": "5595ccaf912efad79be6eef63a5619ff05969be3"
-    },
-    "attest": {
-      "repository": "actions/attest",
-      "version": "v4.2.2",
-      "commit": "1e69f48acb82d1966a394da916b4c1698aa569d6"
-    }
   },
   "go_tools": {
     "actionlint": {
@@ -53,9 +23,5 @@
       "version": "9.1.0",
       "commit": "c9e8005e9d0ec817e26c7db318861cb821409249"
     }
-  },
-  "evidence_tool_manifests": [
-    "build/container/image-tools.json",
-    "build/container/publication-tools.json"
-  ]
+  }
 }

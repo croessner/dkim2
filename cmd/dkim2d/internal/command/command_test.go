@@ -363,7 +363,6 @@ func TestCommandHelpAndShapeFreezeStableExits(t *testing.T) {
 		{name: "help hidden completion no description", args: []string{helpCommandName, hiddenNoDescCompletionCmd, marker}, wantExit: 2, wantStderr: commandShapeDiagnostic},
 	}
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 			owner := &commandOwnerFake{stopLimit: time.Second}
@@ -524,7 +523,6 @@ func TestCommandFailureOwnershipAndPrivacy(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 			owner := &commandOwnerFake{
@@ -619,7 +617,6 @@ func TestCommandPropagatesDynamicStopBounds(t *testing.T) {
 		{shutdown: time.Second, stop: 51 * time.Second},
 		{shutdown: 120 * time.Second, stop: 170 * time.Second},
 	} {
-		test := test
 		t.Run(test.shutdown.String(), func(t *testing.T) {
 			t.Parallel()
 			stopTimeout, err := app.LifecycleStopTimeout(test.shutdown)
@@ -671,7 +668,6 @@ func TestCommandFatalSignalAndStopFailureRemainExitOne(t *testing.T) {
 		{name: "stop failure", stopError: errors.New("private-stop-marker")},
 	}
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 			owner := &commandOwnerFake{stopLimit: time.Second}

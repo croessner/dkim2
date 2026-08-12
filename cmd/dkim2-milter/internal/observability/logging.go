@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"log/slog"
+	"maps"
 	"slices"
 	"strings"
 	"sync"
@@ -346,9 +347,7 @@ func encodeRecord(
 	document["level"] = level.String()
 	document["msg"] = eventID
 	document["event_id"] = eventID
-	for key, value := range fields {
-		document[key] = value
-	}
+	maps.Copy(document, fields)
 	output, err := json.Marshal(document)
 	if err != nil || len(output)+1 > maxLogRecordBytes {
 		return nil, errConfiguration

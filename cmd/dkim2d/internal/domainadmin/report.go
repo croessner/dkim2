@@ -120,7 +120,7 @@ func EncodeReport(report Report, machine bool, maximum uint32) ([]byte, error) {
 			encoded = append(encoded, '\n')
 		}
 	} else if report.planComplete && report.currentKnown {
-		encoded = []byte(fmt.Sprintf(
+		encoded = fmt.Appendf(nil,
 			"schema=%s tool_version=%s command=%s state=%s backend=%s expected_current_generation=%d current_generation=%d candidate_generation=%d credential_count=%d rsa_credential_count=%d ed25519_credential_count=%d plan_complete=%t receipt_present=%t receipt_phase=%s lock_relation=%s runtime_smoke_required=%t result=%s failure=%s\n",
 			document.Schema, document.ToolVersion, document.Command, document.State,
 			document.Backend, report.expectedCurrent, report.current,
@@ -128,9 +128,9 @@ func EncodeReport(report Report, machine bool, maximum uint32) ([]byte, error) {
 			report.ed25519CredentialCount, document.PlanComplete, document.ReceiptPresent,
 			document.ReceiptPhase, document.LockRelation, document.RuntimeSmokeRequired,
 			document.Result, document.Failure,
-		))
+		)
 	} else if report.planComplete {
-		encoded = []byte(fmt.Sprintf(
+		encoded = fmt.Appendf(nil,
 			"schema=%s tool_version=%s command=%s state=%s backend=%s expected_current_generation=%d candidate_generation=%d credential_count=%d rsa_credential_count=%d ed25519_credential_count=%d plan_complete=%t receipt_present=%t receipt_phase=%s lock_relation=%s runtime_smoke_required=%t result=%s failure=%s\n",
 			document.Schema, document.ToolVersion, document.Command, document.State,
 			document.Backend, report.expectedCurrent, report.candidate,
@@ -138,14 +138,14 @@ func EncodeReport(report Report, machine bool, maximum uint32) ([]byte, error) {
 			report.ed25519CredentialCount, document.PlanComplete, document.ReceiptPresent,
 			document.ReceiptPhase, document.LockRelation, document.RuntimeSmokeRequired,
 			document.Result, document.Failure,
-		))
+		)
 	} else {
-		encoded = []byte(fmt.Sprintf(
+		encoded = fmt.Appendf(nil,
 			"schema=%s tool_version=%s command=%s backend=%s plan_complete=%t receipt_present=%t receipt_phase=%s lock_relation=%s result=%s failure=%s\n",
 			document.Schema, document.ToolVersion, document.Command, document.Backend,
 			document.PlanComplete, document.ReceiptPresent, document.ReceiptPhase,
 			document.LockRelation, document.Result, document.Failure,
-		))
+		)
 	}
 	if err != nil || len(encoded) == 0 || len(encoded) > int(maximum) {
 		clear(encoded)

@@ -779,14 +779,12 @@ func TestReplayCoordinatorPrivacyAndConcurrentReuse(t *testing.T) {
 	var wait sync.WaitGroup
 	errs := make(chan error, 32)
 	for range 32 {
-		wait.Add(1)
-		go func() {
-			defer wait.Done()
+		wait.Go(func() {
 			result, coordinateErr := shared.Coordinate(context.Background(), domain)
 			if coordinateErr != nil || !result.Valid() {
 				errs <- &ReplayCoordinatorError{}
 			}
-		}()
+		})
 	}
 	wait.Wait()
 	close(errs)

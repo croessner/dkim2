@@ -69,7 +69,7 @@ func TestAuditRequestEncodingFreezesTheClosedInventory(t *testing.T) {
 func TestAuditWireRejectsCommandTwelveBeforeTransport(t *testing.T) {
 	connection := newScriptedAuditConn(bytes.Repeat([]byte("+OK\r\n"), auditCommandCount))
 	wire := &tlsSecurityAuditWire{connection: connection}
-	for index := 0; index < auditCommandCount; index++ {
+	for index := range auditCommandCount {
 		ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(time.Minute))
 		value, err := wire.roundTrip(ctx, auditRequest{command: auditCommandRole})
 		cancel()

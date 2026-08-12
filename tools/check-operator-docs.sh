@@ -32,7 +32,7 @@ milter=cmd/dkim2-milter/README.md
 client=cmd/dkim2ctl/README.md
 openapi=docs/specs/openapi/dkim2d.yaml
 openapi_readme=docs/specs/openapi/README.md
-containerfile=build/container/Containerfile
+containerfile=build/container/Dockerfile
 for document in \
   README.md \
   "$guide" \

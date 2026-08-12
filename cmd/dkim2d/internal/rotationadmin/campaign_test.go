@@ -144,7 +144,7 @@ func TestCampaignProtectedOwnersRejectGenericSerialization(t *testing.T) {
 	}
 	defer plan.Close() //nolint:errcheck // Test cleanup has no recovery.
 	for _, value := range []any{intent, plan} {
-		if _, err := json.Marshal(value); err == nil || !bytes.Contains([]byte(fmt.Sprintf("%+v", value)), []byte(redacted)) {
+		if _, err := json.Marshal(value); err == nil || !bytes.Contains(fmt.Appendf(nil, "%+v", value), []byte(redacted)) {
 			t.Fatal("protected campaign value reached a generic sink")
 		}
 	}
@@ -164,7 +164,7 @@ func mustCandidateDigest(t *testing.T, prepared *Prepared) admincontract.Digest 
 func campaignSource(t *testing.T, count int) *datasourceadmin.Snapshot {
 	t.Helper()
 	rows := datasourceadmin.Rows{}
-	for index := 0; index < count; index++ {
+	for index := range count {
 		domain := fmt.Sprintf("d%05d.example.test", index)
 		profileID, handleID := fmt.Sprintf("profile-%d", index), fmt.Sprintf("handle-%d", index)
 		private := ed25519.NewKeyFromSeed(bytes.Repeat([]byte{byte(index + 100)}, ed25519.SeedSize))

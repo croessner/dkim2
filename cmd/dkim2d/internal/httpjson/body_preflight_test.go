@@ -120,10 +120,7 @@ func (r *repeatingReader) Read(output []byte) (int, error) {
 	if r.remaining == 0 {
 		return 0, io.EOF
 	}
-	count := int64(len(output))
-	if count > r.remaining {
-		count = r.remaining
-	}
+	count := min(int64(len(output)), r.remaining)
 	for index := range output[:count] {
 		output[index] = 'x'
 	}

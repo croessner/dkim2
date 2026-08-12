@@ -318,7 +318,7 @@ func TestDNSPublicKeyProviderConfigurationControlsCacheAndClock(t *testing.T) {
 		t.Fatal(err)
 	}
 	query := newPublicKeyQuery("example.test", "selector", AlgorithmRSASHA256)
-	for index := 0; index < 2; index++ {
+	for range 2 {
 		if _, lookupErr := provider.LookupPublicKey(context.Background(), query); lookupErr != nil {
 			t.Fatal(lookupErr)
 		}
@@ -341,7 +341,7 @@ func TestDNSPublicKeyProviderConfigurationControlsCacheAndClock(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for index := 0; index < 2; index++ {
+	for range 2 {
 		if _, lookupErr := provider.LookupPublicKey(context.Background(), query); lookupErr != nil {
 			t.Fatal(lookupErr)
 		}

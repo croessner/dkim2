@@ -30,7 +30,6 @@ func TestDecodeCanonicalBase64(t *testing.T) {
 		{name: "three", text: "YWJj", want: []byte("abc")},
 	}
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 			got, err := decodeCanonicalBase64([]byte(test.text))

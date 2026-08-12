@@ -95,7 +95,7 @@ func TestReplayLimitsRejectEveryNegativeAndHardMaximumPlusOne(t *testing.T) {
 
 // TestReplayLimitsFieldsRemainExactAndMachineSized verifies the reusable value has no hidden policy.
 func TestReplayLimitsFieldsRemainExactAndMachineSized(t *testing.T) {
-	valueType := reflect.TypeOf(Limits{})
+	valueType := reflect.TypeFor[Limits]()
 	want := []string{"MaxEntries", "MaxWaiters", "PruneBudget", "MaxInFlight", "MaxAdmissionWaiters"}
 	if valueType.NumField() != len(want) {
 		t.Fatalf("Limits fields = %d", valueType.NumField())

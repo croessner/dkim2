@@ -140,11 +140,9 @@ func TestDrainPreservesGraceThenForceCancels(t *testing.T) {
 	}
 	forcedContext, forcedCancel := context.WithCancel(context.Background())
 	forced.runCancel = forcedCancel
-	forced.workers.Add(1)
-	go func() {
+	forced.workers.Go(func() {
 		<-forcedContext.Done()
-		forced.workers.Done()
-	}()
+	})
 	shutdown, stop := context.WithTimeout(context.Background(), time.Second)
 	defer stop()
 	if err := forced.DrainContext(shutdown); err != nil || forcedContext.Err() == nil {
@@ -217,8 +215,7 @@ func TestServiceAcceptsOneIndependentPeerFrame(t *testing.T) {
 		t.Fatal("service start failed")
 	}
 	defer func() { _ = service.Close() }()
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	serveDone := make(chan error, 1)
 	go func() { serveDone <- service.Serve(ctx) }()
 

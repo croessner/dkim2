@@ -137,7 +137,7 @@ func isLowerSHA256(value string) bool {
 // parseContractFields reads unique non-empty key-value lines without normalization.
 func parseContractFields(data []byte) (map[string]string, error) {
 	fields := make(map[string]string)
-	for _, line := range strings.Split(string(data), "\n") {
+	for line := range strings.SplitSeq(string(data), "\n") {
 		if line == "" {
 			continue
 		}

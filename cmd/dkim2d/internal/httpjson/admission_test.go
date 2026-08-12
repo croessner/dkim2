@@ -258,12 +258,10 @@ func TestProcessAdmissionConcurrentReleaseRemainsExact(t *testing.T) {
 	admission, _ := newProcessAdmission(1, 0, 0)
 	lease, _ := admission.TryAcquire(context.Background())
 	var group sync.WaitGroup
-	for index := 0; index < 64; index++ {
-		group.Add(1)
-		go func() {
-			defer group.Done()
+	for range 64 {
+		group.Go(func() {
 			lease.Release()
-		}()
+		})
 	}
 	group.Wait()
 	if admission.Owned() != 0 || len(admission.permits) != 0 {
@@ -326,7 +324,7 @@ func TestProcessReservationRequiresBothOwners(t *testing.T) {
 func TestProcessReservationConcurrentCompletion(t *testing.T) {
 	t.Parallel()
 
-	for iteration := 0; iteration < 100; iteration++ {
+	for range 100 {
 		admission, err := newProcessAdmission(1, 0, 0)
 		if err != nil {
 			t.Fatal("newProcessAdmission() failed")

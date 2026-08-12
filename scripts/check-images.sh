@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-containerfile=build/container/Containerfile
+containerfile=build/container/Dockerfile
 build_inputs=build/container/build-inputs.json
 compose=deployments/postfix-compose/compose.yaml
 override=deployments/postfix-compose/compose.demo.yaml
@@ -143,42 +143,3 @@ jq -e '
   $ports[0].published == "2525" and
   $ports[0].target == 25
 ' "$render" >/dev/null
-
-test "$(grep -Ec 'uses: [^@[:space:]]+@[0-9a-f]{40}([[:space:]]+#.*)?$' .github/workflows/container-release.yml)" -ge 3
-! grep -Eq 'uses: [^@[:space:]]+@(main|master|v[0-9]+([.]|$))' .github/workflows/container-release.yml
-ci_go_version=$(jq -er '.go.version' build/ci/toolchain.json)
-grep -Fq "go-version: \"$ci_go_version\"" \
-  .github/workflows/container-release.yml
-grep -Fq 'run: make check-container-release' .github/workflows/container-release.yml
-! grep -Eq '(id-token|packages):[[:space:]]*write' .github/workflows/container-release.yml
-! grep -Eq 'provenance-ci|trusted-ci-build' \
-  .github/workflows/container-release.yml scripts/image-evidence.sh
-grep -Fq '"$repository/$tools_dir/trivy" image \' scripts/image-evidence.sh
-grep -Fq -- '--cache-dir "$repository/$tools_dir/trivy-cache" \' \
-  scripts/image-evidence.sh
-grep -Fq 'DOCKER_CONFIG="$repository/$docker_config" \' \
-  scripts/image-evidence.sh
-grep -Fq 'HOME="$repository/$work" \' scripts/image-evidence.sh
-grep -Fq 'TMPDIR="$repository/$work" \' scripts/image-evidence.sh
-jq -e '
-  .schema == "dkim2-image-tool-allowlist-v1" and
-  [.tools[].name] == ["syft","trivy"] and
-  all(.tools[];
-    (.version | test("^[0-9]+[.][0-9]+[.][0-9]+$")) and
-    [.platforms[] | (.goos + "/" + .goarch)] ==
-      ["darwin/amd64","darwin/arm64","linux/amd64","linux/arm64"] and
-    all(.platforms[];
-      (.asset | type == "string" and length > 0 and length <= 128) and
-      (.archive_sha256 | test("^[0-9a-f]{64}$")) and
-      (.binary_sha256 | test("^[0-9a-f]{64}$"))))
-' build/container/image-tools.json >/dev/null
-grep -Fq 'syft_version=$(jq -er' scripts/fetch-image-tools.sh
-grep -Fq 'trivy_version=$(jq -er' scripts/fetch-image-tools.sh
-test "$(grep -Fc -- '-replace' scripts/fetch-image-tools.sh)" -eq 2
-grep -Fq 'syft_version=$(jq -er' scripts/image-evidence.sh
-grep -Fq 'trivy_version=$(jq -er' scripts/image-evidence.sh
-! grep -Eq 'verify_tool (syft|trivy) [0-9]' scripts/image-evidence.sh
-! grep -Eq 'trivy-json-[0-9]' \
-  scripts/image-evidence.sh tools/cmd/imageevidence/main.go
-! grep -Eq 'loadTool\(root, "(syft|trivy)",' \
-  tools/cmd/imageevidence/main.go

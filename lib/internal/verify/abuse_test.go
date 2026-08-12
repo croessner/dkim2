@@ -57,7 +57,7 @@ func TestVerifierPerformsRepeatedMissingKeyLookups(t *testing.T) {
 	}
 
 	var result Result
-	for i := 0; i < defaultMaxSignatureSets; i++ {
+	for i := range defaultMaxSignatureSets {
 		result, err = verifier.Verify(context.Background(), Request{Message: fixture.message, Envelope: matchingEnvelope()})
 		if err != nil {
 			t.Fatalf("Verify() iteration %d error = %v", i, err)

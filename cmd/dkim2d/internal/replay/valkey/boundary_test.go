@@ -147,7 +147,6 @@ func TestReleaseCandidateModuleBoundaryIsExact(t *testing.T) {
 	architecture := readPolicyFile(t, filepath.Join(root, "docs/ARCHITECTURE.md"))
 	vendorModules := readPolicyFile(t, filepath.Join(root, "vendor/modules.txt"))
 	attributes := readPolicyFile(t, filepath.Join(root, ".gitattributes"))
-	makefile := readPolicyFile(t, filepath.Join(root, "Makefile"))
 
 	const candidate = "github.com/croessner/dkim2 v0.1.0-rc.1"
 	if strings.Count(commandModule, candidate) != 1 ||
@@ -177,43 +176,6 @@ func TestReleaseCandidateModuleBoundaryIsExact(t *testing.T) {
 	if attributes != whitespaceExceptions {
 		t.Fatal("whitespace exceptions are not exact and path-scoped")
 	}
-	if !strings.Contains(makefile, "check-vendor:") ||
-		!strings.Contains(makefile, "go -C tools run ./cmd/reference -root .. check-vendor") ||
-		!makeTargetHasPrerequisites(
-			makefile,
-			"guardrails",
-			"check-openapi",
-			"check-vendor",
-			"govulncheck",
-		) {
-		t.Fatal("workspace vendor reproducibility gate is missing from guardrails")
-	}
-}
-
-// makeTargetHasPrerequisites checks exact prerequisite fields without assuming
-// that later guardrails cannot be inserted between established requirements.
-func makeTargetHasPrerequisites(makefile, target string, required ...string) bool {
-	prefix := target + ":"
-	for _, line := range strings.Split(makefile, "\n") {
-		fields := strings.Fields(line)
-		if len(fields) == 0 || fields[0] != prefix {
-			continue
-		}
-		for _, prerequisite := range required {
-			found := false
-			for _, field := range fields[1:] {
-				if field == prerequisite {
-					found = true
-					break
-				}
-			}
-			if !found {
-				return false
-			}
-		}
-		return true
-	}
-	return false
 }
 
 // productionGoFiles recursively returns hand-written and generated production Go files.

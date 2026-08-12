@@ -3,6 +3,7 @@ package testclient
 import (
 	"encoding/json"
 	"io"
+	"slices"
 )
 
 const outputSchema = "dkim2ctl.result.v1"
@@ -133,10 +134,5 @@ func validOptionalEnum(value *string, allowed ...string) bool {
 	if value == nil {
 		return true
 	}
-	for _, candidate := range allowed {
-		if *value == candidate {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(allowed, *value)
 }

@@ -211,15 +211,13 @@ func TestPublicLocalOnlyReleaseIsExactAtomicAndNilOnDenial(t *testing.T) {
 		results := make(chan outcome, 2)
 		var workers sync.WaitGroup
 		for range 2 {
-			workers.Add(1)
-			go func() {
-				defer workers.Done()
+			workers.Go(func() {
 				<-start
 				output, err := scenario.restricted.ReleaseToInControl(
 					context.Background(), scenario.ticket, scenario.routeScope,
 				)
 				results <- outcome{output: output, err: err}
-			}()
+			})
 		}
 		close(start)
 		workers.Wait()
@@ -331,16 +329,14 @@ func TestPublicOutOfBandReleaseIsExactAtomicAndNilOnDenial(t *testing.T) {
 		results := make(chan outcome, 2)
 		var workers sync.WaitGroup
 		for range 2 {
-			workers.Add(1)
-			go func() {
-				defer workers.Done()
+			workers.Go(func() {
 				<-start
 				output, err := scenario.releaseVariant.ReleaseForOutOfBandAcceptance(
 					context.Background(), scenario.ticket, scenario.reversePath,
 					scenario.forwardPaths, scenario.receiver, scenario.routeScope,
 				)
 				results <- outcome{output: output, err: err}
-			}()
+			})
 		}
 		close(start)
 		workers.Wait()

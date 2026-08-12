@@ -1030,10 +1030,7 @@ func FuzzHeaderValidationNeverPanics(f *testing.F) {
 		if len(body) > 8192 {
 			body = body[:8192]
 		}
-		bodySplit := int(split)
-		if bodySplit > len(body) {
-			bodySplit = len(body)
-		}
+		bodySplit := min(int(split), len(body))
 		handler := &testHandler{result: Result{
 			Operation: operationProcess, Result: resultPass, Outcome: DispositionContinue,
 		}}

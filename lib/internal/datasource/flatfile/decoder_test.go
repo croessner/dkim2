@@ -149,7 +149,6 @@ func TestDecodeRejectsClosedSchemaViolations(t *testing.T) {
 		{name: "trailing comma", document: replaceFlatfileOnce(t, valid, `"policies":[`, `"policies":[,`)},
 	}
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			assertFlatfileDecodeError(
 				t, []byte(test.document), datasource.DefaultLimits(),
@@ -703,7 +702,6 @@ func TestDecodeReaderDefendsTheReaderBoundary(t *testing.T) {
 			code: datasource.ErrorCodeInternalInvariant},
 	}
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			snapshot, err := DecodeReader(flatfileTestGeneration, test.reader, datasource.DefaultLimits())
 			if snapshot != nil || datasource.ErrorCodeOf(err) != test.code {

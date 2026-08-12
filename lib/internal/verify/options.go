@@ -326,13 +326,7 @@ func (p AlgorithmPolicy) Validate() error {
 
 // Allows reports whether algorithm is enabled by the policy.
 func (p AlgorithmPolicy) Allows(algorithm Algorithm) bool {
-	for _, allowed := range p.AllowedAlgorithms {
-		if allowed == algorithm {
-			return true
-		}
-	}
-
-	return false
+	return slices.Contains(p.AllowedAlgorithms, algorithm)
 }
 
 // Algorithms returns the enabled signature algorithms as an immutable copy.

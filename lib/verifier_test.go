@@ -26,14 +26,12 @@ func TestVerifierSupportsConcurrentReuse(t *testing.T) {
 	}
 	var group sync.WaitGroup
 	for range 16 {
-		group.Add(1)
-		go func() {
-			defer group.Done()
+		group.Go(func() {
 			result, verifyErr := verifier.Verify(context.Background(), NewVerifyRequest(raw, []byte("<>"), [][]byte{[]byte("<rcpt@example.test>")}))
 			if verifyErr != nil || result.State() != ResultStatePERMERROR || result.PrimaryReason() != ReasonMissingKey {
 				t.Errorf("Verify() = %q, %v", result.State(), verifyErr)
 			}
-		}()
+		})
 	}
 	group.Wait()
 }

@@ -126,7 +126,6 @@ func TestNewRejectsInvalidAndAmbiguousSnapshots(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 			provider, err := New(
@@ -266,7 +265,6 @@ func TestNewEnforcesConfiguredCountAndRecordBounds(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			limits := test.limits(fixture.limits)
 			provider, err := New(
@@ -313,7 +311,6 @@ func TestNewAllowsEmptyAndUnusedDeclarations(t *testing.T) {
 		{name: "unused declaration", handles: []datasource.KeyHandleID{unused}},
 	}
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			provider, err := New(memoryTestGeneration, test.handles, nil, nil, limits)
 			if err != nil || provider == nil || !provider.Valid() {
@@ -450,7 +447,6 @@ func TestProviderAppliesProfileStateAndPreservesNonEnforcePolicySuccess(t *testi
 	}
 
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			fixture := newMemoryFixtureWithState(
 				t, test.profileStatus, test.notBefore, test.notAfter,
@@ -523,7 +519,6 @@ func TestProviderRejectsInvalidContextsAndRequests(t *testing.T) {
 		{name: "deadline", ctx: expired, code: datasource.ErrorCodeDeadlineExceeded, is: context.DeadlineExceeded},
 	}
 	for _, test := range contexts {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			profileResult, profileErr := provider.ResolveProfile(test.ctx, validProfile)
 			assertMemoryProfileFailure(t, profileResult, profileErr, test.code, test.is)
@@ -540,7 +535,6 @@ func TestProviderRejectsInvalidContextsAndRequests(t *testing.T) {
 		{name: "post lookup cancelled", terminal: context.Canceled, code: datasource.ErrorCodeCancelled},
 		{name: "post lookup deadline", terminal: context.DeadlineExceeded, code: datasource.ErrorCodeDeadlineExceeded},
 	} {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			profileContext := &memoryStagedContext{terminal: test.terminal}
 			profileResult, profileErr := provider.ResolveProfile(profileContext, validProfile)
@@ -684,14 +678,14 @@ func TestProviderIsDeterministicAndConcurrent(t *testing.T) {
 	var wait sync.WaitGroup
 	errorsFound := make(chan string, workers)
 	start := make(chan struct{})
-	for worker := 0; worker < workers; worker++ {
+	for worker := range workers {
 		wait.Add(1)
 		go func(index int) {
 			defer wait.Done()
 			<-start
 			profileRequest := profileRequests[index%len(profileRequests)]
 			policyRequest := policyRequests[index%len(policyRequests)]
-			for iteration := 0; iteration < iterations; iteration++ {
+			for iteration := range iterations {
 				profileResult, profileErr := provider.ResolveProfile(
 					context.Background(), profileRequest,
 				)
@@ -719,14 +713,12 @@ func TestProviderIsDeterministicAndConcurrent(t *testing.T) {
 			}
 		}(worker)
 	}
-	wait.Add(1)
-	go func() {
-		defer wait.Done()
+	wait.Go(func() {
 		<-start
 		handles[0] = datasource.KeyHandleID{}
 		profiles[0] = datasource.Profile{}
 		policies[0] = datasource.Policy{}
-	}()
+	})
 	close(start)
 	wait.Wait()
 	close(errorsFound)

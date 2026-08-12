@@ -13,6 +13,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"slices"
 	"sync"
 	"time"
 
@@ -482,12 +483,7 @@ func validEvent(event Event) bool {
 
 // oneOf checks one bounded vocabulary.
 func oneOf(value string, accepted ...string) bool {
-	for _, candidate := range accepted {
-		if value == candidate {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(accepted, value)
 }
 
 // boolText returns one stable metric label.

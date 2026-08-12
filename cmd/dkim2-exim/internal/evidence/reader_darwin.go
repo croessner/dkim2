@@ -588,7 +588,7 @@ func safeDarwinXattrs(file int) bool {
 		return false
 	}
 	defer clear(names)
-	for _, name := range bytes.Split(names[:size-1], []byte{0}) {
+	for name := range bytes.SplitSeq(names[:size-1], []byte{0}) {
 		if string(name) != "com.apple.provenance" {
 			return false
 		}

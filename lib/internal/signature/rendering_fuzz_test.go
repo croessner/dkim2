@@ -192,10 +192,7 @@ func fuzzDNSLabel(seed []byte) string {
 		return "selector"
 	}
 	const alphabet = "abcdefghijklmnopqrstuvwxyz0123456789"
-	size := len(seed)
-	if size > 63 {
-		size = 63
-	}
+	size := min(len(seed), 63)
 	label := make([]byte, size)
 	for index := range label {
 		label[index] = alphabet[int(seed[index])%len(alphabet)]

@@ -260,7 +260,7 @@ func TestProviderCloseIsIdempotentAndClosesFutureWork(t *testing.T) {
 		t.Fatalf("Close(first) state=%s code=%s",
 			flatfileProviderState(provider), datasource.ErrorCodeOf(err))
 	}
-	for count := 0; count < 3; count++ {
+	for range 3 {
 		if err := provider.Close(context.Background()); err != nil {
 			t.Fatalf("Close(idempotent) code=%s", datasource.ErrorCodeOf(err))
 		}
@@ -331,7 +331,7 @@ func TestProviderCancellationWhileBlockedOnOccupiedSlotRestoresReadyState(t *tes
 			}
 		}()
 		<-started
-		for count := 0; count < 10; count++ {
+		for range 10 {
 			runtime.Gosched()
 		}
 		select {
@@ -462,11 +462,9 @@ func TestProviderConcurrentResolvesRemainGenerationConsistent(t *testing.T) {
 	const iterations = 40
 	var wait sync.WaitGroup
 	failures := make(chan struct{}, workers)
-	for worker := 0; worker < workers; worker++ {
-		wait.Add(1)
-		go func() {
-			defer wait.Done()
-			for count := 0; count < iterations; count++ {
+	for range workers {
+		wait.Go(func() {
+			for range iterations {
 				result, err := provider.ResolveProfile(
 					context.Background(), request,
 				)
@@ -475,7 +473,7 @@ func TestProviderConcurrentResolvesRemainGenerationConsistent(t *testing.T) {
 					return
 				}
 			}
-		}()
+		})
 	}
 	wait.Wait()
 	close(failures)

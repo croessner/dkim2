@@ -56,16 +56,16 @@ func TestRestrictedSigningResultsExposeNoByteOrMarshalSurface(t *testing.T) {
 			t.Fatalf("%T satisfies io.WriterTo", value)
 		}
 	}
-	unrestricted := reflect.TypeOf(dkim2.UnrestrictedSignedMessage{})
+	unrestricted := reflect.TypeFor[dkim2.UnrestrictedSignedMessage]()
 	for _, restricted := range []reflect.Type{
-		reflect.TypeOf(dkim2.LocalOnlySignedMessage{}),
-		reflect.TypeOf(dkim2.OutOfBandAcceptanceSignedMessage{}),
+		reflect.TypeFor[dkim2.LocalOnlySignedMessage](),
+		reflect.TypeFor[dkim2.OutOfBandAcceptanceSignedMessage](),
 	} {
 		if restricted.AssignableTo(unrestricted) || restricted.ConvertibleTo(unrestricted) {
 			t.Fatalf("%v can downgrade to %v", restricted, unrestricted)
 		}
 	}
-	if _, ok := reflect.TypeOf(dkim2.UnrestrictedSignedMessage{}).MethodByName("Bytes"); !ok {
+	if _, ok := reflect.TypeFor[dkim2.UnrestrictedSignedMessage]().MethodByName("Bytes"); !ok {
 		t.Fatal("UnrestrictedSignedMessage lacks Bytes")
 	}
 }

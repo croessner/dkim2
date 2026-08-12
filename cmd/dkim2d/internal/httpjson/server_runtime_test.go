@@ -260,7 +260,6 @@ func TestServerAssemblyBindContainsFailures(t *testing.T) {
 		},
 	}
 	for _, testCase := range tests {
-		testCase := testCase
 		t.Run(testCase.name, func(t *testing.T) {
 			t.Parallel()
 			assembly := newServerAssemblyFixture(
@@ -311,7 +310,6 @@ func TestServerAssemblyRejectsDivergentListenerFacts(t *testing.T) {
 		},
 	}
 	for _, testCase := range tests {
-		testCase := testCase
 		t.Run(testCase.name, func(t *testing.T) {
 			t.Parallel()
 			listen := &serverTestListen{listener: testCase.listener}
@@ -427,7 +425,6 @@ func TestServerRuntimeContainsServeFailures(t *testing.T) {
 		},
 	}
 	for _, testCase := range tests {
-		testCase := testCase
 		t.Run(testCase.name, func(t *testing.T) {
 			t.Parallel()
 			fatal := &serverTestFatal{}
@@ -503,14 +500,13 @@ func TestServerRuntimeContainsStickyListenerCloseFailures(t *testing.T) {
 		},
 	}
 	for _, testCase := range tests {
-		testCase := testCase
 		t.Run(testCase.name, func(t *testing.T) {
 			t.Parallel()
 			raw := newServerTestListener(nil)
 			raw.closeErr = testCase.closeErr
 			raw.closePanic = testCase.closePanic
 			runtime := bindServerRuntimeFixture(t, raw, &serverTestFatal{})
-			for attempt := 0; attempt < 2; attempt++ {
+			for range 2 {
 				err := runtime.CloseListener()
 				if !IsServerRuntimeError(err) ||
 					stringsContainPrivateMarker(fmt.Sprint(err)) {
@@ -783,7 +779,6 @@ func TestServerRuntimeFreezesHostileContexts(t *testing.T) {
 		},
 	}
 	for _, testCase := range tests {
-		testCase := testCase
 		t.Run(testCase.name, func(t *testing.T) {
 			t.Parallel()
 			bounded, cancel, err := newBoundedServerContext(

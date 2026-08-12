@@ -1,0 +1,145 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    if: github.event.release.draft == false && github.event.release.prerelease == false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    outputs:
+      version: ${{ steps.metadata.outputs.version }}
+      revision: ${{ steps.metadata.outputs.revision }}
+      source_date_epoch: ${{ steps.metadata.outputs.source_date_epoch }}
+      created: ${{ steps.metadata.outputs.created }}
+    env:
+      GOFLAGS: -mod=vendor
+    steps:
+      - name: Check out release tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.release.tag_name }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Validate stable annotated tag and commit
+        id: metadata
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          if [[ ! "$RELEASE_TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            exit 1
+          fi
+          test "$(git cat-file -t "refs/tags/$RELEASE_TAG")" = tag
+          revision="$(git rev-parse "$RELEASE_TAG^{commit}")"
+          test "$revision" = "$(git rev-parse HEAD)"
+          test -z "$(git status --porcelain --untracked-files=all)"
+          source_date_epoch="$(git show -s --format=%ct HEAD)"
+          created="$(date -u -d "@$source_date_epoch" +%Y-%m-%dT%H:%M:%SZ)"
+          {
+            printf 'version=%s\n' "$RELEASE_TAG"
+            printf 'revision=%s\n' "$revision"
+            printf 'source_date_epoch=%s\n' "$source_date_epoch"
+            printf 'created=%s\n' "$created"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.26.5"
+
+      - name: Install release quality tools
+        run: scripts/install-ci-tools.sh actionlint golangci-lint govulncheck
+
+      - name: Run release guardrails
+        run: make release-guardrails
+
+      - name: Check source cleanliness
+        run: |
+          git diff --exit-code
+          test -z "$(git status --porcelain --untracked-files=all)"
+
+  publish:
+    needs: quality
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        product: [dkim2d, dkim2-milter, dkim2ctl]
+    steps:
+      - name: Check out release tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.quality.outputs.version }}
+          persist-credentials: false
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
+
+      - name: Log in to GHCR
+        uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2 # v4.0.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve image repository
+        id: image
+        env:
+          PRODUCT: ${{ matrix.product }}
+        run: printf 'repository=ghcr.io/%s/%s\n' "$GITHUB_REPOSITORY_OWNER" "$PRODUCT" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push image
+        id: build
+        uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294 # v7.0.0
+        with:
+          context: .
+          file: build/container/Dockerfile
+          target: ${{ matrix.product }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.image.outputs.repository }}:${{ needs.quality.outputs.version }}
+          sbom: true
+          provenance: mode=max
+          build-args: |
+            VERSION=${{ needs.quality.outputs.version }}
+            REVISION=${{ needs.quality.outputs.revision }}
+            SOURCE_DATE_EPOCH=${{ needs.quality.outputs.source_date_epoch }}
+            CREATED=${{ needs.quality.outputs.created }}
+            DIRTY=clean
+
+      - name: Attest exact image digest
+        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
+        with:
+          subject-name: ${{ steps.image.outputs.repository }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+
+      - name: Install pinned vulnerability scanner
+        run: scripts/fetch-image-tools.sh
+
+      - name: Scan exact image digest
+        env:
+          IMAGE: ${{ steps.image.outputs.repository }}@${{ steps.build.outputs.digest }}
+        run: >-
+          .artifacts/image-tools/trivy image --scanners vuln
+          --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 "$IMAGE"
+
+      - name: Smoke-test exact image digest
+        env:
+          IMAGE: ${{ steps.image.outputs.repository }}@${{ steps.build.outputs.digest }}
+        run: >-
+          docker run --rm --read-only --cap-drop ALL
+          --security-opt no-new-privileges --tmpfs /tmp:rw,noexec,nosuid,size=16m
+          "$IMAGE" --help

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"runtime"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -1168,7 +1169,7 @@ func TestLifecycleBlockedRejectDoesNotBlockReadinessOrFatalPublication(t *testin
 	}
 	stopResult := make(chan error, 1)
 	go func() { stopResult <- lifecycle.Stop(context.Background()) }()
-	for attempts := 0; attempts < 10_000; attempts++ {
+	for attempts := range 10_000 {
 		if containsLifecycleStep(order.snapshot(), lifecycleRejectStep) {
 			break
 		}
@@ -1747,10 +1748,5 @@ func equalLifecycleOrder(left, right []string) bool {
 
 // containsLifecycleStep reports whether one exact step is present.
 func containsLifecycleStep(steps []string, want string) bool {
-	for _, step := range steps {
-		if step == want {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(steps, want)
 }

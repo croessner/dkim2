@@ -260,9 +260,7 @@ func TestRestrictedReleaseConcurrentConsumptionHasOneWinner(t *testing.T) {
 	var wait sync.WaitGroup
 	start := make(chan struct{})
 	for range workers {
-		wait.Add(1)
-		go func() {
-			defer wait.Done()
+		wait.Go(func() {
 			<-start
 			err := reservation.ConsumeRestrictedRelease(context.Background(), proof)
 			if err == nil {
@@ -270,7 +268,7 @@ func TestRestrictedReleaseConcurrentConsumptionHasOneWinner(t *testing.T) {
 			} else if IsErrorCode(err, ErrorState) {
 				failures.Add(1)
 			}
-		}()
+		})
 	}
 	close(start)
 	wait.Wait()
@@ -423,7 +421,7 @@ func mustDualReceiverEntry(
 
 // TestRestrictedReleaseTypesAreRedactedAndHaveNoGenericSerialization proves proof privacy.
 func TestRestrictedReleaseTypesAreRedactedAndHaveNoGenericSerialization(t *testing.T) {
-	proofType := reflect.TypeOf(RestrictedReleaseProof{})
+	proofType := reflect.TypeFor[RestrictedReleaseProof]()
 	for _, method := range []string{"Bytes", "Marshal", "MarshalBinary", "MarshalText", "AppendText"} {
 		if _, ok := proofType.MethodByName(method); ok {
 			t.Fatalf("RestrictedReleaseProof exposes %s", method)

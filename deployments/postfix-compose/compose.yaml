@@ -19,7 +19,7 @@ x-daemon: &daemon
   <<: *product-security
   build:
     context: ../..
-    dockerfile: build/container/Containerfile
+    dockerfile: build/container/Dockerfile
     target: dkim2d
     args:
       VERSION: ${DKIM2_VERSION:-0.0.0-dev}
@@ -48,7 +48,7 @@ x-milter: &milter
   user: "2000:103"
   build:
     context: ../..
-    dockerfile: build/container/Containerfile
+    dockerfile: build/container/Dockerfile
     target: dkim2-milter
     args:
       VERSION: ${DKIM2_VERSION:-0.0.0-dev}

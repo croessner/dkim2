@@ -153,9 +153,7 @@ func TestRegistryConcurrentUpdatesAndGatherAreRaceSafe(t *testing.T) {
 	registry := NewRegistry()
 	var workers sync.WaitGroup
 	for range 32 {
-		workers.Add(1)
-		go func() {
-			defer workers.Done()
+		workers.Go(func() {
 			for range 100 {
 				registry.RecordConnectionAdmission("accepted")
 				registry.RecordMessage(
@@ -166,7 +164,7 @@ func TestRegistryConcurrentUpdatesAndGatherAreRaceSafe(t *testing.T) {
 				registry.RecordAction("accept", valueSuccess)
 				_, _ = registry.Gather()
 			}
-		}()
+		})
 	}
 	workers.Wait()
 	if _, err := registry.Gather(); err != nil {

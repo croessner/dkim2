@@ -397,7 +397,7 @@ func TestDNSDraft04CurrentIntegrityFailureCannotPass(t *testing.T) {
 
 // TestDNSDraft04PublicQueryHasNoLookupMethodSurface verifies no q= API was invented.
 func TestDNSDraft04PublicQueryHasNoLookupMethodSurface(t *testing.T) {
-	typeOfQuery := reflect.TypeOf(PublicKeyQuery{})
+	typeOfQuery := reflect.TypeFor[PublicKeyQuery]()
 	for _, name := range []string{"Q", "QueryMethod", "LookupMethod"} {
 		if _, ok := typeOfQuery.MethodByName(name); ok {
 			t.Fatalf("unexpected public lookup method %q", name)

@@ -443,9 +443,7 @@ func TestGeneratorGenerateIsConcurrentSafe(t *testing.T) {
 	}
 	var wait sync.WaitGroup
 	for range 8 {
-		wait.Add(1)
-		go func() {
-			defer wait.Done()
+		wait.Go(func() {
 			for range 20 {
 				generation, usage, err := generator.Generate(request)
 				if err != nil || !generation.Valid() || !usage.Valid() || usage != baselineUsage ||
@@ -461,7 +459,7 @@ func TestGeneratorGenerateIsConcurrentSafe(t *testing.T) {
 					return
 				}
 			}
-		}()
+		})
 	}
 	wait.Wait()
 }

@@ -337,7 +337,7 @@ func validateRESP2InfoLineLengths(payload []byte) error {
 		return nil
 	}
 	start := 0
-	for index := 0; index < len(payload); index++ {
+	for index := range payload {
 		switch payload[index] {
 		case '\n':
 			if index == 0 || payload[index-1] != '\r' ||

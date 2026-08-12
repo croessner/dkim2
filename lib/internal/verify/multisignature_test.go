@@ -404,13 +404,14 @@ func signatureDigestForTarget(t *testing.T, message rawmsg.Message, target uint6
 
 // rawWithSignatureFields renders a synthetic message with supplied signature field bodies.
 func rawWithSignatureFields(headerDigest string, bodyDigest string, signatureFields []string) string {
-	raw := baseVerificationHeaders() +
-		"Message-Instance: m=1; h=sha256:" + headerDigest + ":" + bodyDigest + ";\r\n"
+	var raw strings.Builder
+	raw.WriteString(baseVerificationHeaders() +
+		"Message-Instance: m=1; h=sha256:" + headerDigest + ":" + bodyDigest + ";\r\n")
 	for _, field := range signatureFields {
-		raw += "DKIM2-Signature: " + field + "\r\n"
+		raw.WriteString("DKIM2-Signature: " + field + "\r\n")
 	}
 
-	return raw + "\r\n" + verificationBody()
+	return raw.String() + "\r\n" + verificationBody()
 }
 
 // signatureField renders a bounded synthetic DKIM2-Signature value.

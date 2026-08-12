@@ -195,7 +195,7 @@ func TestLibraryModuleExcludesValkeyAndRedisFamilies(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, field := range strings.Fields(string(data)) {
+	for field := range strings.FieldsSeq(string(data)) {
 		switch field {
 		case "github.com/valkey-io/valkey-go", "github.com/redis/go-redis/v9":
 			t.Fatalf("lib/go.mod contains command-owned dependency %q", field)

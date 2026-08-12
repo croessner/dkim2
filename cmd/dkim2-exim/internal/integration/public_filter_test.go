@@ -364,7 +364,7 @@ func TestPublicExecutablePartialDisconnectIsDeterministic(t *testing.T) {
 	)
 	input = append(input, '\n')
 	const attempts = 10
-	for attempt := 0; attempt < attempts; attempt++ {
+	for range attempts {
 		command := publicSignFilterCommand(t, configPath, input)
 		var stderr bytes.Buffer
 		command.Stderr = &stderr
@@ -460,7 +460,7 @@ func writeSignConfig(t *testing.T, endpoint string) string {
 		t.Fatal("public capability creation failed")
 	}
 	clear(capability)
-	encoded := []byte(fmt.Sprintf("version: dkim2-exim-config-v1\ndaemon:\n  endpoint: %s\n  request_timeout: 10s\n  sign_capability_file: %s\nsigning:\n  tenant: %s\n  domain: example.test\n", endpoint, capabilityPath, publicTenant))
+	encoded := fmt.Appendf(nil, "version: dkim2-exim-config-v1\ndaemon:\n  endpoint: %s\n  request_timeout: 10s\n  sign_capability_file: %s\nsigning:\n  tenant: %s\n  domain: example.test\n", endpoint, capabilityPath, publicTenant)
 	configPath := filepath.Join(root, "sign.yaml")
 	if err := os.WriteFile(configPath, encoded, 0o600); err != nil {
 		clear(encoded)
@@ -565,7 +565,7 @@ func writeReviseConfig(t *testing.T, endpoint string) (string, string) {
 		_ = unix.Close(writerLock)
 	})
 	clear(key)
-	encodedConfig := []byte(fmt.Sprintf("version: dkim2-exim-config-v1\ndaemon:\n  endpoint: %s\n  request_timeout: 10s\n  revise_capability_file: %s\nsigning:\n  tenant: %s\n  domain: example.test\nevidence:\n  enabled: true\n  root: %s\n  key_file: %s\n  readiness_file: %s\n", endpoint, capabilityPath, publicTenant, evidenceRoot, keyPath, readinessPath))
+	encodedConfig := fmt.Appendf(nil, "version: dkim2-exim-config-v1\ndaemon:\n  endpoint: %s\n  request_timeout: 10s\n  revise_capability_file: %s\nsigning:\n  tenant: %s\n  domain: example.test\nevidence:\n  enabled: true\n  root: %s\n  key_file: %s\n  readiness_file: %s\n", endpoint, capabilityPath, publicTenant, evidenceRoot, keyPath, readinessPath)
 	configPath := filepath.Join(configRoot, "revise.yaml")
 	if err = os.WriteFile(configPath, encodedConfig, 0o600); err != nil {
 		clear(encodedConfig)

@@ -179,7 +179,7 @@ for product in dkim2d dkim2-milter dkim2ctl; do
   if test "$state" = absent; then
     docker buildx build \
       --builder "$builder" \
-      --file "$context/build/container/Containerfile" \
+      --file "$context/build/container/Dockerfile" \
       --target "$product" \
       --platform linux/amd64,linux/arm64 \
       --network none \

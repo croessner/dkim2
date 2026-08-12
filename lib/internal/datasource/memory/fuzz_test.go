@@ -14,7 +14,7 @@ const fuzzMappingMarkerBytes = 8
 // FuzzSnapshotMapping proves immutable snapshot construction closes
 // ambiguity, dangling references, reused handles, and configured bounds.
 func FuzzSnapshotMapping(f *testing.F) {
-	for scenario := uint8(0); scenario < 9; scenario++ {
+	for scenario := range uint8(9) {
 		f.Add([]byte{scenario}, scenario, scenario)
 	}
 

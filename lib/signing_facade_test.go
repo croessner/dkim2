@@ -461,13 +461,13 @@ func TestPublicOriginatorSigningAlgorithmsAndImmutableBytes(t *testing.T) {
 // TestPublicInvalidTransportFailsBeforeCallbacksAndRestrictedAPIHasNoBytes
 // proves closed transport preflight and the local-only API shape.
 func TestPublicInvalidTransportFailsBeforeCallbacksAndRestrictedAPIHasNoBytes(t *testing.T) {
-	if _, ok := reflect.TypeOf(LocalOnlySignedMessage{}).MethodByName("Bytes"); ok {
+	if _, ok := reflect.TypeFor[LocalOnlySignedMessage]().MethodByName("Bytes"); ok {
 		t.Fatal("LocalOnlySignedMessage exposes Bytes")
 	}
-	if _, ok := reflect.TypeOf(LocalOnlySignedMessage{}).MethodByName("MarshalText"); ok {
+	if _, ok := reflect.TypeFor[LocalOnlySignedMessage]().MethodByName("MarshalText"); ok {
 		t.Fatal("LocalOnlySignedMessage exposes MarshalText")
 	}
-	if _, ok := reflect.TypeOf(SigningResult{}).MethodByName("Bytes"); ok {
+	if _, ok := reflect.TypeFor[SigningResult]().MethodByName("Bytes"); ok {
 		t.Fatal("SigningResult exposes generic Bytes")
 	}
 
@@ -1297,8 +1297,8 @@ func TestPublicCallbackBridgesRejectInvalidAndTypedNilState(t *testing.T) {
 
 // TestPublicSigningTypesExcludePrivateAndOpenMaterial locks the public facade shape.
 func TestPublicSigningTypesExcludePrivateAndOpenMaterial(t *testing.T) {
-	privateKeyType := reflect.TypeOf(rsa.PrivateKey{})
-	cryptoSignerType := reflect.TypeOf((*crypto.Signer)(nil)).Elem()
+	privateKeyType := reflect.TypeFor[rsa.PrivateKey]()
+	cryptoSignerType := reflect.TypeFor[crypto.Signer]()
 	for _, value := range []any{
 		PrivateKeyHandle{}, RSASigningCredential{}, Ed25519SigningCredential{},
 		SigningProfile{}, PrivateKeySignRequest{}, PrivateKeySignResult{},
@@ -1333,7 +1333,7 @@ func TestPublicBccFanoutKeepsCopiesIsolated(t *testing.T) {
 	for index, recipient := range recipients {
 		entries[index], err = NewOriginatorRouteEntry(
 			source, []byte("<alice@example.test>"), [][]byte{recipient},
-			RouteDisclosureBccSeparated, []byte(fmt.Sprintf("bcc-%d", index)),
+			RouteDisclosureBccSeparated, fmt.Appendf(nil, "bcc-%d", index),
 		)
 		if err != nil {
 			t.Fatalf("NewOriginatorRouteEntry(%d) error = %v", index, err)

@@ -142,17 +142,17 @@ func TestZeroPublicKeyResultIsNotSuccess(t *testing.T) {
 
 // TestPublicProviderTypesContainNoOpenEndedMaterial verifies the result model has no interface slot.
 func TestPublicProviderTypesContainNoOpenEndedMaterial(t *testing.T) {
-	typeOfResult := reflect.TypeOf(PublicKeyResult{})
-	for index := 0; index < typeOfResult.NumField(); index++ {
-		field := typeOfResult.Field(index)
+	typeOfResult := reflect.TypeFor[PublicKeyResult]()
+	for field := range typeOfResult.Fields() {
+		field := field
 		if field.Type.Kind() == reflect.Interface {
 			t.Fatalf("PublicKeyResult field %q is open-ended interface material", field.Name)
 		}
 	}
 
-	providerType := reflect.TypeOf((*PublicKeyProvider)(nil)).Elem()
+	providerType := reflect.TypeFor[PublicKeyProvider]()
 	method, ok := providerType.MethodByName("LookupPublicKey")
-	if !ok || method.Type.NumIn() != 2 || method.Type.In(0) != reflect.TypeOf((*context.Context)(nil)).Elem() || method.Type.In(1) != reflect.TypeOf(PublicKeyQuery{}) {
+	if !ok || method.Type.NumIn() != 2 || method.Type.In(0) != reflect.TypeFor[context.Context]() || method.Type.In(1) != reflect.TypeFor[PublicKeyQuery]() {
 		t.Fatal("PublicKeyProvider has unexpected lookup signature")
 	}
 }

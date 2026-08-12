@@ -175,7 +175,7 @@ case "$*" in
     if test -n "$materialize"; then
       mkdir -p "$materialize/build/container"
       printf '%s\n' '{"images":[{"name":"buildkit","reference":"example.invalid/buildkit","digest":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"}]}' >"$materialize/build/container/build-inputs.json"
-      : >"$materialize/build/container/Containerfile"
+      : >"$materialize/build/container/Dockerfile"
     fi
     printf '%s\n' '{"schema":"dkim2-container-build-metadata-v1","version":"0.0.0-dev","revision":"` + testDevRevision + `","source_date_epoch":1,"created":"1970-01-01T00:00:01Z","dirty":"clean","candidate_snapshot_sha256":"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"}'
     ;;

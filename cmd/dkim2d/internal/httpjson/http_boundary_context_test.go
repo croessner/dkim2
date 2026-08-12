@@ -644,7 +644,6 @@ func TestHTTPBoundaryTrackedPostMutationTerminalContextPreservesHTTP200(t *testi
 		},
 	}
 	for _, testCase := range tests {
-		testCase := testCase
 		t.Run(testCase.name, func(t *testing.T) {
 			cancels := make(chan context.CancelFunc, 1)
 			store := testCase.store(cancels)

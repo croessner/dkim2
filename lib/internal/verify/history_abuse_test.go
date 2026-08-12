@@ -19,7 +19,7 @@ func TestEveryHistoryHardMaximumAcceptsExactAndRejectsOneOver(t *testing.T) {
 	if _, err := exact.normalized(); err != nil {
 		t.Fatalf("exact history maxima rejected: %v", err)
 	}
-	typeOfLimits := reflect.TypeOf(exact)
+	typeOfLimits := reflect.TypeFor[HistoryLimits]()
 	for index := 0; index < typeOfLimits.NumField(); index++ {
 		field := typeOfLimits.Field(index)
 		t.Run(field.Name, func(t *testing.T) {
@@ -79,14 +79,12 @@ func TestHistoryCoordinatorConcurrentReuseIsDeterministic(t *testing.T) {
 	var wait sync.WaitGroup
 	failures := make(chan string, workers)
 	for range workers {
-		wait.Add(1)
-		go func() {
-			defer wait.Done()
+		wait.Go(func() {
 			walk, walkErr := coordinator.Walk(context.Background(), historyPassResult(3), collection, state)
 			if walkErr != nil || !walk.Valid() || walk.Coverage() != want.Coverage() || walk.StopReason() != want.StopReason() || walk.Usage() != want.Usage() || len(walk.Transitions()) != len(want.Transitions()) {
 				failures <- "walk"
 			}
-		}()
+		})
 	}
 	wait.Wait()
 	close(failures)

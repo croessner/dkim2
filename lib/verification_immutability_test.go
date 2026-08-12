@@ -81,14 +81,12 @@ func TestPublicVerifierConcurrentReuseWithFrozenKeys(t *testing.T) {
 	request := NewVerifyRequest(decodeGoldenBytes(t, vector.Raw), decodeGoldenBytes(t, vector.Reverse), decodeGoldenPaths(t, vector.Forward))
 	var group sync.WaitGroup
 	for range 32 {
-		group.Add(1)
-		go func() {
-			defer group.Done()
+		group.Go(func() {
 			result, verifyErr := verifier.Verify(context.Background(), request)
 			if verifyErr != nil || result.State() != ResultStatePASS {
 				t.Errorf("concurrent verification failed")
 			}
-		}()
+		})
 	}
 	group.Wait()
 }

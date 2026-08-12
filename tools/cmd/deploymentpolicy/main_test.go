@@ -287,7 +287,7 @@ func validRouteProject(root string) composeProject {
 	return composeProject{Services: map[string]composeService{
 		"daemon-inbound": {
 			Build: &composeBuild{
-				Context: root, Dockerfile: "build/container/Containerfile",
+				Context: root, Dockerfile: "build/container/Dockerfile",
 				Arguments: arguments, Target: "dkim2d",
 			},
 			Command: []string{"serve", "--config", "/etc/dkim2d/config.yaml"},
@@ -312,7 +312,7 @@ func validRouteProject(root string) composeProject {
 		},
 		"milter-inbound": {
 			Build: &composeBuild{
-				Context: root, Dockerfile: "build/container/Containerfile",
+				Context: root, Dockerfile: "build/container/Dockerfile",
 				Arguments: arguments, Target: "dkim2-milter",
 			},
 			Command: []string{"serve", "--config", "/etc/dkim2-milter/inbound.yaml"},

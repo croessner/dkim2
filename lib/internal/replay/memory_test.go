@@ -364,9 +364,7 @@ func TestMemoryStoreConcurrentSameKeyHasOneWinner(t *testing.T) {
 	start := make(chan struct{})
 	var wait sync.WaitGroup
 	for range callers {
-		wait.Add(1)
-		go func() {
-			defer wait.Done()
+		wait.Go(func() {
 			<-start
 			check, err := store.CheckAndRemember(context.Background(), testReplayKey(1), retention)
 			if err != nil {
@@ -381,7 +379,7 @@ func TestMemoryStoreConcurrentSameKeyHasOneWinner(t *testing.T) {
 			default:
 				t.Errorf("concurrent check = %s", check)
 			}
-		}()
+		})
 	}
 	close(start)
 	wait.Wait()

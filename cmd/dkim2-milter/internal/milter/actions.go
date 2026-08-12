@@ -318,7 +318,7 @@ func validAuthservToken(value string) bool {
 	if value == "" || value != strings.ToLower(value) || len(value) > 253 {
 		return false
 	}
-	for _, part := range strings.Split(value, ".") {
+	for part := range strings.SplitSeq(value, ".") {
 		if part == "" || len(part) > 63 || strings.HasPrefix(part, "-") ||
 			strings.HasSuffix(part, "-") {
 			return false

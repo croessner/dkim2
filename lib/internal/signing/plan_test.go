@@ -300,14 +300,12 @@ func TestUnsignedOperationPlanIsImmutableDeterministicConcurrentAndRedacted(t *t
 
 	var wait sync.WaitGroup
 	for range 8 {
-		wait.Add(1)
-		go func() {
-			defer wait.Done()
+		wait.Go(func() {
 			got, planErr := coordinator.PlanExisting(context.Background(), request)
 			if planErr != nil || !bytes.Equal(got.RenderedInstance(), want) || got.CurrentHashes() != baseline.CurrentHashes() {
 				t.Errorf("concurrent deterministic plan failed code=%s", testErrorCode(planErr))
 			}
-		}()
+		})
 	}
 	wait.Wait()
 }

@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"encoding/json"
+	"maps"
 	"strings"
 	"testing"
 
@@ -53,9 +54,7 @@ func TestOperationAdmissionRejectsAbsentAndZeroValueMembers(t *testing.T) {
 		"actions", "api_version", "disposition", "draft", "operation", "result",
 	} {
 		copyDocument := make(map[string]any, len(document))
-		for key, item := range document {
-			copyDocument[key] = item
-		}
+		maps.Copy(copyDocument, document)
 		delete(copyDocument, member)
 		mutated, marshalErr := json.Marshal(copyDocument)
 		if marshalErr != nil {

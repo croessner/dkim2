@@ -792,16 +792,16 @@ func requiredSchema(t *testing.T, document *openapi3.T, name string) *openapi3.S
 func assertProtectedBindings(t *testing.T) {
 	t.Helper()
 
-	protectedType := reflect.TypeOf(wire.ProtectedString{})
-	messageField, ok := reflect.TypeOf(MessageInput{}).FieldByName("RawRfc5322Base64")
+	protectedType := reflect.TypeFor[wire.ProtectedString]()
+	messageField, ok := reflect.TypeFor[MessageInput]().FieldByName("RawRfc5322Base64")
 	if !ok || messageField.Type != protectedType {
 		t.Fatal("raw message field is not wire.ProtectedString")
 	}
-	mailField, ok := reflect.TypeOf(SMTPInput{}).FieldByName("MailFrom")
+	mailField, ok := reflect.TypeFor[SMTPInput]().FieldByName("MailFrom")
 	if !ok || mailField.Type != protectedType {
 		t.Fatal("MAIL FROM field is not wire.ProtectedString")
 	}
-	recipientsField, ok := reflect.TypeOf(SMTPInput{}).FieldByName("RcptTo")
+	recipientsField, ok := reflect.TypeFor[SMTPInput]().FieldByName("RcptTo")
 	if !ok || recipientsField.Type.Kind() != reflect.Slice ||
 		recipientsField.Type.Elem() != protectedType {
 		t.Fatal("RCPT TO field is not []wire.ProtectedString")

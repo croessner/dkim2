@@ -983,7 +983,7 @@ func reconstructFoldedValue(name, value []byte) ([]byte, bool) {
 		return nil, false
 	}
 	output := make([]byte, 0, length)
-	for index := 0; index < len(value); index++ {
+	for index := range value {
 		if value[index] == '\n' && (index == 0 || value[index-1] != '\r') {
 			output = append(output, '\r')
 		}
@@ -1155,12 +1155,12 @@ func validESMTPArgument(argument []byte) bool {
 	if len(argument) == 0 || len(argument) > 512 {
 		return false
 	}
-	separator := bytes.IndexByte(argument, '=')
+	before, after, ok := bytes.Cut(argument, []byte{'='})
 	keyword := argument
 	value := []byte(nil)
-	if separator >= 0 {
-		keyword = argument[:separator]
-		value = argument[separator+1:]
+	if ok {
+		keyword = before
+		value = after
 		if len(value) == 0 {
 			return false
 		}
@@ -1176,7 +1176,7 @@ func validESMTPArgument(argument []byte) bool {
 			return false
 		}
 	}
-	if asciiEqualFold(keyword, "SMTPUTF8") && separator >= 0 {
+	if asciiEqualFold(keyword, "SMTPUTF8") && ok {
 		return false
 	}
 	for index := 0; index < len(value); {
@@ -1511,7 +1511,7 @@ func validAddressLiteral(domain []byte) bool {
 	if !isASCIIAlphaNumeric(content[0]) || !isASCIIAlphaNumeric(content[separator-1]) {
 		return false
 	}
-	for index := 0; index < separator; index++ {
+	for index := range separator {
 		if !isASCIIAlphaNumeric(content[index]) && content[index] != '-' {
 			return false
 		}
@@ -1537,11 +1537,11 @@ func isASCIIAlpha(value byte) bool {
 
 // firstNULField returns the exact first callback field.
 func firstNULField(payload []byte) []byte {
-	index := bytes.IndexByte(payload, 0)
-	if index < 0 {
+	before, _, ok := bytes.Cut(payload, []byte{0})
+	if !ok {
 		return nil
 	}
-	return payload[:index]
+	return before
 }
 
 // asciiBytes reports whether a path is within the signing engine's ASCII baseline.

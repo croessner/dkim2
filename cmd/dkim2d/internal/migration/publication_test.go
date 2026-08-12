@@ -142,9 +142,7 @@ func TestConcurrentPublicationAllowsAtMostOneExpectedFenceWinner(t *testing.T) {
 	var failures atomic.Int32
 	var wait sync.WaitGroup
 	for range 2 {
-		wait.Add(1)
-		go func() {
-			defer wait.Done()
+		wait.Go(func() {
 			report, err := Apply(
 				context.Background(), records, plan, imported, publisher, "development",
 			)
@@ -153,7 +151,7 @@ func TestConcurrentPublicationAllowsAtMostOneExpectedFenceWinner(t *testing.T) {
 			} else {
 				failures.Add(1)
 			}
-		}()
+		})
 	}
 	wait.Wait()
 	if successes.Load() != 1 || publisher.current != 2 {
@@ -171,9 +169,7 @@ func TestConcurrentBootstrapPublicationAllowsExactlyOneWinner(t *testing.T) {
 	var failures atomic.Int32
 	var wait sync.WaitGroup
 	for range 2 {
-		wait.Add(1)
-		go func() {
-			defer wait.Done()
+		wait.Go(func() {
 			report, err := Apply(
 				context.Background(), records, plan, imported, publisher, "development",
 			)
@@ -182,7 +178,7 @@ func TestConcurrentBootstrapPublicationAllowsExactlyOneWinner(t *testing.T) {
 			} else {
 				failures.Add(1)
 			}
-		}()
+		})
 	}
 	wait.Wait()
 	if successes.Load() != 1 || failures.Load() != 1 || publisher.current != 2 {

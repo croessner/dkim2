@@ -184,10 +184,7 @@ func fuzzLibraryResults(f *testing.F) []publicPolicyFuzzSeed {
 // boundedPublicFuzzIndex maps arbitrary signed input into a nonnegative closed index.
 func boundedPublicFuzzIndex(value, size int) int {
 	if value < 0 {
-		value = -value
-		if value < 0 {
-			value = 0
-		}
+		value = max(-value, 0)
 	}
 	return value % size
 }

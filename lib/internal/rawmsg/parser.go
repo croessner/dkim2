@@ -247,11 +247,11 @@ func buildHeaderField(index int, headerBytes []byte, start int, end int, options
 	}
 
 	original := headerBytes[start:end]
-	firstLineEnd := bytes.Index(original, crlf)
-	if firstLineEnd < 0 {
+	before, _, ok := bytes.Cut(original, crlf)
+	if !ok {
 		return HeaderField{}, malformedHeaderError(start, 0, 0)
 	}
-	firstLine := original[:firstLineEnd]
+	firstLine := before
 	colon := bytes.IndexByte(firstLine, ':')
 	if colon < 0 {
 		return HeaderField{}, malformedHeaderError(start, 0, 1)

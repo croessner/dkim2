@@ -605,7 +605,7 @@ func TestAdministratorRejectsMalformedCurrentPointerMetadata(t *testing.T) {
 		},
 		{
 			name: "v3 pointer must equal root", version: datasourceadmin.SchemaVersionV3,
-			operation: operationPointer(testOperationOne), rootDigest: nonzeroDigest(2),
+			operation: new(testOperationOne), rootDigest: nonzeroDigest(2),
 			pointer: nonzeroDigest(3),
 		},
 	} {
@@ -1084,9 +1084,6 @@ func nonzeroDigest(marker byte) []byte {
 	digest[0] = marker
 	return digest
 }
-
-// operationPointer returns one detached operation pointer for test metadata.
-func operationPointer(operation string) *string { return &operation }
 
 // cloneAdministrationMemory deep-copies one synthetic backend transaction state.
 func cloneAdministrationMemory(source *administrationMemory) *administrationMemory {

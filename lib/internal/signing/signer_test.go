@@ -423,8 +423,8 @@ func rebindOriginHarnessMultiplicity(t *testing.T, harness signerHarness, copies
 	for index := range entries {
 		entries[index], err = routeplan.NewEntry(
 			source, routeplan.PurposeOrigin, []byte("<sender@signer.example.test>"),
-			[][]byte{[]byte(fmt.Sprintf("<recipient-%d@example.test>", index))},
-			routeplan.DisclosureSingle, []byte(fmt.Sprintf("multiplicity-route-%d", index)), nil,
+			[][]byte{fmt.Appendf(nil, "<recipient-%d@example.test>", index)},
+			routeplan.DisclosureSingle, fmt.Appendf(nil, "multiplicity-route-%d", index), nil,
 		)
 		if err != nil {
 			t.Fatalf("routeplan.NewEntry(%d) error = %v", index, err)
@@ -1387,13 +1387,11 @@ func TestCoordinatorConcurrentSameTicketReuseHasOneAtomicWinner(t *testing.T) {
 	results := make(chan result, 2)
 	var wait sync.WaitGroup
 	for range 2 {
-		wait.Add(1)
-		go func() {
-			defer wait.Done()
+		wait.Go(func() {
 			<-start
 			completed, recovery, err := coordinator.CompleteField(context.Background(), harness.request)
 			results <- result{completed: completed, recovery: recovery, err: err}
-		}()
+		})
 	}
 	close(start)
 	wait.Wait()
@@ -1462,17 +1460,14 @@ func TestCoordinatorConcurrentDistinctPlansReuseTheSameServices(t *testing.T) {
 	results := make(chan error, len(requests))
 	var wait sync.WaitGroup
 	for _, request := range requests {
-		request := request
-		wait.Add(1)
-		go func() {
-			defer wait.Done()
+		wait.Go(func() {
 			<-start
 			completed, recovery, completeErr := coordinator.CompleteField(context.Background(), request)
 			if completeErr == nil && (!completed.Valid() || recovery.Valid()) {
 				completeErr = errors.New("successful concurrent operation returned incoherent state")
 			}
 			results <- completeErr
-		}()
+		})
 	}
 	close(start)
 	wait.Wait()

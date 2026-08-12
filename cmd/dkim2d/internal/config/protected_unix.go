@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/croessner/dkim2/cmd/dkim2d/internal/signingstore"
@@ -915,12 +916,7 @@ func descriptorIdentity(metadata descriptorMetadata) [2]uint64 {
 // descriptorAncestryContains reports whether one descriptor is any traversed ancestor.
 func descriptorAncestryContains(ancestry [][2]uint64, metadata descriptorMetadata) bool {
 	expected := descriptorIdentity(metadata)
-	for _, identity := range ancestry {
-		if identity == expected {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(ancestry, expected)
 }
 
 // close releases one descriptor at most once and never retries close.

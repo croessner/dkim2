@@ -515,8 +515,8 @@ func validTLSServerName(name string) bool {
 	if strings.HasSuffix(name, ".") {
 		return false
 	}
-	labels := strings.Split(name, ".")
-	for _, label := range labels {
+	labels := strings.SplitSeq(name, ".")
+	for label := range labels {
 		if len(label) < 1 || len(label) > 63 ||
 			!asciiLetterOrDigit(label[0]) ||
 			!asciiLetterOrDigit(label[len(label)-1]) {

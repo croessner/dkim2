@@ -252,7 +252,7 @@ func exactModuleTokenCount(content, modulePath string) int {
 	count := 0
 	scanner := bufio.NewScanner(strings.NewReader(content))
 	for scanner.Scan() {
-		for _, field := range strings.Fields(scanner.Text()) {
+		for field := range strings.FieldsSeq(scanner.Text()) {
 			if field == modulePath {
 				count++
 			}

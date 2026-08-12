@@ -125,7 +125,6 @@ func TestPreflightYAMLRejectsForbiddenStructures(t *testing.T) {
 	}
 
 	for name, document := range tests {
-		document := document
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			if _, err := preflightYAML([]byte(document)); CodeOf(err) != CodeInvalidYAML {
@@ -217,7 +216,6 @@ func TestExpandPlaceholders(t *testing.T) {
 		{name: "maximum result", input: "${MAX}", want: environment["MAX"]},
 	}
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 			got, err := expandPlaceholders(test.input, lookup)
@@ -241,7 +239,6 @@ func TestExpandPlaceholders(t *testing.T) {
 		"${Å}",
 	}
 	for _, input := range invalid {
-		input := input
 		t.Run("invalid_"+input, func(t *testing.T) {
 			t.Parallel()
 			if _, err := expandPlaceholders(input, lookup); CodeOf(err) != CodeInvalidPlaceholder {

@@ -175,149 +175,149 @@ func TestReplayFacadePreservesExplodedAndEveryRecipient(t *testing.T) {
 
 // TestReplayFacadeContractSurfaceIsExact verifies aliases expose no extra behavior.
 func TestReplayFacadeContractSurfaceIsExact(t *testing.T) {
-	storeType := reflect.TypeOf((*ReplayStore)(nil)).Elem()
-	managedType := reflect.TypeOf((*ManagedReplayStore)(nil)).Elem()
+	storeType := reflect.TypeFor[ReplayStore]()
+	managedType := reflect.TypeFor[ManagedReplayStore]()
 	assertExactReplayMethods(t, storeType, []string{replayMethodCheckAndRemember})
 	assertExactReplayMethods(t, managedType, []string{replayMethodCheckAndRemember, replayMethodClose, replayMethodState})
-	assertExactReplayMethods(t, reflect.TypeOf(ReplayCheck(0)), []string{
+	assertExactReplayMethods(t, reflect.TypeFor[ReplayCheck](), []string{
 		replayMethodFormat, replayMethodGoString, replayMethodKnown, replayMethodMarshalJSON, replayMethodMarshalText, replayMethodString,
 	})
-	assertExactReplayMethods(t, reflect.TypeOf(ReplayStoreState(0)), []string{
+	assertExactReplayMethods(t, reflect.TypeFor[ReplayStoreState](), []string{
 		replayMethodFormat, replayMethodGoString, replayMethodKnown, replayMethodMarshalJSON, replayMethodMarshalText, replayMethodString,
 	})
-	assertExactReplayMethods(t, reflect.TypeOf(ReplayErrorCode("")), []string{
+	assertExactReplayMethods(t, reflect.TypeFor[ReplayErrorCode](), []string{
 		replayMethodFormat, replayMethodGoString, replayMethodKnown, replayMethodMarshalJSON, replayMethodMarshalText, replayMethodString,
 	})
-	assertExactReplayMethods(t, reflect.TypeOf((*ReplayError)(nil)), []string{
+	assertExactReplayMethods(t, reflect.TypeFor[*ReplayError](), []string{
 		"Code", "Error", replayMethodFormat, replayMethodGoString,
 		replayMethodMarshalJSON, replayMethodMarshalText, "Unwrap",
 	})
-	assertExactReplayMethods(t, reflect.TypeOf(ReplayRetention{}), []string{
+	assertExactReplayMethods(t, reflect.TypeFor[ReplayRetention](), []string{
 		"AddTo", "Duration", "Milliseconds", replayMethodValid,
 	})
-	assertExactReplayMethods(t, reflect.TypeOf(ReplayLimits{}), []string{"Validate"})
-	clockType := reflect.TypeOf((*ReplayClock)(nil)).Elem()
+	assertExactReplayMethods(t, reflect.TypeFor[ReplayLimits](), []string{"Validate"})
+	clockType := reflect.TypeFor[ReplayClock]()
 	assertExactReplayMethods(t, clockType, []string{replayMethodNow})
-	assertExactReplayMethods(t, reflect.TypeOf(ReplayClockFunc(nil)), []string{replayMethodNow})
+	assertExactReplayMethods(t, reflect.TypeFor[ReplayClockFunc](), []string{replayMethodNow})
 	assertExactReplayMethodSignature(
 		t,
 		storeType,
 		replayMethodCheckAndRemember,
-		reflect.TypeOf((func(context.Context, ReplayKey, ReplayRetention) (ReplayCheck, error))(nil)),
+		reflect.TypeFor[func(context.Context, ReplayKey, ReplayRetention) (ReplayCheck, error)](),
 	)
 	assertExactReplayMethodSignature(
 		t,
 		managedType,
 		replayMethodClose,
-		reflect.TypeOf((func(context.Context) error)(nil)),
+		reflect.TypeFor[func(context.Context) error](),
 	)
 	assertExactReplayMethodSignature(
 		t,
 		managedType,
 		replayMethodState,
-		reflect.TypeOf((func() ReplayStoreState)(nil)),
+		reflect.TypeFor[func() ReplayStoreState](),
 	)
 	assertExactReplayMethodSignature(
 		t,
 		clockType,
 		replayMethodNow,
-		reflect.TypeOf((func() time.Time)(nil)),
+		reflect.TypeFor[func() time.Time](),
 	)
 	assertExactReplayFunction(
 		t,
-		reflect.TypeOf(ReplayIdentities),
-		reflect.TypeOf((func(VerifyResult) (ReplayIdentitySet, error))(nil)),
+		reflect.TypeFor[func(result VerifyResult) (ReplayIdentitySet, error)](),
+		reflect.TypeFor[func(VerifyResult) (ReplayIdentitySet, error)](),
 	)
 	assertExactReplayFunction(
 		t,
-		reflect.TypeOf(NewReplayError),
-		reflect.TypeOf((func(ReplayErrorCode) error)(nil)),
+		reflect.TypeFor[func(code ReplayErrorCode) error](),
+		reflect.TypeFor[func(ReplayErrorCode) error](),
 	)
 	assertExactReplayFunction(
 		t,
-		reflect.TypeOf(ReplayErrorCodeOf),
-		reflect.TypeOf((func(error) ReplayErrorCode)(nil)),
+		reflect.TypeFor[func(err error) ReplayErrorCode](),
+		reflect.TypeFor[func(error) ReplayErrorCode](),
 	)
 	assertExactReplayFunction(
 		t,
-		reflect.TypeOf(IsReplayError),
-		reflect.TypeOf((func(error) bool)(nil)),
+		reflect.TypeFor[func(err error) bool](),
+		reflect.TypeFor[func(error) bool](),
 	)
 	assertExactReplayFunction(
 		t,
-		reflect.TypeOf(NewReplayRetention),
-		reflect.TypeOf((func(time.Duration) (ReplayRetention, error))(nil)),
+		reflect.TypeFor[func(duration time.Duration) (ReplayRetention, error)](),
+		reflect.TypeFor[func(time.Duration) (ReplayRetention, error)](),
 	)
 	assertExactReplayFunction(
 		t,
-		reflect.TypeOf(DefaultReplayRetention),
-		reflect.TypeOf((func() ReplayRetention)(nil)),
+		reflect.TypeFor[func() ReplayRetention](),
+		reflect.TypeFor[func() ReplayRetention](),
 	)
 	assertExactReplayFunction(
 		t,
-		reflect.TypeOf(NewReplayDeriver),
-		reflect.TypeOf((func([]byte, uint32) (*ReplayDeriver, error))(nil)),
+		reflect.TypeFor[func(secret []byte, epoch uint32) (*ReplayDeriver, error)](),
+		reflect.TypeFor[func([]byte, uint32) (*ReplayDeriver, error)](),
 	)
 	assertExactReplayFunction(
 		t,
-		reflect.TypeOf(NewReplayMemoryStore),
-		reflect.TypeOf((func(ReplayMemoryConfig) (*ReplayMemoryStore, error))(nil)),
+		reflect.TypeFor[func(config ReplayMemoryConfig) (*ReplayMemoryStore, error)](),
+		reflect.TypeFor[func(ReplayMemoryConfig) (*ReplayMemoryStore, error)](),
 	)
 	assertExactReplayFunction(
 		t,
-		reflect.TypeOf(NewReplayDisabledStore),
-		reflect.TypeOf((func() *ReplayDisabledStore)(nil)),
+		reflect.TypeFor[func() *ReplayDisabledStore](),
+		reflect.TypeFor[func() *ReplayDisabledStore](),
 	)
 	assertExactReplayFunction(
 		t,
-		reflect.TypeOf(UseReplayStorageKey),
-		reflect.TypeOf((func(ReplayKey, func(string) error) error)(nil)),
+		reflect.TypeFor[func(key ReplayKey, use func(storageKey string) error) error](),
+		reflect.TypeFor[func(ReplayKey, func(string) error) error](),
 	)
-	assertExactReplayMethods(t, reflect.TypeOf(ReplayIdentity{}), []string{
+	assertExactReplayMethods(t, reflect.TypeFor[ReplayIdentity](), []string{
 		replayMethodFormat, replayMethodGoString, replayMethodString, replayMethodValid,
 	})
-	assertExactReplayMethods(t, reflect.TypeOf(ReplayIdentitySet{}), []string{
+	assertExactReplayMethods(t, reflect.TypeFor[ReplayIdentitySet](), []string{
 		"Exploded", replayMethodFormat, replayMethodGoString, "Identity", "Len", replayMethodString, replayMethodValid,
 	})
-	assertExactReplayMethods(t, reflect.TypeOf(ReplayKey{}), []string{
+	assertExactReplayMethods(t, reflect.TypeFor[ReplayKey](), []string{
 		replayMethodFormat, replayMethodGoString, replayMethodMarshalJSON, replayMethodMarshalText,
 		replayMethodString, replayMethodValid,
 	})
-	assertExactReplayMethods(t, reflect.TypeOf((*ReplayDeriver)(nil)), []string{
+	assertExactReplayMethods(t, reflect.TypeFor[*ReplayDeriver](), []string{
 		replayMethodClose, "Derive", replayMethodFormat, replayMethodGoString, replayMethodString,
 	})
-	assertExactReplayMethods(t, reflect.TypeOf((*ReplayMemoryStore)(nil)), []string{
+	assertExactReplayMethods(t, reflect.TypeFor[*ReplayMemoryStore](), []string{
 		replayMethodCheckAndRemember, replayMethodClose, replayMethodFormat, replayMethodGoString,
 		replayMethodMarshalJSON, replayMethodMarshalText, replayMethodState, replayMethodString,
 	})
-	assertExactReplayMethods(t, reflect.TypeOf((*ReplayDisabledStore)(nil)), []string{
+	assertExactReplayMethods(t, reflect.TypeFor[*ReplayDisabledStore](), []string{
 		replayMethodCheckAndRemember, replayMethodClose, replayMethodFormat, replayMethodGoString,
 		replayMethodMarshalJSON, replayMethodMarshalText, replayMethodState, replayMethodString,
 	})
-	configType := reflect.TypeOf(ReplayMemoryConfig{})
+	configType := reflect.TypeFor[ReplayMemoryConfig]()
 	if configType.NumMethod() != 0 || reflect.PointerTo(configType).NumMethod() != 0 {
 		t.Fatal("ReplayMemoryConfig exposes methods")
 	}
 	assertExactReplayFields(t, configType, []replayFieldExpectation{
-		{name: "Limits", fieldType: reflect.TypeOf(ReplayLimits{})},
-		{name: "Clock", fieldType: reflect.TypeOf((*ReplayClock)(nil)).Elem()},
+		{name: "Limits", fieldType: reflect.TypeFor[ReplayLimits]()},
+		{name: "Clock", fieldType: reflect.TypeFor[ReplayClock]()},
 	})
-	assertExactReplayFields(t, reflect.TypeOf(ReplayLimits{}), []replayFieldExpectation{
-		{name: "MaxEntries", fieldType: reflect.TypeOf(int(0))},
-		{name: "MaxWaiters", fieldType: reflect.TypeOf(int(0))},
-		{name: "PruneBudget", fieldType: reflect.TypeOf(int(0))},
-		{name: "MaxInFlight", fieldType: reflect.TypeOf(int(0))},
-		{name: "MaxAdmissionWaiters", fieldType: reflect.TypeOf(int(0))},
+	assertExactReplayFields(t, reflect.TypeFor[ReplayLimits](), []replayFieldExpectation{
+		{name: "MaxEntries", fieldType: reflect.TypeFor[int]()},
+		{name: "MaxWaiters", fieldType: reflect.TypeFor[int]()},
+		{name: "PruneBudget", fieldType: reflect.TypeFor[int]()},
+		{name: "MaxInFlight", fieldType: reflect.TypeFor[int]()},
+		{name: "MaxAdmissionWaiters", fieldType: reflect.TypeFor[int]()},
 	})
 	for _, protected := range []reflect.Type{
-		reflect.TypeOf(ReplayKey{}),
-		reflect.TypeOf((*ReplayError)(nil)).Elem(),
-		reflect.TypeOf(ReplayRetention{}),
-		reflect.TypeOf(ReplayIdentity{}),
-		reflect.TypeOf(ReplayIdentitySet{}),
-		reflect.TypeOf((*ReplayDeriver)(nil)).Elem(),
-		reflect.TypeOf((*ReplayMemoryStore)(nil)).Elem(),
-		reflect.TypeOf((*ReplayDisabledStore)(nil)).Elem(),
+		reflect.TypeFor[ReplayKey](),
+		reflect.TypeFor[ReplayError](),
+		reflect.TypeFor[ReplayRetention](),
+		reflect.TypeFor[ReplayIdentity](),
+		reflect.TypeFor[ReplayIdentitySet](),
+		reflect.TypeFor[ReplayDeriver](),
+		reflect.TypeFor[ReplayMemoryStore](),
+		reflect.TypeFor[ReplayDisabledStore](),
 	} {
 		assertNoExportedReplayFields(t, protected)
 	}
@@ -762,8 +762,8 @@ func assertExactReplayFields(t *testing.T, value reflect.Type, want []replayFiel
 // assertNoExportedReplayFields proves protected public values expose no data fields.
 func assertNoExportedReplayFields(t *testing.T, value reflect.Type) {
 	t.Helper()
-	for index := range value.NumField() {
-		field := value.Field(index)
+	for field := range value.Fields() {
+		field := field
 		if field.IsExported() {
 			t.Fatalf("%s exposes field %s", value, field.Name)
 		}

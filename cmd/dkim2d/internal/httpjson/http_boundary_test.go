@@ -467,7 +467,6 @@ func TestHTTPBoundaryRecoverySeparatesPrivateAndDependencyPanics(t *testing.T) {
 		{name: "panic after commit", panicValue: errors.New("late test panic"), commit: true, status: http.StatusOK, abort: true},
 	}
 	for _, testCase := range tests {
-		testCase := testCase
 		t.Run(testCase.name, func(t *testing.T) {
 			handler, _, _, secret := newBoundaryFixture(t)
 			notifier := &boundaryFatalNotifier{}
@@ -691,7 +690,6 @@ func TestHTTPBoundaryRawOptionsRejectsEveryContentLengthOccurrence(t *testing.T)
 		},
 	}
 	for _, testCase := range tests {
-		testCase := testCase
 		t.Run(testCase.name, func(t *testing.T) {
 			response := rawBoundaryExchange(t, address,
 				"OPTIONS * HTTP/1.1\r\nHost: "+address+"\r\n"+
@@ -727,7 +725,6 @@ func TestHTTPBoundaryRawIgnoresAccept(t *testing.T) {
 		{name: "multiple", fields: "Accept: text/plain\r\nAccept: application/json\r\n"},
 	}
 	for _, testCase := range tests {
-		testCase := testCase
 		t.Run(testCase.name, func(t *testing.T) {
 			status := rawBoundaryExchange(t, address,
 				"GET /healthz HTTP/1.1\r\nHost: "+address+"\r\n"+

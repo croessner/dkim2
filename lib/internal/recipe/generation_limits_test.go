@@ -27,7 +27,7 @@ func TestEveryGenerationHardMaximumAcceptsExactAndRejectsOneOver(t *testing.T) {
 	if err := exact.Validate(); err != nil {
 		t.Fatalf("exact hard maxima code=%s", recipeTestErrorCode(err))
 	}
-	typeOfLimits := reflect.TypeOf(exact)
+	typeOfLimits := reflect.TypeFor[GenerationLimits]()
 	for index := 1; index < typeOfLimits.NumField(); index++ {
 		field := typeOfLimits.Field(index)
 		t.Run(field.Name, func(t *testing.T) {

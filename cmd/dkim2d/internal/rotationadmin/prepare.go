@@ -421,13 +421,13 @@ func (*Prepared) MarshalJSON() ([]byte, error) { return nil, errInvalid }
 
 // derivedIdentity creates one bounded collision-resistant opaque identifier.
 func derivedIdentity(kind, operation string, generation uint64, ordinal int, algorithm string) string {
-	sum := sha256.Sum256([]byte(fmt.Sprintf("DKIM2-CAMPAIGN-ID-V1\x00%s\x00%s\x00%d\x00%d\x00%s", kind, operation, generation, ordinal, algorithm)))
+	sum := sha256.Sum256(fmt.Appendf(nil, "DKIM2-CAMPAIGN-ID-V1\x00%s\x00%s\x00%d\x00%d\x00%s", kind, operation, generation, ordinal, algorithm))
 	return "campaign-" + hex.EncodeToString(sum[:16])
 }
 
 // derivedSelector creates one LDH selector distinct per candidate credential.
 func derivedSelector(operation string, generation uint64, ordinal int, algorithm string) string {
-	sum := sha256.Sum256([]byte(fmt.Sprintf("DKIM2-CAMPAIGN-SELECTOR-V1\x00%s\x00%d\x00%d\x00%s", operation, generation, ordinal, algorithm)))
+	sum := sha256.Sum256(fmt.Appendf(nil, "DKIM2-CAMPAIGN-SELECTOR-V1\x00%s\x00%d\x00%d\x00%s", operation, generation, ordinal, algorithm))
 	prefix := "e"
 	if algorithm == string(provider.AlgorithmRSASHA256) {
 		prefix = "r"

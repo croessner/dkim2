@@ -707,7 +707,7 @@ func buildMaximumLegalProcessBody(t testing.TB) []byte {
 	body.WriteString(`","fidelity":"raw_rfc5322"},"smtp":{"mail_from":"`)
 	body.Write(escapedPath)
 	body.WriteString(`","rcpt_to":[`)
-	for index := 0; index < dkim2.HardMaxRecipients; index++ {
+	for index := range dkim2.HardMaxRecipients {
 		if index != 0 {
 			body.WriteByte(',')
 		}
