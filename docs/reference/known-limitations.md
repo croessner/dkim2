@@ -11,12 +11,6 @@ certification, or universal interoperability claim.
   Stalwart's observed source revision has no `Cargo.lock`, so no immutable
   transitive build closure can be reproduced. The aggregate evidence is
   `eligible_not_runnable`, not interoperability PASS.
-- The retained Turscar `dkim2tests` corpus is public-only, licensed external
-  evidence, not an external implementation candidate. Its 42 signed inputs at
-  revision `9c48edf1b19bd4db69cd5f27e8732a5a61826739` omit the mandatory final
-  semicolon from both DKIM2 tag-list field families. They are therefore
-  classified as upstream fixture nonconformance and prove strict local refusal,
-  not Draft-04 verification, conformance, or runtime interoperability.
 - Runtime comparison covers only explicitly equivalent parser operations and
   reserved synthetic inputs. It does not cover another implementation's full
   signing, verification, recipe, custody, SMTP, replay, daemon, OpenAPI,
