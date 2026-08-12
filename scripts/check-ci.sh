@@ -39,6 +39,9 @@ if grep -Eq '^check-openapi:.*check-workspace' Makefile; then
 fi
 grep -A5 '^check-vendor:' Makefile | grep -q -- '-mod=vendor' ||
   fail 'vendor validation must use Go vendor resolution directly'
+if grep -Eq '(^|[[:space:]])rg([[:space:]]|$$)' Makefile; then
+  fail 'normal Make gates must not require undeclared ripgrep tooling'
+fi
 if grep -RE '(packages|id-token|attestations):[[:space:]]*write' \
   "$workflows" --exclude=release.yml; then
   fail 'only the release workflow may publish or attest artifacts'

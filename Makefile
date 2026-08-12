@@ -213,18 +213,18 @@ check-exim-real-matrix-evidence-schema: test-exim-real-matrix-helper test-exim-r
 		test -s "$(EXIM_C_DIR)/fixtures/$$row/provenance-v1.txt"; \
 		test -s "$(EXIM_C_DIR)/fixtures/$$row/build-id-v1.h"; \
 		test -s "$(EXIM_C_DIR)/fixtures/$$row/compatibility-manifest-v1.txt"; \
-		rg -q '^format=dkim2-exim-source-manifest-v1$$' "$(EXIM_C_DIR)/fixtures/$$row/source-manifest-v1.txt"; \
-		rg -q '^source_sha256=[0-9a-f]{64}$$' "$(EXIM_C_DIR)/fixtures/$$row/source-manifest-v1.txt"; \
-		rg -q '^retrieved_at=2026-07-27$$' "$(EXIM_C_DIR)/fixtures/$$row/provenance-v1.txt"; \
-		rg -q '^license=GPL-2.0-or-later$$' "$(EXIM_C_DIR)/fixtures/$$row/provenance-v1.txt"; \
+		grep -Eq '^format=dkim2-exim-source-manifest-v1$$' "$(EXIM_C_DIR)/fixtures/$$row/source-manifest-v1.txt"; \
+		grep -Eq '^source_sha256=[0-9a-f]{64}$$' "$(EXIM_C_DIR)/fixtures/$$row/source-manifest-v1.txt"; \
+		grep -Eq '^retrieved_at=2026-07-27$$' "$(EXIM_C_DIR)/fixtures/$$row/provenance-v1.txt"; \
+		grep -Eq '^license=GPL-2.0-or-later$$' "$(EXIM_C_DIR)/fixtures/$$row/provenance-v1.txt"; \
 	done; \
 	test -s "$(EXIM_C_DIR)/fixtures/debian-4.98.2-1+deb13u3/local_scan.patch"; \
 	test -s "$(EXIM_C_DIR)/fixtures/ubuntu-4.99.1-1ubuntu1.3/include/local_scan.h"; \
 	test -s "$(EXIM_C_DIR)/fixtures/ubuntu-4.99.1-1ubuntu1.4/include/local_scan.h"; \
 	test -s "$(ROOT)/cmd/dkim2-exim/packaging/exim/Local.Makefile"; \
-	rg -q '^HAVE_LOCAL_SCAN=yes$$' "$(ROOT)/cmd/dkim2-exim/packaging/exim/Local.Makefile"; \
-	rg -q '^LOCAL_SCAN_SOURCE=Local/dkim2_local_scan\.c$$' "$(ROOT)/cmd/dkim2-exim/packaging/exim/Local.Makefile"; \
-	rg -q '^LOCAL_SCAN_HAS_OPTIONS=yes$$' "$(ROOT)/cmd/dkim2-exim/packaging/exim/Local.Makefile"; \
+	grep -Eq '^HAVE_LOCAL_SCAN=yes$$' "$(ROOT)/cmd/dkim2-exim/packaging/exim/Local.Makefile"; \
+	grep -Eq '^LOCAL_SCAN_SOURCE=Local/dkim2_local_scan\.c$$' "$(ROOT)/cmd/dkim2-exim/packaging/exim/Local.Makefile"; \
+	grep -Eq '^LOCAL_SCAN_HAS_OPTIONS=yes$$' "$(ROOT)/cmd/dkim2-exim/packaging/exim/Local.Makefile"; \
 	test -s "$(ROOT)/cmd/dkim2-exim/packaging/debian/exim4-dkim2-build.patch"; \
 	test -s "$(ROOT)/cmd/dkim2-exim/packaging/ubuntu/exim4-dkim2-build.patch"; \
 	patch --dry-run -s -p1 -d "$(ROOT)/cmd/dkim2-exim/packaging/tests/fixtures/debian" < "$(ROOT)/cmd/dkim2-exim/packaging/debian/exim4-dkim2-build.patch"; \
@@ -374,14 +374,15 @@ check-openapi:
 	cmp "$(OPENAPI_MILTER_TEST_SERVER_OUTPUT)" "$$output/milter-test-server.gen.go"; \
 	cmp "$(OPENAPI_EXIM_OUTPUT)" "$$output/exim.gen.go"; \
 	cmp "$(OPENAPI_EXIM_TEST_SERVER_OUTPUT)" "$$output/exim-test-server.gen.go"; \
-	! rg -q '^output:' "$(OPENAPI_SERVER_CONFIG)" "$(OPENAPI_CLIENT_CONFIG)" "$(OPENAPI_MILTER_CONFIG)" "$(OPENAPI_MILTER_TEST_SERVER_CONFIG)" "$(OPENAPI_EXIM_CONFIG)" "$(OPENAPI_EXIM_TEST_SERVER_CONFIG)"; \
-	rg -q '^[[:space:]]*(require[[:space:]]+)?github.com/getkin/kin-openapi v0\.144\.0$$' tools/go.mod; \
-	rg -q '^[[:space:]]*(require[[:space:]]+)?github.com/getkin/kin-openapi v0\.144\.0$$' cmd/dkim2d/go.mod; \
-	rg -q '^[[:space:]]*github.com/oapi-codegen/oapi-codegen/v2 v2\.7\.1( // indirect)?$$' tools/go.mod; \
-	! rg -q 'github.com/oapi-codegen/runtime' cmd/dkim2d/go.mod cmd/dkim2ctl/go.mod cmd/dkim2-milter/go.mod cmd/dkim2-exim/go.mod; \
-	! rg -q 'github.com/oapi-codegen/runtime' cmd/dkim2d cmd/dkim2ctl cmd/dkim2-milter cmd/dkim2-exim --glob '*.go'; \
-	! rg -q 'oapi-codegen|kin-openapi' lib/go.mod lib --glob '*.go' --glob '!*_test.go'; \
-	! rg -q 'oapi-codegen/(nethttp|middleware)' --glob 'go.mod' .; \
+	! grep -Eq '^output:' "$(OPENAPI_SERVER_CONFIG)" "$(OPENAPI_CLIENT_CONFIG)" "$(OPENAPI_MILTER_CONFIG)" "$(OPENAPI_MILTER_TEST_SERVER_CONFIG)" "$(OPENAPI_EXIM_CONFIG)" "$(OPENAPI_EXIM_TEST_SERVER_CONFIG)"; \
+	grep -Eq '^[[:space:]]*(require[[:space:]]+)?github.com/getkin/kin-openapi v0\.144\.0$$' tools/go.mod; \
+	grep -Eq '^[[:space:]]*(require[[:space:]]+)?github.com/getkin/kin-openapi v0\.144\.0$$' cmd/dkim2d/go.mod; \
+	grep -Eq '^[[:space:]]*github.com/oapi-codegen/oapi-codegen/v2 v2\.7\.1( // indirect)?$$' tools/go.mod; \
+	! grep -Eq 'github.com/oapi-codegen/runtime' cmd/dkim2d/go.mod cmd/dkim2ctl/go.mod cmd/dkim2-milter/go.mod cmd/dkim2-exim/go.mod; \
+	! grep -REq --include='*.go' 'github.com/oapi-codegen/runtime' cmd/dkim2d cmd/dkim2ctl cmd/dkim2-milter cmd/dkim2-exim; \
+	! grep -Eq 'oapi-codegen|kin-openapi' lib/go.mod; \
+	! grep -REq --include='*.go' --exclude='*_test.go' 'oapi-codegen|kin-openapi' lib; \
+	! grep -REq --include='go.mod' 'oapi-codegen/(nethttp|middleware)' .; \
 	go -C tools test ./cmd/wiregen; \
 	go -C cmd/dkim2d test ./internal/httpjson/...; \
 	go -C cmd/dkim2ctl test ./internal/testclient/...; \
@@ -399,9 +400,9 @@ check-workspace:
 .PHONY: check-boundaries
 check-boundaries:
 	@set -eu; \
-	! go list -deps ./lib/... | rg -q 'github.com/croessner/dkim2/cmd/|oapi-codegen|cobra|viper|fx|prometheus'; \
-	! go -C cmd/dkim2-exim list -deps ./... | rg -q 'github.com/croessner/dkim2/cmd/dkim2-milter|github.com/croessner/dkim2/cmd/dkim2d/internal'; \
-	! rg -q 'cmd/dkim2-milter|cmd/dkim2d/internal|\"C\"' cmd/dkim2-exim --glob '*.go'; \
+	! go list -deps ./lib/... | grep -Eq 'github.com/croessner/dkim2/cmd/|oapi-codegen|cobra|viper|fx|prometheus'; \
+	! go -C cmd/dkim2-exim list -deps ./... | grep -Eq 'github.com/croessner/dkim2/cmd/dkim2-milter|github.com/croessner/dkim2/cmd/dkim2d/internal'; \
+	! grep -REq --include='*.go' 'cmd/dkim2-milter|cmd/dkim2d/internal|\"C\"' cmd/dkim2-exim; \
 	scripts/check-securefile-parity.sh
 
 .PHONY: vendor
