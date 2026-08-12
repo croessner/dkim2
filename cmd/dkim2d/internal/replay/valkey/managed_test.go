@@ -485,7 +485,7 @@ func TestProductionAuditCallerAndOwnedDeadlinePrecedence(t *testing.T) {
 			validSecurityAuditPolicy(),
 			auditPhaseConstruction,
 			fixedSecurityClock{now: time.Unix(10_000, 0)},
-			time.Millisecond,
+			time.Second,
 		)
 		if !completed.IsZero() ||
 			dkim2.ReplayErrorCodeOf(err) != dkim2.ReplayErrorInternalInvariant {
@@ -568,7 +568,7 @@ func TestProductionAuditCloseBarrierPrecedence(t *testing.T) {
 				validSecurityAuditPolicy(),
 				auditPhaseConstruction,
 				fixedSecurityClock{now: time.Unix(10_000, 0)},
-				time.Millisecond,
+				time.Second,
 			)
 			if !completed.IsZero() ||
 				dkim2.ReplayErrorCodeOf(err) != testCase.wantGlobal {
