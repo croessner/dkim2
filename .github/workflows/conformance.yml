@@ -35,15 +35,12 @@ jobs:
       - name: Prepare protected test root
         run: |
           sudo install -d -m 0700 "$DKIM2_TEST_TRUSTED_ROOT"
-          truncate -s 512M "$RUNNER_TEMP/dkim2-test.ext4"
-          mkfs.ext4 -q -F "$RUNNER_TEMP/dkim2-test.ext4"
-          sudo mount -o loop,nosuid,nodev "$RUNNER_TEMP/dkim2-test.ext4" "$DKIM2_TEST_TRUSTED_ROOT"
-          sudo chown "$(id -u):$(id -g)" "$DKIM2_TEST_TRUSTED_ROOT"
-          sudo chmod 0700 "$DKIM2_TEST_TRUSTED_ROOT"
+          sudo mount -t tmpfs -o "mode=0700,uid=$(id -u),gid=$(id -g),size=1g,nosuid,nodev" dkim2-test "$DKIM2_TEST_TRUSTED_ROOT"
 
       - name: Run portable conformance
         env:
           GOTMPDIR: ${{ runner.temp }}
+          TMPDIR: /dkim2-test
         run: |
           make check-conformance
           make conformance

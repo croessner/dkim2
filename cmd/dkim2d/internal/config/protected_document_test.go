@@ -53,7 +53,11 @@ func TestCreateProtectedDocumentConcurrentForeignWinnerCannotBeOverwritten(t *te
 			}
 		})
 	}()
-	<-linked
+	select {
+	case <-linked:
+	case err := <-result:
+		t.Fatalf("foreign create-only winner failed before link: %s", CodeOf(err))
+	}
 	if err := CreateProtectedDocument(t.Context(), path, desired, 4096); CodeOf(err) != CodeProtectedConflict {
 		close(release)
 		<-result
