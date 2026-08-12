@@ -6,6 +6,7 @@ on:
     branches: [main, features, "release/**"]
     paths:
       - "lib/**"
+      - "testdata/conformance/**"
       - "testdata/vectors/**"
       - "tools/cmd/conformance/**"
       - "tools/internal/conformance/**"
@@ -16,6 +17,7 @@ on:
     branches: [main, features, "release/**"]
     paths:
       - "lib/**"
+      - "testdata/conformance/**"
       - "testdata/vectors/**"
       - "tools/cmd/conformance/**"
       - "tools/internal/conformance/**"
