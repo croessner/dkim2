@@ -2306,6 +2306,11 @@ CI should eventually include:
 - Coverage report.
 - Vector compatibility report.
 
+Real Postfix and Exim E2E qualification is intentionally operator-invoked
+rather than a per-change GitHub Actions gate. The repository keeps explicit
+Make targets for those adapters while ordinary CI relies on adapter unit tests,
+portable builds, and protocol conformance.
+
 ## 15. Milestones and Rough Implementation Estimate
 
 These estimates assume one very capable GPT-5.5-extra-high style coding agent

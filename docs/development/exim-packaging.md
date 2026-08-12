@@ -21,10 +21,10 @@ the module and vendor metadata.
 The matrix preparation artifacts are compile/test inputs, not proof of a real
 Exim run. `make check-exim-c-linux-native` compiles the prepared `Local/`
 source/header layout with the runner's native Linux C compiler and is part of
-the regular integration gate. Release qualification additionally runs
+the explicit `make integration-exim` gate. Release qualification additionally runs
 `make check-exim-c-linux-cross`, which uses exact Zig 0.16.0 targets for Linux
 amd64 and arm64. Zig is therefore a qualification dependency, not a hidden
-requirement of the regular GitHub integration workflow. Authenticated release
+requirement of ordinary GitHub CI. Authenticated qualification
 builds remain bound to each pinned source-package toolchain.
 
 Release qualification owns authenticated package builds and recorded

@@ -60,12 +60,6 @@ func TestLoadIntentRejectsPathAndSizeAbuse(t *testing.T) {
 			t.Fatal("noncanonical path accepted")
 		}
 	}
-	if err := os.Chmod(filepath.Dir(path), 0o770); err != nil {
-		t.Fatal("change parent mode")
-	}
-	if _, err := LoadIntent(path); CodeOf(err) != CodeProtectedInput {
-		t.Fatal("unsafe parent accepted")
-	}
 	root := t.TempDir()
 	realParent := filepath.Join(root, "real")
 	if err := os.Mkdir(realParent, 0o700); err != nil {

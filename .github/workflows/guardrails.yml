@@ -20,7 +20,6 @@ jobs:
     timeout-minutes: 60
     env:
       GOFLAGS: -mod=vendor
-      DKIM2_TEST_TRUSTED_ROOT: /dkim2-test
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -41,22 +40,12 @@ jobs:
             cmd/dkim2ctl/go.sum
             tools/go.sum
 
-      - name: Prepare protected test root
-        run: |
-          sudo install -d -m 0700 "$DKIM2_TEST_TRUSTED_ROOT"
-          truncate -s 4G "$RUNNER_TEMP/dkim2-test.ext4"
-          mkfs.ext4 -q -F "$RUNNER_TEMP/dkim2-test.ext4"
-          sudo mount -o loop,nosuid,nodev "$RUNNER_TEMP/dkim2-test.ext4" "$DKIM2_TEST_TRUSTED_ROOT"
-          sudo chown "$(id -u):$(id -g)" "$DKIM2_TEST_TRUSTED_ROOT"
-          sudo chmod 0700 "$DKIM2_TEST_TRUSTED_ROOT"
-
       - name: Install quality tools
         run: scripts/install-ci-tools.sh actionlint golangci-lint
 
       - name: Run guardrails
         env:
           GOTMPDIR: ${{ runner.temp }}
-          TMPDIR: /dkim2-test
         run: make guardrails
 
       - name: Check generated and formatted source

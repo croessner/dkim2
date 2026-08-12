@@ -165,7 +165,7 @@ func openProtectedStoreLock(directoryFD int, name string, create bool) (ownedDes
 
 // validateProtectedStoreDirectory requires one exact owner-only mutable journal directory.
 func validateProtectedStoreDirectory(fd int, effectiveUID uint32) (descriptorState, error) {
-	state, err := captureDescriptorState(fd, 0o700, true)
+	state, err := captureDescriptorState(fd)
 	if err != nil {
 		return descriptorState{}, err
 	}
@@ -178,7 +178,7 @@ func validateProtectedStoreDirectory(fd int, effectiveUID uint32) (descriptorSta
 
 // validateProtectedStoreLock requires one stable empty owner-only regular inode.
 func validateProtectedStoreLock(fd int, effectiveUID uint32) (descriptorState, error) {
-	state, err := captureDescriptorState(fd, 0o600, false)
+	state, err := captureDescriptorState(fd)
 	if err != nil {
 		return descriptorState{}, err
 	}
@@ -282,7 +282,7 @@ func (p protectedStorePlatform) read(ctx context.Context) (content []byte, exist
 
 // validateDocument validates one exact bounded owner-only journal descriptor.
 func (s *protectedStoreState) validateDocument(fd int) (descriptorState, error) {
-	state, err := captureDescriptorState(fd, 0o600, false)
+	state, err := captureDescriptorState(fd)
 	if err != nil {
 		return descriptorState{}, err
 	}
@@ -438,7 +438,7 @@ func (s *protectedStoreState) createTemporary() (ownedDescriptor, string, error)
 
 // verifySerializationFence re-proves parent path identity and sibling lock entry identity.
 func (s *protectedStoreState) verifySerializationFence() error {
-	directoryNow, err := captureDescriptorState(s.directory.fd, 0o700, true)
+	directoryNow, err := captureDescriptorState(s.directory.fd)
 	if err != nil || !sameDirectorySecurityState(directoryNow, s.directoryPre) {
 		return newError(CodeProtectedAccess)
 	}
@@ -463,7 +463,7 @@ func (s *protectedStoreState) verifySerializationFence() error {
 func sameDirectorySecurityState(left, right descriptorState) bool {
 	return sameDescriptorIdentity(left.metadata, right.metadata) &&
 		left.metadata.typeBits == right.metadata.typeBits && left.metadata.uid == right.metadata.uid &&
-		left.metadata.modeBits == right.metadata.modeBits && left.access == right.access
+		left.metadata.modeBits == right.metadata.modeBits
 }
 
 // writeAllDescriptor writes every byte or fails on cancellation and no progress.

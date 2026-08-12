@@ -12,9 +12,6 @@ do
 	grep -R -q "$policy" "$milter"
 	grep -R -q "$policy" "$exim"
 done
-for platform in linux darwin; do
-	grep -R -q "securefile-$platform-access-v1" "$milter"
-	grep -R -q "securefile-$platform-access-v1" "$exim"
-done
+! grep -R -Eq 'Fstatfs|Flistxattr|acl_|posix_acl|filesystem.*allowlist' "$milter" "$exim"
 test -s "$exim/securefile_unix_test.go"
 test -s "$milter/securefile_unix_test.go"

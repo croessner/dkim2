@@ -3,9 +3,7 @@ set -eu
 
 workflows=.github/workflows
 expected='conformance.yml
-exim-integration.yml
 guardrails.yml
-postfix-integration.yml
 release.yml'
 
 fail() {
@@ -27,6 +25,11 @@ fi
 if grep -RE 'github[.]ref_protected|prepare-ci-environment|DKIM2_CI_TMPDIR|[.]ci-tmp' "$workflows"; then
   fail 'obsolete branch-protection or CI temporary-directory coupling remains'
 fi
+if grep -RE 'DKIM2_TEST_TRUSTED_ROOT|/dkim2-test|mkfs[.]ext4|mount -o loop' "$workflows"; then
+  fail 'special or privileged test filesystem coupling remains'
+fi
+test ! -e "$workflows/postfix-integration.yml" || fail 'Postfix E2E must remain opt-in'
+test ! -e "$workflows/exim-integration.yml" || fail 'Exim E2E must remain opt-in'
 if grep -RE '(packages|id-token|attestations):[[:space:]]*write' \
   "$workflows" --exclude=release.yml; then
   fail 'only the release workflow may publish or attest artifacts'

@@ -46,11 +46,11 @@ metrics, and Milter endpoints are never published.
 
 ## Host and protected-state prerequisites
 
-Production protected state must be created on Linux storage which the loaders
-support: ext4, XFS, Btrfs, or tmpfs. Network, FUSE, OverlayFS, Docker Desktop
-bind sharing, and unknown filesystems fail closed. A generic Docker secret is
-not compatible with the exact direct-child, owner, ACL, link-count, and
-filesystem contract.
+Production protected state may use the storage selected by the deployment.
+DKIM2 validates direct-child placement, owner, mode, link count, regular-file
+shape, size, no-follow traversal, and stable descriptor reads. It does not
+classify filesystem type, mount identity, ACLs, or xattrs. A generic Docker
+secret is suitable only when it preserves the remaining file contract.
 
 The daemon images use numeric UID/GID `2000:2000`; the Milter images use
 `2000:103`. Before start, create:
@@ -72,7 +72,7 @@ Each daemon route root and generation is owner `2000:2000`, mode `0500`, and
 immutable after validation. The generation name is the exact
 `protected.generation` selector: 32 lowercase hexadecimal characters. Every
 selected protected path is a direct child of that generation and an
-owner-`2000` regular file with one link, no nontrivial ACL, and mode `0400` or
+owner-`2000` regular file with one link and mode `0400` or
 `0600`. No selected children may alias one inode. Capability and replay HMAC
 files contain exactly 32 raw nonzero random bytes. Valkey password children
 contain 1 through 1,024 opaque bytes without NUL, CR, or LF; the private CA
@@ -103,8 +103,8 @@ another route's socket. Steady-state containers never generate, repair, chmod,
 or chown protected material.
 
 Preparation is an operator-owned offline step. Use a restrictive umask, create
-files without following links, set the numeric owner and final mode, remove
-nontrivial ACLs, and publish only a complete generation. The product has no
+files without following links, set the numeric owner and final mode, and
+publish only a complete generation. The product has no
 production key, capability, password, or HMAC generator. Never copy the
 test-only deployment bootstrap or its reserved-domain material into production.
 Never repair an active generation in place.
@@ -142,7 +142,7 @@ trusted DSN gate is implemented and qualified.
 
 Validate every route through the final read-only mounts. The daemon validation
 performs the complete protected generation, replay/Valkey, OTLP CA, datasource,
-signing manifest, PKCS#8, selector, ownership, ACL, link-count, and filesystem
+signing manifest, PKCS#8, selector, ownership, mode, link-count, and stable-read
 checks. Both commands are silent on success and content-free on failure:
 
 ```text
@@ -300,7 +300,7 @@ A protected-generation rotation is a restart, never a reload:
 
 1. Create a new unused 32-lowercase-hex generation beside the retained old
    generation. Populate every selected direct child, set final ownership,
-   modes and ACLs, and make no further changes to that directory.
+   modes, and make no further changes to that directory.
 2. Create a complete replacement daemon YAML file outside the generation. It
    selects only the new generation and direct children and has the required
    owner, mode, link count, and inode separation.
@@ -318,7 +318,7 @@ no old process owns them, atomically select the retained prior YAML and prior
 immutable image subjects, recreate in dependency order, and compare the held
 queue records before release. Never run old and new Milter instances against
 one socket path. A partial generation, missing route capability, wrong
-owner/mode/ACL/link count, unsupported filesystem, invalid selector, or socket
+owner/mode/link count, invalid selector, or socket
 collision is a closed validation/startup failure and must not trigger an
 in-place repair or automatic fallback.
 
@@ -340,7 +340,7 @@ documented replay-loss window; completing them at nearby times does not create
 one transaction.
 
 Restore into new empty offline destinations with numeric ownership, modes,
-ACLs, link counts, and immutable generation names preserved. Never extract
+link counts and immutable generation names preserved. Never extract
 over an active generation. Validate generation cross-references,
 private/public key bindings, Valkey TLS/credential configuration, and every
 daemon/Milter configuration through the final mounts before startup. Restore

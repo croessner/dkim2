@@ -127,8 +127,8 @@ func TestReadProtectedDocumentRejectsPathReplacement(t *testing.T) {
 	}
 }
 
-// TestReadProtectedDocumentUsesPlatformAuthority proves local ACL policy participation.
-func TestReadProtectedDocumentUsesPlatformAuthority(t *testing.T) {
+// TestReadProtectedDocumentUsesPortableAuthority proves the shared descriptor policy.
+func TestReadProtectedDocumentUsesPortableAuthority(t *testing.T) {
 	path := writeProtectedDocumentFixture(t, []byte("document"))
 	data, err := ReadProtectedDocument(path, 64)
 	if err != nil || string(data) != "document" {

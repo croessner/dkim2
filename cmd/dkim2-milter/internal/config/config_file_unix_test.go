@@ -165,20 +165,6 @@ func TestReadConfigurationRequiresExactEffectiveOwner(t *testing.T) {
 	}
 }
 
-// TestReadConfigurationRejectsWritableAncestry proves trusted-parent policy.
-func TestReadConfigurationRejectsWritableAncestry(t *testing.T) {
-	path, _ := configFileFixture(t)
-	parent := filepath.Dir(path)
-	if err := os.Chmod(parent, 0o770); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.Chmod(parent, 0o700) })
-	data, err := readConfiguration(path)
-	if data != nil || !errors.Is(err, &Error{}) {
-		t.Fatal("writable configuration ancestry was accepted")
-	}
-}
-
 // TestReadConfigurationRejectsPathAndContentRaces proves retained state checks.
 func TestReadConfigurationRejectsPathAndContentRaces(t *testing.T) {
 	t.Run("pre-open replacement", func(t *testing.T) {

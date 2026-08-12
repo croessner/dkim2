@@ -53,12 +53,6 @@ replay:
 	writeSmokeFile(t, configPath, []byte(document), 0o600)
 
 	owner, err := config.LoadProtected(configPath, config.FlagValues{})
-	if config.CodeOf(err) == config.CodeProtectedUnsupported {
-		if owner != nil {
-			_ = owner.Close()
-		}
-		t.Skip("test filesystem is outside the closed protected-loader allowlist")
-	}
 	if err != nil {
 		if owner != nil {
 			_ = owner.Close()

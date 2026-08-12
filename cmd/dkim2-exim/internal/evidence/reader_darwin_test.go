@@ -3,7 +3,6 @@
 package evidence
 
 import (
-	"context"
 	"testing"
 
 	"golang.org/x/sys/unix"
@@ -32,25 +31,4 @@ func testRootFingerprint(t *testing.T, root string) rootFingerprint {
 		t.Fatal("readiness root fixture inspection failed")
 	}
 	return darwinRootFingerprint(state)
-}
-
-// TestReaderRejectsExtendedRecordAccess proves ACL/xattr-bearing records do
-// not satisfy the Darwin descriptor policy used by the public filter proof.
-func TestReaderRejectsExtendedRecordAccess(t *testing.T) {
-	fixture := newReaderFixture(t)
-	if err := unix.Setxattr(
-		fixture.recordPath,
-		"user.dkim2-test",
-		[]byte{1},
-		0,
-	); err != nil {
-		t.Skip("filesystem did not support the xattr fixture")
-	}
-	reader := openReaderFixture(t, fixture)
-	if _, err := reader.LoadContext(
-		context.Background(),
-		fixture.record.Locator(),
-	); err == nil {
-		t.Fatal("extended record access metadata was accepted")
-	}
 }

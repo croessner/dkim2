@@ -1263,7 +1263,7 @@ make race
 make check-openapi
 make check-workspace
 make check-vendor
-make check-protected-platforms
+make check-platform-builds
 make govulncheck
 make guardrails
 git diff --check

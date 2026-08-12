@@ -36,8 +36,7 @@ func openRetainedChild(
 		return nil, &Error{}
 	}
 	currentRoot, err := descriptorState(rootFD)
-	if err != nil || currentRoot != expectedRoot ||
-		!validRootState(currentRoot) || !localFilesystem(rootFD) {
+	if err != nil || currentRoot != expectedRoot || !validRootState(currentRoot) {
 		return nil, &Error{}
 	}
 	fd, err := unix.Openat(
@@ -50,7 +49,7 @@ func openRetainedChild(
 		return nil, &Error{}
 	}
 	before, err := descriptorState(fd)
-	if err != nil || !validFileState(before, maximum) || !localFilesystem(fd) {
+	if err != nil || !validFileState(before, maximum) {
 		_ = unix.Close(fd)
 		return nil, &Error{}
 	}
@@ -99,7 +98,7 @@ func validateCompoundGeneration(
 ) error {
 	rootAfter, err := descriptorState(rootFD)
 	if err != nil || rootAfter != expectedRoot ||
-		!validRootState(rootAfter) || !localFilesystem(rootFD) {
+		!validRootState(rootAfter) {
 		return &Error{}
 	}
 	for _, child := range children {
@@ -107,7 +106,7 @@ func validateCompoundGeneration(
 			return &Error{}
 		}
 		after, stateErr := descriptorState(child.fd)
-		if stateErr != nil || after != child.before || !localFilesystem(child.fd) {
+		if stateErr != nil || after != child.before {
 			return &Error{}
 		}
 	}
@@ -169,7 +168,7 @@ func normalizeFileStateLinks[T ~uint16 | ~uint32 | ~uint64](value T) uint64 {
 // protectedRootState captures one stable local generation-directory state.
 func protectedRootState(rootFD int) (fileState, error) {
 	state, err := descriptorState(rootFD)
-	if err != nil || !validRootState(state) || !localFilesystem(rootFD) {
+	if err != nil || !validRootState(state) {
 		return fileState{}, &Error{}
 	}
 	return state, nil

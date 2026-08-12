@@ -9,14 +9,14 @@ second build or test system.
 | --- | --- | --- |
 | `Guardrails` | Go quality, unit/race tests, builds, generated files, vendor and boundaries | `make guardrails` |
 | `Conformance` | Portable Draft-04 protocol conformance | `make check-conformance`, `make conformance` |
-| `Postfix integration` | Real Postfix/Milter qualification | `make integration-postfix` |
-| `Exim integration` | Exim C ABI and supported-version qualification | `make integration-exim` |
 | `Release` | Stable quality gate and exact GHCR publication | `make release-guardrails` |
 
 There is no separate unit-test workflow because Guardrails already owns unit
-tests. Postfix and Exim integration are independent jobs and are never hidden
-inside `make test`. Container publication does not run for ordinary pushes or
-pull requests.
+tests. Postfix and Exim E2E qualification are intentionally not GitHub Actions
+jobs and are never hidden inside `make test`. They remain explicit local or
+operator commands: `make integration-postfix`, `make integration-exim`, and
+`make qualification-exim`. Container publication does not run for ordinary
+pushes or pull requests.
 
 ## Tool versions and policy
 
@@ -24,11 +24,12 @@ pull requests.
 by repository scripts. Workflow Actions are pinned directly to reviewed commit
 identities. `make check-ci` runs actionlint and enforces only durable policy:
 
-- the five expected workflow concerns;
+- the three expected workflow concerns;
 - immutable Action pins;
 - no publication authority outside `release.yml`;
 - no `github.ref_protected` release dependency;
-- no repository-specific CI temporary-directory lifecycle; and
+- no privileged or repository-specific CI temporary-filesystem lifecycle;
+- no Postfix or Exim E2E workflow; and
 - no implicit `latest` image tag.
 
 Normal workflows have read-only repository authority. Only the stable Release

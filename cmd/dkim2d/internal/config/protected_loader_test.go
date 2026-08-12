@@ -21,9 +21,6 @@ import (
 func TestLoadProtectedDisabledOwnsAndTransfersOneImmutableGeneration(t *testing.T) {
 	fixture := newProtectedLoaderFixture(t, bytes.Repeat([]byte{0xa5}, exactKeyBytes))
 	owner, err := LoadProtected(fixture.yamlPath, FlagValues{})
-	if CodeOf(err) == CodeProtectedUnsupported {
-		t.Skip("test filesystem is outside the closed production allowlist")
-	}
 	if err != nil {
 		t.Fatalf("LoadProtected() failed with code %s", CodeOf(err))
 	}
@@ -66,9 +63,6 @@ func TestLoadProtectedBackendChildMatrices(t *testing.T) {
 		t.Run(strconv.Itoa(int(backend)), func(t *testing.T) {
 			fixture := newProtectedBackendFixture(t, backend)
 			owner, err := LoadProtected(fixture.yamlPath, FlagValues{})
-			if CodeOf(err) == CodeProtectedUnsupported {
-				t.Skip("test filesystem is outside the closed production allowlist")
-			}
 			if err != nil {
 				t.Fatalf("LoadProtected() failed with code %s", CodeOf(err))
 			}
@@ -133,9 +127,6 @@ observability:
     ca_file: ` + caPath + "\n"
 	writeProtectedTestFile(t, fixture.yamlPath, []byte(document), 0o600)
 	owner, err := LoadProtected(fixture.yamlPath, FlagValues{})
-	if CodeOf(err) == CodeProtectedUnsupported {
-		t.Skip("test filesystem is outside the closed production allowlist")
-	}
 	if err != nil || owner == nil {
 		t.Fatalf("LoadProtected() failed with code %s", CodeOf(err))
 	}
@@ -208,9 +199,6 @@ func TestLoadProtectedRejectsCrossRoleEqualityAndChildIdentityCollisions(t *test
 			fixture := newProtectedBackendFixture(t, ReplayValkey)
 			test.mutate(t, fixture)
 			owner, err := LoadProtected(fixture.yamlPath, FlagValues{})
-			if CodeOf(err) == CodeProtectedUnsupported {
-				t.Skip("test filesystem is outside the closed production allowlist")
-			}
 			if owner != nil || err == nil {
 				if owner != nil {
 					_ = owner.Close()
@@ -233,9 +221,6 @@ func TestLoadProtectedAllowsLinkedPublicCA(t *testing.T) {
 	}
 	sealGeneration(t, fixture.generationPath)
 	owner, err := LoadProtected(fixture.yamlPath, FlagValues{})
-	if CodeOf(err) == CodeProtectedUnsupported {
-		t.Skip("test filesystem is outside the closed production allowlist")
-	}
 	if err != nil {
 		t.Fatalf("linked public CA rejected with code %s", CodeOf(err))
 	}
@@ -255,9 +240,6 @@ func TestProtectedLoadPhaseOrderPreopensEveryChildBeforeReads(t *testing.T) {
 			role  protectedFileRole
 		}{event: event, role: role})
 	})
-	if CodeOf(err) == CodeProtectedUnsupported {
-		t.Skip("test filesystem is outside the closed production allowlist")
-	}
 	if err != nil {
 		t.Fatalf("loadProtectedObserved() failed with code %s", CodeOf(err))
 	}
@@ -417,9 +399,6 @@ func TestProtectedLoadDetectsSameInodeAndYAMLRewrites(t *testing.T) {
 					test.mutate(fixture)
 				}
 			})
-			if CodeOf(err) == CodeProtectedUnsupported {
-				t.Skip("test filesystem is outside the closed production allowlist")
-			}
 			if owner != nil || CodeOf(err) != CodeProtectedAccess || !mutated {
 				if owner != nil {
 					_ = owner.Close()
@@ -495,9 +474,6 @@ func TestProtectedLoadDetectsImmediateAndFinalMetadataMutations(t *testing.T) {
 					test.mutate(fixture)
 				}
 			})
-			if CodeOf(err) == CodeProtectedUnsupported {
-				t.Skip("test filesystem is outside the closed production allowlist")
-			}
 			if owner != nil || err == nil || !mutated {
 				if owner != nil {
 					_ = owner.Close()
@@ -531,9 +507,6 @@ func TestProtectedLoadAtomicGenerationReplacementCannotMixChildren(t *testing.T)
 			replaced = true
 		}
 	})
-	if CodeOf(err) == CodeProtectedUnsupported {
-		t.Skip("test filesystem is outside the closed production allowlist")
-	}
 	if owner != nil || CodeOf(err) != CodeProtectedAccess || !replaced {
 		if owner != nil {
 			_ = owner.Close()
@@ -665,8 +638,8 @@ func TestLoadProtectedRejectsDescriptorAndContentViolations(t *testing.T) {
 	}
 }
 
-// TestLoadProtectedRejectsWrongUIDAndUntrustedParents freezes one captured authority.
-func TestLoadProtectedRejectsWrongUIDAndUntrustedParents(t *testing.T) {
+// TestLoadProtectedRejectsWrongUID freezes one captured file authority.
+func TestLoadProtectedRejectsWrongUID(t *testing.T) {
 	fixture := newProtectedLoaderFixture(t, bytes.Repeat([]byte{0xa5}, exactKeyBytes))
 	owner, err := loadProtectedObservedWithUID(
 		fixture.yamlPath,
@@ -674,25 +647,11 @@ func TestLoadProtectedRejectsWrongUIDAndUntrustedParents(t *testing.T) {
 		nil,
 		uint32(os.Geteuid()+1),
 	)
-	if CodeOf(err) == CodeProtectedUnsupported {
-		t.Skip("descriptor-native ACL inspection is unavailable")
-	}
 	if owner != nil || CodeOf(err) != CodeProtectedAccess {
 		if owner != nil {
 			_ = owner.Close()
 		}
 		t.Fatalf("wrong captured UID returned code %s", CodeOf(err))
-	}
-
-	if err := os.Chmod(filepath.Dir(fixture.yamlPath), 0o770); err != nil {
-		t.Fatal("chmod fixture parent failed")
-	}
-	owner, err = LoadProtected(fixture.yamlPath, FlagValues{})
-	if owner != nil || CodeOf(err) != CodeProtectedAccess {
-		if owner != nil {
-			_ = owner.Close()
-		}
-		t.Fatalf("writable parent returned code %s", CodeOf(err))
 	}
 }
 
@@ -811,9 +770,6 @@ func TestLoadProtectedRejectsPerRoleAdjacentSizeFixtures(t *testing.T) {
 			fixture := newProtectedBackendFixture(t, test.backend)
 			writeProtectedFileWithoutModeChange(test.path(fixture), bytes.Repeat([]byte{'x'}, test.size))
 			owner, err := LoadProtected(fixture.yamlPath, FlagValues{})
-			if CodeOf(err) == CodeProtectedUnsupported {
-				t.Skip("test filesystem is outside the closed production allowlist")
-			}
 			if owner != nil || err == nil {
 				if owner != nil {
 					_ = owner.Close()
@@ -930,9 +886,6 @@ func TestLoadProtectedEnforcesExactCapabilityReadBounds(t *testing.T) {
 		t.Run(strconv.Itoa(size), func(t *testing.T) {
 			fixture := newProtectedLoaderFixture(t, bytes.Repeat([]byte{0xa5}, size))
 			owner, err := LoadProtected(fixture.yamlPath, FlagValues{})
-			if CodeOf(err) == CodeProtectedUnsupported {
-				t.Skip("test filesystem is outside the closed production allowlist")
-			}
 			if size == exactKeyBytes {
 				if err != nil {
 					t.Fatalf("exact capability rejected with code %s", CodeOf(err))
@@ -951,9 +904,6 @@ func TestLoadProtectedEnforcesExactCapabilityReadBounds(t *testing.T) {
 func TestOpenProtectedChildRemainsBoundToTheOpenedGeneration(t *testing.T) {
 	fixture := newProtectedLoaderFixture(t, bytes.Repeat([]byte{0xa5}, exactKeyBytes))
 	generation, err := openProtectedPath(fixture.generationPath, true)
-	if CodeOf(err) == CodeProtectedUnsupported {
-		t.Skip("test filesystem is outside the closed production allowlist")
-	}
 	if err != nil {
 		t.Fatalf("openProtectedPath() failed with code %s", CodeOf(err))
 	}
@@ -991,9 +941,6 @@ func TestOpenProtectedChildRemainsBoundToTheOpenedGeneration(t *testing.T) {
 func TestProtectedDescriptorOpenFlags(t *testing.T) {
 	fixture := newProtectedLoaderFixture(t, bytes.Repeat([]byte{0xa5}, exactKeyBytes))
 	generation, err := openProtectedPath(fixture.generationPath, true)
-	if CodeOf(err) == CodeProtectedUnsupported {
-		t.Skip("test filesystem is outside the closed production allowlist")
-	}
 	if err != nil {
 		t.Fatalf("open generation failed with code %s", CodeOf(err))
 	}
@@ -1091,9 +1038,6 @@ func TestLoadProtectedRejectsYAMLInsideGenerationAncestry(t *testing.T) {
 			}
 			sealGeneration(t, fixture.generationPath)
 			owner, err := LoadProtected(destination, FlagValues{})
-			if CodeOf(err) == CodeProtectedUnsupported {
-				t.Skip("descriptor-native ACL inspection is unavailable")
-			}
 			if owner != nil || CodeOf(err) != CodeProtectedPath {
 				if owner != nil {
 					_ = owner.Close()

@@ -260,15 +260,15 @@ done
 
 for target in check-images images-multiarch image-sbom image-provenance image-vulnerability check-container-release release-guardrails; do
   grep -Fq "make $target" "$supply"
-  grep -Fq "make $target" Makefile
+  grep -Eq "^$target:" Makefile
 done
 for target in check-deployment deployment-postfix deployment-security; do
   grep -Fq "make $target" "$guide"
-  grep -Fq "make $target" Makefile
+  grep -Eq "^$target:" Makefile
 done
 for target in deployment-postfix deployment-security; do
   grep -Fq "make $target" README.md
-  grep -Fq "make $target" Makefile
+  grep -Eq "^$target:" Makefile
 done
 for platform in amd64 arm64; do
   grep -Fq "$platform" "$supply"

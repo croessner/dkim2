@@ -478,7 +478,7 @@ The generation directory:
 
 - is absolute and ends with the exact 32-character lowercase hexadecimal
   `protected.generation` value;
-- is mode `0500`, owned by the daemon UID, and has no nontrivial ACL;
+- is mode `0500` and owned by the daemon UID;
 - contains every selected protected path as a direct child; and
 - is immutable after publication and never reused.
 
@@ -488,10 +488,10 @@ hex, Base64, delimiter, or stripped newline. Password files contain 1 through
 `0600`. The CA file contains only the bounded accepted PEM CA set and may use
 the documented read-only modes.
 
-Protected loading is supported only where descriptor-native ownership, ACL,
-and local-filesystem checks are implemented: Linux on ext4, XFS, Btrfs, or
-tmpfs, and Darwin with cgo on APFS or HFS. Network, FUSE, OverlayFS, unknown
-filesystems, Darwin without cgo, and other platforms fail closed.
+Protected loading uses portable descriptor-native ownership, mode, link, size,
+regular-file, no-follow, and stable-read checks on Linux and Darwin. The
+application does not classify filesystems, mounts, ACLs, or xattrs; deployment
+and container policy own that surrounding boundary.
 
 Create a complete new read-only generation directory, then atomically replace
 only the YAML file that selects it. There is no hot reload. Activation requires

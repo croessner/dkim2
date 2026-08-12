@@ -47,9 +47,6 @@ func TestLoadProtectedNetworkSigningPublishesOnlyDatasourceCredentials(t *testin
 	)
 	writeProtectedTestFile(t, fixture.yamlPath, []byte(document), 0o600)
 	owner, err := LoadProtected(fixture.yamlPath, FlagValues{})
-	if CodeOf(err) == CodeProtectedUnsupported {
-		t.Skip("test filesystem is outside the closed production allowlist")
-	}
 	if err != nil {
 		t.Fatalf("LoadProtected(network) failed with code %s", CodeOf(err))
 	}
@@ -85,9 +82,6 @@ const (
 func TestLoadProtectedSigningPublishesCompleteReloadRuntime(t *testing.T) {
 	fixture := newProtectedSigningFixture(t)
 	owner, err := LoadProtected(fixture.yamlPath, FlagValues{})
-	if CodeOf(err) == CodeProtectedUnsupported {
-		t.Skip("test filesystem is outside the closed production allowlist")
-	}
 	if err != nil {
 		t.Fatalf("LoadProtected() failed with code %s", CodeOf(err))
 	}
@@ -140,9 +134,6 @@ func TestLoadProtectedDSNOnlySigningPublishesOnlyDSNCapability(t *testing.T) {
 	))
 	writeProtectedTestFile(t, fixture.yamlPath, document, 0o600)
 	owner, err := LoadProtected(fixture.yamlPath, FlagValues{})
-	if CodeOf(err) == CodeProtectedUnsupported {
-		t.Skip("test filesystem is outside the closed production allowlist")
-	}
 	if err != nil {
 		t.Fatalf("LoadProtected() failed with code %s", CodeOf(err))
 	}
@@ -186,9 +177,6 @@ func TestLoadProtectedDisabledDoesNotOpenSigningChildren(t *testing.T) {
 	}
 	sealGeneration(t, fixture.generationPath)
 	owner, err := LoadProtected(fixture.yamlPath, FlagValues{})
-	if CodeOf(err) == CodeProtectedUnsupported {
-		t.Skip("test filesystem is outside the closed production allowlist")
-	}
 	if err != nil {
 		t.Fatalf("LoadProtected(disabled) failed with code %s", CodeOf(err))
 	}

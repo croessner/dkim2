@@ -22,13 +22,13 @@ const (
 	CodeSerialization Code = "config_serialization_forbidden"
 	// CodeProtectedPath identifies an invalid or untrusted protected path.
 	CodeProtectedPath Code = "config_protected_path"
-	// CodeProtectedAccess identifies invalid protected ownership, mode, link, ACL, or filesystem state.
+	// CodeProtectedAccess identifies invalid protected ownership, mode, link, shape, or descriptor state.
 	CodeProtectedAccess Code = "config_protected_access"
 	// CodeProtectedIO identifies a content-free protected descriptor operation failure.
 	CodeProtectedIO Code = "config_protected_io"
 	// CodeProtectedContent identifies malformed or inconsistent protected material.
 	CodeProtectedContent Code = "config_protected_content"
-	// CodeProtectedUnsupported identifies a platform or filesystem outside the closed allowlist.
+	// CodeProtectedUnsupported identifies a platform without the required descriptor primitives.
 	CodeProtectedUnsupported Code = "config_protected_unsupported"
 	// CodeProtectedClosed identifies use after protected ownership was released.
 	CodeProtectedClosed Code = "config_protected_closed"

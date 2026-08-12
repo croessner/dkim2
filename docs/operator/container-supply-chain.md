@@ -33,6 +33,18 @@ make container-smoke
 ```
 
 These commands keep outputs under ignored `.artifacts/` and do not publish.
+The individual release-evidence and aggregate validation targets are:
+
+```text
+make image-sbom
+make image-provenance
+make image-vulnerability
+make check-container-release
+make release-guardrails
+```
+
+They remain local validation commands; only the release workflow receives
+publication authority.
 
 ## Stable publication
 

@@ -88,7 +88,7 @@ func readProtectedDocumentIfExistsObserved(
 	}()
 	fd, err := retryOpenatRaw(parent.fd, filepath.Base(path), unix.O_RDONLY|unix.O_NOFOLLOW|unix.O_CLOEXEC|unix.O_NONBLOCK, 0)
 	if errors.Is(err, unix.ENOENT) {
-		parentFinal, finalErr := captureDescriptorState(parent.fd, parentPre.metadata.modeBits, true)
+		parentFinal, finalErr := captureDescriptorState(parent.fd)
 		if finalErr != nil || !sameDirectorySecurityState(parentFinal, parentPre) {
 			return nil, false, newError(CodeProtectedAccess)
 		}
@@ -115,7 +115,7 @@ func readProtectedDocumentIfExistsObserved(
 	if observe != nil {
 		observe(protectedDocumentAfterRead)
 	}
-	immediate, err := captureDescriptorState(document.fd, pre.metadata.modeBits, false)
+	immediate, err := captureDescriptorState(document.fd)
 	if err != nil || immediate != pre {
 		clear(data)
 		return nil, false, newError(CodeProtectedAccess)
@@ -127,8 +127,8 @@ func readProtectedDocumentIfExistsObserved(
 		clear(data)
 		return nil, false, err
 	}
-	final, err := captureDescriptorState(document.fd, pre.metadata.modeBits, false)
-	parentFinal, parentErr := captureDescriptorState(parent.fd, parentPre.metadata.modeBits, true)
+	final, err := captureDescriptorState(document.fd)
+	parentFinal, parentErr := captureDescriptorState(parent.fd)
 	pathFinal, pathErr := statAtNoFollow(parent.fd, filepath.Base(path))
 	if err != nil || parentErr != nil || pathErr != nil || final != pre || final != immediate ||
 		parentFinal != parentPre || pathFinal != pre.metadata {
@@ -166,12 +166,7 @@ func openProtectedDocumentParent(path string) (ownedDescriptor, descriptorState,
 		_ = parent.close()
 		return ownedDescriptor{fd: -1}, descriptorState{}, 0, err
 	}
-	metadata, err := statDescriptor(parent.fd)
-	if err != nil {
-		_ = parent.close()
-		return ownedDescriptor{fd: -1}, descriptorState{}, 0, err
-	}
-	state, err := captureDescriptorState(parent.fd, metadata.modeBits, true)
+	state, err := captureDescriptorState(parent.fd)
 	if err != nil {
 		_ = parent.close()
 		return ownedDescriptor{fd: -1}, descriptorState{}, 0, err

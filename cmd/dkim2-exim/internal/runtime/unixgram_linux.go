@@ -86,24 +86,19 @@ func openUnixgramSinkWith(
 		return nil, securefile.Identity{}, errRuntime
 	}
 	address := "/proc/self/fd/" + strconv.Itoa(parent) + "/" + name
-	accessBefore, err := securefile.SocketAccessFingerprint(address, uint32(childBefore.Mode&0o777)) //nolint:unconvert // Normalize Stat_t.Mode across architectures.
-	if err != nil {
-		return nil, securefile.Identity{}, errRuntime
-	}
 	connection, err := net.DialUnix(unixgramNetwork, nil, &net.UnixAddr{Name: address, Net: unixgramNetwork})
 	if err != nil {
 		return nil, securefile.Identity{}, errRuntime
 	}
 	// Linux reports unavailable SO_PEERCRED values for a client connected to an
 	// unconnected filesystem datagram listener. The verified owner-only parent,
-	// socket owner/mode, inode, link count, and access fingerprint therefore
+	// socket owner/mode, inode, and link count therefore
 	// define the same-identity trust boundary and are rechecked after connect.
 	if afterDial != nil {
 		afterDial()
 	}
-	accessAfter, accessErr := securefile.SocketAccessFingerprint(address, uint32(childBefore.Mode&0o777)) //nolint:unconvert // Normalize Stat_t.Mode across architectures.
 	var childAfter unix.Stat_t
-	if accessErr != nil || accessAfter != accessBefore || parentHandle.Validate() != nil ||
+	if parentHandle.Validate() != nil ||
 		unix.Fstatat(parent, name, &childAfter, unix.AT_SYMLINK_NOFOLLOW) != nil ||
 		childAfter.Dev != childBefore.Dev || childAfter.Ino != childBefore.Ino ||
 		childAfter.Mode != childBefore.Mode || childAfter.Uid != childBefore.Uid ||

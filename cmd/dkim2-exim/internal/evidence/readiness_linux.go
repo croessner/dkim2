@@ -293,11 +293,6 @@ func inspectReadinessFile(file int) (descriptorState, error) {
 		state.size != readinessBytes {
 		return descriptorState{}, ErrEvidence
 	}
-	filesystem, err := localFilesystem(file)
-	if err != nil || noExtendedAccess(file) != nil {
-		return descriptorState{}, ErrEvidence
-	}
-	state.filesystem = filesystem
 	return state, nil
 }
 
@@ -481,11 +476,6 @@ func inspectReadinessTemporary(file int) (descriptorState, error) {
 		state.size < 0 || state.size > readinessBytes {
 		return descriptorState{}, ErrEvidence
 	}
-	filesystem, err := localFilesystem(file)
-	if err != nil || noExtendedAccess(file) != nil {
-		return descriptorState{}, ErrEvidence
-	}
-	state.filesystem = filesystem
 	return state, nil
 }
 

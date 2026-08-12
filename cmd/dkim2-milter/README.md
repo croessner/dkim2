@@ -31,10 +31,10 @@ file in an exact `0500` parent. The file must be owned by the effective
 identity, have mode `0400` or `0600`, and have one link. Never place the
 capability in a command line, environment value, log, or configuration value.
 
-On macOS the production protected-file loader requires the native cgo build so
-ACLs can be inspected. A `CGO_ENABLED=0` Darwin binary builds for portability
-evidence but fails protected loading closed. Linux production builds remain
-pure Go and support amd64 and arm64.
+Protected-file loading uses the same portable descriptor, owner, mode, link,
+size, and no-follow rules on Linux and macOS. It has no cgo, ACL, xattr, mount,
+or filesystem-type dependency. Linux production builds remain pure Go and
+support amd64 and arm64.
 
 Before activation, validate the strict configuration and its exact route
 capability without opening a socket or contacting the daemon:
@@ -342,8 +342,7 @@ does not claim that the daemon is reachable at that instant.
 
 - Startup failure: inspect ownership and modes of every configuration,
   capability, and socket-parent component; reject symlinks and pre-existing
-  socket targets. On macOS verify that the production binary was built with
-  native cgo ACL support.
+  socket targets.
 - Negotiation disconnect: confirm Milter protocol v6, `add_header`, and
   leading-header-space support at the MTA.
 - Fixed 451 reply: check daemon availability and operation metrics. The SMTP
@@ -381,7 +380,7 @@ make race
 make check-openapi
 make check-workspace
 make check-vendor
-make check-protected-platforms
+make check-platform-builds
 make govulncheck
 make guardrails
 ```

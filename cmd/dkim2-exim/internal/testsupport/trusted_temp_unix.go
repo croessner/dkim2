@@ -6,34 +6,23 @@ package testsupport
 import (
 	"os"
 	"path/filepath"
-	"runtime"
 	"testing"
-
-	"golang.org/x/sys/unix"
 )
 
-// TrustedTempDirectory creates a fixture root beneath ancestry accepted by secure loaders.
+// TrustedTempDirectory creates an isolated portable fixture directory.
 func TrustedTempDirectory(t testing.TB) string {
 	t.Helper()
-	base := "."
-	switch runtime.GOOS {
-	case "darwin":
-		base = darwinUserTempDirectory(t)
-	case "linux":
-		base = os.Getenv("DKIM2_TEST_TRUSTED_ROOT")
-		if base == "" {
-			var err error
-			base, err = os.UserHomeDir()
-			if err != nil {
-				t.Fatal("trusted Linux test home unavailable")
-			}
-		}
-	}
-	directory, err := os.MkdirTemp(base, ".d2e-")
+	directory, err := os.MkdirTemp("/tmp", "d2e-")
 	if err != nil {
-		t.Fatal(err)
+		t.Fatal("create fixture root failed")
 	}
 	t.Cleanup(func() { _ = os.RemoveAll(directory) })
+	if err := os.Chown(directory, os.Geteuid(), os.Getegid()); err != nil {
+		t.Fatal("own fixture root failed")
+	}
+	if err := os.Chmod(directory, 0o700); err != nil {
+		t.Fatal("protect fixture root failed")
+	}
 	absolute, err := filepath.Abs(directory)
 	if err != nil {
 		t.Fatal(err)
@@ -43,39 +32,4 @@ func TrustedTempDirectory(t testing.TB) string {
 		t.Fatal(err)
 	}
 	return resolved
-}
-
-// darwinUserTempDirectory discovers the per-user kernel-managed temporary root.
-func darwinUserTempDirectory(t testing.TB) string {
-	t.Helper()
-	const foldersRoot = "/private/var/folders"
-	buckets, err := os.ReadDir(foldersRoot)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, bucket := range buckets {
-		if !bucket.IsDir() {
-			continue
-		}
-		bucketPath := filepath.Join(foldersRoot, bucket.Name())
-		identities, readErr := os.ReadDir(bucketPath)
-		if readErr != nil {
-			continue
-		}
-		for _, identity := range identities {
-			if !identity.IsDir() {
-				continue
-			}
-			candidate := filepath.Join(bucketPath, identity.Name(), "T")
-			var state unix.Stat_t
-			if statErr := unix.Stat(candidate, &state); statErr == nil &&
-				state.Uid == uint32(os.Geteuid()) &&
-				uint32(state.Mode)&unix.S_IFMT == unix.S_IFDIR && //nolint:unconvert // Stat_t.Mode differs across supported Unix targets.
-				uint32(state.Mode)&0o7777 == 0o700 { //nolint:unconvert // Stat_t.Mode differs across supported Unix targets.
-				return candidate
-			}
-		}
-	}
-	t.Fatal("trusted Darwin test temporary root unavailable")
-	return ""
 }

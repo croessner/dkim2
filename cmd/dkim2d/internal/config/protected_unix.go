@@ -108,7 +108,7 @@ func loadProtectedObservedWithUID(
 	if err != nil {
 		return nil, err
 	}
-	yamlImmediate, err := captureDescriptorState(yaml.fd, yamlPre.metadata.modeBits, false)
+	yamlImmediate, err := captureDescriptorState(yaml.fd)
 	if err != nil || yamlImmediate != yamlPre {
 		return nil, newError(CodeProtectedAccess)
 	}
@@ -323,11 +323,7 @@ func readGenerationChildren(files []*retainedProtectedFile, observe protectedLoa
 		if err != nil {
 			return err
 		}
-		immediate, err := captureDescriptorState(
-			file.descriptor.fd,
-			file.pre.metadata.modeBits,
-			false,
-		)
+		immediate, err := captureDescriptorState(file.descriptor.fd)
 		if err != nil || immediate != file.pre {
 			return newError(CodeProtectedAccess)
 		}
@@ -349,26 +345,18 @@ func validateFinalDescriptorStates(
 ) error {
 	notifyProtectedObserver(observe, protectedEventBeforeFinalChildren, 0)
 	for _, file := range files {
-		final, err := captureDescriptorState(
-			file.descriptor.fd,
-			file.pre.metadata.modeBits,
-			false,
-		)
+		final, err := captureDescriptorState(file.descriptor.fd)
 		if err != nil || final != file.pre || final != file.immediate {
 			return newError(CodeProtectedAccess)
 		}
 		notifyProtectedObserver(observe, protectedEventChildFinal, file.role)
 	}
-	generationFinal, err := captureDescriptorState(
-		generationFD,
-		generationPre.metadata.modeBits,
-		true,
-	)
+	generationFinal, err := captureDescriptorState(generationFD)
 	if err != nil || generationFinal != generationPre {
 		return newError(CodeProtectedAccess)
 	}
 	notifyProtectedObserver(observe, protectedEventGenerationFinal, 0)
-	yamlFinal, err := captureDescriptorState(yamlFD, yamlPre.metadata.modeBits, false)
+	yamlFinal, err := captureDescriptorState(yamlFD)
 	if err != nil || yamlFinal != yamlPre || yamlFinal != yamlImmediate {
 		return newError(CodeProtectedAccess)
 	}
@@ -506,7 +494,7 @@ func buildProtectedState(
 
 // validateGenerationDescriptor enforces the immutable generation-directory policy.
 func validateGenerationDescriptor(fd int, effectiveUID uint32) (descriptorState, error) {
-	state, err := captureDescriptorState(fd, 0o500, true)
+	state, err := captureDescriptorState(fd)
 	if err != nil {
 		return descriptorState{}, err
 	}
@@ -534,11 +522,7 @@ func validateProtectedDescriptor(fd int, role protectedFileRole, effectiveUID ui
 	if err := validateProtectedFileMetadata(metadata, role, effectiveUID); err != nil {
 		return descriptorState{}, err
 	}
-	access, err := descriptorAccessFingerprint(fd, false, metadata.modeBits)
-	if err != nil {
-		return descriptorState{}, err
-	}
-	return descriptorState{metadata: metadata, access: access}, nil
+	return descriptorState{metadata: metadata}, nil
 }
 
 // validateProtectedFileMetadata applies the exact per-role descriptor policy.
@@ -575,17 +559,14 @@ func validateProtectedFileMetadata(
 	return nil
 }
 
-// captureDescriptorState freezes metadata and ACL state through one owned descriptor.
-func captureDescriptorState(fd int, acceptedMode uint32, directory bool) (descriptorState, error) {
+// captureDescriptorState freezes descriptor-native metadata without imposing a
+// filesystem-, mount-, ACL-, or xattr-specific policy.
+func captureDescriptorState(fd int) (descriptorState, error) {
 	metadata, err := statDescriptor(fd)
 	if err != nil {
 		return descriptorState{}, err
 	}
-	access, err := descriptorAccessFingerprint(fd, directory, acceptedMode)
-	if err != nil {
-		return descriptorState{}, err
-	}
-	return descriptorState{metadata: metadata, access: access}, nil
+	return descriptorState{metadata: metadata}, nil
 }
 
 // protectedSizeAccepted validates pre-read size bounds for one protected role.
@@ -681,7 +662,7 @@ func readProtectedDescriptorWith(
 	return data, nil
 }
 
-// openProtectedPath traverses an absolute path through trusted directory descriptors.
+// openProtectedPath traverses an absolute path through no-follow directory descriptors.
 func openProtectedPath(path string, directory bool) (ownedDescriptor, error) {
 	return openProtectedPathWithUID(path, directory, uint32(os.Geteuid()))
 }
@@ -775,18 +756,16 @@ func openRootDescriptor() (ownedDescriptor, error) {
 	return descriptor, nil
 }
 
-// validateTrustedRootDirectory permits only the closed container-root exception.
+// validateTrustedRootDirectory requires only a directory descriptor.
 func validateTrustedRootDirectory(fd int) error {
 	metadata, err := statDescriptor(fd)
 	if err != nil {
 		return err
 	}
-	if metadata.typeBits != unix.S_IFDIR ||
-		metadata.uid != 0 ||
-		metadata.modeBits&0o022 != 0 {
+	if metadata.typeBits != unix.S_IFDIR {
 		return newError(CodeProtectedAccess)
 	}
-	return inspectTrustedRootAccess(fd, metadata.modeBits)
+	return nil
 }
 
 // openProtectedChild opens a preclassified regular child relative to the generation descriptor.
@@ -823,22 +802,18 @@ func openPreclassifiedChild(parentFD int, name string, directory bool) (ownedDes
 	return descriptor, nil
 }
 
-// validateTrustedDirectory enforces owner, mode, local-filesystem, and trivial-ACL policy.
+// validateTrustedDirectory requires a directory; no-follow traversal provides
+// the path-substitution boundary while deployment owns ancestor permissions.
 func validateTrustedDirectory(fd int, effectiveUID uint32) error {
+	_ = effectiveUID
 	metadata, err := statDescriptor(fd)
 	if err != nil {
 		return err
 	}
-	if metadata.typeBits != unix.S_IFDIR ||
-		metadata.uid != 0 && metadata.uid != effectiveUID ||
-		metadata.modeBits&0o022 != 0 {
+	if metadata.typeBits != unix.S_IFDIR {
 		return newError(CodeProtectedAccess)
 	}
-	return inspectTrustedAncestorAccess(
-		fd,
-		metadata.modeBits,
-		metadata.uid == 0,
-	)
+	return nil
 }
 
 // retryOpenat retries interrupted descriptor opens and maps all failures content-free.

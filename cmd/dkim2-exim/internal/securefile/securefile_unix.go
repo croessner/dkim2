@@ -1,6 +1,6 @@
 //go:build linux || darwin
 
-// Package securefile owns descriptor-first reads through trusted Unix ancestry.
+// Package securefile owns portable descriptor-first reads on Unix.
 package securefile
 
 import (
@@ -78,10 +78,9 @@ type metadata struct {
 	ctimeNsec int64
 }
 
-// state freezes metadata and descriptor-native access policy for race detection.
+// state freezes descriptor-native metadata for race detection.
 type state struct {
 	metadata metadata
-	access   [32]byte
 }
 
 // descriptor owns one file descriptor through at most one close.
@@ -265,8 +264,7 @@ func sameDirectorySecurityState(before, after state) bool {
 		before.metadata.links == after.metadata.links &&
 		before.metadata.typeBits == after.metadata.typeBits &&
 		before.metadata.modeBits == after.metadata.modeBits &&
-		before.metadata.uid == after.metadata.uid &&
-		before.access == after.access
+		before.metadata.uid == after.metadata.uid
 }
 
 // Close releases the retained directory descriptor.
@@ -306,11 +304,6 @@ func (h *Handle) Read() ([]byte, error) {
 	notify(h.observe, EventAfterRead)
 	childAfter, err := inspectFile(h.child.fd, h.rules)
 	if err != nil || childAfter != h.childBefore {
-		clear(data)
-		return nil, &Error{}
-	}
-	parentAfter, err := inspectDirectory(h.parent.fd, h.rules, true)
-	if err != nil || parentAfter != h.parentBefore {
 		clear(data)
 		return nil, &Error{}
 	}
@@ -450,7 +443,8 @@ func openChild(parentFD int, name string, directory bool, observe Observer) (des
 	return result, nil
 }
 
-// inspectDirectory enforces trusted ancestry and an optional exact final parent.
+// inspectDirectory requires directory traversal and optionally enforces the
+// explicitly configured final-parent owner and mode.
 func inspectDirectory(fd int, rules Rules, final bool) (state, error) {
 	current, err := statDescriptor(fd)
 	if err != nil {
@@ -463,18 +457,8 @@ func inspectDirectory(fd int, rules Rules, final bool) (state, error) {
 		if current.uid != rules.EffectiveUID || current.modeBits != rules.ParentMode {
 			return state{}, &Error{}
 		}
-	} else {
-		trustedOwner := current.uid == 0 || current.uid == rules.EffectiveUID
-		rootStickyAncestor := current.uid == 0 && current.modeBits&unix.S_ISVTX != 0
-		if !trustedOwner || current.modeBits&0o022 != 0 && !rootStickyAncestor {
-			return state{}, &Error{}
-		}
 	}
-	access, err := descriptorAccessFingerprint(fd, true, current.modeBits)
-	if err != nil {
-		return state{}, err
-	}
-	return state{metadata: current, access: access}, nil
+	return state{metadata: current}, nil
 }
 
 // inspectFile enforces exact final file owner, mode, links, type, and size.
@@ -491,11 +475,7 @@ func inspectFile(fd int, rules Rules) (state, error) {
 		current.size < rules.MinimumBytes || current.size > rules.MaximumBytes {
 		return state{}, &Error{}
 	}
-	access, err := descriptorAccessFingerprint(fd, false, current.modeBits)
-	if err != nil {
-		return state{}, err
-	}
-	return state{metadata: current, access: access}, nil
+	return state{metadata: current}, nil
 }
 
 // statAt obtains one no-follow child metadata snapshot.

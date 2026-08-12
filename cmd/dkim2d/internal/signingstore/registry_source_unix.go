@@ -15,7 +15,7 @@ func openRegistrySourceParent(generationFD int) (int, error) {
 		return -1, &Error{}
 	}
 	state, stateErr := descriptorState(fd)
-	if stateErr != nil || !validRegistryParentState(state) || !localFilesystem(fd) {
+	if stateErr != nil || !validRegistryParentState(state) {
 		_ = unix.Close(fd)
 		return -1, &Error{}
 	}
@@ -36,7 +36,7 @@ func openRegistryGeneration(parentFD int, generation string) (int, error) {
 		return -1, &Error{}
 	}
 	state, stateErr := descriptorState(fd)
-	if stateErr != nil || !validRootState(state) || !localFilesystem(fd) {
+	if stateErr != nil || !validRootState(state) {
 		_ = unix.Close(fd)
 		return -1, &Error{}
 	}

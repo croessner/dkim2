@@ -29,18 +29,17 @@ var (
 
 // descriptorState freezes immutable metadata used for replacement detection.
 type descriptorState struct {
-	device     uint64
-	inode      uint64
-	typeBits   uint32
-	modeBits   uint32
-	uid        uint32
-	linkCount  uint64
-	size       int64
-	mtimeSec   int64
-	mtimeNsec  int64
-	ctimeSec   int64
-	ctimeNsec  int64
-	filesystem int64
+	device    uint64
+	inode     uint64
+	typeBits  uint32
+	modeBits  uint32
+	uid       uint32
+	linkCount uint64
+	size      int64
+	mtimeSec  int64
+	mtimeNsec int64
+	ctimeSec  int64
+	ctimeNsec int64
 }
 
 // manifestEntry owns one authenticated startup or sweep snapshot.
@@ -865,7 +864,6 @@ func (s *Store) publishRecord(
 	if statErr != nil || !sameIdentityAndShape(final, after) {
 		return descriptorState{}, ErrEvidence
 	}
-	final.filesystem = after.filesystem
 	return final, nil
 }
 
@@ -1396,28 +1394,19 @@ func validateRootDescriptor(directory int, expected descriptorState) error {
 		current.typeBits != expected.typeBits ||
 		current.modeBits != expected.modeBits ||
 		current.uid != expected.uid ||
-		current.linkCount != expected.linkCount ||
-		current.filesystem != expected.filesystem {
+		current.linkCount != expected.linkCount {
 		return ErrEvidence
 	}
 	return nil
 }
 
-// inspectRoot verifies one owned 0700 local-filesystem directory descriptor.
+// inspectRoot verifies one owned 0700 directory descriptor.
 func inspectRoot(fd int) (descriptorState, error) {
 	state, err := statDescriptor(fd)
 	if err != nil || state.typeBits != unix.S_IFDIR || state.modeBits != 0o700 ||
 		state.uid != uint32(os.Geteuid()) || state.linkCount != 2 {
 		return descriptorState{}, ErrEvidence
 	}
-	filesystem, fsErr := localFilesystem(fd)
-	if fsErr != nil {
-		return descriptorState{}, ErrEvidence
-	}
-	if noExtendedAccess(fd) != nil {
-		return descriptorState{}, ErrEvidence
-	}
-	state.filesystem = filesystem
 	return state, nil
 }
 
@@ -1441,14 +1430,6 @@ func inspectRecordLinks(fd int, allowUnlinked bool) (descriptorState, error) {
 		state.size < 0 || state.size > MaxRecordBytes {
 		return descriptorState{}, ErrEvidence
 	}
-	filesystem, fsErr := localFilesystem(fd)
-	if fsErr != nil {
-		return descriptorState{}, ErrEvidence
-	}
-	if noExtendedAccess(fd) != nil {
-		return descriptorState{}, ErrEvidence
-	}
-	state.filesystem = filesystem
 	return state, nil
 }
 
@@ -1462,8 +1443,7 @@ func sameReadGeneration(before, after descriptorState) bool {
 		before.typeBits == after.typeBits && before.modeBits == after.modeBits &&
 		before.uid == after.uid && before.size == after.size &&
 		before.mtimeSec == after.mtimeSec &&
-		before.mtimeNsec == after.mtimeNsec &&
-		before.filesystem == after.filesystem
+		before.mtimeNsec == after.mtimeNsec
 }
 
 // inspectProtectedKeyParent verifies the exact protected key-parent policy.
@@ -1473,14 +1453,6 @@ func inspectProtectedKeyParent(fd int) (descriptorState, error) {
 		state.uid != uint32(os.Geteuid()) || state.linkCount != 2 {
 		return descriptorState{}, ErrEvidence
 	}
-	filesystem, fsErr := localFilesystem(fd)
-	if fsErr != nil {
-		return descriptorState{}, ErrEvidence
-	}
-	if noExtendedAccess(fd) != nil {
-		return descriptorState{}, ErrEvidence
-	}
-	state.filesystem = filesystem
 	return state, nil
 }
 
@@ -1493,14 +1465,6 @@ func inspectProtectedKey(fd int) (descriptorState, error) {
 		state.size != KeyBytes {
 		return descriptorState{}, ErrEvidence
 	}
-	filesystem, fsErr := localFilesystem(fd)
-	if fsErr != nil {
-		return descriptorState{}, ErrEvidence
-	}
-	if noExtendedAccess(fd) != nil {
-		return descriptorState{}, ErrEvidence
-	}
-	state.filesystem = filesystem
 	return state, nil
 }
 
@@ -1548,21 +1512,6 @@ func sameIdentityAndShape(left, right descriptorState) bool {
 		left.typeBits == right.typeBits && left.modeBits == right.modeBits &&
 		left.uid == right.uid && left.linkCount == right.linkCount &&
 		left.size == right.size
-}
-
-// localFilesystem applies the closed audited Linux local-filesystem allowlist.
-func localFilesystem(fd int) (int64, error) {
-	var filesystem unix.Statfs_t
-	if unix.Fstatfs(fd, &filesystem) != nil {
-		return 0, ErrEvidence
-	}
-	kind := filesystem.Type
-	switch kind {
-	case unix.EXT4_SUPER_MAGIC, unix.XFS_SUPER_MAGIC, unix.BTRFS_SUPER_MAGIC, unix.TMPFS_MAGIC:
-		return kind, nil
-	default:
-		return 0, ErrEvidence
-	}
 }
 
 // readExactRecord reads the descriptor-declared bounded bytes and exact EOF.

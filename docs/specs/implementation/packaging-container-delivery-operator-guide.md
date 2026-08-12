@@ -723,7 +723,7 @@ make race
 make check-openapi
 make check-workspace
 make check-vendor
-make check-protected-platforms
+make check-platform-builds
 make test-valkey
 make check-conformance
 make conformance

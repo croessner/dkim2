@@ -124,6 +124,13 @@ test-opendkim-bootstrap:
 fmt:
 	@gofmt -w lib cmd tools
 
+.PHONY: fmt-check
+fmt-check:
+	@test -z "$$(gofmt -l lib cmd tools)" || { \
+		gofmt -l lib cmd tools; \
+		exit 1; \
+	}
+
 .PHONY: fix
 fix:
 	@set -e; for module in $(PRODUCT_MODULES); do \
@@ -408,10 +415,10 @@ check-vendor:
 	@GOCACHE="$${GOCACHE:-/tmp/dkim2-go-build-cache}" \
 		go -C tools run ./cmd/reference -root .. check-vendor
 
-.PHONY: check-protected-platforms
-check-protected-platforms:
+.PHONY: check-platform-builds
+check-platform-builds:
 	@set -eu; \
-	output="$$(mktemp -d /tmp/dkim2-protected-platforms.XXXXXX)"; \
+	output="$$(mktemp -d /tmp/dkim2-platform-builds.XXXXXX)"; \
 	trap 'rm -rf "$$output"' 0 1 2 15; \
 	mkdir -m 0700 "$$output/cache"; \
 	GOCACHE="$$output/cache" GOOS=linux GOARCH=amd64 CGO_ENABLED=0 \
@@ -445,15 +452,7 @@ check-protected-platforms:
 	GOCACHE="$$output/cache" GOOS=freebsd GOARCH=amd64 CGO_ENABLED=0 \
 		go test -c -o "$$output/dkim2-milter-freebsd-amd64.test" ./cmd/dkim2-milter/internal/config; \
 	GOCACHE="$$output/cache" GOOS=windows GOARCH=amd64 CGO_ENABLED=0 \
-		go test -c -o "$$output/dkim2-milter-windows-amd64.test.exe" ./cmd/dkim2-milter/internal/config; \
-	if test "$$(go env GOOS)" = darwin; then \
-		GOCACHE="$$output/cache" CGO_ENABLED=1 go test ./cmd/dkim2d/internal/config; \
-		GOCACHE="$$output/cache" CGO_ENABLED=0 go build -o "$$output/dkim2d-darwin-nocgo" ./cmd/dkim2d; \
-		GOCACHE="$$output/cache" CGO_ENABLED=0 go test -run '^TestDarwinNoCGOProtectedConfigurationFailsClosed$$' ./cmd/dkim2d/internal/config; \
-		GOCACHE="$$output/cache" CGO_ENABLED=1 go test ./cmd/dkim2-milter/internal/config ./cmd/dkim2-milter/internal/securefile; \
-		GOCACHE="$$output/cache" CGO_ENABLED=0 go build -o "$$output/dkim2-milter-darwin-nocgo" ./cmd/dkim2-milter; \
-		GOCACHE="$$output/cache" CGO_ENABLED=0 go test -run '^TestDarwinNoCGOProtectedLoadingFailsClosed$$' ./cmd/dkim2-milter/internal/securefile; \
-	fi
+		go test -c -o "$$output/dkim2-milter-windows-amd64.test.exe" ./cmd/dkim2-milter/internal/config
 
 .PHONY: check-admin-contract
 check-admin-contract:
@@ -527,7 +526,7 @@ integration-exim: test-exim-local-scan check-exim-matrix-prep check-exim-c-linux
 qualification-exim: integration-exim check-exim-c-linux-cross test-exim-real-matrix
 
 .PHONY: guardrails
-guardrails: check-ci fix fmt vet lint test race build-check check-generated check-vendor check-protected-platforms check-boundaries check-operator-docs
+guardrails: check-ci fmt-check vet lint test race build-check check-generated check-vendor check-platform-builds check-boundaries check-operator-docs
 
 .PHONY: product-binaries
 product-binaries:

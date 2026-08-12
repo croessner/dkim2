@@ -28,10 +28,9 @@ type descriptorMetadata struct {
 	ctimeNsec int64
 }
 
-// descriptorState freezes metadata and descriptor-native access-control state.
+// descriptorState freezes descriptor-native metadata.
 type descriptorState struct {
 	metadata descriptorMetadata
-	access   [32]byte
 }
 
 // protectedState owns all startup material through exactly one lifecycle phase.

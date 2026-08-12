@@ -82,8 +82,5 @@ func inspectCapabilityDescriptor(descriptor int) (capabilityMetadata, error) {
 		metadata.size != 32 {
 		return capabilityMetadata{}, NewExitError(ExitCapability)
 	}
-	if err := inspectCapabilityAccess(descriptor); err != nil {
-		return capabilityMetadata{}, err
-	}
 	return metadata, nil
 }

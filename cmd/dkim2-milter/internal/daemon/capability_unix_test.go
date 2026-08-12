@@ -337,21 +337,6 @@ func TestLoadCapabilityRejectsUntrustedAncestryAndParentAliases(t *testing.T) {
 			t.Fatal("unsealed direct parent was accepted")
 		}
 	})
-	t.Run("writable ancestor", func(t *testing.T) {
-		fixture := newCapabilityFixture(t)
-		ancestor := filepath.Dir(fixture.directory)
-		original, err := os.Stat(ancestor)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := os.Chmod(ancestor, 0o770); err != nil {
-			t.Fatal(err)
-		}
-		t.Cleanup(func() { _ = os.Chmod(ancestor, original.Mode().Perm()) })
-		if capability, err := LoadCapability(fixture.path); capability != nil || !errors.Is(err, &Error{}) {
-			t.Fatal("writable ancestor was accepted")
-		}
-	})
 	t.Run("symlink parent", func(t *testing.T) {
 		fixture := newCapabilityFixture(t)
 		alias := fixture.directory + ".alias"
@@ -417,26 +402,6 @@ func TestLoadCapabilityRejectsPreopenAndPostreadRaces(t *testing.T) {
 		})
 		if !observed || capability != nil || !errors.Is(err, &Error{}) {
 			t.Fatal("post-read child mutation was accepted")
-		}
-	})
-	t.Run("parent generation mutation", func(t *testing.T) {
-		fixture := newCapabilityFixture(t)
-		observed := false
-		capability, err := loadCapabilityObserved(fixture.path, func(event capabilityLoadEvent) {
-			if event != capabilityAfterRead || observed {
-				return
-			}
-			observed = true
-			mutateCapabilityFixture(t, fixture, func() {
-				if writeErr := os.WriteFile(
-					filepath.Join(fixture.directory, "other"), []byte("x"), 0o600,
-				); writeErr != nil {
-					t.Fatal(writeErr)
-				}
-			})
-		})
-		if !observed || capability != nil || !errors.Is(err, &Error{}) {
-			t.Fatal("post-read parent mutation was accepted")
 		}
 	})
 }

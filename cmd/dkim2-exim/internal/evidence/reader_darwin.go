@@ -3,7 +3,6 @@
 package evidence
 
 import (
-	"bytes"
 	"context"
 	"crypto/subtle"
 	"errors"
@@ -17,22 +16,19 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-const maxDarwinAccessXattrBytes = 65_536
-
 // darwinDescriptorState freezes security-relevant descriptor metadata.
 type darwinDescriptorState struct {
-	device     int32
-	inode      uint64
-	typeBits   uint16
-	modeBits   uint16
-	uid        uint32
-	linkCount  uint16
-	size       int64
-	mtimeSec   int64
-	mtimeNsec  int64
-	ctimeSec   int64
-	ctimeNsec  int64
-	filesystem [16]byte
+	device    int32
+	inode     uint64
+	typeBits  uint16
+	modeBits  uint16
+	uid       uint32
+	linkCount uint16
+	size      int64
+	mtimeSec  int64
+	mtimeNsec int64
+	ctimeSec  int64
+	ctimeNsec int64
 }
 
 // darwinReadEntry owns one authenticated read-only manifest member.
@@ -310,8 +306,7 @@ func sameDarwinReadGeneration(
 		before.typeBits == after.typeBits && before.modeBits == after.modeBits &&
 		before.uid == after.uid && before.size == after.size &&
 		before.mtimeSec == after.mtimeSec &&
-		before.mtimeNsec == after.mtimeNsec &&
-		before.filesystem == after.filesystem
+		before.mtimeNsec == after.mtimeNsec
 }
 
 // Close drains active reads, closes the retained root, and clears the key.
@@ -390,7 +385,7 @@ func sameDarwinRootGeneration(
 ) bool {
 	return before.device == after.device && before.inode == after.inode &&
 		before.typeBits == after.typeBits && before.modeBits == after.modeBits &&
-		before.uid == after.uid && before.filesystem == after.filesystem
+		before.uid == after.uid
 }
 
 // wallTime invokes the injected clock without trusting panicking callbacks.
@@ -532,7 +527,7 @@ func inspectDarwinKey(file int) (darwinDescriptorState, error) {
 	)
 }
 
-// inspectDarwinDescriptor applies exact metadata, filesystem, and xattr policy.
+// inspectDarwinDescriptor applies portable descriptor metadata policy.
 func inspectDarwinDescriptor(
 	file int,
 	kind uint16,
@@ -550,50 +545,13 @@ func inspectDarwinDescriptor(
 		stat.Size < 0 || maximum > 0 && stat.Size > int64(maximum) {
 		return darwinDescriptorState{}, ErrEvidence
 	}
-	var filesystem unix.Statfs_t
-	if unix.Fstatfs(file, &filesystem) != nil {
-		return darwinDescriptorState{}, ErrEvidence
-	}
-	name := strings.TrimRight(string(filesystem.Fstypename[:]), "\x00")
-	if name != "apfs" && name != "hfs" && name != "tmpfs" {
-		return darwinDescriptorState{}, ErrEvidence
-	}
-	if (kind != unix.S_IFREG || stat.Nlink != 0) &&
-		!safeDarwinXattrs(file) {
-		return darwinDescriptorState{}, ErrEvidence
-	}
 	return darwinDescriptorState{
 		device: stat.Dev, inode: stat.Ino,
 		typeBits: stat.Mode & unix.S_IFMT, modeBits: stat.Mode & 0o7777,
 		uid: stat.Uid, linkCount: stat.Nlink, size: stat.Size,
 		mtimeSec: stat.Mtim.Sec, mtimeNsec: stat.Mtim.Nsec,
 		ctimeSec: stat.Ctim.Sec, ctimeNsec: stat.Ctim.Nsec,
-		filesystem: filesystem.Fstypename,
 	}, nil
-}
-
-// safeDarwinXattrs rejects ACL/access xattrs and permits only OS provenance.
-func safeDarwinXattrs(file int) bool {
-	size, err := unix.Flistxattr(file, nil)
-	if err != nil || size < 0 || size > maxDarwinAccessXattrBytes {
-		return false
-	}
-	if size == 0 {
-		return true
-	}
-	names := make([]byte, size)
-	count, err := unix.Flistxattr(file, names)
-	if err != nil || count != size || names[size-1] != 0 {
-		clear(names)
-		return false
-	}
-	defer clear(names)
-	for name := range bytes.SplitSeq(names[:size-1], []byte{0}) {
-		if string(name) != "com.apple.provenance" {
-			return false
-		}
-	}
-	return true
 }
 
 // readDarwinRecord reads one descriptor-declared size and exact EOF.

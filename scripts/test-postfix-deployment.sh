@@ -33,7 +33,6 @@ daemon_image="$prefix"-dkim2d:verified
 milter_image="$prefix"-dkim2-milter:verified
 daemon_upgrade_image="$prefix"-dkim2d:lifecycle-upgrade
 milter_upgrade_image="$prefix"-dkim2-milter:lifecycle-upgrade
-unsupported_filesystem_image="$prefix"-protected:unsupported-filesystem
 daemon_image_selected=$daemon_image
 milter_image_selected=$milter_image
 daemon_image_id=
@@ -88,7 +87,6 @@ cleanup() {
     "$daemon_upgrade_image" "$milter_upgrade_image"; do
     docker image rm "$image" >/dev/null 2>&1 || status=1
   done
-  docker image rm "$unsupported_filesystem_image" >/dev/null 2>&1 || true
   for identity in \
     "$daemon_image_id" "$milter_image_id" \
     "$daemon_upgrade_image_id" "$milter_upgrade_image_id"; do
@@ -666,97 +664,6 @@ milter_validation_result() {
   return 1
 }
 
-# test_unsupported_filesystem proves final protected objects on OverlayFS fail closed.
-test_unsupported_filesystem() {
-  source=$1
-  binary_container="$prefix"-validator-binary
-  preparation_container="$prefix"-unsupported-preparation
-  binary="$work/dkim2d-validator"
-
-  printf 'deployment check: unsupported-filesystem-binary\n'
-  docker create --name "$binary_container" "$daemon_image" >/dev/null
-  docker cp "$binary_container":/usr/local/bin/dkim2d "$binary"
-  docker rm "$binary_container" >/dev/null
-  chmod 0700 "$binary"
-
-  printf 'deployment check: unsupported-filesystem-prepare\n'
-  docker create \
-    --name "$preparation_container" \
-    --network none \
-    --cap-drop ALL \
-    --cap-add CHOWN \
-    --cap-add DAC_OVERRIDE \
-    --cap-add DAC_READ_SEARCH \
-    --cap-add FOWNER \
-    --security-opt no-new-privileges \
-    --mount "type=volume,source=$source,target=/source,readonly" \
-    --entrypoint /bin/sh \
-    "$helper_image" -ceu '
-      mkdir -m 0700 /unsupported
-      cp -a /source/. /unsupported/
-      sed "s#/var/lib/dkim2d/#/unsupported/#g" \
-        /unsupported/config.yaml >/unsupported/config.yaml.new
-      chown 2000:2000 /unsupported/config.yaml.new
-      chmod 0600 /unsupported/config.yaml.new
-      mv /unsupported/config.yaml.new /unsupported/config.yaml
-      chown 2000:2000 /unsupported
-      chmod 0500 /unsupported
-    ' >/dev/null
-  docker start --attach "$preparation_container" >/dev/null
-  test "$(docker inspect "$preparation_container" \
-    --format '{{.State.ExitCode}}')" -eq 0
-  docker commit "$preparation_container" "$unsupported_filesystem_image" >/dev/null
-  docker rm "$preparation_container" >/dev/null
-
-  printf 'deployment check: unsupported-filesystem-shape\n'
-  docker run --rm \
-    --name "$prefix"-helper \
-    --network none \
-    --read-only \
-    --cap-drop ALL \
-    --security-opt no-new-privileges \
-    --user 2000:2000 \
-    --entrypoint /bin/sh \
-    "$unsupported_filesystem_image" -ceu '
-      generation=0123456789abcdef0123456789abcdef
-      test "$(stat -f -c %t /unsupported)" = 794c7630
-      test "$(stat -c "%u:%g:%a:%F" /unsupported)" = \
-        "2000:2000:500:directory"
-      test "$(stat -c "%u:%g:%a:%h:%F" /unsupported/config.yaml)" = \
-        "2000:2000:600:1:regular file"
-      test "$(stat -c "%u:%g:%a:%F" "/unsupported/$generation")" = \
-        "2000:2000:500:directory"
-      for child in "/unsupported/$generation"/*; do
-        test "$(dirname "$child")" = "/unsupported/$generation"
-        test "$(stat -c "%u:%g:%a:%h:%F" "$child")" = \
-          "2000:2000:600:1:regular file"
-      done
-      grep -q "generation: $generation" /unsupported/config.yaml
-      grep -q "/unsupported/$generation/" /unsupported/config.yaml
-      ! grep -q "/var/lib/dkim2d/" /unsupported/config.yaml
-      ! find "/unsupported/$generation" -mindepth 2 -print -quit |
-        grep -q .
-    '
-
-  printf 'deployment check: unsupported-filesystem-rejection\n'
-  if docker run --rm \
-    --name "$prefix"-validator \
-    --network none \
-    --read-only \
-    --cap-drop ALL \
-    --security-opt no-new-privileges \
-    --user 2000:2000 \
-    --mount "type=bind,source=$root/$binary,target=/validator,readonly" \
-    --entrypoint /validator \
-    "$unsupported_filesystem_image" validate \
-    --config /unsupported/config.yaml >/dev/null 2>&1; then
-    return 1
-  fi
-  docker image rm "$unsupported_filesystem_image" >/dev/null
-  rm -f -- "$binary"
-  printf 'deployment check: unsupported-filesystem-complete\n'
-}
-
 # test_socket_collision proves a second owner cannot replace one live route socket.
 test_socket_collision() {
   route=$1
@@ -1329,9 +1236,6 @@ run_once() {
   source_daemon="$project"_test-daemon-originator
   source_milter="$project"_test-milter-originator
 
-  printf 'deployment check: unsupported-protected-filesystem\n'
-  test_unsupported_filesystem "$source_daemon"
-
   printf 'deployment check: restored-daemon-state\n'
   restored_daemon="$prefix"-"$number"-restored-daemon
   clone_volume "$source_daemon" "$restored_daemon"
@@ -1455,7 +1359,6 @@ run_once() {
         "component_consistent_protected_restore",
         "invalid_generation_closed","partial_generation_closed",
         "wrong_owner_mode_closed","missing_route_capability_closed",
-        "unsupported_protected_filesystem_closed",
         "old_new_socket_collision_closed",
         "bounded_forced_stop_socket_recovery",
         "route_socket_cleanup_recreation","namespace_isolation",

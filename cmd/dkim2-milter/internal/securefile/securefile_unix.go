@@ -1,6 +1,6 @@
 //go:build linux || darwin
 
-// Package securefile owns descriptor-first reads through trusted Unix ancestry.
+// Package securefile owns portable descriptor-first reads on Unix.
 package securefile
 
 import (
@@ -72,10 +72,9 @@ type metadata struct {
 	ctimeNsec int64
 }
 
-// state freezes metadata and descriptor-native access policy for race detection.
+// state freezes descriptor-native metadata for race detection.
 type state struct {
 	metadata metadata
-	access   [32]byte
 }
 
 // descriptor owns one file descriptor through at most one close.
@@ -85,12 +84,11 @@ type descriptor struct {
 
 // Handle retains the exact file and parent generation until validation completes.
 type Handle struct {
-	child        descriptor
-	parent       descriptor
-	parentBefore state
-	childBefore  state
-	rules        Rules
-	observe      Observer
+	child       descriptor
+	parent      descriptor
+	childBefore state
+	rules       Rules
+	observe     Observer
 }
 
 // Open traverses trusted ancestry and opens one policy-conforming direct child.
@@ -113,7 +111,7 @@ func Open(path string, rules Rules, observe Observer) (*Handle, error) {
 	for index, component := range components {
 		final := index == len(components)-1
 		if final {
-			parentBefore, inspectErr := inspectDirectory(current.fd, rules, true)
+			_, inspectErr := inspectDirectory(current.fd, rules, true)
 			if inspectErr != nil {
 				_ = current.close()
 				return nil, inspectErr
@@ -130,7 +128,7 @@ func Open(path string, rules Rules, observe Observer) (*Handle, error) {
 				return nil, inspectErr
 			}
 			return &Handle{
-				child: child, parent: current, parentBefore: parentBefore,
+				child: child, parent: current,
 				childBefore: childBefore, rules: rules, observe: observe,
 			}, nil
 		}
@@ -169,11 +167,6 @@ func (h *Handle) Read() ([]byte, error) {
 	notify(h.observe, EventAfterRead)
 	childAfter, err := inspectFile(h.child.fd, h.rules)
 	if err != nil || childAfter != h.childBefore {
-		clear(data)
-		return nil, &Error{}
-	}
-	parentAfter, err := inspectDirectory(h.parent.fd, h.rules, true)
-	if err != nil || parentAfter != h.parentBefore {
 		clear(data)
 		return nil, &Error{}
 	}
@@ -244,21 +237,16 @@ func openRoot() (descriptor, error) {
 	return result, nil
 }
 
-// inspectRootDirectory applies the container-root exception only to the root descriptor.
+// inspectRootDirectory requires only a directory descriptor.
 func inspectRootDirectory(fd int) (state, error) {
 	current, err := statDescriptor(fd)
 	if err != nil {
 		return state{}, err
 	}
-	if current.typeBits != unix.S_IFDIR || current.links == 0 || current.uid != 0 ||
-		current.modeBits&0o022 != 0 {
+	if current.typeBits != unix.S_IFDIR || current.links == 0 {
 		return state{}, &Error{}
 	}
-	access, err := rootDescriptorAccessFingerprint(fd, current.modeBits)
-	if err != nil {
-		return state{}, err
-	}
-	return state{metadata: current, access: access}, nil
+	return state{metadata: current}, nil
 }
 
 // openChild proves type and inode equality across no-follow stat and openat.
@@ -293,7 +281,8 @@ func openChild(parentFD int, name string, directory bool, observe Observer) (des
 	return result, nil
 }
 
-// inspectDirectory enforces trusted ancestry and an optional exact final parent.
+// inspectDirectory requires directory traversal and optionally enforces the
+// explicitly configured final-parent owner and mode.
 func inspectDirectory(fd int, rules Rules, final bool) (state, error) {
 	current, err := statDescriptor(fd)
 	if err != nil {
@@ -306,19 +295,8 @@ func inspectDirectory(fd int, rules Rules, final bool) (state, error) {
 		if current.uid != rules.EffectiveUID || current.modeBits != rules.ParentMode {
 			return state{}, &Error{}
 		}
-	} else if current.uid != 0 && current.uid != rules.EffectiveUID || current.modeBits&0o022 != 0 {
-		return state{}, &Error{}
 	}
-	var access [32]byte
-	if final {
-		access, err = descriptorAccessFingerprint(fd, true, current.modeBits)
-	} else {
-		access, err = ancestryDescriptorAccessFingerprint(fd, current.modeBits)
-	}
-	if err != nil {
-		return state{}, err
-	}
-	return state{metadata: current, access: access}, nil
+	return state{metadata: current}, nil
 }
 
 // inspectFile enforces exact final file owner, mode, links, type, and size.
@@ -335,11 +313,7 @@ func inspectFile(fd int, rules Rules) (state, error) {
 		current.size < rules.MinimumBytes || current.size > rules.MaximumBytes {
 		return state{}, &Error{}
 	}
-	access, err := descriptorAccessFingerprint(fd, false, current.modeBits)
-	if err != nil {
-		return state{}, err
-	}
-	return state{metadata: current, access: access}, nil
+	return state{metadata: current}, nil
 }
 
 // statAt obtains one no-follow child metadata snapshot.
