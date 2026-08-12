@@ -152,10 +152,12 @@ func canonicalHashName(input []byte) (string, bool) {
 	return string(output), true
 }
 
-// validUnknownHashComponent rejects empty or control-bearing hash components.
+// validUnknownHashComponent rejects control-bearing hash components while permitting WSP.
+// Draft-04 admits FWS inside base64string values; alphabet and padding remain
+// owned by tagvalue.ParseBase64String after it strips WSP.
 func validUnknownHashComponent(input []byte) bool {
 	for _, b := range input {
-		if b < 32 || b == 127 {
+		if (b < 32 && !isWSP(b)) || b == 127 {
 			return false
 		}
 	}
