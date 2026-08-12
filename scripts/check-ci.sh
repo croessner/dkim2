@@ -50,8 +50,14 @@ fi
 grep -Fq 'release:' "$workflows/release.yml" || fail 'release event is missing'
 grep -Fq 'types: [published]' "$workflows/release.yml" || fail 'published release gate is missing'
 grep -Fq 'packages: write' "$workflows/release.yml" || fail 'release package authority is missing'
-grep -Fq 'attestations: write' "$workflows/release.yml" || fail 'release attestation authority is missing'
-grep -Fq 'id-token: write' "$workflows/release.yml" || fail 'release identity authority is missing'
+grep -Fq 'sbom: true' "$workflows/release.yml" || fail 'release BuildKit SBOM is missing'
+grep -Fq 'provenance: mode=max' "$workflows/release.yml" || fail 'release BuildKit provenance is missing'
+if grep -Eq '(attestations|id-token):[[:space:]]*write' "$workflows/release.yml"; then
+  fail 'private user repository must not request unavailable GitHub attestation authority'
+fi
+if grep -Fq 'actions/attest-build-provenance' "$workflows/release.yml"; then
+  fail 'private user repository must use registry-bound BuildKit provenance'
+fi
 
 if grep -Fq 'latest' "$workflows/release.yml"; then
   fail 'stable publication must not create an implicit latest tag'

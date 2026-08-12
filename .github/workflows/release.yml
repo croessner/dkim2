@@ -74,8 +74,6 @@ jobs:
     permissions:
       contents: read
       packages: write
-      attestations: write
-      id-token: write
     strategy:
       fail-fast: false
       matrix:
@@ -121,13 +119,6 @@ jobs:
             SOURCE_DATE_EPOCH=${{ needs.quality.outputs.source_date_epoch }}
             CREATED=${{ needs.quality.outputs.created }}
             DIRTY=clean
-
-      - name: Attest exact image digest
-        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
-        with:
-          subject-name: ${{ steps.image.outputs.repository }}
-          subject-digest: ${{ steps.build.outputs.digest }}
-          push-to-registry: true
 
       - name: Install pinned vulnerability scanner
         run: scripts/fetch-image-tools.sh

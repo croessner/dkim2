@@ -33,7 +33,7 @@ identities. `make check-ci` runs actionlint and enforces only durable policy:
 - no implicit `latest` image tag.
 
 Normal workflows have read-only repository authority. Only the stable Release
-publish job receives package, OIDC and attestation write permissions.
+publish job receives package write permission.
 Historical private module-proof reconstruction is not a normal source-quality
 gate; ordinary CI validates the committed vendor tree directly with Go.
 
@@ -46,6 +46,8 @@ an annotated tag, and that tag must resolve to the exact checked-out commit.
 After `make release-guardrails`, standard Docker Actions build and push the
 `dkim2d`, `dkim2-milter` and `dkim2ctl` targets from
 `build/container/Dockerfile`. Each exact multi-architecture digest receives
-BuildKit SBOM/provenance plus GitHub build provenance, is scanned for unfixed
-high/critical vulnerabilities, and is smoke-tested by digest. The workflow
+registry-bound BuildKit SBOM and maximum provenance attestations, is scanned
+for unfixed high/critical vulnerabilities, and is smoke-tested by digest. The
+private user-owned repository deliberately does not call GitHub's repository
+attestation API, which is unavailable for that repository class. The workflow
 publishes the exact stable version only; it does not create `latest`.

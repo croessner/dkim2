@@ -59,14 +59,16 @@ triggered by a published, non-draft, non-prerelease GitHub Release and requires:
 
 The workflow uses pinned standard Docker Actions to build and push each product
 for linux/amd64 and linux/arm64. BuildKit emits SBOM and provenance attestations,
-GitHub records build provenance for the exact digest, the pinned Trivy scanner
-blocks unfixed high/critical vulnerabilities, and a hardened runtime smoke uses
-the exact published digest. Only the exact version tag is published. `latest`
-is never created implicitly.
+bound to the exact registry digest. The pinned Trivy scanner blocks unfixed
+high/critical vulnerabilities, and a hardened runtime smoke uses the exact
+published digest. Only the exact version tag is published. `latest` is never
+created implicitly.
 
-The release job alone receives `packages: write`, `id-token: write` and
-`attestations: write`. Pull requests, branch pushes, conformance and adapter
-integration jobs cannot publish packages or attestations.
+The release job alone receives `packages: write`. Pull requests, branch
+pushes, conformance and adapter integration jobs cannot publish packages. The
+repository is private and user-owned, so the unavailable GitHub repository
+attestation API is not requested; the GHCR subject retains BuildKit SBOM and
+maximum provenance attestations.
 
 ## Internal development images
 
