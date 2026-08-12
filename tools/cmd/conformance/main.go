@@ -1015,7 +1015,9 @@ func executeTestBinary(
 			if errors.Is(contextErr, context.DeadlineExceeded) {
 				return "", nil, runnerCaseFailure("runner_timeout", runnerCase.key)
 			}
-			return "", nil, runnerCaseFailure("runner_failure", runnerCase.key)
+			return "", nil, runnerCaseFailure(
+				classifyTestFailure(output.String()), runnerCase.key,
+			)
 		}
 		text := output.String()
 		if !strings.Contains(text, "=== RUN   "+runnerCase.testName+"\n") ||
@@ -1034,6 +1036,28 @@ func runnerCaseFailure(class, key string) error {
 		return errors.New(class)
 	}
 	return errors.New(class + "_" + strings.ReplaceAll(caseID, "-", "_"))
+}
+
+// classifyTestFailure maps bounded test output to fixed content-free phases.
+func classifyTestFailure(output string) string {
+	for _, candidate := range []struct {
+		marker string
+		class  string
+	}{
+		{marker: "trusted fixture root failed", class: "runner_failure_fixture_root"},
+		{marker: "integration configuration failed preflight", class: "runner_failure_config_preflight"},
+		{marker: "integration capability failed preflight", class: "runner_failure_capability_preflight"},
+		{marker: "adapter socket was not ready", class: "runner_failure_socket_startup"},
+		{marker: "zero-length public frame did not terminate", class: "runner_failure_malformed_disconnect"},
+		{marker: "reused transaction response", class: "runner_failure_abort_reuse"},
+		{marker: "daemon calls after abort/reuse", class: "runner_failure_abort_accounting"},
+		{marker: "adapter did not stop within its shutdown budget", class: "runner_failure_shutdown"},
+	} {
+		if strings.Contains(output, candidate.marker) {
+			return candidate.class
+		}
+	}
+	return "runner_failure"
 }
 
 type boundedOutput struct {

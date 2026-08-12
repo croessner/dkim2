@@ -51,6 +51,17 @@ func TestRunnerCaseFailure(t *testing.T) {
 	}
 }
 
+func TestClassifyTestFailure(t *testing.T) {
+	t.Parallel()
+
+	if got := classifyTestFailure("integration configuration failed preflight: redacted"); got != "runner_failure_config_preflight" {
+		t.Fatalf("classifyTestFailure() = %q, want %q", got, "runner_failure_config_preflight")
+	}
+	if got := classifyTestFailure("unclassified sensitive output"); got != "runner_failure" {
+		t.Fatalf("classifyTestFailure() fallback = %q, want %q", got, "runner_failure")
+	}
+}
+
 // TestMatchesValkeyVersionUsesManifestValue freezes exact dynamic banner binding.
 func TestMatchesValkeyVersionUsesManifestValue(t *testing.T) {
 	valid := "Valkey server v=9.9.9 sha=12345678:0 malloc=libc bits=64 build=abcdef12\n"

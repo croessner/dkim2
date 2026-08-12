@@ -28,16 +28,16 @@ func TrustedTempDirectory(t testing.TB) string {
 	}
 	directory, err := os.MkdirTemp(base, ".d2m-")
 	if err != nil {
-		t.Fatal(err)
+		t.Fatal("trusted fixture root failed")
 	}
 	t.Cleanup(func() { _ = os.RemoveAll(directory) })
 	absolute, err := filepath.Abs(directory)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatal("trusted fixture root failed")
 	}
 	resolved, err := filepath.EvalSymlinks(absolute)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatal("trusted fixture root failed")
 	}
 	return resolved
 }
