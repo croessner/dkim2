@@ -52,13 +52,13 @@
     {
       "id": "daemon-replay-source",
       "path": "cmd/dkim2d/internal/app/replay_test.go",
-      "sha256": "c9222105476f67b31bb0cb5ca82c1c038484ca4dcbe8d08e7abc2dd2f9e98329",
+      "sha256": "6ccddaa4df604d4a6c6257081983e7994f6ea893651f19ee38b08a71771deffb",
       "module": "cmd/dkim2d"
     },
     {
       "id": "dns-negative-source",
       "path": "lib/dns_provider_test.go",
-      "sha256": "955d8bf495f6fdffd8bfc69ffa2f2d27e5bb99282775f916c825cc08a2b7f74d",
+      "sha256": "bc213b46efe06c99e46c3dd91d77ddbb428f83a7fd42b5023acdda5a334c49ef",
       "module": "lib"
     },
     {
@@ -136,19 +136,19 @@
     {
       "id": "milter-negative-source",
       "path": "cmd/dkim2-milter/internal/milter/state_matrix_test.go",
-      "sha256": "018081c53698262339b37d42bd89546188c98fea7223a7d4c49ece0cf354aab5",
+      "sha256": "d2c3f589cc9b85b5a74084a527ee7540e1656b35cd57f9ac4e33bc77da79112d",
       "module": "cmd/dkim2-milter"
     },
     {
       "id": "milter-public-peer-source",
       "path": "cmd/dkim2-milter/internal/integration/public_peer_test.go",
-      "sha256": "3071ba4d1591d8feb8e95a0e91ffe6c02ce92327a9f1e50367e17f6e1eb72a56",
+      "sha256": "c8ff61c6d106e3aa083fef2e119a0d1f4f22b9d3e7f86cd3609d8372af9c8795",
       "module": "cmd/dkim2-milter"
     },
     {
       "id": "openapi-daemon-boundary-source",
       "path": "cmd/dkim2d/internal/httpjson/dkim2ctl_integration_test.go",
-      "sha256": "b67e29d6e44e686cbfa78a932ed80566ce549516e591eb70360ed2a2ed98b9b5",
+      "sha256": "d27ad41f7470b42794b4c17e7fc3f8a109e65160c7dca583ba3725c20bd81674",
       "module": "cmd/dkim2d"
     },
     {
@@ -160,13 +160,13 @@
     {
       "id": "openapi-negative-source",
       "path": "cmd/dkim2ctl/internal/testclient/negative_test.go",
-      "sha256": "7a9f3f1e279f64dd8aa04e63c2853cd6b9181a66e61f7343066c19c075a7f160",
+      "sha256": "f2c4a8b59a549d206b2eb57cf79c8ea71351847f940201ec83cab7179343f271",
       "module": "cmd/dkim2ctl"
     },
     {
       "id": "openapi-operation-source",
       "path": "cmd/dkim2ctl/internal/testclient/operations_test.go",
-      "sha256": "b886dbdd2e1ce91b50e4cfd5fa060c01b47f8b9a9930f02792c7e57964f64a5f",
+      "sha256": "ae79321c05ed5d8c145717d8c14a242546746843b5cdc9fa4c8d5e02529176ba",
       "module": "cmd/dkim2ctl"
     },
     {
@@ -208,7 +208,7 @@
     {
       "id": "policy-positive-source",
       "path": "lib/policy_api_test.go",
-      "sha256": "98859349f70a48ff94eca0c4c41651de879fe11fd394a5972de871fec086ae8f",
+      "sha256": "34f09d8f29ba6b2e2a32187cf7712d6e6daf6952fed6d6458d464da9de7d8428",
       "module": "lib"
     },
     {
@@ -262,7 +262,7 @@
     {
       "id": "recipe-limits-source",
       "path": "lib/internal/recipe/limits_test.go",
-      "sha256": "4b064e6426f0755f62775efed83a696daddad21efee042c8827e7ca1e9845ee9",
+      "sha256": "2c285dd678c341a33c892047581f799b82541c2949e40f4b009d8dab5e719eaa",
       "module": "lib"
     },
     {
@@ -274,13 +274,13 @@
     {
       "id": "replay-deriver-source",
       "path": "lib/internal/replay/deriver_test.go",
-      "sha256": "c5b3a03ed86518cf88ed576f835bdd001f6cd14cc9ae8b333c6f4d4d0d49bc26",
+      "sha256": "233d3fd26b75f6e560bab268f172ff258b8b7f9a3771d37025df8b8324d55874",
       "module": "lib"
     },
     {
       "id": "replay-memory-source",
       "path": "lib/internal/replay/memory_test.go",
-      "sha256": "e6742cdb4e5466a4b64d84e7220e24f801cbfa03ed37fc5b66c3e7cd3c4946d8",
+      "sha256": "9d565e9c59edd08e040a0fc737f55f74b0773a194a17fc2cebf320d9545e78b4",
       "module": "lib"
     },
     {
@@ -304,7 +304,7 @@
     {
       "id": "signing-facade-source",
       "path": "lib/signing_facade_test.go",
-      "sha256": "af3d1d62b1f82ec9f576ffcc496b1bceeb9383ea1dda48188bf4839a728b3614",
+      "sha256": "cdf2036e296e80ff9cafb8afaead974f517eaaf744a5672b17138d775abbcd83",
       "module": "lib"
     },
     {
@@ -328,7 +328,7 @@
     {
       "id": "signing-release-source",
       "path": "lib/signing_restricted_release_test.go",
-      "sha256": "f64622174ce968fa05c3a76e34c767ec94d4a7fcfe9e517945dcdfb34424991b",
+      "sha256": "b1aeb38196eb2ac5d0f3093a39e2b89379f579c17b0143fced8de83224f6fcac",
       "module": "lib"
     },
     {
