@@ -55,6 +55,7 @@ jobs:
 
       - name: Run guardrails
         env:
+          GOTMPDIR: ${{ runner.temp }}
           TMPDIR: /dkim2-test
         run: make guardrails
 

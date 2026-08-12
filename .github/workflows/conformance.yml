@@ -43,6 +43,7 @@ jobs:
 
       - name: Run portable conformance
         env:
+          GOTMPDIR: ${{ runner.temp }}
           TMPDIR: /dkim2-test
         run: |
           make check-conformance
