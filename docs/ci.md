@@ -7,7 +7,7 @@ second build or test system.
 
 | Workflow | Purpose | Command |
 | --- | --- | --- |
-| `Guardrails` | Go quality, unit/race tests, builds, generated files, vendor and boundaries | `make guardrails` |
+| `Guardrails` | Go quality, unit/race tests, builds, generated files, direct vendor resolution and boundaries | `make guardrails` |
 | `Conformance` | Portable Draft-04 protocol conformance | `make check-conformance`, `make conformance` |
 | `Release` | Stable quality gate and exact GHCR publication | `make release-guardrails` |
 
@@ -34,6 +34,8 @@ identities. `make check-ci` runs actionlint and enforces only durable policy:
 
 Normal workflows have read-only repository authority. Only the stable Release
 publish job receives package, OIDC and attestation write permissions.
+Historical private module-proof reconstruction is not a normal source-quality
+gate; ordinary CI validates the committed vendor tree directly with Go.
 
 ## Stable release
 

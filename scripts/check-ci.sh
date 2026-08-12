@@ -34,6 +34,11 @@ for workflow in conformance.yml release.yml; do
   grep -A4 'actions/setup-go@' "$workflows/$workflow" | grep -q 'cache: false' ||
     fail "$workflow must not use setup-go's implicit root-module cache"
 done
+if grep -Eq '^check-openapi:.*check-workspace' Makefile; then
+  fail 'normal generated-source checks must not depend on private module-proof reconstruction'
+fi
+grep -A5 '^check-vendor:' Makefile | grep -q -- '-mod=vendor' ||
+  fail 'vendor validation must use Go vendor resolution directly'
 if grep -RE '(packages|id-token|attestations):[[:space:]]*write' \
   "$workflows" --exclude=release.yml; then
   fail 'only the release workflow may publish or attest artifacts'

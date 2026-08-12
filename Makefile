@@ -345,7 +345,7 @@ generate-openapi:
 	go -C tools tool oapi-codegen -config "$(OPENAPI_EXIM_TEST_SERVER_CONFIG)" -o "$(OPENAPI_EXIM_TEST_SERVER_OUTPUT)" "$(OPENAPI_SOURCE)"
 
 .PHONY: check-openapi
-check-openapi: check-workspace
+check-openapi:
 	@set -eu; \
 	output="$$(mktemp -d /tmp/dkim2-openapi-check.XXXXXX)"; \
 	chmod 0700 "$$output"; \
@@ -412,8 +412,10 @@ vendor:
 
 .PHONY: check-vendor
 check-vendor:
-	@GOCACHE="$${GOCACHE:-/tmp/dkim2-go-build-cache}" \
-		go -C tools run ./cmd/reference -root .. check-vendor
+	@set -eu; for module in $(MODULES); do \
+		echo "==> go list -mod=vendor $$module/..."; \
+		(cd $$module && GOFLAGS=-mod=vendor go list -deps ./... >/dev/null); \
+	done
 
 .PHONY: check-platform-builds
 check-platform-builds:
