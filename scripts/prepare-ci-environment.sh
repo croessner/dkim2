@@ -3,18 +3,29 @@ set -eu
 umask 077
 
 test "$#" -eq 1
-case "$HOME" in
+repository=$(pwd -P)
+case "$repository" in
   /*) ;;
   *)
-    printf '%s\n' 'GitHub runner HOME must be absolute' >&2
+    printf '%s\n' 'CI repository root must be absolute' >&2
     exit 1
     ;;
 esac
-test -d "$HOME"
-test ! -L "$HOME"
-resolved_home=$(CDPATH='' cd -- "$HOME" && pwd -P)
-test "$resolved_home" = "$HOME"
-directory="$HOME/.dkim2-ci-tmp"
+artifacts="$repository/.artifacts"
+if test ! -e "$artifacts"; then
+  mkdir -m 0700 "$artifacts"
+fi
+test -d "$artifacts"
+test ! -L "$artifacts"
+directory="$artifacts/.ci-tmp"
+retain_for_post_actions=${DKIM2_CI_RETAIN_FOR_POST_ACTIONS:-0}
+case "$retain_for_post_actions" in
+  0 | 1) ;;
+  *)
+    printf '%s\n' 'DKIM2_CI_RETAIN_FOR_POST_ACTIONS must be 0 or 1' >&2
+    exit 1
+    ;;
+esac
 
 case "$1" in
   prepare)
@@ -33,6 +44,9 @@ case "$1" in
     test "${TMPDIR:-}" = "$directory"
     test -d "$directory"
     test ! -L "$directory"
+    if test "$retain_for_post_actions" = 1; then
+      exit 0
+    fi
     rm -rf -- "$directory"
     ;;
   *)

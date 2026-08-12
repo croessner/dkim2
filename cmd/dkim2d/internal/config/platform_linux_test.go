@@ -264,12 +264,14 @@ func TestLinuxTrustedAncestorPolicyRejectsNonRootOwnedOverlay(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer file.Close()
+	defer func() {
+		_ = file.Close()
+	}()
 	var state unix.Statfs_t
 	if err := unix.Fstatfs(int(file.Fd()), &state); err != nil {
 		t.Fatal(err)
 	}
-	if int64(state.Type) != unix.OVERLAYFS_SUPER_MAGIC {
+	if state.Type != unix.OVERLAYFS_SUPER_MAGIC {
 		t.Skip("test host root is not overlay")
 	}
 	if err := inspectDescriptorAccess(int(file.Fd()), true, 0o755); CodeOf(err) != CodeProtectedUnsupported {

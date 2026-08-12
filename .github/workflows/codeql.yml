@@ -100,4 +100,7 @@ jobs:
 
       - name: Remove protected CI temporary directory
         if: ${{ always() && steps.ci_environment.outcome == 'success' }}
+        env:
+          # CodeQL post-actions still require TMPDIR; the ephemeral runner removes it.
+          DKIM2_CI_RETAIN_FOR_POST_ACTIONS: "1"
         run: scripts/prepare-ci-environment.sh cleanup

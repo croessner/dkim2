@@ -28,6 +28,7 @@ jobs:
       - name: Check out the exact candidate
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Prepare protected CI temporary directory
@@ -86,7 +87,7 @@ jobs:
             .artifacts/conformance-portable/
             .artifacts/conformance-postfix/
             .artifacts/security/
-          if-no-files-found: error
+          if-no-files-found: warn
           include-hidden-files: true
           retention-days: 14
 

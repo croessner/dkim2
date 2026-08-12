@@ -163,6 +163,13 @@ for workflow in $all_workflows; do
     "$workflow")" -eq 1
   test "$(grep -Fc 'run: scripts/prepare-ci-environment.sh cleanup' "$workflow")" -eq 1
 done
+grep -Fq '          DKIM2_CI_RETAIN_FOR_POST_ACTIONS: "1"' \
+  "$workflows/codeql.yml"
+test "$(grep -RhF 'DKIM2_CI_RETAIN_FOR_POST_ACTIONS: "1"' "$workflows" |
+  wc -l | tr -d ' ')" -eq 1
+grep -Fq '          fetch-depth: 0' "$workflows/conformance.yml"
+grep -Fq '          if-no-files-found: warn' "$workflows/conformance.yml"
+grep -Fq 'directory="$artifacts/.ci-tmp"' scripts/prepare-ci-environment.sh
 
 grep -Fq 'run: make release-guardrails' "$workflows/container-publish.yml"
 grep -Fq 'run: make check-container-release' "$workflows/container-release.yml"

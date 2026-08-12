@@ -3,43 +3,22 @@ set -eu
 
 protected_test_tmp=
 if test "$(uname -s)" = Linux; then
-  case "${TMPDIR:-}" in
-    /*)
-      protected_test_tmp=$TMPDIR
-      test -d "$protected_test_tmp"
-      test ! -L "$protected_test_tmp"
-      ;;
-    '')
-      case "${HOME:-}" in
-        /*) ;;
-        *)
-          printf '%s\n' 'HOME must be absolute for protected Linux tests' >&2
-          exit 1
-          ;;
-      esac
-      test -d "$HOME"
-      test ! -L "$HOME"
-      resolved_home=$(CDPATH='' cd -- "$HOME" && pwd -P)
-      test "$resolved_home" = "$HOME"
-      protected_test_tmp=$(mktemp -d "$HOME/.dkim2-operator-docs-tmp.XXXXXX")
-      chmod 0700 "$protected_test_tmp"
-      ;;
-    *)
-      printf '%s\n' 'TMPDIR must be absolute for protected Linux tests' >&2
-      exit 1
-      ;;
-  esac
-
-  # cleanup removes only the fallback directory owned by this invocation.
+  artifacts=.artifacts
+  if test ! -e "$artifacts"; then
+    mkdir -m 0700 "$artifacts"
+  fi
+  test -d "$artifacts"
+  test ! -L "$artifacts"
+  protected_test_tmp=$(mktemp -d "$artifacts/.operator-docs-tmp.XXXXXX")
+  chmod 0700 "$protected_test_tmp"
+  # cleanup removes only the invocation-owned protected directory.
   cleanup() {
     status=$?
     trap - EXIT HUP INT TERM
     rm -rf -- "$protected_test_tmp" || status=1
     exit "$status"
   }
-  if test -z "${TMPDIR:-}"; then
-    trap cleanup EXIT HUP INT TERM
-  fi
+  trap cleanup EXIT HUP INT TERM
 fi
 
 guide=docs/operator/postfix-compose.md
@@ -235,7 +214,7 @@ run_operator_example_tests() {
       ./internal/config ./internal/domainadmin ./internal/datasource/ldap ./internal/datasource/mysql
 }
 if test -n "$protected_test_tmp"; then
-  TMPDIR="$protected_test_tmp" run_operator_example_tests
+  TMPDIR="$(pwd -P)/$protected_test_tmp" run_operator_example_tests
 else
   run_operator_example_tests
 fi

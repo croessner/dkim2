@@ -140,15 +140,30 @@ func descriptorState(fd int) (fileState, error) {
 	}
 	mtimeSec, mtimeNsec, ctimeSec, ctimeNsec := descriptorTimestamps(status)
 	return fileState{
-		device:   uint64(status.Dev),
+		device:   normalizeFileStateDevice(status.Dev),
 		inode:    status.Ino,
-		mode:     uint32(status.Mode),
+		mode:     normalizeFileStateMode(status.Mode),
 		uid:      status.Uid,
-		links:    uint64(status.Nlink),
+		links:    normalizeFileStateLinks(status.Nlink),
 		size:     status.Size,
 		mtimeSec: mtimeSec, mtimeNsec: mtimeNsec,
 		ctimeSec: ctimeSec, ctimeNsec: ctimeNsec,
 	}, nil
+}
+
+// normalizeFileStateDevice widens a platform-dependent device identifier.
+func normalizeFileStateDevice[T ~int32 | ~uint32 | ~uint64](value T) uint64 {
+	return uint64(value)
+}
+
+// normalizeFileStateMode widens platform-dependent stat mode bits.
+func normalizeFileStateMode[T ~uint16 | ~uint32](value T) uint32 {
+	return uint32(value)
+}
+
+// normalizeFileStateLinks widens a platform-dependent hard-link count.
+func normalizeFileStateLinks[T ~uint16 | ~uint32 | ~uint64](value T) uint64 {
+	return uint64(value)
 }
 
 // protectedRootState captures one stable local generation-directory state.

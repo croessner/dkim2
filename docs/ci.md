@@ -42,13 +42,15 @@ same immutable Valkey 9.1.0 source commit through
 `scripts/install-valkey-ci.sh`. This keeps the portable conformance dependency
 identical wherever `make conformance` can run.
 
-Each Linux job creates one owner-only temporary root directly below the hosted
-runner's home directory before executing repository code. This avoids the
-group-writable ancestry of the standard Actions workspace and `/tmp` for tests
-that intentionally enforce protected-path ownership. The directory is removed
-by an exact, fail-closed cleanup step. Artifact uploads use narrow evidence
-paths and explicitly include the hidden `.artifacts` ancestor; the entire
-working artifact tree is never uploaded.
+Each Linux job creates one owner-only temporary root below the ignored
+repository `.artifacts` directory before executing repository code. This keeps
+tests that intentionally enforce protected-path ownership away from shared
+`/tmp` while retaining the checked-out repository's reviewed local-filesystem
+ancestry. An exact, fail-closed cleanup step removes the directory. CodeQL is
+the sole exception: its automatic post-actions still require `TMPDIR`, so the
+ephemeral hosted runner removes that root after those post-actions complete.
+Artifact uploads use narrow evidence paths and explicitly include the hidden
+`.artifacts` ancestor; the entire working artifact tree is never uploaded.
 
 The CodeQL lane deliberately sets `upload: never` and retains its SARIF through
 the ordinary artifact service. It therefore provides analysis on repositories

@@ -10,7 +10,7 @@ func localFilesystem(fd int) bool {
 	if unix.Fstatfs(fd, &status) != nil {
 		return false
 	}
-	return localLinuxFilesystemType(int64(status.Type))
+	return localLinuxFilesystemType(status.Type)
 }
 
 // localLinuxFilesystemType applies the exact closed local-filesystem

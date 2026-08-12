@@ -68,18 +68,23 @@ func statAtNoFollow(dirfd int, name string) (descriptorMetadata, error) {
 // content-free descriptor metadata representation.
 func linuxDescriptorMetadata(state unix.Stat_t) descriptorMetadata {
 	return descriptorMetadata{
-		device:    uint64(state.Dev),
+		device:    state.Dev,
 		inode:     state.Ino,
-		typeBits:  uint32(state.Mode) & unix.S_IFMT,
+		typeBits:  state.Mode & unix.S_IFMT,
 		uid:       state.Uid,
-		modeBits:  uint32(state.Mode) & 0o7777,
-		linkCount: uint64(state.Nlink),
+		modeBits:  state.Mode & 0o7777,
+		linkCount: normalizeLinuxStatLinks(state.Nlink),
 		size:      state.Size,
 		mtimeSec:  state.Mtim.Sec,
 		mtimeNsec: state.Mtim.Nsec,
 		ctimeSec:  state.Ctim.Sec,
 		ctimeNsec: state.Ctim.Nsec,
 	}
+}
+
+// normalizeLinuxStatLinks widens the architecture-dependent Linux link count.
+func normalizeLinuxStatLinks[T ~uint32 | ~uint64](value T) uint64 {
+	return uint64(value)
 }
 
 // descriptorAccessFingerprint validates descriptor-native filesystem and ACL
@@ -158,7 +163,7 @@ func inspectLinuxFilesystem(fd int) (int64, error) {
 		return 0, err
 	}
 
-	filesystemType := int64(state.Type)
+	filesystemType := state.Type
 	return classifyLinuxFilesystemType(filesystemType)
 }
 
@@ -170,7 +175,7 @@ func inspectTrustedRootAccess(fd int, acceptedMode uint32) error {
 	}); err != nil {
 		return err
 	}
-	overlay, err := classifyLinuxTrustedRootFilesystemType(int64(state.Type))
+	overlay, err := classifyLinuxTrustedRootFilesystemType(state.Type)
 	if err != nil {
 		return err
 	}
@@ -191,7 +196,7 @@ func inspectTrustedAncestorAccess(fd int, acceptedMode uint32, rootOwned bool) e
 	}); err != nil {
 		return err
 	}
-	overlay, err := classifyLinuxTrustedRootFilesystemType(int64(state.Type))
+	overlay, err := classifyLinuxTrustedRootFilesystemType(state.Type)
 	if err != nil {
 		return err
 	}
