@@ -982,13 +982,15 @@ def inspect_message(message: pathlib.Path, wire_format: str, metadata_output: pa
     raw_lf_count = raw.count(b"\n")
     raw_crlf_count = raw.count(b"\r\n")
     raw_bare_lf_count = raw_lf_count - raw_crlf_count
+    header_order_sha256 = hashlib.sha256(b"\n".join(header_names) + b"\n").hexdigest()
+    nul_count = body.count(b"\x00")
     metadata = (
         "format=dkim2-exim-message-inspection-v1\n"
         f"raw_sha256={hashlib.sha256(raw).hexdigest()}\n"
         f"canonical_sha256={hashlib.sha256(canonical).hexdigest()}\n"
         f"stable_sha256={hashlib.sha256(stable).hexdigest()}\n"
         f"body_sha256={hashlib.sha256(body).hexdigest()}\n"
-        f"header_order_sha256={hashlib.sha256(b'\\n'.join(header_names) + b'\\n').hexdigest()}\n"
+        f"header_order_sha256={header_order_sha256}\n"
         f"raw_lf_count={raw_lf_count}\n"
         f"raw_crlf_count={raw_crlf_count}\n"
         f"raw_bare_lf_count={raw_bare_lf_count}\n"
@@ -999,7 +1001,7 @@ def inspect_message(message: pathlib.Path, wire_format: str, metadata_output: pa
         f"authentication_results_count={authentication_results_count}\n"
         f"first_header={first_header}\n"
         f"first_header_received={int(first_header_received)}\n"
-        f"nul_count={body.count(b'\x00')}\n"
+        f"nul_count={nul_count}\n"
         f"nonascii_octets={sum(value >= 0x80 for value in raw)}\n"
     ).encode("ascii")
     write_fresh(metadata_output, metadata)

@@ -100,7 +100,7 @@
     {
       "id": "exim-qualification-helper",
       "path": "cmd/dkim2-exim/exim/tests/real_matrix_service.py",
-      "sha256": "be92640857651edb158ed710d57a18321422854061605cde2612c1129dae0e27",
+      "sha256": "4454083bd89a239fa3598053f31da3bd08e4602f79c784d58f384424ac67e65e",
       "module": "cmd/dkim2-exim"
     },
     {
