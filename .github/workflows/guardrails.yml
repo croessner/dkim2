@@ -48,6 +48,7 @@ jobs:
           mkfs.ext4 -q -F "$RUNNER_TEMP/dkim2-test.ext4"
           sudo mount -o loop,nosuid,nodev "$RUNNER_TEMP/dkim2-test.ext4" "$DKIM2_TEST_TRUSTED_ROOT"
           sudo chown "$(id -u):$(id -g)" "$DKIM2_TEST_TRUSTED_ROOT"
+          printf 'TMPDIR=%s\n' "$DKIM2_TEST_TRUSTED_ROOT" >> "$GITHUB_ENV"
 
       - name: Install quality tools
         run: scripts/install-ci-tools.sh actionlint golangci-lint
