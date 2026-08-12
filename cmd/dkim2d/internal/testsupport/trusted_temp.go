@@ -13,12 +13,15 @@ import (
 func RunWithTrustedTemp(suite *testing.M) int {
 	base := os.TempDir()
 	if runtime.GOOS == "linux" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			_, _ = fmt.Fprintln(os.Stderr, "trusted test temporary root unavailable")
-			return 2
+		base = os.Getenv("DKIM2_TEST_TRUSTED_ROOT")
+		if base == "" {
+			home, err := os.UserHomeDir()
+			if err != nil {
+				_, _ = fmt.Fprintln(os.Stderr, "trusted test temporary root unavailable")
+				return 2
+			}
+			base = home
 		}
-		base = home
 	}
 	root, err := os.MkdirTemp(base, ".dkim2d-test-")
 	if err != nil {
