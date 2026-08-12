@@ -16,8 +16,15 @@ import (
 func TrustedTempDirectory(t testing.TB) string {
 	t.Helper()
 	base := "."
-	if runtime.GOOS == "darwin" {
+	switch runtime.GOOS {
+	case "darwin":
 		base = darwinUserTempDirectory(t)
+	case "linux":
+		var err error
+		base, err = os.UserHomeDir()
+		if err != nil {
+			t.Fatal("trusted Linux test home unavailable")
+		}
 	}
 	directory, err := os.MkdirTemp(base, ".d2m-")
 	if err != nil {

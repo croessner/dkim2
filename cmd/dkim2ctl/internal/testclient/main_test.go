@@ -1,0 +1,12 @@
+package testclient
+
+import (
+	"os"
+	"testing"
+
+	"github.com/croessner/dkim2/cmd/dkim2ctl/internal/testsupport"
+)
+
+func TestMain(suite *testing.M) {
+	os.Exit(testsupport.RunWithTrustedTemp(suite))
+}
