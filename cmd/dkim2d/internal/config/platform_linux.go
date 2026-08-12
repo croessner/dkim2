@@ -30,7 +30,7 @@ func linuxDescriptorMetadata(state unix.Stat_t) descriptorMetadata {
 	return descriptorMetadata{
 		device: state.Dev, inode: state.Ino,
 		typeBits: state.Mode & unix.S_IFMT, uid: state.Uid,
-		modeBits: state.Mode & 0o7777, linkCount: uint64(state.Nlink),
+		modeBits: state.Mode & 0o7777, linkCount: state.Nlink,
 		size:     state.Size,
 		mtimeSec: state.Mtim.Sec, mtimeNsec: state.Mtim.Nsec,
 		ctimeSec: state.Ctim.Sec, ctimeNsec: state.Ctim.Nsec,
