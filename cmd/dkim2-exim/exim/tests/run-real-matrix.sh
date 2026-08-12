@@ -26,6 +26,15 @@ require_regular_file() {
     fail "required evidence is not one non-empty regular file"
 }
 
+# require_nul_free_tree rejects binary evidence once before parsing individual files.
+require_nul_free_tree() {
+  local root=$1
+  cmp -s \
+    <(find "$root" -type f -exec cat {} +) \
+    <(find "$root" -type f -exec cat {} + | LC_ALL=C tr -d '\000') ||
+    fail "evidence contains a NUL byte"
+}
+
 # require_exact_line proves one fixture-derived field without accepting aliases.
 require_exact_line() {
   local path=$1 line=$2 current
@@ -331,6 +340,7 @@ expected_row_readback_inventory() {
   fail "DKIM2_EXIM_REAL_MATRIX_DAEMON_SHA256 must be one lowercase SHA-256 value"
 [[ ! -L $evidence_root && -d $evidence_root ]] ||
   fail "evidence root must be one non-symlink directory"
+require_nul_free_tree "$evidence_root"
 
 run_manifest="$evidence_root/run-v1.txt"
 require_regular_file "$run_manifest"

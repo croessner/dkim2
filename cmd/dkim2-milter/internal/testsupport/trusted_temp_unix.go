@@ -60,8 +60,8 @@ func darwinUserTempDirectory(t testing.TB) string {
 			var state unix.Stat_t
 			if statErr := unix.Stat(candidate, &state); statErr == nil &&
 				state.Uid == uint32(os.Geteuid()) &&
-				uint32(state.Mode)&unix.S_IFMT == unix.S_IFDIR &&
-				uint32(state.Mode)&0o7777 == 0o700 {
+				uint32(state.Mode)&unix.S_IFMT == unix.S_IFDIR && //nolint:unconvert // Stat_t.Mode differs across supported Unix targets.
+				uint32(state.Mode)&0o7777 == 0o700 { //nolint:unconvert // Stat_t.Mode differs across supported Unix targets.
 				return candidate
 			}
 		}

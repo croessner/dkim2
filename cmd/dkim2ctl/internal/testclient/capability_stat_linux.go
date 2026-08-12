@@ -7,8 +7,8 @@ import "golang.org/x/sys/unix"
 // capabilityMetadataFromStat converts Linux descriptor state into the common snapshot.
 func capabilityMetadataFromStat(state unix.Stat_t) capabilityMetadata {
 	return capabilityMetadata{
-		device: uint64(state.Dev), inode: state.Ino, mode: uint32(state.Mode),
-		uid: state.Uid, links: uint64(state.Nlink), size: state.Size,
+		device: uint64(state.Dev), inode: state.Ino, mode: uint32(state.Mode), //nolint:unconvert // Stat_t fields differ across supported Unix targets.
+		uid: state.Uid, links: uint64(state.Nlink), size: state.Size, //nolint:unconvert // Stat_t.Nlink differs across supported Unix targets.
 		mtimeSec: state.Mtim.Sec, mtimeNsec: state.Mtim.Nsec,
 		ctimeSec: state.Ctim.Sec, ctimeNsec: state.Ctim.Nsec,
 	}

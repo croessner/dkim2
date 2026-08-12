@@ -108,7 +108,7 @@ func statSocketChild(parent int, name string) (socketFileState, error) {
 	if err := unix.Fstatat(parent, name, &st, unix.AT_SYMLINK_NOFOLLOW); err != nil {
 		return socketFileState{}, err
 	}
-	return socketFileState{uint64(st.Dev), st.Ino, st.Uid, st.Gid, uint32(st.Mode), uint64(st.Nlink)}, nil
+	return socketFileState{uint64(st.Dev), st.Ino, st.Uid, st.Gid, uint32(st.Mode), uint64(st.Nlink)}, nil //nolint:unconvert // Stat_t fields differ across supported Unix targets.
 }
 
 // cleanup removes only the exact fully validated owned socket identity.

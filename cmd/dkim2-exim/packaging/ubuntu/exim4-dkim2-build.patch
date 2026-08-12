@@ -3,7 +3,7 @@ Author: DKIM2 reference implementation maintainers
 Forwarded: not-needed
 --- a/debian/rules
 +++ b/debian/rules
-@@ -143,7 +143,16 @@ override_dh_auto_configure: unpack-configs-stamp bdir-stamp
+@@ -13,6 +13,15 @@ override_dh_auto_configure: unpack-configs-stamp bdir-stamp
 		cp EDITME.`echo $$i | sed -e s/exim4-daemon/exim4/` \
 		b-$$i/Local/Makefile && \
 		cp EDITME.eximon b-$$i/Local/eximon.conf ;\

@@ -367,9 +367,9 @@ func statDescriptor(fd int) (metadata, error) {
 // metadataFromStat freezes platform-common Stat_t fields.
 func metadataFromStat(state unix.Stat_t) metadata {
 	return metadata{
-		device: uint64(state.Dev), inode: state.Ino, links: uint64(state.Nlink),
-		typeBits: uint32(state.Mode) & unix.S_IFMT,
-		modeBits: uint32(state.Mode) & 0o7777,
+		device: uint64(state.Dev), inode: state.Ino, links: uint64(state.Nlink), //nolint:unconvert // Stat_t fields differ across supported Unix targets.
+		typeBits: uint32(state.Mode) & unix.S_IFMT, //nolint:unconvert // Stat_t.Mode differs across supported Unix targets.
+		modeBits: uint32(state.Mode) & 0o7777,      //nolint:unconvert // Stat_t.Mode differs across supported Unix targets.
 		uid:      state.Uid, size: state.Size,
 		mtimeSec: state.Mtim.Sec, mtimeNsec: state.Mtim.Nsec,
 		ctimeSec: state.Ctim.Sec, ctimeNsec: state.Ctim.Nsec,

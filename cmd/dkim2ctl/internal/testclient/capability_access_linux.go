@@ -12,7 +12,7 @@ func inspectCapabilityAccess(descriptor int) error {
 	if err := unix.Fstatfs(descriptor, &filesystem); err != nil {
 		return NewExitError(ExitCapability)
 	}
-	switch int64(filesystem.Type) {
+	switch int64(filesystem.Type) { //nolint:unconvert // Normalize Statfs_t across architectures.
 	case unix.EXT4_SUPER_MAGIC, unix.XFS_SUPER_MAGIC, unix.BTRFS_SUPER_MAGIC, unix.TMPFS_MAGIC:
 	default:
 		return NewExitError(ExitCapability)

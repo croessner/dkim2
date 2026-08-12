@@ -48,7 +48,8 @@ help:
 		'  make integration-valkey      run Valkey integration' \
 		'  make integration-datasources run LDAP and SQL service integration' \
 		'  make integration-postfix     run real Postfix/Milter qualification' \
-		'  make integration-exim        run Exim ABI and version qualification' \
+		'  make integration-exim        run portable Exim adapter integration' \
+		'  make qualification-exim      run source-matched Exim version qualification' \
 		'  make container-smoke         build images and run hardened runtime smoke' \
 		'  make guardrails              run normal product quality once' \
 		'  make release-guardrails      run release quality and conformance'
@@ -516,7 +517,10 @@ integration-datasources: test-datasource-services
 integration-postfix: conformance-postfix
 
 .PHONY: integration-exim
-integration-exim: test-exim-local-scan check-exim-matrix-prep check-exim-c-linux-cross test-exim-real-matrix
+integration-exim: test-exim-local-scan check-exim-matrix-prep check-exim-c-linux-cross
+
+.PHONY: qualification-exim
+qualification-exim: integration-exim test-exim-real-matrix
 
 .PHONY: guardrails
 guardrails: check-ci fix fmt vet lint test race build-check check-generated check-vendor check-protected-platforms check-boundaries check-operator-docs

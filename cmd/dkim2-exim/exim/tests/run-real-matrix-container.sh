@@ -22,7 +22,7 @@ fail() {
 [[ $(uname -s) == Darwin || $(uname -s) == Linux ]] || fail
 command -v docker >/dev/null 2>&1 || fail
 docker build --platform linux/amd64 --tag "$base_image" \
-  --file "$script_dir/container/Containerfile" "$repository_root" >/dev/null
+  --file "$script_dir/container/Dockerfile" "$repository_root" >/dev/null
 
 cleanup() {
   docker rm --force "$container_name" >/dev/null 2>&1 || true

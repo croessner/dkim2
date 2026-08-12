@@ -53,7 +53,7 @@ func SocketAccessFingerprint(path string, acceptedMode uint32) ([32]byte, error)
 	if err := retryOperation(func() error { return unix.Statfs(path, &filesystem) }); err != nil {
 		return [32]byte{}, err
 	}
-	filesystemType, err := classifyLinuxFilesystemType(int64(filesystem.Type))
+	filesystemType, err := classifyLinuxFilesystemType(int64(filesystem.Type)) //nolint:unconvert // Normalize Statfs_t across architectures.
 	if err != nil {
 		return [32]byte{}, err
 	}
@@ -149,7 +149,7 @@ func inspectLinuxFilesystem(fd int) (int64, error) {
 	if err := retryOperation(func() error { return unix.Fstatfs(fd, &filesystem) }); err != nil {
 		return 0, err
 	}
-	return classifyLinuxFilesystemType(int64(filesystem.Type))
+	return classifyLinuxFilesystemType(int64(filesystem.Type)) //nolint:unconvert // Normalize Statfs_t across architectures.
 }
 
 // classifyLinuxFilesystemType accepts only filesystem access models audited for this loader.
@@ -160,13 +160,6 @@ func classifyLinuxFilesystemType(filesystemType int64) (int64, error) {
 	default:
 		return 0, &Error{}
 	}
-}
-
-// readLinuxXattrNames obtains one exact bounded descriptor-native name list.
-func readLinuxXattrNames(fd int) ([]byte, error) {
-	return readLinuxXattrNamesWith(func(destination []byte) (int, error) {
-		return unix.Flistxattr(fd, destination)
-	})
 }
 
 // readLinuxXattrNamesWith performs one probe, read, and reprobe transaction.
@@ -229,13 +222,6 @@ func classifyLinuxXattrNames(data []byte) (bool, bool, error) {
 		}
 	}
 	return hasAccess, hasDefault, nil
-}
-
-// readLinuxACLXattr reads one exact bounded POSIX ACL value.
-func readLinuxACLXattr(fd int, name string) ([]byte, bool, error) {
-	return readLinuxACLXattrWith(func(destination []byte) (int, error) {
-		return unix.Fgetxattr(fd, name, destination)
-	})
 }
 
 // readLinuxACLXattrWith distinguishes stable absence from one stable value.

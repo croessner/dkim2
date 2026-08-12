@@ -48,7 +48,7 @@ func ancestryDescriptorAccessFingerprint(fd int, acceptedMode uint32) ([32]byte,
 	if err := retryOperation(func() error { return unix.Fstatfs(fd, &filesystem) }); err != nil {
 		return [32]byte{}, err
 	}
-	filesystemType, err := classifyLinuxAncestryFilesystemType(int64(filesystem.Type))
+	filesystemType, err := classifyLinuxAncestryFilesystemType(int64(filesystem.Type)) //nolint:unconvert // Normalize Statfs_t across architectures.
 	if err != nil {
 		return [32]byte{}, err
 	}
@@ -139,7 +139,7 @@ func rootDescriptorAccessFingerprint(fd int, acceptedMode uint32) ([32]byte, err
 	if err := retryOperation(func() error { return unix.Fstatfs(fd, &filesystem) }); err != nil {
 		return [32]byte{}, err
 	}
-	overlay, err := classifyLinuxRootFilesystemType(int64(filesystem.Type))
+	overlay, err := classifyLinuxRootFilesystemType(int64(filesystem.Type)) //nolint:unconvert // Normalize Statfs_t across architectures.
 	if err != nil {
 		return [32]byte{}, err
 	}
@@ -211,7 +211,7 @@ func inspectLinuxFilesystem(fd int) (int64, error) {
 	if err := retryOperation(func() error { return unix.Fstatfs(fd, &filesystem) }); err != nil {
 		return 0, err
 	}
-	return classifyLinuxFilesystemType(int64(filesystem.Type))
+	return classifyLinuxFilesystemType(int64(filesystem.Type)) //nolint:unconvert // Normalize Statfs_t across architectures.
 }
 
 // classifyLinuxFilesystemType accepts only filesystem access models audited for this loader.

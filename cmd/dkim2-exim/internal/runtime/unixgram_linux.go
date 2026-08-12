@@ -16,6 +16,8 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+const unixgramNetwork = "unixgram"
+
 // unixgramSink owns one bounded protected local datagram connection.
 type unixgramSink struct{ connection *net.UnixConn }
 
@@ -41,6 +43,8 @@ func openUnixgramSink(path string) (sink *unixgramSink, identity securefile.Iden
 }
 
 // openUnixgramSinkWith exposes content-free replacement and close-failure test seams.
+//
+//nolint:gocyclo // The single descriptor transaction keeps every fail-closed recheck visibly ordered.
 func openUnixgramSinkWith(
 	path string,
 	afterDial func(),
@@ -82,11 +86,11 @@ func openUnixgramSinkWith(
 		return nil, securefile.Identity{}, errRuntime
 	}
 	address := "/proc/self/fd/" + strconv.Itoa(parent) + "/" + name
-	accessBefore, err := securefile.SocketAccessFingerprint(address, uint32(childBefore.Mode&0o777))
+	accessBefore, err := securefile.SocketAccessFingerprint(address, uint32(childBefore.Mode&0o777)) //nolint:unconvert // Normalize Stat_t.Mode across architectures.
 	if err != nil {
 		return nil, securefile.Identity{}, errRuntime
 	}
-	connection, err := net.DialUnix("unixgram", nil, &net.UnixAddr{Name: address, Net: "unixgram"})
+	connection, err := net.DialUnix(unixgramNetwork, nil, &net.UnixAddr{Name: address, Net: unixgramNetwork})
 	if err != nil {
 		return nil, securefile.Identity{}, errRuntime
 	}
@@ -97,7 +101,7 @@ func openUnixgramSinkWith(
 	if afterDial != nil {
 		afterDial()
 	}
-	accessAfter, accessErr := securefile.SocketAccessFingerprint(address, uint32(childBefore.Mode&0o777))
+	accessAfter, accessErr := securefile.SocketAccessFingerprint(address, uint32(childBefore.Mode&0o777)) //nolint:unconvert // Normalize Stat_t.Mode across architectures.
 	var childAfter unix.Stat_t
 	if accessErr != nil || accessAfter != accessBefore || parentHandle.Validate() != nil ||
 		unix.Fstatat(parent, name, &childAfter, unix.AT_SYMLINK_NOFOLLOW) != nil ||
@@ -108,8 +112,8 @@ func openUnixgramSinkWith(
 		return nil, securefile.Identity{}, errRuntime
 	}
 	identity = securefile.NewIdentity(
-		uint64(childBefore.Dev), childBefore.Ino,
-		uint64(parentState.Dev), parentState.Ino,
+		uint64(childBefore.Dev), childBefore.Ino, //nolint:unconvert // Normalize Stat_t.Dev across architectures.
+		uint64(parentState.Dev), parentState.Ino, //nolint:unconvert // Normalize Stat_t.Dev across architectures.
 	)
 	return &unixgramSink{connection: connection}, identity, nil
 }

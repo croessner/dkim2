@@ -243,7 +243,8 @@ func TestReadinessDirtyFailureInvalidatesWriterLiveness(t *testing.T) {
 // TestReadinessPanicAfterRootMutationNeverPublishesClean proves publish and
 // collection panics cannot expose a live CLEAN generation after root mutation.
 func TestReadinessPanicAfterRootMutationNeverPublishesClean(t *testing.T) {
-	for _, operation := range []string{"publish", "collect"} {
+	const collectOperation = "collect"
+	for _, operation := range []string{"publish", collectOperation} {
 		t.Run(operation, func(t *testing.T) {
 			root, key, now := newRawRoot(t)
 			readinessRoot := t.TempDir()
@@ -268,7 +269,7 @@ func TestReadinessPanicAfterRootMutationNeverPublishesClean(t *testing.T) {
 				t.Fatal("readiness panic reader construction failed")
 			}
 			defer func() { _ = reader.close() }()
-			if operation == "collect" {
+			if operation == collectOperation {
 				record, publishErr := store.Publish(
 					MinimumRetention,
 					testIncoming(
@@ -302,7 +303,7 @@ func TestReadinessPanicAfterRootMutationNeverPublishesClean(t *testing.T) {
 						adapter.SessionSMTP,
 					),
 				)
-			case "collect":
+			case collectOperation:
 				err = store.Collect()
 			}
 			if !errors.Is(err, ErrEvidence) || !dirtyAtMutation {

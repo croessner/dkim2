@@ -492,7 +492,7 @@ func inspectReadinessTemporary(file int) (descriptorState, error) {
 // linuxRootFingerprint returns one exact mutable directory generation.
 func linuxRootFingerprint(state descriptorState) rootFingerprint {
 	return rootFingerprint{
-		device: uint64(state.device), inode: state.inode,
+		device: uint64(state.device), inode: state.inode, //nolint:unconvert // Keep the persisted identity shape architecture-independent.
 		mtimeSec: state.mtimeSec, mtimeNsec: state.mtimeNsec,
 		ctimeSec: state.ctimeSec, ctimeNsec: state.ctimeNsec,
 	}

@@ -21,7 +21,7 @@ import (
 func TestUnixgramSinkProtectedLifecycle(t *testing.T) {
 	parent := testsupport.TrustedTempDirectory(t)
 	path := filepath.Join(parent, "telemetry.sock")
-	listener, err := net.ListenUnixgram("unixgram", &net.UnixAddr{Name: path, Net: "unixgram"})
+	listener, err := net.ListenUnixgram(unixgramNetwork, &net.UnixAddr{Name: path, Net: unixgramNetwork})
 	if err != nil {
 		t.Fatal("unixgram listener setup failed")
 	}
@@ -117,8 +117,8 @@ func TestUnixgramSinkCollectorProcess(t *testing.T) {
 		return
 	}
 	listener, err := net.ListenUnixgram(
-		"unixgram",
-		&net.UnixAddr{Name: path, Net: "unixgram"},
+		unixgramNetwork,
+		&net.UnixAddr{Name: path, Net: unixgramNetwork},
 	)
 	if err != nil {
 		t.Fatal("collector listener setup failed")
@@ -144,7 +144,7 @@ func TestUnixgramSinkCollectorProcess(t *testing.T) {
 func TestUnixgramSinkRejectsReplacementAndCloseFailure(t *testing.T) {
 	parent := testsupport.TrustedTempDirectory(t)
 	path := filepath.Join(parent, "telemetry.sock")
-	original, err := net.ListenUnixgram("unixgram", &net.UnixAddr{Name: path, Net: "unixgram"})
+	original, err := net.ListenUnixgram(unixgramNetwork, &net.UnixAddr{Name: path, Net: unixgramNetwork})
 	if err != nil {
 		t.Fatal("original unixgram listener setup failed")
 	}
@@ -158,7 +158,7 @@ func TestUnixgramSinkRejectsReplacementAndCloseFailure(t *testing.T) {
 		if os.Rename(path, backup) != nil {
 			return
 		}
-		replacement, _ = net.ListenUnixgram("unixgram", &net.UnixAddr{Name: path, Net: "unixgram"})
+		replacement, _ = net.ListenUnixgram(unixgramNetwork, &net.UnixAddr{Name: path, Net: unixgramNetwork})
 		if replacement != nil {
 			_ = os.Chmod(path, 0o600)
 		}
@@ -186,7 +186,7 @@ func TestUnixgramSinkRejectsReplacementAndCloseFailure(t *testing.T) {
 func TestUnixgramSinkRejectsUnsafeMetadata(t *testing.T) {
 	parent := testsupport.TrustedTempDirectory(t)
 	path := filepath.Join(parent, "telemetry.sock")
-	listener, err := net.ListenUnixgram("unixgram", &net.UnixAddr{Name: path, Net: "unixgram"})
+	listener, err := net.ListenUnixgram(unixgramNetwork, &net.UnixAddr{Name: path, Net: unixgramNetwork})
 	if err != nil {
 		t.Fatal("unixgram listener setup failed")
 	}

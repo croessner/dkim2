@@ -76,7 +76,7 @@
     {
       "id": "exim-qualification-container-driver",
       "path": "cmd/dkim2-exim/exim/tests/run-real-matrix-container.sh",
-      "sha256": "b1f6552fed8eca75e1ff3e5efb01e03d7bb79d3df9465a9d387c98243a95e583",
+      "sha256": "47786485b890748e9d34cd87935a2d826c351c410da18491ebc2b2d2d26d2c8a",
       "module": "cmd/dkim2-exim"
     },
     {
@@ -118,7 +118,7 @@
     {
       "id": "exim-qualification-verifier",
       "path": "cmd/dkim2-exim/exim/tests/run-real-matrix.sh",
-      "sha256": "6b0ef3e117ba049430fc493e2b0fe21e5bd242054b51a187f727ccaac44f2be8",
+      "sha256": "a496604d426ea857111d96f3b789dbc3603225b1c35246bbb39cb3883a032cf8",
       "module": "cmd/dkim2-exim"
     },
     {
@@ -142,7 +142,7 @@
     {
       "id": "milter-public-peer-source",
       "path": "cmd/dkim2-milter/internal/integration/public_peer_test.go",
-      "sha256": "c8ff61c6d106e3aa083fef2e119a0d1f4f22b9d3e7f86cd3609d8372af9c8795",
+      "sha256": "052e6cf1109c96a852c506bc93cbcddbfc4f86f35419f8cca19f994c9c2cc8da",
       "module": "cmd/dkim2-milter"
     },
     {
@@ -154,7 +154,7 @@
     {
       "id": "openapi-independent-oracle-source",
       "path": "cmd/dkim2ctl/internal/testclient/public_socket_test.go",
-      "sha256": "007ad7142def6ddbb35472987f6cbc78b7e3580a005a2356d172224adf196b27",
+      "sha256": "d3c0afa677bb7ef6fa267770437e31915d7f366d278ff1e7c53318e7100b4bb6",
       "module": "cmd/dkim2ctl"
     },
     {
@@ -202,7 +202,7 @@
     {
       "id": "openapi-wire-response-source",
       "path": "cmd/dkim2d/internal/httpjson/http_wire_response.go",
-      "sha256": "23acc6cb4ad064c5651c120b6f5f97398259b94df18a5f9c6876f99fb014c45a",
+      "sha256": "b194d5e1d511737868e279bf0126114762c1c1e3ad7431cee6161d80ca5971ba",
       "module": "cmd/dkim2d"
     },
     {
@@ -304,7 +304,7 @@
     {
       "id": "signing-facade-source",
       "path": "lib/signing_facade_test.go",
-      "sha256": "cdf2036e296e80ff9cafb8afaead974f517eaaf744a5672b17138d775abbcd83",
+      "sha256": "3786eeca436e7f62673c8623bf13c41d241c81f2ae6fc0d8e2d9d5ead7f0b703",
       "module": "lib"
     },
     {

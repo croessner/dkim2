@@ -143,7 +143,7 @@ func validateSocketDirectory(descriptor int, final bool) error {
 	if err := unix.Fstat(descriptor, &state); err != nil {
 		return &Error{Class: FailureInternal}
 	}
-	mode := uint32(state.Mode)
+	mode := uint32(state.Mode) //nolint:unconvert // Stat_t.Mode differs across supported Unix targets.
 	if mode&unix.S_IFMT != unix.S_IFDIR ||
 		(state.Uid != 0 && state.Uid != uint32(os.Geteuid())) {
 		return &Error{Class: FailureContract}
