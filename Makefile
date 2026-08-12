@@ -48,7 +48,7 @@ help:
 		'  make integration-valkey      run Valkey integration' \
 		'  make integration-datasources run LDAP and SQL service integration' \
 		'  make integration-postfix     run real Postfix/Milter qualification' \
-		'  make integration-exim        run portable Exim adapter integration' \
+		'  make integration-exim        run Linux Exim adapter integration' \
 		'  make qualification-exim      run source-matched Exim version qualification' \
 		'  make container-smoke         build images and run hardened runtime smoke' \
 		'  make guardrails              run normal product quality once' \
@@ -246,6 +246,10 @@ test-exim-real-matrix-helper:
 .PHONY: check-exim-c-linux-cross
 check-exim-c-linux-cross:
 	@cmd/dkim2-exim/exim/tests/run-linux-cross-compile.sh
+
+.PHONY: check-exim-c-linux-native
+check-exim-c-linux-native:
+	@cmd/dkim2-exim/exim/tests/run-linux-native-compile.sh
 
 .PHONY: generate-exim-build
 generate-exim-build: test-exim-local-scan
@@ -517,10 +521,10 @@ integration-datasources: test-datasource-services
 integration-postfix: conformance-postfix
 
 .PHONY: integration-exim
-integration-exim: test-exim-local-scan check-exim-matrix-prep check-exim-c-linux-cross
+integration-exim: test-exim-local-scan check-exim-matrix-prep check-exim-c-linux-native
 
 .PHONY: qualification-exim
-qualification-exim: integration-exim test-exim-real-matrix
+qualification-exim: integration-exim check-exim-c-linux-cross test-exim-real-matrix
 
 .PHONY: guardrails
 guardrails: check-ci fix fmt vet lint test race build-check check-generated check-vendor check-protected-platforms check-boundaries check-operator-docs

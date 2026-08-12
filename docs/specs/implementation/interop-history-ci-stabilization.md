@@ -76,7 +76,7 @@ specialized gates instead of hidden dependencies of unit testing.
 2. Make authenticated chain verification the safe public and production path.
 3. Project the corrected contract through daemon, OpenAPI, client and adapters.
 4. Simplify the Make dependency graph and separate external integration.
-5. Replace the GitHub workflow graph with the six workflows defined below.
+5. Replace the GitHub workflow graph with the five workflows defined below.
 6. Run an independent final review before any publication is authorized.
 
 ## Implementation Effort
@@ -198,7 +198,7 @@ repeats conformance and security work already reachable from other aggregate
 targets. Container evidence runs on every normal branch and PR despite being a
 release/package concern.
 
-The six workflows also duplicate checkout, Go setup, temporary-directory
+The five workflows also duplicate checkout, Go setup, temporary-directory
 preparation, cleanup, and tool installation. `scripts/check-ci.sh` then tests
 many exact textual implementation details of those workflows. CI is therefore
 partly occupied proving its own scaffolding instead of proving product behavior.
@@ -333,13 +333,7 @@ The target has small workflows with direct commands:
    - runs on relevant library, daemon, Exim, OpenAPI, or Exim fixture changes,
      on manual dispatch, and for a release candidate;
    - runs `make integration-exim` once.
-5. `codeql.yml`
-   - keeps standard GitHub CodeQL analysis with least authority;
-   - analyzes Go and Actions normally;
-   - analyzes C/C++ only when the Exim surface changes or on the scheduled
-     full run;
-   - does not add a custom temporary-directory lifecycle.
-6. `release.yml`
+5. `release.yml`
    - triggers only from a published, non-draft, non-prerelease GitHub Release;
    - checks that the release has a semantic stable version, its ref is an
      annotated tag, and tag, release, checkout, and commit are identical;
@@ -453,7 +447,7 @@ without embedding protected message material.
 | Fixtures | Checkout-dependent Turscar corpus and claims are absent |  | pending |  |
 | Boundaries | Library, daemon, client and adapters own their intended concerns |  | pending |  |
 | Make graph | Unit quality and specialized integration are separate |  | pending |  |
-| Actions | Six direct workflows replace duplicated scaffolding |  | pending |  |
+| Actions | Five direct workflows replace duplicated scaffolding |  | pending |  |
 | Security | Fail-closed, secret-safe and least-authority behavior holds |  | pending |  |
 | Effort | All prompt timing is measured |  | pending |  |
 

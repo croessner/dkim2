@@ -11,7 +11,6 @@ second build or test system.
 | `Conformance` | Portable Draft-04 protocol conformance | `make check-conformance`, `make conformance` |
 | `Postfix integration` | Real Postfix/Milter qualification | `make integration-postfix` |
 | `Exim integration` | Exim C ABI and supported-version qualification | `make integration-exim` |
-| `CodeQL` | Actions and Go analysis; scheduled/manual Exim C analysis | CodeQL |
 | `Release` | Stable quality gate and exact GHCR publication | `make release-guardrails` |
 
 There is no separate unit-test workflow because Guardrails already owns unit
@@ -25,7 +24,7 @@ pull requests.
 by repository scripts. Workflow Actions are pinned directly to reviewed commit
 identities. `make check-ci` runs actionlint and enforces only durable policy:
 
-- the six expected workflow concerns;
+- the five expected workflow concerns;
 - immutable Action pins;
 - no publication authority outside `release.yml`;
 - no `github.ref_protected` release dependency;

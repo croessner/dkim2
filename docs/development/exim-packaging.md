@@ -19,10 +19,13 @@ fixtures retain the repository and generator dependency licenses recorded in
 the module and vendor metadata.
 
 The matrix preparation artifacts are compile/test inputs, not proof of a real
-Exim run. `make check-exim-c-linux-cross` uses exact Zig 0.16.0 targets to
-compile the prepared `Local/` source/header layout for Linux amd64 and arm64.
-Zig is an optional local verification dependency; authenticated release builds
-remain bound to each pinned source-package toolchain.
+Exim run. `make check-exim-c-linux-native` compiles the prepared `Local/`
+source/header layout with the runner's native Linux C compiler and is part of
+the regular integration gate. Release qualification additionally runs
+`make check-exim-c-linux-cross`, which uses exact Zig 0.16.0 targets for Linux
+amd64 and arm64. Zig is therefore a qualification dependency, not a hidden
+requirement of the regular GitHub integration workflow. Authenticated release
+builds remain bound to each pinned source-package toolchain.
 
 Release qualification owns authenticated package builds and recorded
 SMTP/filter execution for upstream 4.99.5, Debian 13, and Ubuntu 26.04.

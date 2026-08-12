@@ -2,8 +2,7 @@
 set -eu
 
 workflows=.github/workflows
-expected='codeql.yml
-conformance.yml
+expected='conformance.yml
 exim-integration.yml
 guardrails.yml
 postfix-integration.yml

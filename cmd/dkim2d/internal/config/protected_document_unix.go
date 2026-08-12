@@ -123,6 +123,10 @@ func readProtectedDocumentIfExistsObserved(
 	if observe != nil {
 		observe(protectedDocumentBeforeFinalProof)
 	}
+	if err := proveProtectedDocumentBytes(document.fd, maximum, data); err != nil {
+		clear(data)
+		return nil, false, err
+	}
 	final, err := captureDescriptorState(document.fd, pre.metadata.modeBits, false)
 	parentFinal, parentErr := captureDescriptorState(parent.fd, parentPre.metadata.modeBits, true)
 	pathFinal, pathErr := statAtNoFollow(parent.fd, filepath.Base(path))
@@ -132,6 +136,20 @@ func readProtectedDocumentIfExistsObserved(
 		return nil, false, newError(CodeProtectedAccess)
 	}
 	return data, true, nil
+}
+
+// proveProtectedDocumentBytes catches same-size rewrites even when a filesystem
+// does not advance descriptor timestamps between the two observations.
+func proveProtectedDocumentBytes(fd, maximum int, expected []byte) error {
+	if _, err := unix.Seek(fd, 0, 0); err != nil {
+		return newError(CodeProtectedIO)
+	}
+	proof, err := readProtectedDescriptor(fd, maximum)
+	defer clear(proof)
+	if err != nil || !bytes.Equal(proof, expected) {
+		return newError(CodeProtectedAccess)
+	}
+	return nil
 }
 
 // openProtectedDocumentParent proves and retains one trusted final parent directory.
