@@ -30,6 +30,10 @@ if grep -RE 'DKIM2_TEST_TRUSTED_ROOT|/dkim2-test|mkfs[.]ext4|mount -o loop' "$wo
 fi
 test ! -e "$workflows/postfix-integration.yml" || fail 'Postfix E2E must remain opt-in'
 test ! -e "$workflows/exim-integration.yml" || fail 'Exim E2E must remain opt-in'
+for workflow in conformance.yml release.yml; do
+  grep -A4 'actions/setup-go@' "$workflows/$workflow" | grep -q 'cache: false' ||
+    fail "$workflow must not use setup-go's implicit root-module cache"
+done
 if grep -RE '(packages|id-token|attestations):[[:space:]]*write' \
   "$workflows" --exclude=release.yml; then
   fail 'only the release workflow may publish or attest artifacts'
