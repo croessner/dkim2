@@ -1013,18 +1013,27 @@ func executeTestBinary(
 		cancelRun()
 		if runErr != nil {
 			if errors.Is(contextErr, context.DeadlineExceeded) {
-				return "", nil, errors.New("runner_timeout")
+				return "", nil, runnerCaseFailure("runner_timeout", runnerCase.key)
 			}
-			return "", nil, errors.New("runner_failure")
+			return "", nil, runnerCaseFailure("runner_failure", runnerCase.key)
 		}
 		text := output.String()
 		if !strings.Contains(text, "=== RUN   "+runnerCase.testName+"\n") ||
 			!strings.Contains(text, "--- PASS: "+runnerCase.testName+" ") {
-			return "", nil, errors.New("runner_missing_case")
+			return "", nil, runnerCaseFailure("runner_missing_case", runnerCase.key)
 		}
 		passed = append(passed, runnerCase.key)
 	}
 	return digest, passed, nil
+}
+
+// runnerCaseFailure identifies a closed manifest case without exposing test output.
+func runnerCaseFailure(class, key string) error {
+	_, caseID, ok := strings.Cut(key, "\x00")
+	if !ok || caseID == "" {
+		return errors.New(class)
+	}
+	return errors.New(class + "_" + strings.ReplaceAll(caseID, "-", "_"))
 }
 
 type boundedOutput struct {

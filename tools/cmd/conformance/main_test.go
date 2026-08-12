@@ -28,6 +28,7 @@ func TestPublicFailureDiagnosticRejectsHostileContent(t *testing.T) {
 		want string
 	}{
 		{name: "closed", err: errors.New("runner_failure:closed-producer"), want: "runner_failure:closed-producer"},
+		{name: "closed case", err: errors.New("runner_failure_abort_reuse:milter-public-fixture-tests"), want: "runner_failure_abort_reuse:milter-public-fixture-tests"},
 		{name: "raw error", err: errors.New("runner failure /protected/marker"), want: unknownDiagnostic},
 		{name: "nil", err: nil, want: unknownDiagnostic},
 	} {
@@ -36,6 +37,17 @@ func TestPublicFailureDiagnosticRejectsHostileContent(t *testing.T) {
 				t.Fatalf("publicFailureDiagnostic() = %q, want %q", got, testCase.want)
 			}
 		})
+	}
+}
+
+func TestRunnerCaseFailure(t *testing.T) {
+	t.Parallel()
+
+	if got := runnerCaseFailure("runner_failure", "milter\x00abort-reuse").Error(); got != "runner_failure_abort_reuse" {
+		t.Fatalf("runnerCaseFailure() = %q, want %q", got, "runner_failure_abort_reuse")
+	}
+	if got := runnerCaseFailure("runner_failure", "invalid").Error(); got != "runner_failure" {
+		t.Fatalf("runnerCaseFailure() fallback = %q, want %q", got, "runner_failure")
 	}
 }
 
