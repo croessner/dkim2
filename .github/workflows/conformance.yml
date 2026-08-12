@@ -4,26 +4,8 @@ on:
   workflow_dispatch:
   push:
     branches: [main, features, "release/**"]
-    paths:
-      - "lib/**"
-      - "testdata/conformance/**"
-      - "testdata/vectors/**"
-      - "tools/cmd/conformance/**"
-      - "tools/internal/conformance/**"
-      - "docs/conformance.md"
-      - "Makefile"
-      - ".github/workflows/conformance.yml"
   pull_request:
     branches: [main, features, "release/**"]
-    paths:
-      - "lib/**"
-      - "testdata/conformance/**"
-      - "testdata/vectors/**"
-      - "tools/cmd/conformance/**"
-      - "tools/internal/conformance/**"
-      - "docs/conformance.md"
-      - "Makefile"
-      - ".github/workflows/conformance.yml"
 
 permissions:
   contents: read

@@ -321,8 +321,8 @@ The target has small workflows with direct commands:
    - runs `make guardrails` once;
    - checks that tracked files did not change.
 2. `conformance.yml`
-   - runs when protocol library, draft-vector, or conformance files change and
-     on manual dispatch;
+   - runs on maintained-branch pushes, pull requests, and manual dispatch so
+     adapter and generated-client changes cannot bypass conformance;
    - runs `make conformance` once;
    - uploads only the rendered conformance report when useful.
 3. `postfix-integration.yml`
