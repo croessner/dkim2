@@ -33,7 +33,9 @@ jobs:
           go-version: "1.26.5"
 
       - name: Prepare protected test root
-        run: sudo install -d -o "$(id -u)" -g "$(id -g)" -m 0700 "$DKIM2_TEST_TRUSTED_ROOT"
+        run: |
+          sudo install -d -m 0700 "$DKIM2_TEST_TRUSTED_ROOT"
+          sudo mount -t tmpfs -o "mode=0700,uid=$(id -u),gid=$(id -g),size=16m,nosuid,nodev,noexec" dkim2-test "$DKIM2_TEST_TRUSTED_ROOT"
 
       - name: Run portable conformance
         run: |
