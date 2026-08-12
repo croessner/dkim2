@@ -581,10 +581,15 @@ func TestHTTPBoundaryRawContinuePrecedesDomainAndFinal(t *testing.T) {
 	continueAt := strings.Index(response, "HTTP/1.1 100 Continue\r\n\r\n")
 	finalAt := strings.Index(response, "HTTP/1.1 500 Internal Server Error\r\n")
 	if continueAt != 0 || finalAt <= continueAt ||
-		processor.calls.Load() != 1 || handler.admission.Owned() != 0 {
-		t.Fatalf("continue/domain/final response = %q calls=%d owned=%d",
-			response, processor.calls.Load(), handler.admission.Owned())
+		processor.calls.Load() != 1 {
+		t.Fatalf("continue/domain/final response = %q calls=%d",
+			response, processor.calls.Load())
 	}
+	// Reading the connection through EOF proves that the final response reached
+	// the socket, not that the serving goroutine has already run its deferred
+	// admission release. Synchronize on the reservation itself instead of
+	// depending on scheduler timing under the race detector.
+	waitBoundaryAdmissionOwned(t, handler.admission, 0)
 }
 
 // TestHTTPBoundaryRawContinueSizePrecedesSaturatedAdmission proves the frozen no-100 ordering.
