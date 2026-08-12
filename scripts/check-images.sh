@@ -146,7 +146,9 @@ jq -e '
 
 test "$(grep -Ec 'uses: [^@[:space:]]+@[0-9a-f]{40}([[:space:]]+#.*)?$' .github/workflows/container-release.yml)" -ge 3
 ! grep -Eq 'uses: [^@[:space:]]+@(main|master|v[0-9]+([.]|$))' .github/workflows/container-release.yml
-grep -Fq 'go-version: "1.26.5"' .github/workflows/container-release.yml
+ci_go_version=$(jq -er '.go.version' build/ci/toolchain.json)
+grep -Fq "go-version: \"$ci_go_version\"" \
+  .github/workflows/container-release.yml
 grep -Fq 'run: make check-container-release' .github/workflows/container-release.yml
 ! grep -Eq '(id-token|packages):[[:space:]]*write' .github/workflows/container-release.yml
 ! grep -Eq 'provenance-ci|trusted-ci-build' \
@@ -161,8 +163,8 @@ grep -Fq 'TMPDIR="$repository/$work" \' scripts/image-evidence.sh
 jq -e '
   .schema == "dkim2-image-tool-allowlist-v1" and
   [.tools[].name] == ["syft","trivy"] and
-  [.tools[].version] == ["1.46.0","0.72.0"] and
   all(.tools[];
+    (.version | test("^[0-9]+[.][0-9]+[.][0-9]+$")) and
     [.platforms[] | (.goos + "/" + .goarch)] ==
       ["darwin/amd64","darwin/arm64","linux/amd64","linux/arm64"] and
     all(.platforms[];
@@ -170,3 +172,13 @@ jq -e '
       (.archive_sha256 | test("^[0-9a-f]{64}$")) and
       (.binary_sha256 | test("^[0-9a-f]{64}$"))))
 ' build/container/image-tools.json >/dev/null
+grep -Fq 'syft_version=$(jq -er' scripts/fetch-image-tools.sh
+grep -Fq 'trivy_version=$(jq -er' scripts/fetch-image-tools.sh
+test "$(grep -Fc -- '-replace' scripts/fetch-image-tools.sh)" -eq 2
+grep -Fq 'syft_version=$(jq -er' scripts/image-evidence.sh
+grep -Fq 'trivy_version=$(jq -er' scripts/image-evidence.sh
+! grep -Eq 'verify_tool (syft|trivy) [0-9]' scripts/image-evidence.sh
+! grep -Eq 'trivy-json-[0-9]' \
+  scripts/image-evidence.sh tools/cmd/imageevidence/main.go
+! grep -Eq 'loadTool\(root, "(syft|trivy)",' \
+  tools/cmd/imageevidence/main.go

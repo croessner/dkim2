@@ -5,6 +5,7 @@ umask 077
 GOCACHE="${GOCACHE:-/tmp/dkim2-go-build-cache}" \
   go -C tools run ./cmd/safepath -root .. -directory .artifacts/image-tools
 work=$(mktemp -d .artifacts/.image-tools-work.XXXXXX)
+# cleanup removes only the invocation-owned download workspace.
 cleanup() {
   rm -rf -- "$work"
 }
@@ -44,12 +45,16 @@ fetch_tool() {
   installed_identity="$installed.identity.json"
   if test -e "$installed" || test -L "$installed" ||
     test -e "$installed_identity" || test -L "$installed_identity"; then
+    test -e "$installed"
+    test ! -L "$installed"
+    test -e "$installed_identity"
+    test ! -L "$installed_identity"
     GOCACHE="${GOCACHE:-/tmp/dkim2-go-build-cache}" \
       go -C tools run ./cmd/safepath -root .. -file "$installed"
     GOCACHE="${GOCACHE:-/tmp/dkim2-go-build-cache}" \
       go -C tools run ./cmd/safepath -root .. -file "$installed_identity"
-    test "$(shasum -a 256 "$installed" | cut -d' ' -f1)" = "$expected_binary_sha"
-    jq -e \
+    if test "$(shasum -a 256 "$installed" | cut -d' ' -f1)" = "$expected_binary_sha" &&
+      jq -e \
       --arg name "$name" --arg version "$version" \
       --arg asset "$asset" \
       --arg archive_sha256 "$archive_sha" \
@@ -62,8 +67,9 @@ fetch_tool() {
           archive_sha256:$archive_sha256,
           binary_sha256:$binary_sha256
         }
-      ' "$installed_identity" >/dev/null
-    return
+      ' "$installed_identity" >/dev/null; then
+      return
+    fi
   fi
   archive="$work/$name.tar.gz"
   binary="$work/$name"
@@ -79,7 +85,7 @@ fetch_tool() {
   test "$binary_sha" = "$expected_binary_sha"
   GOCACHE="${GOCACHE:-/tmp/dkim2-go-build-cache}" \
     go -C tools run ./cmd/safepath -root .. \
-      -install "$binary" -target ".artifacts/image-tools/$name" -executable
+      -install "$binary" -target ".artifacts/image-tools/$name" -executable -replace
   jq -S -n \
     --arg name "$name" \
     --arg version "$version" \
@@ -91,10 +97,18 @@ fetch_tool() {
   GOCACHE="${GOCACHE:-/tmp/dkim2-go-build-cache}" \
     go -C tools run ./cmd/safepath -root .. \
       -install "$work/$name.identity.json" \
-      -target ".artifacts/image-tools/$name.identity.json"
+      -target ".artifacts/image-tools/$name.identity.json" -replace
 }
 
-fetch_tool syft 1.46.0 \
-  "https://github.com/anchore/syft/releases/download/v1.46.0"
-fetch_tool trivy 0.72.0 \
-  "https://github.com/aquasecurity/trivy/releases/download/v0.72.0"
+syft_version=$(jq -er \
+  '[.tools[] | select(.name == "syft") | .version] |
+    if length == 1 then .[0] else halt_error(1) end' \
+  build/container/image-tools.json)
+trivy_version=$(jq -er \
+  '[.tools[] | select(.name == "trivy") | .version] |
+    if length == 1 then .[0] else halt_error(1) end' \
+  build/container/image-tools.json)
+fetch_tool syft "$syft_version" \
+  "https://github.com/anchore/syft/releases/download/v$syft_version"
+fetch_tool trivy "$trivy_version" \
+  "https://github.com/aquasecurity/trivy/releases/download/v$trivy_version"

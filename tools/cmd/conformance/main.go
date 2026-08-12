@@ -532,11 +532,17 @@ var portableDefinitions = []runnerDefinition{
 	},
 }
 
-var valkeyVersionPattern = regexp.MustCompile(
-	`^Valkey server v=9\.1\.0 sha=[0-9a-f]{8,64}:[01] malloc=[A-Za-z0-9._+-]+ bits=(32|64) build=[0-9a-f]{8,64}\n?$`,
-)
-
 var publicFailurePattern = regexp.MustCompile(`^[a-z][a-z0-9_]*(?::[a-z][a-z0-9_-]*)?$`)
+var semanticVersionPattern = regexp.MustCompile(`^[0-9]+[.][0-9]+[.][0-9]+$`)
+
+type ciToolchainVersionManifest struct {
+	Schema   string `json:"schema"`
+	Fixtures struct {
+		Valkey struct {
+			Version string `json:"version"`
+		} `json:"valkey"`
+	} `json:"fixtures"`
+}
 
 type postfixQualificationReport = conformance.PostfixQualificationReport
 type postfixQualificationRuntimeIdentity = conformance.PostfixQualificationRuntimeIdentity
@@ -826,6 +832,10 @@ func executeValkeyHarness(
 	if len(definition.cases) != 1 {
 		return "", nil, nil, errors.New("runner_inventory")
 	}
+	expectedVersion, err := loadValkeyVersion(root)
+	if err != nil {
+		return "", nil, nil, err
+	}
 	sourceServerPath, err := exec.LookPath("valkey-server")
 	if err != nil {
 		return "", nil, nil, errors.New("runner_dependency")
@@ -871,7 +881,7 @@ func executeValkeyHarness(
 	versionContextErr := versionContext.Err()
 	cancelVersion()
 	if versionErr != nil || versionContextErr != nil ||
-		!valkeyVersionPattern.MatchString(versionOutput.String()) {
+		!matchesValkeyVersion(versionOutput.String(), expectedVersion) {
 		return "", nil, nil, errors.New("runner_dependency")
 	}
 	sourceScriptPath := filepath.Join(root, "scripts", "test-valkey.sh")
@@ -934,8 +944,35 @@ func executeValkeyHarness(
 	}
 	return testDigest, []string{definition.cases[0].key}, []conformance.ToolIdentity{
 		{Name: "valkey-harness-script", Digest: scriptDigest},
-		{Name: "valkey-server-9.1.0", Digest: serverDigest},
+		{Name: "valkey-server-" + expectedVersion, Digest: serverDigest},
 	}, nil
+}
+
+// loadValkeyVersion reads the only approved Valkey version from the central CI manifest.
+func loadValkeyVersion(root string) (string, error) {
+	input, err := conformance.ReadConfinedFile(root, "build/ci/toolchain.json", 1<<16)
+	if err != nil {
+		return "", errors.New("runner_dependency")
+	}
+	var manifest ciToolchainVersionManifest
+	if err := json.Unmarshal(input, &manifest); err != nil ||
+		manifest.Schema != "dkim2-ci-toolchain-v1" ||
+		!semanticVersionPattern.MatchString(manifest.Fixtures.Valkey.Version) {
+		return "", errors.New("runner_dependency")
+	}
+	return manifest.Fixtures.Valkey.Version, nil
+}
+
+// matchesValkeyVersion validates the bounded official banner against the manifest version.
+func matchesValkeyVersion(output, expectedVersion string) bool {
+	if !semanticVersionPattern.MatchString(expectedVersion) {
+		return false
+	}
+	pattern := regexp.MustCompile(
+		`^Valkey server v=` + regexp.QuoteMeta(expectedVersion) +
+			` sha=[0-9a-f]{8,64}:[01] malloc=[A-Za-z0-9._+-]+ bits=(32|64) build=[0-9a-f]{8,64}\n?$`,
+	)
+	return pattern.MatchString(output)
 }
 
 // executeTestBinary builds, hashes, and executes one exact test producer.

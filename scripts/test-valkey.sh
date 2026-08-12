@@ -2,7 +2,13 @@
 
 set -eu
 
-readonly expected_version="9.1.0"
+manifest=build/ci/toolchain.json
+expected_version=$(jq -er '
+  if .schema == "dkim2-ci-toolchain-v1" and
+    (.fixtures.valkey.version | test("^[0-9]+[.][0-9]+[.][0-9]+$"))
+  then .fixtures.valkey.version else halt_error(1) end
+' "$manifest")
+readonly manifest expected_version
 readonly application_user="dkim2-integration-application"
 readonly application_password="synthetic-application-password-91"
 readonly auditor_user="dkim2-integration-auditor"
@@ -15,7 +21,8 @@ build_test_binary=false
 case $# in
 0)
 	if ! command -v valkey-server >/dev/null 2>&1; then
-		echo "test-valkey: valkey-server 9.1.0 is required" >&2
+		printf 'test-valkey: valkey-server %s is required\n' \
+			"$expected_version" >&2
 		exit 1
 	fi
 	server_binary="$(realpath "$(command -v valkey-server)")"
@@ -52,7 +59,8 @@ version_lines="$(printf '%s\n' "$version_output" | wc -l | tr -d '[:space:]')"
 if [ "$version_lines" != "1" ] ||
 	! printf '%s\n' "$version_output" |
 		grep -Eq "^Valkey server v=$expected_version sha=[0-9a-f]{8,64}:[01] malloc=[A-Za-z0-9._+-]+ bits=(32|64) build=[0-9a-f]{8,64}$"; then
-	echo "test-valkey: exact official Valkey server 9.1.0 binary is required" >&2
+	printf 'test-valkey: exact official Valkey server %s binary is required\n' \
+		"$expected_version" >&2
 	exit 1
 fi
 

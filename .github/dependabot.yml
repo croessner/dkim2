@@ -6,3 +6,7 @@ updates:
     schedule:
       interval: weekly
     target-branch: features
+    groups:
+      codeql-actions:
+        patterns:
+          - "github/codeql-action/*"

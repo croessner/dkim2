@@ -1,7 +1,16 @@
 #!/bin/sh
 set -eu
 
-root=$(CDPATH= cd -- "$(dirname "$0")/../../../.." && pwd)
+skip_sanitizers=${DKIM2_EXIM_SKIP_SANITIZERS:-0}
+case "$skip_sanitizers" in
+  0 | 1) ;;
+  *)
+    printf '%s\n' 'DKIM2_EXIM_SKIP_SANITIZERS must be 0 or 1' >&2
+    exit 1
+    ;;
+esac
+
+root=$(CDPATH='' cd -- "$(dirname "$0")/../../../.." && pwd)
 exim="$root/cmd/dkim2-exim/exim"
 work=$(mktemp -d "${TMPDIR:-/tmp}/dkim2-exim-c-harness.XXXXXX")
 trap 'rm -rf "$work"' 0 1 2 15
@@ -134,7 +143,10 @@ run_fixture \
   -pthread -o "$work/harness-local-scan-predefined"
 "$work/harness-local-scan-predefined"
 
-if "$cc_bin" $common_flags $warning_flags $include_common \
+if test "$skip_sanitizers" = 1; then
+  printf '%s\n' \
+    'local_scan harness: sanitizer sub-run skipped under CodeQL instrumentation'
+elif "$cc_bin" $common_flags $warning_flags $include_common \
   -DDKIM2_EXIM_EXPAND_STRING_2=1 \
   "-I$work/upstream" \
   -fsanitize=address,undefined -fno-omit-frame-pointer \

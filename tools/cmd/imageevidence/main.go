@@ -58,6 +58,11 @@ type reviewedToolPlatform struct {
 	BinarySHA256  string `json:"binary_sha256"`
 }
 
+type reviewedToolSelection struct {
+	Version  string
+	Platform reviewedToolPlatform
+}
+
 type buildInputPolicy struct {
 	Schema string               `json:"schema"`
 	Images []reviewedBuildImage `json:"images"`
@@ -362,11 +367,11 @@ func main() {
 	if err != nil {
 		fail()
 	}
-	syft, err := loadTool(root, "syft", "1.46.0")
+	syft, err := loadTool(root, "syft")
 	if err != nil {
 		fail()
 	}
-	trivy, err := loadTool(root, "trivy", "0.72.0")
+	trivy, err := loadTool(root, "trivy")
 	if err != nil {
 		fail()
 	}
@@ -705,8 +710,8 @@ func fail() {
 }
 
 // loadTool verifies the downloaded archive identity and exact executable bytes.
-func loadTool(root string, name string, version string) (toolIdentity, error) {
-	reviewed, err := loadReviewedTool(root, name, version, runtime.GOOS, runtime.GOARCH)
+func loadTool(root string, name string) (toolIdentity, error) {
+	reviewed, err := loadReviewedTool(root, name, runtime.GOOS, runtime.GOARCH)
 	if err != nil {
 		return toolIdentity{}, err
 	}
@@ -718,12 +723,12 @@ func loadTool(root string, name string, version string) (toolIdentity, error) {
 	var identity toolIdentity
 	if err := strictjson.Decode(content, &identity, 8, 128); err != nil ||
 		identity.Schema != "dkim2-image-tool-v1" ||
-		identity.Name != name || identity.Version != version ||
+		identity.Name != name || identity.Version != reviewed.Version ||
 		!validSHA256(identity.ArchiveSHA256) || !validSHA256(identity.BinarySHA256) ||
 		identity.Asset == "" || len(identity.Asset) > 128 ||
-		identity.Asset != reviewed.Asset ||
-		identity.ArchiveSHA256 != reviewed.ArchiveSHA256 ||
-		identity.BinarySHA256 != reviewed.BinarySHA256 {
+		identity.Asset != reviewed.Platform.Asset ||
+		identity.ArchiveSHA256 != reviewed.Platform.ArchiveSHA256 ||
+		identity.BinarySHA256 != reviewed.Platform.BinarySHA256 {
 		return toolIdentity{}, errors.New("tool")
 	}
 	binarySHA, err := fileSHA256(root, filepath.Join(root, toolDirectory, name), 256<<20)
@@ -737,27 +742,20 @@ func loadTool(root string, name string, version string) (toolIdentity, error) {
 func loadReviewedTool(
 	root string,
 	name string,
-	version string,
 	goos string,
 	goarch string,
-) (reviewedToolPlatform, error) {
+) (reviewedToolSelection, error) {
 	content, err := readSafeFile(root, filepath.Join(root, toolAllowlistPath), 64<<10)
 	if err != nil {
-		return reviewedToolPlatform{}, err
+		return reviewedToolSelection{}, err
 	}
 	var allowlist toolAllowlist
 	if strictjson.Decode(content, &allowlist, 16, 1024) != nil ||
 		allowlist.Schema != "dkim2-image-tool-allowlist-v1" ||
 		len(allowlist.Tools) != 2 {
-		return reviewedToolPlatform{}, errors.New("tool allowlist")
+		return reviewedToolSelection{}, errors.New("tool allowlist")
 	}
-	expectedTools := []struct {
-		name    string
-		version string
-	}{
-		{name: "syft", version: "1.46.0"},
-		{name: "trivy", version: "0.72.0"},
-	}
+	expectedTools := []string{"syft", "trivy"}
 	expectedPlatforms := []struct {
 		goos   string
 		goarch string
@@ -767,13 +765,13 @@ func loadReviewedTool(
 		{goos: "linux", goarch: "amd64"},
 		{goos: "linux", goarch: "arm64"},
 	}
-	var selected reviewedToolPlatform
+	var selected reviewedToolSelection
 	found := false
 	for toolIndex, tool := range allowlist.Tools {
-		expectedTool := expectedTools[toolIndex]
-		if tool.Name != expectedTool.name || tool.Version != expectedTool.version ||
+		if tool.Name != expectedTools[toolIndex] || tool.Version == "" ||
+			len(tool.Version) > 32 ||
 			len(tool.Platforms) != len(expectedPlatforms) {
-			return reviewedToolPlatform{}, errors.New("tool allowlist")
+			return reviewedToolSelection{}, errors.New("tool allowlist")
 		}
 		for platformIndex, platform := range tool.Platforms {
 			expectedPlatform := expectedPlatforms[platformIndex]
@@ -782,17 +780,20 @@ func loadReviewedTool(
 				platform.Asset == "" || len(platform.Asset) > 128 ||
 				!validSHA256(platform.ArchiveSHA256) ||
 				!validSHA256(platform.BinarySHA256) {
-				return reviewedToolPlatform{}, errors.New("tool allowlist")
+				return reviewedToolSelection{}, errors.New("tool allowlist")
 			}
-			if tool.Name == name && tool.Version == version &&
+			if tool.Name == name &&
 				platform.GOOS == goos && platform.GOARCH == goarch {
-				selected = platform
+				selected = reviewedToolSelection{
+					Version:  tool.Version,
+					Platform: platform,
+				}
 				found = true
 			}
 		}
 	}
 	if !found {
-		return reviewedToolPlatform{}, errors.New("tool allowlist")
+		return reviewedToolSelection{}, errors.New("tool allowlist")
 	}
 	return selected, nil
 }
@@ -1094,7 +1095,7 @@ func validateSBOM(
 		document.CreationInfo.Created != "1970-01-01T00:00:00Z" ||
 		!equalStrings(
 			document.CreationInfo.Creators,
-			[]string{"Organization: Anchore, Inc", "Tool: syft-1.46.0"},
+			[]string{"Organization: Anchore, Inc", "Tool: syft-" + tool.Version},
 		) ||
 		document.CreationInfo.LicenseListVersion == "" ||
 		document.DocumentNamespace !=
@@ -1317,7 +1318,7 @@ func validateVulnerability(
 		binding.CandidateSnapshotSHA256 != candidate ||
 		binding.Product != product || binding.Platform != platform ||
 		binding.SubjectDigest != subject ||
-		binding.Report.Format != "trivy-json-0.72.0" ||
+		binding.Report.Format != "trivy-json-"+tool.Version ||
 		binding.Database.InventorySHA256 != databaseSHA ||
 		binding.Database.ContentSHA256 != database.VulnerabilityDB.Files[1].SHA256 ||
 		binding.Database.MetadataSHA256 != database.VulnerabilityDB.Files[0].SHA256 ||

@@ -5,8 +5,17 @@ umask 077
 action=${1:-}
 evidence=.artifacts/image-evidence
 tools_dir=.artifacts/image-tools
+tool_allowlist=build/container/image-tools.json
 build_inputs=build/container/build-inputs.json
 repository=$(pwd -P)
+syft_version=$(jq -er \
+  '[.tools[] | select(.name == "syft") | .version] |
+    if length == 1 then .[0] else halt_error(1) end' \
+  "$tool_allowlist")
+trivy_version=$(jq -er \
+  '[.tools[] | select(.name == "trivy") | .version] |
+    if length == 1 then .[0] else halt_error(1) end' \
+  "$tool_allowlist")
 GOCACHE="${GOCACHE:-/tmp/dkim2-go-build-cache}" \
   go -C tools run ./cmd/safepath -root .. -directory "$evidence"
 work=$(mktemp -d .artifacts/.image-evidence-work.XXXXXX)
@@ -83,7 +92,7 @@ prepare_platform_layout() {
 case "$action" in
   sbom)
     ensure_inventory
-    verify_tool syft 1.46.0
+    verify_tool syft "$syft_version"
     candidate=$(candidate_identity)
     syft_identity=$(jq -c . "$tools_dir/syft.identity.json")
     for product in dkim2d dkim2-milter dkim2ctl; do
@@ -204,7 +213,7 @@ case "$action" in
     ;;
   vulnerability)
     ensure_inventory
-    verify_tool trivy 0.72.0
+    verify_tool trivy "$trivy_version"
     candidate=$(candidate_identity)
     trivy_identity=$(jq -c . "$tools_dir/trivy.identity.json")
     GOCACHE="${GOCACHE:-/tmp/dkim2-go-build-cache}" \
@@ -297,7 +306,7 @@ case "$action" in
             product:$product,
             platform:$platform,
             subject_digest:$subject,
-            report:{format:"trivy-json-0.72.0",sha256:$report},
+            report:{format:("trivy-json-" + $tool.version),sha256:$report},
             database:{
               inventory_sha256:$database,
               content_sha256:$database_content,

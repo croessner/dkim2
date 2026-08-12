@@ -707,7 +707,8 @@ func loadTool(root string) (toolIdentity, error) {
 	var identity toolIdentity
 	if strictjson.Decode(identityContent, &identity, 8, 128) != nil ||
 		identity.Schema != "dkim2-image-tool-v1" ||
-		identity.Name != "trivy" || identity.Version != "0.72.0" {
+		identity.Name != "trivy" || identity.Version == "" ||
+		len(identity.Version) > 32 {
 		return toolIdentity{}, errors.New("database_tool")
 	}
 	allowlistContent, err := artifactpath.ReadFile(root, toolAllowlistPath, 64<<10)

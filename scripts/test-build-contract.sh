@@ -111,8 +111,14 @@ grep -Fq 'test "$DOCKER_CONFIG" = "$expected"' \
   .github/workflows/container-publish.yml
 grep -Fq 'test ! -L "$DOCKER_CONFIG"' \
   .github/workflows/container-publish.yml
+valkey_commit=$(jq -er '.fixtures.valkey.commit' build/ci/toolchain.json)
+grep -Fq "ref: $valkey_commit" \
+  .github/workflows/container-publish.yml
+grep -Fq 'run: scripts/install-valkey-ci.sh' \
+  .github/workflows/container-publish.yml
+attest_commit=$(jq -er '.actions.attest.commit' build/ci/toolchain.json)
 test "$(grep -Ec \
-  'uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6$' \
+  "uses: actions/attest@$attest_commit # v[0-9]+[.][0-9]+[.][0-9]+$" \
   .github/workflows/container-publish.yml)" -eq 9
 grep -Fq -- '--signer-workflow "$workflow"' \
   .github/workflows/container-publish.yml
@@ -131,28 +137,25 @@ grep -Fq '.artifacts/publication-tools/gh attestation verify' \
 ! grep -Eq '^[[:space:]]*gh[[:space:]]+attestation[[:space:]]+verify' \
   .github/workflows/container-publish.yml
 jq -e '
-  . == {
-    schema:"dkim2-publication-tool-allowlist-v1",
-    attestation_action:{
-      repository:"actions/attest",
-      commit:"f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6",
-      spdx_predicate_type:"https://spdx.dev/Document/v2.3"
-    },
-    verifier:{
-      name:"gh",
-      version:"2.94.0",
-      goos:"linux",
-      goarch:"amd64",
-      asset:"gh_2.94.0_linux_amd64.tar.gz",
-      archive_sha256:
-        "a757f1ba6db18f4de8cbadb244843a5f89bc75b5e7c6fc127d2bd77fbd12ed62",
-      member:"gh_2.94.0_linux_amd64/bin/gh",
-      binary_sha256:
-        "c2033c14259a3a3b7518a47535e57385a6d3faaba1759e9cf8c1c10dd21d3de9"
-    }
-  }
+  (keys == ["attestation_policy","schema","verifier"]) and
+  .schema == "dkim2-publication-tool-allowlist-v2" and
+  .attestation_policy == {
+    spdx_predicate_type:"https://spdx.dev/Document/v2.3"
+  } and
+  .verifier.name == "gh" and
+  .verifier.goos == "linux" and
+  .verifier.goarch == "amd64" and
+  (.verifier.version | test("^[0-9]+[.][0-9]+[.][0-9]+$")) and
+  .verifier.asset ==
+    ("gh_" + .verifier.version + "_linux_amd64.tar.gz") and
+  .verifier.member ==
+    ("gh_" + .verifier.version + "_linux_amd64/bin/gh") and
+  (.verifier.archive_sha256 | test("^[0-9a-f]{64}$")) and
+  (.verifier.binary_sha256 | test("^[0-9a-f]{64}$"))
 ' build/container/publication-tools.json >/dev/null
-grep -Fq -- '--predicate-type https://spdx.dev/Document/v2.3' \
+predicate_type=$(jq -er '.attestation_policy.spdx_predicate_type' \
+  build/container/publication-tools.json)
+grep -Fq -- "--predicate-type $predicate_type" \
   .github/workflows/container-publish.yml
 ! grep -Eq '(^|[^[:alnum:]_-])latest([^[:alnum:]_-]|$)' \
   scripts/publish-images.sh .github/workflows/container-publish.yml

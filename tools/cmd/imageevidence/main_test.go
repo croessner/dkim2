@@ -137,7 +137,6 @@ func TestLoadToolRejectsJointBinaryAndIdentitySubstitution(t *testing.T) {
 	reviewed, err := loadReviewedTool(
 		root,
 		"syft",
-		"1.46.0",
 		runtime.GOOS,
 		runtime.GOARCH,
 	)
@@ -147,13 +146,13 @@ func TestLoadToolRejectsJointBinaryAndIdentitySubstitution(t *testing.T) {
 	identity := toolIdentity{
 		Schema:        "dkim2-image-tool-v1",
 		Name:          "syft",
-		Version:       "1.46.0",
-		Asset:         reviewed.Asset,
-		ArchiveSHA256: reviewed.ArchiveSHA256,
-		BinarySHA256:  reviewed.BinarySHA256,
+		Version:       reviewed.Version,
+		Asset:         reviewed.Platform.Asset,
+		ArchiveSHA256: reviewed.Platform.ArchiveSHA256,
+		BinarySHA256:  reviewed.Platform.BinarySHA256,
 	}
 	writeToolIdentity(t, root, identity)
-	if _, err := loadTool(root, "syft", "1.46.0"); err != nil {
+	if _, err := loadTool(root, "syft"); err != nil {
 		t.Fatal(err)
 	}
 	substituted := []byte("substituted")
@@ -166,7 +165,7 @@ func TestLoadToolRejectsJointBinaryAndIdentitySubstitution(t *testing.T) {
 	}
 	identity.BinarySHA256 = hex.EncodeToString(substitutedSum[:])
 	writeToolIdentity(t, root, identity)
-	if _, err := loadTool(root, "syft", "1.46.0"); err == nil {
+	if _, err := loadTool(root, "syft"); err == nil {
 		t.Fatal("joint binary and identity substitution was accepted")
 	}
 }

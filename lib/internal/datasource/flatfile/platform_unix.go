@@ -34,9 +34,15 @@ func (unixFilesystem) metadata(descriptor int) (fileMetadata, operationFailure) 
 		return fileMetadata{}, operationFailed
 	}
 	return fileMetadata{
-		mode: uint32(status.Mode), uid: status.Uid, links: uint64(status.Nlink),
+		mode: normalizeStatMode(status.Mode), uid: status.Uid, links: normalizeStatLinks(status.Nlink),
 	}, operationSucceeded
 }
+
+// normalizeStatMode widens the platform-dependent stat mode without changing its bits.
+func normalizeStatMode[T ~uint16 | ~uint32](mode T) uint32 { return uint32(mode) }
+
+// normalizeStatLinks widens the platform-dependent link count without changing its value.
+func normalizeStatLinks[T ~uint16 | ~uint32 | ~uint64](links T) uint64 { return uint64(links) }
 
 // openFile opens one exact child component with all confinement flags atomically.
 func (unixFilesystem) openFile(rootFD int, filename string) (int, operationFailure) {

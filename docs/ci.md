@@ -12,19 +12,51 @@ validation runs never receive package, OIDC, or attestation write permission.
 | `Unit tests` | Fast multi-module Go and Exim C harness feedback | `make test` |
 | `Conformance` | Portable and real Postfix conformance plus bounded security evidence | focused conformance and security targets |
 | `Container evidence verification` | Non-publishing multi-architecture container, SBOM, vulnerability, provenance, runtime, and reproducibility evidence | `make check-container-release` |
-| `CodeQL` | Independent GitHub Actions, Go, and Exim C/C++ analysis | CodeQL hosted analysis |
+| `CodeQL` | Independent GitHub Actions, Go, and Exim C/C++ analysis | Retained local SARIF artifacts |
 
 The ordinary workflows run for `main`, `features`, and `release/**` pushes and
 pull requests. Each can also be dispatched manually. Concurrency groups cancel
 an obsolete run for the same branch or pull request, while unrelated refs keep
 their independent evidence.
 
-Every third-party action uses a reviewed full commit SHA. `make check-ci` runs
-`actionlint` and enforces the expected action identities, Go 1.26.5 patch level,
-branch scope, least-privilege permissions, concurrency policy, and release-gate
-wiring. Dependabot proposes weekly GitHub Actions pin updates against
-`features`; each update must include the corresponding reviewed CI-contract
-change.
+[`build/ci/toolchain.json`](../build/ci/toolchain.json) is the single authority
+for the hosted-runner image, Go patch release, every third-party Action identity
+and commit, the Go-installed CI tools, and the Valkey conformance fixture.
+GitHub requires literal values in `uses:` and `go-version`, so workflow files
+contain reviewed mirrors. `make check-ci` runs the manifest-pinned `actionlint`
+and rejects every mirror that differs, every unregistered Action repository,
+and every reintroduced inline tool version. Workflows install Go tools only
+through `scripts/install-ci-tools.sh`.
+
+The content-addressed image and publication binaries retain their narrower
+authorities in `build/container/image-tools.json` and
+`build/container/publication-tools.json`; the central manifest indexes both
+instead of copying their versions or hashes. Their installers read those
+allowlists rather than embedding a second version. Dependabot proposes weekly
+Action updates against `features` and groups all CodeQL sub-actions so `init`,
+`autobuild`, and `analyze` cannot move to different versions. A reviewed update
+must change the central manifest and every required literal mirror together.
+
+The conformance, full guardrails, and protected publication lanes build the
+same immutable Valkey 9.1.0 source commit through
+`scripts/install-valkey-ci.sh`. This keeps the portable conformance dependency
+identical wherever `make conformance` can run.
+
+Each Linux job creates one owner-only temporary root directly below the hosted
+runner's home directory before executing repository code. This avoids the
+group-writable ancestry of the standard Actions workspace and `/tmp` for tests
+that intentionally enforce protected-path ownership. The directory is removed
+by an exact, fail-closed cleanup step. Artifact uploads use narrow evidence
+paths and explicitly include the hidden `.artifacts` ancestor; the entire
+working artifact tree is never uploaded.
+
+The CodeQL lane deliberately sets `upload: never` and retains its SARIF through
+the ordinary artifact service. It therefore provides analysis on repositories
+without GitHub Advanced Security and needs no `security-events: write`
+permission. The Exim build keeps its ordinary AddressSanitizer and
+UndefinedBehaviorSanitizer run; only the CodeQL-instrumented C build skips that
+nested sanitizer sub-run because the two compiler runtimes cannot be safely
+preloaded together.
 
 ## Stable release gate
 

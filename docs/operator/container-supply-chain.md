@@ -113,8 +113,8 @@ make check-container-release
 make release-guardrails
 ```
 
-The local SBOM producer is Syft 1.46.0 and emits SPDX 2.3 JSON. The local
-scanner is Trivy 0.72.0. Tool upgrades are explicit reviewed changes. A
+The local SBOM producer is Syft 1.51.0 and emits SPDX 2.3 JSON. The local
+scanner is Trivy 0.73.0. Tool upgrades are explicit reviewed changes. A
 vulnerability database update is allowed only as part of the scanner's
 documented bounded update step. Each offline scan uses a private copy-on-write
 snapshot created from no-follow, owned, one-link descriptors. The scanner
@@ -170,7 +170,8 @@ The ordinary `Guardrails`, `Unit tests`, `Conformance`, and `Container evidence
 verification` lanes cover the full repository gate, fast unit feedback, the
 real Linux conformance profile, and non-authoritative container evidence
 respectively. `CodeQL` independently analyzes GitHub Actions, Go, and the Exim
-C adapter. All ordinary lanes are branch-scoped, manually dispatchable, and
+C adapter and retains local SARIF without code-scanning write authority. All
+ordinary lanes are branch-scoped, manually dispatchable, and
 cancel stale work for the same branch or pull request. `make check-ci` validates
 their syntax, immutable action pins, toolchain version, trigger scope,
 permissions, and release-gate wiring.
@@ -191,9 +192,10 @@ uses release-job-only OIDC and attestation permission to sign provenance for
 each exact image-index digest and SPDX evidence for each exact platform
 manifest. The workflow verifies repository, signer-workflow, source revision,
 source ref, hosted-runner policy, subject digest, and predicate type with
-the SHA-256-pinned GitHub CLI 2.94.0 verifier. The exact attestation action,
-archive, extracted verifier binary, and SPDX predicate identities live in
-`build/container/publication-tools.json`; the preinstalled runner `gh` is not
-trusted. `latest` is never produced or used as deployment authority. Defining
+the SHA-256-pinned GitHub CLI 2.97.0 verifier. The exact attestation Action pin
+lives in `build/ci/toolchain.json`; the verifier archive, extracted binary, and
+SPDX predicate identity live in `build/container/publication-tools.json`.
+The preinstalled runner `gh` is not trusted. `latest` is never produced or used
+as deployment authority. Defining
 this route does not publish anything; publication occurs only when maintainers
 separately create and publish the stable annotated release.

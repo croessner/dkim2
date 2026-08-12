@@ -39,6 +39,17 @@ func TestPublicFailureDiagnosticRejectsHostileContent(t *testing.T) {
 	}
 }
 
+// TestMatchesValkeyVersionUsesManifestValue freezes exact dynamic banner binding.
+func TestMatchesValkeyVersionUsesManifestValue(t *testing.T) {
+	valid := "Valkey server v=9.9.9 sha=12345678:0 malloc=libc bits=64 build=abcdef12\n"
+	if !matchesValkeyVersion(valid, "9.9.9") {
+		t.Fatal("matchesValkeyVersion rejected the selected manifest version")
+	}
+	if matchesValkeyVersion(valid, "9.9.8") || matchesValkeyVersion(valid, "9.9") {
+		t.Fatal("matchesValkeyVersion accepted version drift")
+	}
+}
+
 // TestPostfixQualificationReportValidation proves every merge identity and
 // required real-process observation is checked before full-profile admission.
 func TestPostfixQualificationReportValidation(t *testing.T) {

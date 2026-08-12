@@ -26,18 +26,22 @@ jobs:
     timeout-minutes: 90
     steps:
       - name: Check out the exact candidate
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
+      - name: Prepare protected CI temporary directory
+        id: ci_environment
+        run: scripts/prepare-ci-environment.sh prepare
+
       - name: Install Go
-        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: "1.26.5"
           cache: false
 
-      - name: Check out immutable Valkey 9.1.0 source
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Check out immutable Valkey source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: valkey-io/valkey
           ref: c9e8005e9d0ec817e26c7db318861cb821409249
@@ -45,15 +49,7 @@ jobs:
           persist-credentials: false
 
       - name: Build exact Valkey test binary
-        shell: bash
-        run: |
-          set -euo pipefail
-          make -C .artifacts/valkey-src -j2 BUILD_TLS=no
-          sudo install -o root -g root -m 0755 \
-            .artifacts/valkey-src/src/valkey-server \
-            /usr/local/bin/valkey-server
-          rm -rf .artifacts/valkey-src
-          valkey-server --version
+        run: scripts/install-valkey-ci.sh
 
       - name: Validate and run portable profile
         run: |
@@ -67,7 +63,7 @@ jobs:
         run: make conformance-postfix
 
       - name: Install the pinned vulnerability scanner
-        run: go install golang.org/x/vuln/cmd/govulncheck@v1.3.0
+        run: scripts/install-ci-tools.sh govulncheck
 
       - name: Run portable security gates
         run: |
@@ -83,9 +79,17 @@ jobs:
 
       - name: Retain deterministic reports
         if: always()
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: dkim2-conformance-reports
-          path: .artifacts/
+          path: |
+            .artifacts/conformance-portable/
+            .artifacts/conformance-postfix/
+            .artifacts/security/
           if-no-files-found: error
+          include-hidden-files: true
           retention-days: 14
+
+      - name: Remove protected CI temporary directory
+        if: ${{ always() && steps.ci_environment.outcome == 'success' }}
+        run: scripts/prepare-ci-environment.sh cleanup

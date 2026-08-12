@@ -23,31 +23,35 @@ jobs:
       attestations: write
     steps:
       - name: Check out exact authorized annotated release tag
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.release.tag_name }}
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Prepare protected CI temporary directory
+        id: ci_environment
+        run: scripts/prepare-ci-environment.sh prepare
+
       - name: Install exact Go toolchain
-        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: "1.26.5"
           cache: false
 
+      - name: Check out immutable Valkey source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: valkey-io/valkey
+          ref: c9e8005e9d0ec817e26c7db318861cb821409249
+          path: .artifacts/valkey-src
+          persist-credentials: false
+
+      - name: Build exact Valkey test binary
+        run: scripts/install-valkey-ci.sh
+
       - name: Install pinned release quality tools
-        env:
-          ACTIONLINT_VERSION: v1.7.12
-          GOLANGCI_LINT_VERSION: v2.12.2
-          GOVULNCHECK_VERSION: v1.3.0
-        run: |
-          GOBIN="$(go env GOPATH)/bin" \
-            go install "github.com/rhysd/actionlint/cmd/actionlint@${ACTIONLINT_VERSION}"
-          GOBIN="$(go env GOPATH)/bin" \
-            go install "github.com/golangci/golangci-lint/v2/cmd/golangci-lint@${GOLANGCI_LINT_VERSION}"
-          GOBIN="$(go env GOPATH)/bin" \
-            go install "golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}"
-          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+        run: scripts/install-ci-tools.sh actionlint golangci-lint govulncheck
 
       - name: Verify complete release guardrails and evidence
         run: make release-guardrails
@@ -100,7 +104,7 @@ jobs:
           done
 
       - name: Attest dkim2d provenance
-        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-name: ghcr.io/croessner/dkim2d
           subject-digest: ${{ steps.subjects.outputs.dkim2d }}
@@ -108,7 +112,7 @@ jobs:
           create-storage-record: false
 
       - name: Attest dkim2-milter provenance
-        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-name: ghcr.io/croessner/dkim2-milter
           subject-digest: ${{ steps.subjects.outputs.dkim2_milter }}
@@ -116,7 +120,7 @@ jobs:
           create-storage-record: false
 
       - name: Attest dkim2ctl provenance
-        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-name: ghcr.io/croessner/dkim2ctl
           subject-digest: ${{ steps.subjects.outputs.dkim2ctl }}
@@ -124,7 +128,7 @@ jobs:
           create-storage-record: false
 
       - name: Attest dkim2d amd64 SBOM
-        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-name: ghcr.io/croessner/dkim2d
           subject-digest: ${{ steps.subjects.outputs.dkim2d_amd64 }}
@@ -133,7 +137,7 @@ jobs:
           create-storage-record: false
 
       - name: Attest dkim2d arm64 SBOM
-        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-name: ghcr.io/croessner/dkim2d
           subject-digest: ${{ steps.subjects.outputs.dkim2d_arm64 }}
@@ -142,7 +146,7 @@ jobs:
           create-storage-record: false
 
       - name: Attest dkim2-milter amd64 SBOM
-        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-name: ghcr.io/croessner/dkim2-milter
           subject-digest: ${{ steps.subjects.outputs.dkim2_milter_amd64 }}
@@ -151,7 +155,7 @@ jobs:
           create-storage-record: false
 
       - name: Attest dkim2-milter arm64 SBOM
-        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-name: ghcr.io/croessner/dkim2-milter
           subject-digest: ${{ steps.subjects.outputs.dkim2_milter_arm64 }}
@@ -160,7 +164,7 @@ jobs:
           create-storage-record: false
 
       - name: Attest dkim2ctl amd64 SBOM
-        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-name: ghcr.io/croessner/dkim2ctl
           subject-digest: ${{ steps.subjects.outputs.dkim2ctl_amd64 }}
@@ -169,7 +173,7 @@ jobs:
           create-storage-record: false
 
       - name: Attest dkim2ctl arm64 SBOM
-        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-name: ghcr.io/croessner/dkim2ctl
           subject-digest: ${{ steps.subjects.outputs.dkim2ctl_arm64 }}
@@ -228,3 +232,7 @@ jobs:
           test -d "$DOCKER_CONFIG"
           test ! -L "$DOCKER_CONFIG"
           rm -rf -- "$DOCKER_CONFIG"
+
+      - name: Remove protected CI temporary directory
+        if: ${{ always() && steps.ci_environment.outcome == 'success' }}
+        run: scripts/prepare-ci-environment.sh cleanup
