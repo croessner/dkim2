@@ -33,7 +33,7 @@ func MapReviseRequest(input generated.ReviseRequest) (app.OperationRequest, erro
 func MapDeliveryStatusRequest(input generated.DSNSignRequest) (app.DeliveryStatusRequest, error) {
 	if input.ApiVersion != generated.V1 || input.Draft != generated.DraftIetfDkimDkim2Spec04 ||
 		input.Message.Fidelity == nil ||
-		!validTenant(input.Context.Tenant) || !validSigningDomain(input.Context.Domain) {
+		!validTenant(input.Context.Tenant) {
 		return app.DeliveryStatusRequest{}, newMappingError(MappingInvalidContract)
 	}
 	fidelity, ok := mapDeliveryStatusFidelity(*input.Message.Fidelity)
@@ -61,7 +61,7 @@ func MapDeliveryStatusRequest(input generated.DSNSignRequest) (app.DeliveryStatu
 	}
 	request, err := app.NewDeliveryStatusRequest(
 		raw, outerReverse, outerRecipients,
-		input.Context.Tenant, input.Context.Domain, fidelity,
+		input.Context.Tenant, fidelity,
 	)
 	if err != nil {
 		return app.DeliveryStatusRequest{}, newMappingError(MappingInvalidContract)

@@ -816,15 +816,22 @@ type CanonicalUint64 = string
 
 // DSNSignRequest defines model for DSNSignRequest.
 type DSNSignRequest struct {
-	ApiVersion APIVersion     `json:"api_version"`
-	Context    SigningContext `json:"context"`
-	Draft      DraftVersion   `json:"draft"`
+	ApiVersion APIVersion `json:"api_version"`
+
+	// Context Administrative tenant only. The daemon derives the exact signing domain from the cryptographically authenticated highest embedded DKIM2 d= value before resolving delivery_status policy.
+	Context DeliveryStatusContext `json:"context"`
+	Draft   DraftVersion          `json:"draft"`
 
 	// Message RFC 5322 DSN bytes. Only raw_rfc5322 or the separately authorized postfix_dsn_milter_reconstructed_crlf fidelity is accepted.
 	Message MessageInput `json:"message"`
 
 	// OuterSmtp Exact observed envelope of the DSN itself. mail_from must be <> and rcpt_to must contain exactly one recipient.
 	OuterSmtp SMTPInput `json:"outer_smtp"`
+}
+
+// DeliveryStatusContext defines model for DeliveryStatusContext.
+type DeliveryStatusContext struct {
+	Tenant string `json:"tenant"`
 }
 
 // Disposition defines model for Disposition.

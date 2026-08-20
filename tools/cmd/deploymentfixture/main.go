@@ -799,12 +799,19 @@ func writeMilterState(
 ) error {
 	extra := ""
 	if signing != nil {
-		extra = fmt.Sprintf(`
+		if mode == "postfix_dsn" {
+			extra = fmt.Sprintf(`
+signing:
+  tenant: %s
+  domain_source: verified_embedded`, privacyTenant)
+		} else {
+			extra = fmt.Sprintf(`
 signing:
   tenant: %s
   domain: %s`, privacyTenant, signing.domain)
-		if mode == "originator" {
-			extra += fmt.Sprintf("\n  dsn_domain: %s", signing.domain)
+			if mode == "originator" {
+				extra += fmt.Sprintf("\n  dsn_domain: %s", signing.domain)
+			}
 		}
 	}
 	if mode == "inbound" {

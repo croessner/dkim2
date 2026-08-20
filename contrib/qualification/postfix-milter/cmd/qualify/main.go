@@ -804,10 +804,14 @@ observability:
 }
 
 // milterSigningBlock renders only the signing authority owned by one adapter
-// mode and gives originator qualification an explicit aligned DSN authority.
+// mode. Postfix DSN domain selection remains daemon-derived after evidence
+// verification.
 func milterSigningBlock(mode string) string {
 	if mode == "inbound" {
 		return ""
+	}
+	if mode == "postfix_dsn" {
+		return "\nsigning:\n  tenant: tenant-a\n  domain_source: verified_embedded"
 	}
 	block := "\nsigning:\n  tenant: tenant-a\n  domain: " + signingDomain
 	if mode == "originator" {

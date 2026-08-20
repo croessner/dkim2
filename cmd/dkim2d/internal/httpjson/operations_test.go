@@ -100,7 +100,7 @@ func TestMapDeliveryStatusRequestReservesExactNullSenderEvidence(t *testing.T) {
 			MailFrom: mustProtectedString(t, "<>"),
 			RcptTo:   []wire.ProtectedString{mustProtectedString(t, "<postmaster@example.test>")},
 		},
-		Context: base.Context,
+		Context: generated.DeliveryStatusContext{Tenant: base.Context.Tenant},
 	}
 	mapped, err := MapDeliveryStatusRequest(request)
 	if err != nil || string(mapped.OuterReversePath()) != "<>" {

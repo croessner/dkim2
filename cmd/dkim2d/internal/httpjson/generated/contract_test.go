@@ -38,6 +38,7 @@ const (
 	testPropertyReason           = "reason"
 	testPropertySequence         = "sequence"
 	testPropertyStatus           = "status"
+	testPropertyTenant           = "tenant"
 	testValueNotEvaluated        = "not_evaluated"
 	testSchemaOperationResponse  = "OperationResponse"
 )
@@ -512,8 +513,12 @@ func assertObjectInventories(t *testing.T, document *openapi3.T) {
 			required:   []string{testPropertyActions, testPropertyAPIVersion, testPropertyDisposition, testPropertyDraft, "policy", "replay", "verification"},
 		},
 		"SigningContext": {
-			properties: []string{"domain", "tenant"},
-			required:   []string{"domain", "tenant"},
+			properties: []string{"domain", testPropertyTenant},
+			required:   []string{"domain", testPropertyTenant},
+		},
+		"DeliveryStatusContext": {
+			properties: []string{testPropertyTenant},
+			required:   []string{testPropertyTenant},
 		},
 		"ReportingContext": {
 			properties: []string{"authserv_id"},

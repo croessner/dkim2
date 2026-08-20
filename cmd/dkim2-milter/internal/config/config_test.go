@@ -37,7 +37,12 @@ func trustedTempDirectory(t *testing.T) string {
 func validConfig(mode Mode) string {
 	signing := ""
 	if mode != ModeInbound {
-		signing = "\nsigning:\n  tenant: tenant-a\n  domain: example.test"
+		signing = "\nsigning:\n  tenant: tenant-a"
+		if mode == ModePostfixDSN {
+			signing += "\n  domain_source: verified_embedded"
+		} else {
+			signing += "\n  domain: example.test"
+		}
 		if mode == ModeOriginator {
 			signing += "\n  dsn_domain: dsn.example.test"
 		}
@@ -67,7 +72,6 @@ func TestLoadModeMatrixAndDefaults(t *testing.T) {
 // inflating the table-driven loader test's control-flow complexity.
 func assertModeDefaults(t *testing.T, snapshot Snapshot, mode Mode) {
 	t.Helper()
-	const wantTenant = "tenant-a"
 	if snapshot.Version() != configVersion || snapshot.Mode() != mode ||
 		snapshot.SocketMode() != 0o660 || snapshot.ShutdownTimeout() != 10*time.Second ||
 		snapshot.MaxConnections() != 128 || snapshot.MaxInFlightMessages() != 64 ||
@@ -80,10 +84,23 @@ func assertModeDefaults(t *testing.T, snapshot Snapshot, mode Mode) {
 		snapshot.RecipientCount() != 2000 || snapshot.LogLevel() != defaultLogLevel {
 		t.Fatalf("unexpected defaults for %s: %#v", mode, snapshot.Effective())
 	}
+	assertModeSigningDefaults(t, snapshot, mode)
+}
+
+// assertModeSigningDefaults checks conditional identity and DSN authority
+// without coupling them to the common default-value matrix.
+func assertModeSigningDefaults(t *testing.T, snapshot Snapshot, mode Mode) {
+	t.Helper()
+	const wantTenant = "tenant-a"
 	if mode == ModeInbound {
 		if snapshot.Tenant() != "" || snapshot.Domain() != "" ||
 			snapshot.DomainSource() != milter.DomainSourceStatic {
 			t.Fatal("inbound mode retained signing identity")
+		}
+	} else if mode == ModePostfixDSN {
+		if snapshot.Tenant() != wantTenant || snapshot.Domain() != "" ||
+			snapshot.DomainSource() != milter.DomainSourceVerifiedEmbedded {
+			t.Fatal("Postfix DSN mode lost verified embedded domain selection")
 		}
 	} else if snapshot.Tenant() != wantTenant || snapshot.Domain() != "example.test" ||
 		snapshot.DomainSource() != milter.DomainSourceStatic {
@@ -125,12 +142,26 @@ func TestLoadAcceptsOriginatorEnvelopeSenderDomainSelection(t *testing.T) {
 func TestLoadRejectsPostfixDSNEnvelopeSenderDomainSelection(t *testing.T) {
 	document := strings.Replace(
 		validConfig(ModePostfixDSN),
-		"  domain: example.test",
+		"  domain_source: verified_embedded",
 		"  domain_source: envelope_sender",
 		1,
 	)
 	if _, err := Load(writeConfig(t, document)); err == nil {
 		t.Fatal("Postfix DSN accepted removed envelope-sender authority")
+	}
+}
+
+// TestLoadAcceptsPostfixDSNVerifiedEmbeddedDomainSelection proves one shared
+// adapter can defer exact domain selection until the daemon authenticates the
+// highest embedded DKIM2 d= value.
+func TestLoadAcceptsPostfixDSNVerifiedEmbeddedDomainSelection(t *testing.T) {
+	snapshot, err := Load(writeConfig(t, validConfig(ModePostfixDSN)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snapshot.Tenant() != "tenant-a" || snapshot.Domain() != "" ||
+		snapshot.DomainSource() != milter.DomainSource("verified_embedded") {
+		t.Fatal("Postfix DSN verified embedded selection was not retained exactly")
 	}
 }
 
@@ -272,8 +303,14 @@ func TestLoadRejectsConditionalMatrixViolations(t *testing.T) {
 		),
 		"Postfix DSN legacy authority": strings.Replace(
 			validConfig(ModePostfixDSN),
+			"  domain_source: verified_embedded",
+			"  domain_source: verified_embedded\n  dsn_domain: dsn.example.test",
+			1,
+		),
+		"Postfix DSN static domain": strings.Replace(
+			validConfig(ModePostfixDSN),
+			"  domain_source: verified_embedded",
 			"  domain: example.test",
-			"  domain: example.test\n  dsn_domain: dsn.example.test",
 			1,
 		),
 		"Postfix DSN fail open": validConfig(ModePostfixDSN) +
@@ -290,6 +327,18 @@ func TestLoadRejectsConditionalMatrixViolations(t *testing.T) {
 			validConfig(ModeOrdinaryTransit),
 			"  domain: example.test",
 			"  domain_source: envelope_sender",
+			1,
+		),
+		"originator verified embedded domain": strings.Replace(
+			validConfig(ModeOriginator),
+			"  domain: example.test",
+			"  domain_source: verified_embedded",
+			1,
+		),
+		"transit verified embedded domain": strings.Replace(
+			validConfig(ModeOrdinaryTransit),
+			"  domain: example.test",
+			"  domain_source: verified_embedded",
 			1,
 		),
 		"inbound explicit domain source": validConfig(ModeInbound) +

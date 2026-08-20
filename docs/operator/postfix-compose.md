@@ -132,13 +132,62 @@ separately operated directly addressed Valkey replay backend. Originator uses
 the sign capability. Ordinary transit uses the revise capability. Only the
 daemon loads the flat-file datasource, private manifest, and PKCS#8 children.
 
-The current originator Milter tempfails every `MAIL FROM <>` message before
-daemon I/O. Its callbacks and request contract cannot authenticate the RFC 3462
-three-part DSN structure, Draft-04 Section 12.1 embedded verification, and
-Section 12.1.2 recipient alignment evidence. `signing.dsn_domain` is retained
-only as a stable, reserved prerequisite and is not sufficient authorization.
-Do not route null-sender traffic to the originator socket until an executable
-trusted DSN gate is implemented and qualified.
+The originator Milter continues to tempfail every `MAIL FROM <>` message before
+daemon I/O. Locally generated Postfix bounces use a separate `postfix_dsn`
+Milter route whose signing block contains only the administrative tenant and
+`domain_source: verified_embedded`; it must not contain `signing.domain` or
+`signing.dsn_domain`. The adapter admits that route only for the exact
+EOH-confirmed `{postfix_dsn_origin}=internal` value. The daemon then verifies
+the complete embedded Draft-04 evidence before datasource access, derives the
+canonical highest authenticated `d=`, and resolves the exact
+`delivery_status` policy for that tenant/domain pair. This permits one route to
+serve multiple domains without trusting the outer envelope or caller-selected
+domain. Missing, ambiguous, unavailable, or mismatched policy/profile data
+fails closed.
+
+### Postfix DSN compatibility upgrade
+
+This is a closed contract change, not a rolling-compatible configuration
+addition. Replace either legacy Postfix DSN signing shape:
+
+```yaml
+mode: postfix_dsn
+signing:
+  tenant: tenant-a
+  domain: example.test
+  domain_source: static
+```
+
+or the legacy `domain_source: envelope_sender` variant with:
+
+```yaml
+mode: postfix_dsn
+signing:
+  tenant: tenant-a
+  domain_source: verified_embedded
+```
+
+The corresponding `/v1/dsn/sign` v1 request changes from:
+
+```json
+{"context":{"tenant":"tenant-a","domain":"example.test"}}
+```
+
+to the tenant-only context:
+
+```json
+{"context":{"tenant":"tenant-a"}}
+```
+
+Old DSN clients/configurations are rejected by the new closed schema and
+configuration loader; new DSN clients are likewise incompatible with an old
+daemon that requires `context.domain`. Do not run a mixed pair. Pull and verify
+the exact daemon and Milter image digests first, validate the new configuration
+offline, drain or stop the dedicated DSN route, and activate the new daemon,
+new Milter/configuration, and `{postfix_dsn_origin}`-capable patched Postfix as
+one pinned change. Reopen the route only after capability, readiness, and
+positive/negative DSN smoke checks pass. Roll back the three components and
+configuration together.
 
 Validate every route through the final read-only mounts. The daemon validation
 performs the complete protected generation, replay/Valkey, OTLP CA, datasource,

@@ -45,6 +45,16 @@ type DSNSigningEvidenceRequest struct {
 	outerReversePath  []byte
 	outerForwardPaths [][]byte
 	identity          DSNIdentity
+	deriveIdentity    bool
+}
+
+// NewDerivedDSNSigningEvidenceRequest snapshots a DSN evidence request whose
+// signing identity must be derived only from verified embedded DKIM2 evidence.
+func NewDerivedDSNSigningEvidenceRequest(outerRaw, outerReversePath []byte, outerForwardPaths [][]byte) DSNSigningEvidenceRequest {
+	return DSNSigningEvidenceRequest{
+		outerRaw: bytes.Clone(outerRaw), outerReversePath: bytes.Clone(outerReversePath),
+		outerForwardPaths: cloneByteSlices(outerForwardPaths), deriveIdentity: true,
+	}
 }
 
 // NewDSNSigningEvidenceRequest snapshots one DSN evidence request.
@@ -83,6 +93,15 @@ func (e DSNSigningEvidence) Valid() bool {
 		len(e.forwardPaths) == 1 && e.identity.Valid() && e.evidence.Valid()
 }
 
+// SigningDomain returns the canonical identity derived from authenticated
+// embedded DKIM2 evidence. Invalid evidence returns an empty string.
+func (e DSNSigningEvidence) SigningDomain() string {
+	if !e.Valid() {
+		return ""
+	}
+	return e.identity.domain
+}
+
 // String prevents DSN evidence from exposing raw message or recipient data.
 func (DSNSigningEvidence) String() string { return "dkim2.DSNSigningEvidence{redacted}" }
 
@@ -117,9 +136,11 @@ func (r DSNSigningRequest) Format(state fmt.State, _ rune) { _, _ = io.WriteStri
 
 // EvaluateDSNForSigning derives the sole opaque authorization for a null
 // reverse-path DSN after RFC 3462/3464 structure and recipient linkage,
-// embedded DKIM2 verification, and local identity alignment all pass.
+// embedded DKIM2 verification, and either derived or compatibility-bound
+// identity alignment all pass.
 func (s *Signer) EvaluateDSNForSigning(ctx context.Context, request DSNSigningEvidenceRequest) (DSNSigningEvidence, error) {
-	if s == nil || !s.initialized || ctx == nil || !request.identity.Valid() ||
+	if s == nil || !s.initialized || ctx == nil ||
+		(!request.deriveIdentity && !request.identity.Valid()) ||
 		!bytes.Equal(request.outerReversePath, []byte("<>")) || len(request.outerForwardPaths) != 1 ||
 		len(request.outerRaw) == 0 {
 		return DSNSigningEvidence{}, newSigningError(SigningErrorInvalidRequest)
@@ -135,13 +156,21 @@ func (s *Signer) EvaluateDSNForSigning(ctx context.Context, request DSNSigningEv
 	if err != nil {
 		return DSNSigningEvidence{}, mapDSNEvidenceError(ctx, err)
 	}
-	if !bytes.Equal(request.outerForwardPaths[0], evidence.MailFrom()) ||
-		evidence.SigningDomain() != request.identity.domain {
+	if !bytes.Equal(request.outerForwardPaths[0], evidence.MailFrom()) {
+		return DSNSigningEvidence{}, newSigningError(SigningErrorAuthorizationDenied)
+	}
+	identity := request.identity
+	if request.deriveIdentity {
+		identity, err = NewDSNIdentity(evidence.SigningDomain())
+		if err != nil {
+			return DSNSigningEvidence{}, newSigningError(SigningErrorAuthorizationDenied)
+		}
+	} else if evidence.SigningDomain() != identity.domain {
 		return DSNSigningEvidence{}, newSigningError(SigningErrorAuthorizationDenied)
 	}
 	return DSNSigningEvidence{
 		raw: bytes.Clone(request.outerRaw), reversePath: bytes.Clone(request.outerReversePath),
-		forwardPaths: cloneByteSlices(request.outerForwardPaths), identity: request.identity,
+		forwardPaths: cloneByteSlices(request.outerForwardPaths), identity: identity,
 		evidence: evidence, valid: true,
 	}, nil
 }

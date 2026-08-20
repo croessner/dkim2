@@ -327,9 +327,12 @@ routes, recipients, policies, keys, algorithms, or signer state fail closed.
 
 An originator route may select its signing domain from the strictly validated
 ASCII SMTP reverse-path while retaining one statically configured tenant.
-`postfix_dsn` instead requires a static domain because the bounded Postfix
-origin enum carries no original envelope. The daemon requires exact equality
-with the embedded original's verified highest `d=` before policy resolution.
+`postfix_dsn` instead requires `domain_source: verified_embedded` and no
+configured domain. The bounded Postfix origin enum authorizes only the route;
+the daemon verifies the complete embedded object, derives the canonical
+authenticated highest `d=`, and only then resolves the exact tenant/domain
+`delivery_status` policy. No outer-envelope or caller-selected domain can
+participate in that lookup.
 
 Every originator route also retains one separate canonical
 `signing.dsn_domain`. This stable configuration path is a reserved prerequisite
@@ -395,8 +398,8 @@ The initial stable paths include:
 | `daemon.request_timeout` | `2s` | 100ms..10s |
 | `mode` | required | `inbound`, `originator`, `ordinary_transit`, `postfix_dsn` |
 | `signing.tenant` | conditional | required for signing/revision modes |
-| `signing.domain` | conditional | required for static signing/revision and Postfix DSN signing; absent only for envelope-derived originator signing |
-| `signing.domain_source` | `static` | `static`, or `envelope_sender` for originator only; `postfix_dsn` requires static |
+| `signing.domain` | conditional | required for static originator/transit routes; absent for envelope-derived originator and verified-embedded Postfix DSN routes |
+| `signing.domain_source` | `static` | `static`, `envelope_sender` for originator only, or explicit `verified_embedded` for `postfix_dsn` only |
 | `signing.dsn_domain` | originator required | reserved legacy originator prerequisite; forbidden in other modes and never sufficient to authorize null-sender signing |
 | `signing.allow_recipient_group` | `false` | reserved; `true` is rejected until per-message Bcc evidence exists |
 | `authentication_results.enabled` | `false` | inbound mode only |

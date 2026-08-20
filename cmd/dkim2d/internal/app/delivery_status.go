@@ -16,7 +16,6 @@ type DeliveryStatusRequest struct {
 	outerReverse    []byte
 	outerRecipients [][]byte
 	tenant          string
-	domain          string
 	fidelity        MessageFidelity
 }
 
@@ -34,15 +33,15 @@ func (deliveryStatusEvidencePrivateKeySigner) SignDigest(
 }
 
 // NewDeliveryStatusRequest snapshots one admitted DSN representation.
-func NewDeliveryStatusRequest(raw, outerReverse []byte, outerRecipients [][]byte, tenant, domain string, fidelity MessageFidelity) (DeliveryStatusRequest, error) {
+func NewDeliveryStatusRequest(raw, outerReverse []byte, outerRecipients [][]byte, tenant string, fidelity MessageFidelity) (DeliveryStatusRequest, error) {
 	if len(raw) == 0 || !bytes.Equal(outerReverse, []byte("<>")) || len(outerRecipients) != 1 ||
-		tenant == "" || domain == "" ||
+		tenant == "" ||
 		!AdmitsDeliveryStatusFidelity(fidelity) {
 		return DeliveryStatusRequest{}, &DomainError{}
 	}
 	return DeliveryStatusRequest{
 		raw: bytes.Clone(raw), outerReverse: bytes.Clone(outerReverse),
-		outerRecipients: cloneOperationRecipients(outerRecipients), tenant: tenant, domain: domain, fidelity: fidelity,
+		outerRecipients: cloneOperationRecipients(outerRecipients), tenant: tenant, fidelity: fidelity,
 	}, nil
 }
 
@@ -59,9 +58,6 @@ func (r DeliveryStatusRequest) OuterRecipients() [][]byte {
 
 // Tenant returns the bounded administrative tenant.
 func (r DeliveryStatusRequest) Tenant() string { return r.tenant }
-
-// Domain returns the canonical daemon-owned delivery-status identity.
-func (r DeliveryStatusRequest) Domain() string { return r.domain }
 
 // Fidelity returns the admitted raw-message declaration.
 func (r DeliveryStatusRequest) Fidelity() MessageFidelity { return r.fidelity }
@@ -83,10 +79,6 @@ func (s *SigningService) SignDeliveryStatus(ctx context.Context, request Deliver
 		return OperationResult{}, err
 	}
 	operationTime := s.clock().UTC()
-	identity, err := dkim2.NewDSNIdentity(request.Domain())
-	if err != nil {
-		return NewOperationResult(OperationDeliveryStatus, OperationPermerror, OperationReject, nil)
-	}
 	evidenceSigner, err := dkim2.NewSigner(
 		s.publicKeys,
 		dkim2.NewRequestRouteAuthority(),
@@ -97,9 +89,8 @@ func (s *SigningService) SignDeliveryStatus(ctx context.Context, request Deliver
 	if err != nil {
 		return OperationResult{}, &DomainError{}
 	}
-	evidence, err := evidenceSigner.EvaluateDSNForSigning(ctx, dkim2.NewDSNSigningEvidenceRequest(
+	evidence, err := evidenceSigner.EvaluateDSNForSigning(ctx, dkim2.NewDerivedDSNSigningEvidenceRequest(
 		request.RawMessage(), request.OuterReversePath(), request.OuterRecipients(),
-		identity,
 	))
 	if err != nil {
 		return operationFailureFromError(OperationDeliveryStatus, err)
@@ -109,7 +100,7 @@ func (s *SigningService) SignDeliveryStatus(ctx context.Context, request Deliver
 		return NewOperationResult(OperationDeliveryStatus, OperationTemperror, OperationTempfail, nil)
 	}
 	defer func() { _ = lease.Close() }()
-	profile, err := lease.ResolvePolicy(ctx, request.Tenant(), request.Domain(), signingstore.PolicyDeliveryStatus, operationTime)
+	profile, err := lease.ResolvePolicy(ctx, request.Tenant(), evidence.SigningDomain(), signingstore.PolicyDeliveryStatus, operationTime)
 	if err != nil {
 		if permanentPolicyResolutionFailure(err) {
 			return NewOperationResult(OperationDeliveryStatus, OperationPermerror, OperationReject, nil)

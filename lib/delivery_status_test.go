@@ -29,6 +29,18 @@ func TestDSNSigningRequiresDedicatedEvidenceAndRoute(t *testing.T) {
 	if err != nil || !evidence.Valid() {
 		t.Fatalf("EvaluateDSNForSigning() evidence=%t error=%v", evidence.Valid(), err)
 	}
+	derived, err := fixture.facade.EvaluateDSNForSigning(
+		context.Background(),
+		NewDerivedDSNSigningEvidenceRequest(
+			outer, []byte("<>"), [][]byte{[]byte("<alice@example.test>")},
+		),
+	)
+	if err != nil || !derived.Valid() || derived.SigningDomain() != "example.test" {
+		t.Fatalf(
+			"EvaluateDSNForSigning(derived) evidence=%t domain=%q error=%v",
+			derived.Valid(), derived.SigningDomain(), err,
+		)
+	}
 	source, err := NewSigningSource(outer)
 	if err != nil {
 		t.Fatal(err)

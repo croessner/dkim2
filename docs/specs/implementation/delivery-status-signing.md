@@ -60,9 +60,9 @@ The product provides a separate, locally authorized DSN path that:
    `text/rfc822-headers`;
 4. validates the embedded original's relevant DKIM2 fields before any profile
    or private-key access;
-5. proves the Draft-04 Section 12.1.2 local-system and recipient-alignment
-   conditions from a daemon-owned local identity and authenticated embedded
-   evidence;
+5. derives the exact local signing identity from authenticated highest
+   embedded `d=` evidence and proves the remaining Draft-04 Section 12.1.2
+   recipient linkage before datasource access;
 6. signs only the validated outer DSN using a dedicated datasource policy and
    route capability; and
 7. exposes the flow to `dkim2ctl` exclusively through generated OpenAPI DTOs
@@ -84,8 +84,8 @@ Implemented in M25:
   local identity/recipient alignment for outgoing initial DSN signing;
 - public library evidence and purpose-specific signing facades without service
   dependencies;
-- a daemon-owned `delivery_status` profile use, route ticket, local identity,
-  and distinct protected capability;
+- a daemon-owned `delivery_status` profile use, route ticket, verified embedded
+  identity, and distinct protected capability;
 - `POST /v1/dsn/sign`, generated server/client artifacts, and generated-client
   `dkim2ctl` DSN fixtures; and
 - focused parser, evidence, capability-isolation, daemon, client, privacy,
@@ -124,30 +124,28 @@ output fields and a temporary result.
 
 ### Alignment and Local Identity
 
-The outer DSN signing domain must have a daemon-owned delivery-status policy.
-It may not fall back to an originator profile. The embedded highest signature
-must verify, must have a non-null `mf=`, and its `rt=` recipient must match the
-outer DSN signing identity according to one explicit local alignment rule.
-Until the draft specifies a DSN-specific alignment algorithm, M25 uses exact
-canonical ASCII DNS-domain equality for this relationship. It does not reuse
-the relaxed ordinary `d=`/`mf=` alignment rule by implication.
+The authenticated highest embedded `d=` domain must have a daemon-owned
+delivery-status policy for the supplied tenant. It may not fall back to an
+originator profile. The embedded highest signature must verify and have a
+non-null `mf=` that exactly matches the one observed outer DSN recipient.
 
 No original SMTP envelope is available independently at bounce time. The
 embedded verifier therefore marks current-envelope comparison not applicable
 instead of copying signed `mf=` and `rt=` claims into an observed envelope.
 It still verifies cryptography, available hashes, timestamp, custody, and the
-authenticated highest `d=`, `mf=`, and `rt=` fields. The configured local
-identity must equal authenticated `d=` before resolving a policy or private
-key. At least one RFC 3464 original/final recipient must link to an
-authenticated highest `rt=` path.
+authenticated highest `d=`, `mf=`, and `rt=` fields. The daemon canonicalizes
+authenticated `d=` only after verification, then uses that exact value for
+policy resolution. A caller, adapter, outer envelope, tenant default, suffix,
+alias, or wildcard cannot preselect or replace it. At least one RFC 3464
+original/final recipient must link to an authenticated highest `rt=` path.
 
 ### API Shape
 
 `POST /v1/dsn/sign` validates an outgoing DSN and returns only a completed
 outer Message-Instance and DKIM2-Signature action plan on success. Its request
 carries raw outer message bytes, an exact outer `<>` envelope with exactly one
-recipient, and a signing context. It contains no copied original envelope or
-caller-derived DSN validity, alignment, identity, or
+recipient, and a tenant-only delivery-status context. It contains no copied
+original envelope or caller-derived domain, DSN validity, alignment, identity, or
 verification fields. The route requires the distinct
 `X-DKIM2-DSN-Sign-Capability` capability and cannot use the ordinary sign or
 revise capability.
@@ -168,8 +166,8 @@ parallel REST model.
 - `lib`: owns narrow public DSN request/result facades and purpose-specific
   signing/verification methods. It imports no daemon, OpenAPI, Milter, or
   datasource implementation dependencies.
-- `cmd/dkim2d/internal/app`: owns DSN operation orchestration, local identity
-  injection, policy/profile use, and result mapping.
+- `cmd/dkim2d/internal/app`: owns DSN operation orchestration, verified-domain
+  policy/profile selection, and result mapping.
 - `cmd/dkim2d/internal/httpjson`: owns generated DTO mapping, capability
   routing, request bounds, and HTTP mapping only.
 - `cmd/dkim2d/internal/signingstore` and datasource providers: own the

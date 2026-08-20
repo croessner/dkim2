@@ -65,7 +65,8 @@
 | 0.1.0-draft | 2026-08-04 | Christian Roessner / Codex | Completed M25 outgoing delivery-status signing: byte-preserving RFC 3462 framing, Draft-04 Section 12.1 embedded verification, Section 12.1.2 exact local alignment, a dedicated `delivery_status` datasource use and route ticket, separate protected daemon capability and OpenAPI/generated-client workflow. Ordinary sign/revise paths reject `<>`; the Milter-specific null-sender deferral remains explicit. |
 | 0.1.0-draft | 2026-08-06 | Christian Roessner / Codex | Selected the standard-library-only public `admincontract` package and its synthetic golden vectors as the versioned cross-repository owner boundary for global rotation campaigns, retention, purge plans, and compact audit commitments. Concrete providers and protected state remain daemon-owned. |
 | 0.1.0-draft | 2026-08-08 | Christian Roessner / Codex | Implemented the offline global datasource rotation candidate: one frozen complete higher generation per normal campaign, bounded DNS proof batches, explicit emergency separation, four-role retention/purge fences with compact receipts, and finite large-installation limits. Disposable four-provider service evidence, fresh review, and release authority remain separate. |
-| 0.1.0-draft | 2026-08-20 | Christian Roessner / Codex | Replaced the superseded Postfix full-envelope DSN handoff with the bounce-only `{postfix_dsn_origin}` enum. Embedded DSN verification omits only unavailable current-envelope observation while preserving cryptography, hashes, timestamp, custody, outer-recipient binding, and static authenticated-domain authorization. |
+| 0.1.0-draft | 2026-08-20 | Christian Roessner / Codex | Replaced the superseded Postfix full-envelope DSN handoff with the bounce-only `{postfix_dsn_origin}` enum. Embedded DSN verification omits only unavailable current-envelope observation while preserving cryptography, hashes, timestamp, custody, outer-recipient binding, and authenticated-domain authorization. |
+| 0.1.0-draft | 2026-08-20 | Christian Roessner / Codex | Removed caller/static domain preselection from the Postfix DSN path. One tenant-only adapter now authorizes the route with the Postfix origin enum; the daemon verifies embedded evidence, derives canonical highest `d=`, and only then resolves the exact `delivery_status` policy, enabling fail-closed multi-domain operation without circular trust. |
 
 ## 1. Purpose
 
@@ -2035,8 +2036,8 @@ has received exact `internal` origin from `{postfix_dsn_origin}`. The embedded
 object has no independently observed original envelope: its dedicated verifier
 marks that one check not applicable and still authenticates cryptography,
 available hashes, timestamp, custody, `d=`, `mf=`, and `rt=`. The outer DSN
-recipient must equal authenticated `mf=`, and the configured static delivery-
-status domain must equal authenticated `d=`. At least one RFC 3464 original or
+recipient must equal authenticated `mf=`, and the delivery-status domain is
+derived only from authenticated `d=` after verification. At least one RFC 3464 original or
 final recipient must match authenticated `rt=`. A generic reconstructed Milter
 message remains insufficient. The originator Milter continues to reject null
 senders and cannot use the daemon DSN route as a fallback.

@@ -877,7 +877,12 @@ components:
           allOf:
             - $ref: "#/components/schemas/SMTPInput"
         context:
-          $ref: "#/components/schemas/SigningContext"
+          description: >
+            Administrative tenant only. The daemon derives the exact signing
+            domain from the cryptographically authenticated highest embedded
+            DKIM2 d= value before resolving delivery_status policy.
+          allOf:
+            - $ref: "#/components/schemas/DeliveryStatusContext"
     MessageInput:
       type: object
       additionalProperties: false
@@ -943,6 +948,17 @@ components:
           $ref: "#/components/schemas/Disposition"
         actions:
           $ref: "#/components/schemas/ActionPlan"
+    DeliveryStatusContext:
+      type: object
+      additionalProperties: false
+      required:
+        - tenant
+      properties:
+        tenant:
+          type: string
+          minLength: 1
+          maxLength: 128
+          pattern: "^[a-z0-9][a-z0-9._-]{0,127}$"
     SigningContext:
       type: object
       additionalProperties: false

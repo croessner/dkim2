@@ -44,8 +44,9 @@ The embedded object has no independently observed current SMTP envelope at
 bounce time. The dedicated verifier therefore records current-envelope matching
 as not applicable instead of copying authenticated `mf=` and `rt=` claims into
 an alleged observed envelope. The outer DSN recipient must still equal the
-authenticated highest embedded `mf=` exactly. The configured static delivery-
-status domain must equal the authenticated highest embedded `d=`, and at least
+authenticated highest embedded `mf=` exactly. The daemon derives the delivery-
+status signing domain from the canonical authenticated highest embedded `d=`
+only after verification, and at least
 one RFC 3464 `Original-Recipient` or `Final-Recipient` field must match an
 authenticated highest embedded `rt=`, before policy or private-key access.
 The bounded RFC 3464 parser rejects folded delivery-status fields and enforces
@@ -60,14 +61,16 @@ per unfolded line, 256 recipient groups, 64 fields per group, and 2048 fields
 overall. Unknown extension fields are accepted within those bounds.
 
 The OpenAPI DSN request consequently contains the outer message, outer SMTP
-envelope, and signing context only. It has no `original_smtp` member.
+envelope, and a tenant-only delivery-status context. It has no caller-selected
+domain or `original_smtp` member.
 
 ## Configuration and deployment
 
 `postfix_dsn` requires `failure.mode: tempfail`, a dedicated DSN capability,
-and a static `signing.domain`. The former `envelope_sender` selection is not
-valid for this mode because Postfix no longer exports the original envelope.
-Originator mode retains its independent envelope-sender option.
+one tenant, and `signing.domain_source: verified_embedded`; `signing.domain`
+must be absent. `envelope_sender` is not valid for this mode because Postfix
+does not export the original envelope. Originator mode retains its independent
+envelope-sender option.
 
 Qualification requires a real bounce(8) positive case and an externally
 injected null-sender negative case. Rollback removes only the DSN Milter from

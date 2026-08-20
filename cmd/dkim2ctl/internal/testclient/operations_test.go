@@ -13,6 +13,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/croessner/dkim2/cmd/dkim2ctl/internal/testclient/generated"
 )
 
 const signAcceptResponse = `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-04","operation":"sign","result":"pass","disposition":"accept","actions":[{"type":"add_header","name":"Message-Instance","value":"v=1; i=1; h=sha256:synthetic"},{"type":"add_header","name":"DKIM2-Signature","value":"v=1; a=ed25519-sha256; d=example.test; s=test; b=synthetic"}]}`
@@ -23,6 +25,43 @@ const operationFixtureSender = "<sender@example.test>"
 const operationFixtureTenant = "tenant-a"
 const operationFixtureDomain = "example.test"
 const operationChunkedEncoding = "chunked"
+const fixtureActionAddHeader = "add_header"
+
+// TestSignFixtureAdmissionRequiresCanonicalDomain proves the tenant-only DSN
+// context does not weaken ordinary originator fixture validation.
+func TestSignFixtureAdmissionRequiresCanonicalDomain(t *testing.T) {
+	t.Parallel()
+	fidelity := string(generated.RawRfc5322)
+	operation := string(generated.Sign)
+	result := "pass"
+	disposition := "accept"
+	actions := []fixtureExpectedAction{
+		{Type: fixtureActionAddHeader, Name: "Message-Instance", Value: "v=1; i=1; h=sha256:synthetic"},
+		{Type: fixtureActionAddHeader, Name: "DKIM2-Signature", Value: "v=1; b=synthetic"},
+	}
+	input := fixtureSignInput{
+		MessageBase64: operationFixtureMessageBase64,
+		Fidelity:      &fidelity,
+		MailFrom:      operationFixtureSender,
+		Recipients:    []string{operationFixtureRecipient},
+		Tenant:        operationFixtureTenant,
+		Domain:        operationFixtureDomain,
+	}
+	expectation := fixtureExpectation{
+		HTTPStatus:  200,
+		Operation:   &operation,
+		Result:      &result,
+		Disposition: &disposition,
+		Actions:     &actions,
+	}
+	if _, err := validateSignInput(input, expectation); err != nil {
+		t.Fatal("valid ordinary sign fixture rejected")
+	}
+	input.Domain = "invalid domain"
+	if _, err := validateSignInput(input, expectation); ExitClassOf(err) != ExitFixture {
+		t.Fatal("ordinary sign fixture admitted invalid domain")
+	}
+}
 
 // TestGeneratedSignAndReviseRequestsPreserveDistinctFacts proves generated DTO use.
 func TestGeneratedSignAndReviseRequestsPreserveDistinctFacts(t *testing.T) {

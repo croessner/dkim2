@@ -36,7 +36,7 @@ func ValidSigningDomainAuthority(value string) bool {
 		asciiBytes([]byte(value)) && value[0] != '[' && validSMTPDomain([]byte(value))
 }
 
-// DomainSource selects one fail-closed originator signing-domain source.
+// DomainSource selects one fail-closed signing-domain source.
 type DomainSource string
 
 const (
@@ -44,6 +44,9 @@ const (
 	DomainSourceStatic DomainSource = "static"
 	// DomainSourceEnvelopeSender derives a canonical DNS domain from MAIL FROM.
 	DomainSourceEnvelopeSender DomainSource = "envelope_sender"
+	// DomainSourceVerifiedEmbedded defers Postfix DSN domain selection until the
+	// daemon authenticates the highest embedded DKIM2 d= value.
+	DomainSourceVerifiedEmbedded DomainSource = "verified_embedded"
 )
 
 // DomainObservation is one bounded operator-visible projection of processed

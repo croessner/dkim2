@@ -23,7 +23,6 @@ func TestGeneratedDSNSignRequestUsesDedicatedClientAndCapability(t *testing.T) {
 		OuterMailFrom:      "<>",
 		OuterRecipients:    []string{operationFixtureRecipient},
 		Tenant:             operationFixtureTenant,
-		Domain:             operationFixtureDomain,
 	})
 	if err != nil {
 		t.Fatal("DSN generated request construction failed")
@@ -74,8 +73,8 @@ func TestDSNFixtureAdmissionRequiresDistinctNullPathFacts(t *testing.T) {
 	result := "pass"
 	disposition := "accept"
 	actions := []fixtureExpectedAction{
-		{Type: "add_header", Name: "Message-Instance", Value: "v=1; i=1; h=sha256:synthetic"},
-		{Type: "add_header", Name: "DKIM2-Signature", Value: "v=1; b=synthetic"},
+		{Type: fixtureActionAddHeader, Name: "Message-Instance", Value: "v=1; i=1; h=sha256:synthetic"},
+		{Type: fixtureActionAddHeader, Name: "DKIM2-Signature", Value: "v=1; b=synthetic"},
 	}
 	valid := fixtureCase{
 		Case: "delivery-status", Kind: caseDSNSign,
@@ -83,7 +82,7 @@ func TestDSNFixtureAdmissionRequiresDistinctNullPathFacts(t *testing.T) {
 			OuterMessageBase64: operationFixtureMessageBase64,
 			OuterFidelity:      &fidelity,
 			OuterMailFrom:      "<>", OuterRecipients: []string{operationFixtureRecipient},
-			Tenant: operationFixtureTenant, Domain: operationFixtureDomain,
+			Tenant: operationFixtureTenant,
 		},
 		Expect: fixtureExpectation{
 			HTTPStatus: 200, Operation: &operation, Result: &result,
@@ -103,7 +102,7 @@ func TestDSNFixtureAdmissionRequiresDistinctNullPathFacts(t *testing.T) {
 		OuterMessageBase64: operationFixtureMessageBase64,
 		OuterFidelity:      &fidelity, OuterMailFrom: operationFixtureSender,
 		OuterRecipients: []string{operationFixtureRecipient},
-		Tenant:          operationFixtureTenant, Domain: operationFixtureDomain,
+		Tenant:          operationFixtureTenant,
 	}
 	if _, err := validateFixtureCase(invalid); ExitClassOf(err) != ExitFixture {
 		t.Fatal("non-null DSN outer envelope accepted")

@@ -749,8 +749,8 @@ func validInboundSigningFields(values map[string]rawValue, allowRecipientGroup b
 		dsnDomainValue.text == "" && !allowRecipientGroup
 }
 
-// validOutboundSigningFields requires one exact route and confines the legacy
-// dsn_domain prerequisite to originator mode.
+// validOutboundSigningFields requires one exact route and confines domain
+// derivation to the route that can authenticate its source.
 func validOutboundSigningFields(
 	values map[string]rawValue,
 	mode Mode,
@@ -766,15 +766,20 @@ func validOutboundSigningFields(
 	envelopeSenderDomain := mode == ModeOriginator &&
 		domainSource == milter.DomainSourceEnvelopeSender &&
 		domainSourceValue.explicit && !domainValue.explicit && domainValue.text == ""
+	verifiedEmbeddedDomain := mode == ModePostfixDSN &&
+		domainSource == milter.DomainSourceVerifiedEmbedded &&
+		domainSourceValue.explicit && !domainValue.explicit && domainValue.text == ""
 	if !tenantValue.explicit || !validTenant(tenantValue.text) ||
-		allowRecipientGroup || !staticDomain && !envelopeSenderDomain {
+		allowRecipientGroup || !staticDomain && !envelopeSenderDomain && !verifiedEmbeddedDomain {
 		return false
 	}
 	switch mode {
 	case ModeOriginator:
 		return dsnDomainValue.explicit && validDomain(dsnDomainValue.text)
-	case ModeOrdinaryTransit, ModePostfixDSN:
-		return !dsnDomainValue.explicit && dsnDomainValue.text == ""
+	case ModeOrdinaryTransit:
+		return staticDomain && !dsnDomainValue.explicit && dsnDomainValue.text == ""
+	case ModePostfixDSN:
+		return verifiedEmbeddedDomain && !dsnDomainValue.explicit && dsnDomainValue.text == ""
 	default:
 		return false
 	}
@@ -1047,7 +1052,7 @@ func (s Snapshot) Domain() string {
 	return s.state.domain
 }
 
-// DomainSource returns the validated originator signing-domain selection policy.
+// DomainSource returns the validated mode-owned signing-domain selection policy.
 func (s Snapshot) DomainSource() milter.DomainSource {
 	if s.state == nil {
 		return ""

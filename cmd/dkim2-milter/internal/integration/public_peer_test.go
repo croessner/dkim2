@@ -865,7 +865,7 @@ func TestPostfixDSNWithoutEvidenceContinuesThroughPublicSocket(t *testing.T) {
 	fixture := newGeneratedDaemonFixture(t, service)
 	process := startExecutableWithSigning(
 		t, fixture.endpoint, integrationModePostfixDSN, "tempfail", 2*time.Second,
-		"\nsigning:\n  tenant: "+integrationTenant+"\n  domain: derived.example",
+		"\nsigning:\n  tenant: "+integrationTenant+"\n  domain_source: verified_embedded",
 	)
 	peer := dialPublicPeer(t, process.socket)
 	peer.negotiatePostfixDSN(t)
@@ -900,7 +900,7 @@ func TestPostfixDSNExternalOrdinaryMessageContinuesThroughPublicSocket(t *testin
 	fixture := newGeneratedDaemonFixture(t, service)
 	process := startExecutableWithSigning(
 		t, fixture.endpoint, integrationModePostfixDSN, "tempfail", 2*time.Second,
-		"\nsigning:\n  tenant: "+integrationTenant+"\n  domain: derived.example",
+		"\nsigning:\n  tenant: "+integrationTenant+"\n  domain_source: verified_embedded",
 	)
 	peer := dialPublicPeer(t, process.socket)
 	peer.negotiatePostfixDSN(t)
@@ -929,7 +929,7 @@ func TestPostfixDSNExternalOrdinaryMessageContinuesThroughPublicSocket(t *testin
 func TestPostfixDSNEvidenceRunsDedicatedRouteThroughPublicSocket(t *testing.T) {
 	service := &generatedDaemonService{
 		dsn: func(body generatedfixture.DSNSignRequest) generatedfixture.OperationResponse {
-			assertPostfixDSNRequest(t, body, "derived.example", "<original@Derived.Example>")
+			assertPostfixDSNRequest(t, body, "<original@Derived.Example>")
 			return fixtureOperationResponse("delivery_status", generated.ActionPlan{
 				{Name: generated.MessageInstance, Type: generated.AddHeader, Value: testMessageInstanceValue},
 				{Name: generated.DKIM2Signature, Type: generated.AddHeader, Value: testSignatureValue},
@@ -939,7 +939,7 @@ func TestPostfixDSNEvidenceRunsDedicatedRouteThroughPublicSocket(t *testing.T) {
 	fixture := newGeneratedDaemonFixture(t, service)
 	process := startExecutableWithSigning(
 		t, fixture.endpoint, integrationModePostfixDSN, "tempfail", 2*time.Second,
-		"\nsigning:\n  tenant: "+integrationTenant+"\n  domain: derived.example",
+		"\nsigning:\n  tenant: "+integrationTenant+"\n  domain_source: verified_embedded",
 	)
 	peer := dialPublicPeer(t, process.socket)
 	peer.negotiatePostfixDSN(t)
@@ -975,18 +975,17 @@ func postfixDSNOriginMacroPayload(origin string) []byte {
 	return payload
 }
 
-// assertPostfixDSNRequest checks fidelity, outer envelope, and signing context.
+// assertPostfixDSNRequest checks fidelity, outer envelope, and tenant-only context.
 func assertPostfixDSNRequest(
 	t *testing.T,
 	body generatedfixture.DSNSignRequest,
-	expectedDomain string,
 	_ string,
 ) {
 	t.Helper()
 	if body.Message.Fidelity == nil ||
 		*body.Message.Fidelity != generatedfixture.PostfixDsnMilterReconstructedCrlf ||
-		body.Context.Tenant != integrationTenant || body.Context.Domain != expectedDomain {
-		t.Fatal("Postfix DSN fidelity or signing context changed")
+		body.Context.Tenant != integrationTenant {
+		t.Fatal("Postfix DSN fidelity or tenant context changed")
 	}
 	outerSender, err := body.OuterSmtp.MailFrom.Bytes()
 	if err != nil {

@@ -110,7 +110,7 @@ Ordinary-transit mode uses the same tenant and static `domain`, but forbids
 messages.
 
 Postfix delivery-status mode uses the separately protected daemon DSN
-capability and one fixed delivery-status signing identity:
+capability and daemon-verified embedded domain selection:
 
 ```yaml
 daemon:
@@ -118,7 +118,7 @@ daemon:
 mode: postfix_dsn
 signing:
   tenant: tenant-a
-  domain: example.test
+  domain_source: verified_embedded
 failure:
   mode: tempfail
 ```
@@ -128,10 +128,12 @@ This mode requires the Postfix origin-enum patch described in
 ordinary null-sender submission, absent or malformed EOH evidence, and more
 than one outer DSN recipient.
 
-The static `domain` is checked against the embedded original's authenticated
-highest `d=` before resolving a `delivery_status` profile. Postfix DSN mode no
-longer accepts `domain_source: envelope_sender` because the bounded Postfix
-contract intentionally carries no original envelope.
+`verified_embedded` is required for `postfix_dsn`; `domain` must be absent. The
+daemon verifies the embedded original first, derives the exact canonical
+highest `d=`, and only then resolves the tenant/domain `delivery_status`
+profile. Neither the outer null sender nor Milter configuration preselects the
+domain. Postfix DSN mode does not accept `envelope_sender` because the bounded
+Postfix contract intentionally carries no original envelope.
 
 An originator instance that serves multiple exact LDAP signing domains may
 derive the domain from the already validated ASCII SMTP reverse-path while
@@ -162,6 +164,10 @@ origin macro is absent or `external` it continues without daemon I/O or
 mutation. Duplicate macro members in one callback, conflicting callback
 replays, wrong-stage delivery, and malformed enum values remain fail-closed
 contract errors.
+
+`verified_embedded` is accepted only for `postfix_dsn`, requires `domain` to
+be absent, and is evaluated only by the daemon after complete DSN evidence
+verification. The adapter does not log a pre-verification signing domain.
 
 For non-null senders, an address literal or otherwise unsupported SMTPUTF8
 envelope is not applicable and continues without daemon I/O or mutation,
@@ -227,7 +233,7 @@ revision, and malformed no-content responses fail closed.
 
 The adapter negotiates only the Milter-v6 callbacks it needs and the add-header
 and change-header mutation capabilities. A `postfix_dsn` instance additionally
-requires standard symbol-list negotiation for its two EOH macros. It rejects
+requires standard symbol-list negotiation for its EOH origin macro. It rejects
 peers that cannot preserve after-colon leading whitespace or perform RFC 8601
 sanitization. Arbitrary
 header deletion or replacement, body replacement, envelope mutation,

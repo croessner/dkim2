@@ -135,7 +135,7 @@ func NewHandler(
 	}}, nil
 }
 
-// validSigningIdentity enforces static and envelope-derived route ownership.
+// validSigningIdentity enforces route-owned domain-selection authority.
 func validSigningIdentity(
 	mode, tenant, domain string,
 	domainSource milter.DomainSource,
@@ -155,9 +155,8 @@ func validSigningIdentity(
 			milter.ValidSigningDomainAuthority(domain) &&
 			domainSource == milter.DomainSourceStatic
 	case modePostfixDSN:
-		return tenant != "" && dsnDomain == "" &&
-			domainSource == milter.DomainSourceStatic &&
-			milter.ValidSigningDomainAuthority(domain)
+		return tenant != "" && domain == "" && dsnDomain == "" &&
+			domainSource == milter.DomainSourceVerifiedEmbedded
 	default:
 		return false
 	}
@@ -280,8 +279,7 @@ func (h *Handler) Handle(
 			return milter.Result{}, &milter.Error{Class: milter.FailureContract}
 		}
 		defer postfixEvidence.Clear()
-		signingDomain := state.domain
-		if state.domainSource == milter.DomainSourceEnvelopeSender {
+		if state.domainSource != milter.DomainSourceVerifiedEmbedded || state.domain != "" {
 			return milter.Result{}, &milter.Error{Class: milter.FailureContract}
 		}
 		response, callErr := state.client.SignDeliveryStatusWithResponse(
@@ -291,8 +289,8 @@ func (h *Handler) Handle(
 				Draft:      generated.DraftIetfDkimDkim2Spec04,
 				Message:    request.message,
 				OuterSmtp:  request.smtp,
-				Context: generated.SigningContext{
-					Tenant: state.tenant, Domain: signingDomain,
+				Context: generated.DeliveryStatusContext{
+					Tenant: state.tenant,
 				},
 			},
 		)
@@ -324,7 +322,10 @@ func observedDomains(state *handlerGuard, message milter.Message) milter.DomainO
 		return message.RecipientDomainObservation()
 	}
 	var signingDomain string
-	if state.mode == modeOrdinaryTransit || state.mode == modePostfixDSN {
+	if state.mode == modePostfixDSN {
+		return milter.DomainObservation{}
+	}
+	if state.mode == modeOrdinaryTransit {
 		signingDomain = state.domain
 	} else {
 		domain, applicable, err := state.signingDomain(message)

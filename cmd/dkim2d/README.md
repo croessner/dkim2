@@ -278,7 +278,9 @@ patch before deployment. Address literals and otherwise unsupported valid
 SMTPUTF8 envelopes remain not applicable and continue unchanged. Malformed
 Milter callback syntax remains fail-closed. The implementation does not infer
 DSN signing authority from message headers, HELO, recipients, suffixes,
-wildcards, or tenant defaults.
+wildcards, tenant defaults, or caller-selected domains. It verifies the
+embedded DKIM2 object first and resolves `delivery_status` policy by the exact
+canonical authenticated highest `d=` value.
 
 ### Explicitly disabled replay
 

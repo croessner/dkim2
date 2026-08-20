@@ -108,7 +108,6 @@ type fixtureDSNSignInput struct {
 	OuterMailFrom      string   `json:"outer_mail_from"`
 	OuterRecipients    []string `json:"outer_rcpt_to"`
 	Tenant             string   `json:"tenant"`
-	Domain             string   `json:"domain"`
 }
 
 // negativeInput selects one closed raw-contract mutation.
@@ -595,7 +594,7 @@ func validateDSNSignInput(input fixtureDSNSignInput, expectation fixtureExpectat
 	if err != nil || input.OuterFidelity == nil || input.OuterMailFrom != "<>" ||
 		len(input.OuterRecipients) != 1 ||
 		*input.OuterFidelity != string(generated.RawRfc5322) ||
-		!validTenant(input.Tenant) || !validDomain(input.Domain) ||
+		!validTenant(input.Tenant) ||
 		!validOperationExpectation(string(OperationDSNSign), expectation) {
 		return 0, NewExitError(ExitFixture)
 	}
@@ -855,9 +854,8 @@ func generatedDSNSignRequest(input fixtureDSNSignInput) (generated.DSNSignReques
 		Draft:      generated.DraftIetfDkimDkim2Spec04,
 		Message:    message,
 		OuterSmtp:  outer,
-		Context: generated.SigningContext{
+		Context: generated.DeliveryStatusContext{
 			Tenant: input.Tenant,
-			Domain: input.Domain,
 		},
 	}, nil
 }

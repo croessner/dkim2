@@ -25,19 +25,24 @@ import (
 )
 
 const (
-	signingServiceOriginDomain    = "origin.example.test"
-	signingServiceTransitDomain   = signingServiceOriginDomain
-	signingServiceTestTenant      = "tenant-a"
-	signingServiceOriginHandle    = "origin-key"
-	signingServiceTransitHandle   = "transit-key"
-	signingServiceDSNHandle       = "dsn-key"
-	signingServiceOriginSelector  = "origin"
-	signingServiceTransitSelector = "transit"
-	signingServiceDSNSelector     = "dsn"
-	signingServiceDomainField     = "domain"
-	signingServiceStrictValue     = "strict"
-	signingServiceNotFoundCase    = "not found"
-	signingServiceInactiveCase    = "inactive"
+	signingServiceOriginDomain            = "origin.example.test"
+	signingServiceAlternateDomain         = "alternate.example.test"
+	signingServiceTransitDomain           = signingServiceOriginDomain
+	signingServiceTestTenant              = "tenant-a"
+	signingServiceOriginHandle            = "origin-key"
+	signingServiceTransitHandle           = "transit-key"
+	signingServiceDSNHandle               = "dsn-key"
+	signingServiceAlternateOriginHandle   = "alternate-origin-key"
+	signingServiceAlternateDSNHandle      = "alternate-dsn-key"
+	signingServiceOriginSelector          = "origin"
+	signingServiceTransitSelector         = "transit"
+	signingServiceDSNSelector             = "dsn"
+	signingServiceAlternateOriginSelector = "alternate-origin"
+	signingServiceAlternateDSNSelector    = "alternate-dsn"
+	signingServiceDomainField             = "domain"
+	signingServiceStrictValue             = "strict"
+	signingServiceNotFoundCase            = "not found"
+	signingServiceInactiveCase            = "inactive"
 )
 
 type signingServicePublicKeys struct {
@@ -51,7 +56,10 @@ func (p signingServicePublicKeys) LookupPublicKey(
 ) (dkim2.PublicKeyResult, error) {
 	key, found := p.keys[query.Selector()]
 	expectedDomain := signingServiceOriginDomain
-	if query.Selector() == signingServiceTransitSelector {
+	if query.Selector() == signingServiceAlternateOriginSelector ||
+		query.Selector() == signingServiceAlternateDSNSelector {
+		expectedDomain = signingServiceAlternateDomain
+	} else if query.Selector() == signingServiceTransitSelector {
 		expectedDomain = signingServiceTransitDomain
 	}
 	if !found || query.SigningDomain() != expectedDomain ||
@@ -880,15 +888,21 @@ func newSigningServiceFixture(t *testing.T) signingServiceFixture {
 	originKey := newSigningServiceRSAKey(t)
 	transitKey := newSigningServiceRSAKey(t)
 	dsnKey := newSigningServiceRSAKey(t)
+	alternateOriginKey := newSigningServiceRSAKey(t)
+	alternateDSNKey := newSigningServiceRSAKey(t)
 	originSPKI := signingServiceSPKI(t, &originKey.PublicKey)
 	transitSPKI := signingServiceSPKI(t, &transitKey.PublicKey)
 	dsnSPKI := signingServiceSPKI(t, &dsnKey.PublicKey)
+	alternateOriginSPKI := signingServiceSPKI(t, &alternateOriginKey.PublicKey)
+	alternateDSNSPKI := signingServiceSPKI(t, &alternateDSNKey.PublicKey)
 	datasource := map[string]any{
 		"version": "dkim2-datasource-v1",
 		"handles": []any{
 			map[string]any{"id": signingServiceOriginHandle},
 			map[string]any{"id": signingServiceTransitHandle},
 			map[string]any{"id": signingServiceDSNHandle},
+			map[string]any{"id": signingServiceAlternateOriginHandle},
+			map[string]any{"id": signingServiceAlternateDSNHandle},
 		},
 		"profiles": []any{
 			signingServiceProfile(
@@ -912,6 +926,20 @@ func newSigningServiceFixture(t *testing.T) signingServiceFixture {
 				signingServiceDSNSelector,
 				dsnSPKI,
 			),
+			signingServiceProfile(
+				"alternate-origin-profile",
+				signingServiceAlternateDomain,
+				signingServiceAlternateOriginHandle,
+				signingServiceAlternateOriginSelector,
+				alternateOriginSPKI,
+			),
+			signingServiceProfile(
+				"alternate-dsn-profile",
+				signingServiceAlternateDomain,
+				signingServiceAlternateDSNHandle,
+				signingServiceAlternateDSNSelector,
+				alternateDSNSPKI,
+			),
 		},
 		"policies": []any{
 			signingServicePolicy(
@@ -922,6 +950,12 @@ func newSigningServiceFixture(t *testing.T) signingServiceFixture {
 			),
 			signingServicePolicy(
 				signingServiceOriginDomain, "delivery_status", "dsn-profile",
+			),
+			signingServicePolicy(
+				signingServiceAlternateDomain, "originator", "alternate-origin-profile",
+			),
+			signingServicePolicy(
+				signingServiceAlternateDomain, "delivery_status", "alternate-dsn-profile",
 			),
 		},
 	}
@@ -949,6 +983,20 @@ func newSigningServiceFixture(t *testing.T) signingServiceFixture {
 				"dsn.pem",
 				dsnSPKI,
 			),
+			signingServiceManifestEntry(
+				signingServiceAlternateDomain,
+				signingServiceAlternateOriginHandle,
+				"originator",
+				"alternate-origin.pem",
+				alternateOriginSPKI,
+			),
+			signingServiceManifestEntry(
+				signingServiceAlternateDomain,
+				signingServiceAlternateDSNHandle,
+				"delivery_status",
+				"alternate-dsn.pem",
+				alternateDSNSPKI,
+			),
 		},
 	}
 	writeSigningServiceJSON(t, filepath.Join(root, "datasource.json"), datasource)
@@ -956,6 +1004,8 @@ func newSigningServiceFixture(t *testing.T) signingServiceFixture {
 	writeSigningServicePrivateKey(t, filepath.Join(root, "origin.pem"), originKey)
 	writeSigningServicePrivateKey(t, filepath.Join(root, "transit.pem"), transitKey)
 	writeSigningServicePrivateKey(t, filepath.Join(root, "dsn.pem"), dsnKey)
+	writeSigningServicePrivateKey(t, filepath.Join(root, "alternate-origin.pem"), alternateOriginKey)
+	writeSigningServicePrivateKey(t, filepath.Join(root, "alternate-dsn.pem"), alternateDSNKey)
 	if err := os.Chmod(root, 0o500); err != nil {
 		t.Fatalf("os.Chmod(root) error = %v", err)
 	}
@@ -975,9 +1025,11 @@ func newSigningServiceFixture(t *testing.T) signingServiceFixture {
 	return signingServiceFixture{
 		runtime: runtime,
 		publicKeys: signingServicePublicKeys{keys: map[string]*rsa.PublicKey{
-			signingServiceOriginSelector:  &originKey.PublicKey,
-			signingServiceTransitSelector: &transitKey.PublicKey,
-			signingServiceDSNSelector:     &dsnKey.PublicKey,
+			signingServiceOriginSelector:          &originKey.PublicKey,
+			signingServiceTransitSelector:         &transitKey.PublicKey,
+			signingServiceDSNSelector:             &dsnKey.PublicKey,
+			signingServiceAlternateOriginSelector: &alternateOriginKey.PublicKey,
+			signingServiceAlternateDSNSelector:    &alternateDSNKey.PublicKey,
 		}},
 	}
 }
