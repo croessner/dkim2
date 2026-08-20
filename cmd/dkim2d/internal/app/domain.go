@@ -5,12 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"reflect"
 	"time"
 
 	"github.com/croessner/dkim2"
 	"github.com/croessner/dkim2/cmd/dkim2d/internal/config"
+	"github.com/croessner/dkim2/cmd/dkim2d/internal/dnstxt"
 	"github.com/croessner/dkim2/cmd/dkim2d/internal/observability"
 )
 
@@ -91,8 +91,7 @@ func NewDNSVerifier(
 	if err != nil {
 		return nil, &DomainError{}
 	}
-	resolver := &net.Resolver{PreferGo: true, StrictErrors: true}
-	transport, err := dkim2.NewNetTXTTransport(resolver)
+	transport, err := dnstxt.New()
 	if err != nil {
 		return nil, &DomainError{}
 	}
@@ -334,7 +333,7 @@ func nilInterface(value any) bool {
 	}
 }
 
-// dnsProviderConfig applies exactly the two validated daemon DNS overrides.
+// dnsProviderConfig applies the validated daemon DNS lookup and cache controls.
 func dnsProviderConfig(parent context.Context, dnsConfig config.DNSConfig) (dkim2.DNSProviderConfig, error) {
 	if nilInterface(parent) || dnsConfig.LookupTimeout() <= 0 || dnsConfig.MaxConcurrentLookups() == 0 {
 		return dkim2.DNSProviderConfig{}, &DomainError{}
@@ -346,6 +345,10 @@ func dnsProviderConfig(parent context.Context, dnsConfig config.DNSConfig) (dkim
 	providerConfig.Parent = parent
 	providerConfig.Limits.LookupTimeout = dnsConfig.LookupTimeout()
 	providerConfig.Limits.MaxConcurrentLookups = int(dnsConfig.MaxConcurrentLookups())
+	providerConfig.Limits.MaxCacheEntries = int(dnsConfig.MaxCacheEntries())
+	providerConfig.Limits.MaxPositiveTTL = dnsConfig.PositiveTTLCap()
+	providerConfig.Limits.MaxNegativeTTL = dnsConfig.NegativeTTLCap()
+	providerConfig.Limits.MaxStableErrorTTL = dnsConfig.StableErrorTTLCap()
 	return providerConfig, nil
 }
 

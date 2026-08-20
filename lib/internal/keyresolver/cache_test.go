@@ -72,8 +72,8 @@ func TestOutcomeCacheAdmitsOnlyStableClosedStates(t *testing.T) {
 	}
 }
 
-// TestOutcomeCacheLRUPromotionTieAndSequenceRenormalization verifies deterministic eviction.
-func TestOutcomeCacheLRUPromotionTieAndSequenceRenormalization(t *testing.T) {
+// TestOutcomeCacheLRUPromotionAndIndexedReplacement verifies deterministic bounded eviction.
+func TestOutcomeCacheLRUPromotionAndIndexedReplacement(t *testing.T) {
 	clock := &fakeCacheClock{now: time.Unix(100, 0)}
 	cache := newOutcomeCache(2, clock.Now)
 	first := cacheKey{owner: cacheOwner('a'), algorithm: AlgorithmEd25519SHA256}
@@ -85,7 +85,10 @@ func TestOutcomeCacheLRUPromotionTieAndSequenceRenormalization(t *testing.T) {
 	if _, hit, _ := cache.get(first); !hit {
 		t.Fatal("promotion miss")
 	}
-	cache.sequence = math.MaxUint64
+	cache.put(first, foundEdOutcome(4), 2*time.Minute)
+	if len(cache.expiries) != 2 || cache.recency.Len() != 2 {
+		t.Fatal("replacement duplicated an indexed cache entry")
+	}
 	cache.put(third, foundEdOutcome(3), time.Minute)
 	if _, hit, _ := cache.get(second); hit {
 		t.Fatal("least-recent equal-clock entry was not evicted")
@@ -93,8 +96,8 @@ func TestOutcomeCacheLRUPromotionTieAndSequenceRenormalization(t *testing.T) {
 	if _, hit, _ := cache.get(first); !hit {
 		t.Fatal("promoted entry was evicted")
 	}
-	if cache.sequence == 0 || cache.sequence == math.MaxUint64 {
-		t.Fatalf("sequence was not renormalized: %d", cache.sequence)
+	if len(cache.entries) != 2 || len(cache.expiries) != 2 || cache.recency.Len() != 2 {
+		t.Fatal("cache indexes drifted from bounded capacity")
 	}
 }
 

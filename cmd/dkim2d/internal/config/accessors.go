@@ -541,6 +541,38 @@ func (c DNSConfig) MaxConcurrentLookups() uint16 {
 	return c.state.maxConcurrentLookups
 }
 
+// MaxCacheEntries returns the bounded process-local DNS outcome capacity.
+func (c DNSConfig) MaxCacheEntries() uint32 {
+	if c.state == nil {
+		return 0
+	}
+	return c.state.maxCacheEntries
+}
+
+// PositiveTTLCap returns the maximum positive DNS cache lifetime.
+func (c DNSConfig) PositiveTTLCap() time.Duration {
+	if c.state == nil {
+		return 0
+	}
+	return c.state.positiveTTLCap
+}
+
+// NegativeTTLCap returns the maximum authoritative absence cache lifetime.
+func (c DNSConfig) NegativeTTLCap() time.Duration {
+	if c.state == nil {
+		return 0
+	}
+	return c.state.negativeTTLCap
+}
+
+// StableErrorTTLCap returns the maximum stable malformed-state cache lifetime.
+func (c DNSConfig) StableErrorTTLCap() time.Duration {
+	if c.state == nil {
+		return 0
+	}
+	return c.state.stableErrorTTLCap
+}
+
 // Backend returns the selected replay backend.
 func (c ReplayConfig) Backend() ReplayBackend {
 	if c.state == nil {

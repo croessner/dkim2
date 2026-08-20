@@ -289,6 +289,11 @@ policy:
 dns:
   lookup_timeout: 7s
   max_concurrent_lookups: 17
+  cache:
+    max_entries: 2048
+    positive_ttl_cap: 2h
+    negative_ttl_cap: 10m
+    stable_error_ttl_cap: 2m
 replay:
   backend: disabled
 `), config.FlagValues{})
@@ -304,6 +309,10 @@ replay:
 	wantLimits := defaults.Limits
 	wantLimits.LookupTimeout = 7 * time.Second
 	wantLimits.MaxConcurrentLookups = 17
+	wantLimits.MaxCacheEntries = 2048
+	wantLimits.MaxPositiveTTL = 2 * time.Hour
+	wantLimits.MaxNegativeTTL = 10 * time.Minute
+	wantLimits.MaxStableErrorTTL = 2 * time.Minute
 	if providerConfig.Parent != ctx || providerConfig.Clock == nil || providerConfig.Limits != wantLimits {
 		t.Fatal("DNS provider configuration changed a non-overridable default")
 	}

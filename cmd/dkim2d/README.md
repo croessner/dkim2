@@ -232,6 +232,31 @@ Map keys are never expanded. Missing variables fail closed. Secret bytes are
 never configuration or environment values; only protected absolute paths may
 be supplied.
 
+### DNS key cache
+
+The daemon retains DNS TTLs and caches public-key lookup outcomes in process.
+Cache lifetimes are the shorter of authoritative DNS TTL evidence and the
+configured cap; the daemon does not invent a fallback TTL. CNAME chains use
+their shortest TTL, while NXDOMAIN and NODATA use the RFC 2308 SOA rule.
+
+```yaml
+dns:
+  lookup_timeout: 5s
+  max_concurrent_lookups: 64
+  cache:
+    max_entries: 4096
+    positive_ttl_cap: 1h
+    negative_ttl_cap: 5m
+    stable_error_ttl_cap: 1m
+```
+
+`max_entries` accepts 0 through 65,536. The TTL caps accept zero to disable
+their respective cache class and are bounded at 24 hours, 1 hour, and 5
+minutes. The corresponding environment variables are
+`DKIM2D_DNS_CACHE_MAX_ENTRIES`, `DKIM2D_DNS_CACHE_POSITIVE_TTL_CAP`,
+`DKIM2D_DNS_CACHE_NEGATIVE_TTL_CAP`, and
+`DKIM2D_DNS_CACHE_STABLE_ERROR_TTL_CAP`.
+
 ### Inbound policy mode
 
 `policy.mode` defaults to `strict`; omitting it enables enforcement. Operators

@@ -1998,16 +1998,29 @@ least request deadline plus one second.
 DNS exposes only:
 
 - `dns.lookup_timeout`, default `5s`, range 1 ms through 30 s;
-- `dns.max_concurrent_lookups`, default 64, range 1 through 1,024.
+- `dns.max_concurrent_lookups`, default 64, range 1 through 1,024;
+- `dns.cache.max_entries`, default 4,096, range 0 through 65,536;
+- `dns.cache.positive_ttl_cap`, default 1 hour, range 0 through 24 hours;
+- `dns.cache.negative_ttl_cap`, default 5 minutes, range 0 through 1 hour; and
+- `dns.cache.stable_error_ttl_cap`, default 1 minute, range 0 through 5 minutes.
 
-These two values replace the matching defaults only within the public hard
-bounds; widening away from the secure default is therefore explicit and
-visible in typed configuration. Every other default remains frozen:
+Zero disables the cache as a whole or the corresponding lifetime class. TTL
+settings are caps, not synthetic lifetimes: the effective lifetime is the
+shorter of DNS TTL evidence and the configured cap. Positive answers retain
+the shortest TTL across the CNAME chain. NXDOMAIN and NODATA use the RFC 2308
+minimum of SOA TTL and SOA MINIMUM. Answers without positive or negative TTL
+evidence are not cached. The values replace the matching defaults only within
+the public hard bounds; widening away from the secure default is therefore
+explicit and visible in typed configuration. Every other default remains frozen:
 selector/signing-domain/owner 253 bytes and 127 labels where applicable, one
 TXT record of at most 8 KiB, 32 tags, tag-name 63 bytes, tag-value and decoded
-key 8 KiB, cache 1,024, positive TTL 1 hour, negative TTL 5 minutes, stable
-error TTL 1 minute, and 64 coalesced waiters. M13 has no configuration path
-that widens or changes them.
+key 8 KiB, and 64 coalesced waiters.
+
+The process cache keeps one mutex around a key map, a doubly linked LRU list,
+and an indexed expiry min-heap. Hits and LRU eviction are constant-time;
+insertion and expiry maintenance are logarithmic. A complete map scan is
+reserved for a detected internal-index corruption repair path and is not part
+of normal admission.
 
 `protected.generation` is a required YAML-only lowercase 128-bit hexadecimal
 generation identifier for every replay backend. It binds the YAML snapshot to
@@ -2289,14 +2302,16 @@ and released during deterministic shutdown.
 
 ## DNS, Replay Provider, And Readiness Wiring
 
-The daemon creates one instance-owned
-`net.Resolver{PreferGo: true, StrictErrors: true}`, exactly one
-`dkim2.NetTXTTransport`, and one
+The daemon creates one instance-owned TTL-aware DNS TXT transport from the
+system resolver configuration and one
 `dkim2.NewDNSPublicKeyProviderWithConfig` under a daemon-owned parent context.
-It applies only the two permitted DNS overrides and preserves all other public
-defaults. There is no DNS startup probe, readiness lookup, custom recursive
-server, DNSSEC verdict, IDNA normalization, or command-owned cache. Runtime
-DNS provider outcomes stay inside the four-state verification result.
+The transport uses bounded resolver failover, retries truncated UDP responses
+over TCP, retains the shortest TTL across CNAME chains, and derives negative
+lifetimes from authoritative SOA records according to RFC 2308. It validates
+response questions and answer ownership before returning TXT data. There is no
+DNS startup probe, readiness lookup, custom recursive server, local DNSSEC
+validation, or IDNA normalization. Runtime DNS provider outcomes stay inside
+the four-state verification result.
 
 Memory replay uses `dkim2.NewReplayDeriver`, the configured retention and
 resolved public replay limits, one instance clock, and

@@ -1,7 +1,8 @@
 package keyresolver
 
 import (
-	"sort"
+	"container/heap"
+	"container/list"
 	"sync"
 	"time"
 )
@@ -12,11 +13,14 @@ type cacheKey struct {
 }
 
 type cacheEntry struct {
-	outcome  KeyOutcome
-	expiry   time.Time
-	lastUsed time.Time
-	sequence uint64
+	key         cacheKey
+	outcome     KeyOutcome
+	expiry      time.Time
+	recency     *list.Element
+	expiryIndex int
 }
+
+type expiryQueue []*cacheEntry
 
 type cacheAdmission struct {
 	key     cacheKey
@@ -31,7 +35,8 @@ type outcomeCache struct {
 	entries  map[cacheKey]*cacheEntry
 	capacity int
 	clock    func() time.Time
-	sequence uint64
+	recency  list.List
+	expiries expiryQueue
 }
 
 // newOutcomeCache constructs an instance-owned cache using injected time.
@@ -58,16 +63,16 @@ func (c *outcomeCache) get(key cacheKey) (KeyOutcome, bool, bool) {
 		return KeyOutcome{}, false, true
 	}
 	now := c.clock()
-	if !cacheKeyValid(key) || !cacheOutcomeValidForKey(entry.outcome, key) || entry.expiry.IsZero() {
-		delete(c.entries, key)
+	if entry.key != key || !cacheKeyValid(key) || !cacheOutcomeValidForKey(entry.outcome, key) ||
+		entry.expiry.IsZero() || entry.recency == nil {
+		c.removeEntryLocked(key, entry)
 		return KeyOutcome{}, false, true
 	}
 	if !now.Before(entry.expiry) {
-		delete(c.entries, key)
+		c.removeEntryLocked(key, entry)
 		return KeyOutcome{}, false, false
 	}
-	entry.lastUsed = now
-	entry.sequence = c.nextSequenceLocked()
+	c.recency.MoveToBack(entry.recency)
 	return cloneKeyOutcome(entry.outcome), true, false
 }
 
@@ -113,83 +118,126 @@ func (c *outcomeCache) commitAdmission(admission cacheAdmission) bool {
 
 // putLocked inserts or replaces one already-cloned live entry.
 func (c *outcomeCache) putLocked(key cacheKey, outcome KeyOutcome, expiry, now time.Time) bool {
-	c.purgeInvalidOrExpiredLocked(now)
-	sequence := c.nextSequenceLocked()
+	c.purgeExpiredLocked(now)
+	if len(c.entries) != c.recency.Len() || len(c.entries) != len(c.expiries) {
+		c.repairCorruptEntriesLocked()
+	}
 	if existing, ok := c.entries[key]; ok {
-		existing.outcome = outcome
-		existing.expiry = expiry
-		existing.lastUsed = now
-		existing.sequence = sequence
-		return true
+		if existing == nil || existing.key != key || existing.recency == nil {
+			c.removeEntryLocked(key, existing)
+		} else {
+			existing.outcome = outcome
+			existing.expiry = expiry
+			c.recency.MoveToBack(existing.recency)
+			if c.expiryEntryIndexed(existing) {
+				heap.Fix(&c.expiries, existing.expiryIndex)
+			} else {
+				heap.Push(&c.expiries, existing)
+			}
+			return true
+		}
 	}
 	if len(c.entries) >= c.capacity {
 		c.evictLeastRecentLocked()
 	}
-	c.entries[key] = &cacheEntry{
-		outcome: outcome, expiry: expiry,
-		lastUsed: now, sequence: sequence,
-	}
+	entry := &cacheEntry{key: key, outcome: outcome, expiry: expiry, expiryIndex: -1}
+	entry.recency = c.recency.PushBack(entry)
+	c.entries[key] = entry
+	heap.Push(&c.expiries, entry)
 	return true
 }
 
-// purgeInvalidOrExpiredLocked removes unusable entries before capacity decisions.
-func (c *outcomeCache) purgeInvalidOrExpiredLocked(now time.Time) {
-	for key, entry := range c.entries {
-		if entry == nil || !cacheKeyValid(key) || !cacheOutcomeValidForKey(entry.outcome, key) ||
-			entry.expiry.IsZero() || !now.Before(entry.expiry) {
-			delete(c.entries, key)
-		}
+// purgeExpiredLocked removes heap-indexed entries whose trustworthy lifetime ended.
+func (c *outcomeCache) purgeExpiredLocked(now time.Time) {
+	for len(c.expiries) > 0 && !now.Before(c.expiries[0].expiry) {
+		entry := c.expiries[0]
+		c.removeEntryLocked(entry.key, entry)
 	}
 }
 
-// nextSequenceLocked advances recency order and renormalizes before overflow.
-func (c *outcomeCache) nextSequenceLocked() uint64 {
-	if c.sequence == ^uint64(0) {
-		c.renormalizeLocked()
-	}
-	c.sequence++
-	return c.sequence
-}
-
-// renormalizeLocked compacts recency order while preserving deterministic ties.
-func (c *outcomeCache) renormalizeLocked() {
-	entries := make([]*cacheEntry, 0, len(c.entries))
-	for key, entry := range c.entries {
-		if entry == nil || !cacheKeyValid(key) || !cacheOutcomeValidForKey(entry.outcome, key) || entry.expiry.IsZero() {
-			delete(c.entries, key)
-			continue
-		}
-		entries = append(entries, entry)
-	}
-	sort.Slice(entries, func(left, right int) bool {
-		if entries[left].lastUsed.Equal(entries[right].lastUsed) {
-			return entries[left].sequence < entries[right].sequence
-		}
-		return entries[left].lastUsed.Before(entries[right].lastUsed)
-	})
-	for index, entry := range entries {
-		entry.sequence = uint64(index + 1)
-	}
-	c.sequence = uint64(len(entries))
-}
-
-// evictLeastRecentLocked removes the deterministic oldest entry.
+// evictLeastRecentLocked removes the oldest live entry in constant time.
 func (c *outcomeCache) evictLeastRecentLocked() {
-	var oldestKey cacheKey
-	var oldest *cacheEntry
-	for key, entry := range c.entries {
-		if entry == nil || !cacheKeyValid(key) || !cacheOutcomeValidForKey(entry.outcome, key) || entry.expiry.IsZero() {
-			delete(c.entries, key)
+	for oldest := c.recency.Front(); oldest != nil; oldest = c.recency.Front() {
+		entry, ok := oldest.Value.(*cacheEntry)
+		if !ok || entry == nil {
+			c.recency.Remove(oldest)
 			continue
 		}
-		if oldest == nil || entry.lastUsed.Before(oldest.lastUsed) ||
-			entry.lastUsed.Equal(oldest.lastUsed) && entry.sequence < oldest.sequence {
-			oldestKey, oldest = key, entry
+		c.removeEntryLocked(entry.key, entry)
+		return
+	}
+	c.repairCorruptEntriesLocked()
+}
+
+// removeEntryLocked detaches one exact entry from all cache indexes.
+func (c *outcomeCache) removeEntryLocked(key cacheKey, entry *cacheEntry) {
+	if current, ok := c.entries[key]; ok && current == entry {
+		delete(c.entries, key)
+	}
+	if entry == nil {
+		return
+	}
+	if entry.recency != nil {
+		c.recency.Remove(entry.recency)
+		entry.recency = nil
+	}
+	if c.expiryEntryIndexed(entry) {
+		heap.Remove(&c.expiries, entry.expiryIndex)
+	}
+}
+
+// expiryEntryIndexed reports whether the heap index still identifies the exact entry.
+func (c *outcomeCache) expiryEntryIndexed(entry *cacheEntry) bool {
+	return entry != nil && entry.expiryIndex >= 0 && entry.expiryIndex < len(c.expiries) &&
+		c.expiries[entry.expiryIndex] == entry
+}
+
+// repairCorruptEntriesLocked removes map-only corruption on an exceptional capacity path.
+func (c *outcomeCache) repairCorruptEntriesLocked() {
+	for key, entry := range c.entries {
+		if entry == nil || entry.key != key || entry.recency == nil || !c.expiryEntryIndexed(entry) {
+			c.removeEntryLocked(key, entry)
 		}
 	}
-	if oldest != nil {
-		delete(c.entries, oldestKey)
+}
+
+// Len returns the number of expiry-indexed entries.
+func (q expiryQueue) Len() int { return len(q) }
+
+// Less orders expiry first and uses owner plus algorithm for deterministic ties.
+func (q expiryQueue) Less(left, right int) bool {
+	if q[left].expiry.Equal(q[right].expiry) {
+		if q[left].key.owner == q[right].key.owner {
+			return q[left].key.algorithm < q[right].key.algorithm
+		}
+		return q[left].key.owner < q[right].key.owner
 	}
+	return q[left].expiry.Before(q[right].expiry)
+}
+
+// Swap exchanges heap entries and keeps their indexes coherent.
+func (q expiryQueue) Swap(left, right int) {
+	q[left], q[right] = q[right], q[left]
+	q[left].expiryIndex = left
+	q[right].expiryIndex = right
+}
+
+// Push appends one cache entry to the expiry heap.
+func (q *expiryQueue) Push(value any) {
+	entry := value.(*cacheEntry)
+	entry.expiryIndex = len(*q)
+	*q = append(*q, entry)
+}
+
+// Pop removes and detaches the last expiry heap entry.
+func (q *expiryQueue) Pop() any {
+	old := *q
+	last := len(old) - 1
+	entry := old[last]
+	old[last] = nil
+	entry.expiryIndex = -1
+	*q = old[:last]
+	return entry
 }
 
 // cacheKeyValid checks bounded internal key identity without exposing its value.

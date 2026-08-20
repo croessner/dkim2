@@ -31,6 +31,10 @@ const (
 	pathPolicyMode              = "policy.mode"
 	pathDNSLookupTimeout        = "dns.lookup_timeout"
 	pathDNSMaxConcurrent        = "dns.max_concurrent_lookups"
+	pathDNSCacheMaxEntries      = "dns.cache.max_entries"
+	pathDNSPositiveTTLCap       = "dns.cache.positive_ttl_cap"
+	pathDNSNegativeTTLCap       = "dns.cache.negative_ttl_cap"
+	pathDNSStableErrorTTLCap    = "dns.cache.stable_error_ttl_cap"
 	pathReplayBackend           = "replay.backend"
 	pathReplayHMACFile          = "replay.hmac_key_file"
 	pathReplayEpoch             = "replay.epoch"
@@ -270,6 +274,10 @@ func stableFieldSpecs() []fieldSpec {
 		{path: pathPolicyMode, env: "DKIM2D_POLICY_MODE", flag: flagPolicyMode, kind: valueString, defaultVal: valuePolicyStrict, hasDefault: true},
 		{path: pathDNSLookupTimeout, env: "DKIM2D_DNS_LOOKUP_TIMEOUT", kind: valueDuration, defaultVal: defaultReadHeader, hasDefault: true},
 		{path: pathDNSMaxConcurrent, env: "DKIM2D_DNS_MAX_CONCURRENT_LOOKUPS", kind: valueUint, defaultVal: "64", hasDefault: true},
+		{path: pathDNSCacheMaxEntries, env: "DKIM2D_DNS_CACHE_MAX_ENTRIES", kind: valueUint, defaultVal: "4096", hasDefault: true},
+		{path: pathDNSPositiveTTLCap, env: "DKIM2D_DNS_CACHE_POSITIVE_TTL_CAP", kind: valueDuration, defaultVal: "1h", hasDefault: true},
+		{path: pathDNSNegativeTTLCap, env: "DKIM2D_DNS_CACHE_NEGATIVE_TTL_CAP", kind: valueDuration, defaultVal: "5m", hasDefault: true},
+		{path: pathDNSStableErrorTTLCap, env: "DKIM2D_DNS_CACHE_STABLE_ERROR_TTL_CAP", kind: valueDuration, defaultVal: "1m", hasDefault: true},
 		{path: pathReplayBackend, env: "DKIM2D_REPLAY_BACKEND", flag: flagReplayBackend, kind: valueString, defaultVal: valueBackendValkey, hasDefault: true},
 		{path: pathReplayHMACFile, env: "DKIM2D_REPLAY_HMAC_KEY_FILE", kind: valueString},
 		{path: pathReplayEpoch, env: "DKIM2D_REPLAY_EPOCH", kind: valueUint},

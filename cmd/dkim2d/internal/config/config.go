@@ -162,6 +162,10 @@ type sqlSigningState struct {
 type dnsState struct {
 	lookupTimeout        time.Duration
 	maxConcurrentLookups uint16
+	maxCacheEntries      uint32
+	positiveTTLCap       time.Duration
+	negativeTTLCap       time.Duration
+	stableErrorTTLCap    time.Duration
 }
 
 type replayState struct {
@@ -927,7 +931,7 @@ func validIdentifier(value string, maximum int) bool {
 	return true
 }
 
-// parseDNS validates only the two permitted DNS overrides.
+// parseDNS validates the bounded DNS lookup and cache controls.
 func parseDNS(values map[string]rawValue) (dnsState, error) {
 	timeout, err := durationValue(values, pathDNSLookupTimeout, time.Millisecond, 30*time.Second, false)
 	if err != nil {
@@ -937,7 +941,26 @@ func parseDNS(values map[string]rawValue) (dnsState, error) {
 	if err != nil {
 		return dnsState{}, err
 	}
-	return dnsState{lookupTimeout: timeout, maxConcurrentLookups: uint16(concurrent)}, nil
+	maxEntries, err := uintValue(values, pathDNSCacheMaxEntries, 0, 65_536)
+	if err != nil {
+		return dnsState{}, err
+	}
+	positiveCap, err := durationValue(values, pathDNSPositiveTTLCap, 0, 24*time.Hour, true)
+	if err != nil {
+		return dnsState{}, err
+	}
+	negativeCap, err := durationValue(values, pathDNSNegativeTTLCap, 0, time.Hour, true)
+	if err != nil {
+		return dnsState{}, err
+	}
+	stableErrorCap, err := durationValue(values, pathDNSStableErrorTTLCap, 0, 5*time.Minute, true)
+	if err != nil {
+		return dnsState{}, err
+	}
+	return dnsState{
+		lookupTimeout: timeout, maxConcurrentLookups: uint16(concurrent), maxCacheEntries: uint32(maxEntries),
+		positiveTTLCap: positiveCap, negativeTTLCap: negativeCap, stableErrorTTLCap: stableErrorCap,
+	}, nil
 }
 
 // parseReplay validates selected provider-neutral and provider-specific values.

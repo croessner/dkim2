@@ -34,7 +34,11 @@ func TestLoadDisabledAppliesOnlyCommonDefaults(t *testing.T) {
 	}
 	if snapshot.Server().Listen() != defaultListenAddress ||
 		snapshot.Server().MaxInFlight() != 1 ||
-		snapshot.DNS().LookupTimeout() != 5*time.Second {
+		snapshot.DNS().LookupTimeout() != 5*time.Second ||
+		snapshot.DNS().MaxCacheEntries() != 4096 ||
+		snapshot.DNS().PositiveTTLCap() != time.Hour ||
+		snapshot.DNS().NegativeTTLCap() != 5*time.Minute ||
+		snapshot.DNS().StableErrorTTLCap() != time.Minute {
 		t.Fatal("Load() did not apply exact common defaults")
 	}
 	if snapshot.Replay().Enabled() {
@@ -642,6 +646,7 @@ func TestScalarLexicalAndRangeTables(t *testing.T) {
 		{path: pathServerMaxInFlight, min: 1, max: 2},
 		{path: pathServerMaxWaiters, min: 0, max: 1024},
 		{path: pathDNSMaxConcurrent, min: 1, max: 1024},
+		{path: pathDNSCacheMaxEntries, min: 0, max: 65_536},
 		{path: pathReplayEpoch, min: 1, max: 4_294_967_295},
 		{path: pathReplayMaxEntries, min: 1, max: 1_048_576},
 		{path: pathReplayMaxWaiters, min: 1, max: 65_536},
@@ -686,6 +691,9 @@ func TestScalarLexicalAndRangeTables(t *testing.T) {
 		{path: pathServerShutdown, min: time.Second, max: 120 * time.Second, minText: "1s", maxText: duration120s, belowText: duration999ms, aboveText: duration121s},
 		{path: pathServerAdmissionWait, min: 0, max: time.Second, minText: "0s", maxText: "1s", belowText: "", aboveText: "1001ms", allowZero: true},
 		{path: pathDNSLookupTimeout, min: time.Millisecond, max: 30 * time.Second, minText: "1ms", maxText: defaultReadTimeout, belowText: "0s", aboveText: "30001ms"},
+		{path: pathDNSPositiveTTLCap, min: 0, max: 24 * time.Hour, minText: "0s", maxText: "24h", aboveText: "25h", allowZero: true},
+		{path: pathDNSNegativeTTLCap, min: 0, max: time.Hour, minText: "0s", maxText: "1h", aboveText: "61m", allowZero: true},
+		{path: pathDNSStableErrorTTLCap, min: 0, max: 5 * time.Minute, minText: "0s", maxText: "5m", aboveText: "301s", allowZero: true},
 		{path: pathReplayRetention, min: time.Second, max: 720 * time.Hour, minText: "1s", maxText: "720h", belowText: "0s", aboveText: "721h"},
 		{path: pathReplayRevalidate, min: 10 * time.Second, max: 60 * time.Second, minText: "10s", maxText: defaultDeadline, belowText: "9s", aboveText: "61s"},
 		{path: pathValkeyDialTimeout, min: 100 * time.Millisecond, max: 30 * time.Second, minText: defaultAdmissionWait, maxText: defaultReadTimeout, belowText: duration99ms, aboveText: duration31s},
