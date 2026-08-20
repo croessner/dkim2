@@ -1,7 +1,7 @@
 {
   "schema": "dkim2-ci-toolchain-v1",
   "go": {
-    "version": "1.26.5"
+    "version": "1.26.6"
   },
   "go_tools": {
     "actionlint": {

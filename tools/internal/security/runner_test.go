@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	testGoVersion = "go1.26.5"
+	testGoVersion = "go1.26.6"
 	testGOARCH    = "amd64"
 	testGOOS      = "linux"
 	testScanner   = "govulncheck@v1.3.0"
@@ -412,10 +412,10 @@ func TestClosedGoEnvironmentRejectsCallerToolchainAndDatabaseSelection(t *testin
 // TestRuntimeExperimentSuffixIsSeparatedFromToolchainVersion freezes the
 // required runtimesecret build's distinction between compiler and experiment.
 func TestRuntimeExperimentSuffixIsSeparatedFromToolchainVersion(t *testing.T) {
-	if version, err := runtimeToolchainVersion("go1.26.5-X:runtimesecret"); err != nil || version != "go1.26.5" {
+	if version, err := runtimeToolchainVersion("go1.26.6-X:runtimesecret"); err != nil || version != "go1.26.6" {
 		t.Fatalf("runtime toolchain version = %q, %v", version, err)
 	}
-	for _, invalid := range []string{"", "-X:runtimesecret", "go1.26.5-X:", "go1.26.5-X:runtimesecret -X:other"} {
+	for _, invalid := range []string{"", "-X:runtimesecret", "go1.26.6-X:", "go1.26.6-X:runtimesecret -X:other"} {
 		if _, err := runtimeToolchainVersion(invalid); err == nil {
 			t.Fatalf("invalid runtime version %q accepted", invalid)
 		}

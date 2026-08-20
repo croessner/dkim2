@@ -690,7 +690,7 @@ func inspectBinaryBuild(
 ) (binaryBuildInfo, error) {
 	info, err := buildinfo.Read(bytes.NewReader(content))
 	if err != nil || info == nil ||
-		info.GoVersion != "go1.26.5" ||
+		info.GoVersion != "go1.26.6" ||
 		info.Path != "github.com/croessner/dkim2/cmd/"+product ||
 		info.Main.Path != info.Path || info.Main.Version != "(devel)" ||
 		info.Main.Sum != "" || info.Main.Replace != nil {

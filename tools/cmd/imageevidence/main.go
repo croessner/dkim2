@@ -904,7 +904,7 @@ func validOCIBinary(
 		file.Mode != 0o555 || file.UID != 0 || file.GID != 0 ||
 		file.Size <= 0 || file.Size > 100<<20 ||
 		!validSHA256(file.SHA256) || file.Typeflag != tar.TypeReg ||
-		file.Build.GoVersion != "go1.26.5" ||
+		file.Build.GoVersion != "go1.26.6" ||
 		file.Build.Main.Path != "github.com/croessner/dkim2/cmd/"+product ||
 		file.Build.Main.Version != "(devel)" || file.Build.Main.Sum != "" ||
 		file.Build.GOOS != "linux" || file.Build.GOARCH != parts[1] ||
@@ -1224,7 +1224,7 @@ func expectedSPDXPackages(
 	version string,
 	build binaryBuildInfo,
 ) map[string]string {
-	if build.GoVersion != "go1.26.5" ||
+	if build.GoVersion != "go1.26.6" ||
 		build.Main.Path != "github.com/croessner/dkim2/cmd/"+product ||
 		build.Main.Version != "(devel)" ||
 		build.GOOS != "linux" ||
