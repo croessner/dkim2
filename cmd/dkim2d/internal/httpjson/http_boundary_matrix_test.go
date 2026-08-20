@@ -678,6 +678,7 @@ func TestHTTPBoundaryRawAdmittedExpectIsSingletonAndInertAtLowerLayer(t *testing
 				observation.framingInertCount != 0 {
 				t.Fatalf("inert fields reached generated code: %#v", observation)
 			}
+			waitBoundaryAdmissionOwned(t, handler.admission, 0)
 		})
 	}
 }
