@@ -19,10 +19,10 @@ certification, or universal interoperability claim.
   the five source-linked upstream, Debian, and Ubuntu rows recorded in the
   compatibility report. There is no portable Exim execution claim, universal
   local-scan binary, or Exim container image.
-- The daemon and library support outgoing null-reverse-path DSN signing through
-  exact raw bytes or the separately authorized Postfix-qualified Milter
-  reconstruction, the `delivery_status` profile, route ticket, and protected
-  DSN capability. The originator Milter deliberately tempfails every null
+- The daemon supports outgoing null-reverse-path DSN signing only through the
+  Postfix-exclusive route, `delivery_status` profile, route ticket, and
+  protected DSN capability. The library retains a strict generic evidence
+  constructor for trusted integrations. The originator Milter deliberately tempfails every null
   sender. The dedicated `postfix_dsn` adapter requires the bounce-only Postfix
   `{postfix_dsn_origin}` enum patch and accepts only exact `internal`.
   Received-DSN

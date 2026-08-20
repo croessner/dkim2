@@ -261,10 +261,11 @@ can preserve and verify that evidence.
 Headers remain an ordered sequence with duplicate fields and original field
 name casing. Negotiated callback folding is reconstructed as CRLF without
 otherwise normalizing header or body bytes. Body chunks are concatenated in
-callback order. The ordinary daemon input fidelity is
-`milter_reconstructed_crlf`; a validated Postfix DSN uses
-`postfix_dsn_milter_reconstructed_crlf`. Neither is represented as original
-raw SMTP wire evidence.
+callback order. Ordinary daemon requests declare
+`milter_reconstructed_crlf`. A validated Postfix DSN is confined instead by
+the Postfix-exclusive route and its dedicated capability; its request body has
+no caller-selected fidelity. Neither representation is original raw SMTP wire
+evidence.
 
 ## Failure policy
 
@@ -306,7 +307,8 @@ milter_default_action = tempfail
 Apply the adapter only at the SMTP trust boundary matching its configured
 mode. Use separate instances and separate route capabilities for inbound,
 originator, ordinary-transit, and Postfix DSN paths. Do not share a signing or
-DSN capability with another adapter mode. MTA socket permissions should grant
+DSN capability with another adapter mode or diagnostic client: possession of
+the DSN capability attests exact `internal` Postfix origin to the daemon. MTA socket permissions should grant
 connection access only to the intended service group.
 
 Postfix simulates Milter callbacks for `non_smtpd_milters` with unbracketed

@@ -16,7 +16,6 @@ type DeliveryStatusRequest struct {
 	outerReverse    []byte
 	outerRecipients [][]byte
 	tenant          string
-	fidelity        MessageFidelity
 }
 
 // deliveryStatusEvidencePrivateKeySigner makes the pre-policy evidence signer
@@ -32,16 +31,16 @@ func (deliveryStatusEvidencePrivateKeySigner) SignDigest(
 	return dkim2.PrivateKeySignResult{}, dkim2.NewTemporaryProviderError()
 }
 
-// NewDeliveryStatusRequest snapshots one admitted DSN representation.
-func NewDeliveryStatusRequest(raw, outerReverse []byte, outerRecipients [][]byte, tenant string, fidelity MessageFidelity) (DeliveryStatusRequest, error) {
+// NewPostfixDeliveryStatusRequest snapshots one Postfix-exclusive DSN request
+// after the HTTP boundary authenticated the dedicated route capability.
+func NewPostfixDeliveryStatusRequest(raw, outerReverse []byte, outerRecipients [][]byte, tenant string) (DeliveryStatusRequest, error) {
 	if len(raw) == 0 || !bytes.Equal(outerReverse, []byte("<>")) || len(outerRecipients) != 1 ||
-		tenant == "" ||
-		!AdmitsDeliveryStatusFidelity(fidelity) {
+		tenant == "" {
 		return DeliveryStatusRequest{}, &DomainError{}
 	}
 	return DeliveryStatusRequest{
 		raw: bytes.Clone(raw), outerReverse: bytes.Clone(outerReverse),
-		outerRecipients: cloneOperationRecipients(outerRecipients), tenant: tenant, fidelity: fidelity,
+		outerRecipients: cloneOperationRecipients(outerRecipients), tenant: tenant,
 	}, nil
 }
 
@@ -59,9 +58,6 @@ func (r DeliveryStatusRequest) OuterRecipients() [][]byte {
 // Tenant returns the bounded administrative tenant.
 func (r DeliveryStatusRequest) Tenant() string { return r.tenant }
 
-// Fidelity returns the admitted raw-message declaration.
-func (r DeliveryStatusRequest) Fidelity() MessageFidelity { return r.fidelity }
-
 // String prevents raw message and SMTP evidence from escaping diagnostics.
 func (DeliveryStatusRequest) String() string { return operationRedacted }
 
@@ -72,7 +68,7 @@ func (r DeliveryStatusRequest) GoString() string { return r.String() }
 // use, library evidence boundary, and route purpose.
 func (s *SigningService) SignDeliveryStatus(ctx context.Context, request DeliveryStatusRequest) (OperationResult, error) {
 	if s == nil || ctx == nil || s.store == nil || nilInterface(s.publicKeys) || s.clock == nil ||
-		!AdmitsDeliveryStatusFidelity(request.Fidelity()) {
+		len(request.raw) == 0 {
 		return OperationResult{}, &DomainError{}
 	}
 	if err := ctx.Err(); err != nil {
@@ -89,9 +85,10 @@ func (s *SigningService) SignDeliveryStatus(ctx context.Context, request Deliver
 	if err != nil {
 		return OperationResult{}, &DomainError{}
 	}
-	evidence, err := evidenceSigner.EvaluateDSNForSigning(ctx, dkim2.NewDerivedDSNSigningEvidenceRequest(
+	evidenceRequest := dkim2.NewPostfixDerivedDSNSigningEvidenceRequest(
 		request.RawMessage(), request.OuterReversePath(), request.OuterRecipients(),
-	))
+	)
+	evidence, err := evidenceSigner.EvaluateDSNForSigning(ctx, evidenceRequest)
 	if err != nil {
 		return operationFailureFromError(OperationDeliveryStatus, err)
 	}

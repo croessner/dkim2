@@ -76,6 +76,28 @@ func (v RevisionVerifier) EvaluateDeliveryStatus(
 	return evidence, nil
 }
 
+// EvaluatePostfixDeliveryStatus verifies one trusted-Postfix DSN while
+// admitting only bounce(8)'s bounded legacy field order and folding.
+func (v RevisionVerifier) EvaluatePostfixDeliveryStatus(
+	ctx context.Context,
+	report dsn.Report,
+) (dsn.Evidence, error) {
+	if ctx == nil || !v.valid() {
+		return dsn.Evidence{}, newError(ErrorCodeInvalidRequest, ErrorLocation{Phase: PhasePreflight}, ErrorDetails{})
+	}
+	evaluator, err := dsn.NewEvidenceEvaluator(v.verifier)
+	if err != nil {
+		return dsn.Evidence{}, newError(ErrorCodeInternalInvariant, ErrorLocation{Phase: PhasePreflight}, ErrorDetails{})
+	}
+	evidence, err := evaluator.Evaluate(ctx, dsn.EvidenceRequest{
+		Report: report, PostfixCompatibleOrder: true,
+	})
+	if err != nil {
+		return dsn.Evidence{}, err
+	}
+	return evidence, nil
+}
+
 // RevisionVerification stores one initialized closed outcome without message content.
 type RevisionVerification struct {
 	status      RevisionVerificationStatus

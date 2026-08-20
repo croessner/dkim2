@@ -68,6 +68,42 @@ func TestDSNSigningRequiresDedicatedEvidenceAndRoute(t *testing.T) {
 	}
 }
 
+// TestPostfixDSNCompatibilityRequiresExplicitProvenanceConstructor proves the
+// generic evidence constructor remains strict while the clearly named trusted
+// adapter constructor admits only the bounded Postfix field form.
+func TestPostfixDSNCompatibilityRequiresExplicitProvenanceConstructor(t *testing.T) {
+	fixture := newPublicSigningFixture(t)
+	original := signDSNOriginal(t, fixture)
+	outer := []byte("From: postmaster@example.test\r\n" +
+		"Content-Type: multipart/report; report-type=delivery-status; boundary=dsn\r\n\r\n" +
+		"--dsn\r\nContent-Type: text/plain\r\n\r\nhuman\r\n" +
+		"--dsn\r\nContent-Type: message/delivery-status\r\n\r\n" +
+		"Reporting-MTA: dns; example.test\r\n" +
+		"X-Postfix-Queue-ID: synthetic-queue-id\r\n" +
+		"Arrival-Date: Tue, 14 Nov 2023 22:13:20 +0000 (UTC)\r\n\r\n" +
+		"Final-Recipient: rfc822; bob@example.test\r\n" +
+		"Original-Recipient: rfc822; bob@example.test\r\n" +
+		"Action: failed\r\nStatus: 5.1.1\r\n" +
+		"Diagnostic-Code: smtp; 550 synthetic rejection\r\n\r\n" +
+		"--dsn\r\nContent-Type: message/rfc822\r\n\r\n" + string(original) + "\r\n--dsn--\r\n")
+	_, err := fixture.facade.EvaluateDSNForSigning(context.Background(), NewDerivedDSNSigningEvidenceRequest(
+		outer,
+		[]byte("<>"),
+		[][]byte{[]byte("<alice@example.test>")},
+	))
+	if !errors.Is(err, newSigningError(SigningErrorAuthorizationDenied)) {
+		t.Fatalf("generic Postfix-order evidence error=%v", err)
+	}
+	evidence, err := fixture.facade.EvaluateDSNForSigning(context.Background(), NewPostfixDerivedDSNSigningEvidenceRequest(
+		outer,
+		[]byte("<>"),
+		[][]byte{[]byte("<alice@example.test>")},
+	))
+	if err != nil || !evidence.Valid() {
+		t.Fatalf("trusted Postfix-order evidence valid=%t error=%v", evidence.Valid(), err)
+	}
+}
+
 // TestDSNEvidenceRequiresOuterRecipientToMatchHighestMailFrom proves Section
 // 12 binds the DSN recipient to the authenticated highest mf= exactly.
 func TestDSNEvidenceRequiresOuterRecipientToMatchHighestMailFrom(t *testing.T) {

@@ -497,13 +497,15 @@ paths:
       operationId: signDeliveryStatus
       summary: Sign one delivery-status notification.
       description: >
-        Authenticates an RFC 3462 delivery-status notification supplied either
-        as exact raw RFC 5322 bytes or as Postfix-qualified Milter CRLF
-        reconstruction, requires its exact null reverse-path envelope, and
+        Authenticates a Postfix bounce(8) RFC 3462 delivery-status notification
+        supplied by the separately authorized Postfix DSN adapter, requires its
+        exact null reverse-path envelope, and
         authenticates the embedded DKIM2 object without fabricating original
         SMTP envelope evidence before returning an
         append-only DKIM2 signing action plan. This dedicated operation never
-        accepts an ordinary sign or revision capability.
+        accepts an ordinary sign or revision capability. Possession of the
+        distinct DSN signing capability attests that the adapter established
+        trusted Postfix internal origin before invoking this route.
       security:
         - dsnSignCapability: []
       requestBody:
@@ -866,10 +868,10 @@ components:
           $ref: "#/components/schemas/DraftVersion"
         message:
           description: >
-            RFC 5322 DSN bytes. Only raw_rfc5322 or the separately authorized
-            postfix_dsn_milter_reconstructed_crlf fidelity is accepted.
+            Postfix Milter-reconstructed RFC 5322 DSN bytes. The authenticated
+            route, not a caller-selected body field, fixes this representation.
           allOf:
-            - $ref: "#/components/schemas/MessageInput"
+            - $ref: "#/components/schemas/DSNMessageInput"
         outer_smtp:
           description: >
             Exact observed envelope of the DSN itself. mail_from must be <> and
@@ -883,6 +885,17 @@ components:
             DKIM2 d= value before resolving delivery_status policy.
           allOf:
             - $ref: "#/components/schemas/DeliveryStatusContext"
+    DSNMessageInput:
+      type: object
+      additionalProperties: false
+      required:
+        - raw_rfc5322_base64
+      properties:
+        raw_rfc5322_base64:
+          type: string
+          format: byte
+          minLength: 0
+          maxLength: 44739244
     MessageInput:
       type: object
       additionalProperties: false
@@ -899,7 +912,6 @@ components:
           enum:
             - raw_rfc5322
             - milter_reconstructed_crlf
-            - postfix_dsn_milter_reconstructed_crlf
             - exim_local_scan_observed_crlf
             - exim_transport_filter_crlf
     SMTPInput:

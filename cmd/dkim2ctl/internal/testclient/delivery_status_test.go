@@ -16,10 +16,8 @@ const deliveryStatusAcceptResponse = `{"api_version":"v1","draft":"draft-ietf-dk
 // fixtures cannot reuse the ordinary signing request or credential boundary.
 func TestGeneratedDSNSignRequestUsesDedicatedClientAndCapability(t *testing.T) {
 	t.Parallel()
-	fidelity := string(generated.RawRfc5322)
 	request, err := generatedDSNSignRequest(fixtureDSNSignInput{
 		OuterMessageBase64: operationFixtureMessageBase64,
-		OuterFidelity:      &fidelity,
 		OuterMailFrom:      "<>",
 		OuterRecipients:    []string{operationFixtureRecipient},
 		Tenant:             operationFixtureTenant,
@@ -62,13 +60,17 @@ func TestGeneratedDSNSignRequestUsesDedicatedClientAndCapability(t *testing.T) {
 		document["smtp"] != nil {
 		t.Fatal("DSN request did not preserve the dedicated generated DTO shape")
 	}
+	var message map[string]json.RawMessage
+	if json.Unmarshal(document["message"], &message) != nil ||
+		message["raw_rfc5322_base64"] == nil || message["fidelity"] != nil {
+		t.Fatal("DSN request exposed caller-selected representation")
+	}
 }
 
 // TestDSNFixtureAdmissionRequiresDistinctNullPathFacts proves DSN fixture
 // validation remains offline while enforcing its dedicated envelope shape.
 func TestDSNFixtureAdmissionRequiresDistinctNullPathFacts(t *testing.T) {
 	t.Parallel()
-	fidelity := string(generated.RawRfc5322)
 	operation := string(generated.DeliveryStatus)
 	result := "pass"
 	disposition := "accept"
@@ -80,7 +82,6 @@ func TestDSNFixtureAdmissionRequiresDistinctNullPathFacts(t *testing.T) {
 		Case: "delivery-status", Kind: caseDSNSign,
 		DSNSign: &fixtureDSNSignInput{
 			OuterMessageBase64: operationFixtureMessageBase64,
-			OuterFidelity:      &fidelity,
 			OuterMailFrom:      "<>", OuterRecipients: []string{operationFixtureRecipient},
 			Tenant: operationFixtureTenant,
 		},
@@ -100,9 +101,9 @@ func TestDSNFixtureAdmissionRequiresDistinctNullPathFacts(t *testing.T) {
 	invalid = valid
 	invalid.DSNSign = &fixtureDSNSignInput{
 		OuterMessageBase64: operationFixtureMessageBase64,
-		OuterFidelity:      &fidelity, OuterMailFrom: operationFixtureSender,
-		OuterRecipients: []string{operationFixtureRecipient},
-		Tenant:          operationFixtureTenant,
+		OuterMailFrom:      operationFixtureSender,
+		OuterRecipients:    []string{operationFixtureRecipient},
+		Tenant:             operationFixtureTenant,
 	}
 	if _, err := validateFixtureCase(invalid); ExitClassOf(err) != ExitFixture {
 		t.Fatal("non-null DSN outer envelope accepted")

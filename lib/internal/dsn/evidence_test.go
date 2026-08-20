@@ -176,7 +176,7 @@ func TestDeliveryStatusRecipientLinkageRequiresRFC3464Structure(t *testing.T) {
 			if signed == "" {
 				signed = "<recipient@example.test>"
 			}
-			if got := deliveryStatusLinksRecipient(report, [][]byte{[]byte(signed)}); got != testCase.want {
+			if got := deliveryStatusLinksRecipient(report, [][]byte{[]byte(signed)}, false); got != testCase.want {
 				t.Fatalf("deliveryStatusLinksRecipient()=%t, want %t", got, testCase.want)
 			}
 		})
@@ -249,8 +249,80 @@ func TestDeliveryStatusRecipientLinkageEnforcesFieldOrder(t *testing.T) {
 		{name: "will retry with non-delayed action", status: strings.Replace(complete, "Action: delayed", "Action: failed", 1)},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
-			if got := deliveryStatusBodyLinksRecipient([]byte(testCase.status), [][]byte{[]byte("<recipient@example.test>")}); got != testCase.want {
+			if got := deliveryStatusBodyLinksRecipient([]byte(testCase.status), [][]byte{[]byte("<recipient@example.test>")}, false); got != testCase.want {
 				t.Fatalf("deliveryStatusBodyLinksRecipient()=%t, want %t", got, testCase.want)
+			}
+		})
+	}
+}
+
+// TestDeliveryStatusRecipientLinkageConfinesPostfixCompatibility proves the
+// dedicated mode admits only bounce(8)'s exact legacy field order and its
+// wrapped Remote-MTA/Diagnostic-Code output. The generic RFC path stays strict.
+func TestDeliveryStatusRecipientLinkageConfinesPostfixCompatibility(t *testing.T) {
+	const date = "Tue, 14 Nov 2023 22:13:20 +0000 (UTC)"
+	const postfixStatus = "Reporting-MTA: dns; example.test\r\n" +
+		"Original-Envelope-Id: synthetic-envid\r\n" +
+		"X-Postfix-Queue-ID: synthetic-queue-id\r\n" +
+		"X-Postfix-Sender: rfc822; sender@example.test\r\n" +
+		"Arrival-Date: " + date + "\r\n\r\n" +
+		"Final-Recipient: rfc822; recipient@example.test\r\n" +
+		"Original-Recipient: rfc822; recipient@example.test\r\n" +
+		"Action: failed\r\n" +
+		"Status: 5.1.1\r\n" +
+		"Remote-MTA: dns; remote.example.test\r\n" +
+		"Diagnostic-Code: smtp; 550 synthetic diagnostic text that is\r\n" +
+		" wrapped exactly as Postfix bounce_print_wrap emits it\r\n"
+	if deliveryStatusBodyLinksRecipient(
+		[]byte(postfixStatus), [][]byte{[]byte("<recipient@example.test>")}, false,
+	) {
+		t.Fatal("generic RFC path admitted Postfix-specific ordering")
+	}
+	if !deliveryStatusBodyLinksRecipient(
+		[]byte(postfixStatus), [][]byte{[]byte("<recipient@example.test>")}, true,
+	) {
+		t.Fatal("Postfix compatibility rejected canonical bounce(8) ordering")
+	}
+	for _, testCase := range []struct {
+		name   string
+		status string
+	}{
+		{name: "unknown message extension", status: strings.Replace(postfixStatus,
+			"X-Postfix-Queue-ID", "X-Trace", 1)},
+		{name: "sender before queue", status: strings.Replace(postfixStatus,
+			"X-Postfix-Queue-ID: synthetic-queue-id\r\nX-Postfix-Sender: rfc822; sender@example.test",
+			"X-Postfix-Sender: rfc822; sender@example.test\r\nX-Postfix-Queue-ID: synthetic-queue-id", 1)},
+		{name: "mismatched mail name", status: strings.Replace(postfixStatus,
+			"X-Postfix-Sender", "X-Other-Sender", 1)},
+		{name: "duplicate queue id", status: strings.Replace(postfixStatus,
+			"X-Postfix-Queue-ID: synthetic-queue-id",
+			"X-Postfix-Queue-ID: synthetic-queue-id\r\nX-Postfix-Queue-ID: duplicate", 1)},
+		{name: "arrival before queue", status: strings.Replace(postfixStatus,
+			"X-Postfix-Queue-ID: synthetic-queue-id\r\nX-Postfix-Sender: rfc822; sender@example.test\r\nArrival-Date: "+date,
+			"Arrival-Date: "+date+"\r\nX-Postfix-Queue-ID: synthetic-queue-id\r\nX-Postfix-Sender: rfc822; sender@example.test", 1)},
+		{name: "recipient extension", status: strings.Replace(postfixStatus,
+			"Action: failed", "X-Trace: opaque\r\nAction: failed", 1)},
+		{name: "missing diagnostic", status: strings.Replace(postfixStatus,
+			"Diagnostic-Code: smtp; 550 synthetic diagnostic text that is\r\n wrapped exactly as Postfix bounce_print_wrap emits it\r\n", "", 1)},
+		{name: "folded queue id", status: strings.Replace(postfixStatus,
+			"X-Postfix-Queue-ID: synthetic-queue-id",
+			"X-Postfix-Queue-ID: synthetic\r\n queue-id", 1)},
+		{name: "empty diagnostic continuation", status: strings.Replace(postfixStatus,
+			" wrapped exactly as Postfix bounce_print_wrap emits it",
+			" \t", 1)},
+		{name: "unfolded diagnostic line limit", status: strings.Replace(postfixStatus,
+			"Diagnostic-Code: smtp; 550 synthetic diagnostic text that is\r\n wrapped exactly as Postfix bounce_print_wrap emits it",
+			"Diagnostic-Code: smtp; "+strings.Repeat("a", 3000)+"\r\n "+strings.Repeat("b", 2000), 1)},
+		{name: "orphan continuation", status: " folded\r\n" + postfixStatus},
+		{name: "duplicate original recipient", status: strings.Replace(postfixStatus,
+			"Original-Recipient: rfc822; recipient@example.test",
+			"Original-Recipient: rfc822; recipient@example.test\r\nOriginal-Recipient: rfc822; duplicate@example.test", 1)},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			if deliveryStatusBodyLinksRecipient(
+				[]byte(testCase.status), [][]byte{[]byte("<recipient@example.test>")}, true,
+			) {
+				t.Fatal("Postfix compatibility admitted non-Postfix field structure")
 			}
 		})
 	}
@@ -352,7 +424,7 @@ func TestDeliveryStatusRecipientLinkageLimits(t *testing.T) {
 		{name: "recipient groups", status: statusWithGroups(maxDeliveryStatusRecipientGroups+1, 0)},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
-			if deliveryStatusBodyLinksRecipient([]byte(testCase.status), [][]byte{[]byte("<recipient@example.test>")}) {
+			if deliveryStatusBodyLinksRecipient([]byte(testCase.status), [][]byte{[]byte("<recipient@example.test>")}, false) {
 				t.Fatal("deliveryStatusLinksRecipient() accepted over-limit status data")
 			}
 		})

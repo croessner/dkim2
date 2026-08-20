@@ -167,7 +167,7 @@ signing:
   domain_source: verified_embedded
 ```
 
-The corresponding `/v1/dsn/sign` v1 request changes from:
+The corresponding `/v1/dsn/sign` v1 request first changed from:
 
 ```json
 {"context":{"tenant":"tenant-a","domain":"example.test"}}
@@ -179,15 +179,37 @@ to the tenant-only context:
 {"context":{"tenant":"tenant-a"}}
 ```
 
+The Postfix-compatibility correction makes the same route Postfix-exclusive
+and removes the caller-selected message fidelity. The previous message object:
+
+```json
+{"message":{"raw_rfc5322_base64":"...","fidelity":"postfix_dsn_milter_reconstructed_crlf"}}
+```
+
+becomes:
+
+```json
+{"message":{"raw_rfc5322_base64":"..."}}
+```
+
+The distinct DSN route capability is now the explicit server-side attestation
+that its sole adapter established exact Postfix `internal` origin. Never mount
+or copy this capability into another Milter mode, Exim, or a diagnostic client.
+There is no generic HTTP DSN signing route; trusted library integrations retain
+the strict generic evidence constructor.
+
 Old DSN clients/configurations are rejected by the new closed schema and
 configuration loader; new DSN clients are likewise incompatible with an old
-daemon that requires `context.domain`. Do not run a mixed pair. Pull and verify
+daemon that requires `context.domain` or the former fidelity member. Do not run
+a mixed pair. Pull and verify
 the exact daemon and Milter image digests first, validate the new configuration
 offline, drain or stop the dedicated DSN route, and activate the new daemon,
 new Milter/configuration, and `{postfix_dsn_origin}`-capable patched Postfix as
-one pinned change. Reopen the route only after capability, readiness, and
-positive/negative DSN smoke checks pass. Roll back the three components and
-configuration together.
+one pinned change. The daemon and Milter update for the fidelity removal must
+be atomic; either mixed direction fails the closed request contract. Reopen the route only after capability, readiness, and
+positive/negative DSN smoke checks pass. Roll back the daemon, Milter, patched
+Postfix, and configuration together to their previous digest-pinned set; never
+roll back only one side of the DSN API.
 
 Validate every route through the final read-only mounts. The daemon validation
 performs the complete protected generation, replay/Valkey, OTLP CA, datasource,

@@ -224,11 +224,10 @@ func (e KeyPolicyResultStrictIdentityApplicable) Valid() bool {
 
 // Defines values for MessageInputFidelity.
 const (
-	EximLocalScanObservedCrlf         MessageInputFidelity = "exim_local_scan_observed_crlf"
-	EximTransportFilterCrlf           MessageInputFidelity = "exim_transport_filter_crlf"
-	MilterReconstructedCrlf           MessageInputFidelity = "milter_reconstructed_crlf"
-	PostfixDsnMilterReconstructedCrlf MessageInputFidelity = "postfix_dsn_milter_reconstructed_crlf"
-	RawRfc5322                        MessageInputFidelity = "raw_rfc5322"
+	EximLocalScanObservedCrlf MessageInputFidelity = "exim_local_scan_observed_crlf"
+	EximTransportFilterCrlf   MessageInputFidelity = "exim_transport_filter_crlf"
+	MilterReconstructedCrlf   MessageInputFidelity = "milter_reconstructed_crlf"
+	RawRfc5322                MessageInputFidelity = "raw_rfc5322"
 )
 
 // Valid indicates whether the value is a known member of the MessageInputFidelity enum.
@@ -239,8 +238,6 @@ func (e MessageInputFidelity) Valid() bool {
 	case EximTransportFilterCrlf:
 		return true
 	case MilterReconstructedCrlf:
-		return true
-	case PostfixDsnMilterReconstructedCrlf:
 		return true
 	case RawRfc5322:
 		return true
@@ -814,6 +811,11 @@ type AddHeaderActionType string
 // CanonicalUint64 defines model for CanonicalUint64.
 type CanonicalUint64 = string
 
+// DSNMessageInput defines model for DSNMessageInput.
+type DSNMessageInput struct {
+	RawRfc5322Base64 wire.ProtectedString `json:"raw_rfc5322_base64"`
+}
+
 // DSNSignRequest defines model for DSNSignRequest.
 type DSNSignRequest struct {
 	ApiVersion APIVersion `json:"api_version"`
@@ -822,8 +824,8 @@ type DSNSignRequest struct {
 	Context DeliveryStatusContext `json:"context"`
 	Draft   DraftVersion          `json:"draft"`
 
-	// Message RFC 5322 DSN bytes. Only raw_rfc5322 or the separately authorized postfix_dsn_milter_reconstructed_crlf fidelity is accepted.
-	Message MessageInput `json:"message"`
+	// Message Postfix Milter-reconstructed RFC 5322 DSN bytes. The authenticated route, not a caller-selected body field, fixes this representation.
+	Message DSNMessageInput `json:"message"`
 
 	// OuterSmtp Exact observed envelope of the DSN itself. mail_from must be <> and rcpt_to must contain exactly one recipient.
 	OuterSmtp SMTPInput `json:"outer_smtp"`

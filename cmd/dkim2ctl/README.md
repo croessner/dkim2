@@ -40,8 +40,9 @@ either. Authenticated process and negative cases require a regular,
 effective-user-owned, single-link 32-byte route capability file with mode
 `0400` or `0600`. Sign, revise, and `sign_dsn` fixtures require their corresponding
 distinct capability options. A `sign_dsn` fixture contains the byte-preserving
-outer DSN message, `outer_fidelity` set to `raw_rfc5322`, the exact null outer
-envelope, and tenant; its expected response operation is `delivery_status`.
+outer DSN message, exact null outer envelope, and tenant; it has no caller-
+selected fidelity. The Postfix-exclusive route and its dedicated capability
+attest the representation. Its expected response operation is `delivery_status`.
 The daemon derives the domain only from verified embedded `d=` evidence.
 Credentials, raw messages, envelope values,
 paths, URLs, headers, response bodies, and raw errors never enter output.

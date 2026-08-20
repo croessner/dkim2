@@ -49,16 +49,31 @@ status signing domain from the canonical authenticated highest embedded `d=`
 only after verification, and at least
 one RFC 3464 `Original-Recipient` or `Final-Recipient` field must match an
 authenticated highest embedded `rt=`, before policy or private-key access.
-The bounded RFC 3464 parser rejects folded delivery-status fields and enforces
-the normative per-message and per-recipient field order, uniqueness, and
-extension-field tail. It decodes bounded RFC 3461 xtext only for the
+The generic library RFC 3464 parser rejects folded delivery-status fields and
+enforces the normative per-message and per-recipient field order, uniqueness,
+and extension-field tail. The Postfix-exclusive daemon route first uses
+that strict path and then admits only the historical form emitted by
+`bounce_notify_util.c`: `Reporting-MTA` precedes optional
+`Original-Envelope-Id`, matching `X-<mail-name>-Queue-ID`/optional `Sender`
+extensions precede optional `Arrival-Date`, and `Final-Recipient` precedes
+optional `Original-Recipient`. Only Postfix's wrapped `Remote-MTA` and
+`Diagnostic-Code` fields are unfolded. Unknown extensions, arbitrary
+reordering, duplicate fields, wrong-group fields, and other folding still fail
+closed. The daemon selects this parser only after authenticating the dedicated,
+non-reusable DSN route capability. Possession of that capability explicitly
+attests that the Postfix-only adapter established exact `internal` provenance;
+the request schema contains neither fidelity nor a compatibility switch. Public library
+integrations must satisfy the same provenance precondition before selecting
+the explicitly named Postfix evidence constructor. It decodes bounded RFC 3461 xtext only for the
 ORCPT-derived `Original-Recipient`; `Final-Recipient` remains the raw exact
 generic-address. Raw or decoded control characters and malformed mailbox
 results fail closed, while valid quoted local-parts remain eligible for exact
 canonical comparison.
 Delivery-status interpretation is additionally capped at 256 KiB, 4096 bytes
 per unfolded line, 256 recipient groups, 64 fields per group, and 2048 fields
-overall. Unknown extension fields are accepted within those bounds.
+overall. The generic RFC path accepts extension fields only in the normative
+extension tail; the Postfix compatibility path accepts only its two matching
+`X-<mail-name>-*` fields in the exact positions above.
 
 The OpenAPI DSN request consequently contains the outer message, outer SMTP
 envelope, and a tenant-only delivery-status context. It has no caller-selected

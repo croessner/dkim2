@@ -94,14 +94,13 @@ func TestEximFidelityCompatibilityRejectsCrossRouteEvidence(t *testing.T) {
 	}
 }
 
-// TestPostfixDSNFidelityIsConfinedToDeliveryStatus proves a qualified null-
-// sender representation cannot cross into process, sign, or revision routes.
-func TestPostfixDSNFidelityIsConfinedToDeliveryStatus(t *testing.T) {
-	fidelity := FidelityPostfixDSNMilterReconstructedCRLF
+// TestPostfixDSNFidelityIsAbsentFromGenericOperations proves the now server-
+// owned DSN representation cannot cross into process, sign, or revision APIs.
+func TestPostfixDSNFidelityIsAbsentFromGenericOperations(t *testing.T) {
+	fidelity := MessageFidelity("postfix_dsn_milter_reconstructed_crlf")
 	if AdmitsProcessFidelity(fidelity) ||
 		AdmitsOperationFidelity(OperationSign, fidelity) ||
-		AdmitsOperationFidelity(OperationRevise, fidelity) ||
-		!AdmitsDeliveryStatusFidelity(fidelity) {
+		AdmitsOperationFidelity(OperationRevise, fidelity) {
 		t.Fatal("Postfix DSN fidelity route confinement drifted")
 	}
 }

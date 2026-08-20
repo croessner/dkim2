@@ -32,12 +32,7 @@ func MapReviseRequest(input generated.ReviseRequest) (app.OperationRequest, erro
 // dedicated daemon-owned evidence request.
 func MapDeliveryStatusRequest(input generated.DSNSignRequest) (app.DeliveryStatusRequest, error) {
 	if input.ApiVersion != generated.V1 || input.Draft != generated.DraftIetfDkimDkim2Spec04 ||
-		input.Message.Fidelity == nil ||
 		!validTenant(input.Context.Tenant) {
-		return app.DeliveryStatusRequest{}, newMappingError(MappingInvalidContract)
-	}
-	fidelity, ok := mapDeliveryStatusFidelity(*input.Message.Fidelity)
-	if !ok {
 		return app.DeliveryStatusRequest{}, newMappingError(MappingInvalidContract)
 	}
 	encoded, err := input.Message.RawRfc5322Base64.Bytes()
@@ -59,27 +54,14 @@ func MapDeliveryStatusRequest(input generated.DSNSignRequest) (app.DeliveryStatu
 	if err != nil {
 		return app.DeliveryStatusRequest{}, err
 	}
-	request, err := app.NewDeliveryStatusRequest(
+	request, err := app.NewPostfixDeliveryStatusRequest(
 		raw, outerReverse, outerRecipients,
-		input.Context.Tenant, fidelity,
+		input.Context.Tenant,
 	)
 	if err != nil {
 		return app.DeliveryStatusRequest{}, newMappingError(MappingInvalidContract)
 	}
 	return request, nil
-}
-
-// mapDeliveryStatusFidelity recognizes only raw input and Postfix-qualified
-// reconstruction on the dedicated delivery-status boundary.
-func mapDeliveryStatusFidelity(value generated.MessageInputFidelity) (app.MessageFidelity, bool) {
-	switch value {
-	case generated.RawRfc5322:
-		return app.FidelityRawRFC5322, true
-	case generated.PostfixDsnMilterReconstructedCrlf:
-		return app.FidelityPostfixDSNMilterReconstructedCRLF, true
-	default:
-		return "", false
-	}
 }
 
 // mapDSNOuterRecipients validates the single exact ASCII outer DSN recipient.

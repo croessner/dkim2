@@ -139,16 +139,33 @@ policy resolution. A caller, adapter, outer envelope, tenant default, suffix,
 alias, or wildcard cannot preselect or replace it. At least one RFC 3464
 original/final recipient must link to an authenticated highest `rt=` path.
 
+Generic library DSNs retain strict RFC 3464 field ordering and reject folding.
+The Postfix-exclusive daemon route additionally recognizes only bounce(8)'s documented
+legacy field order: its two `X-<mail-name>-*` fields occur before
+`Arrival-Date`, and `Final-Recipient` occurs before optional
+`Original-Recipient`. Bounded continuation lines are accepted only for the
+`Remote-MTA` and `Diagnostic-Code` fields that Postfix writes with
+`bounce_print_wrap`. This compatibility is selected only after authentication
+of the dedicated, non-reusable DSN route capability. That capability attests
+that the daemon-owned adapter established trusted Postfix origin; the request
+body has no fidelity or compatibility switch. Library integrations must select the
+explicitly named Postfix evidence constructor only after proving equivalent
+bounce(8) provenance; generic constructors remain strict. The compatibility
+has no generic HTTP alternative, does not apply to Exim input, and does not weaken
+mandatory fields, uniqueness, linkage, cryptographic verification, or limits.
+
 ### API Shape
 
 `POST /v1/dsn/sign` validates an outgoing DSN and returns only a completed
 outer Message-Instance and DKIM2-Signature action plan on success. Its request
-carries raw outer message bytes, an exact outer `<>` envelope with exactly one
+carries Postfix Milter-reconstructed outer message bytes, an exact outer `<>` envelope with exactly one
 recipient, and a tenant-only delivery-status context. It contains no copied
 original envelope or caller-derived domain, DSN validity, alignment, identity, or
 verification fields. The route requires the distinct
 `X-DKIM2-DSN-Sign-Capability` capability and cannot use the ordinary sign or
-revise capability.
+revise capability. Possession of that DSN-only capability is an explicit
+Postfix provenance attestation; operators must never share it with another
+adapter or diagnostic client.
 
 Received-DSN validation and DSN propagation remain intentionally deferred.
 They need a separately designed, evidence-bearing receive-time boundary rather

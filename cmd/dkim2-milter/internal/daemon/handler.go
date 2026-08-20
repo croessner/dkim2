@@ -287,7 +287,7 @@ func (h *Handler) Handle(
 			generated.SignDeliveryStatusJSONRequestBody{
 				ApiVersion: generated.V1,
 				Draft:      generated.DraftIetfDkimDkim2Spec04,
-				Message:    request.message,
+				Message:    request.dsnMessage,
 				OuterSmtp:  request.smtp,
 				Context: generated.DeliveryStatusContext{
 					Tenant: state.tenant,
@@ -455,8 +455,9 @@ func (handlerGuard) MarshalJSON() ([]byte, error) { return nil, &Error{} }
 func (handlerGuard) MarshalText() ([]byte, error) { return nil, &Error{} }
 
 type mappedRequest struct {
-	message generated.MessageInput
-	smtp    generated.SMTPInput
+	message    generated.MessageInput
+	dsnMessage generated.DSNMessageInput
+	smtp       generated.SMTPInput
 }
 
 // mapMessage creates only generated DTOs and preserves admitted bytes.
@@ -476,20 +477,21 @@ func mapMessage(message milter.Message) (mappedRequest, error) {
 	if err != nil {
 		return mappedRequest{}, err
 	}
-	var fidelity generated.MessageInputFidelity
+	var fidelity *generated.MessageInputFidelity
 	switch message.Fidelity() {
 	case milter.FidelityReconstructedCRLF:
-		fidelity = generated.MilterReconstructedCrlf
+		value := generated.MilterReconstructedCrlf
+		fidelity = &value
 	case milter.FidelityPostfixDSNReconstructedCRLF:
-		fidelity = generated.PostfixDsnMilterReconstructedCrlf
 	default:
 		return mappedRequest{}, &milter.Error{Class: milter.FailureFidelity}
 	}
 	return mappedRequest{
 		message: generated.MessageInput{
-			Fidelity: &fidelity, RawRfc5322Base64: rawValue,
+			Fidelity: fidelity, RawRfc5322Base64: rawValue,
 		},
-		smtp: smtp,
+		dsnMessage: generated.DSNMessageInput{RawRfc5322Base64: rawValue},
+		smtp:       smtp,
 	}, nil
 }
 

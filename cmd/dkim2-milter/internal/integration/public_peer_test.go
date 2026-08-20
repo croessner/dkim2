@@ -975,17 +975,21 @@ func postfixDSNOriginMacroPayload(origin string) []byte {
 	return payload
 }
 
-// assertPostfixDSNRequest checks fidelity, outer envelope, and tenant-only context.
+// assertPostfixDSNRequest checks the server-owned Postfix representation,
+// outer envelope, and tenant-only context.
 func assertPostfixDSNRequest(
 	t *testing.T,
 	body generatedfixture.DSNSignRequest,
 	_ string,
 ) {
 	t.Helper()
-	if body.Message.Fidelity == nil ||
-		*body.Message.Fidelity != generatedfixture.PostfixDsnMilterReconstructedCrlf ||
-		body.Context.Tenant != integrationTenant {
-		t.Fatal("Postfix DSN fidelity or tenant context changed")
+	raw, err := body.Message.RawRfc5322Base64.Bytes()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer clear(raw)
+	if len(raw) == 0 || body.Context.Tenant != integrationTenant {
+		t.Fatal("Postfix DSN representation or tenant context changed")
 	}
 	outerSender, err := body.OuterSmtp.MailFrom.Bytes()
 	if err != nil {

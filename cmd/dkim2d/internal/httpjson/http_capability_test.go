@@ -102,16 +102,21 @@ func TestAuthenticateOperationCapabilityUsesDedicatedDSNHeader(t *testing.T) {
 	canonical := base64.RawURLEncoding.EncodeToString(secret)
 	for _, testCase := range []struct {
 		name   string
+		path   string
 		header string
 		ok     bool
 	}{
-		{name: "dedicated header", header: dsnSignCapabilityHeader, ok: true},
-		{name: "ordinary header", header: localCapabilityHeader},
+		{name: "dedicated header", path: dsnSignPath, header: dsnSignCapabilityHeader, ok: true},
+		{name: "missing header", path: dsnSignPath},
+		{name: "ordinary header", path: dsnSignPath, header: localCapabilityHeader},
+		{name: "dedicated header on ordinary route", path: signPath, header: dsnSignCapabilityHeader},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			t.Parallel()
-			request := httptest.NewRequest(http.MethodPost, dsnSignPath, nil)
-			request.Header.Set(testCase.header, canonical)
+			request := httptest.NewRequest(http.MethodPost, testCase.path, nil)
+			if testCase.header != "" {
+				request.Header.Set(testCase.header, canonical)
+			}
 			matcher := &testCapabilityMatcher{value: secret}
 			result, ok := authenticateOperationCapability(request, matcher)
 			if ok != testCase.ok || matcher.calls != boolInt(testCase.ok) ||

@@ -297,8 +297,9 @@ remains permanent. HTTP 204 is never an availability fallback.
 
 Null senders are classified by the originator Milter before daemon I/O and
 continue to tempfail there. The separate `postfix_dsn` adapter may call the DSN
-route only after exact Postfix-only `internal` origin validation and declares
-`postfix_dsn_milter_reconstructed_crlf`; it requires the corresponding Postfix
+route only after exact Postfix-only `internal` origin validation. The body has
+no caller-selected fidelity; the dedicated DSN capability is the server-side
+provenance attestation and must not be shared. The adapter requires the corresponding Postfix
 patch before deployment. Address literals and otherwise unsupported valid
 SMTPUTF8 envelopes remain not applicable and continue unchanged. Malformed
 Milter callback syntax remains fail-closed. The implementation does not infer
@@ -350,8 +351,10 @@ signing:
 ```
 
 Omit every unused route capability. `dsn_sign_capability_file` authorizes only
-`/v1/dsn/sign`; it is distinct from process, sign, revise, replay, and
-all other protected material. The datasource is the closed
+the Postfix-exclusive `/v1/dsn/sign`; possession attests that its sole adapter
+established trusted `internal` origin. It is distinct from process, sign,
+revise, replay, and all other protected material and must not be shared with a
+diagnostic client or another adapter. The datasource is the closed
 `dkim2-datasource-v1` format documented in
 [`docs/specs/implementation/datasource-providers.md`](../../docs/specs/implementation/datasource-providers.md).
 The private manifest is `dkim2-private-keys-v1`; every entry binds one exact
@@ -536,7 +539,7 @@ Exactly these paths are routable:
 | `POST` | `/v1/process` | Verification, policy, replay, disposition |
 | `POST` | `/v1/sign` | Originator signing and ordered append-only actions |
 | `POST` | `/v1/revise` | Ordinary-transit verification, revision, and ordered actions |
-| `POST` | `/v1/dsn/sign` | Authenticated outgoing delivery-status signing |
+| `POST` | `/v1/dsn/sign` | Postfix-exclusive authenticated delivery-status signing |
 
 Health and readiness support their declared strong-ETag conditional behavior.
 Readiness is `200` only after immutable configuration and protected loading,

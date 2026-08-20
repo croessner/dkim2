@@ -104,7 +104,6 @@ type fixtureReviseInput struct {
 // fixtureDSNSignInput holds delivery-status inputs before generated mapping.
 type fixtureDSNSignInput struct {
 	OuterMessageBase64 string   `json:"outer_raw_rfc5322_base64"`
-	OuterFidelity      *string  `json:"outer_fidelity,omitempty"`
 	OuterMailFrom      string   `json:"outer_mail_from"`
 	OuterRecipients    []string `json:"outer_rcpt_to"`
 	Tenant             string   `json:"tenant"`
@@ -588,17 +587,31 @@ func validateReviseInput(input fixtureReviseInput, expectation fixtureExpectatio
 
 // validateDSNSignInput checks the exact outer DSN envelope.
 func validateDSNSignInput(input fixtureDSNSignInput, expectation fixtureExpectation) (int, error) {
-	decoded, err := validateMessageAndEnvelope(
-		input.OuterMessageBase64, input.OuterFidelity, input.OuterMailFrom, input.OuterRecipients,
+	decoded, err := validateDSNMessageAndEnvelope(
+		input.OuterMessageBase64, input.OuterMailFrom, input.OuterRecipients,
 	)
-	if err != nil || input.OuterFidelity == nil || input.OuterMailFrom != "<>" ||
+	if err != nil || input.OuterMailFrom != "<>" ||
 		len(input.OuterRecipients) != 1 ||
-		*input.OuterFidelity != string(generated.RawRfc5322) ||
 		!validTenant(input.Tenant) ||
 		!validOperationExpectation(string(OperationDSNSign), expectation) {
 		return 0, NewExitError(ExitFixture)
 	}
 	return decoded, nil
+}
+
+// validateDSNMessageAndEnvelope checks canonical Base64 and the Postfix DSN
+// outer envelope without accepting a caller-selected representation.
+func validateDSNMessageAndEnvelope(
+	messageBase64 string,
+	mailFrom string,
+	recipients []string,
+) (int, error) {
+	decoded, err := base64.StdEncoding.Strict().DecodeString(messageBase64)
+	if err != nil || base64.StdEncoding.EncodeToString(decoded) != messageBase64 ||
+		!validSMTPEnvelope(mailFrom, recipients) {
+		return 0, NewExitError(ExitFixture)
+	}
+	return len(decoded), nil
 }
 
 // validSMTPEnvelope checks bounded scalar SMTP envelope facts.
@@ -841,10 +854,11 @@ func generatedReviseRequest(input fixtureReviseInput) (generated.ReviseRequest, 
 
 // generatedDSNSignRequest maps the isolated delivery-status fixture boundary.
 func generatedDSNSignRequest(input fixtureDSNSignInput) (generated.DSNSignRequest, error) {
-	message, err := generatedMessageInput(input.OuterMessageBase64, input.OuterFidelity)
+	messageValue, err := wire.NewProtectedString(input.OuterMessageBase64)
 	if err != nil {
 		return generated.DSNSignRequest{}, err
 	}
+	message := generated.DSNMessageInput{RawRfc5322Base64: messageValue}
 	outer, err := generatedSMTPInput(input.OuterMailFrom, input.OuterRecipients)
 	if err != nil {
 		return generated.DSNSignRequest{}, err

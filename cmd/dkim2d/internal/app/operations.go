@@ -29,9 +29,6 @@ const (
 	FidelityRawRFC5322 MessageFidelity = "raw_rfc5322"
 	// FidelityMilterReconstructedCRLF identifies exact callback reconstruction.
 	FidelityMilterReconstructedCRLF MessageFidelity = "milter_reconstructed_crlf"
-	// FidelityPostfixDSNMilterReconstructedCRLF identifies callback reconstruction
-	// admitted only after the Postfix DSN adapter validated exact internal origin.
-	FidelityPostfixDSNMilterReconstructedCRLF MessageFidelity = "postfix_dsn_milter_reconstructed_crlf"
 	// FidelityEximLocalScanObservedCRLF identifies Exim receive-time observed bytes.
 	FidelityEximLocalScanObservedCRLF MessageFidelity = "exim_local_scan_observed_crlf"
 	// FidelityEximTransportFilterCRLF identifies Exim transport-filter network-form bytes.
@@ -51,13 +48,6 @@ func AdmitsOperationFidelity(operation Operation, fidelity MessageFidelity) bool
 		(fidelity == FidelityRawRFC5322 ||
 			fidelity == FidelityMilterReconstructedCRLF ||
 			fidelity == FidelityEximTransportFilterCRLF)
-}
-
-// AdmitsDeliveryStatusFidelity confines Postfix-qualified reconstruction to
-// the separately authorized delivery-status operation.
-func AdmitsDeliveryStatusFidelity(fidelity MessageFidelity) bool {
-	return fidelity == FidelityRawRFC5322 ||
-		fidelity == FidelityPostfixDSNMilterReconstructedCRLF
 }
 
 // OperationRequest is one immutable generated-DTO-free service request.

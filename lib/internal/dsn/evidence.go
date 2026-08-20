@@ -85,6 +85,10 @@ func IsEvidenceErrorCode(err error, code EvidenceErrorCode) bool {
 type EvidenceRequest struct {
 	// Report is the parser-owned RFC 3462 DSN report.
 	Report Report
+	// PostfixCompatibleOrder admits only the bounded field ordering and folding
+	// emitted by Postfix bounce(8), after the caller has independently proven
+	// the dedicated trusted-Postfix route.
+	PostfixCompatibleOrder bool
 }
 
 // Evidence stores the authenticated embedded DKIM2 target without retaining message content.
@@ -165,7 +169,7 @@ func (e EvidenceEvaluator) Evaluate(ctx context.Context, request EvidenceRequest
 			return Evidence{}, evidenceStatusError(result.Status())
 		}
 		evidence, evidenceErr := authenticatedEvidence(EvidenceFormComplete, parsed, result.Target())
-		if evidenceErr != nil || !deliveryStatusLinksRecipient(request.Report, evidence.recipientPaths) {
+		if evidenceErr != nil || !deliveryStatusLinksRecipient(request.Report, evidence.recipientPaths, request.PostfixCompatibleOrder) {
 			return Evidence{}, newEvidenceError(EvidenceErrorCodeInvalidOriginal, evidenceErr)
 		}
 		return evidence, nil
@@ -178,7 +182,7 @@ func (e EvidenceEvaluator) Evaluate(ctx context.Context, request EvidenceRequest
 			return Evidence{}, evidenceStatusError(headerEvidence.Status())
 		}
 		evidence, evidenceErr := authenticatedEvidence(EvidenceFormHeadersOnly, parsed, headerEvidence.Target())
-		if evidenceErr != nil || !deliveryStatusLinksRecipient(request.Report, evidence.recipientPaths) {
+		if evidenceErr != nil || !deliveryStatusLinksRecipient(request.Report, evidence.recipientPaths, request.PostfixCompatibleOrder) {
 			return Evidence{}, newEvidenceError(EvidenceErrorCodeInvalidOriginal, evidenceErr)
 		}
 		return evidence, nil
@@ -234,15 +238,28 @@ const (
 // structure and requires one complete recipient group to name an authenticated
 // highest-signature rt= path. Folding fails closed. RFC 3461 xtext is decoded
 // only for Original-Recipient; Final-Recipient is compared as its raw address.
-func deliveryStatusLinksRecipient(report Report, signed [][]byte) bool {
+func deliveryStatusLinksRecipient(report Report, signed [][]byte, postfixCompatible bool) bool {
 	body := report.DeliveryStatus().BodyBytes()
 	defer clear(body)
-	return deliveryStatusBodyLinksRecipient(body, signed)
+	if deliveryStatusBodyLinksRecipient(body, signed, false) {
+		return true
+	}
+	return postfixCompatible && deliveryStatusBodyLinksRecipient(body, signed, true)
 }
 
-func deliveryStatusBodyLinksRecipient(body []byte, signed [][]byte) bool {
+// deliveryStatusBodyLinksRecipient validates one bounded RFC 3464 body and
+// reports whether a structurally complete recipient group links to signed rt=.
+func deliveryStatusBodyLinksRecipient(body []byte, signed [][]byte, postfixCompatible bool) bool {
 	if len(body) == 0 || len(body) > maxDeliveryStatusBytes {
 		return false
+	}
+	if postfixCompatible {
+		unfolded, valid := unfoldPostfixDeliveryStatus(body)
+		if !valid {
+			return false
+		}
+		defer clear(unfolded)
+		body = unfolded
 	}
 	group := deliveryStatusFieldGroup{}
 	groupIndex := 0
@@ -265,7 +282,7 @@ func deliveryStatusBodyLinksRecipient(body []byte, signed [][]byte) bool {
 			position = lineEnd + 2
 		}
 		if len(line) == 0 {
-			groupLinked, valid := finishDeliveryStatusGroup(groupIndex, group, signed)
+			groupLinked, valid := finishDeliveryStatusGroup(groupIndex, group, signed, postfixCompatible)
 			if !valid {
 				return false
 			}
@@ -275,7 +292,7 @@ func deliveryStatusBodyLinksRecipient(body []byte, signed [][]byte) bool {
 			continue
 		}
 		if line[0] == ' ' || line[0] == '\t' ||
-			!group.add(groupIndex, line) {
+			!group.add(groupIndex, line, postfixCompatible) {
 			return false
 		}
 		totalFields++
@@ -285,7 +302,7 @@ func deliveryStatusBodyLinksRecipient(body []byte, signed [][]byte) bool {
 		}
 	}
 	if group.fieldCount > 0 {
-		groupLinked, valid := finishDeliveryStatusGroup(groupIndex, group, signed)
+		groupLinked, valid := finishDeliveryStatusGroup(groupIndex, group, signed, postfixCompatible)
 		if !valid {
 			return false
 		}
@@ -314,6 +331,9 @@ type deliveryStatusFieldGroup struct {
 	lastAttemptDate    []byte
 	finalLogID         []byte
 	willRetryUntil     []byte
+	postfixMailName    []byte
+	postfixQueueID     []byte
+	postfixSender      []byte
 }
 
 type deliveryStatusField uint8
@@ -336,7 +356,8 @@ const (
 	deliveryStatusFieldWillRetryUntil
 )
 
-func (g *deliveryStatusFieldGroup) add(groupIndex int, line []byte) bool {
+// add classifies and admits one unfolded field into the selected strict group state machine.
+func (g *deliveryStatusFieldGroup) add(groupIndex int, line []byte, postfixCompatible bool) bool {
 	if g == nil {
 		return false
 	}
@@ -346,6 +367,9 @@ func (g *deliveryStatusFieldGroup) add(groupIndex int, line []byte) bool {
 	}
 	value := bytes.Trim(line[colon+1:], " \t")
 	field := classifyDeliveryStatusField(line[:colon])
+	if postfixCompatible {
+		return g.addPostfix(groupIndex, line[:colon], field, value)
+	}
 	rank, allowed := deliveryStatusFieldRank(groupIndex, field)
 	if !allowed {
 		return false
@@ -395,6 +419,157 @@ func (g *deliveryStatusFieldGroup) add(groupIndex int, line []byte) bool {
 		g.lastAttemptDate = value
 	case deliveryStatusFieldFinalLogID:
 		g.finalLogID = value
+	case deliveryStatusFieldWillRetryUntil:
+		g.willRetryUntil = value
+	}
+	return true
+}
+
+// addPostfix admits exactly the historical field order emitted by Postfix
+// bounce_notify_util.c. It does not turn the generic RFC parser into an
+// order-insensitive parser.
+func (g *deliveryStatusFieldGroup) addPostfix(
+	groupIndex int,
+	name []byte,
+	field deliveryStatusField,
+	value []byte,
+) bool {
+	if groupIndex == 0 {
+		return g.addPostfixMessageField(name, field, value)
+	}
+	return g.addPostfixRecipientField(field, value)
+}
+
+// addPostfixMessageField admits one field in Postfix's exact per-message sequence.
+func (g *deliveryStatusFieldGroup) addPostfixMessageField(
+	name []byte,
+	field deliveryStatusField,
+	value []byte,
+) bool {
+	if field == deliveryStatusFieldExtension {
+		return g.addPostfixExtension(name, value)
+	}
+	var rank int
+	switch field {
+	case deliveryStatusFieldReportingMTA:
+		rank = 0
+	case deliveryStatusFieldOriginalEnvelopeID:
+		rank = 1
+	case deliveryStatusFieldArrivalDate:
+		rank = 4
+	default:
+		return false
+	}
+	bit := uint32(1) << field
+	if g.seen&bit != 0 || g.fieldCount > 0 && rank < g.lastRank ||
+		field == deliveryStatusFieldReportingMTA && g.fieldCount != 0 ||
+		field == deliveryStatusFieldOriginalEnvelopeID && !g.has(deliveryStatusFieldReportingMTA) ||
+		field == deliveryStatusFieldArrivalDate && len(g.postfixQueueID) == 0 {
+		return false
+	}
+	g.seen |= bit
+	g.lastRank = rank
+	g.fieldCount++
+	switch field {
+	case deliveryStatusFieldReportingMTA:
+		g.reportingMTA = value
+	case deliveryStatusFieldOriginalEnvelopeID:
+		g.originalEnvelopeID = value
+	case deliveryStatusFieldArrivalDate:
+		g.arrivalDate = value
+	}
+	return true
+}
+
+// addPostfixExtension admits only matching queue and sender fields in their fixed positions.
+func (g *deliveryStatusFieldGroup) addPostfixExtension(name, value []byte) bool {
+	const prefix = "x-"
+	queueSuffix := []byte("-queue-id")
+	senderSuffix := []byte("-sender")
+	if !bytes.EqualFold(name[:min(len(name), len(prefix))], []byte(prefix)) ||
+		!g.has(deliveryStatusFieldReportingMTA) || g.has(deliveryStatusFieldArrivalDate) {
+		return false
+	}
+	var mailName []byte
+	switch {
+	case len(name) > len(prefix)+len(queueSuffix) && bytes.EqualFold(name[len(name)-len(queueSuffix):], queueSuffix):
+		if len(g.postfixQueueID) != 0 || len(g.postfixSender) != 0 || g.lastRank > 2 {
+			return false
+		}
+		mailName = name[len(prefix) : len(name)-len(queueSuffix)]
+		if !validDeliveryStatusAtom(mailName) || !validDeliveryStatusAtom(value) {
+			return false
+		}
+		g.postfixQueueID = value
+		g.postfixMailName = mailName
+		g.lastRank = 2
+	case len(name) > len(prefix)+len(senderSuffix) && bytes.EqualFold(name[len(name)-len(senderSuffix):], senderSuffix):
+		if len(g.postfixQueueID) == 0 || len(g.postfixSender) != 0 || g.lastRank > 3 {
+			return false
+		}
+		mailName = name[len(prefix) : len(name)-len(senderSuffix)]
+		if !bytes.EqualFold(mailName, g.postfixMailName) ||
+			!validDeliveryStatusTypedText(value, "", false) {
+			return false
+		}
+		g.postfixSender = value
+		g.lastRank = 3
+	default:
+		return false
+	}
+	g.fieldCount++
+	return true
+}
+
+// addPostfixRecipientField admits one field in Postfix's exact per-recipient sequence.
+func (g *deliveryStatusFieldGroup) addPostfixRecipientField(
+	field deliveryStatusField,
+	value []byte,
+) bool {
+	var rank int
+	switch field {
+	case deliveryStatusFieldFinalRecipient:
+		rank = 0
+	case deliveryStatusFieldOriginalRecipient:
+		rank = 1
+	case deliveryStatusFieldAction:
+		rank = 2
+	case deliveryStatusFieldStatus:
+		rank = 3
+	case deliveryStatusFieldRemoteMTA:
+		rank = 4
+	case deliveryStatusFieldDiagnosticCode:
+		rank = 5
+	case deliveryStatusFieldWillRetryUntil:
+		rank = 6
+	default:
+		return false
+	}
+	bit := uint32(1) << field
+	if g.seen&bit != 0 || g.fieldCount > 0 && rank < g.lastRank ||
+		field == deliveryStatusFieldFinalRecipient && g.fieldCount != 0 ||
+		field == deliveryStatusFieldOriginalRecipient && !g.has(deliveryStatusFieldFinalRecipient) ||
+		field == deliveryStatusFieldAction && !g.has(deliveryStatusFieldFinalRecipient) ||
+		field == deliveryStatusFieldStatus && !g.has(deliveryStatusFieldAction) ||
+		rank >= 4 && !g.has(deliveryStatusFieldStatus) {
+		return false
+	}
+	g.seen |= bit
+	g.lastRank = rank
+	g.fieldCount++
+	switch field {
+	case deliveryStatusFieldFinalRecipient:
+		g.finalRecipient = value
+	case deliveryStatusFieldOriginalRecipient:
+		g.originalRecipient = value
+	case deliveryStatusFieldAction:
+		g.action = value
+	case deliveryStatusFieldStatus:
+		g.status = value
+	case deliveryStatusFieldRemoteMTA:
+		g.remoteMTA = value
+	case deliveryStatusFieldDiagnosticCode:
+		g.diagnosticCode = value
 	case deliveryStatusFieldWillRetryUntil:
 		g.willRetryUntil = value
 	}
@@ -502,19 +677,26 @@ func (g deliveryStatusFieldGroup) prerequisitesSeen(groupIndex int, field delive
 	}
 }
 
-func finishDeliveryStatusGroup(index int, group deliveryStatusFieldGroup, signed [][]byte) (bool, bool) {
+func finishDeliveryStatusGroup(
+	index int,
+	group deliveryStatusFieldGroup,
+	signed [][]byte,
+	postfixCompatible bool,
+) (bool, bool) {
 	if group.fieldCount == 0 {
 		return false, false
 	}
 	if index == 0 {
-		if !group.mandatoryFieldsSeen(index) || !validDeliveryStatusOptionalMessageFields(group) {
+		if !group.mandatoryFieldsSeen(index) || !validDeliveryStatusOptionalMessageFields(group) ||
+			postfixCompatible && len(group.postfixQueueID) == 0 {
 			return false, false
 		}
 		return false, validDeliveryStatusTypedText(group.reportingMTA, "", false)
 	}
 	if index > maxDeliveryStatusRecipientGroups || !group.mandatoryFieldsSeen(index) ||
 		!validDeliveryStatusAction(group.action) || !validDeliveryStatusCode(group.status) ||
-		!validDeliveryStatusOptionalRecipientFields(group) {
+		!validDeliveryStatusOptionalRecipientFields(group) ||
+		postfixCompatible && !group.has(deliveryStatusFieldDiagnosticCode) {
 		return false, false
 	}
 	finalPath, valid := deliveryStatusFinalRecipientPath(group.finalRecipient)
@@ -532,6 +714,75 @@ func finishDeliveryStatusGroup(index int, group deliveryStatusFieldGroup, signed
 		clear(originalPath)
 	}
 	return linked, true
+}
+
+// unfoldPostfixDeliveryStatus unfolds only RFC 822 continuation lines from a
+// bounded Postfix delivery-status part. Generic DSNs retain the strict
+// no-folding contract. Every unfolded logical field remains line-bounded.
+func unfoldPostfixDeliveryStatus(body []byte) ([]byte, bool) {
+	if len(body) == 0 || len(body) > maxDeliveryStatusBytes {
+		return nil, false
+	}
+	output := make([]byte, 0, len(body))
+	logicalStart := 0
+	position := 0
+	haveField := false
+	foldable := false
+	for position < len(body) {
+		relativeEnd := bytes.Index(body[position:], []byte("\r\n"))
+		lineEnd := len(body)
+		if relativeEnd >= 0 {
+			lineEnd = position + relativeEnd
+		}
+		line := body[position:lineEnd]
+		if len(line) > maxDeliveryStatusLineBytes || bytes.ContainsAny(line, "\r\n") {
+			clear(output)
+			return nil, false
+		}
+		continuation := len(line) > 0 && (line[0] == ' ' || line[0] == '\t')
+		if continuation {
+			if !haveField || !foldable || len(output) < 2 || !bytes.HasSuffix(output, []byte("\r\n")) {
+				clear(output)
+				return nil, false
+			}
+			continued := bytes.TrimLeft(line, " \t")
+			if len(continued) == 0 {
+				clear(output)
+				return nil, false
+			}
+			output = output[:len(output)-2]
+			output = append(output, ' ')
+			output = append(output, continued...)
+			if len(output)-logicalStart > maxDeliveryStatusLineBytes {
+				clear(output)
+				return nil, false
+			}
+		} else {
+			if len(line) == 0 {
+				haveField = false
+				foldable = false
+			} else {
+				haveField = true
+				colon := bytes.IndexByte(line, ':')
+				if colon < 1 {
+					clear(output)
+					return nil, false
+				}
+				field := classifyDeliveryStatusField(line[:colon])
+				foldable = field == deliveryStatusFieldRemoteMTA ||
+					field == deliveryStatusFieldDiagnosticCode
+				logicalStart = len(output)
+			}
+			output = append(output, line...)
+		}
+		if relativeEnd >= 0 {
+			output = append(output, '\r', '\n')
+			position = lineEnd + 2
+		} else {
+			position = len(body)
+		}
+	}
+	return output, true
 }
 
 // deliveryStatusFinalRecipientPath maps the raw RFC 3464 Final-Recipient

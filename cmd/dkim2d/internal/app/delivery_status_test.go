@@ -92,33 +92,24 @@ func (a *deliveryStatusFixedProfileAuthority) SignDigest(
 
 func (*deliveryStatusFixedProfileAuthority) Close() error { return nil }
 
-// TestNewDeliveryStatusRequestRejectsUntrustedShapes proves the dedicated
+// TestNewPostfixDeliveryStatusRequestRejectsUntrustedShapes proves the dedicated
 // daemon request cannot be used as a generic null-sender signing wrapper.
-func TestNewDeliveryStatusRequestRejectsUntrustedShapes(t *testing.T) {
+func TestNewPostfixDeliveryStatusRequestRejectsUntrustedShapes(t *testing.T) {
 	validOuterRecipient := [][]byte{[]byte("<postmaster@example.test>")}
 	valid := func() (DeliveryStatusRequest, error) {
-		return NewDeliveryStatusRequest(
+		return NewPostfixDeliveryStatusRequest(
 			[]byte("From: postmaster@example.test\r\n\r\n"),
 			[]byte("<>"),
 			validOuterRecipient,
 			"tenant-a",
-			FidelityRawRFC5322,
 		)
 	}
 	request, err := valid()
 	if err != nil {
-		t.Fatalf("NewDeliveryStatusRequest() error = %v", err)
+		t.Fatalf("NewPostfixDeliveryStatusRequest() error = %v", err)
 	}
 	if !bytes.Equal(request.OuterReversePath(), []byte("<>")) || len(request.OuterRecipients()) != 1 {
 		t.Fatal("valid request did not retain exact outer DSN envelope")
-	}
-	postfixRequest, err := NewDeliveryStatusRequest(
-		[]byte("From: postmaster@example.test\r\n\r\n"),
-		[]byte("<>"), validOuterRecipient, "tenant-a",
-		FidelityPostfixDSNMilterReconstructedCRLF,
-	)
-	if err != nil || postfixRequest.Fidelity() != FidelityPostfixDSNMilterReconstructedCRLF {
-		t.Fatalf("Postfix-qualified request fidelity/error = %q/%v", postfixRequest.Fidelity(), err)
 	}
 	for _, testCase := range []struct {
 		name   string
@@ -127,48 +118,47 @@ func TestNewDeliveryStatusRequestRejectsUntrustedShapes(t *testing.T) {
 		{
 			name: "non-null outer reverse path",
 			mutate: func() (DeliveryStatusRequest, error) {
-				return NewDeliveryStatusRequest([]byte("x"), []byte("<sender@example.test>"), validOuterRecipient, "tenant-a", FidelityRawRFC5322)
+				return NewPostfixDeliveryStatusRequest([]byte("x"), []byte("<sender@example.test>"), validOuterRecipient, "tenant-a")
 			},
 		},
 		{
 			name: "multiple outer recipients",
 			mutate: func() (DeliveryStatusRequest, error) {
-				return NewDeliveryStatusRequest([]byte("x"), []byte("<>"), [][]byte{[]byte("<one@example.test>"), []byte("<two@example.test>")}, "tenant-a", FidelityRawRFC5322)
+				return NewPostfixDeliveryStatusRequest([]byte("x"), []byte("<>"), [][]byte{[]byte("<one@example.test>"), []byte("<two@example.test>")}, "tenant-a")
 			},
 		},
 		{
 			name: "missing raw message",
 			mutate: func() (DeliveryStatusRequest, error) {
-				return NewDeliveryStatusRequest(nil, []byte("<>"), validOuterRecipient, "tenant-a", FidelityRawRFC5322)
+				return NewPostfixDeliveryStatusRequest(nil, []byte("<>"), validOuterRecipient, "tenant-a")
 			},
 		},
 		{
-			name: "non-raw fidelity",
+			name: "missing tenant",
 			mutate: func() (DeliveryStatusRequest, error) {
-				return NewDeliveryStatusRequest([]byte("x"), []byte("<>"), validOuterRecipient, "tenant-a", FidelityMilterReconstructedCRLF)
+				return NewPostfixDeliveryStatusRequest([]byte("x"), []byte("<>"), validOuterRecipient, "")
 			},
 		},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			if _, err := testCase.mutate(); err == nil {
-				t.Fatal("NewDeliveryStatusRequest() accepted unsafe request")
+				t.Fatal("NewPostfixDeliveryStatusRequest() accepted unsafe request")
 			}
 		})
 	}
 }
 
-// TestNewDeliveryStatusRequestNeedsNoCallerDomain proves the daemon request
+// TestNewPostfixDeliveryStatusRequestNeedsNoCallerDomain proves the daemon request
 // admits only tenant routing before authenticated embedded d= evidence exists.
-func TestNewDeliveryStatusRequestNeedsNoCallerDomain(t *testing.T) {
-	request, err := NewDeliveryStatusRequest(
+func TestNewPostfixDeliveryStatusRequestNeedsNoCallerDomain(t *testing.T) {
+	request, err := NewPostfixDeliveryStatusRequest(
 		[]byte("From: postmaster@example.test\r\n\r\n"),
 		[]byte("<>"),
 		[][]byte{[]byte("<postmaster@example.test>")},
 		"tenant-a",
-		FidelityRawRFC5322,
 	)
 	if err != nil || request.Tenant() != "tenant-a" {
-		t.Fatalf("NewDeliveryStatusRequest() request=%v error=%v", request, err)
+		t.Fatalf("NewPostfixDeliveryStatusRequest() request=%v error=%v", request, err)
 	}
 }
 
@@ -182,12 +172,11 @@ func TestSigningServiceRejectsInvalidDSNBeforePolicyAccess(t *testing.T) {
 		store:      spy,
 		clock:      time.Now,
 	}
-	request, err := NewDeliveryStatusRequest(
+	request, err := NewPostfixDeliveryStatusRequest(
 		[]byte("From: postmaster@example.test\r\n\r\nnot a DSN\r\n"),
 		[]byte("<>"),
 		[][]byte{[]byte("<alice@example.test>")},
 		"tenant-a",
-		FidelityRawRFC5322,
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -222,12 +211,11 @@ func TestSigningServiceRejectsTamperedEmbeddedDomainBeforePolicyAccess(t *testin
 	if bytes.Equal(tamperedRaw, authenticated.RawMessage()) {
 		t.Fatal("fixture contained no embedded signing domain to tamper")
 	}
-	tampered, err := NewDeliveryStatusRequest(
+	tampered, err := NewPostfixDeliveryStatusRequest(
 		tamperedRaw,
 		authenticated.OuterReversePath(),
 		authenticated.OuterRecipients(),
 		authenticated.Tenant(),
-		authenticated.Fidelity(),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -263,6 +251,54 @@ func TestSigningServiceSignsAuthenticatedDeliveryStatus(t *testing.T) {
 		len(recorder.uses) != 1 || recorder.uses[0] != signingstore.PolicyDeliveryStatus {
 		t.Fatalf("derived policy route domains=%v uses=%v acquires=%d", recorder.domains, recorder.uses, recorder.acquires)
 	}
+}
+
+// TestSigningServiceSignsPostfixOrderedDeliveryStatus reproduces the exact
+// field order emitted by Postfix bounce(8): its long-standing DSN form places
+// Postfix extension fields before Arrival-Date and Original-Recipient after
+// Final-Recipient. Only the Postfix-qualified fidelity may admit this form.
+func TestSigningServiceSignsPostfixOrderedDeliveryStatus(t *testing.T) {
+	fixture := newSigningServiceFixture(t)
+	service, err := NewSigningService(fixture.publicKeys, fixture.runtime, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	service.clock = func() time.Time { return time.Unix(1_700_000_000, 0) }
+	request := authenticatedDeliveryStatusRequest(t, service)
+	postfixRaw := bytes.Replace(
+		request.RawMessage(),
+		[]byte("Reporting-MTA: dns; "+signingServiceOriginDomain+"\r\n\r\n"+
+			"Final-Recipient: rfc822; recipient@"+signingServiceOriginDomain+"\r\n"),
+		[]byte("Reporting-MTA: dns; "+signingServiceOriginDomain+"\r\n"+
+			"Original-Envelope-Id: synthetic-envid\r\n"+
+			"X-Postfix-Queue-ID: synthetic-queue-id\r\n"+
+			"X-Postfix-Sender: rfc822; sender@"+signingServiceOriginDomain+"\r\n"+
+			"Arrival-Date: Tue, 14 Nov 2023 22:13:20 +0000 (UTC)\r\n\r\n"+
+			"Final-Recipient: rfc822; recipient@"+signingServiceOriginDomain+"\r\n"+
+			"Original-Recipient: rfc822; recipient@"+signingServiceOriginDomain+"\r\n"),
+		1,
+	)
+	postfixRaw = bytes.Replace(
+		postfixRaw,
+		[]byte("Action: failed\r\nStatus: 5.1.1\r\n"),
+		[]byte("Action: failed\r\nStatus: 5.1.1\r\n"+
+			"Diagnostic-Code: smtp; 550 5.1.1 synthetic recipient rejected\r\n"),
+		1,
+	)
+	if bytes.Equal(postfixRaw, request.RawMessage()) {
+		t.Fatal("fixture did not acquire the Postfix delivery-status field order")
+	}
+	postfixRequest, err := NewPostfixDeliveryStatusRequest(
+		postfixRaw,
+		request.OuterReversePath(),
+		request.OuterRecipients(),
+		request.Tenant(),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := service.SignDeliveryStatus(context.Background(), postfixRequest)
+	assertSigningServicePass(t, result, err, signingServiceDSNSelector)
 }
 
 // TestSigningServiceSelectsTwoDerivedDSNDomains proves one daemon instance
@@ -411,12 +447,11 @@ func authenticatedDeliveryStatusRequestForDomain(
 		"--dsn\r\nContent-Type: text/plain\r\n\r\nhuman\r\n" +
 		"--dsn\r\nContent-Type: message/delivery-status\r\n\r\nReporting-MTA: dns; " + domain + "\r\n\r\nFinal-Recipient: rfc822; recipient@" + domain + "\r\nAction: failed\r\nStatus: 5.1.1\r\n\r\n" +
 		"--dsn\r\nContent-Type: message/rfc822\r\n\r\n" + string(embedded) + "\r\n--dsn--\r\n")
-	request, err := NewDeliveryStatusRequest(
+	request, err := NewPostfixDeliveryStatusRequest(
 		outer,
 		[]byte("<>"),
 		[][]byte{[]byte("<sender@" + domain + ">")},
 		signingServiceTestTenant,
-		FidelityRawRFC5322,
 	)
 	if err != nil {
 		t.Fatal(err)

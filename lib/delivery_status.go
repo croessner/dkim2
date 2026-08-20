@@ -46,6 +46,7 @@ type DSNSigningEvidenceRequest struct {
 	outerForwardPaths [][]byte
 	identity          DSNIdentity
 	deriveIdentity    bool
+	postfixCompatible bool
 }
 
 // NewDerivedDSNSigningEvidenceRequest snapshots a DSN evidence request whose
@@ -54,6 +55,25 @@ func NewDerivedDSNSigningEvidenceRequest(outerRaw, outerReversePath []byte, oute
 	return DSNSigningEvidenceRequest{
 		outerRaw: bytes.Clone(outerRaw), outerReversePath: bytes.Clone(outerReversePath),
 		outerForwardPaths: cloneByteSlices(outerForwardPaths), deriveIdentity: true,
+	}
+}
+
+// NewPostfixDerivedDSNSigningEvidenceRequest snapshots a derived DSN evidence
+// request whose delivery-status field order may use the exact bounded form
+// emitted by Postfix bounce(8).
+//
+// Security precondition: trusted adapters must select this constructor only
+// after independently proving that Postfix bounce(8) generated the DSN. It is
+// not a parser hint for untrusted message input. Generic and non-Postfix paths
+// must use NewDerivedDSNSigningEvidenceRequest.
+func NewPostfixDerivedDSNSigningEvidenceRequest(
+	outerRaw, outerReversePath []byte,
+	outerForwardPaths [][]byte,
+) DSNSigningEvidenceRequest {
+	return DSNSigningEvidenceRequest{
+		outerRaw: bytes.Clone(outerRaw), outerReversePath: bytes.Clone(outerReversePath),
+		outerForwardPaths: cloneByteSlices(outerForwardPaths), deriveIdentity: true,
+		postfixCompatible: true,
 	}
 }
 
@@ -152,7 +172,12 @@ func (s *Signer) EvaluateDSNForSigning(ctx context.Context, request DSNSigningEv
 	if err != nil {
 		return DSNSigningEvidence{}, newSigningError(SigningErrorMalformedInput)
 	}
-	evidence, err := s.revision.EvaluateDeliveryStatus(ctx, report)
+	var evidence dsn.Evidence
+	if request.postfixCompatible {
+		evidence, err = s.revision.EvaluatePostfixDeliveryStatus(ctx, report)
+	} else {
+		evidence, err = s.revision.EvaluateDeliveryStatus(ctx, report)
+	}
 	if err != nil {
 		return DSNSigningEvidence{}, mapDSNEvidenceError(ctx, err)
 	}

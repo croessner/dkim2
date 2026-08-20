@@ -2028,18 +2028,27 @@ Outbound signing:
 10. Canonicalize DKIM2 protocol fields for signing.
 11. Insert signature values.
 
-The daemon supports outgoing delivery-status signing only through its dedicated
-DSN request, separately protected capability, and `delivery_status` policy use.
-It accepts exact raw RFC 5322 bytes or the distinct
-`postfix_dsn_milter_reconstructed_crlf` fidelity after the Postfix-only adapter
-has received exact `internal` origin from `{postfix_dsn_origin}`. The embedded
+The daemon supports outgoing delivery-status signing only through its Postfix-
+exclusive request, separately protected capability, and `delivery_status`
+policy use. Possession of that non-reusable route capability is the server-side
+attestation that the Postfix-only adapter received exact `internal` origin from
+`{postfix_dsn_origin}`. The request carries no caller-selected fidelity. The embedded
 object has no independently observed original envelope: its dedicated verifier
 marks that one check not applicable and still authenticates cryptography,
 available hashes, timestamp, custody, `d=`, `mf=`, and `rt=`. The outer DSN
 recipient must equal authenticated `mf=`, and the delivery-status domain is
 derived only from authenticated `d=` after verification. At least one RFC 3464 original or
 final recipient must match authenticated `rt=`. A generic reconstructed Milter
-message remains insufficient. The originator Milter continues to reject null
+message remains insufficient. Generic library DSNs keep strict RFC 3464 field
+order and no-folding admission. Only the Postfix-exclusive route may also
+consume bounce(8)'s exact legacy ordering of `Original-Envelope-Id`, its
+`X-<mail-name>-Queue-ID`/`Sender` extensions, `Arrival-Date`,
+`Final-Recipient`, and `Original-Recipient`, plus bounded folding of
+`Remote-MTA` and `Diagnostic-Code`; arbitrary extensions, reordering, and
+folding remain invalid. The compatibility constructor is an explicit trusted-
+adapter boundary: daemon code selects it only after authentication of the
+dedicated route capability; no API body field can enable it. Generic library
+and Exim paths remain strict, and no generic HTTP DSN route exists. The originator Milter continues to reject null
 senders and cannot use the daemon DSN route as a fallback.
 
 Revision signing:

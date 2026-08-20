@@ -84,17 +84,16 @@ func TestGenericOperationRequestsRejectNullReversePath(t *testing.T) {
 	}
 }
 
-// TestMapDeliveryStatusRequestReservesExactNullSenderEvidence proves only the
-// dedicated route can admit a raw DSN envelope, before profile resolution.
+// TestMapDeliveryStatusRequestReservesExactNullSenderEvidence proves the
+// Postfix-exclusive route admits no caller-selected representation and keeps
+// the exact outer DSN envelope before profile resolution.
 func TestMapDeliveryStatusRequestReservesExactNullSenderEvidence(t *testing.T) {
 	base := operationRequestFixture(t, []byte("From: postmaster@example.test\r\n\r\nDSN\r\n"))
-	rawFidelity := generated.RawRfc5322
 	request := generated.DSNSignRequest{
 		ApiVersion: base.ApiVersion,
 		Draft:      base.Draft,
-		Message: generated.MessageInput{
+		Message: generated.DSNMessageInput{
 			RawRfc5322Base64: base.Message.RawRfc5322Base64,
-			Fidelity:         &rawFidelity,
 		},
 		OuterSmtp: generated.SMTPInput{
 			MailFrom: mustProtectedString(t, "<>"),
@@ -106,13 +105,6 @@ func TestMapDeliveryStatusRequestReservesExactNullSenderEvidence(t *testing.T) {
 	if err != nil || string(mapped.OuterReversePath()) != "<>" {
 		t.Fatalf("MapDeliveryStatusRequest() request=%v error=%v", mapped, err)
 	}
-	postfixFidelity := generated.PostfixDsnMilterReconstructedCrlf
-	request.Message.Fidelity = &postfixFidelity
-	mapped, err = MapDeliveryStatusRequest(request)
-	if err != nil || mapped.Fidelity() != app.FidelityPostfixDSNMilterReconstructedCRLF {
-		t.Fatalf("Postfix-qualified MapDeliveryStatusRequest() request=%v error=%v", mapped, err)
-	}
-	request.Message.Fidelity = &rawFidelity
 	request.OuterSmtp.MailFrom = mustProtectedString(t, "<sender@example.test>")
 	if _, err := MapDeliveryStatusRequest(request); !IsMappingError(err, MappingInvalidContract) {
 		t.Fatalf("non-null outer path error = %v", err)
