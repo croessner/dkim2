@@ -48,6 +48,29 @@ func TestBoundedLoggerAcceptsDSNSigningRoute(t *testing.T) {
 	}
 }
 
+// TestBoundedLoggerAcceptsClosedDSNEvidenceStage proves the diagnostic event
+// admits only a fixed stage and result vocabulary.
+func TestBoundedLoggerAcceptsClosedDSNEvidenceStage(t *testing.T) {
+	var output bytes.Buffer
+	handler := &boundedJSONHandler{destination: &output, level: slog.LevelInfo, mu: &sync.Mutex{}}
+	record := slog.NewRecord(time.Now(), slog.LevelInfo, "dsn.evidence.completed", 0)
+	record.AddAttrs(
+		slog.String("operation", valueDSNSign),
+		slog.String(keyEvidenceStage, "embedded_verification"),
+		slog.String("result", valueFailure),
+	)
+	if err := handler.Handle(context.Background(), record); err != nil ||
+		!strings.Contains(output.String(), `"evidence_stage":"embedded_verification"`) {
+		t.Fatal("closed DSN evidence observation was rejected")
+	}
+	output.Reset()
+	record = slog.NewRecord(time.Now(), slog.LevelInfo, "dsn.evidence.completed", 0)
+	record.AddAttrs(slog.String("operation", valueDSNSign), slog.String(keyEvidenceStage, "private-marker"))
+	if err := handler.Handle(context.Background(), record); err == nil || output.Len() != 0 {
+		t.Fatal("arbitrary DSN evidence stage escaped")
+	}
+}
+
 type hostileLogValuer struct{}
 
 // LogValue injects a panic that admission must not evaluate.

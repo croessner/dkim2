@@ -30,8 +30,12 @@ const (
 	EvidenceErrorCodeInvalidEvaluator EvidenceErrorCode = "invalid_evaluator"
 	// EvidenceErrorCodeInvalidRequest reports an unsafe DSN evidence request shape.
 	EvidenceErrorCodeInvalidRequest EvidenceErrorCode = "invalid_request"
-	// EvidenceErrorCodeInvalidOriginal reports malformed or ambiguous embedded original bytes.
-	EvidenceErrorCodeInvalidOriginal EvidenceErrorCode = "invalid_original"
+	// EvidenceErrorCodeInvalidEmbeddedMessage reports malformed embedded RFC 5322 bytes.
+	EvidenceErrorCodeInvalidEmbeddedMessage EvidenceErrorCode = "invalid_embedded_message"
+	// EvidenceErrorCodeInvalidEmbeddedClaims reports malformed authenticated protocol claims.
+	EvidenceErrorCodeInvalidEmbeddedClaims EvidenceErrorCode = "invalid_embedded_claims"
+	// EvidenceErrorCodeDeliveryStatusLinkage reports an invalid RFC 3464 recipient link.
+	EvidenceErrorCodeDeliveryStatusLinkage EvidenceErrorCode = "delivery_status_linkage"
 	// EvidenceErrorCodeVerificationFailed reports non-passing cryptographic original evidence.
 	EvidenceErrorCodeVerificationFailed EvidenceErrorCode = "verification_failed"
 	// EvidenceErrorCodeVerificationIndeterminate reports transient or otherwise non-final verification evidence.
@@ -154,7 +158,7 @@ func (e EvidenceEvaluator) Evaluate(ctx context.Context, request EvidenceRequest
 	original := request.Report.OriginalMessage()
 	parsed, err := rawmsg.Parse(original.BodyBytes())
 	if err != nil {
-		return Evidence{}, newEvidenceError(EvidenceErrorCodeInvalidOriginal, nil)
+		return Evidence{}, newEvidenceError(EvidenceErrorCodeInvalidEmbeddedMessage, nil)
 	}
 	verificationRequest := verify.Request{
 		Message: parsed,
@@ -169,8 +173,11 @@ func (e EvidenceEvaluator) Evaluate(ctx context.Context, request EvidenceRequest
 			return Evidence{}, evidenceStatusError(result.Status())
 		}
 		evidence, evidenceErr := authenticatedEvidence(EvidenceFormComplete, parsed, result.Target())
-		if evidenceErr != nil || !deliveryStatusLinksRecipient(request.Report, evidence.recipientPaths, request.PostfixCompatibleOrder) {
-			return Evidence{}, newEvidenceError(EvidenceErrorCodeInvalidOriginal, evidenceErr)
+		if evidenceErr != nil {
+			return Evidence{}, newEvidenceError(EvidenceErrorCodeInvalidEmbeddedClaims, evidenceErr)
+		}
+		if !deliveryStatusLinksRecipient(request.Report, evidence.recipientPaths, request.PostfixCompatibleOrder) {
+			return Evidence{}, newEvidenceError(EvidenceErrorCodeDeliveryStatusLinkage, nil)
 		}
 		return evidence, nil
 	case ContentTypeRFC822Headers:
@@ -182,12 +189,15 @@ func (e EvidenceEvaluator) Evaluate(ctx context.Context, request EvidenceRequest
 			return Evidence{}, evidenceStatusError(headerEvidence.Status())
 		}
 		evidence, evidenceErr := authenticatedEvidence(EvidenceFormHeadersOnly, parsed, headerEvidence.Target())
-		if evidenceErr != nil || !deliveryStatusLinksRecipient(request.Report, evidence.recipientPaths, request.PostfixCompatibleOrder) {
-			return Evidence{}, newEvidenceError(EvidenceErrorCodeInvalidOriginal, evidenceErr)
+		if evidenceErr != nil {
+			return Evidence{}, newEvidenceError(EvidenceErrorCodeInvalidEmbeddedClaims, evidenceErr)
+		}
+		if !deliveryStatusLinksRecipient(request.Report, evidence.recipientPaths, request.PostfixCompatibleOrder) {
+			return Evidence{}, newEvidenceError(EvidenceErrorCodeDeliveryStatusLinkage, nil)
 		}
 		return evidence, nil
 	default:
-		return Evidence{}, newEvidenceError(EvidenceErrorCodeInvalidOriginal, nil)
+		return Evidence{}, newEvidenceError(EvidenceErrorCodeInvalidEmbeddedMessage, nil)
 	}
 }
 
@@ -195,7 +205,7 @@ func (e EvidenceEvaluator) Evaluate(ctx context.Context, request EvidenceRequest
 func authenticatedEvidence(form EvidenceForm, message rawmsg.Message, target verify.Target) (Evidence, error) {
 	signatures, err := signature.Extract(message)
 	if err != nil {
-		return Evidence{}, newEvidenceError(EvidenceErrorCodeInvalidOriginal, nil)
+		return Evidence{}, newEvidenceError(EvidenceErrorCodeInvalidEmbeddedClaims, nil)
 	}
 	for _, parsed := range signatures {
 		if parsed.Sequence() != target.Sequence || parsed.InstanceNumber() != target.InstanceNumber {
@@ -208,21 +218,21 @@ func authenticatedEvidence(form EvidenceForm, message rawmsg.Message, target ver
 			path, pathValid := signature.CanonicalEnvelopePath(recipient.Value(), false)
 			domain, valid := signature.CanonicalEnvelopeDomain(recipient.Value(), false)
 			if !valid || !pathValid {
-				return Evidence{}, newEvidenceError(EvidenceErrorCodeInvalidOriginal, nil)
+				return Evidence{}, newEvidenceError(EvidenceErrorCodeInvalidEmbeddedClaims, nil)
 			}
 			domains[index] = domain
 			paths[index] = path
 		}
 		mailFrom := parsed.MailFrom().Value()
 		if parsed.Domain() == "" || len(domains) == 0 || !signature.ValidEnvelopePath(mailFrom, false) {
-			return Evidence{}, newEvidenceError(EvidenceErrorCodeInvalidOriginal, nil)
+			return Evidence{}, newEvidenceError(EvidenceErrorCodeInvalidEmbeddedClaims, nil)
 		}
 		return Evidence{
 			form: form, target: target, mailFrom: bytes.Clone(mailFrom),
 			signingDomain: parsed.Domain(), recipientDomains: domains, recipientPaths: paths,
 		}, nil
 	}
-	return Evidence{}, newEvidenceError(EvidenceErrorCodeInvalidOriginal, nil)
+	return Evidence{}, newEvidenceError(EvidenceErrorCodeInvalidEmbeddedClaims, nil)
 }
 
 const (

@@ -120,6 +120,11 @@ func TestMetricsMaximumClosedCardinalityFitsExpositionCap(t *testing.T) {
 			metrics.ReplayCompleted(replay, result, time.Millisecond)
 		}
 	}
+	for _, stage := range allowedLogValues[keyEvidenceStage] {
+		for _, result := range []string{valueSuccess, valueFailure, valueTemporary, valueInternal} {
+			metrics.DSNEvidenceCompleted(stage, result)
+		}
+	}
 	for _, signal := range []string{"log", "trace", "metric"} {
 		for _, reason := range []string{"invalid", valueOverflow, valuePanic, valueExport} {
 			metrics.ObservationDropped(signal, reason)
@@ -144,12 +149,29 @@ func TestMetricsRejectArbitraryLabels(t *testing.T) {
 	metrics.HTTPStarted("private-marker.example")
 	metrics.HTTPCompleted("health", "private-marker", time.Second)
 	metrics.ProcessCompleted("private-marker", "pass", "first_seen", "accept", time.Second)
+	metrics.DSNEvidenceCompleted("private-marker", valueFailure)
 	output, err := metrics.Gather()
 	if err != nil {
 		t.Fatal("metrics gather failed")
 	}
 	if bytes.Contains(output, []byte("private-marker")) {
 		t.Fatal("arbitrary label value escaped")
+	}
+}
+
+// TestMetricsRecordClosedDSNEvidenceStage proves one bounded stage/result pair
+// creates exactly the intended low-cardinality series.
+func TestMetricsRecordClosedDSNEvidenceStage(t *testing.T) {
+	metrics, err := NewMetrics()
+	if err != nil {
+		t.Fatal("metrics construction failed")
+	}
+	metrics.DSNEvidenceCompleted("authorized", valueSuccess)
+	output, err := metrics.Gather()
+	if err != nil || !bytes.Contains(output, []byte(
+		`dkim2d_dsn_evidence_total{evidence_stage="authorized",result="success"} 1`,
+	)) {
+		t.Fatal("closed DSN evidence metric missing")
 	}
 }
 

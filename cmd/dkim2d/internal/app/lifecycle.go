@@ -539,6 +539,7 @@ func (l *Lifecycle) assembleApplication(
 		if operationErr != nil || operation == nil {
 			return nil, &LifecycleError{}
 		}
+		operation.attachObservability(startup.telemetry)
 		if preparation.Snapshot().Signing().Backend() == config.SigningFlatFile {
 			if startErr := preparation.SigningStore().StartReload(
 				preparation.Snapshot().Signing().ReloadInterval(),

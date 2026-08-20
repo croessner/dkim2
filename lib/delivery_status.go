@@ -3,6 +3,7 @@ package dkim2
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 
@@ -15,6 +16,89 @@ import (
 // DSNIdentity is the daemon-owned canonical DNS identity permitted to sign a
 // delivery-status notification.
 type DSNIdentity struct{ domain string }
+
+// DSNEvidenceStage identifies one closed content-free DSN authorization stage.
+type DSNEvidenceStage string
+
+const (
+	// DSNEvidenceStagePreflight identifies invalid evaluator or request state.
+	DSNEvidenceStagePreflight DSNEvidenceStage = "preflight"
+	// DSNEvidenceStageMIMEParse identifies outer DSN framing failure.
+	DSNEvidenceStageMIMEParse DSNEvidenceStage = "mime_parse"
+	// DSNEvidenceStageEmbeddedMessage identifies embedded RFC 5322 parsing failure.
+	DSNEvidenceStageEmbeddedMessage DSNEvidenceStage = "embedded_message"
+	// DSNEvidenceStageEmbeddedVerification identifies embedded cryptographic evidence failure.
+	DSNEvidenceStageEmbeddedVerification DSNEvidenceStage = "embedded_verification"
+	// DSNEvidenceStageEmbeddedClaims identifies invalid authenticated protocol claims.
+	DSNEvidenceStageEmbeddedClaims DSNEvidenceStage = "embedded_claims"
+	// DSNEvidenceStageDeliveryStatusLinkage identifies RFC 3464 recipient linkage failure.
+	DSNEvidenceStageDeliveryStatusLinkage DSNEvidenceStage = "delivery_status_linkage"
+	// DSNEvidenceStageOuterRecipientLinkage identifies outer recipient and mf= mismatch.
+	DSNEvidenceStageOuterRecipientLinkage DSNEvidenceStage = "outer_recipient_linkage"
+	// DSNEvidenceStageSigningDomain identifies authenticated signing-domain derivation failure.
+	DSNEvidenceStageSigningDomain DSNEvidenceStage = "signing_domain"
+	// DSNEvidenceStageAuthorized identifies completed pre-policy evidence authorization.
+	DSNEvidenceStageAuthorized DSNEvidenceStage = "authorized"
+)
+
+// Known reports whether the stage belongs to the fixed DSN evidence pipeline.
+func (s DSNEvidenceStage) Known() bool {
+	switch s {
+	case DSNEvidenceStagePreflight, DSNEvidenceStageMIMEParse,
+		DSNEvidenceStageEmbeddedMessage, DSNEvidenceStageEmbeddedVerification,
+		DSNEvidenceStageEmbeddedClaims, DSNEvidenceStageDeliveryStatusLinkage,
+		DSNEvidenceStageOuterRecipientLinkage, DSNEvidenceStageSigningDomain,
+		DSNEvidenceStageAuthorized:
+		return true
+	default:
+		return false
+	}
+}
+
+// DSNEvidenceError preserves only a closed failure stage while retaining the
+// existing public signing error through errors.Unwrap.
+type DSNEvidenceError struct {
+	stage DSNEvidenceStage
+	cause error
+}
+
+// Error returns a bounded diagnostic without message, envelope, or identity data.
+func (e *DSNEvidenceError) Error() string {
+	if e == nil || !e.stage.Known() {
+		return "dkim2 dsn evidence error"
+	}
+	return "dkim2 dsn evidence error: stage=" + string(e.stage)
+}
+
+// Unwrap preserves existing SigningError and context classification.
+func (e *DSNEvidenceError) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	return e.cause
+}
+
+// Stage returns the closed failure stage or the zero value.
+func (e *DSNEvidenceError) Stage() DSNEvidenceStage {
+	if e == nil || !e.stage.Known() {
+		return ""
+	}
+	return e.stage
+}
+
+// Format routes every formatting verb through the bounded diagnostic.
+func (e *DSNEvidenceError) Format(state fmt.State, _ rune) {
+	_, _ = io.WriteString(state, e.Error())
+}
+
+// DSNEvidenceStageOf returns a closed stage only for a typed DSN evidence failure.
+func DSNEvidenceStageOf(err error) DSNEvidenceStage {
+	var evidenceError *DSNEvidenceError
+	if errors.As(err, &evidenceError) {
+		return evidenceError.Stage()
+	}
+	return ""
+}
 
 // NewDSNIdentity validates and canonicalizes one delivery-status signing identity.
 func NewDSNIdentity(domain string) (DSNIdentity, error) {
@@ -163,14 +247,18 @@ func (s *Signer) EvaluateDSNForSigning(ctx context.Context, request DSNSigningEv
 		(!request.deriveIdentity && !request.identity.Valid()) ||
 		!bytes.Equal(request.outerReversePath, []byte("<>")) || len(request.outerForwardPaths) != 1 ||
 		len(request.outerRaw) == 0 {
-		return DSNSigningEvidence{}, newSigningError(SigningErrorInvalidRequest)
+		return DSNSigningEvidence{}, newDSNEvidenceError(
+			DSNEvidenceStagePreflight, newSigningError(SigningErrorInvalidRequest),
+		)
 	}
 	if err := ctx.Err(); err != nil {
 		return DSNSigningEvidence{}, err
 	}
 	report, err := dsn.Parse(request.outerRaw)
 	if err != nil {
-		return DSNSigningEvidence{}, newSigningError(SigningErrorMalformedInput)
+		return DSNSigningEvidence{}, newDSNEvidenceError(
+			DSNEvidenceStageMIMEParse, newSigningError(SigningErrorMalformedInput),
+		)
 	}
 	var evidence dsn.Evidence
 	if request.postfixCompatible {
@@ -182,16 +270,25 @@ func (s *Signer) EvaluateDSNForSigning(ctx context.Context, request DSNSigningEv
 		return DSNSigningEvidence{}, mapDSNEvidenceError(ctx, err)
 	}
 	if !bytes.Equal(request.outerForwardPaths[0], evidence.MailFrom()) {
-		return DSNSigningEvidence{}, newSigningError(SigningErrorAuthorizationDenied)
+		return DSNSigningEvidence{}, newDSNEvidenceError(
+			DSNEvidenceStageOuterRecipientLinkage,
+			newSigningError(SigningErrorAuthorizationDenied),
+		)
 	}
 	identity := request.identity
 	if request.deriveIdentity {
 		identity, err = NewDSNIdentity(evidence.SigningDomain())
 		if err != nil {
-			return DSNSigningEvidence{}, newSigningError(SigningErrorAuthorizationDenied)
+			return DSNSigningEvidence{}, newDSNEvidenceError(
+				DSNEvidenceStageSigningDomain,
+				newSigningError(SigningErrorAuthorizationDenied),
+			)
 		}
 	} else if evidence.SigningDomain() != identity.domain {
-		return DSNSigningEvidence{}, newSigningError(SigningErrorAuthorizationDenied)
+		return DSNSigningEvidence{}, newDSNEvidenceError(
+			DSNEvidenceStageSigningDomain,
+			newSigningError(SigningErrorAuthorizationDenied),
+		)
 	}
 	return DSNSigningEvidence{
 		raw: bytes.Clone(request.outerRaw), reversePath: bytes.Clone(request.outerReversePath),
@@ -231,11 +328,34 @@ func (s *Signer) SignDSN(ctx context.Context, request DSNSigningRequest) (Signin
 
 // mapDSNEvidenceError preserves cancellation and converts content-free DSN outcomes into the public signing vocabulary.
 func mapDSNEvidenceError(ctx context.Context, err error) error {
-	if ctx != nil && ctx.Err() != nil {
-		return ctx.Err()
+	if ctx != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil && errors.Is(err, ctxErr) {
+			return newDSNEvidenceError(DSNEvidenceStageEmbeddedVerification, ctxErr)
+		}
 	}
+	stage := DSNEvidenceStagePreflight
+	switch {
+	case dsn.IsEvidenceErrorCode(err, dsn.EvidenceErrorCodeInvalidEmbeddedMessage):
+		stage = DSNEvidenceStageEmbeddedMessage
+	case dsn.IsEvidenceErrorCode(err, dsn.EvidenceErrorCodeVerificationFailed),
+		dsn.IsEvidenceErrorCode(err, dsn.EvidenceErrorCodeVerificationIndeterminate):
+		stage = DSNEvidenceStageEmbeddedVerification
+	case dsn.IsEvidenceErrorCode(err, dsn.EvidenceErrorCodeInvalidEmbeddedClaims):
+		stage = DSNEvidenceStageEmbeddedClaims
+	case dsn.IsEvidenceErrorCode(err, dsn.EvidenceErrorCodeDeliveryStatusLinkage):
+		stage = DSNEvidenceStageDeliveryStatusLinkage
+	}
+	code := SigningErrorAuthorizationDenied
 	if dsn.IsEvidenceErrorCode(err, dsn.EvidenceErrorCodeVerificationIndeterminate) {
-		return newSigningError(SigningErrorCallbackTemporary)
+		code = SigningErrorCallbackTemporary
 	}
-	return newSigningError(SigningErrorAuthorizationDenied)
+	return newDSNEvidenceError(stage, newSigningError(code))
+}
+
+// newDSNEvidenceError binds a closed diagnostic stage to an existing bounded cause.
+func newDSNEvidenceError(stage DSNEvidenceStage, cause error) error {
+	if !stage.Known() || cause == nil {
+		return newSigningError(SigningErrorInternalInvariant)
+	}
+	return &DSNEvidenceError{stage: stage, cause: cause}
 }

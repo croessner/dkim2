@@ -92,10 +92,12 @@ func TestRuntimeOwnsClosedDisabledTelemetry(t *testing.T) {
 		t.Fatal("test observation invalid")
 	}
 	runtime.Observe(context.Background(), event)
+	runtime.ObserveDSNEvidence("embedded_verification", valueFailure)
 	output, gatherErr := runtime.Metrics().Gather()
 	if gatherErr != nil ||
 		!strings.Contains(string(output), `dkim2d_dns_lookups_total{cache_result="not_used",dns_result="`+valueFound+`"} 1`) ||
 		!strings.Contains(string(output), `dkim2d_observation_dropped_total{reason_class="invalid",signal="log"} 1`) ||
+		!strings.Contains(string(output), `dkim2d_dsn_evidence_total{evidence_stage="embedded_verification",result="failure"} 1`) ||
 		!strings.Contains(string(output), "dkim2d_readiness 1") {
 		t.Fatal("combined runtime did not project closed metrics")
 	}
@@ -107,6 +109,10 @@ func TestRuntimeOwnsClosedDisabledTelemetry(t *testing.T) {
 	}
 	if bytes.Contains(logs.Bytes(), []byte("recipient@example.test")) {
 		t.Fatal("runtime telemetry exposed identity input")
+	}
+	if !bytes.Contains(logs.Bytes(), []byte(`"msg":"dsn.evidence.completed"`)) ||
+		bytes.Contains(logs.Bytes(), []byte("private-marker")) {
+		t.Fatal("runtime omitted or widened DSN evidence diagnostics")
 	}
 }
 

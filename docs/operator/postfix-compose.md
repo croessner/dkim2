@@ -145,6 +145,15 @@ serve multiple domains without trusting the outer envelope or caller-selected
 domain. Missing, ambiguous, unavailable, or mismatched policy/profile data
 fails closed.
 
+For a rejected DSN before policy resolution, inspect the single
+`dsn.evidence.completed` log event or the matching
+`dkim2d_dsn_evidence_total{evidence_stage=...,result=...}` counter. The closed
+stage distinguishes outer MIME parsing, embedded-message parsing or
+verification, RFC 3464 linkage, outer-recipient linkage, and signing-domain
+derivation without logging the domain, selector, address, queue ID, signature,
+or message bytes. `authorized` proves evidence completed before datasource
+acquisition; it does not by itself prove policy resolution or signing.
+
 ### Postfix DSN compatibility upgrade
 
 This is a closed contract change, not a rolling-compatible configuration

@@ -3,6 +3,7 @@ package app
 import (
 	"bytes"
 	"context"
+	"errors"
 	"time"
 
 	"github.com/croessner/dkim2"
@@ -69,9 +70,11 @@ func (r DeliveryStatusRequest) GoString() string { return r.String() }
 func (s *SigningService) SignDeliveryStatus(ctx context.Context, request DeliveryStatusRequest) (OperationResult, error) {
 	if s == nil || ctx == nil || s.store == nil || nilInterface(s.publicKeys) || s.clock == nil ||
 		len(request.raw) == 0 {
+		s.observeDSNEvidence(dkim2.DSNEvidenceStagePreflight, telemetryResultInternal)
 		return OperationResult{}, &DomainError{}
 	}
 	if err := ctx.Err(); err != nil {
+		s.observeDSNEvidence(dkim2.DSNEvidenceStagePreflight, telemetryResultTemporary)
 		return OperationResult{}, err
 	}
 	operationTime := s.clock().UTC()
@@ -83,6 +86,7 @@ func (s *SigningService) SignDeliveryStatus(ctx context.Context, request Deliver
 		dkim2.WithSigningClock(func() time.Time { return operationTime }),
 	)
 	if err != nil {
+		s.observeDSNEvidence(dkim2.DSNEvidenceStagePreflight, telemetryResultInternal)
 		return OperationResult{}, &DomainError{}
 	}
 	evidenceRequest := dkim2.NewPostfixDerivedDSNSigningEvidenceRequest(
@@ -90,8 +94,10 @@ func (s *SigningService) SignDeliveryStatus(ctx context.Context, request Deliver
 	)
 	evidence, err := evidenceSigner.EvaluateDSNForSigning(ctx, evidenceRequest)
 	if err != nil {
+		s.observeDSNEvidenceFailure(err)
 		return operationFailureFromError(OperationDeliveryStatus, err)
 	}
+	s.observeDSNEvidence(dkim2.DSNEvidenceStageAuthorized, "success")
 	lease, err := s.store.Acquire(ctx)
 	if err != nil {
 		return NewOperationResult(OperationDeliveryStatus, OperationTemperror, OperationTempfail, nil)
@@ -147,4 +153,34 @@ func (s *SigningService) SignDeliveryStatus(ctx context.Context, request Deliver
 		}
 	}
 	return NewOperationResult(OperationDeliveryStatus, OperationPass, OperationAccept, fields)
+}
+
+// observeDSNEvidenceFailure maps one typed pre-policy error to a closed stage/result pair.
+func (s *SigningService) observeDSNEvidenceFailure(err error) {
+	stage := dkim2.DSNEvidenceStageOf(err)
+	if !stage.Known() {
+		stage = dkim2.DSNEvidenceStagePreflight
+	}
+	result := telemetryResultFailure
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		result = "temporary"
+	} else {
+		var signingError *dkim2.SigningError
+		if !errors.As(err, &signingError) {
+			result = "internal"
+		} else if signingError.Code() == dkim2.SigningErrorCallbackTemporary {
+			result = "temporary"
+		}
+	}
+	s.observeDSNEvidence(stage, result)
+}
+
+// observeDSNEvidence contains the optional telemetry boundary and its panics.
+func (s *SigningService) observeDSNEvidence(stage dkim2.DSNEvidenceStage, result string) {
+	if s != nil && !nilInterface(s.dsnObserver) {
+		func() {
+			defer func() { _ = recover() }()
+			s.dsnObserver.ObserveDSNEvidence(string(stage), result)
+		}()
+	}
 }

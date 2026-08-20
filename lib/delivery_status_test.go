@@ -4,8 +4,28 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
+	"sync"
 	"testing"
+	"time"
+
+	"github.com/croessner/dkim2/internal/dsn"
 )
+
+type cancelAfterEvidenceError struct {
+	cause  error
+	cancel context.CancelFunc
+	once   sync.Once
+}
+
+// Error returns a bounded test-only error description.
+func (*cancelAfterEvidenceError) Error() string { return "independent DSN evidence failure" }
+
+// Unwrap races cancellation only after the mapper has observed an independent failure.
+func (e *cancelAfterEvidenceError) Unwrap() error {
+	e.once.Do(e.cancel)
+	return e.cause
+}
 
 // TestDSNSigningRequiresDedicatedEvidenceAndRoute proves that a structurally
 // valid, cryptographically authenticated DSN can use only its dedicated
@@ -131,6 +151,116 @@ func TestDSNEvidenceRequiresOuterRecipientToMatchHighestMailFrom(t *testing.T) {
 	))
 	if !errors.Is(err, newSigningError(SigningErrorAuthorizationDenied)) {
 		t.Fatalf("delivery-status recipient mismatch error = %v", err)
+	}
+}
+
+// TestDSNEvidenceErrorsExposeOnlyClosedPipelineStages proves diagnostic
+// observability distinguishes pre-policy failures without retaining content.
+func TestDSNEvidenceErrorsExposeOnlyClosedPipelineStages(t *testing.T) {
+	fixture := newPublicSigningFixture(t)
+	original := signDSNOriginal(t, fixture)
+	outer := []byte("From: postmaster@example.test\r\n" +
+		"Content-Type: multipart/report; report-type=delivery-status; boundary=dsn\r\n\r\n" +
+		"--dsn\r\nContent-Type: text/plain\r\n\r\nhuman\r\n" +
+		"--dsn\r\nContent-Type: message/delivery-status\r\n\r\nReporting-MTA: dns; example.test\r\n\r\nFinal-Recipient: rfc822; bob@example.test\r\nAction: failed\r\nStatus: 5.1.1\r\n\r\n" +
+		"--dsn\r\nContent-Type: message/rfc822\r\n\r\n" + string(original) + "\r\n--dsn--\r\n")
+	identity, err := NewDSNIdentity("example.test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	otherIdentity, err := NewDSNIdentity("other.example.test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cases := []struct {
+		name      string
+		raw       []byte
+		recipient []byte
+		identity  DSNIdentity
+		wantStage DSNEvidenceStage
+	}{
+		{name: "mime", raw: []byte("private-marker"), recipient: []byte("<alice@example.test>"), identity: identity, wantStage: DSNEvidenceStageMIMEParse},
+		{name: "embedded-message", raw: bytes.Replace(outer, original, []byte("private-marker\r\n"), 1), recipient: []byte("<alice@example.test>"), identity: identity, wantStage: DSNEvidenceStageEmbeddedMessage},
+		{name: "embedded-verification", raw: bytes.Replace(outer, []byte("original body"), []byte("private-marker"), 1), recipient: []byte("<alice@example.test>"), identity: identity, wantStage: DSNEvidenceStageEmbeddedVerification},
+		{name: "delivery-status-linkage", raw: bytes.Replace(outer, []byte("bob@example.test"), []byte("other@example.test"), 1), recipient: []byte("<alice@example.test>"), identity: identity, wantStage: DSNEvidenceStageDeliveryStatusLinkage},
+		{name: "outer-recipient-linkage", raw: outer, recipient: []byte("<other@example.test>"), identity: identity, wantStage: DSNEvidenceStageOuterRecipientLinkage},
+		{name: "signing-domain", raw: outer, recipient: []byte("<alice@example.test>"), identity: otherIdentity, wantStage: DSNEvidenceStageSigningDomain},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			_, err := fixture.facade.EvaluateDSNForSigning(context.Background(), NewDSNSigningEvidenceRequest(
+				testCase.raw, []byte("<>"), [][]byte{testCase.recipient}, testCase.identity,
+			))
+			if DSNEvidenceStageOf(err) != testCase.wantStage ||
+				!errors.Is(err, newSigningError(SigningErrorAuthorizationDenied)) && testCase.wantStage != DSNEvidenceStageMIMEParse {
+				t.Fatalf("stage=%q error=%v", DSNEvidenceStageOf(err), err)
+			}
+			if bytes.Contains([]byte(err.Error()), []byte("private-marker")) ||
+				bytes.Contains([]byte(fmt.Sprintf("%#v", err)), []byte("private-marker")) {
+				t.Fatal("evidence diagnostic retained input")
+			}
+		})
+	}
+}
+
+// TestDSNEvidencePreservesVerificationStageOnInFlightCancellation proves a
+// provider cancellation after message parsing remains distinguishable from
+// request preflight while preserving context error classification.
+func TestDSNEvidencePreservesVerificationStageOnInFlightCancellation(t *testing.T) {
+	fixture := newPublicSigningFixture(t)
+	original := signDSNOriginal(t, fixture)
+	outer := []byte("From: postmaster@example.test\r\n" +
+		"Content-Type: multipart/report; report-type=delivery-status; boundary=dsn\r\n\r\n" +
+		"--dsn\r\nContent-Type: text/plain\r\n\r\nhuman\r\n" +
+		"--dsn\r\nContent-Type: message/delivery-status\r\n\r\nReporting-MTA: dns; example.test\r\n\r\nFinal-Recipient: rfc822; bob@example.test\r\nAction: failed\r\nStatus: 5.1.1\r\n\r\n" +
+		"--dsn\r\nContent-Type: message/rfc822\r\n\r\n" + string(original) + "\r\n--dsn--\r\n")
+	ctx, cancel := context.WithCancel(context.Background())
+	lookups := 0
+	provider := publicProviderFunc(func(providerContext context.Context, _ PublicKeyQuery) (PublicKeyResult, error) {
+		lookups++
+		cancel()
+		return PublicKeyResult{}, providerContext.Err()
+	})
+	signer, err := NewSigner(
+		provider, NewRequestRouteAuthority(), fixture.authorizer, fixture.provider,
+		WithSigningClock(func() time.Time { return time.Unix(1_700_000_000, 0) }),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = signer.EvaluateDSNForSigning(ctx, NewPostfixDerivedDSNSigningEvidenceRequest(
+		outer, []byte("<>"), [][]byte{[]byte("<alice@example.test>")},
+	))
+	if !errors.Is(err, context.Canceled) ||
+		DSNEvidenceStageOf(err) != DSNEvidenceStageEmbeddedVerification || lookups != 1 {
+		t.Fatalf("stage=%q lookups=%d error=%v", DSNEvidenceStageOf(err), lookups, err)
+	}
+}
+
+// TestDSNEvidencePrefersIndependentFailureOverRacedCancellation proves a
+// cancellation observed after a completed linkage failure cannot overwrite
+// that failure's actual pipeline stage or response classification.
+func TestDSNEvidencePrefersIndependentFailureOverRacedCancellation(t *testing.T) {
+	fixture := newPublicSigningFixture(t)
+	original := signDSNOriginal(t, fixture)
+	outer := []byte("From: postmaster@example.test\r\n" +
+		"Content-Type: multipart/report; report-type=delivery-status; boundary=dsn\r\n\r\n" +
+		"--dsn\r\nContent-Type: text/plain\r\n\r\nhuman\r\n" +
+		"--dsn\r\nContent-Type: message/delivery-status\r\n\r\nReporting-MTA: dns; example.test\r\n\r\nFinal-Recipient: rfc822; other@example.test\r\nAction: failed\r\nStatus: 5.1.1\r\n\r\n" +
+		"--dsn\r\nContent-Type: message/rfc822\r\n\r\n" + string(original) + "\r\n--dsn--\r\n")
+	report, err := dsn.Parse(outer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, evidenceErr := fixture.facade.revision.EvaluatePostfixDeliveryStatus(context.Background(), report)
+	if !dsn.IsEvidenceErrorCode(evidenceErr, dsn.EvidenceErrorCodeDeliveryStatusLinkage) {
+		t.Fatalf("evidence error=%v", evidenceErr)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	mapped := mapDSNEvidenceError(ctx, &cancelAfterEvidenceError{cause: evidenceErr, cancel: cancel})
+	if !errors.Is(ctx.Err(), context.Canceled) || errors.Is(mapped, context.Canceled) ||
+		DSNEvidenceStageOf(mapped) != DSNEvidenceStageDeliveryStatusLinkage {
+		t.Fatalf("stage=%q context=%v error=%v", DSNEvidenceStageOf(mapped), ctx.Err(), mapped)
 	}
 }
 

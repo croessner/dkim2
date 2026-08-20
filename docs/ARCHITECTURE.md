@@ -1171,6 +1171,8 @@ Default logs and traces may carry:
 - Recipient count bucket.
 - Signature count bucket.
 - Chain length bucket.
+- For DSN signing only, one terminal pre-policy evidence stage from the closed
+  parser/verification/linkage vocabulary and its result class.
 
 The local Milter operator log additionally carries a bounded, independently
 validated processed-domain projection on `message.completed`. Inbound uses

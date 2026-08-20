@@ -17,9 +17,21 @@ const signingRouteScope = "dkim2d-local-signing"
 // SigningService composes exact signing-policy resolution with request-scoped
 // route, authorization, verification, and private signing.
 type SigningService struct {
-	publicKeys dkim2.PublicKeyProvider
-	store      signingAuthority
-	clock      func() time.Time
+	publicKeys  dkim2.PublicKeyProvider
+	store       signingAuthority
+	clock       func() time.Time
+	dsnObserver dsnEvidenceObserver
+}
+
+type dsnEvidenceObserver interface {
+	ObserveDSNEvidence(string, string)
+}
+
+// attachObservability binds the instance-owned observer before publication.
+func (s *SigningService) attachObservability(runtime dsnEvidenceObserver) {
+	if s != nil {
+		s.dsnObserver = runtime
+	}
 }
 
 type signingAuthority interface {

@@ -38,6 +38,7 @@ type Metrics struct {
 	replayDuration  *prometheus.HistogramVec
 	datasource      *prometheus.CounterVec
 	datasourceTime  *prometheus.HistogramVec
+	dsnEvidence     *prometheus.CounterVec
 	dropped         *prometheus.CounterVec
 
 	readyTerminal atomic.Bool
@@ -104,6 +105,10 @@ func NewMetrics() (*Metrics, error) {
 			Help:    "Bounded datasource operation duration.",
 			Buckets: append([]float64(nil), dnsReplayBuckets...),
 		}, []string{keyProvider, keyOperation, keyResult}),
+		dsnEvidence: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "dkim2d_dsn_evidence_total",
+			Help: "Completed content-free DSN evidence stages.",
+		}, []string{keyEvidenceStage, keyResult}),
 		dropped: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "dkim2d_observation_dropped_total",
 			Help: "Contained observation drops.",
@@ -113,7 +118,7 @@ func NewMetrics() (*Metrics, error) {
 		metrics.readiness, metrics.httpRequests, metrics.httpDuration,
 		metrics.httpInFlight, metrics.process, metrics.processDuration,
 		metrics.policy, metrics.dns, metrics.dnsDuration, metrics.replay,
-		metrics.replayDuration, metrics.datasource, metrics.datasourceTime,
+		metrics.replayDuration, metrics.datasource, metrics.datasourceTime, metrics.dsnEvidence,
 		metrics.dropped,
 	}
 	for _, collector := range collectors {
@@ -123,6 +128,16 @@ func NewMetrics() (*Metrics, error) {
 	}
 	metrics.readiness.Set(0)
 	return metrics, nil
+}
+
+// DSNEvidenceCompleted records one terminal pre-policy DSN evidence stage.
+func (m *Metrics) DSNEvidenceCompleted(stage, result string) {
+	defer containMetricPanic()
+	if m == nil || !closedMetricValue(keyEvidenceStage, stage) ||
+		!closedMetricValue(keyResult, result) {
+		return
+	}
+	m.dsnEvidence.WithLabelValues(stage, result).Inc()
 }
 
 // DatasourceCompleted records one closed provider lifecycle operation.

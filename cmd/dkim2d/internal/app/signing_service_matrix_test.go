@@ -3,6 +3,7 @@ package app
 import (
 	"bytes"
 	"context"
+	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
@@ -39,14 +40,26 @@ const (
 	signingServiceDSNSelector             = "dsn"
 	signingServiceAlternateOriginSelector = "alternate-origin"
 	signingServiceAlternateDSNSelector    = "alternate-dsn"
+	signingServiceOriginEdHandle          = "origin-ed-key"
+	signingServiceDSNEdHandle             = "dsn-ed-key"
+	signingServiceOriginEdSelector        = "origin-ed"
+	signingServiceDSNEdSelector           = "dsn-ed"
 	signingServiceDomainField             = "domain"
 	signingServiceStrictValue             = "strict"
 	signingServiceNotFoundCase            = "not found"
 	signingServiceInactiveCase            = "inactive"
+	signingServiceAlgorithmField          = "algorithm"
+	signingServicePublicSPKIField         = "public_key_spki"
+	signingServiceHandleIDField           = "handle_id"
+	signingServiceTenantIDField           = "tenant_id"
+	signingServiceUseField                = "use"
+	signingServiceEd25519Algorithm        = "ed25519-sha256"
+	signingServiceSelectorField           = "selector"
 )
 
 type signingServicePublicKeys struct {
-	keys map[string]*rsa.PublicKey
+	keys   map[string]*rsa.PublicKey
+	edKeys map[string]ed25519.PublicKey
 }
 
 // LookupPublicKey returns the exact selector-bound public fixture credential.
@@ -62,8 +75,16 @@ func (p signingServicePublicKeys) LookupPublicKey(
 	} else if query.Selector() == signingServiceTransitSelector {
 		expectedDomain = signingServiceTransitDomain
 	}
-	if !found || query.SigningDomain() != expectedDomain ||
-		query.Algorithm() != dkim2.AlgorithmRSASHA256 {
+	if query.Selector() == signingServiceOriginEdSelector ||
+		query.Selector() == signingServiceDSNEdSelector {
+		edKey, edFound := p.edKeys[query.Selector()]
+		if !edFound || query.SigningDomain() != expectedDomain ||
+			query.Algorithm() != dkim2.AlgorithmEd25519SHA256 {
+			return dkim2.MissingPublicKey(query.Algorithm()), nil
+		}
+		return dkim2.FoundEd25519PublicKey(edKey), nil
+	}
+	if !found || query.SigningDomain() != expectedDomain || query.Algorithm() != dkim2.AlgorithmRSASHA256 {
 		return dkim2.MissingPublicKey(query.Algorithm()), nil
 	}
 	return dkim2.FoundRSAPublicKey(key), nil
@@ -883,6 +904,12 @@ func signingServiceRawMessage() []byte {
 
 // newSigningServiceFixture publishes protected originator and transit policies.
 func newSigningServiceFixture(t *testing.T) signingServiceFixture {
+	return newSigningServiceFixtureWithDualCredentials(t, false)
+}
+
+// newSigningServiceFixtureWithDualCredentials optionally adds canonical
+// RSA-then-Ed25519 originator and delivery-status credential pairs.
+func newSigningServiceFixtureWithDualCredentials(t *testing.T, dual bool) signingServiceFixture {
 	t.Helper()
 	root := t.TempDir()
 	originKey := newSigningServiceRSAKey(t)
@@ -890,28 +917,64 @@ func newSigningServiceFixture(t *testing.T) signingServiceFixture {
 	dsnKey := newSigningServiceRSAKey(t)
 	alternateOriginKey := newSigningServiceRSAKey(t)
 	alternateDSNKey := newSigningServiceRSAKey(t)
+	var originEdPrivate ed25519.PrivateKey
+	var originEdPublic ed25519.PublicKey
+	var dsnEdPrivate ed25519.PrivateKey
+	var dsnEdPublic ed25519.PublicKey
+	if dual {
+		var err error
+		originEdPublic, originEdPrivate, err = ed25519.GenerateKey(rand.Reader)
+		if err != nil {
+			t.Fatalf("ed25519.GenerateKey(origin) error = %v", err)
+		}
+		dsnEdPublic, dsnEdPrivate, err = ed25519.GenerateKey(rand.Reader)
+		if err != nil {
+			t.Fatalf("ed25519.GenerateKey(DSN) error = %v", err)
+		}
+	}
 	originSPKI := signingServiceSPKI(t, &originKey.PublicKey)
 	transitSPKI := signingServiceSPKI(t, &transitKey.PublicKey)
 	dsnSPKI := signingServiceSPKI(t, &dsnKey.PublicKey)
 	alternateOriginSPKI := signingServiceSPKI(t, &alternateOriginKey.PublicKey)
 	alternateDSNSPKI := signingServiceSPKI(t, &alternateDSNKey.PublicKey)
+	originProfile := signingServiceProfile(
+		"origin-profile", signingServiceOriginDomain, signingServiceOriginHandle,
+		signingServiceOriginSelector, originSPKI,
+	)
+	dsnProfile := signingServiceProfile(
+		"dsn-profile", signingServiceOriginDomain, signingServiceDSNHandle,
+		signingServiceDSNSelector, dsnSPKI,
+	)
+	handles := []any{
+		map[string]any{"id": signingServiceOriginHandle},
+		map[string]any{"id": signingServiceTransitHandle},
+		map[string]any{"id": signingServiceDSNHandle},
+		map[string]any{"id": signingServiceAlternateOriginHandle},
+		map[string]any{"id": signingServiceAlternateDSNHandle},
+	}
+	if dual {
+		originEdSPKI := signingServiceAnySPKI(t, originEdPublic)
+		dsnEdSPKI := signingServiceAnySPKI(t, dsnEdPublic)
+		originProfile["credentials"] = append(originProfile["credentials"].([]any), map[string]any{
+			signingServiceAlgorithmField: signingServiceEd25519Algorithm, signingServiceSelectorField: signingServiceOriginEdSelector,
+			signingServicePublicSPKIField: base64.StdEncoding.EncodeToString(originEdSPKI),
+			signingServiceHandleIDField:   signingServiceOriginEdHandle,
+		})
+		dsnProfile["credentials"] = append(dsnProfile["credentials"].([]any), map[string]any{
+			signingServiceAlgorithmField: signingServiceEd25519Algorithm, signingServiceSelectorField: signingServiceDSNEdSelector,
+			signingServicePublicSPKIField: base64.StdEncoding.EncodeToString(dsnEdSPKI),
+			signingServiceHandleIDField:   signingServiceDSNEdHandle,
+		})
+		handles = append(handles,
+			map[string]any{"id": signingServiceOriginEdHandle},
+			map[string]any{"id": signingServiceDSNEdHandle},
+		)
+	}
 	datasource := map[string]any{
 		"version": "dkim2-datasource-v1",
-		"handles": []any{
-			map[string]any{"id": signingServiceOriginHandle},
-			map[string]any{"id": signingServiceTransitHandle},
-			map[string]any{"id": signingServiceDSNHandle},
-			map[string]any{"id": signingServiceAlternateOriginHandle},
-			map[string]any{"id": signingServiceAlternateDSNHandle},
-		},
+		"handles": handles,
 		"profiles": []any{
-			signingServiceProfile(
-				"origin-profile",
-				signingServiceOriginDomain,
-				signingServiceOriginHandle,
-				signingServiceOriginSelector,
-				originSPKI,
-			),
+			originProfile,
 			signingServiceProfile(
 				"transit-profile",
 				signingServiceTransitDomain,
@@ -919,13 +982,7 @@ func newSigningServiceFixture(t *testing.T) signingServiceFixture {
 				signingServiceTransitSelector,
 				transitSPKI,
 			),
-			signingServiceProfile(
-				"dsn-profile",
-				signingServiceOriginDomain,
-				signingServiceDSNHandle,
-				signingServiceDSNSelector,
-				dsnSPKI,
-			),
+			dsnProfile,
 			signingServiceProfile(
 				"alternate-origin-profile",
 				signingServiceAlternateDomain,
@@ -959,45 +1016,32 @@ func newSigningServiceFixture(t *testing.T) signingServiceFixture {
 			),
 		},
 	}
+	manifestEntries := []any{
+		signingServiceManifestEntry(
+			signingServiceOriginDomain, signingServiceOriginHandle, "originator", "origin.pem", originSPKI,
+		),
+		signingServiceManifestEntry(
+			signingServiceTransitDomain, signingServiceTransitHandle, "ordinary_transit", "transit.pem", transitSPKI,
+		),
+		signingServiceManifestEntry(
+			signingServiceOriginDomain, signingServiceDSNHandle, "delivery_status", "dsn.pem", dsnSPKI,
+		),
+		signingServiceManifestEntry(
+			signingServiceAlternateDomain, signingServiceAlternateOriginHandle, "originator", "alternate-origin.pem", alternateOriginSPKI,
+		),
+		signingServiceManifestEntry(
+			signingServiceAlternateDomain, signingServiceAlternateDSNHandle, "delivery_status", "alternate-dsn.pem", alternateDSNSPKI,
+		),
+	}
+	if dual {
+		manifestEntries = append(manifestEntries,
+			signingServiceEdManifestEntry(t, signingServiceOriginDomain, signingServiceOriginEdHandle, "originator", "origin-ed.pem", originEdPublic),
+			signingServiceEdManifestEntry(t, signingServiceOriginDomain, signingServiceDSNEdHandle, "delivery_status", "dsn-ed.pem", dsnEdPublic),
+		)
+	}
 	manifest := map[string]any{
 		"version": "dkim2-private-keys-v1",
-		"entries": []any{
-			signingServiceManifestEntry(
-				signingServiceOriginDomain,
-				signingServiceOriginHandle,
-				"originator",
-				"origin.pem",
-				originSPKI,
-			),
-			signingServiceManifestEntry(
-				signingServiceTransitDomain,
-				signingServiceTransitHandle,
-				"ordinary_transit",
-				"transit.pem",
-				transitSPKI,
-			),
-			signingServiceManifestEntry(
-				signingServiceOriginDomain,
-				signingServiceDSNHandle,
-				"delivery_status",
-				"dsn.pem",
-				dsnSPKI,
-			),
-			signingServiceManifestEntry(
-				signingServiceAlternateDomain,
-				signingServiceAlternateOriginHandle,
-				"originator",
-				"alternate-origin.pem",
-				alternateOriginSPKI,
-			),
-			signingServiceManifestEntry(
-				signingServiceAlternateDomain,
-				signingServiceAlternateDSNHandle,
-				"delivery_status",
-				"alternate-dsn.pem",
-				alternateDSNSPKI,
-			),
-		},
+		"entries": manifestEntries,
 	}
 	writeSigningServiceJSON(t, filepath.Join(root, "datasource.json"), datasource)
 	writeSigningServiceJSON(t, filepath.Join(root, "manifest.json"), manifest)
@@ -1006,6 +1050,10 @@ func newSigningServiceFixture(t *testing.T) signingServiceFixture {
 	writeSigningServicePrivateKey(t, filepath.Join(root, "dsn.pem"), dsnKey)
 	writeSigningServicePrivateKey(t, filepath.Join(root, "alternate-origin.pem"), alternateOriginKey)
 	writeSigningServicePrivateKey(t, filepath.Join(root, "alternate-dsn.pem"), alternateDSNKey)
+	if dual {
+		writeSigningServicePrivateKey(t, filepath.Join(root, "origin-ed.pem"), originEdPrivate)
+		writeSigningServicePrivateKey(t, filepath.Join(root, "dsn-ed.pem"), dsnEdPrivate)
+	}
 	if err := os.Chmod(root, 0o500); err != nil {
 		t.Fatalf("os.Chmod(root) error = %v", err)
 	}
@@ -1030,6 +1078,9 @@ func newSigningServiceFixture(t *testing.T) signingServiceFixture {
 			signingServiceDSNSelector:             &dsnKey.PublicKey,
 			signingServiceAlternateOriginSelector: &alternateOriginKey.PublicKey,
 			signingServiceAlternateDSNSelector:    &alternateDSNKey.PublicKey,
+		}, edKeys: map[string]ed25519.PublicKey{
+			signingServiceOriginEdSelector: originEdPublic,
+			signingServiceDSNEdSelector:    dsnEdPublic,
 		}},
 	}
 }
@@ -1046,12 +1097,37 @@ func newSigningServiceRSAKey(t *testing.T) *rsa.PrivateKey {
 
 // signingServiceSPKI returns one canonical public credential encoding.
 func signingServiceSPKI(t *testing.T, key *rsa.PublicKey) []byte {
+	return signingServiceAnySPKI(t, key)
+}
+
+// signingServiceAnySPKI returns one canonical public credential encoding.
+func signingServiceAnySPKI(t *testing.T, key any) []byte {
 	t.Helper()
 	spki, err := x509.MarshalPKIXPublicKey(key)
 	if err != nil {
 		t.Fatalf("x509.MarshalPKIXPublicKey() error = %v", err)
 	}
 	return spki
+}
+
+// signingServiceEdManifestEntry binds one Ed25519 private key to one use.
+func signingServiceEdManifestEntry(
+	t *testing.T,
+	domain string,
+	handle string,
+	use string,
+	privateFile string,
+	publicKey ed25519.PublicKey,
+) map[string]any {
+	t.Helper()
+	spki := signingServiceAnySPKI(t, publicKey)
+	digest := sha256.Sum256(spki)
+	return map[string]any{
+		signingServiceTenantIDField: signingServiceTestTenant, signingServiceDomainField: domain,
+		signingServiceUseField: use, signingServiceHandleIDField: handle, signingServiceAlgorithmField: signingServiceEd25519Algorithm,
+		"public_spki_sha256": base64.StdEncoding.EncodeToString(digest[:]),
+		"private_key_file":   privateFile,
+	}
 }
 
 // signingServiceProfile returns one exact datasource profile document.
@@ -1067,10 +1143,10 @@ func signingServiceProfile(
 		signingServiceDomainField: domain,
 		"status":                  "active",
 		"credentials": []any{map[string]any{
-			"algorithm":       "rsa-sha256",
-			"selector":        selector,
-			"public_key_spki": base64.StdEncoding.EncodeToString(spki),
-			"handle_id":       handle,
+			signingServiceAlgorithmField:  "rsa-sha256",
+			signingServiceSelectorField:   selector,
+			signingServicePublicSPKIField: base64.StdEncoding.EncodeToString(spki),
+			signingServiceHandleIDField:   handle,
 		}},
 	}
 }
@@ -1078,13 +1154,13 @@ func signingServiceProfile(
 // signingServicePolicy returns one exact datasource policy document.
 func signingServicePolicy(domain string, use string, profile string) map[string]any {
 	return map[string]any{
-		"tenant_id":               signingServiceTestTenant,
-		signingServiceDomainField: domain,
-		"use":                     use,
-		"profile_id":              profile,
-		"status":                  "active",
-		"rollout":                 "enforce",
-		"compatibility":           signingServiceStrictValue,
+		signingServiceTenantIDField: signingServiceTestTenant,
+		signingServiceDomainField:   domain,
+		signingServiceUseField:      use,
+		"profile_id":                profile,
+		"status":                    "active",
+		"rollout":                   "enforce",
+		"compatibility":             signingServiceStrictValue,
 	}
 }
 
@@ -1098,13 +1174,13 @@ func signingServiceManifestEntry(
 ) map[string]any {
 	digest := sha256.Sum256(spki)
 	return map[string]any{
-		"tenant_id":               signingServiceTestTenant,
-		signingServiceDomainField: domain,
-		"use":                     use,
-		"handle_id":               handle,
-		"algorithm":               "rsa-sha256",
-		"public_spki_sha256":      base64.StdEncoding.EncodeToString(digest[:]),
-		"private_key_file":        privateFile,
+		signingServiceTenantIDField:  signingServiceTestTenant,
+		signingServiceDomainField:    domain,
+		signingServiceUseField:       use,
+		signingServiceHandleIDField:  handle,
+		signingServiceAlgorithmField: "rsa-sha256",
+		"public_spki_sha256":         base64.StdEncoding.EncodeToString(digest[:]),
+		"private_key_file":           privateFile,
 	}
 }
 
@@ -1124,7 +1200,7 @@ func writeSigningServiceJSON(t *testing.T, path string, value any) {
 func writeSigningServicePrivateKey(
 	t *testing.T,
 	path string,
-	key *rsa.PrivateKey,
+	key any,
 ) {
 	t.Helper()
 	pkcs8, err := x509.MarshalPKCS8PrivateKey(key)

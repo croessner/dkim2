@@ -206,6 +206,15 @@ parallel REST model.
 - Metric labels may contain only existing low-cardinality operation/result
   classes. They may not contain DSN-derived identifiers or values.
 
+The daemon emits exactly one terminal pre-policy DSN evidence observation per
+request. `dsn.evidence.completed` and `dkim2d_dsn_evidence_total` carry only
+the closed `evidence_stage` and `result` classes. Stages are `preflight`,
+`mime_parse`, `embedded_message`, `embedded_verification`, `embedded_claims`,
+`delivery_status_linkage`, `outer_recipient_linkage`, `signing_domain`, and
+successful `authorized`. No stage includes a domain, selector, address,
+message identifier, count, index, raw value, or provider diagnostic. This
+observation does not change the REST result or Milter disposition.
+
 ## Delivery Shape
 
 1. Freeze Draft/RFC evidence, local alignment interpretation, contracts,
@@ -219,6 +228,12 @@ parallel REST model.
    projections, and public-socket integration coverage.
 6. Run adversarial, privacy, race, generated-output, conformance, and full
    guardrail evidence followed by independent review.
+
+The opt-in real-process regression is enabled with `DKIM2_MILTERTEST_BIN` and
+is skipped in normal CI. `DKIM2_POSTFIX_BOUNCE_GENERATOR` may additionally
+name a locally reviewed executable accepting `original.eml output.eml` plus
+optional Postfix fixture arguments. Neither external binary nor generated
+message is a repository or release dependency.
 
 ## Required Tests
 

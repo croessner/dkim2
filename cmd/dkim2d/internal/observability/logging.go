@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/croessner/dkim2"
 	"github.com/croessner/dkim2/cmd/dkim2d/internal/config"
 )
 
@@ -31,6 +32,7 @@ const (
 	keyResult          = "result"
 	keyStatusClass     = "status_class"
 	keyDisposition     = "disposition"
+	keyEvidenceStage   = "evidence_stage"
 	keyVerdict         = "verdict"
 	valueInternal      = "internal"
 	valueFailure       = "failure"
@@ -80,7 +82,7 @@ var errRejectedRecord = errors.New("observability record rejected")
 
 var allowedLogKeys = []string{
 	keyCacheResult, "chain_length_bucket", "debug_module", keyDisposition,
-	keyDNSResult, "draft", "duration_bucket", "error_class", keyEventID,
+	keyDNSResult, "draft", "duration_bucket", "error_class", keyEventID, keyEvidenceStage,
 	"lifecycle_state", "message_size_bucket", keyMethod, keyOperation,
 	keyPolicyMode, keyProvider, keyProviderState, keyReady, keyReasonClass, "recipient_count_bucket",
 	keyReplayState, "replay_store_result", keyResult, "route",
@@ -88,13 +90,20 @@ var allowedLogKeys = []string{
 }
 
 var allowedLogValues = map[string][]string{
-	keyCacheResult:           {valueHit, valueMiss, valueNotUsed},
-	"debug_module":           {"message_shape", "dns", "replay"},
-	keyDisposition:           {"accept", "continue", "reject", "tempfail"},
-	keyDNSResult:             {valueFound, "missing", valueInvalid, "ambiguous", valueTemporary, valueInternal},
-	"draft":                  {"draft-ietf-dkim-dkim2-spec-04"},
-	"error_class":            {valueNone, "canceled", "deadline", valueTimeout, valueTransport, "tls", "encoding", "shutdown", valueInternal},
-	keyEventID:               {"config.accepted", "lifecycle.transition", "readiness.transition", "http.request.completed", "process.completed", "dns.lookup.completed", "replay.coordinate.completed", "datasource.operation.completed", "telemetry.export.failed"},
+	keyCacheResult: {valueHit, valueMiss, valueNotUsed},
+	"debug_module": {"message_shape", "dns", "replay"},
+	keyDisposition: {"accept", "continue", "reject", "tempfail"},
+	keyDNSResult:   {valueFound, "missing", valueInvalid, "ambiguous", valueTemporary, valueInternal},
+	"draft":        {"draft-ietf-dkim-dkim2-spec-04"},
+	"error_class":  {valueNone, "canceled", "deadline", valueTimeout, valueTransport, "tls", "encoding", "shutdown", valueInternal},
+	keyEventID:     {"config.accepted", "lifecycle.transition", "readiness.transition", "http.request.completed", "process.completed", "dsn.evidence.completed", "dns.lookup.completed", "replay.coordinate.completed", "datasource.operation.completed", "telemetry.export.failed"},
+	keyEvidenceStage: {
+		string(dkim2.DSNEvidenceStagePreflight), string(dkim2.DSNEvidenceStageMIMEParse),
+		string(dkim2.DSNEvidenceStageEmbeddedMessage), string(dkim2.DSNEvidenceStageEmbeddedVerification),
+		string(dkim2.DSNEvidenceStageEmbeddedClaims), string(dkim2.DSNEvidenceStageDeliveryStatusLinkage),
+		string(dkim2.DSNEvidenceStageOuterRecipientLinkage), string(dkim2.DSNEvidenceStageSigningDomain),
+		string(dkim2.DSNEvidenceStageAuthorized),
+	},
 	"lifecycle_state":        {"starting", "active", "stopping", "stopped", "failed"},
 	keyMethod:                {"GET", "HEAD", "POST", "OPTIONS", "other"},
 	keyOperation:             {"config", "lifecycle", "readiness", "health", "metrics", valueProcess, valueSign, valueRevise, valueDSNSign, "verify", "dns_lookup", valuePolicy, "replay_coordinate", "replay_store", "datasource_initial_load", "datasource_refresh", "datasource_resolve", "telemetry_export", valueUnmatched},

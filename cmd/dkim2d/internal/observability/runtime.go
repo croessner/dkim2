@@ -130,6 +130,21 @@ func (r *Runtime) Metrics() *Metrics {
 	return r.metrics
 }
 
+// ObserveDSNEvidence emits one closed terminal pre-policy evidence outcome.
+func (r *Runtime) ObserveDSNEvidence(stage, result string) {
+	if r == nil || r.metrics == nil || !closedMetricValue(keyEvidenceStage, stage) ||
+		!closedMetricValue(keyResult, result) {
+		return
+	}
+	r.metrics.DSNEvidenceCompleted(stage, result)
+	r.Logger().Info(
+		"dsn.evidence.completed",
+		slog.String("operation", valueDSNSign),
+		slog.String(keyEvidenceStage, stage),
+		slog.String(keyResult, result),
+	)
+}
+
 // Tracing returns the instance-owned OpenTelemetry facade.
 func (r *Runtime) Tracing() *TraceRuntime {
 	if r == nil {
