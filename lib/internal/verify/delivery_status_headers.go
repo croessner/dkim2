@@ -33,11 +33,11 @@ func (e HeaderEvidence) Status() TargetStatus {
 // VerifyDeliveryStatusHeadersOnly verifies the restricted evidence carried by a
 // DSN text/rfc822-headers original. It requires RFC 5322 header-only framing,
 // validates the highest DKIM2 target header hash, Section 9.6 signature,
-// timestamp, trusted post-signing original-envelope expansion, and custody
-// structure, and never evaluates or substitutes body evidence.
+// timestamp, and custody structure without inventing current-envelope evidence,
+// and never evaluates or substitutes body evidence.
 func (v Verifier) VerifyDeliveryStatusHeadersOnly(ctx context.Context, request Request) (HeaderEvidence, error) {
 	if ctx == nil || !request.Message.Initialized() || request.Message.Framing() != rawmsg.MessageFramingHeaderOnly ||
-		request.TargetSequence != 0 || request.SkipEnvelopeForNonCurrentTarget || !request.RequireEnvelope || request.Envelope.IsZero() || !v.valid() {
+		request.TargetSequence != 0 || request.SkipEnvelopeForNonCurrentTarget || request.RequireEnvelope || !request.Envelope.IsZero() || !v.valid() {
 		return HeaderEvidence{}, newError(ErrorCodeInvalidRequest, ErrorLocation{}, ErrorDetails{Class: ErrorClassRequest}, nil)
 	}
 	input, err := v.extractVerificationInput(request, 0)
@@ -69,7 +69,7 @@ func (v Verifier) VerifyDeliveryStatusHeadersOnly(ctx context.Context, request R
 	}
 	timestamp := v.checkTimestamp(targetSignature, target)
 	nextDomain := checkNextDomain(targetSignature, target, target.Sequence)
-	envelope := v.checkEnvelope(request, targetSignature, target, target.Sequence, true)
+	envelope := envelopeCheckResult(target, EnvelopeStatusNotApplicable)
 	domainAlignment, err := checkDomainAlignment(custody, target)
 	if err != nil {
 		return HeaderEvidence{}, err

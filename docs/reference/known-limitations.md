@@ -23,8 +23,8 @@ certification, or universal interoperability claim.
   exact raw bytes or the separately authorized Postfix-qualified Milter
   reconstruction, the `delivery_status` profile, route ticket, and protected
   DSN capability. The originator Milter deliberately tempfails every null
-  sender. The dedicated `postfix_dsn` adapter exists but requires the proposed
-  non-persistent Postfix normal-cleanup evidence patch before deployment.
+  sender. The dedicated `postfix_dsn` adapter requires the bounce-only Postfix
+  `{postfix_dsn_origin}` enum patch and accepts only exact `internal`.
   Received-DSN
   processing and DSN propagation are also deferred.
 - Flat-file, LDAP, PostgreSQL, MySQL, MariaDB, and Valkey datasource paths are implemented.

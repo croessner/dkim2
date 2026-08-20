@@ -358,7 +358,7 @@ func (s *Session) handleRecipient(payload []byte) error {
 		len(s.recipients) >= s.limits.RecipientCount {
 		return &Error{Class: FailureContract}
 	}
-	if s.mode != modeInbound && len(s.recipients) >= 1 {
+	if s.mode != modeInbound && s.mode != modePostfixDSN && len(s.recipients) >= 1 {
 		return &Error{Class: FailureContract}
 	}
 	if (!asciiBytes(path) && !s.smtpUTF8) ||
@@ -591,11 +591,18 @@ func (s *Session) endMessage(ctx context.Context) (frames [][]byte, resultErr er
 			failureClass = observationNoFailure
 			return oneFrame(replyAccept, nil), nil
 		}
-		evidence, valid := s.postfixDSN.take(s.reverse, s.recipients)
+		evidence, applicable, valid := s.postfixDSN.take(s.reverse, s.recipients)
 		if !valid {
 			clear(raw)
 			failureClass = string(FailureContract)
 			return nil, &Error{Class: FailureContract}
+		}
+		if !applicable {
+			clear(raw)
+			disposition = string(DispositionAccept)
+			resultClass = observationSuccess
+			failureClass = observationNoFailure
+			return oneFrame(replyAccept, nil), nil
 		}
 		message, err = newOwnedPostfixDSNMessage(raw, s.reverse, s.recipients, evidence)
 	} else {

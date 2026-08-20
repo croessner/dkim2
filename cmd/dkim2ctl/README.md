@@ -41,7 +41,7 @@ effective-user-owned, single-link 32-byte route capability file with mode
 `0400` or `0600`. Sign, revise, and `sign_dsn` fixtures require their corresponding
 distinct capability options. A `sign_dsn` fixture contains the byte-preserving
 outer DSN message, `outer_fidelity` set to `raw_rfc5322`, the exact null outer
-envelope, the independently observed non-null original envelope, tenant, and
+envelope, tenant, and
 domain; its expected response operation is `delivery_status`. Credentials, raw messages, envelope values,
 paths, URLs, headers, response bodies, and raw errors never enter output.
 

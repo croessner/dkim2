@@ -120,24 +120,17 @@ func TestLoadAcceptsOriginatorEnvelopeSenderDomainSelection(t *testing.T) {
 	}
 }
 
-// TestLoadAcceptsPostfixDSNEnvelopeSenderDomainSelection proves the dedicated
-// adapter may derive its per-message identity only from trusted original
-// Postfix envelope evidence.
-func TestLoadAcceptsPostfixDSNEnvelopeSenderDomainSelection(t *testing.T) {
+// TestLoadRejectsPostfixDSNEnvelopeSenderDomainSelection proves the removed
+// original-envelope handoff cannot remain a signing-domain authority.
+func TestLoadRejectsPostfixDSNEnvelopeSenderDomainSelection(t *testing.T) {
 	document := strings.Replace(
 		validConfig(ModePostfixDSN),
 		"  domain: example.test",
 		"  domain_source: envelope_sender",
 		1,
 	)
-	snapshot, err := Load(writeConfig(t, document))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if snapshot.Tenant() != "tenant-a" || snapshot.Domain() != "" ||
-		snapshot.DomainSource() != milter.DomainSourceEnvelopeSender ||
-		snapshot.DSNDomain() != "" {
-		t.Fatal("Postfix DSN envelope-sender selection was not retained exactly")
+	if _, err := Load(writeConfig(t, document)); err == nil {
+		t.Fatal("Postfix DSN accepted removed envelope-sender authority")
 	}
 }
 

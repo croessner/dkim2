@@ -59,12 +59,8 @@ func MapDeliveryStatusRequest(input generated.DSNSignRequest) (app.DeliveryStatu
 	if err != nil {
 		return app.DeliveryStatusRequest{}, err
 	}
-	originalReverse, originalRecipients, err := mapSigningSMTP(input.OriginalSmtp)
-	if err != nil || bytes.Equal(originalReverse, []byte("<>")) {
-		return app.DeliveryStatusRequest{}, newMappingError(MappingInvalidContract)
-	}
 	request, err := app.NewDeliveryStatusRequest(
-		raw, outerReverse, outerRecipients, originalReverse, originalRecipients,
+		raw, outerReverse, outerRecipients,
 		input.Context.Tenant, input.Context.Domain, fidelity,
 	)
 	if err != nil {

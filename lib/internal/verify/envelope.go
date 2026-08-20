@@ -64,14 +64,6 @@ func compareCurrentEnvelope(current Envelope, signed signature.Signature) Envelo
 	return compareEnvelope(current, signed, false)
 }
 
-// compareDeliveryStatusOriginalEnvelope admits only post-signing recipient
-// expansion by a trusted local MTA. Every authenticated rt= path must still be
-// present in the independently observed original envelope; unsigned paths may
-// be additional recipients but can never replace signed evidence.
-func compareDeliveryStatusOriginalEnvelope(current Envelope, signed signature.Signature) EnvelopeStatus {
-	return compareEnvelope(current, signed, true)
-}
-
 // compareEnvelope applies the selected closed recipient-set relation after
 // exact reverse-path comparison.
 func compareEnvelope(current Envelope, signed signature.Signature, allowPostSigningRecipientExpansion bool) EnvelopeStatus {

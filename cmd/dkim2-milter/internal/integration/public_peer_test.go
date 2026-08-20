@@ -865,7 +865,7 @@ func TestPostfixDSNWithoutEvidenceContinuesThroughPublicSocket(t *testing.T) {
 	fixture := newGeneratedDaemonFixture(t, service)
 	process := startExecutableWithSigning(
 		t, fixture.endpoint, integrationModePostfixDSN, "tempfail", 2*time.Second,
-		"\nsigning:\n  tenant: "+integrationTenant+"\n  domain_source: envelope_sender",
+		"\nsigning:\n  tenant: "+integrationTenant+"\n  domain: derived.example",
 	)
 	peer := dialPublicPeer(t, process.socket)
 	peer.negotiatePostfixDSN(t)
@@ -887,8 +887,45 @@ func TestPostfixDSNWithoutEvidenceContinuesThroughPublicSocket(t *testing.T) {
 	assertPrivateOutputAbsent(t, process.log)
 }
 
+// TestPostfixDSNExternalOrdinaryMessageContinuesThroughPublicSocket proves the
+// real shared adapter does not apply internal-bounce envelope constraints to
+// ordinary mail that Postfix marks external.
+func TestPostfixDSNExternalOrdinaryMessageContinuesThroughPublicSocket(t *testing.T) {
+	service := &generatedDaemonService{
+		dsn: func(generatedfixture.DSNSignRequest) generatedfixture.OperationResponse {
+			t.Fatal("external ordinary message reached the daemon")
+			return generatedfixture.OperationResponse{}
+		},
+	}
+	fixture := newGeneratedDaemonFixture(t, service)
+	process := startExecutableWithSigning(
+		t, fixture.endpoint, integrationModePostfixDSN, "tempfail", 2*time.Second,
+		"\nsigning:\n  tenant: "+integrationTenant+"\n  domain: derived.example",
+	)
+	peer := dialPublicPeer(t, process.socket)
+	peer.negotiatePostfixDSN(t)
+	peer.callback(t, peerConnect, []byte("localhost\x00U"))
+	peer.callback(t, peerHelo, []byte("localhost\x00"))
+	peer.callback(t, peerMail, []byte("<sender@example.test>\x00"))
+	peer.callback(t, peerRecipient, []byte("<first@example.test>\x00"))
+	peer.callback(t, peerRecipient, []byte("<second@example.test>\x00"))
+	peer.callback(t, peerHeader, []byte("Subject\x00 ordinary message\x00"))
+	peer.send(t, peerMacro, postfixDSNOriginMacroPayload("external"))
+	peer.callback(t, peerEOH, nil)
+	peer.callback(t, peerBody, []byte("ordinary body\r\n"))
+	peer.send(t, peerEOM, nil)
+	frame := peer.receive(t)
+	if frame.command != adapterAccept || len(frame.payload) != 0 {
+		t.Fatalf("external ordinary EOM frame = %#v", frame)
+	}
+	peer.send(t, peerQuit, nil)
+	peer.close()
+	process.stop(t)
+	assertPrivateOutputAbsent(t, process.log)
+}
+
 // TestPostfixDSNEvidenceRunsDedicatedRouteThroughPublicSocket proves the real
-// binary binds exact EOD evidence to the separate DSN capability and request.
+// binary binds exact internal origin to the separate DSN capability and request.
 func TestPostfixDSNEvidenceRunsDedicatedRouteThroughPublicSocket(t *testing.T) {
 	service := &generatedDaemonService{
 		dsn: func(body generatedfixture.DSNSignRequest) generatedfixture.OperationResponse {
@@ -902,7 +939,7 @@ func TestPostfixDSNEvidenceRunsDedicatedRouteThroughPublicSocket(t *testing.T) {
 	fixture := newGeneratedDaemonFixture(t, service)
 	process := startExecutableWithSigning(
 		t, fixture.endpoint, integrationModePostfixDSN, "tempfail", 2*time.Second,
-		"\nsigning:\n  tenant: "+integrationTenant+"\n  domain_source: envelope_sender",
+		"\nsigning:\n  tenant: "+integrationTenant+"\n  domain: derived.example",
 	)
 	peer := dialPublicPeer(t, process.socket)
 	peer.negotiatePostfixDSN(t)
@@ -911,10 +948,7 @@ func TestPostfixDSNEvidenceRunsDedicatedRouteThroughPublicSocket(t *testing.T) {
 	peer.callback(t, peerMail, []byte("<>\x00"))
 	peer.callback(t, peerRecipient, []byte("<sender@example.test>\x00"))
 	peer.callback(t, peerHeader, []byte("From\x00 mailer-daemon@example.test\x00"))
-	peer.send(t, peerMacro, postfixDSNMacroPayload(
-		[]byte("original@Derived.Example"),
-		[][]byte{[]byte("failed@example.test"), []byte("second@example.test")},
-	))
+	peer.send(t, peerMacro, postfixDSNOriginMacroPayload("internal"))
 	peer.callback(t, peerEOH, nil)
 	peer.callback(t, peerBody, []byte("delivery status\r\n"))
 	peer.send(t, peerEOM, nil)
@@ -929,23 +963,10 @@ func TestPostfixDSNEvidenceRunsDedicatedRouteThroughPublicSocket(t *testing.T) {
 	assertPrivateOutputAbsent(t, process.log)
 }
 
-// postfixDSNMacroPayload builds the independent v1 EOD evidence representation.
-func postfixDSNMacroPayload(originalSender []byte, originalRecipients [][]byte) []byte {
-	record := []byte{1}
-	record = appendLengthPrefixedPath(record, originalSender)
-	count := make([]byte, 2)
-	binary.BigEndian.PutUint16(count, uint16(len(originalRecipients)))
-	record = append(record, count...)
-	for _, recipient := range originalRecipients {
-		record = appendLengthPrefixedPath(record, recipient)
-	}
-	encoded := base64.RawURLEncoding.EncodeToString(record)
-	clear(record)
+// postfixDSNOriginMacroPayload builds the Postfix origin enum callback.
+func postfixDSNOriginMacroPayload(origin string) []byte {
 	payload := []byte{peerEOH}
-	for _, pair := range [][2]string{
-		{"{postfix_dsn_evidence}", "postfix-dsn-evidence-v1"},
-		{"{postfix_dsn_original_envelope}", encoded},
-	} {
+	for _, pair := range [][2]string{{"{postfix_dsn_origin}", origin}} {
 		payload = append(payload, pair[0]...)
 		payload = append(payload, 0)
 		payload = append(payload, pair[1]...)
@@ -954,20 +975,12 @@ func postfixDSNMacroPayload(originalSender []byte, originalRecipients [][]byte) 
 	return payload
 }
 
-// appendLengthPrefixedPath appends one test-owned Postfix queue-address record.
-func appendLengthPrefixedPath(record, path []byte) []byte {
-	length := make([]byte, 2)
-	binary.BigEndian.PutUint16(length, uint16(len(path)))
-	record = append(record, length...)
-	return append(record, path...)
-}
-
-// assertPostfixDSNRequest checks fidelity, both envelopes, and signing context.
+// assertPostfixDSNRequest checks fidelity, outer envelope, and signing context.
 func assertPostfixDSNRequest(
 	t *testing.T,
 	body generatedfixture.DSNSignRequest,
 	expectedDomain string,
-	expectedOriginalSender string,
+	_ string,
 ) {
 	t.Helper()
 	if body.Message.Fidelity == nil ||
@@ -980,14 +993,7 @@ func assertPostfixDSNRequest(
 		t.Fatal(err)
 	}
 	defer clear(outerSender)
-	originalSender, err := body.OriginalSmtp.MailFrom.Bytes()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer clear(originalSender)
-	if !bytes.Equal(outerSender, []byte("<>")) || len(body.OuterSmtp.RcptTo) != 1 ||
-		!bytes.Equal(originalSender, []byte(expectedOriginalSender)) ||
-		len(body.OriginalSmtp.RcptTo) != 2 {
+	if !bytes.Equal(outerSender, []byte("<>")) || len(body.OuterSmtp.RcptTo) != 1 {
 		t.Fatal("Postfix DSN envelope evidence changed")
 	}
 }
@@ -1089,7 +1095,7 @@ func (p *protocolPeer) negotiatePostfixDSN(t *testing.T) {
 	)
 	p.send(t, peerNegotiate, payload)
 	response := p.receive(t)
-	const macroList = "{postfix_dsn_evidence} {postfix_dsn_original_envelope}"
+	const macroList = "{postfix_dsn_origin}"
 	if response.command != peerNegotiate || len(response.payload) != 12+4+len(macroList)+1 ||
 		!bytes.Equal(response.payload[:12], payload) ||
 		binary.BigEndian.Uint32(response.payload[12:16]) != peerMacroClassEOH ||

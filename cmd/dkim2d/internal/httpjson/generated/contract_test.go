@@ -496,8 +496,8 @@ func assertObjectInventories(t *testing.T, document *openapi3.T) {
 			required:   []string{testPropertyAPIVersion, testPropertyContext, testPropertyDraft, testPropertyIncomingSMTP, testPropertyMessage, testPropertySMTP},
 		},
 		"DSNSignRequest": {
-			properties: []string{testPropertyAPIVersion, testPropertyContext, testPropertyDraft, testPropertyMessage, "original_smtp", "outer_smtp"},
-			required:   []string{testPropertyAPIVersion, testPropertyContext, testPropertyDraft, testPropertyMessage, "original_smtp", "outer_smtp"},
+			properties: []string{testPropertyAPIVersion, testPropertyContext, testPropertyDraft, testPropertyMessage, "outer_smtp"},
+			required:   []string{testPropertyAPIVersion, testPropertyContext, testPropertyDraft, testPropertyMessage, "outer_smtp"},
 		},
 		"MessageInput": {
 			properties: []string{"fidelity", "raw_rfc5322_base64"},

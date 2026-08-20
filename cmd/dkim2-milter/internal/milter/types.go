@@ -25,7 +25,7 @@ const (
 	// FidelityReconstructedCRLF declares Milter callback reconstruction.
 	FidelityReconstructedCRLF Fidelity = "milter_reconstructed_crlf"
 	// FidelityPostfixDSNReconstructedCRLF declares Postfix-qualified DSN
-	// reconstruction after exact local EOD evidence validation.
+	// reconstruction after exact local origin-enum validation.
 	FidelityPostfixDSNReconstructedCRLF Fidelity = "postfix_dsn_milter_reconstructed_crlf"
 )
 

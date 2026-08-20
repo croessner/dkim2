@@ -9,7 +9,7 @@ import (
 
 const validMinimalProcessJSON = `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-04","message":{"raw_rfc5322_base64":"","fidelity":"raw_rfc5322"},"smtp":{"mail_from":"","rcpt_to":[""]}}`
 
-const validMinimalDSNSignJSON = `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-04","message":{"raw_rfc5322_base64":"","fidelity":"postfix_dsn_milter_reconstructed_crlf"},"outer_smtp":{"mail_from":"<>","rcpt_to":["<sender@example.test>"]},"original_smtp":{"mail_from":"<sender@example.test>","rcpt_to":["<recipient@example.test>"]},"context":{"tenant":"tenant-a","domain":"example.test"}}`
+const validMinimalDSNSignJSON = `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-04","message":{"raw_rfc5322_base64":"","fidelity":"postfix_dsn_milter_reconstructed_crlf"},"outer_smtp":{"mail_from":"<>","rcpt_to":["<sender@example.test>"]},"context":{"tenant":"tenant-a","domain":"example.test"}}`
 
 // TestRequestValidatorUsesEmbeddedContractAndPrivateAuthentication proves the runtime seam.
 func TestRequestValidatorUsesEmbeddedContractAndPrivateAuthentication(t *testing.T) {

@@ -499,8 +499,9 @@ paths:
       description: >
         Authenticates an RFC 3462 delivery-status notification supplied either
         as exact raw RFC 5322 bytes or as Postfix-qualified Milter CRLF
-        reconstruction, requires its exact null reverse-path envelope and
-        independently observed original SMTP envelope, and returns an
+        reconstruction, requires its exact null reverse-path envelope, and
+        authenticates the embedded DKIM2 object without fabricating original
+        SMTP envelope evidence before returning an
         append-only DKIM2 signing action plan. This dedicated operation never
         accepts an ordinary sign or revision capability.
       security:
@@ -857,7 +858,6 @@ components:
         - draft
         - message
         - outer_smtp
-        - original_smtp
         - context
       properties:
         api_version:
@@ -874,12 +874,6 @@ components:
           description: >
             Exact observed envelope of the DSN itself. mail_from must be <> and
             rcpt_to must contain exactly one recipient.
-          allOf:
-            - $ref: "#/components/schemas/SMTPInput"
-        original_smtp:
-          description: >
-            Independently observed envelope for the originally transmitted
-            message embedded by the DSN. It must not be inferred from DSN text.
           allOf:
             - $ref: "#/components/schemas/SMTPInput"
         context:

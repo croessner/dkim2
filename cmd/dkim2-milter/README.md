@@ -118,22 +118,20 @@ daemon:
 mode: postfix_dsn
 signing:
   tenant: tenant-a
-  domain_source: envelope_sender
+  domain: example.test
 failure:
   mode: tempfail
 ```
 
-This mode requires the Postfix `postfix-dsn-evidence-v1` patch described in
-`docs/specs/implementation/postfix-dsn-evidence.md`. It rejects fail-open,
+This mode requires the Postfix origin-enum patch described in
+`docs/specs/implementation/postfix-dsn-origin.md`. It rejects fail-open,
 ordinary null-sender submission, absent or malformed EOH evidence, and more
 than one outer DSN recipient.
 
-`domain_source: envelope_sender` derives the candidate DSN identity only from
-the Postfix-qualified original reverse-path, never from the outer null sender
-or message headers. The daemon still verifies that candidate against the
-embedded original's authenticated highest `d=` before resolving a
-`delivery_status` profile. A static `domain` remains available only for a
-deliberately single-domain deployment.
+The static `domain` is checked against the embedded original's authenticated
+highest `d=` before resolving a `delivery_status` profile. Postfix DSN mode no
+longer accepts `domain_source: envelope_sender` because the bounded Postfix
+contract intentionally carries no original envelope.
 
 An originator instance that serves multiple exact LDAP signing domains may
 derive the domain from the already validated ASCII SMTP reverse-path while
@@ -158,11 +156,12 @@ support. It is not signing authority by itself.
 The originator adapter tempfails every null reverse-path before daemon I/O.
 Generic Milter callbacks remain insufficient evidence. Only a separate
 `postfix_dsn` instance may accept `MAIL FROM <>`, after exact Postfix-only EOH
-evidence validation; do not route null senders to the originator socket. A
+origin-enum validation; do not route null senders to the originator socket. A
 `postfix_dsn` instance may share the normal non-SMTP Milter chain: when the
-entire Postfix DSN evidence namespace is absent it continues without daemon
-I/O or mutation. Once any namespace member is present, partial, duplicate,
-wrong-stage, or malformed evidence remains a fail-closed contract error.
+origin macro is absent or `external` it continues without daemon I/O or
+mutation. Duplicate macro members in one callback, conflicting callback
+replays, wrong-stage delivery, and malformed enum values remain fail-closed
+contract errors.
 
 For non-null senders, an address literal or otherwise unsupported SMTPUTF8
 envelope is not applicable and continues without daemon I/O or mutation,

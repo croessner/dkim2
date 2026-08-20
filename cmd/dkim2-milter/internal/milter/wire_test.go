@@ -12,7 +12,10 @@ import (
 	"time"
 )
 
-const testAdmissionBytes = 64 << 20
+const (
+	testAdmissionBytes = 64 << 20
+	testSenderPath     = "<sender@example.test>"
+)
 
 type testHandler struct {
 	message Message
@@ -209,7 +212,7 @@ func TestMessageSigningDomainUsesOnlyCanonicalEnvelopeSenderDNS(t *testing.T) {
 		want    string
 		ok      bool
 	}{
-		{name: "lowercase", reverse: "<sender@example.test>", want: exampleDomain, ok: true},
+		{name: "lowercase", reverse: testSenderPath, want: exampleDomain, ok: true},
 		{name: "canonicalizes ASCII DNS case", reverse: "<sender@Example.TEST>", want: exampleDomain, ok: true},
 		{name: "quoted local part", reverse: "<\"a@b\"@example.test>", want: exampleDomain, ok: true},
 		{name: "source route", reverse: "<@relay.test:sender@example.test>", want: exampleDomain, ok: true},

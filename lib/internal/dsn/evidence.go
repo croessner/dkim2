@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/croessner/dkim2/internal/rawmsg"
 	"github.com/croessner/dkim2/internal/signature"
@@ -79,12 +80,11 @@ func IsEvidenceErrorCode(err error, code EvidenceErrorCode) bool {
 	return errors.As(err, &evidenceError) && evidenceError.Code() == code
 }
 
-// EvidenceRequest carries one parsed DSN and independently observed original SMTP envelope.
+// EvidenceRequest carries one parsed DSN whose embedded protocol object must
+// be authenticated without pretending signed claims were externally observed.
 type EvidenceRequest struct {
 	// Report is the parser-owned RFC 3462 DSN report.
 	Report Report
-	// OriginalEnvelope is independently observed SMTP evidence for the embedded original.
-	OriginalEnvelope verify.Envelope
 }
 
 // Evidence stores the authenticated embedded DKIM2 target without retaining message content.
@@ -94,6 +94,7 @@ type Evidence struct {
 	mailFrom         []byte
 	signingDomain    string
 	recipientDomains []string
+	recipientPaths   [][]byte
 }
 
 // Valid reports whether the evidence binds one supported original representation to an authenticated target.
@@ -139,12 +140,11 @@ func NewEvidenceEvaluator(verifier verify.Verifier) (EvidenceEvaluator, error) {
 	return EvidenceEvaluator{verifier: verifier}, nil
 }
 
-// Evaluate verifies an embedded original before DSN signing authorization. It
-// accepts only non-null independently observed original envelopes; complete
-// originals require complete body and header verification, while headers-only
+// Evaluate verifies an embedded original before DSN signing authorization.
+// Complete originals require complete body and header verification, while headers-only
 // originals use the dedicated header-only verifier and never substitute a body.
 func (e EvidenceEvaluator) Evaluate(ctx context.Context, request EvidenceRequest) (Evidence, error) {
-	if ctx == nil || !e.verifier.Valid() || !request.Report.RawMessage().Initialized() || !originalEnvelopeValid(request.OriginalEnvelope) {
+	if ctx == nil || !e.verifier.Valid() || !request.Report.RawMessage().Initialized() {
 		return Evidence{}, newEvidenceError(EvidenceErrorCodeInvalidRequest, nil)
 	}
 	original := request.Report.OriginalMessage()
@@ -153,9 +153,7 @@ func (e EvidenceEvaluator) Evaluate(ctx context.Context, request EvidenceRequest
 		return Evidence{}, newEvidenceError(EvidenceErrorCodeInvalidOriginal, nil)
 	}
 	verificationRequest := verify.Request{
-		Message:         parsed,
-		Envelope:        request.OriginalEnvelope,
-		RequireEnvelope: true,
+		Message: parsed,
 	}
 	switch original.ContentType() {
 	case ContentTypeRFC822:
@@ -166,7 +164,11 @@ func (e EvidenceEvaluator) Evaluate(ctx context.Context, request EvidenceRequest
 		if result.Status() != verify.TargetStatusPass {
 			return Evidence{}, evidenceStatusError(result.Status())
 		}
-		return authenticatedEvidence(EvidenceFormComplete, parsed, result.Target())
+		evidence, evidenceErr := authenticatedEvidence(EvidenceFormComplete, parsed, result.Target())
+		if evidenceErr != nil || !deliveryStatusLinksRecipient(request.Report, evidence.recipientPaths) {
+			return Evidence{}, newEvidenceError(EvidenceErrorCodeInvalidOriginal, evidenceErr)
+		}
+		return evidence, nil
 	case ContentTypeRFC822Headers:
 		headerEvidence, verifyErr := e.verifier.VerifyDeliveryStatusHeadersOnly(ctx, verificationRequest)
 		if verifyErr != nil {
@@ -175,7 +177,11 @@ func (e EvidenceEvaluator) Evaluate(ctx context.Context, request EvidenceRequest
 		if !headerEvidence.Valid() {
 			return Evidence{}, evidenceStatusError(headerEvidence.Status())
 		}
-		return authenticatedEvidence(EvidenceFormHeadersOnly, parsed, headerEvidence.Target())
+		evidence, evidenceErr := authenticatedEvidence(EvidenceFormHeadersOnly, parsed, headerEvidence.Target())
+		if evidenceErr != nil || !deliveryStatusLinksRecipient(request.Report, evidence.recipientPaths) {
+			return Evidence{}, newEvidenceError(EvidenceErrorCodeInvalidOriginal, evidenceErr)
+		}
+		return evidence, nil
 	default:
 		return Evidence{}, newEvidenceError(EvidenceErrorCodeInvalidOriginal, nil)
 	}
@@ -193,12 +199,15 @@ func authenticatedEvidence(form EvidenceForm, message rawmsg.Message, target ver
 		}
 		recipients := parsed.Recipients()
 		domains := make([]string, len(recipients))
+		paths := make([][]byte, len(recipients))
 		for index, recipient := range recipients {
+			path, pathValid := signature.CanonicalEnvelopePath(recipient.Value(), false)
 			domain, valid := signature.CanonicalEnvelopeDomain(recipient.Value(), false)
-			if !valid {
+			if !valid || !pathValid {
 				return Evidence{}, newEvidenceError(EvidenceErrorCodeInvalidOriginal, nil)
 			}
 			domains[index] = domain
+			paths[index] = path
 		}
 		mailFrom := parsed.MailFrom().Value()
 		if parsed.Domain() == "" || len(domains) == 0 || !signature.ValidEnvelopePath(mailFrom, false) {
@@ -206,15 +215,703 @@ func authenticatedEvidence(form EvidenceForm, message rawmsg.Message, target ver
 		}
 		return Evidence{
 			form: form, target: target, mailFrom: bytes.Clone(mailFrom),
-			signingDomain: parsed.Domain(), recipientDomains: domains,
+			signingDomain: parsed.Domain(), recipientDomains: domains, recipientPaths: paths,
 		}, nil
 	}
 	return Evidence{}, newEvidenceError(EvidenceErrorCodeInvalidOriginal, nil)
 }
 
-// originalEnvelopeValid rejects missing and null original-envelope evidence before generic DKIM2 checks.
-func originalEnvelopeValid(envelope verify.Envelope) bool {
-	return !envelope.IsZero() && envelope.RecipientCount() > 0 && len(envelope.ReversePath()) > 0 && !bytes.Equal(envelope.ReversePath(), []byte("<>"))
+const (
+	maxDeliveryStatusBytes           = 256 << 10
+	maxDeliveryStatusLineBytes       = 4096
+	maxDeliveryStatusRecipientGroups = 256
+	maxDeliveryStatusFieldsPerGroup  = 64
+	maxDeliveryStatusTotalFields     = 2048
+	maxDeliveryStatusCommentDepth    = 16
+)
+
+// deliveryStatusLinksRecipient validates the bounded RFC 3464 field-block
+// structure and requires one complete recipient group to name an authenticated
+// highest-signature rt= path. Folding fails closed. RFC 3461 xtext is decoded
+// only for Original-Recipient; Final-Recipient is compared as its raw address.
+func deliveryStatusLinksRecipient(report Report, signed [][]byte) bool {
+	body := report.DeliveryStatus().BodyBytes()
+	defer clear(body)
+	return deliveryStatusBodyLinksRecipient(body, signed)
+}
+
+func deliveryStatusBodyLinksRecipient(body []byte, signed [][]byte) bool {
+	if len(body) == 0 || len(body) > maxDeliveryStatusBytes {
+		return false
+	}
+	group := deliveryStatusFieldGroup{}
+	groupIndex := 0
+	totalFields := 0
+	linked := false
+	position := 0
+	for position < len(body) {
+		relativeEnd := bytes.Index(body[position:], []byte("\r\n"))
+		lineEnd := len(body)
+		if relativeEnd >= 0 {
+			lineEnd = position + relativeEnd
+		}
+		line := body[position:lineEnd]
+		if len(line) > maxDeliveryStatusLineBytes || bytes.ContainsAny(line, "\r\n") {
+			return false
+		}
+		if relativeEnd < 0 {
+			position = len(body)
+		} else {
+			position = lineEnd + 2
+		}
+		if len(line) == 0 {
+			groupLinked, valid := finishDeliveryStatusGroup(groupIndex, group, signed)
+			if !valid {
+				return false
+			}
+			linked = linked || groupLinked
+			groupIndex++
+			group = deliveryStatusFieldGroup{}
+			continue
+		}
+		if line[0] == ' ' || line[0] == '\t' ||
+			!group.add(groupIndex, line) {
+			return false
+		}
+		totalFields++
+		if group.fieldCount > maxDeliveryStatusFieldsPerGroup ||
+			totalFields > maxDeliveryStatusTotalFields {
+			return false
+		}
+	}
+	if group.fieldCount > 0 {
+		groupLinked, valid := finishDeliveryStatusGroup(groupIndex, group, signed)
+		if !valid {
+			return false
+		}
+		linked = linked || groupLinked
+		groupIndex++
+	}
+	return groupIndex >= 2 && groupIndex-1 <= maxDeliveryStatusRecipientGroups && linked
+}
+
+type deliveryStatusFieldGroup struct {
+	fieldCount         int
+	seen               uint32
+	lastRank           int
+	extensionStarted   bool
+	originalEnvelopeID []byte
+	reportingMTA       []byte
+	dsnGateway         []byte
+	receivedFromMTA    []byte
+	arrivalDate        []byte
+	originalRecipient  []byte
+	finalRecipient     []byte
+	action             []byte
+	status             []byte
+	remoteMTA          []byte
+	diagnosticCode     []byte
+	lastAttemptDate    []byte
+	finalLogID         []byte
+	willRetryUntil     []byte
+}
+
+type deliveryStatusField uint8
+
+const (
+	deliveryStatusFieldExtension deliveryStatusField = iota
+	deliveryStatusFieldOriginalEnvelopeID
+	deliveryStatusFieldReportingMTA
+	deliveryStatusFieldDSNGateway
+	deliveryStatusFieldReceivedFromMTA
+	deliveryStatusFieldArrivalDate
+	deliveryStatusFieldOriginalRecipient
+	deliveryStatusFieldFinalRecipient
+	deliveryStatusFieldAction
+	deliveryStatusFieldStatus
+	deliveryStatusFieldRemoteMTA
+	deliveryStatusFieldDiagnosticCode
+	deliveryStatusFieldLastAttemptDate
+	deliveryStatusFieldFinalLogID
+	deliveryStatusFieldWillRetryUntil
+)
+
+func (g *deliveryStatusFieldGroup) add(groupIndex int, line []byte) bool {
+	if g == nil {
+		return false
+	}
+	colon := bytes.IndexByte(line, ':')
+	if colon < 1 || !validDeliveryStatusFieldName(line[:colon]) {
+		return false
+	}
+	value := bytes.Trim(line[colon+1:], " \t")
+	field := classifyDeliveryStatusField(line[:colon])
+	rank, allowed := deliveryStatusFieldRank(groupIndex, field)
+	if !allowed {
+		return false
+	}
+	if field == deliveryStatusFieldExtension {
+		if !g.mandatoryFieldsSeen(groupIndex) {
+			return false
+		}
+		g.extensionStarted = true
+		g.fieldCount++
+		return true
+	}
+	bit := uint32(1) << field
+	if g.extensionStarted || g.seen&bit != 0 || g.fieldCount > 0 && rank < g.lastRank {
+		return false
+	}
+	if !g.prerequisitesSeen(groupIndex, field) {
+		return false
+	}
+	g.seen |= bit
+	g.lastRank = rank
+	g.fieldCount++
+	switch field {
+	case deliveryStatusFieldOriginalEnvelopeID:
+		g.originalEnvelopeID = value
+	case deliveryStatusFieldReportingMTA:
+		g.reportingMTA = value
+	case deliveryStatusFieldDSNGateway:
+		g.dsnGateway = value
+	case deliveryStatusFieldReceivedFromMTA:
+		g.receivedFromMTA = value
+	case deliveryStatusFieldArrivalDate:
+		g.arrivalDate = value
+	case deliveryStatusFieldOriginalRecipient:
+		g.originalRecipient = value
+	case deliveryStatusFieldFinalRecipient:
+		g.finalRecipient = value
+	case deliveryStatusFieldAction:
+		g.action = value
+	case deliveryStatusFieldStatus:
+		g.status = value
+	case deliveryStatusFieldRemoteMTA:
+		g.remoteMTA = value
+	case deliveryStatusFieldDiagnosticCode:
+		g.diagnosticCode = value
+	case deliveryStatusFieldLastAttemptDate:
+		g.lastAttemptDate = value
+	case deliveryStatusFieldFinalLogID:
+		g.finalLogID = value
+	case deliveryStatusFieldWillRetryUntil:
+		g.willRetryUntil = value
+	}
+	return true
+}
+
+func classifyDeliveryStatusField(name []byte) deliveryStatusField {
+	fields := []struct {
+		name  string
+		field deliveryStatusField
+	}{
+		{"original-envelope-id", deliveryStatusFieldOriginalEnvelopeID},
+		{"reporting-mta", deliveryStatusFieldReportingMTA},
+		{"dsn-gateway", deliveryStatusFieldDSNGateway},
+		{"received-from-mta", deliveryStatusFieldReceivedFromMTA},
+		{"arrival-date", deliveryStatusFieldArrivalDate},
+		{"original-recipient", deliveryStatusFieldOriginalRecipient},
+		{"final-recipient", deliveryStatusFieldFinalRecipient},
+		{"action", deliveryStatusFieldAction},
+		{"status", deliveryStatusFieldStatus},
+		{"remote-mta", deliveryStatusFieldRemoteMTA},
+		{"diagnostic-code", deliveryStatusFieldDiagnosticCode},
+		{"last-attempt-date", deliveryStatusFieldLastAttemptDate},
+		{"final-log-id", deliveryStatusFieldFinalLogID},
+		{"will-retry-until", deliveryStatusFieldWillRetryUntil},
+	}
+	for _, candidate := range fields {
+		if bytes.EqualFold(name, []byte(candidate.name)) {
+			return candidate.field
+		}
+	}
+	return deliveryStatusFieldExtension
+}
+
+func deliveryStatusFieldRank(groupIndex int, field deliveryStatusField) (int, bool) {
+	if field == deliveryStatusFieldExtension {
+		return 100, true
+	}
+	if groupIndex == 0 {
+		switch field {
+		case deliveryStatusFieldOriginalEnvelopeID:
+			return 0, true
+		case deliveryStatusFieldReportingMTA:
+			return 1, true
+		case deliveryStatusFieldDSNGateway:
+			return 2, true
+		case deliveryStatusFieldReceivedFromMTA:
+			return 3, true
+		case deliveryStatusFieldArrivalDate:
+			return 4, true
+		default:
+			return 0, false
+		}
+	}
+	switch field {
+	case deliveryStatusFieldOriginalRecipient:
+		return 0, true
+	case deliveryStatusFieldFinalRecipient:
+		return 1, true
+	case deliveryStatusFieldAction:
+		return 2, true
+	case deliveryStatusFieldStatus:
+		return 3, true
+	case deliveryStatusFieldRemoteMTA:
+		return 4, true
+	case deliveryStatusFieldDiagnosticCode:
+		return 5, true
+	case deliveryStatusFieldLastAttemptDate:
+		return 6, true
+	case deliveryStatusFieldFinalLogID:
+		return 7, true
+	case deliveryStatusFieldWillRetryUntil:
+		return 8, true
+	default:
+		return 0, false
+	}
+}
+
+func (g deliveryStatusFieldGroup) has(field deliveryStatusField) bool {
+	return g.seen&(uint32(1)<<field) != 0
+}
+
+func (g deliveryStatusFieldGroup) mandatoryFieldsSeen(groupIndex int) bool {
+	if groupIndex == 0 {
+		return g.has(deliveryStatusFieldReportingMTA)
+	}
+	return g.has(deliveryStatusFieldFinalRecipient) &&
+		g.has(deliveryStatusFieldAction) && g.has(deliveryStatusFieldStatus)
+}
+
+func (g deliveryStatusFieldGroup) prerequisitesSeen(groupIndex int, field deliveryStatusField) bool {
+	if groupIndex == 0 {
+		return field == deliveryStatusFieldOriginalEnvelopeID ||
+			field == deliveryStatusFieldReportingMTA || g.has(deliveryStatusFieldReportingMTA)
+	}
+	switch field {
+	case deliveryStatusFieldOriginalRecipient, deliveryStatusFieldFinalRecipient:
+		return true
+	case deliveryStatusFieldAction:
+		return g.has(deliveryStatusFieldFinalRecipient)
+	case deliveryStatusFieldStatus:
+		return g.has(deliveryStatusFieldAction)
+	default:
+		return g.has(deliveryStatusFieldStatus)
+	}
+}
+
+func finishDeliveryStatusGroup(index int, group deliveryStatusFieldGroup, signed [][]byte) (bool, bool) {
+	if group.fieldCount == 0 {
+		return false, false
+	}
+	if index == 0 {
+		if !group.mandatoryFieldsSeen(index) || !validDeliveryStatusOptionalMessageFields(group) {
+			return false, false
+		}
+		return false, validDeliveryStatusTypedText(group.reportingMTA, "", false)
+	}
+	if index > maxDeliveryStatusRecipientGroups || !group.mandatoryFieldsSeen(index) ||
+		!validDeliveryStatusAction(group.action) || !validDeliveryStatusCode(group.status) ||
+		!validDeliveryStatusOptionalRecipientFields(group) {
+		return false, false
+	}
+	finalPath, valid := deliveryStatusFinalRecipientPath(group.finalRecipient)
+	if !valid {
+		return false, false
+	}
+	linked := deliveryStatusPathMatches(finalPath, signed)
+	clear(finalPath)
+	if group.has(deliveryStatusFieldOriginalRecipient) {
+		originalPath, originalValid := deliveryStatusOriginalRecipientPath(group.originalRecipient)
+		if !originalValid {
+			return false, false
+		}
+		linked = linked || deliveryStatusPathMatches(originalPath, signed)
+		clear(originalPath)
+	}
+	return linked, true
+}
+
+// deliveryStatusFinalRecipientPath maps the raw RFC 3464 Final-Recipient
+// generic-address to the canonical DKIM2 envelope path. It deliberately does
+// not apply RFC 3461 xtext decoding.
+func deliveryStatusFinalRecipientPath(value []byte) ([]byte, bool) {
+	address, valid := parseDeliveryStatusTypedText(value, "rfc822", false)
+	if !valid || !validDeliveryStatusRawAddress(address) {
+		return nil, false
+	}
+	return canonicalDeliveryStatusRecipientPath(address)
+}
+
+// deliveryStatusOriginalRecipientPath decodes the RFC 3461 ORCPT xtext carried
+// by Original-Recipient before canonical envelope comparison.
+func deliveryStatusOriginalRecipientPath(value []byte) ([]byte, bool) {
+	encoded, valid := parseDeliveryStatusTypedText(value, "rfc822", false)
+	if !valid {
+		return nil, false
+	}
+	decoded, valid := decodeDeliveryStatusXText(encoded)
+	if !valid || !validDeliveryStatusRawAddress(decoded) {
+		clear(decoded)
+		return nil, false
+	}
+	defer clear(decoded)
+	return canonicalDeliveryStatusRecipientPath(decoded)
+}
+
+func canonicalDeliveryStatusRecipientPath(address []byte) ([]byte, bool) {
+	path := make([]byte, 0, len(address)+2)
+	path = append(path, '<')
+	path = append(path, address...)
+	path = append(path, '>')
+	defer clear(path)
+	return signature.CanonicalEnvelopePath(path, false)
+}
+
+func parseDeliveryStatusTypedText(value []byte, requiredType string, allowEmpty bool) ([]byte, bool) {
+	separator := bytes.IndexByte(value, ';')
+	if separator < 1 {
+		return nil, false
+	}
+	typeName := bytes.Trim(value[:separator], " \t")
+	text := bytes.Trim(value[separator+1:], " \t")
+	if len(typeName) == 0 || !allowEmpty && len(text) == 0 || !validDeliveryStatusAtom(typeName) ||
+		requiredType != "" && !bytes.EqualFold(typeName, []byte(requiredType)) {
+		return nil, false
+	}
+	for _, current := range text {
+		if current == '\r' || current == '\n' || current == 0 || current == 127 || current < 32 && current != ' ' && current != '\t' {
+			return nil, false
+		}
+	}
+	return text, true
+}
+
+func validDeliveryStatusTypedText(value []byte, requiredType string, allowEmpty bool) bool {
+	_, valid := parseDeliveryStatusTypedText(value, requiredType, allowEmpty)
+	return valid
+}
+
+func validDeliveryStatusOptionalMessageFields(group deliveryStatusFieldGroup) bool {
+	if group.has(deliveryStatusFieldOriginalEnvelopeID) && !validDeliveryStatusUnfoldedText(group.originalEnvelopeID, true) ||
+		group.has(deliveryStatusFieldDSNGateway) && !validDeliveryStatusTypedText(group.dsnGateway, "", false) ||
+		group.has(deliveryStatusFieldReceivedFromMTA) && !validDeliveryStatusTypedText(group.receivedFromMTA, "", false) ||
+		group.has(deliveryStatusFieldArrivalDate) && !validDeliveryStatusDate(group.arrivalDate) {
+		return false
+	}
+	return true
+}
+
+func validDeliveryStatusOptionalRecipientFields(group deliveryStatusFieldGroup) bool {
+	if group.has(deliveryStatusFieldRemoteMTA) && !validDeliveryStatusTypedText(group.remoteMTA, "", false) ||
+		group.has(deliveryStatusFieldDiagnosticCode) && !validDeliveryStatusTypedText(group.diagnosticCode, "", true) ||
+		group.has(deliveryStatusFieldLastAttemptDate) && !validDeliveryStatusDate(group.lastAttemptDate) ||
+		group.has(deliveryStatusFieldFinalLogID) && !validDeliveryStatusUnfoldedText(group.finalLogID, true) ||
+		group.has(deliveryStatusFieldWillRetryUntil) &&
+			(!bytes.EqualFold(group.action, []byte("delayed")) || !validDeliveryStatusDate(group.willRetryUntil)) {
+		return false
+	}
+	return true
+}
+
+func validDeliveryStatusDate(value []byte) bool {
+	normalized, valid := normalizeDeliveryStatusDateCFWS(value)
+	if !valid {
+		return false
+	}
+	defer clear(normalized)
+	parts := bytes.Fields(normalized)
+	weekday := -1
+	if len(parts) == 6 {
+		if len(parts[0]) != 4 || parts[0][3] != ',' {
+			return false
+		}
+		weekday = deliveryStatusWeekday(parts[0][:3])
+		if weekday < 0 {
+			return false
+		}
+		parts = parts[1:]
+	}
+	if len(parts) != 5 {
+		return false
+	}
+	day, valid := deliveryStatusDecimal(parts[0], 1, 2)
+	month := deliveryStatusMonth(parts[1])
+	year, yearValid := deliveryStatusDecimal(parts[2], 2, 4)
+	hour, minute, second, timeValid := deliveryStatusClock(parts[3])
+	if !valid || month == 0 || !yearValid || !timeValid ||
+		!validDeliveryStatusNumericZone(parts[4]) {
+		return false
+	}
+	if len(parts[2]) == 2 {
+		year += 1900
+	}
+	parsed := time.Date(year, month, day, hour, minute, second, 0, time.UTC)
+	if parsed.Year() != year || parsed.Month() != month || parsed.Day() != day {
+		return false
+	}
+	return weekday < 0 || int(parsed.Weekday()) == weekday
+}
+
+// normalizeDeliveryStatusDateCFWS removes bounded RFC 822 comments and
+// canonicalizes linear whitespace without accepting folded CRLF. Comment
+// parsing is iterative and capped independently of the enclosing line bound.
+func normalizeDeliveryStatusDateCFWS(value []byte) ([]byte, bool) {
+	if len(value) == 0 || len(value) > maxDeliveryStatusLineBytes {
+		return nil, false
+	}
+	normalized := make([]byte, 0, len(value))
+	commentDepth := 0
+	pendingSpace := false
+	for index := 0; index < len(value); index++ {
+		current := value[index]
+		if current == '\r' || current == '\n' || current == 127 ||
+			current < 32 && current != ' ' && current != '\t' {
+			clear(normalized)
+			return nil, false
+		}
+		if commentDepth > 0 {
+			switch current {
+			case '\\':
+				index++
+				if index >= len(value) || !validDeliveryStatusQuotedPairByte(value[index]) {
+					clear(normalized)
+					return nil, false
+				}
+			case '(':
+				commentDepth++
+				if commentDepth > maxDeliveryStatusCommentDepth {
+					clear(normalized)
+					return nil, false
+				}
+			case ')':
+				commentDepth--
+			}
+			continue
+		}
+		switch current {
+		case '(':
+			commentDepth = 1
+			pendingSpace = true
+		case ')', '\\':
+			clear(normalized)
+			return nil, false
+		case ' ', '\t':
+			pendingSpace = true
+		default:
+			if pendingSpace && len(normalized) > 0 && deliveryStatusDateNeedsSpace(normalized[len(normalized)-1], current) {
+				normalized = append(normalized, ' ')
+			}
+			normalized = append(normalized, current)
+			pendingSpace = false
+		}
+	}
+	if commentDepth != 0 || len(normalized) == 0 {
+		clear(normalized)
+		return nil, false
+	}
+	return normalized, true
+}
+
+func validDeliveryStatusQuotedPairByte(value byte) bool {
+	return value == ' ' || value == '\t' || value >= 33 && value <= 126
+}
+
+func deliveryStatusDateNeedsSpace(previous, current byte) bool {
+	if current == ',' || current == ':' || previous == ':' {
+		return false
+	}
+	return true
+}
+
+func deliveryStatusWeekday(value []byte) int {
+	for index, name := range []string{"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"} {
+		if bytes.EqualFold(value, []byte(name)) {
+			return index
+		}
+	}
+	return -1
+}
+
+func deliveryStatusMonth(value []byte) time.Month {
+	for index, name := range []string{"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"} {
+		if bytes.EqualFold(value, []byte(name)) {
+			return time.Month(index + 1)
+		}
+	}
+	return 0
+}
+
+func deliveryStatusDecimal(value []byte, minimum, maximum int) (int, bool) {
+	if len(value) < minimum || len(value) > maximum {
+		return 0, false
+	}
+	result := 0
+	for _, current := range value {
+		if current < '0' || current > '9' {
+			return 0, false
+		}
+		result = result*10 + int(current-'0')
+	}
+	return result, true
+}
+
+func deliveryStatusClock(value []byte) (int, int, int, bool) {
+	if len(value) != 5 && len(value) != 8 || value[2] != ':' || len(value) == 8 && value[5] != ':' {
+		return 0, 0, 0, false
+	}
+	hour, hourValid := deliveryStatusDecimal(value[:2], 2, 2)
+	minute, minuteValid := deliveryStatusDecimal(value[3:5], 2, 2)
+	second := 0
+	secondValid := true
+	if len(value) == 8 {
+		second, secondValid = deliveryStatusDecimal(value[6:], 2, 2)
+	}
+	return hour, minute, second,
+		hourValid && minuteValid && secondValid && hour < 24 && minute < 60 && second < 60
+}
+
+func validDeliveryStatusNumericZone(value []byte) bool {
+	if len(value) != 5 || value[0] != '+' && value[0] != '-' {
+		return false
+	}
+	hour, hourValid := deliveryStatusDecimal(value[1:3], 2, 2)
+	minute, minuteValid := deliveryStatusDecimal(value[3:], 2, 2)
+	return hourValid && minuteValid && hour < 24 && minute < 60
+}
+
+func validDeliveryStatusRawAddress(value []byte) bool {
+	return validDeliveryStatusUnfoldedText(value, false)
+}
+
+// validDeliveryStatusUnfoldedText validates one bounded RFC 822 text value
+// after the enclosing field parser has removed CRLF framing. SP and HTAB are
+// data; all other controls and DEL fail closed.
+func validDeliveryStatusUnfoldedText(value []byte, allowEmpty bool) bool {
+	if len(value) == 0 {
+		return allowEmpty
+	}
+	for _, current := range value {
+		if current == 127 || current < 32 && current != ' ' && current != '\t' {
+			return false
+		}
+	}
+	return true
+}
+
+func validDeliveryStatusAction(value []byte) bool {
+	for _, action := range [][]byte{
+		[]byte("failed"), []byte("delayed"), []byte("delivered"),
+		[]byte("relayed"), []byte("expanded"),
+	} {
+		if bytes.EqualFold(value, action) {
+			return true
+		}
+	}
+	return false
+}
+
+func validDeliveryStatusCode(value []byte) bool {
+	if len(value) < 5 || value[1] != '.' ||
+		(value[0] != '2' && value[0] != '4' && value[0] != '5') {
+		return false
+	}
+	secondEnd := bytes.IndexByte(value[2:], '.')
+	if secondEnd < 1 {
+		return false
+	}
+	secondEnd += 2
+	return validDeliveryStatusCodeComponent(value[2:secondEnd]) &&
+		validDeliveryStatusCodeComponent(value[secondEnd+1:])
+}
+
+func validDeliveryStatusCodeComponent(value []byte) bool {
+	if len(value) < 1 || len(value) > 3 || len(value) > 1 && value[0] == '0' {
+		return false
+	}
+	for _, current := range value {
+		if current < '0' || current > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+func validDeliveryStatusFieldName(value []byte) bool {
+	if len(value) == 0 {
+		return false
+	}
+	for _, current := range value {
+		if current < 33 || current > 126 || current == ':' {
+			return false
+		}
+	}
+	return true
+}
+
+func validDeliveryStatusAtom(value []byte) bool {
+	if len(value) == 0 {
+		return false
+	}
+	for _, current := range value {
+		if current < 33 || current > 126 || deliveryStatusAtomSpecial(current) {
+			return false
+		}
+	}
+	return true
+}
+
+func decodeDeliveryStatusXText(value []byte) ([]byte, bool) {
+	decoded := make([]byte, 0, len(value))
+	for index := 0; index < len(value); index++ {
+		current := value[index]
+		if current == '+' {
+			if index+2 >= len(value) || !upperHexByte(value[index+1]) || !upperHexByte(value[index+2]) {
+				clear(decoded)
+				return nil, false
+			}
+			decoded = append(decoded, hexByte(value[index+1])<<4|hexByte(value[index+2]))
+			index += 2
+			continue
+		}
+		if current < 33 || current > 126 || current == '=' {
+			clear(decoded)
+			return nil, false
+		}
+		decoded = append(decoded, current)
+	}
+	return decoded, true
+}
+
+func deliveryStatusAtomSpecial(value byte) bool {
+	switch value {
+	case '(', ')', '<', '>', '@', ',', ';', ':', '\\', '"', '.', '[', ']':
+		return true
+	default:
+		return false
+	}
+}
+
+func upperHexByte(value byte) bool {
+	return value >= '0' && value <= '9' || value >= 'A' && value <= 'F'
+}
+
+func hexByte(value byte) byte {
+	if value <= '9' {
+		return value - '0'
+	}
+	return value - 'A' + 10
+}
+
+func deliveryStatusPathMatches(path []byte, signed [][]byte) bool {
+	for _, candidate := range signed {
+		if bytes.Equal(path, candidate) {
+			return true
+		}
+	}
+	return false
 }
 
 // evidenceStatusError maps bounded verifier outcomes to a DSN evidence authorization failure.

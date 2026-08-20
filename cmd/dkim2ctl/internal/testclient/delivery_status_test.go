@@ -22,8 +22,6 @@ func TestGeneratedDSNSignRequestUsesDedicatedClientAndCapability(t *testing.T) {
 		OuterFidelity:      &fidelity,
 		OuterMailFrom:      "<>",
 		OuterRecipients:    []string{operationFixtureRecipient},
-		OriginalMailFrom:   operationFixtureSender,
-		OriginalRecipients: []string{operationFixtureRecipient},
 		Tenant:             operationFixtureTenant,
 		Domain:             operationFixtureDomain,
 	})
@@ -61,7 +59,7 @@ func TestGeneratedDSNSignRequestUsesDedicatedClientAndCapability(t *testing.T) {
 	var document map[string]json.RawMessage
 	if json.NewDecoder(recorded.Body).Decode(&document) != nil ||
 		document["message"] == nil || document["outer_smtp"] == nil ||
-		document["original_smtp"] == nil || document["context"] == nil ||
+		document["original_smtp"] != nil || document["context"] == nil ||
 		document["smtp"] != nil {
 		t.Fatal("DSN request did not preserve the dedicated generated DTO shape")
 	}
@@ -85,9 +83,7 @@ func TestDSNFixtureAdmissionRequiresDistinctNullPathFacts(t *testing.T) {
 			OuterMessageBase64: operationFixtureMessageBase64,
 			OuterFidelity:      &fidelity,
 			OuterMailFrom:      "<>", OuterRecipients: []string{operationFixtureRecipient},
-			OriginalMailFrom:   operationFixtureSender,
-			OriginalRecipients: []string{operationFixtureRecipient},
-			Tenant:             operationFixtureTenant, Domain: operationFixtureDomain,
+			Tenant: operationFixtureTenant, Domain: operationFixtureDomain,
 		},
 		Expect: fixtureExpectation{
 			HTTPStatus: 200, Operation: &operation, Result: &result,
@@ -106,10 +102,8 @@ func TestDSNFixtureAdmissionRequiresDistinctNullPathFacts(t *testing.T) {
 	invalid.DSNSign = &fixtureDSNSignInput{
 		OuterMessageBase64: operationFixtureMessageBase64,
 		OuterFidelity:      &fidelity, OuterMailFrom: operationFixtureSender,
-		OuterRecipients:    []string{operationFixtureRecipient},
-		OriginalMailFrom:   operationFixtureSender,
-		OriginalRecipients: []string{operationFixtureRecipient},
-		Tenant:             operationFixtureTenant, Domain: operationFixtureDomain,
+		OuterRecipients: []string{operationFixtureRecipient},
+		Tenant:          operationFixtureTenant, Domain: operationFixtureDomain,
 	}
 	if _, err := validateFixtureCase(invalid); ExitClassOf(err) != ExitFixture {
 		t.Fatal("non-null DSN outer envelope accepted")

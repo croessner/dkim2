@@ -32,9 +32,9 @@ func (h *postfixDSNEvidenceHandler) Handle(_ context.Context, message Message) (
 	}, nil
 }
 
-// TestPostfixDSNNegotiationRequestsOnlyEOHProofMacros proves this adapter uses
+// TestPostfixDSNNegotiationRequestsOnlyOriginMacro proves this adapter uses
 // the standard secondary negotiation payload rather than a new Milter command.
-func TestPostfixDSNNegotiationRequestsOnlyEOHProofMacros(t *testing.T) {
+func TestPostfixDSNNegotiationRequestsOnlyOriginMacro(t *testing.T) {
 	session := testSession(t, &postfixDSNEvidenceHandler{}, false, modePostfixDSN, "")
 	frames, err := session.negotiate(postfixDSNNegotiationPayload())
 	if err != nil || len(frames) != 1 || frames[0][4] != commandNegotiate {
@@ -63,7 +63,7 @@ func TestPostfixDSNNegotiationRequiresMacroListCapability(t *testing.T) {
 // chain leaves ordinary local mail and unauthenticated null-sender input
 // unchanged without invoking the delivery-status handler.
 func TestPostfixDSNWithoutEvidenceContinues(t *testing.T) {
-	for _, reverse := range []string{"<sender@example.test>", "<>"} {
+	for _, reverse := range []string{testSenderPath, "<>"} {
 		t.Run(reverse, func(t *testing.T) {
 			handler := &postfixDSNEvidenceHandler{}
 			session := testSession(t, handler, false, modePostfixDSN, "")
@@ -90,15 +90,11 @@ func TestPostfixDSNWithoutEvidenceContinues(t *testing.T) {
 	}
 }
 
-// TestPostfixDSNEOMTransfersExactEvidence proves a complete one-recipient
-// null-sender DSN is the sole path that reaches the delivery-status handler.
-func TestPostfixDSNEOMTransfersExactEvidence(t *testing.T) {
+// TestPostfixDSNEOMAcceptsInternalOrigin proves exact bounce provenance is the
+// sole macro value that reaches the delivery-status handler.
+func TestPostfixDSNEOMAcceptsInternalOrigin(t *testing.T) {
 	handler := &postfixDSNEvidenceHandler{}
 	session := testSession(t, handler, false, modePostfixDSN, "")
-	queueSender := []byte("sender@example.test")
-	queueRecipients := [][]byte{[]byte("first@example.test"), []byte("second@example.test")}
-	originalSender := []byte("<sender@example.test>")
-	originalRecipients := [][]byte{[]byte("<first@example.test>"), []byte("<second@example.test>")}
 	input := appendPeerFrames(
 		peerFrame(commandNegotiate, postfixDSNNegotiationPayload()),
 		peerFrame(commandMacro, postfixDSNMacroPayload(
@@ -109,13 +105,11 @@ func TestPostfixDSNEOMTransfersExactEvidence(t *testing.T) {
 		peerFrame(commandMail, []byte("<>\x00")),
 		peerFrame(commandRecipient, []byte("<report@example.test>\x00")),
 		peerFrame(commandMacro, postfixDSNMacroPayload(commandHeader,
-			postfixDSNMacroMarker, postfixDSNMarker,
-			postfixDSNMacroEnvelope, string(encodedPostfixDSNEnvelope(postfixDSNEnvelopeRecord(queueSender, queueRecipients))),
+			postfixDSNMacroOrigin, postfixDSNOriginInternal,
 		)),
 		peerFrame(commandHeader, []byte("Subject\x00 Delivery Status\x00")),
 		peerFrame(commandMacro, postfixDSNMacroPayload(commandEOH,
-			postfixDSNMacroMarker, postfixDSNMarker,
-			postfixDSNMacroEnvelope, string(encodedPostfixDSNEnvelope(postfixDSNEnvelopeRecord(queueSender, queueRecipients))),
+			postfixDSNMacroOrigin, postfixDSNOriginInternal,
 		)),
 		peerFrame(commandEOH, nil),
 		peerFrame(commandEOM, nil),
@@ -129,45 +123,32 @@ func TestPostfixDSNEOMTransfersExactEvidence(t *testing.T) {
 		handler.fidelity != FidelityPostfixDSNReconstructedCRLF {
 		t.Fatalf("handler calls/proof/fidelity = %d/%t/%q", handler.calls, handler.hasProof, handler.fidelity)
 	}
-	sender, recipients := handler.evidence.OriginalEnvelope()
-	if !bytes.Equal(sender, originalSender) || len(recipients) != len(originalRecipients) {
-		t.Fatalf("OriginalEnvelope() did not preserve exact values")
-	}
-	for index := range originalRecipients {
-		if !bytes.Equal(recipients[index], originalRecipients[index]) {
-			t.Fatalf("recipient %d changed", index)
-		}
+	if !handler.evidence.Internal() {
+		t.Fatal("PostfixDSNEvidence did not retain internal provenance")
 	}
 }
 
-// TestPostfixDSNEOMRejectsIncompleteOrAmbiguousProof proves malformed proof
+// TestPostfixDSNEOMRejectsMalformedOrAmbiguousOrigin proves malformed proof
 // material cannot become ordinary originator input or reach a handler.
-func TestPostfixDSNEOMRejectsIncompleteOrAmbiguousProof(t *testing.T) {
-	validEnvelope := string(encodedPostfixDSNEnvelope(postfixDSNEnvelopeRecord(
-		[]byte("sender@example.test"), [][]byte{[]byte("recipient@example.test")},
-	)))
+func TestPostfixDSNEOMRejectsMalformedOrAmbiguousOrigin(t *testing.T) {
 	for _, testCase := range []struct {
 		name  string
 		stage byte
 		pairs []string
 	}{
-		{name: "missing original envelope", stage: commandEOH, pairs: []string{
-			postfixDSNMacroMarker, postfixDSNMarker,
+		{name: "duplicate", stage: commandEOH, pairs: []string{
+			postfixDSNMacroOrigin, postfixDSNOriginInternal,
+			postfixDSNMacroOrigin, postfixDSNOriginInternal,
 		}},
-		{name: "duplicate original envelope", stage: commandEOH, pairs: []string{
-			postfixDSNMacroMarker, postfixDSNMarker,
-			postfixDSNMacroEnvelope, validEnvelope,
-			postfixDSNMacroEnvelope, string(encodedPostfixDSNEnvelope(postfixDSNEnvelopeRecord(
-				[]byte("other@example.test"), [][]byte{[]byte("recipient@example.test")},
-			))),
+		{name: "conflicting duplicate", stage: commandEOH, pairs: []string{
+			postfixDSNMacroOrigin, postfixDSNOriginInternal,
+			postfixDSNMacroOrigin, postfixDSNOriginExternal,
 		}},
 		{name: "wrong macro stage", stage: commandEOM, pairs: []string{
-			postfixDSNMacroMarker, postfixDSNMarker,
-			postfixDSNMacroEnvelope, validEnvelope,
+			postfixDSNMacroOrigin, postfixDSNOriginInternal,
 		}},
-		{name: "unexpected local proof member", stage: commandEOH, pairs: []string{
-			postfixDSNMacroMarker, postfixDSNMarker,
-			postfixDSNMacroEnvelope, validEnvelope, "{postfix_dsn_extra}", "x",
+		{name: "invalid enum", stage: commandEOH, pairs: []string{
+			postfixDSNMacroOrigin, "local",
 		}},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -188,6 +169,73 @@ func TestPostfixDSNEOMRejectsIncompleteOrAmbiguousProof(t *testing.T) {
 				t.Fatalf("Serve() error/calls = %v/%d", err, handler.calls)
 			}
 		})
+	}
+}
+
+// TestPostfixDSNExternalOriginContinues proves external provenance never
+// authorizes signing and does not impose bounce envelope shape on ordinary
+// messages sharing the non-SMTP Milter chain.
+func TestPostfixDSNExternalOriginContinues(t *testing.T) {
+	for _, testCase := range []struct {
+		name       string
+		reverse    string
+		recipients []string
+	}{
+		{name: "external null sender", reverse: "<>", recipients: []string{"<report@example.test>"}},
+		{name: "ordinary multiple recipients", reverse: testSenderPath, recipients: []string{
+			"<first@example.test>", "<second@example.test>",
+		}},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			handler := &postfixDSNEvidenceHandler{}
+			session := testSession(t, handler, false, modePostfixDSN, "")
+			frames := [][]byte{
+				peerFrame(commandNegotiate, postfixDSNNegotiationPayload()),
+				peerFrame(commandConnect, []byte("localhost\x00U")),
+				peerFrame(commandHelo, []byte("localhost\x00")),
+				peerFrame(commandMail, []byte(testCase.reverse+"\x00")),
+			}
+			for _, recipient := range testCase.recipients {
+				frames = append(frames, peerFrame(commandRecipient, []byte(recipient+"\x00")))
+			}
+			frames = append(frames,
+				peerFrame(commandMacro, postfixDSNMacroPayload(commandHeader, postfixDSNMacroOrigin, postfixDSNOriginExternal)),
+				peerFrame(commandHeader, []byte("Subject\x00 external message\x00")),
+				peerFrame(commandMacro, postfixDSNMacroPayload(commandEOH, postfixDSNMacroOrigin, postfixDSNOriginExternal)),
+				peerFrame(commandEOH, nil), peerFrame(commandEOM, nil), peerFrame(commandQuit, nil),
+			)
+			stream := &splitStream{reader: bytes.NewReader(appendPeerFrames(frames...))}
+			if err := session.Serve(context.Background(), stream); err != nil || handler.calls != 0 {
+				t.Fatalf("Serve() error/calls = %v/%d", err, handler.calls)
+			}
+		})
+	}
+}
+
+// TestPostfixDSNRequiresOriginAtEOH proves a header-stage value cannot be
+// promoted by an empty or unrelated EOH macro callback.
+func TestPostfixDSNRequiresOriginAtEOH(t *testing.T) {
+	for _, eohPairs := range [][]string{
+		nil,
+		{"{unrelated}", "value"},
+	} {
+		handler := &postfixDSNEvidenceHandler{}
+		session := testSession(t, handler, false, modePostfixDSN, "")
+		input := appendPeerFrames(
+			peerFrame(commandNegotiate, postfixDSNNegotiationPayload()),
+			peerFrame(commandConnect, []byte("localhost\x00U")),
+			peerFrame(commandHelo, []byte("localhost\x00")),
+			peerFrame(commandMail, []byte("<>\x00")),
+			peerFrame(commandRecipient, []byte("<report@example.test>\x00")),
+			peerFrame(commandMacro, postfixDSNMacroPayload(commandHeader, postfixDSNMacroOrigin, postfixDSNOriginInternal)),
+			peerFrame(commandHeader, []byte("Subject\x00 Delivery Status\x00")),
+			peerFrame(commandMacro, postfixDSNMacroPayload(commandEOH, eohPairs...)),
+			peerFrame(commandEOH, nil), peerFrame(commandEOM, nil),
+		)
+		stream := &splitStream{reader: bytes.NewReader(input)}
+		if err := session.Serve(context.Background(), stream); !errors.Is(err, &Error{Class: FailureContract}) || handler.calls != 0 {
+			t.Fatalf("Serve() error/calls = %v/%d", err, handler.calls)
+		}
 	}
 }
 

@@ -1,37 +1,26 @@
 package milter
 
-import (
-	"bytes"
-	"encoding/base64"
-)
+import "bytes"
 
 const (
 	postfixDSNMacroStageHeader byte   = commandHeader
 	postfixDSNMacroStageEOH    byte   = commandEOH
 	postfixDSNMacroClassEOH    uint32 = 6
-	postfixDSNMarker                  = "postfix-dsn-evidence-v1"
-	postfixDSNMacroMarker             = "{postfix_dsn_evidence}"
-	postfixDSNMacroEnvelope           = "{postfix_dsn_original_envelope}"
-	postfixDSNEOHMacroList            = postfixDSNMacroMarker + " " +
-		postfixDSNMacroEnvelope
+	postfixDSNMacroOrigin             = "{postfix_dsn_origin}"
+	postfixDSNOriginInternal          = "internal"
+	postfixDSNOriginExternal          = "external"
+	postfixDSNEOHMacroList            = postfixDSNMacroOrigin
 )
 
-const (
-	postfixDSNMacroSeenMarker uint8 = 1 << iota
-	postfixDSNMacroSeenEnvelope
-	postfixDSNMacroSeenAll = postfixDSNMacroSeenMarker |
-		postfixDSNMacroSeenEnvelope
-)
-
-// postfixDSNMacroState owns at most one complete Postfix-only EOH record.
+// postfixDSNMacroState retains the closed Postfix origin enum through EOH.
 type postfixDSNMacroState struct {
-	seen         uint8
+	seen         bool
 	confirmedEOH bool
-	envelope     postfixDSNOriginalEnvelope
+	origin       string
 }
 
 // validPostfixDSNMacroPayload validates the normal opaque Milter grammar
-// while making room only for the bounded DSN envelope macro at EOH.
+// while keeping every macro value within the ordinary metadata bound.
 func validPostfixDSNMacroPayload(payload []byte) bool {
 	if len(payload) < 1 || len(payload) > maxMilterPayloadLength {
 		return false
@@ -43,7 +32,7 @@ func validPostfixDSNMacroPayload(payload []byte) bool {
 			return false
 		}
 		value, afterValue, ok := nextNULField(payload, afterName)
-		if !ok || !validPostfixDSNMacroValue(name, value) {
+		if !ok || len(value) > 4096 {
 			return false
 		}
 		next = afterValue
@@ -63,133 +52,71 @@ func (s *postfixDSNMacroState) accept(
 	}
 	stage := payload[0]
 	next := 1
-	retained := int64(0)
+	originInPayload := false
 	for next < len(payload) {
 		name, afterName, ok := nextNULField(payload, next)
 		if !ok || len(name) == 0 || len(name) > 255 {
 			return 0, false
 		}
 		value, afterValue, ok := nextNULField(payload, afterName)
-		if !ok || !validPostfixDSNMacroValue(name, value) {
+		if !ok || len(value) > 4096 {
 			return 0, false
 		}
 		next = afterValue
-		if isPostfixDSNMacroNamespace(name) && !isPostfixDSNMacro(name) {
-			return 0, false
-		}
-		if !isPostfixDSNMacro(name) {
+		if !bytes.Equal(name, []byte(postfixDSNMacroOrigin)) {
 			continue
 		}
+		if originInPayload {
+			return 0, false
+		}
+		originInPayload = true
 		if !hasTransaction || !validPostfixDSNMacroStage(stage, state) {
 			return 0, false
 		}
-		added, accepted := s.acceptValue(name, value)
-		if !accepted {
+		origin := string(value)
+		if origin != postfixDSNOriginInternal && origin != postfixDSNOriginExternal ||
+			s.seen && s.origin != origin {
 			return 0, false
 		}
-		retained += added
+		s.seen = true
+		s.origin = origin
 	}
-	if stage == postfixDSNMacroStageEOH && s.seen == postfixDSNMacroSeenAll {
+	if stage == postfixDSNMacroStageEOH && originInPayload {
 		s.confirmedEOH = true
 	}
-	return retained, true
+	return 0, true
 }
 
 // validPostfixDSNMacroStage reflects Postfix milter8_message(): the EOH macro
 // vector is emitted before every header callback and once more at EOH. The
-// complete record must therefore tolerate identical header-stage replays, but
-// take() still requires the final EOH-stage confirmation.
+// value must therefore tolerate identical header-stage replays, but take()
+// still requires the origin macro itself in the final EOH-stage callback.
 func validPostfixDSNMacroStage(stage byte, state callbackState) bool {
 	return stage == postfixDSNMacroStageHeader &&
 		(state == stateRecipients || state == stateHeaders) ||
 		stage == postfixDSNMacroStageEOH && state == stateHeaders
 }
 
-// validPostfixDSNMacroValue keeps ordinary metadata bounded while admitting
-// the one deliberately large base64url envelope proof.
-func validPostfixDSNMacroValue(name, value []byte) bool {
-	if string(name) == postfixDSNMacroEnvelope {
-		return len(value) > 0 &&
-			len(value) <= base64.RawURLEncoding.EncodedLen(maxPostfixDSNEnvelopeBytes)
+// present reports whether this transaction supplied the trusted Postfix DSN
+// origin macro. An entirely absent value is inapplicable; once present,
+// take() must validate the EOH-confirmed enum.
+func (s *postfixDSNMacroState) present() bool { return s != nil && s.seen }
+
+// take treats exact external provenance as inapplicable regardless of ordinary
+// envelope shape; only internal provenance requires the strict outer DSN shape.
+func (s *postfixDSNMacroState) take(reverse []byte, recipients [][]byte) (PostfixDSNEvidence, bool, bool) {
+	if s == nil || !s.seen || !s.confirmedEOH {
+		return PostfixDSNEvidence{}, false, false
 	}
-	return len(value) <= 4096
-}
-
-// isPostfixDSNMacro identifies the closed macro namespace owned by this mode.
-func isPostfixDSNMacro(name []byte) bool {
-	return bytes.Equal(name, []byte(postfixDSNMacroMarker)) ||
-		bytes.Equal(name, []byte(postfixDSNMacroEnvelope))
-}
-
-// isPostfixDSNMacroNamespace prevents a partial or future local proof record
-// from being silently discarded as ordinary Milter metadata.
-func isPostfixDSNMacroNamespace(name []byte) bool {
-	return bytes.HasPrefix(name, []byte("{postfix_dsn_"))
-}
-
-// acceptValue retains one exact, non-duplicated DSN proof component.
-func (s *postfixDSNMacroState) acceptValue(name, value []byte) (int64, bool) {
-	switch string(name) {
-	case postfixDSNMacroMarker:
-		if string(value) != postfixDSNMarker {
-			return 0, false
-		}
-		if s.seen&postfixDSNMacroSeenMarker != 0 {
-			return 0, true
-		}
-		s.seen |= postfixDSNMacroSeenMarker
-		return 0, true
-	case postfixDSNMacroEnvelope:
-		envelope, ok := decodePostfixDSNOriginalEnvelope(value)
-		if !ok {
-			return 0, false
-		}
-		if s.seen&postfixDSNMacroSeenEnvelope != 0 {
-			return 0, equalPostfixDSNEnvelope(s.envelope, envelope)
-		}
-		s.envelope = envelope
-		s.seen |= postfixDSNMacroSeenEnvelope
-		stored := int64(len(envelope.sender))
-		for _, recipient := range envelope.recipients {
-			stored += int64(len(recipient))
-		}
-		return stored, true
-	default:
-		return 0, false
+	internal := s.origin == postfixDSNOriginInternal
+	s.clear()
+	if !internal {
+		return PostfixDSNEvidence{}, false, true
 	}
-}
-
-func equalPostfixDSNEnvelope(left, right postfixDSNOriginalEnvelope) bool {
-	if !bytes.Equal(left.sender, right.sender) || len(left.recipients) != len(right.recipients) {
-		return false
+	if !bytes.Equal(reverse, []byte("<>")) || len(recipients) != 1 {
+		return PostfixDSNEvidence{}, false, false
 	}
-	for index := range left.recipients {
-		if !bytes.Equal(left.recipients[index], right.recipients[index]) {
-			return false
-		}
-	}
-	return true
-}
-
-// present reports whether this transaction supplied any member of the
-// trusted Postfix DSN namespace. An entirely absent record is inapplicable;
-// once any member is present, take() must validate the complete record.
-func (s *postfixDSNMacroState) present() bool {
-	return s != nil && s.seen != 0
-}
-
-// take transfers a complete record only when the outer DSN shape is exact.
-func (s *postfixDSNMacroState) take(reverse []byte, recipients [][]byte) (PostfixDSNEvidence, bool) {
-	if s == nil || s.seen != postfixDSNMacroSeenAll || !s.confirmedEOH ||
-		!bytes.Equal(reverse, []byte("<>")) ||
-		len(recipients) != 1 {
-		return PostfixDSNEvidence{}, false
-	}
-	evidence := PostfixDSNEvidence{original: s.envelope}
-	s.seen = 0
-	s.confirmedEOH = false
-	s.envelope = postfixDSNOriginalEnvelope{}
-	return evidence, true
+	return PostfixDSNEvidence{internal: true}, true, true
 }
 
 // clear erases retained proof material when a transaction ends before EOM.
@@ -197,9 +124,7 @@ func (s *postfixDSNMacroState) clear() {
 	if s == nil {
 		return
 	}
-	clear(s.envelope.sender)
-	clearPostfixDSNRecipients(s.envelope.recipients)
-	s.seen = 0
+	s.seen = false
 	s.confirmedEOH = false
-	s.envelope = postfixDSNOriginalEnvelope{}
+	s.origin = ""
 }

@@ -1,6 +1,7 @@
 package dkim2
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"testing"
@@ -15,7 +16,7 @@ func TestDSNSigningRequiresDedicatedEvidenceAndRoute(t *testing.T) {
 	outer := []byte("From: postmaster@example.test\r\n" +
 		"Content-Type: multipart/report; report-type=delivery-status; boundary=dsn\r\n\r\n" +
 		"--dsn\r\nContent-Type: text/plain\r\n\r\nhuman\r\n" +
-		"--dsn\r\nContent-Type: message/delivery-status\r\n\r\nReporting-MTA: dns; example.test\r\n\r\n" +
+		"--dsn\r\nContent-Type: message/delivery-status\r\n\r\nReporting-MTA: dns; example.test\r\n\r\nFinal-Recipient: rfc822; bob@example.test\r\nAction: failed\r\nStatus: 5.1.1\r\n\r\n" +
 		"--dsn\r\nContent-Type: message/rfc822\r\n\r\n" + string(original) + "\r\n--dsn--\r\n")
 	identity, err := NewDSNIdentity("example.test")
 	if err != nil {
@@ -23,7 +24,7 @@ func TestDSNSigningRequiresDedicatedEvidenceAndRoute(t *testing.T) {
 	}
 	evidence, err := fixture.facade.EvaluateDSNForSigning(context.Background(), NewDSNSigningEvidenceRequest(
 		outer, []byte("<>"), [][]byte{[]byte("<alice@example.test>")},
-		[]byte("<alice@example.test>"), [][]byte{[]byte("<bob@example.test>")}, identity,
+		identity,
 	))
 	if err != nil || !evidence.Valid() {
 		t.Fatalf("EvaluateDSNForSigning() evidence=%t error=%v", evidence.Valid(), err)
@@ -63,7 +64,7 @@ func TestDSNEvidenceRequiresOuterRecipientToMatchHighestMailFrom(t *testing.T) {
 	outer := []byte("From: postmaster@example.test\r\n" +
 		"Content-Type: multipart/report; report-type=delivery-status; boundary=dsn\r\n\r\n" +
 		"--dsn\r\nContent-Type: text/plain\r\n\r\nhuman\r\n" +
-		"--dsn\r\nContent-Type: message/delivery-status\r\n\r\nReporting-MTA: dns; example.test\r\n\r\n" +
+		"--dsn\r\nContent-Type: message/delivery-status\r\n\r\nReporting-MTA: dns; example.test\r\n\r\nFinal-Recipient: rfc822; bob@example.test\r\nAction: failed\r\nStatus: 5.1.1\r\n\r\n" +
 		"--dsn\r\nContent-Type: message/rfc822\r\n\r\n" + string(original) + "\r\n--dsn--\r\n")
 	identity, err := NewDSNIdentity("example.test")
 	if err != nil {
@@ -71,10 +72,17 @@ func TestDSNEvidenceRequiresOuterRecipientToMatchHighestMailFrom(t *testing.T) {
 	}
 	_, err = fixture.facade.EvaluateDSNForSigning(context.Background(), NewDSNSigningEvidenceRequest(
 		outer, []byte("<>"), [][]byte{[]byte("<postmaster@example.test>")},
-		[]byte("<alice@example.test>"), [][]byte{[]byte("<bob@example.test>")}, identity,
+		identity,
 	))
 	if !errors.Is(err, newSigningError(SigningErrorAuthorizationDenied)) {
 		t.Fatalf("outer recipient mismatch error = %v", err)
+	}
+	linkedMismatch := bytes.Replace(outer, []byte("bob@example.test"), []byte("other@example.test"), 1)
+	_, err = fixture.facade.EvaluateDSNForSigning(context.Background(), NewDSNSigningEvidenceRequest(
+		linkedMismatch, []byte("<>"), [][]byte{[]byte("<alice@example.test>")}, identity,
+	))
+	if !errors.Is(err, newSigningError(SigningErrorAuthorizationDenied)) {
+		t.Fatalf("delivery-status recipient mismatch error = %v", err)
 	}
 }
 
@@ -89,7 +97,7 @@ func TestDSNEvidenceAllowsAuthenticatedForeignOriginalRecipient(t *testing.T) {
 	outer := []byte("From: postmaster@example.test\r\n" +
 		"Content-Type: multipart/report; report-type=delivery-status; boundary=dsn\r\n\r\n" +
 		"--dsn\r\nContent-Type: text/plain\r\n\r\nhuman\r\n" +
-		"--dsn\r\nContent-Type: message/delivery-status\r\n\r\nReporting-MTA: dns; example.test\r\n\r\n" +
+		"--dsn\r\nContent-Type: message/delivery-status\r\n\r\nReporting-MTA: dns; example.test\r\n\r\nFinal-Recipient: rfc822; bob@remote.example.test\r\nAction: failed\r\nStatus: 5.1.1\r\n\r\n" +
 		"--dsn\r\nContent-Type: message/rfc822\r\n\r\n" + string(original) + "\r\n--dsn--\r\n")
 	identity, err := NewDSNIdentity("example.test")
 	if err != nil {
@@ -97,25 +105,23 @@ func TestDSNEvidenceAllowsAuthenticatedForeignOriginalRecipient(t *testing.T) {
 	}
 	evidence, err := fixture.facade.EvaluateDSNForSigning(context.Background(), NewDSNSigningEvidenceRequest(
 		outer, []byte("<>"), [][]byte{[]byte("<alice@example.test>")},
-		[]byte("<alice@example.test>"), [][]byte{originalRecipient}, identity,
+		identity,
 	))
 	if err != nil || !evidence.Valid() {
 		t.Fatalf("EvaluateDSNForSigning() evidence=%t error=%v", evidence.Valid(), err)
 	}
 }
 
-// TestDSNEvidenceAllowsTrustedPostSigningRecipientExpansion proves that a
-// local MTA may add an archival recipient after DKIM2 originator signing. The
-// authenticated rt= set must remain a subset of the independently observed
-// Postfix envelope; an unsigned recipient must never replace signed evidence.
-func TestDSNEvidenceAllowsTrustedPostSigningRecipientExpansion(t *testing.T) {
+// TestDSNEvidenceDoesNotFabricateOriginalEnvelope proves DSN authorization no
+// longer accepts a copied signed envelope as independent observation.
+func TestDSNEvidenceDoesNotFabricateOriginalEnvelope(t *testing.T) {
 	fixture := newPublicSigningFixture(t)
 	originalRecipient := []byte("<bob@remote.example.test>")
 	original := signDSNOriginalForRecipient(t, fixture, originalRecipient)
 	outer := []byte("From: postmaster@example.test\r\n" +
 		"Content-Type: multipart/report; report-type=delivery-status; boundary=dsn\r\n\r\n" +
 		"--dsn\r\nContent-Type: text/plain\r\n\r\nhuman\r\n" +
-		"--dsn\r\nContent-Type: message/delivery-status\r\n\r\nReporting-MTA: dns; example.test\r\n\r\n" +
+		"--dsn\r\nContent-Type: message/delivery-status\r\n\r\nReporting-MTA: dns; example.test\r\n\r\nFinal-Recipient: rfc822; bob@remote.example.test\r\nAction: failed\r\nStatus: 5.1.1\r\n\r\n" +
 		"--dsn\r\nContent-Type: message/rfc822\r\n\r\n" + string(original) + "\r\n--dsn--\r\n")
 	identity, err := NewDSNIdentity("example.test")
 	if err != nil {
@@ -123,20 +129,10 @@ func TestDSNEvidenceAllowsTrustedPostSigningRecipientExpansion(t *testing.T) {
 	}
 	evidence, err := fixture.facade.EvaluateDSNForSigning(context.Background(), NewDSNSigningEvidenceRequest(
 		outer, []byte("<>"), [][]byte{[]byte("<alice@example.test>")},
-		[]byte("<alice@example.test>"), [][]byte{
-			originalRecipient,
-			[]byte("<archive@archive.example.test>"),
-		}, identity,
+		identity,
 	))
 	if err != nil || !evidence.Valid() {
 		t.Fatalf("EvaluateDSNForSigning(expanded envelope) evidence=%t error=%v", evidence.Valid(), err)
-	}
-	_, err = fixture.facade.EvaluateDSNForSigning(context.Background(), NewDSNSigningEvidenceRequest(
-		outer, []byte("<>"), [][]byte{[]byte("<alice@example.test>")},
-		[]byte("<alice@example.test>"), [][]byte{[]byte("<archive@archive.example.test>")}, identity,
-	))
-	if !errors.Is(err, newSigningError(SigningErrorAuthorizationDenied)) {
-		t.Fatalf("EvaluateDSNForSigning(replaced signed recipient) error=%v", err)
 	}
 }
 

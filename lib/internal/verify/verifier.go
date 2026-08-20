@@ -31,12 +31,13 @@ func (v Verifier) VerifyCurrent(ctx context.Context, request Request) (Result, e
 	return result, err
 }
 
-// VerifyDeliveryStatusComplete verifies a complete embedded DSN original. It
-// keeps exact reverse-path binding while allowing only trusted local-MTA
-// recipient expansion after originator signing.
+// VerifyDeliveryStatusComplete verifies a complete embedded DSN original
+// without fabricating an observed SMTP envelope for the embedded object. The
+// dedicated DSN caller must separately bind authenticated mf= and rt= claims
+// to the outer report and delivery-status fields.
 func (v Verifier) VerifyDeliveryStatusComplete(ctx context.Context, request Request) (Result, error) {
 	if request.TargetSequence != 0 || request.SkipEnvelopeForNonCurrentTarget ||
-		!request.RequireEnvelope || request.Envelope.IsZero() {
+		request.RequireEnvelope || !request.Envelope.IsZero() {
 		return Result{}, newError(ErrorCodeInvalidRequest, ErrorLocation{}, ErrorDetails{Class: ErrorClassRequest}, nil)
 	}
 	result, _, err := v.verifyCurrent(ctx, request, true)
@@ -398,8 +399,11 @@ func targetStatus(hashPass bool, timestampPass bool, envelopePass bool, domainAl
 }
 
 // checkEnvelope applies current-envelope matching semantics for the selected target.
-func (v Verifier) checkEnvelope(request Request, targetSignature signature.Signature, target Target, currentSequence uint64, deliveryStatusEnvelope bool) envelopeEvaluation {
+func (v Verifier) checkEnvelope(request Request, targetSignature signature.Signature, target Target, currentSequence uint64, deliveryStatusEmbedded bool) envelopeEvaluation {
 	if targetSignature.HasNextDomain() {
+		return envelopeCheckResult(target, EnvelopeStatusNotApplicable)
+	}
+	if deliveryStatusEmbedded {
 		return envelopeCheckResult(target, EnvelopeStatusNotApplicable)
 	}
 	if target.Sequence != currentSequence && request.SkipEnvelopeForNonCurrentTarget && !request.RequireEnvelope {
@@ -409,9 +413,6 @@ func (v Verifier) checkEnvelope(request Request, targetSignature signature.Signa
 		return envelopeLimitCheckResult(target)
 	}
 
-	if deliveryStatusEnvelope {
-		return envelopeCheckResult(target, compareDeliveryStatusOriginalEnvelope(request.Envelope, targetSignature))
-	}
 	return envelopeCheckResult(target, compareCurrentEnvelope(request.Envelope, targetSignature))
 }
 

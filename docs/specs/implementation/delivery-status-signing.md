@@ -6,13 +6,13 @@ the dedicated daemon and library boundary.
 M25 defines a bounded, byte-preserving implementation of the Draft-04 Section
 12 delivery-status-notification (DSN) initial-signing boundary. The originator
 Milter continues to tempfail every null reverse-path. The follow-on
-`postfix_dsn` mode is a distinct qualified source and remains undeployable
-until the corresponding Postfix patch and harness are complete.
+`postfix_dsn` mode is a distinct qualified source bound to the Postfix origin
+enum; production activation still requires unchanged live qualification.
 
 The follow-on Postfix-specific adapter contract is defined in
-[`postfix-dsn-evidence.md`](postfix-dsn-evidence.md). It deliberately retains
-the default null-sender rejection until the Postfix patch and its qualification
-evidence are complete.
+[`postfix-dsn-origin.md`](postfix-dsn-origin.md). It deliberately retains
+the originator null-sender rejection while giving the dedicated DSN adapter an
+explicit qualification contract.
 
 ## Source Documents
 
@@ -44,8 +44,8 @@ all null senders.
 
 That temporary Milter restriction is safe, but it is not DSN support. A
 trusted DSN signer must derive all required evidence from exact message bytes,
-the current outer envelope, and an independently supplied original SMTP
-envelope. It must never trust a caller-supplied boolean such as `is_dsn`, an
+the current outer envelope, plus a Postfix-internal origin assertion that only
+bounce(8) can set. It must never trust a caller-supplied `is_dsn`, an
 SMTP HELO name, an arbitrary header, a tenant default, a wildcard, or a
 configured DSN domain alone.
 
@@ -61,7 +61,7 @@ The product provides a separate, locally authorized DSN path that:
 4. validates the embedded original's relevant DKIM2 fields before any profile
    or private-key access;
 5. proves the Draft-04 Section 12.1.2 local-system and recipient-alignment
-   conditions from a daemon-owned local identity and exact observed envelope
+   conditions from a daemon-owned local identity and authenticated embedded
    evidence;
 6. signs only the validated outer DSN using a dedicated datasource policy and
    route capability; and
@@ -93,7 +93,7 @@ Implemented in M25:
 
 Out of scope:
 
-- Milter DSN acceptance or Milter callback trust changes;
+- generic Milter DSN trust outside the separately qualified Postfix origin enum;
 - DSN propagation and the Draft-04 Section 12.1.1 original-message rebuild;
 - arbitrary MIME support beyond the closed DSN structure;
 - SMTP transmission, queueing, DSN generation policy, or delivery retry;
@@ -132,21 +132,22 @@ Until the draft specifies a DSN-specific alignment algorithm, M25 uses exact
 canonical ASCII DNS-domain equality for this relationship. It does not reuse
 the relaxed ordinary `d=`/`mf=` alignment rule by implication.
 
-The daemon independently supplies the original observed SMTP envelope. A
-qualified Postfix adapter may derive the candidate local identity from that
-trusted original reverse-path for multi-domain operation. The evidence gate
-then proves exact equality with the embedded original's authenticated highest
-`d=` before resolving a policy or private key. No header, outer null sender,
-route, HELO, suffix, tenant default, or unverified caller-provided claim
-substitutes for that proof.
+No original SMTP envelope is available independently at bounce time. The
+embedded verifier therefore marks current-envelope comparison not applicable
+instead of copying signed `mf=` and `rt=` claims into an observed envelope.
+It still verifies cryptography, available hashes, timestamp, custody, and the
+authenticated highest `d=`, `mf=`, and `rt=` fields. The configured local
+identity must equal authenticated `d=` before resolving a policy or private
+key. At least one RFC 3464 original/final recipient must link to an
+authenticated highest `rt=` path.
 
 ### API Shape
 
 `POST /v1/dsn/sign` validates an outgoing DSN and returns only a completed
 outer Message-Instance and DKIM2-Signature action plan on success. Its request
 carries raw outer message bytes, an exact outer `<>` envelope with exactly one
-recipient, an independently observed original SMTP envelope, and a signing
-context. It contains no caller-derived DSN validity, alignment, identity, or
+recipient, and a signing context. It contains no copied original envelope or
+caller-derived DSN validity, alignment, identity, or
 verification fields. The route requires the distinct
 `X-DKIM2-DSN-Sign-Capability` capability and cannot use the ordinary sign or
 revise capability.
@@ -174,8 +175,8 @@ parallel REST model.
 - `cmd/dkim2d/internal/signingstore` and datasource providers: own the
   explicit `delivery_status` profile use, without originator fallback.
 - `cmd/dkim2ctl`: owns only generated-client fixture and stable-output support.
-- `cmd/dkim2-milter`: remains unchanged except mechanical generated interface
-  conformance; it keeps the null-sender tempfail.
+- `cmd/dkim2-milter`: owns the separately qualified Postfix origin-enum adapter;
+  the generic originator route keeps the null-sender tempfail.
 
 ## Security and Privacy
 
@@ -256,8 +257,8 @@ Measured effort is recorded in the ignored prompt ledger during execution.
 - All REST changes originate in OpenAPI and generated artifacts are current.
 - `dkim2ctl` executes draft-versioned DSN positive and negative fixtures over
   the generated client with separate protected capabilities.
-- The Postfix patch and live qualification remain an explicit deployment gap;
-  the generic originator path remains closed.
+- Live qualification remains the deployment gate; the generic originator path
+  remains closed.
 
 ## Completion Evidence
 
@@ -271,7 +272,7 @@ Postfix mode cannot be confused with it.
 
 | Area | Required result | Status |
 | --- | --- | --- |
-| Scope | Outgoing initial DSN signing and the DKIM2-side Postfix adapter are complete; the Postfix patch, received DSNs, and propagation remain deferred | complete |
+| Scope | Outgoing initial DSN signing, the Postfix origin enum, and the DKIM2-side adapter are complete; received DSNs and propagation remain deferred | complete |
 | Protocol | Draft-04 Section 12 and RFC 3462/3464 evidence is explicit, including exact highest `mf=` recipient binding | complete |
 | Security | Generic null-path bypass is closed; identity, evidence, profile, ticket, and capability are purpose-separated | complete |
 | Boundaries | Library, daemon, generated OpenAPI client, `dkim2ctl`, and dedicated Postfix Milter path are purpose-separated | complete |

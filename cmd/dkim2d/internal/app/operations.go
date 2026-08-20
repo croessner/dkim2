@@ -30,7 +30,7 @@ const (
 	// FidelityMilterReconstructedCRLF identifies exact callback reconstruction.
 	FidelityMilterReconstructedCRLF MessageFidelity = "milter_reconstructed_crlf"
 	// FidelityPostfixDSNMilterReconstructedCRLF identifies callback reconstruction
-	// admitted only after the Postfix DSN adapter validated local EOD evidence.
+	// admitted only after the Postfix DSN adapter validated exact internal origin.
 	FidelityPostfixDSNMilterReconstructedCRLF MessageFidelity = "postfix_dsn_milter_reconstructed_crlf"
 	// FidelityEximLocalScanObservedCRLF identifies Exim receive-time observed bytes.
 	FidelityEximLocalScanObservedCRLF MessageFidelity = "exim_local_scan_observed_crlf"

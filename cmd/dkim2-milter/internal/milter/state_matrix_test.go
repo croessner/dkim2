@@ -229,7 +229,7 @@ func TestPostfixNonSMTPBarePathsAreNormalized(t *testing.T) {
 		t.Fatalf("Serve() error = %v", err)
 	}
 	if handler.calls != 1 ||
-		!bytes.Equal(handler.message.ReversePath(), []byte("<sender@example.test>")) ||
+		!bytes.Equal(handler.message.ReversePath(), []byte(testSenderPath)) ||
 		!bytes.Equal(handler.message.Recipients()[0], []byte("<recipient@example.test>")) {
 		t.Fatalf("normalized callback path was not retained calls=%d", handler.calls)
 	}

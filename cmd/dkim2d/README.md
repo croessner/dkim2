@@ -272,7 +272,7 @@ remains permanent. HTTP 204 is never an availability fallback.
 
 Null senders are classified by the originator Milter before daemon I/O and
 continue to tempfail there. The separate `postfix_dsn` adapter may call the DSN
-route only after exact Postfix-only EOD evidence validation and declares
+route only after exact Postfix-only `internal` origin validation and declares
 `postfix_dsn_milter_reconstructed_crlf`; it requires the corresponding Postfix
 patch before deployment. Address literals and otherwise unsupported valid
 SMTPUTF8 envelopes remain not applicable and continue unchanged. Malformed

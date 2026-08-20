@@ -21,9 +21,7 @@ func TestVerifyDeliveryStatusHeadersOnlyProvesHeadersAreNotAnEmptyBody(t *testin
 	fixture := newDeliveryStatusHeadersOnlyFixture(t)
 	verifier := mustVerifierForFixture(t, fixture)
 	request := Request{
-		Message:         fixture.message,
-		Envelope:        NewEnvelope([]byte("<sender@example.test>"), [][]byte{[]byte("<recipient@example.test>")}),
-		RequireEnvelope: true,
+		Message: fixture.message,
 	}
 
 	evidence, err := verifier.VerifyDeliveryStatusHeadersOnly(context.Background(), request)
@@ -39,40 +37,22 @@ func TestVerifyDeliveryStatusHeadersOnlyProvesHeadersAreNotAnEmptyBody(t *testin
 		t.Fatalf("rawmsg.Parse(delimited empty body) error=%v", parseErr)
 	}
 	_, err = verifier.VerifyDeliveryStatusHeadersOnly(context.Background(), Request{
-		Message:         delimited,
-		Envelope:        request.Envelope,
-		RequireEnvelope: true,
+		Message: delimited,
 	})
 	if !IsErrorCode(err, ErrorCodeInvalidRequest) {
 		t.Fatalf("VerifyDeliveryStatusHeadersOnly(delimited empty body) error=%v, want invalid request", err)
 	}
 }
 
-// TestVerifyDeliveryStatusHeadersOnlyAllowsTrustedRecipientExpansion proves
-// the header-only DSN path admits a local archival recipient added after
-// signing while still requiring every authenticated rt= path to be present.
-func TestVerifyDeliveryStatusHeadersOnlyAllowsTrustedRecipientExpansion(t *testing.T) {
+// TestVerifyDeliveryStatusHeadersOnlyDoesNotRequireFabricatedEnvelope proves
+// the embedded DSN verifier authenticates protocol bytes without copied claims.
+func TestVerifyDeliveryStatusHeadersOnlyDoesNotRequireFabricatedEnvelope(t *testing.T) {
 	fixture := newDeliveryStatusHeadersOnlyFixture(t)
 	verifier := mustVerifierForFixture(t, fixture)
-	request := Request{
-		Message: fixture.message,
-		Envelope: NewEnvelope([]byte("<sender@example.test>"), [][]byte{
-			[]byte("<recipient@example.test>"),
-			[]byte("<archive@archive.example.test>"),
-		}),
-		RequireEnvelope: true,
-	}
+	request := Request{Message: fixture.message}
 	evidence, err := verifier.VerifyDeliveryStatusHeadersOnly(context.Background(), request)
 	if err != nil || evidence.Status() != TargetStatusPass || !evidence.Valid() {
 		t.Fatalf("VerifyDeliveryStatusHeadersOnly(expanded envelope) evidence=%#v error=%v", evidence, err)
-	}
-	request.Envelope = NewEnvelope(
-		[]byte("<sender@example.test>"),
-		[][]byte{[]byte("<archive@archive.example.test>")},
-	)
-	evidence, err = verifier.VerifyDeliveryStatusHeadersOnly(context.Background(), request)
-	if err != nil || evidence.Status() != TargetStatusFail || evidence.Valid() {
-		t.Fatalf("VerifyDeliveryStatusHeadersOnly(replaced signed recipient) evidence=%#v error=%v", evidence, err)
 	}
 }
 
@@ -86,9 +66,7 @@ func TestVerifyDeliveryStatusHeadersOnlyRejectsChangedHeader(t *testing.T) {
 		t.Fatalf("rawmsg.Parse(changed header) error=%v", err)
 	}
 	evidence, verifyErr := verifier.VerifyDeliveryStatusHeadersOnly(context.Background(), Request{
-		Message:         changed,
-		Envelope:        NewEnvelope([]byte("<sender@example.test>"), [][]byte{[]byte("<recipient@example.test>")}),
-		RequireEnvelope: true,
+		Message: changed,
 	})
 	if verifyErr != nil || evidence.Status() != TargetStatusFail || evidence.Valid() {
 		t.Fatalf("VerifyDeliveryStatusHeadersOnly(changed header) evidence=%#v error=%v", evidence, verifyErr)

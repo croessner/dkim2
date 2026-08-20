@@ -823,9 +823,6 @@ type DSNSignRequest struct {
 	// Message RFC 5322 DSN bytes. Only raw_rfc5322 or the separately authorized postfix_dsn_milter_reconstructed_crlf fidelity is accepted.
 	Message MessageInput `json:"message"`
 
-	// OriginalSmtp Independently observed envelope for the originally transmitted message embedded by the DSN. It must not be inferred from DSN text.
-	OriginalSmtp SMTPInput `json:"original_smtp"`
-
 	// OuterSmtp Exact observed envelope of the DSN itself. mail_from must be <> and rcpt_to must contain exactly one recipient.
 	OuterSmtp SMTPInput `json:"outer_smtp"`
 }

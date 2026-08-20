@@ -9,17 +9,15 @@ import (
 	"github.com/croessner/dkim2/cmd/dkim2d/internal/signingstore"
 )
 
-// DeliveryStatusRequest carries exact, independently observed DSN and original
-// SMTP evidence into the daemon's dedicated signing operation.
+// DeliveryStatusRequest carries exact outer DSN evidence into the daemon's
+// dedicated signing operation.
 type DeliveryStatusRequest struct {
-	raw                []byte
-	outerReverse       []byte
-	outerRecipients    [][]byte
-	originalReverse    []byte
-	originalRecipients [][]byte
-	tenant             string
-	domain             string
-	fidelity           MessageFidelity
+	raw             []byte
+	outerReverse    []byte
+	outerRecipients [][]byte
+	tenant          string
+	domain          string
+	fidelity        MessageFidelity
 }
 
 // deliveryStatusEvidencePrivateKeySigner makes the pre-policy evidence signer
@@ -35,18 +33,16 @@ func (deliveryStatusEvidencePrivateKeySigner) SignDigest(
 	return dkim2.PrivateKeySignResult{}, dkim2.NewTemporaryProviderError()
 }
 
-// NewDeliveryStatusRequest snapshots one admitted DSN representation and its
-// independently observed original SMTP envelope.
-func NewDeliveryStatusRequest(raw, outerReverse []byte, outerRecipients [][]byte, originalReverse []byte, originalRecipients [][]byte, tenant, domain string, fidelity MessageFidelity) (DeliveryStatusRequest, error) {
+// NewDeliveryStatusRequest snapshots one admitted DSN representation.
+func NewDeliveryStatusRequest(raw, outerReverse []byte, outerRecipients [][]byte, tenant, domain string, fidelity MessageFidelity) (DeliveryStatusRequest, error) {
 	if len(raw) == 0 || !bytes.Equal(outerReverse, []byte("<>")) || len(outerRecipients) != 1 ||
-		len(originalRecipients) == 0 || tenant == "" || domain == "" ||
+		tenant == "" || domain == "" ||
 		!AdmitsDeliveryStatusFidelity(fidelity) {
 		return DeliveryStatusRequest{}, &DomainError{}
 	}
 	return DeliveryStatusRequest{
 		raw: bytes.Clone(raw), outerReverse: bytes.Clone(outerReverse),
-		outerRecipients: cloneOperationRecipients(outerRecipients), originalReverse: bytes.Clone(originalReverse),
-		originalRecipients: cloneOperationRecipients(originalRecipients), tenant: tenant, domain: domain, fidelity: fidelity,
+		outerRecipients: cloneOperationRecipients(outerRecipients), tenant: tenant, domain: domain, fidelity: fidelity,
 	}, nil
 }
 
@@ -59,14 +55,6 @@ func (r DeliveryStatusRequest) OuterReversePath() []byte { return bytes.Clone(r.
 // OuterRecipients returns isolated outer DSN recipient evidence.
 func (r DeliveryStatusRequest) OuterRecipients() [][]byte {
 	return cloneOperationRecipients(r.outerRecipients)
-}
-
-// OriginalReversePath returns independently observed original SMTP reverse-path evidence.
-func (r DeliveryStatusRequest) OriginalReversePath() []byte { return bytes.Clone(r.originalReverse) }
-
-// OriginalRecipients returns independently observed original SMTP recipient evidence.
-func (r DeliveryStatusRequest) OriginalRecipients() [][]byte {
-	return cloneOperationRecipients(r.originalRecipients)
 }
 
 // Tenant returns the bounded administrative tenant.
@@ -111,7 +99,7 @@ func (s *SigningService) SignDeliveryStatus(ctx context.Context, request Deliver
 	}
 	evidence, err := evidenceSigner.EvaluateDSNForSigning(ctx, dkim2.NewDSNSigningEvidenceRequest(
 		request.RawMessage(), request.OuterReversePath(), request.OuterRecipients(),
-		request.OriginalReversePath(), request.OriginalRecipients(), identity,
+		identity,
 	))
 	if err != nil {
 		return operationFailureFromError(OperationDeliveryStatus, err)

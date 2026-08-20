@@ -107,8 +107,6 @@ type fixtureDSNSignInput struct {
 	OuterFidelity      *string  `json:"outer_fidelity,omitempty"`
 	OuterMailFrom      string   `json:"outer_mail_from"`
 	OuterRecipients    []string `json:"outer_rcpt_to"`
-	OriginalMailFrom   string   `json:"original_mail_from"`
-	OriginalRecipients []string `json:"original_rcpt_to"`
 	Tenant             string   `json:"tenant"`
 	Domain             string   `json:"domain"`
 }
@@ -589,7 +587,7 @@ func validateReviseInput(input fixtureReviseInput, expectation fixtureExpectatio
 	return decoded, nil
 }
 
-// validateDSNSignInput checks the distinct DSN outer and original envelopes.
+// validateDSNSignInput checks the exact outer DSN envelope.
 func validateDSNSignInput(input fixtureDSNSignInput, expectation fixtureExpectation) (int, error) {
 	decoded, err := validateMessageAndEnvelope(
 		input.OuterMessageBase64, input.OuterFidelity, input.OuterMailFrom, input.OuterRecipients,
@@ -599,10 +597,6 @@ func validateDSNSignInput(input fixtureDSNSignInput, expectation fixtureExpectat
 		*input.OuterFidelity != string(generated.RawRfc5322) ||
 		!validTenant(input.Tenant) || !validDomain(input.Domain) ||
 		!validOperationExpectation(string(OperationDSNSign), expectation) {
-		return 0, NewExitError(ExitFixture)
-	}
-	if !validSMTPEnvelope(input.OriginalMailFrom, input.OriginalRecipients) ||
-		input.OriginalMailFrom == "<>" {
 		return 0, NewExitError(ExitFixture)
 	}
 	return decoded, nil
@@ -856,16 +850,11 @@ func generatedDSNSignRequest(input fixtureDSNSignInput) (generated.DSNSignReques
 	if err != nil {
 		return generated.DSNSignRequest{}, err
 	}
-	original, err := generatedSMTPInput(input.OriginalMailFrom, input.OriginalRecipients)
-	if err != nil {
-		return generated.DSNSignRequest{}, err
-	}
 	return generated.DSNSignRequest{
-		ApiVersion:   generated.V1,
-		Draft:        generated.DraftIetfDkimDkim2Spec04,
-		Message:      message,
-		OuterSmtp:    outer,
-		OriginalSmtp: original,
+		ApiVersion: generated.V1,
+		Draft:      generated.DraftIetfDkimDkim2Spec04,
+		Message:    message,
+		OuterSmtp:  outer,
 		Context: generated.SigningContext{
 			Tenant: input.Tenant,
 			Domain: input.Domain,

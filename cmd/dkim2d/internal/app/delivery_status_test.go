@@ -19,14 +19,11 @@ func (s *deliveryStatusAcquireSpy) Acquire(context.Context) (signingLease, error
 // daemon request cannot be used as a generic null-sender signing wrapper.
 func TestNewDeliveryStatusRequestRejectsUntrustedShapes(t *testing.T) {
 	validOuterRecipient := [][]byte{[]byte("<postmaster@example.test>")}
-	validOriginalRecipient := [][]byte{[]byte("<bob@example.test>")}
 	valid := func() (DeliveryStatusRequest, error) {
 		return NewDeliveryStatusRequest(
 			[]byte("From: postmaster@example.test\r\n\r\n"),
 			[]byte("<>"),
 			validOuterRecipient,
-			[]byte("<alice@example.test>"),
-			validOriginalRecipient,
 			"tenant-a",
 			"example.test",
 			FidelityRawRFC5322,
@@ -41,8 +38,7 @@ func TestNewDeliveryStatusRequestRejectsUntrustedShapes(t *testing.T) {
 	}
 	postfixRequest, err := NewDeliveryStatusRequest(
 		[]byte("From: postmaster@example.test\r\n\r\n"),
-		[]byte("<>"), validOuterRecipient, []byte("<alice@example.test>"),
-		validOriginalRecipient, "tenant-a", "example.test",
+		[]byte("<>"), validOuterRecipient, "tenant-a", "example.test",
 		FidelityPostfixDSNMilterReconstructedCRLF,
 	)
 	if err != nil || postfixRequest.Fidelity() != FidelityPostfixDSNMilterReconstructedCRLF {
@@ -55,25 +51,25 @@ func TestNewDeliveryStatusRequestRejectsUntrustedShapes(t *testing.T) {
 		{
 			name: "non-null outer reverse path",
 			mutate: func() (DeliveryStatusRequest, error) {
-				return NewDeliveryStatusRequest([]byte("x"), []byte("<sender@example.test>"), validOuterRecipient, []byte("<alice@example.test>"), validOriginalRecipient, "tenant-a", "example.test", FidelityRawRFC5322)
+				return NewDeliveryStatusRequest([]byte("x"), []byte("<sender@example.test>"), validOuterRecipient, "tenant-a", "example.test", FidelityRawRFC5322)
 			},
 		},
 		{
 			name: "multiple outer recipients",
 			mutate: func() (DeliveryStatusRequest, error) {
-				return NewDeliveryStatusRequest([]byte("x"), []byte("<>"), [][]byte{[]byte("<one@example.test>"), []byte("<two@example.test>")}, []byte("<alice@example.test>"), validOriginalRecipient, "tenant-a", "example.test", FidelityRawRFC5322)
+				return NewDeliveryStatusRequest([]byte("x"), []byte("<>"), [][]byte{[]byte("<one@example.test>"), []byte("<two@example.test>")}, "tenant-a", "example.test", FidelityRawRFC5322)
 			},
 		},
 		{
-			name: "missing original recipients",
+			name: "missing raw message",
 			mutate: func() (DeliveryStatusRequest, error) {
-				return NewDeliveryStatusRequest([]byte("x"), []byte("<>"), validOuterRecipient, []byte("<alice@example.test>"), nil, "tenant-a", "example.test", FidelityRawRFC5322)
+				return NewDeliveryStatusRequest(nil, []byte("<>"), validOuterRecipient, "tenant-a", "example.test", FidelityRawRFC5322)
 			},
 		},
 		{
 			name: "non-raw fidelity",
 			mutate: func() (DeliveryStatusRequest, error) {
-				return NewDeliveryStatusRequest([]byte("x"), []byte("<>"), validOuterRecipient, []byte("<alice@example.test>"), validOriginalRecipient, "tenant-a", "example.test", FidelityMilterReconstructedCRLF)
+				return NewDeliveryStatusRequest([]byte("x"), []byte("<>"), validOuterRecipient, "tenant-a", "example.test", FidelityMilterReconstructedCRLF)
 			},
 		},
 	} {
@@ -99,8 +95,6 @@ func TestSigningServiceRejectsInvalidDSNBeforePolicyAccess(t *testing.T) {
 		[]byte("From: postmaster@example.test\r\n\r\nnot a DSN\r\n"),
 		[]byte("<>"),
 		[][]byte{[]byte("<alice@example.test>")},
-		[]byte("<alice@example.test>"),
-		[][]byte{[]byte("<bob@example.test>")},
 		"tenant-a",
 		"example.test",
 		FidelityRawRFC5322,
@@ -143,14 +137,12 @@ func TestSigningServiceSignsAuthenticatedDeliveryStatus(t *testing.T) {
 	outer := []byte("From: postmaster@origin.example.test\r\n" +
 		"Content-Type: multipart/report; report-type=delivery-status; boundary=dsn\r\n\r\n" +
 		"--dsn\r\nContent-Type: text/plain\r\n\r\nhuman\r\n" +
-		"--dsn\r\nContent-Type: message/delivery-status\r\n\r\nReporting-MTA: dns; origin.example.test\r\n\r\n" +
+		"--dsn\r\nContent-Type: message/delivery-status\r\n\r\nReporting-MTA: dns; origin.example.test\r\n\r\nFinal-Recipient: rfc822; recipient@origin.example.test\r\nAction: failed\r\nStatus: 5.1.1\r\n\r\n" +
 		"--dsn\r\nContent-Type: message/rfc822\r\n\r\n" + string(embedded) + "\r\n--dsn--\r\n")
 	request, err := NewDeliveryStatusRequest(
 		outer,
 		[]byte("<>"),
 		[][]byte{[]byte("<sender@origin.example.test>")},
-		originalRequest.ReversePath(),
-		originalRequest.Recipients(),
 		signingServiceTestTenant,
 		signingServiceOriginDomain,
 		FidelityRawRFC5322,

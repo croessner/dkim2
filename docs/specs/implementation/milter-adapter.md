@@ -326,31 +326,20 @@ group switch could violate the draft's Bcc non-disclosure MUST. Ambiguous
 routes, recipients, policies, keys, algorithms, or signer state fail closed.
 
 An originator route may select its signing domain from the strictly validated
-ASCII SMTP reverse-path while retaining one statically configured tenant. A
-`postfix_dsn` route may apply the same selection only to the independently
-authenticated original reverse-path carried by `postfix-dsn-evidence-v1`; it
-never derives authority from the outer null sender. This
-is adapter-local route selection, not datasource fallback: it strips a valid
-obsolete source route if present, rejects address literals,
-SMTPUTF8 domains, and malformed framing, canonicalizes only ASCII DNS case, and
-sends the resulting exact tenant/domain pair through the unchanged daemon
-authorization and datasource lookup. For a DSN, the daemon additionally
-requires exact equality with the embedded original's verified highest `d=`
-before policy resolution. The option is unavailable to inbound and
-ordinary-transit modes. Static domain selection remains the default.
+ASCII SMTP reverse-path while retaining one statically configured tenant.
+`postfix_dsn` instead requires a static domain because the bounded Postfix
+origin enum carries no original envelope. The daemon requires exact equality
+with the embedded original's verified highest `d=` before policy resolution.
 
 Every originator route also retains one separate canonical
 `signing.dsn_domain`. This stable configuration path is a reserved prerequisite
 for future DSN support, not sufficient signing authority.
 
-The current adapter tempfails every exact null reverse-path `<>` before daemon,
-datasource, or private-key access. Milter callbacks and the current daemon
-request contract cannot authenticate a valid RFC 3462 three-part
-`multipart/report` DSN, Draft-04 Section 12.1 verification of all relevant
-embedded fields, or Section 12.1.2 alignment with the embedded original
-recipient. An upstream route assertion cannot satisfy the missing executable
-trust boundary. Null-sender signing remains deferred until a trusted
-prevalidated evidence gate is implemented and qualified.
+The originator adapter tempfails every exact null reverse-path `<>`. The
+separate `postfix_dsn` adapter accepts only exact `internal` provenance from
+`{postfix_dsn_origin}` and then delegates RFC 3462 and Draft-04 Section 12
+evidence checks to the daemon. External or absent provenance never authorizes
+signing.
 
 ## Authentication-Results Policy
 
@@ -406,8 +395,8 @@ The initial stable paths include:
 | `daemon.request_timeout` | `2s` | 100ms..10s |
 | `mode` | required | `inbound`, `originator`, `ordinary_transit`, `postfix_dsn` |
 | `signing.tenant` | conditional | required for signing/revision modes |
-| `signing.domain` | conditional | required for static signing/revision and Postfix DSN signing; absent for envelope-derived originator or trusted-original DSN signing |
-| `signing.domain_source` | `static` | `static`, or `envelope_sender` for originator and `postfix_dsn`; the latter uses only trusted original-envelope evidence |
+| `signing.domain` | conditional | required for static signing/revision and Postfix DSN signing; absent only for envelope-derived originator signing |
+| `signing.domain_source` | `static` | `static`, or `envelope_sender` for originator only; `postfix_dsn` requires static |
 | `signing.dsn_domain` | originator required | reserved legacy originator prerequisite; forbidden in other modes and never sufficient to authorize null-sender signing |
 | `signing.allow_recipient_group` | `false` | reserved; `true` is rejected until per-message Bcc evidence exists |
 | `authentication_results.enabled` | `false` | inbound mode only |

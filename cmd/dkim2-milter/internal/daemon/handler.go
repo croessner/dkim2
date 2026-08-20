@@ -156,9 +156,8 @@ func validSigningIdentity(
 			domainSource == milter.DomainSourceStatic
 	case modePostfixDSN:
 		return tenant != "" && dsnDomain == "" &&
-			(domainSource == milter.DomainSourceStatic &&
-				milter.ValidSigningDomainAuthority(domain) ||
-				domainSource == milter.DomainSourceEnvelopeSender && domain == "")
+			domainSource == milter.DomainSourceStatic &&
+			milter.ValidSigningDomainAuthority(domain)
 	default:
 		return false
 	}
@@ -283,26 +282,15 @@ func (h *Handler) Handle(
 		defer postfixEvidence.Clear()
 		signingDomain := state.domain
 		if state.domainSource == milter.DomainSourceEnvelopeSender {
-			var applicable bool
-			signingDomain, applicable = postfixEvidence.OriginalSigningDomain()
-			if !applicable {
-				return milter.Result{}, &milter.Error{Class: milter.FailureContract}
-			}
-		}
-		originalReverse, originalRecipients := postfixEvidence.OriginalEnvelope()
-		defer clearMessageCopies(nil, originalReverse, originalRecipients)
-		originalSMTP, mapErr := mapSMTPInput(originalReverse, originalRecipients)
-		if mapErr != nil {
-			return milter.Result{}, mapErr
+			return milter.Result{}, &milter.Error{Class: milter.FailureContract}
 		}
 		response, callErr := state.client.SignDeliveryStatusWithResponse(
 			operationContext,
 			generated.SignDeliveryStatusJSONRequestBody{
-				ApiVersion:   generated.V1,
-				Draft:        generated.DraftIetfDkimDkim2Spec04,
-				Message:      request.message,
-				OuterSmtp:    request.smtp,
-				OriginalSmtp: originalSMTP,
+				ApiVersion: generated.V1,
+				Draft:      generated.DraftIetfDkimDkim2Spec04,
+				Message:    request.message,
+				OuterSmtp:  request.smtp,
 				Context: generated.SigningContext{
 					Tenant: state.tenant, Domain: signingDomain,
 				},
@@ -336,18 +324,7 @@ func observedDomains(state *handlerGuard, message milter.Message) milter.DomainO
 		return message.RecipientDomainObservation()
 	}
 	var signingDomain string
-	if state.mode == modePostfixDSN && state.domainSource == milter.DomainSourceEnvelopeSender {
-		evidence, present := message.PostfixDSNEvidence()
-		if !present {
-			return milter.DomainObservation{}
-		}
-		defer evidence.Clear()
-		var applicable bool
-		signingDomain, applicable = evidence.OriginalSigningDomain()
-		if !applicable {
-			return milter.DomainObservation{}
-		}
-	} else if state.mode == modeOrdinaryTransit || state.mode == modePostfixDSN {
+	if state.mode == modeOrdinaryTransit || state.mode == modePostfixDSN {
 		signingDomain = state.domain
 	} else {
 		domain, applicable, err := state.signingDomain(message)

@@ -61,7 +61,6 @@ func (s RevisionVerificationStatus) Known() bool {
 func (v RevisionVerifier) EvaluateDeliveryStatus(
 	ctx context.Context,
 	report dsn.Report,
-	originalEnvelope verify.Envelope,
 ) (dsn.Evidence, error) {
 	if ctx == nil || !v.valid() {
 		return dsn.Evidence{}, newError(ErrorCodeInvalidRequest, ErrorLocation{Phase: PhasePreflight}, ErrorDetails{})
@@ -70,7 +69,7 @@ func (v RevisionVerifier) EvaluateDeliveryStatus(
 	if err != nil {
 		return dsn.Evidence{}, newError(ErrorCodeInternalInvariant, ErrorLocation{Phase: PhasePreflight}, ErrorDetails{})
 	}
-	evidence, err := evaluator.Evaluate(ctx, dsn.EvidenceRequest{Report: report, OriginalEnvelope: originalEnvelope})
+	evidence, err := evaluator.Evaluate(ctx, dsn.EvidenceRequest{Report: report})
 	if err != nil {
 		return dsn.Evidence{}, err
 	}

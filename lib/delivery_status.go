@@ -10,7 +10,6 @@ import (
 	"github.com/croessner/dkim2/internal/keyresolver"
 	"github.com/croessner/dkim2/internal/rawmsg"
 	"github.com/croessner/dkim2/internal/signing"
-	"github.com/croessner/dkim2/internal/verify"
 )
 
 // DSNIdentity is the daemon-owned canonical DNS identity permitted to sign a
@@ -39,23 +38,20 @@ func (i DSNIdentity) GoString() string { return i.String() }
 // Format routes every identity formatting form through the redacted representation.
 func (i DSNIdentity) Format(state fmt.State, _ rune) { _, _ = io.WriteString(state, i.String()) }
 
-// DSNSigningEvidenceRequest carries the exact outer and independently observed
-// original SMTP evidence needed before a DSN can be authorized for signing.
+// DSNSigningEvidenceRequest carries the exact outer evidence needed before a
+// locally generated DSN can be authorized for signing.
 type DSNSigningEvidenceRequest struct {
 	outerRaw          []byte
 	outerReversePath  []byte
 	outerForwardPaths [][]byte
-	originalReverse   []byte
-	originalForward   [][]byte
 	identity          DSNIdentity
 }
 
 // NewDSNSigningEvidenceRequest snapshots one DSN evidence request.
-func NewDSNSigningEvidenceRequest(outerRaw, outerReversePath []byte, outerForwardPaths [][]byte, originalReversePath []byte, originalForwardPaths [][]byte, identity DSNIdentity) DSNSigningEvidenceRequest {
+func NewDSNSigningEvidenceRequest(outerRaw, outerReversePath []byte, outerForwardPaths [][]byte, identity DSNIdentity) DSNSigningEvidenceRequest {
 	return DSNSigningEvidenceRequest{
 		outerRaw: bytes.Clone(outerRaw), outerReversePath: bytes.Clone(outerReversePath),
-		outerForwardPaths: cloneByteSlices(outerForwardPaths), originalReverse: bytes.Clone(originalReversePath),
-		originalForward: cloneByteSlices(originalForwardPaths), identity: identity,
+		outerForwardPaths: cloneByteSlices(outerForwardPaths), identity: identity,
 	}
 }
 
@@ -120,12 +116,12 @@ func (r DSNSigningRequest) GoString() string { return r.String() }
 func (r DSNSigningRequest) Format(state fmt.State, _ rune) { _, _ = io.WriteString(state, r.String()) }
 
 // EvaluateDSNForSigning derives the sole opaque authorization for a null
-// reverse-path DSN after structure, embedded DKIM2 verification, original SMTP
-// evidence, and local identity alignment all pass.
+// reverse-path DSN after RFC 3462/3464 structure and recipient linkage,
+// embedded DKIM2 verification, and local identity alignment all pass.
 func (s *Signer) EvaluateDSNForSigning(ctx context.Context, request DSNSigningEvidenceRequest) (DSNSigningEvidence, error) {
 	if s == nil || !s.initialized || ctx == nil || !request.identity.Valid() ||
 		!bytes.Equal(request.outerReversePath, []byte("<>")) || len(request.outerForwardPaths) != 1 ||
-		len(request.originalForward) == 0 {
+		len(request.outerRaw) == 0 {
 		return DSNSigningEvidence{}, newSigningError(SigningErrorInvalidRequest)
 	}
 	if err := ctx.Err(); err != nil {
@@ -135,7 +131,7 @@ func (s *Signer) EvaluateDSNForSigning(ctx context.Context, request DSNSigningEv
 	if err != nil {
 		return DSNSigningEvidence{}, newSigningError(SigningErrorMalformedInput)
 	}
-	evidence, err := s.revision.EvaluateDeliveryStatus(ctx, report, verify.NewEnvelope(request.originalReverse, request.originalForward))
+	evidence, err := s.revision.EvaluateDeliveryStatus(ctx, report)
 	if err != nil {
 		return DSNSigningEvidence{}, mapDSNEvidenceError(ctx, err)
 	}
