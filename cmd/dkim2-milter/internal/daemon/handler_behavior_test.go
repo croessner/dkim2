@@ -730,6 +730,29 @@ func TestProcessContractAdmitsPermerrorPolicyAcceptance(t *testing.T) {
 	}
 }
 
+// TestProcessContractAdmitsMultiInstanceTestingContinue proves the adapter
+// accepts authenticated chain policy evidence without inventing a mutation.
+func TestProcessContractAdmitsMultiInstanceTestingContinue(t *testing.T) {
+	value := validProcessResponse()
+	value.Actions = generated.ActionPlan{}
+	value.Disposition = generated.DispositionContinue
+	value.Policy.DoNotExplode = generated.PolicyResultDoNotExplodeNotRequested
+	value.Policy.DoNotModify = generated.PolicyResultDoNotModifyIndeterminate
+	value.Policy.Feedback.HistoryCoverage = generated.PolicyFeedbackHistoryCoverageComplete
+	value.Policy.Mode = generated.Testing
+	value.Policy.PrimaryReason = generated.TestingModeObserve
+	value.Policy.Verdict = generated.PolicyResultVerdictContinue
+	sequence := generated.CanonicalUint64("2")
+	value.Policy.Findings = []generated.PolicyFinding{
+		{Reason: generated.DonotmodifyIndeterminate, Sequence: &sequence, Severity: generated.Warning},
+		{Reason: generated.TestingModeObserve, Severity: generated.Warning},
+	}
+	value.Replay.Class = generated.NotChecked
+	if !validProcessContract(&value, testAuthservID) {
+		t.Fatal("multi-instance testing continue response was rejected")
+	}
+}
+
 // TestRequiredResponseMembersRejectZeroValueAmbiguity proves absent required facts fail closed.
 func TestRequiredResponseMembersRejectZeroValueAmbiguity(t *testing.T) {
 	processBody, err := json.Marshal(validProcessResponse())

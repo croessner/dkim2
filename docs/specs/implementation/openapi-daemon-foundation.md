@@ -447,9 +447,9 @@ properties in every HTTP 200 response:
 
 - `state`: enum `PASS`, `FAIL`, `PERMERROR`, `TEMPERROR`;
 - `primary_reason`: one exact public verification reason listed below;
-- `scope`: singleton `current`;
-- `historical_content`: singleton `not_evaluated`;
-- `historical_signatures`: singleton `not_evaluated`;
+- `scope`: `current` or `chain`;
+- `historical_content`: `not_evaluated`, `complete`, or `partial`;
+- `historical_signatures`: `not_evaluated` or `complete`;
 - `custody_structure`: enum `not_evaluated`, `not_present`,
   `nd_links_evaluated`, `terminal_nd_requires_oob`;
 - `checks`: array, `minItems: 1`, `maxItems: 128`, of `VerificationCheck`;
@@ -504,35 +504,39 @@ true value.
 - `feedback`: `PolicyFeedback`;
 - `findings`: array, `maxItems: 128`, of `PolicyFinding`.
 
-Because M13 evaluates only the current instance and the public projection has
-no historical input, both compliance properties are singleton
-`not_evaluated`. The policy-reason enum is the exact reachable
-decision/finding inventory at the fixed implementation base; the error-only
-public constants `invalid_input`, `limit_exceeded`, and `internal_contract`
-and the unreachable historical compliance outcomes are not serializable:
+Current-scope verification reports both compliance properties as
+`not_evaluated`. Full-chain verification preserves the authenticated policy
+projection: `do_not_modify` is `not_requested`, `indeterminate`, or
+`not_evaluated`; `do_not_explode` is `not_requested`,
+`violated`, `indeterminate`, or `not_evaluated`. `honored` is intentionally
+not a valid explosion-compliance value because absence of a later authenticated
+`exploded` report is not positive single-recipient evidence.
+
+The policy-reason enum is the exact reachable decision/finding inventory. The
+error-only public constants `invalid_input`, `limit_exceeded`, and
+`internal_contract` are not serializable:
 
 `protocol_pass`, `protocol_fail`, `protocol_permerror`, `protocol_temperror`,
 `permissive_override`, `testing_mode_observe`, `dns_testing_effective`,
 `dns_testing_mixed`, `dns_testing_ineligible`,
-`donotmodify_not_evaluated`, `donotexplode_not_evaluated`,
+`donotmodify_indeterminate`, `donotmodify_not_evaluated`,
+`donotexplode_violated`, `donotexplode_indeterminate`,
+`donotexplode_not_evaluated`,
 `feedback_requested`, `feedback_relay_selected`, `feedhere_inert`, and
 `exploded_reported`.
 
-The M13 service path MUST use one internal current-verification entry point
-that performs the authoritative extraction, current-target verification, and
-replay-projection work but does not invoke authenticated-history
-reconstruction or retain a `HistoryWalk` or reconstructed historical
-`recipe.State`. The existing internal history-capable verification and
-revision paths remain unchanged. The current-only entry point shares the same
-current verification implementation rather than duplicating protocol rules,
-and tests prove that it returns the same current facts and replay projection
-as the history-capable path while performing no recipe descent. This is both
-the execution form of the singleton `not_evaluated` contract and a mandatory
-working-set invariant; mapping and discarding a constructed history walk is
-not conformant.
+The service shares the current-target verifier and descends into authenticated
+history only after current PASS. A single-instance message therefore remains
+current scope without recipe work. A multi-instance PASS is emitted only after
+bounded full-chain verification, and the response mapper preserves the sealed
+multi-instance policy values instead of inferring them from wire fields. A failed
+or incomplete chain cannot be promoted to PASS merely to obtain a serializable
+response.
 
 `PolicyFeedback` requires `requested`, `relay_required`, and
-`history_coverage`. `history_coverage` is singleton `not_evaluated`.
+`history_coverage`. Coverage is `not_evaluated` for current scope, `complete`
+for contiguous authenticated history, or `indeterminate` for explicitly
+partial authenticated history.
 `relay_sequence` is present in the same canonical uint64 decimal-string form
 if and only if `relay_required` is true.
 
@@ -559,9 +563,6 @@ per-recipient outcomes are not REST data.
 
 The authenticated `exploded` fact is represented only through the immutable
 policy result. It neither bypasses replay nor changes the response shape.
-M16 must amend and regenerate the OpenAPI contract before exposing any
-history-capable projection or one of the deliberately omitted historical
-compliance values/reasons.
 
 ### Health, readiness, and error schemas
 

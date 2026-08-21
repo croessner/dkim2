@@ -26,7 +26,7 @@ import (
 )
 
 const (
-	miltertestHarnessSHA256     = "e32ad58e0cc11c09c5303cfcfa5a70871df25d1c11bbf838596780578cdf0e72"
+	miltertestHarnessSHA256     = "b9caf2d3b6c2fe1d76026e554e2c7b6796e651233b162fdfd0605b9d85198c99"
 	harnessMiddlewareAuthorized = "route_authorized"
 )
 

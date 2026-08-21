@@ -280,49 +280,9 @@ func TestGeneratedStrictHandlerWritesBodylessNotApplicableResponses(t *testing.T
 	if err != nil {
 		t.Fatalf("newStrictAdapter() error = %v", err)
 	}
-	workingSetMiddleware := func(
-		next generated.StrictHandlerFunc,
-		_ string,
-	) generated.StrictHandlerFunc {
-		return func(
-			ctx context.Context,
-			writer http.ResponseWriter,
-			request *http.Request,
-			input any,
-		) (any, error) {
-			ledger, ledgerErr := newWorkingSetLedger(processWorkingSetUnitBytes)
-			if ledgerErr != nil {
-				return nil, &strictAdapterError{class: strictFailureInternal}
-			}
-			defer ledger.ReleaseAll()
-			if ledgerErr = ledger.Claim(
-				workingSetFixedStorage,
-				maximumFixedRequestStorageBytes,
-			); ledgerErr != nil {
-				return nil, &strictAdapterError{class: strictFailureInternal}
-			}
-			for _, transition := range []func() error{
-				ledger.BeginBodyRead,
-				ledger.FinishBodyRead,
-				ledger.BeginValidation,
-				ledger.FinishValidation,
-				ledger.BeginGeneratedProcessing,
-			} {
-				if ledgerErr = transition(); ledgerErr != nil {
-					return nil, &strictAdapterError{class: strictFailureInternal}
-				}
-			}
-			workingContext, holder, contextErr := withWorkingSetContext(ctx, ledger)
-			if contextErr != nil {
-				return nil, &strictAdapterError{class: strictFailureInternal}
-			}
-			defer holder.Clear()
-			return next(workingContext, writer, request, input)
-		}
-	}
 	server := httptest.NewServer(generated.Handler(generated.NewStrictHandler(
 		adapter,
-		[]generated.StrictMiddlewareFunc{workingSetMiddleware},
+		[]generated.StrictMiddlewareFunc{testWorkingSetMiddleware},
 	)))
 	t.Cleanup(server.Close)
 
@@ -374,6 +334,46 @@ func TestGeneratedStrictHandlerWritesBodylessNotApplicableResponses(t *testing.T
 	}
 	if provider.calls != 0 || operations.signCalls != 1 {
 		t.Fatalf("forbidden work: DNS calls=%d sign calls=%d", provider.calls, operations.signCalls)
+	}
+}
+
+// testWorkingSetMiddleware installs a production-shaped ledger for generated
+// strict-handler transport tests that intentionally bypass the outer boundary.
+func testWorkingSetMiddleware(
+	next generated.StrictHandlerFunc,
+	_ string,
+) generated.StrictHandlerFunc {
+	return func(
+		ctx context.Context,
+		writer http.ResponseWriter,
+		request *http.Request,
+		input any,
+	) (any, error) {
+		ledger, err := newWorkingSetLedger(processWorkingSetUnitBytes)
+		if err != nil {
+			return nil, &strictAdapterError{class: strictFailureInternal}
+		}
+		defer ledger.ReleaseAll()
+		if err = ledger.Claim(workingSetFixedStorage, maximumFixedRequestStorageBytes); err != nil {
+			return nil, &strictAdapterError{class: strictFailureInternal}
+		}
+		for _, transition := range []func() error{
+			ledger.BeginBodyRead,
+			ledger.FinishBodyRead,
+			ledger.BeginValidation,
+			ledger.FinishValidation,
+			ledger.BeginGeneratedProcessing,
+		} {
+			if err = transition(); err != nil {
+				return nil, &strictAdapterError{class: strictFailureInternal}
+			}
+		}
+		workingContext, holder, err := withWorkingSetContext(ctx, ledger)
+		if err != nil {
+			return nil, &strictAdapterError{class: strictFailureInternal}
+		}
+		defer holder.Clear()
+		return next(workingContext, writer, request, input)
 	}
 }
 

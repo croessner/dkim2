@@ -410,16 +410,20 @@ Each `donotmodify` and `donotexplode` check has one closed state:
 - `indeterminate`
 - `not_evaluated`
 
-Only complete authenticated history with the positive evidence required by the
-specific request can yield `honored` or `violated`. Indeterminate
-reconstruction cannot yield either. In this increment, complete nonviolating
-transition evidence (`unchanged` or `header_addition_only`) can prove
-`donotmodify` honored, but absence of a later `exploded` report cannot prove
-`donotexplode` honored because no positive
-single-recipient evidence exists. Current-only verification yields
-`not_evaluated` when a request is visible and `not_requested` only for the
-current signature itself; the aggregate historical check remains
-`not_evaluated` because earlier unauthenticated requests may exist.
+The closed internal model reserves `honored` and `violated` for complete
+authenticated history with the positive evidence required by the specific
+request; indeterminate reconstruction cannot yield either. The current
+verifier does not yet mint `unchanged`, `header_addition_only`, or prohibited
+modification transitions from reconstructed history. Consequently its current
+`donotmodify` projection can emit only `not_requested`, `indeterminate`, or
+`not_evaluated`; `honored` and `violated` remain internal future states and are
+excluded from the public wire contract. A later authenticated `exploded`
+report can currently prove `donotexplode` violated, but absence of that report
+cannot prove it honored because no positive single-recipient evidence exists.
+Current-only verification yields `not_evaluated` when a request is visible and
+`not_requested` only for the current signature itself; the aggregate
+historical check remains `not_evaluated` because earlier unauthenticated
+requests may exist.
 
 ### Findings And Reasons
 
@@ -476,8 +480,8 @@ Empty or unknown reason/severity values are invalid. The exhaustive mapping is:
 | Coherent all-set DNS testing makes `PASS`, eligible `FAIL`, or eligible `PERMERROR` non-terminal | `dns_testing_effective` | `warning` | One DNS finding |
 | At least one set declares DNS testing but another relevant set does not | `dns_testing_mixed` | `warning` | One DNS finding |
 | Testing metadata exists on a top-level state/reason excluded by the eligibility matrix | `dns_testing_ineligible` | `warning` | One DNS finding |
-| Complete nonviolating modification evidence | `donotmodify_honored` | `info` | One modification finding at request sequence |
-| Proven later prohibited modification | `donotmodify_violated` | `permanent` | One modification finding at request sequence |
+| Complete nonviolating modification evidence | `donotmodify_honored` | `info` | Internal future model; current verifier emits no such finding |
+| Proven later prohibited modification | `donotmodify_violated` | `permanent` | Internal future model; current verifier emits no such finding |
 | Indeterminate modification transition | `donotmodify_indeterminate` | `warning` | One modification finding at request sequence |
 | Modification request with incomplete/current-only history | `donotmodify_not_evaluated` | `warning` | One modification finding at request sequence |
 | Proven later exploded report | `donotexplode_violated` | `permanent` | One explosion-request finding at request sequence |
@@ -504,9 +508,11 @@ Every successful evaluation has exactly one primary reason. The precedence is:
 
 1. `dns_testing_effective` when DNS testing makes `PASS`, eligible `FAIL`, or
    eligible `PERMERROR` non-terminal, regardless of local mode.
-2. In strict mode with protocol `PASS`, `donotmodify_violated`, then
-   `donotexplode_violated`, when a proven violation changes accept to reject.
-   Both findings remain present when both are violated.
+2. In strict mode with protocol `PASS`, `donotmodify_violated` in the internal
+   future model, then currently reachable `donotexplode_violated`, when a
+   proven violation changes accept to reject. Both findings remain present
+   when both are violated after authenticated transition minting is
+   implemented.
 3. `testing_mode_observe` for every local-testing-mode decision not covered by
    step 1.
 4. `permissive_override` when permissive mode accepts `FAIL` or `PERMERROR`.

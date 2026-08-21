@@ -1103,6 +1103,9 @@ components:
           enum:
             - not_evaluated
             - complete
+          x-enum-varnames:
+            - VerificationResultHistoricalSignaturesNotEvaluated
+            - VerificationResultHistoricalSignaturesComplete
         custody_structure:
           type: string
           enum:
@@ -1232,11 +1235,25 @@ components:
         do_not_modify:
           type: string
           enum:
+            - not_requested
+            - indeterminate
             - not_evaluated
+          x-enum-varnames:
+            - PolicyResultDoNotModifyNotRequested
+            - PolicyResultDoNotModifyIndeterminate
+            - PolicyResultDoNotModifyNotEvaluated
         do_not_explode:
           type: string
           enum:
+            - not_requested
+            - violated
+            - indeterminate
             - not_evaluated
+          x-enum-varnames:
+            - PolicyResultDoNotExplodeNotRequested
+            - PolicyResultDoNotExplodeViolated
+            - PolicyResultDoNotExplodeIndeterminate
+            - PolicyResultDoNotExplodeNotEvaluated
         dns_testing_effective:
           type: boolean
         feedback:
@@ -1262,7 +1279,13 @@ components:
         history_coverage:
           type: string
           enum:
+            - complete
+            - indeterminate
             - not_evaluated
+          x-enum-varnames:
+            - PolicyFeedbackHistoryCoverageComplete
+            - PolicyFeedbackHistoryCoverageIndeterminate
+            - PolicyFeedbackHistoryCoverageNotEvaluated
         relay_sequence:
           $ref: "#/components/schemas/CanonicalUint64"
     PolicyFinding:
@@ -1424,7 +1447,10 @@ components:
         - dns_testing_effective
         - dns_testing_mixed
         - dns_testing_ineligible
+        - donotmodify_indeterminate
         - donotmodify_not_evaluated
+        - donotexplode_violated
+        - donotexplode_indeterminate
         - donotexplode_not_evaluated
         - feedback_requested
         - feedback_relay_selected

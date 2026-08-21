@@ -140,17 +140,17 @@ alias, or wildcard cannot preselect or replace it. At least one RFC 3464
 original/final recipient must link to an authenticated highest `rt=` path.
 
 Generic library DSNs retain strict RFC 3464 field ordering and reject folding.
-The Postfix-exclusive daemon route additionally recognizes only bounce(8)'s documented
-legacy field order: its two `X-<mail-name>-*` fields occur before
+The Postfix-exclusive daemon route additionally recognizes only the current
+bounce(8) wire profile: its two `X-<mail-name>-*` fields occur before
 `Arrival-Date`, and `Final-Recipient` occurs before optional
 `Original-Recipient`. Bounded continuation lines are accepted only for the
 `Remote-MTA` and `Diagnostic-Code` fields that Postfix writes with
-`bounce_print_wrap`. This compatibility is selected only after authentication
+`bounce_print_wrap`. This wire profile is selected only after authentication
 of the dedicated, non-reusable DSN route capability. That capability attests
 that the daemon-owned adapter established trusted Postfix origin; the request
-body has no fidelity or compatibility switch. Library integrations must select the
-explicitly named Postfix evidence constructor only after proving equivalent
-bounce(8) provenance; generic constructors remain strict. The compatibility
+body has no fidelity or wire-profile switch. Library integrations must select
+the explicitly named Postfix evidence constructor only after proving equivalent
+bounce(8) provenance; generic constructors remain strict. The wire profile
 has no generic HTTP alternative, does not apply to Exim input, and does not weaken
 mandatory fields, uniqueness, linkage, cryptographic verification, or limits.
 

@@ -202,6 +202,35 @@ func TestProcessAdmissionAdmitsPermerrorPolicyAcceptance(t *testing.T) {
 	}
 }
 
+// TestProcessAdmissionAdmitsMultiInstanceTestingContinue proves the shared wire
+// expansion does not narrow Exim's unchanged-delivery outcome.
+func TestProcessAdmissionAdmitsMultiInstanceTestingContinue(t *testing.T) {
+	value := validProcessFixture()
+	value.Actions = generated.ActionPlan{}
+	value.Disposition = generated.DispositionContinue
+	value.Policy.DoNotExplode = generated.PolicyResultDoNotExplodeNotRequested
+	value.Policy.DoNotModify = generated.PolicyResultDoNotModifyIndeterminate
+	value.Policy.Feedback.HistoryCoverage = generated.PolicyFeedbackHistoryCoverageComplete
+	value.Policy.Mode = generated.Testing
+	value.Policy.PrimaryReason = generated.TestingModeObserve
+	value.Policy.Verdict = generated.PolicyResultVerdictContinue
+	sequence := generated.CanonicalUint64("2")
+	value.Policy.Findings = []generated.PolicyFinding{
+		{Reason: generated.DonotmodifyIndeterminate, Sequence: &sequence, Severity: generated.Warning},
+		{Reason: generated.TestingModeObserve, Severity: generated.Warning},
+	}
+	value.Replay.Class = generated.NotChecked
+	body, err := json.Marshal(value)
+	if err != nil {
+		t.Fatal("multi-instance process response encoding failed")
+	}
+	plan, err := AdmitProcessJSON(body, "mx.example.test")
+	if err != nil || plan.Result() != adapter.ResultPass ||
+		plan.Disposition() != adapter.DispositionContinue || len(plan.Actions()) != 0 {
+		t.Fatal("multi-instance testing continue response was not admitted exactly")
+	}
+}
+
 // TestOperationAdmissionRejectsDuplicateAndToxicJSON proves strict redaction.
 func TestOperationAdmissionRejectsDuplicateAndToxicJSON(t *testing.T) {
 	body := []byte(`{"actions":[],"actions":[]}`)

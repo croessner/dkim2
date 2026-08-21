@@ -77,7 +77,7 @@ func (v RevisionVerifier) EvaluateDeliveryStatus(
 }
 
 // EvaluatePostfixDeliveryStatus verifies one trusted-Postfix DSN while
-// admitting only bounce(8)'s bounded legacy field order and folding.
+// admitting only the current bounce(8) wire profile's bounded order and folding.
 func (v RevisionVerifier) EvaluatePostfixDeliveryStatus(
 	ctx context.Context,
 	report dsn.Report,
@@ -90,7 +90,7 @@ func (v RevisionVerifier) EvaluatePostfixDeliveryStatus(
 		return dsn.Evidence{}, newError(ErrorCodeInternalInvariant, ErrorLocation{Phase: PhasePreflight}, ErrorDetails{})
 	}
 	evidence, err := evaluator.Evaluate(ctx, dsn.EvidenceRequest{
-		Report: report, PostfixCompatibleOrder: true,
+		Report: report, PostfixBounceOrder: true,
 	})
 	if err != nil {
 		return dsn.Evidence{}, err

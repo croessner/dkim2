@@ -584,6 +584,21 @@ Daemon dispositions map deterministically:
 | `reject` | reject unchanged | `550 5.7.1 DKIM2 policy rejection` |
 | `tempfail` | temporary failure unchanged | `451 4.7.1 DKIM2 service unavailable` |
 
+### Canonical multi-instance policy response
+
+The `v1/process` response represents authenticated policy evidence from the
+entire verified chain, not only the current instance. Consequently its closed
+policy enums contain the reachable `not_requested`, `violated`,
+`indeterminate`, and `complete` states where the OpenAPI schema allows them.
+A valid multi-instance result can therefore be `PASS`, `testing`,
+`not_checked`, and `continue`, with no mutation action.
+
+This is the single current Draft-04 contract, not an alternate compatibility
+mode. It has no deprecated aliases, version fallbacks, or caller-selectable
+schema. Deploy the daemon and every generated `v1/process` client as one
+digest-pinned change. Rollback likewise restores the complete prior
+daemon-and-adapter set.
+
 Local contract, fidelity, timeout, cancellation, malformed-response,
 indeterminate-operation, capacity, or dependency errors default to the same
 fixed 451 reply. No raw error, endpoint, path, identity, or protocol input

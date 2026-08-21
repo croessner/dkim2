@@ -58,9 +58,15 @@ worktree implementation remains an unpublished closeout candidate; exact
 operation guidance and limitations are in the
 [native-domain runbook](../operator/native-domain-onboarding.md).
 
-No public Go or HTTP breaking migration is introduced by this candidate. If the final
-candidate cleanup exposes one, its source change, call-site migration, and
-operator note must land together before the candidate is approved.
+The `POST /v1/process` schema is the one canonical Draft-04 contract for both
+current-only and authenticated multi-instance results. Its closed policy enums
+contain only states produced by the current verifier and policy projection;
+there are no deprecated aliases, version fallbacks, or alternate legacy
+values. The daemon, Milter, Exim adapter, and every generated client are
+regenerated from the same OpenAPI source and must be deployed and rolled back
+as one digest-pinned set. The exact multi-instance response states are
+documented in the
+[Milter adapter contract](../specs/implementation/milter-adapter.md#canonical-multi-instance-policy-response).
 
 The compatibility window begins only if all six `v0.1.0-rc.1` module tags
 are later created under separately authorized release work. From then through

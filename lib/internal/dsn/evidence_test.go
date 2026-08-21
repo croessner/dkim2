@@ -256,10 +256,10 @@ func TestDeliveryStatusRecipientLinkageEnforcesFieldOrder(t *testing.T) {
 	}
 }
 
-// TestDeliveryStatusRecipientLinkageConfinesPostfixCompatibility proves the
-// dedicated mode admits only bounce(8)'s exact legacy field order and its
+// TestDeliveryStatusRecipientLinkageConfinesPostfixBounceOrder proves the
+// dedicated mode admits only the current bounce(8) wire profile and its
 // wrapped Remote-MTA/Diagnostic-Code output. The generic RFC path stays strict.
-func TestDeliveryStatusRecipientLinkageConfinesPostfixCompatibility(t *testing.T) {
+func TestDeliveryStatusRecipientLinkageConfinesPostfixBounceOrder(t *testing.T) {
 	const date = "Tue, 14 Nov 2023 22:13:20 +0000 (UTC)"
 	const postfixStatus = "Reporting-MTA: dns; example.test\r\n" +
 		"Original-Envelope-Id: synthetic-envid\r\n" +
@@ -281,7 +281,7 @@ func TestDeliveryStatusRecipientLinkageConfinesPostfixCompatibility(t *testing.T
 	if !deliveryStatusBodyLinksRecipient(
 		[]byte(postfixStatus), [][]byte{[]byte("<recipient@example.test>")}, true,
 	) {
-		t.Fatal("Postfix compatibility rejected canonical bounce(8) ordering")
+		t.Fatal("Postfix bounce wire profile rejected current ordering")
 	}
 	for _, testCase := range []struct {
 		name   string
@@ -322,7 +322,7 @@ func TestDeliveryStatusRecipientLinkageConfinesPostfixCompatibility(t *testing.T
 			if deliveryStatusBodyLinksRecipient(
 				[]byte(testCase.status), [][]byte{[]byte("<recipient@example.test>")}, true,
 			) {
-				t.Fatal("Postfix compatibility admitted non-Postfix field structure")
+				t.Fatal("Postfix bounce wire profile admitted non-Postfix structure")
 			}
 		})
 	}

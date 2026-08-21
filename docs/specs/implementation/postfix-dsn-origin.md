@@ -52,7 +52,7 @@ authenticated highest embedded `rt=`, before policy or private-key access.
 The generic library RFC 3464 parser rejects folded delivery-status fields and
 enforces the normative per-message and per-recipient field order, uniqueness,
 and extension-field tail. The Postfix-exclusive daemon route first uses
-that strict path and then admits only the historical form emitted by
+that strict path and then admits only the current wire form emitted by
 `bounce_notify_util.c`: `Reporting-MTA` precedes optional
 `Original-Envelope-Id`, matching `X-<mail-name>-Queue-ID`/optional `Sender`
 extensions precede optional `Arrival-Date`, and `Final-Recipient` precedes
@@ -72,7 +72,7 @@ canonical comparison.
 Delivery-status interpretation is additionally capped at 256 KiB, 4096 bytes
 per unfolded line, 256 recipient groups, 64 fields per group, and 2048 fields
 overall. The generic RFC path accepts extension fields only in the normative
-extension tail; the Postfix compatibility path accepts only its two matching
+extension tail; the Postfix bounce wire profile accepts only its two matching
 `X-<mail-name>-*` fields in the exact positions above.
 
 The OpenAPI DSN request consequently contains the outer message, outer SMTP

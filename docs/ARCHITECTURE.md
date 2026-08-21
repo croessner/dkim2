@@ -984,6 +984,14 @@ Authentication-Results action, or terminal MTA decision occurred. Applicable
 messages retain the HTTP 200 response with the exact four-state verification,
 policy, replay, disposition, and action plan.
 
+For a multi-instance PASS, the HTTP 200 policy object preserves the sealed
+full-chain compliance and feedback-history states produced by verification.
+Those values are generated-contract enums, not adapter inference. In
+particular, testing policy may legitimately return
+`PASS`/`continue`/`not_checked` together with `not_requested` compliance and
+`complete` feedback history; serialization of that row must not turn a valid
+non-terminal result into an internal service failure.
+
 `/v1/process` can combine verify, revise, sign, and action planning for Milter
 use. The narrower endpoints are useful for tests and operational tools.
 
@@ -2043,15 +2051,16 @@ derived only from authenticated `d=` after verification. At least one RFC 3464 o
 final recipient must match authenticated `rt=`. A generic reconstructed Milter
 message remains insufficient. Generic library DSNs keep strict RFC 3464 field
 order and no-folding admission. Only the Postfix-exclusive route may also
-consume bounce(8)'s exact legacy ordering of `Original-Envelope-Id`, its
+consume the current bounce(8) ordering of `Original-Envelope-Id`, its
 `X-<mail-name>-Queue-ID`/`Sender` extensions, `Arrival-Date`,
 `Final-Recipient`, and `Original-Recipient`, plus bounded folding of
 `Remote-MTA` and `Diagnostic-Code`; arbitrary extensions, reordering, and
-folding remain invalid. The compatibility constructor is an explicit trusted-
-adapter boundary: daemon code selects it only after authentication of the
-dedicated route capability; no API body field can enable it. Generic library
-and Exim paths remain strict, and no generic HTTP DSN route exists. The originator Milter continues to reject null
-senders and cannot use the daemon DSN route as a fallback.
+folding remain invalid. The Postfix bounce wire-profile constructor is an
+explicit trusted-adapter boundary: daemon code selects it only after
+authentication of the dedicated route capability; no API body field can
+enable it. Generic library and Exim paths remain strict, and no generic HTTP
+DSN route exists. The originator Milter continues to reject null senders and
+cannot use the daemon DSN route as a fallback.
 
 Revision signing:
 

@@ -125,12 +125,12 @@ func (i DSNIdentity) Format(state fmt.State, _ rune) { _, _ = io.WriteString(sta
 // DSNSigningEvidenceRequest carries the exact outer evidence needed before a
 // locally generated DSN can be authorized for signing.
 type DSNSigningEvidenceRequest struct {
-	outerRaw          []byte
-	outerReversePath  []byte
-	outerForwardPaths [][]byte
-	identity          DSNIdentity
-	deriveIdentity    bool
-	postfixCompatible bool
+	outerRaw                 []byte
+	outerReversePath         []byte
+	outerForwardPaths        [][]byte
+	identity                 DSNIdentity
+	deriveIdentity           bool
+	postfixBounceWireProfile bool
 }
 
 // NewDerivedDSNSigningEvidenceRequest snapshots a DSN evidence request whose
@@ -157,7 +157,7 @@ func NewPostfixDerivedDSNSigningEvidenceRequest(
 	return DSNSigningEvidenceRequest{
 		outerRaw: bytes.Clone(outerRaw), outerReversePath: bytes.Clone(outerReversePath),
 		outerForwardPaths: cloneByteSlices(outerForwardPaths), deriveIdentity: true,
-		postfixCompatible: true,
+		postfixBounceWireProfile: true,
 	}
 }
 
@@ -261,7 +261,7 @@ func (s *Signer) EvaluateDSNForSigning(ctx context.Context, request DSNSigningEv
 		)
 	}
 	var evidence dsn.Evidence
-	if request.postfixCompatible {
+	if request.postfixBounceWireProfile {
 		evidence, err = s.revision.EvaluatePostfixDeliveryStatus(ctx, report)
 	} else {
 		evidence, err = s.revision.EvaluateDeliveryStatus(ctx, report)

@@ -154,7 +154,7 @@ derivation without logging the domain, selector, address, queue ID, signature,
 or message bytes. `authorized` proves evidence completed before datasource
 acquisition; it does not by itself prove policy resolution or signing.
 
-### Postfix DSN compatibility upgrade
+### Postfix DSN wire-profile upgrade
 
 This is a closed contract change, not a rolling-compatible configuration
 addition. Replace either legacy Postfix DSN signing shape:
@@ -188,7 +188,7 @@ to the tenant-only context:
 {"context":{"tenant":"tenant-a"}}
 ```
 
-The Postfix-compatibility correction makes the same route Postfix-exclusive
+The Postfix bounce wire-profile correction makes the same route Postfix-exclusive
 and removes the caller-selected message fidelity. The previous message object:
 
 ```json

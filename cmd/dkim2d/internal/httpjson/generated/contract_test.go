@@ -39,6 +39,8 @@ const (
 	testPropertySequence         = "sequence"
 	testPropertyStatus           = "status"
 	testPropertyTenant           = "tenant"
+	testValueComplete            = "complete"
+	testValueIndeterminate       = "indeterminate"
 	testValueNotEvaluated        = "not_evaluated"
 	testSchemaOperationResponse  = "OperationResponse"
 )
@@ -683,7 +685,9 @@ func assertFrozenEnums(t *testing.T, document *openapi3.T) {
 			"protocol_pass", "protocol_fail", "protocol_permerror",
 			"protocol_temperror", "permissive_override", "testing_mode_observe",
 			"dns_testing_effective", "dns_testing_mixed", "dns_testing_ineligible",
-			"donotmodify_not_evaluated", "donotexplode_not_evaluated",
+			"donotmodify_indeterminate", "donotmodify_not_evaluated",
+			"donotexplode_violated",
+			"donotexplode_indeterminate", "donotexplode_not_evaluated",
 			"feedback_requested", "feedback_relay_selected", "feedhere_inert",
 			"exploded_reported",
 		},
@@ -703,9 +707,9 @@ func assertFrozenEnums(t *testing.T, document *openapi3.T) {
 		[]string{"accept", "reject", "tempfail", "continue"})
 	assertPropertyEnum(t, document, "VerificationResult", "scope", []string{"current", "chain"})
 	assertPropertyEnum(t, document, "VerificationResult", "historical_content",
-		[]string{testValueNotEvaluated, "complete", "partial"})
+		[]string{testValueNotEvaluated, testValueComplete, "partial"})
 	assertPropertyEnum(t, document, "VerificationResult", "historical_signatures",
-		[]string{testValueNotEvaluated, "complete"})
+		[]string{testValueNotEvaluated, testValueComplete})
 	assertPropertyEnum(t, document, "VerificationResult", "custody_structure",
 		[]string{testValueNotEvaluated, "not_present", "nd_links_evaluated", "terminal_nd_requires_oob"})
 	assertPropertyEnum(t, document, "VerificationCheck", "class", []string{
@@ -732,15 +736,15 @@ func assertFrozenEnums(t *testing.T, document *openapi3.T) {
 	assertPropertyEnum(t, document, "PolicyResult", "verdict",
 		[]string{"accept", "reject", "tempfail", "continue"})
 	assertPropertyEnum(t, document, "PolicyResult", "do_not_modify",
-		[]string{testValueNotEvaluated})
+		[]string{"not_requested", testValueIndeterminate, testValueNotEvaluated})
 	assertPropertyEnum(t, document, "PolicyResult", "do_not_explode",
-		[]string{testValueNotEvaluated})
+		[]string{"not_requested", "violated", testValueIndeterminate, testValueNotEvaluated})
 	assertPropertyEnum(t, document, "PolicyFeedback", "history_coverage",
-		[]string{testValueNotEvaluated})
+		[]string{testValueComplete, testValueIndeterminate, testValueNotEvaluated})
 	assertPropertyEnum(t, document, "PolicyFinding", "severity",
 		[]string{"info", "warning", "permanent", "temporary"})
 	assertPropertyEnum(t, document, "ReplayResult", "class",
-		[]string{"not_checked", "disabled", "first_seen", "replayed", "indeterminate"})
+		[]string{"not_checked", "disabled", "first_seen", "replayed", testValueIndeterminate})
 	assertPropertyEnum(t, document, "HealthResponse", "status", []string{"alive"})
 	assertPropertyEnum(t, document, "ReadinessResponse", "status", []string{"ready"})
 	assertPropertyEnum(t, document, "ErrorResponse", "category",

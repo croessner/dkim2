@@ -292,12 +292,18 @@ func (e OperationResponseResult) Valid() bool {
 
 // Defines values for PolicyFeedbackHistoryCoverage.
 const (
-	PolicyFeedbackHistoryCoverageNotEvaluated PolicyFeedbackHistoryCoverage = "not_evaluated"
+	PolicyFeedbackHistoryCoverageComplete      PolicyFeedbackHistoryCoverage = "complete"
+	PolicyFeedbackHistoryCoverageIndeterminate PolicyFeedbackHistoryCoverage = "indeterminate"
+	PolicyFeedbackHistoryCoverageNotEvaluated  PolicyFeedbackHistoryCoverage = "not_evaluated"
 )
 
 // Valid indicates whether the value is a known member of the PolicyFeedbackHistoryCoverage enum.
 func (e PolicyFeedbackHistoryCoverage) Valid() bool {
 	switch e {
+	case PolicyFeedbackHistoryCoverageComplete:
+		return true
+	case PolicyFeedbackHistoryCoverageIndeterminate:
+		return true
 	case PolicyFeedbackHistoryCoverageNotEvaluated:
 		return true
 	default:
@@ -331,21 +337,24 @@ func (e PolicyFindingSeverity) Valid() bool {
 
 // Defines values for PolicyReason.
 const (
-	DnsTestingEffective      PolicyReason = "dns_testing_effective"
-	DnsTestingIneligible     PolicyReason = "dns_testing_ineligible"
-	DnsTestingMixed          PolicyReason = "dns_testing_mixed"
-	DonotexplodeNotEvaluated PolicyReason = "donotexplode_not_evaluated"
-	DonotmodifyNotEvaluated  PolicyReason = "donotmodify_not_evaluated"
-	ExplodedReported         PolicyReason = "exploded_reported"
-	FeedbackRelaySelected    PolicyReason = "feedback_relay_selected"
-	FeedbackRequested        PolicyReason = "feedback_requested"
-	FeedhereInert            PolicyReason = "feedhere_inert"
-	PermissiveOverride       PolicyReason = "permissive_override"
-	ProtocolFail             PolicyReason = "protocol_fail"
-	ProtocolPass             PolicyReason = "protocol_pass"
-	ProtocolPermerror        PolicyReason = "protocol_permerror"
-	ProtocolTemperror        PolicyReason = "protocol_temperror"
-	TestingModeObserve       PolicyReason = "testing_mode_observe"
+	DnsTestingEffective       PolicyReason = "dns_testing_effective"
+	DnsTestingIneligible      PolicyReason = "dns_testing_ineligible"
+	DnsTestingMixed           PolicyReason = "dns_testing_mixed"
+	DonotexplodeIndeterminate PolicyReason = "donotexplode_indeterminate"
+	DonotexplodeNotEvaluated  PolicyReason = "donotexplode_not_evaluated"
+	DonotexplodeViolated      PolicyReason = "donotexplode_violated"
+	DonotmodifyIndeterminate  PolicyReason = "donotmodify_indeterminate"
+	DonotmodifyNotEvaluated   PolicyReason = "donotmodify_not_evaluated"
+	ExplodedReported          PolicyReason = "exploded_reported"
+	FeedbackRelaySelected     PolicyReason = "feedback_relay_selected"
+	FeedbackRequested         PolicyReason = "feedback_requested"
+	FeedhereInert             PolicyReason = "feedhere_inert"
+	PermissiveOverride        PolicyReason = "permissive_override"
+	ProtocolFail              PolicyReason = "protocol_fail"
+	ProtocolPass              PolicyReason = "protocol_pass"
+	ProtocolPermerror         PolicyReason = "protocol_permerror"
+	ProtocolTemperror         PolicyReason = "protocol_temperror"
+	TestingModeObserve        PolicyReason = "testing_mode_observe"
 )
 
 // Valid indicates whether the value is a known member of the PolicyReason enum.
@@ -357,7 +366,13 @@ func (e PolicyReason) Valid() bool {
 		return true
 	case DnsTestingMixed:
 		return true
+	case DonotexplodeIndeterminate:
+		return true
 	case DonotexplodeNotEvaluated:
+		return true
+	case DonotexplodeViolated:
+		return true
+	case DonotmodifyIndeterminate:
 		return true
 	case DonotmodifyNotEvaluated:
 		return true
@@ -388,13 +403,22 @@ func (e PolicyReason) Valid() bool {
 
 // Defines values for PolicyResultDoNotExplode.
 const (
-	PolicyResultDoNotExplodeNotEvaluated PolicyResultDoNotExplode = "not_evaluated"
+	PolicyResultDoNotExplodeIndeterminate PolicyResultDoNotExplode = "indeterminate"
+	PolicyResultDoNotExplodeNotEvaluated  PolicyResultDoNotExplode = "not_evaluated"
+	PolicyResultDoNotExplodeNotRequested  PolicyResultDoNotExplode = "not_requested"
+	PolicyResultDoNotExplodeViolated      PolicyResultDoNotExplode = "violated"
 )
 
 // Valid indicates whether the value is a known member of the PolicyResultDoNotExplode enum.
 func (e PolicyResultDoNotExplode) Valid() bool {
 	switch e {
+	case PolicyResultDoNotExplodeIndeterminate:
+		return true
 	case PolicyResultDoNotExplodeNotEvaluated:
+		return true
+	case PolicyResultDoNotExplodeNotRequested:
+		return true
+	case PolicyResultDoNotExplodeViolated:
 		return true
 	default:
 		return false
@@ -403,13 +427,19 @@ func (e PolicyResultDoNotExplode) Valid() bool {
 
 // Defines values for PolicyResultDoNotModify.
 const (
-	PolicyResultDoNotModifyNotEvaluated PolicyResultDoNotModify = "not_evaluated"
+	PolicyResultDoNotModifyIndeterminate PolicyResultDoNotModify = "indeterminate"
+	PolicyResultDoNotModifyNotEvaluated  PolicyResultDoNotModify = "not_evaluated"
+	PolicyResultDoNotModifyNotRequested  PolicyResultDoNotModify = "not_requested"
 )
 
 // Valid indicates whether the value is a known member of the PolicyResultDoNotModify enum.
 func (e PolicyResultDoNotModify) Valid() bool {
 	switch e {
+	case PolicyResultDoNotModifyIndeterminate:
+		return true
 	case PolicyResultDoNotModifyNotEvaluated:
+		return true
+	case PolicyResultDoNotModifyNotRequested:
 		return true
 	default:
 		return false

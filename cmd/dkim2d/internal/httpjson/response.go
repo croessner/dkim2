@@ -798,7 +798,7 @@ func mapCanonicalUint64(value uint64) (generated.CanonicalUint64, bool) {
 	return strconv.FormatUint(value, 10), true
 }
 
-// mapPolicyReason maps only current-only decision and finding reasons.
+// mapPolicyReason maps every reachable decision and finding reason.
 func mapPolicyReason(value dkim2.PolicyReason) (generated.PolicyReason, bool) {
 	switch value {
 	case dkim2.PolicyReasonProtocolPass:
@@ -819,8 +819,14 @@ func mapPolicyReason(value dkim2.PolicyReason) (generated.PolicyReason, bool) {
 		return generated.DnsTestingMixed, true
 	case dkim2.PolicyReasonDNSTestingIneligible:
 		return generated.DnsTestingIneligible, true
+	case dkim2.PolicyReasonDoNotModifyIndeterminate:
+		return generated.DonotmodifyIndeterminate, true
 	case dkim2.PolicyReasonDoNotModifyNotEvaluated:
 		return generated.DonotmodifyNotEvaluated, true
+	case dkim2.PolicyReasonDoNotExplodeViolated:
+		return generated.DonotexplodeViolated, true
+	case dkim2.PolicyReasonDoNotExplodeIndeterminate:
+		return generated.DonotexplodeIndeterminate, true
 	case dkim2.PolicyReasonDoNotExplodeNotEvaluated:
 		return generated.DonotexplodeNotEvaluated, true
 	case dkim2.PolicyReasonFeedbackRequested:
@@ -836,28 +842,48 @@ func mapPolicyReason(value dkim2.PolicyReason) (generated.PolicyReason, bool) {
 	}
 }
 
-// mapDoNotModify maps the only reachable current-only compliance state.
+// mapDoNotModify maps every reachable modification-compliance state.
 func mapDoNotModify(value dkim2.PolicyCompliance) (generated.PolicyResultDoNotModify, bool) {
-	if value != dkim2.PolicyComplianceNotEvaluated {
+	switch value {
+	case dkim2.PolicyComplianceNotRequested:
+		return generated.PolicyResultDoNotModifyNotRequested, true
+	case dkim2.PolicyComplianceIndeterminate:
+		return generated.PolicyResultDoNotModifyIndeterminate, true
+	case dkim2.PolicyComplianceNotEvaluated:
+		return generated.PolicyResultDoNotModifyNotEvaluated, true
+	default:
 		return "", false
 	}
-	return generated.PolicyResultDoNotModifyNotEvaluated, true
 }
 
-// mapDoNotExplode maps the only reachable current-only compliance state.
+// mapDoNotExplode maps every reachable explosion-compliance state.
 func mapDoNotExplode(value dkim2.PolicyCompliance) (generated.PolicyResultDoNotExplode, bool) {
-	if value != dkim2.PolicyComplianceNotEvaluated {
+	switch value {
+	case dkim2.PolicyComplianceNotRequested:
+		return generated.PolicyResultDoNotExplodeNotRequested, true
+	case dkim2.PolicyComplianceViolated:
+		return generated.PolicyResultDoNotExplodeViolated, true
+	case dkim2.PolicyComplianceIndeterminate:
+		return generated.PolicyResultDoNotExplodeIndeterminate, true
+	case dkim2.PolicyComplianceNotEvaluated:
+		return generated.PolicyResultDoNotExplodeNotEvaluated, true
+	default:
 		return "", false
 	}
-	return generated.PolicyResultDoNotExplodeNotEvaluated, true
 }
 
-// mapPolicyHistoryCoverage maps the only reachable current-only history state.
+// mapPolicyHistoryCoverage maps explicit authenticated feedback-history coverage.
 func mapPolicyHistoryCoverage(value dkim2.PolicyHistoryCoverage) (generated.PolicyFeedbackHistoryCoverage, bool) {
-	if value != dkim2.PolicyHistoryNotEvaluated {
+	switch value {
+	case dkim2.PolicyHistoryComplete:
+		return generated.PolicyFeedbackHistoryCoverageComplete, true
+	case dkim2.PolicyHistoryIndeterminate:
+		return generated.PolicyFeedbackHistoryCoverageIndeterminate, true
+	case dkim2.PolicyHistoryNotEvaluated:
+		return generated.PolicyFeedbackHistoryCoverageNotEvaluated, true
+	default:
 		return "", false
 	}
-	return generated.PolicyFeedbackHistoryCoverageNotEvaluated, true
 }
 
 // mapPolicyFindingSeverity maps the closed finding severity.

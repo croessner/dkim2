@@ -89,10 +89,10 @@ func IsEvidenceErrorCode(err error, code EvidenceErrorCode) bool {
 type EvidenceRequest struct {
 	// Report is the parser-owned RFC 3462 DSN report.
 	Report Report
-	// PostfixCompatibleOrder admits only the bounded field ordering and folding
-	// emitted by Postfix bounce(8), after the caller has independently proven
-	// the dedicated trusted-Postfix route.
-	PostfixCompatibleOrder bool
+	// PostfixBounceOrder admits only the bounded field ordering and folding
+	// emitted by current Postfix bounce(8), after the caller has independently
+	// proven the dedicated trusted-Postfix route.
+	PostfixBounceOrder bool
 }
 
 // Evidence stores the authenticated embedded DKIM2 target without retaining message content.
@@ -176,7 +176,7 @@ func (e EvidenceEvaluator) Evaluate(ctx context.Context, request EvidenceRequest
 		if evidenceErr != nil {
 			return Evidence{}, newEvidenceError(EvidenceErrorCodeInvalidEmbeddedClaims, evidenceErr)
 		}
-		if !deliveryStatusLinksRecipient(request.Report, evidence.recipientPaths, request.PostfixCompatibleOrder) {
+		if !deliveryStatusLinksRecipient(request.Report, evidence.recipientPaths, request.PostfixBounceOrder) {
 			return Evidence{}, newEvidenceError(EvidenceErrorCodeDeliveryStatusLinkage, nil)
 		}
 		return evidence, nil
@@ -192,7 +192,7 @@ func (e EvidenceEvaluator) Evaluate(ctx context.Context, request EvidenceRequest
 		if evidenceErr != nil {
 			return Evidence{}, newEvidenceError(EvidenceErrorCodeInvalidEmbeddedClaims, evidenceErr)
 		}
-		if !deliveryStatusLinksRecipient(request.Report, evidence.recipientPaths, request.PostfixCompatibleOrder) {
+		if !deliveryStatusLinksRecipient(request.Report, evidence.recipientPaths, request.PostfixBounceOrder) {
 			return Evidence{}, newEvidenceError(EvidenceErrorCodeDeliveryStatusLinkage, nil)
 		}
 		return evidence, nil
@@ -248,22 +248,22 @@ const (
 // structure and requires one complete recipient group to name an authenticated
 // highest-signature rt= path. Folding fails closed. RFC 3461 xtext is decoded
 // only for Original-Recipient; Final-Recipient is compared as its raw address.
-func deliveryStatusLinksRecipient(report Report, signed [][]byte, postfixCompatible bool) bool {
+func deliveryStatusLinksRecipient(report Report, signed [][]byte, postfixBounceOrder bool) bool {
 	body := report.DeliveryStatus().BodyBytes()
 	defer clear(body)
 	if deliveryStatusBodyLinksRecipient(body, signed, false) {
 		return true
 	}
-	return postfixCompatible && deliveryStatusBodyLinksRecipient(body, signed, true)
+	return postfixBounceOrder && deliveryStatusBodyLinksRecipient(body, signed, true)
 }
 
 // deliveryStatusBodyLinksRecipient validates one bounded RFC 3464 body and
 // reports whether a structurally complete recipient group links to signed rt=.
-func deliveryStatusBodyLinksRecipient(body []byte, signed [][]byte, postfixCompatible bool) bool {
+func deliveryStatusBodyLinksRecipient(body []byte, signed [][]byte, postfixBounceOrder bool) bool {
 	if len(body) == 0 || len(body) > maxDeliveryStatusBytes {
 		return false
 	}
-	if postfixCompatible {
+	if postfixBounceOrder {
 		unfolded, valid := unfoldPostfixDeliveryStatus(body)
 		if !valid {
 			return false
@@ -292,7 +292,7 @@ func deliveryStatusBodyLinksRecipient(body []byte, signed [][]byte, postfixCompa
 			position = lineEnd + 2
 		}
 		if len(line) == 0 {
-			groupLinked, valid := finishDeliveryStatusGroup(groupIndex, group, signed, postfixCompatible)
+			groupLinked, valid := finishDeliveryStatusGroup(groupIndex, group, signed, postfixBounceOrder)
 			if !valid {
 				return false
 			}
@@ -302,7 +302,7 @@ func deliveryStatusBodyLinksRecipient(body []byte, signed [][]byte, postfixCompa
 			continue
 		}
 		if line[0] == ' ' || line[0] == '\t' ||
-			!group.add(groupIndex, line, postfixCompatible) {
+			!group.add(groupIndex, line, postfixBounceOrder) {
 			return false
 		}
 		totalFields++
@@ -312,7 +312,7 @@ func deliveryStatusBodyLinksRecipient(body []byte, signed [][]byte, postfixCompa
 		}
 	}
 	if group.fieldCount > 0 {
-		groupLinked, valid := finishDeliveryStatusGroup(groupIndex, group, signed, postfixCompatible)
+		groupLinked, valid := finishDeliveryStatusGroup(groupIndex, group, signed, postfixBounceOrder)
 		if !valid {
 			return false
 		}
@@ -367,7 +367,7 @@ const (
 )
 
 // add classifies and admits one unfolded field into the selected strict group state machine.
-func (g *deliveryStatusFieldGroup) add(groupIndex int, line []byte, postfixCompatible bool) bool {
+func (g *deliveryStatusFieldGroup) add(groupIndex int, line []byte, postfixBounceOrder bool) bool {
 	if g == nil {
 		return false
 	}
@@ -377,7 +377,7 @@ func (g *deliveryStatusFieldGroup) add(groupIndex int, line []byte, postfixCompa
 	}
 	value := bytes.Trim(line[colon+1:], " \t")
 	field := classifyDeliveryStatusField(line[:colon])
-	if postfixCompatible {
+	if postfixBounceOrder {
 		return g.addPostfix(groupIndex, line[:colon], field, value)
 	}
 	rank, allowed := deliveryStatusFieldRank(groupIndex, field)
@@ -435,7 +435,7 @@ func (g *deliveryStatusFieldGroup) add(groupIndex int, line []byte, postfixCompa
 	return true
 }
 
-// addPostfix admits exactly the historical field order emitted by Postfix
+// addPostfix admits exactly the current field order emitted by Postfix
 // bounce_notify_util.c. It does not turn the generic RFC parser into an
 // order-insensitive parser.
 func (g *deliveryStatusFieldGroup) addPostfix(
@@ -691,14 +691,14 @@ func finishDeliveryStatusGroup(
 	index int,
 	group deliveryStatusFieldGroup,
 	signed [][]byte,
-	postfixCompatible bool,
+	postfixBounceOrder bool,
 ) (bool, bool) {
 	if group.fieldCount == 0 {
 		return false, false
 	}
 	if index == 0 {
 		if !group.mandatoryFieldsSeen(index) || !validDeliveryStatusOptionalMessageFields(group) ||
-			postfixCompatible && len(group.postfixQueueID) == 0 {
+			postfixBounceOrder && len(group.postfixQueueID) == 0 {
 			return false, false
 		}
 		return false, validDeliveryStatusTypedText(group.reportingMTA, "", false)
@@ -706,7 +706,7 @@ func finishDeliveryStatusGroup(
 	if index > maxDeliveryStatusRecipientGroups || !group.mandatoryFieldsSeen(index) ||
 		!validDeliveryStatusAction(group.action) || !validDeliveryStatusCode(group.status) ||
 		!validDeliveryStatusOptionalRecipientFields(group) ||
-		postfixCompatible && !group.has(deliveryStatusFieldDiagnosticCode) {
+		postfixBounceOrder && !group.has(deliveryStatusFieldDiagnosticCode) {
 		return false, false
 	}
 	finalPath, valid := deliveryStatusFinalRecipientPath(group.finalRecipient)
