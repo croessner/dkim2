@@ -268,7 +268,9 @@ introduced beside an existing inbound path:
 - `permissive` accepts `FAIL` and `PERMERROR` for rollout compatibility while
   preserving temporary deferral for `TEMPERROR`; and
 - `testing` returns non-terminal `continue` for every coherent verification
-  state so the daemon can report results without controlling delivery.
+  state so the daemon can report results without controlling delivery; when
+  reporting is enabled, the response still carries the exact daemon-owned
+  `Authentication-Results` action.
 
 These modes apply only when at least one DKIM2 protocol field family is
 present. A syntactically valid message with neither `Message-Instance` nor
@@ -283,9 +285,10 @@ it. There is no domain-wide DNS participation probe because the selector and
 signing domain needed for key lookup come from a present DKIM2 signature.
 
 The verification state remains unchanged in every mode. `testing` is the
-delivery-neutral pilot choice; `permissive` is useful when an accepting
-disposition must also authorize the optional Milter `Authentication-Results`
-action. Neither mode converts local daemon ambiguity, invalid responses,
+delivery-neutral pilot choice and reports applicable results on its accepting
+non-terminal `continue` disposition. `permissive` is useful when failed or
+permanently erroneous verification should receive an accepting terminal
+disposition. Neither mode converts local daemon ambiguity, invalid responses,
 unavailable dependencies, or Milter fidelity failures into success.
 
 Originator signing has a separate authorization boundary and does not inherit

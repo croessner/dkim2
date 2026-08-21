@@ -800,9 +800,9 @@ components:
           $ref: "#/components/schemas/SMTPInput"
         reporting:
           description: >
-            Optional daemon reporting authority. When supplied for an accepting
-            outcome, the daemon returns the exact Authentication-Results action;
-            adapters must not synthesize it.
+            Optional daemon reporting authority. When supplied for an inbound
+            accept or non-terminal continue outcome, the daemon returns the
+            exact Authentication-Results action; adapters must not synthesize it.
           allOf:
             - $ref: "#/components/schemas/ReportingContext"
     SignRequest:
@@ -937,6 +937,10 @@ components:
     ProcessResponse:
       type: object
       additionalProperties: false
+      description: >
+        Applicable inbound processing result. Reject and tempfail carry no
+        actions. Accept and non-terminal continue may carry the sole
+        daemon-owned Authentication-Results reporting action.
       required:
         - api_version
         - draft

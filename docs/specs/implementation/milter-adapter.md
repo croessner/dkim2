@@ -155,12 +155,15 @@ Successful operation responses contain:
 - one ordered action plan.
 
 The closed dispositions are `accept`, `reject`, `tempfail`, and `continue`.
-`continue` means no final SMTP refusal and no daemon-requested mutation. At EOM
-the adapter maps it to successful completion, while still performing mandatory
-local `Authentication-Results` trust-boundary scrubbing when configured. A
-response cannot contain both a rejecting disposition and mutation actions.
+`continue` means no final SMTP refusal or terminal policy decision. At EOM the
+adapter maps it to successful completion. For inbound processing it may carry
+the sole daemon-owned `Authentication-Results` reporting action and still
+performs mandatory local trust-boundary scrubbing when configured. Other modes
+must carry no action on `continue`. A response cannot contain both a rejecting
+disposition and mutation actions.
 
-Operation result and disposition form one exact matrix:
+Sign, revise, and delivery-status operation result and disposition form one
+exact matrix:
 
 | Result | Allowed disposition |
 | --- | --- |
@@ -169,9 +172,15 @@ Operation result and disposition form one exact matrix:
 | `permerror` | `reject` |
 | `temperror` | `tempfail` |
 
-Only `accept` may carry a mutation plan. `continue`, `reject`, and `tempfail`
-must carry no actions. Both daemon construction and adapter admission enforce
-the same matrix independently.
+Inbound process responses instead bind verification state to the selected
+policy and replay result. In `testing`, every coherent applicable verification
+state uses non-terminal `continue`; strict and permissive modes retain their
+documented terminal policy behavior.
+
+Only `accept`, plus inbound `continue` with the exact authoritative reporting
+action, may carry a mutation plan. Other `continue`, `reject`, and `tempfail`
+outcomes must carry no actions. Both daemon construction and adapter admission
+enforce the same matrix independently.
 
 Protocol and policy failures are represented by their operation response when
 the operation was evaluated. JSON/contract failures retain the existing HTTP
@@ -233,7 +242,8 @@ The daemon constructs plans only from successfully completed domain results:
 - changed revision emits `Message-Instance` then `DKIM2-Signature`;
 - inbound processing emits exactly one fixed `Authentication-Results` action
   only when the capability-authenticated request supplied a validated
-  `authserv-id`, reporting is enabled, and the disposition accepts.
+  `authserv-id`, reporting is enabled, and the disposition is `accept` or
+  non-terminal `continue`.
 
 M10 returns complete deterministically folded fields, while Milter
 `add_header` accepts a field name and one logical value. One daemon-owned
@@ -580,7 +590,7 @@ Daemon dispositions map deterministically:
 | Disposition | Milter result | Reply |
 | --- | --- | --- |
 | `accept` | apply validated actions, then accept | none |
-| `continue` | accept unchanged at EOM | none |
+| `continue` | apply the exact inbound report action when present, then accept | none |
 | `reject` | reject unchanged | `550 5.7.1 DKIM2 policy rejection` |
 | `tempfail` | temporary failure unchanged | `451 4.7.1 DKIM2 service unavailable` |
 
@@ -591,7 +601,9 @@ entire verified chain, not only the current instance. Consequently its closed
 policy enums contain the reachable `not_requested`, `violated`,
 `indeterminate`, and `complete` states where the OpenAPI schema allows them.
 A valid multi-instance result can therefore be `PASS`, `testing`,
-`not_checked`, and `continue`, with no mutation action.
+`not_checked`, and `continue`. When inbound reporting is enabled, that result
+carries the exact daemon-owned `Authentication-Results` action while delivery
+remains non-terminal.
 
 This is the single current Draft-04 contract, not an alternate compatibility
 mode. It has no deprecated aliases, version fallbacks, or caller-selectable

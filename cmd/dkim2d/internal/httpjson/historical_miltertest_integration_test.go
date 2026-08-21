@@ -141,6 +141,9 @@ daemon:
   capability_file: %s
   request_timeout: 5s
 mode: inbound
+authentication_results:
+  enabled: true
+  authserv_id: mx.example.test
 failure:
   mode: tempfail
 limits:
@@ -316,7 +319,7 @@ func preserveHistoricalMilterArtifacts(
 	scriptDigest := sha256.Sum256(script)
 	bodyDigest := sha256.Sum256(body)
 	manifest := fmt.Sprintf(
-		"scenario=dkim2-inbound-m2-testing-continue-v1\nconfig_sha256=%x\nlua_sha256=%x\nbody_sha256=%x\nmiltertest_git_remote=%s\nmiltertest_git_commit=%s\nmiltertest_git_tree=%s\nmiltertest_sha256=%s\nmiltertest_go_version=go1.26.6\nmiltertest_build=CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -mod=vendor -buildvcs=false -trimpath -ldflags='-s -w' -o <output> ./cmd/miltertest-go\nexpected_http_status=200\nexpected_terminal=accept\nexpected_mutations=0\nmilter_call=%s serve --config %s\nmiltertest_call=MILTERTEST_ACTIONS_FILE=<ephemeral-0600> %s -s %s\n",
+		"scenario=dkim2-inbound-m2-testing-continue-report-v1\nconfig_sha256=%x\nlua_sha256=%x\nbody_sha256=%x\nmiltertest_git_remote=%s\nmiltertest_git_commit=%s\nmiltertest_git_tree=%s\nmiltertest_sha256=%s\nmiltertest_go_version=go1.26.6\nmiltertest_build=CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -mod=vendor -buildvcs=false -trimpath -ldflags='-s -w' -o <output> ./cmd/miltertest-go\nexpected_http_status=200\nexpected_terminal=accept\nexpected_mutations=1\nexpected_wire_action=INSHEADER:0:Authentication-Results:mx.example.test; dkim2=pass\nmilter_call=%s serve --config %s\nmiltertest_call=MILTERTEST_ACTIONS_FILE=<ephemeral-0600> %s -s %s\n",
 		configDigest, scriptDigest, bodyDigest, historicalMiltertestGitRemote,
 		historicalMiltertestGitCommit,
 		historicalMiltertestGitTree, historicalMiltertestDarwinSHA256,
@@ -375,7 +378,7 @@ func waitForHistoricalMilterSocket(t testing.TB, path string, process *exec.Cmd,
 	t.Fatalf("historical Milter socket not ready output=%q", logged)
 }
 
-// assertHistoricalMilterResult proves HTTP 200 and one mutation-free accept frame.
+// assertHistoricalMilterResult proves HTTP 200 and the exact report before accept.
 func assertHistoricalMilterResult(
 	t testing.TB,
 	results <-chan historicalMilterResult,
@@ -399,13 +402,20 @@ func assertHistoricalMilterResult(
 	var decoded []struct {
 		Disposition string `json:"disposition"`
 		Detail      struct {
-			Kind string `json:"kind"`
+			Kind  string `json:"kind"`
+			Index uint32 `json:"index"`
+			Name  string `json:"name"`
+			Value string `json:"value"`
 		} `json:"detail"`
 	}
-	if err := json.Unmarshal(actions, &decoded); err != nil || len(decoded) != 1 ||
-		decoded[0].Disposition != "accept" ||
-		(decoded[0].Detail.Kind != "" && decoded[0].Detail.Kind != "none") {
-		t.Fatal("historical Milter emitted a mutation or non-accept terminal")
+	if err := json.Unmarshal(actions, &decoded); err != nil || len(decoded) != 2 ||
+		decoded[0].Detail.Kind != "insert_header" ||
+		decoded[0].Detail.Index != 0 ||
+		decoded[0].Detail.Name != "Authentication-Results" ||
+		decoded[0].Detail.Value != testInboundPassReport ||
+		decoded[1].Disposition != "accept" ||
+		(decoded[1].Detail.Kind != "" && decoded[1].Detail.Kind != "none") {
+		t.Fatal("historical Milter report action or terminal changed")
 	}
 }
 

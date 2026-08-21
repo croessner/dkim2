@@ -1010,8 +1010,9 @@ func validProcessReportAction(
 	value *generated.ProcessResponse,
 	authservID string,
 ) bool {
-	if value == nil || value.Disposition != generated.DispositionAccept ||
-		authservID == "" {
+	if value == nil || authservID == "" ||
+		(value.Disposition != generated.DispositionAccept &&
+			value.Disposition != generated.DispositionContinue) {
 		return value != nil && len(value.Actions) == 0
 	}
 	result, ok := verificationResult(value.Verification.State)

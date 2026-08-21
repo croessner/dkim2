@@ -376,7 +376,7 @@ type Disposition string
 const (
 	// DispositionAccept applies actions and accepts.
 	DispositionAccept Disposition = "accept"
-	// DispositionContinue accepts unchanged.
+	// DispositionContinue accepts without a terminal policy decision.
 	DispositionContinue Disposition = "continue"
 	// DispositionReject rejects unchanged.
 	DispositionReject Disposition = "reject"

@@ -439,10 +439,10 @@ func TestMapDomainResultAuthenticFourStatePolicyMatrix(t *testing.T) {
 	modulus := decodeSelectedGolden(t, corpus.RSAModulus)
 	key := &rsa.PublicKey{N: new(big.Int).SetBytes(modulus), E: corpus.RSAExponent}
 	states := []selectedMatrixCase{
-		{name: "pass", vector: selectedRSAPassVector, outcome: selectedProviderFound, state: dkim2.ResultStatePASS, reason: dkim2.ReasonNone, strict: dkim2.PolicyReasonProtocolPass, permissive: dkim2.PolicyReasonProtocolPass},
-		{name: "fail", vector: "body_mismatch", outcome: selectedProviderFound, state: dkim2.ResultStateFAIL, reason: dkim2.ReasonHashMismatch, strict: dkim2.PolicyReasonProtocolFail, permissive: dkim2.PolicyReasonPermissiveOverride},
-		{name: "permerror", vector: selectedRSAPassVector, outcome: selectedProviderMissing, state: dkim2.ResultStatePERMERROR, reason: dkim2.ReasonMissingKey, strict: dkim2.PolicyReasonProtocolPermerror, permissive: dkim2.PolicyReasonPermissiveOverride},
-		{name: "temperror", vector: selectedRSAPassVector, outcome: selectedProviderTemporary, state: dkim2.ResultStateTEMPERROR, reason: dkim2.ReasonProviderTemporary, strict: dkim2.PolicyReasonProtocolTemperror, permissive: dkim2.PolicyReasonProtocolTemperror},
+		{name: authenticationResultPass, vector: selectedRSAPassVector, outcome: selectedProviderFound, state: dkim2.ResultStatePASS, reason: dkim2.ReasonNone, strict: dkim2.PolicyReasonProtocolPass, permissive: dkim2.PolicyReasonProtocolPass},
+		{name: authenticationResultFail, vector: "body_mismatch", outcome: selectedProviderFound, state: dkim2.ResultStateFAIL, reason: dkim2.ReasonHashMismatch, strict: dkim2.PolicyReasonProtocolFail, permissive: dkim2.PolicyReasonPermissiveOverride},
+		{name: authenticationResultPermerror, vector: selectedRSAPassVector, outcome: selectedProviderMissing, state: dkim2.ResultStatePERMERROR, reason: dkim2.ReasonMissingKey, strict: dkim2.PolicyReasonProtocolPermerror, permissive: dkim2.PolicyReasonPermissiveOverride},
+		{name: authenticationResultTemperror, vector: selectedRSAPassVector, outcome: selectedProviderTemporary, state: dkim2.ResultStateTEMPERROR, reason: dkim2.ReasonProviderTemporary, strict: dkim2.PolicyReasonProtocolTemperror, permissive: dkim2.PolicyReasonProtocolTemperror},
 	}
 	modes := []dkim2.PolicyMode{dkim2.PolicyModeStrict, dkim2.PolicyModePermissive, dkim2.PolicyModeTesting}
 	for _, stateCase := range states {

@@ -731,10 +731,13 @@ func TestProcessContractAdmitsPermerrorPolicyAcceptance(t *testing.T) {
 }
 
 // TestProcessContractAdmitsMultiInstanceTestingContinue proves the adapter
-// accepts authenticated chain policy evidence without inventing a mutation.
+// accepts authenticated chain policy evidence with the daemon-owned report.
 func TestProcessContractAdmitsMultiInstanceTestingContinue(t *testing.T) {
 	value := validProcessResponse()
-	value.Actions = generated.ActionPlan{}
+	value.Actions = generated.ActionPlan{{
+		Type: generated.AddHeader, Name: generated.AuthenticationResults,
+		Value: testAuthservID + "; dkim2=pass",
+	}}
 	value.Disposition = generated.DispositionContinue
 	value.Policy.DoNotExplode = generated.PolicyResultDoNotExplodeNotRequested
 	value.Policy.DoNotModify = generated.PolicyResultDoNotModifyIndeterminate
@@ -750,6 +753,10 @@ func TestProcessContractAdmitsMultiInstanceTestingContinue(t *testing.T) {
 	value.Replay.Class = generated.NotChecked
 	if !validProcessContract(&value, testAuthservID) {
 		t.Fatal("multi-instance testing continue response was rejected")
+	}
+	value.Actions = generated.ActionPlan{}
+	if validProcessContract(&value, testAuthservID) {
+		t.Fatal("multi-instance testing continue response omitted its report")
 	}
 }
 

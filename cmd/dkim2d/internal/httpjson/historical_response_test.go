@@ -57,7 +57,8 @@ func TestStrictHandlerReturnsMultiInstanceTestingContinue(t *testing.T) {
 	body := `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-04",` +
 		`"message":{"raw_rfc5322_base64":"` + base64.StdEncoding.EncodeToString(raw) +
 		`","fidelity":"milter_reconstructed_crlf"},` +
-		`"smtp":{"mail_from":"<sender@example.test>","rcpt_to":["<rcpt@example.test>"]}}`
+		`"smtp":{"mail_from":"<sender@example.test>","rcpt_to":["<rcpt@example.test>"]},` +
+		`"reporting":{"authserv_id":"mx.example.test"}}`
 	request, err := http.NewRequestWithContext(
 		t.Context(), http.MethodPost, server.URL+testProcessPath, strings.NewReader(body),
 	)
@@ -84,7 +85,9 @@ func TestStrictHandlerReturnsMultiInstanceTestingContinue(t *testing.T) {
 		decoded.Policy.DoNotExplode != generated.PolicyResultDoNotExplodeNotRequested ||
 		decoded.Policy.Feedback.HistoryCoverage != generated.PolicyFeedbackHistoryCoverageComplete ||
 		decoded.Replay.Class != generated.NotChecked || decoded.Disposition != generated.DispositionContinue ||
-		len(decoded.Actions) != 0 {
+		len(decoded.Actions) != 1 || decoded.Actions[0].Type != generated.AddHeader ||
+		decoded.Actions[0].Name != generated.AuthenticationResults ||
+		decoded.Actions[0].Value != testInboundPassReport {
 		t.Fatal("historical HTTP response changed the authenticated continue row")
 	}
 }

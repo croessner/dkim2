@@ -72,7 +72,8 @@ func TestVerificationScalarMappings(t *testing.T) {
 }
 
 // TestProcessReportActionsAreDaemonOwned proves the daemon constructs the
-// exact accepted RFC 8601 field while non-accepting outcomes remain inert.
+// exact RFC 8601 field for delivered accept and continue outcomes while
+// rejecting outcomes remain inert.
 func TestProcessReportActionsAreDaemonOwned(t *testing.T) {
 	actions, err := mapProcessReportActions(
 		generated.PASS,
@@ -82,8 +83,29 @@ func TestProcessReportActionsAreDaemonOwned(t *testing.T) {
 	if err != nil || len(actions) != 1 ||
 		actions[0].Type != generated.AddHeader ||
 		actions[0].Name != generated.AuthenticationResults ||
-		actions[0].Value != "mx.example.test; dkim2=pass" {
+		actions[0].Value != testInboundPassReport {
 		t.Fatalf("accepted report actions = %#v/%v", actions, err)
+	}
+	for _, testCase := range []struct {
+		state  generated.VerificationState
+		result string
+	}{
+		{state: generated.PASS, result: authenticationResultPass},
+		{state: generated.FAIL, result: authenticationResultFail},
+		{state: generated.PERMERROR, result: authenticationResultPermerror},
+		{state: generated.TEMPERROR, result: authenticationResultTemperror},
+	} {
+		actions, err = mapProcessReportActions(
+			testCase.state,
+			generated.DispositionContinue,
+			"mx.example.test",
+		)
+		if err != nil || len(actions) != 1 ||
+			actions[0].Type != generated.AddHeader ||
+			actions[0].Name != generated.AuthenticationResults ||
+			actions[0].Value != "mx.example.test; dkim2="+testCase.result {
+			t.Fatalf("continued %s report actions = %#v/%v", testCase.state, actions, err)
+		}
 	}
 	actions, err = mapProcessReportActions(
 		generated.TEMPERROR,

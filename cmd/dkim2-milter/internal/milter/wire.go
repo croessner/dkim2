@@ -697,7 +697,7 @@ func (s *Session) serializeResult(
 	}
 	switch result.Outcome {
 	case DispositionContinue:
-		return s.serializeAcceptance(nil, localAuthenticationResults), nil
+		return s.serializeAcceptance(result.Actions, localAuthenticationResults), nil
 	case DispositionReject:
 		return failureFrames(fixedRejectReply), nil
 	case DispositionTempfail:

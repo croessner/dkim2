@@ -94,7 +94,8 @@ func validDisposition(disposition Disposition) bool {
 // validActions validates the transport-safe shape and aggregate size of all actions.
 func validActions(result Result) bool {
 	if len(result.Actions) > 3 ||
-		(result.Outcome != DispositionAccept && len(result.Actions) != 0) {
+		(result.Outcome != DispositionAccept &&
+			result.Outcome != DispositionContinue && len(result.Actions) != 0) {
 		return false
 	}
 	total := 0
@@ -118,7 +119,9 @@ func validInboundResult(result Result, authservID string) bool {
 	if result.Result == resultNone {
 		return result.Outcome == DispositionContinue && len(result.Actions) == 0
 	}
-	if result.Outcome != DispositionAccept || authservID == "" {
+	if authservID == "" ||
+		(result.Outcome != DispositionAccept &&
+			result.Outcome != DispositionContinue) {
 		return len(result.Actions) == 0
 	}
 	return len(result.Actions) == 1 &&

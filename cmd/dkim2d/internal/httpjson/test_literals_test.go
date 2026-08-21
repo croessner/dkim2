@@ -38,6 +38,7 @@ const (
 	testHTTP11PreconditionFailedLine = "HTTP/1.1 412 Precondition Failed\r\n"
 	testHTTP11URITooLongLine         = "HTTP/1.1 414 Request URI Too Long\r\n"
 	testHTTPVersionNotSupported      = "505 HTTP Version Not Supported"
+	testInboundPassReport            = "mx.example.test; dkim2=pass"
 	testHealthPath                   = "/healthz"
 	testHostFactLimit                = 64
 	testMixedName                    = "mixed"

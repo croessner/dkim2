@@ -226,7 +226,8 @@ func validProcessResponse(response generated.ProcessResponse) bool {
 
 // validProcessActions validates the sole daemon-owned RFC 8601 projection.
 func validProcessActions(response generated.ProcessResponse) bool {
-	if response.Disposition != generated.DispositionAccept {
+	if response.Disposition != generated.DispositionAccept &&
+		response.Disposition != generated.DispositionContinue {
 		return len(response.Actions) == 0
 	}
 	if len(response.Actions) == 0 {

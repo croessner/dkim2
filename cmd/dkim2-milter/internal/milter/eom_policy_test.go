@@ -63,6 +63,51 @@ func TestInboundRecipientGroupsRemainProtocolEvidence(t *testing.T) {
 	}
 }
 
+// TestInboundTestingContinueEmitsDaemonReport proves a successful testing
+// verdict remains accepting while preserving its authoritative report action.
+func TestInboundTestingContinueEmitsDaemonReport(t *testing.T) {
+	handler := &testHandler{result: Result{
+		Operation: operationProcess, Result: resultPass, Outcome: DispositionContinue,
+		Actions: []Action{{
+			Kind: ActionAddHeader, Name: headerAuthResults,
+			Value: testAuthservID + "; dkim2=pass",
+		}},
+	}}
+	session := testSession(t, handler, false, modeInbound, testAuthservID)
+	stream := &splitStream{reader: bytes.NewReader(completeTwoRecipientMessage())}
+	if err := session.Serve(context.Background(), stream); err != nil || handler.calls != 1 {
+		t.Fatalf("Serve() error=%v calls=%d", err, handler.calls)
+	}
+	commands := responseCommands(t, stream.writer.Bytes())
+	if len(commands) < 2 || commands[len(commands)-2] != replyInsertHeader ||
+		commands[len(commands)-1] != replyAccept {
+		t.Fatalf("response commands=%q, want report insertion then accept", commands)
+	}
+}
+
+// TestInboundTestingContinueWithoutReportingEmitsNoMutation proves the same
+// non-terminal result remains mutation-free when no local authority is set.
+func TestInboundTestingContinueWithoutReportingEmitsNoMutation(t *testing.T) {
+	handler := &testHandler{result: Result{
+		Operation: operationProcess, Result: resultPass, Outcome: DispositionContinue,
+	}}
+	session := policySession(t, handler, modeInbound, FailurePolicy{})
+	stream := &splitStream{reader: bytes.NewReader(completeTwoRecipientMessage())}
+	if err := session.Serve(context.Background(), stream); err != nil || handler.calls != 1 {
+		t.Fatalf("Serve() error=%v calls=%d", err, handler.calls)
+	}
+	commands := responseCommands(t, stream.writer.Bytes())
+	if len(commands) == 0 || commands[len(commands)-1] != replyAccept {
+		t.Fatalf("response commands=%q, want accept", commands)
+	}
+	for _, command := range commands {
+		if command == replyAddHeader || command == replyInsertHeader ||
+			command == replyChangeHeader {
+			t.Fatalf("reporting-disabled continue emitted mutation %q", command)
+		}
+	}
+}
+
 // TestUnsignedInboundEOMContinuesWithoutActions proves the not-applicable action plan.
 func TestUnsignedInboundEOMContinuesWithoutActions(t *testing.T) {
 	handler := &testHandler{result: Result{

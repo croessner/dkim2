@@ -985,12 +985,12 @@ type ProcessRequest struct {
 	Draft      DraftVersion `json:"draft"`
 	Message    MessageInput `json:"message"`
 
-	// Reporting Optional daemon reporting authority. When supplied for an accepting outcome, the daemon returns the exact Authentication-Results action; adapters must not synthesize it.
+	// Reporting Optional daemon reporting authority. When supplied for an inbound accept or non-terminal continue outcome, the daemon returns the exact Authentication-Results action; adapters must not synthesize it.
 	Reporting *ReportingContext `json:"reporting,omitempty"`
 	Smtp      SMTPInput         `json:"smtp"`
 }
 
-// ProcessResponse defines model for ProcessResponse.
+// ProcessResponse Applicable inbound processing result. Reject and tempfail carry no actions. Accept and non-terminal continue may carry the sole daemon-owned Authentication-Results reporting action.
 type ProcessResponse struct {
 	Actions      ActionPlan         `json:"actions"`
 	ApiVersion   APIVersion         `json:"api_version"`

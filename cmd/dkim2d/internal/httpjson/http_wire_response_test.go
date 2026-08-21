@@ -190,7 +190,7 @@ func TestProcessWireValidationRejectsSkippedReplayAfterPass(t *testing.T) {
 	response = validWireProcessResponse()
 	response.Actions = generated.ActionPlan{{
 		Type: generated.AddHeader, Name: generated.AuthenticationResults,
-		Value: "mx.example.test; dkim2=pass",
+		Value: testInboundPassReport,
 	}}
 	if !validProcessResponse(response) {
 		t.Fatal("daemon-owned process report was rejected")
@@ -198,6 +198,24 @@ func TestProcessWireValidationRejectsSkippedReplayAfterPass(t *testing.T) {
 	response.Actions[0].Value = "mx.example.test; dkim2=fail"
 	if validProcessResponse(response) {
 		t.Fatal("process report inconsistent with verification was accepted")
+	}
+	response = validWireProcessResponse()
+	response.Actions = generated.ActionPlan{{
+		Type: generated.AddHeader, Name: generated.AuthenticationResults,
+		Value: testInboundPassReport,
+	}}
+	response.Disposition = generated.DispositionContinue
+	response.Policy.Mode = generated.Testing
+	response.Policy.PrimaryReason = generated.TestingModeObserve
+	response.Policy.Verdict = generated.PolicyResultVerdictContinue
+	response.Replay.Class = generated.NotChecked
+	if !validProcessResponse(response) {
+		t.Fatal("testing continue report was rejected")
+	}
+	response.Disposition = generated.DispositionReject
+	response.Policy.Verdict = generated.PolicyResultVerdictReject
+	if validProcessResponse(response) {
+		t.Fatal("rejecting process response carried a report action")
 	}
 }
 

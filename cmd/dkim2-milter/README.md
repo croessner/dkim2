@@ -204,8 +204,15 @@ claiming the configured service are deleted in descending field-index order
 for every accepted inbound message, including unsigned messages for which
 DKIM2 processing is not applicable. This mandatory RFC 8601 trust-boundary
 scrub remains separate from the daemon action plan. Applicable messages then
-receive the daemon-owned local result field at the top. Fields from other services
-are preserved. A forged local field disables fail-open.
+receive the daemon-owned local result field at the top for both terminal
+`accept` and non-terminal `continue`, including delivery-neutral `testing`
+policy. Fields from other services are preserved. A forged local field disables
+fail-open.
+
+This reporting change is a closed daemon/adapter contract update: an older
+daemon omits the `continue` report and an older adapter rejects it. Deploy the
+daemon and inbound Milter together as one digest-pinned change, and roll them
+back together.
 
 An inbound HTTP 204 response is the separate `not_applicable` variant for a
 message containing neither DKIM2 protocol field family. The adapter accepts it

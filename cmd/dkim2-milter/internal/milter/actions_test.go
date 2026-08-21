@@ -48,6 +48,10 @@ func TestValidResultEnforcesModeDispositionAndActionMatrix(t *testing.T) {
 			result: Result{Operation: operationSign, Result: resultNone, Outcome: DispositionContinue, Actions: originator},
 		},
 		{
+			name: "originator pass continue cannot mutate", mode: modeOriginator,
+			result: Result{Operation: operationSign, Result: resultPass, Outcome: DispositionContinue, Actions: originator},
+		},
+		{
 			name: "originator wrong order", mode: modeOriginator,
 			result: Result{Operation: operationSign, Result: resultPass, Outcome: DispositionAccept, Actions: []Action{originator[1], originator[0]}},
 		},
@@ -66,12 +70,34 @@ func TestValidResultEnforcesModeDispositionAndActionMatrix(t *testing.T) {
 			valid:  true,
 		},
 		{
+			name: "revision pass continue cannot mutate", mode: modeTransit,
+			result: Result{Operation: operationRevise, Result: resultPass, Outcome: DispositionContinue, Actions: revision},
+		},
+		{
+			name: "delivery status pass continue cannot mutate", mode: modePostfixDSN,
+			result: Result{Operation: operationDSNSign, Result: resultPass, Outcome: DispositionContinue, Actions: originator},
+		},
+		{
 			name: "inbound exact report", mode: modeInbound, authservID: testAuthservID,
 			result: Result{
 				Operation: operationProcess, Result: resultPass, Outcome: DispositionAccept,
 				Actions: []Action{{Kind: ActionAddHeader, Name: headerAuthResults, Value: testAuthservID + "; dkim2=pass"}},
 			},
 			valid: true,
+		},
+		{
+			name: "inbound testing continue exact report", mode: modeInbound, authservID: testAuthservID,
+			result: Result{
+				Operation: operationProcess, Result: resultPass, Outcome: DispositionContinue,
+				Actions: []Action{{Kind: ActionAddHeader, Name: headerAuthResults, Value: testAuthservID + "; dkim2=pass"}},
+			},
+			valid: true,
+		},
+		{
+			name: "inbound testing continue missing report", mode: modeInbound, authservID: testAuthservID,
+			result: Result{
+				Operation: operationProcess, Result: resultPass, Outcome: DispositionContinue,
+			},
 		},
 		{
 			name: "inbound replay rejection", mode: modeInbound,

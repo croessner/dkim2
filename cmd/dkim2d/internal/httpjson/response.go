@@ -181,6 +181,13 @@ const (
 	FinalDispositionContinue = outcome.DispositionContinue
 )
 
+const (
+	authenticationResultPass      = "pass"
+	authenticationResultFail      = "fail"
+	authenticationResultPermerror = "permerror"
+	authenticationResultTemperror = "temperror"
+)
+
 // MapDomainResult maps one complete verification and local-policy result atomically.
 func MapDomainResult(result dkim2.VerifyResult, decision dkim2.PolicyDecision) (DomainProjection, error) {
 	if !result.Valid() || !decision.Valid() {
@@ -253,7 +260,9 @@ func mapProcessReportActions(
 	disposition generated.Disposition,
 	authservID string,
 ) (generated.ActionPlan, error) {
-	if authservID == "" || disposition != generated.DispositionAccept {
+	if authservID == "" ||
+		(disposition != generated.DispositionAccept &&
+			disposition != generated.DispositionContinue) {
 		return generated.ActionPlan{}, nil
 	}
 	reportResult, resultOK := authenticationResult(state)
@@ -270,13 +279,13 @@ func mapProcessReportActions(
 func authenticationResult(state generated.VerificationState) (string, bool) {
 	switch state {
 	case generated.PASS:
-		return "pass", true
+		return authenticationResultPass, true
 	case generated.FAIL:
-		return "fail", true
+		return authenticationResultFail, true
 	case generated.PERMERROR:
-		return "permerror", true
+		return authenticationResultPermerror, true
 	case generated.TEMPERROR:
-		return "temperror", true
+		return authenticationResultTemperror, true
 	default:
 		return "", false
 	}
