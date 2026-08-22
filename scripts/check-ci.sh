@@ -53,10 +53,10 @@ grep -Fq 'packages: write' "$workflows/release.yml" || fail 'release package aut
 grep -Fq 'sbom: true' "$workflows/release.yml" || fail 'release BuildKit SBOM is missing'
 grep -Fq 'provenance: mode=max' "$workflows/release.yml" || fail 'release BuildKit provenance is missing'
 if grep -Eq '(attestations|id-token):[[:space:]]*write' "$workflows/release.yml"; then
-  fail 'private user repository must not request unavailable GitHub attestation authority'
+  fail 'release policy must use one registry-bound BuildKit attestation authority'
 fi
 if grep -Fq 'actions/attest-build-provenance' "$workflows/release.yml"; then
-  fail 'private user repository must use registry-bound BuildKit provenance'
+  fail 'release policy must use registry-bound BuildKit provenance'
 fi
 
 if grep -Fq 'latest' "$workflows/release.yml"; then

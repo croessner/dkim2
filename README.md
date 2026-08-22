@@ -12,6 +12,17 @@ The first design goal is precision: the core implementation must work from a
 controlled RFC 5322 message representation, preserve wire-significant details,
 and keep adapter behavior separate from the protocol engine.
 
+## Repository Status
+
+`github.com/croessner/dkim2` is the canonical development, issue, release, and
+Go module repository. `github.com/go-dkim2/dkim2` is a public read-only mirror
+for project discovery; it is not an alternative Go module path. Contributions,
+issues, and security reports belong in the canonical repository.
+
+The implementation tracks active Internet-Drafts and is therefore experimental.
+Published `v0.x` releases provide reproducible interoperability and deployment
+evidence, but do not claim final-RFC stability.
+
 ## Architecture
 
 ```mermaid
@@ -138,8 +149,8 @@ implemented. They require operator-supplied verified-TLS services and distinct
 least-authority principals. Every network runtime accepts one complete
 committed native v2 or v3 generation. The offline
 `dkim2d datasource domain` CLI implements native onboarding across all four
-network backends, but this worktree is an implementation candidate pending
-fresh independent review; it is not a release or production-rollout claim.
+network backends. Tagged releases and their associated evidence define release
+claims; an arbitrary worktree or mirror checkout does not.
 
 ## Current Behavior
 

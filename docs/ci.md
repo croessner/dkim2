@@ -48,6 +48,7 @@ After `make release-guardrails`, standard Docker Actions build and push the
 `build/container/Dockerfile`. Each exact multi-architecture digest receives
 registry-bound BuildKit SBOM and maximum provenance attestations, is scanned
 for unfixed high/critical vulnerabilities, and is smoke-tested by digest. The
-private user-owned repository deliberately does not call GitHub's repository
-attestation API, which is unavailable for that repository class. The workflow
-publishes the exact stable version only; it does not create `latest`.
+release policy uses the registry-bound BuildKit attestations attached to each
+GHCR subject and does not create a second GitHub repository-attestation path.
+The workflow publishes the exact stable version only; it does not create
+`latest`.

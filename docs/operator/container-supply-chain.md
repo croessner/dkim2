@@ -66,9 +66,9 @@ created implicitly.
 
 The release job alone receives `packages: write`. Pull requests, branch
 pushes, conformance and adapter integration jobs cannot publish packages. The
-repository is private and user-owned, so the unavailable GitHub repository
-attestation API is not requested; the GHCR subject retains BuildKit SBOM and
-maximum provenance attestations.
+release policy uses the BuildKit SBOM and maximum provenance attestations bound
+to the GHCR subject. It does not request a parallel GitHub
+repository-attestation authority.
 
 ## Internal development images
 

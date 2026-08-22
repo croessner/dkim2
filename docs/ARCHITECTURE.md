@@ -11,13 +11,13 @@
 | Date | 2026-08-02 |
 | Owner | Christian Roessner / Codex |
 | Language | English |
-| Classification | Internal design draft |
+| Classification | Public living design document |
 | Baseline specification | `draft-ietf-dkim-dkim2-spec-04`, dated 2026-07-05 |
 | Related specification | M11 tested behavior baseline: `draft-chuang-dkim2-dns-04`, dated 2026-03-18; replaced by `draft-ietf-dkim-dkim2-dns-00` on 2026-07-20 |
 | Baseline status check | Datatracker checked 2026-07-24; the repository behavior and vectors remain pinned to `draft-ietf-dkim-dkim2-spec-04` plus the historical DNS `-04` identifier. The active working-group DNS `-00` has a normatively identical body. Identifier/vector migration is deferred to a separately reviewed baseline update. |
 | Change control | While this document is still `0.1.0-draft`, startup decisions may be added without a version bump; after the first committed planning baseline, material architecture changes require a revision-history entry and may require a new version |
 | Supersedes | None |
-| Next planned revision | Before the first public preview, or when the DKIM2 draft changes materially |
+| Next planned revision | When the DKIM2 draft or a material architecture decision changes |
 
 ## Revision History
 
@@ -100,9 +100,9 @@ implementations.
 
 Initial modules:
 
-- `lib`: the DKIM2 reference library at the current module path
-  `github.com/croessner/dkim2`. A different publication namespace may be
-  selected before the first public release, but is not an active module path.
+- `lib`: the DKIM2 reference library at the canonical module path
+  `github.com/croessner/dkim2`. The public `github.com/go-dkim2/dkim2`
+  repository is a source mirror, not an alternative module identity.
 - `cmd/dkim2d`: an HTTP/JSON service module.
 - `cmd/dkim2-milter`: a Milter adapter module.
 - `cmd/dkim2ctl`: an OpenAPI-generated client and test-client module.
@@ -2537,14 +2537,12 @@ interpretation choices in code.
 ### 18.1 Resolved Decisions
 
 1. Public module namespace:
-   The current library module path is `github.com/croessner/dkim2`, with command
-   modules below `github.com/croessner/dkim2/cmd/`. A possible public target is a dedicated
-   `github.com/go-dkim2/...` namespace. The reference library is likely to be
-   published as `github.com/go-dkim2/libdkim2`; daemon, Milter, and test-client
-   components should use analogous names under the same namespace if that
-   organization/repository structure is created. This is not binding, is not
-   the current module identity, and must be revisited before the first public
-   release.
+   The library module path is `github.com/croessner/dkim2`, with command modules
+   below `github.com/croessner/dkim2/cmd/`. That identity remains canonical so
+   publication does not create competing import paths or require a repository
+   relocation. `github.com/go-dkim2/dkim2` is a public read-only source mirror;
+   it must retain the canonical `go.mod` declarations and must not publish an
+   independent tag or release history.
 2. Daemon message input model:
    `dkim2d` accepts raw RFC 5322 message input for DKIM2 processing. The stable
    API does not include a structured Milter-specific input model, and no later
