@@ -51,7 +51,7 @@ fi
 mirror_workflow="$workflows/mirror.yml"
 grep -Fq "github.repository == 'go-dkim2/dkim2'" "$mirror_workflow" ||
   fail 'mirror workflow must run only in the organization mirror'
-grep -Fq 'repository: croessner/dkim2' "$mirror_workflow" ||
+grep -Fq 'https://github.com/croessner/dkim2.git' "$mirror_workflow" ||
   fail 'mirror workflow must fetch only the canonical repository'
 grep -Fq 'contents: write' "$mirror_workflow" ||
   fail 'mirror workflow requires target-scoped contents write authority'
