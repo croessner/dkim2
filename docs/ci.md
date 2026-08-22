@@ -9,6 +9,7 @@ second build or test system.
 | --- | --- | --- |
 | `Guardrails` | Go quality, unit/race tests, builds, generated files, direct vendor resolution and boundaries | `make guardrails` |
 | `Conformance` | Portable Draft-04 protocol conformance | `make check-conformance`, `make conformance` |
+| `Public Mirror` | One-way branch and tag synchronization from the canonical repository | target-scoped GitHub token |
 | `Release` | Stable quality gate and exact GHCR publication | `make release-guardrails` |
 
 There is no separate unit-test workflow because Guardrails already owns unit
@@ -33,7 +34,11 @@ identities. `make check-ci` runs actionlint and enforces only durable policy:
 - no implicit `latest` image tag.
 
 Normal workflows have read-only repository authority. Only the stable Release
-publish job receives package write permission.
+publish job receives package write permission. The Public Mirror workflow is
+inert in the canonical repository. In `github.com/go-dkim2/dkim2` it receives a
+short-lived target-scoped `contents: write` token, fetches the public canonical
+repository, and synchronizes branches and tags without a persistent deploy key
+or cross-repository secret.
 Historical private module-proof reconstruction is not a normal source-quality
 gate; ordinary CI validates the committed vendor tree directly with Go.
 

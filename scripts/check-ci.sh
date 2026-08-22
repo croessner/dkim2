@@ -4,6 +4,7 @@ set -eu
 workflows=.github/workflows
 expected='conformance.yml
 guardrails.yml
+mirror.yml
 release.yml'
 
 fail() {
@@ -45,6 +46,17 @@ fi
 if grep -RE '(packages|id-token|attestations):[[:space:]]*write' \
   "$workflows" --exclude=release.yml; then
   fail 'only the release workflow may publish or attest artifacts'
+fi
+
+mirror_workflow="$workflows/mirror.yml"
+grep -Fq "github.repository == 'go-dkim2/dkim2'" "$mirror_workflow" ||
+  fail 'mirror workflow must run only in the organization mirror'
+grep -Fq 'repository: croessner/dkim2' "$mirror_workflow" ||
+  fail 'mirror workflow must fetch only the canonical repository'
+grep -Fq 'contents: write' "$mirror_workflow" ||
+  fail 'mirror workflow requires target-scoped contents write authority'
+if grep -Eq 'secrets[.]|packages:[[:space:]]*write|id-token:[[:space:]]*write' "$mirror_workflow"; then
+  fail 'mirror workflow must use only the target-scoped GitHub token'
 fi
 
 grep -Fq 'release:' "$workflows/release.yml" || fail 'release event is missing'

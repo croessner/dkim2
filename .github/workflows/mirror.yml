@@ -1,0 +1,36 @@
+name: Public Mirror
+
+on:
+  schedule:
+    - cron: "23 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: public-mirror
+  cancel-in-progress: false
+
+jobs:
+  synchronize:
+    if: github.repository == 'go-dkim2/dkim2'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out canonical repository
+        uses: actions/checkout@3d3c42e5aac5ba805825a76410c181273ba90b1 # v7.0.1
+        with:
+          repository: croessner/dkim2
+          token: ${{ github.token }}
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Synchronize branches and tags
+        run: |
+          set -euo pipefail
+          git fetch --prune origin '+refs/heads/*:refs/remotes/origin/*' '+refs/tags/*:refs/tags/*'
+          git update-ref -d refs/remotes/origin/HEAD || true
+          git remote add mirror "https://github.com/${GITHUB_REPOSITORY}.git"
+          git push --prune mirror 'refs/remotes/origin/*:refs/heads/*'
+          git push --prune mirror 'refs/tags/*:refs/tags/*'
