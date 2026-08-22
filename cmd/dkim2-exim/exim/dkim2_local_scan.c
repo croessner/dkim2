@@ -1056,7 +1056,7 @@ dkim2_apply_response(
       NULL,
       TRUE,
       ' ',
-      "Authentication-Results:%s\n",
+      "Authentication-Results: %s\n",
       add_value);
     memset(add_value, 0, response->add_value_length);
     free(add_value);

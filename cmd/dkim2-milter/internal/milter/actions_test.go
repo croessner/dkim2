@@ -1,6 +1,7 @@
 package milter
 
 import (
+	"bytes"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
@@ -251,6 +252,10 @@ func TestAuthenticationResultsReplacementIsPreSerializedInRFCOrder(t *testing.T)
 			binary.BigEndian.Uint32(frames[1][5:9]),
 			binary.BigEndian.Uint32(frames[2][5:9]),
 		)
+	}
+	wantInsertion := []byte(headerAuthResults + "\x00 " + testAuthservID + "; dkim2=pass\x00")
+	if !bytes.Equal(frames[2][9:], wantInsertion) {
+		t.Fatalf("replacement insertion payload=%q, want=%q", frames[2][9:], wantInsertion)
 	}
 }
 

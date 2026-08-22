@@ -94,7 +94,7 @@
     {
       "id": "exim-qualification-executor",
       "path": "cmd/dkim2-exim/exim/tests/execute-real-matrix-linux.sh",
-      "sha256": "6963f830d61001758f7a00a9c75b73759602ee25def7972f0741801669411da3",
+      "sha256": "4a63576f4b68f897aaef56941be459a2f3a9a5da0cd8f75e242ef5a8e4bcc8b0",
       "module": "cmd/dkim2-exim"
     },
     {
@@ -124,7 +124,7 @@
     {
       "id": "milter-fixture-data",
       "path": "testdata/conformance/milter/draft-ietf-dkim-dkim2-spec-04/portable-fixtures.json",
-      "sha256": "a70e93c46d8a38c89fc940c552cd2a1a3783042f35664d4800b5bfc5c41875fd",
+      "sha256": "417959eb394c7501b3e60f56a90a7b64ef3e5cc953b7811d53e87c0f5359dc8a",
       "module": "testdata/conformance"
     },
     {

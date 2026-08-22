@@ -350,7 +350,7 @@ authentication_results_count() {
     printf '%s\n' 0
     return
   fi
-  grep -ac '^Authentication-Results:mx\.example\.test;' \
+  grep -ac '^Authentication-Results: mx\.example\.test;' \
     "$state_root/delivered.mbox" || true
 }
 

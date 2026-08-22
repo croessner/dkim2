@@ -319,7 +319,7 @@ func preserveHistoricalMilterArtifacts(
 	scriptDigest := sha256.Sum256(script)
 	bodyDigest := sha256.Sum256(body)
 	manifest := fmt.Sprintf(
-		"scenario=dkim2-inbound-m2-testing-continue-report-v1\nconfig_sha256=%x\nlua_sha256=%x\nbody_sha256=%x\nmiltertest_git_remote=%s\nmiltertest_git_commit=%s\nmiltertest_git_tree=%s\nmiltertest_sha256=%s\nmiltertest_go_version=go1.26.6\nmiltertest_build=CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -mod=vendor -buildvcs=false -trimpath -ldflags='-s -w' -o <output> ./cmd/miltertest-go\nexpected_http_status=200\nexpected_terminal=accept\nexpected_mutations=1\nexpected_wire_action=INSHEADER:0:Authentication-Results:mx.example.test; dkim2=pass\nmilter_call=%s serve --config %s\nmiltertest_call=MILTERTEST_ACTIONS_FILE=<ephemeral-0600> %s -s %s\n",
+		"scenario=dkim2-inbound-m2-testing-continue-report-v1\nconfig_sha256=%x\nlua_sha256=%x\nbody_sha256=%x\nmiltertest_git_remote=%s\nmiltertest_git_commit=%s\nmiltertest_git_tree=%s\nmiltertest_sha256=%s\nmiltertest_go_version=go1.26.6\nmiltertest_build=CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -mod=vendor -buildvcs=false -trimpath -ldflags='-s -w' -o <output> ./cmd/miltertest-go\nexpected_http_status=200\nexpected_terminal=accept\nexpected_mutations=1\nexpected_wire_action=INSHEADER:0:Authentication-Results: mx.example.test; dkim2=pass\nmilter_call=%s serve --config %s\nmiltertest_call=MILTERTEST_ACTIONS_FILE=<ephemeral-0600> %s -s %s\n",
 		configDigest, scriptDigest, bodyDigest, historicalMiltertestGitRemote,
 		historicalMiltertestGitCommit,
 		historicalMiltertestGitTree, historicalMiltertestDarwinSHA256,

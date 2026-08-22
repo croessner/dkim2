@@ -882,7 +882,7 @@ header_add_at_position(
   header_line *header;
 
   HARNESS_ASSERT(after == FALSE && name == NULL && topnot == TRUE);
-  HARNESS_ASSERT(strcmp(format, "Authentication-Results:%s\n") == 0);
+  HARNESS_ASSERT(strcmp(format, "Authentication-Results: %s\n") == 0);
   va_start(arguments, format);
   length = vsnprintf(rendered, sizeof(rendered), format, arguments);
   va_end(arguments);

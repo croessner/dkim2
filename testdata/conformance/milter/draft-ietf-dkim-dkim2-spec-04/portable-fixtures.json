@@ -31,7 +31,7 @@
       },
       "expected_actions": [
         {"command": "change_header", "index": 1, "name": "Authentication-Results", "value": ""},
-        {"command": "insert_header", "index": 0, "name": "Authentication-Results", "value": "mx.example.test; dkim2=pass"}
+        {"command": "insert_header", "index": 0, "name": "Authentication-Results", "value": " mx.example.test; dkim2=pass"}
       ],
       "terminal": "accept"
     },

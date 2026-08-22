@@ -734,9 +734,18 @@ func (s *Session) serializeAcceptance(
 			prefix = 4
 			command = replyInsertHeader
 		}
-		payload := make([]byte, prefix, prefix+len(action.Name)+len(action.Value)+2)
+		valuePrefix := ""
+		if action.Name == headerAuthResults {
+			valuePrefix = " "
+		}
+		payload := make(
+			[]byte,
+			prefix,
+			prefix+len(action.Name)+len(valuePrefix)+len(action.Value)+2,
+		)
 		payload = append(payload, action.Name...)
 		payload = append(payload, 0)
+		payload = append(payload, valuePrefix...)
 		payload = append(payload, action.Value...)
 		payload = append(payload, 0)
 		frames = append(frames, encodeFrame(command, payload))
