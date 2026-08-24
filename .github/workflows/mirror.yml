@@ -5,8 +5,7 @@ on:
     - cron: "23 * * * *"
   workflow_dispatch:
 
-permissions:
-  contents: write
+permissions: {}
 
 concurrency:
   group: public-mirror
@@ -18,13 +17,27 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
+      - name: Clone canonical repository
+        run: git clone --bare "https://github.com/croessner/dkim2.git" "$RUNNER_TEMP/repository.git"
+
+      - name: Create target-scoped mirror token
+        id: mirror-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.DKIM2_MIRROR_APP_CLIENT_ID }}
+          private-key: ${{ secrets.DKIM2_MIRROR_APP_PRIVATE_KEY }}
+          owner: go-dkim2
+          repositories: dkim2
+          permission-contents: write
+          permission-workflows: write
+          skip-token-revoke: false
+
       - name: Synchronize branches and tags
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ steps.mirror-token.outputs.token }}
         run: |
           set -euo pipefail
           gh auth setup-git
-          git clone --bare "https://github.com/croessner/dkim2.git" "$RUNNER_TEMP/repository.git"
           git -C "$RUNNER_TEMP/repository.git" remote add mirror "https://github.com/${GITHUB_REPOSITORY}.git"
-          git -C "$RUNNER_TEMP/repository.git" push --prune mirror 'refs/heads/*:refs/heads/*'
+          git -C "$RUNNER_TEMP/repository.git" push --prune mirror '+refs/heads/*:refs/heads/*'
           git -C "$RUNNER_TEMP/repository.git" push --prune mirror 'refs/tags/*:refs/tags/*'

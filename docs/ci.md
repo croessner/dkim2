@@ -9,7 +9,7 @@ second build or test system.
 | --- | --- | --- |
 | `Guardrails` | Go quality, unit/race tests, builds, generated files, direct vendor resolution and boundaries | `make guardrails` |
 | `Conformance` | Portable Draft-04 protocol conformance | `make check-conformance`, `make conformance` |
-| `Public Mirror` | One-way branch and tag synchronization from the canonical repository | target-scoped GitHub token |
+| `Public Mirror` | One-way branch and tag synchronization from the canonical repository | target-scoped GitHub App installation token |
 | `Release` | Stable quality gate and exact GHCR publication | `make release-guardrails` |
 
 There is no separate unit-test workflow because Guardrails already owns unit
@@ -25,9 +25,9 @@ pushes or pull requests.
 by repository scripts. Workflow Actions are pinned directly to reviewed commit
 identities. `make check-ci` runs actionlint and enforces only durable policy:
 
-- the three expected workflow concerns;
+- the four expected workflow concerns;
 - immutable Action pins;
-- no publication authority outside `release.yml`;
+- no package, attestation, or OIDC publication authority outside `release.yml`;
 - no `github.ref_protected` release dependency;
 - no privileged or repository-specific CI temporary-filesystem lifecycle;
 - no Postfix or Exim E2E workflow; and
@@ -35,10 +35,45 @@ identities. `make check-ci` runs actionlint and enforces only durable policy:
 
 Normal workflows have read-only repository authority. Only the stable Release
 publish job receives package write permission. The Public Mirror workflow is
-inert in the canonical repository. In `github.com/go-dkim2/dkim2` it receives a
-short-lived target-scoped `contents: write` token, fetches the public canonical
-repository, and synchronizes branches and tags without a persistent deploy key
-or cross-repository secret.
+inert in the canonical repository and disables all permissions on its built-in
+`GITHUB_TOKEN`. In `github.com/go-dkim2/dkim2`, it uses the SHA-pinned
+`actions/create-github-app-token` Action to create a short-lived installation
+token for the private `DKIM2 Public Mirror` GitHub App. The token is explicitly
+limited to the single `go-dkim2/dkim2` repository and requests only
+`contents: write` plus `workflows: write`; the latter is required because exact
+branch and tag synchronization includes reviewed changes below
+`.github/workflows/`. GitHub also grants the App its mandatory implicit
+`metadata: read` permission. The Action revokes the installation token after
+the job, and GitHub otherwise limits its lifetime to one hour.
+
+The App is owned by `go-dkim2`, has no webhook or event subscriptions, and is
+installed only on `go-dkim2/dkim2`. Its client ID is the repository variable
+`DKIM2_MIRROR_APP_CLIENT_ID`; its private key is the repository secret
+`DKIM2_MIRROR_APP_PRIVATE_KEY`. Neither credential exists in the canonical
+repository. `make check-ci` enforces the exact Action identity, credential
+allowlist, repository scope, permission pair, built-in-token denial, and
+post-job token revocation. The workflow clones the public canonical repository
+before creating the token and exposes it only to the target-push step. The App
+has no package, attestation, OIDC, secret-management, organization, or
+canonical-repository authority.
+
+Canonical branch rewrites are synchronized explicitly because Dependabot and
+other automation may replace their own branch history. Tags remain
+non-forced: published tag identities are immutable and a rewrite must fail
+visibly instead of being copied silently.
+
+GitHub's indivisible `contents: write` permission also includes releases and
+merges inside the target repository even though this workflow performs only Git
+ref pushes. This is an explicit target-only residual permission: the App is not
+installed on the canonical repository, has no package authority, and the
+public mirror can be reconstructed entirely from canonical refs if the target
+credential is ever compromised.
+
+Because App-authenticated pushes are ordinary repository writes, a changed
+`main`, `features`, or `release/**` ref may start the mirror repository's own
+Guardrails or Conformance workflow. The Public Mirror workflow has no push
+trigger, so synchronization cannot recursively invoke itself.
+
 Historical private module-proof reconstruction is not a normal source-quality
 gate; ordinary CI validates the committed vendor tree directly with Go.
 
