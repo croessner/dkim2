@@ -13,7 +13,7 @@ const (
 	maxDraftVersionBytes   = 128
 
 	supportedAPIVersion   = "v1"
-	supportedDraftVersion = "draft-ietf-dkim-dkim2-spec-04"
+	supportedDraftVersion = "draft-ietf-dkim-dkim2-spec-05"
 	jsonDraftMember       = "draft"
 
 	jsonPreflightErrorDescription = "http-json lexical preflight failure"

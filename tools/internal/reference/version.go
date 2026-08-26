@@ -142,7 +142,7 @@ func CheckReleasePlan(root string) error {
 		!slices.Equal(plan.PlannedTags, plannedCandidateTags) ||
 		plan.Publication.RealTagsCreated || plan.Publication.StableWorkflowAllowed ||
 		plan.Publication.CredentialsAllowed || len(plan.Publication.Aliases) != 0 ||
-		plan.Capabilities.Exim != "qualified_linux" ||
+		plan.Capabilities.Exim != "unqualified_draft05" ||
 		plan.Capabilities.LDAPSQLMigration != "implemented" {
 		return errors.New("release_plan_contract")
 	}

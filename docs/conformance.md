@@ -1,7 +1,7 @@
 # DKIM2 Conformance Evidence
 
 This repository tests the behavior baseline
-`draft-ietf-dkim-dkim2-spec-04` and the DNS baseline
+`draft-ietf-dkim-dkim2-spec-05` and the DNS baseline
 `draft-chuang-dkim2-dns-04`. Results are evidence for one exact Git base and
 candidate-snapshot digest; historical reports do not establish the state of a
 different checkout.
@@ -13,7 +13,7 @@ The manifest keeps the source of every claim visible:
 - `draft_normative` covers rules stated by the pinned DKIM2 drafts.
 - `rfc_normative` covers incorporated RFC 5321, RFC 5322, RFC 6531, RFC 8259,
   and RFC 8601 behavior.
-- `documented_interpretation` covers a behavior needed where Draft-04 is
+- `documented_interpretation` covers a behavior needed where Draft-05 is
   ambiguous.
 - `local_security_policy` covers restrictive implementation policy, including
   replay handling; it is not protocol verification.
@@ -21,7 +21,7 @@ The manifest keeps the source of every claim visible:
 - `adapter_contract` covers Milter, real Postfix, and source-linked real Exim
   integration behavior.
 
-Draft-04 still marks architecture references, EAI considerations, IANA
+Draft-05 still marks architecture references, EAI considerations, IANA
 considerations, and security considerations as `TBA`. The implementation does
 not turn those sections into protocol claims. In particular, signing remains
 ASCII-envelope-only, while inbound SMTPUTF8 handling is bounded by the
@@ -38,7 +38,7 @@ documented RFC 6531 interpretation.
 | Replay detection | supported local policy | Memory and Valkey evidence; replay outcome is deliberately separate from DKIM2 cryptographic verification |
 | LDAP and PostgreSQL signing datasources | supported local policy | Exact schema/DDL, shared provider parity, verified-TLS loaders, immutable generation and protected-registry tests |
 | Offline OpenDKIM migration | supported administrative policy | Bounded inventory, protected key import, fresh DNS proof, fenced publication, and higher-generation rollback tests |
-| Exim | qualified on Linux | Source-linked module and strict imported five-row matrix: upstream 4.99.5, Debian 4.98.2 security revisions, and Ubuntu 4.99.1 updates/security revisions; 43 cases passed per row |
+| Exim | `unqualified_draft05` | Source-linked implementation remains available, but the five-row Linux evidence is Draft-04-only and cannot qualify the Draft-05 candidate; active portable and full reports contain no Exim suite or evidence import |
 
 Exim rewrites the timestamp in its first generated `Received` field after
 `local_scan()` returns. Exim fidelity evidence therefore requires that field
@@ -62,7 +62,7 @@ Local `sendmail(1)` intake is asynchronous: successful handoff to `postdrop(1)`
 is followed by a bounded assertion that exactly one unsigned message remains
 held in the `maildrop` queue because cleanup cannot reach the Milter.
 
-No external DKIM2 corpus is authoritative for this Draft-04 implementation.
+No external DKIM2 corpus is authoritative for this Draft-05 implementation.
 The positive values in this repository come from reviewed draft examples,
 independent derivations, generated contract fixtures, and local synthetic
 oracles as recorded in the manifest.
@@ -77,31 +77,57 @@ make conformance
 ```
 
 The real Postfix profile additionally requires Docker with Compose. The full
-profile also requires the absolute preserved Exim evidence root:
+Draft-05 profile is evidence-free for Exim while the capability is
+`unqualified_draft05`:
 
 ```text
 make conformance-postfix
-make conformance-all EXIM_EVIDENCE_ROOT=/absolute/path/to/exim-evidence
+make conformance-all
 ```
 
-`make conformance-all` fails before report production when
-`EXIM_EVIDENCE_ROOT` is empty. The Make target passes that absolute directory
-to the conformance command as
-`-exim-evidence /absolute/path/to/exim-evidence`; no implicit discovery or
-portable-profile fallback is permitted.
+`make conformance-all` rejects an Exim evidence argument before repository
+access while `unqualified_draft05` is active. A full report must also reject an
+Exim suite, Exim case, imported evidence, or `qualified_linux` capability.
+Fresh evidence becomes admissible only after a separately authorized Draft-05
+matrix run and the corresponding reviewed capability-state migration.
 
 Generated `report.json` and `report.md` files are written below ignored
 `.artifacts/` directories. The machine report records the manifest digest, Git
 base, candidate snapshot, platform/profile, exact producer hashes, ordered
-cases, evidence classes, and the explicit release capability. Portable reports
-record the Linux-only Exim case as `not_applicable` and never open or claim an
-Exim evidence path. Full reports rerun the strict real-matrix verifier and
-admit only a bounded import summary bound to the current manifest, Git base,
-candidate snapshot, and verifier digest. Missing or stale evidence fails the
-full profile closed. Source-matched matrix execution additionally verifies
-each bounded build-input record against that base and snapshot, the
-authenticated row source and patch digests, and the exact adapter, daemon, and
-Exim binaries before any case runs.
+cases, evidence classes, and the explicit release capability. Portable and
+full Draft-05 reports contain no Exim case and never open or claim an Exim
+evidence path. The historical Draft-04 matrix remains a dated adapter record
+only. A future qualified profile must rerun the strict real-matrix verifier and
+bind its bounded import summary to the then-current manifest, Git base,
+candidate snapshot, verifier digest, authenticated row sources and exact
+adapter, daemon, and Exim binaries.
+
+## Draft-05 compatibility boundaries
+
+Draft-05 deliberately tightens duplicate Message-Instance hash names,
+non-lowercase decoded Recipe header keys, selector uniqueness, and the limit of
+two occurrences per signing algorithm. The four corresponding protocol
+infractions are distinct PERMERROR reasons:
+`duplicate_hash_algorithm`, `invalid_recipe_json`, `duplicate_selector`, and
+`too_many_signatures`. They are verification results, not HTTP JSON-decode
+errors, and do not become SMTP 4xx outcomes.
+
+The verifier now accepts SHA-512-only and agreeing dual-hash
+Message-Instances, a second same-algorithm signature with a distinct selector,
+and a matching non-origin unchanged Message-Instance without a Recipe. Every
+supported advertised hash and signature must agree. Public `signature_sets`
+rows remain positional and retain wire occurrence order even when algorithms
+repeat. The deterministic signer continues to emit SHA-256 Message-Instance
+hashes as an explicit local MAY policy and can revise a valid SHA-512-only
+history.
+
+The Draft-05 unsigned-header set changes canonical bytes in both directions:
+the eight added exact names and `Received-*` are excluded, while only the three
+named ARC fields are excluded and an unknown `ARC-*` field is signed. The
+manifest contains one executable incompatibility case in each direction.
+Replay identity is a separate drain-only epoch rotation; see
+[`replay-store-valkey.md`](replay-store-valkey.md) for the no-mixed-version
+procedure and retention-bounded detection gap.
 
 The separate repository security profile consumes these reports without
 reclassifying their claims. See `docs/security-testing.md` and run

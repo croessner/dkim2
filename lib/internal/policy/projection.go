@@ -13,6 +13,10 @@ const (
 	VerificationReasonLimitExceeded           VerificationReason = "limit_exceeded"
 	VerificationReasonMalformedMessage        VerificationReason = "malformed_message"
 	VerificationReasonMalformedProtocol       VerificationReason = "malformed_protocol"
+	VerificationReasonDuplicateHashAlgorithm  VerificationReason = "duplicate_hash_algorithm"
+	VerificationReasonInvalidRecipeJSON       VerificationReason = "invalid_recipe_json"
+	VerificationReasonDuplicateSelector       VerificationReason = "duplicate_selector"
+	VerificationReasonTooManySignatures       VerificationReason = "too_many_signatures"
 	VerificationReasonMissingProtocol         VerificationReason = "missing_protocol"
 	VerificationReasonSequenceInvalid         VerificationReason = "sequence_invalid"
 	VerificationReasonUnsupportedAlgorithm    VerificationReason = "unsupported_algorithm"
@@ -39,7 +43,8 @@ const (
 func (r VerificationReason) Known() bool {
 	switch r {
 	case VerificationReasonNone, VerificationReasonLimitExceeded, VerificationReasonMalformedMessage,
-		VerificationReasonMalformedProtocol, VerificationReasonMissingProtocol, VerificationReasonSequenceInvalid,
+		VerificationReasonMalformedProtocol, VerificationReasonDuplicateHashAlgorithm, VerificationReasonInvalidRecipeJSON,
+		VerificationReasonDuplicateSelector, VerificationReasonTooManySignatures, VerificationReasonMissingProtocol, VerificationReasonSequenceInvalid,
 		VerificationReasonUnsupportedAlgorithm, VerificationReasonHashMismatch, VerificationReasonSignatureMismatch,
 		VerificationReasonMissingKey, VerificationReasonInvalidKey, VerificationReasonAmbiguousKey,
 		VerificationReasonRevokedKey, VerificationReasonUnsupportedKeyType, VerificationReasonKeyAlgorithmMismatch,
@@ -79,6 +84,12 @@ const (
 	PreTargetMalformedMessage PreTargetReason = "malformed_message"
 	// PreTargetMalformedProtocol reports malformed DKIM2 input.
 	PreTargetMalformedProtocol PreTargetReason = "malformed_protocol"
+	// PreTargetDuplicateHashAlgorithm reports a repeated h= algorithm before target selection.
+	PreTargetDuplicateHashAlgorithm PreTargetReason = "duplicate_hash_algorithm"
+	// PreTargetDuplicateSelector reports a repeated selector before target selection.
+	PreTargetDuplicateSelector PreTargetReason = "duplicate_selector"
+	// PreTargetTooManySignatures reports excessive per-algorithm occurrences before target selection.
+	PreTargetTooManySignatures PreTargetReason = "too_many_signatures"
 	// PreTargetMissingProtocol reports absent required DKIM2 state.
 	PreTargetMissingProtocol PreTargetReason = "missing_protocol"
 	// PreTargetSequenceInvalid reports invalid DKIM2 sequencing.
@@ -90,7 +101,8 @@ const (
 // Known reports whether reason belongs to the closed pre-target vocabulary.
 func (r PreTargetReason) Known() bool {
 	switch r {
-	case PreTargetLimitExceeded, PreTargetMalformedMessage, PreTargetMalformedProtocol,
+	case PreTargetLimitExceeded, PreTargetMalformedMessage, PreTargetMalformedProtocol, PreTargetDuplicateHashAlgorithm,
+		PreTargetDuplicateSelector, PreTargetTooManySignatures,
 		PreTargetMissingProtocol, PreTargetSequenceInvalid, PreTargetInternalContract:
 		return true
 	default:
@@ -284,6 +296,7 @@ type Projection struct {
 	history            HistoryCoverage
 	hops               []HopFact
 	signatureFacts     []SignatureFact
+	revisionFailure    bool
 }
 
 // NewSelectedProjection seals a selected target with aggregate reason provenance.
@@ -293,6 +306,44 @@ func NewSelectedProjection(protocol ProtocolClass, reason VerificationReason, ta
 		return Projection{}, err
 	}
 	return projection, nil
+}
+
+// NewRevisionFailureProjection seals a selected target whose current signature sets passed before inherited history failed.
+func NewRevisionFailureProjection(protocol ProtocolClass, reason VerificationReason, current Projection, limits Limits) (Projection, error) {
+	if !revisionFailureProtocolReasonAllowed(protocol, reason) || !current.Valid() || current.form != TargetSelected || current.protocol != ProtocolPASS || current.history != HistoryNotEvaluated {
+		return Projection{}, newError(ErrorInternalContract)
+	}
+	projection := Projection{
+		form: TargetSelected, protocol: protocol, verificationReason: reason,
+		targetSequence: current.targetSequence, history: HistoryNotEvaluated,
+		signatureFacts: slices.Clone(current.signatureFacts), revisionFailure: true,
+	}
+	if err := projection.validate(limits); err != nil {
+		return Projection{}, err
+	}
+	return projection, nil
+}
+
+// revisionFailureProtocolReasonAllowed mirrors the closed service revision-outcome mapping.
+func revisionFailureProtocolReasonAllowed(protocol ProtocolClass, reason VerificationReason) bool {
+	switch protocol {
+	case ProtocolFAIL:
+		return reason == VerificationReasonHashMismatch || reason == VerificationReasonSignatureMismatch
+	case ProtocolTEMPERROR:
+		return reason == VerificationReasonProviderTemporary
+	case ProtocolPERMERROR:
+		switch reason {
+		case VerificationReasonUnsupportedAlgorithm, VerificationReasonProviderPermanent,
+			VerificationReasonProviderContract, VerificationReasonLimitExceeded,
+			VerificationReasonOutOfBandRequired, VerificationReasonInvalidRecipeJSON,
+			VerificationReasonMalformedProtocol, VerificationReasonInternalContract:
+			return true
+		default:
+			return false
+		}
+	default:
+		return false
+	}
 }
 
 // NewUnavailableProjection seals one exact pre-target permanent-error projection.
@@ -340,7 +391,7 @@ func (p Projection) validate(limits Limits) error {
 
 // validateUnavailable enforces the exact zero-target permanent form.
 func (p Projection) validateUnavailable() error {
-	if p.protocol != ProtocolPERMERROR || p.verificationReason != "" || p.targetSequence != 0 || !p.preTarget.Known() || p.history != HistoryNotEvaluated || len(p.hops) != 0 || len(p.signatureFacts) != 0 {
+	if p.protocol != ProtocolPERMERROR || p.verificationReason != "" || p.targetSequence != 0 || !p.preTarget.Known() || p.history != HistoryNotEvaluated || len(p.hops) != 0 || len(p.signatureFacts) != 0 || p.revisionFailure {
 		return newError(ErrorInternalContract)
 	}
 	return nil
@@ -364,6 +415,9 @@ func (p Projection) validateSelected() error {
 
 // validateCurrent enforces the current-only PASS authentication boundary.
 func (p Projection) validateCurrent() error {
+	if p.revisionFailure {
+		return p.validateRevisionFailure()
+	}
 	if len(p.signatureFacts) == 0 {
 		return newError(ErrorInternalContract)
 	}
@@ -377,6 +431,27 @@ func (p Projection) validateCurrent() error {
 		return newError(ErrorInternalContract)
 	}
 	if !p.verificationReasonFactsCoherent() {
+		return newError(ErrorInternalContract)
+	}
+	return nil
+}
+
+// validateRevisionFailure distinguishes passing current-set evidence from an outcome-driving inherited failure.
+func (p Projection) validateRevisionFailure() error {
+	if !revisionFailureProtocolReasonAllowed(p.protocol, p.verificationReason) || len(p.hops) != 0 || len(p.signatureFacts) == 0 {
+		return newError(ErrorInternalContract)
+	}
+	supportedPass := false
+	for _, fact := range p.signatureFacts {
+		if fact.status == SetStatusPass {
+			supportedPass = true
+			continue
+		}
+		if fact.status != SetStatusIgnored {
+			return newError(ErrorInternalContract)
+		}
+	}
+	if !supportedPass {
 		return newError(ErrorInternalContract)
 	}
 	return nil
@@ -414,6 +489,8 @@ func (p Projection) verificationReasonFactsCoherent() bool {
 // eligiblePermanentPrimaryCoherent locks mixed DNS-eligible key reason precedence.
 func (p Projection) eligiblePermanentPrimaryCoherent() bool {
 	if p.verificationReason == VerificationReasonMalformedMessage || p.verificationReason == VerificationReasonMalformedProtocol ||
+		p.verificationReason == VerificationReasonDuplicateHashAlgorithm || p.verificationReason == VerificationReasonInvalidRecipeJSON ||
+		p.verificationReason == VerificationReasonDuplicateSelector || p.verificationReason == VerificationReasonTooManySignatures ||
 		p.verificationReason == VerificationReasonMissingProtocol || p.verificationReason == VerificationReasonSequenceInvalid {
 		return false
 	}
@@ -453,7 +530,8 @@ func (p Projection) eligiblePermanentPrimaryCoherent() bool {
 func permanentProjectionReasonRank(reason VerificationReason) int {
 	for index, candidate := range []VerificationReason{
 		VerificationReasonInternalContract, VerificationReasonLimitExceeded, VerificationReasonMalformedMessage,
-		VerificationReasonMalformedProtocol, VerificationReasonMissingProtocol, VerificationReasonSequenceInvalid,
+		VerificationReasonMalformedProtocol, VerificationReasonDuplicateHashAlgorithm, VerificationReasonInvalidRecipeJSON,
+		VerificationReasonDuplicateSelector, VerificationReasonTooManySignatures, VerificationReasonMissingProtocol, VerificationReasonSequenceInvalid,
 		VerificationReasonUnsupportedAlgorithm, VerificationReasonMissingKey, VerificationReasonRevokedKey,
 		VerificationReasonUnsupportedKeyType, VerificationReasonKeyAlgorithmMismatch, VerificationReasonInvalidKey,
 		VerificationReasonAmbiguousKey, VerificationReasonProviderPermanent, VerificationReasonProviderContract,
@@ -560,7 +638,7 @@ func (p Projection) signatureProtocolCoherent() bool {
 
 // validateHistory enforces bounded explicit partial or contiguous complete history.
 func (p Projection) validateHistory() error {
-	if len(p.signatureFacts) != 0 || len(p.hops) == 0 {
+	if len(p.signatureFacts) != 0 || len(p.hops) == 0 || p.revisionFailure {
 		return newError(ErrorInternalContract)
 	}
 	if p.history == HistoryComplete {
@@ -601,7 +679,7 @@ func (p Projection) Valid() bool { return p.validate(DefaultLimits()) == nil }
 
 // IsZero reports whether the projection is uninitialized.
 func (p Projection) IsZero() bool {
-	return p.form == "" && p.protocol == "" && p.verificationReason == "" && p.targetSequence == 0 && p.preTarget == "" && p.history == "" && len(p.hops) == 0 && len(p.signatureFacts) == 0
+	return p.form == "" && p.protocol == "" && p.verificationReason == "" && p.targetSequence == 0 && p.preTarget == "" && p.history == "" && len(p.hops) == 0 && len(p.signatureFacts) == 0 && !p.revisionFailure
 }
 
 // Form returns the exact target form.

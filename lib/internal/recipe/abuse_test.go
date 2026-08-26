@@ -95,7 +95,7 @@ func TestRecipeArithmeticEdgesStayChecked(t *testing.T) {
 // TestConcurrentParserAndApplierReuseIsImmutable exercises shared value reuse under the race detector.
 func TestConcurrentParserAndApplierReuseIsImmutable(t *testing.T) {
 	const workers = 32
-	input := []byte(`{"h":{"Subject":[{"c":[1,1]},{"d":["restored"]}]},"b":[{"d":["body"]}]}`)
+	input := []byte(`{"h":{"subject":[{"c":[1,1]},{"d":["restored"]}]},"b":[{"d":["body"]}]}`)
 	parser := mustParser(t, Limits{})
 	plan, _, err := parser.Parse(input)
 	if err != nil {
@@ -154,7 +154,7 @@ func TestToxicRecipeMarkersStayOutOfAllFailureDiagnostics(t *testing.T) {
 		}
 	}
 	current := mustRecipeState(t, []byte("A:"+marker+"\r\n\r\n"+marker+"\r\n"))
-	plan := mustParseRecipe(t, `{"h":{"A":[{"c":[2,2]}]},"b":[{"c":[2,2]}]}`)
+	plan := mustParseRecipe(t, `{"h":{"a":[{"c":[2,2]}]},"b":[{"c":[2,2]}]}`)
 	_, usage, err := mustApplier(t, Limits{}).Apply(current, plan)
 	if err == nil || !usage.Valid() || strings.Contains(err.Error(), marker) || len(err.Error()) > 512 {
 		t.Fatalf("application diagnostic privacy failed: code=%s", recipeTestErrorCode(err))

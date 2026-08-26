@@ -58,7 +58,7 @@ func newErrorResponse(
 		ApiVersion: generated.V1,
 		Category:   category,
 		Code:       code,
-		Draft:      generated.DraftIetfDkimDkim2Spec04,
+		Draft:      generated.DraftIetfDkimDkim2Spec05,
 	}, maxErrorResponseBytes)
 	if err != nil {
 		return preMarshaledResponse{}, err
@@ -180,11 +180,11 @@ func validStatusResponse(value any) bool {
 	switch response := value.(type) {
 	case generated.HealthResponse:
 		return response.ApiVersion == generated.V1 &&
-			response.Draft == generated.DraftIetfDkimDkim2Spec04 &&
+			response.Draft == generated.DraftIetfDkimDkim2Spec05 &&
 			response.Status == generated.Alive
 	case generated.ReadinessResponse:
 		return response.ApiVersion == generated.V1 &&
-			response.Draft == generated.DraftIetfDkimDkim2Spec04 &&
+			response.Draft == generated.DraftIetfDkimDkim2Spec05 &&
 			response.Status == generated.Ready
 	default:
 		return false
@@ -194,7 +194,7 @@ func validStatusResponse(value any) bool {
 // validProcessResponse validates every closed generated enum and coherence rule before commit.
 func validProcessResponse(response generated.ProcessResponse) bool {
 	if response.ApiVersion != generated.V1 ||
-		response.Draft != generated.DraftIetfDkimDkim2Spec04 ||
+		response.Draft != generated.DraftIetfDkimDkim2Spec05 ||
 		!response.Disposition.Valid() ||
 		!validProcessActions(response) ||
 		!response.Replay.Class.Valid() ||
@@ -250,7 +250,7 @@ func validProcessActions(response generated.ProcessResponse) bool {
 // validOperationResponse validates one complete sign or revision response.
 func validOperationResponse(response generated.OperationResponse) bool {
 	if response.ApiVersion != generated.V1 ||
-		response.Draft != generated.DraftIetfDkimDkim2Spec04 ||
+		response.Draft != generated.DraftIetfDkimDkim2Spec05 ||
 		!response.Operation.Valid() || !response.Result.Valid() ||
 		!response.Disposition.Valid() ||
 		!validWireOperationOutcome(response.Result, response.Disposition) ||

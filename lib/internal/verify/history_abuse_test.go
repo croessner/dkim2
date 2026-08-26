@@ -122,7 +122,7 @@ func manyHistoryFields(t *testing.T, count int) (recipe.State, []string) {
 	for number := 1; number <= count; number++ {
 		recipeJSON := ""
 		if number > 1 {
-			recipeJSON = `{"h":{"Subject":[{"c":[1,1]}]}}`
+			recipeJSON = `{"h":{"subject":[{"c":[1,1]}]}}`
 		}
 		fields[number-1] = historyInstanceLine(uint64(number), testHistorySHA256, digests, recipeJSON)
 	}

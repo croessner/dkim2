@@ -18,7 +18,7 @@
     "base_revision": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
     "candidate_snapshot_sha256": {"$ref": "#/$defs/digest"},
     "product_version": {"const": "v0.1.0-rc.1"},
-    "message_draft": {"const": "draft-ietf-dkim-dkim2-spec-04"},
+    "message_draft": {"const": "draft-ietf-dkim-dkim2-spec-05"},
     "dns_draft": {"const": "draft-chuang-dkim2-dns-04"},
     "release_plan_sha256": {"$ref": "#/$defs/digest"},
     "api_sha256": {"$ref": "#/$defs/digest"},
@@ -39,7 +39,7 @@
       "additionalProperties": false,
       "required": ["exim", "ldap_sql_migration"],
       "properties": {
-        "exim": {"const": "qualified_linux"},
+        "exim": {"const": "unqualified_draft05"},
         "ldap_sql_migration": {"const": "implemented"}
       }
     },

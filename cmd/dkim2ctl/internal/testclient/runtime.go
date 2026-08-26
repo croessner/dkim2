@@ -652,21 +652,21 @@ func hasRequiredResponseMembers(data []byte, destination any) bool {
 // validHealth validates the complete health representation.
 func validHealth(value generated.HealthResponse) bool {
 	return value.ApiVersion == generated.V1 &&
-		value.Draft == generated.DraftIetfDkimDkim2Spec04 &&
+		value.Draft == generated.DraftIetfDkimDkim2Spec05 &&
 		value.Status == generated.Alive
 }
 
 // validReadiness validates the complete readiness representation.
 func validReadiness(value generated.ReadinessResponse) bool {
 	return value.ApiVersion == generated.V1 &&
-		value.Draft == generated.DraftIetfDkimDkim2Spec04 &&
+		value.Draft == generated.DraftIetfDkimDkim2Spec05 &&
 		value.Status == generated.Ready
 }
 
 // validProcess validates the closed top-level process projection.
 func validProcess(value generated.ProcessResponse) bool {
 	if value.ApiVersion != generated.V1 ||
-		value.Draft != generated.DraftIetfDkimDkim2Spec04 ||
+		value.Draft != generated.DraftIetfDkimDkim2Spec05 ||
 		!value.Disposition.Valid() || !value.Verification.State.Valid() ||
 		!value.Policy.Verdict.Valid() || !value.Replay.Class.Valid() ||
 		!validVerificationProjection(value.Verification) ||
@@ -713,7 +713,7 @@ func validProcessActions(value generated.ProcessResponse) bool {
 // validOperation validates one complete generated signing or revision response.
 func validOperation(value generated.OperationResponse, operation Operation) bool {
 	if value.ApiVersion != generated.V1 ||
-		value.Draft != generated.DraftIetfDkimDkim2Spec04 ||
+		value.Draft != generated.DraftIetfDkimDkim2Spec05 ||
 		!value.Operation.Valid() || !value.Result.Valid() ||
 		!value.Disposition.Valid() ||
 		operation == OperationSign && value.Operation != generated.Sign ||
@@ -820,7 +820,7 @@ func validPolicyProjection(value generated.PolicyResult) bool {
 // validError validates one closed structured error representation.
 func validError(value generated.ErrorResponse) bool {
 	return value.ApiVersion == generated.V1 &&
-		value.Draft == generated.DraftIetfDkimDkim2Spec04 &&
+		value.Draft == generated.DraftIetfDkimDkim2Spec05 &&
 		value.Code.Valid() && value.Category.Valid()
 }
 

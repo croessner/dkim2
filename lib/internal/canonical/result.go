@@ -5,7 +5,10 @@ import (
 	"encoding/base64"
 )
 
-const sha256DigestBytes = 32
+const (
+	sha256DigestBytes = 32
+	sha512DigestBytes = 64
+)
 
 // BodyTerminalAction records how Section 6.1 terminal CRLF handling behaved.
 type BodyTerminalAction string
@@ -35,7 +38,9 @@ type ExcludedHeaderCounts struct {
 	XHeader int
 	// DKIMSignature counts excluded DKIM-Signature fields.
 	DKIMSignature int
-	// ARC counts excluded ARC-* fields.
+	// ExactUnsigned counts the eight exact Draft-05 registered exclusions.
+	ExactUnsigned int
+	// ARC counts the three exact excluded ARC fields.
 	ARC int
 	// MessageInstance counts excluded Message-Instance fields.
 	MessageInstance int
@@ -51,6 +56,7 @@ func (c ExcludedHeaderCounts) Total() int {
 		nonNegative(c.AuthenticationResults) +
 		nonNegative(c.XHeader) +
 		nonNegative(c.DKIMSignature) +
+		nonNegative(c.ExactUnsigned) +
 		nonNegative(c.ARC) +
 		nonNegative(c.MessageInstance) +
 		nonNegative(c.DKIM2Signature)
@@ -140,14 +146,21 @@ func (c ByteInput) Metadata() Metadata {
 	return c.metadata
 }
 
-// NewSHA256Digest constructs an immutable SHA-256 digest container.
-func NewSHA256Digest(digest []byte) (Digest, error) {
-	if len(digest) != sha256DigestBytes {
+// NewDigest constructs an immutable supported Message-Instance digest container.
+func NewDigest(algorithm HashAlgorithm, digest []byte) (Digest, error) {
+	expected := digestSize(algorithm)
+	if expected == 0 {
+		return Digest{}, newError(ErrorCodeUnsupportedAlgorithm, ErrorLocation{}, ErrorDetails{
+			Class:     ErrorClassAlgorithm,
+			Algorithm: algorithm,
+		}, nil)
+	}
+	if len(digest) != expected {
 		return Digest{}, newError(ErrorCodeMalformedState, ErrorLocation{}, ErrorDetails{
 			Class:     ErrorClassMalformed,
-			Algorithm: HashAlgorithmSHA256,
-			LimitName: "sha256_digest_bytes",
-			Limit:     sha256DigestBytes,
+			Algorithm: algorithm,
+			LimitName: "digest_bytes",
+			Limit:     expected,
 			Count:     len(digest),
 		}, nil)
 	}
@@ -155,10 +168,32 @@ func NewSHA256Digest(digest []byte) (Digest, error) {
 	copied := bytes.Clone(digest)
 
 	return Digest{
-		algorithm: HashAlgorithmSHA256,
+		algorithm: algorithm,
 		bytes:     copied,
 		base64:    base64.StdEncoding.EncodeToString(copied),
 	}, nil
+}
+
+// NewSHA256Digest constructs an immutable SHA-256 digest container.
+func NewSHA256Digest(digest []byte) (Digest, error) {
+	return NewDigest(HashAlgorithmSHA256, digest)
+}
+
+// NewSHA512Digest constructs an immutable SHA-512 digest container.
+func NewSHA512Digest(digest []byte) (Digest, error) {
+	return NewDigest(HashAlgorithmSHA512, digest)
+}
+
+// digestSize returns the fixed decoded size for one supported algorithm.
+func digestSize(algorithm HashAlgorithm) int {
+	switch algorithm {
+	case HashAlgorithmSHA256:
+		return sha256DigestBytes
+	case HashAlgorithmSHA512:
+		return sha512DigestBytes
+	default:
+		return 0
+	}
 }
 
 // Bytes returns a copy of the digest bytes.
@@ -242,6 +277,7 @@ func sanitizeExcludedHeaderCounts(counts ExcludedHeaderCounts) ExcludedHeaderCou
 		AuthenticationResults: nonNegative(counts.AuthenticationResults),
 		XHeader:               nonNegative(counts.XHeader),
 		DKIMSignature:         nonNegative(counts.DKIMSignature),
+		ExactUnsigned:         nonNegative(counts.ExactUnsigned),
 		ARC:                   nonNegative(counts.ARC),
 		MessageInstance:       nonNegative(counts.MessageInstance),
 		DKIM2Signature:        nonNegative(counts.DKIM2Signature),

@@ -10,7 +10,7 @@ import (
 )
 
 // DraftIdentifier identifies the exact DKIM2 behavior baseline implemented by this verification facade.
-const DraftIdentifier = "draft-ietf-dkim-dkim2-spec-04"
+const DraftIdentifier = "draft-ietf-dkim-dkim2-spec-05"
 
 // ResultState identifies one of the four public DKIM2 verification outcomes.
 type ResultState string
@@ -148,6 +148,14 @@ const (
 	ReasonMalformedMessage ReasonCode = "malformed_message"
 	// ReasonMalformedProtocol reports malformed DKIM2 protocol input.
 	ReasonMalformedProtocol ReasonCode = "malformed_protocol"
+	// ReasonDuplicateHashAlgorithm reports any repeated h= algorithm name.
+	ReasonDuplicateHashAlgorithm ReasonCode = "duplicate_hash_algorithm"
+	// ReasonInvalidRecipeJSON reports malformed authenticated recipe JSON.
+	ReasonInvalidRecipeJSON ReasonCode = "invalid_recipe_json"
+	// ReasonDuplicateSelector reports a repeated selector in one signature field.
+	ReasonDuplicateSelector ReasonCode = "duplicate_selector"
+	// ReasonTooManySignatures reports a third signature occurrence for one algorithm.
+	ReasonTooManySignatures ReasonCode = "too_many_signatures"
 	// ReasonMissingProtocol reports required DKIM2 protocol state is absent.
 	ReasonMissingProtocol ReasonCode = "missing_protocol"
 	// ReasonSequenceInvalid reports invalid instance or signature numbering.
@@ -194,7 +202,8 @@ const (
 func (r ReasonCode) Known() bool {
 	switch r {
 	case ReasonNone, ReasonInvalidRequest, ReasonLimitExceeded, ReasonMalformedMessage,
-		ReasonMalformedProtocol, ReasonMissingProtocol, ReasonSequenceInvalid,
+		ReasonMalformedProtocol, ReasonDuplicateHashAlgorithm, ReasonInvalidRecipeJSON,
+		ReasonDuplicateSelector, ReasonTooManySignatures, ReasonMissingProtocol, ReasonSequenceInvalid,
 		ReasonUnsupportedAlgorithm, ReasonHashMismatch, ReasonSignatureMismatch,
 		ReasonMissingKey, ReasonInvalidKey, ReasonAmbiguousKey, ReasonRevokedKey, ReasonUnsupportedKeyType, ReasonKeyAlgorithmMismatch, ReasonProviderTemporary,
 		ReasonProviderPermanent, ReasonProviderContract, ReasonTimestampInvalid,

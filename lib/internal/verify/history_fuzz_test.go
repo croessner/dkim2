@@ -11,7 +11,7 @@ import (
 // FuzzHistoryWalk exercises deterministic bounded authenticated descent and cancellation.
 func FuzzHistoryWalk(f *testing.F) {
 	f.Add([]byte(`{"b":[]}`), false)
-	f.Add([]byte(`{"h":{"Subject":[{"d":["previous"]}]},"b":null}`), false)
+	f.Add([]byte(`{"h":{"subject":[{"d":["previous"]}]},"b":null}`), false)
 	f.Add([]byte(`{"b":[{"c":[1,999999]}]}`), false)
 	f.Add([]byte(`{"x":{"TOXIC_HISTORY_MARKER":"value"}}`), false)
 	f.Add([]byte(`{"b":[]}`), true)

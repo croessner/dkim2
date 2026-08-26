@@ -74,8 +74,8 @@ ensure_image \
   sha256:49f0bb6384d2a743d631148b80de7644055e0f7fc9fe3f493872dbddb77a747d \
   linux/amd64
 ensure_image \
-  chrroessner/postfix@sha256:8ccda0e26bb241116c7df5e0fb2bcdbc6a77b409b085d87e7ad4d0c23b0c41fd \
-  sha256:15369ce6d6adc2f67a77a5d65c88956c63ac4ca9864685605eefb9c77a102fcd \
+  chrroessner/postfix@sha256:d4b349ce665ba291444e55862ac842e3d4e612596520a9ba65a7b9bf00f9aa3c \
+  sha256:d4388e96b70baefcf074555e1f5a1f76b91cfcbb77b16e61bde03449c641d60c \
   linux/amd64
 
 docker tag \
@@ -85,7 +85,7 @@ docker tag \
   debian@sha256:4e401d95de7083948053197a9c3913343cd06b706bf15eb6a0c3ccd26f436a0e \
   dkim2-postfix-qualification-daemon:verified
 docker tag \
-  chrroessner/postfix@sha256:8ccda0e26bb241116c7df5e0fb2bcdbc6a77b409b085d87e7ad4d0c23b0c41fd \
+  chrroessner/postfix@sha256:d4b349ce665ba291444e55862ac842e3d4e612596520a9ba65a7b9bf00f9aa3c \
   dkim2-postfix-qualification-postfix:verified
 
 assert_project_removed() {
@@ -156,6 +156,7 @@ prove_injected_failure_cleanup() {
 
 prove_injected_failure_cleanup
 
+# run_once executes one isolated qualification pass and records its bounded evidence.
 run_once() {
   run_number=$1
   run_root="$output_root/run-$run_number"
@@ -219,7 +220,7 @@ run_once() {
     --arg base_revision "$base_revision" \
     --arg manifest "$manifest" \
     --arg producer "$producer" \
-    --arg postfix_image "chrroessner/postfix@sha256:8ccda0e26bb241116c7df5e0fb2bcdbc6a77b409b085d87e7ad4d0c23b0c41fd" \
+    --arg postfix_image "chrroessner/postfix@sha256:d4b349ce665ba291444e55862ac842e3d4e612596520a9ba65a7b9bf00f9aa3c" \
     --arg golang_image "golang@sha256:ae5a2316d12f3e78fd99177dad452e6ad4f240af2d71d57b480c3477f250fec6" \
     --arg debian_image "debian@sha256:4e401d95de7083948053197a9c3913343cd06b706bf15eb6a0c3ccd26f436a0e" \
     --slurpfile success "$run_root/success.json" \
@@ -229,7 +230,7 @@ run_once() {
     --slurpfile daemon_identity "$run_root/daemon-identity.json" \
     '{
       schema: "dkim2.postfix-qualification-report.v1",
-      message_draft: "draft-ietf-dkim-dkim2-spec-04",
+      message_draft: "draft-ietf-dkim-dkim2-spec-05",
       dns_draft: "draft-chuang-dkim2-dns-04",
       base_revision: $base_revision,
       candidate_snapshot_sha256: $candidate,

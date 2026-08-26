@@ -791,7 +791,7 @@ func generatedProcessRequest(input fixtureProcessInput) (generated.ProcessReques
 	}
 	request := generated.ProcessRequest{
 		ApiVersion: generated.V1,
-		Draft:      generated.DraftIetfDkimDkim2Spec04,
+		Draft:      generated.DraftIetfDkimDkim2Spec05,
 		Message:    message,
 		Smtp:       smtp,
 	}
@@ -813,7 +813,7 @@ func generatedSignRequest(input fixtureSignInput) (generated.SignRequest, error)
 	}
 	return generated.SignRequest{
 		ApiVersion: generated.V1,
-		Draft:      generated.DraftIetfDkimDkim2Spec04,
+		Draft:      generated.DraftIetfDkimDkim2Spec05,
 		Message:    message,
 		Smtp:       smtp,
 		Context: generated.SigningContext{
@@ -841,7 +841,7 @@ func generatedReviseRequest(input fixtureReviseInput) (generated.ReviseRequest, 
 	}
 	return generated.ReviseRequest{
 		ApiVersion:   generated.V1,
-		Draft:        generated.DraftIetfDkimDkim2Spec04,
+		Draft:        generated.DraftIetfDkimDkim2Spec05,
 		Message:      message,
 		Smtp:         smtp,
 		IncomingSmtp: incoming,
@@ -865,7 +865,7 @@ func generatedDSNSignRequest(input fixtureDSNSignInput) (generated.DSNSignReques
 	}
 	return generated.DSNSignRequest{
 		ApiVersion: generated.V1,
-		Draft:      generated.DraftIetfDkimDkim2Spec04,
+		Draft:      generated.DraftIetfDkimDkim2Spec05,
 		Message:    message,
 		OuterSmtp:  outer,
 		Context: generated.DeliveryStatusContext{

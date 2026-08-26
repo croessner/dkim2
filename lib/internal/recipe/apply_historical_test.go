@@ -18,7 +18,7 @@ func TestApplyHistoricalContinuesHeadersAcrossUnavailableBodyCopy(t *testing.T) 
 	if err != nil {
 		t.Fatalf("NewState() error = %v", err)
 	}
-	nullRecipe, _, err := parser.Parse([]byte(`{"h":{"Subject":[{"d":["middle"]}]},"b":null}`))
+	nullRecipe, _, err := parser.Parse([]byte(`{"h":{"subject":[{"d":["middle"]}]},"b":null}`))
 	if err != nil {
 		t.Fatalf("Parse(null) error = %v", err)
 	}
@@ -26,7 +26,7 @@ func TestApplyHistoricalContinuesHeadersAcrossUnavailableBodyCopy(t *testing.T) 
 	if err != nil || unavailable.BodyState() != BodyAvailabilityUnavailable {
 		t.Fatalf("Apply(null) state/error = %q/%v", unavailable.BodyState(), err)
 	}
-	copyRecipe, _, err := parser.Parse([]byte(`{"h":{"Subject":[{"d":["origin"]}]},"b":[{"c":[1,1]}]}`))
+	copyRecipe, _, err := parser.Parse([]byte(`{"h":{"subject":[{"d":["origin"]}]},"b":[{"c":[1,1]}]}`))
 	if err != nil {
 		t.Fatalf("Parse(copy) error = %v", err)
 	}
@@ -34,7 +34,7 @@ func TestApplyHistoricalContinuesHeadersAcrossUnavailableBodyCopy(t *testing.T) 
 		t.Fatalf("ordinary Apply() error = %v, want source_unavailable", err)
 	}
 	origin, _, err := applier.ApplyHistorical(unavailable, copyRecipe)
-	if err != nil || origin.BodyState() != BodyAvailabilityUnavailable || string(origin.Headers().OriginalBytes()) != "Subject:origin\r\n" {
+	if err != nil || origin.BodyState() != BodyAvailabilityUnavailable || string(origin.Headers().OriginalBytes()) != "subject:origin\r\n" {
 		t.Fatalf("ApplyHistorical() header/body/error = %q/%q/%v", origin.Headers().OriginalBytes(), origin.BodyState(), err)
 	}
 	restoreRecipe, _, err := parser.Parse([]byte(`{"b":[{"d":["restored"]}]}`))

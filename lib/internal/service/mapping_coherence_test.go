@@ -287,7 +287,7 @@ func TestEveryKnownHashStatusIsMapped(t *testing.T) {
 		{Kind: verify.CheckKindBodyHash, Status: verify.CheckStatusNotEvaluated, HashStatus: verify.HashStatusNotChecked},
 		{Kind: verify.CheckKindBodyHash, Status: verify.CheckStatusPass, HashStatus: verify.HashStatusPass},
 		{Kind: verify.CheckKindBodyHash, Status: verify.CheckStatusFail, Code: verify.ErrorCodeHashMismatch, HashStatus: verify.HashStatusMismatch},
-		{Kind: verify.CheckKindBodyHash, Status: verify.CheckStatusFail, Code: verify.ErrorCodeMissingTarget, HashStatus: verify.HashStatusMissingSHA256},
+		{Kind: verify.CheckKindBodyHash, Status: verify.CheckStatusUnsupported, Code: verify.ErrorCodeUnsupportedAlgorithm, HashStatus: verify.HashStatusUnsupported},
 		{Kind: verify.CheckKindBodyHash, Status: verify.CheckStatusUnsupported, Code: verify.ErrorCodeUnsupportedAlgorithm, HashStatus: verify.HashStatusUnsupported},
 		{Kind: verify.CheckKindBodyHash, Status: verify.CheckStatusFail, Code: verify.ErrorCodeMalformedState, HashStatus: verify.HashStatusInvalid},
 	}

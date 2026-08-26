@@ -18,6 +18,37 @@ const (
 	testScanner   = "govulncheck@v1.3.0"
 )
 
+// TestDraft05InventoryAndUnqualifiedExim freezes security identity and capability admission.
+func TestDraft05InventoryAndUnqualifiedExim(t *testing.T) {
+	const (
+		draft05            = "draft-ietf-dkim-dkim2-spec-05"
+		unqualifiedDraft05 = "unqualified_draft05"
+	)
+	if MessageDraft != draft05 {
+		t.Fatalf("MessageDraft = %q, want %q", MessageDraft, draft05)
+	}
+	evidence := expectedEvidenceIdentities()
+	for index := range evidence {
+		evidence[index].SHA256 = strings.Repeat(string(rune('1'+index)), 64)
+	}
+	report := Report{
+		Schema: securityReportSchema, MessageDraft: MessageDraft, DNSDraft: DNSDraft,
+		BaseRevision: BaseRevision, CandidateSnapshotSHA256: strings.Repeat("a", 64),
+		Profile: securityProfile, InventorySHA256: InventorySHA256(),
+		GoVersion: testGoVersion, GOOS: testGOOS, GOARCH: testGOARCH,
+		Race: racePassState, FuzzTargets: len(Targets()), FuzzState: passState,
+		VulnerabilityState: passState, Evidence: evidence,
+		Exim: unqualifiedDraft05, Overall: passState,
+	}
+	if err := report.Validate(BaseRevision); err != nil {
+		t.Fatalf("unqualified Draft-05 report rejected: %v", err)
+	}
+	report.Exim = "qualified_linux"
+	if err := report.Validate(BaseRevision); err == nil {
+		t.Fatal("qualified Linux evidence was accepted for the unqualified Draft-05 state")
+	}
+}
+
 // TestFuzzArgumentsCannotSelectCommandsFlagsOrPaths freezes the closed runner.
 func TestFuzzArgumentsCannotSelectCommandsFlagsOrPaths(t *testing.T) {
 	target := Targets()[0]
@@ -135,7 +166,7 @@ func TestSecurityReportRejectsFindingOverclaimAndEvidenceTamper(t *testing.T) {
 		GoVersion: testGoVersion, GOOS: testGOOS, GOARCH: testGOARCH,
 		Race: racePassState, FuzzTargets: len(Targets()), FuzzState: passState,
 		VulnerabilityState: passState, Evidence: evidence,
-		Exim: conformance.EximQualifiedLinux, Overall: passState,
+		Exim: conformance.EximUnqualifiedDraft05, Overall: passState,
 	}
 	if err := report.Validate(BaseRevision); err != nil {
 		t.Fatal(err)
@@ -149,7 +180,7 @@ func TestSecurityReportRejectsFindingOverclaimAndEvidenceTamper(t *testing.T) {
 	if err := report.Validate(BaseRevision); err == nil {
 		t.Fatal("Exim overclaim was accepted")
 	}
-	report.Exim = conformance.EximQualifiedLinux
+	report.Exim = conformance.EximUnqualifiedDraft05
 	report.Evidence[0].SHA256 = "marker-private-key"
 	if err := report.Validate(BaseRevision); err == nil {
 		t.Fatal("tampered evidence was accepted")
@@ -512,7 +543,7 @@ func TestSecuritySchemasAcceptExactEvidenceAndRejectUnknownMembers(t *testing.T)
 		GoVersion: testGoVersion, GOOS: testGOOS, GOARCH: testGOARCH,
 		Race: racePassState, FuzzTargets: len(Targets()), FuzzState: passState,
 		VulnerabilityState: passState, Evidence: evidence,
-		Exim: conformance.EximQualifiedLinux, Overall: passState,
+		Exim: conformance.EximUnqualifiedDraft05, Overall: passState,
 	}
 	if err := validateSchemaValue(
 		root,

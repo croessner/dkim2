@@ -274,18 +274,21 @@ func TestProviderUnknownKeyStatusAndInvalidMetadataBecomeContract(t *testing.T) 
 	}
 }
 
-// TestProviderRawErrorAndAlgorithmMismatchMetadataBecomeCleanContract verifies no fallback classification.
-func TestProviderRawErrorAndAlgorithmMismatchMetadataBecomeCleanContract(t *testing.T) {
+// TestProviderErrorsRemainContractAndAlgorithmMismatchStaysTyped verifies disjoint provider classifications.
+func TestProviderErrorsRemainContractAndAlgorithmMismatchStaysTyped(t *testing.T) {
 	fixture := newRSAVerificationFixture(t)
 	policy := KeyPolicyMetadata{TestingDeclared: true, StrictIdentityDeclared: true}
 	tests := []struct {
-		name string
-		key  PublicKey
-		err  error
+		name      string
+		key       PublicKey
+		err       error
+		status    SignatureSetStatus
+		keyPolicy KeyPolicyMetadata
 	}{
-		{name: "raw missing error", key: PublicKey{Algorithm: AlgorithmRSASHA256, Metadata: KeyMetadata{Status: KeyStatusMissing}}, err: errors.New("SECRET-MARKER missing")},
-		{name: "nonzero material plus error", key: PublicKey{Algorithm: AlgorithmRSASHA256, Material: fixture.rsaPublicKey, Metadata: KeyMetadata{Status: KeyStatusFound}}, err: NewProviderFailure(ProviderFailureTemporary)},
-		{name: "algorithm mismatch with metadata", key: PublicKey{Algorithm: AlgorithmEd25519SHA256, Material: fixture.rsaPublicKey, Metadata: KeyMetadata{Status: KeyStatusFound, Policy: policy}}},
+		{name: "raw missing error", key: PublicKey{Algorithm: AlgorithmRSASHA256, Metadata: KeyMetadata{Status: KeyStatusMissing}}, err: errors.New("SECRET-MARKER missing"), status: SignatureSetStatusProviderContract},
+		{name: "nonzero material plus error", key: PublicKey{Algorithm: AlgorithmRSASHA256, Material: fixture.rsaPublicKey, Metadata: KeyMetadata{Status: KeyStatusFound}}, err: NewProviderFailure(ProviderFailureTemporary), status: SignatureSetStatusProviderContract},
+		{name: "contradictory found algorithm mismatch", key: PublicKey{Algorithm: AlgorithmEd25519SHA256, Material: deterministicEd25519PublicKey("metadata algorithm mismatch"), Metadata: KeyMetadata{Status: KeyStatusFound, Policy: policy}}, status: SignatureSetStatusProviderContract},
+		{name: "reported key algorithm mismatch", key: PublicKey{Algorithm: AlgorithmRSASHA256, Metadata: KeyMetadata{Status: KeyStatusAlgorithmMismatch}}, status: SignatureSetStatusKeyAlgorithmMismatch},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -295,7 +298,7 @@ func TestProviderRawErrorAndAlgorithmMismatchMetadataBecomeCleanContract(t *test
 			}
 			result, verifyErr := verifier.Verify(context.Background(), Request{Message: fixture.message, Envelope: matchingEnvelope()})
 			sets := result.SignatureSets()
-			if verifyErr != nil || len(sets) != 1 || sets[0].Status != SignatureSetStatusProviderContract || sets[0].KeyPolicy != (KeyPolicyMetadata{}) {
+			if verifyErr != nil || len(sets) != 1 || sets[0].Status != tt.status || sets[0].KeyPolicy != tt.keyPolicy {
 				t.Fatalf("Verify() sets/error = %#v/%v", sets, verifyErr)
 			}
 		})

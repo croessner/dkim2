@@ -15,7 +15,7 @@ func TestPreMarshaledStatusResponseFreezesExactTagHeadAnd304Shapes(t *testing.T)
 	t.Parallel()
 	value := generated.HealthResponse{
 		ApiVersion: generated.V1,
-		Draft:      generated.DraftIetfDkimDkim2Spec04,
+		Draft:      generated.DraftIetfDkimDkim2Spec05,
 		Status:     generated.Alive,
 	}
 	get, err := newStatusResponse(value, false, "Sat, 25 Jul 2026 08:00:00 GMT", true)
@@ -100,7 +100,7 @@ func TestPreMarshaledErrorResponseFreezesClosedBodyAndHeaders(t *testing.T) {
 		recorder.Header().Get("Date") != "" {
 		t.Fatal("503 response headers differ")
 	}
-	const want = `{"api_version":"v1","category":"availability","code":"service_overloaded","draft":"draft-ietf-dkim-dkim2-spec-04"}`
+	const want = `{"api_version":"v1","category":"availability","code":"service_overloaded","draft":"draft-ietf-dkim-dkim2-spec-05"}`
 	if recorder.Body.String() != want {
 		t.Fatalf("503 body = %q, want %q", recorder.Body.String(), want)
 	}
@@ -166,7 +166,7 @@ func TestPreMarshaledResponseRejectsForgedStatusCodeCategoryCrossProducts(t *tes
 	}
 	if _, err := newStatusResponse(generated.HealthResponse{
 		ApiVersion: generated.V1,
-		Draft:      generated.DraftIetfDkimDkim2Spec04,
+		Draft:      generated.DraftIetfDkimDkim2Spec05,
 		Status:     "forged",
 	}, false, "", false); err == nil {
 		t.Fatal("forged status DTO was accepted")
@@ -225,7 +225,7 @@ func validWireProcessResponse() generated.ProcessResponse {
 		Actions:     generated.ActionPlan{},
 		ApiVersion:  generated.V1,
 		Disposition: generated.DispositionAccept,
-		Draft:       generated.DraftIetfDkimDkim2Spec04,
+		Draft:       generated.DraftIetfDkimDkim2Spec05,
 		Verification: generated.VerificationResult{
 			Checks: []generated.VerificationCheck{{
 				Class:  generated.VerificationCheckClassProtocol,
@@ -261,7 +261,7 @@ func TestPreMarshaledResponseBuildersRejectForgedMetadata(t *testing.T) {
 	t.Parallel()
 	health := generated.HealthResponse{
 		ApiVersion: generated.V1,
-		Draft:      generated.DraftIetfDkimDkim2Spec04,
+		Draft:      generated.DraftIetfDkimDkim2Spec05,
 		Status:     generated.Alive,
 	}
 	if _, err := newStatusResponse(health, false, "forged\r\nX-Leak: value", true); err == nil {

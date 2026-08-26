@@ -5,6 +5,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
+	"sort"
 	"strings"
 	"testing"
 )
@@ -17,6 +19,7 @@ const (
 	expectedKey         = "expected"
 	inputKey            = "input"
 	manualProvenance    = "manual_derivation"
+	localSecurityClass  = "local_security_policy"
 	stateKey            = "state"
 	testAuthority       = "test authority"
 	fixtureCaseID       = "case"
@@ -28,6 +31,162 @@ const (
 	verificationSuite   = "verification"
 	verifyArtifactID    = "verify"
 )
+
+// TestDraft05Identity freezes the active message draft across code and manifest evidence.
+func TestDraft05Identity(t *testing.T) {
+	const draft05 = "draft-ietf-dkim-dkim2-spec-05"
+	if MessageDraft != draft05 {
+		t.Fatalf("MessageDraft = %q, want %q", MessageDraft, draft05)
+	}
+	root := filepath.Clean(filepath.Join("..", "..", ".."))
+	manifest, _, err := LoadManifest(root, "testdata/conformance/manifest.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if manifest.MessageDraft != draft05 {
+		t.Fatalf("manifest message_draft = %q, want %q", manifest.MessageDraft, draft05)
+	}
+}
+
+// TestManifestRejectsUnknownDraft05SectionAuthority proves current normative
+// citations cannot name a section outside the pinned Draft-05 structure.
+func TestManifestRejectsUnknownDraft05SectionAuthority(t *testing.T) {
+	root := filepath.Clean(filepath.Join("..", "..", ".."))
+	manifest, _, err := LoadManifest(root, "testdata/conformance/manifest.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifest.Cases[0].Authority = []string{MessageDraft + " Section 5.3"}
+	if err := manifest.Validate(root); err == nil || err.Error() != "manifest_authority_section" {
+		t.Fatalf("manifest authority error = %v, want manifest_authority_section", err)
+	}
+}
+
+// TestDraft05MigrationCaseAuthorities freezes the semantic Draft-05 authority
+// for every new or reclassified migration case and the audit correction.
+func TestDraft05MigrationCaseAuthorities(t *testing.T) {
+	type expectation struct {
+		class     string
+		authority []string
+	}
+	const draft = MessageDraft + " "
+	want := map[string]expectation{
+		"canonical/body-hash-input":                      {draftNormativeClass, []string{draft + "Sections 6.1 and 9.6"}},
+		"canonical/draft04-to-draft05-header-boundary":   {draftNormativeClass, []string{draft + "Section 6.2"}},
+		"canonical/draft05-digest-algorithms":            {draftNormativeClass, []string{draft + "Sections 3.1, 7.3, and 9.6"}},
+		"canonical/draft05-header-exclusions":            {draftNormativeClass, []string{draft + "Section 6.2"}},
+		"canonical/draft05-to-draft04-header-boundary":   {draftNormativeClass, []string{draft + "Section 6.2"}},
+		"instance/draft05-dual-hash":                     {draftNormativeClass, []string{draft + "Sections 3.1 and 7.3"}},
+		"instance/draft05-duplicate-extension-hash":      {draftNormativeClass, []string{draft + "Sections 3.1 and 7.3"}},
+		"instance/draft05-duplicate-hash":                {draftNormativeClass, []string{draft + "Sections 3.1 and 7.3"}},
+		"instance/draft05-sha512-uppercase":              {draftNormativeClass, []string{draft + "Sections 3.1 and 7.3"}},
+		"openapi/draft05-invalid-json-diagnostics":       {"openapi_contract", []string{"docs/specs/openapi/dkim2d.yaml request bodies", "RFC 8259 Sections 4 and 9"}},
+		"policy/draft05-invalid-recipe-json":             {draftNormativeClass, []string{draft + "Section 11.2"}},
+		"recipe/draft05-lowercase-recipe":                {draftNormativeClass, []string{draft + "Section 5.1"}},
+		"recipe/draft05-nonlowercase-recipe":             {draftNormativeClass, []string{draft + "Section 5.1"}},
+		"replay/identity-draft05-epoch":                  {localSecurityClass, []string{"docs/replay-store-valkey.md Replay Identity Contract"}},
+		"signing/draft05-duplicate-selector":             {draftNormativeClass, []string{draft + "Sections 8.9 and 11.2"}},
+		"signing/draft05-same-algorithm-pair":            {draftNormativeClass, []string{draft + "Sections 8.9 and 11.2"}},
+		"signing/draft05-third-same-algorithm":           {draftNormativeClass, []string{draft + "Sections 8.9 and 11.2"}},
+		"signing/local-sha256-output-policy":             {localSecurityClass, []string{draft + "Section 3", "local signing compatibility policy"}},
+		"signing/unchanged-no-redundant-instance":        {localSecurityClass, []string{draft + "Sections 7.2 and 9.1", "local minimal-transition policy"}},
+		"verification/draft05-diagnostics":               {draftNormativeClass, []string{draft + "Section 11.2"}},
+		"verification/draft05-dual-mismatch":             {draftNormativeClass, []string{draft + "Sections 3.1, 7.3, and 11.7"}},
+		"verification/draft05-recipe-less-unchanged":     {"documented_interpretation", []string{draft + "Sections 7.2, 9.1, and 11.2"}},
+		"verification/draft05-recipe-less-unknown-only":  {"documented_interpretation", []string{draft + "Sections 7.2, 9.1, and 11.2"}},
+		"verification/draft05-same-algorithm-positional": {draftNormativeClass, []string{draft + "Sections 8.9, 11.2, and 11.6"}},
+		"verification/draft05-sha512-only":               {draftNormativeClass, []string{draft + "Sections 3.1, 7.3, and 11.7"}},
+	}
+	root := filepath.Clean(filepath.Join("..", "..", ".."))
+	manifest, _, err := LoadManifest(root, "testdata/conformance/manifest.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, manifestCase := range manifest.Cases {
+		key := manifestCase.Suite + "/" + manifestCase.CaseID
+		expected, exists := want[key]
+		if !exists {
+			continue
+		}
+		if manifestCase.Class != expected.class || !slices.Equal(manifestCase.Authority, expected.authority) {
+			t.Fatalf("%s class/authority = %q/%q, want %q/%q", key, manifestCase.Class, manifestCase.Authority, expected.class, expected.authority)
+		}
+		delete(want, key)
+	}
+	if len(want) != 0 {
+		t.Fatalf("missing Draft-05 migration authority cases: %v", want)
+	}
+}
+
+// TestUnqualifiedDraft05RejectsEximEvidence freezes the evidence-free Draft-05 capability state.
+func TestUnqualifiedDraft05RejectsEximEvidence(t *testing.T) {
+	const unqualifiedDraft05 = "unqualified_draft05"
+	root := filepath.Clean(filepath.Join("..", "..", ".."))
+	manifest, _, err := LoadManifest(root, "testdata/conformance/manifest.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := manifest.Capabilities[capExim]; got != unqualifiedDraft05 {
+		t.Fatalf("Exim capability = %q, want %q", got, unqualifiedDraft05)
+	}
+	for _, manifestCase := range manifest.Cases {
+		if manifestCase.Suite == capExim {
+			t.Fatalf("unqualified Draft-05 manifest retained Exim case %s/%s", manifestCase.Suite, manifestCase.CaseID)
+		}
+	}
+	manifest.Capabilities[capExim] = "qualified_linux"
+	if err := manifest.Validate(root); err == nil {
+		t.Fatal("manifest model admitted qualified Linux under Draft-05")
+	}
+	manifest.Capabilities[capExim] = unqualifiedDraft05
+	manifest.Suites = append(manifest.Suites, capExim)
+	sort.Strings(manifest.Suites)
+	manifest.Cases[0].Suite = capExim
+	if err := manifest.Validate(root); err == nil || err.Error() != "manifest_exim_suite" {
+		t.Fatalf("manifest model Exim suite error = %v, want manifest_exim_suite", err)
+	}
+	manifestJSON, err := json.Marshal(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidateJSONSchema(root, "testdata/conformance/schemas/manifest.schema.json", manifestJSON, 1<<20); err == nil {
+		t.Fatal("manifest schema admitted an Exim suite under Draft-05")
+	}
+	report := Report{
+		Schema: ReportSchema, MessageDraft: MessageDraft, DNSDraft: DNSDraft,
+		ManifestSchema: ManifestSchema, ManifestSHA256: strings.Repeat("1", 64),
+		BaseRevision: strings.Repeat("2", 40), CandidateSnapshotSHA256: strings.Repeat("3", 64),
+		Profile: profilePortable, Platform: profilePortable, Capabilities: cloneMap(manifest.Capabilities),
+		Tools: []ToolIdentity{{Name: manifest.Cases[0].Producer, Digest: strings.Repeat("4", 64)}},
+		Cases: []CaseResult{{
+			Suite: capExim, CaseID: manifest.Cases[0].CaseID, Class: manifest.Cases[0].Class,
+			State: statePass, ArtifactSHA256: manifestCaseDigests(manifest, manifest.Cases[0]),
+			Producer: manifest.Cases[0].Producer, ProducerSHA256: strings.Repeat("4", 64),
+		}},
+	}
+	report.Counts = countCases(report.Cases)
+	report.Overall = statePass
+	if err := report.Validate(manifest); err == nil || err.Error() != "report_exim_suite" {
+		t.Fatalf("report model Exim suite error = %v, want report_exim_suite", err)
+	}
+	controlReport := report
+	controlReport.Cases = append([]CaseResult(nil), report.Cases...)
+	controlReport.Cases[0].Suite = fixtureSuite
+	controlJSON, err := json.Marshal(controlReport)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidateJSONSchema(root, "testdata/conformance/schemas/report.schema.json", controlJSON, 1<<20); err != nil {
+		t.Fatalf("report schema rejected the non-Exim control: %v", err)
+	}
+	reportJSON, err := json.Marshal(report)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidateJSONSchema(root, "testdata/conformance/schemas/report.schema.json", reportJSON, 1<<20); err == nil {
+		t.Fatal("report schema admitted an Exim suite under Draft-05")
+	}
+}
 
 // TestStrictJSONRejectsDuplicateUnknownAndDeepInput freezes the closed JSON boundary.
 func TestStrictJSONRejectsDuplicateUnknownAndDeepInput(t *testing.T) {
@@ -88,10 +247,10 @@ func TestCaseRejectsNestedUnknownAndMultipleOperations(t *testing.T) {
 	base := `{
 	  "schema":"dkim2.conformance-case.v1",
 	  "case_id":"closed-case",
-	  "message_draft":"draft-ietf-dkim-dkim2-spec-04",
+	  "message_draft":"draft-ietf-dkim-dkim2-spec-05",
 	  "dns_draft":"draft-chuang-dkim2-dns-04",
 	  "class":"draft_normative",
-	  "authority":["draft-ietf-dkim-dkim2-spec-04 Section 4"],
+	  "authority":["draft-ietf-dkim-dkim2-spec-05 Section 4"],
 	  "provenance":"manual_derivation",
 	  "verify":{"input":{"message_b64":"","reverse_path_b64":"","forward_paths_b64":[]%s},"expected":{"code":"pass","state":"pass"}}%s
 	}`
@@ -449,7 +608,7 @@ func testManifest(artifacts ...Artifact) Manifest {
 		Capabilities: map[string]string{
 			capLibrary: supportedCapability, capDaemon: supportedCapability,
 			capMilter: partialCapability, capPostfix: partialLinuxCapability,
-			capExim: EximQualifiedLinux,
+			capExim: EximUnqualifiedDraft05,
 		},
 		Artifacts: artifacts, Cases: cases,
 	}
@@ -482,7 +641,7 @@ func runGit(t *testing.T, root string, arguments ...string) string {
 func TestReportJSONIsDeterministic(t *testing.T) {
 	report := Report{
 		Schema: ReportSchema, MessageDraft: MessageDraft, DNSDraft: DNSDraft,
-		Capabilities: map[string]string{"exim": EximQualifiedLinux},
+		Capabilities: map[string]string{"exim": EximUnqualifiedDraft05},
 	}
 	first, err := json.Marshal(report)
 	if err != nil {
@@ -498,23 +657,14 @@ func TestReportJSONIsDeterministic(t *testing.T) {
 func TestHumanReportGolden(t *testing.T) {
 	manifest := Manifest{
 		Schema: ManifestSchema, MessageDraft: MessageDraft, DNSDraft: DNSDraft,
-		SuiteVersion: "1", Suites: []string{capExim, verificationSuite},
+		SuiteVersion: "1", Suites: []string{verificationSuite},
 		Capabilities: map[string]string{
 			capLibrary: supportedCapability, capDaemon: supportedCapability,
 			capMilter: partialCapability, capPostfix: partialLinuxCapability,
-			capExim: EximQualifiedLinux,
+			capExim: EximUnqualifiedDraft05,
 		},
-		Artifacts: []Artifact{
-			{ID: capExim, SHA256: strings.Repeat("5", 64)},
-			{ID: verifyArtifactID, SHA256: strings.Repeat("6", 64)},
-		},
+		Artifacts: []Artifact{{ID: verifyArtifactID, SHA256: strings.Repeat("6", 64)}},
 		Cases: []ManifestCase{
-			{
-				Suite: capExim, CaseID: "linux-real-matrix", Class: classAdapter,
-				Authority: []string{testAuthority}, Provenance: manualProvenance,
-				Runner: runnerExim, RequiredPlatform: platformLinux,
-				ExpectedOutcome: statePass, Artifacts: []string{capExim}, Producer: "exim-runner",
-			},
 			{
 				Suite: verificationSuite, CaseID: "public", Class: "draft_normative",
 				Authority: []string{testAuthority}, Provenance: "cross_primitive",
@@ -533,10 +683,6 @@ func TestHumanReportGolden(t *testing.T) {
 				State: statePass, ArtifactSHA256: []string{strings.Repeat("6", 64)},
 				Producer: runnerName, ProducerSHA256: strings.Repeat("4", 64),
 			},
-			{
-				Suite: capExim, CaseID: "linux-real-matrix", Class: classAdapter,
-				State: stateNotApplicable, ArtifactSHA256: []string{strings.Repeat("5", 64)},
-			},
 		},
 	)
 	if err != nil {
@@ -551,9 +697,9 @@ func TestHumanReportGolden(t *testing.T) {
 	if got := report.RenderText(); string(got) != string(golden) {
 		t.Fatalf("RenderText() drifted:\n%s", got)
 	}
-	report.Cases[1].State = stateNotApplicable
-	report.Cases[1].Producer = ""
-	report.Cases[1].ProducerSHA256 = ""
+	report.Cases[0].State = stateNotApplicable
+	report.Cases[0].Producer = ""
+	report.Cases[0].ProducerSHA256 = ""
 	report.Counts = countCases(report.Cases)
 	if err := report.Validate(manifest); err == nil {
 		t.Fatal("Validate accepted platform state for an ordinary portable case")

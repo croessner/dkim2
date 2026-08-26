@@ -497,7 +497,7 @@ func deliveryStatusHarnessResponse(result OperationResult, operationErr error) (
 		}
 	}
 	return generated.OperationResponse{
-		ApiVersion: generated.V1, Draft: generated.DraftIetfDkimDkim2Spec04,
+		ApiVersion: generated.V1, Draft: generated.DraftIetfDkimDkim2Spec05,
 		Operation:   generated.DeliveryStatus,
 		Result:      generated.OperationResponseResult(result.Result()),
 		Disposition: generated.Disposition(result.Disposition()), Actions: actions,

@@ -1,7 +1,7 @@
 # DKIM2 Reference Implementation
 
 This repository contains an actively developed Go reference implementation of
-DKIM2 based on `draft-ietf-dkim-dkim2-spec-04`. The tested DNS behavior
+DKIM2 based on `draft-ietf-dkim-dkim2-spec-05`. The tested DNS behavior
 baseline remains `draft-chuang-dkim2-dns-04`; the IETF replaced that document
 with `draft-ietf-dkim-dkim2-dns-00` on 2026-07-20 without changing its
 normative body. Moving durable identifiers and versioned vectors to the working
@@ -137,11 +137,12 @@ The preview's public API, compatibility, issue, and limitation entry point is
 [`docs/reference/README.md`](docs/reference/README.md).
 
 The source-linked Exim adapter, packaging validators, operations guide, and
-five-row qualification runner are implemented with capability
-`qualified_linux`. The
-unchanged matrix passed all five supported rows with 43 cases per row; the
-candidate-bound run ID remains in generated full-profile evidence. Portable
-reports still mark Exim execution not applicable. No prebuilt
+five-row qualification runner are implemented. Its current capability is
+`unqualified_draft05`: the historical Draft-04 matrix passed all five supported
+rows with 43 cases per row, but that candidate-bound evidence is not relabeled
+or imported for Draft-05. Portable and full Draft-05 conformance omit Exim
+execution and reject an evidence root until a fresh, separately authorized
+five-row Draft-05 run is bound to unchanged candidate bytes. No prebuilt
 universal Exim binary or container image is claimed. LDAP, PostgreSQL, MySQL,
 and MariaDB datasource providers,
 deployable schema artifacts, and the offline legacy OpenDKIM migration are
@@ -157,7 +158,7 @@ claims; an arbitrary worktree or mirror checkout does not.
 The public library signs origin messages, hash-unchanged forwarding copies,
 recipe-backed revisions, and authorized next-domain transitions. Signing uses
 exact outgoing SMTP envelope evidence, authority-issued copy tickets, opaque
-private-key handles, deterministic draft-04 fields, final message reparsing,
+private-key handles, deterministic Draft-05 fields, final message reparsing,
 custody checks, and cryptographic self-verification. Local-only and
 out-of-band outputs remain closed until their exact route-bound release.
 
@@ -196,7 +197,7 @@ make test-valkey
 make check-conformance
 make conformance
 make conformance-postfix
-make conformance-all EXIM_EVIDENCE_ROOT=/absolute/path/to/exim-evidence
+make conformance-all
 make check-security
 make fuzz-security
 make security

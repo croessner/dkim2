@@ -260,7 +260,7 @@ minutes. The corresponding environment variables are
 ### Inbound policy mode
 
 `policy.mode` defaults to `strict`; omitting it enables enforcement. Operators
-must select a compatibility policy explicitly when the Draft-04 verifier is
+must select a compatibility policy explicitly when the Draft-05 verifier is
 introduced beside an existing inbound path:
 
 - `strict` accepts `PASS`, rejects `FAIL` and `PERMERROR`, and temporarily

@@ -27,6 +27,9 @@ datasources=docs/operator/datasource-backends.md
 ldap_reference=docs/operator/ldap-schema-reference.md
 rotation=docs/operator/datasource-key-rotation.md
 onboarding=docs/operator/native-domain-onboarding.md
+semantics_audit=docs/reports/draft-05-semantics-audit-2026-08-26.md
+exim_operations=docs/operations/exim-adapter.md
+exim_history=docs/reports/exim-compatibility-2026-07-27.md
 daemon=cmd/dkim2d/README.md
 milter=cmd/dkim2-milter/README.md
 client=cmd/dkim2ctl/README.md
@@ -61,6 +64,13 @@ for document in \
   docs/reference/compatibility.md \
   docs/reference/draft-issues.md \
   docs/reference/known-limitations.md \
+  docs/reference/release-candidate.md \
+  docs/conformance.md \
+  docs/security-testing.md \
+  docs/ci.md \
+  "$semantics_audit" \
+  "$exim_operations" \
+  "$exim_history" \
   docs/specs/implementation/datasource-providers.md \
   "$containerfile"; do
   test -s "$document"
@@ -144,13 +154,13 @@ for reference in draft-issues.md compatibility.md known-limitations.md; do
 done
 
 for required in \
-  'draft-ietf-dkim-dkim2-spec-04' \
+  'draft-ietf-dkim-dkim2-spec-05' \
   'draft-chuang-dkim2-dns-04' \
   '127.0.0.1:2525' \
   'milter_protocol = 6' \
   'milter_default_action = tempfail' \
   'Exim' \
-  'qualified_linux' \
+  'unqualified_draft05' \
   'LDAP' \
   'SQL' \
   'PostgreSQL' \
@@ -159,6 +169,38 @@ for required in \
   'backup'; do
   grep -Fq "$required" "$guide"
 done
+
+grep -Fq 'draft-ietf-dkim-dkim2-spec-05' README.md
+grep -Fq 'unqualified_draft05' README.md
+! grep -Fq 'DKIM2 based on `draft-ietf-dkim-dkim2-spec-04`' README.md
+! grep -Fq 'implemented with capability `qualified_linux`' README.md
+! grep -Fq 'Protocol behavior remains pinned to `draft-ietf-dkim-dkim2-spec-04`' "$guide"
+! grep -Fq 'Exim is `qualified_linux`' "$guide"
+
+for document in \
+  docs/conformance.md \
+  docs/security-testing.md \
+  docs/reference/compatibility.md \
+  docs/reference/known-limitations.md \
+  docs/reference/release-candidate.md \
+  "$semantics_audit" \
+  "$exim_operations"; do
+  grep -Fq 'unqualified_draft05' "$document"
+done
+for required in \
+  'duplicate_hash_algorithm' \
+  'invalid_recipe_json' \
+  'duplicate_selector' \
+  'too_many_signatures' \
+  'positional' \
+  'drain-only' \
+  'retention period' \
+  'draft-chuang-dkim2-dns-04' \
+  'working-group DNS successor'; do
+  grep -Fq "$required" "$semantics_audit"
+done
+grep -Fq 'Historical Draft-04 audit' docs/reports/current-semantics-audit-2026-08-21.md
+grep -Fq 'Historical Draft-04 qualification evidence' "$exim_history"
 
 for reference in \
   'cmd/dkim2d/README.md' \
@@ -289,7 +331,7 @@ done
 for document in README.md "$guide"; do
   grep -Fq 'Exim adapter' "$document"
   grep -Fq 'matrix' "$document"
-  grep -Fq 'qualified_linux' "$document"
+  grep -Fq 'unqualified_draft05' "$document"
   grep -Fq 'LDAP' "$document"
   grep -Fq 'SQL' "$document"
   ! grep -Fq 'deferred_ldap_sql_migration' "$document"

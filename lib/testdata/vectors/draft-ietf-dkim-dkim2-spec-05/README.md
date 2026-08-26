@@ -1,7 +1,7 @@
-# DKIM2 Draft-04 Library Vectors
+# DKIM2 Draft-05 Library Vectors
 
 This directory pins protocol evidence to
-`draft-ietf-dkim-dkim2-spec-04`.
+`draft-ietf-dkim-dkim2-spec-05`.
 
 - `public-golden.json` covers public verification, policy, malformed input,
   sequence, timestamp, envelope, and provider outcomes.

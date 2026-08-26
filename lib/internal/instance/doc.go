@@ -1,5 +1,5 @@
 // Package instance parses Message-Instance header fields for the DKIM2 draft
-// baseline draft-ietf-dkim-dkim2-spec-04.
+// baseline draft-ietf-dkim-dkim2-spec-05.
 //
 // The parser consumes immutable raw message header fields, accepts only
 // Message-Instance fields, and validates the field-local `m=`, `h=`, and
@@ -13,8 +13,11 @@
 // origin value 1. This package owns strict recipe base64 decoding and immutable
 // decoded-byte storage but intentionally does not parse recipe JSON or apply a
 // reconstruction plan; those semantics belong to lib/internal/recipe. Hash
-// selection is exposed as a closed SHA-256 selection result, while canonical
-// hash calculation and authenticated comparison remain outside this package.
+// selection exposes supported SHA-256 and SHA-512 tuples in wire order.
+// Syntactically valid unknown extension tuples remain preserved but unselected,
+// and duplicate names are rejected case-insensitively across both groups.
+// Canonical hash calculation and authenticated comparison remain outside this
+// package.
 //
 // Diagnostics are structured and bounded. Errors may expose stable codes,
 // small allowlisted tag names, indexes, and resource-limit metadata, but must

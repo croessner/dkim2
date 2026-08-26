@@ -26,7 +26,7 @@ import (
 
 const (
 	traceInstrumentationName = "github.com/croessner/dkim2/cmd/dkim2d"
-	traceDraftValue          = "draft-ietf-dkim-dkim2-spec-04"
+	traceDraftValue          = "draft-ietf-dkim-dkim2-spec-05"
 	traceShutdownBudget      = 5 * time.Second
 )
 

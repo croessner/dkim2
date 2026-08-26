@@ -31,14 +31,14 @@ func (c Canonicalizer) BodyHashInputFromMessage(message rawmsg.Message) (ByteInp
 	return c.BodyHashInput(message.Body())
 }
 
-// BodyHash calculates SHA-256 over DKIM2 Section 6.1 canonical body input.
+// BodyHash calculates the selected Message-Instance digest over Section 6.1 input.
 func (c Canonicalizer) BodyHash(body rawmsg.Body) (Result, error) {
 	canonical, err := c.BodyHashInput(body)
 	if err != nil {
 		return Result{}, err
 	}
 
-	digest, err := c.SHA256Digest(canonical)
+	digest, err := c.Digest(canonical)
 	if err != nil {
 		return Result{}, err
 	}
@@ -46,7 +46,7 @@ func (c Canonicalizer) BodyHash(body rawmsg.Body) (Result, error) {
 	return NewResult(canonical, digest), nil
 }
 
-// BodyHashFromMessage calculates SHA-256 body hash input from a raw message.
+// BodyHashFromMessage calculates the selected body digest from a raw message.
 func (c Canonicalizer) BodyHashFromMessage(message rawmsg.Message) (Result, error) {
 	return c.BodyHash(message.Body())
 }

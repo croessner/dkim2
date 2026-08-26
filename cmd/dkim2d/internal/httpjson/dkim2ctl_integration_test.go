@@ -296,7 +296,7 @@ func probeDKIM2ctlProductionBoundary(
 	signSecret []byte,
 ) dkim2ctlProbeFacts {
 	t.Helper()
-	body := `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-04",` +
+	body := `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-05",` +
 		`"message":{"raw_rfc5322_base64":"U3ViamVjdDogdGVzdA0KDQpib2R5DQo=",` +
 		`"fidelity":"raw_rfc5322"},"smtp":{"mail_from":"<sender@example.test>",` +
 		`"rcpt_to":["<recipient@example.test>"]},"context":{"tenant":"tenant-a",` +

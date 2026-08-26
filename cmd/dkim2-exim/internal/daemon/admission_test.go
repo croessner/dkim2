@@ -14,7 +14,7 @@ import (
 func validOperationFixture() generated.OperationResponse {
 	return generated.OperationResponse{
 		ApiVersion:  generated.V1,
-		Draft:       generated.DraftIetfDkimDkim2Spec04,
+		Draft:       generated.DraftIetfDkimDkim2Spec05,
 		Operation:   generated.Sign,
 		Result:      generated.OperationResponseResultPass,
 		Disposition: generated.DispositionAccept,
@@ -252,7 +252,7 @@ func validProcessFixture() generated.ProcessResponse {
 			Value: "mx.example.test; dkim2=pass",
 		}},
 		ApiVersion: generated.V1, Disposition: generated.DispositionAccept,
-		Draft: generated.DraftIetfDkimDkim2Spec04,
+		Draft: generated.DraftIetfDkimDkim2Spec05,
 		Verification: generated.VerificationResult{
 			Checks: []generated.VerificationCheck{{
 				Class:  generated.VerificationCheckClassProtocol,
@@ -288,6 +288,42 @@ func validProcessFixture() generated.ProcessResponse {
 			Verdict: generated.PolicyResultVerdictAccept,
 		},
 		Replay: generated.ReplayResult{Class: generated.Disabled},
+	}
+}
+
+// TestDraft05PermanentReasonsDoNotDefer proves every new protocol infraction
+// becomes an admitted permanent rejection rather than an Exim deferral.
+func TestDraft05PermanentReasonsDoNotDefer(t *testing.T) {
+	for _, reason := range []generated.VerificationReason{
+		generated.VerificationReasonDuplicateHashAlgorithm,
+		generated.VerificationReasonInvalidRecipeJson,
+		generated.VerificationReasonDuplicateSelector,
+		generated.VerificationReasonTooManySignatures,
+	} {
+		value := validProcessFixture()
+		value.Actions = generated.ActionPlan{}
+		value.Disposition = generated.DispositionReject
+		value.Draft = generated.DraftIetfDkimDkim2Spec05
+		value.Verification.State = generated.PERMERROR
+		value.Verification.PrimaryReason = reason
+		value.Verification.Scope = generated.Current
+		value.Verification.HistoricalContent = generated.VerificationResultHistoricalContentNotEvaluated
+		value.Verification.HistoricalSignatures = generated.VerificationResultHistoricalSignaturesNotEvaluated
+		value.Verification.Checks[0].Reason = reason
+		value.Policy.Verdict = generated.PolicyResultVerdictReject
+		value.Policy.PrimaryReason = generated.ProtocolPermerror
+		value.Policy.Findings[0].Reason = generated.ProtocolPermerror
+		value.Policy.Findings[0].Severity = generated.Permanent
+		value.Replay.Class = generated.NotChecked
+		body, err := json.Marshal(value)
+		if err != nil {
+			t.Fatal("permanent response encoding failed")
+		}
+		plan, err := AdmitProcessJSON(body, "mx.example.test")
+		if err != nil || plan.Result() != adapter.ResultPermerror ||
+			plan.Disposition() != adapter.DispositionReject {
+			t.Fatalf("permanent reason %q admitted as %#v/%v", reason, plan, err)
+		}
 	}
 }
 

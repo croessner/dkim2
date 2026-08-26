@@ -992,7 +992,7 @@ func assertRawConditionalCases(
 			}
 			if strings.Contains(testCase.statusLine, "412") {
 				body := `{"api_version":"v1","category":"request","code":"precondition_failed",` +
-					`"draft":"draft-ietf-dkim-dkim2-spec-04"}`
+					`"draft":"draft-ietf-dkim-dkim2-spec-05"}`
 				assertRawResponseExact(
 					t,
 					response,
@@ -1157,7 +1157,7 @@ func TestHTTPBoundaryRawFinalResponsesAreSingletonAndNonreflecting(t *testing.T)
 			contentType: true,
 			body:        true,
 			exactBody: `{"api_version":"v1","category":"request","code":"not_found",` +
-				`"draft":"draft-ietf-dkim-dkim2-spec-04"}`,
+				`"draft":"draft-ietf-dkim-dkim2-spec-05"}`,
 		},
 		{
 			name:          "header-only 501",
@@ -1180,7 +1180,7 @@ func TestHTTPBoundaryRawFinalResponsesAreSingletonAndNonreflecting(t *testing.T)
 			contentType: true,
 			body:        true,
 			exactBody: `{"api_version":"v1","category":"request","code":"expectation_failed",` +
-				`"draft":"draft-ietf-dkim-dkim2-spec-04"}`,
+				`"draft":"draft-ietf-dkim-dkim2-spec-05"}`,
 		},
 	}
 	for _, testCase := range tests {

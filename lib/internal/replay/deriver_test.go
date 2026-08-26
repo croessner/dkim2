@@ -42,16 +42,33 @@ func TestDeriverProducesExactPublishedStorageKey(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	const want = "dkim2:replay:v1:01020304:ZY5FUs9tgID9qTmf5RMx0klaDUM7YNLc__lWkDX8RnE"
+	const want = "dkim2:replay:v1:01020304:HI_5l6s7L6xrPIUOMgXV1sgoMf1Nmc_J_KYh0c_aiYk"
 	calls := 0
 	if err := UseStorageKey(key, func(storageKey string) error {
 		calls++
 		if storageKey != want || len(storageKey) != 68 {
-			t.Fatalf("storage key mismatch")
+			t.Fatalf("storage key = %q, want %q", storageKey, want)
 		}
 		return nil
 	}); err != nil || calls != 1 {
 		t.Fatalf("UseStorageKey() calls=%d error=%v", calls, err)
+	}
+}
+
+// TestDraft05IdentitySeparatesEpoch proves the DraftIdentifier rotates otherwise identical replay facts.
+func TestDraft05IdentitySeparatesEpoch(t *testing.T) {
+	if DraftIdentifier != "draft-ietf-dkim-dkim2-spec-05" {
+		t.Fatalf("DraftIdentifier = %q", DraftIdentifier)
+	}
+	source := syntheticIdentitySource{
+		valid: true, draft: DraftIdentifier,
+		message: sequenceDigest(0x00), messagePresent: true,
+		signature: sequenceDigest(0x20), signaturePresent: true,
+		recipients: [][32]byte{sequenceDigest(0x40)},
+	}
+	const draft04Key = "dkim2:replay:v1:01020304:ZY5FUs9tgID9qTmf5RMx0klaDUM7YNLc__lWkDX8RnE"
+	if got := mustDerivedStorageKey(t, sequenceBytes(0xa0), 0x01020304, source); got == draft04Key {
+		t.Fatal("Draft-05 replay identity reused the Draft-04 HMAC epoch")
 	}
 }
 
@@ -62,9 +79,9 @@ func TestDeriverProducesExactAllZeroPresentDigestKey(t *testing.T) {
 		messagePresent: true, signaturePresent: true,
 		recipients: [][32]byte{sequenceDigest(0x40)},
 	}
-	const want = "dkim2:replay:v1:01020304:gczduX-t-EeeXAo9rnUpGn3sO5DymSR1WjgIsClVySk"
+	const want = "dkim2:replay:v1:01020304:ZDWmi2XZcYnMZlpGWEHxBxw0STMmc6b7h06LanyC2i0"
 	if got := mustDerivedStorageKey(t, sequenceBytes(0xa0), 0x01020304, source); got != want {
-		t.Fatal("all-zero present digest storage key mismatch")
+		t.Fatalf("all-zero present digest storage key = %q, want %q", got, want)
 	}
 }
 

@@ -18,7 +18,7 @@ const (
 	AlgorithmEd25519SHA256 Algorithm = "ed25519-sha256"
 )
 
-// Algorithm identifies one closed generated signing algorithm.
+// Algorithm identifies one canonical supported or extension signing-algorithm token.
 type Algorithm string
 
 // Known reports whether algorithm belongs to the baseline signature vocabulary.

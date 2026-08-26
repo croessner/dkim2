@@ -27,6 +27,7 @@ const (
 	testCaseWrongMethod  = "wrong method"
 	testCaseWrongRoute   = "wrong route"
 	testCaseQuery        = "query"
+	testMediaTypeJSON    = "application/json"
 	validResponseDate    = "Mon, 02 Jan 2006 15:04:05 GMT"
 )
 
@@ -107,7 +108,7 @@ func TestHandlerUsesExactInboundGeneratedOperation(t *testing.T) {
 		reporting, _ := document["reporting"].(map[string]any)
 		recipients, _ := smtpInput["rcpt_to"].([]any)
 		if document["api_version"] != "v1" ||
-			document["draft"] != "draft-ietf-dkim-dkim2-spec-04" ||
+			document["draft"] != "draft-ietf-dkim-dkim2-spec-05" ||
 			messageInput["fidelity"] != "milter_reconstructed_crlf" ||
 			messageInput["raw_rfc5322_base64"] != expectedRaw ||
 			smtpInput["mail_from"] != "<a@example.test>" ||
@@ -376,7 +377,7 @@ func TestHandlerNonOKResponseIsContractFailure(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
 		writer.Header().Set("Content-Type", "application/json")
 		writer.WriteHeader(http.StatusServiceUnavailable)
-		_, _ = io.WriteString(writer, `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-04","code":"service_unavailable","category":"availability"}`)
+		_, _ = io.WriteString(writer, `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-05","code":"service_unavailable","category":"availability"}`)
 	}))
 	defer server.Close()
 	handler, err := NewHandler(
@@ -493,7 +494,7 @@ func TestObservedDomainsMatchesAuthoritativeRouteSelection(t *testing.T) {
 }
 
 // TestHandlerTempfailsNullReversePathUntilPrevalidatedDSNGateExists reproduces
-// the missing Draft-04 Section 12.1 trusted-evidence gate.
+// the missing Draft-05 Section 12.1 trusted-evidence gate.
 func TestHandlerTempfailsNullReversePathUntilPrevalidatedDSNGateExists(t *testing.T) {
 	calls := 0
 	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
@@ -878,7 +879,7 @@ func validOperationResponse(operation generated.OperationResponseOperation) gene
 	return generated.OperationResponse{
 		Actions: generated.ActionPlan{}, ApiVersion: generated.V1,
 		Disposition: generated.DispositionReject,
-		Draft:       generated.DraftIetfDkimDkim2Spec04,
+		Draft:       generated.DraftIetfDkimDkim2Spec05,
 		Operation:   operation, Result: generated.OperationResponseResultFail,
 	}
 }
@@ -892,7 +893,7 @@ func validProcessResponse() generated.ProcessResponse {
 		}},
 		ApiVersion:  generated.V1,
 		Disposition: generated.DispositionAccept,
-		Draft:       generated.DraftIetfDkimDkim2Spec04,
+		Draft:       generated.DraftIetfDkimDkim2Spec05,
 		Verification: generated.VerificationResult{
 			Checks: []generated.VerificationCheck{{
 				Class:  generated.VerificationCheckClassProtocol,
@@ -920,6 +921,54 @@ func validProcessResponse() generated.ProcessResponse {
 			Verdict:       generated.PolicyResultVerdictAccept,
 		},
 		Replay: generated.ReplayResult{Class: generated.Disabled},
+	}
+}
+
+// TestDraft05PermanentReasonsDoNotTempfail proves every new protocol
+// infraction remains a permanent rejection at the Milter daemon boundary.
+func TestDraft05PermanentReasonsDoNotTempfail(t *testing.T) {
+	for _, reason := range []generated.VerificationReason{
+		generated.VerificationReasonDuplicateHashAlgorithm,
+		generated.VerificationReasonInvalidRecipeJson,
+		generated.VerificationReasonDuplicateSelector,
+		generated.VerificationReasonTooManySignatures,
+	} {
+		value := validProcessResponse()
+		value.Actions = generated.ActionPlan{}
+		value.Disposition = generated.DispositionReject
+		value.Draft = generated.DraftIetfDkimDkim2Spec05
+		value.Verification.State = generated.PERMERROR
+		value.Verification.PrimaryReason = reason
+		value.Verification.Scope = generated.Current
+		value.Verification.HistoricalContent = generated.VerificationResultHistoricalContentNotEvaluated
+		value.Verification.HistoricalSignatures = generated.VerificationResultHistoricalSignaturesNotEvaluated
+		value.Verification.Checks[0].Reason = reason
+		value.Policy.Verdict = generated.PolicyResultVerdictReject
+		value.Policy.PrimaryReason = generated.ProtocolPermerror
+		value.Policy.Findings[0].Reason = generated.ProtocolPermerror
+		value.Policy.Findings[0].Severity = generated.Permanent
+		value.Replay.Class = generated.NotChecked
+		body, err := json.Marshal(value)
+		if err != nil {
+			t.Fatal("permanent response encoding failed")
+		}
+		response := &generated.ProcessMessageResponse{
+			Body:    body,
+			JSON200: &value,
+			HTTPResponse: &http.Response{
+				StatusCode:    http.StatusOK,
+				ContentLength: int64(len(body)),
+				Header:        http.Header{"Content-Type": []string{testMediaTypeJSON}},
+				Request: &http.Request{
+					Method: http.MethodPost,
+					URL:    &url.URL{Path: routeProcess},
+				},
+			},
+		}
+		result, err := (&handlerGuard{authservID: testAuthservID}).mapProcess(response)
+		if err != nil || result.Result != "permerror" || result.Outcome != milter.DispositionReject {
+			t.Fatalf("permanent reason %q mapped to %#v/%v", reason, result, err)
+		}
 	}
 }
 

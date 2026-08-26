@@ -220,12 +220,10 @@ type HashStatus string
 const (
 	// HashStatusNotChecked records a hash check that has not run.
 	HashStatusNotChecked HashStatus = "not_checked"
-	// HashStatusPass records a matching sha256 digest.
+	// HashStatusPass records matching supported advertised digests.
 	HashStatusPass HashStatus = "pass"
-	// HashStatusMismatch records a non-matching sha256 digest.
+	// HashStatusMismatch records a non-matching supported advertised digest.
 	HashStatusMismatch HashStatus = "mismatch"
-	// HashStatusMissingSHA256 records absence of the required sha256 hash set.
-	HashStatusMissingSHA256 HashStatus = "missing_sha256"
 	// HashStatusUnsupported records only unsupported hash algorithms.
 	HashStatusUnsupported HashStatus = "unsupported"
 	// HashStatusInvalid records malformed parser-owned hash state.
@@ -549,7 +547,7 @@ func (s NextDomainStatus) Known() bool {
 // Known reports whether status is part of the hash-status vocabulary.
 func (s HashStatus) Known() bool {
 	switch s {
-	case HashStatusNotChecked, HashStatusPass, HashStatusMismatch, HashStatusMissingSHA256, HashStatusUnsupported, HashStatusInvalid:
+	case HashStatusNotChecked, HashStatusPass, HashStatusMismatch, HashStatusUnsupported, HashStatusInvalid:
 		return true
 	default:
 		return false

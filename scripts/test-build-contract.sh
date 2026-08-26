@@ -41,8 +41,8 @@ if grep -E '(^|/)([.]env($|[.])|[.]netrc$|[.]npmrc$|[.]pypirc$|credentials[.]jso
 fi
 
 for forbidden in \
-  'lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-04/signing-test-rsa.pem' \
-  'cmd/dkim2ctl/testdata/fixtures/draft-ietf-dkim-dkim2-spec-04/sign.json' \
+  'lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-05/signing-test-rsa.pem' \
+  'cmd/dkim2ctl/testdata/fixtures/draft-ietf-dkim-dkim2-spec-05/sign.json' \
   'cmd/dkim2-milter/internal/integration/milter_fixture_test.go'; do
   test ! -e "$context/context/$forbidden"
 done

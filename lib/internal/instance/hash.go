@@ -6,7 +6,14 @@ import (
 	"github.com/croessner/dkim2/internal/tagvalue"
 )
 
-const sha256HashBytes = 32
+const (
+	sha256HashBytes = 32
+	sha512HashBytes = 64
+)
+
+type supportedHashAlgorithm struct {
+	digestBytes int
+}
 
 // parseHashSets parses the Message-Instance h= hash-set list.
 func parseHashSets(value string, limits Limits, fieldIndex int) ([]HashSet, error) {
@@ -64,9 +71,10 @@ func parseHashSet(input []byte, tagLimits tagvalue.Limits, fieldIndex int, hashI
 		return HashSet{}, malformedHashSetError(fieldIndex, hashIndex)
 	}
 
+	algorithm, known := supportedHashAlgorithmForName(name)
 	hashSet := HashSet{
 		name:            name,
-		known:           name == HashAlgorithmSHA256,
+		known:           known,
 		headerHashValue: bytes.Clone(rawHeaderHash),
 		bodyHashValue:   bytes.Clone(rawBodyHash),
 	}
@@ -83,11 +91,11 @@ func parseHashSet(input []byte, tagLimits tagvalue.Limits, fieldIndex int, hashI
 	if !hashSet.known {
 		return hashSet, nil
 	}
-	if headerHash.DecodedLen() != sha256HashBytes {
-		return HashSet{}, invalidHashLengthError(fieldIndex, hashIndex, headerHash.DecodedLen())
+	if headerHash.DecodedLen() != algorithm.digestBytes {
+		return HashSet{}, invalidHashLengthError(fieldIndex, hashIndex, algorithm.digestBytes, headerHash.DecodedLen())
 	}
-	if bodyHash.DecodedLen() != sha256HashBytes {
-		return HashSet{}, invalidHashLengthError(fieldIndex, hashIndex, bodyHash.DecodedLen())
+	if bodyHash.DecodedLen() != algorithm.digestBytes {
+		return HashSet{}, invalidHashLengthError(fieldIndex, hashIndex, algorithm.digestBytes, bodyHash.DecodedLen())
 	}
 
 	return hashSet, nil
@@ -104,13 +112,25 @@ func parseHashBase64(input []byte, limits tagvalue.Limits, fieldIndex int, hashI
 	return parsed, nil
 }
 
-// invalidHashLengthError reports a baseline sha256 digest with the wrong decoded size.
-func invalidHashLengthError(fieldIndex int, hashIndex int, decodedLength int) *Error {
+// invalidHashLengthError reports a supported digest with the wrong decoded size.
+func invalidHashLengthError(fieldIndex int, hashIndex int, expectedLength int, decodedLength int) *Error {
 	return newError(ErrorCodeInvalidHashLength, ErrorLocation{FieldIndex: fieldIndex, HashIndex: hashIndex}, ErrorDetails{
 		TagName: "h",
-		Limit:   sha256HashBytes,
+		Limit:   expectedLength,
 		Count:   decodedLength,
 	}, nil)
+}
+
+// supportedHashAlgorithmForName resolves the fixed Draft-05 digest-size invariant.
+func supportedHashAlgorithmForName(name string) (supportedHashAlgorithm, bool) {
+	switch name {
+	case HashAlgorithmSHA256:
+		return supportedHashAlgorithm{digestBytes: sha256HashBytes}, true
+	case HashAlgorithmSHA512:
+		return supportedHashAlgorithm{digestBytes: sha512HashBytes}, true
+	default:
+		return supportedHashAlgorithm{}, false
+	}
 }
 
 // splitHashSetList splits the h= value at comma separators.
@@ -153,7 +173,7 @@ func canonicalHashName(input []byte) (string, bool) {
 }
 
 // validUnknownHashComponent rejects control-bearing hash components while permitting WSP.
-// Draft-04 admits FWS inside base64string values; alphabet and padding remain
+// Draft-05 admits FWS inside base64string values; alphabet and padding remain
 // owned by tagvalue.ParseBase64String after it strips WSP.
 func validUnknownHashComponent(input []byte) bool {
 	for _, b := range input {

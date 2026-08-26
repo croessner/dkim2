@@ -23,8 +23,8 @@ func TestDefaultLimitsMatchCanonicalContract(t *testing.T) {
 	if limits.MaxFieldCount != 4000 {
 		t.Fatalf("MaxFieldCount = %d, want 4000", limits.MaxFieldCount)
 	}
-	if limits.MaxExcludedHeaderCounters != defaultExcludedCounterCount {
-		t.Fatalf("MaxExcludedHeaderCounters = %d, want allowlist count", limits.MaxExcludedHeaderCounters)
+	if limits.MaxExcludedHeaderCounters != 10 || defaultExcludedCounterCount != 10 {
+		t.Fatalf("MaxExcludedHeaderCounters = %d, constant = %d, want concrete schema count 10", limits.MaxExcludedHeaderCounters, defaultExcludedCounterCount)
 	}
 	if err := limits.Validate(); err != nil {
 		t.Fatalf("DefaultLimits().Validate() error = %v", err)
@@ -38,7 +38,7 @@ func TestOptionsRejectUnsafeValues(t *testing.T) {
 		t.Fatalf("Limits.Validate() error = %v, want invalid options", err)
 	}
 
-	if _, err := NewCanonicalizer(WithHashAlgorithm("sha512")); !IsErrorCode(err, ErrorCodeUnsupportedAlgorithm) {
+	if _, err := NewCanonicalizer(WithHashAlgorithm("sha999")); !IsErrorCode(err, ErrorCodeUnsupportedAlgorithm) {
 		t.Fatalf("NewCanonicalizer() error = %v, want unsupported algorithm", err)
 	}
 }

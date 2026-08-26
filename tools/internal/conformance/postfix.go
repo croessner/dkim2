@@ -100,7 +100,7 @@ func validatePostfixReportBinding(
 	if len(report.ImageIdentities) != 3 ||
 		report.ImageIdentities["debian"] != "debian@sha256:4e401d95de7083948053197a9c3913343cd06b706bf15eb6a0c3ccd26f436a0e" ||
 		report.ImageIdentities["golang"] != "golang@sha256:ae5a2316d12f3e78fd99177dad452e6ad4f240af2d71d57b480c3477f250fec6" ||
-		report.ImageIdentities["postfix"] != "chrroessner/postfix@sha256:8ccda0e26bb241116c7df5e0fb2bcdbc6a77b409b085d87e7ad4d0c23b0c41fd" {
+		report.ImageIdentities["postfix"] != "chrroessner/postfix@sha256:d4b349ce665ba291444e55862ac842e3d4e612596520a9ba65a7b9bf00f9aa3c" {
 		return errors.New("runner_identity")
 	}
 	return nil
@@ -152,8 +152,11 @@ func validatePostfixFragments(fragments []PostfixQualificationFragment) error {
 		"daemon_loopback_topology",
 		"daemon_unavailable_fixed_tempfail",
 		"inbound_cryptographic_pass",
+		"injected_null_sender_has_no_dsn_evidence",
 		"local_sendmail_signing",
 		"non_smtp_milter_unavailable_tempfail",
+		"postfix_bounce_dsn_evidence_signing",
+		"postfix_normal_cleanup_dsn_routing",
 		"postfix_received_visibility",
 		"smtp_milter_unavailable_tempfail",
 		"smtp_origin_signing",

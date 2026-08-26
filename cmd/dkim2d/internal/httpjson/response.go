@@ -245,7 +245,7 @@ func MapInboundResult(
 	}
 	return generated.ProcessResponse{
 		ApiVersion:   generated.V1,
-		Draft:        generated.DraftIetfDkimDkim2Spec04,
+		Draft:        generated.DraftIetfDkimDkim2Spec05,
 		Verification: verificationDTO,
 		Policy:       policyDTO,
 		Replay:       generated.ReplayResult{Class: replayClass},
@@ -577,6 +577,14 @@ func mapVerificationReason(value dkim2.ReasonCode) (generated.VerificationReason
 		return generated.VerificationReasonMalformedMessage, true
 	case dkim2.ReasonMalformedProtocol:
 		return generated.VerificationReasonMalformedProtocol, true
+	case dkim2.ReasonDuplicateHashAlgorithm:
+		return generated.VerificationReasonDuplicateHashAlgorithm, true
+	case dkim2.ReasonInvalidRecipeJSON:
+		return generated.VerificationReasonInvalidRecipeJson, true
+	case dkim2.ReasonDuplicateSelector:
+		return generated.VerificationReasonDuplicateSelector, true
+	case dkim2.ReasonTooManySignatures:
+		return generated.VerificationReasonTooManySignatures, true
 	case dkim2.ReasonMissingProtocol:
 		return generated.VerificationReasonMissingProtocol, true
 	case dkim2.ReasonSequenceInvalid:
@@ -791,7 +799,7 @@ func mapHistoricalState(value dkim2.HistoricalState) (generated.VerificationResu
 	return mapHistoricalContent(value)
 }
 
-// mapStrictIdentityApplicable maps the Draft-04 singleton false invariant.
+// mapStrictIdentityApplicable maps the Draft-05 singleton false invariant.
 func mapStrictIdentityApplicable(value bool) (generated.KeyPolicyResultStrictIdentityApplicable, bool) {
 	if value {
 		return false, false

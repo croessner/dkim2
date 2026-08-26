@@ -54,7 +54,7 @@ func TestStrictHandlerReturnsMultiInstanceTestingContinue(t *testing.T) {
 	)))
 	t.Cleanup(server.Close)
 
-	body := `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-04",` +
+	body := `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-05",` +
 		`"message":{"raw_rfc5322_base64":"` + base64.StdEncoding.EncodeToString(raw) +
 		`","fidelity":"milter_reconstructed_crlf"},` +
 		`"smtp":{"mail_from":"<sender@example.test>","rcpt_to":["<rcpt@example.test>"]},` +

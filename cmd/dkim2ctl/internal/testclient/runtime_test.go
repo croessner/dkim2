@@ -14,7 +14,7 @@ import (
 	"github.com/croessner/dkim2/cmd/dkim2ctl/internal/testclient/generated"
 )
 
-const healthResponseBody = `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-04","status":"alive"}`
+const healthResponseBody = `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-05","status":"alive"}`
 
 // countingBody records exact response-body close ownership.
 type countingBody struct {
@@ -214,7 +214,7 @@ func TestRuntimeRejectsRedirectWithoutFollowing(t *testing.T) {
 func TestRuntimeAcceptsDeclaredPreconditionFailure(t *testing.T) {
 	t.Parallel()
 	body := newCountingJSONBody(
-		`{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-04",` +
+		`{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-05",` +
 			`"code":"precondition_failed","category":"request"}`,
 	)
 	response := validJSONResponse(http.StatusPreconditionFailed, body)

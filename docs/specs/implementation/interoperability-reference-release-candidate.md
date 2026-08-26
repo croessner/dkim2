@@ -1,5 +1,10 @@
 # Interoperability, Reference Polish, And Release Candidate Specification
 
+> Historical Draft-04 implementation record. The original scope and evidence
+> below are preserved; current Draft-05 authority is the migration disposition
+> and the 2026-08-26 semantics audit. Its `qualified_linux` evidence does not
+> qualify Draft-05.
+
 Status: implementation-ready planning baseline.
 
 Implementation base: `3803d52c5279f65f5e659fefe996548adfe6d41d`.

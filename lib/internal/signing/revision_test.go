@@ -37,6 +37,32 @@ func (f revisionProviderFunc) LookupKey(ctx context.Context, query verify.KeyQue
 	return f(ctx, query)
 }
 
+// TestSignerMayEmitSHA256FromSHA512OnlyHistory proves multi-hop revision capability uses local SHA-256 policy.
+func TestSignerMayEmitSHA256FromSHA512OnlyHistory(t *testing.T) {
+	fixture := newThreeHopRevisionTestFixtureWithHash(t, canonical.HashAlgorithmSHA512)
+	verifier := newRevisionTestVerifier(t, fixture, nil)
+	result, capability, err := verifier.VerifyForRevision(context.Background(), RevisionRequest{Message: fixture.message, Envelope: fixture.envelope})
+	if err != nil || result.Status() != RevisionVerificationVerified || !capability.Valid() {
+		t.Fatalf("SHA-512-only VerifyForRevision() = %q/%t/%v", result.Status(), capability.Valid(), err)
+	}
+	canonicalizer, err := canonical.NewCanonicalizer(canonical.WithHashAlgorithm(canonical.HashAlgorithmSHA256))
+	if err != nil {
+		t.Fatal(err)
+	}
+	header, err := canonicalizer.HeaderHashFromMessage(fixture.message)
+	if err != nil {
+		t.Fatal(err)
+	}
+	digest, ok := header.Digest()
+	if !ok || capability.proof.Facts().Hashes().HeaderDigest() != [sha256.Size]byte(digest.Bytes()) {
+		t.Fatal("revision capability did not retain the local canonical SHA-256 projection")
+	}
+	facts := capability.proof.Facts()
+	if facts.InstanceCount() != 3 || facts.SignatureCount() != 3 || len(facts.History().Transitions()) != 2 || facts.History().Coverage() != verify.HistoryCoverageComplete {
+		t.Fatalf("multi-hop facts = instances:%d signatures:%d transitions:%d coverage:%q", facts.InstanceCount(), facts.SignatureCount(), len(facts.History().Transitions()), facts.History().Coverage())
+	}
+}
+
 // TestVerifyForRevisionOutcomeCapabilityErrorMatrix locks the dedicated closed API lanes.
 func TestVerifyForRevisionOutcomeCapabilityErrorMatrix(t *testing.T) {
 	fixture := newRevisionTestFixture(t, nil, false)
@@ -63,8 +89,8 @@ func TestVerifyForRevisionOutcomeCapabilityErrorMatrix(t *testing.T) {
 	}
 	temporary := newRevisionVerifierForProof(t, temporaryVerifier)
 
-	contractProvider := revisionProviderFunc(func(context.Context, verify.KeyQuery) (verify.PublicKey, error) {
-		return verify.PublicKey{Algorithm: verify.AlgorithmRSASHA256, Metadata: verify.KeyMetadata{Status: verify.KeyStatusFound}}, nil
+	contractProvider := revisionProviderFunc(func(_ context.Context, query verify.KeyQuery) (verify.PublicKey, error) {
+		return verify.PublicKey{Algorithm: query.Algorithm, Material: fixture.publicKey, Metadata: verify.KeyMetadata{Status: verify.KeyStatusFound, Source: "unsafe/source"}}, nil
 	})
 	contractVerifier, err := verify.NewVerifier(contractProvider, revisionTestClockOption())
 	if err != nil {
@@ -256,7 +282,7 @@ func TestVerifiedRevisionInputSealsExactEvidenceAndPreservesRevisedContent(t *te
 
 // TestVerifiedRevisionInputCrossesExplicitNullBodyHistory locks truthful b:null sealing and consumption.
 func TestVerifiedRevisionInputCrossesExplicitNullBodyHistory(t *testing.T) {
-	nullRecipe := `{"h":{"Subject":[{"d":["previous"]}]},"b":null}`
+	nullRecipe := `{"h":{"subject":[{"d":["previous"]}]},"b":null}`
 	fixture := newRevisionTestFixture(t, &nullRecipe, false)
 	verifier := newRevisionTestVerifier(t, fixture, nil)
 	result, capability, err := verifier.VerifyForRevision(context.Background(), RevisionRequest{
@@ -443,6 +469,7 @@ func TestRevisionProofOutcomeMappingIsClosedAndExhaustive(t *testing.T) {
 		verify.RevisionProofVerified:                                RevisionVerificationVerified,
 		verify.RevisionProofTerminalNextDomainAuthorizationRequired: RevisionVerificationTerminalNextDomainAuthorizationRequired,
 		verify.RevisionProofProtocolRejected:                        RevisionVerificationProtocolRejected,
+		verify.RevisionProofInvalidRecipeJSON:                       RevisionVerificationProtocolRejected,
 		verify.RevisionProofHashMismatch:                            RevisionVerificationProtocolRejected,
 		verify.RevisionProofSignatureMismatch:                       RevisionVerificationProtocolRejected,
 		verify.RevisionProofUnsupported:                             RevisionVerificationUnsupported,
@@ -520,23 +547,28 @@ func newRevisionTestFixture(t *testing.T, recipeJSON *string, terminal bool) rev
 
 // newRevisionTestFixtureWithFlags creates one valid fixture with controlled authenticated flags.
 func newRevisionTestFixtureWithFlags(t *testing.T, recipeJSON *string, terminal bool, flags []string) revisionTestFixture {
+	return newRevisionTestFixtureWithHash(t, recipeJSON, terminal, flags, canonical.HashAlgorithmSHA256)
+}
+
+// newRevisionTestFixtureWithHash creates one valid fixture with controlled Message-Instance hashes.
+func newRevisionTestFixtureWithHash(t *testing.T, recipeJSON *string, terminal bool, flags []string, algorithm canonical.HashAlgorithm) revisionTestFixture {
 	t.Helper()
 	seed := sha256.Sum256([]byte("dkim2 revision verifier test key"))
 	privateKey := ed25519.NewKeyFromSeed(seed[:])
 	publicKey := privateKey.Public().(ed25519.PublicKey)
 
 	currentContent := []byte("From: sender@example.test\r\nSubject: current\r\n\r\ncurrent body\r\n")
-	currentHeader, currentBody := revisionTestDigests(t, currentContent)
-	instanceFields := []string{"Message-Instance: m=1; h=sha256:" + currentHeader + ":" + currentBody + ";\r\n"}
+	currentHeader, currentBody := revisionTestDigests(t, currentContent, algorithm)
+	instanceFields := []string{"Message-Instance: m=1; h=" + string(algorithm) + ":" + currentHeader + ":" + currentBody + ";\r\n"}
 	signatureFields := []string{}
 	envelope := verify.NewEnvelope([]byte("<>"), [][]byte{[]byte("<rcpt@example.test>")})
 
 	if recipeJSON != nil {
 		previousContent := []byte("From: sender@example.test\r\nSubject: previous\r\n\r\nolder body\r\n")
-		previousHeader, previousBody := revisionTestDigests(t, previousContent)
-		instanceFields[0] = "Message-Instance: m=1; h=sha256:" + previousHeader + ":" + previousBody + ";\r\n"
+		previousHeader, previousBody := revisionTestDigests(t, previousContent, algorithm)
+		instanceFields[0] = "Message-Instance: m=1; h=" + string(algorithm) + ":" + previousHeader + ":" + previousBody + ";\r\n"
 		instanceFields = append(instanceFields,
-			"Message-Instance: m=2; h=sha256:"+currentHeader+":"+currentBody+"; r="+base64.StdEncoding.EncodeToString([]byte(*recipeJSON))+";\r\n",
+			"Message-Instance: m=2; h="+string(algorithm)+":"+currentHeader+":"+currentBody+"; r="+base64.StdEncoding.EncodeToString([]byte(*recipeJSON))+";\r\n",
 		)
 	}
 
@@ -578,6 +610,45 @@ func newRevisionTestFixtureWithFlags(t *testing.T, recipeJSON *string, terminal 
 	return revisionTestFixture{
 		message:  revisionTestMessage(t, currentContent, instanceFields, signatureFields),
 		envelope: envelope, publicKey: publicKey,
+	}
+}
+
+// newThreeHopRevisionTestFixtureWithHash builds three signed instances and two authenticated recipe transitions.
+func newThreeHopRevisionTestFixtureWithHash(t *testing.T, algorithm canonical.HashAlgorithm) revisionTestFixture {
+	t.Helper()
+	seed := sha256.Sum256([]byte("dkim2 three-hop revision verifier test key"))
+	privateKey := ed25519.NewKeyFromSeed(seed[:])
+	publicKey := privateKey.Public().(ed25519.PublicKey)
+	originContent := []byte("From: sender@example.test\r\nSubject: origin\r\n\r\noldest body\r\n")
+	middleContent := []byte("From: sender@example.test\r\nSubject: previous\r\n\r\nolder body\r\n")
+	currentContent := []byte("From: sender@example.test\r\nSubject: current\r\n\r\ncurrent body\r\n")
+	originHeader, originBody := revisionTestDigests(t, originContent, algorithm)
+	middleHeader, middleBody := revisionTestDigests(t, middleContent, algorithm)
+	currentHeader, currentBody := revisionTestDigests(t, currentContent, algorithm)
+	secondRecipe := `{"h":{"subject":[{"d":["origin"]}]},"b":[{"d":["oldest body"]}]}`
+	thirdRecipe := `{"h":{"subject":[{"d":["previous"]}]},"b":[{"d":["older body"]}]}`
+	instances := []string{
+		"Message-Instance: m=1; h=" + string(algorithm) + ":" + originHeader + ":" + originBody + ";\r\n",
+		"Message-Instance: m=2; h=" + string(algorithm) + ":" + middleHeader + ":" + middleBody + "; r=" + base64.StdEncoding.EncodeToString([]byte(secondRecipe)) + ";\r\n",
+		"Message-Instance: m=3; h=" + string(algorithm) + ":" + currentHeader + ":" + currentBody + "; r=" + base64.StdEncoding.EncodeToString([]byte(thirdRecipe)) + ";\r\n",
+	}
+	placeholder := revisionTestSelector + ":" + string(verify.AlgorithmEd25519SHA256) + ":" + base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{0xa5}, ed25519.SignatureSize))
+	firstEnvelope := "mf=" + base64.StdEncoding.EncodeToString([]byte("<>")) + "; rt=" + base64.StdEncoding.EncodeToString([]byte("<first-hop@example.test>"))
+	secondEnvelope := "mf=" + base64.StdEncoding.EncodeToString([]byte("<first-hop@example.test>")) + "; rt=" + base64.StdEncoding.EncodeToString([]byte("<second-hop@example.test>"))
+	thirdEnvelope := "mf=" + base64.StdEncoding.EncodeToString([]byte("<second-hop@example.test>")) + "; rt=" + revisionTestRecipientTags()
+	firstField := revisionTestSignatureFieldWithFlags(1, 1, firstEnvelope, placeholder, nil)
+	firstSet := revisionTestSignedSet(t, privateKey, revisionTestMessage(t, currentContent, instances[:1], []string{firstField}), 1)
+	firstField = strings.Replace(firstField, placeholder, firstSet, 1)
+	secondField := revisionTestSignatureFieldWithFlags(2, 2, secondEnvelope, placeholder, nil)
+	secondSet := revisionTestSignedSet(t, privateKey, revisionTestMessage(t, currentContent, instances[:2], []string{firstField, secondField}), 2)
+	secondField = strings.Replace(secondField, placeholder, secondSet, 1)
+	thirdField := revisionTestSignatureFieldWithFlags(3, 3, thirdEnvelope, placeholder, nil)
+	thirdSet := revisionTestSignedSet(t, privateKey, revisionTestMessage(t, currentContent, instances, []string{firstField, secondField, thirdField}), 3)
+	thirdField = strings.Replace(thirdField, placeholder, thirdSet, 1)
+	return revisionTestFixture{
+		message:   revisionTestMessage(t, currentContent, instances, []string{firstField, secondField, thirdField}),
+		envelope:  verify.NewEnvelope([]byte("<second-hop@example.test>"), [][]byte{[]byte("<rcpt@example.test>")}),
+		publicKey: publicKey,
 	}
 }
 
@@ -637,11 +708,11 @@ func revisionTestSignedSet(t *testing.T, privateKey ed25519.PrivateKey, message 
 		base64.StdEncoding.EncodeToString(ed25519.Sign(privateKey, digest[:]))
 }
 
-// revisionTestDigests computes current draft-04 Section 6 digest strings.
-func revisionTestDigests(t *testing.T, raw []byte) (string, string) {
+// revisionTestDigests computes current draft-05 Section 6 digest strings.
+func revisionTestDigests(t *testing.T, raw []byte, algorithm canonical.HashAlgorithm) (string, string) {
 	t.Helper()
 	message := mustParseRevisionMessage(t, raw)
-	canonicalizer, err := canonical.NewCanonicalizer()
+	canonicalizer, err := canonical.NewCanonicalizer(canonical.WithHashAlgorithm(algorithm))
 	if err != nil {
 		t.Fatalf("canonical.NewCanonicalizer() error = %v", err)
 	}

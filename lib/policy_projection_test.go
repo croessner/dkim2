@@ -3,6 +3,7 @@ package dkim2
 import (
 	"context"
 	"encoding/base64"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -47,12 +48,79 @@ func TestMalformedHistoriedMessageFailsClosedAcrossServiceAndFacade(t *testing.T
 	}
 	coordinator := serviceVerifierForTest(t, verifier)
 	serviceResult, err := coordinator.Verify(context.Background(), service.NewRequest(raw, []byte("<>"), [][]byte{[]byte("<rcpt@example.test>")}))
-	if err != nil || serviceResult.State() != service.StatePERMERROR || serviceResult.PrimaryReason() != service.ReasonMalformedProtocol || serviceResult.Target().Instance != 2 {
+	if err != nil || serviceResult.State() != service.StatePERMERROR || serviceResult.PrimaryReason() != service.ReasonInvalidRecipeJSON || serviceResult.Target().Instance != 2 {
 		t.Fatalf("service historied result = %q/%q target=%#v error=%v", serviceResult.State(), serviceResult.PrimaryReason(), serviceResult.Target(), err)
 	}
+	serviceProjection := serviceResult.PolicyProjection()
+	if !serviceProjection.Valid() || serviceProjection.Form() != policy.TargetSelected || serviceProjection.TargetSequence() != 1 || serviceProjection.VerificationReason() != policy.VerificationReasonInvalidRecipeJSON {
+		t.Fatalf("service historied projection = %#v", serviceProjection)
+	}
 	publicResult, err := verifier.Verify(context.Background(), NewVerifyRequest(raw, []byte("<>"), [][]byte{[]byte("<rcpt@example.test>")}))
-	if err != nil || publicResult.State() != ResultStatePERMERROR || publicResult.PrimaryReason() != ReasonMalformedProtocol || publicResult.Target().Instance() != 2 {
+	if err != nil || publicResult.State() != ResultStatePERMERROR || publicResult.PrimaryReason() != ReasonInvalidRecipeJSON || publicResult.Target().Instance() != 2 {
 		t.Fatalf("facade historied result = %q/%q target=%#v error=%v", publicResult.State(), publicResult.PrimaryReason(), publicResult.Target(), err)
+	}
+	decision, err := EvaluatePolicy(publicResult)
+	if err != nil || decision.VerificationState() != ResultStatePERMERROR || decision.Verdict() != PolicyVerdictReject || decision.PrimaryReason() != PolicyReasonProtocolPermerror {
+		t.Fatalf("historied policy decision = %q/%q/%q error=%v", decision.VerificationState(), decision.Verdict(), decision.PrimaryReason(), err)
+	}
+}
+
+// TestDraft05MalformedFieldsRemainTargetUnavailableAcrossPublicPolicy proves parser failures keep exact fail-closed authority.
+func TestDraft05MalformedFieldsRemainTargetUnavailableAcrossPublicPolicy(t *testing.T) {
+	base := string(publicProviderFixture(t))
+	hashStart := strings.Index(base, "h=")
+	signatureStart := strings.Index(base, "s=")
+	if hashStart < 0 || signatureStart < 0 {
+		t.Fatal("public fixture lacks h= or s=")
+	}
+	hashEnd := strings.Index(base[hashStart:], ";")
+	signatureEnd := strings.Index(base[signatureStart:], ";")
+	if hashEnd < 0 || signatureEnd < 0 {
+		t.Fatal("public fixture has unterminated h= or s=")
+	}
+	hashValue := base[hashStart+2 : hashStart+hashEnd]
+	signatureValue := base[signatureStart+2 : signatureStart+signatureEnd]
+	parts := strings.SplitN(signatureValue, ":", 3)
+	if len(parts) != 3 {
+		t.Fatal("public fixture signature set is malformed")
+	}
+	many := make([]string, 3)
+	for index := range many {
+		many[index] = "selector-" + strconv.Itoa(index+1) + ".test:" + parts[1] + ":" + parts[2]
+	}
+	tests := []struct {
+		name      string
+		raw       string
+		reason    ReasonCode
+		service   service.Reason
+		preTarget policy.PreTargetReason
+	}{
+		{"duplicate hash", strings.Replace(base, "h="+hashValue, "h="+hashValue+","+hashValue, 1), ReasonDuplicateHashAlgorithm, service.ReasonDuplicateHashAlgorithm, policy.PreTargetDuplicateHashAlgorithm},
+		{"duplicate selector", strings.Replace(base, "s="+signatureValue, "s="+signatureValue+","+signatureValue, 1), ReasonDuplicateSelector, service.ReasonDuplicateSelector, policy.PreTargetDuplicateSelector},
+		{"too many signatures", strings.Replace(base, "s="+signatureValue, "s="+strings.Join(many, ","), 1), ReasonTooManySignatures, service.ReasonTooManySignatures, policy.PreTargetTooManySignatures},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			providerCalls := 0
+			verifier, err := NewVerifier(publicProviderFunc(func(context.Context, PublicKeyQuery) (PublicKeyResult, error) {
+				providerCalls++
+				return MissingPublicKey(AlgorithmRSASHA256), nil
+			}), WithVerificationClock(func() time.Time { return time.Unix(1700000000, 0) }))
+			if err != nil {
+				t.Fatal(err)
+			}
+			coordinator := serviceVerifierForTest(t, verifier)
+			serviceResult, serviceErr := coordinator.Verify(context.Background(), service.NewRequest([]byte(test.raw), []byte("<>"), [][]byte{[]byte("<rcpt@example.test>")}))
+			serviceProjection := serviceResult.PolicyProjection()
+			if serviceErr != nil || serviceResult.State() != service.StatePERMERROR || serviceResult.PrimaryReason() != test.service || serviceResult.Target() != (service.Target{}) || !serviceProjection.Valid() || serviceProjection.Form() != policy.TargetUnavailable || serviceProjection.PreTargetReason() != test.preTarget {
+				t.Fatalf("service = %q/%q target=%#v projection=%#v error=%v", serviceResult.State(), serviceResult.PrimaryReason(), serviceResult.Target(), serviceProjection, serviceErr)
+			}
+			publicResult, publicErr := verifier.Verify(context.Background(), NewVerifyRequest([]byte(test.raw), []byte("<>"), [][]byte{[]byte("<rcpt@example.test>")}))
+			decision, policyErr := EvaluatePolicy(publicResult)
+			if publicErr != nil || policyErr != nil || providerCalls != 0 || publicResult.State() != ResultStatePERMERROR || publicResult.PrimaryReason() != test.reason || publicResult.Target() != (VerificationTarget{}) || decision.VerificationState() != ResultStatePERMERROR || decision.Verdict() != PolicyVerdictReject {
+				t.Fatalf("public = %q/%q target=%#v decision=%q/%q calls=%d errors=%v/%v", publicResult.State(), publicResult.PrimaryReason(), publicResult.Target(), decision.VerificationState(), decision.Verdict(), providerCalls, publicErr, policyErr)
+			}
+		})
 	}
 }
 
@@ -88,6 +156,7 @@ func TestFacadeZerosMismatchedSelectedReasonWithoutRewritingVerification(t *test
 func TestFacadeVerificationReasonMapperRejectsInvalidAndUnknown(t *testing.T) {
 	for _, reason := range []service.Reason{
 		service.ReasonNone, service.ReasonLimitExceeded, service.ReasonMalformedMessage, service.ReasonMalformedProtocol,
+		service.ReasonDuplicateHashAlgorithm, service.ReasonInvalidRecipeJSON, service.ReasonDuplicateSelector, service.ReasonTooManySignatures,
 		service.ReasonMissingProtocol, service.ReasonSequenceInvalid, service.ReasonUnsupportedAlgorithm,
 		service.ReasonHashMismatch, service.ReasonSignatureMismatch, service.ReasonMissingKey, service.ReasonInvalidKey,
 		service.ReasonAmbiguousKey, service.ReasonRevokedKey, service.ReasonUnsupportedKeyType,

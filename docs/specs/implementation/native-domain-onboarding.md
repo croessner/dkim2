@@ -1,5 +1,9 @@
 # Native Domain Onboarding
 
+> Historical Draft-04 implementation record. The original scope and evidence
+> below are preserved; current Draft-05 authority is the migration disposition
+> and the 2026-08-26 semantics audit.
+
 Status: implementation closeout candidate. Prompt 01-10 implementation and
 replacement reviews are complete. Prompt 11 operator documentation and
 release-proportional validation are complete; the fresh independent final

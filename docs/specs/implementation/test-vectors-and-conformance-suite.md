@@ -1,5 +1,10 @@
 # Test Vectors And Conformance Suite Implementation Specification
 
+> Historical Draft-04 implementation record. The original scope and evidence
+> below are preserved; current Draft-05 authority is the migration disposition
+> and the 2026-08-26 semantics audit. Its `qualified_linux` evidence does not
+> qualify Draft-05.
+
 Status: implementation-ready planning baseline.
 
 Implementation base: `487ad434d106954e72d1cd241de543918c0fd260`.

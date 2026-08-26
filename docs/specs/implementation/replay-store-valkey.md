@@ -1,5 +1,9 @@
 # Replay Store And Valkey Provider
 
+> Historical Draft-04 implementation record. The original scope and evidence
+> below are preserved; current Draft-05 authority is the migration disposition,
+> the current replay runbook, and the 2026-08-26 semantics audit.
+
 Status: implementation and closeout evidence prepared; external exact-artifact review and commit pending.
 
 Milestone: M12.

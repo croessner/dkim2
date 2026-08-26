@@ -17,6 +17,7 @@ import (
 )
 
 const ed25519Selector = "ed-selector.test"
+const secondRSASelector = "rsa-selector-two.test"
 
 type multiSignatureFixture struct {
 	verificationFixture
@@ -26,6 +27,90 @@ type multiSignatureFixture struct {
 	wrongEd25519  ed25519.PublicKey
 	sequenceOne   uint64
 	sequenceTwo   uint64
+}
+
+type sameAlgorithmFixture struct {
+	verificationFixture
+	firstKey  *rsa.PublicKey
+	secondKey *rsa.PublicKey
+}
+
+type selectorRecordingProvider struct {
+	keys     map[string]any
+	statuses map[string]KeyStatus
+	queries  []KeyQuery
+}
+
+// LookupKey records each positional selector query and returns its controlled key result.
+func (p *selectorRecordingProvider) LookupKey(_ context.Context, query KeyQuery) (PublicKey, error) {
+	p.queries = append(p.queries, query)
+	if status, present := p.statuses[query.Selector]; present {
+		return PublicKey{Algorithm: query.Algorithm, Metadata: KeyMetadata{Status: status}}, nil
+	}
+	key, ok := p.keys[query.Selector]
+	if !ok {
+		return PublicKey{Algorithm: query.Algorithm, Metadata: KeyMetadata{Status: KeyStatusMissing}}, NewProviderFailure(ProviderFailurePermanent)
+	}
+	return PublicKey{Algorithm: query.Algorithm, Material: key, Metadata: KeyMetadata{Status: KeyStatusFound}}, nil
+}
+
+// TestVerifierChecksSameAlgorithmSignaturesPositionally proves selector lookup, k= matching, and crypto remain occurrence-bound.
+func TestVerifierChecksSameAlgorithmSignaturesPositionally(t *testing.T) {
+	fixture := newSameAlgorithmFixture(t)
+	provider := &selectorRecordingProvider{keys: map[string]any{testSelector: fixture.firstKey, secondRSASelector: fixture.secondKey}}
+	verifier, err := NewVerifier(provider, testClockOption())
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := verifier.Verify(context.Background(), Request{Message: fixture.message, Envelope: matchingEnvelope()})
+	requireSameAlgorithmResult(t, "correct", result, err, TargetStatusPass, SignatureSetStatusPass)
+	if len(provider.queries) != 2 || provider.queries[0].Selector != testSelector || provider.queries[1].Selector != secondRSASelector || provider.queries[0].Algorithm != AlgorithmRSASHA256 || provider.queries[1].Algorithm != AlgorithmRSASHA256 {
+		t.Fatalf("key queries = %#v", provider.queries)
+	}
+
+	wrong, err := rsa.GenerateKey(rand.Reader, 1024)
+	if err != nil {
+		t.Fatal(err)
+	}
+	provider = &selectorRecordingProvider{keys: map[string]any{testSelector: fixture.firstKey, secondRSASelector: &wrong.PublicKey}}
+	verifier, err = NewVerifier(provider, testClockOption())
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err = verifier.Verify(context.Background(), Request{Message: fixture.message, Envelope: matchingEnvelope()})
+	requireSameAlgorithmResult(t, "wrong second RSA material", result, err, TargetStatusMixed, SignatureSetStatusFail)
+	if !orderedSameAlgorithmQueries(provider.queries) {
+		t.Fatalf("crypto-mismatch key queries = %#v", provider.queries)
+	}
+
+	provider = &selectorRecordingProvider{
+		keys:     map[string]any{testSelector: fixture.firstKey},
+		statuses: map[string]KeyStatus{secondRSASelector: KeyStatusAlgorithmMismatch},
+	}
+	verifier, err = NewVerifier(provider, testClockOption())
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err = verifier.Verify(context.Background(), Request{Message: fixture.message, Envelope: matchingEnvelope()})
+	requireSameAlgorithmResult(t, "second k= algorithm mismatch", result, err, TargetStatusMixed, SignatureSetStatusKeyAlgorithmMismatch)
+	if !orderedSameAlgorithmQueries(provider.queries) {
+		t.Fatalf("algorithm-mismatch key queries = %#v", provider.queries)
+	}
+}
+
+// requireSameAlgorithmResult asserts the two positional occurrence results for one integration variant.
+func requireSameAlgorithmResult(t *testing.T, name string, result Result, err error, wantTarget TargetStatus, wantSecond SignatureSetStatus) {
+	t.Helper()
+	sets := result.SignatureSets()
+	if err != nil || result.Status() != wantTarget || len(sets) != 2 || sets[0].Index != 0 || sets[0].Status != SignatureSetStatusPass || sets[1].Index != 1 || sets[1].Status != wantSecond {
+		t.Fatalf("Verify(%s) = status:%q sets:%#v error:%v", name, result.Status(), sets, err)
+	}
+}
+
+// orderedSameAlgorithmQueries reports whether both selector lookups occurred once in source order.
+func orderedSameAlgorithmQueries(queries []KeyQuery) bool {
+	return len(queries) == 2 && queries[0].Selector == testSelector && queries[1].Selector == secondRSASelector &&
+		queries[0].Algorithm == AlgorithmRSASHA256 && queries[1].Algorithm == AlgorithmRSASHA256
 }
 
 // TestVerifierAggregatesMultipleSignatureSets verifies all-checkable-signatures behavior.
@@ -267,6 +352,40 @@ func newOrderedMultiSignatureFixture(t *testing.T, reverse bool) multiSignatureF
 		ed25519Key:          edPublic,
 		wrongEd25519:        wrongPublic,
 	}
+}
+
+// newSameAlgorithmFixture signs two RSA occurrences with distinct selector-owned keys.
+func newSameAlgorithmFixture(t *testing.T) sameAlgorithmFixture {
+	t.Helper()
+	first, err := rsa.GenerateKey(rand.Reader, 1024)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := rsa.GenerateKey(rand.Reader, 1024)
+	if err != nil {
+		t.Fatal(err)
+	}
+	headerDigest, bodyDigest := baseMessageDigests(t)
+	placeholder := base64.StdEncoding.EncodeToString(bytesOf(0xa5, 128))
+	set := func(selector, signatureText string) string {
+		return selector + ":" + string(AlgorithmRSASHA256) + ":" + signatureText
+	}
+	unsigned := mustParseVerificationMessage(t, rawWithSignatureFields(headerDigest, bodyDigest, []string{signatureField(1, set(testSelector, placeholder)+","+set(secondRSASelector, placeholder))}))
+	digest := signatureDigestForTarget(t, unsigned, 1)
+	firstSignature, err := rsa.SignPKCS1v15(rand.Reader, first, crypto.SHA256, digest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondSignature, err := rsa.SignPKCS1v15(rand.Reader, second, crypto.SHA256, digest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	signedSets := set(testSelector, base64.StdEncoding.EncodeToString(firstSignature)) + "," + set(secondRSASelector, base64.StdEncoding.EncodeToString(secondSignature))
+	parsed, err := parseVerificationFixture(rawWithSignatureFields(headerDigest, bodyDigest, []string{signatureField(1, signedSets)}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return sameAlgorithmFixture{verificationFixture: parsed, firstKey: &first.PublicKey, secondKey: &second.PublicKey}
 }
 
 // orderedMultiSignatureSets joins controlled RSA and Ed25519 sets in source or reversed order.

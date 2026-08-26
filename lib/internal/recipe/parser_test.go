@@ -7,7 +7,7 @@ import (
 )
 
 const (
-	testRecipeHeaderName         = "Subject"
+	testRecipeHeaderName         = "subject"
 	testBodyNullRecipe           = `{"b":null}`
 	testBodyEmptyRecipe          = `{"b":[]}`
 	testBodyDataXRecipe          = `{"b":[{"d":["x"]}]}`
@@ -22,10 +22,10 @@ const (
 	testCopiedItemsPerRangeLabel = "copied items per range"
 	testHeaderNameBytesLabel     = "header name bytes"
 	testStepsPerHeaderLabel      = "steps per header"
-	testHeaderRemovalRecipe      = `{"h":{"A":[]}}`
-	testHeaderDataXRecipe        = `{"h":{"A":[{"d":["x"]}]}}`
-	testHeaderDataXYRecipe       = `{"h":{"A":[{"d":["xy"]}]}}`
-	testTwoHeaderRecipe          = `{"h":{"A":[],"B":[]}}`
+	testHeaderRemovalRecipe      = `{"h":{"a":[]}}`
+	testHeaderDataXRecipe        = `{"h":{"a":[{"d":["x"]}]}}`
+	testHeaderDataXYRecipe       = `{"h":{"a":[{"d":["xy"]}]}}`
+	testTwoHeaderRecipe          = `{"h":{"a":[],"b":[]}}`
 	testTwoRangesRecipe          = `{"b":[{"c":[1,1]},{"c":[2,2]}]}`
 )
 
@@ -39,11 +39,11 @@ func TestParserAcceptsDraftRecipeForms(t *testing.T) {
 		bodySteps  int
 		headerStep int
 	}{
-		{"header empty", `{"h":{"Subject":[]}}`, []string{testRecipeHeaderName}, BodyModeAbsent, 0, 0},
-		{"header copy data", `{"h":{"Subject":[{"c":[1,2]},{"d":["", "restored"]}]}}`, []string{testRecipeHeaderName}, BodyModeAbsent, 0, 2},
+		{"header empty", `{"h":{"subject":[]}}`, []string{testRecipeHeaderName}, BodyModeAbsent, 0, 0},
+		{"header copy data", `{"h":{"subject":[{"c":[1,2]},{"d":["", "restored"]}]}}`, []string{testRecipeHeaderName}, BodyModeAbsent, 0, 2},
 		{"body empty", testBodyEmptyRecipe, nil, BodyModeSteps, 0, 0},
 		{"body null", testBodyNullRecipe, nil, BodyModeUnavailable, 0, 0},
-		{"combined", `{"h":{"X-Test":[{"d":["value"]}]},"b":[{"c":[1.0,2e0]}]}`, []string{"X-Test"}, BodyModeSteps, 1, 1},
+		{"combined", `{"h":{"x-test":[{"d":["value"]}]},"b":[{"c":[1.0,2e0]}]}`, []string{"x-test"}, BodyModeSteps, 1, 1},
 		{"unknown root", `{"future":{"nested":[1,true,{"x":"y"}]},"b":null}`, nil, BodyModeUnavailable, 0, 0},
 		{"unicode literal", `{"b":[{"d":["Gr\u00fc\u00dfe","\ud83d\ude00"]}]}`, nil, BodyModeSteps, 1, 0},
 	}
@@ -82,7 +82,7 @@ func TestParserRejectsDuplicateAndCollidingMembers(t *testing.T) {
 		{"root", `{"b":null,"b":[]}`, ErrorCodeDuplicateMember},
 		{"escaped root", `{"b":null,"\u0062":[]}`, ErrorCodeDuplicateMember},
 		{"unknown root", `{"x":1,"x":2,"b":null}`, ErrorCodeDuplicateMember},
-		{"header exact", `{"h":{"Subject":[],"Subject":[]}}`, ErrorCodeDuplicateMember},
+		{"header exact", `{"h":{"subject":[],"subject":[]}}`, ErrorCodeDuplicateMember},
 		{"header case fold", `{"h":{"Subject":[],"subject":[]}}`, ErrorCodeHeaderNameCollision},
 		{"step", `{"b":[{"c":[1,1],"c":[2,2]}]}`, ErrorCodeDuplicateMember},
 		{"unknown nested", `{"x":{"y":1,"y":2},"b":null}`, ErrorCodeDuplicateMember},
@@ -98,6 +98,34 @@ func TestParserRejectsDuplicateAndCollidingMembers(t *testing.T) {
 	}
 }
 
+// TestParserRejectsNonLowercaseHeaderKey proves decoded recipe header names must already be lowercase.
+func TestParserRejectsNonLowercaseHeaderKey(t *testing.T) {
+	parser := mustParser(t, Limits{})
+	for _, input := range []string{
+		`{"h":{"Subject":[]}}`,
+		`{"h":{"subJect":[]}}`,
+		`{"h":{"sub\u004Aect":[]}}`,
+		`{"h":{"\u0053ubject":[]}}`,
+	} {
+		recipe, usage, err := parser.Parse([]byte(input))
+		if recipe.Valid() || !usage.Valid() || !IsErrorCode(err, ErrorCodeNonLowercaseHeaderName) {
+			t.Fatalf("Parse() input_bytes=%d valid=%t code=%s, want invalid header name", len(input), recipe.Valid(), recipeTestErrorCode(err))
+		}
+	}
+}
+
+// TestParserAcceptsEscapedLowercaseHeaderKey proves escaped spelling is judged after JSON decoding.
+func TestParserAcceptsEscapedLowercaseHeaderKey(t *testing.T) {
+	parser := mustParser(t, Limits{})
+	recipe, usage, err := parser.Parse([]byte(`{"h":{"sub\u006aect":[]}}`))
+	if err != nil || !recipe.Valid() || !usage.Valid() {
+		t.Fatalf("Parse() valid=%t usage_valid=%t code=%s, want decoded lowercase key", recipe.Valid(), usage.Valid(), recipeTestErrorCode(err))
+	}
+	if names := recipe.HeaderNames(); len(names) != 1 || names[0] != "subject" {
+		t.Fatalf("HeaderNames() = %v, want [subject]", names)
+	}
+}
+
 // TestParserRejectsSchemaAndSyntaxFailures verifies malformed states fail closed.
 func TestParserRejectsSchemaAndSyntaxFailures(t *testing.T) {
 	tests := []struct {
@@ -108,7 +136,7 @@ func TestParserRejectsSchemaAndSyntaxFailures(t *testing.T) {
 		{"empty", nil, ErrorCodeInvalidJSON}, {"array root", []byte(`[]`), ErrorCodeInvalidTopLevel},
 		{"no dimension", []byte(`{"x":1}`), ErrorCodeMissingRecipeDimension},
 		{"empty h", []byte(`{"h":{}}`), ErrorCodeInvalidHeaderRecipe}, {"h null", []byte(`{"h":null}`), ErrorCodeInvalidHeaderRecipe},
-		{"body scalar", []byte(`{"b":1}`), ErrorCodeInvalidBodyRecipe}, {"null header plan", []byte(`{"h":{"A":null}}`), ErrorCodeInvalidHeaderRecipe},
+		{"body scalar", []byte(`{"b":1}`), ErrorCodeInvalidBodyRecipe}, {"null header plan", []byte(`{"h":{"a":null}}`), ErrorCodeInvalidHeaderRecipe},
 		{"null step", []byte(`{"b":[null]}`), ErrorCodeInvalidStep}, {"unknown step", []byte(`{"b":[{"z":[]}]}`), ErrorCodeInvalidStep},
 		{"extra step", []byte(`{"b":[{"c":[1,1],"x":1}]}`), ErrorCodeInvalidStep}, {"mixed step", []byte(`{"b":[{"c":[1,1],"d":["x"]}]}`), ErrorCodeInvalidStep},
 		{"copy arity", []byte(`{"b":[{"c":[1]}]}`), ErrorCodeInvalidCopyRange}, {"copy type", []byte(`{"b":[{"c":[1,"2"]}]}`), ErrorCodeInvalidCopyRange},
@@ -226,7 +254,7 @@ func TestParserUsageChargesSuccessAndFailureExactly(t *testing.T) {
 
 // TestParserPreservesImmutabilityAndDiagnosticPrivacy verifies toxic JSON cannot escape parser ownership.
 func TestParserPreservesImmutabilityAndDiagnosticPrivacy(t *testing.T) {
-	input := []byte(`{"h":{"Subject":[{"d":["secret_marker"]}]}}`)
+	input := []byte(`{"h":{"subject":[{"d":["secret_marker"]}]}}`)
 	recipe, _, err := mustParser(t, Limits{}).Parse(input)
 	if err != nil {
 		t.Fatal(err)

@@ -74,7 +74,7 @@ func TestVerifierRequiresEnvelopeForCurrentTarget(t *testing.T) {
 	}
 }
 
-// TestVerifierMatchesEnvelopeAccordingToDraft verifies current-envelope matching from draft-04 Sections 9.2 and 11.4.
+// TestVerifierMatchesEnvelopeAccordingToDraft verifies current-envelope matching from draft-05 Sections 9.2 and 11.4.
 func TestVerifierMatchesEnvelopeAccordingToDraft(t *testing.T) {
 	fixture := newRSAVerificationFixture(t)
 	verifier := mustVerifierForFixture(t, fixture)
@@ -226,7 +226,7 @@ func TestVerifierLowercasesOnlyEnvelopeDomains(t *testing.T) {
 	}
 }
 
-// TestVerifierRejectsSMTPUTF8EnvelopePathsAtParserBoundary verifies draft-04 imports ASCII RFC 5321 paths.
+// TestVerifierRejectsSMTPUTF8EnvelopePathsAtParserBoundary verifies draft-05 imports ASCII RFC 5321 paths.
 func TestVerifierRejectsSMTPUTF8EnvelopePathsAtParserBoundary(t *testing.T) {
 	eaiPath := []byte("<\xc3\xbc@example.test>")
 	fixture := newRSAVerificationFixture(t)

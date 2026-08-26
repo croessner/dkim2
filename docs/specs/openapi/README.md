@@ -33,7 +33,7 @@ the Milter and Exim public integration boundaries. All configurations preserve
 the original lower-camel operation identifiers.
 
 The inbound process operation has two success variants. HTTP 200 carries an
-applicable DKIM2 verification with one of the four Draft-04 states plus policy,
+applicable DKIM2 verification with one of the four Draft-05 states plus policy,
 replay, disposition, and actions. HTTP 204 is bodyless and means both DKIM2
 protocol field families were absent, so verification, DNS, policy, replay, and
 mutation were not applicable. Generated server and both client boundaries must

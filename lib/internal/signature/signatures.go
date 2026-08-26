@@ -24,29 +24,16 @@ func parseSignatureSets(value string, limits Limits, fieldIndex int) ([]Set, err
 		}, nil)
 	}
 
-	seenAlgorithms := make(map[string]struct{}, len(parts))
-	seenSelectors := make(map[string]struct{}, len(parts))
+	cardinality := newSignatureSetCardinality(len(parts))
 	sets := make([]Set, 0, len(parts))
 	for i, part := range parts {
 		set, err := parseSignatureSet(part, limits.TagLimits, fieldIndex, i)
 		if err != nil {
 			return nil, err
 		}
-		if _, exists := seenAlgorithms[set.algorithm]; exists {
-			return nil, newError(ErrorCodeDuplicateSignatureAlgorithm, ErrorLocation{FieldIndex: fieldIndex, SignatureIndex: i}, ErrorDetails{
-				Class:   ErrorClassDuplicate,
-				TagName: "s",
-			}, nil)
+		if err := cardinality.add(set.selector, set.algorithm, fieldIndex, i); err != nil {
+			return nil, err
 		}
-		if _, exists := seenSelectors[set.selector]; exists {
-			return nil, newError(ErrorCodeDuplicateSelector, ErrorLocation{FieldIndex: fieldIndex, SignatureIndex: i}, ErrorDetails{
-				Class:   ErrorClassDuplicate,
-				TagName: "s",
-			}, nil)
-		}
-
-		seenAlgorithms[set.algorithm] = struct{}{}
-		seenSelectors[set.selector] = struct{}{}
 		sets = append(sets, set)
 	}
 

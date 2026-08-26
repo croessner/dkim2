@@ -22,7 +22,7 @@ const testHistoryBodyEmpty = `{"b":[]}`
 // TestHistoryWalkCompletesAuthenticatedDescent verifies m=N recipe ownership and per-hop hashes.
 func TestHistoryWalkCompletesAuthenticatedDescent(t *testing.T) {
 	coordinator := mustHistoryCoordinator(t, HistoryLimits{})
-	state, collection := historyFixture(t, `{"h":{"Subject":[{"d":["previous"]}]},"b":[{"d":["old"]}]}`, []byte("Subject:previous\r\n\r\nold\r\n"), testHistorySHA256)
+	state, collection := historyFixture(t, `{"h":{"subject":[{"d":["previous"]}]},"b":[{"d":["old"]}]}`, []byte("Subject:previous\r\n\r\nold\r\n"), testHistorySHA256)
 	walk, err := coordinator.Walk(context.Background(), historyPassResult(2), collection, state)
 	if err != nil || !walk.Valid() || walk.Coverage() != HistoryCoverageComplete || walk.StopReason() != HistoryStopOriginReached || walk.TargetInstance() != 2 || walk.ReachedInstance() != 1 {
 		t.Fatalf("complete walk mismatch: valid=%t coverage=%s stop=%s err=%v", walk.Valid(), walk.Coverage(), walk.StopReason(), err)
@@ -44,7 +44,7 @@ func TestHistoryWalkSealsAuthenticatedFailures(t *testing.T) {
 		coverage                    HistoryCoverage
 		stop                        HistoryStopReason
 	}{
-		{"missing recipe", "", testHistorySHA256, []byte("Subject:previous\r\n\r\nold\r\n"), HistoryCoverageUnreconstructable, HistoryStopRecipeMissing},
+		{"missing recipe with changed state", "", testHistorySHA256, []byte("Subject:previous\r\n\r\nold\r\n"), HistoryCoverageFailed, HistoryStopHashMismatch},
 		{"malformed recipe", `{`, testHistorySHA256, []byte("Subject:previous\r\n\r\nold\r\n"), HistoryCoverageUnreconstructable, HistoryStopRecipeInvalid},
 		{"hash mismatch", testHistoryBodyEmpty, testHistorySHA256, []byte("Subject:different\r\n\r\n"), HistoryCoverageFailed, HistoryStopHashMismatch},
 		{"unsupported", testHistoryBodyEmpty, "future", []byte("Subject:current\r\n\r\n"), HistoryCoverageUnsupported, HistoryStopHashUnsupported},
@@ -62,7 +62,7 @@ func TestHistoryWalkSealsAuthenticatedFailures(t *testing.T) {
 
 // TestHistoryWalkRecordsUnavailableBodyAsPartial verifies independent dimension coverage.
 func TestHistoryWalkRecordsUnavailableBodyAsPartial(t *testing.T) {
-	state, collection := historyFixture(t, `{"h":{"Subject":[{"d":["previous"]}]},"b":null}`, []byte("Subject:previous\r\n\r\n"), testHistorySHA256)
+	state, collection := historyFixture(t, `{"h":{"subject":[{"d":["previous"]}]},"b":null}`, []byte("Subject:previous\r\n\r\n"), testHistorySHA256)
 	walk, err := mustHistoryCoordinator(t, HistoryLimits{}).Walk(context.Background(), historyPassResult(2), collection, state)
 	if err != nil || walk.Coverage() != HistoryCoveragePartial || walk.StopReason() != HistoryStopOriginReached || len(walk.Transitions()) != 1 || walk.Transitions()[0].BodyState() != HistoryDimensionUnavailable {
 		t.Fatalf("partial walk mismatch: coverage=%s stop=%s err=%v", walk.Coverage(), walk.StopReason(), err)
@@ -127,8 +127,8 @@ func TestHistoryWalkDescendsThreeToOrigin(t *testing.T) {
 	currentBytes := []byte("Subject:current\r\n\r\ncurrent\r\n")
 	middleBytes := []byte("Subject:middle\r\n\r\nmiddle\r\n")
 	originBytes := []byte("Subject:origin\r\n\r\norigin\r\n")
-	recipeThree := `{"h":{"Subject":[{"d":["middle"]}]},"b":[{"d":["middle"]}]}`
-	recipeTwo := `{"h":{"Subject":[{"d":["origin"]}]},"b":[{"d":["origin"]}]}`
+	recipeThree := `{"h":{"subject":[{"d":["middle"]}]},"b":[{"d":["middle"]}]}`
+	recipeTwo := `{"h":{"subject":[{"d":["origin"]}]},"b":[{"d":["origin"]}]}`
 	collection := parseHistoryCollection(t,
 		historyInstanceLine(1, testHistorySHA256, historyDigests(t, originBytes), ""),
 		historyInstanceLine(2, testHistorySHA256, historyDigests(t, middleBytes), recipeTwo),
@@ -166,8 +166,8 @@ func TestHistoryWalkContinuesAfterNullWithDataRecovery(t *testing.T) {
 	originBytes := []byte("Subject:origin\r\n\r\nrecovered\r\n")
 	collection := parseHistoryCollection(t,
 		historyInstanceLine(1, testHistorySHA256, historyDigests(t, originBytes), ""),
-		historyInstanceLine(2, testHistorySHA256, historyDigests(t, middleHeader), `{"h":{"Subject":[{"d":["origin"]}]},"b":[{"d":["recovered"]}]}`),
-		historyInstanceLine(3, testHistorySHA256, historyDigests(t, currentBytes), `{"h":{"Subject":[{"d":["middle"]}]},"b":null}`),
+		historyInstanceLine(2, testHistorySHA256, historyDigests(t, middleHeader), `{"h":{"subject":[{"d":["origin"]}]},"b":[{"d":["recovered"]}]}`),
+		historyInstanceLine(3, testHistorySHA256, historyDigests(t, currentBytes), `{"h":{"subject":[{"d":["middle"]}]},"b":null}`),
 	)
 	walk, err := mustHistoryCoordinator(t, HistoryLimits{}).Walk(context.Background(), historyPassResult(3), collection, mustHistoryState(t, currentBytes))
 	if err != nil || !walk.Valid() || walk.Coverage() != HistoryCoveragePartial || walk.StopReason() != HistoryStopOriginReached || walk.ReachedInstance() != 1 || len(walk.Transitions()) != 2 || walk.Transitions()[0].BodyState() != HistoryDimensionUnavailable || walk.Transitions()[1].BodyState() != HistoryDimensionMatched {
@@ -181,8 +181,8 @@ func TestHistoryWalkContinuesHeadersOnCopyAfterUnavailableBody(t *testing.T) {
 	middleBytes := []byte("Subject:middle\r\n\r\nplaceholder\r\n")
 	collection := parseHistoryCollection(t,
 		historyInstanceLine(1, testHistorySHA256, historyDigests(t, []byte("Subject:origin\r\n\r\norigin\r\n")), ""),
-		historyInstanceLine(2, testHistorySHA256, historyDigests(t, middleBytes), `{"h":{"Subject":[{"d":["origin"]}]},"b":[{"c":[1,1]}]}`),
-		historyInstanceLine(3, testHistorySHA256, historyDigests(t, currentBytes), `{"h":{"Subject":[{"d":["middle"]}]},"b":null}`),
+		historyInstanceLine(2, testHistorySHA256, historyDigests(t, middleBytes), `{"h":{"subject":[{"d":["origin"]}]},"b":[{"c":[1,1]}]}`),
+		historyInstanceLine(3, testHistorySHA256, historyDigests(t, currentBytes), `{"h":{"subject":[{"d":["middle"]}]},"b":null}`),
 	)
 	walk, err := mustHistoryCoordinator(t, HistoryLimits{}).Walk(context.Background(), historyPassResult(3), collection, mustHistoryState(t, currentBytes))
 	if err != nil || !walk.Valid() || walk.Coverage() != HistoryCoveragePartial || walk.StopReason() != HistoryStopOriginReached || walk.ReachedInstance() != 1 || len(walk.Transitions()) != 2 || !walk.hadUnavailable || walk.Usage().DecodedBytes() == 0 {
@@ -201,8 +201,8 @@ func TestHistoryWalkCancellationBetweenHopsDiscardsFacts(t *testing.T) {
 	middleBytes := []byte("Subject:middle\r\n\r\nmiddle\r\n")
 	collection := parseHistoryCollection(t,
 		historyInstanceLine(1, testHistorySHA256, historyDigests(t, []byte("Subject:origin\r\n\r\norigin\r\n")), ""),
-		historyInstanceLine(2, testHistorySHA256, historyDigests(t, middleBytes), `{"h":{"Subject":[{"d":["origin"]}]},"b":[{"d":["origin"]}]}`),
-		historyInstanceLine(3, testHistorySHA256, historyDigests(t, currentBytes), `{"h":{"Subject":[{"d":["middle"]}]},"b":[{"d":["middle"]}]}`),
+		historyInstanceLine(2, testHistorySHA256, historyDigests(t, middleBytes), `{"h":{"subject":[{"d":["origin"]}]},"b":[{"d":["origin"]}]}`),
+		historyInstanceLine(3, testHistorySHA256, historyDigests(t, currentBytes), `{"h":{"subject":[{"d":["middle"]}]},"b":[{"d":["middle"]}]}`),
 	)
 	walk, err := mustHistoryCoordinator(t, HistoryLimits{}).Walk(&cancelBetweenHopsContext{cancelAt: 3}, historyPassResult(3), collection, mustHistoryState(t, currentBytes))
 	if walk.Valid() || !errors.Is(err, context.Canceled) {
@@ -240,10 +240,10 @@ func TestHistoryWalkLaterFailureIsPartial(t *testing.T) {
 	collection := parseHistoryCollection(t,
 		historyInstanceLine(1, testHistorySHA256, historyDigests(t, []byte("Subject:origin\r\n\r\norigin\r\n")), ""),
 		historyInstanceLine(2, testHistorySHA256, historyDigests(t, middleBytes), ""),
-		historyInstanceLine(3, testHistorySHA256, historyDigests(t, currentBytes), `{"h":{"Subject":[{"d":["middle"]}]},"b":[{"d":["middle"]}]}`),
+		historyInstanceLine(3, testHistorySHA256, historyDigests(t, currentBytes), `{"h":{"subject":[{"d":["middle"]}]},"b":[{"d":["middle"]}]}`),
 	)
 	walk, err := mustHistoryCoordinator(t, HistoryLimits{}).Walk(context.Background(), historyPassResult(3), collection, mustHistoryState(t, currentBytes))
-	if err != nil || !walk.Valid() || walk.Coverage() != HistoryCoveragePartial || walk.StopReason() != HistoryStopRecipeMissing || walk.ReachedInstance() != 2 || len(walk.Transitions()) != 1 {
+	if err != nil || !walk.Valid() || walk.Coverage() != HistoryCoverageFailed || walk.StopReason() != HistoryStopHashMismatch || walk.ReachedInstance() != 1 || len(walk.Transitions()) != 2 {
 		t.Fatalf("later failure mismatch: coverage=%s stop=%s reached=%d err=%v", walk.Coverage(), walk.StopReason(), walk.ReachedInstance(), err)
 	}
 }
@@ -312,30 +312,11 @@ func TestValidatePreviousSeparatesDimensions(t *testing.T) {
 	if transition, err = mustHistoryCoordinator(t, HistoryLimits{}).ValidatePrevious(state, previous, current); transition.Valid() || !IsErrorCode(err, ErrorCodeHistoryInstanceNotAdjacent) {
 		t.Fatalf("adjacency mismatch: transition=%t err=%v", transition.Valid(), err)
 	}
-	missing, err := mustHistoryCoordinator(t, HistoryLimits{}).validatePreviousSelection(state, current, previous, instance.HashSet{}, instance.HashSelectionStatusMissing)
-	if missing.Valid() || !IsErrorCode(err, ErrorCodeHistoryMissingSHA256) || historyTransitionStop(err) != HistoryStopHashMissing {
-		t.Fatalf("missing selection mismatch: transition=%t err=%v", missing.Valid(), err)
-	}
-}
-
-// TestHistoryMissingSelectionFoldIsFirstHopSensitive verifies future-compatible coverage mapping.
-func TestHistoryMissingSelectionFoldIsFirstHopSensitive(t *testing.T) {
-	usage := HistoryUsage{initialized: true}
-	first := sealedHistory(2, 2, nil, usage, HistoryStopHashMissing, false)
-	if !first.Valid() || first.Coverage() != HistoryCoverageUnreconstructable {
-		t.Fatal("first-hop missing hash fold mismatch")
-	}
-	state := mustHistoryState(t, []byte("Subject:x\r\n\r\nbody\r\n"))
-	matched := HistoryTransition{from: 3, to: 2, mode: HistoryRecipeModeApplied, header: HistoryDimensionMatched, body: HistoryDimensionMatched, state: state, initialized: true}
-	later := sealedHistory(3, 2, []HistoryTransition{matched}, usage, HistoryStopHashMissing, false)
-	if !later.Valid() || later.Coverage() != HistoryCoveragePartial {
-		t.Fatal("later missing hash fold mismatch")
-	}
 }
 
 // TestHistoryMismatchPrecedesUnavailableCoverage verifies failed precedence over partial.
 func TestHistoryMismatchPrecedesUnavailableCoverage(t *testing.T) {
-	state, collection := historyFixture(t, `{"h":{"Subject":[{"d":["wrong"]}]},"b":null}`, []byte("Subject:expected\r\n\r\n"), testHistorySHA256)
+	state, collection := historyFixture(t, `{"h":{"subject":[{"d":["wrong"]}]},"b":null}`, []byte("Subject:expected\r\n\r\n"), testHistorySHA256)
 	walk, err := mustHistoryCoordinator(t, HistoryLimits{}).Walk(context.Background(), historyPassResult(2), collection, state)
 	if err != nil || !walk.Valid() || walk.Coverage() != HistoryCoverageFailed || walk.StopReason() != HistoryStopHashMismatch || walk.Transitions()[0].BodyState() != HistoryDimensionUnavailable {
 		t.Fatalf("mismatch/unavailable precedence: coverage=%s stop=%s err=%v", walk.Coverage(), walk.StopReason(), err)
@@ -349,8 +330,8 @@ func TestHistoryWalkContinuesHeaderProofAcrossBodyUnavailableCopy(t *testing.T) 
 	origin := []byte("Subject:origin\r\n\r\norigin\r\n")
 	collection := parseHistoryCollection(t,
 		historyInstanceLine(1, testHistorySHA256, historyDigests(t, origin), ""),
-		historyInstanceLine(2, testHistorySHA256, historyDigests(t, middle), `{"h":{"Subject":[{"d":["origin"]}]},"b":[{"c":[1,1]}]}`),
-		historyInstanceLine(3, testHistorySHA256, historyDigests(t, current), `{"h":{"Subject":[{"d":["middle"]}]},"b":null}`),
+		historyInstanceLine(2, testHistorySHA256, historyDigests(t, middle), `{"h":{"subject":[{"d":["origin"]}]},"b":[{"c":[1,1]}]}`),
+		historyInstanceLine(3, testHistorySHA256, historyDigests(t, current), `{"h":{"subject":[{"d":["middle"]}]},"b":null}`),
 	)
 	walk, err := mustHistoryCoordinator(t, HistoryLimits{}).Walk(context.Background(), historyPassResult(3), collection, mustHistoryState(t, current))
 	if err != nil || !walk.Valid() || walk.Coverage() != HistoryCoveragePartial || walk.StopReason() != HistoryStopOriginReached || walk.ReachedInstance() != 1 || len(walk.Transitions()) != 2 || !walk.hadUnavailable {
@@ -364,8 +345,8 @@ func TestHistoryWalkContinuesHeaderProofAcrossBodyUnavailableCopy(t *testing.T) 
 
 	wrongOrigin := parseHistoryCollection(t,
 		historyInstanceLine(1, testHistorySHA256, historyDigests(t, []byte("Subject:wrong\r\n\r\norigin\r\n")), ""),
-		historyInstanceLine(2, testHistorySHA256, historyDigests(t, middle), `{"h":{"Subject":[{"d":["origin"]}]},"b":[{"c":[1,1]}]}`),
-		historyInstanceLine(3, testHistorySHA256, historyDigests(t, current), `{"h":{"Subject":[{"d":["middle"]}]},"b":null}`),
+		historyInstanceLine(2, testHistorySHA256, historyDigests(t, middle), `{"h":{"subject":[{"d":["origin"]}]},"b":[{"c":[1,1]}]}`),
+		historyInstanceLine(3, testHistorySHA256, historyDigests(t, current), `{"h":{"subject":[{"d":["middle"]}]},"b":null}`),
 	)
 	failed, err := mustHistoryCoordinator(t, HistoryLimits{}).Walk(context.Background(), historyPassResult(3), wrongOrigin, mustHistoryState(t, current))
 	if err != nil || failed.Coverage() != HistoryCoverageFailed || failed.StopReason() != HistoryStopHashMismatch || failed.Transitions()[1].HeaderState() != HistoryDimensionMismatch {
@@ -375,7 +356,7 @@ func TestHistoryWalkContinuesHeaderProofAcrossBodyUnavailableCopy(t *testing.T) 
 	malformed := parseHistoryCollection(t,
 		historyInstanceLine(1, testHistorySHA256, historyDigests(t, origin), ""),
 		historyInstanceLine(2, testHistorySHA256, historyDigests(t, middle), `{`),
-		historyInstanceLine(3, testHistorySHA256, historyDigests(t, current), `{"h":{"Subject":[{"d":["middle"]}]},"b":null}`),
+		historyInstanceLine(3, testHistorySHA256, historyDigests(t, current), `{"h":{"subject":[{"d":["middle"]}]},"b":null}`),
 	)
 	stopped, err := mustHistoryCoordinator(t, HistoryLimits{}).Walk(context.Background(), historyPassResult(3), malformed, mustHistoryState(t, current))
 	if err != nil || stopped.Coverage() != HistoryCoveragePartial || stopped.StopReason() != HistoryStopRecipeInvalid || stopped.ReachedInstance() != 2 {
@@ -389,8 +370,8 @@ func TestHistoryLaterUnsupportedIgnoresRetentionWidth(t *testing.T) {
 	middleBytes := []byte("Subject:middle\r\n\r\nmiddle\r\n")
 	collection := parseHistoryCollection(t,
 		historyInstanceLine(1, "future", historyDigests(t, []byte("Subject:origin\r\n\r\norigin\r\n")), ""),
-		historyInstanceLine(2, testHistorySHA256, historyDigests(t, middleBytes), `{"h":{"Subject":[{"d":["origin"]}]},"b":[{"d":["origin"]}]}`),
-		historyInstanceLine(3, testHistorySHA256, historyDigests(t, currentBytes), `{"h":{"Subject":[{"d":["middle"]}]},"b":[{"d":["middle"]}]}`),
+		historyInstanceLine(2, testHistorySHA256, historyDigests(t, middleBytes), `{"h":{"subject":[{"d":["origin"]}]},"b":[{"d":["origin"]}]}`),
+		historyInstanceLine(3, testHistorySHA256, historyDigests(t, currentBytes), `{"h":{"subject":[{"d":["middle"]}]},"b":[{"d":["middle"]}]}`),
 	)
 	limits := DefaultHistoryLimits()
 	limits.MaxRetainedTransitions = 1
@@ -519,7 +500,7 @@ func TestHistoryWalkRejectsImpossibleFoldPairs(t *testing.T) {
 		newHistoryWalk(HistoryCoveragePartial, HistoryStopHashMismatch, 2, 1, nil, usage),
 		newHistoryWalk(HistoryCoverageUnsupported, HistoryStopHashUnsupported, 3, 1, nil, usage).withTerminal(HistoryTransition{header: HistoryDimensionUnsupported}),
 		newHistoryWalk(HistoryCoverageComplete, HistoryStopOriginReached, 2, 1, nil, usage),
-		newHistoryWalk(HistoryCoveragePartial, HistoryStopRecipeMissing, 2, 1, nil, usage),
+		newHistoryWalk(HistoryCoveragePartial, HistoryStopInternalContract, 2, 1, nil, usage),
 	} {
 		if walk.Valid() {
 			t.Fatalf("impossible fold accepted: coverage=%s stop=%s", walk.Coverage(), walk.StopReason())
@@ -632,24 +613,24 @@ func TestAttachAuthenticatedHistorySealsPostPassOutcomes(t *testing.T) {
 	}
 }
 
-// TestHistoryMissingSelectionAttachmentPreservesCurrentFacts verifies the future-compatible sealed lane.
-func TestHistoryMissingSelectionAttachmentPreservesCurrentFacts(t *testing.T) {
+// TestHistoryInternalAttachmentPreservesCurrentFacts verifies the sealed internal lane.
+func TestHistoryInternalAttachmentPreservesCurrentFacts(t *testing.T) {
 	current := historyPassResult(2)
 	walk := newHistoryWalk(
 		HistoryCoverageUnreconstructable,
-		HistoryStopHashMissing,
+		HistoryStopInternalContract,
 		2,
 		2,
 		nil,
 		HistoryUsage{initialized: true},
 	)
 	if !walk.Valid() {
-		t.Fatal("future-compatible missing-selection walk is invalid")
+		t.Fatal("internal-contract walk is invalid")
 	}
 	attached := current.withHistory(walk)
 	got, ok := attached.historyWalk()
-	if !ok || got.StopReason() != HistoryStopHashMissing || got.Coverage() != HistoryCoverageUnreconstructable {
-		t.Fatalf("missing-selection attachment = %#v/%t", got, ok)
+	if !ok || got.StopReason() != HistoryStopInternalContract || got.Coverage() != HistoryCoverageUnreconstructable {
+		t.Fatalf("internal-contract attachment = %#v/%t", got, ok)
 	}
 	if attached.Draft() != current.Draft() || attached.Target() != current.Target() || attached.Status() != current.Status() || !reflect.DeepEqual(attached.Checks(), current.Checks()) || !reflect.DeepEqual(attached.SignatureSets(), current.SignatureSets()) || attached.CustodyStatus() != current.CustodyStatus() {
 		t.Fatal("missing-selection history changed current facts")
@@ -745,7 +726,7 @@ func laterHistoryFailureFixture(t *testing.T, secondRecipe string) (recipe.State
 	collection := parseHistoryCollection(t,
 		historyInstanceLine(1, testHistorySHA256, historyDigests(t, []byte("Subject:origin\r\n\r\norigin\r\n")), ""),
 		historyInstanceLine(2, testHistorySHA256, historyDigests(t, middleBytes), secondRecipe),
-		historyInstanceLine(3, testHistorySHA256, historyDigests(t, currentBytes), `{"h":{"Subject":[{"d":["middle"]}]},"b":[{"d":["middle"]}]}`),
+		historyInstanceLine(3, testHistorySHA256, historyDigests(t, currentBytes), `{"h":{"subject":[{"d":["middle"]}]},"b":[{"d":["middle"]}]}`),
 	)
 	return mustHistoryState(t, currentBytes), collection
 }

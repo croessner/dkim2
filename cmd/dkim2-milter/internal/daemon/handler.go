@@ -228,7 +228,7 @@ func (h *Handler) Handle(
 			operationContext,
 			generated.ProcessMessageJSONRequestBody{
 				ApiVersion: generated.V1,
-				Draft:      generated.DraftIetfDkimDkim2Spec04,
+				Draft:      generated.DraftIetfDkimDkim2Spec05,
 				Message:    request.message,
 				Reporting:  reporting,
 				Smtp:       request.smtp,
@@ -243,7 +243,7 @@ func (h *Handler) Handle(
 			operationContext,
 			generated.SignMessageJSONRequestBody{
 				ApiVersion: generated.V1,
-				Draft:      generated.DraftIetfDkimDkim2Spec04,
+				Draft:      generated.DraftIetfDkimDkim2Spec05,
 				Message:    request.message,
 				Smtp:       request.smtp,
 				Context: generated.SigningContext{
@@ -260,7 +260,7 @@ func (h *Handler) Handle(
 			operationContext,
 			generated.ReviseMessageJSONRequestBody{
 				ApiVersion:   generated.V1,
-				Draft:        generated.DraftIetfDkimDkim2Spec04,
+				Draft:        generated.DraftIetfDkimDkim2Spec05,
 				Message:      request.message,
 				Smtp:         request.smtp,
 				IncomingSmtp: request.smtp,
@@ -286,7 +286,7 @@ func (h *Handler) Handle(
 			operationContext,
 			generated.SignDeliveryStatusJSONRequestBody{
 				ApiVersion: generated.V1,
-				Draft:      generated.DraftIetfDkimDkim2Spec04,
+				Draft:      generated.DraftIetfDkimDkim2Spec05,
 				Message:    request.dsnMessage,
 				OuterSmtp:  request.smtp,
 				Context: generated.DeliveryStatusContext{
@@ -343,7 +343,7 @@ func observedDomains(state *handlerGuard, message milter.Message) milter.DomainO
 
 // signingDomain assesses supported reverse-path evidence and resolves one exact
 // originator domain without fallback. Null senders fail closed until the
-// adapter can authenticate the complete Draft-04 DSN prerequisites itself.
+// adapter can authenticate the complete Draft-05 DSN prerequisites itself.
 func (guard *handlerGuard) signingDomain(message milter.Message) (string, bool, error) {
 	if guard == nil {
 		return "", false, &milter.Error{Class: milter.FailureContract}
@@ -875,7 +875,7 @@ func mapOperation(
 ) (milter.Result, error) {
 	if value == nil ||
 		value.ApiVersion != generated.V1 ||
-		value.Draft != generated.DraftIetfDkimDkim2Spec04 ||
+		value.Draft != generated.DraftIetfDkimDkim2Spec05 ||
 		string(value.Operation) != operation ||
 		!value.Operation.Valid() || !value.Result.Valid() ||
 		!value.Disposition.Valid() || value.Actions == nil ||
@@ -994,7 +994,7 @@ func consumeJSONValue(decoder *json.Decoder, depth int) bool {
 // validProcessContract validates every closed nested response fact and bound.
 func validProcessContract(value *generated.ProcessResponse, authservID string) bool {
 	if value == nil || value.ApiVersion != generated.V1 ||
-		value.Draft != generated.DraftIetfDkimDkim2Spec04 ||
+		value.Draft != generated.DraftIetfDkimDkim2Spec05 ||
 		!value.Disposition.Valid() || value.Actions == nil ||
 		!validProcessReportAction(value, authservID) ||
 		!validVerificationContract(value.Verification) ||

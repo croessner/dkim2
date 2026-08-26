@@ -5,7 +5,7 @@ info:
   description: >
     Verification, signing, revision, policy, and replay API for the DKIM2
     reference daemon. Protocol behavior is pinned to
-    draft-ietf-dkim-dkim2-spec-04.
+    draft-ietf-dkim-dkim2-spec-05.
 paths:
   /metrics:
     get:
@@ -1401,7 +1401,7 @@ components:
     DraftVersion:
       type: string
       enum:
-        - draft-ietf-dkim-dkim2-spec-04
+        - draft-ietf-dkim-dkim2-spec-05
     CanonicalUint64:
       type: string
       pattern: "^[1-9][0-9]{0,19}$"
@@ -1419,6 +1419,10 @@ components:
         - limit_exceeded
         - malformed_message
         - malformed_protocol
+        - duplicate_hash_algorithm
+        - invalid_recipe_json
+        - duplicate_selector
+        - too_many_signatures
         - missing_protocol
         - sequence_invalid
         - unsupported_algorithm

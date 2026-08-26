@@ -94,7 +94,6 @@ func mapVerificationResult(input verify.Result, limits Limits) Result {
 	}
 
 	slices.SortFunc(accumulator.checks, compareCheckFacts)
-	slices.SortFunc(accumulator.signatures, compareSignatureFacts)
 	result := newResult(stateForSeverity(accumulator.severity), custody, target, accumulator.reason, accumulator.checks, accumulator.signatures)
 	if len(accumulator.completeSignatures) > hardMaxSignatureFacts {
 		return result
@@ -259,7 +258,7 @@ func (a *mappingAccumulator) mapCheck(check verify.CheckResult) {
 	}
 }
 
-// mapHashCheck maps current SHA-256 facts without interpreting digest bytes.
+// mapHashCheck maps aggregate supported-hash facts without interpreting digest bytes.
 func (a *mappingAccumulator) mapHashCheck(class CheckClass, check verify.CheckResult) {
 	if !check.HashStatus.Known() {
 		a.addFact(CheckInternalContract, severityPermanent, ReasonInternalContract)
@@ -278,8 +277,8 @@ func (a *mappingAccumulator) mapHashCheck(class CheckClass, check verify.CheckRe
 		} else {
 			a.addFact(CheckInternalContract, severityPermanent, ReasonInternalContract)
 		}
-	case verify.HashStatusMissingSHA256, verify.HashStatusUnsupported:
-		if check.HashStatus == verify.HashStatusMissingSHA256 && check.Status == verify.CheckStatusFail && check.Code == verify.ErrorCodeMissingTarget || check.HashStatus == verify.HashStatusUnsupported && check.Status == verify.CheckStatusUnsupported && check.Code == verify.ErrorCodeUnsupportedAlgorithm {
+	case verify.HashStatusUnsupported:
+		if check.Status == verify.CheckStatusUnsupported && check.Code == verify.ErrorCodeUnsupportedAlgorithm {
 			a.addFact(class, severityPermanent, ReasonUnsupportedAlgorithm)
 		} else {
 			a.addFact(CheckInternalContract, severityPermanent, ReasonInternalContract)
@@ -659,16 +658,6 @@ func (a *mappingAccumulator) appendSignature(fact SignatureSetFact) {
 	}
 	if len(a.signatures) < a.maxSignatures {
 		a.signatures = append(a.signatures, fact)
-		return
-	}
-	worst := 0
-	for index := 1; index < len(a.signatures); index++ {
-		if compareSignatureFacts(a.signatures[worst], a.signatures[index]) < 0 {
-			worst = index
-		}
-	}
-	if len(a.signatures) > 0 && compareSignatureFacts(fact, a.signatures[worst]) < 0 {
-		a.signatures[worst] = fact
 	}
 }
 
@@ -765,6 +754,8 @@ func knownErrorCode(code verify.ErrorCode) bool {
 		verify.ErrorCodeMissingKey, verify.ErrorCodeAmbiguousKey, verify.ErrorCodeInvalidKey, verify.ErrorCodeRevokedKey,
 		verify.ErrorCodeUnsupportedKeyType, verify.ErrorCodeKeyAlgorithmMismatch, verify.ErrorCodeWrongKeyType,
 		verify.ErrorCodeKeyPolicyRejected, verify.ErrorCodeProviderError, verify.ErrorCodeMalformedState,
+		verify.ErrorCodeDuplicateHashAlgorithm, verify.ErrorCodeInvalidRecipeJSON,
+		verify.ErrorCodeDuplicateSelector, verify.ErrorCodeTooManySignatures,
 		verify.ErrorCodeSequenceInvalid,
 		verify.ErrorCodeMissingTarget, verify.ErrorCodeDuplicateTarget, verify.ErrorCodeHashMismatch,
 		verify.ErrorCodeSignatureMismatch, verify.ErrorCodeTimestampInvalid, verify.ErrorCodeEnvelopeMismatch,
@@ -836,7 +827,7 @@ func classForReason(reason Reason) CheckClass {
 
 // reasonRank makes equal-precedence primary reasons independent of input order.
 func reasonRank(reason Reason) int {
-	for index, candidate := range []Reason{ReasonInternalContract, ReasonLimitExceeded, ReasonMalformedMessage, ReasonMalformedProtocol, ReasonMissingProtocol, ReasonSequenceInvalid, ReasonUnsupportedAlgorithm, ReasonMissingKey, ReasonRevokedKey, ReasonUnsupportedKeyType, ReasonKeyAlgorithmMismatch, ReasonInvalidKey, ReasonAmbiguousKey, ReasonProviderPermanent, ReasonProviderContract, ReasonTimestampInvalid, ReasonEnvelopeMismatch, ReasonDomainAlignmentMismatch, ReasonNextDomainMismatch, ReasonOutOfBandRequired, ReasonHashMismatch, ReasonSignatureMismatch, ReasonProviderTemporary, ReasonNone} {
+	for index, candidate := range []Reason{ReasonInternalContract, ReasonLimitExceeded, ReasonTooManySignatures, ReasonMalformedMessage, ReasonMalformedProtocol, ReasonDuplicateHashAlgorithm, ReasonInvalidRecipeJSON, ReasonDuplicateSelector, ReasonMissingProtocol, ReasonSequenceInvalid, ReasonUnsupportedAlgorithm, ReasonMissingKey, ReasonRevokedKey, ReasonUnsupportedKeyType, ReasonKeyAlgorithmMismatch, ReasonInvalidKey, ReasonAmbiguousKey, ReasonProviderPermanent, ReasonProviderContract, ReasonTimestampInvalid, ReasonEnvelopeMismatch, ReasonDomainAlignmentMismatch, ReasonNextDomainMismatch, ReasonOutOfBandRequired, ReasonHashMismatch, ReasonSignatureMismatch, ReasonProviderTemporary, ReasonNone} {
 		if reason == candidate {
 			return index
 		}
@@ -850,29 +841,6 @@ func compareCheckFacts(left, right CheckFact) int {
 		return -1
 	}
 	if left.Class > right.Class {
-		return 1
-	}
-	if left.Reason < right.Reason {
-		return -1
-	}
-	if left.Reason > right.Reason {
-		return 1
-	}
-	return 0
-}
-
-// compareSignatureFacts orders bounded signature facts deterministically.
-func compareSignatureFacts(left, right SignatureSetFact) int {
-	if left.Algorithm < right.Algorithm {
-		return -1
-	}
-	if left.Algorithm > right.Algorithm {
-		return 1
-	}
-	if left.Status < right.Status {
-		return -1
-	}
-	if left.Status > right.Status {
 		return 1
 	}
 	if left.Reason < right.Reason {

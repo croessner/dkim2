@@ -71,7 +71,7 @@ func (p ReplayProjection) Draft() string {
 	return p.draft
 }
 
-// MessageDigest returns the selected matched Message-Instance header hash by value.
+// MessageDigest returns the locally computed canonical SHA-256 header digest by value.
 func (p ReplayProjection) MessageDigest() ([32]byte, bool) {
 	return p.messageDigest, p.Valid() && p.hasMessageDigest
 }
@@ -132,7 +132,7 @@ func buildReplayProjection(
 		targetSignature.Sequence() != target.Sequence ||
 		targetSignature.InstanceNumber() != target.InstanceNumber ||
 		targetInstance.Number() != target.InstanceNumber ||
-		!hashes.hasSelectedHeaderDigest || len(signatureDigest) != sha256.Size ||
+		!hashes.hasLocalHeaderSHA256 || len(signatureDigest) != sha256.Size ||
 		!resultHasEnvelopePass(result) || resultHasTestingOnlyPass(result) ||
 		len(input.signatures) != int(target.Sequence) {
 		return ReplayProjection{}, false
@@ -174,7 +174,7 @@ func buildReplayProjection(
 	}
 	return ReplayProjection{
 		draft:                   replay.DraftIdentifier,
-		messageDigest:           hashes.selectedHeaderDigest,
+		messageDigest:           hashes.localHeaderSHA256,
 		signatureInputDigest:    canonicalSignatureDigest,
 		recipientDigests:        recipients,
 		hasMessageDigest:        true,

@@ -71,7 +71,7 @@ func AdmitProcessJSON(body []byte, authservID string) (adapter.Plan, error) {
 // admitOperation proves the exact operation/result/disposition/action matrix.
 func admitOperation(value generated.OperationResponse, operation string) (adapter.Plan, error) {
 	if value.ApiVersion != generated.V1 ||
-		value.Draft != generated.DraftIetfDkimDkim2Spec04 ||
+		value.Draft != generated.DraftIetfDkimDkim2Spec05 ||
 		string(value.Operation) != operation || !value.Operation.Valid() ||
 		!value.Result.Valid() || !value.Disposition.Valid() || value.Actions == nil {
 		return adapter.Plan{}, contractError()
@@ -182,7 +182,7 @@ func validResultDisposition(
 // validProcess proves the closed nested process projection and report action.
 func validProcess(value generated.ProcessResponse, authservID string) bool {
 	if value.ApiVersion != generated.V1 ||
-		value.Draft != generated.DraftIetfDkimDkim2Spec04 ||
+		value.Draft != generated.DraftIetfDkimDkim2Spec05 ||
 		!value.Disposition.Valid() || value.Actions == nil ||
 		!validVerification(value.Verification) || !validPolicy(value.Policy) ||
 		!value.Replay.Class.Valid() || !validProcessMatrix(value) {

@@ -49,6 +49,7 @@ type goldenExcludedCounts struct {
 	AuthenticationResults int `json:"authentication_results"`
 	XHeader               int `json:"x_header"`
 	DKIMSignature         int `json:"dkim_signature"`
+	ExactUnsigned         int `json:"exact_unsigned"`
 	ARC                   int `json:"arc"`
 	MessageInstance       int `json:"message_instance"`
 	DKIM2Signature        int `json:"dkim2_signature"`
@@ -56,7 +57,7 @@ type goldenExcludedCounts struct {
 
 // TestGoldenBodyCanonicalizationFixtures verifies draft-versioned Section 6.1 fixtures.
 func TestGoldenBodyCanonicalizationFixtures(t *testing.T) {
-	fixture := loadGoldenJSON[bodyGoldenFixture](t, "testdata/golden/body-canonicalization-draft-ietf-dkim-dkim2-spec-04.json")
+	fixture := loadGoldenJSON[bodyGoldenFixture](t, "testdata/golden/body-canonicalization-draft-ietf-dkim-dkim2-spec-05.json")
 	if fixture.Draft != DraftBaseline {
 		t.Fatalf("fixture draft = %q, want %q", fixture.Draft, DraftBaseline)
 	}
@@ -103,7 +104,7 @@ func TestGoldenBodyCanonicalizationFixtures(t *testing.T) {
 
 // TestGoldenHeaderCanonicalizationFixture verifies a draft-versioned Section 6.2 fixture.
 func TestGoldenHeaderCanonicalizationFixture(t *testing.T) {
-	fixture := loadGoldenJSON[headerGoldenFixture](t, "testdata/golden/header-canonicalization-draft-ietf-dkim-dkim2-spec-04.json")
+	fixture := loadGoldenJSON[headerGoldenFixture](t, "testdata/golden/header-canonicalization-draft-ietf-dkim-dkim2-spec-05.json")
 	if fixture.Draft != DraftBaseline {
 		t.Fatalf("fixture draft = %q, want %q", fixture.Draft, DraftBaseline)
 	}
@@ -136,7 +137,7 @@ func TestGoldenHeaderCanonicalizationFixture(t *testing.T) {
 
 // TestGoldenSignatureCanonicalizationFixture verifies a draft-versioned Section 9.6 fixture.
 func TestGoldenSignatureCanonicalizationFixture(t *testing.T) {
-	fixture := loadGoldenJSON[signatureGoldenFixture](t, "testdata/golden/signature-input-draft-ietf-dkim-dkim2-spec-04.json")
+	fixture := loadGoldenJSON[signatureGoldenFixture](t, "testdata/golden/signature-input-draft-ietf-dkim-dkim2-spec-05.json")
 	if fixture.Draft != DraftBaseline {
 		t.Fatalf("fixture draft = %q, want %q", fixture.Draft, DraftBaseline)
 	}
@@ -237,6 +238,7 @@ func assertGoldenExcludedCounts(t *testing.T, got ExcludedHeaderCounts, want gol
 		got.AuthenticationResults != want.AuthenticationResults ||
 		got.XHeader != want.XHeader ||
 		got.DKIMSignature != want.DKIMSignature ||
+		got.ExactUnsigned != want.ExactUnsigned ||
 		got.ARC != want.ARC ||
 		got.MessageInstance != want.MessageInstance ||
 		got.DKIM2Signature != want.DKIM2Signature {

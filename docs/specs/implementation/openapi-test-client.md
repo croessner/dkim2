@@ -1,5 +1,9 @@
 # OpenAPI Test Client Implementation Specification
 
+> Historical Draft-04 implementation record. The original scope and evidence
+> below are preserved; current Draft-05 authority is the migration disposition
+> and the 2026-08-26 semantics audit.
+
 Status: implemented; independent review and closeout pending.
 
 Implementation base: `248c00a0bcfe03166ad9002c7b1251f3ae217b6b`.

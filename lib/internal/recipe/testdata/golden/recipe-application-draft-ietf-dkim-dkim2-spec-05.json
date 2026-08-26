@@ -1,18 +1,18 @@
 {
-  "draft": "draft-ietf-dkim-dkim2-spec-04",
+  "draft": "draft-ietf-dkim-dkim2-spec-05",
   "cases": [
     {
       "name": "header-bottom-up-and-body-top-down",
       "source_message_base64": "WC1UcmFjZTogdG9wDQpTdWJqZWN0OiBvbGRlc3QNClN1YmplY3Q6IG5ld2VzdA0KDQpsaW5lLW9uZQ0KbGluZS10d28=",
-      "recipe_json": "{\"h\":{\"Subject\":[{\"c\":[1,1]},{\"d\":[\" restored\"]},{\"c\":[2,2]}]},\"b\":[{\"c\":[1,1]},{\"d\":[\"inserted\"]},{\"c\":[2,2]}]}",
-      "expected_headers_base64": "U3ViamVjdDogb2xkZXN0DQpTdWJqZWN0OiByZXN0b3JlZA0KU3ViamVjdDogbmV3ZXN0DQpYLVRyYWNlOiB0b3ANCg==",
+      "recipe_json": "{\"h\":{\"subject\":[{\"c\":[1,1]},{\"d\":[\" restored\"]},{\"c\":[2,2]}]},\"b\":[{\"c\":[1,1]},{\"d\":[\"inserted\"]},{\"c\":[2,2]}]}",
+      "expected_headers_base64": "U3ViamVjdDogb2xkZXN0DQpzdWJqZWN0OiByZXN0b3JlZA0KU3ViamVjdDogbmV3ZXN0DQpYLVRyYWNlOiB0b3ANCg==",
       "expected_body_state": "known",
       "expected_body_base64": "bGluZS1vbmUNCmluc2VydGVkDQpsaW5lLXR3bw=="
     },
     {
       "name": "null-body-remains-unavailable",
       "source_message_base64": "WC1UcmFjZTogdG9wDQpTdWJqZWN0OiBvbGRlc3QNClN1YmplY3Q6IG5ld2VzdA0KDQpsaW5lLW9uZQ0KbGluZS10d28=",
-      "recipe_json": "{\"h\":{\"X-Trace\":[]},\"b\":null}",
+      "recipe_json": "{\"h\":{\"x-trace\":[]},\"b\":null}",
       "expected_headers_base64": "U3ViamVjdDogb2xkZXN0DQpTdWJqZWN0OiBuZXdlc3QNCg==",
       "expected_body_state": "unavailable",
       "expected_body_base64": ""

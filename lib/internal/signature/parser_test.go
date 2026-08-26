@@ -12,11 +12,12 @@ import (
 )
 
 const (
-	testSelector     = "selector1"
-	testSequenceTag  = "i=2"
-	testInstanceTag  = "m=3"
-	testTimestampTag = "t=1000000000000"
-	testDomainTag    = "d=Example.ORG"
+	testSelector           = "selector1"
+	testSequenceTag        = "i=2"
+	testInstanceTag        = "m=3"
+	testTimestampTag       = "t=1000000000000"
+	testDomainTag          = "d=Example.ORG"
+	testExtensionAlgorithm = "future-sha999"
 )
 
 // TestParseAcceptsDKIM2Signature verifies required and optional tags.
@@ -79,14 +80,14 @@ func TestParseAcceptsInteropFWSAndMixedCaseTags(t *testing.T) {
 	}
 }
 
-// TestParseRejectsMissingFinalSemicolon reproduces the draft-04 DKIM2-Signature terminator rule.
+// TestParseRejectsMissingFinalSemicolon reproduces the Draft-05 DKIM2-Signature terminator rule.
 func TestParseRejectsMissingFinalSemicolon(t *testing.T) {
 	if _, err := Parse(headerField(t, 0, "DKIM2-Signature", validSignatureValue())); err == nil {
 		t.Fatal("Parse() succeeded without the required final semicolon")
 	}
 }
 
-// TestParseAcceptsNextDomainEnvelopeForm reproduces the draft-04 nd= envelope form.
+// TestParseAcceptsNextDomainEnvelopeForm reproduces the Draft-05 nd= envelope form.
 func TestParseAcceptsNextDomainEnvelopeForm(t *testing.T) {
 	parsed, err := Parse(dkim2SignatureField(t, 0, nextDomainSignatureValue()))
 	if err != nil {
@@ -264,7 +265,7 @@ func TestParseRejectsMalformedSignatureSets(t *testing.T) {
 
 // TestParsePreservesUnknownAlgorithms verifies non-success parser data.
 func TestParsePreservesUnknownAlgorithms(t *testing.T) {
-	value := signatureValueWith("s", testSelector+":future-sha999:"+base64OfByte(0xaa, 48))
+	value := signatureValueWith("s", testSelector+":"+testExtensionAlgorithm+":"+base64OfByte(0xaa, 48))
 	parsed, err := Parse(dkim2SignatureField(t, 0, value))
 	if err != nil {
 		t.Fatalf("Parse() error = %v", err)
@@ -274,7 +275,7 @@ func TestParsePreservesUnknownAlgorithms(t *testing.T) {
 	if len(sets) != 1 {
 		t.Fatalf("SignatureSets() length = %d, want 1", len(sets))
 	}
-	if sets[0].Algorithm() != "future-sha999" || sets[0].KnownAlgorithm() {
+	if sets[0].Algorithm() != testExtensionAlgorithm || sets[0].KnownAlgorithm() {
 		t.Fatalf("unknown algorithm set = %#v", sets[0])
 	}
 	if sets[0].Signature().DecodedLen() != 48 {
@@ -303,32 +304,59 @@ func TestParseRejectsInvalidSignatureBase64AndLengths(t *testing.T) {
 	}
 }
 
-// TestParseRejectsDuplicateSignatureAlgorithmsAndSelectors verifies ambiguity handling.
-func TestParseRejectsDuplicateSignatureAlgorithmsAndSelectors(t *testing.T) {
-	tests := []struct {
-		name string
-		in   string
-		code ErrorCode
-	}{
-		{
-			name: "duplicate algorithm",
-			in:   testSelector + ":rsa-sha256:" + base64OfByte(0xaa, 64) + ", selector2:RSA-SHA256:" + base64OfByte(0xbb, 64),
-			code: ErrorCodeDuplicateSignatureAlgorithm,
-		},
-		{
-			name: "duplicate selector",
-			in:   testSelector + ":rsa-sha256:" + base64OfByte(0xaa, 64) + ", Selector1:ed25519-sha256:" + base64OfByte(0xbb, 64),
-			code: ErrorCodeDuplicateSelector,
-		},
+// TestParseRejectsDuplicateSelectors verifies global case-insensitive selector uniqueness.
+func TestParseRejectsDuplicateSelectors(t *testing.T) {
+	value := testSelector + ":rsa-sha256:" + base64OfByte(0xaa, 64) +
+		", Selector1:ed25519-sha256:" + base64OfByte(0xbb, 64)
+	_, err := Parse(dkim2SignatureField(t, 0, signatureValueWith("s", value)))
+	if !IsErrorCode(err, ErrorCodeDuplicateSelector) {
+		t.Fatalf("Parse() error = %v, want duplicate selector", err)
 	}
+}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, err := Parse(dkim2SignatureField(t, 0, signatureValueWith("s", tt.in)))
-			if !IsErrorCode(err, tt.code) {
-				t.Fatalf("Parse() error = %v, want %s", err, tt.code)
-			}
-		})
+// TestParseAllowsTwoSameAlgorithmDifferentSelectors proves the Draft-05 per-algorithm allowance.
+func TestParseAllowsTwoSameAlgorithmDifferentSelectors(t *testing.T) {
+	value := testSelector + ":rsa-sha256:" + base64OfByte(0xaa, 64) +
+		", selector2:RSA-SHA256:" + base64OfByte(0xbb, 64)
+	parsed, err := Parse(dkim2SignatureField(t, 0, signatureValueWith("s", value)))
+	if err != nil {
+		t.Fatalf("Parse() error = %v, want two same-algorithm sets", err)
+	}
+	sets := parsed.SignatureSets()
+	if len(sets) != 2 || sets[0].Algorithm() != "rsa-sha256" || sets[1].Algorithm() != "rsa-sha256" {
+		t.Fatalf("SignatureSets() = %#v, want two positional RSA sets", sets)
+	}
+}
+
+// TestParseRejectsThirdSameAlgorithm proves the Draft-05 per-algorithm upper bound.
+func TestParseRejectsThirdSameAlgorithm(t *testing.T) {
+	value := "one:" + testExtensionAlgorithm + ":" + base64OfByte(0xaa, 48) +
+		", two:FUTURE-SHA999:" + base64OfByte(0xbb, 48) +
+		", three:" + testExtensionAlgorithm + ":" + base64OfByte(0xcc, 48)
+	_, err := Parse(dkim2SignatureField(t, 0, signatureValueWith("s", value)))
+	if !IsErrorCode(err, ErrorCodeTooManySignatures) {
+		t.Fatalf("Parse() error = %v, want too many signatures", err)
+	}
+	var typed *Error
+	if !errors.As(err, &typed) || typed.Code() != ErrorCodeTooManySignatures || typed.Class() != ErrorClassLimit || typed.Limit() != 2 || typed.Count() != 3 {
+		t.Fatalf("Parse() typed error = %#v, want code=%s class=%s limit=2 count=3", typed, ErrorCodeTooManySignatures, ErrorClassLimit)
+	}
+}
+
+// TestParserRetainsTotalSignatureSetLimit proves cardinality does not widen configured bounds.
+func TestParserRetainsTotalSignatureSetLimit(t *testing.T) {
+	limits := DefaultLimits()
+	limits.MaxSignatureSets = 2
+	parser, err := NewParser(limits)
+	if err != nil {
+		t.Fatalf("NewParser() error = %v", err)
+	}
+	value := "one:future-one:" + base64OfByte(0xaa, 8) +
+		", two:future-two:" + base64OfByte(0xbb, 8) +
+		", three:future-three:" + base64OfByte(0xcc, 8)
+	_, err = parser.ParseField(dkim2SignatureField(t, 0, signatureValueWith("s", value)))
+	if !IsErrorCode(err, ErrorCodeLimitExceeded) {
+		t.Fatalf("ParseField() error = %v, want total signature-set limit", err)
 	}
 }
 

@@ -1,5 +1,10 @@
 # Security Hardening Implementation Specification
 
+> Historical Draft-04 implementation record. The original scope and evidence
+> below are preserved; current Draft-05 authority is the migration disposition
+> and the 2026-08-26 semantics audit. Its `qualified_linux` evidence does not
+> qualify Draft-05.
+
 Status: implemented; independent review and commit closeout pending.
 
 Implementation base: `5f51ed500351c7efabe0ab70579d9a62639f6f43`.

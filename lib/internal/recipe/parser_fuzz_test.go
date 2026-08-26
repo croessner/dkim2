@@ -11,10 +11,10 @@ func FuzzParseRecipe(f *testing.F) {
 	dataBomb := `{"b":[{"d":[` + strings.Repeat(`"",`, 4096) + `""]}]}`
 	deepIgnored := `{"ignored":` + strings.Repeat(`[`, 17) + `0` + strings.Repeat(`]`, 17) + `,"b":null}`
 	for _, seed := range [][]byte{
-		[]byte(testBodyNullRecipe), []byte(`{"h":{"Subject":[]}}`),
+		[]byte(testBodyNullRecipe), []byte(`{"h":{"subject":[]}}`),
 		[]byte(`{"b":[{"c":[1e0,2.0]},{"d":["line"]}]}`),
 		[]byte(`{"x":{"x":1,"x":2},"b":null}`),
-		[]byte(`{"h":{"Subject":[],"subject":[]}}`),
+		[]byte(`{"h":{"subject":[],"subject":[]}}`),
 		[]byte(`{"b":[{"c":[1e999999999999,2]}]}`),
 		[]byte(deepIgnored),
 		[]byte(dataBomb),

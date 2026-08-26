@@ -13,12 +13,15 @@ import (
 )
 
 const (
-	signatureTestDomain       = "example.test"
-	signatureTestSelector     = "selector"
-	signatureTestEdSelector   = "ed"
-	signatureTestEd1Selector  = "ed1"
-	signatureTestRSASelector  = "rsa"
-	signatureTestRSA1Selector = "rsa1"
+	signatureTestDomain         = "example.test"
+	signatureTestSelector       = "selector"
+	signatureTestEdSelector     = "ed"
+	signatureTestEd1Selector    = "ed1"
+	signatureTestRSASelector    = "rsa"
+	signatureTestRSA1Selector   = "rsa1"
+	signatureTestFirstSelector  = "one"
+	signatureTestSecondSelector = "two"
+	signatureTestThirdSelector  = "three"
 )
 
 // TestUnsignedTargetAndCompleteFieldRemainDistinct verifies ordinary deterministic rendering.
@@ -315,19 +318,46 @@ func rebuildUnsignedFixture(t *testing.T) (UnsignedTarget, CompleteField, []byte
 	return target, complete, rsaSignature, edSignature
 }
 
-// TestTargetRejectsDuplicateAlgorithmsAndSelectors verifies closed generated set plans.
-func TestTargetRejectsDuplicateAlgorithmsAndSelectors(t *testing.T) {
+// TestTargetEnforcesSharedSignatureSetCardinality verifies renderer/parser invariant parity.
+func TestTargetEnforcesSharedSignatureSetCardinality(t *testing.T) {
 	base := TargetRequest{
 		Sequence: 1, InstanceNumber: 1, Timestamp: 1, MailFrom: []byte("<>"),
 		Recipients: [][]byte{[]byte("<user@example.test>")}, Domain: signatureTestDomain,
+	}
+	accepted := base
+	accepted.Sets = []SetPlan{{Selector: signatureTestFirstSelector, Algorithm: AlgorithmRSASHA256}, {Selector: signatureTestSecondSelector, Algorithm: Algorithm("RSA-SHA256")}}
+	if _, err := NewUnsignedTarget(accepted, RenderLimits{}); err != nil {
+		t.Fatalf("NewUnsignedTarget(two same algorithm) code=%s", signatureTestErrorCode(err))
+	}
+	extension := base
+	extension.Sets = []SetPlan{{Selector: signatureTestFirstSelector, Algorithm: Algorithm("FUTURE-SHA999")}, {Selector: signatureTestSecondSelector, Algorithm: Algorithm(testExtensionAlgorithm)}}
+	extensionTarget, err := NewUnsignedTarget(extension, RenderLimits{})
+	if err != nil {
+		t.Fatalf("NewUnsignedTarget(two extension signatures) code=%s", signatureTestErrorCode(err))
+	}
+	extensionComplete, err := extensionTarget.Complete([]SetValue{
+		{Selector: signatureTestFirstSelector, Algorithm: Algorithm(testExtensionAlgorithm), Signature: bytes.Repeat([]byte{0x41}, 48)},
+		{Selector: signatureTestSecondSelector, Algorithm: Algorithm("FUTURE-SHA999"), Signature: bytes.Repeat([]byte{0x42}, 48)},
+	})
+	if err != nil {
+		t.Fatalf("Complete(two extension signatures) code=%s", signatureTestErrorCode(err))
+	}
+	message, err := rawmsg.Parse(extensionComplete.Bytes())
+	if err != nil {
+		t.Fatalf("rawmsg.Parse(extension complete) error=%v", err)
+	}
+	parsed, err := Parse(message.Headers().FieldsByName(HeaderName)[0])
+	if err != nil || len(parsed.SignatureSets()) != 2 || parsed.SignatureSets()[0].Algorithm() != testExtensionAlgorithm || parsed.SignatureSets()[1].Algorithm() != testExtensionAlgorithm {
+		t.Fatalf("Parse(extension complete) code=%s sets=%#v", signatureTestErrorCode(err), parsed.SignatureSets())
 	}
 	tests := []struct {
 		name string
 		sets []SetPlan
 		code ErrorCode
 	}{
-		{name: "duplicate algorithm", sets: []SetPlan{{Selector: "one", Algorithm: AlgorithmRSASHA256}, {Selector: "two", Algorithm: AlgorithmRSASHA256}}, code: ErrorCodeDuplicateSignatureAlgorithm},
-		{name: "duplicate selector", sets: []SetPlan{{Selector: "same", Algorithm: AlgorithmRSASHA256}, {Selector: "same", Algorithm: AlgorithmEd25519SHA256}}, code: ErrorCodeDuplicateSelector},
+		{name: "duplicate selector", sets: []SetPlan{{Selector: "same", Algorithm: AlgorithmRSASHA256}, {Selector: "SAME", Algorithm: AlgorithmEd25519SHA256}}, code: ErrorCodeDuplicateSelector},
+		{name: "third extension algorithm", sets: []SetPlan{{Selector: signatureTestFirstSelector, Algorithm: Algorithm("future")}, {Selector: signatureTestSecondSelector, Algorithm: Algorithm("FUTURE")}, {Selector: signatureTestThirdSelector, Algorithm: Algorithm("future")}}, code: ErrorCodeTooManySignatures},
+		{name: "total set limit", sets: []SetPlan{{Selector: signatureTestFirstSelector, Algorithm: Algorithm("future-one")}, {Selector: signatureTestSecondSelector, Algorithm: Algorithm("future-two")}, {Selector: signatureTestThirdSelector, Algorithm: Algorithm("future-three")}}, code: ErrorCodeLimitExceeded},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

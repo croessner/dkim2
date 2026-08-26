@@ -138,8 +138,14 @@ fix:
 		(cd $$module && go fix ./...); \
 	done
 
+.PHONY: test-postfix-qualification-helper
+test-postfix-qualification-helper:
+	@GOCACHE="$${GOCACHE:-/tmp/dkim2-go-build-cache}" \
+		go test contrib/qualification/postfix-milter/cmd/qualify/main.go \
+			contrib/qualification/postfix-milter/cmd/qualify/main_test.go
+
 .PHONY: test
-test:
+test: test-postfix-qualification-helper
 	@set -e; for module in $(PRODUCT_MODULES); do \
 		echo "==> go test $$module/..."; \
 		(cd $$module && go test ./...); \
@@ -344,25 +350,38 @@ generate-openapi:
 	go -C tools tool oapi-codegen -config "$(OPENAPI_EXIM_CONFIG)" -o "$(OPENAPI_EXIM_OUTPUT)" "$(OPENAPI_SOURCE)"; \
 	go -C tools tool oapi-codegen -config "$(OPENAPI_EXIM_TEST_SERVER_CONFIG)" -o "$(OPENAPI_EXIM_TEST_SERVER_OUTPUT)" "$(OPENAPI_SOURCE)"
 
+.PHONY: generate-openapi-check-output
+generate-openapi-check-output: override OPENAPI_SERVER_WIRE = $(OPENAPI_CHECK_OUTPUT)/server-wire.go
+generate-openapi-check-output: override OPENAPI_CLIENT_WIRE = $(OPENAPI_CHECK_OUTPUT)/client-wire.go
+generate-openapi-check-output: override OPENAPI_MILTER_WIRE = $(OPENAPI_CHECK_OUTPUT)/milter-wire.go
+generate-openapi-check-output: override OPENAPI_EXIM_WIRE = $(OPENAPI_CHECK_OUTPUT)/exim-wire.go
+generate-openapi-check-output: override OPENAPI_SERVER_OUTPUT = $(OPENAPI_CHECK_OUTPUT)/server.gen.go
+generate-openapi-check-output: override OPENAPI_CLIENT_OUTPUT = $(OPENAPI_CHECK_OUTPUT)/client.gen.go
+generate-openapi-check-output: override OPENAPI_MILTER_OUTPUT = $(OPENAPI_CHECK_OUTPUT)/milter.gen.go
+generate-openapi-check-output: override OPENAPI_MILTER_TEST_SERVER_OUTPUT = $(OPENAPI_CHECK_OUTPUT)/milter-test-server.gen.go
+generate-openapi-check-output: override OPENAPI_EXIM_OUTPUT = $(OPENAPI_CHECK_OUTPUT)/exim.gen.go
+generate-openapi-check-output: override OPENAPI_EXIM_TEST_SERVER_OUTPUT = $(OPENAPI_CHECK_OUTPUT)/exim-test-server.gen.go
+ifneq ($(strip $(OPENAPI_CHECK_OUTPUT)),)
+generate-openapi-check-output: generate-openapi
+else
+generate-openapi-check-output:
+	@printf '%s\n' 'OPENAPI_CHECK_OUTPUT is required' >&2; exit 1
+endif
+
 .PHONY: check-openapi
 check-openapi:
 	@set -eu; \
+	make_flags="$${MAKEFLAGS-}"; \
+	for make_flag in $$make_flags; do \
+		case "$$make_flag" in --|*=*) break ;; -*) ;; *n*) exit 0 ;; esac; \
+	done; \
 	output="$$(mktemp -d /tmp/dkim2-openapi-check.XXXXXX)"; \
 	chmod 0700 "$$output"; \
 	trap 'rm -rf "$$output"' 0 1 2 15; \
 	mkdir -m 0700 "$$output/cache"; \
 	: > "$$output/caller-cache"; \
-	GOCACHE="$$output/caller-cache" $(MAKE) generate-openapi \
-		OPENAPI_SERVER_WIRE="$$output/server-wire.go" \
-		OPENAPI_CLIENT_WIRE="$$output/client-wire.go" \
-		OPENAPI_MILTER_WIRE="$$output/milter-wire.go" \
-		OPENAPI_EXIM_WIRE="$$output/exim-wire.go" \
-		OPENAPI_SERVER_OUTPUT="$$output/server.gen.go" \
-		OPENAPI_CLIENT_OUTPUT="$$output/client.gen.go" \
-		OPENAPI_MILTER_OUTPUT="$$output/milter.gen.go" \
-		OPENAPI_MILTER_TEST_SERVER_OUTPUT="$$output/milter-test-server.gen.go" \
-		OPENAPI_EXIM_OUTPUT="$$output/exim.gen.go" \
-		OPENAPI_EXIM_TEST_SERVER_OUTPUT="$$output/exim-test-server.gen.go"; \
+	GOCACHE="$$output/caller-cache" $(MAKE) generate-openapi-check-output \
+		OPENAPI_CHECK_OUTPUT="$$output"; \
 	export GOCACHE="$$output/cache"; \
 	cmp "$(OPENAPI_SERVER_WIRE)" "$$output/server-wire.go"; \
 	cmp "$(OPENAPI_CLIENT_WIRE)" "$$output/client-wire.go"; \
@@ -467,6 +486,11 @@ check-conformance: check-admin-contract
 	@GOCACHE="$${GOCACHE:-/tmp/dkim2-go-build-cache}" \
 		go -C tools run ./cmd/conformance -root .. check
 
+.PHONY: generate-conformance-manifest
+generate-conformance-manifest:
+	@GOCACHE="$${GOCACHE:-/tmp/dkim2-go-build-cache}" \
+		go -C tools run ./cmd/conformance -root .. refresh-manifest
+
 .PHONY: conformance
 conformance:
 	@GOCACHE="$${GOCACHE:-/tmp/dkim2-go-build-cache}" \
@@ -478,13 +502,8 @@ conformance-postfix:
 
 .PHONY: conformance-all
 conformance-all:
-	@test -n "$(EXIM_EVIDENCE_ROOT)" || { \
-		printf '%s\n' 'EXIM_EVIDENCE_ROOT is required for full conformance' >&2; \
-		exit 1; \
-	}
 	@GOCACHE="$${GOCACHE:-/tmp/dkim2-go-build-cache}" \
-		go -C tools run ./cmd/conformance -root .. -profile full \
-			-exim-evidence "$(EXIM_EVIDENCE_ROOT)" report
+		go -C tools run ./cmd/conformance -root .. -profile full report
 
 .PHONY: check-security
 check-security:

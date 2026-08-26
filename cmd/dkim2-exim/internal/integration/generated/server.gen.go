@@ -97,13 +97,13 @@ func (e Disposition) Valid() bool {
 
 // Defines values for DraftVersion.
 const (
-	DraftIetfDkimDkim2Spec04 DraftVersion = "draft-ietf-dkim-dkim2-spec-04"
+	DraftIetfDkimDkim2Spec05 DraftVersion = "draft-ietf-dkim-dkim2-spec-05"
 )
 
 // Valid indicates whether the value is a known member of the DraftVersion enum.
 func (e DraftVersion) Valid() bool {
 	switch e {
-	case DraftIetfDkimDkim2Spec04:
+	case DraftIetfDkimDkim2Spec05:
 		return true
 	default:
 		return false
@@ -633,10 +633,13 @@ func (e VerificationCheckClass) Valid() bool {
 const (
 	VerificationReasonAmbiguousKey            VerificationReason = "ambiguous_key"
 	VerificationReasonDomainAlignmentMismatch VerificationReason = "domain_alignment_mismatch"
+	VerificationReasonDuplicateHashAlgorithm  VerificationReason = "duplicate_hash_algorithm"
+	VerificationReasonDuplicateSelector       VerificationReason = "duplicate_selector"
 	VerificationReasonEnvelopeMismatch        VerificationReason = "envelope_mismatch"
 	VerificationReasonHashMismatch            VerificationReason = "hash_mismatch"
 	VerificationReasonInternalContract        VerificationReason = "internal_contract"
 	VerificationReasonInvalidKey              VerificationReason = "invalid_key"
+	VerificationReasonInvalidRecipeJson       VerificationReason = "invalid_recipe_json"
 	VerificationReasonKeyAlgorithmMismatch    VerificationReason = "key_algorithm_mismatch"
 	VerificationReasonLimitExceeded           VerificationReason = "limit_exceeded"
 	VerificationReasonMalformedMessage        VerificationReason = "malformed_message"
@@ -653,6 +656,7 @@ const (
 	VerificationReasonSequenceInvalid         VerificationReason = "sequence_invalid"
 	VerificationReasonSignatureMismatch       VerificationReason = "signature_mismatch"
 	VerificationReasonTimestampInvalid        VerificationReason = "timestamp_invalid"
+	VerificationReasonTooManySignatures       VerificationReason = "too_many_signatures"
 	VerificationReasonUnsupportedAlgorithm    VerificationReason = "unsupported_algorithm"
 	VerificationReasonUnsupportedKeyType      VerificationReason = "unsupported_key_type"
 )
@@ -664,6 +668,10 @@ func (e VerificationReason) Valid() bool {
 		return true
 	case VerificationReasonDomainAlignmentMismatch:
 		return true
+	case VerificationReasonDuplicateHashAlgorithm:
+		return true
+	case VerificationReasonDuplicateSelector:
+		return true
 	case VerificationReasonEnvelopeMismatch:
 		return true
 	case VerificationReasonHashMismatch:
@@ -671,6 +679,8 @@ func (e VerificationReason) Valid() bool {
 	case VerificationReasonInternalContract:
 		return true
 	case VerificationReasonInvalidKey:
+		return true
+	case VerificationReasonInvalidRecipeJson:
 		return true
 	case VerificationReasonKeyAlgorithmMismatch:
 		return true
@@ -703,6 +713,8 @@ func (e VerificationReason) Valid() bool {
 	case VerificationReasonSignatureMismatch:
 		return true
 	case VerificationReasonTimestampInvalid:
+		return true
+	case VerificationReasonTooManySignatures:
 		return true
 	case VerificationReasonUnsupportedAlgorithm:
 		return true

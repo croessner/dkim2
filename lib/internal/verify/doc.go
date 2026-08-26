@@ -1,11 +1,12 @@
 // Package verify coordinates DKIM2 static-key verification contracts.
 //
 // The package owns the library-internal verification boundary for
-// draft-ietf-dkim-dkim2-spec-04. It consumes the raw RFC 5322 message model,
+// draft-ietf-dkim-dkim2-spec-05. It consumes the raw RFC 5322 message model,
 // the Message-Instance and DKIM2-Signature parsers, and the
-// canonicalization and SHA-256 helpers. It must not reimplement raw parsing,
-// DKIM2 tag parsing, base64string parsing, sequence validation, canonical body
-// or header input, or Section 9.6 signature input rendering.
+// canonicalization helpers needed to verify every supported Message-Instance
+// hash set. It must not reimplement raw parsing, DKIM2 tag parsing,
+// base64string parsing, sequence validation, canonical body or header input,
+// or Section 9.6 signature input rendering.
 //
 // Verification is intentionally dependency-injected. Public keys are resolved
 // through KeyProvider by canonical signing domain, selector, and algorithm.
@@ -19,7 +20,7 @@
 // Timestamp checks use an injected Clock and explicit TimestampPolicy so tests
 // and callers can evaluate future and stale signatures deterministically.
 // Current SMTP envelope state is carried by immutable Envelope values.
-// Matching follows draft-ietf-dkim-dkim2-spec-04 Sections 9.2 and 11.4: ASCII
+// Matching follows draft-ietf-dkim-dkim2-spec-05 Sections 9.2 and 11.4: ASCII
 // domain bytes are lowercased, local-part and non-ASCII bytes remain
 // case-sensitive, and every current recipient must occur in the signed
 // recipient set regardless of order or additional signed recipients. Matching

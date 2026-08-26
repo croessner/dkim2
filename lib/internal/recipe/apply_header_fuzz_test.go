@@ -10,9 +10,9 @@ import (
 
 // FuzzApplyHeader exercises deterministic immutable header reconstruction under bounded input.
 func FuzzApplyHeader(f *testing.F) {
-	f.Add([]byte("Subject: top\r\nSubject: bottom\r\n\r\nbody\r\n"), []byte(`{"h":{"Subject":[{"c":[1,1]},{"d":["restored"]}]}}`))
-	f.Add([]byte("Folded: one\r\n two\r\n\r\n"), []byte(`{"h":{"Folded":[{"c":[1,1]}]}}`))
-	f.Add([]byte("A:TOXIC_HEADER_MARKER\r\n\r\n"), []byte(`{"h":{"A":[{"c":[2,2]}]}}`))
+	f.Add([]byte("Subject: top\r\nSubject: bottom\r\n\r\nbody\r\n"), []byte(`{"h":{"subject":[{"c":[1,1]},{"d":["restored"]}]}}`))
+	f.Add([]byte("Folded: one\r\n two\r\n\r\n"), []byte(`{"h":{"folded":[{"c":[1,1]}]}}`))
+	f.Add([]byte("A:TOXIC_HEADER_MARKER\r\n\r\n"), []byte(`{"h":{"a":[{"c":[2,2]}]}}`))
 	f.Fuzz(func(t *testing.T, message, encodedRecipe []byte) {
 		if len(message) > 4096 || len(encodedRecipe) > 4096 {
 			t.Skip()

@@ -204,7 +204,7 @@ func TestApplyBodyStopsBeforeLaterOutput(t *testing.T) {
 func TestApplyBodyRevalidatesStructuralPlanLimits(t *testing.T) {
 	checks := []applyLimitCheck{
 		{testBodyStepsLabel, []byte("A:x\r\n\r\na\r\n"), `{"b":[{"d":["x"]},{"d":["y"]}]}`, 2, limitNameMaxBodySteps, func(l *Limits, n int) { l.MaxBodySteps = n }},
-		{"combined steps", []byte("A:x\r\n\r\na\r\n"), `{"h":{"A":[{"d":["x"]}]},"b":[{"d":["y"]}]}`, 2, limitNameMaxTotalSteps, func(l *Limits, n int) { l.MaxStepsPerHeader = n; l.MaxBodySteps = n; l.MaxTotalSteps = n }},
+		{"combined steps", []byte("A:x\r\n\r\na\r\n"), `{"h":{"a":[{"d":["x"]}]},"b":[{"d":["y"]}]}`, 2, limitNameMaxTotalSteps, func(l *Limits, n int) { l.MaxStepsPerHeader = n; l.MaxBodySteps = n; l.MaxTotalSteps = n }},
 		{testCopyRangesLabel, []byte("A:x\r\n\r\na\r\nb\r\n"), `{"b":[{"c":[1,1]},{"c":[2,2]}]}`, 2, limitNameMaxCopyRanges, func(l *Limits, n int) { l.MaxCopyRanges = n }},
 		{"copy per range", []byte("A:x\r\n\r\na\r\nb\r\n"), `{"b":[{"c":[1,2]}]}`, 2, limitNameMaxCopiedItemsPerRange, func(l *Limits, n int) { l.MaxCopiedItemsPerRange = n }},
 		{"total copies", []byte("A:x\r\n\r\na\r\nb\r\n"), `{"b":[{"c":[1,1]},{"c":[2,2]}]}`, 2, limitNameMaxTotalCopiedItems, func(l *Limits, n int) { l.MaxCopiedItemsPerRange = n; l.MaxTotalCopiedItems = n }},
@@ -237,10 +237,10 @@ func TestApplyBodyHeaderOnlyBecomesDelimited(t *testing.T) {
 // TestApplyCombinesDimensionsUnderOneBudget verifies public orchestration and cumulative work.
 func TestApplyCombinesDimensionsUnderOneBudget(t *testing.T) {
 	current := mustRecipeState(t, []byte("B:y\r\nA:x\r\n\r\nold\r\n"))
-	plan := mustParseRecipe(t, `{"h":{"A":[{"d":["new"]}]},"b":[{"d":["body"]}]}`)
+	plan := mustParseRecipe(t, `{"h":{"a":[{"d":["new"]}]},"b":[{"d":["body"]}]}`)
 	state, usage, err := mustApplier(t, Limits{}).Apply(current, plan)
 	body, known := state.Body()
-	if err != nil || !state.Valid() || !known || !bytes.Equal(body.Bytes(), []byte("body\r\n")) || !bytes.Contains(state.Headers().OriginalBytes(), []byte("A:new\r\n")) {
+	if err != nil || !state.Valid() || !known || !bytes.Equal(body.Bytes(), []byte("body\r\n")) || !bytes.Contains(state.Headers().OriginalBytes(), []byte("a:new\r\n")) {
 		t.Fatalf("combined apply mismatch: code=%s", recipeTestErrorCode(err))
 	}
 	if usage.Items() != 6 || usage.EmittedBytes() != 18 || usage.WorkUnits() != 25 {
@@ -260,12 +260,12 @@ func TestApplyUsesFinalCombinedStateForLimits(t *testing.T) {
 	limits.MaxStateBytes = 10
 	applier := mustApplier(t, limits)
 	largeBody := mustRecipeState(t, []byte("A:x\r\n\r\nthis body is deliberately large\r\n"))
-	state, _, err := applier.Apply(largeBody, mustParseRecipe(t, `{"h":{"A":[{"d":["x"]}]},"b":[{"d":["y"]}]}`))
+	state, _, err := applier.Apply(largeBody, mustParseRecipe(t, `{"h":{"a":[{"d":["x"]}]},"b":[{"d":["y"]}]}`))
 	if err != nil || !state.Valid() {
 		t.Fatalf("body shrink rejected: code=%s", recipeTestErrorCode(err))
 	}
 	largeHeaders := mustRecipeState(t, []byte("A:x\r\nLarge: deliberately-long\r\n\r\nold\r\n"))
-	state, _, err = applier.Apply(largeHeaders, mustParseRecipe(t, `{"h":{"Large":[]},"b":[{"d":["y"]}]}`))
+	state, _, err = applier.Apply(largeHeaders, mustParseRecipe(t, `{"h":{"large":[]},"b":[{"d":["y"]}]}`))
 	if err != nil || !state.Valid() {
 		t.Fatalf("header shrink rejected: code=%s", recipeTestErrorCode(err))
 	}
@@ -299,7 +299,7 @@ func TestApplyBodyRejectsInvalidContracts(t *testing.T) {
 func TestApplyRejectsUnavailableCopyBeforeHeaderWork(t *testing.T) {
 	known := mustRecipeState(t, []byte("A:x\r\n\r\nbody"))
 	unavailable, _ := newUnavailableState(known.Headers())
-	state, usage, err := mustApplier(t, Limits{}).Apply(unavailable, mustParseRecipe(t, `{"h":{"A":[{"d":["changed"]}]},"b":[{"c":[1,1]}]}`))
+	state, usage, err := mustApplier(t, Limits{}).Apply(unavailable, mustParseRecipe(t, `{"h":{"a":[{"d":["changed"]}]},"b":[{"c":[1,1]}]}`))
 	if state.Valid() || usage.Items() != 0 || usage.EmittedBytes() != 0 || !IsErrorCode(err, ErrorCodeSourceUnavailable) {
 		t.Fatalf("unavailable precedence mismatch: code=%s items=%d", recipeTestErrorCode(err), usage.Items())
 	}
@@ -308,7 +308,7 @@ func TestApplyRejectsUnavailableCopyBeforeHeaderWork(t *testing.T) {
 // TestApplyBodyPreflightWorkLimitPrecedesHeaderEmission verifies live shared accounting.
 func TestApplyBodyPreflightWorkLimitPrecedesHeaderEmission(t *testing.T) {
 	current := mustRecipeState(t, []byte("A:x\r\n\r\none\r\ntwo\r\n"))
-	plan := mustParseRecipe(t, `{"h":{"A":[{"d":["changed"]}]},"b":[]}`)
+	plan := mustParseRecipe(t, `{"h":{"a":[{"d":["changed"]}]},"b":[]}`)
 	limits := DefaultLimits()
 	limits.MaxOperationWorkUnits = 1
 	state, usage, err := mustApplier(t, limits).Apply(current, plan)

@@ -18,6 +18,7 @@ import (
 const (
 	testFixtureArtifact = "fixture"
 	testPortableRunner  = "portable_vector"
+	testDraftNormative  = "draft_normative"
 )
 
 // TestPublicFailureDiagnosticRejectsHostileContent freezes content-free diagnostics.
@@ -43,11 +44,11 @@ func TestPublicFailureDiagnosticRejectsHostileContent(t *testing.T) {
 func TestRunnerCaseFailure(t *testing.T) {
 	t.Parallel()
 
-	if got := runnerCaseFailure("runner_failure", "milter\x00abort-reuse").Error(); got != "runner_failure_abort_reuse" {
+	if got := runnerCaseFailure(runnerFailureClass, "milter\x00abort-reuse").Error(); got != "runner_failure_abort_reuse" {
 		t.Fatalf("runnerCaseFailure() = %q, want %q", got, "runner_failure_abort_reuse")
 	}
-	if got := runnerCaseFailure("runner_failure", "invalid").Error(); got != "runner_failure" {
-		t.Fatalf("runnerCaseFailure() fallback = %q, want %q", got, "runner_failure")
+	if got := runnerCaseFailure(runnerFailureClass, "invalid").Error(); got != runnerFailureClass {
+		t.Fatalf("runnerCaseFailure() fallback = %q, want %q", got, runnerFailureClass)
 	}
 }
 
@@ -57,8 +58,8 @@ func TestClassifyTestFailure(t *testing.T) {
 	if got := classifyTestFailure("integration configuration failed preflight: redacted"); got != "runner_failure_config_preflight" {
 		t.Fatalf("classifyTestFailure() = %q, want %q", got, "runner_failure_config_preflight")
 	}
-	if got := classifyTestFailure("unclassified sensitive output"); got != "runner_failure" {
-		t.Fatalf("classifyTestFailure() fallback = %q, want %q", got, "runner_failure")
+	if got := classifyTestFailure("unclassified sensitive output"); got != runnerFailureClass {
+		t.Fatalf("classifyTestFailure() fallback = %q, want %q", got, runnerFailureClass)
 	}
 }
 
@@ -132,7 +133,7 @@ func validPostfixQualificationReportForTest() postfixQualificationReport {
 		ImageIdentities: map[string]string{
 			"debian":  "debian@sha256:4e401d95de7083948053197a9c3913343cd06b706bf15eb6a0c3ccd26f436a0e",
 			"golang":  "golang@sha256:ae5a2316d12f3e78fd99177dad452e6ad4f240af2d71d57b480c3477f250fec6",
-			"postfix": "chrroessner/postfix@sha256:8ccda0e26bb241116c7df5e0fb2bcdbc6a77b409b085d87e7ad4d0c23b0c41fd",
+			"postfix": "chrroessner/postfix@sha256:d4b349ce665ba291444e55862ac842e3d4e612596520a9ba65a7b9bf00f9aa3c",
 		},
 		RuntimeIdentity: postfixQualificationRuntimeIdentity{
 			Schema: "dkim2.postfix-qualification-identity.v1", PostfixVersion: "3.11.6",
@@ -146,7 +147,10 @@ func validPostfixQualificationReportForTest() postfixQualificationReport {
 				Cases: []string{
 					"daemon_loopback_topology",
 					"inbound_cryptographic_pass",
+					"injected_null_sender_has_no_dsn_evidence",
 					"local_sendmail_signing",
+					"postfix_bounce_dsn_evidence_signing",
+					"postfix_normal_cleanup_dsn_routing",
 					"postfix_received_visibility",
 					"smtp_origin_signing",
 				},
@@ -263,7 +267,7 @@ func TestRunnerInventoryRejectsUnexecutedManifestCase(t *testing.T) {
 		for _, runnerCase := range definition.cases {
 			parts := strings.SplitN(runnerCase.key, "\x00", 2)
 			cases = append(cases, conformance.ManifestCase{
-				Suite: parts[0], CaseID: parts[1], Class: "draft_normative",
+				Suite: parts[0], CaseID: parts[1], Class: testDraftNormative,
 				Authority: []string{"test authority"}, Provenance: "manual_derivation",
 				Runner: testPortableRunner, RequiredPlatform: portableProfile,
 				ExpectedOutcome: passState, Artifacts: runnerCase.artifacts,
@@ -272,7 +276,7 @@ func TestRunnerInventoryRejectsUnexecutedManifestCase(t *testing.T) {
 		}
 	}
 	cases = append(cases, conformance.ManifestCase{
-		Suite: "verification", CaseID: "unexecuted", Class: "draft_normative",
+		Suite: "verification", CaseID: "unexecuted", Class: testDraftNormative,
 		Authority: []string{"test authority"}, Provenance: "manual_derivation",
 		Runner: testPortableRunner, RequiredPlatform: portableProfile,
 		ExpectedOutcome: passState, Artifacts: []string{testFixtureArtifact},
@@ -347,112 +351,83 @@ func TestConfiguredRunnersEmitExactEvidence(t *testing.T) {
 	if err != nil {
 		t.Fatalf("executeRunners() error = %v", err)
 	}
-	if len(evidence) != 59 {
-		t.Fatalf("executeRunners() evidence count = %d, want 59", len(evidence))
+	if len(evidence) != 83 {
+		t.Fatalf("executeRunners() evidence count = %d, want 83", len(evidence))
 	}
 }
 
-// TestFullProfileRejectsMissingEximEvidence freezes the mandatory import boundary.
-func TestFullProfileRejectsMissingEximEvidence(t *testing.T) {
+// TestDraft05NormativeBindingsUseExactCrossVersionAndRecipeProofs freezes the
+// semantic tests behind the Draft-05 canonical and invalid-recipe claims.
+func TestDraft05NormativeBindingsUseExactCrossVersionAndRecipeProofs(t *testing.T) {
+	want := map[string]string{
+		"canonical\x00draft04-to-draft05-header-boundary": "TestDraft04SignatureFailsUnderDraft05HeaderRules",
+		"canonical\x00draft05-to-draft04-header-boundary": "TestDraft05SignatureFailsUnderDraft04HeaderRules",
+		"policy\x00draft05-invalid-recipe-json":           "TestMalformedHistoriedMessageFailsClosedAcrossServiceAndFacade",
+	}
+	for _, definition := range portableDefinitions {
+		for _, runnerCase := range definition.cases {
+			expected, ok := want[runnerCase.key]
+			if !ok {
+				continue
+			}
+			if runnerCase.testName != expected {
+				t.Fatalf("runner %q test = %q, want %q", runnerCase.key, runnerCase.testName, expected)
+			}
+			delete(want, runnerCase.key)
+		}
+	}
+	if len(want) != 0 {
+		t.Fatalf("missing exact Draft-05 runner bindings: %v", want)
+	}
+	root := filepath.Clean(filepath.Join("..", "..", ".."))
+	manifest, _, err := conformance.LoadManifest(root, manifestPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	policyBound := false
+	httpBound := false
+	for _, manifestCase := range manifest.Cases {
+		if manifestCase.Suite == "policy" && manifestCase.CaseID == "draft05-invalid-recipe-json" {
+			policyBound = true
+			if manifestCase.Class != testDraftNormative ||
+				!slices.Equal(manifestCase.Authority, []string{conformance.MessageDraft + " Section 11.2"}) ||
+				!slices.Equal(manifestCase.Artifacts, []string{"policy-invalid-recipe-source"}) ||
+				manifestCase.Producer != "library-facade-tests" {
+				t.Fatalf("invalid-recipe normative binding = %#v", manifestCase)
+			}
+		}
+		if manifestCase.Suite == "openapi" && manifestCase.CaseID == "draft05-invalid-json-diagnostics" {
+			httpBound = true
+			for _, authority := range manifestCase.Authority {
+				if strings.Contains(authority, conformance.MessageDraft) {
+					t.Fatal("HTTP JSON preflight retained a Draft-05 normative claim")
+				}
+			}
+		}
+	}
+	if !policyBound || !httpBound {
+		t.Fatalf("Draft-05 policy/OpenAPI channels = %v/%v, want true/true", policyBound, httpBound)
+	}
+}
+
+// TestFullProfileRejectsProvidedEximEvidence freezes the Draft-05 import prohibition.
+func TestFullProfileRejectsProvidedEximEvidence(t *testing.T) {
 	_, _, err := executeRunners(
 		t.TempDir(),
-		conformance.Manifest{Cases: []conformance.ManifestCase{{
-			Suite: "exim", CaseID: "linux-real-matrix",
-			Class: "adapter_contract", Authority: []string{"Exim adapter contract"},
-			Provenance: "independent_oracle", Runner: eximRunner,
-			RequiredPlatform: linuxPlatform, ExpectedOutcome: passState,
-			Artifacts: []string{
-				"exim-qualification-builder",
-				"exim-qualification-container-driver",
-				"exim-qualification-contract",
-				"exim-qualification-driver",
-				"exim-qualification-executor",
-				"exim-qualification-helper",
-				"exim-qualification-input-verifier",
-				"exim-qualification-schema",
-				"exim-qualification-verifier",
-			},
-			Producer: eximRunnerName,
-		}}},
+		conformance.Manifest{},
 		fullProfile,
-		qualificationBinding{},
+		qualificationBinding{eximEvidence: "/forbidden/evidence"},
 	)
-	if err == nil || err.Error() != "runner_dependency:exim-qualification-verifier" {
+	if err == nil || err.Error() != "exim_evidence_forbidden" {
 		t.Fatalf("executeRunners() error = %v", err)
 	}
 }
 
-// TestEximQualificationImportsVerifiedEvidence exercises the opt-in real-matrix import boundary.
-func TestEximQualificationImportsVerifiedEvidence(t *testing.T) {
-	evidenceRoot := os.Getenv("DKIM2_EXIM_REAL_MATRIX_EVIDENCE_ROOT")
-	if evidenceRoot == "" {
-		t.Skip("set DKIM2_EXIM_REAL_MATRIX_EVIDENCE_ROOT to verified real-matrix evidence")
-	}
-	root := filepath.Clean(filepath.Join("..", "..", ".."))
-	_, manifestDigest, err := conformance.LoadManifest(root, manifestPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	revision, err := conformance.CurrentRevision(root)
-	if err != nil {
-		t.Fatal(err)
-	}
-	snapshot, err := conformance.ProduceSnapshot(root, revision)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var definition runnerDefinition
-	for _, candidate := range portableDefinitions {
-		if candidate.name == eximRunnerName {
-			definition = candidate
-			break
-		}
-	}
-	if definition.name == "" {
-		t.Fatal("Exim qualification runner definition is missing")
-	}
-	binding := qualificationBinding{
-		manifestDigest: manifestDigest,
-		revision:       revision,
-		snapshotDigest: snapshot.SHA256,
-		eximEvidence:   evidenceRoot,
-	}
-	producerDigest, passed, identities, err := executeEximQualification(
-		root,
-		definition,
-		binding,
-	)
-	if err != nil {
-		t.Fatalf("executeEximQualification() error = %v", err)
-	}
-	if len(passed) != 1 || passed[0] != "exim\x00linux-real-matrix" ||
-		len(identities) != 3 {
-		t.Fatalf(
-			"executeEximQualification() passed=%v identities=%v",
-			passed,
-			identities,
-		)
-	}
-	input, err := os.ReadFile(filepath.Join(root, ".artifacts", "conformance-exim", "import.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	var summary conformance.EximQualificationSummary
-	if err := conformance.DecodeStrictJSON(input, 1<<20, &summary); err != nil {
-		t.Fatal(err)
-	}
-	if err := conformance.ValidateEximQualificationSummary(
-		summary,
-		manifestDigest,
-		revision,
-		snapshot.SHA256,
-		producerDigest,
-	); err != nil {
-		t.Fatal(err)
-	}
-	if expected := os.Getenv("DKIM2_EXIM_REAL_MATRIX_RUN_ID"); expected != "" &&
-		summary.RunID != expected {
-		t.Fatalf("imported run ID = %q, want %q", summary.RunID, expected)
+// TestCLIRejectsEximEvidenceBeforeRepositoryAccess proves stale evidence is never read.
+func TestCLIRejectsEximEvidenceBeforeRepositoryAccess(t *testing.T) {
+	err := run([]string{"-root", t.TempDir(), "-profile", fullProfile, "-exim-evidence", "/forbidden/evidence", "report"})
+	if err == nil || err.Error() != "exim_evidence_forbidden" {
+		t.Fatalf("run() error = %v, want exim_evidence_forbidden", err)
 	}
 }
 

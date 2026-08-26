@@ -121,7 +121,7 @@ func TestMapVerificationResultFailsClosedOnUnknownFacts(t *testing.T) {
 	}
 }
 
-// TestMapVerificationResultHandlesUnknownAlgorithmCombinations verifies draft-04 ignore semantics.
+// TestMapVerificationResultHandlesUnknownAlgorithmCombinations verifies draft-05 ignore semantics.
 func TestMapVerificationResultHandlesUnknownAlgorithmCombinations(t *testing.T) {
 	target := verify.Target{Sequence: 1, InstanceNumber: 1}
 	unknownCheck := verify.CheckResult{Kind: verify.CheckKindSignature, Status: verify.CheckStatusUnsupported, Code: verify.ErrorCodeUnsupportedAlgorithm, Algorithm: verify.AlgorithmUnknown, Target: target}

@@ -669,10 +669,12 @@ func assertFrozenEnums(t *testing.T, document *openapi3.T) {
 
 	expected := map[string][]string{
 		"APIVersion":        {"v1"},
-		"DraftVersion":      {"draft-ietf-dkim-dkim2-spec-04"},
+		"DraftVersion":      {"draft-ietf-dkim-dkim2-spec-05"},
 		"VerificationState": {"PASS", "FAIL", "PERMERROR", "TEMPERROR"},
 		"VerificationReason": {
 			"none", "limit_exceeded", "malformed_message", "malformed_protocol",
+			"duplicate_hash_algorithm", "invalid_recipe_json", "duplicate_selector",
+			"too_many_signatures",
 			"missing_protocol", "sequence_invalid", "unsupported_algorithm",
 			"hash_mismatch", "signature_mismatch", "missing_key", "invalid_key",
 			"ambiguous_key", "revoked_key", "unsupported_key_type",
@@ -829,7 +831,7 @@ func TestGeneratedRequestFormattingIsContentFree(t *testing.T) {
 	}
 	request := ProcessRequest{
 		ApiVersion: V1,
-		Draft:      DraftIetfDkimDkim2Spec04,
+		Draft:      DraftIetfDkimDkim2Spec05,
 		Message:    MessageInput{RawRfc5322Base64: protected},
 		Smtp: SMTPInput{
 			MailFrom: protected,

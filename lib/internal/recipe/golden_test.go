@@ -10,7 +10,7 @@ import (
 	"github.com/croessner/dkim2/internal/rawmsg"
 )
 
-const recipeApplicationDraftBaseline = "draft-ietf-dkim-dkim2-spec-04"
+const recipeApplicationDraftBaseline = "draft-ietf-dkim-dkim2-spec-05"
 
 type recipeGoldenFixture struct {
 	Draft string             `json:"draft"`
@@ -26,8 +26,8 @@ type recipeGoldenCase struct {
 	ExpectedBodyBase64    string `json:"expected_body_base64"`
 }
 
-// TestGoldenRecipeApplicationDraft04 verifies draft-versioned reconstruction examples.
-func TestGoldenRecipeApplicationDraft04(t *testing.T) {
+// TestGoldenRecipeApplicationDraft05 verifies draft-versioned reconstruction examples.
+func TestGoldenRecipeApplicationDraft05(t *testing.T) {
 	fixture := loadRecipeGoldenFixture(t)
 	if fixture.Draft != recipeApplicationDraftBaseline {
 		t.Fatalf("fixture draft = %q, want %q", fixture.Draft, recipeApplicationDraftBaseline)
@@ -75,7 +75,7 @@ func TestGoldenRecipeApplicationDraft04(t *testing.T) {
 func loadRecipeGoldenFixture(t *testing.T) recipeGoldenFixture {
 	t.Helper()
 
-	const path = "testdata/golden/recipe-application-draft-ietf-dkim-dkim2-spec-04.json"
+	const path = "testdata/golden/recipe-application-draft-ietf-dkim-dkim2-spec-05.json"
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("ReadFile(%q) error = %v", path, err)

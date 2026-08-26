@@ -6,7 +6,7 @@ const (
 	defaultMaxSignatureInputBytes = 2 * 1024 * 1024
 	defaultMaxFieldBytes          = 128 * 1024
 	defaultMaxFieldCount          = 4000
-	defaultExcludedCounterCount   = 8
+	defaultExcludedCounterCount   = 10
 )
 
 // Limits contains fail-closed canonicalization resource settings.

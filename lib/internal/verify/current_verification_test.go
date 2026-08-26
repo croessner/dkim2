@@ -39,7 +39,7 @@ func TestVerifyCurrentMatchesHistoryCapableCurrentFacts(t *testing.T) {
 
 // TestVerifyCurrentConcurrentParity proves immutable reuse under race instrumentation.
 func TestVerifyCurrentConcurrentParity(t *testing.T) {
-	recipeJSON := `{"h":{"Subject":[{"d":["previous"]}]},"b":[{"d":["previous"]}]}`
+	recipeJSON := `{"h":{"subject":[{"d":["previous"]}]},"b":[{"d":["previous"]}]}`
 	fixture := newCurrentHistoryVerificationFixture(t, recipeJSON)
 	verifier := mustVerifierForFixture(t, fixture)
 	request := Request{Message: fixture.message, Envelope: matchingEnvelope()}
@@ -73,7 +73,7 @@ func TestVerifyCurrentConcurrentParity(t *testing.T) {
 
 // TestVerifyCurrentPreservesCompleteFullHistory proves full verification still authenticates valid history.
 func TestVerifyCurrentPreservesCompleteFullHistory(t *testing.T) {
-	recipeJSON := `{"h":{"Subject":[{"d":["previous"]}]},"b":[{"d":["previous"]}]}`
+	recipeJSON := `{"h":{"subject":[{"d":["previous"]}]},"b":[{"d":["previous"]}]}`
 	fixture := newCurrentHistoryVerificationFixture(t, recipeJSON)
 	verifier := mustVerifierForFixture(t, fixture)
 	request := Request{Message: fixture.message, Envelope: matchingEnvelope()}

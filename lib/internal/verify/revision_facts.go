@@ -110,7 +110,7 @@ func (f RevisionSignatureFact) Valid() bool {
 	return passes > 0
 }
 
-// RevisionHashFacts stores the matched current SHA-256 tuple.
+// RevisionHashFacts stores the verifier-local canonical SHA-256 projection.
 type RevisionHashFacts struct {
 	instance     uint64
 	header, body [sha256DigestLength]byte
@@ -130,10 +130,10 @@ func (f RevisionHashFacts) Format(state fmt.State, _ rune) {
 // Instance returns the selected current m= value.
 func (f RevisionHashFacts) Instance() uint64 { return f.instance }
 
-// HeaderDigest returns the matched SHA-256 header digest.
+// HeaderDigest returns the locally computed canonical SHA-256 header digest.
 func (f RevisionHashFacts) HeaderDigest() [sha256DigestLength]byte { return f.header }
 
-// BodyDigest returns the matched SHA-256 body digest.
+// BodyDigest returns the locally computed canonical SHA-256 body digest.
 func (f RevisionHashFacts) BodyDigest() [sha256DigestLength]byte { return f.body }
 
 // Valid reports whether fixed SHA-256 pass facts name a current instance.

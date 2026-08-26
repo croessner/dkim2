@@ -83,7 +83,7 @@ func (r *flippingHeaderRelevance) IsRelevantHeader(string) (bool, error) {
 	return r.calls <= r.flipAfter, nil
 }
 
-// TestPlanHeadersUsesInverseExactUnfoldedSemantics verifies core draft-04 vectors.
+// TestPlanHeadersUsesInverseExactUnfoldedSemantics verifies core Draft-05 vectors.
 func TestPlanHeadersUsesInverseExactUnfoldedSemantics(t *testing.T) {
 	tests := []struct {
 		name          string

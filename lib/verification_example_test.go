@@ -13,7 +13,7 @@ import (
 	dkim2 "github.com/croessner/dkim2"
 )
 
-//go:embed testdata/vectors/draft-ietf-dkim-dkim2-spec-04/public-golden.json
+//go:embed testdata/vectors/draft-ietf-dkim-dkim2-spec-05/public-golden.json
 var publicExampleCorpus []byte
 
 type syntheticMissingProvider struct{}

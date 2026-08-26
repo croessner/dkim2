@@ -2,6 +2,8 @@ package canonical
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/base64"
 	"errors"
 	"strings"
 	"testing"
@@ -9,7 +11,7 @@ import (
 	"github.com/croessner/dkim2/internal/rawmsg"
 )
 
-// TestHeaderHashInputExcludesDraftHeaderClasses verifies draft-04 Section 4 and Section 6.2 exclusions.
+// TestHeaderHashInputExcludesDraftHeaderClasses verifies Draft-05 Section 4 and Section 6.2 exclusions.
 func TestHeaderHashInputExcludesDraftHeaderClasses(t *testing.T) {
 	msg := mustParseHeaderMessage(t, []byte(
 		"Received: by mx.example\r\n"+
@@ -48,6 +50,201 @@ func TestHeaderHashInputExcludesDraftHeaderClasses(t *testing.T) {
 		counts.MessageInstance != 1 || counts.DKIM2Signature != 1 {
 		t.Fatalf("ExcludedHeaderCounts = %#v, want one per excluded class", counts)
 	}
+}
+
+// TestHeaderRelevanceDraft05UnsignedSet proves every exact and patterned Draft-05 exclusion and ARC near miss.
+func TestHeaderRelevanceDraft05UnsignedSet(t *testing.T) {
+	relevance := NewHeaderRelevance()
+	tests := []struct {
+		name     string
+		relevant bool
+	}{
+		{name: receivedHeaderName},
+		{name: "received-spf"},
+		{name: "apparently-to"},
+		{name: "auto-submitted"},
+		{name: "dl-expansion-history"},
+		{name: "original-recipient"},
+		{name: "sio-label-history"},
+		{name: "vbr-info"},
+		{name: "x400-received"},
+		{name: "x400-trace"},
+		{name: "arc-authentication-results"},
+		{name: "arc-message-signature"},
+		{name: "arc-seal"},
+		{name: "arc-future", relevant: true},
+		{name: "receivedx", relevant: true},
+		{name: "not-received-trace", relevant: true},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got, err := relevance.IsRelevantHeader(test.name)
+			if err != nil || got != test.relevant {
+				t.Fatalf("IsRelevantHeader(%q) = %t, %v; want %t", test.name, got, err, test.relevant)
+			}
+		})
+	}
+}
+
+// TestHeaderHashInputAppliesDraft05UnsignedSet proves canonical bytes and bounded categories.
+func TestHeaderHashInputAppliesDraft05UnsignedSet(t *testing.T) {
+	msg := mustParseHeaderMessage(t, []byte(
+		"Apparently-To: excluded\r\n"+
+			"Auto-Submitted: excluded\r\n"+
+			"DL-Expansion-History: excluded\r\n"+
+			"Original-Recipient: excluded\r\n"+
+			"SIO-Label-History: excluded\r\n"+
+			"VBR-Info: excluded\r\n"+
+			"X400-Received: excluded\r\n"+
+			"X400-Trace: excluded\r\n"+
+			"Received-SPF: excluded\r\n"+
+			"ARC-Authentication-Results: excluded\r\n"+
+			"ARC-Message-Signature: excluded\r\n"+
+			"ARC-Seal: excluded\r\n"+
+			"ARC-Future: signed\r\n"+
+			"ReceivedX: signed\r\n"))
+	got, err := mustCanonicalizer(t).HeaderHashInputFromMessage(msg)
+	if err != nil {
+		t.Fatalf("HeaderHashInputFromMessage() error = %v", err)
+	}
+	want := []byte("arc-future:signed\r\nreceivedx:signed\r\n")
+	if !bytes.Equal(got.Bytes(), want) {
+		t.Fatalf("canonical bytes = %q, want %q", got.Bytes(), want)
+	}
+	counts := got.Metadata().ExcludedHeaderCounts
+	if counts.ExactUnsigned != 8 || counts.Received != 1 || counts.ARC != 3 || counts.Total() != 12 {
+		t.Fatalf("ExcludedHeaderCounts = %#v, want exact=8 received=1 arc=3", counts)
+	}
+}
+
+// TestDraft04SignatureFailsUnderDraft05HeaderRules proves the legacy-to-current PASS-to-FAIL hash boundary.
+func TestDraft04SignatureFailsUnderDraft05HeaderRules(t *testing.T) {
+	msg := mustParseHeaderMessage(t, []byte(
+		"From: sender@example.test\r\n"+
+			"Auto-Submitted: auto-generated\r\n"+
+			"Subject: legacy signer\r\n"))
+
+	draft04Canonical := draft04HeaderHashInputOracle(msg)
+	draft05Result, err := mustCanonicalizer(t).HeaderHashFromMessage(msg)
+	if err != nil {
+		t.Fatalf("HeaderHashFromMessage() error = %v", err)
+	}
+	draft05Canonical := draft05Result.CanonicalBytes().Bytes()
+
+	wireDigest := mustDecodeHeaderBoundaryDigest(t, "kOot0z6eGAjyHWxwX/baswEx+nIRXJizRLyleAuOzPM=")
+	draft04Digest := assertHeaderBoundaryOracle(t, "Draft-04", draft04Canonical,
+		"auto-submitted:auto-generated\r\nfrom:sender@example.test\r\nsubject:legacy signer\r\n",
+		"kOot0z6eGAjyHWxwX/baswEx+nIRXJizRLyleAuOzPM=")
+	draft05Digest := assertHeaderBoundaryOracle(t, "Draft-05", draft05Canonical,
+		"from:sender@example.test\r\nsubject:legacy signer\r\n",
+		"ggygkH3SuDLLOJs7zNh3xmIv3hREjrhTfkQGUAlh3P4=")
+	assertDraft05ResultDigest(t, draft05Result, draft05Digest)
+
+	if sameDraftPass := bytes.Equal(wireDigest, draft04Digest[:]); !sameDraftPass {
+		t.Fatal("Draft-04 wire digest did not PASS under Draft-04 header rules")
+	}
+	if crossDraftPass := bytes.Equal(wireDigest, draft05Digest[:]); crossDraftPass {
+		t.Fatal("Draft-04 wire digest did not FAIL under Draft-05 header rules")
+	}
+}
+
+// TestDraft05SignatureFailsUnderDraft04HeaderRules proves the current-to-legacy PASS-to-FAIL hash boundary.
+func TestDraft05SignatureFailsUnderDraft04HeaderRules(t *testing.T) {
+	msg := mustParseHeaderMessage(t, []byte(
+		"From: sender@example.test\r\n"+
+			"Apparently-To: recipient@example.test\r\n"+
+			"Subject: current signer\r\n"))
+
+	draft05Result, err := mustCanonicalizer(t).HeaderHashFromMessage(msg)
+	if err != nil {
+		t.Fatalf("HeaderHashFromMessage() error = %v", err)
+	}
+	draft05Canonical := draft05Result.CanonicalBytes().Bytes()
+	draft04Canonical := draft04HeaderHashInputOracle(msg)
+
+	wireDigest := mustDecodeHeaderBoundaryDigest(t, "2yds7Wq4hBcmcIL4vWoD6vPB3UBVBJMvkkhAWqpYxD0=")
+	draft05Digest := assertHeaderBoundaryOracle(t, "Draft-05", draft05Canonical,
+		"from:sender@example.test\r\nsubject:current signer\r\n",
+		"2yds7Wq4hBcmcIL4vWoD6vPB3UBVBJMvkkhAWqpYxD0=")
+	draft04Digest := assertHeaderBoundaryOracle(t, "Draft-04", draft04Canonical,
+		"apparently-to:recipient@example.test\r\nfrom:sender@example.test\r\nsubject:current signer\r\n",
+		"lbD4XmQeNiOdO2URVEVkDPnJCgskeYos8iVd+9TX0JU=")
+	assertDraft05ResultDigest(t, draft05Result, draft05Digest)
+
+	if sameDraftPass := bytes.Equal(wireDigest, draft05Digest[:]); !sameDraftPass {
+		t.Fatal("Draft-05 wire digest did not PASS under Draft-05 header rules")
+	}
+	if crossDraftPass := bytes.Equal(wireDigest, draft04Digest[:]); crossDraftPass {
+		t.Fatal("Draft-05 wire digest did not FAIL under Draft-04 header rules")
+	}
+}
+
+// draft04HeaderHashInputOracle reproduces only the retired Draft-04 unsigned-header boundary for compatibility tests.
+func draft04HeaderHashInputOracle(message rawmsg.Message) []byte {
+	records := make([]headerFieldRecord, 0, message.Headers().Len())
+	for _, field := range message.Headers().Fields() {
+		nameLower := field.NameLower()
+		if draft04UnsignedHeaderName(nameLower) {
+			continue
+		}
+		records = append(records, headerFieldRecord{
+			nameLower:      nameLower,
+			originalIndex:  field.Index(),
+			canonicalBytes: canonicalizeHeaderFieldBytes(nameLower, field.UnfoldedValue()),
+		})
+	}
+	sortHeaderFieldRecords(records)
+
+	var canonical []byte
+	for _, record := range records {
+		canonical = append(canonical, record.canonicalBytes...)
+	}
+	return canonical
+}
+
+// draft04UnsignedHeaderName reports the exact retired Draft-04 exclusion set.
+func draft04UnsignedHeaderName(nameLower string) bool {
+	return nameLower == receivedHeaderName ||
+		nameLower == "return-path" ||
+		nameLower == "delivered-to" ||
+		nameLower == "authentication-results" ||
+		strings.HasPrefix(nameLower, "x-") ||
+		nameLower == "dkim-signature" ||
+		strings.HasPrefix(nameLower, "arc-") ||
+		nameLower == "message-instance" ||
+		nameLower == "dkim2-signature"
+}
+
+// assertHeaderBoundaryOracle verifies fixed canonical bytes and their fixed SHA-256 digest.
+func assertHeaderBoundaryOracle(t *testing.T, draft string, canonical []byte, wantCanonical string, wantDigest string) [sha256.Size]byte {
+	t.Helper()
+	if !bytes.Equal(canonical, []byte(wantCanonical)) {
+		t.Fatalf("%s canonical bytes = %q, want %q", draft, canonical, wantCanonical)
+	}
+	digest := sha256.Sum256(canonical)
+	if got := base64.StdEncoding.EncodeToString(digest[:]); got != wantDigest {
+		t.Fatalf("%s digest = %q, want %q", draft, got, wantDigest)
+	}
+	return digest
+}
+
+// assertDraft05ResultDigest verifies that production hashing matches the fixed Draft-05 oracle.
+func assertDraft05ResultDigest(t *testing.T, result Result, want [sha256.Size]byte) {
+	t.Helper()
+	digest, ok := result.Digest()
+	if !ok || digest.Algorithm() != HashAlgorithmSHA256 || !bytes.Equal(digest.Bytes(), want[:]) {
+		t.Fatalf("Draft-05 result digest present=%t algorithm=%q bytes_match=%t", ok, digest.Algorithm(), bytes.Equal(digest.Bytes(), want[:]))
+	}
+}
+
+// mustDecodeHeaderBoundaryDigest decodes one fixed SHA-256 wire digest.
+func mustDecodeHeaderBoundaryDigest(t *testing.T, encoded string) []byte {
+	t.Helper()
+	digest, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil || len(digest) != sha256.Size {
+		t.Fatalf("fixed wire digest error = %v, length = %d", err, len(digest))
+	}
+	return digest
 }
 
 // TestHeaderHashInputCompressesWSPAndRetainsValueBytes verifies Section 6.2 value rules.

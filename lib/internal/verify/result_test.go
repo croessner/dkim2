@@ -17,7 +17,7 @@ func TestStatusVocabularyIsStable(t *testing.T) {
 		{name: "timestamp", ok: TimestampStatusNoMaxAge.Known() && TimestampStatusFuture.Known() && TimestampStatusNotApplicable.Known() && !TimestampStatus("2026-raw").Known()},
 		{name: "envelope", ok: EnvelopeStatusMismatch.Known() && EnvelopeStatusRecipientValueMismatch.Known() && EnvelopeStatusNotApplicable.Known() && !EnvelopeStatus("<user@example.test>").Known()},
 		{name: "domain alignment", ok: DomainAlignmentStatusPass.Known() && DomainAlignmentStatusNotApplicable.Known() && !DomainAlignmentStatus("<user@example.test>").Known()},
-		{name: "hash", ok: HashStatusMissingSHA256.Known() && HashStatusMismatch.Known() && !HashStatus("raw-hash").Known()},
+		{name: "hash", ok: HashStatusUnsupported.Known() && HashStatusMismatch.Known() && !HashStatus("raw-hash").Known()},
 		{name: "target", ok: TargetStatusMixed.Known() && TargetStatusUnsupported.Known() && !TargetStatus("full-result").Known()},
 	}
 	for _, tt := range tests {

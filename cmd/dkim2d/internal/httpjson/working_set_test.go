@@ -702,7 +702,7 @@ func buildMaximumLegalProcessBody(t testing.TB) []byte {
 	escapedPath := bytes.Repeat([]byte(`\u0001`), maxSMTPPathBytes)
 	var body bytes.Buffer
 	body.Grow(int(maxProcessBodyBytes))
-	body.WriteString(`{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-04","message":{"raw_rfc5322_base64":"`)
+	body.WriteString(`{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-05","message":{"raw_rfc5322_base64":"`)
 	body.WriteString(encoded)
 	body.WriteString(`","fidelity":"raw_rfc5322"},"smtp":{"mail_from":"`)
 	body.Write(escapedPath)

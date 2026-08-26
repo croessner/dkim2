@@ -21,6 +21,9 @@ func evaluateDNSTesting(projection Projection) (dnsTestingOutcome, error) {
 	if !anyTesting {
 		return dnsTestingOutcome{}, nil
 	}
+	if projection.revisionFailure {
+		return dnsTestingOutcome{reason: ReasonDNSTestingIneligible}, nil
+	}
 	if !dnsTopLevelEligible(projection.Protocol(), projection.VerificationReason()) {
 		return dnsTestingOutcome{reason: ReasonDNSTestingIneligible}, nil
 	}

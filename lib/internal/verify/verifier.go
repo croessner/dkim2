@@ -71,6 +71,9 @@ func (v Verifier) extractVerificationInput(request Request, maxDecodedRecipeByte
 	}
 	instances, err := instanceParser.Extract(request.Message)
 	if err != nil {
+		if instance.IsErrorCode(err, instance.ErrorCodeDuplicateHashName) {
+			return verificationInput{}, newError(ErrorCodeDuplicateHashAlgorithm, ErrorLocation{Check: CheckKindSignature}, ErrorDetails{Class: ErrorClassDuplicate}, nil)
+		}
 		if instance.IsErrorCode(err, instance.ErrorCodeLimitExceeded) {
 			return verificationInput{}, newError(ErrorCodeLimitExceeded, ErrorLocation{Check: CheckKindSignature}, ErrorDetails{Class: ErrorClassLimit}, nil)
 		}
@@ -93,6 +96,12 @@ func (v Verifier) extractVerificationInput(request Request, maxDecodedRecipeByte
 	}
 	signatures, err := signatureParser.Extract(request.Message)
 	if err != nil {
+		if signature.IsErrorCode(err, signature.ErrorCodeDuplicateSelector) {
+			return verificationInput{}, newError(ErrorCodeDuplicateSelector, ErrorLocation{Check: CheckKindSignature}, ErrorDetails{Class: ErrorClassDuplicate}, nil)
+		}
+		if signature.IsErrorCode(err, signature.ErrorCodeTooManySignatures) {
+			return verificationInput{}, newError(ErrorCodeTooManySignatures, ErrorLocation{Check: CheckKindSignature}, ErrorDetails{Class: ErrorClassLimit}, nil)
+		}
 		if signature.IsErrorCode(err, signature.ErrorCodeLimitExceeded) {
 			return verificationInput{}, newError(ErrorCodeLimitExceeded, ErrorLocation{Check: CheckKindSignature}, ErrorDetails{Class: ErrorClassLimit}, nil)
 		}

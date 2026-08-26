@@ -7,7 +7,7 @@ import (
 )
 
 // DraftIdentifier is the exact behavior baseline carried by service results.
-const DraftIdentifier = "draft-ietf-dkim-dkim2-spec-04"
+const DraftIdentifier = "draft-ietf-dkim-dkim2-spec-05"
 
 const hardMaxSignatureFacts = 16
 
@@ -133,6 +133,14 @@ const (
 	ReasonMalformedMessage Reason = "malformed_message"
 	// ReasonMalformedProtocol reports malformed DKIM2 state.
 	ReasonMalformedProtocol Reason = "malformed_protocol"
+	// ReasonDuplicateHashAlgorithm reports any repeated h= algorithm name.
+	ReasonDuplicateHashAlgorithm Reason = "duplicate_hash_algorithm"
+	// ReasonInvalidRecipeJSON reports malformed authenticated recipe JSON.
+	ReasonInvalidRecipeJSON Reason = "invalid_recipe_json"
+	// ReasonDuplicateSelector reports a repeated selector in one signature field.
+	ReasonDuplicateSelector Reason = "duplicate_selector"
+	// ReasonTooManySignatures reports a third signature occurrence for one algorithm.
+	ReasonTooManySignatures Reason = "too_many_signatures"
 	// ReasonMissingProtocol reports absent required DKIM2 state.
 	ReasonMissingProtocol Reason = "missing_protocol"
 	// ReasonSequenceInvalid reports invalid signature or instance numbering.
@@ -178,7 +186,7 @@ const (
 // Known reports whether the reason belongs to the closed service vocabulary.
 func (r Reason) Known() bool {
 	switch r {
-	case ReasonNone, ReasonInvalidRequest, ReasonLimitExceeded, ReasonMalformedMessage, ReasonMalformedProtocol, ReasonMissingProtocol, ReasonSequenceInvalid, ReasonUnsupportedAlgorithm, ReasonHashMismatch, ReasonSignatureMismatch, ReasonMissingKey, ReasonInvalidKey, ReasonAmbiguousKey, ReasonRevokedKey, ReasonUnsupportedKeyType, ReasonKeyAlgorithmMismatch, ReasonProviderTemporary, ReasonProviderPermanent, ReasonProviderContract, ReasonTimestampInvalid, ReasonEnvelopeMismatch, ReasonDomainAlignmentMismatch, ReasonNextDomainMismatch, ReasonOutOfBandRequired, ReasonInternalContract:
+	case ReasonNone, ReasonInvalidRequest, ReasonLimitExceeded, ReasonMalformedMessage, ReasonMalformedProtocol, ReasonDuplicateHashAlgorithm, ReasonInvalidRecipeJSON, ReasonDuplicateSelector, ReasonTooManySignatures, ReasonMissingProtocol, ReasonSequenceInvalid, ReasonUnsupportedAlgorithm, ReasonHashMismatch, ReasonSignatureMismatch, ReasonMissingKey, ReasonInvalidKey, ReasonAmbiguousKey, ReasonRevokedKey, ReasonUnsupportedKeyType, ReasonKeyAlgorithmMismatch, ReasonProviderTemporary, ReasonProviderPermanent, ReasonProviderContract, ReasonTimestampInvalid, ReasonEnvelopeMismatch, ReasonDomainAlignmentMismatch, ReasonNextDomainMismatch, ReasonOutOfBandRequired, ReasonInternalContract:
 		return true
 	default:
 		return false

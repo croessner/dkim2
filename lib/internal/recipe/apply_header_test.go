@@ -19,15 +19,15 @@ type applyLimitCheck struct {
 	set       func(*Limits, int)
 }
 
-// TestApplyHeadersReconstructsBottomUpGroups verifies draft-04 copy, data, folding, and ordering.
+// TestApplyHeadersReconstructsBottomUpGroups verifies Draft-05 copy, data, folding, and ordering.
 func TestApplyHeadersReconstructsBottomUpGroups(t *testing.T) {
 	current := mustRecipeState(t, []byte("Zed: z\r\nSubject: top\r\nSubject: folded\r\n value\r\nAlpha: a\r\n\r\nbody\r\n"))
-	plan := mustParseRecipe(t, `{"h":{"Subject":[{"c":[1,1]},{"d":["restored"]}]}}`)
+	plan := mustParseRecipe(t, `{"h":{"subject":[{"c":[1,1]},{"d":["restored"]}]}}`)
 	state, usage, err := mustApplier(t, Limits{}).applyHeaders(current, plan)
 	if err != nil || !state.Valid() || !usage.Valid() {
 		t.Fatalf("apply invalid: state=%t usage=%t code=%s", state.Valid(), usage.Valid(), recipeTestErrorCode(err))
 	}
-	want := []byte("Alpha: a\r\nSubject:restored\r\nSubject: folded\r\n value\r\nZed: z\r\n")
+	want := []byte("Alpha: a\r\nsubject:restored\r\nSubject: folded\r\n value\r\nZed: z\r\n")
 	if got := state.Headers().OriginalBytes(); !bytes.Equal(got, want) {
 		t.Fatalf("header mismatch: got_bytes=%d want_bytes=%d", len(got), len(want))
 	}
@@ -63,12 +63,12 @@ func TestApplyHeadersPreservesAbsentDimensionIdentity(t *testing.T) {
 // TestApplyHeadersReversesEveryEmission verifies multi-copy, multi-data, and mixed-step ordering.
 func TestApplyHeadersReversesEveryEmission(t *testing.T) {
 	current := mustRecipeState(t, []byte("x-Mix: top\r\nX-MIX: folded\r\n value\r\nx-mix: bottom\r\n\r\n"))
-	plan := mustParseRecipe(t, `{"h":{"X-Mix":[{"c":[1,2]},{"d":["","Grüße"]},{"c":[3,3]}]}}`)
+	plan := mustParseRecipe(t, `{"h":{"x-mix":[{"c":[1,2]},{"d":["","Grüße"]},{"c":[3,3]}]}}`)
 	state, _, err := mustApplier(t, Limits{}).applyHeaders(current, plan)
 	if err != nil {
 		t.Fatalf("apply code=%s", recipeTestErrorCode(err))
 	}
-	want := []byte("x-Mix: top\r\nX-Mix:Grüße\r\nX-Mix:\r\nX-MIX: folded\r\n value\r\nx-mix: bottom\r\n")
+	want := []byte("x-Mix: top\r\nx-mix:Grüße\r\nx-mix:\r\nX-MIX: folded\r\n value\r\nx-mix: bottom\r\n")
 	if !bytes.Equal(state.Headers().OriginalBytes(), want) {
 		t.Fatalf("mixed ordering mismatch: got_bytes=%d want_bytes=%d", len(state.Headers().OriginalBytes()), len(want))
 	}
@@ -77,15 +77,15 @@ func TestApplyHeadersReversesEveryEmission(t *testing.T) {
 // TestApplyHeadersHandlesMissingSourceGroup verifies data, removal, and copy semantics without source occurrences.
 func TestApplyHeadersHandlesMissingSourceGroup(t *testing.T) {
 	current := mustRecipeState(t, []byte("A: one\r\n\r\n"))
-	dataState, _, err := mustApplier(t, Limits{}).applyHeaders(current, mustParseRecipe(t, `{"h":{"Missing":[{"d":["made"]}]}}`))
-	if err != nil || !bytes.Contains(dataState.Headers().OriginalBytes(), []byte("Missing:made\r\n")) {
+	dataState, _, err := mustApplier(t, Limits{}).applyHeaders(current, mustParseRecipe(t, `{"h":{"missing":[{"d":["made"]}]}}`))
+	if err != nil || !bytes.Contains(dataState.Headers().OriginalBytes(), []byte("missing:made\r\n")) {
 		t.Fatalf("missing data failed: code=%s", recipeTestErrorCode(err))
 	}
-	emptyState, _, err := mustApplier(t, Limits{}).applyHeaders(current, mustParseRecipe(t, `{"h":{"Missing":[]}}`))
+	emptyState, _, err := mustApplier(t, Limits{}).applyHeaders(current, mustParseRecipe(t, `{"h":{"missing":[]}}`))
 	if err != nil || !bytes.Equal(emptyState.Headers().OriginalBytes(), []byte("A: one\r\n")) {
 		t.Fatalf("missing removal failed: code=%s", recipeTestErrorCode(err))
 	}
-	failed, usage, err := mustApplier(t, Limits{}).applyHeaders(current, mustParseRecipe(t, `{"h":{"Missing":[{"c":[1,1]}]}}`))
+	failed, usage, err := mustApplier(t, Limits{}).applyHeaders(current, mustParseRecipe(t, `{"h":{"missing":[{"c":[1,1]}]}}`))
 	if failed.Valid() || !usage.Valid() || !IsErrorCode(err, ErrorCodeCopyRangeOutOfBounds) {
 		t.Fatalf("missing copy mismatch: code=%s", recipeTestErrorCode(err))
 	}
@@ -94,8 +94,8 @@ func TestApplyHeadersHandlesMissingSourceGroup(t *testing.T) {
 // TestApplyHeadersMechanicallyRestoresExcludedClass verifies recipe does not own canonical exclusions.
 func TestApplyHeadersMechanicallyRestoresExcludedClass(t *testing.T) {
 	current := mustRecipeState(t, []byte("Subject: one\r\n\r\n"))
-	state, _, err := mustApplier(t, Limits{}).applyHeaders(current, mustParseRecipe(t, `{"h":{"Received":[{"d":["restored"]}]}}`))
-	if err != nil || !bytes.Contains(state.Headers().OriginalBytes(), []byte("Received:restored\r\n")) {
+	state, _, err := mustApplier(t, Limits{}).applyHeaders(current, mustParseRecipe(t, `{"h":{"received":[{"d":["restored"]}]}}`))
+	if err != nil || !bytes.Contains(state.Headers().OriginalBytes(), []byte("received:restored\r\n")) {
 		t.Fatalf("mechanical reconstruction failed: code=%s", recipeTestErrorCode(err))
 	}
 	canonicalizer, err := canonical.NewCanonicalizer()
@@ -111,12 +111,12 @@ func TestApplyHeadersMechanicallyRestoresExcludedClass(t *testing.T) {
 // TestApplyHeadersRemovesRetainsAndMatchesCaseInsensitively verifies named replacement semantics.
 func TestApplyHeadersRemovesRetainsAndMatchesCaseInsensitively(t *testing.T) {
 	current := mustRecipeState(t, []byte("Keep: one\r\nSubject: old\r\nRemove: gone\r\n\r\nbody"))
-	plan := mustParseRecipe(t, `{"h":{"remove":[],"sUbJeCt":[{"d":["new"]}]}}`)
+	plan := mustParseRecipe(t, `{"h":{"remove":[],"subject":[{"d":["new"]}]}}`)
 	state, _, err := mustApplier(t, Limits{}).applyHeaders(current, plan)
 	if err != nil {
 		t.Fatalf("apply code=%s", recipeTestErrorCode(err))
 	}
-	want := []byte("Keep: one\r\nsUbJeCt:new\r\n")
+	want := []byte("Keep: one\r\nsubject:new\r\n")
 	if got := state.Headers().OriginalBytes(); !bytes.Equal(got, want) {
 		t.Fatalf("replacement mismatch: got_bytes=%d want_bytes=%d", len(got), len(want))
 	}
@@ -125,7 +125,7 @@ func TestApplyHeadersRemovesRetainsAndMatchesCaseInsensitively(t *testing.T) {
 // TestApplyHeadersCanProduceInitializedEmptyBlock verifies removing every field is valid.
 func TestApplyHeadersCanProduceInitializedEmptyBlock(t *testing.T) {
 	current := mustRecipeState(t, []byte("Only: value\r\n\r\nbody"))
-	state, usage, err := mustApplier(t, Limits{}).applyHeaders(current, mustParseRecipe(t, `{"h":{"Only":[]}}`))
+	state, usage, err := mustApplier(t, Limits{}).applyHeaders(current, mustParseRecipe(t, `{"h":{"only":[]}}`))
 	if err != nil || !state.Valid() || !state.Headers().Initialized() || state.Headers().Len() != 0 {
 		t.Fatalf("empty result invalid: state=%t headers=%d code=%s", state.Valid(), state.Headers().Len(), recipeTestErrorCode(err))
 	}
@@ -150,7 +150,7 @@ func TestApplyHeadersUsageChargesEmissionExactly(t *testing.T) {
 // TestApplyHeadersRejectsOutOfBoundsWithoutPartialState verifies transactional range failure.
 func TestApplyHeadersRejectsOutOfBoundsWithoutPartialState(t *testing.T) {
 	current := mustRecipeState(t, []byte("A: one\r\n\r\nbody"))
-	plan := mustParseRecipe(t, `{"h":{"A":[{"c":[2,2]}]}}`)
+	plan := mustParseRecipe(t, `{"h":{"a":[{"c":[2,2]}]}}`)
 	state, usage, err := mustApplier(t, Limits{}).applyHeaders(current, plan)
 	if state.Valid() || !usage.Valid() || !IsErrorCode(err, ErrorCodeCopyRangeOutOfBounds) {
 		t.Fatalf("failure mismatch: state=%t usage=%t code=%s", state.Valid(), usage.Valid(), recipeTestErrorCode(err))
@@ -184,9 +184,9 @@ func TestApplyHeadersRejectsInvalidContracts(t *testing.T) {
 func TestApplyHeadersEnforcesOutputAndWorkLimits(t *testing.T) {
 	checks := []applyLimitCheck{
 		{"source fields", []byte("A:x\r\nA:y\r\n\r\n"), testHeaderRemovalRecipe, 2, limitNameMaxHeaderFields, func(l *Limits, n int) { l.MaxHeaderFields = n }},
-		{"output fields", []byte("A:x\r\n\r\n"), `{"h":{"A":[{"d":["x","y"]}]}}`, 2, limitNameMaxHeaderFields, func(l *Limits, n int) { l.MaxHeaderFields = n }},
+		{"output fields", []byte("A:x\r\n\r\n"), `{"h":{"a":[{"d":["x","y"]}]}}`, 2, limitNameMaxHeaderFields, func(l *Limits, n int) { l.MaxHeaderFields = n }},
 		{"source names", []byte("A:x\r\nB:y\r\n\r\n"), testHeaderRemovalRecipe, 2, limitNameMaxHeaderNames, func(l *Limits, n int) { l.MaxHeaderNames = n }},
-		{"output names", []byte("A:x\r\n\r\n"), `{"h":{"B":[{"d":["y"]}]}}`, 2, limitNameMaxHeaderNames, func(l *Limits, n int) { l.MaxHeaderNames = n }},
+		{"output names", []byte("A:x\r\n\r\n"), `{"h":{"b":[{"d":["y"]}]}}`, 2, limitNameMaxHeaderNames, func(l *Limits, n int) { l.MaxHeaderNames = n }},
 		{"source field bytes", []byte("A:x\r\n\r\n"), testHeaderRemovalRecipe, 5, limitNameMaxHeaderFieldBytes, func(l *Limits, n int) { l.MaxHeaderFieldBytes = n }},
 		{"output field bytes", []byte("A:x\r\n\r\n"), testHeaderDataXYRecipe, 6, limitNameMaxHeaderFieldBytes, func(l *Limits, n int) { l.MaxHeaderFieldBytes = n }},
 		{"source line bytes", []byte("A:x\r\n\r\n"), testHeaderRemovalRecipe, 3, limitNameMaxHeaderLineBytes, func(l *Limits, n int) { l.MaxHeaderLineBytes = n }},
@@ -194,8 +194,8 @@ func TestApplyHeadersEnforcesOutputAndWorkLimits(t *testing.T) {
 		{"source header bytes", []byte("A:x\r\nB:y\r\n\r\n"), testHeaderRemovalRecipe, 10, limitNameMaxHeaderBytes, func(l *Limits, n int) { l.MaxHeaderBytes = n }},
 		{"output header bytes", []byte("A:x\r\n\r\n"), testHeaderDataXYRecipe, 6, limitNameMaxHeaderBytes, func(l *Limits, n int) { l.MaxHeaderBytes = n }},
 		{testStateBytesLabel, []byte("A:x\r\n\r\nb\r\n"), testHeaderDataXRecipe, 10, limitNameMaxStateBytes, func(l *Limits, n int) { l.MaxStateBytes = n }},
-		{"copy range", []byte("A:x\r\nA:y\r\n\r\n"), `{"h":{"A":[{"c":[1,2]}]}}`, 2, limitNameMaxCopiedItemsPerRange, func(l *Limits, n int) { l.MaxCopiedItemsPerRange = n }},
-		{"total copies", []byte("A:x\r\nB:y\r\n\r\n"), `{"h":{"A":[{"c":[1,1]}],"B":[{"c":[1,1]}]}}`, 2, limitNameMaxTotalCopiedItems, func(l *Limits, n int) { l.MaxCopiedItemsPerRange = 1; l.MaxTotalCopiedItems = n }},
+		{"copy range", []byte("A:x\r\nA:y\r\n\r\n"), `{"h":{"a":[{"c":[1,2]}]}}`, 2, limitNameMaxCopiedItemsPerRange, func(l *Limits, n int) { l.MaxCopiedItemsPerRange = n }},
+		{"total copies", []byte("A:x\r\nB:y\r\n\r\n"), `{"h":{"a":[{"c":[1,1]}],"b":[{"c":[1,1]}]}}`, 2, limitNameMaxTotalCopiedItems, func(l *Limits, n int) { l.MaxCopiedItemsPerRange = 1; l.MaxTotalCopiedItems = n }},
 		{"operation work", []byte("A:x\r\n\r\n"), testHeaderDataXRecipe, 7, limitNameMaxOperationWorkUnits, func(l *Limits, n int) { l.MaxOperationWorkUnits = n }},
 	}
 	runApplyLimitChecks(t, checks, Applier.applyHeaders)
@@ -205,9 +205,9 @@ func TestApplyHeadersEnforcesOutputAndWorkLimits(t *testing.T) {
 func TestApplyHeadersEnforcesNameBudgetsAcrossSourceAndPlan(t *testing.T) {
 	checks := []applyLimitCheck{
 		{"source name", []byte("Long:x\r\n\r\n"), testBodyEmptyRecipe, 4, limitNameMaxHeaderNameBytes, func(l *Limits, n int) { l.MaxHeaderNameBytes = n }},
-		{"plan name", []byte("A:x\r\n\r\n"), `{"h":{"Long":[]}}`, 4, limitNameMaxHeaderNameBytes, func(l *Limits, n int) { l.MaxHeaderNameBytes = n }},
-		{"source plan union", []byte("AA:x\r\n\r\n"), `{"h":{"BBB":[]}}`, 5, limitNameMaxTotalHeaderNameBytes, func(l *Limits, n int) { l.MaxTotalHeaderNameBytes = n }},
-		{"case folded union", []byte("Name:x\r\n\r\n"), `{"h":{"nAmE":[]}}`, 4, limitNameMaxTotalHeaderNameBytes, func(l *Limits, n int) { l.MaxTotalHeaderNameBytes = n }},
+		{"plan name", []byte("A:x\r\n\r\n"), `{"h":{"long":[]}}`, 4, limitNameMaxHeaderNameBytes, func(l *Limits, n int) { l.MaxHeaderNameBytes = n }},
+		{"source plan union", []byte("AA:x\r\n\r\n"), `{"h":{"bbb":[]}}`, 5, limitNameMaxTotalHeaderNameBytes, func(l *Limits, n int) { l.MaxTotalHeaderNameBytes = n }},
+		{"case folded union", []byte("Name:x\r\n\r\n"), `{"h":{"name":[]}}`, 4, limitNameMaxTotalHeaderNameBytes, func(l *Limits, n int) { l.MaxTotalHeaderNameBytes = n }},
 	}
 	runApplyLimitChecks(t, checks, Applier.applyHeaders)
 }
@@ -215,12 +215,12 @@ func TestApplyHeadersEnforcesNameBudgetsAcrossSourceAndPlan(t *testing.T) {
 // TestApplyHeadersRevalidatesParsedPlanBudgets verifies Parser and Applier limits cannot diverge.
 func TestApplyHeadersRevalidatesParsedPlanBudgets(t *testing.T) {
 	checks := []applyLimitCheck{
-		{testStepsPerHeaderLabel, []byte("A:x\r\n\r\n"), `{"h":{"A":[{"d":["x"]},{"d":["y"]}]}}`, 2, limitNameMaxStepsPerHeader, func(l *Limits, n int) { l.MaxStepsPerHeader = n }},
-		{testTotalStepsLabel, []byte("A:x\r\nB:y\r\n\r\n"), `{"h":{"A":[{"d":["x"]}],"B":[{"d":["y"]}]}}`, 2, limitNameMaxTotalSteps, func(l *Limits, n int) { l.MaxStepsPerHeader = n; l.MaxBodySteps = n; l.MaxTotalSteps = n }},
-		{testCopyRangesLabel, []byte("A:x\r\nA:y\r\n\r\n"), `{"h":{"A":[{"c":[1,1]},{"c":[2,2]}]}}`, 2, limitNameMaxCopyRanges, func(l *Limits, n int) { l.MaxCopyRanges = n }},
-		{testDataStringsLabel, []byte("A:x\r\n\r\n"), `{"h":{"A":[{"d":["x","y"]}]}}`, 2, limitNameMaxDataStrings, func(l *Limits, n int) { l.MaxDataStrings = n }},
+		{testStepsPerHeaderLabel, []byte("A:x\r\n\r\n"), `{"h":{"a":[{"d":["x"]},{"d":["y"]}]}}`, 2, limitNameMaxStepsPerHeader, func(l *Limits, n int) { l.MaxStepsPerHeader = n }},
+		{testTotalStepsLabel, []byte("A:x\r\nB:y\r\n\r\n"), `{"h":{"a":[{"d":["x"]}],"b":[{"d":["y"]}]}}`, 2, limitNameMaxTotalSteps, func(l *Limits, n int) { l.MaxStepsPerHeader = n; l.MaxBodySteps = n; l.MaxTotalSteps = n }},
+		{testCopyRangesLabel, []byte("A:x\r\nA:y\r\n\r\n"), `{"h":{"a":[{"c":[1,1]},{"c":[2,2]}]}}`, 2, limitNameMaxCopyRanges, func(l *Limits, n int) { l.MaxCopyRanges = n }},
+		{testDataStringsLabel, []byte("A:x\r\n\r\n"), `{"h":{"a":[{"d":["x","y"]}]}}`, 2, limitNameMaxDataStrings, func(l *Limits, n int) { l.MaxDataStrings = n }},
 		{testDataStringBytesLabel, []byte("A:x\r\n\r\n"), testHeaderDataXYRecipe, 2, limitNameMaxDataStringBytes, func(l *Limits, n int) { l.MaxDataStringBytes = n }},
-		{testLiteralBytesLabel, []byte("A:x\r\n\r\n"), `{"h":{"A":[{"d":["xy","z"]}]}}`, 3, limitNameMaxTotalLiteralBytes, func(l *Limits, n int) { l.MaxDataStringBytes = n; l.MaxTotalLiteralBytes = n }},
+		{testLiteralBytesLabel, []byte("A:x\r\n\r\n"), `{"h":{"a":[{"d":["xy","z"]}]}}`, 3, limitNameMaxTotalLiteralBytes, func(l *Limits, n int) { l.MaxDataStringBytes = n; l.MaxTotalLiteralBytes = n }},
 	}
 	runApplyLimitChecks(t, checks, Applier.applyHeaders)
 }
@@ -250,7 +250,7 @@ func TestApplyHeadersChargesHeaderOnlyRemovalDelimiter(t *testing.T) {
 // TestApplyHeadersUsageIncludesCopyRetentionAndSorting verifies exact accounting policy.
 func TestApplyHeadersUsageIncludesCopyRetentionAndSorting(t *testing.T) {
 	current := mustRecipeState(t, []byte("B:y\r\nA:x\r\n\r\n"))
-	state, usage, err := mustApplier(t, Limits{}).applyHeaders(current, mustParseRecipe(t, `{"h":{"A":[{"c":[1,1]}]}}`))
+	state, usage, err := mustApplier(t, Limits{}).applyHeaders(current, mustParseRecipe(t, `{"h":{"a":[{"c":[1,1]}]}}`))
 	if err != nil || !state.Valid() || usage.Items() != 5 || usage.EmittedBytes() != 10 || usage.WorkUnits() != 16 {
 		t.Fatalf("sorted copy usage: items=%d emitted=%d work=%d code=%s", usage.Items(), usage.EmittedBytes(), usage.WorkUnits(), recipeTestErrorCode(err))
 	}
@@ -263,7 +263,7 @@ func TestApplyHeadersUsageIncludesCopyRetentionAndSorting(t *testing.T) {
 // TestApplyHeadersStopsBeforeLaterOutputExpansion verifies early caps prevent later emission work.
 func TestApplyHeadersStopsBeforeLaterOutputExpansion(t *testing.T) {
 	current := mustRecipeState(t, []byte("A:x\r\n\r\n"))
-	plan := mustParseRecipe(t, `{"h":{"A":[{"d":["first","second"]}]}}`)
+	plan := mustParseRecipe(t, `{"h":{"a":[{"d":["first","second"]}]}}`)
 	limits := DefaultLimits()
 	limits.MaxHeaderFields = 1
 	state, usage, err := mustApplier(t, limits).applyHeaders(current, plan)
@@ -294,7 +294,7 @@ func TestApplyHeadersErrorsDoNotExposeInput(t *testing.T) {
 // TestApplyHeadersIsRepeatableAndImmutable verifies deterministic detached output.
 func TestApplyHeadersIsRepeatableAndImmutable(t *testing.T) {
 	current := mustRecipeState(t, []byte("B: two\r\nA: one\r\n\r\nbody"))
-	plan := mustParseRecipe(t, `{"h":{"A":[{"c":[1,1]}]}}`)
+	plan := mustParseRecipe(t, `{"h":{"a":[{"c":[1,1]}]}}`)
 	applier := mustApplier(t, Limits{})
 	first, _, err := applier.applyHeaders(current, plan)
 	if err != nil {

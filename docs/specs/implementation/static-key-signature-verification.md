@@ -1,5 +1,9 @@
 # Static-Key Signature Verification
 
+> Historical Draft-04 implementation record. The original scope and evidence
+> below are preserved; current Draft-05 authority is the migration disposition
+> and the 2026-08-26 semantics audit.
+
 Status: completed.
 
 This spec defines Milestone M4, static-key DKIM2 signature verification for

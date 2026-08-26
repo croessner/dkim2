@@ -14,7 +14,8 @@ import (
 func FuzzParseMessageInstance(f *testing.F) {
 	seeds := [][]byte{
 		[]byte("m=1; h=sha256:" + base64OfByte(0x11, 32) + ":" + base64OfByte(0x22, 32) + ";"),
-		[]byte("m=1; h=sha512:hash-secret-header:hash-secret-body; x_ext=ignored;"),
+		[]byte("m=1; h=sha512:" + base64OfByte(0x11, 64) + ":" + base64OfByte(0x22, 64) + ";"),
+		[]byte("m=1; h=future-hash:" + base64OfByte(0x11, 8) + ":" + base64OfByte(0x22, 8) + ",FUTURE-HASH:" + base64OfByte(0x33, 8) + ":" + base64OfByte(0x44, 8) + ";"),
 		[]byte("m=0; h=sha256:" + base64OfByte(0x11, 32) + ":" + base64OfByte(0x22, 32) + ";"),
 		[]byte("m=1; h=sha256:not_base64:" + base64OfByte(0x22, 32) + ";"),
 		[]byte("m=1; h=sha256:" + base64OfByte(0x11, 32) + ":" + base64OfByte(0x22, 32) + "; r=c2VjcmV0LXJlY2lwZQ;"),

@@ -1,5 +1,9 @@
 # LDAP And SQL Datasource Providers And Legacy Migration
 
+> Historical Draft-04 implementation record. The original scope and evidence
+> below are preserved; current Draft-05 authority is the migration disposition
+> and the 2026-08-26 semantics audit.
+
 Status: completed historical delivery; current runtime custody is superseded as
 described below.
 

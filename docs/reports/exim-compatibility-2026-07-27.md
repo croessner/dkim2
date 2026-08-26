@@ -1,5 +1,9 @@
 # Exim Compatibility Matrix — qualified 2026-07-31
 
+> Historical Draft-04 qualification evidence. The Draft-05 capability is
+> `unqualified_draft05`; none of the rows below qualify current candidate bytes
+> and the active conformance and security profiles reject their import.
+
 This report records the authenticated five-row implementation inputs and the
 completed Linux runtime qualification. The strict verifier accepted all
 5 × 43 cases and the final fail-closed privacy scan.

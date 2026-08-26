@@ -8,7 +8,7 @@ import (
 
 var scannerKnownTags = MustKnownTags("m", "h", "r", "empty")
 
-// TestScanRejectsMissingFinalSemicolon reproduces the draft-04 tag terminator requirement.
+// TestScanRejectsMissingFinalSemicolon reproduces the draft-05 tag terminator requirement.
 func TestScanRejectsMissingFinalSemicolon(t *testing.T) {
 	if _, err := ScanTerminated([]byte("m=1; h=abc"), scannerKnownTags, Limits{}); !IsErrorCode(err, ErrorCodeMissingTagTerminator) {
 		t.Fatalf("Scan() error = %v, want missing tag terminator", err)

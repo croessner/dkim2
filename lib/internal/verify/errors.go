@@ -43,6 +43,14 @@ const (
 	ErrorCodeProviderError ErrorCode = "provider_error"
 	// ErrorCodeMalformedState reports malformed parser-owned verification state.
 	ErrorCodeMalformedState ErrorCode = "malformed_state"
+	// ErrorCodeDuplicateHashAlgorithm reports a repeated h= algorithm name.
+	ErrorCodeDuplicateHashAlgorithm ErrorCode = "duplicate_hash_algorithm"
+	// ErrorCodeInvalidRecipeJSON reports malformed authenticated r= JSON.
+	ErrorCodeInvalidRecipeJSON ErrorCode = "invalid_recipe_json"
+	// ErrorCodeDuplicateSelector reports a repeated selector within one signature field.
+	ErrorCodeDuplicateSelector ErrorCode = "duplicate_selector"
+	// ErrorCodeTooManySignatures reports more signature sets than the protocol maximum.
+	ErrorCodeTooManySignatures ErrorCode = "too_many_signatures"
 	// ErrorCodeSequenceInvalid reports non-contiguous or duplicate extracted numbering.
 	ErrorCodeSequenceInvalid ErrorCode = "sequence_invalid"
 	// ErrorCodeMissingTarget reports a missing signature or instance target.
@@ -75,10 +83,6 @@ const (
 	ErrorCodeHistoryInvalidState ErrorCode = "history_invalid_state"
 	// ErrorCodeHistoryInstanceNotAdjacent reports invalid m= transition ordering.
 	ErrorCodeHistoryInstanceNotAdjacent ErrorCode = "history_instance_not_adjacent"
-	// ErrorCodeHistoryMissingRecipe reports an absent required r= value.
-	ErrorCodeHistoryMissingRecipe ErrorCode = "history_missing_recipe"
-	// ErrorCodeHistoryMissingSHA256 reports absent historical baseline hashes.
-	ErrorCodeHistoryMissingSHA256 ErrorCode = "history_missing_sha256"
 	// ErrorCodeHistoryLimitExceeded reports a cumulative history ceiling.
 	ErrorCodeHistoryLimitExceeded ErrorCode = "history_limit_exceeded"
 	// ErrorCodeHistoryInternalContract reports an impossible coordinator state.
@@ -435,10 +439,14 @@ func classForCode(code ErrorCode) ErrorClass {
 		return ErrorClassUnsupported
 	case ErrorCodeMissingKey, ErrorCodeAmbiguousKey, ErrorCodeInvalidKey, ErrorCodeRevokedKey, ErrorCodeUnsupportedKeyType, ErrorCodeKeyAlgorithmMismatch, ErrorCodeWrongKeyType, ErrorCodeKeyPolicyRejected, ErrorCodeProviderError:
 		return ErrorClassKey
-	case ErrorCodeMissingTarget, ErrorCodeHistoryMissingRecipe, ErrorCodeHistoryMissingSHA256:
+	case ErrorCodeMissingTarget:
 		return ErrorClassMissing
-	case ErrorCodeDuplicateTarget:
+	case ErrorCodeDuplicateTarget, ErrorCodeDuplicateHashAlgorithm, ErrorCodeDuplicateSelector:
 		return ErrorClassDuplicate
+	case ErrorCodeInvalidRecipeJSON:
+		return ErrorClassMalformed
+	case ErrorCodeTooManySignatures:
+		return ErrorClassLimit
 	case ErrorCodeHashMismatch:
 		return ErrorClassHash
 	case ErrorCodeSignatureMismatch:

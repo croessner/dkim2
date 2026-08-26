@@ -165,7 +165,7 @@ func (s *conformanceService) ServeHTTP(writer http.ResponseWriter, request *http
 	case "/readyz":
 		s.writeJSON(
 			writer, http.StatusOK,
-			`{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-04","status":"ready"}`,
+			`{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-05","status":"ready"}`,
 			true,
 		)
 		return
@@ -272,7 +272,7 @@ func (s *conformanceService) writeError(
 	status int,
 	code string,
 ) {
-	body := `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-04","code":"` +
+	body := `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-05","code":"` +
 		code + `","category":"request"}`
 	s.writeJSON(writer, status, body, false)
 }
@@ -314,10 +314,10 @@ func decodeGeneratedBody(request *http.Request, destination any) bool {
 	return decoder.Decode(&trailing) == io.EOF
 }
 
-const processReportResponse = `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-04","verification":{"state":"PASS","primary_reason":"none","scope":"chain","historical_content":"complete","historical_signatures":"complete","custody_structure":"not_present","checks":[{"class":"protocol","reason":"none"}],"signature_sets":[]},"policy":{"mode":"strict","verdict":"accept","primary_reason":"protocol_pass","do_not_modify":"not_evaluated","do_not_explode":"not_evaluated","dns_testing_effective":false,"feedback":{"requested":false,"relay_required":false,"history_coverage":"not_evaluated"},"findings":[{"reason":"protocol_pass","severity":"info"}]},"replay":{"class":"first_seen"},"disposition":"accept","actions":[{"type":"add_header","name":"Authentication-Results","value":"mx.example.test; dkim2=pass"}]}`
-const signContinueResponse = `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-04","operation":"sign","result":"pass","disposition":"continue","actions":[]}`
-const reviseUnchangedResponse = `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-04","operation":"revise","result":"pass","disposition":"accept","actions":[{"type":"add_header","name":"DKIM2-Signature","value":"v=1; a=ed25519-sha256; d=example.test; s=test; b=unchanged"}]}`
-const reviseChangedResponse = `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-04","operation":"revise","result":"pass","disposition":"accept","actions":[{"type":"add_header","name":"Message-Instance","value":"v=1; i=2; h=sha256:synthetic"},{"type":"add_header","name":"DKIM2-Signature","value":"v=1; a=ed25519-sha256; d=example.test; s=test; b=changed"}]}`
+const processReportResponse = `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-05","verification":{"state":"PASS","primary_reason":"none","scope":"chain","historical_content":"complete","historical_signatures":"complete","custody_structure":"not_present","checks":[{"class":"protocol","reason":"none"}],"signature_sets":[]},"policy":{"mode":"strict","verdict":"accept","primary_reason":"protocol_pass","do_not_modify":"not_evaluated","do_not_explode":"not_evaluated","dns_testing_effective":false,"feedback":{"requested":false,"relay_required":false,"history_coverage":"not_evaluated"},"findings":[{"reason":"protocol_pass","severity":"info"}]},"replay":{"class":"first_seen"},"disposition":"accept","actions":[{"type":"add_header","name":"Authentication-Results","value":"mx.example.test; dkim2=pass"}]}`
+const signContinueResponse = `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-05","operation":"sign","result":"pass","disposition":"continue","actions":[]}`
+const reviseUnchangedResponse = `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-05","operation":"revise","result":"pass","disposition":"accept","actions":[{"type":"add_header","name":"DKIM2-Signature","value":"v=1; a=ed25519-sha256; d=example.test; s=test; b=unchanged"}]}`
+const reviseChangedResponse = `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-05","operation":"revise","result":"pass","disposition":"accept","actions":[{"type":"add_header","name":"Message-Instance","value":"v=1; i=2; h=sha256:synthetic"},{"type":"add_header","name":"DKIM2-Signature","value":"v=1; a=ed25519-sha256; d=example.test; s=test; b=changed"}]}`
 
 // serveOneHealthResponse serves one exact daemon-compatible health response.
 func serveOneHealthResponse(listener net.Listener, done chan<- error) {

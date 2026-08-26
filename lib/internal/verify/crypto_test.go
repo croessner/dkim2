@@ -166,8 +166,8 @@ func syntheticVerifierRSAKey(bits, exponent int) *rsa.PublicKey {
 	return &rsa.PublicKey{N: modulus, E: exponent}
 }
 
-// TestVerifierRejectsInvalidProviderSuccessInvariants verifies nil-error provider results still fail closed.
-func TestVerifierRejectsInvalidProviderSuccessInvariants(t *testing.T) {
+// TestVerifierClassifiesProviderSuccessInvariants verifies nil-error provider results remain typed and fail closed.
+func TestVerifierClassifiesProviderSuccessInvariants(t *testing.T) {
 	fixture := newRSAVerificationFixture(t)
 	tests := []struct {
 		name   string
@@ -178,7 +178,7 @@ func TestVerifierRejectsInvalidProviderSuccessInvariants(t *testing.T) {
 			name: "algorithm mismatch",
 			key: PublicKey{
 				Algorithm: AlgorithmEd25519SHA256,
-				Material:  fixture.rsaPublicKey,
+				Material:  deterministicEd25519PublicKey("provider success algorithm mismatch"),
 				Metadata:  KeyMetadata{Status: KeyStatusFound},
 			},
 			status: SignatureSetStatusProviderContract,

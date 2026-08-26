@@ -118,7 +118,7 @@ func MapProcessRequest(input generated.ProcessRequest) (DomainRequest, error) {
 	if input.Message.Fidelity != nil {
 		fidelity = app.MessageFidelity(*input.Message.Fidelity)
 	}
-	if input.ApiVersion != generated.V1 || input.Draft != generated.DraftIetfDkimDkim2Spec04 ||
+	if input.ApiVersion != generated.V1 || input.Draft != generated.DraftIetfDkimDkim2Spec05 ||
 		!app.AdmitsProcessFidelity(fidelity) {
 		return DomainRequest{}, newMappingError(MappingInvalidContract)
 	}

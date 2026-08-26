@@ -41,7 +41,8 @@ func TestPublicVerificationVocabulariesAreClosed(t *testing.T) {
 
 	reasons := []ReasonCode{
 		ReasonNone, ReasonInvalidRequest, ReasonLimitExceeded,
-		ReasonMalformedMessage, ReasonMalformedProtocol, ReasonMissingProtocol,
+		ReasonMalformedMessage, ReasonMalformedProtocol, ReasonDuplicateHashAlgorithm,
+		ReasonInvalidRecipeJSON, ReasonDuplicateSelector, ReasonTooManySignatures, ReasonMissingProtocol,
 		ReasonSequenceInvalid, ReasonUnsupportedAlgorithm, ReasonHashMismatch,
 		ReasonSignatureMismatch, ReasonMissingKey, ReasonInvalidKey,
 		ReasonAmbiguousKey, ReasonRevokedKey, ReasonUnsupportedKeyType, ReasonKeyAlgorithmMismatch, ReasonProviderTemporary, ReasonProviderPermanent,

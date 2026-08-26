@@ -22,7 +22,7 @@ func TestParseFlagsPreservesKnownAndUnknown(t *testing.T) {
 	}
 }
 
-// TestParseFlagsRecognizesFeedHere reproduces the draft-04 feedhere flag contract.
+// TestParseFlagsRecognizesFeedHere reproduces the Draft-05 feedhere flag contract.
 func TestParseFlagsRecognizesFeedHere(t *testing.T) {
 	parsed, err := Parse(dkim2SignatureField(t, 0, signatureValueWith("f", "feedhere")))
 	if err != nil {

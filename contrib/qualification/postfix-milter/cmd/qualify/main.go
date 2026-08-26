@@ -52,6 +52,69 @@ const (
 
 var errQualification = errors.New("qualification failed")
 
+type qualificationStage string
+
+const (
+	stageHealth             qualificationStage = "health"
+	stageTopology           qualificationStage = "topology"
+	stageOriginSubmit       qualificationStage = "origin_submit"
+	stageOriginValidation   qualificationStage = "origin_validation"
+	stageQueueInventory     qualificationStage = "queue_inventory"
+	stageLocalSubmit        qualificationStage = "local_submit"
+	stageLocalValidation    qualificationStage = "local_validation"
+	stageInboundSubmit      qualificationStage = "inbound_submit"
+	stageInboundValidation  qualificationStage = "inbound_validation"
+	stageDSNInventory       qualificationStage = "dsn_inventory"
+	stageDSNSubmit          qualificationStage = "dsn_submit"
+	stageDSNQueue           qualificationStage = "dsn_queue"
+	stageDSNCardinality     qualificationStage = "dsn_cardinality"
+	stageDSNCrypto          qualificationStage = "dsn_crypto"
+	stageInjectedSubmit     qualificationStage = "injected_submit"
+	stageInjectedValidation qualificationStage = "injected_validation"
+	stageFragment           qualificationStage = "fragment"
+)
+
+type qualificationStageError struct {
+	stage qualificationStage
+}
+
+// Error returns a content-free qualification failure without exposing message state.
+func (*qualificationStageError) Error() string {
+	return errQualification.Error()
+}
+
+// qualificationFailure constructs one failure from the closed stage vocabulary.
+func qualificationFailure(stage qualificationStage) error {
+	if !validQualificationStage(stage) {
+		return errQualification
+	}
+	return &qualificationStageError{stage: stage}
+}
+
+// qualificationFailureStage extracts only a recognized content-free stage.
+func qualificationFailureStage(err error) (qualificationStage, bool) {
+	var staged *qualificationStageError
+	if !errors.As(err, &staged) || staged == nil || !validQualificationStage(staged.stage) {
+		return "", false
+	}
+	return staged.stage, true
+}
+
+// validQualificationStage recognizes every bounded success-qualification stage.
+func validQualificationStage(stage qualificationStage) bool {
+	switch stage {
+	case stageHealth, stageTopology, stageOriginSubmit, stageOriginValidation,
+		stageQueueInventory, stageLocalSubmit, stageLocalValidation,
+		stageInboundSubmit, stageInboundValidation, stageDSNInventory,
+		stageDSNSubmit, stageDSNQueue, stageDSNCardinality, stageDSNCrypto,
+		stageInjectedSubmit,
+		stageInjectedValidation, stageFragment:
+		return true
+	default:
+		return false
+	}
+}
+
 // main dispatches one fixed qualification operation.
 func main() {
 	if len(os.Args) != 2 {
@@ -85,7 +148,11 @@ func main() {
 		os.Exit(2)
 	}
 	if err != nil {
-		_, _ = fmt.Fprintln(os.Stderr, "qualification operation failed")
+		if stage, ok := qualificationFailureStage(err); ok {
+			_, _ = fmt.Fprintf(os.Stderr, "qualification operation failed stage=%s\n", stage)
+		} else {
+			_, _ = fmt.Fprintln(os.Stderr, "qualification operation failed")
+		}
 		os.Exit(1)
 	}
 }
@@ -1025,10 +1092,10 @@ func copyDirectory(source, target string) error {
 // runSuccessQualification proves topology, SMTP/local signing, and inbound verification.
 func runSuccessQualification() error {
 	if err := checkStackHealth(); err != nil || checkDaemonHealth() != nil {
-		return errQualification
+		return qualificationFailure(stageHealth)
 	}
 	if err := verifyTopology(); err != nil {
-		return err
+		return qualificationFailure(stageTopology)
 	}
 	sender := "<sender@" + signingDomain + ">"
 	recipient := "<recipient@receiver.example.test>"
@@ -1042,15 +1109,15 @@ func runSuccessQualification() error {
 	)
 	originID, err := smtpSubmit(2525, sender, []string{recipient}, originMessage, true)
 	if err != nil {
-		return err
+		return qualificationFailure(stageOriginSubmit)
 	}
 	originRaw, err := queuedMessage(originID)
 	if err != nil || validateSignedMessage(originRaw, sender, []string{recipient}) != nil {
-		return errQualification
+		return qualificationFailure(stageOriginValidation)
 	}
 	before, err := queueIDs()
 	if err != nil {
-		return err
+		return qualificationFailure(stageQueueInventory)
 	}
 	localMessage := []byte(
 		"From: sender@" + signingDomain + "\n" +
@@ -1059,19 +1126,19 @@ func runSuccessQualification() error {
 			"X-Local-Submission: yes\n\n",
 	)
 	if err := submitLocalMessage(localMessage); err != nil {
-		return errQualification
+		return qualificationFailure(stageLocalSubmit)
 	}
 	localRaw, err := waitForNewQueuedMessage(before, 10*time.Second)
 	if err != nil {
-		return errQualification
+		return qualificationFailure(stageLocalValidation)
 	}
 	if validateSignedMessage(localRaw, sender, []string{recipient}) != nil {
-		return errQualification
+		return qualificationFailure(stageLocalValidation)
 	}
 	receivedBefore := countHeader(originRaw, "Received")
 	inboundID, err := smtpSubmit(2526, sender, []string{recipient}, originRaw, true)
 	if err != nil {
-		return err
+		return qualificationFailure(stageInboundSubmit)
 	}
 	inboundRaw, err := queuedMessage(inboundID)
 	observedReceived, observedErr := observedDaemonReceivedCount()
@@ -1084,11 +1151,11 @@ func runSuccessQualification() error {
 			"Authentication-Results",
 			authservID+"; dkim2=pass",
 		) {
-		return errQualification
+		return qualificationFailure(stageInboundValidation)
 	}
 	beforeDSN, err := queueIDs()
 	if err != nil {
-		return err
+		return qualificationFailure(stageDSNInventory)
 	}
 	failureMessage := []byte(
 		"From: sender@" + signingDomain + "\r\n" +
@@ -1102,18 +1169,22 @@ func runSuccessQualification() error {
 		failureMessage,
 		true,
 	); err != nil {
-		return err
+		return qualificationFailure(stageDSNSubmit)
 	}
 	dsnRaw, err := waitForQueuedDSN(beforeDSN, 15*time.Second)
-	if err != nil ||
-		countHeader(dsnRaw, "Message-Instance") != 1 ||
-		countHeader(dsnRaw, "DKIM2-Signature") != 1 ||
-		validateSignedMessage(
-			dsnRaw,
-			"<>",
-			[]string{"<sender@" + signingDomain + ">"},
-		) != nil {
-		return errQualification
+	if err != nil {
+		return qualificationFailure(stageDSNQueue)
+	}
+	if countHeader(dsnRaw, "Message-Instance") != 1 ||
+		countHeader(dsnRaw, "DKIM2-Signature") != 1 {
+		return qualificationFailure(stageDSNCardinality)
+	}
+	if validateSignedMessage(
+		dsnRaw,
+		"<>",
+		[]string{"<sender@" + signingDomain + ">"},
+	) != nil {
+		return qualificationFailure(stageDSNCrypto)
 	}
 	injected := []byte(
 		"From: postmaster@" + signingDomain + "\r\n" +
@@ -1128,16 +1199,16 @@ func runSuccessQualification() error {
 		true,
 	)
 	if err != nil {
-		return err
+		return qualificationFailure(stageInjectedSubmit)
 	}
 	injectedRaw, err := queuedMessage(injectedID)
 	if err != nil ||
 		countHeader(injectedRaw, "Message-Instance") != 0 ||
 		countHeader(injectedRaw, "DKIM2-Signature") != 0 ||
 		!headerHasExactValue(injectedRaw, "Subject", "injected null sender") {
-		return errQualification
+		return qualificationFailure(stageInjectedValidation)
 	}
-	return emitCaseFragment([]string{
+	if err := emitCaseFragment([]string{
 		"daemon_loopback_topology",
 		"injected_null_sender_has_no_dsn_evidence",
 		"inbound_cryptographic_pass",
@@ -1146,10 +1217,13 @@ func runSuccessQualification() error {
 		"postfix_normal_cleanup_dsn_routing",
 		"postfix_received_visibility",
 		"smtp_origin_signing",
-	})
+	}); err != nil {
+		return qualificationFailure(stageFragment)
+	}
+	return nil
 }
 
-// waitForQueuedDSN waits for one newly generated signed delivery-status report.
+// waitForQueuedDSN waits for one newly generated delivery-status report.
 func waitForQueuedDSN(before map[string]struct{}, timeout time.Duration) ([]byte, error) {
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
@@ -1165,16 +1239,20 @@ func waitForQueuedDSN(before map[string]struct{}, timeout time.Duration) ([]byte
 			if readErr != nil {
 				continue
 			}
-			lower := strings.ToLower(string(raw))
-			if countHeader(raw, "DKIM2-Signature") == 1 &&
-				strings.Contains(lower, "multipart/report") &&
-				strings.Contains(lower, "message/delivery-status") {
+			if isDeliveryStatusReport(raw) {
 				return raw, nil
 			}
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
 	return nil, errQualification
+}
+
+// isDeliveryStatusReport identifies the bounded MIME markers without assuming signing success.
+func isDeliveryStatusReport(raw []byte) bool {
+	lower := strings.ToLower(string(raw))
+	return strings.Contains(lower, "multipart/report") &&
+		strings.Contains(lower, "message/delivery-status")
 }
 
 // observedDaemonReceivedCount reads only the content-free qualification observation.

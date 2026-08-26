@@ -625,7 +625,7 @@ func publicPolicyProtocol(state ResultState) (policy.ProtocolClass, bool) {
 
 // unavailableReasonMatches binds every allowed pre-target reason exactly.
 func unavailableReasonMatches(pre policy.PreTargetReason, reason ReasonCode) bool {
-	return string(pre) == string(reason) && pre.Known() && (reason == ReasonLimitExceeded || reason == ReasonMalformedMessage || reason == ReasonMalformedProtocol || reason == ReasonMissingProtocol || reason == ReasonSequenceInvalid || reason == ReasonInternalContract)
+	return string(pre) == string(reason) && pre.Known() && (reason == ReasonLimitExceeded || reason == ReasonMalformedMessage || reason == ReasonMalformedProtocol || reason == ReasonDuplicateHashAlgorithm || reason == ReasonDuplicateSelector || reason == ReasonTooManySignatures || reason == ReasonMissingProtocol || reason == ReasonSequenceInvalid || reason == ReasonInternalContract)
 }
 
 // adaptPolicyDecision deep-copies one validated internal decision into public values.

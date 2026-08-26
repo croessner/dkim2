@@ -1,5 +1,9 @@
 # DNS Key Resolver
 
+> Historical Draft-04 implementation record. The original scope and evidence
+> below are preserved; current Draft-05 authority is the migration disposition
+> and the 2026-08-26 semantics audit.
+
 ## Status
 
 - Increment: DNS key resolution after the public current-verification facade.

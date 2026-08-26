@@ -48,7 +48,7 @@
       "additionalProperties": false,
       "required": ["exim", "ldap_sql_migration"],
       "properties": {
-        "exim": {"const": "qualified_linux"},
+        "exim": {"const": "unqualified_draft05"},
         "ldap_sql_migration": {"const": "implemented"}
       }
     }

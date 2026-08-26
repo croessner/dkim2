@@ -22,6 +22,22 @@ func TestSHA256HashSetSelection(t *testing.T) {
 	}
 }
 
+// TestSupportedHashSetSelection distinguishes supported, unknown-only, and empty states.
+func TestSupportedHashSetSelection(t *testing.T) {
+	dual := mustSelectionInstance(t, "m=1; h=sha256:"+base64OfByte(1, 32)+":"+base64OfByte(2, 32)+",sha512:"+base64OfByte(3, 64)+":"+base64OfByte(4, 64))
+	sets, status := dual.SupportedHashSets()
+	if status != HashSelectionStatusSelected || len(sets) != 2 {
+		t.Fatalf("dual selection status=%s sets=%d", status, len(sets))
+	}
+	unknown := mustSelectionInstance(t, "m=1; h=future:"+base64OfByte(1, 8)+":"+base64OfByte(2, 8))
+	if sets, status = unknown.SupportedHashSets(); status != HashSelectionStatusUnsupported || len(sets) != 0 {
+		t.Fatalf("unknown selection status=%s sets=%d", status, len(sets))
+	}
+	if sets, status = (MessageInstance{}).SupportedHashSets(); status != HashSelectionStatusMissing || len(sets) != 0 {
+		t.Fatalf("empty selection status=%s sets=%d", status, len(sets))
+	}
+}
+
 // mustSelectionInstance parses one selector fixture.
 func mustSelectionInstance(t *testing.T, value string) MessageInstance {
 	t.Helper()

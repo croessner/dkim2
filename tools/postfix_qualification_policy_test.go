@@ -167,7 +167,7 @@ func TestPostfixQualificationPinsBuildInputsAndCleanup(t *testing.T) {
 	for _, identity := range []string{
 		"golang@sha256:ae5a2316d12f3e78fd99177dad452e6ad4f240af2d71d57b480c3477f250fec6",
 		"debian@sha256:4e401d95de7083948053197a9c3913343cd06b706bf15eb6a0c3ccd26f436a0e",
-		"chrroessner/postfix@sha256:8ccda0e26bb241116c7df5e0fb2bcdbc6a77b409b085d87e7ad4d0c23b0c41fd",
+		"chrroessner/postfix@sha256:d4b349ce665ba291444e55862ac842e3d4e612596520a9ba65a7b9bf00f9aa3c",
 	} {
 		if !bytes.Contains(dockerfile, []byte(identity)) {
 			t.Fatalf("Dockerfile omitted pinned identity %q", identity)
@@ -260,6 +260,23 @@ func TestPostfixQualificationPinsBuildInputsAndCleanup(t *testing.T) {
 	productIgnore := readRepositoryFile(t, ".dockerignore", 1<<16)
 	if bytes.Contains(productIgnore, []byte("!contrib/")) {
 		t.Fatal("product image context admitted qualification inputs")
+	}
+}
+
+// TestPostfixQualificationHelperIsStandardGuardrail freezes the out-of-workspace helper test gate.
+func TestPostfixQualificationHelperIsStandardGuardrail(t *testing.T) {
+	makefile := readRepositoryFile(t, "Makefile", 1<<20)
+	for _, required := range [][]byte{
+		[]byte(".PHONY: test-postfix-qualification-helper"),
+		[]byte("test-postfix-qualification-helper:"),
+		[]byte("go test contrib/qualification/postfix-milter/cmd/qualify/main.go \\\n\t\t\tcontrib/qualification/postfix-milter/cmd/qualify/main_test.go"),
+		[]byte("test: test-postfix-qualification-helper"),
+		[]byte("guardrails: check-ci fmt-check vet lint test race"),
+		[]byte("release-guardrails: guardrails"),
+	} {
+		if !bytes.Contains(makefile, required) {
+			t.Fatal("Makefile omitted the Postfix qualification helper guardrail")
+		}
 	}
 }
 

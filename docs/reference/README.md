@@ -17,11 +17,15 @@ limitations without creating a second protocol model.
   profiles.
 - [Security testing](../security-testing.md) defines resource, privacy, fuzz,
   race, and vulnerability evidence.
+- [Draft-05 semantics audit](../reports/draft-05-semantics-audit-2026-08-26.md)
+  records the current compatibility, diagnostics, replay, security, and
+  evidence boundaries.
 - [Postfix deployment](../operator/postfix-compose.md) is the implemented
   adapter qualification and operator path.
-- [Exim operations](../operations/exim-adapter.md) and the
-  [compatibility matrix](../reports/exim-compatibility-2026-07-27.md) describe
-  the source-rebuild deployment and separate five-row qualification boundary.
+- [Exim operations](../operations/exim-adapter.md) and the historical
+  [Draft-04 compatibility matrix](../reports/exim-compatibility-2026-07-27.md)
+  describe the source-rebuild deployment and the separately invalidated
+  five-row qualification boundary.
 - [Signing datasource backends](../operator/datasource-backends.md), the
   [LDAP schema reference](../operator/ldap-schema-reference.md), the
   [key-rotation runbook](../operator/datasource-key-rotation.md), and

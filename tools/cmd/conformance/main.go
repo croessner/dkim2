@@ -31,14 +31,13 @@ const (
 	portableProfile             = "portable"
 	fullProfile                 = "full"
 	linuxPlatform               = "linux"
-	eximRunner                  = "exim_qualification"
 	passState                   = "pass"
+	runnerFailureClass          = "runner_failure"
 	libraryModule               = "lib"
 	daemonModule                = "cmd/dkim2d"
 	manifestSchemaPath          = "testdata/conformance/schemas/manifest.schema.json"
 	caseSchemaPath              = "testdata/conformance/schemas/case.schema.json"
 	reportSchemaPath            = "testdata/conformance/schemas/report.schema.json"
-	eximQualificationSchemaPath = "testdata/conformance/exim/qualification.schema.json"
 	signingFacadeArtifact       = "signing-facade-source"
 	signingProvenanceArtifact   = "signing-provenance"
 	signingPublicArtifact       = "signing-public"
@@ -54,15 +53,18 @@ const (
 	postfixProfile              = "postfix"
 	postfixFragmentSchema       = "dkim2.postfix-qualification-fragment.v1"
 	milterPublicPeerArtifact    = "milter-public-peer-source"
+	canonicalHeaderArtifact     = "canonical-header-source"
+	instanceDraft05Artifact     = "instance-draft05-source"
+	signatureNegativeArtifact   = "signature-negative-source"
+	verificationDraft05Artifact = "verification-draft05-source"
 	postfixComposeArtifact      = "postfix-qualification-compose"
 	postfixDockerfileArtifact   = "postfix-qualification-dockerfile"
 	postfixRuntimeArtifact      = "postfix-qualification-runtime"
-	eximRunnerName              = "exim-qualification-verifier"
 	valkeyRunnerName            = "valkey-tests"
 	environmentHomeTmp          = "HOME=/tmp"
 	environmentLangC            = "LANG=C"
 	environmentLocaleC          = "LC_ALL=C"
-	verificationGoldenTest      = "TestPublicDraft04GoldenVectors"
+	verificationGoldenTest      = "TestPublicDraft05GoldenVectors"
 	verificationPublicArtifact  = "verification-public"
 )
 
@@ -94,14 +96,19 @@ func run(arguments []string) error {
 	eximEvidence := flags.String(
 		"exim-evidence",
 		"",
-		"absolute verified real-Exim evidence root required by the full profile",
+		"reserved; Draft-05 rejects imported Exim qualification evidence",
 	)
 	if err := flags.Parse(arguments); err != nil || flags.NArg() != 1 {
 		return errors.New("arguments")
 	}
+	if *eximEvidence != "" {
+		return errors.New("exim_evidence_forbidden")
+	}
 	switch flags.Arg(0) {
 	case "check":
 		return check(*root)
+	case "refresh-manifest":
+		return refreshManifest(*root)
 	case "snapshot":
 		revision, err := conformance.CurrentRevision(*root)
 		if err != nil {
@@ -120,6 +127,45 @@ func run(arguments []string) error {
 	default:
 		return errors.New("arguments")
 	}
+}
+
+// refreshManifest recomputes every artifact digest and atomically writes the validated manifest.
+func refreshManifest(root string) error {
+	input, err := conformance.ReadConfinedFile(root, manifestPath, 1<<20)
+	if err != nil {
+		return err
+	}
+	var manifest conformance.Manifest
+	if err := conformance.DecodeStrictJSON(input, 1<<20, &manifest); err != nil {
+		return err
+	}
+	for index := range manifest.Artifacts {
+		content, readErr := conformance.ReadConfinedFile(root, manifest.Artifacts[index].Path, 16<<20)
+		if readErr != nil {
+			return errors.New("artifact_read")
+		}
+		manifest.Artifacts[index].SHA256 = conformance.SHA256(content)
+	}
+	if err := manifest.Validate(root); err != nil {
+		return err
+	}
+	content, err := json.MarshalIndent(manifest, "", "  ")
+	if err != nil {
+		return errors.New("manifest_encode")
+	}
+	content = append(content, '\n')
+	repository, err := os.OpenRoot(root)
+	if err != nil {
+		return errors.New("manifest_root")
+	}
+	defer func() { _ = repository.Close() }()
+	if err := atomicWrite(repository, manifestPath, content); err != nil {
+		return err
+	}
+	if err := repository.Chmod(manifestPath, 0o644); err != nil {
+		return errors.New("output")
+	}
+	return nil
 }
 
 // check validates strict schemas, manifest closure, and artifact bindings.
@@ -160,6 +206,9 @@ func check(root string) error {
 
 // report renders one profile only after the same candidate passes closure.
 func report(root, profile, eximEvidence string) error {
+	if eximEvidence != "" {
+		return errors.New("exim_evidence_forbidden")
+	}
 	if err := check(root); err != nil {
 		return err
 	}
@@ -179,12 +228,7 @@ func report(root, profile, eximEvidence string) error {
 		root,
 		manifest,
 		profile,
-		qualificationBinding{
-			manifestDigest: manifestDigest,
-			revision:       revision,
-			snapshotDigest: snapshot.SHA256,
-			eximEvidence:   eximEvidence,
-		},
+		qualificationBinding{eximEvidence: eximEvidence},
 	)
 	if err != nil {
 		return err
@@ -192,7 +236,7 @@ func report(root, profile, eximEvidence string) error {
 	results := make([]conformance.CaseResult, 0, len(manifest.Cases))
 	for _, manifestCase := range manifest.Cases {
 		state := "not_run"
-		errorClass := "runner_failure"
+		errorClass := runnerFailureClass
 		producer := conformance.ToolIdentity{}
 		if profile == portableProfile && manifestCase.RequiredPlatform == linuxPlatform {
 			state = "not_applicable"
@@ -278,10 +322,7 @@ type runnerCase struct {
 }
 
 type qualificationBinding struct {
-	manifestDigest string
-	revision       string
-	snapshotDigest string
-	eximEvidence   string
+	eximEvidence string
 }
 
 var portableDefinitions = []runnerDefinition{
@@ -290,8 +331,22 @@ var portableDefinitions = []runnerDefinition{
 		timeout: 2 * time.Minute,
 		cases: []runnerCase{
 			{key: "canonical\x00body-hash-input", testName: "TestGoldenBodyCanonicalizationFixtures", artifacts: []string{"canonical-body"}},
+			{key: "canonical\x00draft04-to-draft05-header-boundary", testName: "TestDraft04SignatureFailsUnderDraft05HeaderRules", artifacts: []string{canonicalHeaderArtifact}},
+			{key: "canonical\x00draft05-digest-algorithms", testName: "TestSHA512DigestHashesCanonicalInput", artifacts: []string{"canonical-digest-source"}},
+			{key: "canonical\x00draft05-header-exclusions", testName: "TestHeaderRelevanceDraft05UnsignedSet", artifacts: []string{canonicalHeaderArtifact}},
+			{key: "canonical\x00draft05-to-draft04-header-boundary", testName: "TestDraft05SignatureFailsUnderDraft04HeaderRules", artifacts: []string{canonicalHeaderArtifact}},
 			{key: "canonical\x00header-hash-input", testName: "TestGoldenHeaderCanonicalizationFixture", artifacts: []string{"canonical-header"}},
 			{key: "canonical\x00signature-input", testName: "TestGoldenSignatureCanonicalizationFixture", artifacts: []string{"canonical-signature"}},
+		},
+	},
+	{
+		name: "instance-tests", module: libraryModule, pkg: "./internal/instance",
+		timeout: 2 * time.Minute,
+		cases: []runnerCase{
+			{key: "instance\x00draft05-dual-hash", testName: "TestHashSetAcceptsMixedSupportedAlgorithmsInWireOrder", artifacts: []string{instanceDraft05Artifact}},
+			{key: "instance\x00draft05-duplicate-extension-hash", testName: "TestHashSetRejectsDuplicateExtensionName", artifacts: []string{instanceDraft05Artifact}},
+			{key: "instance\x00draft05-duplicate-hash", testName: "TestParseRejectsDuplicateHashAlgorithms", artifacts: []string{instanceDraft05Artifact}},
+			{key: "instance\x00draft05-sha512-uppercase", testName: "TestHashSetAcceptsSHA512", artifacts: []string{instanceDraft05Artifact}},
 		},
 	},
 	{
@@ -300,6 +355,7 @@ var portableDefinitions = []runnerDefinition{
 		cases: []runnerCase{
 			{key: "dns\x00dns-negative-record-states", testName: "TestDNSPublicKeyProviderMapsResolverOutcomes", artifacts: []string{"dns-negative-source"}},
 			{key: "dns\x00dns-records", testName: "TestDNSDraft04PublicPassVectors", artifacts: []string{"dns-records"}},
+			{key: "policy\x00draft05-invalid-recipe-json", testName: "TestMalformedHistoriedMessageFailsClosedAcrossServiceAndFacade", artifacts: []string{"policy-invalid-recipe-source"}},
 			{key: "policy\x00projection-modes", testName: "TestEvaluatePolicySelectedFourStateModeMatrix", artifacts: []string{"policy-positive-source"}},
 			{key: "signing\x00envelope-facade", testName: "TestPublicEnvelopeSnapshotsAndOrderedGroupMatching", artifacts: []string{signingFacadeArtifact, signingProvenanceArtifact, signingPublicArtifact, signingTestKeyArtifact}},
 			{key: "signing\x00next-domain-facade", testName: "TestPublicNextDomainCreationReleaseAndCompletion", artifacts: []string{signingFacadeArtifact, signingProvenanceArtifact, signingPublicArtifact, signingTestKeyArtifact}},
@@ -327,7 +383,7 @@ var portableDefinitions = []runnerDefinition{
 		name: "crypto-golden-tests", module: libraryModule, pkg: "./internal/cryptodkim2",
 		timeout: 2 * time.Minute,
 		cases: []runnerCase{
-			{key: "signing\x00custody-cryptography", testName: "TestDraft04CryptoVerificationGoldenVectors", artifacts: []string{"signing-custody", signingProvenanceArtifact}},
+			{key: "signing\x00custody-cryptography", testName: "TestDraft05CryptoVerificationGoldenVectors", artifacts: []string{"signing-custody", signingProvenanceArtifact}},
 			{key: "signing\x00custody-key-policy", testName: "TestCryptoPublicKeyPolicyBoundaryGoldenVectors", artifacts: []string{"signing-custody", signingProvenanceArtifact}},
 		},
 	},
@@ -335,8 +391,10 @@ var portableDefinitions = []runnerDefinition{
 		name: "recipe-tests", module: libraryModule, pkg: "./internal/recipe",
 		timeout: 2 * time.Minute,
 		cases: []runnerCase{
-			{key: "recipe\x00application", testName: "TestGoldenRecipeApplicationDraft04", artifacts: []string{"recipe-application"}},
-			{key: "recipe\x00generation", testName: "TestSerializeGenerationPlanMatchesDraft04Goldens", artifacts: []string{"recipe-generation"}},
+			{key: "recipe\x00application", testName: "TestGoldenRecipeApplicationDraft05", artifacts: []string{"recipe-application"}},
+			{key: "recipe\x00draft05-lowercase-recipe", testName: "TestParserAcceptsEscapedLowercaseHeaderKey", artifacts: []string{"recipe-draft05-source"}},
+			{key: "recipe\x00draft05-nonlowercase-recipe", testName: "TestParserRejectsNonLowercaseHeaderKey", artifacts: []string{"recipe-draft05-source"}},
+			{key: "recipe\x00generation", testName: "TestSerializeGenerationPlanMatchesDraft05Goldens", artifacts: []string{"recipe-generation"}},
 			{key: "recipe\x00limit-boundaries", testName: "TestEveryRecipeHardMaximumAcceptsExactAndRejectsOneOver", artifacts: []string{"recipe-limits-source"}},
 			{key: "recipe\x00parser-negative", testName: "TestParserAdditionalDraftAndRFC8259Vectors", artifacts: []string{"recipe-negative-source"}},
 		},
@@ -346,6 +404,7 @@ var portableDefinitions = []runnerDefinition{
 		timeout: 3 * time.Minute,
 		cases: []runnerCase{
 			{key: "replay\x00concurrent-duplicate", testName: "TestMemoryStoreConcurrentSameKeyHasOneWinner", artifacts: []string{"replay-memory-source"}},
+			{key: "replay\x00identity-draft05-epoch", testName: "TestDraft05IdentitySeparatesEpoch", artifacts: []string{"replay-deriver-source"}},
 			{key: "replay\x00identity-separation", testName: "TestDeriverChangesEveryBoundFact", artifacts: []string{"replay-deriver-source"}},
 			{key: "replay\x00memory-expiry", testName: "TestMemoryStoreFirstSeenReplayExpiryAndNoExtension", artifacts: []string{"replay-memory-source"}},
 			{key: "replay\x00retention-edge", testName: "TestRetentionCheckedAdditionPreservesExactExpiry", artifacts: []string{"replay-retention-source"}},
@@ -365,6 +424,7 @@ var portableDefinitions = []runnerDefinition{
 		name: "dkim2d-openapi-integration-tests", module: daemonModule, pkg: "./internal/httpjson",
 		timeout: 4 * time.Minute,
 		cases: []runnerCase{
+			{key: "openapi\x00draft05-invalid-json-diagnostics", testName: "TestJSONPreflightRejectsMalformedTexts", artifacts: []string{"openapi-invalid-json-source"}},
 			{
 				key:      "openapi\x00real-daemon-generated-boundary",
 				testName: "TestDKIM2ctlGeneratedClientAgainstProductionBoundary",
@@ -501,34 +561,40 @@ var portableDefinitions = []runnerDefinition{
 		name: "signing-golden-tests", module: libraryModule, pkg: "./internal/signing",
 		timeout: 3 * time.Minute,
 		cases: []runnerCase{
-			{key: "signing\x00public-facade", testName: "TestDraft04SigningGoldenVectors", artifacts: []string{signingProvenanceArtifact, signingPublicArtifact}},
+			{key: "signing\x00local-sha256-output-policy", testName: "TestSignerMayEmitSHA256FromSHA512OnlyHistory", artifacts: []string{"signing-revision-source"}},
+			{key: "signing\x00public-facade", testName: "TestDraft05SigningGoldenVectors", artifacts: []string{signingProvenanceArtifact, signingPublicArtifact}},
+			{key: "signing\x00unchanged-no-redundant-instance", testName: "TestHashPlanOriginatorAndExistingRoles", artifacts: []string{"signing-plan-source"}},
 		},
 	},
 	{
 		name: "signature-tests", module: libraryModule, pkg: "./internal/signature",
 		timeout: 2 * time.Minute,
 		cases: []runnerCase{
-			{key: "signing\x00custody-transitions", testName: "TestDraft04CustodyGoldenVectors", artifacts: []string{"custody-positive-source", signingProvenanceArtifact}},
-			{key: "signing\x00signature-grammar-negative", testName: "TestParseRejectsSharedTagSyntaxErrors", artifacts: []string{"signature-negative-source"}},
-			{key: "signing\x00tag-case-interpretation", testName: "TestParseAcceptsInteropFWSAndMixedCaseTags", artifacts: []string{"signature-negative-source"}},
+			{key: "signing\x00custody-transitions", testName: "TestDraft05CustodyGoldenVectors", artifacts: []string{"custody-positive-source", signingProvenanceArtifact}},
+			{key: "signing\x00draft05-duplicate-selector", testName: "TestParseRejectsDuplicateSelectors", artifacts: []string{signatureNegativeArtifact}},
+			{key: "signing\x00draft05-same-algorithm-pair", testName: "TestParseAllowsTwoSameAlgorithmDifferentSelectors", artifacts: []string{signatureNegativeArtifact}},
+			{key: "signing\x00draft05-third-same-algorithm", testName: "TestParseRejectsThirdSameAlgorithm", artifacts: []string{signatureNegativeArtifact}},
+			{key: "signing\x00signature-grammar-negative", testName: "TestParseRejectsSharedTagSyntaxErrors", artifacts: []string{signatureNegativeArtifact}},
+			{key: "signing\x00tag-case-interpretation", testName: "TestParseAcceptsInteropFWSAndMixedCaseTags", artifacts: []string{signatureNegativeArtifact}},
 		},
 	},
 	{
-		name: eximRunnerName, module: "cmd/dkim2-exim", timeout: 5 * time.Minute,
-		cases: []runnerCase{{
-			key: "exim\x00linux-real-matrix",
-			artifacts: []string{
-				"exim-qualification-builder",
-				"exim-qualification-container-driver",
-				"exim-qualification-contract",
-				"exim-qualification-driver",
-				"exim-qualification-executor",
-				"exim-qualification-helper",
-				"exim-qualification-input-verifier",
-				"exim-qualification-schema",
-				"exim-qualification-verifier",
-			},
-		}},
+		name: "service-draft05-tests", module: libraryModule, pkg: "./internal/service",
+		timeout: 2 * time.Minute,
+		cases: []runnerCase{
+			{key: "verification\x00draft05-diagnostics", testName: "TestDraft05ProtocolInfractionsMapToDistinctPermanentReasons", artifacts: []string{"service-draft05-source"}},
+		},
+	},
+	{
+		name: "verification-draft05-tests", module: libraryModule, pkg: "./internal/verify",
+		timeout: 3 * time.Minute,
+		cases: []runnerCase{
+			{key: "verification\x00draft05-dual-mismatch", testName: "TestVerifierRejectsOneMismatchingSupportedTuple", artifacts: []string{verificationDraft05Artifact}},
+			{key: "verification\x00draft05-recipe-less-unchanged", testName: "TestHistoryAcceptsRecipeLessUnchangedTransitionMatrix", artifacts: []string{verificationDraft05Artifact}},
+			{key: "verification\x00draft05-recipe-less-unknown-only", testName: "TestHistoryAcceptsRecipeLessUnchangedTransitionMatrix", artifacts: []string{verificationDraft05Artifact}},
+			{key: "verification\x00draft05-same-algorithm-positional", testName: "TestVerifierChecksSameAlgorithmSignaturesPositionally", artifacts: []string{"verification-multisignature-source"}},
+			{key: "verification\x00draft05-sha512-only", testName: "TestVerifierAcceptsSHA512Only", artifacts: []string{verificationDraft05Artifact}},
+		},
 	},
 }
 
@@ -565,10 +631,8 @@ func executeRunners(
 			required[key] = struct{}{}
 		}
 	}
-	if profile == fullProfile {
-		if _, err := validateEximEvidenceRoot(binding.eximEvidence); err != nil {
-			return nil, nil, fmt.Errorf("%w:%s", err, eximRunnerName)
-		}
+	if binding.eximEvidence != "" {
+		return nil, nil, errors.New("exim_evidence_forbidden")
 	}
 	defined := make(map[string]struct{})
 	for _, definition := range portableDefinitions {
@@ -628,12 +692,6 @@ func executeRunners(
 			digest, passedCases, extraTools, runErr = executePostfixQualification(
 				root,
 				selected,
-			)
-		case eximRunnerName:
-			digest, passedCases, extraTools, runErr = executeEximQualification(
-				root,
-				selected,
-				binding,
 			)
 		default:
 			digest, passedCases, runErr = executeTestBinary(root, directory, selected)

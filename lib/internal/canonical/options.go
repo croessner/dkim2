@@ -2,9 +2,11 @@ package canonical
 
 const (
 	// DraftBaseline identifies the active DKIM2 canonicalization draft.
-	DraftBaseline = "draft-ietf-dkim-dkim2-spec-04"
-	// HashAlgorithmSHA256 identifies the mandatory baseline message hash.
+	DraftBaseline = "draft-ietf-dkim-dkim2-spec-05"
+	// HashAlgorithmSHA256 identifies the supported SHA-256 Message-Instance hash.
 	HashAlgorithmSHA256 HashAlgorithm = "sha256"
+	// HashAlgorithmSHA512 identifies the supported SHA-512 Message-Instance hash.
+	HashAlgorithmSHA512 HashAlgorithm = "sha512"
 )
 
 // Kind identifies one DKIM2 canonicalization byte stream.
@@ -21,6 +23,11 @@ const (
 
 // HashAlgorithm identifies a safe canonicalization hash algorithm name.
 type HashAlgorithm string
+
+// Known reports whether the algorithm is a supported Message-Instance digest.
+func (a HashAlgorithm) Known() bool {
+	return a == HashAlgorithmSHA256 || a == HashAlgorithmSHA512
+}
 
 // Options contains domain-named canonicalization settings.
 type Options struct {
@@ -80,7 +87,7 @@ func (o Options) Validate() error {
 	if err := o.Limits.Validate(); err != nil {
 		return err
 	}
-	if o.HashAlgorithm != HashAlgorithmSHA256 {
+	if !o.HashAlgorithm.Known() {
 		return newError(ErrorCodeUnsupportedAlgorithm, ErrorLocation{}, ErrorDetails{
 			Class:     ErrorClassAlgorithm,
 			Algorithm: o.HashAlgorithm,

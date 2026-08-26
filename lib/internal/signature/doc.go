@@ -1,5 +1,5 @@
 // Package signature parses DKIM2-Signature header fields for the DKIM2 draft
-// baseline draft-ietf-dkim-dkim2-spec-04.
+// baseline draft-ietf-dkim-dkim2-spec-05.
 //
 // This package owns parser-level domain types for required i=, m=, t=, d=, and
 // s= tags, exactly one envelope form consisting of nd= or the mf=/rt= pair,

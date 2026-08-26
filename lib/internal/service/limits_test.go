@@ -150,8 +150,8 @@ func TestMappingCapsDoNotSuppressSignatureCorrelationDefects(t *testing.T) {
 	}
 }
 
-// TestMappingSignatureRetentionIsDeterministicAcrossPermutations verifies coherent top-N detail selection.
-func TestMappingSignatureRetentionIsDeterministicAcrossPermutations(t *testing.T) {
+// TestMappingSignatureRetentionPreservesOccurrencePrefix verifies positional top-N detail selection.
+func TestMappingSignatureRetentionPreservesOccurrencePrefix(t *testing.T) {
 	target := verify.Target{Sequence: 1, InstanceNumber: 1}
 	sets := []verify.SignatureSetResult{
 		{Index: 0, Algorithm: verify.AlgorithmRSASHA256, Status: verify.SignatureSetStatusPass, KeyStatus: verify.KeyStatusFound},
@@ -163,19 +163,12 @@ func TestMappingSignatureRetentionIsDeterministicAcrossPermutations(t *testing.T
 	)
 	limits := DefaultLimits()
 	limits.MaxSignatureFacts = 1
-	var retained []SignatureSetFact
-	for _, orderedChecks := range [][]verify.CheckResult{checks, reverseCheckResults(checks)} {
-		for _, orderedSets := range [][]verify.SignatureSetResult{sets, reverseSignatureSets(sets)} {
-			result := mapVerificationResult(newVerifyResultWithDefaultCustody(target, verify.TargetStatusPass, orderedChecks, orderedSets), limits)
-			if result.State() != StatePASS || result.PrimaryReason() != ReasonNone || len(result.SignatureSets()) != 1 {
-				t.Fatal("coherent signature retention rewrote protocol state")
-			}
-			if retained == nil {
-				retained = result.SignatureSets()
-			} else if !slices.Equal(retained, result.SignatureSets()) {
-				t.Fatal("retained signature detail depended on check or set order")
-			}
-		}
+	result := mapVerificationResult(newVerifyResultWithDefaultCustody(target, verify.TargetStatusPass, checks, sets), limits)
+	if result.State() != StatePASS || result.PrimaryReason() != ReasonNone || len(result.SignatureSets()) != 1 {
+		t.Fatal("coherent signature retention rewrote protocol state")
+	}
+	if result.SignatureSets()[0].Algorithm != AlgorithmRSASHA256 {
+		t.Fatal("retained signature detail did not preserve occurrence prefix")
 	}
 }
 

@@ -24,8 +24,8 @@
         "producer": {"maxLength": 64, "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$", "type": "string"},
         "provenance": {"enum": ["draft_example", "rfc_example", "independent_oracle", "cross_primitive", "manual_derivation", "regression_reproducer"]},
         "required_platform": {"enum": ["portable", "linux"]},
-        "runner": {"enum": ["portable_vector", "openapi_fixture", "milter_fixture", "postfix_qualification", "exim_qualification"]},
-        "suite": {"maxLength": 128, "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$", "type": "string"}
+        "runner": {"enum": ["portable_vector", "openapi_fixture", "milter_fixture", "postfix_qualification"]},
+        "suite": {"maxLength": 128, "not": {"const": "exim"}, "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$", "type": "string"}
       },
       "required": ["suite", "case_id", "class", "authority", "provenance", "runner", "required_platform", "expected_outcome", "artifacts", "producer"],
       "type": "object"
@@ -34,7 +34,7 @@
       "additionalProperties": false,
       "properties": {
         "daemon": {"const": "supported"},
-        "exim": {"const": "qualified_linux"},
+        "exim": {"const": "unqualified_draft05"},
         "library": {"const": "supported"},
         "milter": {"const": "partial"},
         "postfix": {"const": "partial_linux"}
@@ -49,10 +49,10 @@
     "capabilities": {"$ref": "#/$defs/capabilities"},
     "cases": {"items": {"$ref": "#/$defs/case"}, "maxItems": 16384, "minItems": 1, "type": "array"},
     "dns_draft": {"const": "draft-chuang-dkim2-dns-04"},
-    "message_draft": {"const": "draft-ietf-dkim-dkim2-spec-04"},
+    "message_draft": {"const": "draft-ietf-dkim-dkim2-spec-05"},
     "schema": {"const": "dkim2.conformance-manifest.v1"},
     "suite_version": {"const": "1"},
-    "suites": {"items": {"maxLength": 128, "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$", "type": "string"}, "maxItems": 4096, "minItems": 1, "type": "array"}
+    "suites": {"items": {"maxLength": 128, "not": {"const": "exim"}, "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$", "type": "string"}, "maxItems": 4096, "minItems": 1, "type": "array"}
   },
   "required": ["schema", "message_draft", "dns_draft", "suite_version", "suites", "capabilities", "artifacts", "cases"],
   "type": "object"

@@ -15,12 +15,14 @@ const sha256DigestLength = 32
 const hashCheckResultsRedactedText = "verify.hashCheckResults{redacted}"
 
 type hashCheckResults struct {
-	body                    CheckResult
-	header                  CheckResult
-	pass                    bool
-	canonicalWork           int
-	selectedHeaderDigest    [sha256DigestLength]byte
-	hasSelectedHeaderDigest bool
+	body                 CheckResult
+	header               CheckResult
+	pass                 bool
+	canonicalWork        int
+	localHeaderSHA256    [sha256DigestLength]byte
+	hasLocalHeaderSHA256 bool
+	localBodySHA256      [sha256DigestLength]byte
+	hasLocalBodySHA256   bool
 }
 
 // String returns a constant representation without authenticated digest bytes.
@@ -34,95 +36,99 @@ func (hashCheckResults) Format(state fmt.State, _ rune) {
 	_, _ = io.WriteString(state, hashCheckResultsRedactedText)
 }
 
-// compareTargetHashes compares current SHA-256 hashes with the target instance.
+// compareTargetHashes requires every supported advertised hash tuple to match.
 func compareTargetHashes(canonicalizer canonical.Canonicalizer, message rawmsg.Message, targetInstance instance.MessageInstance, target Target) (hashCheckResults, error) {
-	hashSet, hashState := targetSHA256HashSet(targetInstance)
-	if hashState != HashStatusPass {
-		status, code := checkStatusForHashState(hashState)
-
-		return hashCheckResults{
-			body:   hashCheckResult(CheckKindBodyHash, status, code, hashState, target),
-			header: hashCheckResult(CheckKindHeaderHash, status, code, hashState, target),
-		}, nil
+	sets, selection := targetInstance.SupportedHashSets()
+	if selection != instance.HashSelectionStatusSelected {
+		status, code := checkStatusForHashSelection(selection)
+		return hashCheckResults{body: hashCheckResult(CheckKindBodyHash, status, code, HashStatusUnsupported, target), header: hashCheckResult(CheckKindHeaderHash, status, code, HashStatusUnsupported, target)}, nil
 	}
-
-	bodyResult, err := canonicalizer.BodyHashFromMessage(message)
+	bodyInput, err := canonicalizer.BodyHashInputFromMessage(message)
 	if err != nil {
 		return hashCheckResults{}, malformedStateError(CheckKindBodyHash, target, err)
 	}
-	bodyDigest, ok := bodyResult.Digest()
-	if !ok {
-		return hashCheckResults{}, malformedStateError(CheckKindBodyHash, target, nil)
-	}
-	headerResult, err := canonicalizer.HeaderHashFromMessage(message)
+	headerInput, err := canonicalizer.HeaderHashInputFromMessage(message)
 	if err != nil {
 		return hashCheckResults{}, malformedStateError(CheckKindHeaderHash, target, err)
 	}
-	headerDigest, ok := headerResult.Digest()
-	if !ok {
-		return hashCheckResults{}, malformedStateError(CheckKindHeaderHash, target, nil)
+	bodyStatus, bodyCode := CheckStatusPass, ErrorCode("")
+	headerStatus, headerCode := CheckStatusPass, ErrorCode("")
+	for _, set := range sets {
+		algorithm, ok := canonicalHashAlgorithm(set.Name())
+		if !ok {
+			return hashCheckResults{}, malformedStateError(CheckKindHeaderHash, target, nil)
+		}
+		digester, newErr := canonical.NewCanonicalizer(canonical.WithLimits(canonicalizer.Options().Limits), canonical.WithHashAlgorithm(algorithm))
+		if newErr != nil {
+			return hashCheckResults{}, malformedStateError(CheckKindHeaderHash, target, newErr)
+		}
+		bodyDigest, bodyErr := digester.Digest(bodyInput)
+		headerDigest, headerErr := digester.Digest(headerInput)
+		expectedBody, bodyOK := set.BodyHash()
+		expectedHeader, headerOK := set.HeaderHash()
+		if bodyErr != nil || headerErr != nil || !bodyOK || !headerOK {
+			return hashCheckResults{}, malformedStateError(CheckKindHeaderHash, target, nil)
+		}
+		if compared, comparedCode := compareDigest(bodyDigest.Bytes(), expectedBody.Decoded()); compared != CheckStatusPass {
+			bodyStatus, bodyCode = compared, comparedCode
+		}
+		if compared, comparedCode := compareDigest(headerDigest.Bytes(), expectedHeader.Decoded()); compared != CheckStatusPass {
+			headerStatus, headerCode = compared, comparedCode
+		}
 	}
-
-	expectedBodyHash, ok := hashSet.BodyHash()
-	if !ok {
-		return hashCheckResults{
-			body:   hashCheckResult(CheckKindBodyHash, CheckStatusFail, ErrorCodeMalformedState, HashStatusInvalid, target),
-			header: hashCheckResult(CheckKindHeaderHash, CheckStatusFail, ErrorCodeMalformedState, HashStatusInvalid, target),
-		}, nil
+	local, err := canonical.NewCanonicalizer(canonical.WithLimits(canonicalizer.Options().Limits), canonical.WithHashAlgorithm(canonical.HashAlgorithmSHA256))
+	if err != nil {
+		return hashCheckResults{}, malformedStateError(CheckKindHeaderHash, target, err)
 	}
-	expectedHeaderHash, ok := hashSet.HeaderHash()
-	if !ok {
-		return hashCheckResults{
-			body:   hashCheckResult(CheckKindBodyHash, CheckStatusFail, ErrorCodeMalformedState, HashStatusInvalid, target),
-			header: hashCheckResult(CheckKindHeaderHash, CheckStatusFail, ErrorCodeMalformedState, HashStatusInvalid, target),
-		}, nil
+	localHeader, err := local.Digest(headerInput)
+	if err != nil || localHeader.Len() != sha256DigestLength {
+		return hashCheckResults{}, malformedStateError(CheckKindHeaderHash, target, err)
 	}
-
-	bodyStatus, bodyCode := compareSHA256Digest(bodyDigest.Bytes(), expectedBodyHash.Decoded())
-	headerStatus, headerCode := compareSHA256Digest(headerDigest.Bytes(), expectedHeaderHash.Decoded())
-
-	results := hashCheckResults{
-		body:          hashCheckResult(CheckKindBodyHash, bodyStatus, bodyCode, hashStatusFromCheck(bodyStatus), target),
-		header:        hashCheckResult(CheckKindHeaderHash, headerStatus, headerCode, hashStatusFromCheck(headerStatus), target),
-		pass:          bodyStatus == CheckStatusPass && headerStatus == CheckStatusPass,
-		canonicalWork: canonicalWorkBytes(bodyResult.CanonicalBytes()) + canonicalWorkBytes(headerResult.CanonicalBytes()),
+	localBody, err := local.Digest(bodyInput)
+	if err != nil || localBody.Len() != sha256DigestLength {
+		return hashCheckResults{}, malformedStateError(CheckKindBodyHash, target, err)
 	}
-	if headerStatus == CheckStatusPass {
-		copy(results.selectedHeaderDigest[:], expectedHeaderHash.Decoded())
-		results.hasSelectedHeaderDigest = true
-	}
+	results := hashCheckResults{body: hashCheckResult(CheckKindBodyHash, bodyStatus, bodyCode, hashStatusFromCheck(bodyStatus), target), header: hashCheckResult(CheckKindHeaderHash, headerStatus, headerCode, hashStatusFromCheck(headerStatus), target), pass: bodyStatus == CheckStatusPass && headerStatus == CheckStatusPass, canonicalWork: canonicalWorkBytes(bodyInput) + canonicalWorkBytes(headerInput)}
+	copy(results.localHeaderSHA256[:], localHeader.Bytes())
+	results.hasLocalHeaderSHA256 = true
+	copy(results.localBodySHA256[:], localBody.Bytes())
+	results.hasLocalBodySHA256 = true
 	return results, nil
 }
 
-// compareTargetHeaderHash validates only the retained header hash for an RFC
-// 3462 text/rfc822-headers DSN original. Its caller must enforce header-only
-// framing so absent body bytes are never interpreted as an empty body.
+// compareTargetHeaderHash requires every supported retained-header tuple to match.
 func compareTargetHeaderHash(canonicalizer canonical.Canonicalizer, message rawmsg.Message, targetInstance instance.MessageInstance, target Target) (headerHashCheckResult, error) {
-	hashSet, hashState := targetSHA256HashSet(targetInstance)
-	if hashState != HashStatusPass {
-		status, code := checkStatusForHashState(hashState)
-		return headerHashCheckResult{check: hashCheckResult(CheckKindHeaderHash, status, code, hashState, target)}, nil
+	sets, selection := targetInstance.SupportedHashSets()
+	if selection != instance.HashSelectionStatusSelected {
+		status, code := checkStatusForHashSelection(selection)
+		return headerHashCheckResult{check: hashCheckResult(CheckKindHeaderHash, status, code, HashStatusUnsupported, target)}, nil
 	}
-	headerResult, err := canonicalizer.HeaderHashFromMessage(message)
+	headerInput, err := canonicalizer.HeaderHashInputFromMessage(message)
 	if err != nil {
 		return headerHashCheckResult{}, malformedStateError(CheckKindHeaderHash, target, err)
 	}
-	headerDigest, ok := headerResult.Digest()
-	if !ok {
-		return headerHashCheckResult{}, malformedStateError(CheckKindHeaderHash, target, nil)
+	status, code := CheckStatusPass, ErrorCode("")
+	for _, set := range sets {
+		algorithm, ok := canonicalHashAlgorithm(set.Name())
+		if !ok {
+			return headerHashCheckResult{}, malformedStateError(CheckKindHeaderHash, target, nil)
+		}
+		digester, newErr := canonical.NewCanonicalizer(canonical.WithLimits(canonicalizer.Options().Limits), canonical.WithHashAlgorithm(algorithm))
+		if newErr != nil {
+			return headerHashCheckResult{}, malformedStateError(CheckKindHeaderHash, target, newErr)
+		}
+		digest, digestErr := digester.Digest(headerInput)
+		expected, expectedOK := set.HeaderHash()
+		if digestErr != nil || !expectedOK {
+			return headerHashCheckResult{}, malformedStateError(CheckKindHeaderHash, target, digestErr)
+		}
+		if compared, comparedCode := compareDigest(digest.Bytes(), expected.Decoded()); compared != CheckStatusPass {
+			status, code = compared, comparedCode
+		}
 	}
-	expectedHeaderHash, ok := hashSet.HeaderHash()
-	if !ok {
-		return headerHashCheckResult{check: hashCheckResult(CheckKindHeaderHash, CheckStatusFail, ErrorCodeMalformedState, HashStatusInvalid, target)}, nil
-	}
-	status, code := compareSHA256Digest(headerDigest.Bytes(), expectedHeaderHash.Decoded())
-	return headerHashCheckResult{
-		check: hashCheckResult(CheckKindHeaderHash, status, code, hashStatusFromCheck(status), target),
-		pass:  status == CheckStatusPass,
-	}, nil
+	return headerHashCheckResult{check: hashCheckResult(CheckKindHeaderHash, status, code, hashStatusFromCheck(status), target), pass: status == CheckStatusPass}, nil
 }
 
-// headerHashCheckResult stores the restricted header-only hash outcome.
 type headerHashCheckResult struct {
 	check CheckResult
 	pass  bool
@@ -133,54 +139,34 @@ func canonicalWorkBytes(input canonical.ByteInput) int {
 	return max(input.Len(), input.Metadata().InputBytes)
 }
 
-// targetSHA256HashSet finds the known sha256 hash set for an instance.
-func targetSHA256HashSet(targetInstance instance.MessageInstance) (instance.HashSet, HashStatus) {
-	hashSet, status := targetInstance.SHA256HashSet()
-	switch status {
-	case instance.HashSelectionStatusSelected:
-		return hashSet, HashStatusPass
-	case instance.HashSelectionStatusUnsupported:
-		return instance.HashSet{}, HashStatusUnsupported
-	default:
-		return instance.HashSet{}, HashStatusMissingSHA256
-	}
+// canonicalHashAlgorithm maps parser-owned known names to canonical digest algorithms.
+func canonicalHashAlgorithm(name string) (canonical.HashAlgorithm, bool) {
+	algorithm := canonical.HashAlgorithm(name)
+	return algorithm, algorithm.Known()
 }
 
-// compareSHA256Digest compares two fixed-size digest byte slices fail closed.
-func compareSHA256Digest(current []byte, expected []byte) (CheckStatus, ErrorCode) {
-	if len(current) != sha256DigestLength || len(expected) != sha256DigestLength {
+// compareDigest compares equal-length digest byte slices fail closed.
+func compareDigest(current, expected []byte) (CheckStatus, ErrorCode) {
+	if len(current) == 0 || len(current) != len(expected) {
 		return CheckStatusFail, ErrorCodeMalformedState
 	}
 	if subtle.ConstantTimeCompare(current, expected) != 1 {
 		return CheckStatusFail, ErrorCodeHashMismatch
 	}
-
 	return CheckStatusPass, ""
 }
 
-// checkStatusForHashState maps hash-state vocabulary to check facts.
-func checkStatusForHashState(status HashStatus) (CheckStatus, ErrorCode) {
-	switch status {
-	case HashStatusUnsupported:
+// checkStatusForHashSelection maps parser selection state to check facts.
+func checkStatusForHashSelection(selection instance.HashSelectionStatus) (CheckStatus, ErrorCode) {
+	if selection == instance.HashSelectionStatusUnsupported {
 		return CheckStatusUnsupported, ErrorCodeUnsupportedAlgorithm
-	case HashStatusMissingSHA256:
-		return CheckStatusFail, ErrorCodeMissingTarget
-	case HashStatusInvalid:
-		return CheckStatusFail, ErrorCodeMalformedState
-	default:
-		return CheckStatusFail, ErrorCodeMalformedState
 	}
+	return CheckStatusFail, ErrorCodeMalformedState
 }
 
 // hashCheckResult constructs one bounded hash check fact.
 func hashCheckResult(kind CheckKind, status CheckStatus, code ErrorCode, hashStatus HashStatus, target Target) CheckResult {
-	return CheckResult{
-		Kind:       kind,
-		Status:     status,
-		Code:       code,
-		HashStatus: hashStatus,
-		Target:     target,
-	}
+	return CheckResult{Kind: kind, Status: status, Code: code, HashStatus: hashStatus, Target: target}
 }
 
 // hashStatusFromCheck maps digest comparison state to the typed hash vocabulary.

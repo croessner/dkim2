@@ -318,7 +318,7 @@ func TestExecutableActionDisconnectRecovers(t *testing.T) {
 					},
 					ApiVersion:  generatedfixture.V1,
 					Disposition: generatedfixture.DispositionAccept,
-					Draft:       generatedfixture.DraftIetfDkimDkim2Spec04,
+					Draft:       generatedfixture.DraftIetfDkimDkim2Spec05,
 					Operation:   generatedfixture.Sign,
 					Result:      generatedfixture.OperationResponseResultPass,
 				}
@@ -813,7 +813,7 @@ func TestOriginatorEnvelopeSenderDomainSelectionRunsThroughPublicSocket(t *testi
 }
 
 // TestOriginatorNullSenderTempfailsBeforeDaemonThroughPublicSocket proves the
-// adapter stays closed until it can authenticate Draft-04 DSN prerequisites.
+// adapter stays closed until it can authenticate Draft-05 DSN prerequisites.
 func TestOriginatorNullSenderTempfailsBeforeDaemonThroughPublicSocket(t *testing.T) {
 	const dsnDomain = "dsn.example.test"
 	service := &generatedDaemonService{
@@ -1243,7 +1243,7 @@ func assertFixtureMessage(
 	}
 	defer clear(mailFrom)
 	if api != generatedfixture.V1 ||
-		draft != generatedfixture.DraftIetfDkimDkim2Spec04 ||
+		draft != generatedfixture.DraftIetfDkimDkim2Spec05 ||
 		message.Fidelity == nil ||
 		*message.Fidelity != generatedfixture.MilterReconstructedCrlf ||
 		!bytes.Equal(raw, []byte(
@@ -1287,7 +1287,7 @@ func fixtureOperationResponse(
 	return generatedfixture.OperationResponse{
 		Actions: fixtureActions, ApiVersion: generatedfixture.V1,
 		Disposition: generatedfixture.DispositionAccept,
-		Draft:       generatedfixture.DraftIetfDkimDkim2Spec04,
+		Draft:       generatedfixture.DraftIetfDkimDkim2Spec05,
 		Operation:   generatedfixture.OperationResponseOperation(operation),
 		Result:      generatedfixture.OperationResponseResultPass,
 	}
@@ -1321,7 +1321,7 @@ func validFixtureProcessResponse() generatedfixture.ProcessResponse {
 		Actions:     generatedfixture.ActionPlan{},
 		ApiVersion:  generatedfixture.V1,
 		Disposition: generatedfixture.DispositionAccept,
-		Draft:       generatedfixture.DraftIetfDkimDkim2Spec04,
+		Draft:       generatedfixture.DraftIetfDkimDkim2Spec05,
 		Verification: generatedfixture.VerificationResult{
 			Checks: []generatedfixture.VerificationCheck{{
 				Class:  generatedfixture.VerificationCheckClassProtocol,

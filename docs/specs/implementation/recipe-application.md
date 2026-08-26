@@ -1,5 +1,9 @@
 # DKIM2 Recipe Application
 
+> Historical Draft-04 implementation record. The original scope and evidence
+> below are preserved; current Draft-05 authority is the migration disposition
+> and the 2026-08-26 semantics audit.
+
 ## Status
 
 - Increment: strict recipe parsing, bounded previous-message reconstruction,

@@ -72,11 +72,11 @@ func TestParserEveryOwnedLimitHasExactAndOneOverProof(t *testing.T) {
 		{"depth", `{"x":[],"b":null}`, `{"x":[[]],"b":null}`, limitNameMaxJSONDepth, func(l *Limits) { l.MaxJSONDepth = 2 }},
 		{"members", `{"x":1,"b":null}`, `{"x":1,"y":2,"b":null}`, limitNameMaxJSONMembers, func(l *Limits) { l.MaxJSONMembers = 2 }},
 		{testHeaderNamesLabel, testHeaderRemovalRecipe, testTwoHeaderRecipe, limitNameMaxHeaderNames, func(l *Limits) { l.MaxHeaderNames = 1 }},
-		{testHeaderNameBytesLabel, testHeaderRemovalRecipe, `{"h":{"AA":[]}}`, limitNameMaxHeaderNameBytes, func(l *Limits) { l.MaxHeaderNameBytes = 1; l.MaxTotalHeaderNameBytes = 2 }},
-		{"aggregate header names", testTwoHeaderRecipe, `{"h":{"A":[],"BB":[]}}`, limitNameMaxTotalHeaderNameBytes, func(l *Limits) { l.MaxHeaderNameBytes = 2; l.MaxTotalHeaderNameBytes = 2 }},
-		{"header steps", testHeaderDataXRecipe, `{"h":{"A":[{"d":["x"]},{"d":["y"]}]}}`, limitNameMaxStepsPerHeader, func(l *Limits) { l.MaxStepsPerHeader = 1 }},
+		{testHeaderNameBytesLabel, testHeaderRemovalRecipe, `{"h":{"aa":[]}}`, limitNameMaxHeaderNameBytes, func(l *Limits) { l.MaxHeaderNameBytes = 1; l.MaxTotalHeaderNameBytes = 2 }},
+		{"aggregate header names", testTwoHeaderRecipe, `{"h":{"a":[],"bb":[]}}`, limitNameMaxTotalHeaderNameBytes, func(l *Limits) { l.MaxHeaderNameBytes = 2; l.MaxTotalHeaderNameBytes = 2 }},
+		{"header steps", testHeaderDataXRecipe, `{"h":{"a":[{"d":["x"]},{"d":["y"]}]}}`, limitNameMaxStepsPerHeader, func(l *Limits) { l.MaxStepsPerHeader = 1 }},
 		{testBodyStepsLabel, testBodyDataXRecipe, `{"b":[{"d":["x"]},{"d":["y"]}]}`, limitNameMaxBodySteps, func(l *Limits) { l.MaxBodySteps = 1 }},
-		{testTotalStepsLabel, `{"h":{"A":[{"d":["x"]}]},"b":[{"d":["y"]}]}`, `{"h":{"A":[{"d":["x"]},{"d":["z"]}]},"b":[{"d":["y"]}]}`, limitNameMaxTotalSteps, func(l *Limits) { l.MaxTotalSteps = 2; l.MaxStepsPerHeader = 2; l.MaxBodySteps = 2 }},
+		{testTotalStepsLabel, `{"h":{"a":[{"d":["x"]}]},"b":[{"d":["y"]}]}`, `{"h":{"a":[{"d":["x"]},{"d":["z"]}]},"b":[{"d":["y"]}]}`, limitNameMaxTotalSteps, func(l *Limits) { l.MaxTotalSteps = 2; l.MaxStepsPerHeader = 2; l.MaxBodySteps = 2 }},
 		{"ranges", `{"b":[{"c":[1,1]}]}`, testTwoRangesRecipe, limitNameMaxCopyRanges, func(l *Limits) { l.MaxCopyRanges = 1 }},
 		{"range width", `{"b":[{"c":[1,2]}]}`, `{"b":[{"c":[1,3]}]}`, limitNameMaxCopiedItemsPerRange, func(l *Limits) { l.MaxCopiedItemsPerRange = 2; l.MaxTotalCopiedItems = 4 }},
 		{"total copy width", testTwoRangesRecipe, `{"b":[{"c":[1,1]},{"c":[2,3]}]}`, limitNameMaxTotalCopiedItems, func(l *Limits) { l.MaxCopiedItemsPerRange = 2; l.MaxTotalCopiedItems = 2 }},
@@ -84,8 +84,8 @@ func TestParserEveryOwnedLimitHasExactAndOneOverProof(t *testing.T) {
 		{"string bytes", `{"x":"ab","b":null}`, `{"x":"abc","b":null}`, limitNameMaxDataStringBytes, func(l *Limits) { l.MaxDataStringBytes = 2; l.MaxTotalLiteralBytes = 4 }},
 		{testLiteralBytesLabel, `{"x":"a","y":"bc","b":null}`, `{"x":"ab","y":"bc","b":null}`, limitNameMaxTotalLiteralBytes, func(l *Limits) { l.MaxDataStringBytes = 2; l.MaxTotalLiteralBytes = 3 }},
 		{"body line", `{"b":[{"d":["ab"]}]}`, `{"b":[{"d":["abc"]}]}`, limitNameMaxBodyLineBytes, func(l *Limits) { l.MaxBodyLineBytes = 2 }},
-		{"header line", `{"h":{"A":[{"d":[""]}]}}`, `{"h":{"AA":[{"d":[""]}]}}`, limitNameMaxHeaderLineBytes, func(l *Limits) { l.MaxHeaderNameBytes = 2; l.MaxTotalHeaderNameBytes = 8; l.MaxHeaderLineBytes = 2 }},
-		{"header field", `{"h":{"A":[{"d":[""]}]}}`, testHeaderDataXRecipe, limitNameMaxHeaderFieldBytes, func(l *Limits) { l.MaxHeaderFieldBytes = 4; l.MaxHeaderLineBytes = 8 }},
+		{"header line", `{"h":{"a":[{"d":[""]}]}}`, `{"h":{"aa":[{"d":[""]}]}}`, limitNameMaxHeaderLineBytes, func(l *Limits) { l.MaxHeaderNameBytes = 2; l.MaxTotalHeaderNameBytes = 8; l.MaxHeaderLineBytes = 2 }},
+		{"header field", `{"h":{"a":[{"d":[""]}]}}`, testHeaderDataXRecipe, limitNameMaxHeaderFieldBytes, func(l *Limits) { l.MaxHeaderFieldBytes = 4; l.MaxHeaderLineBytes = 8 }},
 	}
 	for _, test := range cases {
 		t.Run(test.name, func(t *testing.T) {
@@ -161,9 +161,9 @@ func TestParserStringUsageCountsRecognizedAndIgnoredOnce(t *testing.T) {
 
 // TestParserChargesCanonicalHeaderPlanSorting verifies deterministic metadata and comparison work.
 func TestParserChargesCanonicalHeaderPlanSorting(t *testing.T) {
-	input := []byte(`{"h":{"C":[],"A":[],"B":[]}}`)
+	input := []byte(`{"h":{"c":[],"a":[],"b":[]}}`)
 	recipe, usage, err := mustParser(t, Limits{}).Parse(input)
-	if err != nil || !recipe.Valid() || !equalStrings(recipe.HeaderNames(), []string{"A", "B", "C"}) {
+	if err != nil || !recipe.Valid() || !equalStrings(recipe.HeaderNames(), []string{"a", "b", "c"}) {
 		t.Fatalf("sort result invalid: recipe_valid=%t names=%d code=%s", recipe.Valid(), len(recipe.HeaderNames()), recipeTestErrorCode(err))
 	}
 	limits := DefaultLimits()
@@ -185,7 +185,7 @@ func TestParserRejectsStringAndHeaderNameBombsAtNarrowIncrementalLimits(t *testi
 		configure              func(*Limits)
 	}{
 		{"ignored string", `{"x":"` + strings.Repeat("s", 4096) + `","b":null}`, limitNameMaxDataStringBytes, func(l *Limits) { l.MaxDataStringBytes = 8; l.MaxTotalLiteralBytes = 16 }},
-		{"header name", `{"h":{"` + strings.Repeat("H", 4096) + `":[]}}`, limitNameMaxHeaderNameBytes, func(l *Limits) { l.MaxHeaderNameBytes = 8; l.MaxTotalHeaderNameBytes = 16 }},
+		{"header name", `{"h":{"` + strings.Repeat("h", 4096) + `":[]}}`, limitNameMaxHeaderNameBytes, func(l *Limits) { l.MaxHeaderNameBytes = 8; l.MaxTotalHeaderNameBytes = 16 }},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

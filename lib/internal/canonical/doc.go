@@ -1,5 +1,5 @@
 // Package canonical owns DKIM2 canonical byte transformations and digest
-// result containers for the draft-ietf-dkim-dkim2-spec-04 baseline.
+// result containers for the draft-ietf-dkim-dkim2-spec-05 baseline.
 //
 // This package is the library-internal source of truth for Section 6.1 body
 // hash input, Section 6.2 header hash input, and Section 9.6 signature input.
@@ -15,9 +15,11 @@
 // intentionally distinct so later code cannot apply header hash rules to
 // signature input or signature rules to header hashes.
 //
-// The package also owns SHA-256 result containers. Hash calculation helpers
-// build on immutable canonical byte and digest accessors, restrictive limits,
-// domain-named options, and structured secret-safe diagnostics.
+// The package also owns fixed-length SHA-256 and SHA-512 Message-Instance
+// digest containers while keeping signature-input SHA-256 separate. Hash
+// calculation helpers build on immutable canonical byte and digest accessors,
+// restrictive limits, domain-named options, and structured secret-safe
+// diagnostics.
 // It also provides the immutable Section 4 and Section 6.2 signed-header
 // relevance classifier consumed through recipe's narrow interface, keeping the
 // exclusion rules in one canonical owner without introducing a package cycle.

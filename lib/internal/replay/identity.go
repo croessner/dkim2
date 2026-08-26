@@ -8,7 +8,7 @@ import (
 
 const (
 	// DraftIdentifier is the exact behavior baseline bound into replay identities.
-	DraftIdentifier = "draft-ietf-dkim-dkim2-spec-04"
+	DraftIdentifier = "draft-ietf-dkim-dkim2-spec-05"
 	// maxIdentityRecipients mirrors the authoritative signature parser hard limit.
 	// Replay cannot import the protocol parser without reversing the package graph.
 	maxIdentityRecipients = 2_000

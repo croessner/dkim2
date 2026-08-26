@@ -92,7 +92,7 @@ func TestStrictMilterFixtureLoaderRejectsClosedContractViolations(t *testing.T) 
 		bytes.Replace(input, []byte(`"schema":`), []byte(`"unknown":0,"schema":`), 1),
 		bytes.Replace(input, []byte(`"schema":`), []byte(`"schema":"duplicate","schema":`), 1),
 		bytes.Replace(input, []byte(`"milter_reconstructed_crlf"`), []byte(`"original_rfc5322"`), 1),
-		bytes.Replace(input, []byte(`"draft-ietf-dkim-dkim2-spec-04"`), []byte(`"draft-ietf-dkim-dkim2-spec-05"`), 1),
+		bytes.Replace(input, []byte(`"draft-ietf-dkim-dkim2-spec-05"`), []byte(`"draft-ietf-dkim-dkim2-spec-04"`), 1),
 		bytes.Replace(input, []byte(`"payload_base64": ""`), []byte(`"payload_base64": "***"`), 1),
 		append(bytes.Clone(input), []byte("\n{}")...),
 	}
@@ -282,7 +282,7 @@ func assertFixtureRequestProjection(
 ) {
 	t.Helper()
 	if api != generatedfixture.V1 ||
-		draft != generatedfixture.DraftIetfDkimDkim2Spec04 ||
+		draft != generatedfixture.DraftIetfDkimDkim2Spec05 ||
 		message.Fidelity == nil ||
 		*message.Fidelity != generatedfixture.MilterReconstructedCrlf {
 		t.Fatal("generated request identity or fidelity differed from fixture")
@@ -404,7 +404,7 @@ func decodeMilterFixtureSet(input []byte) (milterFixtureSet, error) {
 // validateMilterFixtureSet enforces exact identities, enums, ordering, and byte limits.
 func validateMilterFixtureSet(fixtures milterFixtureSet) error {
 	if fixtures.Schema != "dkim2.milter-fixtures.v1" ||
-		fixtures.MessageDraft != "draft-ietf-dkim-dkim2-spec-04" ||
+		fixtures.MessageDraft != "draft-ietf-dkim-dkim2-spec-05" ||
 		fixtures.DNSDraft != "draft-chuang-dkim2-dns-04" ||
 		fixtures.Fidelity != "milter_reconstructed_crlf" ||
 		len(fixtures.Cases) == 0 || len(fixtures.Cases) > milterCaseLimit {
@@ -650,6 +650,6 @@ func milterFixturePath(t *testing.T) string {
 func milterFixturePathForWorkingDirectory() string {
 	return filepath.Clean(
 		"../../../../testdata/conformance/milter/" +
-			"draft-ietf-dkim-dkim2-spec-04/portable-fixtures.json",
+			"draft-ietf-dkim-dkim2-spec-05/portable-fixtures.json",
 	)
 }

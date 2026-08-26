@@ -67,8 +67,8 @@ var currentSourceFiles = map[string][]string{
 	"ietf-dkim2-dns-04": {
 		".artifacts/interop/raw/dns-04.txt",
 	},
-	"ietf-dkim2-spec-04": {
-		".artifacts/interop/raw/spec-04.txt",
+	"ietf-dkim2-spec-05": {
+		".artifacts/interop/raw/spec-05.txt",
 	},
 	"turscar-dkim2": {
 		".artifacts/interop/raw/turscar-repo.json",

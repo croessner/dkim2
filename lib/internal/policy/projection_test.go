@@ -60,6 +60,102 @@ func TestSelectedProjectionAuthenticatesOnlyPassingCurrentFlags(t *testing.T) {
 	}
 }
 
+// TestRevisionFailureProjectionSeparatesCurrentTestingFactsFromInheritedFailure locks fail-closed history provenance.
+func TestRevisionFailureProjectionSeparatesCurrentTestingFactsFromInheritedFailure(t *testing.T) {
+	hop := mustProjectionHop(t, 2, TransitionNotEvaluated)
+	pass := mustProjectionSignatureFact(t, SetAlgorithmRSA, SetStatusPass, SetReasonNone, true, false)
+	current, err := NewSelectedProjection(ProtocolPASS, VerificationReasonNone, 2, []HopFact{hop}, []SignatureFact{pass}, DefaultLimits())
+	if err != nil {
+		t.Fatal(err)
+	}
+	projection, err := NewRevisionFailureProjection(ProtocolFAIL, VerificationReasonSignatureMismatch, current, DefaultLimits())
+	if err != nil || !projection.Valid() || projection.Form() != TargetSelected || projection.TargetSequence() != 2 || len(projection.Hops()) != 0 || len(projection.SignatureFacts()) != 1 {
+		t.Fatalf("NewRevisionFailureProjection() = %#v error=%v", projection, err)
+	}
+	evaluator, err := NewEvaluator(DefaultConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	decision, err := evaluator.EvaluateProjection(projection)
+	if err != nil || decision.Verdict() != VerdictReject || decision.DNSTestingEffective() || !decisionHasReason(decision, ReasonDNSTestingIneligible) {
+		t.Fatalf("EvaluateProjection() = %#v error=%v", decision, err)
+	}
+	if forged, forgeErr := NewRevisionFailureProjection(ProtocolPASS, VerificationReasonNone, current, DefaultLimits()); !IsErrorCode(forgeErr, ErrorInternalContract) || !forged.IsZero() {
+		t.Fatalf("PASS revision failure = %#v error=%v", forged, forgeErr)
+	}
+	if forged, forgeErr := NewRevisionFailureProjection(ProtocolFAIL, VerificationReasonHashMismatch, Projection{}, DefaultLimits()); !IsErrorCode(forgeErr, ErrorInternalContract) || !forged.IsZero() {
+		t.Fatalf("zero current projection = %#v error=%v", forged, forgeErr)
+	}
+}
+
+// TestRevisionFailureProjectionAllowsOnlyServiceOutcomePairs locks the exact service-to-policy history-failure seam.
+func TestRevisionFailureProjectionAllowsOnlyServiceOutcomePairs(t *testing.T) {
+	hop := mustProjectionHop(t, 2, TransitionNotEvaluated)
+	pass := mustProjectionSignatureFact(t, SetAlgorithmRSA, SetStatusPass, SetReasonNone, false, false)
+	current, err := NewSelectedProjection(ProtocolPASS, VerificationReasonNone, 2, []HopFact{hop}, []SignatureFact{pass}, DefaultLimits())
+	if err != nil {
+		t.Fatal(err)
+	}
+	allowed := []struct {
+		protocol ProtocolClass
+		reason   VerificationReason
+	}{
+		{ProtocolFAIL, VerificationReasonHashMismatch},
+		{ProtocolFAIL, VerificationReasonSignatureMismatch},
+		{ProtocolPERMERROR, VerificationReasonUnsupportedAlgorithm},
+		{ProtocolTEMPERROR, VerificationReasonProviderTemporary},
+		{ProtocolPERMERROR, VerificationReasonProviderPermanent},
+		{ProtocolPERMERROR, VerificationReasonProviderContract},
+		{ProtocolPERMERROR, VerificationReasonLimitExceeded},
+		{ProtocolPERMERROR, VerificationReasonOutOfBandRequired},
+		{ProtocolPERMERROR, VerificationReasonInvalidRecipeJSON},
+		{ProtocolPERMERROR, VerificationReasonMalformedProtocol},
+		{ProtocolPERMERROR, VerificationReasonInternalContract},
+	}
+	for _, test := range allowed {
+		projection, projectionErr := NewRevisionFailureProjection(test.protocol, test.reason, current, DefaultLimits())
+		if projectionErr != nil || !projection.Valid() || projection.Protocol() != test.protocol || projection.VerificationReason() != test.reason {
+			t.Errorf("allowed %q/%q = %#v error=%v", test.protocol, test.reason, projection, projectionErr)
+		}
+	}
+	rejected := []struct {
+		protocol ProtocolClass
+		reason   VerificationReason
+	}{
+		{ProtocolPERMERROR, VerificationReasonMissingKey},
+		{ProtocolPERMERROR, VerificationReasonDuplicateSelector},
+		{ProtocolPERMERROR, VerificationReasonTimestampInvalid},
+		{ProtocolPERMERROR, VerificationReason("future")},
+		{ProtocolFAIL, VerificationReasonProviderTemporary},
+		{ProtocolPASS, VerificationReasonNone},
+	}
+	for _, test := range rejected {
+		projection, projectionErr := NewRevisionFailureProjection(test.protocol, test.reason, current, DefaultLimits())
+		if !IsErrorCode(projectionErr, ErrorInternalContract) || !projection.IsZero() {
+			t.Errorf("rejected %q/%q = %#v error=%v", test.protocol, test.reason, projection, projectionErr)
+		}
+	}
+	forged := current
+	forged.protocol = ProtocolPERMERROR
+	forged.verificationReason = VerificationReasonMissingKey
+	forged.history = HistoryNotEvaluated
+	forged.hops = nil
+	forged.revisionFailure = true
+	if forged.Valid() {
+		t.Fatal("directly forged disallowed revision-failure pair is valid")
+	}
+}
+
+// decisionHasReason reports whether one sealed decision carries the requested bounded reason.
+func decisionHasReason(decision Decision, reason PolicyReason) bool {
+	for _, finding := range decision.Findings() {
+		if finding.Reason() == reason {
+			return true
+		}
+	}
+	return false
+}
+
 // TestProjectionCopiesStorage verifies immutable fact ownership.
 func TestProjectionCopiesStorage(t *testing.T) {
 	hop, _ := NewAuthenticatedHopFact(1, TransitionOrigin, true, false, false, false, false)

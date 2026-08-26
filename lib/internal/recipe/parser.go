@@ -10,7 +10,7 @@ import (
 	"github.com/croessner/dkim2/internal/rawmsg"
 )
 
-// Parser converts decoded draft-04 recipe JSON into immutable plans.
+// Parser converts decoded Draft-05 recipe JSON into immutable plans.
 type Parser struct {
 	limits      Limits
 	initialized bool
@@ -609,10 +609,22 @@ func (d *recipeDecoder) decodeHeaders(value jsonValue) ([]headerPlan, error) {
 	}
 	plans := make([]headerPlan, 0, len(value.members))
 	seen := make(map[string]struct{}, len(value.members))
+	canonicalNames := make([]string, len(value.members))
 	for ordinal, member := range value.members {
 		canonicalName, ok := rawmsg.CanonicalHeaderName(member.name)
 		if !ok {
 			return nil, newError(ErrorCodeInvalidHeaderName, ErrorLocation{Offset: member.offset, HeaderOrdinal: ordinal}, ErrorDetails{Dimension: DimensionHeader}, nil)
+		}
+		if _, exists := seen[canonicalName]; exists {
+			return nil, newError(ErrorCodeHeaderNameCollision, ErrorLocation{Offset: member.offset, HeaderOrdinal: ordinal}, ErrorDetails{Dimension: DimensionHeader}, nil)
+		}
+		seen[canonicalName] = struct{}{}
+		canonicalNames[ordinal] = canonicalName
+	}
+	for ordinal, member := range value.members {
+		canonicalName := canonicalNames[ordinal]
+		if member.name != canonicalName {
+			return nil, newError(ErrorCodeNonLowercaseHeaderName, ErrorLocation{Offset: member.offset, HeaderOrdinal: ordinal}, ErrorDetails{Dimension: DimensionHeader}, nil)
 		}
 		d.headerNames++
 		if d.headerNames > d.limits.MaxHeaderNames {
@@ -626,10 +638,6 @@ func (d *recipeDecoder) decodeHeaders(value jsonValue) ([]headerPlan, error) {
 			return nil, parserLimitError(limitNameMaxTotalHeaderNameBytes, d.limits.MaxTotalHeaderNameBytes, totalNameBytes, member.offset)
 		}
 		d.totalHeaderBytes = totalNameBytes
-		if _, exists := seen[canonicalName]; exists {
-			return nil, newError(ErrorCodeHeaderNameCollision, ErrorLocation{Offset: member.offset, HeaderOrdinal: ordinal}, ErrorDetails{Dimension: DimensionHeader}, nil)
-		}
-		seen[canonicalName] = struct{}{}
 		steps, err := d.decodeSteps(member.value, DimensionHeader, member.name, d.limits.MaxStepsPerHeader, limitNameMaxStepsPerHeader)
 		if err != nil {
 			return nil, err

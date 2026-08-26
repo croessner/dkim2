@@ -42,7 +42,7 @@ func TestVerifierReportsHeaderHashMismatch(t *testing.T) {
 // TestVerifierRejectsUnknownOnlyHashSets verifies unsupported hash state cannot pass.
 func TestVerifierRejectsUnknownOnlyHashSets(t *testing.T) {
 	fixture := newRSAVerificationFixture(t)
-	unknownHash := "h=sha512:" + base64.StdEncoding.EncodeToString([]byte("unknown-header")) + ":" + base64.StdEncoding.EncodeToString([]byte("unknown-body"))
+	unknownHash := "h=future:" + base64.StdEncoding.EncodeToString([]byte("unknown-header")) + ":" + base64.StdEncoding.EncodeToString([]byte("unknown-body"))
 	knownHash := "h=sha256:" + fixture.headerDigestBase64 + ":" + fixture.bodyDigestBase64
 	changed := fixture.withRaw(strings.Replace(fixture.raw, knownHash, unknownHash, 1))
 	verifier := mustVerifierForFixture(t, fixture)
@@ -57,8 +57,8 @@ func TestVerifierRejectsUnknownOnlyHashSets(t *testing.T) {
 	}
 }
 
-// TestVerifierRejectsMissingSHA256HashSet verifies absent known hash state is fail closed.
-func TestVerifierRejectsMissingSHA256HashSet(t *testing.T) {
+// TestParserRejectsMalformedSHA256DigestLength verifies an invalid known digest is fail closed.
+func TestParserRejectsMalformedSHA256DigestLength(t *testing.T) {
 	fixture := newRSAVerificationFixture(t)
 	emptyDigest := base64.StdEncoding.EncodeToString([]byte("not-a-digest"))
 	raw := strings.Replace(fixture.raw, fixture.headerDigestBase64, emptyDigest, 1)

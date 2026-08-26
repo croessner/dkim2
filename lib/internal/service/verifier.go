@@ -173,11 +173,23 @@ func mapRevisionProofFailure(current Result, outcome verify.RevisionProofOutcome
 		reason = ReasonLimitExceeded
 	case verify.RevisionProofTerminalNextDomainAuthorizationRequired:
 		reason, class = ReasonOutOfBandRequired, CheckNextDomain
+	case verify.RevisionProofInvalidRecipeJSON:
+		reason = ReasonInvalidRecipeJSON
 	case verify.RevisionProofProtocolRejected:
 	default:
+		reason, class = ReasonInternalContract, CheckInternalContract
+	}
+	result := newResult(state, current.Custody(), current.Target(), reason, []CheckFact{{Class: class, Reason: reason}}, nil)
+	protocol, protocolOK := policyProtocolClass(state)
+	verificationReason, reasonOK := policyVerificationReason(reason)
+	if !protocolOK || !reasonOK {
 		return internalContractResult(current.Target())
 	}
-	return newResult(state, current.Custody(), current.Target(), reason, []CheckFact{{Class: class, Reason: reason}}, nil)
+	projection, err := policy.NewRevisionFailureProjection(protocol, verificationReason, current.PolicyProjection(), policy.DefaultLimits())
+	if err != nil {
+		return internalContractResult(current.Target())
+	}
+	return result.withPolicyProjection(projection)
 }
 
 // attachRevisionProof projects only immutable authenticated all-hop facts.
@@ -273,7 +285,8 @@ func verificationErrorHasUnavailableTarget(code verify.ErrorCode, diagnosticTarg
 	}
 	switch code {
 	case verify.ErrorCodeLimitExceeded, verify.ErrorCodeMissingTarget, verify.ErrorCodeDuplicateTarget,
-		verify.ErrorCodeSequenceInvalid:
+		verify.ErrorCodeSequenceInvalid, verify.ErrorCodeDuplicateHashAlgorithm,
+		verify.ErrorCodeDuplicateSelector, verify.ErrorCodeTooManySignatures:
 		return true
 	default:
 		return false
@@ -286,7 +299,8 @@ func unavailableVerificationFailure(code verify.ErrorCode, reason Reason, class 
 	case verify.ErrorCodeCustodyMismatch, verify.ErrorCodeNextDomainMismatch, verify.ErrorCodeMissingNextSignature:
 		return ReasonMalformedProtocol, CheckProtocol, StatePERMERROR
 	case verify.ErrorCodeLimitExceeded, verify.ErrorCodeMissingTarget, verify.ErrorCodeDuplicateTarget,
-		verify.ErrorCodeSequenceInvalid, verify.ErrorCodeMalformedState:
+		verify.ErrorCodeSequenceInvalid, verify.ErrorCodeMalformedState, verify.ErrorCodeDuplicateHashAlgorithm,
+		verify.ErrorCodeDuplicateSelector, verify.ErrorCodeTooManySignatures:
 		return reason, class, state
 	default:
 		return ReasonInternalContract, CheckInternalContract, StatePERMERROR
@@ -298,6 +312,14 @@ func mapVerificationErrorCode(code verify.ErrorCode) (Reason, CheckClass, State)
 	switch code {
 	case verify.ErrorCodeLimitExceeded:
 		return ReasonLimitExceeded, CheckProtocol, StatePERMERROR
+	case verify.ErrorCodeDuplicateHashAlgorithm:
+		return ReasonDuplicateHashAlgorithm, CheckProtocol, StatePERMERROR
+	case verify.ErrorCodeInvalidRecipeJSON:
+		return ReasonInvalidRecipeJSON, CheckProtocol, StatePERMERROR
+	case verify.ErrorCodeDuplicateSelector:
+		return ReasonDuplicateSelector, CheckProtocol, StatePERMERROR
+	case verify.ErrorCodeTooManySignatures:
+		return ReasonTooManySignatures, CheckProtocol, StatePERMERROR
 	case verify.ErrorCodeMissingTarget:
 		return ReasonMissingProtocol, CheckProtocol, StatePERMERROR
 	case verify.ErrorCodeDuplicateTarget, verify.ErrorCodeSequenceInvalid:

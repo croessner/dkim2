@@ -10,6 +10,7 @@ import (
 
 	"github.com/croessner/dkim2/tools/internal/artifactpath"
 	"github.com/croessner/dkim2/tools/internal/conformance"
+	"github.com/croessner/dkim2/tools/internal/draftsection"
 	"github.com/croessner/dkim2/tools/internal/interop"
 	"github.com/croessner/dkim2/tools/internal/strictjson"
 )
@@ -102,11 +103,11 @@ func checkIssueContent(root string, content []byte) (IssueLog, error) {
 		}
 	}
 	expectedTBA := map[string]bool{
-		"Draft-04 Section 1.1":  false,
-		"Draft-04 Section 10.3": false,
-		"Draft-04 Section 14":   false,
-		"Draft-04 Section 15":   false,
-		"Draft-04 Section 16":   false,
+		"Draft-05 Section 1.1":  false,
+		"Draft-05 Section 10.3": false,
+		"Draft-05 Section 14":   false,
+		"Draft-05 Section 15":   false,
+		"Draft-05 Section 16":   false,
 	}
 	for index, issue := range log.Issues {
 		expectedID := fmt.Sprintf("DKIM2-ISSUE-%04d", index+1)
@@ -180,6 +181,13 @@ func LoadIssueLog(content []byte) (IssueLog, error) {
 		log.MessageDraft != interop.MessageDraft || log.DNSDraft != interop.DNSDraft ||
 		len(log.Issues) == 0 || len(log.Issues) > 256 {
 		return IssueLog{}, errors.New("issues_identity")
+	}
+	for _, issue := range log.Issues {
+		for _, section := range issue.Sections {
+			if !draftsection.CitationValid(section) {
+				return IssueLog{}, errors.New("issues_section")
+			}
+		}
 	}
 	return log, nil
 }

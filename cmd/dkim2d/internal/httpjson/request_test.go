@@ -390,7 +390,7 @@ func processRequestFixture(t testing.TB, raw []byte, reverse string, recipients 
 	fidelity := generated.RawRfc5322
 	return generated.ProcessRequest{
 		ApiVersion: generated.V1,
-		Draft:      generated.DraftIetfDkimDkim2Spec04,
+		Draft:      generated.DraftIetfDkimDkim2Spec05,
 		Message:    generated.MessageInput{RawRfc5322Base64: message, Fidelity: &fidelity},
 		Smtp:       generated.SMTPInput{MailFrom: mailFrom, RcptTo: rcptTo},
 	}

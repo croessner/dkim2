@@ -430,10 +430,12 @@ func (t UnsignedTarget) canonicalCompletionPlan(inputs []completionInput) ([]ren
 	seen := make(map[string]struct{}, len(canonical))
 	for index := range canonical {
 		selector, ok := canonicalDNSName([]byte(canonical[index].selector))
-		if !ok || !canonical[index].algorithm.Known() {
+		algorithm, algorithmOK := canonicalTokenName([]byte(canonical[index].algorithm))
+		if !ok || !algorithmOK {
 			return nil, renderConstructionError("s")
 		}
 		canonical[index].selector = selector
+		canonical[index].algorithm = Algorithm(algorithm)
 		key := selector + "\x00" + string(canonical[index].algorithm)
 		if _, exists := seen[key]; exists {
 			return nil, renderConstructionError("s")
@@ -572,26 +574,28 @@ func canonicalizeEnvelope(request *TargetRequest, limits RenderLimits) error {
 
 // canonicalizeSetPlans validates, sorts, and detaches generated signature plans.
 func canonicalizeSetPlans(input []SetPlan, limits RenderLimits) ([]SetPlan, error) {
-	if len(input) == 0 || len(input) > limits.MaxSignatureSets {
+	if len(input) == 0 {
 		return nil, renderLimitError("max_signature_sets", limits.MaxSignatureSets, len(input))
 	}
-	seenSelectors := make(map[string]struct{}, len(input))
-	seenAlgorithms := make(map[Algorithm]struct{}, len(input))
-	output := make([]SetPlan, 0, len(input))
-	for index, plan := range input {
+	inspectionCount := len(input)
+	if inspectionCount > limits.MaxSignatureSets {
+		inspectionCount = min(inspectionCount, maxSignatureSetsPerAlgorithm+1)
+	}
+	cardinality := newSignatureSetCardinality(inspectionCount)
+	output := make([]SetPlan, 0, min(len(input), limits.MaxSignatureSets))
+	for index, plan := range input[:inspectionCount] {
 		selector, ok := canonicalDNSName([]byte(plan.Selector))
-		if !ok || !plan.Algorithm.Known() {
+		algorithm, algorithmOK := canonicalTokenName([]byte(plan.Algorithm))
+		if !ok || !algorithmOK {
 			return nil, renderConstructionError("s")
 		}
-		if _, exists := seenAlgorithms[plan.Algorithm]; exists {
-			return nil, newError(ErrorCodeDuplicateSignatureAlgorithm, ErrorLocation{SignatureIndex: index}, ErrorDetails{TagName: "s"}, nil)
+		if err := cardinality.add(selector, algorithm, 0, index); err != nil {
+			return nil, err
 		}
-		if _, exists := seenSelectors[selector]; exists {
-			return nil, newError(ErrorCodeDuplicateSelector, ErrorLocation{SignatureIndex: index}, ErrorDetails{TagName: "s"}, nil)
-		}
-		seenAlgorithms[plan.Algorithm] = struct{}{}
-		seenSelectors[selector] = struct{}{}
-		output = append(output, SetPlan{Selector: selector, Algorithm: plan.Algorithm})
+		output = append(output, SetPlan{Selector: selector, Algorithm: Algorithm(algorithm)})
+	}
+	if len(input) > limits.MaxSignatureSets {
+		return nil, renderLimitError("max_signature_sets", limits.MaxSignatureSets, len(input))
 	}
 	slices.SortFunc(output, compareSetPlans)
 	return output, nil
@@ -639,15 +643,28 @@ func generatedFlagRank(name string) int {
 	}
 }
 
-// compareSetPlans orders baseline RSA before Ed25519 and then by selector.
+// compareSetPlans orders supported algorithms first, extensions lexically, then selectors.
 func compareSetPlans(left, right SetPlan) int {
 	if left.Algorithm != right.Algorithm {
-		if left.Algorithm == AlgorithmRSASHA256 {
-			return -1
+		leftRank, rightRank := generatedAlgorithmRank(left.Algorithm), generatedAlgorithmRank(right.Algorithm)
+		if leftRank != rightRank {
+			return leftRank - rightRank
 		}
-		return 1
+		return strings.Compare(string(left.Algorithm), string(right.Algorithm))
 	}
 	return strings.Compare(left.Selector, right.Selector)
+}
+
+// generatedAlgorithmRank preserves the established supported-algorithm order.
+func generatedAlgorithmRank(algorithm Algorithm) int {
+	switch algorithm {
+	case AlgorithmRSASHA256:
+		return 0
+	case AlgorithmEd25519SHA256:
+		return 1
+	default:
+		return 2
+	}
 }
 
 // validGeneratedNonce accepts printable ASCII except the tag terminator.

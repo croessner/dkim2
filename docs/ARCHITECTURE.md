@@ -8,13 +8,13 @@
 | Title | DKIM2 Reference Implementation Architecture |
 | Version | 0.1.0-draft |
 | Status | Living implementation baseline |
-| Date | 2026-08-02 |
+| Date | 2026-08-25 |
 | Owner | Christian Roessner / Codex |
 | Language | English |
 | Classification | Public living design document |
-| Baseline specification | `draft-ietf-dkim-dkim2-spec-04`, dated 2026-07-05 |
+| Baseline specification | `draft-ietf-dkim-dkim2-spec-05`, dated 2026-08-25 |
 | Related specification | M11 tested behavior baseline: `draft-chuang-dkim2-dns-04`, dated 2026-03-18; replaced by `draft-ietf-dkim-dkim2-dns-00` on 2026-07-20 |
-| Baseline status check | Datatracker checked 2026-07-24; the repository behavior and vectors remain pinned to `draft-ietf-dkim-dkim2-spec-04` plus the historical DNS `-04` identifier. The active working-group DNS `-00` has a normatively identical body. Identifier/vector migration is deferred to a separately reviewed baseline update. |
+| Baseline status check | IETF archive sources checked 2026-08-25; the message specification baseline is `draft-ietf-dkim-dkim2-spec-05`. The implemented companion behavior and vectors remain pinned to `draft-chuang-dkim2-dns-04`; the working-group DNS `-00` has a normatively identical body, but its identifier/vector migration remains deferred to a separate reviewed baseline update. |
 | Change control | While this document is still `0.1.0-draft`, startup decisions may be added without a version bump; after the first committed planning baseline, material architecture changes require a revision-history entry and may require a new version |
 | Supersedes | None |
 | Next planned revision | When the DKIM2 draft or a material architecture decision changes |
@@ -68,6 +68,7 @@
 | 0.1.0-draft | 2026-08-20 | Christian Roessner / Codex | Replaced the superseded Postfix full-envelope DSN handoff with the bounce-only `{postfix_dsn_origin}` enum. Embedded DSN verification omits only unavailable current-envelope observation while preserving cryptography, hashes, timestamp, custody, outer-recipient binding, and authenticated-domain authorization. |
 | 0.1.0-draft | 2026-08-20 | Christian Roessner / Codex | Removed caller/static domain preselection from the Postfix DSN path. One tenant-only adapter now authorizes the route with the Postfix origin enum; the daemon verifies embedded evidence, derives canonical highest `d=`, and only then resolves the exact `delivery_status` policy, enabling fail-closed multi-domain operation without circular trust. |
 | 0.1.0-draft | 2026-08-21 | Christian Roessner / Codex | Preserved daemon-owned inbound `Authentication-Results` reporting for delivery-neutral `testing` policy: applicable `continue` responses may carry the same single bounded report action as `accept`, while unsigned, rejecting, temporary, and non-inbound outcomes retain their existing mutation restrictions. |
+| 0.1.0-draft | 2026-08-25 | Christian Roessner / Codex | Advanced the message baseline to Draft-05. The migration authority adds SHA-512 Message-Instance verification, the revised unsigned-header set, lowercase Recipe keys, selector and per-algorithm signature cardinality, unchanged-state Message-Instances, typed diagnostics, a drain-only replay epoch rotation, generated-contract parity, and explicit `unqualified_draft05` Exim status until fresh Linux qualification evidence exists. The DNS companion remains `draft-chuang-dkim2-dns-04`. |
 
 ## 1. Purpose
 
@@ -78,7 +79,7 @@ is written.
 
 The design uses these reviewed behavior baselines as its source of truth:
 
-- `draft-ietf-dkim-dkim2-spec-04`
+- `draft-ietf-dkim-dkim2-spec-05`
 - `draft-chuang-dkim2-dns-04` for the implemented DNS behavior and vectors.
 
 The IETF replaced the DNS document with the working-group
@@ -541,10 +542,14 @@ Responsibilities:
 - Body hash input generation.
 - Header hash input generation.
 - Signature input generation over Message-Instance and DKIM2-Signature fields.
-- Strict coverage of draft-specific excluded headers, including
-  `Delivered-To` and `X-*` under draft-04 Section 4.
+- Strict coverage of the Draft-05 Section 4 excluded-header set, including
+  exact ARC exclusions, the `Received-*` class, and future ARC near misses.
+  The inventory rationale follows the
+  [header-field maintenance survey](https://datatracker.ietf.org/doc/draft-gondwana-email-header-maintenance/)
+  and treats `Received-SPF` as the
+  [RFC 7208](https://www.rfc-editor.org/rfc/rfc7208) example.
 - Stable sorting and duplicate-header ordering rules.
-- An immutable draft-04 Section 4 plus Section 6.2 signed-header relevance
+- An immutable Draft-05 Section 4 plus Section 6.2 signed-header relevance
   classifier exposed through a validated fallible method set for recipe
   generation without duplicating the exclusion table.
 
@@ -576,6 +581,10 @@ Important invariants:
 
 - `m=1` is the origin instance.
 - Gaps make verification impossible per the draft.
+- `sha256` and `sha512` are implemented; decoded values are exactly 32 and 64
+  octets respectively, algorithm names are unique case-insensitively, unknown
+  extension names remain forward-compatible, and verification requires every
+  supplied supported tuple to agree.
 - Hash algorithms unknown to the verifier are ignored, not treated as success.
 - Base64 values must honor the draft's padding requirement.
 
@@ -610,6 +619,9 @@ Design notes:
   verification semantics or the public model.
 - The `b:null` body member must be represented explicitly because body
   unavailability has policy meaning; a null whole recipe is not a valid form.
+- Encoded header-name object keys are lowercase. Parsing rejects decoded mixed
+  or uppercase spellings, including escaped spellings, while message-header
+  matching remains case-insensitive.
 
 ### 5.6 `lib/internal/signature`
 
@@ -620,7 +632,7 @@ Responsibilities:
 
 - Parse required tags: `i=`, `m=`, `t=`, `d=`, `s=`.
 - Require exactly one chain-of-custody form: `nd=`, or both `mf=` and `rt=`.
-- Parse optional tags: `n=`, `f=`, extension tags, including the draft-04
+- Parse optional tags: `n=`, `f=`, extension tags, including the Draft-05
   `feedhere` flag.
 - Validate signature sequence numbers and gaps.
 - Build incomplete signature fields with empty signature values for signing.
@@ -631,6 +643,9 @@ Important invariants:
 
 - `i=1` is the origin signature.
 - Gaps make the message unsigned per the draft.
+- Selectors are unique case-insensitively within one field, and one signing
+  algorithm may occur at most twice with different selectors. These bounds
+  also apply to extension algorithm tokens and preserve the total-set limit.
 - The highest `i=` signature must match the current SMTP envelope when it uses
   `mf=` and `rt=`. A highest signature using `nd=` requires explicit
   out-of-band trust and cannot produce a default verification pass.
@@ -943,7 +958,7 @@ type Envelope struct {
 
 The current envelope is mandatory for normal inbound DKIM2 verification
 because the latest `DKIM2-Signature` must match the actual `MAIL FROM` and
-`RCPT TO` values. Draft-04 permits a highest signature with `nd=` only when
+`RCPT TO` values. Draft-05 permits a highest signature with `nd=` only when
 out-of-band arrangements exist; the secure default is non-success unless that
 trust is explicitly modeled.
 
@@ -1002,7 +1017,7 @@ Request sketch:
 {
   "api_version": "v1",
   "operation": "process",
-  "draft": "draft-ietf-dkim-dkim2-spec-04",
+  "draft": "draft-ietf-dkim-dkim2-spec-05",
   "smtp": {
     "mail_from": "<bounce@example.org>",
     "rcpt_to": ["<user@example.net>"],
@@ -1092,6 +1107,12 @@ Generation rules:
   generated code is stale.
 - Treat generator upgrades as explicit dependency changes with release-note
   review, generated-code review, and regression tests.
+
+The active `DraftVersion` enum contains only
+`draft-ietf-dkim-dkim2-spec-05`. Draft-05 adds the public verification reasons
+`duplicate_hash_algorithm`, `invalid_recipe_json`, `duplicate_selector`, and
+`too_many_signatures`; the OpenAPI document owns these values and every
+generated consumer must reject unknown enum values rather than default them.
 
 Domain packages should not import generated REST types. HTTP handlers adapt
 generated DTOs into explicit DKIM2 domain requests and adapt domain results
@@ -1815,10 +1836,18 @@ Replay storage requirements:
 
 Replay key material is exact:
 
-- the selected current Message-Instance SHA-256 header hash;
+- a local fixed-size SHA-256 projection of the current canonical header input,
+  produced only after every advertised supported Message-Instance hash tuple
+  has passed;
 - SHA-256 of the exact highest canonical signature input;
 - one privacy-preserving recipient-scope SHA-256 digest;
 - the pinned draft identifier and replay-key algorithm version.
+
+The Draft-05 identifier rotates the replay HMAC epoch. Operators must use the
+documented drain-only transition: Draft-04 and Draft-05 instances never process
+replay traffic concurrently, old records become unreachable, and the resulting
+detection gap is bounded by configured retention. The key shape, fixed digest
+width, namespace, storage privileges, and provider ownership do not change.
 
 Sender identities, `Message-ID`, selectors, signer nonces, raw recipients, and
 other creator-private facts are not replay-key inputs.
@@ -1987,6 +2016,12 @@ Ubuntu 26.04 LTS `exim4 4.99.1-1ubuntu1.3` and Debian 13 stable
 used as optional smoke targets, but they do not define the default support floor
 unless a release plan names them explicitly.
 
+The historical five-row evidence is Draft-04 evidence and cannot qualify the
+Draft-05 candidate. Until a fresh separately authorized five-row Linux run is
+bound to unchanged Draft-05 candidate bytes, the active capability token is
+`unqualified_draft05`; portable and otherwise-full conformance run without
+imported Exim evidence and reject any stale qualification claim.
+
 ## 10. Verification Flow
 
 Inbound verification should follow the draft order closely:
@@ -2011,6 +2046,12 @@ Inbound verification should follow the draft order closely:
 15. Produce protocol findings.
 16. Apply local policy.
 17. Produce an action plan.
+
+A non-origin Message-Instance with no Recipe is a valid unchanged-state
+transition under Draft-05. Verification compares the unchanged canonical state
+against every supported tuple in the preceding instance and continues only on
+complete agreement; an invalid or present malformed Recipe remains a distinct
+PERMERROR.
 
 The implementation should support partial verification modes for debugging, but
 the default inbound mode should verify the latest signature and current message
@@ -2104,9 +2145,14 @@ Crypto code should wrap standard, audited Go libraries.
 Rules:
 
 - Use `crypto/rsa` and `crypto/ed25519`.
-- Use SHA-256 as required by the draft baseline.
-- Reject unknown algorithm names unless explicitly configured for experimental
-  draft work.
+- Implement SHA-256 and SHA-512 for Message-Instance body and header hashes.
+  RSA-SHA256 and Ed25519-SHA256 signature inputs continue to use SHA-256.
+- Accept and preserve syntactically valid unknown algorithm tokens at protocol
+  parsing boundaries for draft forward compatibility, but never execute them.
+  Ignore unknown Message-Instance hash tuples only as the active draft permits,
+  require at least one supported tuple, and aggregate unknown signature
+  algorithms as unsupported. Reject configuring an unknown cryptographic
+  implementation unless it is explicitly enabled for experimental draft work.
 - Validate RSA key size policy.
 - Keep private keys behind interfaces.
 - Avoid logging private-key paths if they reveal tenant data.

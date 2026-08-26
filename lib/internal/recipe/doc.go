@@ -1,5 +1,5 @@
 // Package recipe strictly parses, applies, and generates bounded DKIM2 message
-// reconstruction recipes for draft-ietf-dkim-dkim2-spec-04.
+// reconstruction recipes for draft-ietf-dkim-dkim2-spec-05.
 //
 // The package owns the decoded RFC 8259 schema, immutable recipe plans,
 // reconstruction state, resource accounting, transactional application, and

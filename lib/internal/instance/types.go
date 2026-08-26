@@ -10,19 +10,21 @@ import (
 const (
 	// HeaderName is the lowercase rawmsg name for Message-Instance fields.
 	HeaderName = "message-instance"
-	// HashAlgorithmSHA256 is the baseline known Message-Instance hash name.
+	// HashAlgorithmSHA256 is the supported SHA-256 Message-Instance hash name.
 	HashAlgorithmSHA256 = "sha256"
+	// HashAlgorithmSHA512 is the supported SHA-512 Message-Instance hash name.
+	HashAlgorithmSHA512 = "sha512"
 	maxHashSetsHard     = 16
 	maxInstancesHard    = 128
 )
 
-// HashSelectionStatus identifies baseline SHA-256 selection state.
+// HashSelectionStatus identifies supported Message-Instance hash selection state.
 type HashSelectionStatus string
 
 const (
-	// HashSelectionStatusSelected reports one usable SHA-256 tuple.
+	// HashSelectionStatusSelected reports at least one usable supported tuple.
 	HashSelectionStatusSelected HashSelectionStatus = "selected"
-	// HashSelectionStatusMissing reports no SHA-256 or unknown hash tuple.
+	// HashSelectionStatusMissing reports an empty or incoherent instance value.
 	HashSelectionStatusMissing HashSelectionStatus = "missing"
 	// HashSelectionStatusUnsupported reports only unknown hash algorithms.
 	HashSelectionStatusUnsupported HashSelectionStatus = "unsupported"
@@ -103,7 +105,7 @@ func (m MessageInstance) Recipe() (tagvalue.Base64String, bool) {
 	return m.recipe, true
 }
 
-// SHA256HashSet selects the single parser-known baseline tuple.
+// SHA256HashSet selects the supported SHA-256 tuple for compatibility callers.
 func (m MessageInstance) SHA256HashSet() (HashSet, HashSelectionStatus) {
 	sawUnknown := false
 	for _, hashSet := range m.hashes {
@@ -118,6 +120,23 @@ func (m MessageInstance) SHA256HashSet() (HashSet, HashSelectionStatus) {
 		return HashSet{}, HashSelectionStatusUnsupported
 	}
 	return HashSet{}, HashSelectionStatusMissing
+}
+
+// SupportedHashSets returns every supported tuple in wire order.
+func (m MessageInstance) SupportedHashSets() ([]HashSet, HashSelectionStatus) {
+	supported := make([]HashSet, 0, len(m.hashes))
+	for _, hashSet := range m.hashes {
+		if hashSet.known {
+			supported = append(supported, hashSet.clone())
+		}
+	}
+	if len(supported) > 0 {
+		return supported, HashSelectionStatusSelected
+	}
+	if len(m.hashes) > 0 {
+		return nil, HashSelectionStatusUnsupported
+	}
+	return nil, HashSelectionStatusMissing
 }
 
 // HashSet stores one immutable h= algorithm/header/body hash tuple.

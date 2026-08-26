@@ -1,5 +1,9 @@
 # Interoperability, Chain Verification, and CI Simplification Specification
 
+> Historical Draft-04 implementation record. The original scope and evidence
+> below are preserved; current Draft-05 authority is the migration disposition
+> and the 2026-08-26 semantics audit.
+
 Status: implementation-ready stabilization contract.
 
 Date: 2026-08-12.

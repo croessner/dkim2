@@ -67,8 +67,6 @@ func TestHistoryErrorCodesUseCentralOperationalClasses(t *testing.T) {
 		{code: ErrorCodeHistoryInvalidOptions, class: ErrorClassInvariant},
 		{code: ErrorCodeHistoryInvalidState, class: ErrorClassInternal},
 		{code: ErrorCodeHistoryInstanceNotAdjacent, class: ErrorClassMalformed},
-		{code: ErrorCodeHistoryMissingRecipe, class: ErrorClassMissing},
-		{code: ErrorCodeHistoryMissingSHA256, class: ErrorClassMissing},
 		{code: ErrorCodeHistoryLimitExceeded, class: ErrorClassLimit},
 		{code: ErrorCodeHistoryInternalContract, class: ErrorClassInternal},
 	}

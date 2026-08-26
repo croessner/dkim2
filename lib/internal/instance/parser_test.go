@@ -49,7 +49,7 @@ func TestParseAcceptsMessageInstance(t *testing.T) {
 	}
 }
 
-// TestParseRejectsMissingFinalSemicolon reproduces the draft-04 Message-Instance terminator rule.
+// TestParseRejectsMissingFinalSemicolon reproduces the Draft-05 Message-Instance terminator rule.
 func TestParseRejectsMissingFinalSemicolon(t *testing.T) {
 	value := "m=1; h=sha256:" + base64OfByte(1, 32) + ":" + base64OfByte(2, 32)
 	if _, err := Parse(headerField(t, 0, "Message-Instance", value)); err == nil {
@@ -162,6 +162,61 @@ func TestParseRejectsDuplicateHashAlgorithms(t *testing.T) {
 	}
 }
 
+// TestHashSetAcceptsSHA512 proves the Draft-05 Message-Instance SHA-512 tuple contract.
+func TestHashSetAcceptsSHA512(t *testing.T) {
+	parsed, err := Parse(messageInstanceField(t, 0, "m=1; h=SHA512:"+base64OfByte(1, 64)+":"+base64OfByte(2, 64)))
+	if err != nil {
+		t.Fatalf("Parse() error = %v, want SHA-512 acceptance", err)
+	}
+	hashes := parsed.HashSets()
+	if len(hashes) != 1 || hashes[0].Name() != "sha512" || !hashes[0].Known() {
+		t.Fatalf("HashSets() = %#v, want one known SHA-512 tuple", hashes)
+	}
+	if header, ok := hashes[0].HeaderHash(); !ok || header.DecodedLen() != 64 {
+		t.Fatalf("HeaderHash() ok=%v length=%d, want known 64", ok, header.DecodedLen())
+	}
+	if body, ok := hashes[0].BodyHash(); !ok || body.DecodedLen() != 64 {
+		t.Fatalf("BodyHash() ok=%v length=%d, want known 64", ok, body.DecodedLen())
+	}
+}
+
+// TestHashSetAcceptsMixedSupportedAlgorithmsInWireOrder proves dual-hash parsing.
+func TestHashSetAcceptsMixedSupportedAlgorithmsInWireOrder(t *testing.T) {
+	value := "sha512:" + base64OfByte(1, 64) + ":" + base64OfByte(2, 64) +
+		", SHA256:" + base64OfByte(3, 32) + ":" + base64OfByte(4, 32)
+	parsed, err := Parse(messageInstanceField(t, 0, "m=1; h="+value))
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	hashes, status := parsed.SupportedHashSets()
+	if status != HashSelectionStatusSelected || len(hashes) != 2 || hashes[0].Name() != HashAlgorithmSHA512 || hashes[1].Name() != HashAlgorithmSHA256 {
+		t.Fatalf("SupportedHashSets() status=%s hashes=%#v", status, hashes)
+	}
+}
+
+// TestHashSetRejectsWrongSHA512Lengths proves both tuple components enforce 64 octets.
+func TestHashSetRejectsWrongSHA512Lengths(t *testing.T) {
+	for _, value := range []string{
+		"sha512:" + base64OfByte(1, 63) + ":" + base64OfByte(2, 64),
+		"sha512:" + base64OfByte(1, 64) + ":" + base64OfByte(2, 65),
+	} {
+		_, err := Parse(messageInstanceField(t, 0, "m=1; h="+value))
+		if !IsErrorCode(err, ErrorCodeInvalidHashLength) {
+			t.Fatalf("Parse() error = %v, want invalid SHA-512 length", err)
+		}
+	}
+}
+
+// TestHashSetRejectsDuplicateExtensionName proves case-equivalent extension names fail closed.
+func TestHashSetRejectsDuplicateExtensionName(t *testing.T) {
+	value := "future-hash:" + base64OfByte(1, 12) + ":" + base64OfByte(2, 12) +
+		", FUTURE-HASH:" + base64OfByte(3, 12) + ":" + base64OfByte(4, 12)
+	_, err := Parse(messageInstanceField(t, 0, "m=1; h="+value))
+	if !IsErrorCode(err, ErrorCodeDuplicateHashName) {
+		t.Fatalf("Parse() error = %v, want duplicate extension hash name", err)
+	}
+}
+
 // TestParseRejectsInvalidSHA256HashBase64 verifies known-hash base64 checks.
 func TestParseRejectsInvalidSHA256HashBase64(t *testing.T) {
 	tests := []struct {
@@ -188,7 +243,7 @@ func TestParseRejectsInvalidSHA256HashBase64(t *testing.T) {
 func TestParsePreservesUnknownHashNames(t *testing.T) {
 	unknownHeader := base64.StdEncoding.EncodeToString([]byte("future header hash"))
 	unknownBody := base64.StdEncoding.EncodeToString([]byte("future body hash"))
-	field := messageInstanceField(t, 0, "m=1; h=sha512:"+unknownHeader+":"+unknownBody+", sha256:"+base64OfByte(1, 32)+":"+base64OfByte(2, 32))
+	field := messageInstanceField(t, 0, "m=1; h=future512:"+unknownHeader+":"+unknownBody+", sha256:"+base64OfByte(1, 32)+":"+base64OfByte(2, 32))
 	parsed, err := Parse(field)
 	if err != nil {
 		t.Fatalf("Parse() error = %v", err)
@@ -198,7 +253,7 @@ func TestParsePreservesUnknownHashNames(t *testing.T) {
 	if len(hashes) != 2 {
 		t.Fatalf("HashSets() length = %d, want 2", len(hashes))
 	}
-	if hashes[0].Name() != "sha512" || hashes[0].Known() {
+	if hashes[0].Name() != "future512" || hashes[0].Known() {
 		t.Fatalf("unknown hash metadata = name %q known %v", hashes[0].Name(), hashes[0].Known())
 	}
 	if _, ok := hashes[0].HeaderHash(); ok {
@@ -212,8 +267,8 @@ func TestParsePreservesUnknownHashNames(t *testing.T) {
 // TestParseRejectsInvalidUnknownHashBase64 verifies future algorithms retain base64string syntax.
 func TestParseRejectsInvalidUnknownHashBase64(t *testing.T) {
 	for _, value := range []string{
-		"sha512:not-base64:" + base64OfByte(2, 64),
-		"sha512:" + base64OfByte(1, 64) + ":also-not-base64",
+		"future512:not-base64:" + base64OfByte(2, 64),
+		"future512:" + base64OfByte(1, 64) + ":also-not-base64",
 	} {
 		_, err := Parse(messageInstanceField(t, 0, "m=1; h="+value))
 		if !IsErrorCode(err, ErrorCodeInvalidHashBase64) {

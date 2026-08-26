@@ -20,9 +20,11 @@ const (
 	ErrorCodeMalformedHashSet ErrorCode = "malformed_hash_set"
 	// ErrorCodeDuplicateHashName reports a duplicate algorithm name inside h=.
 	ErrorCodeDuplicateHashName ErrorCode = "duplicate_hash_name"
-	// ErrorCodeInvalidHashBase64 reports malformed baseline sha256 hash base64.
+	// ErrorCodeInvalidHashBase64 reports malformed Base64 in a supported or
+	// extension hash tuple.
 	ErrorCodeInvalidHashBase64 ErrorCode = "invalid_hash_base64"
-	// ErrorCodeInvalidHashLength reports a baseline sha256 hash with the wrong size.
+	// ErrorCodeInvalidHashLength reports a supported SHA-256 or SHA-512 hash
+	// with the wrong decoded size.
 	ErrorCodeInvalidHashLength ErrorCode = "invalid_hash_length"
 	// ErrorCodeInvalidRecipeBase64 reports malformed r= base64string syntax.
 	ErrorCodeInvalidRecipeBase64 ErrorCode = "invalid_recipe_base64"

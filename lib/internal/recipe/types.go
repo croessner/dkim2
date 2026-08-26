@@ -18,7 +18,7 @@ const (
 	StepKindData StepKind = "data"
 )
 
-// Known reports whether kind belongs to the draft-04 recipe vocabulary.
+// Known reports whether kind belongs to the Draft-05 recipe vocabulary.
 func (k StepKind) Known() bool { return k == StepKindCopy || k == StepKindData }
 
 // BodyMode identifies the body member form in one parsed recipe.
@@ -139,7 +139,7 @@ type headerPlan struct {
 // valid reports whether the plan owns a coherent field name and ordered closed steps.
 func (p headerPlan) valid() bool {
 	canonicalName, ok := rawmsg.CanonicalHeaderName(p.name)
-	if !p.initialized || !ok || canonicalName != p.canonicalName {
+	if !p.initialized || !ok || canonicalName != p.canonicalName || p.name != canonicalName {
 		return false
 	}
 	previousCopyEnd := 0
@@ -163,7 +163,7 @@ func (p headerPlan) stepsCopy() []step { return cloneSteps(p.steps) }
 // newHeaderPlan constructs one immutable header plan.
 func newHeaderPlan(name, canonicalName string, steps []step) (headerPlan, error) {
 	resolvedName, ok := rawmsg.CanonicalHeaderName(name)
-	if !ok || canonicalName != resolvedName {
+	if !ok || canonicalName != resolvedName || name != canonicalName {
 		return headerPlan{}, newError(ErrorCodeInvalidHeaderName, ErrorLocation{}, ErrorDetails{}, nil)
 	}
 	previousCopyEnd := 0
@@ -184,7 +184,7 @@ func newHeaderPlan(name, canonicalName string, steps []step) (headerPlan, error)
 // clone returns a detached header plan.
 func (p headerPlan) clone() headerPlan { p.steps = cloneSteps(p.steps); return p }
 
-// Recipe stores one immutable parsed draft-04 reconstruction plan.
+// Recipe stores one immutable parsed Draft-05 reconstruction plan.
 type Recipe struct {
 	headers         []headerPlan
 	hasHeaderRecipe bool

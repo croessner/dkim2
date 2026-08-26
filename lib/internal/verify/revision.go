@@ -27,6 +27,8 @@ const (
 	RevisionProofTerminalNextDomainAuthorizationRequired RevisionProofOutcome = "terminal_next_domain_authorization_required"
 	// RevisionProofProtocolRejected reports malformed, mismatched, expired, or otherwise failed protocol evidence.
 	RevisionProofProtocolRejected RevisionProofOutcome = "protocol_rejected"
+	// RevisionProofInvalidRecipeJSON reports malformed authenticated r= JSON.
+	RevisionProofInvalidRecipeJSON RevisionProofOutcome = "invalid_recipe_json"
 	// RevisionProofHashMismatch reports a supported current or historical hash mismatch.
 	RevisionProofHashMismatch RevisionProofOutcome = "hash_mismatch"
 	// RevisionProofSignatureMismatch reports a supported inherited signature mismatch.
@@ -47,7 +49,7 @@ const (
 func (o RevisionProofOutcome) Known() bool {
 	switch o {
 	case RevisionProofVerified, RevisionProofTerminalNextDomainAuthorizationRequired,
-		RevisionProofProtocolRejected, RevisionProofHashMismatch, RevisionProofSignatureMismatch,
+		RevisionProofProtocolRejected, RevisionProofInvalidRecipeJSON, RevisionProofHashMismatch, RevisionProofSignatureMismatch,
 		RevisionProofUnsupported, RevisionProofProviderTemporary,
 		RevisionProofProviderRejected, RevisionProofProviderContract, RevisionProofLimitExceeded:
 		return true
@@ -184,7 +186,7 @@ func (f RevisionFacts) Signatures() []RevisionSignatureFact {
 	return result
 }
 
-// Hashes returns matched current SHA-256 facts.
+// Hashes returns locally computed canonical SHA-256 facts after current hash verification passes.
 func (f RevisionFacts) Hashes() RevisionHashFacts { return f.hashes }
 
 // Envelope returns the authenticated current-envelope result.
@@ -528,6 +530,7 @@ type revisionBaseProof struct {
 	history              HistoryWalk
 	canonicalWork        int
 	currentCanonicalWork int
+	hashes               RevisionHashFacts
 }
 
 // revisionSignatureProof stores detached inherited-signature proof state.
@@ -602,18 +605,9 @@ func (p PreparedRevisionProof) Format(state fmt.State, _ rune) {
 
 // completePreparedRevisionProof builds immutable facts after every provider-backed signature passes.
 func (v Verifier) completePreparedRevisionProof(input verificationInput, base revisionBaseProof, signatures revisionSignatureProof) (RevisionProofOutcome, RevisionProof, error) {
-	hashSet, selection := base.highestInstance.SHA256HashSet()
-	if selection != instance.HashSelectionStatusSelected {
+	if !base.hashes.Valid() {
 		return "", RevisionProof{}, newError(ErrorCodeInternalMisuse, ErrorLocation{}, ErrorDetails{Class: ErrorClassInternal}, nil)
 	}
-	headerHash, headerOK := hashSet.HeaderHash()
-	bodyHash, bodyOK := hashSet.BodyHash()
-	if !headerOK || !bodyOK {
-		return "", RevisionProof{}, newError(ErrorCodeInternalMisuse, ErrorLocation{}, ErrorDetails{Class: ErrorClassInternal}, nil)
-	}
-	hashFacts := RevisionHashFacts{instance: base.highestInstance.Number()}
-	copy(hashFacts.header[:], headerHash.Decoded())
-	copy(hashFacts.body[:], bodyHash.Decoded())
 	custodyFacts := revisionCustodyFacts(base.custody, input.signatures)
 	historyFacts := revisionHistoryFacts(base.history)
 
@@ -624,7 +618,7 @@ func (v Verifier) completePreparedRevisionProof(input verificationInput, base re
 	facts := RevisionFacts{
 		highestSequence: base.highestSignature.Sequence(), highestInstance: base.highestInstance.Number(),
 		instanceCount: len(input.instances), signatureCount: len(input.signatures),
-		signatures: signatures.facts, hashes: hashFacts, envelope: revisionEnvelopeFact(base.highestSignature), custody: custodyFacts, history: historyFacts,
+		signatures: signatures.facts, hashes: base.hashes, envelope: revisionEnvelopeFact(base.highestSignature), custody: custodyFacts, history: historyFacts,
 		usage: RevisionUsage{protocolFields: len(input.instances) + len(input.signatures), signatureSets: signatures.totalSets, keyLookups: signatures.lookups, providerCalls: signatures.lookups,
 			canonicalBytes: signatures.canonicalWork, currentCanonicalBytes: base.currentCanonicalWork, signatureCanonicalBytes: signatures.signatureCanonicalWork, history: base.history.Usage()}, initialized: true,
 	}
@@ -675,6 +669,10 @@ func (v Verifier) verifyRevisionBase(ctx context.Context, input verificationInpu
 		}
 		return revisionBaseProof{}, RevisionProofProtocolRejected, nil
 	}
+	if !hashes.hasLocalHeaderSHA256 || !hashes.hasLocalBodySHA256 {
+		return revisionBaseProof{}, RevisionProofProtocolRejected, nil
+	}
+	hashFacts := RevisionHashFacts{instance: highestInstance.Number(), header: hashes.localHeaderSHA256, body: hashes.localBodySHA256}
 
 	currentCanonicalWork := hashes.canonicalWork
 	canonicalWork := currentCanonicalWork
@@ -703,7 +701,7 @@ func (v Verifier) verifyRevisionBase(ctx context.Context, input verificationInpu
 		return revisionBaseProof{}, RevisionProofLimitExceeded, nil
 	}
 	canonicalWork += walk.Usage().CanonicalBytes()
-	return revisionBaseProof{highestSignature: highestSignature, highestInstance: highestInstance, custody: custody, history: walk, canonicalWork: canonicalWork, currentCanonicalWork: currentCanonicalWork}, "", nil
+	return revisionBaseProof{highestSignature: highestSignature, highestInstance: highestInstance, custody: custody, history: walk, canonicalWork: canonicalWork, currentCanonicalWork: currentCanonicalWork, hashes: hashFacts}, "", nil
 }
 
 // rejectedRevisionHistoryOutcome maps every incomplete authenticated walk to one closed result.
@@ -715,6 +713,8 @@ func rejectedRevisionHistoryOutcome(walk HistoryWalk) RevisionProofOutcome {
 		return RevisionProofProtocolRejected
 	}
 	switch walk.StopReason() {
+	case HistoryStopRecipeInvalid:
+		return RevisionProofInvalidRecipeJSON
 	case HistoryStopLimitExceeded:
 		return RevisionProofLimitExceeded
 	case HistoryStopHashUnsupported:

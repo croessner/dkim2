@@ -135,7 +135,7 @@ func (e Evidence) RecipientDomains() []string {
 	return append([]string(nil), e.recipientDomains...)
 }
 
-// EvidenceEvaluator owns the narrow Draft-04 Section 12 embedded-original verification boundary.
+// EvidenceEvaluator owns the narrow Draft-05 Section 12 embedded-original verification boundary.
 type EvidenceEvaluator struct {
 	verifier verify.Verifier
 }

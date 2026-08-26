@@ -1,5 +1,5 @@
 {
-  "draft": "draft-ietf-dkim-dkim2-spec-04",
+  "draft": "draft-ietf-dkim-dkim2-spec-05",
   "cases": [
     {
       "name": "combined-order-and-escaping",

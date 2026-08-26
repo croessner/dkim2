@@ -15,7 +15,7 @@ import (
 
 const (
 	// MessageDraft is the exact DKIM2 behavior baseline.
-	MessageDraft = "draft-ietf-dkim-dkim2-spec-04"
+	MessageDraft = "draft-ietf-dkim-dkim2-spec-05"
 	// DNSDraft is the exact DNS behavior baseline.
 	DNSDraft = "draft-chuang-dkim2-dns-04"
 	// ManifestSchema identifies the repository manifest format.
@@ -24,9 +24,9 @@ const (
 	ReportSchema = "dkim2.conformance-report.v1"
 	// SnapshotSchema identifies the candidate snapshot framing.
 	SnapshotSchema = "dkim2.candidate-snapshot.v1"
-	// EximQualifiedLinux identifies the release-qualified Linux adapter surface.
-	EximQualifiedLinux = "qualified_linux"
-	maxJSONDepth       = 16
+	// EximUnqualifiedDraft05 identifies the evidence-free Draft-05 adapter surface.
+	EximUnqualifiedDraft05 = "unqualified_draft05"
+	maxJSONDepth           = 16
 )
 
 var (
@@ -36,7 +36,7 @@ var (
 	)
 	knownRunners = stringSet(
 		"portable_vector", "openapi_fixture", "milter_fixture",
-		"postfix_qualification", "exim_qualification",
+		"postfix_qualification",
 	)
 	knownPlatforms = stringSet("portable", "linux")
 	knownOutcomes  = stringSet("pass", "fail", "not_run", "not_applicable")
@@ -50,7 +50,6 @@ const (
 	profilePortable        = "portable"
 	profileFull            = "full"
 	platformLinux          = "linux"
-	runnerExim             = "exim_qualification"
 	classAdapter           = "adapter_contract"
 	moduleConformance      = "testdata/conformance"
 	capLibrary             = "library"
@@ -201,6 +200,11 @@ func (r Report) validateIdentityAndTools(manifest Manifest) error {
 	if !equalMap(r.Capabilities, manifest.Capabilities) {
 		return errors.New("report_capabilities")
 	}
+	for _, suite := range manifest.Suites {
+		if suite == capExim {
+			return errors.New("report_exim_suite")
+		}
+	}
 	if len(r.Tools) == 0 || len(r.Tools) > 64 {
 		return errors.New("report_tools")
 	}
@@ -218,6 +222,9 @@ func (r Report) validateIdentityAndTools(manifest Manifest) error {
 func (r Report) validateCases(manifest Manifest) error {
 	cases := make(map[string]ManifestCase, len(manifest.Cases))
 	for _, manifestCase := range manifest.Cases {
+		if manifestCase.Suite == capExim {
+			return errors.New("report_exim_suite")
+		}
 		cases[manifestCase.Suite+"\x00"+manifestCase.CaseID] = manifestCase
 	}
 	seen := make(map[string]struct{}, len(r.Cases))
@@ -227,6 +234,9 @@ func (r Report) validateCases(manifest Manifest) error {
 	}
 	previous := ""
 	for _, result := range r.Cases {
+		if result.Suite == capExim {
+			return errors.New("report_exim_suite")
+		}
 		key := result.Suite + "\x00" + result.CaseID
 		if key <= previous {
 			return errors.New("report_case_order")
@@ -369,12 +379,8 @@ func (r Report) RenderText() []byte {
 	output.WriteString("- Milter evidence uses byte-exact callback reconstruction, not an original SMTP wire image. Postfix prepends its own `Received` field outside Milter-visible message bytes.\n")
 	output.WriteString("- Postfix execution is Linux-only and covers the pinned qualification image, explicit Milter-v6 timeouts, SMTP intake, and simulated non-SMTP callbacks.\n")
 	output.WriteString("- Replay detection is a restrictive local security policy layered after protocol verification; it is not a DKIM2 cryptographic result.\n")
-	if r.Profile == profilePortable {
-		output.WriteString("- Exim qualification is Linux-only and is not executed or claimed by this portable report.\n")
-	} else {
-		output.WriteString("- Exim execution is admitted only from a separately verified five-row, 43-case-per-row Linux evidence import bound to this candidate.\n")
-	}
-	output.WriteString("- Draft-04 architecture references, EAI considerations, IANA considerations, and security considerations remain `TBA`; implemented interpretations are reported separately from normative claims.\n\n")
+	output.WriteString("- Exim is `unqualified_draft05`; this report admits no Exim qualification case or imported evidence.\n")
+	output.WriteString("- Draft-05 architecture references, EAI considerations, IANA considerations, and security considerations remain `TBA`; implemented interpretations are reported separately from normative claims.\n\n")
 	output.WriteString("## Reproduce\n\n```text\nmake check-conformance\nmake conformance\n")
 	if r.Profile == profileFull {
 		output.WriteString("make conformance-postfix\nmake conformance-all\n")

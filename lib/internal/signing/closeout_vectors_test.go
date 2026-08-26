@@ -55,10 +55,10 @@ type signingInsertionGolden struct {
 	InheritedBytes string `json:"inherited_bytes"`
 }
 
-// TestDraft04SigningGoldenVectors verifies byte-exact generated fields and insertion artifacts.
-func TestDraft04SigningGoldenVectors(t *testing.T) {
+// TestDraft05SigningGoldenVectors verifies byte-exact generated fields and insertion artifacts.
+func TestDraft05SigningGoldenVectors(t *testing.T) {
 	corpus := readSigningGoldenCorpus(t)
-	if corpus.Draft != "draft-ietf-dkim-dkim2-spec-04" {
+	if corpus.Draft != "draft-ietf-dkim-dkim2-spec-05" {
 		t.Fatalf("vector draft = %q", corpus.Draft)
 	}
 	for _, vector := range corpus.Instances {
@@ -147,8 +147,8 @@ func TestDraft04SigningGoldenVectors(t *testing.T) {
 	}
 }
 
-// TestDraft04NextDomainGoldenChain validates the three exact nd flow artifacts as one custody chain.
-func TestDraft04NextDomainGoldenChain(t *testing.T) {
+// TestDraft05NextDomainGoldenChain validates the three exact nd flow artifacts as one custody chain.
+func TestDraft05NextDomainGoldenChain(t *testing.T) {
 	corpus := readSigningGoldenCorpus(t)
 	predecessor := signingSignatureGolden{
 		Name: "ordinary-predecessor", Form: string(PredecessorOrdinary), Sequence: 1, InstanceNumber: 1,
@@ -195,7 +195,7 @@ func TestDraft04NextDomainGoldenChain(t *testing.T) {
 // readSigningGoldenCorpus loads the version-pinned signing closeout corpus.
 func readSigningGoldenCorpus(t *testing.T) signingGoldenCorpus {
 	t.Helper()
-	data, err := os.ReadFile("../../testdata/vectors/draft-ietf-dkim-dkim2-spec-04/signing-golden.json")
+	data, err := os.ReadFile("../../testdata/vectors/draft-ietf-dkim-dkim2-spec-05/signing-golden.json")
 	if err != nil {
 		t.Fatalf("ReadFile(signing-golden.json) error = %v", err)
 	}

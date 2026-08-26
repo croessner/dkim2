@@ -28,10 +28,10 @@ const (
 	ErrorCodeInvalidEnvelopeForm ErrorCode = "invalid_envelope_form"
 	// ErrorCodeMalformedSignatureSet reports malformed selector:algorithm:signature syntax.
 	ErrorCodeMalformedSignatureSet ErrorCode = "malformed_signature_set"
-	// ErrorCodeDuplicateSignatureAlgorithm reports duplicate algorithms inside s=.
-	ErrorCodeDuplicateSignatureAlgorithm ErrorCode = "duplicate_signature_algorithm"
 	// ErrorCodeDuplicateSelector reports duplicate selectors inside s=.
 	ErrorCodeDuplicateSelector ErrorCode = "duplicate_selector"
+	// ErrorCodeTooManySignatures reports a third occurrence of one signing algorithm.
+	ErrorCodeTooManySignatures ErrorCode = "too_many_signatures"
 	// ErrorCodeInvalidSignatureBase64 reports malformed s= signature base64 syntax.
 	ErrorCodeInvalidSignatureBase64 ErrorCode = "invalid_signature_base64"
 	// ErrorCodeInvalidSignatureLength reports a known signature with the wrong size.
@@ -70,7 +70,7 @@ func (c ErrorCode) Known() bool {
 	case ErrorCodeWrongHeaderField, ErrorCodeMissingRequiredTag, ErrorCodeInvalidNumber,
 		ErrorCodeInvalidTimestamp, ErrorCodeInvalidEnvelopeBase64, ErrorCodeInvalidEnvelopePath,
 		ErrorCodeInvalidDomain, ErrorCodeInvalidEnvelopeForm, ErrorCodeMalformedSignatureSet,
-		ErrorCodeDuplicateSignatureAlgorithm, ErrorCodeDuplicateSelector,
+		ErrorCodeDuplicateSelector, ErrorCodeTooManySignatures,
 		ErrorCodeInvalidSignatureBase64, ErrorCodeInvalidSignatureLength, ErrorCodeInvalidNonce,
 		ErrorCodeMalformedFlag, ErrorCodeDuplicateKnownFlag, ErrorCodeLimitExceeded,
 		ErrorCodeInvalidOptions, ErrorCodeMissingOrigin, ErrorCodeDuplicateSequence,
@@ -378,9 +378,9 @@ func classForCode(code ErrorCode) ErrorClass {
 	switch code {
 	case ErrorCodeMissingRequiredTag:
 		return ErrorClassMissing
-	case ErrorCodeDuplicateSignatureAlgorithm, ErrorCodeDuplicateSelector, ErrorCodeDuplicateKnownFlag, ErrorCodeDuplicateSequence:
+	case ErrorCodeDuplicateSelector, ErrorCodeDuplicateKnownFlag, ErrorCodeDuplicateSequence:
 		return ErrorClassDuplicate
-	case ErrorCodeLimitExceeded:
+	case ErrorCodeLimitExceeded, ErrorCodeTooManySignatures:
 		return ErrorClassLimit
 	case ErrorCodeInvalidOptions, ErrorCodeRenderInvariant:
 		return ErrorClassInvariant

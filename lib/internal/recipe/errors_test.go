@@ -75,6 +75,7 @@ func TestEveryRecipeErrorCodeHasAnExplicitOperationalClass(t *testing.T) {
 		{code: ErrorCodeInvalidTopLevel, class: ErrorClassSchema},
 		{code: ErrorCodeMissingRecipeDimension, class: ErrorClassSchema},
 		{code: ErrorCodeInvalidHeaderName, class: ErrorClassSchema},
+		{code: ErrorCodeNonLowercaseHeaderName, class: ErrorClassSchema},
 		{code: ErrorCodeHeaderNameCollision, class: ErrorClassSchema},
 		{code: ErrorCodeInvalidHeaderRecipe, class: ErrorClassSchema},
 		{code: ErrorCodeInvalidBodyRecipe, class: ErrorClassSchema},

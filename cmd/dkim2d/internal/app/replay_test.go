@@ -913,7 +913,7 @@ func authenticReplayDomain(
 func goldenReplayDomain(t *testing.T, mode config.PolicyMode) DomainResult {
 	t.Helper()
 	corpusBytes, err := os.ReadFile(
-		"../../../../lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-04/public-golden.json",
+		"../../../../lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-05/public-golden.json",
 	)
 	if err != nil {
 		t.Fatal("golden replay fixture unavailable")

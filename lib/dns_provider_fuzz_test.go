@@ -71,7 +71,7 @@ func FuzzDNSPublicProvider(f *testing.F) {
 
 // FuzzDNSPublicVerifier verifies hostile DNS states remain structured through the public verifier.
 func FuzzDNSPublicVerifier(f *testing.F) {
-	corpusBytes, err := os.ReadFile("testdata/vectors/draft-ietf-dkim-dkim2-spec-04/public-golden.json")
+	corpusBytes, err := os.ReadFile("testdata/vectors/draft-ietf-dkim-dkim2-spec-05/public-golden.json")
 	if err != nil {
 		f.Fatal("public verifier fuzz corpus unavailable")
 	}

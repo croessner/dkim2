@@ -1195,7 +1195,7 @@ func cachedMessage(t *testing.T, prefix byte, payload string) valkeygo.ValkeyMes
 // validReplayKey derives one protected key only through authentic public verifier evidence.
 func validReplayKey(t *testing.T) dkim2.ReplayKey {
 	t.Helper()
-	corpusBytes, err := os.ReadFile("../../../../../lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-04/public-golden.json")
+	corpusBytes, err := os.ReadFile("../../../../../lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-05/public-golden.json")
 	if err != nil {
 		t.Fatal("public replay corpus read failed")
 	}

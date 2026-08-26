@@ -127,16 +127,22 @@ replication, OOM, and stale-evidence failures require revalidation. Application
 credential drift and internal contract failures require provider reconstruction
 or process restart.
 
-Secret and epoch rotation is drain-only:
+Draft-04 to Draft-05 migration and every later secret or epoch rotation is
+drain-only. The draft identifier is authenticated inside the replay HMAC
+frame, so Draft-04 records are intentionally unreachable from Draft-05 even
+when the namespace and fixed 68-byte storage-key shape stay unchanged:
 
 1. stop all replay traffic;
-2. keep the old epoch and secret authoritative for the complete thirty-day
-   hard maximum retention;
+2. keep the drained Draft-04 deployment, epoch, and secret authoritative and
+   quiescent for the complete thirty-day hard maximum retention;
 3. restart every active instance with the new shared epoch and secret set; and
 4. resume traffic only after the drain and restart are complete.
 
-Instant, partial, mixed-instance, dual-epoch, fallback, and online migration
-states are unsupported and fail closed.
+Instant, partial, mixed-draft, mixed-instance, dual-epoch, fallback, and online
+migration states are unsupported and fail closed. Starting Draft-05 before the
+Draft-04 retention window drains creates a bounded replay-detection gap for
+old records; it is not a compatible rolling-upgrade mode and must be treated as
+an operator policy violation.
 
 ## Ownership Of Later Runtime Work
 

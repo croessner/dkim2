@@ -1,5 +1,5 @@
 // Package dkim2 provides verification and signing for
-// draft-ietf-dkim-dkim2-spec-04.
+// draft-ietf-dkim-dkim2-spec-05.
 //
 // A Verifier requires an injected PublicKeyProvider. VerifyRequest owns cloned
 // raw RFC 5322 bytes; those bytes are the sole authority for message and DKIM2

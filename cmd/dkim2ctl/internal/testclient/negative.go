@@ -14,9 +14,9 @@ import (
 
 const daemonProcessBodyLimit = int64(47_878_316)
 
-const fixedNegativeBody = `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-04","message":{"raw_rfc5322_base64":""},"smtp":{"mail_from":"","rcpt_to":[""]}}`
-const fixedNegativeSignBody = `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-04","message":{"raw_rfc5322_base64":""},"smtp":{"mail_from":"","rcpt_to":[""]},"context":{"tenant":"test","domain":"example.test"}}`
-const fixedNegativeReviseBody = `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-04","message":{"raw_rfc5322_base64":""},"smtp":{"mail_from":"","rcpt_to":[""]},"incoming_smtp":{"mail_from":"","rcpt_to":[""]},"context":{"tenant":"test","domain":"example.test"}}`
+const fixedNegativeBody = `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-05","message":{"raw_rfc5322_base64":""},"smtp":{"mail_from":"","rcpt_to":[""]}}`
+const fixedNegativeSignBody = `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-05","message":{"raw_rfc5322_base64":""},"smtp":{"mail_from":"","rcpt_to":[""]},"context":{"tenant":"test","domain":"example.test"}}`
+const fixedNegativeReviseBody = `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-05","message":{"raw_rfc5322_base64":""},"smtp":{"mail_from":"","rcpt_to":[""]},"incoming_smtp":{"mail_from":"","rcpt_to":[""]},"context":{"tenant":"test","domain":"example.test"}}`
 
 // CallNegative executes one closed raw-contract mutation.
 func (r *Runtime) CallNegative(

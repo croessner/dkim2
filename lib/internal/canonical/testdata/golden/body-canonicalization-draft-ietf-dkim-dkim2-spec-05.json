@@ -1,9 +1,9 @@
 {
-  "draft": "draft-ietf-dkim-dkim2-spec-04",
+  "draft": "draft-ietf-dkim-dkim2-spec-05",
   "cases": [
     {
       "name": "empty-body",
-      "draft": "draft-ietf-dkim-dkim2-spec-04",
+      "draft": "draft-ietf-dkim-dkim2-spec-05",
       "body_base64": "",
       "canonical_base64": "DQo=",
       "sha256_base64": "frcCV1k9oG9oKj3dpUqdJg1PxRT2RSN/XKdLCPjaYaY=",
@@ -12,7 +12,7 @@
     },
     {
       "name": "terminal-crlf",
-      "draft": "draft-ietf-dkim-dkim2-spec-04",
+      "draft": "draft-ietf-dkim-dkim2-spec-05",
       "body_base64": "YWxwaGENCg==",
       "canonical_base64": "YWxwaGENCg==",
       "sha256_base64": "SjH4oynNu6uUQFb8mS7rWrXAtKeMO8NObXxKWf1s87Y=",
@@ -21,7 +21,7 @@
     },
     {
       "name": "multiple-trailing-empty-lines",
-      "draft": "draft-ietf-dkim-dkim2-spec-04",
+      "draft": "draft-ietf-dkim-dkim2-spec-05",
       "body_base64": "YWxwaGENCg0KDQo=",
       "canonical_base64": "YWxwaGENCg==",
       "sha256_base64": "SjH4oynNu6uUQFb8mS7rWrXAtKeMO8NObXxKWf1s87Y=",
@@ -30,7 +30,7 @@
     },
     {
       "name": "missing-terminal-crlf",
-      "draft": "draft-ietf-dkim-dkim2-spec-04",
+      "draft": "draft-ietf-dkim-dkim2-spec-05",
       "body_base64": "YWxwaGE=",
       "canonical_base64": "YWxwaGENCg==",
       "sha256_base64": "SjH4oynNu6uUQFb8mS7rWrXAtKeMO8NObXxKWf1s87Y=",
@@ -39,7 +39,7 @@
     },
     {
       "name": "mime-looking-content",
-      "draft": "draft-ietf-dkim-dkim2-spec-04",
+      "draft": "draft-ietf-dkim-dkim2-spec-05",
       "body_base64": "Q29udGVudC1UeXBlOiB0ZXh0L3BsYWluDQoNCm5vdCBkZWNvZGVkPTNEeWVzDQo=",
       "canonical_base64": "Q29udGVudC1UeXBlOiB0ZXh0L3BsYWluDQoNCm5vdCBkZWNvZGVkPTNEeWVzDQo=",
       "sha256_base64": "D4+DmIiY8RWL2oPllJcdFAthpPD3Bmql+mYY6uvGHsc=",
@@ -48,7 +48,7 @@
     },
     {
       "name": "non-utf8-bytes",
-      "draft": "draft-ietf-dkim-dkim2-spec-04",
+      "draft": "draft-ietf-dkim-dkim2-spec-05",
       "body_base64": "/wCAdGFpbA==",
       "canonical_base64": "/wCAdGFpbA0K",
       "sha256_base64": "IUi7nco2ez6znAITIHFiOexWmgQKdSidgiThG0uwHeU=",

@@ -14,7 +14,7 @@ import (
 	"github.com/croessner/dkim2/internal/recipe"
 )
 
-const generationGoldenDraft04 = "draft-ietf-dkim-dkim2-spec-04"
+const generationGoldenDraft05 = "draft-ietf-dkim-dkim2-spec-05"
 
 type retainedGenerationFixture struct {
 	Draft           string                   `json:"draft"`
@@ -60,10 +60,10 @@ type retainedCanonicalEvidence struct {
 	BodySHA256Base64   *string `json:"body_sha256_base64"`
 }
 
-// TestRetainedGenerationDraft04Evidence verifies reachable state, policy, outcome, reconstruction, and canonical fixtures.
-func TestRetainedGenerationDraft04Evidence(t *testing.T) {
+// TestRetainedGenerationDraft05Evidence verifies reachable state, policy, outcome, reconstruction, and canonical fixtures.
+func TestRetainedGenerationDraft05Evidence(t *testing.T) {
 	fixture := loadRetainedGenerationFixture(t)
-	if fixture.Draft != generationGoldenDraft04 || len(fixture.SerializerCases) == 0 || len(fixture.GenerationCases) == 0 {
+	if fixture.Draft != generationGoldenDraft05 || len(fixture.SerializerCases) == 0 || len(fixture.GenerationCases) == 0 {
 		t.Fatal("retained fixture scope or draft is incomplete")
 	}
 	for _, test := range fixture.GenerationCases {
@@ -104,7 +104,7 @@ func TestRetainedGenerationDraft04Evidence(t *testing.T) {
 // loadRetainedGenerationFixture reads the combined serializer-only and reachable generation fixture.
 func loadRetainedGenerationFixture(t *testing.T) retainedGenerationFixture {
 	t.Helper()
-	data, err := os.ReadFile("testdata/golden/recipe-generation-draft-ietf-dkim-dkim2-spec-04.json")
+	data, err := os.ReadFile("testdata/golden/recipe-generation-draft-ietf-dkim-dkim2-spec-05.json")
 	if err != nil {
 		t.Fatal("retained generation fixture read failed")
 	}
@@ -200,7 +200,7 @@ func consumeRetainedJSONValue(decoder *json.Decoder) error {
 
 // validateRetainedGenerationFixture enforces closed inventories and outcome-aware evidence presence.
 func validateRetainedGenerationFixture(fixture retainedGenerationFixture) error {
-	if fixture.Draft != generationGoldenDraft04 {
+	if fixture.Draft != generationGoldenDraft05 {
 		return fmt.Errorf("retained fixture has wrong draft")
 	}
 	serializerInventory := map[string]struct{}{
@@ -337,7 +337,7 @@ func retainedLiteralPolicyKnown(value string) bool {
 
 // TestRetainedGenerationFixtureRejectsSchemaDrift proves strict decoding and exact inventories are non-vacuous.
 func TestRetainedGenerationFixtureRejectsSchemaDrift(t *testing.T) {
-	data, err := os.ReadFile("testdata/golden/recipe-generation-draft-ietf-dkim-dkim2-spec-04.json")
+	data, err := os.ReadFile("testdata/golden/recipe-generation-draft-ietf-dkim-dkim2-spec-05.json")
 	if err != nil {
 		t.Fatal("retained generation fixture read failed")
 	}
@@ -345,7 +345,7 @@ func TestRetainedGenerationFixtureRejectsSchemaDrift(t *testing.T) {
 	if _, err := decodeRetainedGenerationFixture(unknownField); err == nil {
 		t.Fatal("strict retained fixture decoder accepted an unknown field")
 	}
-	duplicateField := bytes.Replace(data, []byte("\"draft\": \"draft-ietf-dkim-dkim2-spec-04\","), []byte("\"draft\": \"draft-ietf-dkim-dkim2-spec-04\",\n  \"draft\": \"draft-ietf-dkim-dkim2-spec-04\","), 1)
+	duplicateField := bytes.Replace(data, []byte("\"draft\": \"draft-ietf-dkim-dkim2-spec-05\","), []byte("\"draft\": \"draft-ietf-dkim-dkim2-spec-05\",\n  \"draft\": \"draft-ietf-dkim-dkim2-spec-05\","), 1)
 	if _, err := decodeRetainedGenerationFixture(duplicateField); err == nil {
 		t.Fatal("strict retained fixture decoder accepted a duplicate object member")
 	}

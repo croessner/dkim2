@@ -50,7 +50,7 @@ func (p ReplayProjection) Draft() string {
 	return p.state.draft
 }
 
-// MessageDigest returns the selected matched Message-Instance header hash by value.
+// MessageDigest returns the locally computed canonical SHA-256 header digest by value.
 func (p ReplayProjection) MessageDigest() ([32]byte, bool) {
 	if !p.Valid() {
 		return [32]byte{}, false

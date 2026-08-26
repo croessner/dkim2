@@ -25,6 +25,8 @@ const (
 	ErrorCodeMissingRecipeDimension ErrorCode = "missing_recipe_dimension"
 	// ErrorCodeInvalidHeaderName reports a non-RFC 5322 recipe key.
 	ErrorCodeInvalidHeaderName ErrorCode = "invalid_header_name"
+	// ErrorCodeNonLowercaseHeaderName reports a decoded recipe key that is not lowercase.
+	ErrorCodeNonLowercaseHeaderName ErrorCode = "non_lowercase_header_name"
 	// ErrorCodeHeaderNameCollision reports ASCII case-folded key duplication.
 	ErrorCodeHeaderNameCollision ErrorCode = "header_name_collision"
 	// ErrorCodeInvalidHeaderRecipe reports an invalid h member shape.
@@ -68,7 +70,7 @@ func (c ErrorCode) Known() bool {
 	switch c {
 	case ErrorCodeInvalidOptions, ErrorCodeInvalidState, ErrorCodeLimitExceeded, ErrorCodeInvalidJSON,
 		ErrorCodeDuplicateMember, ErrorCodeInvalidTopLevel, ErrorCodeMissingRecipeDimension,
-		ErrorCodeInvalidHeaderName, ErrorCodeHeaderNameCollision, ErrorCodeInvalidHeaderRecipe,
+		ErrorCodeInvalidHeaderName, ErrorCodeNonLowercaseHeaderName, ErrorCodeHeaderNameCollision, ErrorCodeInvalidHeaderRecipe,
 		ErrorCodeInvalidBodyRecipe, ErrorCodeInvalidStep, ErrorCodeInvalidCopyRange,
 		ErrorCodeCopyRangeOrder, ErrorCodeCopyRangeOutOfBounds, ErrorCodeInvalidLiteral,
 		ErrorCodeSourceUnavailable, ErrorCodeInvalidGenerator, ErrorCodeInvalidRequest,
@@ -278,7 +280,7 @@ func classForCode(code ErrorCode) ErrorClass {
 		return ErrorClassLimit
 	case ErrorCodeInvalidJSON, ErrorCodeDuplicateMember:
 		return ErrorClassSyntax
-	case ErrorCodeInvalidTopLevel, ErrorCodeMissingRecipeDimension, ErrorCodeInvalidHeaderName,
+	case ErrorCodeInvalidTopLevel, ErrorCodeMissingRecipeDimension, ErrorCodeInvalidHeaderName, ErrorCodeNonLowercaseHeaderName,
 		ErrorCodeHeaderNameCollision, ErrorCodeInvalidHeaderRecipe,
 		ErrorCodeInvalidBodyRecipe, ErrorCodeInvalidStep, ErrorCodeInvalidLiteral:
 		return ErrorClassSchema

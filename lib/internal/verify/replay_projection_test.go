@@ -10,6 +10,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -17,6 +18,44 @@ import (
 	"github.com/croessner/dkim2/internal/instance"
 	"github.com/croessner/dkim2/internal/replay"
 )
+
+// TestReplayProjectionUsesLocalSHA256AcrossAdvertisedHashSets proves replay identity is algorithm-independent.
+func TestReplayProjectionUsesLocalSHA256AcrossAdvertisedHashSets(t *testing.T) {
+	tests := []struct {
+		name       string
+		algorithms []canonical.HashAlgorithm
+		mismatch   canonical.HashAlgorithm
+		wantPass   bool
+	}{
+		{"sha256", []canonical.HashAlgorithm{canonical.HashAlgorithmSHA256}, "", true},
+		{testHashCaseSHA512Only, []canonical.HashAlgorithm{canonical.HashAlgorithmSHA512}, "", true},
+		{"dual", []canonical.HashAlgorithm{canonical.HashAlgorithmSHA256, canonical.HashAlgorithmSHA512}, "", true},
+		{testHashCaseDualMismatch, []canonical.HashAlgorithm{canonical.HashAlgorithmSHA256, canonical.HashAlgorithmSHA512}, canonical.HashAlgorithmSHA512, false},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			fixture := newRSAHashVerificationFixture(t, test.algorithms, test.mismatch)
+			result, err := mustVerifierForFixture(t, fixture).Verify(context.Background(), Request{Message: fixture.message, Envelope: matchingEnvelope()})
+			if err != nil {
+				t.Fatalf("Verify() error = %v", err)
+			}
+			projection, ok := result.ReplayProjection()
+			if !test.wantPass {
+				if result.Status() == TargetStatusPass || ok || projection.Valid() {
+					t.Fatalf("mismatch = status:%q projection:%#v ok:%t", result.Status(), projection, ok)
+				}
+				return
+			}
+			local := mustCanonicalizer(t)
+			headerResult, headerErr := local.HeaderHashFromMessage(fixture.message)
+			want := mustDigest(t, mustCanonicalResult(t, headerResult, headerErr)).Bytes()
+			got, present := projection.MessageDigest()
+			if result.Status() != TargetStatusPass || !ok || !projection.Valid() || !present || !bytes.Equal(got[:], want) {
+				t.Fatalf("pass = status:%q projection:%#v ok:%t present:%t", result.Status(), projection, ok, present)
+			}
+		})
+	}
+}
 
 // TestRecipientScopeUsesExactFrozenCanonicalizationAndFraming verifies the published SHA-256 vector.
 func TestRecipientScopeUsesExactFrozenCanonicalizationAndFraming(t *testing.T) {
@@ -103,7 +142,7 @@ func TestReplayProjectionIsSealedOnlyByAuthoritativeCurrentPass(t *testing.T) {
 
 	hashSet, status := fixture.instances[0].SHA256HashSet()
 	if status != instance.HashSelectionStatusSelected {
-		t.Fatal("test prerequisite lacks selected SHA-256 set")
+		t.Fatal("test prerequisite lacks an advertised SHA-256 set")
 	}
 	headerHash, ok := hashSet.HeaderHash()
 	if !ok {
@@ -112,7 +151,7 @@ func TestReplayProjectionIsSealedOnlyByAuthoritativeCurrentPass(t *testing.T) {
 	wantMessage := headerHash.Decoded()
 	gotMessage, present := projection.MessageDigest()
 	if !present || !bytes.Equal(gotMessage[:], wantMessage) {
-		t.Fatal("projection message digest is not the selected matched Message-Instance hash")
+		t.Fatal("projection message digest is not the locally computed canonical SHA-256 hash")
 	}
 	canonicalizer, err := canonical.NewCanonicalizer()
 	if err != nil {
@@ -312,6 +351,54 @@ func TestReplayProjectionFormattingDoesNotExposePrivateFacts(t *testing.T) {
 	}
 }
 
+// newRSAHashVerificationFixture creates a real RSA signature over controlled advertised content hashes.
+func newRSAHashVerificationFixture(t *testing.T, algorithms []canonical.HashAlgorithm, mismatch canonical.HashAlgorithm) verificationFixture {
+	t.Helper()
+	key, err := rsa.GenerateKey(rand.Reader, 1024)
+	if err != nil {
+		t.Fatal(err)
+	}
+	base := mustParseVerificationMessage(t, baseVerificationHeaders()+"\r\n"+verificationBody())
+	sets := make([]string, 0, len(algorithms))
+	for _, algorithm := range algorithms {
+		canonicalizer, newErr := canonical.NewCanonicalizer(canonical.WithHashAlgorithm(algorithm))
+		if newErr != nil {
+			t.Fatal(newErr)
+		}
+		headerResult, headerErr := canonicalizer.HeaderHashFromMessage(base)
+		bodyResult, bodyErr := canonicalizer.BodyHashFromMessage(base)
+		header := mustDigest(t, mustCanonicalResult(t, headerResult, headerErr))
+		body := mustDigest(t, mustCanonicalResult(t, bodyResult, bodyErr))
+		headerBytes := header.Bytes()
+		if algorithm == mismatch {
+			headerBytes[0] ^= 0xff
+		}
+		sets = append(sets, string(algorithm)+":"+base64.StdEncoding.EncodeToString(headerBytes)+":"+body.Base64())
+	}
+	build := func(signatureText string) string {
+		return baseVerificationHeaders() +
+			"Message-Instance: m=1; h=" + strings.Join(sets, ",") + ";\r\n" +
+			"DKIM2-Signature: i=1; m=1; t=" + strconv.FormatUint(testTimestampSeconds, 10) + "; mf=PD4=; rt=PHJjcHRAZXhhbXBsZS50ZXN0Pg==; d=" + testDomain + "; s=" + testSelector + ":rsa-sha256:" + signatureText + ";\r\n\r\n" + verificationBody()
+	}
+	placeholder := base64.StdEncoding.EncodeToString(make([]byte, 128))
+	unsigned := mustParseVerificationMessage(t, build(placeholder))
+	digest := signatureDigestForTarget(t, unsigned, 1)
+	sealed, err := rsa.SignPKCS1v15(rand.Reader, key, crypto.SHA256, digest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	signatureText := base64.StdEncoding.EncodeToString(sealed)
+	fixture, err := parseVerificationFixture(build(signatureText))
+	if err != nil {
+		t.Fatal(err)
+	}
+	fixture.algorithm = AlgorithmRSASHA256
+	fixture.signatureBase64 = signatureText
+	fixture.signatureBytes = sealed
+	fixture.rsaPublicKey = &key.PublicKey
+	return fixture
+}
+
 // TestReplayIntermediatesFormattingDoesNotExposePrivateFacts verifies transient helper privacy.
 func TestReplayIntermediatesFormattingDoesNotExposePrivateFacts(t *testing.T) {
 	var marker [32]byte
@@ -322,8 +409,8 @@ func TestReplayIntermediatesFormattingDoesNotExposePrivateFacts(t *testing.T) {
 		valid:     true,
 	}
 	hashes := hashCheckResults{
-		selectedHeaderDigest:    marker,
-		hasSelectedHeaderDigest: true,
+		localHeaderSHA256:    marker,
+		hasLocalHeaderSHA256: true,
 	}
 	for _, value := range []any{scope, &scope, hashes, &hashes} {
 		formatted := fmt.Sprintf("%v|%+v|%#v|%s|%q|%x", value, value, value, value, value, value)

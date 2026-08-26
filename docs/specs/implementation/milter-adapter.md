@@ -1,5 +1,9 @@
 # Milter Adapter Implementation Specification
 
+> Historical Draft-04 implementation record. The original scope and evidence
+> below are preserved; current Draft-05 authority is the migration disposition
+> and the 2026-08-26 semantics audit.
+
 Status: implementation-ready planning baseline.
 
 Implementation base: `bf627cd81d2a46df35d5c42dde06e0f447cf017c`.

@@ -10,6 +10,8 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+
+	"github.com/croessner/dkim2/tools/internal/draftsection"
 )
 
 const (
@@ -140,13 +142,16 @@ func (m Manifest) validateIdentity() (map[string]bool, error) {
 	requiredCapabilities := map[string]string{
 		capLibrary: supportedCapability, capDaemon: supportedCapability,
 		capMilter: partialCapability, capPostfix: partialLinuxCapability,
-		capExim: EximQualifiedLinux,
+		capExim: EximUnqualifiedDraft05,
 	}
 	if !equalMap(m.Capabilities, requiredCapabilities) {
 		return nil, errors.New("manifest_capabilities")
 	}
 	suiteSet := make(map[string]bool, len(m.Suites))
 	for _, suite := range m.Suites {
+		if suite == capExim {
+			return nil, errors.New("manifest_exim_suite")
+		}
 		if !caseIDPattern.MatchString(suite) {
 			return nil, errors.New("manifest_suite")
 		}
@@ -209,6 +214,9 @@ func (m Manifest) validateCases(
 	referenced := make(map[string]struct{}, len(m.Artifacts))
 	previous := ""
 	for _, manifestCase := range m.Cases {
+		if manifestCase.Suite == capExim {
+			return errors.New("manifest_exim_suite")
+		}
 		key := manifestCase.Suite + "\x00" + manifestCase.CaseID
 		if key <= previous || !suiteSet[manifestCase.Suite] ||
 			!caseIDPattern.MatchString(manifestCase.CaseID) ||
@@ -226,6 +234,9 @@ func (m Manifest) validateCases(
 			if len(authority) == 0 || len(authority) > 160 ||
 				strings.ContainsAny(authority, "\r\n\x00") {
 				return errors.New("manifest_case")
+			}
+			if !draftsection.CitationValid(authority) {
+				return errors.New("manifest_authority_section")
 			}
 		}
 		previous = key

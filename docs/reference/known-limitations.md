@@ -3,7 +3,7 @@
 The first preview is a tested reference candidate, not a final DKIM2 standard,
 certification, or universal interoperability claim.
 
-- Draft-04 architecture references, full-chain policy guidance, EAI, IANA,
+- Draft-05 architecture references, full-chain policy guidance, EAI, IANA,
   and Security Considerations still contain `TBA` text. The implementation
   does not invent normative behavior for those sections.
 - External discovery found runnable parser overlap with MailAuthLens and
@@ -15,10 +15,11 @@ certification, or universal interoperability claim.
   reserved synthetic inputs. It does not cover another implementation's full
   signing, verification, recipe, custody, SMTP, replay, daemon, OpenAPI,
   telemetry, or deployment behavior.
-- Postfix/Milter qualification is implemented. Exim is Linux-qualified only for
-  the five source-linked upstream, Debian, and Ubuntu rows recorded in the
-  compatibility report. There is no portable Exim execution claim, universal
-  local-scan binary, or Exim container image.
+- Postfix/Milter qualification is implemented. Exim is
+  `unqualified_draft05`; the five source-linked upstream, Debian, and Ubuntu
+  rows in the compatibility report are historical Draft-04 evidence. There is
+  no current Draft-05 Exim execution claim, universal local-scan binary, or
+  Exim container image.
 - The daemon supports outgoing null-reverse-path DSN signing only through the
   Postfix-exclusive route, `delivery_status` profile, route ticket, and
   protected DSN capability. The library retains a strict generic evidence
@@ -47,6 +48,9 @@ certification, or universal interoperability claim.
   [native-domain runbook](../operator/native-domain-onboarding.md).
 - Product images are Linux `amd64` and `arm64`; release preparation does not
   publish them or create `latest`, stable, minor, or major aliases.
+- The Draft-05 replay identifier is a drain-only epoch rotation. Draft-04 and
+  Draft-05 replay traffic cannot overlap; old records become unreachable and
+  the resulting detection gap is bounded by the configured retention period.
 
 Stable IDs and resolution criteria for draft and interpretation limits are in
 [the issue log](draft-issues.md).

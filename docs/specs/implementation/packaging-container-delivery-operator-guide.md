@@ -1,5 +1,10 @@
 # Packaging, Container Delivery, And Operator Guide
 
+> Historical Draft-04 implementation record. The original scope and evidence
+> below are preserved; current Draft-05 authority is the migration disposition
+> and the 2026-08-26 semantics audit. Its `qualified_linux` evidence does not
+> qualify Draft-05.
+
 Status: implementation-ready planning baseline.
 
 Implementation base: `62a3d8282f65001e24f669be3962cd13474442f1`.

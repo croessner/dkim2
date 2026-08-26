@@ -1,5 +1,9 @@
 # Postfix DSN Origin for the Milter Adapter
 
+> Historical Draft-04 implementation record. The original scope and evidence
+> below are preserved; current Draft-05 authority is the migration disposition
+> and the 2026-08-26 semantics audit.
+
 Status: implementation baseline. This document defines a local Postfix-to-
 DKIM2 adapter contract; it is not a DKIM2 wire-protocol extension.
 

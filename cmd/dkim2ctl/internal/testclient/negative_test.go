@@ -8,12 +8,44 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/croessner/dkim2/cmd/dkim2ctl/internal/testclient/generated"
 )
 
-const forbiddenResponseBody = `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-04","code":"forbidden","category":"request"}`
+const forbiddenResponseBody = `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-05","code":"forbidden","category":"request"}`
 const testForbiddenCode = "forbidden"
 
-const validProcessResponseBody = `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-04","verification":{"state":"PERMERROR","primary_reason":"malformed_message","scope":"current","historical_content":"not_evaluated","historical_signatures":"not_evaluated","custody_structure":"not_present","checks":[{"class":"message","reason":"malformed_message"}],"signature_sets":[]},"policy":{"mode":"strict","verdict":"reject","primary_reason":"protocol_permerror","do_not_modify":"not_evaluated","do_not_explode":"not_evaluated","dns_testing_effective":false,"feedback":{"requested":false,"relay_required":false,"history_coverage":"not_evaluated"},"findings":[{"reason":"protocol_permerror","severity":"permanent"}]},"replay":{"class":"not_checked"},"disposition":"reject","actions":[]}`
+const validProcessResponseBody = `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-05","verification":{"state":"PERMERROR","primary_reason":"malformed_message","scope":"current","historical_content":"not_evaluated","historical_signatures":"not_evaluated","custody_structure":"not_present","checks":[{"class":"message","reason":"malformed_message"}],"signature_sets":[]},"policy":{"mode":"strict","verdict":"reject","primary_reason":"protocol_permerror","do_not_modify":"not_evaluated","do_not_explode":"not_evaluated","dns_testing_effective":false,"feedback":{"requested":false,"relay_required":false,"history_coverage":"not_evaluated"},"findings":[{"reason":"protocol_permerror","severity":"permanent"}]},"replay":{"class":"not_checked"},"disposition":"reject","actions":[]}`
+
+// TestDraft05EnumsFailClosed proves the generated client accepts only the
+// Draft-05 baseline and its complete bounded verification vocabulary.
+func TestDraft05EnumsFailClosed(t *testing.T) {
+	if !generated.DraftIetfDkimDkim2Spec05.Valid() ||
+		generated.DraftVersion("draft-ietf-dkim-dkim2-spec-04").Valid() ||
+		generated.DraftVersion("future").Valid() {
+		t.Fatal("generated draft enum is not closed on Draft-05")
+	}
+	for _, reason := range []generated.VerificationReason{
+		generated.VerificationReasonDuplicateHashAlgorithm,
+		generated.VerificationReasonInvalidRecipeJson,
+		generated.VerificationReasonDuplicateSelector,
+		generated.VerificationReasonTooManySignatures,
+	} {
+		if !reason.Valid() {
+			t.Fatalf("Draft-05 reason %q is not generated", reason)
+		}
+	}
+	for _, reason := range []generated.VerificationReason{"", "future"} {
+		if reason.Valid() {
+			t.Fatalf("unknown verification reason %q was admitted", reason)
+		}
+	}
+	for _, state := range []generated.VerificationState{"", "future"} {
+		if state.Valid() {
+			t.Fatalf("unknown verification state %q was admitted", state)
+		}
+	}
+}
 
 // captureDoer records one request and returns a deterministic response.
 type captureDoer struct {
@@ -163,7 +195,7 @@ func TestNegativeResponseRejectsMalformedAndContradictoryContracts(t *testing.T)
 // retry metadata remain part of the closed response contract.
 func TestNegativeResponseRequiresStatusSpecificHeaders(t *testing.T) {
 	t.Parallel()
-	methodBody := `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-04",` +
+	methodBody := `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-05",` +
 		`"code":"method_not_allowed","category":"request"}`
 	method := buildHostileResponse(http.StatusMethodNotAllowed, mediaTypeJSON, methodBody)
 	method.Header.Del("Allow")
@@ -172,7 +204,7 @@ func TestNegativeResponseRequiresStatusSpecificHeaders(t *testing.T) {
 	); ExitClassOf(err) != ExitContract {
 		t.Fatal("405 without Allow accepted")
 	}
-	retryBody := `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-04",` +
+	retryBody := `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-05",` +
 		`"code":"service_not_ready","category":"availability"}`
 	retry := buildHostileResponse(http.StatusServiceUnavailable, mediaTypeJSON, retryBody)
 	retry.Header.Del("Retry-After")
@@ -262,12 +294,12 @@ func TestSmokeUsesGeneratedHealthAndReadiness(t *testing.T) {
 		{
 			name: "ready", expectReady: true,
 			readiness: exactJSONResponse(http.StatusOK,
-				`{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-04","status":"ready"}`),
+				`{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-05","status":"ready"}`),
 		},
 		{
 			name: "not ready", expectReady: false,
 			readiness: exactJSONResponse(http.StatusServiceUnavailable,
-				`{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-04","code":"service_not_ready","category":"availability"}`),
+				`{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-05","code":"service_not_ready","category":"availability"}`),
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {

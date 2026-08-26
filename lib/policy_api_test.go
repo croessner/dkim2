@@ -402,7 +402,7 @@ func TestEvaluatePolicyUsesHiddenPreRetentionDNSFacts(t *testing.T) {
 		t.Fatalf("NewVerifier(retention) error = %v", err)
 	}
 	retained, err := retainedVerifier.Verify(context.Background(), NewVerifyRequest(decodeGoldenBytes(t, vector.Raw), decodeGoldenBytes(t, vector.Reverse), decodeGoldenPaths(t, vector.Forward)))
-	if err != nil || retained.State() != ResultStateFAIL || retained.SignatureSetCount() != 1 || retained.SignatureSets()[0].KeyPolicyMetadata().TestingDeclared() {
+	if err != nil || retained.State() != ResultStateFAIL || retained.SignatureSetCount() != 1 || !retained.SignatureSets()[0].KeyPolicyMetadata().TestingDeclared() {
 		t.Fatalf("Verify(retention) count/error = %d/%v", retained.SignatureSetCount(), err)
 	}
 	retainedDecision, err := EvaluatePolicy(retained)

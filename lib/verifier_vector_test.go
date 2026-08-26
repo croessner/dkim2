@@ -113,8 +113,8 @@ type publicGoldenSignatureFact struct {
 	reason    ReasonCode
 }
 
-// TestPublicDraft04GoldenVectors proves chain-authenticated verification through the root facade.
-func TestPublicDraft04GoldenVectors(t *testing.T) {
+// TestPublicDraft05GoldenVectors proves chain-authenticated verification through the root facade.
+func TestPublicDraft05GoldenVectors(t *testing.T) {
 	corpus := loadPublicGoldenCorpus(t)
 	cases := publicGoldenCases(corpus)
 	for _, testCase := range cases {
@@ -164,7 +164,7 @@ func TestPublicGoldenVectorBytesAreFrozenCRLF(t *testing.T) {
 	}
 }
 
-// publicGoldenCases returns the binding Draft-04 public result matrix.
+// publicGoldenCases returns the binding Draft-05 public result matrix.
 func publicGoldenCases(corpus publicGoldenCorpus) []publicGoldenCase {
 	pass := func(name, vector string) publicGoldenCase {
 		return publicGoldenCase{name: name, vector: vector, mode: goldenProviderKeys, state: ResultStatePASS, reason: ReasonNone, class: CheckClassBodyHash, custody: CustodyStructureNotPresent, sequence: 1, instance: 1}
@@ -174,8 +174,8 @@ func publicGoldenCases(corpus publicGoldenCorpus) []publicGoldenCase {
 		pass("ed25519_sha256_pass", "ed25519_pass"),
 		pass("rsa_and_ed25519_both_pass", "both_pass"),
 		pass("supported_pass_plus_unknown_signature_pass", "supported_unknown_pass"),
-		pass("sha256_plus_unknown_hash_pass", "sha_unknown_hash_pass"),
-		{name: "unknown_hash_only_permerror", vector: "unknown_hash_only", mode: goldenProviderKeys, state: ResultStatePERMERROR, reason: ReasonUnsupportedAlgorithm, class: CheckClassBodyHash, custody: CustodyStructureNotPresent, sequence: 1, instance: 1},
+		{name: "sha256_plus_mismatching_sha512_fails", vector: "sha_unknown_hash_pass", mode: goldenProviderKeys, state: ResultStateFAIL, reason: ReasonHashMismatch, class: CheckClassBodyHash, custody: CustodyStructureNotPresent, sequence: 1, instance: 1},
+		{name: "mismatching_sha512_only_fails", vector: "unknown_hash_only", mode: goldenProviderKeys, state: ResultStateFAIL, reason: ReasonHashMismatch, class: CheckClassBodyHash, custody: CustodyStructureNotPresent, sequence: 1, instance: 1},
 		{name: "unknown_signature_only_permerror", vector: "unknown_signature_only", mode: goldenProviderKeys, state: ResultStatePERMERROR, reason: ReasonUnsupportedAlgorithm, class: CheckClassSignature, custody: CustodyStructureNotPresent, sequence: 1, instance: 1},
 		{name: "supported_pass_plus_supported_bad_signature_fail", vector: "supported_mixed_fail", mode: goldenProviderKeys, state: ResultStateFAIL, reason: ReasonSignatureMismatch, class: CheckClassSignature, custody: CustodyStructureNotPresent, sequence: 1, instance: 1},
 		{name: "body_hash_mismatch_fail", vector: "body_mismatch", mode: goldenProviderKeys, state: ResultStateFAIL, reason: ReasonHashMismatch, class: CheckClassBodyHash, custody: CustodyStructureNotPresent, sequence: 1, instance: 1},
@@ -225,13 +225,13 @@ func expectedPublicGoldenSignatures(testCase publicGoldenCase) []publicGoldenSig
 	case goldenVectorEd25519Pass:
 		return []publicGoldenSignatureFact{{algorithm: AlgorithmEd25519SHA256, status: SignatureStatusPASS, reason: ReasonNone}}
 	case "both_pass":
-		return []publicGoldenSignatureFact{{algorithm: AlgorithmEd25519SHA256, status: SignatureStatusPASS, reason: ReasonNone}, passRSA}
+		return []publicGoldenSignatureFact{passRSA, {algorithm: AlgorithmEd25519SHA256, status: SignatureStatusPASS, reason: ReasonNone}}
 	case "supported_unknown_pass":
 		return []publicGoldenSignatureFact{passRSA, publicGoldenSignatureFact{algorithm: AlgorithmUnknown, status: SignatureStatusIgnored, reason: ReasonUnsupportedAlgorithm}}
 	case "unknown_signature_only":
 		return []publicGoldenSignatureFact{{algorithm: AlgorithmUnknown, status: SignatureStatusIgnored, reason: ReasonUnsupportedAlgorithm}}
 	case "supported_mixed_fail":
-		return []publicGoldenSignatureFact{{algorithm: AlgorithmEd25519SHA256, status: SignatureStatusFAIL, reason: ReasonSignatureMismatch}, passRSA}
+		return []publicGoldenSignatureFact{passRSA, {algorithm: AlgorithmEd25519SHA256, status: SignatureStatusFAIL, reason: ReasonSignatureMismatch}}
 	}
 	if testCase.malformedProtocol {
 		return nil
@@ -270,9 +270,9 @@ func expectedPublicGoldenChecks(testCase publicGoldenCase) []publicGoldenCheckFa
 		{class: CheckClassNextDomain, reason: ReasonNone},
 		{class: CheckClassTimestamp, reason: ReasonNone},
 	}
-	if testCase.vector == "unknown_hash_only" {
-		facts[0].reason = ReasonUnsupportedAlgorithm
-		facts[3].reason = ReasonUnsupportedAlgorithm
+	if testCase.vector == "unknown_hash_only" || testCase.vector == "sha_unknown_hash_pass" {
+		facts[0].reason = ReasonHashMismatch
+		facts[3].reason = ReasonHashMismatch
 	} else if testCase.reason != ReasonNone {
 		for index := range facts {
 			if facts[index].class == testCase.class {
@@ -367,10 +367,10 @@ func assertPublicGoldenFactImmutability(t *testing.T, result VerifyResult, name 
 	}
 }
 
-// loadPublicGoldenCorpus loads the frozen synthetic Draft-04 corpus.
+// loadPublicGoldenCorpus loads the frozen synthetic Draft-05 corpus.
 func loadPublicGoldenCorpus(t testing.TB) publicGoldenCorpus {
 	t.Helper()
-	raw, err := os.ReadFile("testdata/vectors/draft-ietf-dkim-dkim2-spec-04/public-golden.json")
+	raw, err := os.ReadFile("testdata/vectors/draft-ietf-dkim-dkim2-spec-05/public-golden.json")
 	if err != nil {
 		t.Fatal("golden corpus unavailable")
 	}

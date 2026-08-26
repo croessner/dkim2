@@ -89,6 +89,25 @@ func TestSHA256DigestRejectsWrongLength(t *testing.T) {
 	}
 }
 
+// TestSHA512DigestEnforcesLengthAndImmutability verifies the generic digest container invariant.
+func TestSHA512DigestEnforcesLengthAndImmutability(t *testing.T) {
+	input := bytes.Repeat([]byte{0x52}, sha512DigestBytes)
+	digest, err := NewSHA512Digest(input)
+	if err != nil {
+		t.Fatalf("NewSHA512Digest() error = %v", err)
+	}
+	input[0] = 0
+	if digest.Algorithm() != HashAlgorithmSHA512 || digest.Len() != sha512DigestBytes || digest.Bytes()[0] != 0x52 {
+		t.Fatalf("SHA-512 digest invariant failed: algorithm=%q length=%d", digest.Algorithm(), digest.Len())
+	}
+	if _, err := NewSHA512Digest(input[:sha512DigestBytes-1]); !IsErrorCode(err, ErrorCodeMalformedState) {
+		t.Fatalf("NewSHA512Digest(short) error = %v, want malformed state", err)
+	}
+	if _, err := NewDigest(HashAlgorithm("future"), input); !IsErrorCode(err, ErrorCodeUnsupportedAlgorithm) {
+		t.Fatalf("NewDigest(future) error = %v, want unsupported algorithm", err)
+	}
+}
+
 func TestResultContainersExposeDigestPresence(t *testing.T) {
 	canonicalBytes, err := NewCanonicalBytes(KindBodyHashInput, []byte("\r\n"), Metadata{})
 	if err != nil {

@@ -15,7 +15,11 @@ command -v "$cc" >/dev/null 2>&1 || {
 mkdir -p "$work/Local"
 cp "$exim/dkim2_local_scan.c" "$work/Local/dkim2_local_scan.c"
 cp "$exim/generated/build-id-v1.h" "$work/Local/build-id-v1.h"
-"$cc" -std=c11 -D_GNU_SOURCE -D_POSIX_C_SOURCE=200809L \
+set -- -std=c11 -D_GNU_SOURCE -D_POSIX_C_SOURCE=200809L
+if test "$(uname -s)" = Darwin; then
+  set -- "$@" -D_DARWIN_C_SOURCE
+fi
+"$cc" "$@" \
   -Wall -Wextra -Wpedantic -Werror -Wconversion -Wshadow -Wstrict-prototypes \
   -I"$exim/fixtures/include" -I"$exim/fixtures/upstream-4.99.5" \
   -c "$work/Local/dkim2_local_scan.c" -o "$work/dkim2_local_scan.o"

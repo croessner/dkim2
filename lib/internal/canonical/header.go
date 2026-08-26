@@ -7,7 +7,10 @@ import (
 	"github.com/croessner/dkim2/internal/rawmsg"
 )
 
-const canonicalHeaderLineEnding = "\r\n"
+const (
+	canonicalHeaderLineEnding = "\r\n"
+	receivedHeaderName        = "received"
+)
 
 type headerFieldRecord struct {
 	nameLower      string
@@ -25,6 +28,7 @@ const (
 	excludedHeaderAuthenticationResults
 	excludedHeaderX
 	excludedHeaderDKIMSignature
+	excludedHeaderExactUnsigned
 	excludedHeaderARC
 	excludedHeaderMessageInstance
 	excludedHeaderDKIM2Signature
@@ -84,14 +88,14 @@ func (c Canonicalizer) HeaderHashInputFromMessage(message rawmsg.Message) (ByteI
 	return c.HeaderHashInput(message.Headers())
 }
 
-// HeaderHash calculates SHA-256 over DKIM2 Section 6.2 canonical header input.
+// HeaderHash calculates the selected Message-Instance digest over Section 6.2 input.
 func (c Canonicalizer) HeaderHash(headers rawmsg.HeaderBlock) (Result, error) {
 	canonical, err := c.HeaderHashInput(headers)
 	if err != nil {
 		return Result{}, err
 	}
 
-	digest, err := c.SHA256Digest(canonical)
+	digest, err := c.Digest(canonical)
 	if err != nil {
 		return Result{}, err
 	}
@@ -99,7 +103,7 @@ func (c Canonicalizer) HeaderHash(headers rawmsg.HeaderBlock) (Result, error) {
 	return NewResult(canonical, digest), nil
 }
 
-// HeaderHashFromMessage calculates SHA-256 header hash input from a raw message.
+// HeaderHashFromMessage calculates the selected header digest from a raw message.
 func (c Canonicalizer) HeaderHashFromMessage(message rawmsg.Message) (Result, error) {
 	return c.HeaderHash(message.Headers())
 }
@@ -163,7 +167,7 @@ func isHeaderWSP(b byte) bool {
 // excludedHeaderKindForName classifies the authoritative Section 4 and Section 6.2 exclusion set.
 func excludedHeaderKindForName(nameLower string) excludedHeaderKind {
 	switch {
-	case nameLower == "received":
+	case nameLower == receivedHeaderName || strings.HasPrefix(nameLower, receivedHeaderName+"-"):
 		return excludedHeaderReceived
 	case nameLower == "return-path":
 		return excludedHeaderReturnPath
@@ -175,7 +179,9 @@ func excludedHeaderKindForName(nameLower string) excludedHeaderKind {
 		return excludedHeaderX
 	case nameLower == "dkim-signature":
 		return excludedHeaderDKIMSignature
-	case strings.HasPrefix(nameLower, "arc-"):
+	case exactUnsignedHeaderName(nameLower):
+		return excludedHeaderExactUnsigned
+	case nameLower == "arc-authentication-results" || nameLower == "arc-message-signature" || nameLower == "arc-seal":
 		return excludedHeaderARC
 	case nameLower == "message-instance":
 		return excludedHeaderMessageInstance
@@ -183,6 +189,17 @@ func excludedHeaderKindForName(nameLower string) excludedHeaderKind {
 		return excludedHeaderDKIM2Signature
 	default:
 		return excludedHeaderNone
+	}
+}
+
+// exactUnsignedHeaderName reports the Draft-05 exact registered-field exclusions.
+func exactUnsignedHeaderName(nameLower string) bool {
+	switch nameLower {
+	case "apparently-to", "auto-submitted", "dl-expansion-history", "original-recipient",
+		"sio-label-history", "vbr-info", "x400-received", "x400-trace":
+		return true
+	default:
+		return false
 	}
 }
 
@@ -201,6 +218,8 @@ func countExcludedHeader(nameLower string, counts *ExcludedHeaderCounts) bool {
 		counts.XHeader++
 	case excludedHeaderDKIMSignature:
 		counts.DKIMSignature++
+	case excludedHeaderExactUnsigned:
+		counts.ExactUnsigned++
 	case excludedHeaderARC:
 		counts.ARC++
 	case excludedHeaderMessageInstance:

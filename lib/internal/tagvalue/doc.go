@@ -2,7 +2,7 @@
 //
 // Scan accepts case-sensitive DNS-compatible tag lists, unfolds valid CRLF WSP
 // FWS, and permits an optional final semicolon.
-// ScanTerminated owns the stricter draft-ietf-dkim-dkim2-spec-04 header-field
+// ScanTerminated owns the stricter draft-ietf-dkim-dkim2-spec-05 header-field
 // rule that every tag has a semicolon terminator and tag names are matched
 // case-insensitively after raw-header unfolding. Both split semicolon-separated
 // tag specifications, preserve case-sensitive values, and reject ambiguous or

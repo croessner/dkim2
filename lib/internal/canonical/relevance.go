@@ -2,7 +2,7 @@ package canonical
 
 import "github.com/croessner/dkim2/internal/rawmsg"
 
-// HeaderRelevance is the immutable draft-04 signed-header relevance classifier.
+// HeaderRelevance is the immutable Draft-05 signed-header relevance classifier.
 type HeaderRelevance struct {
 	initialized bool
 }

@@ -34,6 +34,8 @@ type verificationFixture struct {
 }
 
 const testTimestampSeconds = uint64(1700000000)
+const testHashCaseSHA512Only = "SHA-512 only"
+const testHashCaseDualMismatch = "dual mismatch"
 
 // newRSAVerificationFixture creates a synthetic RSA-SHA256 signed message.
 func newRSAVerificationFixture(t *testing.T) verificationFixture {
