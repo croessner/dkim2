@@ -79,9 +79,11 @@ gate; ordinary CI validates the committed vendor tree directly with Go.
 
 ## Stable release
 
-The Release workflow accepts only a published, non-draft, non-prerelease
-GitHub Release with a stable semantic version. The release name must resolve to
-an annotated tag, and that tag must resolve to the exact checked-out commit.
+The Release workflow accepts only a pushed stable semantic-version tag. The ref
+must be an annotated tag, and that tag must resolve to the exact checked-out
+commit. After the release guardrails pass, the workflow groups the structured
+commit subjects since the previous release, creates the GitHub Release with
+those notes, and only then permits image publication.
 
 After `make release-guardrails`, standard Docker Actions build and push the
 `dkim2d`, `dkim2-milter` and `dkim2ctl` targets from

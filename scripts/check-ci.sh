@@ -131,8 +131,13 @@ if grep -Eq 'github[.]token|GITHUB_TOKEN|packages:[[:space:]]*write|id-token:[[:
   fail 'mirror workflow contains authority outside the target-scoped App token'
 fi
 
-grep -Fq 'release:' "$workflows/release.yml" || fail 'release event is missing'
-grep -Fq 'types: [published]' "$workflows/release.yml" || fail 'published release gate is missing'
+grep -Fq 'tags: ["v*"]' "$workflows/release.yml" || fail 'release tag-push gate is missing'
+grep -Fq 'scripts/generate-release-notes.sh "$RELEASE_TAG" "$previous_tag"' "$workflows/release.yml" ||
+  fail 'release notes generator is missing'
+grep -Fq 'gh release create "$RELEASE_TAG"' "$workflows/release.yml" ||
+  fail 'release creation is missing'
+grep -Fq -- '--generate-notes' "$workflows/release.yml" ||
+  fail 'GitHub generated release notes are missing'
 grep -Fq 'packages: write' "$workflows/release.yml" || fail 'release package authority is missing'
 grep -Fq 'sbom: true' "$workflows/release.yml" || fail 'release BuildKit SBOM is missing'
 grep -Fq 'provenance: mode=max' "$workflows/release.yml" || fail 'release BuildKit provenance is missing'
@@ -143,6 +148,6 @@ if grep -Fq 'actions/attest-build-provenance' "$workflows/release.yml"; then
   fail 'release policy must use registry-bound BuildKit provenance'
 fi
 
-if grep -Fq 'latest' "$workflows/release.yml"; then
-  fail 'stable publication must not create an implicit latest tag'
+if grep -Eq '(^|[[:space:]])[^#[:space:]]+:latest([[:space:]]|$$)' "$workflows/release.yml"; then
+  fail 'stable image publication must not create an implicit latest tag'
 fi

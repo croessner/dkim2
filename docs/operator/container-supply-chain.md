@@ -48,16 +48,18 @@ publication authority.
 
 ## Stable publication
 
-`.github/workflows/release.yml` is the only stable GHCR publication path. It is
-triggered by a published, non-draft, non-prerelease GitHub Release and requires:
+`.github/workflows/release.yml` is the only stable GitHub Release and GHCR
+publication path. It is triggered by a pushed stable version tag and requires:
 
 - a stable semantic version;
 - an annotated tag;
-- the tag, checkout and release to identify the same commit;
+- the tag and checkout to identify the same commit;
 - a clean source tree; and
 - successful `make release-guardrails`.
 
-The workflow uses pinned standard Docker Actions to build and push each product
+After the guardrails pass, the workflow creates the GitHub Release with commit
+notes grouped by the repository's structured subject prefixes. It then uses
+pinned standard Docker Actions to build and push each product
 for linux/amd64 and linux/arm64. BuildKit emits SBOM and provenance attestations,
 bound to the exact registry digest. The pinned Trivy scanner blocks unfixed
 high/critical vulnerabilities, and a hardened runtime smoke uses the exact

@@ -1,15 +1,14 @@
 name: Release
 
 on:
-  release:
-    types: [published]
+  push:
+    tags: ["v*"]
 
 permissions:
   contents: read
 
 jobs:
   quality:
-    if: github.event.release.draft == false && github.event.release.prerelease == false
     runs-on: ubuntu-24.04
     timeout-minutes: 75
     outputs:
@@ -23,14 +22,14 @@ jobs:
       - name: Check out release tag
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.event.release.tag_name }}
+          ref: ${{ github.ref_name }}
           fetch-depth: 0
           persist-credentials: false
 
       - name: Validate stable annotated tag and commit
         id: metadata
         env:
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_TAG: ${{ github.ref_name }}
         run: |
           if [[ ! "$RELEASE_TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
             exit 1
@@ -67,8 +66,53 @@ jobs:
           git diff --exit-code
           test -z "$(git status --porcelain --untracked-files=all)"
 
-  publish:
+  create-release:
     needs: quality
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Check out release tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.quality.outputs.version }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Create release with generated notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.quality.outputs.version }}
+        run: |
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $RELEASE_TAG already exists."
+            exit 0
+          fi
+
+          previous_tag="$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq '.tagName' 2>/dev/null || true)"
+          if test -n "$previous_tag"; then
+            ahead_by="$(gh api "repos/$GITHUB_REPOSITORY/compare/${previous_tag}...${RELEASE_TAG}" --jq '.ahead_by')"
+            if test "$ahead_by" -eq 0; then
+              echo "No new commits since $previous_tag; aborting release creation."
+              exit 1
+            fi
+          fi
+
+          notes_file="$(mktemp)"
+          trap 'rm -f "$notes_file"' EXIT
+          scripts/generate-release-notes.sh "$RELEASE_TAG" "$previous_tag" >"$notes_file"
+
+          gh release create "$RELEASE_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --verify-tag \
+            --title "DKIM2 $RELEASE_TAG" \
+            --notes-file "$notes_file" \
+            --generate-notes \
+            --latest
+
+  publish:
+    needs: [quality, create-release]
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     permissions:

@@ -338,10 +338,12 @@ The target has small workflows with direct commands:
      on manual dispatch, and for a release candidate;
    - runs `make integration-exim` once.
 5. `release.yml`
-   - triggers only from a published, non-draft, non-prerelease GitHub Release;
-   - checks that the release has a semantic stable version, its ref is an
-     annotated tag, and tag, release, checkout, and commit are identical;
+   - triggers only from a pushed stable semantic-version tag;
+   - checks that the ref is an annotated tag and that tag, checkout, and commit
+     are identical;
    - runs `make release-guardrails` once;
+   - groups structured commit subjects since the previous release and creates
+     the GitHub Release only after those guardrails pass;
    - builds and pushes the daemon, Milter, and client images to GHCR with
      standard GitHub/Docker build provenance and SBOM support;
    - performs a minimal runtime smoke against the exact published digest;
@@ -424,9 +426,9 @@ without embedding protected message material.
 - `make guardrails` runs each normal quality class once.
 - Postfix and Exim integration are independent visible checks.
 - Normal PRs do not build release OCI evidence or carry publication authority.
-- The stable release workflow accepts only a published stable GitHub Release,
-  annotated tag, and exact same commit, then publishes and verifies exact GHCR
-  digests.
+- The stable release workflow accepts only a pushed stable annotated tag at the
+  exact checked-out commit, passes release guardrails, creates the GitHub
+  Release, then publishes and verifies exact GHCR digests.
 - An independent review compares this specification with the final Make graph,
   workflow graph, public result contract, generated OpenAPI, and adapter
   behavior before release authorization.
@@ -463,8 +465,8 @@ without embedding protected message material.
 - Settled: normal public verification and production adapters require
   authenticated history for multi-instance PASS.
 - Settled: `make test` contains no external MTA or C ABI integration.
-- Settled: stable publication requires a published stable GitHub Release, an
-  annotated tag and exact commit identity; branch-protection state is not a
-  release input.
+- Settled: stable publication requires a pushed stable annotated tag and exact
+  commit identity; the trusted workflow creates the GitHub Release after its
+  guardrails pass, and branch-protection state is not a release input.
 - Open: no release-blocking design question remains; implementation discoveries
   that alter these decisions must update this specification before proceeding.
