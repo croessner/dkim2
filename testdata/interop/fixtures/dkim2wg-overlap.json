@@ -1,0 +1,30 @@
+{
+  "schema": "dkim2.interop-fixtures.v1",
+  "cases": [
+    {
+      "id": "message-instance-duplicate-hash",
+      "operation": "message-instance",
+      "input": "Message-Instance: m=4; h=sha256:AAA:BBB,sha256:CCC:DDD;",
+      "expected": "reject"
+    },
+    {
+      "id": "signature-fws",
+      "operation": "signature-parse",
+      "input": "DKIM2-Signature: i = 1; m = 1; t = 1700000000; mf = PD4=; rt = PHJjcHRAZXhhbXBsZS50ZXN0Pg==; d = example.test; s = ed.test:ed25519-sha256:AA==;",
+      "expected": "accept"
+    },
+    {
+      "id": "signature-selector-cardinality",
+      "operation": "signature-parse",
+      "input": "case-insensitive duplicate Selectors and a third same-algorithm signature",
+      "expected": "reject"
+    },
+    {
+      "id": "signature-verify-ed25519",
+      "operation": "signature-verify",
+      "input_base64": "RnJvbTogc2VuZGVyQGV4YW1wbGUudGVzdA0KU3ViamVjdDogUHVibGljIGdvbGRlbg0KTWVzc2FnZS1JbnN0YW5jZTogbT0xOyBoPXNoYTI1NjpsUkY4ZG54aDVCNFFJYUdVYVRQSzdYQ25TQVdOcjBMa0lrOFdCdG1EK0M4PTpHVnovQ0c1WnNBdEt5bkxrNnl6YnFGZkI0RjVoM1g1Wm1YdDlyYzZqWlJJPTsNCkRLSU0yLVNpZ25hdHVyZTogaT0xOyBtPTE7IHQ9MTcwMDAwMDAwMDsgbWY9UEQ0PTsgcnQ9UEhKamNIUkFaWGhoYlhCc1pTNTBaWE4wUGc9PTsgZD1leGFtcGxlLnRlc3Q7IHM9ZWQudGVzdDplZDI1NTE5LXNoYTI1NjpIOUFUWnZmYTRqNTV1cXhGbkg4VjEyUS9QTlpJT3pZR1lEcDYzZnprcW1zSkE2SVFLMFVoZjBFYU5IQ0FBb05ERllEN0RlUFBuaE5HMWpMNTY5Wm1Edz09Ow0KDQpib2R5IGxpbmUNCg==",
+      "public_key_base64": "IClZTFkgcVVuQpqSIcMJ98ohgPBzN3SrWTX3gbhSofw=",
+      "expected": "accept"
+    }
+  ]
+}

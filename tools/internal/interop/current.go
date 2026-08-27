@@ -93,6 +93,7 @@ type currentPeer struct {
 	sourceDirectory      string
 	packagePath          string
 	harness              string
+	fixture              string
 	tests                string
 	moduleCache          string
 	expectedBuildSHA256  string
@@ -180,7 +181,7 @@ func RunCurrent(root string, now time.Time) error {
 	return writeCurrentArtifact(root, currentComparisonPath, comparisonBytes)
 }
 
-// runCurrentPeers builds both reviewed parser harnesses from their exact source
+// runCurrentPeers builds every reviewed runnable harness from its exact source
 // archives and executes the resulting binaries in separate netless containers.
 func runCurrentPeers(root string, catalog CandidateCatalog) (map[string]currentProducer, error) {
 	absoluteRoot, err := filepath.Abs(root)
@@ -217,29 +218,9 @@ func runCurrentPeers(root string, catalog CandidateCatalog) (map[string]currentP
 	); err != nil {
 		return nil, errors.New("comparison_state")
 	}
-	mailauthlens := candidateByID(catalog.Candidates, "mailauthlens")
-	turscar := candidateByID(catalog.Candidates, "turscar-dkim2")
-	peers := []currentPeer{
-		{
-			id:                  "mailauthlens",
-			archive:             ".artifacts/interop/raw/search-candidates/mailauthlens-source.tar.gz",
-			sourceDirectory:     "mailauthlens-" + mailauthlens.Revision,
-			packagePath:         "./internal/dkim2",
-			harness:             "testdata/interop/harness/mailauthlens_overlap_test.go",
-			tests:               "^(TestDNSKeyFWS|TestSignatureFWS|TestSignatureMixedCaseObservation)$",
-			expectedBuildSHA256: mailauthlens.BuildSHA256,
-		},
-		{
-			id:                   "turscar-dkim2",
-			archive:              ".artifacts/interop/raw/turscar-source.tar.gz",
-			sourceDirectory:      "dkim2",
-			packagePath:          ".",
-			harness:              "testdata/interop/harness/turscar_overlap_test.go",
-			tests:                "^(TestSignatureFWS|TestSignatureMixedCase)$",
-			moduleCache:          ".artifacts/interop/sandbox/turscar-gopath/pkg/mod",
-			expectedBuildSHA256:  turscar.BuildSHA256,
-			expectedDependencyID: turscar.DependencySHA256,
-		},
+	peers, err := reviewedCurrentPeers(catalog)
+	if err != nil {
+		return nil, err
 	}
 	producers := make(map[string]currentProducer, len(peers))
 	for _, peer := range peers {
@@ -272,6 +253,59 @@ func runCurrentPeers(root string, catalog CandidateCatalog) (map[string]currentP
 	return producers, nil
 }
 
+// reviewedCurrentPeers binds every runnable catalog candidate to one closed build and execution contract.
+func reviewedCurrentPeers(catalog CandidateCatalog) ([]currentPeer, error) {
+	peers := make([]currentPeer, 0, len(catalog.Candidates))
+	for _, candidate := range catalog.Candidates {
+		if candidate.State != "eligible_runnable" {
+			continue
+		}
+		var peer currentPeer
+		switch candidate.ID {
+		case "dkim2wg-interop":
+			if len(candidate.Revision) != 40 {
+				return nil, errors.New("comparison_candidate")
+			}
+			peer = currentPeer{
+				id:                  candidate.ID,
+				archive:             ".artifacts/interop/raw/dkim2wg-source.tar.gz",
+				sourceDirectory:     "interop-" + candidate.Revision + "/go",
+				packagePath:         "./dkim2",
+				harness:             "testdata/interop/harness/dkim2wg_overlap_test.go",
+				fixture:             "testdata/interop/fixtures/dkim2wg-overlap.json",
+				tests:               "^TestDKIM2WG",
+				expectedBuildSHA256: candidate.BuildSHA256,
+			}
+		case "mailauthlens":
+			peer = currentPeer{
+				id:                  candidate.ID,
+				archive:             ".artifacts/interop/raw/search-candidates/mailauthlens-source.tar.gz",
+				sourceDirectory:     "mailauthlens-" + candidate.Revision,
+				packagePath:         "./internal/dkim2",
+				harness:             "testdata/interop/harness/mailauthlens_overlap_test.go",
+				tests:               "^(TestDNSKeyFWS|TestSignatureFWS|TestSignatureMixedCaseObservation)$",
+				expectedBuildSHA256: candidate.BuildSHA256,
+			}
+		case "turscar-dkim2":
+			peer = currentPeer{
+				id:                   candidate.ID,
+				archive:              ".artifacts/interop/raw/turscar-source.tar.gz",
+				sourceDirectory:      "dkim2",
+				packagePath:          ".",
+				harness:              "testdata/interop/harness/turscar_overlap_test.go",
+				tests:                "^(TestSignatureFWS|TestSignatureMixedCase)$",
+				moduleCache:          ".artifacts/interop/sandbox/turscar-gopath/pkg/mod",
+				expectedBuildSHA256:  candidate.BuildSHA256,
+				expectedDependencyID: candidate.DependencySHA256,
+			}
+		default:
+			return nil, errors.New("comparison_candidate")
+		}
+		peers = append(peers, peer)
+	}
+	return peers, nil
+}
+
 // buildCurrentPeer compiles one tracked harness from the validated immutable
 // archive using only a verified offline dependency cache.
 func buildCurrentPeer(
@@ -284,8 +318,13 @@ func buildCurrentPeer(
 ) (currentProducer, error) {
 	archive := filepath.Join(filepath.Dir(outputDirectory), peer.id+".source.tar.gz")
 	harness := filepath.Join(filepath.Dir(outputDirectory), peer.id+".harness_test.go")
+	fixture := filepath.Join(filepath.Dir(outputDirectory), peer.id+".fixture.json")
 	output := filepath.Join(outputDirectory, peer.id+".test")
-	for _, path := range []string{archive, harness, output, peer.sourceDirectory} {
+	paths := []string{archive, harness, output, peer.sourceDirectory}
+	if peer.fixture != "" {
+		paths = append(paths, fixture)
+	}
+	for _, path := range paths {
 		if strings.ContainsAny(path, ",\r\n") {
 			return currentProducer{}, errors.New("comparison_producer")
 		}
@@ -302,7 +341,12 @@ func buildCurrentPeer(
 			return currentProducer{}, errors.New("comparison_producer")
 		}
 	}
-	arguments := peerBuildArguments(root, outputDirectory, archive, harness, peer)
+	if peer.fixture != "" {
+		if err := copyPeerInput(root, peer.fixture, fixture, maxRegistryBytes); err != nil {
+			return currentProducer{}, errors.New("comparison_producer")
+		}
+	}
+	arguments := peerBuildArguments(root, outputDirectory, archive, harness, fixture, peer)
 	ctx, cancel := context.WithTimeout(context.Background(), 7*time.Minute)
 	defer cancel()
 	command := exec.CommandContext(ctx, "docker", arguments...)
@@ -370,6 +414,7 @@ func peerBuildArguments(
 	outputDirectory string,
 	archive string,
 	harness string,
+	fixture string,
 	peer currentPeer,
 ) []string {
 	source := "/work/source/" + peer.sourceDirectory
@@ -379,8 +424,11 @@ func peerBuildArguments(
 	}
 	script := "mkdir -p /work/source && " +
 		"tar -xzf /source.tar.gz -C /work/source && " +
-		"cp /harness_test.go " + packageDirectory + "/dkim2_interop_test.go && " +
-		"chmod -R a-w " + source + " && " +
+		"cp /harness_test.go " + packageDirectory + "/dkim2_interop_test.go && "
+	if peer.fixture != "" {
+		script += "cp /fixture.json " + packageDirectory + "/dkim2wg-overlap.json && "
+	}
+	script += "chmod -R a-w " + source + " && " +
 		"cd " + source + " && " +
 		`printf '%s  %s\n' "$EXPECTED_BUILD_SHA256" go.mod | sha256sum -c - && `
 	if peer.expectedDependencyID != "" {
@@ -421,6 +469,12 @@ func peerBuildArguments(
 		"--mount", "type=bind,src=" + archive + ",dst=/source.tar.gz,readonly",
 		"--mount", "type=bind,src=" + harness + ",dst=/harness_test.go,readonly",
 		"--mount", "type=bind,src=" + outputDirectory + ",dst=/output",
+	}
+	if peer.fixture != "" {
+		arguments = append(
+			arguments,
+			"--mount", "type=bind,src="+fixture+",dst=/fixture.json,readonly",
+		)
 	}
 	if peer.moduleCache != "" {
 		cache := filepath.Join(root, filepath.FromSlash(peer.moduleCache))
@@ -651,30 +705,49 @@ func normalizeCurrentSources(
 	return observations, nil
 }
 
-// buildCurrentComparison binds only exact reviewed parser overlap.
+// buildCurrentComparison binds only exact reviewed protocol overlap.
 func buildCurrentComparison(
 	root string,
 	evidence DiscoveryEvidence,
 	evidenceBytes []byte,
 	producers map[string]currentProducer,
 ) (ComparisonReport, error) {
-	fixture, err := artifactpath.SnapshotFile(
+	parserFixture, err := artifactpath.SnapshotFile(
 		root, "testdata/interop/fixtures/mailauthlens-overlap.json", maxRegistryBytes,
 	)
 	if err != nil {
 		return ComparisonReport{}, errors.New("comparison_fixture")
 	}
-	localProducer, err := digestRepositoryFiles(root, []string{
+	parserProducer, err := digestRepositoryFiles(root, []string{
 		"lib/internal/keyresolver/record.go",
 		"lib/internal/signature/parser.go",
 	})
 	if err != nil {
 		return ComparisonReport{}, err
 	}
+	dkim2wgFixture, err := artifactpath.SnapshotFile(
+		root, "testdata/interop/fixtures/dkim2wg-overlap.json", maxRegistryBytes,
+	)
+	if err != nil {
+		return ComparisonReport{}, errors.New("comparison_fixture")
+	}
+	dkim2wgProducer, err := digestRepositoryFiles(root, []string{
+		"lib/internal/instance/hash.go",
+		"lib/internal/instance/parser.go",
+		"lib/internal/service/verifier.go",
+		"lib/internal/signature/cardinality.go",
+		"lib/internal/signature/parser.go",
+		"lib/internal/verify/hash.go",
+		"lib/internal/verify/verifier.go",
+	})
+	if err != nil {
+		return ComparisonReport{}, err
+	}
+	dkim2wg, dkim2wgExists := producers["dkim2wg-interop"]
 	mailauthlens, mailauthlensExists := producers["mailauthlens"]
 	turscar, turscarExists := producers["turscar-dkim2"]
-	if !mailauthlensExists || !turscarExists ||
-		mailauthlens.digest == "" || turscar.digest == "" {
+	if !dkim2wgExists || !mailauthlensExists || !turscarExists ||
+		dkim2wg.digest == "" || mailauthlens.digest == "" || turscar.digest == "" {
 		return ComparisonReport{}, errors.New("comparison_producer")
 	}
 	stalwart := candidateByID(evidence.Candidates, "stalwart-mail-auth")
@@ -683,37 +756,60 @@ func buildCurrentComparison(
 	}
 	cases := []ComparisonCase{
 		{
+			CandidateID: "dkim2wg-interop", CaseID: "message-instance-duplicate-hash",
+			Operation: "message-instance", ClaimClass: "draft_normative",
+			FixtureSHA256: dkim2wgFixture.SHA256, LocalProducer: dkim2wgProducer,
+			ExternalProducer: dkim2wg.digest, State: "agreement",
+		},
+		{
+			CandidateID: "dkim2wg-interop", CaseID: "signature-fws", Operation: "signature-parse",
+			ClaimClass: "draft_normative", FixtureSHA256: dkim2wgFixture.SHA256,
+			LocalProducer: dkim2wgProducer, ExternalProducer: dkim2wg.digest, State: "agreement",
+		},
+		{
+			CandidateID: "dkim2wg-interop", CaseID: "signature-selector-cardinality",
+			Operation: "signature-parse", ClaimClass: "draft_normative",
+			FixtureSHA256: dkim2wgFixture.SHA256, LocalProducer: dkim2wgProducer,
+			ExternalProducer: dkim2wg.digest, State: "agreement",
+		},
+		{
+			CandidateID: "dkim2wg-interop", CaseID: "signature-verify-ed25519",
+			Operation: "signature-verify", ClaimClass: "external_observation",
+			FixtureSHA256: dkim2wgFixture.SHA256, LocalProducer: dkim2wgProducer,
+			ExternalProducer: dkim2wg.digest, State: "agreement",
+		},
+		{
 			CandidateID: "mailauthlens", CaseID: "dns-key-fws", Operation: "dns-key-parse",
-			ClaimClass: "draft_normative", FixtureSHA256: fixture.SHA256,
-			LocalProducer: localProducer, ExternalProducer: mailauthlens.digest, State: "agreement",
+			ClaimClass: "draft_normative", FixtureSHA256: parserFixture.SHA256,
+			LocalProducer: parserProducer, ExternalProducer: mailauthlens.digest, State: "agreement",
 		},
 		{
 			CandidateID: "mailauthlens", CaseID: "signature-fws", Operation: "signature-parse",
-			ClaimClass: "draft_normative", FixtureSHA256: fixture.SHA256,
-			LocalProducer: localProducer, ExternalProducer: mailauthlens.digest, State: "agreement",
+			ClaimClass: "draft_normative", FixtureSHA256: parserFixture.SHA256,
+			LocalProducer: parserProducer, ExternalProducer: mailauthlens.digest, State: "agreement",
 		},
 		{
 			CandidateID: "mailauthlens", CaseID: "signature-mixed-case", Operation: "signature-parse",
-			ClaimClass: "documented_interpretation", FixtureSHA256: fixture.SHA256,
-			LocalProducer: localProducer, ExternalProducer: mailauthlens.digest, State: "unsupported",
+			ClaimClass: "documented_interpretation", FixtureSHA256: parserFixture.SHA256,
+			LocalProducer: parserProducer, ExternalProducer: mailauthlens.digest, State: "unsupported",
 			Limitation: "documented-interpretation-differs",
 		},
 		{
 			CandidateID: "stalwart-mail-auth", CaseID: "signature-parse",
 			Operation: "signature-parse", ClaimClass: "external_observation",
-			FixtureSHA256: fixture.SHA256, LocalProducer: localProducer,
+			FixtureSHA256: parserFixture.SHA256, LocalProducer: parserProducer,
 			ExternalProducer: stalwart.SourceSHA256, State: "not_runnable",
 			Limitation: "no-immutable-cargo-lock",
 		},
 		{
 			CandidateID: "turscar-dkim2", CaseID: "signature-fws", Operation: "signature-parse",
-			ClaimClass: "draft_normative", FixtureSHA256: fixture.SHA256,
-			LocalProducer: localProducer, ExternalProducer: turscar.digest, State: "agreement",
+			ClaimClass: "draft_normative", FixtureSHA256: parserFixture.SHA256,
+			LocalProducer: parserProducer, ExternalProducer: turscar.digest, State: "agreement",
 		},
 		{
 			CandidateID: "turscar-dkim2", CaseID: "signature-mixed-case", Operation: "signature-parse",
-			ClaimClass: "documented_interpretation", FixtureSHA256: fixture.SHA256,
-			LocalProducer: localProducer, ExternalProducer: turscar.digest, State: "agreement",
+			ClaimClass: "documented_interpretation", FixtureSHA256: parserFixture.SHA256,
+			LocalProducer: parserProducer, ExternalProducer: turscar.digest, State: "agreement",
 		},
 	}
 	return ComparisonReport{

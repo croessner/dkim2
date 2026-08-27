@@ -190,8 +190,10 @@ func TestPeerBuildArgumentsEnforceTheClosedSandbox(t *testing.T) {
 		"/safe/output",
 		"/safe/source.tar.gz",
 		"/safe/harness_test.go",
+		"/safe/fixture.json",
 		currentPeer{
 			id: "peer", sourceDirectory: "peer-source", packagePath: ".",
+			fixture:     ".artifacts/fixture.json",
 			moduleCache: ".artifacts/cache", expectedBuildSHA256: testDigest,
 			expectedDependencyID: testDigest,
 		},
@@ -212,8 +214,10 @@ func TestPeerBuildArgumentsEnforceTheClosedSandbox(t *testing.T) {
 	joined := strings.Join(arguments, " ")
 	for _, required := range []string{
 		"sha256sum -c", "go mod verify", "go test -c -vet=off",
+		"cp /fixture.json /work/source/peer-source/dkim2wg-overlap.json",
 		"src=/safe/source.tar.gz,dst=/source.tar.gz,readonly",
 		"src=/safe/harness_test.go,dst=/harness_test.go,readonly",
+		"src=/safe/fixture.json,dst=/fixture.json,readonly",
 		"src=/safe/root/.artifacts/cache,dst=/gopath/pkg/mod,readonly",
 	} {
 		if !strings.Contains(joined, required) {
@@ -224,6 +228,33 @@ func TestPeerBuildArgumentsEnforceTheClosedSandbox(t *testing.T) {
 		if strings.Contains(joined, forbidden) {
 			t.Fatalf("peer build arguments admitted %q", forbidden)
 		}
+	}
+}
+
+// TestReviewedCurrentPeersBindEveryRunnableCandidate prevents eligible catalog entries from escaping execution.
+func TestReviewedCurrentPeersBindEveryRunnableCandidate(t *testing.T) {
+	catalog := CandidateCatalog{Candidates: []Candidate{
+		{ID: "dkim2wg-interop", Revision: strings.Repeat("a", 40), BuildSHA256: testDigest, State: "eligible_runnable"},
+		{ID: "mailauthlens", Revision: strings.Repeat("b", 40), BuildSHA256: testDigest, State: "eligible_runnable"},
+		{ID: "stalwart-mail-auth", State: "eligible_vectors_only"},
+		{ID: "turscar-dkim2", Revision: strings.Repeat("c", 40), BuildSHA256: testDigest, State: "eligible_runnable"},
+	}}
+	peers, err := reviewedCurrentPeers(catalog)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ids := make([]string, 0, len(peers))
+	for _, peer := range peers {
+		ids = append(ids, peer.id)
+	}
+	want := []string{"dkim2wg-interop", "mailauthlens", "turscar-dkim2"}
+	if !slices.Equal(ids, want) {
+		t.Fatalf("reviewedCurrentPeers() IDs = %v, want %v", ids, want)
+	}
+
+	catalog.Candidates = append(catalog.Candidates, Candidate{ID: "unbound-peer", State: "eligible_runnable"})
+	if _, err := reviewedCurrentPeers(catalog); err == nil {
+		t.Fatal("reviewedCurrentPeers accepted an unbound runnable candidate")
 	}
 }
 
