@@ -140,9 +140,21 @@ type signingState struct {
 	allowRecipientGroup bool
 	limitProfile        string
 	maxLoadBytes        uint32
+	policies            signingPoliciesState
 	ldap                ldapSigningState
 	postgresql          sqlSigningState
 	mysql               sqlSigningState
+}
+
+type signingFlagPolicyState struct {
+	doNotModify  bool
+	doNotExplode bool
+}
+
+type signingPoliciesState struct {
+	originator      signingFlagPolicyState
+	ordinaryTransit signingFlagPolicyState
+	deliveryStatus  signingFlagPolicyState
 }
 
 type ldapSigningState struct {
@@ -613,6 +625,10 @@ func parseSigning(
 	generation string,
 	server serverState,
 ) (signingState, error) {
+	policies, err := parseSigningPolicies(values)
+	if err != nil {
+		return signingState{}, err
+	}
 	backendText := text(values, pathSigningBackend)
 	var backend SigningBackend
 	switch backendText {
@@ -635,7 +651,10 @@ func parseSigning(
 				return signingState{}, newError(CodeInvalidMatrix)
 			}
 		}
-		return signingState{backend: SigningDisabled}, nil
+		if policies.anyEnabled() {
+			return signingState{}, newError(CodeInvalidMatrix)
+		}
+		return signingState{backend: SigningDisabled, policies: policies}, nil
 	case "flat_file":
 		backend = SigningFlatFile
 	case "ldap":
@@ -750,6 +769,7 @@ func parseSigning(
 		allowRecipientGroup: allowGroup,
 		limitProfile:        limitProfile,
 		maxLoadBytes:        uint32(maxLoadBytes),
+		policies:            policies,
 	}
 	if backend == SigningLDAP {
 		ldapConfig, parseErr := parseLDAPSigning(values, generation, paths)
@@ -791,6 +811,41 @@ func parseSigning(
 		result.mysql = mysqlConfig
 	}
 	return result, nil
+}
+
+// parseSigningPolicies validates and freezes the six daemon-owned signing requests.
+func parseSigningPolicies(values map[string]rawValue) (signingPoliciesState, error) {
+	read := func(modifyPath, explodePath string) (signingFlagPolicyState, error) {
+		modify, err := boolValue(values, modifyPath)
+		if err != nil {
+			return signingFlagPolicyState{}, err
+		}
+		explode, err := boolValue(values, explodePath)
+		if err != nil {
+			return signingFlagPolicyState{}, err
+		}
+		return signingFlagPolicyState{doNotModify: modify, doNotExplode: explode}, nil
+	}
+	originator, err := read(pathSigningPolicyOriginatorDoNotModify, pathSigningPolicyOriginatorDoNotExplode)
+	if err != nil {
+		return signingPoliciesState{}, err
+	}
+	transit, err := read(pathSigningPolicyTransitDoNotModify, pathSigningPolicyTransitDoNotExplode)
+	if err != nil {
+		return signingPoliciesState{}, err
+	}
+	delivery, err := read(pathSigningPolicyDeliveryDoNotModify, pathSigningPolicyDeliveryDoNotExplode)
+	if err != nil {
+		return signingPoliciesState{}, err
+	}
+	return signingPoliciesState{originator: originator, ordinaryTransit: transit, deliveryStatus: delivery}, nil
+}
+
+// anyEnabled reports whether the policy would request a flag from a disabled signer.
+func (p signingPoliciesState) anyEnabled() bool {
+	return p.originator.doNotModify || p.originator.doNotExplode ||
+		p.ordinaryTransit.doNotModify || p.ordinaryTransit.doNotExplode ||
+		p.deliveryStatus.doNotModify || p.deliveryStatus.doNotExplode
 }
 
 // parseLDAPSigning validates one verified-TLS single-authority LDAP subtree.

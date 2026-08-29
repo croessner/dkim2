@@ -142,7 +142,7 @@ func (m Manifest) validateIdentity() (map[string]bool, error) {
 	requiredCapabilities := map[string]string{
 		capLibrary: supportedCapability, capDaemon: supportedCapability,
 		capMilter: partialCapability, capPostfix: partialLinuxCapability,
-		capExim: EximUnqualifiedDraft05,
+		capExim: EximUnqualifiedDraft06,
 	}
 	if !equalMap(m.Capabilities, requiredCapabilities) {
 		return nil, errors.New("manifest_capabilities")

@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-const validHealthFixture = `{"schema":"dkim2ctl.fixture.v1","draft":"draft-ietf-dkim-dkim2-spec-05","fixture":"fixture-a","cases":[{"case":"case-a","kind":"health","expect":{"http_status":200,"health_status":"alive"}}]}`
+const validHealthFixture = `{"schema":"dkim2ctl.fixture.v1","draft":"draft-ietf-dkim-dkim2-spec-06","fixture":"fixture-a","cases":[{"case":"case-a","kind":"health","expect":{"http_status":200,"health_status":"alive"}}]}`
 
 // TestCheckedFixtureExamplesRemainStrictAndGloballyUnique validates durable examples together.
 func TestCheckedFixtureExamplesRemainStrictAndGloballyUnique(t *testing.T) {
@@ -21,7 +21,7 @@ func TestCheckedFixtureExamplesRemainStrictAndGloballyUnique(t *testing.T) {
 		t.Fatal("fixture test source unavailable")
 	}
 	root := filepath.Join(filepath.Dir(filepath.Dir(filepath.Dir(source))), "testdata", "fixtures",
-		"draft-ietf-dkim-dkim2-spec-05")
+		"draft-ietf-dkim-dkim2-spec-06")
 	paths := []string{
 		filepath.Join(root, "health.json"),
 		filepath.Join(root, "process-report.json"),
@@ -151,7 +151,7 @@ func TestStableOutputOrderAndNullPolicy(t *testing.T) {
 	}); err != nil {
 		t.Fatal("record write failed")
 	}
-	const expected = `{"schema":"dkim2ctl.result.v1","draft":"draft-ietf-dkim-dkim2-spec-05","fixture":null,"case":null,"operation":null,"outcome":"match","http_status":null,"error_class":null,"duration_bucket":null,"disposition":null,"verification_state":null,"policy_verdict":null,"replay_class":null}` + "\n"
+	const expected = `{"schema":"dkim2ctl.result.v1","draft":"draft-ietf-dkim-dkim2-spec-06","fixture":null,"case":null,"operation":null,"outcome":"match","http_status":null,"error_class":null,"duration_bucket":null,"disposition":null,"verification_state":null,"authentication_state":null,"policy_verdict":null,"replay_class":null}` + "\n"
 	if output.String() != expected {
 		t.Fatal("stable JSONL shape changed")
 	}

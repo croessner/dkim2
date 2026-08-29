@@ -36,7 +36,11 @@ var vendorLFPaths = []string{
 }
 
 var vendorTrailingWhitespacePaths = []string{
+	"github.com/go-openapi/jsonpointer/README.md",
 	"github.com/go-sql-driver/mysql/LICENSE",
+	"github.com/miekg/dns/LICENSE",
+	"github.com/pelletier/go-toml/v2/README.md",
+	"go.uber.org/zap/CHANGELOG.md",
 }
 
 // WriteVendorTree regenerates and installs the hardened vendor tree through

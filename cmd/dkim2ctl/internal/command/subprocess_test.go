@@ -15,7 +15,7 @@ func TestCommandSubprocess(t *testing.T) {
 	t.Parallel()
 	directory := t.TempDir()
 	path := filepath.Join(directory, "private-path-marker.json")
-	fixture := `{"schema":"dkim2ctl.fixture.v1","draft":"draft-ietf-dkim-dkim2-spec-05","fixture":"subprocess","cases":[{"case":"health","kind":"health","expect":{"http_status":200,"health_status":"alive"}}]}`
+	fixture := `{"schema":"dkim2ctl.fixture.v1","draft":"draft-ietf-dkim-dkim2-spec-06","fixture":"subprocess","cases":[{"case":"health","kind":"health","expect":{"http_status":200,"health_status":"alive"}}]}`
 	if err := os.WriteFile(path, []byte(fixture), 0o600); err != nil {
 		t.Fatal("write subprocess fixture")
 	}

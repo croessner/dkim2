@@ -33,6 +33,7 @@ import (
 
 const publicFilterTimeout = 15 * time.Second
 const publicTenant = "tenant"
+const publicResponseNoStore = "no-store"
 
 var publicExecutablePath string
 
@@ -133,7 +134,8 @@ func (s *generatedDaemonService) ReviseMessage(
 	return generatedfixture.ReviseMessage200JSONResponse{
 		Body: body,
 		Headers: generatedfixture.ReviseMessage200ResponseHeaders{
-			ContentLength: strconv.Itoa(len(encoded) + 1),
+			CacheControl: publicResponseNoStore, Connection: "close",
+			ContentLength: strconv.Itoa(len(encoded) + 1), XContentTypeOptions: "nosniff",
 		},
 	}, nil
 }
@@ -154,7 +156,8 @@ func (s *generatedDaemonService) SignMessage(
 	return generatedfixture.SignMessage200JSONResponse{
 		Body: body,
 		Headers: generatedfixture.SignMessage200ResponseHeaders{
-			ContentLength: strconv.Itoa(len(encoded) + 1),
+			CacheControl: publicResponseNoStore, Connection: "close",
+			ContentLength: strconv.Itoa(len(encoded) + 1), XContentTypeOptions: "nosniff",
 		},
 	}, nil
 }
@@ -201,7 +204,7 @@ func newGeneratedDaemonFixture(
 				request.Header.Get("Authorization") != "" ||
 				request.Header.Get("Cookie") != "" ||
 				request.Header.Get("Accept") != "application/json" ||
-				request.Header.Get("Cache-Control") != "no-store" ||
+				request.Header.Get("Cache-Control") != publicResponseNoStore ||
 				request.Header.Get("User-Agent") != "dkim2-exim/1" {
 				return nil, errors.New("invalid generated fixture request")
 			}
@@ -414,7 +417,7 @@ func revisedResponse() generatedfixture.OperationResponse {
 		},
 		ApiVersion:  generatedfixture.V1,
 		Disposition: generatedfixture.DispositionAccept,
-		Draft:       generatedfixture.DraftIetfDkimDkim2Spec05,
+		Draft:       generatedfixture.DraftIetfDkimDkim2Spec06,
 		Operation:   generatedfixture.Revise,
 		Result:      generatedfixture.OperationResponseResultPass,
 	}
@@ -437,7 +440,7 @@ func signedResponse() generatedfixture.OperationResponse {
 		},
 		ApiVersion:  generatedfixture.V1,
 		Disposition: generatedfixture.DispositionAccept,
-		Draft:       generatedfixture.DraftIetfDkimDkim2Spec05,
+		Draft:       generatedfixture.DraftIetfDkimDkim2Spec06,
 		Operation:   generatedfixture.Sign,
 		Result:      generatedfixture.OperationResponseResultPass,
 	}

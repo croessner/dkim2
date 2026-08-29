@@ -2,9 +2,9 @@ package draftsection
 
 import "testing"
 
-// TestCitationValidCoversTheClosedDraft05Structure proves every pinned section
+// TestCitationValidCoversTheClosedDraft06Structure proves every pinned section
 // and the active list/range grammars without binding only corrected authorities.
-func TestCitationValidCoversTheClosedDraft05Structure(t *testing.T) {
+func TestCitationValidCoversTheClosedDraft06Structure(t *testing.T) {
 	for section := range sectionOrder {
 		for _, prefix := range []string{fullDraft, shortDraft} {
 			if !CitationValid(prefix + " Section " + section) {
@@ -25,9 +25,9 @@ func TestCitationValidCoversTheClosedDraft05Structure(t *testing.T) {
 	}
 }
 
-// TestCitationValidRejectsUnknownMalformedAndReverseDraft05Sections freezes the
+// TestCitationValidRejectsUnknownMalformedAndReverseDraft06Sections freezes the
 // fail-closed boundary while leaving authorities for other documents untouched.
-func TestCitationValidRejectsUnknownMalformedAndReverseDraft05Sections(t *testing.T) {
+func TestCitationValidRejectsUnknownMalformedAndReverseDraft06Sections(t *testing.T) {
 	for _, citation := range []string{
 		fullDraft + " Section 5.3",
 		fullDraft + " Sections 5.5 and 9.6",

@@ -1,8 +1,8 @@
 # DKIM2 Signing And Revision
 
 > Historical Draft-04 implementation record. The original scope and evidence
-> below are preserved; current Draft-05 authority is the migration disposition
-> and the 2026-08-26 semantics audit.
+> below are preserved; current Draft-06 authority is the migration disposition
+> and current durable architecture.
 
 Status: implemented; independently reviewed.
 
@@ -1353,6 +1353,19 @@ recorded during implementation closeout.
 - Settled: ASCII SMTP paths only; RFC 5322 content remains byte-preserved.
 - Settled: independent normative, mail-domain, security, and architecture
   review approved this specification before prompt-pack preparation.
+
+## Daemon-Owned Signing Flag Policy
+
+`dkim2d` may inject `donotmodify` and `donotexplode` independently for
+originator, ordinary-transit, and delivery-status signing. The six typed YAML
+leaves default to false and are frozen at startup. The application maps each
+closed signing use to its own immutable policy before provider or private-key
+work, then delegates metadata validation and canonical ordering to the library.
+
+The HTTP request contract contains no flag input. `exploded` remains a factual
+report derived only from sealed route fanout multiplicity and cannot be added,
+suppressed, or forged through configuration. An ordinary-transit policy can
+add a request but cannot remove an inherited authenticated restriction.
 
 ## Explicit M11 And Later Deferments
 

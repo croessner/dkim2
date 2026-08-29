@@ -10,6 +10,16 @@ replay:
 signing:
   backend: postgresql
   reload_interval: 1m
+  policy:
+    originator:
+      donotmodify: false
+      donotexplode: false
+    ordinary_transit:
+      donotmodify: false
+      donotexplode: false
+    delivery_status:
+      donotmodify: false
+      donotexplode: false
   postgresql:
     address: 192.0.2.20:5432
     server_name: postgresql.datasource.example.test

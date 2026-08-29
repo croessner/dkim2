@@ -2,6 +2,7 @@ package replay
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -13,6 +14,56 @@ import (
 )
 
 const privacyDeriverMapKey = "deriver"
+
+type originDigestSource struct{ digest [32]byte }
+
+// Valid reports sealed test provenance.
+func (originDigestSource) Valid() bool { return true }
+
+// Draft returns the active test baseline.
+func (originDigestSource) Draft() string { return DraftIdentifier }
+
+// OriginReplayDigest returns the independently frozen origin digest.
+func (s originDigestSource) OriginReplayDigest() ([32]byte, bool) { return s.digest, true }
+
+// Exploded reports no expected fanout for the golden vector.
+func (originDigestSource) Exploded() bool { return false }
+
+// TestDraft06PublishedReplayKey verifies the normative message-wide HMAC vector.
+func TestDraft06PublishedReplayKey(t *testing.T) {
+	digestBytes, err := hex.DecodeString("63519c8a3d2e4d5f6fb9e689259be264a058a3a9fbc8bb5a9a904bef0e9d9cd5")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var digest [32]byte
+	copy(digest[:], digestBytes)
+	set, err := NewIdentitySet(originDigestSource{digest: digest})
+	if err != nil {
+		t.Fatal(err)
+	}
+	identity, err := set.Identity(0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	deriver, err := NewDeriver(sequenceBytes(0xa0), 0x01020304)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = deriver.Close(context.Background()) })
+	key, err := deriver.Derive(context.Background(), identity)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const want = "dkim2:replay:v1:01020304:nxK4RF2gtOiO-FVQQuMsarmpn2hjabHQ5lPVvgR169A"
+	if err := UseStorageKey(key, func(got string) error {
+		if got != want {
+			t.Fatalf("storage key = %s, want %s", got, want)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
 
 // TestDeriverProducesExactPublishedStorageKey verifies byte framing, HMAC, epoch formatting, and base64url.
 func TestDeriverProducesExactPublishedStorageKey(t *testing.T) {
@@ -42,7 +93,7 @@ func TestDeriverProducesExactPublishedStorageKey(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	const want = "dkim2:replay:v1:01020304:HI_5l6s7L6xrPIUOMgXV1sgoMf1Nmc_J_KYh0c_aiYk"
+	const want = "dkim2:replay:v1:01020304:4kTfIzeSC0x3wCkfD8qcqm4sGmrhlBdzEi_Za7TTWT0"
 	calls := 0
 	if err := UseStorageKey(key, func(storageKey string) error {
 		calls++
@@ -55,9 +106,9 @@ func TestDeriverProducesExactPublishedStorageKey(t *testing.T) {
 	}
 }
 
-// TestDraft05IdentitySeparatesEpoch proves the DraftIdentifier rotates otherwise identical replay facts.
-func TestDraft05IdentitySeparatesEpoch(t *testing.T) {
-	if DraftIdentifier != "draft-ietf-dkim-dkim2-spec-05" {
+// TestDraft06IdentitySeparatesEpoch proves the DraftIdentifier rotates otherwise identical replay facts.
+func TestDraft06IdentitySeparatesEpoch(t *testing.T) {
+	if DraftIdentifier != "draft-ietf-dkim-dkim2-spec-06" {
 		t.Fatalf("DraftIdentifier = %q", DraftIdentifier)
 	}
 	source := syntheticIdentitySource{
@@ -68,7 +119,7 @@ func TestDraft05IdentitySeparatesEpoch(t *testing.T) {
 	}
 	const draft04Key = "dkim2:replay:v1:01020304:ZY5FUs9tgID9qTmf5RMx0klaDUM7YNLc__lWkDX8RnE"
 	if got := mustDerivedStorageKey(t, sequenceBytes(0xa0), 0x01020304, source); got == draft04Key {
-		t.Fatal("Draft-05 replay identity reused the Draft-04 HMAC epoch")
+		t.Fatal("Draft-06 replay identity reused the Draft-04 HMAC epoch")
 	}
 }
 
@@ -79,7 +130,7 @@ func TestDeriverProducesExactAllZeroPresentDigestKey(t *testing.T) {
 		messagePresent: true, signaturePresent: true,
 		recipients: [][32]byte{sequenceDigest(0x40)},
 	}
-	const want = "dkim2:replay:v1:01020304:ZDWmi2XZcYnMZlpGWEHxBxw0STMmc6b7h06LanyC2i0"
+	const want = "dkim2:replay:v1:01020304:XjQyFZqA61PNm8jFY2fa6RynYNG8rI_LDuYYYdoPCs8"
 	if got := mustDerivedStorageKey(t, sequenceBytes(0xa0), 0x01020304, source); got != want {
 		t.Fatalf("all-zero present digest storage key = %q, want %q", got, want)
 	}
@@ -384,7 +435,7 @@ func TestKeyAndDeriverFormattingNeverExposeProtectedMaterial(t *testing.T) {
 
 // TestKeyConstantsMatchFrozenAlgorithmAndStoredMarker verifies later providers consume one exact definition.
 func TestKeyConstantsMatchFrozenAlgorithmAndStoredMarker(t *testing.T) {
-	if KeyAlgorithm != "dkim2-replay-hmac-sha256-v1" {
+	if KeyAlgorithm != "dkim2-replay-hmac-sha256-v2" {
 		t.Fatalf("KeyAlgorithm = %q", KeyAlgorithm)
 	}
 	if StoredValue != "v1" || len(StoredValue) != 2 {

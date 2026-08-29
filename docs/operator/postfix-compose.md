@@ -2,7 +2,7 @@
 
 This guide deploys the implemented daemon and Milter with Postfix while
 preserving the existing trust boundaries. Protocol behavior remains pinned to
-`draft-ietf-dkim-dkim2-spec-05` and the tested
+`draft-ietf-dkim-dkim2-spec-06` and the tested
 `draft-chuang-dkim2-dns-04` behavior. The authoritative HTTP contract remains
 [`docs/specs/openapi/dkim2d.yaml`](../specs/openapi/dkim2d.yaml).
 
@@ -138,7 +138,7 @@ Milter route whose signing block contains only the administrative tenant and
 `domain_source: verified_embedded`; it must not contain `signing.domain` or
 `signing.dsn_domain`. The adapter admits that route only for the exact
 EOH-confirmed `{postfix_dsn_origin}=internal` value. The daemon then verifies
-the complete embedded Draft-05 evidence before datasource access, derives the
+the complete embedded Draft-06 evidence before datasource access, derives the
 canonical highest authenticated `d=`, and resolves the exact
 `delivery_status` policy for that tenant/domain pair. This permits one route to
 serve multiple domains without trusting the outer envelope or caller-selected
@@ -322,7 +322,7 @@ explicitly classified internal Postfix transport only after classifying the
 message as unchanged-envelope ordinary transit. Do not attach two route modes
 to one message path.
 
-An unchanged-envelope ordinary-transit route must preserve Draft-05 custody
+An unchanged-envelope ordinary-transit route must preserve Draft-06 custody
 continuity: the successor `mf=` domain must relaxed-match a predecessor `rt=`
 domain, and each non-null signature `d=` must align with its own `mf=` domain.
 The isolated deployment test therefore uses one reserved mail domain across
@@ -348,21 +348,21 @@ only the missing outer brackets as documented.
 
 ## Shutdown, upgrade, and rollback
 
-### Draft-05 protocol and replay upgrade
+### Draft-06 protocol and replay upgrade
 
-Draft-05 is a closed protocol-baseline change. Upgrade the daemon, Milter,
+Draft-06 is a closed protocol-baseline change. Upgrade the daemon, Milter,
 generated clients, fixtures, and configuration references as one digest-pinned
-set; do not run a Draft-04 adapter or client against a Draft-05 daemon. The
-wire enum changes to `draft-ietf-dkim-dkim2-spec-05`, and verification may now
+set; do not run a Draft-04 adapter or client against a Draft-06 daemon. The
+wire enum changes to `draft-ietf-dkim-dkim2-spec-06`, and verification may now
 return `duplicate_hash_algorithm`, `invalid_recipe_json`,
 `duplicate_selector`, or `too_many_signatures` as permanent non-4xx results.
 
 Replay migration is drain-only. Stop SMTP admission, drain every Draft-04
 instance and its in-flight replay work, retain the old deployment offline for
 the complete configured retention period, and only then admit traffic to the
-Draft-05 deployment. Never operate mixed Draft-04/Draft-05 instances, a
+Draft-06 deployment. Never operate mixed Draft-04/Draft-06 instances, a
 rolling upgrade, fallback, or dual replay epochs. Old replay records are
-intentionally unreachable after the Draft-05 epoch activates, so the possible
+intentionally unreachable after the Draft-06 epoch activates, so the possible
 detection gap is bounded by that retention period. Follow the exact procedure
 in [`../replay-store-valkey.md`](../replay-store-valkey.md); the Valkey
 namespace, key width, ACL, and topology do not otherwise change.
@@ -371,7 +371,7 @@ The message baseline change does not migrate the DNS identifier. Keep
 `draft-chuang-dkim2-dns-04` and its versioned vectors until the deferred
 working-group DNS rename receives a separate reviewed update.
 Rollback must restore the complete prior Draft-04 application set only after
-the Draft-05 replay epoch has likewise drained; an online cross-version
+the Draft-06 replay epoch has likewise drained; an online cross-version
 rollback is unsupported.
 
 Stop SMTP admission first. Let Postfix finish active sessions, retain its named
@@ -474,9 +474,9 @@ READMEs and linked durable specs.
 
 The source-linked Exim adapter, `local_scan()`, transport filter, packaging
 validation, and five-row qualification matrix runner are implemented separately from
-this Postfix deployment. Exim is `unqualified_draft05`: its exact five-row
+this Postfix deployment. Exim is `unqualified_draft06`: its exact five-row
 compatibility report is historical Draft-04 evidence and does not extend this
-Postfix deployment or qualify current Draft-05 bytes. No universal binary
+Postfix deployment or qualify current Draft-06 bytes. No universal binary
 package or Exim image is claimed.
 
 LDAP, PostgreSQL, MySQL, and MariaDB providers, drivers, pools, schema/DDL delivery, immutable

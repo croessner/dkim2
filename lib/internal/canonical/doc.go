@@ -1,5 +1,5 @@
 // Package canonical owns DKIM2 canonical byte transformations and digest
-// result containers for the draft-ietf-dkim-dkim2-spec-05 baseline.
+// result containers for the draft-ietf-dkim-dkim2-spec-06 baseline.
 //
 // This package is the library-internal source of truth for Section 6.1 body
 // hash input, Section 6.2 header hash input, and Section 9.6 signature input.

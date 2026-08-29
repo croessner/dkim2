@@ -141,7 +141,7 @@
       "required": ["record_b64", "algorithm", "expected"],
       "type": "object"
     },
-    "message_draft": {"const": "draft-ietf-dkim-dkim2-spec-05"},
+    "message_draft": {"const": "draft-ietf-dkim-dkim2-spec-06"},
     "milter": {"$ref": "#/$defs/milterOperation"},
     "openapi": {"$ref": "#/$defs/openapiOperation"},
     "policy": {

@@ -31,10 +31,8 @@ func TestAuthenticReplayVerifyResultHidesSealedDigests(t *testing.T) {
 	if result.state == nil || !result.state.hasReplayProjection || !result.state.replayProjection.Valid() {
 		t.Fatal("authentic PASS result omitted replay provenance")
 	}
-	message, messageOK := result.state.replayProjection.MessageDigest()
-	signature, signatureOK := result.state.replayProjection.SignatureInputDigest()
-	recipient, recipientOK := result.state.replayProjection.RecipientDigest(0)
-	if !messageOK || !signatureOK || !recipientOK {
+	origin, originOK := result.state.replayProjection.OriginReplayDigest()
+	if !originOK {
 		t.Fatal("authentic replay provenance was incomplete")
 	}
 	values := []any{
@@ -46,8 +44,7 @@ func TestAuthenticReplayVerifyResultHidesSealedDigests(t *testing.T) {
 	}
 	text := formatted.String()
 	for _, protected := range []string{
-		hex.EncodeToString(message[:]), hex.EncodeToString(signature[:]), hex.EncodeToString(recipient[:]),
-		fmt.Sprint(message), fmt.Sprint(signature), fmt.Sprint(recipient),
+		hex.EncodeToString(origin[:]), fmt.Sprint(origin),
 		testSigningDomain, "body line",
 	} {
 		if strings.Contains(text, protected) {

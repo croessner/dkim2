@@ -319,7 +319,18 @@ func productionLifecycleDependencies() lifecycleDependencies {
 			verifier VerificationService,
 			replay lifecycleReplay,
 		) (*InboundProcessor, error) {
-			domain, err := NewDomainProcessor(verifier, preparation.Snapshot().PolicyMode())
+			dnsVerifier, verifierOK := verifier.(*DNSVerifier)
+			replayRuntime, replayOK := replay.(*ReplayRuntime)
+			if !verifierOK || !replayOK {
+				return nil, &LifecycleError{}
+			}
+			authentication, err := replayRuntime.NewAuthenticator(dnsVerifier)
+			if err != nil {
+				return nil, err
+			}
+			domain, err := NewDomainProcessor(
+				verifier, preparation.Snapshot().PolicyMode(), authentication,
+			)
 			if err != nil {
 				return nil, err
 			}
@@ -520,6 +531,7 @@ func (l *Lifecycle) assembleApplication(
 				publicKeys,
 				preparation.SigningStore(),
 				preparation.Snapshot().Signing().AllowRecipientGroup(),
+				signingPoliciesFromConfig(preparation.Snapshot().Signing().Policies()),
 			)
 		} else {
 			startup.signing, operationErr = newNetworkSigningRuntime(
@@ -530,6 +542,7 @@ func (l *Lifecycle) assembleApplication(
 					publicKeys,
 					startup.signing.runtime,
 					preparation.Snapshot().Signing().AllowRecipientGroup(),
+					signingPoliciesFromConfig(preparation.Snapshot().Signing().Policies()),
 				)
 				startup.authority = joinedAuthority{
 					replay: startup.replay, signing: startup.signing,

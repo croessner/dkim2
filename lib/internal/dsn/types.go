@@ -65,7 +65,7 @@ func (p Part) ContentType() ContentType {
 	return p.contentType
 }
 
-// Report exposes the three required RFC 3462 report parts without interpreting their fields.
+// Report exposes the three required RFC 6522 report parts without interpreting their fields.
 type Report struct {
 	message        rawmsg.Message
 	humanReadable  Part

@@ -436,7 +436,7 @@ func TestHTTPBoundaryMapsExpectByVersionAndRoute(t *testing.T) {
 // TestHTTPBoundaryRunsGeneratedProcessAfterOASAndMapsCanonicalFailures proves production composition.
 func TestHTTPBoundaryRunsGeneratedProcessAfterOASAndMapsCanonicalFailures(t *testing.T) {
 	handler, _, processor, secret := newBoundaryFixture(t)
-	body := `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-05","message":{"raw_rfc5322_base64":"*"},"smtp":{"mail_from":"","rcpt_to":[""]}}`
+	body := `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-06","message":{"raw_rfc5322_base64":"*"},"smtp":{"mail_from":"","rcpt_to":[""]}}`
 	request, _ := boundaryRequest(http.MethodPost, "http://"+boundaryTestAuthority+testProcessPath, body, transportFacts{})
 	request.Header.Set(headerContentType, testContentTypeJSON)
 	request.Header.Set(localCapabilityHeader, base64.RawURLEncoding.EncodeToString(secret))

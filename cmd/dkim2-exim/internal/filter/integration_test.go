@@ -34,7 +34,7 @@ func TestGeneratedClientFilterFlow(t *testing.T) {
 					{Type: generated.AddHeader, Name: generated.DKIM2Signature, Value: " i=1; s=a"},
 				},
 				ApiVersion: generated.V1, Disposition: generated.DispositionAccept,
-				Draft:     generated.DraftIetfDkimDkim2Spec05,
+				Draft:     generated.DraftIetfDkimDkim2Spec06,
 				Operation: generated.Sign, Result: generated.OperationResponseResultPass,
 			},
 			wantOutput: []byte(
@@ -57,7 +57,7 @@ func TestGeneratedClientFilterFlow(t *testing.T) {
 					{Type: generated.AddHeader, Name: generated.DKIM2Signature, Value: " i=2; s=b"},
 				},
 				ApiVersion: generated.V1, Disposition: generated.DispositionAccept,
-				Draft:     generated.DraftIetfDkimDkim2Spec05,
+				Draft:     generated.DraftIetfDkimDkim2Spec06,
 				Operation: generated.Revise, Result: generated.OperationResponseResultPass,
 			},
 			wantOutput: []byte(

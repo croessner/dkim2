@@ -1,7 +1,7 @@
 # DKIM2 Current-Semantics Audit — 2026-08-21
 
 > Historical Draft-04 audit. This dated report records the repository state on
-> 2026-08-21 and does not define or qualify the current Draft-05 baseline. See
+> 2026-08-21 and does not define or qualify the current Draft-06 baseline. See
 > [`draft-05-semantics-audit-2026-08-26.md`](draft-05-semantics-audit-2026-08-26.md).
 
 This report checks the protocol changes from `v0.1.6` through `v0.1.9` and

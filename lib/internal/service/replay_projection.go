@@ -1,10 +1,8 @@
 package service
 
 import (
-	"bytes"
 	"fmt"
 	"io"
-	"slices"
 
 	"github.com/croessner/dkim2/internal/replay"
 	"github.com/croessner/dkim2/internal/verify"
@@ -13,33 +11,20 @@ import (
 const serviceReplayProjectionRedactedText = "service.ReplayProjection{redacted}"
 
 // ReplayProjection carries sealed replay facts across the trusted root boundary.
-type ReplayProjection struct {
-	state *replayProjectionState
-}
+type ReplayProjection struct{ state *replayProjectionState }
 
+// replayProjectionState owns one fixed-size message-wide identity fact.
 type replayProjectionState struct {
-	draft                   string
-	messageDigest           [32]byte
-	signatureInputDigest    [32]byte
-	recipientDigests        [][32]byte
-	hasMessageDigest        bool
-	hasSignatureInputDigest bool
-	exploded                bool
-	sealed                  bool
+	draft           string
+	originDigest    [32]byte
+	hasOriginDigest bool
+	exploded        bool
+	sealed          bool
 }
 
 // Valid reports whether the projection contains complete baseline facts.
 func (p ReplayProjection) Valid() bool {
-	if p.state == nil || !p.state.sealed || p.state.draft != replay.DraftIdentifier || !p.state.hasMessageDigest ||
-		!p.state.hasSignatureInputDigest || len(p.state.recipientDigests) == 0 {
-		return false
-	}
-	for index, digest := range p.state.recipientDigests {
-		if index > 0 && bytes.Compare(p.state.recipientDigests[index-1][:], digest[:]) >= 0 {
-			return false
-		}
-	}
-	return true
+	return p.state != nil && p.state.sealed && p.state.draft == replay.DraftIdentifier && p.state.hasOriginDigest
 }
 
 // Draft returns the exact bounded behavior baseline.
@@ -50,39 +35,15 @@ func (p ReplayProjection) Draft() string {
 	return p.state.draft
 }
 
-// MessageDigest returns the locally computed canonical SHA-256 header digest by value.
-func (p ReplayProjection) MessageDigest() ([32]byte, bool) {
+// OriginReplayDigest returns the message-wide origin digest by value.
+func (p ReplayProjection) OriginReplayDigest() ([32]byte, bool) {
 	if !p.Valid() {
 		return [32]byte{}, false
 	}
-	return p.state.messageDigest, p.state.hasMessageDigest
+	return p.state.originDigest, true
 }
 
-// SignatureInputDigest returns the highest canonical signature-input digest by value.
-func (p ReplayProjection) SignatureInputDigest() ([32]byte, bool) {
-	if !p.Valid() {
-		return [32]byte{}, false
-	}
-	return p.state.signatureInputDigest, p.state.hasSignatureInputDigest
-}
-
-// RecipientCount returns the complete unique current-recipient count.
-func (p ReplayProjection) RecipientCount() int {
-	if !p.Valid() {
-		return 0
-	}
-	return len(p.state.recipientDigests)
-}
-
-// RecipientDigest returns one sorted recipient-scope digest by value.
-func (p ReplayProjection) RecipientDigest(index int) ([32]byte, bool) {
-	if !p.Valid() || index < 0 || index >= len(p.state.recipientDigests) {
-		return [32]byte{}, false
-	}
-	return p.state.recipientDigests[index], true
-}
-
-// Exploded returns the authenticated complete-current-chain OR fact.
+// Exploded returns the authenticated complete-chain OR fact.
 func (p ReplayProjection) Exploded() bool { return p.Valid() && p.state.exploded }
 
 // String returns a constant representation without authenticated digest bytes.
@@ -102,38 +63,18 @@ func (p ReplayProjection) clone() ReplayProjection {
 		return ReplayProjection{}
 	}
 	state := *p.state
-	state.recipientDigests = slices.Clone(p.state.recipientDigests)
 	return ReplayProjection{state: &state}
 }
 
 // mapReplayProjection clones only one complete verify-owned sealed projection.
 func mapReplayProjection(source verify.ReplayProjection) (ReplayProjection, bool) {
-	if !source.Valid() || source.Draft() != replay.DraftIdentifier ||
-		source.RecipientCount() <= 0 {
+	if !source.Valid() || source.Draft() != replay.DraftIdentifier {
 		return ReplayProjection{}, false
 	}
-	message, messagePresent := source.MessageDigest()
-	signatureInput, signaturePresent := source.SignatureInputDigest()
-	if !messagePresent || !signaturePresent {
+	digest, present := source.OriginReplayDigest()
+	if !present {
 		return ReplayProjection{}, false
 	}
-	recipients := make([][32]byte, source.RecipientCount())
-	for index := range recipients {
-		digest, present := source.RecipientDigest(index)
-		if !present {
-			return ReplayProjection{}, false
-		}
-		recipients[index] = digest
-	}
-	projection := ReplayProjection{state: &replayProjectionState{
-		draft:                   replay.DraftIdentifier,
-		messageDigest:           message,
-		signatureInputDigest:    signatureInput,
-		recipientDigests:        recipients,
-		hasMessageDigest:        true,
-		hasSignatureInputDigest: true,
-		exploded:                source.Exploded(),
-		sealed:                  true,
-	}}
+	projection := ReplayProjection{state: &replayProjectionState{draft: replay.DraftIdentifier, originDigest: digest, hasOriginDigest: true, exploded: source.Exploded(), sealed: true}}
 	return projection, projection.Valid()
 }

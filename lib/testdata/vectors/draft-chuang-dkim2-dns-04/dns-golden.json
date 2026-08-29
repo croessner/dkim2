@@ -1,5 +1,5 @@
 {
-  "message_draft": "draft-ietf-dkim-dkim2-spec-05",
+  "message_draft": "draft-ietf-dkim-dkim2-spec-06",
   "dns_draft": "draft-chuang-dkim2-dns-04",
   "rsa_pkcs1_der_base64": "MIGJAoGBAMr9ael4Xdg+Y4YsV4Aa5lDcNjdyZgRnJtb2uP2wxvkqHZRrmgCOGRYnZqjuPoUMCbe04g2c3DTOxqbifY2r3ApRTKF8Dtd+TxrRhR4Bt8g7+wGRKNXC728Gp5NP19zJ5CvnSZLR0KWohHhk3/rNDLdsbWtFdoQl3sxoaAXBFWnvAgMBAAE=",
   "ed25519_raw_base64": "IClZTFkgcVVuQpqSIcMJ98ohgPBzN3SrWTX3gbhSofw=",

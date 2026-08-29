@@ -302,7 +302,7 @@ func writeProtectedSigningStoreFiles(t *testing.T, generationPath string) {
 		}},
 		"policies": []any{map[string]any{
 			"tenant_id": "tenant-a", protectedSigningDomainField: protectedSigningDomain,
-			"use": "originator", "profile_id": "origin-profile",
+			"use": testSigningUseOriginator, "profile_id": "origin-profile",
 			"status": "active", "rollout": "enforce",
 			"compatibility": "strict",
 		}},
@@ -312,7 +312,7 @@ func writeProtectedSigningStoreFiles(t *testing.T, generationPath string) {
 		"version": "dkim2-private-keys-v1",
 		"entries": []any{map[string]any{
 			"tenant_id": "tenant-a", protectedSigningDomainField: protectedSigningDomain,
-			"use": "originator", "handle_id": protectedSigningHandle,
+			"use": testSigningUseOriginator, "handle_id": protectedSigningHandle,
 			"algorithm":          "rsa-sha256",
 			"public_spki_sha256": base64.StdEncoding.EncodeToString(digest[:]),
 			"private_key_file":   "origin.pem",

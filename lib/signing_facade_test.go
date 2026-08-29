@@ -28,7 +28,7 @@ import (
 	internalsigning "github.com/croessner/dkim2/internal/signing"
 )
 
-const publicSigningRSAFixture = "testdata/vectors/draft-ietf-dkim-dkim2-spec-05/signing-test-rsa.pem"
+const publicSigningRSAFixture = "testdata/vectors/draft-ietf-dkim-dkim2-spec-06/signing-test-rsa.pem"
 
 type publicRouteMemoryAuthority struct {
 	value *routeplan.MemoryAuthority

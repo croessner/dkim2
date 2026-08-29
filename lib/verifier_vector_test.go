@@ -113,8 +113,8 @@ type publicGoldenSignatureFact struct {
 	reason    ReasonCode
 }
 
-// TestPublicDraft05GoldenVectors proves chain-authenticated verification through the root facade.
-func TestPublicDraft05GoldenVectors(t *testing.T) {
+// TestPublicDraft06GoldenVectors proves chain-authenticated verification through the root facade.
+func TestPublicDraft06GoldenVectors(t *testing.T) {
 	corpus := loadPublicGoldenCorpus(t)
 	cases := publicGoldenCases(corpus)
 	for _, testCase := range cases {
@@ -164,7 +164,7 @@ func TestPublicGoldenVectorBytesAreFrozenCRLF(t *testing.T) {
 	}
 }
 
-// publicGoldenCases returns the binding Draft-05 public result matrix.
+// publicGoldenCases returns the binding Draft-06 public result matrix.
 func publicGoldenCases(corpus publicGoldenCorpus) []publicGoldenCase {
 	pass := func(name, vector string) publicGoldenCase {
 		return publicGoldenCase{name: name, vector: vector, mode: goldenProviderKeys, state: ResultStatePASS, reason: ReasonNone, class: CheckClassBodyHash, custody: CustodyStructureNotPresent, sequence: 1, instance: 1}
@@ -367,10 +367,10 @@ func assertPublicGoldenFactImmutability(t *testing.T, result VerifyResult, name 
 	}
 }
 
-// loadPublicGoldenCorpus loads the frozen synthetic Draft-05 corpus.
+// loadPublicGoldenCorpus loads the frozen synthetic Draft-06 corpus.
 func loadPublicGoldenCorpus(t testing.TB) publicGoldenCorpus {
 	t.Helper()
-	raw, err := os.ReadFile("testdata/vectors/draft-ietf-dkim-dkim2-spec-05/public-golden.json")
+	raw, err := os.ReadFile("testdata/vectors/draft-ietf-dkim-dkim2-spec-06/public-golden.json")
 	if err != nil {
 		t.Fatal("golden corpus unavailable")
 	}

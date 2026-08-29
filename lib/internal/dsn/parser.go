@@ -7,7 +7,7 @@ import (
 	"github.com/croessner/dkim2/internal/rawmsg"
 )
 
-// Parse parses one RFC 3462 multipart/report delivery-status envelope with restrictive defaults.
+// Parse parses one RFC 6522 multipart/report delivery-status envelope with restrictive defaults.
 func Parse(data []byte) (Report, error) {
 	return ParseWithOptions(data, DefaultOptions())
 }

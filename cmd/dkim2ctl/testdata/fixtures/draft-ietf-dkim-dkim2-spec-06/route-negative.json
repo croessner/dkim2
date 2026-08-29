@@ -1,0 +1,31 @@
+{
+  "schema": "dkim2ctl.fixture.v1",
+  "draft": "draft-ietf-dkim-dkim2-spec-06",
+  "fixture": "route-negative",
+  "cases": [
+    {
+      "case": "process-credential-on-sign-route",
+      "kind": "negative",
+      "negative": {
+        "operation": "sign",
+        "mutation": "wrong_route_capability"
+      },
+      "expect": {
+        "http_status": 403,
+        "error_code": "forbidden"
+      }
+    },
+    {
+      "case": "process-credential-on-revise-route",
+      "kind": "negative",
+      "negative": {
+        "operation": "revise",
+        "mutation": "wrong_route_capability"
+      },
+      "expect": {
+        "http_status": 403,
+        "error_code": "forbidden"
+      }
+    }
+  ]
+}

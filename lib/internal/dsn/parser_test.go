@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-// TestParseAcceptsBoundedThreePartReport proves the structural RFC 3462 report boundary.
+// TestParseAcceptsBoundedThreePartReport proves the structural RFC 6522 report boundary.
 func TestParseAcceptsBoundedThreePartReport(t *testing.T) {
 	report, err := Parse(validReport("message/rfc822", ""))
 	if err != nil {

@@ -1,8 +1,8 @@
 # Observability Foundation Implementation Specification
 
 > Historical Draft-04 implementation record. The original scope and evidence
-> below are preserved; current Draft-05 authority is the migration disposition
-> and the 2026-08-26 semantics audit.
+> below are preserved; current Draft-06 authority is the migration disposition
+> and current durable architecture.
 
 Status: implemented and independently reviewed.
 
@@ -53,9 +53,9 @@ copied into logs, attributes, metrics, REST, or CLI output.
 
 ## Dependencies
 
-The daemon pins `github.com/prometheus/client_golang v1.23.2` and
+The daemon pins `github.com/prometheus/client_golang v1.24.1` and
 `go.opentelemetry.io/otel`, `go.opentelemetry.io/otel/sdk`, and
-`go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp` at `v1.44.0`.
+`go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp` at `v1.46.0`.
 No HTTP auto-instrumentation is used. Workspace sums and vendor output remain
 reproducible; no dependency enters `lib/go.mod`.
 

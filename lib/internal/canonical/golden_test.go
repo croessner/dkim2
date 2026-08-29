@@ -57,7 +57,7 @@ type goldenExcludedCounts struct {
 
 // TestGoldenBodyCanonicalizationFixtures verifies draft-versioned Section 6.1 fixtures.
 func TestGoldenBodyCanonicalizationFixtures(t *testing.T) {
-	fixture := loadGoldenJSON[bodyGoldenFixture](t, "testdata/golden/body-canonicalization-draft-ietf-dkim-dkim2-spec-05.json")
+	fixture := loadGoldenJSON[bodyGoldenFixture](t, "testdata/golden/body-canonicalization-draft-ietf-dkim-dkim2-spec-06.json")
 	if fixture.Draft != DraftBaseline {
 		t.Fatalf("fixture draft = %q, want %q", fixture.Draft, DraftBaseline)
 	}
@@ -104,7 +104,7 @@ func TestGoldenBodyCanonicalizationFixtures(t *testing.T) {
 
 // TestGoldenHeaderCanonicalizationFixture verifies a draft-versioned Section 6.2 fixture.
 func TestGoldenHeaderCanonicalizationFixture(t *testing.T) {
-	fixture := loadGoldenJSON[headerGoldenFixture](t, "testdata/golden/header-canonicalization-draft-ietf-dkim-dkim2-spec-05.json")
+	fixture := loadGoldenJSON[headerGoldenFixture](t, "testdata/golden/header-canonicalization-draft-ietf-dkim-dkim2-spec-06.json")
 	if fixture.Draft != DraftBaseline {
 		t.Fatalf("fixture draft = %q, want %q", fixture.Draft, DraftBaseline)
 	}
@@ -137,7 +137,7 @@ func TestGoldenHeaderCanonicalizationFixture(t *testing.T) {
 
 // TestGoldenSignatureCanonicalizationFixture verifies a draft-versioned Section 9.6 fixture.
 func TestGoldenSignatureCanonicalizationFixture(t *testing.T) {
-	fixture := loadGoldenJSON[signatureGoldenFixture](t, "testdata/golden/signature-input-draft-ietf-dkim-dkim2-spec-05.json")
+	fixture := loadGoldenJSON[signatureGoldenFixture](t, "testdata/golden/signature-input-draft-ietf-dkim-dkim2-spec-06.json")
 	if fixture.Draft != DraftBaseline {
 		t.Fatalf("fixture draft = %q, want %q", fixture.Draft, DraftBaseline)
 	}

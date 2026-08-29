@@ -1,0 +1,126 @@
+{
+  "draft": "draft-ietf-dkim-dkim2-spec-06",
+  "message_instances": [
+    {
+      "name": "origin",
+      "number": 1,
+      "recipe": "",
+      "field_sha256": "0291cffbed16b9026661194825b4eb5646f40e543bd27c03b301e53e7c5aea9c",
+      "section_9_6_sha256": "27205d4c6fc988dcbf00adc0d8a7b3ea5e071884a12232b5ae233660c9a13c64"
+    },
+    {
+      "name": "recipe-revision",
+      "number": 2,
+      "recipe": "{\"h\":[]}",
+      "field_sha256": "6e31606359c95fbd0935f99c54e18fe863bc6e94a9cc3eb6311b853845b8180e",
+      "section_9_6_sha256": "7aa43f62c019d949f92ca47e32bfec94b85d0e58d104c741bfb642477eefc3d4"
+    }
+  ],
+  "signature_fields": [
+    {
+      "name": "ordinary-rsa",
+      "form": "ordinary",
+      "sequence": 1,
+      "instance_number": 1,
+      "domain": "example.test",
+      "next_domain": "",
+      "algorithms": ["rsa-sha256"],
+      "flags": [],
+      "recipient_count": 1,
+      "unsigned_sha256": "5eec1069e9bbe653ffb8b3ab228e4d336cf28f2ae3b2cf71d985ae5227f9234e",
+      "complete_sha256": "05b9bda3ffd4ebca73fa894226cc50e5078e065ba4c73c42a82d4fb4db3ad966"
+    },
+    {
+      "name": "ordinary-ed25519",
+      "form": "ordinary",
+      "sequence": 1,
+      "instance_number": 1,
+      "domain": "example.test",
+      "next_domain": "",
+      "algorithms": ["ed25519-sha256"],
+      "flags": [],
+      "recipient_count": 1,
+      "unsigned_sha256": "bb847e6c33a5324b006dd46dbf0eb71d907cdbde2b97cd651919ec9244d8239a",
+      "complete_sha256": "500b064904bd123191369cbca8cd30468594bfd0dc1a5958f9885558ddc8843b"
+    },
+    {
+      "name": "ordinary-dual-bcc-copy",
+      "form": "ordinary",
+      "sequence": 2,
+      "instance_number": 1,
+      "domain": "example.test",
+      "next_domain": "",
+      "algorithms": ["rsa-sha256", "ed25519-sha256"],
+      "flags": ["donotmodify", "donotexplode", "feedback", "feedhere", "exploded"],
+      "recipient_count": 1,
+      "unsigned_sha256": "9ac36452e48ce12894fd99f0911edf01f4dd0917b835e88e1fae76429b41ef29",
+      "complete_sha256": "1f122e7c4b011310a740c4751b7fae0bd3a304d1a618eaddfb65913f050e8d61"
+    },
+    {
+      "name": "terminal-next-domain-creation",
+      "form": "next_domain",
+      "sequence": 2,
+      "instance_number": 1,
+      "domain": "next.example",
+      "next_domain": "continuation.example",
+      "algorithms": ["ed25519-sha256"],
+      "flags": [],
+      "recipient_count": 0,
+      "unsigned_sha256": "ca71a40492b8fb06a402f915ff2eae8ef1a8000590a6799fc26e20ef0ee12731",
+      "complete_sha256": "68ebb609c7e000dcdfbfeb04a3308c2fbf0486895397bf3c2994964b1f10f985"
+    },
+    {
+      "name": "terminal-next-domain-continuation",
+      "form": "next_domain",
+      "sequence": 3,
+      "instance_number": 1,
+      "domain": "continuation.example",
+      "next_domain": "completion.example",
+      "algorithms": ["ed25519-sha256"],
+      "flags": [],
+      "recipient_count": 0,
+      "unsigned_sha256": "fe439d072445f90bdb8fd66b88af13e84b086dc9d463def550e4d7fe41bf4ab2",
+      "complete_sha256": "9da9f4234260f4258afa2cb87725bd587b0735f4f2af6feef3dd569627aaefb7"
+    },
+    {
+      "name": "terminal-next-domain-completion",
+      "form": "ordinary",
+      "sequence": 4,
+      "instance_number": 1,
+      "domain": "completion.example",
+      "next_domain": "",
+      "algorithms": ["ed25519-sha256"],
+      "flags": [],
+      "recipient_count": 1,
+      "unsigned_sha256": "8df7bf90e07fd61bc4ae80c62f457a29375dd2d2dfd83981c9d1ab4bb9d263f7",
+      "complete_sha256": "532111d3a2c7fcb28f6284d29712d2264f0a18655e74483679a9769785a4a5b2"
+    },
+    {
+      "name": "ordinary-revision",
+      "form": "ordinary",
+      "sequence": 2,
+      "instance_number": 2,
+      "domain": "example.test",
+      "next_domain": "",
+      "algorithms": ["ed25519-sha256"],
+      "flags": ["donotmodify"],
+      "recipient_count": 1,
+      "unsigned_sha256": "3c010a315084a6b10f1906ad700d452cfba3971fa612c7f883ec7e5ecff7f94b",
+      "complete_sha256": "f407999764802ea02b237646a5372cf9f6ad13ce215079ad3b0835c7d299c145"
+    }
+  ],
+  "insertions": [
+    {
+      "name": "normal",
+      "header_only": false,
+      "inherited_bytes": "Subject: normal\r\n\r\nbody\r\n",
+      "output_sha256": "9d8741a25b6f1a772297b44892be3a789dc4e46260eb0b9ae85a98484534c60f"
+    },
+    {
+      "name": "header-only",
+      "header_only": true,
+      "inherited_bytes": "Subject: header-only\r\n",
+      "output_sha256": "e65c9f489a9b95ae743e37594ed864bf64708d5483cd58599f64529f57c61c69"
+    }
+  ]
+}

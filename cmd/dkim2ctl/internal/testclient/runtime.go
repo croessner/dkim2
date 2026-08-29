@@ -626,7 +626,7 @@ func hasRequiredResponseMembers(data []byte, destination any) bool {
 	case *generated.ProcessResponse:
 		required = []string{
 			memberActions, memberAPIVersion, memberDisposition, memberDraft,
-			"policy", "replay", "verification",
+			"authentication", "policy", "replay", "verification",
 		}
 	case *generated.OperationResponse:
 		required = []string{
@@ -652,29 +652,55 @@ func hasRequiredResponseMembers(data []byte, destination any) bool {
 // validHealth validates the complete health representation.
 func validHealth(value generated.HealthResponse) bool {
 	return value.ApiVersion == generated.V1 &&
-		value.Draft == generated.DraftIetfDkimDkim2Spec05 &&
+		value.Draft == generated.DraftIetfDkimDkim2Spec06 &&
 		value.Status == generated.Alive
 }
 
 // validReadiness validates the complete readiness representation.
 func validReadiness(value generated.ReadinessResponse) bool {
 	return value.ApiVersion == generated.V1 &&
-		value.Draft == generated.DraftIetfDkimDkim2Spec05 &&
+		value.Draft == generated.DraftIetfDkimDkim2Spec06 &&
 		value.Status == generated.Ready
 }
 
 // validProcess validates the closed top-level process projection.
 func validProcess(value generated.ProcessResponse) bool {
 	if value.ApiVersion != generated.V1 ||
-		value.Draft != generated.DraftIetfDkimDkim2Spec05 ||
+		value.Draft != generated.DraftIetfDkimDkim2Spec06 ||
 		!value.Disposition.Valid() || !value.Verification.State.Valid() ||
+		!value.Authentication.State.Valid() || !value.Authentication.PrimaryReason.Valid() ||
 		!value.Policy.Verdict.Valid() || !value.Replay.Class.Valid() ||
 		!validVerificationProjection(value.Verification) ||
 		!validPolicyProjection(value.Policy) ||
 		!validProcessActions(value) {
 		return false
 	}
-	return string(value.Disposition) == string(value.Policy.Verdict)
+	return validProcessOutcome(value)
+}
+
+// validProcessOutcome validates the final authentication, replay, and disposition matrix.
+func validProcessOutcome(value generated.ProcessResponse) bool {
+	switch value.Replay.Class {
+	case generated.Disabled, generated.FirstSeen, generated.Exploded:
+		return value.Verification.State == generated.PASS && value.Authentication.State == generated.PASS &&
+			value.Authentication.PrimaryReason == generated.AuthenticationResultPrimaryReasonNone &&
+			string(value.Disposition) == string(value.Policy.Verdict)
+	case generated.Replayed:
+		return value.Verification.State == generated.PASS && value.Authentication.State == generated.FAIL &&
+			value.Authentication.PrimaryReason == generated.AuthenticationResultPrimaryReasonDuplicateMessageWithoutExploded &&
+			value.Disposition == generated.DispositionReject
+	case generated.Indeterminate:
+		return value.Verification.State == generated.PASS && value.Authentication.State == generated.TEMPERROR &&
+			(value.Authentication.PrimaryReason == generated.AuthenticationResultPrimaryReasonReplayIndeterminate ||
+				value.Authentication.PrimaryReason == generated.AuthenticationResultPrimaryReasonReplayEvidenceUnavailable) &&
+			value.Disposition == generated.DispositionTempfail
+	case generated.NotChecked:
+		return value.Authentication.State == value.Verification.State &&
+			string(value.Authentication.PrimaryReason) == string(value.Verification.PrimaryReason) &&
+			string(value.Disposition) == string(value.Policy.Verdict)
+	default:
+		return false
+	}
 }
 
 // validProcessActions validates the optional exact RFC 8601 report action.
@@ -690,7 +716,7 @@ func validProcessActions(value generated.ProcessResponse) bool {
 	}
 	action := value.Actions[0]
 	suffix := ""
-	switch value.Verification.State {
+	switch value.Authentication.State {
 	case generated.PASS:
 		suffix = "; dkim2=pass"
 	case generated.FAIL:
@@ -713,7 +739,7 @@ func validProcessActions(value generated.ProcessResponse) bool {
 // validOperation validates one complete generated signing or revision response.
 func validOperation(value generated.OperationResponse, operation Operation) bool {
 	if value.ApiVersion != generated.V1 ||
-		value.Draft != generated.DraftIetfDkimDkim2Spec05 ||
+		value.Draft != generated.DraftIetfDkimDkim2Spec06 ||
 		!value.Operation.Valid() || !value.Result.Valid() ||
 		!value.Disposition.Valid() ||
 		operation == OperationSign && value.Operation != generated.Sign ||
@@ -794,11 +820,20 @@ func validVerificationProjection(value generated.VerificationResult) bool {
 	}
 	for _, signature := range value.SignatureSets {
 		if !signature.Algorithm.Valid() || !signature.Status.Valid() ||
-			!signature.Reason.Valid() || !signature.KeyPolicy.StrictIdentityApplicable.Valid() {
+			!signature.Reason.Valid() || !signature.KeyPolicy.StrictIdentityApplicable.Valid() ||
+			!validDiagnosticSelector(signature.Status, signature.Selector) {
 			return false
 		}
 	}
 	return true
+}
+
+// validDiagnosticSelector admits one bounded selector only for a failed supported signature.
+func validDiagnosticSelector(status generated.SignatureSetResultStatus, selector *string) bool {
+	if status != generated.SignatureSetResultStatusFail {
+		return selector == nil
+	}
+	return selector != nil && len(*selector) >= 1 && len(*selector) <= 253
 }
 
 // validPolicyProjection validates every closed policy enum and bound.
@@ -820,7 +855,7 @@ func validPolicyProjection(value generated.PolicyResult) bool {
 // validError validates one closed structured error representation.
 func validError(value generated.ErrorResponse) bool {
 	return value.ApiVersion == generated.V1 &&
-		value.Draft == generated.DraftIetfDkimDkim2Spec05 &&
+		value.Draft == generated.DraftIetfDkimDkim2Spec06 &&
 		value.Code.Valid() && value.Category.Valid()
 }
 

@@ -289,10 +289,10 @@ func TestGeneratedStrictHandlerWritesBodylessNotApplicableResponses(t *testing.T
 	raw := base64.StdEncoding.EncodeToString(
 		[]byte("From: sender@example.test\r\nSubject: unsigned\r\n\r\nbody\r\n"),
 	)
-	processBody := `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-05",` +
+	processBody := `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-06",` +
 		`"message":{"raw_rfc5322_base64":"` + raw + `","fidelity":"milter_reconstructed_crlf"},` +
 		`"smtp":{"mail_from":"<sender@example.test>","rcpt_to":["<recipient@example.test>"]}}`
-	signBody := `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-05",` +
+	signBody := `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-06",` +
 		`"message":{"raw_rfc5322_base64":"` + raw + `","fidelity":"milter_reconstructed_crlf"},` +
 		`"smtp":{"mail_from":"<sender@example.test>","rcpt_to":["<recipient@example.test>"]},` +
 		`"context":{"tenant":"tenant-a","domain":"example.test"}}`
@@ -449,7 +449,7 @@ func operationRequestFixture(t *testing.T, raw []byte) generated.SignRequest {
 	fidelity := generated.MilterReconstructedCrlf
 	return generated.SignRequest{
 		ApiVersion: generated.V1,
-		Draft:      generated.DraftIetfDkimDkim2Spec05,
+		Draft:      generated.DraftIetfDkimDkim2Spec06,
 		Message: generated.MessageInput{
 			RawRfc5322Base64: message,
 			Fidelity:         &fidelity,

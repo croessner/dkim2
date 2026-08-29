@@ -11,8 +11,8 @@ import (
 const (
 	vendorLDAPMD4Import  = `"golang.org/x/crypto/md4" //nolint:staticcheck`
 	vendorLocalMD4Import = `"github.com/go-ldap/ldap/v3/internal/md4"`
-	vendorCryptoBlock    = "# golang.org/x/crypto v0.54.0\n## explicit; go 1.25.0\ngolang.org/x/crypto/md4\n"
-	vendorCryptoMetadata = "# golang.org/x/crypto v0.54.0\n## explicit; go 1.25.0\n"
+	vendorCryptoBlock    = "# golang.org/x/crypto v0.55.0\n## explicit; go 1.25.0\ngolang.org/x/crypto/md4\n"
+	vendorCryptoMetadata = "# golang.org/x/crypto v0.55.0\n## explicit; go 1.25.0\n"
 	vendorLDAPPackage    = "github.com/go-ldap/ldap/v3\n"
 	vendorLocalMD4       = "github.com/go-ldap/ldap/v3/internal/md4\n"
 )

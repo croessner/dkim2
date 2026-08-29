@@ -1,0 +1,128 @@
+{
+  "schema": "dkim2ctl.fixture.v1",
+  "draft": "draft-ietf-dkim-dkim2-spec-06",
+  "fixture": "process-negative",
+  "cases": [
+    {
+      "case": "body-over-limit",
+      "kind": "negative",
+      "negative": {
+        "mutation": "body_over_limit"
+      },
+      "expect": {
+        "http_status": 413,
+        "error_code": "request_too_large"
+      }
+    },
+    {
+      "case": "contaminated-target",
+      "kind": "negative",
+      "negative": {
+        "mutation": "contaminated_request_target"
+      },
+      "expect": {
+        "http_status": 400,
+        "error_code": "invalid_contract"
+      }
+    },
+    {
+      "case": "duplicate-capability",
+      "kind": "negative",
+      "negative": {
+        "mutation": "duplicate_capability"
+      },
+      "expect": {
+        "http_status": 403,
+        "error_code": "forbidden"
+      }
+    },
+    {
+      "case": "empty-capability",
+      "kind": "negative",
+      "negative": {
+        "mutation": "empty_capability"
+      },
+      "expect": {
+        "http_status": 403,
+        "error_code": "forbidden"
+      }
+    },
+    {
+      "case": "malformed-json",
+      "kind": "negative",
+      "negative": {
+        "mutation": "malformed_json"
+      },
+      "expect": {
+        "http_status": 400,
+        "error_code": "invalid_json"
+      }
+    },
+    {
+      "case": "mismatching-capability",
+      "kind": "negative",
+      "negative": {
+        "mutation": "mismatching_capability"
+      },
+      "expect": {
+        "http_status": 403,
+        "error_code": "forbidden"
+      }
+    },
+    {
+      "case": "missing-capability",
+      "kind": "negative",
+      "negative": {
+        "mutation": "missing_capability"
+      },
+      "expect": {
+        "http_status": 403,
+        "error_code": "forbidden"
+      }
+    },
+    {
+      "case": "truncated-body",
+      "kind": "negative",
+      "negative": {
+        "mutation": "truncated_request_body"
+      },
+      "expect": {
+        "http_status": 400,
+        "error_code": "invalid_json"
+      }
+    },
+    {
+      "case": "unknown-member",
+      "kind": "negative",
+      "negative": {
+        "mutation": "unknown_json_member"
+      },
+      "expect": {
+        "http_status": 400,
+        "error_code": "invalid_contract"
+      }
+    },
+    {
+      "case": "unsupported-method",
+      "kind": "negative",
+      "negative": {
+        "mutation": "unsupported_method"
+      },
+      "expect": {
+        "http_status": 405,
+        "error_code": "method_not_allowed"
+      }
+    },
+    {
+      "case": "unsupported-media",
+      "kind": "negative",
+      "negative": {
+        "mutation": "unsupported_media_type"
+      },
+      "expect": {
+        "http_status": 415,
+        "error_code": "unsupported_media_type"
+      }
+    }
+  ]
+}

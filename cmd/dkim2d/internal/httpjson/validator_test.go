@@ -7,9 +7,9 @@ import (
 	"testing"
 )
 
-const validMinimalProcessJSON = `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-05","message":{"raw_rfc5322_base64":"","fidelity":"raw_rfc5322"},"smtp":{"mail_from":"","rcpt_to":[""]}}`
+const validMinimalProcessJSON = `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-06","message":{"raw_rfc5322_base64":"","fidelity":"raw_rfc5322"},"smtp":{"mail_from":"","rcpt_to":[""]}}`
 
-const validMinimalDSNSignJSON = `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-05","message":{"raw_rfc5322_base64":""},"outer_smtp":{"mail_from":"<>","rcpt_to":["<sender@example.test>"]},"context":{"tenant":"tenant-a"}}`
+const validMinimalDSNSignJSON = `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-06","message":{"raw_rfc5322_base64":""},"outer_smtp":{"mail_from":"<>","rcpt_to":["<sender@example.test>"]},"context":{"tenant":"tenant-a"}}`
 
 // TestRequestValidatorUsesEmbeddedContractAndPrivateAuthentication proves the runtime seam.
 func TestRequestValidatorUsesEmbeddedContractAndPrivateAuthentication(t *testing.T) {
@@ -42,7 +42,7 @@ func TestRequestValidatorClosesSchemaFailuresWithoutDetails(t *testing.T) {
 	for _, body := range []string{
 		`{}`,
 		`{"api_version":"v2"}`,
-		`{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-05","unknown":true}`,
+		`{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-06","unknown":true}`,
 	} {
 		if err := validator.ValidateProcess(request, []byte(body)); !IsValidationError(err) || err.Error() != validatorErrorText {
 			t.Fatalf("ValidateProcess(%q) error = %v", body, err)
@@ -89,11 +89,11 @@ func TestRequestValidatorAdmitsDedicatedDeliveryStatusOperation(t *testing.T) {
 	if err := validator.ValidateOperation(request, []byte(validMinimalDSNSignJSON)); err != nil {
 		t.Fatalf("ValidateOperation() error = %v", err)
 	}
-	callerSelectedDomain := `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-05","message":{"raw_rfc5322_base64":""},"outer_smtp":{"mail_from":"<>","rcpt_to":["<sender@example.test>"]},"context":{"tenant":"tenant-a","domain":"example.test"}}`
+	callerSelectedDomain := `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-06","message":{"raw_rfc5322_base64":""},"outer_smtp":{"mail_from":"<>","rcpt_to":["<sender@example.test>"]},"context":{"tenant":"tenant-a","domain":"example.test"}}`
 	if err := validator.ValidateOperation(request, []byte(callerSelectedDomain)); !IsValidationError(err) {
 		t.Fatalf("ValidateOperation() admitted caller-selected DSN domain: %v", err)
 	}
-	callerSelectedCompatibility := `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-05","message":{"raw_rfc5322_base64":"","fidelity":"postfix_dsn_milter_reconstructed_crlf"},"outer_smtp":{"mail_from":"<>","rcpt_to":["<sender@example.test>"]},"context":{"tenant":"tenant-a"}}`
+	callerSelectedCompatibility := `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-06","message":{"raw_rfc5322_base64":"","fidelity":"postfix_dsn_milter_reconstructed_crlf"},"outer_smtp":{"mail_from":"<>","rcpt_to":["<sender@example.test>"]},"context":{"tenant":"tenant-a"}}`
 	if err := validator.ValidateOperation(request, []byte(callerSelectedCompatibility)); !IsValidationError(err) {
 		t.Fatalf("ValidateOperation() admitted caller-selected Postfix compatibility: %v", err)
 	}

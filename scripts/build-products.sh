@@ -86,7 +86,7 @@ printf '%s\n' \
   "dirty=$dirty" \
   "candidate_snapshot_sha256=$candidate" \
   "source_date_epoch=$source_date_epoch" \
-  "message_draft=draft-ietf-dkim-dkim2-spec-05" \
+  "message_draft=draft-ietf-dkim-dkim2-spec-06" \
   "dns_draft=draft-chuang-dkim2-dns-04" >"$work/build-info"
 for evidence in SHA256SUMS build-info; do
   GOCACHE="${GOCACHE:-/tmp/dkim2-go-build-cache}" \

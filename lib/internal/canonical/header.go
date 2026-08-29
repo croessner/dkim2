@@ -192,7 +192,7 @@ func excludedHeaderKindForName(nameLower string) excludedHeaderKind {
 	}
 }
 
-// exactUnsignedHeaderName reports the Draft-05 exact registered-field exclusions.
+// exactUnsignedHeaderName reports the Draft-06 exact registered-field exclusions.
 func exactUnsignedHeaderName(nameLower string) bool {
 	switch nameLower {
 	case "apparently-to", "auto-submitted", "dl-expansion-history", "original-recipient",

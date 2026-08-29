@@ -22,6 +22,7 @@ type SignatureSetFact struct {
 	Algorithm Algorithm
 	Status    SignatureStatus
 	Reason    Reason
+	Selector  string
 	KeyPolicy KeyPolicyMetadata
 }
 
@@ -70,6 +71,9 @@ func resultDataValid(state State, custody Custody, reason Reason, checks []Check
 	}
 	for _, fact := range signatures {
 		if !fact.Algorithm.Known() || !fact.Status.Known() || !fact.Reason.Known() || !fact.KeyPolicy.Valid() || !serviceResultKeyPolicyCoherent(fact) {
+			return false
+		}
+		if (fact.Status == SignatureFAIL) != (fact.Selector != "") || len(fact.Selector) > 253 {
 			return false
 		}
 	}

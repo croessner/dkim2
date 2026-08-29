@@ -1,8 +1,9 @@
 # Replay Store And Valkey Operations
 
-DKIM2 replay detection is an explicit local-policy facility. It does not alter
-DKIM2 signature, hash, recipe, custody, or aggregate verification correctness,
-and it does not decide an SMTP or adapter disposition.
+DKIM2 replay detection composes the final Draft-06 authentication result while
+leaving message-local signature, hash, recipe, custody, and envelope evidence
+immutable. Unexpected replay produces final `FAIL` with reason
+`duplicate_message_without_exploded`; ambiguity produces `TEMPERROR`.
 
 The library exposes a storage-neutral `CheckAndRemember` contract with bounded
 memory and disabled implementations. The production implementation is owned by
@@ -15,6 +16,14 @@ SET <protected-key> v1 NX PX <retention-milliseconds>
 An `OK` reply means first-seen and a null reply means replayed. A replay never
 extends the existing TTL. Once dispatch may have occurred, a transport failure
 is indeterminate and is never retried or followed by a compensating read.
+
+The single key represents the independently reconstructed `m=1` canonical
+header and body inputs, not a recipient or terminal route. Authenticated
+`exploded` changes a successful store result to the accepted `exploded` class,
+but the seen fact is still retained. The synchronous implementation accepts the
+first unmarked copy and rejects later unmarked copies during retention; expiry,
+process-local memory, asynchronous replication, restore, and cross-site
+separation prevent any global exactly-once claim.
 
 ## Production Topology
 
@@ -127,20 +136,20 @@ replication, OOM, and stale-evidence failures require revalidation. Application
 credential drift and internal contract failures require provider reconstruction
 or process restart.
 
-Draft-04 to Draft-05 migration and every later secret or epoch rotation is
+Draft-05 to Draft-06 migration and every later secret or epoch rotation is
 drain-only. The draft identifier is authenticated inside the replay HMAC
-frame, so Draft-04 records are intentionally unreachable from Draft-05 even
+frame, so Draft-04 records are intentionally unreachable from Draft-06 even
 when the namespace and fixed 68-byte storage-key shape stay unchanged:
 
 1. stop all replay traffic;
-2. keep the drained Draft-04 deployment, epoch, and secret authoritative and
+2. keep the drained Draft-05 deployment, epoch, and secret authoritative and
    quiescent for the complete thirty-day hard maximum retention;
 3. restart every active instance with the new shared epoch and secret set; and
 4. resume traffic only after the drain and restart are complete.
 
 Instant, partial, mixed-draft, mixed-instance, dual-epoch, fallback, and online
-migration states are unsupported and fail closed. Starting Draft-05 before the
-Draft-04 retention window drains creates a bounded replay-detection gap for
+migration states are unsupported and fail closed. Starting Draft-06 before the
+Draft-05 retention window drains creates a bounded replay-detection gap for
 old records; it is not a compatible rolling-upgrade mode and must be treated as
 an operator policy violation.
 
@@ -153,9 +162,8 @@ an operator policy violation.
 - The central observability runtime adds secret-safe logs, traces, and
   low-cardinality metrics. Replay keys, recipients, endpoints, credentials,
   raw replies, and raw errors are forbidden telemetry attributes and labels.
-- The Milter and Exim adapters apply replay disposition policy. The replay
-  store records only the bounded store fact and never chooses accept, reject,
-  quarantine, or tempfail.
+- The library authenticator composes the final replay state. Milter and Exim
+  consume daemon authority and never recompute identity or `exploded`.
 
 ## Local Verification
 
@@ -179,7 +187,7 @@ process and removes its directory on success, failure, timeout, or signal.
 ## Dependency And Supply-Chain Boundary
 
 The library module has no Valkey or daemon dependency. The
-`github.com/valkey-io/valkey-go` dependency is pinned to `v1.0.76`, licensed
+`github.com/valkey-io/valkey-go` dependency is pinned to `v1.0.77`, licensed
 under Apache-2.0, vendored reproducibly, and used only by the daemon-owned
 Valkey provider. Command modules import the public library facade and never
 `lib/internal`.

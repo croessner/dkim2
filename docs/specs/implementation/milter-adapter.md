@@ -1,8 +1,8 @@
 # Milter Adapter Implementation Specification
 
 > Historical Draft-04 implementation record. The original scope and evidence
-> below are preserved; current Draft-05 authority is the migration disposition
-> and the 2026-08-26 semantics audit.
+> below are preserved; current Draft-06 authority is the migration disposition
+> and current durable architecture.
 
 Status: implementation-ready planning baseline.
 
@@ -354,7 +354,7 @@ for future DSN support, not sufficient signing authority.
 
 The originator adapter tempfails every exact null reverse-path `<>`. The
 separate `postfix_dsn` adapter accepts only exact `internal` provenance from
-`{postfix_dsn_origin}` and then delegates RFC 3462 and Draft-04 Section 12
+`{postfix_dsn_origin}` and then delegates RFC 6522 and Draft-04 Section 12
 evidence checks to the daemon. External or absent provenance never authorizes
 signing.
 

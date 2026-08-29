@@ -18,8 +18,8 @@ limitations without creating a second protocol model.
 - [Security testing](../security-testing.md) defines resource, privacy, fuzz,
   race, and vulnerability evidence.
 - [Draft-05 semantics audit](../reports/draft-05-semantics-audit-2026-08-26.md)
-  records the current compatibility, diagnostics, replay, security, and
-  evidence boundaries.
+  records the historical Draft-05 compatibility, diagnostics, replay,
+  security, and evidence boundaries.
 - [Postfix deployment](../operator/postfix-compose.md) is the implemented
   adapter qualification and operator path.
 - [Exim operations](../operations/exim-adapter.md) and the historical

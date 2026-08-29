@@ -114,11 +114,11 @@ type ManagedReplayStore interface {
 	Close(context.Context) error
 }
 
-// ReplayIdentity is one immutable recipient-scoped authenticated replay identity.
+// ReplayIdentity is one immutable message-wide authenticated replay identity.
 type ReplayIdentity = replay.Identity
 
-// ReplayIdentitySet is one immutable complete set of recipient-scoped identities.
-type ReplayIdentitySet = replay.IdentitySet
+// ReplayIdentitySet is the compatibility container for one message-wide identity.
+type ReplayIdentitySet = replay.IdentitySet //nolint:staticcheck // Public compatibility remains until the documented API window closes.
 
 // ReplayDeriver owns one cloned deployment-local HMAC secret and its lifecycle.
 type ReplayDeriver = replay.Deriver

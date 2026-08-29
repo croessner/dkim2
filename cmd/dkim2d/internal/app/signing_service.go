@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/croessner/dkim2"
+	"github.com/croessner/dkim2/cmd/dkim2d/internal/config"
 	datasourceruntime "github.com/croessner/dkim2/cmd/dkim2d/internal/datasource/runtime"
 	"github.com/croessner/dkim2/cmd/dkim2d/internal/signingstore"
 	"github.com/croessner/dkim2/provider"
@@ -19,8 +20,55 @@ const signingRouteScope = "dkim2d-local-signing"
 type SigningService struct {
 	publicKeys  dkim2.PublicKeyProvider
 	store       signingAuthority
+	policies    signingPolicies
 	clock       func() time.Time
 	dsnObserver dsnEvidenceObserver
+}
+
+type signingFlagPolicy struct {
+	doNotModify  bool
+	doNotExplode bool
+}
+
+type signingPolicies struct {
+	originator      signingFlagPolicy
+	ordinaryTransit signingFlagPolicy
+	deliveryStatus  signingFlagPolicy
+}
+
+// metadata constructs validated library-owned signing metadata in canonical flag order.
+func (p signingFlagPolicy) metadata() (dkim2.SigningMetadata, error) {
+	flags := make([]dkim2.SigningFlag, 0, 2)
+	if p.doNotModify {
+		flags = append(flags, dkim2.SigningFlagDoNotModify)
+	}
+	if p.doNotExplode {
+		flags = append(flags, dkim2.SigningFlagDoNotExplode)
+	}
+	return dkim2.NewSigningMetadata(nil, false, flags)
+}
+
+// signingPoliciesFromConfig freezes validated configuration into application policy.
+func signingPoliciesFromConfig(policy config.SigningPoliciesConfig) signingPolicies {
+	convert := func(source config.SigningFlagPolicyConfig) signingFlagPolicy {
+		return signingFlagPolicy{doNotModify: source.DoNotModify(), doNotExplode: source.DoNotExplode()}
+	}
+	return signingPolicies{
+		originator:      convert(policy.Originator()),
+		ordinaryTransit: convert(policy.OrdinaryTransit()),
+		deliveryStatus:  convert(policy.DeliveryStatus()),
+	}
+}
+
+// selectPolicy validates the optional compatibility constructor argument.
+func selectPolicy(values []signingPolicies) (signingPolicies, error) {
+	if len(values) > 1 {
+		return signingPolicies{}, &DomainError{}
+	}
+	if len(values) == 1 {
+		return values[0], nil
+	}
+	return signingPolicies{}, nil
 }
 
 type dsnEvidenceObserver interface {
@@ -67,13 +115,18 @@ func NewSigningService(
 	publicKeys dkim2.PublicKeyProvider,
 	store *signingstore.Runtime,
 	allowRecipientGroup bool,
+	policy ...signingPolicies,
 ) (*SigningService, error) {
 	if nilInterface(publicKeys) || store == nil || allowRecipientGroup {
 		return nil, &DomainError{}
 	}
+	selected, err := selectPolicy(policy)
+	if err != nil {
+		return nil, err
+	}
 	return &SigningService{
 		publicKeys: publicKeys, store: flatSigningAuthority{runtime: store},
-		clock: time.Now,
+		policies: selected, clock: time.Now,
 	}, nil
 }
 
@@ -82,13 +135,19 @@ func NewDatasourceSigningService(
 	publicKeys dkim2.PublicKeyProvider,
 	runtime *datasourceruntime.Runtime,
 	allowRecipientGroup bool,
+	policy ...signingPolicies,
 ) (*SigningService, error) {
 	if nilInterface(publicKeys) || runtime == nil || allowRecipientGroup {
 		return nil, &DomainError{}
 	}
+	selected, err := selectPolicy(policy)
+	if err != nil {
+		return nil, err
+	}
 	return &SigningService{
 		publicKeys: publicKeys,
 		store:      datasourceSigningAuthority{runtime: runtime},
+		policies:   selected,
 		clock:      time.Now,
 	}, nil
 }
@@ -221,6 +280,14 @@ func (s *SigningService) execute(
 	if err := ctx.Err(); err != nil {
 		return operationExecution{}, err
 	}
+	policy := s.policies.originator
+	if operation == OperationRevise {
+		policy = s.policies.ordinaryTransit
+	}
+	metadata, err := policy.metadata()
+	if err != nil {
+		return operationExecution{}, &DomainError{}
+	}
 	recipients := request.Recipients()
 	disclosure := dkim2.RouteDisclosureSingle
 	use := signingstore.PolicyOriginator
@@ -283,7 +350,7 @@ func (s *SigningService) execute(
 		return operationExecution{}, &DomainError{}
 	}
 	result, err := completeOperation(
-		ctx, request, operation, signer, profile, recipients, disclosure,
+		ctx, request, operation, signer, profile, recipients, disclosure, metadata,
 	)
 	if err != nil {
 		return operationExecution{}, err
@@ -336,6 +403,7 @@ func completeOperation(
 	profile dkim2.SigningProfile,
 	recipients [][]byte,
 	disclosure dkim2.RouteDisclosure,
+	metadata dkim2.SigningMetadata,
 ) (OperationResult, error) {
 	raw := request.RawMessage()
 	reverse := request.ReversePath()
@@ -384,7 +452,7 @@ func completeOperation(
 		result, recovery, err = signer.SignOriginator(
 			ctx,
 			dkim2.NewOriginatorSigningRequest(
-				raw, reverse, recipients, ticket, profile, dkim2.SigningMetadata{},
+				raw, reverse, recipients, ticket, profile, metadata,
 				dkim2.SigningTransportFinalNetworkPreDotStuffing,
 			),
 		)
@@ -393,7 +461,7 @@ func completeOperation(
 			ctx,
 			dkim2.NewExistingSigningRequest(
 				capability, raw, reverse, recipients, ticket, profile,
-				dkim2.SigningMetadata{},
+				metadata,
 				dkim2.SigningTransportFinalNetworkPreDotStuffing,
 				dkim2.RejectUnavailableBody,
 				dkim2.RecipeCopyOnly,

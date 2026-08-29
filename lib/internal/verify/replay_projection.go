@@ -1,66 +1,36 @@
 package verify
 
 import (
-	"bytes"
 	"crypto/sha256"
 	"encoding/binary"
 	"fmt"
 	"io"
-	"slices"
-	"sort"
 
+	"github.com/croessner/dkim2/internal/canonical"
 	"github.com/croessner/dkim2/internal/instance"
+	"github.com/croessner/dkim2/internal/rawmsg"
 	"github.com/croessner/dkim2/internal/replay"
 	"github.com/croessner/dkim2/internal/signature"
 )
 
 const (
-	recipientScopeLabel          = "dkim2-replay-recipient-v1"
-	recipientScopeRedactedText   = "verify.recipientScope{redacted}"
+	originReplayDomainLabel      = "dkim2-replay-origin-v1"
+	originReplayAlgorithm        = "dkim2-replay-origin-sha256-v1"
 	replayProjectionRedactedText = "verify.ReplayProjection{redacted}"
 )
 
-// ReplayProjection carries sealed aggregate-current-PASS replay facts.
+// ReplayProjection carries sealed aggregate-chain-PASS replay facts.
 type ReplayProjection struct {
-	draft                   string
-	messageDigest           [32]byte
-	signatureInputDigest    [32]byte
-	recipientDigests        [][32]byte
-	hasMessageDigest        bool
-	hasSignatureInputDigest bool
-	exploded                bool
-	sealed                  bool
-}
-
-type recipientScope struct {
-	canonical string
-	digest    [32]byte
-	valid     bool
-}
-
-// String returns a constant representation without recipient or digest bytes.
-func (recipientScope) String() string { return recipientScopeRedactedText }
-
-// GoString returns a constant representation without recipient or digest bytes.
-func (recipientScope) GoString() string { return recipientScopeRedactedText }
-
-// Format prevents formatting from traversing recipient or digest bytes.
-func (recipientScope) Format(state fmt.State, _ rune) {
-	_, _ = io.WriteString(state, recipientScopeRedactedText)
+	draft           string
+	originDigest    [32]byte
+	hasOriginDigest bool
+	exploded        bool
+	sealed          bool
 }
 
 // Valid reports whether the projection contains complete baseline facts.
 func (p ReplayProjection) Valid() bool {
-	if !p.sealed || p.draft != replay.DraftIdentifier || !p.hasMessageDigest ||
-		!p.hasSignatureInputDigest || len(p.recipientDigests) == 0 {
-		return false
-	}
-	for index, digest := range p.recipientDigests {
-		if index > 0 && bytes.Compare(p.recipientDigests[index-1][:], digest[:]) >= 0 {
-			return false
-		}
-	}
-	return true
+	return p.sealed && p.draft == replay.DraftIdentifier && p.hasOriginDigest
 }
 
 // Draft returns the exact bounded behavior baseline.
@@ -71,33 +41,20 @@ func (p ReplayProjection) Draft() string {
 	return p.draft
 }
 
-// MessageDigest returns the locally computed canonical SHA-256 header digest by value.
-func (p ReplayProjection) MessageDigest() ([32]byte, bool) {
-	return p.messageDigest, p.Valid() && p.hasMessageDigest
+// OriginReplayDigest returns the locally computed message-wide origin digest by value.
+func (p ReplayProjection) OriginReplayDigest() ([32]byte, bool) {
+	return p.originDigest, p.Valid() && p.hasOriginDigest
 }
 
-// SignatureInputDigest returns the highest canonical signature-input digest by value.
-func (p ReplayProjection) SignatureInputDigest() ([32]byte, bool) {
-	return p.signatureInputDigest, p.Valid() && p.hasSignatureInputDigest
-}
-
-// RecipientCount returns the complete unique current-recipient count.
-func (p ReplayProjection) RecipientCount() int {
+// OriginReplayAlgorithm returns the frozen local equality algorithm.
+func (p ReplayProjection) OriginReplayAlgorithm() string {
 	if !p.Valid() {
-		return 0
+		return ""
 	}
-	return len(p.recipientDigests)
+	return originReplayAlgorithm
 }
 
-// RecipientDigest returns one sorted recipient-scope digest by value.
-func (p ReplayProjection) RecipientDigest(index int) ([32]byte, bool) {
-	if !p.Valid() || index < 0 || index >= len(p.recipientDigests) {
-		return [32]byte{}, false
-	}
-	return p.recipientDigests[index], true
-}
-
-// Exploded returns the authenticated complete-current-chain OR fact.
+// Exploded returns the authenticated complete-chain OR fact.
 func (p ReplayProjection) Exploded() bool { return p.Valid() && p.exploded }
 
 // String returns a constant representation without authenticated digest bytes.
@@ -112,110 +69,93 @@ func (ReplayProjection) Format(state fmt.State, _ rune) {
 }
 
 // clone returns an independent trusted-boundary projection.
-func (p ReplayProjection) clone() ReplayProjection {
-	p.recipientDigests = slices.Clone(p.recipientDigests)
-	return p
-}
+func (p ReplayProjection) clone() ReplayProjection { return p }
 
-// buildReplayProjection seals exact intermediates only after aggregate current PASS.
-func buildReplayProjection(
-	input verificationInput,
-	targetSignature signature.Signature,
-	targetInstance instance.MessageInstance,
-	hashes hashCheckResults,
-	signatureDigest []byte,
-	result Result,
-) (ReplayProjection, bool) {
+// buildReplayProjection seals exact origin intermediates only after aggregate current PASS.
+func buildReplayProjection(input verificationInput, targetSignature signature.Signature, targetInstance instance.MessageInstance, hashes hashCheckResults, signatureDigest []byte, result Result) (ReplayProjection, bool) {
 	target := result.Target()
 	if !aggregateCurrentPass(result) || target.Sequence != highestSignatureSequence(input.signatures) ||
-		target.InstanceNumber != highestInstanceNumber(input.instances) ||
-		targetSignature.Sequence() != target.Sequence ||
-		targetSignature.InstanceNumber() != target.InstanceNumber ||
-		targetInstance.Number() != target.InstanceNumber ||
-		!hashes.hasLocalHeaderSHA256 || len(signatureDigest) != sha256.Size ||
-		!resultHasEnvelopePass(result) || resultHasTestingOnlyPass(result) ||
-		len(input.signatures) != int(target.Sequence) {
+		target.InstanceNumber != highestInstanceNumber(input.instances) || targetSignature.Sequence() != target.Sequence ||
+		targetSignature.InstanceNumber() != target.InstanceNumber || targetInstance.Number() != target.InstanceNumber ||
+		!hashes.hasLocalHeaderSHA256 || !hashes.hasLocalBodySHA256 || len(signatureDigest) != sha256.Size ||
+		!resultHasEnvelopePass(result) || resultHasTestingOnlyPass(result) || len(input.signatures) != int(target.Sequence) {
 		return ReplayProjection{}, false
 	}
-
-	scopes := make(map[string]recipientScope, input.request.Envelope.RecipientCount())
-	for _, path := range input.request.Envelope.ForwardPaths() {
-		if !signature.ValidEnvelopePath(path, false) {
-			return ReplayProjection{}, false
-		}
-		scope, err := recipientScopeFromValidatedPath(path)
-		if err != nil || !scope.valid {
-			return ReplayProjection{}, false
-		}
-		scopes[scope.canonical] = scope
-	}
-	if len(scopes) == 0 {
-		return ReplayProjection{}, false
-	}
-
-	recipients := make([][32]byte, 0, len(scopes))
-	for _, scope := range scopes {
-		recipients = append(recipients, scope.digest)
-	}
-	sort.Slice(recipients, func(left int, right int) bool {
-		return bytes.Compare(recipients[left][:], recipients[right][:]) < 0
-	})
-	for index := 1; index < len(recipients); index++ {
-		if recipients[index-1] == recipients[index] {
-			return ReplayProjection{}, false
-		}
-	}
-
-	var canonicalSignatureDigest [32]byte
-	copy(canonicalSignatureDigest[:], signatureDigest)
 	exploded, complete := authenticatedExploded(input.signatures, target.Sequence)
 	if !complete {
 		return ReplayProjection{}, false
 	}
-	return ReplayProjection{
-		draft:                   replay.DraftIdentifier,
-		messageDigest:           hashes.localHeaderSHA256,
-		signatureInputDigest:    canonicalSignatureDigest,
-		recipientDigests:        recipients,
-		hasMessageDigest:        true,
-		hasSignatureInputDigest: true,
-		exploded:                exploded,
-		sealed:                  true,
-	}, true
+	// A current projection is authoritative for replay only when it is already m=1.
+	if target.InstanceNumber != 1 {
+		return ReplayProjection{}, false
+	}
+	digest, ok := originReplayDigest(input.request.Message)
+	if !ok {
+		return ReplayProjection{}, false
+	}
+	return newReplayProjection(digest, exploded), true
 }
 
-// recipientScopeFromValidatedPath canonicalizes one already-owner-validated bracketed path.
-func recipientScopeFromValidatedPath(path []byte) (recipientScope, error) {
-	canonicalPath, valid := signature.CanonicalEnvelopePath(path, false)
-	if !valid {
-		return recipientScope{}, malformedStateError(CheckKindEnvelope, Target{}, nil)
-	}
-	canonical := canonicalPath[1 : len(canonicalPath)-1]
+// newReplayProjection seals a verifier-computed fixed-size origin fact.
+func newReplayProjection(digest [32]byte, exploded bool) ReplayProjection {
+	return ReplayProjection{draft: replay.DraftIdentifier, originDigest: digest, hasOriginDigest: true, exploded: exploded, sealed: true}
+}
 
-	frame := make([]byte, 0, len(recipientScopeLabel)+1+4+len(canonical))
-	frame = append(frame, recipientScopeLabel...)
-	frame = append(frame, 0)
+// originReplayDigest hashes the exact Draft-06 origin header and body hash inputs.
+func originReplayDigest(message rawmsg.Message) ([32]byte, bool) {
+	canonicalizer, err := canonical.NewCanonicalizer()
+	if err != nil {
+		return [32]byte{}, false
+	}
+	header, err := canonicalizer.HeaderHashInputFromMessage(message)
+	if err != nil {
+		return [32]byte{}, false
+	}
+	body, err := canonicalizer.BodyHashInputFromMessage(message)
+	if err != nil {
+		return [32]byte{}, false
+	}
+	frame := originReplayFrame(header.Bytes(), body.Bytes())
+	return sha256.Sum256(frame), true
+}
+
+// originReplayFrame builds the frozen length-delimited origin input.
+func originReplayFrame(header, body []byte) []byte {
+	frame := make([]byte, 0, len(originReplayDomainLabel)+64+len(header)+len(body))
+	frame = append(frame, originReplayDomainLabel...)
+	frame = append(frame, 0, 1, 1)
+	frame = appendUint32ReplayField(frame, []byte(replay.DraftIdentifier))
+	frame = append(frame, 2)
+	frame = appendUint64ReplayField(frame, header)
+	frame = append(frame, 3)
+	return appendUint64ReplayField(frame, body)
+}
+
+// appendUint32ReplayField appends a network-order 32-bit byte length and value.
+func appendUint32ReplayField(output, value []byte) []byte {
 	var length [4]byte
-	binary.BigEndian.PutUint32(length[:], uint32(len(canonical)))
-	frame = append(frame, length[:]...)
-	frame = append(frame, canonical...)
-	return recipientScope{
-		canonical: string(canonical),
-		digest:    sha256.Sum256(frame),
-		valid:     true,
-	}, nil
+	binary.BigEndian.PutUint32(length[:], uint32(len(value)))
+	output = append(output, length[:]...)
+	return append(output, value...)
+}
+
+// appendUint64ReplayField appends a network-order 64-bit byte length and value.
+func appendUint64ReplayField(output, value []byte) []byte {
+	var length [8]byte
+	binary.BigEndian.PutUint64(length[:], uint64(len(value)))
+	output = append(output, length[:]...)
+	return append(output, value...)
 }
 
 // resultHasEnvelopePass proves the exact current SMTP envelope check succeeded.
 func resultHasEnvelopePass(result Result) bool {
 	count := 0
 	for _, check := range result.checks {
-		if check.Kind != CheckKindEnvelope {
-			continue
-		}
-		count++
-		if check.Status != CheckStatusPass || check.EnvelopeStatus != EnvelopeStatusPass {
-			return false
+		if check.Kind == CheckKindEnvelope {
+			count++
+			if check.Status != CheckStatusPass || check.EnvelopeStatus != EnvelopeStatusPass {
+				return false
+			}
 		}
 	}
 	return count == 1
@@ -225,21 +165,19 @@ func resultHasEnvelopePass(result Result) bool {
 func resultHasTestingOnlyPass(result Result) bool {
 	passing := 0
 	for _, set := range result.signatureSets {
-		if set.Status != SignatureSetStatusPass {
-			continue
-		}
-		passing++
-		if !set.KeyPolicy.TestingDeclared {
-			return false
+		if set.Status == SignatureSetStatusPass {
+			passing++
+			if !set.KeyPolicy.TestingDeclared {
+				return false
+			}
 		}
 	}
 	return passing > 0
 }
 
-// authenticatedExploded ORs the complete current signature chain covered by the highest input.
+// authenticatedExploded ORs the complete signature chain covered by the highest input.
 func authenticatedExploded(signatures []signature.Signature, highest uint64) (bool, bool) {
-	if highest == 0 || len(signatures) != int(highest) ||
-		signature.ValidateSequence(signatures) != nil {
+	if highest == 0 || len(signatures) != int(highest) || signature.ValidateSequence(signatures) != nil {
 		return false, false
 	}
 	exploded := false
@@ -247,9 +185,7 @@ func authenticatedExploded(signatures []signature.Signature, highest uint64) (bo
 		if parsed.Sequence() == 0 || parsed.Sequence() > highest {
 			return false, false
 		}
-		if parsed.Flags().HasKnown(signature.FlagExploded) {
-			exploded = true
-		}
+		exploded = exploded || parsed.Flags().HasKnown(signature.FlagExploded)
 	}
 	return exploded, true
 }

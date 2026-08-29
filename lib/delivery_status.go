@@ -239,7 +239,7 @@ func (r DSNSigningRequest) GoString() string { return r.String() }
 func (r DSNSigningRequest) Format(state fmt.State, _ rune) { _, _ = io.WriteString(state, r.String()) }
 
 // EvaluateDSNForSigning derives the sole opaque authorization for a null
-// reverse-path DSN after RFC 3462/3464 structure and recipient linkage,
+// reverse-path DSN after RFC 6522/3464 structure and recipient linkage,
 // embedded DKIM2 verification, and either derived or compatibility-bound
 // identity alignment all pass.
 func (s *Signer) EvaluateDSNForSigning(ctx context.Context, request DSNSigningEvidenceRequest) (DSNSigningEvidence, error) {

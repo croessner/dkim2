@@ -1,5 +1,5 @@
 // Package instance parses Message-Instance header fields for the DKIM2 draft
-// baseline draft-ietf-dkim-dkim2-spec-05.
+// baseline draft-ietf-dkim-dkim2-spec-06.
 //
 // The parser consumes immutable raw message header fields, accepts only
 // Message-Instance fields, and validates the field-local `m=`, `h=`, and

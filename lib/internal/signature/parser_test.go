@@ -80,14 +80,14 @@ func TestParseAcceptsInteropFWSAndMixedCaseTags(t *testing.T) {
 	}
 }
 
-// TestParseRejectsMissingFinalSemicolon reproduces the Draft-05 DKIM2-Signature terminator rule.
+// TestParseRejectsMissingFinalSemicolon reproduces the Draft-06 DKIM2-Signature terminator rule.
 func TestParseRejectsMissingFinalSemicolon(t *testing.T) {
 	if _, err := Parse(headerField(t, 0, "DKIM2-Signature", validSignatureValue())); err == nil {
 		t.Fatal("Parse() succeeded without the required final semicolon")
 	}
 }
 
-// TestParseAcceptsNextDomainEnvelopeForm reproduces the Draft-05 nd= envelope form.
+// TestParseAcceptsNextDomainEnvelopeForm reproduces the Draft-06 nd= envelope form.
 func TestParseAcceptsNextDomainEnvelopeForm(t *testing.T) {
 	parsed, err := Parse(dkim2SignatureField(t, 0, nextDomainSignatureValue()))
 	if err != nil {
@@ -314,7 +314,7 @@ func TestParseRejectsDuplicateSelectors(t *testing.T) {
 	}
 }
 
-// TestParseAllowsTwoSameAlgorithmDifferentSelectors proves the Draft-05 per-algorithm allowance.
+// TestParseAllowsTwoSameAlgorithmDifferentSelectors proves the Draft-06 per-algorithm allowance.
 func TestParseAllowsTwoSameAlgorithmDifferentSelectors(t *testing.T) {
 	value := testSelector + ":rsa-sha256:" + base64OfByte(0xaa, 64) +
 		", selector2:RSA-SHA256:" + base64OfByte(0xbb, 64)
@@ -328,7 +328,7 @@ func TestParseAllowsTwoSameAlgorithmDifferentSelectors(t *testing.T) {
 	}
 }
 
-// TestParseRejectsThirdSameAlgorithm proves the Draft-05 per-algorithm upper bound.
+// TestParseRejectsThirdSameAlgorithm proves the Draft-06 per-algorithm upper bound.
 func TestParseRejectsThirdSameAlgorithm(t *testing.T) {
 	value := "one:" + testExtensionAlgorithm + ":" + base64OfByte(0xaa, 48) +
 		", two:FUTURE-SHA999:" + base64OfByte(0xbb, 48) +

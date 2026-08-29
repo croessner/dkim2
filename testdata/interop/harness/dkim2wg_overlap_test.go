@@ -54,7 +54,7 @@ func loadDKIM2WGFixtureCase(t *testing.T, id string) dkim2wgFixtureCase {
 	return dkim2wgFixtureCase{}
 }
 
-// TestDKIM2WGMessageInstanceDuplicateHash verifies the peer enforces Draft-05 hash-algorithm uniqueness.
+// TestDKIM2WGMessageInstanceDuplicateHash verifies the peer enforces Draft-06 hash-algorithm uniqueness.
 func TestDKIM2WGMessageInstanceDuplicateHash(t *testing.T) {
 	testCase := loadDKIM2WGFixtureCase(t, "message-instance-duplicate-hash")
 	_, err := parseMI(testCase.Input)
@@ -63,7 +63,7 @@ func TestDKIM2WGMessageInstanceDuplicateHash(t *testing.T) {
 	}
 }
 
-// TestDKIM2WGSignatureFWS verifies the peer accepts Draft-05 FWS around tag separators.
+// TestDKIM2WGSignatureFWS verifies the peer accepts Draft-06 FWS around tag separators.
 func TestDKIM2WGSignatureFWS(t *testing.T) {
 	testCase := loadDKIM2WGFixtureCase(t, "signature-fws")
 	signature, err := parseSig(testCase.Input)
@@ -72,7 +72,7 @@ func TestDKIM2WGSignatureFWS(t *testing.T) {
 	}
 }
 
-// TestDKIM2WGSignatureSelectorCardinality verifies both Draft-05 signature-set bounds.
+// TestDKIM2WGSignatureSelectorCardinality verifies both Draft-06 signature-set bounds.
 func TestDKIM2WGSignatureSelectorCardinality(t *testing.T) {
 	duplicate := checkSignatureDuplicates([]SigItem{
 		{Selector: "Selector", Algorithm: "rsa-sha256"},
@@ -91,7 +91,7 @@ func TestDKIM2WGSignatureSelectorCardinality(t *testing.T) {
 	}
 }
 
-// TestDKIM2WGSignatureVerifyEd25519 verifies a local Draft-05 golden message in the independent peer.
+// TestDKIM2WGSignatureVerifyEd25519 verifies a local Draft-06 golden message in the independent peer.
 func TestDKIM2WGSignatureVerifyEd25519(t *testing.T) {
 	testCase := loadDKIM2WGFixtureCase(t, "signature-verify-ed25519")
 	message, err := base64.StdEncoding.DecodeString(testCase.InputBase64)
@@ -108,6 +108,6 @@ func TestDKIM2WGSignatureVerifyEd25519(t *testing.T) {
 		VerifyOptions{SkipTimestampCheck: true},
 	)
 	if err != nil || len(results) != 1 || results[0].Error != nil {
-		t.Fatal("peer rejected the local Draft-05 Ed25519 golden message")
+		t.Fatal("peer rejected the local Draft-06 Ed25519 golden message")
 	}
 }

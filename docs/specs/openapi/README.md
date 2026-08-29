@@ -11,7 +11,7 @@ Adapter-specific message fidelity values describe how message bytes were obtaine
 they do not create adapter-specific routes or parallel DTOs.
 
 The repository pins
-`github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen` at `v2.7.1`.
+`github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen` at `v2.8.0`.
 Generation must run through the repository-local `tools` module and the root
 Makefile:
 
@@ -33,7 +33,7 @@ the Milter and Exim public integration boundaries. All configurations preserve
 the original lower-camel operation identifiers.
 
 The inbound process operation has two success variants. HTTP 200 carries an
-applicable DKIM2 verification with one of the four Draft-05 states plus policy,
+applicable DKIM2 verification with one of the four Draft-06 states plus policy,
 replay, disposition, and actions. HTTP 204 is bodyless and means both DKIM2
 protocol field families were absent, so verification, DNS, policy, replay, and
 mutation were not applicable. Generated server and both client boundaries must
@@ -47,7 +47,7 @@ and the message continues unchanged. Datasource ambiguity, unavailability,
 degradation, malformed active data, and signing failures are never represented
 by this 204 variant.
 
-The delivery-status signing operation requires a strict RFC 3462 report and
+The delivery-status signing operation requires a strict RFC 6522 report and
 separate protected outer and original SMTP contexts. It is intentionally not a
 general process route: the daemon first authenticates the embedded original
 message's highest `mf=` identity, then applies the separate delivery-status

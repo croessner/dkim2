@@ -194,8 +194,8 @@ func TestReplayCoordinatorAcceptsFrozenGoldenPass(t *testing.T) {
 	}
 }
 
-// TestReplayCoordinatorPreservesAuthenticThreeRecipientOrder proves sealed ordering and derive-before-store.
-func TestReplayCoordinatorPreservesAuthenticThreeRecipientOrder(t *testing.T) {
+// TestReplayCoordinatorCollapsesRecipientsToOneMessageIdentity proves Draft-06 equality.
+func TestReplayCoordinatorCollapsesRecipientsToOneMessageIdentity(t *testing.T) {
 	recipients := [][]byte{
 		[]byte("<third@example.test>"),
 		[]byte("<first@example.test>"),
@@ -208,8 +208,8 @@ func TestReplayCoordinatorPreservesAuthenticThreeRecipientOrder(t *testing.T) {
 	}
 	secret := replayTestSecret()
 	expected := expectedReplayStorageOrder(t, verification, secret, 7)
-	if len(expected) != 3 {
-		t.Fatal("authentic replay projection omitted recipients")
+	if len(expected) != 1 {
+		t.Fatal("authentic replay projection did not collapse recipients")
 	}
 
 	inner, err := dkim2.NewReplayDeriver(secret, 7)
@@ -220,7 +220,7 @@ func TestReplayCoordinatorPreservesAuthenticThreeRecipientOrder(t *testing.T) {
 	deriver := &recordingReplayDeriver{inner: inner, failAt: -1, invalidAt: -1}
 	store := &recordingReplayStore{}
 	store.before = func(index int, _ context.Context) {
-		if index == 0 && deriver.Calls() != 3 {
+		if index == 0 && deriver.Calls() != 1 {
 			t.Error("store ran before every identity was derived")
 		}
 	}
@@ -228,7 +228,7 @@ func TestReplayCoordinatorPreservesAuthenticThreeRecipientOrder(t *testing.T) {
 	outcome, coordinateErr := coordinator.Coordinate(context.Background(), domain)
 	assertReplayOutcome(t, outcome, coordinateErr, ReplayResultFirstSeen, FinalDispositionAccept, true)
 	if !equalReplayStorage(expected, deriver.Storage()) ||
-		!equalReplayStorage(expected, store.Storage()) || store.Calls() != 3 {
+		!equalReplayStorage(expected, store.Storage()) || store.Calls() != 1 {
 		t.Fatal("coordinator changed canonical identity or store order")
 	}
 }
@@ -258,7 +258,6 @@ func TestReplayCoordinatorGateAndDisabledPerformNoWork(t *testing.T) {
 		domain      DomainResult
 		disposition FinalDisposition
 	}{
-		{"pass testing", passTesting, FinalDispositionContinue},
 		{"permerror strict", malformedStrict, FinalDispositionReject},
 		{"permerror permissive", malformedPermissive, FinalDispositionAccept},
 		{"permerror testing", malformedTesting, FinalDispositionContinue},
@@ -275,11 +274,13 @@ func TestReplayCoordinatorGateAndDisabledPerformNoWork(t *testing.T) {
 			}
 		})
 	}
+	testingOutcome, testingErr := enabled.Coordinate(context.Background(), passTesting)
+	assertReplayOutcome(t, testingOutcome, testingErr, ReplayResultFirstSeen, FinalDispositionContinue, true)
 
 	disabled := NewDisabledReplayCoordinator()
 	outcome, coordinateErr := disabled.Coordinate(context.Background(), passStrict)
 	assertReplayOutcome(t, outcome, coordinateErr, ReplayResultDisabled, FinalDispositionAccept, false)
-	if deriver.Calls() != 0 || store.Calls() != 0 {
+	if deriver.Calls() != 1 || store.Calls() != 1 {
 		t.Fatal("disabled replay performed derivation or storage work")
 	}
 }
@@ -296,8 +297,8 @@ func TestReplayCoordinatorDerivationFailuresAreZeroWrite(t *testing.T) {
 		failAt    int
 		invalidAt int
 	}{
-		{"typed failure", 1, -1},
-		{"invalid key", -1, 1},
+		{"typed failure", 0, -1},
+		{"invalid key", -1, 0},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			inner, err := dkim2.NewReplayDeriver(replayTestSecret(), 1)
@@ -353,7 +354,7 @@ func TestReplayCoordinatorAggregateMatrix(t *testing.T) {
 		{
 			"mixed",
 			[]replayStoreResponse{{check: dkim2.ReplayCheckReplayed}, {check: dkim2.ReplayCheckFirstSeen}, {check: dkim2.ReplayCheckReplayed}},
-			ReplayResultReplayed, FinalDispositionReject, true,
+			ReplayResultReplayed, FinalDispositionReject, false,
 		},
 		{
 			"enabled disabled contradiction",
@@ -371,7 +372,7 @@ func TestReplayCoordinatorAggregateMatrix(t *testing.T) {
 			coordinator, store := scriptedReplayCoordinator(t, test.responses)
 			outcome, coordinateErr := coordinator.Coordinate(context.Background(), domain)
 			assertReplayOutcome(t, outcome, coordinateErr, test.class, test.final, test.mutation)
-			if store.Calls() != 3 {
+			if store.Calls() != 1 {
 				t.Fatal("ordinary aggregate processing stopped before the complete batch")
 			}
 		})
@@ -391,14 +392,14 @@ func TestReplayCoordinatorContinuesEveryOrdinaryFailure(t *testing.T) {
 		mutation  bool
 		wantCalls int
 	}{
-		{"limit", replayStoreResponse{err: dkim2.NewReplayError(dkim2.ReplayErrorLimitExceeded)}, false, 3},
-		{"unavailable", replayStoreResponse{err: dkim2.NewReplayError(dkim2.ReplayErrorUnavailable)}, false, 3},
-		{"closed", replayStoreResponse{err: dkim2.NewReplayError(dkim2.ReplayErrorClosed)}, false, 3},
-		{"invalid", replayStoreResponse{err: dkim2.NewReplayError(dkim2.ReplayErrorInvalidRequest)}, true, 3},
-		{"misconfigured", replayStoreResponse{err: dkim2.NewReplayError(dkim2.ReplayErrorMisconfigured)}, true, 3},
-		{telemetryReplayIndeterminate, replayStoreResponse{err: dkim2.NewReplayError(dkim2.ReplayErrorIndeterminate)}, true, 3},
-		{"inconsistent", replayStoreResponse{err: dkim2.NewReplayError(dkim2.ReplayErrorInconsistent)}, true, 3},
-		{"invariant", replayStoreResponse{err: dkim2.NewReplayError(dkim2.ReplayErrorInternalInvariant)}, true, 3},
+		{"limit", replayStoreResponse{err: dkim2.NewReplayError(dkim2.ReplayErrorLimitExceeded)}, false, 1},
+		{"unavailable", replayStoreResponse{err: dkim2.NewReplayError(dkim2.ReplayErrorUnavailable)}, false, 1},
+		{"closed", replayStoreResponse{err: dkim2.NewReplayError(dkim2.ReplayErrorClosed)}, false, 1},
+		{"invalid", replayStoreResponse{err: dkim2.NewReplayError(dkim2.ReplayErrorInvalidRequest)}, true, 1},
+		{"misconfigured", replayStoreResponse{err: dkim2.NewReplayError(dkim2.ReplayErrorMisconfigured)}, true, 1},
+		{telemetryReplayIndeterminate, replayStoreResponse{err: dkim2.NewReplayError(dkim2.ReplayErrorIndeterminate)}, true, 1},
+		{"inconsistent", replayStoreResponse{err: dkim2.NewReplayError(dkim2.ReplayErrorInconsistent)}, true, 1},
+		{"invariant", replayStoreResponse{err: dkim2.NewReplayError(dkim2.ReplayErrorInternalInvariant)}, true, 1},
 		{"live typed cancel", replayStoreResponse{err: dkim2.NewReplayError(dkim2.ReplayErrorCancelled)}, true, 1},
 		{"live typed deadline", replayStoreResponse{err: dkim2.NewReplayError(dkim2.ReplayErrorDeadlineExceeded)}, true, 1},
 		{
@@ -419,7 +420,7 @@ func TestReplayCoordinatorContinuesEveryOrdinaryFailure(t *testing.T) {
 			true,
 			1,
 		},
-		{"unknown", replayStoreResponse{err: errors.New("TOXIC-REPLAY-STORE-ERROR")}, true, 3},
+		{"unknown", replayStoreResponse{err: errors.New("TOXIC-REPLAY-STORE-ERROR")}, true, 1},
 		{
 			"contradictory result and error",
 			replayStoreResponse{
@@ -427,7 +428,7 @@ func TestReplayCoordinatorContinuesEveryOrdinaryFailure(t *testing.T) {
 				err:   dkim2.NewReplayError(dkim2.ReplayErrorUnavailable),
 			},
 			true,
-			3,
+			1,
 		},
 	}
 	for _, test := range tests {
@@ -485,7 +486,7 @@ func TestReplayCoordinatorContextBoundariesProveMutationPrecedence(t *testing.T)
 		deriver := &recordingReplayDeriver{
 			inner: inner, failAt: -1, invalidAt: -1,
 			after: func(index int) {
-				if index == 1 {
+				if index == 0 {
 					cancel()
 				}
 			},
@@ -669,10 +670,8 @@ func TestReplayOutcomeRejectsImpossibleMatrixMembers(t *testing.T) {
 	for _, state := range []replayOutcomeState{
 		{},
 		{class: 255, disposition: FinalDispositionAccept},
-		{class: ReplayResultDisabled, disposition: FinalDispositionReject},
 		{class: ReplayResultDisabled, disposition: FinalDispositionAccept, possibleMutation: true},
 		{class: ReplayResultFirstSeen, disposition: FinalDispositionAccept},
-		{class: ReplayResultFirstSeen, disposition: FinalDispositionReject, possibleMutation: true},
 		{class: ReplayResultReplayed, disposition: FinalDispositionAccept},
 		{class: ReplayResultIndeterminate, disposition: FinalDispositionAccept, possibleMutation: true},
 	} {
@@ -913,7 +912,7 @@ func authenticReplayDomain(
 func goldenReplayDomain(t *testing.T, mode config.PolicyMode) DomainResult {
 	t.Helper()
 	corpusBytes, err := os.ReadFile(
-		"../../../../lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-05/public-golden.json",
+		"../../../../lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-06/public-golden.json",
 	)
 	if err != nil {
 		t.Fatal("golden replay fixture unavailable")

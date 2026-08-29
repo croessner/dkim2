@@ -49,7 +49,7 @@ func AdmitProcessJSON(body []byte, authservID string) (adapter.Plan, error) {
 	if !strictDecode(body, &value) || !validProcess(value, authservID) {
 		return adapter.Plan{}, contractError()
 	}
-	result, ok := verificationResult(value.Verification.State)
+	result, ok := verificationResult(value.Authentication.State)
 	if !ok {
 		return adapter.Plan{}, contractError()
 	}
@@ -71,7 +71,7 @@ func AdmitProcessJSON(body []byte, authservID string) (adapter.Plan, error) {
 // admitOperation proves the exact operation/result/disposition/action matrix.
 func admitOperation(value generated.OperationResponse, operation string) (adapter.Plan, error) {
 	if value.ApiVersion != generated.V1 ||
-		value.Draft != generated.DraftIetfDkimDkim2Spec05 ||
+		value.Draft != generated.DraftIetfDkimDkim2Spec06 ||
 		string(value.Operation) != operation || !value.Operation.Valid() ||
 		!value.Result.Valid() || !value.Disposition.Valid() || value.Actions == nil {
 		return adapter.Plan{}, contractError()
@@ -182,8 +182,9 @@ func validResultDisposition(
 // validProcess proves the closed nested process projection and report action.
 func validProcess(value generated.ProcessResponse, authservID string) bool {
 	if value.ApiVersion != generated.V1 ||
-		value.Draft != generated.DraftIetfDkimDkim2Spec05 ||
+		value.Draft != generated.DraftIetfDkimDkim2Spec06 ||
 		!value.Disposition.Valid() || value.Actions == nil ||
+		!validAuthentication(value.Authentication) ||
 		!validVerification(value.Verification) || !validPolicy(value.Policy) ||
 		!value.Replay.Class.Valid() || !validProcessMatrix(value) {
 		return false
@@ -191,7 +192,7 @@ func validProcess(value generated.ProcessResponse, authservID string) bool {
 	if value.Disposition != generated.DispositionAccept || authservID == "" {
 		return len(value.Actions) == 0
 	}
-	result, ok := verificationResult(value.Verification.State)
+	result, ok := verificationResult(value.Authentication.State)
 	return ok && len(value.Actions) == 1 &&
 		value.Actions[0].Type == generated.AddHeader &&
 		value.Actions[0].Name == generated.AuthenticationResults &&
@@ -201,25 +202,36 @@ func validProcess(value generated.ProcessResponse, authservID string) bool {
 // validProcessMatrix preserves replay and policy coordinator semantics.
 func validProcessMatrix(value generated.ProcessResponse) bool {
 	switch value.Replay.Class {
-	case generated.Disabled, generated.FirstSeen:
-		return value.Disposition == generated.DispositionAccept &&
-			value.Verification.State == generated.PASS &&
-			value.Policy.Verdict == generated.PolicyResultVerdictAccept
+	case generated.Disabled, generated.FirstSeen, generated.Exploded:
+		return value.Verification.State == generated.PASS &&
+			value.Authentication.State == generated.PASS &&
+			value.Authentication.PrimaryReason == generated.AuthenticationResultPrimaryReasonNone &&
+			string(value.Disposition) == string(value.Policy.Verdict)
 	case generated.Replayed:
 		return value.Disposition == generated.DispositionReject &&
 			value.Verification.State == generated.PASS &&
-			value.Policy.Verdict == generated.PolicyResultVerdictAccept
+			value.Authentication.State == generated.FAIL &&
+			value.Authentication.PrimaryReason == generated.AuthenticationResultPrimaryReasonDuplicateMessageWithoutExploded
 	case generated.Indeterminate:
 		return value.Disposition == generated.DispositionTempfail &&
 			value.Verification.State == generated.PASS &&
-			value.Policy.Verdict == generated.PolicyResultVerdictAccept
+			value.Authentication.State == generated.TEMPERROR &&
+			(value.Authentication.PrimaryReason == generated.AuthenticationResultPrimaryReasonReplayIndeterminate ||
+				value.Authentication.PrimaryReason == generated.AuthenticationResultPrimaryReasonReplayEvidenceUnavailable)
 	case generated.NotChecked:
 		return (value.Verification.State != generated.PASS ||
 			value.Policy.Verdict != generated.PolicyResultVerdictAccept) &&
+			value.Authentication.State == value.Verification.State &&
+			string(value.Authentication.PrimaryReason) == string(value.Verification.PrimaryReason) &&
 			string(value.Disposition) == string(value.Policy.Verdict)
 	default:
 		return false
 	}
+}
+
+// validAuthentication validates the authoritative final result vocabulary.
+func validAuthentication(value generated.AuthenticationResult) bool {
+	return value.State.Valid() && value.PrimaryReason.Valid()
 }
 
 // validVerification validates every bounded generated verification fact.
@@ -243,11 +255,20 @@ func validVerification(value generated.VerificationResult) bool {
 	}
 	for _, signature := range value.SignatureSets {
 		if !signature.Algorithm.Valid() || !signature.Status.Valid() ||
-			!signature.Reason.Valid() || bool(signature.KeyPolicy.StrictIdentityApplicable) {
+			!signature.Reason.Valid() || bool(signature.KeyPolicy.StrictIdentityApplicable) ||
+			!validSignatureSelector(signature.Status, signature.Selector) {
 			return false
 		}
 	}
 	return true
+}
+
+// validSignatureSelector admits a bounded selector only for cryptographic failures.
+func validSignatureSelector(status generated.SignatureSetResultStatus, selector *string) bool {
+	if status != generated.SignatureSetResultStatusFail {
+		return selector == nil
+	}
+	return selector != nil && len(*selector) >= 1 && len(*selector) <= 253
 }
 
 func verificationCoverageCoherent(state generated.VerificationState, scope generated.VerificationResultScope, content generated.VerificationResultHistoricalContent, signatures generated.VerificationResultHistoricalSignatures) bool {
@@ -289,9 +310,12 @@ func requiredOperationMembers(body []byte) bool {
 func requiredProcessMembers(body []byte) bool {
 	document, ok := requiredObject(
 		body, "actions", "api_version", "disposition", "draft", "policy", "replay",
-		"verification",
+		"authentication", "verification",
 	)
 	if !ok || !requiredActionMembers(document["actions"]) {
+		return false
+	}
+	if _, authOK := requiredObject(document["authentication"], "primary_reason", "state"); !authOK {
 		return false
 	}
 	verification, ok := requiredObject(
@@ -336,7 +360,7 @@ func requiredSignatureSetMembers(data []byte) bool {
 		fields, ok := requiredObject(
 			signature, "algorithm", "key_policy", "reason", "status",
 		)
-		if !ok {
+		if !ok || !validOptionalJSONMember(fields, "selector") {
 			return false
 		}
 		if _, ok = requiredObject(

@@ -108,7 +108,7 @@ func TestHandlerUsesExactInboundGeneratedOperation(t *testing.T) {
 		reporting, _ := document["reporting"].(map[string]any)
 		recipients, _ := smtpInput["rcpt_to"].([]any)
 		if document["api_version"] != "v1" ||
-			document["draft"] != "draft-ietf-dkim-dkim2-spec-05" ||
+			document["draft"] != "draft-ietf-dkim-dkim2-spec-06" ||
 			messageInput["fidelity"] != "milter_reconstructed_crlf" ||
 			messageInput["raw_rfc5322_base64"] != expectedRaw ||
 			smtpInput["mail_from"] != "<a@example.test>" ||
@@ -377,7 +377,7 @@ func TestHandlerNonOKResponseIsContractFailure(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
 		writer.Header().Set("Content-Type", "application/json")
 		writer.WriteHeader(http.StatusServiceUnavailable)
-		_, _ = io.WriteString(writer, `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-05","code":"service_unavailable","category":"availability"}`)
+		_, _ = io.WriteString(writer, `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-06","code":"service_unavailable","category":"availability"}`)
 	}))
 	defer server.Close()
 	handler, err := NewHandler(
@@ -494,7 +494,7 @@ func TestObservedDomainsMatchesAuthoritativeRouteSelection(t *testing.T) {
 }
 
 // TestHandlerTempfailsNullReversePathUntilPrevalidatedDSNGateExists reproduces
-// the missing Draft-05 Section 12.1 trusted-evidence gate.
+// the missing Draft-06 Section 12.1 trusted-evidence gate.
 func TestHandlerTempfailsNullReversePathUntilPrevalidatedDSNGateExists(t *testing.T) {
 	calls := 0
 	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
@@ -722,6 +722,8 @@ func TestProcessContractAdmitsPermerrorPolicyAcceptance(t *testing.T) {
 	value.Replay.Class = generated.NotChecked
 	value.Verification.State = generated.PERMERROR
 	value.Verification.PrimaryReason = generated.VerificationReasonMalformedProtocol
+	value.Authentication.State = generated.PERMERROR
+	value.Authentication.PrimaryReason = generated.AuthenticationResultPrimaryReasonMalformedProtocol
 	value.Verification.Checks[0].Reason = generated.VerificationReasonMalformedProtocol
 	value.Verification.Scope = generated.Current
 	value.Verification.HistoricalContent = generated.VerificationResultHistoricalContentNotEvaluated
@@ -879,7 +881,7 @@ func validOperationResponse(operation generated.OperationResponseOperation) gene
 	return generated.OperationResponse{
 		Actions: generated.ActionPlan{}, ApiVersion: generated.V1,
 		Disposition: generated.DispositionReject,
-		Draft:       generated.DraftIetfDkimDkim2Spec05,
+		Draft:       generated.DraftIetfDkimDkim2Spec06,
 		Operation:   operation, Result: generated.OperationResponseResultFail,
 	}
 }
@@ -893,7 +895,11 @@ func validProcessResponse() generated.ProcessResponse {
 		}},
 		ApiVersion:  generated.V1,
 		Disposition: generated.DispositionAccept,
-		Draft:       generated.DraftIetfDkimDkim2Spec05,
+		Draft:       generated.DraftIetfDkimDkim2Spec06,
+		Authentication: generated.AuthenticationResult{
+			PrimaryReason: generated.AuthenticationResultPrimaryReasonNone,
+			State:         generated.PASS,
+		},
 		Verification: generated.VerificationResult{
 			Checks: []generated.VerificationCheck{{
 				Class:  generated.VerificationCheckClassProtocol,
@@ -924,9 +930,9 @@ func validProcessResponse() generated.ProcessResponse {
 	}
 }
 
-// TestDraft05PermanentReasonsDoNotTempfail proves every new protocol
+// TestDraft06PermanentReasonsDoNotTempfail proves every new protocol
 // infraction remains a permanent rejection at the Milter daemon boundary.
-func TestDraft05PermanentReasonsDoNotTempfail(t *testing.T) {
+func TestDraft06PermanentReasonsDoNotTempfail(t *testing.T) {
 	for _, reason := range []generated.VerificationReason{
 		generated.VerificationReasonDuplicateHashAlgorithm,
 		generated.VerificationReasonInvalidRecipeJson,
@@ -936,9 +942,11 @@ func TestDraft05PermanentReasonsDoNotTempfail(t *testing.T) {
 		value := validProcessResponse()
 		value.Actions = generated.ActionPlan{}
 		value.Disposition = generated.DispositionReject
-		value.Draft = generated.DraftIetfDkimDkim2Spec05
+		value.Draft = generated.DraftIetfDkimDkim2Spec06
 		value.Verification.State = generated.PERMERROR
 		value.Verification.PrimaryReason = reason
+		value.Authentication.State = generated.PERMERROR
+		value.Authentication.PrimaryReason = generated.AuthenticationResultPrimaryReason(reason)
 		value.Verification.Scope = generated.Current
 		value.Verification.HistoricalContent = generated.VerificationResultHistoricalContentNotEvaluated
 		value.Verification.HistoricalSignatures = generated.VerificationResultHistoricalSignaturesNotEvaluated

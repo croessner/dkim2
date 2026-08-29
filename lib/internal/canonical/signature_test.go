@@ -73,7 +73,7 @@ func TestSignatureInputNullsMultiAlgorithmSets(t *testing.T) {
 	}
 }
 
-// TestSignatureInputPreservesTargetTagSpellingAndTerminator verifies Draft-05 target rendering fidelity.
+// TestSignatureInputPreservesTargetTagSpellingAndTerminator verifies Draft-06 target rendering fidelity.
 func TestSignatureInputPreservesTargetTagSpellingAndTerminator(t *testing.T) {
 	hash := sha256HashText()
 	signatureText := base64Text("target signature")
@@ -96,7 +96,7 @@ func TestSignatureInputPreservesTargetTagSpellingAndTerminator(t *testing.T) {
 	}
 }
 
-// TestSignatureInputPreservesNextDomainEnvelopeForm verifies Draft-05 nd= target rendering.
+// TestSignatureInputPreservesNextDomainEnvelopeForm verifies Draft-06 nd= target rendering.
 func TestSignatureInputPreservesNextDomainEnvelopeForm(t *testing.T) {
 	msg := mustParseSignatureMessage(t,
 		messageInstanceLine(1, "state")+

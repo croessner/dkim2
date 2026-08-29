@@ -80,7 +80,7 @@ func TestVerifyResultAccessorsAreImmutable(t *testing.T) {
 		newCheckFact(CheckClassSignature, ReasonNone),
 	}
 	signatures := []SignatureSetFact{
-		newSignatureSetFact(AlgorithmRSASHA256, SignatureStatusPASS, ReasonNone),
+		newSignatureSetFact(AlgorithmRSASHA256, SignatureStatusPASS, ReasonNone, ""),
 	}
 	result := newVerifyResult(verifyResultData{
 		state:                ResultStatePASS,
@@ -141,7 +141,7 @@ func TestVerifyResultRejectsMetadataWithoutUniqueKey(t *testing.T) {
 		state: ResultStatePERMERROR, scope: VerificationScopeCurrent,
 		historicalContent: HistoricalStateNotEvaluated, historicalSignatures: HistoricalStateNotEvaluated,
 		custodyStructure: CustodyStructureNotPresent, primaryReason: ReasonMissingKey,
-		signatures: []SignatureSetFact{newSignatureSetFact(AlgorithmRSASHA256, SignatureStatusPERMERROR, ReasonMissingKey, newKeyPolicyMetadata(true, false))},
+		signatures: []SignatureSetFact{newSignatureSetFact(AlgorithmRSASHA256, SignatureStatusPERMERROR, ReasonMissingKey, "", newKeyPolicyMetadata(true, false))},
 	})
 	if result.PrimaryReason() != ReasonInternalContract {
 		t.Fatalf("PrimaryReason() = %q", result.PrimaryReason())

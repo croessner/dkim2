@@ -2,7 +2,7 @@ package canonical
 
 const (
 	// DraftBaseline identifies the active DKIM2 canonicalization draft.
-	DraftBaseline = "draft-ietf-dkim-dkim2-spec-05"
+	DraftBaseline = "draft-ietf-dkim-dkim2-spec-06"
 	// HashAlgorithmSHA256 identifies the supported SHA-256 Message-Instance hash.
 	HashAlgorithmSHA256 HashAlgorithm = "sha256"
 	// HashAlgorithmSHA512 identifies the supported SHA-512 Message-Instance hash.

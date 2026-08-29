@@ -4,7 +4,7 @@
   "additionalProperties": false,
   "properties": {
     "schema": {"const": "dkim2.interop-discovery-registry.v1"},
-    "message_draft": {"const": "draft-ietf-dkim-dkim2-spec-05"},
+    "message_draft": {"const": "draft-ietf-dkim-dkim2-spec-06"},
     "dns_draft": {"const": "draft-chuang-dkim2-dns-04"},
     "max_age_hours": {"maximum": 168, "minimum": 1, "type": "integer"},
     "retrieval_policy": {

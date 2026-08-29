@@ -7,7 +7,7 @@ import (
 )
 
 const outputSchema = "dkim2ctl.result.v1"
-const draftVersion = "draft-ietf-dkim-dkim2-spec-05"
+const draftVersion = "draft-ietf-dkim-dkim2-spec-06"
 const outcomeMatch = "match"
 const outcomeMismatch = "mismatch"
 const outcomeError = "error"
@@ -15,19 +15,20 @@ const errorClassInternal = "internal"
 
 // ResultRecord is the exact stable JSONL projection for one executed case.
 type ResultRecord struct {
-	Schema            string  `json:"schema"`
-	Draft             string  `json:"draft"`
-	Fixture           *string `json:"fixture"`
-	Case              *string `json:"case"`
-	Operation         *string `json:"operation"`
-	Outcome           string  `json:"outcome"`
-	HTTPStatus        *int    `json:"http_status"`
-	ErrorClass        *string `json:"error_class"`
-	DurationBucket    *string `json:"duration_bucket"`
-	Disposition       *string `json:"disposition"`
-	VerificationState *string `json:"verification_state"`
-	PolicyVerdict     *string `json:"policy_verdict"`
-	ReplayClass       *string `json:"replay_class"`
+	Schema              string  `json:"schema"`
+	Draft               string  `json:"draft"`
+	Fixture             *string `json:"fixture"`
+	Case                *string `json:"case"`
+	Operation           *string `json:"operation"`
+	Outcome             string  `json:"outcome"`
+	HTTPStatus          *int    `json:"http_status"`
+	ErrorClass          *string `json:"error_class"`
+	DurationBucket      *string `json:"duration_bucket"`
+	Disposition         *string `json:"disposition"`
+	VerificationState   *string `json:"verification_state"`
+	AuthenticationState *string `json:"authentication_state"`
+	PolicyVerdict       *string `json:"policy_verdict"`
+	ReplayClass         *string `json:"replay_class"`
 }
 
 // WriteFailure emits one content-free command-level failure record.
@@ -87,9 +88,10 @@ func validResultRecord(record ResultRecord) bool {
 	}
 	return validOptionalEnum(record.Disposition, "accept", "reject", "tempfail", "continue") &&
 		validOptionalEnum(record.VerificationState, "PASS", "FAIL", "PERMERROR", "TEMPERROR") &&
+		validOptionalEnum(record.AuthenticationState, "PASS", "FAIL", "PERMERROR", "TEMPERROR") &&
 		validOptionalEnum(record.PolicyVerdict, "accept", "reject", "tempfail", "continue") &&
 		validOptionalEnum(record.ReplayClass,
-			"not_checked", "disabled", "first_seen", "replayed", "indeterminate")
+			"not_checked", "disabled", "first_seen", "exploded", "replayed", "indeterminate")
 }
 
 // validDurationBucket checks the exact bounded timing vocabulary.

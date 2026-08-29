@@ -37,6 +37,11 @@ type VerificationService interface {
 	Assess(context.Context, dkim2.VerifyRequest) (dkim2.VerificationAssessment, error)
 }
 
+// AuthenticationService is the narrow library-owned final Draft-06 boundary.
+type AuthenticationService interface {
+	AuthenticateVerified(context.Context, dkim2.VerifyResult) (dkim2.AuthenticationResult, error)
+}
+
 // DNSVerifier owns one bounded DNS provider and the verifier built from that
 // exact provider so revision signing cannot drift to a second resolver model.
 type DNSVerifier struct {
@@ -62,6 +67,7 @@ type DomainProcessor struct {
 
 type domainProcessorState struct {
 	verifier VerificationService
+	auth     AuthenticationService
 	mode     dkim2.PolicyMode
 	runtime  *observability.Runtime
 }
@@ -75,10 +81,11 @@ func (p *DomainProcessor) attachObservability(runtime *observability.Runtime) {
 
 // DomainResult keeps verification and local policy separate for replay coordination.
 type DomainResult struct {
-	initialized  bool
-	applicable   bool
-	verification dkim2.VerifyResult
-	policy       dkim2.PolicyDecision
+	initialized    bool
+	applicable     bool
+	verification   dkim2.VerifyResult
+	authentication dkim2.AuthenticationResult
+	policy         dkim2.PolicyDecision
 }
 
 // NewDNSVerifier constructs one instance-owned bounded DNS verifier.
@@ -145,12 +152,17 @@ func (v *DNSVerifier) LookupPublicKey(
 }
 
 // NewDomainProcessor constructs one immutable verification and policy service.
-func NewDomainProcessor(verifier VerificationService, mode config.PolicyMode) (*DomainProcessor, error) {
+func NewDomainProcessor(verifier VerificationService, mode config.PolicyMode, authentication ...AuthenticationService) (*DomainProcessor, error) {
 	policyMode, ok := mapPolicyMode(mode)
-	if nilVerificationService(verifier) || !ok {
+	if nilVerificationService(verifier) || !ok || len(authentication) > 1 ||
+		len(authentication) == 1 && nilInterface(authentication[0]) {
 		return nil, &DomainError{}
 	}
-	return &DomainProcessor{state: &domainProcessorState{verifier: verifier, mode: policyMode}}, nil
+	var auth AuthenticationService
+	if len(authentication) == 1 {
+		auth = authentication[0]
+	}
+	return &DomainProcessor{state: &domainProcessorState{verifier: verifier, auth: auth, mode: policyMode}}, nil
 }
 
 // Process performs current verification and server-owned local policy evaluation.
@@ -194,12 +206,29 @@ func (p *DomainProcessor) Process(ctx context.Context, request dkim2.VerifyReque
 	}
 	defer finishPolicy(observability.SpanInternalError)
 	policyStarted := time.Now()
-	policy, err := dkim2.EvaluatePolicy(verification, dkim2.WithPolicyMode(p.state.mode))
-	if contextErr := domainContextError(ctx); contextErr != nil {
+	var authentication dkim2.AuthenticationResult
+	if !nilInterface(p.state.auth) {
+		authentication, err = p.state.auth.AuthenticateVerified(ctx, verification)
+		if err != nil || !authentication.Valid() || authentication.Verification().State() != verification.State() {
+			finishPolicy(observability.SpanInternalError)
+			return DomainResult{}, &DomainError{}
+		}
+	}
+	var policy dkim2.PolicyDecision
+	if authentication.Valid() {
+		policy, err = dkim2.EvaluateAuthenticationPolicy(authentication, dkim2.WithPolicyMode(p.state.mode))
+	} else {
+		policy, err = dkim2.EvaluatePolicy(verification, dkim2.WithPolicyMode(p.state.mode))
+	}
+	if contextErr := domainContextError(ctx); contextErr != nil && !authentication.Valid() {
 		finishPolicy(observability.SpanInternalError)
 		return DomainResult{}, contextErr
 	}
-	if err != nil || !policy.Valid() || policy.VerificationState() != verification.State() || policy.Mode() != p.state.mode {
+	expectedState := verification.State()
+	if authentication.Valid() {
+		expectedState = authentication.State()
+	}
+	if err != nil || !policy.Valid() || policy.VerificationState() != expectedState || policy.Mode() != p.state.mode {
 		finishPolicy(observability.SpanInternalError)
 		return DomainResult{}, &DomainError{}
 	}
@@ -220,7 +249,7 @@ func (p *DomainProcessor) Process(ctx context.Context, request dkim2.VerifyReque
 		policyReason,
 	)
 	observePolicy(p.state.runtime, policy, time.Since(policyStarted))
-	result := DomainResult{initialized: true, applicable: true, verification: verification, policy: policy}
+	result := DomainResult{initialized: true, applicable: true, verification: verification, authentication: authentication, policy: policy}
 	if !result.valid() {
 		return DomainResult{}, &DomainError{}
 	}
@@ -259,6 +288,11 @@ func (r DomainResult) Verification() (dkim2.VerifyResult, error) {
 	return r.verification, nil
 }
 
+// Authentication returns the authoritative final Draft-06 result when configured.
+func (r DomainResult) Authentication() (dkim2.AuthenticationResult, bool) {
+	return r.authentication, r.valid() && r.applicable && r.authentication.Valid()
+}
+
 // Policy returns the immutable server-owned local-policy result only when applicable.
 func (r DomainResult) Policy() (dkim2.PolicyDecision, error) {
 	if !r.valid() || !r.applicable {
@@ -273,10 +307,16 @@ func (r DomainResult) valid() bool {
 		return false
 	}
 	if !r.applicable {
-		return !r.verification.Valid() && !r.policy.Valid()
+		return !r.verification.Valid() && !r.authentication.Valid() && !r.policy.Valid()
 	}
-	return r.verification.Valid() && r.policy.Valid() &&
-		r.policy.VerificationState() == r.verification.State()
+	if !r.verification.Valid() || !r.policy.Valid() {
+		return false
+	}
+	if r.authentication.Valid() {
+		return r.authentication.Verification().State() == r.verification.State() &&
+			r.policy.VerificationState() == r.authentication.State()
+	}
+	return r.policy.VerificationState() == r.verification.State()
 }
 
 // String returns a content-free domain-result representation.

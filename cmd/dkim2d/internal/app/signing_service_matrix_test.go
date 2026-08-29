@@ -178,7 +178,11 @@ func TestSigningServiceRejectsRecipientGroupForActivePolicy(t *testing.T) {
 	); err == nil || service != nil {
 		t.Fatal("recipient-group compatibility switch was accepted")
 	}
-	service, err := NewSigningService(fixture.publicKeys, fixture.runtime, false)
+	service, err := NewSigningService(
+		fixture.publicKeys,
+		fixture.runtime,
+		false,
+	)
 	if err != nil {
 		t.Fatalf("NewSigningService() error = %v", err)
 	}
@@ -517,7 +521,15 @@ func TestExactSigningAuthorizerRequestMatrix(t *testing.T) {
 // originator and ordinary-transit selection through complete service calls.
 func TestSigningServiceSelectsPoliciesAndFailsClosedOnRevisionVerification(t *testing.T) {
 	fixture := newSigningServiceFixture(t)
-	service, err := NewSigningService(fixture.publicKeys, fixture.runtime, false)
+	service, err := NewSigningService(
+		fixture.publicKeys,
+		fixture.runtime,
+		false,
+		signingPolicies{
+			originator:      signingFlagPolicy{doNotModify: true},
+			ordinaryTransit: signingFlagPolicy{doNotExplode: true},
+		},
+	)
 	if err != nil {
 		t.Fatalf("NewSigningService() error = %v", err)
 	}
@@ -531,6 +543,12 @@ func TestSigningServiceSelectsPoliciesAndFailsClosedOnRevisionVerification(t *te
 		t.Fatal("active originator signing was not applicable")
 	}
 	assertSigningServicePass(t, signed, err, signingServiceOriginSelector)
+	if !slices.ContainsFunc(signed.Fields(), func(field CompletedField) bool {
+		return bytes.HasPrefix(field.Bytes(), []byte("DKIM2-Signature:")) &&
+			bytes.Contains(field.Bytes(), []byte("f=donotmodify"))
+	}) {
+		t.Fatal("originator policy omitted donotmodify")
+	}
 
 	inherited := insertSigningServiceFields(signed.Fields(), raw)
 	reviseRequest := newSigningServiceRequest(
@@ -538,6 +556,12 @@ func TestSigningServiceSelectsPoliciesAndFailsClosedOnRevisionVerification(t *te
 	)
 	revised, err := service.Revise(context.Background(), reviseRequest)
 	assertSigningServicePass(t, revised, err, signingServiceTransitSelector)
+	if !slices.ContainsFunc(revised.Fields(), func(field CompletedField) bool {
+		return bytes.HasPrefix(field.Bytes(), []byte("DKIM2-Signature:")) &&
+			bytes.Contains(field.Bytes(), []byte("donotexplode"))
+	}) {
+		t.Fatal("ordinary-transit policy omitted donotexplode")
+	}
 
 	outgoingReverse := []byte("<forwarded@origin.example.test>")
 	outgoingRecipients := [][]byte{[]byte("<forwarded@example.net>")}
@@ -587,6 +611,41 @@ func TestSigningServiceSelectsPoliciesAndFailsClosedOnRevisionVerification(t *te
 			"Revise(corrupted) valid=%t result=%q disposition=%q fields=%d",
 			failed.Valid(), failed.Result(), failed.Disposition(), len(failed.Fields()),
 		)
+	}
+}
+
+// TestSigningServiceAppliesOnlyInjectedOriginatorFlags proves daemon policy changes output without caller input.
+func TestSigningServiceAppliesOnlyInjectedOriginatorFlags(t *testing.T) {
+	fixture := newSigningServiceFixture(t)
+	service, err := NewSigningService(
+		fixture.publicKeys,
+		fixture.runtime,
+		false,
+		signingPolicies{originator: signingFlagPolicy{doNotModify: true, doNotExplode: true}},
+	)
+	if err != nil {
+		t.Fatalf("NewSigningService() error = %v", err)
+	}
+	service.clock = func() time.Time { return time.Unix(1_700_000_000, 0) }
+	assessment, err := service.Sign(context.Background(), newSigningServiceRequest(
+		t,
+		OperationSign,
+		signingServiceRawMessage(),
+		[][]byte{[]byte("<recipient@origin.example.test>")},
+	))
+	result, ok := assessment.Result()
+	if !ok {
+		t.Fatal("active originator signing was not applicable")
+	}
+	assertSigningServicePass(t, result, err, signingServiceOriginSelector)
+	if !slices.ContainsFunc(result.Fields(), func(field CompletedField) bool {
+		value := field.Bytes()
+		return bytes.HasPrefix(value, []byte("DKIM2-Signature:")) &&
+			bytes.Contains(value, []byte("f=donotmodify,donotexplode")) &&
+			!bytes.Contains(value, []byte(",exploded")) &&
+			!bytes.Contains(value, []byte("f=exploded"))
+	}) {
+		t.Fatal("originator policy flags were absent, reordered, or polluted by exploded")
 	}
 }
 

@@ -225,10 +225,12 @@ func resultForCase(planned plannedCase, fact ResponseFact, class ExitClass) Resu
 	if fact.Process != nil {
 		disposition := string(fact.Process.Disposition)
 		verification := string(fact.Process.Verification.State)
+		authentication := string(fact.Process.Authentication.State)
 		policy := string(fact.Process.Policy.Verdict)
 		replay := string(fact.Process.Replay.Class)
 		record.Disposition = &disposition
 		record.VerificationState = &verification
+		record.AuthenticationState = &authentication
 		record.PolicyVerdict = &policy
 		record.ReplayClass = &replay
 	}
@@ -265,6 +267,8 @@ func expectationMatches(expectation fixtureExpectation, fact ResponseFact) bool 
 			string(fact.Process.Disposition) == *expectation.Disposition &&
 			expectation.VerificationState != nil &&
 			string(fact.Process.Verification.State) == *expectation.VerificationState &&
+			expectation.AuthenticationState != nil &&
+			string(fact.Process.Authentication.State) == *expectation.AuthenticationState &&
 			expectation.PolicyVerdict != nil &&
 			string(fact.Process.Policy.Verdict) == *expectation.PolicyVerdict &&
 			expectation.ReplayClass != nil &&

@@ -107,8 +107,8 @@ func TestVerifyCurrentNeverDescendsIntoHistory(t *testing.T) {
 	if _, ok := result.historyWalk(); ok {
 		t.Fatal("current-only verification attached a history fallback")
 	}
-	if projection, ok := result.ReplayProjection(); !ok || !projection.Valid() {
-		t.Fatal("current-only verification omitted the sealed replay projection")
+	if projection, ok := result.ReplayProjection(); ok || projection.Valid() {
+		t.Fatal("current-only non-origin verification exposed replay authority")
 	}
 }
 

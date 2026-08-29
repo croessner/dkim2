@@ -226,7 +226,13 @@ func attachRevisionProof(current Result, proof verify.RevisionProof) Result {
 	if err != nil {
 		return internalContractResult(current.Target())
 	}
-	return current.withAuthenticatedHistory(history, projection)
+	result := current.withAuthenticatedHistory(history, projection)
+	if source, ok := proof.ReplayProjection(); ok {
+		if replayProjection, mapped := mapReplayProjection(source); mapped {
+			result = result.withReplayProjection(replayProjection)
+		}
+	}
+	return result
 }
 
 // preExtractionResult returns truthful indeterminate custody after early failure.

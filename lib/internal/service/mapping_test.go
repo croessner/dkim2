@@ -12,7 +12,7 @@ func TestMapVerificationResultAppliesBindingPrecedence(t *testing.T) {
 	target := verify.Target{Sequence: 2, InstanceNumber: 2}
 	passChecks := requiredPassChecks(target)
 	passSet := verify.SignatureSetResult{Index: 0, Algorithm: verify.AlgorithmRSASHA256, Status: verify.SignatureSetStatusPass, KeyStatus: verify.KeyStatusFound}
-	failSet := verify.SignatureSetResult{Index: 1, Algorithm: verify.AlgorithmEd25519SHA256, Status: verify.SignatureSetStatusFail, KeyStatus: verify.KeyStatusFound}
+	failSet := verify.SignatureSetResult{Index: 1, Selector: failedSelector, Algorithm: verify.AlgorithmEd25519SHA256, Status: verify.SignatureSetStatusFail, KeyStatus: verify.KeyStatusFound}
 	temporarySet := verify.SignatureSetResult{Index: 0, Algorithm: verify.AlgorithmRSASHA256, Status: verify.SignatureSetStatusProviderTemporary, KeyStatus: verify.KeyStatusProviderTemporary}
 	permanentCheck := verify.CheckResult{Kind: verify.CheckKindTimestamp, Status: verify.CheckStatusFail, Code: verify.ErrorCodeTimestampInvalid, TimestampStatus: verify.TimestampStatusExpired, Target: target}
 	failAndTemporaryChecks := requiredChecksWithSignatures(target,

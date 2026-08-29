@@ -10,7 +10,7 @@ import (
 	"github.com/croessner/dkim2/internal/rawmsg"
 )
 
-// Parser converts decoded Draft-05 recipe JSON into immutable plans.
+// Parser converts decoded Draft-06 recipe JSON into immutable plans.
 type Parser struct {
 	limits      Limits
 	initialized bool

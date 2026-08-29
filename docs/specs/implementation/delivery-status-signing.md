@@ -1,8 +1,8 @@
 # Delivery-Status Evidence and Signing
 
 > Historical Draft-04 implementation record. The original scope and evidence
-> below are preserved; current Draft-05 authority is the migration disposition
-> and the 2026-08-26 semantics audit.
+> below are preserved; current Draft-06 authority is the migration disposition
+> and current durable architecture.
 
 Status: M25 implemented; outgoing initial DSN signing is enabled only through
 the dedicated daemon and library boundary.
@@ -27,7 +27,7 @@ This specification is governed by:
 - `docs/ARCHITECTURE.md`
 - `docs/specs/openapi/dkim2d.yaml`
 - `draft-ietf-dkim-dkim2-spec-04`, Sections 12 through 12.1.2
-- RFC 3462 and RFC 3464
+- RFC 6522 and RFC 3464
 - `docs/specs/implementation/milter-adapter.md`
 - `docs/specs/implementation/signing-and-revision.md`
 - `docs/specs/implementation/openapi-test-client.md`
@@ -40,7 +40,7 @@ reconciled. The active protocol baseline remains
 ## Original Gap
 
 The library treats `<>` as a valid generic SMTP reverse-path and can perform
-the low-level DKIM2 envelope comparison. It has no RFC 3462 parser or DSN
+the low-level DKIM2 envelope comparison. It has no RFC 6522 parser or DSN
 evidence model. The daemon's ordinary `/v1/sign` request similarly accepts a
 generic message, SMTP envelope, and signing context without DSN evidence. The
 originator Milter currently prevents this path from being reached by tempfailing
@@ -81,7 +81,7 @@ DSN boundary.
 
 Implemented in M25:
 
-- bounded RFC 3462/RFC 3464 DSN structure parsing from exact bytes;
+- bounded RFC 6522/RFC 3464 DSN structure parsing from exact bytes;
 - generic null-path rejection in ordinary library and daemon signing
   operations;
 - Draft-04 Section 12.1 embedded-original verification and Section 12.1.2
@@ -307,7 +307,7 @@ Postfix mode cannot be confused with it.
 | Area | Required result | Status |
 | --- | --- | --- |
 | Scope | Outgoing initial DSN signing, the Postfix origin enum, and the DKIM2-side adapter are complete; received DSNs and propagation remain deferred | complete |
-| Protocol | Draft-04 Section 12 and RFC 3462/3464 evidence is explicit, including exact highest `mf=` recipient binding | complete |
+| Protocol | Draft-04 Section 12 and RFC 6522/3464 evidence is explicit, including exact highest `mf=` recipient binding | complete |
 | Security | Generic null-path bypass is closed; identity, evidence, profile, ticket, and capability are purpose-separated | complete |
 | Boundaries | Library, daemon, generated OpenAPI client, `dkim2ctl`, and dedicated Postfix Milter path are purpose-separated | complete |
 | Tests | Parser, fuzz, race, evidence, capability, daemon, client, and adapter-regression coverage exists | complete |

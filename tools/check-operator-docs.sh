@@ -154,13 +154,13 @@ for reference in draft-issues.md compatibility.md known-limitations.md; do
 done
 
 for required in \
-  'draft-ietf-dkim-dkim2-spec-05' \
+  'draft-ietf-dkim-dkim2-spec-06' \
   'draft-chuang-dkim2-dns-04' \
   '127.0.0.1:2525' \
   'milter_protocol = 6' \
   'milter_default_action = tempfail' \
   'Exim' \
-  'unqualified_draft05' \
+  'unqualified_draft06' \
   'LDAP' \
   'SQL' \
   'PostgreSQL' \
@@ -170,8 +170,8 @@ for required in \
   grep -Fq "$required" "$guide"
 done
 
-grep -Fq 'draft-ietf-dkim-dkim2-spec-05' README.md
-grep -Fq 'unqualified_draft05' README.md
+grep -Fq 'draft-ietf-dkim-dkim2-spec-06' README.md
+grep -Fq 'unqualified_draft06' README.md
 ! grep -Fq 'DKIM2 based on `draft-ietf-dkim-dkim2-spec-04`' README.md
 ! grep -Fq 'implemented with capability `qualified_linux`' README.md
 ! grep -Fq 'Protocol behavior remains pinned to `draft-ietf-dkim-dkim2-spec-04`' "$guide"
@@ -183,9 +183,8 @@ for document in \
   docs/reference/compatibility.md \
   docs/reference/known-limitations.md \
   docs/reference/release-candidate.md \
-  "$semantics_audit" \
   "$exim_operations"; do
-  grep -Fq 'unqualified_draft05' "$document"
+  grep -Fq 'unqualified_draft06' "$document"
 done
 for required in \
   'duplicate_hash_algorithm' \
@@ -331,7 +330,7 @@ done
 for document in README.md "$guide"; do
   grep -Fq 'Exim adapter' "$document"
   grep -Fq 'matrix' "$document"
-  grep -Fq 'unqualified_draft05' "$document"
+  grep -Fq 'unqualified_draft06' "$document"
   grep -Fq 'LDAP' "$document"
   grep -Fq 'SQL' "$document"
   ! grep -Fq 'deferred_ldap_sql_migration' "$document"

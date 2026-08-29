@@ -14,11 +14,11 @@ import (
 
 const (
 	// KeyAlgorithm identifies the frozen HMAC replay-key algorithm.
-	KeyAlgorithm = "dkim2-replay-hmac-sha256-v1"
+	KeyAlgorithm = "dkim2-replay-hmac-sha256-v2"
 	// StoredValue is the exact bounded marker retained by enabled stores.
 	StoredValue = "v1"
 
-	keyDomainLabel       = "dkim2-replay-v1"
+	keyDomainLabel       = "dkim2-replay-v2"
 	keyNamespacePrefix   = "dkim2:replay:v1:"
 	deriverRedactedText  = "replay_deriver"
 	storageKeyByteLength = 68
@@ -181,16 +181,13 @@ func UseStorageKey(key Key, use func(string) error) (resultErr error) {
 // replayHMACFrame builds the exact versioned length-delimited identity input.
 func replayHMACFrame(identity Identity) []byte {
 	state := identity.state
-	frame := make([]byte, 0, 161)
+	frame := make([]byte, 0, 96)
 	frame = append(frame, keyDomainLabel...)
-	frame = append(frame, 0, 1)
+	frame = append(frame, 0, 2)
+	frame = append(frame, 1)
 	frame = appendUint32Bytes(frame, []byte(DraftIdentifier))
 	frame = append(frame, 2)
-	frame = appendUint32Bytes(frame, state.messageDigest[:])
-	frame = append(frame, 3)
-	frame = appendUint32Bytes(frame, state.signatureInputDigest[:])
-	frame = append(frame, 4)
-	frame = appendUint32Bytes(frame, state.recipientDigest[:])
+	frame = appendUint32Bytes(frame, state.originDigest[:])
 	return frame
 }
 

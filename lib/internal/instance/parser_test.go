@@ -49,7 +49,7 @@ func TestParseAcceptsMessageInstance(t *testing.T) {
 	}
 }
 
-// TestParseRejectsMissingFinalSemicolon reproduces the Draft-05 Message-Instance terminator rule.
+// TestParseRejectsMissingFinalSemicolon reproduces the Draft-06 Message-Instance terminator rule.
 func TestParseRejectsMissingFinalSemicolon(t *testing.T) {
 	value := "m=1; h=sha256:" + base64OfByte(1, 32) + ":" + base64OfByte(2, 32)
 	if _, err := Parse(headerField(t, 0, "Message-Instance", value)); err == nil {
@@ -162,7 +162,7 @@ func TestParseRejectsDuplicateHashAlgorithms(t *testing.T) {
 	}
 }
 
-// TestHashSetAcceptsSHA512 proves the Draft-05 Message-Instance SHA-512 tuple contract.
+// TestHashSetAcceptsSHA512 proves the Draft-06 Message-Instance SHA-512 tuple contract.
 func TestHashSetAcceptsSHA512(t *testing.T) {
 	parsed, err := Parse(messageInstanceField(t, 0, "m=1; h=SHA512:"+base64OfByte(1, 64)+":"+base64OfByte(2, 64)))
 	if err != nil {

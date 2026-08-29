@@ -11,7 +11,7 @@ described below before inserting the daemon-owned trace field.
 The adapter is operational glue. DKIM2 parsing, verification, signing,
 revision, recipe, replay, and datasource rules remain in the library and
 daemon. The implemented behavior is pinned to
-`draft-ietf-dkim-dkim2-spec-05` and the repository's historical
+`draft-ietf-dkim-dkim2-spec-06` and the repository's historical
 `draft-chuang-dkim2-dns-04` baseline.
 
 ## Runtime requirements

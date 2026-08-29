@@ -10,7 +10,7 @@ import (
 )
 
 // DraftIdentifier identifies the exact DKIM2 behavior baseline implemented by this verification facade.
-const DraftIdentifier = "draft-ietf-dkim-dkim2-spec-05"
+const DraftIdentifier = "draft-ietf-dkim-dkim2-spec-06"
 
 // ResultState identifies one of the four public DKIM2 verification outcomes.
 type ResultState string
@@ -329,17 +329,21 @@ type SignatureSetFact struct {
 	algorithm Algorithm
 	status    SignatureStatus
 	reason    ReasonCode
+	selector  string
 	metadata  KeyPolicyMetadata
 }
 
 // newSignatureSetFact constructs immutable bounded signature-set metadata.
-func newSignatureSetFact(algorithm Algorithm, status SignatureStatus, reason ReasonCode, metadata ...KeyPolicyMetadata) SignatureSetFact {
-	fact := SignatureSetFact{algorithm: algorithm, status: status, reason: reason}
+func newSignatureSetFact(algorithm Algorithm, status SignatureStatus, reason ReasonCode, selector string, metadata ...KeyPolicyMetadata) SignatureSetFact {
+	fact := SignatureSetFact{algorithm: algorithm, status: status, reason: reason, selector: selector}
 	if len(metadata) == 1 {
 		fact.metadata = metadata[0]
 	}
 	return fact
 }
+
+// Selector returns the failed supported signature selector when present.
+func (f SignatureSetFact) Selector() (string, bool) { return f.selector, f.selector != "" }
 
 // Algorithm returns the bounded signature algorithm family.
 func (f SignatureSetFact) Algorithm() Algorithm {
@@ -471,6 +475,9 @@ func verifyResultDataValid(data verifyResultData) bool {
 	}
 	for _, fact := range data.signatures {
 		if !fact.algorithm.Known() || !fact.status.Known() || !fact.reason.Known() || fact.metadata.StrictIdentityApplicable() || !publicResultKeyPolicyCoherent(fact) {
+			return false
+		}
+		if (fact.status == SignatureStatusFAIL) != (fact.selector != "") || len(fact.selector) > 253 {
 			return false
 		}
 	}

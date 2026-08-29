@@ -172,6 +172,7 @@ func (v Verifier) evaluateSignatureSet(ctx context.Context, targetSignature sign
 	result.KeyStatus = KeyStatusFound
 	if err := verifySignatureDigest(algorithm, material, digest, set.Signature().Decoded(), target, index); err != nil {
 		result.Status = SignatureSetStatusFail
+		result.Selector = set.Selector()
 
 		return result
 	}

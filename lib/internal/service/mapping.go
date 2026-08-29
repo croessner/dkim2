@@ -494,6 +494,7 @@ func (a *mappingAccumulator) mapSignatureSet(set verify.SignatureSetResult) {
 			a.add(severityPermanent, fact.Reason)
 		} else {
 			fact.Status, fact.Reason = SignatureFAIL, ReasonSignatureMismatch
+			fact.Selector = set.Selector
 			a.add(severityFailure, fact.Reason)
 		}
 	case verify.SignatureSetStatusUnsupportedAlgorithm:

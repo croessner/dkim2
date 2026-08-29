@@ -103,11 +103,11 @@ func checkIssueContent(root string, content []byte) (IssueLog, error) {
 		}
 	}
 	expectedTBA := map[string]bool{
-		"Draft-05 Section 1.1":  false,
-		"Draft-05 Section 10.3": false,
-		"Draft-05 Section 14":   false,
-		"Draft-05 Section 15":   false,
-		"Draft-05 Section 16":   false,
+		"Draft-06 Section 1.1":  false,
+		"Draft-06 Section 10.3": false,
+		"Draft-06 Section 14":   false,
+		"Draft-06 Section 15":   false,
+		"Draft-06 Section 16":   false,
 	}
 	for index, issue := range log.Issues {
 		expectedID := fmt.Sprintf("DKIM2-ISSUE-%04d", index+1)

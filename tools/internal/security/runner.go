@@ -376,7 +376,7 @@ func BuildReport(root, fuzzPath, racePath, vulnerabilityPath, outputPath string)
 		GoVersion: runtime.Version(), GOOS: runtime.GOOS, GOARCH: runtime.GOARCH,
 		Race: racePassState, FuzzTargets: len(local.fuzz.Targets), FuzzState: passState,
 		VulnerabilityState: passState, Evidence: evidence, Findings: FindingCounts{},
-		Exim: conformance.EximUnqualifiedDraft05, Overall: passState,
+		Exim: conformance.EximUnqualifiedDraft06, Overall: passState,
 	}
 	if err := report.Validate(snapshot.BaseRevision); err != nil {
 		return Report{}, err
@@ -605,7 +605,7 @@ func (r Report) Validate(revision string) error {
 		r.GOOS == "" || r.GOARCH == "" || r.Race != racePassState ||
 		r.FuzzTargets != len(Targets()) || r.FuzzState != passState ||
 		r.VulnerabilityState != passState || r.Findings != (FindingCounts{}) ||
-		r.Exim != conformance.EximUnqualifiedDraft05 || r.Overall != passState ||
+		r.Exim != conformance.EximUnqualifiedDraft06 || r.Overall != passState ||
 		len(r.Evidence) != 7 {
 		return errors.New("security_report")
 	}

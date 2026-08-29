@@ -58,7 +58,7 @@ func newErrorResponse(
 		ApiVersion: generated.V1,
 		Category:   category,
 		Code:       code,
-		Draft:      generated.DraftIetfDkimDkim2Spec05,
+		Draft:      generated.DraftIetfDkimDkim2Spec06,
 	}, maxErrorResponseBytes)
 	if err != nil {
 		return preMarshaledResponse{}, err
@@ -180,11 +180,11 @@ func validStatusResponse(value any) bool {
 	switch response := value.(type) {
 	case generated.HealthResponse:
 		return response.ApiVersion == generated.V1 &&
-			response.Draft == generated.DraftIetfDkimDkim2Spec05 &&
+			response.Draft == generated.DraftIetfDkimDkim2Spec06 &&
 			response.Status == generated.Alive
 	case generated.ReadinessResponse:
 		return response.ApiVersion == generated.V1 &&
-			response.Draft == generated.DraftIetfDkimDkim2Spec05 &&
+			response.Draft == generated.DraftIetfDkimDkim2Spec06 &&
 			response.Status == generated.Ready
 	default:
 		return false
@@ -194,31 +194,55 @@ func validStatusResponse(value any) bool {
 // validProcessResponse validates every closed generated enum and coherence rule before commit.
 func validProcessResponse(response generated.ProcessResponse) bool {
 	if response.ApiVersion != generated.V1 ||
-		response.Draft != generated.DraftIetfDkimDkim2Spec05 ||
+		response.Draft != generated.DraftIetfDkimDkim2Spec06 ||
 		!response.Disposition.Valid() ||
 		!validProcessActions(response) ||
 		!response.Replay.Class.Valid() ||
+		!validAuthenticationResponse(response.Authentication, response.Verification.State, response.Replay.Class) ||
 		!validVerificationResponse(response.Verification) ||
 		!validPolicyResponse(response.Policy) {
 		return false
 	}
 	switch response.Replay.Class {
-	case generated.Disabled, generated.FirstSeen:
-		return response.Disposition == generated.DispositionAccept &&
-			response.Verification.State == generated.PASS &&
-			response.Policy.Verdict == generated.PolicyResultVerdictAccept
+	case generated.Disabled, generated.FirstSeen, generated.Exploded:
+		return response.Verification.State == generated.PASS &&
+			string(response.Disposition) == string(response.Policy.Verdict)
 	case generated.Replayed:
 		return response.Disposition == generated.DispositionReject &&
 			response.Verification.State == generated.PASS &&
-			response.Policy.Verdict == generated.PolicyResultVerdictAccept
+			response.Policy.Verdict == generated.PolicyResultVerdictReject
 	case generated.Indeterminate:
 		return response.Disposition == generated.DispositionTempfail &&
 			response.Verification.State == generated.PASS &&
-			response.Policy.Verdict == generated.PolicyResultVerdictAccept
+			response.Policy.Verdict == generated.PolicyResultVerdictTempfail
 	case generated.NotChecked:
 		return (response.Verification.State != generated.PASS ||
 			response.Policy.Verdict != generated.PolicyResultVerdictAccept) &&
 			string(response.Disposition) == string(response.Policy.Verdict)
+	default:
+		return false
+	}
+}
+
+// validAuthenticationResponse enforces the Draft-06 final authentication projection.
+func validAuthenticationResponse(
+	authentication generated.AuthenticationResult,
+	verification generated.VerificationState,
+	replay generated.ReplayResultClass,
+) bool {
+	if !authentication.State.Valid() || !authentication.PrimaryReason.Valid() {
+		return false
+	}
+	switch replay {
+	case generated.Replayed:
+		return authentication.State == generated.FAIL &&
+			authentication.PrimaryReason == generated.AuthenticationResultPrimaryReasonDuplicateMessageWithoutExploded
+	case generated.Indeterminate:
+		return authentication.State == generated.TEMPERROR &&
+			(authentication.PrimaryReason == generated.AuthenticationResultPrimaryReasonReplayIndeterminate ||
+				authentication.PrimaryReason == generated.AuthenticationResultPrimaryReasonReplayEvidenceUnavailable)
+	case generated.Disabled, generated.FirstSeen, generated.Exploded, generated.NotChecked:
+		return authentication.State == verification
 	default:
 		return false
 	}
@@ -237,7 +261,7 @@ func validProcessActions(response generated.ProcessResponse) bool {
 		return false
 	}
 	action := response.Actions[0]
-	result, ok := authenticationResult(response.Verification.State)
+	result, ok := authenticationResult(response.Authentication.State)
 	suffix := "; dkim2=" + result
 	if !ok || action.Type != generated.AddHeader ||
 		action.Name != generated.AuthenticationResults ||
@@ -250,7 +274,7 @@ func validProcessActions(response generated.ProcessResponse) bool {
 // validOperationResponse validates one complete sign or revision response.
 func validOperationResponse(response generated.OperationResponse) bool {
 	if response.ApiVersion != generated.V1 ||
-		response.Draft != generated.DraftIetfDkimDkim2Spec05 ||
+		response.Draft != generated.DraftIetfDkimDkim2Spec06 ||
 		!response.Operation.Valid() || !response.Result.Valid() ||
 		!response.Disposition.Valid() ||
 		!validWireOperationOutcome(response.Result, response.Disposition) ||

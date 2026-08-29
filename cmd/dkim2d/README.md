@@ -260,7 +260,7 @@ minutes. The corresponding environment variables are
 ### Inbound policy mode
 
 `policy.mode` defaults to `strict`; omitting it enables enforcement. Operators
-must select a compatibility policy explicitly when the Draft-05 verifier is
+must select a compatibility policy explicitly when the Draft-06 verifier is
 introduced beside an existing inbound path:
 
 - `strict` accepts `PASS`, rejects `FAIL` and `PERMERROR`, and temporarily
@@ -351,7 +351,31 @@ signing:
   backend: flat_file
   datasource_file: /var/lib/dkim2d/protected/0123456789abcdef0123456789abcdef/datasource
   private_manifest_file: /var/lib/dkim2d/protected/0123456789abcdef0123456789abcdef/private-manifest
+  policy:
+    originator:
+      donotmodify: true
+      donotexplode: true
+    ordinary_transit:
+      donotmodify: false
+      donotexplode: true
+    delivery_status:
+      donotmodify: true
+      donotexplode: true
 ```
+
+The six optional `signing.policy` booleans default to `false`. They are
+daemon-owned authenticated requests; REST callers cannot select or override
+them. `exploded` is never configuration: signing derives it only from a sealed
+multi-copy route plan. An enabled policy is invalid with `signing.backend:
+disabled`. Environment overrides use
+`DKIM2D_SIGNING_POLICY_<USE>_DONOTMODIFY` and
+`DKIM2D_SIGNING_POLICY_<USE>_DONOTEXPLODE`, where `<USE>` is `ORIGINATOR`,
+`ORDINARY_TRANSIT`, or `DELIVERY_STATUS`.
+
+Downstream local policy may ignore `donotmodify` or `donotexplode`, but the
+draft forbids releasing the resulting modified or exploded message to an MTA
+outside that system's control. Existing fail-closed authorization and
+`local_only` restrictions remain authoritative.
 
 Omit every unused route capability. `dsn_sign_capability_file` authorizes only
 the Postfix-exclusive `/v1/dsn/sign`; possession attests that its sole adapter

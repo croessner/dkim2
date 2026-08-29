@@ -94,7 +94,7 @@ def build_proxy_record(
                 "result",
             }
             or response_document["api_version"] != "v1"
-            or response_document["draft"] != "draft-ietf-dkim-dkim2-spec-05"
+            or response_document["draft"] != "draft-ietf-dkim-dkim2-spec-06"
             or response_document["operation"] != route
             or response_document["result"] != "pass"
             or response_document["disposition"] != "accept"

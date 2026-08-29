@@ -207,7 +207,7 @@ func GenerateCandidateReport(root string, now time.Time) (CandidateReport, []byt
 		ModuleProxySHA256: moduleProof.ProxySHA256, ModuleCount: len(moduleProof.Modules),
 		Evidence: evidence,
 		Capabilities: ReleaseCapability{
-			Exim:             "unqualified_draft05",
+			Exim:             "unqualified_draft06",
 			LDAPSQLMigration: "implemented",
 		},
 		Criteria: []CandidateCriterion{
@@ -297,7 +297,7 @@ func renderCandidateReport(report CandidateReport) []byte {
 	fmt.Fprintf(&output, "- Result: `%s`\n", strings.ToUpper(report.Overall))
 	fmt.Fprintf(&output, "- External availability: `%s` (%d cases)\n", report.ExternalAvailability, report.ExternalCases)
 	fmt.Fprintf(&output, "- Module proxy: `%s` (%d identities)\n", report.ModuleProxySHA256, report.ModuleCount)
-	fmt.Fprintln(&output, "- Exim: `unqualified_draft05`")
+	fmt.Fprintln(&output, "- Exim: `unqualified_draft06`")
 	fmt.Fprintln(&output, "- LDAP/PostgreSQL migration: `implemented`")
 	fmt.Fprintln(&output)
 	fmt.Fprintln(&output, "## Criteria")

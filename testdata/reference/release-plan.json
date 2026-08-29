@@ -25,7 +25,7 @@
     "credentials_allowed": false
   },
   "capabilities": {
-    "exim": "unqualified_draft05",
+    "exim": "unqualified_draft06",
     "ldap_sql_migration": "implemented"
   }
 }

@@ -113,6 +113,18 @@ func (e Evaluator) EvaluateProjection(projection Projection) (Decision, error) {
 	return newDecision(projection.Protocol(), e.config.Mode, verdict, primary, compliance.modifyState, compliance.explodeState, feedback.intent, dns.effective, findings)
 }
 
+// EvaluateAuthenticationProjection applies non-overridable replay failure after deriving authenticated compliance facts.
+func (e Evaluator) EvaluateAuthenticationProjection(projection Projection, protocol ProtocolClass) (Decision, error) {
+	decision, err := e.EvaluateProjection(projection)
+	if err != nil {
+		return Decision{}, err
+	}
+	if protocol == projection.Protocol() {
+		return decision, nil
+	}
+	return newAuthenticationDecision(protocol, e.config.Mode, decision)
+}
+
 // baseOutcome returns the exact base verdict, primary reason, and finding order.
 func baseOutcome(protocol ProtocolClass, mode Mode) (Verdict, PolicyReason, []PolicyReason) {
 	protocolReason := reasonForProtocol(protocol)

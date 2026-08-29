@@ -18,7 +18,7 @@ const (
 	StepKindData StepKind = "data"
 )
 
-// Known reports whether kind belongs to the Draft-05 recipe vocabulary.
+// Known reports whether kind belongs to the Draft-06 recipe vocabulary.
 func (k StepKind) Known() bool { return k == StepKindCopy || k == StepKindData }
 
 // BodyMode identifies the body member form in one parsed recipe.
@@ -184,7 +184,7 @@ func newHeaderPlan(name, canonicalName string, steps []step) (headerPlan, error)
 // clone returns a detached header plan.
 func (p headerPlan) clone() headerPlan { p.steps = cloneSteps(p.steps); return p }
 
-// Recipe stores one immutable parsed Draft-05 reconstruction plan.
+// Recipe stores one immutable parsed Draft-06 reconstruction plan.
 type Recipe struct {
 	headers         []headerPlan
 	hasHeaderRecipe bool

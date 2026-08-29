@@ -406,7 +406,7 @@ func contextGoldenInboundProcessor(
 	t.Helper()
 
 	corpusBytes, err := os.ReadFile(
-		"../../../../lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-05/public-golden.json",
+		"../../../../lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-06/public-golden.json",
 	)
 	if err != nil {
 		t.Fatal("context golden fixture unavailable")
@@ -435,10 +435,6 @@ func contextGoldenInboundProcessor(
 	if err != nil {
 		t.Fatal("context verifier construction failed")
 	}
-	domain, err := app.NewDomainProcessor(verifier, config.PolicyStrict)
-	if err != nil {
-		t.Fatal("context domain processor construction failed")
-	}
 	deriver, err := dkim2.NewReplayDeriver(bytes.Repeat([]byte{0x5a}, 32), 1)
 	if err != nil {
 		t.Fatal("context replay deriver construction failed")
@@ -451,6 +447,19 @@ func contextGoldenInboundProcessor(
 	)
 	if err != nil {
 		t.Fatal("context replay coordinator construction failed")
+	}
+	authenticator, err := dkim2.NewAuthenticator(
+		verifier,
+		store,
+		deriver,
+		dkim2.DefaultReplayRetention(),
+	)
+	if err != nil {
+		t.Fatal("context authenticator construction failed")
+	}
+	domain, err := app.NewDomainProcessor(verifier, config.PolicyStrict, authenticator)
+	if err != nil {
+		t.Fatal("context domain processor construction failed")
 	}
 	processor, err := app.NewInboundProcessor(domain, replay)
 	if err != nil {
@@ -672,8 +681,8 @@ func TestHTTPBoundaryTrackedPostMutationTerminalContextPreservesHTTP200(t *testi
 				!strings.Contains(response, `"disposition":"tempfail"`) ||
 				strings.Contains(response, `"request_deadline"`) ||
 				store.calls.Load() != 1 {
-				t.Fatalf("post-mutation outcome: response_bytes=%d store=%d",
-					len(response), store.calls.Load())
+				t.Fatalf("post-mutation outcome: response_bytes=%d store=%d response=%q",
+					len(response), store.calls.Load(), response)
 			}
 			assertContextResourcesReleased(t, server)
 		})

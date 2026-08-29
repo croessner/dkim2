@@ -48,11 +48,11 @@ Credentials, raw messages, envelope values,
 paths, URLs, headers, response bodies, and raw errors never enter output.
 
 Checked draft-versioned examples live under
-`cmd/dkim2ctl/testdata/fixtures/draft-ietf-dkim-dkim2-spec-05/`. Validate the
+`cmd/dkim2ctl/testdata/fixtures/draft-ietf-dkim-dkim2-spec-06/`. Validate the
 complete offline set without protected-file or network access:
 
 ```text
-dkim2ctl fixture validate cmd/dkim2ctl/testdata/fixtures/draft-ietf-dkim-dkim2-spec-05/*.json
+dkim2ctl fixture validate cmd/dkim2ctl/testdata/fixtures/draft-ietf-dkim-dkim2-spec-06/*.json
 ```
 
 Their expectations are allowlisted typed projections rather than response

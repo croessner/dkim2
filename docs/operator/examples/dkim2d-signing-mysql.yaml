@@ -10,6 +10,16 @@ replay:
 signing:
   backend: mysql
   reload_interval: 1m
+  policy:
+    originator:
+      donotmodify: false
+      donotexplode: false
+    ordinary_transit:
+      donotmodify: false
+      donotexplode: false
+    delivery_status:
+      donotmodify: false
+      donotexplode: false
   mysql:
     address: 192.0.2.30:3306
     server_name: mysql.datasource.example.test

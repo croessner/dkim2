@@ -48,7 +48,11 @@ func TestSignatureKeyStatusCoherenceMatrix(t *testing.T) {
 			algorithm = verify.AlgorithmUnknown
 		}
 		accumulator := testAccumulator()
-		accumulator.mapSignatureSet(verify.SignatureSetResult{Algorithm: algorithm, Status: pair.status, KeyStatus: pair.key})
+		selector := ""
+		if pair.status == verify.SignatureSetStatusFail {
+			selector = failedSelector
+		}
+		accumulator.mapSignatureSet(verify.SignatureSetResult{Algorithm: algorithm, Selector: selector, Status: pair.status, KeyStatus: pair.key})
 		if len(accumulator.signatures) != 1 || accumulator.signatures[0].Status != pair.wantStatus || accumulator.signatures[0].Reason != pair.wantReason || accumulator.severity != pair.wantSeverity {
 			t.Fatalf("known pair %q/%q mapped to %#v severity=%d", pair.status, pair.key, accumulator.signatures, accumulator.severity)
 		}
@@ -76,7 +80,11 @@ func TestSignatureKeyPolicyMetadataCoherence(t *testing.T) {
 	}
 	for _, pair := range allowed {
 		accumulator := testAccumulator()
-		accumulator.mapSignatureSet(verify.SignatureSetResult{Algorithm: verify.AlgorithmRSASHA256, Status: pair.status, KeyStatus: pair.key, KeyPolicy: metadata})
+		selector := ""
+		if pair.status == verify.SignatureSetStatusFail {
+			selector = failedSelector
+		}
+		accumulator.mapSignatureSet(verify.SignatureSetResult{Algorithm: verify.AlgorithmRSASHA256, Selector: selector, Status: pair.status, KeyStatus: pair.key, KeyPolicy: metadata})
 		if len(accumulator.signatures) != 1 || accumulator.signatures[0].KeyPolicy != (KeyPolicyMetadata{TestingDeclared: true, StrictIdentityDeclared: true}) {
 			t.Fatalf("metadata for %q/%q = %#v", pair.status, pair.key, accumulator.signatures)
 		}

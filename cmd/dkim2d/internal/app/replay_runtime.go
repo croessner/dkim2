@@ -113,6 +113,7 @@ type replayRuntimeState struct {
 	backend          config.ReplayBackend
 	coordinator      *ReplayCoordinator
 	deriver          *dkim2.ReplayDeriver
+	retention        dkim2.ReplayRetention
 	closeDeriver     func(context.Context) error
 	store            dkim2.ManagedReplayStore
 	authority        replayAuthorityStore
@@ -354,7 +355,7 @@ func constructMemoryReplayRuntime(
 	}
 	return &ReplayRuntime{state: &replayRuntimeState{
 		backend: config.ReplayMemory, coordinator: coordinator, deriver: deriver,
-		closeDeriver: deriver.Close, store: store, startCleanup: startReplayRuntimeCleanup,
+		retention: retention, closeDeriver: deriver.Close, store: store, startCleanup: startReplayRuntimeCleanup,
 	}}
 }
 
@@ -424,6 +425,7 @@ func constructValkeyReplayRuntime(
 		backend:          config.ReplayValkey,
 		coordinator:      coordinator,
 		deriver:          deriver,
+		retention:        retention,
 		closeDeriver:     deriver.Close,
 		store:            store,
 		authority:        store,
@@ -443,6 +445,26 @@ func replayLimits(replayConfig config.ReplayConfig) dkim2.ReplayLimits {
 		MaxInFlight:         int(replayConfig.MaxInFlight()),
 		MaxAdmissionWaiters: int(replayConfig.MaxAdmissionWaiters()),
 	}
+}
+
+// NewAuthenticator binds the runtime replay authority to the owned DNS verifier.
+func (r *ReplayRuntime) NewAuthenticator(verifier *DNSVerifier) (*dkim2.Authenticator, error) {
+	if r == nil || r.state == nil || verifier == nil || verifier.verifier == nil || nilInterface(r.state.store) {
+		return nil, &ReplayRuntimeError{}
+	}
+	var (
+		auth *dkim2.Authenticator
+		err  error
+	)
+	if r.state.backend == config.ReplayDisabled {
+		auth, err = dkim2.NewDisabledAuthenticator(verifier.verifier)
+	} else {
+		auth, err = dkim2.NewAuthenticator(verifier.verifier, r.state.store, r.state.deriver, r.state.retention)
+	}
+	if err != nil || auth == nil {
+		return nil, &ReplayRuntimeError{}
+	}
+	return auth, nil
 }
 
 // Coordinate applies the immutable provider-neutral replay policy.

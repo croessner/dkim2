@@ -1,6 +1,6 @@
 # Compatibility Statement
 
-The preview baseline implements `draft-ietf-dkim-dkim2-spec-05` with the
+The preview baseline implements `draft-ietf-dkim-dkim2-spec-06` with the
 historical `draft-chuang-dkim2-dns-04` DNS behavior identifier. A later draft
 is a reviewed behavior migration, not an automatic compatibility update.
 
@@ -23,9 +23,9 @@ is a reviewed behavior migration, not an automatic compatibility update.
 - Declared daemon and Milter configuration paths remain in their existing
   stability window. Environment expansion occurs before typed validation and
   never expands map keys.
-- Exim compatibility is `unqualified_draft05`. The exact five source-linked
+- Exim compatibility is `unqualified_draft06`. The exact five source-linked
   rows in the dated compatibility report are historical Draft-04 evidence and
-  do not qualify Draft-05. There is no portable Exim report, universal
+  do not qualify Draft-06. There is no portable Exim report, universal
   local-scan ABI binary, binary package, or container image.
 
 ## Qualified storage services
@@ -59,11 +59,11 @@ worktree implementation remains an unpublished closeout candidate; exact
 operation guidance and limitations are in the
 [native-domain runbook](../operator/native-domain-onboarding.md).
 
-The `POST /v1/process` schema is the one canonical Draft-05 contract for both
+The `POST /v1/process` schema is the one canonical Draft-06 contract for both
 current-only and authenticated multi-instance results. Its closed policy enums
 contain only states produced by the current verifier and policy projection;
 there are no deprecated aliases, version fallbacks, or alternate legacy
-values. Draft-05 intentionally replaces the `DraftVersion` enum and adds the
+values. Draft-06 intentionally replaces the `DraftVersion` enum and adds the
 four closed verification reasons `duplicate_hash_algorithm`,
 `invalid_recipe_json`, `duplicate_selector`, and `too_many_signatures`.
 Signature-set result rows are positional and are not keyed or merged by

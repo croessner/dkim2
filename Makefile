@@ -394,11 +394,12 @@ check-openapi:
 	cmp "$(OPENAPI_EXIM_OUTPUT)" "$$output/exim.gen.go"; \
 	cmp "$(OPENAPI_EXIM_TEST_SERVER_OUTPUT)" "$$output/exim-test-server.gen.go"; \
 	! grep -Eq '^output:' "$(OPENAPI_SERVER_CONFIG)" "$(OPENAPI_CLIENT_CONFIG)" "$(OPENAPI_MILTER_CONFIG)" "$(OPENAPI_MILTER_TEST_SERVER_CONFIG)" "$(OPENAPI_EXIM_CONFIG)" "$(OPENAPI_EXIM_TEST_SERVER_CONFIG)"; \
-	grep -Eq '^[[:space:]]*(require[[:space:]]+)?github.com/getkin/kin-openapi v0\.144\.0$$' tools/go.mod; \
-	grep -Eq '^[[:space:]]*(require[[:space:]]+)?github.com/getkin/kin-openapi v0\.144\.0$$' cmd/dkim2d/go.mod; \
-	grep -Eq '^[[:space:]]*github.com/oapi-codegen/oapi-codegen/v2 v2\.7\.1( // indirect)?$$' tools/go.mod; \
-	! grep -Eq 'github.com/oapi-codegen/runtime' cmd/dkim2d/go.mod cmd/dkim2ctl/go.mod cmd/dkim2-milter/go.mod cmd/dkim2-exim/go.mod; \
-	! grep -REq --include='*.go' 'github.com/oapi-codegen/runtime' cmd/dkim2d cmd/dkim2ctl cmd/dkim2-milter cmd/dkim2-exim; \
+	grep -Eq '^[[:space:]]*(require[[:space:]]+)?github.com/getkin/kin-openapi v0\.149\.0$$' tools/go.mod; \
+	grep -Eq '^[[:space:]]*(require[[:space:]]+)?github.com/getkin/kin-openapi v0\.149\.0$$' cmd/dkim2d/go.mod; \
+	grep -Eq '^[[:space:]]*github.com/oapi-codegen/oapi-codegen/v2 v2\.8\.0( // indirect)?$$' tools/go.mod; \
+	for module in cmd/dkim2ctl/go.mod cmd/dkim2-milter/go.mod cmd/dkim2-exim/go.mod; do grep -Eq '^[[:space:]]*github.com/oapi-codegen/runtime v1\.7\.0$$' "$$module"; done; \
+	! grep -Eq 'github.com/oapi-codegen/runtime' cmd/dkim2d/go.mod lib/go.mod; \
+	! grep -REq --include='*.go' 'github.com/oapi-codegen/runtime' cmd/dkim2d lib; \
 	! grep -Eq 'oapi-codegen|kin-openapi' lib/go.mod; \
 	! grep -REq --include='*.go' --exclude='*_test.go' 'oapi-codegen|kin-openapi' lib; \
 	! grep -REq --include='go.mod' 'oapi-codegen/(nethttp|middleware)' .; \

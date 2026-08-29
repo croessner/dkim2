@@ -1,8 +1,8 @@
 # Replay Store And Valkey Provider
 
 > Historical Draft-04 implementation record. The original scope and evidence
-> below are preserved; current Draft-05 authority is the migration disposition,
-> the current replay runbook, and the 2026-08-26 semantics audit.
+> below are preserved; current Draft-06 authority is the migration disposition,
+> the current replay runbook, and current durable architecture.
 
 Status: implementation and closeout evidence prepared; external exact-artifact review and commit pending.
 
@@ -38,7 +38,7 @@ This specification is governed by:
 - the official tagged Valkey server `9.1.0` source and wire shape; the reviewed
   source archive SHA-256 is
   `7789fe1df257774457bafb4c1d56c9f7020c3879a7f5b4234af9030b2bd82dfd`;
-- `github.com/valkey-io/valkey-go` release `v1.0.76` and its official context
+- `github.com/valkey-io/valkey-go` release `v1.0.77` and its official context
   cancellation and retry documentation.
 
 The implemented and tested DNS behavior remains pinned to the repository's
@@ -181,7 +181,7 @@ invented inside the candidate it attests.
 - An immutable protected replay key with constant redacted formatting.
 - A bounded in-memory provider with injected time.
 - An explicit disabled provider.
-- A `cmd/dkim2d` Valkey provider using `valkey-go v1.0.76`.
+- A `cmd/dkim2d` Valkey provider using `valkey-go v1.0.77`.
 - A production compatibility floor of the ACL database-permission capability
   introduced by official Valkey `9.1.0`.
 - Exactly one non-retryable `SET` command with `NX` and `PX`.
@@ -329,7 +329,7 @@ lib package root
 
 cmd/dkim2d/internal/replay/valkey
   -> github.com/croessner/dkim2 public root facade
-  -> github.com/valkey-io/valkey-go v1.0.76
+  -> github.com/valkey-io/valkey-go v1.0.77
   -> no lib/internal imports
 ```
 
@@ -342,13 +342,13 @@ parent/internal import cycle or duplicated replay taxonomy is permitted.
 `valkey-go` belongs only to `cmd/dkim2d/go.mod` and workspace vendor output.
 It must not appear in `lib/go.mod`.
 
-The dependency review is fixed to `v1.0.76`: Apache-2.0 license, module
+The dependency review is fixed to `v1.0.77`: Apache-2.0 license, module
 `go 1.25.0`, compatible with the repository's Go 1.26 toolchain, and
 `golang.org/x/sys v0.43.0` in its module graph. M12 records the direct
 dependency rationale, runs license and vulnerability checks against the
 vendored graph, and rejects a version or checksum drift without a new review.
 
-`valkey-go v1.0.76` exposes an authoritative server failure as
+`valkey-go v1.0.77` exposes an authoritative server failure as
 `*valkey.ValkeyError`, but does not expose a general error-kind accessor.
 `ValkeyMessage.Error()` strips an exact leading `ERR ` before producing that
 error, and the named helpers cover only a subset of kinds and use prefix
@@ -752,7 +752,7 @@ func (s *Store) Revalidate(context.Context, AuditorConfig) error
 ```
 
 The provider package's single application-client factory validates
-`ClientConfig`, creates a standalone `valkey-go v1.0.76` client with
+`ClientConfig`, creates a standalone `valkey-go v1.0.77` client with
 `ForceSingleClient: true`, and retains ownership.
 There is no borrowed production constructor. Package-private `_test.go` helpers
 may inject a narrow fake command client; nil or typed-nil fake clients are
@@ -936,7 +936,7 @@ value has content-free `String`, `GoString`, text/JSON, and error behavior and
 contains no endpoint, certificate, username, password, epoch, secret,
 namespace, or retention value.
 
-Production cluster mode is deferred. In `valkey-go v1.0.76`,
+Production cluster mode is deferred. In `valkey-go v1.0.77`,
 `ShardsRefreshInterval: 0` disables only periodic refresh: MOVED/ASK and other
 events can still trigger reactive topology refresh and dispatch to a newly
 discovered or promoted node whose authority was not part of the current audit,
@@ -1242,7 +1242,7 @@ reply is `inconsistent`; a well-formed RESP2 error line follows the global
 auditor error-token mapping above. AUTH and HELLO are deliberately not
 DRYRUN-tested because their `NO_AUTH` status would make those probes vacuous.
 
-The exact common application command set for `valkey-go v1.0.76` is:
+The exact common application command set for `valkey-go v1.0.77` is:
 
 ```text
 PING
@@ -1457,7 +1457,7 @@ server error kind and are never returned verbatim. Exact classification is:
    other error type do not supply server-error-kind authority; step 6
    classifies them without reading their text, and `errors.As` must not promote
    them. `ValkeyError.Error()` is never used for kind extraction because
-   `valkey-go v1.0.76` has already removed an exact leading `ERR ` there.
+   `valkey-go v1.0.77` has already removed an exact leading `ERR ` there.
 6. An empty typed-error payload is `inconsistent`.
    `valkey.IsParseErr` without a typed server error represents an authoritative
    unexpected reply shape and is `inconsistent`; any other non-nil error after
@@ -1847,7 +1847,7 @@ Prometheus label design remains M15 ownership.
 - OK maps to first-seen.
 - Null maps to replayed.
 - Replay does not issue a second command.
-- Exhaustive v1.0.76 reply-category tests cover non-OK simple strings, bulk
+- Exhaustive v1.0.77 reply-category tests cover non-OK simple strings, bulk
   strings, integers, floats, booleans, verbatim strings, big numbers, arrays,
   sets, maps, pushes, null contradictions, simple errors, blob errors, and
   malformed replies.
@@ -2073,7 +2073,7 @@ Abuse tests cover:
   kind, and only when paired with the original bounded `ValkeyResult.ToString()`
   value after `NonValkeyError()` is nil; its exact leading token maps once
   through the frozen table and its raw payload and suffix never propagate.
-- Exact simple-string `OK` is proven with the bounded pinned-v1.0.76 cache
+- Exact simple-string `OK` is proven with the bounded pinned-v1.0.77 cache
   layout after `IsString`; bulk, float, verbatim, big-number, and every other
   non-simple-string `OK` plus every layout contradiction fail closed, and no
   error payload is cache-marshaled.
@@ -2161,7 +2161,7 @@ Self-reference-free implementation and validation evidence:
 | Store behavior | Exact first-seen, replayed, disabled and errors | Memory, disabled, and Valkey providers preserve exact retention, non-extension, lifecycle, uncertainty, and closed result pairs | done | Shared parity and concurrency evidence passes |
 | Privacy | No production key, recipient, secret, or raw error disclosure | Protected values remain absent from formatting, marshaling, errors, callbacks, failed-test output, and provider diagnostics | done | Marker matrices cover value, pointer, fake-client, config, result, and lifecycle surfaces |
 | Valkey security | TLS, ACL, primary, noeviction, retry and drift contract | Immutable direct-primary authority, TLS 1.3, exact application/auditor ACLs, noeviction/headroom, persistence/replication evidence, and no-retry writes are enforced | done | Exact Valkey 9.1.0 audit and operator guide define the asynchronous loss window |
-| Boundaries | Internal core, root facade, cmd-only Valkey dependency | Library replay ownership stays standard-library-only; exact valkey-go v1.0.76 ownership remains confined to the daemon provider | done | Machine guards reject import, module/workspace replacement, vendor, license, and NOTICE drift |
+| Boundaries | Internal core, root facade, cmd-only Valkey dependency | Library replay ownership stays standard-library-only; exact valkey-go v1.0.77 ownership remains confined to the daemon provider | done | Machine guards reject import, module/workspace replacement, vendor, license, and NOTICE drift |
 | Tests | Unit, race, fuzz, abuse, real Valkey 9.1.0 | Focused/race suites, five bounded fuzz targets, deterministic cancellation/close storms, privacy abuse, and real-server parity pass | done | Missing or wrong server binary is a hard integration failure |
 | Effort | Prompt 01-07 timings recorded; Prompt 08 terminal timing external | Prompt 01-07 exact spans total 8h47m27s; Prompt 08 terminal timing remains externally recorded by contract | done | Measured pre-closeout total exceeds the eight-hour estimate ceiling by 47m27s |
 | Guardrails | Complete local gate clean | Formatting, tests, vet, lint, race, OpenAPI, deterministic vendor, dependency/license, and vulnerability checks pass | done | Official bulk vulnerability database preserves complete scans without module-path disclosure |
@@ -2175,7 +2175,7 @@ Self-reference-free implementation and validation evidence:
 2. The operation is `CheckAndRemember`, not a Valkey command abstraction.
 3. The library owns an internal replay core and exposes only the exact root
    facade required by command providers.
-4. Valkey code and `valkey-go v1.0.76` remain in `cmd/dkim2d`.
+4. Valkey code and `valkey-go v1.0.77` remain in `cmd/dkim2d`.
 5. M12 freezes the production TLS, ACL, noeviction, primary-routing,
    persistence/replication, shared-secret, epoch, rotation, and attestation
    invariants. M13 owns loading and wiring them without weakening them.
@@ -2197,13 +2197,13 @@ Self-reference-free implementation and validation evidence:
 14. `ReplayStore` has only `CheckAndRemember`; lifecycle and lock-free state are
     an optional managed interface and no portable usage scan exists.
 15. M15 owns telemetry and M16/M17 own adapter policy.
-16. `valkey-go v1.0.76` has no general error-kind accessor and strips `ERR `
+16. `valkey-go v1.0.77` has no general error-kind accessor and strips `ERR `
     from `ValkeyError.Error()`. The provider therefore extracts only a bounded
     exact RESP leading token from the original `ValkeyResult.ToString()` value
     paired with a direct typed `*valkey.ValkeyError` after
     `NonValkeyError()` is nil; it never classifies arbitrary error strings or
     the server message suffix. Because `ToString()` collapses simple and blob
-    strings, only the public constant `OK` uses the bounded pinned-v1.0.76
+    strings, only the public constant `OK` uses the bounded pinned-v1.0.77
     cache serialization as a response-type proof; error payloads never do.
 
 ### Open Questions Deferred By Ownership

@@ -68,6 +68,9 @@ const (
 	integrationTempfailReply  = "451 4.7.1 DKIM2 service unavailable\x00"
 	integrationModeInbound    = "inbound"
 	integrationModeOrigin     = "originator"
+	publicResponseConnection  = "close"
+	publicResponseNoSniff     = "nosniff"
+	publicResponseNoStore     = "no-store"
 	integrationModePostfixDSN = "postfix_dsn"
 	testMessageInstanceValue  = "v=2; i=1"
 	testSignatureValue        = "v=2; s=1"
@@ -266,6 +269,8 @@ func TestExecutableDaemonRejectUsesExactFixedReply(t *testing.T) {
 			response.Verification.State = generatedfixture.FAIL
 			response.Verification.PrimaryReason = generatedfixture.VerificationReasonMissingProtocol
 			response.Verification.Checks[0].Reason = generatedfixture.VerificationReasonMissingProtocol
+			response.Authentication.State = generatedfixture.FAIL
+			response.Authentication.PrimaryReason = generatedfixture.AuthenticationResultPrimaryReasonMissingProtocol
 			response.Verification.Scope = generatedfixture.Current
 			response.Verification.HistoricalContent = generatedfixture.VerificationResultHistoricalContentNotEvaluated
 			response.Verification.HistoricalSignatures = generatedfixture.VerificationResultHistoricalSignaturesNotEvaluated
@@ -318,7 +323,7 @@ func TestExecutableActionDisconnectRecovers(t *testing.T) {
 					},
 					ApiVersion:  generatedfixture.V1,
 					Disposition: generatedfixture.DispositionAccept,
-					Draft:       generatedfixture.DraftIetfDkimDkim2Spec05,
+					Draft:       generatedfixture.DraftIetfDkimDkim2Spec06,
 					Operation:   generatedfixture.Sign,
 					Result:      generatedfixture.OperationResponseResultPass,
 				}
@@ -477,7 +482,8 @@ func (s *generatedDaemonService) SignDeliveryStatus(
 	body := s.dsn(*request.Body)
 	return generatedfixture.SignDeliveryStatus200JSONResponse{
 		Body: body, Headers: generatedfixture.SignDeliveryStatus200ResponseHeaders{
-			ContentLength: strconv.Itoa(encodedFixtureLength(body)),
+			CacheControl: publicResponseNoStore, Connection: publicResponseConnection,
+			ContentLength: strconv.Itoa(encodedFixtureLength(body)), XContentTypeOptions: publicResponseNoSniff,
 		},
 	}, nil
 }
@@ -533,7 +539,8 @@ func (s *generatedDaemonService) ProcessMessage(
 	body := s.process(*request.Body)
 	return generatedfixture.ProcessMessage200JSONResponse{
 		Body: body, Headers: generatedfixture.ProcessMessage200ResponseHeaders{
-			ContentLength: strconv.Itoa(encodedFixtureLength(body)),
+			CacheControl: publicResponseNoStore, Connection: publicResponseConnection,
+			ContentLength: strconv.Itoa(encodedFixtureLength(body)), XContentTypeOptions: publicResponseNoSniff,
 		},
 	}, nil
 }
@@ -549,7 +556,8 @@ func (s *generatedDaemonService) ReviseMessage(
 	body := s.revise(*request.Body)
 	return generatedfixture.ReviseMessage200JSONResponse{
 		Body: body, Headers: generatedfixture.ReviseMessage200ResponseHeaders{
-			ContentLength: strconv.Itoa(encodedFixtureLength(body)),
+			CacheControl: publicResponseNoStore, Connection: publicResponseConnection,
+			ContentLength: strconv.Itoa(encodedFixtureLength(body)), XContentTypeOptions: publicResponseNoSniff,
 		},
 	}, nil
 }
@@ -565,7 +573,8 @@ func (s *generatedDaemonService) SignMessage(
 	body := s.sign(*request.Body)
 	return generatedfixture.SignMessage200JSONResponse{
 		Body: body, Headers: generatedfixture.SignMessage200ResponseHeaders{
-			ContentLength: strconv.Itoa(encodedFixtureLength(body)),
+			CacheControl: publicResponseNoStore, Connection: publicResponseConnection,
+			ContentLength: strconv.Itoa(encodedFixtureLength(body)), XContentTypeOptions: publicResponseNoSniff,
 		},
 	}, nil
 }
@@ -813,7 +822,7 @@ func TestOriginatorEnvelopeSenderDomainSelectionRunsThroughPublicSocket(t *testi
 }
 
 // TestOriginatorNullSenderTempfailsBeforeDaemonThroughPublicSocket proves the
-// adapter stays closed until it can authenticate Draft-05 DSN prerequisites.
+// adapter stays closed until it can authenticate Draft-06 DSN prerequisites.
 func TestOriginatorNullSenderTempfailsBeforeDaemonThroughPublicSocket(t *testing.T) {
 	const dsnDomain = "dsn.example.test"
 	service := &generatedDaemonService{
@@ -1243,7 +1252,7 @@ func assertFixtureMessage(
 	}
 	defer clear(mailFrom)
 	if api != generatedfixture.V1 ||
-		draft != generatedfixture.DraftIetfDkimDkim2Spec05 ||
+		draft != generatedfixture.DraftIetfDkimDkim2Spec06 ||
 		message.Fidelity == nil ||
 		*message.Fidelity != generatedfixture.MilterReconstructedCrlf ||
 		!bytes.Equal(raw, []byte(
@@ -1287,7 +1296,7 @@ func fixtureOperationResponse(
 	return generatedfixture.OperationResponse{
 		Actions: fixtureActions, ApiVersion: generatedfixture.V1,
 		Disposition: generatedfixture.DispositionAccept,
-		Draft:       generatedfixture.DraftIetfDkimDkim2Spec05,
+		Draft:       generatedfixture.DraftIetfDkimDkim2Spec06,
 		Operation:   generatedfixture.OperationResponseOperation(operation),
 		Result:      generatedfixture.OperationResponseResultPass,
 	}
@@ -1306,7 +1315,7 @@ func assertFixedDaemonRequest(t *testing.T, request *http.Request, route string)
 		request.URL.RawQuery != "" ||
 		request.Header.Get("Content-Type") != "application/json" ||
 		request.Header.Get("Accept") != "application/json" ||
-		request.Header.Get("Cache-Control") != "no-store" ||
+		request.Header.Get("Cache-Control") != publicResponseNoStore ||
 		request.Header.Get("User-Agent") != "dkim2-milter/1" ||
 		request.Header.Get(capabilityHeader) != wantCapability ||
 		request.Header.Get(otherCapabilityHeader) != "" ||
@@ -1321,7 +1330,11 @@ func validFixtureProcessResponse() generatedfixture.ProcessResponse {
 		Actions:     generatedfixture.ActionPlan{},
 		ApiVersion:  generatedfixture.V1,
 		Disposition: generatedfixture.DispositionAccept,
-		Draft:       generatedfixture.DraftIetfDkimDkim2Spec05,
+		Draft:       generatedfixture.DraftIetfDkimDkim2Spec06,
+		Authentication: generatedfixture.AuthenticationResult{
+			PrimaryReason: generatedfixture.AuthenticationResultPrimaryReasonNone,
+			State:         generatedfixture.PASS,
+		},
 		Verification: generatedfixture.VerificationResult{
 			Checks: []generatedfixture.VerificationCheck{{
 				Class:  generatedfixture.VerificationCheckClassProtocol,

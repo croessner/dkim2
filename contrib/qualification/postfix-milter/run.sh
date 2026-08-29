@@ -230,7 +230,7 @@ run_once() {
     --slurpfile daemon_identity "$run_root/daemon-identity.json" \
     '{
       schema: "dkim2.postfix-qualification-report.v1",
-      message_draft: "draft-ietf-dkim-dkim2-spec-05",
+      message_draft: "draft-ietf-dkim-dkim2-spec-06",
       dns_draft: "draft-chuang-dkim2-dns-04",
       base_revision: $base_revision,
       candidate_snapshot_sha256: $candidate,

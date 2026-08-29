@@ -129,8 +129,8 @@ func (s *Service) Start() error {
 	if s.listener != nil || s.closed {
 		return adapter.NewError(adapter.FailureContract)
 	}
-	listener, socket, err := openSocketListener(s.config.Path, 0o600)
-	if err != nil {
+	listener, socket, err := openSocketListener(s.config.Path, 0o600) //nolint:staticcheck // Build-tagged implementations include an intentional unsupported-platform error.
+	if err != nil {                                                   //nolint:staticcheck // The non-Linux build-tagged socket implementation deliberately returns an unsupported-platform error.
 		return adapter.NewError(adapter.FailureContract)
 	}
 	s.listener = listener

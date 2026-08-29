@@ -121,7 +121,7 @@ func invalidHashLengthError(fieldIndex int, hashIndex int, expectedLength int, d
 	}, nil)
 }
 
-// supportedHashAlgorithmForName resolves the fixed Draft-05 digest-size invariant.
+// supportedHashAlgorithmForName resolves the fixed Draft-06 digest-size invariant.
 func supportedHashAlgorithmForName(name string) (supportedHashAlgorithm, bool) {
 	switch name {
 	case HashAlgorithmSHA256:
@@ -173,7 +173,7 @@ func canonicalHashName(input []byte) (string, bool) {
 }
 
 // validUnknownHashComponent rejects control-bearing hash components while permitting WSP.
-// Draft-05 admits FWS inside base64string values; alphabet and padding remain
+// Draft-06 admits FWS inside base64string values; alphabet and padding remain
 // owned by tagvalue.ParseBase64String after it strips WSP.
 func validUnknownHashComponent(input []byte) bool {
 	for _, b := range input {

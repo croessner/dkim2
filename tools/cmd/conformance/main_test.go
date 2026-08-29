@@ -356,13 +356,13 @@ func TestConfiguredRunnersEmitExactEvidence(t *testing.T) {
 	}
 }
 
-// TestDraft05NormativeBindingsUseExactCrossVersionAndRecipeProofs freezes the
-// semantic tests behind the Draft-05 canonical and invalid-recipe claims.
-func TestDraft05NormativeBindingsUseExactCrossVersionAndRecipeProofs(t *testing.T) {
+// TestDraft06NormativeBindingsUseExactCrossVersionAndRecipeProofs freezes the
+// semantic tests behind the Draft-06 canonical and invalid-recipe claims.
+func TestDraft06NormativeBindingsUseExactCrossVersionAndRecipeProofs(t *testing.T) {
 	want := map[string]string{
-		"canonical\x00draft04-to-draft05-header-boundary": "TestDraft04SignatureFailsUnderDraft05HeaderRules",
-		"canonical\x00draft05-to-draft04-header-boundary": "TestDraft05SignatureFailsUnderDraft04HeaderRules",
-		"policy\x00draft05-invalid-recipe-json":           "TestMalformedHistoriedMessageFailsClosedAcrossServiceAndFacade",
+		"canonical\x00draft04-to-draft06-header-boundary": "TestDraft04SignatureFailsUnderDraft06HeaderRules",
+		"canonical\x00draft06-to-draft04-header-boundary": "TestDraft06SignatureFailsUnderDraft04HeaderRules",
+		"policy\x00draft06-invalid-recipe-json":           "TestMalformedHistoriedMessageFailsClosedAcrossServiceAndFacade",
 	}
 	for _, definition := range portableDefinitions {
 		for _, runnerCase := range definition.cases {
@@ -377,7 +377,7 @@ func TestDraft05NormativeBindingsUseExactCrossVersionAndRecipeProofs(t *testing.
 		}
 	}
 	if len(want) != 0 {
-		t.Fatalf("missing exact Draft-05 runner bindings: %v", want)
+		t.Fatalf("missing exact Draft-06 runner bindings: %v", want)
 	}
 	root := filepath.Clean(filepath.Join("..", "..", ".."))
 	manifest, _, err := conformance.LoadManifest(root, manifestPath)
@@ -387,7 +387,7 @@ func TestDraft05NormativeBindingsUseExactCrossVersionAndRecipeProofs(t *testing.
 	policyBound := false
 	httpBound := false
 	for _, manifestCase := range manifest.Cases {
-		if manifestCase.Suite == "policy" && manifestCase.CaseID == "draft05-invalid-recipe-json" {
+		if manifestCase.Suite == "policy" && manifestCase.CaseID == "draft06-invalid-recipe-json" {
 			policyBound = true
 			if manifestCase.Class != testDraftNormative ||
 				!slices.Equal(manifestCase.Authority, []string{conformance.MessageDraft + " Section 11.2"}) ||
@@ -396,21 +396,21 @@ func TestDraft05NormativeBindingsUseExactCrossVersionAndRecipeProofs(t *testing.
 				t.Fatalf("invalid-recipe normative binding = %#v", manifestCase)
 			}
 		}
-		if manifestCase.Suite == "openapi" && manifestCase.CaseID == "draft05-invalid-json-diagnostics" {
+		if manifestCase.Suite == "openapi" && manifestCase.CaseID == "draft06-invalid-json-diagnostics" {
 			httpBound = true
 			for _, authority := range manifestCase.Authority {
 				if strings.Contains(authority, conformance.MessageDraft) {
-					t.Fatal("HTTP JSON preflight retained a Draft-05 normative claim")
+					t.Fatal("HTTP JSON preflight retained a Draft-06 normative claim")
 				}
 			}
 		}
 	}
 	if !policyBound || !httpBound {
-		t.Fatalf("Draft-05 policy/OpenAPI channels = %v/%v, want true/true", policyBound, httpBound)
+		t.Fatalf("Draft-06 policy/OpenAPI channels = %v/%v, want true/true", policyBound, httpBound)
 	}
 }
 
-// TestFullProfileRejectsProvidedEximEvidence freezes the Draft-05 import prohibition.
+// TestFullProfileRejectsProvidedEximEvidence freezes the Draft-06 import prohibition.
 func TestFullProfileRejectsProvidedEximEvidence(t *testing.T) {
 	_, _, err := executeRunners(
 		t.TempDir(),

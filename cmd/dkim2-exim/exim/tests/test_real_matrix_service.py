@@ -27,7 +27,7 @@ def operation_request(operation: str) -> bytes:
     """Return one minimal exact operation request."""
     value: dict[str, object] = {
         "api_version": "v1",
-        "draft": "draft-ietf-dkim-dkim2-spec-05",
+        "draft": "draft-ietf-dkim-dkim2-spec-06",
         "message": {
             "fidelity": "exim_transport_filter_crlf",
             "raw_rfc5322_base64": "",
@@ -47,7 +47,7 @@ def operation_response(operation: str) -> dict[str, object]:
     """Return one exact successful operation response."""
     return {
         "api_version": "v1",
-        "draft": "draft-ietf-dkim-dkim2-spec-05",
+        "draft": "draft-ietf-dkim-dkim2-spec-06",
         "operation": operation,
         "result": "pass",
         "disposition": "accept",

@@ -225,6 +225,7 @@ type RevisionProof struct {
 	state       RevisionProofOutcome
 	draft       string
 	facts       RevisionFacts
+	replay      ReplayProjection
 	policy      TimestampPolicy
 	initialized bool
 }
@@ -271,6 +272,14 @@ func (p RevisionProof) Valid() bool {
 		return false
 	}
 	return (p.state == RevisionProofTerminalNextDomainAuthorizationRequired) == (p.facts.custody.status == signature.CustodyStatusTerminalNextDomain)
+}
+
+// ReplayProjection returns the sealed message-wide origin facts from complete proof.
+func (p RevisionProof) ReplayProjection() (ReplayProjection, bool) {
+	if !p.Valid() {
+		return ReplayProjection{}, false
+	}
+	return p.replay.clone(), true
 }
 
 // State returns the clean proof state or zero for invalid proof.
@@ -531,6 +540,8 @@ type revisionBaseProof struct {
 	canonicalWork        int
 	currentCanonicalWork int
 	hashes               RevisionHashFacts
+	originDigest         [32]byte
+	hasOriginDigest      bool
 }
 
 // revisionSignatureProof stores detached inherited-signature proof state.
@@ -622,7 +633,15 @@ func (v Verifier) completePreparedRevisionProof(input verificationInput, base re
 		usage: RevisionUsage{protocolFields: len(input.instances) + len(input.signatures), signatureSets: signatures.totalSets, keyLookups: signatures.lookups, providerCalls: signatures.lookups,
 			canonicalBytes: signatures.canonicalWork, currentCanonicalBytes: base.currentCanonicalWork, signatureCanonicalBytes: signatures.signatureCanonicalWork, history: base.history.Usage()}, initialized: true,
 	}
-	proof := RevisionProof{state: proofState, draft: DraftBaseline, facts: facts, policy: v.options.TimestampPolicy, initialized: true}
+	exploded := false
+	for _, fact := range signatures.facts {
+		exploded = exploded || fact.flags.exploded
+	}
+	var replayProjection ReplayProjection
+	if base.hasOriginDigest {
+		replayProjection = newReplayProjection(base.originDigest, exploded)
+	}
+	proof := RevisionProof{state: proofState, draft: DraftBaseline, facts: facts, replay: replayProjection, policy: v.options.TimestampPolicy, initialized: true}
 	if !proof.Valid() {
 		return "", RevisionProof{}, newError(ErrorCodeInternalMisuse, ErrorLocation{}, ErrorDetails{Class: ErrorClassInternal}, nil)
 	}
@@ -701,7 +720,26 @@ func (v Verifier) verifyRevisionBase(ctx context.Context, input verificationInpu
 		return revisionBaseProof{}, RevisionProofLimitExceeded, nil
 	}
 	canonicalWork += walk.Usage().CanonicalBytes()
-	return revisionBaseProof{highestSignature: highestSignature, highestInstance: highestInstance, custody: custody, history: walk, canonicalWork: canonicalWork, currentCanonicalWork: currentCanonicalWork, hashes: hashFacts}, "", nil
+	originMessage := input.request.Message
+	if target.InstanceNumber > 1 {
+		transitions := walk.Transitions()
+		if len(transitions) != int(target.InstanceNumber-1) {
+			return revisionBaseProof{highestSignature: highestSignature, highestInstance: highestInstance, custody: custody, history: walk, canonicalWork: canonicalWork, currentCanonicalWork: currentCanonicalWork, hashes: hashFacts}, "", nil
+		}
+		state, ok := transitions[len(transitions)-1].ReconstructedState()
+		if !ok {
+			return revisionBaseProof{highestSignature: highestSignature, highestInstance: highestInstance, custody: custody, history: walk, canonicalWork: canonicalWork, currentCanonicalWork: currentCanonicalWork, hashes: hashFacts}, "", nil
+		}
+		originMessage, err = state.Materialize()
+		if err != nil {
+			return revisionBaseProof{highestSignature: highestSignature, highestInstance: highestInstance, custody: custody, history: walk, canonicalWork: canonicalWork, currentCanonicalWork: currentCanonicalWork, hashes: hashFacts}, "", nil
+		}
+	}
+	originDigest, ok := originReplayDigest(originMessage)
+	if !ok {
+		return revisionBaseProof{highestSignature: highestSignature, highestInstance: highestInstance, custody: custody, history: walk, canonicalWork: canonicalWork, currentCanonicalWork: currentCanonicalWork, hashes: hashFacts}, "", nil
+	}
+	return revisionBaseProof{highestSignature: highestSignature, highestInstance: highestInstance, custody: custody, history: walk, canonicalWork: canonicalWork, currentCanonicalWork: currentCanonicalWork, hashes: hashFacts, originDigest: originDigest, hasOriginDigest: true}, "", nil
 }
 
 // rejectedRevisionHistoryOutcome maps every incomplete authenticated walk to one closed result.

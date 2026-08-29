@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"slices"
 	"testing"
 	"time"
 
@@ -266,7 +267,12 @@ func TestSigningServiceRejectsTamperedEmbeddedDomainBeforePolicyAccess(t *testin
 // real delivery-status policy only after exact embedded evidence succeeds.
 func TestSigningServiceSignsAuthenticatedDeliveryStatus(t *testing.T) {
 	fixture := newSigningServiceFixture(t)
-	service, err := NewSigningService(fixture.publicKeys, fixture.runtime, false)
+	service, err := NewSigningService(
+		fixture.publicKeys,
+		fixture.runtime,
+		false,
+		signingPolicies{deliveryStatus: signingFlagPolicy{doNotModify: true, doNotExplode: true}},
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -276,6 +282,12 @@ func TestSigningServiceSignsAuthenticatedDeliveryStatus(t *testing.T) {
 	service.store = recorder
 	result, err := service.SignDeliveryStatus(context.Background(), request)
 	assertSigningServicePass(t, result, err, signingServiceDSNSelector)
+	if !slices.ContainsFunc(result.Fields(), func(field CompletedField) bool {
+		return bytes.HasPrefix(field.Bytes(), []byte("DKIM2-Signature:")) &&
+			bytes.Contains(field.Bytes(), []byte("f=donotmodify,donotexplode"))
+	}) {
+		t.Fatal("delivery-status policy flags were not isolated onto the DSN signature")
+	}
 	if recorder.acquires != 1 || len(recorder.domains) != 1 ||
 		recorder.domains[0] != signingServiceOriginDomain ||
 		len(recorder.uses) != 1 || recorder.uses[0] != signingstore.PolicyDeliveryStatus {

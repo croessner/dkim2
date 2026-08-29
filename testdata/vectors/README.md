@@ -7,8 +7,8 @@ Vector files should make the exact draft version explicit because the DKIM2
 draft is still changing.
 
 The public verification corpus lives at
-`lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-05/public-golden.json`. It is
-synthetic-only and targets exactly `draft-ietf-dkim-dkim2-spec-05`. Raw RFC
+`lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-06/public-golden.json`. It is
+synthetic-only and targets exactly `draft-ietf-dkim-dkim2-spec-06`. Raw RFC
 5322 and SMTP envelope bytes are Base64 encoded so fixed CRLF and byte
 boundaries remain intact. The corpus contains public RSA and Ed25519 key
 material only; it contains no private keys, seeds, credentials, or production
@@ -29,15 +29,15 @@ PKCS#1 RSA representation and raw 32-byte Ed25519 representation, and names
 only reserved `.test` lookup owners. DNS vector tests enter through the public
 TXT transport, DNS provider, and verifier APIs; they perform no network calls.
 
-The internal draft-05 recipe-application fixture lives at
-`lib/internal/recipe/testdata/golden/recipe-application-draft-ietf-dkim-dkim2-spec-05.json`.
+The internal draft-06 recipe-application fixture lives at
+`lib/internal/recipe/testdata/golden/recipe-application-draft-ietf-dkim-dkim2-spec-06.json`.
 Its package-local loader proves bottom-up header reconstruction, top-down body
 reconstruction, copied terminal-line fidelity, deterministic cross-name
 grouping, and truthful unavailable-body handling. It remains internal because
 M8 deliberately exposes no public history result or recipe API.
 
-The internal draft-05 recipe-generation fixture lives at
-`lib/internal/recipe/testdata/golden/recipe-generation-draft-ietf-dkim-dkim2-spec-05.json`.
+The internal draft-06 recipe-generation fixture lives at
+`lib/internal/recipe/testdata/golden/recipe-generation-draft-ietf-dkim-dkim2-spec-06.json`.
 It retains exact compact decoded JSON together with synthetic previous/current
 states, disclosure and unavailable-body policies, closed outcomes,
 reconstructed semantics, and Section 6 canonical evidence. Package-local fuzz,

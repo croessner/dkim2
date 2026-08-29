@@ -28,7 +28,7 @@ func MapProcessRequest(
 	}
 	request := generated.ProcessRequest{
 		ApiVersion: generated.V1,
-		Draft:      generated.DraftIetfDkimDkim2Spec05,
+		Draft:      generated.DraftIetfDkimDkim2Spec06,
 		Message:    message,
 		Smtp:       smtp,
 	}
@@ -64,7 +64,7 @@ func MapSignRequest(
 	return generated.SignRequest{
 		ApiVersion: generated.V1,
 		Context:    generated.SigningContext{Tenant: tenant, Domain: domain},
-		Draft:      generated.DraftIetfDkimDkim2Spec05,
+		Draft:      generated.DraftIetfDkimDkim2Spec06,
 		Message:    message,
 		Smtp:       smtp,
 	}, nil
@@ -103,7 +103,7 @@ func MapReviseRequest(
 	return generated.ReviseRequest{
 		ApiVersion:   generated.V1,
 		Context:      generated.SigningContext{Tenant: tenant, Domain: domain},
-		Draft:        generated.DraftIetfDkimDkim2Spec05,
+		Draft:        generated.DraftIetfDkimDkim2Spec06,
 		IncomingSmtp: incomingSMTP,
 		Message:      message,
 		Smtp:         currentSMTP,

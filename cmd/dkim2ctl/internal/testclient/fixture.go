@@ -117,17 +117,18 @@ type negativeInput struct {
 
 // fixtureExpectation contains only allowlisted typed response assertions.
 type fixtureExpectation struct {
-	HTTPStatus        int                      `json:"http_status"`
-	HealthStatus      *string                  `json:"health_status,omitempty"`
-	ReadinessStatus   *string                  `json:"readiness_status,omitempty"`
-	ErrorCode         *string                  `json:"error_code,omitempty"`
-	Disposition       *string                  `json:"disposition,omitempty"`
-	VerificationState *string                  `json:"verification_state,omitempty"`
-	PolicyVerdict     *string                  `json:"policy_verdict,omitempty"`
-	ReplayClass       *string                  `json:"replay_class,omitempty"`
-	Operation         *string                  `json:"operation,omitempty"`
-	Result            *string                  `json:"result,omitempty"`
-	Actions           *[]fixtureExpectedAction `json:"actions,omitempty"`
+	HTTPStatus          int                      `json:"http_status"`
+	HealthStatus        *string                  `json:"health_status,omitempty"`
+	ReadinessStatus     *string                  `json:"readiness_status,omitempty"`
+	ErrorCode           *string                  `json:"error_code,omitempty"`
+	Disposition         *string                  `json:"disposition,omitempty"`
+	VerificationState   *string                  `json:"verification_state,omitempty"`
+	AuthenticationState *string                  `json:"authentication_state,omitempty"`
+	PolicyVerdict       *string                  `json:"policy_verdict,omitempty"`
+	ReplayClass         *string                  `json:"replay_class,omitempty"`
+	Operation           *string                  `json:"operation,omitempty"`
+	Result              *string                  `json:"result,omitempty"`
+	Actions             *[]fixtureExpectedAction `json:"actions,omitempty"`
 }
 
 // fixtureExpectedAction freezes one exact ordered generated action.
@@ -513,6 +514,7 @@ func expectationFieldCount(expectation fixtureExpectation) int {
 	for _, value := range []*string{
 		expectation.HealthStatus, expectation.ReadinessStatus, expectation.ErrorCode,
 		expectation.Disposition, expectation.VerificationState,
+		expectation.AuthenticationState,
 		expectation.PolicyVerdict, expectation.ReplayClass,
 		expectation.Operation, expectation.Result,
 	} {
@@ -538,15 +540,16 @@ func validateProcessInput(input fixtureProcessInput, expectation fixtureExpectat
 		return 0, NewExitError(ExitFixture)
 	}
 	if !utf8.ValidString(input.MailFrom) ||
-		expectation.Disposition == nil || expectation.VerificationState == nil ||
+		expectation.Disposition == nil || expectation.VerificationState == nil || expectation.AuthenticationState == nil ||
 		expectation.PolicyVerdict == nil || expectation.ReplayClass == nil ||
 		expectation.Actions == nil ||
-		expectationFieldCount(expectation) != 5 ||
+		expectationFieldCount(expectation) != 6 ||
 		!validOptionalEnum(expectation.Disposition, "accept", "reject", "tempfail", "continue") ||
 		!validOptionalEnum(expectation.VerificationState, "PASS", "FAIL", "PERMERROR", "TEMPERROR") ||
+		!validOptionalEnum(expectation.AuthenticationState, "PASS", "FAIL", "PERMERROR", "TEMPERROR") ||
 		!validOptionalEnum(expectation.PolicyVerdict, "accept", "reject", "tempfail", "continue") ||
 		!validOptionalEnum(expectation.ReplayClass,
-			"not_checked", "disabled", "first_seen", "replayed", "indeterminate") ||
+			"not_checked", "disabled", "first_seen", "exploded", "replayed", "indeterminate") ||
 		!validExpectedActions(expectation.Actions) {
 		return 0, NewExitError(ExitFixture)
 	}
@@ -791,7 +794,7 @@ func generatedProcessRequest(input fixtureProcessInput) (generated.ProcessReques
 	}
 	request := generated.ProcessRequest{
 		ApiVersion: generated.V1,
-		Draft:      generated.DraftIetfDkimDkim2Spec05,
+		Draft:      generated.DraftIetfDkimDkim2Spec06,
 		Message:    message,
 		Smtp:       smtp,
 	}
@@ -813,7 +816,7 @@ func generatedSignRequest(input fixtureSignInput) (generated.SignRequest, error)
 	}
 	return generated.SignRequest{
 		ApiVersion: generated.V1,
-		Draft:      generated.DraftIetfDkimDkim2Spec05,
+		Draft:      generated.DraftIetfDkimDkim2Spec06,
 		Message:    message,
 		Smtp:       smtp,
 		Context: generated.SigningContext{
@@ -841,7 +844,7 @@ func generatedReviseRequest(input fixtureReviseInput) (generated.ReviseRequest, 
 	}
 	return generated.ReviseRequest{
 		ApiVersion:   generated.V1,
-		Draft:        generated.DraftIetfDkimDkim2Spec05,
+		Draft:        generated.DraftIetfDkimDkim2Spec06,
 		Message:      message,
 		Smtp:         smtp,
 		IncomingSmtp: incoming,
@@ -865,7 +868,7 @@ func generatedDSNSignRequest(input fixtureDSNSignInput) (generated.DSNSignReques
 	}
 	return generated.DSNSignRequest{
 		ApiVersion: generated.V1,
-		Draft:      generated.DraftIetfDkimDkim2Spec05,
+		Draft:      generated.DraftIetfDkimDkim2Spec06,
 		Message:    message,
 		OuterSmtp:  outer,
 		Context: generated.DeliveryStatusContext{

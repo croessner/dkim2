@@ -42,7 +42,7 @@ func TestCommandSurfaceFreezesInitialSubcommands(t *testing.T) {
 func TestFixtureValidationDoesNotOpenCapabilityOrNetwork(t *testing.T) {
 	t.Parallel()
 	fixturePath := filepath.Join(t.TempDir(), "fixture.json")
-	fixture := `{"schema":"dkim2ctl.fixture.v1","draft":"draft-ietf-dkim-dkim2-spec-05",` +
+	fixture := `{"schema":"dkim2ctl.fixture.v1","draft":"draft-ietf-dkim-dkim2-spec-06",` +
 		`"fixture":"offline","cases":[{"case":"health","kind":"health",` +
 		`"expect":{"http_status":200,"health_status":"alive"}}]}`
 	if err := os.WriteFile(fixturePath, []byte(fixture), 0o600); err != nil {

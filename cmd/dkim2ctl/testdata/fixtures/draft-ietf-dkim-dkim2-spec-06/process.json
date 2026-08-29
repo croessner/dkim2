@@ -1,0 +1,27 @@
+{
+  "schema": "dkim2ctl.fixture.v1",
+  "draft": "draft-ietf-dkim-dkim2-spec-06",
+  "fixture": "process-malformed-message",
+  "cases": [
+    {
+      "case": "process",
+      "kind": "process",
+      "process": {
+        "raw_rfc5322_base64": "U3ViamVjdDogZXhhbXBsZQ0KDQpib2R5DQo=",
+        "mail_from": "",
+        "rcpt_to": [
+          ""
+        ]
+      },
+      "expect": {
+        "http_status": 200,
+        "disposition": "reject",
+        "verification_state": "PERMERROR",
+        "authentication_state": "PERMERROR",
+        "policy_verdict": "reject",
+        "replay_class": "not_checked",
+        "actions": []
+      }
+    }
+  ]
+}

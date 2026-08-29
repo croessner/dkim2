@@ -75,6 +75,7 @@ type Decision struct {
 	findings            []Finding
 	actions             []Action
 	initialized         bool
+	authenticationFinal bool
 }
 
 // Protocol returns the unchanged authoritative verification class.
@@ -109,7 +110,7 @@ func (d Decision) Actions() []Action { return slices.Clone(d.actions) }
 
 // IsZero reports whether the decision carries no initialized policy state.
 func (d Decision) IsZero() bool {
-	return !d.initialized && d.protocol == "" && d.mode == "" && d.verdict == "" && d.primaryReason == "" && d.modifyState == "" && d.explodeState == "" && !d.feedbackIntent.Valid() && !d.dnsTestingEffective && len(d.findings) == 0 && len(d.actions) == 0
+	return !d.initialized && !d.authenticationFinal && d.protocol == "" && d.mode == "" && d.verdict == "" && d.primaryReason == "" && d.modifyState == "" && d.explodeState == "" && !d.feedbackIntent.Valid() && !d.dnsTestingEffective && len(d.findings) == 0 && len(d.actions) == 0
 }
 
 // Valid reports whether decision state satisfies closed base invariants.
@@ -174,6 +175,11 @@ func (d Decision) basicValid() bool {
 
 // expectedBaseOutcome derives mode findings and DNS-effective precedence.
 func (d Decision) expectedBaseOutcome() (Verdict, PolicyReason, []PolicyReason) {
+	if d.authenticationFinal {
+		verdict := strictVerdict(d.protocol)
+		reason := reasonForProtocol(d.protocol)
+		return verdict, reason, []PolicyReason{reason}
+	}
 	verdict, primary, reasons := baseOutcome(d.protocol, d.mode)
 	if !d.dnsTestingEffective {
 		return verdict, primary, reasons
@@ -182,6 +188,42 @@ func (d Decision) expectedBaseOutcome() (Verdict, PolicyReason, []PolicyReason) 
 		reasons = reasons[:1]
 	}
 	return VerdictContinue, ReasonDNSTestingEffective, reasons
+}
+
+// newAuthenticationDecision seals a non-overridable final replay outcome while retaining authenticated compliance facts.
+func newAuthenticationDecision(protocol ProtocolClass, mode Mode, source Decision) (Decision, error) {
+	if !source.Valid() || source.protocol != ProtocolPASS ||
+		(protocol != ProtocolFAIL && protocol != ProtocolTEMPERROR) {
+		return Decision{}, newError(ErrorInternalContract)
+	}
+	reason := reasonForProtocol(protocol)
+	finding, err := newFinding(reason, 0, false)
+	if err != nil {
+		return Decision{}, err
+	}
+	derived := make([]Finding, 0, len(source.findings))
+	for _, current := range source.findings {
+		switch current.reason {
+		case ReasonProtocolPass, ReasonTestingModeObserve, ReasonPermissiveOverride,
+			ReasonDNSTestingEffective, ReasonDNSTestingMixed, ReasonDNSTestingIneligible:
+			continue
+		default:
+			derived = append(derived, current)
+		}
+	}
+	findings := append([]Finding{finding}, derived...)
+	verdict := strictVerdict(protocol)
+	decision := Decision{
+		protocol: protocol, mode: mode, verdict: verdict, primaryReason: reason,
+		modifyState: source.modifyState, explodeState: source.explodeState,
+		feedbackIntent: source.feedbackIntent, findings: findings,
+		actions: []Action{{kind: actionForVerdict(verdict)}}, initialized: true,
+		authenticationFinal: true,
+	}
+	if !decision.Valid() {
+		return Decision{}, newError(ErrorInternalContract)
+	}
+	return decision, nil
 }
 
 // complianceViolations reports proven modification and explosion findings.

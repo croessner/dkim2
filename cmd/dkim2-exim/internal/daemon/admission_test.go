@@ -14,7 +14,7 @@ import (
 func validOperationFixture() generated.OperationResponse {
 	return generated.OperationResponse{
 		ApiVersion:  generated.V1,
-		Draft:       generated.DraftIetfDkimDkim2Spec05,
+		Draft:       generated.DraftIetfDkimDkim2Spec06,
 		Operation:   generated.Sign,
 		Result:      generated.OperationResponseResultPass,
 		Disposition: generated.DispositionAccept,
@@ -185,6 +185,8 @@ func TestProcessAdmissionAdmitsPermerrorPolicyAcceptance(t *testing.T) {
 	value.Replay.Class = generated.NotChecked
 	value.Verification.State = generated.PERMERROR
 	value.Verification.PrimaryReason = generated.VerificationReasonMalformedProtocol
+	value.Authentication.State = generated.PERMERROR
+	value.Authentication.PrimaryReason = generated.AuthenticationResultPrimaryReasonMalformedProtocol
 	value.Verification.Checks[0].Reason = generated.VerificationReasonMalformedProtocol
 	value.Verification.Scope = generated.Current
 	value.Verification.HistoricalContent = generated.VerificationResultHistoricalContentNotEvaluated
@@ -252,7 +254,11 @@ func validProcessFixture() generated.ProcessResponse {
 			Value: "mx.example.test; dkim2=pass",
 		}},
 		ApiVersion: generated.V1, Disposition: generated.DispositionAccept,
-		Draft: generated.DraftIetfDkimDkim2Spec05,
+		Draft: generated.DraftIetfDkimDkim2Spec06,
+		Authentication: generated.AuthenticationResult{
+			PrimaryReason: generated.AuthenticationResultPrimaryReasonNone,
+			State:         generated.PASS,
+		},
 		Verification: generated.VerificationResult{
 			Checks: []generated.VerificationCheck{{
 				Class:  generated.VerificationCheckClassProtocol,
@@ -291,9 +297,9 @@ func validProcessFixture() generated.ProcessResponse {
 	}
 }
 
-// TestDraft05PermanentReasonsDoNotDefer proves every new protocol infraction
+// TestDraft06PermanentReasonsDoNotDefer proves every new protocol infraction
 // becomes an admitted permanent rejection rather than an Exim deferral.
-func TestDraft05PermanentReasonsDoNotDefer(t *testing.T) {
+func TestDraft06PermanentReasonsDoNotDefer(t *testing.T) {
 	for _, reason := range []generated.VerificationReason{
 		generated.VerificationReasonDuplicateHashAlgorithm,
 		generated.VerificationReasonInvalidRecipeJson,
@@ -303,9 +309,11 @@ func TestDraft05PermanentReasonsDoNotDefer(t *testing.T) {
 		value := validProcessFixture()
 		value.Actions = generated.ActionPlan{}
 		value.Disposition = generated.DispositionReject
-		value.Draft = generated.DraftIetfDkimDkim2Spec05
+		value.Draft = generated.DraftIetfDkimDkim2Spec06
 		value.Verification.State = generated.PERMERROR
 		value.Verification.PrimaryReason = reason
+		value.Authentication.State = generated.PERMERROR
+		value.Authentication.PrimaryReason = generated.AuthenticationResultPrimaryReason(reason)
 		value.Verification.Scope = generated.Current
 		value.Verification.HistoricalContent = generated.VerificationResultHistoricalContentNotEvaluated
 		value.Verification.HistoricalSignatures = generated.VerificationResultHistoricalSignaturesNotEvaluated

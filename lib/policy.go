@@ -587,6 +587,33 @@ func EvaluatePolicy(result VerifyResult, options ...PolicyOption) (PolicyDecisio
 	return public, nil
 }
 
+// EvaluateAuthenticationPolicy evaluates local policy from the authoritative final Draft-06 result.
+func EvaluateAuthenticationPolicy(result AuthenticationResult, options ...PolicyOption) (PolicyDecision, error) {
+	config, err := applyPolicyOptions(options...)
+	if err != nil {
+		return PolicyDecision{}, err
+	}
+	if !result.Valid() || !verifyResultPolicyProvenanceValid(result.Verification()) {
+		return PolicyDecision{}, newPolicyError(PolicyErrorInvalidInput)
+	}
+	evaluator, err := policy.NewEvaluator(config.internalConfig())
+	if err != nil {
+		return PolicyDecision{}, adaptPolicyError(err)
+	}
+	decision, err := evaluator.EvaluateAuthenticationProjection(
+		result.Verification().state.policyProjection.Clone(),
+		policy.ProtocolClass(result.State()),
+	)
+	if err != nil {
+		return PolicyDecision{}, adaptPolicyError(err)
+	}
+	public, ok := adaptPolicyDecision(result.State(), decision)
+	if !ok {
+		return PolicyDecision{}, newPolicyError(PolicyErrorInternalContract)
+	}
+	return public, nil
+}
+
 // verifyResultPolicyProvenanceValid binds public state to the sealed projection without reparsing public facts.
 func verifyResultPolicyProvenanceValid(result VerifyResult) bool {
 	if result.state == nil {

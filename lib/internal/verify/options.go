@@ -13,7 +13,7 @@ import (
 
 const (
 	// DraftBaseline identifies the active DKIM2 verification draft.
-	DraftBaseline = "draft-ietf-dkim-dkim2-spec-05"
+	DraftBaseline = "draft-ietf-dkim-dkim2-spec-06"
 	// AlgorithmRSASHA256 identifies RSA with SHA-256 and PKCS#1 v1.5 verification.
 	AlgorithmRSASHA256 = signature.AlgorithmRSASHA256
 	// AlgorithmEd25519SHA256 identifies Ed25519 verification over SHA-256 digest bytes.

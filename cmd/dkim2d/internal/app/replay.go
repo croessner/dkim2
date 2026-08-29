@@ -27,6 +27,8 @@ const (
 	ReplayResultDisabled = outcome.ReplayDisabled
 	// ReplayResultFirstSeen means every authenticated identity was newly retained.
 	ReplayResultFirstSeen = outcome.ReplayFirstSeen
+	// ReplayResultExploded means authenticated exploded made the retained copy expected.
+	ReplayResultExploded = outcome.ReplayExploded
 	// ReplayResultReplayed means at least one authenticated identity already existed.
 	ReplayResultReplayed = outcome.ReplayReplayed
 	// ReplayResultIndeterminate means replay storage cannot be classified safely.
@@ -135,7 +137,7 @@ func (c *ReplayCoordinator) Coordinate(ctx context.Context, domain DomainResult)
 		return ReplayOutcome{}, &ReplayCoordinatorError{}
 	}
 
-	if verification.State() != dkim2.ResultStatePASS || policy.Verdict() != dkim2.PolicyVerdictAccept {
+	if verification.State() != dkim2.ResultStatePASS {
 		disposition, ok := dispositionForPolicy(policy.Verdict())
 		if !ok {
 			return ReplayOutcome{}, &ReplayCoordinatorError{}
@@ -149,19 +151,24 @@ func (c *ReplayCoordinator) Coordinate(ctx context.Context, domain DomainResult)
 		if err := replayContextError(ctx); err != nil {
 			return ReplayOutcome{}, err
 		}
-		return newReplayOutcome(ReplayResultDisabled, FinalDispositionAccept, false), nil
+		disposition, ok := dispositionForPolicy(policy.Verdict())
+		if !ok {
+			return ReplayOutcome{}, &ReplayCoordinatorError{}
+		}
+		return newReplayOutcome(ReplayResultDisabled, disposition, false), nil
 	}
 	if nilInterface(c.state.deriver) || nilInterface(c.state.store) || !c.state.retention.Valid() {
 		return ReplayOutcome{}, &ReplayCoordinatorError{}
 	}
 
-	return c.coordinateEnabled(ctx, verification)
+	return c.coordinateEnabled(ctx, verification, policy)
 }
 
 // coordinateEnabled derives every key before sequentially mutating the selected store.
 func (c *ReplayCoordinator) coordinateEnabled(
 	ctx context.Context,
 	verification dkim2.VerifyResult,
+	policy dkim2.PolicyDecision,
 ) (ReplayOutcome, error) {
 	if err := replayContextError(ctx); err != nil {
 		return ReplayOutcome{}, err
@@ -173,6 +180,7 @@ func (c *ReplayCoordinator) coordinateEnabled(
 	if identityErr != nil || !identities.Valid() || identities.Len() == 0 {
 		return indeterminateReplayOutcome(false), nil
 	}
+	effectiveExploded := identities.Exploded() && policy.DoNotExplodeCompliance() != dkim2.PolicyComplianceViolated
 
 	keys := make([]dkim2.ReplayKey, identities.Len())
 	for index := range identities.Len() {
@@ -224,10 +232,20 @@ func (c *ReplayCoordinator) coordinateEnabled(
 	switch {
 	case indeterminate:
 		return indeterminateReplayOutcome(possibleMutation), nil
+	case effectiveExploded:
+		disposition, ok := dispositionForPolicy(policy.Verdict())
+		if !ok {
+			return ReplayOutcome{}, &ReplayCoordinatorError{}
+		}
+		return newReplayOutcome(ReplayResultExploded, disposition, possibleMutation), nil
 	case replayed:
 		return newReplayOutcome(ReplayResultReplayed, FinalDispositionReject, possibleMutation), nil
 	default:
-		return newReplayOutcome(ReplayResultFirstSeen, FinalDispositionAccept, possibleMutation), nil
+		disposition, ok := dispositionForPolicy(policy.Verdict())
+		if !ok {
+			return ReplayOutcome{}, &ReplayCoordinatorError{}
+		}
+		return newReplayOutcome(ReplayResultFirstSeen, disposition, possibleMutation), nil
 	}
 }
 
@@ -334,9 +352,11 @@ func (o ReplayOutcome) Valid() bool {
 	case ReplayResultNotChecked:
 		return !o.state.possibleMutation
 	case ReplayResultDisabled:
-		return o.state.disposition == FinalDispositionAccept && !o.state.possibleMutation
+		return o.state.disposition.Known() && !o.state.possibleMutation
 	case ReplayResultFirstSeen:
-		return o.state.disposition == FinalDispositionAccept && o.state.possibleMutation
+		return o.state.disposition.Known() && o.state.possibleMutation
+	case ReplayResultExploded:
+		return o.state.disposition.Known() && o.state.possibleMutation
 	case ReplayResultReplayed:
 		return o.state.disposition == FinalDispositionReject
 	case ReplayResultIndeterminate:

@@ -288,6 +288,8 @@ type CheckResult struct {
 type SignatureSetResult struct {
 	// Index records the zero-based s= set position.
 	Index int
+	// Selector identifies the failed supported signature and is otherwise empty.
+	Selector string
 	// Algorithm records the signature algorithm name.
 	Algorithm Algorithm
 	// Status records the per-signature-set outcome.

@@ -286,7 +286,7 @@ type replayPublicAPIAudit struct {
 }
 
 // auditReplayPublicAPI validates the exact replay-related root declaration surface.
-func auditReplayPublicAPI(root string, files []parsedReplayFile) replayPublicAPIAudit {
+func auditReplayPublicAPI(root string, files []parsedReplayFile) replayPublicAPIAudit { //nolint:gocyclo // The declaration audit intentionally validates each closed symbol class in one pass.
 	audit := replayPublicAPIAudit{
 		functions: map[string]bool{
 			"ReplayIdentities": true, "NewReplayError": true, "ReplayErrorCodeOf": true,
@@ -294,6 +294,7 @@ func auditReplayPublicAPI(root string, files []parsedReplayFile) replayPublicAPI
 			"NewReplayRetention": true, "DefaultReplayRetention": true,
 			"NewReplayDeriver": true, "NewReplayMemoryStore": true,
 			"NewReplayDisabledStore": true, useReplayStorageKeyFunction: true,
+			"NewAuthenticator": true, "NewDisabledAuthenticator": true,
 		},
 		types: map[string]bool{
 			"ReplayKey": true, "ReplayCheck": true, "ReplayStoreState": true,
@@ -302,6 +303,8 @@ func auditReplayPublicAPI(root string, files []parsedReplayFile) replayPublicAPI
 			"ReplayIdentity": true, "ReplayIdentitySet": true, "ReplayDeriver": true,
 			"ReplayLimits": true, "ReplayClock": true, "ReplayClockFunc": true,
 			replayMemoryConfigType: true, "ReplayMemoryStore": true, "ReplayDisabledStore": true,
+			"AuthenticationReplayClass": true, "AuthenticationReason": true,
+			"AuthenticationResult": true, "Authenticator": true,
 		},
 		constants: map[string]bool{
 			"ReplayKeyAlgorithm": true, "ReplayStoredValue": true,
@@ -313,6 +316,12 @@ func auditReplayPublicAPI(root string, files []parsedReplayFile) replayPublicAPI
 			"ReplayErrorIndeterminate": true, "ReplayErrorInconsistent": true,
 			"ReplayErrorCancelled": true, "ReplayErrorDeadlineExceeded": true,
 			"ReplayErrorClosed": true, "ReplayErrorInternalInvariant": true,
+			"AuthenticationReasonReplayIndeterminate":             true,
+			"AuthenticationReasonReplayEvidenceUnavailable":       true,
+			"AuthenticationReasonDuplicateMessageWithoutExploded": true,
+			"AuthenticationReplayNotChecked":                      true, "AuthenticationReplayDisabled": true,
+			"AuthenticationReplayFirstSeen": true, "AuthenticationReplayExploded": true,
+			"AuthenticationReplayReplayed": true, "AuthenticationReplayIndeterminate": true,
 		},
 	}
 	rootPackage := filepath.Join(root, "lib")
@@ -327,7 +336,8 @@ func auditReplayPublicAPI(root string, files []parsedReplayFile) replayPublicAPI
 		if directory != rootPackage {
 			continue
 		}
-		facade := file.path == filepath.Join(rootPackage, "replay_facade.go")
+		facade := file.path == filepath.Join(rootPackage, "replay_facade.go") || file.path == filepath.Join(rootPackage, "authenticator.go")
+		authenticatorFacade := file.path == filepath.Join(rootPackage, "authenticator.go")
 		for _, declaration := range file.syntax.Decls {
 			switch typed := declaration.(type) {
 			case *ast.FuncDecl:
@@ -336,7 +346,7 @@ func auditReplayPublicAPI(root string, files []parsedReplayFile) replayPublicAPI
 				}
 				if typed.Recv != nil {
 					receiver := replayReceiverBaseName(typed.Recv)
-					if strings.Contains(typed.Name.Name, "Replay") || strings.Contains(receiver, "Replay") {
+					if !authenticatorFacade && (strings.Contains(typed.Name.Name, "Replay") || strings.Contains(receiver, "Replay")) {
 						audit.violation = "unapproved public replay method " + typed.Name.Name + " in " + file.path
 						return audit
 					}

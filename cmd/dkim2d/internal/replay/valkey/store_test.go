@@ -1064,7 +1064,7 @@ func TestInvariantAndPanicDegradationIsSticky(t *testing.T) {
 	}
 }
 
-// TestNativeAdapterBuildsAndDispatchesExactCompletedCommand verifies the real v1.0.76 path.
+// TestNativeAdapterBuildsAndDispatchesExactCompletedCommand verifies the real v1.0.77 path.
 func TestNativeAdapterBuildsAndDispatchesExactCompletedCommand(t *testing.T) {
 	key := slotZeroStorageKey()
 	client := &nativeClientProbe{}
@@ -1195,7 +1195,7 @@ func cachedMessage(t *testing.T, prefix byte, payload string) valkeygo.ValkeyMes
 // validReplayKey derives one protected key only through authentic public verifier evidence.
 func validReplayKey(t *testing.T) dkim2.ReplayKey {
 	t.Helper()
-	corpusBytes, err := os.ReadFile("../../../../../lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-05/public-golden.json")
+	corpusBytes, err := os.ReadFile("../../../../../lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-06/public-golden.json")
 	if err != nil {
 		t.Fatal("public replay corpus read failed")
 	}

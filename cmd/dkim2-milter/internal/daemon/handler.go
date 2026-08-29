@@ -228,7 +228,7 @@ func (h *Handler) Handle(
 			operationContext,
 			generated.ProcessMessageJSONRequestBody{
 				ApiVersion: generated.V1,
-				Draft:      generated.DraftIetfDkimDkim2Spec05,
+				Draft:      generated.DraftIetfDkimDkim2Spec06,
 				Message:    request.message,
 				Reporting:  reporting,
 				Smtp:       request.smtp,
@@ -243,7 +243,7 @@ func (h *Handler) Handle(
 			operationContext,
 			generated.SignMessageJSONRequestBody{
 				ApiVersion: generated.V1,
-				Draft:      generated.DraftIetfDkimDkim2Spec05,
+				Draft:      generated.DraftIetfDkimDkim2Spec06,
 				Message:    request.message,
 				Smtp:       request.smtp,
 				Context: generated.SigningContext{
@@ -260,7 +260,7 @@ func (h *Handler) Handle(
 			operationContext,
 			generated.ReviseMessageJSONRequestBody{
 				ApiVersion:   generated.V1,
-				Draft:        generated.DraftIetfDkimDkim2Spec05,
+				Draft:        generated.DraftIetfDkimDkim2Spec06,
 				Message:      request.message,
 				Smtp:         request.smtp,
 				IncomingSmtp: request.smtp,
@@ -286,7 +286,7 @@ func (h *Handler) Handle(
 			operationContext,
 			generated.SignDeliveryStatusJSONRequestBody{
 				ApiVersion: generated.V1,
-				Draft:      generated.DraftIetfDkimDkim2Spec05,
+				Draft:      generated.DraftIetfDkimDkim2Spec06,
 				Message:    request.dsnMessage,
 				OuterSmtp:  request.smtp,
 				Context: generated.DeliveryStatusContext{
@@ -343,7 +343,7 @@ func observedDomains(state *handlerGuard, message milter.Message) milter.DomainO
 
 // signingDomain assesses supported reverse-path evidence and resolves one exact
 // originator domain without fallback. Null senders fail closed until the
-// adapter can authenticate the complete Draft-05 DSN prerequisites itself.
+// adapter can authenticate the complete Draft-06 DSN prerequisites itself.
 func (guard *handlerGuard) signingDomain(message milter.Message) (string, bool, error) {
 	if guard == nil {
 		return "", false, &milter.Error{Class: milter.FailureContract}
@@ -550,7 +550,7 @@ func (guard *handlerGuard) mapProcess(response *generated.ProcessMessageResponse
 		response.JSON200 == nil {
 		return milter.Result{}, &milter.Error{Class: milter.FailureContract}
 	}
-	result, ok := verificationResult(value.Verification.State)
+	result, ok := verificationResult(value.Authentication.State)
 	if !ok {
 		return milter.Result{}, &milter.Error{Class: milter.FailureContract}
 	}
@@ -739,11 +739,14 @@ func validProcessRequiredMembers(body []byte) bool {
 	document, ok := requiredJSONObject(
 		body,
 		"actions", "api_version", "disposition", "draft", "policy", "replay",
-		"verification",
+		"authentication", "verification",
 	)
 	if !ok || !validActionMembers(document["actions"]) ||
 		!validVerificationMembers(document["verification"]) ||
 		!validPolicyMembers(document["policy"]) {
+		return false
+	}
+	if _, authOK := requiredJSONObject(document["authentication"], "primary_reason", "state"); !authOK {
 		return false
 	}
 	_, replayOK := requiredJSONObject(document["replay"], "class")
@@ -792,7 +795,7 @@ func validVerificationMembers(data []byte) bool {
 			signature,
 			"algorithm", "key_policy", "reason", "status",
 		)
-		if !valid {
+		if !valid || !validOptionalJSONMember(fields, "selector") {
 			return false
 		}
 		if _, valid = requiredJSONObject(
@@ -875,7 +878,7 @@ func mapOperation(
 ) (milter.Result, error) {
 	if value == nil ||
 		value.ApiVersion != generated.V1 ||
-		value.Draft != generated.DraftIetfDkimDkim2Spec05 ||
+		value.Draft != generated.DraftIetfDkimDkim2Spec06 ||
 		string(value.Operation) != operation ||
 		!value.Operation.Valid() || !value.Result.Valid() ||
 		!value.Disposition.Valid() || value.Actions == nil ||
@@ -994,9 +997,10 @@ func consumeJSONValue(decoder *json.Decoder, depth int) bool {
 // validProcessContract validates every closed nested response fact and bound.
 func validProcessContract(value *generated.ProcessResponse, authservID string) bool {
 	if value == nil || value.ApiVersion != generated.V1 ||
-		value.Draft != generated.DraftIetfDkimDkim2Spec05 ||
+		value.Draft != generated.DraftIetfDkimDkim2Spec06 ||
 		!value.Disposition.Valid() || value.Actions == nil ||
 		!validProcessReportAction(value, authservID) ||
+		!validAuthenticationContract(value.Authentication) ||
 		!validVerificationContract(value.Verification) ||
 		!validPolicyContract(value.Policy) || !value.Replay.Class.Valid() ||
 		!validProcessOutcomeMatrix(value) {
@@ -1015,7 +1019,7 @@ func validProcessReportAction(
 			value.Disposition != generated.DispositionContinue) {
 		return value != nil && len(value.Actions) == 0
 	}
-	result, ok := verificationResult(value.Verification.State)
+	result, ok := verificationResult(value.Authentication.State)
 	return ok && len(value.Actions) == 1 &&
 		value.Actions[0].Type == generated.AddHeader &&
 		value.Actions[0].Name == generated.AuthenticationResults &&
@@ -1028,25 +1032,36 @@ func validProcessOutcomeMatrix(value *generated.ProcessResponse) bool {
 		return false
 	}
 	switch value.Replay.Class {
-	case generated.Disabled, generated.FirstSeen:
-		return value.Disposition == generated.DispositionAccept &&
-			value.Verification.State == generated.PASS &&
-			value.Policy.Verdict == generated.PolicyResultVerdictAccept
+	case generated.Disabled, generated.FirstSeen, generated.Exploded:
+		return value.Verification.State == generated.PASS &&
+			value.Authentication.State == generated.PASS &&
+			value.Authentication.PrimaryReason == generated.AuthenticationResultPrimaryReasonNone &&
+			string(value.Disposition) == string(value.Policy.Verdict)
 	case generated.Replayed:
 		return value.Disposition == generated.DispositionReject &&
 			value.Verification.State == generated.PASS &&
-			value.Policy.Verdict == generated.PolicyResultVerdictAccept
+			value.Authentication.State == generated.FAIL &&
+			value.Authentication.PrimaryReason == generated.AuthenticationResultPrimaryReasonDuplicateMessageWithoutExploded
 	case generated.Indeterminate:
 		return value.Disposition == generated.DispositionTempfail &&
 			value.Verification.State == generated.PASS &&
-			value.Policy.Verdict == generated.PolicyResultVerdictAccept
+			value.Authentication.State == generated.TEMPERROR &&
+			(value.Authentication.PrimaryReason == generated.AuthenticationResultPrimaryReasonReplayIndeterminate ||
+				value.Authentication.PrimaryReason == generated.AuthenticationResultPrimaryReasonReplayEvidenceUnavailable)
 	case generated.NotChecked:
 		return (value.Verification.State != generated.PASS ||
 			value.Policy.Verdict != generated.PolicyResultVerdictAccept) &&
+			value.Authentication.State == value.Verification.State &&
+			string(value.Authentication.PrimaryReason) == string(value.Verification.PrimaryReason) &&
 			string(value.Disposition) == string(value.Policy.Verdict)
 	default:
 		return false
 	}
+}
+
+// validAuthenticationContract validates the authoritative final result vocabulary.
+func validAuthenticationContract(value generated.AuthenticationResult) bool {
+	return value.State.Valid() && value.PrimaryReason.Valid()
 }
 
 // validVerificationContract validates the complete generated verification projection.
@@ -1070,11 +1085,20 @@ func validVerificationContract(value generated.VerificationResult) bool {
 	}
 	for _, signature := range value.SignatureSets {
 		if !signature.Algorithm.Valid() || !signature.Status.Valid() ||
-			!signature.Reason.Valid() || bool(signature.KeyPolicy.StrictIdentityApplicable) {
+			!signature.Reason.Valid() || bool(signature.KeyPolicy.StrictIdentityApplicable) ||
+			!validSignatureSelector(signature.Status, signature.Selector) {
 			return false
 		}
 	}
 	return true
+}
+
+// validSignatureSelector admits a bounded selector only for cryptographic failures.
+func validSignatureSelector(status generated.SignatureSetResultStatus, selector *string) bool {
+	if status != generated.SignatureSetResultStatusFail {
+		return selector == nil
+	}
+	return selector != nil && len(*selector) >= 1 && len(*selector) <= 253
 }
 
 func verificationCoverageCoherent(state generated.VerificationState, scope generated.VerificationResultScope, content generated.VerificationResultHistoricalContent, signatures generated.VerificationResultHistoricalSignatures) bool {

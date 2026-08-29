@@ -19,7 +19,7 @@ type applyLimitCheck struct {
 	set       func(*Limits, int)
 }
 
-// TestApplyHeadersReconstructsBottomUpGroups verifies Draft-05 copy, data, folding, and ordering.
+// TestApplyHeadersReconstructsBottomUpGroups verifies Draft-06 copy, data, folding, and ordering.
 func TestApplyHeadersReconstructsBottomUpGroups(t *testing.T) {
 	current := mustRecipeState(t, []byte("Zed: z\r\nSubject: top\r\nSubject: folded\r\n value\r\nAlpha: a\r\n\r\nbody\r\n"))
 	plan := mustParseRecipe(t, `{"h":{"subject":[{"c":[1,1]},{"d":["restored"]}]}}`)

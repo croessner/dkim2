@@ -20,7 +20,7 @@ func TestGeneratedRequestFormattingIsContentFree(t *testing.T) {
 	}
 	request := ProcessRequest{
 		ApiVersion: V1,
-		Draft:      DraftIetfDkimDkim2Spec05,
+		Draft:      DraftIetfDkimDkim2Spec06,
 		Message:    MessageInput{RawRfc5322Base64: protected},
 		Smtp: SMTPInput{
 			MailFrom: protected,

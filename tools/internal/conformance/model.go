@@ -15,7 +15,7 @@ import (
 
 const (
 	// MessageDraft is the exact DKIM2 behavior baseline.
-	MessageDraft = "draft-ietf-dkim-dkim2-spec-05"
+	MessageDraft = "draft-ietf-dkim-dkim2-spec-06"
 	// DNSDraft is the exact DNS behavior baseline.
 	DNSDraft = "draft-chuang-dkim2-dns-04"
 	// ManifestSchema identifies the repository manifest format.
@@ -24,8 +24,8 @@ const (
 	ReportSchema = "dkim2.conformance-report.v1"
 	// SnapshotSchema identifies the candidate snapshot framing.
 	SnapshotSchema = "dkim2.candidate-snapshot.v1"
-	// EximUnqualifiedDraft05 identifies the evidence-free Draft-05 adapter surface.
-	EximUnqualifiedDraft05 = "unqualified_draft05"
+	// EximUnqualifiedDraft06 identifies the evidence-free Draft-06 adapter surface.
+	EximUnqualifiedDraft06 = "unqualified_draft06"
 	maxJSONDepth           = 16
 )
 
@@ -379,8 +379,8 @@ func (r Report) RenderText() []byte {
 	output.WriteString("- Milter evidence uses byte-exact callback reconstruction, not an original SMTP wire image. Postfix prepends its own `Received` field outside Milter-visible message bytes.\n")
 	output.WriteString("- Postfix execution is Linux-only and covers the pinned qualification image, explicit Milter-v6 timeouts, SMTP intake, and simulated non-SMTP callbacks.\n")
 	output.WriteString("- Replay detection is a restrictive local security policy layered after protocol verification; it is not a DKIM2 cryptographic result.\n")
-	output.WriteString("- Exim is `unqualified_draft05`; this report admits no Exim qualification case or imported evidence.\n")
-	output.WriteString("- Draft-05 architecture references, EAI considerations, IANA considerations, and security considerations remain `TBA`; implemented interpretations are reported separately from normative claims.\n\n")
+	output.WriteString("- Exim is `unqualified_draft06`; this report admits no Exim qualification case or imported evidence.\n")
+	output.WriteString("- Draft-06 architecture references, EAI considerations, IANA considerations, and security considerations remain `TBA`; implemented interpretations are reported separately from normative claims.\n\n")
 	output.WriteString("## Reproduce\n\n```text\nmake check-conformance\nmake conformance\n")
 	if r.Profile == profileFull {
 		output.WriteString("make conformance-postfix\nmake conformance-all\n")

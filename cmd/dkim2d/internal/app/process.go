@@ -132,7 +132,12 @@ func (p *InboundProcessor) Process(
 	if replayStoreRequired(domain) {
 		storeContext, storeSpan = startAppSpan(replayContext, p.runtime, "dkim2.replay.store")
 	}
-	replay, err := p.replay.Coordinate(storeContext, domain)
+	var replay ReplayOutcome
+	if authentication, ok := domain.Authentication(); ok {
+		replay, err = replayOutcomeFromAuthentication(authentication, domain)
+	} else {
+		replay, err = p.replay.Coordinate(storeContext, domain)
+	}
 	if err != nil {
 		internalResult, _ := observability.TextSpanFact(
 			"dkim2.result",
@@ -191,6 +196,41 @@ func (p *InboundProcessor) Process(
 		processReplayFact,
 	}
 	p.observeProcessSuccess(result, started, replayStarted)
+	return result, nil
+}
+
+// replayOutcomeFromAuthentication projects the library-owned final result without a second store operation.
+func replayOutcomeFromAuthentication(authentication dkim2.AuthenticationResult, domain DomainResult) (ReplayOutcome, error) {
+	policy, err := domain.Policy()
+	if err != nil || !authentication.Valid() || policy.VerificationState() != authentication.State() {
+		return ReplayOutcome{}, &InboundProcessorError{}
+	}
+	disposition, ok := dispositionForPolicy(policy.Verdict())
+	if !ok {
+		return ReplayOutcome{}, &InboundProcessorError{}
+	}
+	var class ReplayResultClass
+	possibleMutation := false
+	switch authentication.ReplayClass() {
+	case dkim2.AuthenticationReplayNotChecked:
+		class = ReplayResultNotChecked
+	case dkim2.AuthenticationReplayDisabled:
+		class = ReplayResultDisabled
+	case dkim2.AuthenticationReplayFirstSeen:
+		class, possibleMutation = ReplayResultFirstSeen, true
+	case dkim2.AuthenticationReplayExploded:
+		class, possibleMutation = ReplayResultExploded, true
+	case dkim2.AuthenticationReplayReplayed:
+		class = ReplayResultReplayed
+	case dkim2.AuthenticationReplayIndeterminate:
+		class = ReplayResultIndeterminate
+	default:
+		return ReplayOutcome{}, &InboundProcessorError{}
+	}
+	result := newReplayOutcome(class, disposition, possibleMutation)
+	if !result.Valid() {
+		return ReplayOutcome{}, &InboundProcessorError{}
+	}
 	return result, nil
 }
 

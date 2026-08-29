@@ -22,7 +22,7 @@ const (
 )
 
 // TestEvidenceEvaluatorAuthenticatesCompleteAndHeadersOnlyOriginals verifies
-// both RFC 3462 representations use real DKIM2 cryptographic evidence without
+// both RFC 6522 representations use real DKIM2 cryptographic evidence without
 // treating the headers-only representation as a complete message.
 func TestEvidenceEvaluatorAuthenticatesCompleteAndHeadersOnlyOriginals(t *testing.T) {
 	for _, form := range []struct {
@@ -524,7 +524,7 @@ func mustEvidenceMessage(t *testing.T, raw string) rawmsg.Message {
 	return message
 }
 
-// mustEvidenceReport embeds an exact original in a structurally valid RFC 3462 report.
+// mustEvidenceReport embeds an exact original in a structurally valid RFC 6522 report.
 func mustEvidenceReport(t *testing.T, contentType ContentType, original string) Report {
 	t.Helper()
 	return mustEvidenceReportWithDeliveryStatus(t, contentType, original,

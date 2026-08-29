@@ -87,7 +87,7 @@ func IsEvidenceErrorCode(err error, code EvidenceErrorCode) bool {
 // EvidenceRequest carries one parsed DSN whose embedded protocol object must
 // be authenticated without pretending signed claims were externally observed.
 type EvidenceRequest struct {
-	// Report is the parser-owned RFC 3462 DSN report.
+	// Report is the parser-owned RFC 6522 DSN report.
 	Report Report
 	// PostfixBounceOrder admits only the bounded field ordering and folding
 	// emitted by current Postfix bounce(8), after the caller has independently
@@ -135,7 +135,7 @@ func (e Evidence) RecipientDomains() []string {
 	return append([]string(nil), e.recipientDomains...)
 }
 
-// EvidenceEvaluator owns the narrow Draft-05 Section 12 embedded-original verification boundary.
+// EvidenceEvaluator owns the narrow Draft-06 Section 12 embedded-original verification boundary.
 type EvidenceEvaluator struct {
 	verifier verify.Verifier
 }

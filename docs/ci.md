@@ -8,7 +8,7 @@ second build or test system.
 | Workflow | Purpose | Command |
 | --- | --- | --- |
 | `Guardrails` | Go quality, unit/race tests, builds, generated files, direct vendor resolution and boundaries | `make guardrails` |
-| `Conformance` | Portable Draft-05 protocol conformance | `make check-conformance`, `make conformance` |
+| `Conformance` | Portable Draft-06 protocol conformance | `make check-conformance`, `make conformance` |
 | `Public Mirror` | One-way branch and tag synchronization from the canonical repository | target-scoped GitHub App installation token |
 | `Release` | Stable quality gate and exact GHCR publication | `make release-guardrails` |
 

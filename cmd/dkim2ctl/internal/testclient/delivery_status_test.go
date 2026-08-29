@@ -10,7 +10,7 @@ import (
 	"github.com/croessner/dkim2/cmd/dkim2ctl/internal/testclient/generated"
 )
 
-const deliveryStatusAcceptResponse = `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-05","operation":"delivery_status","result":"pass","disposition":"accept","actions":[{"type":"add_header","name":"Message-Instance","value":"v=1; i=1; h=sha256:synthetic"},{"type":"add_header","name":"DKIM2-Signature","value":"v=1; a=ed25519-sha256; d=example.test; s=test; b=synthetic"}]}`
+const deliveryStatusAcceptResponse = `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-06","operation":"delivery_status","result":"pass","disposition":"accept","actions":[{"type":"add_header","name":"Message-Instance","value":"v=1; i=1; h=sha256:synthetic"},{"type":"add_header","name":"DKIM2-Signature","value":"v=1; a=ed25519-sha256; d=example.test; s=test; b=synthetic"}]}`
 
 // TestGeneratedDSNSignRequestUsesDedicatedClientAndCapability proves DSN
 // fixtures cannot reuse the ordinary signing request or credential boundary.

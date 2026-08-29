@@ -1100,7 +1100,7 @@ func (h *HTTPBoundary) healthResponse(ctx context.Context, head bool) (preMarsha
 	date, present := responseDate(ctx)
 	return newStatusResponse(generated.HealthResponse{
 		ApiVersion: generated.V1,
-		Draft:      generated.DraftIetfDkimDkim2Spec05,
+		Draft:      generated.DraftIetfDkimDkim2Spec06,
 		Status:     generated.Alive,
 	}, head, date, present)
 }

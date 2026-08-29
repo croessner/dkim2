@@ -51,7 +51,7 @@ func adaptServiceResultWithProjection(input service.Result, projection policy.Pr
 		if fact.KeyPolicy.StrictIdentityApplicable {
 			return internalContractResult(newVerificationTarget(input.Target().Sequence, input.Target().Instance))
 		}
-		publicSignatures = append(publicSignatures, newSignatureSetFact(algorithm, status, factReason, metadata))
+		publicSignatures = append(publicSignatures, newSignatureSetFact(algorithm, status, factReason, fact.Selector, metadata))
 	}
 	scope, content, historicalSignatures, ok := adaptHistory(input)
 	if !ok {

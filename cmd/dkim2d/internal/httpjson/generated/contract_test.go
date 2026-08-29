@@ -511,8 +511,8 @@ func assertObjectInventories(t *testing.T, document *openapi3.T) {
 			required:   []string{"mail_from", "rcpt_to"},
 		},
 		"ProcessResponse": {
-			properties: []string{testPropertyActions, testPropertyAPIVersion, testPropertyDisposition, testPropertyDraft, "policy", "replay", "verification"},
-			required:   []string{testPropertyActions, testPropertyAPIVersion, testPropertyDisposition, testPropertyDraft, "policy", "replay", "verification"},
+			properties: []string{testPropertyActions, testPropertyAPIVersion, "authentication", testPropertyDisposition, testPropertyDraft, "policy", "replay", "verification"},
+			required:   []string{testPropertyActions, testPropertyAPIVersion, "authentication", testPropertyDisposition, testPropertyDraft, "policy", "replay", "verification"},
 		},
 		"SigningContext": {
 			properties: []string{"domain", testPropertyTenant},
@@ -553,7 +553,7 @@ func assertObjectInventories(t *testing.T, document *openapi3.T) {
 			required:   []string{testPropertyClass, testPropertyReason},
 		},
 		"SignatureSetResult": {
-			properties: []string{"algorithm", "key_policy", testPropertyReason, testPropertyStatus},
+			properties: []string{"algorithm", "key_policy", testPropertyReason, "selector", testPropertyStatus},
 			required:   []string{"algorithm", "key_policy", testPropertyReason, testPropertyStatus},
 		},
 		"KeyPolicyResult": {
@@ -669,7 +669,7 @@ func assertFrozenEnums(t *testing.T, document *openapi3.T) {
 
 	expected := map[string][]string{
 		"APIVersion":        {"v1"},
-		"DraftVersion":      {"draft-ietf-dkim-dkim2-spec-05"},
+		"DraftVersion":      {"draft-ietf-dkim-dkim2-spec-06"},
 		"VerificationState": {"PASS", "FAIL", "PERMERROR", "TEMPERROR"},
 		"VerificationReason": {
 			"none", "limit_exceeded", "malformed_message", "malformed_protocol",
@@ -746,7 +746,7 @@ func assertFrozenEnums(t *testing.T, document *openapi3.T) {
 	assertPropertyEnum(t, document, "PolicyFinding", "severity",
 		[]string{"info", "warning", "permanent", "temporary"})
 	assertPropertyEnum(t, document, "ReplayResult", "class",
-		[]string{"not_checked", "disabled", "first_seen", "replayed", testValueIndeterminate})
+		[]string{"not_checked", "disabled", "first_seen", "exploded", "replayed", testValueIndeterminate})
 	assertPropertyEnum(t, document, "HealthResponse", "status", []string{"alive"})
 	assertPropertyEnum(t, document, "ReadinessResponse", "status", []string{"ready"})
 	assertPropertyEnum(t, document, "ErrorResponse", "category",
@@ -831,7 +831,7 @@ func TestGeneratedRequestFormattingIsContentFree(t *testing.T) {
 	}
 	request := ProcessRequest{
 		ApiVersion: V1,
-		Draft:      DraftIetfDkimDkim2Spec05,
+		Draft:      DraftIetfDkimDkim2Spec06,
 		Message:    MessageInput{RawRfc5322Base64: protected},
 		Smtp: SMTPInput{
 			MailFrom: protected,

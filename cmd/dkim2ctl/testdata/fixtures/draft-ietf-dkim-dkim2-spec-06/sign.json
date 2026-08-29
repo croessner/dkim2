@@ -1,0 +1,60 @@
+{
+  "schema": "dkim2ctl.fixture.v1",
+  "draft": "draft-ietf-dkim-dkim2-spec-06",
+  "fixture": "sign-operations",
+  "cases": [
+    {
+      "case": "origin-accept",
+      "kind": "sign",
+      "sign": {
+        "raw_rfc5322_base64": "U3ViamVjdDogdGVzdA0KDQpib2R5DQo=",
+        "fidelity": "raw_rfc5322",
+        "mail_from": "<sender@example.test>",
+        "rcpt_to": [
+          "<recipient@example.test>"
+        ],
+        "tenant": "tenant-a",
+        "domain": "example.test"
+      },
+      "expect": {
+        "http_status": 200,
+        "operation": "sign",
+        "result": "pass",
+        "disposition": "accept",
+        "actions": [
+          {
+            "type": "add_header",
+            "name": "Message-Instance",
+            "value": "v=1; i=1; h=sha256:synthetic"
+          },
+          {
+            "type": "add_header",
+            "name": "DKIM2-Signature",
+            "value": "v=1; a=ed25519-sha256; d=example.test; s=test; b=synthetic"
+          }
+        ]
+      }
+    },
+    {
+      "case": "origin-no-mutation",
+      "kind": "sign",
+      "sign": {
+        "raw_rfc5322_base64": "U3ViamVjdDogdGVzdA0KDQpib2R5DQo=",
+        "fidelity": "raw_rfc5322",
+        "mail_from": "<sender@example.test>",
+        "rcpt_to": [
+          "<recipient@example.test>"
+        ],
+        "tenant": "tenant-no-mutation",
+        "domain": "example.test"
+      },
+      "expect": {
+        "http_status": 200,
+        "operation": "sign",
+        "result": "pass",
+        "disposition": "continue",
+        "actions": []
+      }
+    }
+  ]
+}

@@ -54,7 +54,7 @@ func TestStrictHandlerReturnsMultiInstanceTestingContinue(t *testing.T) {
 	)))
 	t.Cleanup(server.Close)
 
-	body := `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-05",` +
+	body := `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-06",` +
 		`"message":{"raw_rfc5322_base64":"` + base64.StdEncoding.EncodeToString(raw) +
 		`","fidelity":"milter_reconstructed_crlf"},` +
 		`"smtp":{"mail_from":"<sender@example.test>","rcpt_to":["<rcpt@example.test>"]},` +
@@ -73,7 +73,7 @@ func TestStrictHandlerReturnsMultiInstanceTestingContinue(t *testing.T) {
 	wireBody, readErr := io.ReadAll(response.Body)
 	closeErr := response.Body.Close()
 	if readErr != nil || closeErr != nil || response.StatusCode != http.StatusOK {
-		t.Fatalf("historical HTTP response status=%d read=%v close=%v", response.StatusCode, readErr, closeErr)
+		t.Fatalf("historical HTTP response status=%d read=%v close=%v body=%q", response.StatusCode, readErr, closeErr, wireBody)
 	}
 	var decoded generated.ProcessResponse
 	if err = json.Unmarshal(wireBody, &decoded); err != nil {
@@ -84,7 +84,7 @@ func TestStrictHandlerReturnsMultiInstanceTestingContinue(t *testing.T) {
 		decoded.Policy.DoNotModify != generated.PolicyResultDoNotModifyNotRequested ||
 		decoded.Policy.DoNotExplode != generated.PolicyResultDoNotExplodeNotRequested ||
 		decoded.Policy.Feedback.HistoryCoverage != generated.PolicyFeedbackHistoryCoverageComplete ||
-		decoded.Replay.Class != generated.NotChecked || decoded.Disposition != generated.DispositionContinue ||
+		decoded.Replay.Class != generated.Disabled || decoded.Disposition != generated.DispositionContinue ||
 		len(decoded.Actions) != 1 || decoded.Actions[0].Type != generated.AddHeader ||
 		decoded.Actions[0].Name != generated.AuthenticationResults ||
 		decoded.Actions[0].Value != testInboundPassReport {

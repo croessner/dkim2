@@ -1,8 +1,8 @@
 # Postfix DSN Origin for the Milter Adapter
 
 > Historical Draft-04 implementation record. The original scope and evidence
-> below are preserved; current Draft-05 authority is the migration disposition
-> and the 2026-08-26 semantics audit.
+> below are preserved; current Draft-06 authority is the migration disposition
+> and current durable architecture.
 
 Status: implementation baseline. This document defines a local Postfix-to-
 DKIM2 adapter contract; it is not a DKIM2 wire-protocol extension.
@@ -37,7 +37,7 @@ sender alone is never authority.
 ## DKIM2 evidence boundary
 
 Postfix provenance proves only that the local MTA generated the outer bounce.
-The library still parses the exact three-part RFC 3462 report and verifies the
+The library still parses the exact three-part RFC 6522 report and verifies the
 relevant embedded DKIM2 signatures and Message-Instance evidence required by
 Draft-04 Section 12.1. For a complete embedded message it verifies header and
 body hashes; for `text/rfc822-headers` it uses the restricted header-only path.

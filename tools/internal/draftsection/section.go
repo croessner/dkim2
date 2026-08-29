@@ -1,11 +1,11 @@
-// Package draftsection validates citations against the pinned DKIM2 Draft-05 structure.
+// Package draftsection validates citations against the pinned DKIM2 Draft-06 structure.
 package draftsection
 
 import "strings"
 
 const (
-	fullDraft  = "draft-ietf-dkim-dkim2-spec-05"
-	shortDraft = "Draft-05"
+	fullDraft  = "draft-ietf-dkim-dkim2-spec-06"
+	shortDraft = "Draft-06"
 )
 
 var sectionOrder = func() map[string]int {
@@ -31,8 +31,8 @@ var sectionOrder = func() map[string]int {
 	return order
 }()
 
-// CitationValid accepts non-Draft-05 text unchanged and validates every current
-// Draft-05 Section/Sections citation against the pinned closed section set.
+// CitationValid accepts non-Draft-06 text unchanged and validates every current
+// Draft-06 Section/Sections citation against the pinned closed section set.
 func CitationValid(value string) bool {
 	suffix, plural, current := citationSuffix(value)
 	if !current {
@@ -53,7 +53,7 @@ func CitationValid(value string) bool {
 	return sectionListValid(suffix, plural)
 }
 
-// citationSuffix recognizes both manifest and issue-log Draft-05 citation prefixes.
+// citationSuffix recognizes both manifest and issue-log Draft-06 citation prefixes.
 func citationSuffix(value string) (string, bool, bool) {
 	for _, draft := range []string{fullDraft, shortDraft} {
 		if suffix, found := strings.CutPrefix(value, draft+" Sections "); found {

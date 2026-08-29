@@ -77,6 +77,11 @@ func (s *SigningService) SignDeliveryStatus(ctx context.Context, request Deliver
 		s.observeDSNEvidence(dkim2.DSNEvidenceStagePreflight, telemetryResultTemporary)
 		return OperationResult{}, err
 	}
+	metadata, err := s.policies.deliveryStatus.metadata()
+	if err != nil {
+		s.observeDSNEvidence(dkim2.DSNEvidenceStagePreflight, telemetryResultInternal)
+		return OperationResult{}, &DomainError{}
+	}
 	operationTime := s.clock().UTC()
 	evidenceSigner, err := dkim2.NewSigner(
 		s.publicKeys,
@@ -136,7 +141,7 @@ func (s *SigningService) SignDeliveryStatus(ctx context.Context, request Deliver
 	if err != nil || len(tickets) != 1 || !tickets[0].Valid() {
 		return operationFailureFromError(OperationDeliveryStatus, err)
 	}
-	result, recovery, err := signer.SignDSN(ctx, dkim2.NewDSNSigningRequest(evidence, tickets[0], profile, dkim2.SigningMetadata{}, dkim2.SigningTransportFinalNetworkPreDotStuffing))
+	result, recovery, err := signer.SignDSN(ctx, dkim2.NewDSNSigningRequest(evidence, tickets[0], profile, metadata, dkim2.SigningTransportFinalNetworkPreDotStuffing))
 	if err != nil || recovery.Valid() || !result.Valid() {
 		return operationFailureFromError(OperationDeliveryStatus, err)
 	}

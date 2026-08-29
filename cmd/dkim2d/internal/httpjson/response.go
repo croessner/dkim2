@@ -24,6 +24,7 @@ type signatureSetSnapshot struct {
 	algorithm                dkim2.Algorithm
 	status                   dkim2.SignatureStatus
 	reason                   dkim2.ReasonCode
+	selector                 string
 	testingDeclared          bool
 	strictIdentityDeclared   bool
 	strictIdentityApplicable bool
@@ -225,18 +226,41 @@ func MapInboundResult(
 	if verificationErr != nil || policyErr != nil {
 		return generated.ProcessResponse{}, newMappingError(MappingInternalContract)
 	}
-	projection, err := MapDomainResult(verification, policy)
-	if err != nil {
-		return generated.ProcessResponse{}, err
+	var projection DomainProjection
+	if final, ok := domain.Authentication(); ok {
+		verificationDTO, mapErr := mapVerificationSnapshot(captureVerification(verification))
+		if mapErr != nil {
+			return generated.ProcessResponse{}, mapErr
+		}
+		policyDTO, mapErr := mapPolicySnapshot(capturePolicy(policy), final.State())
+		if mapErr != nil {
+			return generated.ProcessResponse{}, mapErr
+		}
+		projection = DomainProjection{state: &domainProjectionState{
+			verification: cloneGeneratedVerification(verificationDTO),
+			policy:       cloneGeneratedPolicy(policyDTO),
+		}}
+	} else {
+		var mapErr error
+		projection, mapErr = MapDomainResult(verification, policy)
+		if mapErr != nil {
+			return generated.ProcessResponse{}, mapErr
+		}
 	}
 	verificationDTO, policyDTO, ok := projection.domainValues()
 	replayClass, replayOK := mapReplayClass(replay.Class())
 	disposition, dispositionOK := mapDisposition(replay.Disposition())
-	if !ok || !replayOK || !dispositionOK {
+	authentication, authenticationOK := generated.AuthenticationResult{}, false
+	if final, ok := domain.Authentication(); ok {
+		authentication, authenticationOK = mapFinalAuthenticationResult(final)
+	} else {
+		authentication, authenticationOK = mapAuthenticationResult(verification, replay.Class())
+	}
+	if !ok || !replayOK || !dispositionOK || !authenticationOK {
 		return generated.ProcessResponse{}, newMappingError(MappingInternalContract)
 	}
 	actions, actionsErr := mapProcessReportActions(
-		verificationDTO.State,
+		authentication.State,
 		disposition,
 		authservID,
 	)
@@ -244,14 +268,61 @@ func MapInboundResult(
 		return generated.ProcessResponse{}, actionsErr
 	}
 	return generated.ProcessResponse{
-		ApiVersion:   generated.V1,
-		Draft:        generated.DraftIetfDkimDkim2Spec05,
-		Verification: verificationDTO,
-		Policy:       policyDTO,
-		Replay:       generated.ReplayResult{Class: replayClass},
-		Disposition:  disposition,
-		Actions:      actions,
+		ApiVersion:     generated.V1,
+		Draft:          generated.DraftIetfDkimDkim2Spec06,
+		Verification:   verificationDTO,
+		Authentication: authentication,
+		Policy:         policyDTO,
+		Replay:         generated.ReplayResult{Class: replayClass},
+		Disposition:    disposition,
+		Actions:        actions,
 	}, nil
+}
+
+// mapFinalAuthenticationResult projects the library-owned authoritative result without recomposition.
+func mapFinalAuthenticationResult(final dkim2.AuthenticationResult) (generated.AuthenticationResult, bool) {
+	if !final.Valid() {
+		return generated.AuthenticationResult{}, false
+	}
+	result := generated.AuthenticationResult{
+		State:         generated.VerificationState(final.State()),
+		PrimaryReason: generated.AuthenticationResultPrimaryReason(final.PrimaryReason()),
+	}
+	return result, result.State.Valid() && result.PrimaryReason.Valid()
+}
+
+// mapAuthenticationResult preserves the legacy test-only pipeline projection.
+func mapAuthenticationResult(verification dkim2.VerifyResult, replay app.ReplayResultClass) (generated.AuthenticationResult, bool) {
+	if !verification.Valid() {
+		return generated.AuthenticationResult{}, false
+	}
+	state := generated.VerificationState(verification.State())
+	reason := generated.AuthenticationResultPrimaryReason(verification.PrimaryReason())
+	switch replay {
+	case app.ReplayResultReplayed:
+		if verification.State() != dkim2.ResultStatePASS {
+			return generated.AuthenticationResult{}, false
+		}
+		state = generated.FAIL
+		reason = generated.AuthenticationResultPrimaryReasonDuplicateMessageWithoutExploded
+	case app.ReplayResultIndeterminate:
+		if verification.State() != dkim2.ResultStatePASS {
+			return generated.AuthenticationResult{}, false
+		}
+		state = generated.TEMPERROR
+		reason = generated.AuthenticationResultPrimaryReasonReplayIndeterminate
+	case app.ReplayResultNotChecked:
+	case app.ReplayResultDisabled:
+	case app.ReplayResultFirstSeen:
+	case app.ReplayResultExploded:
+	default:
+		return generated.AuthenticationResult{}, false
+	}
+	result := generated.AuthenticationResult{
+		State:         state,
+		PrimaryReason: reason,
+	}
+	return result, result.State.Valid() && result.PrimaryReason.Valid()
 }
 
 // mapProcessReportActions constructs the daemon-owned RFC 8601 mutation plan.
@@ -300,6 +371,8 @@ func mapReplayClass(value app.ReplayResultClass) (generated.ReplayResultClass, b
 		return generated.Disabled, true
 	case app.ReplayResultFirstSeen:
 		return generated.FirstSeen, true
+	case app.ReplayResultExploded:
+		return generated.Exploded, true
 	case app.ReplayResultReplayed:
 		return generated.Replayed, true
 	case app.ReplayResultIndeterminate:
@@ -320,10 +393,12 @@ func captureVerification(result dkim2.VerifyResult) verificationSnapshot {
 	signatureSnapshots := make([]signatureSetSnapshot, len(signatures))
 	for index, signature := range signatures {
 		metadata := signature.KeyPolicyMetadata()
+		selector, _ := signature.Selector()
 		signatureSnapshots[index] = signatureSetSnapshot{
 			algorithm:                signature.Algorithm(),
 			status:                   signature.Status(),
 			reason:                   signature.Reason(),
+			selector:                 selector,
 			testingDeclared:          metadata.TestingDeclared(),
 			strictIdentityDeclared:   metadata.StrictIdentityDeclared(),
 			strictIdentityApplicable: metadata.StrictIdentityApplicable(),
@@ -407,7 +482,8 @@ func mapVerificationSnapshot(input verificationSnapshot) (generated.Verification
 		status, statusOK := mapSignatureStatus(fact.status)
 		reason, factReasonOK := mapVerificationReason(fact.reason)
 		applicable, applicableOK := mapStrictIdentityApplicable(fact.strictIdentityApplicable)
-		if !algorithmOK || !statusOK || !factReasonOK || !applicableOK {
+		if !algorithmOK || !statusOK || !factReasonOK || !applicableOK ||
+			(fact.status == dkim2.SignatureStatusFAIL) != (fact.selector != "") || len(fact.selector) > 253 {
 			return generated.VerificationResult{}, newMappingError(MappingInternalContract)
 		}
 		signatureSets[index] = generated.SignatureSetResult{
@@ -419,6 +495,9 @@ func mapVerificationSnapshot(input verificationSnapshot) (generated.Verification
 				StrictIdentityDeclared:   fact.strictIdentityDeclared,
 				StrictIdentityApplicable: applicable,
 			},
+		}
+		if fact.selector != "" {
+			signatureSets[index].Selector = &fact.selector
 		}
 	}
 
@@ -799,7 +878,7 @@ func mapHistoricalState(value dkim2.HistoricalState) (generated.VerificationResu
 	return mapHistoricalContent(value)
 }
 
-// mapStrictIdentityApplicable maps the Draft-05 singleton false invariant.
+// mapStrictIdentityApplicable maps the Draft-06 singleton false invariant.
 func mapStrictIdentityApplicable(value bool) (generated.KeyPolicyResultStrictIdentityApplicable, bool) {
 	if value {
 		return false, false

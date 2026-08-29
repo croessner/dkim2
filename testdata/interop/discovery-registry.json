@@ -1,6 +1,6 @@
 {
   "schema": "dkim2.interop-discovery-registry.v1",
-  "message_draft": "draft-ietf-dkim-dkim2-spec-05",
+  "message_draft": "draft-ietf-dkim-dkim2-spec-06",
   "dns_draft": "draft-chuang-dkim2-dns-04",
   "max_age_hours": 168,
   "retrieval_policy": {
@@ -68,7 +68,7 @@
     {
       "id": "ietf-dkim2-spec-05",
       "kind": "ietf_draft",
-      "url": "https://www.ietf.org/archive/id/draft-ietf-dkim-dkim2-spec-05.txt",
+      "url": "https://www.ietf.org/archive/id/draft-ietf-dkim-dkim2-spec-06.txt",
       "query": "exact pinned message draft bytes published 2026-08-25",
       "required": true
     },

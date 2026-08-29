@@ -17,13 +17,13 @@ import (
 const (
 	replayRootModule        = "github.com/croessner/dkim2"
 	valkeyClientModule      = "github.com/valkey-io/valkey-go"
-	valkeyClientVersion     = "v1.0.76"
+	valkeyClientVersion     = "v1.0.77"
 	valkeyClientModuleGo    = "go 1.25.0"
 	valkeyLicenseSHA256     = "283ea6cc2997a1a70da0049e09adf9317bb60ca1b51279b65196b83a69e1996b"
 	valkeyNoticeSHA256      = "41824cdce292fe84e7130615e322aae144fdb9e1d147c00ce901b92694fae02c"
 	valkeyNoticeContent     = "valkey-go\nCopyright 2024 Rueian (https://github.com/rueian)\n"
-	valkeyModuleSum         = "h1:Rcown7FFseVhG9b0+4MWfMs4xWu8otPzHjrsK044ET4="
-	valkeyModuleFileSum     = "h1:6X581PhgfeMkJmyfjIsa2eFdq6dy3Qkkg9zwjM1p42M="
+	valkeyModuleSum         = "h1:0H5yQ8cOkISr5mU4NDNIgjHvA7bPs2ijgymPjBFNEoc="
+	valkeyModuleFileSum     = "h1:gvC/r2m3eW4Hbj0YnjogTzNtFdPSM/D+NCqen+5OABM="
 	valkeyProviderDirectory = "cmd/dkim2d/internal/replay/valkey"
 	dkim2DaemonModule       = "cmd/dkim2d/go.mod"
 	dkim2DaemonModuleSum    = "cmd/dkim2d/go.sum"
@@ -325,7 +325,7 @@ func validValkeyVendorSection(content string) bool {
 }
 
 // requireValkeyLicenseEvidence proves the vendored Apache-2.0 license and
-// upstream attribution notice are the reviewed v1.0.76 artifacts.
+// upstream attribution notice are the reviewed v1.0.77 artifacts.
 func requireValkeyLicenseEvidence(t *testing.T, root string) {
 	t.Helper()
 	dependencyRoot := filepath.Join(root, "vendor/github.com/valkey-io/valkey-go")
@@ -408,7 +408,7 @@ func testReplayImportClassifier(t *testing.T) {
 func testReplayModuleRequirementClassifier(t *testing.T) {
 	t.Helper()
 	content := "require (\n\t" + valkeyClientModule + " " + valkeyClientVersion + "\n" +
-		"\t" + valkeyClientModule + "-extra v1.0.76\n)\n"
+		"\t" + valkeyClientModule + "-extra v1.0.77\n)\n"
 	requirements, valid := parseReplayModuleRequirements(content)
 	if !valid || len(requirements) != 2 ||
 		requirements[0] != (replayModuleRequirement{
@@ -444,7 +444,7 @@ func testReplaySumClassifier(t *testing.T) {
 	t.Helper()
 	valid := valkeyClientModule + " " + valkeyClientVersion + " " + valkeyModuleSum + "\n" +
 		valkeyClientModule + " " + valkeyClientVersion + "/go.mod " + valkeyModuleFileSum + "\n" +
-		valkeyClientModule + "-extra v1.0.76 h1:near-miss\n"
+		valkeyClientModule + "-extra v1.0.77 h1:near-miss\n"
 	if !validValkeySums(valid) {
 		t.Fatal("reviewed checksum pair rejected")
 	}
@@ -464,7 +464,7 @@ func testReplaySumClassifier(t *testing.T) {
 // and similarly named module separation.
 func testReplayVendorClassifier(t *testing.T) {
 	t.Helper()
-	valid := "# " + valkeyClientModule + "-extra v1.0.76\n## explicit; go 1.25.0\n" +
+	valid := "# " + valkeyClientModule + "-extra v1.0.77\n## explicit; go 1.25.0\n" +
 		valkeyClientModule + "-extra\n" +
 		"# " + valkeyClientModule + " " + valkeyClientVersion + "\n" +
 		"## explicit; " + valkeyClientModuleGo + "\n" +

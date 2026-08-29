@@ -12,9 +12,9 @@
 | Owner | Christian Roessner / Codex |
 | Language | English |
 | Classification | Public living design document |
-| Baseline specification | `draft-ietf-dkim-dkim2-spec-05`, dated 2026-08-25 |
+| Baseline specification | `draft-ietf-dkim-dkim2-spec-06`, dated 2026-08-25 |
 | Related specification | M11 tested behavior baseline: `draft-chuang-dkim2-dns-04`, dated 2026-03-18; replaced by `draft-ietf-dkim-dkim2-dns-00` on 2026-07-20 |
-| Baseline status check | IETF archive sources checked 2026-08-25; the message specification baseline is `draft-ietf-dkim-dkim2-spec-05`. The implemented companion behavior and vectors remain pinned to `draft-chuang-dkim2-dns-04`; the working-group DNS `-00` has a normatively identical body, but its identifier/vector migration remains deferred to a separate reviewed baseline update. |
+| Baseline status check | IETF archive sources checked 2026-08-25; the message specification baseline is `draft-ietf-dkim-dkim2-spec-06`. The implemented companion behavior and vectors remain pinned to `draft-chuang-dkim2-dns-04`; the working-group DNS `-00` has a normatively identical body, but its identifier/vector migration remains deferred to a separate reviewed baseline update. |
 | Change control | While this document is still `0.1.0-draft`, startup decisions may be added without a version bump; after the first committed planning baseline, material architecture changes require a revision-history entry and may require a new version |
 | Supersedes | None |
 | Next planned revision | When the DKIM2 draft or a material architecture decision changes |
@@ -52,7 +52,7 @@
 | 0.1.0-draft | 2026-07-31 | Christian Roessner / Codex | Integrated production corrections for the Postfix Milter and legacy migration: idempotent pre-MAIL abort/HELO restart, exact legacy selector lookup with a separate DKIM2 target selector, bounded inactive-wildcard history, canonical RSA PKCS#1-to-PKCS#8 import, and retained verified-TLS trust bytes across datasource reload cleanup. |
 | 0.1.0-draft | 2026-07-31 | Christian Roessner / Codex | Separated inbound DKIM2 applicability from verification: messages with neither protocol field family make no DNS call and return a bodyless non-terminal process result, while partial or malformed claims retain strict four-state verification and policy handling. |
 | 0.1.0-draft | 2026-07-31 | Christian Roessner / Codex | Separated originator applicability from signing results: unsupported reverse-path domain evidence and authoritative absent or inactive exact profiles continue without mutation, while datasource ambiguity, unavailability, malformed active data, and signing failures remain fail-closed. |
-| 0.1.0-draft | 2026-08-01 | Christian Roessner / Codex | Deferred null-reverse-path DSN signing: the originator Milter tempfails before daemon I/O until an executable trusted gate authenticates RFC 3462 structure, Draft-04 Section 12.1 embedded verification, and Section 12.1.2 alignment evidence. |
+| 0.1.0-draft | 2026-08-01 | Christian Roessner / Codex | Deferred null-reverse-path DSN signing: the originator Milter tempfails before daemon I/O until an executable trusted gate authenticates RFC 6522 structure, Draft-04 Section 12.1 embedded verification, and Section 12.1.2 alignment evidence. |
 | 0.1.0-draft | 2026-08-01 | Christian Roessner / Codex | Moved LDAP and PostgreSQL signing-key custody into immutable `dkim2-datasource-v2` generations, preserving opaque handles and in-memory signing while removing network-backend local manifests and REST key surfaces. |
 | 0.1.0-draft | 2026-08-01 | Christian Roessner / Codex | Added daemon-owned MySQL 8.4 and MariaDB 10.11 datasource support through one typed verified-TLS adapter, a shared SQL snapshot core, immutable InnoDB generations, transactionally fenced offline publication, and digest-pinned parity evidence for both server families. |
 | 0.1.0-draft | 2026-08-01 | Christian Roessner / Codex | Reconciled the operator documentation with native v2 custody: completed the 18-attribute/six-class LDAP allocation, marked M22 implemented across LDAP and three SQL server families, added parser-checked configuration examples, and made installation, grants, rotation, backup, and legacy isolation one navigable operator contract. |
@@ -62,13 +62,13 @@
 | 0.1.0-draft | 2026-08-03 | Christian Roessner / Codex | Implemented the M23 offline native-domain onboarding candidate across LDAP, PostgreSQL, MySQL, and MariaDB with v3 metadata, receipt-before-Claim recovery, deterministic DNS export, fresh recursive proof, exact stage/readback/activation fences, bounded reports, and disposable four-backend runtime-signing evidence. Independent final closeout review and release authorization remain separate. |
 | 0.1.0-draft | 2026-08-04 | Christian Roessner / Codex | Historically introduced M24 external-vector-corpus intake; the corpus and its local checker were removed on 2026-08-12 after review found that checkout-time CRLF conversion, rather than Git blob identity, made the parser-refusal fixtures pass. |
 | 0.1.0-draft | 2026-08-12 | Christian Roessner / Codex | Removed the retained Turscar Draft-02 fixture corpus, its parser-refusal test, and its conformance gates. Git blob bytes did not match the manifest identities, so the repository no longer claims immutable or executable evidence from that corpus. Runnable Turscar interoperability discovery remains a separate M21 activity. |
-| 0.1.0-draft | 2026-08-04 | Christian Roessner / Codex | Completed M25 outgoing delivery-status signing: byte-preserving RFC 3462 framing, Draft-04 Section 12.1 embedded verification, Section 12.1.2 exact local alignment, a dedicated `delivery_status` datasource use and route ticket, separate protected daemon capability and OpenAPI/generated-client workflow. Ordinary sign/revise paths reject `<>`; the Milter-specific null-sender deferral remains explicit. |
+| 0.1.0-draft | 2026-08-04 | Christian Roessner / Codex | Completed M25 outgoing delivery-status signing: byte-preserving RFC 6522 framing, Draft-04 Section 12.1 embedded verification, Section 12.1.2 exact local alignment, a dedicated `delivery_status` datasource use and route ticket, separate protected daemon capability and OpenAPI/generated-client workflow. Ordinary sign/revise paths reject `<>`; the Milter-specific null-sender deferral remains explicit. |
 | 0.1.0-draft | 2026-08-06 | Christian Roessner / Codex | Selected the standard-library-only public `admincontract` package and its synthetic golden vectors as the versioned cross-repository owner boundary for global rotation campaigns, retention, purge plans, and compact audit commitments. Concrete providers and protected state remain daemon-owned. |
 | 0.1.0-draft | 2026-08-08 | Christian Roessner / Codex | Implemented the offline global datasource rotation candidate: one frozen complete higher generation per normal campaign, bounded DNS proof batches, explicit emergency separation, four-role retention/purge fences with compact receipts, and finite large-installation limits. Disposable four-provider service evidence, fresh review, and release authority remain separate. |
 | 0.1.0-draft | 2026-08-20 | Christian Roessner / Codex | Replaced the superseded Postfix full-envelope DSN handoff with the bounce-only `{postfix_dsn_origin}` enum. Embedded DSN verification omits only unavailable current-envelope observation while preserving cryptography, hashes, timestamp, custody, outer-recipient binding, and authenticated-domain authorization. |
 | 0.1.0-draft | 2026-08-20 | Christian Roessner / Codex | Removed caller/static domain preselection from the Postfix DSN path. One tenant-only adapter now authorizes the route with the Postfix origin enum; the daemon verifies embedded evidence, derives canonical highest `d=`, and only then resolves the exact `delivery_status` policy, enabling fail-closed multi-domain operation without circular trust. |
 | 0.1.0-draft | 2026-08-21 | Christian Roessner / Codex | Preserved daemon-owned inbound `Authentication-Results` reporting for delivery-neutral `testing` policy: applicable `continue` responses may carry the same single bounded report action as `accept`, while unsigned, rejecting, temporary, and non-inbound outcomes retain their existing mutation restrictions. |
-| 0.1.0-draft | 2026-08-25 | Christian Roessner / Codex | Advanced the message baseline to Draft-05. The migration authority adds SHA-512 Message-Instance verification, the revised unsigned-header set, lowercase Recipe keys, selector and per-algorithm signature cardinality, unchanged-state Message-Instances, typed diagnostics, a drain-only replay epoch rotation, generated-contract parity, and explicit `unqualified_draft05` Exim status until fresh Linux qualification evidence exists. The DNS companion remains `draft-chuang-dkim2-dns-04`. |
+| 0.1.0-draft | 2026-08-25 | Christian Roessner / Codex | Advanced the message baseline to Draft-06. The migration authority adds SHA-512 Message-Instance verification, the revised unsigned-header set, lowercase Recipe keys, selector and per-algorithm signature cardinality, unchanged-state Message-Instances, typed diagnostics, a drain-only replay epoch rotation, generated-contract parity, and explicit `unqualified_draft06` Exim status until fresh Linux qualification evidence exists. The DNS companion remains `draft-chuang-dkim2-dns-04`. |
 
 ## 1. Purpose
 
@@ -79,7 +79,7 @@ is written.
 
 The design uses these reviewed behavior baselines as its source of truth:
 
-- `draft-ietf-dkim-dkim2-spec-05`
+- `draft-ietf-dkim-dkim2-spec-06`
 - `draft-chuang-dkim2-dns-04` for the implemented DNS behavior and vectors.
 
 The IETF replaced the DNS document with the working-group
@@ -542,14 +542,14 @@ Responsibilities:
 - Body hash input generation.
 - Header hash input generation.
 - Signature input generation over Message-Instance and DKIM2-Signature fields.
-- Strict coverage of the Draft-05 Section 4 excluded-header set, including
+- Strict coverage of the Draft-06 Section 4 excluded-header set, including
   exact ARC exclusions, the `Received-*` class, and future ARC near misses.
   The inventory rationale follows the
   [header-field maintenance survey](https://datatracker.ietf.org/doc/draft-gondwana-email-header-maintenance/)
   and treats `Received-SPF` as the
   [RFC 7208](https://www.rfc-editor.org/rfc/rfc7208) example.
 - Stable sorting and duplicate-header ordering rules.
-- An immutable Draft-05 Section 4 plus Section 6.2 signed-header relevance
+- An immutable Draft-06 Section 4 plus Section 6.2 signed-header relevance
   classifier exposed through a validated fallible method set for recipe
   generation without duplicating the exclusion table.
 
@@ -632,7 +632,7 @@ Responsibilities:
 
 - Parse required tags: `i=`, `m=`, `t=`, `d=`, `s=`.
 - Require exactly one chain-of-custody form: `nd=`, or both `mf=` and `rt=`.
-- Parse optional tags: `n=`, `f=`, extension tags, including the Draft-05
+- Parse optional tags: `n=`, `f=`, extension tags, including the Draft-06
   `feedhere` flag.
 - Validate signature sequence numbers and gaps.
 - Build incomplete signature fields with empty signature values for signing.
@@ -958,7 +958,7 @@ type Envelope struct {
 
 The current envelope is mandatory for normal inbound DKIM2 verification
 because the latest `DKIM2-Signature` must match the actual `MAIL FROM` and
-`RCPT TO` values. Draft-05 permits a highest signature with `nd=` only when
+`RCPT TO` values. Draft-06 permits a highest signature with `nd=` only when
 out-of-band arrangements exist; the secure default is non-success unless that
 trust is explicitly modeled.
 
@@ -1017,7 +1017,7 @@ Request sketch:
 {
   "api_version": "v1",
   "operation": "process",
-  "draft": "draft-ietf-dkim-dkim2-spec-05",
+  "draft": "draft-ietf-dkim-dkim2-spec-06",
   "smtp": {
     "mail_from": "<bounce@example.org>",
     "rcpt_to": ["<user@example.net>"],
@@ -1082,10 +1082,10 @@ contract. Generated code should provide:
 - Reproducible generated artifacts checked by guardrails.
 
 The first OpenAPI generator should be `oapi-codegen` pinned to
-`v2.7.1`:
+`v2.8.0`:
 
 ```text
-github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.7.1
+github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.8.0
 ```
 
 The pinned generator belongs to the build toolchain, not to runtime protocol
@@ -1109,7 +1109,7 @@ Generation rules:
   review, generated-code review, and regression tests.
 
 The active `DraftVersion` enum contains only
-`draft-ietf-dkim-dkim2-spec-05`. Draft-05 adds the public verification reasons
+`draft-ietf-dkim-dkim2-spec-06`. Draft-06 adds the public verification reasons
 `duplicate_hash_algorithm`, `invalid_recipe_json`, `duplicate_selector`, and
 `too_many_signatures`; the OpenAPI document owns these values and every
 generated consumer must reject unknown enum values rather than default them.
@@ -1834,20 +1834,19 @@ Replay storage requirements:
   misconfigured, and other closed error outcomes, with degradation represented
   separately as store state.
 
-Replay key material is exact:
+Replay key material is one message-wide fixed-size SHA-256 projection of the
+exact canonical header and body inputs reconstructed and independently verified
+at `m=1`. Current recipients, terminal signatures, routes, and advertised hash
+algorithm selection are deliberately not identity inputs. The projection is
+framed as `dkim2-replay-origin-v1`; the deployment HMAC frame is
+`dkim2-replay-v2` and reports algorithm `dkim2-replay-hmac-sha256-v2`.
 
-- a local fixed-size SHA-256 projection of the current canonical header input,
-  produced only after every advertised supported Message-Instance hash tuple
-  has passed;
-- SHA-256 of the exact highest canonical signature input;
-- one privacy-preserving recipient-scope SHA-256 digest;
-- the pinned draft identifier and replay-key algorithm version.
-
-The Draft-05 identifier rotates the replay HMAC epoch. Operators must use the
-documented drain-only transition: Draft-04 and Draft-05 instances never process
+The Draft-06 identifier rotates the replay HMAC epoch. Operators must use the
+documented drain-only transition: Draft-05 and Draft-06 instances never process
 replay traffic concurrently, old records become unreachable, and the resulting
-detection gap is bounded by configured retention. The key shape, fixed digest
-width, namespace, storage privileges, and provider ownership do not change.
+detection gap is bounded by configured retention. The 68-byte storage key,
+`dkim2:replay:v1:*` ACL namespace, storage privileges, and provider ownership
+do not change.
 
 Sender identities, `Message-ID`, selectors, signer nonces, raw recipients, and
 other creator-private facts are not replay-key inputs.
@@ -2017,9 +2016,9 @@ used as optional smoke targets, but they do not define the default support floor
 unless a release plan names them explicitly.
 
 The historical five-row evidence is Draft-04 evidence and cannot qualify the
-Draft-05 candidate. Until a fresh separately authorized five-row Linux run is
-bound to unchanged Draft-05 candidate bytes, the active capability token is
-`unqualified_draft05`; portable and otherwise-full conformance run without
+Draft-06 candidate. Until a fresh separately authorized five-row Linux run is
+bound to unchanged Draft-06 candidate bytes, the active capability token is
+`unqualified_draft06`; portable and otherwise-full conformance run without
 imported Exim evidence and reject any stale qualification claim.
 
 ## 10. Verification Flow
@@ -2048,7 +2047,7 @@ Inbound verification should follow the draft order closely:
 17. Produce an action plan.
 
 A non-origin Message-Instance with no Recipe is a valid unchanged-state
-transition under Draft-05. Verification compares the unchanged canonical state
+transition under Draft-06. Verification compares the unchanged canonical state
 against every supported tuple in the preceding instance and continues only on
 complete agreement; an invalid or present malformed Recipe remains a distinct
 PERMERROR.
@@ -2663,7 +2662,7 @@ interpretation choices in code.
     behavior.
 11. OpenAPI generator:
     The first generated server/client artifacts use `oapi-codegen` pinned to
-    `github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.7.1`.
+    `github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.8.0`.
     Generated artifacts are committed, reviewed, and checked by guardrails for
     stale output. Generator upgrades are explicit dependency changes, not
     implicit `latest` drift.

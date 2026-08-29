@@ -1,12 +1,12 @@
 {
   "schema": "dkim2.draft-issues.v1",
-  "message_draft": "draft-ietf-dkim-dkim2-spec-05",
+  "message_draft": "draft-ietf-dkim-dkim2-spec-06",
   "dns_draft": "draft-chuang-dkim2-dns-04",
   "issues": [
     {
       "id": "DKIM2-ISSUE-0001",
       "title": "Architecture document references remain unspecified",
-      "sections": ["Draft-05 Section 1.1"],
+      "sections": ["Draft-06 Section 1.1"],
       "class": "tba",
       "local_status": "not_implemented",
       "upstream_status": "not_reported",
@@ -17,12 +17,12 @@
       "public_effect": "reference-limitation",
       "resolution_criterion": "published-architecture-references",
       "claim_classes": ["draft_normative"],
-      "upstream_reference": "https://www.ietf.org/archive/id/draft-ietf-dkim-dkim2-spec-05.txt"
+      "upstream_reference": "https://www.ietf.org/archive/id/draft-ietf-dkim-dkim2-spec-06.txt"
     },
     {
       "id": "DKIM2-ISSUE-0002",
       "title": "Full-chain policy guidance document remains unspecified",
-      "sections": ["Draft-05 Section 10.3"],
+      "sections": ["Draft-06 Section 10.3"],
       "class": "tba",
       "local_status": "not_implemented",
       "upstream_status": "not_reported",
@@ -33,12 +33,12 @@
       "public_effect": "policy-limitation",
       "resolution_criterion": "published-policy-guidance",
       "claim_classes": ["draft_normative"],
-      "upstream_reference": "https://www.ietf.org/archive/id/draft-ietf-dkim-dkim2-spec-05.txt"
+      "upstream_reference": "https://www.ietf.org/archive/id/draft-ietf-dkim-dkim2-spec-06.txt"
     },
     {
       "id": "DKIM2-ISSUE-0003",
       "title": "EAI behavior remains unspecified",
-      "sections": ["Draft-05 Section 14"],
+      "sections": ["Draft-06 Section 14"],
       "class": "tba",
       "local_status": "not_implemented",
       "upstream_status": "not_reported",
@@ -49,12 +49,12 @@
       "public_effect": "eai-deferred",
       "resolution_criterion": "published-eai-semantics",
       "claim_classes": ["draft_normative"],
-      "upstream_reference": "https://www.ietf.org/archive/id/draft-ietf-dkim-dkim2-spec-05.txt"
+      "upstream_reference": "https://www.ietf.org/archive/id/draft-ietf-dkim-dkim2-spec-06.txt"
     },
     {
       "id": "DKIM2-ISSUE-0004",
       "title": "IANA considerations remain unspecified",
-      "sections": ["Draft-05 Section 15"],
+      "sections": ["Draft-06 Section 15"],
       "class": "tba",
       "local_status": "not_implemented",
       "upstream_status": "not_reported",
@@ -65,12 +65,12 @@
       "public_effect": "registry-limitation",
       "resolution_criterion": "published-iana-considerations",
       "claim_classes": ["draft_normative"],
-      "upstream_reference": "https://www.ietf.org/archive/id/draft-ietf-dkim-dkim2-spec-05.txt"
+      "upstream_reference": "https://www.ietf.org/archive/id/draft-ietf-dkim-dkim2-spec-06.txt"
     },
     {
       "id": "DKIM2-ISSUE-0005",
       "title": "Draft security considerations remain unspecified",
-      "sections": ["Draft-05 Section 16"],
+      "sections": ["Draft-06 Section 16"],
       "class": "tba",
       "local_status": "not_implemented",
       "upstream_status": "not_reported",
@@ -81,12 +81,12 @@
       "public_effect": "draft-security-limitation",
       "resolution_criterion": "published-security-considerations",
       "claim_classes": ["draft_normative", "local_security_policy"],
-      "upstream_reference": "https://www.ietf.org/archive/id/draft-ietf-dkim-dkim2-spec-05.txt"
+      "upstream_reference": "https://www.ietf.org/archive/id/draft-ietf-dkim-dkim2-spec-06.txt"
     },
     {
       "id": "DKIM2-ISSUE-0006",
       "title": "Header tag-name case interpretation differs between implementations",
-      "sections": ["Draft-05 Sections 5 and 8"],
+      "sections": ["Draft-06 Sections 5 and 8"],
       "class": "external_disagreement",
       "local_status": "implemented_interpretation",
       "upstream_status": "reporting_requires_authorization",
@@ -103,7 +103,7 @@
     {
       "id": "DKIM2-ISSUE-0007",
       "title": "Binary body and UTF-8 header preservation interpretation",
-      "sections": ["Draft-05 Section 2.9", "RFC 5322 Sections 2.2 and 2.3"],
+      "sections": ["Draft-06 Section 2.9", "RFC 5322 Sections 2.2 and 2.3"],
       "class": "ambiguity",
       "local_status": "implemented_interpretation",
       "upstream_status": "not_reported",
@@ -118,7 +118,7 @@
     {
       "id": "DKIM2-ISSUE-0008",
       "title": "Recipe application and inverse generation require exact local rules",
-      "sections": ["Draft-05 Sections 4 through 7.2"],
+      "sections": ["Draft-06 Sections 4 through 7.2"],
       "class": "ambiguity",
       "local_status": "implemented_interpretation",
       "upstream_status": "not_reported",
@@ -136,7 +136,7 @@
     {
       "id": "DKIM2-ISSUE-0009",
       "title": "Policy projection modes are locally sealed",
-      "sections": ["Draft-05 Section 10"],
+      "sections": ["Draft-06 Section 10"],
       "class": "ambiguity",
       "local_status": "implemented_interpretation",
       "upstream_status": "not_reported",
@@ -151,7 +151,7 @@
     {
       "id": "DKIM2-ISSUE-0010",
       "title": "Restricted signing output requires explicit release authority",
-      "sections": ["Draft-05 Sections 8 through 11"],
+      "sections": ["Draft-06 Sections 8 through 11"],
       "class": "ambiguity",
       "local_status": "implemented_interpretation",
       "upstream_status": "not_upstream_issue",
@@ -182,7 +182,7 @@
     {
       "id": "DKIM2-ISSUE-0012",
       "title": "DNS query method has no active signature q tag",
-      "sections": ["DNS-04 Section 3.1", "Draft-05 Section 8"],
+      "sections": ["DNS-04 Section 3.1", "Draft-06 Section 8"],
       "class": "discrepancy",
       "local_status": "implemented_interpretation",
       "upstream_status": "not_reported",
@@ -197,7 +197,7 @@
     {
       "id": "DKIM2-ISSUE-0013",
       "title": "DNS strict-identity flag conflicts with numeric signature i tag",
-      "sections": ["DNS-04 Section 3.4.4", "Draft-05 Section 8.1"],
+      "sections": ["DNS-04 Section 3.4.4", "Draft-06 Section 8.1"],
       "class": "discrepancy",
       "local_status": "implemented_interpretation",
       "upstream_status": "not_reported",
@@ -227,7 +227,7 @@
     {
       "id": "DKIM2-ISSUE-0015",
       "title": "Milter SMTP fidelity is an adapter-specific contract",
-      "sections": ["Draft-05 Sections 8.5 and 8.6", "RFC 5321 Section 4.1.1"],
+      "sections": ["Draft-06 Sections 8.5 and 8.6", "RFC 5321 Section 4.1.1"],
       "class": "ambiguity",
       "local_status": "implemented_interpretation",
       "upstream_status": "not_upstream_issue",
@@ -248,22 +248,22 @@
       "upstream_status": "not_upstream_issue",
       "behavior_owner": "cmd/dkim2-exim/exim/tests",
       "conformance_cases": [],
-      "test_refs": ["tools/internal/conformance/conformance_test.go#TestUnqualifiedDraft05RejectsEximEvidence"],
+      "test_refs": ["tools/internal/conformance/conformance_test.go#TestUnqualifiedDraft06RejectsEximEvidence"],
       "external_cases": [],
-      "public_effect": "exim-unqualified-draft05",
-      "resolution_criterion": "fresh-draft05-five-row-qualification",
+      "public_effect": "exim-unqualified-draft06",
+      "resolution_criterion": "fresh-draft06-five-row-qualification",
       "claim_classes": ["adapter_contract", "release_policy"]
     },
     {
       "id": "DKIM2-ISSUE-0017",
       "title": "Recipe-less unchanged history requires an explicit transition interpretation",
-      "sections": ["Draft-05 Sections 7.2, 9.1, and 11.2"],
+      "sections": ["Draft-06 Sections 7.2, 9.1, and 11.2"],
       "class": "ambiguity",
       "local_status": "implemented_interpretation",
       "upstream_status": "not_reported",
       "behavior_owner": "lib/internal/verify",
-      "conformance_cases": ["verification/draft05-recipe-less-unchanged", "verification/draft05-recipe-less-unknown-only"],
-      "test_refs": ["lib/internal/verify/draft05_test.go#TestHistoryAcceptsRecipeLessUnchangedTransitionMatrix"],
+      "conformance_cases": ["verification/draft06-recipe-less-unchanged", "verification/draft06-recipe-less-unknown-only"],
+      "test_refs": ["lib/internal/verify/draft06_test.go#TestHistoryAcceptsRecipeLessUnchangedTransitionMatrix"],
       "external_cases": [],
       "public_effect": "recipe-less-history-compares-supported-tuples",
       "resolution_criterion": "draft-defines-recipe-less-unchanged-transition",

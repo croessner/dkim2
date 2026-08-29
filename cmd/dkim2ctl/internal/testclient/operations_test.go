@@ -17,8 +17,8 @@ import (
 	"github.com/croessner/dkim2/cmd/dkim2ctl/internal/testclient/generated"
 )
 
-const signAcceptResponse = `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-05","operation":"sign","result":"pass","disposition":"accept","actions":[{"type":"add_header","name":"Message-Instance","value":"v=1; i=1; h=sha256:synthetic"},{"type":"add_header","name":"DKIM2-Signature","value":"v=1; a=ed25519-sha256; d=example.test; s=test; b=synthetic"}]}`
-const reviseContinueResponse = `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-05","operation":"revise","result":"pass","disposition":"continue","actions":[]}`
+const signAcceptResponse = `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-06","operation":"sign","result":"pass","disposition":"accept","actions":[{"type":"add_header","name":"Message-Instance","value":"v=1; i=1; h=sha256:synthetic"},{"type":"add_header","name":"DKIM2-Signature","value":"v=1; a=ed25519-sha256; d=example.test; s=test; b=synthetic"}]}`
+const reviseContinueResponse = `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-06","operation":"revise","result":"pass","disposition":"continue","actions":[]}`
 const operationFixtureMessageBase64 = "U3ViamVjdDogdGVzdA0KDQpib2R5DQo="
 const operationFixtureRecipient = "<recipient@example.test>"
 const operationFixtureSender = "<sender@example.test>"
@@ -183,7 +183,7 @@ func TestOperationFixturesRejectVersionFidelityAndBase64Contradictions(t *testin
 		func(value string) string {
 			return strings.Replace(
 				value,
-				`"draft": "draft-ietf-dkim-dkim2-spec-05"`,
+				`"draft": "draft-ietf-dkim-dkim2-spec-06"`,
 				`"draft": "draft-ietf-dkim-dkim2-spec-04"`,
 				1,
 			)
@@ -261,9 +261,9 @@ func TestOperationResponseAcceptsDocumentedNoMutationAndRevisePlans(t *testing.T
 		operation Operation
 		response  string
 	}{
-		{OperationSign, `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-05","operation":"sign","result":"pass","disposition":"continue","actions":[]}`},
-		{OperationRevise, `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-05","operation":"revise","result":"pass","disposition":"accept","actions":[{"type":"add_header","name":"DKIM2-Signature","value":"v=1; b=unchanged"}]}`},
-		{OperationRevise, `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-05","operation":"revise","result":"pass","disposition":"accept","actions":[{"type":"add_header","name":"Message-Instance","value":"v=1; i=2"},{"type":"add_header","name":"DKIM2-Signature","value":"v=1; b=changed"}]}`},
+		{OperationSign, `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-06","operation":"sign","result":"pass","disposition":"continue","actions":[]}`},
+		{OperationRevise, `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-06","operation":"revise","result":"pass","disposition":"accept","actions":[{"type":"add_header","name":"DKIM2-Signature","value":"v=1; b=unchanged"}]}`},
+		{OperationRevise, `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-06","operation":"revise","result":"pass","disposition":"accept","actions":[{"type":"add_header","name":"Message-Instance","value":"v=1; i=2"},{"type":"add_header","name":"DKIM2-Signature","value":"v=1; b=changed"}]}`},
 	} {
 		response := buildHostileResponse(http.StatusOK, mediaTypeJSON, testCase.response)
 		if _, err := classifyResponse(testCase.operation, response); err != nil {

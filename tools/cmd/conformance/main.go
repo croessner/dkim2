@@ -54,9 +54,9 @@ const (
 	postfixFragmentSchema       = "dkim2.postfix-qualification-fragment.v1"
 	milterPublicPeerArtifact    = "milter-public-peer-source"
 	canonicalHeaderArtifact     = "canonical-header-source"
-	instanceDraft05Artifact     = "instance-draft05-source"
+	instanceDraft06Artifact     = "instance-draft06-source"
 	signatureNegativeArtifact   = "signature-negative-source"
-	verificationDraft05Artifact = "verification-draft05-source"
+	verificationDraft06Artifact = "verification-draft06-source"
 	postfixComposeArtifact      = "postfix-qualification-compose"
 	postfixDockerfileArtifact   = "postfix-qualification-dockerfile"
 	postfixRuntimeArtifact      = "postfix-qualification-runtime"
@@ -64,7 +64,7 @@ const (
 	environmentHomeTmp          = "HOME=/tmp"
 	environmentLangC            = "LANG=C"
 	environmentLocaleC          = "LC_ALL=C"
-	verificationGoldenTest      = "TestPublicDraft05GoldenVectors"
+	verificationGoldenTest      = "TestPublicDraft06GoldenVectors"
 	verificationPublicArtifact  = "verification-public"
 )
 
@@ -96,7 +96,7 @@ func run(arguments []string) error {
 	eximEvidence := flags.String(
 		"exim-evidence",
 		"",
-		"reserved; Draft-05 rejects imported Exim qualification evidence",
+		"reserved; Draft-06 rejects imported Exim qualification evidence",
 	)
 	if err := flags.Parse(arguments); err != nil || flags.NArg() != 1 {
 		return errors.New("arguments")
@@ -331,10 +331,10 @@ var portableDefinitions = []runnerDefinition{
 		timeout: 2 * time.Minute,
 		cases: []runnerCase{
 			{key: "canonical\x00body-hash-input", testName: "TestGoldenBodyCanonicalizationFixtures", artifacts: []string{"canonical-body"}},
-			{key: "canonical\x00draft04-to-draft05-header-boundary", testName: "TestDraft04SignatureFailsUnderDraft05HeaderRules", artifacts: []string{canonicalHeaderArtifact}},
-			{key: "canonical\x00draft05-digest-algorithms", testName: "TestSHA512DigestHashesCanonicalInput", artifacts: []string{"canonical-digest-source"}},
-			{key: "canonical\x00draft05-header-exclusions", testName: "TestHeaderRelevanceDraft05UnsignedSet", artifacts: []string{canonicalHeaderArtifact}},
-			{key: "canonical\x00draft05-to-draft04-header-boundary", testName: "TestDraft05SignatureFailsUnderDraft04HeaderRules", artifacts: []string{canonicalHeaderArtifact}},
+			{key: "canonical\x00draft04-to-draft06-header-boundary", testName: "TestDraft04SignatureFailsUnderDraft06HeaderRules", artifacts: []string{canonicalHeaderArtifact}},
+			{key: "canonical\x00draft06-digest-algorithms", testName: "TestSHA512DigestHashesCanonicalInput", artifacts: []string{"canonical-digest-source"}},
+			{key: "canonical\x00draft06-header-exclusions", testName: "TestHeaderRelevanceDraft06UnsignedSet", artifacts: []string{canonicalHeaderArtifact}},
+			{key: "canonical\x00draft06-to-draft04-header-boundary", testName: "TestDraft06SignatureFailsUnderDraft04HeaderRules", artifacts: []string{canonicalHeaderArtifact}},
 			{key: "canonical\x00header-hash-input", testName: "TestGoldenHeaderCanonicalizationFixture", artifacts: []string{"canonical-header"}},
 			{key: "canonical\x00signature-input", testName: "TestGoldenSignatureCanonicalizationFixture", artifacts: []string{"canonical-signature"}},
 		},
@@ -343,10 +343,10 @@ var portableDefinitions = []runnerDefinition{
 		name: "instance-tests", module: libraryModule, pkg: "./internal/instance",
 		timeout: 2 * time.Minute,
 		cases: []runnerCase{
-			{key: "instance\x00draft05-dual-hash", testName: "TestHashSetAcceptsMixedSupportedAlgorithmsInWireOrder", artifacts: []string{instanceDraft05Artifact}},
-			{key: "instance\x00draft05-duplicate-extension-hash", testName: "TestHashSetRejectsDuplicateExtensionName", artifacts: []string{instanceDraft05Artifact}},
-			{key: "instance\x00draft05-duplicate-hash", testName: "TestParseRejectsDuplicateHashAlgorithms", artifacts: []string{instanceDraft05Artifact}},
-			{key: "instance\x00draft05-sha512-uppercase", testName: "TestHashSetAcceptsSHA512", artifacts: []string{instanceDraft05Artifact}},
+			{key: "instance\x00draft06-dual-hash", testName: "TestHashSetAcceptsMixedSupportedAlgorithmsInWireOrder", artifacts: []string{instanceDraft06Artifact}},
+			{key: "instance\x00draft06-duplicate-extension-hash", testName: "TestHashSetRejectsDuplicateExtensionName", artifacts: []string{instanceDraft06Artifact}},
+			{key: "instance\x00draft06-duplicate-hash", testName: "TestParseRejectsDuplicateHashAlgorithms", artifacts: []string{instanceDraft06Artifact}},
+			{key: "instance\x00draft06-sha512-uppercase", testName: "TestHashSetAcceptsSHA512", artifacts: []string{instanceDraft06Artifact}},
 		},
 	},
 	{
@@ -355,7 +355,7 @@ var portableDefinitions = []runnerDefinition{
 		cases: []runnerCase{
 			{key: "dns\x00dns-negative-record-states", testName: "TestDNSPublicKeyProviderMapsResolverOutcomes", artifacts: []string{"dns-negative-source"}},
 			{key: "dns\x00dns-records", testName: "TestDNSDraft04PublicPassVectors", artifacts: []string{"dns-records"}},
-			{key: "policy\x00draft05-invalid-recipe-json", testName: "TestMalformedHistoriedMessageFailsClosedAcrossServiceAndFacade", artifacts: []string{"policy-invalid-recipe-source"}},
+			{key: "policy\x00draft06-invalid-recipe-json", testName: "TestMalformedHistoriedMessageFailsClosedAcrossServiceAndFacade", artifacts: []string{"policy-invalid-recipe-source"}},
 			{key: "policy\x00projection-modes", testName: "TestEvaluatePolicySelectedFourStateModeMatrix", artifacts: []string{"policy-positive-source"}},
 			{key: "signing\x00envelope-facade", testName: "TestPublicEnvelopeSnapshotsAndOrderedGroupMatching", artifacts: []string{signingFacadeArtifact, signingProvenanceArtifact, signingPublicArtifact, signingTestKeyArtifact}},
 			{key: "signing\x00next-domain-facade", testName: "TestPublicNextDomainCreationReleaseAndCompletion", artifacts: []string{signingFacadeArtifact, signingProvenanceArtifact, signingPublicArtifact, signingTestKeyArtifact}},
@@ -383,7 +383,7 @@ var portableDefinitions = []runnerDefinition{
 		name: "crypto-golden-tests", module: libraryModule, pkg: "./internal/cryptodkim2",
 		timeout: 2 * time.Minute,
 		cases: []runnerCase{
-			{key: "signing\x00custody-cryptography", testName: "TestDraft05CryptoVerificationGoldenVectors", artifacts: []string{"signing-custody", signingProvenanceArtifact}},
+			{key: "signing\x00custody-cryptography", testName: "TestDraft06CryptoVerificationGoldenVectors", artifacts: []string{"signing-custody", signingProvenanceArtifact}},
 			{key: "signing\x00custody-key-policy", testName: "TestCryptoPublicKeyPolicyBoundaryGoldenVectors", artifacts: []string{"signing-custody", signingProvenanceArtifact}},
 		},
 	},
@@ -391,10 +391,10 @@ var portableDefinitions = []runnerDefinition{
 		name: "recipe-tests", module: libraryModule, pkg: "./internal/recipe",
 		timeout: 2 * time.Minute,
 		cases: []runnerCase{
-			{key: "recipe\x00application", testName: "TestGoldenRecipeApplicationDraft05", artifacts: []string{"recipe-application"}},
-			{key: "recipe\x00draft05-lowercase-recipe", testName: "TestParserAcceptsEscapedLowercaseHeaderKey", artifacts: []string{"recipe-draft05-source"}},
-			{key: "recipe\x00draft05-nonlowercase-recipe", testName: "TestParserRejectsNonLowercaseHeaderKey", artifacts: []string{"recipe-draft05-source"}},
-			{key: "recipe\x00generation", testName: "TestSerializeGenerationPlanMatchesDraft05Goldens", artifacts: []string{"recipe-generation"}},
+			{key: "recipe\x00application", testName: "TestGoldenRecipeApplicationDraft06", artifacts: []string{"recipe-application"}},
+			{key: "recipe\x00draft06-lowercase-recipe", testName: "TestParserAcceptsEscapedLowercaseHeaderKey", artifacts: []string{"recipe-draft06-source"}},
+			{key: "recipe\x00draft06-nonlowercase-recipe", testName: "TestParserRejectsNonLowercaseHeaderKey", artifacts: []string{"recipe-draft06-source"}},
+			{key: "recipe\x00generation", testName: "TestSerializeGenerationPlanMatchesDraft06Goldens", artifacts: []string{"recipe-generation"}},
 			{key: "recipe\x00limit-boundaries", testName: "TestEveryRecipeHardMaximumAcceptsExactAndRejectsOneOver", artifacts: []string{"recipe-limits-source"}},
 			{key: "recipe\x00parser-negative", testName: "TestParserAdditionalDraftAndRFC8259Vectors", artifacts: []string{"recipe-negative-source"}},
 		},
@@ -404,7 +404,7 @@ var portableDefinitions = []runnerDefinition{
 		timeout: 3 * time.Minute,
 		cases: []runnerCase{
 			{key: "replay\x00concurrent-duplicate", testName: "TestMemoryStoreConcurrentSameKeyHasOneWinner", artifacts: []string{"replay-memory-source"}},
-			{key: "replay\x00identity-draft05-epoch", testName: "TestDraft05IdentitySeparatesEpoch", artifacts: []string{"replay-deriver-source"}},
+			{key: "replay\x00identity-draft06-epoch", testName: "TestDraft06IdentitySeparatesEpoch", artifacts: []string{"replay-deriver-source"}},
 			{key: "replay\x00identity-separation", testName: "TestDeriverChangesEveryBoundFact", artifacts: []string{"replay-deriver-source"}},
 			{key: "replay\x00memory-expiry", testName: "TestMemoryStoreFirstSeenReplayExpiryAndNoExtension", artifacts: []string{"replay-memory-source"}},
 			{key: "replay\x00retention-edge", testName: "TestRetentionCheckedAdditionPreservesExactExpiry", artifacts: []string{"replay-retention-source"}},
@@ -424,7 +424,7 @@ var portableDefinitions = []runnerDefinition{
 		name: "dkim2d-openapi-integration-tests", module: daemonModule, pkg: "./internal/httpjson",
 		timeout: 4 * time.Minute,
 		cases: []runnerCase{
-			{key: "openapi\x00draft05-invalid-json-diagnostics", testName: "TestJSONPreflightRejectsMalformedTexts", artifacts: []string{"openapi-invalid-json-source"}},
+			{key: "openapi\x00draft06-invalid-json-diagnostics", testName: "TestJSONPreflightRejectsMalformedTexts", artifacts: []string{"openapi-invalid-json-source"}},
 			{
 				key:      "openapi\x00real-daemon-generated-boundary",
 				testName: "TestDKIM2ctlGeneratedClientAgainstProductionBoundary",
@@ -562,7 +562,7 @@ var portableDefinitions = []runnerDefinition{
 		timeout: 3 * time.Minute,
 		cases: []runnerCase{
 			{key: "signing\x00local-sha256-output-policy", testName: "TestSignerMayEmitSHA256FromSHA512OnlyHistory", artifacts: []string{"signing-revision-source"}},
-			{key: "signing\x00public-facade", testName: "TestDraft05SigningGoldenVectors", artifacts: []string{signingProvenanceArtifact, signingPublicArtifact}},
+			{key: "signing\x00public-facade", testName: "TestDraft06SigningGoldenVectors", artifacts: []string{signingProvenanceArtifact, signingPublicArtifact}},
 			{key: "signing\x00unchanged-no-redundant-instance", testName: "TestHashPlanOriginatorAndExistingRoles", artifacts: []string{"signing-plan-source"}},
 		},
 	},
@@ -570,30 +570,30 @@ var portableDefinitions = []runnerDefinition{
 		name: "signature-tests", module: libraryModule, pkg: "./internal/signature",
 		timeout: 2 * time.Minute,
 		cases: []runnerCase{
-			{key: "signing\x00custody-transitions", testName: "TestDraft05CustodyGoldenVectors", artifacts: []string{"custody-positive-source", signingProvenanceArtifact}},
-			{key: "signing\x00draft05-duplicate-selector", testName: "TestParseRejectsDuplicateSelectors", artifacts: []string{signatureNegativeArtifact}},
-			{key: "signing\x00draft05-same-algorithm-pair", testName: "TestParseAllowsTwoSameAlgorithmDifferentSelectors", artifacts: []string{signatureNegativeArtifact}},
-			{key: "signing\x00draft05-third-same-algorithm", testName: "TestParseRejectsThirdSameAlgorithm", artifacts: []string{signatureNegativeArtifact}},
+			{key: "signing\x00custody-transitions", testName: "TestDraft06CustodyGoldenVectors", artifacts: []string{"custody-positive-source", signingProvenanceArtifact}},
+			{key: "signing\x00draft06-duplicate-selector", testName: "TestParseRejectsDuplicateSelectors", artifacts: []string{signatureNegativeArtifact}},
+			{key: "signing\x00draft06-same-algorithm-pair", testName: "TestParseAllowsTwoSameAlgorithmDifferentSelectors", artifacts: []string{signatureNegativeArtifact}},
+			{key: "signing\x00draft06-third-same-algorithm", testName: "TestParseRejectsThirdSameAlgorithm", artifacts: []string{signatureNegativeArtifact}},
 			{key: "signing\x00signature-grammar-negative", testName: "TestParseRejectsSharedTagSyntaxErrors", artifacts: []string{signatureNegativeArtifact}},
 			{key: "signing\x00tag-case-interpretation", testName: "TestParseAcceptsInteropFWSAndMixedCaseTags", artifacts: []string{signatureNegativeArtifact}},
 		},
 	},
 	{
-		name: "service-draft05-tests", module: libraryModule, pkg: "./internal/service",
+		name: "service-draft06-tests", module: libraryModule, pkg: "./internal/service",
 		timeout: 2 * time.Minute,
 		cases: []runnerCase{
-			{key: "verification\x00draft05-diagnostics", testName: "TestDraft05ProtocolInfractionsMapToDistinctPermanentReasons", artifacts: []string{"service-draft05-source"}},
+			{key: "verification\x00draft06-diagnostics", testName: "TestDraft06ProtocolInfractionsMapToDistinctPermanentReasons", artifacts: []string{"service-draft06-source"}},
 		},
 	},
 	{
-		name: "verification-draft05-tests", module: libraryModule, pkg: "./internal/verify",
+		name: "verification-draft06-tests", module: libraryModule, pkg: "./internal/verify",
 		timeout: 3 * time.Minute,
 		cases: []runnerCase{
-			{key: "verification\x00draft05-dual-mismatch", testName: "TestVerifierRejectsOneMismatchingSupportedTuple", artifacts: []string{verificationDraft05Artifact}},
-			{key: "verification\x00draft05-recipe-less-unchanged", testName: "TestHistoryAcceptsRecipeLessUnchangedTransitionMatrix", artifacts: []string{verificationDraft05Artifact}},
-			{key: "verification\x00draft05-recipe-less-unknown-only", testName: "TestHistoryAcceptsRecipeLessUnchangedTransitionMatrix", artifacts: []string{verificationDraft05Artifact}},
-			{key: "verification\x00draft05-same-algorithm-positional", testName: "TestVerifierChecksSameAlgorithmSignaturesPositionally", artifacts: []string{"verification-multisignature-source"}},
-			{key: "verification\x00draft05-sha512-only", testName: "TestVerifierAcceptsSHA512Only", artifacts: []string{verificationDraft05Artifact}},
+			{key: "verification\x00draft06-dual-mismatch", testName: "TestVerifierRejectsOneMismatchingSupportedTuple", artifacts: []string{verificationDraft06Artifact}},
+			{key: "verification\x00draft06-recipe-less-unchanged", testName: "TestHistoryAcceptsRecipeLessUnchangedTransitionMatrix", artifacts: []string{verificationDraft06Artifact}},
+			{key: "verification\x00draft06-recipe-less-unknown-only", testName: "TestHistoryAcceptsRecipeLessUnchangedTransitionMatrix", artifacts: []string{verificationDraft06Artifact}},
+			{key: "verification\x00draft06-same-algorithm-positional", testName: "TestVerifierChecksSameAlgorithmSignaturesPositionally", artifacts: []string{"verification-multisignature-source"}},
+			{key: "verification\x00draft06-sha512-only", testName: "TestVerifierAcceptsSHA512Only", artifacts: []string{verificationDraft06Artifact}},
 		},
 	},
 }

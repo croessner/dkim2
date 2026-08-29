@@ -14,7 +14,7 @@ func TestJSONPreflightAcceptsExactRFC8259Text(t *testing.T) {
 
 	input := []byte(" \r\n\t{" +
 		`"api_\u0076ersion":"v\u0031",` +
-		`"draft":"draft-ietf-dkim-dkim2-spec-05",` +
+		`"draft":"draft-ietf-dkim-dkim2-spec-06",` +
 		`"unknown":[0,-0,1,-1,1.5,1e2,1E-2,true,false,null,"\uD834\uDD1E"]` +
 		"} \t\r\n")
 	constants, err := preflightJSON(input)
@@ -40,7 +40,7 @@ func TestJSONPreflightRejectsMalformedTexts(t *testing.T) {
 		{name: "trailing byte", input: validJSONPreflightDocument() + " x"},
 		{name: "unterminated object", input: `{"api_version":"v1"`},
 		{name: "non-string name", input: `{1:"value"}`},
-		{name: "raw control", input: "{\"api_version\":\"v1\",\"draft\":\"draft-ietf-dkim-dkim2-spec-05\",\"x\":\"\n\"}"},
+		{name: "raw control", input: "{\"api_version\":\"v1\",\"draft\":\"draft-ietf-dkim-dkim2-spec-06\",\"x\":\"\n\"}"},
 		{name: "invalid escape", input: validJSONPreflightPrefix() + `"x":"\q"}`},
 		{name: "leading zero", input: validJSONPreflightPrefix() + `"x":01}`},
 		{name: "missing fraction", input: validJSONPreflightPrefix() + `"x":1.}`},
@@ -103,7 +103,7 @@ func TestJSONPreflightRejectsDecodedDuplicateNames(t *testing.T) {
 	t.Parallel()
 
 	tests := []string{
-		`{"api_version":"v1","api_\u0076ersion":"v1","draft":"draft-ietf-dkim-dkim2-spec-05"}`,
+		`{"api_version":"v1","api_\u0076ersion":"v1","draft":"draft-ietf-dkim-dkim2-spec-06"}`,
 		validJSONPreflightPrefix() + `"x":{"name":0,"na\u006de":1}}`,
 		validJSONPreflightPrefix() + `"\uD83D\uDE00":0,"😀":1}`,
 	}
@@ -234,7 +234,7 @@ func TestJSONPreflightConstantClassification(t *testing.T) {
 		},
 		{
 			name:  "non-string api",
-			input: `{"api_version":1,"draft":"draft-ietf-dkim-dkim2-spec-05"}`,
+			input: `{"api_version":1,"draft":"draft-ietf-dkim-dkim2-spec-06"}`,
 			code:  jsonPreflightInvalidContract,
 		},
 		{
@@ -448,12 +448,12 @@ func assertJSONPreflightCode(t testing.TB, input []byte, want jsonPreflightError
 
 // validJSONPreflightDocument returns one minimal supported root object.
 func validJSONPreflightDocument() string {
-	return `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-05"}`
+	return `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-06"}`
 }
 
 // validJSONPreflightPrefix returns supported constants followed by one member slot.
 func validJSONPreflightPrefix() string {
-	return `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-05",`
+	return `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-06",`
 }
 
 // nestedJSONPreflightDocument builds a root object plus the requested array depth.

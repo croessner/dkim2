@@ -1,7 +1,7 @@
 # Exim Compatibility Matrix — qualified 2026-07-31
 
-> Historical Draft-04 qualification evidence. The Draft-05 capability is
-> `unqualified_draft05`; none of the rows below qualify current candidate bytes
+> Historical Draft-04 qualification evidence. The Draft-06 capability is
+> `unqualified_draft06`; none of the rows below qualify current candidate bytes
 > and the active conformance and security profiles reject their import.
 
 This report records the authenticated five-row implementation inputs and the

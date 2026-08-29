@@ -11,6 +11,8 @@ const (
 	ReplayDisabled
 	// ReplayFirstSeen means every authenticated identity was newly retained.
 	ReplayFirstSeen
+	// ReplayExploded means authenticated exploded made a remembered copy expected.
+	ReplayExploded
 	// ReplayReplayed means at least one authenticated identity already existed.
 	ReplayReplayed
 	// ReplayIndeterminate means replay storage cannot be classified safely.

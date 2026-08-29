@@ -11,7 +11,7 @@ import (
 	"github.com/croessner/dkim2/internal/rawmsg"
 )
 
-// TestHeaderHashInputExcludesDraftHeaderClasses verifies Draft-05 Section 4 and Section 6.2 exclusions.
+// TestHeaderHashInputExcludesDraftHeaderClasses verifies Draft-06 Section 4 and Section 6.2 exclusions.
 func TestHeaderHashInputExcludesDraftHeaderClasses(t *testing.T) {
 	msg := mustParseHeaderMessage(t, []byte(
 		"Received: by mx.example\r\n"+
@@ -52,8 +52,8 @@ func TestHeaderHashInputExcludesDraftHeaderClasses(t *testing.T) {
 	}
 }
 
-// TestHeaderRelevanceDraft05UnsignedSet proves every exact and patterned Draft-05 exclusion and ARC near miss.
-func TestHeaderRelevanceDraft05UnsignedSet(t *testing.T) {
+// TestHeaderRelevanceDraft06UnsignedSet proves every exact and patterned Draft-06 exclusion and ARC near miss.
+func TestHeaderRelevanceDraft06UnsignedSet(t *testing.T) {
 	relevance := NewHeaderRelevance()
 	tests := []struct {
 		name     string
@@ -86,8 +86,8 @@ func TestHeaderRelevanceDraft05UnsignedSet(t *testing.T) {
 	}
 }
 
-// TestHeaderHashInputAppliesDraft05UnsignedSet proves canonical bytes and bounded categories.
-func TestHeaderHashInputAppliesDraft05UnsignedSet(t *testing.T) {
+// TestHeaderHashInputAppliesDraft06UnsignedSet proves canonical bytes and bounded categories.
+func TestHeaderHashInputAppliesDraft06UnsignedSet(t *testing.T) {
 	msg := mustParseHeaderMessage(t, []byte(
 		"Apparently-To: excluded\r\n"+
 			"Auto-Submitted: excluded\r\n"+
@@ -117,65 +117,65 @@ func TestHeaderHashInputAppliesDraft05UnsignedSet(t *testing.T) {
 	}
 }
 
-// TestDraft04SignatureFailsUnderDraft05HeaderRules proves the legacy-to-current PASS-to-FAIL hash boundary.
-func TestDraft04SignatureFailsUnderDraft05HeaderRules(t *testing.T) {
+// TestDraft04SignatureFailsUnderDraft06HeaderRules proves the legacy-to-current PASS-to-FAIL hash boundary.
+func TestDraft04SignatureFailsUnderDraft06HeaderRules(t *testing.T) {
 	msg := mustParseHeaderMessage(t, []byte(
 		"From: sender@example.test\r\n"+
 			"Auto-Submitted: auto-generated\r\n"+
 			"Subject: legacy signer\r\n"))
 
 	draft04Canonical := draft04HeaderHashInputOracle(msg)
-	draft05Result, err := mustCanonicalizer(t).HeaderHashFromMessage(msg)
+	draft06Result, err := mustCanonicalizer(t).HeaderHashFromMessage(msg)
 	if err != nil {
 		t.Fatalf("HeaderHashFromMessage() error = %v", err)
 	}
-	draft05Canonical := draft05Result.CanonicalBytes().Bytes()
+	draft06Canonical := draft06Result.CanonicalBytes().Bytes()
 
 	wireDigest := mustDecodeHeaderBoundaryDigest(t, "kOot0z6eGAjyHWxwX/baswEx+nIRXJizRLyleAuOzPM=")
 	draft04Digest := assertHeaderBoundaryOracle(t, "Draft-04", draft04Canonical,
 		"auto-submitted:auto-generated\r\nfrom:sender@example.test\r\nsubject:legacy signer\r\n",
 		"kOot0z6eGAjyHWxwX/baswEx+nIRXJizRLyleAuOzPM=")
-	draft05Digest := assertHeaderBoundaryOracle(t, "Draft-05", draft05Canonical,
+	draft06Digest := assertHeaderBoundaryOracle(t, "Draft-06", draft06Canonical,
 		"from:sender@example.test\r\nsubject:legacy signer\r\n",
 		"ggygkH3SuDLLOJs7zNh3xmIv3hREjrhTfkQGUAlh3P4=")
-	assertDraft05ResultDigest(t, draft05Result, draft05Digest)
+	assertDraft06ResultDigest(t, draft06Result, draft06Digest)
 
 	if sameDraftPass := bytes.Equal(wireDigest, draft04Digest[:]); !sameDraftPass {
 		t.Fatal("Draft-04 wire digest did not PASS under Draft-04 header rules")
 	}
-	if crossDraftPass := bytes.Equal(wireDigest, draft05Digest[:]); crossDraftPass {
-		t.Fatal("Draft-04 wire digest did not FAIL under Draft-05 header rules")
+	if crossDraftPass := bytes.Equal(wireDigest, draft06Digest[:]); crossDraftPass {
+		t.Fatal("Draft-04 wire digest did not FAIL under Draft-06 header rules")
 	}
 }
 
-// TestDraft05SignatureFailsUnderDraft04HeaderRules proves the current-to-legacy PASS-to-FAIL hash boundary.
-func TestDraft05SignatureFailsUnderDraft04HeaderRules(t *testing.T) {
+// TestDraft06SignatureFailsUnderDraft04HeaderRules proves the current-to-legacy PASS-to-FAIL hash boundary.
+func TestDraft06SignatureFailsUnderDraft04HeaderRules(t *testing.T) {
 	msg := mustParseHeaderMessage(t, []byte(
 		"From: sender@example.test\r\n"+
 			"Apparently-To: recipient@example.test\r\n"+
 			"Subject: current signer\r\n"))
 
-	draft05Result, err := mustCanonicalizer(t).HeaderHashFromMessage(msg)
+	draft06Result, err := mustCanonicalizer(t).HeaderHashFromMessage(msg)
 	if err != nil {
 		t.Fatalf("HeaderHashFromMessage() error = %v", err)
 	}
-	draft05Canonical := draft05Result.CanonicalBytes().Bytes()
+	draft06Canonical := draft06Result.CanonicalBytes().Bytes()
 	draft04Canonical := draft04HeaderHashInputOracle(msg)
 
 	wireDigest := mustDecodeHeaderBoundaryDigest(t, "2yds7Wq4hBcmcIL4vWoD6vPB3UBVBJMvkkhAWqpYxD0=")
-	draft05Digest := assertHeaderBoundaryOracle(t, "Draft-05", draft05Canonical,
+	draft06Digest := assertHeaderBoundaryOracle(t, "Draft-06", draft06Canonical,
 		"from:sender@example.test\r\nsubject:current signer\r\n",
 		"2yds7Wq4hBcmcIL4vWoD6vPB3UBVBJMvkkhAWqpYxD0=")
 	draft04Digest := assertHeaderBoundaryOracle(t, "Draft-04", draft04Canonical,
 		"apparently-to:recipient@example.test\r\nfrom:sender@example.test\r\nsubject:current signer\r\n",
 		"lbD4XmQeNiOdO2URVEVkDPnJCgskeYos8iVd+9TX0JU=")
-	assertDraft05ResultDigest(t, draft05Result, draft05Digest)
+	assertDraft06ResultDigest(t, draft06Result, draft06Digest)
 
-	if sameDraftPass := bytes.Equal(wireDigest, draft05Digest[:]); !sameDraftPass {
-		t.Fatal("Draft-05 wire digest did not PASS under Draft-05 header rules")
+	if sameDraftPass := bytes.Equal(wireDigest, draft06Digest[:]); !sameDraftPass {
+		t.Fatal("Draft-06 wire digest did not PASS under Draft-06 header rules")
 	}
 	if crossDraftPass := bytes.Equal(wireDigest, draft04Digest[:]); crossDraftPass {
-		t.Fatal("Draft-05 wire digest did not FAIL under Draft-04 header rules")
+		t.Fatal("Draft-06 wire digest did not FAIL under Draft-04 header rules")
 	}
 }
 
@@ -228,12 +228,12 @@ func assertHeaderBoundaryOracle(t *testing.T, draft string, canonical []byte, wa
 	return digest
 }
 
-// assertDraft05ResultDigest verifies that production hashing matches the fixed Draft-05 oracle.
-func assertDraft05ResultDigest(t *testing.T, result Result, want [sha256.Size]byte) {
+// assertDraft06ResultDigest verifies that production hashing matches the fixed Draft-06 oracle.
+func assertDraft06ResultDigest(t *testing.T, result Result, want [sha256.Size]byte) {
 	t.Helper()
 	digest, ok := result.Digest()
 	if !ok || digest.Algorithm() != HashAlgorithmSHA256 || !bytes.Equal(digest.Bytes(), want[:]) {
-		t.Fatalf("Draft-05 result digest present=%t algorithm=%q bytes_match=%t", ok, digest.Algorithm(), bytes.Equal(digest.Bytes(), want[:]))
+		t.Fatalf("Draft-06 result digest present=%t algorithm=%q bytes_match=%t", ok, digest.Algorithm(), bytes.Equal(digest.Bytes(), want[:]))
 	}
 }
 

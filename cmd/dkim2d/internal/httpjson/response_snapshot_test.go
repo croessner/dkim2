@@ -367,7 +367,7 @@ func (p selectedMatrixProvider) LookupPublicKey(_ context.Context, query dkim2.P
 
 // TestMapDomainResultMapsAuthenticSelectedSignatureAndKeyPolicy proves end-to-end selected output.
 func TestMapDomainResultMapsAuthenticSelectedSignatureAndKeyPolicy(t *testing.T) {
-	corpusBytes, err := os.ReadFile("../../../../lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-05/public-golden.json")
+	corpusBytes, err := os.ReadFile("../../../../lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-06/public-golden.json")
 	if err != nil {
 		t.Fatal("golden verification corpus unavailable")
 	}
@@ -428,7 +428,7 @@ func TestMapDomainResultMapsAuthenticSelectedSignatureAndKeyPolicy(t *testing.T)
 
 // TestMapDomainResultAuthenticFourStatePolicyMatrix proves combined result and policy gates accept every legal cell.
 func TestMapDomainResultAuthenticFourStatePolicyMatrix(t *testing.T) {
-	corpusBytes, err := os.ReadFile("../../../../lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-05/public-golden.json")
+	corpusBytes, err := os.ReadFile("../../../../lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-06/public-golden.json")
 	if err != nil {
 		t.Fatal("golden verification corpus unavailable")
 	}

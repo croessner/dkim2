@@ -10,6 +10,16 @@ replay:
 signing:
   backend: ldap
   reload_interval: 1m
+  policy:
+    originator:
+      donotmodify: false
+      donotexplode: false
+    ordinary_transit:
+      donotmodify: false
+      donotexplode: false
+    delivery_status:
+      donotmodify: false
+      donotexplode: false
   ldap:
     address: 192.0.2.10:636
     server_name: ldap.datasource.example.test

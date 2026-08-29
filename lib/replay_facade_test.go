@@ -120,7 +120,7 @@ func TestReplayFacadeRejectsZeroAndCallerComposedPass(t *testing.T) {
 			custodyStructure: CustodyStructureNotPresent, target: newVerificationTarget(1, 1),
 			primaryReason: ReasonNone,
 			checks:        []CheckFact{newCheckFact(CheckClassSignature, ReasonNone)},
-			signatures:    []SignatureSetFact{newSignatureSetFact(AlgorithmRSASHA256, SignatureStatusPASS, ReasonNone)},
+			signatures:    []SignatureSetFact{newSignatureSetFact(AlgorithmRSASHA256, SignatureStatusPASS, ReasonNone, "")},
 		}),
 		internalContractResult(newVerificationTarget(1, 1)),
 	} {
@@ -137,8 +137,8 @@ func TestReplayFacadeRejectsZeroAndCallerComposedPass(t *testing.T) {
 	}
 }
 
-// TestReplayFacadePreservesExplodedAndEveryRecipient verifies exact root set facts.
-func TestReplayFacadePreservesExplodedAndEveryRecipient(t *testing.T) {
+// TestReplayFacadePreservesOneMessageWideIdentity verifies exact Draft-06 root facts.
+func TestReplayFacadePreservesOneMessageWideIdentity(t *testing.T) {
 	const timestamp = int64(1700000000)
 	flaggedRaw, flaggedKey := signedPublicFlaggedPolicyMessage(t, timestamp)
 	flagged := verifyReplayFixture(
@@ -149,7 +149,7 @@ func TestReplayFacadePreservesExplodedAndEveryRecipient(t *testing.T) {
 		[][]byte{[]byte("<rcpt@example.test>")},
 	)
 	flaggedSet, err := ReplayIdentities(flagged)
-	if err != nil || !flaggedSet.Valid() || flaggedSet.Len() != 1 || !flaggedSet.Exploded() {
+	if err != nil || !flaggedSet.Valid() || flaggedSet.Len() != 1 {
 		t.Fatalf("flagged set valid=%t len=%d exploded=%t error=%v",
 			flaggedSet.Valid(), flaggedSet.Len(), flaggedSet.Exploded(), err)
 	}
@@ -161,15 +161,15 @@ func TestReplayFacadePreservesExplodedAndEveryRecipient(t *testing.T) {
 	raw, key := signedPublicReplayMessage(t, timestamp, recipients)
 	result := verifyReplayFixture(t, raw, key, timestamp, recipients)
 	set, err := ReplayIdentities(result)
-	if err != nil || !set.Valid() || set.Len() != 2 || set.Exploded() {
+	if err != nil || !set.Valid() || set.Len() != 1 || set.Exploded() {
 		t.Fatalf("two-recipient set valid=%t len=%d exploded=%t error=%v",
 			set.Valid(), set.Len(), set.Exploded(), err)
 	}
 	first, firstErr := set.Identity(0)
-	second, secondErr := set.Identity(1)
-	if firstErr != nil || secondErr != nil || !first.Valid() || !second.Valid() || first == second {
-		t.Fatalf("two-recipient identities valid=%t/%t equal=%t errors=%v/%v",
-			first.Valid(), second.Valid(), first == second, firstErr, secondErr)
+	second, secondErr := set.Identity(0)
+	if firstErr != nil || secondErr != nil || !first.Valid() || !second.Valid() {
+		t.Fatalf("message identities valid=%t/%t errors=%v/%v",
+			first.Valid(), second.Valid(), firstErr, secondErr)
 	}
 }
 
@@ -331,7 +331,7 @@ func TestReplayFacadeContractSurfaceIsExact(t *testing.T) {
 		ReplayStoreClosed.String() != "closed" {
 		t.Fatal("root replay states diverged from the closed core vocabulary")
 	}
-	if ReplayKeyAlgorithm != "dkim2-replay-hmac-sha256-v1" || ReplayStoredValue != "v1" {
+	if ReplayKeyAlgorithm != "dkim2-replay-hmac-sha256-v2" || ReplayStoredValue != "v1" {
 		t.Fatalf("root replay constants = %q/%q", ReplayKeyAlgorithm, ReplayStoredValue)
 	}
 }
@@ -541,7 +541,7 @@ func TestReplayFacadePrivacyCoversNestedAndContainerSurfaces(t *testing.T) {
 	for _, value := range values {
 		formatted := fmt.Sprintf("%v|%+v|%#v|%s|%q|%x|%X|%p", value, value, value, value, value, value, value, value)
 		for _, forbidden := range []string{
-			"draft-ietf-dkim-dkim2-spec-05", "rcpt@example.test",
+			"draft-ietf-dkim-dkim2-spec-06", "rcpt@example.test",
 			"dkim2:replay:v1:", storage, fmt.Sprintf("%x", storage),
 			fmt.Sprintf("%x", secret), "01020304", "protected callback failure marker",
 		} {

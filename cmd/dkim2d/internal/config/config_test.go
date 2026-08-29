@@ -13,6 +13,8 @@ const testGeneration = "0123456789abcdef0123456789abcdef"
 
 const testValkeyAddress = "127.0.0.1:6379"
 
+const testSigningUseOriginator = "originator"
+
 const (
 	testValuePath = "value"
 	duration120s  = "120s"
@@ -139,6 +141,88 @@ func TestSigningConfigurationIsDefaultDisabledAndConditionallyComplete(t *testin
 		if _, loadErr := Load([]byte(mutation), FlagValues{}); loadErr == nil {
 			t.Fatal("signing conditional matrix accepted an incomplete or conflicting state")
 		}
+	}
+}
+
+// TestSigningFlagPolicyMapsExactUsesAndPreservesDisabledDefaults proves the closed six-leaf contract.
+func TestSigningFlagPolicyMapsExactUsesAndPreservesDisabledDefaults(t *testing.T) {
+	clearStableEnvironment(t)
+	disabled, err := Load([]byte(disabledYAML()), FlagValues{})
+	if err != nil {
+		t.Fatalf("Load(disabled) code = %s", CodeOf(err))
+	}
+	policies := disabled.Signing().Policies()
+	for name, policy := range map[string]SigningFlagPolicyConfig{
+		testSigningUseOriginator: policies.Originator(),
+		"ordinary_transit":       policies.OrdinaryTransit(),
+		"delivery_status":        policies.DeliveryStatus(),
+	} {
+		if policy.DoNotModify() || policy.DoNotExplode() {
+			t.Fatalf("omitted %s policy enabled a flag", name)
+		}
+	}
+
+	document := strings.Replace(signingYAML(), "  backend: flat_file", `  backend: flat_file
+  policy:
+    originator:
+      donotmodify: true
+      donotexplode: false
+    ordinary_transit:
+      donotmodify: false
+      donotexplode: true
+    delivery_status:
+      donotmodify: true
+      donotexplode: true`, 1)
+	enabled, err := Load([]byte(document), FlagValues{})
+	if err != nil {
+		t.Fatalf("Load(policy) code = %s", CodeOf(err))
+	}
+	policies = enabled.Signing().Policies()
+	if !policies.Originator().DoNotModify() || policies.Originator().DoNotExplode() ||
+		policies.OrdinaryTransit().DoNotModify() || !policies.OrdinaryTransit().DoNotExplode() ||
+		!policies.DeliveryStatus().DoNotModify() || !policies.DeliveryStatus().DoNotExplode() {
+		t.Fatal("signing policy leaves mapped to the wrong use")
+	}
+
+	overrides := []struct {
+		name string
+		read func(SigningPoliciesConfig) bool
+	}{
+		{"DKIM2D_SIGNING_POLICY_ORIGINATOR_DONOTMODIFY", func(p SigningPoliciesConfig) bool { return p.Originator().DoNotModify() }},
+		{"DKIM2D_SIGNING_POLICY_ORIGINATOR_DONOTEXPLODE", func(p SigningPoliciesConfig) bool { return p.Originator().DoNotExplode() }},
+		{"DKIM2D_SIGNING_POLICY_ORDINARY_TRANSIT_DONOTMODIFY", func(p SigningPoliciesConfig) bool { return p.OrdinaryTransit().DoNotModify() }},
+		{"DKIM2D_SIGNING_POLICY_ORDINARY_TRANSIT_DONOTEXPLODE", func(p SigningPoliciesConfig) bool { return p.OrdinaryTransit().DoNotExplode() }},
+		{"DKIM2D_SIGNING_POLICY_DELIVERY_STATUS_DONOTMODIFY", func(p SigningPoliciesConfig) bool { return p.DeliveryStatus().DoNotModify() }},
+		{"DKIM2D_SIGNING_POLICY_DELIVERY_STATUS_DONOTEXPLODE", func(p SigningPoliciesConfig) bool { return p.DeliveryStatus().DoNotExplode() }},
+	}
+	for _, override := range overrides {
+		t.Setenv(override.name, "true")
+		environment, loadErr := Load([]byte(signingYAML()), FlagValues{})
+		if loadErr != nil || !override.read(environment.Signing().Policies()) {
+			t.Fatalf("environment policy override %s failed with code %s", override.name, CodeOf(loadErr))
+		}
+	}
+	t.Setenv("DKIM2D_SIGNING_POLICY_DELIVERY_STATUS_DONOTEXPLODE", "not-a-boolean")
+	if _, loadErr := Load([]byte(signingYAML()), FlagValues{}); loadErr == nil {
+		t.Fatal("invalid signing policy environment boolean was accepted")
+	}
+}
+
+// TestSigningFlagPolicyFailsClosedForDisabledAndUnknownPolicy proves unsafe policy input is rejected.
+func TestSigningFlagPolicyFailsClosedForDisabledAndUnknownPolicy(t *testing.T) {
+	clearStableEnvironment(t)
+	for _, document := range []string{
+		strings.Replace(disabledYAML(), "signing:\n", "signing:\n", 1) + "signing:\n  policy:\n    originator:\n      donotmodify: true\n",
+		strings.Replace(signingYAML(), "  backend: flat_file", "  backend: flat_file\n  policy:\n    originator:\n      exploded: false", 1),
+		strings.Replace(signingYAML(), "  backend: flat_file", "  backend: flat_file\n  policy:\n    default:\n      donotmodify: true", 1),
+	} {
+		if _, err := Load([]byte(document), FlagValues{}); err == nil {
+			t.Fatal("unsafe signing policy input was accepted")
+		}
+	}
+	falseOnly := disabledYAML() + "signing:\n  policy:\n    originator:\n      donotmodify: false\n"
+	if _, err := Load([]byte(falseOnly), FlagValues{}); err != nil {
+		t.Fatalf("explicit false disabled policy failed with code %s", CodeOf(err))
 	}
 }
 
