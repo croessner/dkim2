@@ -58,6 +58,12 @@ const (
 	pathSigningPolicyTransitDoNotExplode    = "signing.policy.ordinary_transit.donotexplode"
 	pathSigningPolicyDeliveryDoNotModify    = "signing.policy.delivery_status.donotmodify"
 	pathSigningPolicyDeliveryDoNotExplode   = "signing.policy.delivery_status.donotexplode"
+	envSigningPolicyOriginatorDoNotModify   = "DKIM2D_SIGNING_POLICY_ORIGINATOR_DONOTMODIFY"
+	envSigningPolicyOriginatorDoNotExplode  = "DKIM2D_SIGNING_POLICY_ORIGINATOR_DONOTEXPLODE"
+	envSigningPolicyTransitDoNotModify      = "DKIM2D_SIGNING_POLICY_ORDINARY_TRANSIT_DONOTMODIFY"
+	envSigningPolicyTransitDoNotExplode     = "DKIM2D_SIGNING_POLICY_ORDINARY_TRANSIT_DONOTEXPLODE"
+	envSigningPolicyDeliveryDoNotModify     = "DKIM2D_SIGNING_POLICY_DELIVERY_STATUS_DONOTMODIFY"
+	envSigningPolicyDeliveryDoNotExplode    = "DKIM2D_SIGNING_POLICY_DELIVERY_STATUS_DONOTEXPLODE"
 	pathSigningLDAPAddress                  = "signing.ldap.address"
 	pathSigningLDAPServerName               = "signing.ldap.server_name"
 	pathSigningLDAPCAFile                   = "signing.ldap.ca_file"
@@ -301,12 +307,12 @@ func stableFieldSpecs() []fieldSpec {
 		{path: pathSigningAllowGroup, env: "DKIM2D_SIGNING_ALLOW_RECIPIENT_GROUP", kind: valueBool, defaultVal: canonicalFalse, hasDefault: true},
 		{path: pathSigningLimitProfile, env: "DKIM2D_SIGNING_LIMIT_PROFILE", kind: valueString, defaultVal: limitProfileSmall, hasDefault: true},
 		{path: pathSigningMaxLoadBytes, env: "DKIM2D_SIGNING_MAX_LOAD_BYTES", kind: valueUint, defaultVal: "16777216", hasDefault: true},
-		{path: pathSigningPolicyOriginatorDoNotModify, env: "DKIM2D_SIGNING_POLICY_ORIGINATOR_DONOTMODIFY", kind: valueBool, defaultVal: canonicalFalse, hasDefault: true},
-		{path: pathSigningPolicyOriginatorDoNotExplode, env: "DKIM2D_SIGNING_POLICY_ORIGINATOR_DONOTEXPLODE", kind: valueBool, defaultVal: canonicalFalse, hasDefault: true},
-		{path: pathSigningPolicyTransitDoNotModify, env: "DKIM2D_SIGNING_POLICY_ORDINARY_TRANSIT_DONOTMODIFY", kind: valueBool, defaultVal: canonicalFalse, hasDefault: true},
-		{path: pathSigningPolicyTransitDoNotExplode, env: "DKIM2D_SIGNING_POLICY_ORDINARY_TRANSIT_DONOTEXPLODE", kind: valueBool, defaultVal: canonicalFalse, hasDefault: true},
-		{path: pathSigningPolicyDeliveryDoNotModify, env: "DKIM2D_SIGNING_POLICY_DELIVERY_STATUS_DONOTMODIFY", kind: valueBool, defaultVal: canonicalFalse, hasDefault: true},
-		{path: pathSigningPolicyDeliveryDoNotExplode, env: "DKIM2D_SIGNING_POLICY_DELIVERY_STATUS_DONOTEXPLODE", kind: valueBool, defaultVal: canonicalFalse, hasDefault: true},
+		{path: pathSigningPolicyOriginatorDoNotModify, env: envSigningPolicyOriginatorDoNotModify, kind: valueBool, defaultVal: canonicalFalse, hasDefault: true},
+		{path: pathSigningPolicyOriginatorDoNotExplode, env: envSigningPolicyOriginatorDoNotExplode, kind: valueBool, defaultVal: canonicalFalse, hasDefault: true},
+		{path: pathSigningPolicyTransitDoNotModify, env: envSigningPolicyTransitDoNotModify, kind: valueBool, defaultVal: canonicalFalse, hasDefault: true},
+		{path: pathSigningPolicyTransitDoNotExplode, env: envSigningPolicyTransitDoNotExplode, kind: valueBool, defaultVal: canonicalFalse, hasDefault: true},
+		{path: pathSigningPolicyDeliveryDoNotModify, env: envSigningPolicyDeliveryDoNotModify, kind: valueBool, defaultVal: canonicalFalse, hasDefault: true},
+		{path: pathSigningPolicyDeliveryDoNotExplode, env: envSigningPolicyDeliveryDoNotExplode, kind: valueBool, defaultVal: canonicalFalse, hasDefault: true},
 		{path: pathSigningLDAPAddress, env: "DKIM2D_SIGNING_LDAP_ADDRESS", kind: valueString},
 		{path: pathSigningLDAPServerName, env: "DKIM2D_SIGNING_LDAP_SERVER_NAME", kind: valueString},
 		{path: pathSigningLDAPCAFile, env: "DKIM2D_SIGNING_LDAP_CA_FILE", kind: valueString},

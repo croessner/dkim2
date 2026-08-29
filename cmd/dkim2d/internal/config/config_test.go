@@ -188,12 +188,12 @@ func TestSigningFlagPolicyMapsExactUsesAndPreservesDisabledDefaults(t *testing.T
 		name string
 		read func(SigningPoliciesConfig) bool
 	}{
-		{"DKIM2D_SIGNING_POLICY_ORIGINATOR_DONOTMODIFY", func(p SigningPoliciesConfig) bool { return p.Originator().DoNotModify() }},
-		{"DKIM2D_SIGNING_POLICY_ORIGINATOR_DONOTEXPLODE", func(p SigningPoliciesConfig) bool { return p.Originator().DoNotExplode() }},
-		{"DKIM2D_SIGNING_POLICY_ORDINARY_TRANSIT_DONOTMODIFY", func(p SigningPoliciesConfig) bool { return p.OrdinaryTransit().DoNotModify() }},
-		{"DKIM2D_SIGNING_POLICY_ORDINARY_TRANSIT_DONOTEXPLODE", func(p SigningPoliciesConfig) bool { return p.OrdinaryTransit().DoNotExplode() }},
-		{"DKIM2D_SIGNING_POLICY_DELIVERY_STATUS_DONOTMODIFY", func(p SigningPoliciesConfig) bool { return p.DeliveryStatus().DoNotModify() }},
-		{"DKIM2D_SIGNING_POLICY_DELIVERY_STATUS_DONOTEXPLODE", func(p SigningPoliciesConfig) bool { return p.DeliveryStatus().DoNotExplode() }},
+		{envSigningPolicyOriginatorDoNotModify, func(p SigningPoliciesConfig) bool { return p.Originator().DoNotModify() }},
+		{envSigningPolicyOriginatorDoNotExplode, func(p SigningPoliciesConfig) bool { return p.Originator().DoNotExplode() }},
+		{envSigningPolicyTransitDoNotModify, func(p SigningPoliciesConfig) bool { return p.OrdinaryTransit().DoNotModify() }},
+		{envSigningPolicyTransitDoNotExplode, func(p SigningPoliciesConfig) bool { return p.OrdinaryTransit().DoNotExplode() }},
+		{envSigningPolicyDeliveryDoNotModify, func(p SigningPoliciesConfig) bool { return p.DeliveryStatus().DoNotModify() }},
+		{envSigningPolicyDeliveryDoNotExplode, func(p SigningPoliciesConfig) bool { return p.DeliveryStatus().DoNotExplode() }},
 	}
 	for _, override := range overrides {
 		t.Setenv(override.name, "true")
@@ -202,7 +202,7 @@ func TestSigningFlagPolicyMapsExactUsesAndPreservesDisabledDefaults(t *testing.T
 			t.Fatalf("environment policy override %s failed with code %s", override.name, CodeOf(loadErr))
 		}
 	}
-	t.Setenv("DKIM2D_SIGNING_POLICY_DELIVERY_STATUS_DONOTEXPLODE", "not-a-boolean")
+	t.Setenv(envSigningPolicyDeliveryDoNotExplode, "not-a-boolean")
 	if _, loadErr := Load([]byte(signingYAML()), FlagValues{}); loadErr == nil {
 		t.Fatal("invalid signing policy environment boolean was accepted")
 	}
