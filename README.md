@@ -216,3 +216,9 @@ make check-release
 make guardrails
 make release-guardrails
 ```
+
+## Public Validators
+
+Several public DKIM2 validators are available. This project's validator is
+[dkim2.pub](https://dkim2.pub); other services include
+[dkim2.com](https://dkim2.com) and [dkim2.eu](https://dkim2.eu).
