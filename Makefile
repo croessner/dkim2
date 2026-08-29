@@ -20,6 +20,7 @@ OPENAPI_SERVER_WIRE := $(ROOT)/cmd/dkim2d/internal/httpjson/wire/protected_strin
 OPENAPI_CLIENT_WIRE := $(ROOT)/cmd/dkim2ctl/internal/testclient/wire/protected_string.gen.go
 OPENAPI_MILTER_WIRE := $(ROOT)/cmd/dkim2-milter/internal/daemon/wire/protected_string.gen.go
 OPENAPI_EXIM_WIRE := $(ROOT)/cmd/dkim2-exim/internal/daemon/wire/protected_string.gen.go
+OPENAPI_GO_TOOLCHAIN := go1.26.0
 VENDOR_LF_PATHS := github.com/vmware-labs/yaml-jsonpath/LICENSE github.com/vmware-labs/yaml-jsonpath/NOTICE
 # OTLP's x/net graph makes Go 1.26 synchronize dkim2ctl's pruned module sums.
 WORKSPACE_SYNC_FILES := go.work go.work.sum lib/go.mod lib/go.sum cmd/dkim2d/go.mod cmd/dkim2d/go.sum cmd/dkim2-milter/go.mod cmd/dkim2-milter/go.sum cmd/dkim2-exim/go.mod cmd/dkim2-exim/go.sum cmd/dkim2ctl/go.mod cmd/dkim2ctl/go.sum tools/go.mod tools/go.sum
@@ -339,6 +340,7 @@ generate-openapi:
 	chmod 0700 "$$cache"; \
 	trap 'rm -rf "$$cache"' 0 1 2 15; \
 	export GOCACHE="$$cache"; \
+	export GOTOOLCHAIN="$(OPENAPI_GO_TOOLCHAIN)"; \
 	go -C tools run ./cmd/wiregen -package wire -output "$(OPENAPI_SERVER_WIRE)"; \
 	go -C tools run ./cmd/wiregen -package wire -output "$(OPENAPI_CLIENT_WIRE)"; \
 	go -C tools run ./cmd/wiregen -package wire -output "$(OPENAPI_MILTER_WIRE)"; \
