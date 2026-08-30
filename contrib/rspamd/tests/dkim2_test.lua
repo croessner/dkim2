@@ -7,6 +7,7 @@ local expected_transport = arg[3] or 'loopback'
 local expected_server_name = arg[4]
 local pending_response
 local last_request
+local last_encoded_message
 local callback
 
 local function contains(values, expected)
@@ -35,7 +36,7 @@ local function response(state, verdict, replay, actions)
   }
 end
 
-local function new_task(headers, full_headers, bare_envelope)
+local function new_task(headers, full_headers, bare_envelope, content)
   local task = {
     headers = headers or {},
     full_headers = full_headers or {},
@@ -49,7 +50,7 @@ local function new_task(headers, full_headers, bare_envelope)
   end
 
   function task:get_content()
-    return 'From: sender@example.test\r\n\r\nbody\r\n'
+    return content or 'From: sender@example.test\r\n\r\nbody\r\n'
   end
 
   function task:get_header_full(name)
@@ -92,6 +93,7 @@ package.preload.rspamd_util = function()
       if #value == 32 then
         return 'eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHg='
       end
+      last_encoded_message = value
       return 'ZW5jb2RlZC1tZXNzYWdl'
     end,
     is_valid_utf8 = function() return true end,
@@ -206,9 +208,32 @@ local accepted = new_task({ ['Message-Instance'] = true }, {
 })
 callback(accepted)
 assert(last_request.message.fidelity == 'raw_rfc5322')
+assert(last_encoded_message == 'From: sender@example.test\r\n\r\nbody\r\n')
 assert(last_request.smtp.mail_from == '<sender@example.test>')
 assert(last_request.smtp.rcpt_to[1] == '<first@example.test>')
 assert(last_request.smtp.rcpt_to[2] == '<second@example.test>')
+
+local lf_only = new_task(
+  { ['Message-Instance'] = true }, nil, false,
+  'From: sender@example.test\nSubject: restored\n\nbody\n')
+callback(lf_only)
+assert(lf_only.pre_result == nil)
+assert(last_encoded_message ==
+  'From: sender@example.test\r\nSubject: restored\r\n\r\nbody\r\n')
+
+local mixed_endings = new_task(
+  { ['Message-Instance'] = true }, nil, false,
+  'From: sender@example.test\r\nSubject: ambiguous\n\r\nbody\r\n')
+callback(mixed_endings)
+assert(mixed_endings.pre_result.action == 'soft reject')
+assert(contains(mixed_endings.symbols, 'DKIM2_SERVICE_ERROR'))
+
+local bare_cr = new_task(
+  { ['Message-Instance'] = true }, nil, false,
+  'From: sender@example.test\rSubject: ambiguous\r\rbody')
+callback(bare_cr)
+assert(bare_cr.pre_result.action == 'soft reject')
+assert(contains(bare_cr.symbols, 'DKIM2_SERVICE_ERROR'))
 assert(last_request.reporting.authserv_id == 'mx.example.test')
 assert(accepted.pre_result == nil)
 assert(contains(accepted.symbols, 'DKIM2_PASS'))

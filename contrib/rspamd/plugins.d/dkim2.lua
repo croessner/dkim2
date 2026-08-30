@@ -133,7 +133,7 @@ local function valid_authserv_id(value)
   return not value:find('..', 1, true)
 end
 
--- valid_service_name accepts one canonical container DNS name without IP fallback.
+-- valid_service_name accepts one canonical service DNS name without IP fallback.
 local function valid_service_name(value)
   if type(value) ~= 'string' or #value == 0 or #value > 253 or value ~= string.lower(value) or
       value == 'localhost' or value:find('..', 1, true) then
@@ -433,6 +433,34 @@ local function original_envelope(task)
   return result
 end
 
+-- smtp_message_bytes restores only Rspamd's uniform LF representation to SMTP CRLF.
+local function smtp_message_bytes(value)
+  if type(value) == 'userdata' then
+    value = tostring(value)
+  end
+  if type(value) ~= 'string' or #value == 0 or #value > MAX_MESSAGE_BYTES then
+    return nil
+  end
+  local outside_crlf = value:gsub('\r\n', '')
+  if outside_crlf:find('\r', 1, true) then
+    return nil
+  end
+  if value:find('\r\n', 1, true) then
+    if outside_crlf:find('\n', 1, true) then
+      return nil
+    end
+    return value
+  end
+  if value:find('\n', 1, true) then
+    local restored = value:gsub('\n', '\r\n')
+    if #restored > MAX_MESSAGE_BYTES then
+      return nil
+    end
+    return restored
+  end
+  return value
+end
+
 -- insert_symbol publishes one zero-score, option-free bounded result.
 local function insert_symbol(task, symbol)
   task:insert_result(symbol, 1.0)
@@ -497,9 +525,9 @@ local function process_message(task)
     insert_symbol(task, symbols.not_applicable)
     return
   end
-  local content = task:get_content()
+  local content = smtp_message_bytes(task:get_content())
   local envelope = original_envelope(task)
-  if not content or #content == 0 or #content > MAX_MESSAGE_BYTES or not envelope then
+  if not content or not envelope then
     apply_failure(task)
     return
   end
