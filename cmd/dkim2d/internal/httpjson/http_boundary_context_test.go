@@ -572,13 +572,19 @@ func runScriptedContextServer(
 		<-serveDone
 	})
 	deadline := time.Now().Add(2 * time.Second)
-	for raw.closeCalls.Load() == 0 && time.Now().Before(deadline) {
+	for time.Now().Before(deadline) {
+		if raw.closeCalls.Load() > 0 &&
+			handler.admission.Owned() == 0 && len(tracked.tokens) == 0 {
+			return handler, tracked, diagnostics
+		}
 		time.Sleep(time.Millisecond)
 	}
 	if raw.closeCalls.Load() == 0 {
 		t.Fatal("scripted context connection did not become terminal")
 	}
-	return handler, tracked, diagnostics
+	t.Fatalf("scripted context ownership did not become terminal: owned=%d connections=%d",
+		handler.admission.Owned(), len(tracked.tokens))
+	return nil, nil, nil
 }
 
 // TestHTTPBoundaryTrackedCancellationAfterReservationSuppressesResponse proves client precedence.

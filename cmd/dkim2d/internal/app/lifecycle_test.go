@@ -103,12 +103,16 @@ func (r *lifecycleReplayFake) Close(context.Context) error {
 
 // lifecycleMaterialFake records protected-runtime release.
 type lifecycleMaterialFake struct {
-	order *lifecycleOrder
+	order        *lifecycleOrder
+	closeEntered chan struct{}
 }
 
 // Close records protected-runtime release.
 func (m *lifecycleMaterialFake) Close() error {
 	m.order.add(lifecycleMaterialCloseStep)
+	if m.closeEntered != nil {
+		close(m.closeEntered)
+	}
 	return nil
 }
 
@@ -1310,6 +1314,14 @@ func TestLifecycleBlockedReplayCloseStillAttemptsMaterialRelease(t *testing.T) {
 		runtime:  runtimeHTTP,
 	}
 	deps := lifecycleTestDependencies(order, replay, nil)
+	materialEntered := make(chan struct{})
+	deps.commitRuntime = func(
+		*config.Prebootstrap,
+		*config.RuntimePreparation,
+	) (lifecycleMaterial, error) {
+		order.add("commit")
+		return &lifecycleMaterialFake{order: order, closeEntered: materialEntered}, nil
+	}
 	finalCancel := make(chan context.CancelFunc, 1)
 	var fiveSecondCalls atomic.Int32
 	deps.withTimeout = func(
@@ -1341,8 +1353,14 @@ func TestLifecycleBlockedReplayCloseStillAttemptsMaterialRelease(t *testing.T) {
 	if err := <-stopResult; !IsLifecycleError(err) {
 		t.Fatalf("blocked replay Close returned %T", err)
 	}
-	if !containsLifecycleStep(order.snapshot(), lifecycleMaterialCloseStep) {
-		t.Fatalf("blocked replay skipped material release: %v", order.snapshot())
+	select {
+	case <-materialEntered:
+	case <-time.After(time.Second):
+		t.Fatal("blocked replay did not dispatch material release")
+	}
+	steps := order.snapshot()
+	if !containsLifecycleStep(steps, lifecycleMaterialCloseStep) {
+		t.Fatalf("blocked replay skipped material release: %v", steps)
 	}
 	close(replayRelease)
 }
