@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/subtle"
+	"crypto/tls"
 	"fmt"
 	"io"
 	"sync"
@@ -49,6 +50,7 @@ type protectedState struct {
 	signCapability    [32]byte
 	reviseCapability  [32]byte
 	dsnSignCapability [32]byte
+	serverTLS         *tls.Config
 	hasSign           bool
 	hasRevise         bool
 	hasDSNSign        bool
@@ -311,6 +313,20 @@ func (p *RuntimePreparation) DSNSignCapability() DSNSignCapability {
 		return DSNSignCapability{}
 	}
 	return DSNSignCapability{state: p.state, token: p.token}
+}
+
+// ServerTLSConfig returns a private clone of the validated TLS 1.3 server configuration.
+func (p *RuntimePreparation) ServerTLSConfig() *tls.Config {
+	if p == nil || p.state == nil || p.token == nil {
+		return nil
+	}
+	p.state.mu.Lock()
+	defer p.state.mu.Unlock()
+	if p.state.phase != protectedPreparedForRuntime || p.state.runtimeToken != p.token ||
+		p.state.borrowed || p.state.serverTLS == nil {
+		return nil
+	}
+	return p.state.serverTLS.Clone()
 }
 
 // SigningStore returns the same-generation reload runtime only while
@@ -646,6 +662,7 @@ func (s *protectedState) clearProtected(releasedBy protectedPhase) {
 	s.hasSign = false
 	s.hasRevise = false
 	s.hasDSNSign = false
+	s.serverTLS = nil
 	if s.signingStore != nil {
 		_ = s.signingStore.Close(context.Background())
 		s.signingStore = nil

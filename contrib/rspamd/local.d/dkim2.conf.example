@@ -1,0 +1,19 @@
+# Copy to local.d/dkim2.conf and adjust only local paths and identity.
+enabled = true;
+endpoint = "http://127.0.0.1:8080/v1/process";
+transport = "loopback";
+capability_file = "/etc/dkim2/protected/process-capability";
+timeout = 2.0;
+max_response_bytes = 262144;
+failure_mode = "tempfail";
+
+# Optional. When set, dkim2d owns the exact Authentication-Results value.
+# Existing Authentication-Results fields are removed before that value is
+# inserted so forged local authority cannot survive the trust boundary.
+# authserv_id = "mx.example.test";
+
+# Container-network alternative. Rspamd's global ssl_ca_path must trust the
+# internal PKI that issued the dkim2d-inbound certificate.
+# endpoint = "https://dkim2d-inbound:8443/v1/process";
+# transport = "tls_private_network";
+# server_name = "dkim2d-inbound";

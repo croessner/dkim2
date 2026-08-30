@@ -387,6 +387,37 @@ func TestHTTPDeadlineEqualityAndListenerClasses(t *testing.T) {
 	}
 }
 
+// TestPrivateNetworkListenerRequiresExplicitMode freezes the opt-in private-address boundary.
+func TestPrivateNetworkListenerRequiresExplicitMode(t *testing.T) {
+	clearStableEnvironment(t)
+	base := memoryYAML("1", "capability")
+	tlsFields := "  listener_mode: tls_private_network\n" +
+		"  tls:\n" +
+		"    certificate_file: /secure/" + testGeneration + "/server-cert.pem\n" +
+		"    private_key_file: /secure/" + testGeneration + "/server-key.pem\n" +
+		"    ca_file: /secure/" + testGeneration + "/server-ca.pem\n" +
+		"    server_name: dkim2d-inbound"
+	private := strings.Replace(base, "listen: "+defaultListenAddress,
+		"listen: 10.73.0.2:8080\n"+tlsFields, 1)
+	snapshot, err := Load([]byte(private), FlagValues{})
+	if err != nil || snapshot.Server().Listen() != "10.73.0.2:8080" || !snapshot.Server().PrivateNetwork() {
+		t.Fatal("Load() rejected the explicit private-network listener")
+	}
+	for _, document := range []string{
+		strings.Replace(base, "listen: "+defaultListenAddress, "listen: 0.0.0.0:8080", 1),
+		strings.Replace(base, "listen: "+defaultListenAddress,
+			"listen: 127.0.0.1:8080\n"+tlsFields, 1),
+		strings.Replace(base, "listen: "+defaultListenAddress,
+			"listen: 192.0.2.1:8080\n"+tlsFields, 1),
+		strings.Replace(base, "listen: "+defaultListenAddress,
+			"listen: 0.0.0.0:8080\n"+tlsFields, 1),
+	} {
+		if _, loadErr := Load([]byte(document), FlagValues{}); CodeOf(loadErr) != CodeInvalidField {
+			t.Fatal("Load() accepted a listener outside its selected mode")
+		}
+	}
+}
+
 // TestProtectedPathGenerationInvariants freezes lexical generation grouping
 // before descriptor-safe ownership checks.
 func TestProtectedPathGenerationInvariants(t *testing.T) {

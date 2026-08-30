@@ -182,12 +182,49 @@ func (c TracingConfig) ExportTimeout() time.Duration {
 	return c.state.exportTimeout
 }
 
-// Listen returns the canonical loopback listener authority.
+// Listen returns the canonical listener authority selected by configuration.
 func (c ServerConfig) Listen() string {
 	if c.state == nil {
 		return ""
 	}
 	return c.state.listen
+}
+
+// PrivateNetwork reports whether the explicit private-container-network listener mode is enabled.
+func (c ServerConfig) PrivateNetwork() bool {
+	return c.state != nil && c.state.privateNetwork
+}
+
+// TLSCertificateFile returns the protected server certificate path for private-network mode.
+func (c ServerConfig) TLSCertificateFile() string {
+	if c.state == nil {
+		return ""
+	}
+	return c.state.tlsCertificateFile
+}
+
+// TLSPrivateKeyFile returns the protected server private-key path for private-network mode.
+func (c ServerConfig) TLSPrivateKeyFile() string {
+	if c.state == nil {
+		return ""
+	}
+	return c.state.tlsPrivateKeyFile
+}
+
+// TLSCAFile returns the protected internal-PKI trust-root path for private-network mode.
+func (c ServerConfig) TLSCAFile() string {
+	if c.state == nil {
+		return ""
+	}
+	return c.state.tlsCAFile
+}
+
+// TLSServerName returns the certificate DNS identity required by private-network mode.
+func (c ServerConfig) TLSServerName() string {
+	if c.state == nil {
+		return ""
+	}
+	return c.state.tlsServerName
 }
 
 // CapabilityFile returns the protected process-capability path.

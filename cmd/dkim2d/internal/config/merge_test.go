@@ -178,7 +178,7 @@ func TestStableFieldBindings(t *testing.T) {
 func TestStablePathSetIsExact(t *testing.T) {
 	specs := stableFieldSpecs()
 	golden := stableFieldGoldenContract()
-	if len(specs) != 112 || len(specs) != len(golden) {
+	if len(specs) != 117 || len(specs) != len(golden) {
 		t.Fatal("stable path count changed")
 	}
 	for index, expected := range golden {
@@ -224,6 +224,11 @@ func stableFieldGoldenContract() []stableFieldGolden {
 		{path: "config.version"},
 		{path: "protected.generation"},
 		{path: "server.listen", environment: "DKIM2D_SERVER_LISTEN", defaultValue: "127.0.0.1:8080", hasDefault: true},
+		{path: "server.listener_mode", environment: "DKIM2D_SERVER_LISTENER_MODE", defaultValue: "loopback", hasDefault: true},
+		{path: "server.tls.certificate_file", environment: "DKIM2D_SERVER_TLS_CERTIFICATE_FILE"},
+		{path: "server.tls.private_key_file", environment: "DKIM2D_SERVER_TLS_PRIVATE_KEY_FILE"},
+		{path: "server.tls.ca_file", environment: "DKIM2D_SERVER_TLS_CA_FILE"},
+		{path: "server.tls.server_name", environment: "DKIM2D_SERVER_TLS_SERVER_NAME"},
 		{path: "server.capability_file", environment: "DKIM2D_SERVER_CAPABILITY_FILE"},
 		{path: "server.sign_capability_file", environment: "DKIM2D_SERVER_SIGN_CAPABILITY_FILE"},
 		{path: "server.revise_capability_file", environment: "DKIM2D_SERVER_REVISE_CAPABILITY_FILE"},

@@ -16,17 +16,29 @@ LDAP/PostgreSQL/MySQL/MariaDB installation and migration are documented in
 and
 [`docs/operator/opendkim-migration.md`](../../docs/operator/opendkim-migration.md).
 
-## Local Security Boundary
+## HTTP Security Boundary
 
 Run one daemon instance under a dedicated, unprivileged service UID. The
 effective UID, local root, and the kernel are trusted. Other local UIDs and
 processes that can merely reach localhost are not trusted.
 
-The listener accepts exactly one canonical loopback IP literal and nonzero
-port. The default is `127.0.0.1:8080`. Hostnames, wildcard or unspecified
-addresses, non-loopback addresses, IPv4-mapped IPv6, zone identifiers, Unix
-sockets, port zero, and multiple listeners are rejected. There is no remote
-plaintext compatibility mode.
+The default `server.listener_mode: loopback` accepts exactly one canonical
+loopback IP literal and nonzero port. The default is `127.0.0.1:8080`.
+
+The explicit `server.listener_mode: tls_private_network` accepts only one
+canonical private unicast IP and port and requires a protected server certificate,
+private key, internal-PKI CA bundle, and canonical lowercase DNS server name.
+Startup verifies the key pair, validity interval, SAN, ServerAuth usage, and
+chain to that CA. The leaf must contain exactly that one DNS SAN; wildcard,
+alternate DNS, IP, email, and URI identities are rejected. The listener permits
+only TLS 1.3 and HTTP/1.1. Its only accepted HTTP Host authority is the exact
+certificate DNS name plus the listener port. Deploy it on
+a dedicated internal container network with no published or proxied port and
+only the approved adapter as another application participant. There is no
+plaintext private-network compatibility mode.
+
+Both modes reject hostnames as listener addresses, IPv4-mapped IPv6, zone
+identifiers, Unix sockets, port zero, and multiple listeners.
 
 `/v1/process`, `/v1/sign`, and `/v1/revise` each require
 `X-DKIM2-Capability`. The value is the canonical unpadded Base64url encoding
@@ -43,9 +55,10 @@ configuration. `dkim2-milter` and `dkim2ctl` provide protected-file loaders for
 the capabilities they use; they never receive private keys or datasource
 records.
 
-Loopback HTTP is deliberately plaintext and HTTP/1-only. Do not put a reverse
-proxy, TCP forwarder, TLS terminator, container port publication, or other
-reachability expansion in front of it.
+Loopback HTTP is deliberately plaintext and HTTP/1-only. Private-network mode
+terminates TLS natively. Do not put a reverse proxy, TCP forwarder, TLS
+terminator, container port publication, or other reachability expansion in
+front of either mode.
 
 ## Command And Exit Status
 
@@ -67,7 +80,7 @@ selected replay, tracing, datasource, signing-manifest, and PKCS#8 children,
 then releases all protected values. It is silent on success and never creates,
 repairs, changes ownership of, or rewrites protected state.
 
-The container readiness probe is:
+The loopback container readiness probe is:
 
 ```text
 dkim2d probe
@@ -76,7 +89,19 @@ dkim2d probe
 It performs one non-proxied, non-retrying, two-second `GET` of the fixed
 `http://127.0.0.1:8080/readyz` endpoint, discards bounded response bytes, and
 succeeds only on `200`. Deployments using the product image health check
-therefore keep the daemon on its default container-local authority.
+therefore keep the daemon on its default container-local authority. A TLS
+private-network deployment overrides the health check with:
+
+```text
+dkim2d probe --tls-server-name dkim2d-inbound \
+  --tls-ca-file /var/lib/dkim2d/protected/<generation>/server-ca.pem \
+  --connect-address 10.73.0.2 \
+  --port 8443
+```
+
+The TLS probe dials the exact configured private listener IP; the DNS name is
+used only for certificate verification. It neither resolves nor follows a
+remote endpoint.
 
 The command accepts no positional arguments. The only configuration flags are:
 
@@ -224,7 +249,8 @@ Configuration precedence is typed defaults, YAML, explicitly bound
 environment variables, then the three flags above.
 `config.version` and `protected.generation` are YAML-only. Every other stable
 path has one explicit `DKIM2D_...` environment name, for example
-`DKIM2D_SERVER_LISTEN` and `DKIM2D_REPLAY_HMAC_KEY_FILE`. Arbitrary
+`DKIM2D_SERVER_LISTEN`, `DKIM2D_SERVER_LISTENER_MODE`,
+`DKIM2D_SERVER_TLS_CERTIFICATE_FILE`, and `DKIM2D_REPLAY_HMAC_KEY_FILE`. Arbitrary
 environment names are ignored.
 
 Scalar string values may contain one nonrecursive `${NAME}` expansion pass.
@@ -328,6 +354,32 @@ replay:
 
 Disabled replay is explicit local policy. It loads no replay HMAC, constructs
 no replay deriver, and does not silently fall back to another backend.
+
+For one private container-network listener, the same generation must also own
+the internal-PKI identity:
+
+```yaml
+server:
+  listen: 10.73.0.2:8443
+  listener_mode: tls_private_network
+  tls:
+    certificate_file: /var/lib/dkim2d/protected/0123456789abcdef0123456789abcdef/server-cert.pem
+    private_key_file: /var/lib/dkim2d/protected/0123456789abcdef0123456789abcdef/server-key.pem
+    ca_file: /var/lib/dkim2d/protected/0123456789abcdef0123456789abcdef/server-ca.pem
+    server_name: dkim2d-inbound
+  capability_file: /var/lib/dkim2d/protected/0123456789abcdef0123456789abcdef/capability
+```
+
+All four protected files are distinct children of the selected generation.
+The certificate must contain only `dkim2d-inbound` as its DNS SAN, contain no
+other SAN identity type, and chain to the configured internal CA. Wildcard and
+alternate identities are rejected. The private key and certificate are loaded
+only through the descriptor-confined protected-generation owner.
+
+Certificate renewal selects a new complete immutable generation. It need not
+rotate the route capabilities or replay HMAC: the secret-management authority
+may publish those exact existing bytes into the new generation while replacing
+only the TLS identity. Active generation files are never edited in place.
 
 ### Flat-file signing, revision, and delivery status
 
@@ -638,9 +690,9 @@ no separate `server_name` override. Exactly TLS 1.3 is permitted. Proxies,
 redirects, arbitrary headers, environment-driven exporter configuration,
 compression overrides, userinfo, queries, and fragments remain rejected.
 Loopback HTTPS endpoints remain supported. Remote export does not relax the
-daemon HTTP listener's separate loopback-only contract.
+daemon HTTP listener's separate inbound transport contract.
 
-`GET /metrics` is public on the same loopback listener and does not require
+`GET /metrics` is public on the same daemon listener and does not require
 readiness or the process capability. It accepts no body, query, conditional,
 trace, or capability input. Scrapes are untraced and nonrecursive, use the
 Prometheus 0.0.4 text format, and are capped at 256 KiB. `HEAD /metrics`
@@ -682,8 +734,8 @@ restart.
 The current daemon does not provide:
 
 - Milter or Exim action application;
-- remote HTTP exposure, TLS serving, proxy trust, Unix sockets, or multiple
-  listeners;
+- public HTTP exposure, proxy trust, Unix sockets, multiple listeners, or a
+  plaintext private-network mode;
 - OAuth, bearer tokens, request-selected policy, or remote authentication;
 - HTTP/2, h2c, persistent connections, or effective-config output;
 - hot configuration, secret, certificate, capability, or replay-key reload;

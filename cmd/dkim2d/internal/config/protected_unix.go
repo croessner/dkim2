@@ -3,11 +3,15 @@
 package config
 
 import (
+	"bytes"
+	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/croessner/dkim2/cmd/dkim2d/internal/signingstore"
 	"golang.org/x/sys/unix"
@@ -35,6 +39,9 @@ const (
 	protectedTracingCA
 	protectedDatasourcePassword
 	protectedDatasourceCA
+	protectedServerCertificate
+	protectedServerPrivateKey
+	protectedServerCA
 )
 
 type ownedDescriptor struct {
@@ -255,6 +262,13 @@ func selectedProtectedPaths(snapshot Snapshot) []selectedProtectedPath {
 		path: snapshot.Server().CapabilityFile(),
 		role: protectedCapability,
 	}}
+	if snapshot.Server().PrivateNetwork() {
+		paths = append(paths,
+			selectedProtectedPath{path: snapshot.Server().TLSCertificateFile(), role: protectedServerCertificate},
+			selectedProtectedPath{path: snapshot.Server().TLSPrivateKeyFile(), role: protectedServerPrivateKey},
+			selectedProtectedPath{path: snapshot.Server().TLSCAFile(), role: protectedServerCA},
+		)
+	}
 	if snapshot.Signing().Enabled() {
 		if snapshot.Server().SignEnabled() {
 			paths = append(paths, selectedProtectedPath{
@@ -388,6 +402,7 @@ func buildProtectedState(
 		snapshot: snapshot,
 	}
 	allocated := state
+	var serverCertificatePEM, serverPrivateKeyPEM, serverCAPEM []byte
 	defer func() {
 		if resultErr != nil {
 			_ = allocated.releasePrebootstrap()
@@ -458,9 +473,33 @@ func buildProtectedState(
 				return nil, err
 			}
 			state.datasourceRootsDER = roots
+		case protectedServerCertificate:
+			serverCertificatePEM = append([]byte(nil), file.data...)
+		case protectedServerPrivateKey:
+			serverPrivateKeyPEM = append([]byte(nil), file.data...)
+		case protectedServerCA:
+			serverCAPEM = append([]byte(nil), file.data...)
 		default:
 			return nil, newError(CodeInternal)
 		}
+	}
+	defer clear(serverCertificatePEM)
+	defer clear(serverPrivateKeyPEM)
+	defer clear(serverCAPEM)
+	if snapshot.Server().PrivateNetwork() {
+		tlsConfig, err := validatedServerTLSConfig(
+			serverCertificatePEM,
+			serverPrivateKeyPEM,
+			serverCAPEM,
+			snapshot.Server().TLSServerName(),
+			time.Now(),
+		)
+		if err != nil {
+			return nil, err
+		}
+		state.serverTLS = tlsConfig
+	} else if len(serverCertificatePEM) != 0 || len(serverPrivateKeyPEM) != 0 {
+		return nil, newError(CodeProtectedContent)
 	}
 	if snapshot.Signing().Enabled() {
 		if generationFD < 0 ||
@@ -490,6 +529,83 @@ func buildProtectedState(
 		return nil, err
 	}
 	return state, nil
+}
+
+// validatedServerTLSConfig validates the server identity and fixes a TLS 1.3-only policy.
+func validatedServerTLSConfig(certificatePEM, privateKeyPEM, caPEM []byte, serverName string, now time.Time) (*tls.Config, error) {
+	if len(certificatePEM) == 0 || len(privateKeyPEM) == 0 || len(caPEM) == 0 ||
+		!ValidTLSServerName(serverName) || now.IsZero() {
+		return nil, newError(CodeProtectedContent)
+	}
+	pair, err := tls.X509KeyPair(certificatePEM, privateKeyPEM)
+	if err != nil || len(pair.Certificate) < 2 {
+		return nil, newError(CodeProtectedContent)
+	}
+	leaf, err := x509.ParseCertificate(pair.Certificate[0])
+	if err != nil || now.Before(leaf.NotBefore) || !now.Before(leaf.NotAfter) ||
+		leaf.IsCA || leaf.VerifyHostname(serverName) != nil || !hasExactServerIdentity(leaf, serverName) ||
+		(leaf.KeyUsage != 0 && leaf.KeyUsage&x509.KeyUsageDigitalSignature == 0) ||
+		!allowsOnlyServerAuthentication(leaf.ExtKeyUsage) {
+		return nil, newError(CodeProtectedContent)
+	}
+	rootsDER, err := parseCertificateRoots(caPEM)
+	if err != nil {
+		return nil, err
+	}
+	roots := x509.NewCertPool()
+	for _, rootDER := range rootsDER {
+		root, parseErr := x509.ParseCertificate(rootDER)
+		if parseErr != nil {
+			return nil, newError(CodeProtectedContent)
+		}
+		roots.AddCert(root)
+	}
+	intermediates := x509.NewCertPool()
+	issuer := leaf
+	for _, intermediateDER := range pair.Certificate[1:] {
+		intermediate, parseErr := x509.ParseCertificate(intermediateDER)
+		if parseErr != nil || !intermediate.BasicConstraintsValid || !intermediate.IsCA ||
+			issuer.CheckSignatureFrom(intermediate) != nil || slices.ContainsFunc(rootsDER, func(rootDER []byte) bool {
+			return bytes.Equal(rootDER, intermediate.Raw)
+		}) {
+			return nil, newError(CodeProtectedContent)
+		}
+		intermediates.AddCert(intermediate)
+		issuer = intermediate
+	}
+	if _, err = leaf.Verify(x509.VerifyOptions{
+		DNSName: serverName, Roots: roots, Intermediates: intermediates,
+		CurrentTime: now, KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+	}); err != nil {
+		return nil, newError(CodeProtectedContent)
+	}
+	pair.Leaf = leaf
+	return &tls.Config{
+		Certificates: []tls.Certificate{pair},
+		MinVersion:   tls.VersionTLS13,
+		MaxVersion:   tls.VersionTLS13,
+		NextProtos:   []string{"http/1.1"},
+	}, nil
+}
+
+// hasExactServerIdentity rejects wildcard, alternate, IP, email, and URI identities.
+func hasExactServerIdentity(certificate *x509.Certificate, serverName string) bool {
+	return certificate != nil && len(certificate.DNSNames) == 1 &&
+		certificate.DNSNames[0] == serverName && len(certificate.IPAddresses) == 0 &&
+		len(certificate.EmailAddresses) == 0 && len(certificate.URIs) == 0
+}
+
+// allowsOnlyServerAuthentication requires the sole explicit server-authentication usage.
+func allowsOnlyServerAuthentication(usages []x509.ExtKeyUsage) bool {
+	if len(usages) != 1 {
+		return false
+	}
+	for _, usage := range usages {
+		if usage == x509.ExtKeyUsageServerAuth {
+			return true
+		}
+	}
+	return false
 }
 
 // validateGenerationDescriptor enforces the immutable generation-directory policy.
@@ -540,9 +656,9 @@ func validateProtectedFileMetadata(
 	case protectedYAML, protectedCapability, protectedSignCapability,
 		protectedReviseCapability, protectedDSNSignCapability, protectedHMAC,
 		protectedApplicationPassword, protectedAuditorPassword,
-		protectedDatasourcePassword:
+		protectedDatasourcePassword, protectedServerCertificate, protectedServerPrivateKey:
 		modeAccepted = metadata.modeBits == 0o400 || metadata.modeBits == 0o600
-	case protectedCA, protectedDatasourceCA:
+	case protectedCA, protectedDatasourceCA, protectedServerCA:
 		switch metadata.modeBits {
 		case 0o400, 0o440, 0o444, 0o600, 0o640, 0o644:
 			modeAccepted = true
@@ -582,7 +698,9 @@ func protectedSizeAccepted(role protectedFileRole, size int64) bool {
 		return size >= 1 && size <= maxPasswordBytes
 	case protectedDatasourcePassword:
 		return size >= 1 && size <= maxPasswordBytes
-	case protectedCA, protectedDatasourceCA:
+	case protectedCA, protectedDatasourceCA, protectedServerCA:
+		return size >= 1 && size <= maxCAPEMBytes
+	case protectedServerCertificate, protectedServerPrivateKey:
 		return size >= 1 && size <= maxCAPEMBytes
 	case protectedTracingCA:
 		return size >= 1 && size <= maxTracingCAPEMBytes
@@ -604,7 +722,9 @@ func protectedReadCap(role protectedFileRole) int {
 		return maxPasswordBytes
 	case protectedDatasourcePassword:
 		return maxPasswordBytes
-	case protectedCA, protectedDatasourceCA:
+	case protectedCA, protectedDatasourceCA, protectedServerCA:
+		return maxCAPEMBytes
+	case protectedServerCertificate, protectedServerPrivateKey:
 		return maxCAPEMBytes
 	case protectedTracingCA:
 		return maxTracingCAPEMBytes

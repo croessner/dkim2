@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -66,6 +67,7 @@ type HTTPAssemblyInput struct {
 	activation        ActivationAuthority
 	baseContext       context.Context
 	telemetry         *observability.Runtime
+	serverTLS         *tls.Config
 }
 
 // newHTTPAssemblyInput validates one pure transport-construction input.
@@ -90,6 +92,7 @@ func newHTTPAssemblyInput(
 		serveReturn: serveReturn,
 		activation:  activation,
 		baseContext: baseContext,
+		serverTLS:   preparation.ServerTLSConfig(),
 	}
 	if !input.baseValid() {
 		return HTTPAssemblyInput{}, &LifecycleError{}
@@ -109,7 +112,8 @@ func (i HTTPAssemblyInput) Valid() bool {
 // baseValid reports the transport dependencies that exist before optional
 // signing-service composition.
 func (i HTTPAssemblyInput) baseValid() bool {
-	return i.snapshot.Valid() && i.processor != nil && i.readiness != nil &&
+	return i.snapshot.Valid() && (i.snapshot.Server().PrivateNetwork() == (i.serverTLS != nil)) &&
+		i.processor != nil && i.readiness != nil &&
 		!nilInterface(i.fatal) && !nilInterface(i.serveReturn) &&
 		!nilInterface(i.activation) && !nilInterface(i.baseContext)
 }
@@ -160,6 +164,14 @@ func (i HTTPAssemblyInput) BaseContext() context.Context { return i.baseContext 
 
 // Observability returns the optional instance-owned telemetry runtime.
 func (i HTTPAssemblyInput) Observability() *observability.Runtime { return i.telemetry }
+
+// ServerTLSConfig returns a private clone of the validated optional server TLS policy.
+func (i HTTPAssemblyInput) ServerTLSConfig() *tls.Config {
+	if i.serverTLS == nil {
+		return nil
+	}
+	return i.serverTLS.Clone()
+}
 
 // withObservability binds the already acquired telemetry owner to transport assembly.
 func (i HTTPAssemblyInput) withObservability(runtime *observability.Runtime) HTTPAssemblyInput {

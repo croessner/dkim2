@@ -16,6 +16,11 @@ const (
 	pathConfigVersion                       = "config.version"
 	pathProtectedGeneration                 = "protected.generation"
 	pathServerListen                        = "server.listen"
+	pathServerListenerMode                  = "server.listener_mode"
+	pathServerTLSCertificate                = "server.tls.certificate_file"
+	pathServerTLSPrivateKey                 = "server.tls.private_key_file"
+	pathServerTLSCA                         = "server.tls.ca_file"
+	pathServerTLSServerName                 = "server.tls.server_name"
 	pathServerCapability                    = "server.capability_file"
 	pathServerSignCapability                = "server.sign_capability_file"
 	pathServerReviseCapability              = "server.revise_capability_file"
@@ -113,6 +118,7 @@ const (
 	pathAttestationRotation    = "replay.valkey.attestation.rotation_state"
 
 	defaultListenAddress = "127.0.0.1:8080"
+	defaultListenerMode  = "loopback"
 	defaultReadHeader    = "5s"
 	defaultReadTimeout   = "30s"
 	defaultWriteTimeout  = "65s"
@@ -120,6 +126,7 @@ const (
 	defaultAdmissionWait = "100ms"
 
 	valuePolicyStrict    = "strict"
+	valueListenerPrivate = "tls_private_network"
 	valueBackendValkey   = "valkey"
 	valueBackendDisabled = "disabled"
 	valuePersistenceRDB  = "rdb"
@@ -271,6 +278,11 @@ func stableFieldSpecs() []fieldSpec {
 		{path: pathConfigVersion, kind: valueString, yamlOnly: true},
 		{path: pathProtectedGeneration, kind: valueString, yamlOnly: true},
 		{path: pathServerListen, env: "DKIM2D_SERVER_LISTEN", flag: flagListen, kind: valueString, defaultVal: defaultListenAddress, hasDefault: true},
+		{path: pathServerListenerMode, env: "DKIM2D_SERVER_LISTENER_MODE", kind: valueString, defaultVal: defaultListenerMode, hasDefault: true},
+		{path: pathServerTLSCertificate, env: "DKIM2D_SERVER_TLS_CERTIFICATE_FILE", kind: valueString},
+		{path: pathServerTLSPrivateKey, env: "DKIM2D_SERVER_TLS_PRIVATE_KEY_FILE", kind: valueString},
+		{path: pathServerTLSCA, env: "DKIM2D_SERVER_TLS_CA_FILE", kind: valueString},
+		{path: pathServerTLSServerName, env: "DKIM2D_SERVER_TLS_SERVER_NAME", kind: valueString},
 		{path: pathServerCapability, env: "DKIM2D_SERVER_CAPABILITY_FILE", kind: valueString},
 		{path: pathServerSignCapability, env: "DKIM2D_SERVER_SIGN_CAPABILITY_FILE", kind: valueString},
 		{path: pathServerReviseCapability, env: "DKIM2D_SERVER_REVISE_CAPABILITY_FILE", kind: valueString},

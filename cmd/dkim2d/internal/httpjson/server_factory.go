@@ -2,6 +2,7 @@ package httpjson
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding"
 	"encoding/json"
 	"fmt"
@@ -14,6 +15,7 @@ import (
 	"time"
 
 	"github.com/croessner/dkim2/cmd/dkim2d/internal/app"
+	"github.com/croessner/dkim2/cmd/dkim2d/internal/config"
 )
 
 const serverRuntimeRedacted = "dkim2d_http_server_runtime"
@@ -67,6 +69,9 @@ func (f *ServerFactory) Assemble(input app.HTTPAssemblyInput) (app.HTTPAssembly,
 		input.BaseContext(),
 		serverSettings{
 			authority:         server.Listen(),
+			privateNetwork:    server.PrivateNetwork(),
+			serverName:        server.TLSServerName(),
+			tlsConfig:         input.ServerTLSConfig(),
 			readHeaderTimeout: server.ReadHeaderTimeout(),
 			readTimeout:       server.ReadTimeout(),
 			writeTimeout:      server.WriteTimeout(),
@@ -89,6 +94,9 @@ func (f *ServerFactory) Assemble(input app.HTTPAssemblyInput) (app.HTTPAssembly,
 
 type serverSettings struct {
 	authority         string
+	privateNetwork    bool
+	serverName        string
+	tlsConfig         *tls.Config
 	readHeaderTimeout time.Duration
 	readTimeout       time.Duration
 	writeTimeout      time.Duration
@@ -102,7 +110,9 @@ type serverSettings struct {
 // valid reports whether the copied server snapshot retains every exact
 // cross-field and resource bound enforced by configuration.
 func (s serverSettings) valid() bool {
-	return validServerAuthority(s.authority) &&
+	return validServerAuthority(s.authority, s.privateNetwork) &&
+		validRequestAuthority(s.authority, s.serverName, s.privateNetwork) &&
+		validServerTLSConfig(s.tlsConfig, s.privateNetwork) &&
 		s.readHeaderTimeout >= time.Second &&
 		s.readHeaderTimeout <= 30*time.Second &&
 		s.readTimeout >= time.Second &&
@@ -122,6 +132,39 @@ func (s serverSettings) valid() bool {
 		s.readHeaderTimeout <= s.readTimeout &&
 		s.readTimeout <= s.requestDeadline &&
 		s.writeTimeout >= s.requestDeadline+time.Second
+}
+
+// requestAuthority returns the sole HTTP Host authority allowed by the selected transport.
+func (s serverSettings) requestAuthority() string {
+	if !s.privateNetwork {
+		return s.authority
+	}
+	_, port, err := net.SplitHostPort(s.authority)
+	if err != nil {
+		return ""
+	}
+	return net.JoinHostPort(s.serverName, port)
+}
+
+// validRequestAuthority binds private TLS requests to the certificate DNS identity and listener port.
+func validRequestAuthority(authority, serverName string, privateNetwork bool) bool {
+	if !privateNetwork {
+		return serverName == ""
+	}
+	_, port, err := net.SplitHostPort(authority)
+	return err == nil && config.ValidTLSServerName(serverName) &&
+		net.JoinHostPort(serverName, port) == serverName+":"+port
+}
+
+// validServerTLSConfig repeats the immutable TLS 1.3 transport invariants at assembly time.
+func validServerTLSConfig(value *tls.Config, privateNetwork bool) bool {
+	if !privateNetwork {
+		return value == nil
+	}
+	return value != nil && value.MinVersion == tls.VersionTLS13 &&
+		value.MaxVersion == tls.VersionTLS13 && len(value.Certificates) == 1 &&
+		len(value.Certificates[0].Certificate) > 0 && len(value.NextProtos) == 1 &&
+		value.NextProtos[0] == "http/1.1"
 }
 
 type serverAssembly struct {
@@ -168,7 +211,7 @@ func newServerAssembly(
 	}
 	boundary, err := NewHTTPBoundary(
 		BoundaryConfig{
-			Authority:       settings.authority,
+			Authority:       settings.requestAuthority(),
 			RequestDeadline: settings.requestDeadline,
 			MaxInFlight:     settings.maxInFlight,
 			MaxWaiters:      settings.maxWaiters,
@@ -213,7 +256,17 @@ func (a *serverAssembly) Bind(ctx context.Context) (runtime app.HTTPRuntime, res
 		!a.bindStarted.CompareAndSwap(false, true) {
 		return nil, &serverRuntimeError{}
 	}
-	raw, err := a.listen("tcp", a.settings.authority)
+	network := "tcp"
+	if a.settings.privateNetwork {
+		host, _, _ := net.SplitHostPort(a.settings.authority)
+		address, _ := netip.ParseAddr(host)
+		if address.Is4() {
+			network = "tcp4"
+		} else {
+			network = "tcp6"
+		}
+	}
+	raw, err := a.listen(network, a.settings.authority)
 	if err != nil || nilInterfaceValue(raw) {
 		closeRawServerListener(raw)
 		return nil, &serverRuntimeError{}
@@ -226,6 +279,9 @@ func (a *serverAssembly) Bind(ctx context.Context) (runtime app.HTTPRuntime, res
 	}()
 	if ctx.Err() != nil || !serverListenerMatches(raw, a.settings.authority) {
 		return nil, &serverRuntimeError{}
+	}
+	if a.settings.tlsConfig != nil {
+		raw = tls.NewListener(raw, a.settings.tlsConfig.Clone())
 	}
 	listener, err := NewServerListener(raw, currentHTTPDate)
 	if err != nil || listener == nil {
@@ -249,17 +305,18 @@ func (a *serverAssembly) Bind(ctx context.Context) (runtime app.HTTPRuntime, res
 	return bound, nil
 }
 
-// validServerAuthority accepts only one canonical numeric loopback TCP
-// authority with a nonzero decimal port.
-func validServerAuthority(authority string) bool {
+// validServerAuthority accepts one canonical authority for the selected listener mode.
+func validServerAuthority(authority string, privateNetwork bool) bool {
 	host, portText, err := net.SplitHostPort(authority)
 	if err != nil || host == "" || portText == "" {
 		return false
 	}
 	address, err := netip.ParseAddr(host)
-	if err != nil || !address.IsLoopback() || address.Is4In6() ||
+	if err != nil || address.Is4In6() ||
 		address.Zone() != "" ||
-		address.String() != host {
+		address.String() != host ||
+		(privateNetwork && !address.IsPrivate()) ||
+		(!privateNetwork && !address.IsLoopback()) {
 		return false
 	}
 	port, err := strconv.ParseUint(portText, 10, 16)

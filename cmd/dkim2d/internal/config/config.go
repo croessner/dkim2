@@ -118,6 +118,11 @@ type tracingState struct {
 
 type serverState struct {
 	listen                string
+	privateNetwork        bool
+	tlsCertificateFile    string
+	tlsPrivateKeyFile     string
+	tlsCAFile             string
+	tlsServerName         string
 	capabilityFile        string
 	signCapabilityFile    string
 	reviseCapabilityFile  string
@@ -377,6 +382,9 @@ func validateSnapshot(values map[string]rawValue, presence map[string]Presence) 
 		return nil, err
 	}
 	protectedPaths := append([]string{server.capabilityFile}, replayProtectedPaths(replay)...)
+	if server.privateNetwork {
+		protectedPaths = append(protectedPaths, server.tlsCertificateFile, server.tlsPrivateKeyFile, server.tlsCAFile)
+	}
 	if signing.backend != SigningDisabled {
 		if server.signCapabilityFile != "" {
 			protectedPaths = append(protectedPaths, server.signCapabilityFile)
@@ -590,17 +598,32 @@ func parseServer(values map[string]rawValue) (serverState, error) {
 		return serverState{}, err
 	}
 	listen := text(values, pathServerListen)
+	listenerMode := text(values, pathServerListenerMode)
+	tlsCertificate := text(values, pathServerTLSCertificate)
+	tlsPrivateKey := text(values, pathServerTLSPrivateKey)
+	tlsCA := text(values, pathServerTLSCA)
+	tlsServerName := text(values, pathServerTLSServerName)
 	capability := text(values, pathServerCapability)
 	signCapability := text(values, pathServerSignCapability)
 	reviseCapability := text(values, pathServerReviseCapability)
 	dsnSignCapability := text(values, pathServerDSNSignCapability)
-	if !validLoopbackListener(listen) || !validProtectedPath(capability) ||
+	privateNetwork := listenerMode == valueListenerPrivate
+	if (listenerMode != defaultListenerMode && !privateNetwork) ||
+		!validServerListener(listen, privateNetwork) || !validProtectedPath(capability) ||
+		(privateNetwork && (!validProtectedPath(tlsCertificate) || !validProtectedPath(tlsPrivateKey) ||
+			!validProtectedPath(tlsCA) || !ValidTLSServerName(tlsServerName))) ||
+		(!privateNetwork && (tlsCertificate != "" || tlsPrivateKey != "" || tlsCA != "" || tlsServerName != "")) ||
 		readHeader > read || read > deadline || deadline > time.Duration(1<<63-1)-time.Second ||
 		write < deadline+time.Second {
 		return serverState{}, newError(CodeInvalidField)
 	}
 	return serverState{
 		listen:                listen,
+		privateNetwork:        privateNetwork,
+		tlsCertificateFile:    tlsCertificate,
+		tlsPrivateKeyFile:     tlsPrivateKey,
+		tlsCAFile:             tlsCA,
+		tlsServerName:         tlsServerName,
 		capabilityFile:        capability,
 		signCapabilityFile:    signCapability,
 		reviseCapabilityFile:  reviseCapability,
@@ -614,6 +637,25 @@ func parseServer(values map[string]rawValue) (serverState, error) {
 		maxWaiters:            uint16(maxWaiters),
 		admissionWait:         admission,
 	}, nil
+}
+
+// ValidTLSServerName accepts one canonical lowercase DNS identity for certificate verification.
+func ValidTLSServerName(value string) bool {
+	if value == "" || len(value) > 253 || value != strings.ToLower(value) || value == "localhost" ||
+		strings.Contains(value, "..") {
+		return false
+	}
+	for _, label := range strings.Split(value, ".") {
+		if label == "" || len(label) > 63 || label[0] == '-' || label[len(label)-1] == '-' {
+			return false
+		}
+		for _, character := range label {
+			if (character < 'a' || character > 'z') && (character < '0' || character > '9') && character != '-' {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // parseSigning validates the default-disabled signing conditional matrix.
@@ -1420,14 +1462,16 @@ func canonicalDuration(value string, allowZero bool) bool {
 	return digits != "" && digits[0] >= '1' && digits[0] <= '9' && canonicalUint(digits)
 }
 
-// validLoopbackListener proves one canonical loopback IP-literal authority.
-func validLoopbackListener(value string) bool {
+// validServerListener proves one canonical authority for the selected listener mode.
+func validServerListener(value string, privateNetwork bool) bool {
 	host, portText, err := net.SplitHostPort(value)
 	if err != nil || host == "" || strings.Contains(host, "%") {
 		return false
 	}
 	address, err := netip.ParseAddr(host)
-	if err != nil || !address.IsLoopback() || address.Is4In6() || address.String() != host {
+	if err != nil || address.Is4In6() || address.String() != host ||
+		(privateNetwork && !address.IsPrivate()) ||
+		(!privateNetwork && !address.IsLoopback()) {
 		return false
 	}
 	port, err := strconv.ParseUint(portText, 10, 16)

@@ -69,6 +69,7 @@
 | 0.1.0-draft | 2026-08-20 | Christian Roessner / Codex | Removed caller/static domain preselection from the Postfix DSN path. One tenant-only adapter now authorizes the route with the Postfix origin enum; the daemon verifies embedded evidence, derives canonical highest `d=`, and only then resolves the exact `delivery_status` policy, enabling fail-closed multi-domain operation without circular trust. |
 | 0.1.0-draft | 2026-08-21 | Christian Roessner / Codex | Preserved daemon-owned inbound `Authentication-Results` reporting for delivery-neutral `testing` policy: applicable `continue` responses may carry the same single bounded report action as `accept`, while unsigned, rejecting, temporary, and non-inbound outcomes retain their existing mutation restrictions. |
 | 0.1.0-draft | 2026-08-25 | Christian Roessner / Codex | Advanced the message baseline to Draft-06. The migration authority adds SHA-512 Message-Instance verification, the revised unsigned-header set, lowercase Recipe keys, selector and per-algorithm signature cardinality, unchanged-state Message-Instances, typed diagnostics, a drain-only replay epoch rotation, generated-contract parity, and explicit `unqualified_draft06` Exim status until fresh Linux qualification evidence exists. The DNS companion remains `draft-chuang-dkim2-dns-04`. |
+| 0.1.0-draft | 2026-08-30 | Christian Roessner / Codex | Added an explicit TLS-1.3-only private-container-network listener for authenticated local adapters, backed by generation-confined internal-PKI certificate, key, and CA material; loopback remains the default and plaintext remote exposure remains unsupported. |
 
 ## 1. Purpose
 
@@ -1171,7 +1172,10 @@ collector. The validated URL hostname is the sole TLS peer identity; a
 separate server-name override would create ambiguous authority and is not part
 of the stable config. The exporter uses only its generation-protected CA pool,
 exact TLS 1.3, and a proxy-free, redirect-free bounded client. This outbound
-authority does not widen the daemon's loopback-only inbound HTTP listener.
+authority is independent of the daemon's inbound listener. The inbound default
+remains loopback-only; its explicit private-container-network mode terminates
+TLS 1.3 natively, validates one internal-PKI server identity at startup, and
+retains route capabilities as application authorization.
 
 Telemetry uses a tiered allowlist. Default telemetry is intentionally boring
 and low-cardinality. Richer DKIM2-specific diagnostics are available only

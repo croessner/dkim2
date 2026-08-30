@@ -3,6 +3,7 @@ package httpjson
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -388,6 +389,53 @@ func TestServerAssemblyRejectsIPv4MappedIPv6Authority(t *testing.T) {
 	)
 	if assembly != nil || !IsServerRuntimeError(err) {
 		t.Fatal("assembly accepted an IPv4-mapped IPv6 listener")
+	}
+}
+
+// TestServerAssemblyPrivateNetworkRequiresExplicitAddress proves the runtime repeats the config boundary.
+func TestServerAssemblyPrivateNetworkRequiresExplicitAddress(t *testing.T) {
+	t.Parallel()
+	const privateServerName = "dkim2d-inbound"
+
+	valid := serverSettings{
+		authority: "10.73.0.2:8080", privateNetwork: true, serverName: privateServerName,
+		tlsConfig: &tls.Config{
+			Certificates: []tls.Certificate{{Certificate: [][]byte{{1}}}},
+			MinVersion:   tls.VersionTLS13, MaxVersion: tls.VersionTLS13,
+			NextProtos: []string{"http/1.1"},
+		},
+		readHeaderTimeout: 5 * time.Second, readTimeout: 30 * time.Second,
+		writeTimeout: 31 * time.Second, requestDeadline: 30 * time.Second,
+		shutdownTimeout: 30 * time.Second, maxInFlight: 1, maxWaiters: 1,
+		admissionWait: 10 * time.Millisecond,
+	}
+	if !valid.valid() {
+		t.Fatal("explicit private-network address settings were rejected")
+	}
+	if valid.requestAuthority() != privateServerName+":8080" {
+		t.Fatal("private-network HTTP authority did not use the certificate identity")
+	}
+	valid.serverName = ""
+	if valid.valid() {
+		t.Fatal("private-network settings without a certificate identity were accepted")
+	}
+	valid.serverName = privateServerName
+	valid.privateNetwork = false
+	valid.serverName = ""
+	valid.tlsConfig = nil
+	if valid.valid() {
+		t.Fatal("private authority was accepted without private-network mode")
+	}
+	valid.authority = boundaryTestAuthority
+	valid.privateNetwork = true
+	valid.serverName = privateServerName
+	valid.tlsConfig = &tls.Config{
+		Certificates: []tls.Certificate{{Certificate: [][]byte{{1}}}},
+		MinVersion:   tls.VersionTLS13, MaxVersion: tls.VersionTLS13,
+		NextProtos: []string{"http/1.1"},
+	}
+	if valid.valid() {
+		t.Fatal("loopback authority was accepted as a private-network address")
 	}
 }
 

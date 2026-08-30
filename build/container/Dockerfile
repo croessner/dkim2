@@ -111,7 +111,7 @@ USER 2000:2000
 
 FROM runtime-common AS dkim2d
 LABEL org.opencontainers.image.title="dkim2d" \
-      org.opencontainers.image.description="Loopback-only DKIM2 processing daemon"
+      org.opencontainers.image.description="Authenticated local DKIM2 processing daemon with optional private-network TLS"
 COPY --from=build /runtime/dkim2d/ /
 HEALTHCHECK --interval=10s --timeout=3s --retries=3 CMD ["/usr/local/bin/dkim2d", "probe"]
 ENTRYPOINT ["/usr/local/bin/dkim2d"]

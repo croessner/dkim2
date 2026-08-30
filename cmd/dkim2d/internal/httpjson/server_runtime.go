@@ -121,6 +121,7 @@ func newServerRuntime(
 			return baseContext
 		},
 		ConnContext: listener.ConnContext,
+		TLSConfig:   settings.tlsConfig,
 	}
 	runtime.shutdownServer = runtime.server.Shutdown
 	runtime.forceServer = runtime.server.Close
