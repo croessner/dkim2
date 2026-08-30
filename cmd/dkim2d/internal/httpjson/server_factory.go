@@ -18,7 +18,11 @@ import (
 	"github.com/croessner/dkim2/cmd/dkim2d/internal/config"
 )
 
-const serverRuntimeRedacted = "dkim2d_http_server_runtime"
+const (
+	serverRuntimeRedacted = "dkim2d_http_server_runtime"
+	serverNetworkTCP      = "tcp"
+	serverHTTP11Protocol  = "http/1.1"
+)
 
 type serverListenFunc func(network, address string) (net.Listener, error)
 
@@ -164,7 +168,7 @@ func validServerTLSConfig(value *tls.Config, privateNetwork bool) bool {
 	return value != nil && value.MinVersion == tls.VersionTLS13 &&
 		value.MaxVersion == tls.VersionTLS13 && len(value.Certificates) == 1 &&
 		len(value.Certificates[0].Certificate) > 0 && len(value.NextProtos) == 1 &&
-		value.NextProtos[0] == "http/1.1"
+		value.NextProtos[0] == serverHTTP11Protocol
 }
 
 type serverAssembly struct {
@@ -256,7 +260,7 @@ func (a *serverAssembly) Bind(ctx context.Context) (runtime app.HTTPRuntime, res
 		!a.bindStarted.CompareAndSwap(false, true) {
 		return nil, &serverRuntimeError{}
 	}
-	network := "tcp"
+	network := serverNetworkTCP
 	if a.settings.privateNetwork {
 		host, _, _ := net.SplitHostPort(a.settings.authority)
 		address, _ := netip.ParseAddr(host)
@@ -338,7 +342,7 @@ func serverListenerMatches(listener net.Listener, authority string) (valid bool)
 	}
 	address := listener.Addr()
 	return !nilInterfaceValue(address) &&
-		address.Network() == "tcp" &&
+		address.Network() == serverNetworkTCP &&
 		address.String() == authority
 }
 

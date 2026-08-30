@@ -24,7 +24,7 @@ func TestProbeOptionsRejectTransportDowngrades(t *testing.T) {
 	tests := []probeOptions{
 		{port: 8080, connectAddress: privateAddress},
 		{port: 8443, connectAddress: privateAddress, tlsServerName: "dkim2d-inbound"},
-		{port: 8443, connectAddress: "127.0.0.1", tlsServerName: "dkim2d-inbound", tlsCAFile: filepath.Join(t.TempDir(), "ca.pem")},
+		{port: 8443, connectAddress: probeLoopbackAddress, tlsServerName: "dkim2d-inbound", tlsCAFile: filepath.Join(t.TempDir(), "ca.pem")},
 		{port: 8443, connectAddress: privateAddress, tlsServerName: "DKIM2D-INBOUND", tlsCAFile: filepath.Join(t.TempDir(), "ca.pem")},
 		{port: 8443, connectAddress: privateAddress, tlsCAFile: filepath.Join(t.TempDir(), "ca.pem")},
 	}

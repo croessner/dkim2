@@ -29,7 +29,7 @@ type serverTestListen struct {
 // Listen records one acquisition and returns the scripted outcome.
 func (s *serverTestListen) Listen(network, address string) (net.Listener, error) {
 	s.calls.Add(1)
-	if network != "tcp" || address != boundaryTestAuthority {
+	if network != serverNetworkTCP || address != boundaryTestAuthority {
 		return nil, errors.New("server-test-authority-marker")
 	}
 	if s.panicVal != nil {
@@ -402,7 +402,7 @@ func TestServerAssemblyPrivateNetworkRequiresExplicitAddress(t *testing.T) {
 		tlsConfig: &tls.Config{
 			Certificates: []tls.Certificate{{Certificate: [][]byte{{1}}}},
 			MinVersion:   tls.VersionTLS13, MaxVersion: tls.VersionTLS13,
-			NextProtos: []string{"http/1.1"},
+			NextProtos: []string{serverHTTP11Protocol},
 		},
 		readHeaderTimeout: 5 * time.Second, readTimeout: 30 * time.Second,
 		writeTimeout: 31 * time.Second, requestDeadline: 30 * time.Second,
@@ -432,7 +432,7 @@ func TestServerAssemblyPrivateNetworkRequiresExplicitAddress(t *testing.T) {
 	valid.tlsConfig = &tls.Config{
 		Certificates: []tls.Certificate{{Certificate: [][]byte{{1}}}},
 		MinVersion:   tls.VersionTLS13, MaxVersion: tls.VersionTLS13,
-		NextProtos: []string{"http/1.1"},
+		NextProtos: []string{serverHTTP11Protocol},
 	}
 	if valid.valid() {
 		t.Fatal("loopback authority was accepted as a private-network address")

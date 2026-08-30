@@ -18,8 +18,9 @@ import (
 )
 
 const (
-	probeTimeout = 2 * time.Second
-	probeCAMax   = 1 << 20
+	probeTimeout         = 2 * time.Second
+	probeCAMax           = 1 << 20
+	probeLoopbackAddress = "127.0.0.1"
 )
 
 type probeOptions struct {
@@ -31,7 +32,7 @@ type probeOptions struct {
 
 // newProbeCommand constructs the fixed local non-mutating readiness probe.
 func newProbeCommand() *cobra.Command {
-	options := probeOptions{port: 8080, connectAddress: "127.0.0.1"}
+	options := probeOptions{port: 8080, connectAddress: probeLoopbackAddress}
 	command := &cobra.Command{
 		Use:           probeCommandName,
 		Short:         "Check local daemon readiness",
@@ -45,13 +46,13 @@ func newProbeCommand() *cobra.Command {
 	command.Flags().StringVar(&options.tlsServerName, "tls-server-name", "", "verify the private-network TLS server identity")
 	command.Flags().StringVar(&options.tlsCAFile, "tls-ca-file", "", "read the internal-PKI trust roots from this absolute path")
 	command.Flags().Uint16Var(&options.port, "port", 8080, "local daemon readiness port")
-	command.Flags().StringVar(&options.connectAddress, "connect-address", "127.0.0.1", "exact local daemon listener IP")
+	command.Flags().StringVar(&options.connectAddress, "connect-address", probeLoopbackAddress, "exact local daemon listener IP")
 	return command
 }
 
 // runProbe checks only the fixed canonical-loopback readiness endpoint.
 func runProbe(parent context.Context) error {
-	return runProbeWithOptions(parent, probeOptions{port: 8080, connectAddress: "127.0.0.1"})
+	return runProbeWithOptions(parent, probeOptions{port: 8080, connectAddress: probeLoopbackAddress})
 }
 
 // runProbeWithOptions checks loopback while optionally verifying the private-network TLS identity.
