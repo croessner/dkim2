@@ -157,9 +157,10 @@ because dkim2d cannot yet derive the required authenticated modification facts.
 Rspamd 4.1.5 exposes the original SMTP address views through
 `task:get_from({'smtp', 'orig'})` and `task:get_recipients({'smtp', 'orig'})`,
 including each address's raw representation. `task:get_content()` supplies the
-message buffer submitted to filtering. The module preserves a uniform CRLF
-buffer and restores a uniformly LF-normalized buffer to SMTP CRLF. Mixed line
-endings or bare carriage returns fail through the configured failure mode. A
+message buffer submitted to filtering. The module preserves CRLF lines and
+restores LF-normalized lines to SMTP CRLF, including the mixed CRLF/LF buffer
+that Rspamd can produce after MTA and filter fixups. Bare carriage returns fail
+through the configured failure mode. A
 deployment must still qualify its actual MTA-to-Rspamd integration because
 upstream MTA fixups before Rspamd sees the message are outside this module's
 control.

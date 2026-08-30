@@ -433,7 +433,7 @@ local function original_envelope(task)
   return result
 end
 
--- smtp_message_bytes restores only Rspamd's uniform LF representation to SMTP CRLF.
+-- smtp_message_bytes canonicalizes Rspamd's filter buffer to SMTP CRLF.
 local function smtp_message_bytes(value)
   if type(value) == 'userdata' then
     value = tostring(value)
@@ -441,24 +441,15 @@ local function smtp_message_bytes(value)
   if type(value) ~= 'string' or #value == 0 or #value > MAX_MESSAGE_BYTES then
     return nil
   end
-  local outside_crlf = value:gsub('\r\n', '')
-  if outside_crlf:find('\r', 1, true) then
+  local without_crlf = value:gsub('\r\n', '')
+  if without_crlf:find('\r', 1, true) then
     return nil
   end
-  if value:find('\r\n', 1, true) then
-    if outside_crlf:find('\n', 1, true) then
-      return nil
-    end
-    return value
+  local normalized = value:gsub('\r\n', '\n'):gsub('\n', '\r\n')
+  if #normalized > MAX_MESSAGE_BYTES then
+    return nil
   end
-  if value:find('\n', 1, true) then
-    local restored = value:gsub('\n', '\r\n')
-    if #restored > MAX_MESSAGE_BYTES then
-      return nil
-    end
-    return restored
-  end
-  return value
+  return normalized
 end
 
 -- insert_symbol publishes one zero-score, option-free bounded result.

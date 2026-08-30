@@ -223,10 +223,11 @@ assert(last_encoded_message ==
 
 local mixed_endings = new_task(
   { ['Message-Instance'] = true }, nil, false,
-  'From: sender@example.test\r\nSubject: ambiguous\n\r\nbody\r\n')
+  'From: sender@example.test\r\nSubject: normalized\n\r\nbody\r\n')
 callback(mixed_endings)
-assert(mixed_endings.pre_result.action == 'soft reject')
-assert(contains(mixed_endings.symbols, 'DKIM2_SERVICE_ERROR'))
+assert(mixed_endings.pre_result == nil)
+assert(last_encoded_message ==
+  'From: sender@example.test\r\nSubject: normalized\r\n\r\nbody\r\n')
 
 local bare_cr = new_task(
   { ['Message-Instance'] = true }, nil, false,
