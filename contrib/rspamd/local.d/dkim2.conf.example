@@ -12,8 +12,8 @@ failure_mode = "tempfail";
 # inserted so forged local authority cannot survive the trust boundary.
 # authserv_id = "mx.example.test";
 
-# Container-network alternative. Rspamd's global ssl_ca_path must trust the
-# internal PKI that issued the dkim2d-inbound certificate.
+# Private-service-network alternative. Rspamd's global ssl_ca_path must trust
+# the internal PKI that issued the dkim2d-inbound certificate.
 # endpoint = "https://dkim2d-inbound:8443/v1/process";
 # transport = "tls_private_network";
 # server_name = "dkim2d-inbound";

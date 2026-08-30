@@ -27,10 +27,11 @@ local.d/dkim2.conf.example
   -> $LOCAL_CONFDIR/local.d/dkim2.conf
 ```
 
-Some container images compile `$CONFDIR` below the image's read-only shared
-configuration tree rather than `/etc/rspamd`. Check `rspamadm configdump` and
-mount `modules.local.d/dkim2.conf` at the effective `$CONFDIR` path. Do not
-modify the image's shipped `modules.d` files.
+Rspamd installation paths vary between operating-system packages, source
+builds, appliances, and container images. Check `rspamadm configdump` and the
+installation's package metadata, then install `modules.local.d/dkim2.conf` at
+the effective `$CONFDIR` path. Do not modify Rspamd's shipped `modules.d`
+files.
 
 The process capability file contains exactly 32 nonzero raw bytes and must be
 the same generation-bound process capability configured for `dkim2d`. Keep it
@@ -39,14 +40,15 @@ Never put the bytes or their encoded value in UCL, environment variables,
 arguments, logs, traces, metrics, or diagnostic output.
 
 The default `loopback` transport requires a shared host network namespace. The
-explicit `tls_private_network` transport uses a canonical container DNS name,
+explicit `tls_private_network` transport uses a canonical service DNS name,
 TLS 1.3 with the deployment's internal PKI, and the existing route capability.
-Use it only on a dedicated internal container network whose only application
-participants are the inbound Rspamd and `dkim2d`. Configure Rspamd's
-`ssl_ca_path` with the internal CA, and configure the daemon with its matching
-TLS private-network listener. Never publish or proxy the daemon port. Reload
-or restart Rspamd whenever the generation-bound capability or PKI material is
-rotated.
+Use it only on a dedicated private service network whose only application
+participants are the inbound Rspamd and `dkim2d`. The isolation boundary may
+be implemented by hosts, VMs, containers, or an equivalent private network.
+Configure Rspamd's `ssl_ca_path` with the internal CA, and configure the daemon
+with its matching TLS private-network listener. Never publish or proxy the
+daemon port. Reload or restart Rspamd whenever the generation-bound capability
+or PKI material is rotated.
 
 Run before activation:
 
@@ -155,9 +157,12 @@ because dkim2d cannot yet derive the required authenticated modification facts.
 Rspamd 4.1.5 exposes the original SMTP address views through
 `task:get_from({'smtp', 'orig'})` and `task:get_recipients({'smtp', 'orig'})`,
 including each address's raw representation. `task:get_content()` supplies the
-message buffer submitted to filtering. A deployment must still qualify its
-actual MTA-to-Rspamd integration because upstream MTA fixups before Rspamd sees
-the message are outside this module's control.
+message buffer submitted to filtering. The module preserves a uniform CRLF
+buffer and restores a uniformly LF-normalized buffer to SMTP CRLF. Mixed line
+endings or bare carriage returns fail through the configured failure mode. A
+deployment must still qualify its actual MTA-to-Rspamd integration because
+upstream MTA fixups before Rspamd sees the message are outside this module's
+control.
 
 ## Bounce and DSN boundary
 

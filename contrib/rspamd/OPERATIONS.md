@@ -22,11 +22,11 @@ dkim2d: verify -> policy -> replay gate -> disposition
 ```
 
 The default `loopback` transport requires one shared host network namespace.
-The explicit `tls_private_network` container transport instead requires a
-dedicated internal network, TLS 1.3, a certificate from the deployment's
+The explicit `tls_private_network` transport instead requires a dedicated
+private service network, TLS 1.3, a certificate from the deployment's
 internal PKI, exact service-name verification, and the route capability. Only
 the inbound Rspamd and `dkim2d` may be application participants. Never publish
-or proxy the daemon port or reuse a broad mail-stack network. Bind `dkim2d` to
+or proxy the daemon port or reuse a broad application network. Bind `dkim2d` to
 its exact static private IP on that network; wildcard listeners are rejected so
 another daemon network cannot gain incidental reachability.
 
@@ -66,14 +66,15 @@ Install the repository files as follows:
 | `modules.local.d/dkim2.conf` | `$CONFDIR/modules.local.d/dkim2.conf` |
 | `local.d/dkim2.conf.example` | `$LOCAL_CONFDIR/local.d/dkim2.conf` |
 
-Do not edit Rspamd's shipped `modules.d` files. Some packages and container
-images compile `$CONFDIR` into a shared read-only tree rather than
-`/etc/rspamd`. Use `rspamadm configdump` to discover the effective paths and
-mount the module loader at that actual `$CONFDIR` location.
+Do not edit Rspamd's shipped `modules.d` files. Packages, source builds,
+appliances, and container images may use different effective configuration
+trees. Use `rspamadm configdump` and the installation's package metadata to
+discover the effective paths, then install the module loader at the actual
+`$CONFDIR` location.
 
-Keep the local configuration and protected capability outside the image when
-Rspamd runs in a container. A package or image upgrade must not replace either
-file.
+Keep local configuration and protected capability material in an
+operator-owned, access-controlled path outside vendor-managed files. Neither a
+package upgrade nor an image replacement may overwrite them.
 
 ## Configuration reference
 
@@ -118,7 +119,7 @@ max_response_bytes = 262144;
 failure_mode = "tempfail";
 ```
 
-Configure Rspamd's global `ssl_ca_path` to a CA bundle containing the internal
+Configure Rspamd's global `ssl_ca_path` to a trust file containing the internal
 PKI issuer. TLS verification is always enabled by the module and cannot be
 disabled through its configuration.
 
@@ -254,17 +255,17 @@ failure, never a silent bypass.
 
 ## Internal-PKI rotation
 
-TLS certificate renewal publishes a new immutable protected bundle generation
+TLS certificate renewal publishes a new immutable protected TLS generation
 for `dkim2d`. It does not require new capability or replay-HMAC values: copy
 those exact protected bytes into the new generation through the normal
 secret-management path, add the renewed leaf chain, key, and unchanged internal
 CA, validate, then restart only the inbound daemon. Keep the Rspamd-readable
-capability copy unchanged when its bytes did not rotate. Replace the Rspamd CA
-bundle and reload Rspamd only when the internal trust anchor actually changes.
+capability copy unchanged when its bytes did not rotate. Replace Rspamd's trust
+file and reload Rspamd only when the internal trust anchor actually changes.
 
 Never edit certificate files in an active immutable generation. Retain the
-previous complete generation and daemon image digest until HTTPS, capability,
-applicable mail, unsigned mail, and rollback checks pass.
+previous complete generation and deployed daemon release identifier until
+HTTPS, capability, applicable mail, unsigned mail, and rollback checks pass.
 
 ## Troubleshooting
 
@@ -354,7 +355,7 @@ the rollback follows a verification or policy incident.
 
 ## Security checklist
 
-- Loopback, or TLS 1.3 on a dedicated internal network; no plaintext private
+- Loopback, or TLS 1.3 on a dedicated private service network; no plaintext private
   mode and no published or proxied daemon port.
 - Internal-PKI chain and exact service-name verification are active.
 - Exact protected process capability; no secret output or copied encoding.
