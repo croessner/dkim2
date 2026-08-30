@@ -391,21 +391,44 @@ local function valid_path(value, allow_null)
       (allow_null or value ~= '<>')
 end
 
+-- smtp_path accepts Rspamd's bare SMTP raw value or an already bracketed path.
+-- It preserves address bytes and restores only delimiters omitted by Rspamd.
+local function smtp_path(value, allow_null)
+  if type(value) ~= 'string' or not rspamd_util.is_valid_utf8(value) or
+      contains_forbidden_octet(value) then
+    return nil
+  end
+  if valid_path(value, allow_null) then
+    return value
+  end
+  if value == '' then
+    return allow_null and '<>' or nil
+  end
+  if #value > MAX_PATH_BYTES - 2 or value:find('[<>]') then
+    return nil
+  end
+  local bracketed = '<' .. value .. '>'
+  return valid_path(bracketed, allow_null) and bracketed or nil
+end
+
 -- original_envelope extracts only the original Rspamd SMTP address views.
 local function original_envelope(task)
   local senders = task:get_from({ 'smtp', 'orig' })
   local recipients = task:get_recipients({ 'smtp', 'orig' })
+  local sender_path = type(senders) == 'table' and type(senders[1]) == 'table' and
+      smtp_path(senders[1].raw, true) or nil
   if type(senders) ~= 'table' or #senders ~= 1 or type(senders[1]) ~= 'table' or
-      not valid_path(senders[1].raw, true) or type(recipients) ~= 'table' or
+      not sender_path or type(recipients) ~= 'table' or
       #recipients < 1 or #recipients > MAX_RECIPIENTS then
     return nil
   end
-  local result = { mail_from = senders[1].raw, rcpt_to = {} }
+  local result = { mail_from = sender_path, rcpt_to = {} }
   for index, recipient in ipairs(recipients) do
-    if type(recipient) ~= 'table' or not valid_path(recipient.raw, false) then
+    local recipient_path = type(recipient) == 'table' and smtp_path(recipient.raw, false) or nil
+    if not recipient_path then
       return nil
     end
-    result.rcpt_to[index] = recipient.raw
+    result.rcpt_to[index] = recipient_path
   end
   return result
 end

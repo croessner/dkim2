@@ -35,7 +35,7 @@ local function response(state, verdict, replay, actions)
   }
 end
 
-local function new_task(headers, full_headers)
+local function new_task(headers, full_headers, bare_envelope)
   local task = {
     headers = headers or {},
     full_headers = full_headers or {},
@@ -57,10 +57,13 @@ local function new_task(headers, full_headers)
   end
 
   function task:get_from()
-    return { { raw = '<sender@example.test>' } }
+    return { { raw = bare_envelope and 'sender@example.test' or '<sender@example.test>' } }
   end
 
   function task:get_recipients()
+    if bare_envelope then
+      return { { raw = 'first@example.test' }, { raw = 'second@example.test' } }
+    end
     return { { raw = '<first@example.test>' }, { raw = '<second@example.test>' } }
   end
 
@@ -216,6 +219,13 @@ assert(#accepted.alterations.remove['Authentication-Results'] == 1)
 assert(accepted.alterations.remove['Authentication-Results'][1] == 1)
 assert(accepted.alterations.add['Authentication-Results'].value ==
   'mx.example.test; dkim2=pass')
+
+local bare_envelope = new_task({ ['Message-Instance'] = true }, nil, true)
+callback(bare_envelope)
+assert(bare_envelope.pre_result == nil)
+assert(last_request.smtp.mail_from == '<sender@example.test>')
+assert(last_request.smtp.rcpt_to[1] == '<first@example.test>')
+assert(last_request.smtp.rcpt_to[2] == '<second@example.test>')
 
 pending_response = response('FAIL', 'reject', 'replayed')
 pending_response.verification.state = 'PASS'
