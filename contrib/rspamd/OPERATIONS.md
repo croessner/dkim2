@@ -50,6 +50,17 @@ after the action-setting phases even when another filter has set a pre-result. C
 idempotent symbols must remain observation/output-only and must not change the
 message action after this boundary.
 
+Rspamd 4.1.5 models this as stage ordering, not as cross-stage symbol
+dependencies. Its [version-pinned symbol-cache scheduler][rspamd-415-order]
+appends every postfilter before every idempotent symbol; the shipped
+`GREYLIST_SAVE` and this module's
+`DKIM2_NAUTHILUS_POLICY` are postfilters, while `DKIM2_RETRY_FINALIZE` is
+idempotent. Cross-stage dependencies are rejected by Rspamd and must not be
+used as a substitute. The digest-pinned compatibility test asserts all three
+stage contracts against the supported distribution.
+
+[rspamd-415-order]: https://github.com/rspamd/rspamd/blob/4.1.5/src/libserver/symcache/symcache_impl.cxx#L689-L694
+
 ## Prerequisites
 
 Before installation, verify all of the following:

@@ -4,6 +4,9 @@
 local module_path = assert(arg[1], 'retry cache module path is required')
 local registered_script
 local calls = {}
+local redis_error
+local redis_reply
+local redis_started = true
 
 local redis = {
   add_redis_script = function(script)
@@ -12,8 +15,12 @@ local redis = {
   end,
   exec_redis_script = function(id, params, callback, keys, args)
     calls[#calls + 1] = { id = id, params = params, keys = keys, args = args }
-    callback(nil, { args[1] == 'claim' and 'MISS' or args[1] == 'store' and 'STORED' or 'ARMED' })
-    return true
+    if not redis_started then
+      return false
+    end
+    callback(redis_error, redis_reply or
+      { args[1] == 'claim' and 'MISS' or args[1] == 'store' and 'STORED' or 'ARMED' })
+    return redis_started
   end,
 }
 
@@ -89,6 +96,31 @@ assert(calls[2].args[1] == 'store' and calls[2].args[5] == '{"validated":true}')
 
 assert(cache:finalize({}, key, '0123456789abcdef', true, function(value) status = value end))
 assert(status == 'ARMED' and calls[3].args[1] == 'arm')
+
+redis_error = 'unavailable'
+status = 'unexpected'
+assert(cache:claim({}, key, '0123456789abcdef', function(value) status = value end))
+assert(status == nil, 'Redis errors must fail closed without inventing a cache state')
+redis_error = nil
+
+redis_reply = { 'HIT' }
+status = 'unexpected'
+assert(cache:claim({}, key, '0123456789abcdef', function(value) status = value end))
+assert(status == nil, 'HIT without a payload must fail closed')
+
+redis_reply = { 'UNKNOWN' }
+status = 'unexpected'
+assert(cache:claim({}, key, '0123456789abcdef', function(value) status = value end))
+assert(status == nil, 'unknown Redis script states must fail closed')
+redis_reply = nil
+
+redis_started = false
+assert(not cache:claim({}, key, '0123456789abcdef', function() end),
+  'unscheduled Redis work must be reported synchronously')
+redis_started = true
+
+assert(cache:identity({}) == nil)
+assert(not cache:store({}, key, '0123456789abcdef', '', function() end))
 
 assert(cache_module.new({ redis = redis, hash = hash, secret = 'short', ttl_ms = 86400000,
   authority_generation = 'generation-1', lease_ms = 30000 }) == nil)

@@ -1,0 +1,91 @@
+{
+  "api_version": "v1",
+  "draft": "draft-ietf-dkim-dkim2-spec-06",
+  "verification": {
+    "state": "PASS",
+    "primary_reason": "none",
+    "scope": "chain",
+    "historical_content": "complete",
+    "historical_signatures": "complete",
+    "custody_structure": "nd_links_evaluated",
+    "target": {"sequence": "2", "instance": "2"},
+    "checks": [{"class": "protocol", "reason": "none"}],
+    "signature_sets": []
+  },
+  "authentication": {"state": "PASS", "primary_reason": "none"},
+  "policy": {
+    "mode": "strict",
+    "verdict": "continue",
+    "primary_reason": "protocol_pass",
+    "do_not_modify": "not_requested",
+    "do_not_explode": "indeterminate",
+    "dns_testing_effective": false,
+    "feedback": {
+      "requested": false,
+      "relay_required": false,
+      "history_coverage": "complete"
+    },
+    "findings": [{"reason": "protocol_pass", "severity": "info"}]
+  },
+  "replay": {"class": "first_seen"},
+  "disposition": "continue",
+  "actions": [],
+  "verifier_projection": {
+    "schema": "dkim2.verifier-projection.v1",
+    "draft": "draft-ietf-dkim-dkim2-spec-06",
+    "binding_algorithm": "sha-256",
+    "binding": "+qKU31mG9rfjJVOLNVZ3t4tFASDfjtiLuifxku0M1Wc=",
+    "hops": [
+      {
+        "sequence": "1",
+        "message_instance": "1",
+        "hop_binding": "XjzrXaCLipVnxijVsqD8kSNKlgcszIlTAhlYuR9/jC8=",
+        "signer_domain": "historical.example.test",
+        "signature_algorithms": ["rsa-sha256"],
+        "signature_state": "pass",
+        "custody_transition": "origin",
+        "do_not_modify": false,
+        "do_not_explode": false,
+        "feedback": false,
+        "feed_here": false,
+        "exploded": false,
+        "recipe_mode": "unchanged",
+        "recipe_has_header_changes": false,
+        "recipe_body_mode": "absent",
+        "recipe_digest": "shIKOVjSXkh0XI3ScWUfpo5LXt6wZQ7WBk35lcKm75Y=",
+        "change_classes": [],
+        "affected_headers": [],
+        "history_header_state": "matched",
+        "history_body_state": "matched",
+        "body_availability": "known",
+        "change_count": 0,
+        "affected_header_count": 0
+      },
+      {
+        "sequence": "2",
+        "message_instance": "2",
+        "hop_binding": "MvZ4D9OAQIQ3dyfQkVzu2fhtWIk9m4Srf8DZDdxvhpA=",
+        "signer_domain": "example.test",
+        "signature_algorithms": ["ed25519-sha256", "rsa-sha256"],
+        "signature_state": "pass",
+        "custody_transition": "ordinary",
+        "do_not_modify": false,
+        "do_not_explode": true,
+        "feedback": true,
+        "feed_here": false,
+        "exploded": false,
+        "recipe_mode": "applied",
+        "recipe_has_header_changes": true,
+        "recipe_body_mode": "steps",
+        "recipe_digest": "sciPR7Tn1MkjmO+sjFlTgwkNuFWcwbygwqnUTvzXqu4=",
+        "change_classes": ["body.rewrite", "header.rewrite"],
+        "affected_headers": ["subject", "x-trace"],
+        "history_header_state": "matched",
+        "history_body_state": "matched",
+        "body_availability": "known",
+        "change_count": 2,
+        "affected_header_count": 2
+      }
+    ]
+  }
+}

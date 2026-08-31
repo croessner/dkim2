@@ -52,11 +52,35 @@ if printf '%s\n' "$module_output" | grep 'Modules disabled (failed):.*dkim2' >/d
 fi
 
 symbol_output=$(run_rspamadm configdump -d)
-for symbol in DKIM2_CHECK DKIM2_NAUTHILUS_POLICY DKIM2_RETRY_FINALIZE; do
-  printf '%s\n' "$symbol_output" | grep "${symbol}" >/dev/null || {
-    echo "missing registered symbol: ${symbol}" >&2
+assert_symbol_type() {
+  symbol=$1
+  expected_type=$2
+  actual_type=$(printf '%s\n' "$symbol_output" | awk -v symbol="$symbol" '
+    $1 == symbol && $2 == "{" { found = 1; next }
+    found && $1 == "type" { gsub(/[";]/, "", $3); actual = $3; found = 0 }
+    found && $1 == "}" { found = 0 }
+    END { if (actual != "") print actual }
+  ')
+  if [ "$actual_type" != "$expected_type" ]; then
+    echo "unexpected symbol type for ${symbol}: ${actual_type:-missing}" >&2
     exit 1
-  }
-done
+  fi
+}
+
+assert_symbol_type DKIM2_CHECK filter
+assert_symbol_type DKIM2_NAUTHILUS_POLICY postfilter
+assert_symbol_type DKIM2_RETRY_FINALIZE idempotent
+
+# Rspamd 4.1.5 rejects cross-stage dependencies, so the supported ordering is
+# structural: GREYLIST_SAVE and Policy are postfilters; finalization is the
+# later idempotent stage. Assert the pinned distribution's greylist contract.
+docker run --rm --entrypoint sh "$image" -c '
+  awk '\''
+    /name = '\''"'"'GREYLIST_SAVE'"'"'\''/ { found = 1; next }
+    found && /type = '\''"'"'postfilter'"'"'\''/ { matched = 1; exit }
+    found && /}\)/ { exit }
+    END { exit !(found && matched) }
+  '\'' /usr/share/rspamd/plugins/greylist.lua
+'
 
 echo 'dkim2 Rspamd 4.1.5 config/dependency test: PASS'

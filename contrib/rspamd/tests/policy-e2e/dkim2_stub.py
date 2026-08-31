@@ -1,28 +1,44 @@
 #!/usr/bin/env python3
-"""Serve one deterministic dkim2d response and persist bounded call evidence."""
+"""Serve deterministic dkim2d scenarios and persist bounded call evidence."""
 
 import argparse
 import json
 import os
 import tempfile
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 
 class State:
     """Own the response bytes and an atomically persisted request counter."""
 
-    def __init__(self, response_path: str, state_path: str) -> None:
-        with open(response_path, "r", encoding="utf-8") as source:
-            document = json.load(source)
-        self.response = json.dumps(document, separators=(",", ":")).encode("utf-8")
+    def __init__(self, response_paths: dict[str, str], state_path: str, control_path: str) -> None:
+        self.responses = {}
+        for name, response_path in response_paths.items():
+            with open(response_path, "r", encoding="utf-8") as source:
+                document = json.load(source)
+            self.responses[name] = json.dumps(document, separators=(",", ":")).encode("utf-8")
         self.state_path = state_path
+        self.control_path = control_path
         self.count = 0
         self.last_request_bytes = 0
+        self.last_mode = "default"
         self.persist()
 
-    def record(self, size: int) -> None:
+    def mode(self) -> str:
+        """Read one closed scenario selector from the runtime control file."""
+        try:
+            with open(self.control_path, "r", encoding="utf-8") as source:
+                mode = json.load(source).get("mode", "default")
+        except (FileNotFoundError, json.JSONDecodeError, OSError):
+            return "default"
+        allowed = {"default", "replayed", "two_hop", "malformed", "timeout"}
+        return mode if mode in allowed else "default"
+
+    def record(self, size: int, mode: str) -> None:
         self.count += 1
         self.last_request_bytes = size
+        self.last_mode = mode
         self.persist()
 
     def persist(self) -> None:
@@ -32,7 +48,11 @@ class State:
         try:
             with os.fdopen(descriptor, "w", encoding="utf-8") as target:
                 json.dump(
-                    {"calls": self.count, "last_request_bytes": self.last_request_bytes},
+                    {
+                        "calls": self.count,
+                        "last_mode": self.last_mode,
+                        "last_request_bytes": self.last_request_bytes,
+                    },
                     target,
                     sort_keys=True,
                 )
@@ -77,8 +97,13 @@ class Handler(BaseHTTPRequestHandler):
         if not self.headers.get("X-DKIM2-Capability"):
             self.send_error(401)
             return
-        self.server.state.record(len(request))
-        response = self.server.state.response
+        mode = self.server.state.mode()
+        self.server.state.record(len(request), mode)
+        if mode == "timeout":
+            time.sleep(3)
+        response = b"{" if mode == "malformed" else self.server.state.responses.get(
+            mode, self.server.state.responses["default"]
+        )
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(response)))
@@ -92,10 +117,21 @@ class Handler(BaseHTTPRequestHandler):
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--response", required=True)
+    parser.add_argument("--replayed-response", required=True)
+    parser.add_argument("--two-hop-response", required=True)
     parser.add_argument("--state", required=True)
+    parser.add_argument("--control", required=True)
     args = parser.parse_args()
     server = ThreadingHTTPServer(("127.0.0.1", 8080), Handler)
-    server.state = State(args.response, args.state)
+    server.state = State(
+        {
+            "default": args.response,
+            "replayed": args.replayed_response,
+            "two_hop": args.two_hop_response,
+        },
+        args.state,
+        args.control,
+    )
     server.serve_forever()
 
 

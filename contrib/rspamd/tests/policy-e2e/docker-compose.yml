@@ -20,8 +20,14 @@ services:
       - /fixture/dkim2_stub.py
       - --response
       - /fixture/dkim2-response.json
+      - --replayed-response
+      - /fixture/dkim2-replayed-response.json
+      - --two-hop-response
+      - /fixture/dkim2-two-hop-response.json
       - --state
       - /state/dkim2-stub-state.json
+      - --control
+      - /state/dkim2-stub-control.json
     volumes:
       - .:/fixture:ro
       - ${POLICY_E2E_RUNTIME:?runtime directory is required}/state:/state
@@ -72,6 +78,31 @@ services:
       timeout: 2s
       retries: 60
 
+  policy-observer:
+    image: python:3.13-alpine
+    restart: "no"
+    command:
+      - python3
+      - /fixture/policy_observer.py
+      - --cert
+      - /certs/nauthilus-policy.crt
+      - --key
+      - /certs/nauthilus-policy.key
+      - --ca
+      - /certs/policy-e2e-ca.crt
+      - --state
+      - /state/policy-observer-state.json
+      - --control
+      - /state/policy-observer-control.json
+    volumes:
+      - .:/fixture:ro
+      - ${POLICY_E2E_RUNTIME:?runtime directory is required}/state:/state
+      - ${POLICY_E2E_RUNTIME:?runtime directory is required}/certs:/certs:ro
+    networks: [policy-e2e]
+    depends_on:
+      nauthilus-policy:
+        condition: service_healthy
+
   rspamd:
     image: rspamd/rspamd:4.1.5
     restart: "no"
@@ -83,6 +114,8 @@ services:
         condition: service_healthy
       nauthilus-policy:
         condition: service_healthy
+      policy-observer:
+        condition: service_started
     volumes:
       - ../../plugins.d/dkim2.lua:/etc/rspamd/plugins.d/dkim2.lua:ro
       - ../../modules.local.d/dkim2.conf:/usr/share/rspamd/config/modules.local.d/dkim2.conf:ro

@@ -1,0 +1,174 @@
+package verify
+
+import (
+	"bytes"
+	"encoding/base64"
+	"encoding/json"
+	"os"
+	"testing"
+
+	"github.com/croessner/dkim2/internal/recipe"
+)
+
+type policyE2EProjectionFixture struct {
+	VerifierProjection struct {
+		Schema  string `json:"schema"`
+		Draft   string `json:"draft"`
+		Binding string `json:"binding"`
+		Hops    []struct {
+			Sequence               uint64   `json:"sequence,string"`
+			MessageInstance        uint64   `json:"message_instance,string"`
+			HopBinding             string   `json:"hop_binding"`
+			SignerDomain           string   `json:"signer_domain"`
+			SignatureAlgorithms    []string `json:"signature_algorithms"`
+			SignatureState         string   `json:"signature_state"`
+			CustodyTransition      string   `json:"custody_transition"`
+			DoNotModify            bool     `json:"do_not_modify"`
+			DoNotExplode           bool     `json:"do_not_explode"`
+			Feedback               bool     `json:"feedback"`
+			FeedHere               bool     `json:"feed_here"`
+			Exploded               bool     `json:"exploded"`
+			RecipeMode             string   `json:"recipe_mode"`
+			RecipeHasHeaderChanges bool     `json:"recipe_has_header_changes"`
+			RecipeBodyMode         string   `json:"recipe_body_mode"`
+			RecipeDigest           string   `json:"recipe_digest"`
+			ChangeClasses          []string `json:"change_classes"`
+			AffectedHeaders        []string `json:"affected_headers"`
+			HistoryHeaderState     string   `json:"history_header_state"`
+			HistoryBodyState       string   `json:"history_body_state"`
+			BodyAvailability       string   `json:"body_availability"`
+			ChangeCount            int      `json:"change_count"`
+			AffectedHeaderCount    int      `json:"affected_header_count"`
+		} `json:"hops"`
+	} `json:"verifier_projection"`
+}
+
+// TestPolicyE2ETwoHopProjectionBinding locks the fixture to the producer's private canonical binding functions.
+func TestPolicyE2ETwoHopProjectionBinding(t *testing.T) {
+	fixture := loadPolicyE2EProjectionFixture(t)
+	hops := make([]VerifierHop, len(fixture.VerifierProjection.Hops))
+
+	for index, source := range fixture.VerifierProjection.Hops {
+		descriptor := policyE2ERecipeDescriptor(t, source.RecipeMode)
+		algorithms := make([]Algorithm, len(source.SignatureAlgorithms))
+		for algorithmIndex, algorithm := range source.SignatureAlgorithms {
+			algorithms[algorithmIndex] = Algorithm(algorithm)
+		}
+
+		hops[index] = VerifierHop{
+			domain: source.SignerDomain, algorithms: algorithms, recipe: descriptor,
+			sequence: source.Sequence, instance: source.MessageInstance,
+			custody: VerifierCustodyTransition(source.CustodyTransition),
+			recipeMode: VerifierRecipeMode(source.RecipeMode),
+			headerState: HistoryDimensionState(source.HistoryHeaderState),
+			bodyState: HistoryDimensionState(source.HistoryBodyState),
+			bodyAvailable: recipe.BodyAvailability(source.BodyAvailability),
+			flags: RevisionFlagFacts{
+				doNotModify: source.DoNotModify, doNotExplode: source.DoNotExplode,
+				feedback: source.Feedback, feedHere: source.FeedHere, exploded: source.Exploded,
+			},
+			sealed: true,
+		}
+		assertPolicyE2ERecipe(t, descriptor, source.RecipeDigest, source.RecipeHasHeaderChanges,
+			source.RecipeBodyMode, source.ChangeClasses, source.AffectedHeaders,
+			source.ChangeCount, source.AffectedHeaderCount)
+		if source.SignatureState != "pass" || !verifierHopShapeValid(hops[index]) {
+			t.Fatalf("hop %d is not coherent with the producer model", index+1)
+		}
+	}
+
+	projectionBinding := verifierProjectionBinding(hops)
+	assertPolicyE2EDigest(t, "projection", projectionBinding[:], fixture.VerifierProjection.Binding)
+	for index := range hops {
+		binding := verifierBoundHopBinding(projectionBinding, hops[index])
+		assertPolicyE2EDigest(t, "hop", binding[:], fixture.VerifierProjection.Hops[index].HopBinding)
+		hops[index].binding = binding
+	}
+
+	projection := VerifierProjection{
+		hops: hops, binding: projectionBinding, draft: fixture.VerifierProjection.Draft,
+		schema: fixture.VerifierProjection.Schema, sealed: true,
+	}
+	if !projection.Valid() {
+		t.Fatal("two-hop fixture does not form a valid producer projection")
+	}
+}
+
+// loadPolicyE2EProjectionFixture strictly loads the tracked HTTP response fixture.
+func loadPolicyE2EProjectionFixture(t *testing.T) policyE2EProjectionFixture {
+	t.Helper()
+	data, err := os.ReadFile(os.Getenv("POLICY_E2E_TWO_HOP_FIXTURE"))
+	if err != nil {
+		t.Fatalf("read two-hop fixture: %v", err)
+	}
+	var fixture policyE2EProjectionFixture
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	if err = decoder.Decode(&fixture); err != nil {
+		t.Fatalf("decode two-hop fixture: %v", err)
+	}
+	return fixture
+}
+
+// policyE2ERecipeDescriptor reconstructs the exact producer-owned recipe descriptor.
+func policyE2ERecipeDescriptor(t *testing.T, mode string) recipe.Descriptor {
+	t.Helper()
+	if mode == string(VerifierRecipeUnchanged) {
+		return recipe.UnchangedDescriptor()
+	}
+	parser, err := recipe.NewParser(recipe.DefaultLimits())
+	if err != nil {
+		t.Fatalf("create recipe parser: %v", err)
+	}
+	plan, _, err := parser.Parse([]byte(`{"h":{"subject":[],"x-trace":[]},"b":[]}`))
+	if err != nil {
+		t.Fatalf("parse recipe: %v", err)
+	}
+	return plan.Descriptor()
+}
+
+// assertPolicyE2ERecipe compares all public descriptor fields with the wire fixture.
+func assertPolicyE2ERecipe(t *testing.T, descriptor recipe.Descriptor, digest string,
+	hasHeaders bool, bodyMode string, changeClasses, affectedHeaders []string,
+	changeCount, affectedHeaderCount int,
+) {
+	t.Helper()
+	actualDigest := descriptor.Digest()
+	assertPolicyE2EDigest(t, "recipe", actualDigest[:], digest)
+	if descriptor.HasHeaderChanges() != hasHeaders || string(descriptor.BodyMode()) != bodyMode ||
+		!slicesEqualStrings(descriptor.ChangeClasses(), changeClasses) ||
+		!bytes.Equal([]byte(stringsJoin(descriptor.AffectedHeaders())), []byte(stringsJoin(affectedHeaders))) ||
+		descriptor.ChangeCount() != changeCount || descriptor.AffectedHeaderCount() != affectedHeaderCount {
+		t.Fatal("recipe descriptor fields do not match the producer model")
+	}
+}
+
+// assertPolicyE2EDigest compares a producer digest with one canonical base64 wire value.
+func assertPolicyE2EDigest(t *testing.T, name string, actual []byte, encoded string) {
+	t.Helper()
+	expected, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil || len(expected) != len(actual) || !bytes.Equal(actual, expected) {
+		t.Fatalf("%s binding = %s, want %s", name, base64.StdEncoding.EncodeToString(actual), encoded)
+	}
+}
+
+// slicesEqualStrings compares producer enum strings without adding another dependency.
+func slicesEqualStrings[T ~string](left []T, right []string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for index := range left {
+		if string(left[index]) != right[index] {
+			return false
+		}
+	}
+	return true
+}
+
+// stringsJoin creates one unambiguous comparison for already bounded header names.
+func stringsJoin(values []string) string {
+	var output string
+	for _, value := range values {
+		output += string(rune(len(value))) + value
+	}
+	return output
+}

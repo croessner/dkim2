@@ -1,0 +1,31 @@
+{
+  "api_version": "v1",
+  "draft": "draft-ietf-dkim-dkim2-spec-06",
+  "verification": {
+    "state": "PASS",
+    "primary_reason": "none",
+    "scope": "current",
+    "historical_content": "not_evaluated",
+    "historical_signatures": "not_evaluated",
+    "custody_structure": "not_evaluated",
+    "checks": [{"class": "protocol", "reason": "none"}],
+    "signature_sets": []
+  },
+  "authentication": {
+    "state": "FAIL",
+    "primary_reason": "duplicate_message_without_exploded"
+  },
+  "policy": {
+    "mode": "strict",
+    "verdict": "reject",
+    "primary_reason": "protocol_fail",
+    "do_not_modify": "not_requested",
+    "do_not_explode": "not_requested",
+    "dns_testing_effective": false,
+    "feedback": {"requested": false, "relay_required": false, "history_coverage": "complete"},
+    "findings": [{"reason": "protocol_fail", "severity": "permanent"}]
+  },
+  "replay": {"class": "replayed"},
+  "disposition": "reject",
+  "actions": []
+}
