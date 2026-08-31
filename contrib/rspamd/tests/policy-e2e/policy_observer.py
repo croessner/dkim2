@@ -26,6 +26,7 @@ class State:
         self.last_request = None
         self.last_upstream_status = None
         self.last_upstream_error = None
+        self.last_request_id_matches = None
         self.persist()
 
     def mode(self) -> str:
@@ -52,13 +53,25 @@ class State:
             self.forwarded_calls += 1
             self.persist()
 
-    def record_upstream_response(self, status: int, body: bytes) -> None:
-        """Persist bounded error diagnostics without retaining successful bodies."""
+    def record_upstream_response(
+        self, status: int, body: bytes, request_id: object
+    ) -> None:
+        """Persist bounded status and correlation evidence without retaining successful bodies."""
         with self.lock:
             self.last_upstream_status = status
             self.last_upstream_error = (
                 body[:4096].decode("utf-8", errors="replace") if status >= 400 else None
             )
+            self.last_request_id_matches = False
+            if status < 400:
+                try:
+                    response = json.loads(body)
+                    self.last_request_id_matches = (
+                        isinstance(request_id, str)
+                        and response.get("request_id") == request_id
+                    )
+                except (json.JSONDecodeError, AttributeError):
+                    pass
             self.persist()
 
     def persist(self) -> None:
@@ -76,6 +89,7 @@ class State:
                         "last_request": self.last_request,
                         "last_upstream_status": self.last_upstream_status,
                         "last_upstream_error": self.last_upstream_error,
+                        "last_request_id_matches": self.last_request_id_matches,
                     },
                     target,
                     sort_keys=True,
@@ -133,7 +147,9 @@ class Handler(BaseHTTPRequestHandler):
         }
         status, content_type, response_body = self.forward(body, headers)
         self.server.state.record_forward()
-        self.server.state.record_upstream_response(status, response_body)
+        self.server.state.record_upstream_response(
+            status, response_body, request.get("request_id")
+        )
         self.send_response(status)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(response_body)))

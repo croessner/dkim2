@@ -127,11 +127,12 @@ Nauthilus `permit` continues without forcing accept. `deny` and non-retryable
 `indeterminate` reject permanently. Retryable `indeterminate`, unexpected
 `not_applicable`, malformed responses, HTTP failures, and authentication or
 transport failures soft reject with local generic text. A successful response
-must use `application/json` and strict RFC 8259 JSON, and its required
-`request_id` must exactly match the generated request identifier. Status codes,
-retryability, and effects must satisfy the closed Nauthilus taxonomy. The
-finalizer arms the cache only for an effective soft reject or greylist action.
-Every permanent reject or accepted/continued terminal result consumes the entry.
+must use `application/json` and strict RFC 8259 JSON, contain the required
+`request_id`, and return exactly the fresh correlation identifier sent by this
+scan. Status codes, retryability, and effects must satisfy the closed Nauthilus
+taxonomy. The finalizer arms the cache only for an effective soft reject or
+greylist action. Every permanent reject or accepted/continued terminal result
+consumes the entry.
 
 The module emits only zero-score, option-free symbols. This includes closed
 symbols for the daemon's authenticated `donotmodify` and `donotexplode`
@@ -163,8 +164,8 @@ so it does not replace the daemon-owned DKIM2 result.
 ## Symbols
 
 The parent symbol is `DKIM2_CHECK`. Virtual symbols cover applicability, the
-four final authentication states, replay classes, local policy verdicts, and
-adapter service failure:
+four final authentication states, replay classes, local policy verdicts,
+Nauthilus outcomes, and adapter service failure:
 
 ```text
 DKIM2_NOT_APPLICABLE
@@ -190,7 +191,14 @@ DKIM2_DONOTEXPLODE_VIOLATED
 DKIM2_DONOTEXPLODE_INDETERMINATE
 DKIM2_DONOTEXPLODE_NOT_EVALUATED
 DKIM2_SERVICE_ERROR
+DKIM2_NAUTHILUS_PERMIT
+DKIM2_NAUTHILUS_DENY
+DKIM2_NAUTHILUS_INDETERMINATE
 ```
+
+`DKIM2_NAUTHILUS_POLICY` is the postfilter execution symbol and
+`DKIM2_RETRY_FINALIZE` is the idempotent retry-state finalizer. They are
+scheduling internals rather than result symbols and must not receive scores.
 
 Consumers should depend on `DKIM2_CHECK`. Do not assign positive or negative
 scores to the state symbols merely to reproduce the daemon disposition; the

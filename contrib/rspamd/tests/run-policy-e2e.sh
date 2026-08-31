@@ -19,7 +19,7 @@ cleanup() {
   STATUS=$?
   if test "$STATUS" -ne 0 && test -f "$ENV_FILE"; then
     if test -f "$RUNTIME_DIR/state/policy-observer-state.json"; then
-      jq '{calls, forwarded_calls, last_mode, last_upstream_status, last_upstream_error}' \
+      jq '{calls, forwarded_calls, last_mode, last_upstream_status, last_upstream_error, last_request_id_matches}' \
         "$RUNTIME_DIR/state/policy-observer-state.json" >&2 || true
     fi
     docker compose --project-name "$PROJECT_NAME" --env-file "$ENV_FILE" \
@@ -202,6 +202,7 @@ run_scan scan-tempfail.lua
 test "$(stub_calls)" -eq 1
 test "$(observer_value calls)" -eq 1
 test "$(observer_value forwarded_calls)" -eq 1
+test "$(observer_value last_request_id_matches)" = true
 assert_policy_request 203.0.113.25 greylist
 
 sleep 2
@@ -209,6 +210,7 @@ run_scan scan-accept.lua
 test "$(stub_calls)" -eq 1
 test "$(observer_value calls)" -eq 2
 test "$(observer_value forwarded_calls)" -eq 2
+test "$(observer_value last_request_id_matches)" = true
 
 # A later duplicate returns to dkim2d after consume and replay rejection bypasses Policy.
 set_dkim_mode replayed
@@ -382,4 +384,4 @@ FINAL_FORWARDED_CALLS=$(observer_value forwarded_calls)
 printf '%s\n' \
   "DKIM2/Rspamd/Nauthilus Policy E2E: PASS" \
   "stub_calls=$FINAL_STUB_CALLS policy_calls=$FINAL_POLICY_CALLS forwarded_policy_calls=$FINAL_FORWARDED_CALLS" \
-  "request_projection=exact smtp_peers=203.0.113.25,198.51.100.25"
+  "request_projection=exact response_request_id=correlated smtp_peers=203.0.113.25,198.51.100.25"

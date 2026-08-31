@@ -34,7 +34,10 @@ local task = {
   get_metric_action = function() return 'greylist' end,
   get_user = function() return nil end,
   get_size = function() return 48312 end,
-  has_symbol = function(_, symbol) return symbol == 'DMARC_POLICY_REJECT' or symbol == 'R_SPF_SOFTFAIL' end,
+  has_symbol = function(_, symbol)
+    return symbol == 'DMARC_BAD_POLICY' or symbol == 'DMARC_DNSFAIL' or
+      symbol == 'DMARC_POLICY_REJECT' or symbol == 'R_SPF_SOFTFAIL'
+  end,
 }
 local module = assert(loadfile(module_path))()
 local client = assert(module.new({
@@ -67,8 +70,8 @@ assert(metric_score_calls == 0,
 assert(sent.target.namespace == 'dkim2' and sent.target.action == 'accept-message-instance')
 assert(sent.resource.attributes['dkim2.projection_schema'].string == 'dkim2.verifier-projection.v1')
 assert(sent.environment.attributes['rspamd.smtp_client_ip'].string == '2001:db8::25')
-assert(sent.environment.attributes['rspamd.normalized_signals'].strings[1] == 'dmarc.fail')
-assert(sent.environment.attributes['rspamd.normalized_signals'].strings[2] == 'spf.softfail')
+assert(table.concat(sent.environment.attributes['rspamd.normalized_signals'].strings, ',') ==
+  'dmarc.fail,dmarc.permerror,dmarc.temperror,spf.softfail')
 assert(sent.options.include_diagnostics == false)
 assert(module.decision_action(result) == 'continue')
 
@@ -160,6 +163,12 @@ response_content_type = 'application/json; charset=utf-8'
 assert(not client:request(task, {}, '', function() end), 'missing captured SMTP peer must fail closed')
 assert(sent.environment.attributes['rspamd.smtp_client_ip'].string == '2001:db8::25',
   'Policy must use the caller-captured peer instead of reading the task again')
+
+local valid_random_hex = util.random_hex
+util.random_hex = function() return 'not-a-hex-request-id' end
+assert(not client:request(task, {}, '2001:db8::25', function() end),
+  'a malformed locally generated Policy request_id must fail closed before I/O')
+util.random_hex = valid_random_hex
 
 local missing_action_task = setmetatable({
   get_metric_result = function() return { score = 6.2 } end,

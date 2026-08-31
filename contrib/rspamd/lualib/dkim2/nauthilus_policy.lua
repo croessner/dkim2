@@ -8,6 +8,7 @@ local MAX_PASSWORD_BYTES = 1024
 local SIGNAL_SYMBOLS = {
   ARC_ALLOW = 'arc.pass', ARC_INVALID = 'arc.invalid', ARC_REJECT = 'arc.fail',
   CLAM_VIRUS = 'malware.detected', DMARC_POLICY_ALLOW = 'dmarc.pass',
+  DMARC_BAD_POLICY = 'dmarc.permerror', DMARC_DNSFAIL = 'dmarc.temperror',
   DMARC_POLICY_QUARANTINE = 'dmarc.fail', DMARC_POLICY_REJECT = 'dmarc.fail',
   PHISHING = 'phishing.detected', R_DKIM_ALLOW = 'dkim.pass',
   R_DKIM_PERMFAIL = 'dkim.permerror', R_DKIM_REJECT = 'dkim.fail',
@@ -146,6 +147,12 @@ local function valid_identity(value)
     not contains_forbidden_octet(value)
 end
 
+-- valid_request_id accepts the bounded lowercase hexadecimal correlation IDs generated locally.
+local function valid_request_id(value)
+  return type(value) == 'string' and #value >= 16 and #value <= 128 and
+    value:match('^[0-9a-f]+$') ~= nil
+end
+
 -- valid_username accepts one unambiguous printable Policy-Basic user identity.
 local function valid_username(value)
   return valid_identity(value) and not value:find(':', 1, true) and
@@ -165,8 +172,7 @@ local function validate_response(value, request_id)
     STATUS_CODES[value.status.code] or nil
   if not exact_keys(value, { 'request_id', 'decision_id', 'effect', 'status' },
       { 'obligations', 'advice', 'diagnostics' }) or
-      type(value.request_id) ~= 'string' or value.request_id ~= request_id or
-      #value.request_id == 0 or #value.request_id > 128 or
+      not valid_request_id(value.request_id) or value.request_id ~= request_id or
       type(value.decision_id) ~= 'string' or #value.decision_id == 0 or #value.decision_id > 128 or
       not ({ permit = true, deny = true, not_applicable = true, indeterminate = true })[value.effect] or
       not exact_keys(value.status, { 'code', 'message', 'retryable' }, { 'details' }) or
@@ -320,7 +326,7 @@ function M:request(task, verifier_response, peer_ip, callback)
     return false
   end
   local request_id = self.util.random_hex(16)
-  if type(request_id) ~= 'string' or #request_id < 16 or #request_id > 128 then
+  if not valid_request_id(request_id) then
     return false
   end
   local request = {
