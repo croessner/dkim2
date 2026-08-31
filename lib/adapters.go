@@ -9,7 +9,10 @@ import (
 func adaptServiceResult(input service.Result) VerifyResult {
 	result := adaptServiceResultWithProjection(input, input.PolicyProjection())
 	replayProjection, present := input.ReplayProjection()
-	return result.withReplayProjection(replayProjection, present)
+	result = result.withReplayProjection(replayProjection, present)
+	serviceVerifier, verifierPresent := input.VerifierProjection()
+	verifierProjection, mapped := adaptVerifierProjection(serviceVerifier)
+	return result.withVerifierProjection(verifierProjection, verifierPresent && mapped)
 }
 
 // adaptServiceResultWithProjection maps one service result with an explicit sealed clone.

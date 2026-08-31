@@ -1,0 +1,111 @@
+name: dkim2-policy-e2e
+
+services:
+  redis:
+    image: valkey/valkey:8-alpine
+    restart: "no"
+    command: ["valkey-server", "--save", "", "--appendonly", "no"]
+    networks: [policy-e2e]
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 1s
+      timeout: 1s
+      retries: 30
+
+  dkim2-stub:
+    image: python:3.13-alpine
+    restart: "no"
+    command:
+      - python3
+      - /fixture/dkim2_stub.py
+      - --response
+      - /fixture/dkim2-response.json
+      - --state
+      - /state/dkim2-stub-state.json
+    volumes:
+      - .:/fixture:ro
+      - ${POLICY_E2E_RUNTIME:?runtime directory is required}/state:/state
+    networks: [policy-e2e]
+    ports:
+      - 127.0.0.1:${POLICY_E2E_MILTER_PORT:-19900}:11332
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:8080/healthz"]
+      interval: 1s
+      timeout: 1s
+      retries: 30
+
+  nauthilus-policy:
+    image: ${POLICY_E2E_NAUTHILUS_IMAGE:?Nauthilus image is required}
+    build:
+      context: ${NAUTHILUS_REPO:?Nauthilus checkout is required}
+      dockerfile: Dockerfile
+      args:
+        BUNDLED_NATIVE_PLUGINS: dkim2-reputation
+    restart: "no"
+    command:
+      - /usr/app/nauthilus
+      - -config
+      - /etc/nauthilus/nauthilus.yml
+      - -config-format
+      - yaml
+    environment:
+      POLICY_DKIM2_RSPAMD_PASSWORD: ${POLICY_E2E_PASSWORD:?Policy password is required}
+      POLICY_E2E_REDIS_ENCRYPTION_SECRET: ${POLICY_E2E_REDIS_ENCRYPTION_SECRET:?Redis encryption secret is required}
+      POLICY_E2E_REDIS_PASSWORD_NONCE: ${POLICY_E2E_REDIS_PASSWORD_NONCE:?Redis password nonce is required}
+      PLUGIN_SHA256: ${PLUGIN_SHA256:?plugin checksum is required}
+      SSL_CERT_FILE: /etc/nauthilus/e2e/certs/policy-e2e-ca.crt
+    volumes:
+      - ./nauthilus.yml:/etc/nauthilus/nauthilus.yml:ro
+      - ${NAUTHILUS_REPO:?Nauthilus checkout is required}/server/docs/examples/policy_dkim2_rspamd_verifier.yml:/etc/nauthilus/policy.yml:ro
+      - ${POLICY_E2E_RUNTIME:?runtime directory is required}/certs/nauthilus-policy.crt:/etc/nauthilus/e2e/certs/nauthilus-policy.crt:ro
+      - ${POLICY_E2E_RUNTIME:?runtime directory is required}/certs/nauthilus-policy.key:/etc/nauthilus/e2e/certs/nauthilus-policy.key:ro
+      - ${POLICY_E2E_RUNTIME:?runtime directory is required}/certs/policy-e2e-ca.crt:/etc/nauthilus/e2e/certs/policy-e2e-ca.crt:ro
+    networks: [policy-e2e]
+    ports:
+      - 127.0.0.1:${POLICY_E2E_NAUTHILUS_PORT:-19443}:9443
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/usr/app/healthcheck", "--url", "https://nauthilus-policy:9443/healthz"]
+      interval: 1s
+      timeout: 2s
+      retries: 60
+
+  rspamd:
+    image: rspamd/rspamd:4.1.5
+    restart: "no"
+    network_mode: service:dkim2-stub
+    depends_on:
+      redis:
+        condition: service_healthy
+      dkim2-stub:
+        condition: service_healthy
+      nauthilus-policy:
+        condition: service_healthy
+    volumes:
+      - ../../plugins.d/dkim2.lua:/etc/rspamd/plugins.d/dkim2.lua:ro
+      - ../../modules.local.d/dkim2.conf:/usr/share/rspamd/config/modules.local.d/dkim2.conf:ro
+      - ../../lualib/dkim2:/usr/share/rspamd/config/lua/dkim2:ro
+      - ./rspamd/local.d:/etc/rspamd/local.d:ro
+      - ${POLICY_E2E_RUNTIME:?runtime directory is required}/protected:/etc/dkim2/protected:ro
+      - ${POLICY_E2E_RUNTIME:?runtime directory is required}/certs/policy-e2e-ca.crt:/etc/ssl/certs/policy-e2e-ca.crt:ro
+    healthcheck:
+      test: ["CMD", "rspamadm", "control", "stat"]
+      interval: 1s
+      timeout: 2s
+      retries: 60
+
+  miltertest:
+    image: ${POLICY_E2E_MILTERTEST_IMAGE:?miltertest image is required}
+    build:
+      context: ${MILTERTEST_REPO:?miltertest-go checkout is required}
+      dockerfile: Dockerfile
+    profiles: [tools]
+    networks: [policy-e2e]
+    volumes:
+      - .:/fixture:ro
+
+networks:
+  policy-e2e:
+    internal: true

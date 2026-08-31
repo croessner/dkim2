@@ -1,0 +1,18 @@
+socket:
+  network: tcp
+  address: dkim2-stub:11332
+timeouts:
+  dial: 5s
+  io: 15s
+  total: 30s
+limits:
+  max_frame_bytes: 67108864
+defaults:
+  conn:
+    hostname: client.example.test
+    ip: 203.0.113.25
+  helo: client.example.test
+  from: "<sender@example.test>"
+  rcpt: "<recipient@example.test>"
+log:
+  level: info

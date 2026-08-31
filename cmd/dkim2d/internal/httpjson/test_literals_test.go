@@ -17,6 +17,7 @@ const (
 	testDraftName                    = "draft"
 	testDuplicateName                = "duplicate"
 	testEmptyParametersName          = "empty parameters"
+	testExampleDomain                = "example.test"
 	testExactName                    = "exact"
 	testExpectContinueField          = "Expect: 100-continue\r\n"
 	testForbiddenReason              = "403 Forbidden"

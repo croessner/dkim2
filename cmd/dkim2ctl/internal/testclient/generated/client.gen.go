@@ -935,6 +935,198 @@ func (e VerificationState) Valid() bool {
 	}
 }
 
+// Defines values for VerifierHistoryState.
+const (
+	VerifierHistoryStateMatched     VerifierHistoryState = "matched"
+	VerifierHistoryStateMismatch    VerifierHistoryState = "mismatch"
+	VerifierHistoryStateUnavailable VerifierHistoryState = "unavailable"
+	VerifierHistoryStateUnsupported VerifierHistoryState = "unsupported"
+)
+
+// Valid indicates whether the value is a known member of the VerifierHistoryState enum.
+func (e VerifierHistoryState) Valid() bool {
+	switch e {
+	case VerifierHistoryStateMatched:
+		return true
+	case VerifierHistoryStateMismatch:
+		return true
+	case VerifierHistoryStateUnavailable:
+		return true
+	case VerifierHistoryStateUnsupported:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for VerifierHopBodyAvailability.
+const (
+	VerifierHopBodyAvailabilityKnown       VerifierHopBodyAvailability = "known"
+	VerifierHopBodyAvailabilityUnavailable VerifierHopBodyAvailability = "unavailable"
+)
+
+// Valid indicates whether the value is a known member of the VerifierHopBodyAvailability enum.
+func (e VerifierHopBodyAvailability) Valid() bool {
+	switch e {
+	case VerifierHopBodyAvailabilityKnown:
+		return true
+	case VerifierHopBodyAvailabilityUnavailable:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for VerifierHopChangeClasses.
+const (
+	BodyRewrite   VerifierHopChangeClasses = "body.rewrite"
+	HeaderRewrite VerifierHopChangeClasses = "header.rewrite"
+)
+
+// Valid indicates whether the value is a known member of the VerifierHopChangeClasses enum.
+func (e VerifierHopChangeClasses) Valid() bool {
+	switch e {
+	case BodyRewrite:
+		return true
+	case HeaderRewrite:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for VerifierHopCustodyTransition.
+const (
+	VerifierHopCustodyTransitionNextDomain         VerifierHopCustodyTransition = "next_domain"
+	VerifierHopCustodyTransitionOrdinary           VerifierHopCustodyTransition = "ordinary"
+	VerifierHopCustodyTransitionOrigin             VerifierHopCustodyTransition = "origin"
+	VerifierHopCustodyTransitionTerminalNextDomain VerifierHopCustodyTransition = "terminal_next_domain"
+)
+
+// Valid indicates whether the value is a known member of the VerifierHopCustodyTransition enum.
+func (e VerifierHopCustodyTransition) Valid() bool {
+	switch e {
+	case VerifierHopCustodyTransitionNextDomain:
+		return true
+	case VerifierHopCustodyTransitionOrdinary:
+		return true
+	case VerifierHopCustodyTransitionOrigin:
+		return true
+	case VerifierHopCustodyTransitionTerminalNextDomain:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for VerifierHopRecipeBodyMode.
+const (
+	VerifierHopRecipeBodyModeAbsent      VerifierHopRecipeBodyMode = "absent"
+	VerifierHopRecipeBodyModeSteps       VerifierHopRecipeBodyMode = "steps"
+	VerifierHopRecipeBodyModeUnavailable VerifierHopRecipeBodyMode = "unavailable"
+)
+
+// Valid indicates whether the value is a known member of the VerifierHopRecipeBodyMode enum.
+func (e VerifierHopRecipeBodyMode) Valid() bool {
+	switch e {
+	case VerifierHopRecipeBodyModeAbsent:
+		return true
+	case VerifierHopRecipeBodyModeSteps:
+		return true
+	case VerifierHopRecipeBodyModeUnavailable:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for VerifierHopRecipeMode.
+const (
+	Applied   VerifierHopRecipeMode = "applied"
+	Unchanged VerifierHopRecipeMode = "unchanged"
+)
+
+// Valid indicates whether the value is a known member of the VerifierHopRecipeMode enum.
+func (e VerifierHopRecipeMode) Valid() bool {
+	switch e {
+	case Applied:
+		return true
+	case Unchanged:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for VerifierHopSignatureAlgorithms.
+const (
+	VerifierAlgorithmEd25519SHA256 VerifierHopSignatureAlgorithms = "ed25519-sha256"
+	VerifierAlgorithmEd25519SHA512 VerifierHopSignatureAlgorithms = "ed25519-sha512"
+	VerifierAlgorithmRSASHA256     VerifierHopSignatureAlgorithms = "rsa-sha256"
+	VerifierAlgorithmRSASHA512     VerifierHopSignatureAlgorithms = "rsa-sha512"
+)
+
+// Valid indicates whether the value is a known member of the VerifierHopSignatureAlgorithms enum.
+func (e VerifierHopSignatureAlgorithms) Valid() bool {
+	switch e {
+	case VerifierAlgorithmEd25519SHA256:
+		return true
+	case VerifierAlgorithmEd25519SHA512:
+		return true
+	case VerifierAlgorithmRSASHA256:
+		return true
+	case VerifierAlgorithmRSASHA512:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for VerifierHopSignatureState.
+const (
+	VerifierHopSignatureStatePass VerifierHopSignatureState = "pass"
+)
+
+// Valid indicates whether the value is a known member of the VerifierHopSignatureState enum.
+func (e VerifierHopSignatureState) Valid() bool {
+	switch e {
+	case VerifierHopSignatureStatePass:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for VerifierProjectionBindingAlgorithm.
+const (
+	Sha256 VerifierProjectionBindingAlgorithm = "sha-256"
+)
+
+// Valid indicates whether the value is a known member of the VerifierProjectionBindingAlgorithm enum.
+func (e VerifierProjectionBindingAlgorithm) Valid() bool {
+	switch e {
+	case Sha256:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for VerifierProjectionSchema.
+const (
+	Dkim2VerifierProjectionV1 VerifierProjectionSchema = "dkim2.verifier-projection.v1"
+)
+
+// Valid indicates whether the value is a known member of the VerifierProjectionSchema enum.
+func (e VerifierProjectionSchema) Valid() bool {
+	switch e {
+	case Dkim2VerifierProjectionV1:
+		return true
+	default:
+		return false
+	}
+}
+
 // APIVersion defines model for APIVersion.
 type APIVersion string
 
@@ -1127,6 +1319,9 @@ type ProcessResponse struct {
 
 	// Verification Message-local cryptographic evidence; replay may change the final authentication state.
 	Verification VerificationResult `json:"verification"`
+
+	// VerifierProjection Transport-neutral sealed verifier evidence for a complete ordinary authenticated chain.
+	VerifierProjection *VerifierProjection `json:"verifier_projection,omitempty"`
 }
 
 // ReadinessResponse defines model for ReadinessResponse.
@@ -1163,6 +1358,9 @@ type ReviseRequest struct {
 	Message      MessageInput `json:"message"`
 	Smtp         SMTPInput    `json:"smtp"`
 }
+
+// SHA256Binding defines model for SHA256Binding.
+type SHA256Binding = []byte
 
 // SMTPInput defines model for SMTPInput.
 type SMTPInput struct {
@@ -1247,6 +1445,72 @@ type VerificationTarget struct {
 	Instance CanonicalUint64 `json:"instance"`
 	Sequence CanonicalUint64 `json:"sequence"`
 }
+
+// VerifierHistoryState defines model for VerifierHistoryState.
+type VerifierHistoryState string
+
+// VerifierHop defines model for VerifierHop.
+type VerifierHop struct {
+	AffectedHeaderCount    int                              `json:"affected_header_count"`
+	AffectedHeaders        []string                         `json:"affected_headers"`
+	BodyAvailability       VerifierHopBodyAvailability      `json:"body_availability"`
+	ChangeClasses          []VerifierHopChangeClasses       `json:"change_classes"`
+	ChangeCount            int                              `json:"change_count"`
+	CustodyTransition      VerifierHopCustodyTransition     `json:"custody_transition"`
+	DoNotExplode           bool                             `json:"do_not_explode"`
+	DoNotModify            bool                             `json:"do_not_modify"`
+	Exploded               bool                             `json:"exploded"`
+	FeedHere               bool                             `json:"feed_here"`
+	Feedback               bool                             `json:"feedback"`
+	HistoryBodyState       VerifierHistoryState             `json:"history_body_state"`
+	HistoryHeaderState     VerifierHistoryState             `json:"history_header_state"`
+	HopBinding             SHA256Binding                    `json:"hop_binding"`
+	MessageInstance        CanonicalUint64                  `json:"message_instance"`
+	RecipeBodyMode         VerifierHopRecipeBodyMode        `json:"recipe_body_mode"`
+	RecipeDigest           SHA256Binding                    `json:"recipe_digest"`
+	RecipeHasHeaderChanges bool                             `json:"recipe_has_header_changes"`
+	RecipeMode             VerifierHopRecipeMode            `json:"recipe_mode"`
+	Sequence               CanonicalUint64                  `json:"sequence"`
+	SignatureAlgorithms    []VerifierHopSignatureAlgorithms `json:"signature_algorithms"`
+	SignatureState         VerifierHopSignatureState        `json:"signature_state"`
+	SignerDomain           string                           `json:"signer_domain"`
+}
+
+// VerifierHopBodyAvailability defines model for VerifierHop.BodyAvailability.
+type VerifierHopBodyAvailability string
+
+// VerifierHopChangeClasses defines model for VerifierHop.ChangeClasses.
+type VerifierHopChangeClasses string
+
+// VerifierHopCustodyTransition defines model for VerifierHop.CustodyTransition.
+type VerifierHopCustodyTransition string
+
+// VerifierHopRecipeBodyMode defines model for VerifierHop.RecipeBodyMode.
+type VerifierHopRecipeBodyMode string
+
+// VerifierHopRecipeMode defines model for VerifierHop.RecipeMode.
+type VerifierHopRecipeMode string
+
+// VerifierHopSignatureAlgorithms defines model for VerifierHop.SignatureAlgorithms.
+type VerifierHopSignatureAlgorithms string
+
+// VerifierHopSignatureState defines model for VerifierHop.SignatureState.
+type VerifierHopSignatureState string
+
+// VerifierProjection Transport-neutral sealed verifier evidence for a complete ordinary authenticated chain.
+type VerifierProjection struct {
+	Binding          SHA256Binding                      `json:"binding"`
+	BindingAlgorithm VerifierProjectionBindingAlgorithm `json:"binding_algorithm"`
+	Draft            DraftVersion                       `json:"draft"`
+	Hops             []VerifierHop                      `json:"hops"`
+	Schema           VerifierProjectionSchema           `json:"schema"`
+}
+
+// VerifierProjectionBindingAlgorithm defines model for VerifierProjection.BindingAlgorithm.
+type VerifierProjectionBindingAlgorithm string
+
+// VerifierProjectionSchema defines model for VerifierProjection.Schema.
+type VerifierProjectionSchema string
 
 // BadRequest defines model for BadRequest.
 type BadRequest = ErrorResponse

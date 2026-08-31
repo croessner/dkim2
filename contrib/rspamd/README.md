@@ -6,13 +6,16 @@ transport adapter only. DKIM2 parsing, cryptography, recipes, DNS, local DKIM2
 policy, replay coordination, disposition, and the optional
 `Authentication-Results` value remain owned by `dkim2d`.
 
-The supported compatibility floor is Rspamd 4.1.5. The module uses a normal
-asynchronous filter symbol, so dependent normal symbols and composites can use
-its virtual result symbols. It is neither a prefilter nor a postfilter.
+The supported compatibility floor is Rspamd 4.1.5. A normal asynchronous
+filter resolves a privacy-preserving Redis retry result before calling
+`dkim2d`. A later postfilter sends the validated verifier projection and
+bounded current-scan facts to the existing generic Nauthilus Policy API. A
+final idempotent symbol runs after all filters, postfilters, and composites to
+arm retryable results or consume terminal results from the effective action.
 
 See [OPERATIONS.md](OPERATIONS.md) for the complete operator runbook, including
 configuration reference, staged rollout, acceptance checks, troubleshooting,
-capability rotation, rollback, DSN boundaries, and future Nauthilus operation.
+credential rotation, Redis operation, rollback, and DSN boundaries.
 
 ## Installation
 
@@ -21,6 +24,8 @@ Install the files using the paths compiled into the target Rspamd package:
 ```text
 plugins.d/dkim2.lua
   -> $LOCAL_CONFDIR/plugins.d/dkim2.lua
+lualib/dkim2/*.lua
+  -> $CONFDIR/lua/dkim2/*.lua
 modules.local.d/dkim2.conf
   -> $CONFDIR/modules.local.d/dkim2.conf
 local.d/dkim2.conf.example
@@ -50,6 +55,15 @@ with its matching TLS private-network listener. Never publish or proxy the
 daemon port. Reload or restart Rspamd whenever the generation-bound capability
 or PKI material is rotated.
 
+The retry cache uses a separate protected 32-64 byte binary HMAC key and a
+required opaque authority generation. Rotate the generation whenever the
+dkim2d verifier build/schema, local policy, replay authority or namespace,
+endpoint tenant, or process-capability generation changes. Its Redis
+ACL is limited to `dkim2:retry:v1:*` and the script load/execute operations
+needed by Rspamd. The generic Nauthilus client uses verified HTTPS and a
+Policy-Basic password read from a protected file; neither credential belongs in
+UCL, environment variables, logs, or diagnostics.
+
 Run before activation:
 
 ```text
@@ -64,11 +78,26 @@ compiler:
 contrib/rspamd/tests/run.sh
 ```
 
-## Behavior
+The digest-pinned Rspamd 4.1.5 loader, UCL, Redis discovery, greylist
+dependency, and active-module proof requires Docker:
+
+```text
+contrib/rspamd/tests/rspamd-4.1.5/configtest.sh
+```
+
+## Behavior and ordering
 
 Messages containing neither `Message-Instance` nor `DKIM2-Signature` continue
-without daemon I/O. Every message containing either field family is sent to
-`dkim2d`; the Lua module does not parse DKIM2 fields.
+without daemon, Redis, or Policy I/O. For an applicable message, the normal
+filter derives a keyed versioned identity over the exact SMTP peer, message,
+sender path, ordered recipient paths including duplicates, DKIM2 draft,
+projection schema, and operator-owned authority generation. Raw values never
+appear in the Redis key.
+
+An armed cache hit is atomically claimed with an owner and lease. A miss calls
+`dkim2d`; an eligible validated `PASS`/`chain` response is acknowledged in
+Redis as `provisional` before Rspamd consumes it. Concurrent provisional or
+leased entries fail temporarily instead of reusing first-seen evidence.
 
 The request carries the unchanged Rspamd message buffer plus the original raw
 SMTP sender and recipient paths. The module accepts at most 32 MiB of message
@@ -84,6 +113,23 @@ contract failures use `failure_mode`:
 - `tempfail` is the secure default.
 - `continue` is an explicit fail-open pilot setting and remains visible in
   `configdump`, startup logs, and the `DKIM2_SERVICE_ERROR` symbol.
+
+Only a complete `PASS`/`chain` projection whose daemon policy and disposition
+are `accept` or `continue` reaches Nauthilus. The request uses generic
+`POST /api/v1/policy/decisions`, target
+`dkim2/accept-message-instance`, and local nested `dkim2.*` and `rspamd.*`
+attributes. The exact MTA-supplied peer is captured once from
+`task:get_from_ip()` and reused for both cache identity and Policy request;
+Rspamd
+does not submit reputation or provider/plugin facts.
+
+Nauthilus `permit` continues without forcing accept. `deny` and non-retryable
+`indeterminate` reject permanently. Retryable `indeterminate`, unexpected
+`not_applicable`, malformed responses, HTTP failures, and authentication or
+transport failures soft reject with local generic text. A successful response
+must use `application/json` and strict RFC 8259 JSON. The finalizer arms the
+cache only for an effective soft reject or greylist action. Every permanent
+reject or accepted/continued terminal result consumes the entry.
 
 The module emits only zero-score, option-free symbols. This includes closed
 symbols for the daemon's authenticated `donotmodify` and `donotexplode`
@@ -183,22 +229,12 @@ extension that requests the EOH macro and exposes its exact stage-bound value,
 or it must retain the separate purpose-specific DKIM2 Milter. Do not tunnel the
 origin value through a message header or infer it from MIME structure.
 
-## Future Nauthilus policy
+## Retry cache crash boundary
 
-Rspamd should continue to call only `dkim2d`. Once configured, `dkim2d` can
-send one bounded complete-chain aggregate to Nauthilus target
-`dkim2/accept-message-instance`. Nauthilus owns local admissibility and
-reputation; it must not rewrite cryptographic verification state.
-
-The external decision must occur before the one atomic replay mutation. A
-temporary Nauthilus failure after replay insertion would otherwise turn the
-SMTP retry into an apparent duplicate. The required future order is:
-
-```text
-verify -> local DKIM2 policy -> Nauthilus -> atomic replay gate -> disposition
-```
-
-No Rspamd module change is needed when the final `dkim2d` disposition and
-action-plan contract remains stable. A separate postfilter is needed only if a
-future policy explicitly consumes completed Rspamd-owned score or reputation
-facts; chain-owned reputation does not require it.
+There is no cross-service transaction between the replay mutation in `dkim2d`
+and the acknowledged provisional write in Rspamd Redis. A worker or Redis
+failure in that narrow interval can make the SMTP retry appear replayed to
+`dkim2d`. This is a documented operational watchpoint, not a reason to weaken
+replay detection. Monitor daemon success followed by retry-cache write failure,
+keep Redis durable for the configured retry window, and preserve evidence when
+investigating the condition.

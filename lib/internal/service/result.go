@@ -28,19 +28,21 @@ type SignatureSetFact struct {
 
 // Result is an immutable internal current-verification outcome.
 type Result struct {
-	draft                string
-	state                State
-	scope                Scope
-	historicalContent    HistoricalState
-	historicalSignatures HistoricalState
-	custody              Custody
-	target               Target
-	primaryReason        Reason
-	checks               []CheckFact
-	signatures           []SignatureSetFact
-	policyProjection     policy.Projection
-	replayProjection     ReplayProjection
-	hasReplayProjection  bool
+	draft                 string
+	state                 State
+	scope                 Scope
+	historicalContent     HistoricalState
+	historicalSignatures  HistoricalState
+	custody               Custody
+	target                Target
+	primaryReason         Reason
+	checks                []CheckFact
+	signatures            []SignatureSetFact
+	policyProjection      policy.Projection
+	replayProjection      ReplayProjection
+	hasReplayProjection   bool
+	verifierProjection    VerifierProjection
+	hasVerifierProjection bool
 }
 
 // newResult constructs an immutable populated service result.
@@ -189,6 +191,24 @@ func (r Result) ReplayProjection() (ReplayProjection, bool) {
 		return ReplayProjection{}, false
 	}
 	return r.replayProjection.clone(), true
+}
+
+// withVerifierProjection attaches one independently cloned complete verifier projection.
+func (r Result) withVerifierProjection(projection VerifierProjection) Result {
+	if !projection.Valid() || r.state != StatePASS || r.scope != ScopeChain {
+		return r
+	}
+	r.verifierProjection = projection.clone()
+	r.hasVerifierProjection = true
+	return r
+}
+
+// VerifierProjection returns one independent sealed projection when present.
+func (r Result) VerifierProjection() (VerifierProjection, bool) {
+	if !r.hasVerifierProjection || !r.verifierProjection.Valid() || r.state != StatePASS || r.scope != ScopeChain {
+		return VerifierProjection{}, false
+	}
+	return r.verifierProjection.clone(), true
 }
 
 // String returns a constant representation without private service facts.

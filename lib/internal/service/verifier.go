@@ -137,9 +137,6 @@ func (v Verifier) assessWithAbsencePolicy(ctx context.Context, request Request, 
 	if current.State() != StatePASS {
 		return current, true, nil
 	}
-	if current.Target().Sequence == 1 && current.Target().Instance == 1 {
-		return current.withAuthenticatedOrigin(), true, nil
-	}
 	outcome, proof, err := v.core.VerifyRevisionProofAfterCurrent(ctx, coreRequest, coreResult)
 	if ctxErr := ctx.Err(); ctxErr != nil {
 		return Result{}, true, ctxErr
@@ -201,6 +198,9 @@ func attachRevisionProof(current Result, proof verify.RevisionProof) Result {
 	if !facts.Valid() || facts.HighestSequence() != current.Target().Sequence || facts.HighestInstance() != current.Target().Instance {
 		return internalContractResult(current.Target())
 	}
+	if current.Target() == (Target{Sequence: 1, Instance: 1}) {
+		return attachOriginProof(current, proof)
+	}
 	history := HistoricalComplete
 	policyCoverage := policy.HistoryComplete
 	if facts.HistoryHasUnavailableBody() {
@@ -227,8 +227,37 @@ func attachRevisionProof(current Result, proof verify.RevisionProof) Result {
 		return internalContractResult(current.Target())
 	}
 	result := current.withAuthenticatedHistory(history, projection)
+	sourceVerifier, hasVerifier := proof.VerifierProjection()
+	if !hasVerifier {
+		return internalContractResult(current.Target())
+	}
+	verifierProjection, mapped := mapVerifierProjection(sourceVerifier)
+	if !mapped {
+		return internalContractResult(current.Target())
+	}
+	result = result.withVerifierProjection(verifierProjection)
 	if source, ok := proof.ReplayProjection(); ok {
 		if replayProjection, mapped := mapReplayProjection(source); mapped {
+			result = result.withReplayProjection(replayProjection)
+		}
+	}
+	return result
+}
+
+// attachOriginProof upgrades origin coverage while preserving current policy and DNS metadata.
+func attachOriginProof(current Result, proof verify.RevisionProof) Result {
+	result := current.withAuthenticatedOrigin()
+	sourceVerifier, present := proof.VerifierProjection()
+	if !present {
+		return internalContractResult(current.Target())
+	}
+	verifierProjection, mapped := mapVerifierProjection(sourceVerifier)
+	if !mapped {
+		return internalContractResult(current.Target())
+	}
+	result = result.withVerifierProjection(verifierProjection)
+	if sourceReplay, replayPresent := proof.ReplayProjection(); replayPresent {
+		if replayProjection, replayMapped := mapReplayProjection(sourceReplay); replayMapped {
 			result = result.withReplayProjection(replayProjection)
 		}
 	}

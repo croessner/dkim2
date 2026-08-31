@@ -369,19 +369,21 @@ type VerifyResult struct {
 }
 
 type verifyResultState struct {
-	draft                string
-	resultState          ResultState
-	scope                VerificationScope
-	historicalContent    HistoricalState
-	historicalSignatures HistoricalState
-	custodyStructure     CustodyStructure
-	target               VerificationTarget
-	primaryReason        ReasonCode
-	checks               []CheckFact
-	signatures           []SignatureSetFact
-	policyProjection     policy.Projection
-	replayProjection     service.ReplayProjection
-	hasReplayProjection  bool
+	draft                 string
+	resultState           ResultState
+	scope                 VerificationScope
+	historicalContent     HistoricalState
+	historicalSignatures  HistoricalState
+	custodyStructure      CustodyStructure
+	target                VerificationTarget
+	primaryReason         ReasonCode
+	checks                []CheckFact
+	signatures            []SignatureSetFact
+	policyProjection      policy.Projection
+	replayProjection      service.ReplayProjection
+	hasReplayProjection   bool
+	verifierProjection    VerifierProjection
+	hasVerifierProjection bool
 }
 
 const verifyResultRedactedText = "dkim2.VerifyResult{redacted}"
@@ -431,6 +433,17 @@ func (r VerifyResult) withReplayProjection(projection service.ReplayProjection, 
 	return VerifyResult{state: state}
 }
 
+// withVerifierProjection attaches one facade-mapped complete verifier projection.
+func (r VerifyResult) withVerifierProjection(projection VerifierProjection, present bool) VerifyResult {
+	if !present || !projection.Valid() || !r.replayEligible() || r.state.scope != VerificationScopeChain {
+		return r
+	}
+	state := r.cloneState()
+	state.verifierProjection = projection.clone()
+	state.hasVerifierProjection = true
+	return VerifyResult{state: state}
+}
+
 // replayEligible validates the complete public aggregate-current-PASS envelope.
 func (r VerifyResult) replayEligible() bool {
 	return r.state != nil &&
@@ -453,6 +466,7 @@ func (r VerifyResult) cloneState() *verifyResultState {
 	state.checks = slices.Clone(r.state.checks)
 	state.signatures = slices.Clone(r.state.signatures)
 	state.policyProjection = r.state.policyProjection.Clone()
+	state.verifierProjection = r.state.verifierProjection.clone()
 	return &state
 }
 
@@ -614,6 +628,15 @@ func (r VerifyResult) SignatureSetCount() int {
 		return 0
 	}
 	return len(r.state.signatures)
+}
+
+// VerifierProjection returns detached complete-chain evidence when present.
+func (r VerifyResult) VerifierProjection() (VerifierProjection, bool) {
+	if r.state == nil || !r.state.hasVerifierProjection || !r.state.verifierProjection.Valid() ||
+		r.state.resultState != ResultStatePASS || r.state.scope != VerificationScopeChain {
+		return VerifierProjection{}, false
+	}
+	return r.state.verifierProjection.clone(), true
 }
 
 // sealedPolicyProjection returns an independent policy projection for package-internal checks.

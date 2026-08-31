@@ -121,7 +121,7 @@ func TestParserAcceptsEscapedLowercaseHeaderKey(t *testing.T) {
 	if err != nil || !recipe.Valid() || !usage.Valid() {
 		t.Fatalf("Parse() valid=%t usage_valid=%t code=%s, want decoded lowercase key", recipe.Valid(), usage.Valid(), recipeTestErrorCode(err))
 	}
-	if names := recipe.HeaderNames(); len(names) != 1 || names[0] != "subject" {
+	if names := recipe.HeaderNames(); len(names) != 1 || names[0] != testRecipeHeaderName {
 		t.Fatalf("HeaderNames() = %v, want [subject]", names)
 	}
 }

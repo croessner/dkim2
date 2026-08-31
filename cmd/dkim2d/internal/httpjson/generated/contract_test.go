@@ -27,7 +27,10 @@ const (
 	testPropertyClass            = "class"
 	testPropertyDNSTesting       = "dns_testing_effective"
 	testPropertyDraft            = "draft"
+	testPropertyFeedback         = "feedback"
 	testPropertyDisposition      = "disposition"
+	testPropertyDoNotExplode     = "do_not_explode"
+	testPropertyDoNotModify      = "do_not_modify"
 	testPropertyMessage          = "message"
 	testPropertyIncomingSMTP     = "incoming_smtp"
 	testPropertyReporting        = "reporting"
@@ -511,8 +514,28 @@ func assertObjectInventories(t *testing.T, document *openapi3.T) {
 			required:   []string{"mail_from", "rcpt_to"},
 		},
 		"ProcessResponse": {
-			properties: []string{testPropertyActions, testPropertyAPIVersion, "authentication", testPropertyDisposition, testPropertyDraft, "policy", "replay", "verification"},
+			properties: []string{testPropertyActions, testPropertyAPIVersion, "authentication", testPropertyDisposition, testPropertyDraft, "policy", "replay", "verification", "verifier_projection"},
 			required:   []string{testPropertyActions, testPropertyAPIVersion, "authentication", testPropertyDisposition, testPropertyDraft, "policy", "replay", "verification"},
+		},
+		"VerifierProjection": {
+			properties: []string{"binding", "binding_algorithm", testPropertyDraft, "hops", "schema"},
+			required:   []string{"binding", "binding_algorithm", testPropertyDraft, "hops", "schema"},
+		},
+		"VerifierHop": {
+			properties: []string{
+				"affected_header_count", "affected_headers", "body_availability", "change_classes", "change_count",
+				"custody_transition", testPropertyDoNotExplode, testPropertyDoNotModify, string(Exploded), "feed_here", testPropertyFeedback,
+				"history_body_state", "history_header_state", "hop_binding", "message_instance", "recipe_body_mode",
+				"recipe_digest", "recipe_has_header_changes", "recipe_mode", testPropertySequence, "signature_algorithms",
+				"signature_state", "signer_domain",
+			},
+			required: []string{
+				"affected_header_count", "affected_headers", "body_availability", "change_classes", "change_count",
+				"custody_transition", testPropertyDoNotExplode, testPropertyDoNotModify, string(Exploded), "feed_here", testPropertyFeedback,
+				"history_body_state", "history_header_state", "hop_binding", "message_instance", "recipe_body_mode",
+				"recipe_digest", "recipe_has_header_changes", "recipe_mode", testPropertySequence, "signature_algorithms",
+				"signature_state", "signer_domain",
+			},
 		},
 		"SigningContext": {
 			properties: []string{"domain", testPropertyTenant},

@@ -957,6 +957,8 @@ components:
           $ref: "#/components/schemas/DraftVersion"
         verification:
           $ref: "#/components/schemas/VerificationResult"
+        verifier_projection:
+          $ref: "#/components/schemas/VerifierProjection"
         authentication:
           $ref: "#/components/schemas/AuthenticationResult"
         policy:
@@ -1077,6 +1079,169 @@ components:
           minLength: 1
           maxLength: 65535
           pattern: "^[^\\r\\n\\x00]+$"
+    VerifierProjection:
+      type: object
+      additionalProperties: false
+      description: Transport-neutral sealed verifier evidence for a complete ordinary authenticated chain.
+      required:
+        - schema
+        - draft
+        - binding_algorithm
+        - binding
+        - hops
+      properties:
+        schema:
+          type: string
+          enum:
+            - dkim2.verifier-projection.v1
+        draft:
+          $ref: "#/components/schemas/DraftVersion"
+        binding_algorithm:
+          type: string
+          enum:
+            - sha-256
+        binding:
+          $ref: "#/components/schemas/SHA256Binding"
+        hops:
+          type: array
+          minItems: 1
+          maxItems: 128
+          items:
+            $ref: "#/components/schemas/VerifierHop"
+    VerifierHop:
+      type: object
+      additionalProperties: false
+      required:
+        - sequence
+        - message_instance
+        - hop_binding
+        - signer_domain
+        - signature_algorithms
+        - signature_state
+        - custody_transition
+        - do_not_modify
+        - do_not_explode
+        - feedback
+        - feed_here
+        - exploded
+        - recipe_mode
+        - recipe_has_header_changes
+        - recipe_body_mode
+        - recipe_digest
+        - change_classes
+        - affected_headers
+        - history_header_state
+        - history_body_state
+        - body_availability
+        - change_count
+        - affected_header_count
+      properties:
+        sequence:
+          $ref: "#/components/schemas/CanonicalUint64"
+        message_instance:
+          $ref: "#/components/schemas/CanonicalUint64"
+        hop_binding:
+          $ref: "#/components/schemas/SHA256Binding"
+        signer_domain:
+          type: string
+          minLength: 1
+          maxLength: 253
+          pattern: "^[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?$"
+        signature_algorithms:
+          type: array
+          minItems: 1
+          maxItems: 4
+          uniqueItems: true
+          items:
+            type: string
+            enum:
+              - rsa-sha256
+              - rsa-sha512
+              - ed25519-sha256
+              - ed25519-sha512
+            x-enum-varnames:
+              - VerifierAlgorithmRSASHA256
+              - VerifierAlgorithmRSASHA512
+              - VerifierAlgorithmEd25519SHA256
+              - VerifierAlgorithmEd25519SHA512
+        signature_state:
+          type: string
+          enum:
+            - pass
+        custody_transition:
+          type: string
+          enum:
+            - origin
+            - ordinary
+            - next_domain
+            - terminal_next_domain
+        do_not_modify:
+          type: boolean
+        do_not_explode:
+          type: boolean
+        feedback:
+          type: boolean
+        feed_here:
+          type: boolean
+        exploded:
+          type: boolean
+        recipe_mode:
+          type: string
+          enum:
+            - unchanged
+            - applied
+        recipe_has_header_changes:
+          type: boolean
+        recipe_body_mode:
+          type: string
+          enum:
+            - absent
+            - steps
+            - unavailable
+        recipe_digest:
+          $ref: "#/components/schemas/SHA256Binding"
+        change_classes:
+          type: array
+          maxItems: 2
+          uniqueItems: true
+          items:
+            type: string
+            enum:
+              - body.rewrite
+              - header.rewrite
+        affected_headers:
+          type: array
+          maxItems: 128
+          uniqueItems: true
+          items:
+            type: string
+            minLength: 1
+            maxLength: 64
+            pattern: "^[a-z0-9!#$%&'*+.^_`|~-]+$"
+        history_header_state:
+          $ref: "#/components/schemas/VerifierHistoryState"
+        history_body_state:
+          $ref: "#/components/schemas/VerifierHistoryState"
+        body_availability:
+          type: string
+          enum:
+            - known
+            - unavailable
+        change_count:
+          type: integer
+          minimum: 0
+          maximum: 2
+        affected_header_count:
+          type: integer
+          minimum: 0
+          maximum: 128
+    VerifierHistoryState:
+      type: string
+      enum:
+        - matched
+        - mismatch
+        - unavailable
+        - unsupported
     VerificationResult:
       type: object
       additionalProperties: false
@@ -1459,6 +1624,12 @@ components:
     CanonicalUint64:
       type: string
       pattern: "^[1-9][0-9]{0,19}$"
+    SHA256Binding:
+      type: string
+      format: byte
+      minLength: 44
+      maxLength: 44
+      pattern: "^[A-Za-z0-9+/]{43}=$"
     VerificationState:
       type: string
       enum:

@@ -79,6 +79,14 @@ func TestStrictHandlerReturnsMultiInstanceTestingContinue(t *testing.T) {
 	if err = json.Unmarshal(wireBody, &decoded); err != nil {
 		t.Fatal("historical HTTP response was not generated ProcessResponse JSON")
 	}
+	assertHistoricalPolicyResponse(t, decoded)
+	assertHistoricalVerifierProjection(t, decoded.VerifierProjection)
+}
+
+// assertHistoricalPolicyResponse validates the authenticated policy row independently of verifier evidence.
+func assertHistoricalPolicyResponse(t *testing.T, decoded generated.ProcessResponse) {
+	t.Helper()
+
 	if decoded.Verification.State != generated.PASS || decoded.Verification.Scope != generated.Chain ||
 		decoded.Policy.Mode != generated.Testing || decoded.Policy.Verdict != generated.PolicyResultVerdictContinue ||
 		decoded.Policy.DoNotModify != generated.PolicyResultDoNotModifyNotRequested ||
@@ -86,9 +94,26 @@ func TestStrictHandlerReturnsMultiInstanceTestingContinue(t *testing.T) {
 		decoded.Policy.Feedback.HistoryCoverage != generated.PolicyFeedbackHistoryCoverageComplete ||
 		decoded.Replay.Class != generated.Disabled || decoded.Disposition != generated.DispositionContinue ||
 		len(decoded.Actions) != 1 || decoded.Actions[0].Type != generated.AddHeader ||
-		decoded.Actions[0].Name != generated.AuthenticationResults ||
-		decoded.Actions[0].Value != testInboundPassReport {
+		decoded.Actions[0].Name != generated.AuthenticationResults || decoded.Actions[0].Value != testInboundPassReport {
 		t.Fatal("historical HTTP response changed the authenticated continue row")
+	}
+}
+
+// assertHistoricalVerifierProjection validates the privacy-minimized multi-instance evidence.
+func assertHistoricalVerifierProjection(t *testing.T, projection *generated.VerifierProjection) {
+	t.Helper()
+
+	if projection == nil || projection.Schema != generated.Dkim2VerifierProjectionV1 ||
+		len(projection.Binding) != 32 || len(projection.Hops) != 1 {
+		t.Fatal("historical HTTP response omitted verifier projection")
+	}
+
+	hop := projection.Hops[0]
+	if hop.Sequence != "1" || hop.MessageInstance != "2" || hop.SignerDomain != testExampleDomain ||
+		hop.RecipeMode != generated.Applied || hop.RecipeBodyMode != generated.VerifierHopRecipeBodyModeSteps ||
+		len(hop.ChangeClasses) != 1 || hop.ChangeClasses[0] != generated.BodyRewrite ||
+		hop.ChangeCount != 1 || hop.AffectedHeaderCount != 0 || len(hop.HopBinding) != 32 || len(hop.RecipeDigest) != 32 {
+		t.Fatal("historical HTTP response omitted or widened verifier Recipe evidence")
 	}
 }
 

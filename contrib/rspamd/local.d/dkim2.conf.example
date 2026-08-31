@@ -7,6 +7,41 @@ timeout = 2.0;
 max_response_bytes = 262144;
 failure_mode = "tempfail";
 
+# Retry-result storage is authoritative for one SMTP retry window. The binary
+# HMAC key is independent from dkim2d replay material and contains 32-64 bytes.
+retry_cache {
+  secret_file = "/etc/dkim2/protected/rspamd-retry-hmac";
+  # Rotate this opaque value whenever the dkim2d build/schema, local policy,
+  # replay authority/namespace, endpoint tenant, or capability generation changes.
+  authority_generation = "verifier-policy-replay-2026-08-31";
+  ttl_ms = 86400000;
+  lease_ms = 30000;
+  redis {
+    servers = "127.0.0.1:6379";
+    # Put ACL credentials only in a separately protected site include. Never
+    # ship them in this example, an image, or an environment variable.
+  }
+}
+
+# Nauthilus is called only through the existing generic Policy endpoint. The
+# password file contains the exact Policy-Basic password without a newline.
+# Rspamd's global ssl_ca_path must trust the Policy endpoint certificate.
+nauthilus {
+  endpoint = "https://nauthilus-policy:9443/api/v1/policy/decisions";
+  server_name = "nauthilus-policy";
+  username = "rspamd-verifier";
+  password_file = "/etc/dkim2/protected/nauthilus-policy-password";
+  instance = "mx01.example.test";
+  timeout = 2.0;
+  max_response_bytes = 65536;
+
+  # These listener-scoped privacy classes are policy inputs, not substitutes
+  # for the mandatory exact SMTP peer IP. Null MAIL FROM is detected per task.
+  client_class = "untrusted";
+  mail_from_class = "external";
+  recipient_classes = ["local"];
+}
+
 # Optional. When set, dkim2d owns the exact Authentication-Results value.
 # Existing Authentication-Results fields are removed before that value is
 # inserted so forged local authority cannot survive the trust boundary.

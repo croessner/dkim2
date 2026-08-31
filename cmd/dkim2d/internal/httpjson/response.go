@@ -267,15 +267,98 @@ func MapInboundResult(
 	if actionsErr != nil {
 		return generated.ProcessResponse{}, actionsErr
 	}
+	verifierProjection, projectionErr := mapVerifierProjection(verification)
+	if projectionErr != nil {
+		return generated.ProcessResponse{}, projectionErr
+	}
 	return generated.ProcessResponse{
-		ApiVersion:     generated.V1,
-		Draft:          generated.DraftIetfDkimDkim2Spec06,
-		Verification:   verificationDTO,
-		Authentication: authentication,
-		Policy:         policyDTO,
-		Replay:         generated.ReplayResult{Class: replayClass},
-		Disposition:    disposition,
-		Actions:        actions,
+		ApiVersion:         generated.V1,
+		Draft:              generated.DraftIetfDkimDkim2Spec06,
+		Verification:       verificationDTO,
+		Authentication:     authentication,
+		Policy:             policyDTO,
+		Replay:             generated.ReplayResult{Class: replayClass},
+		Disposition:        disposition,
+		Actions:            actions,
+		VerifierProjection: verifierProjection,
+	}, nil
+}
+
+// mapVerifierProjection maps only complete sealed generic verifier evidence.
+func mapVerifierProjection(result dkim2.VerifyResult) (*generated.VerifierProjection, error) {
+	projection, present := result.VerifierProjection()
+	required := result.State() == dkim2.ResultStatePASS && result.Scope() == dkim2.VerificationScopeChain &&
+		result.CustodyStructure() != dkim2.CustodyStructureTerminalNDRequiresOOB
+	if present != required {
+		return nil, newMappingError(MappingInternalContract)
+	}
+	if !present {
+		return nil, nil
+	}
+	hops := projection.Hops()
+	mappedHops := make([]generated.VerifierHop, len(hops))
+	for index, hop := range hops {
+		mapped, err := mapVerifierHop(hop, index)
+		if err != nil {
+			return nil, err
+		}
+		mappedHops[index] = mapped
+	}
+	binding := projection.Binding()
+	return &generated.VerifierProjection{
+		Schema: generated.Dkim2VerifierProjectionV1, Draft: generated.DraftIetfDkimDkim2Spec06,
+		BindingAlgorithm: generated.Sha256, Binding: slices.Clone(binding[:]), Hops: mappedHops,
+	}, nil
+}
+
+// mapVerifierHop maps one immutable hop without recreating verifier bindings.
+func mapVerifierHop(hop dkim2.VerifierHop, index int) (generated.VerifierHop, error) {
+	if !hop.Valid() || hop.Sequence() != uint64(index+1) {
+		return generated.VerifierHop{}, newMappingError(MappingInternalContract)
+	}
+	algorithms := hop.SignatureAlgorithms()
+	if !slices.IsSorted(algorithms) || len(algorithms) == 0 || len(algorithms) > 4 {
+		return generated.VerifierHop{}, newMappingError(MappingInternalContract)
+	}
+	mappedAlgorithms := make([]generated.VerifierHopSignatureAlgorithms, len(algorithms))
+	for algorithmIndex, algorithm := range algorithms {
+		mappedAlgorithms[algorithmIndex] = generated.VerifierHopSignatureAlgorithms(algorithm)
+		if !mappedAlgorithms[algorithmIndex].Valid() {
+			return generated.VerifierHop{}, newMappingError(MappingInternalContract)
+		}
+	}
+	descriptor := hop.Recipe()
+	headers, classes := descriptor.AffectedHeaders(), descriptor.ChangeClasses()
+	if !descriptor.Valid() || !slices.IsSorted(headers) || !slices.IsSorted(classes) {
+		return generated.VerifierHop{}, newMappingError(MappingInternalContract)
+	}
+	mappedClasses := make([]generated.VerifierHopChangeClasses, len(classes))
+	for classIndex, class := range classes {
+		mappedClasses[classIndex] = generated.VerifierHopChangeClasses(class)
+		if !mappedClasses[classIndex].Valid() {
+			return generated.VerifierHop{}, newMappingError(MappingInternalContract)
+		}
+	}
+	sequence, sequenceOK := mapCanonicalUint64(hop.Sequence())
+	messageInstance, instanceOK := mapCanonicalUint64(hop.MessageInstance())
+	custody := generated.VerifierHopCustodyTransition(hop.CustodyTransition())
+	recipeMode := generated.VerifierHopRecipeMode(hop.RecipeMode())
+	bodyMode := generated.VerifierHopRecipeBodyMode(descriptor.BodyMode())
+	headerState := generated.VerifierHistoryState(hop.HistoryHeaderState())
+	bodyState := generated.VerifierHistoryState(hop.HistoryBodyState())
+	bodyAvailability := generated.VerifierHopBodyAvailability(hop.BodyAvailability())
+	if !sequenceOK || !instanceOK || !custody.Valid() || !recipeMode.Valid() || !bodyMode.Valid() ||
+		!headerState.Valid() || !bodyState.Valid() || !bodyAvailability.Valid() {
+		return generated.VerifierHop{}, newMappingError(MappingInternalContract)
+	}
+	hopBinding, recipeDigest := hop.HopBinding(), descriptor.Digest()
+	return generated.VerifierHop{
+		Sequence: sequence, MessageInstance: messageInstance, HopBinding: slices.Clone(hopBinding[:]),
+		SignerDomain: hop.SignerDomain(), SignatureAlgorithms: mappedAlgorithms, SignatureState: generated.VerifierHopSignatureStatePass,
+		CustodyTransition: custody, DoNotModify: hop.DoNotModify(), DoNotExplode: hop.DoNotExplode(), Feedback: hop.Feedback(), FeedHere: hop.FeedHere(), Exploded: hop.Exploded(),
+		RecipeMode: recipeMode, RecipeHasHeaderChanges: descriptor.HasHeaderChanges(), RecipeBodyMode: bodyMode, RecipeDigest: slices.Clone(recipeDigest[:]),
+		ChangeClasses: mappedClasses, AffectedHeaders: headers, HistoryHeaderState: headerState, HistoryBodyState: bodyState, BodyAvailability: bodyAvailability,
+		ChangeCount: descriptor.ChangeCount(), AffectedHeaderCount: descriptor.AffectedHeaderCount(),
 	}, nil
 }
 

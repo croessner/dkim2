@@ -226,6 +226,7 @@ type RevisionProof struct {
 	draft       string
 	facts       RevisionFacts
 	replay      ReplayProjection
+	verifier    VerifierProjection
 	policy      TimestampPolicy
 	initialized bool
 }
@@ -271,7 +272,9 @@ func (p RevisionProof) Valid() bool {
 		p.draft != DraftBaseline || !p.facts.Valid() || !revisionTimestampPolicySafe(p.policy) {
 		return false
 	}
-	return (p.state == RevisionProofTerminalNextDomainAuthorizationRequired) == (p.facts.custody.status == signature.CustodyStatusTerminalNextDomain)
+	terminal := p.state == RevisionProofTerminalNextDomainAuthorizationRequired
+	return terminal == (p.facts.custody.status == signature.CustodyStatusTerminalNextDomain) &&
+		(terminal && !p.verifier.Valid() || !terminal && p.verifier.Valid())
 }
 
 // ReplayProjection returns the sealed message-wide origin facts from complete proof.
@@ -280,6 +283,14 @@ func (p RevisionProof) ReplayProjection() (ReplayProjection, bool) {
 		return ReplayProjection{}, false
 	}
 	return p.replay.clone(), true
+}
+
+// VerifierProjection returns sealed transport-neutral evidence only for ordinary complete proof.
+func (p RevisionProof) VerifierProjection() (VerifierProjection, bool) {
+	if !p.Valid() || p.state != RevisionProofVerified || !p.verifier.Valid() {
+		return VerifierProjection{}, false
+	}
+	return p.verifier.clone(), true
 }
 
 // State returns the clean proof state or zero for invalid proof.
@@ -641,7 +652,14 @@ func (v Verifier) completePreparedRevisionProof(input verificationInput, base re
 	if base.hasOriginDigest {
 		replayProjection = newReplayProjection(base.originDigest, exploded)
 	}
-	proof := RevisionProof{state: proofState, draft: DraftBaseline, facts: facts, replay: replayProjection, policy: v.options.TimestampPolicy, initialized: true}
+	verifierProjection, hasVerifierProjection := v.buildVerifierProjection(input, base, signatures)
+	if proofState == RevisionProofVerified && !hasVerifierProjection {
+		return "", RevisionProof{}, newError(ErrorCodeInternalMisuse, ErrorLocation{}, ErrorDetails{Class: ErrorClassInternal}, nil)
+	}
+	if proofState != RevisionProofVerified {
+		verifierProjection = VerifierProjection{}
+	}
+	proof := RevisionProof{state: proofState, draft: DraftBaseline, facts: facts, replay: replayProjection, verifier: verifierProjection, policy: v.options.TimestampPolicy, initialized: true}
 	if !proof.Valid() {
 		return "", RevisionProof{}, newError(ErrorCodeInternalMisuse, ErrorLocation{}, ErrorDetails{Class: ErrorClassInternal}, nil)
 	}

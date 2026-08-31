@@ -1,0 +1,97 @@
+includes:
+  required:
+    - /etc/nauthilus/policy.yml
+
+runtime:
+  instance_name: dkim2-policy-e2e
+  servers:
+    http:
+      address: 0.0.0.0:9443
+      tls:
+        enabled: true
+        cert: /etc/nauthilus/e2e/certs/nauthilus-policy.crt
+        key: /etc/nauthilus/e2e/certs/nauthilus-policy.key
+        min_tls_version: TLS1.3
+      keep_alive: {enabled: true}
+      middlewares:
+        recovery: true
+        request_decompression: false
+        response_compression: false
+        logging: true
+        metrics: true
+        trusted_proxies: false
+        limit: false
+        rate: false
+  timeouts:
+    redis_read: 2s
+    redis_write: 2s
+    lua_script: 2s
+
+observability:
+  log:
+    level: info
+    add_source: false
+    color: false
+    json: true
+  profiles:
+    pprof: {enabled: false}
+    block: {enabled: false}
+  tracing: {enabled: false}
+
+storage:
+  redis:
+    protocol: 3
+    primary: {address: redis:6379}
+    database_number: 1
+    prefix: "nauthilus-policy-e2e:"
+    pool_size: 16
+    pool_timeout: 1s
+    read_timeout: 1s
+    write_timeout: 1s
+    idle_pool_size: 4
+    positive_cache_ttl: 120
+    negative_cache_ttl: 60
+    encryption_secret: ${POLICY_E2E_REDIS_ENCRYPTION_SECRET}
+    password_nonce: ${POLICY_E2E_REDIS_PASSWORD_NONCE}
+
+auth:
+  backchannel:
+    basic_auth:
+      enabled: true
+      username: rspamd-verifier
+      password: ${POLICY_DKIM2_RSPAMD_PASSWORD}
+  pipeline: {max_concurrent_requests: 16}
+  backends: {order: []}
+  controls: {enabled: []}
+  services: {enabled: []}
+
+plugins:
+  verification_policy: checksum_required
+  allowed_dirs:
+    - /usr/local/lib/nauthilus/plugins
+  modules:
+    - name: dkim2_reputation
+      type: go
+      path: /usr/local/lib/nauthilus/plugins/dkim2-reputation.so
+      checksum: sha256:${PLUGIN_SHA256}
+      optional: false
+      config:
+        domains:
+          - domain: example.test
+            reputation: trusted
+        client_networks:
+          - cidr: 203.0.113.0/24
+            reputation: trusted
+        contracts:
+          - signer_domain: example.test
+            allowed_client_cidrs: [203.0.113.0/24]
+            permitted_change_classes: [body.rewrite, header.rewrite]
+
+# This lane exercises the HTTPS transport only. The included contract enables
+# both public transports for documentation; the isolated runtime has no gRPC
+# listener and therefore closes that unused transport explicitly.
+policy:
+  api:
+    grpc:
+      enabled: false
+      require_mtls: false

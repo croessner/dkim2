@@ -242,6 +242,20 @@ func validWireProcessResponse() generated.ProcessResponse {
 			Scope:                generated.Chain,
 			SignatureSets:        []generated.SignatureSetResult{},
 			State:                generated.PASS,
+			Target:               &generated.VerificationTarget{Sequence: "1", Instance: "1"},
+		},
+		VerifierProjection: &generated.VerifierProjection{
+			Schema: generated.Dkim2VerifierProjectionV1, Draft: generated.DraftIetfDkimDkim2Spec06,
+			BindingAlgorithm: generated.Sha256, Binding: make([]byte, 32),
+			Hops: []generated.VerifierHop{{
+				Sequence: "1", MessageInstance: "1", HopBinding: make([]byte, 32), SignerDomain: testExampleDomain,
+				SignatureAlgorithms: []generated.VerifierHopSignatureAlgorithms{generated.VerifierAlgorithmRSASHA256},
+				SignatureState:      generated.VerifierHopSignatureStatePass, CustodyTransition: generated.VerifierHopCustodyTransitionOrigin,
+				RecipeMode: generated.Unchanged, RecipeBodyMode: generated.VerifierHopRecipeBodyModeAbsent,
+				RecipeDigest: make([]byte, 32), AffectedHeaders: []string{}, ChangeClasses: []generated.VerifierHopChangeClasses{},
+				HistoryHeaderState: generated.VerifierHistoryStateMatched, HistoryBodyState: generated.VerifierHistoryStateMatched,
+				BodyAvailability: generated.VerifierHopBodyAvailabilityKnown,
+			}},
 		},
 		Policy: generated.PolicyResult{
 			DoNotExplode: generated.PolicyResultDoNotExplodeNotEvaluated,

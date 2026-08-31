@@ -1,0 +1,7 @@
+From: sender@example.test
+To: recipient@example.test
+Subject: unsigned compatibility probe
+Message-ID: <unsigned-rspamd-compatibility@example.test>
+Date: Mon, 31 Aug 2026 08:00:00 +0000
+
+unsigned body

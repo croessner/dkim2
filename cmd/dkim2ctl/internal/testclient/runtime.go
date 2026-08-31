@@ -8,6 +8,8 @@ import (
 	"mime"
 	"net"
 	"net/http"
+	"slices"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -618,6 +620,7 @@ func hasRequiredResponseMembers(data []byte, destination any) bool {
 		return false
 	}
 	var required []string
+	optional := map[string]bool{}
 	switch destination.(type) {
 	case *generated.HealthResponse:
 		required = []string{memberAPIVersion, memberDraft, memberStatus}
@@ -628,6 +631,7 @@ func hasRequiredResponseMembers(data []byte, destination any) bool {
 			memberActions, memberAPIVersion, memberDisposition, memberDraft,
 			"authentication", "policy", "replay", "verification",
 		}
+		optional["verifier_projection"] = true
 	case *generated.OperationResponse:
 		required = []string{
 			memberActions, memberAPIVersion, memberDisposition, memberDraft,
@@ -638,11 +642,16 @@ func hasRequiredResponseMembers(data []byte, destination any) bool {
 	default:
 		return false
 	}
-	if len(document) != len(required) {
+	if len(document) < len(required) || len(document) > len(required)+len(optional) {
 		return false
 	}
 	for _, name := range required {
 		if _, ok := document[name]; !ok {
+			return false
+		}
+	}
+	for name := range document {
+		if !slices.Contains(required, name) && !optional[name] {
 			return false
 		}
 	}
@@ -671,11 +680,125 @@ func validProcess(value generated.ProcessResponse) bool {
 		!value.Authentication.State.Valid() || !value.Authentication.PrimaryReason.Valid() ||
 		!value.Policy.Verdict.Valid() || !value.Replay.Class.Valid() ||
 		!validVerificationProjection(value.Verification) ||
+		!validVerifierProjection(value.VerifierProjection, value.Verification) ||
 		!validPolicyProjection(value.Policy) ||
 		!validProcessActions(value) {
 		return false
 	}
 	return validProcessOutcome(value)
+}
+
+// validVerifierProjection validates the optional complete-chain evidence shape.
+func validVerifierProjection(projection *generated.VerifierProjection, verification generated.VerificationResult) bool {
+	required := verification.State == generated.PASS && verification.Scope == generated.Chain &&
+		verification.CustodyStructure != generated.VerificationResultCustodyStructureTerminalNdRequiresOob
+	if (projection != nil) != required {
+		return false
+	}
+	if projection == nil {
+		return true
+	}
+	if projection.Schema != generated.Dkim2VerifierProjectionV1 || projection.Draft != generated.DraftIetfDkimDkim2Spec06 ||
+		projection.BindingAlgorithm != generated.Sha256 || len(projection.Binding) != 32 ||
+		len(projection.Hops) == 0 || len(projection.Hops) > 128 || verification.Target == nil ||
+		strconv.Itoa(len(projection.Hops)) != verification.Target.Sequence {
+		return false
+	}
+	for index, hop := range projection.Hops {
+		if !validVerifierHop(hop, index) {
+			return false
+		}
+	}
+	last := projection.Hops[len(projection.Hops)-1]
+	return last.Sequence == verification.Target.Sequence && last.MessageInstance == verification.Target.Instance
+}
+
+// validVerifierHop checks closed bounded wire facts without interpreting DKIM2 protocol state.
+func validVerifierHop(hop generated.VerifierHop, index int) bool {
+	algorithms, algorithmsValid := verifierAlgorithmStrings(hop.SignatureAlgorithms)
+	changes, changesValid := verifierChangeStrings(hop.ChangeClasses)
+	if !algorithmsValid || !changesValid || !validVerifierHopShape(hop, index, algorithms, changes) ||
+		!validVerifierCustody(hop, index) {
+		return false
+	}
+
+	return validVerifierRecipe(hop, changes)
+}
+
+// verifierAlgorithmStrings validates and projects the closed algorithm enum.
+func verifierAlgorithmStrings(values []generated.VerifierHopSignatureAlgorithms) ([]string, bool) {
+	algorithms := make([]string, len(values))
+	for algorithmIndex, algorithm := range values {
+		if !algorithm.Valid() {
+			return nil, false
+		}
+		algorithms[algorithmIndex] = string(algorithm)
+	}
+
+	return algorithms, true
+}
+
+// verifierChangeStrings validates and projects the closed change-class enum.
+func verifierChangeStrings(values []generated.VerifierHopChangeClasses) ([]string, bool) {
+	changes := make([]string, len(values))
+	for changeIndex, change := range values {
+		if !change.Valid() {
+			return nil, false
+		}
+		changes[changeIndex] = string(change)
+	}
+
+	return changes, true
+}
+
+// validVerifierHopShape validates bounded scalar and collection shape.
+func validVerifierHopShape(hop generated.VerifierHop, index int, algorithms, changes []string) bool {
+	return hop.Sequence == strconv.Itoa(index+1) && validPositiveUint(hop.MessageInstance) && len(hop.HopBinding) == 32 &&
+		validDomain(hop.SignerDomain) && len(algorithms) > 0 && len(algorithms) <= 4 && strictSortedStrings(algorithms) &&
+		hop.SignatureState == generated.VerifierHopSignatureStatePass && hop.CustodyTransition.Valid() &&
+		hop.RecipeMode.Valid() && hop.RecipeBodyMode.Valid() && hop.HistoryHeaderState.Valid() &&
+		hop.HistoryBodyState.Valid() && hop.BodyAvailability.Valid() && len(hop.RecipeDigest) == 32 &&
+		len(changes) <= 2 && len(hop.AffectedHeaders) <= 128 && hop.ChangeCount == len(changes) &&
+		hop.AffectedHeaderCount == len(hop.AffectedHeaders) && strictSortedStrings(changes) &&
+		strictSortedStrings(hop.AffectedHeaders)
+}
+
+// validVerifierCustody validates the ordered custody role without admitting terminal OOB authority.
+func validVerifierCustody(hop generated.VerifierHop, index int) bool {
+	return (index != 0 || hop.CustodyTransition == generated.VerifierHopCustodyTransitionOrigin) &&
+		(index <= 0 || hop.CustodyTransition != generated.VerifierHopCustodyTransitionOrigin) &&
+		hop.CustodyTransition != generated.VerifierHopCustodyTransitionTerminalNextDomain
+}
+
+// validVerifierRecipe validates coherence between normalized Recipe and body facts.
+func validVerifierRecipe(hop generated.VerifierHop, changes []string) bool {
+	if hop.RecipeHasHeaderChanges != (len(hop.AffectedHeaders) > 0) ||
+		hop.BodyAvailability == generated.VerifierHopBodyAvailabilityUnavailable != (hop.HistoryBodyState == generated.VerifierHistoryStateUnavailable) {
+		return false
+	}
+	if hop.RecipeMode == generated.Unchanged {
+		return !hop.RecipeHasHeaderChanges && hop.RecipeBodyMode == generated.VerifierHopRecipeBodyModeAbsent && len(changes) == 0
+	}
+	return hop.RecipeMode == generated.Applied && (hop.RecipeHasHeaderChanges || hop.RecipeBodyMode != generated.VerifierHopRecipeBodyModeAbsent)
+}
+
+// validPositiveUint validates one canonical positive uint64 string.
+func validPositiveUint(value string) bool {
+	parsed, err := strconv.ParseUint(value, 10, 64)
+	return err == nil && parsed > 0 && strconv.FormatUint(parsed, 10) == value
+}
+
+// strictSortedStrings validates nonempty values in strict lexical byte order.
+func strictSortedStrings(values []string) bool {
+	if !sort.StringsAreSorted(values) {
+		return false
+	}
+	for index, value := range values {
+		if value == "" || index > 0 && values[index-1] == value {
+			return false
+		}
+	}
+	return true
 }
 
 // validProcessOutcome validates the final authentication, replay, and disposition matrix.
