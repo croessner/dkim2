@@ -22,6 +22,17 @@ local METRIC_ACTIONS = {
   ['rewrite subject'] = true, greylist = true, ['soft reject'] = true,
   reject = true, discard = true, quarantine = true,
 }
+local STATUS_CODES = {
+  permit = { effect = 'permit', retryable = false },
+  policy_denied = { effect = 'deny', retryable = false },
+  not_applicable = { effect = 'not_applicable', retryable = false },
+  no_applicable_rule = { effect = 'not_applicable', retryable = false },
+  no_match_deny = { effect = 'deny', retryable = false },
+  evaluation_failed = { effect = 'indeterminate', retryable = true },
+  provider_unavailable = { effect = 'indeterminate', retryable = true },
+  effect_outcome_unknown = { effect = 'indeterminate', retryable = false },
+  effect_acceptance_rejected = { effect = 'indeterminate', retryable = true },
+}
 
 -- valid_json_content_type accepts JSON with an optional media-type parameter list.
 local function valid_json_content_type(value)
@@ -144,18 +155,24 @@ end
 -- validate_detail validates one bounded response detail without consuming its text.
 local function validate_detail(value)
   return exact_keys(value, { 'field', 'reason' }, {}) and type(value.field) == 'string' and
-    #value.field <= 512 and type(value.reason) == 'string' and #value.reason <= 512
+    #value.field > 0 and #value.field <= 512 and type(value.reason) == 'string' and
+    #value.reason > 0 and #value.reason <= 512
 end
 
--- validate_response enforces the exact generic Policy response consumed by Rspamd.
-local function validate_response(value)
-  if not exact_keys(value, { 'decision_id', 'effect', 'status' },
+-- validate_response enforces and correlates the exact generic Policy response consumed by Rspamd.
+local function validate_response(value, request_id)
+  local status_contract = type(value) == 'table' and type(value.status) == 'table' and
+    STATUS_CODES[value.status.code] or nil
+  if not exact_keys(value, { 'request_id', 'decision_id', 'effect', 'status' },
       { 'obligations', 'advice', 'diagnostics' }) or
+      type(value.request_id) ~= 'string' or value.request_id ~= request_id or
+      #value.request_id == 0 or #value.request_id > 128 or
       type(value.decision_id) ~= 'string' or #value.decision_id == 0 or #value.decision_id > 128 or
       not ({ permit = true, deny = true, not_applicable = true, indeterminate = true })[value.effect] or
       not exact_keys(value.status, { 'code', 'message', 'retryable' }, { 'details' }) or
-      type(value.status.code) ~= 'string' or type(value.status.message) ~= 'string' or
-      type(value.status.retryable) ~= 'boolean' or value.diagnostics ~= nil or
+      not status_contract or status_contract.effect ~= value.effect or
+      type(value.status.message) ~= 'string' or #value.status.message > 512 or
+      value.status.retryable ~= status_contract.retryable or value.diagnostics ~= nil or
       not empty_array(value.obligations) or not empty_array(value.advice) then
     return false
   end
@@ -172,8 +189,8 @@ local function validate_response(value)
   return true
 end
 
--- parse_response decodes one bounded successful generic Policy response.
-local function parse_response(ucl, json_validator, body, maximum)
+-- parse_response decodes and correlates one bounded successful generic Policy response.
+local function parse_response(ucl, json_validator, body, maximum, request_id)
   if type(body) == 'userdata' then
     body = tostring(body)
   end
@@ -186,7 +203,7 @@ local function parse_response(ucl, json_validator, body, maximum)
     return nil
   end
   local value = parser:get_object()
-  return validate_response(value) and value or nil
+  return validate_response(value, request_id) and value or nil
 end
 
 -- normalized_signals maps only explicitly owned Rspamd states into Policy facts.
@@ -337,7 +354,8 @@ function M:request(task, verifier_response, peer_ip, callback)
         callback(nil)
         return
       end
-      callback(parse_response(self.ucl, self.json_validator, response_body, self.max_response_bytes))
+      callback(parse_response(
+        self.ucl, self.json_validator, response_body, self.max_response_bytes, request_id))
     end,
   })
 end

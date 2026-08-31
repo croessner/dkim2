@@ -387,6 +387,10 @@ attributes, and bounded Rspamd-owned local `rspamd.*` observations. It never
 submits caller-assessed reputation, provider facts, plugin facts, Redis state,
 raw addresses, or message content. The exact SMTP peer IP is mandatory request
 data but is prohibited from ordinary logs, metrics, traces, and diagnostics.
+Every successful Policy response must carry the exact generated `request_id`;
+missing or mismatched correlation fails closed before any decision is applied.
+Status codes, their derived retryability, and their decision effects must also
+match the closed Nauthilus response taxonomy.
 
 The Redis entry has one absolute deadline and the states `provisional`,
 `armed`, and `claimed`. Every transition is atomic and owner-bound:

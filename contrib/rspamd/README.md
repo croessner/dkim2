@@ -127,9 +127,11 @@ Nauthilus `permit` continues without forcing accept. `deny` and non-retryable
 `indeterminate` reject permanently. Retryable `indeterminate`, unexpected
 `not_applicable`, malformed responses, HTTP failures, and authentication or
 transport failures soft reject with local generic text. A successful response
-must use `application/json` and strict RFC 8259 JSON. The finalizer arms the
-cache only for an effective soft reject or greylist action. Every permanent
-reject or accepted/continued terminal result consumes the entry.
+must use `application/json` and strict RFC 8259 JSON, and its required
+`request_id` must exactly match the generated request identifier. Status codes,
+retryability, and effects must satisfy the closed Nauthilus taxonomy. The
+finalizer arms the cache only for an effective soft reject or greylist action.
+Every permanent reject or accepted/continued terminal result consumes the entry.
 
 The module emits only zero-score, option-free symbols. This includes closed
 symbols for the daemon's authenticated `donotmodify` and `donotexplode`

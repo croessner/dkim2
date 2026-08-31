@@ -53,12 +53,15 @@ local client = assert(module.new({
 }))
 
 response_value = {
+  request_id = '0123456789abcdef0123456789abcdef',
   decision_id = 'decision-1', effect = 'permit',
   status = { code = 'permit', message = 'permitted', retryable = false },
 }
 local result
 assert(client:request(task, {}, '2001:db8::25', function(value) result = value end))
 assert(result.effect == 'permit')
+assert(result.request_id == sent.request_id,
+  'Policy response request ID must correlate with the request')
 assert(metric_score_calls == 0,
   'Policy postfilter must use get_metric_result instead of the 4.1.5 score table API')
 assert(sent.target.namespace == 'dkim2' and sent.target.action == 'accept-message-instance')
@@ -69,14 +72,78 @@ assert(sent.environment.attributes['rspamd.normalized_signals'].strings[2] == 's
 assert(sent.options.include_diagnostics == false)
 assert(module.decision_action(result) == 'continue')
 
+response_value.request_id = 'fedcba9876543210fedcba9876543210'
+assert(client:request(task, {}, '2001:db8::25', function(value) result = value end))
+assert(result == nil, 'mismatched Policy response request ID must fail closed')
+response_value.request_id = '0123456789abcdef0123456789abcdef'
+
+response_value.request_id = nil
+assert(client:request(task, {}, '2001:db8::25', function(value) result = value end))
+assert(result == nil, 'missing Policy response request ID must fail closed')
+response_value.request_id = '0123456789abcdef0123456789abcdef'
+
+response_value.unknown = true
+assert(client:request(task, {}, '2001:db8::25', function(value) result = value end))
+assert(result == nil, 'unknown Policy response fields must fail closed')
+response_value.unknown = nil
+
+response_value.obligations = {}
+response_value.advice = {}
+response_value.status.details = { { field = 'resource.attributes', reason = 'valid' } }
+assert(client:request(task, {}, '2001:db8::25', function(value) result = value end))
+assert(result ~= nil, 'supported optional Policy response fields must remain accepted')
+response_value.obligations = nil
+response_value.advice = nil
+response_value.status.details = nil
+
+response_value.obligations = { { id = 'unsupported', parameters = {} } }
+assert(client:request(task, {}, '2001:db8::25', function(value) result = value end))
+assert(result == nil, 'unsupported Policy obligations must fail closed')
+response_value.obligations = nil
+
+response_value.status.unknown = true
+assert(client:request(task, {}, '2001:db8::25', function(value) result = value end))
+assert(result == nil, 'unknown Policy status fields must fail closed')
+response_value.status.unknown = nil
+
+response_value.status.code = 'provider_unavailable'
+response_value.status.retryable = true
+assert(client:request(task, {}, '2001:db8::25', function(value) result = value end))
+assert(result == nil, 'Policy permit with an indeterminate status must fail closed')
+response_value.status.code = 'permit'
+response_value.status.retryable = false
+
+response_value.status.code = 'unknown'
+assert(client:request(task, {}, '2001:db8::25', function(value) result = value end))
+assert(result == nil, 'unknown Policy status codes must fail closed')
+response_value.status.code = 'permit'
+
+response_value.status.retryable = true
+assert(client:request(task, {}, '2001:db8::25', function(value) result = value end))
+assert(result == nil, 'Policy retryability must match the status taxonomy')
+response_value.status.retryable = false
+
+response_value.status.message = string.rep('x', 513)
+assert(client:request(task, {}, '2001:db8::25', function(value) result = value end))
+assert(result == nil, 'oversized Policy status messages must fail closed')
+response_value.status.message = 'permitted'
+
+response_value.status.details = { { field = '', reason = 'invalid' } }
+assert(client:request(task, {}, '2001:db8::25', function(value) result = value end))
+assert(result == nil, 'empty Policy validation-detail fields must fail closed')
+response_value.status.details = nil
+
 response_value.effect = 'indeterminate'
+response_value.status.code = 'evaluation_failed'
 response_value.status.retryable = true
 assert(client:request(task, {}, '2001:db8::25', function(value) result = value end))
 assert(module.decision_action(result) == 'soft reject')
+response_value.status.code = 'effect_outcome_unknown'
 response_value.status.retryable = false
 assert(client:request(task, {}, '2001:db8::25', function(value) result = value end))
 assert(module.decision_action(result) == 'reject')
 response_value.effect = 'not_applicable'
+response_value.status.code = 'no_applicable_rule'
 assert(client:request(task, {}, '2001:db8::25', function(value) result = value end))
 assert(module.decision_action(result) == 'soft reject')
 
