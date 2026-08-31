@@ -85,6 +85,22 @@ dependency, and active-module proof requires Docker:
 contrib/rspamd/tests/rspamd-4.1.5/configtest.sh
 ```
 
+The neutral Nauthilus Policy lane uses real Rspamd, Redis, Nauthilus v4, its
+native reputation provider, and `miltertest-go`, but deliberately supplies the
+`/v1/process` response from a deterministic stub:
+
+```text
+contrib/rspamd/tests/run-policy-e2e.sh
+```
+
+That lane proves the adapter, retry, strict Policy request/response, and Milter
+boundaries. It does not prove that a live `dkim2d` verifier produced the
+upstream response. A bounded isolated attempt started the live daemon and
+Rspamd successfully, but the synthetic signed message returned a verifier-side
+temporary failure before Policy and therefore is not published as pass
+evidence. Qualify the real verifier, DNS, and MTA wire-fidelity path separately
+before production activation.
+
 ## Behavior and ordering
 
 Messages containing neither `Message-Instance` nor `DKIM2-Signature` continue
@@ -200,9 +216,11 @@ DKIM2_NAUTHILUS_INDETERMINATE
 `DKIM2_RETRY_FINALIZE` is the idempotent retry-state finalizer. They are
 scheduling internals rather than result symbols and must not receive scores.
 
-Consumers should depend on `DKIM2_CHECK`. Do not assign positive or negative
-scores to the state symbols merely to reproduce the daemon disposition; the
-adapter already enforces terminal reject and temporary-failure outcomes.
+Consumers that need verifier results should depend on `DKIM2_CHECK`. Consumers
+that need final Nauthilus outcomes must run after or depend on the unscored
+`DKIM2_NAUTHILUS_POLICY` postfilter. Do not assign positive or negative scores
+to the state symbols merely to reproduce the daemon disposition; the adapter
+already enforces terminal reject and temporary-failure outcomes.
 Unknown or future compliance values fail closed until the module and the
 versioned daemon contract are updated together. The current Draft-06 wire
 contract intentionally has no `donotmodify` `honored` or `violated` state,

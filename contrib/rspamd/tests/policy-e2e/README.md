@@ -88,6 +88,15 @@ subject mutations, action preservation, retryability, and malformed response
 variants. Verifier unit tests cover additional upstream no-call classifications
 that cannot be produced deterministically by the single shared golden response.
 
+The deterministic `/v1/process` stub is an explicit proof boundary. This lane
+does not claim that its PASS projection was produced by a live `dkim2d`
+process. A bounded isolated live-daemon attempt reached healthy `dkim2d` and
+Rspamd processes, but the generated signed message ended in a verifier-side
+temporary failure before the Policy observer received a request. Because the
+daemon intentionally exposes only content-free runtime diagnostics, that run
+could not safely distinguish DNS-TXT fixture acceptance from message
+wire-fidelity mismatch and is not retained as passing evidence.
+
 ## Isolation and secrets
 
 The Compose project, ports, network, Redis instance, and temporary runtime
