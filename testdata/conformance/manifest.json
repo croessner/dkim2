@@ -118,7 +118,7 @@
     {
       "id": "openapi-independent-oracle-source",
       "path": "cmd/dkim2ctl/internal/testclient/public_socket_test.go",
-      "sha256": "e9b7e888a6294a4e75d9534466330bf8fbe13bbfffabd06e7167d6feccf04e63",
+      "sha256": "306845750b79dc5af18dcd858d12cd6b71f1900a80c465df9a115e6cea83eb4c",
       "module": "cmd/dkim2ctl"
     },
     {
@@ -172,7 +172,7 @@
     {
       "id": "openapi-wire-response-source",
       "path": "cmd/dkim2d/internal/httpjson/http_wire_response.go",
-      "sha256": "79566e6842c64d6fab9e8bab04d04b43df4e649675bfa2d7428bc10909937249",
+      "sha256": "c733c903cc6592cb109264d7236fc4a07c710c3a699931b82af1465d0e1db43a",
       "module": "cmd/dkim2d"
     },
     {
@@ -232,7 +232,7 @@
     {
       "id": "recipe-draft06-source",
       "path": "lib/internal/recipe/parser_test.go",
-      "sha256": "67a78c0216e656f91c1fdeeff991ee507ed5021d5372406cd1259fe1d6bd8ebd",
+      "sha256": "1159149f0301a509307205db00c2d30f4e57e2538849a1500b035695227e1935",
       "module": "lib"
     },
     {
