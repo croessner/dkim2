@@ -319,6 +319,32 @@ type selectedGoldenCorpus struct {
 	} `json:"vectors"`
 }
 
+// loadSelectedGoldenCorpus loads the shared authenticated response fixture.
+func loadSelectedGoldenCorpus(t *testing.T) selectedGoldenCorpus {
+	t.Helper()
+
+	corpusBytes, err := os.ReadFile("../../../../lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-06/public-golden.json")
+	if err != nil {
+		t.Fatal("golden verification corpus unavailable")
+	}
+
+	var corpus selectedGoldenCorpus
+	if json.Unmarshal(corpusBytes, &corpus) != nil || corpus.Draft != dkim2.DraftIdentifier {
+		t.Fatal("golden verification corpus was invalid")
+	}
+
+	return corpus
+}
+
+// selectedGoldenRSAKey constructs the public key bound to the shared corpus.
+func selectedGoldenRSAKey(t *testing.T, corpus selectedGoldenCorpus) *rsa.PublicKey {
+	t.Helper()
+
+	modulus := decodeSelectedGolden(t, corpus.RSAModulus)
+
+	return &rsa.PublicKey{N: new(big.Int).SetBytes(modulus), E: corpus.RSAExponent}
+}
+
 type fixedTXTTransport struct {
 	payload []byte
 }
@@ -367,20 +393,12 @@ func (p selectedMatrixProvider) LookupPublicKey(_ context.Context, query dkim2.P
 
 // TestMapDomainResultMapsAuthenticSelectedSignatureAndKeyPolicy proves end-to-end selected output.
 func TestMapDomainResultMapsAuthenticSelectedSignatureAndKeyPolicy(t *testing.T) {
-	corpusBytes, err := os.ReadFile("../../../../lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-06/public-golden.json")
-	if err != nil {
-		t.Fatal("golden verification corpus unavailable")
-	}
-	var corpus selectedGoldenCorpus
-	if json.Unmarshal(corpusBytes, &corpus) != nil || corpus.Draft != dkim2.DraftIdentifier {
-		t.Fatal("golden verification corpus was invalid")
-	}
+	corpus := loadSelectedGoldenCorpus(t)
 	vector, ok := corpus.Vectors["rsa_pass"]
 	if !ok {
 		t.Fatal("golden RSA PASS vector unavailable")
 	}
-	modulus := decodeSelectedGolden(t, corpus.RSAModulus)
-	keyDER := x509.MarshalPKCS1PublicKey(&rsa.PublicKey{N: new(big.Int).SetBytes(modulus), E: corpus.RSAExponent})
+	keyDER := x509.MarshalPKCS1PublicKey(selectedGoldenRSAKey(t, corpus))
 	record := []byte("p=" + base64.StdEncoding.EncodeToString(keyDER) + "; t=y:s")
 	provider, err := dkim2.NewDNSPublicKeyProvider(fixedTXTTransport{payload: record})
 	if err != nil {
@@ -428,16 +446,8 @@ func TestMapDomainResultMapsAuthenticSelectedSignatureAndKeyPolicy(t *testing.T)
 
 // TestMapDomainResultAuthenticFourStatePolicyMatrix proves combined result and policy gates accept every legal cell.
 func TestMapDomainResultAuthenticFourStatePolicyMatrix(t *testing.T) {
-	corpusBytes, err := os.ReadFile("../../../../lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-06/public-golden.json")
-	if err != nil {
-		t.Fatal("golden verification corpus unavailable")
-	}
-	var corpus selectedGoldenCorpus
-	if json.Unmarshal(corpusBytes, &corpus) != nil || corpus.Draft != dkim2.DraftIdentifier {
-		t.Fatal("golden verification corpus was invalid")
-	}
-	modulus := decodeSelectedGolden(t, corpus.RSAModulus)
-	key := &rsa.PublicKey{N: new(big.Int).SetBytes(modulus), E: corpus.RSAExponent}
+	corpus := loadSelectedGoldenCorpus(t)
+	key := selectedGoldenRSAKey(t, corpus)
 	states := []selectedMatrixCase{
 		{name: authenticationResultPass, vector: selectedRSAPassVector, outcome: selectedProviderFound, state: dkim2.ResultStatePASS, reason: dkim2.ReasonNone, strict: dkim2.PolicyReasonProtocolPass, permissive: dkim2.PolicyReasonProtocolPass},
 		{name: authenticationResultFail, vector: "body_mismatch", outcome: selectedProviderFound, state: dkim2.ResultStateFAIL, reason: dkim2.ReasonHashMismatch, strict: dkim2.PolicyReasonProtocolFail, permissive: dkim2.PolicyReasonPermissiveOverride},

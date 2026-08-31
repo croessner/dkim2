@@ -3,12 +3,61 @@ package httpjson
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
+	"github.com/croessner/dkim2"
+
 	"github.com/croessner/dkim2/cmd/dkim2d/internal/httpjson/generated"
 )
+
+// TestProcessWireResponseEmitsRequiredEmptyVerifierCollections proves real
+// unchanged PASS evidence remains a schema-valid JSON array representation.
+func TestProcessWireResponseEmitsRequiredEmptyVerifierCollections(t *testing.T) {
+	corpus := loadSelectedGoldenCorpus(t)
+	result := authenticSelectedMatrixResult(t, corpus, selectedGoldenRSAKey(t, corpus), selectedMatrixCase{
+		name: authenticationResultPass, vector: selectedRSAPassVector, outcome: selectedProviderFound,
+		state: dkim2.ResultStatePASS, reason: dkim2.ReasonNone,
+	})
+	projection, err := mapVerifierProjection(result)
+	if err != nil || projection == nil || len(projection.Hops) != 1 || projection.Hops[0].ChangeCount != 0 ||
+		projection.Hops[0].AffectedHeaderCount != 0 {
+		t.Fatal("authentic unchanged verifier projection did not map")
+	}
+
+	response := validWireProcessResponse()
+	response.VerifierProjection = projection
+	wire, err := newJSONResponse(http.StatusOK, response, false, "", false)
+	if err != nil {
+		t.Fatalf("newJSONResponse() error = %v", err)
+	}
+	var decoded struct {
+		VerifierProjection map[string]json.RawMessage `json:"verifier_projection"`
+	}
+	if err := json.Unmarshal(wire.body, &decoded); err != nil {
+		t.Fatal("wire response did not contain verifier projection JSON")
+	}
+	hopsJSON, present := decoded.VerifierProjection["hops"]
+	if !present {
+		t.Fatal("wire response omitted required verifier hops")
+	}
+	var hops []map[string]json.RawMessage
+	if err := json.Unmarshal(hopsJSON, &hops); err != nil || len(hops) != 1 || string(hopsJSON) == "null" {
+		t.Fatal("wire response did not contain one verifier hop")
+	}
+	for field, want := range map[string]string{
+		"signature_algorithms": `["rsa-sha256"]`,
+		"change_classes":       "[]",
+		"affected_headers":     "[]",
+	} {
+		value, present := hops[0][field]
+		if !present || string(value) != want {
+			t.Fatalf("required verifier collection %s = %s, want %s", field, value, want)
+		}
+	}
+}
 
 // TestPreMarshaledStatusResponseFreezesExactTagHeadAnd304Shapes covers representation metadata.
 func TestPreMarshaledStatusResponseFreezesExactTagHeadAnd304Shapes(t *testing.T) {

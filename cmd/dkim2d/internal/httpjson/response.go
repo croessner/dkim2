@@ -332,6 +332,8 @@ func mapVerifierHop(hop dkim2.VerifierHop, index int) (generated.VerifierHop, er
 	if !descriptor.Valid() || !slices.IsSorted(headers) || !slices.IsSorted(classes) {
 		return generated.VerifierHop{}, newMappingError(MappingInternalContract)
 	}
+	mappedHeaders := make([]string, len(headers))
+	copy(mappedHeaders, headers)
 	mappedClasses := make([]generated.VerifierHopChangeClasses, len(classes))
 	for classIndex, class := range classes {
 		mappedClasses[classIndex] = generated.VerifierHopChangeClasses(class)
@@ -357,7 +359,7 @@ func mapVerifierHop(hop dkim2.VerifierHop, index int) (generated.VerifierHop, er
 		SignerDomain: hop.SignerDomain(), SignatureAlgorithms: mappedAlgorithms, SignatureState: generated.VerifierHopSignatureStatePass,
 		CustodyTransition: custody, DoNotModify: hop.DoNotModify(), DoNotExplode: hop.DoNotExplode(), Feedback: hop.Feedback(), FeedHere: hop.FeedHere(), Exploded: hop.Exploded(),
 		RecipeMode: recipeMode, RecipeHasHeaderChanges: descriptor.HasHeaderChanges(), RecipeBodyMode: bodyMode, RecipeDigest: slices.Clone(recipeDigest[:]),
-		ChangeClasses: mappedClasses, AffectedHeaders: headers, HistoryHeaderState: headerState, HistoryBodyState: bodyState, BodyAvailability: bodyAvailability,
+		ChangeClasses: mappedClasses, AffectedHeaders: mappedHeaders, HistoryHeaderState: headerState, HistoryBodyState: bodyState, BodyAvailability: bodyAvailability,
 		ChangeCount: descriptor.ChangeCount(), AffectedHeaderCount: descriptor.AffectedHeaderCount(),
 	}, nil
 }

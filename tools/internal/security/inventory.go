@@ -161,6 +161,7 @@ func Targets() []FuzzTarget {
 		target("lib/internal/tagvalue/fuzz_test.go", "FuzzScanTagList", "DKIM2 tag list", "draft_normative", "bounded duplicate-aware lexical scanner"),
 		target("lib/internal/verify/fuzz_test.go", "FuzzVerifyStaticKeyRequest", "static-key verification", "draft_normative", "bounded immutable verification request"),
 		target("lib/internal/verify/history_fuzz_test.go", "FuzzHistoryWalk", "historical reconstruction", "draft_normative", "iterative bounded depth state output and work"),
+		target("lib/internal/verify/verifier_projection_test.go", "FuzzVerifierProjectionBindings", "sealed verifier projection", "local_security_policy", "bounded deterministic framed projection binding"),
 		target("lib/policy_fuzz_test.go", "FuzzEvaluatePolicySealedResults", "public policy facade", "documented_interpretation", "bounded immutable sealed-result projection"),
 		target("lib/signing_fuzz_test.go", "FuzzSigningFacade", "public signing facade", "draft_normative", "bounded immutable signing and revision request"),
 		target("lib/verification_fuzz_test.go", "FuzzPublicVerify", "public verification facade", "draft_normative", "bounded immutable message envelope and provider work"),
