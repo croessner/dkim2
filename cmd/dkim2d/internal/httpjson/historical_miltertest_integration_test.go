@@ -412,7 +412,7 @@ func assertHistoricalMilterResult(
 		decoded[0].Detail.Kind != "insert_header" ||
 		decoded[0].Detail.Index != 0 ||
 		decoded[0].Detail.Name != "Authentication-Results" ||
-		decoded[0].Detail.Value != testInboundPassReport ||
+		decoded[0].Detail.Value != " "+testInboundPassReport ||
 		decoded[1].Disposition != "accept" ||
 		(decoded[1].Detail.Kind != "" && decoded[1].Detail.Kind != "none") {
 		t.Fatal("historical Milter report action or terminal changed")
