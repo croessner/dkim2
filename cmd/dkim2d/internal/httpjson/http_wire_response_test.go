@@ -26,8 +26,24 @@ func TestProcessWireResponseEmitsRequiredEmptyVerifierCollections(t *testing.T) 
 		projection.Hops[0].AffectedHeaderCount != 0 {
 		t.Fatal("authentic unchanged verifier projection did not map")
 	}
+	decision, err := dkim2.EvaluatePolicy(result)
+	if err != nil {
+		t.Fatalf("EvaluatePolicy() error = %v", err)
+	}
+	authentic, err := MapDomainResult(result, decision)
+	if err != nil {
+		t.Fatalf("MapDomainResult() error = %v", err)
+	}
+	_, authenticPolicy, ok := authentic.domainValues()
+	if !ok {
+		t.Fatal("authentic origin result did not expose policy values")
+	}
 
 	response := validWireProcessResponse()
+	if response.Policy.DoNotModify != authenticPolicy.DoNotModify || response.Policy.DoNotExplode != authenticPolicy.DoNotExplode ||
+		response.Policy.Feedback.HistoryCoverage != authenticPolicy.Feedback.HistoryCoverage {
+		t.Fatalf("wire fixture policy differs from authentic origin: fixture=%#v authentic=%#v", response.Policy, authenticPolicy)
+	}
 	response.VerifierProjection = projection
 	wire, err := newJSONResponse(http.StatusOK, response, false, "", false)
 	if err != nil {
@@ -307,10 +323,10 @@ func validWireProcessResponse() generated.ProcessResponse {
 			}},
 		},
 		Policy: generated.PolicyResult{
-			DoNotExplode: generated.PolicyResultDoNotExplodeNotEvaluated,
-			DoNotModify:  generated.PolicyResultDoNotModifyNotEvaluated,
+			DoNotExplode: generated.PolicyResultDoNotExplodeNotRequested,
+			DoNotModify:  generated.PolicyResultDoNotModifyNotRequested,
 			Feedback: generated.PolicyFeedback{
-				HistoryCoverage: generated.PolicyFeedbackHistoryCoverageNotEvaluated,
+				HistoryCoverage: generated.PolicyFeedbackHistoryCoverageComplete,
 			},
 			Findings: []generated.PolicyFinding{{
 				Reason: generated.ProtocolPass, Severity: generated.Info,
