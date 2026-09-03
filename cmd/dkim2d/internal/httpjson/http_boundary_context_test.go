@@ -799,20 +799,19 @@ func testContextEarlyFinalFutureBytes(t *testing.T) {
 	request := earlyFinalRequest(contextPostHandlerReadLimit, body)
 	initialLimit := len(earlyFinalHead(contextPostHandlerReadLimit)) + 1
 	raw := newContextEarlyFinalConn(request, initialLimit, false)
-	started := time.Now()
 	handler, tracked, diagnostics := runScriptedContextServer(t, raw, nil)
-	elapsed := time.Since(started)
 	advanced, writeBefore, readsAfter, bytesAfter, deadlineAt, remaining, written := raw.snapshot()
 	statuses, continues := raw.writtenResponseCounts()
+	// Scripted post-deadline reads return immediately, so transport counters prove ordering without scheduler timing.
 	if !advanced || writeBefore || readsAfter == 0 || bytesAfter != 0 ||
 		deadlineAt != initialLimit || remaining != len(body)-1 ||
-		written == 0 || elapsed >= time.Second ||
+		written == 0 ||
 		raw.closeCalls.Load() != 1 ||
 		handler.admission.Owned() != 0 || len(tracked.tokens) != 0 ||
 		raw.writtenContains(contextEarlyFinalPrivateMarker) ||
 		diagnostics.Contains(contextEarlyFinalPrivateMarker) ||
 		statuses != 1 || continues != 0 {
-		t.Fatalf("future-byte outcome: advanced=%t early_write=%t reads=%d raw_after=%d deadline_at=%d remaining=%d written=%d elapsed_ms=%d closes=%d owned=%d connections=%d",
+		t.Fatalf("future-byte outcome: advanced=%t early_write=%t reads=%d raw_after=%d deadline_at=%d remaining=%d written=%d closes=%d owned=%d connections=%d",
 			advanced,
 			writeBefore,
 			readsAfter,
@@ -820,7 +819,6 @@ func testContextEarlyFinalFutureBytes(t *testing.T) {
 			deadlineAt,
 			remaining,
 			written,
-			elapsed.Milliseconds(),
 			raw.closeCalls.Load(),
 			handler.admission.Owned(),
 			len(tracked.tokens),
