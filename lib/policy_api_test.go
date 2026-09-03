@@ -264,13 +264,13 @@ func TestEvaluatePolicyUsesSealedAuthenticatedFlags(t *testing.T) {
 	if err != nil {
 		t.Fatalf("EvaluatePolicy(flags) error = %v", err)
 	}
-	if decision.FeedbackIntent().Requested() != true || decision.DoNotModifyCompliance() != PolicyComplianceNotEvaluated || decision.DoNotExplodeCompliance() != PolicyComplianceNotEvaluated {
+	if decision.FeedbackIntent().Requested() != true || decision.DoNotModifyCompliance() != PolicyComplianceIndeterminate || decision.DoNotExplodeCompliance() != PolicyComplianceIndeterminate {
 		t.Fatalf("flag decision = %#v", decision)
 	}
 	if !decision.FeedbackIntent().RelayRequired() || decision.FeedbackIntent().RelaySequence() != 1 {
 		t.Fatalf("feedback intent = %#v", decision.FeedbackIntent())
 	}
-	wantFlagReasons := []PolicyReason{PolicyReasonProtocolPass, PolicyReasonDoNotModifyNotEvaluated, PolicyReasonDoNotExplodeNotEvaluated, PolicyReasonFeedbackRequested, PolicyReasonFeedbackRelaySelected, PolicyReasonExplodedReported}
+	wantFlagReasons := []PolicyReason{PolicyReasonProtocolPass, PolicyReasonDoNotModifyIndeterminate, PolicyReasonDoNotExplodeIndeterminate, PolicyReasonFeedbackRequested, PolicyReasonFeedbackRelaySelected, PolicyReasonExplodedReported}
 	flagFindings := decision.Findings()
 	gotFlagReasons := make([]PolicyReason, len(flagFindings))
 	for index, finding := range flagFindings {
@@ -344,7 +344,7 @@ func TestEvaluatePolicySuppressesTestingSignerFlags(t *testing.T) {
 			t.Fatalf("EvaluatePolicy(%s) error = %v", mode, evaluateErr)
 		}
 		intent := decision.FeedbackIntent()
-		if decision.Verdict() != PolicyVerdictContinue || decision.PrimaryReason() != PolicyReasonDNSTestingEffective || decision.DoNotModifyCompliance() != PolicyComplianceNotEvaluated || decision.DoNotExplodeCompliance() != PolicyComplianceNotEvaluated || intent.Requested() || intent.RelayRequired() || intent.RelaySequence() != 0 {
+		if decision.Verdict() != PolicyVerdictContinue || decision.PrimaryReason() != PolicyReasonDNSTestingEffective || decision.DoNotModifyCompliance() != PolicyComplianceNotRequested || decision.DoNotExplodeCompliance() != PolicyComplianceNotRequested || intent.Requested() || intent.RelayRequired() || intent.RelaySequence() != 0 {
 			t.Fatalf("testing flag decision %q = %#v", mode, decision)
 		}
 		for _, finding := range decision.Findings() {

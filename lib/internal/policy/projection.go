@@ -367,6 +367,19 @@ func NewHistoricalProjection(target uint64, coverage HistoryCoverage, hops []Hop
 	return projection, nil
 }
 
+// CompleteOriginHistory atomically upgrades authenticated current origin evidence to complete one-hop history.
+func (p Projection) CompleteOriginHistory(limits Limits) (Projection, error) {
+	if err := p.validate(limits); err != nil || p.history != HistoryNotEvaluated || p.targetSequence != 1 || p.protocol != ProtocolPASS || p.revisionFailure {
+		return Projection{}, newError(ErrorInternalContract)
+	}
+	completed := p.Clone()
+	completed.history = HistoryComplete
+	if err := completed.validate(limits); err != nil {
+		return Projection{}, err
+	}
+	return completed, nil
+}
+
 // newHistoricalProjection retains the package-local test seam.
 func newHistoricalProjection(target uint64, coverage HistoryCoverage, hops []HopFact, limits Limits) (Projection, error) {
 	return NewHistoricalProjection(target, coverage, hops, limits)
@@ -638,7 +651,10 @@ func (p Projection) signatureProtocolCoherent() bool {
 
 // validateHistory enforces bounded explicit partial or contiguous complete history.
 func (p Projection) validateHistory() error {
-	if len(p.signatureFacts) != 0 || len(p.hops) == 0 || p.revisionFailure {
+	if len(p.hops) == 0 || p.revisionFailure {
+		return newError(ErrorInternalContract)
+	}
+	if len(p.signatureFacts) != 0 && !p.completedOriginEvidenceValid() {
 		return newError(ErrorInternalContract)
 	}
 	if p.history == HistoryComplete {
@@ -664,6 +680,13 @@ func (p Projection) validateHistory() error {
 		previous = hop.sequence
 	}
 	return nil
+}
+
+// completedOriginEvidenceValid restricts retained signature facts to one authenticated origin hop.
+func (p Projection) completedOriginEvidenceValid() bool {
+	return p.history == HistoryComplete && p.protocol == ProtocolPASS && p.verificationReason == VerificationReasonNone &&
+		p.targetSequence == 1 && len(p.hops) == 1 && p.hops[0].sequence == 1 && p.hops[0].transition == TransitionOrigin &&
+		p.signatureProtocolCoherent() && p.verificationReasonFactsCoherent()
 }
 
 // currentTransition returns the only truthful transition for current-only verification.

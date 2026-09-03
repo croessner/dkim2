@@ -514,6 +514,12 @@ func assertAuthenticMappedCell(t *testing.T, result dkim2.VerifyResult, testCase
 	wantScope, _ := mapVerificationScope(result.Scope())
 	wantContent, _ := mapHistoricalContent(result.HistoricalContent())
 	wantSignatures, _ := mapHistoricalSignatures(result.HistoricalSignatures())
+	wantModify := generated.PolicyResultDoNotModifyNotEvaluated
+	wantExplode := generated.PolicyResultDoNotExplodeNotEvaluated
+	if testCase.state == dkim2.ResultStatePASS {
+		wantModify = generated.PolicyResultDoNotModifyNotRequested
+		wantExplode = generated.PolicyResultDoNotExplodeNotRequested
+	}
 	if !valid || verification.State != wantState || verification.PrimaryReason != wantReason ||
 		verification.Scope != wantScope ||
 		verification.HistoricalContent != wantContent ||
@@ -525,8 +531,8 @@ func assertAuthenticMappedCell(t *testing.T, result dkim2.VerifyResult, testCase
 		len(verification.SignatureSets) != result.SignatureSetCount() ||
 		policyResult.Mode != wantMode || policyResult.Verdict != wantVerdict ||
 		policyResult.PrimaryReason != wantPolicyReason ||
-		policyResult.DoNotModify != generated.PolicyResultDoNotModifyNotEvaluated ||
-		policyResult.DoNotExplode != generated.PolicyResultDoNotExplodeNotEvaluated {
+		policyResult.DoNotModify != wantModify ||
+		policyResult.DoNotExplode != wantExplode {
 		t.Fatal("authentic matrix cell mapped incorrect state or policy")
 	}
 }

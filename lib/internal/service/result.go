@@ -131,14 +131,19 @@ func (r Result) withAuthenticatedHistory(content HistoricalState, projection pol
 	return r
 }
 
-// withAuthenticatedOrigin upgrades an m=1 current proof without a second key lookup.
+// withAuthenticatedOrigin upgrades an m=1 current proof and its sealed policy evidence.
 func (r Result) withAuthenticatedOrigin() Result {
 	if r.state != StatePASS || r.target.Sequence != 1 || r.target.Instance != 1 || !r.policyProjection.Valid() {
+		return internalContractResult(r.target)
+	}
+	projection, err := r.policyProjection.CompleteOriginHistory(policy.DefaultLimits())
+	if err != nil {
 		return internalContractResult(r.target)
 	}
 	r.scope = ScopeChain
 	r.historicalContent = HistoricalComplete
 	r.historicalSignatures = HistoricalComplete
+	r.policyProjection = projection
 	return r
 }
 

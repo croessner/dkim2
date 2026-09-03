@@ -76,7 +76,7 @@ func TestServiceAloneUpgradesPassingCandidateAndDiscardsNonPassFlags(t *testing.
 	}
 	passing := passingResult.PolicyProjection()
 	hops := passing.Hops()
-	if !passing.Valid() || passing.Protocol() != policy.ProtocolPASS || passing.HistoryCoverage() != policy.HistoryNotEvaluated || len(hops) != 1 ||
+	if !passing.Valid() || passing.Protocol() != policy.ProtocolPASS || passing.HistoryCoverage() != policy.HistoryComplete || len(hops) != 1 ||
 		hops[0].Sequence() != 1 || hops[0].Transition() != policy.TransitionOrigin || !hops[0].DoNotModify() || !hops[0].DoNotExplode() || !hops[0].Feedback() || !hops[0].FeedHere() || !hops[0].Exploded() {
 		t.Fatalf("PASS projection = %#v hops=%#v", passing, hops)
 	}

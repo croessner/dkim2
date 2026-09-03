@@ -60,6 +60,55 @@ func TestSelectedProjectionAuthenticatesOnlyPassingCurrentFlags(t *testing.T) {
 	}
 }
 
+// TestCompleteOriginHistoryPreservesCurrentEvidence verifies the one-hop completion invariant.
+func TestCompleteOriginHistoryPreservesCurrentEvidence(t *testing.T) {
+	hop := mustProjectionHop(t, 1, TransitionOrigin)
+	set := mustProjectionSignatureFact(t, SetAlgorithmRSA, SetStatusPass, SetReasonNone, true, true)
+	current, err := NewSelectedProjection(ProtocolPASS, VerificationReasonNone, 1, []HopFact{hop}, []SignatureFact{set}, DefaultLimits())
+	if err != nil {
+		t.Fatalf("NewSelectedProjection() error = %v", err)
+	}
+
+	completed, err := current.CompleteOriginHistory(DefaultLimits())
+	if err != nil || !completed.Valid() || completed.HistoryCoverage() != HistoryComplete || len(completed.Hops()) != 1 || len(completed.SignatureFacts()) != 1 ||
+		!completed.SignatureFacts()[0].TestingDeclared() || !completed.SignatureFacts()[0].StrictIdentityDeclared() {
+		t.Fatalf("CompleteOriginHistory() = %#v error=%v", completed, err)
+	}
+	if current.HistoryCoverage() != HistoryNotEvaluated {
+		t.Fatalf("current projection mutated to %q", current.HistoryCoverage())
+	}
+}
+
+// TestCompleteOriginHistoryRejectsIneligibleProjections verifies fail-closed completion.
+func TestCompleteOriginHistoryRejectsIneligibleProjections(t *testing.T) {
+	pass := mustProjectionSignatureFact(t, SetAlgorithmRSA, SetStatusPass, SetReasonNone, false, false)
+	for _, test := range []struct {
+		name    string
+		target  uint64
+		history HistoryCoverage
+		hops    []HopFact
+	}{
+		{name: "non-origin target", target: 2, history: HistoryNotEvaluated, hops: []HopFact{mustProjectionHop(t, 2, TransitionNotEvaluated)}},
+		{name: "already complete", target: 1, history: HistoryComplete, hops: []HopFact{mustProjectionHop(t, 1, TransitionOrigin)}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			var current Projection
+			var err error
+			if test.history == HistoryNotEvaluated {
+				current, err = NewSelectedProjection(ProtocolPASS, VerificationReasonNone, test.target, test.hops, []SignatureFact{pass}, DefaultLimits())
+			} else {
+				current, err = NewHistoricalProjection(test.target, test.history, test.hops, DefaultLimits())
+			}
+			if err != nil {
+				t.Fatalf("fixture error = %v", err)
+			}
+			if completed, completionErr := current.CompleteOriginHistory(DefaultLimits()); !IsErrorCode(completionErr, ErrorInternalContract) || !completed.IsZero() {
+				t.Fatalf("completion = %#v error=%v", completed, completionErr)
+			}
+		})
+	}
+}
+
 // TestRevisionFailureProjectionSeparatesCurrentTestingFactsFromInheritedFailure locks fail-closed history provenance.
 func TestRevisionFailureProjectionSeparatesCurrentTestingFactsFromInheritedFailure(t *testing.T) {
 	hop := mustProjectionHop(t, 2, TransitionNotEvaluated)
