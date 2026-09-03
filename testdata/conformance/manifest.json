@@ -118,7 +118,7 @@
     {
       "id": "openapi-independent-oracle-source",
       "path": "cmd/dkim2ctl/internal/testclient/public_socket_test.go",
-      "sha256": "306845750b79dc5af18dcd858d12cd6b71f1900a80c465df9a115e6cea83eb4c",
+      "sha256": "c37814828b265a019d0c1848917ac311010ef82c3e069ef5f5a8268b42a8b481",
       "module": "cmd/dkim2ctl"
     },
     {
@@ -184,7 +184,7 @@
     {
       "id": "policy-positive-source",
       "path": "lib/policy_api_test.go",
-      "sha256": "d71b7930a8f752c9e14f719e65efe70c5712e1f8d316ec5a9d4a3205d83a6d94",
+      "sha256": "3d283722ee57cb4aa485c130e48a7349de5d54604f02032f0f99cfa664198e14",
       "module": "lib"
     },
     {
