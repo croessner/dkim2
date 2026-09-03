@@ -67,7 +67,9 @@ Before Docker starts, a Go overlay test compiles inside the repository verifier
 package and invokes the producer's canonical Recipe, projection-binding, and
 bound-hop functions. It locks the tracked wire fixture to the same private
 producer logic used for real responses, including the empty Recipe lists on the
-unchanged origin hop.
+unchanged origin hop. It also proves that the aggregate custody structure agrees
+with the projected hop transitions, so an ordinary chain cannot claim evaluated
+next-domain links.
 
 The trusted SMTP peer is `203.0.113.25`. The native plugin permits only the
 configured `203.0.113.0/24` contract for the target hop. A separate

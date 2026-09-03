@@ -11,6 +11,9 @@ import (
 )
 
 type policyE2EProjectionFixture struct {
+	Verification struct {
+		CustodyStructure string `json:"custody_structure"`
+	} `json:"verification"`
 	VerifierProjection struct {
 		Schema  string `json:"schema"`
 		Draft   string `json:"draft"`
@@ -58,10 +61,10 @@ func TestPolicyE2ETwoHopProjectionBinding(t *testing.T) {
 		hops[index] = VerifierHop{
 			domain: source.SignerDomain, algorithms: algorithms, recipe: descriptor,
 			sequence: source.Sequence, instance: source.MessageInstance,
-			custody: VerifierCustodyTransition(source.CustodyTransition),
-			recipeMode: VerifierRecipeMode(source.RecipeMode),
-			headerState: HistoryDimensionState(source.HistoryHeaderState),
-			bodyState: HistoryDimensionState(source.HistoryBodyState),
+			custody:       VerifierCustodyTransition(source.CustodyTransition),
+			recipeMode:    VerifierRecipeMode(source.RecipeMode),
+			headerState:   HistoryDimensionState(source.HistoryHeaderState),
+			bodyState:     HistoryDimensionState(source.HistoryBodyState),
 			bodyAvailable: recipe.BodyAvailability(source.BodyAvailability),
 			flags: RevisionFlagFacts{
 				doNotModify: source.DoNotModify, doNotExplode: source.DoNotExplode,
@@ -83,6 +86,20 @@ func TestPolicyE2ETwoHopProjectionBinding(t *testing.T) {
 		binding := verifierBoundHopBinding(projectionBinding, hops[index])
 		assertPolicyE2EDigest(t, "hop", binding[:], fixture.VerifierProjection.Hops[index].HopBinding)
 		hops[index].binding = binding
+	}
+	expectedCustodyStructure := "not_present"
+	for index, hop := range hops {
+		switch hop.custody {
+		case VerifierCustodyOrigin, VerifierCustodyOrdinary:
+		case VerifierCustodyNextDomain:
+			expectedCustodyStructure = "nd_links_evaluated"
+		case VerifierCustodyTerminalNextDomain:
+			t.Fatalf("hop %d has an unresolved terminal next-domain transition", index+1)
+		}
+	}
+	if fixture.Verification.CustodyStructure != expectedCustodyStructure {
+		t.Fatalf("aggregate custody structure = %q, want %q for projected transitions",
+			fixture.Verification.CustodyStructure, expectedCustodyStructure)
 	}
 
 	projection := VerifierProjection{

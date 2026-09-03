@@ -7,7 +7,7 @@
     "scope": "chain",
     "historical_content": "complete",
     "historical_signatures": "complete",
-    "custody_structure": "nd_links_evaluated",
+    "custody_structure": "not_present",
     "target": {"sequence": "2", "instance": "2"},
     "checks": [{"class": "protocol", "reason": "none"}],
     "signature_sets": []
