@@ -309,8 +309,14 @@ The evaluation proves, in this order, and stops at the first failure:
    is also DKIM2 signed", so evaluation stops with `propagation =
    not_applicable` and every later member `not_evaluated`.
 3. **Local hop identity**: this is Section 12.1.2 item 2. The completion
-   signature `i=n` must (a) verify, (b) have a `d=` that is a local authority
-   domain for the tenant, resolved through the datasource before the
+   signature `i=n` must (a) verify, with its Section 8.4 timestamp window
+   evaluated against the outer DSN's highest-signature `t=` instead of the
+   current clock, because a DSN may legitimately arrive long after the
+   forwarding: the completion `t=` must not exceed the outer `t=` plus the
+   verifier's skew allowance, and the outer `t=` minus the completion `t=`
+   must stay within the verifier's maximum age, (b) have a `d=` that is a
+   local authority domain for the tenant, resolved through the datasource
+   before the
    projection is emitted, (c) satisfy the Section 11.4 relaxed domain match
    between its `d=` and its `mf=` domain, and (d) have an `mf=` that is
    byte-equal to the observed outer DSN recipient after lowercasing the
@@ -329,8 +335,10 @@ The evaluation proves, in this order, and stops at the first failure:
    `not_local`.
 4. **Outer signer alignment**: this is Section 12.1.2 item 1. The outer DSN
    signer's `d=` relaxed-matches the domain of at least one `rt=` path of
-   the completion signature. Reading "aligned" as the relaxed domain match
-   is a local interpretation.
+   the completion signature: the outer `d=` is equal to, or a parent domain
+   of, that `rt=` domain, so a recipient domain may be signed by its
+   organizational domain but not the reverse. Reading "aligned" as this
+   directed relaxed domain match is a local interpretation.
 5. **Recipient linkage**: at least one RFC 3464 recipient group whose
    `Final-Recipient` address, compared raw, or whose `Original-Recipient`
    address, compared after bounded xtext decoding, matches an authenticated
@@ -359,10 +367,12 @@ The result is one closed `delivery_status` projection:
 `propagation` is informational in `/v1/process`. It tells a policy consumer
 whether the propagation adapter would be able to act. It is computed from the
 same evidence without building anything, so `not_reconstructable` in
-`/v1/process` reflects only conditions visible without a rebuild, such as a
-headers-only embedded original whose run contains a header recipe. The
-propagation route may still return `not_reconstructable` after an attempted
-rebuild.
+`/v1/process` reflects only the two conditions visible without a rebuild: a
+previous hop `rt=` with more than one path, and an unsupported historical
+hash tuple at or above the previous hop's instance. A headers-only embedded
+original with a header recipe in the run is not one of them, because rebuild
+step 5 degrades that case instead of failing it. The propagation route may
+still return `not_reconstructable` after an attempted rebuild.
 
 Temporary DNS or key failures map to `embedded = temperror`; a temporary
 datasource failure maps to `local_hop = temperror`. Both carry the existing
@@ -374,8 +384,11 @@ carries a temporary meaning.
 Run-member verification inside `/v1/process` needs no reconstruction: a
 DKIM2-Signature covers only the Message-Instance and DKIM2-Signature fields
 named by Section 9.6, which are present in the embedded original as is. It
-does add one bounded key fetch per run member under the existing signature
-count limit.
+adds bounded key fetches per run member under the existing signature-set
+limit, deduplicated by the provider cache. A member is verified across all of
+its supported signature sets with the same all-hop semantics as chain
+verification: any permanent set failure rejects the member even if another
+set passes.
 
 ### Policy mapping for received DSNs
 
@@ -390,13 +403,20 @@ evaluated top-down in stage order and the first matching row decides.
 | Outer verification not `pass` | existing outer policy applies unchanged | | |
 | `structure` not `valid` | `reject` | `continue` | `continue` |
 | `embedded = unverified` | `reject` (draft SHOULD) | `continue` | `continue` |
-| `embedded = absent` | `accept` | `accept` | `accept` |
+| `embedded = absent` | `accept` | `accept` | `continue` |
 | `embedded = temperror` or `local_hop = temperror` | `tempfail` | `tempfail` | `continue` |
-| `local_hop = not_evaluated` because no tenant is available | `accept` | `accept` | `accept` |
+| `local_hop = not_evaluated` because no tenant is available | `accept` | `accept` | `continue` |
 | `local_hop = mismatch` or `outer_alignment = misaligned` | `reject` (draft SHOULD) | `continue` | `continue` |
-| `local_hop = not_local` | `accept` | `accept` | `accept` |
+| `local_hop = not_local` | `accept` | `accept` | `continue` |
 | `recipient_linkage = unlinked` | `reject` | `continue` | `continue` |
-| fully linked, any `propagation` value | `accept` | `accept` | `accept` |
+| fully linked, any `propagation` value | `accept` | `accept` | `continue` |
+
+An `accept` row never upgrades the outer verdict: it keeps whatever the
+outer message verification and policy already decided, so in `testing` mode
+the delivery-neutral `continue` remains the result. Reject, tempfail, and
+continue rows replace the outer verdict. The received-DSN outcome is recorded
+as a policy finding on the single `PolicyDecision`, which keeps one policy
+authority and one action plan.
 
 `local_hop = not_local` is accepted because a DSN in transit through a relay
 is valid mail for that relay; the relay is not the party Section 12.1.2 speaks
