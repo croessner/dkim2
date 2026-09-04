@@ -453,7 +453,12 @@ follows.
 2. **Verify the previous hop.** The previous hop signature `i=k-1` must
    verify cryptographically over the reconstructed state at its instance,
    with the same custody and Section 9.6 rules the current-target verifier
-   applies. The verifier's Section 8.4 timestamp window is evaluated with the
+   applies. Custody is validated over the whole chain below and including
+   `i=k-1`, exactly as the current-target verifier validates the chain below
+   its target; a broken link below the previous hop is reported as the
+   distinct outcome `custody_rejected`, not as an alignment failure of the
+   previous hop itself. This is stricter than Section 12.1.1 requires and is
+   a recorded local interpretation. The verifier's Section 8.4 timestamp window is evaluated with the
    completion signature's `t=`, the moment this system forwarded the message,
    as the reference time instead of the current time, and the previous hop's
    `t=` must not exceed the completion `t=`; a DSN that arrives long after
@@ -479,7 +484,16 @@ follows.
    rule. Every field above `i=k-1` was
    prepended by this system or by a later system, because each hop prepends
    its fields; every field below it was present when the previous hop signed.
-   Every other unsigned field is preserved byte-exact. This is local policy;
+   Every other unsigned field is preserved byte-exact, and the rebuilt header
+   block keeps the pruned wire order for every field name the run's recipes
+   did not touch; only fields whose name a header recipe rewrote follow the
+   recipe applier's regrouping. The Section 6.2 header hash is order-neutral
+   across names, so both orders verify, but preserving the wire order keeps
+   `Received` and `Return-Path` fields in their RFC 5322 trace position and
+   does not reveal to the previous hop which names our recipe touched. A
+   previous hop `rt=` or `mf=` that carries an obsolete RFC 5321 source route
+   is `not_reconstructable`; the rebuild never emits a source route in
+   `Final-Recipient` or `To:`. This is local policy;
    Section 12.1.1 speaks of "the state the message was in when it was
    forwarded", and fields above `i=k-1` describe our reception and the onward
    path, not that state, and would leak topology to the previous hop. The
@@ -877,7 +891,12 @@ route, and the propagation capability is rejected on every other route.
   or `unprovisioned_domain`
 - `propagation` present only with `accept`: `next_hop_recipient` (exact
   SMTP forward path with angle brackets), `smtputf8_required` (true when
-  the previous hop's `mf=` or the rebuilt message needs `SMTPUTF8`),
+  the next-hop path or any header field of the rebuilt DSN contains a
+  non-ASCII byte in the RFC 6531/6532 sense; an 8-bit body alone does not
+  set it and is an `8BITMIME` question for the re-injection client. Because
+  the signed-envelope grammar of this implementation is ASCII-only, an EAI
+  previous hop `mf=` cannot verify and propagation fails closed as
+  `embedded = unverified`; EAI previous hops are a recorded known limit),
   `commit_token` (opaque, bounded, bound to the coordinate), and `raw_rfc5322_base64` of
   the complete signed DSN
 
