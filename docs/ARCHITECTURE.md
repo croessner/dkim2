@@ -70,6 +70,7 @@
 | 0.1.0-draft | 2026-08-21 | Christian Roessner / Codex | Preserved daemon-owned inbound `Authentication-Results` reporting for delivery-neutral `testing` policy: applicable `continue` responses may carry the same single bounded report action as `accept`, while unsigned, rejecting, temporary, and non-inbound outcomes retain their existing mutation restrictions. |
 | 0.1.0-draft | 2026-08-25 | Christian Roessner / Codex | Advanced the message baseline to Draft-06. The migration authority adds SHA-512 Message-Instance verification, the revised unsigned-header set, lowercase Recipe keys, selector and per-algorithm signature cardinality, unchanged-state Message-Instances, typed diagnostics, a drain-only replay epoch rotation, generated-contract parity, and explicit `unqualified_draft06` Exim status until fresh Linux qualification evidence exists. The DNS companion remains `draft-chuang-dkim2-dns-04`. |
 | 0.1.0-draft | 2026-08-30 | Christian Roessner / Codex | Added an explicit TLS-1.3-only private-container-network listener for authenticated local adapters, backed by generation-confined internal-PKI certificate, key, and CA material; loopback remains the default and plaintext remote exposure remains unsupported. |
+| 0.1.0-draft | 2026-09-04 | Christian Roessner / Claude | Planned M26 received delivery-status evaluation and Draft-06 Section 12.1.1 DSN propagation: a read-only `delivery_status` projection inside `/v1/process` with datasource-defined locality, a Section 12.1.1 rebuild that removes the complete local hop run across `nd=` and imaginary hops, re-proves the previous state, and verifies the previous hop's signature before its `mf=` becomes a recipient, a separate replay-gated `/v1/dsn/propagate` route whose signing authority is the removed completion signature's domain, and an MTA-neutral LMTP-to-SMTP propagation adapter that needs no MTA patch. This records the implementation baseline, not completion. |
 
 ## 1. Purpose
 
@@ -442,6 +443,15 @@ cmd/dkim2ctl/internal/
 cmd/dkim2-milter/internal/
 ├── config/
 └── milter/
+
+cmd/dkim2-dsn-propagator/internal/
+├── app/
+├── config/
+├── daemon/
+├── lmtp/
+├── observability/
+├── reinject/
+└── securefile/
 
 testdata/
 ├── corpus/
@@ -2121,6 +2131,55 @@ The reference implementation must generate and apply draft-conformant recipes.
 Generated recipes may be conservative and are not required to be minimal. Later
 revisions can optimize recipe size without changing verification semantics.
 
+### 11.1 Delivery-Status Reception and Propagation
+
+Received DSNs and DSN propagation are specified in
+`docs/specs/implementation/delivery-status-propagation.md`. The architecture
+decisions are:
+
+1. A DKIM2-signed inbound null-sender `multipart/report` is first verified as
+   an ordinary message. Only then does `/v1/process` evaluate it as a DSN
+   under Draft-06 Section 12.1.2: RFC 6522 structure, embedded-original
+   verification, local-hop identity, outer-signer alignment with the local
+   hop's `rt=`, RFC 3464 recipient linkage, and failure class. The result is
+   a closed read-only `delivery_status` projection. It can never authorize
+   signing.
+2. "Local" is datasource authority over the signing domain, never an
+   address in `mf=`: the tenant holds an active signing profile of any use
+   for it. The local hop is a run: the completion signature plus every `nd=`
+   or same-tenant imaginary-hop signature this system added before it, as
+   Section 8.7 and Section 9.3 describe. Section 12.1.1 requires the whole
+   run to be removed. A previous hop that is itself an `nd=` signature is an
+   unsupported chain, not an approximation.
+3. Propagation is a separate daemon route with its own capability, a
+   two-phase replay coordinate that is reserved on propagation and committed
+   after re-injection, and its own response and disposition types. The
+   rebuild descends the run through the existing
+   history coordinator and recipe applier, verifies the previous hop's
+   signature over the reconstructed state before its `mf=` may become a
+   recipient, degrades to `text/rfc822-headers` when the body cannot be
+   reconstructed, regenerates the machine and human report parts from closed
+   templates without destination-specific data, and signs a new
+   single-instance, single-signature DSN with `mf=<>` addressed to the
+   previous hop's `mf=`. Only `Action: failed` reports propagate.
+4. The propagation signing domain is the canonical `d=` of the removed,
+   verified completion signature. The outgoing DSN authority, which derives
+   the domain from the embedded highest `d=`, does not apply and is not
+   reachable through the propagation capability. Forwarding domains therefore
+   need a `delivery_status` profile.
+5. The transport component is an MTA-neutral adapter, not a Milter: it
+   receives the DSN from the MTA over LMTP, calls the daemon, and re-submits
+   the rebuilt DSN with a null reverse path to a trusted, Milter-free listener.
+   It acknowledges to the MTA only after re-injection succeeded and the
+   coordinate was committed, giving at-least-once delivery in which a failed
+   re-injection is retried rather than discarded. No MTA patch is
+   required; the Postfix `{postfix_dsn_origin}` enum remains the authority
+   for locally generated bounces only.
+6. Propagation terminates structurally at `i=1`, at a null previous sender,
+   at a non-failure report, at an unsupported chain, at a non-reconstructable
+   state, and at a DSN whose propagation coordinate is already committed; the
+   adapter cannot choose a recipient, and the daemon cannot choose a domain.
+
 ## 12. Security Architecture
 
 ### 12.1 Input Limits
@@ -2448,6 +2507,8 @@ maintainers to understand why behavior exists.
 | M22 - LDAP and SQL datasource providers and legacy migration | Completed: RNS DKIM2 LDAP schema under `1.3.6.1.4.1.31612.1.7`, native v2 key custody, bounded LDAP and PostgreSQL/MySQL/MariaDB readers, immutable generation publication, provider parity, deployable schema/DDL, secret-safe OpenDKIM bootstrap, fresh DNS proof, forward-only rollback, and operator documentation | measured implementation and rollout evidence is retained in the completed implementation specifications | Very high; completed with production LDAP and disposable multi-database evidence |
 | M23 - Native domain onboarding | Implemented candidate: offline domain intent, complete-generation cloning, native RSA/Ed25519 generation, protected receipt/journal recovery, export-only DNS records, fresh DNS/SPKI proof, and digest-bound stage/readback/activation parity for LDAP, PostgreSQL, MySQL, and MariaDB | Exact Prompt 01-11 spans and review/rework variance are retained in the ignored execution ledger; the original 6-to-14-hour estimate excluded production DNS and rollout | Very high; four-backend disposable evidence and Prompt 01-10 reviews complete, fresh final closeout review still required |
 | M24 - External vector corpus | Removed: the retained Draft-02 fixture corpus, checker, and parser-refusal lane were deleted because checkout-time line-ending conversion meant the tested bytes were not the immutable Git blob bytes claimed by the manifest | measured in the historical ignored execution ledger | Closed without a conformance or interoperability claim; runnable implementation comparison remains under M21 |
+| M25 - Outgoing delivery-status signing | Completed: byte-preserving RFC 6522 evidence, Draft Section 12.1 embedded verification, Section 12.1.2 local alignment, dedicated `delivery_status` profile use, route ticket, protected capability, `POST /v1/dsn/sign`, and the Postfix `{postfix_dsn_origin}` adapter | measured in the ignored execution ledger | High; completed with independent review and live Postfix rollout evidence |
+| M26 - Received delivery-status evaluation and DSN propagation | Planned: read-only Section 12.1.2 evaluation inside `/v1/process` with datasource-defined locality, Section 12.1.1 rebuild across `nd=` and imaginary-hop runs with recipe undo, previous-hop signature verification, and headers-only degradation, `POST /v1/dsn/propagate` with removed-completion-signature authority and replay gate, MTA-neutral LMTP-to-SMTP propagation adapter, Rspamd projection, and Postfix qualification without patches | 4 to 6 engineering days | Very high; rebuild correctness and the new authority boundary require independent normative and security review |
 
 Total rough implementation estimate:
 

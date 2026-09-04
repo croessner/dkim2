@@ -26,8 +26,14 @@ certification, or universal interoperability claim.
   constructor for trusted integrations. The originator Milter deliberately tempfails every null
   sender. The dedicated `postfix_dsn` adapter requires the bounce-only Postfix
   `{postfix_dsn_origin}` enum patch and accepts only exact `internal`.
-  Received-DSN
-  processing and DSN propagation are also deferred.
+  Received-DSN evaluation and Draft-06 Section 12.1.1 DSN propagation are
+  not implemented yet. Their implementation-ready contract is
+  [delivery-status-propagation.md](../specs/implementation/delivery-status-propagation.md);
+  until it is closed out, an inbound DSN is verified only as an ordinary
+  message and no DSN is propagated backwards. That contract also excludes
+  propagation when the previous hop is itself an `nd=` signature, and it
+  cannot propagate when the previous hop's public key was rotated away or
+  revoked between forwarding and the arrival of the DSN.
 - Flat-file, LDAP, PostgreSQL, MySQL, MariaDB, and Valkey datasource paths are implemented.
   The offline OpenDKIM migration requires separately managed verified-TLS
   services, explicit mapping, and distinct least-authority principals.
