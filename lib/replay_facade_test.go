@@ -284,15 +284,15 @@ func TestReplayFacadeContractSurfaceIsExact(t *testing.T) {
 		replayMethodString, replayMethodValid,
 	})
 	assertExactReplayMethods(t, reflect.TypeFor[*ReplayDeriver](), []string{
-		replayMethodClose, "Derive", replayMethodFormat, replayMethodGoString, replayMethodString,
+		replayMethodClose, "Derive", "DerivePropagation", replayMethodFormat, replayMethodGoString, replayMethodString,
 	})
 	assertExactReplayMethods(t, reflect.TypeFor[*ReplayMemoryStore](), []string{
-		replayMethodCheckAndRemember, replayMethodClose, replayMethodFormat, replayMethodGoString,
-		replayMethodMarshalJSON, replayMethodMarshalText, replayMethodState, replayMethodString,
+		replayMethodCheckAndRemember, replayMethodClose, "CommitPropagation", replayMethodFormat, replayMethodGoString,
+		replayMethodMarshalJSON, replayMethodMarshalText, "ReservePropagation", replayMethodState, replayMethodString,
 	})
 	assertExactReplayMethods(t, reflect.TypeFor[*ReplayDisabledStore](), []string{
-		replayMethodCheckAndRemember, replayMethodClose, replayMethodFormat, replayMethodGoString,
-		replayMethodMarshalJSON, replayMethodMarshalText, replayMethodState, replayMethodString,
+		replayMethodCheckAndRemember, replayMethodClose, "CommitPropagation", replayMethodFormat, replayMethodGoString,
+		replayMethodMarshalJSON, replayMethodMarshalText, "ReservePropagation", replayMethodState, replayMethodString,
 	})
 	configType := reflect.TypeFor[ReplayMemoryConfig]()
 	if configType.NumMethod() != 0 || reflect.PointerTo(configType).NumMethod() != 0 {

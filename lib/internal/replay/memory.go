@@ -123,6 +123,18 @@ func (s *MemoryStore) validateCheckRequest(
 	key Key,
 	retention Retention,
 ) ([storageKeyByteLength]byte, error) {
+	storage, err := s.validateKeyRequest(ctx, key)
+	if err != nil {
+		return [storageKeyByteLength]byte{}, err
+	}
+	if !retention.Valid() {
+		return [storageKeyByteLength]byte{}, NewError(ErrorCodeInvalidRequest)
+	}
+	return storage, nil
+}
+
+// validateKeyRequest applies exact context, lifecycle, and key precedence.
+func (s *MemoryStore) validateKeyRequest(ctx context.Context, key Key) ([storageKeyByteLength]byte, error) {
 	if err := PreflightContext(ctx); err != nil {
 		return [storageKeyByteLength]byte{}, err
 	}
@@ -137,7 +149,7 @@ func (s *MemoryStore) validateCheckRequest(
 		return [storageKeyByteLength]byte{}, NewError(ErrorCodeInternalInvariant)
 	}
 	storage, present := key.storageValue()
-	if !present || !validStorageKey(key) || !retention.Valid() {
+	if !present || !validStorageKey(key) {
 		return [storageKeyByteLength]byte{}, NewError(ErrorCodeInvalidRequest)
 	}
 	return storage, nil
@@ -148,26 +160,9 @@ func (s *MemoryStore) captureOperationTime(
 	ctx context.Context,
 	retention Retention,
 ) (time.Time, time.Time, error) {
-	if s.state.afterToken != nil {
-		close(s.state.afterToken)
-	}
-	if s.state.continueAfterToken != nil {
-		<-s.state.continueAfterToken
-	}
-	if err := PreflightContext(ctx); err != nil {
+	now, err := s.captureOperationNow(ctx)
+	if err != nil {
 		return time.Time{}, time.Time{}, err
-	}
-	switch s.state.gate.State() {
-	case StoreReady:
-	case StoreClosing, StoreClosed:
-		return time.Time{}, time.Time{}, NewError(ErrorCodeClosed)
-	default:
-		return time.Time{}, time.Time{}, NewError(ErrorCodeInternalInvariant)
-	}
-	now, err := readClock(s.state.clock)
-	if err != nil || now.IsZero() || !s.state.lastNow.IsZero() && now.Before(s.state.lastNow) {
-		s.state.gate.degrade()
-		return time.Time{}, time.Time{}, NewError(ErrorCodeInternalInvariant)
 	}
 	expiry, err := retention.AddTo(now)
 	if err != nil {
@@ -180,29 +175,205 @@ func (s *MemoryStore) captureOperationTime(
 	return now, expiry, nil
 }
 
+// captureOperationNow rechecks admission state and reads one monotone operation time.
+func (s *MemoryStore) captureOperationNow(ctx context.Context) (time.Time, error) {
+	if s.state.afterToken != nil {
+		close(s.state.afterToken)
+	}
+	if s.state.continueAfterToken != nil {
+		<-s.state.continueAfterToken
+	}
+	if err := PreflightContext(ctx); err != nil {
+		return time.Time{}, err
+	}
+	switch s.state.gate.State() {
+	case StoreReady:
+	case StoreClosing, StoreClosed:
+		return time.Time{}, NewError(ErrorCodeClosed)
+	default:
+		return time.Time{}, NewError(ErrorCodeInternalInvariant)
+	}
+	now, err := readClock(s.state.clock)
+	if err != nil || now.IsZero() || !s.state.lastNow.IsZero() && now.Before(s.state.lastNow) {
+		s.state.gate.degrade()
+		return time.Time{}, NewError(ErrorCodeInternalInvariant)
+	}
+	return now, nil
+}
+
 // rememberStorageKey applies bounded pruning and one atomic replay classification.
 func (s *MemoryStore) rememberStorageKey(
 	storage [storageKeyByteLength]byte,
 	now time.Time,
 	expiry time.Time,
 ) (Check, error) {
-	pruned := s.pruneExpired(now)
-	if existing, exists := s.state.entries[storage]; exists {
-		if existing.expiry.After(now) {
-			return CheckReplayed, nil
+	existing, err := s.liveEntry(storage, now, entryFirstSeen)
+	if err != nil {
+		return 0, err
+	}
+	if existing != nil {
+		return CheckReplayed, nil
+	}
+	if _, err := s.insertEntry(storage, expiry, entryFirstSeen); err != nil {
+		return 0, err
+	}
+	return CheckFirstSeen, nil
+}
+
+// ReservePropagation atomically inserts or refreshes one pending propagation
+// coordinate. A live lease is reported as pending, a committed coordinate as
+// committed, and an absent coordinate or an expired lease becomes pending
+// with a fresh lease and a fresh retention.
+func (s *MemoryStore) ReservePropagation(
+	ctx context.Context,
+	key Key,
+	retention Retention,
+	lease Lease,
+) (reservation PropagationReservation, resultErr error) {
+	defer func() {
+		if recover() != nil {
+			reservation = 0
+			resultErr = NewError(ErrorCodeInternalInvariant)
 		}
-		if pruned >= s.state.limits.PruneBudget {
-			return 0, NewError(ErrorCodeLimitExceeded)
-		}
+	}()
+	storage, err := s.validateCheckRequest(ctx, key, retention)
+	if err != nil {
+		return 0, err
+	}
+	if !lease.Valid() {
+		return 0, NewError(ErrorCodeInvalidRequest)
+	}
+	if err := s.state.gate.admit(StoreReady); err != nil {
+		return 0, err
+	}
+	defer s.state.gate.finish()
+	if err := s.acquireToken(ctx); err != nil {
+		return 0, err
+	}
+	defer s.releaseToken()
+	now, expiry, err := s.captureOperationTime(ctx, retention)
+	if err != nil {
+		return 0, err
+	}
+	leaseExpiry := now.Add(lease.Duration())
+	if !leaseExpiry.After(now) {
+		s.state.gate.degrade()
 		return 0, NewError(ErrorCodeInternalInvariant)
 	}
-	if len(s.state.entries) >= s.state.limits.MaxEntries {
-		return 0, NewError(ErrorCodeLimitExceeded)
+	s.state.lastNow = now
+	reservation, err = s.reservePropagationKey(storage, now, expiry, leaseExpiry)
+	if err != nil {
+		return 0, err
 	}
-	entry := &memoryEntry{key: storage, expiry: expiry, index: -1}
+	s.waitAfterMutation()
+	return reservation, nil
+}
+
+// reservePropagationKey applies the insert-if-absent and expired-lease refresh rules.
+func (s *MemoryStore) reservePropagationKey(
+	storage [storageKeyByteLength]byte,
+	now time.Time,
+	expiry time.Time,
+	leaseExpiry time.Time,
+) (PropagationReservation, error) {
+	existing, err := s.liveEntry(storage, now, entryPropagation)
+	if err != nil {
+		return 0, err
+	}
+	if existing == nil {
+		entry, insertErr := s.insertEntry(storage, expiry, entryPropagation)
+		if insertErr != nil {
+			return 0, insertErr
+		}
+		entry.propagation = PropagationStatePending
+		entry.lease = leaseExpiry
+		return PropagationReserved, nil
+	}
+	if existing.propagation == PropagationStateCommitted {
+		return PropagationAlreadyCommitted, nil
+	}
+	if existing.lease.After(now) {
+		return PropagationPending, nil
+	}
+	existing.lease = leaseExpiry
+	existing.expiry = expiry
+	heap.Fix(&s.state.expiries, existing.index)
+	return PropagationReserved, nil
+}
+
+// CommitPropagation moves one pending propagation coordinate to committed by
+// compare-and-set. A committed coordinate stays committed; an absent or
+// expired coordinate is unknown.
+func (s *MemoryStore) CommitPropagation(ctx context.Context, key Key) (commit PropagationCommit, resultErr error) {
+	defer func() {
+		if recover() != nil {
+			commit = 0
+			resultErr = NewError(ErrorCodeInternalInvariant)
+		}
+	}()
+	storage, err := s.validateKeyRequest(ctx, key)
+	if err != nil {
+		return 0, err
+	}
+	if err := s.state.gate.admit(StoreReady); err != nil {
+		return 0, err
+	}
+	defer s.state.gate.finish()
+	if err := s.acquireToken(ctx); err != nil {
+		return 0, err
+	}
+	defer s.releaseToken()
+	now, err := s.captureOperationNow(ctx)
+	if err != nil {
+		return 0, err
+	}
+	if err := PreflightContext(ctx); err != nil {
+		return 0, err
+	}
+	s.state.lastNow = now
+	existing, err := s.liveEntry(storage, now, entryPropagation)
+	if err != nil {
+		return 0, err
+	}
+	if existing == nil {
+		return PropagationCommitUnresolved, nil
+	}
+	existing.propagation = PropagationStateCommitted
+	existing.lease = time.Time{}
+	s.waitAfterMutation()
+	return PropagationCommitted, nil
+}
+
+// liveEntry prunes expired records and returns the live record of the
+// requested kind, nil when absent, and a typed error when the record is
+// expired but unprunable or belongs to the other record kind.
+func (s *MemoryStore) liveEntry(storage [storageKeyByteLength]byte, now time.Time, kind entryKind) (*memoryEntry, error) {
+	pruned := s.pruneExpired(now)
+	existing, exists := s.state.entries[storage]
+	if !exists {
+		return nil, nil
+	}
+	if !existing.expiry.After(now) {
+		if pruned >= s.state.limits.PruneBudget {
+			return nil, NewError(ErrorCodeLimitExceeded)
+		}
+		return nil, NewError(ErrorCodeInternalInvariant)
+	}
+	if existing.kind != kind {
+		return nil, NewError(ErrorCodeInconsistent)
+	}
+	return existing, nil
+}
+
+// insertEntry adds one record under the entry ceiling.
+func (s *MemoryStore) insertEntry(storage [storageKeyByteLength]byte, expiry time.Time, kind entryKind) (*memoryEntry, error) {
+	if len(s.state.entries) >= s.state.limits.MaxEntries {
+		return nil, NewError(ErrorCodeLimitExceeded)
+	}
+	entry := &memoryEntry{key: storage, expiry: expiry, index: -1, kind: kind}
 	s.state.entries[storage] = entry
 	heap.Push(&s.state.expiries, entry)
-	return CheckFirstSeen, nil
+	return entry, nil
 }
 
 // waitAfterMutation runs only the deterministic post-linearization test seam.
@@ -340,11 +511,24 @@ func readClock(clock Clock) (now time.Time, resultErr error) {
 	return clock.Now(), nil
 }
 
+// entryKind separates ordinary first-seen records from propagation coordinates.
+type entryKind uint8
+
+const (
+	// entryFirstSeen is an ordinary single-value replay record.
+	entryFirstSeen entryKind = iota
+	// entryPropagation is a two-phase propagation coordinate.
+	entryPropagation
+)
+
 // memoryEntry is one one-to-one map and heap replay record.
 type memoryEntry struct {
-	key    [storageKeyByteLength]byte
-	expiry time.Time
-	index  int
+	key         [storageKeyByteLength]byte
+	expiry      time.Time
+	index       int
+	kind        entryKind
+	propagation PropagationState
+	lease       time.Time
 }
 
 // expiryHeap orders entries by expiry and protected-key bytes.

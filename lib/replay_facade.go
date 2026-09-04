@@ -167,6 +167,73 @@ func UseReplayStorageKey(key ReplayKey, use func(storageKey string) error) error
 	return replay.UseStorageKey(key, use)
 }
 
+// ReplayPropagationKeyDomainLabel is the distinct domain-separation frame of propagation coordinates.
+const ReplayPropagationKeyDomainLabel = replay.PropagationKeyDomainLabel
+
+// ReplayLease is an immutable validated whole-millisecond propagation pending lease.
+type ReplayLease = replay.Lease
+
+// NewReplayLease validates and constructs one propagation pending lease.
+func NewReplayLease(duration time.Duration) (ReplayLease, error) {
+	return replay.NewLease(duration)
+}
+
+// ReplayPropagationState is the closed stored state of one propagation coordinate.
+type ReplayPropagationState = replay.PropagationState
+
+const (
+	// ReplayPropagationStatePending reports a reserved coordinate whose attempt has not committed.
+	ReplayPropagationStatePending = replay.PropagationStatePending
+	// ReplayPropagationStateCommitted reports a coordinate whose propagated report was accepted.
+	ReplayPropagationStateCommitted = replay.PropagationStateCommitted
+	// ReplayPropagationCommittedValue is the exact stored value of a committed coordinate.
+	ReplayPropagationCommittedValue = replay.PropagationCommittedValue
+	// ReplayPropagationPendingPrefix starts the stored value of a pending coordinate.
+	ReplayPropagationPendingPrefix = replay.PropagationPendingPrefix
+)
+
+// FormatReplayPropagationPending renders the stored pending value for one lease expiry.
+func FormatReplayPropagationPending(leaseExpiry time.Time) string {
+	return replay.FormatPropagationPending(leaseExpiry)
+}
+
+// ParseReplayPropagationValue decodes one stored propagation value.
+func ParseReplayPropagationValue(value string) (ReplayPropagationState, time.Time, bool) {
+	return replay.ParsePropagationValue(value)
+}
+
+// ReplayPropagationReservation identifies one successful propagation reservation outcome.
+type ReplayPropagationReservation = replay.PropagationReservation
+
+const (
+	// ReplayPropagationReserved means the coordinate is now pending under a fresh lease.
+	ReplayPropagationReserved = replay.PropagationReserved
+	// ReplayPropagationPending means another attempt holds a live lease.
+	ReplayPropagationPending = replay.PropagationPending
+	// ReplayPropagationAlreadyCommitted means the coordinate was committed within retention.
+	ReplayPropagationAlreadyCommitted = replay.PropagationAlreadyCommitted
+	// ReplayPropagationReservationDisabled means explicit local policy selected no replay storage.
+	ReplayPropagationReservationDisabled = replay.PropagationReservationDisabled
+)
+
+// ReplayPropagationCommit identifies one successful propagation commit outcome.
+type ReplayPropagationCommit = replay.PropagationCommit
+
+const (
+	// ReplayPropagationCommitted means the coordinate is committed.
+	ReplayPropagationCommitted = replay.PropagationCommitted
+	// ReplayPropagationCommitUnresolved means the token resolves to no pending or committed coordinate within retention.
+	ReplayPropagationCommitUnresolved = replay.PropagationCommitUnresolved
+	// ReplayPropagationCommitDisabled means explicit local policy selected no replay storage.
+	ReplayPropagationCommitDisabled = replay.PropagationCommitDisabled
+)
+
+// ReplayPropagationStore reserves and commits propagation coordinates in two phases.
+type ReplayPropagationStore interface {
+	ReservePropagation(context.Context, ReplayKey, ReplayRetention, ReplayLease) (ReplayPropagationReservation, error)
+	CommitPropagation(context.Context, ReplayKey) (ReplayPropagationCommit, error)
+}
+
 // ReplayIdentities adapts only one coherent verifier-owned aggregate-current-PASS projection.
 func ReplayIdentities(result VerifyResult) (ReplayIdentitySet, error) {
 	if !result.replayEligible() || result.state == nil || !result.state.hasReplayProjection ||

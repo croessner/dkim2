@@ -255,6 +255,22 @@ func (i RevisionInstant) UnixSeconds() uint64 {
 	return uint64(i.now.Unix())
 }
 
+// WithinSkewOf reports whether i was captured by the same verifier as
+// reference under the same policy and lies within the policy's future
+// tolerance of reference in either direction. It lets a signing plan accept
+// a caller-supplied instant, such as the one a report was rendered at, only
+// when it is bounded by a fresh capture of the same clock.
+func (i RevisionInstant) WithinSkewOf(reference RevisionInstant) bool {
+	if !i.Valid() || !reference.Valid() || i.owner != reference.owner || i.policy != reference.policy {
+		return false
+	}
+	difference := i.now.Sub(reference.now)
+	if difference < 0 {
+		difference = -difference
+	}
+	return difference <= i.policy.FutureTolerance
+}
+
 // Time returns the exact immutable captured instant to trusted internal consumers.
 func (i RevisionInstant) Time() time.Time {
 	if !i.Valid() {

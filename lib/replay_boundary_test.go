@@ -295,6 +295,7 @@ func auditReplayPublicAPI(root string, files []parsedReplayFile) replayPublicAPI
 			"NewReplayDeriver": true, "NewReplayMemoryStore": true,
 			"NewReplayDisabledStore": true, useReplayStorageKeyFunction: true,
 			"NewAuthenticator": true, "NewDisabledAuthenticator": true,
+			"NewReplayLease": true, "FormatReplayPropagationPending": true, "ParseReplayPropagationValue": true,
 		},
 		types: map[string]bool{
 			"ReplayKey": true, "ReplayCheck": true, "ReplayStoreState": true,
@@ -305,6 +306,8 @@ func auditReplayPublicAPI(root string, files []parsedReplayFile) replayPublicAPI
 			replayMemoryConfigType: true, "ReplayMemoryStore": true, "ReplayDisabledStore": true,
 			"AuthenticationReplayClass": true, "AuthenticationReason": true,
 			"AuthenticationResult": true, "Authenticator": true,
+			"ReplayLease": true, "ReplayPropagationState": true, "ReplayPropagationReservation": true,
+			"ReplayPropagationCommit": true, "ReplayPropagationStore": true,
 		},
 		constants: map[string]bool{
 			"ReplayKeyAlgorithm": true, "ReplayStoredValue": true,
@@ -322,6 +325,12 @@ func auditReplayPublicAPI(root string, files []parsedReplayFile) replayPublicAPI
 			"AuthenticationReplayNotChecked":                      true, "AuthenticationReplayDisabled": true,
 			"AuthenticationReplayFirstSeen": true, "AuthenticationReplayExploded": true,
 			"AuthenticationReplayReplayed": true, "AuthenticationReplayIndeterminate": true,
+			"ReplayPropagationKeyDomainLabel": true, "ReplayPropagationStatePending": true,
+			"ReplayPropagationStateCommitted": true, "ReplayPropagationCommittedValue": true,
+			"ReplayPropagationPendingPrefix": true, "ReplayPropagationReserved": true,
+			"ReplayPropagationPending": true, "ReplayPropagationAlreadyCommitted": true,
+			"ReplayPropagationReservationDisabled": true, "ReplayPropagationCommitted": true,
+			"ReplayPropagationCommitUnresolved": true, "ReplayPropagationCommitDisabled": true,
 		},
 	}
 	rootPackage := filepath.Join(root, "lib")

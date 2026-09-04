@@ -244,6 +244,19 @@ func (r Recipe) HeaderNames() []string {
 	return names
 }
 
+// CanonicalHeaderNames returns the lowercase canonical names of every header
+// plan, the names whose fields the applier regroups when the recipe is applied.
+func (r Recipe) CanonicalHeaderNames() []string {
+	if !r.Valid() {
+		return nil
+	}
+	names := make([]string, len(r.headers))
+	for i, plan := range r.headers {
+		names[i] = plan.canonicalName
+	}
+	return names
+}
+
 // BodyMode returns the closed body-member form.
 func (r Recipe) BodyMode() BodyMode {
 	if !r.Valid() {

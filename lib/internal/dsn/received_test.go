@@ -289,7 +289,7 @@ func TestReceivedEvaluationEligibleCompleteAndHeadersOnly(t *testing.T) {
 			if _, present := evaluation.OriginalEnvelopeID(); present {
 				t.Fatal("OriginalEnvelopeID() present without ENVID")
 			}
-			if _, present := evaluation.OriginalRecipient(); present {
+			if _, present := evaluation.OriginalRecipientFor([]byte(receivedDestination)); present {
 				t.Fatal("OriginalRecipient() present without ORCPT")
 			}
 		})
@@ -535,9 +535,12 @@ func TestReceivedEvaluationReportFacts(t *testing.T) {
 	if !present || string(envelopeID) != "envid-123" {
 		t.Fatalf("OriginalEnvelopeID()=%q present=%t", envelopeID, present)
 	}
-	original, present := evaluation.OriginalRecipient()
+	original, present := evaluation.OriginalRecipientFor([]byte(receivedDestination))
 	if !present || string(original) != "rfc822; dest+40destination.example" {
-		t.Fatalf("OriginalRecipient()=%q present=%t", original, present)
+		t.Fatalf("OriginalRecipientFor()=%q present=%t", original, present)
+	}
+	if _, present := evaluation.OriginalRecipientFor([]byte(receivedLocalRecipient)); present {
+		t.Fatal("OriginalRecipientFor() matched a path the ORCPT does not name")
 	}
 	envelopeID[0] = 'X'
 	if again, _ := evaluation.OriginalEnvelopeID(); string(again) != "envid-123" {
@@ -548,8 +551,8 @@ func TestReceivedEvaluationReportFacts(t *testing.T) {
 	if err != nil || evaluation.Propagation() != PropagationEligible {
 		t.Fatalf("mismatched ORCPT projection=%+v error=%v", projectionOf(evaluation), err)
 	}
-	if _, present := evaluation.OriginalRecipient(); present {
-		t.Fatal("OriginalRecipient() exposed an ORCPT that does not equal the rt= path")
+	if _, present := evaluation.OriginalRecipientFor([]byte(receivedDestination)); present {
+		t.Fatal("OriginalRecipientFor() exposed an ORCPT that does not equal the rt= path")
 	}
 }
 

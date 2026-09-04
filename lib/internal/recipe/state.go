@@ -21,6 +21,14 @@ func NewState(message rawmsg.Message) (State, error) {
 	return newKnownState(message.Headers(), message.Body(), message.Framing())
 }
 
+// NewHeadersOnlyState constructs a header-known state whose body is truthfully
+// unavailable, such as the text/rfc822-headers original of a delivery-status
+// report. Application and generation semantics are unchanged: the state
+// behaves exactly like the body-unavailable state produced by a null recipe.
+func NewHeadersOnlyState(headers rawmsg.HeaderBlock) (State, error) {
+	return newUnavailableState(headers)
+}
+
 // newUnavailableState constructs a header-known state with no body bytes.
 func newUnavailableState(headers rawmsg.HeaderBlock) (State, error) {
 	if !headers.Initialized() {
@@ -76,6 +84,16 @@ func (s State) Body() (rawmsg.Body, bool) {
 		return rawmsg.Body{}, false
 	}
 	return s.body, true
+}
+
+// Framing returns the validated header/body separator form of the state, or
+// the empty value for an invalid state. A body-unavailable state always
+// reports delimited framing because its body is unknown rather than empty.
+func (s State) Framing() rawmsg.MessageFraming {
+	if !s.Valid() {
+		return ""
+	}
+	return s.framing
 }
 
 // Materialize returns exact raw framing when both dimensions are known.

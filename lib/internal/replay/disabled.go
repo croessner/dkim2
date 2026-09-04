@@ -29,19 +29,43 @@ func (s *DisabledStore) CheckAndRemember(
 	_ Key,
 	_ Retention,
 ) (Check, error) {
-	if err := PreflightContext(ctx); err != nil {
+	if err := s.disabledAdmission(ctx); err != nil {
 		return 0, err
 	}
+	return CheckDisabled, nil
+}
+
+// ReservePropagation returns disabled without inspecting key, retention, or lease.
+func (s *DisabledStore) ReservePropagation(ctx context.Context, _ Key, _ Retention, _ Lease) (PropagationReservation, error) {
+	if err := s.disabledAdmission(ctx); err != nil {
+		return 0, err
+	}
+	return PropagationReservationDisabled, nil
+}
+
+// CommitPropagation returns disabled without inspecting the key.
+func (s *DisabledStore) CommitPropagation(ctx context.Context, _ Key) (PropagationCommit, error) {
+	if err := s.disabledAdmission(ctx); err != nil {
+		return 0, err
+	}
+	return PropagationCommitDisabled, nil
+}
+
+// disabledAdmission applies the context and lifecycle rules shared by every disabled operation.
+func (s *DisabledStore) disabledAdmission(ctx context.Context) error {
+	if err := PreflightContext(ctx); err != nil {
+		return err
+	}
 	if s == nil || s.state == nil || s.state.gate == nil {
-		return 0, NewError(ErrorCodeMisconfigured)
+		return NewError(ErrorCodeMisconfigured)
 	}
 	switch s.state.gate.State() {
 	case StoreDisabled:
-		return CheckDisabled, nil
+		return nil
 	case StoreClosing, StoreClosed:
-		return 0, NewError(ErrorCodeClosed)
+		return NewError(ErrorCodeClosed)
 	default:
-		return 0, NewError(ErrorCodeInternalInvariant)
+		return NewError(ErrorCodeInternalInvariant)
 	}
 }
 

@@ -576,40 +576,12 @@ func (c HistoryCoordinator) walkAuthenticatedWithin(ctx context.Context, target 
 		if target-number+1 > uint64(c.limits.MaxTransitions) {
 			return sealedHistory(target, reached, transitions, usage, HistoryStopLimitExceeded, sawUnavailable), nil
 		}
-		currentInstance, currentOK := collection.ByNumber(number)
-		previous, previousOK := collection.ByNumber(number - 1)
-		if !currentOK || !previousOK {
-			return sealedHistory(target, reached, transitions, usage, HistoryStopInternalContract, sawUnavailable), nil
-		}
-		encoded, hasRecipe := currentInstance.Recipe()
-		next := state
-		mode := HistoryRecipeModeUnchanged
-		var usageErr error
-		if hasRecipe {
-			plan, parseUsage, parseErr := c.parser.Parse(encoded.Decoded())
-			usage, usageErr = usage.addRecipe(parseUsage, c.limits)
-			if stop, stopped := historyParseStop(parseErr, usageErr); stopped {
-				return sealedHistory(target, reached, transitions, usage, stop, sawUnavailable), nil
-			}
-			var applyUsage recipe.Usage
-			var applyErr error
-			next, applyUsage, applyErr = c.applier.ApplyHistorical(state, plan)
-			usage, usageErr = usage.addRecipe(applyUsage, c.limits)
-			if stop, stopped := historyApplyStop(applyErr, usageErr); stopped {
-				return sealedHistory(target, reached, transitions, usage, stop, sawUnavailable), nil
-			}
-			mode = HistoryRecipeModeApplied
-		}
-		transition, canonicalWork, transitionErr := c.validatePreviousWithin(next, currentInstance, previous, maxCanonicalBytes-usage.canonical)
-		if transitionErr != nil {
-			stop := historyTransitionStop(transitionErr)
+		step, stop := c.transitionStep(collection, number, state, usage, maxCanonicalBytes)
+		usage = step.usage
+		if stop != "" {
 			return sealedHistory(target, reached, transitions, usage, stop, sawUnavailable), nil
 		}
-		usage, usageErr = usage.addCanonical(canonicalWork, maxCanonicalBytes)
-		if usageErr != nil {
-			return sealedHistory(target, reached, transitions, usage, HistoryStopLimitExceeded, sawUnavailable), nil
-		}
-		transition.mode = mode
+		next, transition := step.state, step.facts
 		if len(transitions) < c.limits.MaxRetainedTransitions {
 			transitions = append(transitions, transition)
 		}
@@ -632,6 +604,59 @@ func (c HistoryCoordinator) walkAuthenticatedWithin(ctx context.Context, target 
 	}
 	coverage := completedHistoryCoverage(sawUnavailable)
 	return newHistoryWalk(coverage, HistoryStopOriginReached, target, reached, transitions, usage).withTerminal(lastTransition).withUnavailable(sawUnavailable), nil
+}
+
+// historyStep is the result of one evaluated transition: the next state, the
+// transition facts, the updated cumulative usage, and the canonical header
+// names the applied recipe rewrote, which the applier regrouped.
+type historyStep struct {
+	state     recipe.State
+	facts     HistoryTransition
+	usage     HistoryUsage
+	rewritten []string
+}
+
+// transitionStep applies the authenticated recipe of instance number to state
+// and compares the result against instance number-1. It returns the step and
+// a closed stop reason when the transition cannot be evaluated; a returned
+// stop never carries a state, only the usage consumed so far.
+func (c HistoryCoordinator) transitionStep(collection instance.Collection, number uint64, state recipe.State, usage HistoryUsage, maxCanonicalBytes int) (historyStep, HistoryStopReason) {
+	currentInstance, currentOK := collection.ByNumber(number)
+	previous, previousOK := collection.ByNumber(number - 1)
+	if !currentOK || !previousOK {
+		return historyStep{usage: usage}, HistoryStopInternalContract
+	}
+	encoded, hasRecipe := currentInstance.Recipe()
+	next := state
+	mode := HistoryRecipeModeUnchanged
+	var rewritten []string
+	var usageErr error
+	if hasRecipe {
+		plan, parseUsage, parseErr := c.parser.Parse(encoded.Decoded())
+		usage, usageErr = usage.addRecipe(parseUsage, c.limits)
+		if stop, stopped := historyParseStop(parseErr, usageErr); stopped {
+			return historyStep{usage: usage}, stop
+		}
+		var applyUsage recipe.Usage
+		var applyErr error
+		next, applyUsage, applyErr = c.applier.ApplyHistorical(state, plan)
+		usage, usageErr = usage.addRecipe(applyUsage, c.limits)
+		if stop, stopped := historyApplyStop(applyErr, usageErr); stopped {
+			return historyStep{usage: usage}, stop
+		}
+		mode = HistoryRecipeModeApplied
+		rewritten = plan.CanonicalHeaderNames()
+	}
+	transition, canonicalWork, transitionErr := c.validatePreviousWithin(next, currentInstance, previous, maxCanonicalBytes-usage.canonical)
+	if transitionErr != nil {
+		return historyStep{usage: usage}, historyTransitionStop(transitionErr)
+	}
+	usage, usageErr = usage.addCanonical(canonicalWork, maxCanonicalBytes)
+	if usageErr != nil {
+		return historyStep{usage: usage}, HistoryStopLimitExceeded
+	}
+	transition.mode = mode
+	return historyStep{state: next, facts: transition, usage: usage, rewritten: rewritten}, ""
 }
 
 // completedHistoryCoverage maps a complete walk with an explicit body gap to partial coverage.

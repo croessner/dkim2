@@ -302,6 +302,16 @@ func (v RevisionVerifier) VerifyForRevision(ctx context.Context, request Revisio
 	return result, capability, nil
 }
 
+// Core returns the validated protocol-core verifier so that facades built on
+// the same provider, limits, and clock can reuse it for evaluations the
+// revision verifier does not own, such as received-DSN evaluation and rebuild.
+func (v RevisionVerifier) Core() verify.Verifier {
+	if !v.valid() {
+		return verify.Verifier{}
+	}
+	return v.verifier
+}
+
 // CaptureOperationInstant captures the sole verifier-owned time for one signing operation.
 func (v RevisionVerifier) CaptureOperationInstant() (verify.RevisionInstant, error) {
 	if !v.valid() {

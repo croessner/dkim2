@@ -24,11 +24,6 @@ func (g deliveryStatusRecipient) links(signed [][]byte) bool {
 	return g.hasOriginal && deliveryStatusPathMatches(g.originalPath, signed)
 }
 
-// originalLinks reports whether the decoded Original-Recipient equals one of the paths.
-func (g deliveryStatusRecipient) originalLinks(signed [][]byte) bool {
-	return g.hasOriginal && deliveryStatusPathMatches(g.originalPath, signed)
-}
-
 // failed reports whether the group carries Action: failed.
 func (g deliveryStatusRecipient) failed() bool {
 	return bytes.EqualFold(g.action, []byte("failed"))

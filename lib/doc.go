@@ -153,6 +153,40 @@
 // verdict, accept rows keep it, and an outer verification or final replay
 // state other than PASS keeps the outer policy unchanged.
 //
+// Signer.RebuildDSNForPropagation and Signer.SignPropagatedDSN implement
+// Draft-06 Section 12.1.1 propagation of a received DSN to the previous hop.
+// The signer re-runs the received-DSN evaluation on the exact request bytes
+// with the mandatory tenant-bound LocalAuthority, and only an eligible
+// evaluation is rebuilt: the local hop run's DKIM2-Signature fields and every
+// Message-Instance above the previous hop's instance are removed by tag value,
+// every Section 4 hash-excluded field above the previous hop signature is
+// removed as fixed local policy, the run is descended through the
+// authenticated recipes with every intermediate state re-proven, and the
+// previous hop signature is verified over the reconstructed state with its
+// Section 8.4 window evaluated at the completion signature's t=. Body
+// evidence that was unavailable at any point degrades the embedded part to
+// text/rfc822-headers. The rebuilt header block keeps the pruned wire order
+// for every name the run's recipes did not rewrite, custody is validated over
+// the whole chain below and including the previous hop, and a previous hop
+// mf= or rt= carrying an obsolete source route is not reconstructable. The
+// fresh report carries a fixed English human part
+// with Content-Language en, Reporting-MTA, an optional verbatim
+// Original-Envelope-Id, one recipient group naming the previous hop's single
+// rt= path with Action failed and the 4.X.Y or 5.X.Y status of the
+// propagation group or 5.0.0, and no destination-specific field. The signing
+// domain is the canonical d= of the removed completion signature; the route
+// purpose delivery_status_propagation, disclosure single, class external,
+// binds the null reverse path to the authenticated previous mf=, and the
+// signed DSN carries exactly one Message-Instance m=1 and one DKIM2-Signature
+// i=1 with mf=<> and rt= equal to that address. PropagatedDSN reports
+// SMTPUTF8Required when any header field of the DSN carries a non-ASCII byte
+// and EightBitMIMERequired when only the embedded body does. Not
+// reconstructable, null previous sender, unsupported chain, terminal origin,
+// non-failure, and ineligible states never produce output. ReplayDeriver.DerivePropagation
+// derives the propagation replay coordinate under a distinct
+// domain-separation frame, and ReplayPropagationStore reserves it with a
+// lease and commits it in two phases.
+//
 // SigningResult is a closed sum. Only UnrestrictedSignedMessage has Bytes.
 // LocalOnlySignedMessage and OutOfBandAcceptanceSignedMessage deliberately have
 // no generic byte, marshal, text, or release surface. Their type-specific

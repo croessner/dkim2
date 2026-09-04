@@ -65,6 +65,23 @@ type Hop struct {
 	Instance uint64
 	// CorruptSignature replaces the computed signature with an invalid value.
 	CorruptSignature bool
+	// UnsignedAbove renders CRLF-terminated header fields directly above this
+	// hop's DKIM2-Signature field, such as trace fields the hop prepended.
+	UnsignedAbove string
+}
+
+// Revision describes one earlier Message-Instance state below the current
+// state of an Original. Revisions are listed in ascending m= order, so the
+// first revision is m=1 and the current Headers and Body form the highest
+// instance.
+type Revision struct {
+	// Headers is the CRLF-terminated base header block of the earlier state.
+	Headers string
+	// Body is the exact body of the earlier state.
+	Body string
+	// Recipe is the JSON recipe carried by the next higher Message-Instance
+	// that reconstructs this state; empty renders that instance without r=.
+	Recipe string
 }
 
 // Original describes one signed embedded original message.
@@ -75,8 +92,14 @@ type Original struct {
 	Body string
 	// Hops are applied in ascending i= order; the last hop is the highest signature.
 	Hops []Hop
-	// ExtraInstances renders additional Message-Instance fields verbatim above m=1.
+	// Revisions lists earlier states in ascending m= order; the current state
+	// becomes m=len(Revisions)+1 and each hop selects its instance explicitly.
+	Revisions []Revision
+	// ExtraInstances renders additional Message-Instance fields verbatim above the highest instance.
 	ExtraInstances []string
+	// Prepend renders CRLF-terminated header fields above every signature,
+	// such as trace fields added by the system that received the message.
+	Prepend string
 }
 
 // Build renders and signs the original. The returned bytes are the complete
@@ -89,42 +112,86 @@ func (o Original) Build() ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	base, err := rawmsg.Parse([]byte(o.Headers + "\r\n" + o.Body))
+	instanceFields, err := o.renderInstances(canonicalizer)
 	if err != nil {
 		return nil, err
-	}
-	headerHash, err := canonicalizer.HeaderHashFromMessage(base)
-	if err != nil {
-		return nil, err
-	}
-	bodyHash, err := canonicalizer.BodyHashFromMessage(base)
-	if err != nil {
-		return nil, err
-	}
-	headerDigest, ok := headerHash.Digest()
-	if !ok {
-		return nil, errors.New("dsntest: header digest missing")
-	}
-	bodyDigest, ok := bodyHash.Digest()
-	if !ok {
-		return nil, errors.New("dsntest: body digest missing")
-	}
-	instances := "Message-Instance: m=1; h=sha256:" + headerDigest.Base64() + ":" + bodyDigest.Base64() + ";\r\n"
-	for _, extra := range o.ExtraInstances {
-		instances = extra + instances
 	}
 	signatureFields := make([]string, 0, len(o.Hops))
+	highest := uint64(0)
 	for index, hop := range o.Hops {
 		sequence := uint64(index + 1)
-		unsigned := renderSignature(sequence, hop, placeholderSignature)
-		candidate := unsigned + joinReverse(signatureFields) + instances + o.Headers + "\r\n" + o.Body
+		if hop.Instance > highest {
+			highest = hop.Instance
+		}
+		if highest == 0 {
+			highest = 1
+		}
+		unsigned := hop.UnsignedAbove + renderSignature(sequence, hop, placeholderSignature)
+		candidate := unsigned + joinReverse(signatureFields) + joinReverse(instanceFields[:min(int(highest), len(instanceFields))]) + o.Headers + "\r\n" + o.Body
 		signed, signErr := signCandidate(canonicalizer, []byte(candidate), sequence, hop)
 		if signErr != nil {
 			return nil, signErr
 		}
-		signatureFields = append(signatureFields, renderSignature(sequence, hop, signed))
+		signatureFields = append(signatureFields, hop.UnsignedAbove+renderSignature(sequence, hop, signed))
 	}
-	return []byte(joinReverse(signatureFields) + instances + o.Headers + "\r\n" + o.Body), nil
+	instances := joinReverse(instanceFields)
+	for _, extra := range o.ExtraInstances {
+		instances = extra + instances
+	}
+	return []byte(o.Prepend + joinReverse(signatureFields) + instances + o.Headers + "\r\n" + o.Body), nil
+}
+
+// renderInstances renders every Message-Instance field in ascending m= order
+// with the hashes of each revision and current state and the recipe that
+// reconstructs the state below each instance. Each hop is signed over the
+// instances that existed when it signed, so the candidate for hop i carries
+// only instances up to the highest instance referenced so far.
+func (o Original) renderInstances(canonicalizer canonical.Canonicalizer) ([]string, error) {
+	states := make([]Revision, 0, len(o.Revisions)+1)
+	states = append(states, o.Revisions...)
+	states = append(states, Revision{Headers: o.Headers, Body: o.Body})
+	rendered := make([]string, 0, len(states))
+	for index, state := range states {
+		number := uint64(index + 1)
+		hashes, err := instanceHashes(canonicalizer, state.Headers, state.Body)
+		if err != nil {
+			return nil, err
+		}
+		line := "Message-Instance: m=" + itoa(number) + "; h=" + hashes + ";"
+		if index > 0 && states[index-1].Recipe != "" {
+			line += " r=" + base64.StdEncoding.EncodeToString([]byte(states[index-1].Recipe)) + ";"
+		}
+		rendered = append(rendered, line+"\r\n")
+	}
+	return rendered, nil
+}
+
+// instanceHashes computes the sha256 header and body hash tuple of one state.
+func instanceHashes(canonicalizer canonical.Canonicalizer, headers, body string) (string, error) {
+	if headers == "" || !strings.HasSuffix(headers, "\r\n") {
+		return "", errors.New("dsntest: state requires CRLF headers")
+	}
+	base, err := rawmsg.Parse([]byte(headers + "\r\n" + body))
+	if err != nil {
+		return "", err
+	}
+	headerHash, err := canonicalizer.HeaderHashFromMessage(base)
+	if err != nil {
+		return "", err
+	}
+	bodyHash, err := canonicalizer.BodyHashFromMessage(base)
+	if err != nil {
+		return "", err
+	}
+	headerDigest, ok := headerHash.Digest()
+	if !ok {
+		return "", errors.New("dsntest: header digest missing")
+	}
+	bodyDigest, ok := bodyHash.Digest()
+	if !ok {
+		return "", errors.New("dsntest: body digest missing")
+	}
+	return "sha256:" + headerDigest.Base64() + ":" + bodyDigest.Base64(), nil
 }
 
 // HeaderBlock returns the header-only representation of a built original.

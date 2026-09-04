@@ -55,7 +55,21 @@ func NewDeriver(secret []byte, epoch uint32) (*Deriver, error) {
 }
 
 // Derive produces one protected fixed storage key from one sealed identity.
-func (d *Deriver) Derive(ctx context.Context, identity Identity) (key Key, resultErr error) {
+func (d *Deriver) Derive(ctx context.Context, identity Identity) (Key, error) {
+	return d.derive(ctx, identity, keyDomainLabel)
+}
+
+// DerivePropagation produces the delivery-status propagation storage key of
+// one sealed identity. It shares the secret, epoch, and storage-key shape
+// with Derive but uses the distinct propagation domain-separation frame, so a
+// propagation coordinate never collides with the ordinary first-seen record
+// of the same message.
+func (d *Deriver) DerivePropagation(ctx context.Context, identity Identity) (Key, error) {
+	return d.derive(ctx, identity, PropagationKeyDomainLabel)
+}
+
+// derive produces one protected storage key under the selected frame label.
+func (d *Deriver) derive(ctx context.Context, identity Identity, frameLabel string) (key Key, resultErr error) {
 	if err := PreflightContext(ctx); err != nil {
 		return Key{}, err
 	}
@@ -83,7 +97,7 @@ func (d *Deriver) Derive(ctx context.Context, identity Identity) (key Key, resul
 		<-d.state.continueHMAC
 	}
 
-	frame := replayHMACFrame(identity)
+	frame := replayHMACFrame(identity, frameLabel)
 	mac := hmac.New(sha256.New, d.state.secret[:])
 	if _, err := mac.Write(frame); err != nil {
 		return Key{}, NewError(ErrorCodeInternalInvariant)
@@ -178,11 +192,12 @@ func UseStorageKey(key Key, use func(string) error) (resultErr error) {
 	return nil
 }
 
-// replayHMACFrame builds the exact versioned length-delimited identity input.
-func replayHMACFrame(identity Identity) []byte {
+// replayHMACFrame builds the exact versioned length-delimited identity input
+// under the selected domain-separation frame label.
+func replayHMACFrame(identity Identity, frameLabel string) []byte {
 	state := identity.state
 	frame := make([]byte, 0, 96)
-	frame = append(frame, keyDomainLabel...)
+	frame = append(frame, frameLabel...)
 	frame = append(frame, 0, 2)
 	frame = append(frame, 1)
 	frame = appendUint32Bytes(frame, []byte(DraftIdentifier))

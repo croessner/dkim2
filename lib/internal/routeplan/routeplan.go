@@ -55,12 +55,21 @@ const (
 	PurposeNextDomain Purpose = "next_domain"
 	// PurposeDeliveryStatus identifies a DSN copy authorized by dedicated evidence.
 	PurposeDeliveryStatus Purpose = "delivery_status"
+	// PurposeDeliveryStatusPropagation identifies a propagated DSN copy whose
+	// authority is the removed completion signature of a rebuilt report.
+	PurposeDeliveryStatusPropagation Purpose = "delivery_status_propagation"
 )
 
 // Known reports whether purpose belongs to the closed route vocabulary.
 func (p Purpose) Known() bool {
 	return p == PurposeOrigin || p == PurposeRevision || p == PurposeNextDomain ||
-		p == PurposeDeliveryStatus
+		p == PurposeDeliveryStatus || p == PurposeDeliveryStatusPropagation
+}
+
+// Initial reports whether purpose creates the first Message-Instance and
+// DKIM2-Signature of a new message without any revision capability.
+func (p Purpose) Initial() bool {
+	return p == PurposeOrigin || p == PurposeDeliveryStatus || p == PurposeDeliveryStatusPropagation
 }
 
 // DisclosureClass identifies the recipient-disclosure policy of one copy.
@@ -274,14 +283,16 @@ func (e Entry) valid() bool {
 		return false
 	}
 	if (e.routeClass == RouteOutOfBand) != (len(e.outboundReceiverBinding) > 0) ||
-		(e.purpose == PurposeOrigin || e.purpose == PurposeDeliveryStatus) &&
-			(e.routeClass != RouteExternal || len(e.inboundReceiverBinding) > 0) ||
+		e.purpose.Initial() && (e.routeClass != RouteExternal || len(e.inboundReceiverBinding) > 0) ||
 		e.purpose == PurposeRevision &&
 			(e.routeClass == RouteOutOfBand || len(e.outboundReceiverBinding) > 0) ||
 		e.purpose == PurposeNextDomain && e.routeClass != RouteOutOfBand {
 		return false
 	}
-	if (e.purpose != PurposeOrigin && e.purpose != PurposeDeliveryStatus) != (len(e.revisionBinding) > 0) {
+	if e.purpose.Initial() == (len(e.revisionBinding) > 0) {
+		return false
+	}
+	if e.purpose == PurposeDeliveryStatusPropagation && (e.disclosure != DisclosureSingle || len(e.forwardPaths) != 1) {
 		return false
 	}
 	if len(e.forwardPaths) > hardCopies {
@@ -392,7 +403,7 @@ func (q FinalizeQuery) Valid() bool {
 			!binding.routeClass.Known() || len(binding.forwardPaths) == 0 ||
 			len(binding.route) == 0 ||
 			(binding.routeClass == RouteOutOfBand) != (len(binding.outboundReceiver) > 0) ||
-			(binding.purpose == PurposeOrigin || binding.purpose == PurposeDeliveryStatus) &&
+			binding.purpose.Initial() &&
 				(binding.routeClass != RouteExternal || len(binding.inboundReceiver) > 0) ||
 			binding.purpose == PurposeRevision &&
 				(binding.routeClass == RouteOutOfBand || len(binding.outboundReceiver) > 0) ||

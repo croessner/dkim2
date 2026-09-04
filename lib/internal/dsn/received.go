@@ -170,11 +170,15 @@ type ReceivedEvaluation struct {
 	completion        completionFacts
 	run               verify.LocalHopRun
 	hasRun            bool
+	original          rawmsg.Message
+	input             verify.EmbeddedInput
 	status            []byte
 	envelopeID        []byte
 	hasEnvelopeID     bool
 	originalRecipient []byte
+	originalPath      []byte
 	hasOriginal       bool
+	receivedBytes     int
 	initialized       bool
 }
 
@@ -254,10 +258,17 @@ func (e ReceivedEvaluation) OriginalEnvelopeID() ([]byte, bool) {
 	return bytes.Clone(e.envelopeID), true
 }
 
-// OriginalRecipient returns the propagation group's verbatim Original-Recipient
-// value only when its decoded address equals the linked completion rt= path.
-func (e ReceivedEvaluation) OriginalRecipient() ([]byte, bool) {
-	if !e.hasOriginal {
+// OriginalRecipientFor returns the propagation group's verbatim
+// Original-Recipient value only when its xtext-decoded address equals the
+// given canonical bracketed path. The rebuild passes the previous hop's
+// single rt= path, which is the recipient the sender-supplied ORCPT would
+// name; the evaluation itself never interprets the value beyond linkage.
+func (e ReceivedEvaluation) OriginalRecipientFor(path []byte) ([]byte, bool) {
+	if !e.hasOriginal || len(path) == 0 {
+		return nil, false
+	}
+	canonicalPath, ok := signature.CanonicalEnvelopePath(path, false)
+	if !ok || !bytes.Equal(canonicalPath, e.originalPath) {
 		return nil, false
 	}
 	return bytes.Clone(e.originalRecipient), true
@@ -307,7 +318,8 @@ func (e ReceivedEvaluator) Evaluate(ctx context.Context, request ReceivedRequest
 	}
 	evaluation := ReceivedEvaluation{
 		localHop: LocalHopNotEvaluated, outerAlignment: OuterAlignmentNotEvaluated,
-		recipientLinkage: RecipientLinkageNotEvaluated, propagation: PropagationNotEvaluated, initialized: true,
+		recipientLinkage: RecipientLinkageNotEvaluated, propagation: PropagationNotEvaluated,
+		receivedBytes: len(request.Raw), initialized: true,
 	}
 	state := &receivedState{recipient: recipient}
 	if !niliface.IsNil(request.Authority) {
@@ -431,6 +443,10 @@ func (e ReceivedEvaluator) evaluateEmbedded(ctx context.Context, state *received
 		return true, newReceivedError(ReceivedStageEmbeddedVerification, ReceivedErrorInternal, err)
 	}
 	state.target, state.input = target, input
+	// The verified embedded original and its extracted protocol fields are
+	// retained privately so that a later rebuild works on exactly the bytes
+	// this evaluation proved; no accessor exposes them.
+	evaluation.original, evaluation.input = state.embedded, input
 	return false, nil
 }
 
@@ -589,8 +605,8 @@ func evaluateFailureClass(state *receivedState, evaluation *ReceivedEvaluation) 
 		if state.status.hasEnvelopeID {
 			evaluation.envelopeID, evaluation.hasEnvelopeID = bytes.Clone(state.status.envelopeID), true
 		}
-		if group.originalLinks(state.evidence.recipientPaths) {
-			evaluation.originalRecipient, evaluation.hasOriginal = bytes.Clone(group.originalRecipient), true
+		if group.hasOriginal {
+			evaluation.originalRecipient, evaluation.originalPath, evaluation.hasOriginal = bytes.Clone(group.originalRecipient), bytes.Clone(group.originalPath), true
 		}
 		return false
 	}

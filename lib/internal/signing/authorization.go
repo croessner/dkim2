@@ -732,7 +732,7 @@ func DeriveEffectiveMetadata(metadata Metadata, capability VerifiedRevisionInput
 		return EffectiveMetadata{}, newError(ErrorCodeInvalidRequest, ErrorLocation{Phase: PhasePreflight}, ErrorDetails{})
 	}
 	switch ticket.Purpose() {
-	case routeplan.PurposeOrigin, routeplan.PurposeDeliveryStatus:
+	case routeplan.PurposeOrigin, routeplan.PurposeDeliveryStatus, routeplan.PurposeDeliveryStatusPropagation:
 		if !zeroRevisionInput(capability) {
 			return EffectiveMetadata{}, newError(ErrorCodeInvalidRequest, ErrorLocation{Phase: PhasePreflight}, ErrorDetails{})
 		}

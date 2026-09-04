@@ -1,6 +1,7 @@
 package dkim2
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"errors"
@@ -75,6 +76,26 @@ func NewDeliveryStatusRouteEntry(source SigningSource, reversePath []byte, forwa
 	value, err := routeplan.NewEntry(
 		source.value, routeplan.PurposeDeliveryStatus, reversePath, forwardPaths,
 		routeplan.DisclosureClass(disclosure), routeScope, nil,
+	)
+	if err != nil {
+		return RouteEntry{}, mapRouteError(err)
+	}
+	return RouteEntry{value: value}, nil
+}
+
+// NewDeliveryStatusPropagationRouteEntry constructs one exact propagated-DSN
+// route descriptor: purpose delivery_status_propagation, disclosure single,
+// class external, the null reverse path, and exactly one forward path, the
+// authenticated previous-hop mf= of the rebuilt report. It is
+// purpose-separated from DSN signing and originator tickets so that neither
+// can authorize a propagation and a propagation ticket can authorize nothing else.
+func NewDeliveryStatusPropagationRouteEntry(source SigningSource, reversePath []byte, forwardPaths [][]byte, routeScope []byte) (RouteEntry, error) {
+	if !bytes.Equal(reversePath, []byte("<>")) || len(forwardPaths) != 1 {
+		return RouteEntry{}, newSigningError(SigningErrorInvalidRequest)
+	}
+	value, err := routeplan.NewEntry(
+		source.value, routeplan.PurposeDeliveryStatusPropagation, reversePath, forwardPaths,
+		routeplan.DisclosureSingle, routeScope, nil,
 	)
 	if err != nil {
 		return RouteEntry{}, mapRouteError(err)

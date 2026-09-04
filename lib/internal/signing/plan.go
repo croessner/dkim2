@@ -249,9 +249,15 @@ func validSignatureAllowanceLimit(name LimitName) bool {
 }
 
 // OriginatorPlanRequest carries one exact source-bound origin plan request.
+// Instant optionally binds the plan to an already captured operation instant
+// so that a report rendered at that instant carries the same t= it is signed
+// with; the zero value captures a fresh instant, and a supplied instant is
+// accepted only from the coordinator's own verifier and within its skew
+// tolerance around a fresh capture.
 type OriginatorPlanRequest struct {
 	Message rawmsg.Message
 	Ticket  routeplan.CopyTicket
+	Instant verify.RevisionInstant
 }
 
 // String returns a constant secret-safe originator request summary.
@@ -343,7 +349,7 @@ func (p UnsignedOperationPlan) Valid() bool {
 // validOriginator verifies origin-only progression, generation, and size invariants.
 func (p UnsignedOperationPlan) validOriginator() bool {
 	return p.highestInstance == 0 && p.newInstance == 1 && p.signatureInstance == 1 &&
-		(p.binding.purpose == routeplan.PurposeOrigin || p.binding.purpose == routeplan.PurposeDeliveryStatus) &&
+		p.binding.purpose.Initial() &&
 		!p.binding.hasCapability &&
 		p.nextSequence == 1 && p.instance.Number() == 1 && len(p.renderedInstance) > 0 &&
 		p.generation.outcome == recipe.GenerationOutcomeUnchanged &&
@@ -535,6 +541,14 @@ func (c HashPlanCoordinator) PlanDeliveryStatus(ctx context.Context, request Ori
 	return c.planInitial(ctx, request, routeplan.PurposeDeliveryStatus)
 }
 
+// PlanDeliveryStatusPropagation derives the initial plan of a rebuilt,
+// propagated DSN whose authority is the removed completion signature. It is
+// purpose-separated from ordinary DSN signing so that neither route ticket
+// can authorize the other operation.
+func (c HashPlanCoordinator) PlanDeliveryStatusPropagation(ctx context.Context, request OriginatorPlanRequest) (UnsignedOperationPlan, error) {
+	return c.planInitial(ctx, request, routeplan.PurposeDeliveryStatusPropagation)
+}
+
 // planInitial derives one initial instance under the exact route purpose that
 // has already authorized the otherwise identical hash and signature plan.
 func (c HashPlanCoordinator) planInitial(
@@ -562,7 +576,7 @@ func (c HashPlanCoordinator) planInitial(
 	if err := ctx.Err(); err != nil {
 		return UnsignedOperationPlan{}, err
 	}
-	instant, err := c.revision.CaptureOperationInstant()
+	instant, err := c.boundedOperationInstant(request.Instant)
 	if err != nil {
 		return UnsignedOperationPlan{}, err
 	}
@@ -577,6 +591,24 @@ func (c HashPlanCoordinator) planInitial(
 		binding: newOperationPlanBinding(request.Message, request.Ticket, VerifiedRevisionInput{}),
 		instant: instant, initialized: true,
 	}, nil
+}
+
+// boundedOperationInstant captures a fresh operation instant and returns it
+// when no instant was supplied; a supplied instant is returned only when the
+// verifier bounds it within its skew tolerance of the fresh capture, so a
+// stale, future, or foreign instant can never become a signature t=.
+func (c HashPlanCoordinator) boundedOperationInstant(supplied verify.RevisionInstant) (verify.RevisionInstant, error) {
+	fresh, err := c.revision.CaptureOperationInstant()
+	if err != nil {
+		return verify.RevisionInstant{}, err
+	}
+	if !supplied.Valid() {
+		return fresh, nil
+	}
+	if !supplied.WithinSkewOf(fresh) {
+		return verify.RevisionInstant{}, newError(ErrorCodeInvalidRequest, ErrorLocation{Phase: PhasePreflight}, ErrorDetails{})
+	}
+	return supplied, nil
 }
 
 // PlanExisting derives forwarding or revision solely from the exact SHA-256 tuple.
@@ -801,7 +833,7 @@ func (c HashPlanCoordinator) validateBase(ctx context.Context, message rawmsg.Me
 		return limitError(LimitNameMaxMessageBytes, c.limits.MaxMessageBytes, metadata.StoredBytes)
 	}
 	generatedFields := 1
-	if purpose == routeplan.PurposeOrigin || purpose == routeplan.PurposeDeliveryStatus {
+	if purpose.Initial() {
 		generatedFields = 2
 	}
 	finalHeaderFields, ok := checkedAdd(metadata.HeaderFields, generatedFields)
