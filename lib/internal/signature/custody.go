@@ -392,7 +392,7 @@ func newCustodyEntry(parsed Signature, limits CustodyLimits) (custodyEntry, erro
 		} else {
 			entry.mailDomain = mailDomain
 			entry.direct = CustodyDirectAlignmentPass
-			if !relaxedCustodyDomainMatch(domain, mailDomain) {
+			if !RelaxedDomainMatch(domain, mailDomain) {
 				entry.direct = CustodyDirectAlignmentMismatch
 			}
 		}
@@ -440,7 +440,7 @@ func custodyTransitionAllowed(previous, current custodyEntry) bool {
 		return false
 	}
 	for recipientDomain := range previous.recipients {
-		if relaxedCustodyDomainMatch(recipientDomain, current.mailDomain) {
+		if RelaxedDomainMatch(recipientDomain, current.mailDomain) {
 			return true
 		}
 	}
@@ -460,7 +460,11 @@ func custodyPathDomain(path []byte) (string, bool) {
 	return canonicalDNSName(mailbox[separator+1:])
 }
 
-// relaxedCustodyDomainMatch removes labels only from the candidate side.
-func relaxedCustodyDomainMatch(base, candidate string) bool {
+// RelaxedDomainMatch applies the Section 9.4 relaxed domain match: labels are
+// removed only from the left of candidate until it equals base, so base may be
+// equal to or a parent domain of candidate but never the reverse. It is the
+// single owner of that rule for custody, Section 11.4 identity, and outer
+// signer alignment.
+func RelaxedDomainMatch(base, candidate string) bool {
 	return candidate == base || strings.HasSuffix(candidate, "."+base)
 }

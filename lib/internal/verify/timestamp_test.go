@@ -161,3 +161,42 @@ func hasTimestampCheck(result Result, status TimestampStatus, checkStatus CheckS
 
 	return false
 }
+
+// TestRequestReferenceTimeReplacesClock verifies that a non-zero
+// Request.ReferenceTime evaluates the Section 8.4 window at that instant
+// instead of the injected clock, while the zero value keeps the clock.
+func TestRequestReferenceTimeReplacesClock(t *testing.T) {
+	signed := time.Unix(int64(testTimestampSeconds), 0)
+	wallClock := signed.Add(30 * 24 * time.Hour)
+	fixture := newRSAVerificationFixtureAt(t, testTimestampSeconds)
+	verifier := mustVerifierForFixtureWithOptions(t, fixture, WithClock(func() time.Time { return wallClock }))
+	for _, tt := range []struct {
+		name          string
+		reference     time.Time
+		wantStatus    TargetStatus
+		wantTimestamp TimestampStatus
+	}{
+		{name: "zero reference keeps the clock", wantStatus: TargetStatusFail, wantTimestamp: TimestampStatusExpired},
+		{name: "reference one day after signing passes", reference: signed.Add(24 * time.Hour), wantStatus: TargetStatusPass, wantTimestamp: TimestampStatusPass},
+		{name: "reference before signing beyond skew is future", reference: signed.Add(-time.Hour), wantStatus: TargetStatusFail, wantTimestamp: TimestampStatusFuture},
+		{name: "reference beyond max age is expired", reference: signed.Add(15 * 24 * time.Hour), wantStatus: TargetStatusFail, wantTimestamp: TimestampStatusExpired},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := verifier.Verify(context.Background(), Request{Message: fixture.message, Envelope: matchingEnvelope(), ReferenceTime: tt.reference})
+			if err != nil {
+				t.Fatalf("Verify() error = %v", err)
+			}
+			if result.Status() != tt.wantStatus || !hasTimestampCheck(result, tt.wantTimestamp, checkStatusForTarget(tt.wantStatus)) {
+				t.Fatalf("Status() = %q checks=%#v, want %q/%q", result.Status(), result.Checks(), tt.wantStatus, tt.wantTimestamp)
+			}
+		})
+	}
+}
+
+// checkStatusForTarget maps the expected target status to the timestamp check status.
+func checkStatusForTarget(status TargetStatus) CheckStatus {
+	if status == TargetStatusPass {
+		return CheckStatusPass
+	}
+	return CheckStatusFail
+}

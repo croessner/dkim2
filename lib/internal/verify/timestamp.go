@@ -13,9 +13,10 @@ type timestampEvaluation struct {
 	pass  bool
 }
 
-// checkTimestamp applies local timestamp policy to the selected signature.
-func (v Verifier) checkTimestamp(targetSignature signature.Signature, target Target) timestampEvaluation {
-	status := v.timestampStatus(targetSignature.TimestampSeconds())
+// checkTimestamp applies local timestamp policy to the selected signature at
+// the request's reference instant, which defaults to the verifier clock.
+func (v Verifier) checkTimestamp(request Request, targetSignature signature.Signature, target Target) timestampEvaluation {
+	status := v.timestampStatus(request, targetSignature.TimestampSeconds())
 	checkStatus := CheckStatusFail
 	code := ErrorCodeTimestampInvalid
 	if status == TimestampStatusPass || status == TimestampStatusNoMaxAge {
@@ -35,9 +36,18 @@ func (v Verifier) checkTimestamp(targetSignature signature.Signature, target Tar
 	}
 }
 
-// timestampStatus classifies t= seconds using deterministic verifier policy.
-func (v Verifier) timestampStatus(seconds uint64) TimestampStatus {
-	return timestampStatusAt(v.options.Clock.Now(), seconds, v.options.TimestampPolicy)
+// timestampStatus classifies t= seconds using deterministic verifier policy
+// at the request's reference instant.
+func (v Verifier) timestampStatus(request Request, seconds uint64) TimestampStatus {
+	return timestampStatusAt(v.referenceTime(request), seconds, v.options.TimestampPolicy)
+}
+
+// referenceTime returns the explicit request reference instant or the clock reading.
+func (v Verifier) referenceTime(request Request) time.Time {
+	if !request.ReferenceTime.IsZero() {
+		return request.ReferenceTime
+	}
+	return v.options.Clock.Now()
 }
 
 // timestampStatusAt classifies one timestamp against an already captured clock.

@@ -67,7 +67,7 @@ func (v Verifier) VerifyDeliveryStatusHeadersOnly(ctx context.Context, request R
 	if err := ctx.Err(); err != nil {
 		return HeaderEvidence{}, err
 	}
-	timestamp := v.checkTimestamp(targetSignature, target)
+	timestamp := v.checkTimestamp(request, targetSignature, target)
 	nextDomain := checkNextDomain(targetSignature, target, target.Sequence)
 	envelope := envelopeCheckResult(target, EnvelopeStatusNotApplicable)
 	domainAlignment, err := checkDomainAlignment(custody, target)

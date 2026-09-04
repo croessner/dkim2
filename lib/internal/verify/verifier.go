@@ -159,7 +159,7 @@ func (v Verifier) verifyCurrentExtracted(ctx context.Context, input verification
 	if err := ctx.Err(); err != nil {
 		return Result{}, err
 	}
-	timestamp := v.checkTimestamp(targetSignature, target)
+	timestamp := v.checkTimestamp(input.request, targetSignature, target)
 	nextDomain := checkNextDomain(targetSignature, target, currentSequence)
 	envelope := v.checkEnvelope(input.request, targetSignature, target, currentSequence, deliveryStatusEnvelope)
 	domainAlignment, err := checkDomainAlignment(custody, target)

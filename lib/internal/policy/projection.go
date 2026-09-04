@@ -297,6 +297,8 @@ type Projection struct {
 	hops               []HopFact
 	signatureFacts     []SignatureFact
 	revisionFailure    bool
+	receivedDSN        ReceivedDSNFacts
+	hasReceivedDSN     bool
 }
 
 // NewSelectedProjection seals a selected target with aggregate reason provenance.
@@ -394,6 +396,9 @@ func (p Projection) validate(limits Limits) error {
 		return newLimitError(limitNameAuthenticatedHops, limits.MaxAuthenticatedHops, len(p.hops))
 	}
 	if len(p.signatureFacts) > hardMaxSignatureFacts {
+		return newError(ErrorInternalContract)
+	}
+	if p.hasReceivedDSN && !p.receivedDSN.Valid() || !p.hasReceivedDSN && p.receivedDSN != (ReceivedDSNFacts{}) {
 		return newError(ErrorInternalContract)
 	}
 	if p.form == TargetUnavailable {
@@ -702,7 +707,27 @@ func (p Projection) Valid() bool { return p.validate(DefaultLimits()) == nil }
 
 // IsZero reports whether the projection is uninitialized.
 func (p Projection) IsZero() bool {
-	return p.form == "" && p.protocol == "" && p.verificationReason == "" && p.targetSequence == 0 && p.preTarget == "" && p.history == "" && len(p.hops) == 0 && len(p.signatureFacts) == 0 && !p.revisionFailure
+	return p.form == "" && p.protocol == "" && p.verificationReason == "" && p.targetSequence == 0 && p.preTarget == "" && p.history == "" && len(p.hops) == 0 && len(p.signatureFacts) == 0 && !p.revisionFailure && !p.hasReceivedDSN
+}
+
+// WithReceivedDSN returns a copy of the sealed verification projection that
+// also carries the closed received-DSN facts of the same inbound message, so
+// that one evaluation yields one decision covering both.
+func (p Projection) WithReceivedDSN(facts ReceivedDSNFacts) (Projection, error) {
+	if p.IsZero() || !p.Valid() || !facts.Valid() {
+		return Projection{}, newError(ErrorInvalidInput)
+	}
+	projection := p.Clone()
+	projection.receivedDSN, projection.hasReceivedDSN = facts, true
+	return projection, nil
+}
+
+// ReceivedDSN returns the received-DSN facts and whether the projection carries them.
+func (p Projection) ReceivedDSN() (ReceivedDSNFacts, bool) {
+	if !p.hasReceivedDSN {
+		return ReceivedDSNFacts{}, false
+	}
+	return p.receivedDSN, true
 }
 
 // Form returns the exact target form.

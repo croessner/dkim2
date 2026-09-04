@@ -100,6 +100,26 @@ const (
 	PolicyReasonFeedHereInert PolicyReason = "feedhere_inert"
 	// PolicyReasonExplodedReported reports an authenticated explosion flag.
 	PolicyReasonExplodedReported PolicyReason = "exploded_reported"
+	// PolicyReasonReceivedDSNOuterPolicy reports that the outer verification is not PASS, so the outer policy applies unchanged to a received DSN.
+	PolicyReasonReceivedDSNOuterPolicy PolicyReason = "received_dsn_outer_policy"
+	// PolicyReasonReceivedDSNStructureInvalid reports a received DSN whose structure member is not valid.
+	PolicyReasonReceivedDSNStructureInvalid PolicyReason = "received_dsn_structure_invalid"
+	// PolicyReasonReceivedDSNEmbeddedUnverified reports permanent verification failure of the embedded original.
+	PolicyReasonReceivedDSNEmbeddedUnverified PolicyReason = "received_dsn_embedded_unverified"
+	// PolicyReasonReceivedDSNEmbeddedAbsent reports an unsigned embedded original outside Section 12.1.2.
+	PolicyReasonReceivedDSNEmbeddedAbsent PolicyReason = "received_dsn_embedded_absent"
+	// PolicyReasonReceivedDSNTemporaryFailure reports a temporary key or datasource failure during received-DSN evaluation.
+	PolicyReasonReceivedDSNTemporaryFailure PolicyReason = "received_dsn_temporary_failure"
+	// PolicyReasonReceivedDSNTenantUnavailable reports that locality was not evaluated because no tenant was available.
+	PolicyReasonReceivedDSNTenantUnavailable PolicyReason = "received_dsn_tenant_unavailable"
+	// PolicyReasonReceivedDSNIdentityMismatch reports a local-hop mismatch or a misaligned outer signer.
+	PolicyReasonReceivedDSNIdentityMismatch PolicyReason = "received_dsn_identity_mismatch"
+	// PolicyReasonReceivedDSNNotLocal reports a received DSN in transit through a relay.
+	PolicyReasonReceivedDSNNotLocal PolicyReason = "received_dsn_not_local"
+	// PolicyReasonReceivedDSNRecipientUnlinked reports that no recipient group links to the completion rt= path.
+	PolicyReasonReceivedDSNRecipientUnlinked PolicyReason = "received_dsn_recipient_unlinked"
+	// PolicyReasonReceivedDSNLinked reports a fully linked received DSN with any propagation value.
+	PolicyReasonReceivedDSNLinked PolicyReason = "received_dsn_linked"
 )
 
 // Known reports whether the reason belongs to the frozen public vocabulary.
@@ -236,15 +256,19 @@ func publicFindingReasonAllowed(reason PolicyReason) bool {
 func publicSeverityForReason(reason PolicyReason) PolicyFindingSeverity {
 	switch reason {
 	case PolicyReasonProtocolPass, PolicyReasonDoNotModifyHonored,
-		PolicyReasonFeedbackRequested, PolicyReasonFeedbackRelaySelected, PolicyReasonFeedHereInert, PolicyReasonExplodedReported:
+		PolicyReasonFeedbackRequested, PolicyReasonFeedbackRelaySelected, PolicyReasonFeedHereInert, PolicyReasonExplodedReported,
+		PolicyReasonReceivedDSNOuterPolicy, PolicyReasonReceivedDSNEmbeddedAbsent, PolicyReasonReceivedDSNNotLocal, PolicyReasonReceivedDSNLinked:
 		return PolicySeverityInfo
 	case PolicyReasonPermissiveOverride, PolicyReasonTestingModeObserve, PolicyReasonDNSTestingEffective,
 		PolicyReasonDNSTestingMixed, PolicyReasonDNSTestingIneligible, PolicyReasonDoNotModifyIndeterminate,
-		PolicyReasonDoNotModifyNotEvaluated, PolicyReasonDoNotExplodeIndeterminate, PolicyReasonDoNotExplodeNotEvaluated:
+		PolicyReasonDoNotModifyNotEvaluated, PolicyReasonDoNotExplodeIndeterminate, PolicyReasonDoNotExplodeNotEvaluated,
+		PolicyReasonReceivedDSNTenantUnavailable:
 		return PolicySeverityWarning
-	case PolicyReasonProtocolTemperror:
+	case PolicyReasonProtocolTemperror, PolicyReasonReceivedDSNTemporaryFailure:
 		return PolicySeverityTemporary
-	case PolicyReasonProtocolFail, PolicyReasonProtocolPermerror, PolicyReasonDoNotModifyViolated, PolicyReasonDoNotExplodeViolated:
+	case PolicyReasonProtocolFail, PolicyReasonProtocolPermerror, PolicyReasonDoNotModifyViolated, PolicyReasonDoNotExplodeViolated,
+		PolicyReasonReceivedDSNStructureInvalid, PolicyReasonReceivedDSNEmbeddedUnverified,
+		PolicyReasonReceivedDSNIdentityMismatch, PolicyReasonReceivedDSNRecipientUnlinked:
 		return PolicySeverityPermanent
 	default:
 		return ""
@@ -563,7 +587,9 @@ func publicDecisionMatchesSource(d PolicyDecision) bool {
 		state.actionPlan.actions[0].kind == PolicyActionKind(sourceActions[0].Kind())
 }
 
-// EvaluatePolicy evaluates only the sealed projection embedded by library verification.
+// EvaluatePolicy evaluates only the sealed projection embedded by library
+// verification, extended by the received-DSN facts when
+// WithReceivedDSNEvaluation attached them.
 func EvaluatePolicy(result VerifyResult, options ...PolicyOption) (PolicyDecision, error) {
 	config, err := applyPolicyOptions(options...)
 	if err != nil {
@@ -576,7 +602,11 @@ func EvaluatePolicy(result VerifyResult, options ...PolicyOption) (PolicyDecisio
 	if err != nil {
 		return PolicyDecision{}, adaptPolicyError(err)
 	}
-	decision, err := evaluator.EvaluateProjection(result.state.policyProjection.Clone())
+	projection, err := config.projection(result.state.policyProjection)
+	if err != nil {
+		return PolicyDecision{}, err
+	}
+	decision, err := evaluator.EvaluateProjection(projection)
 	if err != nil {
 		return PolicyDecision{}, adaptPolicyError(err)
 	}
@@ -587,7 +617,10 @@ func EvaluatePolicy(result VerifyResult, options ...PolicyOption) (PolicyDecisio
 	return public, nil
 }
 
-// EvaluateAuthenticationPolicy evaluates local policy from the authoritative final Draft-06 result.
+// EvaluateAuthenticationPolicy evaluates local policy from the authoritative
+// final Draft-06 result, extended by the received-DSN facts when
+// WithReceivedDSNEvaluation attached them; a final state other than PASS keeps
+// the outer policy and retains the facts as the outer-policy finding.
 func EvaluateAuthenticationPolicy(result AuthenticationResult, options ...PolicyOption) (PolicyDecision, error) {
 	config, err := applyPolicyOptions(options...)
 	if err != nil {
@@ -600,10 +633,11 @@ func EvaluateAuthenticationPolicy(result AuthenticationResult, options ...Policy
 	if err != nil {
 		return PolicyDecision{}, adaptPolicyError(err)
 	}
-	decision, err := evaluator.EvaluateAuthenticationProjection(
-		result.Verification().state.policyProjection.Clone(),
-		policy.ProtocolClass(result.State()),
-	)
+	projection, err := config.projection(result.Verification().state.policyProjection)
+	if err != nil {
+		return PolicyDecision{}, err
+	}
+	decision, err := evaluator.EvaluateAuthenticationProjection(projection, policy.ProtocolClass(result.State()))
 	if err != nil {
 		return PolicyDecision{}, adaptPolicyError(err)
 	}

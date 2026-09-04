@@ -166,29 +166,39 @@ type PolicyReason string
 
 // Frozen policy reason constants shared by decisions, findings, and errors.
 const (
-	ReasonInvalidInput              PolicyReason = "invalid_input"
-	ReasonLimitExceeded             PolicyReason = "limit_exceeded"
-	ReasonInternalContract          PolicyReason = "internal_contract"
-	ReasonProtocolPass              PolicyReason = "protocol_pass"
-	ReasonProtocolFail              PolicyReason = "protocol_fail"
-	ReasonProtocolPermerror         PolicyReason = "protocol_permerror"
-	ReasonProtocolTemperror         PolicyReason = "protocol_temperror"
-	ReasonPermissiveOverride        PolicyReason = "permissive_override"
-	ReasonTestingModeObserve        PolicyReason = "testing_mode_observe"
-	ReasonDNSTestingEffective       PolicyReason = "dns_testing_effective"
-	ReasonDNSTestingMixed           PolicyReason = "dns_testing_mixed"
-	ReasonDNSTestingIneligible      PolicyReason = "dns_testing_ineligible"
-	ReasonDoNotModifyHonored        PolicyReason = "donotmodify_honored"
-	ReasonDoNotModifyViolated       PolicyReason = "donotmodify_violated"
-	ReasonDoNotModifyIndeterminate  PolicyReason = "donotmodify_indeterminate"
-	ReasonDoNotModifyNotEvaluated   PolicyReason = "donotmodify_not_evaluated"
-	ReasonDoNotExplodeViolated      PolicyReason = "donotexplode_violated"
-	ReasonDoNotExplodeIndeterminate PolicyReason = "donotexplode_indeterminate"
-	ReasonDoNotExplodeNotEvaluated  PolicyReason = "donotexplode_not_evaluated"
-	ReasonFeedbackRequested         PolicyReason = "feedback_requested"
-	ReasonFeedbackRelaySelected     PolicyReason = "feedback_relay_selected"
-	ReasonFeedHereInert             PolicyReason = "feedhere_inert"
-	ReasonExplodedReported          PolicyReason = "exploded_reported"
+	ReasonInvalidInput                  PolicyReason = "invalid_input"
+	ReasonLimitExceeded                 PolicyReason = "limit_exceeded"
+	ReasonInternalContract              PolicyReason = "internal_contract"
+	ReasonProtocolPass                  PolicyReason = "protocol_pass"
+	ReasonProtocolFail                  PolicyReason = "protocol_fail"
+	ReasonProtocolPermerror             PolicyReason = "protocol_permerror"
+	ReasonProtocolTemperror             PolicyReason = "protocol_temperror"
+	ReasonPermissiveOverride            PolicyReason = "permissive_override"
+	ReasonTestingModeObserve            PolicyReason = "testing_mode_observe"
+	ReasonDNSTestingEffective           PolicyReason = "dns_testing_effective"
+	ReasonDNSTestingMixed               PolicyReason = "dns_testing_mixed"
+	ReasonDNSTestingIneligible          PolicyReason = "dns_testing_ineligible"
+	ReasonDoNotModifyHonored            PolicyReason = "donotmodify_honored"
+	ReasonDoNotModifyViolated           PolicyReason = "donotmodify_violated"
+	ReasonDoNotModifyIndeterminate      PolicyReason = "donotmodify_indeterminate"
+	ReasonDoNotModifyNotEvaluated       PolicyReason = "donotmodify_not_evaluated"
+	ReasonDoNotExplodeViolated          PolicyReason = "donotexplode_violated"
+	ReasonDoNotExplodeIndeterminate     PolicyReason = "donotexplode_indeterminate"
+	ReasonDoNotExplodeNotEvaluated      PolicyReason = "donotexplode_not_evaluated"
+	ReasonFeedbackRequested             PolicyReason = "feedback_requested"
+	ReasonFeedbackRelaySelected         PolicyReason = "feedback_relay_selected"
+	ReasonFeedHereInert                 PolicyReason = "feedhere_inert"
+	ReasonExplodedReported              PolicyReason = "exploded_reported"
+	ReasonReceivedDSNOuterPolicy        PolicyReason = "received_dsn_outer_policy"
+	ReasonReceivedDSNStructureInvalid   PolicyReason = "received_dsn_structure_invalid"
+	ReasonReceivedDSNEmbeddedUnverified PolicyReason = "received_dsn_embedded_unverified"
+	ReasonReceivedDSNEmbeddedAbsent     PolicyReason = "received_dsn_embedded_absent"
+	ReasonReceivedDSNTemporaryFailure   PolicyReason = "received_dsn_temporary_failure"
+	ReasonReceivedDSNTenantUnavailable  PolicyReason = "received_dsn_tenant_unavailable"
+	ReasonReceivedDSNIdentityMismatch   PolicyReason = "received_dsn_identity_mismatch"
+	ReasonReceivedDSNNotLocal           PolicyReason = "received_dsn_not_local"
+	ReasonReceivedDSNRecipientUnlinked  PolicyReason = "received_dsn_recipient_unlinked"
+	ReasonReceivedDSNLinked             PolicyReason = "received_dsn_linked"
 )
 
 // Known reports whether the reason belongs to the frozen policy vocabulary.
@@ -201,7 +211,11 @@ func (r PolicyReason) Known() bool {
 		ReasonDoNotModifyHonored, ReasonDoNotModifyViolated, ReasonDoNotModifyIndeterminate,
 		ReasonDoNotModifyNotEvaluated, ReasonDoNotExplodeViolated, ReasonDoNotExplodeIndeterminate,
 		ReasonDoNotExplodeNotEvaluated, ReasonFeedbackRequested, ReasonFeedbackRelaySelected,
-		ReasonFeedHereInert, ReasonExplodedReported:
+		ReasonFeedHereInert, ReasonExplodedReported,
+		ReasonReceivedDSNOuterPolicy, ReasonReceivedDSNStructureInvalid, ReasonReceivedDSNEmbeddedUnverified,
+		ReasonReceivedDSNEmbeddedAbsent, ReasonReceivedDSNTemporaryFailure, ReasonReceivedDSNTenantUnavailable,
+		ReasonReceivedDSNIdentityMismatch, ReasonReceivedDSNNotLocal, ReasonReceivedDSNRecipientUnlinked,
+		ReasonReceivedDSNLinked:
 		return true
 	default:
 		return false
@@ -212,16 +226,20 @@ func (r PolicyReason) Known() bool {
 func severityForReason(reason PolicyReason) FindingSeverity {
 	switch reason {
 	case ReasonProtocolPass, ReasonDoNotModifyHonored,
-		ReasonFeedbackRequested, ReasonFeedbackRelaySelected, ReasonFeedHereInert, ReasonExplodedReported:
+		ReasonFeedbackRequested, ReasonFeedbackRelaySelected, ReasonFeedHereInert, ReasonExplodedReported,
+		ReasonReceivedDSNOuterPolicy, ReasonReceivedDSNEmbeddedAbsent, ReasonReceivedDSNNotLocal, ReasonReceivedDSNLinked:
 		return SeverityInfo
 	case ReasonPermissiveOverride, ReasonTestingModeObserve, ReasonDNSTestingEffective,
 		ReasonDNSTestingMixed, ReasonDNSTestingIneligible, ReasonDoNotModifyIndeterminate,
-		ReasonDoNotModifyNotEvaluated, ReasonDoNotExplodeIndeterminate, ReasonDoNotExplodeNotEvaluated:
+		ReasonDoNotModifyNotEvaluated, ReasonDoNotExplodeIndeterminate, ReasonDoNotExplodeNotEvaluated,
+		ReasonReceivedDSNTenantUnavailable:
 		return SeverityWarning
-	case ReasonProtocolTemperror:
+	case ReasonProtocolTemperror, ReasonReceivedDSNTemporaryFailure:
 		return SeverityTemporary
 	case ReasonInvalidInput, ReasonLimitExceeded, ReasonInternalContract, ReasonProtocolFail,
-		ReasonProtocolPermerror, ReasonDoNotModifyViolated, ReasonDoNotExplodeViolated:
+		ReasonProtocolPermerror, ReasonDoNotModifyViolated, ReasonDoNotExplodeViolated,
+		ReasonReceivedDSNStructureInvalid, ReasonReceivedDSNEmbeddedUnverified,
+		ReasonReceivedDSNIdentityMismatch, ReasonReceivedDSNRecipientUnlinked:
 		return SeverityPermanent
 	default:
 		return ""

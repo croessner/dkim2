@@ -12,6 +12,15 @@ This directory pins protocol evidence to
   one-recipient Bcc-safe copy shape, restriction and derived-flag field shapes,
   the explicit next-domain creation/continuation/completion chain, normal
   insertion, and header-only insertion.
+- `received-dsn-golden.json` covers the read-only received-DSN evaluation of
+  Draft-06 Section 12.1.2: the closed `delivery_status` projection for every
+  stage outcome, complete and headers-only originals, the local-hop-run
+  schemes, the foreign parent-domain signer that names a local address, and
+  the completion-signature window evaluated at the outer DSN's `t=`. Its
+  deterministic Ed25519 keys are published in the corpus and are the fixture
+  keys; regenerate it byte-deterministically with
+  `DKIM2_WRITE_RECEIVED_DSN_VECTORS=1 go -C lib test . -run
+  TestReceivedDSNGoldenVectorsRegenerate`.
 - `signing-test-rsa.pem` is a synthetic, test-only RSA key for deterministic
   public-facade evidence under reserved `.test` domains. It is never selected
   by production configuration, and only its artifact digest may enter reports.

@@ -3,6 +3,7 @@ package dkim2
 import (
 	"time"
 
+	"github.com/croessner/dkim2/internal/dsn"
 	"github.com/croessner/dkim2/internal/niliface"
 	"github.com/croessner/dkim2/internal/service"
 )
@@ -89,6 +90,7 @@ type Verifier struct {
 
 type verifierState struct {
 	service     service.Verifier
+	receivedDSN dsn.ReceivedEvaluator
 	limits      VerificationLimits
 	initialized bool
 	sink        ObservationSink

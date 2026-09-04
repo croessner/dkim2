@@ -128,6 +128,31 @@
 // bounded versioned JSON, publishes complete snapshots atomically, and stops
 // serving after a failed reload until explicit recovery.
 //
+// Verifier.EvaluateReceivedDSN exposes the read-only Draft-06 Section 12.1.2
+// evaluation of an inbound DKIM2-signed delivery-status notification after the
+// caller verified the outer message as an ordinary message with the same
+// verifier. It takes the exact outer bytes, the observed null reverse path and
+// single forward path, and an optional tenant-bound LocalAuthority, and proves
+// in order RFC 6522 and strict generic RFC 3464 structure, embedded-original
+// verification through the dedicated embedded verifiers, local-hop identity,
+// outer-signer alignment, recipient linkage, failure class, and the previous
+// hop. The completion signature's Section 8.4 window is evaluated at the outer
+// DSN's highest-signature t= instead of the clock, because a DSN may
+// legitimately arrive long after the forwarding it reports on. "Local" is
+// datasource authority over the completion signature's d=, never an address
+// in mf=; a verified foreign signer naming a local address is not_local. The
+// local hop is a run: the completion signature plus every Section 9.3 nd= or
+// same-tenant imaginary-hop member below it, each verified cryptographically;
+// a non-verifying member or an nd= previous hop is an unsupported chain. The
+// result is the closed delivery_status projection with bounded sequence facts
+// and no content; it can never authorize signing. Without an authority the
+// local hop and propagation are not evaluated. WithReceivedDSNEvaluation
+// attaches the evaluation to EvaluatePolicy or EvaluateAuthenticationPolicy,
+// which record the received-DSN mapping-table row as one finding on the single
+// PolicyDecision: reject, tempfail, and continue rows replace the outer
+// verdict, accept rows keep it, and an outer verification or final replay
+// state other than PASS keeps the outer policy unchanged.
+//
 // SigningResult is a closed sum. Only UnrestrictedSignedMessage has Bytes.
 // LocalOnlySignedMessage and OutOfBandAcceptanceSignedMessage deliberately have
 // no generic byte, marshal, text, or release surface. Their type-specific

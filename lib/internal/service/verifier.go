@@ -60,6 +60,16 @@ func NewVerifier(provider verify.KeyProvider, config Config) (Verifier, error) {
 	return Verifier{core: core, limits: config.Limits, initialized: true}, nil
 }
 
+// Core returns the validated protocol-core verifier so that facades built on
+// the same provider, limits, clock, and policy can reuse it for evaluations
+// the coordinator does not own, such as received-DSN evaluation.
+func (v Verifier) Core() verify.Verifier {
+	if !v.initialized {
+		return verify.Verifier{}
+	}
+	return v.core
+}
+
 // nilKeyProvider reports nil and typed-nil injected interface dependencies.
 func nilKeyProvider(provider verify.KeyProvider) bool {
 	return niliface.IsNil(provider)

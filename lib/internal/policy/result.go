@@ -139,6 +139,13 @@ func (d Decision) Valid() bool {
 			expectedVerdict, expectedPrimary = VerdictReject, ReasonDoNotExplodeViolated
 		}
 	}
+	dsnVerdict, dsnReason, dsnReplace, dsnCoherent := receivedDSNDecisionCoherent(d.protocol, d.mode, remainder)
+	if !dsnCoherent {
+		return false
+	}
+	if dsnReplace {
+		expectedVerdict, expectedPrimary = dsnVerdict, dsnReason
+	}
 	if d.verdict != expectedVerdict || d.primaryReason != expectedPrimary || !dnsDecisionCoherent(d.protocol, d.dnsTestingEffective, remainder) ||
 		!feedbackFindingCoherent(d.feedbackIntent, d.findings) || !complianceFindingCoherent(d.modifyState, d.findings, true) || !complianceFindingCoherent(d.explodeState, d.findings, false) {
 		return false
@@ -203,10 +210,19 @@ func newAuthenticationDecision(protocol ProtocolClass, mode Mode, source Decisio
 	}
 	derived := make([]Finding, 0, len(source.findings))
 	for _, current := range source.findings {
-		switch current.reason {
-		case ReasonProtocolPass, ReasonTestingModeObserve, ReasonPermissiveOverride,
-			ReasonDNSTestingEffective, ReasonDNSTestingMixed, ReasonDNSTestingIneligible:
+		switch {
+		case current.reason == ReasonProtocolPass || current.reason == ReasonTestingModeObserve || current.reason == ReasonPermissiveOverride ||
+			current.reason == ReasonDNSTestingEffective || current.reason == ReasonDNSTestingMixed || current.reason == ReasonDNSTestingIneligible:
 			continue
+		case complianceFindingClass(current.reason) == receivedDSNFindingClass:
+			// The final replay outcome is not PASS, so the received-DSN row
+			// table yields the outer-policy row: the facts are retained as a
+			// finding but no longer replace the verdict.
+			outerPolicy, findingErr := newFinding(ReasonReceivedDSNOuterPolicy, 0, false)
+			if findingErr != nil {
+				return Decision{}, findingErr
+			}
+			derived = append(derived, outerPolicy)
 		default:
 			derived = append(derived, current)
 		}
@@ -261,6 +277,9 @@ func newDecision(protocol ProtocolClass, mode Mode, verdict Verdict, primary Pol
 	return decision, nil
 }
 
+// receivedDSNFindingClass is the finding class of the single received-DSN row finding.
+const receivedDSNFindingClass = 7
+
 // validFindingOrder enforces compliance class and ascending sequence order.
 func validFindingOrder(findings []Finding) bool {
 	previousClass := 0
@@ -268,7 +287,7 @@ func validFindingOrder(findings []Finding) bool {
 	for _, finding := range findings {
 		class := complianceFindingClass(finding.reason)
 		sequence, hasSequence := finding.Sequence()
-		if class == 0 || class < previousClass || class == 1 && hasSequence || class > 1 && !hasSequence || class == previousClass && class > 1 && sequence <= previousSequence {
+		if class == 0 || class < previousClass || hasSequence != findingRequiresSequence(finding.reason) || class == previousClass && hasSequence && sequence <= previousSequence {
 			return false
 		}
 		previousClass, previousSequence = class, sequence
@@ -276,7 +295,7 @@ func validFindingOrder(findings []Finding) bool {
 	return true
 }
 
-// complianceFindingClass returns the frozen P03 finding class order.
+// complianceFindingClass returns the frozen finding class order.
 func complianceFindingClass(reason PolicyReason) int {
 	switch reason {
 	case ReasonDNSTestingEffective, ReasonDNSTestingMixed, ReasonDNSTestingIneligible:
@@ -291,6 +310,11 @@ func complianceFindingClass(reason PolicyReason) int {
 		return 5
 	case ReasonExplodedReported:
 		return 6
+	case ReasonReceivedDSNOuterPolicy, ReasonReceivedDSNStructureInvalid, ReasonReceivedDSNEmbeddedUnverified,
+		ReasonReceivedDSNEmbeddedAbsent, ReasonReceivedDSNTemporaryFailure, ReasonReceivedDSNTenantUnavailable,
+		ReasonReceivedDSNIdentityMismatch, ReasonReceivedDSNNotLocal, ReasonReceivedDSNRecipientUnlinked,
+		ReasonReceivedDSNLinked:
+		return receivedDSNFindingClass
 	default:
 		return 0
 	}

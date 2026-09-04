@@ -46,6 +46,10 @@ func TestPolicyReasonVocabulary(t *testing.T) {
 		"donotmodify_honored", "donotmodify_violated", "donotmodify_indeterminate", "donotmodify_not_evaluated",
 		"donotexplode_violated", "donotexplode_indeterminate", "donotexplode_not_evaluated", "feedback_requested",
 		"feedback_relay_selected", "feedhere_inert", "exploded_reported",
+		"received_dsn_outer_policy", "received_dsn_structure_invalid", "received_dsn_embedded_unverified",
+		"received_dsn_embedded_absent", "received_dsn_temporary_failure", "received_dsn_tenant_unavailable",
+		"received_dsn_identity_mismatch", "received_dsn_not_local", "received_dsn_recipient_unlinked",
+		"received_dsn_linked",
 	}
 	actual := []PolicyReason{
 		ReasonInvalidInput, ReasonLimitExceeded, ReasonInternalContract,
@@ -56,6 +60,10 @@ func TestPolicyReasonVocabulary(t *testing.T) {
 		ReasonDoNotModifyNotEvaluated, ReasonDoNotExplodeViolated, ReasonDoNotExplodeIndeterminate,
 		ReasonDoNotExplodeNotEvaluated, ReasonFeedbackRequested, ReasonFeedbackRelaySelected,
 		ReasonFeedHereInert, ReasonExplodedReported,
+		ReasonReceivedDSNOuterPolicy, ReasonReceivedDSNStructureInvalid, ReasonReceivedDSNEmbeddedUnverified,
+		ReasonReceivedDSNEmbeddedAbsent, ReasonReceivedDSNTemporaryFailure, ReasonReceivedDSNTenantUnavailable,
+		ReasonReceivedDSNIdentityMismatch, ReasonReceivedDSNNotLocal, ReasonReceivedDSNRecipientUnlinked,
+		ReasonReceivedDSNLinked,
 	}
 	if !slices.Equal(actual, expected) {
 		t.Fatalf("policy reasons = %v, want %v", actual, expected)
@@ -70,8 +78,8 @@ func TestPolicyReasonVocabulary(t *testing.T) {
 		}
 		seen[reason] = struct{}{}
 	}
-	if len(actual) != 23 {
-		t.Fatalf("reason count = %d, want 23", len(actual))
+	if len(actual) != 33 {
+		t.Fatalf("reason count = %d, want 33", len(actual))
 	}
 	if PolicyReason("").Known() || PolicyReason("future").Known() {
 		t.Fatal("unknown policy reason accepted")
@@ -84,6 +92,10 @@ func TestFindingSequenceContract(t *testing.T) {
 		ReasonProtocolPass, ReasonProtocolFail, ReasonProtocolPermerror, ReasonProtocolTemperror,
 		ReasonPermissiveOverride, ReasonTestingModeObserve,
 		ReasonDNSTestingEffective, ReasonDNSTestingMixed, ReasonDNSTestingIneligible,
+		ReasonReceivedDSNOuterPolicy, ReasonReceivedDSNStructureInvalid, ReasonReceivedDSNEmbeddedUnverified,
+		ReasonReceivedDSNEmbeddedAbsent, ReasonReceivedDSNTemporaryFailure, ReasonReceivedDSNTenantUnavailable,
+		ReasonReceivedDSNIdentityMismatch, ReasonReceivedDSNNotLocal, ReasonReceivedDSNRecipientUnlinked,
+		ReasonReceivedDSNLinked,
 	} {
 		finding, err := newFinding(reason, 0, false)
 		if err != nil || !finding.Valid() {
@@ -152,9 +164,19 @@ func TestPolicyReasonSeverityMatrix(t *testing.T) {
 		{ReasonFeedbackRelaySelected, SeverityInfo},
 		{ReasonFeedHereInert, SeverityInfo},
 		{ReasonExplodedReported, SeverityInfo},
+		{ReasonReceivedDSNOuterPolicy, SeverityInfo},
+		{ReasonReceivedDSNStructureInvalid, SeverityPermanent},
+		{ReasonReceivedDSNEmbeddedUnverified, SeverityPermanent},
+		{ReasonReceivedDSNEmbeddedAbsent, SeverityInfo},
+		{ReasonReceivedDSNTemporaryFailure, SeverityTemporary},
+		{ReasonReceivedDSNTenantUnavailable, SeverityWarning},
+		{ReasonReceivedDSNIdentityMismatch, SeverityPermanent},
+		{ReasonReceivedDSNNotLocal, SeverityInfo},
+		{ReasonReceivedDSNRecipientUnlinked, SeverityPermanent},
+		{ReasonReceivedDSNLinked, SeverityInfo},
 	}
-	if len(tests) != 23 {
-		t.Fatalf("severity row count = %d, want 23", len(tests))
+	if len(tests) != 33 {
+		t.Fatalf("severity row count = %d, want 33", len(tests))
 	}
 	for _, tt := range tests {
 		if got := severityForReason(tt.reason); got != tt.severity {

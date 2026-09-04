@@ -69,6 +69,10 @@ func (e Evaluator) EvaluateProjection(projection Projection) (Decision, error) {
 	if dns.reason != "" {
 		derivedCount++
 	}
+	receivedDSN, hasReceivedDSN := projection.ReceivedDSN()
+	if hasReceivedDSN {
+		derivedCount++
+	}
 	if derivedCount > e.config.Limits.MaxFindings || len(baseReasons) > e.config.Limits.MaxFindings-derivedCount {
 		return Decision{}, newLimitError(limitNameFindings, e.config.Limits.MaxFindings, len(baseReasons)+derivedCount)
 	}
@@ -110,7 +114,29 @@ func (e Evaluator) EvaluateProjection(projection Projection) (Decision, error) {
 			verdict, primary = VerdictReject, ReasonDoNotExplodeViolated
 		}
 	}
+	if hasReceivedDSN {
+		findings, verdict, primary, err = e.applyReceivedDSNRow(projection.Protocol(), receivedDSN, findings, verdict, primary)
+		if err != nil {
+			return Decision{}, err
+		}
+	}
 	return newDecision(projection.Protocol(), e.config.Mode, verdict, primary, compliance.modifyState, compliance.explodeState, feedback.intent, dns.effective, findings)
+}
+
+// applyReceivedDSNRow evaluates the received-DSN row table last: the selected
+// row is appended as the final finding, reject, tempfail, and continue rows
+// replace the outer verdict and primary reason, and accept rows keep them.
+func (e Evaluator) applyReceivedDSNRow(protocol ProtocolClass, facts ReceivedDSNFacts, findings []Finding, verdict Verdict, primary PolicyReason) ([]Finding, Verdict, PolicyReason, error) {
+	reason := receivedDSNRowReason(protocol, facts)
+	finding, err := newFinding(reason, 0, false)
+	if err != nil {
+		return nil, "", "", err
+	}
+	findings = append(findings, finding)
+	if rowVerdict, replace := receivedDSNRowVerdict(e.config.Mode, reason); replace {
+		verdict, primary = rowVerdict, reason
+	}
+	return findings, verdict, primary, nil
 }
 
 // EvaluateAuthenticationProjection applies non-overridable replay failure after deriving authenticated compliance facts.

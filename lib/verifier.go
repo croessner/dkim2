@@ -39,8 +39,12 @@ func NewVerifier(provider PublicKeyProvider, options ...VerifierOption) (*Verifi
 	if err != nil {
 		return nil, newAPIError(APIErrorCodeInvalidOption)
 	}
+	receivedDSN, err := newReceivedDSNEvaluator(coordinator.Core(), limits)
+	if err != nil {
+		return nil, newAPIError(APIErrorCodeInvalidOption)
+	}
 	return &Verifier{state: &verifierState{
-		service: coordinator, limits: limits, sink: config.sink, initialized: true,
+		service: coordinator, receivedDSN: receivedDSN, limits: limits, sink: config.sink, initialized: true,
 	}}, nil
 }
 

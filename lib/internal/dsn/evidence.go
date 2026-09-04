@@ -207,6 +207,11 @@ func authenticatedEvidence(form EvidenceForm, message rawmsg.Message, target ver
 	if err != nil {
 		return Evidence{}, newEvidenceError(EvidenceErrorCodeInvalidEmbeddedClaims, nil)
 	}
+	return authenticatedEvidenceFrom(form, signatures, target)
+}
+
+// authenticatedEvidenceFrom derives the same facts from signatures a verifier already extracted.
+func authenticatedEvidenceFrom(form EvidenceForm, signatures []signature.Signature, target verify.Target) (Evidence, error) {
 	for _, parsed := range signatures {
 		if parsed.Sequence() != target.Sequence || parsed.InstanceNumber() != target.InstanceNumber {
 			continue
@@ -259,67 +264,14 @@ func deliveryStatusLinksRecipient(report Report, signed [][]byte, postfixBounceO
 
 // deliveryStatusBodyLinksRecipient validates one bounded RFC 3464 body and
 // reports whether a structurally complete recipient group links to signed rt=.
+// It retains no report facts after the comparison.
 func deliveryStatusBodyLinksRecipient(body []byte, signed [][]byte, postfixBounceOrder bool) bool {
-	if len(body) == 0 || len(body) > maxDeliveryStatusBytes {
+	report, valid := parseDeliveryStatusBody(body, postfixBounceOrder)
+	if !valid {
 		return false
 	}
-	if postfixBounceOrder {
-		unfolded, valid := unfoldPostfixDeliveryStatus(body)
-		if !valid {
-			return false
-		}
-		defer clear(unfolded)
-		body = unfolded
-	}
-	group := deliveryStatusFieldGroup{}
-	groupIndex := 0
-	totalFields := 0
-	linked := false
-	position := 0
-	for position < len(body) {
-		relativeEnd := bytes.Index(body[position:], []byte("\r\n"))
-		lineEnd := len(body)
-		if relativeEnd >= 0 {
-			lineEnd = position + relativeEnd
-		}
-		line := body[position:lineEnd]
-		if len(line) > maxDeliveryStatusLineBytes || bytes.ContainsAny(line, "\r\n") {
-			return false
-		}
-		if relativeEnd < 0 {
-			position = len(body)
-		} else {
-			position = lineEnd + 2
-		}
-		if len(line) == 0 {
-			groupLinked, valid := finishDeliveryStatusGroup(groupIndex, group, signed, postfixBounceOrder)
-			if !valid {
-				return false
-			}
-			linked = linked || groupLinked
-			groupIndex++
-			group = deliveryStatusFieldGroup{}
-			continue
-		}
-		if line[0] == ' ' || line[0] == '\t' ||
-			!group.add(groupIndex, line, postfixBounceOrder) {
-			return false
-		}
-		totalFields++
-		if group.fieldCount > maxDeliveryStatusFieldsPerGroup ||
-			totalFields > maxDeliveryStatusTotalFields {
-			return false
-		}
-	}
-	if group.fieldCount > 0 {
-		groupLinked, valid := finishDeliveryStatusGroup(groupIndex, group, signed, postfixBounceOrder)
-		if !valid {
-			return false
-		}
-		linked = linked || groupLinked
-		groupIndex++
-	}
-	return groupIndex >= 2 && groupIndex-1 <= maxDeliveryStatusRecipientGroups && linked
+	defer report.clear()
+	return report.linksAny(signed)
 }
 
 type deliveryStatusFieldGroup struct {
@@ -685,45 +637,6 @@ func (g deliveryStatusFieldGroup) prerequisitesSeen(groupIndex int, field delive
 	default:
 		return g.has(deliveryStatusFieldStatus)
 	}
-}
-
-func finishDeliveryStatusGroup(
-	index int,
-	group deliveryStatusFieldGroup,
-	signed [][]byte,
-	postfixBounceOrder bool,
-) (bool, bool) {
-	if group.fieldCount == 0 {
-		return false, false
-	}
-	if index == 0 {
-		if !group.mandatoryFieldsSeen(index) || !validDeliveryStatusOptionalMessageFields(group) ||
-			postfixBounceOrder && len(group.postfixQueueID) == 0 {
-			return false, false
-		}
-		return false, validDeliveryStatusTypedText(group.reportingMTA, "", false)
-	}
-	if index > maxDeliveryStatusRecipientGroups || !group.mandatoryFieldsSeen(index) ||
-		!validDeliveryStatusAction(group.action) || !validDeliveryStatusCode(group.status) ||
-		!validDeliveryStatusOptionalRecipientFields(group) ||
-		postfixBounceOrder && !group.has(deliveryStatusFieldDiagnosticCode) {
-		return false, false
-	}
-	finalPath, valid := deliveryStatusFinalRecipientPath(group.finalRecipient)
-	if !valid {
-		return false, false
-	}
-	linked := deliveryStatusPathMatches(finalPath, signed)
-	clear(finalPath)
-	if group.has(deliveryStatusFieldOriginalRecipient) {
-		originalPath, originalValid := deliveryStatusOriginalRecipientPath(group.originalRecipient)
-		if !originalValid {
-			return false, false
-		}
-		linked = linked || deliveryStatusPathMatches(originalPath, signed)
-		clear(originalPath)
-	}
-	return linked, true
 }
 
 // unfoldPostfixDeliveryStatus unfolds only RFC 822 continuation lines from a
