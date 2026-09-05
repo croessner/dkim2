@@ -59,24 +59,286 @@ func TestValidatePostfixRejectsRouteConflation(t *testing.T) {
 	if err := os.MkdirAll(base, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	mainCF := expectedMainCF
-	masterCF := expectedMasterCF
-	if err := os.WriteFile(filepath.Join(base, "main.cf"), []byte(mainCF), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(base, "master.cf"), []byte(masterCF), 0o600); err != nil {
-		t.Fatal(err)
-	}
+	writePostfixFixtures(t, base)
 	if err := validatePostfix(root); err != nil {
 		t.Fatal(err)
 	}
-	hostile := strings.Replace(masterCF, "transit/milter.sock", "inbound/milter.sock", 1)
+	hostile := strings.Replace(expectedMasterCF, "transit/milter.sock", "inbound/milter.sock", 1)
 	if err := os.WriteFile(filepath.Join(base, "master.cf"), []byte(hostile), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if err := validatePostfix(root); err == nil {
 		t.Fatal("route capability conflation was accepted")
 	}
+}
+
+// TestValidatePostfixFreezesPropagationOverlayConfiguration proves the
+// propagation main.cf and master.cf are frozen exactly, so a parser-level
+// defect in either file cannot ship unnoticed again.
+func TestValidatePostfixFreezesPropagationOverlayConfiguration(t *testing.T) {
+	for _, testCase := range []struct {
+		name    string
+		file    string
+		content string
+	}{
+		{
+			name: "flat inline table", file: "propagation-main.cf",
+			content: strings.Replace(expectedPropagationMainCF, "inline:{ {bounces@operator.test = OK} }", "inline:{ bounces@operator.test = OK }", 1),
+		},
+		{
+			name: "unauthorized return path", file: "propagation-main.cf",
+			content: strings.Replace(expectedPropagationMainCF, "    check_recipient_access inline:{ {bounces@operator.test = OK} },\n", "", 1),
+		},
+		{
+			name: "multi-recipient transport", file: "propagation-main.cf",
+			content: strings.Replace(expectedPropagationMainCF, "dsn_propagator_destination_recipient_limit = 1", "dsn_propagator_destination_recipient_limit = 2", 1),
+		},
+		{
+			name: "unknown backoff parameter", file: "propagation-main.cf",
+			content: strings.Replace(expectedPropagationMainCF, "maximal_backoff_time", "maximum_backoff_time", 1),
+		},
+		{
+			name: "milter on reinjection listener", file: "propagation-master.cf",
+			content: strings.Replace(expectedPropagationMasterCF, "  -o smtpd_milters=\n  -o non_smtpd_milters=\n", "  -o smtpd_milters=unix:/run/dkim2/inbound/milter.sock\n  -o non_smtpd_milters=\n", 1),
+		},
+		{
+			name: "missing transport", file: "propagation-master.cf",
+			content: strings.Replace(expectedPropagationMasterCF, "dsn_propagator unix  -       -       n       -       -       lmtp\n", "", 1),
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			root := t.TempDir()
+			base := filepath.Join(root, "deployments", "postfix-compose", "postfix")
+			if err := os.MkdirAll(base, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			writePostfixFixtures(t, base)
+			if err := validatePostfix(root); err != nil {
+				t.Fatal(err)
+			}
+			if testCase.content == expectedPropagationMainCF || testCase.content == expectedPropagationMasterCF {
+				t.Fatal("mutation did not change the frozen configuration")
+			}
+			if err := os.WriteFile(filepath.Join(base, testCase.file), []byte(testCase.content), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if err := validatePostfix(root); err == nil {
+				t.Fatal("propagation configuration drift was accepted")
+			}
+		})
+	}
+}
+
+// writePostfixFixtures writes the four frozen Postfix files below base.
+func writePostfixFixtures(t *testing.T, base string) {
+	t.Helper()
+	for name, content := range map[string]string{
+		"main.cf": expectedMainCF, "master.cf": expectedMasterCF,
+		"propagation-main.cf": expectedPropagationMainCF, "propagation-master.cf": expectedPropagationMasterCF,
+	} {
+		if err := os.WriteFile(filepath.Join(base, name), []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+// TestValidatePropagationRejectsTopologyDrift freezes the propagation overlay:
+// the adapter and Postfix must share the propagation daemon's namespace, the
+// base services must stay untouched, and no mount may reach protected state.
+func TestValidatePropagationRejectsTopologyDrift(t *testing.T) {
+	root := t.TempDir()
+	defaultProject := validRouteProject(root)
+	defaultProject.Services["postfix"] = validPostfixService(root)
+	defaultProject.Networks = map[string]composeNetwork{"daemon-control": {Internal: true}, "mail": {Internal: true}}
+	defaultProject.Volumes = map[string]composeVolume{"postfix-config": {}, "postfix-queue": {}}
+	if err := validatePropagation(defaultProject, validPropagationProject(root, defaultProject), root); err != nil {
+		t.Fatal(err)
+	}
+	base := filepath.Join(root, "deployments", "postfix-compose")
+	tests := []struct {
+		name   string
+		mutate func(*composeProject)
+	}{
+		{name: "postfix keeps the mail network", mutate: func(project *composeProject) {
+			service := project.Services["postfix"]
+			service.Networks = map[string]any{"mail": nil}
+			project.Services["postfix"] = service
+		}},
+		{name: "postfix outside the propagation namespace", mutate: func(project *composeProject) {
+			service := project.Services["postfix"]
+			service.NetworkMode = ""
+			project.Services["postfix"] = service
+		}},
+		{name: "postfix without the propagation socket", mutate: func(project *composeProject) {
+			service := project.Services["postfix"]
+			service.Volumes = service.Volumes[:7]
+			project.Services["postfix"] = service
+		}},
+		{name: "postfix mounts propagator configuration", mutate: func(project *composeProject) {
+			service := project.Services["postfix"]
+			service.Volumes = append(service.Volumes, composeMount{
+				Type: "bind", Source: filepath.Join(base, "state", "propagator"), Target: "/mnt", ReadOnly: true,
+			})
+			project.Services["postfix"] = service
+		}},
+		{name: "postfix uses base main.cf", mutate: func(project *composeProject) {
+			service := project.Services["postfix"]
+			service.Volumes[5].Source = filepath.Join(base, "postfix", "main.cf")
+			project.Services["postfix"] = service
+		}},
+		{name: "adapter on its own network", mutate: func(project *composeProject) {
+			service := project.Services["dsn-propagator"]
+			service.NetworkMode = ""
+			service.Networks = map[string]any{"mail": nil}
+			project.Services["dsn-propagator"] = service
+		}},
+		{name: "adapter without health dependency", mutate: func(project *composeProject) {
+			service := project.Services["dsn-propagator"]
+			service.DependsOn = nil
+			project.Services["dsn-propagator"] = service
+		}},
+		{name: "adapter mounts daemon state", mutate: func(project *composeProject) {
+			service := project.Services["dsn-propagator"]
+			service.Volumes[1].Source = filepath.Join(base, "state", "daemon", "propagation")
+			project.Services["dsn-propagator"] = service
+		}},
+		{name: "adapter published port", mutate: func(project *composeProject) {
+			service := project.Services["dsn-propagator"]
+			service.Ports = []composePort{{Mode: "ingress", HostIP: "127.0.0.1", Target: 24, Published: "24", Protocol: "tcp"}}
+			project.Services["dsn-propagator"] = service
+		}},
+		{name: "adapter mutable image", mutate: func(project *composeProject) {
+			service := project.Services["dsn-propagator"]
+			service.Image = "untrusted.example/dkim2-dsn-propagator:mutable"
+			project.Services["dsn-propagator"] = service
+		}},
+		{name: "daemon off the control network", mutate: func(project *composeProject) {
+			service := project.Services["daemon-propagation"]
+			service.Networks = map[string]any{"mail": nil}
+			project.Services["daemon-propagation"] = service
+		}},
+		{name: "daemon reuses a route configuration", mutate: func(project *composeProject) {
+			service := project.Services["daemon-propagation"]
+			service.Volumes[1].Source = filepath.Join(base, "config", "dkim2d-inbound.yaml")
+			project.Services["daemon-propagation"] = service
+		}},
+		{name: "base route changed", mutate: func(project *composeProject) {
+			service := project.Services["milter-inbound"]
+			service.NetworkMode = "service:daemon-propagation"
+			project.Services["milter-inbound"] = service
+		}},
+		{name: "extra service", mutate: func(project *composeProject) {
+			project.Services["debug"] = composeService{}
+		}},
+		{name: "network drift", mutate: func(project *composeProject) {
+			project.Networks["mail"] = composeNetwork{Internal: false}
+		}},
+	}
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			project := validPropagationProject(root, defaultProject)
+			testCase.mutate(&project)
+			if err := validatePropagation(defaultProject, project, root); err == nil {
+				t.Fatal("propagation topology drift was accepted")
+			}
+		})
+	}
+}
+
+// validPropagationProject returns one exact propagation overlay rendering of
+// the supplied default project for validator tests.
+func validPropagationProject(root string, defaultProject composeProject) composeProject {
+	arguments := map[string]string{
+		"CREATED": "1970-01-01T00:00:00Z", "DIRTY": "clean",
+		"REVISION": strings.Repeat("0", 40), "SOURCE_DATE_EPOCH": "0",
+		"VERSION": "0.0.0-dev",
+	}
+	base := filepath.Join(root, "deployments", "postfix-compose")
+	project := composeProject{
+		Name:     defaultProject.Name,
+		Networks: map[string]composeNetwork{},
+		Volumes:  map[string]composeVolume{},
+		Services: map[string]composeService{},
+	}
+	for name, network := range defaultProject.Networks {
+		project.Networks[name] = network
+	}
+	for name, volume := range defaultProject.Volumes {
+		project.Volumes[name] = volume
+	}
+	for name, service := range defaultProject.Services {
+		project.Services[name] = service
+	}
+	postfix := defaultProject.Services["postfix"]
+	postfix.NetworkMode = "service:daemon-propagation"
+	postfix.Networks = nil
+	postfix.DependsOn = map[string]composeDependency{
+		"daemon-propagation": {Condition: "service_started", Required: true, Restart: true},
+		"dsn-propagator":     {Condition: "service_healthy", Required: true},
+		"milter-inbound":     {Condition: "service_healthy", Required: true},
+		"milter-originator":  {Condition: "service_healthy", Required: true},
+		"milter-transit":     {Condition: "service_healthy", Required: true},
+	}
+	postfix.Volumes = append([]composeMount(nil), defaultProject.Services["postfix"].Volumes[:5]...)
+	postfix.Volumes = append(postfix.Volumes,
+		composeMount{Type: "bind", Source: filepath.Join(base, "postfix", "propagation-main.cf"), Target: "/etc/postfix/custom-config/main.cf", ReadOnly: true},
+		composeMount{Type: "bind", Source: filepath.Join(base, "postfix", "propagation-master.cf"), Target: "/etc/postfix/custom-config/master.cf", ReadOnly: true},
+		composeMount{Type: "bind", Source: filepath.Join(base, "state", "sockets", "propagation"), Target: "/run/dkim2/propagation", ReadOnly: true},
+	)
+	project.Services["postfix"] = postfix
+	project.Services["daemon-propagation"] = composeService{
+		Build: &composeBuild{
+			Context: root, Dockerfile: "build/container/Dockerfile",
+			Arguments: arguments, Target: "dkim2d",
+		},
+		Command: []string{"serve", "--config", "/etc/dkim2d/config.yaml"},
+		Image:   "dkim2d:local", User: "2000:2000",
+		Networks: map[string]any{"daemon-control": nil, "mail": nil},
+		Healthcheck: composeHealthcheck{
+			Test:     []string{"CMD", "/usr/local/bin/dkim2d", "probe"},
+			Interval: "10s", Timeout: "3s", Retries: 6, StartPeriod: "5s",
+		},
+		CapDrop: []string{"ALL"}, SecurityOptions: []string{"no-new-privileges:true"},
+		ReadOnly: true, Restart: "no",
+		Ulimits:   map[string]composeUlimit{"nofile": {Soft: 1024, Hard: 1024}},
+		PidsLimit: 64, MemoryLimit: "268435456", CPUs: 1,
+		StopGracePeriod: "15s",
+		Tmpfs:           []string{"/tmp:rw,noexec,nosuid,nodev,size=16m,mode=0700,uid=2000,gid=2000"},
+		Volumes: []composeMount{
+			{Type: "bind", Source: filepath.Join(base, "state", "daemon", "propagation"), Target: "/var/lib/dkim2d", ReadOnly: true},
+			{Type: "bind", Source: filepath.Join(base, "config", "dkim2d-propagation.yaml"), Target: "/etc/dkim2d/config.yaml", ReadOnly: true},
+		},
+	}
+	project.Services["dsn-propagator"] = composeService{
+		Build: &composeBuild{
+			Context: root, Dockerfile: "build/container/Dockerfile",
+			Arguments: arguments, Target: "dkim2-dsn-propagator",
+		},
+		Command: []string{"serve", "--config", "/etc/dkim2-dsn-propagator/config.yaml"},
+		Image:   "dkim2-dsn-propagator:local", User: "2000:103",
+		NetworkMode: "service:daemon-propagation",
+		DependsOn: map[string]composeDependency{
+			"daemon-propagation": {Condition: "service_healthy", Required: true},
+		},
+		Healthcheck: composeHealthcheck{
+			Test: []string{
+				"CMD", "/usr/local/bin/dkim2-dsn-propagator", "probe",
+				"--config", "/etc/dkim2-dsn-propagator/config.yaml",
+			},
+			Interval: "10s", Timeout: "2s", Retries: 6, StartPeriod: "5s",
+		},
+		CapDrop: []string{"ALL"}, SecurityOptions: []string{"no-new-privileges:true"},
+		ReadOnly: true, Restart: "no",
+		Ulimits:   map[string]composeUlimit{"nofile": {Soft: 1024, Hard: 1024}},
+		PidsLimit: 64, MemoryLimit: "268435456", CPUs: 1,
+		StopGracePeriod: "15s",
+		Tmpfs:           []string{"/tmp:rw,noexec,nosuid,nodev,size=16m,mode=0700,uid=2000,gid=103"},
+		Volumes: []composeMount{
+			{Type: "bind", Source: filepath.Join(base, "state", "sockets", "propagation"), Target: "/run/dkim2/propagation"},
+			{Type: "bind", Source: filepath.Join(base, "state", "propagator"), Target: "/etc/dkim2-dsn-propagator", ReadOnly: true},
+		},
+	}
+	return project
 }
 
 // TestProjectRoundTripDocumentsTheClosedProjection verifies stable JSON field shapes.

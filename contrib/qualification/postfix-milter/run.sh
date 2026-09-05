@@ -6,9 +6,9 @@ compose_file=contrib/qualification/postfix-milter/compose.yaml
 
 # lane selects which qualification fragments one pass produces. "core" is the
 # signing, verification, and Postfix delivery-status evidence and is the
-# default gate. "propagation" is the delivery-status propagation evidence and
-# is opt-in while the notification shapes it needs cannot be produced by this
-# implementation; "all" is both.
+# default gate. "propagation" is the delivery-status propagation evidence; it
+# is opt-in because it drives the deferred LMTP transport through real retry
+# and lease windows and therefore takes several minutes; "all" is both.
 lane=core
 while test "$#" -gt 0; do
   case $1 in

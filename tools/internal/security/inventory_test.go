@@ -17,8 +17,42 @@ func TestRepositoryInventoryMatchesEveryFirstPartyFuzzTarget(t *testing.T) {
 	if got := len(Targets()); got != 97 {
 		t.Fatalf("target count = %d, want 97", got)
 	}
-	if got := len(ResourceOwners()); got != 18 {
-		t.Fatalf("resource owner count = %d, want 18", got)
+	if got := len(ResourceOwners()); got != 19 {
+		t.Fatalf("resource owner count = %d, want 19", got)
+	}
+}
+
+// TestResourceInventoryOwnsPropagatorTransportBounds freezes the propagation
+// adapter's transport limits as one resource owner with exact proof bindings.
+func TestResourceInventoryOwnsPropagatorTransportBounds(t *testing.T) {
+	var owner ResourceOwner
+	for _, current := range ResourceOwners() {
+		if current.ID == "propagator" {
+			owner = current
+		}
+	}
+	if owner.ID == "" || !strings.Contains(owner.Owner, "cmd/dkim2-dsn-propagator/internal/lmtp") {
+		t.Fatalf("propagator resource owner = %+v", owner)
+	}
+	for _, dimension := range []string{
+		"message_bytes", "data_line_bytes", "recipients", "connections", "in_flight",
+	} {
+		if !slices.Contains(owner.Dimensions, dimension) {
+			t.Fatalf("propagator owner lacks dimension %q", dimension)
+		}
+	}
+	root := filepath.Clean(filepath.Join("..", "..", ".."))
+	functions, err := discoverTestFunctions(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, proof := range owner.Proofs {
+		if !strings.HasPrefix(proof, "cmd/dkim2-dsn-propagator/") {
+			t.Fatalf("propagator proof %q lives outside the adapter module", proof)
+		}
+		if _, ok := functions[proof]; !ok {
+			t.Fatalf("propagator proof %q does not exist", proof)
+		}
 	}
 }
 
