@@ -556,8 +556,10 @@ func TestPropagateRejectsNotApplicableAndOmitsTheProjection(t *testing.T) {
 		t.Fatalf("request: %v", err)
 	}
 	result := fixture.propagate(t, request)
-	if observed := fixture.observer.last(); observed != propagationStageEvaluation+"="+string(PropagationDispositionReject) {
-		t.Fatalf("observation = %q, want the evaluation stage rejecting the notification", observed)
+	if observed := fixture.observer.last(); observed !=
+		propagationStageOuterVerification+"="+string(PropagationDispositionReject) {
+		t.Fatalf("observation = %q, want the outer verification stage rejecting the notification",
+			observed)
 	}
 	if result.Result() != PropagationFail || result.Disposition() != PropagationDispositionReject {
 		t.Fatalf("result=%q disposition=%q, want fail/reject", result.Result(), result.Disposition())
@@ -684,8 +686,10 @@ func TestPropagateRejectsUndecodableOuterSignatureBeforeEvaluation(t *testing.T)
 	}
 	result := fixture.propagate(t, request)
 	requireOutcome(t, result, PropagationFail, PropagationDispositionReject, PropagationFailureNone)
-	if observed := fixture.observer.last(); observed != propagationStageEvaluation+"="+string(PropagationDispositionReject) {
-		t.Fatalf("observation = %q, want the evaluation stage rejecting the notification", observed)
+	if observed := fixture.observer.last(); observed !=
+		propagationStageOuterVerification+"="+string(PropagationDispositionReject) {
+		t.Fatalf("observation = %q, want the outer verification stage rejecting the notification",
+			observed)
 	}
 	if !result.Projection().Absent() {
 		t.Fatal("a notification whose outer verification stopped the request carried a projection")

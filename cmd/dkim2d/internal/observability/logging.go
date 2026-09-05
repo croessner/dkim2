@@ -109,7 +109,7 @@ var receivedDSNResults = []string{"ok", valuePermanent, valueTemporary}
 // propagationStages is the closed stage vocabulary of dsn.propagation.completed
 // and dkim2d_dsn_propagation_total.
 var propagationStages = []string{
-	"evaluation", valueReplay, "rebuild", "previous_hop_verification",
+	"outer_verification", "evaluation", valueReplay, "rebuild", "previous_hop_verification",
 	"signing_domain", valuePolicy, "signing", "completed",
 }
 

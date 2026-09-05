@@ -16,6 +16,9 @@ import (
 const (
 	// propagationRouteScope is the daemon's fixed propagation route scope.
 	propagationRouteScope = "dkim2d-delivery-status-propagation"
+	// propagationStageOuterVerification identifies the outer-verification rows,
+	// which decide before any received-DSN evaluation runs.
+	propagationStageOuterVerification = "outer_verification"
 	// propagationStageEvaluation identifies the received-DSN evaluation rows.
 	propagationStageEvaluation = "evaluation"
 	// propagationStageReplay identifies the two-phase replay gate.
@@ -247,11 +250,11 @@ func (c *PropagationCoordinator) Propagate(
 		return PropagationResult{}, err
 	}
 	if outerState == propagationOuterNotApplicable {
-		c.observe(propagationStageEvaluation, PropagationDispositionReject)
+		c.observe(propagationStageOuterVerification, PropagationDispositionReject)
 		return c.notApplicableResult()
 	}
-	if decision, decided := classifyPropagationOuter(outerState, verification); decided {
-		c.observe(propagationStageEvaluation, decision.disposition)
+	if decision, decided := classifyPropagationOuter(outerState, verification.State()); decided {
+		c.observe(propagationStageOuterVerification, decision.disposition)
 		return c.unevaluatedResultFor(decision)
 	}
 	authority, err := c.authorityFor(request.Tenant())
@@ -273,7 +276,7 @@ func (c *PropagationCoordinator) Propagate(
 		c.observe(propagationStageEvaluation, PropagationDispositionTempfail)
 		return c.unevaluatedResult()
 	}
-	if decision := classifyPropagationEvaluation(verification.State(), projection); decision.decided {
+	if decision := classifyPropagationEvaluation(projection); decision.decided {
 		c.observe(propagationStageEvaluation, decision.disposition)
 		return NewPropagationResult(decision.result, decision.disposition, decision.failure,
 			projection, ReplayResultNotChecked, PropagationOutput{})
@@ -422,7 +425,7 @@ func (c *PropagationCoordinator) rebuildAndSign(
 		c.observe(propagationStagePreviousHop, PropagationDispositionTempfail)
 		return c.temporaryResult(rebuiltProjection, replayClass)
 	case dkim2.DSNPropagationNotEligible:
-		decision := classifyPropagationEvaluation(dkim2.ResultStatePASS, rebuiltProjection)
+		decision := classifyPropagationEvaluation(rebuiltProjection)
 		if !decision.decided {
 			c.observe(propagationStagePolicy, PropagationDispositionTempfail)
 			return c.temporaryResult(rebuiltProjection, replayClass)

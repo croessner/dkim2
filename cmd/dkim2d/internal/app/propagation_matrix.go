@@ -51,12 +51,12 @@ func discardedPropagation() propagationDecision {
 // evaluation rows.
 func classifyPropagationOuter(
 	state propagationOuterState,
-	verification dkim2.VerifyResult,
+	outer dkim2.ResultState,
 ) (propagationDecision, bool) {
 	if state != propagationOuterAssessed {
 		return temporaryPropagation(), true
 	}
-	switch verification.State() {
+	switch outer {
 	case dkim2.ResultStatePASS:
 		return propagationDecision{}, false
 	case dkim2.ResultStateFAIL, dkim2.ResultStatePERMERROR:
@@ -68,26 +68,16 @@ func classifyPropagationOuter(
 
 // classifyPropagationEvaluation applies the evaluation rows of the
 // propagation coherence matrix in specification order and stops at the first
-// match. It never reaches the replay gate, the rebuild, or a private key for
-// an ambiguous or refused state, and it fails closed as temperror for every
-// value outside the closed vocabularies. On this route local_hop = not_local
-// is a misrouting and is rejected, unlike the informational process
-// projection, because the delivering socket is reserved for our own
-// return-path addresses.
-func classifyPropagationEvaluation(
-	outer dkim2.ResultState,
-	projection DeliveryStatusProjection,
-) propagationDecision {
+// match. The outer-verification rows are owned by classifyPropagationOuter
+// alone and have already decided the request when this function runs, so it
+// takes the projection only. It never reaches the replay gate, the rebuild,
+// or a private key for an ambiguous or refused state, and it fails closed as
+// temperror for every value outside the closed vocabularies. On this route
+// local_hop = not_local is a misrouting and is rejected, unlike the
+// informational process projection, because the delivering socket is reserved
+// for our own return-path addresses.
+func classifyPropagationEvaluation(projection DeliveryStatusProjection) propagationDecision {
 	if !projection.Valid() {
-		return temporaryPropagation()
-	}
-	switch outer {
-	case dkim2.ResultStateTEMPERROR:
-		return temporaryPropagation()
-	case dkim2.ResultStateFAIL, dkim2.ResultStatePERMERROR:
-		return rejectedPropagation()
-	case dkim2.ResultStatePASS:
-	default:
 		return temporaryPropagation()
 	}
 	if projection.Structure() != dkim2.ReceivedDSNStructureValid {

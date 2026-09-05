@@ -32,29 +32,13 @@ func TestPropagationEvaluationMatrixFollowsSpecificationOrder(t *testing.T) {
 
 	cases := []struct {
 		name        string
-		outer       dkim2.ResultState
 		projection  DeliveryStatusProjection
 		result      PropagationResultClass
 		disposition PropagationDispositionClass
 		failure     PropagationFailureClass
 	}{
 		{
-			name: "outer temperror", outer: dkim2.ResultStateTEMPERROR,
-			projection: eligibleProjection(),
-			result:     PropagationTemperror, disposition: PropagationDispositionTempfail,
-		},
-		{
-			name: "outer fail", outer: dkim2.ResultStateFAIL,
-			projection: eligibleProjection(),
-			result:     PropagationFail, disposition: PropagationDispositionReject,
-		},
-		{
-			name: "outer permerror", outer: dkim2.ResultStatePERMERROR,
-			projection: eligibleProjection(),
-			result:     PropagationFail, disposition: PropagationDispositionReject,
-		},
-		{
-			name: "structure malformed", outer: dkim2.ResultStatePASS,
+			name: "structure malformed",
 			projection: func() DeliveryStatusProjection {
 				projection := eligibleProjection()
 				projection.structure = dkim2.ReceivedDSNStructureMalformed
@@ -63,7 +47,7 @@ func TestPropagationEvaluationMatrixFollowsSpecificationOrder(t *testing.T) {
 			result: PropagationFail, disposition: PropagationDispositionReject,
 		},
 		{
-			name: "structure limit exceeded", outer: dkim2.ResultStatePASS,
+			name: "structure limit exceeded",
 			projection: func() DeliveryStatusProjection {
 				projection := eligibleProjection()
 				projection.structure = dkim2.ReceivedDSNStructureLimitExceeded
@@ -72,7 +56,7 @@ func TestPropagationEvaluationMatrixFollowsSpecificationOrder(t *testing.T) {
 			result: PropagationFail, disposition: PropagationDispositionReject,
 		},
 		{
-			name: "embedded unverified", outer: dkim2.ResultStatePASS,
+			name: "embedded unverified",
 			projection: func() DeliveryStatusProjection {
 				projection := eligibleProjection()
 				projection.embedded = dkim2.ReceivedDSNEmbeddedUnverified
@@ -81,7 +65,7 @@ func TestPropagationEvaluationMatrixFollowsSpecificationOrder(t *testing.T) {
 			result: PropagationFail, disposition: PropagationDispositionReject,
 		},
 		{
-			name: "embedded absent", outer: dkim2.ResultStatePASS,
+			name: "embedded absent",
 			projection: func() DeliveryStatusProjection {
 				projection := eligibleProjection()
 				projection.embedded = dkim2.ReceivedDSNEmbeddedAbsent
@@ -90,7 +74,7 @@ func TestPropagationEvaluationMatrixFollowsSpecificationOrder(t *testing.T) {
 			result: PropagationFail, disposition: PropagationDispositionReject,
 		},
 		{
-			name: "local hop mismatch", outer: dkim2.ResultStatePASS,
+			name: "local hop mismatch",
 			projection: func() DeliveryStatusProjection {
 				projection := eligibleProjection()
 				projection.localHop = dkim2.ReceivedDSNLocalHopMismatch
@@ -99,7 +83,7 @@ func TestPropagationEvaluationMatrixFollowsSpecificationOrder(t *testing.T) {
 			result: PropagationFail, disposition: PropagationDispositionReject,
 		},
 		{
-			name: "outer alignment misaligned", outer: dkim2.ResultStatePASS,
+			name: "outer alignment misaligned",
 			projection: func() DeliveryStatusProjection {
 				projection := eligibleProjection()
 				projection.outerAlignment = dkim2.ReceivedDSNOuterAlignmentMisaligned
@@ -108,7 +92,7 @@ func TestPropagationEvaluationMatrixFollowsSpecificationOrder(t *testing.T) {
 			result: PropagationFail, disposition: PropagationDispositionReject,
 		},
 		{
-			name: "recipient linkage unlinked", outer: dkim2.ResultStatePASS,
+			name: "recipient linkage unlinked",
 			projection: func() DeliveryStatusProjection {
 				projection := eligibleProjection()
 				projection.recipientLinkage = dkim2.ReceivedDSNRecipientLinkageUnlinked
@@ -117,7 +101,7 @@ func TestPropagationEvaluationMatrixFollowsSpecificationOrder(t *testing.T) {
 			result: PropagationFail, disposition: PropagationDispositionReject,
 		},
 		{
-			name: "local hop not local is misrouting", outer: dkim2.ResultStatePASS,
+			name: "local hop not local is misrouting",
 			projection: func() DeliveryStatusProjection {
 				projection := eligibleProjection()
 				projection.localHop = dkim2.ReceivedDSNLocalHopNotLocal
@@ -126,7 +110,7 @@ func TestPropagationEvaluationMatrixFollowsSpecificationOrder(t *testing.T) {
 			result: PropagationFail, disposition: PropagationDispositionReject,
 		},
 		{
-			name: "embedded temperror", outer: dkim2.ResultStatePASS,
+			name: "embedded temperror",
 			projection: func() DeliveryStatusProjection {
 				projection := eligibleProjection()
 				projection.embedded = dkim2.ReceivedDSNEmbeddedTemperror
@@ -135,7 +119,7 @@ func TestPropagationEvaluationMatrixFollowsSpecificationOrder(t *testing.T) {
 			result: PropagationTemperror, disposition: PropagationDispositionTempfail,
 		},
 		{
-			name: "local hop temperror", outer: dkim2.ResultStatePASS,
+			name: "local hop temperror",
 			projection: func() DeliveryStatusProjection {
 				projection := eligibleProjection()
 				projection.localHop = dkim2.ReceivedDSNLocalHopTemperror
@@ -144,7 +128,7 @@ func TestPropagationEvaluationMatrixFollowsSpecificationOrder(t *testing.T) {
 			result: PropagationTemperror, disposition: PropagationDispositionTempfail,
 		},
 		{
-			name: "local hop not evaluated fails closed", outer: dkim2.ResultStatePASS,
+			name: "local hop not evaluated fails closed",
 			projection: func() DeliveryStatusProjection {
 				projection := eligibleProjection()
 				projection.localHop = dkim2.ReceivedDSNLocalHopNotEvaluated
@@ -153,43 +137,43 @@ func TestPropagationEvaluationMatrixFollowsSpecificationOrder(t *testing.T) {
 			result: PropagationTemperror, disposition: PropagationDispositionTempfail,
 		},
 		{
-			name: "terminal origin", outer: dkim2.ResultStatePASS,
+			name:       "terminal origin",
 			projection: withPropagation(dkim2.ReceivedDSNPropagationTerminalOrigin),
 			result:     PropagationPass, disposition: PropagationDispositionDiscard,
 		},
 		{
-			name: "not failure", outer: dkim2.ResultStatePASS,
+			name:       "not failure",
 			projection: withPropagation(dkim2.ReceivedDSNPropagationNotFailure),
 			result:     PropagationPass, disposition: PropagationDispositionDiscard,
 		},
 		{
-			name: "forbidden null previous sender", outer: dkim2.ResultStatePASS,
+			name:       "forbidden null previous sender",
 			projection: withPropagation(dkim2.ReceivedDSNPropagationForbiddenNullPreviousSender),
 			result:     PropagationPass, disposition: PropagationDispositionDiscard,
 		},
 		{
-			name: "unsupported chain", outer: dkim2.ResultStatePASS,
+			name:       "unsupported chain",
 			projection: withPropagation(dkim2.ReceivedDSNPropagationUnsupportedChain),
 			result:     PropagationPass, disposition: PropagationDispositionDiscard,
 		},
 		{
-			name: "not applicable", outer: dkim2.ResultStatePASS,
+			name:       "not applicable",
 			projection: withPropagation(dkim2.ReceivedDSNPropagationNotApplicable),
 			result:     PropagationPass, disposition: PropagationDispositionDiscard,
 		},
 		{
-			name: "not reconstructable", outer: dkim2.ResultStatePASS,
+			name:       "not reconstructable",
 			projection: withPropagation(dkim2.ReceivedDSNPropagationNotReconstructable),
 			result:     PropagationPermerror, disposition: PropagationDispositionDiscard,
 			failure: PropagationFailureNotReconstructable,
 		},
 		{
-			name: "propagation not evaluated fails closed", outer: dkim2.ResultStatePASS,
+			name:       "propagation not evaluated fails closed",
 			projection: withPropagation(dkim2.ReceivedDSNPropagationNotEvaluated),
 			result:     PropagationTemperror, disposition: PropagationDispositionTempfail,
 		},
 		{
-			name: "eligible reaches the replay gate", outer: dkim2.ResultStatePASS,
+			name:       "eligible reaches the replay gate",
 			projection: eligibleProjection(),
 			result:     "", disposition: "",
 		},
@@ -198,7 +182,7 @@ func TestPropagationEvaluationMatrixFollowsSpecificationOrder(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			t.Parallel()
 
-			decision := classifyPropagationEvaluation(testCase.outer, testCase.projection)
+			decision := classifyPropagationEvaluation(testCase.projection)
 			if testCase.result == "" {
 				if decision.decided {
 					t.Fatalf("eligible input decided early as %q/%q",
@@ -228,32 +212,93 @@ func TestPropagationEvaluationMatrixPrefersEarlierRows(t *testing.T) {
 	projection := eligibleProjection()
 	projection.structure = dkim2.ReceivedDSNStructureMalformed
 	projection.embedded = dkim2.ReceivedDSNEmbeddedTemperror
-	decision := classifyPropagationEvaluation(dkim2.ResultStatePASS, projection)
+	decision := classifyPropagationEvaluation(projection)
 	if !decision.decided || decision.result != PropagationFail {
 		t.Fatalf("structure row did not win over the temperror row: %q", decision.result)
 	}
-	decision = classifyPropagationEvaluation(dkim2.ResultStateTEMPERROR, projection)
-	if !decision.decided || decision.result != PropagationTemperror {
-		t.Fatalf("outer temperror row did not win: %q", decision.result)
+}
+
+// TestPropagationOuterMatrixOwnsTheOuterRows binds the outer-verification rows
+// to their single owner: they decide before the evaluation runs, an
+// unreadable or non-pass outer verdict never reaches the evaluation rows, and
+// only a pass leaves the decision open.
+func TestPropagationOuterMatrixOwnsTheOuterRows(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name        string
+		state       propagationOuterState
+		outer       dkim2.ResultState
+		decided     bool
+		result      PropagationResultClass
+		disposition PropagationDispositionClass
+	}{
+		{
+			name: "unusable assessment", state: propagationOuterUnusable,
+			outer: dkim2.ResultStatePASS, decided: true,
+			result: PropagationTemperror, disposition: PropagationDispositionTempfail,
+		},
+		{
+			name: "outer temperror", state: propagationOuterAssessed,
+			outer: dkim2.ResultStateTEMPERROR, decided: true,
+			result: PropagationTemperror, disposition: PropagationDispositionTempfail,
+		},
+		{
+			name: "outer fail", state: propagationOuterAssessed,
+			outer: dkim2.ResultStateFAIL, decided: true,
+			result: PropagationFail, disposition: PropagationDispositionReject,
+		},
+		{
+			name: "outer permerror", state: propagationOuterAssessed,
+			outer: dkim2.ResultStatePERMERROR, decided: true,
+			result: PropagationFail, disposition: PropagationDispositionReject,
+		},
+		{
+			name: "unknown outer state fails closed", state: propagationOuterAssessed,
+			outer: dkim2.ResultState("unknown"), decided: true,
+			result: PropagationTemperror, disposition: PropagationDispositionTempfail,
+		},
+		{
+			name:  "outer pass leaves the evaluation rows to decide",
+			state: propagationOuterAssessed, outer: dkim2.ResultStatePASS,
+		},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			decision, decided := classifyPropagationOuter(testCase.state, testCase.outer)
+			if decided != testCase.decided {
+				t.Fatalf("decided = %v, want %v", decided, testCase.decided)
+			}
+			if !testCase.decided {
+				if decision.decided {
+					t.Fatal("an outer pass decided the request before the evaluation rows")
+				}
+				return
+			}
+			if !decision.decided || decision.result != testCase.result ||
+				decision.disposition != testCase.disposition ||
+				decision.failure != PropagationFailureNone {
+				t.Fatalf("got %q/%q failure %q, want %q/%q", decision.result,
+					decision.disposition, decision.failure, testCase.result,
+					testCase.disposition)
+			}
+			if !validPropagationOutcome(decision.result, decision.disposition,
+				decision.failure, false) {
+				t.Fatal("decision violates the operation coherence rule")
+			}
+		})
 	}
 }
 
 func TestPropagationEvaluationMatrixFailsClosedOnAnInvalidProjection(t *testing.T) {
 	t.Parallel()
 
-	decision := classifyPropagationEvaluation(dkim2.ResultStatePASS, DeliveryStatusProjection{})
+	decision := classifyPropagationEvaluation(DeliveryStatusProjection{})
 	if !decision.decided || decision.result != PropagationTemperror ||
 		decision.disposition != PropagationDispositionTempfail {
 		t.Fatalf("invalid projection did not fail closed: %v %q", decision.decided, decision.result)
-	}
-}
-
-func TestPropagationEvaluationMatrixFailsClosedOnAnUnknownOuterState(t *testing.T) {
-	t.Parallel()
-
-	decision := classifyPropagationEvaluation(dkim2.ResultState("unknown"), eligibleProjection())
-	if !decision.decided || decision.result != PropagationTemperror {
-		t.Fatalf("unknown outer state did not fail closed: %v %q", decision.decided, decision.result)
 	}
 }
 
