@@ -182,7 +182,7 @@ func mustParseRebuilt(t *testing.T, raw []byte) (Report, deliveryStatusReport, r
 	if err != nil {
 		t.Fatalf("Parse(rebuilt) error=%v", err)
 	}
-	status, ok := parseDeliveryStatusBody(report.DeliveryStatus().BodyBytes(), false)
+	status, ok := parseDeliveryStatusBody(report.DeliveryStatus().BodyBytes(), deliveryStatusProfileStrictSequence)
 	if !ok {
 		t.Fatalf("rebuilt delivery-status body rejected by the strict parser: %q", report.DeliveryStatus().BodyBytes())
 	}

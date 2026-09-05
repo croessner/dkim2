@@ -208,7 +208,7 @@
     {
       "id": "postfix-qualification-runner",
       "path": "contrib/qualification/postfix-milter/run.sh",
-      "sha256": "fc04ce302f16784dbe34c70d7ff2028d647f458e8479a4fc3b87e4e87d014e81",
+      "sha256": "4d10c960d1516a496085d949f17756e15726dd96515c2fb99d37642520092c17",
       "module": "contrib/qualification/postfix-milter"
     },
     {
@@ -376,7 +376,7 @@
     {
       "id": "verification-received-dsn",
       "path": "lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-06/received-dsn-golden.json",
-      "sha256": "0debfff0201693d001cac9df4fbf896544254e1def4992b2fb8ee172c07d0469",
+      "sha256": "fd470271fa1972d3e7a89d238f39ad016dcbbfb7d2bc34f335eb51700156d980",
       "module": "lib"
     }
   ],

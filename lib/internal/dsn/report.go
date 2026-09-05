@@ -75,13 +75,15 @@ func (r *deliveryStatusReport) clear() {
 }
 
 // parseDeliveryStatusBody validates one bounded RFC 3464 body under the
-// selected strict profile and returns its per-message and per-recipient
-// facts. Folding fails closed in the generic profile. It reports false for
-// every structural, ordering, cardinality, syntax, or limit violation.
-func parseDeliveryStatusBody(body []byte, postfixBounceOrder bool) (deliveryStatusReport, bool) {
+// selected profile and returns its per-message and per-recipient facts.
+// Folding fails closed outside the Postfix bounce profile. It reports false
+// for every structural, cardinality, syntax, or limit violation, and for
+// ordering violations under the profiles that pin an order.
+func parseDeliveryStatusBody(body []byte, profile deliveryStatusProfile) (deliveryStatusReport, bool) {
 	if len(body) == 0 || len(body) > maxDeliveryStatusBytes {
 		return deliveryStatusReport{}, false
 	}
+	postfixBounceOrder := profile == deliveryStatusProfilePostfixBounce
 	if postfixBounceOrder {
 		unfolded, valid := unfoldPostfixDeliveryStatus(body)
 		if !valid {
@@ -120,7 +122,7 @@ func parseDeliveryStatusBody(body []byte, postfixBounceOrder bool) (deliveryStat
 			group = deliveryStatusFieldGroup{}
 			continue
 		}
-		if line[0] == ' ' || line[0] == '\t' || !group.add(groupIndex, line, postfixBounceOrder) {
+		if line[0] == ' ' || line[0] == '\t' || !group.add(groupIndex, line, profile) {
 			report.clear()
 			return deliveryStatusReport{}, false
 		}

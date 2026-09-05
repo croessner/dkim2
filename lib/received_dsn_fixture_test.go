@@ -26,7 +26,19 @@ const (
 	receivedDSNClock             = int64(dsntest.DefaultTimestamp) + 60
 	receivedDSNOtherLocal        = "<other@local.example>"
 	receivedDSNMalformedStatus   = "Reporting-MTA: dns; destination.example\r\n"
-	receivedDSNDay               = uint64(24 * 60 * 60)
+	// receivedDSNPostfixOrderStatus is the delivery-status field order Postfix
+	// bounce(8) emits: extensions before Arrival-Date, Final-Recipient before
+	// Original-Recipient.
+	receivedDSNPostfixOrderStatus = "Reporting-MTA: dns; destination.example\r\n" +
+		"X-Postfix-Queue-ID: 4hcQ6z1Cg6z1X\r\n" +
+		"X-Postfix-Sender: rfc822; forwarded@local.example\r\n" +
+		"Arrival-Date: Sat, 05 Sep 2026 07:33:31 +0000 (UTC)\r\n\r\n" +
+		"Final-Recipient: rfc822; dest@destination.example\r\n" +
+		"Original-Recipient: rfc822;dest@destination.example\r\n" +
+		"Action: failed\r\nStatus: 5.1.1\r\n" +
+		"Remote-MTA: dns; 127.0.0.1\r\n" +
+		"Diagnostic-Code: smtp; 550 5.1.1 forced qualification failure\r\n"
+	receivedDSNDay = uint64(24 * 60 * 60)
 )
 
 // receivedDSNKeys returns deterministic keys for every fixture domain.

@@ -101,7 +101,7 @@ func FuzzRebuild(f *testing.F) {
 			t.Fatalf("rebuilt report does not parse: %v", parseErr)
 		}
 		machine := string(parsed.DeliveryStatus().BodyBytes())
-		if _, ok := parseDeliveryStatusBody([]byte(machine), false); !ok {
+		if _, ok := parseDeliveryStatusBody([]byte(machine), deliveryStatusProfileStrictSequence); !ok {
 			t.Fatal("rebuilt machine part rejected by the strict parser")
 		}
 		for _, forbidden := range []string{"Remote-MTA", "Diagnostic-Code", "Will-Retry-Until", "Last-Attempt-Date", "Arrival-Date"} {

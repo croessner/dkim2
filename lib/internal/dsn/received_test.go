@@ -318,7 +318,8 @@ func TestReceivedEvaluationStructureFailures(t *testing.T) {
 		{name: "two parts", raw: bytes.Replace(valid, []byte("--dsn-boundary\r\nContent-Type: text/plain; charset=us-ascii\r\n\r\ndelivery failed\r\n"), nil, 1), want: StructureMalformed},
 		{name: "missing action", raw: bytes.Replace(valid, []byte("Action: failed\r\n"), nil, 1), want: StructureMalformed},
 		{name: "folded final recipient", raw: bytes.Replace(valid, []byte("Final-Recipient: rfc822; "), []byte("Final-Recipient: rfc822;\r\n "), 1), want: StructureMalformed},
-		{name: "postfix bounce order is not generic", raw: bytes.Replace(valid, []byte("Final-Recipient: rfc822; dest@destination.example\r\n"), []byte("Final-Recipient: rfc822; dest@destination.example\r\nOriginal-Recipient: rfc822; dest@destination.example\r\n"), 1), want: StructureMalformed},
+		{name: "duplicate final recipient", raw: bytes.Replace(valid, []byte("Final-Recipient: rfc822; dest@destination.example\r\n"), []byte("Final-Recipient: rfc822; dest@destination.example\r\nFinal-Recipient: rfc822; dest@destination.example\r\n"), 1), want: StructureMalformed},
+		{name: "reporting mta in recipient group", raw: bytes.Replace(valid, []byte("Action: failed\r\n"), []byte("Action: failed\r\nReporting-MTA: dns; destination.example\r\n"), 1), want: StructureMalformed},
 		{name: "embedded original not a message", raw: bytes.Replace(valid, []byte("From: sender@remote.example\r\nSubject: original\r\n"), []byte("no colon line\r\n"), 1), want: StructureMalformed},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -346,6 +347,39 @@ func TestReceivedEvaluationStructureFailures(t *testing.T) {
 	evaluation, err := limited.Evaluate(context.Background(), ReceivedRequest{Raw: valid, OuterRecipient: []byte(receivedLocalMailFrom), Authority: newReceivedAuthority(receivedLocalDomain)})
 	if err != nil || evaluation.Structure() != StructureLimitExceeded || evaluation.Propagation() != PropagationNotEvaluated {
 		t.Fatalf("limited Evaluate() structure=%q propagation=%q error=%v", evaluation.Structure(), evaluation.Propagation(), err)
+	}
+}
+
+// TestReceivedEvaluationAcceptsPostfixFieldOrder proves a notification whose
+// delivery-status part carries the field order Postfix bounce(8) emits, with
+// its extensions before Arrival-Date and Final-Recipient before
+// Original-Recipient, is a valid structure that evaluates to eligible.
+func TestReceivedEvaluationAcceptsPostfixFieldOrder(t *testing.T) {
+	verifier, _ := mustReceivedVerifier(t, "")
+	evaluator, err := NewReceivedEvaluator(verifier, ReceivedEvaluatorConfig{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	status := "Reporting-MTA: dns; destination.example\r\n" +
+		"X-Postfix-Queue-ID: 4hcQ6z1Cg6z1X\r\n" +
+		"X-Postfix-Sender: rfc822; " + strings.Trim(receivedLocalMailFrom, "<>") + "\r\n" +
+		"Arrival-Date: Sat, 05 Sep 2026 07:33:31 +0000 (UTC)\r\n\r\n" +
+		"Final-Recipient: rfc822; " + receivedDestinationRaw + "\r\n" +
+		"Original-Recipient: rfc822;" + receivedDestinationRaw + "\r\n" +
+		"Action: failed\r\nStatus: 5.1.1\r\n" +
+		"Remote-MTA: dns; 127.0.0.1\r\n" +
+		"Diagnostic-Code: smtp; 550 5.1.1 forced qualification failure\r\n"
+	raw := receivedSpec{deliveryStatus: status}.build(t)
+	evaluation, err := evaluator.Evaluate(context.Background(), ReceivedRequest{Raw: raw, OuterRecipient: []byte(receivedLocalMailFrom), Authority: newReceivedAuthority(receivedLocalDomain)})
+	if err != nil || !evaluation.Valid() {
+		t.Fatalf("Evaluate() valid=%t error=%v", evaluation.Valid(), err)
+	}
+	want := projection{
+		structure: StructureValid, embedded: EmbeddedVerified, localHop: LocalHopLocal,
+		alignment: OuterAlignmentAligned, linkage: RecipientLinkageLinked, propagation: PropagationEligible,
+	}
+	if got := projectionOf(evaluation); got != want {
+		t.Fatalf("projection=%+v want=%+v", got, want)
 	}
 }
 

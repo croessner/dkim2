@@ -256,23 +256,44 @@ const (
 func deliveryStatusLinksRecipient(report Report, signed [][]byte, postfixBounceOrder bool) bool {
 	body := report.DeliveryStatus().BodyBytes()
 	defer clear(body)
-	if deliveryStatusBodyLinksRecipient(body, signed, false) {
+	if deliveryStatusBodyLinksRecipient(body, signed, deliveryStatusProfileStrictSequence) {
 		return true
 	}
-	return postfixBounceOrder && deliveryStatusBodyLinksRecipient(body, signed, true)
+	return postfixBounceOrder && deliveryStatusBodyLinksRecipient(body, signed, deliveryStatusProfilePostfixBounce)
 }
 
-// deliveryStatusBodyLinksRecipient validates one bounded RFC 3464 body and
-// reports whether a structurally complete recipient group links to signed rt=.
-// It retains no report facts after the comparison.
-func deliveryStatusBodyLinksRecipient(body []byte, signed [][]byte, postfixBounceOrder bool) bool {
-	report, valid := parseDeliveryStatusBody(body, postfixBounceOrder)
+// deliveryStatusBodyLinksRecipient validates one bounded RFC 3464 body under
+// the selected profile and reports whether a structurally complete recipient
+// group links to signed rt=. It retains no report facts after the comparison.
+func deliveryStatusBodyLinksRecipient(body []byte, signed [][]byte, profile deliveryStatusProfile) bool {
+	report, valid := parseDeliveryStatusBody(body, profile)
 	if !valid {
 		return false
 	}
 	defer report.clear()
 	return report.linksAny(signed)
 }
+
+// deliveryStatusProfile selects the RFC 3464 field-group rules of one parse.
+type deliveryStatusProfile uint8
+
+const (
+	// deliveryStatusProfileStrictSequence pins the RFC 3464 ABNF sequence of
+	// each group and confines extension fields to the trailing extension
+	// tail. It remains the rule for the outgoing signing path.
+	deliveryStatusProfileStrictSequence deliveryStatusProfile = iota
+	// deliveryStatusProfileReceivedReport accepts the known per-message and
+	// per-recipient fields in any order and extension fields anywhere inside
+	// their group. Group membership, uniqueness, mandatory fields, syntax,
+	// folding, and limits are unchanged. RFC 3464 lists the fields of each
+	// group without an ordering requirement, and a foreign generator such as
+	// Postfix bounce(8) emits its extensions before Arrival-Date.
+	deliveryStatusProfileReceivedReport
+	// deliveryStatusProfilePostfixBounce admits exactly the current wire
+	// form emitted by Postfix bounce_notify_util.c, including its wrapped
+	// Remote-MTA and Diagnostic-Code fields.
+	deliveryStatusProfilePostfixBounce
+)
 
 type deliveryStatusFieldGroup struct {
 	fieldCount         int
@@ -318,8 +339,12 @@ const (
 	deliveryStatusFieldWillRetryUntil
 )
 
-// add classifies and admits one unfolded field into the selected strict group state machine.
-func (g *deliveryStatusFieldGroup) add(groupIndex int, line []byte, postfixBounceOrder bool) bool {
+// add classifies and admits one unfolded field into the group state machine
+// of the selected profile. Group membership and uniqueness are enforced for
+// every profile; the strict sequence profile additionally pins the ABNF order
+// and the extension tail, while the received-report profile accepts known
+// fields and extensions in any order inside their group.
+func (g *deliveryStatusFieldGroup) add(groupIndex int, line []byte, profile deliveryStatusProfile) bool {
 	if g == nil {
 		return false
 	}
@@ -329,15 +354,16 @@ func (g *deliveryStatusFieldGroup) add(groupIndex int, line []byte, postfixBounc
 	}
 	value := bytes.Trim(line[colon+1:], " \t")
 	field := classifyDeliveryStatusField(line[:colon])
-	if postfixBounceOrder {
+	if profile == deliveryStatusProfilePostfixBounce {
 		return g.addPostfix(groupIndex, line[:colon], field, value)
 	}
 	rank, allowed := deliveryStatusFieldRank(groupIndex, field)
 	if !allowed {
 		return false
 	}
+	anyOrder := profile == deliveryStatusProfileReceivedReport
 	if field == deliveryStatusFieldExtension {
-		if !g.mandatoryFieldsSeen(groupIndex) {
+		if !anyOrder && !g.mandatoryFieldsSeen(groupIndex) {
 			return false
 		}
 		g.extensionStarted = true
@@ -345,10 +371,11 @@ func (g *deliveryStatusFieldGroup) add(groupIndex int, line []byte, postfixBounc
 		return true
 	}
 	bit := uint32(1) << field
-	if g.extensionStarted || g.seen&bit != 0 || g.fieldCount > 0 && rank < g.lastRank {
+	if g.seen&bit != 0 {
 		return false
 	}
-	if !g.prerequisitesSeen(groupIndex, field) {
+	if !anyOrder && (g.extensionStarted || g.fieldCount > 0 && rank < g.lastRank ||
+		!g.prerequisitesSeen(groupIndex, field)) {
 		return false
 	}
 	g.seen |= bit

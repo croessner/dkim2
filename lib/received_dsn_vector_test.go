@@ -96,6 +96,7 @@ func receivedDSNVectorSpecs() []receivedDSNVectorSpec {
 		{name: "eligible_complete", spec: receivedDSNSpec{}, tenant: true, local: local},
 		{name: "eligible_headers_only", spec: receivedDSNSpec{headersOnly: true}, tenant: true, local: local},
 		{name: "structure_malformed", spec: receivedDSNSpec{deliveryStatus: receivedDSNMalformedStatus}, tenant: true, local: local},
+		{name: "postfix_field_order_eligible", spec: receivedDSNSpec{deliveryStatus: receivedDSNPostfixOrderStatus}, tenant: true, local: local},
 		{name: "embedded_absent", spec: receivedDSNSpec{unsigned: true}, tenant: true, local: local},
 		{name: "embedded_unverified", spec: receivedDSNSpec{hops: corrupt}, tenant: true, local: local},
 		{name: "no_tenant", spec: receivedDSNSpec{}, tenant: false},

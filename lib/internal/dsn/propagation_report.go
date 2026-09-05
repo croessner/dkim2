@@ -202,7 +202,7 @@ func (input propagationReportInput) proveRendered(rendered []byte) error {
 	if report.OriginalMessage().ContentType() != input.originalContentType || !bytes.Equal(report.OriginalMessage().BodyBytes(), input.original()) {
 		return newRebuildError(RebuildErrorInternal, nil)
 	}
-	status, ok := parseDeliveryStatusBody(report.DeliveryStatus().BodyBytes(), false)
+	status, ok := parseDeliveryStatusBody(report.DeliveryStatus().BodyBytes(), deliveryStatusProfileStrictSequence)
 	if !ok || len(status.recipients) != 1 || !status.recipients[0].failed() || status.hasEnvelopeID != input.hasEnvelopeID {
 		return newRebuildError(RebuildErrorInternal, nil)
 	}

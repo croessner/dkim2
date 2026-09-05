@@ -371,7 +371,7 @@ func (e ReceivedEvaluator) evaluateStructure(raw []byte, state *receivedState, e
 	if !ok || outerSignature.TimestampSeconds() > maxReferenceUnixSeconds {
 		return true, newReceivedError(ReceivedStageStructure, ReceivedErrorInvalidRequest, nil)
 	}
-	status, ok := parseDeliveryStatusBody(report.DeliveryStatus().BodyBytes(), false)
+	status, ok := parseDeliveryStatusBody(report.DeliveryStatus().BodyBytes(), deliveryStatusProfileReceivedReport)
 	if !ok {
 		evaluation.structure = StructureMalformed
 		return true, nil

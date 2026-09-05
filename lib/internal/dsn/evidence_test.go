@@ -249,8 +249,95 @@ func TestDeliveryStatusRecipientLinkageEnforcesFieldOrder(t *testing.T) {
 		{name: "will retry with non-delayed action", status: strings.Replace(complete, "Action: delayed", "Action: failed", 1)},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
-			if got := deliveryStatusBodyLinksRecipient([]byte(testCase.status), [][]byte{[]byte("<recipient@example.test>")}, false); got != testCase.want {
+			if got := deliveryStatusBodyLinksRecipient([]byte(testCase.status), [][]byte{[]byte("<recipient@example.test>")}, deliveryStatusProfileStrictSequence); got != testCase.want {
 				t.Fatalf("deliveryStatusBodyLinksRecipient()=%t, want %t", got, testCase.want)
+			}
+		})
+	}
+}
+
+// postfixOrderDeliveryStatus is the exact per-message and per-recipient
+// field order Postfix bounce(8) emits for a refused recipient: the
+// X-<mail-name>-* extensions precede Arrival-Date, and Final-Recipient
+// precedes Original-Recipient.
+const postfixOrderDeliveryStatus = "Reporting-MTA: dns; postfix.example.test\r\n" +
+	"X-Postfix-Queue-ID: 4hcQ6z1Cg6z1X\r\n" +
+	"X-Postfix-Sender: rfc822; dsn-return@origin.example.test\r\n" +
+	"Arrival-Date: Sat, 05 Sep 2026 07:33:31 +0000 (UTC)\r\n\r\n" +
+	"Final-Recipient: rfc822; final@origin.example.test\r\n" +
+	"Original-Recipient: rfc822;final@origin.example.test\r\n" +
+	"Action: failed\r\nStatus: 5.1.1\r\n" +
+	"Remote-MTA: dns; 127.0.0.1\r\n" +
+	"Diagnostic-Code: smtp; 550 5.1.1 forced qualification failure\r\n"
+
+// TestDeliveryStatusReceivedReportProfileAcceptsAnyFieldOrder proves the
+// received-report profile accepts the known fields of each group in any order
+// and extension fields anywhere inside their group, while the strict sequence
+// profile of the signing path still refuses the Postfix order and the Postfix
+// bounce profile still admits it.
+func TestDeliveryStatusReceivedReportProfileAcceptsAnyFieldOrder(t *testing.T) {
+	signed := [][]byte{[]byte("<final@origin.example.test>")}
+	if _, ok := parseDeliveryStatusBody([]byte(postfixOrderDeliveryStatus), deliveryStatusProfileStrictSequence); ok {
+		t.Fatal("strict sequence profile admitted the Postfix field order")
+	}
+	if _, ok := parseDeliveryStatusBody([]byte(postfixOrderDeliveryStatus), deliveryStatusProfilePostfixBounce); !ok {
+		t.Fatal("Postfix bounce profile refused the Postfix field order")
+	}
+	report, ok := parseDeliveryStatusBody([]byte(postfixOrderDeliveryStatus), deliveryStatusProfileReceivedReport)
+	if !ok || len(report.recipients) != 1 || !report.recipients[0].failed() ||
+		!report.recipients[0].hasOriginal || !report.linksAny(signed) {
+		t.Fatalf("received-report profile refused the Postfix field order: ok=%t report=%+v", ok, report)
+	}
+	const date = "Thu, 7 Jul 1994 17:15:49 -0400"
+	const reordered = "X-Message-Extension: value\r\n" +
+		"Arrival-Date: " + date + "\r\n" +
+		"Received-From-MTA: dns; source.example.test\r\n" +
+		"DSN-Gateway: dns; gateway.example.test\r\n" +
+		"Reporting-MTA: dns; example.test\r\n" +
+		"Original-Envelope-Id: envelope-id\r\n\r\n" +
+		"X-Recipient-Extension: value\r\n" +
+		"Will-Retry-Until: " + date + "\r\n" +
+		"Final-Log-ID: log-id\r\n" +
+		"Last-Attempt-Date: " + date + "\r\n" +
+		"Diagnostic-Code: smtp; 450 mailbox unavailable\r\n" +
+		"Remote-MTA: dns; remote.example.test\r\n" +
+		"Status: 4.1.1\r\n" +
+		"Action: delayed\r\n" +
+		"X-Second: value\r\n" +
+		"Final-Recipient: rfc822; recipient@example.test\r\n" +
+		"Original-Recipient: rfc822; recipient+40example.test\r\n"
+	for _, testCase := range []struct {
+		name   string
+		status string
+		want   bool
+	}{
+		{name: "fully reversed groups with interleaved extensions", status: reordered, want: true},
+		{name: "extension before mandatory fields", status: strings.Replace(postfixOrderDeliveryStatus,
+			"Final-Recipient:", "X-Trace: opaque\r\nFinal-Recipient:", 1), want: true},
+		{name: "duplicate known message field", status: strings.Replace(postfixOrderDeliveryStatus,
+			"Reporting-MTA: dns; postfix.example.test", "Reporting-MTA: dns; postfix.example.test\r\nReporting-MTA: dns; other.example.test", 1)},
+		{name: "duplicate known recipient field", status: strings.Replace(postfixOrderDeliveryStatus,
+			"Action: failed", "Action: failed\r\nAction: failed", 1)},
+		{name: "known recipient field inside the message group", status: strings.Replace(postfixOrderDeliveryStatus,
+			"Reporting-MTA: dns; postfix.example.test", "Reporting-MTA: dns; postfix.example.test\r\nAction: failed", 1)},
+		{name: "known message field inside a recipient group", status: strings.Replace(postfixOrderDeliveryStatus,
+			"Status: 5.1.1", "Status: 5.1.1\r\nReporting-MTA: dns; postfix.example.test", 1)},
+		{name: "missing reporting mta", status: strings.Replace(postfixOrderDeliveryStatus,
+			"Reporting-MTA", "X-Reporting-MTA", 1)},
+		{name: "missing status", status: strings.Replace(postfixOrderDeliveryStatus,
+			"Status: 5.1.1", "X-Status: 5.1.1", 1)},
+		{name: "extension-only recipient group", status: strings.Replace(postfixOrderDeliveryStatus,
+			"Final-Recipient: rfc822; final@origin.example.test\r\n", "", 1)},
+		{name: "folded known field", status: strings.Replace(postfixOrderDeliveryStatus,
+			"Diagnostic-Code: smtp; 550", "Diagnostic-Code: smtp;\r\n 550", 1)},
+		{name: "folded extension field", status: strings.Replace(postfixOrderDeliveryStatus,
+			"X-Postfix-Queue-ID: 4hcQ6z1Cg6z1X", "X-Postfix-Queue-ID:\r\n 4hcQ6z1Cg6z1X", 1)},
+		{name: "will retry with non-delayed action", status: strings.Replace(reordered,
+			"Action: delayed", "Action: failed", 1)},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			if got := deliveryStatusBodyLinksRecipient([]byte(testCase.status), [][]byte{[]byte("<recipient@example.test>"), signed[0]}, deliveryStatusProfileReceivedReport); got != testCase.want {
+				t.Fatalf("received-report profile=%t, want %t", got, testCase.want)
 			}
 		})
 	}
@@ -274,12 +361,12 @@ func TestDeliveryStatusRecipientLinkageConfinesPostfixBounceOrder(t *testing.T) 
 		"Diagnostic-Code: smtp; 550 synthetic diagnostic text that is\r\n" +
 		" wrapped exactly as Postfix bounce_print_wrap emits it\r\n"
 	if deliveryStatusBodyLinksRecipient(
-		[]byte(postfixStatus), [][]byte{[]byte("<recipient@example.test>")}, false,
+		[]byte(postfixStatus), [][]byte{[]byte("<recipient@example.test>")}, deliveryStatusProfileStrictSequence,
 	) {
 		t.Fatal("generic RFC path admitted Postfix-specific ordering")
 	}
 	if !deliveryStatusBodyLinksRecipient(
-		[]byte(postfixStatus), [][]byte{[]byte("<recipient@example.test>")}, true,
+		[]byte(postfixStatus), [][]byte{[]byte("<recipient@example.test>")}, deliveryStatusProfilePostfixBounce,
 	) {
 		t.Fatal("Postfix bounce wire profile rejected current ordering")
 	}
@@ -320,7 +407,7 @@ func TestDeliveryStatusRecipientLinkageConfinesPostfixBounceOrder(t *testing.T) 
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			if deliveryStatusBodyLinksRecipient(
-				[]byte(testCase.status), [][]byte{[]byte("<recipient@example.test>")}, true,
+				[]byte(testCase.status), [][]byte{[]byte("<recipient@example.test>")}, deliveryStatusProfilePostfixBounce,
 			) {
 				t.Fatal("Postfix bounce wire profile admitted non-Postfix structure")
 			}
@@ -424,7 +511,7 @@ func TestDeliveryStatusRecipientLinkageLimits(t *testing.T) {
 		{name: "recipient groups", status: statusWithGroups(maxDeliveryStatusRecipientGroups+1, 0)},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
-			if deliveryStatusBodyLinksRecipient([]byte(testCase.status), [][]byte{[]byte("<recipient@example.test>")}, false) {
+			if deliveryStatusBodyLinksRecipient([]byte(testCase.status), [][]byte{[]byte("<recipient@example.test>")}, deliveryStatusProfileStrictSequence) {
 				t.Fatal("deliveryStatusLinksRecipient() accepted over-limit status data")
 			}
 		})
