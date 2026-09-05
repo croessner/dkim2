@@ -16,9 +16,15 @@ lives in the library and the daemon. The implemented behavior is pinned to
 `draft-chuang-dkim2-dns-04` baseline.
 
 This document is the runtime and configuration reference. The complete
-operator deployment procedure, including the MTA routing rule, the
-single-recipient transport, and the dedicated re-injection listener, lives in
-the operator guide and is completed separately.
+operator deployment procedure, including the concrete Postfix routing rule,
+the single-recipient transport, the dedicated Milter-free re-injection
+listener, the minimum retry interval, and the provisioning of
+`delivery_status` profiles for forwarding domains, lives in
+[`docs/operator/postfix-compose.md`](../../docs/operator/postfix-compose.md).
+The daemon-side configuration paths it depends on are documented in
+[`cmd/dkim2d/README.md`](../dkim2d/README.md), and every request and response
+shape remains authoritative only in
+[`docs/specs/openapi/dkim2d.yaml`](../../docs/specs/openapi/dkim2d.yaml).
 
 ## Deployment prerequisites
 
@@ -37,6 +43,14 @@ parameter names:
 3. The MTA's minimum retry interval for the LMTP transport exceeds the
    daemon's `dsn_propagation.pending_lease`. A retry that lands inside a live
    lease is deferred once more before it can be served.
+
+A fourth property belongs to the daemon rather than to the MTA: every domain
+this deployment forwards mail under must hold an active `delivery_status`
+signing profile for the configured tenant. The propagation signing domain is
+the canonical `d=` of the removed, verified completion signature, so a local
+domain without that profile is answered `permerror` with
+`propagation_failure: unprovisioned_domain` and the notification is
+discarded.
 
 ## Runtime requirements
 
@@ -75,7 +89,10 @@ Validation is silent on success. It uses the same protected-file loader as the
 runtime and never creates, repairs, changes ownership of, or rewrites either
 file.
 
-After activation, the container probe is:
+The product image deliberately carries no `HEALTHCHECK`. The container release
+policy declares one only for `dkim2d` and rejects one on every other product,
+so the deployment supplies the probe, exactly as it does for the Milter. After
+activation, the container probe is:
 
 ```text
 dkim2-dsn-propagator probe --config /absolute/path/to/dkim2-dsn-propagator.yaml
@@ -117,6 +134,16 @@ receiver returns exactly one reply for the single accepted recipient.
 
 Nothing is acknowledged before the re-injection listener's own `250` and the
 commit operation's `200`. There is no fail-open mode.
+
+Propagation is therefore at-least-once, bounded by the daemon's two-phase
+replay gate. A failed re-injection is retried by the MTA and never silently
+discarded. A duplicate can reach the previous hop in three windows: a crash
+between the re-injection `250` and the commit; a lease that expired while an
+attempt was still running; and a commit token the daemon can no longer
+resolve, because tokens live in a bounded process-local ledger that a daemon
+restart empties and that evicts entries once its capacity is reached. An
+unresolvable token is answered `409`, is deferred here as `451`, and is
+re-served with a fresh rebuild once the lease expires.
 
 ## Configuration
 
@@ -179,7 +206,7 @@ reinjection:
   endpoint: smtp://127.0.0.1:10025
 propagation:
   tenant: default
-  reporting_mta: mta.example.com
+  reporting_mta: mx.operator.test
 ```
 
 ## Observability

@@ -33,6 +33,8 @@ RESOURCE_KEYS = {
     "dkim2.chain",
 }
 
+RECEIVED_DSN_KEY = "dkim2.received_dsn_propagation"
+
 ENVIRONMENT_KEYS = {
     "rspamd.scan_action_before_policy",
     "rspamd.metric_score",
@@ -103,7 +105,41 @@ def expected_chain(response: dict) -> list[dict]:
     return records
 
 
-def assert_request(state: dict, response: dict, peer_ip: str, expected_action: str) -> None:
+def expected_resource_keys(response: dict) -> set[str]:
+    """Return the closed resource key set implied by the served producer response.
+
+    The optional received delivery-status projection is the only conditional
+    resource attribute, so an unexpected presence or absence stays a failure.
+    """
+    if response.get("delivery_status") is None:
+        return RESOURCE_KEYS
+    return RESOURCE_KEYS | {RECEIVED_DSN_KEY}
+
+
+def assert_received_dsn(attributes: dict, response: dict, expected: str | None) -> None:
+    """Assert the received delivery-status propagation attribute exactly.
+
+    The attribute must be present with the projected propagation value whenever
+    the producer returned the projection, absent otherwise, and equal to the
+    caller-declared expectation when the scenario states one.
+    """
+    projection = response.get("delivery_status")
+    if projection is None:
+        assert RECEIVED_DSN_KEY not in attributes
+        assert expected is None, RECEIVED_DSN_KEY
+        return
+    assert attributes[RECEIVED_DSN_KEY] == {"string": projection["propagation"]}
+    if expected is not None:
+        assert projection["propagation"] == expected, RECEIVED_DSN_KEY
+
+
+def assert_request(
+    state: dict,
+    response: dict,
+    peer_ip: str,
+    expected_action: str,
+    expected_received_dsn: str | None = None,
+) -> None:
     """Assert projection fidelity, environment provenance, and excluded payload classes."""
     request = state["last_request"]
     assert set(request) == {"version", "request_id", "target", "resource", "environment", "options"}
@@ -116,7 +152,7 @@ def assert_request(state: dict, response: dict, peer_ip: str, expected_action: s
     attributes = resource["attributes"]
     assert set(resource) == {"type", "attributes"}
     assert resource["type"] == "dkim2-message-instance"
-    assert set(attributes) == RESOURCE_KEYS
+    assert set(attributes) == expected_resource_keys(response)
     projection = response["verifier_projection"]
     verification = response["verification"]
     authentication = response["authentication"]
@@ -149,6 +185,7 @@ def assert_request(state: dict, response: dict, peer_ip: str, expected_action: s
     for name, expected in expected_scalars.items():
         assert attributes[name] == expected, name
     assert attributes["dkim2.chain"] == {"records": expected_chain(response)}
+    assert_received_dsn(attributes, response, expected_received_dsn)
 
     environment = request["environment"]
     environment_attributes = environment["attributes"]
@@ -193,10 +230,17 @@ def main() -> None:
     parser.add_argument("--response", required=True)
     parser.add_argument("--peer-ip", required=True)
     parser.add_argument("--expected-action", required=True)
+    parser.add_argument("--expect-received-dsn")
     args = parser.parse_args()
     state = load(args.state)
     assert state["calls"] >= 1
-    assert_request(state, load(args.response), args.peer_ip, args.expected_action)
+    assert_request(
+        state,
+        load(args.response),
+        args.peer_ip,
+        args.expected_action,
+        args.expect_received_dsn,
+    )
 
 
 if __name__ == "__main__":

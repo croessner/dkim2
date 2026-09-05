@@ -40,6 +40,7 @@ The runner exercises the following behavior through the real Milter boundary:
 | Policy timeout | Rspamd returns a temporary failure after its bounded HTTP timeout. |
 | Invalid provider input | The real Nauthilus provider rejects the forwarded request and Rspamd returns a temporary failure. |
 | Historical-hop rejection | A producer-bound two-hop chain reaches the real native provider. The target hop is trusted, while the unknown historical signer alone makes Nauthilus deny the message. |
+| Received delivery-status projection | The producer returns the optional `delivery_status` member. Rspamd publishes all six projected zero-score `DKIM2_DSN_*` observations on the scanned message and carries `dkim2.received_dsn_propagation` to Policy, while disposition, replay, and action semantics stay unchanged. |
 | Oversized retry payload | An armed cache document is replaced with syntactically valid JSON beyond the configured payload bound. The retry fails closed without calling DKIM2 or Policy. |
 | Retry identity mismatch | An armed result is presented with the same message content but a different envelope recipient. Rspamd does not reuse it, calls DKIM2 again, and leaves the original identity-bound entry intact. |
 | Concurrent retry claim | One retry worker claims the armed entry and is held at the Policy observer. A concurrent worker sees the claim as busy and fails closed; only the winner calls Policy, and its induced timeout safely re-arms the entry. |
@@ -57,6 +58,10 @@ the `nauthilus-policy` server name.
 
 The request assertion checks the exact SMTP CONNECT peer, target, options, all
 resource facts, all environment facts, and every field of every verifier hop.
+The optional `dkim2.received_dsn_propagation` resource attribute is the only
+conditional fact: it must be present with the projected `propagation` value
+exactly when the served producer response carries `delivery_status`, and absent
+otherwise.
 This includes the bounded Recipe descriptor, custody state, modification and
 explosion flags, validation status, algorithms, signer domains, and digests. It
 also proves that raw Recipe data, selectors, envelope addresses, the Message-ID,

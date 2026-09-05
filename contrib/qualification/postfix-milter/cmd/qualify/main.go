@@ -44,13 +44,61 @@ const (
 	originSocket          = "/milter-jail/run/milter/origin/milter.sock"
 	inboundSocket         = "/milter-jail/run/milter/inbound/milter.sock"
 	dsnSocket             = "/milter-jail/run/milter/dsn/milter.sock"
+	propagatorRuntimeRoot = "/run/propagator"
+	propagatorSocket      = "/milter-jail/run/propagator/propagator.sock"
 	daemonEndpoint        = "http://127.0.0.1:8080"
 	inboundDaemonEndpoint = "http://127.0.0.1:8081"
 	signingDomain         = "origin.example.test"
 	authservID            = "mx.receiver.example.test"
+
+	// localTenant owns every domain this deployment signs for.
+	localTenant = "tenant-a"
+	// foreignTenant owns the simulated previous hop and the simulated
+	// downstream so that neither domain is local for the propagation tenant.
+	foreignTenant = "tenant-foreign"
+	// previousHopDomain is the simulated hop that handed the message to us.
+	previousHopDomain = "remote.foreign.test"
+	// returnPath is the reserved local return-path address of forwarded mail.
+	returnPath = "<dsn-return@" + signingDomain + ">"
+	// previousSender is the reverse path the previous hop signed.
+	previousSender = "<sender@" + previousHopDomain + ">"
+	// forwardedRecipient is the final recipient the destination refused.
+	forwardedRecipient = "<final@" + signingDomain + ">"
+	// reinjectionPort is the Milter-free loopback submission listener.
+	reinjectionPort = 10025
+	// propagationTransport is the Postfix transport that serves the reserved
+	// return-path address class over LMTP.
+	propagationTransport = "dkim2-propagate"
 )
 
+// propagationLease is the daemon reservation window for one propagation
+// coordinate. It exceeds the adapter's complete attempt budget and stays
+// short enough for a bounded expiry lane.
+const propagationLease = 10 * time.Second
+
+// propagationBackoff is the Postfix minimum retry interval of the LMTP
+// transport. It must exceed propagationLease so a deferred retry can never
+// land inside a live reservation.
+const propagationBackoff = 15 * time.Second
+
 var errQualification = errors.New("qualification failed")
+
+// protectedOperations is the closed set of protected credentials the
+// bootstrap publishes for the daemon and the adapters.
+var protectedOperations = []string{
+	"process", "sign", "revise", "dsn-sign", "propagate", "replay-hmac",
+}
+
+// protectedGenerationNames maps one protected operation to the direct child
+// name the daemon generation exposes for it.
+var protectedGenerationNames = map[string]string{
+	"process":     "capability",
+	"sign":        "sign-capability",
+	"revise":      "revise-capability",
+	"dsn-sign":    "dsn-sign-capability",
+	"propagate":   "dsn-propagate-capability",
+	"replay-hmac": "replay-hmac",
+}
 
 type qualificationStage string
 
@@ -72,6 +120,18 @@ const (
 	stageInjectedSubmit     qualificationStage = "injected_submit"
 	stageInjectedValidation qualificationStage = "injected_validation"
 	stageFragment           qualificationStage = "fragment"
+
+	stagePropagationChain          qualificationStage = "propagation_chain"
+	stagePropagationNotice         qualificationStage = "propagation_notice"
+	stagePropagationRoute          qualificationStage = "propagation_route"
+	stagePropagationDelivery       qualificationStage = "propagation_delivery"
+	stagePropagationCardinality    qualificationStage = "propagation_cardinality"
+	stagePropagationCrypto         qualificationStage = "propagation_crypto"
+	stagePropagationSpoofed        qualificationStage = "propagation_spoofed"
+	stagePropagationTerminalOrigin qualificationStage = "propagation_terminal_origin"
+	stagePropagationDuplicate      qualificationStage = "propagation_duplicate"
+	stagePropagationOutage         qualificationStage = "propagation_outage"
+	stagePropagationLease          qualificationStage = "propagation_lease"
 )
 
 type qualificationStageError struct {
@@ -108,7 +168,12 @@ func validQualificationStage(stage qualificationStage) bool {
 		stageInboundSubmit, stageInboundValidation, stageDSNInventory,
 		stageDSNSubmit, stageDSNQueue, stageDSNCardinality, stageDSNCrypto,
 		stageInjectedSubmit,
-		stageInjectedValidation, stageFragment:
+		stageInjectedValidation, stageFragment,
+		stagePropagationChain, stagePropagationNotice, stagePropagationRoute,
+		stagePropagationDelivery, stagePropagationCardinality,
+		stagePropagationCrypto, stagePropagationSpoofed,
+		stagePropagationTerminalOrigin, stagePropagationDuplicate,
+		stagePropagationOutage, stagePropagationLease:
 		return true
 	default:
 		return false
@@ -138,10 +203,12 @@ func main() {
 		err = stopOriginMilter()
 	case "milter-failure":
 		err = runMilterFailureQualification()
+	case "propagation":
+		err = runPropagationQualification()
 	case "daemon-failure":
 		err = runDaemonFailureQualification()
 	case "identity":
-		err = emitIdentity([]string{"dkim2-milter", "qualify"}, true)
+		err = emitIdentity([]string{"dkim2-dsn-propagator", "dkim2-milter", "qualify"}, true)
 	case "daemon-identity":
 		err = emitIdentity([]string{"dkim2d"}, false)
 	default:
@@ -172,7 +239,7 @@ func bootstrapCapabilities() error {
 			return errQualification
 		}
 	}
-	for _, operation := range []string{"process", "sign", "revise", "dsn-sign"} {
+	for _, operation := range protectedOperations {
 		value := make([]byte, 32)
 		if _, err := io.ReadFull(rand.Reader, value); err != nil {
 			return errQualification
@@ -255,13 +322,13 @@ func runDaemon() error {
 	if err := os.MkdirAll(generation, 0o700); err != nil {
 		return errQualification
 	}
-	for _, operation := range []string{"process", "sign", "revise", "dsn-sign"} {
+	for _, operation := range protectedOperations {
 		source := filepath.Join("/capabilities/daemon", operation)
-		name := map[string]string{
-			"process": "capability", "sign": "sign-capability", "revise": "revise-capability",
-			"dsn-sign": "dsn-sign-capability",
-		}[operation]
-		if err := copyProtectedFile(source, filepath.Join(generation, name), 0o600); err != nil {
+		if err := copyProtectedFile(
+			source,
+			filepath.Join(generation, protectedGenerationNames[operation]),
+			0o600,
+		); err != nil {
 			return err
 		}
 	}
@@ -278,32 +345,32 @@ func runDaemon() error {
 	config := fmt.Sprintf(`config:
   version: dkim2d-config-v1
 protected:
-  generation: %s
+  generation: %[1]s
 server:
   listen: 127.0.0.1:8080
-  capability_file: %s/capability
-  sign_capability_file: %s/sign-capability
-  revise_capability_file: %s/revise-capability
-  dsn_sign_capability_file: %s/dsn-sign-capability
+  capability_file: %[2]s/capability
+  sign_capability_file: %[2]s/sign-capability
+  revise_capability_file: %[2]s/revise-capability
+  dsn_sign_capability_file: %[2]s/dsn-sign-capability
+  dsn_propagate_capability_file: %[2]s/dsn-propagate-capability
   read_header_timeout: 5s
   read_timeout: 30s
   write_timeout: 65s
   request_deadline: 60s
   max_in_flight: 2
+process:
+  default_tenant: %[3]s
 replay:
-  backend: disabled
+  backend: memory
+  hmac_key_file: %[2]s/replay-hmac
+  epoch: 1
+dsn_propagation:
+  pending_lease: %[4]s
 signing:
   backend: flat_file
-  datasource_file: %s/datasource
-  private_manifest_file: %s/private-manifest
-`, generationID,
-		runtimeGeneration,
-		runtimeGeneration,
-		runtimeGeneration,
-		runtimeGeneration,
-		runtimeGeneration,
-		runtimeGeneration,
-	)
+  datasource_file: %[2]s/datasource
+  private_manifest_file: %[2]s/private-manifest
+`, generationID, runtimeGeneration, localTenant, propagationLease)
 	if err := os.WriteFile(configPath, []byte(config), 0o600); err != nil {
 		return errQualification
 	}
@@ -469,109 +536,110 @@ func bindGenerationOwnership(generation string) error {
 	return nil
 }
 
-// writeSigningGeneration creates one synthetic RSA profile and private manifest.
+// signingIdentity is one synthetic datasource profile, policy, and private
+// manifest entry generated for the qualification stack.
+type signingIdentity struct {
+	tenant     string
+	domain     string
+	use        string
+	selector   string
+	profileID  string
+	handleID   string
+	privateKey string
+}
+
+// qualificationIdentities is the closed signing inventory of the stack. The
+// local tenant owns the originator, ordinary-transit, and delivery-status
+// authority of the signing domain; the foreign tenant owns the simulated
+// previous hop and the simulated downstream, so neither domain is local for
+// the propagation tenant.
+var qualificationIdentities = []signingIdentity{
+	{localTenant, signingDomain, "originator", "s1", "origin-profile", "origin-key", "origin.pem"},
+	{localTenant, signingDomain, "delivery_status", "dsn1", "dsn-profile", "dsn-key", "dsn.pem"},
+	{localTenant, signingDomain, "ordinary_transit", "t1", "transit-profile", "transit-key", "transit.pem"},
+	{
+		foreignTenant, previousHopDomain, "originator", "r1",
+		"previous-hop-profile", "previous-hop-key", "previous-hop.pem",
+	},
+}
+
+// writeSigningGeneration creates the synthetic RSA profiles, policies, and
+// private manifest of the qualification stack and returns the TXT records the
+// fixture authority must publish for them.
 func writeSigningGeneration(generation string) (map[string]string, error) {
-	key, err := rsa.GenerateKey(rand.Reader, 1024)
-	if err != nil {
-		return nil, errQualification
-	}
-	spki, err := x509.MarshalPKIXPublicKey(&key.PublicKey)
-	if err != nil {
-		return nil, errQualification
-	}
-	dsnKey, err := rsa.GenerateKey(rand.Reader, 1024)
-	if err != nil {
-		return nil, errQualification
-	}
-	dsnSPKI, err := x509.MarshalPKIXPublicKey(&dsnKey.PublicKey)
-	if err != nil {
-		return nil, errQualification
-	}
-	datasource := map[string]any{
-		"version": "dkim2-datasource-v1",
-		"handles": []any{
-			map[string]any{"id": "origin-key"},
-			map[string]any{"id": "dsn-key"},
-		},
-		"profiles": []any{map[string]any{
-			"id": "origin-profile", "domain": signingDomain, "status": "active",
+	handles := make([]any, 0, len(qualificationIdentities))
+	profiles := make([]any, 0, len(qualificationIdentities))
+	policies := make([]any, 0, len(qualificationIdentities))
+	entries := make([]any, 0, len(qualificationIdentities))
+	records := make(map[string]string, len(qualificationIdentities))
+	for _, identity := range qualificationIdentities {
+		key, err := rsa.GenerateKey(rand.Reader, 1024)
+		if err != nil {
+			return nil, errQualification
+		}
+		spki, err := x509.MarshalPKIXPublicKey(&key.PublicKey)
+		if err != nil {
+			return nil, errQualification
+		}
+		digest := sha256.Sum256(spki)
+		handles = append(handles, map[string]any{"id": identity.handleID})
+		profiles = append(profiles, map[string]any{
+			"id": identity.profileID, "domain": identity.domain, "status": "active",
 			"credentials": []any{map[string]any{
-				"algorithm": "rsa-sha256", "selector": "s1",
+				"algorithm": "rsa-sha256", "selector": identity.selector,
 				"public_key_spki": base64.StdEncoding.EncodeToString(spki),
-				"handle_id":       "origin-key",
+				"handle_id":       identity.handleID,
 			}},
-		}, map[string]any{
-			"id": "dsn-profile", "domain": signingDomain, "status": "active",
-			"credentials": []any{map[string]any{
-				"algorithm": "rsa-sha256", "selector": "dsn1",
-				"public_key_spki": base64.StdEncoding.EncodeToString(dsnSPKI),
-				"handle_id":       "dsn-key",
-			}},
-		}},
-		"policies": []any{map[string]any{
-			"tenant_id": "tenant-a", "domain": signingDomain,
-			"use": "originator", "profile_id": "origin-profile",
-			"status": "active", "rollout": "enforce",
-			"compatibility": "strict",
-		}, map[string]any{
-			"tenant_id": "tenant-a", "domain": signingDomain,
-			"use": "delivery_status", "profile_id": "dsn-profile",
-			"status": "active", "rollout": "enforce",
-			"compatibility": "strict",
-		}},
-	}
-	digest := sha256.Sum256(spki)
-	dsnDigest := sha256.Sum256(dsnSPKI)
-	manifest := map[string]any{
-		"version": "dkim2-private-keys-v1",
-		"entries": []any{map[string]any{
-			"tenant_id": "tenant-a", "domain": signingDomain,
-			"use": "originator", "handle_id": "origin-key",
+		})
+		policies = append(policies, map[string]any{
+			"tenant_id": identity.tenant, "domain": identity.domain,
+			"use": identity.use, "profile_id": identity.profileID,
+			"status": "active", "rollout": "enforce", "compatibility": "strict",
+		})
+		entries = append(entries, map[string]any{
+			"tenant_id": identity.tenant, "domain": identity.domain,
+			"use": identity.use, "handle_id": identity.handleID,
 			"algorithm":          "rsa-sha256",
 			"public_spki_sha256": base64.StdEncoding.EncodeToString(digest[:]),
-			"private_key_file":   "origin.pem",
-		}, map[string]any{
-			"tenant_id": "tenant-a", "domain": signingDomain,
-			"use": "delivery_status", "handle_id": "dsn-key",
-			"algorithm":          "rsa-sha256",
-			"public_spki_sha256": base64.StdEncoding.EncodeToString(dsnDigest[:]),
-			"private_key_file":   "dsn.pem",
-		}},
+			"private_key_file":   identity.privateKey,
+		})
+		if err := writePrivateKeyFile(
+			filepath.Join(generation, identity.privateKey), key,
+		); err != nil {
+			return nil, err
+		}
+		records[identity.selector+"._domainkey."+identity.domain+"."] =
+			"v=DKIM1; k=rsa; p=" +
+				base64.StdEncoding.EncodeToString(x509.MarshalPKCS1PublicKey(&key.PublicKey))
+	}
+	datasource := map[string]any{
+		"version": "dkim2-datasource-v1", "handles": handles,
+		"profiles": profiles, "policies": policies,
 	}
 	if err := writeProtectedJSON(filepath.Join(generation, "datasource"), datasource); err != nil {
 		return nil, err
 	}
+	manifest := map[string]any{"version": "dkim2-private-keys-v1", "entries": entries}
 	if err := writeProtectedJSON(filepath.Join(generation, "private-manifest"), manifest); err != nil {
 		return nil, err
 	}
+	return records, nil
+}
+
+// writePrivateKeyFile writes one unencrypted PKCS#8 generation child and
+// clears every intermediate copy of the private material.
+func writePrivateKeyFile(path string, key *rsa.PrivateKey) error {
 	pkcs8, err := x509.MarshalPKCS8PrivateKey(key)
 	if err != nil {
-		return nil, errQualification
+		return errQualification
 	}
-	privatePEM := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: pkcs8})
+	encoded := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: pkcs8})
 	clear(pkcs8)
-	if err := os.WriteFile(filepath.Join(generation, "origin.pem"), privatePEM, 0o600); err != nil {
-		clear(privatePEM)
-		return nil, errQualification
+	defer clear(encoded)
+	if err := os.WriteFile(path, encoded, 0o600); err != nil {
+		return errQualification
 	}
-	clear(privatePEM)
-	dsnPKCS8, err := x509.MarshalPKCS8PrivateKey(dsnKey)
-	if err != nil {
-		return nil, errQualification
-	}
-	dsnPEM := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: dsnPKCS8})
-	clear(dsnPKCS8)
-	if err := os.WriteFile(filepath.Join(generation, "dsn.pem"), dsnPEM, 0o600); err != nil {
-		clear(dsnPEM)
-		return nil, errQualification
-	}
-	clear(dsnPEM)
-	dnsKey := x509.MarshalPKCS1PublicKey(&key.PublicKey)
-	dsnDNSKey := x509.MarshalPKCS1PublicKey(&dsnKey.PublicKey)
-	return map[string]string{
-		"s1._domainkey." + signingDomain + ".":   "v=DKIM1; k=rsa; p=" + base64.StdEncoding.EncodeToString(dnsKey),
-		"dsn1._domainkey." + signingDomain + ".": "v=DKIM1; k=rsa; p=" + base64.StdEncoding.EncodeToString(dsnDNSKey),
-	}, nil
+	return nil
 }
 
 // writeProtectedJSON writes one owner-only compact JSON generation child.
@@ -731,21 +799,18 @@ func runStack() error {
 	if err := prepareMilterJail(); err != nil {
 		return err
 	}
-	origin, err := startMilter("origin", "sign", "originator", daemonEndpoint, false)
+	for _, route := range milterRoutes {
+		command, startErr := startMilter(route)
+		if startErr != nil {
+			return startErr
+		}
+		defer stopCommand(command)
+	}
+	propagator, err := startPropagator()
 	if err != nil {
 		return err
 	}
-	defer stopCommand(origin)
-	inbound, err := startMilter("inbound", "process", "inbound", inboundDaemonEndpoint, true)
-	if err != nil {
-		return err
-	}
-	defer stopCommand(inbound)
-	dsn, err := startMilter("dsn", "dsn-sign", "postfix_dsn", daemonEndpoint, false)
-	if err != nil {
-		return err
-	}
-	defer stopCommand(dsn)
+	defer stopCommand(propagator)
 	failureSMTP, err := startFailureSMTP()
 	if err != nil {
 		return err
@@ -761,7 +826,8 @@ func runStack() error {
 	return waitForTermination()
 }
 
-// prepareMilterJail creates one project-scoped local-filesystem root for both adapters.
+// prepareMilterJail creates one project-scoped local-filesystem root shared
+// by the Milter adapters and the delivery-status propagation adapter.
 func prepareMilterJail() error {
 	if err := os.Chown(milterJail, 0, 0); err != nil ||
 		os.Chmod(milterJail, 0o755) != nil ||
@@ -769,17 +835,55 @@ func prepareMilterJail() error {
 		os.MkdirAll(filepath.Join(milterJail, "run", "milter"), 0o755) != nil {
 		return errQualification
 	}
-	return copyExecutableFile(
-		"/usr/local/bin/dkim2-milter",
-		filepath.Join(milterJail, "usr", "local", "bin", "dkim2-milter"),
-	)
+	for _, name := range []string{"dkim2-milter", "dkim2-dsn-propagator"} {
+		if err := copyExecutableFile(
+			filepath.Join("/usr/local/bin", name),
+			filepath.Join(milterJail, "usr", "local", "bin", name),
+		); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// milterRoute is one adapter instance of the qualification stack.
+type milterRoute struct {
+	// name is the runtime directory and socket name of the instance.
+	name string
+	// capability is the protected operation the instance is confined to.
+	capability string
+	// mode is the adapter mode and therefore the daemon route it calls.
+	mode string
+	// endpoint is the daemon origin the instance calls.
+	endpoint string
+	// tenant owns the signing authority of the instance; empty for inbound.
+	tenant string
+	// domain is the static signing domain; empty for inbound and postfix_dsn.
+	domain string
+	// authenticationResults enables the inbound reporting field.
+	authenticationResults bool
+}
+
+// milterRoutes is the closed adapter inventory of the qualification stack.
+var milterRoutes = []milterRoute{
+	{
+		name: "origin", capability: "sign", mode: "originator",
+		endpoint: daemonEndpoint, tenant: localTenant, domain: signingDomain,
+	},
+	{
+		name: "inbound", capability: "process", mode: "inbound",
+		endpoint: inboundDaemonEndpoint, authenticationResults: true,
+	},
+	{
+		name: "dsn", capability: "dsn-sign", mode: "postfix_dsn",
+		endpoint: daemonEndpoint, tenant: localTenant,
+	},
 }
 
 // startMilter prepares one route-specific config and starts it as the adapter identity.
-func startMilter(
-	name, capability, mode, endpoint string,
-	authenticationResults bool,
-) (*exec.Cmd, error) {
+func startMilter(route milterRoute) (*exec.Cmd, error) {
+	name, capability, mode, endpoint := route.name, route.capability, route.mode, route.endpoint
+	authenticationResults := route.authenticationResults
 	runtimeRoot := filepath.Join("/run/milter", name)
 	root := filepath.Join(milterJail, runtimeRoot)
 	protected := filepath.Join(root, "protected")
@@ -803,7 +907,7 @@ func startMilter(
 		os.Chmod(protected, 0o500) != nil {
 		return nil, errQualification
 	}
-	signing := milterSigningBlock(mode)
+	signing := route.signingBlock()
 	reporting := ""
 	if authenticationResults {
 		reporting = "\nauthentication_results:\n  enabled: true\n  authserv_id: " + authservID
@@ -870,21 +974,101 @@ observability:
 	return command, nil
 }
 
-// milterSigningBlock renders only the signing authority owned by one adapter
-// mode. Postfix DSN domain selection remains daemon-derived after evidence
-// verification.
-func milterSigningBlock(mode string) string {
-	if mode == "inbound" {
+// signingBlock renders only the signing authority owned by one adapter mode.
+// Postfix DSN domain selection remains daemon-derived after evidence
+// verification, and ordinary transit forbids a delivery-status domain because
+// it revises existing messages instead of originating new ones.
+func (r milterRoute) signingBlock() string {
+	if r.mode == "inbound" {
 		return ""
 	}
-	if mode == "postfix_dsn" {
-		return "\nsigning:\n  tenant: tenant-a\n  domain_source: verified_embedded"
+	if r.mode == "postfix_dsn" {
+		return "\nsigning:\n  tenant: " + r.tenant + "\n  domain_source: verified_embedded"
 	}
-	block := "\nsigning:\n  tenant: tenant-a\n  domain: " + signingDomain
-	if mode == "originator" {
-		block += "\n  dsn_domain: " + signingDomain
+	block := "\nsigning:\n  tenant: " + r.tenant + "\n  domain: " + r.domain
+	if r.mode == "originator" {
+		block += "\n  dsn_domain: " + r.domain
 	}
 	return block
+}
+
+// startPropagator prepares the delivery-status propagation adapter and starts
+// it inside the same local-filesystem root as the Milter adapters, confined to
+// the protected propagation capability and the loopback daemon origin.
+func startPropagator() (*exec.Cmd, error) {
+	root := filepath.Join(milterJail, propagatorRuntimeRoot)
+	protected := filepath.Join(root, "protected")
+	if err := os.MkdirAll(protected, 0o700); err != nil {
+		return nil, errQualification
+	}
+	if err := os.Chown(root, milterUID, postfixGID); err != nil ||
+		os.Chmod(root, 0o750) != nil ||
+		os.Chown(protected, milterUID, postfixGID) != nil {
+		return nil, errQualification
+	}
+	capabilityPath := filepath.Join(protected, "capability")
+	if err := copyProtectedFile(
+		"/capabilities/milter/propagate", capabilityPath, 0o600,
+	); err != nil {
+		return nil, err
+	}
+	if err := os.Chown(capabilityPath, milterUID, postfixGID); err != nil ||
+		os.Chmod(protected, 0o500) != nil {
+		return nil, errQualification
+	}
+	config := fmt.Sprintf(`version: dkim2-dsn-propagator-config-v1
+server:
+  socket: %[1]s/propagator.sock
+  socket_mode: "0660"
+  shutdown_timeout: 5s
+  max_connections: 32
+  max_in_flight_transactions: 16
+daemon:
+  endpoint: %[2]s
+  capability_file: %[1]s/protected/capability
+  request_timeout: 2s
+  commit_timeout: 1s
+  pending_lease: %[3]s
+reinjection:
+  endpoint: smtp://127.0.0.1:%[4]d
+  connect_timeout: 1s
+  command_timeout: 1s
+  data_timeout: 2s
+propagation:
+  tenant: %[5]s
+  reporting_mta: postfix.example.test
+  permanent_failure_reply: reject
+limits:
+  message_bytes: 4194304
+observability:
+  logging:
+    level: info
+`, propagatorRuntimeRoot, daemonEndpoint, propagationLease, reinjectionPort, localTenant)
+	configPath := filepath.Join(root, "propagator.yaml")
+	if err := os.WriteFile(configPath, []byte(config), 0o600); err != nil ||
+		os.Chown(configPath, milterUID, postfixGID) != nil {
+		return nil, errQualification
+	}
+	command := exec.Command(
+		"/usr/local/bin/dkim2-dsn-propagator",
+		"serve",
+		"--config",
+		filepath.Join(propagatorRuntimeRoot, "propagator.yaml"),
+	)
+	command.Stdout = os.Stdout
+	command.Stderr = os.Stderr
+	command.SysProcAttr = &syscall.SysProcAttr{
+		Chroot:     milterJail,
+		Credential: &syscall.Credential{Uid: milterUID, Gid: postfixGID},
+	}
+	if err := command.Start(); err != nil {
+		return nil, errQualification
+	}
+	if err := waitForUnixSocket(propagatorSocket, 20*time.Second); err != nil {
+		stopCommand(command)
+		return nil, err
+	}
+	return command, nil
 }
 
 type failureSMTP struct {
@@ -983,7 +1167,8 @@ func preparePostfix() error {
 		"myorigin=" + signingDomain,
 		"mydestination=",
 		"mynetworks=127.0.0.0/8",
-		"relay_domains=receiver.example.test, " + signingDomain + ", failed.example.test",
+		"relay_domains=receiver.example.test, " + signingDomain +
+			", failed.example.test, " + previousHopDomain,
 		"smtpd_relay_restrictions=permit_mynetworks,reject_unauth_destination",
 		"smtpd_recipient_restrictions=permit_mynetworks,reject_unauth_destination",
 		"smtpd_milters=unix:" + originSocket,
@@ -996,9 +1181,17 @@ func preparePostfix() error {
 		"milter_content_timeout=5s",
 		"default_transport=smtp",
 		"relay_transport=smtp",
-		"transport_maps=inline:{failed.example.test=smtp-failure:[127.0.0.1]:2998}",
+		"transport_maps=inline:{" +
+			"failed.example.test=smtp-failure:[127.0.0.1]:2998, " +
+			strings.Trim(forwardedRecipient, "<>") + "=smtp-failure:[127.0.0.1]:2998, " +
+			strings.Trim(returnPath, "<>") + "=" + propagationTransport +
+			":unix:" + propagatorSocket + "}",
 		"relayhost=[127.0.0.1]:2999",
-		"defer_transports=smtp",
+		"defer_transports=smtp, " + propagationTransport,
+		propagationTransport + "_destination_recipient_limit=1",
+		"minimal_backoff_time=" + propagationBackoff.String(),
+		"maximal_backoff_time=" + propagationBackoff.String(),
+		"queue_run_delay=" + propagationBackoff.String(),
 		"enable_long_queue_ids=yes",
 		"smtputf8_enable=yes",
 		"local_header_rewrite_clients=",
@@ -1045,7 +1238,12 @@ local_cleanup unix n - n - 0 cleanup
   -o milter_command_timeout=5s
   -o milter_content_timeout=5s
 smtp-failure unix - - n - - smtp
-`, originSocket, originSocket, inboundSocket, dsnSocket)
+%s unix - - n - 1 lmtp
+  -o lmtp_tls_security_level=none
+  -o lmtp_lhlo_name=postfix.example.test
+%s
+`, originSocket, originSocket, inboundSocket, dsnSocket,
+		propagationTransport, reinjectionListenerEntry())
 	closeErr := master.Close()
 	if writeErr != nil || closeErr != nil {
 		return errQualification
@@ -1054,6 +1252,57 @@ smtp-failure unix - - n - - smtp
 		return err
 	}
 	return nil
+}
+
+// reinjectionOverrides are the exact service attributes that make the
+// re-injection listener a trusted internal submission path with no Milter and
+// no content filter attached.
+var reinjectionOverrides = []string{
+	"smtpd_milters=",
+	"non_smtpd_milters=",
+	"content_filter=",
+	"receive_override_options=no_milters",
+	"cleanup_service_name=cleanup",
+	"smtpd_client_restrictions=permit_mynetworks,reject",
+}
+
+// reinjectionListenerEntry renders the dedicated loopback re-injection service
+// for master.cf.
+func reinjectionListenerEntry() string {
+	entry := fmt.Sprintf("%d inet n - n - - smtpd", reinjectionPort)
+	for _, override := range reinjectionOverrides {
+		entry += "\n  -o " + override
+	}
+	return entry
+}
+
+// setReinjectionListener removes or restores the re-injection listener and
+// reloads Postfix, so the propagation lane can prove a real re-injection
+// outage and the delivering MTA's own retry.
+func setReinjectionListener(enabled bool) error {
+	service := fmt.Sprintf("%d/inet", reinjectionPort)
+	if !enabled {
+		if err := runCommand(
+			"/usr/sbin/postconf", "-c", postfixConfig, "-MX", service,
+		); err != nil {
+			return err
+		}
+		return runCommand("/usr/sbin/postfix", "-c", postfixConfig, "reload")
+	}
+	if err := runCommand(
+		"/usr/sbin/postconf", "-c", postfixConfig, "-M",
+		fmt.Sprintf("%s=%d inet n - n - - smtpd", service, reinjectionPort),
+	); err != nil {
+		return err
+	}
+	for _, override := range reinjectionOverrides {
+		if err := runCommand(
+			"/usr/sbin/postconf", "-c", postfixConfig, "-P", service+"/"+override,
+		); err != nil {
+			return err
+		}
+	}
+	return runCommand("/usr/sbin/postfix", "-c", postfixConfig, "reload")
 }
 
 // copyDirectory copies one fixed configuration tree without following symlinks.
@@ -1221,6 +1470,542 @@ func runSuccessQualification() error {
 		return qualificationFailure(stageFragment)
 	}
 	return nil
+}
+
+// --- delivery-status propagation qualification ---
+
+// smtpEnvelope is one exact observed SMTP envelope of a daemon signing call.
+type smtpEnvelope struct {
+	// mailFrom is the exact bracketed reverse path.
+	mailFrom string
+	// recipients are the exact bracketed forward paths.
+	recipients []string
+}
+
+// wire renders the envelope as the operation contract's SMTP member.
+func (e smtpEnvelope) wire() map[string]any {
+	return map[string]any{"mail_from": e.mailFrom, "rcpt_to": e.recipients}
+}
+
+// signViaDaemon signs one message through the daemon's originator route. It
+// exists because the originator Milter refuses every null reverse path by
+// policy, while a simulated foreign system must be able to originate a
+// delivery-status notification under its own domain.
+func signViaDaemon(
+	tenant, domain string,
+	envelope smtpEnvelope,
+	message []byte,
+) ([]byte, error) {
+	return callSigningRoute("/v1/sign", "sign", tenant, domain, message, nil, envelope)
+}
+
+// reviseViaDaemon signs one forwarded message through the daemon's
+// ordinary-transit revision route with a distinct inherited envelope and
+// outgoing envelope, which is what a forwarder that installs its own local
+// return path observes.
+func reviseViaDaemon(
+	tenant, domain string,
+	inherited, outgoing smtpEnvelope,
+	message []byte,
+) ([]byte, error) {
+	return callSigningRoute(
+		"/v1/revise", "revise", tenant, domain, message, &inherited, outgoing,
+	)
+}
+
+// callSigningRoute performs one authenticated daemon signing call and returns
+// the message with the returned action plan applied in plan order.
+func callSigningRoute(
+	route, capabilityName, tenant, domain string,
+	message []byte,
+	inherited *smtpEnvelope,
+	outgoing smtpEnvelope,
+) ([]byte, error) {
+	capability, err := os.ReadFile("/capabilities/milter/" + capabilityName)
+	if err != nil || len(capability) != 32 {
+		return nil, errQualification
+	}
+	defer clear(capability)
+	request := map[string]any{
+		"api_version": "v1",
+		"draft":       "draft-ietf-dkim-dkim2-spec-06",
+		"message": map[string]any{
+			"raw_rfc5322_base64": base64.StdEncoding.EncodeToString(message),
+			"fidelity":           "raw_rfc5322",
+		},
+		"smtp":    outgoing.wire(),
+		"context": map[string]any{"tenant": tenant, "domain": domain},
+	}
+	if inherited != nil {
+		request["incoming_smtp"] = inherited.wire()
+	}
+	buffer := &bytes.Buffer{}
+	encoder := json.NewEncoder(buffer)
+	encoder.SetEscapeHTML(false)
+	if err := encoder.Encode(request); err != nil {
+		return nil, errQualification
+	}
+	body := bytes.TrimRight(buffer.Bytes(), "\n")
+	defer clear(body)
+	call, err := http.NewRequest(
+		http.MethodPost, daemonEndpoint+route, bytes.NewReader(body),
+	)
+	if err != nil {
+		return nil, errQualification
+	}
+	call.Header.Set("Content-Type", "application/json")
+	call.Header.Set("Accept", "application/json")
+	call.Header.Set("Cache-Control", "no-store")
+	call.Header.Set("X-DKIM2-Capability", base64.RawURLEncoding.EncodeToString(capability))
+	transport := &http.Transport{Proxy: nil, DisableCompression: true, DisableKeepAlives: true}
+	client := &http.Client{Transport: transport, Timeout: 10 * time.Second}
+	defer transport.CloseIdleConnections()
+	response, err := client.Do(call)
+	if err != nil {
+		return nil, errQualification
+	}
+	defer func() { _ = response.Body.Close() }()
+	if response.StatusCode != http.StatusOK {
+		return nil, errQualification
+	}
+	payload, err := io.ReadAll(io.LimitReader(response.Body, 1<<20))
+	if err != nil {
+		return nil, errQualification
+	}
+	var decoded struct {
+		Result      string `json:"result"`
+		Disposition string `json:"disposition"`
+		Actions     []struct {
+			Type  string `json:"type"`
+			Name  string `json:"name"`
+			Value string `json:"value"`
+		} `json:"actions"`
+	}
+	if json.Unmarshal(payload, &decoded) != nil ||
+		decoded.Result != "pass" || decoded.Disposition != "accept" ||
+		len(decoded.Actions) == 0 {
+		return nil, errQualification
+	}
+	prefix := make([]byte, 0, 1024)
+	for _, action := range decoded.Actions {
+		if action.Type != "add_header" ||
+			action.Name != "Message-Instance" && action.Name != "DKIM2-Signature" {
+			return nil, errQualification
+		}
+		prefix = append(prefix, action.Name...)
+		prefix = append(prefix, ':', ' ')
+		prefix = append(prefix, action.Value...)
+		prefix = append(prefix, '\r', '\n')
+	}
+	return append(prefix, message...), nil
+}
+
+// nullReversePath is how the daemon's signing operations spell the null
+// reverse path: the empty observed path, not the field encoding "<>".
+const nullReversePath = ""
+
+// injectMessage hands one already signed message to the Milter-free
+// re-injection listener, which is the only local submission path that adds no
+// signature of its own.
+func injectMessage(sender string, recipients []string, message []byte) (string, error) {
+	return smtpSubmit(reinjectionPort, sender, recipients, message, true)
+}
+
+// flushQueue forces one delivery attempt for every deferred message.
+func flushQueue() error {
+	return runCommand("/usr/sbin/postqueue", "-c", postfixConfig, "-f")
+}
+
+// propagatorDeliver drives one complete LMTP transaction against the adapter's
+// own socket and returns its exact final reply code for the single recipient.
+func propagatorDeliver(message []byte) (int, error) {
+	connection, err := net.DialTimeout("unix", propagatorSocket, 5*time.Second)
+	if err != nil {
+		return 0, errQualification
+	}
+	defer func() { _ = connection.Close() }()
+	if err := connection.SetDeadline(time.Now().Add(30 * time.Second)); err != nil {
+		return 0, errQualification
+	}
+	text := textproto.NewConn(connection)
+	defer func() { _ = text.Close() }()
+	if _, _, err := text.ReadResponse(220); err != nil {
+		return 0, errQualification
+	}
+	for _, command := range []string{
+		"LHLO qualification.example.test",
+		"MAIL FROM:<>",
+		"RCPT TO:" + returnPath,
+	} {
+		if err := text.PrintfLine("%s", command); err != nil {
+			return 0, errQualification
+		}
+		if _, _, err := text.ReadResponse(250); err != nil {
+			return 0, errQualification
+		}
+	}
+	if err := text.PrintfLine("DATA"); err != nil {
+		return 0, errQualification
+	}
+	if _, _, err := text.ReadResponse(354); err != nil {
+		return 0, errQualification
+	}
+	writer := text.DotWriter()
+	if _, err := writer.Write(message); err != nil || writer.Close() != nil {
+		return 0, errQualification
+	}
+	code, _, err := text.ReadResponse(250)
+	if err != nil && code == 0 {
+		return 0, errQualification
+	}
+	_ = text.PrintfLine("QUIT")
+	return code, nil
+}
+
+// corruptOuterSignature replaces one Base64 character of the topmost
+// DKIM2-Signature value so an otherwise valid notification no longer verifies.
+func corruptOuterSignature(raw []byte) ([]byte, bool) {
+	marker := []byte("DKIM2-Signature: ")
+	index := bytes.Index(raw, marker)
+	if index < 0 {
+		return nil, false
+	}
+	end := bytes.Index(raw[index:], []byte("\r\n\r\n"))
+	if end < 0 {
+		return nil, false
+	}
+	for offset := index + end - 1; offset > index; offset-- {
+		character := raw[offset]
+		if character >= 'a' && character <= 'y' {
+			corrupted := bytes.Clone(raw)
+			corrupted[offset] = character + 1
+			return corrupted, true
+		}
+	}
+	return nil, false
+}
+
+// forwardedOriginal renders the base message the simulated previous hop sends.
+func forwardedOriginal() []byte {
+	return []byte(
+		"From: sender@" + previousHopDomain + "\r\n" +
+			"To: user@" + signingDomain + "\r\n" +
+			"Subject: forwarded message\r\n" +
+			"Message-ID: <forwarded@" + previousHopDomain + ">\r\n\r\n" +
+			"forwarded body\r\n",
+	)
+}
+
+// forwardedChain builds one complete forwarded message: the simulated previous
+// hop originates the message for a local recipient, and the local
+// ordinary-transit revision route forwards it under the reserved local return
+// path to the destination that later refuses it.
+func forwardedChain() ([]byte, error) {
+	inherited := smtpEnvelope{
+		mailFrom:   previousSender,
+		recipients: []string{"<user@" + signingDomain + ">"},
+	}
+	original, err := signViaDaemon(
+		foreignTenant, previousHopDomain, inherited, forwardedOriginal(),
+	)
+	if err != nil {
+		return nil, err
+	}
+	return reviseViaDaemon(
+		localTenant, signingDomain, inherited,
+		smtpEnvelope{mailFrom: returnPath, recipients: []string{forwardedRecipient}},
+		original,
+	)
+}
+
+// receivedNotification submits one message that the destination refuses, waits
+// for the delivery-status notification Postfix generates and its own
+// delivery-status Milter signs, and returns the exact queued notification with
+// its queue identity. The notification stays queued on the deferred
+// propagation transport, so the same bytes serve both the routed lane and the
+// adapter-level lanes.
+func receivedNotification(sender string, message []byte) (string, []byte, error) {
+	before, err := queueIDs()
+	if err != nil {
+		return "", nil, err
+	}
+	if _, err := injectMessage(
+		sender, []string{forwardedRecipient}, message,
+	); err != nil {
+		return "", nil, err
+	}
+	deadline := time.Now().Add(30 * time.Second)
+	for time.Now().Before(deadline) {
+		inventory, inventoryErr := queueInventory()
+		if inventoryErr != nil {
+			return "", nil, inventoryErr
+		}
+		for id := range inventory {
+			if _, existed := before[id]; existed {
+				continue
+			}
+			raw, readErr := readQueuedMessage(id)
+			if readErr != nil || !isDeliveryStatusReport(raw) {
+				continue
+			}
+			return id, raw, nil
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	return "", nil, errQualification
+}
+
+// runPropagationQualification proves the complete delivery-status propagation
+// path on real Postfix: the reserved return-path routing, the single-recipient
+// LMTP transport, the Milter-free re-injection listener, the propagated
+// notification at a simulated previous hop, and the refusal, discard,
+// duplicate, outage, and lease lanes the adapter contract fixes.
+func runPropagationQualification() error {
+	if err := checkStackHealth(); err != nil || checkDaemonHealth() != nil {
+		return qualificationFailure(stageHealth)
+	}
+	if err := verifyTopology(); err != nil {
+		return qualificationFailure(stageTopology)
+	}
+	forwarded, err := forwardedChain()
+	if err != nil {
+		return qualificationFailure(stagePropagationChain)
+	}
+	before, err := queueIDs()
+	if err != nil {
+		return qualificationFailure(stagePropagationNotice)
+	}
+	_, notice, err := receivedNotification(returnPath, forwarded)
+	if err != nil {
+		return qualificationFailure(stagePropagationNotice)
+	}
+	if err := provePropagationRoute(before); err != nil {
+		return err
+	}
+	if err := provePropagationDuplicate(notice); err != nil {
+		return err
+	}
+	if err := provePropagationSpoofed(notice); err != nil {
+		return err
+	}
+	if err := provePropagationTerminalOrigin(); err != nil {
+		return err
+	}
+	if err := provePropagationOutage(); err != nil {
+		return err
+	}
+	return emitCaseFragment([]string{
+		"propagated_dsn_verified_at_previous_hop",
+		"propagation_duplicate_suppressed_after_commit",
+		"propagation_reinjection_outage_retried_by_mta",
+		"propagation_retry_inside_lease_deferred",
+		"propagation_return_path_routed_over_single_recipient_lmtp",
+		"propagation_spoofed_notification_refused",
+		"propagation_terminal_origin_discarded",
+	})
+}
+
+// provePropagationRoute forces the deferred propagation transport, which is
+// the only route the reserved return-path address has, and requires that the
+// previous hop can verify the propagated notification.
+func provePropagationRoute(before map[string]struct{}) error {
+	if err := flushQueue(); err != nil {
+		return qualificationFailure(stagePropagationRoute)
+	}
+	propagated, err := waitForQueuedDSNExcluding(before, 40*time.Second)
+	if err != nil {
+		return qualificationFailure(stagePropagationDelivery)
+	}
+	return validatePropagatedNotice(propagated)
+}
+
+// waitForQueuedDSNExcluding waits for one delivery-status report addressed to
+// the previous hop that is not part of the recorded queue inventory.
+func waitForQueuedDSNExcluding(
+	before map[string]struct{},
+	timeout time.Duration,
+) ([]byte, error) {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		inventory, err := queueInventory()
+		if err != nil {
+			return nil, err
+		}
+		for id := range inventory {
+			if _, existed := before[id]; existed {
+				continue
+			}
+			raw, readErr := readQueuedMessage(id)
+			if readErr != nil || !isDeliveryStatusReport(raw) {
+				continue
+			}
+			if headerHasExactValue(raw, "To", previousSender) {
+				return raw, nil
+			}
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	return nil, errQualification
+}
+
+// validatePropagatedNotice checks the propagated notification exactly as the
+// simulated previous hop would: one protocol field pair, the fixed
+// auto-response markers, and an independent cryptographic verification against
+// the null reverse path and the recipient the previous hop signed.
+func validatePropagatedNotice(raw []byte) error {
+	if countHeader(raw, "Message-Instance") != 1 ||
+		countHeader(raw, "DKIM2-Signature") != 1 ||
+		!headerHasExactValue(raw, "Auto-Submitted", "auto-replied") ||
+		!isDeliveryStatusReport(raw) {
+		return qualificationFailure(stagePropagationCardinality)
+	}
+	if validateSignedMessage(raw, "<>", []string{previousSender}) != nil {
+		return qualificationFailure(stagePropagationCrypto)
+	}
+	return nil
+}
+
+// provePropagationDuplicate proves that a committed coordinate answers the
+// delivering MTA successfully without propagating the notification twice.
+func provePropagationDuplicate(notice []byte) error {
+	return provePropagationRefusal(notice, 250, stagePropagationDuplicate)
+}
+
+// provePropagationSpoofed proves that a notification whose own chain does not
+// verify is refused permanently and never propagated.
+func provePropagationSpoofed(notice []byte) error {
+	spoofed, ok := corruptOuterSignature(notice)
+	if !ok {
+		return qualificationFailure(stagePropagationSpoofed)
+	}
+	return provePropagationRefusal(spoofed, 550, stagePropagationSpoofed)
+}
+
+// provePropagationTerminalOrigin proves that a notification for a message this
+// system originated rather than forwarded is discarded without a report to a
+// previous hop, because a terminal origin has none.
+func provePropagationTerminalOrigin() error {
+	originated := []byte(
+		"From: sender@" + signingDomain + "\r\n" +
+			"To: final@" + signingDomain + "\r\n" +
+			"Subject: originated message\r\n\r\nbody\r\n",
+	)
+	queueID, err := smtpSubmit(
+		2525, returnPath, []string{forwardedRecipient}, originated, true,
+	)
+	if err != nil || queueID == "" {
+		return qualificationFailure(stagePropagationTerminalOrigin)
+	}
+	before, err := queueIDs()
+	if err != nil {
+		return qualificationFailure(stagePropagationTerminalOrigin)
+	}
+	deadline := time.Now().Add(30 * time.Second)
+	var notice []byte
+	for time.Now().Before(deadline) && notice == nil {
+		inventory, inventoryErr := queueInventory()
+		if inventoryErr != nil {
+			return qualificationFailure(stagePropagationTerminalOrigin)
+		}
+		for id := range inventory {
+			if _, existed := before[id]; existed {
+				continue
+			}
+			raw, readErr := readQueuedMessage(id)
+			if readErr == nil && isDeliveryStatusReport(raw) {
+				notice = raw
+				break
+			}
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	if notice == nil {
+		return qualificationFailure(stagePropagationTerminalOrigin)
+	}
+	return provePropagationRefusal(notice, 250, stagePropagationTerminalOrigin)
+}
+
+// provePropagationRefusal drives one notification over the adapter's own LMTP
+// socket, requires the exact contract reply, and requires that no propagated
+// notification was produced.
+func provePropagationRefusal(
+	notice []byte,
+	want int,
+	stage qualificationStage,
+) error {
+	before, err := queueIDs()
+	if err != nil {
+		return qualificationFailure(stage)
+	}
+	code, err := propagatorDeliver(notice)
+	if err != nil || code != want {
+		return qualificationFailure(stage)
+	}
+	if _, err := waitForQueuedDSNExcluding(before, 3*time.Second); err == nil {
+		return qualificationFailure(stage)
+	}
+	return nil
+}
+
+// provePropagationOutage proves that a re-injection outage defers the
+// notification, that a retry inside the live reservation is deferred again,
+// and that the delivering MTA's own retry after the reservation expires
+// completes the propagation.
+func provePropagationOutage() error {
+	forwarded, err := forwardedChain()
+	if err != nil {
+		return qualificationFailure(stagePropagationChain)
+	}
+	before, err := queueIDs()
+	if err != nil {
+		return qualificationFailure(stagePropagationOutage)
+	}
+	queueID, notice, err := receivedNotification(returnPath, forwarded)
+	if err != nil {
+		return qualificationFailure(stagePropagationNotice)
+	}
+	if err := setReinjectionListener(false); err != nil {
+		return qualificationFailure(stagePropagationOutage)
+	}
+	if err := flushQueue(); err != nil {
+		return qualificationFailure(stagePropagationOutage)
+	}
+	if err := waitForDeferredQueueEntry(queueID, 30*time.Second); err != nil {
+		return qualificationFailure(stagePropagationOutage)
+	}
+	code, err := propagatorDeliver(notice)
+	if err != nil || code != 451 {
+		return qualificationFailure(stagePropagationLease)
+	}
+	if err := setReinjectionListener(true); err != nil {
+		return qualificationFailure(stagePropagationOutage)
+	}
+	time.Sleep(propagationLease + 2*time.Second)
+	if err := flushQueue(); err != nil {
+		return qualificationFailure(stagePropagationOutage)
+	}
+	propagated, err := waitForQueuedDSNExcluding(before, 40*time.Second)
+	if err != nil {
+		return qualificationFailure(stagePropagationOutage)
+	}
+	return validatePropagatedNotice(propagated)
+}
+
+// waitForDeferredQueueEntry waits until one exact queue identity is deferred,
+// which is how Postfix records the adapter's temporary refusal.
+func waitForDeferredQueueEntry(queueID string, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		inventory, err := queueInventory()
+		if err != nil {
+			return err
+		}
+		if inventory[queueID] == "deferred" {
+			return nil
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	return errQualification
 }
 
 // waitForQueuedDSN waits for one newly generated delivery-status report.
@@ -1782,7 +2567,38 @@ func verifyTopology() error {
 			return errQualification
 		}
 	}
-	for _, socket := range []string{originSocket, inboundSocket, dsnSocket} {
+	propagationValues := map[string]string{
+		propagationTransport + "_destination_recipient_limit": "1",
+		"minimal_backoff_time":                                propagationBackoff.String(),
+	}
+	for name, want := range propagationValues {
+		command := exec.Command("/usr/sbin/postconf", "-c", postfixConfig, "-h", name)
+		output, err := command.Output()
+		if err != nil || strings.TrimSpace(string(output)) != want {
+			return errQualification
+		}
+	}
+	transports, err := exec.Command(
+		"/usr/sbin/postconf", "-c", postfixConfig, "-h", "transport_maps",
+	).Output()
+	if err != nil || !strings.Contains(
+		string(transports),
+		strings.Trim(returnPath, "<>")+"="+propagationTransport+":unix:"+propagatorSocket,
+	) {
+		return errQualification
+	}
+	reinjectionService := fmt.Sprintf("%d/inet", reinjectionPort)
+	for _, name := range []string{"smtpd_milters", "non_smtpd_milters", "content_filter"} {
+		output, err := exec.Command(
+			"/usr/sbin/postconf", "-c", postfixConfig, "-Ph",
+			reinjectionService+"/"+name,
+		).Output()
+		if err != nil || strings.TrimSpace(string(output)) != "" {
+			return errQualification
+		}
+	}
+	for _, socket := range []string{
+		originSocket, inboundSocket, dsnSocket, propagatorSocket} {
 		state, err := os.Lstat(socket)
 		if err != nil || state.Mode()&os.ModeSocket == 0 || state.Mode().Perm() != 0o660 {
 			return errQualification
@@ -1804,7 +2620,8 @@ func verifyTopology() error {
 			return errQualification
 		}
 		switch port {
-		case "0019", "09DD", "09DE", "09DF", "0BB6", "1F90", "1F91":
+		case "0019", "09DD", "09DE", "09DF",
+			"0BB6", "1F90", "1F91", "2729":
 			if address != "0100007F" {
 				return errQualification
 			}
@@ -1858,7 +2675,8 @@ func checkDaemonHealth() error {
 
 // checkStackHealth requires both sockets and the running Postfix master.
 func checkStackHealth() error {
-	for _, path := range []string{originSocket, inboundSocket, dsnSocket} {
+	for _, path := range []string{
+		originSocket, inboundSocket, dsnSocket, propagatorSocket} {
 		state, err := os.Lstat(path)
 		if err != nil || state.Mode()&os.ModeSocket == 0 {
 			return errQualification

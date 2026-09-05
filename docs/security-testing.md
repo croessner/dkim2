@@ -11,7 +11,17 @@ and datasource records, replay responses, HTTP and Milter peers, protected
 files, configuration, and all tool/report inputs as hostile. It protects exact
 message and envelope evidence, protocol authority, private signing material,
 capabilities, provider generations, replay identity, process availability,
-trusted `Authentication-Results`, and telemetry privacy.
+trusted `Authentication-Results`, and telemetry privacy. Delivery-status
+propagation extends the same profile: an inbound notification, its embedded
+original, and the reconstructed previous state are hostile input; locality is
+datasource authority and never an address in `mf=`; the previous hop's
+signature is verified over the reconstructed state before its `mf=` may become
+a recipient; the regenerated report carries no destination-specific data
+beyond the status code and the original envelope identifier; and the
+propagation coordinate is reserved before signing and committed only after
+re-injection. The propagation adapter's LMTP peer is hostile: it may pipeline,
+send unadvertised commands and parameters, exceed the advertised `SIZE`, offer
+a non-null sender or a second recipient, and drop mid-transfer.
 
 ## Closed Inventories
 
@@ -29,6 +39,14 @@ limits. Each cohesive production package remains the authority for its limit
 values. The security inventory records only ownership, dimension names, and
 exact proof source/function pairs, and fails when independently parsed fuzz
 functions or proof locations drift.
+
+Delivery-status propagation contributes two `draft_normative` fuzz targets to
+that inventory, `FuzzReceivedDSN` over the received-notification parser path
+and `FuzzRebuild` over the Section 12.1.1 rebuild input. It adds no
+resource-limit owner: the received-notification and rebuild bounds are owned
+by the existing `verification`, `recipe`, `raw-message`, `tag-fields`, and
+`signing` entries, and the propagation adapter's own transport bounds are not
+yet represented in the closed resource inventory.
 
 The fuzz runner accepts no caller-selected target, package, command, flag,
 environment, URL, endpoint, output location, or duration. It maps the closed
@@ -50,7 +68,8 @@ The complete report binds:
 - the closed fuzz/resource inventory digest;
 - Go, platform, fuzz, race, and vulnerability state;
 - current portable and full conformance reports;
-- two current real-Postfix qualification reports;
+- two current real-Postfix qualification reports, including the
+  delivery-status propagation lane;
 - zero unresolved findings; and
 - the exact `unqualified_draft06` Exim capability through the candidate-bound
   full conformance report, with no Exim suite, case, or evidence import.

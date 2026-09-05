@@ -1,0 +1,27 @@
+version: dkim2-dsn-propagator-config-v1
+server:
+  socket: /run/dkim2/propagation/lmtp.sock
+  socket_mode: "0660"
+  shutdown_timeout: 10s
+  max_connections: 128
+  max_in_flight_transactions: 64
+daemon:
+  endpoint: http://127.0.0.1:8080
+  capability_file: /etc/dkim2-dsn-propagator/protected/capability
+  request_timeout: 5s
+  commit_timeout: 2s
+  pending_lease: 120s
+reinjection:
+  endpoint: smtp://127.0.0.1:10025
+  connect_timeout: 5s
+  command_timeout: 5s
+  data_timeout: 30s
+propagation:
+  tenant: tenant-a
+  reporting_mta: mx.operator.test
+  permanent_failure_reply: reject
+limits:
+  message_bytes: 33554432
+observability:
+  logging:
+    level: info

@@ -192,6 +192,14 @@ assert_policy_request() {
     --peer-ip "$1" --expected-action "$2"
 }
 
+assert_policy_request_received_dsn() {
+  python3 "$SCRIPT_DIR/policy-e2e/assert_policy_request.py" \
+    --state "$RUNTIME_DIR/state/policy-observer-state.json" \
+    --response "$SCRIPT_DIR/policy-e2e/dkim2-received-dsn-response.json" \
+    --peer-ip "$1" --expected-action "$2" \
+    --expect-received-dsn "$3"
+}
+
 # A non-applicable unsigned message must call neither upstream service.
 run_scan scan-unsigned.lua
 test "$(stub_calls)" -eq 0
@@ -260,6 +268,23 @@ assert_policy_request 203.0.113.25 greylist \
   "$SCRIPT_DIR/policy-e2e/dkim2-two-hop-response.json"
 test "$(retry_cache_size)" -eq 0
 set_dkim_mode default
+
+# An optional received delivery-status projection reaches Policy and the message.
+flush_retry_cache
+STUB_BEFORE=$(stub_calls)
+POLICY_BEFORE=$(observer_value calls)
+set_dkim_mode received_dsn
+run_scan scan-received-dsn-tempfail.lua
+test "$(stub_calls)" -eq "$((STUB_BEFORE + 1))"
+test "$(observer_value calls)" -eq "$((POLICY_BEFORE + 1))"
+assert_policy_request_received_dsn 203.0.113.25 greylist not_failure
+sleep 2
+run_scan scan-received-dsn.lua
+test "$(stub_calls)" -eq "$((STUB_BEFORE + 1))"
+test "$(observer_value calls)" -eq "$((POLICY_BEFORE + 2))"
+test "$(retry_cache_size)" -eq 0
+set_dkim_mode default
+flush_retry_cache
 
 # An oversized but syntactically valid cached JSON document is never reused.
 flush_retry_cache

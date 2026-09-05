@@ -35,6 +35,7 @@ flowchart LR
     subgraph adapters["MTA adapters"]
         milter["dkim2-milter\nMilter-v6 Unix-socket adapter"]
         eximAdapter["dkim2-exim\nlocal_scan and transport-filter adapter"]
+        propagator["dkim2-dsn-propagator\nLMTP intake and SMTP re-injection adapter"]
     end
 
     client["dkim2ctl\nOpenAPI client and conformance runner"]
@@ -43,8 +44,11 @@ flowchart LR
 
     postfix -->|"Milter-v6 over Unix socket"| milter
     exim -->|"local_scan and transport_filter"| eximAdapter
+    postfix -->|"LMTP over Unix socket"| propagator
+    propagator -->|"null-sender SMTP re-injection"| postfix
     milter -->|"generated OpenAPI client\nloopback HTTP with route capability"| daemon
     eximAdapter -->|"generated OpenAPI client\nloopback HTTP with route capability"| daemon
+    propagator -->|"generated OpenAPI client\nloopback HTTP with propagation capability"| daemon
     client -->|"generated OpenAPI client\nsmoke and fixture requests"| daemon
     daemon -->|"domain requests and action plans"| library
 ```
@@ -52,6 +56,12 @@ flowchart LR
 The arrows show the runtime request flow. `dkim2-milter` and `dkim2-exim` are
 transport adapters: they collect MTA-specific message and envelope evidence,
 call `dkim2d`, validate its response, and apply only the admitted action plan.
+`dkim2-dsn-propagator` is the MTA-neutral delivery-status propagation adapter:
+it receives one delivery-status notification for a forwarded message over
+LMTP, asks `dkim2d` to evaluate, rebuild, and sign the notification the
+previous hop must receive, re-injects that notification through a trusted
+Milter-free submission listener, commits the reserved propagation coordinate,
+and only then acknowledges the LMTP transaction.
 `dkim2ctl` uses the same local OpenAPI boundary for smoke and conformance
 workflows. `dkim2d` is the service layer around the standalone library, which
 owns DKIM2 protocol semantics.
@@ -72,6 +82,9 @@ Current contents:
 - `cmd/dkim2-exim`: source-linked Exim `local_scan()` and transport-filter
   adapter module.
 - `cmd/dkim2ctl`: standalone OpenAPI-backed client and test-client module.
+- `cmd/dkim2-dsn-propagator`: standalone MTA-neutral delivery-status
+  propagation adapter module with LMTP intake and null-sender SMTP
+  re-injection.
 - `lib/internal/*`: implemented raw-message, parser, canonicalization,
   verification, policy, recipe, signing, revision, route-authority,
   restricted-release, and datasource protocol foundations.
@@ -129,8 +142,10 @@ and
 The
 component references are
 [`cmd/dkim2d/README.md`](cmd/dkim2d/README.md),
-[`cmd/dkim2-milter/README.md`](cmd/dkim2-milter/README.md), and
-[`cmd/dkim2ctl/README.md`](cmd/dkim2ctl/README.md); all HTTP request and
+[`cmd/dkim2-milter/README.md`](cmd/dkim2-milter/README.md),
+[`cmd/dkim2ctl/README.md`](cmd/dkim2ctl/README.md), and
+[`cmd/dkim2-dsn-propagator/README.md`](cmd/dkim2-dsn-propagator/README.md);
+all HTTP request and
 response shapes remain authoritative only in
 [`docs/specs/openapi/dkim2d.yaml`](docs/specs/openapi/dkim2d.yaml).
 The preview's public API, compatibility, issue, and limitation entry point is
@@ -179,6 +194,16 @@ PostgreSQL, MySQL, and MariaDB also load immutable committed native v2 or v3
 generations through verified TLS. Every network provider builds a validated
 in-memory signer from the same generation and uses no local private manifest.
 
+Inbound delivery-status notifications are evaluated read-only inside
+`POST /v1/process` and projected as the closed `delivery_status` fact.
+"Local" is datasource authority over a signing domain, never an address in
+`mf=`, and no received-DSN fact can authorize a signing operation. Draft-06
+Section 12.1.1 propagation is a separate replay-gated route,
+`POST /v1/dsn/propagate` with `POST /v1/dsn/propagate/commit`, whose signing
+authority is the removed completion signature's domain and whose recipient is
+the cryptographically verified previous hop's `mf=`. Forwarding domains
+therefore need an active `delivery_status` signing profile.
+
 `dkim2ctl` provides a generated-client-backed loopback smoke check and a
 strict draft-versioned fixture runner. It validates every fixture offline
 before protected-file or network access, emits deterministic JSON Lines, and
@@ -192,6 +217,7 @@ go test ./lib/...
 go test ./cmd/dkim2d/...
 go test ./cmd/dkim2-milter/...
 go test ./cmd/dkim2ctl/...
+go test ./cmd/dkim2-dsn-propagator/...
 make test
 make test-valkey
 make check-conformance

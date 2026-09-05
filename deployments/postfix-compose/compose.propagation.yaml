@@ -1,0 +1,141 @@
+# Delivery-status propagation overlay.
+#
+# The propagation adapter confines both of its endpoints to canonical literal
+# loopback: the daemon it calls and the submission listener it re-injects
+# through. Postfix, the adapter, and the adapter's daemon therefore share one
+# network namespace. That is a deliberate topology change relative to the base
+# rendering, where Postfix reaches the Milter routes only through read-only
+# socket mounts. Read the propagation section of
+# docs/operator/postfix-compose.md before enabling this overlay.
+services:
+  daemon-propagation:
+    user: "2000:2000"
+    read_only: true
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 64
+    ulimits:
+      nofile:
+        soft: 1024
+        hard: 1024
+    mem_limit: 256m
+    cpus: 1.0
+    stop_grace_period: 15s
+    restart: "no"
+    build:
+      context: ../..
+      dockerfile: build/container/Dockerfile
+      target: dkim2d
+      args:
+        VERSION: ${DKIM2_VERSION:-0.0.0-dev}
+        REVISION: ${DKIM2_REVISION:?set DKIM2_REVISION to the exact 40-character source revision}
+        SOURCE_DATE_EPOCH: ${SOURCE_DATE_EPOCH:?set SOURCE_DATE_EPOCH to the trusted release timestamp}
+        CREATED: ${DKIM2_CREATED:?set DKIM2_CREATED to the RFC3339 release timestamp}
+        DIRTY: ${DKIM2_DIRTY:-clean}
+    image: ${DKIM2D_IMAGE:-dkim2d:local}
+    command: ["serve", "--config", "/etc/dkim2d/config.yaml"]
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/dkim2d", "probe"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 5s
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=16m,mode=0700,uid=2000,gid=2000
+    networks: [daemon-control, mail]
+    volumes:
+      - type: bind
+        source: ./state/daemon/propagation
+        target: /var/lib/dkim2d
+        read_only: true
+      - type: bind
+        source: ./config/dkim2d-propagation.yaml
+        target: /etc/dkim2d/config.yaml
+        read_only: true
+
+  dsn-propagator:
+    user: "2000:103"
+    read_only: true
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 64
+    ulimits:
+      nofile:
+        soft: 1024
+        hard: 1024
+    mem_limit: 256m
+    cpus: 1.0
+    stop_grace_period: 15s
+    restart: "no"
+    build:
+      context: ../..
+      dockerfile: build/container/Dockerfile
+      target: dkim2-dsn-propagator
+      args:
+        VERSION: ${DKIM2_VERSION:-0.0.0-dev}
+        REVISION: ${DKIM2_REVISION:?set DKIM2_REVISION to the exact 40-character source revision}
+        SOURCE_DATE_EPOCH: ${SOURCE_DATE_EPOCH:?set SOURCE_DATE_EPOCH to the trusted release timestamp}
+        CREATED: ${DKIM2_CREATED:?set DKIM2_CREATED to the RFC3339 release timestamp}
+        DIRTY: ${DKIM2_DIRTY:-clean}
+    image: ${DKIM2_DSN_PROPAGATOR_IMAGE:-dkim2-dsn-propagator:local}
+    command: ["serve", "--config", "/etc/dkim2-dsn-propagator/config.yaml"]
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/dkim2-dsn-propagator", "probe", "--config", "/etc/dkim2-dsn-propagator/config.yaml"]
+      interval: 10s
+      timeout: 2s
+      retries: 6
+      start_period: 5s
+    network_mode: "service:daemon-propagation"
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=16m,mode=0700,uid=2000,gid=103
+    volumes:
+      - type: bind
+        source: ./state/sockets/propagation
+        target: /run/dkim2/propagation
+      - type: bind
+        source: ./state/propagator
+        target: /etc/dkim2-dsn-propagator
+        read_only: true
+    depends_on:
+      daemon-propagation:
+        condition: service_healthy
+
+  postfix:
+    networks: !reset null
+    network_mode: "service:daemon-propagation"
+    volumes:
+      - postfix-queue:/var/spool/postfix
+      - postfix-config:/etc/postfix
+      - type: bind
+        source: ./state/sockets/inbound
+        target: /run/dkim2/inbound
+        read_only: true
+      - type: bind
+        source: ./state/sockets/originator
+        target: /run/dkim2/originator
+        read_only: true
+      - type: bind
+        source: ./state/sockets/transit
+        target: /run/dkim2/transit
+        read_only: true
+      - type: bind
+        source: ./state/sockets/propagation
+        target: /run/dkim2/propagation
+        read_only: true
+      - type: bind
+        source: ./postfix/propagation-main.cf
+        target: /etc/postfix/custom-config/main.cf
+        read_only: true
+      - type: bind
+        source: ./postfix/propagation-master.cf
+        target: /etc/postfix/custom-config/master.cf
+        read_only: true
+    depends_on:
+      milter-inbound:
+        condition: service_healthy
+      milter-originator:
+        condition: service_healthy
+      milter-transit:
+        condition: service_healthy
+      dsn-propagator:
+        condition: service_healthy

@@ -139,6 +139,25 @@ The old generation and DNS record remain available during this observation
 period. Runtime signing never mixes generations: an operation leases exactly
 one immutable local snapshot.
 
+### Delivery-status profiles during rotation
+
+A forwarding domain's `delivery_status` profile rotates under exactly the same
+overlap, higher-generation, and retirement rules as its transit profile. Roll
+them in the same campaign: a generation that activates a new transit selector
+while retiring the old `delivery_status` selector leaves the domain able to
+sign forwarded copies but unable to propagate a delivery-status notification
+back to the previous hop, which the propagation route reports as `permerror`
+with `propagation_failure: unprovisioned_domain`.
+
+A previous hop's own key rotation is outside this deployment's control and is
+a documented limit rather than a failure to repair. Propagation verifies the
+previous hop's signature over the reconstructed state, with the Draft-06
+Section 8.4 window evaluated at the completion signature's `t=`, before that
+hop's `mf=` may become a recipient. If the previous hop rotated its key away
+between forwarding and the arrival of the notification, propagation is refused
+permanently; retrying, relaxing verification, or delivering unsigned is not
+offered.
+
 ## Retirement
 
 Remove the old DNS selector only after all of these are true:

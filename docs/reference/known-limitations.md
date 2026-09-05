@@ -27,13 +27,50 @@ certification, or universal interoperability claim.
   sender. The dedicated `postfix_dsn` adapter requires the bounce-only Postfix
   `{postfix_dsn_origin}` enum patch and accepts only exact `internal`.
   Received-DSN evaluation and Draft-06 Section 12.1.1 DSN propagation are
-  not implemented yet. Their implementation-ready contract is
-  [delivery-status-propagation.md](../specs/implementation/delivery-status-propagation.md);
-  until it is closed out, an inbound DSN is verified only as an ordinary
-  message and no DSN is propagated backwards. That contract also excludes
-  propagation when the previous hop is itself an `nd=` signature, and it
-  cannot propagate when the previous hop's public key was rotated away or
-  revoked between forwarding and the arrival of the DSN.
+  implemented against
+  [delivery-status-propagation.md](../specs/implementation/delivery-status-propagation.md)
+  through the read-only `delivery_status` projection of `POST /v1/process`,
+  the replay-gated `POST /v1/dsn/propagate` and
+  `POST /v1/dsn/propagate/commit` routes, and the `dkim2-dsn-propagator`
+  adapter. The following limits remain.
+- Propagation is refused as `unsupported_chain` when the previous hop is
+  itself an `nd=` signature without `mf=`, or when a member of the local hop
+  run does not verify. Reconstructing an earlier system's custody scheme is
+  out of scope, and the refusal is deliberate rather than an approximation.
+- Propagation cannot complete when the previous hop's public key was rotated
+  away or revoked between forwarding and the arrival of the notification. The
+  previous hop's signature is verified over the reconstructed state, with the
+  Draft-06 Section 8.4 window evaluated at the completion signature's `t=`,
+  before its `mf=` may become a recipient; without a resolvable key the
+  outcome is a permanent refusal, not a best-effort delivery.
+- An EAI previous hop cannot be propagated to. The signed-envelope grammar of
+  this implementation is ASCII-only, so a previous-hop `mf=` carrying a
+  non-ASCII address does not parse, the embedded signature therefore does not
+  verify, and the outcome is `embedded = unverified` with a propagation state
+  that is never `eligible`. The refusal happens at signature parsing, before
+  any rebuild. The `smtputf8_required` fact still exists for notifications
+  whose rebuilt header fields carry non-ASCII bytes for other reasons; it is
+  computed over every rendered byte outside the embedded original's body, and
+  the adapter fails closed when the re-injection listener does not advertise a
+  required `SMTPUTF8` or `8BITMIME` extension.
+- Propagation is at-least-once, bounded by the two-phase replay gate. A
+  duplicate notification can reach the previous hop in three windows: the
+  crash window between the re-injection listener's `250` and the commit; a
+  lease that expired while an attempt was still running; and a commit token
+  the daemon can no longer resolve, because tokens live in a bounded
+  process-local ledger that a daemon restart empties and that evicts entries
+  once its capacity is reached. An unresolvable token is answered `409`, is
+  deferred by the adapter as `451`, is retried by the MTA, and is re-served
+  with a fresh rebuild once the lease expires. Set the MTA's minimum retry
+  interval for the LMTP transport above `dsn_propagation.pending_lease` so a
+  retry cannot land
+  inside a live lease.
+- The Valkey replay parity gate accepts only the exact `valkey-server` 9.1.0
+  binary. The propagation store's conditional `SET` forms need Valkey 8.1 for
+  `IFEQ` and `NX GET` and stay inside that 9.1 floor, but the pinned parity
+  test does not run against a nearby patch release and offers no container
+  path; a host carrying a different 9.1 patch level cannot produce this
+  evidence.
 - Flat-file, LDAP, PostgreSQL, MySQL, MariaDB, and Valkey datasource paths are implemented.
   The offline OpenDKIM migration requires separately managed verified-TLS
   services, explicit mapping, and distinct least-authority principals.

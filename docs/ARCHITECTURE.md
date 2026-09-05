@@ -2134,8 +2134,11 @@ revisions can optimize recipe size without changing verification semantics.
 ### 11.1 Delivery-Status Reception and Propagation
 
 Received DSNs and DSN propagation are specified in
-`docs/specs/implementation/delivery-status-propagation.md`. The architecture
-decisions are:
+`docs/specs/implementation/delivery-status-propagation.md` and implemented as
+an M26 candidate: the library evaluation and rebuild, the daemon projection
+and propagation route, the `cmd/dkim2-dsn-propagator` adapter, the generated
+artifacts, and the operator and qualification evidence all exist. Independent
+final closeout review remains separate. The architecture decisions are:
 
 1. A DKIM2-signed inbound null-sender `multipart/report` is first verified as
    an ordinary message. Only then does `/v1/process` evaluate it as a DSN
@@ -2508,7 +2511,7 @@ maintainers to understand why behavior exists.
 | M23 - Native domain onboarding | Implemented candidate: offline domain intent, complete-generation cloning, native RSA/Ed25519 generation, protected receipt/journal recovery, export-only DNS records, fresh DNS/SPKI proof, and digest-bound stage/readback/activation parity for LDAP, PostgreSQL, MySQL, and MariaDB | Exact Prompt 01-11 spans and review/rework variance are retained in the ignored execution ledger; the original 6-to-14-hour estimate excluded production DNS and rollout | Very high; four-backend disposable evidence and Prompt 01-10 reviews complete, fresh final closeout review still required |
 | M24 - External vector corpus | Removed: the retained Draft-02 fixture corpus, checker, and parser-refusal lane were deleted because checkout-time line-ending conversion meant the tested bytes were not the immutable Git blob bytes claimed by the manifest | measured in the historical ignored execution ledger | Closed without a conformance or interoperability claim; runnable implementation comparison remains under M21 |
 | M25 - Outgoing delivery-status signing | Completed: byte-preserving RFC 6522 evidence, Draft Section 12.1 embedded verification, Section 12.1.2 local alignment, dedicated `delivery_status` profile use, route ticket, protected capability, `POST /v1/dsn/sign`, and the Postfix `{postfix_dsn_origin}` adapter | measured in the ignored execution ledger | High; completed with independent review and live Postfix rollout evidence |
-| M26 - Received delivery-status evaluation and DSN propagation | Planned: read-only Section 12.1.2 evaluation inside `/v1/process` with datasource-defined locality, Section 12.1.1 rebuild across `nd=` and imaginary-hop runs with recipe undo, previous-hop signature verification, and headers-only degradation, `POST /v1/dsn/propagate` with removed-completion-signature authority and replay gate, MTA-neutral LMTP-to-SMTP propagation adapter, Rspamd projection, and Postfix qualification without patches | 4 to 6 engineering days | Very high; rebuild correctness and the new authority boundary require independent normative and security review |
+| M26 - Received delivery-status evaluation and DSN propagation | Implemented candidate: read-only Section 12.1.2 evaluation inside `/v1/process` with datasource-defined locality, Section 12.1.1 rebuild across `nd=` and imaginary-hop runs with recipe undo, previous-hop signature verification, and headers-only degradation, `POST /v1/dsn/propagate` and `POST /v1/dsn/propagate/commit` with removed-completion-signature authority and a two-phase replay gate, the MTA-neutral `cmd/dkim2-dsn-propagator` LMTP-to-SMTP adapter, `dkim2ctl` fixtures, inbound Milter tolerance, Rspamd projection, and Postfix qualification without patches | measured in the ignored execution ledger against a 4-to-6-engineering-day estimate | Very high; independent final closeout review of rebuild correctness and the new authority boundary remains separate |
 
 Total rough implementation estimate:
 

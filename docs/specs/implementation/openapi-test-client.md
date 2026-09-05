@@ -140,8 +140,9 @@ trailing JSON value, and no BOM. Aggregate fixture bytes per invocation are at
 most 32 MiB. Files must be regular, non-symlink files and are read with a
 bounded reader. Directories are not recursively expanded.
 
-The top-level object requires exact schema `dkim2ctl.fixture.v1`, exact
-Draft-04, one stable identifier, and one `cases` array.
+The top-level object requires exact schema `dkim2ctl.fixture.v1`, the exact
+current draft identifier `draft-ietf-dkim-dkim2-spec-06`, one stable
+identifier, and one `cases` array.
 
 Each file contains 1 through 256 cases. The file-wide encoded message total is
 at most 32 MiB after Base64 decoding. Case identifiers are 1 through 64 ASCII
@@ -153,14 +154,29 @@ Closed case kinds:
 - `health`: generated GET health with an expected status and typed body;
 - `readiness`: generated GET readiness with expected status and typed body;
 - `process`: generated process request plus expected status and selected
-  generated response fields;
+  generated response fields, including the optional `context.tenant` member;
+- `sign`: generated originator signing request against `POST /v1/sign`;
+- `revise`: generated authorized revision request against `POST /v1/revise`;
+- `sign_dsn`: generated outgoing delivery-status signing request against
+  `POST /v1/dsn/sign`;
+- `propagate_dsn`: generated Draft-06 Section 12.1.1 propagation request
+  against `POST /v1/dsn/propagate`;
+- `commit_dsn_propagation`: generated commit request against
+  `POST /v1/dsn/propagate/commit`;
 - `negative`: one declared raw-contract mutation plus an expected status and
   bounded response metadata.
 
-Process input uses fields corresponding exactly to generated `ProcessRequest`.
-The runner converts fixture values into generated DTOs at one adapter boundary.
-It must not define a parallel Go response structure. Expected projections are
-explicit allowlisted assertions, not full raw-response snapshots.
+Each authenticated kind uses its own declared protected capability flag, and a
+capability is never accepted on a route it is not bound to. The two
+propagation kinds deliberately share one credential because the REST contract
+binds both operations to a single security scheme; that is a contract fact,
+not a relaxation.
+
+Input for every kind uses fields corresponding exactly to the generated
+request DTO for its route. The runner converts fixture values into generated
+DTOs at one adapter boundary. It must not define a parallel Go response
+structure. Expected projections are explicit allowlisted assertions, not full
+raw-response snapshots.
 
 Negative mutations are closed and independently bounded:
 
@@ -213,16 +229,27 @@ Keys are emitted in a fixed order:
 
 ```text
 schema,draft,fixture,case,operation,outcome,http_status,error_class,
-duration_bucket,disposition,verification_state,policy_verdict,replay_class
+duration_bucket,disposition,verification_state,authentication_state,
+policy_verdict,replay_class,propagation_result,propagation_disposition,
+propagation_failure,propagation_state,propagation_digest,delivery_status
 ```
 
 Fields not applicable are `null`, not omitted. Values are closed enums or
 validated bounded identifiers. No timestamp, clock reading, or exact duration
 enters the stable record; executed network cases use only the closed
 `under_100ms`, `under_1s`, `under_10s`, or `at_least_10s` duration bucket.
-The output never includes input messages,
-envelope values, server URLs, paths, headers, response bodies, raw errors,
-credentials, selectors, domains, recipients, or hashes derived from them.
+The propagation members are closed enums except `propagation_digest`, which
+is the lowercase hexadecimal SHA-256 of the signed notification bytes the
+propagation route returned. It exists so a fixture can prove that two runs
+produced identical signed output without the runner ever holding, printing, or
+persisting those bytes. `delivery_status` is the closed six-member projection
+`{structure, embedded, outer_alignment, recipient_linkage, local_hop,
+propagation}` echoed from the response.
+
+Apart from that one declared digest of the daemon's own signed output, the
+output never includes input messages, envelope values, server URLs, paths,
+headers, response bodies, raw errors, credentials, selectors, domains,
+recipients, next-hop paths, commit tokens, or hashes derived from them.
 
 Exit status is stable:
 

@@ -269,6 +269,31 @@ serializable transaction. A missing current pointer in a nonempty backend is
 corruption, not a bootstrap opportunity. Concurrent publishers do not retry and
 cannot both succeed.
 
+### Delivery-status profiles for forwarding domains
+
+The profile use is part of the published generation, not a runtime switch.
+Every domain this deployment forwards mail under needs an active
+`delivery_status` profile in addition to the `ordinary_transit` or
+`next_domain_transit` profile that signs the forwarded copy. Draft-06
+Section 12.1.1 propagation signs the rebuilt delivery-status notification
+under the removed completion signature's own domain, so the outgoing
+delivery-status authority that derives a domain from an embedded signature
+does not apply and is not reachable through the propagation capability.
+
+A local domain that holds a transit profile but no active `delivery_status`
+profile is a permanent refusal, not a degraded mode: the propagation route
+answers `permerror` with `propagation_failure: unprovisioned_domain`, the
+disposition is `discard`, and the previous hop receives nothing. There is no
+fallback to another profile use and no tempfail. Publish the profile, its
+credential, and the selector's DNS record in the same generation that starts
+forwarding under that domain, and treat a missing profile as a publication
+defect rather than as a routing problem.
+
+The same rule holds for every backend. Flat-file generations carry it in the
+policy's `use` member, LDAP in `dkim2ProfileUse`, and PostgreSQL, MySQL, and
+MariaDB in the equivalent policy column; the provider bridge maps all of them
+to the same closed vocabulary and refuses an unknown value.
+
 Use the dry-run-first workflow in
 [`opendkim-migration.md`](opendkim-migration.md) when the source is an existing
 OpenDKIM deployment. No normal runtime path reads a legacy object or local

@@ -18,8 +18,8 @@ The manifest keeps the source of every claim visible:
 - `local_security_policy` covers restrictive implementation policy, including
   replay handling; it is not protocol verification.
 - `openapi_contract` covers the generated daemon HTTP boundary.
-- `adapter_contract` covers Milter, real Postfix, and source-linked real Exim
-  integration behavior.
+- `adapter_contract` covers Milter, delivery-status propagation, real
+  Postfix, and source-linked real Exim integration behavior.
 
 Draft-06 still marks architecture references, EAI considerations, IANA
 considerations, and security considerations as `TBA`. The implementation does
@@ -34,6 +34,7 @@ documented RFC 6531 interpretation.
 | Library verification, origin signing, and authorized revision | supported | Draft-versioned public, negative, recipe, DNS, custody, and cryptographic vectors |
 | `dkim2d` process, sign, and revise operations | supported | Generated OpenAPI clients and real daemon sockets |
 | Milter inbound, originator, ordinary-transit, and Postfix DSN modes | partial | Public Milter-v6 socket fixtures; Postfix DSN covers the exact `internal` origin enum and dedicated daemon capability, but still requires the upstream Postfix patch and qualification harness |
+| Received delivery-status evaluation and Draft-06 Section 12.1.1 propagation | supported | Byte-exact received-DSN and propagation golden vectors, daemon route and two-phase replay tests, and the adapter fail-closed matrix; the opt-in real-Postfix profile qualifies the deployment path without any MTA patch |
 | Postfix SMTP and local `sendmail(1)` intake | partial | Linux Docker profile with Postfix 3.11.6 and exact immutable image identities |
 | Replay detection | supported local policy | Memory and Valkey evidence; replay outcome is deliberately separate from DKIM2 cryptographic verification |
 | LDAP and PostgreSQL signing datasources | supported local policy | Exact schema/DDL, shared provider parity, verified-TLS loaders, immutable generation and protected-registry tests |
@@ -55,12 +56,33 @@ unbracketed envelope mailbox fields. The adapter validates and frames those
 mailboxes as RFC 5321 paths without otherwise changing mailbox bytes. These
 facts are adapter limitations, not original-wire fidelity claims.
 
+The real Postfix profile also qualifies delivery-status propagation without
+any Postfix patch. It routes a reserved local return-path address class to
+the propagation adapter's LMTP socket with one recipient per transaction, and
+re-injects the rebuilt notification through a dedicated loopback listener that
+carries no Milters and no content filter. It gives the previous hop and the
+downstream destination their own tenant, so neither domain can be local for
+the propagation tenant, and it sets the LMTP transport's minimum retry
+interval above the daemon's reservation window so a deferred retry can never
+land inside a live lease. Its lanes exercise the propagation route's
+fail-closed matrix, and the portable adapter, daemon, and library suites carry
+the exhaustive negative coverage for spoofed notifications, notifications for
+messages this system did not sign, a foreign signature naming a local address,
+a null previous sender, replay, and re-injection outages.
+
 The real profile fixes Milter connect, command, and content timeouts instead of
 depending on mutable Postfix defaults. When the originator Milter is
 unavailable, SMTP intake must receive code 451 without a queue mutation.
 Local `sendmail(1)` intake is asynchronous: successful handoff to `postdrop(1)`
 is followed by a bounded assertion that exactly one unsigned message remains
 held in the `maildrop` queue because cleanup cannot reach the Milter.
+
+The manifest binds two byte-exact Draft-06 vector families for this path:
+`received-dsn-golden.json` for Section 12.1.2 evaluation and
+`dsn-propagation-golden.json` for the Section 12.1.1 rebuild, report
+generation, and propagation signing, both under
+`lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-06/`. Their cases are
+`verification/received-dsn-evaluation` and `signing/dsn-propagation-rebuild`.
 
 No external DKIM2 corpus is authoritative for this Draft-06 implementation.
 The positive values in this repository come from reviewed draft examples,

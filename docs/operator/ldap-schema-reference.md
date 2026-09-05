@@ -95,7 +95,7 @@ All 23 attributes are single-valued.
 | `dkim2Selector` | `RNSDKIM2at:11` | exact IA5 text | canonical lowercase ASCII DNS selector |
 | `dkim2PublicKeySPKI` | `RNSDKIM2at:12` | octet string | canonical public SubjectPublicKeyInfo DER |
 | `dkim2TenantID` | `RNSDKIM2at:13` | exact IA5 text | exact administrative tenant identity |
-| `dkim2ProfileUse` | `RNSDKIM2at:14` | exact IA5 text | `originator`, `ordinary_transit`, or `next_domain_transit` |
+| `dkim2ProfileUse` | `RNSDKIM2at:14` | exact IA5 text | `originator`, `ordinary_transit`, `next_domain_transit`, or `delivery_status` |
 | `dkim2Rollout` | `RNSDKIM2at:15` | exact IA5 text | `enforce`, `observe`, or `off` |
 | `dkim2Compatibility` | `RNSDKIM2at:16` | exact IA5 text | currently exactly `strict` |
 | `dkim2FeedbackRouteID` | `RNSDKIM2at:17` | exact IA5 text | optional opaque future-service route |
@@ -111,6 +111,16 @@ Validity attributes are both absent or both present and require
 PEM and not Base64 text in the application model. LDIF represents an octet
 string with the normal double-colon Base64 transport syntax; that encoding does
 not change the stored value into a textual key format.
+
+`delivery_status` is the profile use for null-reverse-path delivery-status
+notifications. Every domain this deployment forwards mail under needs an
+active `delivery_status` profile in addition to the transit profile that signs
+the forwarded copy, because Draft-06 Section 12.1.1 propagation signs the
+rebuilt notification under the removed completion signature's own domain. A
+local domain that holds a transit profile but no active `delivery_status`
+profile is a permanent refusal: the propagation route answers `permerror` with
+`propagation_failure: unprovisioned_domain` and no notification reaches the
+previous hop. It never falls back to another profile use and never tempfails.
 
 `dkim2HandleID` is deliberately opaque. Do not derive it from a DN, path,
 selector, key digest, database key, tenant, or domain. A handle grants no

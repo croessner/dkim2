@@ -21,6 +21,26 @@ if test "$(uname -s)" = Linux; then
   trap cleanup EXIT HUP INT TERM
 fi
 
+# refute fails the check when the fixed text is present in any named file.
+refute() {
+  refuted=$1
+  shift
+  if grep -Fq -e "$refuted" "$@"; then
+    printf 'check-operator-docs: forbidden text present: %s\n' "$refuted" >&2
+    exit 1
+  fi
+}
+
+# refute_pattern fails the check when the extended expression matches any input.
+refute_pattern() {
+  expression=$1
+  shift
+  if grep -ERn -e "$expression" "$@"; then
+    printf 'check-operator-docs: forbidden pattern matched: %s\n' "$expression" >&2
+    exit 1
+  fi
+}
+
 guide=docs/operator/postfix-compose.md
 supply=docs/operator/container-supply-chain.md
 datasources=docs/operator/datasource-backends.md
@@ -33,6 +53,7 @@ exim_history=docs/reports/exim-compatibility-2026-07-27.md
 daemon=cmd/dkim2d/README.md
 milter=cmd/dkim2-milter/README.md
 client=cmd/dkim2ctl/README.md
+propagator=cmd/dkim2-dsn-propagator/README.md
 openapi=docs/specs/openapi/dkim2d.yaml
 openapi_readme=docs/specs/openapi/README.md
 containerfile=build/container/Dockerfile
@@ -43,6 +64,7 @@ for document in \
   "$daemon" \
   "$milter" \
   "$client" \
+  "$propagator" \
   "$openapi" \
   "$openapi_readme" \
   docs/datasource-ldap-sql-design.md \
@@ -117,14 +139,14 @@ for invariant in \
   grep -Fqi "$invariant" "$onboarding"
 done
 
-! grep -Fq 'no operator CLI for that workflow is released' README.md
-! grep -Fq 'currently accept only `dkim2-datasource-v2`' cmd/dkim2d/README.md
-! grep -Fq 'unique staging current entry' cmd/dkim2d/README.md
-! grep -Fq 'LDAP atomically claims and later activates the unique `cn=current`' "$datasources"
-! grep -Fq '18/6 schema allocation' "$datasources"
-! grep -Fq 'stable v2 current fence' "$datasources"
-! grep -Fq 'not yet exposed as an operator command' "$rotation"
-! grep -Fq 'Until the native domain-onboarding command surface is wired and qualified' "$rotation"
+refute 'no operator CLI for that workflow is released' README.md
+refute 'currently accept only `dkim2-datasource-v2`' cmd/dkim2d/README.md
+refute 'unique staging current entry' cmd/dkim2d/README.md
+refute 'LDAP atomically claims and later activates the unique `cn=current`' "$datasources"
+refute '18/6 schema allocation' "$datasources"
+refute 'stable v2 current fence' "$datasources"
+refute 'not yet exposed as an operator command' "$rotation"
+refute 'Until the native domain-onboarding command surface is wired and qualified' "$rotation"
 grep -Fq 'native v2 or v3 generation' README.md
 grep -Fq 'LDAP, PostgreSQL, MySQL, and' cmd/dkim2d/README.md
 grep -Fq 'MariaDB accept an exact complete' cmd/dkim2d/README.md
@@ -132,7 +154,7 @@ grep -Fq 'atomic LDAP Add with no placeholder current' cmd/dkim2d/README.md
 grep -Fq 'creates `cn=current` through one atomic Add' "$datasources"
 grep -Fq '23-attribute/eight-class' "$datasources"
 grep -Fq 'native-domain-onboarding.md' "$rotation"
-! grep -Fq 'key-manager integration remains a separate project' docs/reference/known-limitations.md
+refute 'key-manager integration remains a separate project' docs/reference/known-limitations.md
 for document in \
   docs/reference/README.md \
   docs/reference/compatibility.md \
@@ -172,10 +194,10 @@ done
 
 grep -Fq 'draft-ietf-dkim-dkim2-spec-06' README.md
 grep -Fq 'unqualified_draft06' README.md
-! grep -Fq 'DKIM2 based on `draft-ietf-dkim-dkim2-spec-04`' README.md
-! grep -Fq 'implemented with capability `qualified_linux`' README.md
-! grep -Fq 'Protocol behavior remains pinned to `draft-ietf-dkim-dkim2-spec-04`' "$guide"
-! grep -Fq 'Exim is `qualified_linux`' "$guide"
+refute 'DKIM2 based on `draft-ietf-dkim-dkim2-spec-04`' README.md
+refute 'implemented with capability `qualified_linux`' README.md
+refute 'Protocol behavior remains pinned to `draft-ietf-dkim-dkim2-spec-04`' "$guide"
+refute 'Exim is `qualified_linux`' "$guide"
 
 for document in \
   docs/conformance.md \
@@ -205,6 +227,7 @@ for reference in \
   'cmd/dkim2d/README.md' \
   'cmd/dkim2-milter/README.md' \
   'cmd/dkim2ctl/README.md' \
+  'cmd/dkim2-dsn-propagator/README.md' \
   'docs/operator/container-supply-chain.md' \
   'docs/operator/datasource-backends.md' \
   'docs/operator/ldap-schema-reference.md' \
@@ -242,11 +265,11 @@ for subject in \
   grep -Fq "$subject" docs/reference/compatibility.md
 done
 
-! grep -Fq 'refresh_interval' "$datasources" docs/operator/examples/*.yaml
-! grep -Fq 'response_bytes' "$datasources" docs/operator/examples/*.yaml
-! grep -Fq 'dkim2-datasource-v1' contrib/schema/ldap/layout.ldif
-! grep -Fq 'LDAP and SQL providers are deferred to M22' docs/ARCHITECTURE.md
-! grep -Fq 'architecture-only until M22' docs/ARCHITECTURE.md
+refute 'refresh_interval' "$datasources" docs/operator/examples/*.yaml
+refute 'response_bytes' "$datasources" docs/operator/examples/*.yaml
+refute 'dkim2-datasource-v1' contrib/schema/ldap/layout.ldif
+refute 'LDAP and SQL providers are deferred to M22' docs/ARCHITECTURE.md
+refute 'architecture-only until M22' docs/ARCHITECTURE.md
 
 run_operator_example_tests() {
   GOCACHE="${GOCACHE:-/tmp/dkim2-go-build-cache}" \
@@ -263,8 +286,68 @@ for reference in \
   'cmd/dkim2d/README.md' \
   'cmd/dkim2-milter/README.md' \
   'cmd/dkim2ctl/README.md' \
+  'cmd/dkim2-dsn-propagator/README.md' \
   'docs/operator/container-supply-chain.md'; do
   grep -Fq "$reference" "$guide"
+done
+
+# The propagation deployment contract must stay stated where operators act.
+for required in \
+  'dsn_propagator_destination_recipient_limit = 1' \
+  '-o smtpd_milters=' \
+  '-o non_smtpd_milters=' \
+  '-o smtpd_client_restrictions=permit_mynetworks,reject' \
+  '-o content_filter=' \
+  'minimal_backoff_time' \
+  'dsn_propagation.pending_lease' \
+  'dkim2-dsn-propagator probe --config' \
+  'permanent_failure_reply' \
+  'unprovisioned_domain' \
+  'without Postfix parameter names'; do
+  grep -Fq -e "$required" "$guide"
+done
+for required in \
+  'dkim2-dsn-propagator-config-v1' \
+  'permanent_failure_reply' \
+  'probe --config' \
+  'validate --config' \
+  'unprovisioned_domain' \
+  'docs/operator/postfix-compose.md'; do
+  grep -Fq -e "$required" "$propagator"
+done
+refute 'and is completed separately' "$propagator"
+# Only the daemon image declares a healthcheck; the propagator documents that.
+test "$(grep -c '^HEALTHCHECK' "$containerfile")" -eq 1
+grep -Fq 'HEALTHCHECK --interval=10s --timeout=3s --retries=3 CMD ["/usr/local/bin/dkim2d", "probe"]' \
+  "$containerfile"
+grep -Fq 'no `HEALTHCHECK`' "$propagator"
+grep -Fq 'at-least-once' "$propagator"
+grep -Fq 'embedded = unverified' docs/reference/known-limitations.md
+for document in "$datasources" "$ldap_reference" "$rotation"; do
+  grep -Fq 'delivery_status' "$document"
+  grep -Fq 'unprovisioned_domain' "$document"
+done
+grep -Fq 'delivery_status' docs/reference/known-limitations.md
+grep -Fq 'unsupported_chain' docs/reference/known-limitations.md
+grep -Fq 'at-least-once' docs/reference/known-limitations.md
+grep -Fq 'valkey-server` 9.1.0' docs/reference/known-limitations.md
+refute 'no DSN is propagated backwards' docs/reference/known-limitations.md
+for required in \
+  '/v1/dsn/propagate' \
+  'X-DKIM2-DSN-Propagate-Capability' \
+  'propagation_commit_unresolved' \
+  'dsn_propagate_capability_file'; do
+  grep -Fq "$required" docs/reference/compatibility.md
+done
+for required in \
+  'received-dsn-golden.json' \
+  'dsn-propagation-golden.json' \
+  'received-dsn-evaluation' \
+  'dsn-propagation-rebuild'; do
+  grep -Fq "$required" docs/conformance.md
+done
+for required in FuzzReceivedDSN FuzzRebuild; do
+  grep -Fq "$required" docs/security-testing.md
 done
 
 test "$(sed -n 's|^  \(/[^:]*\):$|\1|p' "$openapi" | wc -l | tr -d ' ')" -eq 9
@@ -293,6 +376,7 @@ for flag in \
   grep -Fq -- "\"${flag#--}\"" cmd/dkim2ctl/internal/command/command.go
   grep -Fq -- "$flag" "$client"
 done
+grep -Fq -- '"dsn-propagate-capability-file"' cmd/dkim2ctl/internal/command/command.go
 for mode in inbound originator ordinary_transit; do
   grep -Fq "\`$mode\`" "$milter"
 done
@@ -336,15 +420,16 @@ for document in README.md "$guide"; do
   grep -Fq 'unqualified_draft06' "$document"
   grep -Fq 'LDAP' "$document"
   grep -Fq 'SQL' "$document"
-  ! grep -Fq 'deferred_ldap_sql_migration' "$document"
+  refute 'deferred_ldap_sql_migration' "$document"
 done
 
-! grep -En \
+refute_pattern \
   '(inbound-only|does not sign or revise|signing or revision endpoints|protected generated-client capability loader)' \
   "$daemon" "$openapi_readme"
-! grep -ERn \
+refute_pattern \
   '(example\.(com|org|net)|0\.0\.0\.0:2525|image:[[:space:]]+[^[:space:]]*:latest)' \
   README.md cmd/dkim2d/README.md cmd/dkim2-milter/README.md \
-  cmd/dkim2ctl/README.md docs/operator docs/specs/openapi/README.md \
+  cmd/dkim2ctl/README.md cmd/dkim2-dsn-propagator/README.md \
+  docs/operator docs/specs/openapi/README.md \
   deployments/postfix-compose \
   --include='*.md' --include='*.yaml' --include='*.cf'

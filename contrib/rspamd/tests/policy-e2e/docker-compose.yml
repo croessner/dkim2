@@ -24,6 +24,8 @@ services:
       - /fixture/dkim2-replayed-response.json
       - --two-hop-response
       - /fixture/dkim2-two-hop-response.json
+      - --received-dsn-response
+      - /fixture/dkim2-received-dsn-response.json
       - --state
       - /state/dkim2-stub-state.json
       - --control

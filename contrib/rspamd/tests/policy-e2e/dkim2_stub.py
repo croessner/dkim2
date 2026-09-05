@@ -32,7 +32,14 @@ class State:
                 mode = json.load(source).get("mode", "default")
         except (FileNotFoundError, json.JSONDecodeError, OSError):
             return "default"
-        allowed = {"default", "replayed", "two_hop", "malformed", "timeout"}
+        allowed = {
+            "default",
+            "replayed",
+            "two_hop",
+            "received_dsn",
+            "malformed",
+            "timeout",
+        }
         return mode if mode in allowed else "default"
 
     def record(self, size: int, mode: str) -> None:
@@ -119,6 +126,7 @@ def main() -> None:
     parser.add_argument("--response", required=True)
     parser.add_argument("--replayed-response", required=True)
     parser.add_argument("--two-hop-response", required=True)
+    parser.add_argument("--received-dsn-response", required=True)
     parser.add_argument("--state", required=True)
     parser.add_argument("--control", required=True)
     args = parser.parse_args()
@@ -128,6 +136,7 @@ def main() -> None:
             "default": args.response,
             "replayed": args.replayed_response,
             "two_hop": args.two_hop_response,
+            "received_dsn": args.received_dsn_response,
         },
         args.state,
         args.control,

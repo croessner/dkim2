@@ -1,0 +1,25 @@
+compatibility_level = 3.11
+myhostname = mx.operator.test
+mydomain = operator.test
+myorigin = $mydomain
+inet_interfaces = all
+inet_protocols = ipv4
+mydestination = $myhostname, localhost.$mydomain, localhost
+relay_domains =
+relayhost =
+smtpd_relay_restrictions = permit_mynetworks,
+    check_recipient_access inline:{ {bounces@operator.test = OK} },
+    reject_unauth_destination
+smtpd_milters = unix:/run/dkim2/inbound/milter.sock
+non_smtpd_milters = unix:/run/dkim2/originator/milter.sock
+milter_protocol = 6
+milter_default_action = tempfail
+milter_connect_timeout = 2s
+milter_command_timeout = 5s
+milter_content_timeout = 5s
+maillog_file = /dev/stdout
+transport_maps = inline:{ {bounces@operator.test = dsn_propagator:unix:/run/dkim2/propagation/lmtp.sock} }
+dsn_propagator_destination_recipient_limit = 1
+dsn_propagator_destination_concurrency_limit = 10
+minimal_backoff_time = 600s
+maximal_backoff_time = 4000s

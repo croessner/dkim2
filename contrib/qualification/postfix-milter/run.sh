@@ -3,6 +3,32 @@ set -eu
 
 project=dkim2-postfix-qualification
 compose_file=contrib/qualification/postfix-milter/compose.yaml
+
+# lane selects which qualification fragments one pass produces. "core" is the
+# signing, verification, and Postfix delivery-status evidence and is the
+# default gate. "propagation" is the delivery-status propagation evidence and
+# is opt-in while the notification shapes it needs cannot be produced by this
+# implementation; "all" is both.
+lane=core
+while test "$#" -gt 0; do
+  case $1 in
+    --lane)
+      test "$#" -ge 2 || exit 2
+      lane=$2
+      shift 2
+      ;;
+    --lane=*)
+      lane=${1#--lane=}
+      shift
+      ;;
+    *) break ;;
+  esac
+done
+case $lane in
+  all|core|propagation) ;;
+  *) exit 2 ;;
+esac
+
 output_root=${1:-.artifacts/postfix-qualification}
 
 validate_output_root() {
@@ -166,8 +192,6 @@ run_once() {
   docker compose --project-name "$project" --file "$compose_file" \
     up --build --detach --wait
 
-  run_bounded_exec 30 stack "$run_root/success.json" \
-    /usr/local/bin/qualify success
   run_bounded_exec 10 stack "$run_root/identity.json" \
     /usr/local/bin/qualify identity
   run_bounded_exec 10 daemon "$run_root/daemon-identity.json" \
@@ -176,7 +200,7 @@ run_once() {
     keys == ["executables", "postfix_version", "schema"] and
     .schema == "dkim2.postfix-qualification-identity.v1" and
     .postfix_version == "3.11.6" and
-    (.executables | keys == ["dkim2-milter", "qualify"])
+    (.executables | keys == ["dkim2-dsn-propagator", "dkim2-milter", "qualify"])
   ' "$run_root/identity.json" >/dev/null
   jq -e '
     keys == ["executables", "schema"] and
@@ -184,17 +208,34 @@ run_once() {
     (.executables | keys == ["dkim2d"])
   ' "$run_root/daemon-identity.json" >/dev/null
 
-  docker compose --project-name "$project" --file "$compose_file" \
-    pause daemon
-  run_bounded_exec 25 stack "$run_root/daemon-failure.json" \
-    /usr/local/bin/qualify daemon-failure
-  docker compose --project-name "$project" --file "$compose_file" \
-    unpause daemon
+  fragment_files=""
+  if test "$lane" != propagation; then
+    run_bounded_exec 30 stack "$run_root/success.json" \
+      /usr/local/bin/qualify success
+    fragment_files="$fragment_files $run_root/success.json"
+  fi
+  if test "$lane" != core; then
+    run_bounded_exec 240 stack "$run_root/propagation.json" \
+      /usr/local/bin/qualify propagation
+    fragment_files="$fragment_files $run_root/propagation.json"
+  fi
+  if test "$lane" != propagation; then
+    docker compose --project-name "$project" --file "$compose_file" \
+      pause daemon
+    run_bounded_exec 25 stack "$run_root/daemon-failure.json" \
+      /usr/local/bin/qualify daemon-failure
+    docker compose --project-name "$project" --file "$compose_file" \
+      unpause daemon
 
-  run_bounded_exec 15 stack /dev/null \
-    /usr/local/bin/qualify stop-origin-milter
-  run_bounded_exec 20 stack "$run_root/milter-failure.json" \
-    /usr/local/bin/qualify milter-failure
+    run_bounded_exec 15 stack /dev/null \
+      /usr/local/bin/qualify stop-origin-milter
+    run_bounded_exec 20 stack "$run_root/milter-failure.json" \
+      /usr/local/bin/qualify milter-failure
+    fragment_files="$fragment_files $run_root/daemon-failure.json"
+    fragment_files="$fragment_files $run_root/milter-failure.json"
+  fi
+  # shellcheck disable=SC2086
+  fragments=$(jq -S -s '.' $fragment_files)
 
   candidate=$(
     GOCACHE=/tmp/dkim2-postfix-qualification-gocache \
@@ -223,13 +264,13 @@ run_once() {
     --arg postfix_image "chrroessner/postfix@sha256:d4b349ce665ba291444e55862ac842e3d4e612596520a9ba65a7b9bf00f9aa3c" \
     --arg golang_image "golang@sha256:ae5a2316d12f3e78fd99177dad452e6ad4f240af2d71d57b480c3477f250fec6" \
     --arg debian_image "debian@sha256:4e401d95de7083948053197a9c3913343cd06b706bf15eb6a0c3ccd26f436a0e" \
-    --slurpfile success "$run_root/success.json" \
-    --slurpfile daemon_failure "$run_root/daemon-failure.json" \
-    --slurpfile milter_failure "$run_root/milter-failure.json" \
+    --argjson fragments "$fragments" \
+    --arg lane "$lane" \
     --slurpfile identity "$run_root/identity.json" \
     --slurpfile daemon_identity "$run_root/daemon-identity.json" \
     '{
       schema: "dkim2.postfix-qualification-report.v1",
+      lane: $lane,
       message_draft: "draft-ietf-dkim-dkim2-spec-06",
       dns_draft: "draft-chuang-dkim2-dns-04",
       base_revision: $base_revision,
@@ -249,11 +290,7 @@ run_once() {
         postfix_version: $identity[0].postfix_version,
         executables: ($identity[0].executables + $daemon_identity[0].executables)
       },
-      fragments: [
-        $success[0],
-        $daemon_failure[0],
-        $milter_failure[0]
-      ],
+      fragments: $fragments,
       topology: {
         compose_host_ports: 0,
         daemon_http: "canonical_loopback_only",
@@ -262,7 +299,10 @@ run_once() {
         postfix_default_action: "tempfail",
         milter_connect_timeout: "2s",
         milter_command_timeout: "5s",
-        milter_content_timeout: "5s"
+        milter_content_timeout: "5s",
+        propagation_transport: "lmtp_owned_unix_socket_only",
+        propagation_recipient_limit: 1,
+        propagation_reinjection: "milter_free_loopback_listener"
       },
       cleanup: "project_scoped_pending"
     }' >"$run_root/report.pending.json"

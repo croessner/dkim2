@@ -346,6 +346,361 @@ conformance fixtures; a grep-only header assertion is not cryptographic proof.
 Postfix simulated non-SMTP callbacks omit path brackets, and the adapter adds
 only the missing outer brackets as documented.
 
+## Delivery-status propagation
+
+Forwarded mail that fails at a later hop produces a delivery-status
+notification addressed to the return path this system signed. Draft-06
+Section 12.1.1 requires that notification to be rebuilt for, and delivered to,
+the previous hop of the forwarded message. The transport component is
+`dkim2-dsn-propagator`, an MTA-neutral adapter that is not a Milter: it
+receives one notification over LMTP, calls the daemon's
+`POST /v1/dsn/propagate` and `POST /v1/dsn/propagate/commit` operations,
+re-injects the rebuilt notification through a trusted internal listener, and
+only then acknowledges the LMTP transaction. No Postfix patch is involved. The
+runtime and configuration reference is
+[`cmd/dkim2-dsn-propagator/README.md`](../../cmd/dkim2-dsn-propagator/README.md);
+the request and response shapes remain authoritative only in
+[`docs/specs/openapi/dkim2d.yaml`](../specs/openapi/dkim2d.yaml).
+
+### The three deployment requirements
+
+These three properties are what the adapter assumes of any MTA. The Postfix
+parameters that satisfy them follow in the next subsection.
+
+1. Mail addressed to the local return-path addresses of forwarded messages,
+   and only that mail, reaches the adapter's LMTP socket with one recipient
+   per transaction, and the recipient address is handed to LMTP unrewritten.
+   The daemon compares that address byte-wise against the signed `mf=` apart
+   from domain case, so any address rewriting on that path is a permanent
+   refusal rather than a tolerated difference.
+2. A trusted internal null-sender submission listener exists for re-injection
+   with no DKIM2 signing route and no content filter attached. It must support
+   `SMTPUTF8` when a previous hop address is non-ASCII and `8BITMIME` when the
+   signed notification carries eight-bit content; the adapter fails closed and
+   defers rather than downgrading.
+3. The minimum retry interval for the LMTP transport exceeds the daemon's
+   `dsn_propagation.pending_lease`. A retry that lands inside a live lease is
+   deferred once more before it can be served, which wastes a delivery attempt
+   without changing the outcome.
+
+Forwarded mail must also already leave this system with a local `mf=` whose
+domain is a local authority domain. Automatic sender rewriting is out of
+scope: without a local return path no notification reaches this system and
+there is nothing to propagate.
+
+### Concrete Postfix configuration
+
+Route the reserved return-path address class to the adapter's LMTP socket and
+force one recipient per transaction:
+
+```text
+smtpd_relay_restrictions = permit_mynetworks,
+    check_recipient_access inline:{ {bounces@operator.test = OK} },
+    reject_unauth_destination
+transport_maps = inline:{ {bounces@operator.test = dsn_propagator:unix:/run/dkim2/propagation/lmtp.sock} }
+dsn_propagator_destination_recipient_limit = 1
+dsn_propagator_destination_concurrency_limit = 10
+```
+
+`transport_maps` selects a route; it does not authorize a destination. The
+reserved return-path address is neither in `mydestination` nor in
+`relay_domains`, so without the `check_recipient_access` entry every incoming
+notification is refused by `reject_unauth_destination` before the transport is
+ever consulted. Permit exactly the reserved address and nothing else: the
+`transport_maps` entry then pins that address to the adapter, so the permit
+cannot be used to relay anywhere.
+
+Write both inline tables in the brace-delimited form
+`inline:{ {key = value} }`. Postfix rejects the flat form
+`inline:{ key = value }` at table-open time with `missing '=' after attribute
+name`, and that failure surfaces only when the table is first queried, not
+when `postfix check` parses `main.cf`.
+
+The transport name in `transport_maps` is the `master.cf` service name, and
+`dsn_propagator_destination_recipient_limit` is that service's per-transport
+recipient limit. Declare the transport and the dedicated re-injection listener
+in `master.cf`:
+
+```text
+dsn_propagator unix  -       -       n       -       -       lmtp
+  -o syslog_name=postfix/dsn-propagator
+  -o lmtp_lhlo_name=$myhostname
+127.0.0.1:10025 inet n       -       n       -       -       smtpd
+  -o syslog_name=postfix/dkim2-reinjection
+  -o smtpd_milters=
+  -o non_smtpd_milters=
+  -o smtpd_client_restrictions=permit_mynetworks,reject
+  -o smtpd_relay_restrictions=permit_mynetworks,reject_unauth_destination
+  -o content_filter=
+  -o receive_override_options=no_address_mappings
+```
+
+The four empty overrides are the point of the listener: the rebuilt
+notification is already signed by the propagation route, so no Milter, no
+`non_smtpd_milters` callback, and no content filter may see or alter it, and
+no client outside `mynetworks` may reach it. `no_address_mappings` keeps the
+previous hop's address unrewritten on the way out. The listener is
+container-loopback only; it is neither host-published nor reachable from
+another container on the mail network.
+
+`minimal_backoff_time` and `maximal_backoff_time` are queue-manager parameters
+with no per-transport override, so the minimum retry interval is global:
+
+```text
+minimal_backoff_time = 600s
+maximal_backoff_time = 4000s
+```
+
+The daemon's default `dsn_propagation.pending_lease` and the adapter's default
+`daemon.pending_lease` are both 120 seconds. Postfix's own default
+`minimal_backoff_time` of 300 seconds already exceeds that; the rendering sets
+600 seconds so that a lease raised to any value below 600 seconds stays covered
+without a second change. `maximal_backoff_time` is set to its default
+only to keep the retry envelope explicit next to the minimum. Keep the three
+values ordered as `dsn_propagation.pending_lease` equals
+`daemon.pending_lease` and both stay strictly below `minimal_backoff_time`. If
+you raise the lease, raise `minimal_backoff_time` above the new value in the
+same change; if you lower `minimal_backoff_time`, lower both lease values
+first.
+
+Finally, provision the daemon route. Add the distinct propagation capability
+and, if the default does not fit, the lease:
+
+```text
+server:
+  dsn_propagate_capability_file: /var/lib/dkim2d/<generation>/dsn-propagate-capability
+process:
+  default_tenant: tenant-a
+dsn_propagation:
+  pending_lease: 120s
+```
+
+The propagation capability is a fifth distinct 32-byte protected value. It
+must differ from the process, sign, revise, and delivery-status signing
+capabilities, is accepted on no other route, and no other capability is
+accepted on the two propagation routes. It does not require the
+delivery-status signing capability to be configured. `process.default_tenant`
+is what `POST /v1/process` uses when a request carries no `context.tenant`;
+the inbound Milter sends none and relies on this value. Without a tenant the
+projection reports `local_hop: not_evaluated` and `propagation:
+not_evaluated`, and policy accepts.
+
+### Routing options for the return-path address class
+
+The routing rule must select exactly the return paths of forwarded mail. Three
+shapes are workable; the second and third scale, the first is easiest to
+audit.
+
+- One reserved local part on a local authority domain, as in the example
+  above. The `transport_maps` key is the full address, so ordinary mail to the
+  same domain is unaffected, and the matching `check_recipient_access` entry
+  authorizes that one address without making the domain relayable. Use this
+  when forwarding uses a single fixed return path.
+- One reserved subdomain of a local authority domain, for example
+  `returns.operator.test`, keyed by domain in `transport_maps` and listed in
+  `relay_domains`. The signing `d=` must still relaxed-match the `mf=` domain
+  under Draft-06 Section 9.4, which a subdomain of the signing domain
+  satisfies. Use this when the return path carries a variable local part.
+- A regular-expression table over a variable-envelope return path prefix. This
+  is the only shape that can accidentally capture ordinary mail, so anchor the
+  pattern to both the exact prefix and the exact domain and prove the negative
+  cases before activation.
+
+Whichever shape you choose, do not attach an address-rewriting map, an alias,
+a virtual mapping, or a canonical mapping to that class. The daemon refuses a
+recipient that does not match the signed `mf=` byte-wise apart from domain
+case, and a rewritten address is indistinguishable from a misrouted one.
+
+### Provisioning `delivery_status` for forwarding domains
+
+The propagation signing domain is the canonical `d=` of the removed, verified
+completion signature. The outgoing delivery-status authority, which derives
+the domain from the embedded highest `d=`, does not apply and is not reachable
+through the propagation capability. Every domain this deployment forwards mail
+under therefore needs an active `delivery_status` signing profile for the
+tenant, in addition to whatever `originator`, `ordinary_transit`, or
+`next_domain_transit` profiles it already holds.
+
+A local domain without that profile is a permanent refusal: the route answers
+`permerror` with `propagation_failure: unprovisioned_domain`, the disposition
+is `discard`, and no notification reaches the previous hop. It is not a
+tempfail and it does not fall back to another profile use. Provision the
+profiles for the flat-file, LDAP, PostgreSQL, MySQL, and MariaDB backends as
+described in [`datasource-backends.md`](datasource-backends.md),
+[`ldap-schema-reference.md`](ldap-schema-reference.md), and
+[`datasource-key-rotation.md`](datasource-key-rotation.md), and publish the
+selector's DNS record before routing return paths to the adapter.
+
+### Rendering the propagation overlay
+
+The propagation topology is an overlay on the base rendering, not a separate
+project. Four checked-in files carry it:
+
+```text
+deployments/postfix-compose/compose.propagation.yaml
+deployments/postfix-compose/postfix/propagation-main.cf
+deployments/postfix-compose/postfix/propagation-master.cf
+deployments/postfix-compose/examples/dsn-propagator.yaml
+```
+
+`compose.propagation.yaml` adds the `daemon-propagation` and `dsn-propagator`
+services and re-points Postfix at the two `propagation-*.cf` renderings. The
+two `.cf` files are the base `main.cf` and `master.cf` plus exactly the
+propagation additions documented above, so a deployment that already diverged
+from the base rendering must merge rather than substitute.
+`examples/dsn-propagator.yaml` is a complete adapter document to copy, not a
+file the overlay mounts.
+
+Render and inspect the overlay before starting it:
+
+```text
+docker compose \
+  --project-name dkim2-postfix \
+  --project-directory deployments/postfix-compose \
+  --file deployments/postfix-compose/compose.yaml \
+  --file deployments/postfix-compose/compose.propagation.yaml \
+  config
+```
+
+The overlay is a deliberate topology change. In the base rendering Postfix
+reaches the Milter routes only through read-only socket mounts and joins the
+`mail` network. Here Postfix, the adapter, and the adapter's daemon share one
+network namespace, because the adapter confines both of its endpoints to
+canonical literal loopback: it calls its daemon on `127.0.0.1` and re-injects
+into the `127.0.0.1:10025` listener. Nothing new is published to the host.
+
+Create the additional state before the first start, using the same ownership
+and mode rules as the other routes:
+
+```text
+deployments/postfix-compose/state/daemon/propagation/<32-lowercase-hex-generation>/
+deployments/postfix-compose/state/propagator/
+deployments/postfix-compose/state/sockets/propagation/
+deployments/postfix-compose/config/dkim2d-propagation.yaml
+```
+
+`state/daemon/propagation` follows the daemon rules exactly: owner
+`2000:2000`, mode `0500`, and one protected child per selected value,
+including the distinct propagation capability. `state/propagator` is mounted
+read-only at `/etc/dkim2-dsn-propagator` and holds the adapter's own
+configuration document as `config.yaml` and its propagation capability as
+`protected/capability`, matching the `command` and `healthcheck` entries and
+the `daemon.capability_file` value in `examples/dsn-propagator.yaml`. Its
+identity is `2000:103`, the same as the Milter images.
+`state/sockets/propagation` is the
+writable socket directory the adapter creates its LMTP socket in and Postfix
+mounts read-only.
+
+Both the adapter configuration document and the capability are loaded through
+the protected-file contract, so each must be a regular file with one link,
+owned by the effective identity, and mode `0400` or `0600`. A configuration
+document left at the usual `0644` is refused, and every command exits with the
+same content-free `dkim2-dsn-propagator: runtime failure` diagnostic, so check
+the mode first when `validate` fails on a document you believe is correct. The
+capability additionally requires its parent directory to be exactly `0500`.
+
+### Adapter configuration and health probe
+
+The adapter's complete strict configuration reference, including every stable
+path, default, and the frozen `dkim2-dsn-propagator-config-v1` root, is in
+[`cmd/dkim2-dsn-propagator/README.md`](../../cmd/dkim2-dsn-propagator/README.md).
+Four deployment facts matter here.
+
+- `daemon.endpoint` and `reinjection.endpoint` must be canonical
+  literal-loopback origins. The adapter shares its daemon container's network
+  namespace exactly as a Milter does, and it reaches the re-injection listener
+  over the mail network; hostnames, remote addresses, redirects, proxies, and
+  ambient credentials are rejected on both endpoints.
+- `daemon.pending_lease` is the operator's declaration of the daemon's
+  `dsn_propagation.pending_lease`. The sum of `daemon.request_timeout`, the
+  three `reinjection.*` timeouts, and `daemon.commit_timeout` must stay below
+  it, so one complete attempt finishes inside the reservation. Configuration
+  loading refuses a document that violates this bound.
+- `propagation.permanent_failure_reply` is the adapter's only policy knob. It
+  governs every daemon `reject`, that is a verification failure and the
+  misrouting case where the notification is not ours, and never affects
+  `discard`, `tempfail`, or `accept`. The default `reject` answers `550 5.7.1`;
+  a `550` to a null-sender notification cannot be bounced, so an MTA discards
+  it, notifies postmaster, or freezes it. An operator who prefers silence sets
+  `discard`, which answers `250` and drops the notification.
+- Validate before activation with
+  `dkim2-dsn-propagator validate --config <absolute-path>`, which is silent on
+  success and contacts neither the socket nor the daemon.
+
+The propagator image deliberately carries no `HEALTHCHECK`. Only the daemon
+image declares one; the container release policy rejects a healthcheck on any
+other product, exactly as for the Milter. The deployment therefore supplies
+the probe:
+
+```text
+healthcheck:
+  test: ["CMD", "/usr/local/bin/dkim2-dsn-propagator", "probe", "--config", "/etc/dkim2-dsn-propagator/config.yaml"]
+```
+
+Outside a container, the same check is
+`dkim2-dsn-propagator probe --config <absolute-path>`.
+
+`probe` reloads the strict configuration and checks that the configured socket
+is a single-link Unix socket owned by the effective UID with no permissions
+for other users. It opens no LMTP session and contacts no daemon. `--config`
+must be an absolute path, so a bare `dkim2-dsn-propagator probe` cannot
+succeed.
+
+### Duplicate windows and operational expectations
+
+Propagation is at-least-once, bounded by the two-phase replay gate. The
+adapter acknowledges only after the re-injection listener's own `250` and the
+commit's `200`, so a failed re-injection is retried by Postfix and never
+silently discarded. Three windows can deliver a duplicate to the previous hop:
+a crash between the re-injection `250` and the commit; a lease that expired
+while an attempt was still running; and a daemon restart, because commit
+tokens live in a bounded process-local ledger, so a token issued before the
+restart is unresolvable, is answered `409`, is deferred by the adapter as
+`451`, and is re-served with a fresh rebuild once the lease expires. Keeping
+the minimum retry interval above the lease is what keeps that last window from
+producing repeated wasted attempts.
+
+For a refused or deferred notification, inspect the single
+`dsn.propagation.completed` log event or the matching
+`dkim2d_dsn_propagation_total{stage=...,result=...}` counter on the daemon,
+and the adapter's `dsn_propagator_transactions_total{outcome=...}`,
+`dsn_propagator_reinjection_total{outcome=...}`, and
+`dsn_propagator_commit_total{outcome=...}` counters. The closed stage
+distinguishes evaluation, replay, rebuild, previous-hop verification, signing
+domain, policy, and signing without logging the domain, selector, address,
+queue ID, capability, commit token, signature, or message bytes. For a
+received notification that is only evaluated and not propagated, the
+equivalent daemon evidence is `dsn.received.completed` and
+`dkim2d_dsn_received_total{stage=...,result=...}`.
+
+### The same requirements without Postfix parameter names
+
+An MTA other than Postfix satisfies the same contract when it can do four
+things. This project makes no qualification claim for any of them; the
+executed evidence is Postfix only.
+
+1. Select, by envelope recipient, exactly the return-path addresses of
+   forwarded mail and deliver them to a local LMTP endpoint on a Unix socket,
+   without applying any address rewriting, alias expansion, or canonical
+   mapping to that class, and without batching a second recipient into the
+   same transaction.
+2. Offer a local submission endpoint that accepts a null reverse path from a
+   trusted internal client, applies no signing, filtering, or rewriting to the
+   submitted message, and advertises `SMTPUTF8` and `8BITMIME`.
+3. Treat a `4xx` LMTP reply as a retryable deferral that keeps the
+   notification queued, and schedule the next attempt no sooner than the
+   daemon's configured propagation lease.
+4. Leave the notification's bytes unchanged between acceptance and the LMTP
+   transfer, because the daemon verifies the outer signature over exactly
+   those bytes.
+
+An MTA that cannot express a per-transport single-recipient limit can instead
+use a transport whose delivery agent is inherently single-recipient, or an
+intermediate that splits transactions before the LMTP socket. An MTA whose
+retry schedule cannot be raised above the lease can instead lower the daemon's
+lease below the shortest retry interval, provided the sum of the adapter's
+timeouts still fits inside the new lease.
+
 ## Shutdown, upgrade, and rollback
 
 ### Draft-06 protocol and replay upgrade

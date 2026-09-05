@@ -6,8 +6,10 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"go.yaml.in/yaml/v3"
 )
@@ -220,13 +222,14 @@ func TestPostfixQualificationPinsBuildInputsAndCleanup(t *testing.T) {
 		[]byte(`syscall.Setgid(daemonUID)`),
 		[]byte(`syscall.Setuid(daemonUID)`),
 		[]byte(`err = emitIdentity([]string{"dkim2d"}, false)`),
+		[]byte(`emitIdentity([]string{"dkim2-dsn-propagator", "dkim2-milter", "qualify"}, true)`),
 		[]byte(`"milter_connect_timeout=2s"`),
 		[]byte(`"milter_command_timeout=5s"`),
 		[]byte(`"milter_content_timeout=5s"`),
 		[]byte(`os.ReadFile("/proc/net/tcp6")`),
 		[]byte(`context.WithTimeout(context.Background(), 10*time.Second)`),
 		[]byte(`exec.CommandContext(`),
-		[]byte(`return "\nsigning:\n  tenant: tenant-a\n  domain_source: verified_embedded"`),
+		[]byte(`return "\nsigning:\n  tenant: " + r.tenant + "\n  domain_source: verified_embedded"`),
 	} {
 		if !bytes.Contains(runtime, required) {
 			t.Fatal("daemon runtime omitted chroot or privilege-drop evidence")
@@ -249,6 +252,7 @@ func TestPostfixQualificationPinsBuildInputsAndCleanup(t *testing.T) {
 	for _, required := range [][]byte{
 		[]byte("**\n"), []byte("!lib/**"), []byte("!cmd/dkim2d/**"),
 		[]byte("!cmd/dkim2-milter/**"),
+		[]byte("!cmd/dkim2-dsn-propagator/**"),
 		[]byte("!cmd/dkim2-exim/go.mod"),
 		[]byte("!cmd/dkim2-exim/go.sum"),
 		[]byte("!contrib/qualification/postfix-milter/cmd/qualify/main.go"),
@@ -261,6 +265,98 @@ func TestPostfixQualificationPinsBuildInputsAndCleanup(t *testing.T) {
 	if bytes.Contains(productIgnore, []byte("!contrib/")) {
 		t.Fatal("product image context admitted qualification inputs")
 	}
+}
+
+// TestPostfixQualificationBindsPropagationLane freezes the delivery-status
+// propagation lane: the adapter is part of the pinned image and its runtime
+// identity, the lane is selectable and opt-in, and the Postfix side keeps the
+// reserved return-path routing, the one-recipient LMTP transport, the
+// Milter-free re-injection listener, and a retry interval above the daemon's
+// propagation reservation.
+func TestPostfixQualificationBindsPropagationLane(t *testing.T) {
+	dockerfile := readQualificationFile(t, "Dockerfile", 1<<16)
+	for _, required := range [][]byte{
+		[]byte("COPY cmd/dkim2-dsn-propagator ./cmd/dkim2-dsn-propagator"),
+		[]byte("-o /out/dkim2-dsn-propagator ./cmd/dkim2-dsn-propagator"),
+		[]byte("COPY --from=build /out/dkim2-dsn-propagator /usr/local/bin/dkim2-dsn-propagator"),
+	} {
+		if !bytes.Contains(dockerfile, required) {
+			t.Fatal("qualification image omitted the propagation adapter")
+		}
+	}
+	run := readQualificationFile(t, "run.sh", 1<<16)
+	for _, required := range [][]byte{
+		[]byte("lane=core"),
+		[]byte("all|core|propagation) ;;"),
+		[]byte(`/usr/local/bin/qualify propagation`),
+		[]byte("lane: $lane,"),
+		[]byte(`(.executables | keys == ["dkim2-dsn-propagator", "dkim2-milter", "qualify"])`),
+		[]byte(`propagation_recipient_limit: 1`),
+		[]byte(`propagation_reinjection: "milter_free_loopback_listener"`),
+	} {
+		if !bytes.Contains(run, required) {
+			t.Fatal("qualification runner omitted the propagation lane binding")
+		}
+	}
+	runtime := readQualificationFile(t, filepath.Join("cmd", "qualify", "main.go"), 1<<20)
+	for _, required := range [][]byte{
+		[]byte(`propagationTransport = "dkim2-propagate"`),
+		[]byte(`propagationTransport + "_destination_recipient_limit=1"`),
+		[]byte(`"minimal_backoff_time=" + propagationBackoff.String()`),
+		[]byte(`":unix:" + propagatorSocket + "}"`),
+		[]byte(`"receive_override_options=no_milters"`),
+		[]byte(`"smtpd_milters="`),
+		[]byte(`dsn_propagate_capability_file: %[2]s/dsn-propagate-capability`),
+		[]byte(`pending_lease: %[4]s`),
+		[]byte(`"/usr/local/bin/dkim2-dsn-propagator",`),
+		[]byte(`err = runPropagationQualification()`),
+	} {
+		if !bytes.Contains(runtime, required) {
+			t.Fatal("qualification runtime omitted the propagation topology")
+		}
+	}
+	assertPropagationRetryExceedsLease(t, runtime)
+}
+
+// assertPropagationRetryExceedsLease proves the harness keeps the MTA's
+// minimum retry interval strictly above the daemon's propagation reservation,
+// which is the deployment rule the operator documentation states.
+func assertPropagationRetryExceedsLease(t *testing.T, runtime []byte) {
+	t.Helper()
+	lease, leaseOK := durationConstant(runtime, "propagationLease")
+	backoff, backoffOK := durationConstant(runtime, "propagationBackoff")
+	if !leaseOK || !backoffOK || lease <= 0 || backoff <= lease {
+		t.Fatalf("propagation retry interval did not exceed the lease: %s vs %s", backoff, lease)
+	}
+}
+
+// durationConstant reads one declared Go duration constant of the harness.
+func durationConstant(runtime []byte, name string) (time.Duration, bool) {
+	marker := []byte("const " + name + " = ")
+	index := bytes.Index(runtime, marker)
+	if index < 0 {
+		return 0, false
+	}
+	line := runtime[index+len(marker):]
+	if end := bytes.IndexByte(line, '\n'); end >= 0 {
+		line = line[:end]
+	}
+	fields := bytes.Fields(line)
+	if len(fields) != 3 || !bytes.Equal(fields[1], []byte("*")) {
+		return 0, false
+	}
+	count, err := strconv.Atoi(string(fields[0]))
+	if err != nil || count <= 0 {
+		return 0, false
+	}
+	unit, ok := map[string]time.Duration{
+		"time.Second": time.Second,
+		"time.Minute": time.Minute,
+	}[string(fields[2])]
+	if !ok {
+		return 0, false
+	}
+	return time.Duration(count) * unit, true
 }
 
 // TestPostfixQualificationHelperIsStandardGuardrail freezes the out-of-workspace helper test gate.

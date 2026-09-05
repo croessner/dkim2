@@ -16,13 +16,19 @@ is a reviewed behavior migration, not an automatic compatibility update.
 - Daemon HTTP shapes and bounds are authoritative only in
   `docs/specs/openapi/dkim2d.yaml`. The wire `api_version` remains `v1`;
   product prerelease versioning does not alter that field.
-- Generated server, client, Milter client, and Milter test-server artifacts
-  must remain byte-equal to output from the pinned generator.
+- Generated server, client, Milter client, Milter test-server, Exim client,
+  and delivery-status propagator client and test-server artifacts must remain
+  byte-equal to output from the pinned generator.
 - CLI JSON and JSON Lines remain bounded machine surfaces. Human help text is
   not a parallel wire model.
-- Declared daemon and Milter configuration paths remain in their existing
-  stability window. Environment expansion occurs before typed validation and
-  never expands map keys.
+- Declared daemon, Milter, and delivery-status propagator configuration paths
+  remain in their existing stability window. Environment expansion occurs
+  before typed validation and never expands map keys. The daemon adds the
+  stable paths `server.dsn_propagate_capability_file`,
+  `process.default_tenant`, and `dsn_propagation.pending_lease`; the
+  propagator module introduces the frozen configuration root
+  `dkim2-dsn-propagator-config-v1` documented in
+  [`cmd/dkim2-dsn-propagator/README.md`](../../cmd/dkim2-dsn-propagator/README.md).
 - Exim compatibility is `unqualified_draft06`. The exact five source-linked
   rows in the dated compatibility report are historical Draft-04 evidence and
   do not qualify Draft-06. There is no portable Exim report, universal
@@ -59,6 +65,24 @@ worktree implementation remains an unpublished closeout candidate; exact
 operation guidance and limitations are in the
 [native-domain runbook](../operator/native-domain-onboarding.md).
 
+Draft-06 delivery-status propagation adds two operations to the same
+contract, `POST /v1/dsn/propagate` and `POST /v1/dsn/propagate/commit`, behind
+one distinct security scheme carried in `X-DKIM2-DSN-Propagate-Capability`.
+They are additive: the shared `Disposition` enum is unchanged and
+`PropagationDisposition` is a distinct schema, because propagation adds
+`discard` and never uses `continue`. `ProcessRequest` gains the optional
+`context.tenant`, `ProcessResponse` gains the optional closed
+`delivery_status` projection, `MessageInput.fidelity` gains
+`lmtp_delivered_crlf`, and `PolicyReason` gains the ten closed
+`received_dsn_*` values. The generated Milter and Exim clients keep their
+existing operation sets, because both exclude the propagation operations;
+their shared `ErrorResponseCode` enum gains `propagation_commit_unresolved`,
+so their artifacts are regenerated and deployed with the rest of the
+digest-pinned set. The commit route answers
+`409` with the error code `propagation_commit_unresolved` for a token it
+cannot resolve, which is the caller's instruction to defer rather than to
+retry immediately.
+
 The `POST /v1/process` schema is the one canonical Draft-06 contract for both
 current-only and authenticated multi-instance results. Its closed policy enums
 contain only states produced by the current verifier and policy projection;
@@ -67,13 +91,13 @@ values. Draft-06 intentionally replaces the `DraftVersion` enum and adds the
 four closed verification reasons `duplicate_hash_algorithm`,
 `invalid_recipe_json`, `duplicate_selector`, and `too_many_signatures`.
 Signature-set result rows are positional and are not keyed or merged by
-algorithm. The daemon, Milter, Exim adapter, and every generated client are
-regenerated from the same OpenAPI source and must be deployed and rolled back
-as one digest-pinned set. The exact multi-instance response states are
+algorithm. The daemon, Milter, Exim adapter, delivery-status propagator, and every
+generated client are regenerated from the same OpenAPI source and must be
+deployed and rolled back as one digest-pinned set. The exact multi-instance response states are
 documented in the
 [Milter adapter contract](../specs/implementation/milter-adapter.md#canonical-multi-instance-policy-response).
 
-The compatibility window begins only if all six `v0.1.0-rc.1` module tags
+The compatibility window begins only if all seven `v0.1.0-rc.1` module tags
 are later created under separately authorized release work. From then through
 `v0.1.0`, breaking exported Go API, HTTP wire `v1`, configuration, CLI machine
 output, or report-schema changes require a documented Draft/RFC/security
