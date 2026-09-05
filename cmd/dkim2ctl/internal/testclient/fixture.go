@@ -25,6 +25,8 @@ const (
 	caseSign                      = "sign"
 	caseRevise                    = "revise"
 	caseDSNSign                   = "sign_dsn"
+	caseDSNPropagate              = "propagate_dsn"
+	caseDSNPropagateCommit        = "commit_dsn_propagation"
 	caseNegative                  = "negative"
 	mutationMissingCapability     = "missing_capability"
 	mutationDuplicateCapability   = "duplicate_capability"
@@ -60,14 +62,45 @@ type fixtureDocument struct {
 
 // fixtureCase owns one closed operation input and allowlisted expectation.
 type fixtureCase struct {
-	Case     string               `json:"case"`
-	Kind     string               `json:"kind"`
-	Process  *fixtureProcessInput `json:"process,omitempty"`
-	Sign     *fixtureSignInput    `json:"sign,omitempty"`
-	Revise   *fixtureReviseInput  `json:"revise,omitempty"`
-	DSNSign  *fixtureDSNSignInput `json:"sign_dsn,omitempty"`
-	Negative *negativeInput       `json:"negative,omitempty"`
-	Expect   fixtureExpectation   `json:"expect"`
+	Case    string               `json:"case"`
+	Kind    string               `json:"kind"`
+	Process *fixtureProcessInput `json:"process,omitempty"`
+	Sign    *fixtureSignInput    `json:"sign,omitempty"`
+	Revise  *fixtureReviseInput  `json:"revise,omitempty"`
+	DSNSign *fixtureDSNSignInput `json:"sign_dsn,omitempty"`
+	// Propagate holds the received-notification propagation inputs.
+	Propagate *fixturePropagateInput `json:"propagate_dsn,omitempty"`
+	// Commit holds the propagation-coordinate commit input.
+	Commit   *fixtureCommitInput `json:"commit_dsn_propagation,omitempty"`
+	Negative *negativeInput      `json:"negative,omitempty"`
+	Expect   fixtureExpectation  `json:"expect"`
+}
+
+// fixturePropagateInput holds the exact received delivery-status notification
+// and the observed envelope of the transaction that delivered it.
+type fixturePropagateInput struct {
+	MessageBase64   string   `json:"raw_rfc5322_base64"`
+	Fidelity        string   `json:"fidelity"`
+	OuterMailFrom   string   `json:"outer_mail_from"`
+	OuterRecipients []string `json:"outer_rcpt_to"`
+	OuterSMTPUTF8   bool     `json:"outer_smtputf8"`
+	Tenant          string   `json:"tenant"`
+	ReportingMTA    string   `json:"reporting_mta"`
+}
+
+// fixtureCommitInput holds one opaque coordinate token for the commit route.
+type fixtureCommitInput struct {
+	CommitToken string `json:"commit_token"`
+}
+
+// fixtureDeliveryStatus freezes the six closed received delivery-status members.
+type fixtureDeliveryStatus struct {
+	Structure        string `json:"structure"`
+	Embedded         string `json:"embedded"`
+	OuterAlignment   string `json:"outer_alignment"`
+	RecipientLinkage string `json:"recipient_linkage"`
+	LocalHop         string `json:"local_hop"`
+	Propagation      string `json:"propagation"`
 }
 
 // fixtureProcessInput holds generated-request-compatible scalar inputs.
@@ -77,6 +110,7 @@ type fixtureProcessInput struct {
 	MailFrom      string   `json:"mail_from"`
 	Recipients    []string `json:"rcpt_to"`
 	AuthservID    *string  `json:"authserv_id,omitempty"`
+	Tenant        *string  `json:"tenant,omitempty"`
 }
 
 // fixtureSignInput holds protected originator inputs before generated mapping.
@@ -129,6 +163,18 @@ type fixtureExpectation struct {
 	Operation           *string                  `json:"operation,omitempty"`
 	Result              *string                  `json:"result,omitempty"`
 	Actions             *[]fixtureExpectedAction `json:"actions,omitempty"`
+	// PropagationResult is the propagation-route operation result.
+	PropagationResult *string `json:"propagation_result,omitempty"`
+	// PropagationDisposition is the route-specific closed disposition.
+	PropagationDisposition *string `json:"propagation_disposition,omitempty"`
+	// PropagationFailure is the permanent reason no notification was produced.
+	PropagationFailure *string `json:"propagation_failure,omitempty"`
+	// PropagationDigest freezes the produced notification without its bytes.
+	PropagationDigest *string `json:"propagation_digest,omitempty"`
+	// PropagationState is the committed coordinate state.
+	PropagationState *string `json:"propagation_state,omitempty"`
+	// DeliveryStatus freezes the optional received delivery-status projection.
+	DeliveryStatus *fixtureDeliveryStatus `json:"delivery_status,omitempty"`
 }
 
 // fixtureExpectedAction freezes one exact ordered generated action.
@@ -152,6 +198,8 @@ type ExecutionPlan struct {
 	requiresSignCapability    bool
 	requiresReviseCapability  bool
 	requiresDSNSignCapability bool
+	// requiresDSNPropagateCapability records the propagation credential need.
+	requiresDSNPropagateCapability bool
 }
 
 // FixtureIdentifiers returns a defensive copy of deterministic fixture IDs.
@@ -225,6 +273,9 @@ func LoadExecutionPlan(paths []string) (ExecutionPlan, error) {
 			if testCase.Kind == caseDSNSign {
 				plan.requiresDSNSignCapability = true
 			}
+			if testCase.Kind == caseDSNPropagate || testCase.Kind == caseDSNPropagateCommit {
+				plan.requiresDSNPropagateCapability = true
+			}
 			if testCase.Kind == caseNegative {
 				operation := negativeOperation(*testCase.Negative)
 				if testCase.Negative.Mutation == mutationWrongRouteCapability ||
@@ -234,6 +285,8 @@ func LoadExecutionPlan(paths []string) (ExecutionPlan, error) {
 					plan.requiresSignCapability = true
 				} else if operation == OperationRevise {
 					plan.requiresReviseCapability = true
+				} else if operation == OperationDSNPropagate {
+					plan.requiresDSNPropagateCapability = true
 				}
 			}
 			plan.cases = append(plan.cases, plannedCase{fixture: document.Fixture, value: testCase})
@@ -386,51 +439,85 @@ func validateFixtureCase(testCase fixtureCase) (int, error) {
 	if testCase.Expect.HTTPStatus < 100 || testCase.Expect.HTTPStatus > 599 {
 		return 0, NewExitError(ExitFixture)
 	}
+	if size, handled, err := validateOperationCase(testCase); handled {
+		return size, err
+	}
 	switch testCase.Kind {
-	case caseHealth:
-		if !validStatusFixture(testCase, caseHealth) {
+	case caseHealth, caseReadiness:
+		if !validStatusFixture(testCase, testCase.Kind) {
 			return 0, NewExitError(ExitFixture)
 		}
-	case caseReadiness:
-		if !validStatusFixture(testCase, caseReadiness) {
+	case caseDSNPropagateCommit:
+		if testCase.Commit == nil || testCase.operationInputCount() != 1 ||
+			!validCommitTokenText(testCase.Commit.CommitToken) ||
+			!validCommitExpectation(testCase.Expect) {
 			return 0, NewExitError(ExitFixture)
 		}
-	case caseProcess:
-		if testCase.Process == nil || testCase.operationInputCount() != 1 {
-			return 0, NewExitError(ExitFixture)
-		}
-		return validateProcessInput(*testCase.Process, testCase.Expect)
-	case caseSign:
-		if testCase.Sign == nil || testCase.operationInputCount() != 1 {
-			return 0, NewExitError(ExitFixture)
-		}
-		return validateSignInput(*testCase.Sign, testCase.Expect)
-	case caseRevise:
-		if testCase.Revise == nil || testCase.operationInputCount() != 1 {
-			return 0, NewExitError(ExitFixture)
-		}
-		return validateReviseInput(*testCase.Revise, testCase.Expect)
-	case caseDSNSign:
-		if testCase.DSNSign == nil || testCase.operationInputCount() != 1 {
-			return 0, NewExitError(ExitFixture)
-		}
-		return validateDSNSignInput(*testCase.DSNSign, testCase.Expect)
 	case caseNegative:
-		if testCase.Negative == nil || testCase.operationInputCount() != 1 ||
-			!validNegativeMutation(testCase.Negative.Mutation) ||
-			!validNegativeOperation(*testCase.Negative) ||
-			testCase.Expect.ErrorCode == nil || expectationFieldCount(testCase.Expect) != 1 ||
-			!validNegativeExpectation(
-				testCase.Negative.Mutation,
-				testCase.Expect.HTTPStatus,
-				*testCase.Expect.ErrorCode,
-			) {
+		if !validNegativeCase(testCase) {
 			return 0, NewExitError(ExitFixture)
 		}
 	default:
 		return 0, NewExitError(ExitFixture)
 	}
 	return 0, nil
+}
+
+// validateOperationCase validates every kind that carries request bytes. The
+// second result reports whether this function owns the kind at all.
+func validateOperationCase(testCase fixtureCase) (int, bool, error) {
+	if testCase.operationInputCount() != 1 {
+		return 0, false, nil
+	}
+	switch testCase.Kind {
+	case caseProcess:
+		if testCase.Process == nil {
+			break
+		}
+		size, err := validateProcessInput(*testCase.Process, testCase.Expect)
+		return size, true, err
+	case caseSign:
+		if testCase.Sign == nil {
+			break
+		}
+		size, err := validateSignInput(*testCase.Sign, testCase.Expect)
+		return size, true, err
+	case caseRevise:
+		if testCase.Revise == nil {
+			break
+		}
+		size, err := validateReviseInput(*testCase.Revise, testCase.Expect)
+		return size, true, err
+	case caseDSNSign:
+		if testCase.DSNSign == nil {
+			break
+		}
+		size, err := validateDSNSignInput(*testCase.DSNSign, testCase.Expect)
+		return size, true, err
+	case caseDSNPropagate:
+		if testCase.Propagate == nil {
+			break
+		}
+		size, err := validatePropagateInput(*testCase.Propagate, testCase.Expect)
+		return size, true, err
+	default:
+		return 0, false, nil
+	}
+	return 0, true, NewExitError(ExitFixture)
+}
+
+// validNegativeCase checks one declared raw-contract mutation and its expectation.
+func validNegativeCase(testCase fixtureCase) bool {
+	return testCase.Negative != nil && testCase.operationInputCount() == 1 &&
+		validNegativeMutation(testCase.Negative.Mutation) &&
+		validNegativeOperation(*testCase.Negative) &&
+		testCase.Expect.ErrorCode != nil &&
+		expectationFieldCount(testCase.Expect) == 1 &&
+		validNegativeExpectation(
+			testCase.Negative.Mutation,
+			testCase.Expect.HTTPStatus,
+			*testCase.Expect.ErrorCode,
+		)
 }
 
 // validStatusFixture checks one unauthenticated generated status expectation.
@@ -456,7 +543,8 @@ func validStatusFixture(testCase fixtureCase, kind string) bool {
 func (c fixtureCase) operationInputCount() int {
 	count := 0
 	for _, present := range []bool{
-		c.Process != nil, c.Sign != nil, c.Revise != nil, c.DSNSign != nil, c.Negative != nil,
+		c.Process != nil, c.Sign != nil, c.Revise != nil, c.DSNSign != nil,
+		c.Propagate != nil, c.Commit != nil, c.Negative != nil,
 	} {
 		if present {
 			count++
@@ -500,12 +588,13 @@ func negativeOperation(input negativeInput) Operation {
 func validNegativeOperation(input negativeInput) bool {
 	operation := negativeOperation(input)
 	if operation != OperationProcess && operation != OperationSign &&
-		operation != OperationRevise {
+		operation != OperationRevise && operation != OperationDSNPropagate {
 		return false
 	}
 	return input.Mutation != mutationWrongRouteCapability ||
 		input.Operation != nil &&
-			(operation == OperationSign || operation == OperationRevise)
+			(operation == OperationSign || operation == OperationRevise ||
+				operation == OperationDSNPropagate)
 }
 
 // expectationFieldCount counts explicitly selected allowlisted assertions.
@@ -517,12 +606,18 @@ func expectationFieldCount(expectation fixtureExpectation) int {
 		expectation.AuthenticationState,
 		expectation.PolicyVerdict, expectation.ReplayClass,
 		expectation.Operation, expectation.Result,
+		expectation.PropagationResult, expectation.PropagationDisposition,
+		expectation.PropagationFailure, expectation.PropagationDigest,
+		expectation.PropagationState,
 	} {
 		if value != nil {
 			count++
 		}
 	}
 	if expectation.Actions != nil {
+		count++
+	}
+	if expectation.DeliveryStatus != nil {
 		count++
 	}
 	return count
@@ -539,11 +634,21 @@ func validateProcessInput(input fixtureProcessInput, expectation fixtureExpectat
 	if input.AuthservID != nil && !validDomain(*input.AuthservID) {
 		return 0, NewExitError(ExitFixture)
 	}
+	if input.Tenant != nil && !validTenant(*input.Tenant) {
+		return 0, NewExitError(ExitFixture)
+	}
+	expectedFields := 6
+	if expectation.DeliveryStatus != nil {
+		expectedFields++
+		if !validDeliveryStatusExpectation(*expectation.DeliveryStatus) {
+			return 0, NewExitError(ExitFixture)
+		}
+	}
 	if !utf8.ValidString(input.MailFrom) ||
 		expectation.Disposition == nil || expectation.VerificationState == nil || expectation.AuthenticationState == nil ||
 		expectation.PolicyVerdict == nil || expectation.ReplayClass == nil ||
 		expectation.Actions == nil ||
-		expectationFieldCount(expectation) != 6 ||
+		expectationFieldCount(expectation) != expectedFields ||
 		!validOptionalEnum(expectation.Disposition, "accept", "reject", "tempfail", "continue") ||
 		!validOptionalEnum(expectation.VerificationState, "PASS", "FAIL", "PERMERROR", "TEMPERROR") ||
 		!validOptionalEnum(expectation.AuthenticationState, "PASS", "FAIL", "PERMERROR", "TEMPERROR") ||
@@ -554,6 +659,91 @@ func validateProcessInput(input fixtureProcessInput, expectation fixtureExpectat
 		return 0, NewExitError(ExitFixture)
 	}
 	return decoded, nil
+}
+
+// validatePropagateInput checks the received notification, the observed
+// delivery envelope, and the complete propagation response expectation.
+func validatePropagateInput(
+	input fixturePropagateInput,
+	expectation fixtureExpectation,
+) (int, error) {
+	decoded, err := validateDSNMessageAndEnvelope(
+		input.MessageBase64, input.OuterMailFrom, input.OuterRecipients,
+	)
+	if err != nil || input.OuterMailFrom != "<>" || len(input.OuterRecipients) != 1 ||
+		!generated.PropagationMessageInputFidelity(input.Fidelity).Valid() ||
+		!validTenant(input.Tenant) || !validDomain(input.ReportingMTA) ||
+		!validPropagateExpectation(expectation) {
+		return 0, NewExitError(ExitFixture)
+	}
+	return decoded, nil
+}
+
+// validPropagateExpectation checks the route-specific closed vocabularies and
+// their coherence, so a fixture cannot declare an impossible daemon answer.
+func validPropagateExpectation(expectation fixtureExpectation) bool {
+	if expectation.HTTPStatus != http.StatusOK ||
+		expectation.PropagationResult == nil || expectation.PropagationDisposition == nil ||
+		!validOptionalEnum(expectation.PropagationResult,
+			"pass", "fail", "permerror", "temperror") ||
+		!validOptionalEnum(expectation.PropagationDisposition,
+			"accept", "discard", "reject", "tempfail") ||
+		!validPropagationOutcome(
+			generated.DSNPropagateResponseResult(*expectation.PropagationResult),
+			generated.PropagationDisposition(*expectation.PropagationDisposition),
+		) {
+		return false
+	}
+	expected := 2
+	if expectation.PropagationFailure != nil {
+		expected++
+		if *expectation.PropagationResult != "permerror" ||
+			!validOptionalEnum(expectation.PropagationFailure,
+				"not_reconstructable", "unprovisioned_domain") {
+			return false
+		}
+	} else if *expectation.PropagationResult == "permerror" {
+		return false
+	}
+	if expectation.PropagationDigest != nil {
+		expected++
+		if *expectation.PropagationDisposition != "accept" ||
+			!validNotificationDigest(*expectation.PropagationDigest) {
+			return false
+		}
+	}
+	if expectation.DeliveryStatus != nil {
+		expected++
+		if !validDeliveryStatusExpectation(*expectation.DeliveryStatus) {
+			return false
+		}
+	}
+	return expectationFieldCount(expectation) == expected
+}
+
+// validCommitExpectation checks the committed state or the declared conflict.
+func validCommitExpectation(expectation fixtureExpectation) bool {
+	if expectationFieldCount(expectation) != 1 {
+		return false
+	}
+	if expectation.HTTPStatus == http.StatusOK {
+		return expectation.PropagationState != nil &&
+			*expectation.PropagationState == string(generated.PropagationStateCommitted)
+	}
+	return expectation.HTTPStatus == http.StatusConflict &&
+		expectation.ErrorCode != nil &&
+		*expectation.ErrorCode == string(generated.ErrorResponseCodePropagationCommitUnresolved)
+}
+
+// validDeliveryStatusExpectation checks every declared projection member
+// against its own closed vocabulary before any comparison is attempted.
+func validDeliveryStatusExpectation(expectation fixtureDeliveryStatus) bool {
+	return generated.DeliveryStatusProjectionStructure(expectation.Structure).Valid() &&
+		generated.DeliveryStatusProjectionEmbedded(expectation.Embedded).Valid() &&
+		generated.DeliveryStatusProjectionOuterAlignment(expectation.OuterAlignment).Valid() &&
+		generated.DeliveryStatusProjectionRecipientLinkage(expectation.RecipientLinkage).Valid() &&
+		generated.DeliveryStatusProjectionLocalHop(expectation.LocalHop).Valid() &&
+		generated.DeliveryStatusProjectionPropagation(expectation.Propagation).Valid()
 }
 
 // validateSignInput checks one originator request and complete response expectation.
@@ -801,6 +991,9 @@ func generatedProcessRequest(input fixtureProcessInput) (generated.ProcessReques
 	if input.AuthservID != nil {
 		request.Reporting = &generated.ReportingContext{AuthservId: *input.AuthservID}
 	}
+	if input.Tenant != nil {
+		request.Context = &generated.ProcessContext{Tenant: *input.Tenant}
+	}
 	return request, nil
 }
 
@@ -874,6 +1067,56 @@ func generatedDSNSignRequest(input fixtureDSNSignInput) (generated.DSNSignReques
 		Context: generated.DeliveryStatusContext{
 			Tenant: input.Tenant,
 		},
+	}, nil
+}
+
+// generatedPropagateRequest maps the propagation fixture at the client boundary.
+func generatedPropagateRequest(
+	input fixturePropagateInput,
+) (generated.DSNPropagateRequest, error) {
+	messageValue, err := wire.NewProtectedString(input.MessageBase64)
+	if err != nil {
+		return generated.DSNPropagateRequest{}, NewExitError(ExitFixture)
+	}
+	mailFrom, err := wire.NewProtectedString(input.OuterMailFrom)
+	if err != nil {
+		return generated.DSNPropagateRequest{}, NewExitError(ExitFixture)
+	}
+	recipients := make([]wire.ProtectedString, len(input.OuterRecipients))
+	for index, recipient := range input.OuterRecipients {
+		recipients[index], err = wire.NewProtectedString(recipient)
+		if err != nil {
+			return generated.DSNPropagateRequest{}, NewExitError(ExitFixture)
+		}
+	}
+	return generated.DSNPropagateRequest{
+		ApiVersion: generated.V1,
+		Draft:      generated.DraftIetfDkimDkim2Spec06,
+		Message: generated.PropagationMessageInput{
+			Fidelity:         generated.PropagationMessageInputFidelity(input.Fidelity),
+			RawRfc5322Base64: messageValue,
+		},
+		OuterSmtp: generated.PropagationSMTPInput{
+			MailFrom: mailFrom, RcptTo: recipients, Smtputf8: input.OuterSMTPUTF8,
+		},
+		Context: generated.PropagationContext{
+			Tenant: input.Tenant, ReportingMta: input.ReportingMTA,
+		},
+	}, nil
+}
+
+// generatedCommitRequest maps one opaque coordinate token at the boundary.
+func generatedCommitRequest(
+	input fixtureCommitInput,
+) (generated.DSNPropagateCommitRequest, error) {
+	token, err := wire.NewProtectedString(input.CommitToken)
+	if err != nil {
+		return generated.DSNPropagateCommitRequest{}, NewExitError(ExitFixture)
+	}
+	return generated.DSNPropagateCommitRequest{
+		ApiVersion:  generated.V1,
+		Draft:       generated.DraftIetfDkimDkim2Spec06,
+		CommitToken: token,
 	}, nil
 }
 

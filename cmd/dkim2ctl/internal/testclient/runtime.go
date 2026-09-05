@@ -33,6 +33,7 @@ const (
 	memberOperation     = "operation"
 	memberResult        = "result"
 	memberStatus        = "status"
+	memberState         = "state"
 	headerCacheControl  = "Cache-Control"
 	headerConnection    = "Connection"
 	headerContentLength = "Content-Length"
@@ -55,6 +56,10 @@ const (
 	OperationRevise Operation = "revise"
 	// OperationDSNSign identifies the dedicated delivery-status signing call.
 	OperationDSNSign Operation = "sign_dsn"
+	// OperationDSNPropagate identifies the delivery-status propagation call.
+	OperationDSNPropagate Operation = "propagate_dsn"
+	// OperationDSNPropagateCommit identifies the propagation-coordinate commit call.
+	OperationDSNPropagateCommit Operation = "commit_dsn_propagation"
 )
 
 // ResponseFact is the bounded typed result of one generated operation.
@@ -67,6 +72,10 @@ type ResponseFact struct {
 	Sign      *generated.OperationResponse
 	Revise    *generated.OperationResponse
 	DSNSign   *generated.OperationResponse
+	// DSNPropagate holds the route-specific propagation response.
+	DSNPropagate *generated.DSNPropagateResponse
+	// DSNCommit holds the propagation-coordinate commit response.
+	DSNCommit *generated.DSNPropagateCommitResponse
 	Error     *generated.ErrorResponse
 }
 
@@ -245,6 +254,40 @@ func (r *Runtime) CallDSNSign(
 	return classifyResponse(OperationDSNSign, response)
 }
 
+// CallDSNPropagate executes and strictly classifies delivery-status propagation.
+func (r *Runtime) CallDSNPropagate(
+	ctx context.Context,
+	request generated.DSNPropagateRequest,
+	editor generated.RequestEditorFn,
+) (ResponseFact, error) {
+	if r == nil || r.generated == nil || editor == nil {
+		return ResponseFact{}, NewExitError(ExitInternal)
+	}
+	response, err := r.generated.PropagateDeliveryStatus(ctx, request, editor)
+	if err != nil {
+		closeResponseOnError(response)
+		return ResponseFact{}, classifyTransportError(err)
+	}
+	return classifyResponse(OperationDSNPropagate, response)
+}
+
+// CallDSNPropagateCommit executes and strictly classifies the coordinate commit.
+func (r *Runtime) CallDSNPropagateCommit(
+	ctx context.Context,
+	request generated.DSNPropagateCommitRequest,
+	editor generated.RequestEditorFn,
+) (ResponseFact, error) {
+	if r == nil || r.generated == nil || editor == nil {
+		return ResponseFact{}, NewExitError(ExitInternal)
+	}
+	response, err := r.generated.CommitDeliveryStatusPropagation(ctx, request, editor)
+	if err != nil {
+		closeResponseOnError(response)
+		return ResponseFact{}, classifyTransportError(err)
+	}
+	return classifyResponse(OperationDSNPropagateCommit, response)
+}
+
 // authorityRoundTripper prevents generated requests from drifting off authority.
 type authorityRoundTripper struct {
 	authority string
@@ -261,7 +304,8 @@ func (t *authorityRoundTripper) RoundTrip(request *http.Request) (*http.Response
 	path := request.URL.EscapedPath()
 	valid := request.Method == http.MethodGet &&
 		(path == healthPath || path == readinessPath) && request.URL.RawQuery == ""
-	valid = valid || (path == processPath || path == signPath || path == revisePath || path == dsnSignPath) &&
+	valid = valid || (path == processPath || path == signPath || path == revisePath ||
+		path == dsnSignPath || path == dsnPropagatePath || path == dsnCommitPath) &&
 		(request.Method == http.MethodPost && (request.URL.RawQuery == "" ||
 			request.URL.RawQuery == "unexpected=1") ||
 			request.Method == http.MethodPut && request.URL.RawQuery == "")
@@ -323,37 +367,14 @@ func classifyResponse(operation Operation, response *http.Response) (ResponseFac
 	if response.StatusCode == http.StatusNoContent {
 		return fact, nil
 	}
-	switch operation {
-	case OperationHealth:
-		if response.StatusCode == http.StatusOK {
-			var value generated.HealthResponse
-			if strictResponseJSON(body, &value) != nil || !validHealth(value) {
-				return ResponseFact{}, NewExitError(ExitContract)
-			}
-			fact.Health = &value
-			return fact, nil
-		}
-	case OperationReadiness:
-		if response.StatusCode == http.StatusOK {
-			var value generated.ReadinessResponse
-			if strictResponseJSON(body, &value) != nil || !validReadiness(value) {
-				return ResponseFact{}, NewExitError(ExitContract)
-			}
-			fact.Readiness = &value
-			return fact, nil
-		}
-	case OperationProcess:
-		if response.StatusCode == http.StatusOK {
-			var value generated.ProcessResponse
-			if strictResponseJSON(body, &value) != nil || !validProcess(value) {
-				return ResponseFact{}, NewExitError(ExitContract)
-			}
-			fact.Process = &value
-			return fact, nil
-		}
-	case OperationSign, OperationRevise, OperationDSNSign:
+	if operation == OperationSign || operation == OperationRevise ||
+		operation == OperationDSNSign {
 		return classifyOperationResponse(operation, response.StatusCode, body, fact)
-	default:
+	}
+	if response.StatusCode == http.StatusOK {
+		return classifySuccessResponse(operation, body, fact)
+	}
+	if !validClassifiedOperation(operation) {
 		return ResponseFact{}, NewExitError(ExitInternal)
 	}
 	if !allowedErrorStatus(operation, response.StatusCode) {
@@ -368,10 +389,67 @@ func classifyResponse(operation Operation, response *http.Response) (ResponseFac
 	return fact, nil
 }
 
+// classifySuccessResponse decodes one successful representation into the exact
+// typed member of the operation that produced it.
+func classifySuccessResponse(
+	operation Operation,
+	body []byte,
+	fact ResponseFact,
+) (ResponseFact, error) {
+	switch operation {
+	case OperationHealth:
+		var value generated.HealthResponse
+		if strictResponseJSON(body, &value) != nil || !validHealth(value) {
+			return ResponseFact{}, NewExitError(ExitContract)
+		}
+		fact.Health = &value
+	case OperationReadiness:
+		var value generated.ReadinessResponse
+		if strictResponseJSON(body, &value) != nil || !validReadiness(value) {
+			return ResponseFact{}, NewExitError(ExitContract)
+		}
+		fact.Readiness = &value
+	case OperationProcess:
+		var value generated.ProcessResponse
+		if strictResponseJSON(body, &value) != nil || !validProcess(value) {
+			return ResponseFact{}, NewExitError(ExitContract)
+		}
+		fact.Process = &value
+	case OperationDSNPropagate:
+		var value generated.DSNPropagateResponse
+		if strictResponseJSON(body, &value) != nil || !validDSNPropagate(value) {
+			return ResponseFact{}, NewExitError(ExitContract)
+		}
+		fact.DSNPropagate = &value
+	case OperationDSNPropagateCommit:
+		var value generated.DSNPropagateCommitResponse
+		if strictResponseJSON(body, &value) != nil || !validDSNPropagateCommit(value) {
+			return ResponseFact{}, NewExitError(ExitContract)
+		}
+		fact.DSNCommit = &value
+	default:
+		return ResponseFact{}, NewExitError(ExitInternal)
+	}
+	return fact, nil
+}
+
+// validClassifiedOperation reports whether one operation has a declared
+// non-successful status map, so an unknown operation still fails closed.
+func validClassifiedOperation(operation Operation) bool {
+	switch operation {
+	case OperationHealth, OperationReadiness, OperationProcess,
+		OperationDSNPropagate, OperationDSNPropagateCommit:
+		return true
+	default:
+		return false
+	}
+}
+
 // responseBodyLimit selects the closed response size bound for one operation.
 func responseBodyLimit(operation Operation) int64 {
 	switch operation {
-	case OperationProcess, OperationSign, OperationRevise, OperationDSNSign:
+	case OperationProcess, OperationSign, OperationRevise, OperationDSNSign,
+		OperationDSNPropagate, OperationDSNPropagateCommit:
 		return processBodyLimit
 	default:
 		return int64(statusBodyLimit)
@@ -632,11 +710,22 @@ func hasRequiredResponseMembers(data []byte, destination any) bool {
 			"authentication", "policy", "replay", "verification",
 		}
 		optional["verifier_projection"] = true
+		optional["delivery_status"] = true
 	case *generated.OperationResponse:
 		required = []string{
 			memberActions, memberAPIVersion, memberDisposition, memberDraft,
 			memberOperation, memberResult,
 		}
+	case *generated.DSNPropagateResponse:
+		required = []string{
+			memberAPIVersion, memberDisposition, memberDraft, memberOperation,
+			"replay", memberResult,
+		}
+		optional["delivery_status"] = true
+		optional["propagation"] = true
+		optional["propagation_failure"] = true
+	case *generated.DSNPropagateCommitResponse:
+		required = []string{memberAPIVersion, memberDraft, memberState}
 	case *generated.ErrorResponse:
 		required = []string{memberAPIVersion, memberCategory, memberCode, memberDraft}
 	default:
@@ -682,6 +771,7 @@ func validProcess(value generated.ProcessResponse) bool {
 		!validVerificationProjection(value.Verification) ||
 		!validVerifierProjection(value.VerifierProjection, value.Verification) ||
 		!validPolicyProjection(value.Policy) ||
+		!validDeliveryStatusProjection(value.DeliveryStatus) ||
 		!validProcessActions(value) {
 		return false
 	}
@@ -993,6 +1083,9 @@ func coherentErrorStatus(status int, value generated.ErrorResponse) bool {
 				code == generated.ErrorResponseCodeInvalidContract ||
 				code == generated.ErrorResponseCodeUnsupportedVersion ||
 				code == generated.ErrorResponseCodeUnsupportedDraft)
+	case http.StatusConflict:
+		return category == generated.Request &&
+			code == generated.ErrorResponseCodePropagationCommitUnresolved
 	case http.StatusForbidden:
 		return category == generated.Request && code == generated.ErrorResponseCodeForbidden
 	case http.StatusPreconditionFailed:
@@ -1026,9 +1119,14 @@ func allowedErrorStatus(operation Operation, status int) bool {
 		return status == 400 || status == 412 || status == 417 || status == 500
 	case OperationReadiness:
 		return status == 400 || status == 412 || status == 417 || status == 500 || status == 503
-	case OperationProcess, OperationSign, OperationRevise, OperationDSNSign:
+	case OperationProcess, OperationSign, OperationRevise, OperationDSNSign,
+		OperationDSNPropagate:
 		return status == 400 || status == 403 || status == 408 || status == 413 ||
 			status == 415 || status == 417 || status == 500 || status == 503
+	case OperationDSNPropagateCommit:
+		return status == 400 || status == 403 || status == 408 || status == 409 ||
+			status == 413 || status == 415 || status == 417 || status == 500 ||
+			status == 503
 	default:
 		return false
 	}

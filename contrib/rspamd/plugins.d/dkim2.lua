@@ -26,7 +26,8 @@ local FINALIZER_SYMBOL = 'DKIM2_RETRY_FINALIZE'
 local allowed_top = {
   enabled = true, endpoint = true, transport = true, server_name = true,
   capability_file = true, timeout = true, max_response_bytes = true,
-  failure_mode = true, authserv_id = true, retry_cache = true, nauthilus = true,
+  failure_mode = true, authserv_id = true, tenant = true, retry_cache = true,
+  nauthilus = true,
 }
 local allowed_retry = {
   secret_file = true, authority_generation = true, ttl_ms = true, lease_ms = true, redis = true,
@@ -131,6 +132,7 @@ local verifier_options = options and {
   server_name = options.server_name, capability_file = options.capability_file,
   timeout = options.timeout, max_response_bytes = options.max_response_bytes,
   failure_mode = options.failure_mode, authserv_id = options.authserv_id,
+  tenant = options.tenant,
 } or nil
 if not closed_top_settings(options) or type(options.retry_cache) ~= 'table' or
     type(options.nauthilus) ~= 'table' or not closed_keys(options.retry_cache, allowed_retry) or

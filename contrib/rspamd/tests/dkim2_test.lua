@@ -185,6 +185,7 @@ rspamd_config = {
       max_response_bytes = 262144,
       failure_mode = 'tempfail',
       authserv_id = 'mx.example.test',
+      tenant = 'tenant-a',
     }
   end,
   register_symbol = function(_, definition)
@@ -250,6 +251,7 @@ callback(bare_cr)
 assert(bare_cr.pre_result.action == 'soft reject')
 assert(contains(bare_cr.symbols, 'DKIM2_SERVICE_ERROR'))
 assert(last_request.reporting.authserv_id == 'mx.example.test')
+assert(last_request.context.tenant == 'tenant-a')
 assert(accepted.pre_result == nil)
 assert(contains(accepted.symbols, 'DKIM2_PASS'))
 assert(contains(accepted.symbols, 'DKIM2_REPLAY_FIRST_SEEN'))
@@ -363,5 +365,93 @@ local malformed = new_task({ ['Message-Instance'] = true })
 callback(malformed)
 assert(malformed.pre_result.action == 'soft reject')
 assert(contains(malformed.symbols, 'DKIM2_SERVICE_ERROR'))
+
+
+local function delivery_status(overrides)
+  local projection = {
+    structure = 'valid', embedded = 'verified', outer_alignment = 'aligned',
+    recipient_linkage = 'linked', local_hop = 'local', propagation = 'eligible',
+  }
+  for key, value in pairs(overrides or {}) do
+    projection[key] = value
+  end
+  return projection
+end
+
+pending_response = response('PASS', 'accept', 'first_seen', {
+  {
+    type = 'add_header',
+    name = 'Authentication-Results',
+    value = 'mx.example.test; dkim2=pass',
+  },
+})
+pending_response.delivery_status = delivery_status()
+local received_dsn = new_task({ ['DKIM2-Signature'] = true })
+callback(received_dsn)
+assert(received_dsn.pre_result == nil, 'the projection must not change the gate result')
+assert(contains(received_dsn.symbols, 'DKIM2_PASS'))
+assert(contains(received_dsn.symbols, 'DKIM2_DSN_STRUCTURE_VALID'))
+assert(contains(received_dsn.symbols, 'DKIM2_DSN_EMBEDDED_VERIFIED'))
+assert(contains(received_dsn.symbols, 'DKIM2_DSN_OUTER_ALIGNMENT_ALIGNED'))
+assert(contains(received_dsn.symbols, 'DKIM2_DSN_RECIPIENT_LINKAGE_LINKED'))
+assert(contains(received_dsn.symbols, 'DKIM2_DSN_LOCAL_HOP_LOCAL'))
+assert(contains(received_dsn.symbols, 'DKIM2_DSN_PROPAGATION_ELIGIBLE'))
+
+pending_response = response('PASS', 'accept', 'first_seen', {
+  {
+    type = 'add_header',
+    name = 'Authentication-Results',
+    value = 'mx.example.test; dkim2=pass',
+  },
+})
+pending_response.delivery_status = delivery_status({
+  local_hop = 'not_evaluated', propagation = 'not_evaluated',
+})
+local untenanted_dsn = new_task({ ['DKIM2-Signature'] = true })
+callback(untenanted_dsn)
+assert(untenanted_dsn.pre_result == nil)
+assert(contains(untenanted_dsn.symbols, 'DKIM2_DSN_LOCAL_HOP_NOT_EVALUATED'))
+assert(contains(untenanted_dsn.symbols, 'DKIM2_DSN_PROPAGATION_NOT_EVALUATED'))
+
+pending_response = response('PASS', 'accept', 'first_seen', {
+  {
+    type = 'add_header',
+    name = 'Authentication-Results',
+    value = 'mx.example.test; dkim2=pass',
+  },
+})
+pending_response.delivery_status = delivery_status({ propagation = 'invented' })
+local unknown_projection = new_task({ ['DKIM2-Signature'] = true })
+callback(unknown_projection)
+assert(unknown_projection.pre_result.action == 'soft reject',
+  'an unknown projection value must fail closed')
+assert(contains(unknown_projection.symbols, 'DKIM2_SERVICE_ERROR'))
+
+pending_response = response('PASS', 'accept', 'first_seen', {
+  {
+    type = 'add_header',
+    name = 'Authentication-Results',
+    value = 'mx.example.test; dkim2=pass',
+  },
+})
+pending_response.delivery_status = delivery_status()
+pending_response.delivery_status.local_hop = nil
+local partial_projection = new_task({ ['DKIM2-Signature'] = true })
+callback(partial_projection)
+assert(partial_projection.pre_result.action == 'soft reject',
+  'a partial projection must fail closed')
+
+for _, symbol in pairs(verifier.symbols) do
+  assert(symbol:match('^DKIM2_[A-Z0-9_]+$'), 'every symbol stays a closed identifier')
+end
+
+projected.verifier_projection.hops[1].affected_headers = {}
+projected.delivery_status = delivery_status({ propagation = 'not_failure' })
+local projected_attributes = assert(verifier.policy_attributes(projected))
+assert(projected_attributes['dkim2.received_dsn_propagation'].string == 'not_failure')
+projected.delivery_status = nil
+local plain_attributes = assert(verifier.policy_attributes(projected))
+assert(plain_attributes['dkim2.received_dsn_propagation'] == nil,
+  'a message that is not a received notification carries no propagation class')
 
 print('dkim2 Rspamd Lua contract tests: PASS')

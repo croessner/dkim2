@@ -42,6 +42,13 @@ nauthilus {
   recipient_classes = ["local"];
 }
 
+# Optional. Administrative tenant for received delivery-status locality. It is
+# sent as the request context tenant and is an authority key only, never an
+# identity claim. Without it the daemon falls back to its own configured
+# default tenant, and the received delivery-status projection reports
+# local_hop = not_evaluated and propagation = not_evaluated.
+# tenant = "tenant-a";
+
 # Optional. When set, dkim2d owns the exact Authentication-Results value.
 # Existing Authentication-Results fields are removed before that value is
 # inserted so forged local authority cannot survive the trust boundary.

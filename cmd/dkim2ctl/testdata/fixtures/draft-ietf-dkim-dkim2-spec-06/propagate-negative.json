@@ -1,0 +1,43 @@
+{
+  "schema": "dkim2ctl.fixture.v1",
+  "draft": "draft-ietf-dkim-dkim2-spec-06",
+  "fixture": "dsn-propagate-negative",
+  "cases": [
+    {
+      "case": "propagate-missing-capability",
+      "kind": "negative",
+      "negative": {
+        "operation": "propagate_dsn",
+        "mutation": "missing_capability"
+      },
+      "expect": {
+        "http_status": 403,
+        "error_code": "forbidden"
+      }
+    },
+    {
+      "case": "propagate-unknown-member",
+      "kind": "negative",
+      "negative": {
+        "operation": "propagate_dsn",
+        "mutation": "unknown_json_member"
+      },
+      "expect": {
+        "http_status": 400,
+        "error_code": "invalid_contract"
+      }
+    },
+    {
+      "case": "process-credential-on-propagate-route",
+      "kind": "negative",
+      "negative": {
+        "operation": "propagate_dsn",
+        "mutation": "wrong_route_capability"
+      },
+      "expect": {
+        "http_status": 403,
+        "error_code": "forbidden"
+      }
+    }
+  ]
+}

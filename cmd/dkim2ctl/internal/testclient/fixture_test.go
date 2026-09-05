@@ -151,7 +151,9 @@ func TestStableOutputOrderAndNullPolicy(t *testing.T) {
 	}); err != nil {
 		t.Fatal("record write failed")
 	}
-	const expected = `{"schema":"dkim2ctl.result.v1","draft":"draft-ietf-dkim-dkim2-spec-06","fixture":null,"case":null,"operation":null,"outcome":"match","http_status":null,"error_class":null,"duration_bucket":null,"disposition":null,"verification_state":null,"authentication_state":null,"policy_verdict":null,"replay_class":null}` + "\n"
+	const expected = `{"schema":"dkim2ctl.result.v1","draft":"draft-ietf-dkim-dkim2-spec-06","fixture":null,"case":null,"operation":null,"outcome":"match","http_status":null,"error_class":null,"duration_bucket":null,"disposition":null,"verification_state":null,"authentication_state":null,"policy_verdict":null,"replay_class":null,"propagation_result":null,` +
+		`"propagation_disposition":null,"propagation_failure":null,` +
+		`"propagation_state":null,"propagation_digest":null,"delivery_status":null}` + "\n"
 	if output.String() != expected {
 		t.Fatal("stable JSONL shape changed")
 	}

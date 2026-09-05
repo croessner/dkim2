@@ -272,6 +272,26 @@ composites {
 Keep such composites observational. Terminal reject and temporary-failure
 outcomes are already applied directly from the authenticated daemon response.
 
+## Received delivery-status symbols
+
+When the daemon returns its optional received delivery-status projection, the
+module publishes one zero-score `DKIM2_DSN_*` symbol per projection member.
+The symbols are purely observational: they never change a disposition, an
+`Authentication-Results` value, or any other DKIM2 result, and the projection
+never becomes an `Authentication-Results` property. An unknown or incomplete
+projection is contract drift and fails the whole response closed, which surfaces
+as `DKIM2_SERVICE_ERROR` under the configured failure mode.
+
+Locality is tenant-keyed. Set the optional `tenant` value in
+`local.d/dkim2.conf` to name the administrative tenant whose signing profiles
+decide whether a previous hop is local. Without it the daemon falls back to its
+own default tenant, and `DKIM2_DSN_LOCAL_HOP_NOT_EVALUATED` plus
+`DKIM2_DSN_PROPAGATION_NOT_EVALUATED` are the expected steady state rather than
+an error. Two tenants sharing one daemon are isolated by this key: a domain
+that is local for one tenant is `not_local` for the other. The tenant value is
+an authority key only, never an identity claim, and never reaches a symbol
+option, a metric label, or a log line.
+
 ## Normal operation
 
 Monitor at least these conditions:
@@ -281,7 +301,8 @@ Monitor at least these conditions:
 - daemon readiness, latency, and timeout rate;
 - unexpected changes in applicable versus non-applicable volume;
 - capability generation mismatch immediately after rotation;
-- distribution of finite policy and compliance symbols.
+- distribution of finite policy, compliance, and received delivery-status
+  symbols.
 - retry-cache miss, provisional-store failure, busy claim, hit, arm, consume,
   stale finalizer, and deadline expiry counts;
 - generic Nauthilus Policy latency, transport failures, and the finite permit,

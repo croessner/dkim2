@@ -20,6 +20,8 @@ type operationCapabilities struct {
 	sign    *Capability
 	revise  *Capability
 	dsnSign *Capability
+	// dsnPropagate serves both propagation routes under one security scheme.
+	dsnPropagate *Capability
 }
 
 // Close releases every loaded operation capability.
@@ -28,6 +30,7 @@ func (c operationCapabilities) Close() {
 	_ = c.sign.Close()
 	_ = c.revise.Close()
 	_ = c.dsnSign.Close()
+	_ = c.dsnPropagate.Close()
 }
 
 // NewApplication constructs one command-scoped test client application.
@@ -59,12 +62,13 @@ func (a *Application) Run(options Options, paths []string) error {
 	if err != nil {
 		return err
 	}
-	if err := options.validateRequirements(
-		plan.requiresCapability,
-		plan.requiresSignCapability,
-		plan.requiresReviseCapability,
-		plan.requiresDSNSignCapability,
-	); err != nil {
+	if err := options.validateRequirements(capabilityRequirements{
+		process:      plan.requiresCapability,
+		sign:         plan.requiresSignCapability,
+		revise:       plan.requiresReviseCapability,
+		dsnSign:      plan.requiresDSNSignCapability,
+		dsnPropagate: plan.requiresDSNPropagateCapability,
+	}); err != nil {
 		return err
 	}
 	var capabilities operationCapabilities
@@ -103,9 +107,19 @@ func (a *Application) Run(options Options, paths []string) error {
 			return err
 		}
 	}
+	if plan.requiresDSNPropagateCapability {
+		capabilities.dsnPropagate, err = LoadCapabilityForOperation(
+			options.DSNPropagateCapabilityFile, OperationDSNPropagate,
+		)
+		if err != nil {
+			capabilities.Close()
+			return err
+		}
+	}
 	defer capabilities.Close()
 	if !capabilitiesAreDistinct(
-		capabilities.process, capabilities.sign, capabilities.revise, capabilities.dsnSign,
+		capabilities.process, capabilities.sign, capabilities.revise,
+		capabilities.dsnSign, capabilities.dsnPropagate,
 	) {
 		return NewExitError(ExitCapability)
 	}
@@ -173,6 +187,22 @@ func (a *Application) executePlannedCase(
 		if err == nil {
 			fact, err = runtime.CallDSNSign(ctx, request, capabilities.dsnSign.EditRequest)
 		}
+	case caseDSNPropagate:
+		var request generated.DSNPropagateRequest
+		request, err = generatedPropagateRequest(*testCase.Propagate)
+		if err == nil {
+			fact, err = runtime.CallDSNPropagate(
+				ctx, request, capabilities.dsnPropagate.EditRequest,
+			)
+		}
+	case caseDSNPropagateCommit:
+		var request generated.DSNPropagateCommitRequest
+		request, err = generatedCommitRequest(*testCase.Commit)
+		if err == nil {
+			fact, err = runtime.CallDSNPropagateCommit(
+				ctx, request, capabilities.dsnPropagate.EditRequest,
+			)
+		}
 	case caseNegative:
 		operation := negativeOperation(*testCase.Negative)
 		capability := capabilities.process
@@ -182,6 +212,8 @@ func (a *Application) executePlannedCase(
 				capability = capabilities.sign
 			case OperationRevise:
 				capability = capabilities.revise
+			case OperationDSNPropagate:
+				capability = capabilities.dsnPropagate
 			}
 		}
 		fact, err = runtime.CallNegativeOperation(
@@ -233,6 +265,7 @@ func resultForCase(planned plannedCase, fact ResponseFact, class ExitClass) Resu
 		record.AuthenticationState = &authentication
 		record.PolicyVerdict = &policy
 		record.ReplayClass = &replay
+		record.DeliveryStatus = projectDeliveryStatus(fact.Process.DeliveryStatus)
 	}
 	if fact.Sign != nil {
 		disposition := string(fact.Sign.Disposition)
@@ -246,7 +279,54 @@ func resultForCase(planned plannedCase, fact ResponseFact, class ExitClass) Resu
 		disposition := string(fact.DSNSign.Disposition)
 		record.Disposition = &disposition
 	}
+	projectPropagation(&record, fact)
 	return record
+}
+
+// projectPropagation records the closed propagation and received delivery-status
+// facts. Notification bytes are reduced to a digest, and the opaque commit token
+// never enters the record.
+func projectPropagation(record *ResultRecord, fact ResponseFact) {
+	if fact.DSNCommit != nil {
+		state := string(fact.DSNCommit.State)
+		record.PropagationState = &state
+	}
+	if fact.DSNPropagate == nil {
+		return
+	}
+	result := string(fact.DSNPropagate.Result)
+	disposition := string(fact.DSNPropagate.Disposition)
+	record.PropagationResult = &result
+	record.PropagationDisposition = &disposition
+	if fact.DSNPropagate.PropagationFailure != nil {
+		failure := string(*fact.DSNPropagate.PropagationFailure)
+		record.PropagationFailure = &failure
+	}
+	if fact.DSNPropagate.Propagation != nil {
+		if digest, ok := notificationDigest(
+			fact.DSNPropagate.Propagation.RawRfc5322Base64,
+		); ok {
+			record.PropagationDigest = &digest
+		}
+	}
+	record.DeliveryStatus = projectDeliveryStatus(fact.DSNPropagate.DeliveryStatus)
+}
+
+// projectDeliveryStatus copies the six closed projection members verbatim.
+func projectDeliveryStatus(
+	value *generated.DeliveryStatusProjection,
+) *ResultDeliveryStatus {
+	if value == nil {
+		return nil
+	}
+	return &ResultDeliveryStatus{
+		Structure:        string(value.Structure),
+		Embedded:         string(value.Embedded),
+		OuterAlignment:   string(value.OuterAlignment),
+		RecipientLinkage: string(value.RecipientLinkage),
+		LocalHop:         string(value.LocalHop),
+		Propagation:      string(value.Propagation),
+	}
 }
 
 // expectationMatches compares only explicitly allowlisted typed facts.
@@ -273,6 +353,9 @@ func expectationMatches(expectation fixtureExpectation, fact ResponseFact) bool 
 			string(fact.Process.Policy.Verdict) == *expectation.PolicyVerdict &&
 			expectation.ReplayClass != nil &&
 			string(fact.Process.Replay.Class) == *expectation.ReplayClass &&
+			expectedDeliveryStatusMatches(
+				expectation.DeliveryStatus, fact.Process.DeliveryStatus,
+			) &&
 			expectedActionsMatch(expectation.Actions, fact.Process.Actions)
 	}
 	if fact.Sign != nil {
@@ -283,6 +366,13 @@ func expectationMatches(expectation fixtureExpectation, fact ResponseFact) bool 
 	}
 	if fact.DSNSign != nil {
 		return expectedOperationMatches(expectation, fact.DSNSign)
+	}
+	if fact.DSNPropagate != nil {
+		return expectedPropagationMatches(expectation, fact.DSNPropagate)
+	}
+	if fact.DSNCommit != nil {
+		return expectation.PropagationState != nil &&
+			string(fact.DSNCommit.State) == *expectation.PropagationState
 	}
 	if fact.Error != nil {
 		return expectation.ErrorCode != nil && string(fact.Error.Code) == *expectation.ErrorCode
@@ -303,6 +393,58 @@ func expectedOperationMatches(
 		expectation.Disposition != nil &&
 		string(actual.Disposition) == *expectation.Disposition &&
 		expectedActionsMatch(expectation.Actions, actual.Actions)
+}
+
+// expectedPropagationMatches compares every declared propagation fact,
+// including the digest of the produced notification.
+func expectedPropagationMatches(
+	expectation fixtureExpectation,
+	actual *generated.DSNPropagateResponse,
+) bool {
+	if actual == nil || expectation.PropagationResult == nil ||
+		string(actual.Result) != *expectation.PropagationResult ||
+		expectation.PropagationDisposition == nil ||
+		string(actual.Disposition) != *expectation.PropagationDisposition {
+		return false
+	}
+	if (expectation.PropagationFailure == nil) != (actual.PropagationFailure == nil) {
+		return false
+	}
+	if actual.PropagationFailure != nil &&
+		string(*actual.PropagationFailure) != *expectation.PropagationFailure {
+		return false
+	}
+	if expectation.PropagationDigest != nil {
+		if actual.Propagation == nil {
+			return false
+		}
+		digest, ok := notificationDigest(actual.Propagation.RawRfc5322Base64)
+		if !ok || digest != *expectation.PropagationDigest {
+			return false
+		}
+	}
+	return expectedDeliveryStatusMatches(expectation.DeliveryStatus, actual.DeliveryStatus)
+}
+
+// expectedDeliveryStatusMatches compares the optional projection member. A
+// declared expectation requires the member; an undeclared one accepts either
+// presence, so existing fixtures keep their meaning.
+func expectedDeliveryStatusMatches(
+	expected *fixtureDeliveryStatus,
+	actual *generated.DeliveryStatusProjection,
+) bool {
+	if expected == nil {
+		return true
+	}
+	if actual == nil {
+		return false
+	}
+	return expected.Structure == string(actual.Structure) &&
+		expected.Embedded == string(actual.Embedded) &&
+		expected.OuterAlignment == string(actual.OuterAlignment) &&
+		expected.RecipientLinkage == string(actual.RecipientLinkage) &&
+		expected.LocalHop == string(actual.LocalHop) &&
+		expected.Propagation == string(actual.Propagation)
 }
 
 // expectedActionsMatch compares exact ordered generated action fields.

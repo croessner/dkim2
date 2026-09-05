@@ -212,6 +212,52 @@ DKIM2_NAUTHILUS_DENY
 DKIM2_NAUTHILUS_INDETERMINATE
 ```
 
+Received delivery-status notifications add one zero-score symbol per member of
+the daemon's closed received-DSN projection. They are published only when the
+daemon returned that optional member, and they change no disposition, no
+`Authentication-Results` value, and no other DKIM2 result:
+
+```text
+DKIM2_DSN_STRUCTURE_VALID
+DKIM2_DSN_STRUCTURE_MALFORMED
+DKIM2_DSN_STRUCTURE_LIMIT_EXCEEDED
+DKIM2_DSN_EMBEDDED_ABSENT
+DKIM2_DSN_EMBEDDED_NOT_EVALUATED
+DKIM2_DSN_EMBEDDED_TEMPERROR
+DKIM2_DSN_EMBEDDED_UNVERIFIED
+DKIM2_DSN_EMBEDDED_VERIFIED
+DKIM2_DSN_EMBEDDED_VERIFIED_HEADERS_ONLY
+DKIM2_DSN_OUTER_ALIGNMENT_ALIGNED
+DKIM2_DSN_OUTER_ALIGNMENT_MISALIGNED
+DKIM2_DSN_OUTER_ALIGNMENT_NOT_EVALUATED
+DKIM2_DSN_RECIPIENT_LINKAGE_LINKED
+DKIM2_DSN_RECIPIENT_LINKAGE_UNLINKED
+DKIM2_DSN_RECIPIENT_LINKAGE_NOT_EVALUATED
+DKIM2_DSN_LOCAL_HOP_LOCAL
+DKIM2_DSN_LOCAL_HOP_NOT_LOCAL
+DKIM2_DSN_LOCAL_HOP_MISMATCH
+DKIM2_DSN_LOCAL_HOP_TEMPERROR
+DKIM2_DSN_LOCAL_HOP_NOT_EVALUATED
+DKIM2_DSN_PROPAGATION_ELIGIBLE
+DKIM2_DSN_PROPAGATION_NOT_FAILURE
+DKIM2_DSN_PROPAGATION_NOT_APPLICABLE
+DKIM2_DSN_PROPAGATION_NOT_RECONSTRUCTABLE
+DKIM2_DSN_PROPAGATION_TERMINAL_ORIGIN
+DKIM2_DSN_PROPAGATION_UNSUPPORTED_CHAIN
+DKIM2_DSN_PROPAGATION_FORBIDDEN_NULL_PREVIOUS_SENDER
+DKIM2_DSN_PROPAGATION_NOT_EVALUATED
+```
+
+An unknown or incomplete projection is contract drift: the whole response is
+refused and the configured failure mode applies. The projection is JSON-only
+and never becomes an `Authentication-Results` property.
+
+Received delivery-status locality is tenant-keyed. The optional `tenant`
+setting in `local.d/dkim2.conf` is sent as the request context tenant; without
+it the daemon falls back to its own default tenant, and `local_hop` and
+`propagation` are reported as `not_evaluated`. The tenant is an authority key
+only and never appears in a symbol, a symbol option, or a log value.
+
 `DKIM2_NAUTHILUS_POLICY` is the postfilter execution symbol and
 `DKIM2_RETRY_FINALIZE` is the idempotent retry-state finalizer. They are
 scheduling internals rather than result symbols and must not receive scores.

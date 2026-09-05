@@ -21,6 +21,8 @@ const (
 	signPath         = "/v1/sign"
 	revisePath       = "/v1/revise"
 	dsnSignPath      = "/v1/dsn/sign"
+	dsnPropagatePath = "/v1/dsn/propagate"
+	dsnCommitPath    = "/v1/dsn/propagate/commit"
 	cacheNoStore     = "no-store"
 	contentNoSniff   = "nosniff"
 	connectionClose  = "close"
@@ -30,13 +32,14 @@ const (
 
 // Options owns the validated command-wide authority and resource bounds.
 type Options struct {
-	ServerURL             string
-	Timeout               time.Duration
-	CapabilityFile        string
-	SignCapabilityFile    string
-	ReviseCapabilityFile  string
-	DSNSignCapabilityFile string
-	Output                string
+	ServerURL                  string
+	Timeout                    time.Duration
+	CapabilityFile             string
+	SignCapabilityFile         string
+	ReviseCapabilityFile       string
+	DSNSignCapabilityFile      string
+	DSNPropagateCapabilityFile string
+	Output                     string
 }
 
 // DefaultOptions returns the closed local-only command defaults.
@@ -50,11 +53,20 @@ func DefaultOptions() Options {
 
 // Validate checks all command options before protected-file or network access.
 func (o Options) Validate(requireCapability bool) error {
-	return o.validateRequirements(requireCapability, false, false, false)
+	return o.validateRequirements(capabilityRequirements{process: requireCapability})
+}
+
+// capabilityRequirements records which protected route credentials one plan needs.
+type capabilityRequirements struct {
+	process      bool
+	sign         bool
+	revise       bool
+	dsnSign      bool
+	dsnPropagate bool
 }
 
 // validateRequirements checks operation-specific protected capability paths.
-func (o Options) validateRequirements(requireProcess, requireSign, requireRevise, requireDSNSign bool) error {
+func (o Options) validateRequirements(required capabilityRequirements) error {
 	if _, err := ParseServerURL(o.ServerURL); err != nil {
 		return NewExitError(ExitUsage)
 	}
@@ -64,21 +76,21 @@ func (o Options) validateRequirements(requireProcess, requireSign, requireRevise
 	if o.Output != outputJSONL {
 		return NewExitError(ExitUsage)
 	}
-	for _, path := range []string{
-		o.CapabilityFile, o.SignCapabilityFile, o.ReviseCapabilityFile, o.DSNSignCapabilityFile,
-	} {
+	paths := []string{
+		o.CapabilityFile, o.SignCapabilityFile, o.ReviseCapabilityFile,
+		o.DSNSignCapabilityFile, o.DSNPropagateCapabilityFile,
+	}
+	for _, path := range paths {
 		if path != "" && !validCapabilityPath(path) {
 			return NewExitError(ExitUsage)
 		}
 	}
-	if requireProcess && o.CapabilityFile == "" ||
-		requireSign && o.SignCapabilityFile == "" ||
-		requireRevise && o.ReviseCapabilityFile == "" ||
-		requireDSNSign && o.DSNSignCapabilityFile == "" {
+	if required.process && o.CapabilityFile == "" ||
+		required.sign && o.SignCapabilityFile == "" ||
+		required.revise && o.ReviseCapabilityFile == "" ||
+		required.dsnSign && o.DSNSignCapabilityFile == "" ||
+		required.dsnPropagate && o.DSNPropagateCapabilityFile == "" {
 		return NewExitError(ExitUsage)
-	}
-	paths := []string{
-		o.CapabilityFile, o.SignCapabilityFile, o.ReviseCapabilityFile, o.DSNSignCapabilityFile,
 	}
 	for left := range paths {
 		if paths[left] == "" {

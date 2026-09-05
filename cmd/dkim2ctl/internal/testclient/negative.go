@@ -16,6 +16,7 @@ const daemonProcessBodyLimit = int64(47_878_316)
 
 const fixedNegativeBody = `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-06","message":{"raw_rfc5322_base64":""},"smtp":{"mail_from":"","rcpt_to":[""]}}`
 const fixedNegativeSignBody = `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-06","message":{"raw_rfc5322_base64":""},"smtp":{"mail_from":"","rcpt_to":[""]},"context":{"tenant":"test","domain":"example.test"}}`
+const fixedNegativePropagateBody = `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-06","message":{"raw_rfc5322_base64":"","fidelity":"raw_rfc5322"},"outer_smtp":{"mail_from":"","rcpt_to":[""],"smtputf8":false},"context":{"tenant":"test","reporting_mta":"mx.example.test"}}`
 const fixedNegativeReviseBody = `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-06","message":{"raw_rfc5322_base64":""},"smtp":{"mail_from":"","rcpt_to":[""]},"incoming_smtp":{"mail_from":"","rcpt_to":[""]},"context":{"tenant":"test","domain":"example.test"}}`
 
 // CallNegative executes one closed raw-contract mutation.
@@ -149,6 +150,8 @@ func negativeRoute(operation Operation) (string, string, bool) {
 		return signPath, fixedNegativeSignBody, true
 	case OperationRevise:
 		return revisePath, fixedNegativeReviseBody, true
+	case OperationDSNPropagate:
+		return dsnPropagatePath, fixedNegativePropagateBody, true
 	default:
 		return "", "", false
 	}

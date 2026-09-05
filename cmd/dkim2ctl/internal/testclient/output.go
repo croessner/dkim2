@@ -29,6 +29,31 @@ type ResultRecord struct {
 	AuthenticationState *string `json:"authentication_state"`
 	PolicyVerdict       *string `json:"policy_verdict"`
 	ReplayClass         *string `json:"replay_class"`
+	// PropagationResult is the closed propagation-route operation result.
+	PropagationResult *string `json:"propagation_result"`
+	// PropagationDisposition is the closed propagation-route disposition.
+	PropagationDisposition *string `json:"propagation_disposition"`
+	// PropagationFailure is the closed permanent propagation failure reason.
+	PropagationFailure *string `json:"propagation_failure"`
+	// PropagationState is the closed committed-coordinate state.
+	PropagationState *string `json:"propagation_state"`
+	// PropagationDigest is the lowercase hexadecimal SHA-256 of the signed
+	// notification. The notification bytes themselves never reach the output.
+	PropagationDigest *string `json:"propagation_digest"`
+	// DeliveryStatus is the closed received delivery-status projection.
+	DeliveryStatus *ResultDeliveryStatus `json:"delivery_status"`
+}
+
+// ResultDeliveryStatus is the stable closed projection of the received
+// delivery-status evaluation. Every member is a closed vocabulary value; no
+// address, message byte, or identifier enters this record.
+type ResultDeliveryStatus struct {
+	Structure        string `json:"structure"`
+	Embedded         string `json:"embedded"`
+	OuterAlignment   string `json:"outer_alignment"`
+	RecipientLinkage string `json:"recipient_linkage"`
+	LocalHop         string `json:"local_hop"`
+	Propagation      string `json:"propagation"`
 }
 
 // WriteFailure emits one content-free command-level failure record.
@@ -86,6 +111,22 @@ func validResultRecord(record ResultRecord) bool {
 		(record.DurationBucket != nil && !validDurationBucket(*record.DurationBucket)) {
 		return false
 	}
+	if record.PropagationDigest != nil && !validNotificationDigest(*record.PropagationDigest) {
+		return false
+	}
+	if record.DeliveryStatus != nil && !validDeliveryStatusExpectation(
+		fixtureDeliveryStatus(*record.DeliveryStatus),
+	) {
+		return false
+	}
+	if !validOptionalEnum(record.PropagationResult, "pass", "fail", "permerror", "temperror") ||
+		!validOptionalEnum(record.PropagationDisposition,
+			"accept", "discard", "reject", "tempfail") ||
+		!validOptionalEnum(record.PropagationFailure,
+			"not_reconstructable", "unprovisioned_domain") ||
+		!validOptionalEnum(record.PropagationState, "committed") {
+		return false
+	}
 	return validOptionalEnum(record.Disposition, "accept", "reject", "tempfail", "continue") &&
 		validOptionalEnum(record.VerificationState, "PASS", "FAIL", "PERMERROR", "TEMPERROR") &&
 		validOptionalEnum(record.AuthenticationState, "PASS", "FAIL", "PERMERROR", "TEMPERROR") &&
@@ -113,7 +154,8 @@ func validOutcome(value string) bool {
 func validOutputOperation(value string) bool {
 	switch value {
 	case "validate", "smoke", caseHealth, caseReadiness, caseProcess,
-		caseSign, caseRevise, caseNegative:
+		caseSign, caseRevise, caseDSNSign, caseDSNPropagate, caseDSNPropagateCommit,
+		caseNegative:
 		return true
 	default:
 		return false

@@ -749,8 +749,25 @@ func validProcessRequiredMembers(body []byte) bool {
 	if _, authOK := requiredJSONObject(document["authentication"], "primary_reason", "state"); !authOK {
 		return false
 	}
-	_, replayOK := requiredJSONObject(document["replay"], "class")
-	return replayOK
+	if _, replayOK := requiredJSONObject(document["replay"], "class"); !replayOK {
+		return false
+	}
+	return validDeliveryStatusMembers(document["delivery_status"])
+}
+
+// validDeliveryStatusMembers proves the optional received delivery-status
+// member is either absent or complete. A partially populated projection would
+// decode into an ambiguous zero value, so it is refused before typed decoding.
+func validDeliveryStatusMembers(value json.RawMessage) bool {
+	if len(value) == 0 {
+		return true
+	}
+	_, ok := requiredJSONObject(
+		value,
+		"structure", "embedded", "outer_alignment",
+		"recipient_linkage", "local_hop", "propagation",
+	)
+	return ok
 }
 
 // validActionMembers proves every present action has its complete discriminator.
@@ -1003,10 +1020,24 @@ func validProcessContract(value *generated.ProcessResponse, authservID string) b
 		!validAuthenticationContract(value.Authentication) ||
 		!validVerificationContract(value.Verification) ||
 		!validPolicyContract(value.Policy) || !value.Replay.Class.Valid() ||
+		!validDeliveryStatusContract(value.DeliveryStatus) ||
 		!validProcessOutcomeMatrix(value) {
 		return false
 	}
 	return true
+}
+
+// validDeliveryStatusContract validates the optional received delivery-status
+// projection. The member is informational for this adapter and never changes an
+// action, disposition, or Authentication-Results value, but an unknown value in
+// any of its closed vocabularies is contract drift and fails closed.
+func validDeliveryStatusContract(value *generated.DeliveryStatusProjection) bool {
+	if value == nil {
+		return true
+	}
+	return value.Structure.Valid() && value.Embedded.Valid() &&
+		value.OuterAlignment.Valid() && value.RecipientLinkage.Valid() &&
+		value.LocalHop.Valid() && value.Propagation.Valid()
 }
 
 // validProcessReportAction proves the daemon owns the exact configured report.

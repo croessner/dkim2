@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 	"sync"
 )
@@ -13,6 +14,9 @@ import (
 const (
 	capabilityHeader        = "X-DKIM2-Capability"
 	dsnSignCapabilityHeader = "X-DKIM2-DSN-Sign-Capability"
+	// dsnPropagateCapabilityHeader is the sole credential field of the
+	// propagation and propagation-commit routes.
+	dsnPropagateCapabilityHeader = "X-DKIM2-DSN-Propagate-Capability"
 )
 const capabilityRedacted = "dkim2ctl_protected_capability"
 
@@ -58,7 +62,8 @@ func (c *Capability) EditRequest(_ context.Context, request *http.Request) error
 // LoadCapabilityForOperation binds protected bytes to exactly one generated route.
 func LoadCapabilityForOperation(path string, operation Operation) (*Capability, error) {
 	if operation != OperationProcess && operation != OperationSign &&
-		operation != OperationRevise && operation != OperationDSNSign {
+		operation != OperationRevise && operation != OperationDSNSign &&
+		operation != OperationDSNPropagate {
 		return nil, NewExitError(ExitCapability)
 	}
 	capability, err := LoadCapability(path)
@@ -144,37 +149,50 @@ func validGeneratedOperationRequest(request *http.Request, operation Operation) 
 		!exactHeader(request.Header, headerContentType, mediaTypeJSON) {
 		return false
 	}
-	expectedPath := ""
-	switch operation {
-	case OperationProcess:
-		expectedPath = processPath
-	case OperationSign:
-		expectedPath = signPath
-	case OperationRevise:
-		expectedPath = revisePath
-	case OperationDSNSign:
-		expectedPath = dsnSignPath
-	default:
-		return false
-	}
-	if request.URL.EscapedPath() != expectedPath {
+	if !slices.Contains(operationRoutePaths(operation), request.URL.EscapedPath()) {
 		return false
 	}
 	_, err := ParseServerURL(schemeHTTP + "://" + request.URL.Host)
 	return err == nil && request.URL.Scheme == schemeHTTP
 }
 
+// operationRoutePaths returns every route one loaded credential may address.
+// The propagation credential covers both propagation routes because the
+// contract binds them to the same security scheme; every other credential
+// covers exactly one route.
+func operationRoutePaths(operation Operation) []string {
+	switch operation {
+	case OperationProcess:
+		return []string{processPath}
+	case OperationSign:
+		return []string{signPath}
+	case OperationRevise:
+		return []string{revisePath}
+	case OperationDSNSign:
+		return []string{dsnSignPath}
+	case OperationDSNPropagate, OperationDSNPropagateCommit:
+		return []string{dsnPropagatePath, dsnCommitPath}
+	default:
+		return nil
+	}
+}
+
 // capabilityHeaderForOperation returns the exact isolated credential header.
 func capabilityHeaderForOperation(operation Operation) string {
-	if operation == OperationDSNSign {
+	switch operation {
+	case OperationDSNSign:
 		return dsnSignCapabilityHeader
+	case OperationDSNPropagate, OperationDSNPropagateCommit:
+		return dsnPropagateCapabilityHeader
+	default:
+		return capabilityHeader
 	}
-	return capabilityHeader
 }
 
 // hasAnyCapabilityHeader detects every operation capability field.
 func hasAnyCapabilityHeader(header http.Header) bool {
-	return hasHeader(header, capabilityHeader) || hasHeader(header, dsnSignCapabilityHeader)
+	return hasHeader(header, capabilityHeader) || hasHeader(header, dsnSignCapabilityHeader) ||
+		hasHeader(header, dsnPropagateCapabilityHeader)
 }
 
 // hasHeader detects an existing field independent of canonical map spelling.

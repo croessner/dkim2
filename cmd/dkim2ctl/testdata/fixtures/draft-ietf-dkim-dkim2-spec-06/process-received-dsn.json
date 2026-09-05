@@ -1,0 +1,64 @@
+{
+  "schema": "dkim2ctl.fixture.v1",
+  "draft": "draft-ietf-dkim-dkim2-spec-06",
+  "fixture": "process-received-dsn",
+  "cases": [
+    {
+      "case": "process-received-dsn-tenant",
+      "kind": "process",
+      "process": {
+        "raw_rfc5322_base64": "UmV0dXJuLVBhdGg6IDw+DQpGcm9tOiBNQUlMRVItREFFTU9OQG14LmV4YW1wbGUudGVzdA0KVG86IDxib3VuY2VAZXhhbXBsZS50ZXN0Pg0KU3ViamVjdDogVW5kZWxpdmVyZWQgTWFpbCBSZXR1cm5lZCB0byBTZW5kZXINCkNvbnRlbnQtVHlwZTogbXVsdGlwYXJ0L3JlcG9ydDsgcmVwb3J0LXR5cGU9ZGVsaXZlcnktc3RhdHVzOyBib3VuZGFyeT0iYiINCg0KLS1iDQpDb250ZW50LVR5cGU6IHRleHQvcGxhaW4NCg0KRGVsaXZlcnkgZmFpbGVkLg0KLS1iDQpDb250ZW50LVR5cGU6IG1lc3NhZ2UvZGVsaXZlcnktc3RhdHVzDQoNClJlcG9ydGluZy1NVEE6IGRuczsgbXguZXhhbXBsZS50ZXN0DQoNCkFjdGlvbjogZmFpbGVkDQpTdGF0dXM6IDUuMS4xDQotLWItLQ0K",
+        "mail_from": "<>",
+        "rcpt_to": [
+          "<bounce@example.test>"
+        ],
+        "tenant": "tenant-a"
+      },
+      "expect": {
+        "http_status": 200,
+        "disposition": "accept",
+        "verification_state": "PASS",
+        "authentication_state": "PASS",
+        "policy_verdict": "accept",
+        "replay_class": "first_seen",
+        "actions": [],
+        "delivery_status": {
+          "structure": "valid",
+          "embedded": "verified",
+          "outer_alignment": "aligned",
+          "recipient_linkage": "linked",
+          "local_hop": "local",
+          "propagation": "eligible"
+        }
+      }
+    },
+    {
+      "case": "process-received-dsn-without-tenant",
+      "kind": "process",
+      "process": {
+        "raw_rfc5322_base64": "UmV0dXJuLVBhdGg6IDw+DQpGcm9tOiBNQUlMRVItREFFTU9OQG14LmV4YW1wbGUudGVzdA0KVG86IDxib3VuY2VAZXhhbXBsZS50ZXN0Pg0KU3ViamVjdDogVW5kZWxpdmVyZWQgTWFpbCBSZXR1cm5lZCB0byBTZW5kZXINCkNvbnRlbnQtVHlwZTogbXVsdGlwYXJ0L3JlcG9ydDsgcmVwb3J0LXR5cGU9ZGVsaXZlcnktc3RhdHVzOyBib3VuZGFyeT0iYiINCg0KLS1iDQpDb250ZW50LVR5cGU6IHRleHQvcGxhaW4NCg0KRGVsaXZlcnkgZmFpbGVkLg0KLS1iDQpDb250ZW50LVR5cGU6IG1lc3NhZ2UvZGVsaXZlcnktc3RhdHVzDQoNClJlcG9ydGluZy1NVEE6IGRuczsgbXguZXhhbXBsZS50ZXN0DQoNCkFjdGlvbjogZmFpbGVkDQpTdGF0dXM6IDUuMS4xDQotLWItLQ0K",
+        "mail_from": "<>",
+        "rcpt_to": [
+          "<bounce@example.test>"
+        ]
+      },
+      "expect": {
+        "http_status": 200,
+        "disposition": "accept",
+        "verification_state": "PASS",
+        "authentication_state": "PASS",
+        "policy_verdict": "accept",
+        "replay_class": "first_seen",
+        "actions": [],
+        "delivery_status": {
+          "structure": "valid",
+          "embedded": "verified",
+          "outer_alignment": "aligned",
+          "recipient_linkage": "linked",
+          "local_hop": "not_evaluated",
+          "propagation": "not_evaluated"
+        }
+      }
+    }
+  ]
+}

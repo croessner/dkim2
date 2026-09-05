@@ -1,0 +1,29 @@
+{
+  "schema": "dkim2ctl.fixture.v1",
+  "draft": "draft-ietf-dkim-dkim2-spec-06",
+  "fixture": "dsn-propagate-commit",
+  "cases": [
+    {
+      "case": "commit-committed",
+      "kind": "commit_dsn_propagation",
+      "commit_dsn_propagation": {
+        "commit_token": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+      },
+      "expect": {
+        "http_status": 200,
+        "propagation_state": "committed"
+      }
+    },
+    {
+      "case": "commit-unresolved",
+      "kind": "commit_dsn_propagation",
+      "commit_dsn_propagation": {
+        "commit_token": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
+      },
+      "expect": {
+        "http_status": 409,
+        "error_code": "propagation_commit_unresolved"
+      }
+    }
+  ]
+}

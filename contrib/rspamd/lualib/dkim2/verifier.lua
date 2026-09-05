@@ -49,6 +49,41 @@ local symbols = {
   service_error = 'DKIM2_SERVICE_ERROR',
 }
 
+-- delivery_status_members is the closed received delivery-status vocabulary.
+-- Its member order is the daemon's evaluation order, and the symbol suffixes
+-- are drawn from it so that no symbol can outlive its contract value.
+local delivery_status_order = {
+  'structure', 'embedded', 'outer_alignment', 'recipient_linkage',
+  'local_hop', 'propagation',
+}
+local delivery_status_members = {
+  structure = { 'limit_exceeded', 'malformed', 'valid' },
+  embedded = {
+    'absent', 'not_evaluated', 'temperror', 'unverified', 'verified',
+    'verified_headers_only',
+  },
+  outer_alignment = { 'aligned', 'misaligned', 'not_evaluated' },
+  recipient_linkage = { 'linked', 'not_evaluated', 'unlinked' },
+  local_hop = { 'local', 'mismatch', 'not_evaluated', 'not_local', 'temperror' },
+  propagation = {
+    'eligible', 'forbidden_null_previous_sender', 'not_applicable',
+    'not_evaluated', 'not_failure', 'not_reconstructable', 'terminal_origin',
+    'unsupported_chain',
+  },
+}
+
+-- delivery_status_values indexes each member vocabulary for strict validation.
+local delivery_status_values = {}
+for member, values in pairs(delivery_status_members) do
+  local allowed = {}
+  for _, value in ipairs(values) do
+    allowed[value] = true
+    symbols['dsn_' .. member .. '_' .. value] =
+      'DKIM2_DSN_' .. string.upper(member) .. '_' .. string.upper(value)
+  end
+  delivery_status_values[member] = allowed
+end
+
 local allowed_settings = {
   enabled = true,
   endpoint = true,
@@ -59,6 +94,7 @@ local allowed_settings = {
   max_response_bytes = true,
   failure_mode = true,
   authserv_id = true,
+  tenant = true,
 }
 
 local verification_states = {
@@ -238,6 +274,19 @@ local function read_capability(path)
   return encoded
 end
 
+-- valid_tenant accepts one bounded canonical administrative tenant identifier.
+-- The tenant is an authority key for received delivery-status locality only; it
+-- is never an identity claim and never reaches a symbol or log value.
+local function valid_tenant(value)
+  if type(value) ~= 'string' or #value == 0 or #value > 128 then
+    return false
+  end
+  if not value:match('^[a-z0-9][a-z0-9._-]*$') then
+    return false
+  end
+  return true
+end
+
 -- validate_settings copies only the closed supported configuration vocabulary.
 local function validate_settings(input)
   if type(input) ~= 'table' then
@@ -262,7 +311,8 @@ local function validate_settings(input)
       (failure_mode ~= 'tempfail' and failure_mode ~= 'continue') or
       (transport == 'tls_private_network' and not valid_service_name(input.server_name)) or
       (transport == 'loopback' and input.server_name ~= nil) or
-      (input.authserv_id ~= nil and not valid_authserv_id(input.authserv_id)) then
+      (input.authserv_id ~= nil and not valid_authserv_id(input.authserv_id)) or
+      (input.tenant ~= nil and not valid_tenant(input.tenant)) then
     return nil
   end
   return {
@@ -275,6 +325,7 @@ local function validate_settings(input)
     max_response_bytes = response_bytes,
     failure_mode = failure_mode,
     authserv_id = input.authserv_id,
+    tenant = input.tenant,
   }
 end
 
@@ -576,14 +627,33 @@ local function valid_policy_result(value)
   return true
 end
 
+-- valid_delivery_status validates the closed received delivery-status
+-- projection. Every member is required and closed, so a partial or unknown
+-- projection is contract drift and fails the whole response.
+local function valid_delivery_status(value)
+  if not exact_keys(value, delivery_status_order, {}) then
+    return false
+  end
+  for _, member in ipairs(delivery_status_order) do
+    if not delivery_status_values[member][value[member]] then
+      return false
+    end
+  end
+  return true
+end
+
 -- valid_response validates the response members that authorize Rspamd effects.
 local function valid_response(value)
   local top_required = {
     'api_version', 'draft', 'verification', 'authentication', 'policy',
     'replay', 'disposition', 'actions',
   }
-  if not exact_keys(value, top_required, { 'verifier_projection' }) or value.api_version ~= API_VERSION or
+  if not exact_keys(value, top_required, { 'verifier_projection', 'delivery_status' }) or
+      value.api_version ~= API_VERSION or
       value.draft ~= DRAFT or not policy_verdicts[value.disposition] then
+    return false
+  end
+  if value.delivery_status ~= nil and not valid_delivery_status(value.delivery_status) then
     return false
   end
   if not valid_verification_result(value.verification) or
@@ -666,7 +736,7 @@ local function policy_attributes(response)
   for index, hop in ipairs(projection.hops) do
     records[index] = projection_hop_record(hop)
   end
-  return {
+  local attributes = {
     ['dkim2.projection_schema'] = { string = projection.schema },
     ['dkim2.draft'] = { string = projection.draft },
     ['dkim2.projection_binding_algorithm'] = { string = projection.binding_algorithm },
@@ -692,6 +762,11 @@ local function policy_attributes(response)
     ['dkim2.disposition'] = { string = response.disposition },
     ['dkim2.chain'] = { records = records },
   }
+  if response.delivery_status ~= nil then
+    attributes['dkim2.received_dsn_propagation'] =
+      { string = response.delivery_status.propagation }
+  end
+  return attributes
 end
 
 -- parse_response accepts one bounded JSON object and rejects ambiguous shapes.
@@ -822,6 +897,18 @@ local function apply_authentication_results(task, actions)
   lua_mime.modify_headers(task, changes, 'compat')
 end
 
+-- apply_delivery_status publishes the already validated received
+-- delivery-status projection as zero-score observations. It changes no
+-- disposition, no Authentication-Results value, and no other DKIM2 fact.
+local function apply_delivery_status(task, projection)
+  if projection == nil then
+    return
+  end
+  for _, member in ipairs(delivery_status_order) do
+    insert_symbol(task, symbols['dsn_' .. member .. '_' .. projection[member]])
+  end
+end
+
 -- apply_response publishes trusted facts and the final DKIM2 gate result.
 local function apply_response(task, response)
   insert_symbol(task, symbols.check)
@@ -833,6 +920,7 @@ local function apply_response(task, response)
   insert_symbol(task, symbols['policy_' .. response.policy.verdict])
   insert_symbol(task, symbols['donotmodify_' .. response.policy.do_not_modify])
   insert_symbol(task, symbols['donotexplode_' .. response.policy.do_not_explode])
+  apply_delivery_status(task, response.delivery_status)
   apply_authentication_results(task, response.actions)
   if response.disposition == 'reject' then
     task:set_pre_result('reject', 'Message rejected by DKIM2 policy', N)
@@ -863,6 +951,9 @@ local function prepare_request(task)
   }
   if settings.authserv_id ~= nil then
     request.reporting = { authserv_id = settings.authserv_id }
+  end
+  if settings.tenant ~= nil then
+    request.context = { tenant = settings.tenant }
   end
   local body = ucl.to_format(request, 'json-compact')
   if type(body) == 'userdata' then

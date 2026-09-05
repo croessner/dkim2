@@ -72,6 +72,12 @@ func NewRoot(stdout, stderr io.Writer) *cobra.Command {
 		"",
 		"absolute protected DSN sign capability path",
 	)
+	flags.StringVar(
+		&options.DSNPropagateCapabilityFile,
+		"dsn-propagate-capability-file",
+		"",
+		"absolute protected DSN propagate capability path",
+	)
 	flags.StringVar(&options.Output, "output", options.Output, "output format")
 
 	root.AddCommand(newSmokeCommand(application, &options))
