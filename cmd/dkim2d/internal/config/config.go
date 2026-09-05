@@ -427,7 +427,7 @@ func validateSnapshot(values map[string]rawValue, presence map[string]Presence) 
 	if err != nil {
 		return nil, err
 	}
-	propagation, err := parsePropagation(values, presence, server)
+	propagation, err := parsePropagation(values, presence, server, backend)
 	if err != nil {
 		return nil, err
 	}
@@ -458,12 +458,18 @@ func parseProcess(values map[string]rawValue) (processState, error) {
 	return processState{defaultTenant: tenant}, nil
 }
 
-// parsePropagation validates the propagation pending lease. The lease is only
-// meaningful when the propagation route carries its own capability.
+// parsePropagation validates the propagation pending lease and the replay
+// prerequisite of the propagation route. The lease is only meaningful when
+// the route carries its own capability, and the capability is refused
+// together with the disabled replay backend: the two-phase propagation
+// coordinate is the only bound on how many signed notifications one captured
+// DSN can extract, so a propagation route without replay storage would be an
+// unbounded signing oracle. There is no opt-out.
 func parsePropagation(
 	values map[string]rawValue,
 	presence map[string]Presence,
 	server serverState,
+	backend ReplayBackend,
 ) (propagationState, error) {
 	lease, err := durationValue(
 		values, pathDSNPropagationPendingLease, time.Second, time.Hour, false,
@@ -473,6 +479,9 @@ func parsePropagation(
 	}
 	if presence[pathDSNPropagationPendingLease].Explicit() &&
 		server.dsnPropagateCapabilityFile == "" {
+		return propagationState{}, newError(CodeInvalidMatrix)
+	}
+	if server.dsnPropagateCapabilityFile != "" && backend == ReplayDisabled {
 		return propagationState{}, newError(CodeInvalidMatrix)
 	}
 	return propagationState{pendingLease: lease}, nil

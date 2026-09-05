@@ -302,3 +302,28 @@ func TestReceivedDSNCandidateGate(t *testing.T) {
 		})
 	}
 }
+
+// TestProcessUndecodableOuterSignatureKeepsTheOuterVerdict is the reproducer
+// for the process route: a received DSN whose outer DKIM2-Signature base64
+// cannot be decoded is a permerror of the outer verification, and the
+// received-DSN evaluation, which requires a verified outer message, must not
+// run on it. The route used to run the evaluation anyway and turned its
+// invalid-request error into a daemon failure instead of the verdict.
+func TestProcessUndecodableOuterSignatureKeepsTheOuterVerdict(t *testing.T) {
+	fixture := newReceivedDSNFixture(t)
+	processor := fixture.processor(t, config.PolicyStrict, propagationTestTenant, true)
+	testCase := fixture.corpus.Case(t, propagationtest.CaseRunOfOne)
+	raw := breakOuterSignatureBase64(t, testCase.RawMessage(t))
+	request, err := NewInboundRequest(dkim2.NewVerifyRequest(raw, []byte("<>"), [][]byte{testCase.ForwardPath(t)}), propagationTestTenant)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := process(t, processor, request)
+	verification, err := result.Verification()
+	if err != nil || verification.State() != dkim2.ResultStatePERMERROR {
+		t.Fatalf("verification state=%q error=%v, want permerror", verification.State(), err)
+	}
+	if _, present := result.DeliveryStatus(); present {
+		t.Fatal("an outer message that did not verify carried a delivery-status projection")
+	}
+}

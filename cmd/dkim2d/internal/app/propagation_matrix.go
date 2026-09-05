@@ -42,6 +42,30 @@ func discardedPropagation() propagationDecision {
 		PropagationFailureNone)
 }
 
+// classifyPropagationOuter applies the outer-verification rows of the
+// propagation coherence matrix before the received-DSN evaluation runs. The
+// evaluation requires a verified outer message, so an outer verdict other
+// than pass decides the request on its own: an assessment the route could
+// not read or a temporary outer state defers, and a failed or permanently
+// erroneous outer signature rejects. Only a pass leaves the decision to the
+// evaluation rows.
+func classifyPropagationOuter(
+	state propagationOuterState,
+	verification dkim2.VerifyResult,
+) (propagationDecision, bool) {
+	if state != propagationOuterAssessed {
+		return temporaryPropagation(), true
+	}
+	switch verification.State() {
+	case dkim2.ResultStatePASS:
+		return propagationDecision{}, false
+	case dkim2.ResultStateFAIL, dkim2.ResultStatePERMERROR:
+		return rejectedPropagation(), true
+	default:
+		return temporaryPropagation(), true
+	}
+}
+
 // classifyPropagationEvaluation applies the evaluation rows of the
 // propagation coherence matrix in specification order and stops at the first
 // match. It never reaches the replay gate, the rebuild, or a private key for

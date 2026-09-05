@@ -76,7 +76,9 @@ func newPropagationStore(t *testing.T, client commandClient, now time.Time) *Sto
 	return store
 }
 
-// TestPropagationPendingCommittedReservation proves the reservation command
+// TestPropagationPendingCommittedReservation proves, over the propagation
+// frame coordinate of a verified public fixture, which never collides with
+// that fixture's first-seen record, that the reservation command
 // shapes and the closed reply mapping: an absent record is reserved with one
 // insert-if-absent command, a live lease is pending, a committed record is
 // reported without any write, and an expired lease is re-served by exactly
@@ -177,7 +179,10 @@ func TestPropagationPendingCommittedReservation(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			client := &propagationScriptedClient{results: testCase.replies}
 			store := newPropagationStore(t, client, now)
-			key := validReplayKey(t)
+			key := validPropagationReplayKey(t)
+			if key == validReplayKey(t) {
+				t.Fatal("the propagation coordinate collides with the first-seen record of the same message")
+			}
 			got, err := store.ReservePropagation(context.Background(), key, retention, lease)
 			if testCase.code == "" {
 				if err != nil || got != testCase.want {

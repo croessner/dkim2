@@ -3,6 +3,7 @@ package app
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"strings"
 	"sync"
 	"testing"
@@ -663,4 +664,69 @@ func TestPropagationSharesTheTenantAuthorityAcrossRequests(t *testing.T) {
 	if !ok || shared.negativeCacheSize() == 0 {
 		t.Fatal("the process binding does not share the propagation route's tenant resolver")
 	}
+}
+
+// TestPropagateRejectsUndecodableOuterSignatureBeforeEvaluation is the
+// reproducer for a notification whose outer DKIM2-Signature carries base64
+// with non-zero trailing bits, which the library refuses to parse. The outer
+// verification is a definitive permerror and the coherence matrix row for it
+// is fail/reject, so the route must answer reject without running the
+// received-DSN evaluation; it used to run the evaluation first, whose
+// invalid-request error masked the verdict as a temporary defer.
+func TestPropagateRejectsUndecodableOuterSignatureBeforeEvaluation(t *testing.T) {
+	fixture := newPropagationFixture(t)
+	testCase := fixture.corpus.Case(t, propagationtest.CaseRunOfOne)
+	raw := breakOuterSignatureBase64(t, testCase.RawMessage(t))
+	request, err := NewPropagationRequest(raw, []byte("<>"), [][]byte{testCase.ForwardPath(t)},
+		false, propagationTestTenant, propagationtest.ReportingMTA, FidelityLMTPDeliveredCRLF)
+	if err != nil {
+		t.Fatalf("request: %v", err)
+	}
+	result := fixture.propagate(t, request)
+	requireOutcome(t, result, PropagationFail, PropagationDispositionReject, PropagationFailureNone)
+	if observed := fixture.observer.last(); observed != propagationStageEvaluation+"="+string(PropagationDispositionReject) {
+		t.Fatalf("observation = %q, want the evaluation stage rejecting the notification", observed)
+	}
+	if !result.Projection().Absent() {
+		t.Fatal("a notification whose outer verification stopped the request carried a projection")
+	}
+	if _, present := result.Output(); present {
+		t.Fatal("a rejected notification carried signed output")
+	}
+	if result.Replay() != ReplayResultNotChecked {
+		t.Fatalf("replay = %v, want not_checked", result.Replay())
+	}
+	if fixture.authority.Signs.Load() != 0 {
+		t.Fatal("a rejected notification reached the private key")
+	}
+}
+
+// breakOuterSignatureBase64 turns the outer DKIM2-Signature's signature
+// base64 into a string with non-zero trailing bits before its padding, which
+// a strict decoder refuses while every other byte of the notification stays
+// intact. It mirrors a single-character transmission corruption that lands on
+// the last symbol.
+func breakOuterSignatureBase64(t *testing.T, raw []byte) []byte {
+	t.Helper()
+	boundary := bytes.Index(raw, []byte("\r\n\r\n"))
+	marker := bytes.Index(raw, []byte("DKIM2-Signature:"))
+	if boundary < 0 || marker < 0 || marker > boundary {
+		t.Fatal("the notification has no outer DKIM2-Signature")
+	}
+	padding := bytes.Index(raw[marker:boundary], []byte("==;"))
+	if padding < 1 {
+		t.Fatal("the outer signature has no padded base64 tail")
+	}
+	index := marker + padding - 1
+	broken := bytes.Clone(raw)
+	broken[index] = 'B'
+	if raw[index] == 'B' {
+		broken[index] = 'C'
+	}
+	end := bytes.Index(raw[marker:boundary], []byte("=;"))
+	start := bytes.LastIndexByte(raw[marker:marker+end], ':') + 1
+	if _, err := base64.StdEncoding.DecodeString(string(broken[marker+start : marker+end+1])); err == nil {
+		t.Fatal("the broken signature still decodes")
+	}
+	return broken
 }

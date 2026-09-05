@@ -250,6 +250,10 @@ func (c *PropagationCoordinator) Propagate(
 		c.observe(propagationStageEvaluation, PropagationDispositionReject)
 		return c.notApplicableResult()
 	}
+	if decision, decided := classifyPropagationOuter(outerState, verification); decided {
+		c.observe(propagationStageEvaluation, decision.disposition)
+		return c.unevaluatedResultFor(decision)
+	}
 	authority, err := c.authorityFor(request.Tenant())
 	if err != nil {
 		return PropagationResult{}, err
@@ -269,11 +273,7 @@ func (c *PropagationCoordinator) Propagate(
 		c.observe(propagationStageEvaluation, PropagationDispositionTempfail)
 		return c.unevaluatedResult()
 	}
-	outer := dkim2.ResultStateTEMPERROR
-	if outerState == propagationOuterAssessed {
-		outer = verification.State()
-	}
-	if decision := classifyPropagationEvaluation(outer, projection); decision.decided {
+	if decision := classifyPropagationEvaluation(verification.State(), projection); decision.decided {
 		c.observe(propagationStageEvaluation, decision.disposition)
 		return NewPropagationResult(decision.result, decision.disposition, decision.failure,
 			projection, ReplayResultNotChecked, PropagationOutput{})
@@ -573,9 +573,17 @@ func (c *PropagationCoordinator) temporaryResult(
 // projection rather than fabricating a malformed structure, because no
 // structural evidence was ever established.
 func (c *PropagationCoordinator) unevaluatedResult() (PropagationResult, error) {
-	return NewPropagationResult(PropagationTemperror, PropagationDispositionTempfail,
-		PropagationFailureNone, DeliveryStatusProjection{}, ReplayResultNotChecked,
-		PropagationOutput{})
+	return c.unevaluatedResultFor(temporaryPropagation())
+}
+
+// unevaluatedResultFor seals one decided matrix row for a notification whose
+// outer verification stopped the request before the received-DSN evaluation
+// ran. The projection is omitted because no evaluation evidence exists; the
+// row is either the temporary defer or the permanent reject of the outer
+// verdict.
+func (c *PropagationCoordinator) unevaluatedResultFor(decision propagationDecision) (PropagationResult, error) {
+	return NewPropagationResult(decision.result, decision.disposition, decision.failure,
+		DeliveryStatusProjection{}, ReplayResultNotChecked, PropagationOutput{})
 }
 
 // notApplicableResult seals the permanent refusal of a notification that

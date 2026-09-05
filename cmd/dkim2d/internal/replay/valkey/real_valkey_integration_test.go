@@ -35,10 +35,12 @@ func TestRealValkeyHarness(t *testing.T) {
 
 	memory := integrationMemoryStore(t)
 	exerciseProviderParity(t, memory)
+	exercisePropagationParity(t, memory)
 	closeIntegrationStore(t, memory)
 
 	store := integrationValkeyStore(t, socket)
 	exerciseProviderParity(t, store)
+	exercisePropagationParity(t, store)
 	closeIntegrationStore(t, store)
 }
 
@@ -206,6 +208,73 @@ func exerciseProviderParity(t *testing.T, store dkim2.ReplayStore) {
 	}
 	if firstSeen != 1 || replayed != callers-1 {
 		t.Fatalf("same-key parity = %d first-seen, %d replayed", firstSeen, replayed)
+	}
+}
+
+// exercisePropagationParity proves the two-phase propagation contract on a
+// real provider: an absent coordinate is reserved, a live lease is pending, an
+// expired lease is re-served exactly once, a commit is monotonic and
+// idempotent, a committed coordinate is never re-served, and a coordinate
+// that was never reserved cannot be committed.
+func exercisePropagationParity(t *testing.T, store dkim2.ReplayStore) {
+	t.Helper()
+	propagation, ok := store.(dkim2.ReplayPropagationStore)
+	if !ok {
+		t.Fatal("integration provider does not hold the propagation contract")
+	}
+	retention, err := dkim2.NewReplayRetention(5 * time.Second)
+	if err != nil {
+		t.Fatal("propagation retention construction failed")
+	}
+	lease, err := dkim2.NewReplayLease(time.Second)
+	if err != nil {
+		t.Fatal("propagation lease construction failed")
+	}
+	key := validPropagationReplayKey(t)
+	requireIntegrationReservation(t, propagation, key, retention, lease, dkim2.ReplayPropagationReserved)
+	requireIntegrationReservation(t, propagation, key, retention, lease, dkim2.ReplayPropagationPending)
+	time.Sleep(1100 * time.Millisecond)
+	requireIntegrationReservation(t, propagation, key, retention, lease, dkim2.ReplayPropagationReserved)
+	requireIntegrationReservation(t, propagation, key, retention, lease, dkim2.ReplayPropagationPending)
+	requireIntegrationCommit(t, propagation, key, dkim2.ReplayPropagationCommitted)
+	requireIntegrationCommit(t, propagation, key, dkim2.ReplayPropagationCommitted)
+	requireIntegrationReservation(t, propagation, key, retention, lease, dkim2.ReplayPropagationAlreadyCommitted)
+	time.Sleep(1100 * time.Millisecond)
+	requireIntegrationReservation(t, propagation, key, retention, lease, dkim2.ReplayPropagationAlreadyCommitted)
+	requireIntegrationCommit(t, propagation, validReplayKey(t), dkim2.ReplayPropagationCommitUnresolved)
+}
+
+// requireIntegrationReservation requires one exact successful reservation outcome.
+func requireIntegrationReservation(
+	t *testing.T,
+	store dkim2.ReplayPropagationStore,
+	key dkim2.ReplayKey,
+	retention dkim2.ReplayRetention,
+	lease dkim2.ReplayLease,
+	want dkim2.ReplayPropagationReservation,
+) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	reservation, err := store.ReservePropagation(ctx, key, retention, lease)
+	if err != nil || reservation != want {
+		t.Fatalf("ReservePropagation() = %v, %v; want %v", reservation, err, want)
+	}
+}
+
+// requireIntegrationCommit requires one exact successful commit outcome.
+func requireIntegrationCommit(
+	t *testing.T,
+	store dkim2.ReplayPropagationStore,
+	key dkim2.ReplayKey,
+	want dkim2.ReplayPropagationCommit,
+) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	commit, err := store.CommitPropagation(ctx, key)
+	if err != nil || commit != want {
+		t.Fatalf("CommitPropagation() = %v, %v; want %v", commit, err, want)
 	}
 }
 

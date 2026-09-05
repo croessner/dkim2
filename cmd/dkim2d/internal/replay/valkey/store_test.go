@@ -1203,6 +1203,25 @@ func cachedMessage(t *testing.T, prefix byte, payload string) valkeygo.ValkeyMes
 // validReplayKey derives one protected key only through authentic public verifier evidence.
 func validReplayKey(t *testing.T) dkim2.ReplayKey {
 	t.Helper()
+	return deriveValidReplayKey(t, (*dkim2.ReplayDeriver).Derive)
+}
+
+// validPropagationReplayKey derives the propagation coordinate of the same
+// verified public fixture under the distinct propagation frame, so that the
+// ordinary first-seen record and the propagation record of one message never
+// share a storage key.
+func validPropagationReplayKey(t *testing.T) dkim2.ReplayKey {
+	t.Helper()
+	return deriveValidReplayKey(t, (*dkim2.ReplayDeriver).DerivePropagation)
+}
+
+// deriveValidReplayKey verifies the public RSA fixture and derives one replay
+// key from its first identity with the supplied deriver method.
+func deriveValidReplayKey(
+	t *testing.T,
+	derive func(*dkim2.ReplayDeriver, context.Context, dkim2.ReplayIdentity) (dkim2.ReplayKey, error),
+) dkim2.ReplayKey {
+	t.Helper()
 	corpusBytes, err := os.ReadFile("../../../../../lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-06/public-golden.json")
 	if err != nil {
 		t.Fatal("public replay corpus read failed")
@@ -1266,7 +1285,7 @@ func validReplayKey(t *testing.T) dkim2.ReplayKey {
 	defer func() {
 		_ = deriver.Close(context.Background())
 	}()
-	derived, err := deriver.Derive(context.Background(), identity)
+	derived, err := derive(deriver, context.Background(), identity)
 	if err != nil {
 		t.Fatal("public replay key derivation failed")
 	}

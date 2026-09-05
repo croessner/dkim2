@@ -1820,7 +1820,10 @@ func bindReceivedDSN(
 // authority and delivery-status profiles, the verifier's evaluation seam, and
 // a replay backend that holds the two-phase propagation contract; every
 // missing prerequisite refuses startup instead of serving a route that
-// cannot fail closed.
+// cannot fail closed. The explicitly disabled replay backend is refused here
+// as well as at configuration load: without a stored coordinate a captured
+// DSN could extract an unbounded number of signed notifications, so the
+// route never composes over the no-storage policy.
 func composePropagation(
 	verifier VerificationService,
 	operation *SigningService,
@@ -1836,7 +1839,7 @@ func composePropagation(
 		return nil, &LifecycleError{}
 	}
 	runtime, ok := replay.(*ReplayRuntime)
-	if !ok || runtime == nil {
+	if !ok || runtime == nil || runtime.state == nil || runtime.state.backend == config.ReplayDisabled {
 		return nil, &LifecycleError{}
 	}
 	gate, err := runtime.PropagationReplay(snapshot.PropagationPendingLease())

@@ -1719,7 +1719,7 @@ type ProcessResponse struct {
 	ApiVersion     APIVersion           `json:"api_version"`
 	Authentication AuthenticationResult `json:"authentication"`
 
-	// DeliveryStatus Received delivery-status projection. Present only when the outer message has a null reverse path, a multipart/report delivery-status top level, and at least one DKIM2 protocol field family. Its presence changes neither verification, authentication, replay, nor action semantics.
+	// DeliveryStatus Received delivery-status projection. Present only when the outer message has a null reverse path, a multipart/report delivery-status top level, and at least one DKIM2 protocol field family, and only when the outer DKIM2-Signature could be read; an unreadable outer signature is the outer verification's own permerror and carries no projection. Its presence changes neither verification, authentication, replay, nor action semantics.
 	DeliveryStatus *DeliveryStatusProjection `json:"delivery_status,omitempty"`
 	Disposition    Disposition               `json:"disposition"`
 	Draft          DraftVersion              `json:"draft"`

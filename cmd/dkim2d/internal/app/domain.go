@@ -199,7 +199,10 @@ func (p *DomainProcessor) Process(ctx context.Context, request dkim2.VerifyReque
 
 // ProcessInbound performs current verification, the received-DSN evaluation
 // for a classified notification under the bound tenant precedence, and the
-// server-owned local policy evaluation that incorporates both.
+// server-owned local policy evaluation that incorporates both. The outer
+// verdict is established first and stands on its own; a notification whose
+// outer signature the library cannot read is projected only when the outer
+// verification passed, which it then never is.
 func (p *DomainProcessor) ProcessInbound(ctx context.Context, inbound InboundRequest) (DomainResult, error) {
 	if p == nil || p.state == nil || nilVerificationService(p.state.verifier) || nilInterface(ctx) {
 		return DomainResult{}, &DomainError{}
@@ -249,7 +252,9 @@ func (p *DomainProcessor) ProcessInbound(ctx context.Context, inbound InboundReq
 			return DomainResult{}, &DomainError{}
 		}
 	}
-	deliveryStatus, hasDeliveryStatus, err := p.evaluateReceivedDSN(ctx, inbound)
+	deliveryStatus, hasDeliveryStatus, err := p.evaluateReceivedDSN(
+		ctx, inbound, verification.State() == dkim2.ResultStatePASS,
+	)
 	if err != nil {
 		finishPolicy(observability.SpanInternalError)
 		return DomainResult{}, err
@@ -323,20 +328,29 @@ type receivedDSNOutcome struct {
 
 // evaluateReceivedDSN runs the received-DSN evaluation only for an applicable
 // message that the classification gate admits and only when a binding
-// exists. It records the closed observation of the terminal stage.
+// exists. It records the closed observation of the terminal stage. When the
+// outer verification did not pass and the library refuses the outer
+// signature at its structure stage, no evaluation evidence exists and the
+// projection is omitted instead of failing the request; the outer verdict
+// already decides the message.
 func (p *DomainProcessor) evaluateReceivedDSN(
 	ctx context.Context,
 	inbound InboundRequest,
+	outerVerified bool,
 ) (receivedDSNOutcome, bool, error) {
 	binding := p.state.receivedDSN
 	if binding == nil || !receivedDSNCandidate(inbound.VerifyRequest()) {
 		return receivedDSNOutcome{}, false, nil
 	}
 	evaluationContext, span := startAppSpan(ctx, p.state.runtime, "dkim2.dsn.received.evaluate")
-	evaluation, err := binding.evaluate(evaluationContext, inbound)
+	evaluation, evaluated, err := binding.evaluate(evaluationContext, inbound, outerVerified)
 	if err != nil {
 		observability.EndSpan(span, observability.SpanInternalError)
 		return receivedDSNOutcome{}, false, err
+	}
+	if !evaluated {
+		observability.EndSpan(span, observability.SpanCompleted)
+		return receivedDSNOutcome{}, false, nil
 	}
 	projection, err := NewDeliveryStatusProjection(evaluation)
 	if err != nil {

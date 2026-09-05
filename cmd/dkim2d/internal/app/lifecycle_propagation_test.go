@@ -14,7 +14,7 @@ import (
 const lifecyclePropagationGeneration = "0123456789abcdef0123456789abcdef"
 
 // lifecyclePropagationSnapshot loads one validated flat-file signing snapshot
-// with or without the propagation capability.
+// over the memory replay backend, with or without the propagation capability.
 func lifecyclePropagationSnapshot(t *testing.T, propagate bool) config.Snapshot {
 	t.Helper()
 	document := `config:
@@ -26,7 +26,9 @@ server:
   dsn_sign_capability_file: /secure/` + lifecyclePropagationGeneration + `/dsn-sign-capability
   dsn_propagate_capability_file: /secure/` + lifecyclePropagationGeneration + `/dsn-propagate-capability
 replay:
-  backend: disabled
+  backend: memory
+  hmac_key_file: /secure/` + lifecyclePropagationGeneration + `/replay-hmac
+  epoch: 1
 signing:
   backend: flat_file
   datasource_file: /secure/` + lifecyclePropagationGeneration + `/datasource
@@ -52,11 +54,33 @@ func (v lifecyclePropagationVerifier) Assess(ctx context.Context, request dkim2.
 	return v.verifier.Assess(ctx, request)
 }
 
+// lifecycleMemoryReplay builds one memory-backed replay runtime that holds
+// the two-phase propagation contract.
+func lifecycleMemoryReplay(t *testing.T) *ReplayRuntime {
+	t.Helper()
+	store, err := dkim2.NewReplayMemoryStore(dkim2.ReplayMemoryConfig{Clock: dkim2.ReplayClockFunc(time.Now)})
+	if err != nil {
+		t.Fatalf("memory replay store: %v", err)
+	}
+	deriver, err := dkim2.NewReplayDeriver([]byte("0123456789abcdef0123456789abcdef"), 1)
+	if err != nil {
+		t.Fatalf("replay deriver: %v", err)
+	}
+	retention, err := dkim2.NewReplayRetention(time.Minute)
+	if err != nil {
+		t.Fatalf("replay retention: %v", err)
+	}
+	return &ReplayRuntime{state: &replayRuntimeState{
+		backend: config.ReplayMemory, store: store, deriver: deriver, retention: retention,
+	}}
+}
+
 // TestComposePropagationFollowsCapabilityAndPrerequisites proves the
 // propagation service is composed only under its own capability, refuses
 // startup when the verifier lacks the evaluation seam or the replay runtime
-// cannot hold the two-phase contract, and composes over the disabled replay
-// policy when replay storage is explicitly off.
+// cannot hold the two-phase contract, refuses the explicitly disabled replay
+// policy because the stored coordinate is the route's only bound against a
+// captured DSN, and composes over a storing backend.
 func TestComposePropagationFollowsCapabilityAndPrerequisites(t *testing.T) {
 	corpus := propagationtest.Load(t)
 	provider := corpus.Provider(t)
@@ -66,25 +90,30 @@ func TestComposePropagationFollowsCapabilityAndPrerequisites(t *testing.T) {
 	disabledReplay := &ReplayRuntime{state: &replayRuntimeState{
 		backend: config.ReplayDisabled, store: dkim2.NewReplayDisabledStore(),
 	}}
+	memoryReplay := lifecycleMemoryReplay(t)
 	authorities, err := NewLocalAuthorityRegistry(lifecycleAuthority{authority}, time.Now)
 	if err != nil {
 		t.Fatalf("authority registry: %v", err)
 	}
-	service, err := composePropagation(verifier, operation, authorities, disabledReplay, lifecyclePropagationSnapshot(t, false))
+	service, err := composePropagation(verifier, operation, authorities, memoryReplay, lifecyclePropagationSnapshot(t, false))
 	if err != nil || service != nil {
 		t.Fatalf("without capability service=%v error=%v", service != nil, err)
 	}
 	enabled := lifecyclePropagationSnapshot(t, true)
-	if _, err := composePropagation(lifecyclePropagationVerifier{verifier: verifier}, operation, authorities, disabledReplay, enabled); err == nil {
+	if _, err := composePropagation(lifecyclePropagationVerifier{verifier: verifier}, operation, authorities, memoryReplay, enabled); err == nil {
 		t.Fatal("verifier without the evaluation seam composed a propagation service")
 	}
-	if _, err := composePropagation(verifier, nil, authorities, disabledReplay, enabled); err == nil {
+	if _, err := composePropagation(verifier, nil, authorities, memoryReplay, enabled); err == nil {
 		t.Fatal("missing signing generation composed a propagation service")
 	}
 	if _, err := composePropagation(verifier, operation, authorities, lifecycleReplayStub{}, enabled); err == nil {
 		t.Fatal("replay without the propagation contract composed a propagation service")
 	}
 	service, err = composePropagation(verifier, operation, authorities, disabledReplay, enabled)
+	if !IsLifecycleError(err) || service != nil {
+		t.Fatalf("disabled replay composed a propagation service: service=%v error=%v", service != nil, err)
+	}
+	service, err = composePropagation(verifier, operation, authorities, memoryReplay, enabled)
 	if err != nil || service == nil {
 		t.Fatalf("enabled composition service=%v error=%v", service != nil, err)
 	}

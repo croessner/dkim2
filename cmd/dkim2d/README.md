@@ -353,7 +353,10 @@ replay:
 ```
 
 Disabled replay is explicit local policy. It loads no replay HMAC, constructs
-no replay deriver, and does not silently fall back to another backend.
+no replay deriver, and does not silently fall back to another backend. It
+cannot be combined with `server.dsn_propagate_capability_file`: the
+propagation routes need a stored replay coordinate and the loader refuses that
+matrix (see "Received delivery-status evaluation and propagation").
 
 For one private container-network listener, the same generation must also own
 the internal-PKI identity:
@@ -453,6 +456,15 @@ capability is accepted on these two. It does not require
 `delivery_status` datasource profile, not through the `/v1/dsn/sign` route,
 and a local domain without that profile is answered `permerror`/`discard`
 with `propagation_failure: unprovisioned_domain`.
+
+`server.dsn_propagate_capability_file` is refused together with
+`replay.backend: disabled`; the loader answers
+`config_invalid_backend_matrix`, and the daemon lifecycle refuses to compose
+the route over the disabled backend even if a loader were bypassed. The
+two-phase propagation coordinate is the only bound on how many signed
+notifications one captured DSN can extract from this daemon, so a propagation
+route without replay storage would be an unbounded signing oracle. There is no
+opt-out; propagation requires the `memory` or `valkey` backend.
 
 `process.default_tenant` names the administrative tenant that `/v1/process`
 uses when a request carries no `context.tenant`. Locality of a received

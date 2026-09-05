@@ -118,18 +118,23 @@ func (b *ReceivedDSNBinding) resolverFor(tenant string) (dkim2.LocalAuthority, e
 }
 
 // evaluate runs the received-DSN evaluation for one classified notification
-// under the bound tenant precedence. Library contract errors are returned so
-// that the process route fails closed instead of guessing a projection.
+// under the bound tenant precedence and reports whether an evaluation exists.
+// The library requires a readable outer signature; when it refuses the outer
+// message at its structure stage and the outer verification did not pass,
+// that refusal is the outer verdict's own consequence and no evaluation is
+// reported. Every other library contract error is returned so that the
+// process route fails closed instead of guessing a projection.
 func (b *ReceivedDSNBinding) evaluate(
 	ctx context.Context,
 	request InboundRequest,
-) (dkim2.ReceivedDSNEvaluation, error) {
+	outerVerified bool,
+) (dkim2.ReceivedDSNEvaluation, bool, error) {
 	if b == nil || nilInterface(b.evaluator) {
-		return dkim2.ReceivedDSNEvaluation{}, &DomainError{}
+		return dkim2.ReceivedDSNEvaluation{}, false, &DomainError{}
 	}
 	authority, err := b.resolverFor(b.tenantFor(request.Tenant()))
 	if err != nil {
-		return dkim2.ReceivedDSNEvaluation{}, err
+		return dkim2.ReceivedDSNEvaluation{}, false, err
 	}
 	verify := request.VerifyRequest()
 	evaluation, err := b.evaluator.EvaluateReceivedDSN(ctx, dkim2.NewReceivedDSNRequest(
@@ -137,14 +142,17 @@ func (b *ReceivedDSNBinding) evaluate(
 	))
 	if err != nil {
 		if contextErr := domainContextError(ctx); contextErr != nil {
-			return dkim2.ReceivedDSNEvaluation{}, contextErr
+			return dkim2.ReceivedDSNEvaluation{}, false, contextErr
 		}
-		return dkim2.ReceivedDSNEvaluation{}, &DomainError{}
+		if !outerVerified && dkim2.ReceivedDSNStageOf(err) == dkim2.ReceivedDSNStageStructure {
+			return dkim2.ReceivedDSNEvaluation{}, false, nil
+		}
+		return dkim2.ReceivedDSNEvaluation{}, false, &DomainError{}
 	}
 	if !evaluation.Valid() {
-		return dkim2.ReceivedDSNEvaluation{}, &DomainError{}
+		return dkim2.ReceivedDSNEvaluation{}, false, &DomainError{}
 	}
-	return evaluation, nil
+	return evaluation, true, nil
 }
 
 // String returns a content-free binding representation.

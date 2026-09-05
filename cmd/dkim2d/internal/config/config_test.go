@@ -1098,6 +1098,18 @@ replay:
 // propagationYAML returns the signing document with the propagation capability.
 func propagationYAML() string {
 	return strings.Replace(
+		propagationYAMLWithDisabledReplay(),
+		"replay:\n  backend: disabled\n",
+		"replay:\n  backend: memory\n  hmac_key_file: /secure/"+testGeneration+"/hmac\n  epoch: 1\n",
+		1,
+	)
+}
+
+// propagationYAMLWithDisabledReplay returns the signing document with the
+// propagation capability over the explicitly disabled replay backend, the
+// one combination the matrix must refuse.
+func propagationYAMLWithDisabledReplay() string {
+	return strings.Replace(
 		signingYAML(),
 		"  dsn_sign_capability_file: /secure/"+testGeneration+"/dsn-sign-capability\n",
 		"  dsn_sign_capability_file: /secure/"+testGeneration+"/dsn-sign-capability\n"+
@@ -1110,7 +1122,9 @@ func propagationYAML() string {
 // the process default tenant, the propagation capability, and the pending
 // lease: the tenant must be canonical, the lease is bounded and only
 // meaningful with the propagation capability, the fifth capability stays
-// distinct, and propagation stands alone. It does not require the
+// distinct, propagation refuses the disabled replay backend because the
+// two-phase coordinate is its only replay bound, and propagation otherwise
+// stands alone. It does not require the
 // delivery-status route capability, because propagation needs the tenant's
 // delivery_status datasource profile rather than the /v1/dsn/sign route, and
 // a missing profile is already answered permerror/discard at request time.
@@ -1142,10 +1156,11 @@ func TestLoadValidatesReceivedDSNAndPropagationFields(t *testing.T) {
 		document string
 		code     Code
 	}{
-		"non-canonical tenant":     {signingYAML() + "process:\n  default_tenant: \"Tenant A\"\n", CodeInvalidField},
-		"lease without capability": {signingYAML() + "dsn_propagation:\n  pending_lease: 30s\n", CodeInvalidMatrix},
-		"lease below bound":        {propagationYAML() + "dsn_propagation:\n  pending_lease: 500ms\n", CodeInvalidField},
-		"lease above bound":        {propagationYAML() + "dsn_propagation:\n  pending_lease: 2h\n", CodeInvalidField},
+		"non-canonical tenant":             {signingYAML() + "process:\n  default_tenant: \"Tenant A\"\n", CodeInvalidField},
+		"lease without capability":         {signingYAML() + "dsn_propagation:\n  pending_lease: 30s\n", CodeInvalidMatrix},
+		"propagation with disabled replay": {propagationYAMLWithDisabledReplay(), CodeInvalidMatrix},
+		"lease below bound":                {propagationYAML() + "dsn_propagation:\n  pending_lease: 500ms\n", CodeInvalidField},
+		"lease above bound":                {propagationYAML() + "dsn_propagation:\n  pending_lease: 2h\n", CodeInvalidField},
 		"propagation capability equal to another": {
 			strings.Replace(propagationYAML(), "/dsn-propagate-capability", "/dsn-sign-capability", 1), CodeInvalidField,
 		},
