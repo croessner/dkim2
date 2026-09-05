@@ -358,7 +358,7 @@ The result is one closed `delivery_status` projection:
 | Member | Closed values |
 | --- | --- |
 | `structure` | `valid`, `malformed`, `limit_exceeded` |
-| `embedded` | `verified`, `verified_headers_only`, `unverified`, `temperror`, `absent` |
+| `embedded` | `verified`, `verified_headers_only`, `unverified`, `temperror`, `absent`, `not_evaluated` |
 | `local_hop` | `local`, `not_local`, `mismatch`, `temperror`, `not_evaluated` |
 | `outer_alignment` | `aligned`, `misaligned`, `not_evaluated` |
 | `recipient_linkage` | `linked`, `unlinked`, `not_evaluated` |
@@ -377,6 +377,9 @@ still return `not_reconstructable` after an attempted rebuild.
 Temporary DNS or key failures map to `embedded = temperror`; a temporary
 datasource failure maps to `local_hop = temperror`. Both carry the existing
 temporary disposition and never degrade to a permanent state.
+Every member after `structure` carries `not_evaluated` when the structure
+stage stopped the evaluation, so a `malformed` or `limit_exceeded` report is
+always a complete, valid projection that the policy table can reject.
 `not_evaluated` means only that an earlier stage stopped the evaluation or,
 for `local_hop` and `propagation`, that no tenant was available; it never
 carries a temporary meaning.
