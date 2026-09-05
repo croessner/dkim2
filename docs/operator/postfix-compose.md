@@ -132,6 +132,15 @@ separately operated directly addressed Valkey replay backend. Originator uses
 the sign capability. Ordinary transit uses the revise capability. Only the
 daemon loads the flat-file datasource, private manifest, and PKCS#8 children.
 
+A verification daemon may resolve locality without signing capabilities. The
+inbound route may configure `signing.backend` together with
+`process.default_tenant` and no route capability at all: the datasource is
+loaded read-only so that received delivery-status notifications can be
+classified as local or foreign, no signing route is registered, and
+`/v1/sign`, `/v1/revise`, `/v1/dsn/sign`, and `/v1/dsn/propagate` answer `403`
+for every credential. Do not add an unused sign or delivery-status capability
+to the inbound route to satisfy the datasource.
+
 The originator Milter continues to tempfail every `MAIL FROM <>` message before
 daemon I/O. Locally generated Postfix bounces use a separate `postfix_dsn`
 Milter route whose signing block contains only the administrative tenant and

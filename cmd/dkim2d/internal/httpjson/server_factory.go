@@ -48,7 +48,12 @@ func (f *ServerFactory) Assemble(input app.HTTPAssemblyInput) (app.HTTPAssembly,
 	if input.Observability() != nil {
 		dependencies = append(dependencies, input.Observability())
 	}
-	if input.Snapshot().Signing().Enabled() {
+	// The signing application service is a boundary dependency only for the
+	// routes that invoke it directly. A propagation-only daemon reaches it
+	// through the propagation service, and a verification daemon that only
+	// resolves received-DSN locality holds no signing service at all.
+	if input.Snapshot().Signing().Enabled() && server.SigningRouteEnabled() &&
+		!nilInterfaceValue(input.OperationService()) {
 		dependencies = append(dependencies, input.OperationService())
 		if server.SignEnabled() {
 			dependencies = append(

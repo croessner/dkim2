@@ -519,7 +519,11 @@ func buildProtectedState(
 			state.hasSign != snapshot.Server().SignEnabled() ||
 			state.hasRevise != snapshot.Server().ReviseEnabled() ||
 			state.hasDSNSign != snapshot.Server().DSNSignEnabled() ||
-			(!state.hasSign && !state.hasRevise && !state.hasDSNSign) {
+			state.hasDSNPropagate != snapshot.Server().DSNPropagateEnabled() ||
+			!signingDatasourceConsumed(
+				state.hasSign || state.hasRevise || state.hasDSNSign || state.hasDSNPropagate,
+				snapshot.ProcessDefaultTenant(),
+			) {
 			return nil, newError(CodeProtectedContent)
 		}
 		if snapshot.Signing().Backend() == SigningFlatFile {

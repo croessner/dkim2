@@ -306,6 +306,38 @@ func (c ServerConfig) DSNSignEnabled() bool {
 	return c.state != nil && c.state.dsnSignCapabilityFile != ""
 }
 
+// SigningRouteEnabled reports whether any capability authorizes a route that
+// invokes the signing application service directly: /v1/sign, /v1/revise, or
+// /v1/dsn/sign. Propagation is deliberately excluded: it owns a separate
+// capability and a separate service seam.
+func (c ServerConfig) SigningRouteEnabled() bool {
+	return c.SignEnabled() || c.ReviseEnabled() || c.DSNSignEnabled()
+}
+
+// AnyRouteCapability reports whether any route capability beyond the process
+// capability is configured, propagation included. It is the single authority
+// on whether the daemon must construct a signer at all.
+func (c ServerConfig) AnyRouteCapability() bool {
+	return c.SigningRouteEnabled() || c.DSNPropagateEnabled()
+}
+
+// SigningDatasourceConsumed reports whether at least one configured consumer
+// needs the signing datasource: a signing or propagation route capability, or
+// the received-DSN locality tenant of /v1/process. A configured datasource
+// without any consumer is refused at load, so this never reports a silent
+// no-op backend.
+func (s Snapshot) SigningDatasourceConsumed() bool {
+	return s.Signing().Enabled() &&
+		signingDatasourceConsumed(s.Server().AnyRouteCapability(), s.ProcessDefaultTenant())
+}
+
+// signingDatasourceConsumed is the one rule shared by the document loader,
+// the protected-generation loader, and the runtime handoff: a datasource is
+// valid exactly when a route capability or the locality tenant consumes it.
+func signingDatasourceConsumed(anyRouteCapability bool, defaultTenant string) bool {
+	return anyRouteCapability || defaultTenant != ""
+}
+
 // Backend returns the selected signing backend.
 func (c SigningConfig) Backend() SigningBackend {
 	if c.state == nil {

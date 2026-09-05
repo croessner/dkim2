@@ -500,6 +500,37 @@ and ordinary inbound messages that are not delivery-status notifications never
 reach this lookup. A datasource outage is reported as `local_hop: temperror`
 with a `tempfail` disposition, never as `not_local`.
 
+### Datasource consumers and the valid capability matrix
+
+A configured `signing.backend` needs at least one consumer. Exactly three
+shapes are valid, and a datasource that nothing consumes is refused with
+`config_invalid_backend_matrix` rather than loaded as a silent no-op.
+
+| Shape | Route capabilities | `process.default_tenant` | Datasource | Registered signing routes |
+| --- | --- | --- | --- | --- |
+| Verification with locality | none | required | read-only, for locality | none; `/v1/sign`, `/v1/revise`, `/v1/dsn/sign`, `/v1/dsn/propagate` answer `403` |
+| Propagation only | `dsn_propagate_capability_file` | optional | read plus `delivery_status` signing | `/v1/dsn/propagate`, `/v1/dsn/propagate/commit` |
+| Full signing | any of `sign`, `revise`, `dsn_sign`, `dsn_propagate` | optional | read plus signing | the configured routes only |
+
+The verification shape is the correct one for an internet-facing inbound
+daemon that must classify a received delivery-status notification as local or
+foreign: locality is a datasource read keyed by `process.default_tenant`, it
+never reaches a private key, and the daemon constructs no signer at all. Do
+not add an unused `dsn_sign` or `dsn_propagate` capability to make the
+datasource acceptable.
+
+The propagation shape needs no `dsn_sign_capability_file`. Both shapes are
+accepted by the protected-generation loader with exactly the capability
+children they declare; a generation carrying a capability the document does
+not configure, or missing one it does, stays refused with
+`config_protected_content`.
+
+Readiness is identical in all three shapes: whenever `signing.backend` is
+configured, the datasource runtime is a readiness dependency, so a
+verification daemon whose datasource is unavailable at startup does not become
+ready. A later outage is reported as `local_hop: temperror`, never as
+`not_local`.
+
 Omit every unused route capability. `dsn_sign_capability_file` authorizes only
 the Postfix-exclusive `/v1/dsn/sign`; possession attests that its sole adapter
 established trusted `internal` origin. It is distinct from process, sign,

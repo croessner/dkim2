@@ -128,7 +128,25 @@ func NewSigningService(
 	allowRecipientGroup bool,
 	policy ...signingPolicies,
 ) (*SigningService, error) {
-	if nilInterface(publicKeys) || store == nil || allowRecipientGroup {
+	if store == nil {
+		return nil, &DomainError{}
+	}
+	return newSigningServiceOver(
+		publicKeys, flatSigningAuthority{runtime: store}, allowRecipientGroup, policy...,
+	)
+}
+
+// newSigningServiceOver constructs one signing application service over an
+// already composed authority. It is the single constructor shared by the
+// flat-file and datasource generations and never accepts an absent authority,
+// so a route can not become reachable without its signing generation.
+func newSigningServiceOver(
+	publicKeys dkim2.PublicKeyProvider,
+	store SigningAuthority,
+	allowRecipientGroup bool,
+	policy ...signingPolicies,
+) (*SigningService, error) {
+	if nilInterface(publicKeys) || nilInterface(store) || allowRecipientGroup {
 		return nil, &DomainError{}
 	}
 	selected, err := selectPolicy(policy)
@@ -136,8 +154,7 @@ func NewSigningService(
 		return nil, err
 	}
 	return &SigningService{
-		publicKeys: publicKeys, store: flatSigningAuthority{runtime: store},
-		policies: selected, clock: time.Now,
+		publicKeys: publicKeys, store: store, policies: selected, clock: time.Now,
 	}, nil
 }
 
@@ -148,19 +165,12 @@ func NewDatasourceSigningService(
 	allowRecipientGroup bool,
 	policy ...signingPolicies,
 ) (*SigningService, error) {
-	if nilInterface(publicKeys) || runtime == nil || allowRecipientGroup {
+	if runtime == nil {
 		return nil, &DomainError{}
 	}
-	selected, err := selectPolicy(policy)
-	if err != nil {
-		return nil, err
-	}
-	return &SigningService{
-		publicKeys: publicKeys,
-		store:      datasourceSigningAuthority{runtime: runtime},
-		policies:   selected,
-		clock:      time.Now,
-	}, nil
+	return newSigningServiceOver(
+		publicKeys, datasourceSigningAuthority{runtime: runtime}, allowRecipientGroup, policy...,
+	)
 }
 
 // Acquire pins one flat-file signing generation.

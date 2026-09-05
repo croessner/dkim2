@@ -347,8 +347,11 @@ func (p *RuntimePreparation) ServerTLSConfig() *tls.Config {
 	return p.state.serverTLS.Clone()
 }
 
-// SigningStore returns the same-generation reload runtime only while
-// runtime preparation owns the handoff.
+// SigningStore returns the same-generation reload runtime only while runtime
+// preparation owns the handoff and at least one configured consumer needs the
+// datasource. A generation configured solely for received-DSN locality
+// receives the same store: it resolves local authority through it and never
+// reaches a private key, because no signing route is composed over it.
 func (p *RuntimePreparation) SigningStore() *signingstore.Runtime {
 	if p == nil || p.state == nil || p.token == nil {
 		return nil
@@ -357,7 +360,11 @@ func (p *RuntimePreparation) SigningStore() *signingstore.Runtime {
 	defer p.state.mu.Unlock()
 	if p.state.phase != protectedPreparedForRuntime ||
 		p.state.runtimeToken != p.token ||
-		(!p.state.hasSign && !p.state.hasRevise && !p.state.hasDSNSign) {
+		!signingDatasourceConsumed(
+			p.state.hasSign || p.state.hasRevise || p.state.hasDSNSign ||
+				p.state.hasDSNPropagate,
+			p.state.snapshot.ProcessDefaultTenant(),
+		) {
 		return nil
 	}
 	return p.state.signingStore

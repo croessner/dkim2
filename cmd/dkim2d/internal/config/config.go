@@ -391,7 +391,11 @@ func validateSnapshot(values map[string]rawValue, presence map[string]Presence) 
 	if err != nil {
 		return nil, err
 	}
-	signing, err := parseSigning(values, presence, generation, server)
+	process, err := parseProcess(values)
+	if err != nil {
+		return nil, err
+	}
+	signing, err := parseSigning(values, presence, generation, server, process.defaultTenant)
 	if err != nil {
 		return nil, err
 	}
@@ -420,10 +424,6 @@ func validateSnapshot(values map[string]rawValue, presence map[string]Presence) 
 		return nil, newError(CodeInvalidField)
 	}
 	observability, err := parseObservability(values, presence, generation, protectedPaths...)
-	if err != nil {
-		return nil, err
-	}
-	process, err := parseProcess(values)
 	if err != nil {
 		return nil, err
 	}
@@ -745,7 +745,12 @@ func ValidTLSServerName(value string) bool {
 	return true
 }
 
-// parseSigning validates the default-disabled signing conditional matrix.
+// parseSigning validates the default-disabled signing conditional matrix. The
+// configured datasource needs at least one consumer: a signing or
+// delivery-status route capability, the propagation capability, or the
+// received-DSN locality tenant of the process route. A verification-only
+// daemon that resolves locality is therefore accepted without any signing
+// route, while a datasource that nothing consumes stays refused.
 //
 //nolint:gocyclo // The closed backend-conditional configuration matrix is intentionally explicit.
 func parseSigning(
@@ -753,6 +758,7 @@ func parseSigning(
 	presence map[string]Presence,
 	generation string,
 	server serverState,
+	defaultTenant string,
 ) (signingState, error) {
 	policies, err := parseSigningPolicies(values)
 	if err != nil {
@@ -850,7 +856,8 @@ func parseSigning(
 	revisePresent := presence[pathServerReviseCapability].Explicit()
 	dsnSignPresent := presence[pathServerDSNSignCapability].Explicit()
 	propagatePresent := presence[pathServerDSNPropagateCapability].Explicit()
-	if !signPresent && !revisePresent && !dsnSignPresent && !propagatePresent {
+	anyRouteCapability := signPresent || revisePresent || dsnSignPresent || propagatePresent
+	if !signingDatasourceConsumed(anyRouteCapability, defaultTenant) {
 		return signingState{}, newError(CodeInvalidMatrix)
 	}
 	reload, err := durationValue(

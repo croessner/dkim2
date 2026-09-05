@@ -102,13 +102,17 @@ func newHTTPAssemblyInput(
 	return input, nil
 }
 
-// Valid reports whether every structurally provable assembly dependency is present.
+// Valid reports whether every structurally provable assembly dependency is
+// present. The signing service must exist exactly when a route capability
+// authorizes a route that signs: a signing generation configured solely for
+// received-DSN locality assembles without one, and no configured signing
+// route may assemble without it.
 func (i HTTPAssemblyInput) Valid() bool {
 	if !i.baseValid() {
 		return false
 	}
-	enabled := i.snapshot.Signing().Enabled()
-	return enabled == !nilInterface(i.operation)
+	required := i.snapshot.Signing().Enabled() && i.snapshot.Server().AnyRouteCapability()
+	return required == !nilInterface(i.operation)
 }
 
 // baseValid reports the transport dependencies that exist before optional

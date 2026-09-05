@@ -523,40 +523,19 @@ func (l *Lifecycle) assembleApplication(
 		if !ok || nilInterface(publicKeys) {
 			return nil, &LifecycleError{}
 		}
-		var (
-			operation    *SigningService
-			operationErr error
-		)
-		if preparation.Snapshot().Signing().Backend() == config.SigningFlatFile {
-			operation, operationErr = NewSigningService(
-				publicKeys,
-				preparation.SigningStore(),
-				preparation.Snapshot().Signing().AllowRecipientGroup(),
-				signingPoliciesFromConfig(preparation.Snapshot().Signing().Policies()),
-			)
-		} else {
-			startup.signing, operationErr = newNetworkSigningRuntime(
-				acquisition, preparation, startup.telemetry,
-			)
-			if operationErr == nil && startup.signing != nil {
-				operation, operationErr = NewDatasourceSigningService(
-					publicKeys,
-					startup.signing.runtime,
-					preparation.Snapshot().Signing().AllowRecipientGroup(),
-					signingPoliciesFromConfig(preparation.Snapshot().Signing().Policies()),
-				)
-				startup.authority = joinedAuthority{
-					replay: startup.replay, signing: startup.signing,
-				}
-			}
-		}
-		if operationErr != nil || operation == nil {
-			return nil, &LifecycleError{}
-		}
-		operation.attachObservability(startup.telemetry)
-		authorities, err := NewLocalAuthorityRegistry(operation.store, time.Now)
+		authority, err := l.composeSigningAuthority(acquisition, startup, preparation)
 		if err != nil {
 			return nil, &LifecycleError{}
+		}
+		operation, authorities, err := composeSigningGeneration(
+			publicKeys, authority, preparation.Snapshot(),
+		)
+		if err != nil {
+			return nil, &LifecycleError{}
+		}
+		if operation != nil {
+			operation.attachObservability(startup.telemetry)
+			startup.operation = operation
 		}
 		if err := bindReceivedDSN(processor, verifier, authorities, preparation.Snapshot()); err != nil {
 			return nil, &LifecycleError{}
@@ -578,7 +557,6 @@ func (l *Lifecycle) assembleApplication(
 				return nil, &LifecycleError{}
 			}
 		}
-		startup.operation = operation
 	}
 	if !preparation.Snapshot().Signing().Enabled() {
 		authorities, err := NewLocalAuthorityRegistry(nil, time.Now)
@@ -606,6 +584,72 @@ func (l *Lifecycle) assembleApplication(
 		return nil, &LifecycleError{}
 	}
 	return processor, nil
+}
+
+// composeSigningAuthority constructs the signing authority of the prepared
+// generation and binds its readiness. The flat-file backend reuses the
+// protected compound store; every network backend starts one datasource
+// runtime and joins it to replay readiness, so an unavailable datasource
+// keeps the daemon out of ready state whether or not a signing route exists.
+func (l *Lifecycle) composeSigningAuthority(
+	acquisition context.Context,
+	startup *lifecycleStartup,
+	preparation *config.RuntimePreparation,
+) (SigningAuthority, error) {
+	if startup == nil || preparation == nil {
+		return nil, &LifecycleError{}
+	}
+	if preparation.Snapshot().Signing().Backend() == config.SigningFlatFile {
+		store := preparation.SigningStore()
+		if store == nil {
+			return nil, &LifecycleError{}
+		}
+		return flatSigningAuthority{runtime: store}, nil
+	}
+	runtime, err := newNetworkSigningRuntime(acquisition, preparation, startup.telemetry)
+	if runtime != nil {
+		startup.signing = runtime
+	}
+	if err != nil || runtime == nil || runtime.runtime == nil {
+		return nil, &LifecycleError{}
+	}
+	startup.authority = joinedAuthority{replay: startup.replay, signing: runtime}
+	return datasourceSigningAuthority{runtime: runtime.runtime}, nil
+}
+
+// composeSigningGeneration builds the route-facing signing service and the
+// shared local-authority registry over one composed signing generation. The
+// signing service exists only when a route capability authorizes a route that
+// signs; a generation configured solely for received-DSN locality resolves
+// domains through the same authority without constructing a signer, so a
+// verification daemon holds no signing seam that a route could reach.
+func composeSigningGeneration(
+	publicKeys dkim2.PublicKeyProvider,
+	authority SigningAuthority,
+	snapshot config.Snapshot,
+) (*SigningService, *LocalAuthorityRegistry, error) {
+	if nilInterface(publicKeys) || nilInterface(authority) || !snapshot.Valid() ||
+		!snapshot.Signing().Enabled() {
+		return nil, nil, &LifecycleError{}
+	}
+	var operation *SigningService
+	if snapshot.Server().AnyRouteCapability() {
+		service, err := newSigningServiceOver(
+			publicKeys,
+			authority,
+			snapshot.Signing().AllowRecipientGroup(),
+			signingPoliciesFromConfig(snapshot.Signing().Policies()),
+		)
+		if err != nil || service == nil {
+			return nil, nil, &LifecycleError{}
+		}
+		operation = service
+	}
+	authorities, err := NewLocalAuthorityRegistry(authority, time.Now)
+	if err != nil || authorities == nil {
+		return nil, nil, &LifecycleError{}
+	}
+	return operation, authorities, nil
 }
 
 // bindTransport assembles and binds the HTTP owner without publishing readiness.
