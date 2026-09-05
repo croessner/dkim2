@@ -1,0 +1,344 @@
+{
+  "schema": "dkim2.dsn-propagate-fixture.v1",
+  "draft": "draft-ietf-dkim-dkim2-spec-06",
+  "expectation": "invalid",
+  "cases": [
+    {
+      "case": "propagate_request_two_forward_paths",
+      "schema": "DSNPropagateRequest",
+      "document": {
+        "api_version": "v1",
+        "draft": "draft-ietf-dkim-dkim2-spec-06",
+        "message": {
+          "raw_rfc5322_base64": "Q29udGVudC1UeXBlOiBtdWx0aXBhcnQvcmVwb3J0OyByZXBvcnQtdHlwZT1kZWxpdmVyeS1zdGF0dXMNCg0K",
+          "fidelity": "lmtp_delivered_crlf"
+        },
+        "outer_smtp": {
+          "mail_from": "<>",
+          "smtputf8": false,
+          "rcpt_to": [
+            "<one@example.com>",
+            "<two@example.com>"
+          ]
+        },
+        "context": {
+          "tenant": "example",
+          "reporting_mta": "mta.example.com"
+        }
+      },
+      "violates": "the propagation envelope admits exactly one forward path"
+    },
+    {
+      "case": "propagate_request_without_smtputf8",
+      "schema": "DSNPropagateRequest",
+      "document": {
+        "api_version": "v1",
+        "draft": "draft-ietf-dkim-dkim2-spec-06",
+        "message": {
+          "raw_rfc5322_base64": "Q29udGVudC1UeXBlOiBtdWx0aXBhcnQvcmVwb3J0OyByZXBvcnQtdHlwZT1kZWxpdmVyeS1zdGF0dXMNCg0K",
+          "fidelity": "lmtp_delivered_crlf"
+        },
+        "outer_smtp": {
+          "mail_from": "<>",
+          "rcpt_to": [
+            "<return.path@example.com>"
+          ]
+        },
+        "context": {
+          "tenant": "example",
+          "reporting_mta": "mta.example.com"
+        }
+      },
+      "violates": "observed SMTPUTF8 evidence is required"
+    },
+    {
+      "case": "propagate_request_foreign_fidelity",
+      "schema": "DSNPropagateRequest",
+      "document": {
+        "api_version": "v1",
+        "draft": "draft-ietf-dkim-dkim2-spec-06",
+        "message": {
+          "raw_rfc5322_base64": "Q29udGVudC1UeXBlOiBtdWx0aXBhcnQvcmVwb3J0OyByZXBvcnQtdHlwZT1kZWxpdmVyeS1zdGF0dXMNCg0K",
+          "fidelity": "milter_reconstructed_crlf"
+        },
+        "outer_smtp": {
+          "mail_from": "<>",
+          "rcpt_to": [
+            "<return.path@example.com>"
+          ],
+          "smtputf8": false
+        },
+        "context": {
+          "tenant": "example",
+          "reporting_mta": "mta.example.com"
+        }
+      },
+      "violates": "the route admits only raw and LMTP-delivered representations"
+    },
+    {
+      "case": "propagate_request_without_fidelity",
+      "schema": "DSNPropagateRequest",
+      "document": {
+        "api_version": "v1",
+        "draft": "draft-ietf-dkim-dkim2-spec-06",
+        "message": {
+          "raw_rfc5322_base64": "Q29udGVudC1UeXBlOiBtdWx0aXBhcnQvcmVwb3J0OyByZXBvcnQtdHlwZT1kZWxpdmVyeS1zdGF0dXMNCg0K"
+        },
+        "outer_smtp": {
+          "mail_from": "<>",
+          "rcpt_to": [
+            "<return.path@example.com>"
+          ],
+          "smtputf8": false
+        },
+        "context": {
+          "tenant": "example",
+          "reporting_mta": "mta.example.com"
+        }
+      },
+      "violates": "the representation claim is explicit on this route"
+    },
+    {
+      "case": "propagate_request_without_reporting_mta",
+      "schema": "DSNPropagateRequest",
+      "document": {
+        "api_version": "v1",
+        "draft": "draft-ietf-dkim-dkim2-spec-06",
+        "message": {
+          "raw_rfc5322_base64": "Q29udGVudC1UeXBlOiBtdWx0aXBhcnQvcmVwb3J0OyByZXBvcnQtdHlwZT1kZWxpdmVyeS1zdGF0dXMNCg0K",
+          "fidelity": "lmtp_delivered_crlf"
+        },
+        "outer_smtp": {
+          "mail_from": "<>",
+          "rcpt_to": [
+            "<return.path@example.com>"
+          ],
+          "smtputf8": false
+        },
+        "context": {
+          "tenant": "example"
+        }
+      },
+      "violates": "the reporting MTA name is required"
+    },
+    {
+      "case": "propagate_request_uppercase_reporting_mta",
+      "schema": "DSNPropagateRequest",
+      "document": {
+        "api_version": "v1",
+        "draft": "draft-ietf-dkim-dkim2-spec-06",
+        "message": {
+          "raw_rfc5322_base64": "Q29udGVudC1UeXBlOiBtdWx0aXBhcnQvcmVwb3J0OyByZXBvcnQtdHlwZT1kZWxpdmVyeS1zdGF0dXMNCg0K",
+          "fidelity": "lmtp_delivered_crlf"
+        },
+        "outer_smtp": {
+          "mail_from": "<>",
+          "rcpt_to": [
+            "<return.path@example.com>"
+          ],
+          "smtputf8": false
+        },
+        "context": {
+          "tenant": "example",
+          "reporting_mta": "MTA.example.com"
+        }
+      },
+      "violates": "the reporting MTA name is canonical lowercase"
+    },
+    {
+      "case": "propagate_request_unknown_member",
+      "schema": "DSNPropagateRequest",
+      "document": {
+        "api_version": "v1",
+        "draft": "draft-ietf-dkim-dkim2-spec-06",
+        "message": {
+          "raw_rfc5322_base64": "Q29udGVudC1UeXBlOiBtdWx0aXBhcnQvcmVwb3J0OyByZXBvcnQtdHlwZT1kZWxpdmVyeS1zdGF0dXMNCg0K",
+          "fidelity": "lmtp_delivered_crlf"
+        },
+        "outer_smtp": {
+          "mail_from": "<>",
+          "rcpt_to": [
+            "<return.path@example.com>"
+          ],
+          "smtputf8": false
+        },
+        "context": {
+          "tenant": "example",
+          "reporting_mta": "mta.example.com"
+        },
+        "permanent_failure_reply": "discard"
+      },
+      "violates": "request objects are closed"
+    },
+    {
+      "case": "propagate_response_shared_continue_disposition",
+      "schema": "DSNPropagateResponse",
+      "document": {
+        "api_version": "v1",
+        "draft": "draft-ietf-dkim-dkim2-spec-06",
+        "operation": "delivery_status_propagation",
+        "result": "pass",
+        "disposition": "continue",
+        "delivery_status": {
+          "structure": "valid",
+          "embedded": "verified",
+          "local_hop": "local",
+          "outer_alignment": "aligned",
+          "recipient_linkage": "linked",
+          "propagation": "eligible"
+        },
+        "replay": {
+          "class": "first_seen"
+        }
+      },
+      "violates": "the propagation disposition vocabulary excludes continue"
+    },
+    {
+      "case": "propagate_response_unknown_failure",
+      "schema": "DSNPropagateResponse",
+      "document": {
+        "api_version": "v1",
+        "draft": "draft-ietf-dkim-dkim2-spec-06",
+        "operation": "delivery_status_propagation",
+        "result": "permerror",
+        "disposition": "discard",
+        "delivery_status": {
+          "structure": "valid",
+          "embedded": "verified",
+          "local_hop": "local",
+          "outer_alignment": "aligned",
+          "recipient_linkage": "linked",
+          "propagation": "eligible"
+        },
+        "replay": {
+          "class": "first_seen"
+        },
+        "propagation_failure": "unsupported_chain"
+      },
+      "violates": "the propagation failure vocabulary is closed"
+    },
+    {
+      "case": "propagate_response_propagation_without_commit_token",
+      "schema": "DSNPropagateResponse",
+      "document": {
+        "api_version": "v1",
+        "draft": "draft-ietf-dkim-dkim2-spec-06",
+        "operation": "delivery_status_propagation",
+        "result": "pass",
+        "disposition": "accept",
+        "delivery_status": {
+          "structure": "valid",
+          "embedded": "verified",
+          "local_hop": "local",
+          "outer_alignment": "aligned",
+          "recipient_linkage": "linked",
+          "propagation": "eligible"
+        },
+        "replay": {
+          "class": "first_seen"
+        },
+        "propagation": {
+          "next_hop_recipient": "<previous.hop@example.net>",
+          "smtputf8_required": false,
+          "eight_bit_mime_required": false,
+          "raw_rfc5322_base64": "REtJTTItU2lnbmF0dXJlOiBpPTE7IGQ9ZXhhbXBsZS5jb20NCg0K"
+        }
+      },
+      "violates": "an accepted propagation always carries its commit token"
+    },
+    {
+      "case": "propagate_response_propagation_without_eight_bit_fact",
+      "schema": "DSNPropagateResponse",
+      "document": {
+        "api_version": "v1",
+        "draft": "draft-ietf-dkim-dkim2-spec-06",
+        "operation": "delivery_status_propagation",
+        "result": "pass",
+        "disposition": "accept",
+        "delivery_status": {
+          "structure": "valid",
+          "embedded": "verified",
+          "local_hop": "local",
+          "outer_alignment": "aligned",
+          "recipient_linkage": "linked",
+          "propagation": "eligible"
+        },
+        "replay": {
+          "class": "first_seen"
+        },
+        "propagation": {
+          "next_hop_recipient": "<previous.hop@example.net>",
+          "smtputf8_required": false,
+          "commit_token": "Q29tbWl0VG9rZW5FeGFtcGxlMDAx",
+          "raw_rfc5322_base64": "REtJTTItU2lnbmF0dXJlOiBpPTE7IGQ9ZXhhbXBsZS5jb20NCg0K"
+        }
+      },
+      "violates": "transport facts are explicit, never inferred from absence"
+    },
+    {
+      "case": "commit_request_short_token",
+      "schema": "DSNPropagateCommitRequest",
+      "document": {
+        "api_version": "v1",
+        "draft": "draft-ietf-dkim-dkim2-spec-06",
+        "commit_token": "short"
+      },
+      "violates": "the commit token is bounded below"
+    },
+    {
+      "case": "commit_response_pending_state",
+      "schema": "DSNPropagateCommitResponse",
+      "document": {
+        "api_version": "v1",
+        "draft": "draft-ietf-dkim-dkim2-spec-06",
+        "state": "pending"
+      },
+      "violates": "the commit response reports the committed state only"
+    },
+    {
+      "case": "delivery_status_projection_foreign_local_hop",
+      "schema": "DeliveryStatusProjection",
+      "document": {
+        "structure": "valid",
+        "embedded": "verified",
+        "local_hop": "not_applicable",
+        "outer_alignment": "aligned",
+        "recipient_linkage": "linked",
+        "propagation": "eligible"
+      },
+      "violates": "the local-hop vocabulary is closed"
+    },
+    {
+      "case": "delivery_status_projection_incomplete",
+      "schema": "DeliveryStatusProjection",
+      "document": {
+        "structure": "valid",
+        "embedded": "verified",
+        "local_hop": "local",
+        "outer_alignment": "aligned",
+        "recipient_linkage": "linked"
+      },
+      "violates": "the projection always reports every stage"
+    },
+    {
+      "case": "process_request_empty_context",
+      "schema": "ProcessRequest",
+      "document": {
+        "api_version": "v1",
+        "draft": "draft-ietf-dkim-dkim2-spec-06",
+        "message": {
+          "raw_rfc5322_base64": "Q29udGVudC1UeXBlOiBtdWx0aXBhcnQvcmVwb3J0OyByZXBvcnQtdHlwZT1kZWxpdmVyeS1zdGF0dXMNCg0K",
+          "fidelity": "lmtp_delivered_crlf"
+        },
+        "smtp": {
+          "mail_from": "<>",
+          "rcpt_to": [
+            "<return.path@example.com>"
+          ]
+        },
+        "context": {}
+      },
+      "violates": "a present process context names its tenant"
+    }
+  ]
+}

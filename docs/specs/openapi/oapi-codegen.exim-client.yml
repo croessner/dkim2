@@ -5,6 +5,9 @@ generate:
 compatibility:
   preserve-original-operation-id-casing-in-embedded-spec: true
 output-options:
+  exclude-operation-ids:
+    - propagateDeliveryStatus
+    - commitDeliveryStatusPropagation
   overlay:
     path: ../docs/specs/openapi/oapi-codegen.exim-client.overlay.yml
     strict: true

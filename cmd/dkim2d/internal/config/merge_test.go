@@ -178,7 +178,7 @@ func TestStableFieldBindings(t *testing.T) {
 func TestStablePathSetIsExact(t *testing.T) {
 	specs := stableFieldSpecs()
 	golden := stableFieldGoldenContract()
-	if len(specs) != 117 || len(specs) != len(golden) {
+	if len(specs) != 120 || len(specs) != len(golden) {
 		t.Fatal("stable path count changed")
 	}
 	for index, expected := range golden {
@@ -233,6 +233,7 @@ func stableFieldGoldenContract() []stableFieldGolden {
 		{path: "server.sign_capability_file", environment: "DKIM2D_SERVER_SIGN_CAPABILITY_FILE"},
 		{path: "server.revise_capability_file", environment: "DKIM2D_SERVER_REVISE_CAPABILITY_FILE"},
 		{path: "server.dsn_sign_capability_file", environment: "DKIM2D_SERVER_DSN_SIGN_CAPABILITY_FILE"},
+		{path: "server.dsn_propagate_capability_file", environment: "DKIM2D_SERVER_DSN_PROPAGATE_CAPABILITY_FILE"},
 		{path: "server.read_header_timeout", environment: "DKIM2D_SERVER_READ_HEADER_TIMEOUT", defaultValue: "5s", hasDefault: true},
 		{path: "server.read_timeout", environment: "DKIM2D_SERVER_READ_TIMEOUT", defaultValue: "30" + "s", hasDefault: true},
 		{path: "server.write_timeout", environment: "DKIM2D_SERVER_WRITE_TIMEOUT", defaultValue: "65s", hasDefault: true},
@@ -242,6 +243,8 @@ func stableFieldGoldenContract() []stableFieldGolden {
 		{path: "server.max_waiters", environment: "DKIM2D_SERVER_MAX_WAITERS", defaultValue: "64", hasDefault: true},
 		{path: "server.admission_wait", environment: "DKIM2D_SERVER_ADMISSION_WAIT", defaultValue: "100ms", hasDefault: true},
 		{path: "policy.mode", environment: "DKIM2D_POLICY_MODE", defaultValue: "strict", hasDefault: true},
+		{path: "process.default_tenant", environment: "DKIM2D_PROCESS_DEFAULT_TENANT"},
+		{path: "dsn_propagation.pending_lease", environment: "DKIM2D_DSN_PROPAGATION_PENDING_LEASE", defaultValue: "120s", hasDefault: true},
 		{path: "dns.lookup_timeout", environment: "DKIM2D_DNS_LOOKUP_TIMEOUT", defaultValue: "5s", hasDefault: true},
 		{path: "dns.max_concurrent_lookups", environment: "DKIM2D_DNS_MAX_CONCURRENT_LOOKUPS", defaultValue: "64", hasDefault: true},
 		{path: "dns.cache.max_entries", environment: "DKIM2D_DNS_CACHE_MAX_ENTRIES", defaultValue: "4096", hasDefault: true},

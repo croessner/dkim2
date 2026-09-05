@@ -63,6 +63,7 @@ func newMappingError(code MappingErrorCode) *MappingError {
 type domainRequestState struct {
 	request    dkim2.VerifyRequest
 	authservID string
+	tenant     string
 }
 
 // AuthservID returns the optional validated local reporting authority.
@@ -84,6 +85,26 @@ func (r DomainRequest) VerifyRequest() (dkim2.VerifyRequest, error) {
 		return dkim2.VerifyRequest{}, newMappingError(MappingInvalidContract)
 	}
 	return r.state.request, nil
+}
+
+// Tenant returns the optional validated request tenant.
+func (r DomainRequest) Tenant() string {
+	if r.state == nil {
+		return ""
+	}
+	return r.state.tenant
+}
+
+// InboundRequest returns the app-owned request with its optional tenant.
+func (r DomainRequest) InboundRequest() (app.InboundRequest, error) {
+	if r.state == nil {
+		return app.InboundRequest{}, newMappingError(MappingInvalidContract)
+	}
+	inbound, err := app.NewInboundRequest(r.state.request, r.state.tenant)
+	if err != nil {
+		return app.InboundRequest{}, newMappingError(MappingInternalContract)
+	}
+	return inbound, nil
 }
 
 // String returns a content-free diagnostic representation.
@@ -126,6 +147,13 @@ func MapProcessRequest(input generated.ProcessRequest) (DomainRequest, error) {
 	if input.Reporting != nil {
 		authservID = input.Reporting.AuthservId
 		if !validSigningDomain(authservID) {
+			return DomainRequest{}, newMappingError(MappingInvalidContract)
+		}
+	}
+	tenant := ""
+	if input.Context != nil {
+		tenant = input.Context.Tenant
+		if !validTenant(tenant) {
 			return DomainRequest{}, newMappingError(MappingInvalidContract)
 		}
 	}
@@ -172,6 +200,7 @@ func MapProcessRequest(input generated.ProcessRequest) (DomainRequest, error) {
 	return DomainRequest{state: &domainRequestState{
 		request:    dkim2.NewVerifyRequest(rawMessage, reversePath, forwardPaths),
 		authservID: authservID,
+		tenant:     tenant,
 	}}, nil
 }
 

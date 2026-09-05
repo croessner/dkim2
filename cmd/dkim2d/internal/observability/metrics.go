@@ -39,6 +39,8 @@ type Metrics struct {
 	datasource      *prometheus.CounterVec
 	datasourceTime  *prometheus.HistogramVec
 	dsnEvidence     *prometheus.CounterVec
+	dsnReceived     *prometheus.CounterVec
+	dsnPropagation  *prometheus.CounterVec
 	dropped         *prometheus.CounterVec
 
 	readyTerminal atomic.Bool
@@ -109,6 +111,14 @@ func NewMetrics() (*Metrics, error) {
 			Name: "dkim2d_dsn_evidence_total",
 			Help: "Completed content-free DSN evidence stages.",
 		}, []string{keyEvidenceStage, keyResult}),
+		dsnReceived: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "dkim2d_dsn_received_total",
+			Help: "Completed received delivery-status evaluations by terminal stage.",
+		}, []string{keyStage, keyResult}),
+		dsnPropagation: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "dkim2d_dsn_propagation_total",
+			Help: "Completed delivery-status propagation operations by terminal stage.",
+		}, []string{keyStage, keyResult}),
 		dropped: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "dkim2d_observation_dropped_total",
 			Help: "Contained observation drops.",
@@ -119,7 +129,7 @@ func NewMetrics() (*Metrics, error) {
 		metrics.httpInFlight, metrics.process, metrics.processDuration,
 		metrics.policy, metrics.dns, metrics.dnsDuration, metrics.replay,
 		metrics.replayDuration, metrics.datasource, metrics.datasourceTime, metrics.dsnEvidence,
-		metrics.dropped,
+		metrics.dsnReceived, metrics.dsnPropagation, metrics.dropped,
 	}
 	for _, collector := range collectors {
 		if err := metrics.registry.Register(collector); err != nil {
@@ -138,6 +148,26 @@ func (m *Metrics) DSNEvidenceCompleted(stage, result string) {
 		return
 	}
 	m.dsnEvidence.WithLabelValues(stage, result).Inc()
+}
+
+// DSNReceivedCompleted records one terminal received-DSN evaluation stage
+// under exactly the closed stage and result vocabularies of that counter.
+func (m *Metrics) DSNReceivedCompleted(stage, result string) {
+	defer containMetricPanic()
+	if m == nil || !slices.Contains(receivedDSNStages, stage) || !slices.Contains(receivedDSNResults, result) {
+		return
+	}
+	m.dsnReceived.WithLabelValues(stage, result).Inc()
+}
+
+// DSNPropagationCompleted records one terminal propagation stage under
+// exactly the closed stage and result vocabularies of that counter.
+func (m *Metrics) DSNPropagationCompleted(stage, result string) {
+	defer containMetricPanic()
+	if m == nil || !slices.Contains(propagationStages, stage) || !slices.Contains(propagationResults, result) {
+		return
+	}
+	m.dsnPropagation.WithLabelValues(stage, result).Inc()
 }
 
 // DatasourceCompleted records one closed provider lifecycle operation.
@@ -296,7 +326,7 @@ func closedMetricValue(key, value string) bool {
 // httpOperations returns one fresh route-operation allowlist.
 func httpOperations() []string {
 	return []string{
-		"health", "readiness", "metrics", valueProcess, valueSign, valueRevise, valueDSNSign, valueUnmatched,
+		"health", "readiness", "metrics", valueProcess, valueSign, valueRevise, valueDSNSign, valuePropagation, valueUnmatched,
 	}
 }
 

@@ -33,13 +33,19 @@ const (
 	FidelityEximLocalScanObservedCRLF MessageFidelity = "exim_local_scan_observed_crlf"
 	// FidelityEximTransportFilterCRLF identifies Exim transport-filter network-form bytes.
 	FidelityEximTransportFilterCRLF MessageFidelity = "exim_transport_filter_crlf"
+	// FidelityLMTPDeliveredCRLF identifies bytes an MTA delivered over LMTP.
+	// The MTA has queued the message, so unsigned parts may have been
+	// rewritten; the representation is acceptable evidence for verification
+	// and propagation but is not a claim of unmodified raw submission bytes.
+	FidelityLMTPDeliveredCRLF MessageFidelity = "lmtp_delivered_crlf"
 )
 
 // AdmitsProcessFidelity reports whether receive-time verification may consume the representation.
 func AdmitsProcessFidelity(fidelity MessageFidelity) bool {
 	return fidelity == FidelityRawRFC5322 ||
 		fidelity == FidelityMilterReconstructedCRLF ||
-		fidelity == FidelityEximLocalScanObservedCRLF
+		fidelity == FidelityEximLocalScanObservedCRLF ||
+		fidelity == FidelityLMTPDeliveredCRLF
 }
 
 // AdmitsOperationFidelity reports whether signing or revision may consume the representation.

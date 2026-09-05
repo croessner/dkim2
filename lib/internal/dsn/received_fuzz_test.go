@@ -59,8 +59,11 @@ func FuzzReceivedDSN(f *testing.F) {
 		if !evaluation.Valid() {
 			t.Fatalf("invalid evaluation %+v", evaluation.Propagation())
 		}
-		if evaluation.Structure() != StructureValid && evaluation.Embedded() != "" {
+		if evaluation.Structure() != StructureValid && evaluation.Embedded() != EmbeddedNotEvaluated {
 			t.Fatal("embedded evaluated without valid structure")
+		}
+		if evaluation.Structure() == StructureValid && evaluation.Embedded() == EmbeddedNotEvaluated {
+			t.Fatal("embedded left unevaluated after a valid structure")
 		}
 		if evaluation.Propagation() == PropagationEligible && evaluation.LocalHop() != LocalHopLocal {
 			t.Fatal("eligible without local hop")

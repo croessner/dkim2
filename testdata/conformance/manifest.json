@@ -172,7 +172,7 @@
     {
       "id": "openapi-wire-response-source",
       "path": "cmd/dkim2d/internal/httpjson/http_wire_response.go",
-      "sha256": "c733c903cc6592cb109264d7236fc4a07c710c3a699931b82af1465d0e1db43a",
+      "sha256": "c487fa5d1beaa23ac89b7c5dbaa8fe312cd2ce25eaeb72a6ec30aefb2d509798",
       "module": "cmd/dkim2d"
     },
     {
@@ -290,6 +290,12 @@
       "module": "lib"
     },
     {
+      "id": "signing-dsn-propagation",
+      "path": "lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-06/dsn-propagation-golden.json",
+      "sha256": "3dc46c801bee5a371ff2275c984275ec906a67ae5a8384ee1af783cce4e05ca5",
+      "module": "lib"
+    },
+    {
       "id": "signing-facade-source",
       "path": "lib/signing_facade_test.go",
       "sha256": "3005bf9d7990e48e44af6c0ddcbc66c517644ac2fe37f1062657b44644f54c18",
@@ -310,7 +316,7 @@
     {
       "id": "signing-provenance",
       "path": "lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-06/README.md",
-      "sha256": "d55ec397ef20385e12a6a458143d450c68edb0b550874370c93785070e7e57f3",
+      "sha256": "ff9a7fac4bb573c3c48a2517cfb0679b028905303b90c156ce0f396888a119cc",
       "module": "lib"
     },
     {
@@ -365,6 +371,12 @@
       "id": "verification-public",
       "path": "lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-06/public-golden.json",
       "sha256": "12763019f6d4f30ab6f5e5fd972e9b971f2954fff1b1706cfacc7fd9978b68f9",
+      "module": "lib"
+    },
+    {
+      "id": "verification-received-dsn",
+      "path": "lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-06/received-dsn-golden.json",
+      "sha256": "0debfff0201693d001cac9df4fbf896544254e1def4992b2fb8ee172c07d0469",
       "module": "lib"
     }
   ],
@@ -1428,6 +1440,22 @@
     },
     {
       "suite": "signing",
+      "case_id": "dsn-propagation-rebuild",
+      "class": "draft_normative",
+      "authority": [
+        "draft-ietf-dkim-dkim2-spec-06 Section 12.1.1"
+      ],
+      "provenance": "manual_derivation",
+      "runner": "portable_vector",
+      "required_platform": "portable",
+      "expected_outcome": "pass",
+      "artifacts": [
+        "signing-dsn-propagation"
+      ],
+      "producer": "library-facade-tests"
+    },
+    {
+      "suite": "signing",
       "case_id": "envelope-facade",
       "class": "draft_normative",
       "authority": [
@@ -1814,6 +1842,22 @@
       "expected_outcome": "pass",
       "artifacts": [
         "verification-public"
+      ],
+      "producer": "library-facade-tests"
+    },
+    {
+      "suite": "verification",
+      "case_id": "received-dsn-evaluation",
+      "class": "draft_normative",
+      "authority": [
+        "draft-ietf-dkim-dkim2-spec-06 Section 12.1.2"
+      ],
+      "provenance": "manual_derivation",
+      "runner": "portable_vector",
+      "required_platform": "portable",
+      "expected_outcome": "pass",
+      "artifacts": [
+        "verification-received-dsn"
       ],
       "producer": "library-facade-tests"
     }

@@ -45,19 +45,19 @@ func (r *deliveryStatusObservationRecorder) ObserveDSNEvidence(stage, result str
 }
 
 // Acquire records forbidden profile access from an invalid DSN evidence request.
-func (s *deliveryStatusAcquireSpy) Acquire(context.Context) (signingLease, error) {
+func (s *deliveryStatusAcquireSpy) Acquire(context.Context) (SigningLease, error) {
 	s.calls++
 	return nil, &DomainError{}
 }
 
 type deliveryStatusPolicyRecorder struct {
-	next     signingAuthority
+	next     SigningAuthority
 	acquires int
 	domains  []string
 	uses     []signingstore.PolicyUse
 }
 
-func (r *deliveryStatusPolicyRecorder) Acquire(ctx context.Context) (signingLease, error) {
+func (r *deliveryStatusPolicyRecorder) Acquire(ctx context.Context) (SigningLease, error) {
 	r.acquires++
 	lease, err := r.next.Acquire(ctx)
 	if err != nil {
@@ -67,7 +67,7 @@ func (r *deliveryStatusPolicyRecorder) Acquire(ctx context.Context) (signingLeas
 }
 
 type deliveryStatusRecordingLease struct {
-	next     signingLease
+	next     SigningLease
 	recorder *deliveryStatusPolicyRecorder
 }
 
@@ -91,6 +91,17 @@ func (l deliveryStatusRecordingLease) SignDigest(
 	return l.next.SignDigest(ctx, handle, request)
 }
 
+// ResolveAnyProfile records and forwards one bounded authority probe.
+func (l deliveryStatusRecordingLease) ResolveAnyProfile(
+	ctx context.Context,
+	tenant string,
+	domain string,
+	at time.Time,
+) error {
+	l.recorder.domains = append(l.recorder.domains, domain)
+	return l.next.ResolveAnyProfile(ctx, tenant, domain, at)
+}
+
 func (l deliveryStatusRecordingLease) Close() error { return l.next.Close() }
 
 type deliveryStatusFixedProfileAuthority struct {
@@ -98,7 +109,7 @@ type deliveryStatusFixedProfileAuthority struct {
 	signs   int
 }
 
-func (a *deliveryStatusFixedProfileAuthority) Acquire(context.Context) (signingLease, error) {
+func (a *deliveryStatusFixedProfileAuthority) Acquire(context.Context) (SigningLease, error) {
 	return a, nil
 }
 
@@ -119,6 +130,16 @@ func (a *deliveryStatusFixedProfileAuthority) SignDigest(
 ) (dkim2.PrivateKeySignResult, error) {
 	a.signs++
 	return dkim2.PrivateKeySignResult{}, dkim2.NewTemporaryProviderError()
+}
+
+// ResolveAnyProfile reports the fixture profile as local authority.
+func (*deliveryStatusFixedProfileAuthority) ResolveAnyProfile(
+	context.Context,
+	string,
+	string,
+	time.Time,
+) error {
+	return nil
 }
 
 func (*deliveryStatusFixedProfileAuthority) Close() error { return nil }

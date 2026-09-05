@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	dkim2 "github.com/croessner/dkim2"
+	"github.com/croessner/dkim2/cmd/dkim2d/internal/app"
 	"github.com/croessner/dkim2/cmd/dkim2d/internal/httpjson/generated"
 )
 
@@ -103,9 +104,96 @@ func validSuccessResponse(value any) bool {
 		return validProcessResponse(typed)
 	case generated.OperationResponse:
 		return validOperationResponse(typed)
+	case generated.DSNPropagateResponse:
+		return validPropagationResponse(typed)
+	case generated.DSNPropagateCommitResponse:
+		return validPropagationCommitResponse(typed)
 	default:
 		return false
 	}
+}
+
+// validPropagationResponse validates the closed propagation contract before
+// commit: every enum, the projection, this operation's own result and
+// disposition coherence rule, and the presence rules of the two optional
+// members, so that an incoherent internal result never reaches the wire.
+func validPropagationResponse(response generated.DSNPropagateResponse) bool {
+	if response.ApiVersion != generated.V1 ||
+		response.Draft != generated.DraftIetfDkimDkim2Spec06 ||
+		response.Operation != generated.PropagationOperationDeliveryStatusPropagation ||
+		!response.Result.Valid() || !response.Disposition.Valid() ||
+		!response.Replay.Class.Valid() ||
+		!validWirePropagationOutcome(response.Result, response.Disposition) ||
+		!validWirePropagationProjection(response) {
+		return false
+	}
+	if (response.PropagationFailure != nil) != (response.Result == generated.PropagationResultPermerror) ||
+		response.PropagationFailure != nil && !response.PropagationFailure.Valid() {
+		return false
+	}
+	if (response.Propagation != nil) != (response.Disposition == generated.PropagationDispositionAccept) {
+		return false
+	}
+	return response.Propagation == nil || validPropagationOutput(*response.Propagation)
+}
+
+// validWirePropagationOutcome enforces the propagation result/disposition
+// matrix: pass permits accept or discard, fail requires reject, permerror
+// requires discard, and temperror requires tempfail.
+func validWirePropagationOutcome(
+	result generated.DSNPropagateResponseResult,
+	disposition generated.PropagationDisposition,
+) bool {
+	switch result {
+	case generated.PropagationResultPass:
+		return disposition == generated.PropagationDispositionAccept ||
+			disposition == generated.PropagationDispositionDiscard
+	case generated.PropagationResultFail:
+		return disposition == generated.PropagationDispositionReject
+	case generated.PropagationResultPermerror:
+		return disposition == generated.PropagationDispositionDiscard
+	case generated.PropagationResultTemperror:
+		return disposition == generated.PropagationDispositionTempfail
+	default:
+		return false
+	}
+}
+
+// validWirePropagationProjection enforces where the optional delivery-status
+// member may be absent. Only the two outcomes decided before the evaluation
+// may omit it: a notification with no DKIM2 field family, which is a
+// permanent refusal, and an unusable outer assessment, which is temporary.
+// Every present projection must be complete.
+func validWirePropagationProjection(response generated.DSNPropagateResponse) bool {
+	if response.DeliveryStatus == nil {
+		return response.Result == generated.PropagationResultFail ||
+			response.Result == generated.PropagationResultTemperror
+	}
+	return validDeliveryStatusProjection(*response.DeliveryStatus)
+}
+
+// validDeliveryStatusProjection validates every closed projection member.
+func validDeliveryStatusProjection(projection generated.DeliveryStatusProjection) bool {
+	return projection.Structure.Valid() && projection.Embedded.Valid() &&
+		projection.LocalHop.Valid() && projection.OuterAlignment.Valid() &&
+		projection.RecipientLinkage.Valid() && projection.Propagation.Valid()
+}
+
+// validPropagationOutput validates the bounded signed-notification member.
+func validPropagationOutput(output generated.PropagationOutput) bool {
+	raw, rawErr := output.RawRfc5322Base64.Bytes()
+	nextHop, nextHopErr := output.NextHopRecipient.Bytes()
+	token, tokenErr := output.CommitToken.Bytes()
+	return rawErr == nil && len(raw) > 0 && nextHopErr == nil && len(nextHop) > 0 &&
+		len(nextHop) <= maxSMTPPathBytes && tokenErr == nil &&
+		app.ValidPropagationCommitToken(string(token))
+}
+
+// validPropagationCommitResponse validates the closed committed singleton.
+func validPropagationCommitResponse(response generated.DSNPropagateCommitResponse) bool {
+	return response.ApiVersion == generated.V1 &&
+		response.Draft == generated.DraftIetfDkimDkim2Spec06 &&
+		response.State == generated.PropagationStateCommitted
 }
 
 // validApplicationError enforces the one closed status, code, and category matrix.
@@ -133,6 +221,8 @@ func validApplicationError(
 		return status == http.StatusRequestTimeout && category == generated.Request
 	case generated.ErrorResponseCodePreconditionFailed:
 		return status == http.StatusPreconditionFailed && category == generated.Request
+	case generated.ErrorResponseCodePropagationCommitUnresolved:
+		return status == http.StatusConflict && category == generated.Request
 	case generated.ErrorResponseCodeRequestTooLarge:
 		return status == http.StatusRequestEntityTooLarge && category == generated.Request
 	case generated.ErrorResponseCodeUnsupportedMediaType:
@@ -549,6 +639,22 @@ type operationDeliveryStatusResponse struct{ preMarshaledResponse }
 
 // VisitSignDeliveryStatusResponse writes one exact generated-interface response.
 func (r operationDeliveryStatusResponse) VisitSignDeliveryStatusResponse(writer http.ResponseWriter) error {
+	return r.write(writer)
+}
+
+type propagationResponse struct{ preMarshaledResponse }
+
+// VisitPropagateDeliveryStatusResponse writes one exact generated-interface response.
+func (r propagationResponse) VisitPropagateDeliveryStatusResponse(writer http.ResponseWriter) error {
+	return r.write(writer)
+}
+
+type propagationCommitResponse struct{ preMarshaledResponse }
+
+// VisitCommitDeliveryStatusPropagationResponse writes one exact generated-interface response.
+func (r propagationCommitResponse) VisitCommitDeliveryStatusPropagationResponse(
+	writer http.ResponseWriter,
+) error {
 	return r.write(writer)
 }
 

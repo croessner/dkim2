@@ -33,7 +33,7 @@ const (
 var allowedSpanNames = []string{
 	"dkim2d.http.request", "dkim2d.process", "dkim2.verify",
 	"dkim2.dns.lookup", "dkim2.policy.evaluate",
-	"dkim2.replay.coordinate", "dkim2.replay.store",
+	"dkim2.replay.coordinate", "dkim2.replay.store", "dkim2.dsn.received.evaluate",
 }
 
 var allowedSpanValues = map[string][]string{
@@ -44,7 +44,9 @@ var allowedSpanValues = map[string][]string{
 	"dkim2.reason_class":  {valueNone, valueProtocol, valuePolicy, valueAvailability, valueInternal},
 	"dkim2.error_class":   {valueNone, "canceled", "deadline", valueTemporary, valueInternal},
 	"http.request.method": {"GET", "HEAD", "POST", "OPTIONS", "other"},
-	"http.route":          {"/healthz", "/readyz", "/metrics", "/v1/process", "/v1/sign", "/v1/revise", valueUnmatched},
+	"http.route":          {"/healthz", "/readyz", "/metrics", "/v1/process", "/v1/sign", "/v1/revise", "/v1/dsn/sign", "/v1/dsn/propagate", "/v1/dsn/propagate/commit", valueUnmatched},
+	"dkim2.dsn_stage":     closedStageUnion(),
+	"dkim2.dsn_result":    {"ok", valuePermanent, valueTemporary},
 }
 
 // SpanOutcome identifies whether one completed span represents an invariant failure.

@@ -162,6 +162,16 @@ func (*deliveryStatusHarnessService) SignMessage(context.Context, generated.Sign
 	return nil, errors.New("unexpected harness operation")
 }
 
+// PropagateDeliveryStatus rejects operations outside the dedicated DSN harness route.
+func (*deliveryStatusHarnessService) PropagateDeliveryStatus(context.Context, generated.PropagateDeliveryStatusRequestObject) (generated.PropagateDeliveryStatusResponseObject, error) {
+	return nil, errors.New("unexpected harness operation")
+}
+
+// CommitDeliveryStatusPropagation rejects operations outside the dedicated DSN harness route.
+func (*deliveryStatusHarnessService) CommitDeliveryStatusPropagation(context.Context, generated.CommitDeliveryStatusPropagationRequestObject) (generated.CommitDeliveryStatusPropagationResponseObject, error) {
+	return nil, errors.New("unexpected harness operation")
+}
+
 // TestMiltertestPostfixDSNEndToEnd drives the real Milter executable with the
 // sibling Lua MTA oracle and real cryptographic application service.
 func TestMiltertestPostfixDSNEndToEnd(t *testing.T) {

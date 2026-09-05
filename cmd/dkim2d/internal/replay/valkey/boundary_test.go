@@ -11,6 +11,36 @@ import (
 	"testing"
 )
 
+// setGetOption recognizes the one permitted Get selector: the GET option of
+// a value-conditional SET builder chain in the propagation record file. The
+// option makes the single SET return the previous value in the same round
+// trip; it is not a read command, a compensating read, or a fallback. Every
+// other Get selector remains forbidden.
+func setGetOption(call *ast.CallExpr, path string) bool {
+	if filepath.Base(path) != "propagation_store.go" {
+		return false
+	}
+	selector, ok := call.Fun.(*ast.SelectorExpr)
+	if !ok || selector.Sel.Name != "Get" {
+		return false
+	}
+	for receiver := selector.X; receiver != nil; {
+		inner, ok := receiver.(*ast.CallExpr)
+		if !ok {
+			return false
+		}
+		innerSelector, ok := inner.Fun.(*ast.SelectorExpr)
+		if !ok {
+			return false
+		}
+		if innerSelector.Sel.Name == "Set" {
+			return true
+		}
+		receiver = innerSelector.X
+	}
+	return false
+}
+
 // TestProductionSourceForbidsReplayFallbacks guards the one-command mutation boundary.
 func TestProductionSourceForbidsReplayFallbacks(t *testing.T) {
 	forbiddenSelectors := map[string]bool{
@@ -35,7 +65,7 @@ func TestProductionSourceForbidsReplayFallbacks(t *testing.T) {
 		"Watch":         true,
 	}
 	forbiddenCommandLiterals := map[string]bool{
-		"GET": true, "EVAL": true, "EVALSHA": true, "MULTI": true,
+		tokenGET: true, "EVAL": true, "EVALSHA": true, "MULTI": true,
 		"EXEC": true, "PTTL": true, "TTL": true, "EXPIRE": true,
 		"PEXPIRE": true,
 	}
@@ -52,7 +82,7 @@ func TestProductionSourceForbidsReplayFallbacks(t *testing.T) {
 			switch value := node.(type) {
 			case *ast.CallExpr:
 				selector, ok := value.Fun.(*ast.SelectorExpr)
-				if ok && forbiddenSelectors[selector.Sel.Name] {
+				if ok && forbiddenSelectors[selector.Sel.Name] && !setGetOption(value, path) {
 					t.Fatalf("forbidden production selector %q in %q",
 						selector.Sel.Name, filepath.Base(path))
 				}
@@ -62,7 +92,7 @@ func TestProductionSourceForbidsReplayFallbacks(t *testing.T) {
 				}
 				literal, err := strconv.Unquote(value.Value)
 				upper := strings.ToUpper(literal)
-				privilegedConfigGet := upper == "GET" && filepath.Base(path) == "wire.go"
+				privilegedConfigGet := upper == tokenGET && filepath.Base(path) == "wire.go"
 				if err == nil && forbiddenCommandLiterals[upper] && !privilegedConfigGet {
 					t.Fatalf("forbidden command literal in %q", filepath.Base(path))
 				}

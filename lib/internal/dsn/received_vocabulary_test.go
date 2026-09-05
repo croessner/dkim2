@@ -16,6 +16,7 @@ embedded=verified_headers_only
 embedded=unverified
 embedded=temperror
 embedded=absent
+embedded=not_evaluated
 local_hop=local
 local_hop=not_local
 local_hop=mismatch
@@ -59,7 +60,7 @@ func receivedVocabularyMembers() []receivedVocabularyMember {
 	return []receivedVocabularyMember{
 		{name: "structure", values: []string{string(StructureValid), string(StructureMalformed), string(StructureLimitExceeded)},
 			known: func(v string) bool { return StructureResult(v).Known() }},
-		{name: "embedded", values: []string{string(EmbeddedVerified), string(EmbeddedVerifiedHeadersOnly), string(EmbeddedUnverified), string(EmbeddedTemporaryError), string(EmbeddedAbsent)},
+		{name: "embedded", values: []string{string(EmbeddedVerified), string(EmbeddedVerifiedHeadersOnly), string(EmbeddedUnverified), string(EmbeddedTemporaryError), string(EmbeddedAbsent), string(EmbeddedNotEvaluated)},
 			known: func(v string) bool { return EmbeddedResult(v).Known() }},
 		{name: "local_hop", values: []string{string(LocalHopLocal), string(LocalHopNotLocal), string(LocalHopMismatch), string(LocalHopTemporaryError), string(LocalHopNotEvaluated)},
 			known: func(v string) bool { return LocalHopResult(v).Known() }},

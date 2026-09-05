@@ -18,20 +18,26 @@ import (
 )
 
 const (
-	statusAllowMethods   = "GET, HEAD"
-	processAllowMethod   = "POST"
-	serverAllowMethods   = "GET, HEAD, POST, OPTIONS"
-	healthPath           = "/healthz"
-	readinessPath        = "/readyz"
-	metricsPath          = "/metrics"
-	processPath          = "/v1/process"
-	signPath             = "/v1/sign"
-	revisePath           = "/v1/revise"
-	dsnSignPath          = "/v1/dsn/sign"
-	metricsAllowMethod   = "GET"
-	observationUnmatched = "unmatched"
-	observationProcess   = "process"
-	observationDSNSign   = "dsn_sign"
+	statusAllowMethods     = "GET, HEAD"
+	processAllowMethod     = "POST"
+	serverAllowMethods     = "GET, HEAD, POST, OPTIONS"
+	healthPath             = "/healthz"
+	readinessPath          = "/readyz"
+	metricsPath            = "/metrics"
+	processPath            = "/v1/process"
+	signPath               = "/v1/sign"
+	revisePath             = "/v1/revise"
+	dsnSignPath            = "/v1/dsn/sign"
+	dsnPropagatePath       = "/v1/dsn/propagate"
+	dsnPropagateCommitPath = "/v1/dsn/propagate/commit"
+	metricsAllowMethod     = "GET"
+	observationUnmatched   = "unmatched"
+	observationProcess     = "process"
+	observationDSNSign     = "dsn_sign"
+	// observationPropagate is the one operation value both propagation
+	// paths share on the existing operation metrics; the route label keeps
+	// the two paths apart.
+	observationPropagate = "delivery_status_propagation"
 	observationSuccess   = "success"
 )
 
@@ -59,20 +65,21 @@ type BoundaryConfig struct {
 
 // HTTPBoundary owns route, admission, validation, and generated-adapter ordering.
 type HTTPBoundary struct {
-	authority      string
-	deadline       time.Duration
-	matcher        capabilityMatcher
-	signMatcher    capabilityMatcher
-	reviseMatcher  capabilityMatcher
-	dsnSignMatcher capabilityMatcher
-	readiness      readinessSource
-	validator      *RequestValidator
-	admission      *processAdmission
-	strict         *strictAdapter
-	generated      generated.ServerInterface
-	fatal          FatalNotifier
-	metrics        *observability.Metrics
-	telemetry      *observability.Runtime
+	authority        string
+	deadline         time.Duration
+	matcher          capabilityMatcher
+	signMatcher      capabilityMatcher
+	reviseMatcher    capabilityMatcher
+	dsnSignMatcher   capabilityMatcher
+	propagateMatcher capabilityMatcher
+	readiness        readinessSource
+	validator        *RequestValidator
+	admission        *processAdmission
+	strict           *strictAdapter
+	generated        generated.ServerInterface
+	fatal            FatalNotifier
+	metrics          *observability.Metrics
+	telemetry        *observability.Runtime
 }
 
 // NewHTTPBoundary constructs one immutable process-local HTTP handler.
@@ -99,11 +106,11 @@ func NewHTTPBoundary(
 	if err != nil {
 		return nil, errHTTPBoundaryConfig
 	}
-	telemetry, operation, signMatcher, reviseMatcher, dsnSignMatcher, dependenciesOK :=
-		parseBoundaryDependencies(dependencies)
+	parsed, dependenciesOK := parseBoundaryDependencies(dependencies)
 	if !dependenciesOK {
 		return nil, errHTTPBoundaryConfig
 	}
+	telemetry := parsed.runtime
 	var metrics *observability.Metrics
 	if telemetry != nil {
 		metrics = telemetry.Metrics()
@@ -115,27 +122,31 @@ func NewHTTPBoundary(
 		}
 	}
 	strictDependencies := []any{metrics}
-	if !nilInterfaceValue(operation) {
-		strictDependencies = append(strictDependencies, operation)
+	if !nilInterfaceValue(parsed.operation) {
+		strictDependencies = append(strictDependencies, parsed.operation)
+	}
+	if !nilInterfaceValue(parsed.propagation) {
+		strictDependencies = append(strictDependencies, parsed.propagation)
 	}
 	strict, err := newStrictAdapter(readiness, processor, strictDependencies...)
 	if err != nil {
 		return nil, errHTTPBoundaryConfig
 	}
 	boundary := &HTTPBoundary{
-		authority:      config.Authority,
-		deadline:       config.RequestDeadline,
-		matcher:        matcher,
-		signMatcher:    signMatcher,
-		reviseMatcher:  reviseMatcher,
-		dsnSignMatcher: dsnSignMatcher,
-		readiness:      readiness,
-		validator:      validator,
-		admission:      admission,
-		strict:         strict,
-		fatal:          notifier,
-		metrics:        metrics,
-		telemetry:      telemetry,
+		authority:        config.Authority,
+		deadline:         config.RequestDeadline,
+		matcher:          matcher,
+		signMatcher:      parsed.signMatcher,
+		reviseMatcher:    parsed.reviseMatcher,
+		dsnSignMatcher:   parsed.dsnSignMatcher,
+		propagateMatcher: parsed.propagateMatcher,
+		readiness:        readiness,
+		validator:        validator,
+		admission:        admission,
+		strict:           strict,
+		fatal:            notifier,
+		metrics:          metrics,
+		telemetry:        telemetry,
 	}
 	boundary.generated = generated.NewStrictHandlerWithOptions(
 		strict,
@@ -167,54 +178,82 @@ func NewHTTPBoundary(
 type signMatcherDependency struct{ capabilityMatcher }
 type reviseMatcherDependency struct{ capabilityMatcher }
 type dsnSignMatcherDependency struct{ capabilityMatcher }
+type propagateMatcherDependency struct{ capabilityMatcher }
 
 // parseBoundaryDependencies accepts at most one optional runtime, operation
 // service, and each named signing capability.
-func parseBoundaryDependencies(
-	values []any,
-) (*observability.Runtime, app.OperationService, capabilityMatcher, capabilityMatcher, capabilityMatcher, bool) {
-	var runtime *observability.Runtime
-	var operation app.OperationService
-	var signMatcher capabilityMatcher
-	var reviseMatcher capabilityMatcher
-	var dsnSignMatcher capabilityMatcher
+func parseBoundaryDependencies(values []any) (boundaryDependencies, bool) {
+	var parsed boundaryDependencies
 	for _, value := range values {
 		switch typed := value.(type) {
 		case *observability.Runtime:
-			if runtime != nil || typed == nil {
-				return nil, nil, nil, nil, nil, false
+			if parsed.runtime != nil || typed == nil {
+				return boundaryDependencies{}, false
 			}
-			runtime = typed
+			parsed.runtime = typed
 		case app.OperationService:
-			if !nilInterfaceValue(operation) || nilInterfaceValue(typed) {
-				return nil, nil, nil, nil, nil, false
+			if !nilInterfaceValue(parsed.operation) || nilInterfaceValue(typed) {
+				return boundaryDependencies{}, false
 			}
-			operation = typed
+			parsed.operation = typed
+		case app.PropagationService:
+			if !nilInterfaceValue(parsed.propagation) || nilInterfaceValue(typed) {
+				return boundaryDependencies{}, false
+			}
+			parsed.propagation = typed
 		case signMatcherDependency:
-			if !nilInterfaceValue(signMatcher) || nilInterfaceValue(typed.capabilityMatcher) {
-				return nil, nil, nil, nil, nil, false
+			if !nilInterfaceValue(parsed.signMatcher) || nilInterfaceValue(typed.capabilityMatcher) {
+				return boundaryDependencies{}, false
 			}
-			signMatcher = typed.capabilityMatcher
+			parsed.signMatcher = typed.capabilityMatcher
 		case reviseMatcherDependency:
-			if !nilInterfaceValue(reviseMatcher) || nilInterfaceValue(typed.capabilityMatcher) {
-				return nil, nil, nil, nil, nil, false
+			if !nilInterfaceValue(parsed.reviseMatcher) || nilInterfaceValue(typed.capabilityMatcher) {
+				return boundaryDependencies{}, false
 			}
-			reviseMatcher = typed.capabilityMatcher
+			parsed.reviseMatcher = typed.capabilityMatcher
 		case dsnSignMatcherDependency:
-			if !nilInterfaceValue(dsnSignMatcher) || nilInterfaceValue(typed.capabilityMatcher) {
-				return nil, nil, nil, nil, nil, false
+			if !nilInterfaceValue(parsed.dsnSignMatcher) || nilInterfaceValue(typed.capabilityMatcher) {
+				return boundaryDependencies{}, false
 			}
-			dsnSignMatcher = typed.capabilityMatcher
+			parsed.dsnSignMatcher = typed.capabilityMatcher
+		case propagateMatcherDependency:
+			if !nilInterfaceValue(parsed.propagateMatcher) || nilInterfaceValue(typed.capabilityMatcher) {
+				return boundaryDependencies{}, false
+			}
+			parsed.propagateMatcher = typed.capabilityMatcher
 		default:
-			return nil, nil, nil, nil, nil, false
+			return boundaryDependencies{}, false
 		}
 	}
-	enabled := !nilInterfaceValue(operation)
-	hasMatcher := !nilInterfaceValue(signMatcher) || !nilInterfaceValue(reviseMatcher) || !nilInterfaceValue(dsnSignMatcher)
-	if enabled != hasMatcher {
-		return nil, nil, nil, nil, nil, false
+	if !parsed.coherent() {
+		return boundaryDependencies{}, false
 	}
-	return runtime, operation, signMatcher, reviseMatcher, dsnSignMatcher, true
+	return parsed, true
+}
+
+// boundaryDependencies collects the optional runtime, application services,
+// and per-operation credential matchers of one HTTP boundary.
+type boundaryDependencies struct {
+	runtime          *observability.Runtime
+	operation        app.OperationService
+	propagation      app.PropagationService
+	signMatcher      capabilityMatcher
+	reviseMatcher    capabilityMatcher
+	dsnSignMatcher   capabilityMatcher
+	propagateMatcher capabilityMatcher
+}
+
+// coherent reports whether every enabled service owns a credential matcher
+// and no credential matcher exists without its service, so that a route can
+// never be reachable without its own capability.
+func (d boundaryDependencies) coherent() bool {
+	signingEnabled := !nilInterfaceValue(d.operation)
+	signingMatchers := !nilInterfaceValue(d.signMatcher) ||
+		!nilInterfaceValue(d.reviseMatcher) || !nilInterfaceValue(d.dsnSignMatcher)
+	if signingEnabled != signingMatchers {
+		return false
+	}
+	return !nilInterfaceValue(d.propagation) == !nilInterfaceValue(d.propagateMatcher)
 }
 
 // Close rejects new process admission and interrupts ordinary waiters.
@@ -263,7 +302,7 @@ func (h *HTTPBoundary) ServeHTTP(writer http.ResponseWriter, request *http.Reque
 		request = request.WithContext(rootContext)
 		rootSpan = span
 		defer h.completeHTTPObservation(
-			committed, operation, httpObservationMethod(request.Method), started, rootSpan,
+			committed, operation, route, httpObservationMethod(request.Method), started, rootSpan,
 		)
 	}
 	clientContext := request.Context()
@@ -326,6 +365,7 @@ func requestContext(request *http.Request) context.Context {
 func (h *HTTPBoundary) completeHTTPObservation(
 	writer *boundaryWriter,
 	operation string,
+	route string,
 	method string,
 	started time.Time,
 	span trace.Span,
@@ -346,7 +386,7 @@ func (h *HTTPBoundary) completeHTTPObservation(
 			"http.request.completed",
 			slog.String("operation", operation),
 			slog.String("method", method),
-			slog.String("route", httpObservationPath(operation)),
+			slog.String("route", route),
 			slog.String("status_class", statusClass),
 			slog.String("result", httpObservationResult(status)),
 		)
@@ -371,6 +411,10 @@ func httpObservationRoute(request *http.Request) (string, string) {
 		return "revise", revisePath
 	case dsnSignPath:
 		return observationDSNSign, dsnSignPath
+	case dsnPropagatePath:
+		return observationPropagate, dsnPropagatePath
+	case dsnPropagateCommitPath:
+		return observationPropagate, dsnPropagateCommitPath
 	default:
 		return observationUnmatched, observationUnmatched
 	}
@@ -383,26 +427,6 @@ func httpObservationMethod(method string) string {
 		return method
 	default:
 		return "other"
-	}
-}
-
-// httpObservationPath maps a closed operation back to its route label.
-func httpObservationPath(operation string) string {
-	switch operation {
-	case "health":
-		return healthPath
-	case "readiness":
-		return readinessPath
-	case observationProcess:
-		return processPath
-	case "sign":
-		return signPath
-	case "revise":
-		return revisePath
-	case observationDSNSign:
-		return dsnSignPath
-	default:
-		return observationUnmatched
 	}
 }
 
@@ -525,7 +549,7 @@ func (h *HTTPBoundary) serveBoundaryRequest(
 		h.serveStatus(committed, request, facts)
 	case metricsPath:
 		h.serveMetrics(committed, request, facts, traceContextPresent)
-	case processPath, signPath, revisePath, dsnSignPath:
+	case processPath, signPath, revisePath, dsnSignPath, dsnPropagatePath, dsnPropagateCommitPath:
 		h.serveProcess(
 			committed,
 			request,
@@ -594,7 +618,9 @@ func (h *HTTPBoundary) serveMetrics(
 		facts.framing != framingAbsent || facts.expect != expectNone ||
 		traceContextPresent || hasHeader(request.Header, headerContentType) ||
 		hasHeader(request.Header, "Content-Encoding") ||
-		hasHeader(request.Header, "X-DKIM2-Capability") ||
+		hasHeader(request.Header, localCapabilityHeader) ||
+		hasHeader(request.Header, dsnSignCapabilityHeader) ||
+		hasHeader(request.Header, dsnPropagateCapabilityHeader) ||
 		hasHeader(request.Header, "If-Match") ||
 		hasHeader(request.Header, "If-None-Match") ||
 		hasHeader(request.Header, "If-Modified-Since") ||
@@ -903,8 +929,13 @@ func authenticateOperationCapability(
 	request *http.Request,
 	matcher capabilityMatcher,
 ) (*http.Request, bool) {
-	if request != nil && request.URL != nil && request.URL.Path == dsnSignPath {
-		return authenticateCapability(request, dsnSignCapabilityHeader, matcher)
+	if request != nil && request.URL != nil {
+		switch request.URL.Path {
+		case dsnSignPath:
+			return authenticateCapability(request, dsnSignCapabilityHeader, matcher)
+		case dsnPropagatePath, dsnPropagateCommitPath:
+			return authenticateCapability(request, dsnPropagateCapabilityHeader, matcher)
+		}
 	}
 	return authenticateLocalCapability(request, matcher)
 }
@@ -920,6 +951,8 @@ func (h *HTTPBoundary) matcherForPath(path string) capabilityMatcher {
 		return h.reviseMatcher
 	case dsnSignPath:
 		return h.dsnSignMatcher
+	case dsnPropagatePath, dsnPropagateCommitPath:
+		return h.propagateMatcher
 	default:
 		return nil
 	}
@@ -997,6 +1030,10 @@ func (h *HTTPBoundary) processReservedRequest(
 		h.generated.ReviseMessage(writer, request)
 	case dsnSignPath:
 		h.generated.SignDeliveryStatus(writer, request)
+	case dsnPropagatePath:
+		h.generated.PropagateDeliveryStatus(writer, request)
+	case dsnPropagateCommitPath:
+		h.generated.CommitDeliveryStatusPropagation(writer, request)
 	default:
 		h.writeInternal(writer, request)
 	}
@@ -1060,7 +1097,7 @@ func (h *HTTPBoundary) validateProcessBody(
 		h.writeContextFailure(writer, request)
 		return false
 	}
-	if err := validateRawMessageSpelling(constants); err != nil {
+	if err := validateRouteRawMessage(request.URL.Path, constants); err != nil {
 		h.writeError(writer, request, http.StatusBadRequest,
 			generated.ErrorResponseCodeInvalidContract, generated.Request)
 		return false

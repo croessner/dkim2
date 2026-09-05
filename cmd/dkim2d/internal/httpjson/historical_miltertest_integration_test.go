@@ -46,11 +46,11 @@ type historicalMilterProcessor struct {
 }
 
 // Process delegates to the real inbound pipeline and captures only its typed result.
-func (p *historicalMilterProcessor) Process(
+func (p *historicalMilterProcessor) ProcessInbound(
 	ctx context.Context,
-	request dkim2.VerifyRequest,
+	request app.InboundRequest,
 ) (app.InboundResult, error) {
-	result, err := p.processor.Process(ctx, request)
+	result, err := p.processor.ProcessInbound(ctx, request)
 	p.results <- historicalMilterResult{value: result, err: err}
 	return result, err
 }
@@ -413,7 +413,7 @@ func assertHistoricalMilterResult(
 		decoded[0].Detail.Index != 0 ||
 		decoded[0].Detail.Name != "Authentication-Results" ||
 		decoded[0].Detail.Value != " "+testInboundPassReport ||
-		decoded[1].Disposition != "accept" ||
+		decoded[1].Disposition != testDispositionAccept ||
 		(decoded[1].Detail.Kind != "" && decoded[1].Detail.Kind != "none") {
 		t.Fatal("historical Milter report action or terminal changed")
 	}

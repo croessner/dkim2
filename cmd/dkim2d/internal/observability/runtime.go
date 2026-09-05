@@ -145,6 +145,38 @@ func (r *Runtime) ObserveDSNEvidence(stage, result string) {
 	)
 }
 
+// ObserveReceivedDSN emits one closed terminal received-DSN evaluation stage
+// on the process operation.
+func (r *Runtime) ObserveReceivedDSN(stage, result string) {
+	if r == nil || r.metrics == nil || !slices.Contains(receivedDSNStages, stage) ||
+		!slices.Contains(receivedDSNResults, result) {
+		return
+	}
+	r.metrics.DSNReceivedCompleted(stage, result)
+	r.Logger().Info(
+		"dsn.received.completed",
+		slog.String("operation", valueProcess),
+		slog.String(keyStage, stage),
+		slog.String(keyResult, result),
+	)
+}
+
+// ObservePropagation emits one closed terminal propagation stage on the
+// delivery_status_propagation operation.
+func (r *Runtime) ObservePropagation(stage, result string) {
+	if r == nil || r.metrics == nil || !slices.Contains(propagationStages, stage) ||
+		!slices.Contains(propagationResults, result) {
+		return
+	}
+	r.metrics.DSNPropagationCompleted(stage, result)
+	r.Logger().Info(
+		"dsn.propagation.completed",
+		slog.String("operation", valuePropagation),
+		slog.String(keyStage, stage),
+		slog.String(keyResult, result),
+	)
+}
+
 // Tracing returns the instance-owned OpenTelemetry facade.
 func (r *Runtime) Tracing() *TraceRuntime {
 	if r == nil {

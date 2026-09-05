@@ -53,6 +53,21 @@ func validateRawMessageSpelling(constants jsonConstants) error {
 	return nil
 }
 
+// validateRouteRawMessage applies the raw-message spelling rule to every
+// operation whose contract carries message bytes and refuses message bytes on
+// the commit operation, whose contract carries none: a commit body that
+// smuggles a raw message is an invalid contract, never a silently ignored
+// field.
+func validateRouteRawMessage(path string, constants jsonConstants) error {
+	if path == dsnPropagateCommitPath {
+		if constants.rawMessage.present {
+			return &knownFieldError{class: knownFieldInvalidContract}
+		}
+		return nil
+	}
+	return validateRawMessageSpelling(constants)
+}
+
 // isKnownFieldFailure reports one closed resource-preflight class.
 func isKnownFieldFailure(err error, class knownFieldFailure) bool {
 	var known *knownFieldError

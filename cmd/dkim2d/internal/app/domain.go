@@ -66,10 +66,11 @@ type DomainProcessor struct {
 }
 
 type domainProcessorState struct {
-	verifier VerificationService
-	auth     AuthenticationService
-	mode     dkim2.PolicyMode
-	runtime  *observability.Runtime
+	verifier    VerificationService
+	auth        AuthenticationService
+	mode        dkim2.PolicyMode
+	runtime     *observability.Runtime
+	receivedDSN *ReceivedDSNBinding
 }
 
 // attachObservability binds the already acquired instance runtime before publication.
@@ -79,13 +80,26 @@ func (p *DomainProcessor) attachObservability(runtime *observability.Runtime) {
 	}
 }
 
+// BindReceivedDSN installs the received-DSN evaluation policy before
+// publication. Without a binding no delivery-status projection is emitted
+// and every existing process behavior is unchanged.
+func (p *DomainProcessor) BindReceivedDSN(binding *ReceivedDSNBinding) error {
+	if p == nil || p.state == nil || binding == nil || nilInterface(binding.evaluator) {
+		return &DomainError{}
+	}
+	p.state.receivedDSN = binding
+	return nil
+}
+
 // DomainResult keeps verification and local policy separate for replay coordination.
 type DomainResult struct {
-	initialized    bool
-	applicable     bool
-	verification   dkim2.VerifyResult
-	authentication dkim2.AuthenticationResult
-	policy         dkim2.PolicyDecision
+	initialized       bool
+	applicable        bool
+	verification      dkim2.VerifyResult
+	authentication    dkim2.AuthenticationResult
+	policy            dkim2.PolicyDecision
+	deliveryStatus    DeliveryStatusProjection
+	hasDeliveryStatus bool
 }
 
 // NewDNSVerifier constructs one instance-owned bounded DNS verifier.
@@ -139,6 +153,18 @@ func (v *DNSVerifier) Assess(
 	return v.verifier.Assess(ctx, request)
 }
 
+// EvaluateReceivedDSN delegates the Section 12.1.2 received-DSN evaluation to
+// the instance verifier so that it shares the verification key provider.
+func (v *DNSVerifier) EvaluateReceivedDSN(
+	ctx context.Context,
+	request dkim2.ReceivedDSNRequest,
+) (dkim2.ReceivedDSNEvaluation, error) {
+	if v == nil || v.verifier == nil {
+		return dkim2.ReceivedDSNEvaluation{}, &DomainError{}
+	}
+	return v.verifier.EvaluateReceivedDSN(ctx, request)
+}
+
 // LookupPublicKey delegates revision publication checks to the same bounded
 // DNS provider used by verification.
 func (v *DNSVerifier) LookupPublicKey(
@@ -165,14 +191,23 @@ func NewDomainProcessor(verifier VerificationService, mode config.PolicyMode, au
 	return &DomainProcessor{state: &domainProcessorState{verifier: verifier, auth: auth, mode: policyMode}}, nil
 }
 
-// Process performs current verification and server-owned local policy evaluation.
+// Process performs current verification and server-owned local policy
+// evaluation for a request that carries no tenant.
 func (p *DomainProcessor) Process(ctx context.Context, request dkim2.VerifyRequest) (DomainResult, error) {
+	return p.ProcessInbound(ctx, InboundRequest{verify: request})
+}
+
+// ProcessInbound performs current verification, the received-DSN evaluation
+// for a classified notification under the bound tenant precedence, and the
+// server-owned local policy evaluation that incorporates both.
+func (p *DomainProcessor) ProcessInbound(ctx context.Context, inbound InboundRequest) (DomainResult, error) {
 	if p == nil || p.state == nil || nilVerificationService(p.state.verifier) || nilInterface(ctx) {
 		return DomainResult{}, &DomainError{}
 	}
 	if err := domainContextError(ctx); err != nil {
 		return DomainResult{}, err
 	}
+	request := inbound.VerifyRequest()
 	assessment, err := p.state.verifier.Assess(ctx, request)
 	if err != nil {
 		if contextErr := domainContextError(ctx); contextErr != nil {
@@ -214,11 +249,20 @@ func (p *DomainProcessor) Process(ctx context.Context, request dkim2.VerifyReque
 			return DomainResult{}, &DomainError{}
 		}
 	}
+	deliveryStatus, hasDeliveryStatus, err := p.evaluateReceivedDSN(ctx, inbound)
+	if err != nil {
+		finishPolicy(observability.SpanInternalError)
+		return DomainResult{}, err
+	}
+	options := []dkim2.PolicyOption{dkim2.WithPolicyMode(p.state.mode)}
+	if hasDeliveryStatus {
+		options = append(options, dkim2.WithReceivedDSNEvaluation(deliveryStatus.evaluation))
+	}
 	var policy dkim2.PolicyDecision
 	if authentication.Valid() {
-		policy, err = dkim2.EvaluateAuthenticationPolicy(authentication, dkim2.WithPolicyMode(p.state.mode))
+		policy, err = dkim2.EvaluateAuthenticationPolicy(authentication, options...)
 	} else {
-		policy, err = dkim2.EvaluatePolicy(verification, dkim2.WithPolicyMode(p.state.mode))
+		policy, err = dkim2.EvaluatePolicy(verification, options...)
 	}
 	if contextErr := domainContextError(ctx); contextErr != nil && !authentication.Valid() {
 		finishPolicy(observability.SpanInternalError)
@@ -249,7 +293,10 @@ func (p *DomainProcessor) Process(ctx context.Context, request dkim2.VerifyReque
 		policyReason,
 	)
 	observePolicy(p.state.runtime, policy, time.Since(policyStarted))
-	result := DomainResult{initialized: true, applicable: true, verification: verification, authentication: authentication, policy: policy}
+	result := DomainResult{
+		initialized: true, applicable: true, verification: verification, authentication: authentication, policy: policy,
+		deliveryStatus: deliveryStatus.projection, hasDeliveryStatus: hasDeliveryStatus,
+	}
 	if !result.valid() {
 		return DomainResult{}, &DomainError{}
 	}
@@ -258,6 +305,53 @@ func (p *DomainProcessor) Process(ctx context.Context, request dkim2.VerifyReque
 
 // Applicable reports whether protocol fields caused a DKIM2 verification.
 func (r DomainResult) Applicable() bool { return r.valid() && r.applicable }
+
+// DeliveryStatus returns the closed received-DSN projection when the inbound
+// message was classified and evaluated as a Received DSN.
+func (r DomainResult) DeliveryStatus() (DeliveryStatusProjection, bool) {
+	if !r.valid() || !r.hasDeliveryStatus {
+		return DeliveryStatusProjection{}, false
+	}
+	return r.deliveryStatus, true
+}
+
+// receivedDSNOutcome pairs one library evaluation with its closed projection.
+type receivedDSNOutcome struct {
+	evaluation dkim2.ReceivedDSNEvaluation
+	projection DeliveryStatusProjection
+}
+
+// evaluateReceivedDSN runs the received-DSN evaluation only for an applicable
+// message that the classification gate admits and only when a binding
+// exists. It records the closed observation of the terminal stage.
+func (p *DomainProcessor) evaluateReceivedDSN(
+	ctx context.Context,
+	inbound InboundRequest,
+) (receivedDSNOutcome, bool, error) {
+	binding := p.state.receivedDSN
+	if binding == nil || !receivedDSNCandidate(inbound.VerifyRequest()) {
+		return receivedDSNOutcome{}, false, nil
+	}
+	evaluationContext, span := startAppSpan(ctx, p.state.runtime, "dkim2.dsn.received.evaluate")
+	evaluation, err := binding.evaluate(evaluationContext, inbound)
+	if err != nil {
+		observability.EndSpan(span, observability.SpanInternalError)
+		return receivedDSNOutcome{}, false, err
+	}
+	projection, err := NewDeliveryStatusProjection(evaluation)
+	if err != nil {
+		observability.EndSpan(span, observability.SpanInternalError)
+		return receivedDSNOutcome{}, false, err
+	}
+	stage, result := receivedDSNObservation(projection)
+	stageFact, _ := observability.TextSpanFact("dkim2.dsn_stage", stage)
+	resultFact, _ := observability.TextSpanFact("dkim2.dsn_result", result)
+	observability.EndSpanWithFacts(span, observability.SpanCompleted, stageFact, resultFact)
+	if p.state.runtime != nil {
+		p.state.runtime.ObserveReceivedDSN(stage, result)
+	}
+	return receivedDSNOutcome{evaluation: evaluation, projection: projection}, true, nil
+}
 
 // String returns a content-free domain-processor representation.
 func (DomainProcessor) String() string { return domainProcessorRedacted }
@@ -307,9 +401,9 @@ func (r DomainResult) valid() bool {
 		return false
 	}
 	if !r.applicable {
-		return !r.verification.Valid() && !r.authentication.Valid() && !r.policy.Valid()
+		return !r.verification.Valid() && !r.authentication.Valid() && !r.policy.Valid() && !r.hasDeliveryStatus
 	}
-	if !r.verification.Valid() || !r.policy.Valid() {
+	if !r.verification.Valid() || !r.policy.Valid() || r.hasDeliveryStatus != r.deliveryStatus.Valid() {
 		return false
 	}
 	if r.authentication.Valid() {

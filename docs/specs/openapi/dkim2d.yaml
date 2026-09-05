@@ -548,6 +548,119 @@ paths:
           $ref: "#/components/responses/InternalError"
         "503":
           $ref: "#/components/responses/ServiceUnavailable"
+  /v1/dsn/propagate:
+    post:
+      operationId: propagateDeliveryStatus
+      summary: Rebuild and sign one propagated delivery-status notification.
+      description: >
+        Evaluates one received RFC 6522 delivery-status notification whose
+        embedded original is DKIM2 signed, proves that this system is the
+        signing hop the notification was addressed to, rebuilds the state the
+        previous hop signed, and returns a signed notification addressed to
+        that previous hop together with an opaque commit token. The route
+        reserves a distinct propagation replay coordinate before rebuilding
+        and returns the coordinate to the caller only through that token; the
+        caller commits it after its own re-injection succeeded. This dedicated
+        operation never accepts a process, originator-signing, revision, or
+        delivery-status signing capability.
+      security:
+        - dsnPropagateCapability: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DSNPropagateRequest"
+      responses:
+        "200":
+          description: Propagation completed with a coherent domain result.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/CacheControl"
+            X-Content-Type-Options:
+              $ref: "#/components/headers/ContentTypeOptions"
+            Content-Length:
+              $ref: "#/components/headers/ContentLength"
+            Connection:
+              $ref: "#/components/headers/Connection"
+            Date:
+              $ref: "#/components/headers/Date"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DSNPropagateResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "408":
+          $ref: "#/components/responses/RequestTimeout"
+        "413":
+          $ref: "#/components/responses/RequestTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "417":
+          $ref: "#/components/responses/ExpectationFailed"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /v1/dsn/propagate/commit:
+    post:
+      operationId: commitDeliveryStatusPropagation
+      summary: Commit one reserved delivery-status propagation coordinate.
+      description: >
+        Moves the propagation replay coordinate bound to the supplied commit
+        token from pending to committed. The caller invokes this operation
+        only after its own re-injection of the signed notification was
+        accepted. The operation is idempotent for an already committed
+        coordinate. A token that is unknown, malformed, or outside the
+        retention window is answered 409 so that the caller defers instead of
+        leaving the coordinate uncommitted.
+      security:
+        - dsnPropagateCapability: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DSNPropagateCommitRequest"
+      responses:
+        "200":
+          description: The propagation coordinate is committed.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/CacheControl"
+            X-Content-Type-Options:
+              $ref: "#/components/headers/ContentTypeOptions"
+            Content-Length:
+              $ref: "#/components/headers/ContentLength"
+            Connection:
+              $ref: "#/components/headers/Connection"
+            Date:
+              $ref: "#/components/headers/Date"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DSNPropagateCommitResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "408":
+          $ref: "#/components/responses/RequestTimeout"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          $ref: "#/components/responses/RequestTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "417":
+          $ref: "#/components/responses/ExpectationFailed"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
 components:
   securitySchemes:
     localCapability:
@@ -565,6 +678,16 @@ components:
         Generation-bound local delivery-status signing capability. This
         credential is distinct from process, originator-signing, and revision
         capabilities and is not intended for remote transport.
+    dsnPropagateCapability:
+      type: apiKey
+      in: header
+      name: X-DKIM2-DSN-Propagate-Capability
+      description: >
+        Generation-bound local delivery-status propagation capability. This
+        credential is distinct from the process, originator-signing, revision,
+        and delivery-status signing capabilities, is accepted on the
+        propagation and propagation-commit routes only, and is not intended
+        for remote transport.
   headers:
     CacheControl:
       description: Prevent storage of every daemon response.
@@ -744,6 +867,25 @@ components:
         application/json:
           schema:
             $ref: "#/components/schemas/ErrorResponse"
+    Conflict:
+      description: >
+        The supplied propagation commit token does not resolve to a
+        reserved coordinate.
+      headers:
+        Cache-Control:
+          $ref: "#/components/headers/CacheControl"
+        X-Content-Type-Options:
+          $ref: "#/components/headers/ContentTypeOptions"
+        Content-Length:
+          $ref: "#/components/headers/ContentLength"
+        Connection:
+          $ref: "#/components/headers/Connection"
+        Date:
+          $ref: "#/components/headers/Date"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
     InternalError:
       description: An internal contract failure occurred.
       headers:
@@ -805,6 +947,14 @@ components:
             exact Authentication-Results action; adapters must not synthesize it.
           allOf:
             - $ref: "#/components/schemas/ReportingContext"
+        context:
+          description: >
+            Optional administrative tenant. Received delivery-status locality
+            is tenant-keyed, so a request without this member and without a
+            configured daemon default keeps the delivery-status projection
+            unevaluated instead of guessing an authority.
+          allOf:
+            - $ref: "#/components/schemas/ProcessContext"
     SignRequest:
       type: object
       additionalProperties: false
@@ -885,6 +1035,139 @@ components:
             DKIM2 d= value before resolving delivery_status policy.
           allOf:
             - $ref: "#/components/schemas/DeliveryStatusContext"
+    DSNPropagateRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - api_version
+        - draft
+        - message
+        - outer_smtp
+        - context
+      properties:
+        api_version:
+          $ref: "#/components/schemas/APIVersion"
+        draft:
+          $ref: "#/components/schemas/DraftVersion"
+        message:
+          description: >
+            Received RFC 6522 delivery-status notification bytes together with
+            the caller's explicit representation claim.
+          allOf:
+            - $ref: "#/components/schemas/PropagationMessageInput"
+        outer_smtp:
+          description: >
+            Exact observed envelope of the received notification itself.
+            mail_from must be the null reverse path and rcpt_to must contain
+            exactly the one local return-path address the notification was
+            delivered to.
+          allOf:
+            - $ref: "#/components/schemas/PropagationSMTPInput"
+        context:
+          description: >
+            Administrative tenant that owns local authority resolution and the
+            canonical reporting MTA name rendered into the rebuilt report. The
+            daemon derives the propagation signing domain from the
+            cryptographically authenticated completion signature, never from
+            this member.
+          allOf:
+            - $ref: "#/components/schemas/PropagationContext"
+    PropagationMessageInput:
+      type: object
+      additionalProperties: false
+      description: >
+        Received delivery-status bytes for the propagation route. The
+        representation claim is explicit because a locally delivered
+        notification reaches the adapter over LMTP rather than as raw
+        submission bytes.
+      required:
+        - raw_rfc5322_base64
+        - fidelity
+      properties:
+        raw_rfc5322_base64:
+          type: string
+          format: byte
+          minLength: 0
+          maxLength: 44739244
+        fidelity:
+          type: string
+          enum:
+            - raw_rfc5322
+            - lmtp_delivered_crlf
+          x-enum-varnames:
+            - PropagationFidelityRawRFC5322
+            - PropagationFidelityLMTPDeliveredCRLF
+    PropagationSMTPInput:
+      type: object
+      additionalProperties: false
+      description: >
+        Route-specific envelope evidence. It differs from the shared envelope
+        schema because propagation admits exactly one forward path and records
+        the observed SMTPUTF8 parameter of the delivering transaction.
+      required:
+        - mail_from
+        - rcpt_to
+        - smtputf8
+      properties:
+        mail_from:
+          description: >
+            Observed reverse path, which must be the null reverse path.
+          type: string
+          minLength: 0
+          maxLength: 256
+        rcpt_to:
+          description: >
+            The single observed forward path of the delivered notification.
+          type: array
+          minItems: 1
+          maxItems: 1
+          uniqueItems: false
+          items:
+            type: string
+            minLength: 0
+            maxLength: 256
+        smtputf8:
+          description: >
+            Whether the delivering MAIL command carried the SMTPUTF8
+            parameter. It records observed transport evidence of the received
+            transaction only and is not an identity claim. It does not
+            influence the response member smtputf8_required, which is derived
+            from the rebuilt notification alone.
+          type: boolean
+    PropagationContext:
+      type: object
+      additionalProperties: false
+      required:
+        - tenant
+        - reporting_mta
+      properties:
+        tenant:
+          type: string
+          minLength: 1
+          maxLength: 128
+          pattern: "^[a-z0-9][a-z0-9._-]{0,127}$"
+        reporting_mta:
+          description: >
+            Canonical lowercase DNS name of the reporting MTA, used only in the
+            rebuilt report and its outer From field.
+          type: string
+          minLength: 1
+          maxLength: 253
+          pattern: "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$"
+    DSNPropagateCommitRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - api_version
+        - draft
+        - commit_token
+      properties:
+        api_version:
+          $ref: "#/components/schemas/APIVersion"
+        draft:
+          $ref: "#/components/schemas/DraftVersion"
+        commit_token:
+          $ref: "#/components/schemas/PropagationCommitToken"
     DSNMessageInput:
       type: object
       additionalProperties: false
@@ -914,6 +1197,7 @@ components:
             - milter_reconstructed_crlf
             - exim_local_scan_observed_crlf
             - exim_transport_filter_crlf
+            - lmtp_delivered_crlf
     SMTPInput:
       type: object
       additionalProperties: false
@@ -969,6 +1253,126 @@ components:
           $ref: "#/components/schemas/Disposition"
         actions:
           $ref: "#/components/schemas/ActionPlan"
+        delivery_status:
+          description: >
+            Received delivery-status projection. Present only when the outer
+            message has a null reverse path, a multipart/report delivery-status
+            top level, and at least one DKIM2 protocol field family. Its
+            presence changes neither verification, authentication, replay, nor
+            action semantics.
+          allOf:
+            - $ref: "#/components/schemas/DeliveryStatusProjection"
+    DeliveryStatusProjection:
+      type: object
+      additionalProperties: false
+      description: >
+        Closed received delivery-status evaluation projection. The stages are
+        evaluated in member order and stop at the first failure, so a member is
+        not_evaluated when an earlier stage stopped the evaluation or, for
+        local_hop and propagation, when no tenant was available. not_evaluated
+        never carries a temporary meaning; a temporary key or DNS failure is
+        reported as embedded temperror and a temporary datasource failure as
+        local_hop temperror. The propagation member is informational: it
+        reports whether a propagation attempt could act on this notification.
+      required:
+        - structure
+        - embedded
+        - local_hop
+        - outer_alignment
+        - recipient_linkage
+        - propagation
+      properties:
+        structure:
+          type: string
+          enum:
+            - valid
+            - malformed
+            - limit_exceeded
+          x-enum-varnames:
+            - DeliveryStatusStructureValid
+            - DeliveryStatusStructureMalformed
+            - DeliveryStatusStructureLimitExceeded
+        embedded:
+          type: string
+          enum:
+            - verified
+            - verified_headers_only
+            - unverified
+            - temperror
+            - absent
+            - not_evaluated
+          x-enum-varnames:
+            - DeliveryStatusEmbeddedVerified
+            - DeliveryStatusEmbeddedVerifiedHeadersOnly
+            - DeliveryStatusEmbeddedUnverified
+            - DeliveryStatusEmbeddedTemperror
+            - DeliveryStatusEmbeddedAbsent
+            - DeliveryStatusEmbeddedNotEvaluated
+        local_hop:
+          type: string
+          enum:
+            - local
+            - not_local
+            - mismatch
+            - temperror
+            - not_evaluated
+          x-enum-varnames:
+            - DeliveryStatusLocalHopLocal
+            - DeliveryStatusLocalHopNotLocal
+            - DeliveryStatusLocalHopMismatch
+            - DeliveryStatusLocalHopTemperror
+            - DeliveryStatusLocalHopNotEvaluated
+        outer_alignment:
+          type: string
+          enum:
+            - aligned
+            - misaligned
+            - not_evaluated
+          x-enum-varnames:
+            - DeliveryStatusOuterAlignmentAligned
+            - DeliveryStatusOuterAlignmentMisaligned
+            - DeliveryStatusOuterAlignmentNotEvaluated
+        recipient_linkage:
+          type: string
+          enum:
+            - linked
+            - unlinked
+            - not_evaluated
+          x-enum-varnames:
+            - DeliveryStatusRecipientLinkageLinked
+            - DeliveryStatusRecipientLinkageUnlinked
+            - DeliveryStatusRecipientLinkageNotEvaluated
+        propagation:
+          type: string
+          enum:
+            - not_applicable
+            - eligible
+            - terminal_origin
+            - not_failure
+            - forbidden_null_previous_sender
+            - unsupported_chain
+            - not_reconstructable
+            - not_evaluated
+          x-enum-varnames:
+            - DeliveryStatusPropagationNotApplicable
+            - DeliveryStatusPropagationEligible
+            - DeliveryStatusPropagationTerminalOrigin
+            - DeliveryStatusPropagationNotFailure
+            - DeliveryStatusPropagationForbiddenNullPreviousSender
+            - DeliveryStatusPropagationUnsupportedChain
+            - DeliveryStatusPropagationNotReconstructable
+            - DeliveryStatusPropagationNotEvaluated
+    ProcessContext:
+      type: object
+      additionalProperties: false
+      required:
+        - tenant
+      properties:
+        tenant:
+          type: string
+          minLength: 1
+          maxLength: 128
+          pattern: "^[a-z0-9][a-z0-9._-]{0,127}$"
     DeliveryStatusContext:
       type: object
       additionalProperties: false
@@ -1051,6 +1455,165 @@ components:
         - reject
         - tempfail
         - continue
+    PropagationDisposition:
+      type: string
+      description: >
+        Closed propagation disposition. It is distinct from the shared
+        disposition because propagation adds discard, which answers a
+        notification that must not be propagated and must not be reported as a
+        failure, and because it never uses continue. Coherence with the
+        operation result is fixed: pass permits accept or discard, permerror
+        requires discard, fail requires reject, and temperror requires
+        tempfail.
+      enum:
+        - accept
+        - reject
+        - discard
+        - tempfail
+      x-enum-varnames:
+        - PropagationDispositionAccept
+        - PropagationDispositionReject
+        - PropagationDispositionDiscard
+        - PropagationDispositionTempfail
+    DSNPropagateResponse:
+      type: object
+      additionalProperties: false
+      description: >
+        Propagation result. Result and disposition are coherent under this
+        operation's own rule: pass permits accept or discard, permerror
+        requires discard, fail requires reject, and temperror requires
+        tempfail. Only accept carries the propagation member, and only
+        permerror carries the propagation_failure member. A notification that
+        is not ours is a misrouting on this route and is reported as fail with
+        reject, unlike the informational projection of the process route.
+        The delivery_status member is present only when the received-DSN
+        evaluation ran. It is absent when the notification carries no DKIM2
+        field family at all and when the outer assessment was unusable,
+        because the projection has no value for an assessment that never
+        happened and a fabricated malformed structure would be false evidence.
+      required:
+        - api_version
+        - draft
+        - operation
+        - result
+        - disposition
+        - replay
+      properties:
+        api_version:
+          $ref: "#/components/schemas/APIVersion"
+        draft:
+          $ref: "#/components/schemas/DraftVersion"
+        operation:
+          type: string
+          enum:
+            - delivery_status_propagation
+          x-enum-varnames:
+            - PropagationOperationDeliveryStatusPropagation
+        result:
+          type: string
+          enum:
+            - pass
+            - fail
+            - permerror
+            - temperror
+          x-enum-varnames:
+            - PropagationResultPass
+            - PropagationResultFail
+            - PropagationResultPermerror
+            - PropagationResultTemperror
+        disposition:
+          $ref: "#/components/schemas/PropagationDisposition"
+        delivery_status:
+          description: >
+            Closed received-DSN projection. Present only when the evaluation
+            ran.
+          allOf:
+            - $ref: "#/components/schemas/DeliveryStatusProjection"
+        replay:
+          $ref: "#/components/schemas/ReplayResult"
+        propagation_failure:
+          description: >
+            Permanent reason why no notification was produced. Present only
+            with permerror.
+          type: string
+          enum:
+            - not_reconstructable
+            - unprovisioned_domain
+          x-enum-varnames:
+            - PropagationFailureNotReconstructable
+            - PropagationFailureUnprovisionedDomain
+        propagation:
+          description: >
+            Signed notification and its transport requirements. Present only
+            with accept.
+          allOf:
+            - $ref: "#/components/schemas/PropagationOutput"
+    PropagationOutput:
+      type: object
+      additionalProperties: false
+      description: >
+        Everything the caller needs to re-inject the signed notification and to
+        commit the reserved propagation coordinate afterwards.
+      required:
+        - next_hop_recipient
+        - smtputf8_required
+        - eight_bit_mime_required
+        - commit_token
+        - raw_rfc5322_base64
+      properties:
+        next_hop_recipient:
+          description: >
+            Exact SMTP forward path of the previous hop, including angle
+            brackets, taken from the authenticated previous-hop signature.
+          type: string
+          minLength: 3
+          maxLength: 256
+        smtputf8_required:
+          description: >
+            Whether the forward path or any header field of the signed
+            notification carries a non-ASCII byte in the RFC 6531 and RFC 6532
+            sense. An eight-bit body alone does not set it.
+          type: boolean
+        eight_bit_mime_required:
+          description: >
+            Whether the signed notification carries eight-bit body content, so
+            that the re-injection client must negotiate 8BITMIME.
+          type: boolean
+        commit_token:
+          $ref: "#/components/schemas/PropagationCommitToken"
+        raw_rfc5322_base64:
+          description: Complete signed notification bytes.
+          type: string
+          format: byte
+          minLength: 0
+          maxLength: 44739244
+    PropagationCommitToken:
+      type: string
+      description: >
+        Opaque bounded token bound to one reserved propagation coordinate, not
+        to one issuing attempt. It carries no caller-readable structure and
+        must not be logged.
+      minLength: 16
+      maxLength: 512
+      pattern: "^[A-Za-z0-9_-]{16,512}$"
+    DSNPropagateCommitResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - api_version
+        - draft
+        - state
+      properties:
+        api_version:
+          $ref: "#/components/schemas/APIVersion"
+        draft:
+          $ref: "#/components/schemas/DraftVersion"
+        state:
+          type: string
+          enum:
+            - committed
+          x-enum-varnames:
+            - PropagationStateCommitted
     ActionPlan:
       type: array
       maxItems: 3
@@ -1606,6 +2169,7 @@ components:
             - request_deadline
             - expectation_failed
             - precondition_failed
+            - propagation_commit_unresolved
             - internal_error
         category:
           type: string
@@ -1689,3 +2253,13 @@ components:
         - feedback_relay_selected
         - feedhere_inert
         - exploded_reported
+        - received_dsn_outer_policy
+        - received_dsn_structure_invalid
+        - received_dsn_embedded_unverified
+        - received_dsn_embedded_absent
+        - received_dsn_temporary_failure
+        - received_dsn_tenant_unavailable
+        - received_dsn_identity_mismatch
+        - received_dsn_not_local
+        - received_dsn_recipient_unlinked
+        - received_dsn_linked

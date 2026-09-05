@@ -31,12 +31,17 @@ const (
 	EmbeddedTemporaryError EmbeddedResult = "temperror"
 	// EmbeddedAbsent reports an embedded original that carries no DKIM2-Signature at all.
 	EmbeddedAbsent EmbeddedResult = "absent"
+	// EmbeddedNotEvaluated reports that the structure stage stopped the
+	// evaluation before any embedded evidence could be assessed. It never
+	// carries a temporary meaning.
+	EmbeddedNotEvaluated EmbeddedResult = "not_evaluated"
 )
 
 // Known reports whether the value belongs to the closed vocabulary.
 func (r EmbeddedResult) Known() bool {
 	switch r {
-	case EmbeddedVerified, EmbeddedVerifiedHeadersOnly, EmbeddedUnverified, EmbeddedTemporaryError, EmbeddedAbsent:
+	case EmbeddedVerified, EmbeddedVerifiedHeadersOnly, EmbeddedUnverified, EmbeddedTemporaryError, EmbeddedAbsent,
+		EmbeddedNotEvaluated:
 		return true
 	default:
 		return false

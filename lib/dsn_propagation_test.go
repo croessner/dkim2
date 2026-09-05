@@ -15,6 +15,7 @@ import (
 	"github.com/croessner/dkim2/internal/dsn"
 	"github.com/croessner/dkim2/internal/dsn/dsntest"
 	"github.com/croessner/dkim2/internal/rawmsg"
+	"github.com/croessner/dkim2/internal/routeplan"
 	"github.com/croessner/dkim2/internal/signature"
 )
 
@@ -719,5 +720,55 @@ func TestRebuildDSNForPropagationNarrowsParserByFixedPartsAndSignatureAllowance(
 	}
 	if _, err := narrowSigner.RebuildDSNForPropagation(context.Background(), propagationCase{original: propagationOriginal(propagationFullRecipe)}.request(t)); DSNPropagationStageOf(err) != DSNPropagationStagePreflight {
 		t.Fatalf("limits too narrow for propagation accepted: %v", err)
+	}
+}
+
+// TestPlanPropagationRouteBindsTicketToRebuiltReport proves the signer plans
+// exactly one delivery_status_propagation ticket over the rebuilt report's
+// own bytes, so that the ticket source matches the message the signer sees,
+// that the ticket signs, and that every derived authority stays derived.
+func TestPlanPropagationRouteBindsTicketToRebuiltReport(t *testing.T) {
+	fixture := newPropagationFixture(t, newPropagationProvider(receivedDSNLocalDomain, receivedDSNRemoteDomain))
+	evidence := fixture.mustRebuild(t, propagationCase{original: propagationOriginal(propagationFullRecipe)})
+	ticket, err := fixture.signer.PlanPropagationRoute(context.Background(), evidence, []byte("daemon-route"))
+	if err != nil || !ticket.Valid() || ticket.TotalMultiplicity() != 1 {
+		t.Fatalf("PlanPropagationRoute() valid=%t multiplicity=%d error=%v", ticket.Valid(), ticket.TotalMultiplicity(), err)
+	}
+	if ticket.value.Purpose() != routeplan.PurposeDeliveryStatusPropagation ||
+		!ticket.value.MatchesEnvelope([]byte("<>"), [][]byte{evidence.NextHopRecipient()}) ||
+		!ticket.value.MatchesSource(evidence.state.report.Bytes()) {
+		t.Fatal("planned ticket is not bound to the null reverse path, the previous mf=, and the rebuilt report bytes")
+	}
+	propagated, recovery, err := fixture.signer.SignPropagatedDSN(context.Background(), NewDSNPropagationSigningRequest(
+		evidence, ticket, fixture.profiles[receivedDSNLocalDomain], SigningMetadata{}, SigningTransportFinalNetworkPreDotStuffing,
+	))
+	if err != nil || recovery.Valid() || !propagated.Valid() || propagated.SigningDomain() != receivedDSNLocalDomain ||
+		!bytes.Equal(propagated.NextHopRecipient(), []byte(propagationPreviousSender)) {
+		t.Fatalf("SignPropagatedDSN() with the planned ticket valid=%t recovery=%t error=%v", propagated.Valid(), recovery.Valid(), err)
+	}
+	if _, _, err := fixture.signer.SignPropagatedDSN(context.Background(), NewDSNPropagationSigningRequest(
+		evidence, ticket, fixture.profiles[receivedDSNLocalDomain], SigningMetadata{}, SigningTransportFinalNetworkPreDotStuffing,
+	)); err == nil {
+		t.Fatal("planned ticket was consumed twice")
+	}
+	notEligible, err := fixture.signer.RebuildDSNForPropagation(context.Background(), propagationCase{
+		original: propagationOriginal(propagationFullRecipe), local: []string{receivedDSNOtherDomain},
+	}.request(t))
+	if err != nil || notEligible.Rebuilt() {
+		t.Fatalf("not-eligible rebuild rebuilt=%t error=%v", notEligible.Rebuilt(), err)
+	}
+	for name, input := range map[string]DSNPropagationEvidence{"zero": {}, "not_rebuilt": notEligible} {
+		if _, err := fixture.signer.PlanPropagationRoute(context.Background(), input, []byte("daemon-route")); !errors.Is(err, newSigningError(SigningErrorInvalidRequest)) {
+			t.Fatalf("%s evidence planned a route: %v", name, err)
+		}
+	}
+	var nilSigner *Signer
+	if _, err := nilSigner.PlanPropagationRoute(context.Background(), evidence, []byte("daemon-route")); !errors.Is(err, newSigningError(SigningErrorInvalidRequest)) {
+		t.Fatalf("nil signer planned a route: %v", err)
+	}
+	cancelled, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := fixture.signer.PlanPropagationRoute(cancelled, evidence, []byte("daemon-route")); !errors.Is(err, context.Canceled) {
+		t.Fatalf("cancelled planning error=%v", err)
 	}
 }

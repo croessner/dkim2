@@ -151,3 +151,33 @@ func TestRawMessageEscapingIsRejectedOnlyAfterResourceAndSchemaStages(t *testing
 		t.Fatalf("spelling failure = %v", err)
 	}
 }
+
+// TestRouteRawMessageRuleIsContractAware proves the raw-message spelling rule
+// stays mandatory on every message-carrying operation and that the commit
+// operation, whose contract carries no message, refuses a smuggled one.
+func TestRouteRawMessageRuleIsContractAware(t *testing.T) {
+	commit := []byte(`{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-06","commit_token":"` + strings.Repeat("A", 43) + `"}`)
+	constants, err := preflightJSON(commit)
+	if err != nil {
+		t.Fatalf("commit preflight: %v", err)
+	}
+	if err := validateRouteRawMessage(dsnPropagateCommitPath, constants); err != nil {
+		t.Fatalf("commit without message refused: %v", err)
+	}
+	for _, path := range []string{processPath, signPath, revisePath, dsnSignPath, dsnPropagatePath} {
+		if err := validateRouteRawMessage(path, constants); !isKnownFieldFailure(err, knownFieldInvalidContract) {
+			t.Fatalf("%s without message accepted: %v", path, err)
+		}
+	}
+	smuggled := []byte(`{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-06","commit_token":"` + strings.Repeat("A", 43) + `","message":{"raw_rfc5322_base64":"QQ=="}}`)
+	constants, err = preflightJSON(smuggled)
+	if err != nil {
+		t.Fatalf("smuggled preflight: %v", err)
+	}
+	if err := validateRouteRawMessage(dsnPropagateCommitPath, constants); !isKnownFieldFailure(err, knownFieldInvalidContract) {
+		t.Fatalf("commit with message accepted: %v", err)
+	}
+	if err := validateRouteRawMessage(dsnPropagatePath, constants); err != nil {
+		t.Fatalf("propagate with message refused: %v", err)
+	}
+}

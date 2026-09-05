@@ -78,7 +78,7 @@ func TestEvaluateReceivedDSNStageOutcomes(t *testing.T) {
 		want      receivedDSNProjection
 	}{
 		{name: "malformed delivery status", spec: receivedDSNSpec{deliveryStatus: receivedDSNMalformedStatus}, authority: local,
-			want: stopped(ReceivedDSNStructureMalformed, "", ReceivedDSNLocalHopNotEvaluated, ReceivedDSNOuterAlignmentNotEvaluated, ReceivedDSNRecipientLinkageNotEvaluated, ReceivedDSNPropagationNotEvaluated)},
+			want: stopped(ReceivedDSNStructureMalformed, ReceivedDSNEmbeddedNotEvaluated, ReceivedDSNLocalHopNotEvaluated, ReceivedDSNOuterAlignmentNotEvaluated, ReceivedDSNRecipientLinkageNotEvaluated, ReceivedDSNPropagationNotEvaluated)},
 		{name: "embedded absent", spec: receivedDSNSpec{unsigned: true}, authority: local,
 			want: stopped(ReceivedDSNStructureValid, ReceivedDSNEmbeddedAbsent, ReceivedDSNLocalHopNotEvaluated, ReceivedDSNOuterAlignmentNotEvaluated, ReceivedDSNRecipientLinkageNotEvaluated, ReceivedDSNPropagationNotApplicable)},
 		{name: "embedded unverified", spec: receivedDSNSpec{hops: corrupt}, authority: local,
@@ -269,7 +269,7 @@ func TestReceivedDSNVocabulariesAreClosedTokens(t *testing.T) {
 		}
 	}
 	check("structure", []string{string(ReceivedDSNStructureValid), string(ReceivedDSNStructureMalformed), string(ReceivedDSNStructureLimitExceeded)}, func(v string) bool { return ReceivedDSNStructure(v).Known() })
-	check("embedded", []string{string(ReceivedDSNEmbeddedVerified), string(ReceivedDSNEmbeddedVerifiedHeadersOnly), string(ReceivedDSNEmbeddedUnverified), string(ReceivedDSNEmbeddedTemperror), string(ReceivedDSNEmbeddedAbsent)}, func(v string) bool { return ReceivedDSNEmbedded(v).Known() })
+	check("embedded", []string{string(ReceivedDSNEmbeddedVerified), string(ReceivedDSNEmbeddedVerifiedHeadersOnly), string(ReceivedDSNEmbeddedUnverified), string(ReceivedDSNEmbeddedTemperror), string(ReceivedDSNEmbeddedAbsent), string(ReceivedDSNEmbeddedNotEvaluated)}, func(v string) bool { return ReceivedDSNEmbedded(v).Known() })
 	check("local_hop", []string{string(ReceivedDSNLocalHopLocal), string(ReceivedDSNLocalHopNotLocal), string(ReceivedDSNLocalHopMismatch), string(ReceivedDSNLocalHopTemperror), string(ReceivedDSNLocalHopNotEvaluated)}, func(v string) bool { return ReceivedDSNLocalHop(v).Known() })
 	check("outer_alignment", []string{string(ReceivedDSNOuterAlignmentAligned), string(ReceivedDSNOuterAlignmentMisaligned), string(ReceivedDSNOuterAlignmentNotEvaluated)}, func(v string) bool { return ReceivedDSNOuterAlignment(v).Known() })
 	check("recipient_linkage", []string{string(ReceivedDSNRecipientLinkageLinked), string(ReceivedDSNRecipientLinkageUnlinked), string(ReceivedDSNRecipientLinkageNotEvaluated)}, func(v string) bool { return ReceivedDSNRecipientLinkage(v).Known() })
@@ -373,5 +373,8 @@ func TestReceivedDSNLimitsNarrowParser(t *testing.T) {
 	evaluation, err := evaluator.EvaluateReceivedDSN(context.Background(), NewReceivedDSNRequest(receivedDSNSpec{}.build(t), []byte("<>"), [][]byte{[]byte(receivedDSNLocalMailFrom)}, newReceivedDSNAuthority(receivedDSNLocalDomain)))
 	if err != nil || evaluation.Structure() != ReceivedDSNStructureLimitExceeded || evaluation.Propagation() != ReceivedDSNPropagationNotEvaluated {
 		t.Fatalf("structure=%q propagation=%q error=%v", evaluation.Structure(), evaluation.Propagation(), err)
+	}
+	if evaluation.Embedded() != ReceivedDSNEmbeddedNotEvaluated || !evaluation.Valid() {
+		t.Fatalf("limit-exceeded embedded=%q valid=%t", evaluation.Embedded(), evaluation.Valid())
 	}
 }

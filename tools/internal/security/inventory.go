@@ -133,6 +133,8 @@ func Targets() []FuzzTarget {
 		target("lib/internal/datasource/memory/fuzz_test.go", "FuzzSnapshotMapping", "memory datasource snapshot", "local_security_policy", "immutable generation projection"),
 		target("lib/internal/datasource/signingprofile/fuzz_test.go", "FuzzSigningProjection", "signing profile projection", "local_security_policy", "opaque handle and public key coherence"),
 		target("lib/internal/dsn/parser_test.go", "FuzzParse", "delivery status notification parser", "rfc_normative", "bounded multipart parsing without caller-byte mutation"),
+		target("lib/internal/dsn/rebuild_fuzz_test.go", "FuzzRebuild", "delivery status notification rebuild", "draft_normative", "bounded rebuild without output on failure"),
+		target("lib/internal/dsn/received_fuzz_test.go", "FuzzReceivedDSN", "received delivery status notification evaluation", "draft_normative", "bounded staged evaluation with content-free diagnostics"),
 		target("lib/internal/instance/fuzz_test.go", "FuzzParseMessageInstance", "Message-Instance parser", "draft_normative", "bounded strict tag and Base64 parsing"),
 		target("lib/internal/instance/render_fuzz_test.go", "FuzzMessageInstanceRender", "Message-Instance rendering", "draft_normative", "bounded deterministic field rendering"),
 		target("lib/internal/keyresolver/fuzz_test.go", "FuzzDNSKeyRecord", "DNS key record", "draft_normative", "bounded strict DNS-04 tag parsing"),

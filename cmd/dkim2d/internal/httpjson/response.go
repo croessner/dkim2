@@ -271,6 +271,14 @@ func MapInboundResult(
 	if projectionErr != nil {
 		return generated.ProcessResponse{}, projectionErr
 	}
+	var deliveryStatus *generated.DeliveryStatusProjection
+	if projection, present := domain.DeliveryStatus(); present {
+		mapped, mapErr := mapDeliveryStatusProjection(projection)
+		if mapErr != nil {
+			return generated.ProcessResponse{}, mapErr
+		}
+		deliveryStatus = &mapped
+	}
 	return generated.ProcessResponse{
 		ApiVersion:         generated.V1,
 		Draft:              generated.DraftIetfDkimDkim2Spec06,
@@ -281,6 +289,7 @@ func MapInboundResult(
 		Disposition:        disposition,
 		Actions:            actions,
 		VerifierProjection: verifierProjection,
+		DeliveryStatus:     deliveryStatus,
 	}, nil
 }
 
@@ -979,48 +988,44 @@ func mapCanonicalUint64(value uint64) (generated.CanonicalUint64, bool) {
 	return strconv.FormatUint(value, 10), true
 }
 
-// mapPolicyReason maps every reachable decision and finding reason.
+// policyReasonWire is the closed policy-reason projection. Every library
+// reason maps to exactly one generated value; an unknown reason is refused
+// by the caller so that no reason outside the contract reaches the wire.
+var policyReasonWire = map[dkim2.PolicyReason]generated.PolicyReason{
+	dkim2.PolicyReasonProtocolPass:                  generated.ProtocolPass,
+	dkim2.PolicyReasonProtocolFail:                  generated.ProtocolFail,
+	dkim2.PolicyReasonProtocolPermerror:             generated.ProtocolPermerror,
+	dkim2.PolicyReasonProtocolTemperror:             generated.ProtocolTemperror,
+	dkim2.PolicyReasonPermissiveOverride:            generated.PermissiveOverride,
+	dkim2.PolicyReasonTestingModeObserve:            generated.TestingModeObserve,
+	dkim2.PolicyReasonDNSTestingEffective:           generated.DnsTestingEffective,
+	dkim2.PolicyReasonDNSTestingMixed:               generated.DnsTestingMixed,
+	dkim2.PolicyReasonDNSTestingIneligible:          generated.DnsTestingIneligible,
+	dkim2.PolicyReasonDoNotModifyIndeterminate:      generated.DonotmodifyIndeterminate,
+	dkim2.PolicyReasonDoNotModifyNotEvaluated:       generated.DonotmodifyNotEvaluated,
+	dkim2.PolicyReasonDoNotExplodeViolated:          generated.DonotexplodeViolated,
+	dkim2.PolicyReasonDoNotExplodeIndeterminate:     generated.DonotexplodeIndeterminate,
+	dkim2.PolicyReasonDoNotExplodeNotEvaluated:      generated.DonotexplodeNotEvaluated,
+	dkim2.PolicyReasonFeedbackRequested:             generated.FeedbackRequested,
+	dkim2.PolicyReasonFeedbackRelaySelected:         generated.FeedbackRelaySelected,
+	dkim2.PolicyReasonFeedHereInert:                 generated.FeedhereInert,
+	dkim2.PolicyReasonExplodedReported:              generated.ExplodedReported,
+	dkim2.PolicyReasonReceivedDSNOuterPolicy:        generated.ReceivedDsnOuterPolicy,
+	dkim2.PolicyReasonReceivedDSNStructureInvalid:   generated.ReceivedDsnStructureInvalid,
+	dkim2.PolicyReasonReceivedDSNEmbeddedUnverified: generated.ReceivedDsnEmbeddedUnverified,
+	dkim2.PolicyReasonReceivedDSNEmbeddedAbsent:     generated.ReceivedDsnEmbeddedAbsent,
+	dkim2.PolicyReasonReceivedDSNTemporaryFailure:   generated.ReceivedDsnTemporaryFailure,
+	dkim2.PolicyReasonReceivedDSNTenantUnavailable:  generated.ReceivedDsnTenantUnavailable,
+	dkim2.PolicyReasonReceivedDSNIdentityMismatch:   generated.ReceivedDsnIdentityMismatch,
+	dkim2.PolicyReasonReceivedDSNNotLocal:           generated.ReceivedDsnNotLocal,
+	dkim2.PolicyReasonReceivedDSNRecipientUnlinked:  generated.ReceivedDsnRecipientUnlinked,
+	dkim2.PolicyReasonReceivedDSNLinked:             generated.ReceivedDsnLinked,
+}
+
+// mapPolicyReason maps one closed library policy reason through the table.
 func mapPolicyReason(value dkim2.PolicyReason) (generated.PolicyReason, bool) {
-	switch value {
-	case dkim2.PolicyReasonProtocolPass:
-		return generated.ProtocolPass, true
-	case dkim2.PolicyReasonProtocolFail:
-		return generated.ProtocolFail, true
-	case dkim2.PolicyReasonProtocolPermerror:
-		return generated.ProtocolPermerror, true
-	case dkim2.PolicyReasonProtocolTemperror:
-		return generated.ProtocolTemperror, true
-	case dkim2.PolicyReasonPermissiveOverride:
-		return generated.PermissiveOverride, true
-	case dkim2.PolicyReasonTestingModeObserve:
-		return generated.TestingModeObserve, true
-	case dkim2.PolicyReasonDNSTestingEffective:
-		return generated.DnsTestingEffective, true
-	case dkim2.PolicyReasonDNSTestingMixed:
-		return generated.DnsTestingMixed, true
-	case dkim2.PolicyReasonDNSTestingIneligible:
-		return generated.DnsTestingIneligible, true
-	case dkim2.PolicyReasonDoNotModifyIndeterminate:
-		return generated.DonotmodifyIndeterminate, true
-	case dkim2.PolicyReasonDoNotModifyNotEvaluated:
-		return generated.DonotmodifyNotEvaluated, true
-	case dkim2.PolicyReasonDoNotExplodeViolated:
-		return generated.DonotexplodeViolated, true
-	case dkim2.PolicyReasonDoNotExplodeIndeterminate:
-		return generated.DonotexplodeIndeterminate, true
-	case dkim2.PolicyReasonDoNotExplodeNotEvaluated:
-		return generated.DonotexplodeNotEvaluated, true
-	case dkim2.PolicyReasonFeedbackRequested:
-		return generated.FeedbackRequested, true
-	case dkim2.PolicyReasonFeedbackRelaySelected:
-		return generated.FeedbackRelaySelected, true
-	case dkim2.PolicyReasonFeedHereInert:
-		return generated.FeedhereInert, true
-	case dkim2.PolicyReasonExplodedReported:
-		return generated.ExplodedReported, true
-	default:
-		return "", false
-	}
+	mapped, ok := policyReasonWire[value]
+	return mapped, ok
 }
 
 // mapDoNotModify maps every reachable modification-compliance state.

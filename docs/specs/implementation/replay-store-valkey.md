@@ -1422,6 +1422,31 @@ Rules:
 - any non-authoritative result after dispatch is indeterminate;
 - no raw Valkey error string is propagated.
 
+Delivery-status propagation records extend this contract without changing
+it for first-seen records. They are derived under the distinct
+`dkim2-replay-propagation-v1` frame, keep the namespace, epoch, secret,
+retention, and 68-byte storage-key shape, and carry a closed stored value of
+either `pending:<lease-expiry-unix-ms>` or `committed`. The provider issues
+only value-conditional forms of the same `SET` command, each with the `GET`
+option so that one round trip applies the transition and returns the previous
+value: `SET <key> pending:<expiry> NX GET PX <retention-ms>` is the
+insert-if-absent reservation; `SET <key> pending:<expiry> IFEQ
+<observed-previous> GET PX <retention-ms>` is the compare-and-set that
+re-serves a reservation whose lease has expired against exactly the previous
+value this attempt observed, so that concurrent re-serving attempts cannot
+both win and an interleaved commit is never overwritten; and `SET <key>
+committed XX GET KEEPTTL` is the monotonic pending-to-committed transition
+that keeps the retention TTL, whose null reply means the retention expired
+and the commit is unresolved. A `pending` record whose lease and retention
+have both expired is absent. Each form is built by one explicit
+`client.B().Set()...` chain, is non-retryable, is never retried, and maps
+transport failures after dispatch and replies outside the closed value
+grammar to fail-closed temporary conditions. The `IFEQ` and combined `NX GET`
+forms require Valkey 8.1 or later, inside the 9.1 production floor. No
+`GET` command, script, transaction, pipeline, read-before-write, or TTL
+mutation is introduced, so the application ACL grant remains `+ping +set`
+and the auditor plan is unchanged.
+
 Authoritative Valkey error replies are matched only by their exact stable
 server error kind and are never returned verbatim. Exact classification is:
 

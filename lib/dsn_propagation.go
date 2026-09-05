@@ -510,6 +510,43 @@ func mapDSNPropagationEvaluationError(ctx context.Context, err error) error {
 	return newDSNPropagationError(DSNPropagationStageEvaluation, newSigningError(SigningErrorInvalidRequest))
 }
 
+// PlanPropagationRoute plans exactly one delivery_status_propagation route
+// ticket over the rebuilt report that the evidence carries. The ticket source
+// is the report's own bytes, so it matches the message SignPropagatedDSN
+// signs; the reverse path is null, the single forward path is the
+// authenticated previous-hop mf=, and the disclosure and route class are the
+// fixed single external shape. Neither the caller nor the route scope can
+// select the recipient or the signing domain: both stay derived from the
+// removed completion signature and the verified previous hop.
+func (s *Signer) PlanPropagationRoute(ctx context.Context, evidence DSNPropagationEvidence, routeScope []byte) (RouteCopyTicket, error) {
+	if s == nil || !s.initialized || ctx == nil || !evidence.Rebuilt() {
+		return RouteCopyTicket{}, newSigningError(SigningErrorInvalidRequest)
+	}
+	if err := ctx.Err(); err != nil {
+		return RouteCopyTicket{}, err
+	}
+	source, err := NewSigningSource(evidence.state.report.Bytes())
+	if err != nil {
+		return RouteCopyTicket{}, err
+	}
+	entry, err := NewDeliveryStatusPropagationRouteEntry(source, []byte("<>"), [][]byte{evidence.NextHopRecipient()}, routeScope)
+	if err != nil {
+		return RouteCopyTicket{}, err
+	}
+	request, err := NewRouteFanoutRequest([]RouteEntry{entry})
+	if err != nil {
+		return RouteCopyTicket{}, err
+	}
+	_, tickets, err := s.PlanRouteFanout(ctx, request)
+	if err != nil {
+		return RouteCopyTicket{}, err
+	}
+	if len(tickets) != 1 || !tickets[0].Valid() || tickets[0].TotalMultiplicity() != 1 {
+		return RouteCopyTicket{}, newSigningError(SigningErrorInternalInvariant)
+	}
+	return tickets[0], nil
+}
+
 // SignPropagatedDSN signs only a report rebuilt by RebuildDSNForPropagation.
 // The ticket must carry the delivery_status_propagation purpose with the
 // null reverse path and the authenticated next-hop recipient, the profile

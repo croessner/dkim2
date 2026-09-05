@@ -8,6 +8,7 @@ import (
 
 	"github.com/croessner/dkim2"
 	"github.com/croessner/dkim2/cmd/dkim2d/internal/app"
+	"github.com/croessner/dkim2/cmd/dkim2d/internal/config"
 	"github.com/croessner/dkim2/cmd/dkim2d/internal/httpjson/generated"
 	"github.com/croessner/dkim2/cmd/dkim2d/internal/httpjson/wire"
 )
@@ -268,21 +269,9 @@ func validOperationActionMatrix(
 	}
 }
 
-// validTenant accepts one bounded canonical administrative identifier.
-func validTenant(value string) bool {
-	if value == "" || len(value) > 128 {
-		return false
-	}
-	for index, char := range value {
-		letter := char >= 'a' && char <= 'z'
-		digit := char >= '0' && char <= '9'
-		punctuation := index > 0 && (char == '.' || char == '_' || char == '-')
-		if !letter && !digit && !punctuation {
-			return false
-		}
-	}
-	return true
-}
+// validTenant delegates to the single daemon-wide tenant syntax authority so
+// that the wire boundary and the operator configuration cannot drift apart.
+func validTenant(value string) bool { return config.ValidTenant(value) }
 
 // validSigningDomain accepts a canonical lower-case ASCII domain.
 func validSigningDomain(value string) bool {

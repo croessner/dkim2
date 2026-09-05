@@ -188,16 +188,20 @@ func (e ReceivedEvaluation) Valid() bool {
 		!e.recipientLinkage.Known() || !e.propagation.Known() {
 		return false
 	}
-	if e.structure != StructureValid {
-		return e.embedded == "" && e.propagation == PropagationNotEvaluated
+	if !e.embedded.Known() {
+		return false
 	}
-	return e.embedded.Known()
+	if e.structure != StructureValid {
+		return e.embedded == EmbeddedNotEvaluated && e.propagation == PropagationNotEvaluated
+	}
+	return e.embedded != EmbeddedNotEvaluated
 }
 
 // Structure returns the closed structure outcome.
 func (e ReceivedEvaluation) Structure() StructureResult { return e.structure }
 
-// Embedded returns the closed embedded-verification outcome or the empty value before that stage.
+// Embedded returns the closed embedded-verification outcome, or
+// EmbeddedNotEvaluated when the structure stage stopped the evaluation.
 func (e ReceivedEvaluation) Embedded() EmbeddedResult { return e.embedded }
 
 // LocalHop returns the closed local-hop identity outcome.
@@ -317,6 +321,7 @@ func (e ReceivedEvaluator) Evaluate(ctx context.Context, request ReceivedRequest
 		return ReceivedEvaluation{}, contextError(ReceivedStagePreflight, err)
 	}
 	evaluation := ReceivedEvaluation{
+		embedded: EmbeddedNotEvaluated,
 		localHop: LocalHopNotEvaluated, outerAlignment: OuterAlignmentNotEvaluated,
 		recipientLinkage: RecipientLinkageNotEvaluated, propagation: PropagationNotEvaluated,
 		receivedBytes: len(request.Raw), initialized: true,

@@ -73,7 +73,20 @@ type snapshotState struct {
 	replay        replayState
 	signing       signingState
 	observability observabilityState
+	process       processState
+	propagation   propagationState
 	presence      map[string]Presence
+}
+
+// processState carries the inbound-processing configuration that the
+// received delivery-status evaluation needs.
+type processState struct {
+	defaultTenant string
+}
+
+// propagationState carries the delivery-status propagation configuration.
+type propagationState struct {
+	pendingLease time.Duration
 }
 
 // LogLevel identifies one closed slog admission threshold.
@@ -117,24 +130,25 @@ type tracingState struct {
 }
 
 type serverState struct {
-	listen                string
-	privateNetwork        bool
-	tlsCertificateFile    string
-	tlsPrivateKeyFile     string
-	tlsCAFile             string
-	tlsServerName         string
-	capabilityFile        string
-	signCapabilityFile    string
-	reviseCapabilityFile  string
-	dsnSignCapabilityFile string
-	readHeaderTimeout     time.Duration
-	readTimeout           time.Duration
-	writeTimeout          time.Duration
-	requestDeadline       time.Duration
-	shutdownTimeout       time.Duration
-	maxInFlight           uint8
-	maxWaiters            uint16
-	admissionWait         time.Duration
+	listen                     string
+	privateNetwork             bool
+	tlsCertificateFile         string
+	tlsPrivateKeyFile          string
+	tlsCAFile                  string
+	tlsServerName              string
+	capabilityFile             string
+	signCapabilityFile         string
+	reviseCapabilityFile       string
+	dsnSignCapabilityFile      string
+	dsnPropagateCapabilityFile string
+	readHeaderTimeout          time.Duration
+	readTimeout                time.Duration
+	writeTimeout               time.Duration
+	requestDeadline            time.Duration
+	shutdownTimeout            time.Duration
+	maxInFlight                uint8
+	maxWaiters                 uint16
+	admissionWait              time.Duration
 }
 
 type signingState struct {
@@ -395,6 +409,9 @@ func validateSnapshot(values map[string]rawValue, presence map[string]Presence) 
 		if server.dsnSignCapabilityFile != "" {
 			protectedPaths = append(protectedPaths, server.dsnSignCapabilityFile)
 		}
+		if server.dsnPropagateCapabilityFile != "" {
+			protectedPaths = append(protectedPaths, server.dsnPropagateCapabilityFile)
+		}
 	}
 	if signing.backend == SigningFlatFile {
 		protectedPaths = append(protectedPaths, signing.datasourceFile, signing.privateManifestFile)
@@ -403,6 +420,14 @@ func validateSnapshot(values map[string]rawValue, presence map[string]Presence) 
 		return nil, newError(CodeInvalidField)
 	}
 	observability, err := parseObservability(values, presence, generation, protectedPaths...)
+	if err != nil {
+		return nil, err
+	}
+	process, err := parseProcess(values)
+	if err != nil {
+		return nil, err
+	}
+	propagation, err := parsePropagation(values, presence, server)
 	if err != nil {
 		return nil, err
 	}
@@ -415,8 +440,59 @@ func validateSnapshot(values map[string]rawValue, presence map[string]Presence) 
 		replay:        replay,
 		signing:       signing,
 		observability: observability,
+		process:       process,
+		propagation:   propagation,
 		presence:      clonePresence(presence),
 	}, nil
+}
+
+// parseProcess validates the optional inbound-processing tenant default. It
+// is optional: without any tenant the received delivery-status member is
+// still emitted with not_evaluated locality and is accepted, so an operator
+// who never configured a tenant keeps the existing behavior.
+func parseProcess(values map[string]rawValue) (processState, error) {
+	tenant := text(values, pathProcessDefaultTenant)
+	if tenant != "" && !ValidTenant(tenant) {
+		return processState{}, newError(CodeInvalidField)
+	}
+	return processState{defaultTenant: tenant}, nil
+}
+
+// parsePropagation validates the propagation pending lease. The lease is only
+// meaningful when the propagation route carries its own capability.
+func parsePropagation(
+	values map[string]rawValue,
+	presence map[string]Presence,
+	server serverState,
+) (propagationState, error) {
+	lease, err := durationValue(
+		values, pathDSNPropagationPendingLease, time.Second, time.Hour, false,
+	)
+	if err != nil {
+		return propagationState{}, err
+	}
+	if presence[pathDSNPropagationPendingLease].Explicit() &&
+		server.dsnPropagateCapabilityFile == "" {
+		return propagationState{}, newError(CodeInvalidMatrix)
+	}
+	return propagationState{pendingLease: lease}, nil
+}
+
+// ValidTenant accepts one bounded canonical administrative identifier. It is
+// the single tenant-syntax authority of the daemon configuration.
+func ValidTenant(value string) bool {
+	if value == "" || len(value) > 128 {
+		return false
+	}
+	for index, character := range value {
+		letter := character >= 'a' && character <= 'z'
+		digit := character >= '0' && character <= '9'
+		punctuation := index > 0 && (character == '.' || character == '_' || character == '-')
+		if !letter && !digit && !punctuation {
+			return false
+		}
+	}
+	return true
 }
 
 // parseObservability validates logging, debug, and conditional tracing state.
@@ -607,6 +683,7 @@ func parseServer(values map[string]rawValue) (serverState, error) {
 	signCapability := text(values, pathServerSignCapability)
 	reviseCapability := text(values, pathServerReviseCapability)
 	dsnSignCapability := text(values, pathServerDSNSignCapability)
+	dsnPropagateCapability := text(values, pathServerDSNPropagateCapability)
 	privateNetwork := listenerMode == valueListenerPrivate
 	if (listenerMode != defaultListenerMode && !privateNetwork) ||
 		!validServerListener(listen, privateNetwork) || !validProtectedPath(capability) ||
@@ -618,24 +695,25 @@ func parseServer(values map[string]rawValue) (serverState, error) {
 		return serverState{}, newError(CodeInvalidField)
 	}
 	return serverState{
-		listen:                listen,
-		privateNetwork:        privateNetwork,
-		tlsCertificateFile:    tlsCertificate,
-		tlsPrivateKeyFile:     tlsPrivateKey,
-		tlsCAFile:             tlsCA,
-		tlsServerName:         tlsServerName,
-		capabilityFile:        capability,
-		signCapabilityFile:    signCapability,
-		reviseCapabilityFile:  reviseCapability,
-		dsnSignCapabilityFile: dsnSignCapability,
-		readHeaderTimeout:     readHeader,
-		readTimeout:           read,
-		writeTimeout:          write,
-		requestDeadline:       deadline,
-		shutdownTimeout:       shutdown,
-		maxInFlight:           uint8(maxInFlight),
-		maxWaiters:            uint16(maxWaiters),
-		admissionWait:         admission,
+		listen:                     listen,
+		privateNetwork:             privateNetwork,
+		tlsCertificateFile:         tlsCertificate,
+		tlsPrivateKeyFile:          tlsPrivateKey,
+		tlsCAFile:                  tlsCA,
+		tlsServerName:              tlsServerName,
+		capabilityFile:             capability,
+		signCapabilityFile:         signCapability,
+		reviseCapabilityFile:       reviseCapability,
+		dsnSignCapabilityFile:      dsnSignCapability,
+		dsnPropagateCapabilityFile: dsnPropagateCapability,
+		readHeaderTimeout:          readHeader,
+		readTimeout:                read,
+		writeTimeout:               write,
+		requestDeadline:            deadline,
+		shutdownTimeout:            shutdown,
+		maxInFlight:                uint8(maxInFlight),
+		maxWaiters:                 uint16(maxWaiters),
+		admissionWait:              admission,
 	}, nil
 }
 
@@ -688,6 +766,7 @@ func parseSigning(
 			pathServerSignCapability,
 			pathServerReviseCapability,
 			pathServerDSNSignCapability,
+			pathServerDSNPropagateCapability,
 		} {
 			if presence[path].Explicit() {
 				return signingState{}, newError(CodeInvalidMatrix)
@@ -761,7 +840,8 @@ func parseSigning(
 	signPresent := presence[pathServerSignCapability].Explicit()
 	revisePresent := presence[pathServerReviseCapability].Explicit()
 	dsnSignPresent := presence[pathServerDSNSignCapability].Explicit()
-	if !signPresent && !revisePresent && !dsnSignPresent {
+	propagatePresent := presence[pathServerDSNPropagateCapability].Explicit()
+	if !signPresent && !revisePresent && !dsnSignPresent && !propagatePresent {
 		return signingState{}, newError(CodeInvalidMatrix)
 	}
 	reload, err := durationValue(
@@ -799,6 +879,9 @@ func parseSigning(
 	}
 	if dsnSignPresent {
 		paths = append(paths, server.dsnSignCapabilityFile)
+	}
+	if propagatePresent {
+		paths = append(paths, server.dsnPropagateCapabilityFile)
 	}
 	if !sameGenerationPaths(generation, paths...) || !allDistinct(paths) {
 		return signingState{}, newError(CodeInvalidField)

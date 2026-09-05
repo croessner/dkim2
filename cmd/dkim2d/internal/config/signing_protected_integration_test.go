@@ -301,7 +301,7 @@ func writeProtectedSigningStoreFiles(t *testing.T, generationPath string) {
 			}},
 		}},
 		"policies": []any{map[string]any{
-			"tenant_id": "tenant-a", protectedSigningDomainField: protectedSigningDomain,
+			"tenant_id": testTenant, protectedSigningDomainField: protectedSigningDomain,
 			"use": testSigningUseOriginator, "profile_id": "origin-profile",
 			"status": "active", "rollout": "enforce",
 			"compatibility": "strict",

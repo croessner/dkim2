@@ -32,9 +32,9 @@ func receivedDSNRows(t *testing.T) []receivedDSNFactsRow {
 		return mustReceivedDSNFacts(t, ReceivedDSNStructureValid, embedded, localHop, ReceivedDSNOuterAlignmentNotEvaluated, ReceivedDSNRecipientLinkageNotEvaluated)
 	}
 	return []receivedDSNFactsRow{
-		{name: "structure malformed", facts: mustReceivedDSNFacts(t, ReceivedDSNStructureMalformed, "", ReceivedDSNLocalHopNotEvaluated, ReceivedDSNOuterAlignmentNotEvaluated, ReceivedDSNRecipientLinkageNotEvaluated),
+		{name: "structure malformed", facts: mustReceivedDSNFacts(t, ReceivedDSNStructureMalformed, ReceivedDSNEmbeddedNotEvaluated, ReceivedDSNLocalHopNotEvaluated, ReceivedDSNOuterAlignmentNotEvaluated, ReceivedDSNRecipientLinkageNotEvaluated),
 			reason: ReasonReceivedDSNStructureInvalid, strict: VerdictReject, permissive: VerdictContinue, testing: VerdictContinue},
-		{name: "structure limit exceeded", facts: mustReceivedDSNFacts(t, ReceivedDSNStructureLimitExceeded, "", ReceivedDSNLocalHopNotEvaluated, ReceivedDSNOuterAlignmentNotEvaluated, ReceivedDSNRecipientLinkageNotEvaluated),
+		{name: "structure limit exceeded", facts: mustReceivedDSNFacts(t, ReceivedDSNStructureLimitExceeded, ReceivedDSNEmbeddedNotEvaluated, ReceivedDSNLocalHopNotEvaluated, ReceivedDSNOuterAlignmentNotEvaluated, ReceivedDSNRecipientLinkageNotEvaluated),
 			reason: ReasonReceivedDSNStructureInvalid, strict: VerdictReject, permissive: VerdictContinue, testing: VerdictContinue},
 		{name: "embedded unverified", facts: stopped(ReceivedDSNEmbeddedUnverified, ReceivedDSNLocalHopNotEvaluated),
 			reason: ReasonReceivedDSNEmbeddedUnverified, strict: VerdictReject, permissive: VerdictContinue, testing: VerdictContinue},
@@ -144,7 +144,7 @@ func (p Projection) withoutReceivedDSN() Projection {
 // TestReceivedDSNOuterNotPassKeepsOuterPolicy proves the first row: a non-PASS
 // outer verification keeps the outer policy and records the outer-policy finding.
 func TestReceivedDSNOuterNotPassKeepsOuterPolicy(t *testing.T) {
-	facts := mustReceivedDSNFacts(t, ReceivedDSNStructureMalformed, "", ReceivedDSNLocalHopNotEvaluated, ReceivedDSNOuterAlignmentNotEvaluated, ReceivedDSNRecipientLinkageNotEvaluated)
+	facts := mustReceivedDSNFacts(t, ReceivedDSNStructureMalformed, ReceivedDSNEmbeddedNotEvaluated, ReceivedDSNLocalHopNotEvaluated, ReceivedDSNOuterAlignmentNotEvaluated, ReceivedDSNRecipientLinkageNotEvaluated)
 	for _, modeCase := range []struct {
 		mode Mode
 		want Verdict
@@ -169,7 +169,7 @@ func TestReceivedDSNOuterNotPassKeepsOuterPolicy(t *testing.T) {
 // TestReceivedDSNAuthenticationFinalDowngradesToOuterPolicy proves a final
 // replay failure keeps the received-DSN fact only as the outer-policy finding.
 func TestReceivedDSNAuthenticationFinalDowngradesToOuterPolicy(t *testing.T) {
-	facts := mustReceivedDSNFacts(t, ReceivedDSNStructureMalformed, "", ReceivedDSNLocalHopNotEvaluated, ReceivedDSNOuterAlignmentNotEvaluated, ReceivedDSNRecipientLinkageNotEvaluated)
+	facts := mustReceivedDSNFacts(t, ReceivedDSNStructureMalformed, ReceivedDSNEmbeddedNotEvaluated, ReceivedDSNLocalHopNotEvaluated, ReceivedDSNOuterAlignmentNotEvaluated, ReceivedDSNRecipientLinkageNotEvaluated)
 	projection := mustReceivedDSNProjection(t, ProtocolPASS, VerificationReasonNone, facts, []HopFact{mustProjectionHop(t, 1, TransitionOrigin)})
 	evaluator, err := NewEvaluator(DefaultConfig())
 	if err != nil {
@@ -235,6 +235,8 @@ func TestReceivedDSNFactsRejectIncoherentStages(t *testing.T) {
 		{name: "unknown structure", structure: "not_a_structure", localHop: ReceivedDSNLocalHopNotEvaluated, alignment: ReceivedDSNOuterAlignmentNotEvaluated, linkage: ReceivedDSNRecipientLinkageNotEvaluated},
 		{name: "malformed with embedded", structure: ReceivedDSNStructureMalformed, embedded: ReceivedDSNEmbeddedVerified, localHop: ReceivedDSNLocalHopNotEvaluated, alignment: ReceivedDSNOuterAlignmentNotEvaluated, linkage: ReceivedDSNRecipientLinkageNotEvaluated},
 		{name: "valid without embedded", structure: ReceivedDSNStructureValid, localHop: ReceivedDSNLocalHopNotEvaluated, alignment: ReceivedDSNOuterAlignmentNotEvaluated, linkage: ReceivedDSNRecipientLinkageNotEvaluated},
+		{name: "valid with unevaluated embedded", structure: ReceivedDSNStructureValid, embedded: ReceivedDSNEmbeddedNotEvaluated, localHop: ReceivedDSNLocalHopNotEvaluated, alignment: ReceivedDSNOuterAlignmentNotEvaluated, linkage: ReceivedDSNRecipientLinkageNotEvaluated},
+		{name: "malformed with empty embedded", structure: ReceivedDSNStructureMalformed, embedded: "", localHop: ReceivedDSNLocalHopNotEvaluated, alignment: ReceivedDSNOuterAlignmentNotEvaluated, linkage: ReceivedDSNRecipientLinkageNotEvaluated},
 		{name: "unverified with local hop", structure: ReceivedDSNStructureValid, embedded: ReceivedDSNEmbeddedUnverified, localHop: ReceivedDSNLocalHopLocal, alignment: ReceivedDSNOuterAlignmentNotEvaluated, linkage: ReceivedDSNRecipientLinkageNotEvaluated},
 		{name: "not local with alignment", structure: ReceivedDSNStructureValid, embedded: ReceivedDSNEmbeddedVerified, localHop: ReceivedDSNLocalHopNotLocal, alignment: ReceivedDSNOuterAlignmentAligned, linkage: ReceivedDSNRecipientLinkageNotEvaluated},
 		{name: "misaligned with linkage", structure: ReceivedDSNStructureValid, embedded: ReceivedDSNEmbeddedVerified, localHop: ReceivedDSNLocalHopLocal, alignment: ReceivedDSNOuterAlignmentMisaligned, linkage: ReceivedDSNRecipientLinkageLinked},

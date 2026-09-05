@@ -9,7 +9,10 @@ import (
 	"time"
 )
 
-const testGeneration = "0123456789abcdef0123456789abcdef"
+const (
+	testGeneration = "0123456789abcdef0123456789abcdef"
+	testTenant     = "tenant-a"
+)
 
 const testValkeyAddress = "127.0.0.1:6379"
 
@@ -1090,4 +1093,65 @@ replay:
       shared_secret_set: true
       shared_retention: true
 `
+}
+
+// propagationYAML returns the signing document with the propagation capability.
+func propagationYAML() string {
+	return strings.Replace(
+		signingYAML(),
+		"  dsn_sign_capability_file: /secure/"+testGeneration+"/dsn-sign-capability\n",
+		"  dsn_sign_capability_file: /secure/"+testGeneration+"/dsn-sign-capability\n"+
+			"  dsn_propagate_capability_file: /secure/"+testGeneration+"/dsn-propagate-capability\n",
+		1,
+	)
+}
+
+// TestLoadValidatesReceivedDSNAndPropagationFields freezes the typed rules of
+// the process default tenant, the propagation capability, and the pending
+// lease: the tenant must be canonical, the lease is bounded and only
+// meaningful with the propagation capability, the fifth capability stays
+// distinct, and propagation stands alone. It does not require the
+// delivery-status route capability, because propagation needs the tenant's
+// delivery_status datasource profile rather than the /v1/dsn/sign route, and
+// a missing profile is already answered permerror/discard at request time.
+func TestLoadValidatesReceivedDSNAndPropagationFields(t *testing.T) {
+	clearStableEnvironment(t)
+	base, err := Load([]byte(signingYAML()), FlagValues{})
+	if err != nil || base.ProcessDefaultTenant() != "" || base.Server().DSNPropagateEnabled() ||
+		base.PropagationPendingLease() != 120*time.Second {
+		t.Fatalf("defaults: tenant=%q propagate=%t lease=%s code=%s", base.ProcessDefaultTenant(), base.Server().DSNPropagateEnabled(), base.PropagationPendingLease(), CodeOf(err))
+	}
+	tenant := signingYAML() + "process:\n  default_tenant: " + testTenant + "\n"
+	snapshot, err := Load([]byte(tenant), FlagValues{})
+	if err != nil || snapshot.ProcessDefaultTenant() != testTenant {
+		t.Fatalf("default tenant: %q code=%s", snapshot.ProcessDefaultTenant(), CodeOf(err))
+	}
+	standalone := removeYAMLField(propagationYAML(), "  dsn_sign_capability_file:")
+	snapshot, err = Load([]byte(standalone), FlagValues{})
+	if err != nil || !snapshot.Server().DSNPropagateEnabled() {
+		t.Fatalf("propagation without the delivery-status route: code=%s", CodeOf(err))
+	}
+	enabled := propagationYAML() + "dsn_propagation:\n  pending_lease: 30s\n"
+	snapshot, err = Load([]byte(enabled), FlagValues{})
+	if err != nil || !snapshot.Server().DSNPropagateEnabled() ||
+		snapshot.Server().DSNPropagateCapabilityFile() != "/secure/"+testGeneration+"/dsn-propagate-capability" ||
+		snapshot.PropagationPendingLease() != 30*time.Second {
+		t.Fatalf("propagation: enabled=%t lease=%s code=%s", snapshot.Server().DSNPropagateEnabled(), snapshot.PropagationPendingLease(), CodeOf(err))
+	}
+	for name, testCase := range map[string]struct {
+		document string
+		code     Code
+	}{
+		"non-canonical tenant":     {signingYAML() + "process:\n  default_tenant: \"Tenant A\"\n", CodeInvalidField},
+		"lease without capability": {signingYAML() + "dsn_propagation:\n  pending_lease: 30s\n", CodeInvalidMatrix},
+		"lease below bound":        {propagationYAML() + "dsn_propagation:\n  pending_lease: 500ms\n", CodeInvalidField},
+		"lease above bound":        {propagationYAML() + "dsn_propagation:\n  pending_lease: 2h\n", CodeInvalidField},
+		"propagation capability equal to another": {
+			strings.Replace(propagationYAML(), "/dsn-propagate-capability", "/dsn-sign-capability", 1), CodeInvalidField,
+		},
+	} {
+		if _, loadErr := Load([]byte(testCase.document), FlagValues{}); CodeOf(loadErr) != testCase.code {
+			t.Fatalf("%s: code %s, want %s", name, CodeOf(loadErr), testCase.code)
+		}
+	}
 }

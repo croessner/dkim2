@@ -306,9 +306,9 @@ func (c *contextEarlyFinalConn) writtenResponseCounts() (int, int) {
 }
 
 // Process waits for the boundary-owned deadline and preserves its exact cause.
-func (p *contextDeadlineProcessor) Process(
+func (p *contextDeadlineProcessor) ProcessInbound(
 	ctx context.Context,
-	_ dkim2.VerifyRequest,
+	_ app.InboundRequest,
 ) (app.InboundResult, error) {
 	p.calls.Add(1)
 	<-ctx.Done()
@@ -478,15 +478,15 @@ func contextGoldenInboundProcessor(
 		recipients[index] = string(value)
 	}
 	body, err := json.Marshal(map[string]any{
-		"api_version": "v1",
-		testDraftName: dkim2.DraftIdentifier,
-		"message": map[string]any{
-			"raw_rfc5322_base64": vector.Raw,
-			"fidelity":           "raw_rfc5322",
+		testKeyAPIVersion: "v1",
+		testDraftName:     dkim2.DraftIdentifier,
+		testKeyMessage: map[string]any{
+			testKeyRawMessage: vector.Raw,
+			testKeyFidelity:   "raw_rfc5322",
 		},
-		"smtp": map[string]any{
-			"mail_from": string(reverse),
-			"rcpt_to":   recipients,
+		testKeySMTP: map[string]any{
+			testKeyMailFrom: string(reverse),
+			testKeyRcptTo:   recipients,
 		},
 	})
 	if err != nil {

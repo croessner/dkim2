@@ -429,6 +429,65 @@ draft forbids releasing the resulting modified or exploded message to an MTA
 outside that system's control. Existing fail-closed authorization and
 `local_only` restrictions remain authoritative.
 
+### Received delivery-status evaluation and propagation
+
+Three stable configuration paths govern received delivery-status
+notifications. All three are optional and all three default to today's
+behavior.
+
+```yaml
+server:
+  dsn_propagate_capability_file: /var/lib/dkim2d/protected/0123456789abcdef0123456789abcdef/dsn-propagate-capability
+process:
+  default_tenant: tenant-a
+dsn_propagation:
+  pending_lease: 120s
+```
+
+`server.dsn_propagate_capability_file` is the protected 32-byte credential of
+`/v1/dsn/propagate` and `/v1/dsn/propagate/commit`. Its presence enables both
+routes. It belongs to the same protected generation as every other capability,
+must be distinct from all of them, and is accepted on no other route; no other
+capability is accepted on these two. It does not require
+`dsn_sign_capability_file`: propagation signs with the tenant's
+`delivery_status` datasource profile, not through the `/v1/dsn/sign` route,
+and a local domain without that profile is answered `permerror`/`discard`
+with `propagation_failure: unprovisioned_domain`.
+
+`process.default_tenant` names the administrative tenant that `/v1/process`
+uses when a request carries no `context.tenant`. Locality of a received
+delivery-status notification is tenant-keyed, so without a tenant the
+`delivery_status` projection reports `local_hop: not_evaluated` and
+`propagation: not_evaluated` and the policy accepts it, which is exactly the
+behavior of a daemon that never configured one. The inbound Milter sends no
+tenant and relies on this value. Two tenants on one daemon are isolated by
+this key: a domain that is local for tenant A is `not_local` for tenant B.
+
+`dsn_propagation.pending_lease` is how long one reserved propagation
+coordinate stays pending before another attempt may re-serve it. It defaults
+to 120 seconds, is only meaningful together with the propagation capability,
+and must exceed the adapter's daemon call timeout plus its re-injection and
+commit timeouts. A live lease answers `temperror`/`tempfail`, an expired lease
+re-serves with a fresh rebuild and a fresh commit token, and a committed
+coordinate answers `pass`/`discard`. Issued commit tokens are held in a
+bounded process-local ledger for the lease plus a small fixed margin; they do
+not survive a restart, and an unresolvable token is answered `409` so the
+caller defers rather than leaving a coordinate uncommitted.
+
+Readiness and latency: `/v1/process` reads the signing datasource whenever an
+inbound message is classified as a received delivery-status notification and a
+tenant is available. This is the only datasource dependency on the process
+path. It runs after canonical domain-syntax validation, uses the same bounded
+lease and read path as the signing routes, and is served from a bounded
+per-tenant negative cache shared by `/v1/process` and `/v1/dsn/propagate`, so
+a stream of foreign notifications does not turn every inbound message into a
+datasource read. A foreign domain costs one bounded read per profile use
+before it is cached; a local domain usually costs one. Readiness is unchanged:
+the datasource is already a readiness dependency whenever signing is enabled,
+and ordinary inbound messages that are not delivery-status notifications never
+reach this lookup. A datasource outage is reported as `local_hop: temperror`
+with a `tempfail` disposition, never as `not_local`.
+
 Omit every unused route capability. `dsn_sign_capability_file` authorizes only
 the Postfix-exclusive `/v1/dsn/sign`; possession attests that its sole adapter
 established trusted `internal` origin. It is distinct from process, sign,
@@ -619,6 +678,8 @@ Exactly these paths are routable:
 | `POST` | `/v1/sign` | Originator signing and ordered append-only actions |
 | `POST` | `/v1/revise` | Ordinary-transit verification, revision, and ordered actions |
 | `POST` | `/v1/dsn/sign` | Postfix-exclusive authenticated delivery-status signing |
+| `POST` | `/v1/dsn/propagate` | Received delivery-status evaluation, rebuild, and propagation signing |
+| `POST` | `/v1/dsn/propagate/commit` | Commit of one reserved propagation coordinate |
 
 Health and readiness support their declared strong-ETag conditional behavior.
 Readiness is `200` only after immutable configuration and protected loading,

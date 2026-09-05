@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dkim2.invalid/schemas/dsn-propagate-fixture.schema.json",
+  "title": "DKIM2 delivery-status propagation contract fixture v1",
+  "description": "Reference documents checked against the authoritative daemon OpenAPI schemas. A file declares one expectation, and every case names the component schema its document is validated against.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "draft", "expectation", "cases"],
+  "properties": {
+    "schema": {"const": "dkim2.dsn-propagate-fixture.v1"},
+    "draft": {"const": "draft-ietf-dkim-dkim2-spec-06"},
+    "expectation": {"enum": ["valid", "invalid"]},
+    "cases": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["case", "schema", "document"],
+        "properties": {
+          "case": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_]{0,63}$"},
+          "schema": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9]{0,63}$"},
+          "document": {"type": "object"},
+          "violates": {"type": "string", "minLength": 1, "maxLength": 200}
+        }
+      }
+    }
+  }
+}

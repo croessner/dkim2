@@ -18,7 +18,6 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/croessner/dkim2"
 	"github.com/croessner/dkim2/cmd/dkim2d/internal/app"
 	"github.com/croessner/dkim2/cmd/dkim2d/internal/httpjson/generated"
 )
@@ -196,9 +195,9 @@ func (h *panicGeneratedHandler) ProcessMessage(
 }
 
 // Process records domain entry and returns one intentionally invalid test result.
-func (p *boundaryProcessor) Process(
+func (p *boundaryProcessor) ProcessInbound(
 	context.Context,
-	dkim2.VerifyRequest,
+	app.InboundRequest,
 ) (app.InboundResult, error) {
 	p.calls.Add(1)
 	return app.InboundResult{}, nil

@@ -31,13 +31,16 @@ const (
 	ReceivedDSNEmbeddedTemperror ReceivedDSNEmbedded = "temperror"
 	// ReceivedDSNEmbeddedAbsent reports an embedded original without any DKIM2-Signature.
 	ReceivedDSNEmbeddedAbsent ReceivedDSNEmbedded = "absent"
+	// ReceivedDSNEmbeddedNotEvaluated reports that the structure stage stopped
+	// the evaluation before any embedded evidence could be assessed.
+	ReceivedDSNEmbeddedNotEvaluated ReceivedDSNEmbedded = "not_evaluated"
 )
 
 // Known reports whether the value belongs to the closed vocabulary.
 func (e ReceivedDSNEmbedded) Known() bool {
 	switch e {
 	case ReceivedDSNEmbeddedVerified, ReceivedDSNEmbeddedVerifiedHeadersOnly, ReceivedDSNEmbeddedUnverified,
-		ReceivedDSNEmbeddedTemperror, ReceivedDSNEmbeddedAbsent:
+		ReceivedDSNEmbeddedTemperror, ReceivedDSNEmbeddedAbsent, ReceivedDSNEmbeddedNotEvaluated:
 		return true
 	default:
 		return false
@@ -134,14 +137,14 @@ func NewReceivedDSNFacts(structure ReceivedDSNStructure, embedded ReceivedDSNEmb
 // Valid reports whether the members are known and coherent with the
 // stop-at-first-failure stage order of the evaluation.
 func (f ReceivedDSNFacts) Valid() bool {
-	if !f.structure.Known() || !f.localHop.Known() || !f.alignment.Known() || !f.linkage.Known() {
+	if !f.structure.Known() || !f.embedded.Known() || !f.localHop.Known() || !f.alignment.Known() || !f.linkage.Known() {
 		return false
 	}
 	laterNotEvaluated := f.localHop == ReceivedDSNLocalHopNotEvaluated && f.alignment == ReceivedDSNOuterAlignmentNotEvaluated && f.linkage == ReceivedDSNRecipientLinkageNotEvaluated
 	if f.structure != ReceivedDSNStructureValid {
-		return f.embedded == "" && laterNotEvaluated
+		return f.embedded == ReceivedDSNEmbeddedNotEvaluated && laterNotEvaluated
 	}
-	if !f.embedded.Known() {
+	if f.embedded == ReceivedDSNEmbeddedNotEvaluated {
 		return false
 	}
 	if !f.embedded.verified() {
@@ -159,7 +162,9 @@ func (f ReceivedDSNFacts) Valid() bool {
 // Structure returns the closed structure member.
 func (f ReceivedDSNFacts) Structure() ReceivedDSNStructure { return f.structure }
 
-// Embedded returns the closed embedded member or the empty value before that stage.
+// Embedded returns the closed embedded member, which is
+// ReceivedDSNEmbeddedNotEvaluated when the structure stage stopped the
+// evaluation.
 func (f ReceivedDSNFacts) Embedded() ReceivedDSNEmbedded { return f.embedded }
 
 // LocalHop returns the closed local_hop member.

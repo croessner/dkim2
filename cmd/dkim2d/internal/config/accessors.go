@@ -259,6 +259,38 @@ func (c ServerConfig) DSNSignCapabilityFile() string {
 	return c.state.dsnSignCapabilityFile
 }
 
+// ProcessDefaultTenant returns the fallback tenant of the process route. An
+// empty value means no tenant is available and locality is not evaluated.
+func (s Snapshot) ProcessDefaultTenant() string {
+	if s.state == nil {
+		return ""
+	}
+	return s.state.process.defaultTenant
+}
+
+// PropagationPendingLease returns the validated propagation reservation lease.
+func (s Snapshot) PropagationPendingLease() time.Duration {
+	if s.state == nil {
+		return 0
+	}
+	return s.state.propagation.pendingLease
+}
+
+// DSNPropagateCapabilityFile returns the protected delivery-status
+// propagation capability path.
+func (c ServerConfig) DSNPropagateCapabilityFile() string {
+	if c.state == nil {
+		return ""
+	}
+	return c.state.dsnPropagateCapabilityFile
+}
+
+// DSNPropagateEnabled reports whether delivery-status propagation has
+// explicit capability authority. The route is unreachable without it.
+func (c ServerConfig) DSNPropagateEnabled() bool {
+	return c.state != nil && c.state.dsnPropagateCapabilityFile != ""
+}
+
 // SignEnabled reports whether the originator route has explicit capability authority.
 func (c ServerConfig) SignEnabled() bool {
 	return c.state != nil && c.state.signCapabilityFile != ""

@@ -71,10 +71,20 @@ func NewInboundProcessor(
 	return &InboundProcessor{domain: domain, replay: replay}, nil
 }
 
-// Process performs domain evaluation followed by the exact replay gate and batch.
+// Process performs domain evaluation followed by the exact replay gate and
+// batch for a request that carries no tenant.
 func (p *InboundProcessor) Process(
 	ctx context.Context,
 	request dkim2.VerifyRequest,
+) (InboundResult, error) {
+	return p.ProcessInbound(ctx, InboundRequest{verify: request})
+}
+
+// ProcessInbound performs domain evaluation, including the received-DSN
+// evaluation under the request tenant, followed by the exact replay gate.
+func (p *InboundProcessor) ProcessInbound(
+	ctx context.Context,
+	request InboundRequest,
 ) (InboundResult, error) {
 	if p == nil || p.domain == nil || p.replay == nil {
 		return InboundResult{}, &InboundProcessorError{}
@@ -86,7 +96,7 @@ func (p *InboundProcessor) Process(
 	defer func() {
 		observability.EndSpanWithFacts(processSpan, outcome, processFacts...)
 	}()
-	domain, err := p.domain.Process(processContext, request)
+	domain, err := p.domain.ProcessInbound(processContext, request)
 	if err != nil {
 		p.observeProcessFailure(started)
 		return InboundResult{}, err

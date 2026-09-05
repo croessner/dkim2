@@ -39,6 +39,7 @@ type command interface {
 // commandClient owns command construction and one dispatch operation.
 type commandClient interface {
 	BuildSet(string, string, int64) command
+	BuildConditionalSet(conditionalSet) command
 	Do(context.Context, command) resultReader
 }
 
@@ -176,6 +177,7 @@ type storeCore struct {
 	auditWireFactory    auditWireFactory
 	revalidation        atomic.Bool
 	ownedClient         ownedApplicationClient
+	wallClock           func() time.Time
 	closeOnce           sync.Once
 	closeMu             sync.Mutex
 	closeErr            error
@@ -206,7 +208,9 @@ func (s *Store) CheckAndRemember(
 		return 0, dkim2.NewReplayError(dkim2.ReplayErrorInvalidRequest)
 	}
 
-	completed, finish, err := s.buildCommand(ctx, key, retention)
+	completed, finish, err := s.buildKeyedCommand(ctx, key, func(storageKey string) command {
+		return s.client.BuildSet(storageKey, dkim2.ReplayStoredValue, retention.Milliseconds())
+	})
 	if err != nil {
 		if dkim2.ReplayErrorCodeOf(err) == dkim2.ReplayErrorInternalInvariant {
 			s.publishFailure(recoveryRestart)
@@ -232,11 +236,13 @@ func (s *Store) CheckAndRemember(
 	return 0, outcome.err
 }
 
-// buildCommand contains pre-dispatch callback and client-builder panics.
-func (s *Store) buildCommand(
+// buildKeyedCommand admits one operation and builds its first command under
+// the protected-key seam; it contains pre-dispatch callback and
+// client-builder panics.
+func (s *Store) buildKeyedCommand(
 	ctx context.Context,
 	key dkim2.ReplayKey,
-	retention dkim2.ReplayRetention,
+	build func(storageKey string) command,
 ) (completed command, finish func(), resultErr error) {
 	defer func() {
 		if recover() != nil {
@@ -263,10 +269,10 @@ func (s *Store) buildCommand(
 		if evidenceErr := s.requireFreshSecurityEvidence(); evidenceErr != nil {
 			return evidenceErr
 		}
-		if nilInterface(s.client) {
+		if nilInterface(s.client) || build == nil {
 			return dkim2.NewReplayError(dkim2.ReplayErrorInternalInvariant)
 		}
-		completed = s.client.BuildSet(storageKey, dkim2.ReplayStoredValue, retention.Milliseconds())
+		completed = build(storageKey)
 		if nilInterface(completed) || completed.IsRetryable() {
 			return dkim2.NewReplayError(dkim2.ReplayErrorInternalInvariant)
 		}

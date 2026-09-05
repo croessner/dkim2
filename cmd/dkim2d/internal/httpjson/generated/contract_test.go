@@ -13,39 +13,65 @@ import (
 )
 
 const (
-	testHeaderCacheControl       = "Cache-Control"
-	testHeaderConnection         = "Connection"
-	testHeaderContentTypeOptions = "X-Content-Type-Options"
-	testMethodGet                = "GET"
-	testMethodPost               = "POST"
-	testMetricsPath              = "/metrics"
-	testDSNSignPath              = "/v1/dsn/sign"
-	testProcessPath              = "/v1/process"
-	testRevisePath               = "/v1/revise"
-	testSignPath                 = "/v1/sign"
-	testPropertyAPIVersion       = "api_version"
-	testPropertyClass            = "class"
-	testPropertyDNSTesting       = "dns_testing_effective"
-	testPropertyDraft            = "draft"
-	testPropertyFeedback         = "feedback"
-	testPropertyDisposition      = "disposition"
-	testPropertyDoNotExplode     = "do_not_explode"
-	testPropertyDoNotModify      = "do_not_modify"
-	testPropertyMessage          = "message"
-	testPropertyIncomingSMTP     = "incoming_smtp"
-	testPropertyReporting        = "reporting"
-	testPropertySMTP             = "smtp"
-	testPropertyContext          = "context"
-	testPropertyActions          = "actions"
-	testPropertyPrimaryReason    = "primary_reason"
-	testPropertyReason           = "reason"
-	testPropertySequence         = "sequence"
-	testPropertyStatus           = "status"
-	testPropertyTenant           = "tenant"
-	testValueComplete            = "complete"
-	testValueIndeterminate       = "indeterminate"
-	testValueNotEvaluated        = "not_evaluated"
-	testSchemaOperationResponse  = "OperationResponse"
+	testHeaderCacheControl         = "Cache-Control"
+	testHeaderConnection           = "Connection"
+	testHeaderContentTypeOptions   = "X-Content-Type-Options"
+	testMethodGet                  = "GET"
+	testMethodPost                 = "POST"
+	testMetricsPath                = "/metrics"
+	testDSNSignPath                = "/v1/dsn/sign"
+	testPropagatePath              = "/v1/dsn/propagate"
+	testPropagateCommitPath        = "/v1/dsn/propagate/commit"
+	testProcessPath                = "/v1/process"
+	testRevisePath                 = "/v1/revise"
+	testSignPath                   = "/v1/sign"
+	testPropertyAPIVersion         = "api_version"
+	testPropertyClass              = "class"
+	testPropertyDNSTesting         = "dns_testing_effective"
+	testPropertyDraft              = "draft"
+	testPropertyFeedback           = "feedback"
+	testPropertyDisposition        = "disposition"
+	testPropertyDoNotExplode       = "do_not_explode"
+	testPropertyDoNotModify        = "do_not_modify"
+	testPropertyMessage            = "message"
+	testPropertyIncomingSMTP       = "incoming_smtp"
+	testPropertyReporting          = "reporting"
+	testPropertySMTP               = "smtp"
+	testPropertyContext            = "context"
+	testPropertyActions            = "actions"
+	testPropertyPrimaryReason      = "primary_reason"
+	testPropertyReason             = "reason"
+	testPropertySequence           = "sequence"
+	testPropertyStatus             = "status"
+	testPropertyTenant             = "tenant"
+	testValueComplete              = "complete"
+	testValueIndeterminate         = "indeterminate"
+	testValueNotEvaluated          = "not_evaluated"
+	testSchemaOperationResponse    = "OperationResponse"
+	testPropertyOuterSMTP          = "outer_smtp"
+	testPropertyDeliveryStatus     = "delivery_status"
+	testPropertyOperation          = "operation"
+	testPropertyResult             = "result"
+	testPropertyReplay             = "replay"
+	testPropertyPropagation        = "propagation"
+	testPropertyPropagationFailure = "propagation_failure"
+	testPropertyCommitToken        = "commit_token"
+	testPropertyState              = "state"
+	testPropertyFidelity           = "fidelity"
+	testPropertyRawMessage         = "raw_rfc5322_base64"
+	testPropertyMailFrom           = "mail_from"
+	testPropertyRcptTo             = "rcpt_to"
+	testPropertySMTPUTF8           = "smtputf8"
+	testPropertySMTPUTF8Required   = "smtputf8_required"
+	testPropertyEightBitMIME       = "eight_bit_mime_required"
+	testPropertyNextHop            = "next_hop_recipient"
+	testPropertyReportingMTA       = "reporting_mta"
+	testSchemeAPIKey               = "apiKey"
+	testSchemeInHeader             = "header"
+	testValueReject                = "reject"
+	testValueTempfail              = "tempfail"
+	testValueAccept                = "accept"
+	testValueTemperror             = "temperror"
 )
 
 type expectedOperation struct {
@@ -133,6 +159,20 @@ func TestEmbeddedOpenAPIContract(t *testing.T) {
 				success:   testSchemaOperationResponse,
 			},
 		},
+		testPropagatePath: {
+			testMethodPost: {
+				id:        "propagateDeliveryStatus",
+				responses: []string{"200", "400", "403", "408", "413", "415", "417", "500", "503"},
+				success:   "DSNPropagateResponse",
+			},
+		},
+		testPropagateCommitPath: {
+			testMethodPost: {
+				id:        "commitDeliveryStatusPropagation",
+				responses: []string{"200", "400", "403", "408", "409", "413", "415", "417", "500", "503"},
+				success:   "DSNPropagateCommitResponse",
+			},
+		},
 	}
 	if document.Paths.Len() != len(expected) {
 		t.Fatalf("unexpected path count %d", document.Paths.Len())
@@ -177,7 +217,7 @@ func assertOperationSecurity(t *testing.T, path string, operation *openapi3.Oper
 	if operation.Security == nil {
 		t.Fatalf("operation %s has no explicit security declaration", operation.OperationID)
 	}
-	if path != testProcessPath && path != testSignPath && path != testRevisePath && path != testDSNSignPath {
+	if !protectedContractPath(path) {
 		if len(*operation.Security) != 0 {
 			t.Fatalf("status operation %s is unexpectedly protected", operation.OperationID)
 		}
@@ -188,12 +228,26 @@ func assertOperationSecurity(t *testing.T, path string, operation *openapi3.Oper
 	}
 	requirement := (*operation.Security)[0]
 	schemeName := "localCapability"
-	if path == testDSNSignPath {
+	switch path {
+	case testDSNSignPath:
 		schemeName = "dsnSignCapability"
+	case testPropagatePath, testPropagateCommitPath:
+		schemeName = "dsnPropagateCapability"
 	}
 	scopes, ok := requirement[schemeName]
 	if !ok || len(requirement) != 1 || len(scopes) != 0 {
 		t.Fatalf("operation %s does not require only %s", operation.OperationID, schemeName)
+	}
+}
+
+// protectedContractPath reports whether one path carries a capability scheme.
+func protectedContractPath(path string) bool {
+	switch path {
+	case testProcessPath, testSignPath, testRevisePath, testDSNSignPath,
+		testPropagatePath, testPropagateCommitPath:
+		return true
+	default:
+		return false
 	}
 }
 
@@ -432,7 +486,7 @@ func assertDeliveryStatusRequestBody(t *testing.T, document *openapi3.T) {
 func assertLocalCapability(t *testing.T, document *openapi3.T) {
 	t.Helper()
 
-	if document.Components == nil || len(document.Components.SecuritySchemes) != 2 {
+	if document.Components == nil || len(document.Components.SecuritySchemes) != 3 {
 		t.Fatal("unexpected security-scheme inventory")
 	}
 	reference := document.Components.SecuritySchemes["localCapability"]
@@ -440,15 +494,22 @@ func assertLocalCapability(t *testing.T, document *openapi3.T) {
 		t.Fatal("missing localCapability scheme")
 	}
 	scheme := reference.Value
-	if scheme.Type != "apiKey" || scheme.In != "header" ||
+	if scheme.Type != testSchemeAPIKey || scheme.In != testSchemeInHeader ||
 		scheme.Name != "X-DKIM2-Capability" || scheme.Scheme != "" {
 		t.Fatal("localCapability is not the approved local API-key scheme")
 	}
 	dsnReference := document.Components.SecuritySchemes["dsnSignCapability"]
-	if dsnReference == nil || dsnReference.Value == nil || dsnReference.Value.Type != "apiKey" ||
-		dsnReference.Value.In != "header" || dsnReference.Value.Name != "X-DKIM2-DSN-Sign-Capability" ||
+	if dsnReference == nil || dsnReference.Value == nil || dsnReference.Value.Type != testSchemeAPIKey ||
+		dsnReference.Value.In != testSchemeInHeader || dsnReference.Value.Name != "X-DKIM2-DSN-Sign-Capability" ||
 		dsnReference.Value.Scheme != "" {
 		t.Fatal("dsnSignCapability is not the approved dedicated API-key scheme")
+	}
+	propagateReference := document.Components.SecuritySchemes["dsnPropagateCapability"]
+	if propagateReference == nil || propagateReference.Value == nil ||
+		propagateReference.Value.Type != testSchemeAPIKey || propagateReference.Value.In != testSchemeInHeader ||
+		propagateReference.Value.Name != "X-DKIM2-DSN-Propagate-Capability" ||
+		propagateReference.Value.Scheme != "" {
+		t.Fatal("dsnPropagateCapability is not the approved dedicated API-key scheme")
 	}
 }
 
@@ -490,8 +551,67 @@ func assertObjectInventories(t *testing.T, document *openapi3.T) {
 	}
 	expected := map[string]shape{
 		"ProcessRequest": {
-			properties: []string{testPropertyAPIVersion, testPropertyDraft, testPropertyMessage, testPropertyReporting, testPropertySMTP},
+			properties: []string{testPropertyAPIVersion, testPropertyContext, testPropertyDraft, testPropertyMessage, testPropertyReporting, testPropertySMTP},
 			required:   []string{testPropertyAPIVersion, testPropertyDraft, testPropertyMessage, testPropertySMTP},
+		},
+		"ProcessContext": {
+			properties: []string{testPropertyTenant},
+			required:   []string{testPropertyTenant},
+		},
+		"DSNPropagateRequest": {
+			properties: []string{testPropertyAPIVersion, testPropertyContext, testPropertyDraft, testPropertyMessage, testPropertyOuterSMTP},
+			required:   []string{testPropertyAPIVersion, testPropertyContext, testPropertyDraft, testPropertyMessage, testPropertyOuterSMTP},
+		},
+		"DSNPropagateResponse": {
+			properties: []string{
+				testPropertyAPIVersion, testPropertyDeliveryStatus, testPropertyDisposition,
+				testPropertyDraft, testPropertyOperation, testPropertyPropagation,
+				testPropertyPropagationFailure, testPropertyReplay, testPropertyResult,
+			},
+			required: []string{
+				testPropertyAPIVersion, testPropertyDisposition, testPropertyDraft,
+				testPropertyOperation, testPropertyReplay, testPropertyResult,
+			},
+		},
+		"DSNPropagateCommitRequest": {
+			properties: []string{testPropertyAPIVersion, testPropertyCommitToken, testPropertyDraft},
+			required:   []string{testPropertyAPIVersion, testPropertyCommitToken, testPropertyDraft},
+		},
+		"DSNPropagateCommitResponse": {
+			properties: []string{testPropertyAPIVersion, testPropertyDraft, testPropertyState},
+			required:   []string{testPropertyAPIVersion, testPropertyDraft, testPropertyState},
+		},
+		"PropagationMessageInput": {
+			properties: []string{testPropertyFidelity, testPropertyRawMessage},
+			required:   []string{testPropertyFidelity, testPropertyRawMessage},
+		},
+		"PropagationSMTPInput": {
+			properties: []string{testPropertyMailFrom, testPropertyRcptTo, testPropertySMTPUTF8},
+			required:   []string{testPropertyMailFrom, testPropertyRcptTo, testPropertySMTPUTF8},
+		},
+		"PropagationContext": {
+			properties: []string{testPropertyReportingMTA, testPropertyTenant},
+			required:   []string{testPropertyReportingMTA, testPropertyTenant},
+		},
+		"PropagationOutput": {
+			properties: []string{
+				testPropertyCommitToken, testPropertyEightBitMIME, testPropertyNextHop,
+				testPropertyRawMessage, testPropertySMTPUTF8Required,
+			},
+			required: []string{
+				testPropertyCommitToken, testPropertyEightBitMIME, testPropertyNextHop,
+				testPropertyRawMessage, testPropertySMTPUTF8Required,
+			},
+		},
+		"DeliveryStatusProjection": {
+			properties: []string{
+				"embedded", "local_hop", "outer_alignment", testPropertyPropagation,
+				"recipient_linkage", "structure",
+			},
+			required: []string{
+				"embedded", "local_hop", "outer_alignment", testPropertyPropagation,
+				"recipient_linkage", "structure",
+			},
 		},
 		"SignRequest": {
 			properties: []string{testPropertyAPIVersion, testPropertyContext, testPropertyDraft, testPropertyMessage, testPropertySMTP},
@@ -514,7 +634,7 @@ func assertObjectInventories(t *testing.T, document *openapi3.T) {
 			required:   []string{"mail_from", "rcpt_to"},
 		},
 		"ProcessResponse": {
-			properties: []string{testPropertyActions, testPropertyAPIVersion, "authentication", testPropertyDisposition, testPropertyDraft, "policy", "replay", "verification", "verifier_projection"},
+			properties: []string{testPropertyActions, testPropertyAPIVersion, "authentication", testPropertyDeliveryStatus, testPropertyDisposition, testPropertyDraft, "policy", "replay", "verification", "verifier_projection"},
 			required:   []string{testPropertyActions, testPropertyAPIVersion, "authentication", testPropertyDisposition, testPropertyDraft, "policy", "replay", "verification"},
 		},
 		"VerifierProjection": {
@@ -661,6 +781,12 @@ func assertRequestBounds(t *testing.T, document *openapi3.T) {
 	if requiredSchema(t, document, "CanonicalUint64").Pattern != "^[1-9][0-9]{0,19}$" {
 		t.Fatal("canonical uint64 schema pattern is not frozen")
 	}
+	token := requiredSchema(t, document, "PropagationCommitToken")
+	if !token.Type.Is("string") || token.MinLength != 16 ||
+		token.MaxLength == nil || *token.MaxLength != 512 ||
+		token.Pattern != "^[A-Za-z0-9_-]{16,512}$" {
+		t.Fatal("propagation commit token bounds are not frozen")
+	}
 }
 
 // assertResultArrayBounds locks bounded result collections.
@@ -715,6 +841,11 @@ func assertFrozenEnums(t *testing.T, document *openapi3.T) {
 			"donotexplode_indeterminate", "donotexplode_not_evaluated",
 			"feedback_requested", "feedback_relay_selected", "feedhere_inert",
 			"exploded_reported",
+			"received_dsn_outer_policy", "received_dsn_structure_invalid",
+			"received_dsn_embedded_unverified", "received_dsn_embedded_absent",
+			"received_dsn_temporary_failure", "received_dsn_tenant_unavailable",
+			"received_dsn_identity_mismatch", "received_dsn_not_local",
+			"received_dsn_recipient_unlinked", "received_dsn_linked",
 		},
 	}
 	for name, want := range expected {
@@ -729,7 +860,7 @@ func assertFrozenEnums(t *testing.T, document *openapi3.T) {
 	}
 
 	assertPropertyEnum(t, document, "ProcessResponse", "disposition",
-		[]string{"accept", "reject", "tempfail", "continue"})
+		[]string{testValueAccept, testValueReject, testValueTempfail, "continue"})
 	assertPropertyEnum(t, document, "VerificationResult", "scope", []string{"current", "chain"})
 	assertPropertyEnum(t, document, "VerificationResult", "historical_content",
 		[]string{testValueNotEvaluated, testValueComplete, "partial"})
@@ -745,7 +876,7 @@ func assertFrozenEnums(t *testing.T, document *openapi3.T) {
 	assertPropertyEnum(t, document, "SignatureSetResult", "algorithm",
 		[]string{"rsa-sha256", "ed25519-sha256", "unknown"})
 	assertPropertyEnum(t, document, "SignatureSetResult", "status",
-		[]string{"pass", "fail", "permerror", "temperror", "ignored"})
+		[]string{"pass", "fail", "permerror", testValueTemperror, "ignored"})
 	strictIdentity := requiredSchema(t, document, "KeyPolicyResult").
 		Properties["strict_identity_applicable"].Value
 	if strictIdentity == nil || !strictIdentity.Type.Is("boolean") ||
@@ -759,7 +890,7 @@ func assertFrozenEnums(t *testing.T, document *openapi3.T) {
 	assertPropertyEnum(t, document, "PolicyResult", "mode",
 		[]string{"strict", "permissive", "testing"})
 	assertPropertyEnum(t, document, "PolicyResult", "verdict",
-		[]string{"accept", "reject", "tempfail", "continue"})
+		[]string{testValueAccept, testValueReject, testValueTempfail, "continue"})
 	assertPropertyEnum(t, document, "PolicyResult", "do_not_modify",
 		[]string{"not_requested", testValueIndeterminate, testValueNotEvaluated})
 	assertPropertyEnum(t, document, "PolicyResult", "do_not_explode",
@@ -779,10 +910,60 @@ func assertFrozenEnums(t *testing.T, document *openapi3.T) {
 		"request_too_large", "unsupported_media_type", "not_found",
 		"method_not_allowed", "forbidden", "service_not_ready", "service_overloaded",
 		"request_timeout", "request_deadline", "expectation_failed", "precondition_failed",
-		"internal_error",
+		"propagation_commit_unresolved", "internal_error",
 	})
-	assertPropertyEnum(t, document, testSchemaOperationResponse, "operation",
+	assertPropertyEnum(t, document, testSchemaOperationResponse, testPropertyOperation,
 		[]string{"sign", "revise", "delivery_status"})
+	assertPropagationEnums(t, document)
+}
+
+// assertPropagationEnums locks every closed vocabulary the propagation route
+// and the received delivery-status projection introduce.
+func assertPropagationEnums(t *testing.T, document *openapi3.T) {
+	t.Helper()
+
+	assertPropertyEnum(t, document, "DSNPropagateResponse", testPropertyOperation,
+		[]string{"delivery_status_propagation"})
+	assertPropertyEnum(t, document, "DSNPropagateResponse", testPropertyResult,
+		[]string{"pass", "fail", "permerror", testValueTemperror})
+	assertPropertyEnum(t, document, "DSNPropagateResponse", testPropertyPropagationFailure,
+		[]string{"not_reconstructable", "unprovisioned_domain"})
+	assertPropertyEnum(t, document, "DSNPropagateCommitResponse", testPropertyState,
+		[]string{"committed"})
+	assertPropertyEnum(t, document, "PropagationMessageInput", testPropertyFidelity,
+		[]string{"raw_rfc5322", "lmtp_delivered_crlf"})
+	assertPropertyEnum(t, document, "DeliveryStatusProjection", "structure",
+		[]string{"valid", "malformed", "limit_exceeded"})
+	assertPropertyEnum(t, document, "DeliveryStatusProjection", "embedded",
+		[]string{"verified", "verified_headers_only", "unverified", testValueTemperror, "absent", testValueNotEvaluated})
+	assertPropertyEnum(t, document, "DeliveryStatusProjection", "local_hop",
+		[]string{"local", "not_local", "mismatch", testValueTemperror, testValueNotEvaluated})
+	assertPropertyEnum(t, document, "DeliveryStatusProjection", "outer_alignment",
+		[]string{"aligned", "misaligned", testValueNotEvaluated})
+	assertPropertyEnum(t, document, "DeliveryStatusProjection", "recipient_linkage",
+		[]string{"linked", "unlinked", testValueNotEvaluated})
+	assertPropertyEnum(t, document, "DeliveryStatusProjection", testPropertyPropagation,
+		[]string{
+			"not_applicable", "eligible", "terminal_origin", "not_failure",
+			"forbidden_null_previous_sender", "unsupported_chain",
+			"not_reconstructable", testValueNotEvaluated,
+		})
+	propagationDisposition := requiredSchema(t, document, "PropagationDisposition")
+	got := make([]string, 0, len(propagationDisposition.Enum))
+	for _, value := range propagationDisposition.Enum {
+		got = append(got, fmt.Sprint(value))
+	}
+	if !slices.Equal(got, []string{testValueAccept, testValueReject, "discard", testValueTempfail}) {
+		t.Fatalf("PropagationDisposition has enum %v", got)
+	}
+	if requiredSchema(t, document, "MessageInput").Properties[testPropertyFidelity] == nil {
+		t.Fatal("MessageInput lost its fidelity property")
+	}
+	assertPropertyEnum(t, document, "MessageInput", testPropertyFidelity,
+		[]string{
+			"raw_rfc5322", "milter_reconstructed_crlf", "exim_local_scan_observed_crlf",
+			"exim_transport_filter_crlf", "lmtp_delivered_crlf",
+		})
 }
 
 // assertPropertyEnum compares one inline property enum without sorting because

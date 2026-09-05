@@ -54,20 +54,22 @@ type HTTPRuntime interface {
 
 // HTTPAssemblyInput carries only opaque app-owned dependencies into the transport adapter.
 type HTTPAssemblyInput struct {
-	snapshot          config.Snapshot
-	capability        config.ProcessCapability
-	signCapability    config.SignCapability
-	reviseCapability  config.ReviseCapability
-	dsnSignCapability config.DSNSignCapability
-	processor         *InboundProcessor
-	operation         OperationService
-	readiness         *Readiness
-	fatal             FatalNotifier
-	serveReturn       ServeReturnObserver
-	activation        ActivationAuthority
-	baseContext       context.Context
-	telemetry         *observability.Runtime
-	serverTLS         *tls.Config
+	snapshot               config.Snapshot
+	capability             config.ProcessCapability
+	signCapability         config.SignCapability
+	reviseCapability       config.ReviseCapability
+	dsnSignCapability      config.DSNSignCapability
+	dsnPropagateCapability config.DSNPropagateCapability
+	processor              *InboundProcessor
+	operation              OperationService
+	propagation            PropagationService
+	readiness              *Readiness
+	fatal                  FatalNotifier
+	serveReturn            ServeReturnObserver
+	activation             ActivationAuthority
+	baseContext            context.Context
+	telemetry              *observability.Runtime
+	serverTLS              *tls.Config
 }
 
 // newHTTPAssemblyInput validates one pure transport-construction input.
@@ -141,6 +143,14 @@ func (i HTTPAssemblyInput) DSNSignCapability() config.DSNSignCapability {
 	return i.dsnSignCapability
 }
 
+// DSNPropagateCapability returns the opaque prepared propagation capability handle.
+func (i HTTPAssemblyInput) DSNPropagateCapability() config.DSNPropagateCapability {
+	return i.dsnPropagateCapability
+}
+
+// PropagationService returns the optional concrete propagation application service.
+func (i HTTPAssemblyInput) PropagationService() PropagationService { return i.propagation }
+
 // OperationService returns the optional concrete signing application service.
 func (i HTTPAssemblyInput) OperationService() OperationService { return i.operation }
 
@@ -190,6 +200,19 @@ func (i HTTPAssemblyInput) withOperation(
 	i.signCapability = sign
 	i.reviseCapability = revise
 	i.dsnSignCapability = dsnSign
+	return i
+}
+
+// withPropagation binds the same-generation propagation service and its
+// distinct capability; both are absent when the route is not composed.
+func (i HTTPAssemblyInput) withPropagation(
+	service PropagationService,
+	capability config.DSNPropagateCapability,
+) HTTPAssemblyInput {
+	if !nilInterface(service) {
+		i.propagation = service
+	}
+	i.dsnPropagateCapability = capability
 	return i
 }
 

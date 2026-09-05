@@ -17,6 +17,38 @@ An `OK` reply means first-seen and a null reply means replayed. A replay never
 extends the existing TTL. Once dispatch may have occurred, a transport failure
 is indeterminate and is never retried or followed by a compensating read.
 
+Delivery-status propagation records share the store, namespace, epoch,
+secret, retention, and 68-byte storage-key shape, but are derived under the
+distinct `dkim2-replay-propagation-v1` frame, so a `/v1/process` record and
+the propagation record of the same notification never collide. The stored
+value of a propagation record is closed: `pending:<lease-expiry-unix-ms>` or
+`committed`. The provider uses only value-conditional forms of the same
+`SET` command, each carrying the `GET` option so that one round trip both
+applies the transition and returns the previous value:
+
+```text
+SET <protected-key> pending:<expiry> NX GET PX <retention-milliseconds>
+SET <protected-key> pending:<expiry> IFEQ <observed-previous> GET PX <retention-milliseconds>
+SET <protected-key> committed XX GET KEEPTTL
+```
+
+The first form reserves an absent coordinate. A returned `committed` reports
+an already committed coordinate without any write; a returned `pending` value
+with a live lease reports an attempt in flight; a returned `pending` value
+with an expired lease is re-served by the second form, a compare-and-set
+against exactly the observed previous value, so that two concurrent
+re-serving attempts cannot both win and a commit that lands in between is
+never overwritten. The third form is the monotonic `pending` to `committed`
+transition that keeps the retention TTL; a null reply means the retention
+expired and the commit is unresolved, which the daemon answers `409`. A
+`pending` record whose lease and retention have both expired is absent. Every
+transport failure after dispatch and every reply outside the closed value
+grammar remains fail-closed as a temporary condition. The `IFEQ` and combined
+`NX GET` forms need Valkey 8.1 or later, inside the 9.1 production floor. No
+script, transaction, pipeline, read command, or TTL mutation is added, so the
+application ACL grant stays exactly `+ping +set`. `/v1/process` records keep
+their single first-seen `SET NX PX` command and `v1` value unchanged.
+
 The single key represents the independently reconstructed `m=1` canonical
 header and body inputs, not a recipient or terminal route. Authenticated
 `exploded` changes a successful store result to the accepted `exploded` class,

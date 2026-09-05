@@ -52,10 +52,11 @@ type maximumWorkingSetProcessor struct {
 }
 
 // Process records the production ledger at the domain seam without retaining input.
-func (p *maximumWorkingSetProcessor) Process(
+func (p *maximumWorkingSetProcessor) ProcessInbound(
 	ctx context.Context,
-	request dkim2.VerifyRequest,
+	inbound app.InboundRequest,
 ) (app.InboundResult, error) {
+	request := inbound.VerifyRequest()
 	ledger, ok := workingSetLedgerFromContext(ctx)
 	if p == nil || !ok || ledger == nil {
 		return app.InboundResult{}, &workingSetError{code: workingSetErrorInvariant}

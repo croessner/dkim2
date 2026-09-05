@@ -97,6 +97,11 @@ type stressCommandClient struct {
 	message    valkeygo.ValkeyMessage
 }
 
+// BuildConditionalSet is never issued by the first-seen stress operation.
+func (*stressCommandClient) BuildConditionalSet(conditionalSet) command {
+	panic("stress operation built a conditional command")
+}
+
 // BuildSet returns one non-retryable command without retaining protected inputs.
 func (c *stressCommandClient) BuildSet(string, string, int64) command {
 	c.builds.Add(1)

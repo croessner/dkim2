@@ -300,7 +300,7 @@ func TestReceivedEvaluationEligibleCompleteAndHeadersOnly(t *testing.T) {
 // delivery-status bodies, and limit violations stop at the structure stage.
 func TestReceivedEvaluationStructureFailures(t *testing.T) {
 	notEvaluated := projection{
-		structure: StructureMalformed, embedded: "", localHop: LocalHopNotEvaluated,
+		structure: StructureMalformed, embedded: EmbeddedNotEvaluated, localHop: LocalHopNotEvaluated,
 		alignment: OuterAlignmentNotEvaluated, linkage: RecipientLinkageNotEvaluated, propagation: PropagationNotEvaluated,
 	}
 	verifier, provider := mustReceivedVerifier(t, "")

@@ -4,7 +4,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/croessner/dkim2"
 	"github.com/croessner/dkim2/cmd/dkim2d/internal/app"
 )
 
@@ -16,9 +15,9 @@ func (*adapterReadinessStub) Ready() bool { return true }
 type adapterProcessorStub struct{}
 
 // Process returns one empty result for constructor-only tests.
-func (*adapterProcessorStub) Process(
+func (*adapterProcessorStub) ProcessInbound(
 	context.Context,
-	dkim2.VerifyRequest,
+	app.InboundRequest,
 ) (app.InboundResult, error) {
 	return app.InboundResult{}, nil
 }

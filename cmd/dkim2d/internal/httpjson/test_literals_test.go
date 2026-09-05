@@ -79,4 +79,25 @@ const (
 	testWeakEntityTag                = "W/\"0123456789abcdef\""
 	testZeroChunkTerminator          = "0\r\n\r\n"
 	testZeroName                     = "zero"
+	testKeyAPIVersion                = "api_version"
+	testKeyMessage                   = "message"
+	testKeyRawMessage                = "raw_rfc5322_base64"
+	testKeyFidelity                  = "fidelity"
+	testKeyMailFrom                  = "mail_from"
+	testKeyRcptTo                    = "rcpt_to"
+	testDispositionAccept            = "accept"
+	// testKeySMTP and testKeyContext are the request document members that
+	// carry the observed envelope and the administrative context.
+	testKeySMTP    = "smtp"
+	testKeyContext = "context"
+	// testKeyTenant is the administrative tenant member of a request context.
+	testKeyTenant      = "tenant"
+	testLocalHopLocal  = "local"
+	testStateCommitted = "committed"
+	// testDispositionReject, testStructureMalformed, and testValueNotEvaluated
+	// are the closed projection and disposition values a refused received
+	// delivery-status structure must report.
+	testDispositionReject  = "reject"
+	testStructureMalformed = "malformed"
+	testValueNotEvaluated  = "not_evaluated"
 )

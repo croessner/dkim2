@@ -177,6 +177,234 @@ func (e AuthenticationResultPrimaryReason) Valid() bool {
 	}
 }
 
+// Defines values for DSNPropagateCommitResponseState.
+const (
+	PropagationStateCommitted DSNPropagateCommitResponseState = "committed"
+)
+
+// Valid indicates whether the value is a known member of the DSNPropagateCommitResponseState enum.
+func (e DSNPropagateCommitResponseState) Valid() bool {
+	switch e {
+	case PropagationStateCommitted:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for DSNPropagateResponseOperation.
+const (
+	PropagationOperationDeliveryStatusPropagation DSNPropagateResponseOperation = "delivery_status_propagation"
+)
+
+// Valid indicates whether the value is a known member of the DSNPropagateResponseOperation enum.
+func (e DSNPropagateResponseOperation) Valid() bool {
+	switch e {
+	case PropagationOperationDeliveryStatusPropagation:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for DSNPropagateResponsePropagationFailure.
+const (
+	PropagationFailureNotReconstructable  DSNPropagateResponsePropagationFailure = "not_reconstructable"
+	PropagationFailureUnprovisionedDomain DSNPropagateResponsePropagationFailure = "unprovisioned_domain"
+)
+
+// Valid indicates whether the value is a known member of the DSNPropagateResponsePropagationFailure enum.
+func (e DSNPropagateResponsePropagationFailure) Valid() bool {
+	switch e {
+	case PropagationFailureNotReconstructable:
+		return true
+	case PropagationFailureUnprovisionedDomain:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for DSNPropagateResponseResult.
+const (
+	PropagationResultFail      DSNPropagateResponseResult = "fail"
+	PropagationResultPass      DSNPropagateResponseResult = "pass"
+	PropagationResultPermerror DSNPropagateResponseResult = "permerror"
+	PropagationResultTemperror DSNPropagateResponseResult = "temperror"
+)
+
+// Valid indicates whether the value is a known member of the DSNPropagateResponseResult enum.
+func (e DSNPropagateResponseResult) Valid() bool {
+	switch e {
+	case PropagationResultFail:
+		return true
+	case PropagationResultPass:
+		return true
+	case PropagationResultPermerror:
+		return true
+	case PropagationResultTemperror:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for DeliveryStatusProjectionEmbedded.
+const (
+	DeliveryStatusEmbeddedAbsent              DeliveryStatusProjectionEmbedded = "absent"
+	DeliveryStatusEmbeddedNotEvaluated        DeliveryStatusProjectionEmbedded = "not_evaluated"
+	DeliveryStatusEmbeddedTemperror           DeliveryStatusProjectionEmbedded = "temperror"
+	DeliveryStatusEmbeddedUnverified          DeliveryStatusProjectionEmbedded = "unverified"
+	DeliveryStatusEmbeddedVerified            DeliveryStatusProjectionEmbedded = "verified"
+	DeliveryStatusEmbeddedVerifiedHeadersOnly DeliveryStatusProjectionEmbedded = "verified_headers_only"
+)
+
+// Valid indicates whether the value is a known member of the DeliveryStatusProjectionEmbedded enum.
+func (e DeliveryStatusProjectionEmbedded) Valid() bool {
+	switch e {
+	case DeliveryStatusEmbeddedAbsent:
+		return true
+	case DeliveryStatusEmbeddedNotEvaluated:
+		return true
+	case DeliveryStatusEmbeddedTemperror:
+		return true
+	case DeliveryStatusEmbeddedUnverified:
+		return true
+	case DeliveryStatusEmbeddedVerified:
+		return true
+	case DeliveryStatusEmbeddedVerifiedHeadersOnly:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for DeliveryStatusProjectionLocalHop.
+const (
+	DeliveryStatusLocalHopLocal        DeliveryStatusProjectionLocalHop = "local"
+	DeliveryStatusLocalHopMismatch     DeliveryStatusProjectionLocalHop = "mismatch"
+	DeliveryStatusLocalHopNotEvaluated DeliveryStatusProjectionLocalHop = "not_evaluated"
+	DeliveryStatusLocalHopNotLocal     DeliveryStatusProjectionLocalHop = "not_local"
+	DeliveryStatusLocalHopTemperror    DeliveryStatusProjectionLocalHop = "temperror"
+)
+
+// Valid indicates whether the value is a known member of the DeliveryStatusProjectionLocalHop enum.
+func (e DeliveryStatusProjectionLocalHop) Valid() bool {
+	switch e {
+	case DeliveryStatusLocalHopLocal:
+		return true
+	case DeliveryStatusLocalHopMismatch:
+		return true
+	case DeliveryStatusLocalHopNotEvaluated:
+		return true
+	case DeliveryStatusLocalHopNotLocal:
+		return true
+	case DeliveryStatusLocalHopTemperror:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for DeliveryStatusProjectionOuterAlignment.
+const (
+	DeliveryStatusOuterAlignmentAligned      DeliveryStatusProjectionOuterAlignment = "aligned"
+	DeliveryStatusOuterAlignmentMisaligned   DeliveryStatusProjectionOuterAlignment = "misaligned"
+	DeliveryStatusOuterAlignmentNotEvaluated DeliveryStatusProjectionOuterAlignment = "not_evaluated"
+)
+
+// Valid indicates whether the value is a known member of the DeliveryStatusProjectionOuterAlignment enum.
+func (e DeliveryStatusProjectionOuterAlignment) Valid() bool {
+	switch e {
+	case DeliveryStatusOuterAlignmentAligned:
+		return true
+	case DeliveryStatusOuterAlignmentMisaligned:
+		return true
+	case DeliveryStatusOuterAlignmentNotEvaluated:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for DeliveryStatusProjectionPropagation.
+const (
+	DeliveryStatusPropagationEligible                    DeliveryStatusProjectionPropagation = "eligible"
+	DeliveryStatusPropagationForbiddenNullPreviousSender DeliveryStatusProjectionPropagation = "forbidden_null_previous_sender"
+	DeliveryStatusPropagationNotApplicable               DeliveryStatusProjectionPropagation = "not_applicable"
+	DeliveryStatusPropagationNotEvaluated                DeliveryStatusProjectionPropagation = "not_evaluated"
+	DeliveryStatusPropagationNotFailure                  DeliveryStatusProjectionPropagation = "not_failure"
+	DeliveryStatusPropagationNotReconstructable          DeliveryStatusProjectionPropagation = "not_reconstructable"
+	DeliveryStatusPropagationTerminalOrigin              DeliveryStatusProjectionPropagation = "terminal_origin"
+	DeliveryStatusPropagationUnsupportedChain            DeliveryStatusProjectionPropagation = "unsupported_chain"
+)
+
+// Valid indicates whether the value is a known member of the DeliveryStatusProjectionPropagation enum.
+func (e DeliveryStatusProjectionPropagation) Valid() bool {
+	switch e {
+	case DeliveryStatusPropagationEligible:
+		return true
+	case DeliveryStatusPropagationForbiddenNullPreviousSender:
+		return true
+	case DeliveryStatusPropagationNotApplicable:
+		return true
+	case DeliveryStatusPropagationNotEvaluated:
+		return true
+	case DeliveryStatusPropagationNotFailure:
+		return true
+	case DeliveryStatusPropagationNotReconstructable:
+		return true
+	case DeliveryStatusPropagationTerminalOrigin:
+		return true
+	case DeliveryStatusPropagationUnsupportedChain:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for DeliveryStatusProjectionRecipientLinkage.
+const (
+	DeliveryStatusRecipientLinkageLinked       DeliveryStatusProjectionRecipientLinkage = "linked"
+	DeliveryStatusRecipientLinkageNotEvaluated DeliveryStatusProjectionRecipientLinkage = "not_evaluated"
+	DeliveryStatusRecipientLinkageUnlinked     DeliveryStatusProjectionRecipientLinkage = "unlinked"
+)
+
+// Valid indicates whether the value is a known member of the DeliveryStatusProjectionRecipientLinkage enum.
+func (e DeliveryStatusProjectionRecipientLinkage) Valid() bool {
+	switch e {
+	case DeliveryStatusRecipientLinkageLinked:
+		return true
+	case DeliveryStatusRecipientLinkageNotEvaluated:
+		return true
+	case DeliveryStatusRecipientLinkageUnlinked:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for DeliveryStatusProjectionStructure.
+const (
+	DeliveryStatusStructureLimitExceeded DeliveryStatusProjectionStructure = "limit_exceeded"
+	DeliveryStatusStructureMalformed     DeliveryStatusProjectionStructure = "malformed"
+	DeliveryStatusStructureValid         DeliveryStatusProjectionStructure = "valid"
+)
+
+// Valid indicates whether the value is a known member of the DeliveryStatusProjectionStructure enum.
+func (e DeliveryStatusProjectionStructure) Valid() bool {
+	switch e {
+	case DeliveryStatusStructureLimitExceeded:
+		return true
+	case DeliveryStatusStructureMalformed:
+		return true
+	case DeliveryStatusStructureValid:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for Disposition.
 const (
 	DispositionAccept   Disposition = "accept"
@@ -239,22 +467,23 @@ func (e ErrorResponseCategory) Valid() bool {
 
 // Defines values for ErrorResponseCode.
 const (
-	ErrorResponseCodeExpectationFailed    ErrorResponseCode = "expectation_failed"
-	ErrorResponseCodeForbidden            ErrorResponseCode = "forbidden"
-	ErrorResponseCodeInternalError        ErrorResponseCode = "internal_error"
-	ErrorResponseCodeInvalidContract      ErrorResponseCode = "invalid_contract"
-	ErrorResponseCodeInvalidJson          ErrorResponseCode = "invalid_json"
-	ErrorResponseCodeMethodNotAllowed     ErrorResponseCode = "method_not_allowed"
-	ErrorResponseCodeNotFound             ErrorResponseCode = "not_found"
-	ErrorResponseCodePreconditionFailed   ErrorResponseCode = "precondition_failed"
-	ErrorResponseCodeRequestDeadline      ErrorResponseCode = "request_deadline"
-	ErrorResponseCodeRequestTimeout       ErrorResponseCode = "request_timeout"
-	ErrorResponseCodeRequestTooLarge      ErrorResponseCode = "request_too_large"
-	ErrorResponseCodeServiceNotReady      ErrorResponseCode = "service_not_ready"
-	ErrorResponseCodeServiceOverloaded    ErrorResponseCode = "service_overloaded"
-	ErrorResponseCodeUnsupportedDraft     ErrorResponseCode = "unsupported_draft"
-	ErrorResponseCodeUnsupportedMediaType ErrorResponseCode = "unsupported_media_type"
-	ErrorResponseCodeUnsupportedVersion   ErrorResponseCode = "unsupported_version"
+	ErrorResponseCodeExpectationFailed           ErrorResponseCode = "expectation_failed"
+	ErrorResponseCodeForbidden                   ErrorResponseCode = "forbidden"
+	ErrorResponseCodeInternalError               ErrorResponseCode = "internal_error"
+	ErrorResponseCodeInvalidContract             ErrorResponseCode = "invalid_contract"
+	ErrorResponseCodeInvalidJson                 ErrorResponseCode = "invalid_json"
+	ErrorResponseCodeMethodNotAllowed            ErrorResponseCode = "method_not_allowed"
+	ErrorResponseCodeNotFound                    ErrorResponseCode = "not_found"
+	ErrorResponseCodePreconditionFailed          ErrorResponseCode = "precondition_failed"
+	ErrorResponseCodePropagationCommitUnresolved ErrorResponseCode = "propagation_commit_unresolved"
+	ErrorResponseCodeRequestDeadline             ErrorResponseCode = "request_deadline"
+	ErrorResponseCodeRequestTimeout              ErrorResponseCode = "request_timeout"
+	ErrorResponseCodeRequestTooLarge             ErrorResponseCode = "request_too_large"
+	ErrorResponseCodeServiceNotReady             ErrorResponseCode = "service_not_ready"
+	ErrorResponseCodeServiceOverloaded           ErrorResponseCode = "service_overloaded"
+	ErrorResponseCodeUnsupportedDraft            ErrorResponseCode = "unsupported_draft"
+	ErrorResponseCodeUnsupportedMediaType        ErrorResponseCode = "unsupported_media_type"
+	ErrorResponseCodeUnsupportedVersion          ErrorResponseCode = "unsupported_version"
 )
 
 // Valid indicates whether the value is a known member of the ErrorResponseCode enum.
@@ -275,6 +504,8 @@ func (e ErrorResponseCode) Valid() bool {
 	case ErrorResponseCodeNotFound:
 		return true
 	case ErrorResponseCodePreconditionFailed:
+		return true
+	case ErrorResponseCodePropagationCommitUnresolved:
 		return true
 	case ErrorResponseCodeRequestDeadline:
 		return true
@@ -331,6 +562,7 @@ func (e KeyPolicyResultStrictIdentityApplicable) Valid() bool {
 const (
 	EximLocalScanObservedCrlf MessageInputFidelity = "exim_local_scan_observed_crlf"
 	EximTransportFilterCrlf   MessageInputFidelity = "exim_transport_filter_crlf"
+	LmtpDeliveredCrlf         MessageInputFidelity = "lmtp_delivered_crlf"
 	MilterReconstructedCrlf   MessageInputFidelity = "milter_reconstructed_crlf"
 	RawRfc5322                MessageInputFidelity = "raw_rfc5322"
 )
@@ -341,6 +573,8 @@ func (e MessageInputFidelity) Valid() bool {
 	case EximLocalScanObservedCrlf:
 		return true
 	case EximTransportFilterCrlf:
+		return true
+	case LmtpDeliveredCrlf:
 		return true
 	case MilterReconstructedCrlf:
 		return true
@@ -443,24 +677,34 @@ func (e PolicyFindingSeverity) Valid() bool {
 
 // Defines values for PolicyReason.
 const (
-	DnsTestingEffective       PolicyReason = "dns_testing_effective"
-	DnsTestingIneligible      PolicyReason = "dns_testing_ineligible"
-	DnsTestingMixed           PolicyReason = "dns_testing_mixed"
-	DonotexplodeIndeterminate PolicyReason = "donotexplode_indeterminate"
-	DonotexplodeNotEvaluated  PolicyReason = "donotexplode_not_evaluated"
-	DonotexplodeViolated      PolicyReason = "donotexplode_violated"
-	DonotmodifyIndeterminate  PolicyReason = "donotmodify_indeterminate"
-	DonotmodifyNotEvaluated   PolicyReason = "donotmodify_not_evaluated"
-	ExplodedReported          PolicyReason = "exploded_reported"
-	FeedbackRelaySelected     PolicyReason = "feedback_relay_selected"
-	FeedbackRequested         PolicyReason = "feedback_requested"
-	FeedhereInert             PolicyReason = "feedhere_inert"
-	PermissiveOverride        PolicyReason = "permissive_override"
-	ProtocolFail              PolicyReason = "protocol_fail"
-	ProtocolPass              PolicyReason = "protocol_pass"
-	ProtocolPermerror         PolicyReason = "protocol_permerror"
-	ProtocolTemperror         PolicyReason = "protocol_temperror"
-	TestingModeObserve        PolicyReason = "testing_mode_observe"
+	DnsTestingEffective           PolicyReason = "dns_testing_effective"
+	DnsTestingIneligible          PolicyReason = "dns_testing_ineligible"
+	DnsTestingMixed               PolicyReason = "dns_testing_mixed"
+	DonotexplodeIndeterminate     PolicyReason = "donotexplode_indeterminate"
+	DonotexplodeNotEvaluated      PolicyReason = "donotexplode_not_evaluated"
+	DonotexplodeViolated          PolicyReason = "donotexplode_violated"
+	DonotmodifyIndeterminate      PolicyReason = "donotmodify_indeterminate"
+	DonotmodifyNotEvaluated       PolicyReason = "donotmodify_not_evaluated"
+	ExplodedReported              PolicyReason = "exploded_reported"
+	FeedbackRelaySelected         PolicyReason = "feedback_relay_selected"
+	FeedbackRequested             PolicyReason = "feedback_requested"
+	FeedhereInert                 PolicyReason = "feedhere_inert"
+	PermissiveOverride            PolicyReason = "permissive_override"
+	ProtocolFail                  PolicyReason = "protocol_fail"
+	ProtocolPass                  PolicyReason = "protocol_pass"
+	ProtocolPermerror             PolicyReason = "protocol_permerror"
+	ProtocolTemperror             PolicyReason = "protocol_temperror"
+	ReceivedDsnEmbeddedAbsent     PolicyReason = "received_dsn_embedded_absent"
+	ReceivedDsnEmbeddedUnverified PolicyReason = "received_dsn_embedded_unverified"
+	ReceivedDsnIdentityMismatch   PolicyReason = "received_dsn_identity_mismatch"
+	ReceivedDsnLinked             PolicyReason = "received_dsn_linked"
+	ReceivedDsnNotLocal           PolicyReason = "received_dsn_not_local"
+	ReceivedDsnOuterPolicy        PolicyReason = "received_dsn_outer_policy"
+	ReceivedDsnRecipientUnlinked  PolicyReason = "received_dsn_recipient_unlinked"
+	ReceivedDsnStructureInvalid   PolicyReason = "received_dsn_structure_invalid"
+	ReceivedDsnTemporaryFailure   PolicyReason = "received_dsn_temporary_failure"
+	ReceivedDsnTenantUnavailable  PolicyReason = "received_dsn_tenant_unavailable"
+	TestingModeObserve            PolicyReason = "testing_mode_observe"
 )
 
 // Valid indicates whether the value is a known member of the PolicyReason enum.
@@ -499,6 +743,26 @@ func (e PolicyReason) Valid() bool {
 	case ProtocolPermerror:
 		return true
 	case ProtocolTemperror:
+		return true
+	case ReceivedDsnEmbeddedAbsent:
+		return true
+	case ReceivedDsnEmbeddedUnverified:
+		return true
+	case ReceivedDsnIdentityMismatch:
+		return true
+	case ReceivedDsnLinked:
+		return true
+	case ReceivedDsnNotLocal:
+		return true
+	case ReceivedDsnOuterPolicy:
+		return true
+	case ReceivedDsnRecipientUnlinked:
+		return true
+	case ReceivedDsnStructureInvalid:
+		return true
+	case ReceivedDsnTemporaryFailure:
+		return true
+	case ReceivedDsnTenantUnavailable:
 		return true
 	case TestingModeObserve:
 		return true
@@ -591,6 +855,48 @@ func (e PolicyResultVerdict) Valid() bool {
 	case PolicyResultVerdictReject:
 		return true
 	case PolicyResultVerdictTempfail:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PropagationDisposition.
+const (
+	PropagationDispositionAccept   PropagationDisposition = "accept"
+	PropagationDispositionDiscard  PropagationDisposition = "discard"
+	PropagationDispositionReject   PropagationDisposition = "reject"
+	PropagationDispositionTempfail PropagationDisposition = "tempfail"
+)
+
+// Valid indicates whether the value is a known member of the PropagationDisposition enum.
+func (e PropagationDisposition) Valid() bool {
+	switch e {
+	case PropagationDispositionAccept:
+		return true
+	case PropagationDispositionDiscard:
+		return true
+	case PropagationDispositionReject:
+		return true
+	case PropagationDispositionTempfail:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PropagationMessageInputFidelity.
+const (
+	PropagationFidelityLMTPDeliveredCRLF PropagationMessageInputFidelity = "lmtp_delivered_crlf"
+	PropagationFidelityRawRFC5322        PropagationMessageInputFidelity = "raw_rfc5322"
+)
+
+// Valid indicates whether the value is a known member of the PropagationMessageInputFidelity enum.
+func (e PropagationMessageInputFidelity) Valid() bool {
+	switch e {
+	case PropagationFidelityLMTPDeliveredCRLF:
+		return true
+	case PropagationFidelityRawRFC5322:
 		return true
 	default:
 		return false
@@ -1167,6 +1473,70 @@ type DSNMessageInput struct {
 	RawRfc5322Base64 wire.ProtectedString `json:"raw_rfc5322_base64"`
 }
 
+// DSNPropagateCommitRequest defines model for DSNPropagateCommitRequest.
+type DSNPropagateCommitRequest struct {
+	ApiVersion APIVersion `json:"api_version"`
+
+	// CommitToken Opaque bounded token bound to one reserved propagation coordinate, not to one issuing attempt. It carries no caller-readable structure and must not be logged.
+	CommitToken PropagationCommitToken `json:"commit_token"`
+	Draft       DraftVersion           `json:"draft"`
+}
+
+// DSNPropagateCommitResponse defines model for DSNPropagateCommitResponse.
+type DSNPropagateCommitResponse struct {
+	ApiVersion APIVersion                      `json:"api_version"`
+	Draft      DraftVersion                    `json:"draft"`
+	State      DSNPropagateCommitResponseState `json:"state"`
+}
+
+// DSNPropagateCommitResponseState defines model for DSNPropagateCommitResponse.State.
+type DSNPropagateCommitResponseState string
+
+// DSNPropagateRequest defines model for DSNPropagateRequest.
+type DSNPropagateRequest struct {
+	ApiVersion APIVersion `json:"api_version"`
+
+	// Context Administrative tenant that owns local authority resolution and the canonical reporting MTA name rendered into the rebuilt report. The daemon derives the propagation signing domain from the cryptographically authenticated completion signature, never from this member.
+	Context PropagationContext `json:"context"`
+	Draft   DraftVersion       `json:"draft"`
+
+	// Message Received RFC 6522 delivery-status notification bytes together with the caller's explicit representation claim.
+	Message PropagationMessageInput `json:"message"`
+
+	// OuterSmtp Exact observed envelope of the received notification itself. mail_from must be the null reverse path and rcpt_to must contain exactly the one local return-path address the notification was delivered to.
+	OuterSmtp PropagationSMTPInput `json:"outer_smtp"`
+}
+
+// DSNPropagateResponse Propagation result. Result and disposition are coherent under this operation's own rule: pass permits accept or discard, permerror requires discard, fail requires reject, and temperror requires tempfail. Only accept carries the propagation member, and only permerror carries the propagation_failure member. A notification that is not ours is a misrouting on this route and is reported as fail with reject, unlike the informational projection of the process route. The delivery_status member is present only when the received-DSN evaluation ran. It is absent when the notification carries no DKIM2 field family at all and when the outer assessment was unusable, because the projection has no value for an assessment that never happened and a fabricated malformed structure would be false evidence.
+type DSNPropagateResponse struct {
+	ApiVersion APIVersion `json:"api_version"`
+
+	// DeliveryStatus Closed received-DSN projection. Present only when the evaluation ran.
+	DeliveryStatus *DeliveryStatusProjection `json:"delivery_status,omitempty"`
+
+	// Disposition Closed propagation disposition. It is distinct from the shared disposition because propagation adds discard, which answers a notification that must not be propagated and must not be reported as a failure, and because it never uses continue. Coherence with the operation result is fixed: pass permits accept or discard, permerror requires discard, fail requires reject, and temperror requires tempfail.
+	Disposition PropagationDisposition        `json:"disposition"`
+	Draft       DraftVersion                  `json:"draft"`
+	Operation   DSNPropagateResponseOperation `json:"operation"`
+
+	// Propagation Signed notification and its transport requirements. Present only with accept.
+	Propagation *PropagationOutput `json:"propagation,omitempty"`
+
+	// PropagationFailure Permanent reason why no notification was produced. Present only with permerror.
+	PropagationFailure *DSNPropagateResponsePropagationFailure `json:"propagation_failure,omitempty"`
+	Replay             ReplayResult                            `json:"replay"`
+	Result             DSNPropagateResponseResult              `json:"result"`
+}
+
+// DSNPropagateResponseOperation defines model for DSNPropagateResponse.Operation.
+type DSNPropagateResponseOperation string
+
+// DSNPropagateResponsePropagationFailure Permanent reason why no notification was produced. Present only with permerror.
+type DSNPropagateResponsePropagationFailure string
+
+// DSNPropagateResponseResult defines model for DSNPropagateResponse.Result.
+type DSNPropagateResponseResult string
+
 // DSNSignRequest defines model for DSNSignRequest.
 type DSNSignRequest struct {
 	ApiVersion APIVersion `json:"api_version"`
@@ -1186,6 +1556,34 @@ type DSNSignRequest struct {
 type DeliveryStatusContext struct {
 	Tenant string `json:"tenant"`
 }
+
+// DeliveryStatusProjection Closed received delivery-status evaluation projection. The stages are evaluated in member order and stop at the first failure, so a member is not_evaluated when an earlier stage stopped the evaluation or, for local_hop and propagation, when no tenant was available. not_evaluated never carries a temporary meaning; a temporary key or DNS failure is reported as embedded temperror and a temporary datasource failure as local_hop temperror. The propagation member is informational: it reports whether a propagation attempt could act on this notification.
+type DeliveryStatusProjection struct {
+	Embedded         DeliveryStatusProjectionEmbedded         `json:"embedded"`
+	LocalHop         DeliveryStatusProjectionLocalHop         `json:"local_hop"`
+	OuterAlignment   DeliveryStatusProjectionOuterAlignment   `json:"outer_alignment"`
+	Propagation      DeliveryStatusProjectionPropagation      `json:"propagation"`
+	RecipientLinkage DeliveryStatusProjectionRecipientLinkage `json:"recipient_linkage"`
+	Structure        DeliveryStatusProjectionStructure        `json:"structure"`
+}
+
+// DeliveryStatusProjectionEmbedded defines model for DeliveryStatusProjection.Embedded.
+type DeliveryStatusProjectionEmbedded string
+
+// DeliveryStatusProjectionLocalHop defines model for DeliveryStatusProjection.LocalHop.
+type DeliveryStatusProjectionLocalHop string
+
+// DeliveryStatusProjectionOuterAlignment defines model for DeliveryStatusProjection.OuterAlignment.
+type DeliveryStatusProjectionOuterAlignment string
+
+// DeliveryStatusProjectionPropagation defines model for DeliveryStatusProjection.Propagation.
+type DeliveryStatusProjectionPropagation string
+
+// DeliveryStatusProjectionRecipientLinkage defines model for DeliveryStatusProjection.RecipientLinkage.
+type DeliveryStatusProjectionRecipientLinkage string
+
+// DeliveryStatusProjectionStructure defines model for DeliveryStatusProjection.Structure.
+type DeliveryStatusProjectionStructure string
 
 // Disposition defines model for Disposition.
 type Disposition string
@@ -1300,11 +1698,19 @@ type PolicyResultMode string
 // PolicyResultVerdict defines model for PolicyResult.Verdict.
 type PolicyResultVerdict string
 
+// ProcessContext defines model for ProcessContext.
+type ProcessContext struct {
+	Tenant string `json:"tenant"`
+}
+
 // ProcessRequest defines model for ProcessRequest.
 type ProcessRequest struct {
-	ApiVersion APIVersion   `json:"api_version"`
-	Draft      DraftVersion `json:"draft"`
-	Message    MessageInput `json:"message"`
+	ApiVersion APIVersion `json:"api_version"`
+
+	// Context Optional administrative tenant. Received delivery-status locality is tenant-keyed, so a request without this member and without a configured daemon default keeps the delivery-status projection unevaluated instead of guessing an authority.
+	Context *ProcessContext `json:"context,omitempty"`
+	Draft   DraftVersion    `json:"draft"`
+	Message MessageInput    `json:"message"`
 
 	// Reporting Optional daemon reporting authority. When supplied for an inbound accept or non-terminal continue outcome, the daemon returns the exact Authentication-Results action; adapters must not synthesize it.
 	Reporting *ReportingContext `json:"reporting,omitempty"`
@@ -1316,16 +1722,71 @@ type ProcessResponse struct {
 	Actions        ActionPlan           `json:"actions"`
 	ApiVersion     APIVersion           `json:"api_version"`
 	Authentication AuthenticationResult `json:"authentication"`
-	Disposition    Disposition          `json:"disposition"`
-	Draft          DraftVersion         `json:"draft"`
-	Policy         PolicyResult         `json:"policy"`
-	Replay         ReplayResult         `json:"replay"`
+
+	// DeliveryStatus Received delivery-status projection. Present only when the outer message has a null reverse path, a multipart/report delivery-status top level, and at least one DKIM2 protocol field family. Its presence changes neither verification, authentication, replay, nor action semantics.
+	DeliveryStatus *DeliveryStatusProjection `json:"delivery_status,omitempty"`
+	Disposition    Disposition               `json:"disposition"`
+	Draft          DraftVersion              `json:"draft"`
+	Policy         PolicyResult              `json:"policy"`
+	Replay         ReplayResult              `json:"replay"`
 
 	// Verification Message-local cryptographic evidence; replay may change the final authentication state.
 	Verification VerificationResult `json:"verification"`
 
 	// VerifierProjection Transport-neutral sealed verifier evidence for a complete ordinary authenticated chain.
 	VerifierProjection *VerifierProjection `json:"verifier_projection,omitempty"`
+}
+
+// PropagationCommitToken Opaque bounded token bound to one reserved propagation coordinate, not to one issuing attempt. It carries no caller-readable structure and must not be logged.
+type PropagationCommitToken = wire.ProtectedString
+
+// PropagationContext defines model for PropagationContext.
+type PropagationContext struct {
+	// ReportingMta Canonical lowercase DNS name of the reporting MTA, used only in the rebuilt report and its outer From field.
+	ReportingMta string `json:"reporting_mta"`
+	Tenant       string `json:"tenant"`
+}
+
+// PropagationDisposition Closed propagation disposition. It is distinct from the shared disposition because propagation adds discard, which answers a notification that must not be propagated and must not be reported as a failure, and because it never uses continue. Coherence with the operation result is fixed: pass permits accept or discard, permerror requires discard, fail requires reject, and temperror requires tempfail.
+type PropagationDisposition string
+
+// PropagationMessageInput Received delivery-status bytes for the propagation route. The representation claim is explicit because a locally delivered notification reaches the adapter over LMTP rather than as raw submission bytes.
+type PropagationMessageInput struct {
+	Fidelity         PropagationMessageInputFidelity `json:"fidelity"`
+	RawRfc5322Base64 wire.ProtectedString            `json:"raw_rfc5322_base64"`
+}
+
+// PropagationMessageInputFidelity defines model for PropagationMessageInput.Fidelity.
+type PropagationMessageInputFidelity string
+
+// PropagationOutput Everything the caller needs to re-inject the signed notification and to commit the reserved propagation coordinate afterwards.
+type PropagationOutput struct {
+	// CommitToken Opaque bounded token bound to one reserved propagation coordinate, not to one issuing attempt. It carries no caller-readable structure and must not be logged.
+	CommitToken PropagationCommitToken `json:"commit_token"`
+
+	// EightBitMimeRequired Whether the signed notification carries eight-bit body content, so that the re-injection client must negotiate 8BITMIME.
+	EightBitMimeRequired bool `json:"eight_bit_mime_required"`
+
+	// NextHopRecipient Exact SMTP forward path of the previous hop, including angle brackets, taken from the authenticated previous-hop signature.
+	NextHopRecipient wire.ProtectedString `json:"next_hop_recipient"`
+
+	// RawRfc5322Base64 Complete signed notification bytes.
+	RawRfc5322Base64 wire.ProtectedString `json:"raw_rfc5322_base64"`
+
+	// Smtputf8Required Whether the forward path or any header field of the signed notification carries a non-ASCII byte in the RFC 6531 and RFC 6532 sense. An eight-bit body alone does not set it.
+	Smtputf8Required bool `json:"smtputf8_required"`
+}
+
+// PropagationSMTPInput Route-specific envelope evidence. It differs from the shared envelope schema because propagation admits exactly one forward path and records the observed SMTPUTF8 parameter of the delivering transaction.
+type PropagationSMTPInput struct {
+	// MailFrom Observed reverse path, which must be the null reverse path.
+	MailFrom wire.ProtectedString `json:"mail_from"`
+
+	// RcptTo The single observed forward path of the delivered notification.
+	RcptTo []wire.ProtectedString `json:"rcpt_to"`
+
+	// Smtputf8 Whether the delivering MAIL command carried the SMTPUTF8 parameter. It records observed transport evidence of the received transaction only and is not an identity claim. It does not influence the response member smtputf8_required, which is derived from the rebuilt notification alone.
+	Smtputf8 bool `json:"smtputf8"`
 }
 
 // ReadinessResponse defines model for ReadinessResponse.
@@ -1519,6 +1980,9 @@ type VerifierProjectionSchema string
 // BadRequest defines model for BadRequest.
 type BadRequest = ErrorResponse
 
+// Conflict defines model for Conflict.
+type Conflict = ErrorResponse
+
 // ExpectationFailed defines model for ExpectationFailed.
 type ExpectationFailed = ErrorResponse
 
@@ -1542,6 +2006,12 @@ type ServiceUnavailable = ErrorResponse
 
 // UnsupportedMediaType defines model for UnsupportedMediaType.
 type UnsupportedMediaType = ErrorResponse
+
+// PropagateDeliveryStatusJSONRequestBody defines body for PropagateDeliveryStatus for application/json ContentType.
+type PropagateDeliveryStatusJSONRequestBody = DSNPropagateRequest
+
+// CommitDeliveryStatusPropagationJSONRequestBody defines body for CommitDeliveryStatusPropagation for application/json ContentType.
+type CommitDeliveryStatusPropagationJSONRequestBody = DSNPropagateCommitRequest
 
 // SignDeliveryStatusJSONRequestBody defines body for SignDeliveryStatus for application/json ContentType.
 type SignDeliveryStatusJSONRequestBody = DSNSignRequest
@@ -1572,6 +2042,12 @@ type ServerInterface interface {
 	// HeadReadiness Report service readiness without a response body.
 	// (HEAD /readyz)
 	HeadReadiness(w http.ResponseWriter, r *http.Request)
+	// PropagateDeliveryStatus Rebuild and sign one propagated delivery-status notification.
+	// (POST /v1/dsn/propagate)
+	PropagateDeliveryStatus(w http.ResponseWriter, r *http.Request)
+	// CommitDeliveryStatusPropagation Commit one reserved delivery-status propagation coordinate.
+	// (POST /v1/dsn/propagate/commit)
+	CommitDeliveryStatusPropagation(w http.ResponseWriter, r *http.Request)
 	// SignDeliveryStatus Sign one delivery-status report.
 	// (POST /v1/dsn/sign)
 	SignDeliveryStatus(w http.ResponseWriter, r *http.Request)
@@ -1656,6 +2132,34 @@ func (siw *ServerInterfaceWrapper) HeadReadiness(w http.ResponseWriter, r *http.
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.HeadReadiness(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PropagateDeliveryStatus operation middleware
+func (siw *ServerInterfaceWrapper) PropagateDeliveryStatus(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PropagateDeliveryStatus(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CommitDeliveryStatusPropagation operation middleware
+func (siw *ServerInterfaceWrapper) CommitDeliveryStatusPropagation(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CommitDeliveryStatusPropagation(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1846,6 +2350,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/metrics", wrapper.GetMetrics)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/readyz", wrapper.GetReadiness)
 	m.HandleFunc(http.MethodHead+" "+options.BaseURL+"/readyz", wrapper.HeadReadiness)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/dsn/propagate", wrapper.PropagateDeliveryStatus)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/dsn/propagate/commit", wrapper.CommitDeliveryStatusPropagation)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/dsn/sign", wrapper.SignDeliveryStatus)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/process", wrapper.ProcessMessage)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/revise", wrapper.ReviseMessage)
@@ -1865,6 +2371,19 @@ type BadRequestJSONResponse struct {
 	Body ErrorResponse
 
 	Headers BadRequestResponseHeaders
+}
+
+type ConflictResponseHeaders struct {
+	CacheControl        string
+	Connection          string
+	ContentLength       string
+	Date                *string
+	XContentTypeOptions string
+}
+type ConflictJSONResponse struct {
+	Body ErrorResponse
+
+	Headers ConflictResponseHeaders
 }
 
 type ExpectationFailedResponseHeaders struct {
@@ -2687,6 +3206,449 @@ func (response HeadReadiness503Response) VisitHeadReadinessResponse(w http.Respo
 	w.Header().Set("X-Content-Type-Options", fmt.Sprint(response.Headers.XContentTypeOptions))
 	w.WriteHeader(503)
 	return nil
+}
+
+type PropagateDeliveryStatusRequestObject struct {
+	Body *PropagateDeliveryStatusJSONRequestBody
+}
+
+type PropagateDeliveryStatusResponseObject interface {
+	VisitPropagateDeliveryStatusResponse(w http.ResponseWriter) error
+}
+
+type PropagateDeliveryStatus200ResponseHeaders struct {
+	CacheControl        string
+	Connection          string
+	ContentLength       string
+	Date                *string
+	XContentTypeOptions string
+}
+
+type PropagateDeliveryStatus200JSONResponse struct {
+	Body    DSNPropagateResponse
+	Headers PropagateDeliveryStatus200ResponseHeaders
+}
+
+func (response PropagateDeliveryStatus200JSONResponse) VisitPropagateDeliveryStatusResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Connection", fmt.Sprint(response.Headers.Connection))
+	w.Header().Set("Content-Length", fmt.Sprint(response.Headers.ContentLength))
+	if response.Headers.Date != nil {
+		w.Header().Set("Date", fmt.Sprint(*response.Headers.Date))
+	}
+	w.Header().Set("X-Content-Type-Options", fmt.Sprint(response.Headers.XContentTypeOptions))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PropagateDeliveryStatus400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response PropagateDeliveryStatus400JSONResponse) VisitPropagateDeliveryStatusResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Connection", fmt.Sprint(response.Headers.Connection))
+	w.Header().Set("Content-Length", fmt.Sprint(response.Headers.ContentLength))
+	if response.Headers.Date != nil {
+		w.Header().Set("Date", fmt.Sprint(*response.Headers.Date))
+	}
+	w.Header().Set("X-Content-Type-Options", fmt.Sprint(response.Headers.XContentTypeOptions))
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PropagateDeliveryStatus403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response PropagateDeliveryStatus403JSONResponse) VisitPropagateDeliveryStatusResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Connection", fmt.Sprint(response.Headers.Connection))
+	w.Header().Set("Content-Length", fmt.Sprint(response.Headers.ContentLength))
+	if response.Headers.Date != nil {
+		w.Header().Set("Date", fmt.Sprint(*response.Headers.Date))
+	}
+	w.Header().Set("X-Content-Type-Options", fmt.Sprint(response.Headers.XContentTypeOptions))
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PropagateDeliveryStatus408JSONResponse struct{ RequestTimeoutJSONResponse }
+
+func (response PropagateDeliveryStatus408JSONResponse) VisitPropagateDeliveryStatusResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Connection", fmt.Sprint(response.Headers.Connection))
+	w.Header().Set("Content-Length", fmt.Sprint(response.Headers.ContentLength))
+	if response.Headers.Date != nil {
+		w.Header().Set("Date", fmt.Sprint(*response.Headers.Date))
+	}
+	w.Header().Set("X-Content-Type-Options", fmt.Sprint(response.Headers.XContentTypeOptions))
+	w.WriteHeader(408)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PropagateDeliveryStatus413JSONResponse struct{ RequestTooLargeJSONResponse }
+
+func (response PropagateDeliveryStatus413JSONResponse) VisitPropagateDeliveryStatusResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Connection", fmt.Sprint(response.Headers.Connection))
+	w.Header().Set("Content-Length", fmt.Sprint(response.Headers.ContentLength))
+	if response.Headers.Date != nil {
+		w.Header().Set("Date", fmt.Sprint(*response.Headers.Date))
+	}
+	w.Header().Set("X-Content-Type-Options", fmt.Sprint(response.Headers.XContentTypeOptions))
+	w.WriteHeader(413)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PropagateDeliveryStatus415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response PropagateDeliveryStatus415JSONResponse) VisitPropagateDeliveryStatusResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Connection", fmt.Sprint(response.Headers.Connection))
+	w.Header().Set("Content-Length", fmt.Sprint(response.Headers.ContentLength))
+	if response.Headers.Date != nil {
+		w.Header().Set("Date", fmt.Sprint(*response.Headers.Date))
+	}
+	w.Header().Set("X-Content-Type-Options", fmt.Sprint(response.Headers.XContentTypeOptions))
+	w.WriteHeader(415)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PropagateDeliveryStatus417JSONResponse struct{ ExpectationFailedJSONResponse }
+
+func (response PropagateDeliveryStatus417JSONResponse) VisitPropagateDeliveryStatusResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Connection", fmt.Sprint(response.Headers.Connection))
+	w.Header().Set("Content-Length", fmt.Sprint(response.Headers.ContentLength))
+	if response.Headers.Date != nil {
+		w.Header().Set("Date", fmt.Sprint(*response.Headers.Date))
+	}
+	w.Header().Set("X-Content-Type-Options", fmt.Sprint(response.Headers.XContentTypeOptions))
+	w.WriteHeader(417)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PropagateDeliveryStatus500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response PropagateDeliveryStatus500JSONResponse) VisitPropagateDeliveryStatusResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Connection", fmt.Sprint(response.Headers.Connection))
+	w.Header().Set("Content-Length", fmt.Sprint(response.Headers.ContentLength))
+	if response.Headers.Date != nil {
+		w.Header().Set("Date", fmt.Sprint(*response.Headers.Date))
+	}
+	w.Header().Set("X-Content-Type-Options", fmt.Sprint(response.Headers.XContentTypeOptions))
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PropagateDeliveryStatus503JSONResponse struct{ ServiceUnavailableJSONResponse }
+
+func (response PropagateDeliveryStatus503JSONResponse) VisitPropagateDeliveryStatusResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Connection", fmt.Sprint(response.Headers.Connection))
+	w.Header().Set("Content-Length", fmt.Sprint(response.Headers.ContentLength))
+	if response.Headers.Date != nil {
+		w.Header().Set("Date", fmt.Sprint(*response.Headers.Date))
+	}
+	w.Header().Set("Retry-After", fmt.Sprint(response.Headers.RetryAfter))
+	w.Header().Set("X-Content-Type-Options", fmt.Sprint(response.Headers.XContentTypeOptions))
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CommitDeliveryStatusPropagationRequestObject struct {
+	Body *CommitDeliveryStatusPropagationJSONRequestBody
+}
+
+type CommitDeliveryStatusPropagationResponseObject interface {
+	VisitCommitDeliveryStatusPropagationResponse(w http.ResponseWriter) error
+}
+
+type CommitDeliveryStatusPropagation200ResponseHeaders struct {
+	CacheControl        string
+	Connection          string
+	ContentLength       string
+	Date                *string
+	XContentTypeOptions string
+}
+
+type CommitDeliveryStatusPropagation200JSONResponse struct {
+	Body    DSNPropagateCommitResponse
+	Headers CommitDeliveryStatusPropagation200ResponseHeaders
+}
+
+func (response CommitDeliveryStatusPropagation200JSONResponse) VisitCommitDeliveryStatusPropagationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Connection", fmt.Sprint(response.Headers.Connection))
+	w.Header().Set("Content-Length", fmt.Sprint(response.Headers.ContentLength))
+	if response.Headers.Date != nil {
+		w.Header().Set("Date", fmt.Sprint(*response.Headers.Date))
+	}
+	w.Header().Set("X-Content-Type-Options", fmt.Sprint(response.Headers.XContentTypeOptions))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CommitDeliveryStatusPropagation400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response CommitDeliveryStatusPropagation400JSONResponse) VisitCommitDeliveryStatusPropagationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Connection", fmt.Sprint(response.Headers.Connection))
+	w.Header().Set("Content-Length", fmt.Sprint(response.Headers.ContentLength))
+	if response.Headers.Date != nil {
+		w.Header().Set("Date", fmt.Sprint(*response.Headers.Date))
+	}
+	w.Header().Set("X-Content-Type-Options", fmt.Sprint(response.Headers.XContentTypeOptions))
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CommitDeliveryStatusPropagation403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response CommitDeliveryStatusPropagation403JSONResponse) VisitCommitDeliveryStatusPropagationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Connection", fmt.Sprint(response.Headers.Connection))
+	w.Header().Set("Content-Length", fmt.Sprint(response.Headers.ContentLength))
+	if response.Headers.Date != nil {
+		w.Header().Set("Date", fmt.Sprint(*response.Headers.Date))
+	}
+	w.Header().Set("X-Content-Type-Options", fmt.Sprint(response.Headers.XContentTypeOptions))
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CommitDeliveryStatusPropagation408JSONResponse struct{ RequestTimeoutJSONResponse }
+
+func (response CommitDeliveryStatusPropagation408JSONResponse) VisitCommitDeliveryStatusPropagationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Connection", fmt.Sprint(response.Headers.Connection))
+	w.Header().Set("Content-Length", fmt.Sprint(response.Headers.ContentLength))
+	if response.Headers.Date != nil {
+		w.Header().Set("Date", fmt.Sprint(*response.Headers.Date))
+	}
+	w.Header().Set("X-Content-Type-Options", fmt.Sprint(response.Headers.XContentTypeOptions))
+	w.WriteHeader(408)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CommitDeliveryStatusPropagation409JSONResponse struct{ ConflictJSONResponse }
+
+func (response CommitDeliveryStatusPropagation409JSONResponse) VisitCommitDeliveryStatusPropagationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Connection", fmt.Sprint(response.Headers.Connection))
+	w.Header().Set("Content-Length", fmt.Sprint(response.Headers.ContentLength))
+	if response.Headers.Date != nil {
+		w.Header().Set("Date", fmt.Sprint(*response.Headers.Date))
+	}
+	w.Header().Set("X-Content-Type-Options", fmt.Sprint(response.Headers.XContentTypeOptions))
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CommitDeliveryStatusPropagation413JSONResponse struct{ RequestTooLargeJSONResponse }
+
+func (response CommitDeliveryStatusPropagation413JSONResponse) VisitCommitDeliveryStatusPropagationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Connection", fmt.Sprint(response.Headers.Connection))
+	w.Header().Set("Content-Length", fmt.Sprint(response.Headers.ContentLength))
+	if response.Headers.Date != nil {
+		w.Header().Set("Date", fmt.Sprint(*response.Headers.Date))
+	}
+	w.Header().Set("X-Content-Type-Options", fmt.Sprint(response.Headers.XContentTypeOptions))
+	w.WriteHeader(413)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CommitDeliveryStatusPropagation415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response CommitDeliveryStatusPropagation415JSONResponse) VisitCommitDeliveryStatusPropagationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Connection", fmt.Sprint(response.Headers.Connection))
+	w.Header().Set("Content-Length", fmt.Sprint(response.Headers.ContentLength))
+	if response.Headers.Date != nil {
+		w.Header().Set("Date", fmt.Sprint(*response.Headers.Date))
+	}
+	w.Header().Set("X-Content-Type-Options", fmt.Sprint(response.Headers.XContentTypeOptions))
+	w.WriteHeader(415)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CommitDeliveryStatusPropagation417JSONResponse struct{ ExpectationFailedJSONResponse }
+
+func (response CommitDeliveryStatusPropagation417JSONResponse) VisitCommitDeliveryStatusPropagationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Connection", fmt.Sprint(response.Headers.Connection))
+	w.Header().Set("Content-Length", fmt.Sprint(response.Headers.ContentLength))
+	if response.Headers.Date != nil {
+		w.Header().Set("Date", fmt.Sprint(*response.Headers.Date))
+	}
+	w.Header().Set("X-Content-Type-Options", fmt.Sprint(response.Headers.XContentTypeOptions))
+	w.WriteHeader(417)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CommitDeliveryStatusPropagation500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response CommitDeliveryStatusPropagation500JSONResponse) VisitCommitDeliveryStatusPropagationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Connection", fmt.Sprint(response.Headers.Connection))
+	w.Header().Set("Content-Length", fmt.Sprint(response.Headers.ContentLength))
+	if response.Headers.Date != nil {
+		w.Header().Set("Date", fmt.Sprint(*response.Headers.Date))
+	}
+	w.Header().Set("X-Content-Type-Options", fmt.Sprint(response.Headers.XContentTypeOptions))
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CommitDeliveryStatusPropagation503JSONResponse struct{ ServiceUnavailableJSONResponse }
+
+func (response CommitDeliveryStatusPropagation503JSONResponse) VisitCommitDeliveryStatusPropagationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Connection", fmt.Sprint(response.Headers.Connection))
+	w.Header().Set("Content-Length", fmt.Sprint(response.Headers.ContentLength))
+	if response.Headers.Date != nil {
+		w.Header().Set("Date", fmt.Sprint(*response.Headers.Date))
+	}
+	w.Header().Set("Retry-After", fmt.Sprint(response.Headers.RetryAfter))
+	w.Header().Set("X-Content-Type-Options", fmt.Sprint(response.Headers.XContentTypeOptions))
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
 }
 
 type SignDeliveryStatusRequestObject struct {
@@ -3590,6 +4552,12 @@ type StrictServerInterface interface {
 	// HeadReadiness Report service readiness without a response body.
 	// (HEAD /readyz)
 	HeadReadiness(ctx context.Context, request HeadReadinessRequestObject) (HeadReadinessResponseObject, error)
+	// PropagateDeliveryStatus Rebuild and sign one propagated delivery-status notification.
+	// (POST /v1/dsn/propagate)
+	PropagateDeliveryStatus(ctx context.Context, request PropagateDeliveryStatusRequestObject) (PropagateDeliveryStatusResponseObject, error)
+	// CommitDeliveryStatusPropagation Commit one reserved delivery-status propagation coordinate.
+	// (POST /v1/dsn/propagate/commit)
+	CommitDeliveryStatusPropagation(ctx context.Context, request CommitDeliveryStatusPropagationRequestObject) (CommitDeliveryStatusPropagationResponseObject, error)
 	// SignDeliveryStatus Sign one delivery-status report.
 	// (POST /v1/dsn/sign)
 	SignDeliveryStatus(ctx context.Context, request SignDeliveryStatusRequestObject) (SignDeliveryStatusResponseObject, error)
@@ -3763,6 +4731,68 @@ func (sh *strictHandler) HeadReadiness(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// PropagateDeliveryStatus operation middleware
+func (sh *strictHandler) PropagateDeliveryStatus(w http.ResponseWriter, r *http.Request) {
+	var request PropagateDeliveryStatusRequestObject
+
+	var body PropagateDeliveryStatusJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PropagateDeliveryStatus(ctx, request.(PropagateDeliveryStatusRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PropagateDeliveryStatus")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PropagateDeliveryStatusResponseObject); ok {
+		if err := validResponse.VisitPropagateDeliveryStatusResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CommitDeliveryStatusPropagation operation middleware
+func (sh *strictHandler) CommitDeliveryStatusPropagation(w http.ResponseWriter, r *http.Request) {
+	var request CommitDeliveryStatusPropagationRequestObject
+
+	var body CommitDeliveryStatusPropagationJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CommitDeliveryStatusPropagation(ctx, request.(CommitDeliveryStatusPropagationRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CommitDeliveryStatusPropagation")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CommitDeliveryStatusPropagationResponseObject); ok {
+		if err := validResponse.VisitCommitDeliveryStatusPropagationResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // SignDeliveryStatus operation middleware
 func (sh *strictHandler) SignDeliveryStatus(w http.ResponseWriter, r *http.Request) {
 	var request SignDeliveryStatusRequestObject
@@ -3892,114 +4922,167 @@ func (sh *strictHandler) SignMessage(w http.ResponseWriter, r *http.Request) {
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
-	"zwltFf2ttPqPlVbeExfIk46Uur//3wAAAP//",
+	"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",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

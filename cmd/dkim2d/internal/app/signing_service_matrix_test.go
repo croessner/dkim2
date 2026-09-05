@@ -100,7 +100,7 @@ type policyFailureAuthority struct {
 }
 
 // Acquire returns one lease whose policy resolution exposes the configured failure.
-func (a policyFailureAuthority) Acquire(context.Context) (signingLease, error) {
+func (a policyFailureAuthority) Acquire(context.Context) (SigningLease, error) {
 	return policyFailureLease(a), nil
 }
 
@@ -139,6 +139,16 @@ func (l policyFailureLease) ResolvePolicy(
 	time.Time,
 ) (dkim2.SigningProfile, error) {
 	return dkim2.SigningProfile{}, l.err
+}
+
+// ResolveAnyProfile returns the configured storage-neutral resolution failure.
+func (l policyFailureLease) ResolveAnyProfile(
+	context.Context,
+	string,
+	string,
+	time.Time,
+) error {
+	return l.err
 }
 
 // SignDigest fails if a policy-resolution regression reaches private signing.

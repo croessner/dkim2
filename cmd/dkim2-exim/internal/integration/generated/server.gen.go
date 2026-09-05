@@ -171,6 +171,162 @@ func (e AuthenticationResultPrimaryReason) Valid() bool {
 	}
 }
 
+// Defines values for DeliveryStatusProjectionEmbedded.
+const (
+	DeliveryStatusEmbeddedAbsent              DeliveryStatusProjectionEmbedded = "absent"
+	DeliveryStatusEmbeddedNotEvaluated        DeliveryStatusProjectionEmbedded = "not_evaluated"
+	DeliveryStatusEmbeddedTemperror           DeliveryStatusProjectionEmbedded = "temperror"
+	DeliveryStatusEmbeddedUnverified          DeliveryStatusProjectionEmbedded = "unverified"
+	DeliveryStatusEmbeddedVerified            DeliveryStatusProjectionEmbedded = "verified"
+	DeliveryStatusEmbeddedVerifiedHeadersOnly DeliveryStatusProjectionEmbedded = "verified_headers_only"
+)
+
+// Valid indicates whether the value is a known member of the DeliveryStatusProjectionEmbedded enum.
+func (e DeliveryStatusProjectionEmbedded) Valid() bool {
+	switch e {
+	case DeliveryStatusEmbeddedAbsent:
+		return true
+	case DeliveryStatusEmbeddedNotEvaluated:
+		return true
+	case DeliveryStatusEmbeddedTemperror:
+		return true
+	case DeliveryStatusEmbeddedUnverified:
+		return true
+	case DeliveryStatusEmbeddedVerified:
+		return true
+	case DeliveryStatusEmbeddedVerifiedHeadersOnly:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for DeliveryStatusProjectionLocalHop.
+const (
+	DeliveryStatusLocalHopLocal        DeliveryStatusProjectionLocalHop = "local"
+	DeliveryStatusLocalHopMismatch     DeliveryStatusProjectionLocalHop = "mismatch"
+	DeliveryStatusLocalHopNotEvaluated DeliveryStatusProjectionLocalHop = "not_evaluated"
+	DeliveryStatusLocalHopNotLocal     DeliveryStatusProjectionLocalHop = "not_local"
+	DeliveryStatusLocalHopTemperror    DeliveryStatusProjectionLocalHop = "temperror"
+)
+
+// Valid indicates whether the value is a known member of the DeliveryStatusProjectionLocalHop enum.
+func (e DeliveryStatusProjectionLocalHop) Valid() bool {
+	switch e {
+	case DeliveryStatusLocalHopLocal:
+		return true
+	case DeliveryStatusLocalHopMismatch:
+		return true
+	case DeliveryStatusLocalHopNotEvaluated:
+		return true
+	case DeliveryStatusLocalHopNotLocal:
+		return true
+	case DeliveryStatusLocalHopTemperror:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for DeliveryStatusProjectionOuterAlignment.
+const (
+	DeliveryStatusOuterAlignmentAligned      DeliveryStatusProjectionOuterAlignment = "aligned"
+	DeliveryStatusOuterAlignmentMisaligned   DeliveryStatusProjectionOuterAlignment = "misaligned"
+	DeliveryStatusOuterAlignmentNotEvaluated DeliveryStatusProjectionOuterAlignment = "not_evaluated"
+)
+
+// Valid indicates whether the value is a known member of the DeliveryStatusProjectionOuterAlignment enum.
+func (e DeliveryStatusProjectionOuterAlignment) Valid() bool {
+	switch e {
+	case DeliveryStatusOuterAlignmentAligned:
+		return true
+	case DeliveryStatusOuterAlignmentMisaligned:
+		return true
+	case DeliveryStatusOuterAlignmentNotEvaluated:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for DeliveryStatusProjectionPropagation.
+const (
+	DeliveryStatusPropagationEligible                    DeliveryStatusProjectionPropagation = "eligible"
+	DeliveryStatusPropagationForbiddenNullPreviousSender DeliveryStatusProjectionPropagation = "forbidden_null_previous_sender"
+	DeliveryStatusPropagationNotApplicable               DeliveryStatusProjectionPropagation = "not_applicable"
+	DeliveryStatusPropagationNotEvaluated                DeliveryStatusProjectionPropagation = "not_evaluated"
+	DeliveryStatusPropagationNotFailure                  DeliveryStatusProjectionPropagation = "not_failure"
+	DeliveryStatusPropagationNotReconstructable          DeliveryStatusProjectionPropagation = "not_reconstructable"
+	DeliveryStatusPropagationTerminalOrigin              DeliveryStatusProjectionPropagation = "terminal_origin"
+	DeliveryStatusPropagationUnsupportedChain            DeliveryStatusProjectionPropagation = "unsupported_chain"
+)
+
+// Valid indicates whether the value is a known member of the DeliveryStatusProjectionPropagation enum.
+func (e DeliveryStatusProjectionPropagation) Valid() bool {
+	switch e {
+	case DeliveryStatusPropagationEligible:
+		return true
+	case DeliveryStatusPropagationForbiddenNullPreviousSender:
+		return true
+	case DeliveryStatusPropagationNotApplicable:
+		return true
+	case DeliveryStatusPropagationNotEvaluated:
+		return true
+	case DeliveryStatusPropagationNotFailure:
+		return true
+	case DeliveryStatusPropagationNotReconstructable:
+		return true
+	case DeliveryStatusPropagationTerminalOrigin:
+		return true
+	case DeliveryStatusPropagationUnsupportedChain:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for DeliveryStatusProjectionRecipientLinkage.
+const (
+	DeliveryStatusRecipientLinkageLinked       DeliveryStatusProjectionRecipientLinkage = "linked"
+	DeliveryStatusRecipientLinkageNotEvaluated DeliveryStatusProjectionRecipientLinkage = "not_evaluated"
+	DeliveryStatusRecipientLinkageUnlinked     DeliveryStatusProjectionRecipientLinkage = "unlinked"
+)
+
+// Valid indicates whether the value is a known member of the DeliveryStatusProjectionRecipientLinkage enum.
+func (e DeliveryStatusProjectionRecipientLinkage) Valid() bool {
+	switch e {
+	case DeliveryStatusRecipientLinkageLinked:
+		return true
+	case DeliveryStatusRecipientLinkageNotEvaluated:
+		return true
+	case DeliveryStatusRecipientLinkageUnlinked:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for DeliveryStatusProjectionStructure.
+const (
+	DeliveryStatusStructureLimitExceeded DeliveryStatusProjectionStructure = "limit_exceeded"
+	DeliveryStatusStructureMalformed     DeliveryStatusProjectionStructure = "malformed"
+	DeliveryStatusStructureValid         DeliveryStatusProjectionStructure = "valid"
+)
+
+// Valid indicates whether the value is a known member of the DeliveryStatusProjectionStructure enum.
+func (e DeliveryStatusProjectionStructure) Valid() bool {
+	switch e {
+	case DeliveryStatusStructureLimitExceeded:
+		return true
+	case DeliveryStatusStructureMalformed:
+		return true
+	case DeliveryStatusStructureValid:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for Disposition.
 const (
 	DispositionAccept   Disposition = "accept"
@@ -233,22 +389,23 @@ func (e ErrorResponseCategory) Valid() bool {
 
 // Defines values for ErrorResponseCode.
 const (
-	ErrorResponseCodeExpectationFailed    ErrorResponseCode = "expectation_failed"
-	ErrorResponseCodeForbidden            ErrorResponseCode = "forbidden"
-	ErrorResponseCodeInternalError        ErrorResponseCode = "internal_error"
-	ErrorResponseCodeInvalidContract      ErrorResponseCode = "invalid_contract"
-	ErrorResponseCodeInvalidJson          ErrorResponseCode = "invalid_json"
-	ErrorResponseCodeMethodNotAllowed     ErrorResponseCode = "method_not_allowed"
-	ErrorResponseCodeNotFound             ErrorResponseCode = "not_found"
-	ErrorResponseCodePreconditionFailed   ErrorResponseCode = "precondition_failed"
-	ErrorResponseCodeRequestDeadline      ErrorResponseCode = "request_deadline"
-	ErrorResponseCodeRequestTimeout       ErrorResponseCode = "request_timeout"
-	ErrorResponseCodeRequestTooLarge      ErrorResponseCode = "request_too_large"
-	ErrorResponseCodeServiceNotReady      ErrorResponseCode = "service_not_ready"
-	ErrorResponseCodeServiceOverloaded    ErrorResponseCode = "service_overloaded"
-	ErrorResponseCodeUnsupportedDraft     ErrorResponseCode = "unsupported_draft"
-	ErrorResponseCodeUnsupportedMediaType ErrorResponseCode = "unsupported_media_type"
-	ErrorResponseCodeUnsupportedVersion   ErrorResponseCode = "unsupported_version"
+	ErrorResponseCodeExpectationFailed           ErrorResponseCode = "expectation_failed"
+	ErrorResponseCodeForbidden                   ErrorResponseCode = "forbidden"
+	ErrorResponseCodeInternalError               ErrorResponseCode = "internal_error"
+	ErrorResponseCodeInvalidContract             ErrorResponseCode = "invalid_contract"
+	ErrorResponseCodeInvalidJson                 ErrorResponseCode = "invalid_json"
+	ErrorResponseCodeMethodNotAllowed            ErrorResponseCode = "method_not_allowed"
+	ErrorResponseCodeNotFound                    ErrorResponseCode = "not_found"
+	ErrorResponseCodePreconditionFailed          ErrorResponseCode = "precondition_failed"
+	ErrorResponseCodePropagationCommitUnresolved ErrorResponseCode = "propagation_commit_unresolved"
+	ErrorResponseCodeRequestDeadline             ErrorResponseCode = "request_deadline"
+	ErrorResponseCodeRequestTimeout              ErrorResponseCode = "request_timeout"
+	ErrorResponseCodeRequestTooLarge             ErrorResponseCode = "request_too_large"
+	ErrorResponseCodeServiceNotReady             ErrorResponseCode = "service_not_ready"
+	ErrorResponseCodeServiceOverloaded           ErrorResponseCode = "service_overloaded"
+	ErrorResponseCodeUnsupportedDraft            ErrorResponseCode = "unsupported_draft"
+	ErrorResponseCodeUnsupportedMediaType        ErrorResponseCode = "unsupported_media_type"
+	ErrorResponseCodeUnsupportedVersion          ErrorResponseCode = "unsupported_version"
 )
 
 // Valid indicates whether the value is a known member of the ErrorResponseCode enum.
@@ -269,6 +426,8 @@ func (e ErrorResponseCode) Valid() bool {
 	case ErrorResponseCodeNotFound:
 		return true
 	case ErrorResponseCodePreconditionFailed:
+		return true
+	case ErrorResponseCodePropagationCommitUnresolved:
 		return true
 	case ErrorResponseCodeRequestDeadline:
 		return true
@@ -325,6 +484,7 @@ func (e KeyPolicyResultStrictIdentityApplicable) Valid() bool {
 const (
 	EximLocalScanObservedCrlf MessageInputFidelity = "exim_local_scan_observed_crlf"
 	EximTransportFilterCrlf   MessageInputFidelity = "exim_transport_filter_crlf"
+	LmtpDeliveredCrlf         MessageInputFidelity = "lmtp_delivered_crlf"
 	MilterReconstructedCrlf   MessageInputFidelity = "milter_reconstructed_crlf"
 	RawRfc5322                MessageInputFidelity = "raw_rfc5322"
 )
@@ -335,6 +495,8 @@ func (e MessageInputFidelity) Valid() bool {
 	case EximLocalScanObservedCrlf:
 		return true
 	case EximTransportFilterCrlf:
+		return true
+	case LmtpDeliveredCrlf:
 		return true
 	case MilterReconstructedCrlf:
 		return true
@@ -437,24 +599,34 @@ func (e PolicyFindingSeverity) Valid() bool {
 
 // Defines values for PolicyReason.
 const (
-	DnsTestingEffective       PolicyReason = "dns_testing_effective"
-	DnsTestingIneligible      PolicyReason = "dns_testing_ineligible"
-	DnsTestingMixed           PolicyReason = "dns_testing_mixed"
-	DonotexplodeIndeterminate PolicyReason = "donotexplode_indeterminate"
-	DonotexplodeNotEvaluated  PolicyReason = "donotexplode_not_evaluated"
-	DonotexplodeViolated      PolicyReason = "donotexplode_violated"
-	DonotmodifyIndeterminate  PolicyReason = "donotmodify_indeterminate"
-	DonotmodifyNotEvaluated   PolicyReason = "donotmodify_not_evaluated"
-	ExplodedReported          PolicyReason = "exploded_reported"
-	FeedbackRelaySelected     PolicyReason = "feedback_relay_selected"
-	FeedbackRequested         PolicyReason = "feedback_requested"
-	FeedhereInert             PolicyReason = "feedhere_inert"
-	PermissiveOverride        PolicyReason = "permissive_override"
-	ProtocolFail              PolicyReason = "protocol_fail"
-	ProtocolPass              PolicyReason = "protocol_pass"
-	ProtocolPermerror         PolicyReason = "protocol_permerror"
-	ProtocolTemperror         PolicyReason = "protocol_temperror"
-	TestingModeObserve        PolicyReason = "testing_mode_observe"
+	DnsTestingEffective           PolicyReason = "dns_testing_effective"
+	DnsTestingIneligible          PolicyReason = "dns_testing_ineligible"
+	DnsTestingMixed               PolicyReason = "dns_testing_mixed"
+	DonotexplodeIndeterminate     PolicyReason = "donotexplode_indeterminate"
+	DonotexplodeNotEvaluated      PolicyReason = "donotexplode_not_evaluated"
+	DonotexplodeViolated          PolicyReason = "donotexplode_violated"
+	DonotmodifyIndeterminate      PolicyReason = "donotmodify_indeterminate"
+	DonotmodifyNotEvaluated       PolicyReason = "donotmodify_not_evaluated"
+	ExplodedReported              PolicyReason = "exploded_reported"
+	FeedbackRelaySelected         PolicyReason = "feedback_relay_selected"
+	FeedbackRequested             PolicyReason = "feedback_requested"
+	FeedhereInert                 PolicyReason = "feedhere_inert"
+	PermissiveOverride            PolicyReason = "permissive_override"
+	ProtocolFail                  PolicyReason = "protocol_fail"
+	ProtocolPass                  PolicyReason = "protocol_pass"
+	ProtocolPermerror             PolicyReason = "protocol_permerror"
+	ProtocolTemperror             PolicyReason = "protocol_temperror"
+	ReceivedDsnEmbeddedAbsent     PolicyReason = "received_dsn_embedded_absent"
+	ReceivedDsnEmbeddedUnverified PolicyReason = "received_dsn_embedded_unverified"
+	ReceivedDsnIdentityMismatch   PolicyReason = "received_dsn_identity_mismatch"
+	ReceivedDsnLinked             PolicyReason = "received_dsn_linked"
+	ReceivedDsnNotLocal           PolicyReason = "received_dsn_not_local"
+	ReceivedDsnOuterPolicy        PolicyReason = "received_dsn_outer_policy"
+	ReceivedDsnRecipientUnlinked  PolicyReason = "received_dsn_recipient_unlinked"
+	ReceivedDsnStructureInvalid   PolicyReason = "received_dsn_structure_invalid"
+	ReceivedDsnTemporaryFailure   PolicyReason = "received_dsn_temporary_failure"
+	ReceivedDsnTenantUnavailable  PolicyReason = "received_dsn_tenant_unavailable"
+	TestingModeObserve            PolicyReason = "testing_mode_observe"
 )
 
 // Valid indicates whether the value is a known member of the PolicyReason enum.
@@ -493,6 +665,26 @@ func (e PolicyReason) Valid() bool {
 	case ProtocolPermerror:
 		return true
 	case ProtocolTemperror:
+		return true
+	case ReceivedDsnEmbeddedAbsent:
+		return true
+	case ReceivedDsnEmbeddedUnverified:
+		return true
+	case ReceivedDsnIdentityMismatch:
+		return true
+	case ReceivedDsnLinked:
+		return true
+	case ReceivedDsnNotLocal:
+		return true
+	case ReceivedDsnOuterPolicy:
+		return true
+	case ReceivedDsnRecipientUnlinked:
+		return true
+	case ReceivedDsnStructureInvalid:
+		return true
+	case ReceivedDsnTemporaryFailure:
+		return true
+	case ReceivedDsnTenantUnavailable:
 		return true
 	case TestingModeObserve:
 		return true
@@ -1181,6 +1373,34 @@ type DeliveryStatusContext struct {
 	Tenant string `json:"tenant"`
 }
 
+// DeliveryStatusProjection Closed received delivery-status evaluation projection. The stages are evaluated in member order and stop at the first failure, so a member is not_evaluated when an earlier stage stopped the evaluation or, for local_hop and propagation, when no tenant was available. not_evaluated never carries a temporary meaning; a temporary key or DNS failure is reported as embedded temperror and a temporary datasource failure as local_hop temperror. The propagation member is informational: it reports whether a propagation attempt could act on this notification.
+type DeliveryStatusProjection struct {
+	Embedded         DeliveryStatusProjectionEmbedded         `json:"embedded"`
+	LocalHop         DeliveryStatusProjectionLocalHop         `json:"local_hop"`
+	OuterAlignment   DeliveryStatusProjectionOuterAlignment   `json:"outer_alignment"`
+	Propagation      DeliveryStatusProjectionPropagation      `json:"propagation"`
+	RecipientLinkage DeliveryStatusProjectionRecipientLinkage `json:"recipient_linkage"`
+	Structure        DeliveryStatusProjectionStructure        `json:"structure"`
+}
+
+// DeliveryStatusProjectionEmbedded defines model for DeliveryStatusProjection.Embedded.
+type DeliveryStatusProjectionEmbedded string
+
+// DeliveryStatusProjectionLocalHop defines model for DeliveryStatusProjection.LocalHop.
+type DeliveryStatusProjectionLocalHop string
+
+// DeliveryStatusProjectionOuterAlignment defines model for DeliveryStatusProjection.OuterAlignment.
+type DeliveryStatusProjectionOuterAlignment string
+
+// DeliveryStatusProjectionPropagation defines model for DeliveryStatusProjection.Propagation.
+type DeliveryStatusProjectionPropagation string
+
+// DeliveryStatusProjectionRecipientLinkage defines model for DeliveryStatusProjection.RecipientLinkage.
+type DeliveryStatusProjectionRecipientLinkage string
+
+// DeliveryStatusProjectionStructure defines model for DeliveryStatusProjection.Structure.
+type DeliveryStatusProjectionStructure string
+
 // Disposition defines model for Disposition.
 type Disposition string
 
@@ -1294,11 +1514,19 @@ type PolicyResultMode string
 // PolicyResultVerdict defines model for PolicyResult.Verdict.
 type PolicyResultVerdict string
 
+// ProcessContext defines model for ProcessContext.
+type ProcessContext struct {
+	Tenant string `json:"tenant"`
+}
+
 // ProcessRequest defines model for ProcessRequest.
 type ProcessRequest struct {
-	ApiVersion APIVersion   `json:"api_version"`
-	Draft      DraftVersion `json:"draft"`
-	Message    MessageInput `json:"message"`
+	ApiVersion APIVersion `json:"api_version"`
+
+	// Context Optional administrative tenant. Received delivery-status locality is tenant-keyed, so a request without this member and without a configured daemon default keeps the delivery-status projection unevaluated instead of guessing an authority.
+	Context *ProcessContext `json:"context,omitempty"`
+	Draft   DraftVersion    `json:"draft"`
+	Message MessageInput    `json:"message"`
 
 	// Reporting Optional daemon reporting authority. When supplied for an inbound accept or non-terminal continue outcome, the daemon returns the exact Authentication-Results action; adapters must not synthesize it.
 	Reporting *ReportingContext `json:"reporting,omitempty"`
@@ -1310,10 +1538,13 @@ type ProcessResponse struct {
 	Actions        ActionPlan           `json:"actions"`
 	ApiVersion     APIVersion           `json:"api_version"`
 	Authentication AuthenticationResult `json:"authentication"`
-	Disposition    Disposition          `json:"disposition"`
-	Draft          DraftVersion         `json:"draft"`
-	Policy         PolicyResult         `json:"policy"`
-	Replay         ReplayResult         `json:"replay"`
+
+	// DeliveryStatus Received delivery-status projection. Present only when the outer message has a null reverse path, a multipart/report delivery-status top level, and at least one DKIM2 protocol field family. Its presence changes neither verification, authentication, replay, nor action semantics.
+	DeliveryStatus *DeliveryStatusProjection `json:"delivery_status,omitempty"`
+	Disposition    Disposition               `json:"disposition"`
+	Draft          DraftVersion              `json:"draft"`
+	Policy         PolicyResult              `json:"policy"`
+	Replay         ReplayResult              `json:"replay"`
 
 	// Verification Message-local cryptographic evidence; replay may change the final authentication state.
 	Verification VerificationResult `json:"verification"`

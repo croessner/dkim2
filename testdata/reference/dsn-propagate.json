@@ -1,0 +1,361 @@
+{
+  "schema": "dkim2.dsn-propagate-fixture.v1",
+  "draft": "draft-ietf-dkim-dkim2-spec-06",
+  "expectation": "valid",
+  "cases": [
+    {
+      "case": "propagate_request_lmtp_delivered",
+      "schema": "DSNPropagateRequest",
+      "document": {
+        "api_version": "v1",
+        "draft": "draft-ietf-dkim-dkim2-spec-06",
+        "message": {
+          "raw_rfc5322_base64": "Q29udGVudC1UeXBlOiBtdWx0aXBhcnQvcmVwb3J0OyByZXBvcnQtdHlwZT1kZWxpdmVyeS1zdGF0dXMNCg0K",
+          "fidelity": "lmtp_delivered_crlf"
+        },
+        "outer_smtp": {
+          "mail_from": "<>",
+          "rcpt_to": [
+            "<return.path@example.com>"
+          ],
+          "smtputf8": false
+        },
+        "context": {
+          "tenant": "example",
+          "reporting_mta": "mta.example.com"
+        }
+      }
+    },
+    {
+      "case": "propagate_request_raw_fidelity",
+      "schema": "DSNPropagateRequest",
+      "document": {
+        "api_version": "v1",
+        "draft": "draft-ietf-dkim-dkim2-spec-06",
+        "message": {
+          "raw_rfc5322_base64": "Q29udGVudC1UeXBlOiBtdWx0aXBhcnQvcmVwb3J0OyByZXBvcnQtdHlwZT1kZWxpdmVyeS1zdGF0dXMNCg0K",
+          "fidelity": "raw_rfc5322"
+        },
+        "outer_smtp": {
+          "mail_from": "<>",
+          "rcpt_to": [
+            "<return.path@example.com>"
+          ],
+          "smtputf8": false
+        },
+        "context": {
+          "tenant": "example",
+          "reporting_mta": "mta.example.com"
+        }
+      }
+    },
+    {
+      "case": "propagate_response_accept",
+      "schema": "DSNPropagateResponse",
+      "document": {
+        "api_version": "v1",
+        "draft": "draft-ietf-dkim-dkim2-spec-06",
+        "operation": "delivery_status_propagation",
+        "result": "pass",
+        "disposition": "accept",
+        "delivery_status": {
+          "structure": "valid",
+          "embedded": "verified",
+          "local_hop": "local",
+          "outer_alignment": "aligned",
+          "recipient_linkage": "linked",
+          "propagation": "eligible"
+        },
+        "replay": {
+          "class": "first_seen"
+        },
+        "propagation": {
+          "next_hop_recipient": "<previous.hop@example.net>",
+          "smtputf8_required": false,
+          "eight_bit_mime_required": false,
+          "commit_token": "Q29tbWl0VG9rZW5FeGFtcGxlMDAx",
+          "raw_rfc5322_base64": "REtJTTItU2lnbmF0dXJlOiBpPTE7IGQ9ZXhhbXBsZS5jb20NCg0K"
+        }
+      }
+    },
+    {
+      "case": "propagate_response_committed_discard",
+      "schema": "DSNPropagateResponse",
+      "document": {
+        "api_version": "v1",
+        "draft": "draft-ietf-dkim-dkim2-spec-06",
+        "operation": "delivery_status_propagation",
+        "result": "pass",
+        "disposition": "discard",
+        "delivery_status": {
+          "structure": "valid",
+          "embedded": "verified",
+          "local_hop": "local",
+          "outer_alignment": "aligned",
+          "recipient_linkage": "linked",
+          "propagation": "eligible"
+        },
+        "replay": {
+          "class": "replayed"
+        }
+      }
+    },
+    {
+      "case": "propagate_response_permerror_discard",
+      "schema": "DSNPropagateResponse",
+      "document": {
+        "api_version": "v1",
+        "draft": "draft-ietf-dkim-dkim2-spec-06",
+        "operation": "delivery_status_propagation",
+        "result": "permerror",
+        "disposition": "discard",
+        "delivery_status": {
+          "structure": "valid",
+          "embedded": "verified",
+          "local_hop": "local",
+          "outer_alignment": "aligned",
+          "recipient_linkage": "linked",
+          "propagation": "not_reconstructable"
+        },
+        "replay": {
+          "class": "first_seen"
+        },
+        "propagation_failure": "not_reconstructable"
+      }
+    },
+    {
+      "case": "propagate_response_unprovisioned_domain",
+      "schema": "DSNPropagateResponse",
+      "document": {
+        "api_version": "v1",
+        "draft": "draft-ietf-dkim-dkim2-spec-06",
+        "operation": "delivery_status_propagation",
+        "result": "permerror",
+        "disposition": "discard",
+        "delivery_status": {
+          "structure": "valid",
+          "embedded": "verified",
+          "local_hop": "local",
+          "outer_alignment": "aligned",
+          "recipient_linkage": "linked",
+          "propagation": "eligible"
+        },
+        "replay": {
+          "class": "first_seen"
+        },
+        "propagation_failure": "unprovisioned_domain"
+      }
+    },
+    {
+      "case": "propagate_response_fail_reject",
+      "schema": "DSNPropagateResponse",
+      "document": {
+        "api_version": "v1",
+        "draft": "draft-ietf-dkim-dkim2-spec-06",
+        "operation": "delivery_status_propagation",
+        "result": "fail",
+        "disposition": "reject",
+        "delivery_status": {
+          "structure": "valid",
+          "embedded": "verified",
+          "local_hop": "not_local",
+          "outer_alignment": "not_evaluated",
+          "recipient_linkage": "not_evaluated",
+          "propagation": "not_evaluated"
+        },
+        "replay": {
+          "class": "first_seen"
+        }
+      }
+    },
+    {
+      "case": "propagate_response_temperror_tempfail",
+      "schema": "DSNPropagateResponse",
+      "document": {
+        "api_version": "v1",
+        "draft": "draft-ietf-dkim-dkim2-spec-06",
+        "operation": "delivery_status_propagation",
+        "result": "temperror",
+        "disposition": "tempfail",
+        "delivery_status": {
+          "structure": "valid",
+          "embedded": "temperror",
+          "local_hop": "not_evaluated",
+          "outer_alignment": "not_evaluated",
+          "recipient_linkage": "not_evaluated",
+          "propagation": "not_evaluated"
+        },
+        "replay": {
+          "class": "not_checked"
+        }
+      }
+    },
+    {
+      "case": "propagate_response_not_applicable_reject",
+      "schema": "DSNPropagateResponse",
+      "document": {
+        "api_version": "v1",
+        "draft": "draft-ietf-dkim-dkim2-spec-06",
+        "operation": "delivery_status_propagation",
+        "result": "fail",
+        "disposition": "reject",
+        "replay": {
+          "class": "not_checked"
+        }
+      }
+    },
+    {
+      "case": "propagate_response_unassessed_tempfail",
+      "schema": "DSNPropagateResponse",
+      "document": {
+        "api_version": "v1",
+        "draft": "draft-ietf-dkim-dkim2-spec-06",
+        "operation": "delivery_status_propagation",
+        "result": "temperror",
+        "disposition": "tempfail",
+        "replay": {
+          "class": "not_checked"
+        }
+      }
+    },
+    {
+      "case": "propagate_response_smtputf8_and_eight_bit",
+      "schema": "DSNPropagateResponse",
+      "document": {
+        "api_version": "v1",
+        "draft": "draft-ietf-dkim-dkim2-spec-06",
+        "operation": "delivery_status_propagation",
+        "result": "pass",
+        "disposition": "accept",
+        "delivery_status": {
+          "structure": "valid",
+          "embedded": "verified",
+          "local_hop": "local",
+          "outer_alignment": "aligned",
+          "recipient_linkage": "linked",
+          "propagation": "eligible"
+        },
+        "replay": {
+          "class": "first_seen"
+        },
+        "propagation": {
+          "next_hop_recipient": "<previous.hop@example.net>",
+          "smtputf8_required": true,
+          "eight_bit_mime_required": true,
+          "commit_token": "Q29tbWl0VG9rZW5FeGFtcGxlMDAx",
+          "raw_rfc5322_base64": "REtJTTItU2lnbmF0dXJlOiBpPTE7IGQ9ZXhhbXBsZS5jb20NCg0K"
+        }
+      }
+    },
+    {
+      "case": "commit_request",
+      "schema": "DSNPropagateCommitRequest",
+      "document": {
+        "api_version": "v1",
+        "draft": "draft-ietf-dkim-dkim2-spec-06",
+        "commit_token": "Q29tbWl0VG9rZW5FeGFtcGxlMDAx"
+      }
+    },
+    {
+      "case": "commit_response",
+      "schema": "DSNPropagateCommitResponse",
+      "document": {
+        "api_version": "v1",
+        "draft": "draft-ietf-dkim-dkim2-spec-06",
+        "state": "committed"
+      }
+    },
+    {
+      "case": "process_request_with_tenant",
+      "schema": "ProcessRequest",
+      "document": {
+        "api_version": "v1",
+        "draft": "draft-ietf-dkim-dkim2-spec-06",
+        "message": {
+          "raw_rfc5322_base64": "Q29udGVudC1UeXBlOiBtdWx0aXBhcnQvcmVwb3J0OyByZXBvcnQtdHlwZT1kZWxpdmVyeS1zdGF0dXMNCg0K",
+          "fidelity": "lmtp_delivered_crlf"
+        },
+        "smtp": {
+          "mail_from": "<>",
+          "rcpt_to": [
+            "<return.path@example.com>"
+          ]
+        },
+        "context": {
+          "tenant": "example"
+        }
+      }
+    },
+    {
+      "case": "process_response_with_delivery_status",
+      "schema": "ProcessResponse",
+      "document": {
+        "api_version": "v1",
+        "draft": "draft-ietf-dkim-dkim2-spec-06",
+        "verification": {
+          "state": "PASS",
+          "primary_reason": "none",
+          "scope": "chain",
+          "historical_content": "complete",
+          "historical_signatures": "complete",
+          "custody_structure": "not_present",
+          "checks": [
+            {
+              "class": "signature",
+              "reason": "none"
+            }
+          ],
+          "signature_sets": []
+        },
+        "authentication": {
+          "state": "PASS",
+          "primary_reason": "none"
+        },
+        "policy": {
+          "mode": "strict",
+          "verdict": "accept",
+          "primary_reason": "received_dsn_linked",
+          "do_not_modify": "not_requested",
+          "do_not_explode": "not_requested",
+          "dns_testing_effective": false,
+          "feedback": {
+            "requested": false,
+            "relay_required": false,
+            "history_coverage": "complete"
+          },
+          "findings": [
+            {
+              "reason": "received_dsn_linked",
+              "severity": "info"
+            }
+          ]
+        },
+        "replay": {
+          "class": "first_seen"
+        },
+        "disposition": "accept",
+        "actions": [],
+        "delivery_status": {
+          "structure": "valid",
+          "embedded": "verified",
+          "local_hop": "local",
+          "outer_alignment": "aligned",
+          "recipient_linkage": "linked",
+          "propagation": "eligible"
+        }
+      }
+    },
+    {
+      "case": "delivery_status_projection_not_evaluated",
+      "schema": "DeliveryStatusProjection",
+      "document": {
+        "structure": "valid",
+        "embedded": "absent",
+        "local_hop": "not_evaluated",
+        "outer_alignment": "not_evaluated",
+        "recipient_linkage": "not_evaluated",
+        "propagation": "not_applicable"
+      }
+    }
+  ]
+}

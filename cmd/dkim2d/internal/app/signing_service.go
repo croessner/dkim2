@@ -19,7 +19,7 @@ const signingRouteScope = "dkim2d-local-signing"
 // route, authorization, verification, and private signing.
 type SigningService struct {
 	publicKeys  dkim2.PublicKeyProvider
-	store       signingAuthority
+	store       SigningAuthority
 	policies    signingPolicies
 	clock       func() time.Time
 	dsnObserver dsnEvidenceObserver
@@ -82,11 +82,16 @@ func (s *SigningService) attachObservability(runtime dsnEvidenceObserver) {
 	}
 }
 
-type signingAuthority interface {
-	Acquire(context.Context) (signingLease, error)
+// SigningAuthority pins one provider-neutral signing generation per
+// operation. Flat-file and datasource providers satisfy the same contract so
+// that no protocol package sees a provider model.
+type SigningAuthority interface {
+	Acquire(context.Context) (SigningLease, error)
 }
 
-type signingLease interface {
+// SigningLease is one acquired signing generation: policy resolution, local
+// authority probing, and private-key signing over provider-owned handles.
+type SigningLease interface {
 	ResolvePolicy(
 		context.Context,
 		string,
@@ -94,6 +99,12 @@ type signingLease interface {
 		signingstore.PolicyUse,
 		time.Time,
 	) (dkim2.SigningProfile, error)
+	// ResolveAnyProfile reports local authority over one canonical domain.
+	// It returns nil when the tenant holds an active signing profile of any
+	// use for the domain, a permanent provider error when it holds none, and
+	// a temporary provider error when the answer is unavailable. Each
+	// provider owns its own complete profile-use inventory.
+	ResolveAnyProfile(context.Context, string, string, time.Time) error
 	dkim2.PrivateKeySigner
 	Close() error
 }
@@ -153,7 +164,7 @@ func NewDatasourceSigningService(
 }
 
 // Acquire pins one flat-file signing generation.
-func (a flatSigningAuthority) Acquire(ctx context.Context) (signingLease, error) {
+func (a flatSigningAuthority) Acquire(ctx context.Context) (SigningLease, error) {
 	if a.runtime == nil || ctx == nil {
 		return nil, &DomainError{}
 	}
@@ -164,7 +175,7 @@ func (a flatSigningAuthority) Acquire(ctx context.Context) (signingLease, error)
 }
 
 // Acquire pins one joined datasource and signer-registry generation.
-func (a datasourceSigningAuthority) Acquire(ctx context.Context) (signingLease, error) {
+func (a datasourceSigningAuthority) Acquire(ctx context.Context) (SigningLease, error) {
 	if a.runtime == nil || ctx == nil {
 		return nil, &DomainError{}
 	}
@@ -194,6 +205,43 @@ func (l datasourceSigningLease) ResolvePolicy(
 		profileUse = provider.ProfileUseDeliveryStatus
 	}
 	return l.lease.ResolvePolicy(ctx, tenant, domain, profileUse, at)
+}
+
+// ResolveAnyProfile reports local authority over one canonical domain by
+// probing the datasource's complete profile-use inventory in canonical order.
+// It returns nil as soon as one use resolves, the last permanent failure when
+// no use resolves, and the first temporary failure unchanged, so that a
+// datasource outage never degrades into an authoritative absence.
+func (l datasourceSigningLease) ResolveAnyProfile(
+	ctx context.Context,
+	tenant string,
+	domain string,
+	at time.Time,
+) error {
+	if l.lease == nil {
+		return &DomainError{}
+	}
+	uses := []provider.ProfileUse{
+		provider.ProfileUseOriginator,
+		provider.ProfileUseOrdinaryTransit,
+		provider.ProfileUseNextDomainTransit,
+		provider.ProfileUseDeliveryStatus,
+	}
+	var permanent error
+	for _, use := range uses {
+		_, err := l.lease.ResolvePolicy(ctx, tenant, domain, use, at)
+		if err == nil {
+			return nil
+		}
+		if !signingstore.PermanentProfileAbsence(err) {
+			return err
+		}
+		permanent = err
+	}
+	if permanent == nil {
+		return &DomainError{}
+	}
+	return permanent
 }
 
 // SignDigest delegates to the joined private registry generation.
@@ -375,22 +423,8 @@ func absentSigningPolicy(err error) (absent bool) {
 
 // permanentPolicyResolutionFailure recognizes malformed active configuration
 // and explicit permanent signing failures; every ambiguous class remains retryable.
-func permanentPolicyResolutionFailure(err error) (permanent bool) {
-	defer func() {
-		if recover() != nil {
-			permanent = false
-		}
-	}()
-	if _, granular := err.(interface{ Code() provider.ErrorCode }); granular {
-		switch provider.ErrorCodeOf(err) {
-		case provider.ErrorCodeInvalidRequest, provider.ErrorCodeNotFound,
-			provider.ErrorCodeInactive, provider.ErrorCodeMalformedData:
-			return true
-		default:
-			return false
-		}
-	}
-	return dkim2.ProviderErrorClassOf(err) == dkim2.ProviderErrorClassPermanent
+func permanentPolicyResolutionFailure(err error) bool {
+	return signingstore.PermanentProfileAbsence(err)
 }
 
 // completeOperation verifies revision evidence, plans one request-local route,

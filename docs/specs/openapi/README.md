@@ -2,11 +2,13 @@
 
 `dkim2d.yaml` is the authoritative REST contract for the daemon. The current
 contract exposes metrics, liveness, readiness, inbound verification/policy/replay
-processing, originator signing, ordinary-transit revision, and authenticated
-outgoing delivery-status signing. Each authenticated route uses a distinct
+processing, originator signing, ordinary-transit revision, authenticated
+outgoing delivery-status signing, and received delivery-status propagation with
+its two-phase commit. Each authenticated route uses a distinct
 generation-bound local capability in the implementation. Process, originator
 signing, and revision share the contract's `X-DKIM2-Capability` header shape;
-delivery-status signing uses `X-DKIM2-DSN-Sign-Capability`.
+delivery-status signing uses `X-DKIM2-DSN-Sign-Capability`, and delivery-status
+propagation uses `X-DKIM2-DSN-Propagate-Capability`.
 Adapter-specific message fidelity values describe how message bytes were obtained;
 they do not create adapter-specific routes or parallel DTOs.
 
@@ -55,10 +57,38 @@ policy and signing profile. It uses the same 200/204 applicability distinction
 as originator signing; malformed or unauthenticated delivery status reports are
 explicit failures, not 204 results.
 
+The delivery-status propagation operations rebuild and sign a notification
+addressed to the previous hop of a forwarded message, and then commit the
+replay coordinate the first operation reserved. They own contract elements that
+the other routes do not share. The envelope schema of the propagation route
+admits exactly one forward path and records the observed SMTPUTF8 parameter,
+because a notification is delivered to exactly one local return-path address.
+The propagation disposition is a distinct closed vocabulary with `discard`,
+under its own coherence rule: `pass` permits `accept` or `discard`, `permerror`
+requires `discard`, `fail` requires `reject`, and `temperror` requires
+`tempfail`. The shared disposition, operation response, and envelope schemas are
+unchanged, so existing generated clients keep their shape. The commit operation
+answers `409` for a token that does not resolve to a reserved coordinate, so a
+caller defers instead of leaving a coordinate uncommitted. The received
+delivery-status projection is also reported by the process route, which gains an
+optional tenant context because locality is tenant-keyed.
+
+The Milter and Exim configurations exclude both propagation operations. Those
+adapters observe inbound mail and must not hold or exercise the propagation
+route; the generated propagation client belongs to the adapter that owns
+delivery-status propagation.
+
+`testdata/reference/dsn-propagate.json` and
+`testdata/reference/dsn-propagate-negative.json` are the published reference
+documents for these operations. `tools/openapi_contract_test.go` validates every
+admitted document against the named component schema and proves that every
+recorded violation is refused.
+
 The target-specific overlays change only the Go bindings for the protected raw
-message, reverse path, and forward paths. Each generated package uses its own
-opaque `wire.ProtectedString`; generated DTOs are never shared with or imported
-by the protocol library.
+message, reverse path, forward paths, next-hop forward path, signed notification
+bytes, and propagation commit token. Each generated package uses its own opaque
+`wire.ProtectedString`; generated DTOs are never shared with or imported by the
+protocol library.
 
 Generated server and client code, generated protected-wire wrappers, and their
 generation guards are committed. `make check-openapi` must regenerate into a

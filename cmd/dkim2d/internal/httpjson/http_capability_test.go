@@ -134,3 +134,51 @@ func boolInt(value bool) int {
 	}
 	return 0
 }
+
+// TestAuthenticateOperationCapabilityIsolatesPropagationInBothDirections
+// proves the propagation routes accept only their own credential field and
+// that the propagation credential field is refused on every other route.
+func TestAuthenticateOperationCapabilityIsolatesPropagationInBothDirections(t *testing.T) {
+	t.Parallel()
+	secret := bytes.Repeat([]byte{0xa5}, 32)
+	canonical := base64.RawURLEncoding.EncodeToString(secret)
+	for _, testCase := range []struct {
+		name   string
+		path   string
+		header string
+		ok     bool
+	}{
+		{name: "propagate dedicated header", path: dsnPropagatePath, header: dsnPropagateCapabilityHeader, ok: true},
+		{name: "commit dedicated header", path: dsnPropagateCommitPath, header: dsnPropagateCapabilityHeader, ok: true},
+		{name: "propagate missing header", path: dsnPropagatePath},
+		{name: "propagate with process header", path: dsnPropagatePath, header: localCapabilityHeader},
+		{name: "propagate with dsn sign header", path: dsnPropagatePath, header: dsnSignCapabilityHeader},
+		{name: "commit with process header", path: dsnPropagateCommitPath, header: localCapabilityHeader},
+		{name: "commit with dsn sign header", path: dsnPropagateCommitPath, header: dsnSignCapabilityHeader},
+		{name: "propagation header on process route", path: processPath, header: dsnPropagateCapabilityHeader},
+		{name: "propagation header on sign route", path: signPath, header: dsnPropagateCapabilityHeader},
+		{name: "propagation header on revise route", path: revisePath, header: dsnPropagateCapabilityHeader},
+		{name: "propagation header on dsn sign route", path: dsnSignPath, header: dsnPropagateCapabilityHeader},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+			request := httptest.NewRequest(http.MethodPost, testCase.path, nil)
+			if testCase.header != "" {
+				request.Header.Set(testCase.header, canonical)
+			}
+			matcher := &testCapabilityMatcher{value: secret}
+			result, ok := authenticateOperationCapability(request, matcher)
+			if ok != testCase.ok || matcher.calls != boolInt(testCase.ok) {
+				t.Fatalf("authenticateOperationCapability() = (%v, calls %d), want (%v, %d)",
+					ok, matcher.calls, testCase.ok, boolInt(testCase.ok))
+			}
+			for _, header := range []string{
+				localCapabilityHeader, dsnSignCapabilityHeader, dsnPropagateCapabilityHeader,
+			} {
+				if len(result.Header.Values(header)) != 0 {
+					t.Fatalf("credential field %s survived preflight", header)
+				}
+			}
+		})
+	}
+}

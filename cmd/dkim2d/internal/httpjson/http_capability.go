@@ -9,6 +9,10 @@ import (
 const (
 	localCapabilityHeader   = "X-DKIM2-Capability"
 	dsnSignCapabilityHeader = "X-DKIM2-DSN-Sign-Capability"
+	// dsnPropagateCapabilityHeader carries the credential of the propagation
+	// and propagation-commit routes only. It is distinct from every other
+	// route credential in both directions.
+	dsnPropagateCapabilityHeader = "X-DKIM2-DSN-Propagate-Capability"
 )
 
 type localCapabilityMarker struct{}
@@ -38,6 +42,7 @@ func authenticateCapability(
 	values := request.Header.Values(header)
 	request.Header.Del(localCapabilityHeader)
 	request.Header.Del(dsnSignCapabilityHeader)
+	request.Header.Del(dsnPropagateCapabilityHeader)
 	if nilInterfaceValue(matcher) || len(values) != 1 || len(values[0]) != 43 {
 		return request, false
 	}

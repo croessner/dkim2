@@ -54,6 +54,13 @@ const (
 	valueRevise        = "revise"
 	valueSign          = "sign"
 	valueDSNSign       = "dsn_sign"
+	valuePropagation   = "delivery_status_propagation"
+	valueAccept        = "accept"
+	valueReject        = "reject"
+	valueTempfail      = "tempfail"
+	valuePermanent     = "permanent"
+	valueReplay        = "replay"
+	keyStage           = "stage"
 	valueExport        = "export"
 	valueFirstSeen     = "first_seen"
 	valueOverflow      = "overflow"
@@ -86,17 +93,37 @@ var allowedLogKeys = []string{
 	"lifecycle_state", "message_size_bucket", keyMethod, keyOperation,
 	keyPolicyMode, keyProvider, keyProviderState, keyReady, keyReasonClass, "recipient_count_bucket",
 	keyReplayState, "replay_store_result", keyResult, "route",
-	"signature_count_bucket", keyStatusClass, "tracing_exporter", keyVerdict,
+	"signature_count_bucket", keyStage, keyStatusClass, "tracing_exporter", keyVerdict,
 }
+
+// receivedDSNStages is the closed stage vocabulary of dsn.received.completed
+// and dkim2d_dsn_received_total.
+var receivedDSNStages = []string{
+	"structure", "embedded_verification", "local_hop", "outer_alignment",
+	"recipient_linkage", "failure_class", "previous_hop", "completed",
+}
+
+// receivedDSNResults is the closed result vocabulary of dsn.received.completed.
+var receivedDSNResults = []string{"ok", valuePermanent, valueTemporary}
+
+// propagationStages is the closed stage vocabulary of dsn.propagation.completed
+// and dkim2d_dsn_propagation_total.
+var propagationStages = []string{
+	"evaluation", valueReplay, "rebuild", "previous_hop_verification",
+	"signing_domain", valuePolicy, "signing", "completed",
+}
+
+// propagationResults is the closed result vocabulary of dsn.propagation.completed.
+var propagationResults = []string{valueAccept, valueReject, "discard", valueTempfail}
 
 var allowedLogValues = map[string][]string{
 	keyCacheResult: {valueHit, valueMiss, valueNotUsed},
-	"debug_module": {"message_shape", "dns", "replay"},
-	keyDisposition: {"accept", "continue", "reject", "tempfail"},
+	"debug_module": {"message_shape", "dns", valueReplay},
+	keyDisposition: {valueAccept, "continue", valueReject, valueTempfail},
 	keyDNSResult:   {valueFound, "missing", valueInvalid, "ambiguous", valueTemporary, valueInternal},
 	"draft":        {"draft-ietf-dkim-dkim2-spec-06"},
 	"error_class":  {valueNone, "canceled", "deadline", valueTimeout, valueTransport, "tls", "encoding", "shutdown", valueInternal},
-	keyEventID:     {"config.accepted", "lifecycle.transition", "readiness.transition", "http.request.completed", "process.completed", "dsn.evidence.completed", "dns.lookup.completed", "replay.coordinate.completed", "datasource.operation.completed", "telemetry.export.failed"},
+	keyEventID:     {"config.accepted", "lifecycle.transition", "readiness.transition", "http.request.completed", "process.completed", "dsn.evidence.completed", "dsn.received.completed", "dsn.propagation.completed", "dns.lookup.completed", "replay.coordinate.completed", "datasource.operation.completed", "telemetry.export.failed"},
 	keyEvidenceStage: {
 		string(dkim2.DSNEvidenceStagePreflight), string(dkim2.DSNEvidenceStageMIMEParse),
 		string(dkim2.DSNEvidenceStageEmbeddedMessage), string(dkim2.DSNEvidenceStageEmbeddedVerification),
@@ -106,15 +133,16 @@ var allowedLogValues = map[string][]string{
 	},
 	"lifecycle_state":        {"starting", "active", "stopping", "stopped", "failed"},
 	keyMethod:                {"GET", "HEAD", "POST", "OPTIONS", "other"},
-	keyOperation:             {"config", "lifecycle", "readiness", "health", "metrics", valueProcess, valueSign, valueRevise, valueDSNSign, "verify", "dns_lookup", valuePolicy, "replay_coordinate", "replay_store", "datasource_initial_load", "datasource_refresh", "datasource_resolve", "telemetry_export", valueUnmatched},
+	keyOperation:             {"config", "lifecycle", "readiness", "health", "metrics", valueProcess, valueSign, valueRevise, valueDSNSign, valuePropagation, "verify", "dns_lookup", valuePolicy, "replay_coordinate", "replay_store", "datasource_initial_load", "datasource_refresh", "datasource_resolve", "telemetry_export", valueUnmatched},
 	keyPolicyMode:            {valueStrict, valuePermissive, valueTesting},
 	keyProvider:              {"flat_file", "memory", "ldap", "postgresql", "mysql"},
 	keyProviderState:         {"initializing", "ready", "degraded", "closed"},
 	keyReasonClass:           {valueNone, valueProtocol, valuePolicy, valueAvailability, "invalid_request", keyMethod, valueInternal},
 	keyReplayState:           {valueNotChecked, valueDisabled, valueFirstSeen, valueReplayed, valueIndeterminate},
 	"replay_store_result":    {"not_used", valueSuccess, valueTemporary, valueInternal},
-	keyResult:                {valueSuccess, valueFailure, valueTemporary, valueInternal},
-	"route":                  {"/healthz", "/readyz", "/metrics", "/v1/process", "/v1/sign", "/v1/revise", "/v1/dsn/sign", valueUnmatched},
+	keyResult:                {valueSuccess, valueFailure, valueTemporary, valueInternal, "ok", valuePermanent, valueAccept, valueReject, "discard", valueTempfail},
+	"route":                  {"/healthz", "/readyz", "/metrics", "/v1/process", "/v1/sign", "/v1/revise", "/v1/dsn/sign", "/v1/dsn/propagate", "/v1/dsn/propagate/commit", valueUnmatched},
+	keyStage:                 closedStageUnion(),
 	keyStatusClass:           {valueStatus2XX, valueStatus3XX, valueStatus4XX, valueStatus5XX},
 	"tracing_exporter":       {valueNone, "otlp_http"},
 	keyVerdict:               {valuePass, valueFail, valueNeutral, valueTemperror, valuePermerror},
@@ -123,6 +151,18 @@ var allowedLogValues = map[string][]string{
 	"recipient_count_bucket": {"0", "1", "2_10", "11_100", "101_1000", "gte_1001"},
 	"signature_count_bucket": {"0", "1", "2_4", "5_8", valueGTE9},
 	"chain_length_bucket":    {"0", "1", "2_4", "5_8", valueGTE9},
+}
+
+// closedStageUnion returns the union of both closed DSN stage vocabularies
+// for log attribute admission; each event still emits only its own subset.
+func closedStageUnion() []string {
+	union := append([]string(nil), receivedDSNStages...)
+	for _, stage := range propagationStages {
+		if !slices.Contains(union, stage) {
+			union = append(union, stage)
+		}
+	}
+	return union
 }
 
 // Logger owns one central slog logger and its exact debug policy.
@@ -181,7 +221,7 @@ func (l *Logger) DebugEnabled(module string) bool {
 		return l.messageShape
 	case "dns":
 		return l.dns
-	case "replay":
+	case valueReplay:
 		return l.replay
 	default:
 		return false

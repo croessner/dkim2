@@ -267,19 +267,22 @@ for reference in \
   grep -Fq "$reference" "$guide"
 done
 
-test "$(sed -n 's|^  \(/[^:]*\):$|\1|p' "$openapi" | wc -l | tr -d ' ')" -eq 7
-for route in /metrics /healthz /readyz /v1/process /v1/sign /v1/revise /v1/dsn/sign; do
+test "$(sed -n 's|^  \(/[^:]*\):$|\1|p' "$openapi" | wc -l | tr -d ' ')" -eq 9
+for route in /metrics /healthz /readyz /v1/process /v1/sign /v1/revise /v1/dsn/sign \
+  /v1/dsn/propagate /v1/dsn/propagate/commit; do
   grep -Fq "  $route:" "$openapi"
   grep -Fq "\`$route\`" "$daemon"
 done
-for operation in processMessage signMessage reviseMessage signDeliveryStatus; do
+for operation in processMessage signMessage reviseMessage signDeliveryStatus \
+  propagateDeliveryStatus commitDeliveryStatusPropagation; do
   grep -Fq "operationId: $operation" "$openapi"
 done
 for capability in \
   capability_file \
   sign_capability_file \
   revise_capability_file \
-  dsn_sign_capability_file; do
+  dsn_sign_capability_file \
+  dsn_propagate_capability_file; do
   grep -Fq "$capability" "$daemon"
 done
 for flag in \

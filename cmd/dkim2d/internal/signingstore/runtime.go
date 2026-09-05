@@ -305,6 +305,45 @@ func (l *Lease) ResolvePolicy(
 	return generation.ResolvePolicy(ctx, tenant, domain, use, at)
 }
 
+// ResolveAnyProfile reports local authority over one canonical domain by
+// probing the flat-file store's profile-use inventory. It stops at the first
+// use that resolves, returns the last permanent failure when no use resolves,
+// and returns the first temporary failure unchanged, so that a store outage
+// never degrades into an authoritative absence. The probe order is by
+// expected hit likelihood for the received-DSN lookups that dominate this
+// call, so a local domain usually costs one read; a foreign domain always
+// costs one read per use, currently three, before it is answered not_local,
+// which is why the caller serves repeated foreign domains from a bounded
+// negative cache.
+func (l *Lease) ResolveAnyProfile(
+	ctx context.Context,
+	tenant string,
+	domain string,
+	at time.Time,
+) error {
+	generation, err := l.generation()
+	if err != nil {
+		return err
+	}
+	var permanent error
+	for _, use := range []PolicyUse{
+		PolicyOrdinaryTransit, PolicyDeliveryStatus, PolicyOriginator,
+	} {
+		_, resolveErr := generation.ResolvePolicy(ctx, tenant, domain, use, at)
+		if resolveErr == nil {
+			return nil
+		}
+		if !PermanentProfileAbsence(resolveErr) {
+			return resolveErr
+		}
+		permanent = resolveErr
+	}
+	if permanent == nil {
+		return &Error{}
+	}
+	return permanent
+}
+
 // SignDigest delegates to the same pinned generation as policy resolution.
 func (l *Lease) SignDigest(
 	ctx context.Context,

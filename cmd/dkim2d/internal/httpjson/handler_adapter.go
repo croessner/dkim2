@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/croessner/dkim2"
 	"github.com/croessner/dkim2/cmd/dkim2d/internal/app"
 	"github.com/croessner/dkim2/cmd/dkim2d/internal/httpjson/generated"
 	"github.com/croessner/dkim2/cmd/dkim2d/internal/observability"
@@ -45,15 +44,16 @@ type readinessSource interface {
 
 // inboundProcessService is the immutable app processing seam.
 type inboundProcessService interface {
-	Process(context.Context, dkim2.VerifyRequest) (app.InboundResult, error)
+	ProcessInbound(context.Context, app.InboundRequest) (app.InboundResult, error)
 }
 
 // strictAdapter maps generated operation objects to immutable app services.
 type strictAdapter struct {
-	readiness  readinessSource
-	processor  inboundProcessService
-	operations app.OperationService
-	metrics    *observability.Metrics
+	readiness   readinessSource
+	processor   inboundProcessService
+	operations  app.OperationService
+	propagation app.PropagationService
+	metrics     *observability.Metrics
 }
 
 // newStrictAdapter constructs one generated strict-server implementation.
@@ -67,6 +67,7 @@ func newStrictAdapter(
 	}
 	var metrics *observability.Metrics
 	var operations app.OperationService
+	var propagation app.PropagationService
 	for _, dependency := range dependencies {
 		switch typed := dependency.(type) {
 		case *observability.Metrics:
@@ -79,6 +80,11 @@ func newStrictAdapter(
 				return nil, &strictAdapterError{class: strictFailureInternal}
 			}
 			operations = typed
+		case app.PropagationService:
+			if propagation != nil || nilInterfaceValue(typed) {
+				return nil, &strictAdapterError{class: strictFailureInternal}
+			}
+			propagation = typed
 		default:
 			return nil, &strictAdapterError{class: strictFailureInternal}
 		}
@@ -94,7 +100,8 @@ func newStrictAdapter(
 		return nil, &strictAdapterError{class: strictFailureInternal}
 	}
 	return &strictAdapter{
-		readiness: readiness, processor: processor, operations: operations, metrics: metrics,
+		readiness: readiness, processor: processor, operations: operations,
+		propagation: propagation, metrics: metrics,
 	}, nil
 }
 
@@ -207,7 +214,7 @@ func (a *strictAdapter) ProcessMessage(
 	if err := ledger.BeginVerifyRequest(); err != nil {
 		return nil, &strictAdapterError{class: strictFailureInternal}
 	}
-	verifyRequest, err := domainRequest.VerifyRequest()
+	inboundRequest, err := domainRequest.InboundRequest()
 	if err != nil {
 		return nil, &strictAdapterError{class: strictFailureInternal}
 	}
@@ -220,7 +227,7 @@ func (a *strictAdapter) ProcessMessage(
 	if ctx != nil && ctx.Err() != nil {
 		return nil, classifyStrictContextFailure(ctx)
 	}
-	result, err := a.processor.Process(ctx, verifyRequest)
+	result, err := a.processor.ProcessInbound(ctx, inboundRequest)
 	if err != nil {
 		return nil, classifyStrictContextFailure(ctx)
 	}
@@ -348,6 +355,82 @@ func (a *strictAdapter) SignDeliveryStatus(
 		return nil, err
 	}
 	return operationDeliveryStatusResponse{wire}, nil
+}
+
+// PropagateDeliveryStatus maps and executes one generated propagation
+// operation. The route is served only when the daemon composed a propagation
+// service; without one the operation is an invalid contract rather than a
+// silently disabled route.
+func (a *strictAdapter) PropagateDeliveryStatus(
+	ctx context.Context,
+	request generated.PropagateDeliveryStatusRequestObject,
+) (generated.PropagateDeliveryStatusResponseObject, error) {
+	if a == nil || nilInterfaceValue(a.propagation) || request.Body == nil {
+		return nil, &strictAdapterError{class: strictFailureInvalidContract}
+	}
+	domainRequest, err := MapPropagationRequest(*request.Body)
+	if err != nil {
+		return nil, classifyMappingFailure(err)
+	}
+	result, err := a.propagation.Propagate(ctx, domainRequest)
+	if err != nil {
+		return nil, classifyStrictContextFailure(ctx)
+	}
+	response, err := MapPropagationResult(result)
+	if err != nil {
+		return nil, &strictAdapterError{class: strictFailureInternal}
+	}
+	date, datePresent := responseDate(ctx)
+	wire, err := newJSONResponse(http.StatusOK, response, false, date, datePresent)
+	if err != nil {
+		return nil, err
+	}
+	return propagationResponse{wire}, nil
+}
+
+// CommitDeliveryStatusPropagation commits one reserved propagation
+// coordinate. A committed or already committed coordinate answers 200; an
+// unknown, malformed, or expired token answers 409 so that the caller defers
+// instead of leaving the coordinate uncommitted.
+func (a *strictAdapter) CommitDeliveryStatusPropagation(
+	ctx context.Context,
+	request generated.CommitDeliveryStatusPropagationRequestObject,
+) (generated.CommitDeliveryStatusPropagationResponseObject, error) {
+	if a == nil || nilInterfaceValue(a.propagation) || request.Body == nil {
+		return nil, &strictAdapterError{class: strictFailureInvalidContract}
+	}
+	token, err := MapPropagationCommitRequest(*request.Body)
+	if err != nil {
+		return nil, classifyMappingFailure(err)
+	}
+	state, err := a.propagation.CommitPropagation(ctx, token)
+	if err != nil {
+		return nil, classifyStrictContextFailure(ctx)
+	}
+	date, datePresent := responseDate(ctx)
+	if state != app.PropagationCommitCommitted {
+		conflict, conflictErr := newErrorResponse(
+			http.StatusConflict,
+			generated.ErrorResponseCodePropagationCommitUnresolved,
+			generated.Request,
+			false,
+			date,
+			datePresent,
+		)
+		if conflictErr != nil {
+			return nil, &strictAdapterError{class: strictFailureInternal}
+		}
+		return propagationCommitResponse{conflict}, nil
+	}
+	response, err := MapPropagationCommitResult(state)
+	if err != nil {
+		return nil, &strictAdapterError{class: strictFailureInternal}
+	}
+	wire, err := newJSONResponse(http.StatusOK, response, false, date, datePresent)
+	if err != nil {
+		return nil, err
+	}
+	return propagationCommitResponse{wire}, nil
 }
 
 // classifyMappingFailure maps one bounded DTO admission failure.

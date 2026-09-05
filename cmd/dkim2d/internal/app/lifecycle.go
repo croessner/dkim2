@@ -205,6 +205,7 @@ type lifecycleStartup struct {
 	revalidatorLive atomic.Bool
 	material        lifecycleMaterial
 	operation       OperationService
+	propagation     PropagationService
 	shutdownLimit   time.Duration
 }
 
@@ -553,6 +554,23 @@ func (l *Lifecycle) assembleApplication(
 			return nil, &LifecycleError{}
 		}
 		operation.attachObservability(startup.telemetry)
+		authorities, err := NewLocalAuthorityRegistry(operation.store, time.Now)
+		if err != nil {
+			return nil, &LifecycleError{}
+		}
+		if err := bindReceivedDSN(processor, verifier, authorities, preparation.Snapshot()); err != nil {
+			return nil, &LifecycleError{}
+		}
+		propagation, err := composePropagation(
+			verifier, operation, authorities, startup.replay, preparation.Snapshot(),
+		)
+		if err != nil {
+			return nil, &LifecycleError{}
+		}
+		if propagation != nil {
+			propagation.attachObservability(startup.telemetry)
+			startup.propagation = propagation
+		}
 		if preparation.Snapshot().Signing().Backend() == config.SigningFlatFile {
 			if startErr := preparation.SigningStore().StartReload(
 				preparation.Snapshot().Signing().ReloadInterval(),
@@ -561,6 +579,15 @@ func (l *Lifecycle) assembleApplication(
 			}
 		}
 		startup.operation = operation
+	}
+	if !preparation.Snapshot().Signing().Enabled() {
+		authorities, err := NewLocalAuthorityRegistry(nil, time.Now)
+		if err != nil {
+			return nil, &LifecycleError{}
+		}
+		if err := bindReceivedDSN(processor, verifier, authorities, preparation.Snapshot()); err != nil {
+			return nil, &LifecycleError{}
+		}
 	}
 	readiness, err := l.state.deps.newReadiness(startup.authority)
 	if err != nil || readiness == nil {
@@ -605,6 +632,7 @@ func (l *Lifecycle) bindTransport(
 		preparation.ReviseCapability(),
 		preparation.DSNSignCapability(),
 	)
+	input = input.withPropagation(startup.propagation, preparation.DSNPropagateCapability())
 	input = input.withObservability(startup.telemetry)
 	if err != nil || lifecycleContextFailed(acquisition) {
 		return nil, &LifecycleError{}
@@ -1762,4 +1790,68 @@ func lifecycleContextFailed(ctx context.Context) (failed bool) {
 		return true
 	}
 	return ctx.Err() != nil
+}
+
+// bindReceivedDSN installs the process route's received-DSN evaluation over
+// the instance verifier, the shared per-tenant authority registry, and the
+// configured default tenant. A verifier without the evaluation seam leaves
+// the process route exactly as it was.
+func bindReceivedDSN(
+	processor *InboundProcessor,
+	verifier VerificationService,
+	authorities *LocalAuthorityRegistry,
+	snapshot config.Snapshot,
+) error {
+	evaluator, ok := verifier.(ReceivedDSNEvaluator)
+	if !ok || nilInterface(evaluator) || processor == nil || processor.domain == nil {
+		return nil
+	}
+	binding, err := NewReceivedDSNBinding(
+		evaluator, authorities, snapshot.ProcessDefaultTenant(),
+	)
+	if err != nil {
+		return err
+	}
+	return processor.domain.BindReceivedDSN(binding)
+}
+
+// composePropagation constructs the propagation service when the propagation
+// capability is configured. It needs the signing generation for local
+// authority and delivery-status profiles, the verifier's evaluation seam, and
+// a replay backend that holds the two-phase propagation contract; every
+// missing prerequisite refuses startup instead of serving a route that
+// cannot fail closed.
+func composePropagation(
+	verifier VerificationService,
+	operation *SigningService,
+	authorities *LocalAuthorityRegistry,
+	replay lifecycleReplay,
+	snapshot config.Snapshot,
+) (*PropagationCoordinator, error) {
+	if !snapshot.Server().DSNPropagateEnabled() {
+		return nil, nil
+	}
+	evaluator, ok := verifier.(ReceivedDSNEvaluator)
+	if !ok || nilInterface(evaluator) || operation == nil {
+		return nil, &LifecycleError{}
+	}
+	runtime, ok := replay.(*ReplayRuntime)
+	if !ok || runtime == nil {
+		return nil, &LifecycleError{}
+	}
+	gate, err := runtime.PropagationReplay(snapshot.PropagationPendingLease())
+	if err != nil {
+		return nil, err
+	}
+	return NewPropagationCoordinator(PropagationDependencies{
+		Verifier:       verifier,
+		Evaluator:      evaluator,
+		PublicKeys:     operation.publicKeys,
+		Authority:      operation.store,
+		Authorities:    authorities,
+		Policy:         snapshot.Signing().Policies().DeliveryStatus(),
+		Replay:         gate,
+		TokenRetention: propagationTokenRetention(snapshot.PropagationPendingLease()),
+		Clock:          time.Now,
+	})
 }

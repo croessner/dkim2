@@ -90,7 +90,7 @@
       ],
       "expected": {
         "structure": "malformed",
-        "embedded": "",
+        "embedded": "not_evaluated",
         "local_hop": "not_evaluated",
         "outer_alignment": "not_evaluated",
         "recipient_linkage": "not_evaluated",

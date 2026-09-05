@@ -47,6 +47,9 @@ const (
 	ReceivedDSNEmbeddedTemperror ReceivedDSNEmbedded = "temperror"
 	// ReceivedDSNEmbeddedAbsent reports an embedded original without any DKIM2-Signature.
 	ReceivedDSNEmbeddedAbsent ReceivedDSNEmbedded = "absent"
+	// ReceivedDSNEmbeddedNotEvaluated reports that the structure stage stopped
+	// the evaluation before any embedded evidence could be assessed.
+	ReceivedDSNEmbeddedNotEvaluated ReceivedDSNEmbedded = "not_evaluated"
 )
 
 // Known reports whether the value belongs to the closed vocabulary.
@@ -331,8 +334,7 @@ type receivedDSNEvaluationState struct {
 func (e ReceivedDSNEvaluation) Valid() bool {
 	return e.state != nil && e.state.inner.Valid() &&
 		e.Structure().Known() && e.LocalHop().Known() && e.OuterAlignment().Known() &&
-		e.RecipientLinkage().Known() && e.Propagation().Known() &&
-		(e.Structure() != ReceivedDSNStructureValid || e.Embedded().Known())
+		e.RecipientLinkage().Known() && e.Propagation().Known() && e.Embedded().Known()
 }
 
 // Structure returns the closed structure member.
@@ -343,7 +345,9 @@ func (e ReceivedDSNEvaluation) Structure() ReceivedDSNStructure {
 	return ReceivedDSNStructure(e.state.inner.Structure())
 }
 
-// Embedded returns the closed embedded member, or the empty value when structure stopped the evaluation.
+// Embedded returns the closed embedded member, which is
+// ReceivedDSNEmbeddedNotEvaluated when the structure stage stopped the
+// evaluation.
 func (e ReceivedDSNEvaluation) Embedded() ReceivedDSNEmbedded {
 	if e.state == nil {
 		return ""

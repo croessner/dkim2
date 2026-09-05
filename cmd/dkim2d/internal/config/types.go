@@ -25,6 +25,7 @@ const (
 	pathServerSignCapability                = "server.sign_capability_file"
 	pathServerReviseCapability              = "server.revise_capability_file"
 	pathServerDSNSignCapability             = "server.dsn_sign_capability_file"
+	pathServerDSNPropagateCapability        = "server.dsn_propagate_capability_file"
 	pathServerReadHeader                    = "server.read_header_timeout"
 	pathServerRead                          = "server.read_timeout"
 	pathServerWrite                         = "server.write_timeout"
@@ -34,6 +35,8 @@ const (
 	pathServerMaxWaiters                    = "server.max_waiters"
 	pathServerAdmissionWait                 = "server.admission_wait"
 	pathPolicyMode                          = "policy.mode"
+	pathProcessDefaultTenant                = "process.default_tenant"
+	pathDSNPropagationPendingLease          = "dsn_propagation.pending_lease"
 	pathDNSLookupTimeout                    = "dns.lookup_timeout"
 	pathDNSMaxConcurrent                    = "dns.max_concurrent_lookups"
 	pathDNSCacheMaxEntries                  = "dns.cache.max_entries"
@@ -124,6 +127,10 @@ const (
 	defaultWriteTimeout  = "65s"
 	defaultDeadline      = "60s"
 	defaultAdmissionWait = "100ms"
+	// defaultPendingLease is the propagation reservation lease. It must exceed
+	// the adapter's daemon timeout plus its re-injection and commit timeouts,
+	// so that a retry inside the lease is deferred rather than served twice.
+	defaultPendingLease = "120s"
 
 	valuePolicyStrict    = "strict"
 	valueListenerPrivate = "tls_private_network"
@@ -287,6 +294,7 @@ func stableFieldSpecs() []fieldSpec {
 		{path: pathServerSignCapability, env: "DKIM2D_SERVER_SIGN_CAPABILITY_FILE", kind: valueString},
 		{path: pathServerReviseCapability, env: "DKIM2D_SERVER_REVISE_CAPABILITY_FILE", kind: valueString},
 		{path: pathServerDSNSignCapability, env: "DKIM2D_SERVER_DSN_SIGN_CAPABILITY_FILE", kind: valueString},
+		{path: pathServerDSNPropagateCapability, env: "DKIM2D_SERVER_DSN_PROPAGATE_CAPABILITY_FILE", kind: valueString},
 		{path: pathServerReadHeader, env: "DKIM2D_SERVER_READ_HEADER_TIMEOUT", kind: valueDuration, defaultVal: defaultReadHeader, hasDefault: true},
 		{path: pathServerRead, env: "DKIM2D_SERVER_READ_TIMEOUT", kind: valueDuration, defaultVal: defaultReadTimeout, hasDefault: true},
 		{path: pathServerWrite, env: "DKIM2D_SERVER_WRITE_TIMEOUT", kind: valueDuration, defaultVal: defaultWriteTimeout, hasDefault: true},
@@ -296,6 +304,8 @@ func stableFieldSpecs() []fieldSpec {
 		{path: pathServerMaxWaiters, env: "DKIM2D_SERVER_MAX_WAITERS", kind: valueUint, defaultVal: "64", hasDefault: true},
 		{path: pathServerAdmissionWait, env: "DKIM2D_SERVER_ADMISSION_WAIT", kind: valueDuration, defaultVal: defaultAdmissionWait, hasDefault: true},
 		{path: pathPolicyMode, env: "DKIM2D_POLICY_MODE", flag: flagPolicyMode, kind: valueString, defaultVal: valuePolicyStrict, hasDefault: true},
+		{path: pathProcessDefaultTenant, env: "DKIM2D_PROCESS_DEFAULT_TENANT", kind: valueString},
+		{path: pathDSNPropagationPendingLease, env: "DKIM2D_DSN_PROPAGATION_PENDING_LEASE", kind: valueDuration, defaultVal: defaultPendingLease, hasDefault: true},
 		{path: pathDNSLookupTimeout, env: "DKIM2D_DNS_LOOKUP_TIMEOUT", kind: valueDuration, defaultVal: defaultReadHeader, hasDefault: true},
 		{path: pathDNSMaxConcurrent, env: "DKIM2D_DNS_MAX_CONCURRENT_LOOKUPS", kind: valueUint, defaultVal: "64", hasDefault: true},
 		{path: pathDNSCacheMaxEntries, env: "DKIM2D_DNS_CACHE_MAX_ENTRIES", kind: valueUint, defaultVal: "4096", hasDefault: true},

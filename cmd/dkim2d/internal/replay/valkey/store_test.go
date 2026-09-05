@@ -71,6 +71,9 @@ type typedNilCommandClient struct{}
 // BuildSet is unreachable for a rejected typed-nil client.
 func (*typedNilCommandClient) BuildSet(string, string, int64) command { return nil }
 
+// BuildConditionalSet is unreachable for a rejected typed-nil client.
+func (*typedNilCommandClient) BuildConditionalSet(conditionalSet) command { return nil }
+
 // Do is unreachable for a rejected typed-nil client.
 func (*typedNilCommandClient) Do(context.Context, command) resultReader { return nil }
 
@@ -105,6 +108,11 @@ func (c *fakeCommandClient) BuildSet(key, marker string, milliseconds int64) com
 	c.marker = marker
 	c.milliseconds = milliseconds
 	return c.command
+}
+
+// BuildConditionalSet is never issued by the first-seen operation under test.
+func (c *fakeCommandClient) BuildConditionalSet(conditionalSet) command {
+	panic("first-seen operation built a conditional command")
 }
 
 // Do records one dispatch and returns the injected bounded result.
@@ -1076,7 +1084,7 @@ func TestNativeAdapterBuildsAndDispatchesExactCompletedCommand(t *testing.T) {
 	}
 	tokens := native.completed.Commands()
 	if len(tokens) != 6 ||
-		tokens[0] != "SET" ||
+		tokens[0] != tokenSET ||
 		tokens[1] != key ||
 		tokens[2] != dkim2.ReplayStoredValue ||
 		tokens[3] != "NX" ||
@@ -1303,10 +1311,12 @@ func clusterSlot(key string) uint16 {
 	return crc % 16384
 }
 
-// TestTestSeamsRemainNarrow prevents accidental provider-shaped surface growth.
+// TestTestSeamsRemainNarrow prevents accidental provider-shaped surface
+// growth. The command client owns exactly the first-seen SET, the
+// value-conditional SET of the propagation record, and one dispatch.
 func TestTestSeamsRemainNarrow(t *testing.T) {
-	if got := reflect.TypeFor[commandClient]().NumMethod(); got != 2 {
-		t.Fatalf("commandClient methods = %d, want 2", got)
+	if got := reflect.TypeFor[commandClient]().NumMethod(); got != 3 {
+		t.Fatalf("commandClient methods = %d, want 3", got)
 	}
 	if got := reflect.TypeFor[resultReader]().NumMethod(); got != 3 {
 		t.Fatalf("resultReader methods = %d, want 3", got)

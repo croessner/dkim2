@@ -69,6 +69,13 @@ func (f *ServerFactory) Assemble(input app.HTTPAssemblyInput) (app.HTTPAssembly,
 			)
 		}
 	}
+	if server.DSNPropagateEnabled() && !nilInterfaceValue(input.PropagationService()) {
+		dependencies = append(
+			dependencies,
+			input.PropagationService(),
+			propagateMatcherDependency{capabilityMatcher: input.DSNPropagateCapability()},
+		)
+	}
 	return newServerAssembly(
 		input.BaseContext(),
 		serverSettings{

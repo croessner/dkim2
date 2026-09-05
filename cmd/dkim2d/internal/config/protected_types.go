@@ -46,17 +46,19 @@ type protectedState struct {
 
 	snapshot Snapshot
 
-	capability        [32]byte
-	signCapability    [32]byte
-	reviseCapability  [32]byte
-	dsnSignCapability [32]byte
-	serverTLS         *tls.Config
-	hasSign           bool
-	hasRevise         bool
-	hasDSNSign        bool
-	signingStore      *signingstore.Runtime
-	hmac              [32]byte
-	hasHMAC           bool
+	capability             [32]byte
+	signCapability         [32]byte
+	reviseCapability       [32]byte
+	dsnSignCapability      [32]byte
+	dsnPropagateCapability [32]byte
+	serverTLS              *tls.Config
+	hasSign                bool
+	hasRevise              bool
+	hasDSNSign             bool
+	hasDSNPropagate        bool
+	signingStore           *signingstore.Runtime
+	hmac                   [32]byte
+	hasHMAC                bool
 
 	applicationPassword        []byte
 	auditorPassword            []byte
@@ -136,6 +138,14 @@ type ReviseCapability struct {
 
 // DSNSignCapability is a comparison-only opaque delivery-status authorization value.
 type DSNSignCapability struct {
+	state *protectedState
+	token *runtimeToken
+}
+
+// DSNPropagateCapability is a comparison-only opaque delivery-status
+// propagation authorization value. It is distinct from every other route
+// capability in both directions.
+type DSNPropagateCapability struct {
 	state *protectedState
 	token *runtimeToken
 }
@@ -313,6 +323,14 @@ func (p *RuntimePreparation) DSNSignCapability() DSNSignCapability {
 		return DSNSignCapability{}
 	}
 	return DSNSignCapability{state: p.state, token: p.token}
+}
+
+// DSNPropagateCapability returns the non-owning post-commit propagation capability.
+func (p *RuntimePreparation) DSNPropagateCapability() DSNPropagateCapability {
+	if p == nil {
+		return DSNPropagateCapability{}
+	}
+	return DSNPropagateCapability{state: p.state, token: p.token}
 }
 
 // ServerTLSConfig returns a private clone of the validated TLS 1.3 server configuration.
@@ -557,12 +575,18 @@ func (c DSNSignCapability) Equal(candidate []byte) bool {
 	return equalProtectedCapability(c.state, c.token, candidate, protectedDSNSign)
 }
 
+// Equal performs an exact constant-time propagation capability comparison.
+func (c DSNPropagateCapability) Equal(candidate []byte) bool {
+	return equalProtectedCapability(c.state, c.token, candidate, protectedDSNPropagate)
+}
+
 type protectedCapabilityKind uint8
 
 const (
 	protectedSign protectedCapabilityKind = iota + 1
 	protectedRevise
 	protectedDSNSign
+	protectedDSNPropagate
 )
 
 // equalProtectedCapability compares one enabled role without revealing length.
@@ -598,6 +622,11 @@ func equalProtectedCapability(
 			return false
 		}
 		expected = &state.dsnSignCapability
+	case protectedDSNPropagate:
+		if !state.hasDSNPropagate {
+			return false
+		}
+		expected = &state.dsnPropagateCapability
 	default:
 		return false
 	}
@@ -659,9 +688,11 @@ func (s *protectedState) clearProtected(releasedBy protectedPhase) {
 	s.signCapability = [32]byte{}
 	s.reviseCapability = [32]byte{}
 	s.dsnSignCapability = [32]byte{}
+	s.dsnPropagateCapability = [32]byte{}
 	s.hasSign = false
 	s.hasRevise = false
 	s.hasDSNSign = false
+	s.hasDSNPropagate = false
 	s.serverTLS = nil
 	if s.signingStore != nil {
 		_ = s.signingStore.Close(context.Background())
@@ -726,41 +757,8 @@ func validateProtectedSeparation(state *protectedState) error {
 		bytes.Equal(state.applicationPassword, state.auditorPassword) {
 		return newError(CodeProtectedContent)
 	}
-	if state.hasHMAC && bytes.Equal(state.capability[:], state.hmac[:]) {
-		return newError(CodeProtectedContent)
-	}
-	if state.hasSign && bytes.Equal(state.capability[:], state.signCapability[:]) {
-		return newError(CodeProtectedContent)
-	}
-	if state.hasRevise && bytes.Equal(state.capability[:], state.reviseCapability[:]) {
-		return newError(CodeProtectedContent)
-	}
-	if state.hasSign && state.hasRevise &&
-		bytes.Equal(state.signCapability[:], state.reviseCapability[:]) {
-		return newError(CodeProtectedContent)
-	}
-	if state.hasSign && state.hasDSNSign &&
-		bytes.Equal(state.signCapability[:], state.dsnSignCapability[:]) {
-		return newError(CodeProtectedContent)
-	}
-	if state.hasRevise && state.hasDSNSign &&
-		bytes.Equal(state.reviseCapability[:], state.dsnSignCapability[:]) {
-		return newError(CodeProtectedContent)
-	}
-	if state.hasDSNSign && bytes.Equal(state.capability[:], state.dsnSignCapability[:]) {
-		return newError(CodeProtectedContent)
-	}
-	if state.hasHMAC && state.hasSign &&
-		bytes.Equal(state.hmac[:], state.signCapability[:]) {
-		return newError(CodeProtectedContent)
-	}
-	if state.hasHMAC && state.hasRevise &&
-		bytes.Equal(state.hmac[:], state.reviseCapability[:]) {
-		return newError(CodeProtectedContent)
-	}
-	if state.hasHMAC && state.hasDSNSign &&
-		bytes.Equal(state.hmac[:], state.dsnSignCapability[:]) {
-		return newError(CodeProtectedContent)
+	if err := distinctProtectedKeys(state); err != nil {
+		return err
 	}
 	passwords := [][]byte{
 		state.applicationPassword,
@@ -775,13 +773,51 @@ func validateProtectedSeparation(state *protectedState) error {
 		}
 	}
 	for _, password := range passwords {
-		if len(password) == exactKeyBytes &&
-			(bytes.Equal(state.capability[:], password) ||
-				state.hasSign && bytes.Equal(state.signCapability[:], password) ||
-				state.hasRevise && bytes.Equal(state.reviseCapability[:], password) ||
-				state.hasDSNSign && bytes.Equal(state.dsnSignCapability[:], password) ||
-				state.hasHMAC && bytes.Equal(state.hmac[:], password)) {
-			return newError(CodeProtectedContent)
+		if len(password) != exactKeyBytes {
+			continue
+		}
+		for _, key := range enabledProtectedKeys(state) {
+			if bytes.Equal(key[:], password) {
+				return newError(CodeProtectedContent)
+			}
+		}
+	}
+	return nil
+}
+
+// enabledProtectedKeys returns every enabled exact-length protected key in
+// one place, so that adding a route capability cannot silently escape the
+// distinctness rule.
+func enabledProtectedKeys(state *protectedState) []*[32]byte {
+	keys := []*[32]byte{&state.capability}
+	if state.hasSign {
+		keys = append(keys, &state.signCapability)
+	}
+	if state.hasRevise {
+		keys = append(keys, &state.reviseCapability)
+	}
+	if state.hasDSNSign {
+		keys = append(keys, &state.dsnSignCapability)
+	}
+	if state.hasDSNPropagate {
+		keys = append(keys, &state.dsnPropagateCapability)
+	}
+	if state.hasHMAC {
+		keys = append(keys, &state.hmac)
+	}
+	return keys
+}
+
+// distinctProtectedKeys refuses any two enabled protected keys that share
+// their exact value, so that no route can be reached with the credential of
+// another route.
+func distinctProtectedKeys(state *protectedState) error {
+	keys := enabledProtectedKeys(state)
+	for left := range keys {
+		for right := left + 1; right < len(keys); right++ {
+			if bytes.Equal(keys[left][:], keys[right][:]) {
+				return newError(CodeProtectedContent)
+			}
 		}
 	}
 	return nil
@@ -954,6 +990,21 @@ func (DSNSignCapability) MarshalJSON() ([]byte, error) { return nil, newError(Co
 
 // MarshalText rejects text serialization of the delivery-status capability.
 func (DSNSignCapability) MarshalText() ([]byte, error) { return nil, newError(CodeSerialization) }
+
+// String returns a constant content-free propagation capability representation.
+func (DSNPropagateCapability) String() string { return protectedRedactedText }
+
+// GoString returns a constant content-free propagation capability representation.
+func (DSNPropagateCapability) GoString() string { return protectedRedactedText }
+
+// Format prevents formatting verbs from exposing the propagation capability.
+func (DSNPropagateCapability) Format(state fmt.State, _ rune) { writeProtectedRedacted(state) }
+
+// MarshalJSON rejects serialization of the propagation capability.
+func (DSNPropagateCapability) MarshalJSON() ([]byte, error) { return nil, newError(CodeSerialization) }
+
+// MarshalText rejects text serialization of the propagation capability.
+func (DSNPropagateCapability) MarshalText() ([]byte, error) { return nil, newError(CodeSerialization) }
 
 // writeProtectedRedacted emits only the fixed protected-material marker.
 func writeProtectedRedacted(state fmt.State) {
