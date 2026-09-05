@@ -12,6 +12,7 @@ export DKIM2_CREATED=1970-01-01T00:00:00Z
 test "$(grep -c '^FROM .* AS dkim2d$' "$containerfile")" -eq 1
 test "$(grep -c '^FROM .* AS dkim2-milter$' "$containerfile")" -eq 1
 test "$(grep -c '^FROM .* AS dkim2ctl$' "$containerfile")" -eq 1
+test "$(grep -c '^FROM .* AS dkim2-dsn-propagator$' "$containerfile")" -eq 1
 test "$(grep -c '^FROM .* AS build-metadata$' "$containerfile")" -eq 1
 test "$(grep -c '^FROM .* AS build$' "$containerfile")" -eq 1
 test "$(grep -c '^COPY --from=build-metadata /validated /validated$' "$containerfile")" -eq 1
@@ -19,6 +20,13 @@ test "$(grep -c '^USER 2000:2000$' "$containerfile")" -eq 1
 test "$(grep -c '^COPY --from=build /runtime/dkim2d/ /$' "$containerfile")" -eq 1
 test "$(grep -c '^COPY --from=build /runtime/dkim2-milter/ /$' "$containerfile")" -eq 1
 test "$(grep -c '^COPY --from=build /runtime/dkim2ctl/ /$' "$containerfile")" -eq 1
+test "$(grep -c '^COPY --from=build /runtime/dkim2-dsn-propagator/ /$' \
+  "$containerfile")" -eq 1
+test "$(grep -c '^COPY cmd/dkim2-dsn-propagator ./cmd/dkim2-dsn-propagator$' \
+  "$containerfile")" -eq 1
+test "$(grep -c '^!cmd/dkim2-dsn-propagator/\*\*$' .dockerignore)" -eq 1
+test "$(grep -c '^cmd/dkim2-dsn-propagator/internal/integration/\*\*$' \
+  .dockerignore)" -eq 1
 test "$(grep -c '^COPY cmd/dkim2-exim/go.mod cmd/dkim2-exim/go.sum ./cmd/dkim2-exim/$' "$containerfile")" -eq 1
 test "$(grep -c '^!cmd/dkim2-exim/$' .dockerignore)" -eq 1
 test "$(grep -c '^!cmd/dkim2-exim/go.mod$' .dockerignore)" -eq 1

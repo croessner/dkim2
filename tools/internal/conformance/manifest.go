@@ -24,7 +24,7 @@ const (
 var caseIDPattern = regexp.MustCompile(`^[a-z0-9]+(?:[._-][a-z0-9]+)*$`)
 var knownModules = stringSet(
 	"lib", "cmd/dkim2d", "cmd/dkim2ctl", "cmd/dkim2-milter",
-	"cmd/dkim2-exim", "testdata/conformance",
+	"cmd/dkim2-exim", "cmd/dkim2-dsn-propagator", "testdata/conformance",
 	"contrib/qualification/postfix-milter", "scripts", "tools",
 )
 

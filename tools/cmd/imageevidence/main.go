@@ -386,7 +386,7 @@ func main() {
 	}
 	databaseSum := sha256.Sum256(databaseContent)
 	databaseSHA := hex.EncodeToString(databaseSum[:])
-	products := []string{"dkim2d", "dkim2-milter", "dkim2ctl"}
+	products := []string{"dkim2d", "dkim2-milter", "dkim2ctl", "dkim2-dsn-propagator"}
 	reports := make(map[string]ociReport, len(products))
 	noticeSHA := ""
 	for _, product := range products {
@@ -700,7 +700,8 @@ func parseInvocation() (string, string, error) {
 
 // validEvidenceProduct accepts one repository-owned container product.
 func validEvidenceProduct(value string) bool {
-	return value == "dkim2d" || value == "dkim2-milter" || value == "dkim2ctl"
+	return value == "dkim2d" || value == "dkim2-milter" || value == "dkim2ctl" ||
+		value == "dkim2-dsn-propagator"
 }
 
 // fail emits one fixed content-free evidence failure.
@@ -816,9 +817,10 @@ func loadOCIReport(root string, product string, revision string) (ociReport, err
 	}
 	seen := make(map[string]struct{}, len(report.Platforms))
 	descriptions := map[string]string{
-		"dkim2d":       "Loopback-only DKIM2 processing daemon",
-		"dkim2-milter": "Unix-socket DKIM2 Milter adapter",
-		"dkim2ctl":     "Generated-client DKIM2 conformance utility",
+		"dkim2d":               "Loopback-only DKIM2 processing daemon",
+		"dkim2-milter":         "Unix-socket DKIM2 Milter adapter",
+		"dkim2ctl":             "Generated-client DKIM2 conformance utility",
+		"dkim2-dsn-propagator": "LMTP DKIM2 delivery-status propagation adapter",
 	}
 	for _, candidate := range report.Platforms {
 		expectedLabels := map[string]string{
@@ -1473,7 +1475,7 @@ func loadBuildInputPolicy(root string) (buildInputPolicy, error) {
 // scanPrivacy rejects local identity and protected marker classes in evidence.
 func scanPrivacy(root string) error {
 	names := []string{"trivy-database.json", "runtime-policy.json"}
-	for _, product := range []string{"dkim2d", "dkim2-milter", "dkim2ctl"} {
+	for _, product := range []string{"dkim2d", "dkim2-milter", "dkim2ctl", "dkim2-dsn-propagator"} {
 		names = append(names, product+".oci.json", product+".provenance.json")
 		for _, architecture := range []string{"amd64", "arm64"} {
 			prefix := product + "." + architecture

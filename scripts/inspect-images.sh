@@ -16,7 +16,7 @@ cleanup() {
   rm -rf -- "$work"
 }
 trap cleanup EXIT HUP INT TERM
-for product in dkim2d dkim2-milter dkim2ctl; do
+for product in dkim2d dkim2-milter dkim2ctl dkim2-dsn-propagator; do
   archive=".artifacts/$product.oci.tar"
   test -f "$archive"
   test ! -L "$archive"
@@ -32,7 +32,7 @@ done
 
 if test "$action" = reproducibility; then
   scripts/build-images.sh reproduction
-  for product in dkim2d dkim2-milter dkim2ctl; do
+  for product in dkim2d dkim2-milter dkim2ctl dkim2-dsn-propagator; do
     GOCACHE="${GOCACHE:-/tmp/dkim2-go-build-cache}" \
       go -C tools run ./cmd/ocipolicy \
         -archive "../.artifacts/image-reproducibility/second/$product.oci.tar" \

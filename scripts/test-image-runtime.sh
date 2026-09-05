@@ -94,7 +94,7 @@ work=$(mktemp -d .artifacts/.image-runtime-work.XXXXXX)
 entries="$work/entries.jsonl"
 : >"$entries"
 
-for product in dkim2d dkim2-milter dkim2ctl; do
+for product in dkim2d dkim2-milter dkim2ctl dkim2-dsn-propagator; do
   image="$prefix-$product:local"
   if docker image inspect "$image" >/dev/null 2>&1; then
     exit 1

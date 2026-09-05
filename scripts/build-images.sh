@@ -70,7 +70,7 @@ builder_active=true
 DOCKER_CONFIG="$docker_config" DOCKER_HOST="$docker_host" \
   docker buildx inspect "$builder" --bootstrap >/dev/null
 
-for target in dkim2d dkim2-milter dkim2ctl; do
+for target in dkim2d dkim2-milter dkim2ctl dkim2-dsn-propagator; do
   archive="$work/$target.oci.tar"
   DOCKER_CONFIG="$docker_config" DOCKER_HOST="$docker_host" docker buildx build \
     --builder "$builder" \

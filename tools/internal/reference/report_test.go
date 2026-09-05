@@ -266,6 +266,8 @@ func TestCollectOpenAPIIdentitiesBindsClosedGeneratedInventory(t *testing.T) {
 	root := t.TempDir()
 	paths := []string{
 		"docs/specs/openapi/dkim2d.yaml",
+		"cmd/dkim2-dsn-propagator/internal/daemon/generated/client.gen.go",
+		"cmd/dkim2-dsn-propagator/internal/integration/generated/server.gen.go",
 		"cmd/dkim2-exim/internal/daemon/generated/client.gen.go",
 		"cmd/dkim2-exim/internal/integration/generated/server.gen.go",
 		"cmd/dkim2-milter/internal/daemon/generated/client.gen.go",
@@ -288,7 +290,7 @@ func TestCollectOpenAPIIdentitiesBindsClosedGeneratedInventory(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(identities) != len(paths) || len(generatedOpenAPIPaths) != len(paths)-1 {
-		t.Fatalf("OpenAPI identity inventory is not closed over seven artifacts: got %d", len(identities))
+		t.Fatalf("OpenAPI identity inventory is not closed over nine artifacts: got %d", len(identities))
 	}
 	for index, path := range paths {
 		identity := identities[index]

@@ -267,10 +267,10 @@ func boundedErrorClass(err error) string {
 	return "invalid artifact"
 }
 
-// validProduct restricts policy selection to the three shipped products.
+// validProduct restricts policy selection to the shipped container products.
 func validProduct(product string) bool {
 	switch product {
-	case "dkim2d", "dkim2-milter", "dkim2ctl":
+	case "dkim2d", "dkim2-milter", "dkim2ctl", "dkim2-dsn-propagator":
 		return true
 	default:
 		return false
@@ -574,9 +574,10 @@ func validateConfig(product string, platformName string, config imageConfig) err
 		return errors.New("invalid runtime config")
 	}
 	descriptions := map[string]string{
-		"dkim2d":       "Loopback-only DKIM2 processing daemon",
-		"dkim2-milter": "Unix-socket DKIM2 Milter adapter",
-		"dkim2ctl":     "Generated-client DKIM2 conformance utility",
+		"dkim2d":               "Loopback-only DKIM2 processing daemon",
+		"dkim2-milter":         "Unix-socket DKIM2 Milter adapter",
+		"dkim2ctl":             "Generated-client DKIM2 conformance utility",
+		"dkim2-dsn-propagator": "LMTP DKIM2 delivery-status propagation adapter",
 	}
 	expectedLabels := map[string]string{
 		"org.opencontainers.image.source":        "https://github.com/croessner/dkim2",

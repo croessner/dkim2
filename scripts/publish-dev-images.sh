@@ -64,7 +64,7 @@ assert_candidate
 
 subjects="$work/local-subjects.jsonl"
 : >"$subjects"
-for product in dkim2d dkim2-milter dkim2ctl; do
+for product in dkim2d dkim2-milter dkim2ctl dkim2-dsn-propagator; do
   report=".artifacts/image-evidence/$product.oci.json"
   current_version=$(GOCACHE="${GOCACHE:-/tmp/dkim2-go-build-cache}" \
     go -C tools run ./cmd/imageevidence -root .. -oci-version "$product")
@@ -92,8 +92,8 @@ for product in dkim2d dkim2-milter dkim2ctl; do
     }' >>"$subjects"
 done
 jq -e -s --arg tag "$tag" '
-  length == 3 and
-  map(.product) == ["dkim2d","dkim2-milter","dkim2ctl"] and
+  length == 4 and
+  map(.product) == ["dkim2d","dkim2-milter","dkim2ctl","dkim2-dsn-propagator"] and
   all(.[];
     .tag == $tag and
     (.subject_digest | test("^sha256:[0-9a-f]{64}$")) and
@@ -145,7 +145,7 @@ validate_registry_index() {
 # subjects are idempotent; a different subject or ambiguous lookup fails closed.
 remote_states="$work/remote-states.jsonl"
 : >"$remote_states"
-for product in dkim2d dkim2-milter dkim2ctl; do
+for product in dkim2d dkim2-milter dkim2ctl dkim2-dsn-propagator; do
   repository="$registry/$product"
   raw="$work/$product.preflight-index.json"
   diagnostic="$work/$product.preflight-error"
@@ -165,13 +165,13 @@ for product in dkim2d dkim2-milter dkim2ctl; do
     '{product:$product,state:$state}' >>"$remote_states"
 done
 jq -e -s '
-  length == 3 and
-  map(.product) == ["dkim2d","dkim2-milter","dkim2ctl"] and
+  length == 4 and
+  map(.product) == ["dkim2d","dkim2-milter","dkim2ctl","dkim2-dsn-propagator"] and
   all(.[]; .state == "absent" or .state == "present_identical")
 ' "$remote_states" >/dev/null
 assert_candidate
 
-for product in dkim2d dkim2-milter dkim2ctl; do
+for product in dkim2d dkim2-milter dkim2ctl dkim2-dsn-propagator; do
   repository="$registry/$product"
   state=$(jq -er -s --arg product "$product" \
     '.[] | select(.product == $product) | .state' "$remote_states")
@@ -223,6 +223,8 @@ jq -S -n \
   --arg dkim2d "$(jq -er '."containerimage.digest"' "$work/dkim2d.publish.json")" \
   --arg milter "$(jq -er '."containerimage.digest"' "$work/dkim2-milter.publish.json")" \
   --arg ctl "$(jq -er '."containerimage.digest"' "$work/dkim2ctl.publish.json")" \
+  --arg propagator \
+    "$(jq -er '."containerimage.digest"' "$work/dkim2-dsn-propagator.publish.json")" \
   '{
     schema:"dkim2-internal-dev-publication-subjects-v1",
     registry:"docker.roessner-net.de/mail",
@@ -236,7 +238,11 @@ jq -S -n \
         repository:"docker.roessner-net.de/mail/dkim2-milter",
         subject_digest:$milter
       },
-      dkim2ctl:{repository:"docker.roessner-net.de/mail/dkim2ctl",subject_digest:$ctl}
+      dkim2ctl:{repository:"docker.roessner-net.de/mail/dkim2ctl",subject_digest:$ctl},
+      "dkim2-dsn-propagator":{
+        repository:"docker.roessner-net.de/mail/dkim2-dsn-propagator",
+        subject_digest:$propagator
+      }
     }
   }' >"$work/dev-publication-subjects.json"
 GOCACHE="${GOCACHE:-/tmp/dkim2-go-build-cache}" \

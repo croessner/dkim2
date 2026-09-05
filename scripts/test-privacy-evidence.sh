@@ -100,13 +100,17 @@ verify_candidate_evidence() {
     .artifacts/image-evidence/dkim2ctl.amd64.sbom-binding.json \
     .artifacts/image-evidence/dkim2ctl.arm64.sbom-binding.json \
     .artifacts/image-evidence/dkim2ctl.amd64.trivy-binding.json \
-    .artifacts/image-evidence/dkim2ctl.arm64.trivy-binding.json; do
+    .artifacts/image-evidence/dkim2ctl.arm64.trivy-binding.json \
+    .artifacts/image-evidence/dkim2-dsn-propagator.amd64.sbom-binding.json \
+    .artifacts/image-evidence/dkim2-dsn-propagator.arm64.sbom-binding.json \
+    .artifacts/image-evidence/dkim2-dsn-propagator.amd64.trivy-binding.json \
+    .artifacts/image-evidence/dkim2-dsn-propagator.arm64.trivy-binding.json; do
     test -f "$report"
     test ! -L "$report"
     jq -e --arg candidate "$candidate" \
       '.candidate_snapshot_sha256 == $candidate' "$report" >/dev/null
   done
-  for product in dkim2d dkim2-milter dkim2ctl; do
+  for product in dkim2d dkim2-milter dkim2ctl dkim2-dsn-propagator; do
     report=.artifacts/image-evidence/"$product".provenance.json
     test -f "$report"
     test ! -L "$report"
@@ -164,7 +168,7 @@ grep -Fq "$label_marker" "$work/label-seed"
 : >"$work/label.stdout"
 : >"$work/label.stderr"
 for architecture in amd64 arm64; do
-  for target in dkim2d dkim2-milter dkim2ctl; do
+  for target in dkim2d dkim2-milter dkim2ctl dkim2-dsn-propagator; do
     set +e
     timeout -k 5 60 env \
       DOCKER_CONFIG="$docker_config" DOCKER_HOST="$docker_host" \
@@ -237,7 +241,7 @@ esac
 printf '%s\n' "privacy evidence: container output"
 printf '%s\n' "$output_marker" >"$work/container-output-seed"
 grep -Fq "$output_marker" "$work/container-output-seed"
-for product in dkim2d dkim2-milter dkim2ctl; do
+for product in dkim2d dkim2-milter dkim2ctl dkim2-dsn-propagator; do
   subject=$(jq -er --arg platform "$platform" \
     '.platforms[] | select(.platform == $platform) | .manifest_digest' \
     ".artifacts/image-evidence/$product.oci.json")

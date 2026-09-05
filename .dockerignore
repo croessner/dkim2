@@ -6,6 +6,7 @@
 !cmd/dkim2d/**
 !cmd/dkim2-milter/**
 !cmd/dkim2ctl/**
+!cmd/dkim2-dsn-propagator/**
 !cmd/dkim2-exim/
 !cmd/dkim2-exim/go.mod
 !cmd/dkim2-exim/go.sum
@@ -19,6 +20,7 @@
 **/*_test.go
 **/testdata/**
 cmd/dkim2-milter/internal/integration/**
+cmd/dkim2-dsn-propagator/internal/integration/**
 **/*.md
 **/*.pem
 **/*.key

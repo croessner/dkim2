@@ -95,7 +95,7 @@ case "$action" in
     verify_tool syft "$syft_version"
     candidate=$(candidate_identity)
     syft_identity=$(jq -c . "$tools_dir/syft.identity.json")
-    for product in dkim2d dkim2-milter dkim2ctl; do
+    for product in dkim2d dkim2-milter dkim2ctl dkim2-dsn-propagator; do
       version=$(oci_version_for "$product")
       for architecture in amd64 arm64; do
         platform="linux/$architecture"
@@ -166,7 +166,7 @@ case "$action" in
     resolved_build_inputs=$(jq -c '
       [.images[] | {uri:.uri,digest:{sha256:.digest}}]
     ' "$build_inputs")
-    for product in dkim2d dkim2-milter dkim2ctl; do
+    for product in dkim2d dkim2-milter dkim2ctl dkim2-dsn-propagator; do
       output="$work/$product.provenance.json"
       index_subject=$(jq -er .subject_digest "$evidence/$product.oci.json")
       amd64_subject=$(subject_for "$product" linux/amd64)
@@ -245,7 +245,7 @@ case "$action" in
     database_downloaded=$(jq -er '.vulnerability_database.downloaded_at' "$work/trivy-database.json")
     database_scan_time=$(jq -er '.scan_time' "$work/trivy-database.json")
     database_sha=$(shasum -a 256 "$work/trivy-database.json" | cut -d' ' -f1)
-    for product in dkim2d dkim2-milter dkim2ctl; do
+    for product in dkim2d dkim2-milter dkim2ctl dkim2-dsn-propagator; do
       for architecture in amd64 arm64; do
         platform="linux/$architecture"
         subject=$(subject_for "$product" "$platform")

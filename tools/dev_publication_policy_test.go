@@ -95,13 +95,13 @@ func runRejectedDevPublisher(t *testing.T, root string, logPath string) {
 	}
 }
 
-// writeOCIReports writes the three minimal descriptor projections consumed by
-// the publisher test double, optionally making only the final product stale.
+// writeOCIReports writes the minimal descriptor projections consumed by the
+// publisher test double, optionally making only the third product stale.
 func writeOCIReports(t *testing.T, root string, staleThird bool) {
 	t.Helper()
 	index := []byte(`{"schemaVersion":2,"manifests":[{"digest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","platform":{"os":"linux","architecture":"amd64"}},{"digest":"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","platform":{"os":"linux","architecture":"arm64"}}]}`)
 	sum := sha256.Sum256(index)
-	for _, product := range []string{"dkim2d", "dkim2-milter", "dkim2ctl"} {
+	for _, product := range []string{"dkim2d", "dkim2-milter", "dkim2ctl", "dkim2-dsn-propagator"} {
 		revision := testDevRevision
 		if staleThird && product == "dkim2ctl" {
 			revision = strings.Repeat("9", 40)

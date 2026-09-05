@@ -1,0 +1,21 @@
+package: generatedfixture
+generate:
+  models: true
+  std-http-server: true
+  strict-server: true
+compatibility:
+  preserve-original-operation-id-casing-in-embedded-spec: true
+output-options:
+  exclude-operation-ids:
+    - getMetrics
+    - getHealth
+    - headHealth
+    - getReadiness
+    - headReadiness
+    - processMessage
+    - signMessage
+    - reviseMessage
+    - signDeliveryStatus
+  overlay:
+    path: ../docs/specs/openapi/oapi-codegen.propagator.overlay.yml
+    strict: true

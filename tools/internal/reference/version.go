@@ -30,6 +30,7 @@ var plannedCandidateTags = []string{
 	"cmd/dkim2-exim/v0.1.0-rc.1",
 	"cmd/dkim2ctl/v0.1.0-rc.1",
 	"cmd/dkim2d/v0.1.0-rc.1",
+	"cmd/dkim2-dsn-propagator/v0.1.0-rc.1",
 	"lib/v0.1.0-rc.1",
 	"v0.1.0-rc.1",
 }
@@ -188,6 +189,11 @@ func checkModulePlans(root string, modules []ReleaseModule) error {
 		{Path: "github.com/croessner/dkim2/cmd/dkim2-exim", Directory: "cmd/dkim2-exim", Tag: "cmd/dkim2-exim/" + candidateVersion},
 		{Path: "github.com/croessner/dkim2/cmd/dkim2ctl", Directory: "cmd/dkim2ctl", Tag: "cmd/dkim2ctl/" + candidateVersion},
 		{Path: "github.com/croessner/dkim2/cmd/dkim2d", Directory: "cmd/dkim2d", Tag: "cmd/dkim2d/" + candidateVersion},
+		{
+			Path:      "github.com/croessner/dkim2/cmd/dkim2-dsn-propagator",
+			Directory: "cmd/dkim2-dsn-propagator",
+			Tag:       "cmd/dkim2-dsn-propagator/" + candidateVersion,
+		},
 	}
 	if !slices.Equal(modules, expected) {
 		return errors.New("release_plan_modules")

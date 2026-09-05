@@ -1,6 +1,7 @@
 go 1.26
 
 use (
+	./cmd/dkim2-dsn-propagator
 	./cmd/dkim2-exim
 	./cmd/dkim2-milter
 	./cmd/dkim2ctl

@@ -1,0 +1,47 @@
+overlay: 1.0.0
+info:
+  title: DKIM2 delivery-status propagator protected wire bindings
+  version: 0.1.0
+actions:
+  - target: $.components.schemas.PropagationMessageInput.properties.raw_rfc5322_base64
+    description: Bind received notification bytes to the propagator client wire wrapper.
+    update:
+      x-go-type: wire.ProtectedString
+      x-go-type-import:
+        path: github.com/croessner/dkim2/cmd/dkim2-dsn-propagator/internal/daemon/wire
+        name: wire
+  - target: $.components.schemas.PropagationSMTPInput.properties.mail_from
+    description: Bind the observed reverse path to the propagator client wire wrapper.
+    update:
+      x-go-type: wire.ProtectedString
+      x-go-type-import:
+        path: github.com/croessner/dkim2/cmd/dkim2-dsn-propagator/internal/daemon/wire
+        name: wire
+  - target: $.components.schemas.PropagationSMTPInput.properties.rcpt_to.items
+    description: Bind the observed forward path to the propagator client wire wrapper.
+    update:
+      x-go-type: wire.ProtectedString
+      x-go-type-import:
+        path: github.com/croessner/dkim2/cmd/dkim2-dsn-propagator/internal/daemon/wire
+        name: wire
+  - target: $.components.schemas.PropagationOutput.properties.next_hop_recipient
+    description: Bind the next-hop forward path to the propagator client wire wrapper.
+    update:
+      x-go-type: wire.ProtectedString
+      x-go-type-import:
+        path: github.com/croessner/dkim2/cmd/dkim2-dsn-propagator/internal/daemon/wire
+        name: wire
+  - target: $.components.schemas.PropagationOutput.properties.raw_rfc5322_base64
+    description: Bind signed notification bytes to the propagator client wire wrapper.
+    update:
+      x-go-type: wire.ProtectedString
+      x-go-type-import:
+        path: github.com/croessner/dkim2/cmd/dkim2-dsn-propagator/internal/daemon/wire
+        name: wire
+  - target: $.components.schemas.PropagationCommitToken
+    description: Bind the propagation commit token to the propagator client wire wrapper.
+    update:
+      x-go-type: wire.ProtectedString
+      x-go-type-import:
+        path: github.com/croessner/dkim2/cmd/dkim2-dsn-propagator/internal/daemon/wire
+        name: wire

@@ -40,13 +40,14 @@ build_once() {
   mkdir -m 0700 "$destination"
   for arch in amd64 arm64; do
     mkdir -m 0700 "$destination/$arch"
-    for product in dkim2d dkim2-milter dkim2ctl; do
+    for product in dkim2d dkim2-milter dkim2ctl dkim2-dsn-propagator; do
       module="./cmd/$product"
       flags="-buildid="
       case "$product" in
         dkim2d) package=github.com/croessner/dkim2/cmd/dkim2d/internal/command ;;
         dkim2-milter) package=github.com/croessner/dkim2/cmd/dkim2-milter/internal/command ;;
         dkim2ctl) package=github.com/croessner/dkim2/cmd/dkim2ctl/internal/command ;;
+        dkim2-dsn-propagator) package=github.com/croessner/dkim2/cmd/dkim2-dsn-propagator/internal/command ;;
       esac
       flags="$flags -X $package.buildVersion=$version"
       (
@@ -65,7 +66,7 @@ assert_candidate
 build_once "$work/second" "$work/cache-second"
 assert_candidate
 for arch in amd64 arm64; do
-  for product in dkim2d dkim2-milter dkim2ctl; do
+  for product in dkim2d dkim2-milter dkim2ctl dkim2-dsn-propagator; do
     cmp "$work/first/$arch/$product" "$work/second/$arch/$product"
     GOCACHE="${GOCACHE:-/tmp/dkim2-go-build-cache}" \
       go -C tools run ./cmd/safepath -root .. \

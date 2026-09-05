@@ -43,6 +43,7 @@ COPY lib ./lib
 COPY cmd/dkim2d ./cmd/dkim2d
 COPY cmd/dkim2-milter ./cmd/dkim2-milter
 COPY cmd/dkim2ctl ./cmd/dkim2ctl
+COPY cmd/dkim2-dsn-propagator ./cmd/dkim2-dsn-propagator
 COPY cmd/dkim2-exim/go.mod cmd/dkim2-exim/go.sum ./cmd/dkim2-exim/
 COPY tools/go.mod tools/go.sum ./tools/
 COPY vendor ./vendor
@@ -58,6 +59,10 @@ RUN --network=none --mount=type=tmpfs,target=/root/.cache \
     CGO_ENABLED=0 GOOS=linux GOARCH="${TARGETARCH}" GOFLAGS=-mod=vendor \
     go build -buildvcs=false -trimpath -ldflags="-buildid= -X github.com/croessner/dkim2/cmd/dkim2ctl/internal/command.buildVersion=${VERSION}" \
     -o /out/dkim2ctl ./cmd/dkim2ctl
+RUN --network=none --mount=type=tmpfs,target=/root/.cache \
+    CGO_ENABLED=0 GOOS=linux GOARCH="${TARGETARCH}" GOFLAGS=-mod=vendor \
+    go build -buildvcs=false -trimpath -ldflags="-buildid= -X github.com/croessner/dkim2/cmd/dkim2-dsn-propagator/internal/command.buildVersion=${VERSION}" \
+    -o /out/dkim2-dsn-propagator ./cmd/dkim2-dsn-propagator
 RUN set -eu; \
     notices=/out/THIRD_PARTY_NOTICES.txt; \
     printf '%s\n' \
@@ -81,7 +86,7 @@ RUN set -eu; \
         printf '\n' >>"${notices}"; \
       done; \
     test -s "${notices}"; \
-    for product in dkim2d dkim2-milter dkim2ctl; do \
+    for product in dkim2d dkim2-milter dkim2ctl dkim2-dsn-propagator; do \
       for directory in \
         usr usr/local usr/local/bin \
         usr/share usr/share/licenses usr/share/licenses/dkim2; do \
@@ -127,3 +132,9 @@ LABEL org.opencontainers.image.title="dkim2ctl" \
       org.opencontainers.image.description="Generated-client DKIM2 conformance utility"
 COPY --from=build /runtime/dkim2ctl/ /
 ENTRYPOINT ["/usr/local/bin/dkim2ctl"]
+
+FROM runtime-common AS dkim2-dsn-propagator
+LABEL org.opencontainers.image.title="dkim2-dsn-propagator" \
+      org.opencontainers.image.description="LMTP DKIM2 delivery-status propagation adapter"
+COPY --from=build /runtime/dkim2-dsn-propagator/ /
+ENTRYPOINT ["/usr/local/bin/dkim2-dsn-propagator"]

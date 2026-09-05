@@ -1,5 +1,5 @@
 ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
-PRODUCT_MODULES := ./lib ./cmd/dkim2d ./cmd/dkim2-milter ./cmd/dkim2-exim ./cmd/dkim2ctl
+PRODUCT_MODULES := ./lib ./cmd/dkim2d ./cmd/dkim2-milter ./cmd/dkim2-exim ./cmd/dkim2ctl ./cmd/dkim2-dsn-propagator
 TOOL_MODULES := ./tools
 MODULES := $(PRODUCT_MODULES) $(TOOL_MODULES)
 OPENAPI_DIR := $(ROOT)/docs/specs/openapi
@@ -10,20 +10,25 @@ OPENAPI_MILTER_CONFIG := $(OPENAPI_DIR)/oapi-codegen.milter-client.yml
 OPENAPI_MILTER_TEST_SERVER_CONFIG := $(OPENAPI_DIR)/oapi-codegen.milter-test-server.yml
 OPENAPI_EXIM_CONFIG := $(OPENAPI_DIR)/oapi-codegen.exim-client.yml
 OPENAPI_EXIM_TEST_SERVER_CONFIG := $(OPENAPI_DIR)/oapi-codegen.exim-test-server.yml
+OPENAPI_PROPAGATOR_CONFIG := $(OPENAPI_DIR)/oapi-codegen.propagator.yml
+OPENAPI_PROPAGATOR_TEST_SERVER_CONFIG := $(OPENAPI_DIR)/oapi-codegen.propagator-test-server.yml
 OPENAPI_SERVER_OUTPUT := $(ROOT)/cmd/dkim2d/internal/httpjson/generated/server.gen.go
 OPENAPI_CLIENT_OUTPUT := $(ROOT)/cmd/dkim2ctl/internal/testclient/generated/client.gen.go
 OPENAPI_MILTER_OUTPUT := $(ROOT)/cmd/dkim2-milter/internal/daemon/generated/client.gen.go
 OPENAPI_MILTER_TEST_SERVER_OUTPUT := $(ROOT)/cmd/dkim2-milter/internal/integration/generated/server.gen.go
 OPENAPI_EXIM_OUTPUT := $(ROOT)/cmd/dkim2-exim/internal/daemon/generated/client.gen.go
 OPENAPI_EXIM_TEST_SERVER_OUTPUT := $(ROOT)/cmd/dkim2-exim/internal/integration/generated/server.gen.go
+OPENAPI_PROPAGATOR_OUTPUT := $(ROOT)/cmd/dkim2-dsn-propagator/internal/daemon/generated/client.gen.go
+OPENAPI_PROPAGATOR_TEST_SERVER_OUTPUT := $(ROOT)/cmd/dkim2-dsn-propagator/internal/integration/generated/server.gen.go
 OPENAPI_SERVER_WIRE := $(ROOT)/cmd/dkim2d/internal/httpjson/wire/protected_string.gen.go
 OPENAPI_CLIENT_WIRE := $(ROOT)/cmd/dkim2ctl/internal/testclient/wire/protected_string.gen.go
 OPENAPI_MILTER_WIRE := $(ROOT)/cmd/dkim2-milter/internal/daemon/wire/protected_string.gen.go
 OPENAPI_EXIM_WIRE := $(ROOT)/cmd/dkim2-exim/internal/daemon/wire/protected_string.gen.go
+OPENAPI_PROPAGATOR_WIRE := $(ROOT)/cmd/dkim2-dsn-propagator/internal/daemon/wire/protected_string.gen.go
 OPENAPI_GO_TOOLCHAIN := go1.26.0
 VENDOR_LF_PATHS := github.com/vmware-labs/yaml-jsonpath/LICENSE github.com/vmware-labs/yaml-jsonpath/NOTICE
 # OTLP's x/net graph makes Go 1.26 synchronize dkim2ctl's pruned module sums.
-WORKSPACE_SYNC_FILES := go.work go.work.sum lib/go.mod lib/go.sum cmd/dkim2d/go.mod cmd/dkim2d/go.sum cmd/dkim2-milter/go.mod cmd/dkim2-milter/go.sum cmd/dkim2-exim/go.mod cmd/dkim2-exim/go.sum cmd/dkim2ctl/go.mod cmd/dkim2ctl/go.sum tools/go.mod tools/go.sum
+WORKSPACE_SYNC_FILES := go.work go.work.sum lib/go.mod lib/go.sum cmd/dkim2d/go.mod cmd/dkim2d/go.sum cmd/dkim2-milter/go.mod cmd/dkim2-milter/go.sum cmd/dkim2-exim/go.mod cmd/dkim2-exim/go.sum cmd/dkim2ctl/go.mod cmd/dkim2ctl/go.sum cmd/dkim2-dsn-propagator/go.mod cmd/dkim2-dsn-propagator/go.sum tools/go.mod tools/go.sum
 WORKSPACE_ABSENT_SUM_FILES :=
 EXIM_C_DIR := $(ROOT)/cmd/dkim2-exim/exim
 EXIM_PROBE_CONTRACT := $(EXIM_C_DIR)/generated/probe-contract-v1.txt
@@ -345,24 +350,30 @@ generate-openapi:
 	go -C tools run ./cmd/wiregen -package wire -output "$(OPENAPI_CLIENT_WIRE)"; \
 	go -C tools run ./cmd/wiregen -package wire -output "$(OPENAPI_MILTER_WIRE)"; \
 	go -C tools run ./cmd/wiregen -package wire -output "$(OPENAPI_EXIM_WIRE)"; \
+	go -C tools run ./cmd/wiregen -package wire -output "$(OPENAPI_PROPAGATOR_WIRE)"; \
 	go -C tools tool oapi-codegen -config "$(OPENAPI_SERVER_CONFIG)" -o "$(OPENAPI_SERVER_OUTPUT)" "$(OPENAPI_SOURCE)"; \
 	go -C tools tool oapi-codegen -config "$(OPENAPI_CLIENT_CONFIG)" -o "$(OPENAPI_CLIENT_OUTPUT)" "$(OPENAPI_SOURCE)"; \
 	go -C tools tool oapi-codegen -config "$(OPENAPI_MILTER_CONFIG)" -o "$(OPENAPI_MILTER_OUTPUT)" "$(OPENAPI_SOURCE)"; \
 	go -C tools tool oapi-codegen -config "$(OPENAPI_MILTER_TEST_SERVER_CONFIG)" -o "$(OPENAPI_MILTER_TEST_SERVER_OUTPUT)" "$(OPENAPI_SOURCE)"; \
 	go -C tools tool oapi-codegen -config "$(OPENAPI_EXIM_CONFIG)" -o "$(OPENAPI_EXIM_OUTPUT)" "$(OPENAPI_SOURCE)"; \
-	go -C tools tool oapi-codegen -config "$(OPENAPI_EXIM_TEST_SERVER_CONFIG)" -o "$(OPENAPI_EXIM_TEST_SERVER_OUTPUT)" "$(OPENAPI_SOURCE)"
+	go -C tools tool oapi-codegen -config "$(OPENAPI_EXIM_TEST_SERVER_CONFIG)" -o "$(OPENAPI_EXIM_TEST_SERVER_OUTPUT)" "$(OPENAPI_SOURCE)"; \
+	go -C tools tool oapi-codegen -config "$(OPENAPI_PROPAGATOR_CONFIG)" -o "$(OPENAPI_PROPAGATOR_OUTPUT)" "$(OPENAPI_SOURCE)"; \
+	go -C tools tool oapi-codegen -config "$(OPENAPI_PROPAGATOR_TEST_SERVER_CONFIG)" -o "$(OPENAPI_PROPAGATOR_TEST_SERVER_OUTPUT)" "$(OPENAPI_SOURCE)"
 
 .PHONY: generate-openapi-check-output
 generate-openapi-check-output: override OPENAPI_SERVER_WIRE = $(OPENAPI_CHECK_OUTPUT)/server-wire.go
 generate-openapi-check-output: override OPENAPI_CLIENT_WIRE = $(OPENAPI_CHECK_OUTPUT)/client-wire.go
 generate-openapi-check-output: override OPENAPI_MILTER_WIRE = $(OPENAPI_CHECK_OUTPUT)/milter-wire.go
 generate-openapi-check-output: override OPENAPI_EXIM_WIRE = $(OPENAPI_CHECK_OUTPUT)/exim-wire.go
+generate-openapi-check-output: override OPENAPI_PROPAGATOR_WIRE = $(OPENAPI_CHECK_OUTPUT)/propagator-wire.go
 generate-openapi-check-output: override OPENAPI_SERVER_OUTPUT = $(OPENAPI_CHECK_OUTPUT)/server.gen.go
 generate-openapi-check-output: override OPENAPI_CLIENT_OUTPUT = $(OPENAPI_CHECK_OUTPUT)/client.gen.go
 generate-openapi-check-output: override OPENAPI_MILTER_OUTPUT = $(OPENAPI_CHECK_OUTPUT)/milter.gen.go
 generate-openapi-check-output: override OPENAPI_MILTER_TEST_SERVER_OUTPUT = $(OPENAPI_CHECK_OUTPUT)/milter-test-server.gen.go
 generate-openapi-check-output: override OPENAPI_EXIM_OUTPUT = $(OPENAPI_CHECK_OUTPUT)/exim.gen.go
 generate-openapi-check-output: override OPENAPI_EXIM_TEST_SERVER_OUTPUT = $(OPENAPI_CHECK_OUTPUT)/exim-test-server.gen.go
+generate-openapi-check-output: override OPENAPI_PROPAGATOR_OUTPUT = $(OPENAPI_CHECK_OUTPUT)/propagator.gen.go
+generate-openapi-check-output: override OPENAPI_PROPAGATOR_TEST_SERVER_OUTPUT = $(OPENAPI_CHECK_OUTPUT)/propagator-test-server.gen.go
 ifneq ($(strip $(OPENAPI_CHECK_OUTPUT)),)
 generate-openapi-check-output: generate-openapi
 else
@@ -389,17 +400,20 @@ check-openapi:
 	cmp "$(OPENAPI_CLIENT_WIRE)" "$$output/client-wire.go"; \
 	cmp "$(OPENAPI_MILTER_WIRE)" "$$output/milter-wire.go"; \
 	cmp "$(OPENAPI_EXIM_WIRE)" "$$output/exim-wire.go"; \
+	cmp "$(OPENAPI_PROPAGATOR_WIRE)" "$$output/propagator-wire.go"; \
 	cmp "$(OPENAPI_SERVER_OUTPUT)" "$$output/server.gen.go"; \
 	cmp "$(OPENAPI_CLIENT_OUTPUT)" "$$output/client.gen.go"; \
 	cmp "$(OPENAPI_MILTER_OUTPUT)" "$$output/milter.gen.go"; \
 	cmp "$(OPENAPI_MILTER_TEST_SERVER_OUTPUT)" "$$output/milter-test-server.gen.go"; \
 	cmp "$(OPENAPI_EXIM_OUTPUT)" "$$output/exim.gen.go"; \
 	cmp "$(OPENAPI_EXIM_TEST_SERVER_OUTPUT)" "$$output/exim-test-server.gen.go"; \
-	! grep -Eq '^output:' "$(OPENAPI_SERVER_CONFIG)" "$(OPENAPI_CLIENT_CONFIG)" "$(OPENAPI_MILTER_CONFIG)" "$(OPENAPI_MILTER_TEST_SERVER_CONFIG)" "$(OPENAPI_EXIM_CONFIG)" "$(OPENAPI_EXIM_TEST_SERVER_CONFIG)"; \
+	cmp "$(OPENAPI_PROPAGATOR_OUTPUT)" "$$output/propagator.gen.go"; \
+	cmp "$(OPENAPI_PROPAGATOR_TEST_SERVER_OUTPUT)" "$$output/propagator-test-server.gen.go"; \
+	! grep -Eq '^output:' "$(OPENAPI_SERVER_CONFIG)" "$(OPENAPI_CLIENT_CONFIG)" "$(OPENAPI_MILTER_CONFIG)" "$(OPENAPI_MILTER_TEST_SERVER_CONFIG)" "$(OPENAPI_EXIM_CONFIG)" "$(OPENAPI_EXIM_TEST_SERVER_CONFIG)" "$(OPENAPI_PROPAGATOR_CONFIG)" "$(OPENAPI_PROPAGATOR_TEST_SERVER_CONFIG)"; \
 	grep -Eq '^[[:space:]]*(require[[:space:]]+)?github.com/getkin/kin-openapi v0\.149\.0$$' tools/go.mod; \
 	grep -Eq '^[[:space:]]*(require[[:space:]]+)?github.com/getkin/kin-openapi v0\.149\.0$$' cmd/dkim2d/go.mod; \
 	grep -Eq '^[[:space:]]*github.com/oapi-codegen/oapi-codegen/v2 v2\.8\.0( // indirect)?$$' tools/go.mod; \
-	for module in cmd/dkim2ctl/go.mod cmd/dkim2-milter/go.mod cmd/dkim2-exim/go.mod; do grep -Eq '^[[:space:]]*github.com/oapi-codegen/runtime v1\.7\.0$$' "$$module"; done; \
+	for module in cmd/dkim2ctl/go.mod cmd/dkim2-milter/go.mod cmd/dkim2-exim/go.mod cmd/dkim2-dsn-propagator/go.mod; do grep -Eq '^[[:space:]]*github.com/oapi-codegen/runtime v1\.7\.0$$' "$$module"; done; \
 	! grep -Eq 'github.com/oapi-codegen/runtime' cmd/dkim2d/go.mod lib/go.mod; \
 	! grep -REq --include='*.go' 'github.com/oapi-codegen/runtime' cmd/dkim2d lib; \
 	! grep -Eq 'oapi-codegen|kin-openapi' lib/go.mod; \
@@ -409,7 +423,8 @@ check-openapi:
 	go -C cmd/dkim2d test ./internal/httpjson/...; \
 	go -C cmd/dkim2ctl test ./internal/testclient/...; \
 	go -C cmd/dkim2-milter test ./internal/daemon/...; \
-	go -C cmd/dkim2-exim test ./internal/daemon/...
+	go -C cmd/dkim2-exim test ./internal/daemon/...; \
+	go -C cmd/dkim2-dsn-propagator test ./internal/daemon/... ./internal/integration/...
 
 .PHONY: check-generated
 check-generated: check-openapi check-exim-build check-exim-row-builds

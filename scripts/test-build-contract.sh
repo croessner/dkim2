@@ -27,6 +27,7 @@ docker buildx build --file build/container/Dockerfile \
 
 test -f "$context/context/go.work"
 test -f "$context/context/cmd/dkim2d/main.go"
+test -f "$context/context/cmd/dkim2-dsn-propagator/main.go"
 test -f "$context/context/cmd/dkim2-exim/go.mod"
 test -f "$context/context/cmd/dkim2-exim/go.sum"
 ! grep -aFRq -- "$marker" "$context"
@@ -43,6 +44,7 @@ fi
 for forbidden in \
   'lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-06/signing-test-rsa.pem' \
   'cmd/dkim2ctl/testdata/fixtures/draft-ietf-dkim-dkim2-spec-06/sign.json' \
-  'cmd/dkim2-milter/internal/integration/milter_fixture_test.go'; do
+  'cmd/dkim2-milter/internal/integration/milter_fixture_test.go' \
+  'cmd/dkim2-dsn-propagator/internal/integration/generated/server.gen.go'; do
   test ! -e "$context/context/$forbidden"
 done

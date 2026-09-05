@@ -121,7 +121,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        product: [dkim2d, dkim2-milter, dkim2ctl]
+        product: [dkim2d, dkim2-milter, dkim2ctl, dkim2-dsn-propagator]
     steps:
       - name: Check out release tag
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

@@ -12,15 +12,15 @@
     "wire_version": {"const": "v1"},
     "planned_tags": {
       "type": "array",
-      "minItems": 6,
-      "maxItems": 6,
+      "minItems": 7,
+      "maxItems": 7,
       "uniqueItems": true,
       "items": {"type": "string", "maxLength": 64}
     },
     "modules": {
       "type": "array",
-      "minItems": 5,
-      "maxItems": 5,
+      "minItems": 6,
+      "maxItems": 6,
       "items": {
         "type": "object",
         "additionalProperties": false,
