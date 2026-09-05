@@ -1117,9 +1117,13 @@ Daemon:
   `previous_hop`, `completed`) and `result` (`ok`, `permanent`, `temporary`).
 - `dsn.propagation.completed` log event and
   `dkim2d_dsn_propagation_total` counter with closed labels `stage`
-  (`evaluation`, `replay`, `rebuild`, `previous_hop_verification`,
-  `signing_domain`, `policy`, `signing`, `completed`) and `result` (`accept`,
-  `reject`, `discard`, `tempfail`).
+  (`outer_verification`, `evaluation`, `replay`, `rebuild`,
+  `previous_hop_verification`, `signing_domain`, `policy`, `signing`,
+  `completed`) and `result` (`accept`, `reject`, `discard`, `tempfail`).
+  `outer_verification` is the terminal stage whenever the outer verification
+  rows decide the request, which includes a notification without a DKIM2 field
+  family and an outer signature that did not verify; no received-DSN
+  evaluation ran in those cases and the response carries no projection.
 - Existing operation latency and error metrics gain the
   `delivery_status_propagation` operation value.
 
@@ -1232,14 +1236,19 @@ Integration and E2E tests:
   generates when the destination refuses it and the local delivery-status
   Milter signs, routing to the adapter over the reserved return-path LMTP
   transport, re-injection, and verification of the propagated DSN at a
-  simulated previous hop. Negative cases that run on real Postfix: a spoofed
-  DSN (corrupted outer signature, `550`), a terminal-origin DSN (`250`,
-  discarded), a DSN for a message this system did not sign (embedded
-  completion `d=` of the foreign tenant, classified `not_local` by
-  `/v1/process` under the local tenant before the adapter answers `550`
-  with `permanent_failure_reply: reject`), a replayed DSN (`250` after the
+  simulated previous hop. Negative cases that run in the Postfix
+  qualification stack: a spoofed DSN (corrupted outer signature, `550`), a
+  terminal-origin DSN (`250`, discarded), a DSN for a message this system did
+  not sign (embedded completion `d=` of the foreign tenant, classified
+  `not_local` by `/v1/process` under the local tenant (outer verification state
+  `PASS`) before the adapter answers `550` with
+  `permanent_failure_reply: reject`), a replayed DSN (`250` after the
   commit, nothing propagated), a re-injection outage (`451`, completed by the
   MTA's own retry after the lease), and a retry inside a live lease (`451`).
+  The spoofed, terminal-origin, duplicate, and in-lease retry notifications
+  are handed to the adapter over its own LMTP socket inside that stack rather
+  than travelling through the Postfix queue; the positive path and the
+  re-injection outage exercise Postfix's own queue and retry behavior.
   The `not_local` notification is minted by the harness through the daemon's
   delivery-status route under the foreign tenant, which is the only shape
   the public API can sign: the delivery-status signing domain is bound to
@@ -1314,13 +1323,14 @@ Final gate:
   `testdata/conformance/manifest.json` was refreshed with `make
   generate-conformance-manifest` after the qualification runner, `run.sh`,
   and the real-Valkey integration test changed.
-- Guardrails: `make guardrails` passes (exit 0, recorded in the ignored prompt ledger with its timestamps), and `git diff
-  --check` is clean. In `go -C tools test ./...` only the pre-existing
+- Guardrails: `make guardrails` passes (exit 0, recorded in the measured
+  effort record with its timestamps), and `git diff --check` is clean. In
+  `go -C tools test ./...` only the pre-existing
   `TestCheckReleasePlanAcceptsRepositoryPlan` (`release_stable_workflow`)
   failure remains, unrelated and unchanged.
 - Postfix qualification, core lane: `contrib/qualification/postfix-milter/run.sh
   .artifacts/conformance-postfix` passes. Two independent passes produce
-  byte-identical reports; report SHA-256 `01cc446863d339bafda5ae5959486d3346b75e912cbd5f50f321322de6c6de5a`. Pinned images
+  byte-identical reports; report SHA-256 `b4453c4bb46d3c662dc5cc3e132dbad022d3a603c7845711174f94d3759db5ae`. Pinned images
   `golang@sha256:ae5a2316d12f3e78fd99177dad452e6ad4f240af2d71d57b480c3477f250fec6`,
   `debian@sha256:4e401d95de7083948053197a9c3913343cd06b706bf15eb6a0c3ccd26f436a0e`,
   `chrroessner/postfix@sha256:d4b349ce665ba291444e55862ac842e3d4e612596520a9ba65a7b9bf00f9aa3c`,
@@ -1331,7 +1341,7 @@ Final gate:
 - Postfix qualification, propagation lane:
   `contrib/qualification/postfix-milter/run.sh --lane propagation
   .artifacts/postfix-propagation` passes. Two independent passes produce
-  byte-identical reports; report SHA-256 `0026f250329979a37094d1434b8a96429983e9a915cf86070eb377358240918c`; the same pinned images
+  byte-identical reports; report SHA-256 `19e56ce232a664bc08390e9d09559f16414ef49683d4b6c0d18b305456e89305`; the same pinned images
   and Postfix version as the core lane. The fragment carries eight cases:
   `propagated_dsn_verified_at_previous_hop`,
   `propagation_return_path_routed_over_single_recipient_lmtp`,
@@ -1347,8 +1357,11 @@ Final gate:
   `/v1/sign`, wraps it in a Postfix-wire-form report, signs that report
   through `/v1/dsn/sign` under the foreign tenant's own `delivery_status`
   profile (the route derives the signing domain from the embedded highest
-  `d=`, which is the foreign domain), proves `local_hop: not_local` through
-  `/v1/process` under the local tenant, and then delivers it over the
+  `d=`, which is the foreign domain), proves through `/v1/process` under the
+  local tenant that the outer verification state is `PASS` and
+  `local_hop: not_local`, so the refusal is attributed to the `not_local` row
+  and not to an outer signature that failed to verify, and then delivers it
+  over the
   adapter's LMTP socket to the foreign sender's address, where
   `permanent_failure_reply: reject` answers `550` and nothing is propagated.
 - Defect found by the lane and fixed at its root: a corrupted outer signature
@@ -1365,9 +1378,9 @@ Final gate:
   unreadable outer signature whose outer verdict is not `pass`. The OpenAPI
   description of `ProcessResponse.delivery_status` states the omission and
   the generated artifacts were refreshed.
-- Negative-case coverage split: on real Postfix the lane runs the spoofed,
-  terminal-origin, `not_local`, replayed, re-injection-outage, and in-lease
-  retry cases listed above. Two negatives are library-only, proven by
+- Negative-case coverage split: in the Postfix qualification stack the lane
+  runs the spoofed, terminal-origin, `not_local`, replayed,
+  re-injection-outage, and in-lease retry cases listed above. Two negatives are library-only, proven by
   `dsn-propagation-golden.json` and `received-dsn-golden.json`: a foreign
   signature naming a local address in `mf=` and a null previous sender. They
   cannot be minted through the public API because `/v1/dsn/sign` binds the
