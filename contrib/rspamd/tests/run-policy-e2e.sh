@@ -14,6 +14,20 @@ ENV_FILE="$RUNTIME_DIR/compose.env"
 REUSED_NAUTHILUS_IMAGE=${POLICY_E2E_REUSE_NAUTHILUS_IMAGE:-}
 NAUTHILUS_IMAGE=${REUSED_NAUTHILUS_IMAGE:-"$PROJECT_NAME-nauthilus"}
 MILTERTEST_IMAGE="$PROJECT_NAME-miltertest"
+# RECEIVED_DSN_ATTRIBUTE selects whether the Rspamd option
+# nauthilus.received_dsn_attribute is enabled for this run. The fixture enables
+# it; "false" rewrites the runtime copy of local.d and asserts the attribute
+# absent, which is the variant that passes against a Policy allowlist that has
+# not admitted dkim2.received_dsn_propagation.
+RECEIVED_DSN_ATTRIBUTE=${POLICY_E2E_RECEIVED_DSN_ATTRIBUTE:-true}
+case $RECEIVED_DSN_ATTRIBUTE in
+  true|false) ;;
+  *)
+    echo "POLICY_E2E_RECEIVED_DSN_ATTRIBUTE must be true or false" >&2
+    exit 2
+    ;;
+esac
+RSPAMD_LOCAL_D="$RUNTIME_DIR/rspamd-local.d"
 
 cleanup() {
   STATUS=$?
@@ -63,6 +77,19 @@ command -v go >/dev/null
 
 umask 077
 mkdir -p "$RUNTIME_DIR/certs" "$RUNTIME_DIR/protected" "$RUNTIME_DIR/state"
+# The runtime local.d copy carries the selected received-DSN attribute setting
+# and is the only Rspamd configuration the stack mounts.
+mkdir -p "$RSPAMD_LOCAL_D"
+cp "$SCRIPT_DIR"/policy-e2e/rspamd/local.d/* "$RSPAMD_LOCAL_D/"
+grep -q '^  received_dsn_attribute = true;$' "$RSPAMD_LOCAL_D/dkim2.conf"
+if test "$RECEIVED_DSN_ATTRIBUTE" = false; then
+  sed -i.orig 's/^  received_dsn_attribute = true;$/  received_dsn_attribute = false;/' \
+    "$RSPAMD_LOCAL_D/dkim2.conf"
+  rm -f "$RSPAMD_LOCAL_D/dkim2.conf.orig"
+  grep -q '^  received_dsn_attribute = false;$' "$RSPAMD_LOCAL_D/dkim2.conf"
+fi
+chmod 0555 "$RSPAMD_LOCAL_D"
+chmod 0444 "$RSPAMD_LOCAL_D"/*
 printf '%s\n' '{"mode":"default"}' >"$RUNTIME_DIR/state/dkim2-stub-control.json"
 printf '%s\n' '{"mode":"forward"}' >"$RUNTIME_DIR/state/policy-observer-control.json"
 openssl rand 32 >"$RUNTIME_DIR/protected/process-capability"
@@ -104,6 +131,7 @@ chmod 0444 \
 write_env() {
   {
     printf 'POLICY_E2E_RUNTIME=%s\n' "$RUNTIME_DIR"
+    printf 'POLICY_E2E_RSPAMD_LOCAL_D=%s\n' "$RSPAMD_LOCAL_D"
     printf 'POLICY_E2E_PASSWORD=%s\n' "$POLICY_PASSWORD"
     printf 'POLICY_E2E_REDIS_ENCRYPTION_SECRET=%s\n' "$REDIS_ENCRYPTION_SECRET"
     printf 'POLICY_E2E_REDIS_PASSWORD_NONCE=%s\n' "$REDIS_PASSWORD_NONCE"
@@ -193,11 +221,17 @@ assert_policy_request() {
 }
 
 assert_policy_request_received_dsn() {
+  if test "$RECEIVED_DSN_ATTRIBUTE" = true; then
+    ATTRIBUTE_STATE=enabled
+  else
+    ATTRIBUTE_STATE=disabled
+  fi
   python3 "$SCRIPT_DIR/policy-e2e/assert_policy_request.py" \
     --state "$RUNTIME_DIR/state/policy-observer-state.json" \
     --response "$SCRIPT_DIR/policy-e2e/dkim2-received-dsn-response.json" \
     --peer-ip "$1" --expected-action "$2" \
-    --expect-received-dsn "$3"
+    --expect-received-dsn "$3" \
+    --received-dsn-attribute "$ATTRIBUTE_STATE"
 }
 
 # A non-applicable unsigned message must call neither upstream service.
@@ -409,4 +443,5 @@ FINAL_FORWARDED_CALLS=$(observer_value forwarded_calls)
 printf '%s\n' \
   "DKIM2/Rspamd/Nauthilus Policy E2E: PASS" \
   "stub_calls=$FINAL_STUB_CALLS policy_calls=$FINAL_POLICY_CALLS forwarded_policy_calls=$FINAL_FORWARDED_CALLS" \
+  "received_dsn_attribute=$RECEIVED_DSN_ATTRIBUTE" \
   "request_projection=exact response_request_id=correlated smtp_peers=203.0.113.25,198.51.100.25"

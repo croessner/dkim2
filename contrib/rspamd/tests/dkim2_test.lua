@@ -447,10 +447,21 @@ end
 
 projected.verifier_projection.hops[1].affected_headers = {}
 projected.delivery_status = delivery_status({ propagation = 'not_failure' })
-local projected_attributes = assert(verifier.policy_attributes(projected))
+local projected_attributes = assert(verifier.policy_attributes(projected, true))
 assert(projected_attributes['dkim2.received_dsn_propagation'].string == 'not_failure')
+local default_attributes = assert(verifier.policy_attributes(projected))
+assert(default_attributes['dkim2.received_dsn_propagation'] == nil,
+  'the propagation class is opt-in and absent by default')
+local disabled_attributes = assert(verifier.policy_attributes(projected, false))
+assert(disabled_attributes['dkim2.received_dsn_propagation'] == nil,
+  'an explicitly disabled propagation class is never sent')
+assert(verifier.policy_attributes(projected, 'true')['dkim2.received_dsn_propagation'] == nil,
+  'only the exact boolean true enables the propagation class')
+for key in pairs(default_attributes) do
+  assert(projected_attributes[key] ~= nil, key .. ' must be carried in both settings')
+end
 projected.delivery_status = nil
-local plain_attributes = assert(verifier.policy_attributes(projected))
+local plain_attributes = assert(verifier.policy_attributes(projected, true))
 assert(plain_attributes['dkim2.received_dsn_propagation'] == nil,
   'a message that is not a received notification carries no propagation class')
 

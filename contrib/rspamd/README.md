@@ -139,6 +139,17 @@ attributes. The exact MTA-supplied peer is captured once from
 Rspamd
 does not submit reputation or provider/plugin facts.
 
+The received delivery-status projection reaches Policy only on explicit
+opt-in. With `nauthilus.received_dsn_attribute = true` the projected
+`propagation` class is sent as the `dkim2.received_dsn_propagation` resource
+attribute; by default it is not sent, because a Policy configuration with a
+closed `allowed_resource_attributes` list refuses every request that names an
+attribute it has not admitted, and that refusal would tempfail every received
+notification as `DKIM2_NAUTHILUS_INDETERMINATE`. Enable the option only after
+the Nauthilus policy admits the attribute with a string schema whose
+`max_length` is at least 30. The `DKIM2_DSN_*` symbols are published
+regardless of the option.
+
 Nauthilus `permit` continues without forcing accept. `deny` and non-retryable
 `indeterminate` reject permanently. Retryable `indeterminate`, unexpected
 `not_applicable`, malformed responses, HTTP failures, and authentication or

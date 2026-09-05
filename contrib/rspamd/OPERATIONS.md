@@ -138,6 +138,7 @@ module instead of being silently ignored.
 | `nauthilus.client_class` | yes | none | Listener-scoped `untrusted`, `trusted`, or `local`; authenticated SMTP overrides it per task. |
 | `nauthilus.mail_from_class` | yes | none | Listener-scoped non-null sender class. Null MAIL FROM is detected per task. |
 | `nauthilus.recipient_classes` | yes | none | Bounded recipient class set for this listener/routing scope. |
+| `nauthilus.received_dsn_attribute` | no | `false` | Exactly boolean. When `true`, the received delivery-status `propagation` class is sent as the `dkim2.received_dsn_propagation` resource attribute. Enable it only after the Nauthilus policy admits that attribute in `allowed_resource_attributes` with a string schema whose `max_length` is at least 30; a closed allowlist that has not admitted it answers `403`, which tempfails every received notification as `DKIM2_NAUTHILUS_INDETERMINATE`. Any non-boolean value disables the module at startup. |
 
 Rspamd 4.1.5 uses its global `ssl_ca_path` for the HTTPS client trust store.
 That store must contain the issuer for `nauthilus.server_name`; certificate and
@@ -291,6 +292,14 @@ an error. Two tenants sharing one daemon are isolated by this key: a domain
 that is local for one tenant is `not_local` for the other. The tenant value is
 an authority key only, never an identity claim, and never reaches a symbol
 option, a metric label, or a log line.
+
+The projection is carried to Nauthilus only when
+`nauthilus.received_dsn_attribute = true`. Leave it at its default `false`
+until the Policy allowlist admits `dkim2.received_dsn_propagation`; enabling it
+against a closed allowlist that has not admitted the attribute turns every
+received notification into a `403` from Policy and therefore into
+`DKIM2_NAUTHILUS_INDETERMINATE` with a soft reject. Rollback is the single
+configuration line plus a reload.
 
 ## Normal operation
 

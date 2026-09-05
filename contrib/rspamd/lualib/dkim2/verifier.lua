@@ -725,8 +725,12 @@ local function projection_hop_record(hop)
   } }
 end
 
--- policy_attributes maps validated daemon facts to local dkim2.* generic Policy values.
-local function policy_attributes(response)
+-- policy_attributes maps validated daemon facts to local dkim2.* generic Policy
+-- values. The received delivery-status propagation class is carried only when
+-- include_received_dsn is exactly true, because a Policy configuration with a
+-- closed resource-attribute allowlist refuses every request that names an
+-- attribute it has not admitted.
+local function policy_attributes(response, include_received_dsn)
   if not valid_response(response) or response.verifier_projection == nil then
     return nil
   end
@@ -762,7 +766,7 @@ local function policy_attributes(response)
     ['dkim2.disposition'] = { string = response.disposition },
     ['dkim2.chain'] = { records = records },
   }
-  if response.delivery_status ~= nil then
+  if include_received_dsn == true and response.delivery_status ~= nil then
     attributes['dkim2.received_dsn_propagation'] =
       { string = response.delivery_status.propagation }
   end

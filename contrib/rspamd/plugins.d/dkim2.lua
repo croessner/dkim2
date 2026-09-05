@@ -35,7 +35,7 @@ local allowed_retry = {
 local allowed_policy = {
   endpoint = true, server_name = true, username = true, password_file = true,
   instance = true, timeout = true, max_response_bytes = true, client_class = true,
-  mail_from_class = true, recipient_classes = true,
+  mail_from_class = true, recipient_classes = true, received_dsn_attribute = true,
 }
 
 -- disable_module reports one bounded startup category without configuration values.
@@ -55,6 +55,13 @@ local function closed_keys(value, allowed)
     end
   end
   return true
+end
+
+-- valid_received_dsn_attribute accepts the absent or exactly boolean opt-in for
+-- the dkim2.received_dsn_propagation Policy attribute. Any other value is a
+-- configuration error rather than an implicit enablement.
+local function valid_received_dsn_attribute(value)
+  return value == nil or type(value) == 'boolean'
 end
 
 -- closed_top_settings rejects accidental or unsupported module configuration.
@@ -137,6 +144,7 @@ local verifier_options = options and {
 if not closed_top_settings(options) or type(options.retry_cache) ~= 'table' or
     type(options.nauthilus) ~= 'table' or not closed_keys(options.retry_cache, allowed_retry) or
     not closed_keys(options.nauthilus, allowed_policy) or
+    not valid_received_dsn_attribute(options.nauthilus.received_dsn_attribute) or
     type(options.retry_cache.authority_generation) ~= 'string' or
     #options.retry_cache.authority_generation == 0 or
     #options.retry_cache.authority_generation > 128 or
@@ -176,7 +184,11 @@ local policy = policy_module.new({
   recipient_classes = options.nauthilus.recipient_classes,
   http = rspamd_http, ucl = ucl, util = rspamd_util,
   json_validator = strict_json.valid,
-  projection_mapper = verifier.policy_attributes,
+  -- The received delivery-status attribute is opt-in: the Policy allowlist
+  -- must admit dkim2.received_dsn_propagation before it may be sent.
+  projection_mapper = function(response)
+    return verifier.policy_attributes(response, options.nauthilus.received_dsn_attribute == true)
+  end,
   envelope = {
     rcpt_count = function(task)
       local prepared = task:cache_get(TASK_PREPARED)

@@ -9,6 +9,8 @@ local policy_requests = 0
 local finalizations = {}
 local log_errors = 0
 local eligible_body = '{"validated":"eligible"}'
+local policy_options
+local received_dsn_opt_in
 
 local control = {}
 
@@ -67,7 +69,10 @@ package.preload['dkim2.verifier'] = function()
     end,
     apply_failure = function() control.failures = control.failures + 1 end,
     apply_response = function() control.applied = control.applied + 1 end,
-    policy_attributes = function() return {} end,
+    policy_attributes = function(_, include_received_dsn)
+      received_dsn_opt_in = include_received_dsn
+      return {}
+    end,
   }
 end
 
@@ -120,7 +125,10 @@ local policy_instance = {
 
 package.preload['dkim2.nauthilus_policy'] = function()
   return {
-    new = function() return policy_instance end,
+    new = function(options)
+      policy_options = options
+      return policy_instance
+    end,
     decision_action = function(decision)
       return decision and decision.action or 'soft reject'
     end,
@@ -155,23 +163,25 @@ package.preload.lua_util = function()
 end
 package.preload.ucl = function() return {} end
 
+local plugin_options = {
+  enabled = true, endpoint = 'http://127.0.0.1:8080/v1/process', transport = 'loopback',
+  capability_file = '/protected/capability', failure_mode = 'tempfail',
+  retry_cache = {
+    secret_file = '/protected/retry', authority_generation = 'generation-1',
+    ttl_ms = 60000, lease_ms = 1000, redis = { servers = 'redis:6379' },
+  },
+  nauthilus = {
+    endpoint = 'https://nauthilus-policy:9443/api/v1/policy/decisions',
+    server_name = 'nauthilus-policy', username = 'rspamd-verifier',
+    password_file = '/protected/password', instance = 'mx.example.test',
+    client_class = 'untrusted', mail_from_class = 'external',
+    recipient_classes = { 'local' },
+  },
+}
+
 rspamd_config = {
   get_all_opt = function()
-    return {
-      enabled = true, endpoint = 'http://127.0.0.1:8080/v1/process', transport = 'loopback',
-      capability_file = '/protected/capability', failure_mode = 'tempfail',
-      retry_cache = {
-        secret_file = '/protected/retry', authority_generation = 'generation-1',
-        ttl_ms = 60000, lease_ms = 1000, redis = { servers = 'redis:6379' },
-      },
-      nauthilus = {
-        endpoint = 'https://nauthilus-policy:9443/api/v1/policy/decisions',
-        server_name = 'nauthilus-policy', username = 'rspamd-verifier',
-        password_file = '/protected/password', instance = 'mx.example.test',
-        client_class = 'untrusted', mail_from_class = 'external',
-        recipient_classes = { 'local' },
-      },
-    }
+    return plugin_options
   end,
   register_symbol = function(_, definition)
     definitions[definition.name] = definition
@@ -405,5 +415,31 @@ task = policy_task('soft reject')
 errors_before = log_errors
 finalizer_callback(task)
 assert(log_errors == errors_before + 1 and task.pre_action == 'soft reject')
+
+-- Received delivery-status Policy attribute opt-in matrix: absent and false
+-- never send the attribute, exactly true sends it, and any other value is a
+-- configuration error that disables the module.
+for _, scenario in ipairs({
+  { present = false, want = false },
+  { present = true, value = false, want = false },
+  { present = true, value = true, want = true },
+}) do
+  plugin_options.nauthilus.received_dsn_attribute = scenario.present and scenario.value or nil
+  policy_options = nil
+  received_dsn_opt_in = 'unset'
+  assert(loadfile(plugin_path))()
+  assert(type(policy_options) == 'table' and type(policy_options.projection_mapper) == 'function')
+  assert(type(policy_options.projection_mapper(eligible_response)) == 'table')
+  assert(received_dsn_opt_in == scenario.want,
+    'received_dsn_attribute must reach the projection mapper as exactly ' .. tostring(scenario.want))
+end
+for _, hostile in ipairs({ 'true', 1, {} }) do
+  plugin_options.nauthilus.received_dsn_attribute = hostile
+  local errors_before = log_errors
+  assert(not pcall(assert(loadfile(plugin_path))),
+    'a non-boolean received_dsn_attribute must disable the module')
+  assert(log_errors == errors_before + 1)
+end
+plugin_options.nauthilus.received_dsn_attribute = nil
 
 print('dkim2 Rspamd plugin orchestration tests: PASS')

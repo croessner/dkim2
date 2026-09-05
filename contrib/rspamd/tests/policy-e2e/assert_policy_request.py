@@ -105,32 +105,40 @@ def expected_chain(response: dict) -> list[dict]:
     return records
 
 
-def expected_resource_keys(response: dict) -> set[str]:
+def expected_resource_keys(response: dict, attribute_enabled: bool) -> set[str]:
     """Return the closed resource key set implied by the served producer response.
 
     The optional received delivery-status projection is the only conditional
-    resource attribute, so an unexpected presence or absence stays a failure.
+    resource attribute: it is carried only when the producer returned the
+    projection and the Rspamd option nauthilus.received_dsn_attribute is true,
+    so an unexpected presence or absence stays a failure.
     """
-    if response.get("delivery_status") is None:
+    if response.get("delivery_status") is None or not attribute_enabled:
         return RESOURCE_KEYS
     return RESOURCE_KEYS | {RECEIVED_DSN_KEY}
 
 
-def assert_received_dsn(attributes: dict, response: dict, expected: str | None) -> None:
+def assert_received_dsn(
+    attributes: dict, response: dict, expected: str | None, attribute_enabled: bool
+) -> None:
     """Assert the received delivery-status propagation attribute exactly.
 
-    The attribute must be present with the projected propagation value whenever
-    the producer returned the projection, absent otherwise, and equal to the
-    caller-declared expectation when the scenario states one.
+    With the Rspamd option enabled the attribute must be present with the
+    projected propagation value whenever the producer returned the projection;
+    with the option disabled it must be absent even then. The caller-declared
+    expectation is checked against the served projection in both settings.
     """
     projection = response.get("delivery_status")
     if projection is None:
         assert RECEIVED_DSN_KEY not in attributes
         assert expected is None, RECEIVED_DSN_KEY
         return
-    assert attributes[RECEIVED_DSN_KEY] == {"string": projection["propagation"]}
     if expected is not None:
         assert projection["propagation"] == expected, RECEIVED_DSN_KEY
+    if not attribute_enabled:
+        assert RECEIVED_DSN_KEY not in attributes, RECEIVED_DSN_KEY
+        return
+    assert attributes[RECEIVED_DSN_KEY] == {"string": projection["propagation"]}
 
 
 def assert_request(
@@ -139,6 +147,7 @@ def assert_request(
     peer_ip: str,
     expected_action: str,
     expected_received_dsn: str | None = None,
+    attribute_enabled: bool = True,
 ) -> None:
     """Assert projection fidelity, environment provenance, and excluded payload classes."""
     request = state["last_request"]
@@ -152,7 +161,7 @@ def assert_request(
     attributes = resource["attributes"]
     assert set(resource) == {"type", "attributes"}
     assert resource["type"] == "dkim2-message-instance"
-    assert set(attributes) == expected_resource_keys(response)
+    assert set(attributes) == expected_resource_keys(response, attribute_enabled)
     projection = response["verifier_projection"]
     verification = response["verification"]
     authentication = response["authentication"]
@@ -185,7 +194,7 @@ def assert_request(
     for name, expected in expected_scalars.items():
         assert attributes[name] == expected, name
     assert attributes["dkim2.chain"] == {"records": expected_chain(response)}
-    assert_received_dsn(attributes, response, expected_received_dsn)
+    assert_received_dsn(attributes, response, expected_received_dsn, attribute_enabled)
 
     environment = request["environment"]
     environment_attributes = environment["attributes"]
@@ -231,6 +240,9 @@ def main() -> None:
     parser.add_argument("--peer-ip", required=True)
     parser.add_argument("--expected-action", required=True)
     parser.add_argument("--expect-received-dsn")
+    parser.add_argument(
+        "--received-dsn-attribute", choices=("enabled", "disabled"), default="enabled"
+    )
     args = parser.parse_args()
     state = load(args.state)
     assert state["calls"] >= 1
@@ -240,6 +252,7 @@ def main() -> None:
         args.peer_ip,
         args.expected_action,
         args.expect_received_dsn,
+        args.received_dsn_attribute == "enabled",
     )
 
 

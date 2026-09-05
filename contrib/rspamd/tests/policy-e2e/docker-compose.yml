@@ -122,7 +122,7 @@ services:
       - ../../plugins.d/dkim2.lua:/etc/rspamd/plugins.d/dkim2.lua:ro
       - ../../modules.local.d/dkim2.conf:/usr/share/rspamd/config/modules.local.d/dkim2.conf:ro
       - ../../lualib/dkim2:/usr/share/rspamd/config/lua/dkim2:ro
-      - ./rspamd/local.d:/etc/rspamd/local.d:ro
+      - ${POLICY_E2E_RSPAMD_LOCAL_D:?runtime Rspamd local.d directory is required}:/etc/rspamd/local.d:ro
       - ${POLICY_E2E_RUNTIME:?runtime directory is required}/protected:/etc/dkim2/protected:ro
       - ${POLICY_E2E_RUNTIME:?runtime directory is required}/certs/policy-e2e-ca.crt:/etc/ssl/certs/policy-e2e-ca.crt:ro
     healthcheck:
