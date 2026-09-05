@@ -33,6 +33,15 @@ certification, or universal interoperability claim.
   the replay-gated `POST /v1/dsn/propagate` and
   `POST /v1/dsn/propagate/commit` routes, and the `dkim2-dsn-propagator`
   adapter. The following limits remain.
+- The `ordinary_transit` Milter mode revises unchanged-envelope transit only.
+  It observes one SMTP transaction and sends the outgoing envelope as both the
+  inherited and the outgoing envelope of `POST /v1/revise`, so a forwarder that
+  installs its own local return path, the premise of delivery-status
+  propagation, is rejected by that route as a custody discontinuity. Such a
+  forwarder must add its signature through a `POST /v1/revise` client that
+  presents both envelopes explicitly, as the Postfix propagation qualification
+  lane does; the Milter mode is not extended because no Milter callback can
+  attest the inherited envelope.
 - Propagation is refused as `unsupported_chain` when the previous hop is
   itself an `nd=` signature without `mf=`, or when a member of the local hop
   run does not verify. Reconstructing an earlier system's custody scheme is

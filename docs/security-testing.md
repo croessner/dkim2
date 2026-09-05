@@ -42,11 +42,14 @@ functions or proof locations drift.
 
 Delivery-status propagation contributes two `draft_normative` fuzz targets to
 that inventory, `FuzzReceivedDSN` over the received-notification parser path
-and `FuzzRebuild` over the Section 12.1.1 rebuild input. It adds no
-resource-limit owner: the received-notification and rebuild bounds are owned
-by the existing `verification`, `recipe`, `raw-message`, `tag-fields`, and
-`signing` entries, and the propagation adapter's own transport bounds are not
-yet represented in the closed resource inventory.
+and `FuzzRebuild` over the Section 12.1.1 rebuild input. The
+received-notification and rebuild bounds are owned by the existing
+`verification`, `recipe`, `raw-message`, `tag-fields`, and `signing` entries.
+The propagation adapter's transport bounds, the LMTP message, command, data
+line, forward path, recipient, connection, and in-flight limits together with
+the daemon response, next-hop, and re-injection reply bounds, are the
+`propagator` resource owner, proven by the adapter's oversized-data,
+second-recipient, invalid-limit, and connection-limit tests.
 
 The fuzz runner accepts no caller-selected target, package, command, flag,
 environment, URL, endpoint, output location, or duration. It maps the closed

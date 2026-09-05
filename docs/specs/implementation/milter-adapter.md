@@ -130,6 +130,20 @@ the same callback envelope for both sets and therefore safely supports only
 unchanged-envelope transit; other generated clients can represent forwarding
 without conflating evidence and authority.
 
+This is a documented limitation of the `ordinary_transit` Milter mode, not
+of the daemon route. A Milter observes only the outgoing SMTP transaction, so
+`handler.go` sends that envelope as both `smtp` and `incoming_smtp`. A
+forwarder that installs its own local return path, which is the premise of
+Draft-06 Section 12.1.1 delivery-status propagation, presents an outgoing
+`MAIL FROM` that differs from the inherited one; the daemon then rejects the
+revision as a custody discontinuity (`disposition: reject`), exactly as it
+must for evidence it cannot distinguish from a forged envelope. Such a
+forwarder must revise through a path that knows both envelopes: a client of
+`POST /v1/revise` that supplies the inherited envelope as `incoming_smtp` and
+the forwarding envelope as `smtp`, as the Postfix propagation qualification
+lane does. The Milter mode is not extended to carry a second envelope because
+no Milter callback can attest the inherited one.
+
 The process request may carry only an optional closed reporting context with a
 validated canonical `authserv_id`. It is accepted solely on the
 capability-authenticated process route and lets the daemon construct, rather

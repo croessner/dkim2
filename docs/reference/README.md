@@ -12,7 +12,7 @@ limitations without creating a second protocol model.
 - [Known limitations](known-limitations.md) states incomplete or unavailable
   capabilities without converting them into passing evidence.
 - [Preview release candidate](release-candidate.md) freezes the intended
-  version, six-tag plan, non-publication boundary, and capability status.
+  version, seven-tag plan, non-publication boundary, and capability status.
 - [Conformance](../conformance.md) defines claim classes and exact report
   profiles.
 - [Security testing](../security-testing.md) defines resource, privacy, fuzz,

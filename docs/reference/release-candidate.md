@@ -14,7 +14,8 @@ that later release does not rewrite this snapshot's deliberately false
 publication-authority fields. Stable publication now requires the independent
 `make release-guardrails` gate documented in the container supply-chain guide.
 
-The future six-tag plan for one exact maintainer-approved commit is:
+The future seven-tag plan for one exact maintainer-approved commit, pinned in
+`tools/internal/reference/version.go`, is:
 
 ```text
 v0.1.0-rc.1
@@ -23,6 +24,7 @@ cmd/dkim2d/v0.1.0-rc.1
 cmd/dkim2-milter/v0.1.0-rc.1
 cmd/dkim2-exim/v0.1.0-rc.1
 cmd/dkim2ctl/v0.1.0-rc.1
+cmd/dkim2-dsn-propagator/v0.1.0-rc.1
 ```
 
 No tag is created by candidate preparation. RC paths do not create stable,
@@ -38,8 +40,9 @@ The release plan is owned by
 reports. `make release-candidate` is a local, non-publishing aggregate.
 
 The prepared scope includes the standalone protocol library, daemon, Postfix
-Milter adapter, generated-client test tool, conformance and security evidence,
-and local multi-architecture packaging evidence. External implementation
+Milter adapter, delivery-status propagation adapter, generated-client test
+tool, conformance and security evidence, and local multi-architecture
+packaging evidence. External implementation
 agreement is observation only. Current comparison availability and open draft
 issues are stated in the generated report and
 [`draft-issues.md`](draft-issues.md).

@@ -31,6 +31,7 @@ Global options:
 --sign-capability-file /absolute/protected/sign-path
 --revise-capability-file /absolute/protected/revise-path
 --dsn-sign-capability-file /absolute/protected/dsn-sign-path
+--dsn-propagate-capability-file /absolute/protected/dsn-propagate-path
 --output jsonl
 ```
 
@@ -44,6 +45,17 @@ outer DSN message, exact null outer envelope, and tenant; it has no caller-
 selected fidelity. The Postfix-exclusive route and its dedicated capability
 attest the representation. Its expected response operation is `delivery_status`.
 The daemon derives the domain only from verified embedded `d=` evidence.
+The two propagation fixture kinds require the fifth, distinct propagation
+capability option. A `propagate_dsn` fixture contains the byte-preserving
+received delivery-status notification, its selected fidelity, the observed
+outer envelope of the transaction that delivered it (null reverse path, one
+recipient, `SMTPUTF8` flag), the tenant, and the adapter's `Reporting-MTA`;
+its expected projection carries the closed six-member `delivery_status`
+projection, the propagation disposition, and only a digest of the rebuilt
+notification, never its bytes. A `commit_dsn_propagation` fixture contains
+one opaque commit token from a previous propagation response and expects the
+closed commit outcome. Neither kind is accepted by the process, sign, revise,
+or DSN-sign capability.
 Credentials, raw messages, envelope values,
 paths, URLs, headers, response bodies, and raw errors never enter output.
 

@@ -322,6 +322,15 @@ explicitly classified internal Postfix transport only after classifying the
 message as unchanged-envelope ordinary transit. Do not attach two route modes
 to one message path.
 
+The transit Milter serves unchanged-envelope transit only. It sees one SMTP
+transaction and therefore sends the outgoing envelope as both the inherited
+and the outgoing envelope of `POST /v1/revise`. Mail whose return path this
+system rewrites on forwarding, which is exactly the mail that delivery-status
+propagation is for, is rejected by that route as a custody discontinuity, and
+no `main.cf` or `master.cf` setting changes that. Revise such mail through a
+client that presents both envelopes explicitly, as the qualification lane
+does through the daemon route; the Milter chain must not be attached to it.
+
 An unchanged-envelope ordinary-transit route must preserve Draft-06 custody
 continuity: the successor `mf=` domain must relaxed-match a predecessor `rt=`
 domain, and each non-null signature `d=` must align with its own `mf=` domain.
@@ -386,7 +395,12 @@ parameters that satisfy them follow in the next subsection.
 Forwarded mail must also already leave this system with a local `mf=` whose
 domain is a local authority domain. Automatic sender rewriting is out of
 scope: without a local return path no notification reaches this system and
-there is nothing to propagate.
+there is nothing to propagate. The rewritten return path also decides which
+signing path may add the forwarding signature: the `ordinary_transit` Milter
+cannot, because it presents the outgoing envelope as the inherited one and
+the daemon rejects the changed return path; the forwarding signature must
+come from a `POST /v1/revise` client that supplies the inherited envelope as
+`incoming_smtp` and the forwarding envelope as `smtp`.
 
 ### Concrete Postfix configuration
 
