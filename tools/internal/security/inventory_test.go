@@ -8,6 +8,9 @@ import (
 	"testing"
 )
 
+// propagatorConnectionsDimension names the connection bound shared by the propagator inventory assertions.
+const propagatorConnectionsDimension = "connections"
+
 // TestRepositoryInventoryMatchesEveryFirstPartyFuzzTarget freezes drift closure.
 func TestRepositoryInventoryMatchesEveryFirstPartyFuzzTarget(t *testing.T) {
 	root := filepath.Clean(filepath.Join("..", "..", ".."))
@@ -35,7 +38,7 @@ func TestResourceInventoryOwnsPropagatorTransportBounds(t *testing.T) {
 		t.Fatalf("propagator resource owner = %+v", owner)
 	}
 	for _, dimension := range []string{
-		"message_bytes", "data_line_bytes", "recipients", "connections", "in_flight",
+		"message_bytes", "data_line_bytes", "recipients", propagatorConnectionsDimension, "in_flight",
 	} {
 		if !slices.Contains(owner.Dimensions, dimension) {
 			t.Fatalf("propagator owner lacks dimension %q", dimension)

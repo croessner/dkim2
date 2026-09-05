@@ -136,7 +136,7 @@
     {
       "id": "openapi-operation-source",
       "path": "cmd/dkim2ctl/internal/testclient/operations_test.go",
-      "sha256": "0184366db1c56c257526b1fa06bb77c548a629afb93907090799a4c7e140d84f",
+      "sha256": "daa1401ee7624741d45a320e54b29cf01dbf49b89efd7a86d4346ee90184ed21",
       "module": "cmd/dkim2ctl"
     },
     {

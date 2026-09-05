@@ -34,7 +34,7 @@ func TestSignFixtureAdmissionRequiresCanonicalDomain(t *testing.T) {
 	fidelity := string(generated.RawRfc5322)
 	operation := string(generated.Sign)
 	result := "pass"
-	disposition := "accept"
+	disposition := dispositionAccept
 	actions := []fixtureExpectedAction{
 		{Type: fixtureActionAddHeader, Name: "Message-Instance", Value: "v=1; i=1; h=sha256:synthetic"},
 		{Type: fixtureActionAddHeader, Name: "DKIM2-Signature", Value: "v=1; b=synthetic"},

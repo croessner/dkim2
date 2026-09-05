@@ -17,6 +17,9 @@ import (
 	"github.com/croessner/dkim2/cmd/dkim2ctl/internal/testclient/wire"
 )
 
+// dispositionAccept is the accepting disposition value shared by the operation and propagation expectations.
+const dispositionAccept = "accept"
+
 const (
 	fixtureSchema                 = "dkim2ctl.fixture.v1"
 	caseHealth                    = "health"
@@ -707,7 +710,7 @@ func validPropagateExpectation(expectation fixtureExpectation) bool {
 	}
 	if expectation.PropagationDigest != nil {
 		expected++
-		if *expectation.PropagationDisposition != "accept" ||
+		if *expectation.PropagationDisposition != dispositionAccept ||
 			!validNotificationDigest(*expectation.PropagationDigest) {
 			return false
 		}

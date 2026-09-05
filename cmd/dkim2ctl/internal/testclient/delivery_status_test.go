@@ -73,7 +73,7 @@ func TestDSNFixtureAdmissionRequiresDistinctNullPathFacts(t *testing.T) {
 	t.Parallel()
 	operation := string(generated.DeliveryStatus)
 	result := "pass"
-	disposition := "accept"
+	disposition := dispositionAccept
 	actions := []fixtureExpectedAction{
 		{Type: fixtureActionAddHeader, Name: "Message-Instance", Value: "v=1; i=1; h=sha256:synthetic"},
 		{Type: fixtureActionAddHeader, Name: "DKIM2-Signature", Value: "v=1; b=synthetic"},
