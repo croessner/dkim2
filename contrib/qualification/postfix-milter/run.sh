@@ -21,6 +21,13 @@ compose_file=contrib/qualification/postfix-milter/compose.yaml
 # The not_local case mints its notification through the daemon's
 # delivery-status route under the foreign tenant, because Postfix itself can
 # only produce notifications the local delivery-status Milter signs.
+#
+# DKIM2_DEBUG_KEEP_STACK is a debugging knob: when it is set to any non-empty
+# value the exit trap keeps the compose project and the built images instead of
+# tearing them down, so a failed pass can be inspected on the live stack. It
+# leaves containers, volumes, and images behind and must stay unset for
+# evidence runs; clean up afterwards with docker compose down --volumes
+# --remove-orphans for project dkim2-postfix-qualification.
 lane=core
 while test "$#" -gt 0; do
   case $1 in

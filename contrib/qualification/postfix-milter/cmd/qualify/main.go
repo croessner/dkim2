@@ -1987,15 +1987,17 @@ func provePropagationTerminalOrigin() error {
 // belongs to the foreign tenant, as not_local, which the propagation contract
 // answers reject, and the adapter's permanent_failure_reply: reject turns that
 // into 550. The classification is proven through /v1/process before the
-// adapter is driven so that the 550 is attributed to not_local rather than to
-// an unverifiable outer signature.
+// adapter is driven: the route must report the outer verification state as
+// PASS and local_hop as not_local, so the 550 is attributed to the not_local
+// row rather than to a foreign outer signature that failed to verify.
 func provePropagationNotLocal() error {
 	notice, err := foreignNotification()
 	if err != nil {
 		return qualificationFailure(stagePropagationNotLocal)
 	}
-	localHop, err := classifyReceivedNotification(previousSender, notice)
-	if err != nil || localHop != "not_local" {
+	classified, err := classifyReceivedNotification(previousSender, notice)
+	if err != nil || classified.verificationState != "PASS" ||
+		classified.localHop != "not_local" {
 		return qualificationFailure(stagePropagationNotLocal)
 	}
 	return provePropagationRefusalTo(previousSender, notice, 550, stagePropagationNotLocal)
@@ -2052,13 +2054,27 @@ func foreignNotification() ([]byte, error) {
 	)
 }
 
+// receivedNotificationClassification carries the two closed members that
+// decide why a notification is refused: the outer verification state and the
+// local_hop member of the delivery_status projection. Both are needed because
+// a refusal reply alone cannot distinguish a not_local classification from an
+// outer signature that did not verify.
+type receivedNotificationClassification struct {
+	verificationState string
+	localHop          string
+}
+
 // classifyReceivedNotification submits one notification to the propagation
-// daemon's /v1/process route under the local tenant and returns the closed
-// local_hop member of its delivery_status projection.
-func classifyReceivedNotification(recipient string, notice []byte) (string, error) {
+// daemon's /v1/process route under the local tenant and returns the outer
+// verification state together with the closed local_hop member of its
+// delivery_status projection.
+func classifyReceivedNotification(
+	recipient string,
+	notice []byte,
+) (receivedNotificationClassification, error) {
 	capability, err := os.ReadFile("/capabilities/milter/process")
 	if err != nil || len(capability) != 32 {
-		return "", errQualification
+		return receivedNotificationClassification{}, errQualification
 	}
 	defer clear(capability)
 	request := map[string]any{
@@ -2073,12 +2089,12 @@ func classifyReceivedNotification(recipient string, notice []byte) (string, erro
 	}
 	body, err := json.Marshal(request)
 	if err != nil {
-		return "", errQualification
+		return receivedNotificationClassification{}, errQualification
 	}
 	defer clear(body)
 	call, err := http.NewRequest(http.MethodPost, daemonEndpoint+"/v1/process", bytes.NewReader(body))
 	if err != nil {
-		return "", errQualification
+		return receivedNotificationClassification{}, errQualification
 	}
 	call.Header.Set("Content-Type", "application/json")
 	call.Header.Set("Accept", "application/json")
@@ -2089,25 +2105,33 @@ func classifyReceivedNotification(recipient string, notice []byte) (string, erro
 	defer transport.CloseIdleConnections()
 	response, err := client.Do(call)
 	if err != nil {
-		return "", errQualification
+		return receivedNotificationClassification{}, errQualification
 	}
 	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode != http.StatusOK {
-		return "", errQualification
+		return receivedNotificationClassification{}, errQualification
 	}
 	payload, err := io.ReadAll(io.LimitReader(response.Body, 1<<20))
 	if err != nil {
-		return "", errQualification
+		return receivedNotificationClassification{}, errQualification
 	}
 	var decoded struct {
+		Verification struct {
+			State string `json:"state"`
+		} `json:"verification"`
 		DeliveryStatus struct {
 			LocalHop string `json:"local_hop"`
 		} `json:"delivery_status"`
 	}
-	if json.Unmarshal(payload, &decoded) != nil || decoded.DeliveryStatus.LocalHop == "" {
-		return "", errQualification
+	if json.Unmarshal(payload, &decoded) != nil ||
+		decoded.Verification.State == "" ||
+		decoded.DeliveryStatus.LocalHop == "" {
+		return receivedNotificationClassification{}, errQualification
 	}
-	return decoded.DeliveryStatus.LocalHop, nil
+	return receivedNotificationClassification{
+		verificationState: decoded.Verification.State,
+		localHop:          decoded.DeliveryStatus.LocalHop,
+	}, nil
 }
 
 // provePropagationRefusal drives one notification addressed to the local

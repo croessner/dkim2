@@ -208,13 +208,13 @@
     {
       "id": "postfix-qualification-runner",
       "path": "contrib/qualification/postfix-milter/run.sh",
-      "sha256": "3885f5e6c045a3db0d1948f48b8d57c21ce43af179d689c6e6e418f20e3d31ed",
+      "sha256": "8f4483b625e7cc3247b16fe65a39b17bbbc1b4e01e6fdcb1557bfdb78a99e181",
       "module": "contrib/qualification/postfix-milter"
     },
     {
       "id": "postfix-qualification-runtime",
       "path": "contrib/qualification/postfix-milter/cmd/qualify/main.go",
-      "sha256": "9d560cfe18f1ea244bd81fa20b16ffcc8f30ba7856f016f12e4edc8449202b9f",
+      "sha256": "569c512c9daf603254839503a72f2dcde4a8daceca96fbad0cd3c8f736ef9251",
       "module": "contrib/qualification/postfix-milter"
     },
     {
