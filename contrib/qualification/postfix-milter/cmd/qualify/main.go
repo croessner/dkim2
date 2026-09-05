@@ -129,6 +129,7 @@ const (
 	stagePropagationCrypto         qualificationStage = "propagation_crypto"
 	stagePropagationSpoofed        qualificationStage = "propagation_spoofed"
 	stagePropagationTerminalOrigin qualificationStage = "propagation_terminal_origin"
+	stagePropagationNotLocal       qualificationStage = "propagation_not_local"
 	stagePropagationDuplicate      qualificationStage = "propagation_duplicate"
 	stagePropagationOutage         qualificationStage = "propagation_outage"
 	stagePropagationLease          qualificationStage = "propagation_lease"
@@ -172,8 +173,8 @@ func validQualificationStage(stage qualificationStage) bool {
 		stagePropagationChain, stagePropagationNotice, stagePropagationRoute,
 		stagePropagationDelivery, stagePropagationCardinality,
 		stagePropagationCrypto, stagePropagationSpoofed,
-		stagePropagationTerminalOrigin, stagePropagationDuplicate,
-		stagePropagationOutage, stagePropagationLease:
+		stagePropagationTerminalOrigin, stagePropagationNotLocal,
+		stagePropagationDuplicate, stagePropagationOutage, stagePropagationLease:
 		return true
 	default:
 		return false
@@ -552,7 +553,10 @@ type signingIdentity struct {
 // local tenant owns the originator, ordinary-transit, and delivery-status
 // authority of the signing domain; the foreign tenant owns the simulated
 // previous hop and the simulated downstream, so neither domain is local for
-// the propagation tenant.
+// the propagation tenant. The foreign tenant also holds a delivery-status
+// profile so that the harness can mint a notification signed by a foreign
+// system about a message this system never signed, the misrouting shape the
+// propagation route must classify as not_local.
 var qualificationIdentities = []signingIdentity{
 	{localTenant, signingDomain, "originator", "s1", "origin-profile", "origin-key", "origin.pem"},
 	{localTenant, signingDomain, "delivery_status", "dsn1", "dsn-profile", "dsn-key", "dsn.pem"},
@@ -560,6 +564,10 @@ var qualificationIdentities = []signingIdentity{
 	{
 		foreignTenant, previousHopDomain, "originator", "r1",
 		"previous-hop-profile", "previous-hop-key", "previous-hop.pem",
+	},
+	{
+		foreignTenant, previousHopDomain, "delivery_status", "rdsn1",
+		"previous-hop-dsn-profile", "previous-hop-dsn-key", "previous-hop-dsn.pem",
 	},
 }
 
@@ -1513,19 +1521,33 @@ func reviseViaDaemon(
 	)
 }
 
-// callSigningRoute performs one authenticated daemon signing call and returns
-// the message with the returned action plan applied in plan order.
+// signDSNViaDaemon signs one delivery-status notification through the
+// daemon's Postfix delivery-status route under the given tenant. The route
+// derives the signing domain from the embedded original's highest signature,
+// so a foreign tenant with a delivery-status profile for its own domain can
+// sign a notification about a message it originated, which is how the harness
+// mints a foreign-signed notification without any local signature.
+func signDSNViaDaemon(tenant string, outer smtpEnvelope, message []byte) ([]byte, error) {
+	request := map[string]any{
+		"api_version": "v1",
+		"draft":       "draft-ietf-dkim-dkim2-spec-06",
+		"message": map[string]any{
+			"raw_rfc5322_base64": base64.StdEncoding.EncodeToString(message),
+		},
+		"outer_smtp": outer.wire(),
+		"context":    map[string]any{"tenant": tenant},
+	}
+	return postSigningRequest("/v1/dsn/sign", "dsn-sign", dsnSignCapabilityHeader, request, message)
+}
+
+// callSigningRoute performs one authenticated originator or revision call and
+// returns the message with the returned action plan applied in plan order.
 func callSigningRoute(
 	route, capabilityName, tenant, domain string,
 	message []byte,
 	inherited *smtpEnvelope,
 	outgoing smtpEnvelope,
 ) ([]byte, error) {
-	capability, err := os.ReadFile("/capabilities/milter/" + capabilityName)
-	if err != nil || len(capability) != 32 {
-		return nil, errQualification
-	}
-	defer clear(capability)
 	request := map[string]any{
 		"api_version": "v1",
 		"draft":       "draft-ietf-dkim-dkim2-spec-06",
@@ -1539,6 +1561,32 @@ func callSigningRoute(
 	if inherited != nil {
 		request["incoming_smtp"] = inherited.wire()
 	}
+	return postSigningRequest(route, capabilityName, localCapabilityHeader, request, message)
+}
+
+// localCapabilityHeader carries the capability of the originator, revision,
+// and process routes; dsnSignCapabilityHeader carries the distinct
+// delivery-status signing capability. The daemon accepts each capability on
+// no other header.
+const (
+	localCapabilityHeader   = "X-DKIM2-Capability"
+	dsnSignCapabilityHeader = "X-DKIM2-DSN-Sign-Capability"
+)
+
+// postSigningRequest posts one already shaped signing request under the named
+// protected capability, presented on the route's capability header, and
+// returns the message with the returned add_header action plan applied in
+// plan order. Every signing route of the daemon shares this response contract.
+func postSigningRequest(
+	route, capabilityName, capabilityHeader string,
+	request map[string]any,
+	message []byte,
+) ([]byte, error) {
+	capability, err := os.ReadFile("/capabilities/milter/" + capabilityName)
+	if err != nil || len(capability) != 32 {
+		return nil, errQualification
+	}
+	defer clear(capability)
 	buffer := &bytes.Buffer{}
 	encoder := json.NewEncoder(buffer)
 	encoder.SetEscapeHTML(false)
@@ -1556,7 +1604,7 @@ func callSigningRoute(
 	call.Header.Set("Content-Type", "application/json")
 	call.Header.Set("Accept", "application/json")
 	call.Header.Set("Cache-Control", "no-store")
-	call.Header.Set("X-DKIM2-Capability", base64.RawURLEncoding.EncodeToString(capability))
+	call.Header.Set(capabilityHeader, base64.RawURLEncoding.EncodeToString(capability))
 	transport := &http.Transport{Proxy: nil, DisableCompression: true, DisableKeepAlives: true}
 	client := &http.Client{Transport: transport, Timeout: 10 * time.Second}
 	defer transport.CloseIdleConnections()
@@ -1600,9 +1648,10 @@ func callSigningRoute(
 	return append(prefix, message...), nil
 }
 
-// nullReversePath is how the daemon's signing operations spell the null
-// reverse path: the empty observed path, not the field encoding "<>".
-const nullReversePath = ""
+// nullReversePath is how the daemon's delivery-status, propagation, and
+// process routes spell the null reverse path: the exact observed SMTP path
+// "<>", which the Milter and the propagation adapter present unchanged.
+const nullReversePath = "<>"
 
 // injectMessage hands one already signed message to the Milter-free
 // re-injection listener, which is the only local submission path that adds no
@@ -1616,9 +1665,12 @@ func flushQueue() error {
 	return runCommand("/usr/sbin/postqueue", "-c", postfixConfig, "-f")
 }
 
-// propagatorDeliver drives one complete LMTP transaction against the adapter's
-// own socket and returns its exact final reply code for the single recipient.
-func propagatorDeliver(message []byte) (int, error) {
+// propagatorDeliver drives one complete LMTP transaction for the given
+// recipient against the adapter's own socket and returns its exact final reply
+// code for that single recipient. The recipient is the outer envelope the
+// adapter presents to the daemon, so a notification must be delivered to the
+// address its embedded completion signature names.
+func propagatorDeliver(recipient string, message []byte) (int, error) {
 	connection, err := net.DialTimeout("unix", propagatorSocket, 5*time.Second)
 	if err != nil {
 		return 0, errQualification
@@ -1635,7 +1687,7 @@ func propagatorDeliver(message []byte) (int, error) {
 	for _, command := range []string{
 		"LHLO qualification.example.test",
 		"MAIL FROM:<>",
-		"RCPT TO:" + returnPath,
+		"RCPT TO:" + recipient,
 	} {
 		if err := text.PrintfLine("%s", command); err != nil {
 			return 0, errQualification
@@ -1759,7 +1811,7 @@ func receivedNotification(sender string, message []byte) (string, []byte, error)
 // path on real Postfix: the reserved return-path routing, the single-recipient
 // LMTP transport, the Milter-free re-injection listener, the propagated
 // notification at a simulated previous hop, and the refusal, discard,
-// duplicate, outage, and lease lanes the adapter contract fixes.
+// not_local, duplicate, outage, and lease lanes the adapter contract fixes.
 func runPropagationQualification() error {
 	if err := checkStackHealth(); err != nil || checkDaemonHealth() != nil {
 		return qualificationFailure(stageHealth)
@@ -1791,12 +1843,16 @@ func runPropagationQualification() error {
 	if err := provePropagationTerminalOrigin(); err != nil {
 		return err
 	}
+	if err := provePropagationNotLocal(); err != nil {
+		return err
+	}
 	if err := provePropagationOutage(); err != nil {
 		return err
 	}
 	return emitCaseFragment([]string{
 		"propagated_dsn_verified_at_previous_hop",
 		"propagation_duplicate_suppressed_after_commit",
+		"propagation_not_local_notification_refused",
 		"propagation_reinjection_outage_retried_by_mta",
 		"propagation_retry_inside_lease_deferred",
 		"propagation_return_path_routed_over_single_recipient_lmtp",
@@ -1925,10 +1981,151 @@ func provePropagationTerminalOrigin() error {
 	return provePropagationRefusal(notice, 250, stagePropagationTerminalOrigin)
 }
 
-// provePropagationRefusal drives one notification over the adapter's own LMTP
-// socket, requires the exact contract reply, and requires that no propagated
-// notification was produced.
+// provePropagationNotLocal proves that a notification signed by a foreign
+// system about a message this system never signed is refused permanently and
+// never propagated. The daemon classifies its completion signature, whose d=
+// belongs to the foreign tenant, as not_local, which the propagation contract
+// answers reject, and the adapter's permanent_failure_reply: reject turns that
+// into 550. The classification is proven through /v1/process before the
+// adapter is driven so that the 550 is attributed to not_local rather than to
+// an unverifiable outer signature.
+func provePropagationNotLocal() error {
+	notice, err := foreignNotification()
+	if err != nil {
+		return qualificationFailure(stagePropagationNotLocal)
+	}
+	localHop, err := classifyReceivedNotification(previousSender, notice)
+	if err != nil || localHop != "not_local" {
+		return qualificationFailure(stagePropagationNotLocal)
+	}
+	return provePropagationRefusalTo(previousSender, notice, 550, stagePropagationNotLocal)
+}
+
+// foreignNotification mints one delivery-status notification about a message
+// the foreign previous hop originated for the local final recipient and that
+// this system never signed. The foreign tenant signs the notification through
+// the daemon's delivery-status route under its own domain, so the outer
+// signature verifies while the embedded completion signature is foreign. The
+// report carries the exact Postfix bounce wire form, queue identifier, sender
+// extension, and Diagnostic-Code included, because that route admits only
+// the Postfix delivery-status profile.
+func foreignNotification() ([]byte, error) {
+	original, err := signViaDaemon(
+		foreignTenant, previousHopDomain,
+		smtpEnvelope{mailFrom: previousSender, recipients: []string{forwardedRecipient}},
+		[]byte(
+			"From: sender@"+previousHopDomain+"\r\n"+
+				"To: final@"+signingDomain+"\r\n"+
+				"Subject: foreign message\r\n"+
+				"Message-ID: <foreign@"+previousHopDomain+">\r\n\r\n"+
+				"foreign body\r\n",
+		),
+	)
+	if err != nil {
+		return nil, err
+	}
+	const boundary = "dkim2-qualification-foreign-dsn"
+	report := "From: postmaster@" + previousHopDomain + "\r\n" +
+		"To: " + strings.Trim(previousSender, "<>") + "\r\n" +
+		"Subject: Undelivered Mail Returned to Sender\r\n" +
+		"Auto-Submitted: auto-replied\r\n" +
+		"MIME-Version: 1.0\r\n" +
+		"Content-Type: multipart/report; report-type=delivery-status; boundary=" + boundary + "\r\n\r\n" +
+		"--" + boundary + "\r\nContent-Type: text/plain; charset=us-ascii\r\n\r\n" +
+		"The message could not be delivered.\r\n" +
+		"--" + boundary + "\r\nContent-Type: message/delivery-status\r\n\r\n" +
+		"Reporting-MTA: dns; mx." + previousHopDomain + "\r\n" +
+		"X-Postfix-Queue-ID: 4hcQ6z1Cg6z1Y\r\n" +
+		"X-Postfix-Sender: rfc822; " + strings.Trim(previousSender, "<>") + "\r\n" +
+		"Arrival-Date: " + time.Now().UTC().Format(time.RFC1123Z) + "\r\n\r\n" +
+		"Final-Recipient: rfc822; " + strings.Trim(forwardedRecipient, "<>") + "\r\n" +
+		"Action: failed\r\nStatus: 5.1.1\r\n" +
+		"Remote-MTA: dns; 127.0.0.1\r\n" +
+		"Diagnostic-Code: smtp; 550 5.1.1 forced qualification failure\r\n" +
+		"--" + boundary + "\r\nContent-Type: message/rfc822\r\n\r\n" +
+		string(original) +
+		"--" + boundary + "--\r\n"
+	return signDSNViaDaemon(
+		foreignTenant,
+		smtpEnvelope{mailFrom: nullReversePath, recipients: []string{previousSender}},
+		[]byte(report),
+	)
+}
+
+// classifyReceivedNotification submits one notification to the propagation
+// daemon's /v1/process route under the local tenant and returns the closed
+// local_hop member of its delivery_status projection.
+func classifyReceivedNotification(recipient string, notice []byte) (string, error) {
+	capability, err := os.ReadFile("/capabilities/milter/process")
+	if err != nil || len(capability) != 32 {
+		return "", errQualification
+	}
+	defer clear(capability)
+	request := map[string]any{
+		"api_version": "v1",
+		"draft":       "draft-ietf-dkim-dkim2-spec-06",
+		"message": map[string]any{
+			"raw_rfc5322_base64": base64.StdEncoding.EncodeToString(notice),
+			"fidelity":           "raw_rfc5322",
+		},
+		"smtp":    smtpEnvelope{mailFrom: nullReversePath, recipients: []string{recipient}}.wire(),
+		"context": map[string]any{"tenant": localTenant},
+	}
+	body, err := json.Marshal(request)
+	if err != nil {
+		return "", errQualification
+	}
+	defer clear(body)
+	call, err := http.NewRequest(http.MethodPost, daemonEndpoint+"/v1/process", bytes.NewReader(body))
+	if err != nil {
+		return "", errQualification
+	}
+	call.Header.Set("Content-Type", "application/json")
+	call.Header.Set("Accept", "application/json")
+	call.Header.Set("Cache-Control", "no-store")
+	call.Header.Set(localCapabilityHeader, base64.RawURLEncoding.EncodeToString(capability))
+	transport := &http.Transport{Proxy: nil, DisableCompression: true, DisableKeepAlives: true}
+	client := &http.Client{Transport: transport, Timeout: 10 * time.Second}
+	defer transport.CloseIdleConnections()
+	response, err := client.Do(call)
+	if err != nil {
+		return "", errQualification
+	}
+	defer func() { _ = response.Body.Close() }()
+	if response.StatusCode != http.StatusOK {
+		return "", errQualification
+	}
+	payload, err := io.ReadAll(io.LimitReader(response.Body, 1<<20))
+	if err != nil {
+		return "", errQualification
+	}
+	var decoded struct {
+		DeliveryStatus struct {
+			LocalHop string `json:"local_hop"`
+		} `json:"delivery_status"`
+	}
+	if json.Unmarshal(payload, &decoded) != nil || decoded.DeliveryStatus.LocalHop == "" {
+		return "", errQualification
+	}
+	return decoded.DeliveryStatus.LocalHop, nil
+}
+
+// provePropagationRefusal drives one notification addressed to the local
+// return path over the adapter's own LMTP socket, requires the exact contract
+// reply, and requires that no propagated notification was produced.
 func provePropagationRefusal(
+	notice []byte,
+	want int,
+	stage qualificationStage,
+) error {
+	return provePropagationRefusalTo(returnPath, notice, want, stage)
+}
+
+// provePropagationRefusalTo is provePropagationRefusal for an explicit outer
+// recipient, which the not_local lane needs because a foreign notification is
+// addressed to the foreign sender rather than to the local return path.
+func provePropagationRefusalTo(
+	recipient string,
 	notice []byte,
 	want int,
 	stage qualificationStage,
@@ -1937,7 +2134,7 @@ func provePropagationRefusal(
 	if err != nil {
 		return qualificationFailure(stage)
 	}
-	code, err := propagatorDeliver(notice)
+	code, err := propagatorDeliver(recipient, notice)
 	if err != nil || code != want {
 		return qualificationFailure(stage)
 	}
@@ -1973,7 +2170,7 @@ func provePropagationOutage() error {
 	if err := waitForDeferredQueueEntry(queueID, 30*time.Second); err != nil {
 		return qualificationFailure(stagePropagationOutage)
 	}
-	code, err := propagatorDeliver(notice)
+	code, err := propagatorDeliver(returnPath, notice)
 	if err != nil || code != 451 {
 		return qualificationFailure(stagePropagationLease)
 	}

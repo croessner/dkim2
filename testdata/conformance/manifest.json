@@ -208,13 +208,13 @@
     {
       "id": "postfix-qualification-runner",
       "path": "contrib/qualification/postfix-milter/run.sh",
-      "sha256": "4d10c960d1516a496085d949f17756e15726dd96515c2fb99d37642520092c17",
+      "sha256": "3885f5e6c045a3db0d1948f48b8d57c21ce43af179d689c6e6e418f20e3d31ed",
       "module": "contrib/qualification/postfix-milter"
     },
     {
       "id": "postfix-qualification-runtime",
       "path": "contrib/qualification/postfix-milter/cmd/qualify/main.go",
-      "sha256": "e285b3f99a102d9745977b68789bddc9dd935adf526afb8afa9e92d5acc18324",
+      "sha256": "9d560cfe18f1ea244bd81fa20b16ffcc8f30ba7856f016f12e4edc8449202b9f",
       "module": "contrib/qualification/postfix-milter"
     },
     {
@@ -352,7 +352,7 @@
     {
       "id": "valkey-replay-source",
       "path": "cmd/dkim2d/internal/replay/valkey/real_valkey_integration_test.go",
-      "sha256": "df852d9137eb4db275a2e2db3edb1e7a82fa37762db38de76b3f158451324895",
+      "sha256": "0048539115ff3b7eb58a5e7edce5975540308156fc615d463d61ee310fb50a73",
       "module": "cmd/dkim2d"
     },
     {

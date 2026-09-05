@@ -9,6 +9,18 @@ compose_file=contrib/qualification/postfix-milter/compose.yaml
 # default gate. "propagation" is the delivery-status propagation evidence; it
 # is opt-in because it drives the deferred LMTP transport through real retry
 # and lease windows and therefore takes several minutes; "all" is both.
+#
+# Topology disclosure for the propagation lane: the originator, the
+# ordinary-transit forwarder, the delivery-status signer, the forwarder's
+# reserved return path (mf=), and the destination that refuses the message
+# all share one domain, origin.example.test, while only the simulated
+# previous hop is foreign. Draft-06 Section 12.1.2 item 1, the alignment of
+# the outer notification signer with the completion signature's rt= domain,
+# is therefore exercised on real Postfix only in the equal-domain case; the
+# directed parent-domain case is covered by the library golden vectors alone.
+# The not_local case mints its notification through the daemon's
+# delivery-status route under the foreign tenant, because Postfix itself can
+# only produce notifications the local delivery-status Milter signs.
 lane=core
 while test "$#" -gt 0; do
   case $1 in
@@ -62,6 +74,7 @@ cleanup_project() {
 }
 
 cleanup() {
+  test -n "${DKIM2_DEBUG_KEEP_STACK:-}" && return 0
   cleanup_project
   docker image rm \
     dkim2-postfix-qualification-build:verified \
