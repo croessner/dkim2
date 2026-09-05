@@ -17,7 +17,9 @@ Recorded limits that are not open items of this specification:
   signed by a *foreign* destination domain, and the qualification lane proves
   the propagation path with a destination whose refusal is reported by the
   local delivery-status route, the one shape this implementation can both
-  produce and consume. The foreign-signed shape is proven at library level by
+  produce and consume; the `not_local` negative is minted through the same
+  route under the foreign tenant, whose own domain is the embedded highest
+  `d=`. The foreign-signed shape naming a local address is proven at library level by
   `dsn-propagation-golden.json` (`run_of_one`) and `received-dsn-golden.json`,
   whose outer signer is `destination.example` over an embedded highest
   `local.example`. Producing that shape through the public API is refused by
@@ -229,6 +231,7 @@ summarized here:
 | 06 | 2026-09-05T07:28:07+02:00 | 2026-09-05T07:49:16+02:00 | 0h 21m 09s | 0h 21m 09s | |
 | 07 | 2026-09-05T08:42:49+02:00 | 2026-09-05T09:51:30+02:00 | 1h 08m 41s | 1h 08m 41s | Continuation of a terminated pass; qualification lane blocked at that time |
 | 08 | 2026-09-05T08:02:36Z | 2026-09-05T08:38:00Z | 0h 35m 24s | 0h 35m 24s | Finding-scoped remediation of the eight recorded findings; propagation lane and Rspamd policy end-to-end run for real |
+| 08 final review | 2026-09-05T13:43:10+02:00 | 2026-09-05T14:42:17+0200 | 0h 59m 07s | 0h 59m 07s | Continuation of a terminated pass; replay-storage prerequisite, `not_local` lane case run for real, evidence and limit records, and the outer-verdict masking defect the lane exposed |
 
 ## Scope
 
@@ -316,7 +319,18 @@ Out of scope:
   8.7 guarantees that an `nd=` run ends in one signature with `mf=` and
   `rt=`. A run therefore has one or more members. Section 12.1.1 requires
   *every* signature that the Forwarder added to be removed, which is the
-  whole run.
+  whole run. Rule (b) applies only when the member above the candidate is
+  itself an `mf=`/`rt=` signature; an `nd=` member above a candidate ends
+  the run, because an imaginary hop is defined by envelope custody and an
+  `nd=` signature carries no envelope to check custody against. The chain
+  "own imaginary hop, then own `nd=` chain, then completion" therefore has a
+  run that stops at the lowest `nd=` member; its previous hop is the own
+  imaginary-hop signature, the propagated DSN is addressed to that
+  signature's own `mf=`, and the same system evaluates and propagates it
+  once more from that hop. This is an accepted one-hop cost, not an open
+  item: the second pass removes the remaining own signature and reaches the
+  genuine previous hop, and every pass is bounded by its own replay
+  coordinate.
 - **Previous hop**: the DKIM2-Signature `i=k-1`. It must carry `mf=` and
   `rt=`. If `i=k-1` is itself an `nd=` signature, the previous hop used a
   custody scheme whose reconstruction this specification does not qualify, and
@@ -328,7 +342,12 @@ Out of scope:
 
 Evaluation runs only after the ordinary inbound verification of the outer
 message. It never replaces it. The outer DSN's own DKIM2 signature, replay
-state, and policy remain authoritative for accepting the outer message.
+state, and policy remain authoritative for accepting the outer message. On
+the propagation route the outer verdict is applied before the evaluation
+runs, because its matrix rows precede every evaluation row; on `/v1/process`
+the evaluation still runs after a failed outer verification so that the
+informational projection can report the structure, except that an outer
+signature the library cannot read yields no projection at all.
 
 The evaluation proves, in this order, and stops at the first failure:
 
@@ -713,6 +732,27 @@ to the previous hop. The attacker cannot keep a coordinate `pending`: every
 successful re-injection commits it, and an adversary who can make
 re-injection fail already controls the local trust boundary.
 
+Because the coordinate is the only bound, the propagation route cannot exist
+without replay storage. `server.dsn_propagate_capability_file` together with
+`replay.backend: disabled` is a configuration matrix violation
+(`config_invalid_backend_matrix`) and the daemon lifecycle additionally
+refuses to compose the route over the disabled backend. The `disabled`
+reservation and commit outcomes of the replay contract therefore never reach
+the propagation service in a running daemon; they remain in the contract only
+so that the store vocabulary stays closed. There is no operator opt-out.
+
+The coordinate is derived from the outer DSN's own signature and instance,
+not from the forwarded message it reports on. A hostile destination that
+holds a legitimately forwarded message can therefore mint any number of
+distinct, correctly aligned notifications for that one message, and each of
+them is a fresh coordinate that yields exactly one propagated DSN to the
+previous hop. This is a one-to-one relation, not an amplification: every
+propagated DSN costs the attacker one signed, aligned, structurally valid
+notification, and the previous hop verifies each one on its own. Keying the
+coordinate on the embedded original's identity instead would make the first
+notification, delivered or forged, suppress every later genuine one for the
+same message; the outer-identity coordinate is the accepted design.
+
 The adapter therefore provides at-least-once semantics: it answers the LMTP
 transaction with `250` only after the re-injection listener accepted the
 rebuilt DSN and the commit succeeded. A crash between the listener's `250`
@@ -896,7 +936,11 @@ null reverse path, exactly one recipient, a `multipart/report`
 delivery-status top level named by any top-level `Content-Type` field (the
 library parser refuses duplicate fields as `malformed`, so the classification
 gate must not pre-filter them), and at
-least one DKIM2 field family, matching the Received DSN definition. Its
+least one DKIM2 field family, matching the Received DSN definition, and only
+when the outer DKIM2-Signature could be read: the evaluation needs the outer
+signer and its `t=`, so a notification whose outer signature the library
+refuses to parse carries no projection, and its outer verification, which is
+already `permerror` for that signature, decides the message on its own. Its
 presence does not change the existing `verification`, `authentication`,
 `replay`, or `actions` semantics. `policy` and `disposition` incorporate the
 mapping table above.
@@ -1030,6 +1074,17 @@ propagation, not an evidence claim of unmodified raw bytes.
   re-injection listener's `250` and the commit and to a lease that expired
   while an attempt was still running. A captured DSN yields no further
   output once its coordinate is committed.
+- The propagation route requires replay storage. The propagation capability
+  is refused together with `replay.backend: disabled` at configuration load
+  and again at lifecycle composition, with no opt-out, because a route that
+  issued a fresh signed DSN for every presentation of one captured DSN would
+  be an unbounded signing oracle.
+- Accepted limit: the propagation coordinate is the outer DSN's own identity.
+  A hostile destination can mint unlimited distinct aligned notifications for
+  one forwarded message and obtain one propagated DSN per notification. The
+  relation is one-to-one and every propagated DSN is verified by the previous
+  hop; the coordinate is not changed to the embedded identity because that
+  would let one notification suppress every later genuine one.
 - The rebuilt report carries no upstream diagnostic, remote MTA, queue
   identifier, or free text. Only the enhanced status code and the ENVID
   survive, and only when syntactically valid.
@@ -1172,12 +1227,28 @@ Integration and E2E tests:
   client with the distinct capability;
 - Milter inbound response tolerance with and without the new member;
 - `contrib/rspamd` unit tests for the new symbols;
-- opt-in real Postfix qualification: a forwarded message signed by the transit
-  route, a foreign DSN generated by the qualification harness, routing to the
-  adapter, re-injection, and verification of the propagated DSN at a simulated
-  previous hop. Negative cases are a spoofed DSN, a DSN for a message this
-  system did not sign, a foreign signature naming a local address, a null
-  previous sender, a replayed DSN, and a re-injection outage.
+- opt-in real Postfix qualification: a forwarded message signed by the
+  ordinary-transit route through `/v1/revise`, the notification Postfix
+  generates when the destination refuses it and the local delivery-status
+  Milter signs, routing to the adapter over the reserved return-path LMTP
+  transport, re-injection, and verification of the propagated DSN at a
+  simulated previous hop. Negative cases that run on real Postfix: a spoofed
+  DSN (corrupted outer signature, `550`), a terminal-origin DSN (`250`,
+  discarded), a DSN for a message this system did not sign (embedded
+  completion `d=` of the foreign tenant, classified `not_local` by
+  `/v1/process` under the local tenant before the adapter answers `550`
+  with `permanent_failure_reply: reject`), a replayed DSN (`250` after the
+  commit, nothing propagated), a re-injection outage (`451`, completed by the
+  MTA's own retry after the lease), and a retry inside a live lease (`451`).
+  The `not_local` notification is minted by the harness through the daemon's
+  delivery-status route under the foreign tenant, which is the only shape
+  the public API can sign: the delivery-status signing domain is bound to
+  the embedded original's highest `d=`, so a foreign signature over an
+  embedded original whose highest signature is local cannot be produced
+  through any public route. Negative cases that are therefore library-only,
+  proven by `dsn-propagation-golden.json` and `received-dsn-golden.json`: a
+  foreign signature naming a local address in `mf=`, and a null previous
+  sender.
 
 Generated and documentation checks:
 
@@ -1228,79 +1299,129 @@ Final gate:
 ## Completion Evidence
 
 - Focused tests: `go -C tools test ./... -run
-  'TestPostfixQualificationPolicy|TestOpenAPIContract'` passes, including the
-  new `TestPostfixQualificationBindsPropagationLane`, which freezes the
-  adapter in the pinned image and its runtime identity, the selectable lane,
-  the reserved return-path transport, the one-recipient LMTP limit, the
+  'TestPostfixQualificationPolicy|TestOpenAPIContract'` passes, including
+  `TestPostfixQualificationBindsPropagationLane`, which freezes the adapter
+  in the pinned image and its runtime identity, the selectable lane, the
+  reserved return-path transport, the one-recipient LMTP limit, the
   Milter-free re-injection listener, and a minimum retry interval strictly
-  above the propagation reservation.
+  above the propagation reservation. The replay-storage prerequisite of the
+  propagation route is proven by
+  `TestLoadValidatesReceivedDSNAndPropagationFields` (case "propagation with
+  disabled replay", `config_invalid_backend_matrix`) and by
+  `TestComposePropagationFollowsCapabilityAndPrerequisites` (the disabled
+  backend is a lifecycle error even when a loader is bypassed).
 - Generated checks: `make check-generated` and `make check-conformance` pass;
   `testdata/conformance/manifest.json` was refreshed with `make
-  generate-conformance-manifest`.
-- Guardrails: `make test`, `make vet`, `make lint` (0 issues in every module),
-  `tools/check-operator-docs.sh`, and `git diff --check` pass. The
-  pre-existing `TestCheckReleasePlanAcceptsRepositoryPlan`
-  (`release_stable_workflow`) failure is unrelated and unchanged.
+  generate-conformance-manifest` after the qualification runner, `run.sh`,
+  and the real-Valkey integration test changed.
+- Guardrails: `make guardrails` passes (exit 0, recorded in the ignored prompt ledger with its timestamps), and `git diff
+  --check` is clean. In `go -C tools test ./...` only the pre-existing
+  `TestCheckReleasePlanAcceptsRepositoryPlan` (`release_stable_workflow`)
+  failure remains, unrelated and unchanged.
 - Postfix qualification, core lane: `contrib/qualification/postfix-milter/run.sh
   .artifacts/conformance-postfix` passes. Two independent passes produce
-  byte-identical reports; report SHA-256
-  `b204ca4cf764565688ad18469dce190dbafe513b1277a253486ae515c0a5ab90`. Pinned
-  images `golang@sha256:ae5a2316d12f3e78fd99177dad452e6ad4f240af2d71d57b480c3477f250fec6`,
+  byte-identical reports; report SHA-256 `01cc446863d339bafda5ae5959486d3346b75e912cbd5f50f321322de6c6de5a`. Pinned images
+  `golang@sha256:ae5a2316d12f3e78fd99177dad452e6ad4f240af2d71d57b480c3477f250fec6`,
   `debian@sha256:4e401d95de7083948053197a9c3913343cd06b706bf15eb6a0c3ccd26f436a0e`,
   `chrroessner/postfix@sha256:d4b349ce665ba291444e55862ac842e3d4e612596520a9ba65a7b9bf00f9aa3c`,
-  Postfix 3.11.6. The daemon now runs with the propagation route, the process
+  Postfix 3.11.6. The daemon runs with the propagation route, the process
   default tenant, and the bounded memory replay backend enabled, and the
   runtime identity pins the propagation adapter binary alongside the Milter
   and the daemon.
-- Postfix qualification, propagation lane: blocked.
+- Postfix qualification, propagation lane:
   `contrib/qualification/postfix-milter/run.sh --lane propagation
-  .artifacts/postfix-propagation` exits 1 with `qualification operation failed
-  stage=propagation_delivery`. The harness builds the forwarded chain over the
-  real originator and ordinary-transit daemon routes, the destination refuses
-  the message, Postfix generates the notification, the delivery-status Milter
-  signs it, the reserved return-path address routes over the one-recipient
-  LMTP transport, and the adapter calls the propagation route. The route then
-  answers `structure: malformed` because the generic RFC 3464 group parser
-  refuses the per-message field order Postfix emits
-  (`Reporting-MTA`, `X-Postfix-Queue-ID`, `X-Postfix-Sender`, `Arrival-Date`):
-  a known field after an extension field is rejected. A notification with
-  RFC-ordered fields cannot be produced either, because a delivery-status
-  signature must be aligned with the reported recipient domain and this
-  implementation exposes no route that signs one: the originator route answers
-  `permerror`/`reject` for a null reverse path, and the delivery-status
-  signing route derives its domain from the verified embedded original and
-  parses only the Postfix field order.
-- `git status --short`: no staged or committed change; modified `README.md`,
-  `cmd/dkim2-dsn-propagator/README.md`, the qualification harness
-  (`Dockerfile`, `Dockerfile.dockerignore`, `cmd/qualify/main.go`, `run.sh`),
-  the Rspamd policy end-to-end harness, `docs/ARCHITECTURE.md`,
-  `docs/conformance.md`, `docs/operator/*`, `docs/reference/*`,
-  `docs/security-testing.md`, `docs/specs/implementation/openapi-test-client.md`,
-  `testdata/conformance/manifest.json`, `tools/check-operator-docs.sh`, and
-  `tools/postfix_qualification_policy_test.go`; new deployment overlay and
-  Rspamd fixture files.
+  .artifacts/postfix-propagation` passes. Two independent passes produce
+  byte-identical reports; report SHA-256 `0026f250329979a37094d1434b8a96429983e9a915cf86070eb377358240918c`; the same pinned images
+  and Postfix version as the core lane. The fragment carries eight cases:
+  `propagated_dsn_verified_at_previous_hop`,
+  `propagation_return_path_routed_over_single_recipient_lmtp`,
+  `propagation_spoofed_notification_refused` (corrupted outer signature,
+  `550`), `propagation_terminal_origin_discarded` (`250`, nothing
+  propagated), `propagation_not_local_notification_refused`,
+  `propagation_duplicate_suppressed_after_commit` (`250` after the commit,
+  nothing propagated), `propagation_reinjection_outage_retried_by_mta`
+  (`451`, completed by Postfix's own retry after the lease), and
+  `propagation_retry_inside_lease_deferred` (`451`). The `not_local` case is
+  a DSN for a message this system never signed: the harness has the foreign
+  tenant originate a message for the local final recipient through
+  `/v1/sign`, wraps it in a Postfix-wire-form report, signs that report
+  through `/v1/dsn/sign` under the foreign tenant's own `delivery_status`
+  profile (the route derives the signing domain from the embedded highest
+  `d=`, which is the foreign domain), proves `local_hop: not_local` through
+  `/v1/process` under the local tenant, and then delivers it over the
+  adapter's LMTP socket to the foreign sender's address, where
+  `permanent_failure_reply: reject` answers `550` and nothing is propagated.
+- Defect found by the lane and fixed at its root: a corrupted outer signature
+  whose last base64 symbol ends with non-zero trailing bits is refused by the
+  decoder, the outer verification is `permerror`, and the library refuses the
+  outer signature at its structure stage; the propagation route ran the
+  received-DSN evaluation before applying the outer verdict, so that refusal
+  surfaced as `tempfail` (`451`) instead of the matrix row `reject` (`550`),
+  and `/v1/process` answered a daemon error for the same message.
+  Reproducers `TestPropagateRejectsUndecodableOuterSignatureBeforeEvaluation`
+  and `TestProcessUndecodableOuterSignatureKeepsTheOuterVerdict` failed first;
+  `classifyPropagationOuter` now applies the outer rows before the evaluation
+  and omits the projection, and the process route omits the projection for an
+  unreadable outer signature whose outer verdict is not `pass`. The OpenAPI
+  description of `ProcessResponse.delivery_status` states the omission and
+  the generated artifacts were refreshed.
+- Negative-case coverage split: on real Postfix the lane runs the spoofed,
+  terminal-origin, `not_local`, replayed, re-injection-outage, and in-lease
+  retry cases listed above. Two negatives are library-only, proven by
+  `dsn-propagation-golden.json` and `received-dsn-golden.json`: a foreign
+  signature naming a local address in `mf=` and a null previous sender. They
+  cannot be minted through the public API because `/v1/dsn/sign` binds the
+  signing domain to the embedded original's highest `d=`
+  (`DSNEvidenceStageSigningDomain`): a foreign outer signature over an
+  embedded original whose highest signature is local has no public signing
+  route, and `/v1/sign` refuses the null reverse path.
+- Topology disclosure of the propagation lane: the originator, the
+  ordinary-transit forwarder, the delivery-status signer, the forwarder's
+  reserved return path (`mf=`), and the destination that refuses the message
+  all share `origin.example.test`; only the simulated previous hop is
+  foreign. Draft-06 Section 12.1.2 item 1, the alignment of the outer signer
+  with the completion signature's `rt=` domain, is therefore exercised on
+  real Postfix only in the equal-domain case; the directed parent-domain case
+  is covered by the golden vectors alone. The same disclosure is stated in
+  the lane's `run.sh`.
+- Real-Valkey propagation parity: `real_valkey_integration_test.go` carries
+  the reservation, expired-lease re-serve, commit, idempotent commit,
+  already-committed, and unresolved-commit cases for the propagation store in
+  the existing real-server style. They were not executed on the development
+  host, which carries `valkey-server` 9.1.1 against the deliberate 9.1.0
+  pin; the propagation store's real-server parity is proven only where the
+  9.1.0 gate runs, as `docs/reference/known-limitations.md` states.
+- `git status --short`: no staged or committed change; modified
+  `cmd/dkim2d/README.md`, `cmd/dkim2d/internal/app/{lifecycle.go,
+  propagation_service.go, propagation_matrix.go, domain.go, received_dsn.go}`
+  and their tests, `cmd/dkim2d/internal/config/config.go` and its test,
+  `cmd/dkim2d/internal/replay/valkey/real_valkey_integration_test.go`,
+  `propagation_store_test.go` (reservation over the propagation frame key),
+  and `store_test.go`, `docs/specs/openapi/dkim2d.yaml` with the regenerated
+  daemon server and the Milter, Exim, and `dkim2ctl` generated clients, the
+  qualification harness (`cmd/qualify/main.go`, `run.sh`),
+  `docs/reference/known-limitations.md`, `testdata/conformance/manifest.json`,
+  and this specification.
 - Skipped checks: `make test-valkey` (host `valkey-server` 9.1.1, pinned
-  fixture 9.1.0; the pin is deliberate and was not changed). The Rspamd policy
-  end-to-end run is blocked: `contrib/rspamd/tests/run-policy-e2e.sh` requires
-  a `miltertest-go` checkout that is not present on this host. The pinned
-  Rspamd 4.1.5 configuration was proven instead
-  (`contrib/rspamd/tests/rspamd-4.1.5/configtest.sh`,
-  `rspamadm configtest`/`configdump`), and `contrib/rspamd/tests/run.sh`
-  passes. A real `docker compose up` of the deployment overlay was not
-  attempted: it needs operator-provisioned protected generations that the
-  repository deliberately does not carry; the overlay was proven with
-  `docker compose config`, `postfix check`, `postconf`, and `postmap -q`.
+  fixture 9.1.0; the pin is deliberate and was not changed). The Rspamd
+  policy end-to-end run passes with the attribute disabled; the
+  enabled-attribute variant is blocked on the external Nauthilus example
+  policy (`403` at Policy admission). A real `docker compose up` of the
+  deployment overlay was not attempted: it needs operator-provisioned
+  protected generations that the repository deliberately does not carry; the
+  overlay was proven with `docker compose config`, `postfix check`,
+  `postconf`, `postmap -q`, and the frozen deployment policy.
 
 ## Review Matrix
 
 | Area | Soll | Ist | Status | Notes |
 | --- | --- | --- | --- | --- |
 | Scope | Received-DSN evaluation, rebuild, propagation route, adapter, projections, docs | All slices implemented; the qualification lane passes end to end and the documentation set is complete | done | See "Completion Evidence" |
-| Behavior | Draft-06 Sections 8.7, 9.3, 11.4, 12, 12.1.1, 12.1.2 and RFC 6522/3464/3834/2033 semantics are explicit and tested | Covered by unit, golden-vector, and fuzz coverage in `lib` and by daemon and adapter tests; the received-report RFC 3464 profile accepts the Postfix field order and is frozen in the golden corpus | done | The Milter ordinary-transit envelope inheritance is a documented limitation with a documented alternative |
-| Security | Datasource-defined locality, read-only evaluation, verified previous hop, replay gate, fail-closed rebuild, no destination leakage, secret-safe diagnostics | Preserved; the qualification stack keeps loopback-only transports, owned Unix sockets, distinct protected capabilities, and content-free diagnostics | done | Qualification stage vocabulary stays closed and content-free |
+| Behavior | Draft-06 Sections 8.7, 9.3, 11.4, 12, 12.1.1, 12.1.2 and RFC 6522/3464/3834/2033 semantics are explicit and tested | Covered by unit, golden-vector, and fuzz coverage in `lib` and by daemon and adapter tests; the received-report RFC 3464 profile accepts the Postfix field order and is frozen in the golden corpus; the propagation route applies the outer verdict before the evaluation, so an unreadable outer signature is `reject`, never `tempfail`, and `/v1/process` keeps the outer `permerror` without a daemon error | done | The Milter ordinary-transit envelope inheritance is a documented limitation with a documented alternative |
+| Security | Datasource-defined locality, read-only evaluation, verified previous hop, replay gate, fail-closed rebuild, no destination leakage, secret-safe diagnostics | Preserved; the propagation capability is refused together with the disabled replay backend at configuration load and at lifecycle composition, so the route never composes without a stored coordinate; the qualification stack keeps loopback-only transports, owned Unix sockets, distinct protected capabilities, and content-free diagnostics | done | The outer-identity coordinate (one propagated DSN per distinct aligned notification, no amplification) and the imaginary-hop-below-`nd=` one-hop cost are recorded as accepted limits, not open items |
 | Boundaries | Library, daemon, generated client, adapter, Milter, Rspamd stay purpose-separated | Unchanged; the qualification harness reaches production only through public HTTP routes, the LMTP socket, and the public verifier | done | No protocol logic was duplicated into the harness |
-| Tests | Unit, golden, fuzz, race, privacy, daemon, adapter, client, and real-MTA evidence exist | Present, including the propagation real-MTA evidence and the Rspamd policy end-to-end run with the attribute disabled | done | The enabled-attribute variant is blocked on the external Nauthilus example policy, recorded with its exact `403` evidence |
-| Documentation | Architecture, operator, reference, provisioning, and limitation documents agree | Verified against the implementation; the Milter transit limitation, the `dkim2ctl` propagation kinds, the seven-tag plan, and the Rspamd opt-in are documented | done | `tools/check-operator-docs.sh` passes |
+| Tests | Unit, golden, fuzz, race, privacy, daemon, adapter, client, and real-MTA evidence exist | Present. On real Postfix the propagation lane runs the positive path plus spoofed, terminal origin, `not_local` (foreign completion `d=`, classification proven through `/v1/process`), duplicate after commit, re-injection outage, and in-lease retry. Library-only by design: a foreign signature naming a local address in `mf=` and a null previous sender (golden vectors). The real-Valkey gate carries reservation, expired-lease re-serve, and commit cases that run only where the 9.1.0 binary is present | done | The Rspamd enabled-attribute variant is blocked on the external Nauthilus example policy (`403` evidence); the Valkey propagation cases were not executed on the development host (9.1.1) |
+| Documentation | Architecture, operator, reference, provisioning, and limitation documents agree | Verified against the implementation; the Milter transit limitation, the `dkim2ctl` propagation kinds, the seven-tag plan, the Rspamd opt-in, the replay-storage prerequisite of the propagation route, the outer-identity coordinate, the imaginary-hop-below-`nd=` cost, the equal-domain topology of the Postfix lane, and the unexecuted real-Valkey propagation cases are documented | done | `tools/check-operator-docs.sh` passes |
 | Effort | Prompt timings are measured and recorded | Recorded in "Implementation Effort" and in the ignored prompt ledger | done | |
 
 ## Decisions And Open Questions

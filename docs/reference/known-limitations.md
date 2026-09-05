@@ -74,12 +74,33 @@ certification, or universal interoperability claim.
   interval for the LMTP transport above `dsn_propagation.pending_lease` so a
   retry cannot land
   inside a live lease.
+- The propagation replay coordinate is the outer notification's own signed
+  identity, not the forwarded message it reports on. A hostile destination
+  that holds one legitimately forwarded message can mint any number of
+  distinct, correctly aligned notifications for it and obtain one propagated
+  DSN per notification. The relation is one-to-one, never an amplification,
+  and the previous hop verifies every propagated DSN on its own; keying the
+  coordinate on the embedded original would let the first notification,
+  genuine or forged, suppress every later genuine one, so the outer-identity
+  coordinate is the accepted design.
+- The local hop run does not absorb an imaginary-hop member that sits below
+  an `nd=` member of the same tenant. For the chain "own imaginary hop, own
+  `nd=` chain, completion" the run stops at the lowest `nd=` member, the
+  propagated DSN is addressed to the own imaginary-hop signature's `mf=`,
+  and this system evaluates and propagates it once more from that hop before
+  the genuine previous hop receives it. This is an accepted one-hop cost;
+  every pass is bounded by its own replay coordinate.
 - The Valkey replay parity gate accepts only the exact `valkey-server` 9.1.0
   binary. The propagation store's conditional `SET` forms need Valkey 8.1 for
   `IFEQ` and `NX GET` and stay inside that 9.1 floor, but the pinned parity
   test does not run against a nearby patch release and offers no container
   path; a host carrying a different 9.1 patch level cannot produce this
-  evidence.
+  evidence. The real-server propagation cases of that gate, reservation,
+  expired-lease re-serve, and commit, exist in
+  `cmd/dkim2d/internal/replay/valkey/real_valkey_integration_test.go` but
+  have not been executed on the development host, which carries 9.1.1; the
+  propagation store's real-server parity is proven only where the 9.1.0 gate
+  runs.
 - Flat-file, LDAP, PostgreSQL, MySQL, MariaDB, and Valkey datasource paths are implemented.
   The offline OpenDKIM migration requires separately managed verified-TLS
   services, explicit mapping, and distinct least-authority principals.
