@@ -633,8 +633,11 @@ rebuilt DSN:
    fresh lease, a fresh rebuild, and a fresh token. If the coordinate is
    `committed`, the response is `pass`/`discard` and no rebuild happens.
 2. `POST /v1/dsn/propagate/commit` with the same capability and the
-   `commit_token` moves the coordinate from `pending` to `committed` by a
-   compare-and-set on the stored value. The token binds to the coordinate,
+   `commit_token` moves the coordinate from any `pending` value to
+   `committed` by a replace-if-present write; the transition is monotonic,
+   so no compare is needed there, while the expired-lease re-serve in step 1
+   uses a compare-and-set against the exact observed value so that two
+   concurrent re-serves cannot both win. The token binds to the coordinate,
    not to one token instance: any token issued for that coordinate within
    the ordinary retention commits it, so a token from a superseded attempt
    still commits correctly. The adapter calls commit after the re-injection
@@ -839,7 +842,10 @@ import generated OpenAPI types.
 
 `ProcessResponse` gains one optional member `delivery_status` with the closed
 projection defined above. It is present only when the outer message has a
-null reverse path, a `multipart/report` delivery-status top level, and at
+null reverse path, exactly one recipient, a `multipart/report`
+delivery-status top level named by any top-level `Content-Type` field (the
+library parser refuses duplicate fields as `malformed`, so the classification
+gate must not pre-filter them), and at
 least one DKIM2 field family, matching the Received DSN definition. Its
 presence does not change the existing `verification`, `authentication`,
 `replay`, or `actions` semantics. `policy` and `disposition` incorporate the
@@ -872,7 +878,9 @@ route, and the propagation capability is rejected on every other route.
 - `message.fidelity`: `lmtp_delivered_crlf` or `raw_rfc5322`
 - `outer_smtp`: `mail_from` must be `<>`, `rcpt_to` exactly one path,
   `smtputf8` boolean recording whether the LMTP `MAIL` command carried the
-  parameter; this member exists only on this route's envelope schema
+  parameter; this member exists only on this route's envelope schema and is
+  recorded evidence of the received transaction only, it does not influence
+  `smtputf8_required`, which is derived from the rebuilt DSN
 - `context.tenant`
 - `context.reporting_mta`: canonical lowercase DNS name used only in the
   rebuilt report and outer `From:`
@@ -885,7 +893,11 @@ route, and the propagation capability is rejected on every other route.
 - `disposition`: a distinct `PropagationDisposition` schema with `accept`,
   `reject`, `discard`, `tempfail`; the shared `Disposition` schema and its
   generated clients are unchanged
-- `delivery_status`: the same closed projection as in `/v1/process`
+- `delivery_status`: the same closed projection as in `/v1/process`, present
+  only when the evaluation ran; it is omitted when the outer verification
+  stopped the request before evaluation, because the projection has no
+  "not assessed" value for `structure` and a fabricated `malformed` would be
+  false evidence
 - `replay`: the existing replay result shape
 - `propagation_failure` present only with `permerror`: `not_reconstructable`
   or `unprovisioned_domain`
@@ -911,6 +923,7 @@ be tested against a closed matrix:
 
 | Evaluation outcome | `result` | `disposition` |
 | --- | --- | --- |
+| outer message not applicable (no DKIM2 field family) | `fail` | `reject` |
 | outer verification `temperror` | `temperror` | `tempfail` |
 | outer verification `fail` or `permerror`, or `structure` not `valid`, or `embedded = unverified`, or `embedded = absent`, or `local_hop = mismatch`, or `outer_alignment = misaligned`, or `recipient_linkage = unlinked` | `fail` | `reject` |
 | `local_hop = not_local` | `fail` | `reject` |
