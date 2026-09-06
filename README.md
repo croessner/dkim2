@@ -115,6 +115,9 @@ Current contents:
   evidence, and known-limitation navigation for the preview candidate.
 - `docs/operator/postfix-compose.md`: hardened no-host-exposure-by-default
   Postfix/Milter deployment, lifecycle, backup, and rollback guide.
+- `docs/operator/deployment-walkthrough.md`: vendor-neutral conceptual map of
+  a DKIM2 deployment with signal-flow diagrams for verification, signing,
+  transit revision, bounce signing, and delivery-status propagation.
 - `docs/operator/container-supply-chain.md`: reproducible product images,
   multi-architecture layouts, SBOM, provenance, and vulnerability policy.
 - `docs/specs/openapi`: authoritative source-of-truth OpenAPI contract.

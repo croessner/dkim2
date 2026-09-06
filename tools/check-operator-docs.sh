@@ -42,6 +42,7 @@ refute_pattern() {
 }
 
 guide=docs/operator/postfix-compose.md
+walkthrough=docs/operator/deployment-walkthrough.md
 supply=docs/operator/container-supply-chain.md
 datasources=docs/operator/datasource-backends.md
 ldap_reference=docs/operator/ldap-schema-reference.md
@@ -60,6 +61,7 @@ containerfile=build/container/Dockerfile
 for document in \
   README.md \
   "$guide" \
+  "$walkthrough" \
   "$supply" \
   "$daemon" \
   "$milter" \
@@ -194,6 +196,34 @@ done
 
 grep -Fq 'draft-ietf-dkim-dkim2-spec-06' README.md
 grep -Fq 'unqualified_draft06' README.md
+
+# The walkthrough is the conceptual map; it must stay indexed, pinned to the
+# same baselines, and must not restate the procedure it links to.
+for reference in README.md docs/reference/README.md; do
+  grep -Fq 'operator/deployment-walkthrough.md' "$reference"
+done
+for required in \
+  'draft-ietf-dkim-dkim2-spec-06' \
+  'draft-chuang-dkim2-dns-04' \
+  'postfix-compose.md' \
+  'unqualified_draft06' \
+  'milter_reconstructed_crlf' \
+  'lmtp_delivered_crlf' \
+  '{postfix_dsn_origin}' \
+  'process.default_tenant' \
+  'dsn_propagation.pending_lease' \
+  'unprovisioned_domain' \
+  'X-DKIM2-DSN-Propagate-Capability' \
+  'known-limitations.md'; do
+  grep -Fq -e "$required" "$walkthrough"
+done
+for route in /v1/process /v1/sign /v1/revise /v1/dsn/sign \
+  /v1/dsn/propagate /v1/dsn/propagate/commit; do
+  grep -Fq "\`$route\`" "$walkthrough"
+done
+refute 'transport_maps' "$walkthrough"
+refute 'minimal_backoff_time' "$walkthrough"
+refute 'docker compose' "$walkthrough"
 refute 'DKIM2 based on `draft-ietf-dkim-dkim2-spec-04`' README.md
 refute 'implemented with capability `qualified_linux`' README.md
 refute 'Protocol behavior remains pinned to `draft-ietf-dkim-dkim2-spec-04`' "$guide"

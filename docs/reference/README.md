@@ -22,6 +22,9 @@ limitations without creating a second protocol model.
   security, and evidence boundaries.
 - [Postfix deployment](../operator/postfix-compose.md) is the implemented
   adapter qualification and operator path.
+- [Deployment walkthrough](../operator/deployment-walkthrough.md) is the
+  vendor-neutral conceptual map of components, capabilities, and signal flows
+  that complements the Postfix procedure.
 - [Exim operations](../operations/exim-adapter.md) and the historical
   [Draft-04 compatibility matrix](../reports/exim-compatibility-2026-07-27.md)
   describe the source-rebuild deployment and the separately invalidated
