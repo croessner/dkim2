@@ -346,7 +346,7 @@
     {
       "id": "valkey-harness-script",
       "path": "scripts/test-valkey.sh",
-      "sha256": "4a78475f515c790e1f0a170524ba151f854ba102b9be43cc24779a05d7f83d48",
+      "sha256": "8dbe79cbf85d8fda313928c8c05ddd2148205b4af642fcac1a48811e0491d0e8",
       "module": "scripts"
     },
     {
