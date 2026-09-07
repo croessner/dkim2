@@ -216,3 +216,72 @@ prove_provider_outages() {
   fi
   echo 'geoip_unavailable_denied=PASS geoip_fresh_recovery=PASS outbox_persistence_outage_tempfail=PASS outbox_recovery=PASS'
 }
+
+# scan_consumer_calibration requires fresh policy evaluation and synchronous acknowledgement for each scan.
+scan_consumer_calibration() {
+  CALIBRATION_CALLS=$(observer_value calls)
+  CALIBRATION_LOG="$RUNTIME_DIR/state/$1.log"
+  if ! run_scan "$1" >"$CALIBRATION_LOG" 2>&1; then
+    cat "$CALIBRATION_LOG" >&2
+    return 1
+  fi
+  test "$(observer_value calls)" -eq "$((CALIBRATION_CALLS + 1))"
+  test "$(observer_value last_upstream_effect)" = deny
+  grep -q DKIM2_OBSERVATION_ACKNOWLEDGED "$CALIBRATION_LOG"
+  if grep -Eq 'DKIM2_OBSERVATION_(PERSISTED|UNAVAILABLE)' "$CALIBRATION_LOG"; then
+    return 1
+  fi
+}
+
+# prove_consumer_calibration checks proposal-only decisions and acknowledged synchronous learning over SMTP.
+prove_consumer_calibration() {
+  python3 - "$RSPAMD_LOCAL_D/dkim2.conf" <<'PYCONFIG'
+from pathlib import Path
+import sys
+path = Path(sys.argv[1])
+config = path.read_text()
+assert config.count('nauthilus {\n') == 1
+assert config.count('  mode = "asynchronous";') == 1
+config = config.replace('nauthilus {\n', 'nauthilus {\n  mode = "observe";\n')
+config = config.replace('  mode = "asynchronous";', '  mode = "synchronous";')
+# Remove the fixture's complete nested outbox block; synchronous mode rejects queue settings.
+start = config.index('  outbox {')
+opening = config.index('{', start)
+depth = 1
+end = opening + 1
+while depth:
+    depth += (config[end] == '{') - (config[end] == '}')
+    end += 1
+config = config[:start] + config[end:]
+path.chmod(0o644)
+path.write_text(config)
+path.chmod(0o444)
+PYCONFIG
+  docker compose --project-name "$PROJECT_NAME" --env-file "$ENV_FILE" \
+    -f "$COMPOSE_FILE" restart rspamd >/dev/null
+  docker compose --project-name "$PROJECT_NAME" --env-file "$ENV_FILE" \
+    -f "$COMPOSE_FILE" up -d --wait --wait-timeout 90 rspamd >/dev/null
+  clear_retry_scenario
+  set_policy_mode forward
+  set_dkim_mode same_hop_risk
+  scan_consumer_calibration scan-observed-proposal-greylist.lua
+  sleep 2
+  scan_consumer_calibration scan-observed-proposal-accept.lua
+  docker compose --project-name "$PROJECT_NAME" --env-file "$ENV_FILE" \
+    -f "$COMPOSE_FILE" logs --no-color rspamd | grep -q 'policy_mode=observe proposed_effect=deny'
+  set_dkim_mode default
+  run_scan scan-unrelated-reject.lua
+  wait_learning_drain
+  observation_control unavailable
+  SYNC_FAILURE_LOG="$RUNTIME_DIR/state/synchronous-failure.log"
+  if ! run_scan scan-observation-unavailable.lua >"$SYNC_FAILURE_LOG" 2>&1; then
+    cat "$SYNC_FAILURE_LOG" >&2
+    return 1
+  fi
+  grep -q DKIM2_OBSERVATION_UNAVAILABLE "$SYNC_FAILURE_LOG"
+  if grep -q DKIM2_OBSERVATION_PERSISTED "$SYNC_FAILURE_LOG"; then
+    return 1
+  fi
+  observation_control forward
+  echo 'consumer_calibration_real_policy_deny=PASS ordinary_greylist_preserved=PASS subsequent_accept=PASS independent_rejection_preserved=PASS synchronous_observation_outage_tempfail=PASS'
+}

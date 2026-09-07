@@ -545,6 +545,7 @@ assert_policy_request 203.0.113.25 reject
 test "$(retry_cache_size)" -eq 0
 
 prove_later_reputation
+prove_consumer_calibration
 
 FINAL_STUB_CALLS=$(stub_calls)
 FINAL_POLICY_CALLS=$(observer_value calls)

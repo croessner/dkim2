@@ -16,6 +16,7 @@ local STATUS_CODES = {
   effect_outcome_unknown_replay_safe = { effect = 'indeterminate', retryable = true },
   effect_outcome_unknown = { effect = 'indeterminate', retryable = false },
   effect_acceptance_rejected = { effect = 'indeterminate', retryable = true },
+  effect_replay_unsafe = { effect = 'indeterminate', retryable = false },
 }
 
 -- M.proposal_summary excludes response text and preserves unavailable versus validated outcomes.

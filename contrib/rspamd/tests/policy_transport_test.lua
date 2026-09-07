@@ -3,6 +3,10 @@
 
 package.path = assert(arg[1]) .. '/?.lua;' .. package.path
 local transport = require 'dkim2.policy_transport'
+local partial_effect, partial_status = transport.proposal_summary({
+  effect='indeterminate', status={code='effect_replay_unsafe',retryable=false},
+})
+assert(partial_effect=='indeterminate' and partial_status=='effect_replay_unsafe', 'unsafe partial execution lost its non-retryable status')
 local code, failure, classification = 400, nil, nil
 local client = assert(transport.new({
   endpoint='https://policy.test/api/v1/policy/decisions', server_name='policy.test',
