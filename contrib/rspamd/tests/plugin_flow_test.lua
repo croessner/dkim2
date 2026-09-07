@@ -8,6 +8,7 @@ local verifier_callback
 local policy_requests = 0
 local finalizations = {}
 local log_errors = 0
+local proposal_logs = {}
 local eligible_body = '{"validated":"eligible"}'
 local policy_options
 local received_dsn_opt_in
@@ -127,7 +128,11 @@ package.preload['dkim2.nauthilus_policy'] = function()
   return {
     new = function(options)
       policy_options = options
+      policy_instance.mode = options.mode or "enforce"
       return policy_instance
+    end,
+    proposal_summary = function(decision)
+      return decision and decision.action or 'unavailable', 'test_status'
     end,
     decision_action = function(decision)
       return decision and decision.action or 'soft reject'
@@ -151,7 +156,11 @@ end
 package.preload.rspamd_http = function() return { request = function() end } end
 package.preload.rspamd_logger = function()
   return {
-    infox = function() end,
+    infox = function(_, format, ...)
+      if format:find('policy_mode=observe', 1, true) then
+        proposal_logs[#proposal_logs+1] = {...}
+      end
+    end,
     errx = function() log_errors = log_errors + 1 end,
   }
 end
@@ -447,6 +456,7 @@ print('dkim2 Rspamd plugin orchestration tests: PASS')
 -- The separate observation owner freezes evidence before the decision and delivers only after completion.
 local observation_order, observation_callback, decision_callback = {}, nil, nil
 local frozen = {}
+local expected_capture_action
 package.preload['dkim2.observation_runtime'] = function()
   return {new=function()
     return {
@@ -457,7 +467,7 @@ package.preload['dkim2.observation_runtime'] = function()
         return frozen
       end,
       deliver=function(_,value,event,callback)
-        assert(event==frozen and event.action==nil)
+        assert(event==frozen and event.action==expected_capture_action)
         observation_order[#observation_order+1]='delivery'
         observation_callback=callback
         return true
@@ -494,3 +504,62 @@ observation_callback('UNAVAILABLE')
 assert(task.pre_action=='soft reject','missing durable acknowledgement must prevent successful SMTP completion')
 policy_instance.request=original_request
 print('pre-policy capture, post-decision delivery and non-widening observation failure: PASS')
+
+-- Consumer calibration never applies proposals or masks independent durability failures.
+plugin_options.nauthilus.mode = 'observe'
+plugin_options.observation = nil
+assert(loadfile(plugin_path))()
+assert(policy_options.mode == 'observe', 'consumer observation mode was not wired')
+policy_callback = definitions.DKIM2_NAUTHILUS_POLICY.callback
+for _, action in ipairs({'continue', 'reject', 'soft reject'}) do
+  for _, existing in ipairs({'none', 'accept', 'reject', 'discard', 'quarantine', 'greylist', 'soft reject'}) do
+    reset_control()
+    control.policy_decision = {action=action}
+    task = policy_task(existing ~= 'none' and existing or nil)
+    local previous = task.pre_action
+    policy_callback(task)
+    assert(task.pre_action == previous, 'observed proposal changed delivery')
+    assert(not task.symbols.DKIM2_NAUTHILUS_PERMIT and not task.symbols.DKIM2_NAUTHILUS_DENY and
+      not task.symbols.DKIM2_NAUTHILUS_INDETERMINATE, 'observation emitted enforcement symbols')
+  end
+end
+for _, scenario in ipairs({'transport', 'schedule', 'context'}) do
+  reset_control()
+  task = policy_task()
+  if scenario == 'transport' then control.policy_decision = nil end
+  if scenario == 'schedule' then control.policy_started = false end
+  if scenario == 'context' then task.cache['dkim2.retry_context'] = nil end
+  policy_callback(task)
+  assert(task.pre_action == nil, 'observation failure changed delivery')
+end
+print('consumer observation preserves delivery and emits no enforcement symbols: PASS')
+
+plugin_options.observation = {mode='asynchronous'}
+assert(loadfile(plugin_path))()
+policy_callback = definitions.DKIM2_NAUTHILUS_POLICY.callback
+policy_instance.request = function(_,_,_,_,callback)
+  observation_order[#observation_order+1] = 'decision'
+  decision_callback = callback
+  return true
+end
+reset_control()
+observation_order = {}
+observation_callback = nil
+task = policy_task()
+local logs_before = #proposal_logs
+policy_callback(task)
+decision_callback({action='reject'})
+decision_callback({action='continue'})
+assert(task.pre_action == nil and #proposal_logs == logs_before+1, 'duplicate proposal callback was not fenced')
+assert(table.concat(observation_order,',') == 'capture,decision,delivery', 'observation was delivered more than once')
+observation_callback('UNAVAILABLE')
+assert(task.pre_action == 'soft reject', 'consumer observation bypassed independent persistence')
+policy_instance.request = original_request
+reset_control()
+task = policy_task('reject')
+expected_capture_action = 'reject'
+task.cache['dkim2.verifier_response'] = ineligible_response
+local requests_before = policy_requests
+policy_callback(task)
+assert(task.pre_action == 'reject' and policy_requests == requests_before, 'consumer observation bypassed verifier rejection')
+print('observed callbacks remain once-only and preserve independent durability and verifier authority: PASS')

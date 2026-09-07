@@ -33,6 +33,7 @@ local allowed_retry = {
   secret_file = true, authority_generation = true, ttl_ms = true, lease_ms = true, redis = true,
 }
 local allowed_policy = {
+  mode = true,
   endpoint = true, server_name = true, username = true, password_file = true,
   instance = true, timeout = true, max_response_bytes = true, client_class = true,
   mail_from_class = true, recipient_classes = true, received_dsn_attribute = true,
@@ -173,6 +174,7 @@ if not retry_cache then
 end
 
 local policy = policy_module.new({
+  mode = options.nauthilus.mode,
   endpoint = options.nauthilus.endpoint,
   server_name = options.nauthilus.server_name,
   username = options.nauthilus.username,
@@ -334,11 +336,6 @@ local function policy_callback(task)
     deliver_observation(task, event)
     return
   end
-  if not context or type(context.peer_ip) ~= 'string' then
-    fail_closed(task)
-    deliver_observation(task, event)
-    return
-  end
   local completed = false
   -- finish settles the current decision before opening the separate observation delivery boundary.
   local function finish(decision)
@@ -346,6 +343,12 @@ local function policy_callback(task)
       return
     end
     completed = true
+    if policy.mode == 'observe' then
+      local effect, status = policy_module.proposal_summary(decision)
+      rspamd_logger.infox(task, '%s policy_mode=observe proposed_effect=%s proposed_status=%s', N, effect, status)
+      deliver_observation(task, event)
+      return
+    end
     local action = policy_module.decision_action(decision)
     if action == 'soft reject' then
       task:insert_result(POLICY_INDETERMINATE, 1.0)
@@ -357,6 +360,10 @@ local function policy_callback(task)
       task:set_pre_result('reject', 'Message rejected by Nauthilus policy', N)
     end
     deliver_observation(task, event)
+  end
+  if not context or type(context.peer_ip) ~= 'string' then
+    finish(nil)
+    return
   end
   if not policy:request(task, response, context.peer_ip, finish) then
     finish(nil)
@@ -399,4 +406,4 @@ rspamd_config:register_symbol({
   augmentations = { string.format('timeout=%f', redis_params.timeout or 1.0) },
 })
 rspamd_logger.infox(rspamd_config,
-  '%s verifier, retry cache, and generic Nauthilus Policy postfilter enabled', N)
+  '%s verifier, retry cache, and generic Nauthilus Policy postfilter enabled mode=%s', N, policy.mode)

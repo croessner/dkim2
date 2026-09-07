@@ -27,6 +27,11 @@ retry_cache {
 # password file contains the exact Policy-Basic password without a newline.
 # Rspamd's global ssl_ca_path must trust the Policy endpoint certificate.
 nauthilus {
+  # Omission defaults to enforce. Use observe during calibration to log bounded
+  # proposed outcomes without applying them or emitting enforcement symbols.
+  # The server target must have no effects; independent observation delivery,
+  # verifier validation and retry-cache protections remain mandatory.
+  mode = "enforce";
   endpoint = "https://nauthilus-policy:9443/api/v1/policy/decisions";
   server_name = "nauthilus-policy";
   username = "rspamd-verifier";

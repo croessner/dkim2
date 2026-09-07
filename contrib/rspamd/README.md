@@ -389,3 +389,20 @@ a later decision rejects after that evidence is admitted. Policy-generated
 rejections do not acquire the independent rejection weight. Outbox persistence
 outages temporarily fail SMTP, and recovery preserves unrelated greylisting.
 These local controls supplement the real deployment's required SMTP proof.
+
+## Consumer calibration
+
+Set `dkim2.nauthilus.mode = "observe"` explicitly to evaluate the existing
+DKIM2 Policy target without applying its proposals to SMTP delivery. Omission
+retains `enforce`. Generic Nauthilus targets remain in `enforce` mode and the
+DKIM2 consumer target must have no reachable effects or returned obligations;
+the adapter cannot undo server-side actions.
+
+Observation logs contain only `policy_mode=observe`, `proposed_effect` and
+`proposed_status` from the closed response vocabulary. Missing or invalid
+responses are classified as unavailable, separately from a validated
+`not_applicable` result. No enforcement symbols are inserted in this mode.
+Verifier failures, retry-cache protection and mandatory independent observation
+acknowledgement or durable persistence keep their existing behavior. In
+particular, unavailable observation storage can still defer mail. The separate
+`reputation/observe` target always executes its admitted storage effect.

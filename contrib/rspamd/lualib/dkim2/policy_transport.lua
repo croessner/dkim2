@@ -18,6 +18,16 @@ local STATUS_CODES = {
   effect_acceptance_rejected = { effect = 'indeterminate', retryable = true },
 }
 
+-- M.proposal_summary excludes response text and preserves unavailable versus validated outcomes.
+function M.proposal_summary(decision)
+  local status = type(decision) == 'table' and type(decision.status) == 'table' and decision.status or nil
+  local contract = status and STATUS_CODES[status.code] or nil
+  if contract and contract.effect == decision.effect and contract.retryable == status.retryable then
+    return contract.effect, status.code
+  end
+  return 'unavailable', 'unavailable'
+end
+
 -- valid_json_content_type accepts JSON with an optional media-type parameter list.
 local function valid_json_content_type(value)
   if type(value) ~= 'string' then

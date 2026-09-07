@@ -580,8 +580,9 @@ outbox, allocation identity, previous decryption key, and Nauthilus event
 manifests until already accepted events have drained or expired under the
 recorded retention policy. Rollback of a decision policy does not authorize
 replaying observations under new IDs, rewriting their independent origin, or
-clearing reputation storage. Changing consumer targets to observation mode does
-not disable effect execution for `reputation/observe` itself.
+clearing reputation storage. Setting `dkim2.nauthilus.mode = "observe"` calibrates the consumer while the
+generic server target remains in `enforce` mode with no reachable effects. It
+does not disable effect execution for `reputation/observe` itself.
 
 ### Observation counters
 

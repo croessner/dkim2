@@ -44,7 +44,7 @@ package.preload['dkim2.policy_transport'] = function()
   return assert(loadfile((module_path:gsub('nauthilus_policy.lua$', 'policy_transport.lua'))))()
 end
 local module = assert(loadfile(module_path))()
-local client = assert(module.new({
+local client_options = {
   endpoint = 'https://nauthilus-policy:9443/api/v1/policy/decisions',
   server_name = 'nauthilus-policy', username = 'rspamd-verifier', password = 'secret',
   instance = 'mx01.example.test', timeout = 2, max_response_bytes = 65536,
@@ -57,7 +57,18 @@ local client = assert(module.new({
     mail_from_class = function() return 'external' end,
     recipient_classes = function() return { 'local' } end,
   },
-}))
+}
+local client = assert(module.new(client_options))
+assert(client.mode == "enforce", "omitted consumer mode must enforce")
+for _, mode in ipairs({"enforce", "observe"}) do
+  client_options.mode = mode
+  assert(module.new(client_options).mode == mode)
+end
+for _, mode in ipairs({false, true, 1, "disabled", {}}) do
+  client_options.mode = mode
+  assert(module.new(client_options) == nil, "invalid consumer mode accepted")
+end
+client_options.mode = nil
 
 response_value = {
   request_id = '0123456789abcdef0123456789abcdef',
@@ -211,3 +222,21 @@ assert(background:send_background('event-loop','frozen-body',response_value.requ
 assert(background_request.task==nil and background_request.ev_base=='event-loop' and background_request.config=='runtime-config')
 assert(background_request.body=='frozen-body' and background_request.no_ssl_verify==false)
 assert(not background:send_background(nil,'frozen-body',response_value.request_id,function() end))
+
+assert(module.new(nil) == nil and module.new(false) == nil)
+for _, proposal in ipairs({
+  {effect='permit', code='permit', retryable=false},
+  {effect='deny', code='policy_denied', retryable=false},
+  {effect='not_applicable', code='no_applicable_rule', retryable=false},
+  {effect='indeterminate', code='provider_unavailable', retryable=true},
+}) do
+  local effect, code = module.proposal_summary({effect=proposal.effect,
+    status={code=proposal.code, retryable=proposal.retryable, message='never log this'}})
+  assert(effect == proposal.effect and code == proposal.code, 'proposal classification lost')
+end
+for _, proposal in ipairs({{}, {effect='deny',status={code='secret\r\nbody',retryable=false}},
+  {effect='permit',status={code='policy_denied',retryable=false}}}) do
+  local effect, code = module.proposal_summary(proposal)
+  assert(effect == 'unavailable' and code == 'unavailable', 'untrusted proposal escaped bounded vocabulary')
+end
+print('consumer mode and bounded proposal classification: PASS')

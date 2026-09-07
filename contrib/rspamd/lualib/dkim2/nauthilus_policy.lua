@@ -87,6 +87,10 @@ end
 
 -- M.new constructs the DKIM2 decision mapper over the shared authenticated transport.
 function M.new(options)
+  if type(options) ~= 'table' then return nil end
+  local mode = options.mode
+  if mode == nil then mode = 'enforce' end
+  if mode ~= 'enforce' and mode ~= 'observe' then return nil end
   local transport = transport_module.new(options)
   if not transport or not valid_identity(options.instance) or
       type(options.ucl.to_format) ~= 'function' or type(options.util.random_hex) ~= 'function' or
@@ -111,7 +115,7 @@ function M.new(options)
       return nil
     end
   end
-  return setmetatable({transport = transport, instance = options.instance,
+  return setmetatable({transport = transport, instance = options.instance, mode = mode,
     client_class = options.client_class, mail_from_class = options.mail_from_class,
     recipient_classes = options.recipient_classes, ucl = options.ucl, util = options.util,
     projection_mapper = options.projection_mapper, envelope = options.envelope}, {__index = M})
@@ -143,6 +147,11 @@ function M:request(task, verifier_response, peer_ip, callback)
     return false
   end
   return self.transport:send(task, body, request_id, callback)
+end
+
+-- M.proposal_summary exposes only the shared codec's bounded proposal vocabulary.
+function M.proposal_summary(decision)
+  return transport_module.proposal_summary(decision)
 end
 
 -- M.decision_action maps one validated Policy outcome to a closed local action.
