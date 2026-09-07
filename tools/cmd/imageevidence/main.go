@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/croessner/dkim2/tools/internal/artifactpath"
+	"github.com/croessner/dkim2/tools/internal/buildidentity"
 	"github.com/croessner/dkim2/tools/internal/conformance"
 	"github.com/croessner/dkim2/tools/internal/strictjson"
 )
@@ -906,7 +907,7 @@ func validOCIBinary(
 		file.Mode != 0o555 || file.UID != 0 || file.GID != 0 ||
 		file.Size <= 0 || file.Size > 100<<20 ||
 		!validSHA256(file.SHA256) || file.Typeflag != tar.TypeReg ||
-		file.Build.GoVersion != "go1.26.6" ||
+		file.Build.GoVersion != buildidentity.GoVersion ||
 		file.Build.Main.Path != "github.com/croessner/dkim2/cmd/"+product ||
 		file.Build.Main.Version != "(devel)" || file.Build.Main.Sum != "" ||
 		file.Build.GOOS != "linux" || file.Build.GOARCH != parts[1] ||
@@ -1226,7 +1227,7 @@ func expectedSPDXPackages(
 	version string,
 	build binaryBuildInfo,
 ) map[string]string {
-	if build.GoVersion != "go1.26.6" ||
+	if build.GoVersion != buildidentity.GoVersion ||
 		build.Main.Path != "github.com/croessner/dkim2/cmd/"+product ||
 		build.Main.Version != "(devel)" ||
 		build.GOOS != "linux" ||

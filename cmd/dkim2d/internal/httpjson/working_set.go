@@ -9,24 +9,24 @@ import (
 )
 
 const (
-	// Go 1.26 io.ReadAll in src/io/io.go retains a 65,509,696-byte sum of
+	// Go 1.27.0 io.ReadAll in src/io/io.go retains a 65,509,696-byte sum of
 	// intermediate chunk capacities at this exact input maximum while it
 	// allocates the final exact-size result.
 	maximumProcessBodyCapacityBytes = uint64(47_882_240)
 	maximumReadAllIntermediateBytes = uint64(65_509_696)
 
-	// Go 1.26 encoding/json.Decoder.refill grows by 2*cap+512. Its last
-	// growth for this body replaces 33,553,920 bytes with 67,108,352 bytes;
-	// both capacities are live while make/copy performs that replacement.
-	maximumJSONDecoderRetainedBytes = uint64(67_108_352)
-	maximumJSONDecoderCapacityBytes = uint64(33_553_920 + 67_108_352)
+	// The Go 1.27.0 decoder measurement retains a 64 MiB buffer and replaces
+	// a 32 MiB buffer at the final growth. Both allocations are live during
+	// replacement; the runtime probe locks these effective capacities.
+	maximumJSONDecoderRetainedBytes = uint64(67_108_864)
+	maximumJSONDecoderCapacityBytes = uint64(33_554_432 + 67_108_864)
 
-	// Large Base64 byte/string storage rounds to the Go 1.26 8 KiB runtime
+	// Large Base64 byte/string storage rounds to the Go 1.27.0 8 KiB runtime
 	// allocation page even though its logical maximum remains 44,739,244.
 	maximumEncodedMessageCapacityBytes = uint64(44_744_704)
 	maximumRawMessageCapacityBytes     = uint64(dkim2.HardMaxRawMessageBytes)
 
-	// Go 1.26 encoding/base64.DecodeString allocates DecodedLen before it
+	// Go 1.27.0 encoding/base64.DecodeString allocates DecodedLen before it
 	// subtracts canonical padding, so the maximum result has one spare byte.
 	maximumBase64DecodedCapacityBytes = maximumRawMessageCapacityBytes + 1
 
@@ -42,7 +42,7 @@ const (
 	// RFC 8259 string decoding never expands beyond the source text, while the
 	// lexical 8,192-token ceiling bounds maps, slices, interfaces, numbers, and
 	// transient container growth. A second complete body capacity provides more
-	// than 5.8 KiB of Go 1.26 structure per accepted token, independently of the
+	// than 5.8 KiB of Go 1.27.0 structure per accepted token, independently of the
 	// generated DTO layout and in addition to every retained decoded string.
 	maximumValidationGenericStringBytes    = maximumProcessBodyCapacityBytes
 	maximumValidationGenericStructureBytes = maximumProcessBodyCapacityBytes
@@ -531,7 +531,7 @@ func (l *workingSetLedger) ReleaseAll() {
 	l.live = 0
 }
 
-// BeginBodyRead reserves the maximum Go 1.26 ReadAll overlap before reading.
+// BeginBodyRead reserves the maximum Go 1.27.0 ReadAll overlap before reading.
 func (l *workingSetLedger) BeginBodyRead() error {
 	if err := l.Claim(workingSetBodyReadChunks, maximumReadAllIntermediateBytes); err != nil {
 		return err

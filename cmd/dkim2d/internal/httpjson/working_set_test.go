@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"io"
 	"math"
@@ -94,7 +95,7 @@ func TestMaximumLegalWorkingSetProof(t *testing.T) {
 	}
 	claimWorkingSet(t, ledger, workingSetFixedStorage, maximumFixedRequestStorageBytes)
 
-	// Go 1.26 io.ReadAll retains its completed chunks while allocating the
+	// Go 1.27.0 io.ReadAll retains its completed chunks while allocating the
 	// exact final body snapshot. The new snapshot is claimed first so the
 	// transient overlap contributes to high water.
 	if err := ledger.BeginBodyRead(); err != nil {
@@ -102,7 +103,7 @@ func TestMaximumLegalWorkingSetProof(t *testing.T) {
 	}
 	if live := ledger.Snapshot().Live; live != maximumFixedRequestStorageBytes+
 		maximumReadAllIntermediateBytes+maximumProcessBodyCapacityBytes {
-		t.Fatal("BeginBodyRead() did not charge the Go 1.26 transient")
+		t.Fatal("BeginBodyRead() did not charge the Go 1.27.0 transient")
 	}
 	if err := ledger.FinishBodyRead(); err != nil {
 		t.Fatal("FinishBodyRead() failed")
@@ -276,29 +277,35 @@ func TestMaximumLegalProductionWorkingSetProof(t *testing.T) {
 	}
 }
 
-// TestGo126WorkingSetCapacityBounds derives the pinned standard-library overlaps.
-func TestGo126WorkingSetCapacityBounds(t *testing.T) {
+// TestPinnedWorkingSetCapacityBounds derives the pinned standard-library overlaps.
+func TestPinnedWorkingSetCapacityBounds(t *testing.T) {
 	probe := &workingSetReadAllProbe{remaining: uint64(maxProcessBodyBytes)}
 	body, err := io.ReadAll(probe)
 	if err != nil || len(body) != int(maxProcessBodyBytes) ||
 		uint64(cap(body)) != maximumProcessBodyCapacityBytes ||
 		probe.offered != maximumReadAllIntermediateBytes ||
 		probe.offered+uint64(cap(body)) != 113_391_936 {
-		t.Fatal("Go 1.26 io.ReadAll capacity inventory drifted")
+		t.Fatal("Go 1.27.0 io.ReadAll capacity inventory drifted")
 	}
-	retained, overlap := go126JSONDecoderCapacities(uint64(maxProcessBodyBytes))
+	decoderProbe := &workingSetJSONProbe{remaining: uint64(maxProcessBodyBytes)}
+	var decodedArray []any
+	if err := json.NewDecoder(decoderProbe).Decode(&decodedArray); err != nil {
+		t.Fatal(err)
+	}
+	retained, overlap := decoderProbe.capacity, decoderProbe.previous+decoderProbe.capacity
 	if retained != maximumJSONDecoderRetainedBytes ||
 		overlap != maximumJSONDecoderCapacityBytes {
-		t.Fatal("Go 1.26 encoding/json decoder capacity inventory drifted")
+		t.Fatalf("Go 1.27.0 JSON capacity inventory: retained=%d overlap=%d", retained, overlap)
 	}
 	if roundWorkingSetPage(uint64(maxEncodedMessageBytes), 8*1024) !=
 		maximumEncodedMessageCapacityBytes {
-		t.Fatal("Go 1.26 Base64 allocation inventory drifted")
+		t.Fatal("Go 1.27.0 Base64 allocation inventory drifted")
 	}
 	if decoded := base64.StdEncoding.DecodedLen(maxEncodedMessageBytes); uint64(decoded) != maximumBase64DecodedCapacityBytes ||
 		decoded != dkim2.HardMaxRawMessageBytes+1 {
-		t.Fatal("Go 1.26 Base64 decoded capacity inventory drifted")
+		t.Fatal("Go 1.27.0 Base64 decoded capacity inventory drifted")
 	}
+	t.Logf("measured ReadAll final=%d intermediate=%d; JSON retained=%d overlap=%d", cap(body), probe.offered, retained, overlap)
 	if maximumValidationGenericStructureBytes/uint64(maxJSONTokens) < 5_800 {
 		t.Fatal("generic OpenAPI value structural allowance drifted")
 	}
@@ -312,7 +319,7 @@ func TestGo126WorkingSetCapacityBounds(t *testing.T) {
 	if len(lines) != rawmsg.HardMaxBodyLines ||
 		cap(lines) != rawmsg.HardMaxBodyLines ||
 		maximumLibraryBodyLineIndexBytes != 7_864_320 {
-		t.Fatal("Go 1.26 BodyLine capacity inventory drifted")
+		t.Fatal("Go 1.27.0 BodyLine capacity inventory drifted")
 	}
 }
 
@@ -655,18 +662,40 @@ func assertWorkingSetError(
 	}
 }
 
-// go126JSONDecoderCapacities simulates Decoder.refill's pinned 2*cap+512 growth.
-func go126JSONDecoderCapacities(size uint64) (uint64, uint64) {
-	var previous uint64
-	capacity := uint64(512)
-	for capacity < size {
-		previous = capacity
-		capacity = 2*capacity + 512
-	}
-	return capacity, previous + capacity
+// workingSetJSONProbe measures actual Decoder.refill allocation capacities for a bounded empty array.
+type workingSetJSONProbe struct {
+	remaining uint64
+	read      uint64
+	capacity  uint64
+	previous  uint64
 }
 
-// workingSetReadAllProbe records each actual Go 1.26 intermediate allocation.
+// Read keeps one complete JSON value live while exposing each real decoder buffer growth.
+func (p *workingSetJSONProbe) Read(output []byte) (int, error) {
+	if p.remaining == 0 {
+		return 0, io.EOF
+	}
+	capacity := p.read + uint64(len(output))
+	if capacity > p.capacity {
+		p.previous, p.capacity = p.capacity, capacity
+	}
+	count := min(p.remaining, uint64(len(output)))
+	for i := range output[:count] {
+		output[i] = ' '
+	}
+	if p.read == 0 {
+		output[0] = '['
+	}
+	p.read += count
+	p.remaining -= count
+	if p.remaining == 0 {
+		output[count-1] = ']'
+		return int(count), io.EOF
+	}
+	return int(count), nil
+}
+
+// workingSetReadAllProbe records each actual Go 1.27.0 intermediate allocation.
 type workingSetReadAllProbe struct {
 	remaining uint64
 	offered   uint64

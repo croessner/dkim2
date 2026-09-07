@@ -1013,7 +1013,7 @@ func runStandaloneModule(
 		"HOME=" + filepath.Join(state, "home"),
 		"TMPDIR=" + temporaryRoot,
 		"LANG=C", "LC_ALL=C", "PATH=/usr/local/bin:/usr/bin:/bin",
-		"GOENV=off", "GOTOOLCHAIN=local", "GOWORK=off",
+		"GOENV=off", "GOEXPERIMENT=runtimesecret", "GOTOOLCHAIN=local", "GOWORK=off",
 		"GOPROXY=file://" + filepath.ToSlash(proxy), "GOSUMDB=off",
 		"GONOSUMDB=*", "GONOPROXY=none", "GOPRIVATE=", "GOVCS=off",
 		"GOMODCACHE=" + filepath.Join(state, "mod"),

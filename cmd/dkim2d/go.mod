@@ -1,6 +1,8 @@
 module github.com/croessner/dkim2/cmd/dkim2d
 
-go 1.26
+go 1.27
+
+toolchain go1.27.0
 
 require (
 	github.com/croessner/dkim2 v0.1.0-rc.1

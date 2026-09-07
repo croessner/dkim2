@@ -1,6 +1,8 @@
 module github.com/croessner/dkim2/tools
 
-go 1.26
+go 1.27
+
+toolchain go1.27.0
 
 tool github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen
 

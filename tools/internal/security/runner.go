@@ -18,6 +18,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/croessner/dkim2/tools/internal/buildidentity"
 	"github.com/croessner/dkim2/tools/internal/conformance"
 	referencecheck "github.com/croessner/dkim2/tools/internal/reference"
 )
@@ -554,7 +555,7 @@ func (r FuzzReport) Validate(revision string) error {
 	if !isRevision(revision) || r.Schema != fuzzReportSchema || r.BaseRevision != revision ||
 		!isSHA256(r.CandidateSnapshotSHA256) ||
 		r.InventorySHA256 != InventorySHA256() ||
-		!strings.HasPrefix(r.GoVersion, "go1.26.") ||
+		r.GoVersion != buildidentity.GoVersion ||
 		r.GOOS == "" || r.GOARCH == "" || r.Overall != passState ||
 		len(r.Targets) != len(targets) {
 		return errors.New("fuzz_report_identity")
@@ -587,7 +588,7 @@ func (r RaceReport) Validate(revision string) error {
 	expectedModules := workspaceModules()
 	if !isRevision(revision) || r.Schema != raceReportSchema || r.BaseRevision != revision ||
 		!isSHA256(r.CandidateSnapshotSHA256) ||
-		!strings.HasPrefix(r.GoVersion, "go1.26.") ||
+		r.GoVersion != buildidentity.GoVersion ||
 		r.GOOS == "" || r.GOARCH == "" ||
 		!slices.Equal(r.Modules, expectedModules) || r.State != passState {
 		return errors.New("race_report")
@@ -601,7 +602,7 @@ func (r Report) Validate(revision string) error {
 		!isRevision(revision) || r.DNSDraft != DNSDraft || r.BaseRevision != revision ||
 		!isSHA256(r.CandidateSnapshotSHA256) || r.Profile != securityProfile ||
 		r.InventorySHA256 != InventorySHA256() ||
-		!strings.HasPrefix(r.GoVersion, "go1.26.") ||
+		r.GoVersion != buildidentity.GoVersion ||
 		r.GOOS == "" || r.GOARCH == "" || r.Race != racePassState ||
 		r.FuzzTargets != len(Targets()) || r.FuzzState != passState ||
 		r.VulnerabilityState != passState || r.Findings != (FindingCounts{}) ||
@@ -794,7 +795,7 @@ func appendClosedGoEnvironment(environment []string, root string) []string {
 		"GOCACHE=/tmp/dkim2-security-go-cache",
 		"GOMODCACHE=/tmp/dkim2-security-module-cache",
 		"GOFLAGS=",
-		"GOENV=off",
+		"GOENV=off", "GOEXPERIMENT=runtimesecret",
 		"GOTOOLCHAIN=local",
 		"GOVULNDB=https://vuln.go.dev",
 		"GOWORK="+filepath.Join(root, "go.work"),

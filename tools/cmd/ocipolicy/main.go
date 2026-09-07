@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/croessner/dkim2/tools/internal/artifactpath"
+	"github.com/croessner/dkim2/tools/internal/buildidentity"
 	"github.com/croessner/dkim2/tools/internal/strictjson"
 )
 
@@ -691,7 +692,7 @@ func inspectBinaryBuild(
 ) (binaryBuildInfo, error) {
 	info, err := buildinfo.Read(bytes.NewReader(content))
 	if err != nil || info == nil ||
-		info.GoVersion != "go1.26.6" ||
+		info.GoVersion != buildidentity.GoVersion ||
 		info.Path != "github.com/croessner/dkim2/cmd/"+product ||
 		info.Main.Path != info.Path || info.Main.Version != "(devel)" ||
 		info.Main.Sum != "" || info.Main.Replace != nil {
@@ -715,13 +716,14 @@ func inspectBinaryBuild(
 		featureValue = "v8.0"
 	}
 	expectedSettings := map[string]string{
-		"-buildmode":  "exe",
-		"-compiler":   "gc",
-		"-trimpath":   "true",
-		"CGO_ENABLED": "0",
-		"GOARCH":      parts[1],
-		"GOOS":        parts[0],
-		featureKey:    featureValue,
+		"-buildmode":   "exe",
+		"-compiler":    "gc",
+		"-trimpath":    "true",
+		"CGO_ENABLED":  "0",
+		"GOEXPERIMENT": "runtimesecret",
+		"GOARCH":       parts[1],
+		"GOOS":         parts[0],
+		featureKey:     featureValue,
 	}
 	if !equalStringMaps(settings, expectedSettings) {
 		return binaryBuildInfo{}, errors.New("invalid build settings")

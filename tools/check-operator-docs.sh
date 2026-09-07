@@ -1,4 +1,6 @@
 #!/bin/sh
+export GOEXPERIMENT=runtimesecret
+export GOTOOLCHAIN=go1.27.0
 set -eu
 
 protected_test_tmp=

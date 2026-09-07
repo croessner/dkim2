@@ -5,7 +5,7 @@
   "properties": {
     "base_revision": {"pattern": "^[0-9a-f]{40}$", "type": "string"},
     "candidate_snapshot_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
-    "go_version": {"pattern": "^go1\\.26\\.[0-9]+$", "type": "string"},
+    "go_version": {"const": "go1.27.0-X:runtimesecret", "type": "string"},
     "goarch": {"maxLength": 32, "pattern": "^[a-z0-9]+$", "type": "string"},
     "goos": {"maxLength": 32, "pattern": "^[a-z0-9]+$", "type": "string"},
     "modules": {

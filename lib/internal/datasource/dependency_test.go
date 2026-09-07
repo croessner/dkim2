@@ -1034,7 +1034,8 @@ func testExternalHarnessClassifier(t *testing.T) {
 func testModuleDependencyParser(t *testing.T) {
 	t.Helper()
 	valid := `module github.com/croessner/dkim2
-go 1.26
+go 1.27
+toolchain go1.27.0
 require (
 	golang.org/x/sys v0.47.0
 	ldap.example v1.0.0
@@ -1061,10 +1062,12 @@ replace (
 		t.Fatal("no-slash forbidden module path was not classified")
 	}
 	invalid := []string{
-		"module github.com/croessner/dkim2\ngo 1.26\nrequire (\nexample.com v1.0.0\n",
-		"module github.com/croessner/dkim2\ngo 1.26\nreplace example.com => ../local\n",
-		"module github.com/croessner/dkim2\ngo 1.26\ntool (\nexample.com v1.0.0\n)\n",
-		"module github.com/croessner/dkim2\ngo 1.26\nreplace (example.com)\n",
+		"module github.com/croessner/dkim2\ngo 1.27\ntoolchain go1.26.6\n",
+		"module github.com/croessner/dkim2\ngo 1.27\ntoolchain go1.27.0 extra\n",
+		"module github.com/croessner/dkim2\ngo 1.27\nrequire (\nexample.com v1.0.0\n",
+		"module github.com/croessner/dkim2\ngo 1.27\nreplace example.com => ../local\n",
+		"module github.com/croessner/dkim2\ngo 1.27\ntool (\nexample.com v1.0.0\n)\n",
+		"module github.com/croessner/dkim2\ngo 1.27\nreplace (example.com)\n",
 	}
 	for _, content := range invalid {
 		if _, parsed := parseModuleDependencies(content); parsed {
@@ -1264,12 +1267,8 @@ func parseModuleDependencies(content string) ([]string, bool) {
 			continue
 		}
 		switch fields[0] {
-		case "module":
-			if len(fields) != 2 || fields[1] != dependencyModulePath {
-				return nil, false
-			}
-		case "go":
-			if len(fields) != 2 {
+		case "module", "go", "toolchain":
+			if !validModuleMetadataDirective(fields) {
 				return nil, false
 			}
 		case requireDirective, toolDirective:
@@ -1426,4 +1425,21 @@ func declarationWords(name string) []string {
 		words = append(words, string(runes[start:]))
 	}
 	return words
+}
+
+// validModuleMetadataDirective separates closed module/compiler identity from dependency grammar.
+func validModuleMetadataDirective(fields []string) bool {
+	if len(fields) != 2 {
+		return false
+	}
+	switch fields[0] {
+	case "module":
+		return fields[1] == dependencyModulePath
+	case "go":
+		return fields[1] == "1.27"
+	case "toolchain":
+		return fields[1] == "go1.27.0"
+	default:
+		return false
+	}
 }

@@ -1,6 +1,8 @@
 module github.com/croessner/dkim2/cmd/dkim2-exim
 
-go 1.26
+go 1.27
+
+toolchain go1.27.0
 
 require (
 	github.com/oapi-codegen/runtime v1.7.0

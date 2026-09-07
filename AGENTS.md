@@ -1,8 +1,8 @@
 # DKIM2 Development Guidelines
 
-This repository is a Go 1.26 multi-module workspace for a DKIM2 reference
+This repository is a Go 1.27.0 multi-module workspace for a DKIM2 reference
 implementation. Keep `go.work`, every module `go.mod`, generated code,
-documentation, CI, and local guardrails aligned with Go 1.26 whenever toolchain
+documentation, CI, and local guardrails aligned with Go 1.27.0 whenever toolchain
 details change.
 
 The implementation baseline is `draft-ietf-dkim-dkim2-spec-06` plus
@@ -33,6 +33,10 @@ before substantial work in its area:
 - `dkim2-review-audit` for review or audit tasks.
 
 ## Required Workflow
+
+- Always use exact Go 1.27.0 and `GOEXPERIMENT=runtimesecret`. Make targets
+  and direct test scripts export the experiment internally; direct Go test
+  invocations must prefix it explicitly. Run `make check-go-toolchain-contract`.
 
 - Use `make` targets instead of ad hoc command variants whenever possible.
 - Run `make guardrails` before every commit or pull request once the touched
@@ -193,10 +197,10 @@ as those targets become available.
 Current multi-module direct checks:
 
 ```text
-go test ./lib/...
-go test ./cmd/dkim2d/...
-go test ./cmd/dkim2-milter/...
-go test ./cmd/dkim2ctl/...
+GOEXPERIMENT=runtimesecret go test ./lib/...
+GOEXPERIMENT=runtimesecret go test ./cmd/dkim2d/...
+GOEXPERIMENT=runtimesecret go test ./cmd/dkim2-milter/...
+GOEXPERIMENT=runtimesecret go test ./cmd/dkim2ctl/...
 ```
 
 ## Definition Of Done

@@ -186,7 +186,7 @@ func runWorkspaceCommand(root, proxy, state string, arguments ...string) error {
 		"HOME=" + filepath.Join(state, "home"),
 		"TMPDIR=" + filepath.Join(state, "tmp"),
 		"LANG=C", "LC_ALL=C", "PATH=/usr/local/bin:/usr/bin:/bin",
-		"GOENV=off", "GOTOOLCHAIN=local",
+		"GOENV=off", "GOEXPERIMENT=runtimesecret", "GOTOOLCHAIN=local",
 		"GOWORK=" + filepath.Join(root, "go.work"),
 		"GOPROXY=file://" + filepath.ToSlash(proxy), "GOSUMDB=off",
 		"GONOSUMDB=*", "GONOPROXY=none", "GOPRIVATE=", "GOVCS=off",

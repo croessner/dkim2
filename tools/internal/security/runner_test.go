@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	testGoVersion = "go1.26.6"
+	testGoVersion = "go1.27.0-X:runtimesecret"
 	testGOARCH    = "amd64"
 	testGOOS      = "linux"
 	testScanner   = "govulncheck@v1.3.0"
@@ -415,18 +415,19 @@ func TestClosedGoEnvironmentRejectsCallerToolchainAndDatabaseSelection(t *testin
 		values[key] = value
 	}
 	for key, want := range map[string]string{
-		"GOENV":       "off",
-		"GOTOOLCHAIN": "local",
-		"GOVULNDB":    "https://vuln.go.dev",
-		"GOWORK":      "/repository/go.work",
-		"LANG":        "C",
-		"LC_ALL":      "C",
+		"GOENV":        "off",
+		"GOEXPERIMENT": "runtimesecret",
+		"GOTOOLCHAIN":  "local",
+		"GOVULNDB":     "https://vuln.go.dev",
+		"GOWORK":       "/repository/go.work",
+		"LANG":         "C",
+		"LC_ALL":       "C",
 	} {
 		if got := values[key]; got != want {
 			t.Fatalf("%s = %q, want %q", key, got, want)
 		}
 	}
-	for _, key := range []string{"GOOS", "GOARCH", "GOEXPERIMENT"} {
+	for _, key := range []string{"GOOS", "GOARCH"} {
 		if _, present := values[key]; present {
 			t.Fatalf("%s remained caller-selectable", key)
 		}
@@ -443,10 +444,10 @@ func TestClosedGoEnvironmentRejectsCallerToolchainAndDatabaseSelection(t *testin
 // TestRuntimeExperimentSuffixIsSeparatedFromToolchainVersion freezes the
 // required runtimesecret build's distinction between compiler and experiment.
 func TestRuntimeExperimentSuffixIsSeparatedFromToolchainVersion(t *testing.T) {
-	if version, err := runtimeToolchainVersion("go1.26.6-X:runtimesecret"); err != nil || version != "go1.26.6" {
+	if version, err := runtimeToolchainVersion("go1.27.0-X:runtimesecret"); err != nil || version != "go1.27.0" {
 		t.Fatalf("runtime toolchain version = %q, %v", version, err)
 	}
-	for _, invalid := range []string{"", "-X:runtimesecret", "go1.26.6-X:", "go1.26.6-X:runtimesecret -X:other"} {
+	for _, invalid := range []string{"", "-X:runtimesecret", "go1.27.0-X:", "go1.27.0-X:runtimesecret -X:other"} {
 		if _, err := runtimeToolchainVersion(invalid); err == nil {
 			t.Fatalf("invalid runtime version %q accepted", invalid)
 		}

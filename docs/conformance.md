@@ -91,7 +91,7 @@ oracles as recorded in the manifest.
 
 ## Reproducing the reports
 
-The portable profile requires Go 1.26 and `valkey-server` 9.1.0:
+The portable profile requires exact Go 1.27.0 with `GOEXPERIMENT=runtimesecret` and `valkey-server` 9.1.0:
 
 ```text
 make check-conformance

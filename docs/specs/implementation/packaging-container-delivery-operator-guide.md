@@ -69,7 +69,7 @@ In particular:
 
 - there are no product Dockerfiles or Containerfiles for `dkim2d`,
   `dkim2-milter`, or `dkim2ctl`;
-- no checked build contract freezes Go 1.26, vendored module use, target
+- no checked build contract freezes Go 1.27.0, vendored module use, target
   platforms, build flags, binary ownership, OCI metadata, or reproducibility;
 - no minimal runtime image contract proves non-root execution, lack of a
   shell/package manager, read-only-root operation, dropped capabilities,
@@ -108,7 +108,7 @@ The increment produces:
 - one reviewed multi-stage production build definition with named targets, or
   separate equivalent definitions, for `dkim2d`, `dkim2-milter`, and
   `dkim2ctl`;
-- Linux `amd64` and `arm64` OCI images built from the exact Go 1.26 workspace
+- Linux `amd64` and `arm64` OCI images built from the exact Go 1.27.0 workspace
   and vendored dependencies;
 - minimal non-root runtime images with deterministic users, ownership,
   entrypoints, metadata, and read-only-root compatibility;
@@ -185,7 +185,7 @@ prompt-pack ledger until closeout.
 - Production container build definitions for `dkim2d`, `dkim2-milter`, and
   `dkim2ctl`.
 - A central immutable build-input policy, a minimal fail-fast metadata
-  validator, a pinned Go 1.26 builder, and `scratch` runtime images.
+  validator, a pinned Go 1.27.0 builder, and `scratch` runtime images.
 - Reproducible `CGO_ENABLED=0` Linux builds for `amd64` and `arm64`.
 - OCI image labels, annotations, digests, manifests, platforms, SBOMs,
   provenance, and vulnerability evidence.
@@ -244,7 +244,7 @@ contrib assets, and developer home material.
 
 Product builds:
 
-- use exact Go `1.26.0` or a reviewed later `1.26.x` patch consistently across
+- use exact Go `1.27.0` with `GOEXPERIMENT=runtimesecret` consistently across
   repository metadata, builder identity, docs, and CI;
 - use the checked-in vendor tree with `-mod=vendor` and no network access after
   immutable builder/runtime image acquisition;
@@ -635,7 +635,7 @@ substitute for runtime failure handling.
 - hostile target architecture and build metadata are rejected in a minimal
   stage before source copying or compilation, and every product target depends
   on its validation result;
-- Go builder version matches repository Go 1.26 policy;
+- Go builder version matches repository Go 1.27.0 policy;
 - build context closure and `.dockerignore` exclude secret/local paths;
 - final images contain only expected paths, modes, owners, and file types;
 - build-only validator and builder bytes are absent from both final platforms;
@@ -751,7 +751,7 @@ locally or in trusted CI; it must not pretend that a registry push occurred.
 
 ## Acceptance Criteria
 
-- All three product images build from immutable Go 1.26 and runtime inputs for
+- All three product images build from immutable Go 1.27.0 and runtime inputs for
   Linux amd64 and arm64.
 - Product binaries and normalized OCI inventories satisfy the documented
   reproducibility contract.
@@ -838,7 +838,7 @@ Fill after implementation and independent review:
 | Area | Soll | Ist | Status | Notes |
 | --- | --- | --- | --- | --- |
 | Authority | Draft/RFC/OpenAPI/product/deployment/supply-chain claims remain separate | pending | pending | |
-| Build | Go 1.26, vendor, immutable inputs, deterministic metadata, closed platforms | pending | pending | |
+| Build | Go 1.27.0, vendor, immutable inputs, deterministic metadata, closed platforms | pending | pending | |
 | Images | Minimal non-root hardened runtime for all three products and two architectures | pending | pending | |
 | Supply chain | Digests, SBOM, provenance, vulnerability, release policy and tamper proof | pending | pending | |
 | Topology | Daemon loopback, Unix Milter, no default host exposure, explicit demo SMTP only | pending | pending | |

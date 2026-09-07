@@ -33,7 +33,7 @@
     "exim": {"const": "unqualified_draft06"},
     "fuzz_state": {"const": "pass"},
     "fuzz_targets": {"maximum": 4096, "minimum": 1, "type": "integer"},
-    "go_version": {"pattern": "^go1\\.26\\.[0-9]+$", "type": "string"},
+    "go_version": {"const": "go1.27.0-X:runtimesecret", "type": "string"},
     "goarch": {"maxLength": 32, "pattern": "^[a-z0-9]+$", "type": "string"},
     "goos": {"maxLength": 32, "pattern": "^[a-z0-9]+$", "type": "string"},
     "inventory_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},

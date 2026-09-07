@@ -29,7 +29,7 @@ func TestGenerateAPIManifestIncludesModuleAndDocumentationSurface(t *testing.T) 
 	}
 	for _, required := range []string{
 		"module: github.com/croessner/dkim2\n",
-		"go: 1.26\n",
+		"go: 1.27\n",
 		"// ObservationEvent is the immutable closed library observation value.",
 	} {
 		if !strings.Contains(string(manifest), required) {
