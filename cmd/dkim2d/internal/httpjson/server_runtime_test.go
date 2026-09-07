@@ -860,6 +860,33 @@ func TestServerRuntimeFreezesHostileContexts(t *testing.T) {
 	}
 }
 
+// assertServerCleanupBoundedAfterEntry cancels only after the exact cleanup owner
+// has started, so scheduler delay cannot substitute for the bounded join being tested.
+func assertServerCleanupBoundedAfterEntry(t *testing.T, cleanup func(context.Context) error, entered <-chan struct{}) {
+	t.Helper()
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	result := make(chan error, 1)
+	go func() { result <- cleanup(ctx) }()
+
+	select {
+	case <-entered:
+		cancel()
+	case <-ctx.Done():
+		t.Fatal("cleanup owner did not start within the fixture bound")
+	}
+
+	select {
+	case err := <-result:
+		if !IsServerRuntimeError(err) {
+			t.Fatal("cleanup falsely proved a blocked shutdown join")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("cleanup escaped its canceled caller bound")
+	}
+}
+
 // TestServerRuntimeBoundsAndJoinsShutdownAndForce proves blocking net/http
 // cleanup calls are attempted once and never reported joined prematurely.
 func TestServerRuntimeBoundsAndJoinsShutdownAndForce(t *testing.T) {
@@ -875,37 +902,30 @@ func TestServerRuntimeBoundsAndJoinsShutdownAndForce(t *testing.T) {
 		runtime.state = serverRuntimeStopping
 		runtime.serveReturned.Store(true)
 		shutdownRelease := make(chan struct{})
+		var releaseOnce sync.Once
+		releaseShutdown := func() { releaseOnce.Do(func() { close(shutdownRelease) }) }
+		t.Cleanup(releaseShutdown)
+		shutdownEntered := make(chan struct{})
 		shutdownCalls := atomic.Int32{}
 		runtime.shutdownServer = func(context.Context) error {
 			shutdownCalls.Add(1)
+			close(shutdownEntered)
 			<-shutdownRelease
 			return errors.New("shutdown-private-marker")
 		}
+		forceEntered := make(chan struct{})
 		forceCalls := atomic.Int32{}
 		runtime.forceServer = func() error {
 			forceCalls.Add(1)
+			close(forceEntered)
 			return nil
 		}
-		shutdownContext, cancelShutdown := context.WithTimeout(
-			context.Background(),
-			20*time.Millisecond,
-		)
-		defer cancelShutdown()
-		if err := runtime.Shutdown(shutdownContext); !IsServerRuntimeError(err) {
-			t.Fatal("blocking Shutdown() escaped its caller bound")
-		}
-		forceContext, cancelForce := context.WithTimeout(
-			context.Background(),
-			20*time.Millisecond,
-		)
-		defer cancelForce()
-		if err := runtime.ForceClose(forceContext); !IsServerRuntimeError(err) {
-			t.Fatal("ForceClose() falsely proved a blocked shutdown join")
-		}
+		assertServerCleanupBoundedAfterEntry(t, runtime.Shutdown, shutdownEntered)
+		assertServerCleanupBoundedAfterEntry(t, runtime.ForceClose, forceEntered)
 		if shutdownCalls.Load() != 1 || forceCalls.Load() != 1 {
 			t.Fatal("bounded cleanup did not attempt each exact owner once")
 		}
-		close(shutdownRelease)
+		releaseShutdown()
 		retryContext, cancelRetry := context.WithTimeout(
 			context.Background(),
 			time.Second,
