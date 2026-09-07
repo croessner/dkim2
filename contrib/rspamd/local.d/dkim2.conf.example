@@ -68,3 +68,51 @@ nauthilus {
 # endpoint = "https://dkim2d-inbound:8443/v1/process";
 # transport = "tls_private_network";
 # server_name = "dkim2d-inbound";
+
+# Optional independent learning. Enable only with the matching Nauthilus source
+# admission and real reputation/GeoIP providers. This principal is distinct from
+# rspamd-verifier. Omission disables new observations; it does not drain a queue.
+# observation {
+#   mode = "synchronous";
+#   source = "scan";
+#   instance = "mx01.example.test";
+#   endpoint = "https://nauthilus-policy:9443/api/v1/policy/decisions";
+#   server_name = "nauthilus-policy";
+#   username = "ScanWriter";
+#   password_file = "/etc/dkim2/protected/observation-password";
+#   timeout = 2.0;
+#   max_response_bytes = 65536;
+#   failure_action = "tempfail";
+#
+#   # To use asynchronous mode, change mode above and include this complete
+#   # outbox block. Do not include an unused outbox in synchronous mode.
+#   # outbox {
+#   #   allocation_key { file = "/etc/dkim2/protected/outbox-allocation"; }
+#   #   active_key { file = "/etc/dkim2/protected/outbox-encryption-active"; }
+#   #   # previous_key { file = "/etc/dkim2/protected/outbox-encryption-previous"; }
+#   #   shard_count = 4;
+#   #   drain_generation = 0;
+#   #   max_records = 4096;
+#   #   max_encrypted_bytes = 67108864;
+#   #   max_age_ms = 86400000;
+#   #   lease_ms = 15000;
+#   #   max_attempts = 100;
+#   #   backoff_min_ms = 1000;
+#   #   backoff_max_ms = 60000;
+#   #   jitter_ms = 1000;
+#   #   tombstone_limit = 4096;
+#   #   tombstone_ttl_ms = 86400000;
+#   #   poll_interval = 0.25;
+#   #   sweep_interval = 1.0;
+#   #   redis {
+#   #     servers = "outbox-redis:6379";
+#   #     username = "outbox";
+#   #     password_file = "/etc/dkim2/protected/outbox-password";
+#   #     ssl = true;
+#   #     no_ssl_verify = false;
+#   #     ssl_ca = "/etc/ssl/certs/outbox-ca.crt";
+#   #     sni = "outbox-redis";
+#   #     timeout = 1.0;
+#   #   }
+#   # }
+# }

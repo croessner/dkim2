@@ -2,6 +2,7 @@
 -- SPDX-License-Identifier: Apache-2.0
 
 local N = 'dkim2'
+local protected_file = require 'dkim2.protected_file'
 local M = {}
 local rspamd_http = require 'rspamd_http'
 local rspamd_logger = require 'rspamd_logger'
@@ -243,17 +244,8 @@ end
 
 -- read_capability loads one exact raw route capability without diagnostic exposure.
 local function read_capability(path)
-  if type(path) ~= 'string' or path:sub(1, 1) ~= '/' or path:find('\0', 1, true) then
-    return nil
-  end
-  local handle = io.open(path, 'rb')
-  if not handle then
-    return nil
-  end
-  local raw = handle:read(33)
-  local trailing = handle:read(1)
-  handle:close()
-  if type(raw) ~= 'string' or #raw ~= 32 or trailing ~= nil then
+  local raw = protected_file.read(path, 32, 32)
+  if not raw then
     return nil
   end
   local nonzero = false

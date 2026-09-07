@@ -49,6 +49,42 @@ type policyE2EProjectionFixture struct {
 // TestPolicyE2ETwoHopProjectionBinding locks the fixture to the producer's private canonical binding functions.
 func TestPolicyE2ETwoHopProjectionBinding(t *testing.T) {
 	fixture := loadPolicyE2EProjectionFixture(t)
+	hops := policyE2EBoundHops(t, fixture)
+
+	projectionBinding := verifierProjectionBinding(hops)
+	assertPolicyE2EDigest(t, "projection", projectionBinding[:], fixture.VerifierProjection.Binding)
+	for index := range hops {
+		binding := verifierBoundHopBinding(projectionBinding, hops[index])
+		assertPolicyE2EDigest(t, "hop", binding[:], fixture.VerifierProjection.Hops[index].HopBinding)
+		hops[index].binding = binding
+	}
+	expectedCustodyStructure := "not_present"
+	for index, hop := range hops {
+		switch hop.custody {
+		case VerifierCustodyOrigin, VerifierCustodyOrdinary:
+		case VerifierCustodyNextDomain:
+			expectedCustodyStructure = "nd_links_evaluated"
+		case VerifierCustodyTerminalNextDomain:
+			t.Fatalf("hop %d has an unresolved terminal next-domain transition", index+1)
+		}
+	}
+	if fixture.Verification.CustodyStructure != expectedCustodyStructure {
+		t.Fatalf("aggregate custody structure = %q, want %q for projected transitions",
+			fixture.Verification.CustodyStructure, expectedCustodyStructure)
+	}
+
+	projection := VerifierProjection{
+		hops: hops, binding: projectionBinding, draft: fixture.VerifierProjection.Draft,
+		schema: fixture.VerifierProjection.Schema, sealed: true,
+	}
+	if !projection.Valid() {
+		t.Fatal("two-hop fixture does not form a valid producer projection")
+	}
+}
+
+// policyE2EBoundHops reconstructs coherent producer-owned descriptors for both locked and generated fixtures.
+func policyE2EBoundHops(t *testing.T, fixture policyE2EProjectionFixture) []VerifierHop {
+	t.Helper()
 	hops := make([]VerifierHop, len(fixture.VerifierProjection.Hops))
 
 	for index, source := range fixture.VerifierProjection.Hops {
@@ -80,35 +116,7 @@ func TestPolicyE2ETwoHopProjectionBinding(t *testing.T) {
 		}
 	}
 
-	projectionBinding := verifierProjectionBinding(hops)
-	assertPolicyE2EDigest(t, "projection", projectionBinding[:], fixture.VerifierProjection.Binding)
-	for index := range hops {
-		binding := verifierBoundHopBinding(projectionBinding, hops[index])
-		assertPolicyE2EDigest(t, "hop", binding[:], fixture.VerifierProjection.Hops[index].HopBinding)
-		hops[index].binding = binding
-	}
-	expectedCustodyStructure := "not_present"
-	for index, hop := range hops {
-		switch hop.custody {
-		case VerifierCustodyOrigin, VerifierCustodyOrdinary:
-		case VerifierCustodyNextDomain:
-			expectedCustodyStructure = "nd_links_evaluated"
-		case VerifierCustodyTerminalNextDomain:
-			t.Fatalf("hop %d has an unresolved terminal next-domain transition", index+1)
-		}
-	}
-	if fixture.Verification.CustodyStructure != expectedCustodyStructure {
-		t.Fatalf("aggregate custody structure = %q, want %q for projected transitions",
-			fixture.Verification.CustodyStructure, expectedCustodyStructure)
-	}
-
-	projection := VerifierProjection{
-		hops: hops, binding: projectionBinding, draft: fixture.VerifierProjection.Draft,
-		schema: fixture.VerifierProjection.Schema, sealed: true,
-	}
-	if !projection.Valid() {
-		t.Fatal("two-hop fixture does not form a valid producer projection")
-	}
+	return hops
 }
 
 // loadPolicyE2EProjectionFixture strictly loads the tracked HTTP response fixture.

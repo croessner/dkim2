@@ -16,6 +16,7 @@ ENV_FILE="$RUNTIME_DIR/compose.env"
 REUSED_NAUTHILUS_IMAGE=${POLICY_E2E_REUSE_NAUTHILUS_IMAGE:-}
 NAUTHILUS_IMAGE=${REUSED_NAUTHILUS_IMAGE:-"$PROJECT_NAME-nauthilus"}
 MILTERTEST_IMAGE="$PROJECT_NAME-miltertest"
+RSPAMD_IMAGE=${POLICY_E2E_RSPAMD_IMAGE:-rspamd/rspamd:4.1.5}
 # RECEIVED_DSN_ATTRIBUTE selects whether the Rspamd option
 # nauthilus.received_dsn_attribute is enabled for this run. The fixture enables
 # it; "false" rewrites the runtime copy of local.d and asserts the attribute
@@ -75,7 +76,11 @@ command -v openssl >/dev/null
 command -v jq >/dev/null
 command -v go >/dev/null
 
-"$SCRIPT_DIR/policy-e2e/verify-two-hop-projection.sh"
+"$SCRIPT_DIR/observation_outbox_native_test.sh" "$RSPAMD_IMAGE"
+python3 "$SCRIPT_DIR/policy-e2e/policy_observer_test.py"
+python3 "$SCRIPT_DIR/policy-e2e/reputation_probe_test.py"
+mkdir -p "$RUNTIME_DIR/projections"
+POLICY_E2E_PROJECTION_OUTPUT="$RUNTIME_DIR/projections" "$SCRIPT_DIR/policy-e2e/verify-two-hop-projection.sh"
 
 umask 077
 mkdir -p "$RUNTIME_DIR/certs" "$RUNTIME_DIR/protected" "$RUNTIME_DIR/state"
@@ -97,6 +102,31 @@ printf '%s\n' '{"mode":"forward"}' >"$RUNTIME_DIR/state/policy-observer-control.
 openssl rand 32 >"$RUNTIME_DIR/protected/process-capability"
 openssl rand 32 >"$RUNTIME_DIR/protected/rspamd-retry-hmac"
 POLICY_PASSWORD=$(openssl rand -hex 24)
+OBSERVATION_PASSWORD=$(openssl rand -hex 24)
+SEED_PASSWORD=$(openssl rand -hex 24)
+OUTBOX_PASSWORD=$(openssl rand -hex 24)
+for KEY_NAME in reputation-subject-key reputation-manifest-key outbox-allocation outbox-encryption-active outbox-encryption-previous; do
+  openssl rand 32 >"$RUNTIME_DIR/protected/$KEY_NAME"
+done
+printf '%s' "$OBSERVATION_PASSWORD" >"$RUNTIME_DIR/protected/observation-password"
+printf '%s' "$SEED_PASSWORD" >"$RUNTIME_DIR/protected/fixture-seed-password"
+printf '%s' "$OUTBOX_PASSWORD" >"$RUNTIME_DIR/protected/outbox-password"
+python3 - "$RUNTIME_DIR" <<'PY_FIXTURE'
+import hashlib
+import json
+from pathlib import Path
+import sys
+root=Path(sys.argv[1])
+password=(root/'protected/outbox-password').read_bytes()
+inspection=__import__('secrets').token_hex(32)
+(root/'protected/outbox-inspection-password').write_text(inspection)
+commands='+ping +auth +hello +evalsha +eval +script|load +script|exists +time +type +hgetall +hget +hmget +hlen +hset +hdel +exists +zadd +zrange +zrangebyscore +zscore +zrem +zcard +pttl +del'
+(root/'protected/outbox.acl').write_text('user default off\nuser health on nopass +ping\nuser outbox on #'+hashlib.sha256(password).hexdigest()+' ~dkim2:observation:v1:* '+commands+'\nuser inspector on #'+hashlib.sha256(inspection.encode()).hexdigest()+
+    ' ~dkim2:observation:v1:*:capacity ~dkim2:observation:v1:*:due +hgetall +zcard\n')
+(root/'geoip.json').write_text(json.dumps({'records':[
+  {'cidr':'203.0.113.0/24','country_iso':'DE','country_name':'Fixture','city_name':'Fixture','asn':64500,'asn_org':'Fixture trusted route'},
+  {'cidr':'198.51.100.0/24','country_iso':'DE','country_name':'Fixture','city_name':'Fixture','asn':64501,'asn_org':'Fixture other route'}]}))
+PY_FIXTURE
 REDIS_ENCRYPTION_SECRET=$(openssl rand -hex 32)
 REDIS_PASSWORD_NONCE=$(openssl rand -hex 32)
 printf '%s' "$POLICY_PASSWORD" >"$RUNTIME_DIR/protected/nauthilus-policy-password"
@@ -121,6 +151,26 @@ openssl x509 -req -sha256 -days 1 \
   -CAkey "$RUNTIME_DIR/certs/policy-e2e-ca.key" \
   -CAcreateserial -copy_extensions copy \
   -out "$RUNTIME_DIR/certs/nauthilus-policy.crt" >/dev/null 2>&1
+openssl req -newkey rsa:3072 -sha256 -nodes \
+  -subj "/CN=outbox-redis" -addext "subjectAltName=DNS:outbox-redis" \
+  -addext "basicConstraints=critical,CA:FALSE" \
+  -addext "keyUsage=critical,digitalSignature,keyEncipherment" \
+  -addext "extendedKeyUsage=serverAuth" \
+  -keyout "$RUNTIME_DIR/certs/outbox-redis.key" -out "$RUNTIME_DIR/certs/outbox-redis.csr" >/dev/null 2>&1
+openssl x509 -req -sha256 -days 1 -in "$RUNTIME_DIR/certs/outbox-redis.csr" \
+  -CA "$RUNTIME_DIR/certs/policy-e2e-ca.crt" -CAkey "$RUNTIME_DIR/certs/policy-e2e-ca.key" \
+  -CAcreateserial -copy_extensions copy -out "$RUNTIME_DIR/certs/outbox-redis.crt" >/dev/null 2>&1
+(
+  cd "$NAUTHILUS_REPO"
+  GOEXPERIMENT=runtimesecret go test -mod=vendor "$SCRIPT_DIR/policy-e2e/compose_config.go" "$SCRIPT_DIR/policy-e2e/compose_config_test.go"
+  go run -mod=vendor "$SCRIPT_DIR/policy-e2e/compose_config.go" "$RUNTIME_DIR/nauthilus.yml" \
+    server/docs/examples/go_plugin_reputation.yml \
+    server/docs/examples/reputation_geoip_observation.yml \
+    server/docs/examples/go_plugin_dkim2_intelligence.yml \
+    server/docs/examples/policy_dkim2_rspamd_verifier.yml \
+    "$SCRIPT_DIR/policy-e2e/reputation-fixture.yml" "$SCRIPT_DIR/policy-e2e/nauthilus.yml"
+)
+chmod 0444 "$RUNTIME_DIR/nauthilus.yml" "$RUNTIME_DIR/geoip.json"
 chmod 0555 "$RUNTIME_DIR/certs" "$RUNTIME_DIR/protected"
 chmod 0444 \
   "$RUNTIME_DIR/certs/policy-e2e-ca.crt" \
@@ -135,18 +185,27 @@ write_env() {
     printf 'POLICY_E2E_RUNTIME=%s\n' "$RUNTIME_DIR"
     printf 'POLICY_E2E_RSPAMD_LOCAL_D=%s\n' "$RSPAMD_LOCAL_D"
     printf 'POLICY_E2E_PASSWORD=%s\n' "$POLICY_PASSWORD"
+    printf 'POLICY_E2E_OBSERVATION_PASSWORD=%s\n' "$OBSERVATION_PASSWORD"
+    printf 'POLICY_E2E_SEED_PASSWORD=%s\n' "$SEED_PASSWORD"
+    printf 'POLICY_E2E_RSPAMD_IMAGE=%s\n' "$RSPAMD_IMAGE"
     printf 'POLICY_E2E_REDIS_ENCRYPTION_SECRET=%s\n' "$REDIS_ENCRYPTION_SECRET"
     printf 'POLICY_E2E_REDIS_PASSWORD_NONCE=%s\n' "$REDIS_PASSWORD_NONCE"
     printf 'POLICY_E2E_NAUTHILUS_IMAGE=%s\n' "$NAUTHILUS_IMAGE"
     printf 'POLICY_E2E_MILTERTEST_IMAGE=%s\n' "$MILTERTEST_IMAGE"
     printf 'NAUTHILUS_REPO=%s\n' "$NAUTHILUS_REPO"
     printf 'MILTERTEST_REPO=%s\n' "$MILTERTEST_REPO"
-    printf 'PLUGIN_SHA256=%s\n' "${1:-missing}"
+    printf 'REPUTATION_PLUGIN_SHA256=%s\n' "${REPUTATION_PLUGIN_SHA256:-missing}"
+    printf 'GEOIP_PLUGIN_SHA256=%s\n' "${GEOIP_PLUGIN_SHA256:-missing}"
+    printf 'INTELLIGENCE_PLUGIN_SHA256=%s\n' "${INTELLIGENCE_PLUGIN_SHA256:-missing}"
   } >"$ENV_FILE"
 }
 
 write_env
 if test -n "$REUSED_NAUTHILUS_IMAGE"; then
+  test -z "$(git -C "$NAUTHILUS_REPO" status --porcelain --untracked-files=normal)" || {
+    echo "reused Nauthilus images require a clean matching checkout" >&2
+    exit 1
+  }
   docker image inspect "$REUSED_NAUTHILUS_IMAGE" >/dev/null
   docker compose --project-name "$PROJECT_NAME" --env-file "$ENV_FILE" \
     -f "$COMPOSE_FILE" build miltertest
@@ -154,14 +213,33 @@ else
   docker compose --project-name "$PROJECT_NAME" --env-file "$ENV_FILE" \
     -f "$COMPOSE_FILE" build nauthilus-policy miltertest
 fi
-PLUGIN_SHA256=$(docker run --rm --entrypoint sha256sum "$NAUTHILUS_IMAGE" \
-  /usr/local/lib/nauthilus/plugins/dkim2-reputation.so | awk '{print $1}')
-test "${#PLUGIN_SHA256}" -eq 64
-write_env "$PLUGIN_SHA256"
+# plugin_checksum reads only public artifact digests from the exact coherent bundle.
+plugin_checksum() {
+  docker run --rm --network none --entrypoint sha256sum "$NAUTHILUS_IMAGE" \
+    "/usr/local/lib/nauthilus/plugins/$1.so" | awk '{print $1}'
+}
+REPUTATION_PLUGIN_SHA256=$(plugin_checksum reputation)
+GEOIP_PLUGIN_SHA256=$(plugin_checksum geoip)
+INTELLIGENCE_PLUGIN_SHA256=$(plugin_checksum dkim2-intelligence)
+for CHECKSUM in "$REPUTATION_PLUGIN_SHA256" "$GEOIP_PLUGIN_SHA256" "$INTELLIGENCE_PLUGIN_SHA256"; do
+  test "${#CHECKSUM}" -eq 64
+  printf '%s' "$CHECKSUM" | grep -Eq '^[0-9a-f]{64}$'
+done
+EXPECTED_VERSION=$(git -C "$NAUTHILUS_REPO" describe --tags --abbrev=0)-$(git -C "$NAUTHILUS_REPO" rev-parse --short HEAD)
+IMAGE_VERSION=$(docker run --rm --network none --read-only --entrypoint /usr/app/nauthilus "$NAUTHILUS_IMAGE" -version)
+case "$IMAGE_VERSION" in
+  *"$EXPECTED_VERSION"*) ;;
+  *) echo "Nauthilus image does not match the current checkout" >&2; exit 1 ;;
+esac
+write_env
+docker compose --project-name "$PROJECT_NAME" --env-file "$ENV_FILE" \
+  -f "$COMPOSE_FILE" config -q
+docker compose --project-name "$PROJECT_NAME" --env-file "$ENV_FILE" \
+  -f "$COMPOSE_FILE" run --rm fixture-setup
 
 docker compose --project-name "$PROJECT_NAME" --env-file "$ENV_FILE" \
   -f "$COMPOSE_FILE" up -d --wait --wait-timeout 90 \
-  redis dkim2-stub nauthilus-policy policy-observer rspamd
+  redis outbox-redis dkim2-stub nauthilus-policy policy-observer rspamd
 docker compose --project-name "$PROJECT_NAME" --env-file "$ENV_FILE" \
   -f "$COMPOSE_FILE" exec -T rspamd \
   getent hosts nauthilus-policy policy-observer >/dev/null
@@ -205,8 +283,20 @@ redis_command() {
     -f "$COMPOSE_FILE" exec -T redis valkey-cli -n 0 "$@"
 }
 
-flush_retry_cache() {
-  test "$(redis_command FLUSHDB)" = "OK"
+# clear_retry_scenario resets exact retry and fixture-greylist keys while retaining learned reputation.
+clear_retry_scenario() {
+  redis_command --scan --pattern 'dkim2:retry:v1:*' | while IFS= read -r KEY; do
+    test -n "$KEY" || continue
+    printf '%s' "$KEY" | grep -Eq '^dkim2:retry:v1:[0-9a-f]{64}$'
+    redis_command DEL "$KEY" </dev/null >/dev/null
+  done
+  redis_command --scan --pattern 'policy_e2e_rg*' | while IFS= read -r KEY; do
+    test -n "$KEY" || continue
+    printf '%s' "$KEY" | grep -Eq '^policy_e2e_rg[bm][a-z0-9]{20}$'
+    redis_command DEL "$KEY" </dev/null >/dev/null
+  done
+  REMAINING_GREYLIST=$(redis_command --scan --pattern 'policy_e2e_rg*' | awk 'NF { count++ } END { print count + 0 }')
+  test "$REMAINING_GREYLIST" -eq 0
 }
 
 retry_cache_size() {
@@ -236,8 +326,17 @@ assert_policy_request_received_dsn() {
     --received-dsn-attribute "$ATTRIBUTE_STATE"
 }
 
-# A non-applicable unsigned message must call neither upstream service.
-run_scan scan-unsigned.lua
+# Seed through the real observation Policy; network and ASN are derived by the native GeoIP provider.
+docker compose --project-name "$PROJECT_NAME" --env-file "$ENV_FILE" \
+  -f "$COMPOSE_FILE" exec -T policy-observer python3 /fixture/reputation_probe.py \
+  seed --password-file /probe/seed-password
+docker compose --project-name "$PROJECT_NAME" --env-file "$ENV_FILE" \
+  -f "$COMPOSE_FILE" exec -T policy-observer python3 /fixture/reputation_probe.py \
+  forbidden --password-file /probe/observation-password
+
+# Prove actual durable observation admission before the existing verifier/retry scenarios.
+. "$SCRIPT_DIR/policy-e2e/observation-recovery.sh"
+prove_observation_recovery
 test "$(stub_calls)" -eq 0
 test "$(observer_value calls)" -eq 0
 
@@ -262,7 +361,7 @@ run_scan scan-replayed-reject.lua
 test "$(stub_calls)" -eq 2
 test "$(observer_value calls)" -eq 2
 set_dkim_mode default
-flush_retry_cache
+clear_retry_scenario
 
 # Malformed upstream verifier JSON is a temporary failure and never reaches Policy.
 STUB_BEFORE=$(stub_calls)
@@ -272,7 +371,7 @@ run_scan scan-dkim-malformed.lua
 test "$(stub_calls)" -eq "$((STUB_BEFORE + 1))"
 test "$(observer_value calls)" -eq "$POLICY_BEFORE"
 set_dkim_mode default
-flush_retry_cache
+clear_retry_scenario
 
 # Malformed Policy JSON, Policy timeout, and provider-invalid input all fail closed.
 for MODE in malformed_response timeout invalid_provider; do
@@ -288,12 +387,12 @@ for MODE in malformed_response timeout invalid_provider; do
   else
     test "$(observer_value forwarded_calls)" -eq "$FORWARDED_BEFORE"
   fi
-  flush_retry_cache
+  clear_retry_scenario
 done
 set_policy_mode forward
 
 # A producer-bound two-hop chain is denied solely because its historical signer is unknown.
-flush_retry_cache
+clear_retry_scenario
 STUB_BEFORE=$(stub_calls)
 POLICY_BEFORE=$(observer_value calls)
 set_dkim_mode two_hop
@@ -306,7 +405,7 @@ test "$(retry_cache_size)" -eq 0
 set_dkim_mode default
 
 # An optional received delivery-status projection reaches Policy and the message.
-flush_retry_cache
+clear_retry_scenario
 STUB_BEFORE=$(stub_calls)
 POLICY_BEFORE=$(observer_value calls)
 set_dkim_mode received_dsn
@@ -320,10 +419,10 @@ test "$(stub_calls)" -eq "$((STUB_BEFORE + 1))"
 test "$(observer_value calls)" -eq "$((POLICY_BEFORE + 2))"
 test "$(retry_cache_size)" -eq 0
 set_dkim_mode default
-flush_retry_cache
+clear_retry_scenario
 
 # An oversized but syntactically valid cached JSON document is never reused.
-flush_retry_cache
+clear_retry_scenario
 run_scan scan-cache-oversized.lua
 OVERSIZED_KEY=$(redis_command --scan --pattern 'dkim2:retry:v1:*')
 test -n "$OVERSIZED_KEY"
@@ -340,7 +439,7 @@ test "$(observer_value calls)" -eq "$POLICY_BEFORE"
 test "$(redis_command HGET "$OVERSIZED_KEY" state)" = claimed
 
 # An armed result for the same message but another envelope identity is not reused.
-flush_retry_cache
+clear_retry_scenario
 run_scan scan-cache-identity-source.lua
 IDENTITY_KEY=$(redis_command --scan --pattern 'dkim2:retry:v1:*')
 test -n "$IDENTITY_KEY"
@@ -355,7 +454,7 @@ test "$(retry_cache_size)" -eq 1
 set_dkim_mode default
 
 # While one worker owns an armed retry claim, a competitor fails closed on BUSY.
-flush_retry_cache
+clear_retry_scenario
 run_scan scan-concurrent-retry.lua
 CONCURRENT_KEY=$(redis_command --scan --pattern 'dkim2:retry:v1:*')
 test -n "$CONCURRENT_KEY"
@@ -390,7 +489,7 @@ test "$(observer_value calls)" -eq "$((POLICY_BEFORE + 1))"
 test "$(observer_value forwarded_calls)" -eq "$FORWARDED_BEFORE"
 test "$(redis_command HGET "$CONCURRENT_KEY" state)" = armed
 set_policy_mode forward
-flush_retry_cache
+clear_retry_scenario
 
 # Redis unavailability fails before dkim2d or Policy and recovers without state reuse.
 STUB_BEFORE=$(stub_calls)
@@ -402,7 +501,7 @@ test "$(stub_calls)" -eq "$STUB_BEFORE"
 test "$(observer_value calls)" -eq "$POLICY_BEFORE"
 docker compose --project-name "$PROJECT_NAME" --env-file "$ENV_FILE" \
   -f "$COMPOSE_FILE" up -d --wait --wait-timeout 30 redis >/dev/null
-flush_retry_cache
+clear_retry_scenario
 
 # A corrupt armed entry is deleted and fails closed without either upstream call.
 run_scan scan-corrupt-cache.lua
@@ -416,7 +515,7 @@ run_scan scan-corrupt-cache.lua
 test "$(stub_calls)" -eq "$STUB_BEFORE"
 test "$(observer_value calls)" -eq "$POLICY_BEFORE"
 test "$(redis_command EXISTS "$CACHE_KEY")" -eq 0
-flush_retry_cache
+clear_retry_scenario
 
 # A real Policy deny is terminal: each identical delivery returns to dkim2d.
 STUB_BEFORE=$(stub_calls)
@@ -429,6 +528,13 @@ test "$(stub_calls)" -eq "$((STUB_BEFORE + 2))"
 test "$(observer_value calls)" -eq "$((POLICY_BEFORE + 2))"
 test "$(retry_cache_size)" -eq 0
 
+prove_hop_reputation
+prove_provider_outages
+
+# Policy-caused rejections have not been relabeled as independent high-weight rejection evidence.
+wait_learning_drain
+learned_snapshot | jq -e '.mail_risk_mass < 1' >/dev/null
+OBSERVATIONS_BEFORE_REJECT=$(observer_value observation_calls)
 # An unrelated Rspamd rejection survives a Policy permit and consumes its cache entry.
 STUB_BEFORE=$(stub_calls)
 POLICY_BEFORE=$(observer_value calls)
@@ -437,6 +543,8 @@ test "$(stub_calls)" -eq "$((STUB_BEFORE + 1))"
 test "$(observer_value calls)" -eq "$((POLICY_BEFORE + 1))"
 assert_policy_request 203.0.113.25 reject
 test "$(retry_cache_size)" -eq 0
+
+prove_later_reputation
 
 FINAL_STUB_CALLS=$(stub_calls)
 FINAL_POLICY_CALLS=$(observer_value calls)

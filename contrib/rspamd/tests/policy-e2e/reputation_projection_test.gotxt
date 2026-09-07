@@ -1,0 +1,113 @@
+package verify
+
+import (
+	"encoding/base64"
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"testing"
+)
+
+// TestPolicyE2EReputationProjections creates closed semantic variants using the actual producer binding authority.
+func TestPolicyE2EReputationProjections(t *testing.T) {
+	output := os.Getenv("POLICY_E2E_PROJECTION_OUTPUT")
+	if output == "" {
+		t.Skip("runtime fixture output not requested")
+	}
+
+	input, err := os.ReadFile(os.Getenv("POLICY_E2E_TWO_HOP_FIXTURE"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, scenario := range []string{"same_hop_risk", "split_hop_risk", "historical_provider", "current_provider", "aged_reputation"} {
+		t.Run(scenario, func(t *testing.T) {
+			var document map[string]any
+			if err := json.Unmarshal(input, &document); err != nil {
+				t.Fatal(err)
+			}
+
+			projection := document["verifier_projection"].(map[string]any)
+			hops := projection["hops"].([]any)
+			first, target := hops[0].(map[string]any), hops[1].(map[string]any)
+			configurePolicyE2EVariant(scenario, first, target)
+			bindPolicyE2EVariant(t, document)
+			data, err := json.MarshalIndent(document, "", "  ")
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if err := os.WriteFile(filepath.Join(output, scenario+".json"), append(data, '\n'), 0644); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+// configurePolicyE2EVariant varies signer placement or recipe ownership without changing signature authority.
+func configurePolicyE2EVariant(scenario string, first, target map[string]any) {
+	switch scenario {
+	case "same_hop_risk":
+		swapPolicyE2ERecipes(first, target)
+	case "split_hop_risk":
+		// The original projection already places the rewrite only on the current good signer.
+	case "historical_provider", "current_provider", "aged_reputation":
+		copyPolicyE2ERecipe(first, target)
+		first["signer_domain"], target["signer_domain"] = "google.example", "other.example.test"
+		if scenario == "current_provider" {
+			first["signer_domain"], target["signer_domain"] = target["signer_domain"], first["signer_domain"]
+		} else if scenario == "aged_reputation" {
+			first["signer_domain"], target["signer_domain"] = "other.example.test", "aged.example.test"
+		}
+	}
+}
+
+// policyE2ERecipeKeys returns the complete existing public recipe tuple that must move together.
+func policyE2ERecipeKeys() []string {
+	return []string{"recipe_mode", "recipe_has_header_changes", "recipe_body_mode", "recipe_digest", "change_classes", "affected_headers", "change_count", "affected_header_count"}
+}
+
+// swapPolicyE2ERecipes moves the identical rewrite descriptor to the other signer.
+func swapPolicyE2ERecipes(first, target map[string]any) {
+	for _, key := range policyE2ERecipeKeys() {
+		first[key], target[key] = target[key], first[key]
+	}
+}
+
+// copyPolicyE2ERecipe gives the current signer the historical unchanged descriptor.
+func copyPolicyE2ERecipe(first, target map[string]any) {
+	for _, key := range policyE2ERecipeKeys() {
+		target[key] = first[key]
+	}
+}
+
+// bindPolicyE2EVariant recomputes and validates every private bound hop before exposing the fixture bytes.
+func bindPolicyE2EVariant(t *testing.T, document map[string]any) {
+	t.Helper()
+	data, err := json.Marshal(document)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var fixture policyE2EProjectionFixture
+	if err := json.Unmarshal(data, &fixture); err != nil {
+		t.Fatal(err)
+	}
+
+	hops := policyE2EBoundHops(t, fixture)
+	binding := verifierProjectionBinding(hops)
+	target := document["verifier_projection"].(map[string]any)
+	target["binding"] = base64.StdEncoding.EncodeToString(binding[:])
+	publicHops := target["hops"].([]any)
+	for index := range hops {
+		hopBinding := verifierBoundHopBinding(binding, hops[index])
+		publicHops[index].(map[string]any)["hop_binding"] = base64.StdEncoding.EncodeToString(hopBinding[:])
+		hops[index].binding = hopBinding
+	}
+
+	projection := VerifierProjection{hops: hops, binding: binding, draft: fixture.VerifierProjection.Draft,
+		schema: fixture.VerifierProjection.Schema, sealed: true}
+	if !projection.Valid() {
+		t.Fatal("generated reputation fixture is not a valid producer projection")
+	}
+}

@@ -491,3 +491,107 @@ the rollback follows a verification or policy incident.
 - Authentication-Results ownership and module ordering are explicit.
 - Dedicated `postfix_dsn` signer retained for locally generated bounces.
 - Capability rotation and rollback tested without deleting replay state.
+
+## Observation outbox operations
+
+Provision the observation principal independently from the DKIM2 decision
+principal. On Nauthilus, enable the real reputation, trusted GeoIP, and
+DKIM2-intelligence providers as one coherent host/plugin build. The old static
+`dkim2-reputation` module is not an observation store. The source binding permits
+only the exact Rspamd caller, its closed mail signals, and the current peer IP;
+network and ASN attribution belongs to the trusted Nauthilus lookup.
+
+Every protected file must be readable only by its service identity (0400 files
+inside a 0700 service-owned directory, mounted read-only). Use separate material
+for the observation password, decision password, outbox Redis password, outbox
+allocation key, active/previous encryption masters, verifier capability, and
+retry-cache HMAC. Binary outbox keys contain 32–64 bytes. Never mount Nauthilus
+reputation tagger secrets in Rspamd. Do not place secrets in UCL, environment
+variables, command arguments, images, or reports.
+
+Asynchronous mode requires the supported Rspamd native authenticated-encryption
+primitive. Missing support rejects configuration; there is no automatic
+plaintext or memory-only fallback. An operator may explicitly select synchronous
+acknowledged delivery. The outbox Redis authority must use verified TLS and an
+ACL confined to `~dkim2:observation:v1:*`. In addition to authentication and
+script loading/execution, scripts require `TIME`, `TYPE`, `HGETALL`, `HGET`,
+`HMGET`, `HLEN`, `HSET`, `HDEL`, `EXISTS`, `ZADD`, `ZRANGE`, `ZRANGEBYSCORE`,
+`ZSCORE`, `ZREM`, `ZCARD`, `PTTL`, and `DEL`. Prove both initial startup and
+metadata validation after worker restart with the restricted principal.
+The outbox uses the ordinary TLS-aware Rspamd Redis request API for both
+`SCRIPT LOAD` and `EVALSHA`; the Rspamd 4.1.5 shared script loader omits TLS
+settings. Recovery is limited to one `NOSCRIPT` reload and three requests.
+
+Require a server with the AOF ACL-replay fix before enabling asynchronous
+acknowledgements. Valkey 8.1.9 can silently lose script/transaction writes on
+restart with the default user disabled ([upstream issue](https://github.com/valkey-io/valkey/issues/3983)).
+The canonical fixture pins Valkey 8.1.10 and its image digest, retaining the
+disabled default user and narrow outbox ACL. Run the actual crash/replay test
+against the chosen server build; a successful health check is insufficient.
+
+A Redis acknowledgement must meet the deployment's durability guarantee. The
+isolated fixture uses AOF with `appendfsync always`; production replication and
+failover must not acknowledge writes that the chosen failover can discard.
+Do not set TTLs on live record keys or run independent key deletion. The
+same-slot sweeper owns expiry and releases the exact capacity charge together
+with the record and due member. Quota exhaustion or persistence failure must
+produce a temporary SMTP failure. Tombstones have separate bounded capacity;
+the oldest is evicted when necessary so a full tombstone store cannot prevent
+live cleanup.
+
+### Encryption and allocation maintenance
+
+Encryption-master rotation supports one active and one previous key. Deploy
+the new active key with the old active key as previous to every worker, retain
+the same allocation key/shard count/drain generation, and retain the previous
+key through the maximum record lifetime and verified drain of its records.
+A third simultaneous decryption generation is unsupported. Inspect only key
+version identifiers and bounded counts during drain, never payloads.
+
+The allocation key does not hot-rotate. Workers never replace the pinned
+allocation metadata. A different key identity, shard count, or drain generation
+fails startup. Merely renaming a key file or changing a version label grants no
+replacement authority. Allocation replacement is an offline operator boundary:
+
+1. Record the old material identity, shard count, drain generation, maximum
+   record/dead-letter retention, and all worker owners in the maintenance record.
+2. Quiesce enqueue across every owner. Stop every old worker and revoke its
+   Redis access, including existing connections, before the boundary is valid.
+3. Wait the recorded maximum record lifetime plus dead-letter retention after
+   confirmed quiescence. Run cleanup under the old allocation and verify every
+   shard has no live record, due member, byte charge, or tombstone. Missing or
+   inconsistent capacity metadata is a repair stop, not evidence of emptiness.
+4. Preserve that drain proof. Under exclusive administrative access, compare
+   the exact old five-field metadata, then install the new allocation identity,
+   fixed shard count, incremented drain generation, and Redis activation time.
+   Do not delete metadata and let a generation-zero worker initialize it again.
+5. Restart all workers coherently with new access credentials and the exact
+   new metadata. Verify readiness and a synthetic enqueue/delivery. Retire the
+   old allocation material only after the maintenance evidence is complete.
+
+Perform this procedure under a separate maintenance authority, never through
+a normal worker or a rolling deployment. No online replacement endpoint is provided. If complete
+quiescence or drain cannot be proved, retain the allocation key.
+
+### Observation rollback
+
+Quiesce new observations before removing the producer. Preserve the encrypted
+outbox, allocation identity, previous decryption key, and Nauthilus event
+manifests until already accepted events have drained or expired under the
+recorded retention policy. Rollback of a decision policy does not authorize
+replaying observations under new IDs, rewriting their independent origin, or
+clearing reputation storage. Changing consumer targets to observation mode does
+not disable effect execution for `reputation/observe` itself.
+
+### Observation counters
+
+Each scanner emits `dkim2_observation_counter` log records every 60 seconds
+only for nonzero deltas. The only dimensions are the fixed `operation` and
+`outcome` vocabularies, with a bounded numeric `count`. Collect these deltas in
+the existing log monitoring pipeline; there is no additional public metrics
+endpoint. Alert on enqueue `FULL`/`UNAVAILABLE`, startup
+`ALLOCATION_MISMATCH`/`CORRUPT`, retry `UNAVAILABLE`, and dead-letter activity.
+SMTP persistence failures also produce the zero-score
+`DKIM2_OBSERVATION_UNAVAILABLE` symbol. Counters are process-local diagnostics:
+a crash can lose an unflushed interval. They are not delivery acknowledgements
+or a substitute for the authoritative Redis queue and Nauthilus manifests.

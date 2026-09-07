@@ -2,6 +2,7 @@
 -- SPDX-License-Identifier: Apache-2.0
 
 local module_path = assert(arg[1], 'retry cache module path is required')
+package.path = module_path:gsub('/dkim2/[^/]+%.lua$', '/?.lua;') .. package.path
 local registered_script
 local calls = {}
 local redis_error

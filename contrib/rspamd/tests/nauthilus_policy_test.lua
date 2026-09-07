@@ -2,6 +2,7 @@
 -- SPDX-License-Identifier: Apache-2.0
 
 local module_path = assert(arg[1], 'policy module path is required')
+package.path = module_path:gsub('/dkim2/[^/]+%.lua$', '/?.lua;') .. package.path
 local json_module_path = assert(arg[2], 'strict JSON module path is required')
 local strict_json = assert(loadfile(json_module_path))()
 local sent
@@ -39,6 +40,9 @@ local task = {
       symbol == 'DMARC_POLICY_REJECT' or symbol == 'R_SPF_SOFTFAIL'
   end,
 }
+package.preload['dkim2.policy_transport'] = function()
+  return assert(loadfile((module_path:gsub('nauthilus_policy.lua$', 'policy_transport.lua'))))()
+end
 local module = assert(loadfile(module_path))()
 local client = assert(module.new({
   endpoint = 'https://nauthilus-policy:9443/api/v1/policy/decisions',
@@ -141,6 +145,13 @@ response_value.status.code = 'evaluation_failed'
 response_value.status.retryable = true
 assert(client:request(task, {}, '2001:db8::25', function(value) result = value end))
 assert(module.decision_action(result) == 'soft reject')
+response_value.status.code = 'effect_outcome_unknown_replay_safe'
+response_value.status.retryable = true
+assert(client:request(task, {}, '2001:db8::25', function(value) result = value end))
+assert(result and module.decision_action(result) == 'soft reject', 'replay-safe ambiguity must retain retryability')
+response_value.status.retryable = false
+assert(client:request(task, {}, '2001:db8::25', function(value) result = value end))
+assert(result == nil, 'a forged replay-safe retry flag must be rejected')
 response_value.status.code = 'effect_outcome_unknown'
 response_value.status.retryable = false
 assert(client:request(task, {}, '2001:db8::25', function(value) result = value end))
@@ -189,3 +200,14 @@ for _, invalid in ipairs({
 }) do
   assert(not strict_json.valid(invalid), 'non-strict JSON must be rejected: ' .. invalid)
 end
+
+local background_request
+local background = assert(require('dkim2.policy_transport').new({
+  endpoint='https://nauthilus-policy:9443/api/v1/policy/decisions', server_name='nauthilus-policy',
+  username='rspamd-verifier',password='secret',ucl=ucl,util=util,json_validator=strict_json.valid,
+  background_config='runtime-config',http={request=function(request) background_request=request; return true end},
+}))
+assert(background:send_background('event-loop','frozen-body',response_value.request_id,function() end))
+assert(background_request.task==nil and background_request.ev_base=='event-loop' and background_request.config=='runtime-config')
+assert(background_request.body=='frozen-body' and background_request.no_ssl_verify==false)
+assert(not background:send_background(nil,'frozen-body',response_value.request_id,function() end))

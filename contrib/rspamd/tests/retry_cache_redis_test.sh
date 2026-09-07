@@ -17,6 +17,7 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 lua - "$module_path" "$script_path" <<'LUA'
+package.path = assert(arg[1]):gsub('/dkim2/[^/]+%.lua$', '/?.lua;') .. package.path
 local module = assert(loadfile(assert(arg[1])))()
 local handle = assert(io.open(assert(arg[2]), 'wb'))
 assert(handle:write(module.redis_script))

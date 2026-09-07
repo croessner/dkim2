@@ -3,6 +3,7 @@
 
 import argparse
 import copy
+import hashlib
 import json
 import os
 import socket
@@ -21,10 +22,16 @@ class State:
         self.control_path = control_path
         self.lock = Lock()
         self.calls = 0
+        self.observation_calls = 0
+        self.observations = {}
+        self.observation_inflight = set()
+        self.last_observation = None
         self.forwarded_calls = 0
         self.last_mode = "forward"
         self.last_request = None
         self.last_upstream_status = None
+        self.last_upstream_code = None
+        self.last_upstream_effect = None
         self.last_upstream_error = None
         self.last_request_id_matches = None
         self.persist()
@@ -37,7 +44,62 @@ class State:
         except (FileNotFoundError, json.JSONDecodeError, OSError):
             return "forward"
         allowed = {"forward", "invalid_provider", "malformed_response", "timeout"}
-        return mode if mode in allowed else "forward"
+        return mode if isinstance(mode, str) and mode in allowed else "forward"
+
+    def observation_mode(self) -> str:
+        """Read observation faults independently from the current decision fault mode."""
+        try:
+            with open(self.control_path, "r", encoding="utf-8") as source:
+                mode = json.load(source).get("observation_mode", "forward")
+        except (FileNotFoundError, json.JSONDecodeError, OSError):
+            return "forward"
+        return mode if isinstance(mode, str) and mode in {"forward", "unavailable", "drop_ack"} else "forward"
+
+    def record_observation(self, body: bytes) -> str:
+        """Correlate exact canonical retries using bounded opaque metadata only."""
+        digest = hashlib.sha256(body).hexdigest()
+        with self.lock:
+            self.observation_calls += 1
+            self.last_observation = digest
+            if digest not in self.observations:
+                if len(self.observations) >= 256:
+                    self.observations.pop(next(iter(self.observations)))
+                self.observations[digest] = {"received": 0, "forwarded": 0,
+                    "last_effect": None, "last_status": None, "preceding_decisions": self.calls}
+            self.observations[digest]["received"] += 1
+            self.persist()
+        return digest
+
+    def begin_observation_forward(self, digest: str, mode: str) -> bool:
+        """Hold lost-ack duplicates after admission until the fixture explicitly releases them."""
+        with self.lock:
+            entry = self.observations.get(digest)
+            if entry is None or digest in self.observation_inflight:
+                return False
+            if mode == "drop_ack" and entry["last_status"] == 200 and entry["last_effect"] == "permit":
+                return False
+            self.observation_inflight.add(digest)
+            return True
+
+    def record_observation_response(self, digest: str, status: int, body: bytes) -> int:
+        """Retain closed admission outcomes without response messages or observation payloads."""
+        effect = "invalid"
+        try:
+            value = json.loads(body)
+            if isinstance(value, dict) and isinstance(value.get("effect"), str) and value.get("effect") in {"permit", "deny", "indeterminate", "not_applicable"}:
+                effect = value["effect"]
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            pass
+        with self.lock:
+            self.observation_inflight.discard(digest)
+            entry = self.observations.get(digest)
+            if entry is None:
+                return 0
+            entry["forwarded"] += 1
+            entry["last_status"] = status
+            entry["last_effect"] = effect
+            self.persist()
+            return entry["forwarded"]
 
     def record(self, request: dict, mode: str) -> None:
         """Persist one received request without recording credentials."""
@@ -59,6 +121,8 @@ class State:
         """Persist bounded status and correlation evidence without retaining successful bodies."""
         with self.lock:
             self.last_upstream_status = status
+            self.last_upstream_code = None
+            self.last_upstream_effect = None
             self.last_upstream_error = (
                 body[:4096].decode("utf-8", errors="replace") if status >= 400 else None
             )
@@ -66,6 +130,12 @@ class State:
             if status < 400:
                 try:
                     response = json.loads(body)
+                    code = response.get("status", {}).get("code")
+                    effect = response.get("effect")
+                    if isinstance(code, str) and code in {"permit", "policy_denied", "no_match_deny"}:
+                        self.last_upstream_code = code
+                    if isinstance(effect, str) and effect in {"permit", "deny", "indeterminate", "not_applicable"}:
+                        self.last_upstream_effect = effect
                     self.last_request_id_matches = (
                         isinstance(request_id, str)
                         and response.get("request_id") == request_id
@@ -84,10 +154,15 @@ class State:
                 json.dump(
                     {
                         "calls": self.calls,
+                        "observation_calls": self.observation_calls,
+                        "observations": self.observations,
+                        "last_observation": self.last_observation,
                         "forwarded_calls": self.forwarded_calls,
                         "last_mode": self.last_mode,
                         "last_request": self.last_request,
                         "last_upstream_status": self.last_upstream_status,
+                        "last_upstream_code": self.last_upstream_code,
+                        "last_upstream_effect": self.last_upstream_effect,
                         "last_upstream_error": self.last_upstream_error,
                         "last_request_id_matches": self.last_request_id_matches,
                     },
@@ -124,6 +199,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         raw_request = self.rfile.read(length)
         request = json.loads(raw_request)
+        if request.get("target") == {"namespace": "reputation", "action": "observe"}:
+            self.observe(raw_request)
+            return
         mode = self.server.state.mode()
         self.server.state.record(request, mode)
         if mode == "timeout":
@@ -155,6 +233,25 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(response_body)))
         self.end_headers()
         self.wfile.write(response_body)
+
+    def observe(self, body: bytes) -> None:
+        """Forward original observation bytes and simulate a lost acknowledgement only after real admission."""
+        digest = self.server.state.record_observation(body)
+        mode = self.server.state.observation_mode()
+        if mode == "unavailable" or not self.server.state.begin_observation_forward(digest, mode):
+            self.write_json(503, b"{}")
+            return
+        headers = {"Accept": "application/json", "Content-Type": "application/json",
+            "Authorization": self.headers.get("Authorization", ""), "Cache-Control": "no-store"}
+        try:
+            status, _, response = self.forward(body, headers)
+        except (OSError, ValueError):
+            status, response = 503, b"{}"
+        self.server.state.record_observation_response(digest, status, response)
+        if mode == "drop_ack" and status == 200:
+            self.write_json(503, b"{}")
+            return
+        self.write_json(status, response)
 
     def forward(self, body: bytes, headers: dict[str, str]) -> tuple[int, str, bytes]:
         """Forward one request with explicit HTTP/1.1 framing over verified TLS 1.3."""

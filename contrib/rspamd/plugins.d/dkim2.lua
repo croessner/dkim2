@@ -27,7 +27,7 @@ local allowed_top = {
   enabled = true, endpoint = true, transport = true, server_name = true,
   capability_file = true, timeout = true, max_response_bytes = true,
   failure_mode = true, authserv_id = true, tenant = true, retry_cache = true,
-  nauthilus = true,
+  nauthilus = true, observation = true,
 }
 local allowed_retry = {
   secret_file = true, authority_generation = true, ttl_ms = true, lease_ms = true, redis = true,
@@ -125,7 +125,8 @@ end
 
 -- register_policy_symbols registers zero-score bounded decision observations.
 local function register_policy_symbols(config, parent)
-  for _, symbol in ipairs({ POLICY_PERMIT, POLICY_DENY, POLICY_INDETERMINATE }) do
+  for _, symbol in ipairs({ POLICY_PERMIT, POLICY_DENY, POLICY_INDETERMINATE,
+    'DKIM2_OBSERVATION_ACKNOWLEDGED', 'DKIM2_OBSERVATION_PERSISTED', 'DKIM2_OBSERVATION_UNAVAILABLE' }) do
     config:register_symbol({
       name = symbol, type = 'virtual', parent = parent,
       score = 0.0, group = N,
@@ -209,6 +210,48 @@ if not policy then
   return
 end
 
+local observation
+if options.observation then
+  observation = require('dkim2.observation_runtime').new(options.observation, {
+    config=rspamd_config, redis=lua_redis, http=rspamd_http, ucl=ucl, util=rspamd_util,
+    hash=rspamd_cryptobox_hash, json_validator=strict_json.valid,
+    observation_counter=function(operation, outcome, count)
+      rspamd_logger.infox(rspamd_config,
+        'dkim2_observation_counter operation=%s outcome=%s count=%s', operation, outcome, count)
+    end,
+    decision_password_file=options.nauthilus.password_file,
+    retry_key_file=options.retry_cache.secret_file, capability_file=options.capability_file,
+  })
+  if not observation then
+    disable_module('observation_config')
+    return
+  end
+end
+
+-- deliver_observation requires a distinct acknowledged or durable completion after decision visibility ends.
+local function deliver_observation(task, event)
+  if not observation then
+    return
+  end
+  local completed = false
+  -- finish preserves existing non-delivery actions and reports only closed delivery outcomes.
+  local function finish(status)
+    if completed then
+      return
+    end
+    completed = true
+    if status == 'ACKNOWLEDGED' or status == 'PERSISTED' then
+      task:insert_result('DKIM2_OBSERVATION_' .. status, 1.0)
+    else
+      task:insert_result('DKIM2_OBSERVATION_UNAVAILABLE', 1.0)
+      fail_closed(task)
+    end
+  end
+  if not event or not observation:deliver(task, event, finish) then
+    finish('UNAVAILABLE')
+  end
+end
+
 -- verifier_callback resolves cache state before invoking the replay-mutating daemon route.
 local function verifier_callback(task)
   local prepared = verifier.prepare_request(task)
@@ -276,18 +319,27 @@ end
 
 local verifier_parent = verifier.register(rspamd_config, verifier_callback)
 
--- policy_callback sends only generic Policy request facts after the normal scan.
+-- policy_callback seals independent evidence before scheduling the decision and releases it only afterward.
 local function policy_callback(task)
+  local event = observation and observation:capture(task)
   local response = task:cache_get(TASK_RESPONSE)
   local context = task:cache_get(TASK_RETRY)
   if not cache_eligible(response) then
+    deliver_observation(task, event)
     return
   end
   if not context or type(context.peer_ip) ~= 'string' then
     fail_closed(task)
+    deliver_observation(task, event)
     return
   end
-  local started = policy:request(task, response, context.peer_ip, function(decision)
+  local completed = false
+  -- finish settles the current decision before opening the separate observation delivery boundary.
+  local function finish(decision)
+    if completed then
+      return
+    end
+    completed = true
     local action = policy_module.decision_action(decision)
     if action == 'soft reject' then
       task:insert_result(POLICY_INDETERMINATE, 1.0)
@@ -298,10 +350,10 @@ local function policy_callback(task)
       task:insert_result(POLICY_DENY, 1.0)
       task:set_pre_result('reject', 'Message rejected by Nauthilus policy', N)
     end
-  end)
-  if not started then
-    task:insert_result(POLICY_INDETERMINATE, 1.0)
-    fail_closed(task)
+    deliver_observation(task, event)
+  end
+  if not policy:request(task, response, context.peer_ip, finish) then
+    finish(nil)
   end
 end
 
@@ -309,7 +361,8 @@ local policy_parent = rspamd_config:register_symbol({
   name = POLICY_SYMBOL, type = 'postfilter', callback = policy_callback,
   priority = lua_util.symbols_priorities.medium, score = 0.0, group = N,
   flags = 'nostat,ignore_passthrough',
-  augmentations = { string.format('timeout=%f', options.nauthilus.timeout or 2.0) },
+  augmentations = { string.format('timeout=%f',
+    (options.nauthilus.timeout or 2.0) + (observation and observation.completion_timeout or 0)) },
 })
 register_policy_symbols(rspamd_config, policy_parent)
 rspamd_config:register_dependency(POLICY_SYMBOL, verifier.symbols.check, true)

@@ -1,0 +1,245 @@
+# Isolated integration calibration and explicit fixture identities; never production defaults.
+plugins:
+  verification_policy: checksum_required
+  allowed_dirs: [/usr/local/lib/nauthilus/plugins]
+  modules:
+    - name: reputation
+      path: /usr/local/lib/nauthilus/plugins/reputation.so
+      checksum: sha256:${REPUTATION_PLUGIN_SHA256}
+      optional: false
+      config:
+        source_class_caps:
+          fixture_seed: {risk: 40, trust: 40, samples: 100}
+        bands:
+          minimum_confidence: 0.001
+          minimum_samples: 0.1
+        sources:
+          scan:
+            source_policy_id: rspamd-independent-evidence
+            allowed_signals: [mail.rspamd.clean, mail.rspamd.spam, mail.rspamd.reject]
+            max_concurrency: 16
+            requests_per_second: 100
+          fixture_seed:
+            source_policy_id: isolated-fixture-seeder
+            binding: {kind: api_caller, caller_principal: FixtureSeeder}
+            source_class: fixture_seed
+            allowed_signals: [fixture.seed, fixture.risk]
+            allowed_subjects: {smtp_peer: [ip], signer: [dns_domain]}
+            derived_subjects: {smtp_peer: [network, asn]}
+            asn_provider: reputation/plugin.geoip.observation
+            asn_fact: plugin.geoip.observations
+            asn_max_age: 2160h
+            maximum_subjects: 8
+            maximum_lateness: 24h
+            future_clock_skew: 2m
+            allow_magnitude: true
+            requests_per_second: 100
+            max_concurrency: 16
+        signals:
+          mail.rspamd.clean:
+            direction: trust
+            weight: 0.25
+            magnitude: required
+            magnitude_range: [0.0, 1.0]
+            subject_roles: {smtp_peer: {ip: 1.0, network: 0.35, asn: 0.1}}
+            source_classes: [mail_filter]
+            evidence_origin: external_pre_policy
+            authoritative: false
+            max_event_age: 24h
+            profiles: [fast, operational, baseline]
+          mail.rspamd.spam:
+            direction: risk
+            weight: 0.01
+            magnitude: required
+            magnitude_range: [0.0, 1.0]
+            subject_roles: {smtp_peer: {ip: 1.0, network: 0.35, asn: 0.1}}
+            source_classes: [mail_filter]
+            evidence_origin: external_pre_policy
+            authoritative: false
+            max_event_age: 24h
+            profiles: [fast, operational, baseline]
+          mail.rspamd.reject:
+            direction: risk
+            weight: 40
+            magnitude: required
+            magnitude_range: [0.0, 1.0]
+            subject_roles: {smtp_peer: {ip: 1.0, network: 0.35, asn: 0.1}}
+            source_classes: [mail_filter]
+            evidence_origin: external_pre_policy
+            authoritative: false
+            max_event_age: 24h
+            profiles: [fast, operational, baseline]
+          fixture.seed: &fixture_signal
+            direction: trust
+            weight: 0.25
+            magnitude: required
+            magnitude_range: [0.0, 1.0]
+            subject_roles: {smtp_peer: {ip: 1.0, network: 0.35, asn: 0.1}, signer: {dns_domain: 1.0}}
+            source_classes: [fixture_seed]
+            evidence_origin: external_pre_policy
+            authoritative: false
+            max_event_age: 24h
+            profiles: [fast, operational, baseline]
+          fixture.risk:
+            <<: *fixture_signal
+            direction: risk
+            weight: 40
+    - name: geoip
+      path: /usr/local/lib/nauthilus/plugins/geoip.so
+      checksum: sha256:${GEOIP_PLUGIN_SHA256}
+      optional: false
+      config:
+        database_path: /etc/nauthilus/e2e/geoip.json
+        database_format: json
+        asn_database_path: ''
+    - name: dkim2_intelligence
+      path: /usr/local/lib/nauthilus/plugins/dkim2-intelligence.so
+      checksum: sha256:${INTELLIGENCE_PLUGIN_SHA256}
+      optional: false
+      config:
+        identity_contracts:
+          - name: isolated-origin
+            signer_domains: [example.test]
+            current_peer_cidrs: [203.0.113.0/24]
+          - name: isolated-provider-controls
+            signer_domains: [google.example, other.example.test, aged.example.test]
+            current_peer_cidrs: [203.0.113.0/24]
+policy:
+  api:
+    clients:
+      - principal: FixtureSeeder
+        authentication_kinds: [basic]
+        authentication:
+          basic: {username: FixtureSeeder, password: '${POLICY_FIXTURE_SEED_PASSWORD}'}
+        targets: [{namespace: reputation, actions: [observe]}]
+        allowed_schemas: [reputation/observe/v1]
+        allowed_resource_attributes:
+          - reputation.event_id
+          - reputation.observed_at
+          - reputation.signal
+          - reputation.magnitude
+          - reputation.subjects
+        max_request_bytes: 32768
+        max_facts: 6
+        max_concurrency: 16
+        requests_per_second: 50
+        diagnostics: false
+  namespaces:
+    dkim2:
+      policy_sets:
+        verifier:
+          rules:
+            # The original producer fixture explicitly exercises a body rewrite.
+            # Keep every canonical deny; add only this exact-origin integration permit.
+            - name: permit_fixture_verified_origin
+              checkpoint: final_decision
+              require_providers: [intelligence_assessment]
+              if:
+                all:
+                  - {attribute: plugin.dkim2_intelligence.assessment_complete, eq: true}
+                  - {attribute: plugin.geoip.network, eq: 203.0.113.0/24}
+                  - records:
+                      attribute: plugin.dkim2_intelligence.assessed_chain
+                      quantifier: all
+                      where:
+                        all:
+                          - {field: signature_state, eq: pass}
+                          - {field: signer_reputation_state, eq: fresh}
+                          - {field: signer_reputation_band, in: [trusted, positive, neutral]}
+                  - records:
+                      attribute: plugin.dkim2_intelligence.assessed_chain
+                      quantifier: any
+                      where:
+                        all:
+                          - {field: is_target, eq: true}
+                          - {field: signer_domain, eq: example.test}
+                          - {field: identity_contract_state, eq: matched}
+                          - {field: identity_contract_strength, eq: cidr}
+                  - records:
+                      attribute: plugin.dkim2_intelligence.smtp_peer
+                      quantifier: any
+                      where: &fixture_peer_predicate
+                        all:
+                          - {field: asn, eq: 64500}
+                          - {field: geoip_state, eq: fresh}
+                          - {field: ip_state, eq: fresh}
+                          - {field: ip_band, in: [trusted, positive, neutral]}
+                          - {field: network_state, eq: fresh}
+                          - {field: network_band, in: [trusted, positive, neutral]}
+                          - {field: asn_state, eq: fresh}
+                          - {field: asn_band, in: [trusted, positive, neutral]}
+              then: {decision: permit, reason: fixture_verified_origin}
+
+            # This narrow counterexample may permit only the exact split-hop fixture after all canonical denies.
+            - name: permit_fixture_split_hop
+              checkpoint: final_decision
+              require_providers: [intelligence_assessment]
+              if:
+                all:
+                  - {attribute: plugin.dkim2_intelligence.assessment_complete, eq: true}
+                  - {attribute: plugin.geoip.network, eq: 203.0.113.0/24}
+                  - records:
+                      attribute: plugin.dkim2_intelligence.assessed_chain
+                      quantifier: all
+                      where:
+                        all:
+                          - {field: signature_state, eq: pass}
+                          - {field: signer_reputation_state, eq: fresh}
+                          - {field: signer_domain, in: [historical.example.test, example.test]}
+                  - records:
+                      attribute: plugin.dkim2_intelligence.assessed_chain
+                      quantifier: any
+                      where:
+                        all:
+                          - {field: sequence, eq: 1}
+                          - {field: is_target, eq: false}
+                          - {field: signer_domain, eq: historical.example.test}
+                          - {field: signer_reputation_band, eq: suspicious}
+                          - {field: change_classes, contains_none: [body.rewrite]}
+                  - records:
+                      attribute: plugin.dkim2_intelligence.assessed_chain
+                      quantifier: any
+                      where:
+                        all:
+                          - {field: sequence, eq: 2}
+                          - {field: is_target, eq: true}
+                          - {field: signer_domain, eq: example.test}
+                          - {field: signer_reputation_band, in: [trusted, positive, neutral]}
+                          - {field: identity_contract_state, eq: matched}
+                          - {field: identity_contract_strength, eq: cidr}
+                          - {field: change_classes, contains: body.rewrite}
+                  - records:
+                      attribute: plugin.dkim2_intelligence.smtp_peer
+                      quantifier: any
+                      where: *fixture_peer_predicate
+              then: {decision: permit, reason: fixture_split_hop}
+            # Three twelve-hour-old events must decay below three samples under the actual seven-day profile.
+            - name: permit_fixture_decayed_reputation
+              checkpoint: final_decision
+              require_providers: [intelligence_assessment]
+              if:
+                all:
+                  - {attribute: plugin.dkim2_intelligence.assessment_complete, eq: true}
+                  - {attribute: plugin.geoip.network, eq: 203.0.113.0/24}
+                  - records:
+                      attribute: plugin.dkim2_intelligence.assessed_chain
+                      quantifier: all
+                      where:
+                        all:
+                          - {field: signature_state, eq: pass}
+                          - {field: signer_reputation_state, eq: fresh}
+                          - {field: signer_reputation_band, in: [trusted, positive, neutral]}
+                          - {field: change_classes, contains_none: [body.rewrite]}
+                  - records:
+                      attribute: plugin.dkim2_intelligence.assessed_chain
+                      quantifier: any
+                      where:
+                        all:
+                          - {field: is_target, eq: true}
+                          - {field: signer_domain, eq: aged.example.test}
+                          - {field: identity_contract_state, eq: matched}
+                          - {field: identity_contract_strength, eq: cidr}
+                          - {field: signer_reputation_profile, eq: operational}
+                          - {field: signer_samples, gte: 2.8}
+                          - {field: signer_samples, lt: 2.9}
+              then: {decision: permit, reason: fixture_decayed_reputation}

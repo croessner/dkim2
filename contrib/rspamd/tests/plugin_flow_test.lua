@@ -443,3 +443,54 @@ end
 plugin_options.nauthilus.received_dsn_attribute = nil
 
 print('dkim2 Rspamd plugin orchestration tests: PASS')
+
+-- The separate observation owner freezes evidence before the decision and delivers only after completion.
+local observation_order, observation_callback, decision_callback = {}, nil, nil
+local frozen = {}
+package.preload['dkim2.observation_runtime'] = function()
+  return {new=function()
+    return {
+      completion_timeout=3,
+      capture=function(_,value)
+        observation_order[#observation_order+1]='capture'
+        frozen.action=value.pre_action
+        return frozen
+      end,
+      deliver=function(_,value,event,callback)
+        assert(event==frozen and event.action==nil)
+        observation_order[#observation_order+1]='delivery'
+        observation_callback=callback
+        return true
+      end,
+    }
+  end}
+end
+plugin_options.observation={mode='asynchronous'}
+assert(loadfile(plugin_path))()
+assert(definitions.DKIM2_NAUTHILUS_POLICY.augmentations[1]=='timeout=5.000000',
+  'the task budget must include decision and observation completion')
+policy_callback=definitions.DKIM2_NAUTHILUS_POLICY.callback
+local original_request=policy_instance.request
+policy_instance.request=function(_,_,_,_,callback)
+  observation_order[#observation_order+1]='decision'
+  decision_callback=callback
+  return true
+end
+reset_control()
+task=policy_task()
+policy_callback(task)
+assert(table.concat(observation_order,',')=='capture,decision' and observation_callback==nil)
+decision_callback({action='reject'})
+assert(table.concat(observation_order,',')=='capture,decision,delivery' and task.pre_action=='reject')
+observation_callback('UNAVAILABLE')
+assert(task.pre_action=='reject','observation persistence failure must not widen an existing rejection')
+observation_order={}
+observation_callback=nil
+task=policy_task()
+policy_callback(task)
+decision_callback({action='continue'})
+assert(task.pre_action==nil and observation_callback)
+observation_callback('UNAVAILABLE')
+assert(task.pre_action=='soft reject','missing durable acknowledgement must prevent successful SMTP completion')
+policy_instance.request=original_request
+print('pre-policy capture, post-decision delivery and non-widening observation failure: PASS')

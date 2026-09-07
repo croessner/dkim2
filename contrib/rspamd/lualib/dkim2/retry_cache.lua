@@ -1,6 +1,7 @@
 -- Copyright 2026 Christian Roessner
 -- SPDX-License-Identifier: Apache-2.0
 
+local protected_file = require 'dkim2.protected_file'
 local M = {}
 
 local IDENTITY_FRAME = 'dkim2-rspamd-retry-identity-v1'
@@ -101,23 +102,6 @@ local function frame_part(parts, name, value)
   parts[#parts + 1] = string.format('%08x', #encoded) .. encoded
 end
 
--- read_secret reads one bounded binary cache-identity key without exposing it.
-local function read_secret(path)
-  if type(path) ~= 'string' or path:sub(1, 1) ~= '/' or path:find('\0', 1, true) then
-    return nil
-  end
-  local handle = io.open(path, 'rb')
-  if not handle then
-    return nil
-  end
-  local secret = handle:read(MAX_SECRET_BYTES + 1)
-  handle:close()
-  if type(secret) ~= 'string' or #secret < MIN_SECRET_BYTES or #secret > MAX_SECRET_BYTES then
-    return nil
-  end
-  return secret
-end
-
 -- validate_result accepts only the finite reply vocabulary of the cache script.
 local function validate_result(value)
   if type(value) ~= 'table' or type(value[1]) ~= 'string' then
@@ -142,7 +126,7 @@ function M.new(options)
       type(options.hash) ~= 'table' or type(options.hash.create_specific_keyed) ~= 'function' then
     return nil
   end
-  local secret = options.secret or read_secret(options.secret_file)
+  local secret = options.secret or protected_file.read(options.secret_file, MIN_SECRET_BYTES, MAX_SECRET_BYTES)
   local ttl_ms = tonumber(options.ttl_ms)
   local lease_ms = tonumber(options.lease_ms)
   local authority_generation = options.authority_generation

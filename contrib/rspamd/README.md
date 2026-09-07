@@ -323,3 +323,69 @@ failure in that narrow interval can make the SMTP retry appear replayed to
 replay detection. Monitor daemon success followed by retry-cache write failure,
 keep Redis durable for the configured retry window, and preserve evidence when
 investigating the condition.
+
+## Independent reputation observations
+
+The optional `observation` block enables a separate `reputation/observe` call
+through the generic Nauthilus Policy endpoint. It has its own authenticated
+principal and protected password file. Nauthilus admits that principal through
+an exact source binding and owns weights, decay, derived network/ASN subjects,
+and policy thresholds.
+
+The adapter seals the current peer from `task:get_from_ip()` and the normal
+Rspamd metric result before calling DKIM2 Policy. It sends only one approved
+`mail.rspamd.clean`, `mail.rspamd.spam`, or `mail.rspamd.reject` signal with a
+bounded threshold-relative magnitude. It does not submit signer reputation,
+arbitrary symbols, caller-derived network/ASN, or a causality assertion.
+Delivery begins after the current DKIM2 decision finishes, so that decision
+cannot observe its own event. Policy-caused final action changes do not alter
+the sealed observation. Each distinct scan creates an independent event;
+transport and outbox retries retain the exact original event ID and bytes.
+
+Synchronous mode waits for a correlated successful Policy acknowledgement.
+Asynchronous mode waits for atomic persistence in a separate encrypted Redis
+outbox before SMTP completion. `DKIM2_OBSERVATION_ACKNOWLEDGED` means the
+synchronous store succeeded; `DKIM2_OBSERVATION_PERSISTED` means only durable
+queue acceptance. Neither a queued event nor a temporary delivery failure is
+reported as successful learning. `DKIM2_OBSERVATION_UNAVAILABLE` applies a
+non-widening temporary SMTP failure and preserves any existing permanent
+reject. All three symbols have zero score.
+
+The outbox has bounded fixed shards, per-shard record/byte budgets, fenced
+leases, logical expiry, and independent cleanup. Nauthilus deduplicates the
+same event if an acknowledgement is lost. Verified permanent HTTP client
+rejections terminate delivery; timeouts, early-data refusal, rate limits,
+server failures, and unknown replay-safe outcomes retain the original event
+for bounded retries. Dead letters retain only an opaque allocation tag and a
+closed reason, never the encrypted payload.
+
+See [the configuration example](local.d/dkim2.conf.example) and
+[the operations guide](OPERATIONS.md#observation-outbox-operations) for secret
+ownership, durability, maintenance, and rollback requirements.
+
+### Local reputation proof
+
+The canonical `tests/run-policy-e2e.sh` lane runs the current Nauthilus host and
+its coherent reputation, GeoIP, and DKIM2 intelligence artifacts with Rspamd,
+verified TLS, isolated Redis authorities, and Milter messages. Synthetic
+signer/route contracts exist only in this fixture. Producer-owned bindings
+validate every generated hop projection before it reaches the verifier stub.
+
+The lane checks durable acceptance before SMTP completion, process and Redis
+crash recovery, byte-identical lost-acknowledgement replay without a second
+state change, and rejection of caller-supplied network/ASN/origin assertions.
+It compares bad reputation and body modification within one hop against split
+hop evidence, and historical selected-provider signers against current-peer
+identity. A known aged observation must produce the expected decayed numeric
+sample range through the real Policy provider. Exact derived ASN/network
+predicates and GeoIP stale/recovery controls exercise the trusted lookup.
+
+Before learning assertions, a separate authenticated read-only fixture
+principal verifies that all fixed outbox capacity ledgers and due indexes are
+empty; successful admission is then required for every observed event. This
+prevents unsent durable events from masquerading as completed learning. A
+current decision permits before independent rejection evidence is delivered;
+a later decision rejects after that evidence is admitted. Policy-generated
+rejections do not acquire the independent rejection weight. Outbox persistence
+outages temporarily fail SMTP, and recovery preserves unrelated greylisting.
+These local controls supplement the real deployment's required SMTP proof.

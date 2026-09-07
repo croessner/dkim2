@@ -1,7 +1,3 @@
-includes:
-  required:
-    - /etc/nauthilus/policy.yml
-
 runtime:
   instance_name: dkim2-policy-e2e
   servers:
@@ -64,28 +60,6 @@ auth:
   backends: {order: []}
   controls: {enabled: []}
   services: {enabled: []}
-
-plugins:
-  verification_policy: checksum_required
-  allowed_dirs:
-    - /usr/local/lib/nauthilus/plugins
-  modules:
-    - name: dkim2_reputation
-      type: go
-      path: /usr/local/lib/nauthilus/plugins/dkim2-reputation.so
-      checksum: sha256:${PLUGIN_SHA256}
-      optional: false
-      config:
-        domains:
-          - domain: example.test
-            reputation: trusted
-        client_networks:
-          - cidr: 203.0.113.0/24
-            reputation: trusted
-        contracts:
-          - signer_domain: example.test
-            allowed_client_cidrs: [203.0.113.0/24]
-            permitted_change_classes: [body.rewrite, header.rewrite]
 
 # This lane exercises the HTTPS transport only. The included contract enables
 # both public transports for documentation; the isolated runtime has no gRPC

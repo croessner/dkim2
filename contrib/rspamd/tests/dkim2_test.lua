@@ -2,6 +2,7 @@
 -- SPDX-License-Identifier: Apache-2.0
 
 local plugin_path = assert(arg[1], 'plugin path is required')
+package.path = plugin_path:gsub('/dkim2/[^/]+%.lua$', '/?.lua;') .. package.path
 local expected_endpoint = arg[2] or 'http://127.0.0.1:8080/v1/process'
 local expected_transport = arg[3] or 'loopback'
 local expected_server_name = arg[4]
