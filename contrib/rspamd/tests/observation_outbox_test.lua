@@ -27,11 +27,14 @@ local crypto = {
 local claimed = {allocation_tag=envelope.allocation_tag,lease_owner='worker',lease_token=string.rep('1',32),lease_generation=1}
 local encoded = {}
 local options = {redis=redis,redis_params={},crypto=crypto,
-  observer=function(operation,outcome)
-    observed[#observed+1]={operation,outcome}
+  observer=function(operation,outcome,shard,snapshot)
+    observed[#observed+1]={operation,outcome,shard,snapshot}
   end,
   encode=function(value) encoded[#encoded+1]=value; return '{}' end,
-  decode=function() return claimed end, random_hex=function(length) random_calls=random_calls+1;return string.rep(string.format('%x',random_calls%16),length) end,
+  decode=function(value)
+    if value=='numeric-snapshot' then return {observed_at=1000,live_records=1,live_bytes=128,due_records=1,tombstones=0,expired=0,missing=0,reclaimed=0,tombstone_expired=0,tombstone_evicted=0} end
+    return claimed
+  end, random_hex=function(length) random_calls=random_calls+1;return string.rep(string.format('%x',random_calls%16),length) end,
   transport={send_background=function(_,ev_base,payload,id,callback)
     assert(ev_base=='event-loop' and payload==body and id==request_id)
     pending=callback
@@ -80,6 +83,19 @@ queue:sweep('event-loop',1)
 assert(calls[#calls].args[1]=='sweep')
 assert(#observed==#calls,'duplicate callbacks must not inflate operation counters')
 assert(observed[1][1]=='initialize' and observed[1][2]=='READY')
+response={'ENQUEUED','','numeric-snapshot'}
+queue:enqueue({}, {}, function(value) status=value end)
+assert(status=='ENQUEUED' and observed[#observed][3]==0 and observed[#observed][4].live_records==1)
+for _, invalid in ipairs({'invalid-json',string.rep('x',1025),false}) do
+  response={'ENQUEUED','',invalid}
+  queue:enqueue({}, {}, function(value) status=value end)
+  assert(status=='ENQUEUED' and observed[#observed][4]==nil,'optional diagnostics must not change authority')
+end
+for _, invalid in ipairs({{'ENQUEUED','unexpected','numeric-snapshot'},{'ENQUEUED','','numeric-snapshot','extra'},{'LEASED'},{'LEASED',false,'numeric-snapshot'}}) do
+  response=invalid
+  queue:enqueue({}, {}, function(value) status=value end)
+  assert(status=='UNAVAILABLE','malformed authority reply was accepted')
+end
 queue.observer=function() error('synthetic observer failure') end
 response={'ALLOCATION_MISMATCH'}
 queue:initialize('event-loop',function(value) status=value end)

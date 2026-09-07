@@ -157,7 +157,7 @@ local function create_queue(settings, options, runtime, transport)
   if not crypto then
     return nil
   end
-  local metrics = require('dkim2.observation_metrics').new(runtime.observation_counter)
+  local metrics = require('dkim2.observation_metrics').new(runtime.observation_counter, runtime.observation_snapshot, settings.shard_count)
   if not metrics then
     return nil
   end
@@ -167,7 +167,7 @@ local function create_queue(settings, options, runtime, transport)
   end
   local queue = require('dkim2.observation_outbox').new({
     allocation=assigned,limits=limits,redis=redis,redis_params=parameters,crypto=crypto,
-    observer=function(operation, outcome) metrics:observe(operation, outcome) end,
+    observer=function(operation, outcome, shard, snapshot) metrics:observe(operation, outcome, shard, snapshot) end,
     transport=transport,random_hex=runtime.util.random_hex,decode=decode,
     encode=function(value) return runtime.ucl.to_format(value, 'json-compact') end,
   })

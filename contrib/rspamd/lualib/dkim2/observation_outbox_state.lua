@@ -135,6 +135,7 @@ local function ledger()
 end
 local capacity = ledger()
 if not capacity then return {'CORRUPT'} end
+local telemetry = {expired=0,missing=0,reclaimed=0,tombstone_expired=0,tombstone_evicted=0}
 local fields = {schema_version=true,state=true,allocation_tag=true,payload_fingerprint=true,key_id=true,nonce=true,ciphertext=true,
   created_at=true,expires_at=true,next_attempt_at=true,attempt_count=true,lease_owner=true,lease_token=true,lease_generation=true,lease_until=true}
 local numbers = {'created_at','expires_at','next_attempt_at','attempt_count','lease_generation','lease_until'}
@@ -175,6 +176,7 @@ end
 local function prune_tombstones()
   local expired=redis.call('ZRANGEBYSCORE',KEYS[4],'-inf',now)
   for _,tag in ipairs(expired) do
+    telemetry.tombstone_expired=telemetry.tombstone_expired+1
     redis.call('ZREM',KEYS[4],tag)
     redis.call('HDEL',KEYS[5],tag)
   end
@@ -185,6 +187,7 @@ local function tombstone(tag,reason)
   prune_tombstones()
   while redis.call('ZCARD',KEYS[4])>=cfg.tombstone_limit do
     local oldest=redis.call('ZRANGE',KEYS[4],0,0)[1]
+    telemetry.tombstone_evicted=telemetry.tombstone_evicted+1
     redis.call('ZREM',KEYS[4],oldest)
     redis.call('HDEL',KEYS[5],oldest)
   end
@@ -194,6 +197,7 @@ end
 
 -- remove releases the exact ledger charge, record and due member in the same slot.
 local function remove(tag,reason)
+  if reason=='expired' or reason=='missing' then telemetry[reason]=telemetry[reason]+1 end
   local size=capacity.charges[tag] or 0
   capacity.total=capacity.total-size
   capacity.count=capacity.count-(size>0 and 1 or 0)
@@ -239,6 +243,7 @@ local function claim()
   if r.expires_at<=now then remove(tag,'expired');return {'EXPIRED'} end
   if r.attempt_count>=cfg.max_attempts then remove(tag,'attempts');return {'DEAD'} end
   if r.lease_generation>=9007199254740990 then return {'CORRUPT'} end
+  if r.state=='leased' then telemetry.reclaimed=telemetry.reclaimed+1 end
   r.state='leased';r.lease_owner=input.lease_owner;r.lease_token=input.lease_token
   r.lease_generation=r.lease_generation+1;r.lease_until=now+cfg.lease_ms;r.attempt_count=r.attempt_count+1
   redis.call('HSET',KEYS[3]..tag,'state',r.state,'lease_owner',r.lease_owner,'lease_token',r.lease_token,
@@ -315,6 +320,7 @@ local function sweep()
     elseif entry.expires_at <= now then
       remove(entry.tag, 'expired')
     elseif entry.state == 'leased' and entry.lease_until <= now then
+      telemetry.reclaimed=telemetry.reclaimed+1
       redis.call('HSET', KEYS[3] .. entry.tag, 'state', 'pending', 'next_attempt_at', now,
         'lease_owner', '', 'lease_token', '', 'lease_until', 0)
       redis.call('ZADD', KEYS[1], math.min(now, entry.expires_at), entry.tag)
@@ -323,13 +329,26 @@ local function sweep()
   return {'SWEPT'}
 end
 
-if operation=='enqueue' then return enqueue()
-elseif operation=='claim' then return claim()
-elseif operation=='retry' then return retry()
-elseif operation=='ack' then return complete(false)
-elseif operation=='dead' then return complete(true)
-elseif operation=='sweep' then return sweep()
+local result
+if operation=='enqueue' then result=enqueue()
+elseif operation=='claim' then result=claim()
+elseif operation=='retry' then result=retry()
+elseif operation=='ack' then result=complete(false)
+elseif operation=='dead' then result=complete(true)
+elseif operation=='sweep' then result=sweep()
+else return {'INVALID'} end
+if result[1]=='INVALID' or result[1]=='CORRUPT' then return result end
+-- Optional diagnostics cannot turn a committed transition into a failed acknowledgement.
+local function snapshot()
+  telemetry.observed_at=now
+  telemetry.live_records=math.max(0,redis.call('HLEN',KEYS[2])-1)
+  telemetry.live_bytes=tonumber(redis.call('HGET',KEYS[2],'total_encrypted_bytes')) or 0
+  telemetry.due_records=redis.call('ZCARD',KEYS[1])
+  telemetry.tombstones=redis.call('ZCARD',KEYS[4])
+  return cjson.encode(telemetry)
 end
-return {'INVALID'}
+local measured, encoded = pcall(snapshot)
+if not measured then return result end
+return {result[1],result[2] or '',encoded}
 ]==]
 return M

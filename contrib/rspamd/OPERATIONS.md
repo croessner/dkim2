@@ -595,3 +595,37 @@ SMTP persistence failures also produce the zero-score
 `DKIM2_OBSERVATION_UNAVAILABLE` symbol. Counters are process-local diagnostics:
 a crash can lose an unflushed interval. They are not delivery acknowledgements
 or a substitute for the authoritative Redis queue and Nauthilus manifests.
+
+
+### Observation capacity snapshots
+
+Each scanner also emits a fixed `dkim2_observation_snapshot` record for every
+shard with a new valid snapshot during the same 60-second flush. Its only fields
+are numeric: `shard`, `observed_at`, `live_records`, `live_bytes`, `due_records`,
+`tombstones`, `expired`, `missing`, `reclaimed`, `tombstone_expired`, and
+`tombstone_evicted`. Shards are bounded by the configured shard count; no
+allocation tag, key, subject, event identity or ciphertext is included.
+
+`live_records` and `live_bytes` describe occupied capacity in the ledger,
+including expired or missing records not yet reconciled by bounded cleanup.
+`due_records` and `tombstones` describe the corresponding indexes. These are
+last-observed values, not a consistent current aggregate across workers or
+shards. `observed_at` is Redis time in milliseconds and supplies freshness
+information; equal timestamps do not establish callback ordering. Retain the
+latest timestamp per shard when displaying capacity, and show stale or absent
+snapshots explicitly rather than substituting zero.
+
+The remaining fields are bounded, process-local cleanup deltas: expired records,
+missing records, reclaimed leases, expired tombstones and evicted tombstones.
+They are best-effort diagnostics. Lost responses, exporter failures, restarts or
+counter saturation can lose increments. Existing operation/outcome counters
+cover stale lease no-ops (`STALE`), aggregate state inconsistency (`CORRUPT`) and
+allocation metadata drift (`ALLOCATION_MISMATCH`); no separate inconsistency
+subtypes are exported.
+
+Diagnostic reads and encoding cannot turn successful queue writes into failures.
+Malformed or unavailable optional snapshots are discarded without changing the
+original queue result. Deploy the script and its consumer together: the new
+consumer accepts original and extended responses, while an old consumer rejects
+extended responses. Script identities are content-bound. None of these
+telemetry values authorizes delivery or replaces primary queue inspection.

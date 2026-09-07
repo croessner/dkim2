@@ -66,6 +66,37 @@ class OutboxStateTest(unittest.TestCase):
             result[1] = json.loads(result[1])
         return result
 
+    def test_metrics_report_exact_capacity_and_sweep_outcomes(self):
+        """Require sanitized atomic capacity and cleanup facts from the actual transition."""
+        reply = self.execute('enqueue', self.payload)
+        self.assertEqual(len(reply), 3)
+        snapshot = json.loads(reply[2])
+        self.assertEqual(snapshot['live_records'], 1)
+        self.assertEqual(snapshot['live_bytes'], 128)
+        self.assertEqual(snapshot['due_records'], 1)
+        self.assertNotIn(self.tag, reply[2])
+        self.redis('DEL', self.prefix + 'record:' + self.tag)
+        swept = json.loads(self.execute('sweep')[2])
+        self.assertEqual(swept['live_records'], 0)
+        self.assertEqual(swept['live_bytes'], 0)
+        self.assertEqual(swept['due_records'], 0)
+        self.assertEqual(swept['missing'], 1)
+
+    def test_optional_metrics_permission_failure_preserves_acknowledgement(self):
+        """A denied diagnostic HGET cannot change committed enqueue/acknowledgement results."""
+        if '-s' not in self.command:
+            self.skipTest('private standalone ACL fault')
+        fixture = Path(__file__).with_name('run-policy-e2e.sh').read_text()
+        commands = re.search(r"^commands='([^']+)'$", fixture, re.MULTILINE).group(1).split()
+        self.redis('ACL', 'SETUSER', 'metrics_fault', 'on', 'nopass', '-@all',
+            '~dkim2:observation:v1:*', *[command for command in commands if command != '+hget'])
+        self.command.extend(['--user', 'metrics_fault', '--pass', '', '--no-auth-warning'])
+        self.assertEqual(self.execute('enqueue', self.payload), ['ENQUEUED'])
+        record = self.lease()[1]
+        self.assertEqual(self.execute('ack', self.fence(record)), ['ACKED'])
+        self.assertEqual(self.redis('HLEN', self.prefix + 'capacity'), 1)
+        self.assertEqual(self.redis('ZCARD', self.prefix + 'due'), 0)
+
     def fence(self,record):
         """Pass only the closed ownership tuple back to a completion transition."""
         return {name:record[name] for name in ('allocation_tag','lease_owner','lease_token','lease_generation')}
@@ -85,20 +116,20 @@ class OutboxStateTest(unittest.TestCase):
     def test_real_idle_expiry(self):
         """An invocation-owned Redis clock drives live expiry and idle tombstone cleanup."""
         self.settings.update(max_age_ms=100,lease_ms=20,tombstone_ttl_ms=50)
-        self.assertEqual(self.execute('enqueue',self.payload),['ENQUEUED'])
+        self.assertEqual(self.execute('enqueue',self.payload)[0],['ENQUEUED'][0])
         time.sleep(0.13)
-        self.assertEqual(self.execute('sweep'),['SWEPT'])
+        self.assertEqual(self.execute('sweep')[0],['SWEPT'][0])
         self.assertEqual(self.redis('HGET',self.prefix+'capacity','total_encrypted_bytes'),'0')
         self.assertEqual(self.redis('ZCARD',self.prefix+'tombstone_due'),1)
         time.sleep(0.07)
-        self.assertEqual(self.execute('sweep'),['SWEPT'])
+        self.assertEqual(self.execute('sweep')[0],['SWEPT'][0])
         self.assertEqual(self.redis('HLEN',self.prefix+'tombstone_reason'),0)
 
     def test_closed_transition_inputs_and_lease_identity(self):
         """Extra transition fields and malformed fencing tuples cannot mutate capacity."""
         self.assertEqual(self.execute('enqueue',dict(self.payload,plaintext='forbidden')),['INVALID'])
         self.assertEqual(self.redis('EXISTS',self.prefix+'capacity'),0)
-        self.assertEqual(self.execute('enqueue',self.payload),['ENQUEUED'])
+        self.assertEqual(self.execute('enqueue',self.payload)[0],['ENQUEUED'][0])
         self.assertEqual(self.execute('claim',dict(lease_owner='worker',lease_token='1'*32,extra='forbidden')),['INVALID'])
         current=self.lease()[1]
         malformed={name:current[name] for name in ('allocation_tag','lease_owner','lease_token','lease_generation')}
@@ -123,10 +154,10 @@ class OutboxStateTest(unittest.TestCase):
         for _ in range(2):
             self.assertEqual(self.redis('--eval', script,
                 'dkim2:observation:v1:{meta}:allocation', ',', 'a'*64, 4, 0), ['READY'])
-        self.assertEqual(self.execute('enqueue', self.payload), ['ENQUEUED'])
+        self.assertEqual(self.execute('enqueue', self.payload)[0], ['ENQUEUED'][0])
         record = self.lease()[1]
-        self.assertEqual(self.execute('ack', self.fence(record)), ['ACKED'])
-        self.assertEqual(self.execute('sweep'), ['SWEPT'])
+        self.assertEqual(self.execute('ack', self.fence(record))[0], ['ACKED'][0])
+        self.assertEqual(self.execute('sweep')[0], ['SWEPT'][0])
 
     def test_allocation_metadata_fences_material_drift(self):
         """Concurrent generations pin one material identity and cannot rotate by changing a label."""

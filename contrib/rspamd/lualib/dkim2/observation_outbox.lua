@@ -41,8 +41,27 @@ function M.new(options)
     ready=false, busy={}, sweeping={}, observer=options.observer}, {__index=M})
 end
 
+-- decode_reply preserves authority validation while treating optional diagnostics as non-authoritative.
+local function decode_reply(self, value)
+  if type(value) ~= 'table' or not REPLIES[value[1]] or #value < 1 or #value > 3 then return nil end
+  local leased = value[1] == 'LEASED'
+  if leased then
+    if #value < 2 or type(value[2]) ~= 'string' or #value[2] == 0 or #value[2] > 100000 then return nil end
+  elseif (#value == 2) or (#value == 3 and value[2] ~= '') then
+    return nil
+  end
+  local snapshot
+  if #value == 3 and type(value[3]) == 'string' and #value[3] <= 1024 then
+    local ok, decoded = pcall(function()
+      return require('dkim2.observation_metrics').snapshot(self.decode(value[3]))
+    end)
+    if ok then snapshot = decoded end
+  end
+  return value[1], leased and value[2] or nil, snapshot
+end
+
 -- execute translates transport errors to closed status and invokes its completion at most once.
-local function execute(self, script, context, keys, args, callback)
+local function execute(self, script, context, keys, args, callback, shard)
   local completed = false
   -- finish prevents a scheduling error or duplicate callback from completing one operation twice.
   local function finish(err, value)
@@ -50,15 +69,13 @@ local function execute(self, script, context, keys, args, callback)
       return
     end
     completed = true
-    if err or type(value) ~= 'table' or not REPLIES[value[1]] or
-        (#value ~= 1 and not (value[1] == 'LEASED' and #value == 2 and type(value[2]) == 'string' and #value[2] <= 100000)) then
-      value = {'UNAVAILABLE'}
-    end
+    local status, payload, snapshot = decode_reply(self, value)
+    if err or not status then status, payload, snapshot = 'UNAVAILABLE', nil, nil end
     if type(self.observer) == 'function' then
       local operation = script == self.allocation_id and 'initialize' or args[1]
-      pcall(self.observer, operation, value[1])
+      pcall(self.observer, operation, status, shard, snapshot)
     end
-    callback(value[1], value[2])
+    callback(status, payload)
   end
   local started = self.redis.exec_redis_script(script, {task=context.task, ev_base=context.ev_base,
     key=keys[1], is_write=true}, finish, keys, args)
@@ -93,7 +110,7 @@ local function transition(self, context, shard, operation, input, callback)
     return false
   end
   return execute(self, self.state_id, context, keys,
-    {operation, self.encode(self.configurations[shard]), self.encode(input)}, callback)
+    {operation, self.encode(self.configurations[shard]), self.encode(input)}, callback, shard)
 end
 
 -- M.enqueue acknowledges only atomic persistence of one sealed event before SMTP completion.

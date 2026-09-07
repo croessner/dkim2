@@ -219,6 +219,12 @@ if options.observation then
       rspamd_logger.infox(rspamd_config,
         'dkim2_observation_counter operation=%s outcome=%s count=%s', operation, outcome, count)
     end,
+    observation_snapshot=function(shard, value)
+      rspamd_logger.infox(rspamd_config,
+        'dkim2_observation_snapshot shard=%s observed_at=%s live_records=%s live_bytes=%s due_records=%s tombstones=%s expired=%s missing=%s reclaimed=%s tombstone_expired=%s tombstone_evicted=%s',
+        shard, value.observed_at, value.live_records, value.live_bytes, value.due_records, value.tombstones,
+        value.expired, value.missing, value.reclaimed, value.tombstone_expired, value.tombstone_evicted)
+    end,
     decision_password_file=options.nauthilus.password_file,
     retry_key_file=options.retry_cache.secret_file, capability_file=options.capability_file,
   })

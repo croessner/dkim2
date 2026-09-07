@@ -22,4 +22,20 @@ local unavailable=assert(module.new(function() error('synthetic sink failure') e
 unavailable:observe('retry','UNAVAILABLE')
 assert(pcall(unavailable.flush,unavailable),'observability failure must not abort delivery')
 assert(module.new('invalid')==nil)
+local snapshots = {}
+local detailed = assert(module.new(function() end, function(shard, snapshot)
+  snapshots[#snapshots+1]={shard,snapshot}
+end, 2))
+local snapshot = {observed_at=1000,live_records=1,live_bytes=128,due_records=1,tombstones=0,
+  expired=0,missing=0,reclaimed=0,tombstone_expired=0,tombstone_evicted=0}
+detailed:observe('enqueue','ENQUEUED',0,snapshot)
+snapshot.live_records=999
+-- Only the immutable bounded snapshot may survive the callback.
+detailed:flush()
+assert(#snapshots==1 and snapshots[1][1]==0 and snapshots[1][2].live_records==1)
+snapshot.secret='raw-subject'
+detailed:observe('sweep','SWEPT',0,snapshot)
+detailed:observe('sweep','SWEPT','allocation-tag',snapshot)
+detailed:flush()
+assert(#snapshots==1,'unknown fields and invalid shards must not enter telemetry')
 print('bounded closed outbox counter deltas and observer isolation: PASS')
