@@ -492,6 +492,9 @@ set_policy_mode forward
 clear_retry_scenario
 
 # Redis unavailability fails before dkim2d or Policy and recovers without state reuse.
+# Drain and pause independent learning so this retry-store fault cannot invalidate caller authentication.
+wait_learning_drain
+observation_control unavailable
 STUB_BEFORE=$(stub_calls)
 POLICY_BEFORE=$(observer_value calls)
 docker compose --project-name "$PROJECT_NAME" --env-file "$ENV_FILE" \
@@ -501,6 +504,9 @@ test "$(stub_calls)" -eq "$STUB_BEFORE"
 test "$(observer_value calls)" -eq "$POLICY_BEFORE"
 docker compose --project-name "$PROJECT_NAME" --env-file "$ENV_FILE" \
   -f "$COMPOSE_FILE" up -d --wait --wait-timeout 30 redis >/dev/null
+# A throttle-store failure closes the authentication generation until explicit recovery.
+restart_policy
+observation_control forward
 clear_retry_scenario
 
 # A corrupt armed entry is deleted and fails closed without either upstream call.
