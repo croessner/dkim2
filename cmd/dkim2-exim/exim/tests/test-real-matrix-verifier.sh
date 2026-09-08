@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Exercises the strict fixture-bound real-matrix evidence verifier.
 set -euo pipefail
+export GOEXPERIMENT=runtimesecret
+export GOTOOLCHAIN=go1.27.0
 
 script_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)
 repository_root=$(CDPATH='' cd -- "$script_dir/../../../.." && pwd -P)
@@ -178,7 +180,7 @@ candidate_snapshot_sha256=$(go -C "$repository_root/tools" run ./cmd/candidateid
 build_input="$work/build-input-v1.txt"
 printf '%s\n' \
   'format=dkim2-exim-container-build-input-v1' \
-  'image=golang@sha256:ae5a2316d12f3e78fd99177dad452e6ad4f240af2d71d57b480c3477f250fec6' \
+  'image=golang:1.27.0-trixie@sha256:df98008ecd2b0ecc9f0a94d1b07e3564a9c92b555369b33d9b5f60d0765b2db7' \
   'platform=linux-amd64' \
   'mta_uid=999' \
   "base_revision=$candidate_base_revision" \
@@ -194,6 +196,13 @@ printf '%s\n' \
   "$candidate_base_revision" "$candidate_snapshot_sha256" \
   "$adapter_sha256" "$daemon_sha256" "$binary_sha256" \
   "$binary_sha256" "$transport_filter_patch_sha256"
+
+cp "$build_input" "$work/build-input-stale-compiler"
+sed -i.bak \
+  's/^image=.*/image=golang@sha256:ae5a2316d12f3e78fd99177dad452e6ad4f240af2d71d57b480c3477f250fec6/' \
+  "$work/build-input-stale-compiler"
+rm "$work/build-input-stale-compiler.bak"
+expect_build_input_rejection "$work/build-input-stale-compiler"
 
 cp "$build_input" "$work/build-input-stale-candidate"
 sed -i.bak \

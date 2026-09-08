@@ -7,7 +7,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 MODULES = ('lib', 'cmd/dkim2d', 'cmd/dkim2-milter', 'cmd/dkim2-exim', 'cmd/dkim2ctl', 'cmd/dkim2-dsn-propagator', 'tools')
-SCRIPTS = ('scripts/test-datasource-services.sh', 'scripts/test-valkey.sh', 'scripts/test-datasource-ldap-acl.sh', 'tools/check-operator-docs.sh', 'contrib/rspamd/tests/run-policy-e2e.sh', 'contrib/rspamd/tests/policy-e2e/verify-two-hop-projection.sh')
+SCRIPTS = ('contrib/qualification/postfix-milter/run.sh', 'cmd/dkim2-exim/exim/tests/test-real-matrix-verifier.sh', 'scripts/test-datasource-services.sh', 'scripts/test-valkey.sh', 'scripts/test-datasource-ldap-acl.sh', 'tools/check-operator-docs.sh', 'contrib/rspamd/tests/run-policy-e2e.sh', 'contrib/rspamd/tests/policy-e2e/verify-two-hop-projection.sh')
 
 class ToolchainContractTest(unittest.TestCase):
     """Check standalone modules, native Make execution, CI, and direct entry points."""
@@ -41,6 +41,29 @@ class ToolchainContractTest(unittest.TestCase):
         docker = (ROOT / 'build/container/Dockerfile').read_text()
         self.assertRegex(docker, r'golang:1\.27\.0-bookworm@sha256:[0-9a-f]{64}')
         self.assertNotIn('golang:1.26', docker)
+
+    def test_qualification_images_share_compiler_and_experiment(self):
+        """Qualification compilers must not silently retain an older Go lane."""
+        for name in ('contrib/qualification/postfix-milter/Dockerfile',
+                     'cmd/dkim2-exim/exim/tests/container/Dockerfile'):
+            with self.subTest(path=name):
+                content = (ROOT / name).read_text()
+                self.assertRegex(content, r'golang:1\.27\.0-trixie@sha256:[0-9a-f]{64}')
+                self.assertIn('ENV GOEXPERIMENT=runtimesecret', content)
+                self.assertIn('ENV GOTOOLCHAIN=go1.27.0', content)
+        image = re.search(r'golang:1\.27\.0-trixie@sha256:[0-9a-f]{64}',
+                          (ROOT / 'contrib/qualification/postfix-milter/Dockerfile').read_text()).group()
+        for name in ('contrib/qualification/postfix-milter/run.sh',
+                     'cmd/dkim2-exim/exim/tests/container/Dockerfile',
+                     'cmd/dkim2-exim/exim/tests/build-real-matrix-inputs-container.sh',
+                     'cmd/dkim2-exim/exim/tests/verify-real-matrix-build-input.sh',
+                     'tools/internal/conformance/postfix.go'):
+            with self.subTest(path=name):
+                self.assertIn(image, (ROOT / name).read_text())
+        builder = (ROOT / 'cmd/dkim2-exim/exim/tests/build-real-matrix-inputs-container.sh').read_text()
+        for setting in ('GOEXPERIMENT=runtimesecret', 'GOTOOLCHAIN=go1.27.0'):
+            self.assertIn('export ' + setting, builder)
+            self.assertIn('--env ' + setting, builder)
 
 if __name__ == '__main__':
     unittest.main()

@@ -167,7 +167,7 @@ func assertQualificationStackCapabilities(t *testing.T, capabilities []string) {
 func TestPostfixQualificationPinsBuildInputsAndCleanup(t *testing.T) {
 	dockerfile := readQualificationFile(t, "Dockerfile", 1<<16)
 	for _, identity := range []string{
-		"golang@sha256:ae5a2316d12f3e78fd99177dad452e6ad4f240af2d71d57b480c3477f250fec6",
+		"golang:1.27.0-trixie@sha256:df98008ecd2b0ecc9f0a94d1b07e3564a9c92b555369b33d9b5f60d0765b2db7",
 		"debian@sha256:4e401d95de7083948053197a9c3913343cd06b706bf15eb6a0c3ccd26f436a0e",
 		"chrroessner/postfix@sha256:d4b349ce665ba291444e55862ac842e3d4e612596520a9ba65a7b9bf00f9aa3c",
 	} {
@@ -367,7 +367,7 @@ func TestPostfixQualificationHelperIsStandardGuardrail(t *testing.T) {
 		[]byte("test-postfix-qualification-helper:"),
 		[]byte("go test contrib/qualification/postfix-milter/cmd/qualify/main.go \\\n\t\t\tcontrib/qualification/postfix-milter/cmd/qualify/main_test.go"),
 		[]byte("test: test-postfix-qualification-helper"),
-		[]byte("guardrails: check-ci fmt-check vet lint test race"),
+		[]byte("guardrails: check-go-toolchain-contract check-ci fmt-check vet lint test race"),
 		[]byte("release-guardrails: guardrails"),
 	} {
 		if !bytes.Contains(makefile, required) {

@@ -99,7 +99,7 @@ func validatePostfixReportBinding(
 	}
 	if len(report.ImageIdentities) != 3 ||
 		report.ImageIdentities["debian"] != "debian@sha256:4e401d95de7083948053197a9c3913343cd06b706bf15eb6a0c3ccd26f436a0e" ||
-		report.ImageIdentities["golang"] != "golang@sha256:ae5a2316d12f3e78fd99177dad452e6ad4f240af2d71d57b480c3477f250fec6" ||
+		report.ImageIdentities["golang"] != "golang:1.27.0-trixie@sha256:df98008ecd2b0ecc9f0a94d1b07e3564a9c92b555369b33d9b5f60d0765b2db7" ||
 		report.ImageIdentities["postfix"] != "chrroessner/postfix@sha256:d4b349ce665ba291444e55862ac842e3d4e612596520a9ba65a7b9bf00f9aa3c" {
 		return errors.New("runner_identity")
 	}

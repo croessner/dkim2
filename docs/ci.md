@@ -94,3 +94,26 @@ release policy uses the registry-bound BuildKit attestations attached to each
 GHCR subject and does not create a second GitHub repository-attestation path.
 The workflow publishes the exact stable version only; it does not create
 `latest`.
+
+## Qualification compiler and evidence scope
+
+Postfix and Exim qualification use the digest-pinned Go 1.27.0 Trixie
+compiler image, with `GOEXPERIMENT=runtimesecret` and exact toolchain selection.
+The product image keeps its Go 1.27.0 Bookworm build environment. The toolchain
+contract checks both qualification Dockerfiles and their evidence producers
+and consumers. Changing the compiler identity invalidates earlier
+qualification evidence; fresh Postfix and source-matched Exim runs are required
+before claiming qualification for the changed candidate. Historical evidence
+in implementation documents retains its original image identity.
+
+CodeQL is not an active repository workflow. Guardrails, Dependabot and
+`govulncheck` do not replace CodeQL analysis; absence of current analysis is a
+coverage gap, not a clean result. Historical failures from removed workflows
+must be checked against the current workflow inventory and exact commit.
+
+For source vulnerability checks, use `make govulncheck` across all seven
+workspace modules. A missing root `go.mod` does not mean this workspace has no
+Go toolchain. Filesystem scanners must distinguish source from ignored local
+build artifacts and disclose exclusions and parse failures. Module-level
+advisories require affected-package and import-path revalidation before they
+are classified as product vulnerabilities.

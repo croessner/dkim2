@@ -1,5 +1,7 @@
 #!/bin/sh
 set -eu
+export GOEXPERIMENT=runtimesecret
+export GOTOOLCHAIN=go1.27.0
 
 project=dkim2-postfix-qualification
 compose_file=contrib/qualification/postfix-milter/compose.yaml
@@ -93,6 +95,7 @@ trap cleanup EXIT HUP INT TERM
 cleanup
 validate_output_root
 
+# ensure_image verifies the immutable digest, config identity, and platform.
 ensure_image() {
   expected_digest=$1
   expected_id=$2
@@ -100,20 +103,22 @@ ensure_image() {
   if ! docker image inspect "$expected_digest" >/dev/null 2>&1; then
     docker pull "$expected_digest" >/dev/null
   fi
+  # RepoDigests omit an optional human-readable tag from a digest reference.
+  expected_repo_digest=$(printf '%s\n' "$expected_digest" | sed 's/:[^/@]*@/@/')
   actual_id=$(docker image inspect "$expected_digest" --format '{{.Id}}')
   actual_digests=$(docker image inspect "$expected_digest" --format '{{json .RepoDigests}}')
   actual_platform=$(docker image inspect "$expected_digest" --format '{{.Os}}/{{.Architecture}}')
   test "$actual_id" = "$expected_id"
   test "$actual_platform" = "$expected_platform"
   case "$actual_digests" in
-    *"$expected_digest"*) ;;
+    *"$expected_repo_digest"*) ;;
     *) exit 1 ;;
   esac
 }
 
 ensure_image \
-  golang@sha256:ae5a2316d12f3e78fd99177dad452e6ad4f240af2d71d57b480c3477f250fec6 \
-  sha256:b0bb43a2dcec5fbd07bedbe887849d53b2ac412c7876dd0bfa4c4e07ae80fe1c \
+  golang:1.27.0-trixie@sha256:df98008ecd2b0ecc9f0a94d1b07e3564a9c92b555369b33d9b5f60d0765b2db7 \
+  sha256:ccb6f18cbf10486608b5fea50834a621b9fada5dd869841f08c486ba307155a3 \
   linux/amd64
 ensure_image \
   debian@sha256:4e401d95de7083948053197a9c3913343cd06b706bf15eb6a0c3ccd26f436a0e \
@@ -125,7 +130,7 @@ ensure_image \
   linux/amd64
 
 docker tag \
-  golang@sha256:ae5a2316d12f3e78fd99177dad452e6ad4f240af2d71d57b480c3477f250fec6 \
+  golang:1.27.0-trixie@sha256:df98008ecd2b0ecc9f0a94d1b07e3564a9c92b555369b33d9b5f60d0765b2db7 \
   dkim2-postfix-qualification-build:verified
 docker tag \
   debian@sha256:4e401d95de7083948053197a9c3913343cd06b706bf15eb6a0c3ccd26f436a0e \
@@ -282,7 +287,7 @@ run_once() {
     --arg manifest "$manifest" \
     --arg producer "$producer" \
     --arg postfix_image "chrroessner/postfix@sha256:d4b349ce665ba291444e55862ac842e3d4e612596520a9ba65a7b9bf00f9aa3c" \
-    --arg golang_image "golang@sha256:ae5a2316d12f3e78fd99177dad452e6ad4f240af2d71d57b480c3477f250fec6" \
+    --arg golang_image "golang:1.27.0-trixie@sha256:df98008ecd2b0ecc9f0a94d1b07e3564a9c92b555369b33d9b5f60d0765b2db7" \
     --arg debian_image "debian@sha256:4e401d95de7083948053197a9c3913343cd06b706bf15eb6a0c3ccd26f436a0e" \
     --argjson fragments "$fragments" \
     --arg lane "$lane" \
