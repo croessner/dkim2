@@ -49,11 +49,13 @@ type protectedState struct {
 	capability             [32]byte
 	signCapability         [32]byte
 	reviseCapability       [32]byte
+	batchReviseCapability  [32]byte
 	dsnSignCapability      [32]byte
 	dsnPropagateCapability [32]byte
 	serverTLS              *tls.Config
 	hasSign                bool
 	hasRevise              bool
+	hasBatchRevise         bool
 	hasDSNSign             bool
 	hasDSNPropagate        bool
 	signingStore           *signingstore.Runtime
@@ -361,7 +363,7 @@ func (p *RuntimePreparation) SigningStore() *signingstore.Runtime {
 	if p.state.phase != protectedPreparedForRuntime ||
 		p.state.runtimeToken != p.token ||
 		!signingDatasourceConsumed(
-			p.state.hasSign || p.state.hasRevise || p.state.hasDSNSign ||
+			p.state.hasSign || p.state.hasRevise || p.state.hasBatchRevise || p.state.hasDSNSign ||
 				p.state.hasDSNPropagate,
 			p.state.snapshot.ProcessDefaultTenant(),
 		) {
@@ -592,6 +594,7 @@ type protectedCapabilityKind uint8
 const (
 	protectedSign protectedCapabilityKind = iota + 1
 	protectedRevise
+	protectedBatchRevise
 	protectedDSNSign
 	protectedDSNPropagate
 )
@@ -624,6 +627,11 @@ func equalProtectedCapability(
 			return false
 		}
 		expected = &state.reviseCapability
+	case protectedBatchRevise:
+		if !state.hasBatchRevise {
+			return false
+		}
+		expected = &state.batchReviseCapability
 	case protectedDSNSign:
 		if !state.hasDSNSign {
 			return false
@@ -694,10 +702,12 @@ func (s *protectedState) clearProtected(releasedBy protectedPhase) {
 	s.capability = [32]byte{}
 	s.signCapability = [32]byte{}
 	s.reviseCapability = [32]byte{}
+	s.batchReviseCapability = [32]byte{}
 	s.dsnSignCapability = [32]byte{}
 	s.dsnPropagateCapability = [32]byte{}
 	s.hasSign = false
 	s.hasRevise = false
+	s.hasBatchRevise = false
 	s.hasDSNSign = false
 	s.hasDSNPropagate = false
 	s.serverTLS = nil
@@ -802,6 +812,9 @@ func enabledProtectedKeys(state *protectedState) []*[32]byte {
 	}
 	if state.hasRevise {
 		keys = append(keys, &state.reviseCapability)
+	}
+	if state.hasBatchRevise {
+		keys = append(keys, &state.batchReviseCapability)
 	}
 	if state.hasDSNSign {
 		keys = append(keys, &state.dsnSignCapability)

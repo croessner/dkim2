@@ -48,10 +48,12 @@ func (e *jsonPreflightError) Code() jsonPreflightErrorCode {
 }
 
 type jsonConstants struct {
-	apiVersion string
-	draft      string
-	rawMessage jsonRawMessageToken
-	known      jsonKnownFieldFacts
+	apiVersion       string
+	draft            string
+	rawMessage       jsonRawMessageToken
+	batchRawMessages []jsonRawMessageToken
+	batchKnown       []jsonKnownFieldFacts
+	known            jsonKnownFieldFacts
 }
 
 type jsonRawMessageToken struct {
@@ -70,6 +72,7 @@ const (
 	jsonObjectRoot
 	jsonObjectMessage
 	jsonObjectSMTP
+	jsonObjectBatchMessageEnvelope
 )
 
 type jsonConstantState struct {
@@ -82,6 +85,8 @@ type jsonConstantState struct {
 	draftLarge       bool
 	draft            string
 	rawMessage       jsonRawMessageToken
+	batchRawMessages []jsonRawMessageToken
+	batchKnown       []jsonKnownFieldFacts
 	known            jsonKnownFieldFacts
 }
 
@@ -163,10 +168,12 @@ func (s *jsonScanner) scanDocument() (jsonConstants, error) {
 	}
 
 	return jsonConstants{
-		apiVersion: supportedAPIVersion,
-		draft:      supportedDraftVersion,
-		rawMessage: s.constants.rawMessage,
-		known:      s.constants.known,
+		apiVersion:       supportedAPIVersion,
+		draft:            supportedDraftVersion,
+		rawMessage:       s.constants.rawMessage,
+		batchRawMessages: s.constants.batchRawMessages,
+		batchKnown:       s.constants.batchKnown,
+		known:            s.constants.known,
 	}, nil
 }
 
@@ -181,7 +188,7 @@ func (s *jsonScanner) scanValue(scope jsonObjectScope, captureString bool, strin
 	case '{':
 		return s.scanObject(scope)
 	case '[':
-		return s.scanArray()
+		return s.scanArray(scope)
 	case '"':
 		_, err := s.scanString(captureString, stringLimit)
 		return err
@@ -265,6 +272,8 @@ func (s *jsonScanner) scanObjectMember(scope jsonObjectScope, name string) error
 		}
 	case jsonObjectSMTP:
 		return s.scanSMTPMember(name)
+	case jsonObjectBatchMessageEnvelope:
+		return s.scanBatchMessageEnvelopeMember(name)
 	}
 	return s.scanValue(jsonObjectGeneric, false, 0)
 }
@@ -294,6 +303,8 @@ func (s *jsonScanner) scanRootMember(name string) error {
 		return nil
 	case "message":
 		return s.scanMessageValue()
+	case "original", "copies":
+		return s.scanValue(jsonObjectBatchMessageEnvelope, false, 0)
 	case "smtp":
 		return s.scanSMTPValue()
 	default:
@@ -314,7 +325,7 @@ func (s *jsonScanner) scanSMTPMember(name string) error {
 }
 
 // scanArray validates one array without retaining any element value.
-func (s *jsonScanner) scanArray() error {
+func (s *jsonScanner) scanArray(elementScope jsonObjectScope) error {
 	if err := s.openContainer('['); err != nil {
 		return err
 	}
@@ -328,7 +339,7 @@ func (s *jsonScanner) scanArray() error {
 	}
 
 	for {
-		if err := s.scanValue(jsonObjectGeneric, false, 0); err != nil {
+		if err := s.scanValue(elementScope, false, 0); err != nil {
 			return err
 		}
 		s.skipWhitespace()

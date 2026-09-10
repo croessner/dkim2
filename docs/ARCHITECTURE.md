@@ -1083,6 +1083,20 @@ or both.
 
 ### 7.1 OpenAPI as Contract Authority
 
+The complete-fanout adapter at `POST /v1/revise/batch` uses the unchanged public
+library to verify original SMTP evidence, seal every actual local/external copy,
+and sign only unrestricted external results with private one-recipient route
+tickets. Local delivery remains independent. Each external result is an exact
+append-only header delta bound to the caller's plan and original/current/result
+digests. Optional same-tenant `via` makes an ordinary controlled intermediate
+revision before the final prepared envelope; both signatures are released
+together. Signing profiles and intermediate-domain authority use one generation
+lease. Null-sender received DSNs use the existing propagation service instead.
+`GET /v1/revise/batch/capabilities` requires the same dedicated batch capability
+and current readiness and advertises actual bounds without signing or DNS work.
+See [the complete contract](specs/implementation/batch-revision.md); no caller
+flag or asserted pass is promoted to cryptographic evidence.
+
 `docs/specs/openapi/dkim2d.yaml` is the source of truth for `dkim2d` REST
 behavior. The service should not grow hand-written routes that bypass the
 contract. Generated code should provide:

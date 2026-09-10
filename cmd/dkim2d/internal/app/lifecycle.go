@@ -677,6 +677,7 @@ func (l *Lifecycle) bindTransport(
 		preparation.DSNSignCapability(),
 	)
 	input = input.withPropagation(startup.propagation, preparation.DSNPropagateCapability())
+	input = input.withBatchRevision(preparation.BatchReviseCapability())
 	input = input.withObservability(startup.telemetry)
 	if err != nil || lifecycleContextFailed(acquisition) {
 		return nil, &LifecycleError{}

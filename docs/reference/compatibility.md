@@ -16,6 +16,12 @@ is a reviewed behavior migration, not an automatic compatibility update.
 - Daemon HTTP shapes and bounds are authoritative only in
   `docs/specs/openapi/dkim2d.yaml`. The wire `api_version` remains `v1`;
   product prerelease versioning does not alter that field.
+- Complete-fanout revision is an additive daemon capability at
+  `/v1/revise/batch`, with separately authenticated discovery at
+  `/v1/revise/batch/capabilities` and the stable configuration path
+  `server.batch_revise_capability_file`. Existing single-message revise and
+  public library contracts retain their semantics. See the
+  [batch revision contract](../specs/implementation/batch-revision.md).
 - Generated server, client, Milter client, Milter test-server, Exim client,
   and delivery-status propagator client and test-server artifacts must remain
   byte-equal to output from the pinned generator.

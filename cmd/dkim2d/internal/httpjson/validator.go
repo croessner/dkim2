@@ -79,6 +79,7 @@ func (v *RequestValidator) ValidateOperation(request *http.Request, body []byte)
 		processPath:            "processMessage",
 		signPath:               "signMessage",
 		revisePath:             "reviseMessage",
+		batchRevisePath:        "reviseBatch",
 		dsnSignPath:            "signDeliveryStatus",
 		dsnPropagatePath:       "propagateDeliveryStatus",
 		dsnPropagateCommitPath: "commitDeliveryStatusPropagation",

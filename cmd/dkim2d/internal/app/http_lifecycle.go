@@ -58,6 +58,7 @@ type HTTPAssemblyInput struct {
 	capability             config.ProcessCapability
 	signCapability         config.SignCapability
 	reviseCapability       config.ReviseCapability
+	batchReviseCapability  config.BatchReviseCapability
 	dsnSignCapability      config.DSNSignCapability
 	dsnPropagateCapability config.DSNPropagateCapability
 	processor              *InboundProcessor
@@ -140,6 +141,17 @@ func (i HTTPAssemblyInput) SignCapability() config.SignCapability {
 // ReviseCapability returns the opaque prepared revision capability handle.
 func (i HTTPAssemblyInput) ReviseCapability() config.ReviseCapability {
 	return i.reviseCapability
+}
+
+// BatchReviseCapability returns the opaque same-generation complete-fanout capability handle.
+func (i HTTPAssemblyInput) BatchReviseCapability() config.BatchReviseCapability {
+	return i.batchReviseCapability
+}
+
+// withBatchRevision binds explicit complete-fanout authority to the existing signing service.
+func (i HTTPAssemblyInput) withBatchRevision(capability config.BatchReviseCapability) HTTPAssemblyInput {
+	i.batchReviseCapability = capability
+	return i
 }
 
 // DSNSignCapability returns the opaque prepared delivery-status capability handle.

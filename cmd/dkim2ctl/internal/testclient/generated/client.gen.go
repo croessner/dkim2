@@ -173,6 +173,123 @@ func (e AuthenticationResultPrimaryReason) Valid() bool {
 	}
 }
 
+// Defines values for BatchRevisionCapabilitiesControlledVia.
+const (
+	BatchControlledViaSupported BatchRevisionCapabilitiesControlledVia = true
+)
+
+// Valid indicates whether the value is a known member of the BatchRevisionCapabilitiesControlledVia enum.
+func (e BatchRevisionCapabilitiesControlledVia) Valid() bool {
+	switch e {
+	case BatchControlledViaSupported:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for BatchRevisionCapabilitiesExternalNullSender.
+const (
+	BatchExternalNullSenderUnsupported BatchRevisionCapabilitiesExternalNullSender = false
+)
+
+// Valid indicates whether the value is a known member of the BatchRevisionCapabilitiesExternalNullSender enum.
+func (e BatchRevisionCapabilitiesExternalNullSender) Valid() bool {
+	switch e {
+	case BatchExternalNullSenderUnsupported:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for BatchRevisionCapabilitiesFullFanout.
+const (
+	BatchFullFanoutSupported BatchRevisionCapabilitiesFullFanout = true
+)
+
+// Valid indicates whether the value is a known member of the BatchRevisionCapabilitiesFullFanout enum.
+func (e BatchRevisionCapabilitiesFullFanout) Valid() bool {
+	switch e {
+	case BatchFullFanoutSupported:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for BatchRevisionCapabilitiesOriginalCurrent.
+const (
+	BatchOriginalCurrentSupported BatchRevisionCapabilitiesOriginalCurrent = true
+)
+
+// Valid indicates whether the value is a known member of the BatchRevisionCapabilitiesOriginalCurrent enum.
+func (e BatchRevisionCapabilitiesOriginalCurrent) Valid() bool {
+	switch e {
+	case BatchOriginalCurrentSupported:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for BatchRevisionCapabilitiesProtocol.
+const (
+	BatchRevisionV1 BatchRevisionCapabilitiesProtocol = "batch_revision_v1"
+)
+
+// Valid indicates whether the value is a known member of the BatchRevisionCapabilitiesProtocol enum.
+func (e BatchRevisionCapabilitiesProtocol) Valid() bool {
+	switch e {
+	case BatchRevisionV1:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for BatchRevisionCopyDelivery.
+const (
+	External BatchRevisionCopyDelivery = "external"
+	Local    BatchRevisionCopyDelivery = "local"
+)
+
+// Valid indicates whether the value is a known member of the BatchRevisionCopyDelivery enum.
+func (e BatchRevisionCopyDelivery) Valid() bool {
+	switch e {
+	case External:
+		return true
+	case Local:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for BatchRevisionResponseResult.
+const (
+	BatchRevisionResponseResultFail      BatchRevisionResponseResult = "fail"
+	BatchRevisionResponseResultPass      BatchRevisionResponseResult = "pass"
+	BatchRevisionResponseResultPermerror BatchRevisionResponseResult = "permerror"
+	BatchRevisionResponseResultTemperror BatchRevisionResponseResult = "temperror"
+)
+
+// Valid indicates whether the value is a known member of the BatchRevisionResponseResult enum.
+func (e BatchRevisionResponseResult) Valid() bool {
+	switch e {
+	case BatchRevisionResponseResultFail:
+		return true
+	case BatchRevisionResponseResultPass:
+		return true
+	case BatchRevisionResponseResultPermerror:
+		return true
+	case BatchRevisionResponseResultTemperror:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for DSNPropagateCommitResponseState.
 const (
 	PropagationStateCommitted DSNPropagateCommitResponseState = "committed"
@@ -1461,8 +1578,130 @@ type AuthenticationResult struct {
 // AuthenticationResultPrimaryReason defines model for AuthenticationResult.PrimaryReason.
 type AuthenticationResultPrimaryReason string
 
+// BatchBinding Caller-owned SHA-256 binding of its immutable transaction and complete delivery plan. Returned unchanged over the authenticated channel. This correlation value is not a verification result or an independent proof of the MTA's queue completeness.
+type BatchBinding = string
+
+// BatchCopyID Opaque transaction-local identity without an address or secret.
+type BatchCopyID = string
+
+// BatchDigest SHA-256 of the exact identified RFC 5322 message bytes.
+type BatchDigest = string
+
+// BatchRevisionCapabilities defines model for BatchRevisionCapabilities.
+type BatchRevisionCapabilities struct {
+	ApiVersion    APIVersion                             `json:"api_version"`
+	ControlledVia BatchRevisionCapabilitiesControlledVia `json:"controlled_via"`
+	Draft         DraftVersion                           `json:"draft"`
+
+	// ExternalNullSender Ordinary revision cannot create a null reverse-path. Valid signed delivery-status messages use the separately authorized received-DSN propagation API, including its verification and replay contract.
+	ExternalNullSender       BatchRevisionCapabilitiesExternalNullSender `json:"external_null_sender"`
+	FullFanout               BatchRevisionCapabilitiesFullFanout         `json:"full_fanout"`
+	MaxAggregateMessageBytes int64                                       `json:"max_aggregate_message_bytes"`
+	MaxControlledHops        int                                         `json:"max_controlled_hops"`
+	MaxCopies                int                                         `json:"max_copies"`
+	MaxHeaderFields          int                                         `json:"max_header_fields"`
+	MaxRequestBytes          int64                                       `json:"max_request_bytes"`
+	MaxResponseBytes         int64                                       `json:"max_response_bytes"`
+	OriginalCurrent          BatchRevisionCapabilitiesOriginalCurrent    `json:"original_current"`
+	Protocol                 BatchRevisionCapabilitiesProtocol           `json:"protocol"`
+}
+
+// BatchRevisionCapabilitiesControlledVia defines model for BatchRevisionCapabilities.ControlledVia.
+type BatchRevisionCapabilitiesControlledVia bool
+
+// BatchRevisionCapabilitiesExternalNullSender Ordinary revision cannot create a null reverse-path. Valid signed delivery-status messages use the separately authorized received-DSN propagation API, including its verification and replay contract.
+type BatchRevisionCapabilitiesExternalNullSender bool
+
+// BatchRevisionCapabilitiesFullFanout defines model for BatchRevisionCapabilities.FullFanout.
+type BatchRevisionCapabilitiesFullFanout bool
+
+// BatchRevisionCapabilitiesOriginalCurrent defines model for BatchRevisionCapabilities.OriginalCurrent.
+type BatchRevisionCapabilitiesOriginalCurrent bool
+
+// BatchRevisionCapabilitiesProtocol defines model for BatchRevisionCapabilities.Protocol.
+type BatchRevisionCapabilitiesProtocol string
+
+// BatchRevisionCopy Exact current bytes and prepared outgoing SMTP paths, including an MTA-prepared SRS reverse path if applicable. The original and local reverse paths may be <>; the reference library refuses ordinary external revision with <>. Valid received DSNs use the independent authenticated propagation operation. The daemon never invents or rewrites SRS. Context is required for external copies and forbidden for local copies. Message fidelity is explicit; current local bytes may use lmtp_delivered_crlf, while external bytes must be an admitted signing fidelity. Existing protocol fields may not be removed, changed, or fabricated after verification.
+type BatchRevisionCopy struct {
+	Context  *SigningContext           `json:"context,omitempty"`
+	Delivery BatchRevisionCopyDelivery `json:"delivery"`
+
+	// Id Opaque transaction-local identity without an address or secret.
+	Id      BatchCopyID  `json:"id"`
+	Message MessageInput `json:"message"`
+	Smtp    SMTPInput    `json:"smtp"`
+
+	// Via Optional single controlled intermediate hop for an external copy, implementing Draft 06 section 9.3 with ordinary mf/rt signatures. The MTA supplies the exact non-null intermediate reverse path and one controlled intermediate recipient. Both signing contexts must have the same tenant; exact transit profiles for both domains and local authority over the intermediate recipient domain are required. The initial fanout still counts every actual local and external copy. Intermediate and final signatures are released only together, in one output. No real SMTP transfer is claimed for this imaginary hop. Not permitted on local copies. No free domain-alignment exception.
+	Via *BatchRevisionHop `json:"via,omitempty"`
+}
+
+// BatchRevisionCopyDelivery defines model for BatchRevisionCopy.Delivery.
+type BatchRevisionCopyDelivery string
+
+// BatchRevisionHop Optional single controlled intermediate hop for an external copy, implementing Draft 06 section 9.3 with ordinary mf/rt signatures. The MTA supplies the exact non-null intermediate reverse path and one controlled intermediate recipient. Both signing contexts must have the same tenant; exact transit profiles for both domains and local authority over the intermediate recipient domain are required. The initial fanout still counts every actual local and external copy. Intermediate and final signatures are released only together, in one output. No real SMTP transfer is claimed for this imaginary hop. Not permitted on local copies. No free domain-alignment exception.
+type BatchRevisionHop struct {
+	Context SigningContext `json:"context"`
+	Smtp    SMTPInput      `json:"smtp"`
+}
+
+// BatchRevisionOriginal defines model for BatchRevisionOriginal.
+type BatchRevisionOriginal struct {
+	Message MessageInput `json:"message"`
+	Smtp    SMTPInput    `json:"smtp"`
+}
+
+// BatchRevisionOutput Decode each complete header field and concatenate them in array order, then insert them at insertion_offset in the exact current bytes. Do not unfold, reorder, normalize, or insert an extra empty line. The result must match result_sha256 before release. Message body bytes are never returned. Each external signature contains only its own recipient.
+type BatchRevisionOutput struct {
+	// CurrentSha256 SHA-256 of the exact identified RFC 5322 message bytes.
+	CurrentSha256      BatchDigest            `json:"current_sha256"`
+	HeaderFieldsBase64 []CompletedHeaderField `json:"header_fields_base64"`
+
+	// Id Opaque transaction-local identity without an address or secret.
+	Id BatchCopyID `json:"id"`
+
+	// InsertionOffset Byte offset in current message immediately after the final existing header field CRLF and before the empty separator line. The client verifies this location and inserts the completed fields there.
+	InsertionOffset int64 `json:"insertion_offset"`
+
+	// ResultSha256 SHA-256 of the exact identified RFC 5322 message bytes.
+	ResultSha256 BatchDigest `json:"result_sha256"`
+}
+
+// BatchRevisionRequest defines model for BatchRevisionRequest.
+type BatchRevisionRequest struct {
+	ApiVersion APIVersion `json:"api_version"`
+
+	// Binding Caller-owned SHA-256 binding of its immutable transaction and complete delivery plan. Returned unchanged over the authenticated channel. This correlation value is not a verification result or an independent proof of the MTA's queue completeness.
+	Binding BatchBinding `json:"binding"`
+
+	// Copies Complete actual copy set, including local copies already delivered. IDs are unique. At least one external copy is required. Each smtp object contains exactly one recipient. Duplicate addresses remain distinct copies when the MTA actually produces distinct deliveries.
+	Copies   []BatchRevisionCopy   `json:"copies"`
+	Draft    DraftVersion          `json:"draft"`
+	Original BatchRevisionOriginal `json:"original"`
+}
+
+// BatchRevisionResponse pass/accept contains one output per external copy in request order. fail/reject and permerror/reject contain no outputs; temperror/tempfail contains no outputs. No partial signature set is released. This is a signing result, not proof of downstream delivery, TLS, or archiving.
+type BatchRevisionResponse struct {
+	ApiVersion APIVersion `json:"api_version"`
+
+	// Binding Caller-owned SHA-256 binding of its immutable transaction and complete delivery plan. Returned unchanged over the authenticated channel. This correlation value is not a verification result or an independent proof of the MTA's queue completeness.
+	Binding     BatchBinding `json:"binding"`
+	Disposition Disposition  `json:"disposition"`
+	Draft       DraftVersion `json:"draft"`
+
+	// OriginalSha256 SHA-256 of the exact identified RFC 5322 message bytes.
+	OriginalSha256 BatchDigest                 `json:"original_sha256"`
+	Outputs        []BatchRevisionOutput       `json:"outputs"`
+	Result         BatchRevisionResponseResult `json:"result"`
+}
+
+// BatchRevisionResponseResult defines model for BatchRevisionResponse.Result.
+type BatchRevisionResponseResult string
+
 // CanonicalUint64 defines model for CanonicalUint64.
 type CanonicalUint64 = string
+
+// CompletedHeaderField Canonical standard base64 of one complete library-generated Message-Instance or DKIM2-Signature field, including any CRLF folding and its terminal CRLF. Protected transport material, never diagnostics.
+type CompletedHeaderField = wire.ProtectedString
 
 // DSNMessageInput defines model for DSNMessageInput.
 type DSNMessageInput struct {
@@ -2018,6 +2257,9 @@ type ProcessMessageJSONRequestBody = ProcessRequest
 // ReviseMessageJSONRequestBody defines body for ReviseMessage for application/json ContentType.
 type ReviseMessageJSONRequestBody = ReviseRequest
 
+// ReviseBatchJSONRequestBody defines body for ReviseBatch for application/json ContentType.
+type ReviseBatchJSONRequestBody = BatchRevisionRequest
+
 // SignMessageJSONRequestBody defines body for SignMessage for application/json ContentType.
 type SignMessageJSONRequestBody = SignRequest
 
@@ -2219,6 +2461,31 @@ type ClientInterface interface {
 	//
 	// Corresponds with POST /v1/revise (the `ReviseMessage` operationId).
 	ReviseMessage(ctx context.Context, body ReviseMessageJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ReviseBatchWithBody Revise the external copies of one complete message fanout.
+	//
+	// The separately authorized trusted MTA supplies the exact original message and incoming envelope, and every actual local and external copy with its current message and prepared outgoing envelope. The daemon verifies the original itself, seals the entire fanout with the reference library, and releases exact completed header fields only for external copies. Every copy has exactly one recipient. Local delivery is independent; failure here never rolls it back. Authenticated modification and fanout restrictions gate every external output. Caller assertions are not verification evidence. All external outputs succeed together or outputs is empty. This endpoint does not originate unsigned messages or deliver mail. The framed JSON limit is 47878316 bytes; the aggregate decoded original and current message limit is 33554432 bytes.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /v1/revise/batch (the `ReviseBatch` operationId).
+	ReviseBatchWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ReviseBatch Revise the external copies of one complete message fanout.
+	//
+	// The separately authorized trusted MTA supplies the exact original message and incoming envelope, and every actual local and external copy with its current message and prepared outgoing envelope. The daemon verifies the original itself, seals the entire fanout with the reference library, and releases exact completed header fields only for external copies. Every copy has exactly one recipient. Local delivery is independent; failure here never rolls it back. Authenticated modification and fanout restrictions gate every external output. Caller assertions are not verification evidence. All external outputs succeed together or outputs is empty. This endpoint does not originate unsigned messages or deliver mail. The framed JSON limit is 47878316 bytes; the aggregate decoded original and current message limit is 33554432 bytes.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /v1/revise/batch (the `ReviseBatch` operationId).
+	ReviseBatch(ctx context.Context, body ReviseBatchJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetBatchRevisionCapabilities Inspect the enabled batch revision contract without signing.
+	//
+	// Uses the batch revision capability. A successful response requires the configured batch signing service and current daemon readiness. It advertises implementation bounds, not availability of a particular tenant profile, remote DNS key, or validity of a future message. Query strings, request bodies, content metadata, expectations, and conditional request headers are not accepted. This route does not perform cryptography, reserve delivery state, or disclose key material.
+	//
+	// Corresponds with GET /v1/revise/batch/capabilities (the `GetBatchRevisionCapabilities` operationId).
+	GetBatchRevisionCapabilities(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// SignMessageWithBody Sign one originator DKIM2 message.
 	//
@@ -2504,6 +2771,61 @@ func (c *Client) ReviseMessageWithBody(ctx context.Context, contentType string, 
 // Corresponds with POST /v1/revise (the `ReviseMessage` operationId).
 func (c *Client) ReviseMessage(ctx context.Context, body ReviseMessageJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewReviseMessageRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ReviseBatchWithBody Revise the external copies of one complete message fanout.
+//
+// The separately authorized trusted MTA supplies the exact original message and incoming envelope, and every actual local and external copy with its current message and prepared outgoing envelope. The daemon verifies the original itself, seals the entire fanout with the reference library, and releases exact completed header fields only for external copies. Every copy has exactly one recipient. Local delivery is independent; failure here never rolls it back. Authenticated modification and fanout restrictions gate every external output. Caller assertions are not verification evidence. All external outputs succeed together or outputs is empty. This endpoint does not originate unsigned messages or deliver mail. The framed JSON limit is 47878316 bytes; the aggregate decoded original and current message limit is 33554432 bytes.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /v1/revise/batch (the `ReviseBatch` operationId).
+func (c *Client) ReviseBatchWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewReviseBatchRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ReviseBatch Revise the external copies of one complete message fanout.
+//
+// The separately authorized trusted MTA supplies the exact original message and incoming envelope, and every actual local and external copy with its current message and prepared outgoing envelope. The daemon verifies the original itself, seals the entire fanout with the reference library, and releases exact completed header fields only for external copies. Every copy has exactly one recipient. Local delivery is independent; failure here never rolls it back. Authenticated modification and fanout restrictions gate every external output. Caller assertions are not verification evidence. All external outputs succeed together or outputs is empty. This endpoint does not originate unsigned messages or deliver mail. The framed JSON limit is 47878316 bytes; the aggregate decoded original and current message limit is 33554432 bytes.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /v1/revise/batch (the `ReviseBatch` operationId).
+func (c *Client) ReviseBatch(ctx context.Context, body ReviseBatchJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewReviseBatchRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetBatchRevisionCapabilities Inspect the enabled batch revision contract without signing.
+//
+// Uses the batch revision capability. A successful response requires the configured batch signing service and current daemon readiness. It advertises implementation bounds, not availability of a particular tenant profile, remote DNS key, or validity of a future message. Query strings, request bodies, content metadata, expectations, and conditional request headers are not accepted. This route does not perform cryptography, reserve delivery state, or disclose key material.
+//
+// Corresponds with GET /v1/revise/batch/capabilities (the `GetBatchRevisionCapabilities` operationId).
+func (c *Client) GetBatchRevisionCapabilities(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetBatchRevisionCapabilitiesRequest(c.Server)
 	if err != nil {
 		return nil, err
 	}
@@ -2887,6 +3209,73 @@ func NewReviseMessageRequestWithBody(server string, contentType string, body io.
 	return req, nil
 }
 
+// NewReviseBatchRequest calls the generic ReviseBatch builder with application/json body
+func NewReviseBatchRequest(server string, body ReviseBatchJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewReviseBatchRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewReviseBatchRequestWithBody constructs an http.Request for the ReviseBatch method, with any body, and a specified content type
+func NewReviseBatchRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/revise/batch")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewGetBatchRevisionCapabilitiesRequest constructs an http.Request for the GetBatchRevisionCapabilities method
+func NewGetBatchRevisionCapabilitiesRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/revise/batch/capabilities")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewSignMessageRequest calls the generic SignMessage builder with application/json body
 func NewSignMessageRequest(server string, body SignMessageJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
@@ -3105,6 +3494,33 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with POST /v1/revise (the `ReviseMessage` operationId).
 	ReviseMessageWithResponse(ctx context.Context, body ReviseMessageJSONRequestBody, reqEditors ...RequestEditorFn) (*ReviseMessageResponse, error)
+
+	// ReviseBatchWithBodyWithResponse Revise the external copies of one complete message fanout.
+	//
+	// The separately authorized trusted MTA supplies the exact original message and incoming envelope, and every actual local and external copy with its current message and prepared outgoing envelope. The daemon verifies the original itself, seals the entire fanout with the reference library, and releases exact completed header fields only for external copies. Every copy has exactly one recipient. Local delivery is independent; failure here never rolls it back. Authenticated modification and fanout restrictions gate every external output. Caller assertions are not verification evidence. All external outputs succeed together or outputs is empty. This endpoint does not originate unsigned messages or deliver mail. The framed JSON limit is 47878316 bytes; the aggregate decoded original and current message limit is 33554432 bytes.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/revise/batch (the `ReviseBatch` operationId).
+	ReviseBatchWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ReviseBatchResponse, error)
+
+	// ReviseBatchWithResponse Revise the external copies of one complete message fanout.
+	//
+	// The separately authorized trusted MTA supplies the exact original message and incoming envelope, and every actual local and external copy with its current message and prepared outgoing envelope. The daemon verifies the original itself, seals the entire fanout with the reference library, and releases exact completed header fields only for external copies. Every copy has exactly one recipient. Local delivery is independent; failure here never rolls it back. Authenticated modification and fanout restrictions gate every external output. Caller assertions are not verification evidence. All external outputs succeed together or outputs is empty. This endpoint does not originate unsigned messages or deliver mail. The framed JSON limit is 47878316 bytes; the aggregate decoded original and current message limit is 33554432 bytes.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/revise/batch (the `ReviseBatch` operationId).
+	ReviseBatchWithResponse(ctx context.Context, body ReviseBatchJSONRequestBody, reqEditors ...RequestEditorFn) (*ReviseBatchResponse, error)
+
+	// GetBatchRevisionCapabilitiesWithResponse Inspect the enabled batch revision contract without signing.
+	//
+	// Uses the batch revision capability. A successful response requires the configured batch signing service and current daemon readiness. It advertises implementation bounds, not availability of a particular tenant profile, remote DNS key, or validity of a future message. Query strings, request bodies, content metadata, expectations, and conditional request headers are not accepted. This route does not perform cryptography, reserve delivery state, or disclose key material.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/revise/batch/capabilities (the `GetBatchRevisionCapabilities` operationId).
+	GetBatchRevisionCapabilitiesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetBatchRevisionCapabilitiesResponse, error)
 
 	// SignMessageWithBodyWithResponse Sign one originator DKIM2 message.
 	//
@@ -4737,6 +5153,346 @@ func (r ReviseMessageResponse) ContentType() string {
 	return ""
 }
 
+// ReviseBatchResponse200Headers the declared response headers of an HTTP 200 response for ReviseBatch
+type ReviseBatchResponse200Headers struct {
+	CacheControl        string
+	Connection          string
+	ContentLength       string
+	Date                *string
+	XContentTypeOptions string
+}
+
+// ReviseBatchResponse400Headers the declared response headers of an HTTP 400 response for ReviseBatch
+type ReviseBatchResponse400Headers struct {
+	CacheControl        string
+	Connection          string
+	ContentLength       string
+	Date                *string
+	XContentTypeOptions string
+}
+
+// ReviseBatchResponse403Headers the declared response headers of an HTTP 403 response for ReviseBatch
+type ReviseBatchResponse403Headers struct {
+	CacheControl        string
+	Connection          string
+	ContentLength       string
+	Date                *string
+	XContentTypeOptions string
+}
+
+// ReviseBatchResponse408Headers the declared response headers of an HTTP 408 response for ReviseBatch
+type ReviseBatchResponse408Headers struct {
+	CacheControl        string
+	Connection          string
+	ContentLength       string
+	Date                *string
+	XContentTypeOptions string
+}
+
+// ReviseBatchResponse413Headers the declared response headers of an HTTP 413 response for ReviseBatch
+type ReviseBatchResponse413Headers struct {
+	CacheControl        string
+	Connection          string
+	ContentLength       string
+	Date                *string
+	XContentTypeOptions string
+}
+
+// ReviseBatchResponse415Headers the declared response headers of an HTTP 415 response for ReviseBatch
+type ReviseBatchResponse415Headers struct {
+	CacheControl        string
+	Connection          string
+	ContentLength       string
+	Date                *string
+	XContentTypeOptions string
+}
+
+// ReviseBatchResponse417Headers the declared response headers of an HTTP 417 response for ReviseBatch
+type ReviseBatchResponse417Headers struct {
+	CacheControl        string
+	Connection          string
+	ContentLength       string
+	Date                *string
+	XContentTypeOptions string
+}
+
+// ReviseBatchResponse500Headers the declared response headers of an HTTP 500 response for ReviseBatch
+type ReviseBatchResponse500Headers struct {
+	CacheControl        string
+	Connection          string
+	ContentLength       string
+	Date                *string
+	XContentTypeOptions string
+}
+
+// ReviseBatchResponse503Headers the declared response headers of an HTTP 503 response for ReviseBatch
+type ReviseBatchResponse503Headers struct {
+	CacheControl        string
+	Connection          string
+	ContentLength       string
+	Date                *string
+	RetryAfter          string
+	XContentTypeOptions string
+}
+
+type ReviseBatchResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *BatchRevisionResponse
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *BadRequest
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON408 the response for an HTTP 408 `application/json` response
+	JSON408 *RequestTimeout
+	// JSON413 the response for an HTTP 413 `application/json` response
+	JSON413 *RequestTooLarge
+	// JSON415 the response for an HTTP 415 `application/json` response
+	JSON415 *UnsupportedMediaType
+	// JSON417 the response for an HTTP 417 `application/json` response
+	JSON417 *ExpectationFailed
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *InternalError
+	// JSON503 the response for an HTTP 503 `application/json` response
+	JSON503 *ServiceUnavailable
+	// Headers200 the parsed response headers for an HTTP 200 response
+	Headers200 *ReviseBatchResponse200Headers
+	// Headers400 the parsed response headers for an HTTP 400 response
+	Headers400 *ReviseBatchResponse400Headers
+	// Headers403 the parsed response headers for an HTTP 403 response
+	Headers403 *ReviseBatchResponse403Headers
+	// Headers408 the parsed response headers for an HTTP 408 response
+	Headers408 *ReviseBatchResponse408Headers
+	// Headers413 the parsed response headers for an HTTP 413 response
+	Headers413 *ReviseBatchResponse413Headers
+	// Headers415 the parsed response headers for an HTTP 415 response
+	Headers415 *ReviseBatchResponse415Headers
+	// Headers417 the parsed response headers for an HTTP 417 response
+	Headers417 *ReviseBatchResponse417Headers
+	// Headers500 the parsed response headers for an HTTP 500 response
+	Headers500 *ReviseBatchResponse500Headers
+	// Headers503 the parsed response headers for an HTTP 503 response
+	Headers503 *ReviseBatchResponse503Headers
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ReviseBatchResponse) GetJSON200() *BatchRevisionResponse {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r ReviseBatchResponse) GetJSON400() *BadRequest {
+	return r.JSON400
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r ReviseBatchResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON408 returns the response for an HTTP 408 `application/json` response
+func (r ReviseBatchResponse) GetJSON408() *RequestTimeout {
+	return r.JSON408
+}
+
+// GetJSON413 returns the response for an HTTP 413 `application/json` response
+func (r ReviseBatchResponse) GetJSON413() *RequestTooLarge {
+	return r.JSON413
+}
+
+// GetJSON415 returns the response for an HTTP 415 `application/json` response
+func (r ReviseBatchResponse) GetJSON415() *UnsupportedMediaType {
+	return r.JSON415
+}
+
+// GetJSON417 returns the response for an HTTP 417 `application/json` response
+func (r ReviseBatchResponse) GetJSON417() *ExpectationFailed {
+	return r.JSON417
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r ReviseBatchResponse) GetJSON500() *InternalError {
+	return r.JSON500
+}
+
+// GetJSON503 returns the response for an HTTP 503 `application/json` response
+func (r ReviseBatchResponse) GetJSON503() *ServiceUnavailable {
+	return r.JSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r ReviseBatchResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ReviseBatchResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ReviseBatchResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ReviseBatchResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// GetBatchRevisionCapabilitiesResponse200Headers the declared response headers of an HTTP 200 response for GetBatchRevisionCapabilities
+type GetBatchRevisionCapabilitiesResponse200Headers struct {
+	CacheControl        string
+	Connection          string
+	ContentLength       string
+	Date                *string
+	XContentTypeOptions string
+}
+
+// GetBatchRevisionCapabilitiesResponse400Headers the declared response headers of an HTTP 400 response for GetBatchRevisionCapabilities
+type GetBatchRevisionCapabilitiesResponse400Headers struct {
+	CacheControl        string
+	Connection          string
+	ContentLength       string
+	Date                *string
+	XContentTypeOptions string
+}
+
+// GetBatchRevisionCapabilitiesResponse403Headers the declared response headers of an HTTP 403 response for GetBatchRevisionCapabilities
+type GetBatchRevisionCapabilitiesResponse403Headers struct {
+	CacheControl        string
+	Connection          string
+	ContentLength       string
+	Date                *string
+	XContentTypeOptions string
+}
+
+// GetBatchRevisionCapabilitiesResponse417Headers the declared response headers of an HTTP 417 response for GetBatchRevisionCapabilities
+type GetBatchRevisionCapabilitiesResponse417Headers struct {
+	CacheControl        string
+	Connection          string
+	ContentLength       string
+	Date                *string
+	XContentTypeOptions string
+}
+
+// GetBatchRevisionCapabilitiesResponse500Headers the declared response headers of an HTTP 500 response for GetBatchRevisionCapabilities
+type GetBatchRevisionCapabilitiesResponse500Headers struct {
+	CacheControl        string
+	Connection          string
+	ContentLength       string
+	Date                *string
+	XContentTypeOptions string
+}
+
+// GetBatchRevisionCapabilitiesResponse503Headers the declared response headers of an HTTP 503 response for GetBatchRevisionCapabilities
+type GetBatchRevisionCapabilitiesResponse503Headers struct {
+	CacheControl        string
+	Connection          string
+	ContentLength       string
+	Date                *string
+	RetryAfter          string
+	XContentTypeOptions string
+}
+
+type GetBatchRevisionCapabilitiesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *BatchRevisionCapabilities
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *BadRequest
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON417 the response for an HTTP 417 `application/json` response
+	JSON417 *ExpectationFailed
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *InternalError
+	// JSON503 the response for an HTTP 503 `application/json` response
+	JSON503 *ServiceUnavailable
+	// Headers200 the parsed response headers for an HTTP 200 response
+	Headers200 *GetBatchRevisionCapabilitiesResponse200Headers
+	// Headers400 the parsed response headers for an HTTP 400 response
+	Headers400 *GetBatchRevisionCapabilitiesResponse400Headers
+	// Headers403 the parsed response headers for an HTTP 403 response
+	Headers403 *GetBatchRevisionCapabilitiesResponse403Headers
+	// Headers417 the parsed response headers for an HTTP 417 response
+	Headers417 *GetBatchRevisionCapabilitiesResponse417Headers
+	// Headers500 the parsed response headers for an HTTP 500 response
+	Headers500 *GetBatchRevisionCapabilitiesResponse500Headers
+	// Headers503 the parsed response headers for an HTTP 503 response
+	Headers503 *GetBatchRevisionCapabilitiesResponse503Headers
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetBatchRevisionCapabilitiesResponse) GetJSON200() *BatchRevisionCapabilities {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r GetBatchRevisionCapabilitiesResponse) GetJSON400() *BadRequest {
+	return r.JSON400
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r GetBatchRevisionCapabilitiesResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON417 returns the response for an HTTP 417 `application/json` response
+func (r GetBatchRevisionCapabilitiesResponse) GetJSON417() *ExpectationFailed {
+	return r.JSON417
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r GetBatchRevisionCapabilitiesResponse) GetJSON500() *InternalError {
+	return r.JSON500
+}
+
+// GetJSON503 returns the response for an HTTP 503 `application/json` response
+func (r GetBatchRevisionCapabilitiesResponse) GetJSON503() *ServiceUnavailable {
+	return r.JSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r GetBatchRevisionCapabilitiesResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetBatchRevisionCapabilitiesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetBatchRevisionCapabilitiesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetBatchRevisionCapabilitiesResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 // SignMessageResponse200Headers the declared response headers of an HTTP 200 response for SignMessage
 type SignMessageResponse200Headers struct {
 	CacheControl        string
@@ -5166,6 +5922,51 @@ func (c *ClientWithResponses) ReviseMessageWithResponse(ctx context.Context, bod
 		return nil, err
 	}
 	return ParseReviseMessageResponse(rsp)
+}
+
+// ReviseBatchWithBodyWithResponse Revise the external copies of one complete message fanout.
+//
+// The separately authorized trusted MTA supplies the exact original message and incoming envelope, and every actual local and external copy with its current message and prepared outgoing envelope. The daemon verifies the original itself, seals the entire fanout with the reference library, and releases exact completed header fields only for external copies. Every copy has exactly one recipient. Local delivery is independent; failure here never rolls it back. Authenticated modification and fanout restrictions gate every external output. Caller assertions are not verification evidence. All external outputs succeed together or outputs is empty. This endpoint does not originate unsigned messages or deliver mail. The framed JSON limit is 47878316 bytes; the aggregate decoded original and current message limit is 33554432 bytes.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/revise/batch (the `ReviseBatch` operationId).
+func (c *ClientWithResponses) ReviseBatchWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ReviseBatchResponse, error) {
+	rsp, err := c.ReviseBatchWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseReviseBatchResponse(rsp)
+}
+
+// ReviseBatchWithResponse Revise the external copies of one complete message fanout.
+//
+// The separately authorized trusted MTA supplies the exact original message and incoming envelope, and every actual local and external copy with its current message and prepared outgoing envelope. The daemon verifies the original itself, seals the entire fanout with the reference library, and releases exact completed header fields only for external copies. Every copy has exactly one recipient. Local delivery is independent; failure here never rolls it back. Authenticated modification and fanout restrictions gate every external output. Caller assertions are not verification evidence. All external outputs succeed together or outputs is empty. This endpoint does not originate unsigned messages or deliver mail. The framed JSON limit is 47878316 bytes; the aggregate decoded original and current message limit is 33554432 bytes.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/revise/batch (the `ReviseBatch` operationId).
+func (c *ClientWithResponses) ReviseBatchWithResponse(ctx context.Context, body ReviseBatchJSONRequestBody, reqEditors ...RequestEditorFn) (*ReviseBatchResponse, error) {
+	rsp, err := c.ReviseBatch(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseReviseBatchResponse(rsp)
+}
+
+// GetBatchRevisionCapabilitiesWithResponse Inspect the enabled batch revision contract without signing.
+//
+// Uses the batch revision capability. A successful response requires the configured batch signing service and current daemon readiness. It advertises implementation bounds, not availability of a particular tenant profile, remote DNS key, or validity of a future message. Query strings, request bodies, content metadata, expectations, and conditional request headers are not accepted. This route does not perform cryptography, reserve delivery state, or disclose key material.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/revise/batch/capabilities (the `GetBatchRevisionCapabilities` operationId).
+func (c *ClientWithResponses) GetBatchRevisionCapabilitiesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetBatchRevisionCapabilitiesResponse, error) {
+	rsp, err := c.GetBatchRevisionCapabilities(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetBatchRevisionCapabilitiesResponse(rsp)
 }
 
 // SignMessageWithBodyWithResponse Sign one originator DKIM2 message.
@@ -8754,6 +9555,739 @@ func ParseReviseMessageResponse(rsp *http.Response) (*ReviseMessageResponse, err
 		response.Headers500 = &headers
 	case rsp.StatusCode == 503:
 		var headers ReviseMessageResponse503Headers
+		if values := rsp.Header.Values("Cache-Control"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Cache-Control", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.CacheControl = value
+		}
+		if values := rsp.Header.Values("Connection"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Connection", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.Connection = value
+		}
+		if values := rsp.Header.Values("Content-Length"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Content-Length", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.ContentLength = value
+		}
+		if values := rsp.Header.Values("Date"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Date", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.Date = &value
+		}
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = value
+		}
+		if values := rsp.Header.Values("X-Content-Type-Options"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "X-Content-Type-Options", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.XContentTypeOptions = value
+		}
+		response.Headers503 = &headers
+	}
+
+	return response, nil
+}
+
+// ParseReviseBatchResponse parses an HTTP response from a ReviseBatchWithResponse call
+func ParseReviseBatchResponse(rsp *http.Response) (*ReviseBatchResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ReviseBatchResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest BatchRevisionResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 408:
+		var dest RequestTimeout
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON408 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest RequestTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 417:
+		var dest ExpectationFailed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON417 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 200:
+		var headers ReviseBatchResponse200Headers
+		if values := rsp.Header.Values("Cache-Control"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Cache-Control", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.CacheControl = value
+		}
+		if values := rsp.Header.Values("Connection"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Connection", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.Connection = value
+		}
+		if values := rsp.Header.Values("Content-Length"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Content-Length", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.ContentLength = value
+		}
+		if values := rsp.Header.Values("Date"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Date", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.Date = &value
+		}
+		if values := rsp.Header.Values("X-Content-Type-Options"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "X-Content-Type-Options", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.XContentTypeOptions = value
+		}
+		response.Headers200 = &headers
+	case rsp.StatusCode == 400:
+		var headers ReviseBatchResponse400Headers
+		if values := rsp.Header.Values("Cache-Control"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Cache-Control", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.CacheControl = value
+		}
+		if values := rsp.Header.Values("Connection"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Connection", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.Connection = value
+		}
+		if values := rsp.Header.Values("Content-Length"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Content-Length", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.ContentLength = value
+		}
+		if values := rsp.Header.Values("Date"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Date", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.Date = &value
+		}
+		if values := rsp.Header.Values("X-Content-Type-Options"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "X-Content-Type-Options", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.XContentTypeOptions = value
+		}
+		response.Headers400 = &headers
+	case rsp.StatusCode == 403:
+		var headers ReviseBatchResponse403Headers
+		if values := rsp.Header.Values("Cache-Control"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Cache-Control", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.CacheControl = value
+		}
+		if values := rsp.Header.Values("Connection"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Connection", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.Connection = value
+		}
+		if values := rsp.Header.Values("Content-Length"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Content-Length", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.ContentLength = value
+		}
+		if values := rsp.Header.Values("Date"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Date", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.Date = &value
+		}
+		if values := rsp.Header.Values("X-Content-Type-Options"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "X-Content-Type-Options", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.XContentTypeOptions = value
+		}
+		response.Headers403 = &headers
+	case rsp.StatusCode == 408:
+		var headers ReviseBatchResponse408Headers
+		if values := rsp.Header.Values("Cache-Control"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Cache-Control", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.CacheControl = value
+		}
+		if values := rsp.Header.Values("Connection"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Connection", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.Connection = value
+		}
+		if values := rsp.Header.Values("Content-Length"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Content-Length", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.ContentLength = value
+		}
+		if values := rsp.Header.Values("Date"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Date", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.Date = &value
+		}
+		if values := rsp.Header.Values("X-Content-Type-Options"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "X-Content-Type-Options", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.XContentTypeOptions = value
+		}
+		response.Headers408 = &headers
+	case rsp.StatusCode == 413:
+		var headers ReviseBatchResponse413Headers
+		if values := rsp.Header.Values("Cache-Control"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Cache-Control", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.CacheControl = value
+		}
+		if values := rsp.Header.Values("Connection"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Connection", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.Connection = value
+		}
+		if values := rsp.Header.Values("Content-Length"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Content-Length", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.ContentLength = value
+		}
+		if values := rsp.Header.Values("Date"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Date", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.Date = &value
+		}
+		if values := rsp.Header.Values("X-Content-Type-Options"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "X-Content-Type-Options", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.XContentTypeOptions = value
+		}
+		response.Headers413 = &headers
+	case rsp.StatusCode == 415:
+		var headers ReviseBatchResponse415Headers
+		if values := rsp.Header.Values("Cache-Control"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Cache-Control", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.CacheControl = value
+		}
+		if values := rsp.Header.Values("Connection"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Connection", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.Connection = value
+		}
+		if values := rsp.Header.Values("Content-Length"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Content-Length", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.ContentLength = value
+		}
+		if values := rsp.Header.Values("Date"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Date", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.Date = &value
+		}
+		if values := rsp.Header.Values("X-Content-Type-Options"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "X-Content-Type-Options", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.XContentTypeOptions = value
+		}
+		response.Headers415 = &headers
+	case rsp.StatusCode == 417:
+		var headers ReviseBatchResponse417Headers
+		if values := rsp.Header.Values("Cache-Control"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Cache-Control", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.CacheControl = value
+		}
+		if values := rsp.Header.Values("Connection"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Connection", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.Connection = value
+		}
+		if values := rsp.Header.Values("Content-Length"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Content-Length", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.ContentLength = value
+		}
+		if values := rsp.Header.Values("Date"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Date", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.Date = &value
+		}
+		if values := rsp.Header.Values("X-Content-Type-Options"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "X-Content-Type-Options", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.XContentTypeOptions = value
+		}
+		response.Headers417 = &headers
+	case rsp.StatusCode == 500:
+		var headers ReviseBatchResponse500Headers
+		if values := rsp.Header.Values("Cache-Control"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Cache-Control", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.CacheControl = value
+		}
+		if values := rsp.Header.Values("Connection"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Connection", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.Connection = value
+		}
+		if values := rsp.Header.Values("Content-Length"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Content-Length", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.ContentLength = value
+		}
+		if values := rsp.Header.Values("Date"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Date", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.Date = &value
+		}
+		if values := rsp.Header.Values("X-Content-Type-Options"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "X-Content-Type-Options", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.XContentTypeOptions = value
+		}
+		response.Headers500 = &headers
+	case rsp.StatusCode == 503:
+		var headers ReviseBatchResponse503Headers
+		if values := rsp.Header.Values("Cache-Control"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Cache-Control", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.CacheControl = value
+		}
+		if values := rsp.Header.Values("Connection"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Connection", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.Connection = value
+		}
+		if values := rsp.Header.Values("Content-Length"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Content-Length", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.ContentLength = value
+		}
+		if values := rsp.Header.Values("Date"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Date", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.Date = &value
+		}
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = value
+		}
+		if values := rsp.Header.Values("X-Content-Type-Options"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "X-Content-Type-Options", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.XContentTypeOptions = value
+		}
+		response.Headers503 = &headers
+	}
+
+	return response, nil
+}
+
+// ParseGetBatchRevisionCapabilitiesResponse parses an HTTP response from a GetBatchRevisionCapabilitiesWithResponse call
+func ParseGetBatchRevisionCapabilitiesResponse(rsp *http.Response) (*GetBatchRevisionCapabilitiesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetBatchRevisionCapabilitiesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest BatchRevisionCapabilities
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 417:
+		var dest ExpectationFailed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON417 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 200:
+		var headers GetBatchRevisionCapabilitiesResponse200Headers
+		if values := rsp.Header.Values("Cache-Control"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Cache-Control", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.CacheControl = value
+		}
+		if values := rsp.Header.Values("Connection"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Connection", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.Connection = value
+		}
+		if values := rsp.Header.Values("Content-Length"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Content-Length", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.ContentLength = value
+		}
+		if values := rsp.Header.Values("Date"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Date", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.Date = &value
+		}
+		if values := rsp.Header.Values("X-Content-Type-Options"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "X-Content-Type-Options", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.XContentTypeOptions = value
+		}
+		response.Headers200 = &headers
+	case rsp.StatusCode == 400:
+		var headers GetBatchRevisionCapabilitiesResponse400Headers
+		if values := rsp.Header.Values("Cache-Control"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Cache-Control", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.CacheControl = value
+		}
+		if values := rsp.Header.Values("Connection"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Connection", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.Connection = value
+		}
+		if values := rsp.Header.Values("Content-Length"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Content-Length", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.ContentLength = value
+		}
+		if values := rsp.Header.Values("Date"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Date", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.Date = &value
+		}
+		if values := rsp.Header.Values("X-Content-Type-Options"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "X-Content-Type-Options", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.XContentTypeOptions = value
+		}
+		response.Headers400 = &headers
+	case rsp.StatusCode == 403:
+		var headers GetBatchRevisionCapabilitiesResponse403Headers
+		if values := rsp.Header.Values("Cache-Control"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Cache-Control", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.CacheControl = value
+		}
+		if values := rsp.Header.Values("Connection"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Connection", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.Connection = value
+		}
+		if values := rsp.Header.Values("Content-Length"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Content-Length", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.ContentLength = value
+		}
+		if values := rsp.Header.Values("Date"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Date", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.Date = &value
+		}
+		if values := rsp.Header.Values("X-Content-Type-Options"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "X-Content-Type-Options", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.XContentTypeOptions = value
+		}
+		response.Headers403 = &headers
+	case rsp.StatusCode == 417:
+		var headers GetBatchRevisionCapabilitiesResponse417Headers
+		if values := rsp.Header.Values("Cache-Control"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Cache-Control", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.CacheControl = value
+		}
+		if values := rsp.Header.Values("Connection"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Connection", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.Connection = value
+		}
+		if values := rsp.Header.Values("Content-Length"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Content-Length", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.ContentLength = value
+		}
+		if values := rsp.Header.Values("Date"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Date", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.Date = &value
+		}
+		if values := rsp.Header.Values("X-Content-Type-Options"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "X-Content-Type-Options", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.XContentTypeOptions = value
+		}
+		response.Headers417 = &headers
+	case rsp.StatusCode == 500:
+		var headers GetBatchRevisionCapabilitiesResponse500Headers
+		if values := rsp.Header.Values("Cache-Control"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Cache-Control", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.CacheControl = value
+		}
+		if values := rsp.Header.Values("Connection"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Connection", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.Connection = value
+		}
+		if values := rsp.Header.Values("Content-Length"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Content-Length", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.ContentLength = value
+		}
+		if values := rsp.Header.Values("Date"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Date", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.Date = &value
+		}
+		if values := rsp.Header.Values("X-Content-Type-Options"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "X-Content-Type-Options", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.XContentTypeOptions = value
+		}
+		response.Headers500 = &headers
+	case rsp.StatusCode == 503:
+		var headers GetBatchRevisionCapabilitiesResponse503Headers
 		if values := rsp.Header.Values("Cache-Control"); len(values) > 0 {
 			var value string
 			if err := runtime.BindStyledParameterWithOptions("simple", "Cache-Control", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {

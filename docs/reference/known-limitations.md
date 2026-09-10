@@ -42,6 +42,15 @@ certification, or universal interoperability claim.
   presents both envelopes explicitly, as the Postfix propagation qualification
   lane does; the Milter mode is not extended because no Milter callback can
   attest the inherited envelope.
+- The complete-fanout batch API requires explicit original and current byte
+  evidence from an authorized MTA. It supports 32 actual local/external copies
+  and 32 MiB aggregate decoded message bytes, one optional same-control
+  intermediate hop per external copy, and copy-only reconstruction recipes.
+  These limits can be stricter than an MTA's message size. Ordinary outgoing
+  null-sender revision remains unsupported; the separately verified DSN
+  propagation path is the available null-sender operation. A batch signature
+  result does not prove SMTP delivery, downstream TLS, archiving or queue
+  completeness. See [the batch contract](../specs/implementation/batch-revision.md).
 - Propagation is refused as `unsupported_chain` when the previous hop is
   itself an `nd=` signature without `mf=`, or when a member of the local hop
   run does not verify. Reconstructing an earlier system's custody scheme is

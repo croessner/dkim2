@@ -307,11 +307,11 @@ func (c ServerConfig) DSNSignEnabled() bool {
 }
 
 // SigningRouteEnabled reports whether any capability authorizes a route that
-// invokes the signing application service directly: /v1/sign, /v1/revise, or
-// /v1/dsn/sign. Propagation is deliberately excluded: it owns a separate
+// invokes the signing application service directly: sign, revise, batch revise,
+// or DSN sign. Propagation is deliberately excluded: it owns a separate
 // capability and a separate service seam.
 func (c ServerConfig) SigningRouteEnabled() bool {
-	return c.SignEnabled() || c.ReviseEnabled() || c.DSNSignEnabled()
+	return c.SignEnabled() || c.ReviseEnabled() || c.BatchReviseEnabled() || c.DSNSignEnabled()
 }
 
 // AnyRouteCapability reports whether any route capability beyond the process

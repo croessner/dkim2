@@ -587,17 +587,18 @@ adapter answers `550` or, under its single policy knob
 
 ## 4. Capabilities and trust boundaries
 
-### Five route capabilities
+### Separate route capabilities
 
 Every daemon route that does work is authenticated by a 32-byte protected
 capability file that belongs to the daemon's current protected generation.
-At v0.1.27 there are five, and they must all be distinct:
+Every enabled route capability must be distinct:
 
 | Capability | Configuration path | Header | Routes | Holder |
 | --- | --- | --- | --- | --- |
 | process | `server.capability_file` | `X-DKIM2-Capability` | `/v1/process` | inbound Milter, Rspamd module, `dkim2ctl` |
 | sign | `server.sign_capability_file` | `X-DKIM2-Capability` | `/v1/sign` | originator Milter |
 | revise | `server.revise_capability_file` | `X-DKIM2-Capability` | `/v1/revise` | transit Milter or a two-envelope revise client |
+| batch revise | `server.batch_revise_capability_file` | `X-DKIM2-Batch-Revise-Capability` | `/v1/revise/batch`, `/v1/revise/batch/capabilities` | trusted MTA with exact original/current bytes and the complete actual fanout |
 | DSN sign | `server.dsn_sign_capability_file` | `X-DKIM2-DSN-Sign-Capability` | `/v1/dsn/sign` | `postfix_dsn` Milter only |
 | DSN propagate | `server.dsn_propagate_capability_file` | `X-DKIM2-DSN-Propagate-Capability` | `/v1/dsn/propagate`, `/v1/dsn/propagate/commit` | `dkim2-dsn-propagator` only |
 

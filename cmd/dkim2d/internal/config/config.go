@@ -139,6 +139,7 @@ type serverState struct {
 	capabilityFile             string
 	signCapabilityFile         string
 	reviseCapabilityFile       string
+	batchReviseCapabilityFile  string
 	dsnSignCapabilityFile      string
 	dsnPropagateCapabilityFile string
 	readHeaderTimeout          time.Duration
@@ -409,6 +410,9 @@ func validateSnapshot(values map[string]rawValue, presence map[string]Presence) 
 		}
 		if server.reviseCapabilityFile != "" {
 			protectedPaths = append(protectedPaths, server.reviseCapabilityFile)
+		}
+		if server.batchReviseCapabilityFile != "" {
+			protectedPaths = append(protectedPaths, server.batchReviseCapabilityFile)
 		}
 		if server.dsnSignCapabilityFile != "" {
 			protectedPaths = append(protectedPaths, server.dsnSignCapabilityFile)
@@ -691,6 +695,7 @@ func parseServer(values map[string]rawValue) (serverState, error) {
 	capability := text(values, pathServerCapability)
 	signCapability := text(values, pathServerSignCapability)
 	reviseCapability := text(values, pathServerReviseCapability)
+	batchReviseCapability := text(values, pathServerBatchReviseCapability)
 	dsnSignCapability := text(values, pathServerDSNSignCapability)
 	dsnPropagateCapability := text(values, pathServerDSNPropagateCapability)
 	privateNetwork := listenerMode == valueListenerPrivate
@@ -713,6 +718,7 @@ func parseServer(values map[string]rawValue) (serverState, error) {
 		capabilityFile:             capability,
 		signCapabilityFile:         signCapability,
 		reviseCapabilityFile:       reviseCapability,
+		batchReviseCapabilityFile:  batchReviseCapability,
 		dsnSignCapabilityFile:      dsnSignCapability,
 		dsnPropagateCapabilityFile: dsnPropagateCapability,
 		readHeaderTimeout:          readHeader,
@@ -780,6 +786,7 @@ func parseSigning(
 			pathSigningAllowGroup,
 			pathServerSignCapability,
 			pathServerReviseCapability,
+			pathServerBatchReviseCapability,
 			pathServerDSNSignCapability,
 			pathServerDSNPropagateCapability,
 		} {
@@ -854,9 +861,10 @@ func parseSigning(
 	}
 	signPresent := presence[pathServerSignCapability].Explicit()
 	revisePresent := presence[pathServerReviseCapability].Explicit()
+	batchRevisePresent := presence[pathServerBatchReviseCapability].Explicit()
 	dsnSignPresent := presence[pathServerDSNSignCapability].Explicit()
 	propagatePresent := presence[pathServerDSNPropagateCapability].Explicit()
-	anyRouteCapability := signPresent || revisePresent || dsnSignPresent || propagatePresent
+	anyRouteCapability := signPresent || revisePresent || batchRevisePresent || dsnSignPresent || propagatePresent
 	if !signingDatasourceConsumed(anyRouteCapability, defaultTenant) {
 		return signingState{}, newError(CodeInvalidMatrix)
 	}
@@ -892,6 +900,9 @@ func parseSigning(
 	}
 	if revisePresent {
 		paths = append(paths, server.reviseCapabilityFile)
+	}
+	if batchRevisePresent {
+		paths = append(paths, server.batchReviseCapabilityFile)
 	}
 	if dsnSignPresent {
 		paths = append(paths, server.dsnSignCapabilityFile)

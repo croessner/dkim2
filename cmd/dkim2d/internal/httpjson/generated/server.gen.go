@@ -177,6 +177,123 @@ func (e AuthenticationResultPrimaryReason) Valid() bool {
 	}
 }
 
+// Defines values for BatchRevisionCapabilitiesControlledVia.
+const (
+	BatchControlledViaSupported BatchRevisionCapabilitiesControlledVia = true
+)
+
+// Valid indicates whether the value is a known member of the BatchRevisionCapabilitiesControlledVia enum.
+func (e BatchRevisionCapabilitiesControlledVia) Valid() bool {
+	switch e {
+	case BatchControlledViaSupported:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for BatchRevisionCapabilitiesExternalNullSender.
+const (
+	BatchExternalNullSenderUnsupported BatchRevisionCapabilitiesExternalNullSender = false
+)
+
+// Valid indicates whether the value is a known member of the BatchRevisionCapabilitiesExternalNullSender enum.
+func (e BatchRevisionCapabilitiesExternalNullSender) Valid() bool {
+	switch e {
+	case BatchExternalNullSenderUnsupported:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for BatchRevisionCapabilitiesFullFanout.
+const (
+	BatchFullFanoutSupported BatchRevisionCapabilitiesFullFanout = true
+)
+
+// Valid indicates whether the value is a known member of the BatchRevisionCapabilitiesFullFanout enum.
+func (e BatchRevisionCapabilitiesFullFanout) Valid() bool {
+	switch e {
+	case BatchFullFanoutSupported:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for BatchRevisionCapabilitiesOriginalCurrent.
+const (
+	BatchOriginalCurrentSupported BatchRevisionCapabilitiesOriginalCurrent = true
+)
+
+// Valid indicates whether the value is a known member of the BatchRevisionCapabilitiesOriginalCurrent enum.
+func (e BatchRevisionCapabilitiesOriginalCurrent) Valid() bool {
+	switch e {
+	case BatchOriginalCurrentSupported:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for BatchRevisionCapabilitiesProtocol.
+const (
+	BatchRevisionV1 BatchRevisionCapabilitiesProtocol = "batch_revision_v1"
+)
+
+// Valid indicates whether the value is a known member of the BatchRevisionCapabilitiesProtocol enum.
+func (e BatchRevisionCapabilitiesProtocol) Valid() bool {
+	switch e {
+	case BatchRevisionV1:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for BatchRevisionCopyDelivery.
+const (
+	External BatchRevisionCopyDelivery = "external"
+	Local    BatchRevisionCopyDelivery = "local"
+)
+
+// Valid indicates whether the value is a known member of the BatchRevisionCopyDelivery enum.
+func (e BatchRevisionCopyDelivery) Valid() bool {
+	switch e {
+	case External:
+		return true
+	case Local:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for BatchRevisionResponseResult.
+const (
+	BatchRevisionResponseResultFail      BatchRevisionResponseResult = "fail"
+	BatchRevisionResponseResultPass      BatchRevisionResponseResult = "pass"
+	BatchRevisionResponseResultPermerror BatchRevisionResponseResult = "permerror"
+	BatchRevisionResponseResultTemperror BatchRevisionResponseResult = "temperror"
+)
+
+// Valid indicates whether the value is a known member of the BatchRevisionResponseResult enum.
+func (e BatchRevisionResponseResult) Valid() bool {
+	switch e {
+	case BatchRevisionResponseResultFail:
+		return true
+	case BatchRevisionResponseResultPass:
+		return true
+	case BatchRevisionResponseResultPermerror:
+		return true
+	case BatchRevisionResponseResultTemperror:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for DSNPropagateCommitResponseState.
 const (
 	PropagationStateCommitted DSNPropagateCommitResponseState = "committed"
@@ -1465,8 +1582,130 @@ type AuthenticationResult struct {
 // AuthenticationResultPrimaryReason defines model for AuthenticationResult.PrimaryReason.
 type AuthenticationResultPrimaryReason string
 
+// BatchBinding Caller-owned SHA-256 binding of its immutable transaction and complete delivery plan. Returned unchanged over the authenticated channel. This correlation value is not a verification result or an independent proof of the MTA's queue completeness.
+type BatchBinding = string
+
+// BatchCopyID Opaque transaction-local identity without an address or secret.
+type BatchCopyID = string
+
+// BatchDigest SHA-256 of the exact identified RFC 5322 message bytes.
+type BatchDigest = string
+
+// BatchRevisionCapabilities defines model for BatchRevisionCapabilities.
+type BatchRevisionCapabilities struct {
+	ApiVersion    APIVersion                             `json:"api_version"`
+	ControlledVia BatchRevisionCapabilitiesControlledVia `json:"controlled_via"`
+	Draft         DraftVersion                           `json:"draft"`
+
+	// ExternalNullSender Ordinary revision cannot create a null reverse-path. Valid signed delivery-status messages use the separately authorized received-DSN propagation API, including its verification and replay contract.
+	ExternalNullSender       BatchRevisionCapabilitiesExternalNullSender `json:"external_null_sender"`
+	FullFanout               BatchRevisionCapabilitiesFullFanout         `json:"full_fanout"`
+	MaxAggregateMessageBytes int64                                       `json:"max_aggregate_message_bytes"`
+	MaxControlledHops        int                                         `json:"max_controlled_hops"`
+	MaxCopies                int                                         `json:"max_copies"`
+	MaxHeaderFields          int                                         `json:"max_header_fields"`
+	MaxRequestBytes          int64                                       `json:"max_request_bytes"`
+	MaxResponseBytes         int64                                       `json:"max_response_bytes"`
+	OriginalCurrent          BatchRevisionCapabilitiesOriginalCurrent    `json:"original_current"`
+	Protocol                 BatchRevisionCapabilitiesProtocol           `json:"protocol"`
+}
+
+// BatchRevisionCapabilitiesControlledVia defines model for BatchRevisionCapabilities.ControlledVia.
+type BatchRevisionCapabilitiesControlledVia bool
+
+// BatchRevisionCapabilitiesExternalNullSender Ordinary revision cannot create a null reverse-path. Valid signed delivery-status messages use the separately authorized received-DSN propagation API, including its verification and replay contract.
+type BatchRevisionCapabilitiesExternalNullSender bool
+
+// BatchRevisionCapabilitiesFullFanout defines model for BatchRevisionCapabilities.FullFanout.
+type BatchRevisionCapabilitiesFullFanout bool
+
+// BatchRevisionCapabilitiesOriginalCurrent defines model for BatchRevisionCapabilities.OriginalCurrent.
+type BatchRevisionCapabilitiesOriginalCurrent bool
+
+// BatchRevisionCapabilitiesProtocol defines model for BatchRevisionCapabilities.Protocol.
+type BatchRevisionCapabilitiesProtocol string
+
+// BatchRevisionCopy Exact current bytes and prepared outgoing SMTP paths, including an MTA-prepared SRS reverse path if applicable. The original and local reverse paths may be <>; the reference library refuses ordinary external revision with <>. Valid received DSNs use the independent authenticated propagation operation. The daemon never invents or rewrites SRS. Context is required for external copies and forbidden for local copies. Message fidelity is explicit; current local bytes may use lmtp_delivered_crlf, while external bytes must be an admitted signing fidelity. Existing protocol fields may not be removed, changed, or fabricated after verification.
+type BatchRevisionCopy struct {
+	Context  *SigningContext           `json:"context,omitempty"`
+	Delivery BatchRevisionCopyDelivery `json:"delivery"`
+
+	// Id Opaque transaction-local identity without an address or secret.
+	Id      BatchCopyID  `json:"id"`
+	Message MessageInput `json:"message"`
+	Smtp    SMTPInput    `json:"smtp"`
+
+	// Via Optional single controlled intermediate hop for an external copy, implementing Draft 06 section 9.3 with ordinary mf/rt signatures. The MTA supplies the exact non-null intermediate reverse path and one controlled intermediate recipient. Both signing contexts must have the same tenant; exact transit profiles for both domains and local authority over the intermediate recipient domain are required. The initial fanout still counts every actual local and external copy. Intermediate and final signatures are released only together, in one output. No real SMTP transfer is claimed for this imaginary hop. Not permitted on local copies. No free domain-alignment exception.
+	Via *BatchRevisionHop `json:"via,omitempty"`
+}
+
+// BatchRevisionCopyDelivery defines model for BatchRevisionCopy.Delivery.
+type BatchRevisionCopyDelivery string
+
+// BatchRevisionHop Optional single controlled intermediate hop for an external copy, implementing Draft 06 section 9.3 with ordinary mf/rt signatures. The MTA supplies the exact non-null intermediate reverse path and one controlled intermediate recipient. Both signing contexts must have the same tenant; exact transit profiles for both domains and local authority over the intermediate recipient domain are required. The initial fanout still counts every actual local and external copy. Intermediate and final signatures are released only together, in one output. No real SMTP transfer is claimed for this imaginary hop. Not permitted on local copies. No free domain-alignment exception.
+type BatchRevisionHop struct {
+	Context SigningContext `json:"context"`
+	Smtp    SMTPInput      `json:"smtp"`
+}
+
+// BatchRevisionOriginal defines model for BatchRevisionOriginal.
+type BatchRevisionOriginal struct {
+	Message MessageInput `json:"message"`
+	Smtp    SMTPInput    `json:"smtp"`
+}
+
+// BatchRevisionOutput Decode each complete header field and concatenate them in array order, then insert them at insertion_offset in the exact current bytes. Do not unfold, reorder, normalize, or insert an extra empty line. The result must match result_sha256 before release. Message body bytes are never returned. Each external signature contains only its own recipient.
+type BatchRevisionOutput struct {
+	// CurrentSha256 SHA-256 of the exact identified RFC 5322 message bytes.
+	CurrentSha256      BatchDigest            `json:"current_sha256"`
+	HeaderFieldsBase64 []CompletedHeaderField `json:"header_fields_base64"`
+
+	// Id Opaque transaction-local identity without an address or secret.
+	Id BatchCopyID `json:"id"`
+
+	// InsertionOffset Byte offset in current message immediately after the final existing header field CRLF and before the empty separator line. The client verifies this location and inserts the completed fields there.
+	InsertionOffset int64 `json:"insertion_offset"`
+
+	// ResultSha256 SHA-256 of the exact identified RFC 5322 message bytes.
+	ResultSha256 BatchDigest `json:"result_sha256"`
+}
+
+// BatchRevisionRequest defines model for BatchRevisionRequest.
+type BatchRevisionRequest struct {
+	ApiVersion APIVersion `json:"api_version"`
+
+	// Binding Caller-owned SHA-256 binding of its immutable transaction and complete delivery plan. Returned unchanged over the authenticated channel. This correlation value is not a verification result or an independent proof of the MTA's queue completeness.
+	Binding BatchBinding `json:"binding"`
+
+	// Copies Complete actual copy set, including local copies already delivered. IDs are unique. At least one external copy is required. Each smtp object contains exactly one recipient. Duplicate addresses remain distinct copies when the MTA actually produces distinct deliveries.
+	Copies   []BatchRevisionCopy   `json:"copies"`
+	Draft    DraftVersion          `json:"draft"`
+	Original BatchRevisionOriginal `json:"original"`
+}
+
+// BatchRevisionResponse pass/accept contains one output per external copy in request order. fail/reject and permerror/reject contain no outputs; temperror/tempfail contains no outputs. No partial signature set is released. This is a signing result, not proof of downstream delivery, TLS, or archiving.
+type BatchRevisionResponse struct {
+	ApiVersion APIVersion `json:"api_version"`
+
+	// Binding Caller-owned SHA-256 binding of its immutable transaction and complete delivery plan. Returned unchanged over the authenticated channel. This correlation value is not a verification result or an independent proof of the MTA's queue completeness.
+	Binding     BatchBinding `json:"binding"`
+	Disposition Disposition  `json:"disposition"`
+	Draft       DraftVersion `json:"draft"`
+
+	// OriginalSha256 SHA-256 of the exact identified RFC 5322 message bytes.
+	OriginalSha256 BatchDigest                 `json:"original_sha256"`
+	Outputs        []BatchRevisionOutput       `json:"outputs"`
+	Result         BatchRevisionResponseResult `json:"result"`
+}
+
+// BatchRevisionResponseResult defines model for BatchRevisionResponse.Result.
+type BatchRevisionResponseResult string
+
 // CanonicalUint64 defines model for CanonicalUint64.
 type CanonicalUint64 = string
+
+// CompletedHeaderField Canonical standard base64 of one complete library-generated Message-Instance or DKIM2-Signature field, including any CRLF folding and its terminal CRLF. Protected transport material, never diagnostics.
+type CompletedHeaderField = wire.ProtectedString
 
 // DSNMessageInput defines model for DSNMessageInput.
 type DSNMessageInput struct {
@@ -2022,6 +2261,9 @@ type ProcessMessageJSONRequestBody = ProcessRequest
 // ReviseMessageJSONRequestBody defines body for ReviseMessage for application/json ContentType.
 type ReviseMessageJSONRequestBody = ReviseRequest
 
+// ReviseBatchJSONRequestBody defines body for ReviseBatch for application/json ContentType.
+type ReviseBatchJSONRequestBody = BatchRevisionRequest
+
 // SignMessageJSONRequestBody defines body for SignMessage for application/json ContentType.
 type SignMessageJSONRequestBody = SignRequest
 
@@ -2057,6 +2299,12 @@ type ServerInterface interface {
 	// ReviseMessage Revise one ordinary-transit DKIM2 message.
 	// (POST /v1/revise)
 	ReviseMessage(w http.ResponseWriter, r *http.Request)
+	// ReviseBatch Revise the external copies of one complete message fanout.
+	// (POST /v1/revise/batch)
+	ReviseBatch(w http.ResponseWriter, r *http.Request)
+	// GetBatchRevisionCapabilities Inspect the enabled batch revision contract without signing.
+	// (GET /v1/revise/batch/capabilities)
+	GetBatchRevisionCapabilities(w http.ResponseWriter, r *http.Request)
 	// SignMessage Sign one originator DKIM2 message.
 	// (POST /v1/sign)
 	SignMessage(w http.ResponseWriter, r *http.Request)
@@ -2211,6 +2459,34 @@ func (siw *ServerInterfaceWrapper) ReviseMessage(w http.ResponseWriter, r *http.
 	handler.ServeHTTP(w, r)
 }
 
+// ReviseBatch operation middleware
+func (siw *ServerInterfaceWrapper) ReviseBatch(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReviseBatch(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetBatchRevisionCapabilities operation middleware
+func (siw *ServerInterfaceWrapper) GetBatchRevisionCapabilities(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetBatchRevisionCapabilities(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // SignMessage operation middleware
 func (siw *ServerInterfaceWrapper) SignMessage(w http.ResponseWriter, r *http.Request) {
 
@@ -2355,6 +2631,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/dsn/sign", wrapper.SignDeliveryStatus)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/process", wrapper.ProcessMessage)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/revise", wrapper.ReviseMessage)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/revise/batch", wrapper.ReviseBatch)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/revise/batch/capabilities", wrapper.GetBatchRevisionCapabilities)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/sign", wrapper.SignMessage)
 
 	return m
@@ -4304,6 +4582,362 @@ func (response ReviseMessage503JSONResponse) VisitReviseMessageResponse(w http.R
 	return err
 }
 
+type ReviseBatchRequestObject struct {
+	Body *ReviseBatchJSONRequestBody
+}
+
+type ReviseBatchResponseObject interface {
+	VisitReviseBatchResponse(w http.ResponseWriter) error
+}
+
+type ReviseBatch200ResponseHeaders struct {
+	CacheControl        string
+	Connection          string
+	ContentLength       string
+	Date                *string
+	XContentTypeOptions string
+}
+
+type ReviseBatch200JSONResponse struct {
+	Body    BatchRevisionResponse
+	Headers ReviseBatch200ResponseHeaders
+}
+
+func (response ReviseBatch200JSONResponse) VisitReviseBatchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Connection", fmt.Sprint(response.Headers.Connection))
+	w.Header().Set("Content-Length", fmt.Sprint(response.Headers.ContentLength))
+	if response.Headers.Date != nil {
+		w.Header().Set("Date", fmt.Sprint(*response.Headers.Date))
+	}
+	w.Header().Set("X-Content-Type-Options", fmt.Sprint(response.Headers.XContentTypeOptions))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReviseBatch400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response ReviseBatch400JSONResponse) VisitReviseBatchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Connection", fmt.Sprint(response.Headers.Connection))
+	w.Header().Set("Content-Length", fmt.Sprint(response.Headers.ContentLength))
+	if response.Headers.Date != nil {
+		w.Header().Set("Date", fmt.Sprint(*response.Headers.Date))
+	}
+	w.Header().Set("X-Content-Type-Options", fmt.Sprint(response.Headers.XContentTypeOptions))
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReviseBatch403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ReviseBatch403JSONResponse) VisitReviseBatchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Connection", fmt.Sprint(response.Headers.Connection))
+	w.Header().Set("Content-Length", fmt.Sprint(response.Headers.ContentLength))
+	if response.Headers.Date != nil {
+		w.Header().Set("Date", fmt.Sprint(*response.Headers.Date))
+	}
+	w.Header().Set("X-Content-Type-Options", fmt.Sprint(response.Headers.XContentTypeOptions))
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReviseBatch408JSONResponse struct{ RequestTimeoutJSONResponse }
+
+func (response ReviseBatch408JSONResponse) VisitReviseBatchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Connection", fmt.Sprint(response.Headers.Connection))
+	w.Header().Set("Content-Length", fmt.Sprint(response.Headers.ContentLength))
+	if response.Headers.Date != nil {
+		w.Header().Set("Date", fmt.Sprint(*response.Headers.Date))
+	}
+	w.Header().Set("X-Content-Type-Options", fmt.Sprint(response.Headers.XContentTypeOptions))
+	w.WriteHeader(408)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReviseBatch413JSONResponse struct{ RequestTooLargeJSONResponse }
+
+func (response ReviseBatch413JSONResponse) VisitReviseBatchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Connection", fmt.Sprint(response.Headers.Connection))
+	w.Header().Set("Content-Length", fmt.Sprint(response.Headers.ContentLength))
+	if response.Headers.Date != nil {
+		w.Header().Set("Date", fmt.Sprint(*response.Headers.Date))
+	}
+	w.Header().Set("X-Content-Type-Options", fmt.Sprint(response.Headers.XContentTypeOptions))
+	w.WriteHeader(413)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReviseBatch415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response ReviseBatch415JSONResponse) VisitReviseBatchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Connection", fmt.Sprint(response.Headers.Connection))
+	w.Header().Set("Content-Length", fmt.Sprint(response.Headers.ContentLength))
+	if response.Headers.Date != nil {
+		w.Header().Set("Date", fmt.Sprint(*response.Headers.Date))
+	}
+	w.Header().Set("X-Content-Type-Options", fmt.Sprint(response.Headers.XContentTypeOptions))
+	w.WriteHeader(415)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReviseBatch417JSONResponse struct{ ExpectationFailedJSONResponse }
+
+func (response ReviseBatch417JSONResponse) VisitReviseBatchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Connection", fmt.Sprint(response.Headers.Connection))
+	w.Header().Set("Content-Length", fmt.Sprint(response.Headers.ContentLength))
+	if response.Headers.Date != nil {
+		w.Header().Set("Date", fmt.Sprint(*response.Headers.Date))
+	}
+	w.Header().Set("X-Content-Type-Options", fmt.Sprint(response.Headers.XContentTypeOptions))
+	w.WriteHeader(417)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReviseBatch500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response ReviseBatch500JSONResponse) VisitReviseBatchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Connection", fmt.Sprint(response.Headers.Connection))
+	w.Header().Set("Content-Length", fmt.Sprint(response.Headers.ContentLength))
+	if response.Headers.Date != nil {
+		w.Header().Set("Date", fmt.Sprint(*response.Headers.Date))
+	}
+	w.Header().Set("X-Content-Type-Options", fmt.Sprint(response.Headers.XContentTypeOptions))
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReviseBatch503JSONResponse struct{ ServiceUnavailableJSONResponse }
+
+func (response ReviseBatch503JSONResponse) VisitReviseBatchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Connection", fmt.Sprint(response.Headers.Connection))
+	w.Header().Set("Content-Length", fmt.Sprint(response.Headers.ContentLength))
+	if response.Headers.Date != nil {
+		w.Header().Set("Date", fmt.Sprint(*response.Headers.Date))
+	}
+	w.Header().Set("Retry-After", fmt.Sprint(response.Headers.RetryAfter))
+	w.Header().Set("X-Content-Type-Options", fmt.Sprint(response.Headers.XContentTypeOptions))
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetBatchRevisionCapabilitiesRequestObject struct {
+}
+
+type GetBatchRevisionCapabilitiesResponseObject interface {
+	VisitGetBatchRevisionCapabilitiesResponse(w http.ResponseWriter) error
+}
+
+type GetBatchRevisionCapabilities200ResponseHeaders struct {
+	CacheControl        string
+	Connection          string
+	ContentLength       string
+	Date                *string
+	XContentTypeOptions string
+}
+
+type GetBatchRevisionCapabilities200JSONResponse struct {
+	Body    BatchRevisionCapabilities
+	Headers GetBatchRevisionCapabilities200ResponseHeaders
+}
+
+func (response GetBatchRevisionCapabilities200JSONResponse) VisitGetBatchRevisionCapabilitiesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Connection", fmt.Sprint(response.Headers.Connection))
+	w.Header().Set("Content-Length", fmt.Sprint(response.Headers.ContentLength))
+	if response.Headers.Date != nil {
+		w.Header().Set("Date", fmt.Sprint(*response.Headers.Date))
+	}
+	w.Header().Set("X-Content-Type-Options", fmt.Sprint(response.Headers.XContentTypeOptions))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetBatchRevisionCapabilities400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response GetBatchRevisionCapabilities400JSONResponse) VisitGetBatchRevisionCapabilitiesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Connection", fmt.Sprint(response.Headers.Connection))
+	w.Header().Set("Content-Length", fmt.Sprint(response.Headers.ContentLength))
+	if response.Headers.Date != nil {
+		w.Header().Set("Date", fmt.Sprint(*response.Headers.Date))
+	}
+	w.Header().Set("X-Content-Type-Options", fmt.Sprint(response.Headers.XContentTypeOptions))
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetBatchRevisionCapabilities403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response GetBatchRevisionCapabilities403JSONResponse) VisitGetBatchRevisionCapabilitiesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Connection", fmt.Sprint(response.Headers.Connection))
+	w.Header().Set("Content-Length", fmt.Sprint(response.Headers.ContentLength))
+	if response.Headers.Date != nil {
+		w.Header().Set("Date", fmt.Sprint(*response.Headers.Date))
+	}
+	w.Header().Set("X-Content-Type-Options", fmt.Sprint(response.Headers.XContentTypeOptions))
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetBatchRevisionCapabilities417JSONResponse struct{ ExpectationFailedJSONResponse }
+
+func (response GetBatchRevisionCapabilities417JSONResponse) VisitGetBatchRevisionCapabilitiesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Connection", fmt.Sprint(response.Headers.Connection))
+	w.Header().Set("Content-Length", fmt.Sprint(response.Headers.ContentLength))
+	if response.Headers.Date != nil {
+		w.Header().Set("Date", fmt.Sprint(*response.Headers.Date))
+	}
+	w.Header().Set("X-Content-Type-Options", fmt.Sprint(response.Headers.XContentTypeOptions))
+	w.WriteHeader(417)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetBatchRevisionCapabilities500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response GetBatchRevisionCapabilities500JSONResponse) VisitGetBatchRevisionCapabilitiesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Connection", fmt.Sprint(response.Headers.Connection))
+	w.Header().Set("Content-Length", fmt.Sprint(response.Headers.ContentLength))
+	if response.Headers.Date != nil {
+		w.Header().Set("Date", fmt.Sprint(*response.Headers.Date))
+	}
+	w.Header().Set("X-Content-Type-Options", fmt.Sprint(response.Headers.XContentTypeOptions))
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetBatchRevisionCapabilities503JSONResponse struct{ ServiceUnavailableJSONResponse }
+
+func (response GetBatchRevisionCapabilities503JSONResponse) VisitGetBatchRevisionCapabilitiesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Connection", fmt.Sprint(response.Headers.Connection))
+	w.Header().Set("Content-Length", fmt.Sprint(response.Headers.ContentLength))
+	if response.Headers.Date != nil {
+		w.Header().Set("Date", fmt.Sprint(*response.Headers.Date))
+	}
+	w.Header().Set("Retry-After", fmt.Sprint(response.Headers.RetryAfter))
+	w.Header().Set("X-Content-Type-Options", fmt.Sprint(response.Headers.XContentTypeOptions))
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type SignMessageRequestObject struct {
 	Body *SignMessageJSONRequestBody
 }
@@ -4567,6 +5201,12 @@ type StrictServerInterface interface {
 	// ReviseMessage Revise one ordinary-transit DKIM2 message.
 	// (POST /v1/revise)
 	ReviseMessage(ctx context.Context, request ReviseMessageRequestObject) (ReviseMessageResponseObject, error)
+	// ReviseBatch Revise the external copies of one complete message fanout.
+	// (POST /v1/revise/batch)
+	ReviseBatch(ctx context.Context, request ReviseBatchRequestObject) (ReviseBatchResponseObject, error)
+	// GetBatchRevisionCapabilities Inspect the enabled batch revision contract without signing.
+	// (GET /v1/revise/batch/capabilities)
+	GetBatchRevisionCapabilities(ctx context.Context, request GetBatchRevisionCapabilitiesRequestObject) (GetBatchRevisionCapabilitiesResponseObject, error)
 	// SignMessage Sign one originator DKIM2 message.
 	// (POST /v1/sign)
 	SignMessage(ctx context.Context, request SignMessageRequestObject) (SignMessageResponseObject, error)
@@ -4886,6 +5526,61 @@ func (sh *strictHandler) ReviseMessage(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// ReviseBatch operation middleware
+func (sh *strictHandler) ReviseBatch(w http.ResponseWriter, r *http.Request) {
+	var request ReviseBatchRequestObject
+
+	var body ReviseBatchJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ReviseBatch(ctx, request.(ReviseBatchRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ReviseBatch")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ReviseBatchResponseObject); ok {
+		if err := validResponse.VisitReviseBatchResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetBatchRevisionCapabilities operation middleware
+func (sh *strictHandler) GetBatchRevisionCapabilities(w http.ResponseWriter, r *http.Request) {
+	var request GetBatchRevisionCapabilitiesRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetBatchRevisionCapabilities(ctx, request.(GetBatchRevisionCapabilitiesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetBatchRevisionCapabilities")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetBatchRevisionCapabilitiesResponseObject); ok {
+		if err := validResponse.VisitGetBatchRevisionCapabilitiesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // SignMessage operation middleware
 func (sh *strictHandler) SignMessage(w http.ResponseWriter, r *http.Request) {
 	var request SignMessageRequestObject
@@ -4922,167 +5617,213 @@ func (sh *strictHandler) SignMessage(w http.ResponseWriter, r *http.Request) {
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
+	"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",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

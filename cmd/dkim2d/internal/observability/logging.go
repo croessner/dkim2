@@ -141,7 +141,7 @@ var allowedLogValues = map[string][]string{
 	keyReplayState:           {valueNotChecked, valueDisabled, valueFirstSeen, valueReplayed, valueIndeterminate},
 	"replay_store_result":    {"not_used", valueSuccess, valueTemporary, valueInternal},
 	keyResult:                {valueSuccess, valueFailure, valueTemporary, valueInternal, "ok", valuePermanent, valueAccept, valueReject, "discard", valueTempfail},
-	"route":                  {"/healthz", "/readyz", "/metrics", "/v1/process", "/v1/sign", "/v1/revise", "/v1/dsn/sign", "/v1/dsn/propagate", "/v1/dsn/propagate/commit", valueUnmatched},
+	"route":                  {"/healthz", "/readyz", "/metrics", "/v1/process", "/v1/sign", "/v1/revise", "/v1/revise/batch", "/v1/revise/batch/capabilities", "/v1/dsn/sign", "/v1/dsn/propagate", "/v1/dsn/propagate/commit", valueUnmatched},
 	keyStage:                 closedStageUnion(),
 	keyStatusClass:           {valueStatus2XX, valueStatus3XX, valueStatus4XX, valueStatus5XX},
 	"tracing_exporter":       {valueNone, "otlp_http"},

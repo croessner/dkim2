@@ -158,6 +158,11 @@ func newSigningServiceOver(
 	}, nil
 }
 
+// NewAuthoritySigningService composes the daemon signer with an explicit provider-neutral authority.
+func NewAuthoritySigningService(publicKeys dkim2.PublicKeyProvider, authority SigningAuthority, policies config.SigningPoliciesConfig) (*SigningService, error) {
+	return newSigningServiceOver(publicKeys, authority, false, signingPoliciesFromConfig(policies))
+}
+
 // NewDatasourceSigningService constructs signing over a joined network generation.
 func NewDatasourceSigningService(
 	publicKeys dkim2.PublicKeyProvider,

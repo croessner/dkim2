@@ -7,6 +7,8 @@ compatibility:
   preserve-original-operation-id-casing-in-embedded-spec: true
 output-options:
   exclude-operation-ids:
+    - reviseBatch
+    - getBatchRevisionCapabilities
     - getMetrics
     - getHealth
     - headHealth

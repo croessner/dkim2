@@ -219,7 +219,7 @@ for required in \
   'known-limitations.md'; do
   grep -Fq -e "$required" "$walkthrough"
 done
-for route in /v1/process /v1/sign /v1/revise /v1/dsn/sign \
+for route in /v1/process /v1/sign /v1/revise /v1/revise/batch /v1/revise/batch/capabilities /v1/dsn/sign \
   /v1/dsn/propagate /v1/dsn/propagate/commit; do
   grep -Fq "\`$route\`" "$walkthrough"
 done
@@ -382,13 +382,13 @@ for required in FuzzReceivedDSN FuzzRebuild; do
   grep -Fq "$required" docs/security-testing.md
 done
 
-test "$(sed -n 's|^  \(/[^:]*\):$|\1|p' "$openapi" | wc -l | tr -d ' ')" -eq 9
-for route in /metrics /healthz /readyz /v1/process /v1/sign /v1/revise /v1/dsn/sign \
+test "$(sed -n 's|^  \(/[^:]*\):$|\1|p' "$openapi" | wc -l | tr -d ' ')" -eq 11
+for route in /metrics /healthz /readyz /v1/process /v1/sign /v1/revise /v1/revise/batch /v1/revise/batch/capabilities /v1/dsn/sign \
   /v1/dsn/propagate /v1/dsn/propagate/commit; do
   grep -Fq "  $route:" "$openapi"
   grep -Fq "\`$route\`" "$daemon"
 done
-for operation in processMessage signMessage reviseMessage signDeliveryStatus \
+for operation in processMessage signMessage reviseMessage reviseBatch getBatchRevisionCapabilities signDeliveryStatus \
   propagateDeliveryStatus commitDeliveryStatusPropagation; do
   grep -Fq "operationId: $operation" "$openapi"
 done
@@ -396,6 +396,7 @@ for capability in \
   capability_file \
   sign_capability_file \
   revise_capability_file \
+  batch_revise_capability_file \
   dsn_sign_capability_file \
   dsn_propagate_capability_file; do
   grep -Fq "$capability" "$daemon"

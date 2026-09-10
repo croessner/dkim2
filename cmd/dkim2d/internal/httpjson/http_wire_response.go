@@ -104,6 +104,10 @@ func validSuccessResponse(value any) bool {
 		return validProcessResponse(typed)
 	case generated.OperationResponse:
 		return validOperationResponse(typed)
+	case generated.BatchRevisionResponse:
+		return validBatchRevisionResponse(typed)
+	case generated.BatchRevisionCapabilities:
+		return typed == batchCapabilities()
 	case generated.DSNPropagateResponse:
 		return validPropagationResponse(typed)
 	case generated.DSNPropagateCommitResponse:

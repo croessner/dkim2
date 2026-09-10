@@ -337,6 +337,36 @@ wildcards, tenant defaults, or caller-selected domains. It verifies the
 embedded DKIM2 object first and resolves `delivery_status` policy by the exact
 canonical authenticated highest `d=` value.
 
+### Complete-fanout revision
+
+`server.batch_revise_capability_file` explicitly enables
+POST `/v1/revise/batch` and its authenticated read-only discovery route
+GET `/v1/revise/batch/capabilities`. Its private 32-byte credential belongs to
+the selected protected generation and must differ from every other enabled
+route capability and replay key. The canonical unpadded base64url credential
+is sent only in `X-DKIM2-Batch-Revise-Capability`. The environment path override
+is `DKIM2D_SERVER_BATCH_REVISE_CAPABILITY_FILE`; never put credential bytes
+in configuration, environment values, arguments or logs.
+
+The route needs a configured signing backend and exact `ordinary_transit`
+policies for each external signing context. It accepts exact original SMTP
+evidence and the complete actual local/external fanout. Optional same-tenant
+controlled intermediate hops require both transit policies and local authority
+over the intermediate recipient domain. Only library-verified unrestricted
+external signatures are returned. A local delivery may stand if the external
+batch fails. The service performs no SMTP delivery or SRS encoding.
+
+Bounds are 32 actual copies, 32 MiB aggregate decoded original/current message
+bytes, 47,878,316 framed JSON bytes, 262,144 response bytes, one optional
+controlled hop per external copy, and at most three generated header fields
+per output. A 100 MiB MTA message limit does not change these service limits;
+clients must stop an oversized plan without omitting actual copies.
+Ordinary external null-sender revision is unsupported. Received signed DSNs
+use the existing separately authorized propagation API and replay contract.
+The [batch revision contract](../../docs/specs/implementation/batch-revision.md)
+contains the generated DTO shape, exact-byte insertion procedure and return
+workflow. Existing Milter clients do not acquire this capability implicitly.
+
 ### Explicitly disabled replay
 
 This is the smallest valid document:

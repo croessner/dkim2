@@ -73,6 +73,9 @@ func (f *ServerFactory) Assemble(input app.HTTPAssemblyInput) (app.HTTPAssembly,
 				dsnSignMatcherDependency{capabilityMatcher: input.DSNSignCapability()},
 			)
 		}
+		if server.BatchReviseEnabled() {
+			dependencies = append(dependencies, batchReviseMatcherDependency{capabilityMatcher: input.BatchReviseCapability()})
+		}
 	}
 	if server.DSNPropagateEnabled() && !nilInterfaceValue(input.PropagationService()) {
 		dependencies = append(

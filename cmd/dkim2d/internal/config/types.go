@@ -24,6 +24,7 @@ const (
 	pathServerCapability                    = "server.capability_file"
 	pathServerSignCapability                = "server.sign_capability_file"
 	pathServerReviseCapability              = "server.revise_capability_file"
+	pathServerBatchReviseCapability         = "server.batch_revise_capability_file"
 	pathServerDSNSignCapability             = "server.dsn_sign_capability_file"
 	pathServerDSNPropagateCapability        = "server.dsn_propagate_capability_file"
 	pathServerReadHeader                    = "server.read_header_timeout"
@@ -293,6 +294,7 @@ func stableFieldSpecs() []fieldSpec {
 		{path: pathServerCapability, env: "DKIM2D_SERVER_CAPABILITY_FILE", kind: valueString},
 		{path: pathServerSignCapability, env: "DKIM2D_SERVER_SIGN_CAPABILITY_FILE", kind: valueString},
 		{path: pathServerReviseCapability, env: "DKIM2D_SERVER_REVISE_CAPABILITY_FILE", kind: valueString},
+		{path: pathServerBatchReviseCapability, env: "DKIM2D_SERVER_BATCH_REVISE_CAPABILITY_FILE", kind: valueString},
 		{path: pathServerDSNSignCapability, env: "DKIM2D_SERVER_DSN_SIGN_CAPABILITY_FILE", kind: valueString},
 		{path: pathServerDSNPropagateCapability, env: "DKIM2D_SERVER_DSN_PROPAGATE_CAPABILITY_FILE", kind: valueString},
 		{path: pathServerReadHeader, env: "DKIM2D_SERVER_READ_HEADER_TIMEOUT", kind: valueDuration, defaultVal: defaultReadHeader, hasDefault: true},

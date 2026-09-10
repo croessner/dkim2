@@ -492,6 +492,108 @@ paths:
           $ref: "#/components/responses/InternalError"
         "503":
           $ref: "#/components/responses/ServiceUnavailable"
+  /v1/revise/batch:
+    post:
+      operationId: reviseBatch
+      summary: Revise the external copies of one complete message fanout.
+      description: >
+        The separately authorized trusted MTA supplies the exact original
+        message and incoming envelope, and every actual local and external
+        copy with its current message and prepared outgoing envelope. The
+        daemon verifies the original itself, seals the entire fanout with
+        the reference library, and releases exact completed header fields
+        only for external copies. Every copy has exactly one recipient.
+        Local delivery is independent; failure here never rolls it back.
+        Authenticated modification and fanout restrictions gate every
+        external output. Caller assertions are not verification evidence.
+        All external outputs succeed together or outputs is empty. This
+        endpoint does not originate unsigned messages or deliver mail.
+        The framed JSON limit is 47878316 bytes; the aggregate decoded
+        original and current message limit is 33554432 bytes.
+      security:
+        - batchReviseCapability: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BatchRevisionRequest"
+      responses:
+        "200":
+          description: A coherent result bound to the submitted complete fanout.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/CacheControl"
+            X-Content-Type-Options:
+              $ref: "#/components/headers/ContentTypeOptions"
+            Content-Length:
+              $ref: "#/components/headers/ContentLength"
+            Connection:
+              $ref: "#/components/headers/Connection"
+            Date:
+              $ref: "#/components/headers/Date"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BatchRevisionResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "408":
+          $ref: "#/components/responses/RequestTimeout"
+        "413":
+          $ref: "#/components/responses/RequestTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "417":
+          $ref: "#/components/responses/ExpectationFailed"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /v1/revise/batch/capabilities:
+    get:
+      operationId: getBatchRevisionCapabilities
+      summary: Inspect the enabled batch revision contract without signing.
+      description: >
+        Uses the batch revision capability. A successful response requires
+        the configured batch signing service and current daemon readiness.
+        It advertises implementation bounds, not availability of a particular
+        tenant profile, remote DNS key, or validity of a future message.
+        Query strings, request bodies, content metadata, expectations, and
+        conditional request headers are not accepted. This route does not
+        perform cryptography, reserve delivery state, or disclose key material.
+      security:
+        - batchReviseCapability: []
+      responses:
+        "200":
+          description: The enabled and ready batch revision contract.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/CacheControl"
+            X-Content-Type-Options:
+              $ref: "#/components/headers/ContentTypeOptions"
+            Content-Length:
+              $ref: "#/components/headers/ContentLength"
+            Connection:
+              $ref: "#/components/headers/Connection"
+            Date:
+              $ref: "#/components/headers/Date"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BatchRevisionCapabilities"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "417":
+          $ref: "#/components/responses/ExpectationFailed"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
   /v1/dsn/sign:
     post:
       operationId: signDeliveryStatus
@@ -663,6 +765,15 @@ paths:
           $ref: "#/components/responses/ServiceUnavailable"
 components:
   securitySchemes:
+    batchReviseCapability:
+      type: apiKey
+      in: header
+      name: X-DKIM2-Batch-Revise-Capability
+      description: >
+        Independent 32-byte capability encoded as canonical unpadded
+        base64url. Configured only through server.batch_revise_capability_file.
+        It authorizes the trusted MTA to submit a complete fanout and exact
+        prepared envelopes; it never supplies cryptographic verification facts.
     localCapability:
       type: apiKey
       in: header
@@ -1179,6 +1290,239 @@ components:
           format: byte
           minLength: 0
           maxLength: 44739244
+    BatchRevisionCapabilities:
+      type: object
+      additionalProperties: false
+      required: [api_version, draft, protocol, original_current, full_fanout,
+        controlled_via, max_copies, max_controlled_hops,
+        max_aggregate_message_bytes, max_request_bytes, max_response_bytes,
+        max_header_fields, external_null_sender]
+      properties:
+        api_version:
+          $ref: "#/components/schemas/APIVersion"
+        draft:
+          $ref: "#/components/schemas/DraftVersion"
+        protocol:
+          type: string
+          enum: [batch_revision_v1]
+        original_current:
+          type: boolean
+          enum: [true]
+          x-enum-varnames: [BatchOriginalCurrentSupported]
+        full_fanout:
+          type: boolean
+          enum: [true]
+          x-enum-varnames: [BatchFullFanoutSupported]
+        controlled_via:
+          type: boolean
+          enum: [true]
+          x-enum-varnames: [BatchControlledViaSupported]
+        max_copies:
+          type: integer
+          minimum: 32
+          maximum: 32
+        max_controlled_hops:
+          type: integer
+          minimum: 1
+          maximum: 1
+        max_aggregate_message_bytes:
+          type: integer
+          format: int64
+          minimum: 33554432
+          maximum: 33554432
+        max_request_bytes:
+          type: integer
+          format: int64
+          minimum: 47878316
+          maximum: 47878316
+        max_response_bytes:
+          type: integer
+          format: int64
+          minimum: 262144
+          maximum: 262144
+        max_header_fields:
+          type: integer
+          minimum: 3
+          maximum: 3
+        external_null_sender:
+          description: >
+            Ordinary revision cannot create a null reverse-path. Valid signed
+            delivery-status messages use the separately authorized received-DSN
+            propagation API, including its verification and replay contract.
+          type: boolean
+          enum: [false]
+          x-enum-varnames: [BatchExternalNullSenderUnsupported]
+    BatchRevisionRequest:
+      type: object
+      additionalProperties: false
+      required: [api_version, draft, binding, original, copies]
+      properties:
+        api_version:
+          $ref: "#/components/schemas/APIVersion"
+        draft:
+          $ref: "#/components/schemas/DraftVersion"
+        binding:
+          $ref: "#/components/schemas/BatchBinding"
+        original:
+          $ref: "#/components/schemas/BatchRevisionOriginal"
+        copies:
+          type: array
+          minItems: 1
+          maxItems: 32
+          description: >
+            Complete actual copy set, including local copies already delivered.
+            IDs are unique. At least one external copy is required. Each smtp
+            object contains exactly one recipient. Duplicate addresses remain
+            distinct copies when the MTA actually produces distinct deliveries.
+          items:
+            $ref: "#/components/schemas/BatchRevisionCopy"
+    BatchBinding:
+      type: string
+      pattern: "^[0-9a-f]{64}$"
+      description: >
+        Caller-owned SHA-256 binding of its immutable transaction and complete
+        delivery plan. Returned unchanged over the authenticated channel.
+        This correlation value is not a verification result or an independent
+        proof of the MTA's queue completeness.
+    BatchDigest:
+      type: string
+      description: SHA-256 of the exact identified RFC 5322 message bytes.
+      minLength: 64
+      maxLength: 64
+      pattern: "^[0-9a-f]{64}$"
+    BatchRevisionOriginal:
+      type: object
+      additionalProperties: false
+      required: [message, smtp]
+      properties:
+        message:
+          $ref: "#/components/schemas/MessageInput"
+        smtp:
+          $ref: "#/components/schemas/SMTPInput"
+    BatchRevisionCopy:
+      type: object
+      additionalProperties: false
+      required: [id, delivery, message, smtp]
+      properties:
+        id:
+          $ref: "#/components/schemas/BatchCopyID"
+        delivery:
+          type: string
+          enum: [local, external]
+        message:
+          $ref: "#/components/schemas/MessageInput"
+        smtp:
+          $ref: "#/components/schemas/SMTPInput"
+        context:
+          $ref: "#/components/schemas/SigningContext"
+        via:
+          $ref: "#/components/schemas/BatchRevisionHop"
+      description: >
+        Exact current bytes and prepared outgoing SMTP paths, including an
+        MTA-prepared SRS reverse path if applicable. The original and local
+        reverse paths may be <>; the reference library refuses ordinary
+        external revision with <>. Valid received DSNs use the independent
+        authenticated propagation operation. The daemon never invents or
+        rewrites SRS. Context is required
+        for external copies and forbidden for local copies. Message fidelity
+        is explicit; current local bytes may use lmtp_delivered_crlf, while
+        external bytes must be an admitted signing fidelity. Existing protocol
+        fields may not be removed, changed, or fabricated after verification.
+    BatchRevisionHop:
+      type: object
+      additionalProperties: false
+      required: [smtp, context]
+      properties:
+        smtp:
+          $ref: "#/components/schemas/SMTPInput"
+        context:
+          $ref: "#/components/schemas/SigningContext"
+      description: >
+        Optional single controlled intermediate hop for an external copy,
+        implementing Draft 06 section 9.3 with ordinary mf/rt signatures.
+        The MTA supplies the exact non-null intermediate reverse path and
+        one controlled intermediate recipient. Both signing contexts must
+        have the same tenant; exact transit profiles for both domains and
+        local authority over the intermediate recipient domain are required.
+        The initial fanout still counts every actual local and external copy.
+        Intermediate and final signatures are released only together, in one
+        output. No real SMTP transfer is claimed for this imaginary hop.
+        Not permitted on local copies. No free domain-alignment exception.
+    BatchCopyID:
+      type: string
+      minLength: 1
+      maxLength: 128
+      pattern: "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+      description: Opaque transaction-local identity without an address or secret.
+    BatchRevisionResponse:
+      type: object
+      additionalProperties: false
+      required: [api_version, draft, binding, original_sha256, result, disposition, outputs]
+      properties:
+        api_version:
+          $ref: "#/components/schemas/APIVersion"
+        draft:
+          $ref: "#/components/schemas/DraftVersion"
+        binding:
+          $ref: "#/components/schemas/BatchBinding"
+        original_sha256:
+          $ref: "#/components/schemas/BatchDigest"
+        result:
+          type: string
+          enum: [pass, fail, permerror, temperror]
+        disposition:
+          $ref: "#/components/schemas/Disposition"
+        outputs:
+          type: array
+          maxItems: 32
+          items:
+            $ref: "#/components/schemas/BatchRevisionOutput"
+      description: >
+        pass/accept contains one output per external copy in request order.
+        fail/reject and permerror/reject contain no outputs; temperror/tempfail
+        contains no outputs. No partial signature set is released. This is a
+        signing result, not proof of downstream delivery, TLS, or archiving.
+    BatchRevisionOutput:
+      type: object
+      additionalProperties: false
+      required: [id, current_sha256, result_sha256, insertion_offset, header_fields_base64]
+      properties:
+        id:
+          $ref: "#/components/schemas/BatchCopyID"
+        current_sha256:
+          $ref: "#/components/schemas/BatchDigest"
+        result_sha256:
+          $ref: "#/components/schemas/BatchDigest"
+        insertion_offset:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 33554432
+          description: >
+            Byte offset in current message immediately after the final existing
+            header field CRLF and before the empty separator line. The client
+            verifies this location and inserts the completed fields there.
+        header_fields_base64:
+          type: array
+          minItems: 1
+          maxItems: 3
+          items:
+            $ref: "#/components/schemas/CompletedHeaderField"
+      description: >
+        Decode each complete header field and concatenate them in array order,
+        then insert them at insertion_offset in the exact current bytes. Do not
+        unfold, reorder, normalize, or insert an extra empty line. The result
+        must match result_sha256 before release. Message body bytes are never
+        returned. Each external signature contains only its own recipient.
+    CompletedHeaderField:
+      type: string
+      format: byte
+      minLength: 4
+      maxLength: 87384
+      description: >
+        Canonical standard base64 of one complete library-generated
+        Message-Instance or DKIM2-Signature field, including any CRLF folding
+        and its terminal CRLF. Protected transport material, never diagnostics.
     MessageInput:
       type: object
       additionalProperties: false

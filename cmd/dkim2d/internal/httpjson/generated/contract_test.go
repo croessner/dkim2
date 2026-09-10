@@ -24,6 +24,8 @@ const (
 	testPropagateCommitPath        = "/v1/dsn/propagate/commit"
 	testProcessPath                = "/v1/process"
 	testRevisePath                 = "/v1/revise"
+	testBatchRevisePath            = "/v1/revise/batch"
+	testBatchCapabilitiesPath      = "/v1/revise/batch/capabilities"
 	testSignPath                   = "/v1/sign"
 	testPropertyAPIVersion         = "api_version"
 	testPropertyClass              = "class"
@@ -159,6 +161,20 @@ func TestEmbeddedOpenAPIContract(t *testing.T) {
 				success:   testSchemaOperationResponse,
 			},
 		},
+		testBatchRevisePath: {
+			testMethodPost: {
+				id:        "reviseBatch",
+				responses: []string{"200", "400", "403", "408", "413", "415", "417", "500", "503"},
+				success:   "BatchRevisionResponse",
+			},
+		},
+		testBatchCapabilitiesPath: {
+			testMethodGet: {
+				id:        "getBatchRevisionCapabilities",
+				responses: []string{"200", "400", "403", "417", "500", "503"},
+				success:   "BatchRevisionCapabilities",
+			},
+		},
 		testPropagatePath: {
 			testMethodPost: {
 				id:        "propagateDeliveryStatus",
@@ -229,6 +245,8 @@ func assertOperationSecurity(t *testing.T, path string, operation *openapi3.Oper
 	requirement := (*operation.Security)[0]
 	schemeName := "localCapability"
 	switch path {
+	case testBatchRevisePath, testBatchCapabilitiesPath:
+		schemeName = "batchReviseCapability"
 	case testDSNSignPath:
 		schemeName = "dsnSignCapability"
 	case testPropagatePath, testPropagateCommitPath:
@@ -244,7 +262,7 @@ func assertOperationSecurity(t *testing.T, path string, operation *openapi3.Oper
 func protectedContractPath(path string) bool {
 	switch path {
 	case testProcessPath, testSignPath, testRevisePath, testDSNSignPath,
-		testPropagatePath, testPropagateCommitPath:
+		testPropagatePath, testPropagateCommitPath, testBatchRevisePath, testBatchCapabilitiesPath:
 		return true
 	default:
 		return false
@@ -486,7 +504,7 @@ func assertDeliveryStatusRequestBody(t *testing.T, document *openapi3.T) {
 func assertLocalCapability(t *testing.T, document *openapi3.T) {
 	t.Helper()
 
-	if document.Components == nil || len(document.Components.SecuritySchemes) != 3 {
+	if document.Components == nil || len(document.Components.SecuritySchemes) != 4 {
 		t.Fatal("unexpected security-scheme inventory")
 	}
 	reference := document.Components.SecuritySchemes["localCapability"]
@@ -510,6 +528,11 @@ func assertLocalCapability(t *testing.T, document *openapi3.T) {
 		propagateReference.Value.Name != "X-DKIM2-DSN-Propagate-Capability" ||
 		propagateReference.Value.Scheme != "" {
 		t.Fatal("dsnPropagateCapability is not the approved dedicated API-key scheme")
+	}
+	batchReference := document.Components.SecuritySchemes["batchReviseCapability"]
+	if batchReference == nil || batchReference.Value == nil || batchReference.Value.Type != testSchemeAPIKey ||
+		batchReference.Value.In != testSchemeInHeader || batchReference.Value.Name != "X-DKIM2-Batch-Revise-Capability" || batchReference.Value.Scheme != "" {
+		t.Fatal("batchReviseCapability is not the approved dedicated API-key scheme")
 	}
 }
 

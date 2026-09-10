@@ -3,12 +3,16 @@
 `dkim2d.yaml` is the authoritative REST contract for the daemon. The current
 contract exposes metrics, liveness, readiness, inbound verification/policy/replay
 processing, originator signing, ordinary-transit revision, authenticated
-outgoing delivery-status signing, and received delivery-status propagation with
+complete-fanout original/current revision, outgoing delivery-status signing, and received delivery-status propagation with
 its two-phase commit. Each authenticated route uses a distinct
 generation-bound local capability in the implementation. Process, originator
 signing, and revision share the contract's `X-DKIM2-Capability` header shape;
 delivery-status signing uses `X-DKIM2-DSN-Sign-Capability`, and delivery-status
 propagation uses `X-DKIM2-DSN-Propagate-Capability`.
+Complete-fanout revision and its read-only capability discovery use the distinct
+`X-DKIM2-Batch-Revise-Capability`. See
+[the batch revision contract](../implementation/batch-revision.md) for private
+per-copy outputs, controlled intermediate hops, exact field insertion and bounds.
 Adapter-specific message fidelity values describe how message bytes were obtained;
 they do not create adapter-specific routes or parallel DTOs.
 

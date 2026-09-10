@@ -178,7 +178,7 @@ func TestStableFieldBindings(t *testing.T) {
 func TestStablePathSetIsExact(t *testing.T) {
 	specs := stableFieldSpecs()
 	golden := stableFieldGoldenContract()
-	if len(specs) != 120 || len(specs) != len(golden) {
+	if len(specs) != 121 || len(specs) != len(golden) {
 		t.Fatal("stable path count changed")
 	}
 	for index, expected := range golden {
@@ -232,6 +232,7 @@ func stableFieldGoldenContract() []stableFieldGolden {
 		{path: "server.capability_file", environment: "DKIM2D_SERVER_CAPABILITY_FILE"},
 		{path: "server.sign_capability_file", environment: "DKIM2D_SERVER_SIGN_CAPABILITY_FILE"},
 		{path: "server.revise_capability_file", environment: "DKIM2D_SERVER_REVISE_CAPABILITY_FILE"},
+		{path: "server.batch_revise_capability_file", environment: "DKIM2D_SERVER_BATCH_REVISE_CAPABILITY_FILE"},
 		{path: "server.dsn_sign_capability_file", environment: "DKIM2D_SERVER_DSN_SIGN_CAPABILITY_FILE"},
 		{path: "server.dsn_propagate_capability_file", environment: "DKIM2D_SERVER_DSN_PROPAGATE_CAPABILITY_FILE"},
 		{path: "server.read_header_timeout", environment: "DKIM2D_SERVER_READ_HEADER_TIMEOUT", defaultValue: "5s", hasDefault: true},

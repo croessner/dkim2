@@ -41,7 +41,7 @@ func preflightKnownFields(
 		known.mailFrom.decodedSize > maxEnvelopeBytes-known.recipients.decodedBytes {
 		return &knownFieldError{class: knownFieldRequestTooLarge}
 	}
-	return nil
+	return preflightBatchKnownFields(body, constants)
 }
 
 // validateRawMessageSpelling rejects escaped-equivalent Base64 only after schema validation.
@@ -59,6 +59,9 @@ func validateRawMessageSpelling(constants jsonConstants) error {
 // smuggles a raw message is an invalid contract, never a silently ignored
 // field.
 func validateRouteRawMessage(path string, constants jsonConstants) error {
+	if path == batchRevisePath {
+		return validateBatchRawMessages(constants)
+	}
 	if path == dsnPropagateCommitPath {
 		if constants.rawMessage.present {
 			return &knownFieldError{class: knownFieldInvalidContract}

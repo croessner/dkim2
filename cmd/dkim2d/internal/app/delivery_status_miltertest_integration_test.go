@@ -157,6 +157,16 @@ func (*deliveryStatusHarnessService) ReviseMessage(context.Context, generated.Re
 	return nil, errors.New("unexpected harness operation")
 }
 
+// ReviseBatch rejects operations outside the dedicated DSN harness route.
+func (*deliveryStatusHarnessService) ReviseBatch(context.Context, generated.ReviseBatchRequestObject) (generated.ReviseBatchResponseObject, error) {
+	return nil, errors.New("unexpected harness operation")
+}
+
+// GetBatchRevisionCapabilities rejects queries outside the dedicated DSN harness route.
+func (*deliveryStatusHarnessService) GetBatchRevisionCapabilities(context.Context, generated.GetBatchRevisionCapabilitiesRequestObject) (generated.GetBatchRevisionCapabilitiesResponseObject, error) {
+	return nil, errors.New("unexpected batch capability route")
+}
+
 // SignMessage rejects operations outside the dedicated DSN harness route.
 func (*deliveryStatusHarnessService) SignMessage(context.Context, generated.SignMessageRequestObject) (generated.SignMessageResponseObject, error) {
 	return nil, errors.New("unexpected harness operation")

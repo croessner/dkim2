@@ -31,6 +31,7 @@ const (
 	protectedCapability
 	protectedSignCapability
 	protectedReviseCapability
+	protectedBatchReviseCapability
 	protectedDSNSignCapability
 	protectedDSNPropagateCapability
 	protectedHMAC
@@ -301,6 +302,12 @@ func selectedProtectedPaths(snapshot Snapshot) []selectedProtectedPath {
 				role: protectedReviseCapability,
 			})
 		}
+		if snapshot.Server().BatchReviseEnabled() {
+			paths = append(paths, selectedProtectedPath{
+				path: snapshot.Server().BatchReviseCapabilityFile(),
+				role: protectedBatchReviseCapability,
+			})
+		}
 		if snapshot.Server().DSNSignEnabled() {
 			paths = append(paths, selectedProtectedPath{
 				path: snapshot.Server().DSNSignCapabilityFile(),
@@ -435,6 +442,12 @@ func buildProtectedState(
 			}
 			copy(state.reviseCapability[:], file.data)
 			state.hasRevise = true
+		case protectedBatchReviseCapability:
+			if err := validateExactKey(file.data); err != nil {
+				return nil, err
+			}
+			copy(state.batchReviseCapability[:], file.data)
+			state.hasBatchRevise = true
 		case protectedDSNSignCapability:
 			if err := validateExactKey(file.data); err != nil {
 				return nil, err
@@ -518,10 +531,11 @@ func buildProtectedState(
 		if generationFD < 0 ||
 			state.hasSign != snapshot.Server().SignEnabled() ||
 			state.hasRevise != snapshot.Server().ReviseEnabled() ||
+			state.hasBatchRevise != snapshot.Server().BatchReviseEnabled() ||
 			state.hasDSNSign != snapshot.Server().DSNSignEnabled() ||
 			state.hasDSNPropagate != snapshot.Server().DSNPropagateEnabled() ||
 			!signingDatasourceConsumed(
-				state.hasSign || state.hasRevise || state.hasDSNSign || state.hasDSNPropagate,
+				state.hasSign || state.hasRevise || state.hasBatchRevise || state.hasDSNSign || state.hasDSNPropagate,
 				snapshot.ProcessDefaultTenant(),
 			) {
 			return nil, newError(CodeProtectedContent)
@@ -671,7 +685,7 @@ func validateProtectedFileMetadata(
 	requireSingleLink := role != protectedCA && role != protectedDatasourceCA
 	switch role {
 	case protectedYAML, protectedCapability, protectedSignCapability,
-		protectedReviseCapability, protectedDSNSignCapability,
+		protectedReviseCapability, protectedBatchReviseCapability, protectedDSNSignCapability,
 		protectedDSNPropagateCapability, protectedHMAC,
 		protectedApplicationPassword, protectedAuditorPassword,
 		protectedDatasourcePassword, protectedServerCertificate, protectedServerPrivateKey:
@@ -708,7 +722,7 @@ func protectedSizeAccepted(role protectedFileRole, size int64) bool {
 	switch role {
 	case protectedYAML:
 		return size >= 1 && size <= maxYAMLDocumentBytes
-	case protectedCapability, protectedSignCapability, protectedReviseCapability,
+	case protectedCapability, protectedSignCapability, protectedReviseCapability, protectedBatchReviseCapability,
 		protectedDSNSignCapability, protectedDSNPropagateCapability,
 		protectedHMAC:
 		return size == exactKeyBytes
@@ -732,7 +746,7 @@ func protectedReadCap(role protectedFileRole) int {
 	switch role {
 	case protectedYAML:
 		return maxYAMLDocumentBytes
-	case protectedCapability, protectedSignCapability, protectedReviseCapability,
+	case protectedCapability, protectedSignCapability, protectedReviseCapability, protectedBatchReviseCapability,
 		protectedDSNSignCapability, protectedDSNPropagateCapability,
 		protectedHMAC:
 		return exactKeyBytes
