@@ -247,6 +247,14 @@ type Provider interface {
 	ResolvePolicy(context.Context, PolicyRequest) (ResolvedPolicy, error)
 }
 
+// InspectionProvider exposes exact immutable policy facts for registry
+// construction, including inactive records. Inspection never authorizes
+// signing; callers must use Provider and the signing projection at message time.
+type InspectionProvider interface {
+	Provider
+	InspectPolicy(context.Context, PolicyRequest) (ResolvedPolicy, error)
+}
+
 // ValidateProfileOutcome enforces the closed profile result/error matrix.
 func ValidateProfileOutcome(result ResolvedProfile, err error) error {
 	if err == nil && result.Valid() || IsTypedError(err) && result.zero() {

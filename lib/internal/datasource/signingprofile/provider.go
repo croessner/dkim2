@@ -83,10 +83,11 @@ type Resolver struct {
 	closed   bool
 }
 
-// NewResolver composes one provider-neutral snapshot and immutable projection
-// registry.
+// NewResolver validates every immutable binding, including inactive policies,
+// without granting signing authority. Runtime projection still checks status,
+// rollout, and validity for each message.
 func NewResolver(
-	provider datasource.Provider,
+	provider datasource.InspectionProvider,
 	bindings []Binding,
 	at time.Time,
 ) (*Resolver, error) {
@@ -94,7 +95,11 @@ func NewResolver(
 		return nil, datasource.NewError(datasource.ErrorCodeInvalidRequest)
 	}
 	limits := datasource.DefaultLimits()
+	if len(bindings) > limits.MaxHandles {
+		return nil, datasource.NewError(datasource.ErrorCodeLimitExceeded)
+	}
 	entries := make([]Entry, 0, len(bindings))
+	inspected := make([]datasource.ResolvedPolicy, 0, len(bindings))
 	seen := make(map[datasource.KeyHandleID]struct{}, len(bindings))
 	for _, binding := range bindings {
 		if !binding.valid {
@@ -103,25 +108,12 @@ func NewResolver(
 		if _, duplicate := seen[binding.handleID]; duplicate {
 			return nil, datasource.NewError(datasource.ErrorCodeAmbiguous)
 		}
-		request, requestErr := datasource.NewPolicyRequest(
-			binding.tenant, binding.domain, binding.use, at, limits,
-		)
-		if requestErr != nil {
-			return nil, requestErr
+		resolved, inspectErr := inspectBindingPolicy(provider, binding, at, limits)
+		if inspectErr != nil {
+			return nil, inspectErr
 		}
-		resolved, panicked, resolveErr := callResolvePolicy(
-			context.Background(), provider, request,
-		)
-		if panicked {
-			return nil, datasource.NewError(datasource.ErrorCodeInternalInvariant)
-		}
-		if outcomeErr := datasource.ValidatePolicyOutcome(
-			resolved, resolveErr,
-		); outcomeErr != nil {
-			return nil, outcomeErr
-		}
-		if resolveErr != nil || !resolved.Valid() {
-			return nil, datasource.NewError(datasource.ErrorCodeUnavailable)
+		if len(inspected) > 0 && resolved.Generation() != inspected[0].Generation() {
+			return nil, datasource.NewError(datasource.ErrorCodeMalformedData)
 		}
 		credential, found := credentialByHandle(resolved.Profile(), binding.handleID)
 		if !found || credential.Algorithm() != binding.algorithm ||
@@ -136,6 +128,7 @@ func NewResolver(
 			return nil, entryErr
 		}
 		entries = append(entries, entry)
+		inspected = append(inspected, resolved)
 		seen[binding.handleID] = struct{}{}
 	}
 	registry, err := NewRegistry(entries, limits)
@@ -146,20 +139,46 @@ func NewResolver(
 	if err != nil {
 		return nil, err
 	}
-	for _, binding := range bindings {
-		projected, projectionErr := adapter.ResolvePolicy(
-			context.Background(),
-			binding.tenant,
-			binding.domain,
-			binding.use,
-			at,
-		)
-		if projectionErr != nil || !projected.Valid() {
-			return nil, datasource.NewError(datasource.ErrorCodeInvalidRequest)
+	for index, binding := range bindings {
+		if _, matchErr := registry.matchedEntries(inspected[index].Profile(), binding.use); matchErr != nil {
+			return nil, matchErr
 		}
 	}
 	output := &Resolver{provider: provider, adapter: adapter}
 	return output, nil
+}
+
+// inspectBindingPolicy contains hostile providers and checks exact immutable
+// selection identity before a credential enters the inert registry.
+func inspectBindingPolicy(
+	provider datasource.InspectionProvider,
+	binding Binding,
+	at time.Time,
+	limits datasource.Limits,
+) (result datasource.ResolvedPolicy, resultErr error) {
+	defer func() {
+		if recover() != nil {
+			result = datasource.ResolvedPolicy{}
+			resultErr = datasource.NewError(datasource.ErrorCodeInternalInvariant)
+		}
+	}()
+	request, err := datasource.NewPolicyRequest(binding.tenant, binding.domain, binding.use, at, limits)
+	if err != nil {
+		return datasource.ResolvedPolicy{}, err
+	}
+	resolved, err := provider.InspectPolicy(context.Background(), request)
+	if outcomeErr := datasource.ValidatePolicyOutcome(resolved, err); outcomeErr != nil {
+		return datasource.ResolvedPolicy{}, outcomeErr
+	}
+	if err != nil {
+		return datasource.ResolvedPolicy{}, err
+	}
+	policy := resolved.Policy()
+	if !resolved.ValidForLimits(limits) || policy.TenantID() != binding.tenant ||
+		policy.SigningDomain() != binding.domain || policy.Use() != binding.use {
+		return datasource.ResolvedPolicy{}, datasource.NewError(datasource.ErrorCodeMalformedData)
+	}
+	return resolved, nil
 }
 
 // ResolvePolicy returns one internal signing profile from the sole adapter.

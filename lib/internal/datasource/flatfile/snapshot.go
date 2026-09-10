@@ -97,6 +97,18 @@ func (s *Snapshot) ResolvePolicy(
 	return s.provider.ResolvePolicy(ctx, request)
 }
 
+// InspectPolicy delegates exact inert binding inspection after the same
+// immutable-snapshot and parser-accounting checks as runtime resolution.
+func (s *Snapshot) InspectPolicy(
+	ctx context.Context,
+	request datasource.PolicyRequest,
+) (datasource.ResolvedPolicy, error) {
+	if err := s.preflight(ctx); err != nil {
+		return datasource.ResolvedPolicy{}, err
+	}
+	return s.provider.InspectPolicy(ctx, request)
+}
+
 // String returns a constant protected snapshot summary.
 func (s *Snapshot) String() string { return "flatfile.Snapshot{redacted}" }
 

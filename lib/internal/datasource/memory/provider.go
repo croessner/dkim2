@@ -283,6 +283,29 @@ func (p *Provider) ResolvePolicy(
 	ctx context.Context,
 	request datasource.PolicyRequest,
 ) (datasource.ResolvedPolicy, error) {
+	resolved, err := p.InspectPolicy(ctx, request)
+	if err != nil {
+		return datasource.ResolvedPolicy{}, err
+	}
+	if resolved.Policy().Status() != datasource.RecordStatusActive {
+		return datasource.ResolvedPolicy{}, datasource.NewError(datasource.ErrorCodeInactive)
+	}
+	if activeErr := resolved.Profile().ActiveAt(request.EvaluationTime()); activeErr != nil {
+		return datasource.ResolvedPolicy{}, activeErr
+	}
+	if contextErr := datasource.ErrorFromContext(ctx); contextErr != nil {
+		return datasource.ResolvedPolicy{}, contextErr
+	}
+	return resolved, nil
+}
+
+// InspectPolicy validates an exact same-generation policy and every profile
+// relationship without requiring active status or a current validity window.
+// Its result is an inert datasource record, never a signing authorization.
+func (p *Provider) InspectPolicy(
+	ctx context.Context,
+	request datasource.PolicyRequest,
+) (datasource.ResolvedPolicy, error) {
 	snapshot, err := p.preflight(ctx)
 	if err != nil {
 		return datasource.ResolvedPolicy{}, err
@@ -312,12 +335,6 @@ func (p *Provider) ResolvePolicy(
 	resolvedProfile, valid := checkedResolvedProfile(snapshot, profile, policy.ProfileID())
 	if !found || !valid || resolvedProfile.SigningDomain() != policy.SigningDomain() {
 		return datasource.ResolvedPolicy{}, datasource.NewError(datasource.ErrorCodeInternalInvariant)
-	}
-	if policy.Status() != datasource.RecordStatusActive {
-		return datasource.ResolvedPolicy{}, datasource.NewError(datasource.ErrorCodeInactive)
-	}
-	if activeErr := resolvedProfile.ActiveAt(request.EvaluationTime()); activeErr != nil {
-		return datasource.ResolvedPolicy{}, activeErr
 	}
 	output, resultErr := datasource.NewResolvedPolicy(snapshot.generation, policy, profile)
 	if resultErr != nil {

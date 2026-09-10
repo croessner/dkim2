@@ -25,6 +25,14 @@ func (panicPolicyProvider) ResolvePolicy(
 	panic("protected-provider-marker")
 }
 
+// InspectPolicy panics at the inert construction boundary under test.
+func (panicPolicyProvider) InspectPolicy(
+	context.Context,
+	datasource.PolicyRequest,
+) (datasource.ResolvedPolicy, error) {
+	panic("protected-provider-marker")
+}
+
 // TestResolverConstructionContainsProviderPanic proves candidate construction
 // fails closed instead of propagating provider panics into daemon startup.
 func TestResolverConstructionContainsProviderPanic(t *testing.T) {
