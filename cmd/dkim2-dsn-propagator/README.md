@@ -13,7 +13,7 @@ message, never chooses a recipient, and never falls back to the outgoing
 delivery-status signing route or to the originator route. Every protocol rule
 lives in the library and the daemon. The implemented behavior is pinned to
 `draft-ietf-dkim-dkim2-spec-06` and the repository's historical
-`draft-chuang-dkim2-dns-04` baseline.
+`draft-ietf-dkim-dkim2-dns-00` baseline.
 
 This document is the runtime and configuration reference. The complete
 operator deployment procedure, including the concrete Postfix routing rule,

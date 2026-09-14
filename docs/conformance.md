@@ -2,7 +2,7 @@
 
 This repository tests the behavior baseline
 `draft-ietf-dkim-dkim2-spec-06` and the DNS baseline
-`draft-chuang-dkim2-dns-04`. Results are evidence for one exact Git base and
+`draft-ietf-dkim-dkim2-dns-00`. Results are evidence for one exact Git base and
 candidate-snapshot digest; historical reports do not establish the state of a
 different checkout.
 

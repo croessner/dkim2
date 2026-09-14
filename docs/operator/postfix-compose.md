@@ -3,7 +3,7 @@
 This guide deploys the implemented daemon and Milter with Postfix while
 preserving the existing trust boundaries. Protocol behavior remains pinned to
 `draft-ietf-dkim-dkim2-spec-06` and the tested
-`draft-chuang-dkim2-dns-04` behavior. The authoritative HTTP contract remains
+`draft-ietf-dkim-dkim2-dns-00` behavior. The authoritative HTTP contract remains
 [`docs/specs/openapi/dkim2d.yaml`](../specs/openapi/dkim2d.yaml).
 
 ## Reference map
@@ -746,7 +746,7 @@ in [`../replay-store-valkey.md`](../replay-store-valkey.md); the Valkey
 namespace, key width, ACL, and topology do not otherwise change.
 
 The message baseline change does not migrate the DNS identifier. Keep
-`draft-chuang-dkim2-dns-04` and its versioned vectors until the deferred
+`draft-ietf-dkim-dkim2-dns-00` and its versioned vectors until the deferred
 working-group DNS rename receives a separate reviewed update.
 Rollback must restore the complete prior Draft-04 application set only after
 the Draft-06 replay epoch has likewise drained; an online cross-version

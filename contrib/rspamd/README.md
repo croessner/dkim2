@@ -6,6 +6,12 @@ transport adapter only. DKIM2 parsing, cryptography, recipes, DNS, local DKIM2
 policy, replay coordination, disposition, and the optional
 `Authentication-Results` value remain owned by `dkim2d`.
 
+Delivered negative results may include a canonical `(reason=...)` diagnostic.
+The adapter admits only the exact reason from the already validated daemon
+response, bound to its authority and result; legacy bare reports remain valid.
+Comments are reporting only and do not supply policy input. Deploy this adapter
+update together with daemon versions that emit these diagnostics.
+
 The supported compatibility floor is Rspamd 4.1.5. A normal asynchronous
 filter resolves a privacy-preserving Redis retry result before calling
 `dkim2d`. A later postfilter sends the validated verifier projection and

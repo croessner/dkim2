@@ -6,7 +6,7 @@ documentation, CI, and local guardrails aligned with Go 1.27.0 whenever toolchai
 details change.
 
 The implementation baseline is `draft-ietf-dkim-dkim2-spec-06` plus
-`draft-chuang-dkim2-dns-04`. Treat the draft version as part of the behavior
+`draft-ietf-dkim-dkim2-dns-00`. Treat the draft version as part of the behavior
 under test. If a later draft changes semantics, update durable documentation and
 test vectors before changing protocol behavior.
 

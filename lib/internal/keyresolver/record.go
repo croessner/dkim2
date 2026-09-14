@@ -9,7 +9,7 @@ import (
 )
 
 // DNSDraftIdentifier records the active DNS key-record behavior baseline.
-const DNSDraftIdentifier = "draft-chuang-dkim2-dns-04"
+const DNSDraftIdentifier = "draft-ietf-dkim-dkim2-dns-00"
 
 var dnsRecordTags = tagvalue.MustKnownTags("v", "h", "k", "n", "p", "s", "t")
 

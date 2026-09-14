@@ -181,7 +181,7 @@ done
 
 for required in \
   'draft-ietf-dkim-dkim2-spec-06' \
-  'draft-chuang-dkim2-dns-04' \
+  'draft-ietf-dkim-dkim2-dns-00' \
   '127.0.0.1:2525' \
   'milter_protocol = 6' \
   'milter_default_action = tempfail' \
@@ -206,7 +206,7 @@ for reference in README.md docs/reference/README.md; do
 done
 for required in \
   'draft-ietf-dkim-dkim2-spec-06' \
-  'draft-chuang-dkim2-dns-04' \
+  'draft-ietf-dkim-dkim2-dns-00' \
   'postfix-compose.md' \
   'unqualified_draft06' \
   'milter_reconstructed_crlf' \
@@ -466,3 +466,7 @@ refute_pattern \
   docs/operator docs/specs/openapi/README.md \
   deployments/postfix-compose \
   --include='*.md' --include='*.yaml' --include='*.cf'
+
+# Current companion authority is separate from immutable historical reports.
+grep -Fq draft-ietf-dkim-dkim2-dns-00 docs/specs/companion-conformance.md
+grep -Fq draft-ietf-dkim-dkim2-dns-00 docs/ARCHITECTURE.md

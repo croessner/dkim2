@@ -44,7 +44,7 @@ This spec is governed by:
 - `draft-ietf-dkim-dkim2-spec-04`, dated 2026-07-05, especially
   Sections 3.1, 3.4, 6.1, 6.2, 8.2, 8.4, 8.7, 8.8, 9.2, 9.3, 9.4, 9.6, 10,
   11.2, 11.3, 11.4, 11.6, and 11.7
-- `draft-chuang-dkim2-dns-04`, dated 2026-03-18, only for DKIM2 key-record
+- `draft-ietf-dkim-dkim2-dns-00`, dated 2026-03-18, only for DKIM2 key-record
   and algorithm context needed by static public-key modeling
 - RFC 5321 SMTP envelope concepts for reverse-path and forward-path evidence
 - RFC 5322 Internet Message Format semantics already modeled by M1
@@ -53,7 +53,7 @@ This spec is governed by:
 If this spec conflicts with a source document, stop and reconcile the durable
 artifact before implementation continues.
 
-`draft-ietf-dkim-dkim2-spec-04` and `draft-chuang-dkim2-dns-04` remain the
+`draft-ietf-dkim-dkim2-spec-04` and `draft-ietf-dkim-dkim2-dns-00` remain the
 binding implementation baselines for M4. If a later draft exists or changes
 verification semantics, record it as a caveat or follow-up, but do not switch
 the repository behavior baseline without updating durable documentation and
@@ -293,7 +293,7 @@ Out of scope:
 ## Protocol, Runtime Or Domain Semantics
 
 M4 is bound to `draft-ietf-dkim-dkim2-spec-04`. It uses
-`draft-chuang-dkim2-dns-04` only as key-record and algorithm context for the
+`draft-ietf-dkim-dkim2-dns-00` only as key-record and algorithm context for the
 shape of static public keys. The static provider is not DNS and must not
 pretend to validate DNS publication, TXT record cardinality, DNS TTLs,
 revocation, DNSSEC, NXDOMAIN, or temporary resolver failures.

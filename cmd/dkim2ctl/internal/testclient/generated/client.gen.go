@@ -1556,7 +1556,7 @@ type APIVersion string
 // ActionPlan defines model for ActionPlan.
 type ActionPlan = []AddHeaderAction
 
-// AddHeaderAction defines model for AddHeaderAction.
+// AddHeaderAction Daemon-owned header action. Authentication-Results carries one dkim2 result, optionally followed by a bounded diagnostic comment from the closed reason vocabulary. Consumers validate authority and result and must not use diagnostic comments for policy. Legacy bare results remain accepted. Origin and failure-index properties are omitted by this privacy-preserving profile.
 type AddHeaderAction struct {
 	Name  AddHeaderActionName `json:"name"`
 	Type  AddHeaderActionType `json:"type"`
@@ -2428,7 +2428,7 @@ type ClientInterface interface {
 
 	// ProcessMessageWithBody Process one inbound DKIM2 message.
 	//
-	// Classifies DKIM2 applicability before verification. A message with no Message-Instance and no DKIM2-Signature fields returns 204 without starting verification, policy, replay, DNS, or mutation work. An applicable message is verified, receives server-owned policy and the configured replay check, and returns a closed final disposition. This operation neither signs nor revises a message.
+	// Classifies DKIM2 applicability before verification. A message with no Message-Instance and no DKIM2-Signature fields returns 204 without starting verification, policy, replay, DNS, or mutation work. An applicable message is verified, receives server-owned policy and the configured replay check, and returns a closed final disposition. This operation neither signs nor revises a message. Authentication-Results uses the bounded reporting profile in docs/specs/companion-conformance.md; unsigned 204 responses deliberately omit dkim2=none.
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -2437,7 +2437,7 @@ type ClientInterface interface {
 
 	// ProcessMessage Process one inbound DKIM2 message.
 	//
-	// Classifies DKIM2 applicability before verification. A message with no Message-Instance and no DKIM2-Signature fields returns 204 without starting verification, policy, replay, DNS, or mutation work. An applicable message is verified, receives server-owned policy and the configured replay check, and returns a closed final disposition. This operation neither signs nor revises a message.
+	// Classifies DKIM2 applicability before verification. A message with no Message-Instance and no DKIM2-Signature fields returns 204 without starting verification, policy, replay, DNS, or mutation work. An applicable message is verified, receives server-owned policy and the configured replay check, and returns a closed final disposition. This operation neither signs nor revises a message. Authentication-Results uses the bounded reporting profile in docs/specs/companion-conformance.md; unsigned 204 responses deliberately omit dkim2=none.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -2707,7 +2707,7 @@ func (c *Client) SignDeliveryStatus(ctx context.Context, body SignDeliveryStatus
 
 // ProcessMessageWithBody Process one inbound DKIM2 message.
 //
-// Classifies DKIM2 applicability before verification. A message with no Message-Instance and no DKIM2-Signature fields returns 204 without starting verification, policy, replay, DNS, or mutation work. An applicable message is verified, receives server-owned policy and the configured replay check, and returns a closed final disposition. This operation neither signs nor revises a message.
+// Classifies DKIM2 applicability before verification. A message with no Message-Instance and no DKIM2-Signature fields returns 204 without starting verification, policy, replay, DNS, or mutation work. An applicable message is verified, receives server-owned policy and the configured replay check, and returns a closed final disposition. This operation neither signs nor revises a message. Authentication-Results uses the bounded reporting profile in docs/specs/companion-conformance.md; unsigned 204 responses deliberately omit dkim2=none.
 //
 // Takes any type of body and a specified content type.
 //
@@ -2726,7 +2726,7 @@ func (c *Client) ProcessMessageWithBody(ctx context.Context, contentType string,
 
 // ProcessMessage Process one inbound DKIM2 message.
 //
-// Classifies DKIM2 applicability before verification. A message with no Message-Instance and no DKIM2-Signature fields returns 204 without starting verification, policy, replay, DNS, or mutation work. An applicable message is verified, receives server-owned policy and the configured replay check, and returns a closed final disposition. This operation neither signs nor revises a message.
+// Classifies DKIM2 applicability before verification. A message with no Message-Instance and no DKIM2-Signature fields returns 204 without starting verification, policy, replay, DNS, or mutation work. An applicable message is verified, receives server-owned policy and the configured replay check, and returns a closed final disposition. This operation neither signs nor revises a message. Authentication-Results uses the bounded reporting profile in docs/specs/companion-conformance.md; unsigned 204 responses deliberately omit dkim2=none.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -3461,7 +3461,7 @@ type ClientWithResponsesInterface interface {
 
 	// ProcessMessageWithBodyWithResponse Process one inbound DKIM2 message.
 	//
-	// Classifies DKIM2 applicability before verification. A message with no Message-Instance and no DKIM2-Signature fields returns 204 without starting verification, policy, replay, DNS, or mutation work. An applicable message is verified, receives server-owned policy and the configured replay check, and returns a closed final disposition. This operation neither signs nor revises a message.
+	// Classifies DKIM2 applicability before verification. A message with no Message-Instance and no DKIM2-Signature fields returns 204 without starting verification, policy, replay, DNS, or mutation work. An applicable message is verified, receives server-owned policy and the configured replay check, and returns a closed final disposition. This operation neither signs nor revises a message. Authentication-Results uses the bounded reporting profile in docs/specs/companion-conformance.md; unsigned 204 responses deliberately omit dkim2=none.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -3470,7 +3470,7 @@ type ClientWithResponsesInterface interface {
 
 	// ProcessMessageWithResponse Process one inbound DKIM2 message.
 	//
-	// Classifies DKIM2 applicability before verification. A message with no Message-Instance and no DKIM2-Signature fields returns 204 without starting verification, policy, replay, DNS, or mutation work. An applicable message is verified, receives server-owned policy and the configured replay check, and returns a closed final disposition. This operation neither signs nor revises a message.
+	// Classifies DKIM2 applicability before verification. A message with no Message-Instance and no DKIM2-Signature fields returns 204 without starting verification, policy, replay, DNS, or mutation work. An applicable message is verified, receives server-owned policy and the configured replay check, and returns a closed final disposition. This operation neither signs nor revises a message. Authentication-Results uses the bounded reporting profile in docs/specs/companion-conformance.md; unsigned 204 responses deliberately omit dkim2=none.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -5866,7 +5866,7 @@ func (c *ClientWithResponses) SignDeliveryStatusWithResponse(ctx context.Context
 
 // ProcessMessageWithBodyWithResponse Process one inbound DKIM2 message.
 //
-// Classifies DKIM2 applicability before verification. A message with no Message-Instance and no DKIM2-Signature fields returns 204 without starting verification, policy, replay, DNS, or mutation work. An applicable message is verified, receives server-owned policy and the configured replay check, and returns a closed final disposition. This operation neither signs nor revises a message.
+// Classifies DKIM2 applicability before verification. A message with no Message-Instance and no DKIM2-Signature fields returns 204 without starting verification, policy, replay, DNS, or mutation work. An applicable message is verified, receives server-owned policy and the configured replay check, and returns a closed final disposition. This operation neither signs nor revises a message. Authentication-Results uses the bounded reporting profile in docs/specs/companion-conformance.md; unsigned 204 responses deliberately omit dkim2=none.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -5881,7 +5881,7 @@ func (c *ClientWithResponses) ProcessMessageWithBodyWithResponse(ctx context.Con
 
 // ProcessMessageWithResponse Process one inbound DKIM2 message.
 //
-// Classifies DKIM2 applicability before verification. A message with no Message-Instance and no DKIM2-Signature fields returns 204 without starting verification, policy, replay, DNS, or mutation work. An applicable message is verified, receives server-owned policy and the configured replay check, and returns a closed final disposition. This operation neither signs nor revises a message.
+// Classifies DKIM2 applicability before verification. A message with no Message-Instance and no DKIM2-Signature fields returns 204 without starting verification, policy, replay, DNS, or mutation work. An applicable message is verified, receives server-owned policy and the configured replay check, and returns a closed final disposition. This operation neither signs nor revises a message. Authentication-Results uses the bounded reporting profile in docs/specs/companion-conformance.md; unsigned 204 responses deliberately omit dkim2=none.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //

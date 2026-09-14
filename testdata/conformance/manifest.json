@@ -1,7 +1,7 @@
 {
   "schema": "dkim2.conformance-manifest.v1",
   "message_draft": "draft-ietf-dkim-dkim2-spec-06",
-  "dns_draft": "draft-chuang-dkim2-dns-04",
+  "dns_draft": "draft-ietf-dkim-dkim2-dns-00",
   "suite_version": "1",
   "suites": [
     "canonical",
@@ -75,8 +75,8 @@
     },
     {
       "id": "dns-records",
-      "path": "lib/testdata/vectors/draft-chuang-dkim2-dns-04/dns-golden.json",
-      "sha256": "73a3ba2c04ccf46102dbd75e4d83cdcc16cc5a12a561ae46c56140e8cc4bb9ce",
+      "path": "lib/testdata/vectors/draft-ietf-dkim-dkim2-dns-00/dns-golden.json",
+      "sha256": "1e0510e58a4cfe1bb3ac29c41688e0c05441519b98622965dc433a62e9c431d0",
       "module": "lib"
     },
     {
@@ -88,13 +88,13 @@
     {
       "id": "milter-fixture-data",
       "path": "testdata/conformance/milter/draft-ietf-dkim-dkim2-spec-06/portable-fixtures.json",
-      "sha256": "33821e279e0f7723ee4682855225acbda94a848386067a2cbe5618f1299102e6",
+      "sha256": "fee087f57cbcf620ca71a58f5b0cd9e9dbced55701acf9e37e18708a5c785427",
       "module": "testdata/conformance"
     },
     {
       "id": "milter-fixture-source",
       "path": "cmd/dkim2-milter/internal/integration/milter_fixture_test.go",
-      "sha256": "6e04fb0268ca20678f2e49cd14edb000209c6a2c30ca7e299553a30eca552910",
+      "sha256": "a5478a25cceed0f85a5d5597fe260713fc79b7b3598a078acc863d8a809aec7a",
       "module": "cmd/dkim2-milter"
     },
     {
@@ -172,7 +172,7 @@
     {
       "id": "openapi-wire-response-source",
       "path": "cmd/dkim2d/internal/httpjson/http_wire_response.go",
-      "sha256": "232bee1c33434c38979cec8e53be8b5c6f44f98bff35fb4b8931a7a106029f3b",
+      "sha256": "b0f9e179e08248cb81d4b4f50805061adbaf3cc41c1b6b85f88e695a7d22c8c0",
       "module": "cmd/dkim2d"
     },
     {
@@ -208,7 +208,7 @@
     {
       "id": "postfix-qualification-runner",
       "path": "contrib/qualification/postfix-milter/run.sh",
-      "sha256": "1a73d07813dd67737c085195a5e0a6bc1a7b3d0c60e376d6ef12cbb4908caa2e",
+      "sha256": "2db615bcccd4cab75d505eb545e2ec8e9241e73839f5b77f4255a0e00fcf896e",
       "module": "contrib/qualification/postfix-milter"
     },
     {
@@ -498,7 +498,7 @@
       "case_id": "dns-negative-record-states",
       "class": "draft_normative",
       "authority": [
-        "draft-chuang-dkim2-dns-04 Sections 3.2 through 3.4.2"
+        "draft-ietf-dkim-dkim2-dns-00 Sections 3.2 through 3.4.2"
       ],
       "provenance": "regression_reproducer",
       "runner": "portable_vector",
@@ -514,7 +514,7 @@
       "case_id": "dns-records",
       "class": "draft_normative",
       "authority": [
-        "draft-chuang-dkim2-dns-04 Sections 3.2 through 3.4.2"
+        "draft-ietf-dkim-dkim2-dns-00 Sections 3.2 through 3.4.2"
       ],
       "provenance": "manual_derivation",
       "runner": "portable_vector",
@@ -1752,7 +1752,7 @@
       "class": "draft_normative",
       "authority": [
         "draft-ietf-dkim-dkim2-spec-06 Sections 3, 10, 11.5, and 11.6",
-        "draft-chuang-dkim2-dns-04 Sections 3.3 through 3.4.2"
+        "draft-ietf-dkim-dkim2-dns-00 Sections 3.3 through 3.4.2"
       ],
       "provenance": "cross_primitive",
       "runner": "portable_vector",

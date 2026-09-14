@@ -16,7 +16,7 @@
 // provenance. DNSSECStatus is a closed diagnostic value with no verdict or TTL
 // effect.
 //
-// ParseRecord implements draft-chuang-dkim2-dns-04 using the shared tagvalue
+// ParseRecord implements draft-ietf-dkim-dkim2-dns-00 using the shared tagvalue
 // scanner. Lowercase k= is recognized according to the draft prose and RFC 6376
 // Erratum 5137 despite the inherited ABNF typo. DNS TXT is the sole lookup
 // binding because the active signature grammar has no q=. Unknown and retired

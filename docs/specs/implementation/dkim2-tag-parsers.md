@@ -31,7 +31,7 @@ This spec is governed by:
 - `.gitignore`
 - `draft-ietf-dkim-dkim2-spec-04`, dated 2026-07-05, especially
   Sections 2.8, 2.12, 2.14, 7, 8, 9.6, 10, 11.2, and 11.4
-- `draft-chuang-dkim2-dns-04`, dated 2026-03-18, especially
+- `draft-ietf-dkim-dkim2-dns-00`, dated 2026-03-18, especially
   Section 3.2 for the shared DKIM2 tag-value syntax used by DNS records
 
 If this spec conflicts with a source document, stop and reconcile the durable
@@ -224,7 +224,7 @@ Out of scope:
 ## Protocol, Runtime Or Domain Semantics
 
 M2 is bound to `draft-ietf-dkim-dkim2-spec-04`, with
-`draft-chuang-dkim2-dns-04` used only for the shared DKIM2 tag-value list
+`draft-ietf-dkim-dkim2-dns-00` used only for the shared DKIM2 tag-value list
 syntax that the DNS record format copies from DKIM2.
 
 ### Shared Tag-Value Semantics

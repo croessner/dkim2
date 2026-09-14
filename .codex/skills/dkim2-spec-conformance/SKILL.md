@@ -9,7 +9,7 @@ description: Enforce DKIM2 draft and RFC fidelity for protocol design, implement
 
 Read `AGENTS.md`, `POLICY.md`, and `docs/ARCHITECTURE.md` before changing
 behavior. Treat `draft-ietf-dkim-dkim2-spec-06` and
-`draft-chuang-dkim2-dns-04` as the active baseline until the architecture says
+`draft-ietf-dkim-dkim2-dns-00` as the active baseline until the architecture says
 otherwise.
 
 When a task depends on exact draft text, verify the draft text directly instead

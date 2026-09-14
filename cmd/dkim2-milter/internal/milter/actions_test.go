@@ -334,3 +334,20 @@ func TestFormatAuthenticationResultsIsExactAndBounded(t *testing.T) {
 		t.Fatal("unknown Authentication-Results value succeeded")
 	}
 }
+
+// TestInboundDiagnosticRetainsAuthorityAndOutcome binds enriched reports at EOM.
+func TestInboundDiagnosticRetainsAuthorityAndOutcome(t *testing.T) {
+	result := Result{Operation: operationProcess, Result: resultFail, Outcome: DispositionContinue,
+		Actions: []Action{{Kind: ActionAddHeader, Name: headerAuthResults, Value: testAuthservID + "; dkim2=fail (reason=signature_mismatch)"}}}
+	if !validResult(result, modeInbound, testAuthservID) {
+		t.Fatal("bounded report rejected")
+	}
+	result.Actions[0].Value = "attacker.example; dkim2=fail (reason=signature_mismatch)"
+	if validResult(result, modeInbound, testAuthservID) {
+		t.Fatal("forged authority accepted")
+	}
+	result.Actions[0].Value = testAuthservID + "; dkim2=pass"
+	if validResult(result, modeInbound, testAuthservID) {
+		t.Fatal("forged outcome accepted")
+	}
+}

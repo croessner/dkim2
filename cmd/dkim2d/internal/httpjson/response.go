@@ -2,6 +2,7 @@ package httpjson
 
 import (
 	"fmt"
+	"github.com/croessner/dkim2/authresults"
 	"io"
 	"slices"
 	"strconv"
@@ -263,6 +264,7 @@ func MapInboundResult(
 		authentication.State,
 		disposition,
 		authservID,
+		string(authentication.PrimaryReason),
 	)
 	if actionsErr != nil {
 		return generated.ProcessResponse{}, actionsErr
@@ -424,6 +426,7 @@ func mapProcessReportActions(
 	state generated.VerificationState,
 	disposition generated.Disposition,
 	authservID string,
+	reasons ...string,
 ) (generated.ActionPlan, error) {
 	if authservID == "" ||
 		(disposition != generated.DispositionAccept &&
@@ -434,9 +437,20 @@ func mapProcessReportActions(
 	if !validSigningDomain(authservID) || !resultOK {
 		return nil, newMappingError(MappingInternalContract)
 	}
+	reason := ""
+	if len(reasons) > 1 {
+		return nil, newMappingError(MappingInternalContract)
+	}
+	if len(reasons) == 1 {
+		reason = reasons[0]
+	}
+	report, valid := authresults.New(authservID, reportResult, reason)
+	if !valid {
+		return nil, newMappingError(MappingInternalContract)
+	}
 	return generated.ActionPlan{{
 		Type: generated.AddHeader, Name: generated.AuthenticationResults,
-		Value: authservID + "; dkim2=" + reportResult,
+		Value: report.Value(),
 	}}, nil
 }
 

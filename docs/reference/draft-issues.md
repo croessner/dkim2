@@ -2,7 +2,7 @@
 
 This log binds the first preview to
 `draft-ietf-dkim-dkim2-spec-06` and historical
-`draft-chuang-dkim2-dns-04`. The strict machine source is
+`draft-ietf-dkim-dkim2-dns-00`. The strict machine source is
 `testdata/reference/draft-issues.json`; stable issue IDs are never reused.
 Local implementation status and upstream draft status are intentionally
 separate. No entry records an upstream filing or resolution unless that event

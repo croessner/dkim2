@@ -1,7 +1,7 @@
 {
   "schema": "dkim2.milter-fixtures.v1",
   "message_draft": "draft-ietf-dkim-dkim2-spec-06",
-  "dns_draft": "draft-chuang-dkim2-dns-04",
+  "dns_draft": "draft-ietf-dkim-dkim2-dns-00",
   "fidelity": "milter_reconstructed_crlf",
   "cases": [
     {

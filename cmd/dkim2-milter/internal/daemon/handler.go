@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/croessner/dkim2/authresults"
 	"io"
 	"mime"
 	"net"
@@ -1051,10 +1052,14 @@ func validProcessReportAction(
 		return value != nil && len(value.Actions) == 0
 	}
 	result, ok := verificationResult(value.Authentication.State)
-	return ok && len(value.Actions) == 1 &&
+	if len(value.Actions) != 1 {
+		return false
+	}
+	report, reportOK := authresults.Parse(value.Actions[0].Value)
+	return ok && reportOK && report.MatchesReason(string(value.Authentication.PrimaryReason)) && len(value.Actions) == 1 &&
 		value.Actions[0].Type == generated.AddHeader &&
 		value.Actions[0].Name == generated.AuthenticationResults &&
-		value.Actions[0].Value == authservID+"; dkim2="+result
+		report.Matches(authservID, result)
 }
 
 // validProcessOutcomeMatrix preserves the daemon replay coordinator contract.

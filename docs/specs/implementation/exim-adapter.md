@@ -9,7 +9,7 @@ Status: implementation-ready planning baseline.
 
 Implementation base: `487ad434d106954e72d1cd241de543918c0fd260`.
 Protocol behavior remains pinned to `draft-ietf-dkim-dkim2-spec-04` and the
-historical `draft-chuang-dkim2-dns-04` identifier. This increment adds an Exim
+historical `draft-ietf-dkim-dkim2-dns-00` identifier. This increment adds an Exim
 adapter family around the existing daemon contract. It does not change the
 pinned DKIM2 or DNS semantics.
 

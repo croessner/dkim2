@@ -9,7 +9,7 @@ Status: implementation-ready planning baseline.
 
 Implementation base: `487ad434d106954e72d1cd241de543918c0fd260`.
 Protocol behavior remains pinned to `draft-ietf-dkim-dkim2-spec-04` and the
-historical `draft-chuang-dkim2-dns-04` baseline. The active working-group DNS
+historical `draft-ietf-dkim-dkim2-dns-00` baseline. The active working-group DNS
 document has a different identifier but a normatively identical body; this
 increment does not silently migrate identifiers, behavior, or vectors.
 
@@ -59,7 +59,7 @@ snapshot, and verifier digest. See `docs/conformance.md` and
 Authority order is:
 
 1. `draft-ietf-dkim-dkim2-spec-04` for DKIM2 protocol meaning;
-2. `draft-chuang-dkim2-dns-04` for the repository's tested DNS behavior;
+2. `draft-ietf-dkim-dkim2-dns-00` for the repository's tested DNS behavior;
 3. RFC 5321, RFC 5322, RFC 6376, RFC 6531, RFC 6532, and RFC 8601 for SMTP,
    message, DKIM heritage, internationalized mail, and reporting behavior;
 4. the authoritative OpenAPI document for HTTP operations and DTOs;
@@ -152,7 +152,7 @@ Package-owned fixtures stay close to their implementation:
 ```text
 lib/testdata/vectors/
   draft-ietf-dkim-dkim2-spec-04/
-  draft-chuang-dkim2-dns-04/
+  draft-ietf-dkim-dkim2-dns-00/
 
 cmd/dkim2ctl/testdata/fixtures/
   draft-ietf-dkim-dkim2-spec-04/

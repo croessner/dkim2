@@ -33,7 +33,9 @@ const (
 	maxModuleBytes    = int64(256 << 20)
 )
 
-var proofModules = []string{"cmd/dkim2-milter", "cmd/dkim2-exim", "cmd/dkim2ctl", "cmd/dkim2d", "tools"}
+var proofModules = []string{"cmd/dkim2-milter", "cmd/dkim2-exim", "cmd/dkim2ctl", "cmd/dkim2d", "cmd/dkim2-dsn-propagator", "tools"}
+
+var moduleSumPaths = []string{"go.work.sum", "lib/go.sum", "cmd/dkim2d/go.sum", "cmd/dkim2-milter/go.sum", "cmd/dkim2-exim/go.sum", "cmd/dkim2ctl/go.sum", "cmd/dkim2-dsn-propagator/go.sum", "tools/go.sum"}
 
 // ModuleIdentity records one exact private-proxy module artifact.
 type ModuleIdentity struct {
@@ -185,6 +187,15 @@ func RunModuleProof(root string) (ModuleProof, error) {
 	if err != nil {
 		return ModuleProof{}, err
 	}
+	metadata, err := artifactpath.ReadFile(sourceRoot, "lib/go.mod", 1<<20)
+	if err != nil {
+		return ModuleProof{}, err
+	}
+	metadataSum, err := candidateModuleMetadataSum(metadata)
+	if err != nil {
+		return ModuleProof{}, err
+	}
+	allowedSums[metadataSum] = true
 	for _, directory := range proofModules {
 		moduleRoot := filepath.Join(sourceRoot, filepath.FromSlash(directory))
 		graph, err := runStandaloneModule(
@@ -692,9 +703,8 @@ func vendoredPackageModules(root string) (map[string]string, error) {
 
 // committedModuleSums returns the exact authenticated zip hashes in committed metadata.
 func committedModuleSums(root string) (map[string]string, error) {
-	paths := []string{"go.work.sum", "lib/go.sum", "cmd/dkim2d/go.sum", "cmd/dkim2-milter/go.sum", "cmd/dkim2ctl/go.sum", "tools/go.sum"}
 	sums := make(map[string]string)
-	for _, path := range paths {
+	for _, path := range moduleSumPaths {
 		content, err := artifactpath.ReadFile(root, path, 8<<20)
 		if err != nil {
 			return nil, errors.New("module_sum_read")
@@ -720,9 +730,8 @@ func committedModuleSums(root string) (map[string]string, error) {
 
 // committedModuleSumLines returns every exact authenticated line across workspace metadata.
 func committedModuleSumLines(root string) (map[string]bool, error) {
-	paths := []string{"go.work.sum", "lib/go.sum", "cmd/dkim2d/go.sum", "cmd/dkim2-milter/go.sum", "cmd/dkim2ctl/go.sum", "tools/go.sum"}
 	lines := make(map[string]bool)
-	for _, path := range paths {
+	for _, path := range moduleSumPaths {
 		content, err := artifactpath.ReadFile(root, path, 8<<20)
 		if err != nil {
 			return nil, errors.New("module_sum_read")
@@ -1083,7 +1092,19 @@ func replaceEnvironment(environment []string, replacement string) []string {
 	return append(result, replacement)
 }
 
-// moduleSumSubset proves standalone tidy adds or changes no authenticated sum.
+// candidateModuleMetadataSum authenticates the synthetic proxy go.mod from snapshot-bound source bytes.
+func candidateModuleMetadataSum(content []byte) (string, error) {
+	if len(content) == 0 || len(content) > 1<<20 {
+		return "", errors.New("module_candidate_mod_sum")
+	}
+	// Go h1 hashes sorted filename/content-digest lines, as moduleZipHash does.
+	entry := fmt.Sprintf("%x  go.mod\n", sha256.Sum256(content))
+	digest := sha256.Sum256([]byte(entry))
+	hash := "h1:" + base64.StdEncoding.EncodeToString(digest[:])
+	return "github.com/croessner/dkim2 " + candidateVersion + "/go.mod " + hash, nil
+}
+
+// moduleSumSubset permits only original sums or explicitly authenticated dependency and candidate sums.
 func moduleSumSubset(original, tidied []byte, allowed map[string]bool) bool {
 	originalLines := make(map[string]bool)
 	scanner := bufio.NewScanner(bytes.NewReader(original))

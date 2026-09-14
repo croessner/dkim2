@@ -2,7 +2,7 @@
 
 DKIM2 security evidence is a repository-owned local security profile. It does
 not add requirements to `draft-ietf-dkim-dkim2-spec-06`, the historical
-`draft-chuang-dkim2-dns-04` behavior baseline, or the incorporated RFCs.
+`draft-ietf-dkim-dkim2-dns-00` behavior baseline, or the incorporated RFCs.
 Normative, documented-interpretation, OpenAPI, adapter, and local-policy
 assertions remain separately classified.
 

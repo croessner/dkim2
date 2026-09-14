@@ -327,7 +327,9 @@ paths:
         starting verification, policy, replay, DNS, or mutation work. An
         applicable message is verified, receives server-owned policy and the
         configured replay check, and returns a closed final disposition. This
-        operation neither signs nor revises a message.
+        operation neither signs nor revises a message. Authentication-Results uses
+        the bounded reporting profile in docs/specs/companion-conformance.md;
+        unsigned 204 responses deliberately omit dkim2=none.
       security:
         - localCapability: []
       requestBody:
@@ -1966,6 +1968,13 @@ components:
       items:
         $ref: "#/components/schemas/AddHeaderAction"
     AddHeaderAction:
+      description: >
+        Daemon-owned header action. Authentication-Results carries one dkim2
+        result, optionally followed by a bounded diagnostic comment from the
+        closed reason vocabulary. Consumers validate authority and result and
+        must not use diagnostic comments for policy. Legacy bare results remain
+        accepted. Origin and failure-index properties are omitted by this
+        privacy-preserving profile.
       type: object
       additionalProperties: false
       required:

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/croessner/dkim2/authresults"
 	"io"
 	"net/http"
 	"sort"
@@ -460,13 +461,13 @@ func validProcessActions(response generated.ProcessResponse) bool {
 	}
 	action := response.Actions[0]
 	result, ok := authenticationResult(response.Authentication.State)
-	suffix := "; dkim2=" + result
+	report, reportOK := authresults.Parse(action.Value)
 	if !ok || action.Type != generated.AddHeader ||
 		action.Name != generated.AuthenticationResults ||
-		!strings.HasSuffix(action.Value, suffix) {
+		!reportOK || !report.Matches(report.Authority(), result) || !report.MatchesReason(string(response.Authentication.PrimaryReason)) {
 		return false
 	}
-	return validSigningDomain(strings.TrimSuffix(action.Value, suffix))
+	return validSigningDomain(report.Authority())
 }
 
 // validOperationResponse validates one complete sign or revision response.

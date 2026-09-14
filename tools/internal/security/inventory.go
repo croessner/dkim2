@@ -23,7 +23,7 @@ const (
 	// MessageDraft is the exact DKIM2 behavior baseline used by security evidence.
 	MessageDraft = "draft-ietf-dkim-dkim2-spec-06"
 	// DNSDraft is the exact historical DNS behavior baseline used by security evidence.
-	DNSDraft = "draft-chuang-dkim2-dns-04"
+	DNSDraft = "draft-ietf-dkim-dkim2-dns-00"
 	// BaseRevision is the fixed trusted implementation anchor for candidate admission.
 	BaseRevision = "f30fecbd35ae3afd1b590ddfe55ee45f0cf6555a"
 	// FuzzDuration is the minimum unchanged-candidate duration for each target.
@@ -121,6 +121,7 @@ func Targets() []FuzzTarget {
 		target("cmd/dkim2d/internal/replay/valkey/fuzz_test.go", "FuzzValkeyResultMapping", "Valkey replay response", "local_security_policy", "bounded RESP and closed mutation authority"),
 		target("cmd/dkim2d/internal/signingstore/manifest_fuzz_test.go", "FuzzPrivateManifestParsingNeverPanics", "private signing manifest", "local_security_policy", "strict bounded same-generation parsing"),
 		target("cmd/dkim2d/internal/signingstore/registry_test.go", "FuzzImportedPrivateKeyNeverLeaksOrPanics", "protected legacy private-key import", "local_security_policy", "bounded exact PKCS8 algorithm and strength validation"),
+		target("lib/authresults/report_test.go", "FuzzReportRoundTrip", "local authentication report", "adapter_contract", "bounded canonical report roundtrip with closed diagnostic reasons"),
 		target("lib/dns_provider_fuzz_test.go", "FuzzDNSPublicProvider", "public DNS provider", "draft_normative", "bounded typed resolver projection"),
 		target("lib/dns_provider_fuzz_test.go", "FuzzDNSPublicVerifier", "public DNS verification", "draft_normative", "bounded provider and verification composition"),
 		target("lib/internal/canonical/fuzz_test.go", "FuzzBodyHashInput", "body hash input", "draft_normative", "bounded byte-preserving canonicalization"),

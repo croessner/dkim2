@@ -1,6 +1,7 @@
 package milter
 
 import (
+	"github.com/croessner/dkim2/authresults"
 	"strings"
 	"unicode/utf8"
 )
@@ -124,10 +125,14 @@ func validInboundResult(result Result, authservID string) bool {
 			result.Outcome != DispositionContinue) {
 		return len(result.Actions) == 0
 	}
-	return len(result.Actions) == 1 &&
+	if len(result.Actions) != 1 {
+		return false
+	}
+	report, ok := authresults.Parse(result.Actions[0].Value)
+	return ok && len(result.Actions) == 1 &&
 		result.Actions[0].Name == headerAuthResults &&
 		authservID != "" &&
-		result.Actions[0].Value == authservID+"; dkim2="+result.Result
+		report.Matches(authservID, result.Result)
 }
 
 // validOriginatorResult enforces the exact ordered signing mutation.

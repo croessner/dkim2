@@ -49,9 +49,8 @@
 // when explicitly typed temporary; otherwise it is a provider contract error.
 //
 // NewDNSPublicKeyProvider constructs the DNS-backed provider for the tested
-// draft-chuang-dkim2-dns-04 behavior baseline. That document was replaced by
-// draft-ietf-dkim-dkim2-dns-00 without a normative-body change; changing the
-// version identifier remains an explicit reviewed baseline migration. The
+// draft-ietf-dkim-dkim2-dns-00 behavior baseline. The 2026-09-14 migration
+// from the individual DNS draft changed identifiers, not normative behavior. The
 // provider derives an absolute
 // <selector>._domainkey.<signing-domain>. owner from signed values, so transports
 // and callers must treat that name as sensitive diagnostic data. TXTTransport
@@ -64,8 +63,8 @@
 //
 // DNS key records use PKCS#1 RSAPublicKey DER for RSA and exactly 32 raw bytes
 // for Ed25519. Empty p= is revoked. Non-empty p= accepts omitted terminal
-// Base64 padding as DNS-04 specifies while still requiring canonical zero pad
-// bits. The parser follows the DNS-04 k= prose and RFC 6376 Erratum 5137 by
+// Base64 padding as WG DNS-00 specifies while still requiring canonical zero pad
+// bits. The parser follows the WG DNS-00 k= prose and RFC 6376 Erratum 5137 by
 // recognizing lowercase k= despite the inherited ABNF typo. The active DKIM2
 // signature grammar exposes no q= option; DNS TXT is the only lookup binding.
 // Testing t=y and strict-identity t=s declarations reach

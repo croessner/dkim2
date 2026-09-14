@@ -20,8 +20,8 @@ func TestRepositoryInventoryMatchesEveryFirstPartyFuzzTarget(t *testing.T) {
 	if err := ValidateInventory(root); err != nil {
 		t.Fatalf("ValidateInventory() error = %v", err)
 	}
-	if got := len(Targets()); got != 97 {
-		t.Fatalf("target count = %d, want 97", got)
+	if got := len(Targets()); got != 98 {
+		t.Fatalf("target count = %d, want 98", got)
 	}
 	if got := len(ResourceOwners()); got != 19 {
 		t.Fatalf("resource owner count = %d, want 19", got)

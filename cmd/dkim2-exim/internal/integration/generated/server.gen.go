@@ -1323,7 +1323,7 @@ type APIVersion string
 // ActionPlan defines model for ActionPlan.
 type ActionPlan = []AddHeaderAction
 
-// AddHeaderAction defines model for AddHeaderAction.
+// AddHeaderAction Daemon-owned header action. Authentication-Results carries one dkim2 result, optionally followed by a bounded diagnostic comment from the closed reason vocabulary. Consumers validate authority and result and must not use diagnostic comments for policy. Legacy bare results remain accepted. Origin and failure-index properties are omitted by this privacy-preserving profile.
 type AddHeaderAction struct {
 	Name  AddHeaderActionName `json:"name"`
 	Type  AddHeaderActionType `json:"type"`

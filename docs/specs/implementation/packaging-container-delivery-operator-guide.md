@@ -9,7 +9,7 @@ Status: implementation-ready planning baseline.
 
 Implementation base: `62a3d8282f65001e24f669be3962cd13474442f1`.
 Protocol behavior remains pinned to `draft-ietf-dkim-dkim2-spec-04` and the
-historical `draft-chuang-dkim2-dns-04` behavior baseline. Packaging, deployment,
+historical `draft-ietf-dkim-dkim2-dns-00` behavior baseline. Packaging, deployment,
 health probes, supply-chain evidence, and operator procedures are local product
 policy. They must not be described as new DKIM2 protocol requirements.
 
@@ -31,7 +31,7 @@ and operator boundaries are documented in `docs/operations/exim.md`,
 This specification is governed, in order, by:
 
 1. `draft-ietf-dkim-dkim2-spec-04` for DKIM2 protocol meaning;
-2. `draft-chuang-dkim2-dns-04` for the repository's tested DNS behavior;
+2. `draft-ietf-dkim-dkim2-dns-00` for the repository's tested DNS behavior;
 3. RFC 5321, RFC 5322, RFC 6376, RFC 6531, RFC 6532, and RFC 8601 for the
    SMTP, message, DKIM heritage, internationalized-message, and
    Authentication-Results behavior used by the deployed product;

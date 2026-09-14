@@ -32,7 +32,7 @@ This specification is governed by:
 - `docs/specs/spec-and-prompt-template.md`;
 - `docs/operator/datasource-key-rotation.md`;
 - `docs/specs/openapi/dkim2d.yaml` as an explicitly unchanged boundary;
-- `draft-ietf-dkim-dkim2-spec-04` and `draft-chuang-dkim2-dns-04`;
+- `draft-ietf-dkim-dkim2-spec-04` and `draft-ietf-dkim-dkim2-dns-00`;
 - RFC 4511, RFC 2696, and RFC 4528 for LDAP publication;
 - the documented PostgreSQL, MySQL, and MariaDB transaction contracts;
 - `Makefile` and repository guardrails.

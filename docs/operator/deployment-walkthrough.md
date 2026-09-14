@@ -10,7 +10,7 @@ state layout, lifecycle, backup, and rollback are in
 repeating it.
 
 Protocol behavior is pinned to `draft-ietf-dkim-dkim2-spec-06` with the
-tested `draft-chuang-dkim2-dns-04` DNS behavior. Where the draft leaves a
+tested `draft-ietf-dkim-dkim2-dns-00` DNS behavior. Where the draft leaves a
 choice to local policy, this page says so. Where this implementation makes a
 recorded interpretation, it is named as one. The authoritative HTTP contract
 is [`docs/specs/openapi/dkim2d.yaml`](../specs/openapi/dkim2d.yaml), and the

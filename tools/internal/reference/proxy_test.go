@@ -8,6 +8,31 @@ import (
 	"testing"
 )
 
+// TestCandidateModuleMetadataSumBindsExactSource permits only the generated local module metadata.
+func TestCandidateModuleMetadataSumBindsExactSource(t *testing.T) {
+	content, err := os.ReadFile(filepath.Join(repositoryRoot(t), "lib/go.mod"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	line, err := candidateModuleMetadataSum(content)
+	if err != nil {
+		t.Fatal(err)
+	}
+	changed, err := candidateModuleMetadataSum(append(append([]byte(nil), content...), '\n'))
+	if err != nil || line == changed {
+		t.Fatal("metadata digest ignored changed bytes")
+	}
+	allowed := map[string]bool{line: true}
+	if !moduleSumSubset(nil, []byte(line+"\n"), allowed) {
+		t.Fatal("candidate metadata rejected")
+	}
+	for _, hostile := range []string{changed, strings.Replace(line, "/go.mod", "", 1), strings.Replace(line, "croessner/dkim2", "attacker/other", 1)} {
+		if moduleSumSubset(nil, []byte(hostile+"\n"), allowed) {
+			t.Fatal("unbound checksum admitted")
+		}
+	}
+}
+
 // TestValidModuleRelativePathRejectsHostileTrees proves path confinement.
 func TestValidModuleRelativePathRejectsHostileTrees(t *testing.T) {
 	for _, value := range []string{"", "../escape", "a/../../escape", "/absolute", `a\b`, ".git/config", "temp/key", ".artifacts/report", "a//b"} {

@@ -1,18 +1,21 @@
 # Compatibility Statement
 
 The preview baseline implements `draft-ietf-dkim-dkim2-spec-06` with the
-historical `draft-chuang-dkim2-dns-04` DNS behavior identifier. A later draft
+`draft-ietf-dkim-dkim2-dns-00` DNS behavior identifier. A later draft
 is a reviewed behavior migration, not an automatic compatibility update.
 
 ## Public surfaces
 
 - The exported root library API is reviewed against the exact base
-  `f30fecbd35ae3afd1b590ddfe55ee45f0cf6555a`. The candidate retains the public
-  datasource-provider bridge and adds closed, nonbreaking verification and
-  signing applicability assessments so protocol absence is not represented as
-  a four-state result. The
-  deterministic API manifest has 691 declarations and SHA-256
-  `ddf0ef36cdc47bac57495a5d14fd5c56243d1bc9b82f68c80e14a48c95c45748`.
+  `f7099dbd47ff3bd79e30f7801814c87eb0914b4c`. The deterministic API manifest
+  has 883 declarations and SHA-256
+  `5958926bb0b972d164d6d6dee00c372cc8966b30f1b0906c2c494262577fd2b2`.
+  The [dated review](../reports/api-and-mailflow-review-2026-09-14.md)
+  records the previous inconsistent revision/hash pair, additive declarations,
+  Draft-06 behavior migration and the older DSN constructor migration.
+  This is a reviewed current reference, not a claim of Draft-04/05 behavioral
+  compatibility. The checker covers the root package only; `authresults` is
+  a separately tested subpackage.
 - Daemon HTTP shapes and bounds are authoritative only in
   `docs/specs/openapi/dkim2d.yaml`. The wire `api_version` remains `v1`;
   product prerelease versioning does not alter that field.

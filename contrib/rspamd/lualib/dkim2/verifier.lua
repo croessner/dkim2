@@ -634,6 +634,16 @@ local function valid_delivery_status(value)
   return true
 end
 
+-- valid_report binds optional diagnostics to validated daemon facts, never to policy input.
+local function valid_report(value, authentication)
+  local bare = settings.authserv_id .. '; dkim2=' .. authentication_results[authentication.state]
+  if value == bare then
+    return true
+  end
+  return authentication.state ~= 'PASS' and authentication.primary_reason ~= 'none' and
+    value == bare .. ' (reason=' .. authentication.primary_reason .. ')'
+end
+
 -- valid_response validates the response members that authorize Rspamd effects.
 local function valid_response(value)
   local top_required = {
@@ -676,7 +686,7 @@ local function valid_response(value)
   if not exact_keys(action, { 'type', 'name', 'value' }, {}) or
       action.type ~= 'add_header' or action.name ~= 'Authentication-Results' or
       settings.authserv_id == nil or
-      action.value ~= settings.authserv_id .. '; dkim2=' .. authentication_results[state] or
+      not valid_report(action.value, value.authentication) or
       #action.value > 65535 or contains_forbidden_octet(action.value) then
     return false
   end

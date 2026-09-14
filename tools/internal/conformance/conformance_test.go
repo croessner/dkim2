@@ -248,7 +248,7 @@ func TestCaseRejectsNestedUnknownAndMultipleOperations(t *testing.T) {
 	  "schema":"dkim2.conformance-case.v1",
 	  "case_id":"closed-case",
 	  "message_draft":"draft-ietf-dkim-dkim2-spec-06",
-	  "dns_draft":"draft-chuang-dkim2-dns-04",
+	  "dns_draft":"draft-ietf-dkim-dkim2-dns-00",
 	  "class":"draft_normative",
 	  "authority":["draft-ietf-dkim-dkim2-spec-06 Section 4"],
 	  "provenance":"manual_derivation",

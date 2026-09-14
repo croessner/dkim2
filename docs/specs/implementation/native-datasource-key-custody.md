@@ -32,7 +32,7 @@ This specification is governed by:
 - `docs/specs/spec-and-prompt-template.md`;
 - `docs/specs/openapi/dkim2d.yaml` as an explicitly unchanged boundary;
 - `draft-ietf-dkim-dkim2-spec-04`;
-- `draft-chuang-dkim2-dns-04` for the implemented DNS behavior baseline;
+- `draft-ietf-dkim-dkim2-dns-00` for the implemented DNS behavior baseline;
 - RFC 4511, RFC 4512, RFC 4513, RFC 4515, RFC 4517, RFC 4519, RFC 2696,
   and RFC 4528 for LDAP behavior;
 - PostgreSQL transactional, privilege, constraint, and trigger semantics;

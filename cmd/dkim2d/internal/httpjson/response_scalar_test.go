@@ -360,3 +360,17 @@ func rejectScalarMapping[Input comparable, Output comparable](
 		}
 	}
 }
+
+// TestProcessReportDiagnosticsAreBoundToFinalReason covers the delivered failure path.
+func TestProcessReportDiagnosticsAreBoundToFinalReason(t *testing.T) {
+	actions, err := mapProcessReportActions(generated.FAIL, generated.DispositionContinue, "mx.example.test", "signature_mismatch")
+	if err != nil || len(actions) != 1 || actions[0].Value != "mx.example.test; dkim2=fail (reason=signature_mismatch)" {
+		t.Fatal("missing bounded failure diagnosis")
+	}
+	if _, err := mapProcessReportActions(generated.FAIL, generated.DispositionContinue, "mx.example.test", "recipient@example.test"); err == nil {
+		t.Fatal("untrusted diagnostic admitted")
+	}
+	if _, err := mapProcessReportActions(generated.PASS, generated.DispositionContinue, "mx.example.test", "signature_mismatch"); err == nil {
+		t.Fatal("contradictory passing diagnosis admitted")
+	}
+}

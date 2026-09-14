@@ -13,6 +13,7 @@ import (
 	"github.com/croessner/dkim2/tools/internal/conformance"
 	"github.com/croessner/dkim2/tools/internal/interop"
 	"github.com/croessner/dkim2/tools/internal/strictjson"
+	"go.yaml.in/yaml/v3"
 	"golang.org/x/mod/modfile"
 )
 
@@ -251,15 +252,73 @@ func checkVersionSeparation(root string) error {
 		return errors.New("release_openapi_version")
 	}
 	workflow, err := artifactpath.ReadFile(root, ".github/workflows/release.yml", 1<<20)
-	if err != nil || !strings.Contains(
-		string(workflow), "github.event.release.prerelease == false",
-	) || !strings.Contains(string(workflow), "git cat-file -t") ||
-		!strings.Contains(string(workflow), "git rev-parse \"$RELEASE_TAG^{commit}\"") ||
-		strings.Contains(string(workflow), "github.ref_protected") ||
-		strings.Contains(string(workflow), "latest") {
+	if err != nil || !stableTagWorkflow(workflow) {
 		return errors.New("release_stable_workflow")
 	}
 	return nil
+}
+
+// stableTagWorkflow validates executable stable-tag gates and image tags independently of release aliases.
+func stableTagWorkflow(content []byte) bool {
+	var workflow struct {
+		On map[string]struct {
+			Tags []string `yaml:"tags"`
+		} `yaml:"on"`
+		Jobs map[string]struct {
+			Needs yaml.Node `yaml:"needs"`
+			Steps []struct {
+				ID   string            `yaml:"id"`
+				Run  string            `yaml:"run"`
+				Env  map[string]string `yaml:"env"`
+				With map[string]string `yaml:"with"`
+			} `yaml:"steps"`
+		} `yaml:"jobs"`
+	}
+	if yaml.Unmarshal(content, &workflow) != nil || len(workflow.On) != 1 ||
+		!slices.Equal(workflow.On["push"].Tags, []string{"v*"}) {
+		return false
+	}
+	quality := workflow.Jobs["quality"]
+	validated := false
+	for _, step := range quality.Steps {
+		if step.ID != "metadata" {
+			continue
+		}
+		if step.Env["RELEASE_TAG"] != "${{ github.ref_name }}" {
+			return false
+		}
+		lines := make(map[string]bool)
+		for _, line := range strings.Split(step.Run, "\n") {
+			lines[strings.TrimSpace(line)] = true
+		}
+		for _, required := range []string{
+			`if [[ ! "$RELEASE_TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then`,
+			`exit 1`,
+			`test "$(git cat-file -t "refs/tags/$RELEASE_TAG")" = tag`,
+			`revision="$(git rev-parse "$RELEASE_TAG^{commit}")"`,
+			`test "$revision" = "$(git rev-parse HEAD)"`,
+		} {
+			if !lines[required] {
+				return false
+			}
+		}
+		validated = true
+	}
+	publish := workflow.Jobs["publish"]
+	var dependencies []string
+	if !validated || publish.Needs.Decode(&dependencies) != nil || !slices.Contains(dependencies, "quality") {
+		return false
+	}
+	imageTag := false
+	for _, step := range publish.Steps {
+		if tags, ok := step.With["tags"]; ok {
+			if tags != "${{ steps.image.outputs.repository }}:${{ needs.quality.outputs.version }}" {
+				return false
+			}
+			imageTag = true
+		}
+	}
+	return imageTag
 }
 
 // checkCandidateTagsAbsent proves preparation did not create any planned Git tag.

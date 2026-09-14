@@ -8,7 +8,7 @@ Status: implementation-ready planning baseline.
 
 Implementation base: `bf627cd81d2a46df35d5c42dde06e0f447cf017c`.
 Protocol behavior remains pinned to `draft-ietf-dkim-dkim2-spec-04` and the
-historical `draft-chuang-dkim2-dns-04` baseline. This increment adds the first
+historical `draft-ietf-dkim-dkim2-dns-00` baseline. This increment adds the first
 production HTTP signing and revision surface and the first SMTP/Milter adapter.
 It does not change the pinned draft behavior.
 

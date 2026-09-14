@@ -2,7 +2,7 @@
 
 This repository contains an actively developed Go reference implementation of
 DKIM2 based on `draft-ietf-dkim-dkim2-spec-06`. The tested DNS behavior
-baseline remains `draft-chuang-dkim2-dns-04`; the IETF replaced that document
+baseline remains `draft-ietf-dkim-dkim2-dns-00`; the IETF replaced that document
 with `draft-ietf-dkim-dkim2-dns-00` on 2026-07-20 without changing its
 normative body. Moving durable identifiers and versioned vectors to the working
 group name is a separate reviewed baseline update, not an implicit behavior

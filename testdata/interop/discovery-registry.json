@@ -1,7 +1,7 @@
 {
   "schema": "dkim2.interop-discovery-registry.v1",
   "message_draft": "draft-ietf-dkim-dkim2-spec-06",
-  "dns_draft": "draft-chuang-dkim2-dns-04",
+  "dns_draft": "draft-ietf-dkim-dkim2-dns-00",
   "max_age_hours": 168,
   "retrieval_policy": {
     "max_redirects": 2,
@@ -61,7 +61,7 @@
     {
       "id": "ietf-dkim2-dns-04",
       "kind": "ietf_draft",
-      "url": "https://www.ietf.org/archive/id/draft-chuang-dkim2-dns-04.txt",
+      "url": "https://www.ietf.org/archive/id/draft-ietf-dkim-dkim2-dns-00.txt",
       "query": "exact historical DNS behavior baseline bytes",
       "required": true
     },

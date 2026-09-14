@@ -11,7 +11,7 @@ import (
 	dkim2 "github.com/croessner/dkim2"
 )
 
-//go:embed testdata/vectors/draft-chuang-dkim2-dns-04/dns-golden.json
+//go:embed testdata/vectors/draft-ietf-dkim-dkim2-dns-00/dns-golden.json
 var dnsExampleManifestJSON []byte
 
 type dnsExampleManifest struct {

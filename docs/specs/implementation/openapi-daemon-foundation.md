@@ -43,7 +43,7 @@ This specification is governed by:
 - `docs/specs/openapi/oapi-codegen.server.yml`;
 - `docs/specs/openapi/oapi-codegen.client.yml`;
 - `draft-ietf-dkim-dkim2-spec-04`;
-- `draft-chuang-dkim2-dns-04`, under the repository's documented historical
+- `draft-ietf-dkim-dkim2-dns-00`, under the repository's documented historical
   DNS baseline policy;
 - RFC 4648 for strict canonical padded Base64;
 - RFC 5321 for SMTP reverse-path and forward-path bytes;

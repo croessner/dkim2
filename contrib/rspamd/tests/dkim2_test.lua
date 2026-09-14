@@ -350,6 +350,35 @@ projected.verifier_projection.hops[1].affected_headers = { 'z-trace', 'subject' 
 assert(verifier.policy_attributes(projected) == nil,
   'unsorted affected headers must fail projection validation')
 
+-- Delivered failure reports admit only legacy text or the exact authoritative reason.
+for _, report in ipairs({
+  { value = 'mx.example.test; dkim2=fail', valid = true },
+  { value = 'mx.example.test; dkim2=fail (reason=hash_mismatch)', valid = true },
+  { value = 'mx.example.test; dkim2=fail (reason=missing_key)', valid = false },
+  { value = 'mx.example.test; dkim2=fail (reason=unknown)', valid = false },
+  { value = 'attacker.example; dkim2=fail (reason=hash_mismatch)', valid = false },
+  { value = 'mx.example.test; dkim2=pass (reason=hash_mismatch)', valid = false },
+  { value = 'mx.example.test; dkim2=fail (reason=hash_mismatch)\r\nX-Forged: yes', valid = false },
+  { value = 'mx.example.test; dkim2=fail (reason=hash_mismatch); spf=pass', valid = false },
+}) do
+  pending_response = response('FAIL', 'accept', 'not_checked', {
+    { type = 'add_header', name = 'Authentication-Results', value = report.value },
+  })
+  pending_response.authentication.primary_reason = 'hash_mismatch'
+  pending_response.verification.primary_reason = 'hash_mismatch'
+  pending_response.policy.mode = 'permissive'
+  pending_response.policy.primary_reason = 'permissive_override'
+  local task = new_task({ ['DKIM2-Signature'] = true })
+  callback(task)
+  assert((task.pre_result == nil) == report.valid, 'unexpected report admission: ' .. report.value)
+  if report.valid then
+    assert(task.alterations.add['Authentication-Results'].value == report.value)
+    assert(contains(task.symbols, 'DKIM2_FAIL'))
+  else
+    assert(contains(task.symbols, 'DKIM2_SERVICE_ERROR'))
+  end
+end
+
 local incomplete_pass = response('PASS', 'accept', 'first_seen')
 incomplete_pass.verification.scope = nil
 assert(verifier.policy_attributes(incomplete_pass) == nil,

@@ -5,6 +5,7 @@ go 1.27
 toolchain go1.27.0
 
 require (
+	github.com/croessner/dkim2 v0.1.0-rc.1
 	github.com/oapi-codegen/runtime v1.7.0
 	github.com/prometheus/client_golang v1.24.1
 	github.com/prometheus/common v0.70.1

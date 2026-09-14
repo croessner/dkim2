@@ -3,8 +3,56 @@ package reference
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
+
+// TestVersionSeparationRejectsPublicationBypasses exercises the current tag-push workflow boundary.
+func TestVersionSeparationRejectsPublicationBypasses(t *testing.T) {
+	root := repositoryRoot(t)
+	workflow, err := os.ReadFile(filepath.Join(root, ".github/workflows/release.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	openapi, err := os.ReadFile(filepath.Join(root, "docs/specs/openapi/dkim2d.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct{ name, old, replacement string }{
+		{"valid_workflow", "", ""},
+		{"trigger", `tags: ["v*"]`, `branches: ["main"]`},
+		{"version", `\.(0|[1-9][0-9]*)$`, `\.(0|[1-9][0-9]*)(-rc.1)?$`},
+		{"annotation", `git cat-file -t`, `git cat-file -s`},
+		{"commit", `test "$revision" = "$(git rev-parse HEAD)"`, `true`},
+		{"image_alias", `tags: ${{ steps.image.outputs.repository }}:${{ needs.quality.outputs.version }}`, `tags: example.invalid/image:latest`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			for _, path := range []string{".github/workflows", "docs/specs/openapi"} {
+				if err := os.MkdirAll(filepath.Join(dir, path), 0o700); err != nil {
+					t.Fatal(err)
+				}
+			}
+			content := string(workflow)
+			if tc.old != "" {
+				if !strings.Contains(content, tc.old) {
+					t.Fatal("mutation missing")
+				}
+				content = strings.Replace(content, tc.old, tc.replacement, 1)
+			}
+			if err := os.WriteFile(filepath.Join(dir, ".github/workflows/release.yml"), []byte(content), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(dir, "docs/specs/openapi/dkim2d.yaml"), openapi, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			err := checkVersionSeparation(dir)
+			if (err == nil) != (tc.name == "valid_workflow") {
+				t.Fatalf("unexpected workflow admission: %v", err)
+			}
+		})
+	}
+}
 
 // TestParseRCVersionAcceptsCanonicalValues proves all numeric fields are bounded.
 func TestParseRCVersionAcceptsCanonicalValues(t *testing.T) {

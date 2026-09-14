@@ -45,3 +45,6 @@ limitations without creating a second protocol model.
 The first intended product preview is `v0.1.0-rc.1`. Preparing the candidate
 does not create a Git tag, module release, container publication, stable alias,
 or claim that the drafts are final.
+
+- [Companion qualification](../specs/companion-conformance.md) records DNS migration,
+  Authentication-Results reporting and BCP coverage with explicit exceptions.

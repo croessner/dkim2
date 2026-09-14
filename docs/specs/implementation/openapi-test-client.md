@@ -8,7 +8,7 @@ Status: implemented; independent review and closeout pending.
 
 Implementation base: `248c00a0bcfe03166ad9002c7b1251f3ae217b6b`.
 Protocol behavior is pinned to `draft-ietf-dkim-dkim2-spec-04` and the
-repository's historical `draft-chuang-dkim2-dns-04` baseline.
+repository's historical `draft-ietf-dkim-dkim2-dns-00` baseline.
 
 ## Purpose
 

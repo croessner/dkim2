@@ -9,7 +9,7 @@
 - Increment: local policy evaluation after current DKIM2 verification and DNS
   key resolution.
 - Protocol baseline: `draft-ietf-dkim-dkim2-spec-04` plus
-  `draft-chuang-dkim2-dns-04`.
+  `draft-ietf-dkim-dkim2-dns-00`.
 - Architecture owners: `lib/internal/policy` for decisions and action planning,
   `lib/internal/verify` for parsed flag candidates, and
   `lib/internal/service` for authenticated verified-fact sealing.
@@ -41,7 +41,7 @@ The binding sources are, in order:
 
 1. `draft-ietf-dkim-dkim2-spec-04`, especially Sections 8.10, 10.4, 11.1,
    and 11.8, for flag meaning, output states, and local-policy separation.
-2. `draft-chuang-dkim2-dns-04`, Section 3.4.1, for the DNS `t=y` testing
+2. `draft-ietf-dkim-dkim2-dns-00`, Section 3.4.1, for the DNS `t=y` testing
    declaration.
 3. RFC 5321 for the distinction between permanent rejection and temporary SMTP
    failure.

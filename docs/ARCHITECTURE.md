@@ -13,8 +13,8 @@
 | Language | English |
 | Classification | Public living design document |
 | Baseline specification | `draft-ietf-dkim-dkim2-spec-06`, dated 2026-08-25 |
-| Related specification | M11 tested behavior baseline: `draft-chuang-dkim2-dns-04`, dated 2026-03-18; replaced by `draft-ietf-dkim-dkim2-dns-00` on 2026-07-20 |
-| Baseline status check | IETF archive sources checked 2026-08-25; the message specification baseline is `draft-ietf-dkim-dkim2-spec-06`. The implemented companion behavior and vectors remain pinned to `draft-chuang-dkim2-dns-04`; the working-group DNS `-00` has a normatively identical body, but its identifier/vector migration remains deferred to a separate reviewed baseline update. |
+| Related specification | `draft-ietf-dkim-dkim2-dns-00`, dated 2026-07-20; identifiers migrated 2026-09-14 after a repeated byte-identical XML middle comparison |
+| Baseline status check | IETF archive sources checked 2026-09-14. Message baseline: `draft-ietf-dkim-dkim2-spec-06`; DNS baseline: `draft-ietf-dkim-dkim2-dns-00`. See `docs/specs/companion-conformance.md` for companion coverage and reporting exceptions. |
 | Change control | While this document is still `0.1.0-draft`, startup decisions may be added without a version bump; after the first committed planning baseline, material architecture changes require a revision-history entry and may require a new version |
 | Supersedes | None |
 | Next planned revision | When the DKIM2 draft or a material architecture decision changes |
@@ -71,6 +71,7 @@
 | 0.1.0-draft | 2026-08-25 | Christian Roessner / Codex | Advanced the message baseline to Draft-06. The migration authority adds SHA-512 Message-Instance verification, the revised unsigned-header set, lowercase Recipe keys, selector and per-algorithm signature cardinality, unchanged-state Message-Instances, typed diagnostics, a drain-only replay epoch rotation, generated-contract parity, and explicit `unqualified_draft06` Exim status until fresh Linux qualification evidence exists. The DNS companion remains `draft-chuang-dkim2-dns-04`. |
 | 0.1.0-draft | 2026-08-30 | Christian Roessner / Codex | Added an explicit TLS-1.3-only private-container-network listener for authenticated local adapters, backed by generation-confined internal-PKI certificate, key, and CA material; loopback remains the default and plaintext remote exposure remains unsupported. |
 | 0.1.0-draft | 2026-09-04 | Christian Roessner / Claude | Planned M26 received delivery-status evaluation and Draft-06 Section 12.1.1 DSN propagation: a read-only `delivery_status` projection inside `/v1/process` with datasource-defined locality, a Section 12.1.1 rebuild that removes the complete local hop run across `nd=` and imaginary hops, re-proves the previous state, and verifies the previous hop's signature before its `mf=` becomes a recipient, a separate replay-gated `/v1/dsn/propagate` route whose signing authority is the removed completion signature's domain, and an MTA-neutral LMTP-to-SMTP propagation adapter that needs no MTA patch. This records the implementation baseline, not completion. |
+| 0.1.0-draft | 2026-09-14 | Christian Roessner / Codex | Migrated DNS identifiers and vectors to WG DNS-00 after byte-identical normative-body comparison; adopted the bounded Authentication-Results profile and explicit BCP coverage/exception matrix in `docs/specs/companion-conformance.md`. |
 
 ## 1. Purpose
 
@@ -82,10 +83,12 @@ is written.
 The design uses these reviewed behavior baselines as its source of truth:
 
 - `draft-ietf-dkim-dkim2-spec-06`
-- `draft-chuang-dkim2-dns-04` for the implemented DNS behavior and vectors.
+- `draft-ietf-dkim-dkim2-dns-00` for the implemented DNS behavior and vectors.
 
 The IETF replaced the DNS document with the working-group
 `draft-ietf-dkim-dkim2-dns-00` on 2026-07-20. Its normative body is unchanged.
+The 2026-09-14 companion migration explicitly advances DNS identifiers and vectors to the WG successor without changing DNS behavior. Historical audit records retain their original identifiers.
+
 The repository does not silently rename baselines: durable identifiers and
 versioned vectors migrate together in a separately reviewed update.
 
@@ -673,7 +676,7 @@ Responsibilities:
   `selector._domainkey.domain.` owner while preserving dotted selector labels.
 - Consume one already-concatenated TXT RR payload while retaining RR boundaries
   and failing closed on a multi-record RRset.
-- Parse DNS-04 records through `internal/tagvalue`, including revocation,
+- Parse WG DNS-00 records through `internal/tagvalue`, including revocation,
   ignored extension/retired tags, DNS-optional terminal Base64 padding with
   canonical pad bits, and bounded `t=y`/`t=s` metadata.
 - Decode PKCS#1 RSA public DER and raw 32-byte Ed25519 public keys while reusing
@@ -691,7 +694,7 @@ Design notes:
 - The root package owns public transport/provider adapters; keyresolver does not
   import the root package or own four-state verification mapping.
 - Derived qnames and cache keys are sensitive and never enter errors or results.
-- DNS-04 lowercase `k=` follows prose and RFC 6376 Erratum 5137; no signature
+- WG DNS-00 lowercase `k=` follows prose and RFC 6376 Erratum 5137; no signature
   `q=` API is invented for the active DKIM2 grammar.
 - DNSSEC is diagnostic-only. Testing and strict-identity flags are metadata,
   not cryptographic verdict or MTA policy.
@@ -1446,7 +1449,7 @@ Every operation also binds a protected deployment-unique `authority_id` and
 canonical provider authority descriptor; every command rejects same-class
 backend substitution before I/O.
 DNS mutation is outside the initial native onboarding contract. The tool
-exports deterministic DNS-04 records through a create-only protected-document
+exports deterministic WG DNS-00 records through a create-only protected-document
 primitive: exact existing bytes are idempotent, foreign existing bytes are a
 conflict, and no export path is ever replaced. A racing create is accepted only
 after an exact descriptor-native readback proves the installed artifact;
@@ -2789,7 +2792,7 @@ interpretation choices in code.
 16. Native domain onboarding:
     M23 adds an offline privileged workflow that clones one complete native
     generation, adds one exact domain with freshly generated RSA and/or
-    Ed25519 credentials, exports DNS-04 records, proves the configured fresh
+    Ed25519 credentials, exports WG DNS-00 records, proves the configured fresh
     recursive resolver path against staged SPKI, and activates only through
     exact current, state, readback, and
     candidate-content-digest fences. Publication state is fenced separately
