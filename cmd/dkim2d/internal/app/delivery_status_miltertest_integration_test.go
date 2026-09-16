@@ -570,13 +570,13 @@ func deliveryStatusLuaScript(t *testing.T, socketPath, bodyPath string, headers 
 	fmt.Fprintf(&output, "socket_set(\"unix\", %s)\n", luaLongString(socketPath))
 	output.WriteString("negotiate(6, 0xffffffff, 0xffffffff)\n")
 	output.WriteString("assert_cap(\"actions\", MILTER.SMFIF_SETSYMLIST)\n")
-	output.WriteString("assert_macro_requested(MILTER.SMFIM_EOH, \"{postfix_dsn_origin}\")\n")
+	output.WriteString("assert_macro_requested(MILTER.SMFIM_EOH, \"{postfix_internal_origin}\")\n")
 	output.WriteString("connect(\"localhost\", \"127.0.0.1\")\nhelo(\"localhost\")\nmailfrom(\"<>\")\n")
 	output.WriteString("rcptto(\"<sender@" + signingServiceOriginDomain + ">\")\n")
 	for _, header := range headers {
 		fmt.Fprintf(&output, "header(%s, %s)\n", luaLongString(header[0]), luaLongString(header[1]))
 	}
-	output.WriteString("macro(\"N\", { [\"{postfix_dsn_origin}\"] = \"internal\" })\n")
+	output.WriteString("macro(\"N\", { [\"{postfix_internal_origin}\"] = \"bounce\" })\n")
 	output.WriteString("eoh()\n")
 	fmt.Fprintf(&output, "local file = assert(io.open(%s, \"rb\"))\n", luaLongString(bodyPath))
 	output.WriteString("while true do local chunk = file:read(4096); if not chunk then break end; body(chunk) end\nfile:close()\n")

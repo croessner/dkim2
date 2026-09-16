@@ -6,9 +6,11 @@ const (
 	postfixDSNMacroStageHeader byte   = commandHeader
 	postfixDSNMacroStageEOH    byte   = commandEOH
 	postfixDSNMacroClassEOH    uint32 = 6
-	postfixDSNMacroOrigin             = "{postfix_dsn_origin}"
-	postfixDSNOriginInternal          = "internal"
-	postfixDSNOriginExternal          = "external"
+	postfixDSNMacroOrigin             = "{postfix_internal_origin}"
+	postfixDSNOriginBounce            = "bounce"
+	postfixDSNOriginNone              = ""
+	postfixDSNOriginNotify            = "notify"
+	postfixDSNOriginVerify            = "verify"
 	postfixDSNEOHMacroList            = postfixDSNMacroOrigin
 )
 
@@ -70,11 +72,19 @@ func (s *postfixDSNMacroState) accept(
 			return 0, false
 		}
 		originInPayload = true
+		// Postfix exposes the origin at CONNECT by default. Validate it, but
+		// never reuse connection metadata as proof for a later transaction.
+		if stage == commandConnect && state == stateNegotiated && !hasTransaction {
+			if !validPostfixInternalOrigin(string(value)) {
+				return 0, false
+			}
+			continue
+		}
 		if !hasTransaction || !validPostfixDSNMacroStage(stage, state) {
 			return 0, false
 		}
 		origin := string(value)
-		if origin != postfixDSNOriginInternal && origin != postfixDSNOriginExternal ||
+		if !validPostfixInternalOrigin(origin) ||
 			s.seen && s.origin != origin {
 			return 0, false
 		}
@@ -102,18 +112,21 @@ func validPostfixDSNMacroStage(stage byte, state callbackState) bool {
 // take() must validate the EOH-confirmed enum.
 func (s *postfixDSNMacroState) present() bool { return s != nil && s.seen }
 
-// take treats exact external provenance as inapplicable regardless of ordinary
-// envelope shape; only internal provenance requires the strict outer DSN shape.
+// take selects upstream bounce provenance with the supported outer DSN shape.
+// Other origins and non-null double-bounce/postmaster copies remain untouched.
 func (s *postfixDSNMacroState) take(reverse []byte, recipients [][]byte) (PostfixDSNEvidence, bool, bool) {
 	if s == nil || !s.seen || !s.confirmedEOH {
 		return PostfixDSNEvidence{}, false, false
 	}
-	internal := s.origin == postfixDSNOriginInternal
+	internal := s.origin == postfixDSNOriginBounce
 	s.clear()
 	if !internal {
 		return PostfixDSNEvidence{}, false, true
 	}
-	if !bytes.Equal(reverse, []byte("<>")) || len(recipients) != 1 {
+	if !bytes.Equal(reverse, []byte("<>")) {
+		return PostfixDSNEvidence{}, false, true
+	}
+	if len(recipients) != 1 {
 		return PostfixDSNEvidence{}, false, false
 	}
 	return PostfixDSNEvidence{internal: true}, true, true
@@ -127,4 +140,9 @@ func (s *postfixDSNMacroState) clear() {
 	s.seen = false
 	s.confirmedEOH = false
 	s.origin = ""
+}
+
+// validPostfixInternalOrigin recognizes exactly the upstream provenance values.
+func validPostfixInternalOrigin(origin string) bool {
+	return origin == postfixDSNOriginBounce || origin == postfixDSNOriginNotify || origin == postfixDSNOriginVerify || origin == postfixDSNOriginNone
 }

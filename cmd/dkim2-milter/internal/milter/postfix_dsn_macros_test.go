@@ -8,6 +8,8 @@ import (
 	"testing"
 )
 
+const testDSNReportPath = "<report@example.test>"
+
 // postfixDSNEvidenceHandler captures only detached evidence required to prove
 // the Postfix-only Milter callback contract.
 type postfixDSNEvidenceHandler struct {
@@ -99,17 +101,18 @@ func TestPostfixDSNEOMAcceptsInternalOrigin(t *testing.T) {
 		peerFrame(commandNegotiate, postfixDSNNegotiationPayload()),
 		peerFrame(commandMacro, postfixDSNMacroPayload(
 			commandConnect, "{daemon_name}", "postfix",
+			"{postfix_internal_origin}", postfixDSNOriginBounce,
 		)),
 		peerFrame(commandConnect, []byte("localhost\x00U")),
 		peerFrame(commandHelo, []byte("localhost\x00")),
 		peerFrame(commandMail, []byte("<>\x00")),
 		peerFrame(commandRecipient, []byte("<report@example.test>\x00")),
 		peerFrame(commandMacro, postfixDSNMacroPayload(commandHeader,
-			postfixDSNMacroOrigin, postfixDSNOriginInternal,
+			postfixDSNMacroOrigin, postfixDSNOriginBounce,
 		)),
 		peerFrame(commandHeader, []byte("Subject\x00 Delivery Status\x00")),
 		peerFrame(commandMacro, postfixDSNMacroPayload(commandEOH,
-			postfixDSNMacroOrigin, postfixDSNOriginInternal,
+			postfixDSNMacroOrigin, postfixDSNOriginBounce,
 		)),
 		peerFrame(commandEOH, nil),
 		peerFrame(commandEOM, nil),
@@ -137,15 +140,15 @@ func TestPostfixDSNEOMRejectsMalformedOrAmbiguousOrigin(t *testing.T) {
 		pairs []string
 	}{
 		{name: "duplicate", stage: commandEOH, pairs: []string{
-			postfixDSNMacroOrigin, postfixDSNOriginInternal,
-			postfixDSNMacroOrigin, postfixDSNOriginInternal,
+			postfixDSNMacroOrigin, postfixDSNOriginBounce,
+			postfixDSNMacroOrigin, postfixDSNOriginBounce,
 		}},
 		{name: "conflicting duplicate", stage: commandEOH, pairs: []string{
-			postfixDSNMacroOrigin, postfixDSNOriginInternal,
-			postfixDSNMacroOrigin, postfixDSNOriginExternal,
+			postfixDSNMacroOrigin, postfixDSNOriginBounce,
+			postfixDSNMacroOrigin, postfixDSNOriginNone,
 		}},
 		{name: "wrong macro stage", stage: commandEOM, pairs: []string{
-			postfixDSNMacroOrigin, postfixDSNOriginInternal,
+			postfixDSNMacroOrigin, postfixDSNOriginBounce,
 		}},
 		{name: "invalid enum", stage: commandEOH, pairs: []string{
 			postfixDSNMacroOrigin, "local",
@@ -172,16 +175,20 @@ func TestPostfixDSNEOMRejectsMalformedOrAmbiguousOrigin(t *testing.T) {
 	}
 }
 
-// TestPostfixDSNExternalOriginContinues proves external provenance never
+// TestPostfixDSNNonSigningOriginContinues proves non-signing provenance never
 // authorizes signing and does not impose bounce envelope shape on ordinary
 // messages sharing the non-SMTP Milter chain.
-func TestPostfixDSNExternalOriginContinues(t *testing.T) {
+func TestPostfixDSNNonSigningOriginContinues(t *testing.T) {
 	for _, testCase := range []struct {
 		name       string
+		origin     string
 		reverse    string
 		recipients []string
 	}{
-		{name: "external null sender", reverse: "<>", recipients: []string{"<report@example.test>"}},
+		{name: postfixDSNOriginNotify, origin: postfixDSNOriginNotify, reverse: "<>", recipients: []string{testDSNReportPath}},
+		{name: postfixDSNOriginVerify, origin: postfixDSNOriginVerify, reverse: "<>", recipients: []string{testDSNReportPath}},
+		{name: "double bounce", origin: postfixDSNOriginBounce, reverse: "<double-bounce@example.test>", recipients: []string{"<postmaster@example.test>"}},
+		{name: "external null sender", reverse: "<>", recipients: []string{testDSNReportPath}},
 		{name: "ordinary multiple recipients", reverse: testSenderPath, recipients: []string{
 			"<first@example.test>", "<second@example.test>",
 		}},
@@ -199,9 +206,9 @@ func TestPostfixDSNExternalOriginContinues(t *testing.T) {
 				frames = append(frames, peerFrame(commandRecipient, []byte(recipient+"\x00")))
 			}
 			frames = append(frames,
-				peerFrame(commandMacro, postfixDSNMacroPayload(commandHeader, postfixDSNMacroOrigin, postfixDSNOriginExternal)),
+				peerFrame(commandMacro, postfixDSNMacroPayload(commandHeader, postfixDSNMacroOrigin, testCase.origin)),
 				peerFrame(commandHeader, []byte("Subject\x00 external message\x00")),
-				peerFrame(commandMacro, postfixDSNMacroPayload(commandEOH, postfixDSNMacroOrigin, postfixDSNOriginExternal)),
+				peerFrame(commandMacro, postfixDSNMacroPayload(commandEOH, postfixDSNMacroOrigin, testCase.origin)),
 				peerFrame(commandEOH, nil), peerFrame(commandEOM, nil), peerFrame(commandQuit, nil),
 			)
 			stream := &splitStream{reader: bytes.NewReader(appendPeerFrames(frames...))}
@@ -227,7 +234,7 @@ func TestPostfixDSNRequiresOriginAtEOH(t *testing.T) {
 			peerFrame(commandHelo, []byte("localhost\x00")),
 			peerFrame(commandMail, []byte("<>\x00")),
 			peerFrame(commandRecipient, []byte("<report@example.test>\x00")),
-			peerFrame(commandMacro, postfixDSNMacroPayload(commandHeader, postfixDSNMacroOrigin, postfixDSNOriginInternal)),
+			peerFrame(commandMacro, postfixDSNMacroPayload(commandHeader, postfixDSNMacroOrigin, postfixDSNOriginBounce)),
 			peerFrame(commandHeader, []byte("Subject\x00 Delivery Status\x00")),
 			peerFrame(commandMacro, postfixDSNMacroPayload(commandEOH, eohPairs...)),
 			peerFrame(commandEOH, nil), peerFrame(commandEOM, nil),
@@ -256,4 +263,92 @@ func postfixDSNMacroPayload(stage byte, pairs ...string) []byte {
 		payload = append(payload, 0)
 	}
 	return payload
+}
+
+// TestPostfixInternalOriginClasses verifies the complete upstream enum and excludes
+// postmaster copies and double bounces from the null-sender DSN signing route.
+func TestPostfixInternalOriginClasses(t *testing.T) {
+	for _, origin := range []string{postfixDSNOriginBounce, postfixDSNOriginNotify, postfixDSNOriginVerify, ""} {
+		for _, reverse := range []string{"<>", "<double-bounce@example.test>"} {
+			t.Run(origin+reverse, func(t *testing.T) {
+				var state postfixDSNMacroState
+				_, ok := state.accept(postfixDSNMacroPayload(commandEOH, "{postfix_internal_origin}", origin), stateHeaders, true)
+				if !ok {
+					t.Fatal("upstream value rejected")
+				}
+				_, applicable, valid := state.take([]byte(reverse), [][]byte{[]byte("<recipient@example.test>")})
+				if !valid || applicable != (origin == postfixDSNOriginBounce && reverse == "<>") {
+					t.Fatalf("applicable=%t valid=%t", applicable, valid)
+				}
+			})
+		}
+	}
+}
+
+// TestPostfixOriginTransactionIsolation rejects stale or conflicting provenance
+// while allowing default CONNECT macros without authorizing any transaction.
+func TestPostfixOriginTransactionIsolation(t *testing.T) {
+	var state postfixDSNMacroState
+	for _, origin := range []string{postfixDSNOriginBounce, postfixDSNOriginNotify, postfixDSNOriginVerify, ""} {
+		if _, ok := state.accept(postfixDSNMacroPayload(commandConnect, postfixDSNMacroOrigin, origin), stateNegotiated, false); !ok || state.present() {
+			t.Fatal("connection origin retained as transaction evidence")
+		}
+	}
+	if _, ok := state.accept(postfixDSNMacroPayload(commandConnect, postfixDSNMacroOrigin, "internal"), stateNegotiated, false); ok {
+		t.Fatal("retired origin value accepted")
+	}
+	if _, ok := state.accept(postfixDSNMacroPayload(commandHeader, postfixDSNMacroOrigin, postfixDSNOriginBounce), stateRecipients, true); !ok {
+		t.Fatal("header origin rejected")
+	}
+	if _, ok := state.accept(postfixDSNMacroPayload(commandEOH, postfixDSNMacroOrigin, postfixDSNOriginNotify), stateHeaders, true); ok {
+		t.Fatal("conflicting origin accepted")
+	}
+	state.clear()
+	if state.present() {
+		t.Fatal("aborted transaction retained origin")
+	}
+	if _, ok := state.accept(postfixDSNMacroPayload(commandEOH, postfixDSNMacroOrigin, postfixDSNOriginBounce), stateHeaders, true); !ok {
+		t.Fatal("EOH origin rejected")
+	}
+	if _, applicable, valid := state.take([]byte("<>"), [][]byte{[]byte("<one@example.test>"), []byte("<two@example.test>")}); valid || applicable {
+		t.Fatal("multiple-recipient bounce accepted")
+	}
+	if state.present() {
+		t.Fatal("completed transaction retained origin")
+	}
+}
+
+// TestPostfixOriginSessionBoundaries proves legacy macros and aborted evidence
+// cannot authorize a later message on the same connection.
+func TestPostfixOriginSessionBoundaries(t *testing.T) {
+	for _, abort := range []bool{false, true} {
+		handler := &postfixDSNEvidenceHandler{}
+		session := testSession(t, handler, false, modePostfixDSN, "")
+		frames := [][]byte{
+			peerFrame(commandNegotiate, postfixDSNNegotiationPayload()),
+			peerFrame(commandConnect, []byte("localhost\x00U")),
+			peerFrame(commandHelo, []byte("localhost\x00")),
+		}
+		if abort {
+			frames = append(frames,
+				peerFrame(commandMail, []byte("<>\x00")),
+				peerFrame(commandRecipient, []byte("<report@example.test>\x00")),
+				peerFrame(commandMacro, postfixDSNMacroPayload(commandHeader, postfixDSNMacroOrigin, postfixDSNOriginBounce)),
+				peerFrame(commandHeader, []byte("Subject\x00 aborted\x00")),
+				peerFrame(commandMacro, postfixDSNMacroPayload(commandEOH, postfixDSNMacroOrigin, postfixDSNOriginBounce)),
+				peerFrame(commandEOH, nil), peerFrame(commandAbort, nil),
+			)
+		}
+		frames = append(frames,
+			peerFrame(commandMail, []byte("<>\x00")),
+			peerFrame(commandRecipient, []byte("<report@example.test>\x00")),
+			peerFrame(commandHeader, []byte("Subject\x00 legacy input\x00")),
+			peerFrame(commandMacro, postfixDSNMacroPayload(commandEOH, "{postfix_dsn_origin}", "internal")),
+			peerFrame(commandEOH, nil), peerFrame(commandEOM, nil), peerFrame(commandQuit, nil),
+		)
+		stream := &splitStream{reader: bytes.NewReader(appendPeerFrames(frames...))}
+		if err := session.Serve(context.Background(), stream); err != nil || handler.calls != 0 {
+			t.Fatalf("abort=%t error=%v calls=%d", abort, err, handler.calls)
+		}
+	}
 }

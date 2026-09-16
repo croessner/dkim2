@@ -146,7 +146,7 @@ daemon I/O. Locally generated Postfix bounces use a separate `postfix_dsn`
 Milter route whose signing block contains only the administrative tenant and
 `domain_source: verified_embedded`; it must not contain `signing.domain` or
 `signing.dsn_domain`. The adapter admits that route only for the exact
-EOH-confirmed `{postfix_dsn_origin}=internal` value. The daemon then verifies
+EOH-confirmed `{postfix_internal_origin}=bounce` value. The daemon then verifies
 the complete embedded Draft-06 evidence before datasource access, derives the
 canonical highest authenticated `d=`, and resolves the exact
 `delivery_status` policy for that tenant/domain pair. This permits one route to
@@ -211,7 +211,7 @@ becomes:
 ```
 
 The distinct DSN route capability is now the explicit server-side attestation
-that its sole adapter established exact Postfix `internal` origin. Never mount
+that its sole adapter established exact Postfix `bounce` origin. Never mount
 or copy this capability into another Milter mode, Exim, or a diagnostic client.
 There is no generic HTTP DSN signing route; trusted library integrations retain
 the strict generic evidence constructor.
@@ -222,10 +222,10 @@ daemon that requires `context.domain` or the former fidelity member. Do not run
 a mixed pair. Pull and verify
 the exact daemon and Milter image digests first, validate the new configuration
 offline, drain or stop the dedicated DSN route, and activate the new daemon,
-new Milter/configuration, and `{postfix_dsn_origin}`-capable patched Postfix as
+new Milter/configuration, and `{postfix_internal_origin}`-capable upstream Postfix as
 one pinned change. The daemon and Milter update for the fidelity removal must
 be atomic; either mixed direction fails the closed request contract. Reopen the route only after capability, readiness, and
-positive/negative DSN smoke checks pass. Roll back the daemon, Milter, patched
+positive/negative DSN smoke checks pass. Roll back the daemon, Milter,
 Postfix, and configuration together to their previous digest-pinned set; never
 roll back only one side of the DSN API.
 
@@ -864,3 +864,20 @@ in
 [`opendkim-migration.md`](opendkim-migration.md). They require separately
 managed verified-TLS services and least-authority credentials; the demo stack
 does not create those external authorities.
+
+## Upstream Postfix origin migration (v0.1.31)
+
+This release breaks the old downstream Postfix origin-macro contract. The
+`postfix_dsn` adapter now requires `{postfix_internal_origin}=bounce`, confirmed
+at EOH. Unmodified Postfix 3.11.7 and the retired downstream DSN patches cannot
+provide this contract. It first appeared in upstream `postfix-3.12-20260915`;
+the approved deployment uses a qualified backport of the final upstream
+implementation to Postfix 3.11.7. Qualify and pin that image by digest; the
+version number alone is insufficient. No old-macro compatibility is provided.
+
+`notify`, `verify`, empty/absent provenance, and non-null double-bounce or
+postmaster copies pass unchanged. Ordinary bounce signing retains embedded
+signature, recipient, MIME, and policy validation. Default CONNECT provenance
+never authorizes a later transaction. The HTTP/OpenAPI contract is unchanged.
+Coordinate the Postfix and Milter image switch; do not independently roll out
+this Milter against the old macro. See the [origin contract](../specs/implementation/postfix-dsn-origin.md).

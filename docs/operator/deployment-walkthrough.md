@@ -106,7 +106,7 @@ flowchart LR
 | `dkim2-milter` in mode `inbound` | Milter-v6 adapter on `smtpd_milters`; calls `POST /v1/process`; scrubs and adds `Authentication-Results` | The process capability | Any signing capability, keys, datasource records |
 | `dkim2-milter` in mode `originator` | Milter on `non_smtpd_milters`; calls `POST /v1/sign` for locally submitted mail; tempfails every null sender before daemon I/O | The sign capability | Keys, key handles, the DSN capabilities |
 | `dkim2-milter` in mode `ordinary_transit` | Milter on a dedicated transit service; calls `POST /v1/revise` for unchanged-envelope forwarding | The revise capability | Keys, the other capabilities |
-| `dkim2-milter` in mode `postfix_dsn` | Milter on `non_smtpd_milters` for locally generated bounces; calls `POST /v1/dsn/sign` only after the exact `{postfix_dsn_origin}=internal` macro | The DSN signing capability | Any other capability; it must not be shared with any other adapter or client |
+| `dkim2-milter` in mode `postfix_dsn` | Milter on `non_smtpd_milters` for locally generated bounces; calls `POST /v1/dsn/sign` only after the exact `{postfix_internal_origin}=bounce` macro | The DSN signing capability | Any other capability; it must not be shared with any other adapter or client |
 | `dkim2-dsn-propagator` | MTA-neutral LMTP adapter; calls `POST /v1/dsn/propagate` and `/commit`, re-injects the rebuilt notification | The propagation capability | The process, sign, revise, or DSN signing capability |
 | Rspamd module (`contrib/rspamd`) | Alternative inbound consumer of `POST /v1/process` from inside Rspamd | The process capability | Any signing capability; it cannot sign bounces because Rspamd does not expose the origin macro |
 | `dkim2-exim` | Source-linked Exim `local_scan()` inbound service plus one-shot originator and ordinary-transit transport filters; capability `unqualified_draft06` | The capability of its configured operation | Draft-06 qualification evidence |
@@ -399,10 +399,10 @@ sequenceDiagram
     participant Daemon as dkim2d
     participant Store as Signing datasource
     Bounce->>Cleanup: DSN, null sender, one recipient
-    Cleanup->>Milter: callbacks plus postfix_dsn_origin macro at EOH
-    alt macro absent or external
+    Cleanup->>Milter: callbacks plus postfix_internal_origin macro at EOH
+    alt macro absent, empty, notify, or verify
         Milter-->>Cleanup: continue without daemon call
-    else macro internal, null sender, one recipient
+    else macro bounce, null sender, one recipient
         Milter->>Daemon: POST /v1/dsn/sign with DSN sign capability
         Daemon->>Daemon: parse three-part report, verify embedded original
         Daemon->>Daemon: outer recipient equals embedded mf=, RFC 3464 linkage
@@ -413,16 +413,19 @@ sequenceDiagram
     end
 ```
 
-1. The provenance fact is the Milter macro `{postfix_dsn_origin}`, a closed
-   enum with the values `internal` and `external` that only `bounce(8)` can
-   set to `internal`. It requires a bounce-only Postfix patch; this is a
-   local adapter contract, not a DKIM2 wire extension
+1. The provenance fact is the Milter macro `{postfix_internal_origin}`, a closed
+   upstream enum with `bounce`, `notify`, `verify`, and empty/absent values.
+   The DSN adapter selects only `bounce` with a null sender and one recipient.
+   It requires upstream Postfix 3.12-20260915 or a later release containing
+   this feature, or the qualified backport of that final upstream implementation
+   to 3.11.7; unmodified 3.11.7 does not provide it. This is an MTA
+   adapter contract, not a DKIM2 wire extension
    ([`postfix-dsn-origin.md`](../specs/implementation/postfix-dsn-origin.md)).
 2. The `postfix_dsn` Milter requests that macro for end of headers through the
-   standard symbol-list negotiation. Only the exact value `internal`,
+   standard symbol-list negotiation. Only the exact value `bounce`,
    confirmed at that stage, for a transaction with reverse path `<>` and
-   exactly one recipient, authorizes a daemon call. `external` or an absent
-   macro continues without daemon I/O, so the instance can share the normal
+   exactly one recipient, authorizes a daemon call. `notify`, `verify`, empty,
+   or absent provenance continues without daemon I/O, so the instance can share the normal
    non-SMTP Milter chain with ordinary mail. A malformed, duplicated, or
    wrong-stage macro is a contract failure, and nothing on this route can
    fall back to originator signing.
@@ -456,8 +459,9 @@ sequenceDiagram
    Postfix delivers it to the previous hop's return path.
 
 [`docs/conformance.md`](../conformance.md) records this mode as partial: the
-adapter covers the exact `internal` enum and the dedicated capability, but the
-mode still requires the upstream Postfix patch and its qualification harness.
+adapter covers the exact `bounce` enum and the dedicated capability, but the
+mode requires the upstream provenance implementation and real-Postfix
+qualification of the exact deployed image.
 
 ### 3.5 Received notifications and propagation
 
@@ -708,8 +712,8 @@ qualification claim for any MTA other than Postfix.
 - Exim is `unqualified_draft06`: the adapter is implemented, but its five-row
   evidence is historical Draft-04 evidence and does not qualify the Draft-06
   candidate.
-- `postfix_dsn` is partial until the upstream Postfix patch and qualification
-  harness exist.
+- `postfix_dsn` requires upstream provenance and real-Postfix qualification of
+  the exact deployed image; socket fixtures alone do not qualify production.
 - The `ordinary_transit` Milter cannot sign a forwarder that rewrites its
   return path; that mail needs a two-envelope `POST /v1/revise` client.
 - Propagation refuses `unsupported_chain` for an `nd=` previous hop or a

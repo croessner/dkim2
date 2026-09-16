@@ -1494,7 +1494,7 @@ Final gate:
 - Settled: the RFC 3464, RFC 3834, and RFC 2033 facts this contract relies on
   were confirmed against the RFC text and are listed under Source Documents;
   no confirmation task remains for the first slice.
-- Settled: no Postfix patch is required. The existing `{postfix_dsn_origin}`
+- Settled: no Postfix patch is required. The existing `{postfix_internal_origin}`
   enum remains the authority for locally generated bounces only.
 - Settled: the human-readable part is one fixed English template that ships
   with the library, marked `Content-Language: en`, with an internal closed

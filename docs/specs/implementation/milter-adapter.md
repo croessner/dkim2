@@ -367,8 +367,8 @@ Every originator route also retains one separate canonical
 for future DSN support, not sufficient signing authority.
 
 The originator adapter tempfails every exact null reverse-path `<>`. The
-separate `postfix_dsn` adapter accepts only exact `internal` provenance from
-`{postfix_dsn_origin}` and then delegates RFC 6522 and Draft-04 Section 12
+separate `postfix_dsn` adapter accepts only exact `bounce` provenance from
+`{postfix_internal_origin}` and then delegates RFC 6522 and Draft-04 Section 12
 evidence checks to the daemon. External or absent provenance never authorizes
 signing.
 

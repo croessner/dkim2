@@ -211,7 +211,7 @@ for required in \
   'unqualified_draft06' \
   'milter_reconstructed_crlf' \
   'lmtp_delivered_crlf' \
-  '{postfix_dsn_origin}' \
+  '{postfix_internal_origin}' \
   'process.default_tenant' \
   'dsn_propagation.pending_lease' \
   'unprovisioned_domain' \

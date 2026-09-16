@@ -24,8 +24,10 @@ certification, or universal interoperability claim.
   Postfix-exclusive route, `delivery_status` profile, route ticket, and
   protected DSN capability. The library retains a strict generic evidence
   constructor for trusted integrations. The originator Milter deliberately tempfails every null
-  sender. The dedicated `postfix_dsn` adapter requires the bounce-only Postfix
-  `{postfix_dsn_origin}` enum patch and accepts only exact `internal`.
+  sender. The dedicated `postfix_dsn` adapter requires the upstream Postfix
+  `{postfix_internal_origin}` macro and accepts only EOH-confirmed `bounce`
+  with a null outer sender and one recipient. `notify`, `verify`, empty or
+  absent values, and non-null double-bounce/postmaster copies remain unchanged.
   Received-DSN evaluation and Draft-06 Section 12.1.1 DSN propagation are
   implemented against
   [delivery-status-propagation.md](../specs/implementation/delivery-status-propagation.md)

@@ -305,12 +305,12 @@ control.
 ## Bounce and DSN boundary
 
 Inbound verification supports the null reverse path `<>` and forwards it with
-the original outer recipients. It does not need or interpret Postfix's private
-`{postfix_dsn_origin}` macro to verify a received delivery-status message.
+the original outer recipients. It does not need or interpret Postfix's upstream
+`{postfix_internal_origin}` macro to verify a received delivery-status message.
 
 This module cannot replace the dedicated `dkim2-milter` `postfix_dsn` mode for
 signing a locally generated bounce. Rspamd 4.1.5 accepts Milter macro frames
-internally, but it neither requests `{postfix_dsn_origin}` with
+internally, but it neither requests `{postfix_internal_origin}` with
 `SMFIR_SETSYMLIST` nor exposes arbitrary custom macros to Lua tasks. Its Milter
 bridge forwards only a fixed built-in macro allowlist. A null reverse path by
 itself is never authority for DSN signing.

@@ -398,8 +398,8 @@ Rspamd symbol.
 ## Bounce and DSN boundary
 
 Inbound DSN verification works with `MAIL FROM:<>` and does not require a
-Postfix-private macro. Locally generated DSN signing is different: Rspamd 4.1.5
-does not request `{postfix_dsn_origin}` with `SMFIR_SETSYMLIST` and does not
+Postfix origin macro. Locally generated DSN signing is different: Rspamd 4.1.5
+does not request `{postfix_internal_origin}` with `SMFIR_SETSYMLIST` and does not
 expose arbitrary custom Milter macros to Lua. The null reverse path alone is
 not trustworthy signing authority.
 

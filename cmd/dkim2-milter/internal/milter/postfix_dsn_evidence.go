@@ -6,7 +6,7 @@ type PostfixDSNEvidence struct {
 	internal bool
 }
 
-// Internal reports whether bounce(8) asserted the exact internal origin enum.
+// Internal reports whether bounce(8) asserted the upstream bounce origin with null sender.
 func (e PostfixDSNEvidence) Internal() bool { return e.internal }
 
 // Clear erases one detached evidence copy after daemon request mapping.

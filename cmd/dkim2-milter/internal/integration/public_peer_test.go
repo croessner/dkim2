@@ -919,7 +919,7 @@ func TestPostfixDSNExternalOrdinaryMessageContinuesThroughPublicSocket(t *testin
 	peer.callback(t, peerRecipient, []byte("<first@example.test>\x00"))
 	peer.callback(t, peerRecipient, []byte("<second@example.test>\x00"))
 	peer.callback(t, peerHeader, []byte("Subject\x00 ordinary message\x00"))
-	peer.send(t, peerMacro, postfixDSNOriginMacroPayload("external"))
+	peer.send(t, peerMacro, postfixDSNOriginMacroPayload(""))
 	peer.callback(t, peerEOH, nil)
 	peer.callback(t, peerBody, []byte("ordinary body\r\n"))
 	peer.send(t, peerEOM, nil)
@@ -957,7 +957,7 @@ func TestPostfixDSNEvidenceRunsDedicatedRouteThroughPublicSocket(t *testing.T) {
 	peer.callback(t, peerMail, []byte("<>\x00"))
 	peer.callback(t, peerRecipient, []byte("<sender@example.test>\x00"))
 	peer.callback(t, peerHeader, []byte("From\x00 mailer-daemon@example.test\x00"))
-	peer.send(t, peerMacro, postfixDSNOriginMacroPayload("internal"))
+	peer.send(t, peerMacro, postfixDSNOriginMacroPayload("bounce"))
 	peer.callback(t, peerEOH, nil)
 	peer.callback(t, peerBody, []byte("delivery status\r\n"))
 	peer.send(t, peerEOM, nil)
@@ -975,7 +975,7 @@ func TestPostfixDSNEvidenceRunsDedicatedRouteThroughPublicSocket(t *testing.T) {
 // postfixDSNOriginMacroPayload builds the Postfix origin enum callback.
 func postfixDSNOriginMacroPayload(origin string) []byte {
 	payload := []byte{peerEOH}
-	for _, pair := range [][2]string{{"{postfix_dsn_origin}", origin}} {
+	for _, pair := range [][2]string{{"{postfix_internal_origin}", origin}} {
 		payload = append(payload, pair[0]...)
 		payload = append(payload, 0)
 		payload = append(payload, pair[1]...)
@@ -1107,7 +1107,7 @@ func (p *protocolPeer) negotiatePostfixDSN(t *testing.T) {
 	)
 	p.send(t, peerNegotiate, payload)
 	response := p.receive(t)
-	const macroList = "{postfix_dsn_origin}"
+	const macroList = "{postfix_internal_origin}"
 	if response.command != peerNegotiate || len(response.payload) != 12+4+len(macroList)+1 ||
 		!bytes.Equal(response.payload[:12], payload) ||
 		binary.BigEndian.Uint32(response.payload[12:16]) != peerMacroClassEOH ||

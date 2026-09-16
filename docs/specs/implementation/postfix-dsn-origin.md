@@ -1,45 +1,59 @@
 # Postfix DSN Origin for the Milter Adapter
 
-> Historical Draft-04 implementation record. The original scope and evidence
-> below are preserved; current Draft-06 authority is the migration disposition
-> and current durable architecture.
-
-Status: implementation baseline. This document defines a local Postfix-to-
-DKIM2 adapter contract; it is not a DKIM2 wire-protocol extension.
+Status: active upstream Postfix adapter contract, migrated 2026-09-16.
+This is not a DKIM2 wire-protocol extension. The DKIM2 baseline is Draft-06.
 
 ## Authority and scope
 
-The active baseline is `draft-ietf-dkim-dkim2-spec-04`, Section 12. Postfix
-provides one provenance fact through normal negotiated Milter macros:
+Wietse Venema introduced `{postfix_internal_origin}` in upstream
+`postfix-3.12-20260915`. Unmodified Postfix 3.11.7 does not have this feature.
+A qualified backport of the final upstream implementation to 3.11.7 is
+supported; the old downstream DSN interface and compatibility fallback are not.
 
-| Macro | Values | Meaning |
-| --- | --- | --- |
-| `{postfix_dsn_origin}` | `internal`, `external` | Whether bounce(8) generated the current message. |
+| Upstream value | Adapter behavior |
+| --- | --- |
+| `bounce` | Candidate for DSN signing only with null outer sender and exactly one recipient; embedded evidence remains mandatory. |
+| `notify` | SMTP transcript; leave unchanged. |
+| `verify` | Address verification probe; leave unchanged. |
+| Empty or absent | No signing authority; leave unchanged. |
 
-The internal Postfix representation is a boolean asserted only by bounce(8).
-The Milter-facing value is the closed enum above. No original queue ID,
-envelope, recipient list, action, status, or message copy crosses this boundary.
+Upstream `bounce` includes double bounces and postmaster copies. These have
+non-null senders and are outside the dedicated DSN signing route, so they pass
+unchanged. No original queue ID, envelope, recipient list, action, status, or
+message copy crosses the macro boundary.
 
 ## Authorization contract
 
-The `postfix_dsn` adapter requests `{postfix_dsn_origin}` for `SMFIM_EOH` with
-the standard `SMFIR_SETSYMLIST` mechanism. Only exact `internal`, confirmed at
-EOH for a transaction whose outer reverse path is `<>` and which has exactly
-one outer recipient, authorizes the dedicated `/v1/dsn/sign` call.
+The `postfix_dsn` adapter requests `{postfix_internal_origin}` for `SMFIM_EOH`
+using standard `SMFIR_SETSYMLIST`. Identical header-stage replays are accepted;
+the transaction must receive the origin again at EOH. Postfix also sends this
+macro at CONNECT by default: the adapter validates it but never retains it as
+proof for a later transaction. Operators overriding `milter_connect_macros`
+should preserve the upstream macro in that list.
 
-`external` and an absent macro are not applicable and continue without daemon
-I/O or mutation; `external` does not impose bounce envelope shape on ordinary
-mail sharing the Milter chain. A malformed enum, duplicate member in one callback,
-conflicting callback replay, wrong callback stage, or invalid outer shape is an
-adapter contract failure. None can fall back to originator signing. A null
-sender alone is never authority.
+Unknown enum values, duplicate members, conflicting transaction replays, wrong
+callback stages, and multiple recipients on a null-sender bounce fail closed.
+A null sender alone never authorizes signing. Aborted or completed transactions
+clear their evidence; no connection-level fallback or legacy macro is used.
+
+## Migration
+
+Upgrade Postfix, the Milter adapter, and deployment documentation together.
+An old Postfix with this adapter cannot authorize local DSN signing. Drain or
+stop the DSN route during migration, qualify an actual local bounce and an
+externally injected null-sender negative case, then reopen it. Roll back the
+complete digest-pinned set if qualification fails. Do not backport or translate
+the retired downstream interface.
+
+Upstream references: [announcement](https://www.mail-archive.com/postfix-devel@postfix.org/msg01355.html)
+and the snapshot's `MILTER_README` provenance section.
 
 ## DKIM2 evidence boundary
 
 Postfix provenance proves only that the local MTA generated the outer bounce.
 The library still parses the exact three-part RFC 6522 report and verifies the
 relevant embedded DKIM2 signatures and Message-Instance evidence required by
-Draft-04 Section 12.1. For a complete embedded message it verifies header and
+Draft-06 Section 12.1. For a complete embedded message it verifies header and
 body hashes; for `text/rfc822-headers` it uses the restricted header-only path.
 Signature cryptography, timestamps, custody structure, and authenticated
 `d=`, `mf=`, and `rt=` values remain mandatory.
@@ -65,7 +79,7 @@ optional `Original-Recipient`. Only Postfix's wrapped `Remote-MTA` and
 reordering, duplicate fields, wrong-group fields, and other folding still fail
 closed. The daemon selects this parser only after authenticating the dedicated,
 non-reusable DSN route capability. Possession of that capability explicitly
-attests that the Postfix-only adapter established exact `internal` provenance;
+attests that the Postfix-only adapter established exact `bounce` provenance;
 the request schema contains neither fidelity nor a compatibility switch. Public library
 integrations must satisfy the same provenance precondition before selecting
 the explicitly named Postfix evidence constructor. It decodes bounded RFC 3461 xtext only for the
