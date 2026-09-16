@@ -871,8 +871,10 @@ This release breaks the old downstream Postfix origin-macro contract. The
 `postfix_dsn` adapter now requires `{postfix_internal_origin}=bounce`, confirmed
 at EOH. Unmodified Postfix 3.11.7 and the retired downstream DSN patches cannot
 provide this contract. It first appeared in upstream `postfix-3.12-20260915`;
-the approved deployment uses a qualified backport of the final upstream
-implementation to Postfix 3.11.7. Qualify and pin that image by digest; the
+the approved deployment uses `chrroessner/postfix:3.11.7-r1`, containing the
+final upstream implementation backported to 3.11.7, at immutable index digest
+`sha256:736180b4fa352bb55bdca9e93e9201c7df7a419dad6622ed601d9dde028ae254`.
+Qualify and pin that image by digest; the
 version number alone is insufficient. No old-macro compatibility is provided.
 
 `notify`, `verify`, empty/absent provenance, and non-null double-bounce or

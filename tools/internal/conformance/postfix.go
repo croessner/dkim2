@@ -13,6 +13,7 @@ const (
 
 // PostfixQualificationReport is the strict real-Postfix qualification evidence.
 type PostfixQualificationReport struct {
+	Lane                    string                              `json:"lane"`
 	Schema                  string                              `json:"schema"`
 	MessageDraft            string                              `json:"message_draft"`
 	DNSDraft                string                              `json:"dns_draft"`
@@ -46,14 +47,17 @@ type PostfixQualificationFragment struct {
 
 // PostfixQualificationTopology records the security-relevant adapter wiring.
 type PostfixQualificationTopology struct {
-	ComposeHostPorts     int    `json:"compose_host_ports"`
-	DaemonHTTP           string `json:"daemon_http"`
-	MilterTransport      string `json:"milter_transport"`
-	PostfixProtocol      int    `json:"postfix_protocol"`
-	PostfixDefaultAction string `json:"postfix_default_action"`
-	MilterConnectTimeout string `json:"milter_connect_timeout"`
-	MilterCommandTimeout string `json:"milter_command_timeout"`
-	MilterContentTimeout string `json:"milter_content_timeout"`
+	PropagationRecipientLimit int    `json:"propagation_recipient_limit"`
+	PropagationReinjection    string `json:"propagation_reinjection"`
+	PropagationTransport      string `json:"propagation_transport"`
+	ComposeHostPorts          int    `json:"compose_host_ports"`
+	DaemonHTTP                string `json:"daemon_http"`
+	MilterTransport           string `json:"milter_transport"`
+	PostfixProtocol           int    `json:"postfix_protocol"`
+	PostfixDefaultAction      string `json:"postfix_default_action"`
+	MilterConnectTimeout      string `json:"milter_connect_timeout"`
+	MilterCommandTimeout      string `json:"milter_command_timeout"`
+	MilterContentTimeout      string `json:"milter_content_timeout"`
 }
 
 // ValidatePostfixQualificationReport enforces exact provenance, runtime, topology, cases, and cleanup.
@@ -84,7 +88,8 @@ func validatePostfixReportBinding(
 	report PostfixQualificationReport,
 	manifestDigest, revision, snapshotDigest, producerDigest string,
 ) error {
-	if report.Schema != "dkim2.postfix-qualification-report.v1" ||
+	if report.Lane != "core" ||
+		report.Schema != "dkim2.postfix-qualification-report.v1" ||
 		report.MessageDraft != MessageDraft ||
 		report.DNSDraft != DNSDraft ||
 		report.BaseRevision != revision ||
@@ -100,7 +105,7 @@ func validatePostfixReportBinding(
 	if len(report.ImageIdentities) != 3 ||
 		report.ImageIdentities["debian"] != "debian@sha256:4e401d95de7083948053197a9c3913343cd06b706bf15eb6a0c3ccd26f436a0e" ||
 		report.ImageIdentities["golang"] != "golang:1.27.0-trixie@sha256:df98008ecd2b0ecc9f0a94d1b07e3564a9c92b555369b33d9b5f60d0765b2db7" ||
-		report.ImageIdentities["postfix"] != "chrroessner/postfix@sha256:d4b349ce665ba291444e55862ac842e3d4e612596520a9ba65a7b9bf00f9aa3c" {
+		report.ImageIdentities["postfix"] != "chrroessner/postfix@sha256:736180b4fa352bb55bdca9e93e9201c7df7a419dad6622ed601d9dde028ae254" {
 		return errors.New("runner_identity")
 	}
 	return nil
@@ -109,11 +114,11 @@ func validatePostfixReportBinding(
 // validatePostfixRuntimeIdentity checks the exact runtime and executable set.
 func validatePostfixRuntimeIdentity(report PostfixQualificationReport) error {
 	if report.RuntimeIdentity.Schema != "dkim2.postfix-qualification-identity.v1" ||
-		report.RuntimeIdentity.PostfixVersion != "3.11.6" ||
-		len(report.RuntimeIdentity.Executables) != 3 {
+		report.RuntimeIdentity.PostfixVersion != "3.11.7" ||
+		len(report.RuntimeIdentity.Executables) != 4 {
 		return errors.New("runner_identity")
 	}
-	for _, name := range []string{"dkim2-milter", "dkim2d", "qualify"} {
+	for _, name := range []string{"dkim2-dsn-propagator", "dkim2-milter", "dkim2d", "qualify"} {
 		if !isSHA256(report.RuntimeIdentity.Executables[name]) {
 			return errors.New("runner_identity")
 		}
@@ -123,7 +128,10 @@ func validatePostfixRuntimeIdentity(report PostfixQualificationReport) error {
 
 // validatePostfixTopology checks the bounded adapter and Postfix wiring facts.
 func validatePostfixTopology(topology PostfixQualificationTopology) error {
-	if topology.ComposeHostPorts != 0 ||
+	if topology.PropagationRecipientLimit != 1 ||
+		topology.PropagationReinjection != "milter_free_loopback_listener" ||
+		topology.PropagationTransport != "lmtp_owned_unix_socket_only" ||
+		topology.ComposeHostPorts != 0 ||
 		topology.DaemonHTTP != "canonical_loopback_only" ||
 		topology.MilterTransport != "owned_unix_sockets_only" ||
 		topology.PostfixProtocol != 6 ||

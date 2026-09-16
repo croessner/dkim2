@@ -615,7 +615,7 @@ func validPostfixService(root string) composeService {
 			"SETGID", "SETUID", "SYS_CHROOT",
 		},
 		GroupAdd: []string{"103"},
-		Image:    "chrroessner/postfix:3.11.6-r2@sha256:d4b349ce665ba291444e55862ac842e3d4e612596520a9ba65a7b9bf00f9aa3c",
+		Image:    "chrroessner/postfix:3.11.7-r1@sha256:736180b4fa352bb55bdca9e93e9201c7df7a419dad6622ed601d9dde028ae254",
 		Networks: map[string]any{"mail": nil},
 		DependsOn: map[string]composeDependency{
 			"milter-inbound":    {Condition: "service_healthy", Required: true},

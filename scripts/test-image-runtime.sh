@@ -21,7 +21,7 @@ esac
 ownership_label="com.croessner.dkim2.runtime-run=$run_id"
 project_label=com.croessner.dkim2.project=runtime-test
 prefix="dkim2-image-runtime-$run_id"
-helper_image=chrroessner/postfix:3.11.6-r2@sha256:d4b349ce665ba291444e55862ac842e3d4e612596520a9ba65a7b9bf00f9aa3c
+helper_image=chrroessner/postfix:3.11.7-r1@sha256:736180b4fa352bb55bdca9e93e9201c7df7a419dad6622ed601d9dde028ae254
 containers=
 images=
 volumes=

@@ -169,7 +169,7 @@ func TestPostfixQualificationPinsBuildInputsAndCleanup(t *testing.T) {
 	for _, identity := range []string{
 		"golang:1.27.0-trixie@sha256:df98008ecd2b0ecc9f0a94d1b07e3564a9c92b555369b33d9b5f60d0765b2db7",
 		"debian@sha256:4e401d95de7083948053197a9c3913343cd06b706bf15eb6a0c3ccd26f436a0e",
-		"chrroessner/postfix@sha256:d4b349ce665ba291444e55862ac842e3d4e612596520a9ba65a7b9bf00f9aa3c",
+		"chrroessner/postfix@sha256:736180b4fa352bb55bdca9e93e9201c7df7a419dad6622ed601d9dde028ae254",
 	} {
 		if !bytes.Contains(dockerfile, []byte(identity)) {
 			t.Fatalf("Dockerfile omitted pinned identity %q", identity)

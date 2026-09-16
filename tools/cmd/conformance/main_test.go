@@ -132,6 +132,7 @@ func FuzzPostfixQualificationReportDecoding(f *testing.F) {
 func validPostfixQualificationReportForTest() postfixQualificationReport {
 	digest := strings.Repeat("a", 64)
 	return postfixQualificationReport{
+		Lane:                    "core",
 		Schema:                  "dkim2.postfix-qualification-report.v1",
 		MessageDraft:            conformance.MessageDraft,
 		DNSDraft:                conformance.DNSDraft,
@@ -145,12 +146,12 @@ func validPostfixQualificationReportForTest() postfixQualificationReport {
 		ImageIdentities: map[string]string{
 			"debian":  "debian@sha256:4e401d95de7083948053197a9c3913343cd06b706bf15eb6a0c3ccd26f436a0e",
 			"golang":  "golang:1.27.0-trixie@sha256:df98008ecd2b0ecc9f0a94d1b07e3564a9c92b555369b33d9b5f60d0765b2db7",
-			"postfix": "chrroessner/postfix@sha256:d4b349ce665ba291444e55862ac842e3d4e612596520a9ba65a7b9bf00f9aa3c",
+			"postfix": "chrroessner/postfix@sha256:736180b4fa352bb55bdca9e93e9201c7df7a419dad6622ed601d9dde028ae254",
 		},
 		RuntimeIdentity: postfixQualificationRuntimeIdentity{
-			Schema: "dkim2.postfix-qualification-identity.v1", PostfixVersion: "3.11.6",
+			Schema: "dkim2.postfix-qualification-identity.v1", PostfixVersion: "3.11.7",
 			Executables: map[string]string{
-				"dkim2-milter": digest, "dkim2d": digest, "qualify": digest,
+				"dkim2-dsn-propagator": digest, "dkim2-milter": digest, "dkim2d": digest, "qualify": digest,
 			},
 		},
 		Fragments: []postfixQualificationReportFragment{
@@ -180,6 +181,7 @@ func validPostfixQualificationReportForTest() postfixQualificationReport {
 			},
 		},
 		Topology: postfixQualificationTopology{
+			PropagationRecipientLimit: 1, PropagationReinjection: "milter_free_loopback_listener", PropagationTransport: "lmtp_owned_unix_socket_only",
 			ComposeHostPorts: 0, DaemonHTTP: "canonical_loopback_only",
 			MilterTransport: "owned_unix_sockets_only", PostfixProtocol: 6,
 			PostfixDefaultAction: "tempfail",
@@ -478,4 +480,21 @@ func runGitCommand(t *testing.T, root string, arguments ...string) string {
 		t.Fatalf("git %v: %v: %s", arguments, err, output)
 	}
 	return string(output)
+}
+
+// TestPostfixQualificationCurrentRuntimeContract rejects incomplete or foreign
+// lane reports while retaining the exact core runner's four-binary identity.
+func TestPostfixQualificationCurrentRuntimeContract(t *testing.T) {
+	for _, lane := range []string{"", "propagation", "all", "unknown"} {
+		report := validPostfixQualificationReportForTest()
+		report.Lane = lane
+		if err := validatePostfixQualificationReport(report, report.ManifestSHA256, report.BaseRevision, report.CandidateSnapshotSHA256, report.ProducerSHA256); err == nil {
+			t.Fatalf("accepted unsupported lane %q", lane)
+		}
+	}
+	report := validPostfixQualificationReportForTest()
+	delete(report.RuntimeIdentity.Executables, "dkim2-dsn-propagator")
+	if err := validatePostfixQualificationReport(report, report.ManifestSHA256, report.BaseRevision, report.CandidateSnapshotSHA256, report.ProducerSHA256); err == nil {
+		t.Fatal("accepted missing propagation-adapter identity")
+	}
 }
