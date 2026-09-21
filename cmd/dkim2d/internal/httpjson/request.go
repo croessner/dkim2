@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	maxEncodedMessageBytes  = 44_739_244
+	maxEncodedMessageBytes  = ((dkim2.HardMaxRawMessageBytes + 2) / 3) * 4
 	maxSMTPPathBytes        = 256
 	maxEnvelopeBytes        = 512_256
 	domainRequestRedacted   = "dkim2d_domain_request"

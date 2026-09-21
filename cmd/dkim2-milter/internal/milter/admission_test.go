@@ -130,18 +130,19 @@ func TestAdmissionAccountsAndReleasesExactlyOnce(t *testing.T) {
 func TestDefaultAdmissionFitsOneMaximumMessageThroughEOM(t *testing.T) {
 	const (
 		defaultBufferedBytes = 256 << 20
+		defaultMessageBytes  = 32 << 20
 		maximumEnvelopeBytes = 256 + hardRecipientCount*256
 	)
 	admission, err := NewAdmission(2, 2, defaultBufferedBytes)
 	if err != nil {
 		t.Fatal(err)
 	}
-	messageReservation, ok := admission.AdmitMessage(2 * hardMessageBytes)
+	messageReservation, ok := admission.AdmitMessage(2 * defaultMessageBytes)
 	if !ok {
 		t.Fatal("maximum message retained-byte reservation was rejected")
 	}
 	transportBytes, bounded := eomTransportReservationBytes(
-		hardMessageBytes,
+		defaultMessageBytes,
 		maximumEnvelopeBytes,
 	)
 	if !bounded {
@@ -150,7 +151,7 @@ func TestDefaultAdmissionFitsOneMaximumMessageThroughEOM(t *testing.T) {
 	if !messageReservation.Grow(transportBytes + resource.EOMResponseWorkingSetBytes) {
 		t.Fatal("one configured maximum message was rejected at EOM")
 	}
-	if _, ok := admission.AdmitMessage(2 * hardMessageBytes); ok {
+	if _, ok := admission.AdmitMessage(2 * defaultMessageBytes); ok {
 		t.Fatal("concurrent maximum message exceeded the process byte cap")
 	}
 	messageReservation.Release()

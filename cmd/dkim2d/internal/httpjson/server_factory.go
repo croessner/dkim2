@@ -87,6 +87,7 @@ func (f *ServerFactory) Assemble(input app.HTTPAssemblyInput) (app.HTTPAssembly,
 	return newServerAssembly(
 		input.BaseContext(),
 		serverSettings{
+			messageBytes:      server.MessageBytes(),
 			authority:         server.Listen(),
 			privateNetwork:    server.PrivateNetwork(),
 			serverName:        server.TLSServerName(),
@@ -112,6 +113,7 @@ func (f *ServerFactory) Assemble(input app.HTTPAssemblyInput) (app.HTTPAssembly,
 }
 
 type serverSettings struct {
+	messageBytes      int
 	authority         string
 	privateNetwork    bool
 	serverName        string
@@ -230,6 +232,7 @@ func newServerAssembly(
 	}
 	boundary, err := NewHTTPBoundary(
 		BoundaryConfig{
+			MessageBytes:    settings.messageBytes,
 			Authority:       settings.requestAuthority(),
 			RequestDeadline: settings.requestDeadline,
 			MaxInFlight:     settings.maxInFlight,

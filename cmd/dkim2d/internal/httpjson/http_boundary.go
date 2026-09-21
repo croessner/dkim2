@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/croessner/dkim2"
 	"github.com/croessner/dkim2/cmd/dkim2d/internal/app"
 	"github.com/croessner/dkim2/cmd/dkim2d/internal/httpjson/generated"
 	"github.com/croessner/dkim2/cmd/dkim2d/internal/observability"
@@ -59,6 +60,8 @@ type FatalNotifier interface {
 
 // BoundaryConfig contains the immutable HTTP containment policy.
 type BoundaryConfig struct {
+	// MessageBytes bounds each decoded RFC 5322 input; zero selects 32 MiB.
+	MessageBytes    int
 	Authority       string
 	RequestDeadline time.Duration
 	MaxInFlight     int
@@ -68,6 +71,7 @@ type BoundaryConfig struct {
 
 // HTTPBoundary owns route, admission, validation, and generated-adapter ordering.
 type HTTPBoundary struct {
+	messageBytes       int
 	authority          string
 	deadline           time.Duration
 	matcher            capabilityMatcher
@@ -96,6 +100,12 @@ func NewHTTPBoundary(
 	validator *RequestValidator,
 	dependencies ...any,
 ) (*HTTPBoundary, error) {
+	if config.MessageBytes == 0 {
+		config.MessageBytes = 32 << 20
+	}
+	if config.MessageBytes < 1 || config.MessageBytes > dkim2.HardMaxRawMessageBytes {
+		return nil, errHTTPBoundaryConfig
+	}
 	if config.Authority == "" || strings.ContainsAny(config.Authority, "\r\n/?#@") ||
 		config.RequestDeadline <= 0 || nilInterfaceValue(matcher) ||
 		nilInterfaceValue(readiness) || nilInterfaceValue(processor) ||
@@ -137,6 +147,7 @@ func NewHTTPBoundary(
 		return nil, errHTTPBoundaryConfig
 	}
 	boundary := &HTTPBoundary{
+		messageBytes:       config.MessageBytes,
 		authority:          config.Authority,
 		deadline:           config.RequestDeadline,
 		matcher:            matcher,
@@ -1094,6 +1105,11 @@ func (h *HTTPBoundary) validateProcessBody(
 	}
 	if request.Context().Err() != nil {
 		h.writeContextFailure(writer, request)
+		return false
+	}
+	if err := preflightConfiguredMessageSize(body, constants, h.messageBytes); err != nil {
+		h.writeError(writer, request, http.StatusRequestEntityTooLarge,
+			generated.ErrorResponseCodeRequestTooLarge, generated.Request)
 		return false
 	}
 	if err := preflightKnownFields(body, constants); err != nil {

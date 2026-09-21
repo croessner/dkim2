@@ -3,8 +3,8 @@ package dsn
 import "github.com/croessner/dkim2/internal/rawmsg"
 
 const (
-	defaultMaxMessageBytes = 32 * 1024 * 1024
-	defaultMaxPartBytes    = 24 * 1024 * 1024
+	defaultMaxMessageBytes = rawmsg.HardMaxMessageBytes
+	defaultMaxPartBytes    = rawmsg.HardMaxMessageBytes
 	hardMaxBoundaryBytes   = 70
 )
 

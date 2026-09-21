@@ -8,13 +8,15 @@ import (
 	"fmt"
 	"io"
 	"slices"
+
+	"github.com/croessner/dkim2"
 )
 
 const (
 	// MaxBatchRevisionCopies bounds one complete fanout at the service boundary.
 	MaxBatchRevisionCopies = 32
 	// MaxBatchRevisionMessageBytes bounds the aggregate decoded message snapshots.
-	MaxBatchRevisionMessageBytes = 32 << 20
+	MaxBatchRevisionMessageBytes = 2 * dkim2.HardMaxRawMessageBytes
 	batchRevisionRedacted        = "dkim2d_batch_revision{redacted}"
 )
 

@@ -156,9 +156,9 @@ func TestLifecycleDegradesWithoutStaleServing(t *testing.T) {
 	lease.Release()
 }
 
-// TestLifecycleRecoversOnlyWithHigherMatchingGeneration proves complete
+// TestLifecycleRecoversWithHigherMatchingGeneration proves complete
 // generation agreement and strict monotonic publication.
-func TestLifecycleRecoversOnlyWithHigherMatchingGeneration(t *testing.T) {
+func TestLifecycleRecoversWithHigherMatchingGeneration(t *testing.T) {
 	t.Parallel()
 	generation := uint64(3)
 	registryGeneration := uint64(3)
@@ -209,6 +209,49 @@ func TestLifecycleRevalidatesUnchangedGenerationWithoutDegrading(t *testing.T) {
 	}
 }
 
+// TestLifecycleRecoversWithFreshEquivalentGeneration proves a transient load
+// failure cannot permanently block a freshly validated unchanged generation.
+func TestLifecycleRecoversWithFreshEquivalentGeneration(t *testing.T) {
+	t.Parallel()
+	fail := false
+	loader := loaderFunc(func(context.Context) (Candidate, error) {
+		if fail {
+			return Candidate{}, provider.NewError(provider.ErrorCodeUnavailable)
+		}
+		return testCandidate(7, 7)
+	})
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	runtime, err := New(ctx, loader, 2*time.Second)
+	if err != nil {
+		t.Fatal("construct runtime")
+	}
+	old, err := runtime.Acquire(ctx)
+	if err != nil {
+		t.Fatal("acquire initial generation")
+	}
+	defer old.Release()
+	fail = true
+	if err := runtime.Refresh(ctx); provider.ErrorCodeOf(err) != provider.ErrorCodeUnavailable {
+		t.Fatal("load failure must remain unavailable")
+	}
+	if _, err := runtime.Acquire(ctx); provider.ErrorCodeOf(err) != provider.ErrorCodeUnavailable {
+		t.Fatal("degraded runtime must not lease cached state")
+	}
+	fail = false
+	if err := runtime.Refresh(ctx); err != nil || !runtime.Ready() {
+		t.Fatal("fresh equivalent generation must restore readiness")
+	}
+	fresh, err := runtime.Acquire(ctx)
+	if err != nil {
+		t.Fatal("acquire recovered generation")
+	}
+	defer fresh.Release()
+	if fresh.ref == old.ref {
+		t.Fatal("recovery must publish the freshly loaded generation")
+	}
+}
+
 // TestLifecycleRejectsChangedFactsWithinCurrentGeneration proves a backend
 // cannot mutate a generation in place while retaining runtime readiness.
 func TestLifecycleRejectsChangedFactsWithinCurrentGeneration(t *testing.T) {
@@ -231,5 +274,36 @@ func TestLifecycleRejectsChangedFactsWithinCurrentGeneration(t *testing.T) {
 	}
 	if runtime.State() != StateDegraded {
 		t.Fatal("changed same-generation facts must degrade runtime")
+	}
+	if err := runtime.Refresh(refreshCtx); provider.ErrorCodeOf(err) != provider.ErrorCodeMalformedData {
+		t.Fatal("changed facts must remain rejected while degraded")
+	}
+	if _, err := runtime.Acquire(context.Background()); provider.ErrorCodeOf(err) != provider.ErrorCodeUnavailable {
+		t.Fatal("changed facts must not restore serving")
+	}
+}
+
+// TestLifecycleRejectsRollbackWhileDegraded preserves monotonic generation
+// authority even when the backend supplies an otherwise complete candidate.
+func TestLifecycleRejectsRollbackWhileDegraded(t *testing.T) {
+	t.Parallel()
+	generation := uint64(7)
+	loader := loaderFunc(func(context.Context) (Candidate, error) {
+		return testCandidate(generation, generation)
+	})
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	runtime, err := New(ctx, loader, 2*time.Second)
+	if err != nil {
+		t.Fatal("construct runtime")
+	}
+	generation = 6
+	for range 2 {
+		if err := runtime.Refresh(ctx); provider.ErrorCodeOf(err) != provider.ErrorCodeMalformedData {
+			t.Fatal("lower generation must fail closed")
+		}
+		if runtime.Ready() {
+			t.Fatal("rollback must not restore readiness")
+		}
 	}
 }

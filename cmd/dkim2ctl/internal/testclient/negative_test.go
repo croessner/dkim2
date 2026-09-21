@@ -115,7 +115,7 @@ func TestNegativeBuilderFreezesClosedMutationShapes(t *testing.T) {
 				}
 			}
 			if mutation == mutationBodyOverLimit &&
-				request.ContentLength != 47_878_317 {
+				request.ContentLength != 361_053_017 {
 				t.Fatal("body-over-limit mutation changed")
 			}
 		})

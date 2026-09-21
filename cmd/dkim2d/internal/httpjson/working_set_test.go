@@ -82,12 +82,12 @@ func TestMaximumLegalWorkingSetProof(t *testing.T) {
 	t.Parallel()
 
 	const (
-		wantHighWater = uint64(482_651_127)
-		wantMargin    = uint64(54_219_785)
+		wantHighWater = uint64(2_750_757_184)
+		wantMargin    = uint64(1_544_210_112)
 	)
 	if maximumLegalWorkingSetHighWaterBytes != wantHighWater ||
 		maximumLegalWorkingSetMarginBytes != wantMargin {
-		t.Fatal("maximum-input inventory changed without proof review")
+		t.Fatalf("maximum-input inventory changed: high_water=%d margin=%d", maximumLegalWorkingSetHighWaterBytes, maximumLegalWorkingSetMarginBytes)
 	}
 	ledger, err := newWorkingSetLedger(processWorkingSetUnitBytes)
 	if err != nil {
@@ -218,6 +218,7 @@ func TestMaximumLegalProductionWorkingSetProof(t *testing.T) {
 	secret := bytes.Repeat([]byte{0xa5}, 32)
 	processor := &maximumWorkingSetProcessor{}
 	handler, err := NewHTTPBoundary(BoundaryConfig{
+		MessageBytes:    dkim2.HardMaxRawMessageBytes,
 		Authority:       boundaryTestAuthority,
 		RequestDeadline: 5 * time.Minute,
 		MaxInFlight:     1,
@@ -284,8 +285,8 @@ func TestPinnedWorkingSetCapacityBounds(t *testing.T) {
 	if err != nil || len(body) != int(maxProcessBodyBytes) ||
 		uint64(cap(body)) != maximumProcessBodyCapacityBytes ||
 		probe.offered != maximumReadAllIntermediateBytes ||
-		probe.offered+uint64(cap(body)) != 113_391_936 {
-		t.Fatal("Go 1.27.0 io.ReadAll capacity inventory drifted")
+		probe.offered+uint64(cap(body)) != 858_093_888 {
+		t.Fatalf("Go 1.27.0 io.ReadAll capacity inventory: final=%d intermediate=%d", cap(body), probe.offered)
 	}
 	decoderProbe := &workingSetJSONProbe{remaining: uint64(maxProcessBodyBytes)}
 	var decodedArray []any
@@ -318,7 +319,7 @@ func TestPinnedWorkingSetCapacityBounds(t *testing.T) {
 	lines := message.Body().Lines().Lines()
 	if len(lines) != rawmsg.HardMaxBodyLines ||
 		cap(lines) != rawmsg.HardMaxBodyLines ||
-		maximumLibraryBodyLineIndexBytes != 7_864_320 {
+		maximumLibraryBodyLineIndexBytes != 251_658_240 {
 		t.Fatal("Go 1.27.0 BodyLine capacity inventory drifted")
 	}
 }

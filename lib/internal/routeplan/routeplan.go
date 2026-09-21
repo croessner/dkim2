@@ -18,6 +18,7 @@ import (
 
 	"github.com/croessner/dkim2/internal/niliface"
 	"github.com/croessner/dkim2/internal/provider"
+	"github.com/croessner/dkim2/internal/rawmsg"
 	"github.com/croessner/dkim2/internal/signature"
 )
 
@@ -26,8 +27,8 @@ const (
 	hardCopies       = 128
 	hardDescriptors  = 256 * 1024
 	hardWork         = 4096
-	hardPerSource    = 32 * 1024 * 1024
-	hardSourceBytes  = 64 * 1024 * 1024
+	hardPerSource    = rawmsg.HardMaxMessageBytes
+	hardSourceBytes  = 2 * rawmsg.HardMaxMessageBytes
 	hardRecipients   = 128
 	hardEnvelopePath = 32 * 1024
 	hardCalls        = 4

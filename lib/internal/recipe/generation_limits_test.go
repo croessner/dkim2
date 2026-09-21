@@ -9,9 +9,9 @@ import (
 // TestDefaultGenerationLimitsMatchDurableContract locks exact defaults and hard maxima.
 func TestDefaultGenerationLimitsMatchDurableContract(t *testing.T) {
 	want := GenerationLimits{
-		RecipeLimits: DefaultLimits(), MaxInputBytes: 67_108_864, MaxInputItems: 135_072,
-		MaxCandidateEntries: 67_536, MaxCandidateKeyBytes: 33_554_432,
-		MaxComparisons: 135_072, MaxGenerationWorkUnits: 268_435_456,
+		RecipeLimits: DefaultLimits(), MaxInputBytes: 268_435_456, MaxInputItems: 4_198_304,
+		MaxCandidateEntries: 2_099_152, MaxCandidateKeyBytes: 134_217_728,
+		MaxComparisons: 4_198_304, MaxGenerationWorkUnits: 1_879_048_192,
 	}
 	if got := DefaultGenerationLimits(); got != want {
 		t.Fatalf("DefaultGenerationLimits() = %#v, want %#v", got, want)

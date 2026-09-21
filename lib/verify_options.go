@@ -5,12 +5,13 @@ import (
 
 	"github.com/croessner/dkim2/internal/dsn"
 	"github.com/croessner/dkim2/internal/niliface"
+	"github.com/croessner/dkim2/internal/rawmsg"
 	"github.com/croessner/dkim2/internal/service"
 )
 
 const (
 	// HardMaxRawMessageBytes is the public verification maximum raw RFC 5322 message size.
-	HardMaxRawMessageBytes = 32 << 20
+	HardMaxRawMessageBytes = rawmsg.HardMaxMessageBytes
 	// HardMaxRecipients is the public verification maximum current SMTP recipient count.
 	HardMaxRecipients = 2_000
 	// HardMaxInstanceHashSets is the public verification maximum hash-set count per Message-Instance.

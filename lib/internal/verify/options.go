@@ -7,6 +7,7 @@ import (
 	"github.com/croessner/dkim2/internal/canonical"
 	"github.com/croessner/dkim2/internal/cryptodkim2"
 	"github.com/croessner/dkim2/internal/niliface"
+	"github.com/croessner/dkim2/internal/rawmsg"
 	"github.com/croessner/dkim2/internal/recipe"
 	"github.com/croessner/dkim2/internal/signature"
 )
@@ -124,7 +125,7 @@ func DefaultOptions() Options {
 func DefaultRevisionLimits() RevisionLimits {
 	return RevisionLimits{
 		MaxProtocolFields: 256, MaxTotalSignatureSets: 256,
-		MaxPublicKeyLookups: 256, MaxCanonicalWorkBytes: 64 * 1024 * 1024,
+		MaxPublicKeyLookups: 256, MaxCanonicalWorkBytes: 4 * rawmsg.HardMaxMessageBytes,
 		MaxSignatureInputBytes: canonical.DefaultLimits().MaxSignatureInputBytes,
 		MaxDecodedRecipeBytes:  recipe.DefaultLimits().MaxDecodedRecipeBytes,
 	}

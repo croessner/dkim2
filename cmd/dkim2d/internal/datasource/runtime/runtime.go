@@ -134,7 +134,8 @@ func (r *Runtime) Acquire(ctx context.Context) (*Lease, error) {
 	return &Lease{owner: r, ref: r.current}, nil
 }
 
-// Refresh loads and publishes one strictly higher complete generation.
+// Refresh revalidates a complete generation, publishing higher generations or
+// freshly loaded equivalent state after degradation without serving stale data.
 func (r *Runtime) Refresh(ctx context.Context) error {
 	if r == nil {
 		return provider.NewError(provider.ErrorCodeUnavailable)
@@ -209,10 +210,13 @@ func (r *Runtime) refresh(ctx context.Context, initial bool) (resultErr error) {
 		currentGeneration := r.current.candidate.Dataset.Generation()
 		switch {
 		case candidate.Dataset.Generation() == currentGeneration &&
-			r.state == StateReady &&
 			candidatesEquivalent(candidate, r.current.candidate):
-			discardCandidate(&candidate, resolver)
-			return nil
+			if r.state == StateReady {
+				discardCandidate(&candidate, resolver)
+				return nil
+			}
+			// Recover only with the freshly loaded and validated candidate;
+			// existing leases retain their independently retired generation.
 		case candidate.Dataset.Generation() <= currentGeneration:
 			discardCandidate(&candidate, resolver)
 			if !initial {

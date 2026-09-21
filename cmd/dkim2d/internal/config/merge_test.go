@@ -178,7 +178,7 @@ func TestStableFieldBindings(t *testing.T) {
 func TestStablePathSetIsExact(t *testing.T) {
 	specs := stableFieldSpecs()
 	golden := stableFieldGoldenContract()
-	if len(specs) != 121 || len(specs) != len(golden) {
+	if len(specs) != 122 || len(specs) != len(golden) {
 		t.Fatal("stable path count changed")
 	}
 	for index, expected := range golden {
@@ -241,6 +241,7 @@ func stableFieldGoldenContract() []stableFieldGolden {
 		{path: "server.request_deadline", environment: "DKIM2D_SERVER_REQUEST_DEADLINE", defaultValue: "60s", hasDefault: true},
 		{path: "server.shutdown_timeout", environment: "DKIM2D_SERVER_SHUTDOWN_TIMEOUT", defaultValue: "30" + "s", hasDefault: true},
 		{path: "server.max_in_flight", environment: "DKIM2D_SERVER_MAX_IN_FLIGHT", defaultValue: "1", hasDefault: true},
+		{path: "server.message_bytes", environment: "DKIM2D_SERVER_MESSAGE_BYTES", defaultValue: "33554432", hasDefault: true},
 		{path: "server.max_waiters", environment: "DKIM2D_SERVER_MAX_WAITERS", defaultValue: "64", hasDefault: true},
 		{path: "server.admission_wait", environment: "DKIM2D_SERVER_ADMISSION_WAIT", defaultValue: "100ms", hasDefault: true},
 		{path: "policy.mode", environment: "DKIM2D_POLICY_MODE", defaultValue: "strict", hasDefault: true},

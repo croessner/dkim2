@@ -16,6 +16,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/croessner/dkim2"
 	"github.com/croessner/dkim2/cmd/dkim2d/internal/replay/valkey"
 )
 
@@ -130,6 +131,7 @@ type tracingState struct {
 }
 
 type serverState struct {
+	messageBytes               int
 	listen                     string
 	privateNetwork             bool
 	tlsCertificateFile         string
@@ -654,6 +656,10 @@ func clonePresence(input map[string]Presence) map[string]Presence {
 
 // parseServer validates the exact local HTTP resource contract.
 func parseServer(values map[string]rawValue) (serverState, error) {
+	messageBytes, err := uintValue(values, pathServerMessageBytes, 1, dkim2.HardMaxRawMessageBytes)
+	if err != nil {
+		return serverState{}, err
+	}
 	readHeader, err := durationValue(values, pathServerReadHeader, time.Second, 30*time.Second, false)
 	if err != nil {
 		return serverState{}, err
@@ -709,6 +715,7 @@ func parseServer(values map[string]rawValue) (serverState, error) {
 		return serverState{}, newError(CodeInvalidField)
 	}
 	return serverState{
+		messageBytes:               int(messageBytes),
 		listen:                     listen,
 		privateNetwork:             privateNetwork,
 		tlsCertificateFile:         tlsCertificate,

@@ -49,7 +49,7 @@ func DefaultLimits() Limits {
 	signatureLimits := signature.DefaultLimits()
 	signatureRender := signature.DefaultRenderLimits()
 	return Limits{
-		MaxMessageBytes: 32 * 1024 * 1024, MaxHeaderBytes: 1024 * 1024,
+		MaxMessageBytes: rawmsg.HardMaxMessageBytes, MaxHeaderBytes: 1024 * 1024,
 		MaxHeaderFields: rawmsg.DefaultParserOptions().MaxHeaderFields,
 		MaxFieldBytes:   min(instanceRender.MaxFieldBytes, signatureRender.MaxFieldBytes),
 		MaxLineBytes:    min(instanceRender.MaxLineBytes, signatureRender.MaxLineBytes),
@@ -57,7 +57,7 @@ func DefaultLimits() Limits {
 		MaxProtocolFields: 256, MaxHashSetsPerInstance: instanceLimits.MaxHashSets,
 		MaxSignatureSetsPerField: signatureLimits.MaxSignatureSets, MaxTotalSignatureSets: 256,
 		MaxPublicKeyLookups: 256, MaxSignatureInputBytes: 2 * 1024 * 1024,
-		MaxCanonicalWorkBytes: 64 * 1024 * 1024, MaxGeneratedRecipients: signatureRender.MaxRecipients,
+		MaxCanonicalWorkBytes: 4 * rawmsg.HardMaxMessageBytes, MaxGeneratedRecipients: signatureRender.MaxRecipients,
 		MaxParentOutputCopiesAndTickets: 128, MaxEnvelopePathBytes: signatureRender.MaxEnvelopePathBytes,
 		MaxDecodedRecipeBytes: instanceRender.MaxRecipeBytes, MaxGeneratedSignatureSets: signatureRender.MaxSignatureSets,
 		MaxAuthorizationCalls: 4, MaxPrivateSigningCalls: 2, MaxNonceBytes: signatureRender.MaxNonceBytes,

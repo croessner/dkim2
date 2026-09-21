@@ -1,7 +1,7 @@
 package rawmsg
 
 const (
-	defaultMaxMessageBytes     = 32 * 1024 * 1024
+	defaultMaxMessageBytes     = HardMaxMessageBytes
 	defaultMaxHeaderBytes      = 1024 * 1024
 	defaultMaxHeaderFields     = 2000
 	defaultMaxHeaderFieldBytes = 64 * 1024
@@ -11,7 +11,10 @@ const (
 )
 
 // HardMaxBodyLines is the closed ceiling for parser-owned body-line metadata.
-const HardMaxBodyLines = 65_536
+const HardMaxBodyLines = 2_097_152
+
+// HardMaxMessageBytes bounds supported SMTP-sized raw messages across the library.
+const HardMaxMessageBytes = 128 << 20
 
 // LineEndingPolicy identifies the parser's line-ending handling mode.
 type LineEndingPolicy string

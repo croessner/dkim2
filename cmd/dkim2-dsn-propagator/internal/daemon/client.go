@@ -21,7 +21,7 @@ const (
 	daemonScheme        = "http"
 	cacheControlNoStore = "no-store"
 	redactedClient      = "dkim2_dsn_propagator_daemon_client{redacted}"
-	maxResponseBytes    = 64 << 20
+	maxResponseBytes    = 192 << 20
 	maxNextHopBytes     = 256
 	nullReversePath     = "<>"
 )

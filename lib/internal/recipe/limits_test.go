@@ -38,8 +38,8 @@ func TestDefaultLimitsMatchDurableContract(t *testing.T) {
 		MaxTotalSteps: 4_096, MaxCopyRanges: 2_048, MaxCopiedItemsPerRange: 2_000,
 		MaxTotalCopiedItems: 8_192, MaxDataStrings: 4_096, MaxDataStringBytes: 16_384,
 		MaxTotalLiteralBytes: 32_768, MaxHeaderFields: 2_000, MaxHeaderFieldBytes: 65_536,
-		MaxHeaderLineBytes: 998, MaxHeaderBytes: 1 << 20, MaxBodyLines: 65_536,
-		MaxBodyLineBytes: 998, MaxStateBytes: 32 << 20, MaxOperationWorkUnits: 4_194_304,
+		MaxHeaderLineBytes: 998, MaxHeaderBytes: 1 << 20, MaxBodyLines: 2_097_152,
+		MaxBodyLineBytes: 998, MaxStateBytes: 128 << 20, MaxOperationWorkUnits: 272_629_760,
 	}
 	if got != want {
 		t.Fatalf("DefaultLimits() = %#v, want %#v", got, want)

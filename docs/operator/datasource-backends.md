@@ -351,9 +351,13 @@ emergency recovery are in
 - Native key validation fails: verify exactly one key per selected credential
   and algorithm, canonical PKCS#8 DER, exact generation/tenant/domain/use/handle
   relations, and matching SPKI without printing any key or fingerprint.
-- A refresh degrades the provider: repair or replace the candidate and publish
-  a strictly higher complete generation. There is no hidden retry, fallback,
-  or operator switch that authorizes stale signing.
+- A refresh degrades the provider: new work remains unavailable until the
+  configured refresh owner successfully loads and validates a complete
+  candidate. A higher generation may replace the previous one; an unchanged
+  generation may recover only when every dataset fact and protected binding
+  equals the last accepted generation. Recovery publishes the fresh candidate,
+  never the cached signer. Changed same-generation facts and lower generations
+  remain rejected. There is no stale-signing fallback or operator bypass.
 
 Run the applicable focused checks after every schema, configuration, grant, or
 documentation change:
