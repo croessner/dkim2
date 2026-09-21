@@ -642,7 +642,7 @@ func parseValues(values map[string]rawValue) (parsedValues, error) {
 		return parsedValues{}, err
 	}
 	if parsed.requestTimeout, err = parseDuration(
-		values["daemon.request_timeout"], 100*time.Millisecond, 10*time.Second,
+		values["daemon.request_timeout"], 100*time.Millisecond, resource.MaximumDaemonRequestTimeout,
 	); err != nil {
 		return parsedValues{}, err
 	}
@@ -659,7 +659,7 @@ func parseValues(values map[string]rawValue) (parsedValues, error) {
 	); err != nil {
 		return parsedValues{}, err
 	}
-	if parsed.messageBytes, err = parseInt64(values["limits.message_bytes"], 1, 33_554_432); err != nil {
+	if parsed.messageBytes, err = parseInt64(values["limits.message_bytes"], 1, resource.MaximumMessageBytes); err != nil {
 		return parsedValues{}, err
 	}
 	if parsed.headerBytes, err = parseInt64(values["limits.header_bytes"], 1, 1_048_576); err != nil {

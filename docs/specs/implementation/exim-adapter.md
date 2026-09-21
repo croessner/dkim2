@@ -974,7 +974,7 @@ Initial paths:
 | `daemon.process_capability_file` | inbound conditional | protected direct child |
 | `daemon.sign_capability_file` | sign conditional | protected direct child |
 | `daemon.revise_capability_file` | revise conditional | protected direct child |
-| `daemon.request_timeout` | `2s` | 100ms..10s |
+| `daemon.request_timeout` | `2s` | 100ms..3m0s, canonical Go duration spelling only |
 | `signing.tenant` | sign/revise conditional | closed validated tenant |
 | `signing.domain` | sign/revise conditional | canonical domain |
 | `authentication_results.enabled` | `false` | inbound only |
@@ -1047,11 +1047,16 @@ used by the Milter adapter is the minimum starting point. The configuration
 validator computes the exact worst case for the selected service/filter mode
 and rejects an aggregate cap that cannot admit one configured maximum message.
 
-The validated service and filter deadlines remain at most 10 seconds. The
-packaged C module and transport-filter outer boundaries are exactly 11 seconds,
-and `local_scan_timeout` is exactly 12 seconds. Consequently daemon request
-timeout is shorter than service/filter ownership, every configured service
-deadline finishes before the C boundary, and the C boundary finishes before
+`daemon.request_timeout` accepts up to three minutes so an SMTP-sized message
+can complete, but the packaged Exim deployment still pins its own outer
+boundaries: the C module and transport filter are exactly 11 seconds and
+`local_scan_timeout` is exactly 12 seconds. Raising the daemon call deadline
+above those values therefore does not extend the call; Exim aborts first.
+A deployment that admits SMTP-sized messages must raise
+`transport_filter_timeout`, `dkim2_timeout` and `local_scan_timeout` together
+with the adapter deadline. With the packaged values unchanged the daemon
+request timeout stays shorter than service/filter ownership, every configured
+service deadline finishes before the C boundary, and the C boundary finishes before
 Exim's global local-scan boundary. Zero/unbounded timeout configuration is
 forbidden.
 

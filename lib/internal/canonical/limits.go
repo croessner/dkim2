@@ -1,7 +1,9 @@
 package canonical
 
+import "github.com/croessner/dkim2/internal/rawmsg"
+
 const (
-	defaultMaxBodyInputBytes      = 32 * 1024 * 1024
+	defaultMaxBodyInputBytes      = rawmsg.HardMaxMessageBytes
 	defaultMaxHeaderInputBytes    = 2 * 1024 * 1024
 	defaultMaxSignatureInputBytes = 2 * 1024 * 1024
 	defaultMaxFieldBytes          = 128 * 1024

@@ -1110,9 +1110,9 @@ The exact server defaults and allowed ranges are:
 
 | Setting | Default | Allowed |
 | --- | ---: | ---: |
-| process requests in flight | 1 | 1 through 2 |
+| process requests in flight | 1 | 1 through 64, and never more than the process working-set budget covers at the configured `server.message_bytes` |
 | admission waiters | 64 | 0 through 1024 |
-| admission wait | 100 ms | 0 through 1 s |
+| admission wait | 100 ms | 0 through 120 s, and never more than the handler deadline |
 | handler deadline | 60 s | 1 s through 120 s |
 | read-header timeout | 5 s | 1 s through 30 s |
 | whole-request read timeout | 30 s | 1 s through 120 s |
@@ -1650,9 +1650,17 @@ working-set unit; bounded bytes may already exist in the HTTP connection's
 parser/socket buffers, transferred request-prefix/first-head backing, and
 response-head filter. They are covered by the fixed 128-connection limits of
 69,632 request-head plus 16,384 response-head bytes per connection; the prefix
-and first-head capture never overlap as separate allocations. At most two
-units can be owned, matching the hard `server.max_in_flight` maximum; the
-secure default owns one.
+and first-head capture never overlap as separate allocations. Because a waiter
+owns no unit, `server.admission_wait` is bounded by `server.max_waiters` and by
+`server.request_deadline`, not by memory.
+
+The number of concurrently owned units is whatever the process working-set
+budget covers at the deployment's proven per-request reservation, never a
+number chosen independently of it. That reservation is derived from the
+configured `server.message_bytes`: a deployment that admits smaller messages
+reserves proportionally less and therefore owns proportionally more units. At
+the closed library ceiling two units fit the budget; the secure default owns
+one.
 
 Acquisition is atomic with the process admission permit and occurs before
 `MaxBytesReader`, JSON scanning, or any request-sized allocation. Release
@@ -1985,9 +1993,13 @@ Server paths and values are exactly the HTTP table:
 - `server.write_timeout`, default `65s`;
 - `server.request_deadline`, default `60s`;
 - `server.shutdown_timeout`, default `30s`;
-- `server.max_in_flight`, default `1`, range 1 through 2;
+- `server.max_in_flight`, default `1`, range 1 through 64, additionally bounded
+  by what the process working-set budget covers at the configured
+  `server.message_bytes`;
+- `server.message_bytes`, default `33554432`, range 1 through `134217728`;
 - `server.max_waiters`, default `64`;
-- `server.admission_wait`, default `100ms`.
+- `server.admission_wait`, default `100ms`, range `0s` through `120s` and never
+  above `server.request_deadline`.
 
 The exact ranges are those in the HTTP table and are cross-validated, including
 read-header timeout being no greater than whole-request read timeout, read

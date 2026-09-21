@@ -510,8 +510,9 @@ paths:
         external output. Caller assertions are not verification evidence.
         All external outputs succeed together or outputs is empty. This
         endpoint does not originate unsigned messages or deliver mail.
-        The framed JSON limit is 47878316 bytes; the aggregate decoded
-        original and current message limit is 33554432 bytes.
+        The framed JSON limit is 361053016 bytes; the aggregate decoded
+        original and current message limit is 268435456 bytes. Each message
+        also obeys the deployment's configured server.message_bytes ceiling.
       security:
         - batchReviseCapability: []
       requestBody:
@@ -1201,7 +1202,7 @@ components:
           type: string
           format: byte
           minLength: 0
-          maxLength: 44739244
+          maxLength: 178956972
         fidelity:
           type: string
           enum:
@@ -1291,7 +1292,7 @@ components:
           type: string
           format: byte
           minLength: 0
-          maxLength: 44739244
+          maxLength: 178956972
     BatchRevisionCapabilities:
       type: object
       additionalProperties: false
@@ -1330,13 +1331,13 @@ components:
         max_aggregate_message_bytes:
           type: integer
           format: int64
-          minimum: 33554432
-          maximum: 33554432
+          minimum: 268435456
+          maximum: 268435456
         max_request_bytes:
           type: integer
           format: int64
-          minimum: 47878316
-          maximum: 47878316
+          minimum: 361053016
+          maximum: 361053016
         max_response_bytes:
           type: integer
           format: int64
@@ -1499,7 +1500,7 @@ components:
           type: integer
           format: int64
           minimum: 0
-          maximum: 33554432
+          maximum: 134217728
           description: >
             Byte offset in current message immediately after the final existing
             header field CRLF and before the empty separator line. The client
@@ -1535,7 +1536,7 @@ components:
           type: string
           format: byte
           minLength: 0
-          maxLength: 44739244
+          maxLength: 178956972
         fidelity:
           type: string
           enum:
@@ -1934,7 +1935,7 @@ components:
           type: string
           format: byte
           minLength: 0
-          maxLength: 44739244
+          maxLength: 178956972
     PropagationCommitToken:
       type: string
       description: >

@@ -49,7 +49,7 @@ const (
 	requiredProtocol              = protocolNoUnknown | protocolNoData | protocolHeaderSpace
 	maxMilterPayloadLength        = 65535
 	maxMilterFrameLength          = 1 + maxMilterPayloadLength
-	hardMessageBytes       int64  = 32 << 20
+	hardMessageBytes       int64  = resource.MaximumMessageBytes
 	hardHeaderBytes        int64  = 1 << 20
 	hardHeaderCount               = 2000
 	hardHeaderFieldBytes          = 65536

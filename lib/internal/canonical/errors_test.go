@@ -8,8 +8,8 @@ import (
 
 func TestDefaultLimitsMatchCanonicalContract(t *testing.T) {
 	limits := DefaultLimits()
-	if limits.MaxBodyInputBytes != 32*1024*1024 {
-		t.Fatalf("MaxBodyInputBytes = %d, want 32 MiB", limits.MaxBodyInputBytes)
+	if limits.MaxBodyInputBytes != 128*1024*1024 {
+		t.Fatalf("MaxBodyInputBytes = %d, want 128 MiB", limits.MaxBodyInputBytes)
 	}
 	if limits.MaxHeaderInputBytes != 2*1024*1024 {
 		t.Fatalf("MaxHeaderInputBytes = %d, want 2 MiB", limits.MaxHeaderInputBytes)

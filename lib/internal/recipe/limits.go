@@ -18,7 +18,10 @@ const (
 	hardMaxDataStrings          = 4_096
 	hardMaxDataStringBytes      = 16_384
 	hardMaxTotalLiteralBytes    = 32_768
-	hardMaxOperationWorkUnits   = 4_194_304
+	// Reconstruction charges emitted bytes and line visits independently.
+	// Two message-sized passes plus two line-index passes cover a supported
+	// large unchanged body without removing the aggregate work ceiling.
+	hardMaxOperationWorkUnits = 2*rawmsg.HardMaxMessageBytes + 2*rawmsg.HardMaxBodyLines
 )
 
 // Limits bounds one recipe parse or apply operation.

@@ -16,12 +16,25 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/croessner/dkim2"
 	"github.com/croessner/dkim2/cmd/dkim2d/internal/replay/valkey"
 )
 
 const (
 	maxScalarBytes    = 65_536
 	maxAggregateBytes = 262_144
+
+	// maximumAdmissionWait is the longest bounded wait for one process permit.
+	// A waiting request owns no working-set reservation and no request body,
+	// so the wait is bounded by server.max_waiters rather than by memory. It
+	// must not exceed server.request_deadline, because the deadline governs
+	// the whole request including its admission.
+	maximumAdmissionWait = 120 * time.Second
+	// maximumInFlightRequests is the structural ceiling for concurrent
+	// request processing. The effective limit is whatever the process
+	// working-set budget covers at the configured server.message_bytes, and
+	// the HTTP boundary refuses a combination the budget cannot own.
+	maximumInFlightRequests = 64
 )
 
 // PolicyMode identifies one daemon-owned result policy.
@@ -130,6 +143,7 @@ type tracingState struct {
 }
 
 type serverState struct {
+	messageBytes               int
 	listen                     string
 	privateNetwork             bool
 	tlsCertificateFile         string
@@ -654,6 +668,10 @@ func clonePresence(input map[string]Presence) map[string]Presence {
 
 // parseServer validates the exact local HTTP resource contract.
 func parseServer(values map[string]rawValue) (serverState, error) {
+	messageBytes, err := uintValue(values, pathServerMessageBytes, 1, dkim2.HardMaxRawMessageBytes)
+	if err != nil {
+		return serverState{}, err
+	}
 	readHeader, err := durationValue(values, pathServerReadHeader, time.Second, 30*time.Second, false)
 	if err != nil {
 		return serverState{}, err
@@ -674,11 +692,14 @@ func parseServer(values map[string]rawValue) (serverState, error) {
 	if err != nil || shutdown > time.Duration(1<<63-1)-50*time.Second {
 		return serverState{}, newError(CodeInvalidField)
 	}
-	admission, err := durationValue(values, pathServerAdmissionWait, 0, time.Second, true)
+	admission, err := durationValue(values, pathServerAdmissionWait, 0, maximumAdmissionWait, true)
 	if err != nil {
 		return serverState{}, err
 	}
-	maxInFlight, err := uintValue(values, pathServerMaxInFlight, 1, 2)
+	if admission > deadline {
+		return serverState{}, newError(CodeInvalidField)
+	}
+	maxInFlight, err := uintValue(values, pathServerMaxInFlight, 1, maximumInFlightRequests)
 	if err != nil {
 		return serverState{}, err
 	}
@@ -709,6 +730,7 @@ func parseServer(values map[string]rawValue) (serverState, error) {
 		return serverState{}, newError(CodeInvalidField)
 	}
 	return serverState{
+		messageBytes:               int(messageBytes),
 		listen:                     listen,
 		privateNetwork:             privateNetwork,
 		tlsCertificateFile:         tlsCertificate,

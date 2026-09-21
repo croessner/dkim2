@@ -19,6 +19,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/croessner/dkim2"
 	"github.com/croessner/dkim2/cmd/dkim2-dsn-propagator/internal/endpoint"
 	"github.com/spf13/viper"
 	"go.yaml.in/yaml/v3"
@@ -644,7 +645,7 @@ func parseValues(values map[string]rawValue) (parsedValues, error) {
 		return parsedValues{}, err
 	}
 	if parsed.messageBytes, err = parseInt64(
-		values["limits.message_bytes"], 1024, 33_554_432,
+		values["limits.message_bytes"], 1024, dkim2.HardMaxRawMessageBytes,
 	); err != nil {
 		return parsedValues{}, err
 	}

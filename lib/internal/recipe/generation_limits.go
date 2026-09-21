@@ -1,14 +1,19 @@
 package recipe
 
-import "math"
+import (
+	"github.com/croessner/dkim2/internal/rawmsg"
+	"math"
+)
 
 const (
-	hardMaxGenerationInputBytes        = 67_108_864
-	hardMaxGenerationInputItems        = 135_072
-	hardMaxGenerationCandidateEntries  = 67_536
-	hardMaxGenerationCandidateKeyBytes = 33_554_432
-	hardMaxGenerationComparisons       = 135_072
-	hardMaxGenerationWorkUnits         = 268_435_456
+	hardMaxGenerationInputBytes        = 2 * rawmsg.HardMaxMessageBytes
+	hardMaxGenerationInputItems        = 2 * (rawmsg.HardMaxBodyLines + 2000)
+	hardMaxGenerationCandidateEntries  = rawmsg.HardMaxBodyLines + 2000
+	hardMaxGenerationCandidateKeyBytes = rawmsg.HardMaxMessageBytes
+	hardMaxGenerationComparisons       = hardMaxGenerationInputItems
+	// Input scans, two reserved parser/application proofs and semantic
+	// reconstruction each charge their own passes over large message bytes.
+	hardMaxGenerationWorkUnits = 14 * rawmsg.HardMaxMessageBytes
 )
 
 // GenerationLimits bounds one deterministic generation operation and its proof.

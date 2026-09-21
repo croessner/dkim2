@@ -16,6 +16,9 @@ recorded interpretation, it is named as one. The authoritative HTTP contract
 is [`docs/specs/openapi/dkim2d.yaml`](../specs/openapi/dkim2d.yaml), and the
 architecture is [`docs/ARCHITECTURE.md`](../ARCHITECTURE.md).
 
+Configure and qualify matching SMTP, adapter and daemon message ceilings using
+[`message-size.md`](message-size.md), including its memory and rollout limits.
+
 All domains on this page are reserved `.test` identities: `example.test` is
 the deployment's own domain, `mx.example.test` its MTA, `origin.test` the
 system that sent a message to it, and `destination.test` the system it

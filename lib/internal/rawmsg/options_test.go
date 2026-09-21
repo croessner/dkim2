@@ -14,8 +14,8 @@ func TestDefaultParserOptionsAreRestrictive(t *testing.T) {
 	if opts.LineEndingPolicy != LineEndingPolicyStrictCRLF {
 		t.Fatalf("LineEndingPolicy = %q, want %q", opts.LineEndingPolicy, LineEndingPolicyStrictCRLF)
 	}
-	if opts.MaxMessageBytes != 32*1024*1024 {
-		t.Fatalf("MaxMessageBytes = %d, want 32 MiB", opts.MaxMessageBytes)
+	if opts.MaxMessageBytes != 128*1024*1024 {
+		t.Fatalf("MaxMessageBytes = %d, want 128 MiB", opts.MaxMessageBytes)
 	}
 	if opts.MaxHeaderBytes != 1024*1024 {
 		t.Fatalf("MaxHeaderBytes = %d, want 1 MiB", opts.MaxHeaderBytes)

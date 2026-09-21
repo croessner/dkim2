@@ -48,7 +48,7 @@ func TestBatchRevisionSchemaContract(t *testing.T) {
 		t.Fatal("private delta bound changed")
 	}
 	capabilities := requiredSchema(t, document, "BatchRevisionCapabilities")
-	for name, want := range map[string]float64{"max_copies": 32, "max_controlled_hops": 1, "max_aggregate_message_bytes": 33554432, "max_request_bytes": 47878316, "max_response_bytes": 262144, "max_header_fields": 3} {
+	for name, want := range map[string]float64{"max_copies": 32, "max_controlled_hops": 1, "max_aggregate_message_bytes": 268435456, "max_request_bytes": 361053016, "max_response_bytes": 262144, "max_header_fields": 3} {
 		bound := capabilities.Properties[name].Value
 		if bound.Min == nil || bound.Max == nil || *bound.Min != want || *bound.Max != want {
 			t.Fatalf("capability bound changed: %s", name)

@@ -76,7 +76,7 @@ func TestReadProcessBodyClassifiesBoundsTransportAndTrailers(t *testing.T) {
 			request := httptest.NewRequest(http.MethodPost, testProcessPath, nil)
 			request.Body = test.body
 			request.Trailer = test.trailer
-			body, failure := readProcessBody(httptest.NewRecorder(), request, request)
+			body, failure := readProcessBody(httptest.NewRecorder(), request, request, maxProcessBodyBytes)
 			if body != nil || failure != test.want || request.Trailer != nil {
 				t.Fatalf("readProcessBody() = %v/%v trailer=%v", body, failure, request.Trailer)
 			}
@@ -100,7 +100,7 @@ func TestReadProcessBodyAcceptsExactLimitAndRejectsOneOver(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			request := httptest.NewRequest(http.MethodPost, testProcessPath, nil)
 			request.Body = io.NopCloser(&repeatingReader{remaining: test.size})
-			body, failure := readProcessBody(httptest.NewRecorder(), request, request)
+			body, failure := readProcessBody(httptest.NewRecorder(), request, request, maxProcessBodyBytes)
 			if failure != test.want {
 				t.Fatalf("failure = %v, want %v", failure, test.want)
 			}

@@ -423,7 +423,7 @@ The initial stable paths include:
 | `server.max_buffered_bytes` | `268435456` | 32 MiB..1 GiB |
 | `daemon.endpoint` | required | canonical loopback-literal HTTP URL |
 | `daemon.capability_file` | required | protected direct child |
-| `daemon.request_timeout` | `2s` | 100ms..10s |
+| `daemon.request_timeout` | `2s` | 100ms..180s |
 | `mode` | required | `inbound`, `originator`, `ordinary_transit`, `postfix_dsn` |
 | `signing.tenant` | conditional | required for signing/revision modes |
 | `signing.domain` | conditional | required for static originator/transit routes; absent for envelope-derived originator and verified-embedded Postfix DSN routes |
@@ -433,7 +433,7 @@ The initial stable paths include:
 | `authentication_results.enabled` | `false` | inbound mode only |
 | `authentication_results.authserv_id` | absent | required exactly when enabled |
 | `failure.mode` | `tempfail` | `tempfail` or `fail_open`; `postfix_dsn` requires `tempfail` |
-| `limits.message_bytes` | `33554432` | may only narrow |
+| `limits.message_bytes` | `33554432` | 1..134217728; sufficient aggregate EOM budget required |
 | `limits.header_bytes` | `1048576` | may only narrow |
 | `limits.header_count` | `2000` | may only narrow |
 | `limits.header_field_bytes` | `65536` | may only narrow |

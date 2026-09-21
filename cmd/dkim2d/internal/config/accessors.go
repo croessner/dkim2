@@ -10,6 +10,14 @@ import (
 
 const typedConfigRedactedText = "dkim2d_typed_config"
 
+// MessageBytes returns the configured raw SMTP message ceiling.
+func (c ServerConfig) MessageBytes() int {
+	if c.state == nil {
+		return 0
+	}
+	return c.state.messageBytes
+}
+
 // ServerConfig is one immutable structurally opaque HTTP configuration view.
 type ServerConfig struct {
 	state *serverState

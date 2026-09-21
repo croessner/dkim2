@@ -349,7 +349,7 @@ func testWorkingSetMiddleware(
 		request *http.Request,
 		input any,
 	) (any, error) {
-		ledger, err := newWorkingSetLedger(processWorkingSetUnitBytes)
+		ledger, err := newWorkingSetLedger(ceilingSizingValue())
 		if err != nil {
 			return nil, &strictAdapterError{class: strictFailureInternal}
 		}

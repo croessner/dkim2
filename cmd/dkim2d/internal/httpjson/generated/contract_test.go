@@ -784,7 +784,7 @@ func assertRequestBounds(t *testing.T, document *openapi3.T) {
 
 	message := requiredSchema(t, document, "MessageInput").Properties["raw_rfc5322_base64"].Value
 	if message == nil || !message.Type.Is("string") || message.Format != "byte" ||
-		message.MinLength != 0 || message.MaxLength == nil || *message.MaxLength != 44_739_244 {
+		message.MinLength != 0 || message.MaxLength == nil || *message.MaxLength != 178_956_972 {
 		t.Fatal("raw message schema bounds are not frozen")
 	}
 	smtp := requiredSchema(t, document, "SMTPInput")

@@ -406,7 +406,7 @@ func TestLoadBoundsAndEndpointGrammar(t *testing.T) {
 			"server:\n  socket: /tmp/dkim2-milter.sock\n  max_connections: 1\n  max_in_flight_messages: 2",
 			1,
 		),
-		"wide message": base + "limits:\n  message_bytes: 33554433\n",
+		"wide message": base + "limits:\n  message_bytes: 134217729\n",
 		"buffer below message": strings.Replace(
 			base,
 			"  socket: /tmp/dkim2-milter.sock",

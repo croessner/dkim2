@@ -26,6 +26,20 @@ const (
 	Version  = "dkim2-exim-config-v1"
 	maxBytes = 256 << 10
 	redacted = "dkim2_exim_config{redacted}"
+
+	// daemonRequestDeadlineCeiling mirrors the largest server.request_deadline
+	// dkim2d accepts. One SMTP-sized message may legitimately occupy the daemon
+	// for that long, including its bounded admission wait.
+	daemonRequestDeadlineCeiling = 120 * time.Second
+	// maximumDaemonRequestTimeout is the largest admitted daemon call deadline.
+	// It exceeds daemonRequestDeadlineCeiling so a deployment can always let the
+	// daemon's own deadline expire first: the daemon then answers 503 and the
+	// filter reports a bounded availability failure instead of aborting the call
+	// with an indeterminate outcome. The Milter adapter owns the identical
+	// contract in its own resource package; both adapters call the same daemon
+	// with the same message sizes, but they are separate modules and therefore
+	// keep separate declarations.
+	maximumDaemonRequestTimeout = 180 * time.Second
 )
 
 // Error is one content-free configuration failure.
@@ -548,7 +562,7 @@ func validate(values map[string]raw, operation Operation) (Snapshot, error) { //
 	if err != nil {
 		return Snapshot{}, err
 	}
-	daemonTimeout, err := parseDuration(value(values, "daemon.request_timeout", "2s"), 100*time.Millisecond, 10*time.Second)
+	daemonTimeout, err := parseDuration(value(values, "daemon.request_timeout", "2s"), 100*time.Millisecond, maximumDaemonRequestTimeout)
 	if err != nil {
 		return Snapshot{}, err
 	}

@@ -12,7 +12,7 @@ import (
 	"github.com/croessner/dkim2/cmd/dkim2ctl/internal/testclient/generated"
 )
 
-const daemonProcessBodyLimit = int64(47_878_316)
+const daemonProcessBodyLimit = int64(361_053_016)
 
 const fixedNegativeBody = `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-06","message":{"raw_rfc5322_base64":""},"smtp":{"mail_from":"","rcpt_to":[""]}}`
 const fixedNegativeSignBody = `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-06","message":{"raw_rfc5322_base64":""},"smtp":{"mail_from":"","rcpt_to":[""]},"context":{"tenant":"test","domain":"example.test"}}`

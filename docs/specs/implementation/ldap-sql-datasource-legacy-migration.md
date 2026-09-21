@@ -353,8 +353,12 @@ generation is a successful health no-op only when every immutable dataset
 fact and protected registry binding is exactly equal: the newly loaded
 candidate is destroyed and no generation is republished. Changed facts under
 the current generation degrade the runtime. A later complete successful
-refresh atomically publishes a strictly higher generation and clears degraded
-state. There is no stale
+refresh atomically publishes a higher generation, or a freshly loaded equivalent
+current generation, and clears degraded state. Same-generation recovery repeats
+the complete loader and resolver validation and compares all immutable dataset
+facts and protected bindings before publication. It never reactivates the cached
+signer; outstanding leases retain their separately retired generation. Lower
+generations and changed same-generation facts remain rejected. There is no stale
 serving, hidden retry, endpoint failover, provider fallback, or background
 recovery other than the single configured serialized refresh owner.
 
