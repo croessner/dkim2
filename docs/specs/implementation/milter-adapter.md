@@ -423,7 +423,7 @@ The initial stable paths include:
 | `server.max_buffered_bytes` | `268435456` | 32 MiB..1 GiB |
 | `daemon.endpoint` | required | canonical loopback-literal HTTP URL |
 | `daemon.capability_file` | required | protected direct child |
-| `daemon.request_timeout` | `2s` | 100ms..10s |
+| `daemon.request_timeout` | `2s` | 100ms..180s |
 | `mode` | required | `inbound`, `originator`, `ordinary_transit`, `postfix_dsn` |
 | `signing.tenant` | conditional | required for signing/revision modes |
 | `signing.domain` | conditional | required for static originator/transit routes; absent for envelope-derived originator and verified-embedded Postfix DSN routes |
