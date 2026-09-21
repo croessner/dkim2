@@ -22,6 +22,8 @@ limits:
   message_bytes: 104857600
 server:
   max_buffered_bytes: 1073741824
+daemon:
+  request_timeout: 90s
 ```
 
 The DSN propagator uses `limits.message_bytes: 104857600`. Its message
@@ -41,6 +43,28 @@ to accept every possible message below the byte ceiling.
 HTTP framing permits 361,053,016 bytes; batch original/current snapshots have
 a 256 MiB aggregate ceiling and still obey the configured per-message limit.
 OpenAPI and all generated wire clients carry the same hard bounds.
+
+## Call deadlines
+
+Byte limits alone do not make an SMTP-sized message deliverable. One 38 MB
+message occupies a two-CPU daemon for several seconds of Base64 decoding,
+generic JSON validation, canonicalization and signing, and `max_in_flight: 1`
+serializes everything else behind it. The adapter's `daemon.request_timeout`
+must therefore cover the complete call including the bounded admission wait,
+and it must exceed the daemon's `server.request_deadline`, so the daemon's own
+503 answer arrives instead of a client-side abort. `dkim2-milter` accepts up
+to 180 seconds and the DSN propagator up to 30 seconds; `server.request_deadline`
+accepts up to 120 seconds. A 2-second adapter deadline is a small-message
+default and rejects SMTP-sized mail as `451 4.7.1 DKIM2 service unavailable`
+with `failure_class=indeterminate`, long after every byte limit was accepted.
+
+`server.admission_wait` is capped at one second and `server.max_in_flight` at
+two. An MTA that splits one message to several recipients opens that many
+concurrent transactions, so a single-slot daemon answers all but one of them
+with 503 `service_overloaded` after that second. Those recipients are deferred
+and delivered by a later queue run. Raising `max_in_flight` to two removes the
+extra queue round for two-recipient mail but doubles the concurrent HTTP
+working set, so raise container memory with it.
 
 ## Memory and rollout qualification
 

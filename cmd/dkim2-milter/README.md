@@ -298,6 +298,22 @@ signing ambiguity, replay indeterminacy, or possible mutation write. Enabling
 it produces a mandatory bounded startup warning and a low-cardinality outcome
 metric.
 
+### Daemon call deadline
+
+`daemon.request_timeout` bounds one complete EOM call. It accepts 100
+milliseconds through 180 seconds and defaults to 2 seconds. Size it above the
+daemon's own `server.request_deadline`, so an overlong operation ends as a
+bounded daemon answer rather than a client-side abort: an abort discards the
+daemon's availability verdict and is reported as `failure_class=indeterminate`,
+because the request body was already written and a mutation cannot be excluded.
+
+The deadline must cover the whole call, not only signing: the adapter first
+encodes the complete message, then waits for the daemon's bounded admission
+and its operation. A deployment whose `limits.message_bytes` allows
+SMTP-sized mail therefore needs a deadline far above the small-message
+default. Keep it below the MTA's own content timeout, for example the Postfix
+`milter_content_timeout` default of 300 seconds.
+
 ## Postfix-style integration
 
 After starting the service and verifying the socket owner, group, and mode,

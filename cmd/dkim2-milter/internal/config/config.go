@@ -642,7 +642,7 @@ func parseValues(values map[string]rawValue) (parsedValues, error) {
 		return parsedValues{}, err
 	}
 	if parsed.requestTimeout, err = parseDuration(
-		values["daemon.request_timeout"], 100*time.Millisecond, 10*time.Second,
+		values["daemon.request_timeout"], 100*time.Millisecond, resource.MaximumDaemonRequestTimeout,
 	); err != nil {
 		return parsedValues{}, err
 	}

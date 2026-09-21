@@ -1,11 +1,27 @@
 // Package resource owns shared adapter transport and allocation limits.
 package resource
 
-import "github.com/croessner/dkim2"
+import (
+	"time"
+
+	"github.com/croessner/dkim2"
+)
 
 const (
 	// MaximumMessageBytes is the library-owned maximum configurable SMTP size.
 	MaximumMessageBytes = dkim2.HardMaxRawMessageBytes
+	// DaemonRequestDeadlineCeiling mirrors the largest server.request_deadline
+	// dkim2d accepts. One SMTP-sized message may legitimately occupy the daemon
+	// for that long, including its bounded admission wait.
+	DaemonRequestDeadlineCeiling = 120 * time.Second
+	// MaximumDaemonRequestTimeout is the largest admitted daemon call deadline.
+	// It exceeds DaemonRequestDeadlineCeiling so a deployment can always let the
+	// daemon's own deadline expire first: the daemon then answers 503 and the
+	// adapter reports a bounded availability failure instead of aborting the
+	// call and reporting an indeterminate operation. It stays well below the
+	// Postfix milter_content_timeout default of 300 seconds, so the MTA never
+	// loses the SMTP transaction before the adapter has decided.
+	MaximumDaemonRequestTimeout = 180 * time.Second
 	// DaemonResponseBytes is the maximum admitted daemon HTTP response body.
 	DaemonResponseBytes int64 = 4 << 20
 	// MilterActionFrameBytes is the maximum encoded size of one action frame.
