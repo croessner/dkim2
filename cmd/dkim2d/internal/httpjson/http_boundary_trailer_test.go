@@ -3,6 +3,7 @@ package httpjson
 import (
 	"bytes"
 	"encoding/base64"
+	"errors"
 	"io"
 	"log"
 	"net"
@@ -11,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"testing"
 	"time"
 
@@ -106,6 +108,7 @@ func startRawTrailerServer(t *testing.T, readTimeout time.Duration) *rawTrailerS
 	processor := &boundaryProcessor{}
 	handler, err := NewHTTPBoundary(BoundaryConfig{
 		Authority:       raw.Addr().String(),
+		MessageBytes:    trailerServerMessageBytes,
 		RequestDeadline: 15 * time.Second,
 		MaxInFlight:     1,
 		MaxWaiters:      1,
@@ -560,7 +563,15 @@ func rawBodyLimitTrailerExchange(t *testing.T, server *rawTrailerServer) string 
 	if _, err := io.WriteString(connection, head); err != nil {
 		t.Fatalf("write request head error = %v", err)
 	}
-	if _, err := io.CopyN(connection, trailerRepeatingReader{}, maxProcessBodyBytes+1); err != nil {
+	// The boundary limits the body by its configured message ceiling, so the
+	// overflow must be measured against that ceiling. The server answers and
+	// closes as soon as the limit is exceeded, which can abort the remaining
+	// client write; that is the outcome under test, not a failure.
+	if _, err := io.CopyN(
+		connection,
+		trailerRepeatingReader{},
+		mustSizing(t, trailerServerMessageBytes).ProcessBodyBytes()+1,
+	); err != nil && !errors.Is(err, syscall.EPIPE) && !errors.Is(err, syscall.ECONNRESET) {
 		t.Fatalf("write max-plus-one chunk error = %v", err)
 	}
 	_, _ = io.WriteString(connection,
@@ -571,6 +582,11 @@ func rawBodyLimitTrailerExchange(t *testing.T, server *rawTrailerServer) string 
 	response, _ := io.ReadAll(connection)
 	return string(response)
 }
+
+// trailerServerMessageBytes is the message ceiling of the raw trailer server.
+// The body-limit race is measured against the ceiling this deployment
+// configures, not against the closed library maximum.
+const trailerServerMessageBytes = 8 << 20
 
 // TestHTTPBoundaryRawBodyLimitPrecedesMalformedTrailer freezes the outer 413 race outcome.
 func TestHTTPBoundaryRawBodyLimitPrecedesMalformedTrailer(t *testing.T) {

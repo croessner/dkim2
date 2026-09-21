@@ -9,11 +9,21 @@ import (
 )
 
 const (
-	processWorkingSetUnitBytes      = uint64(4 << 30)
+	// processWorkingSetAggregateBytes is the whole process ownership budget.
+	// Concurrency is whatever that budget can cover at the deployment's proven
+	// per-request reservation, never a number chosen independently of it.
 	processWorkingSetAggregateBytes = uint64(8 << 30)
-	maxProcessInFlight              = 2
-	maxProcessWaiters               = 1_024
-	maxProcessAdmissionWait         = time.Second
+	// maxProcessInFlight is the closed structural ceiling. The aggregate
+	// budget is the effective limit for every deployment below it.
+	maxProcessInFlight = 64
+	maxProcessWaiters  = 1_024
+	// maxProcessAdmissionWait is the longest bounded wait for one permit.
+	// Waiting owns no working-set reservation and no request body: admission
+	// completes before the body is read, so a waiter costs one goroutine and
+	// its already-open connection, both bounded by maxProcessWaiters. The
+	// ceiling mirrors the largest server.request_deadline so an operator can
+	// let a queued request use the same budget the handler may use.
+	maxProcessAdmissionWait = 120 * time.Second
 )
 
 var errAdmissionConfig = errors.New("http process admission configuration failure")
@@ -44,11 +54,13 @@ func newProcessAdmission(
 	maxInFlight int,
 	maxWaiters int,
 	wait time.Duration,
+	unitBytes uint64,
 ) (*processAdmission, error) {
 	if maxInFlight < 1 || maxInFlight > maxProcessInFlight ||
 		maxWaiters < 0 || maxWaiters > maxProcessWaiters ||
 		wait < 0 || wait > maxProcessAdmissionWait ||
-		uint64(maxInFlight)*processWorkingSetUnitBytes > processWorkingSetAggregateBytes {
+		unitBytes == 0 ||
+		uint64(maxInFlight) > processWorkingSetAggregateBytes/unitBytes {
 		return nil, errAdmissionConfig
 	}
 	return &processAdmission{

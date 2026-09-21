@@ -509,9 +509,9 @@ func TestTrackedConnConcurrentCloseSuppressesBlockedReadReplay(t *testing.T) {
 	var releases atomic.Int32
 	connection := newTrackedConn(raw, state, func() { releases.Add(1) })
 	state.connection.Store(connection)
-	admission, _ := newProcessAdmission(1, 0, 0)
+	admission, _ := newProcessAdmission(1, 0, 0, ceilingSizing(t).UnitBytes())
 	lease, _ := admission.TryAcquire(context.Background())
-	ledger, _ := newWorkingSetLedger(processWorkingSetUnitBytes)
+	ledger, _ := newWorkingSetLedger(ceilingSizing(t))
 	if err := ledger.Claim(workingSetFixedStorage, 1); err != nil {
 		t.Fatal("working-set claim failed")
 	}
@@ -590,9 +590,9 @@ func TestTrackedConnDefersReservationUntilBlockedResponseScrub(t *testing.T) {
 	var releases atomic.Int32
 	connection := newTrackedConn(raw, state, func() { releases.Add(1) })
 	state.connection.Store(connection)
-	admission, _ := newProcessAdmission(1, 0, 0)
+	admission, _ := newProcessAdmission(1, 0, 0, ceilingSizing(t).UnitBytes())
 	lease, _ := admission.TryAcquire(context.Background())
-	ledger, _ := newWorkingSetLedger(processWorkingSetUnitBytes)
+	ledger, _ := newWorkingSetLedger(ceilingSizing(t))
 	if err := ledger.Claim(workingSetFixedStorage, 1); err != nil {
 		t.Fatal("working-set claim failed")
 	}
@@ -677,9 +677,9 @@ func TestTrackedConnResponseOutcomesReleaseAttachedReservation(t *testing.T) {
 			state.MarkHandlerEntered()
 			connection := newTrackedConn(raw, state, nil)
 			state.connection.Store(connection)
-			admission, _ := newProcessAdmission(1, 0, 0)
+			admission, _ := newProcessAdmission(1, 0, 0, ceilingSizing(t).UnitBytes())
 			lease, _ := admission.TryAcquire(context.Background())
-			ledger, _ := newWorkingSetLedger(processWorkingSetUnitBytes)
+			ledger, _ := newWorkingSetLedger(ceilingSizing(t))
 			if err := ledger.Claim(workingSetFixedStorage, 1); err != nil {
 				t.Fatal("working-set claim failed")
 			}

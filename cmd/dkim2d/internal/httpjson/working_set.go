@@ -3,6 +3,7 @@ package httpjson
 import (
 	"context"
 	"math"
+	"math/bits"
 	"sync"
 
 	"github.com/croessner/dkim2"
@@ -303,8 +304,13 @@ const (
 		2*maximumProcessBodyCapacityBytes + maximumReadAllIntermediateBytes +
 		maximumJSONDecoderCapacityBytes + maximumValidationGenericValueBytes
 	maximumLegalWorkingSetHighWaterBytes = max(maximumDomainWorkingSetBytes, maximumValidationWorkingSetBytes)
-	maximumLegalWorkingSetMarginBytes    = processWorkingSetUnitBytes -
-		maximumLegalWorkingSetHighWaterBytes
+	// maximumLegalWorkingSetMarginBytes fails compilation if the pinned
+	// worst case at the closed library ceiling ever stops fitting inside the
+	// process budget with its reservation headroom. The deployment-scaled
+	// sizing below derives every runtime reservation, but this subtraction
+	// keeps the measured inventory itself a compile-time invariant.
+	maximumLegalWorkingSetMarginBytes = processWorkingSetAggregateBytes -
+		workingSetUnitHeadroomBytes - maximumLegalWorkingSetHighWaterBytes
 )
 
 const workingSetErrorText = "http request working-set accounting failure"
@@ -432,18 +438,21 @@ func (s workingSetSnapshot) ProvedBelowReservation() bool {
 type workingSetLedger struct {
 	mu        sync.Mutex
 	limit     uint64
+	sizing    workingSetSizing
 	live      uint64
 	highWater uint64
 	owned     [workingSetSlotCount]uint64
 	failed    bool
 }
 
-// newWorkingSetLedger constructs one bounded per-request ownership ledger.
-func newWorkingSetLedger(limit uint64) (*workingSetLedger, error) {
-	if limit == 0 || limit > processWorkingSetUnitBytes {
+// newWorkingSetLedger constructs one bounded per-request ownership ledger from
+// the deployment's proven capacity inventory.
+func newWorkingSetLedger(sizing workingSetSizing) (*workingSetLedger, error) {
+	limit := sizing.UnitBytes()
+	if limit == 0 || limit > processWorkingSetAggregateBytes {
 		return nil, &workingSetError{code: workingSetErrorInvariant}
 	}
-	return &workingSetLedger{limit: limit}, nil
+	return &workingSetLedger{limit: limit, sizing: sizing}, nil
 }
 
 // Claim adds one newly live capacity before any replaced owner is released.
@@ -539,10 +548,10 @@ func (l *workingSetLedger) ReleaseAll() {
 
 // BeginBodyRead reserves the maximum Go 1.27.0 ReadAll overlap before reading.
 func (l *workingSetLedger) BeginBodyRead() error {
-	if err := l.Claim(workingSetBodyReadChunks, maximumReadAllIntermediateBytes); err != nil {
+	if err := l.Claim(workingSetBodyReadChunks, l.sizing.readAllIntermediate); err != nil {
 		return err
 	}
-	return l.Claim(workingSetBodySnapshot, maximumProcessBodyCapacityBytes)
+	return l.Claim(workingSetBodySnapshot, l.sizing.processBodyCapacity)
 }
 
 // FinishBodyRead makes the transient ReadAll chunk owner unreachable.
@@ -554,23 +563,23 @@ func (l *workingSetLedger) FinishBodyRead() error {
 func (l *workingSetLedger) BeginValidation() error {
 	if err := l.Claim(
 		workingSetValidationReadChunks,
-		maximumReadAllIntermediateBytes,
+		l.sizing.readAllIntermediate,
 	); err != nil {
 		return err
 	}
 	if err := l.Claim(
 		workingSetValidationBodySnapshot,
-		maximumProcessBodyCapacityBytes,
+		l.sizing.processBodyCapacity,
 	); err != nil {
 		return err
 	}
 	if err := l.Claim(
 		workingSetValidationDecoder,
-		maximumJSONDecoderCapacityBytes,
+		l.sizing.jsonDecoderCapacity,
 	); err != nil {
 		return err
 	}
-	return l.Claim(workingSetValidationValue, maximumValidationGenericValueBytes)
+	return l.Claim(workingSetValidationValue, l.sizing.validationGeneric)
 }
 
 // FinishValidation drops every validation-only body and generic-value owner.
@@ -595,8 +604,8 @@ func (l *workingSetLedger) BeginGeneratedProcessing() error {
 		slot     workingSetSlot
 		capacity uint64
 	}{
-		{workingSetGeneratedDecoder, maximumJSONDecoderCapacityBytes},
-		{workingSetGeneratedDTO, maximumGeneratedRequestDTOBytes},
+		{workingSetGeneratedDecoder, l.sizing.jsonDecoderCapacity},
+		{workingSetGeneratedDTO, l.sizing.generatedRequestDTO},
 	}
 	for _, claim := range claims {
 		if err := l.Claim(claim.slot, claim.capacity); err != nil {
@@ -617,14 +626,14 @@ func (l *workingSetLedger) BeginRequestMapping() error {
 		slot     workingSetSlot
 		capacity uint64
 	}{
-		{workingSetBase64EncodedCopy, maximumEncodedMessageCapacityBytes},
-		{workingSetBase64InputString, maximumEncodedMessageCapacityBytes},
-		{workingSetBase64Decoded, maximumBase64DecodedCapacityBytes},
-		{workingSetCanonicalBase64, maximumEncodedMessageCapacityBytes},
-		{workingSetCanonicalBase64String, maximumEncodedMessageCapacityBytes},
-		{workingSetCanonicalCompareCopy, maximumEncodedMessageCapacityBytes},
+		{workingSetBase64EncodedCopy, l.sizing.encodedMessage},
+		{workingSetBase64InputString, l.sizing.encodedMessage},
+		{workingSetBase64Decoded, l.sizing.base64Decoded},
+		{workingSetCanonicalBase64, l.sizing.encodedMessage},
+		{workingSetCanonicalBase64String, l.sizing.encodedMessage},
+		{workingSetCanonicalCompareCopy, l.sizing.encodedMessage},
 		{workingSetMappingEnvelopeScratch, maximumMappingEnvelopeScratchBytes},
-		{workingSetDomainRequest, maximumImmutableRequestGenerationBytes},
+		{workingSetDomainRequest, l.sizing.requestGeneration},
 	} {
 		if err := l.Claim(claim.slot, claim.capacity); err != nil {
 			return err
@@ -662,9 +671,9 @@ func (l *workingSetLedger) BeginDomainProcessing() error {
 		slot     workingSetSlot
 		capacity uint64
 	}{
-		{workingSetServiceRequest, maximumImmutableRequestGenerationBytes},
-		{workingSetServiceExtracted, maximumImmutableRequestGenerationBytes},
-		{workingSetLibraryRuntime, maximumLibraryRuntimeBytes},
+		{workingSetServiceRequest, l.sizing.requestGeneration},
+		{workingSetServiceExtracted, l.sizing.requestGeneration},
+		{workingSetLibraryRuntime, l.sizing.libraryRuntime},
 		{workingSetResponse, maximumSuccessResponseBytes},
 	} {
 		if err := l.Claim(claim.slot, claim.capacity); err != nil {
@@ -680,4 +689,192 @@ func (l *workingSetLedger) failLocked(code workingSetErrorCode) error {
 		l.failed = true
 	}
 	return &workingSetError{code: code}
+}
+
+// Deployment-scaled working-set sizing.
+//
+// Every constant above states the worst case at the closed library ceiling of
+// dkim2.HardMaxRawMessageBytes. A deployment that configures a smaller
+// server.message_bytes can never reach those capacities, yet the fixed unit
+// reservation made every request pay the maximum and therefore capped process
+// concurrency at two. The sizing below reproduces the same ownership
+// inventory as a function of the configured ceiling, so a smaller deployment
+// reserves proportionally less and may admit proportionally more requests.
+//
+// Only two terms are not analytic in the input size, and each has its own
+// structure rather than a flat ratio.
+//
+// io.ReadAll grows through a series whose successive retained totals differ by
+// a factor of 1.5, so the complete sum of intermediate capacities converges
+// below three times the final capacity. Measurement across the supported range
+// peaks at 1.464 times the final capacity, well inside that bound.
+//
+// The JSON decoder replaces a buffer by the next power of two and keeps both
+// live during the swap, so its overlap is exactly one and a half times the
+// power of two that covers the body. Measurement reproduces that ratio at
+// every size, not merely at the ceiling. Two conditions carry that equality:
+// the Go 1.27.0 default jsonv2 decoder doubles from 64 bytes, and the boundary
+// hands the generated decoder a bytes.Reader that fills every requested slice,
+// so a short read can never force one extra doubling. TestPinnedWorkingSetCapacityBounds
+// keeps the ceiling equality pinned, which is what detects a decoder change.
+//
+// TestWorkingSetSizingOverApproximatesMeasuredGrowth replays both probes at
+// every supported ceiling and requires measured <= modelled. Over-approximation
+// is the only safe direction: an undercut reservation would let one request
+// own more memory than the process budget accounted for.
+const (
+	// workingSetReadAllCapacityFactor bounds the retained sum of intermediate
+	// ReadAll capacities as a multiple of the final body capacity.
+	workingSetReadAllCapacityFactor = uint64(3)
+	// workingSetJSONNumerator over workingSetJSONDenominator is the decoder's
+	// replaced plus replacement buffer, relative to the covering power of two.
+	workingSetJSONNumerator   = uint64(3)
+	workingSetJSONDenominator = uint64(2)
+	// workingSetUnitHeadroomBytes is the fixed allowance added to the proven
+	// phase high-water mark before it becomes the per-request reservation.
+	workingSetUnitHeadroomBytes = uint64(64 << 20)
+	// workingSetPageBytes is the Go 1.27.0 large-allocation rounding page.
+	workingSetPageBytes = uint64(8192)
+	// workingSetBodyLineCeiling mirrors the parser's closed BodyLine ceiling.
+	// Production accounting keeps the literal, and
+	// TestWorkingSetBodyLineLiteralsMatchTheParser compares all three literals
+	// against rawmsg and the concrete Go object size.
+	workingSetBodyLineCeiling = uint64(2_097_152)
+	// workingSetBodyLineBytes is one Go 1.27.0 BodyLine value.
+	workingSetBodyLineBytes = uint64(40)
+	// workingSetBodyLineGenerations counts the parser, validated and canonical
+	// indexes that current verification retains at the same time.
+	workingSetBodyLineGenerations = uint64(3)
+)
+
+// roundWorkingSetPage rounds one large allocation to the pinned runtime page.
+func roundWorkingSetPage(size uint64, page uint64) uint64 {
+	if page == 0 || size > math.MaxUint64-page+1 {
+		return math.MaxUint64
+	}
+	return (size + page - 1) / page * page
+}
+
+// workingSetSizing owns one deployment's complete per-request capacity
+// inventory. It is immutable after construction and carries no request data.
+type workingSetSizing struct {
+	messageBytes        uint64
+	processBodyBytes    uint64
+	processBodyCapacity uint64
+	readAllIntermediate uint64
+	jsonDecoderCapacity uint64
+	validationGeneric   uint64
+	encodedMessage      uint64
+	base64Decoded       uint64
+	requestGeneration   uint64
+	generatedRequestDTO uint64
+	libraryRuntime      uint64
+	unitBytes           uint64
+}
+
+// newWorkingSetSizing derives one complete inventory from the configured
+// raw-message ceiling. It fails closed on an unsupported ceiling and on any
+// arithmetic that cannot be proven below the process aggregate.
+func newWorkingSetSizing(messageBytes int64) (workingSetSizing, error) {
+	if messageBytes < 1 || messageBytes > dkim2.HardMaxRawMessageBytes {
+		return workingSetSizing{}, &workingSetError{code: workingSetErrorInvariant}
+	}
+	raw := uint64(messageBytes)
+	encoded := (raw + 2) / 3 * 4
+	sizing := workingSetSizing{messageBytes: raw}
+	sizing.encodedMessage = roundWorkingSetPage(encoded, workingSetPageBytes)
+	sizing.base64Decoded = encoded/4*3 + 1
+	sizing.processBodyBytes = 2*encoded + batchFramingOverheadBytes
+	sizing.processBodyCapacity = roundWorkingSetPage(sizing.processBodyBytes, workingSetPageBytes)
+	sizing.readAllIntermediate = scaleWorkingSetBytes(
+		sizing.processBodyCapacity, workingSetReadAllCapacityFactor, 1,
+	)
+	sizing.jsonDecoderCapacity = scaleWorkingSetBytes(
+		coveringPowerOfTwo(sizing.processBodyBytes),
+		workingSetJSONNumerator, workingSetJSONDenominator,
+	)
+	sizing.validationGeneric = 2 * sizing.processBodyCapacity
+	sizing.requestGeneration = raw + maximumMappingEnvelopeScratchBytes
+	sizing.generatedRequestDTO = sizing.encodedMessage + maximumMappingEnvelopeScratchBytes
+	sizing.libraryRuntime = 6*raw + sizing.bodyLineIndexBytes() +
+		maximumLibraryHeaderBytes + maximumLibraryProtocolBytes
+	unit, err := sizing.proveUnitBytes()
+	if err != nil {
+		return workingSetSizing{}, err
+	}
+	sizing.unitBytes = unit
+	return sizing, nil
+}
+
+// bodyLineIndexBytes bounds the three retained BodyLine generations. A body
+// cannot hold more lines than half its bytes, and the parser never records
+// more than its own closed ceiling.
+func (s workingSetSizing) bodyLineIndexBytes() uint64 {
+	lines := min(workingSetBodyLineCeiling, s.messageBytes/2+1)
+	return workingSetBodyLineGenerations * workingSetBodyLineBytes * lines
+}
+
+// validationPhaseBytes returns the generic-validation ownership high water.
+func (s workingSetSizing) validationPhaseBytes() uint64 {
+	return maximumFixedRequestStorageBytes + 2*s.processBodyCapacity +
+		s.readAllIntermediate + s.jsonDecoderCapacity + s.validationGeneric
+}
+
+// domainPhaseBytes returns the domain-processing ownership high water.
+func (s workingSetSizing) domainPhaseBytes() uint64 {
+	return maximumFixedRequestStorageBytes + s.processBodyCapacity +
+		s.generatedRequestDTO + 3*s.requestGeneration + s.libraryRuntime +
+		maximumSuccessResponseBytes
+}
+
+// proveUnitBytes returns the per-request reservation that strictly dominates
+// every phase, or fails closed when it cannot be covered by the aggregate.
+func (s workingSetSizing) proveUnitBytes() (uint64, error) {
+	highWater := max(s.validationPhaseBytes(), s.domainPhaseBytes())
+	if highWater == 0 || highWater > processWorkingSetAggregateBytes-workingSetUnitHeadroomBytes {
+		return 0, &workingSetError{code: workingSetErrorOverflow}
+	}
+	unit := roundWorkingSetPage(highWater+workingSetUnitHeadroomBytes, workingSetPageBytes)
+	if unit <= highWater || unit > processWorkingSetAggregateBytes {
+		return 0, &workingSetError{code: workingSetErrorOverflow}
+	}
+	return unit, nil
+}
+
+// UnitBytes returns the proven per-request working-set reservation.
+func (s workingSetSizing) UnitBytes() uint64 { return s.unitBytes }
+
+// ProcessBodyBytes returns the largest admitted request body for this ceiling.
+func (s workingSetSizing) ProcessBodyBytes() int64 { return int64(s.processBodyBytes) }
+
+// MaxInFlight returns how many concurrent requests the aggregate can own.
+func (s workingSetSizing) MaxInFlight() int {
+	if s.unitBytes == 0 {
+		return 0
+	}
+	return int(min(processWorkingSetAggregateBytes/s.unitBytes, uint64(maxProcessInFlight)))
+}
+
+// coveringPowerOfTwo returns the smallest power of two at or above value.
+// The JSON decoder replaces its buffer along exactly this progression. A value
+// above the largest representable power of two saturates instead of wrapping
+// to zero, so an unusable size can never present itself as a free capacity.
+func coveringPowerOfTwo(value uint64) uint64 {
+	switch {
+	case value == 0:
+		return 1
+	case value > uint64(1)<<63:
+		return math.MaxUint64
+	default:
+		return uint64(1) << uint(bits.Len64(value-1))
+	}
+}
+
+// scaleWorkingSetBytes multiplies without overflow and always rounds upward.
+func scaleWorkingSetBytes(value, numerator, denominator uint64) uint64 {
+	if denominator == 0 || numerator == 0 ||
+		value > (math.MaxUint64-denominator+1)/numerator {
+		return math.MaxUint64
+	}
+	return (value*numerator + denominator - 1) / denominator
 }

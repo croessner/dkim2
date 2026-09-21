@@ -9,7 +9,14 @@ import (
 	"sync/atomic"
 )
 
-const maxProcessBodyBytes = int64(2*maxEncodedMessageBytes + 3_139_072)
+const (
+	// batchFramingOverheadBytes is the closed JSON envelope, escaped SMTP path
+	// and batch framing allowance carried beside the encoded message bytes.
+	batchFramingOverheadBytes = uint64(3_139_072)
+	// maxProcessBodyBytes is the transport ceiling at the closed library
+	// maximum. A deployment narrows it through its working-set sizing.
+	maxProcessBodyBytes = int64(2*maxEncodedMessageBytes) + int64(batchFramingOverheadBytes)
+)
 
 type bodyFailure uint8
 
@@ -76,6 +83,7 @@ func readProcessBody(
 	writer http.ResponseWriter,
 	request *http.Request,
 	original *http.Request,
+	bodyBytes int64,
 ) ([]byte, bodyFailure) {
 	if request == nil {
 		return nil, bodyFailureInvalid
@@ -84,7 +92,10 @@ func readProcessBody(
 	if writer == nil || request.Body == nil {
 		return nil, bodyFailureInvalid
 	}
-	request.Body = http.MaxBytesReader(writer, request.Body, maxProcessBodyBytes)
+	if bodyBytes < 1 || bodyBytes > maxProcessBodyBytes {
+		return nil, bodyFailureInvalid
+	}
+	request.Body = http.MaxBytesReader(writer, request.Body, bodyBytes)
 	body, err := io.ReadAll(request.Body)
 	clearBoundaryTrailers(request, original)
 	if err == nil {

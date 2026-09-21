@@ -357,7 +357,7 @@ func TestLoadRejectsCrossFieldAndAuthorityViolations(t *testing.T) {
 		headerAfterRead,
 		strings.Replace(memoryYAML("1", "capability"), "read_timeout: "+defaultReadTimeout, "read_timeout: 61s", 1),
 		strings.Replace(memoryYAML("1", "capability"), "write_timeout: 65s", "write_timeout: 60s", 1),
-		strings.Replace(memoryYAML("1", "capability"), "max_in_flight: 1", "max_in_flight: 3", 1),
+		strings.Replace(memoryYAML("1", "capability"), "max_in_flight: 1", "max_in_flight: 65", 1),
 	}
 	for _, document := range tests {
 		if _, err := Load([]byte(document), FlagValues{}); CodeOf(err) != CodeInvalidField {

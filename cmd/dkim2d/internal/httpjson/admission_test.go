@@ -6,9 +6,13 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/croessner/dkim2"
 )
 
-// TestProcessAdmissionValidatesFixedBudget proves configuration cannot widen reservations.
+// TestProcessAdmissionValidatesFixedBudget proves configuration cannot widen
+// the process working-set budget, and that concurrency is exactly what that
+// budget covers at the deployment's proven per-request reservation.
 func TestProcessAdmissionValidatesFixedBudget(t *testing.T) {
 	for _, values := range []struct {
 		inFlight int
@@ -16,25 +20,44 @@ func TestProcessAdmissionValidatesFixedBudget(t *testing.T) {
 		wait     time.Duration
 	}{
 		{inFlight: 0},
-		{inFlight: 3},
+		{inFlight: maxProcessInFlight + 1},
 		{inFlight: 1, waiters: -1},
 		{inFlight: 1, waiters: maxProcessWaiters + 1},
 		{inFlight: 1, wait: maxProcessAdmissionWait + time.Nanosecond},
 	} {
-		if _, err := newProcessAdmission(values.inFlight, values.waiters, values.wait); !errors.Is(err, errAdmissionConfig) {
+		if _, err := newProcessAdmission(values.inFlight, values.waiters, values.wait, ceilingSizing(t).UnitBytes()); !errors.Is(err, errAdmissionConfig) {
 			t.Fatalf("newProcessAdmission(%+v) error = %v", values, err)
 		}
 	}
-	for inFlight := 1; inFlight <= maxProcessInFlight; inFlight++ {
-		if _, err := newProcessAdmission(inFlight, maxProcessWaiters, maxProcessAdmissionWait); err != nil {
-			t.Fatalf("valid in-flight %d rejected: %v", inFlight, err)
+	// Concurrency follows the process budget at the deployment's proven
+	// reservation. A smaller configured message ceiling therefore admits more
+	// concurrent requests, and one request beyond the budget always fails.
+	for _, messageBytes := range []int64{8 << 20, 32 << 20, 100 << 20, dkim2.HardMaxRawMessageBytes} {
+		sizing := mustSizing(t, messageBytes)
+		allowed := sizing.MaxInFlight()
+		if allowed < 1 || uint64(allowed)*sizing.UnitBytes() > processWorkingSetAggregateBytes {
+			t.Fatalf("%d MiB: budget proof failed for %d in flight", messageBytes>>20, allowed)
 		}
+		for inFlight := 1; inFlight <= allowed; inFlight++ {
+			if _, err := newProcessAdmission(inFlight, maxProcessWaiters, maxProcessAdmissionWait, sizing.UnitBytes()); err != nil {
+				t.Fatalf("%d MiB: valid in-flight %d rejected: %v", messageBytes>>20, inFlight, err)
+			}
+		}
+		if allowed < maxProcessInFlight {
+			if _, err := newProcessAdmission(allowed+1, maxProcessWaiters, maxProcessAdmissionWait, sizing.UnitBytes()); !errors.Is(err, errAdmissionConfig) {
+				t.Fatalf("%d MiB: in-flight %d beyond the budget accepted", messageBytes>>20, allowed+1)
+			}
+		}
+	}
+	// A narrower ceiling must never reserve more than a wider one.
+	if mustSizing(t, 8<<20).UnitBytes() >= mustSizing(t, dkim2.HardMaxRawMessageBytes).UnitBytes() {
+		t.Fatal("reservation did not shrink with the configured message ceiling")
 	}
 }
 
 // TestProcessAdmissionTryAcquireIsAtomicAndNonblocking proves Expect-path ownership.
 func TestProcessAdmissionTryAcquireIsAtomicAndNonblocking(t *testing.T) {
-	admission, err := newProcessAdmission(2, 64, 100*time.Millisecond)
+	admission, err := newProcessAdmission(2, 64, 100*time.Millisecond, ceilingSizing(t).UnitBytes())
 	if err != nil {
 		t.Fatalf("newProcessAdmission() error = %v", err)
 	}
@@ -63,7 +86,7 @@ func TestProcessAdmissionTryAcquireIsAtomicAndNonblocking(t *testing.T) {
 
 // TestProcessAdmissionBoundsWaitersAndWakesOnRelease proves ordinary queue policy.
 func TestProcessAdmissionBoundsWaitersAndWakesOnRelease(t *testing.T) {
-	admission, err := newProcessAdmission(1, 1, time.Second)
+	admission, err := newProcessAdmission(1, 1, time.Second, ceilingSizing(t).UnitBytes())
 	if err != nil {
 		t.Fatalf("newProcessAdmission() error = %v", err)
 	}
@@ -125,7 +148,7 @@ func TestProcessAdmissionCancellationDeadlineAndCloseAreClosed(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			admission, _ := newProcessAdmission(1, 1, time.Second)
+			admission, _ := newProcessAdmission(1, 1, time.Second, ceilingSizing(t).UnitBytes())
 			ctx, cancel := test.ctx()
 			defer cancel()
 			if lease, failure := admission.Acquire(ctx); lease != nil || failure != test.want {
@@ -134,7 +157,7 @@ func TestProcessAdmissionCancellationDeadlineAndCloseAreClosed(t *testing.T) {
 		})
 	}
 
-	admission, _ := newProcessAdmission(1, 1, time.Second)
+	admission, _ := newProcessAdmission(1, 1, time.Second, ceilingSizing(t).UnitBytes())
 	owner, _ := admission.TryAcquire(context.Background())
 	entered := make(chan struct{})
 	admission.onWait = func() { close(entered) }
@@ -192,7 +215,7 @@ func TestProcessAdmissionResolvesSimultaneousEventsInFrozenOrder(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			admission, _ := newProcessAdmission(1, 1, time.Second)
+			admission, _ := newProcessAdmission(1, 1, time.Second, ceilingSizing(t).UnitBytes())
 			owner, _ := admission.TryAcquire(context.Background())
 			entered := make(chan struct{})
 			releaseWaiter := make(chan struct{})
@@ -238,14 +261,14 @@ func TestProcessAdmissionResolvesSimultaneousEventsInFrozenOrder(t *testing.T) {
 
 // TestProcessAdmissionZeroWaiterAndZeroWaitAreImmediate proves zero-valued policy.
 func TestProcessAdmissionZeroWaiterAndZeroWaitAreImmediate(t *testing.T) {
-	noWaiters, _ := newProcessAdmission(1, 0, time.Second)
+	noWaiters, _ := newProcessAdmission(1, 0, time.Second, ceilingSizing(t).UnitBytes())
 	owner, _ := noWaiters.TryAcquire(context.Background())
 	if lease, failure := noWaiters.Acquire(context.Background()); lease != nil || failure != admissionOverloaded {
 		t.Fatalf("zero-waiter Acquire() = %v/%v", lease, failure)
 	}
 	owner.Release()
 
-	zeroWait, _ := newProcessAdmission(1, 1, 0)
+	zeroWait, _ := newProcessAdmission(1, 1, 0, ceilingSizing(t).UnitBytes())
 	owner, _ = zeroWait.TryAcquire(context.Background())
 	if lease, failure := zeroWait.Acquire(context.Background()); lease != nil || failure != admissionOverloaded {
 		t.Fatalf("zero-wait Acquire() = %v/%v", lease, failure)
@@ -255,7 +278,7 @@ func TestProcessAdmissionZeroWaiterAndZeroWaitAreImmediate(t *testing.T) {
 
 // TestProcessAdmissionConcurrentReleaseRemainsExact proves lease race safety.
 func TestProcessAdmissionConcurrentReleaseRemainsExact(t *testing.T) {
-	admission, _ := newProcessAdmission(1, 0, 0)
+	admission, _ := newProcessAdmission(1, 0, 0, ceilingSizing(t).UnitBytes())
 	lease, _ := admission.TryAcquire(context.Background())
 	var group sync.WaitGroup
 	for range 64 {
@@ -274,7 +297,7 @@ func TestProcessReservationRequiresBothOwners(t *testing.T) {
 	t.Parallel()
 
 	for _, handlerFirst := range []bool{true, false} {
-		admission, err := newProcessAdmission(1, 0, 0)
+		admission, err := newProcessAdmission(1, 0, 0, ceilingSizing(t).UnitBytes())
 		if err != nil {
 			t.Fatal("newProcessAdmission() failed")
 		}
@@ -282,7 +305,7 @@ func TestProcessReservationRequiresBothOwners(t *testing.T) {
 		if failure != 0 || lease == nil {
 			t.Fatal("TryAcquire() failed")
 		}
-		ledger, err := newWorkingSetLedger(processWorkingSetUnitBytes)
+		ledger, err := newWorkingSetLedger(ceilingSizing(t))
 		if err != nil || ledger.Claim(workingSetFixedStorage, 1) != nil {
 			t.Fatal("ledger construction failed")
 		}
@@ -325,7 +348,7 @@ func TestProcessReservationConcurrentCompletion(t *testing.T) {
 	t.Parallel()
 
 	for range 100 {
-		admission, err := newProcessAdmission(1, 0, 0)
+		admission, err := newProcessAdmission(1, 0, 0, ceilingSizing(t).UnitBytes())
 		if err != nil {
 			t.Fatal("newProcessAdmission() failed")
 		}
@@ -333,7 +356,7 @@ func TestProcessReservationConcurrentCompletion(t *testing.T) {
 		if failure != 0 || lease == nil {
 			t.Fatal("TryAcquire() failed")
 		}
-		ledger, err := newWorkingSetLedger(processWorkingSetUnitBytes)
+		ledger, err := newWorkingSetLedger(ceilingSizing(t))
 		if err != nil || ledger.Claim(workingSetFixedStorage, 1) != nil {
 			t.Fatal("ledger construction failed")
 		}

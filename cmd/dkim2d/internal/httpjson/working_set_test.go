@@ -83,13 +83,15 @@ func TestMaximumLegalWorkingSetProof(t *testing.T) {
 
 	const (
 		wantHighWater = uint64(2_750_757_184)
-		wantMargin    = uint64(1_544_210_112)
+		wantMargin    = uint64(5_772_068_544)
 	)
 	if maximumLegalWorkingSetHighWaterBytes != wantHighWater ||
 		maximumLegalWorkingSetMarginBytes != wantMargin {
 		t.Fatalf("maximum-input inventory changed: high_water=%d margin=%d", maximumLegalWorkingSetHighWaterBytes, maximumLegalWorkingSetMarginBytes)
 	}
-	ledger, err := newWorkingSetLedger(processWorkingSetUnitBytes)
+	ceiling := ceilingSizing(t)
+	modelled := assertCeilingInventoryDominates(t, ceiling)
+	ledger, err := newWorkingSetLedger(ceilingSizing(t))
 	if err != nil {
 		t.Fatal("newWorkingSetLedger() rejected the fixed reservation")
 	}
@@ -102,7 +104,7 @@ func TestMaximumLegalWorkingSetProof(t *testing.T) {
 		t.Fatal("BeginBodyRead() failed")
 	}
 	if live := ledger.Snapshot().Live; live != maximumFixedRequestStorageBytes+
-		maximumReadAllIntermediateBytes+maximumProcessBodyCapacityBytes {
+		ceiling.readAllIntermediate+ceiling.processBodyCapacity {
 		t.Fatal("BeginBodyRead() did not charge the Go 1.27.0 transient")
 	}
 	if err := ledger.FinishBodyRead(); err != nil {
@@ -115,9 +117,9 @@ func TestMaximumLegalWorkingSetProof(t *testing.T) {
 		t.Fatal("BeginValidation() failed")
 	}
 	if live := ledger.Snapshot().Live; live != maximumFixedRequestStorageBytes+
-		maximumProcessBodyCapacityBytes+maximumReadAllIntermediateBytes+
-		maximumProcessBodyCapacityBytes+maximumJSONDecoderCapacityBytes+
-		maximumValidationGenericValueBytes {
+		ceiling.processBodyCapacity+ceiling.readAllIntermediate+
+		ceiling.processBodyCapacity+ceiling.jsonDecoderCapacity+
+		ceiling.validationGeneric {
 		t.Fatal("BeginValidation() did not retain every validation owner")
 	}
 	if err := ledger.FinishValidation(); err != nil {
@@ -137,12 +139,12 @@ func TestMaximumLegalWorkingSetProof(t *testing.T) {
 	}
 	mapping := ledger.Snapshot()
 	if mapping.Live != maximumFixedRequestStorageBytes+
-		maximumProcessBodyCapacityBytes+
-		maximumGeneratedRequestDTOBytes+
-		maximumEncodedMessageCapacityBytes*5+
-		maximumBase64DecodedCapacityBytes+
+		ceiling.processBodyCapacity+
+		ceiling.generatedRequestDTO+
+		ceiling.encodedMessage*5+
+		ceiling.base64Decoded+
 		maximumMappingEnvelopeScratchBytes+
-		maximumImmutableRequestGenerationBytes {
+		ceiling.requestGeneration {
 		t.Fatal("BeginRequestMapping() did not charge every mapping owner")
 	}
 	if err := ledger.BeginVerifyRequest(); err != nil {
@@ -158,9 +160,9 @@ func TestMaximumLegalWorkingSetProof(t *testing.T) {
 		t.Fatal("FinishRequestMapping() failed")
 	}
 	if live := ledger.Snapshot().Live; live != maximumFixedRequestStorageBytes+
-		maximumProcessBodyCapacityBytes+
-		maximumGeneratedRequestDTOBytes+
-		maximumImmutableRequestGenerationBytes {
+		ceiling.processBodyCapacity+
+		ceiling.generatedRequestDTO+
+		ceiling.requestGeneration {
 		t.Fatal("FinishRequestMapping() retained mapping scratch")
 	}
 
@@ -171,16 +173,16 @@ func TestMaximumLegalWorkingSetProof(t *testing.T) {
 	}
 
 	snapshot := ledger.Snapshot()
-	if snapshot.Failed || snapshot.HighWater != maximumLegalWorkingSetHighWaterBytes {
+	if snapshot.Failed || snapshot.HighWater != modelled {
 		t.Fatalf("maximum-input proof snapshot = %+v", snapshot)
 	}
 	if !snapshot.ProvedBelowReservation() {
 		t.Fatalf("maximum-input high water %d is not strictly below %d",
 			snapshot.HighWater, snapshot.Limit)
 	}
-	if margin := snapshot.Limit - snapshot.HighWater; margin != maximumLegalWorkingSetMarginBytes {
-		t.Fatalf("maximum-input margin = %d, want %d",
-			margin, maximumLegalWorkingSetMarginBytes)
+	if margin := snapshot.Limit - snapshot.HighWater; margin < workingSetUnitHeadroomBytes {
+		t.Fatalf("maximum-input margin = %d, want at least %d",
+			margin, workingSetUnitHeadroomBytes)
 	}
 
 	for _, slot := range []workingSetSlot{
@@ -199,6 +201,25 @@ func TestMaximumLegalWorkingSetProof(t *testing.T) {
 	if final.Live != 0 || final.Failed || final.HighWater != snapshot.HighWater {
 		t.Fatalf("released maximum-input snapshot = %+v", final)
 	}
+}
+
+// assertCeilingInventoryDominates proves the deployment-scaled inventory at
+// the closed library ceiling over-approximates the pinned measured inventory
+// and stays strictly below its own reservation. The sizing replaces two
+// measured standard-library terms with structural bounds, so an undercut here
+// would let one request own more than the process budget accounted for.
+func assertCeilingInventoryDominates(t *testing.T, ceiling workingSetSizing) uint64 {
+	t.Helper()
+	modelled := max(ceiling.validationPhaseBytes(), ceiling.domainPhaseBytes())
+	if modelled < maximumLegalWorkingSetHighWaterBytes {
+		t.Fatalf("modelled ceiling inventory %d undercuts the measured %d",
+			modelled, maximumLegalWorkingSetHighWaterBytes)
+	}
+	if ceiling.UnitBytes() <= modelled || ceiling.UnitBytes() > processWorkingSetAggregateBytes {
+		t.Fatalf("ceiling reservation %d does not dominate its inventory %d",
+			ceiling.UnitBytes(), modelled)
+	}
+	return modelled
 }
 
 // TestMaximumLegalProductionWorkingSetProof drives one exact maximum JSON body
@@ -257,8 +278,12 @@ func TestMaximumLegalProductionWorkingSetProof(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	handler.ServeHTTP(recorder, request)
 
+	ceiling := ceilingSizing(t)
+	wantHighWater := max(ceiling.validationPhaseBytes(), ceiling.domainPhaseBytes())
 	if processor.ledger == nil || !processor.snapshot.ProvedBelowReservation() ||
-		processor.snapshot.HighWater != maximumLegalWorkingSetHighWaterBytes {
+		processor.snapshot.HighWater != wantHighWater ||
+		processor.snapshot.Limit != ceiling.UnitBytes() ||
+		wantHighWater < maximumLegalWorkingSetHighWaterBytes {
 		t.Fatalf("production maximum-input snapshot = %+v", processor.snapshot)
 	}
 	if processor.rawBytes != dkim2.HardMaxRawMessageBytes ||
@@ -462,7 +487,7 @@ func assertWorkingSetPhaseInventory(t testing.TB) {
 func TestWorkingSetLedgerTransferPreservesOwnership(t *testing.T) {
 	t.Parallel()
 
-	ledger, err := newWorkingSetLedger(4_096)
+	ledger, err := ledgerWithLimit(4_096)
 	if err != nil {
 		t.Fatal("newWorkingSetLedger() failed")
 	}
@@ -488,7 +513,7 @@ func TestWorkingSetLedgerFailsClosed(t *testing.T) {
 	t.Parallel()
 
 	t.Run("reservation", func(t *testing.T) {
-		ledger, err := newWorkingSetLedger(10)
+		ledger, err := ledgerWithLimit(10)
 		if err != nil {
 			t.Fatal("newWorkingSetLedger() failed")
 		}
@@ -507,7 +532,7 @@ func TestWorkingSetLedgerFailsClosed(t *testing.T) {
 	})
 
 	t.Run(testDuplicateName, func(t *testing.T) {
-		ledger, err := newWorkingSetLedger(10)
+		ledger, err := ledgerWithLimit(10)
 		if err != nil {
 			t.Fatal("newWorkingSetLedger() failed")
 		}
@@ -521,7 +546,7 @@ func TestWorkingSetLedgerFailsClosed(t *testing.T) {
 	})
 
 	t.Run("invalid_slot", func(t *testing.T) {
-		ledger, err := newWorkingSetLedger(10)
+		ledger, err := ledgerWithLimit(10)
 		if err != nil {
 			t.Fatal("newWorkingSetLedger() failed")
 		}
@@ -545,7 +570,7 @@ func TestWorkingSetLedgerErrorsAreContentFree(t *testing.T) {
 	t.Parallel()
 
 	const marker = "DO-NOT-RETAIN-WORKING-SET"
-	ledger, err := newWorkingSetLedger(1)
+	ledger, err := ledgerWithLimit(1)
 	if err != nil {
 		t.Fatal("newWorkingSetLedger() failed")
 	}
@@ -563,7 +588,7 @@ func TestWorkingSetLedgerErrorsAreContentFree(t *testing.T) {
 func TestWorkingSetLedgerConcurrentClaims(t *testing.T) {
 	t.Parallel()
 
-	ledger, err := newWorkingSetLedger(processWorkingSetUnitBytes)
+	ledger, err := newWorkingSetLedger(ceilingSizing(t))
 	if err != nil {
 		t.Fatal("newWorkingSetLedger() failed")
 	}
@@ -715,11 +740,6 @@ func (r *workingSetReadAllProbe) Read(output []byte) (int, error) {
 		return int(count), io.EOF
 	}
 	return int(count), nil
-}
-
-// roundWorkingSetPage rounds one large allocation to a pinned runtime page.
-func roundWorkingSetPage(size uint64, page uint64) uint64 {
-	return (size + page - 1) / page * page
 }
 
 // buildMaximumLegalProcessBody constructs the exact admitted outer body limit.

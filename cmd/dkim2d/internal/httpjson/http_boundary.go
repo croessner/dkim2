@@ -72,6 +72,7 @@ type BoundaryConfig struct {
 // HTTPBoundary owns route, admission, validation, and generated-adapter ordering.
 type HTTPBoundary struct {
 	messageBytes       int
+	sizing             workingSetSizing
 	authority          string
 	deadline           time.Duration
 	matcher            capabilityMatcher
@@ -101,7 +102,7 @@ func NewHTTPBoundary(
 	dependencies ...any,
 ) (*HTTPBoundary, error) {
 	if config.MessageBytes == 0 {
-		config.MessageBytes = 32 << 20
+		config.MessageBytes = defaultBoundaryMessageBytes
 	}
 	if config.MessageBytes < 1 || config.MessageBytes > dkim2.HardMaxRawMessageBytes {
 		return nil, errHTTPBoundaryConfig
@@ -112,10 +113,15 @@ func NewHTTPBoundary(
 		nilInterfaceValue(notifier) || validator == nil {
 		return nil, errHTTPBoundaryConfig
 	}
+	sizing, err := newWorkingSetSizing(int64(config.MessageBytes))
+	if err != nil {
+		return nil, errHTTPBoundaryConfig
+	}
 	admission, err := newProcessAdmission(
 		config.MaxInFlight,
 		config.MaxWaiters,
 		config.AdmissionWait,
+		sizing.UnitBytes(),
 	)
 	if err != nil {
 		return nil, errHTTPBoundaryConfig
@@ -148,6 +154,7 @@ func NewHTTPBoundary(
 	}
 	boundary := &HTTPBoundary{
 		messageBytes:       config.MessageBytes,
+		sizing:             sizing,
 		authority:          config.Authority,
 		deadline:           config.RequestDeadline,
 		matcher:            matcher,
@@ -848,7 +855,7 @@ func (h *HTTPBoundary) serveProcess(
 		h.writeAdmissionFailure(writer, request, failure)
 		return
 	}
-	ledger, err := newWorkingSetLedger(processWorkingSetUnitBytes)
+	ledger, err := newWorkingSetLedger(h.sizing)
 	if err != nil {
 		lease.Release()
 		h.writeInternal(writer, request)
@@ -1015,7 +1022,7 @@ func (h *HTTPBoundary) processReservedRequest(
 			generated.ErrorResponseCodeServiceNotReady, generated.Availability)
 		return
 	}
-	if request.ContentLength > maxProcessBodyBytes {
+	if request.ContentLength > h.sizing.ProcessBodyBytes() {
 		h.writeError(writer, request, http.StatusRequestEntityTooLarge,
 			generated.ErrorResponseCodeRequestTooLarge, generated.Request)
 		return
@@ -1031,7 +1038,7 @@ func (h *HTTPBoundary) processReservedRequest(
 		h.writeInternal(writer, request)
 		return
 	}
-	body, bodyFailure := readProcessBody(writer, request, originalRequest)
+	body, bodyFailure := readProcessBody(writer, request, originalRequest, h.sizing.ProcessBodyBytes())
 	switch bodyFailure {
 	case 0:
 	case bodyFailureTooLarge:

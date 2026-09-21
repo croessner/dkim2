@@ -13,7 +13,8 @@ For a Postfix `message_size_limit = 104857600` deployment, use:
 # dkim2d, for every role
 server:
   message_bytes: 104857600
-  max_in_flight: 1
+  max_in_flight: 2
+  admission_wait: 30s
 ```
 
 ```yaml
@@ -40,8 +41,11 @@ for a 100 MiB body with 76-character MIME wrapping. Independent structural,
 recipe, cryptographic and recipient limits still apply. This is not a promise
 to accept every possible message below the byte ceiling.
 
-HTTP framing permits 361,053,016 bytes; batch original/current snapshots have
-a 256 MiB aggregate ceiling and still obey the configured per-message limit.
+HTTP framing permits 361,053,016 bytes at the closed library ceiling. The
+transport limit of a deployment follows its own `server.message_bytes`, so a
+100 MiB deployment admits 282,759,344 body bytes and answers 413 above that.
+Batch original/current snapshots have a 256 MiB aggregate ceiling and still
+obey the configured per-message limit.
 OpenAPI and all generated wire clients carry the same hard bounds.
 
 ## Call deadlines
@@ -58,13 +62,32 @@ accepts up to 120 seconds. A 2-second adapter deadline is a small-message
 default and rejects SMTP-sized mail as `451 4.7.1 DKIM2 service unavailable`
 with `failure_class=indeterminate`, long after every byte limit was accepted.
 
-`server.admission_wait` is capped at one second and `server.max_in_flight` at
-two. An MTA that splits one message to several recipients opens that many
-concurrent transactions, so a single-slot daemon answers all but one of them
-with 503 `service_overloaded` after that second. Those recipients are deferred
-and delivered by a later queue run. Raising `max_in_flight` to two removes the
-extra queue round for two-recipient mail but doubles the concurrent HTTP
-working set, so raise container memory with it.
+Concurrency follows the configured size. The daemon reserves one per-request
+working-set unit derived from `server.message_bytes` and admits as many
+requests as the process budget covers at that unit. A deployment that admits
+smaller messages therefore admits more requests:
+
+| `server.message_bytes` | reservation | admitted concurrency |
+| --- | --- | --- |
+| 1 MiB | 217 MiB | 37 |
+| 8 MiB | 488 MiB | 16 |
+| 33554432 (default) | 878 MiB | 9 |
+| 104857600 | 2.66 GiB | 3 |
+| 134217728 (ceiling) | 3.17 GiB | 2 |
+
+`server.max_in_flight` selects a value inside that range and the daemon
+refuses a larger one at startup. The reservation is an ownership-accounting
+bound, not a startup allocation and not a container memory setting: size the
+container for the concurrency actually configured.
+
+`server.admission_wait` accepts up to 120 seconds and never more than
+`server.request_deadline`. A waiting request owns no reservation and no
+request body, so the wait costs one goroutine and its open connection, bounded
+by `server.max_waiters`. Keep it below the adapter's `daemon.request_timeout`,
+so a queued request still has time to run. An MTA that splits one message to
+several recipients opens that many concurrent transactions; with enough
+admitted concurrency they are signed together instead of all but one being
+deferred with 503 `service_overloaded`.
 
 ## Memory and rollout qualification
 
@@ -73,15 +96,20 @@ memory limit. Milter admission requires a complete EOM working set, not only
 the retained raw input. The 100 MiB configuration test rejects an insufficient
 256 MiB budget and accepts 1 GiB.
 
-HTTP reserves 4 GiB per active request, at most two reservations/8 GiB per
-process. These are ownership-accounting bounds, not allocations at startup
-and not container memory settings. The pinned Go 1.27.0 current-verification
-inventory peaks at 2,750,757,184 bytes, below its 4 GiB reservation. The
-largest phase is now generic JSON validation. The exact ReadAll capacities
-are 361,054,208 final plus 497,039,680 intermediate bytes; JSON retains
-536,870,912 bytes and overlaps 805,306,368 during growth. Regression tests
-derive these capacities from the runtime and exercise the complete maximum
-HTTP boundary. Signing and batch/revision load qualification must additionally
+HTTP reserves one working-set unit per active request, derived from
+`server.message_bytes`, within an 8 GiB process budget. These are
+ownership-accounting bounds, not allocations at startup and not container
+memory settings. The pinned Go 1.27.0 current-verification inventory peaks at
+2,750,757,184 bytes at the closed library ceiling, below the 3,403,988,992-byte
+reservation that ceiling derives. The largest phase is generic JSON validation.
+The exact ReadAll capacities at that ceiling are 361,054,208 final plus
+497,039,680 intermediate bytes; JSON retains 536,870,912 bytes and overlaps
+805,306,368 during growth. The modelled bounds cover both: ReadAll by three
+times the final body capacity, which its 1.5 growth ratio converges below, and
+the JSON overlap exactly by one and a half times the covering power of two.
+Regression tests replay both probes at every supported ceiling and require
+measured to stay at or below modelled, and exercise the complete maximum HTTP
+boundary. Signing and batch/revision load qualification must additionally
 cover the selected operation and deployment concurrency before rollout.
 
 The 100 MiB library regression signs a MIME-wrapped message, preserves its

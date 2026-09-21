@@ -145,14 +145,36 @@ func (s serverSettings) valid() bool {
 		s.shutdownTimeout >= time.Second &&
 		s.shutdownTimeout <= 120*time.Second &&
 		s.admissionWait >= 0 &&
-		s.admissionWait <= time.Second &&
+		s.admissionWait <= maxProcessAdmissionWait &&
+		s.admissionWait <= s.requestDeadline &&
 		s.maxInFlight >= 1 &&
 		s.maxInFlight <= maxProcessInFlight &&
+		s.admittedConcurrency() &&
 		s.maxWaiters >= 0 &&
 		s.maxWaiters <= maxProcessWaiters &&
 		s.readHeaderTimeout <= s.readTimeout &&
 		s.readTimeout <= s.requestDeadline &&
 		s.writeTimeout >= s.requestDeadline+time.Second
+}
+
+// defaultBoundaryMessageBytes is the raw-message ceiling applied when a caller
+// leaves it unset. It matches the daemon's own server.message_bytes default.
+const defaultBoundaryMessageBytes = 32 << 20
+
+// admittedConcurrency reports whether the process working-set budget can own
+// the configured concurrency at the configured message ceiling. Concurrency is
+// never an independent number: it is what the budget covers. An unset ceiling
+// resolves to the same default the HTTP boundary applies.
+func (s serverSettings) admittedConcurrency() bool {
+	messageBytes := s.messageBytes
+	if messageBytes == 0 {
+		messageBytes = defaultBoundaryMessageBytes
+	}
+	sizing, err := newWorkingSetSizing(int64(messageBytes))
+	if err != nil {
+		return false
+	}
+	return s.maxInFlight <= sizing.MaxInFlight()
 }
 
 // requestAuthority returns the sole HTTP Host authority allowed by the selected transport.
