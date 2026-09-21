@@ -659,7 +659,7 @@ func parseValues(values map[string]rawValue) (parsedValues, error) {
 	); err != nil {
 		return parsedValues{}, err
 	}
-	if parsed.messageBytes, err = parseInt64(values["limits.message_bytes"], 1, 33_554_432); err != nil {
+	if parsed.messageBytes, err = parseInt64(values["limits.message_bytes"], 1, resource.MaximumMessageBytes); err != nil {
 		return parsedValues{}, err
 	}
 	if parsed.headerBytes, err = parseInt64(values["limits.header_bytes"], 1, 1_048_576); err != nil {

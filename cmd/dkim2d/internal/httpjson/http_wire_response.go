@@ -88,7 +88,13 @@ func newJSONResponse(
 	if !datePresent {
 		date = ""
 	}
-	body, err := marshalBounded(value, maxSuccessResponseBytes)
+	limit := maxSuccessResponseBytes
+	if _, propagation := value.(generated.DSNPropagateResponse); propagation {
+		// Propagation returns the complete rebuilt notification, whereas
+		// verification and signing return bounded facts/header deltas.
+		limit = maxEncodedMessageBytes + 65_536
+	}
+	body, err := marshalBounded(value, limit)
 	if err != nil {
 		return preMarshaledResponse{}, err
 	}

@@ -11,8 +11,8 @@ import (
 )
 
 const (
-	maxProtectedStringBytes     = 44_739_244
-	maxProtectedStringJSONBytes = 47_878_316
+	maxProtectedStringBytes     = 178_956_972
+	maxProtectedStringJSONBytes = 361_053_016
 	protectedFormattingValue    = "<protected>"
 )
 

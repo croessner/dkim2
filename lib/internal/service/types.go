@@ -3,6 +3,7 @@ package service
 import (
 	"bytes"
 
+	"github.com/croessner/dkim2/internal/rawmsg"
 	"github.com/croessner/dkim2/internal/verify"
 )
 
@@ -253,7 +254,7 @@ type Limits struct {
 
 // DefaultLimits returns the closed service maxima.
 func DefaultLimits() Limits {
-	return Limits{32 << 20, 2000, 16, 16, 128, hardMaxSignatureFacts}
+	return Limits{rawmsg.HardMaxMessageBytes, 2000, 16, 16, 128, hardMaxSignatureFacts}
 }
 
 // Validate rejects zero, negative, or widening service limits.

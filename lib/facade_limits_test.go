@@ -92,7 +92,7 @@ func TestFacadeWiresPreProviderLimits(t *testing.T) {
 
 // TestFacadeEnforcesBodyLineCountBeforeDownstreamWork verifies the raw-message index ceiling at the public boundary.
 func TestFacadeEnforcesBodyLineCountBeforeDownstreamWork(t *testing.T) {
-	const maxBodyLines = 65_536
+	const maxBodyLines = 2_097_152
 
 	fixture := publicProviderFixture(t)
 	bodyOffset := bytes.Index(fixture, []byte("\r\n\r\n"))

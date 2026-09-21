@@ -33,6 +33,7 @@ const (
 	pathServerDeadline                      = "server.request_deadline"
 	pathServerShutdown                      = "server.shutdown_timeout"
 	pathServerMaxInFlight                   = "server.max_in_flight"
+	pathServerMessageBytes                  = "server.message_bytes"
 	pathServerMaxWaiters                    = "server.max_waiters"
 	pathServerAdmissionWait                 = "server.admission_wait"
 	pathPolicyMode                          = "policy.mode"
@@ -303,6 +304,7 @@ func stableFieldSpecs() []fieldSpec {
 		{path: pathServerDeadline, env: "DKIM2D_SERVER_REQUEST_DEADLINE", kind: valueDuration, defaultVal: defaultDeadline, hasDefault: true},
 		{path: pathServerShutdown, env: "DKIM2D_SERVER_SHUTDOWN_TIMEOUT", kind: valueDuration, defaultVal: defaultReadTimeout, hasDefault: true},
 		{path: pathServerMaxInFlight, env: "DKIM2D_SERVER_MAX_IN_FLIGHT", kind: valueUint, defaultVal: "1", hasDefault: true},
+		{path: pathServerMessageBytes, env: "DKIM2D_SERVER_MESSAGE_BYTES", kind: valueUint, defaultVal: "33554432", hasDefault: true},
 		{path: pathServerMaxWaiters, env: "DKIM2D_SERVER_MAX_WAITERS", kind: valueUint, defaultVal: "64", hasDefault: true},
 		{path: pathServerAdmissionWait, env: "DKIM2D_SERVER_ADMISSION_WAIT", kind: valueDuration, defaultVal: defaultAdmissionWait, hasDefault: true},
 		{path: pathPolicyMode, env: "DKIM2D_POLICY_MODE", flag: flagPolicyMode, kind: valueString, defaultVal: valuePolicyStrict, hasDefault: true},

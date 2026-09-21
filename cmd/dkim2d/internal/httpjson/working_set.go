@@ -9,21 +9,21 @@ import (
 )
 
 const (
-	// Go 1.27.0 io.ReadAll in src/io/io.go retains a 65,509,696-byte sum of
+	// Go 1.27.0 io.ReadAll in src/io/io.go retains a 497,039,680-byte sum of
 	// intermediate chunk capacities at this exact input maximum while it
 	// allocates the final exact-size result.
-	maximumProcessBodyCapacityBytes = uint64(47_882_240)
-	maximumReadAllIntermediateBytes = uint64(65_509_696)
+	maximumProcessBodyCapacityBytes = uint64((maxProcessBodyBytes + 8191) / 8192 * 8192)
+	maximumReadAllIntermediateBytes = uint64(497_039_680)
 
-	// The Go 1.27.0 decoder measurement retains a 64 MiB buffer and replaces
-	// a 32 MiB buffer at the final growth. Both allocations are live during
+	// The Go 1.27.0 decoder measurement retains a 512 MiB buffer and replaces
+	// a 256 MiB buffer at the final growth. Both allocations are live during
 	// replacement; the runtime probe locks these effective capacities.
-	maximumJSONDecoderRetainedBytes = uint64(67_108_864)
-	maximumJSONDecoderCapacityBytes = uint64(33_554_432 + 67_108_864)
+	maximumJSONDecoderRetainedBytes = uint64(512 << 20)
+	maximumJSONDecoderCapacityBytes = uint64(256<<20 + 512<<20)
 
 	// Large Base64 byte/string storage rounds to the Go 1.27.0 8 KiB runtime
-	// allocation page even though its logical maximum remains 44,739,244.
-	maximumEncodedMessageCapacityBytes = uint64(44_744_704)
+	// allocation page even though its logical maximum remains 178,956,972.
+	maximumEncodedMessageCapacityBytes = uint64((maxEncodedMessageBytes + 8191) / 8192 * 8192)
 	maximumRawMessageCapacityBytes     = uint64(dkim2.HardMaxRawMessageBytes)
 
 	// Go 1.27.0 encoding/base64.DecodeString allocates DecodedLen before it
@@ -82,12 +82,12 @@ const (
 		maximumLibraryCanonicalBodyOutputBytes +
 		maximumLibraryCanonicalBodyCloneBytes
 
-	// rawmsg pre-counts and exactly preallocates at most 65,536 40-byte
+	// rawmsg pre-counts and exactly preallocates at most 2,097,152 40-byte
 	// BodyLine values. Current verification retains the parser index, validated
 	// message index, and canonical body view; it never retains a history view.
-	maximumLibraryParsedBodyLineBytes    = uint64(65_536 * 40)
-	maximumLibraryValidatedBodyLineBytes = uint64(65_536 * 40)
-	maximumLibraryCanonicalBodyLineBytes = uint64(65_536 * 40)
+	maximumLibraryParsedBodyLineBytes    = uint64(2_097_152 * 40)
+	maximumLibraryValidatedBodyLineBytes = uint64(2_097_152 * 40)
+	maximumLibraryCanonicalBodyLineBytes = uint64(2_097_152 * 40)
 	maximumLibraryBodyLineIndexBytes     = maximumLibraryParsedBodyLineBytes +
 		maximumLibraryValidatedBodyLineBytes +
 		maximumLibraryCanonicalBodyLineBytes
@@ -289,7 +289,7 @@ const (
 	// The maximum domain phase retains the encoded body and generated DTO,
 	// three named immutable request generations, current-only library runtime,
 	// bounded response, and fixed request storage simultaneously.
-	maximumLegalWorkingSetHighWaterBytes = maximumProcessBodyCapacityBytes +
+	maximumDomainWorkingSetBytes = maximumProcessBodyCapacityBytes +
 		maximumGeneratedRequestDTOBytes +
 		maximumFacadeRequestBytes +
 		maximumServiceRequestBytes +
@@ -297,7 +297,13 @@ const (
 		maximumLibraryRuntimeBytes +
 		maximumSuccessResponseBytes +
 		maximumFixedRequestStorageBytes
-	maximumLegalWorkingSetMarginBytes = processWorkingSetUnitBytes -
+	// At the expanded batch framing ceiling, generic validation owns more
+	// memory than current verification. Keep both phase equations explicit.
+	maximumValidationWorkingSetBytes = maximumFixedRequestStorageBytes +
+		2*maximumProcessBodyCapacityBytes + maximumReadAllIntermediateBytes +
+		maximumJSONDecoderCapacityBytes + maximumValidationGenericValueBytes
+	maximumLegalWorkingSetHighWaterBytes = max(maximumDomainWorkingSetBytes, maximumValidationWorkingSetBytes)
+	maximumLegalWorkingSetMarginBytes    = processWorkingSetUnitBytes -
 		maximumLegalWorkingSetHighWaterBytes
 )
 

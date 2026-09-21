@@ -6,6 +6,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/croessner/dkim2/cmd/dkim2-milter/internal/resource"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/expfmt"
 )
@@ -26,7 +27,7 @@ const (
 	metricMessages             = "dkim2_milter_messages_total"
 	metricReadiness            = "dkim2_milter_readiness"
 	metricRecipientCount       = "dkim2_milter_recipient_count"
-	maxObservedMessageBytes    = 32 << 20
+	maxObservedMessageBytes    = resource.MaximumMessageBytes
 	maxObservedRecipients      = 2_000
 )
 

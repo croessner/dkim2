@@ -7,6 +7,7 @@ import (
 
 	"github.com/croessner/dkim2/internal/canonical"
 	"github.com/croessner/dkim2/internal/instance"
+	"github.com/croessner/dkim2/internal/rawmsg"
 	"github.com/croessner/dkim2/internal/recipe"
 )
 
@@ -124,7 +125,8 @@ type HistoryLimits struct {
 
 // DefaultHistoryLimits returns hard cumulative ceilings.
 func DefaultHistoryLimits() HistoryLimits {
-	return HistoryLimits{128, 6 << 20, 64 << 20, 524288, 16777216, 128}
+	return HistoryLimits{128, 6 << 20, 2 * rawmsg.HardMaxMessageBytes,
+		4 * rawmsg.HardMaxBodyLines, 4 * rawmsg.HardMaxMessageBytes, 128}
 }
 
 // normalized fills zero defaults and rejects unsafe limits.

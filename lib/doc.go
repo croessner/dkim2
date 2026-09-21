@@ -201,7 +201,7 @@
 // according to the precedence above. Callers should inspect typed state,
 // ReasonCode, CheckClass, and SignatureSetFact values rather than parse text.
 //
-// Defaults and hard maxima are 32 MiB raw message bytes, 2,000 current
+// Defaults and hard maxima are 128 MiB raw message bytes, 2,000 current
 // recipients, 16 Message-Instance hash sets, 16 signature sets, 128 retained
 // check facts, and 16 retained signature facts. Options may narrow but never
 // widen these limits. Timestamp policy permits five minutes of future skew as

@@ -130,7 +130,7 @@
     {
       "id": "openapi-negative-source",
       "path": "cmd/dkim2ctl/internal/testclient/negative_test.go",
-      "sha256": "58fd842fe0b2ddb34b6b8c5e558afc55d8c375e33ba8a30d5fa13061e4ffb738",
+      "sha256": "9cdac3adbf6faa894dc2252c8190e25a43d99fefdfa3913c49c491d588ed46c2",
       "module": "cmd/dkim2ctl"
     },
     {
@@ -172,7 +172,7 @@
     {
       "id": "openapi-wire-response-source",
       "path": "cmd/dkim2d/internal/httpjson/http_wire_response.go",
-      "sha256": "b0f9e179e08248cb81d4b4f50805061adbaf3cc41c1b6b85f88e695a7d22c8c0",
+      "sha256": "6f2d8dce18b654aaa874ee587d468c48bcc8892dd4d380dcc05828f443532bfe",
       "module": "cmd/dkim2d"
     },
     {
@@ -244,7 +244,7 @@
     {
       "id": "recipe-limits-source",
       "path": "lib/internal/recipe/limits_test.go",
-      "sha256": "2c285dd678c341a33c892047581f799b82541c2949e40f4b009d8dab5e719eaa",
+      "sha256": "d476c82854799800f97b53941288796b84cee6bb6599a1579af155ea99d39923",
       "module": "lib"
     },
     {

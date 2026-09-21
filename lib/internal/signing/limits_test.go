@@ -13,7 +13,7 @@ import (
 // TestDefaultLimitsMatchDurableSigningContract locks every shared signing ceiling.
 func TestDefaultLimitsMatchDurableSigningContract(t *testing.T) {
 	want := Limits{
-		MaxMessageBytes:                 32 * 1024 * 1024,
+		MaxMessageBytes:                 128 * 1024 * 1024,
 		MaxHeaderBytes:                  1024 * 1024,
 		MaxHeaderFields:                 rawmsg.DefaultParserOptions().MaxHeaderFields,
 		MaxFieldBytes:                   64 * 1024,
@@ -26,7 +26,7 @@ func TestDefaultLimitsMatchDurableSigningContract(t *testing.T) {
 		MaxTotalSignatureSets:           256,
 		MaxPublicKeyLookups:             256,
 		MaxSignatureInputBytes:          2 * 1024 * 1024,
-		MaxCanonicalWorkBytes:           64 * 1024 * 1024,
+		MaxCanonicalWorkBytes:           512 * 1024 * 1024,
 		MaxGeneratedRecipients:          128,
 		MaxParentOutputCopiesAndTickets: 128,
 		MaxEnvelopePathBytes:            32 * 1024,

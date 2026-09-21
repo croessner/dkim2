@@ -9,8 +9,8 @@ import (
 )
 
 const (
-	processWorkingSetUnitBytes      = uint64(536_870_912)
-	processWorkingSetAggregateBytes = uint64(1_073_741_824)
+	processWorkingSetUnitBytes      = uint64(4 << 30)
+	processWorkingSetAggregateBytes = uint64(8 << 30)
 	maxProcessInFlight              = 2
 	maxProcessWaiters               = 1_024
 	maxProcessAdmissionWait         = time.Second

@@ -1,7 +1,11 @@
 // Package resource owns shared adapter transport and allocation limits.
 package resource
 
+import "github.com/croessner/dkim2"
+
 const (
+	// MaximumMessageBytes is the library-owned maximum configurable SMTP size.
+	MaximumMessageBytes = dkim2.HardMaxRawMessageBytes
 	// DaemonResponseBytes is the maximum admitted daemon HTTP response body.
 	DaemonResponseBytes int64 = 4 << 20
 	// MilterActionFrameBytes is the maximum encoded size of one action frame.

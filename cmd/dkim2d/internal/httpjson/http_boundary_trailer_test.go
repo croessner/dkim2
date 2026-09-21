@@ -124,7 +124,7 @@ func startRawTrailerServer(t *testing.T, readTimeout time.Duration) *rawTrailerS
 		ConnContext:                  tracked.ConnContext,
 		ErrorLog:                     log.New(errorLog, "", 0),
 		ReadTimeout:                  readTimeout,
-		WriteTimeout:                 5 * time.Second,
+		WriteTimeout:                 readTimeout + 5*time.Second,
 		DisableGeneralOptionsHandler: true,
 	}
 	serveDone := make(chan struct{})

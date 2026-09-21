@@ -9,7 +9,7 @@ import (
 	"sync/atomic"
 )
 
-const maxProcessBodyBytes = int64(47_878_316)
+const maxProcessBodyBytes = int64(2*maxEncodedMessageBytes + 3_139_072)
 
 type bodyFailure uint8
 

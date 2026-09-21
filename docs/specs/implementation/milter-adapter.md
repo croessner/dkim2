@@ -433,7 +433,7 @@ The initial stable paths include:
 | `authentication_results.enabled` | `false` | inbound mode only |
 | `authentication_results.authserv_id` | absent | required exactly when enabled |
 | `failure.mode` | `tempfail` | `tempfail` or `fail_open`; `postfix_dsn` requires `tempfail` |
-| `limits.message_bytes` | `33554432` | may only narrow |
+| `limits.message_bytes` | `33554432` | 1..134217728; sufficient aggregate EOM budget required |
 | `limits.header_bytes` | `1048576` | may only narrow |
 | `limits.header_count` | `2000` | may only narrow |
 | `limits.header_field_bytes` | `65536` | may only narrow |

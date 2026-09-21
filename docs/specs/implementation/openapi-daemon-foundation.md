@@ -1986,6 +1986,7 @@ Server paths and values are exactly the HTTP table:
 - `server.request_deadline`, default `60s`;
 - `server.shutdown_timeout`, default `30s`;
 - `server.max_in_flight`, default `1`, range 1 through 2;
+- `server.message_bytes`, default `33554432`, range 1 through `134217728`;
 - `server.max_waiters`, default `64`;
 - `server.admission_wait`, default `100ms`.
 
