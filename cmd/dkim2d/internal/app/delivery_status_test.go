@@ -233,7 +233,7 @@ func TestSigningServiceRejectsInvalidDSNBeforePolicyAccess(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err := service.SignDeliveryStatus(context.Background(), request)
+	result, err := signDeliveryStatusResult(context.Background(), t, service, request)
 	if err != nil || !result.Valid() || result.Result() != OperationPermerror ||
 		result.Disposition() != OperationReject || spy.calls != 0 {
 		t.Fatalf(
@@ -274,7 +274,7 @@ func TestSigningServiceRejectsTamperedEmbeddedDomainBeforePolicyAccess(t *testin
 	}
 	spy := &deliveryStatusAcquireSpy{}
 	service := &SigningService{publicKeys: fixture.publicKeys, store: spy, clock: base.clock}
-	result, err := service.SignDeliveryStatus(context.Background(), tampered)
+	result, err := signDeliveryStatusResult(context.Background(), t, service, tampered)
 	if err != nil || !result.Valid() || result.Result() != OperationPermerror ||
 		result.Disposition() != OperationReject || spy.calls != 0 {
 		t.Fatalf(
@@ -301,7 +301,7 @@ func TestSigningServiceSignsAuthenticatedDeliveryStatus(t *testing.T) {
 	request := authenticatedDeliveryStatusRequest(t, service)
 	recorder := &deliveryStatusPolicyRecorder{next: service.store}
 	service.store = recorder
-	result, err := service.SignDeliveryStatus(context.Background(), request)
+	result, err := signDeliveryStatusResult(context.Background(), t, service, request)
 	assertSigningServicePass(t, result, err, signingServiceDSNSelector)
 	if !slices.ContainsFunc(result.Fields(), func(field CompletedField) bool {
 		return bytes.HasPrefix(field.Bytes(), []byte("DKIM2-Signature:")) &&
@@ -328,7 +328,7 @@ func TestSigningServiceObservesOneTerminalPrePolicyDSNStage(t *testing.T) {
 	request := authenticatedDeliveryStatusRequest(t, service)
 	recorder := &deliveryStatusObservationRecorder{}
 	service.attachObservability(recorder)
-	result, err := service.SignDeliveryStatus(context.Background(), request)
+	result, err := signDeliveryStatusResult(context.Background(), t, service, request)
 	assertSigningServicePass(t, result, err, signingServiceDSNSelector)
 	if len(recorder.events) != 1 || recorder.events[0] != (deliveryStatusObservation{stage: "authorized", result: "success"}) {
 		t.Fatalf("success observations=%v", recorder.events)
@@ -344,7 +344,7 @@ func TestSigningServiceObservesOneTerminalPrePolicyDSNStage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err = service.SignDeliveryStatus(context.Background(), tampered)
+	result, err = signDeliveryStatusResult(context.Background(), t, service, tampered)
 	if err != nil || !result.Valid() || result.Result() != OperationPermerror ||
 		result.Disposition() != OperationReject || spy.calls != 0 ||
 		len(recorder.events) != 1 || recorder.events[0] != (deliveryStatusObservation{stage: "embedded_verification", result: telemetryResultFailure}) {
@@ -354,14 +354,14 @@ func TestSigningServiceObservesOneTerminalPrePolicyDSNStage(t *testing.T) {
 	recorder.events = nil
 	canceled, cancel := context.WithCancel(context.Background())
 	cancel()
-	result, err = service.SignDeliveryStatus(canceled, request)
+	result, err = signDeliveryStatusResult(canceled, t, service, request)
 	if !errors.Is(err, context.Canceled) || result.Valid() || spy.calls != 0 ||
 		len(recorder.events) != 1 || recorder.events[0] != (deliveryStatusObservation{stage: "preflight", result: telemetryResultTemporary}) {
 		t.Fatalf("canceled result=%v err=%v acquire=%d observations=%v", result, err, spy.calls, recorder.events)
 	}
 
 	recorder.events = nil
-	result, err = service.SignDeliveryStatus(context.Background(), DeliveryStatusRequest{})
+	result, err = signDeliveryStatusResult(context.Background(), t, service, DeliveryStatusRequest{})
 	if err == nil || result.Valid() || spy.calls != 0 || len(recorder.events) != 1 ||
 		recorder.events[0] != (deliveryStatusObservation{stage: "preflight", result: telemetryResultInternal}) {
 		t.Fatalf("invalid result=%v err=%v acquire=%d observations=%v", result, err, spy.calls, recorder.events)
@@ -371,11 +371,136 @@ func TestSigningServiceObservesOneTerminalPrePolicyDSNStage(t *testing.T) {
 	inFlight, cancelInFlight := context.WithCancel(context.Background())
 	cancelingProvider := &deliveryStatusCancelingPublicKeys{cancel: cancelInFlight}
 	service.publicKeys = cancelingProvider
-	result, err = service.SignDeliveryStatus(inFlight, request)
+	result, err = signDeliveryStatusResult(inFlight, t, service, request)
 	if !errors.Is(err, context.Canceled) || result.Valid() || cancelingProvider.calls != 1 || spy.calls != 0 ||
 		len(recorder.events) != 1 || recorder.events[0] != (deliveryStatusObservation{stage: "embedded_verification", result: telemetryResultTemporary}) {
 		t.Fatalf("in-flight result=%v err=%v lookups=%d acquire=%d observations=%v",
 			result, err, cancelingProvider.calls, spy.calls, recorder.events)
+	}
+}
+
+// TestSigningServiceRefusesUnsignedOriginalByDefault reproduces the queued
+// bounce: without an explicit compatibility policy a returned original that
+// carries no DKIM2-Signature header field is refused exactly as before, with
+// its own closed diagnostic stage and without any profile or key access.
+func TestSigningServiceRefusesUnsignedOriginalByDefault(t *testing.T) {
+	fixture := newSigningServiceFixture(t)
+	spy := &deliveryStatusAcquireSpy{}
+	service := &SigningService{publicKeys: fixture.publicKeys, store: spy, clock: time.Now}
+	recorder := &deliveryStatusObservationRecorder{}
+	service.attachObservability(recorder)
+	result, err := signDeliveryStatusResult(context.Background(), t, service, unsignedDeliveryStatusRequest(t))
+	if err != nil || !result.Valid() || result.Result() != OperationPermerror ||
+		result.Disposition() != OperationReject || len(result.Fields()) != 0 || spy.calls != 0 ||
+		len(recorder.events) != 1 ||
+		recorder.events[0] != (deliveryStatusObservation{stage: string(dkim2.DSNEvidenceStageEmbeddedUnsigned), result: telemetryResultFailure}) {
+		t.Fatalf("result=%v error=%v acquire=%d observations=%v", result, err, spy.calls, recorder.events)
+	}
+}
+
+// TestSigningServiceContinuesUnsignedOriginalOnlyUnderExplicitPolicy proves
+// the continue policy completes without mutation, profile resolution, or key
+// access, and records a distinct closed observation.
+func TestSigningServiceContinuesUnsignedOriginalOnlyUnderExplicitPolicy(t *testing.T) {
+	fixture := newSigningServiceFixture(t)
+	spy := &deliveryStatusAcquireSpy{}
+	service := &SigningService{
+		publicKeys: fixture.publicKeys, store: spy, clock: time.Now,
+		policies: signingPolicies{continueUnsignedOriginal: true},
+	}
+	recorder := &deliveryStatusObservationRecorder{}
+	service.attachObservability(recorder)
+	assessment, err := service.SignDeliveryStatus(context.Background(), unsignedDeliveryStatusRequest(t))
+	if err != nil || !assessment.Valid() || assessment.Applicable() ||
+		assessment.Operation() != OperationDeliveryStatus || spy.calls != 0 ||
+		len(recorder.events) != 1 ||
+		recorder.events[0] != (deliveryStatusObservation{stage: string(dkim2.DSNEvidenceStageEmbeddedUnsigned), result: telemetryResultNotApplicable}) {
+		t.Fatalf("assessment=%v error=%v acquire=%d observations=%v", assessment, err, spy.calls, recorder.events)
+	}
+	if _, applicable := assessment.Result(); applicable {
+		t.Fatal("not-applicable delivery-status assessment exposed a result")
+	}
+}
+
+// TestSigningServiceNeverRelaxesDKIM2OriginalsUnderContinuePolicy proves the
+// continue policy applies only to the absence of every DKIM2-Signature field:
+// failing, malformed, and structurally invalid reports keep the refusal.
+func TestSigningServiceNeverRelaxesDKIM2OriginalsUnderContinuePolicy(t *testing.T) {
+	fixture := newSigningServiceFixture(t)
+	base, err := NewSigningService(fixture.publicKeys, fixture.runtime, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	base.clock = func() time.Time { return time.Unix(1_700_000_000, 0) }
+	authenticated := authenticatedDeliveryStatusRequest(t, base)
+	raw := authenticated.RawMessage()
+	signatureStart := bytes.Index(raw, []byte("DKIM2-Signature:"))
+	signatureEnd := bytes.Index(raw[signatureStart:], []byte("\r\n"))
+	if signatureStart < 0 || signatureEnd < 0 {
+		t.Fatal("fixture contained no embedded DKIM2-Signature")
+	}
+	malformed := append(append(append([]byte(nil), raw[:signatureStart]...),
+		[]byte("dkim2-signature: malformed")...), raw[signatureStart+signatureEnd:]...)
+	for _, testCase := range []struct {
+		name  string
+		raw   []byte
+		stage dkim2.DSNEvidenceStage
+	}{
+		{name: "failing signature", raw: bytes.Replace(raw, []byte("original body"), []byte("changed body"), 1), stage: dkim2.DSNEvidenceStageEmbeddedVerification},
+		{name: "malformed lowercase signature", raw: malformed, stage: dkim2.DSNEvidenceStageEmbeddedVerification},
+		{name: "invalid report", raw: []byte("From: postmaster@example.test\r\n\r\nnot a DSN\r\n"), stage: dkim2.DSNEvidenceStageMIMEParse},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			request, requestErr := NewPostfixDeliveryStatusRequest(
+				testCase.raw, authenticated.OuterReversePath(), authenticated.OuterRecipients(), authenticated.Tenant(),
+			)
+			if requestErr != nil {
+				t.Fatal(requestErr)
+			}
+			spy := &deliveryStatusAcquireSpy{}
+			service := &SigningService{
+				publicKeys: fixture.publicKeys, store: spy, clock: base.clock,
+				policies: signingPolicies{continueUnsignedOriginal: true},
+			}
+			recorder := &deliveryStatusObservationRecorder{}
+			service.attachObservability(recorder)
+			result, err := signDeliveryStatusResult(context.Background(), t, service, request)
+			if err != nil || !result.Valid() || result.Result() != OperationPermerror ||
+				result.Disposition() != OperationReject || spy.calls != 0 ||
+				len(recorder.events) != 1 ||
+				recorder.events[0] != (deliveryStatusObservation{stage: string(testCase.stage), result: telemetryResultFailure}) {
+				t.Fatalf("result=%v error=%v acquire=%d observations=%v", result, err, spy.calls, recorder.events)
+			}
+		})
+	}
+}
+
+// TestSigningServiceSignsAuthenticatedDeliveryStatusUnderContinuePolicy
+// proves the compatibility policy does not change the signing path of an
+// authenticated DKIM2 original.
+func TestSigningServiceSignsAuthenticatedDeliveryStatusUnderContinuePolicy(t *testing.T) {
+	fixture := newSigningServiceFixture(t)
+	service, err := NewSigningService(fixture.publicKeys, fixture.runtime, false,
+		signingPolicies{continueUnsignedOriginal: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	service.clock = func() time.Time { return time.Unix(1_700_000_000, 0) }
+	result, err := signDeliveryStatusResult(context.Background(), t, service, authenticatedDeliveryStatusRequest(t, service))
+	assertSigningServicePass(t, result, err, signingServiceDSNSelector)
+}
+
+// TestSigningPoliciesFromConfigMapsUnsignedOriginalPolicy proves the stable
+// configuration leaf reaches the application policy with the reject default.
+func TestSigningPoliciesFromConfigMapsUnsignedOriginalPolicy(t *testing.T) {
+	document := lifecyclePropagationSnapshot(t, false)
+	if signingPoliciesFromConfig(document.Signing().Policies()).continueUnsignedOriginal {
+		t.Fatal("omitted unsigned_original policy relaxed the delivery-status operation")
+	}
+	t.Setenv("DKIM2D_SIGNING_POLICY_DELIVERY_STATUS_UNSIGNED_ORIGINAL", "continue")
+	document = lifecyclePropagationSnapshot(t, false)
+	if !signingPoliciesFromConfig(document.Signing().Policies()).continueUnsignedOriginal {
+		t.Fatal("continue unsigned_original policy did not reach the application")
 	}
 }
 
@@ -423,7 +548,7 @@ func TestSigningServiceSignsPostfixOrderedDeliveryStatus(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err := service.SignDeliveryStatus(context.Background(), postfixRequest)
+	result, err := signDeliveryStatusResult(context.Background(), t, service, postfixRequest)
 	assertSigningServicePass(t, result, err, signingServiceDSNSelector)
 }
 
@@ -457,7 +582,7 @@ func TestSigningServiceSignsPostfixBounceShapeVariants(t *testing.T) {
 			service.clock = func() time.Time { return time.Unix(1_700_000_000, 0) }
 			request := authenticatedDeliveryStatusRequest(t, service)
 			request = postfixBounceShapeRequest(t, request, testCase.options)
-			result, err := service.SignDeliveryStatus(context.Background(), request)
+			result, err := signDeliveryStatusResult(context.Background(), t, service, request)
 			if testCase.pass {
 				assertSigningServicePass(t, result, err, signingServiceDSNSelector)
 			} else if err != nil || !result.Valid() || result.Result() != OperationPermerror ||
@@ -489,7 +614,7 @@ func TestSigningServiceSignsDualCredentialPostfixBounce(t *testing.T) {
 		diagnosticFold:      true,
 		embeddedReturnPath:  true,
 	})
-	result, err := service.SignDeliveryStatus(context.Background(), request)
+	result, err := signDeliveryStatusResult(context.Background(), t, service, request)
 	assertSigningServicePass(t, result, err, signingServiceDSNSelector)
 	fields := result.Fields()
 	foundEd := false
@@ -605,7 +730,7 @@ func TestSigningServiceSelectsTwoDerivedDSNDomains(t *testing.T) {
 			)
 			recorder := &deliveryStatusPolicyRecorder{next: baseStore}
 			service.store = recorder
-			result, err := service.SignDeliveryStatus(context.Background(), request)
+			result, err := signDeliveryStatusResult(context.Background(), t, service, request)
 			assertSigningServicePass(t, result, err, testCase.dsnSelector)
 			if recorder.acquires != 1 || len(recorder.domains) != 1 ||
 				recorder.domains[0] != testCase.domain || len(recorder.uses) != 1 ||
@@ -642,7 +767,7 @@ func TestSigningServiceClassifiesDerivedDSNPolicyFailures(t *testing.T) {
 				store:      policyFailureAuthority{err: testCase.err},
 				clock:      base.clock,
 			}
-			result, err := service.SignDeliveryStatus(context.Background(), request)
+			result, err := signDeliveryStatusResult(context.Background(), t, service, request)
 			if err != nil || !result.Valid() || result.Result() != testCase.result ||
 				result.Disposition() != testCase.disposition || len(result.Fields()) != 0 {
 				t.Fatalf("SignDeliveryStatus() result=%v error=%v", result, err)
@@ -676,11 +801,35 @@ func TestSigningServiceRejectsMismatchedDerivedDSNProfile(t *testing.T) {
 	}
 	authority := &deliveryStatusFixedProfileAuthority{profile: profile}
 	service := &SigningService{publicKeys: fixture.publicKeys, store: authority, clock: base.clock}
-	result, err := service.SignDeliveryStatus(context.Background(), request)
+	result, err := signDeliveryStatusResult(context.Background(), t, service, request)
 	if err != nil || !result.Valid() || result.Result() != OperationPermerror ||
 		result.Disposition() != OperationReject || authority.signs != 0 {
 		t.Fatalf("SignDeliveryStatus() result=%v error=%v signs=%d", result, err, authority.signs)
 	}
+}
+
+// signDeliveryStatusResult runs the delivery-status operation and unwraps the
+// applicable assessment that every strict-path case must produce. An error is
+// returned unchanged together with the zero result.
+func signDeliveryStatusResult(
+	ctx context.Context,
+	t *testing.T,
+	service *SigningService,
+	request DeliveryStatusRequest,
+) (OperationResult, error) {
+	t.Helper()
+	assessment, err := service.SignDeliveryStatus(ctx, request)
+	if err != nil {
+		if assessment.Valid() {
+			t.Fatal("failed delivery-status operation returned a valid assessment")
+		}
+		return OperationResult{}, err
+	}
+	result, ok := assessment.Result()
+	if !ok || assessment.Operation() != OperationDeliveryStatus {
+		t.Fatal("strict delivery-status operation returned a not-applicable assessment")
+	}
+	return result, nil
 }
 
 func authenticatedDeliveryStatusRequest(t *testing.T, service *SigningService) DeliveryStatusRequest {
@@ -720,6 +869,25 @@ func authenticatedDeliveryStatusRequestForDomain(
 	}
 	assertSigningServicePass(t, original, nil, originSelector)
 	embedded := insertSigningServiceFields(original.Fields(), originalRaw)
+	return deliveryStatusRequestAround(t, domain, embedded)
+}
+
+// unsignedDeliveryStatusRequest reproduces a Postfix bounce for inbound
+// internet mail whose returned original carries only DKIM1 evidence and no
+// DKIM2-Signature header field at all.
+func unsignedDeliveryStatusRequest(t *testing.T) DeliveryStatusRequest {
+	t.Helper()
+	domain := signingServiceOriginDomain
+	embedded := []byte("From: sender@" + domain + "\r\nTo: recipient@" + domain + "\r\n" +
+		"DKIM-Signature: v=1; a=rsa-sha256; d=" + domain + "; s=legacy; h=from:to; bh=AAAA; b=AAAA\r\n" +
+		"Subject: inbound\r\n\r\noriginal body\r\n")
+	return deliveryStatusRequestAround(t, domain, embedded)
+}
+
+// deliveryStatusRequestAround wraps one exact embedded original in the
+// shared synthetic RFC 6522 report addressed to its original sender.
+func deliveryStatusRequestAround(t *testing.T, domain string, embedded []byte) DeliveryStatusRequest {
+	t.Helper()
 	outer := []byte("From: postmaster@" + domain + "\r\n" +
 		"Content-Type: multipart/report; report-type=delivery-status; boundary=dsn\r\n\r\n" +
 		"--dsn\r\nContent-Type: text/plain\r\n\r\nhuman\r\n" +

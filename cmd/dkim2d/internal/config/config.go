@@ -49,6 +49,22 @@ const (
 	PolicyTesting
 )
 
+// UnsignedOriginalPolicy is the explicit compatibility policy of the
+// delivery-status signing operation for a returned original that carries no
+// DKIM2-Signature header field at all. The zero value is the fail-closed
+// default, so an unset policy can never relax the operation.
+type UnsignedOriginalPolicy uint8
+
+const (
+	// UnsignedOriginalReject refuses such a report exactly like any other
+	// failed embedded evidence. It is the default.
+	UnsignedOriginalReject UnsignedOriginalPolicy = iota
+	// UnsignedOriginalContinue lets such a report leave unsigned and
+	// unchanged as a classic RFC 3464 notification. It never applies to an
+	// original that carries any DKIM2-Signature header field.
+	UnsignedOriginalContinue
+)
+
 // ReplayBackend identifies one closed replay-store selection.
 type ReplayBackend uint8
 
@@ -186,9 +202,10 @@ type signingFlagPolicyState struct {
 }
 
 type signingPoliciesState struct {
-	originator      signingFlagPolicyState
-	ordinaryTransit signingFlagPolicyState
-	deliveryStatus  signingFlagPolicyState
+	originator       signingFlagPolicyState
+	ordinaryTransit  signingFlagPolicyState
+	deliveryStatus   signingFlagPolicyState
+	unsignedOriginal UnsignedOriginalPolicy
 }
 
 type ldapSigningState struct {
@@ -987,7 +1004,8 @@ func parseSigning(
 	return result, nil
 }
 
-// parseSigningPolicies validates and freezes the six daemon-owned signing requests.
+// parseSigningPolicies validates and freezes the six daemon-owned signing
+// requests and the delivery-status unsigned-original compatibility policy.
 func parseSigningPolicies(values map[string]rawValue) (signingPoliciesState, error) {
 	read := func(modifyPath, explodePath string) (signingFlagPolicyState, error) {
 		modify, err := boolValue(values, modifyPath)
@@ -1012,14 +1030,36 @@ func parseSigningPolicies(values map[string]rawValue) (signingPoliciesState, err
 	if err != nil {
 		return signingPoliciesState{}, err
 	}
-	return signingPoliciesState{originator: originator, ordinaryTransit: transit, deliveryStatus: delivery}, nil
+	unsignedOriginal, err := parseUnsignedOriginalPolicy(text(values, pathSigningPolicyDeliveryUnsigned))
+	if err != nil {
+		return signingPoliciesState{}, err
+	}
+	return signingPoliciesState{
+		originator: originator, ordinaryTransit: transit, deliveryStatus: delivery,
+		unsignedOriginal: unsignedOriginal,
+	}, nil
 }
 
-// anyEnabled reports whether the policy would request a flag from a disabled signer.
+// parseUnsignedOriginalPolicy maps the exact lowercase policy spelling onto
+// the closed compatibility vocabulary. Any other value fails closed.
+func parseUnsignedOriginalPolicy(value string) (UnsignedOriginalPolicy, error) {
+	switch value {
+	case valueUnsignedOriginalReject:
+		return UnsignedOriginalReject, nil
+	case valueUnsignedOriginalContinue:
+		return UnsignedOriginalContinue, nil
+	default:
+		return UnsignedOriginalReject, newError(CodeInvalidField)
+	}
+}
+
+// anyEnabled reports whether the policy would request a flag or a
+// compatibility relaxation from a disabled signer.
 func (p signingPoliciesState) anyEnabled() bool {
 	return p.originator.doNotModify || p.originator.doNotExplode ||
 		p.ordinaryTransit.doNotModify || p.ordinaryTransit.doNotExplode ||
-		p.deliveryStatus.doNotModify || p.deliveryStatus.doNotExplode
+		p.deliveryStatus.doNotModify || p.deliveryStatus.doNotExplode ||
+		p.unsignedOriginal != UnsignedOriginalReject
 }
 
 // parseLDAPSigning validates one verified-TLS single-authority LDAP subtree.

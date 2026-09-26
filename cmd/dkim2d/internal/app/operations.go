@@ -308,34 +308,63 @@ type OperationResult struct {
 	valid       bool
 }
 
-// SigningAssessment separates originator applicability from an applicable
-// signing result so authoritative absence never becomes protocol failure.
+// SigningAssessment separates signing applicability from an applicable
+// signing result so authoritative absence, or an explicitly configured
+// compatibility no-op, never becomes protocol failure. Only originator and
+// delivery-status signing have a not-applicable variant; revision never does.
 type SigningAssessment struct {
 	initialized bool
 	applicable  bool
+	operation   Operation
 	result      OperationResult
 }
 
 // NewNotApplicableSigningAssessment constructs a mutation-free originator no-op.
 func NewNotApplicableSigningAssessment() SigningAssessment {
-	return SigningAssessment{initialized: true}
+	return SigningAssessment{initialized: true, operation: OperationSign}
 }
 
-// NewApplicableSigningAssessment seals exactly one valid originator result.
+// NewNotApplicableDeliveryStatusAssessment constructs the mutation-free
+// delivery-status no-op issued only when the returned original carries no
+// DKIM2-Signature header field and the operator configured the continue
+// compatibility policy.
+func NewNotApplicableDeliveryStatusAssessment() SigningAssessment {
+	return SigningAssessment{initialized: true, operation: OperationDeliveryStatus}
+}
+
+// NewApplicableSigningAssessment seals exactly one valid originator or
+// delivery-status result.
 func NewApplicableSigningAssessment(result OperationResult) (SigningAssessment, error) {
-	if !result.Valid() || result.Operation() != OperationSign {
+	if !result.Valid() || !assessableOperation(result.Operation()) {
 		return SigningAssessment{}, &DomainError{}
 	}
-	return SigningAssessment{initialized: true, applicable: true, result: result}, nil
+	return SigningAssessment{
+		initialized: true, applicable: true, operation: result.Operation(), result: result,
+	}, nil
+}
+
+// assessableOperation reports whether an operation has an applicability
+// variant. Revision is always applicable and therefore excluded.
+func assessableOperation(operation Operation) bool {
+	return operation == OperationSign || operation == OperationDeliveryStatus
 }
 
 // Valid reports whether the assessment is one coherent closed variant.
 func (a SigningAssessment) Valid() bool {
-	return a.initialized && (a.applicable == a.result.Valid()) &&
-		(!a.applicable || a.result.Operation() == OperationSign)
+	return a.initialized && assessableOperation(a.operation) &&
+		(a.applicable == a.result.Valid()) &&
+		(!a.applicable || a.result.Operation() == a.operation)
 }
 
-// Applicable reports whether exact originator signing was attempted.
+// Operation returns the assessed operation or the zero value when invalid.
+func (a SigningAssessment) Operation() Operation {
+	if !a.Valid() {
+		return ""
+	}
+	return a.operation
+}
+
+// Applicable reports whether exact signing was attempted.
 func (a SigningAssessment) Applicable() bool { return a.Valid() && a.applicable }
 
 // Result returns the sole applicable signing result.
@@ -434,5 +463,5 @@ func (OperationResult) Format(state fmt.State, _ rune) {
 type OperationService interface {
 	Sign(context.Context, OperationRequest) (SigningAssessment, error)
 	Revise(context.Context, OperationRequest) (OperationResult, error)
-	SignDeliveryStatus(context.Context, DeliveryStatusRequest) (OperationResult, error)
+	SignDeliveryStatus(context.Context, DeliveryStatusRequest) (SigningAssessment, error)
 }

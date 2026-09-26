@@ -337,6 +337,17 @@ wildcards, tenant defaults, or caller-selected domains. It verifies the
 embedded DKIM2 object first and resolves `delivery_status` policy by the exact
 canonical authenticated highest `d=` value.
 
+A returned original that carries no `DKIM2-Signature` header field at all is
+outside draft-ietf-dkim-dkim2-spec Section 12, which defines DSN handling only
+for DKIM2-signed originals. Such a report is refused by default exactly like
+failed embedded evidence (`permerror`/`reject`, evidence stage
+`embedded_unsigned`). The explicit compatibility policy
+`signing.policy.delivery_status.unsigned_original: continue` instead answers
+`/v1/dsn/sign` with bodyless HTTP 204: the report leaves unsigned and unchanged
+as a classic RFC 3464 notification, without profile resolution or key access.
+See [Flat-file signing, revision, and delivery status](#flat-file-signing-revision-and-delivery-status)
+for the rationale and limits.
+
 ### Complete-fanout revision
 
 `server.batch_revise_capability_file` explicitly enables
@@ -446,6 +457,7 @@ signing:
     delivery_status:
       donotmodify: true
       donotexplode: true
+      unsigned_original: reject
 ```
 
 The six optional `signing.policy` booleans default to `false`. They are
@@ -456,6 +468,33 @@ disabled`. Environment overrides use
 `DKIM2D_SIGNING_POLICY_<USE>_DONOTMODIFY` and
 `DKIM2D_SIGNING_POLICY_<USE>_DONOTEXPLODE`, where `<USE>` is `ORIGINATOR`,
 `ORDINARY_TRANSIT`, or `DELIVERY_STATUS`.
+
+`signing.policy.delivery_status.unsigned_original` is the explicit
+compatibility policy of `POST /v1/dsn/sign` for a returned original that carries
+no `DKIM2-Signature` header field at all. It accepts exactly `reject` (the
+default) or `continue`; any other value is refused at load time, and `continue`
+is invalid with `signing.backend: disabled`. The environment override is
+`DKIM2D_SIGNING_POLICY_DELIVERY_STATUS_UNSIGNED_ORIGINAL`.
+
+- `reject` keeps the fail-closed behavior: the operation answers
+  `permerror`/`reject` and the Postfix DSN adapter refuses the bounce.
+- `continue` answers bodyless HTTP 204. The adapter continues without mutation
+  and Postfix delivers the bounce unsigned and unchanged, as a classic RFC 3464
+  notification.
+
+The rationale is transitional: draft-ietf-dkim-dkim2-spec Section 12 defines
+DSNs only for DKIM2-signed originals and is silent about originals without a
+DKIM2 signature. While inbound mail is accepted without DKIM2, a bounce for
+such mail must still reach its sender; refusing it keeps the original message
+queued at the MTA and the sender never learns about the failure. The policy
+is scoped strictly to the absence of every `DKIM2-Signature` field, compared
+case-insensitively, in either the `message/rfc822` or the
+`text/rfc822-headers` representation. An original that carries any
+`DKIM2-Signature` field, valid, failing, or malformed, is never relaxed: it
+is verified and signed, or refused, exactly as without the policy. Every other
+evidence failure is also unaffected. Each outcome is counted in
+`dkim2d_dsn_evidence_total` with `evidence_stage="embedded_unsigned"` and
+`result="failure"` (refused) or `result="not_applicable"` (left unsigned).
 
 Downstream local policy may ignore `donotmodify` or `donotexplode`, but the
 draft forbids releasing the resulting modified or exploded message to an MTA

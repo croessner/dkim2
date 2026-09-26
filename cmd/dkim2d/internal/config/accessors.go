@@ -391,6 +391,16 @@ func (c SigningPoliciesConfig) DeliveryStatus() SigningFlagPolicyConfig {
 	return SigningFlagPolicyConfig{state: &c.state.deliveryStatus}
 }
 
+// DeliveryStatusUnsignedOriginal returns the delivery-status compatibility
+// policy for a returned original without any DKIM2-Signature header field.
+// An absent configuration view reports the fail-closed reject default.
+func (c SigningPoliciesConfig) DeliveryStatusUnsignedOriginal() UnsignedOriginalPolicy {
+	if c.state == nil {
+		return UnsignedOriginalReject
+	}
+	return c.state.unsignedOriginal
+}
+
 // DoNotModify reports whether the daemon requests the authenticated donotmodify flag.
 func (c SigningFlagPolicyConfig) DoNotModify() bool {
 	return c.state != nil && c.state.doNotModify

@@ -157,7 +157,7 @@ func TestEmbeddedOpenAPIContract(t *testing.T) {
 		testDSNSignPath: {
 			testMethodPost: {
 				id:        "signDeliveryStatus",
-				responses: []string{"200", "400", "403", "408", "413", "415", "417", "500", "503"},
+				responses: []string{"200", "204", "400", "403", "408", "413", "415", "417", "500", "503"},
 				success:   testSchemaOperationResponse,
 			},
 		},
@@ -363,7 +363,7 @@ func requiredResponseHeaders(path string, status string) []string {
 	if status == "304" {
 		return append(headers, "ETag")
 	}
-	if status == "204" && (path == testProcessPath || path == testSignPath) {
+	if status == "204" && (path == testProcessPath || path == testSignPath || path == testDSNSignPath) {
 		return headers
 	}
 	headers = append(headers, "Content-Length", testHeaderContentTypeOptions)

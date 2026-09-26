@@ -612,6 +612,15 @@ Daemon dispositions map deterministically:
 | `reject` | reject unchanged | `550 5.7.1 DKIM2 policy rejection` |
 | `tempfail` | temporary failure unchanged | `451 4.7.1 DKIM2 service unavailable` |
 
+Three routes also define a bodyless HTTP 204 applicability variant, which the
+adapter maps to `continue` without any action: `/v1/process` (unsigned inbound
+message), `/v1/sign` (authoritative absent originator policy), and, in
+`postfix_dsn` mode, `/v1/dsn/sign` when the daemon's explicit
+`signing.policy.delivery_status.unsigned_original: continue` policy lets a
+bounce whose returned original carries no DKIM2-Signature leave unsigned. The
+adapter accepts a 204 only with the exact shared envelope bound to the route
+that produced it; any other 204 is a contract failure.
+
 ### Canonical multi-instance policy response
 
 The `v1/process` response represents authenticated policy evidence from the

@@ -13,10 +13,13 @@ import (
 const policyModeStrictClass = "strict"
 
 const (
-	telemetryResultFailure       = "failure"
-	telemetryResultInternal      = "internal"
-	telemetryResultSuccess       = "success"
-	telemetryResultTemporary     = "temporary"
+	telemetryResultFailure   = "failure"
+	telemetryResultInternal  = "internal"
+	telemetryResultSuccess   = "success"
+	telemetryResultTemporary = "temporary"
+	// telemetryResultNotApplicable records a delivery-status report that
+	// left unsigned under the explicit unsigned-original compatibility policy.
+	telemetryResultNotApplicable = "not_applicable"
 	telemetryReplayIndeterminate = "indeterminate"
 	telemetryDispositionReject   = "reject"
 	telemetryVerdictNeutral      = "neutral"

@@ -235,15 +235,10 @@ func (a *strictAdapter) ProcessMessage(
 		return nil, &strictAdapterError{class: strictFailureInternal}
 	}
 	if !result.Applicable() {
-		date, datePresent := responseDate(ctx)
-		var dateHeader *string
-		if datePresent {
-			dateHeader = &date
-		}
 		return generated.ProcessMessage204Response{Headers: generated.ProcessMessage204ResponseHeaders{
 			CacheControl: cacheControlNoStore,
 			Connection:   connectionCloseValue,
-			Date:         dateHeader,
+			Date:         optionalResponseDate(ctx),
 		}}, nil
 	}
 	response, err := MapInboundResult(result, domainRequest.AuthservID())
@@ -270,19 +265,14 @@ func (a *strictAdapter) SignMessage(
 	if err != nil {
 		return nil, classifyStrictContextFailure(ctx)
 	}
-	if !assessment.Valid() {
+	if !assessment.Valid() || assessment.Operation() != app.OperationSign {
 		return nil, &strictAdapterError{class: strictFailureInternal}
 	}
 	if !assessment.Applicable() {
-		date, datePresent := responseDate(ctx)
-		var dateHeader *string
-		if datePresent {
-			dateHeader = &date
-		}
 		return generated.SignMessage204Response{Headers: generated.SignMessage204ResponseHeaders{
 			CacheControl: cacheControlNoStore,
 			Connection:   connectionCloseValue,
-			Date:         dateHeader,
+			Date:         optionalResponseDate(ctx),
 		}}, nil
 	}
 	result, ok := assessment.Result()
@@ -330,6 +320,8 @@ func (a *strictAdapter) ReviseMessage(
 }
 
 // SignDeliveryStatus maps and executes one generated dedicated DSN operation.
+// The bodyless 204 variant is emitted only for the not-applicable assessment
+// produced by the explicit unsigned-original compatibility policy.
 func (a *strictAdapter) SignDeliveryStatus(
 	ctx context.Context,
 	request generated.SignDeliveryStatusRequestObject,
@@ -341,9 +333,23 @@ func (a *strictAdapter) SignDeliveryStatus(
 	if err != nil {
 		return nil, classifyMappingFailure(err)
 	}
-	result, err := a.operations.SignDeliveryStatus(ctx, domainRequest)
+	assessment, err := a.operations.SignDeliveryStatus(ctx, domainRequest)
 	if err != nil {
 		return nil, classifyStrictContextFailure(ctx)
+	}
+	if !assessment.Valid() || assessment.Operation() != app.OperationDeliveryStatus {
+		return nil, &strictAdapterError{class: strictFailureInternal}
+	}
+	if !assessment.Applicable() {
+		return generated.SignDeliveryStatus204Response{Headers: generated.SignDeliveryStatus204ResponseHeaders{
+			CacheControl: cacheControlNoStore,
+			Connection:   connectionCloseValue,
+			Date:         optionalResponseDate(ctx),
+		}}, nil
+	}
+	result, ok := assessment.Result()
+	if !ok {
+		return nil, &strictAdapterError{class: strictFailureInternal}
 	}
 	response, err := MapOperationResult(result)
 	if err != nil {
@@ -465,6 +471,17 @@ func (a *strictAdapter) readinessResponse(
 		Draft:      generated.DraftIetfDkimDkim2Spec06,
 		Status:     generated.Ready,
 	}, head, date, datePresent)
+}
+
+// optionalResponseDate returns the shared response Date for a bodyless 204
+// variant, or nil when no Date is available, so every no-content response
+// carries the identical optional header contract.
+func optionalResponseDate(ctx context.Context) *string {
+	date, present := responseDate(ctx)
+	if !present {
+		return nil
+	}
+	return &date
 }
 
 // responseDate samples only the private connection's validated Date provider.

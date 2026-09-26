@@ -2954,6 +2954,26 @@ func (response SignDeliveryStatus200JSONResponse) VisitSignDeliveryStatusRespons
 	return err
 }
 
+type SignDeliveryStatus204ResponseHeaders struct {
+	CacheControl string
+	Connection   string
+	Date         *string
+}
+
+type SignDeliveryStatus204Response struct {
+	Headers SignDeliveryStatus204ResponseHeaders
+}
+
+func (response SignDeliveryStatus204Response) VisitSignDeliveryStatusResponse(w http.ResponseWriter) error {
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Connection", fmt.Sprint(response.Headers.Connection))
+	if response.Headers.Date != nil {
+		w.Header().Set("Date", fmt.Sprint(*response.Headers.Date))
+	}
+	w.WriteHeader(204)
+	return nil
+}
+
 type SignDeliveryStatus400JSONResponse struct{ BadRequestJSONResponse }
 
 func (response SignDeliveryStatus400JSONResponse) VisitSignDeliveryStatusResponse(w http.ResponseWriter) error {

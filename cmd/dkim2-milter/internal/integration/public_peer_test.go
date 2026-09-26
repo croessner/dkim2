@@ -469,15 +469,27 @@ type generatedDaemonService struct {
 	sign    func(generatedfixture.SignRequest) generatedfixture.OperationResponse
 	revise  func(generatedfixture.ReviseRequest) generatedfixture.OperationResponse
 	dsn     func(generatedfixture.DSNSignRequest) generatedfixture.OperationResponse
+	// dsnNotApplicable answers the DSN route with the bodyless 204 the daemon
+	// issues under its unsigned-original compatibility policy.
+	dsnNotApplicable bool
 }
 
-// SignDeliveryStatus returns one test-owned response through generated serialization.
+// SignDeliveryStatus returns one test-owned response through generated
+// serialization, or the bodyless not-applicable variant when configured.
 func (s *generatedDaemonService) SignDeliveryStatus(
 	_ context.Context,
 	request generatedfixture.SignDeliveryStatusRequestObject,
 ) (generatedfixture.SignDeliveryStatusResponseObject, error) {
 	if s == nil || s.dsn == nil || request.Body == nil {
 		return nil, errors.New("unexpected fixture operation")
+	}
+	if s.dsnNotApplicable {
+		_ = s.dsn(*request.Body)
+		return generatedfixture.SignDeliveryStatus204Response{
+			Headers: generatedfixture.SignDeliveryStatus204ResponseHeaders{
+				CacheControl: publicResponseNoStore, Connection: publicResponseConnection,
+			},
+		}, nil
 	}
 	body := s.dsn(*request.Body)
 	return generatedfixture.SignDeliveryStatus200JSONResponse{
@@ -965,6 +977,45 @@ func TestPostfixDSNEvidenceRunsDedicatedRouteThroughPublicSocket(t *testing.T) {
 	if frames[0].command != adapterAddHeader || frames[1].command != adapterAddHeader ||
 		frames[2].command != adapterAccept {
 		t.Fatalf("Postfix DSN EOM frames = %#v", frames)
+	}
+	peer.send(t, peerQuit, nil)
+	peer.close()
+	process.stop(t)
+	assertPrivateOutputAbsent(t, process.log)
+}
+
+// TestPostfixDSNUnsignedOriginalNoContentAcceptsUnchangedThroughPublicSocket
+// proves the real binary maps the daemon's unsigned-original 204 to an
+// acceptance without any header mutation, so Postfix delivers the bounce.
+func TestPostfixDSNUnsignedOriginalNoContentAcceptsUnchangedThroughPublicSocket(t *testing.T) {
+	calls := 0
+	service := &generatedDaemonService{
+		dsn: func(body generatedfixture.DSNSignRequest) generatedfixture.OperationResponse {
+			calls++
+			assertPostfixDSNRequest(t, body, "<original@Derived.Example>")
+			return generatedfixture.OperationResponse{}
+		},
+		dsnNotApplicable: true,
+	}
+	fixture := newGeneratedDaemonFixture(t, service)
+	process := startExecutableWithSigning(
+		t, fixture.endpoint, integrationModePostfixDSN, "tempfail", 2*time.Second,
+		"\nsigning:\n  tenant: "+integrationTenant+"\n  domain_source: verified_embedded",
+	)
+	peer := dialPublicPeer(t, process.socket)
+	peer.negotiatePostfixDSN(t)
+	peer.callback(t, peerConnect, []byte("localhost\x00U"))
+	peer.callback(t, peerHelo, []byte("localhost\x00"))
+	peer.callback(t, peerMail, []byte("<>\x00"))
+	peer.callback(t, peerRecipient, []byte("<sender@example.test>\x00"))
+	peer.callback(t, peerHeader, []byte("From\x00 mailer-daemon@example.test\x00"))
+	peer.send(t, peerMacro, postfixDSNOriginMacroPayload("bounce"))
+	peer.callback(t, peerEOH, nil)
+	peer.callback(t, peerBody, []byte("delivery status\r\n"))
+	peer.send(t, peerEOM, nil)
+	frame := peer.receive(t)
+	if frame.command != adapterAccept || len(frame.payload) != 0 || calls != 1 {
+		t.Fatalf("unsigned-original Postfix DSN EOM frame = %#v calls=%d", frame, calls)
 	}
 	peer.send(t, peerQuit, nil)
 	peer.close()

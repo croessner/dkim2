@@ -229,6 +229,61 @@ func TestSigningFlagPolicyFailsClosedForDisabledAndUnknownPolicy(t *testing.T) {
 	}
 }
 
+// TestDeliveryStatusUnsignedOriginalPolicyDefaultsToRejectAndFailsClosed
+// proves the delivery-status compatibility policy is an explicit opt-in with
+// a fail-closed default, an exact closed vocabulary, and no effect on a
+// daemon whose signing backend is disabled.
+func TestDeliveryStatusUnsignedOriginalPolicyDefaultsToRejectAndFailsClosed(t *testing.T) {
+	clearStableEnvironment(t)
+	for name, document := range map[string]string{"disabled": disabledYAML(), "signing": signingYAML()} {
+		snapshot, err := Load([]byte(document), FlagValues{})
+		if err != nil || snapshot.Signing().Policies().DeliveryStatusUnsignedOriginal() != UnsignedOriginalReject {
+			t.Fatalf("omitted %s policy did not default to reject: code=%s", name, CodeOf(err))
+		}
+	}
+	if (SigningPoliciesConfig{}).DeliveryStatusUnsignedOriginal() != UnsignedOriginalReject {
+		t.Fatal("absent policy view relaxed the unsigned-original policy")
+	}
+	withPolicy := func(value string) string {
+		return strings.Replace(signingYAML(), "  backend: flat_file",
+			"  backend: flat_file\n  policy:\n    delivery_status:\n      unsigned_original: "+value, 1)
+	}
+	for value, want := range map[string]UnsignedOriginalPolicy{
+		"reject": UnsignedOriginalReject, "continue": UnsignedOriginalContinue,
+	} {
+		snapshot, err := Load([]byte(withPolicy(value)), FlagValues{})
+		if err != nil || snapshot.Signing().Policies().DeliveryStatusUnsignedOriginal() != want {
+			t.Fatalf("unsigned_original %q code=%s", value, CodeOf(err))
+		}
+		if snapshot.Signing().Policies().DeliveryStatus().DoNotModify() ||
+			snapshot.Signing().Policies().DeliveryStatus().DoNotExplode() {
+			t.Fatal("unsigned_original changed the delivery-status signing flags")
+		}
+	}
+	for _, value := range []string{"accept", "Continue", "CONTINUE", "true", "\"\"", "\"reject \"", "sign"} {
+		if _, err := Load([]byte(withPolicy(value)), FlagValues{}); err == nil {
+			t.Fatalf("unknown unsigned_original value %q was accepted", value)
+		}
+	}
+	disabledContinue := disabledYAML() + "signing:\n  policy:\n    delivery_status:\n      unsigned_original: continue\n"
+	if _, err := Load([]byte(disabledContinue), FlagValues{}); CodeOf(err) != CodeInvalidMatrix {
+		t.Fatalf("continue under a disabled signer code=%s", CodeOf(err))
+	}
+	disabledReject := disabledYAML() + "signing:\n  policy:\n    delivery_status:\n      unsigned_original: reject\n"
+	if _, err := Load([]byte(disabledReject), FlagValues{}); err != nil {
+		t.Fatalf("explicit reject under a disabled signer code=%s", CodeOf(err))
+	}
+	t.Setenv(envSigningPolicyDeliveryUnsigned, "continue")
+	environment, err := Load([]byte(signingYAML()), FlagValues{})
+	if err != nil || environment.Signing().Policies().DeliveryStatusUnsignedOriginal() != UnsignedOriginalContinue {
+		t.Fatalf("environment unsigned_original override code=%s", CodeOf(err))
+	}
+	t.Setenv(envSigningPolicyDeliveryUnsigned, "permit")
+	if _, err := Load([]byte(signingYAML()), FlagValues{}); err == nil {
+		t.Fatal("invalid unsigned_original environment value was accepted")
+	}
+}
+
 // TestNetworkSigningConfigurationIsConditionalAndVerified proves network
 // providers require exact backend-specific fields and reject irrelevant ones.
 func TestNetworkSigningConfigurationIsConditionalAndVerified(t *testing.T) {

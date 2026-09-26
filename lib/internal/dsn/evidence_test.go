@@ -91,6 +91,88 @@ func TestEvidenceEvaluatorRejectsChangedOriginalEvidence(t *testing.T) {
 	}
 }
 
+// TestEvidenceEvaluatorClassifiesOriginalWithoutDKIM2Signature reproduces a
+// Postfix bounce for inbound internet mail that carries only DKIM1 evidence:
+// an embedded original without any DKIM2-Signature header field is outside the
+// Section 12 DSN model and must be reported as unsigned, not as a failure.
+func TestEvidenceEvaluatorClassifiesOriginalWithoutDKIM2Signature(t *testing.T) {
+	const headers = "From: sender@example.test\r\n" +
+		"DKIM-Signature: v=1; a=rsa-sha256; d=example.test; s=legacy; h=from; bh=AAAA; b=AAAA\r\n" +
+		"X-DKIM2-Signature: not a DKIM2 field name\r\n" +
+		"Subject: original\r\n"
+	for _, testCase := range []struct {
+		name        string
+		contentType ContentType
+		original    string
+	}{
+		{name: "complete representation", contentType: ContentTypeRFC822, original: headers + "\r\nbody\r\n"},
+		{name: "headers-only representation", contentType: ContentTypeRFC822Headers, original: headers},
+		{name: "message instance without signature", contentType: ContentTypeRFC822,
+			original: headers + "Message-Instance: m=1; h=sha256:AAAA:AAAA;\r\n\r\nbody\r\n"},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			fixture := newEvidenceFixture(t, false)
+			evaluator, err := NewEvidenceEvaluator(fixture.verifier)
+			if err != nil {
+				t.Fatalf("NewEvidenceEvaluator() error=%v", err)
+			}
+			report := mustEvidenceReport(t, testCase.contentType, testCase.original)
+			for _, postfix := range []bool{false, true} {
+				evidence, err := evaluator.Evaluate(context.Background(), EvidenceRequest{Report: report, PostfixBounceOrder: postfix})
+				if !IsEvidenceErrorCode(err, EvidenceErrorCodeUnsignedEmbeddedMessage) || evidence.Valid() {
+					t.Fatalf("Evaluate(postfix=%t) evidence=%#v error=%v, want unsigned embedded message", postfix, evidence, err)
+				}
+				if strings.Contains(err.Error(), "sender@example.test") {
+					t.Fatalf("Evaluate() leaked message content: %q", err)
+				}
+			}
+		})
+	}
+}
+
+// TestEvidenceEvaluatorKeepsStrictPathForAnyDKIM2Signature proves the unsigned
+// classification cannot be reached by an original that carries a
+// DKIM2-Signature field in any ASCII case, however malformed or failing.
+func TestEvidenceEvaluatorKeepsStrictPathForAnyDKIM2Signature(t *testing.T) {
+	for _, testCase := range []struct {
+		name        string
+		contentType ContentType
+		headersOnly bool
+		mutate      func(string) string
+	}{
+		{name: "failing signature", contentType: ContentTypeRFC822, mutate: func(raw string) string {
+			return strings.Replace(raw, "Subject: original", "Subject: changed", 1)
+		}},
+		{name: "failing headers-only signature", contentType: ContentTypeRFC822Headers, headersOnly: true, mutate: func(raw string) string {
+			return strings.Replace(raw, "Subject: original", "Subject: changed", 1)
+		}},
+		{name: "malformed signature", contentType: ContentTypeRFC822, mutate: func(raw string) string {
+			start := strings.Index(raw, "DKIM2-Signature:")
+			end := strings.Index(raw[start:], "\r\n")
+			return raw[:start] + "DKIM2-Signature: malformed" + raw[start+end:]
+		}},
+		{name: "lowercase malformed signature", contentType: ContentTypeRFC822, mutate: func(raw string) string {
+			start := strings.Index(raw, "DKIM2-Signature:")
+			end := strings.Index(raw[start:], "\r\n")
+			return raw[:start] + "dkim2-SIGNATURE: malformed" + raw[start+end:]
+		}},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			fixture := newEvidenceFixture(t, testCase.headersOnly)
+			evaluator, err := NewEvidenceEvaluator(fixture.verifier)
+			if err != nil {
+				t.Fatalf("NewEvidenceEvaluator() error=%v", err)
+			}
+			report := mustEvidenceReport(t, testCase.contentType, testCase.mutate(fixture.raw))
+			_, err = evaluator.Evaluate(context.Background(), EvidenceRequest{Report: report})
+			if err == nil || IsEvidenceErrorCode(err, EvidenceErrorCodeUnsignedEmbeddedMessage) ||
+				!IsEvidenceErrorCode(err, EvidenceErrorCodeVerificationFailed) {
+				t.Fatalf("Evaluate() error=%v, want strict verification failure", err)
+			}
+		})
+	}
+}
+
 // TestDeliveryStatusRecipientLinkageRequiresRFC3464Structure proves a matching
 // address cannot authorize DSN signing unless it occurs in a complete,
 // unambiguous per-recipient field group.

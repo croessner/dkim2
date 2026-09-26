@@ -68,12 +68,14 @@ const (
 	pathSigningPolicyTransitDoNotExplode    = "signing.policy.ordinary_transit.donotexplode"
 	pathSigningPolicyDeliveryDoNotModify    = "signing.policy.delivery_status.donotmodify"
 	pathSigningPolicyDeliveryDoNotExplode   = "signing.policy.delivery_status.donotexplode"
+	pathSigningPolicyDeliveryUnsigned       = "signing.policy.delivery_status.unsigned_original"
 	envSigningPolicyOriginatorDoNotModify   = "DKIM2D_SIGNING_POLICY_ORIGINATOR_DONOTMODIFY"
 	envSigningPolicyOriginatorDoNotExplode  = "DKIM2D_SIGNING_POLICY_ORIGINATOR_DONOTEXPLODE"
 	envSigningPolicyTransitDoNotModify      = "DKIM2D_SIGNING_POLICY_ORDINARY_TRANSIT_DONOTMODIFY"
 	envSigningPolicyTransitDoNotExplode     = "DKIM2D_SIGNING_POLICY_ORDINARY_TRANSIT_DONOTEXPLODE"
 	envSigningPolicyDeliveryDoNotModify     = "DKIM2D_SIGNING_POLICY_DELIVERY_STATUS_DONOTMODIFY"
 	envSigningPolicyDeliveryDoNotExplode    = "DKIM2D_SIGNING_POLICY_DELIVERY_STATUS_DONOTEXPLODE"
+	envSigningPolicyDeliveryUnsigned        = "DKIM2D_SIGNING_POLICY_DELIVERY_STATUS_UNSIGNED_ORIGINAL"
 	pathSigningLDAPAddress                  = "signing.ldap.address"
 	pathSigningLDAPServerName               = "signing.ldap.server_name"
 	pathSigningLDAPCAFile                   = "signing.ldap.ca_file"
@@ -139,6 +141,9 @@ const (
 	valueBackendValkey   = "valkey"
 	valueBackendDisabled = "disabled"
 	valuePersistenceRDB  = "rdb"
+
+	valueUnsignedOriginalReject   = "reject"
+	valueUnsignedOriginalContinue = "continue"
 
 	flagListen        = "listen"
 	flagPolicyMode    = "policy-mode"
@@ -339,6 +344,7 @@ func stableFieldSpecs() []fieldSpec {
 		{path: pathSigningPolicyTransitDoNotExplode, env: envSigningPolicyTransitDoNotExplode, kind: valueBool, defaultVal: canonicalFalse, hasDefault: true},
 		{path: pathSigningPolicyDeliveryDoNotModify, env: envSigningPolicyDeliveryDoNotModify, kind: valueBool, defaultVal: canonicalFalse, hasDefault: true},
 		{path: pathSigningPolicyDeliveryDoNotExplode, env: envSigningPolicyDeliveryDoNotExplode, kind: valueBool, defaultVal: canonicalFalse, hasDefault: true},
+		{path: pathSigningPolicyDeliveryUnsigned, env: envSigningPolicyDeliveryUnsigned, kind: valueString, defaultVal: valueUnsignedOriginalReject, hasDefault: true},
 		{path: pathSigningLDAPAddress, env: "DKIM2D_SIGNING_LDAP_ADDRESS", kind: valueString},
 		{path: pathSigningLDAPServerName, env: "DKIM2D_SIGNING_LDAP_SERVER_NAME", kind: valueString},
 		{path: pathSigningLDAPCAFile, env: "DKIM2D_SIGNING_LDAP_CA_FILE", kind: valueString},

@@ -40,6 +40,11 @@ const (
 	EvidenceErrorCodeVerificationFailed EvidenceErrorCode = "verification_failed"
 	// EvidenceErrorCodeVerificationIndeterminate reports transient or otherwise non-final verification evidence.
 	EvidenceErrorCodeVerificationIndeterminate EvidenceErrorCode = "verification_indeterminate"
+	// EvidenceErrorCodeUnsignedEmbeddedMessage reports a well-formed embedded
+	// original that carries no DKIM2-Signature header field at all. Such an
+	// original is outside the Section 12 DSN model; it is never a relaxed form
+	// of a failing signature, which keeps EvidenceErrorCodeVerificationFailed.
+	EvidenceErrorCodeUnsignedEmbeddedMessage EvidenceErrorCode = "unsigned_embedded_message"
 )
 
 // EvidenceError is a typed, content-free DSN evidence failure.
@@ -151,6 +156,10 @@ func NewEvidenceEvaluator(verifier verify.Verifier) (EvidenceEvaluator, error) {
 // Evaluate verifies an embedded original before DSN signing authorization.
 // Complete originals require complete body and header verification, while headers-only
 // originals use the dedicated header-only verifier and never substitute a body.
+// A well-formed original of either representation without any DKIM2-Signature
+// header field is classified as EvidenceErrorCodeUnsignedEmbeddedMessage before
+// verification; the presence of at least one such field, valid or not, always
+// selects the strict verification path.
 func (e EvidenceEvaluator) Evaluate(ctx context.Context, request EvidenceRequest) (Evidence, error) {
 	if ctx == nil || !e.verifier.Valid() || !request.Report.RawMessage().Initialized() {
 		return Evidence{}, newEvidenceError(EvidenceErrorCodeInvalidRequest, nil)
@@ -159,6 +168,10 @@ func (e EvidenceEvaluator) Evaluate(ctx context.Context, request EvidenceRequest
 	parsed, err := rawmsg.Parse(original.BodyBytes())
 	if err != nil {
 		return Evidence{}, newEvidenceError(EvidenceErrorCodeInvalidEmbeddedMessage, nil)
+	}
+	if contentType := original.ContentType(); (contentType == ContentTypeRFC822 ||
+		contentType == ContentTypeRFC822Headers) && !carriesDKIM2SignatureField(parsed) {
+		return Evidence{}, newEvidenceError(EvidenceErrorCodeUnsignedEmbeddedMessage, nil)
 	}
 	verificationRequest := verify.Request{
 		Message: parsed,
@@ -199,6 +212,15 @@ func (e EvidenceEvaluator) Evaluate(ctx context.Context, request EvidenceRequest
 	default:
 		return Evidence{}, newEvidenceError(EvidenceErrorCodeInvalidEmbeddedMessage, nil)
 	}
+}
+
+// carriesDKIM2SignatureField reports whether the parsed embedded original
+// contains at least one DKIM2-Signature header field under any ASCII case.
+// It deliberately inspects only field presence: a malformed or failing field
+// still counts, so absence can never be manufactured from a broken signature.
+func carriesDKIM2SignatureField(message rawmsg.Message) bool {
+	_, present := message.Headers().LastFieldByName(signature.HeaderName)
+	return present
 }
 
 // authenticatedEvidence derives only the local-identity facts required from the already authenticated highest target.

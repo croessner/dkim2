@@ -182,6 +182,7 @@ func TestDSNEvidenceErrorsExposeOnlyClosedPipelineStages(t *testing.T) {
 		{name: "mime", raw: []byte("private-marker"), recipient: []byte("<alice@example.test>"), identity: identity, wantStage: DSNEvidenceStageMIMEParse},
 		{name: "embedded-message", raw: bytes.Replace(outer, original, []byte("private-marker\r\n"), 1), recipient: []byte("<alice@example.test>"), identity: identity, wantStage: DSNEvidenceStageEmbeddedMessage},
 		{name: "embedded-verification", raw: bytes.Replace(outer, []byte("original body"), []byte("private-marker"), 1), recipient: []byte("<alice@example.test>"), identity: identity, wantStage: DSNEvidenceStageEmbeddedVerification},
+		{name: "embedded-unsigned", raw: bytes.Replace(outer, original, []byte("From: alice@example.test\r\nSubject: private-marker\r\n\r\noriginal body\r\n"), 1), recipient: []byte("<alice@example.test>"), identity: identity, wantStage: DSNEvidenceStageEmbeddedUnsigned},
 		{name: "delivery-status-linkage", raw: bytes.Replace(outer, []byte("bob@example.test"), []byte("other@example.test"), 1), recipient: []byte("<alice@example.test>"), identity: identity, wantStage: DSNEvidenceStageDeliveryStatusLinkage},
 		{name: "outer-recipient-linkage", raw: outer, recipient: []byte("<other@example.test>"), identity: identity, wantStage: DSNEvidenceStageOuterRecipientLinkage},
 		{name: "signing-domain", raw: outer, recipient: []byte("<alice@example.test>"), identity: otherIdentity, wantStage: DSNEvidenceStageSigningDomain},
@@ -197,6 +198,47 @@ func TestDSNEvidenceErrorsExposeOnlyClosedPipelineStages(t *testing.T) {
 			}
 			if bytes.Contains([]byte(err.Error()), []byte("private-marker")) ||
 				bytes.Contains([]byte(fmt.Sprintf("%#v", err)), []byte("private-marker")) {
+				t.Fatal("evidence diagnostic retained input")
+			}
+		})
+	}
+}
+
+// TestDSNEvidenceClassifiesOriginalWithoutDKIM2SignatureAsUnsigned reproduces
+// a Postfix bounce for inbound mail that carries only DKIM1 evidence. The
+// derived Postfix request must expose the closed unsigned stage while keeping
+// the authorization-denied cause, and a failing DKIM2 original must not.
+func TestDSNEvidenceClassifiesOriginalWithoutDKIM2SignatureAsUnsigned(t *testing.T) {
+	fixture := newPublicSigningFixture(t)
+	original := signDSNOriginal(t, fixture)
+	outer := []byte("From: postmaster@example.test\r\n" +
+		"Content-Type: multipart/report; report-type=delivery-status; boundary=dsn\r\n\r\n" +
+		"--dsn\r\nContent-Type: text/plain\r\n\r\nhuman\r\n" +
+		"--dsn\r\nContent-Type: message/delivery-status\r\n\r\nReporting-MTA: dns; example.test\r\n\r\nFinal-Recipient: rfc822; bob@example.test\r\nAction: failed\r\nStatus: 5.1.1\r\n\r\n" +
+		"--dsn\r\nContent-Type: message/rfc822\r\n\r\n" + string(original) + "\r\n--dsn--\r\n")
+	unsigned := bytes.Replace(outer, original, []byte("From: alice@example.test\r\n"+
+		"DKIM-Signature: v=1; a=rsa-sha256; d=example.test; s=legacy; h=from; bh=AAAA; b=AAAA\r\n"+
+		"Subject: private-marker\r\n\r\noriginal body\r\n"), 1)
+	if !DSNEvidenceStageEmbeddedUnsigned.Known() {
+		t.Fatal("unsigned stage is not part of the closed pipeline")
+	}
+	for _, testCase := range []struct {
+		name      string
+		raw       []byte
+		wantStage DSNEvidenceStage
+	}{
+		{name: "unsigned", raw: unsigned, wantStage: DSNEvidenceStageEmbeddedUnsigned},
+		{name: "failing", raw: bytes.Replace(outer, []byte("original body"), []byte("private-marker"), 1), wantStage: DSNEvidenceStageEmbeddedVerification},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			evidence, err := fixture.facade.EvaluateDSNForSigning(context.Background(), NewPostfixDerivedDSNSigningEvidenceRequest(
+				testCase.raw, []byte("<>"), [][]byte{[]byte("<alice@example.test>")},
+			))
+			if evidence.Valid() || DSNEvidenceStageOf(err) != testCase.wantStage ||
+				!errors.Is(err, newSigningError(SigningErrorAuthorizationDenied)) {
+				t.Fatalf("stage=%q error=%v", DSNEvidenceStageOf(err), err)
+			}
+			if bytes.Contains([]byte(err.Error()), []byte("private-marker")) {
 				t.Fatal("evidence diagnostic retained input")
 			}
 		})

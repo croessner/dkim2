@@ -20,6 +20,9 @@ signing:
     delivery_status:
       donotmodify: false
       donotexplode: false
+      # reject (default) refuses a bounce whose returned original carries no
+      # DKIM2-Signature; continue lets it leave unsigned and unchanged.
+      unsigned_original: reject
   mysql:
     address: 192.0.2.30:3306
     server_name: mysql.datasource.example.test

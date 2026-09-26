@@ -29,6 +29,13 @@ const (
 	DSNEvidenceStageEmbeddedMessage DSNEvidenceStage = "embedded_message"
 	// DSNEvidenceStageEmbeddedVerification identifies embedded cryptographic evidence failure.
 	DSNEvidenceStageEmbeddedVerification DSNEvidenceStage = "embedded_verification"
+	// DSNEvidenceStageEmbeddedUnsigned identifies a well-formed embedded
+	// original without any DKIM2-Signature header field. Draft-06 Section 12
+	// defines DKIM2 DSN handling only for DKIM2-signed originals, so such a
+	// report cannot be authorized for signing. The wrapped cause remains
+	// SigningErrorAuthorizationDenied; only a caller with an explicit
+	// compatibility policy may let the report leave unsigned and unchanged.
+	DSNEvidenceStageEmbeddedUnsigned DSNEvidenceStage = "embedded_unsigned"
 	// DSNEvidenceStageEmbeddedClaims identifies invalid authenticated protocol claims.
 	DSNEvidenceStageEmbeddedClaims DSNEvidenceStage = "embedded_claims"
 	// DSNEvidenceStageDeliveryStatusLinkage identifies RFC 3464 recipient linkage failure.
@@ -46,8 +53,8 @@ func (s DSNEvidenceStage) Known() bool {
 	switch s {
 	case DSNEvidenceStagePreflight, DSNEvidenceStageMIMEParse,
 		DSNEvidenceStageEmbeddedMessage, DSNEvidenceStageEmbeddedVerification,
-		DSNEvidenceStageEmbeddedClaims, DSNEvidenceStageDeliveryStatusLinkage,
-		DSNEvidenceStageOuterRecipientLinkage, DSNEvidenceStageSigningDomain,
+		DSNEvidenceStageEmbeddedUnsigned, DSNEvidenceStageEmbeddedClaims,
+		DSNEvidenceStageDeliveryStatusLinkage, DSNEvidenceStageOuterRecipientLinkage, DSNEvidenceStageSigningDomain,
 		DSNEvidenceStageAuthorized:
 		return true
 	default:
@@ -241,7 +248,9 @@ func (r DSNSigningRequest) Format(state fmt.State, _ rune) { _, _ = io.WriteStri
 // EvaluateDSNForSigning derives the sole opaque authorization for a null
 // reverse-path DSN after RFC 6522/3464 structure and recipient linkage,
 // embedded DKIM2 verification, and either derived or compatibility-bound
-// identity alignment all pass.
+// identity alignment all pass. A returned original without any
+// DKIM2-Signature header field fails with DSNEvidenceStageEmbeddedUnsigned;
+// one that carries such a field always takes the strict verification path.
 func (s *Signer) EvaluateDSNForSigning(ctx context.Context, request DSNSigningEvidenceRequest) (DSNSigningEvidence, error) {
 	if s == nil || !s.initialized || ctx == nil ||
 		(!request.deriveIdentity && !request.identity.Valid()) ||
@@ -326,7 +335,10 @@ func (s *Signer) SignDSN(ctx context.Context, request DSNSigningRequest) (Signin
 	})
 }
 
-// mapDSNEvidenceError preserves cancellation and converts content-free DSN outcomes into the public signing vocabulary.
+// mapDSNEvidenceError preserves cancellation and converts content-free DSN
+// outcomes into the public signing vocabulary. An unsigned embedded original
+// maps to its own closed stage but keeps the authorization-denied cause, so
+// callers that do not opt into a compatibility policy still refuse it.
 func mapDSNEvidenceError(ctx context.Context, err error) error {
 	if ctx != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil && errors.Is(err, ctxErr) {
@@ -337,6 +349,8 @@ func mapDSNEvidenceError(ctx context.Context, err error) error {
 	switch {
 	case dsn.IsEvidenceErrorCode(err, dsn.EvidenceErrorCodeInvalidEmbeddedMessage):
 		stage = DSNEvidenceStageEmbeddedMessage
+	case dsn.IsEvidenceErrorCode(err, dsn.EvidenceErrorCodeUnsignedEmbeddedMessage):
+		stage = DSNEvidenceStageEmbeddedUnsigned
 	case dsn.IsEvidenceErrorCode(err, dsn.EvidenceErrorCodeVerificationFailed),
 		dsn.IsEvidenceErrorCode(err, dsn.EvidenceErrorCodeVerificationIndeterminate):
 		stage = DSNEvidenceStageEmbeddedVerification

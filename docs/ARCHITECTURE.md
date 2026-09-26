@@ -74,6 +74,7 @@
 | 0.1.0-draft | 2026-09-14 | Christian Roessner / Codex | Migrated DNS identifiers and vectors to WG DNS-00 after byte-identical normative-body comparison; adopted the bounded Authentication-Results profile and explicit BCP coverage/exception matrix in `docs/specs/companion-conformance.md`. |
 
 | 0.1.0-draft | 2026-09-16 | Christian Roessner / Codex | Adopted upstream `{postfix_internal_origin}` with transaction-scoped EOH proof, bounce/null-sender selection, and unchanged notify/verify/non-null bounce messages; removed downstream macro compatibility. |
+| 0.1.0-draft | 2026-09-26 | Christian Roessner / Claude | Separated an embedded DSN original without any DKIM2-Signature field (closed stage `embedded_unsigned`) from failed embedded verification and added the explicit, default-`reject` daemon compatibility policy `signing.policy.delivery_status.unsigned_original`. Under `continue`, `POST /v1/dsn/sign` answers bodyless 204 and the `postfix_dsn` adapter delivers the RFC 3464 report unsigned and unchanged; Section 12 covers only DKIM2-signed originals, and any original carrying a DKIM2-Signature is never relaxed. |
 
 ## 1. Purpose
 

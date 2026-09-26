@@ -163,6 +163,26 @@ derivation without logging the domain, selector, address, queue ID, signature,
 or message bytes. `authorized` proves evidence completed before datasource
 acquisition; it does not by itself prove policy resolution or signing.
 
+A bounce for inbound mail whose returned original carries no `DKIM2-Signature`
+header field at all appears as `evidence_stage="embedded_unsigned"`. By default
+it is refused (`result="failure"`), the adapter answers `550 5.7.1`, and
+Postfix keeps the original message queued, so the sender never receives a
+non-delivery notice. While inbound mail without DKIM2 is accepted, set the
+explicit daemon compatibility policy:
+
+```yaml
+signing:
+  policy:
+    delivery_status:
+      unsigned_original: continue
+```
+
+The daemon then answers `/v1/dsn/sign` with HTTP 204, the adapter continues
+without mutation, and Postfix delivers the bounce unsigned and unchanged as a
+classic RFC 3464 notification (`result="not_applicable"`). Bounces whose
+returned original carries any `DKIM2-Signature` field are never relaxed. The
+Milter configuration needs no change.
+
 ### Postfix DSN wire-profile upgrade
 
 This is a closed contract change, not a rolling-compatible configuration

@@ -127,7 +127,7 @@ var allowedLogValues = map[string][]string{
 	keyEvidenceStage: {
 		string(dkim2.DSNEvidenceStagePreflight), string(dkim2.DSNEvidenceStageMIMEParse),
 		string(dkim2.DSNEvidenceStageEmbeddedMessage), string(dkim2.DSNEvidenceStageEmbeddedVerification),
-		string(dkim2.DSNEvidenceStageEmbeddedClaims), string(dkim2.DSNEvidenceStageDeliveryStatusLinkage),
+		string(dkim2.DSNEvidenceStageEmbeddedUnsigned), string(dkim2.DSNEvidenceStageEmbeddedClaims), string(dkim2.DSNEvidenceStageDeliveryStatusLinkage),
 		string(dkim2.DSNEvidenceStageOuterRecipientLinkage), string(dkim2.DSNEvidenceStageSigningDomain),
 		string(dkim2.DSNEvidenceStageAuthorized),
 	},
@@ -140,7 +140,7 @@ var allowedLogValues = map[string][]string{
 	keyReasonClass:           {valueNone, valueProtocol, valuePolicy, valueAvailability, "invalid_request", keyMethod, valueInternal},
 	keyReplayState:           {valueNotChecked, valueDisabled, valueFirstSeen, valueReplayed, valueIndeterminate},
 	"replay_store_result":    {"not_used", valueSuccess, valueTemporary, valueInternal},
-	keyResult:                {valueSuccess, valueFailure, valueTemporary, valueInternal, "ok", valuePermanent, valueAccept, valueReject, "discard", valueTempfail},
+	keyResult:                {valueSuccess, valueFailure, valueTemporary, valueInternal, "ok", valuePermanent, valueAccept, valueReject, "discard", valueTempfail, "not_applicable"},
 	"route":                  {"/healthz", "/readyz", "/metrics", "/v1/process", "/v1/sign", "/v1/revise", "/v1/revise/batch", "/v1/revise/batch/capabilities", "/v1/dsn/sign", "/v1/dsn/propagate", "/v1/dsn/propagate/commit", valueUnmatched},
 	keyStage:                 closedStageUnion(),
 	keyStatusClass:           {valueStatus2XX, valueStatus3XX, valueStatus4XX, valueStatus5XX},

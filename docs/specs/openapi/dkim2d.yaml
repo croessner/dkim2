@@ -637,6 +637,24 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/OperationResponse"
+        "204":
+          description: >
+            Delivery-status signing is not applicable because the returned
+            original carries no DKIM2-Signature header field at all and the
+            daemon operator explicitly configured the compatibility policy
+            signing.policy.delivery_status.unsigned_original as continue. The
+            caller delivers the report unsigned and unchanged, as a classic
+            RFC 3464 notification, without a terminal decision or mutation.
+            Under the default reject policy this response is never produced.
+            A returned original carrying any DKIM2-Signature header field,
+            valid or not, is never relaxed.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/CacheControl"
+            Connection:
+              $ref: "#/components/headers/Connection"
+            Date:
+              $ref: "#/components/headers/Date"
         "400":
           $ref: "#/components/responses/BadRequest"
         "403":

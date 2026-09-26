@@ -178,7 +178,7 @@ func TestStableFieldBindings(t *testing.T) {
 func TestStablePathSetIsExact(t *testing.T) {
 	specs := stableFieldSpecs()
 	golden := stableFieldGoldenContract()
-	if len(specs) != 122 || len(specs) != len(golden) {
+	if len(specs) != 123 || len(specs) != len(golden) {
 		t.Fatal("stable path count changed")
 	}
 	for index, expected := range golden {
@@ -277,6 +277,7 @@ func stableFieldGoldenContract() []stableFieldGolden {
 		{path: "signing.policy.ordinary_transit.donotexplode", environment: envSigningPolicyTransitDoNotExplode, defaultValue: "false", hasDefault: true},
 		{path: "signing.policy.delivery_status.donotmodify", environment: envSigningPolicyDeliveryDoNotModify, defaultValue: "false", hasDefault: true},
 		{path: "signing.policy.delivery_status.donotexplode", environment: envSigningPolicyDeliveryDoNotExplode, defaultValue: "false", hasDefault: true},
+		{path: "signing.policy.delivery_status.unsigned_original", environment: envSigningPolicyDeliveryUnsigned, defaultValue: "reject", hasDefault: true},
 		{path: "signing.ldap.address", environment: "DKIM2D_SIGNING_LDAP_ADDRESS"},
 		{path: "signing.ldap.server_name", environment: "DKIM2D_SIGNING_LDAP_SERVER_NAME"},
 		{path: "signing.ldap.ca_file", environment: "DKIM2D_SIGNING_LDAP_CA_FILE"},

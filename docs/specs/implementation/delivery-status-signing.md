@@ -158,6 +158,44 @@ bounce(8) provenance; generic constructors remain strict. The wire profile
 has no generic HTTP alternative, does not apply to Exim input, and does not weaken
 mandatory fields, uniqueness, linkage, cryptographic verification, or limits.
 
+### Unsigned Returned Originals
+
+Added 2026-09-26 against the Draft-06 baseline. Section 12 of
+draft-ietf-dkim-dkim2-spec defines DSN handling only for DKIM2-signed
+originals: the report goes to the `mf=` of the highest DKIM2-Signature, and
+`mf=<>` forbids sending one. It is silent about an original without any
+DKIM2-Signature; such a report remains a classic RFC 3464 notification.
+
+The library therefore distinguishes absence from failure. Before verification,
+`lib/internal/dsn` checks the parsed embedded original of both the
+`message/rfc822` and the `text/rfc822-headers` representation for a
+DKIM2-Signature header field under any ASCII case. With none present it
+reports `unsigned_embedded_message`, which the public facade maps to the
+closed stage `embedded_unsigned` while keeping `SigningErrorAuthorizationDenied`
+as the cause, so a caller that does not opt in still refuses. With at least
+one such field present, however malformed or failing, the strict verification
+path and its existing stages apply unchanged; absence is never inferred from a
+broken signature.
+
+`dkim2d` owns the explicit compatibility policy
+`signing.policy.delivery_status.unsigned_original`:
+
+- `reject` (default) keeps the refusal: `permerror`/`reject`, so the Postfix
+  adapter answers `550 5.7.1`.
+- `continue` completes the operation without mutation. `POST /v1/dsn/sign`
+  answers bodyless HTTP 204 with the same header contract as the originator
+  no-op on `POST /v1/sign`, and no datasource profile or private key is
+  touched. The `postfix_dsn` adapter accepts only the exact 204 envelope bound
+  to the DSN route and continues, so Postfix delivers the report unsigned and
+  unchanged.
+
+The policy exists for the transition period in which inbound mail without
+DKIM2 is accepted: without it, a bounce for such mail is refused, the original
+stays queued at the MTA, and the sender never learns of the failure. It
+applies only to the `embedded_unsigned` stage; every other evidence failure
+and every original carrying a DKIM2-Signature is handled exactly as without
+the policy.
+
 ### API Shape
 
 `POST /v1/dsn/sign` validates an outgoing DSN and returns only a completed
@@ -213,9 +251,11 @@ parallel REST model.
 The daemon emits exactly one terminal pre-policy DSN evidence observation per
 request. `dsn.evidence.completed` and `dkim2d_dsn_evidence_total` carry only
 the closed `evidence_stage` and `result` classes. Stages are `preflight`,
-`mime_parse`, `embedded_message`, `embedded_verification`, `embedded_claims`,
-`delivery_status_linkage`, `outer_recipient_linkage`, `signing_domain`, and
-successful `authorized`. No stage includes a domain, selector, address,
+`mime_parse`, `embedded_message`, `embedded_verification`, `embedded_unsigned`,
+`embedded_claims`, `delivery_status_linkage`, `outer_recipient_linkage`,
+`signing_domain`, and successful `authorized`. `embedded_unsigned` records
+`failure` under the default `reject` policy and `not_applicable` when the
+`continue` policy lets the report leave unsigned. No stage includes a domain, selector, address,
 message identifier, count, index, raw value, or provider diagnostic. This
 observation does not change the REST result or Milter disposition.
 

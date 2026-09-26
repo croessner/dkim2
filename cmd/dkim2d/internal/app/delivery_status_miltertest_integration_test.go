@@ -31,9 +31,9 @@ const (
 )
 
 type deliveryStatusHarnessResult struct {
-	raw    []byte
-	result OperationResult
-	err    error
+	raw        []byte
+	assessment SigningAssessment
+	err        error
 }
 
 type harnessHTTPStatusWriter struct {
@@ -53,7 +53,8 @@ type deliveryStatusHarnessService struct {
 	stages  chan string
 }
 
-// SignDeliveryStatus executes the real application service behind the strict HTTP boundary.
+// SignDeliveryStatus executes the real application service behind the strict
+// HTTP boundary and projects a not-applicable assessment as the bodyless 204.
 func (s *deliveryStatusHarnessService) SignDeliveryStatus(
 	ctx context.Context,
 	request generated.SignDeliveryStatusRequestObject,
@@ -91,8 +92,14 @@ func (s *deliveryStatusHarnessService) SignDeliveryStatus(
 		return nil, err
 	}
 	s.stages <- "mapped"
-	result, operationErr := s.service.SignDeliveryStatus(ctx, appRequest)
-	s.result <- deliveryStatusHarnessResult{raw: bytes.Clone(raw), result: result, err: operationErr}
+	assessment, operationErr := s.service.SignDeliveryStatus(ctx, appRequest)
+	s.result <- deliveryStatusHarnessResult{raw: bytes.Clone(raw), assessment: assessment, err: operationErr}
+	if operationErr == nil && assessment.Valid() && !assessment.Applicable() {
+		return generated.SignDeliveryStatus204Response{
+			Headers: generated.SignDeliveryStatus204ResponseHeaders{CacheControl: "no-store", Connection: "close"},
+		}, nil
+	}
+	result, _ := assessment.Result()
 	response, err := deliveryStatusHarnessResponse(result, operationErr)
 	if err != nil {
 		return nil, err
@@ -223,7 +230,7 @@ func TestMiltertestPostfixDSNEndToEnd(t *testing.T) {
 				contentDescriptions: true, messageFieldOrder: true,
 				recipientFieldOrder: true, diagnosticFold: true, embeddedReturnPath: true,
 			})
-			runDeliveryStatusMilterHarness(t, root, milterBinary, miltertestBinary, service, request)
+			runDeliveryStatusMilterHarness(t, root, milterBinary, miltertestBinary, service, request, false)
 			if generator := os.Getenv("DKIM2_POSTFIX_BOUNCE_GENERATOR"); generator != "" && testCase.dual {
 				for _, variant := range []struct {
 					name string
@@ -234,12 +241,26 @@ func TestMiltertestPostfixDSNEndToEnd(t *testing.T) {
 				} {
 					t.Run(variant.name, func(t *testing.T) {
 						postfixRequest := generateHarnessPostfixBounce(t, root, generator, request, variant.args...)
-						runDeliveryStatusMilterHarness(t, root, milterBinary, miltertestBinary, service, postfixRequest)
+						runDeliveryStatusMilterHarness(t, root, milterBinary, miltertestBinary, service, postfixRequest, false)
 					})
 				}
 			}
 		})
 	}
+	t.Run("unsigned-original-continue", func(t *testing.T) {
+		fixture := newSigningServiceFixture(t)
+		service, serviceErr := NewSigningService(fixture.publicKeys, fixture.runtime, false,
+			signingPolicies{continueUnsignedOriginal: true})
+		if serviceErr != nil {
+			t.Fatal(serviceErr)
+		}
+		service.clock = func() time.Time { return time.Unix(1_700_000_000, 0) }
+		request := postfixBounceShapeRequest(t, unsignedDeliveryStatusRequest(t), postfixBounceShapeOptions{
+			contentDescriptions: true, messageFieldOrder: true,
+			recipientFieldOrder: true, diagnosticFold: true, embeddedReturnPath: true,
+		})
+		runDeliveryStatusMilterHarness(t, root, milterBinary, miltertestBinary, service, request, true)
+	})
 }
 
 // generateHarnessPostfixBounce invokes an explicitly supplied local Postfix fixture generator.
@@ -300,7 +321,9 @@ func extractHarnessEmbeddedMessage(raw []byte) ([]byte, error) {
 	return bytes.Clone(raw[start : start+end]), nil
 }
 
-// runDeliveryStatusMilterHarness drives one exact Milter callback sequence through the real process.
+// runDeliveryStatusMilterHarness drives one exact Milter callback sequence
+// through the real process. unsigned selects the expectation that the report
+// leaves unchanged under the continue compatibility policy.
 func runDeliveryStatusMilterHarness(
 	t *testing.T,
 	root string,
@@ -308,6 +331,7 @@ func runDeliveryStatusMilterHarness(
 	miltertestBinary string,
 	service *SigningService,
 	request DeliveryStatusRequest,
+	unsigned bool,
 ) {
 	t.Helper()
 	harnessService := &deliveryStatusHarnessService{
@@ -421,7 +445,7 @@ limits:
 		t.Fatal(err)
 	}
 	scriptPath := filepath.Join(caseRoot, "dsn.lua")
-	script := deliveryStatusLuaScript(t, socketPath, bodyPath, headerBlock)
+	script := deliveryStatusLuaScript(t, socketPath, bodyPath, headerBlock, unsigned)
 	if err := os.WriteFile(scriptPath, []byte(script), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -433,12 +457,13 @@ limits:
 	}
 
 	assertDeliveryStatusHarnessResult(
-		t, harnessService, request, httpResults, middlewareResults, logPath, oracleOutput,
+		t, harnessService, request, httpResults, middlewareResults, logPath, oracleOutput, unsigned,
 	)
 	stopDeliveryStatusHarnessMilter(t, milter)
 }
 
-// assertDeliveryStatusHarnessResult verifies exact reconstruction and successful application output.
+// assertDeliveryStatusHarnessResult verifies exact reconstruction and either
+// successful signing output or, when unsigned, the not-applicable assessment.
 func assertDeliveryStatusHarnessResult(
 	t *testing.T,
 	service *deliveryStatusHarnessService,
@@ -447,6 +472,7 @@ func assertDeliveryStatusHarnessResult(
 	middlewareResults <-chan string,
 	logPath string,
 	oracleOutput []byte,
+	unsigned bool,
 ) {
 	t.Helper()
 	select {
@@ -455,10 +481,18 @@ func assertDeliveryStatusHarnessResult(
 			t.Fatalf("Milter reconstruction differed at offset %d left_len=%d right_len=%d",
 				firstDifferentByte(got.raw, request.RawMessage()), len(got.raw), len(request.RawMessage()))
 		}
-		if got.err != nil || !got.result.Valid() || got.result.Result() != OperationPass ||
-			got.result.Disposition() != OperationAccept {
+		if unsigned {
+			if got.err != nil || !got.assessment.Valid() || got.assessment.Applicable() {
+				t.Fatalf("application assessment valid=%t applicable=%t error=%v",
+					got.assessment.Valid(), got.assessment.Applicable(), got.err)
+			}
+			return
+		}
+		result, _ := got.assessment.Result()
+		if got.err != nil || !result.Valid() || result.Result() != OperationPass ||
+			result.Disposition() != OperationAccept {
 			t.Fatalf("application result valid=%t result=%q disposition=%q error=%v",
-				got.result.Valid(), got.result.Result(), got.result.Disposition(), got.err)
+				result.Valid(), result.Result(), result.Disposition(), got.err)
 		}
 	case <-time.After(3 * time.Second):
 		logged, _ := os.ReadFile(logPath)
@@ -563,8 +597,10 @@ func splitHarnessMessage(raw []byte) ([][2]string, []byte, error) {
 	return fields, bytes.Clone(raw[separator+4:]), nil
 }
 
-// deliveryStatusLuaScript renders the exact Postfix DSN callback sequence for the sibling oracle.
-func deliveryStatusLuaScript(t *testing.T, socketPath, bodyPath string, headers [][2]string) string {
+// deliveryStatusLuaScript renders the exact Postfix DSN callback sequence for
+// the sibling oracle. unsigned expects the report to leave without any added
+// header field instead of the ordered DKIM2 signing mutation.
+func deliveryStatusLuaScript(t *testing.T, socketPath, bodyPath string, headers [][2]string, unsigned bool) string {
 	t.Helper()
 	var output strings.Builder
 	fmt.Fprintf(&output, "socket_set(\"unix\", %s)\n", luaLongString(socketPath))
@@ -580,7 +616,15 @@ func deliveryStatusLuaScript(t *testing.T, socketPath, bodyPath string, headers 
 	output.WriteString("eoh()\n")
 	fmt.Fprintf(&output, "local file = assert(io.open(%s, \"rb\"))\n", luaLongString(bodyPath))
 	output.WriteString("while true do local chunk = file:read(4096); if not chunk then break end; body(chunk) end\nfile:close()\n")
-	output.WriteString("local actions = eom()\nassert_added_header(actions, \"Message-Instance\")\nassert_added_header(actions, \"DKIM2-Signature\")\nassert_final(actions, \"accept\")\nquit()\n")
+	output.WriteString("local actions = eom()\n")
+	if unsigned {
+		output.WriteString("for _, row in pairs(actions) do\n" +
+			"  if type(row) == \"table\" and type(row.detail) == \"table\" and row.detail.kind == \"add_header\" then\n" +
+			"    error(\"unsigned report was modified\")\n  end\nend\n")
+	} else {
+		output.WriteString("assert_added_header(actions, \"Message-Instance\")\nassert_added_header(actions, \"DKIM2-Signature\")\n")
+	}
+	output.WriteString("assert_final(actions, \"accept\")\nquit()\n")
 	return output.String()
 }
 

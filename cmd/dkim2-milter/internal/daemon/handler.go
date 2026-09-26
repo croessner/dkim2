@@ -571,11 +571,9 @@ func (guard *handlerGuard) mapProcess(response *generated.ProcessMessageResponse
 
 // validNoContentProcessResponse validates the exact unsigned applicability response.
 func validNoContentProcessResponse(response *generated.ProcessMessageResponse) bool {
-	return response != nil && validNoContentResponseShape(
-		response.HTTPResponse,
-		response.Body,
-		response.JSON200 != nil,
-	) && validNoContentRequest(response.HTTPResponse.Request, routeProcess)
+	return response != nil && validNoContentRouteResponse(
+		response.HTTPResponse, response.Body, response.JSON200 != nil, routeProcess,
+	)
 }
 
 // mapOperationResponse validates one sign response including its raw JSON envelope.
@@ -612,11 +610,26 @@ func mapOperationResponse(
 
 // validNoContentSignResponse validates the authoritative originator no-op response.
 func validNoContentSignResponse(response *generated.SignMessageResponse) bool {
-	return response != nil && validNoContentResponseShape(
-		response.HTTPResponse,
-		response.Body,
-		response.JSON200 != nil,
-	) && validNoContentRequest(response.HTTPResponse.Request, routeSign)
+	return response != nil && validNoContentRouteResponse(
+		response.HTTPResponse, response.Body, response.JSON200 != nil, routeSign,
+	)
+}
+
+// validNoContentDeliveryStatusResponse validates the delivery-status no-op
+// that the daemon issues only under its explicit unsigned-original
+// compatibility policy, bound to the dedicated DSN route.
+func validNoContentDeliveryStatusResponse(response *generated.SignDeliveryStatusResponse) bool {
+	return response != nil && validNoContentRouteResponse(
+		response.HTTPResponse, response.Body, response.JSON200 != nil, routeDeliveryStatus,
+	)
+}
+
+// validNoContentRouteResponse is the single no-content acceptance rule: the
+// exact OpenAPI 204 transport envelope bound to the generated POST route that
+// produced it.
+func validNoContentRouteResponse(response *http.Response, body []byte, hasJSONDocument bool, route string) bool {
+	return validNoContentResponseShape(response, body, hasJSONDocument) &&
+		validNoContentRequest(response.Request, route)
 }
 
 // validNoContentResponseShape enforces the exact OpenAPI 204 transport envelope.
@@ -692,12 +705,20 @@ func mapRevisionResponse(
 }
 
 // mapDeliveryStatusResponse validates one dedicated DSN response including
-// its exact generated-client HTTP envelope.
+// its exact generated-client HTTP envelope. A valid 204 means the returned
+// original carried no DKIM2-Signature and the daemon's compatibility policy
+// let the report leave unsigned: Postfix continues without any mutation.
 func mapDeliveryStatusResponse(
 	response *generated.SignDeliveryStatusResponse,
 ) (milter.Result, error) {
 	if response != nil {
 		defer clear(response.Body)
+	}
+	if validNoContentDeliveryStatusResponse(response) {
+		return milter.Result{
+			Operation: operationDSNSign, Result: verificationNone,
+			Outcome: milter.DispositionContinue,
+		}, nil
 	}
 	if response == nil || !validJSONResponseShape(
 		response.HTTPResponse,

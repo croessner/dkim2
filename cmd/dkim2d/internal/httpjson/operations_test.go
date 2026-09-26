@@ -259,8 +259,64 @@ func TestStrictAdapterReturnsBodylessOriginatorNotApplicable(t *testing.T) {
 	}
 }
 
+// TestStrictAdapterReturnsBodylessDeliveryStatusNotApplicable proves the
+// unsigned-original compatibility variant maps only to the bodyless DSN 204,
+// while a strict refusal and a foreign-operation assessment never do.
+func TestStrictAdapterReturnsBodylessDeliveryStatusNotApplicable(t *testing.T) {
+	raw := base64.StdEncoding.EncodeToString([]byte("From: postmaster@example.test\r\n\r\nreport\r\n"))
+	request := generated.DSNSignRequest{
+		ApiVersion: generated.V1, Draft: generated.DraftIetfDkimDkim2Spec06,
+		Message: generated.DSNMessageInput{RawRfc5322Base64: mustProtectedString(t, raw)},
+		OuterSmtp: generated.SMTPInput{
+			MailFrom: mustProtectedString(t, "<>"),
+			RcptTo:   []wire.ProtectedString{mustProtectedString(t, "<sender@example.test>")},
+		},
+		Context: generated.DeliveryStatusContext{Tenant: "tenant-a"},
+	}
+	for _, testCase := range []struct {
+		name    string
+		service app.OperationService
+		want    string
+	}{
+		{name: "not applicable", service: &operationServiceStub{notApplicable: true}, want: "204"},
+		{name: "strict refusal", service: &operationServiceStub{}, want: "200"},
+		{name: "foreign operation", service: foreignDeliveryStatusService{operationServiceStub: &operationServiceStub{}}, want: "adapter_failure"},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			adapter, err := newStrictAdapter(&adapterReadinessStub{}, &adapterProcessorStub{}, testCase.service)
+			if err != nil {
+				t.Fatalf("newStrictAdapter() error = %v", err)
+			}
+			response, err := adapter.SignDeliveryStatus(context.Background(), generated.SignDeliveryStatusRequestObject{Body: &request})
+			got := "adapter_failure"
+			switch response.(type) {
+			case generated.SignDeliveryStatus204Response:
+				got = "204"
+			case operationDeliveryStatusResponse:
+				got = "200"
+			}
+			if got != testCase.want || (got == "adapter_failure") != (err != nil) {
+				t.Fatalf("SignDeliveryStatus() response=%T error=%v, want %s", response, err, testCase.want)
+			}
+		})
+	}
+}
+
+// foreignDeliveryStatusService answers the DSN route with an originator
+// assessment to prove the adapter binds the 204 to the DSN operation.
+type foreignDeliveryStatusService struct{ *operationServiceStub }
+
+// SignDeliveryStatus returns an originator not-applicable assessment.
+func (foreignDeliveryStatusService) SignDeliveryStatus(
+	context.Context,
+	app.DeliveryStatusRequest,
+) (app.SigningAssessment, error) {
+	return app.NewNotApplicableSigningAssessment(), nil
+}
+
 // TestGeneratedStrictHandlerWritesBodylessNotApplicableResponses crosses the
-// real HTTP transport for both inbound and originator applicability variants.
+// real HTTP transport for the inbound, originator, and delivery-status
+// applicability variants.
 func TestGeneratedStrictHandlerWritesBodylessNotApplicableResponses(t *testing.T) {
 	provider := &noOperationPublicKeyProvider{}
 	verifier, err := dkim2.NewVerifier(provider)
@@ -296,6 +352,10 @@ func TestGeneratedStrictHandlerWritesBodylessNotApplicableResponses(t *testing.T
 		`"message":{"raw_rfc5322_base64":"` + raw + `","fidelity":"milter_reconstructed_crlf"},` +
 		`"smtp":{"mail_from":"<sender@example.test>","rcpt_to":["<recipient@example.test>"]},` +
 		`"context":{"tenant":"tenant-a","domain":"example.test"}}`
+	dsnBody := `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-06",` +
+		`"message":{"raw_rfc5322_base64":"` + raw + `"},` +
+		`"outer_smtp":{"mail_from":"<>","rcpt_to":["<sender@example.test>"]},` +
+		`"context":{"tenant":"tenant-a"}}`
 	for _, testCase := range []struct {
 		name string
 		path string
@@ -303,6 +363,7 @@ func TestGeneratedStrictHandlerWritesBodylessNotApplicableResponses(t *testing.T
 	}{
 		{name: "inbound", path: "/v1/process", body: processBody},
 		{name: "originator", path: "/v1/sign", body: signBody},
+		{name: "delivery status unsigned original", path: "/v1/dsn/sign", body: dsnBody},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			request, requestErr := http.NewRequestWithContext(
@@ -332,8 +393,9 @@ func TestGeneratedStrictHandlerWritesBodylessNotApplicableResponses(t *testing.T
 			}
 		})
 	}
-	if provider.calls != 0 || operations.signCalls != 1 {
-		t.Fatalf("forbidden work: DNS calls=%d sign calls=%d", provider.calls, operations.signCalls)
+	if provider.calls != 0 || operations.signCalls != 1 || operations.dsnCalls != 1 {
+		t.Fatalf("forbidden work: DNS calls=%d sign calls=%d dsn calls=%d",
+			provider.calls, operations.signCalls, operations.dsnCalls)
 	}
 }
 
@@ -379,6 +441,7 @@ func testWorkingSetMiddleware(
 
 type operationServiceStub struct {
 	signCalls     int
+	dsnCalls      int
 	err           error
 	notApplicable bool
 }
@@ -411,14 +474,30 @@ func (*operationServiceStub) Revise(context.Context, app.OperationRequest) (app.
 	)
 }
 
-// SignDeliveryStatus keeps this focused ordinary-operation stub closed for DSN requests.
-func (*operationServiceStub) SignDeliveryStatus(
+// SignDeliveryStatus returns the not-applicable delivery-status variant when
+// the stub models the unsigned-original continue policy and otherwise keeps
+// this focused ordinary-operation stub closed for DSN requests.
+func (s *operationServiceStub) SignDeliveryStatus(
 	context.Context,
 	app.DeliveryStatusRequest,
-) (app.OperationResult, error) {
-	return app.NewOperationResult(
+) (app.SigningAssessment, error) {
+	s.dsnCalls++
+	if s.notApplicable {
+		return app.NewNotApplicableDeliveryStatusAssessment(), nil
+	}
+	return closedDeliveryStatusAssessment()
+}
+
+// closedDeliveryStatusAssessment returns the permanent DSN refusal shared by
+// ordinary-operation fixtures that do not exercise the DSN route.
+func closedDeliveryStatusAssessment() (app.SigningAssessment, error) {
+	result, err := app.NewOperationResult(
 		app.OperationDeliveryStatus, app.OperationPermerror, app.OperationReject, nil,
 	)
+	if err != nil {
+		return app.SigningAssessment{}, err
+	}
+	return app.NewApplicableSigningAssessment(result)
 }
 
 // mustProtectedString constructs one test-only protected wire scalar.

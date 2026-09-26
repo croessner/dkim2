@@ -523,10 +523,8 @@ func (s *dkim2ctlOperationService) Revise(
 func (*dkim2ctlOperationService) SignDeliveryStatus(
 	context.Context,
 	app.DeliveryStatusRequest,
-) (app.OperationResult, error) {
-	return app.NewOperationResult(
-		app.OperationDeliveryStatus, app.OperationPermerror, app.OperationReject, nil,
-	)
+) (app.SigningAssessment, error) {
+	return closedDeliveryStatusAssessment()
 }
 
 // newDKIM2ctlOperationResult constructs one exact successful operation plan.

@@ -34,6 +34,10 @@ type signingPolicies struct {
 	originator      signingFlagPolicy
 	ordinaryTransit signingFlagPolicy
 	deliveryStatus  signingFlagPolicy
+	// continueUnsignedOriginal lets a delivery-status report whose returned
+	// original carries no DKIM2-Signature header field leave unsigned and
+	// unchanged. The zero value is the fail-closed reject default.
+	continueUnsignedOriginal bool
 }
 
 // metadata constructs validated library-owned signing metadata in canonical flag order.
@@ -57,6 +61,8 @@ func signingPoliciesFromConfig(policy config.SigningPoliciesConfig) signingPolic
 		originator:      convert(policy.Originator()),
 		ordinaryTransit: convert(policy.OrdinaryTransit()),
 		deliveryStatus:  convert(policy.DeliveryStatus()),
+		continueUnsignedOriginal: policy.DeliveryStatusUnsignedOriginal() ==
+			config.UnsignedOriginalContinue,
 	}
 }
 

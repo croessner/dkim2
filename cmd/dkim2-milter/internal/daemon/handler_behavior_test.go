@@ -187,91 +187,81 @@ func testHandlerAcceptsNoContent(
 
 // TestMapProcessAcceptsOnlyExactUnsignedNoContent proves the applicability wire variant.
 func TestMapProcessAcceptsOnlyExactUnsignedNoContent(t *testing.T) {
-	request := &http.Request{Method: http.MethodPost, URL: &url.URL{Path: routeProcess}}
-	response := &generated.ProcessMessageResponse{
-		HTTPResponse: &http.Response{
-			StatusCode: http.StatusNoContent,
-			Request:    request,
-			Close:      true,
-			ProtoMajor: 1,
-			ProtoMinor: 1,
-			Header: http.Header{
-				"Cache-Control": []string{cacheControlNoStore},
-				"Connection":    []string{connectionClose},
-				"Date":          []string{validResponseDate},
-			},
-			ContentLength: 0,
-		},
-	}
 	guard := &handlerGuard{authservID: testAuthservID}
-	result, err := guard.mapProcess(response)
-	if err != nil || result.Operation != operationProcess || result.Result != verificationNone ||
-		result.Outcome != milter.DispositionContinue || len(result.Actions) != 0 {
-		t.Fatalf("mapProcess() = %#v, %v", result, err)
-	}
-	withoutDate := *response
-	withoutDateHTTP := *response.HTTPResponse
-	withoutDateHTTP.Header = response.HTTPResponse.Header.Clone()
-	withoutDateHTTP.Header.Del("Date")
-	withoutDate.HTTPResponse = &withoutDateHTTP
-	if _, withoutDateErr := guard.mapProcess(&withoutDate); withoutDateErr != nil {
-		t.Fatal("optional Date header was required")
-	}
-	for _, testCase := range []struct {
-		name   string
-		mutate func(*http.Request)
-	}{
-		{name: testCaseWrongMethod, mutate: func(value *http.Request) { value.Method = http.MethodGet }},
-		{name: testCaseWrongRoute, mutate: func(value *http.Request) { value.URL.Path = routeSign }},
-		{name: testCaseQuery, mutate: func(value *http.Request) { value.URL.RawQuery = "unexpected=true" }},
-	} {
-		t.Run(testCase.name, func(t *testing.T) {
-			candidate := *response
-			candidateHTTP := *response.HTTPResponse
-			candidateRequest := *response.HTTPResponse.Request
-			candidateURL := *response.HTTPResponse.Request.URL
-			candidateRequest.URL = &candidateURL
-			testCase.mutate(&candidateRequest)
-			candidateHTTP.Request = &candidateRequest
-			candidate.HTTPResponse = &candidateHTTP
-			if _, err := guard.mapProcess(&candidate); err == nil {
-				t.Fatal("misbound process response was accepted")
+	assertNoContentMapping(t, routeProcess, routeSign, operationProcess,
+		func(response *http.Response, body []byte, hasJSONDocument bool) (milter.Result, error) {
+			wrapped := &generated.ProcessMessageResponse{HTTPResponse: response, Body: body}
+			if hasJSONDocument {
+				wrapped.JSON200 = &generated.ProcessResponse{}
 			}
+			return guard.mapProcess(wrapped)
 		})
-	}
-	assertRejectsMalformedNoContent(t, response.HTTPResponse)
 }
 
 // TestMapSignAcceptsOnlyExactNotApplicableNoContent proves the originator
 // applicability wire variant is bodyless, mutation-free, and operation-bound.
 func TestMapSignAcceptsOnlyExactNotApplicableNoContent(t *testing.T) {
-	request := &http.Request{Method: http.MethodPost, URL: &url.URL{Path: routeSign}}
-	response := &generated.SignMessageResponse{
-		HTTPResponse: &http.Response{
-			StatusCode: http.StatusNoContent,
-			Request:    request,
-			Close:      true,
-			ProtoMajor: 1,
-			ProtoMinor: 1,
-			Header: http.Header{
-				"Cache-Control": []string{cacheControlNoStore},
-				"Connection":    []string{connectionClose},
-				"Date":          []string{validResponseDate},
-			},
-			ContentLength: 0,
-		},
+	assertNoContentMapping(t, routeSign, routeProcess, operationSign,
+		func(response *http.Response, body []byte, hasJSONDocument bool) (milter.Result, error) {
+			wrapped := &generated.SignMessageResponse{HTTPResponse: response, Body: body}
+			if hasJSONDocument {
+				wrapped.JSON200 = &generated.OperationResponse{}
+			}
+			return mapOperationResponse(wrapped, operationSign)
+		})
+}
+
+// TestMapDeliveryStatusAcceptsOnlyExactNotApplicableNoContent proves the DSN
+// no-op issued under the daemon's unsigned-original compatibility policy maps
+// to a mutation-free continue, bound to the dedicated DSN route and envelope.
+func TestMapDeliveryStatusAcceptsOnlyExactNotApplicableNoContent(t *testing.T) {
+	assertNoContentMapping(t, routeDeliveryStatus, routeSign, operationDSNSign,
+		func(response *http.Response, body []byte, hasJSONDocument bool) (milter.Result, error) {
+			wrapped := &generated.SignDeliveryStatusResponse{HTTPResponse: response, Body: body}
+			if hasJSONDocument {
+				wrapped.JSON200 = &generated.OperationResponse{}
+			}
+			return mapDeliveryStatusResponse(wrapped)
+		})
+	if _, err := mapDeliveryStatusResponse(nil); err == nil {
+		t.Fatal("absent delivery-status response was accepted")
 	}
-	result, err := mapOperationResponse(response, operationSign)
-	if err != nil || result.Operation != operationSign || result.Result != verificationNone ||
+}
+
+// assertNoContentMapping proves one route mapper turns the exact 204 envelope
+// into a mutation-free continue for operation, treats Date as optional, and
+// rejects a response bound to another method, route, or query as well as
+// every malformed envelope.
+func assertNoContentMapping(
+	t *testing.T,
+	route string,
+	foreignRoute string,
+	operation string,
+	mapResponse func(*http.Response, []byte, bool) (milter.Result, error),
+) {
+	t.Helper()
+	response := &http.Response{
+		StatusCode: http.StatusNoContent,
+		Request:    &http.Request{Method: http.MethodPost, URL: &url.URL{Path: route}},
+		Close:      true,
+		ProtoMajor: 1,
+		ProtoMinor: 1,
+		Header: http.Header{
+			"Cache-Control": []string{cacheControlNoStore},
+			"Connection":    []string{connectionClose},
+			"Date":          []string{validResponseDate},
+		},
+		ContentLength: 0,
+	}
+	result, err := mapResponse(response, nil, false)
+	if err != nil || result.Operation != operation || result.Result != verificationNone ||
 		result.Outcome != milter.DispositionContinue || len(result.Actions) != 0 {
-		t.Fatalf("mapOperationResponse() = %#v, %v", result, err)
+		t.Fatalf("no-content mapping = %#v, %v", result, err)
 	}
 	withoutDate := *response
-	withoutDateHTTP := *response.HTTPResponse
-	withoutDateHTTP.Header = response.HTTPResponse.Header.Clone()
-	withoutDateHTTP.Header.Del("Date")
-	withoutDate.HTTPResponse = &withoutDateHTTP
-	if _, withoutDateErr := mapOperationResponse(&withoutDate, operationSign); withoutDateErr != nil {
+	withoutDate.Header = response.Header.Clone()
+	withoutDate.Header.Del("Date")
+	if _, withoutDateErr := mapResponse(&withoutDate, nil, false); withoutDateErr != nil {
 		t.Fatal("optional Date header was required")
 	}
 	for _, testCase := range []struct {
@@ -279,29 +269,42 @@ func TestMapSignAcceptsOnlyExactNotApplicableNoContent(t *testing.T) {
 		mutate func(*http.Request)
 	}{
 		{name: testCaseWrongMethod, mutate: func(value *http.Request) { value.Method = http.MethodGet }},
-		{name: testCaseWrongRoute, mutate: func(value *http.Request) { value.URL.Path = routeProcess }},
+		{name: testCaseWrongRoute, mutate: func(value *http.Request) { value.URL.Path = foreignRoute }},
 		{name: testCaseQuery, mutate: func(value *http.Request) { value.URL.RawQuery = "unexpected=true" }},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			candidate := *response
-			candidateHTTP := *response.HTTPResponse
-			candidateRequest := *response.HTTPResponse.Request
-			candidateURL := *response.HTTPResponse.Request.URL
+			candidateRequest := *response.Request
+			candidateURL := *response.Request.URL
 			candidateRequest.URL = &candidateURL
 			testCase.mutate(&candidateRequest)
-			candidateHTTP.Request = &candidateRequest
-			candidate.HTTPResponse = &candidateHTTP
-			if _, err := mapOperationResponse(&candidate, operationSign); err == nil {
-				t.Fatal("misbound sign response was accepted")
+			candidate.Request = &candidateRequest
+			if _, err := mapResponse(&candidate, nil, false); err == nil {
+				t.Fatal("misbound no-content response was accepted")
 			}
 		})
 	}
-	assertRejectsMalformedNoContent(t, response.HTTPResponse)
+	assertRejectsMalformedNoContent(t, response)
+	assertAcceptorRejectsMalformedNoContent(t, response, func(candidate *http.Response, body []byte, hasJSONDocument bool) bool {
+		_, err := mapResponse(candidate, body, hasJSONDocument)
+		return err == nil
+	})
 }
 
 // assertRejectsMalformedNoContent exercises the shared strict 204 envelope
 // against representation, framing, and date mutations.
 func assertRejectsMalformedNoContent(t *testing.T, response *http.Response) {
+	t.Helper()
+	assertAcceptorRejectsMalformedNoContent(t, response, validNoContentResponseShape)
+}
+
+// assertAcceptorRejectsMalformedNoContent applies the malformed 204 matrix to
+// one acceptance function, so a route mapper proves it inherits the envelope.
+func assertAcceptorRejectsMalformedNoContent(
+	t *testing.T,
+	response *http.Response,
+	accepts func(*http.Response, []byte, bool) bool,
+) {
 	t.Helper()
 	for _, testCase := range []struct {
 		name   string
@@ -365,7 +368,7 @@ func assertRejectsMalformedNoContent(t *testing.T, response *http.Response) {
 			var body []byte
 			hasJSONDocument := false
 			testCase.mutate(&candidate, &body, &hasJSONDocument)
-			if validNoContentResponseShape(&candidate, body, hasJSONDocument) {
+			if accepts(&candidate, body, hasJSONDocument) {
 				t.Fatal("malformed no-content response was accepted")
 			}
 		})

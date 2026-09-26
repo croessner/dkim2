@@ -571,10 +571,11 @@ func validNoContentResponseMetadata(
 	return validNoContentMetadata(operation, response.Header, body)
 }
 
-// validNoContentMetadata accepts only the two OpenAPI operations with an
-// explicit bodyless applicability result and rejects representation metadata.
+// validNoContentMetadata accepts only the OpenAPI operations with an explicit
+// bodyless applicability result (process, sign, and the delivery-status
+// unsigned-original compatibility no-op) and rejects representation metadata.
 func validNoContentMetadata(operation Operation, header http.Header, body []byte) bool {
-	if operation != OperationProcess && operation != OperationSign {
+	if operation != OperationProcess && operation != OperationSign && operation != OperationDSNSign {
 		return false
 	}
 	if len(body) != 0 || headerPresent(header, "X-Content-Type-Options") ||

@@ -135,6 +135,20 @@ profile. Neither the outer null sender nor Milter configuration preselects the
 domain. Postfix DSN mode does not accept `envelope_sender` because the bounded
 Postfix contract intentionally carries no original envelope.
 
+A bounce whose returned original carries no `DKIM2-Signature` header field at
+all is outside draft-ietf-dkim-dkim2-spec Section 12. The daemon refuses it by
+default, and the adapter then answers `550 5.7.1`, which leaves the original
+message queued at Postfix. When the daemon operator explicitly configures
+`signing.policy.delivery_status.unsigned_original: continue`, the daemon
+answers `/v1/dsn/sign` with bodyless HTTP 204 instead. The adapter accepts only
+the exact 204 envelope bound to `/v1/dsn/sign` (no body or representation
+headers, `Cache-Control: no-store`, `Connection: close`, HTTP/1.1, optional
+canonical `Date`) and continues without any mutation, so Postfix delivers the
+bounce unsigned and unchanged as a classic RFC 3464 notification. The policy
+lives only in the daemon; the adapter has no switch of its own. An original
+that carries any `DKIM2-Signature` field is never relaxed, and a malformed 204
+remains a contract failure handled by `failure.mode`.
+
 An originator instance that serves multiple exact LDAP signing domains may
 derive the domain from the already validated ASCII SMTP reverse-path while
 retaining one fixed tenant:

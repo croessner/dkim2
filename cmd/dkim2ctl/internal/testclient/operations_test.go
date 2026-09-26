@@ -273,9 +273,10 @@ func TestOperationResponseAcceptsDocumentedNoMutationAndRevisePlans(t *testing.T
 }
 
 // TestOperationResponseAcceptsDocumentedNoContentApplicability proves generated
-// process and sign clients retain the bodyless OpenAPI variants exactly.
+// process, sign, and delivery-status clients retain the bodyless OpenAPI
+// variants exactly.
 func TestOperationResponseAcceptsDocumentedNoContentApplicability(t *testing.T) {
-	for _, operation := range []Operation{OperationProcess, OperationSign} {
+	for _, operation := range []Operation{OperationProcess, OperationSign, OperationDSNSign} {
 		response := &http.Response{
 			StatusCode: http.StatusNoContent,
 			Close:      true,
@@ -310,6 +311,9 @@ func TestOperationResponseRejectsMalformedNoContent(t *testing.T) {
 		{name: "wrong connection", operation: OperationProcess, extra: http.Header{headerConnection: {"keep-alive"}}},
 		{name: "duplicate connection", operation: OperationSign, extra: http.Header{headerConnection: {connectionClose, connectionClose}}},
 		{name: "revise", operation: OperationRevise},
+		{name: "delivery status body", operation: OperationDSNSign, body: "{}"},
+		{name: "delivery status content type", operation: OperationDSNSign, extra: http.Header{headerContentType: {mediaTypeJSON}}},
+		{name: "propagation", operation: OperationDSNPropagate},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			headers := http.Header{

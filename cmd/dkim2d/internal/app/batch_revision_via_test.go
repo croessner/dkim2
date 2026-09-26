@@ -318,7 +318,7 @@ func signBatchRemoteDSN(t *testing.T, f batchViaFixture, embedded, reverse []byt
 	if err != nil {
 		t.Fatal("remote DSN request invalid")
 	}
-	result, err := f.remote.SignDeliveryStatus(context.Background(), request)
+	result, err := signDeliveryStatusResult(context.Background(), t, f.remote, request)
 	if err != nil || result.Result() != OperationPass {
 		t.Fatalf("remote DSN signing: result=%s", result.Result())
 	}

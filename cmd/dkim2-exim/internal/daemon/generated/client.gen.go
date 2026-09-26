@@ -3267,6 +3267,13 @@ type SignDeliveryStatusResponse200Headers struct {
 	XContentTypeOptions string
 }
 
+// SignDeliveryStatusResponse204Headers the declared response headers of an HTTP 204 response for SignDeliveryStatus
+type SignDeliveryStatusResponse204Headers struct {
+	CacheControl string
+	Connection   string
+	Date         *string
+}
+
 // SignDeliveryStatusResponse400Headers the declared response headers of an HTTP 400 response for SignDeliveryStatus
 type SignDeliveryStatusResponse400Headers struct {
 	CacheControl        string
@@ -3363,6 +3370,8 @@ type SignDeliveryStatusResponse struct {
 	JSON503 *ServiceUnavailable
 	// Headers200 the parsed response headers for an HTTP 200 response
 	Headers200 *SignDeliveryStatusResponse200Headers
+	// Headers204 the parsed response headers for an HTTP 204 response
+	Headers204 *SignDeliveryStatusResponse204Headers
 	// Headers400 the parsed response headers for an HTTP 400 response
 	Headers400 *SignDeliveryStatusResponse400Headers
 	// Headers403 the parsed response headers for an HTTP 403 response
@@ -5642,6 +5651,9 @@ func ParseSignDeliveryStatusResponse(rsp *http.Response) (*SignDeliveryStatusRes
 		}
 		response.JSON200 = &dest
 
+	case rsp.StatusCode == 204:
+		break // No content-type
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
 		var dest BadRequest
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -5739,6 +5751,30 @@ func ParseSignDeliveryStatusResponse(rsp *http.Response) (*SignDeliveryStatusRes
 			headers.XContentTypeOptions = value
 		}
 		response.Headers200 = &headers
+	case rsp.StatusCode == 204:
+		var headers SignDeliveryStatusResponse204Headers
+		if values := rsp.Header.Values("Cache-Control"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Cache-Control", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.CacheControl = value
+		}
+		if values := rsp.Header.Values("Connection"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Connection", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.Connection = value
+		}
+		if values := rsp.Header.Values("Date"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Date", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.Date = &value
+		}
+		response.Headers204 = &headers
 	case rsp.StatusCode == 400:
 		var headers SignDeliveryStatusResponse400Headers
 		if values := rsp.Header.Values("Cache-Control"); len(values) > 0 {

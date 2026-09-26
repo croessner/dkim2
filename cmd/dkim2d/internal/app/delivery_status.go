@@ -66,21 +66,24 @@ func (DeliveryStatusRequest) String() string { return operationRedacted }
 func (r DeliveryStatusRequest) GoString() string { return r.String() }
 
 // SignDeliveryStatus signs one validated DSN only through the dedicated policy
-// use, library evidence boundary, and route purpose.
-func (s *SigningService) SignDeliveryStatus(ctx context.Context, request DeliveryStatusRequest) (OperationResult, error) {
+// use, library evidence boundary, and route purpose. A returned original
+// without any DKIM2-Signature header field yields the not-applicable
+// assessment only under the explicit continue compatibility policy; every
+// other evidence failure, and the default reject policy, keep the refusal.
+func (s *SigningService) SignDeliveryStatus(ctx context.Context, request DeliveryStatusRequest) (SigningAssessment, error) {
 	if s == nil || ctx == nil || s.store == nil || nilInterface(s.publicKeys) || s.clock == nil ||
 		len(request.raw) == 0 {
 		s.observeDSNEvidence(dkim2.DSNEvidenceStagePreflight, telemetryResultInternal)
-		return OperationResult{}, &DomainError{}
+		return SigningAssessment{}, &DomainError{}
 	}
 	if err := ctx.Err(); err != nil {
 		s.observeDSNEvidence(dkim2.DSNEvidenceStagePreflight, telemetryResultTemporary)
-		return OperationResult{}, err
+		return SigningAssessment{}, err
 	}
 	metadata, err := s.policies.deliveryStatus.metadata()
 	if err != nil {
 		s.observeDSNEvidence(dkim2.DSNEvidenceStagePreflight, telemetryResultInternal)
-		return OperationResult{}, &DomainError{}
+		return SigningAssessment{}, &DomainError{}
 	}
 	operationTime := s.clock().UTC()
 	evidenceSigner, err := dkim2.NewSigner(
@@ -92,17 +95,44 @@ func (s *SigningService) SignDeliveryStatus(ctx context.Context, request Deliver
 	)
 	if err != nil {
 		s.observeDSNEvidence(dkim2.DSNEvidenceStagePreflight, telemetryResultInternal)
-		return OperationResult{}, &DomainError{}
+		return SigningAssessment{}, &DomainError{}
 	}
 	evidenceRequest := dkim2.NewPostfixDerivedDSNSigningEvidenceRequest(
 		request.RawMessage(), request.OuterReversePath(), request.OuterRecipients(),
 	)
 	evidence, err := evidenceSigner.EvaluateDSNForSigning(ctx, evidenceRequest)
 	if err != nil {
+		if s.policies.continueUnsignedOriginal &&
+			dkim2.DSNEvidenceStageOf(err) == dkim2.DSNEvidenceStageEmbeddedUnsigned {
+			s.observeDSNEvidence(dkim2.DSNEvidenceStageEmbeddedUnsigned, telemetryResultNotApplicable)
+			return NewNotApplicableDeliveryStatusAssessment(), nil
+		}
 		s.observeDSNEvidenceFailure(err)
-		return operationFailureFromError(OperationDeliveryStatus, err)
+		return deliveryStatusAssessment(operationFailureFromError(OperationDeliveryStatus, err))
 	}
 	s.observeDSNEvidence(dkim2.DSNEvidenceStageAuthorized, "success")
+	return deliveryStatusAssessment(s.signAuthorizedDeliveryStatus(ctx, request, evidence, metadata, operationTime))
+}
+
+// deliveryStatusAssessment seals one applicable delivery-status result while
+// propagating an operation error unchanged.
+func deliveryStatusAssessment(result OperationResult, err error) (SigningAssessment, error) {
+	if err != nil {
+		return SigningAssessment{}, err
+	}
+	return NewApplicableSigningAssessment(result)
+}
+
+// signAuthorizedDeliveryStatus resolves the delivery_status profile for the
+// authenticated embedded d= and signs the exact DSN. It runs only after the
+// library issued opaque evidence, so no profile or key is touched earlier.
+func (s *SigningService) signAuthorizedDeliveryStatus(
+	ctx context.Context,
+	request DeliveryStatusRequest,
+	evidence dkim2.DSNSigningEvidence,
+	metadata dkim2.SigningMetadata,
+	operationTime time.Time,
+) (OperationResult, error) {
 	lease, err := s.store.Acquire(ctx)
 	if err != nil {
 		return NewOperationResult(OperationDeliveryStatus, OperationTemperror, OperationTempfail, nil)

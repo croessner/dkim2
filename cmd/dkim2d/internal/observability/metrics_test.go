@@ -175,6 +175,33 @@ func TestMetricsRecordClosedDSNEvidenceStage(t *testing.T) {
 	}
 }
 
+// TestMetricsRecordUnsignedOriginalDSNOutcomes proves the unsigned-original
+// refusal and its explicit compatibility no-op form distinct closed series.
+func TestMetricsRecordUnsignedOriginalDSNOutcomes(t *testing.T) {
+	metrics, err := NewMetrics()
+	if err != nil {
+		t.Fatal("metrics construction failed")
+	}
+	metrics.DSNEvidenceCompleted("embedded_unsigned", valueFailure)
+	metrics.DSNEvidenceCompleted("embedded_unsigned", "not_applicable")
+	metrics.DSNEvidenceCompleted("embedded_unsigned", "private-marker")
+	output, err := metrics.Gather()
+	if err != nil {
+		t.Fatal("metrics gather failed")
+	}
+	for _, want := range []string{
+		`dkim2d_dsn_evidence_total{evidence_stage="embedded_unsigned",result="failure"} 1`,
+		`dkim2d_dsn_evidence_total{evidence_stage="embedded_unsigned",result="not_applicable"} 1`,
+	} {
+		if !bytes.Contains(output, []byte(want)) {
+			t.Fatalf("missing unsigned-original DSN series %s", want)
+		}
+	}
+	if bytes.Contains(output, []byte("private-marker")) {
+		t.Fatal("arbitrary DSN evidence result escaped")
+	}
+}
+
 // TestMetricsRecordEverySupportedOperation proves all implemented HTTP routes are observable.
 func TestMetricsRecordEverySupportedOperation(t *testing.T) {
 	metrics, err := NewMetrics()
