@@ -106,13 +106,13 @@
     {
       "id": "milter-public-peer-source",
       "path": "cmd/dkim2-milter/internal/integration/public_peer_test.go",
-      "sha256": "f89a61ddf53cdd9994c40cf30e531ec752f09abe76c6500a1b637da3629f4481",
+      "sha256": "ca340869efdd2d275126b8195ee41a75e2a98db39e02e64e649e38375a9d9ae4",
       "module": "cmd/dkim2-milter"
     },
     {
       "id": "openapi-daemon-boundary-source",
       "path": "cmd/dkim2d/internal/httpjson/dkim2ctl_integration_test.go",
-      "sha256": "7a1312089ef68b665d3a8b867df49508b790f493a2b5f190cc73e7d6cfee5441",
+      "sha256": "2cf016358d2344d3caa48890b7361c259e1d26a0216afd145852e0d3de36418e",
       "module": "cmd/dkim2d"
     },
     {
@@ -136,7 +136,7 @@
     {
       "id": "openapi-operation-source",
       "path": "cmd/dkim2ctl/internal/testclient/operations_test.go",
-      "sha256": "daa1401ee7624741d45a320e54b29cf01dbf49b89efd7a86d4346ee90184ed21",
+      "sha256": "572db2fbc9e027302020d518aceb619c3ad7d934235bc84549cf0d368fa6809e",
       "module": "cmd/dkim2ctl"
     },
     {
