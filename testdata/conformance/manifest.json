@@ -106,7 +106,7 @@
     {
       "id": "milter-public-peer-source",
       "path": "cmd/dkim2-milter/internal/integration/public_peer_test.go",
-      "sha256": "f0539eafb493f7c2f05d56fa86039748a630fc5399c0949b7c7c0542698f8d72",
+      "sha256": "e78b5c0fcc02ee108755141a32b02f344b4e80b01066f31eeff382065c3cbec9",
       "module": "cmd/dkim2-milter"
     },
     {
@@ -310,7 +310,7 @@
     {
       "id": "signing-null-sender-source",
       "path": "lib/header_from_test.go",
-      "sha256": "9d34f4bba7f27074375b5f360deca3769b9d612a07886917056a5a9a78600fb4",
+      "sha256": "ede2997a6ea95a3406a316f2758ff6ba1ea728b0ef7f7f390dffee0136fcc42f",
       "module": "lib"
     },
     {
@@ -660,6 +660,23 @@
         "milter-negative-source"
       ],
       "producer": "milter-negative-tests"
+    },
+    {
+      "suite": "milter",
+      "case_id": "null-sender-delivery-status-unchanged",
+      "class": "adapter_contract",
+      "authority": [
+        "draft-ietf-dkim-dkim2-spec-06 Section 12.1",
+        "docs/specs/implementation/milter-adapter.md Datasource And Private Signing Backend"
+      ],
+      "provenance": "regression_reproducer",
+      "runner": "milter_fixture",
+      "required_platform": "portable",
+      "expected_outcome": "pass",
+      "artifacts": [
+        "milter-public-peer-source"
+      ],
+      "producer": "milter-public-fixture-tests"
     },
     {
       "suite": "milter",
@@ -1544,6 +1561,25 @@
         "signing-facade-source",
         "signing-provenance",
         "signing-public",
+        "signing-test-key"
+      ],
+      "producer": "library-facade-tests"
+    },
+    {
+      "suite": "signing",
+      "case_id": "null-sender-delivery-status-excluded",
+      "class": "documented_interpretation",
+      "authority": [
+        "draft-ietf-dkim-dkim2-spec-06 Section 12.1",
+        "RFC 3464 Section 2",
+        "RFC 6522 Section 3"
+      ],
+      "provenance": "regression_reproducer",
+      "runner": "portable_vector",
+      "required_platform": "portable",
+      "expected_outcome": "pass",
+      "artifacts": [
+        "signing-null-sender-source",
         "signing-test-key"
       ],
       "producer": "library-facade-tests"
