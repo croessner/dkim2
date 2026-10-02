@@ -114,7 +114,7 @@ func validSuccessResponse(value any) bool {
 	case generated.BatchRevisionResponse:
 		return validBatchRevisionResponse(typed)
 	case generated.BatchRevisionCapabilities:
-		return typed == batchCapabilities()
+		return validBatchCapabilities(typed)
 	case generated.DSNPropagateResponse:
 		return validPropagationResponse(typed)
 	case generated.DSNPropagateCommitResponse:

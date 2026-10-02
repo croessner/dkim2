@@ -35,6 +35,15 @@ const (
 	// working-set budget covers at the configured server.message_bytes, and
 	// the HTTP boundary refuses a combination the budget cannot own.
 	maximumInFlightRequests = 64
+	// minimumWorkingSetBytes and maximumWorkingSetBytes bound the configured
+	// process working-set budget that every admission permit reserves from.
+	minimumWorkingSetBytes = 1 << 30
+	maximumWorkingSetBytes = 64 << 30
+	// maximumBatchAggregateBytes is the closed batch-revision aggregate: an
+	// original and three copies at the library message ceiling.
+	maximumBatchAggregateBytes = 4 * dkim2.HardMaxRawMessageBytes
+	// maximumBatchInFlight bounds the dedicated batch-revision permits.
+	maximumBatchInFlight = 8
 )
 
 // PolicyMode identifies one daemon-owned result policy.
@@ -196,6 +205,9 @@ type serverState struct {
 	maxInFlight                uint8
 	maxWaiters                 uint16
 	admissionWait              time.Duration
+	workingSetBytes            uint64
+	batchAggregateBytes        int
+	batchMaxInFlight           uint8
 }
 
 type signingState struct {
@@ -737,7 +749,7 @@ func parseServer(values map[string]rawValue) (serverState, error) {
 	if err != nil {
 		return serverState{}, err
 	}
-	maxWaiters, err := uintValue(values, pathServerMaxWaiters, 0, 1024)
+	resources, err := parseServerResources(values, messageBytes, text(values, pathServerBatchReviseCapability))
 	if err != nil {
 		return serverState{}, err
 	}
@@ -783,8 +795,50 @@ func parseServer(values map[string]rawValue) (serverState, error) {
 		requestDeadline:            deadline,
 		shutdownTimeout:            shutdown,
 		maxInFlight:                uint8(maxInFlight),
-		maxWaiters:                 uint16(maxWaiters),
+		maxWaiters:                 resources.maxWaiters,
 		admissionWait:              admission,
+		workingSetBytes:            resources.workingSetBytes,
+		batchAggregateBytes:        resources.batchAggregateBytes,
+		batchMaxInFlight:           resources.batchMaxInFlight,
+	}, nil
+}
+
+// serverResources is the validated admission waiters, process budget, and
+// batch pool selection.
+type serverResources struct {
+	maxWaiters          uint16
+	workingSetBytes     uint64
+	batchAggregateBytes int
+	batchMaxInFlight    uint8
+}
+
+// parseServerResources validates the admission waiters, the working-set
+// budget, and the optional dedicated batch aggregate, which must carry at
+// least one full message and requires the batch revision route. Whether the
+// permits fit the budget together is proven by the HTTP boundary.
+func parseServerResources(values map[string]rawValue, messageBytes uint64, batchCapability string) (serverResources, error) {
+	maxWaiters, err := uintValue(values, pathServerMaxWaiters, 0, 1024)
+	if err != nil {
+		return serverResources{}, err
+	}
+	workingSetBytes, err := uintValue(values, pathServerWorkingSetBytes, minimumWorkingSetBytes, maximumWorkingSetBytes)
+	if err != nil {
+		return serverResources{}, err
+	}
+	batchAggregate, err := uintValue(values, pathServerBatchAggregateBytes, 0, maximumBatchAggregateBytes)
+	if err != nil {
+		return serverResources{}, err
+	}
+	batchInFlight, err := uintValue(values, pathServerBatchMaxInFlight, 1, maximumBatchInFlight)
+	if err != nil {
+		return serverResources{}, err
+	}
+	if batchAggregate != 0 && (batchAggregate < messageBytes || batchCapability == "") {
+		return serverResources{}, newError(CodeInvalidField)
+	}
+	return serverResources{
+		maxWaiters: uint16(maxWaiters), workingSetBytes: workingSetBytes, batchAggregateBytes: int(batchAggregate),
+		batchMaxInFlight: uint8(batchInFlight),
 	}, nil
 }
 

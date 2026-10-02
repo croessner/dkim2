@@ -1609,16 +1609,20 @@ type BatchRevisionCapabilities struct {
 	Draft         DraftVersion                           `json:"draft"`
 
 	// ExternalNullSender Ordinary revision cannot create a null reverse-path. Valid signed delivery-status messages use the separately authorized received-DSN propagation API, including its verification and replay contract.
-	ExternalNullSender       BatchRevisionCapabilitiesExternalNullSender `json:"external_null_sender"`
-	FullFanout               BatchRevisionCapabilitiesFullFanout         `json:"full_fanout"`
-	MaxAggregateMessageBytes int64                                       `json:"max_aggregate_message_bytes"`
-	MaxControlledHops        int                                         `json:"max_controlled_hops"`
-	MaxCopies                int                                         `json:"max_copies"`
-	MaxHeaderFields          int                                         `json:"max_header_fields"`
-	MaxRequestBytes          int64                                       `json:"max_request_bytes"`
-	MaxResponseBytes         int64                                       `json:"max_response_bytes"`
-	OriginalCurrent          BatchRevisionCapabilitiesOriginalCurrent    `json:"original_current"`
-	Protocol                 BatchRevisionCapabilitiesProtocol           `json:"protocol"`
+	ExternalNullSender BatchRevisionCapabilitiesExternalNullSender `json:"external_null_sender"`
+	FullFanout         BatchRevisionCapabilitiesFullFanout         `json:"full_fanout"`
+
+	// MaxAggregateMessageBytes The enforced bound of the decoded original plus every copy of one request. It is 268435456 unless the daemon configures server.batch_revision.max_aggregate_message_bytes; every single message still obeys the daemon's server.message_bytes. Clients read this value instead of assuming a constant.
+	MaxAggregateMessageBytes int64 `json:"max_aggregate_message_bytes"`
+	MaxControlledHops        int   `json:"max_controlled_hops"`
+	MaxCopies                int   `json:"max_copies"`
+	MaxHeaderFields          int   `json:"max_header_fields"`
+
+	// MaxRequestBytes The enforced bound of one request body in bytes: the deployment's single-message transport ceiling, or with a configured batch aggregate the separately padded Base64 of that aggregate plus the closed framing allowance. A larger body is answered with 413.
+	MaxRequestBytes  int64                                    `json:"max_request_bytes"`
+	MaxResponseBytes int64                                    `json:"max_response_bytes"`
+	OriginalCurrent  BatchRevisionCapabilitiesOriginalCurrent `json:"original_current"`
+	Protocol         BatchRevisionCapabilitiesProtocol        `json:"protocol"`
 }
 
 // BatchRevisionCapabilitiesControlledVia defines model for BatchRevisionCapabilities.ControlledVia.

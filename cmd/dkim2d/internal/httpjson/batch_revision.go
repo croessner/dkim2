@@ -17,8 +17,19 @@ const (
 	batchInstanceHeaderName  = "Message-Instance"
 )
 
-// MapBatchRevisionRequest converts the generated complete-fanout contract to immutable domain evidence.
+// MapBatchRevisionRequest converts the generated complete-fanout contract to
+// immutable domain evidence under the default aggregate message bound.
 func MapBatchRevisionRequest(input generated.BatchRevisionRequest) (app.BatchRevisionRequest, error) {
+	return mapBatchRevisionRequestWithin(input, app.MaxBatchRevisionMessageBytes)
+}
+
+// mapBatchRevisionRequestWithin converts one generated complete-fanout
+// request whose decoded original and copies together may hold at most
+// aggregateBytes, the value the capability route advertises.
+func mapBatchRevisionRequestWithin(input generated.BatchRevisionRequest, aggregateBytes int) (app.BatchRevisionRequest, error) {
+	if aggregateBytes < 1 || aggregateBytes > app.HardMaxBatchRevisionMessageBytes {
+		return app.BatchRevisionRequest{}, newMappingError(MappingInternalContract)
+	}
 	if input.ApiVersion != generated.V1 || input.Draft != generated.DraftIetfDkimDkim2Spec06 ||
 		len(input.Copies) == 0 || len(input.Copies) > app.MaxBatchRevisionCopies {
 		return app.BatchRevisionRequest{}, newMappingError(MappingInvalidContract)
@@ -28,6 +39,9 @@ func MapBatchRevisionRequest(input generated.BatchRevisionRequest) (app.BatchRev
 		return app.BatchRevisionRequest{}, err
 	}
 	total := original.RawSize()
+	if total > aggregateBytes {
+		return app.BatchRevisionRequest{}, newMappingError(MappingRequestTooLarge)
+	}
 	copies := make([]app.BatchCopy, 0, len(input.Copies))
 	for _, branch := range input.Copies {
 		message, messageErr := mapBatchMessage(branch.Message, branch.Smtp)
@@ -35,7 +49,7 @@ func MapBatchRevisionRequest(input generated.BatchRevisionRequest) (app.BatchRev
 			return app.BatchRevisionRequest{}, messageErr
 		}
 		total += message.RawSize()
-		if total > app.MaxBatchRevisionMessageBytes {
+		if total > aggregateBytes {
 			return app.BatchRevisionRequest{}, newMappingError(MappingRequestTooLarge)
 		}
 		local := branch.Delivery == generated.Local
@@ -161,7 +175,7 @@ func validBatchRevisionResponse(response generated.BatchRevisionResponse) bool {
 	ids := make(map[string]bool, len(response.Outputs))
 	for _, output := range response.Outputs {
 		if !app.ValidBatchCopyID(output.Id) || ids[output.Id] || !validBatchWireDigest(output.CurrentSha256) ||
-			!validBatchWireDigest(output.ResultSha256) || output.InsertionOffset < 2 || output.InsertionOffset > app.MaxBatchRevisionMessageBytes ||
+			!validBatchWireDigest(output.ResultSha256) || output.InsertionOffset < 2 || output.InsertionOffset > app.HardMaxBatchRevisionMessageBytes ||
 			len(output.HeaderFieldsBase64) < 1 || len(output.HeaderFieldsBase64) > 3 {
 			return false
 		}
@@ -201,7 +215,7 @@ func (a *strictAdapter) ReviseBatch(ctx context.Context, request generated.Revis
 	if !ok || nilInterfaceValue(service) {
 		return nil, &strictAdapterError{class: strictFailureInternal}
 	}
-	domain, err := MapBatchRevisionRequest(*request.Body)
+	domain, err := mapBatchRevisionRequestWithin(*request.Body, a.batch.aggregateBytes())
 	if err != nil {
 		return nil, classifyMappingFailure(err)
 	}

@@ -72,8 +72,16 @@ Each copy has exactly one outgoing recipient, its own opaque transaction-local
 ID and exact current bytes. Local copies have no signing context; external
 copies require one. There must be at least one external copy.
 
-Bounds are 32 actual copies, 33,554,432 aggregate decoded original/current
-message bytes and the existing 47,878,316-byte framed JSON request limit. Repeated
+Bounds are 32 actual copies, the configured aggregate of decoded original and
+copy message bytes, and the configured request body limit; each single message
+also obeys `server.message_bytes`. By default the aggregate is 268,435,456 bytes
+and batch requests share the single-message transport ceiling
+`2 * base64(server.message_bytes) + 3,139,072` bytes (92,617,560 at the 32 MiB
+default). `server.batch_revision.max_aggregate_message_bytes` (at most
+536,870,912 bytes) gives the route its own working-set sizing and admission
+pool, whose request limit is the separately padded Base64 of that aggregate
+plus 3,139,072 bytes (at most 718,967,044). The capability route advertises
+the enforced values, which a client must read instead of pinning constants. Repeated
 byte strings count repeatedly; clients must not omit real copies to fit a bound.
 The existing bounded successful response limit also applies. Unsupported or
 oversized requests receive no signing output.
@@ -84,7 +92,9 @@ First query `GET /v1/revise/batch/capabilities` using the same dedicated
 capability. HTTP 200 requires the enabled service and current readiness. The
 response names `protocol: batch_revision_v1`, API/draft, original/current,
 complete-fanout and controlled-via support, and the exact copy, hop, aggregate
-message, request, response and generated-field bounds. It explicitly reports
+message, request, response and generated-field bounds that this deployment
+enforces; `max_aggregate_message_bytes` and `max_request_bytes` follow the
+daemon configuration and may differ between deployments. It explicitly reports
 `external_null_sender: false`. This read-only operation never signs or looks up
 DNS keys. Ordinary `/readyz` alone cannot advertise a new batch capability.
 Neither endpoint predicts a particular profile's availability or message's
@@ -92,6 +102,9 @@ future cryptographic result. Body, query, content metadata, expectation and
 conditional request headers are rejected on the capability route.
 
 1. Freeze original message/envelope, all current variants and the complete plan.
+   Sum the decoded sizes of the original and every copy and compare the sum with
+   `max_aggregate_message_bytes`, and the encoded JSON body with
+   `max_request_bytes`; a plan above either bound must not be sent.
    Prepare each outgoing envelope first, including any independently issued SRS
    sender. Compute an opaque SHA-256 binding over the caller's immutable context
    and plan. Do not log this payload or the credential.

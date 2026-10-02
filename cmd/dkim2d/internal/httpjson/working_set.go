@@ -449,7 +449,7 @@ type workingSetLedger struct {
 // the deployment's proven capacity inventory.
 func newWorkingSetLedger(sizing workingSetSizing) (*workingSetLedger, error) {
 	limit := sizing.UnitBytes()
-	if limit == 0 || limit > processWorkingSetAggregateBytes {
+	if limit == 0 || limit > sizing.budget {
 		return nil, &workingSetError{code: workingSetErrorInvariant}
 	}
 	return &workingSetLedger{limit: limit, sizing: sizing}, nil
@@ -758,6 +758,8 @@ func roundWorkingSetPage(size uint64, page uint64) uint64 {
 // workingSetSizing owns one deployment's complete per-request capacity
 // inventory. It is immutable after construction and carries no request data.
 type workingSetSizing struct {
+	budget              uint64
+	messageCount        uint64
 	messageBytes        uint64
 	processBodyBytes    uint64
 	processBodyCapacity uint64
@@ -773,37 +775,91 @@ type workingSetSizing struct {
 }
 
 // newWorkingSetSizing derives one complete inventory from the configured
-// raw-message ceiling. It fails closed on an unsupported ceiling and on any
-// arithmetic that cannot be proven below the process aggregate.
+// raw-message ceiling within the default process budget.
 func newWorkingSetSizing(messageBytes int64) (workingSetSizing, error) {
-	if messageBytes < 1 || messageBytes > dkim2.HardMaxRawMessageBytes {
+	return newWorkingSetSizingWithin(messageBytes, processWorkingSetAggregateBytes)
+}
+
+// newWorkingSetSizingWithin derives one complete single-message inventory
+// from the configured raw-message ceiling and the configured process budget.
+// It fails closed on an unsupported ceiling or budget and on any arithmetic
+// that cannot be proven below the budget.
+func newWorkingSetSizingWithin(messageBytes int64, budget uint64) (workingSetSizing, error) {
+	if messageBytes < 1 || messageBytes > dkim2.HardMaxRawMessageBytes || !validWorkingSetBudget(budget) {
 		return workingSetSizing{}, &workingSetError{code: workingSetErrorInvariant}
 	}
 	raw := uint64(messageBytes)
 	encoded := (raw + 2) / 3 * 4
-	sizing := workingSetSizing{messageBytes: raw}
+	sizing := workingSetSizing{budget: budget, messageCount: 1, messageBytes: raw}
 	sizing.encodedMessage = roundWorkingSetPage(encoded, workingSetPageBytes)
 	sizing.base64Decoded = encoded/4*3 + 1
 	sizing.processBodyBytes = 2*encoded + batchFramingOverheadBytes
-	sizing.processBodyCapacity = roundWorkingSetPage(sizing.processBodyBytes, workingSetPageBytes)
-	sizing.readAllIntermediate = scaleWorkingSetBytes(
-		sizing.processBodyCapacity, workingSetReadAllCapacityFactor, 1,
-	)
-	sizing.jsonDecoderCapacity = scaleWorkingSetBytes(
-		coveringPowerOfTwo(sizing.processBodyBytes),
-		workingSetJSONNumerator, workingSetJSONDenominator,
-	)
-	sizing.validationGeneric = 2 * sizing.processBodyCapacity
 	sizing.requestGeneration = raw + maximumMappingEnvelopeScratchBytes
 	sizing.generatedRequestDTO = sizing.encodedMessage + maximumMappingEnvelopeScratchBytes
-	sizing.libraryRuntime = 6*raw + sizing.bodyLineIndexBytes() +
+	sizing.libraryRuntime = sizing.messageRuntimeBytes()
+	return sizing.finish()
+}
+
+// newBatchWorkingSetSizing derives the dedicated complete-fanout inventory
+// for one batch revision request whose decoded original and copies together
+// hold at most aggregateBytes, each of them at most messageBytes. The body
+// carries every message in Base64 with its own padding; the domain phase keeps
+// the generated DTO, three decoded aggregate generations, and the library
+// runtime of the verified original and of one signed copy at a time.
+func newBatchWorkingSetSizing(messageBytes, aggregateBytes int64, budget uint64) (workingSetSizing, error) {
+	if messageBytes < 1 || messageBytes > dkim2.HardMaxRawMessageBytes ||
+		aggregateBytes < messageBytes || aggregateBytes > maxBatchAggregateMessageBytes ||
+		!validWorkingSetBudget(budget) {
+		return workingSetSizing{}, &workingSetError{code: workingSetErrorInvariant}
+	}
+	raw := uint64(aggregateBytes)
+	messages := uint64(maxBatchMessages)
+	encoded := encodedBatchAggregateBytes(raw)
+	scratch := messages * maximumMappingEnvelopeScratchBytes
+	sizing := workingSetSizing{budget: budget, messageCount: messages, messageBytes: uint64(messageBytes)}
+	sizing.encodedMessage = roundWorkingSetPage(encoded, workingSetPageBytes)
+	sizing.base64Decoded = raw + messages
+	sizing.processBodyBytes = encoded + batchFramingOverheadBytes
+	sizing.requestGeneration = raw + scratch
+	sizing.generatedRequestDTO = sizing.encodedMessage + scratch
+	sizing.libraryRuntime = 2 * sizing.messageRuntimeBytes()
+	return sizing.finish()
+}
+
+// encodedBatchAggregateBytes bounds the Base64 text of every batch message
+// together: each of the at most maxBatchMessages messages pads separately.
+func encodedBatchAggregateBytes(rawAggregate uint64) uint64 {
+	return (rawAggregate + 2*uint64(maxBatchMessages) + 2) / 3 * 4
+}
+
+// validWorkingSetBudget accepts one configured process budget.
+func validWorkingSetBudget(budget uint64) bool {
+	return budget >= minProcessWorkingSetBytes && budget <= maxProcessWorkingSetBytes
+}
+
+// messageRuntimeBytes bounds the library runtime of one message operation.
+func (s workingSetSizing) messageRuntimeBytes() uint64 {
+	return 6*s.messageBytes + s.bodyLineIndexBytes() +
 		maximumLibraryHeaderBytes + maximumLibraryProtocolBytes
-	unit, err := sizing.proveUnitBytes()
+}
+
+// finish derives the body-scaled terms and proves the per-request unit.
+func (s workingSetSizing) finish() (workingSetSizing, error) {
+	s.processBodyCapacity = roundWorkingSetPage(s.processBodyBytes, workingSetPageBytes)
+	s.readAllIntermediate = scaleWorkingSetBytes(
+		s.processBodyCapacity, workingSetReadAllCapacityFactor, 1,
+	)
+	s.jsonDecoderCapacity = scaleWorkingSetBytes(
+		coveringPowerOfTwo(s.processBodyBytes),
+		workingSetJSONNumerator, workingSetJSONDenominator,
+	)
+	s.validationGeneric = 2 * s.processBodyCapacity
+	unit, err := s.proveUnitBytes()
 	if err != nil {
 		return workingSetSizing{}, err
 	}
-	sizing.unitBytes = unit
-	return sizing, nil
+	s.unitBytes = unit
+	return s, nil
 }
 
 // bodyLineIndexBytes bounds the three retained BodyLine generations. A body
@@ -827,15 +883,25 @@ func (s workingSetSizing) domainPhaseBytes() uint64 {
 		maximumSuccessResponseBytes
 }
 
+// mappingPhaseBytes returns the request-mapping ownership high water: the
+// body and DTO plus every Base64 conversion owner and the first request
+// generation that BeginRequestMapping claims together.
+func (s workingSetSizing) mappingPhaseBytes() uint64 {
+	return maximumFixedRequestStorageBytes + s.processBodyCapacity +
+		s.generatedRequestDTO + 5*s.encodedMessage + s.base64Decoded +
+		maximumMappingEnvelopeScratchBytes + s.requestGeneration
+}
+
 // proveUnitBytes returns the per-request reservation that strictly dominates
-// every phase, or fails closed when it cannot be covered by the aggregate.
+// every phase, or fails closed when it cannot be covered by the budget.
 func (s workingSetSizing) proveUnitBytes() (uint64, error) {
-	highWater := max(s.validationPhaseBytes(), s.domainPhaseBytes())
-	if highWater == 0 || highWater > processWorkingSetAggregateBytes-workingSetUnitHeadroomBytes {
+	highWater := max(s.validationPhaseBytes(), s.domainPhaseBytes(), s.mappingPhaseBytes())
+	if highWater == 0 || s.budget < workingSetUnitHeadroomBytes ||
+		highWater > s.budget-workingSetUnitHeadroomBytes {
 		return 0, &workingSetError{code: workingSetErrorOverflow}
 	}
 	unit := roundWorkingSetPage(highWater+workingSetUnitHeadroomBytes, workingSetPageBytes)
-	if unit <= highWater || unit > processWorkingSetAggregateBytes {
+	if unit <= highWater || unit > s.budget {
 		return 0, &workingSetError{code: workingSetErrorOverflow}
 	}
 	return unit, nil
@@ -852,7 +918,7 @@ func (s workingSetSizing) MaxInFlight() int {
 	if s.unitBytes == 0 {
 		return 0
 	}
-	return int(min(processWorkingSetAggregateBytes/s.unitBytes, uint64(maxProcessInFlight)))
+	return int(min(s.budget/s.unitBytes, uint64(maxProcessInFlight)))
 }
 
 // coveringPowerOfTwo returns the smallest power of two at or above value.

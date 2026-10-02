@@ -46,7 +46,8 @@ certification, or universal interoperability claim.
   attest the inherited envelope.
 - The complete-fanout batch API requires explicit original and current byte
   evidence from an authorized MTA. It supports 32 actual local/external copies
-  and 32 MiB aggregate decoded message bytes, one optional same-control
+  and a configurable aggregate of decoded message bytes (256 MiB by default,
+  at most 512 MiB with a dedicated batch admission pool), one optional same-control
   intermediate hop per external copy, and copy-only reconstruction recipes.
   These limits can be stricter than an MTA's message size. Ordinary outgoing
   null-sender revision remains unsupported; the separately verified DSN

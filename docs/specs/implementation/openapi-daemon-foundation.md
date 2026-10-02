@@ -1999,7 +1999,16 @@ Server paths and values are exactly the HTTP table:
 - `server.message_bytes`, default `33554432`, range 1 through `134217728`;
 - `server.max_waiters`, default `64`;
 - `server.admission_wait`, default `100ms`, range `0s` through `120s` and never
-  above `server.request_deadline`.
+  above `server.request_deadline`;
+- `server.working_set_bytes`, default `8589934592`, range 1 GiB through 64 GiB,
+  the process working-set budget every shared and batch permit reserves from;
+- `server.batch_revision.max_aggregate_message_bytes`, default `0` (batch
+  requests share the single-message sizing), otherwise `server.message_bytes`
+  through `536870912`, which gives `/v1/revise/batch` its own sizing and
+  admission pool and requires `server.batch_revise_capability_file`;
+- `server.batch_revision.max_in_flight`, default `1`, range 1 through 8,
+  consulted only with a batch aggregate. All shared and batch permits must fit
+  `server.working_set_bytes` together.
 
 The exact ranges are those in the HTTP table and are cross-validated, including
 read-header timeout being no greater than whole-request read timeout, read

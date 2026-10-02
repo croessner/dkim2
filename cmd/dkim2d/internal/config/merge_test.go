@@ -178,7 +178,7 @@ func TestStableFieldBindings(t *testing.T) {
 func TestStablePathSetIsExact(t *testing.T) {
 	specs := stableFieldSpecs()
 	golden := stableFieldGoldenContract()
-	if len(specs) != 124 || len(specs) != len(golden) {
+	if len(specs) != 127 || len(specs) != len(golden) {
 		t.Fatal("stable path count changed")
 	}
 	for index, expected := range golden {
@@ -243,6 +243,9 @@ func stableFieldGoldenContract() []stableFieldGolden {
 		{path: "server.max_in_flight", environment: "DKIM2D_SERVER_MAX_IN_FLIGHT", defaultValue: "1", hasDefault: true},
 		{path: "server.message_bytes", environment: "DKIM2D_SERVER_MESSAGE_BYTES", defaultValue: "33554432", hasDefault: true},
 		{path: "server.max_waiters", environment: "DKIM2D_SERVER_MAX_WAITERS", defaultValue: "64", hasDefault: true},
+		{path: "server.working_set_bytes", environment: "DKIM2D_SERVER_WORKING_SET_BYTES", defaultValue: "8589934592", hasDefault: true},
+		{path: "server.batch_revision.max_aggregate_message_bytes", environment: "DKIM2D_SERVER_BATCH_REVISION_MAX_AGGREGATE_MESSAGE_BYTES", defaultValue: "0", hasDefault: true},
+		{path: "server.batch_revision.max_in_flight", environment: "DKIM2D_SERVER_BATCH_REVISION_MAX_IN_FLIGHT", defaultValue: "1", hasDefault: true},
 		{path: "server.admission_wait", environment: "DKIM2D_SERVER_ADMISSION_WAIT", defaultValue: "100ms", hasDefault: true},
 		{path: "policy.mode", environment: "DKIM2D_POLICY_MODE", defaultValue: "strict", hasDefault: true},
 		{path: "process.default_tenant", environment: "DKIM2D_PROCESS_DEFAULT_TENANT"},

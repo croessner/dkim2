@@ -15,9 +15,16 @@ import (
 const (
 	// MaxBatchRevisionCopies bounds one complete fanout at the service boundary.
 	MaxBatchRevisionCopies = 32
-	// MaxBatchRevisionMessageBytes bounds the aggregate decoded message snapshots.
+	// MaxBatchRevisionMessageBytes is the default bound of the aggregate
+	// decoded original and copy snapshots of one batch request. A deployment
+	// may raise it with server.batch_revision.max_aggregate_message_bytes up
+	// to HardMaxBatchRevisionMessageBytes; the HTTP mapper enforces the
+	// configured value.
 	MaxBatchRevisionMessageBytes = 2 * dkim2.HardMaxRawMessageBytes
-	batchRevisionRedacted        = "dkim2d_batch_revision{redacted}"
+	// HardMaxBatchRevisionMessageBytes is the closed aggregate ceiling: an
+	// original and three copies at the library message ceiling.
+	HardMaxBatchRevisionMessageBytes = 4 * dkim2.HardMaxRawMessageBytes
+	batchRevisionRedacted            = "dkim2d_batch_revision{redacted}"
 )
 
 // BatchMessage freezes one exact message representation and SMTP envelope.
@@ -141,7 +148,7 @@ func NewBatchRevisionRequest(binding string, original BatchMessage, copies []Bat
 		}
 		ids[branch.id] = true
 		total += branch.message.RawSize()
-		if total > MaxBatchRevisionMessageBytes {
+		if total > HardMaxBatchRevisionMessageBytes {
 			return BatchRevisionRequest{}, &DomainError{}
 		}
 		if !branch.local {

@@ -67,12 +67,22 @@ type BoundaryConfig struct {
 	MaxInFlight     int
 	MaxWaiters      int
 	AdmissionWait   time.Duration
+	// WorkingSetBytes is the process working-set budget; zero selects 8 GiB.
+	WorkingSetBytes uint64
+	// BatchAggregateBytes enables a dedicated batch-revision sizing and
+	// admission pool whose decoded aggregate is at most this value. Zero keeps
+	// batch requests on the shared single-message sizing.
+	BatchAggregateBytes int
+	// BatchMaxInFlight is the dedicated batch permit count; zero selects one.
+	BatchMaxInFlight int
 }
 
 // HTTPBoundary owns route, admission, validation, and generated-adapter ordering.
 type HTTPBoundary struct {
 	messageBytes       int
 	sizing             workingSetSizing
+	batchSizing        workingSetSizing
+	batchAdmission     *processAdmission
 	authority          string
 	deadline           time.Duration
 	matcher            capabilityMatcher
@@ -113,16 +123,7 @@ func NewHTTPBoundary(
 		nilInterfaceValue(notifier) || validator == nil {
 		return nil, errHTTPBoundaryConfig
 	}
-	sizing, err := newWorkingSetSizing(int64(config.MessageBytes))
-	if err != nil {
-		return nil, errHTTPBoundaryConfig
-	}
-	admission, err := newProcessAdmission(
-		config.MaxInFlight,
-		config.MaxWaiters,
-		config.AdmissionWait,
-		sizing.UnitBytes(),
-	)
+	resources, err := newBoundaryResources(config)
 	if err != nil {
 		return nil, errHTTPBoundaryConfig
 	}
@@ -141,7 +142,7 @@ func NewHTTPBoundary(
 			return nil, errHTTPBoundaryConfig
 		}
 	}
-	strictDependencies := []any{metrics}
+	strictDependencies := []any{metrics, resources.batchLimits}
 	if !nilInterfaceValue(parsed.operation) {
 		strictDependencies = append(strictDependencies, parsed.operation)
 	}
@@ -154,7 +155,9 @@ func NewHTTPBoundary(
 	}
 	boundary := &HTTPBoundary{
 		messageBytes:       config.MessageBytes,
-		sizing:             sizing,
+		sizing:             resources.sizing,
+		batchSizing:        resources.batchSizing,
+		batchAdmission:     resources.batchAdmission,
 		authority:          config.Authority,
 		deadline:           config.RequestDeadline,
 		matcher:            matcher,
@@ -165,7 +168,7 @@ func NewHTTPBoundary(
 		propagateMatcher:   parsed.propagateMatcher,
 		readiness:          readiness,
 		validator:          validator,
-		admission:          admission,
+		admission:          resources.admission,
 		strict:             strict,
 		fatal:              notifier,
 		metrics:            metrics,
@@ -294,6 +297,9 @@ func (d boundaryDependencies) coherent() bool {
 
 // Close rejects new process admission and interrupts ordinary waiters.
 func (h *HTTPBoundary) Close() {
+	if h != nil && h.batchAdmission != nil {
+		h.batchAdmission.Close()
+	}
 	if h != nil && h.admission != nil {
 		h.admission.Close()
 	}
@@ -830,6 +836,85 @@ func (h *HTTPBoundary) serveStatus(
 	h.writePrepared(writer, request, response, err)
 }
 
+// boundaryResources is the validated sizing and admission inventory of one
+// boundary: the shared single-message pool and the optional dedicated batch
+// pool, both proven inside one process working-set budget.
+type boundaryResources struct {
+	sizing         workingSetSizing
+	admission      *processAdmission
+	batchSizing    workingSetSizing
+	batchAdmission *processAdmission
+	batchLimits    batchLimits
+}
+
+// newBoundaryResources derives every reservation from the configuration and
+// refuses a combination whose permits cannot all be owned at once.
+func newBoundaryResources(config BoundaryConfig) (boundaryResources, error) {
+	budget := config.WorkingSetBytes
+	if budget == 0 {
+		budget = processWorkingSetAggregateBytes
+	}
+	sizing, err := newWorkingSetSizingWithin(int64(config.MessageBytes), budget)
+	if err != nil {
+		return boundaryResources{}, err
+	}
+	admission, err := newProcessAdmissionWithin(
+		config.MaxInFlight, config.MaxWaiters, config.AdmissionWait, sizing.UnitBytes(), budget,
+	)
+	if err != nil {
+		return boundaryResources{}, err
+	}
+	resources := boundaryResources{
+		sizing: sizing, admission: admission,
+		batchLimits: batchLimits{aggregate: app.MaxBatchRevisionMessageBytes, request: sizing.ProcessBodyBytes()},
+	}
+	if config.BatchAggregateBytes == 0 {
+		if config.BatchMaxInFlight != 0 {
+			return boundaryResources{}, errHTTPBoundaryConfig
+		}
+		return resources, nil
+	}
+	batchInFlight := config.BatchMaxInFlight
+	if batchInFlight == 0 {
+		batchInFlight = 1
+	}
+	batchSizing, err := newBatchWorkingSetSizing(int64(config.MessageBytes), int64(config.BatchAggregateBytes), budget)
+	if err != nil {
+		return boundaryResources{}, err
+	}
+	if !jointWorkingSetFits(budget, config.MaxInFlight, sizing.UnitBytes(), batchInFlight, batchSizing.UnitBytes()) {
+		return boundaryResources{}, errHTTPBoundaryConfig
+	}
+	batchAdmission, err := newProcessAdmissionWithin(
+		batchInFlight, config.MaxWaiters, config.AdmissionWait, batchSizing.UnitBytes(), budget,
+	)
+	if err != nil {
+		return boundaryResources{}, err
+	}
+	resources.batchSizing, resources.batchAdmission = batchSizing, batchAdmission
+	resources.batchLimits = batchLimits{aggregate: config.BatchAggregateBytes, request: batchSizing.ProcessBodyBytes()}
+	return resources, nil
+}
+
+// jointWorkingSetFits reports whether every shared and batch permit can own
+// its full reservation inside the budget at the same time.
+func jointWorkingSetFits(budget uint64, inFlight int, unit uint64, batchInFlight int, batchUnit uint64) bool {
+	if inFlight < 1 || batchInFlight < 1 || unit == 0 || batchUnit == 0 ||
+		uint64(inFlight) > budget/unit || uint64(batchInFlight) > budget/batchUnit {
+		return false
+	}
+	shared := uint64(inFlight) * unit
+	return shared <= budget && uint64(batchInFlight)*batchUnit <= budget-shared
+}
+
+// routeResources selects the admission pool and sizing that own one route.
+func (h *HTTPBoundary) routeResources(path string) (*processAdmission, workingSetSizing) {
+	if path == batchRevisePath && h.batchAdmission != nil {
+		return h.batchAdmission, h.batchSizing
+	}
+	return h.admission, h.sizing
+}
+
 // serveProcess applies authenticated admission, body, JSON, OAS, and domain stages.
 func (h *HTTPBoundary) serveProcess(
 	writer *boundaryWriter,
@@ -844,18 +929,19 @@ func (h *HTTPBoundary) serveProcess(
 		return
 	}
 	request = preparedRequest
+	admission, sizing := h.routeResources(request.URL.Path)
 	var lease *processLease
 	var failure admissionFailure
 	if continueEligible {
-		lease, failure = h.admission.TryAcquire(request.Context())
+		lease, failure = admission.TryAcquire(request.Context())
 	} else {
-		lease, failure = h.admission.Acquire(request.Context())
+		lease, failure = admission.Acquire(request.Context())
 	}
 	if lease == nil {
 		h.writeAdmissionFailure(writer, request, failure)
 		return
 	}
-	ledger, err := newWorkingSetLedger(h.sizing)
+	ledger, err := newWorkingSetLedger(sizing)
 	if err != nil {
 		lease.Release()
 		h.writeInternal(writer, request)
@@ -958,7 +1044,8 @@ func (h *HTTPBoundary) prepareProcessRequest(
 	announced := request.ContentLength > 0 || facts.framing == framingSingleChunked
 	continueEligible := facts.expect == expectContinue &&
 		facts.protoMinor >= 1 && announced
-	if continueEligible && request.ContentLength > maxProcessBodyBytes {
+	if _, sizing := h.routeResources(request.URL.Path); continueEligible &&
+		request.ContentLength > sizing.ProcessBodyBytes() {
 		h.writeError(writer, request, http.StatusRequestEntityTooLarge,
 			generated.ErrorResponseCodeRequestTooLarge, generated.Request)
 		return request, false, false
@@ -1022,7 +1109,8 @@ func (h *HTTPBoundary) processReservedRequest(
 			generated.ErrorResponseCodeServiceNotReady, generated.Availability)
 		return
 	}
-	if request.ContentLength > h.sizing.ProcessBodyBytes() {
+	_, sizing := h.routeResources(request.URL.Path)
+	if request.ContentLength > sizing.ProcessBodyBytes() {
 		h.writeError(writer, request, http.StatusRequestEntityTooLarge,
 			generated.ErrorResponseCodeRequestTooLarge, generated.Request)
 		return
@@ -1038,7 +1126,7 @@ func (h *HTTPBoundary) processReservedRequest(
 		h.writeInternal(writer, request)
 		return
 	}
-	body, bodyFailure := readProcessBody(writer, request, originalRequest, h.sizing.ProcessBodyBytes())
+	body, bodyFailure := readProcessBody(writer, request, originalRequest, sizing.ProcessBodyBytes())
 	switch bodyFailure {
 	case 0:
 	case bodyFailureTooLarge:

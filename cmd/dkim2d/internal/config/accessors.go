@@ -697,6 +697,33 @@ func (c ServerConfig) MaxWaiters() uint16 {
 	return c.state.maxWaiters
 }
 
+// WorkingSetBytes returns the process working-set budget every admission
+// permit reserves from.
+func (c ServerConfig) WorkingSetBytes() uint64 {
+	if c.state == nil {
+		return 0
+	}
+	return c.state.workingSetBytes
+}
+
+// BatchAggregateBytes returns the dedicated batch-revision aggregate, or zero
+// when batch requests share the single-message sizing.
+func (c ServerConfig) BatchAggregateBytes() int {
+	if c.state == nil {
+		return 0
+	}
+	return c.state.batchAggregateBytes
+}
+
+// BatchMaxInFlight returns the dedicated batch-revision permit count. It is
+// consulted only when BatchAggregateBytes is nonzero.
+func (c ServerConfig) BatchMaxInFlight() uint8 {
+	if c.state == nil {
+		return 0
+	}
+	return c.state.batchMaxInFlight
+}
+
 // AdmissionWait returns the process admission waiting budget.
 func (c ServerConfig) AdmissionWait() time.Duration {
 	if c.state == nil {

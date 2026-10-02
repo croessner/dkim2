@@ -7,6 +7,8 @@ import (
 	"net"
 	"net/http"
 	"sync/atomic"
+
+	"github.com/croessner/dkim2/cmd/dkim2d/internal/app"
 )
 
 const (
@@ -16,6 +18,17 @@ const (
 	// maxProcessBodyBytes is the transport ceiling at the closed library
 	// maximum. A deployment narrows it through its working-set sizing.
 	maxProcessBodyBytes = int64(2*maxEncodedMessageBytes) + int64(batchFramingOverheadBytes)
+	// maxBatchMessages is the original plus every copy of one batch request.
+	maxBatchMessages = app.MaxBatchRevisionCopies + 1
+	// maxBatchAggregateMessageBytes is the closed configurable batch aggregate.
+	maxBatchAggregateMessageBytes = app.HardMaxBatchRevisionMessageBytes
+	// maxBatchProcessBodyBytes is the transport ceiling of a dedicated batch
+	// sizing at the closed aggregate: every message in separately padded
+	// Base64 plus the closed framing allowance.
+	maxBatchProcessBodyBytes = int64((uint64(maxBatchAggregateMessageBytes)+2*maxBatchMessages+2)/3*4) +
+		int64(batchFramingOverheadBytes)
+	// maxTransportBodyBytes is the largest body any route can admit.
+	maxTransportBodyBytes = max(maxProcessBodyBytes, maxBatchProcessBodyBytes)
 )
 
 type bodyFailure uint8
@@ -92,7 +105,7 @@ func readProcessBody(
 	if writer == nil || request.Body == nil {
 		return nil, bodyFailureInvalid
 	}
-	if bodyBytes < 1 || bodyBytes > maxProcessBodyBytes {
+	if bodyBytes < 1 || bodyBytes > maxTransportBodyBytes {
 		return nil, bodyFailureInvalid
 	}
 	request.Body = http.MaxBytesReader(writer, request.Body, bodyBytes)

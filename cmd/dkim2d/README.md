@@ -367,11 +367,29 @@ over the intermediate recipient domain. Only library-verified unrestricted
 external signatures are returned. A local delivery may stand if the external
 batch fails. The service performs no SMTP delivery or SRS encoding.
 
-Bounds are 32 actual copies, 32 MiB aggregate decoded original/current message
-bytes, 47,878,316 framed JSON bytes, 262,144 response bytes, one optional
-controlled hop per external copy, and at most three generated header fields
-per output. A 100 MiB MTA message limit does not change these service limits;
-clients must stop an oversized plan without omitting actual copies.
+Bounds are 32 actual copies, 262,144 response bytes, one optional controlled
+hop per external copy, at most three generated header fields per output, and
+two size bounds that the capability route advertises as configured:
+
+- `max_aggregate_message_bytes`, the decoded original plus every copy:
+  268,435,456 by default, or `server.batch_revision.max_aggregate_message_bytes`
+  (`DKIM2D_SERVER_BATCH_REVISION_MAX_AGGREGATE_MESSAGE_BYTES`, at least
+  `server.message_bytes`, at most 536,870,912). Each message still obeys
+  `server.message_bytes`.
+- `max_request_bytes`, the JSON body: by default the shared single-message
+  ceiling `2 * base64(server.message_bytes) + 3,139,072`; with a configured
+  aggregate the separately padded Base64 of the aggregate plus 3,139,072 bytes,
+  at most 718,967,044.
+
+A configured aggregate gives `/v1/revise/batch` its own working-set sizing and
+admission pool with `server.batch_revision.max_in_flight` permits (default 1,
+at most 8). Every shared permit and every batch permit must fit
+`server.working_set_bytes` (`DKIM2D_SERVER_WORKING_SET_BYTES`, default
+8,589,934,592, 1 GiB to 64 GiB) at the same time, or the daemon refuses to
+start. The aggregate requires `server.batch_revise_capability_file`. See
+[message size](../../docs/operator/message-size.md) for memory figures and the
+recommended production values. Clients must stop an oversized plan without
+omitting actual copies.
 Ordinary external null-sender revision is unsupported. Received signed DSNs
 use the existing separately authorized propagation API and replay contract.
 The [batch revision contract](../../docs/specs/implementation/batch-revision.md)

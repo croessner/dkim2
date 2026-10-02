@@ -13,6 +13,11 @@ const (
 	// Concurrency is whatever that budget can cover at the deployment's proven
 	// per-request reservation, never a number chosen independently of it.
 	processWorkingSetAggregateBytes = uint64(8 << 30)
+	// minProcessWorkingSetBytes and maxProcessWorkingSetBytes bound the
+	// configured server.working_set_bytes. The default above stays the
+	// budget whenever the operator leaves it unset.
+	minProcessWorkingSetBytes = uint64(1 << 30)
+	maxProcessWorkingSetBytes = uint64(64 << 30)
 	// maxProcessInFlight is the closed structural ceiling. The aggregate
 	// budget is the effective limit for every deployment below it.
 	maxProcessInFlight = 64
@@ -49,18 +54,31 @@ type processAdmission struct {
 	onWait    func()
 }
 
-// newProcessAdmission constructs one atomic permit and working-set reservation owner.
+// newProcessAdmission constructs one atomic permit and working-set
+// reservation owner within the default process budget.
 func newProcessAdmission(
 	maxInFlight int,
 	maxWaiters int,
 	wait time.Duration,
 	unitBytes uint64,
 ) (*processAdmission, error) {
+	return newProcessAdmissionWithin(maxInFlight, maxWaiters, wait, unitBytes, processWorkingSetAggregateBytes)
+}
+
+// newProcessAdmissionWithin constructs one atomic permit and working-set
+// reservation owner whose permits at unitBytes fit the configured budget.
+func newProcessAdmissionWithin(
+	maxInFlight int,
+	maxWaiters int,
+	wait time.Duration,
+	unitBytes uint64,
+	budget uint64,
+) (*processAdmission, error) {
 	if maxInFlight < 1 || maxInFlight > maxProcessInFlight ||
 		maxWaiters < 0 || maxWaiters > maxProcessWaiters ||
 		wait < 0 || wait > maxProcessAdmissionWait ||
-		unitBytes == 0 ||
-		uint64(maxInFlight) > processWorkingSetAggregateBytes/unitBytes {
+		unitBytes == 0 || !validWorkingSetBudget(budget) ||
+		uint64(maxInFlight) > budget/unitBytes {
 		return nil, errAdmissionConfig
 	}
 	return &processAdmission{

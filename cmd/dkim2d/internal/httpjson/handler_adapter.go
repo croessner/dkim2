@@ -54,6 +54,7 @@ type strictAdapter struct {
 	operations  app.OperationService
 	propagation app.PropagationService
 	metrics     *observability.Metrics
+	batch       batchLimits
 }
 
 // newStrictAdapter constructs one generated strict-server implementation.
@@ -68,8 +69,14 @@ func newStrictAdapter(
 	var metrics *observability.Metrics
 	var operations app.OperationService
 	var propagation app.PropagationService
+	var batch batchLimits
 	for _, dependency := range dependencies {
 		switch typed := dependency.(type) {
+		case batchLimits:
+			if batch.configured() || !typed.valid() {
+				return nil, &strictAdapterError{class: strictFailureInternal}
+			}
+			batch = typed
 		case *observability.Metrics:
 			if metrics != nil || typed == nil {
 				return nil, &strictAdapterError{class: strictFailureInternal}
@@ -101,7 +108,7 @@ func newStrictAdapter(
 	}
 	return &strictAdapter{
 		readiness: readiness, processor: processor, operations: operations,
-		propagation: propagation, metrics: metrics,
+		propagation: propagation, metrics: metrics, batch: batch,
 	}, nil
 }
 

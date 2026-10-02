@@ -100,6 +100,9 @@ func (f *ServerFactory) Assemble(input app.HTTPAssemblyInput) (app.HTTPAssembly,
 			maxInFlight:       int(server.MaxInFlight()),
 			maxWaiters:        int(server.MaxWaiters()),
 			admissionWait:     server.AdmissionWait(),
+			workingSetBytes:   server.WorkingSetBytes(),
+			batchAggregate:    server.BatchAggregateBytes(),
+			batchMaxInFlight:  batchPermits(server.BatchAggregateBytes(), server.BatchMaxInFlight()),
 		},
 		input.ProcessCapability(),
 		input.Readiness(),
@@ -126,6 +129,33 @@ type serverSettings struct {
 	maxInFlight       int
 	maxWaiters        int
 	admissionWait     time.Duration
+	workingSetBytes   uint64
+	batchAggregate    int
+	batchMaxInFlight  int
+}
+
+// batchPermits returns the dedicated batch permit count only when a batch
+// aggregate enables the dedicated pool.
+func batchPermits(aggregate int, permits uint8) int {
+	if aggregate == 0 {
+		return 0
+	}
+	return int(permits)
+}
+
+// boundaryConfig projects the copied server snapshot onto the HTTP boundary.
+func (s serverSettings) boundaryConfig() BoundaryConfig {
+	return BoundaryConfig{
+		MessageBytes:        s.messageBytes,
+		Authority:           s.requestAuthority(),
+		RequestDeadline:     s.requestDeadline,
+		MaxInFlight:         s.maxInFlight,
+		MaxWaiters:          s.maxWaiters,
+		AdmissionWait:       s.admissionWait,
+		WorkingSetBytes:     s.workingSetBytes,
+		BatchAggregateBytes: s.batchAggregate,
+		BatchMaxInFlight:    s.batchMaxInFlight,
+	}
 }
 
 // valid reports whether the copied server snapshot retains every exact
@@ -166,15 +196,19 @@ const defaultBoundaryMessageBytes = 32 << 20
 // never an independent number: it is what the budget covers. An unset ceiling
 // resolves to the same default the HTTP boundary applies.
 func (s serverSettings) admittedConcurrency() bool {
-	messageBytes := s.messageBytes
-	if messageBytes == 0 {
-		messageBytes = defaultBoundaryMessageBytes
+	config := s.boundaryConfig()
+	if config.MessageBytes == 0 {
+		config.MessageBytes = defaultBoundaryMessageBytes
 	}
-	sizing, err := newWorkingSetSizing(int64(messageBytes))
+	resources, err := newBoundaryResources(config)
 	if err != nil {
 		return false
 	}
-	return s.maxInFlight <= sizing.MaxInFlight()
+	resources.admission.Close()
+	if resources.batchAdmission != nil {
+		resources.batchAdmission.Close()
+	}
+	return true
 }
 
 // requestAuthority returns the sole HTTP Host authority allowed by the selected transport.
@@ -253,14 +287,7 @@ func newServerAssembly(
 		return nil, &serverRuntimeError{}
 	}
 	boundary, err := NewHTTPBoundary(
-		BoundaryConfig{
-			MessageBytes:    settings.messageBytes,
-			Authority:       settings.requestAuthority(),
-			RequestDeadline: settings.requestDeadline,
-			MaxInFlight:     settings.maxInFlight,
-			MaxWaiters:      settings.maxWaiters,
-			AdmissionWait:   settings.admissionWait,
-		},
+		settings.boundaryConfig(),
 		matcher,
 		readiness,
 		processor,

@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net"
@@ -72,6 +73,13 @@ type batchBoundaryFixture struct {
 // newBatchBoundaryFixture runs the actual tracked HTTP boundary and production signing service.
 func newBatchBoundaryFixture(t *testing.T) batchBoundaryFixture {
 	t.Helper()
+	return newBatchBoundaryFixtureWith(t, []byte("body\r\n"), 2, BoundaryConfig{})
+}
+
+// newBatchBoundaryFixtureWith builds the fixture with one message body, a
+// number of external copies, and the boundary resource configuration.
+func newBatchBoundaryFixtureWith(t *testing.T, messageBody []byte, externalCopies int, resources BoundaryConfig) batchBoundaryFixture {
+	t.Helper()
 	keys := (&propagationtest.Corpus{}).Provider(t)
 	key := propagationtest.NewSigningKey(t, batchBoundaryDomain)
 	keys.Publish(key)
@@ -80,7 +88,7 @@ func newBatchBoundaryFixture(t *testing.T) batchBoundaryFixture {
 	if err != nil {
 		t.Fatal("batch service construction failed")
 	}
-	raw := []byte("From: sender@hosted.test\r\nTo: alias@hosted.test\r\nX-Spacing:\t  exact\r\n\r\nbody\r\n")
+	raw := append([]byte("From: sender@hosted.test\r\nTo: alias@hosted.test\r\nX-Spacing:\t  exact\r\n\r\n"), messageBody...)
 	signRequest, err := app.NewOperationRequest(app.OperationSign, raw, []byte("<sender@hosted.test>"), [][]byte{[]byte("<alias@hosted.test>")}, propagateRouteTenant, batchBoundaryDomain, app.FidelityRawRFC5322)
 	if err != nil {
 		t.Fatal("original request invalid")
@@ -101,16 +109,24 @@ func newBatchBoundaryFixture(t *testing.T) batchBoundaryFixture {
 		Original: generated.BatchRevisionOriginal{Message: batchWireMessage(t, original), Smtp: batchWireSMTP(t, "<sender@hosted.test>", "<alias@hosted.test>")}}
 	request.Copies = []generated.BatchRevisionCopy{
 		{Id: "local", Delivery: generated.Local, Message: batchWireMessage(t, current), Smtp: batchWireSMTP(t, "<sender@hosted.test>", "<local@hosted.test>")},
-		{Id: "external-1", Delivery: generated.External, Message: batchWireMessage(t, current), Smtp: batchWireSMTP(t, "<prepared-1@srs.hosted.test>", "<one@external.test>"), Context: &generated.SigningContext{Tenant: propagateRouteTenant, Domain: batchBoundaryDomain}},
-		{Id: "external-2", Delivery: generated.External, Message: batchWireMessage(t, current), Smtp: batchWireSMTP(t, "<prepared-2@srs.hosted.test>", "<two@external.test>"), Context: &generated.SigningContext{Tenant: propagateRouteTenant, Domain: batchBoundaryDomain}},
 	}
-	address, readiness := startBatchBoundary(t, service)
+	for index := 1; index <= externalCopies; index++ {
+		number := []string{"zero", "one", "two", "three", "four", "five", "six", "seven", "eight"}[index]
+		request.Copies = append(request.Copies, generated.BatchRevisionCopy{
+			Id: fmt.Sprintf("external-%d", index), Delivery: generated.External, Message: batchWireMessage(t, current),
+			Smtp:    batchWireSMTP(t, fmt.Sprintf("<prepared-%d@srs.hosted.test>", index), "<"+number+"@external.test>"),
+			Context: &generated.SigningContext{Tenant: propagateRouteTenant, Domain: batchBoundaryDomain},
+		})
+	}
+	address, readiness := startBatchBoundaryWith(t, service, resources)
 	return batchBoundaryFixture{address: address, readiness: readiness, provider: keys, authority: authority, request: request, current: current,
 		capability: base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{0xb5}, 32))}
 }
 
-// startBatchBoundary composes the production tracked socket, capability gate, and generated dispatcher.
-func startBatchBoundary(t *testing.T, service *app.SigningService) (string, *boundaryReadiness) {
+// startBatchBoundaryWith composes the production tracked socket, capability
+// gate, and generated dispatcher, and starts the boundary with explicit message, budget,
+// and batch resource settings on top of the fixed fixture policy.
+func startBatchBoundaryWith(t *testing.T, service *app.SigningService, resources BoundaryConfig) (string, *boundaryReadiness) {
 	t.Helper()
 	raw, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -128,7 +144,12 @@ func startBatchBoundary(t *testing.T, service *app.SigningService) (string, *bou
 	}
 	ready := &boundaryReadiness{}
 	ready.ready.Store(true)
-	handler, err := NewHTTPBoundary(BoundaryConfig{Authority: raw.Addr().String(), RequestDeadline: 10 * time.Second, MaxInFlight: 1, MaxWaiters: 1, AdmissionWait: time.Second},
+	resources.Authority = raw.Addr().String()
+	if resources.RequestDeadline == 0 {
+		resources.RequestDeadline = 10 * time.Second
+	}
+	resources.MaxInFlight, resources.MaxWaiters, resources.AdmissionWait = 1, 1, time.Second
+	handler, err := NewHTTPBoundary(resources,
 		&boundaryCapabilityMatcher{value: bytes.Repeat([]byte{0xa5}, 32)}, ready, &boundaryProcessor{}, &boundaryFatalNotifier{}, validator,
 		service, batchReviseMatcherDependency{&boundaryCapabilityMatcher{value: bytes.Repeat([]byte{0xb5}, 32)}})
 	if err != nil {
@@ -155,6 +176,10 @@ func batchWireSMTP(t *testing.T, reverse, recipient string) generated.SMTPInput 
 }
 
 // exchangeBatch sends generated JSON through a real HTTP socket without a parallel DTO model.
+// batchExchangeTimeout bounds one test batch exchange, including the larger
+// race-instrumented signing of the dedicated-pool fixture.
+const batchExchangeTimeout = 120 * time.Second
+
 func exchangeBatch(t *testing.T, f batchBoundaryFixture, body []byte, capability string) (int, generated.BatchRevisionResponse) {
 	t.Helper()
 	request, err := http.NewRequest(http.MethodPost, "http://"+f.address+batchRevisePath, bytes.NewReader(body))
@@ -163,7 +188,7 @@ func exchangeBatch(t *testing.T, f batchBoundaryFixture, body []byte, capability
 	}
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set(batchReviseCapabilityHeader, capability)
-	response, err := (&http.Client{Timeout: 10 * time.Second}).Do(request)
+	response, err := (&http.Client{Timeout: batchExchangeTimeout}).Do(request)
 	if err != nil {
 		t.Fatal("HTTP exchange failed")
 	}
@@ -256,7 +281,10 @@ func TestBatchRevisionHTTPCapabilityIsDistinctAndReadinessIsHonest(t *testing.T)
 			}
 			if test.want == 200 {
 				var value generated.BatchRevisionCapabilities
-				if json.NewDecoder(response.Body).Decode(&value) != nil || value != batchCapabilities() {
+				if json.NewDecoder(response.Body).Decode(&value) != nil || value != batchCapabilities(batchLimits{
+					aggregate: app.MaxBatchRevisionMessageBytes,
+					request:   mustSizing(t, defaultBoundaryMessageBytes).ProcessBodyBytes(),
+				}) {
 					t.Fatal("capability contract mismatch")
 				}
 			}

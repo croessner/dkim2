@@ -35,6 +35,9 @@ const (
 	pathServerMaxInFlight                   = "server.max_in_flight"
 	pathServerMessageBytes                  = "server.message_bytes"
 	pathServerMaxWaiters                    = "server.max_waiters"
+	pathServerWorkingSetBytes               = "server.working_set_bytes"
+	pathServerBatchAggregateBytes           = "server.batch_revision.max_aggregate_message_bytes"
+	pathServerBatchMaxInFlight              = "server.batch_revision.max_in_flight"
 	pathServerAdmissionWait                 = "server.admission_wait"
 	pathPolicyMode                          = "policy.mode"
 	pathProcessDefaultTenant                = "process.default_tenant"
@@ -133,6 +136,8 @@ const (
 	defaultWriteTimeout  = "65s"
 	defaultDeadline      = "60s"
 	defaultAdmissionWait = "100ms"
+	// defaultWorkingSetBytes is the 8 GiB process working-set budget.
+	defaultWorkingSetBytes = "8589934592"
 	// defaultPendingLease is the propagation reservation lease. It must exceed
 	// the adapter's daemon timeout plus its re-injection and commit timeouts,
 	// so that a retry inside the lease is deferred rather than served twice.
@@ -316,6 +321,9 @@ func stableFieldSpecs() []fieldSpec {
 		{path: pathServerMaxInFlight, env: "DKIM2D_SERVER_MAX_IN_FLIGHT", kind: valueUint, defaultVal: "1", hasDefault: true},
 		{path: pathServerMessageBytes, env: "DKIM2D_SERVER_MESSAGE_BYTES", kind: valueUint, defaultVal: "33554432", hasDefault: true},
 		{path: pathServerMaxWaiters, env: "DKIM2D_SERVER_MAX_WAITERS", kind: valueUint, defaultVal: "64", hasDefault: true},
+		{path: pathServerWorkingSetBytes, env: "DKIM2D_SERVER_WORKING_SET_BYTES", kind: valueUint, defaultVal: defaultWorkingSetBytes, hasDefault: true},
+		{path: pathServerBatchAggregateBytes, env: "DKIM2D_SERVER_BATCH_REVISION_MAX_AGGREGATE_MESSAGE_BYTES", kind: valueUint, defaultVal: "0", hasDefault: true},
+		{path: pathServerBatchMaxInFlight, env: "DKIM2D_SERVER_BATCH_REVISION_MAX_IN_FLIGHT", kind: valueUint, defaultVal: "1", hasDefault: true},
 		{path: pathServerAdmissionWait, env: "DKIM2D_SERVER_ADMISSION_WAIT", kind: valueDuration, defaultVal: defaultAdmissionWait, hasDefault: true},
 		{path: pathPolicyMode, env: "DKIM2D_POLICY_MODE", flag: flagPolicyMode, kind: valueString, defaultVal: valuePolicyStrict, hasDefault: true},
 		{path: pathProcessDefaultTenant, env: "DKIM2D_PROCESS_DEFAULT_TENANT", kind: valueString},

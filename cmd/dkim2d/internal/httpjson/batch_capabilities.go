@@ -9,16 +9,59 @@ import (
 	"github.com/croessner/dkim2/cmd/dkim2d/internal/httpjson/generated"
 )
 
-// batchCapabilities advertises actual implementation bounds without resolving keys or signing.
-func batchCapabilities() generated.BatchRevisionCapabilities {
+// batchLimits carries the deployment's enforced batch bounds from the HTTP
+// boundary to the generated adapter, so the capability route advertises
+// exactly what the transport and mapper accept.
+type batchLimits struct {
+	aggregate int
+	request   int64
+}
+
+// configured reports whether the boundary supplied explicit limits.
+func (l batchLimits) configured() bool { return l.aggregate != 0 || l.request != 0 }
+
+// valid reports whether both limits lie inside the closed contract.
+func (l batchLimits) valid() bool {
+	return l.aggregate >= 1 && l.aggregate <= app.HardMaxBatchRevisionMessageBytes &&
+		l.request >= 1 && l.request <= maxBatchProcessBodyBytes
+}
+
+// aggregateBytes returns the enforced aggregate, or the default when the
+// adapter runs without a boundary-supplied value.
+func (l batchLimits) aggregateBytes() int {
+	if !l.configured() {
+		return app.MaxBatchRevisionMessageBytes
+	}
+	return l.aggregate
+}
+
+// requestBytes returns the enforced batch request body ceiling, or the
+// closed default-sizing ceiling when no boundary value is present.
+func (l batchLimits) requestBytes() int64 {
+	if !l.configured() {
+		return maxProcessBodyBytes
+	}
+	return l.request
+}
+
+// batchCapabilities advertises the enforced deployment bounds without resolving keys or signing.
+func batchCapabilities(limits batchLimits) generated.BatchRevisionCapabilities {
 	return generated.BatchRevisionCapabilities{
 		ApiVersion: generated.V1, Draft: generated.DraftIetfDkimDkim2Spec06,
 		Protocol: generated.BatchRevisionV1, OriginalCurrent: true, FullFanout: true, ControlledVia: true,
 		MaxCopies: app.MaxBatchRevisionCopies, MaxControlledHops: 1,
-		MaxAggregateMessageBytes: app.MaxBatchRevisionMessageBytes,
-		MaxRequestBytes:          maxProcessBodyBytes, MaxResponseBytes: maxSuccessResponseBytes,
+		MaxAggregateMessageBytes: int64(limits.aggregateBytes()),
+		MaxRequestBytes:          limits.requestBytes(), MaxResponseBytes: maxSuccessResponseBytes,
 		MaxHeaderFields: 3, ExternalNullSender: false,
 	}
+}
+
+// validBatchCapabilities accepts exactly the fixed protocol facts with
+// deployment bounds inside the closed contract.
+func validBatchCapabilities(value generated.BatchRevisionCapabilities) bool {
+	limits := batchLimits{aggregate: int(value.MaxAggregateMessageBytes), request: value.MaxRequestBytes}
+	return value.MaxAggregateMessageBytes <= int64(app.HardMaxBatchRevisionMessageBytes) &&
+		limits.valid() && value == batchCapabilities(limits)
 }
 
 // serveBatchCapabilities admits only one bodyless and separately authenticated capability query.
@@ -86,7 +129,7 @@ func (a *strictAdapter) GetBatchRevisionCapabilities(ctx context.Context,
 		return nil, &strictAdapterError{class: strictFailureInternal}
 	}
 	date, present := responseDate(ctx)
-	response, err := newJSONResponse(http.StatusOK, batchCapabilities(), false, date, present)
+	response, err := newJSONResponse(http.StatusOK, batchCapabilities(a.batch), false, date, present)
 	if err != nil {
 		return nil, err
 	}

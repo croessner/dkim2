@@ -1369,15 +1369,26 @@ components:
           minimum: 1
           maximum: 1
         max_aggregate_message_bytes:
+          description: >
+            The enforced bound of the decoded original plus every copy of one
+            request. It is 268435456 unless the daemon configures
+            server.batch_revision.max_aggregate_message_bytes; every single
+            message still obeys the daemon's server.message_bytes. Clients
+            read this value instead of assuming a constant.
           type: integer
           format: int64
-          minimum: 268435456
-          maximum: 268435456
+          minimum: 1
+          maximum: 536870912
         max_request_bytes:
+          description: >
+            The enforced bound of one request body in bytes: the deployment's
+            single-message transport ceiling, or with a configured batch
+            aggregate the separately padded Base64 of that aggregate plus the
+            closed framing allowance. A larger body is answered with 413.
           type: integer
           format: int64
-          minimum: 361053016
-          maximum: 361053016
+          minimum: 1
+          maximum: 718967044
         max_response_bytes:
           type: integer
           format: int64

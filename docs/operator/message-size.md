@@ -56,8 +56,8 @@ generic JSON validation, canonicalization and signing, and `max_in_flight: 1`
 serializes everything else behind it. The adapter's `daemon.request_timeout`
 must therefore cover the complete call including the bounded admission wait,
 and it must exceed the daemon's `server.request_deadline`, so the daemon's own
-503 answer arrives instead of a client-side abort. `dkim2-milter` accepts up
-to 180 seconds and the DSN propagator up to 30 seconds; `server.request_deadline`
+503 answer arrives instead of a client-side abort. `dkim2-milter` and the DSN
+propagator accept up to 180 seconds; `server.request_deadline`
 accepts up to 120 seconds. A 2-second adapter deadline is a small-message
 default and rejects SMTP-sized mail as `451 4.7.1 DKIM2 service unavailable`
 with `failure_class=indeterminate`, long after every byte limit was accepted.
@@ -122,3 +122,99 @@ real deployment SMTP/queue verification after installing new images.
 Older implementation milestone tables describing 32 MiB library maxima and
 512 MiB HTTP reservations are superseded by this operator contract and the
 current source-owned capacity tests.
+
+## Batch revision for SMTP-sized forwarding
+
+A forwarding MTA that revises one message for several recipients sends the
+original and every current copy in one `POST /v1/revise/batch` request. By
+default that request shares the single-message transport ceiling
+`2 * base64(server.message_bytes) + 3,139,072` bytes and the 268,435,456-byte
+decoded aggregate, so at a 112 MiB message ceiling it carries only about two
+messages. `server.batch_revision.max_aggregate_message_bytes` raises the
+decoded aggregate of the original plus all copies up to 536,870,912 bytes and
+gives the batch route its own working-set sizing and admission pool:
+
+| Setting | Default | Range |
+| --- | --- | --- |
+| `server.working_set_bytes` | 8589934592 (8 GiB) | 1 GiB to 64 GiB |
+| `server.batch_revision.max_aggregate_message_bytes` | 0 (shared sizing) | `server.message_bytes` to 536870912 |
+| `server.batch_revision.max_in_flight` | 1 | 1 to 8, used only with an aggregate |
+
+The batch request limit is then the separately padded Base64 of the
+aggregate plus 3,139,072 bytes. `GET /v1/revise/batch/capabilities` advertises
+the enforced `max_aggregate_message_bytes` and `max_request_bytes`; clients
+must read them instead of pinning constants. Each single message still obeys
+`server.message_bytes`.
+
+Every shared permit (`server.max_in_flight` times the shared reservation) and
+every batch permit (`server.batch_revision.max_in_flight` times the batch
+reservation) must fit `server.working_set_bytes` together, or the daemon
+refuses to start. The reservations are ownership-accounting bounds derived by
+the same model as above; the largest phase of a batch request is generic JSON
+validation of its body:
+
+| `server.message_bytes` | aggregate | batch body | batch reservation |
+| --- | --- | --- | --- |
+| 33554432 | 268435456 | 361,053,104 | 3.17 GiB |
+| 104857600 | 419430400 | 562,379,696 | 5.23 GiB |
+| 117440512 | 469762048 (original + 3 copies) | 629,488,560 | 5.67 GiB |
+| 117440512 | 536870912 (ceiling) | 718,967,044 | 6.25 GiB |
+
+The shared reservation at `server.message_bytes: 117440512` is 2.88 GiB.
+
+### Recommended values for a 112 MiB message limit
+
+For Postfix `message_size_limit = 117440512` and forwarding with an original
+and up to three copies per batch:
+
+```yaml
+# dkim2d serving /v1/revise/batch
+server:
+  message_bytes: 117440512
+  max_in_flight: 2
+  admission_wait: 30s
+  request_deadline: 120s
+  working_set_bytes: 12884901888
+  batch_revision:
+    max_aggregate_message_bytes: 469762048
+    max_in_flight: 1
+```
+
+This reserves 2 x 2.88 GiB + 5.67 GiB = 11.43 GiB of the 12 GiB budget. Size
+the container for that budget plus the process baseline, about 13 GiB; with
+`server.max_in_flight: 1` the budget may be 10 GiB (10737418240) and the
+container about 11 GiB. A daemon that serves no batch route keeps the 8 GiB
+default and leaves the batch keys unset.
+
+```yaml
+# dkim2-milter, for every role
+limits:
+  message_bytes: 117440512
+server:
+  max_buffered_bytes: 1073741824
+daemon:
+  request_timeout: 150s
+```
+
+```yaml
+# dkim2-dsn-propagator
+limits:
+  message_bytes: 117440512
+daemon:
+  request_timeout: 150s
+  pending_lease: 300s
+reinjection:
+  data_timeout: 120s
+```
+
+The propagator's `daemon.pending_lease` declares the daemon's
+`dsn_propagation.pending_lease`, so the daemon that serves propagation sets
+`dsn_propagation.pending_lease: 300s` as well; the sum of the propagator's
+call, re-injection and commit deadlines (282 seconds here) must stay below it.
+
+The batch client's own call deadline must exceed `server.request_deadline`
+(120 seconds), like an adapter's `daemon.request_timeout`, and its reported
+limits must come from the capability route. Revising a 112 MiB message for
+three external copies decodes, verifies and signs about 450 MiB of message
+data in one request; qualify the deployment's CPU time against the 120-second
+deadline before rollout. The Exim adapter keeps its separate 32 MiB ceiling.

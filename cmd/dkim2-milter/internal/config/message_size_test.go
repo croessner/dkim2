@@ -19,3 +19,15 @@ func TestSMTPMessageSizeConfiguration(t *testing.T) {
 		t.Fatal("insufficient working-set budget accepted")
 	}
 }
+
+// TestProductionMessageSizeConfiguration pins the documented 112 MiB adapter
+// values: the 1 GiB budget and a call deadline above the daemon's 120 seconds.
+func TestProductionMessageSizeConfiguration(t *testing.T) {
+	document := strings.Replace(validConfig(ModeOriginator), "server:\n", "server:\n  max_buffered_bytes: 1073741824\n", 1)
+	document = strings.Replace(document, "daemon:\n", "daemon:\n  request_timeout: 150s\n", 1)
+	document += "limits:\n  message_bytes: 117440512\n"
+	snapshot, err := Load(writeConfig(t, document))
+	if err != nil || snapshot.MessageBytes() != 117440512 {
+		t.Fatalf("112 MiB Milter configuration rejected: %v", err)
+	}
+}

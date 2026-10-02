@@ -41,5 +41,5 @@ func ceilingSizingValue() workingSetSizing {
 // ledgerWithLimit builds one ledger with an arbitrary reservation so the
 // accounting mechanics can be exercised without a realistic inventory.
 func ledgerWithLimit(limit uint64) (*workingSetLedger, error) {
-	return newWorkingSetLedger(workingSetSizing{unitBytes: limit})
+	return newWorkingSetLedger(workingSetSizing{budget: processWorkingSetAggregateBytes, unitBytes: limit})
 }
