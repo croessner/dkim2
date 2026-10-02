@@ -291,13 +291,55 @@ func canonicalASCIIEnvelopeDomain(path []byte, allowNull bool) (string, bool) {
 	return string(canonical), true
 }
 
-// HeaderFromSigningDomain derives the canonical DNS domain of the single
-// RFC 5322 From mailbox from the header fields collected by the bounded
-// header callbacks. It is the null-sender identity source of the header_from
-// originator policy and reports false for any missing, repeated, group,
-// multi-mailbox, literal, or SMTPUTF8 author.
-func (m Message) HeaderFromSigningDomain() (string, bool) {
-	return dkim2.HeaderFromDomain(m.raw)
+// NullSenderSkip is the closed reason why the header_from originator policy
+// left a null-sender message unsigned without a daemon call.
+type NullSenderSkip string
+
+const (
+	// NullSenderSkipProtocolFields reports existing DKIM2 protocol fields.
+	NullSenderSkipProtocolFields NullSenderSkip = "dkim2_protocol_fields"
+	// NullSenderSkipDeliveryStatus reports an RFC 3464 delivery-status report.
+	NullSenderSkipDeliveryStatus NullSenderSkip = "delivery_status_report"
+	// NullSenderSkipContentTypeAmbiguous reports an undecidable Content-Type.
+	NullSenderSkipContentTypeAmbiguous NullSenderSkip = "content_type_ambiguous"
+	// NullSenderSkipAuthorUnusable reports a From that yields no DNS domain.
+	NullSenderSkipAuthorUnusable NullSenderSkip = "author_unusable"
+	// NullSenderSkipEnvelopeUnsupported reports an unsupported recipient path.
+	NullSenderSkipEnvelopeUnsupported NullSenderSkip = "envelope_unsupported"
+)
+
+// Known reports whether the reason belongs to the closed vocabulary.
+func (r NullSenderSkip) Known() bool {
+	switch r {
+	case NullSenderSkipProtocolFields, NullSenderSkipDeliveryStatus,
+		NullSenderSkipContentTypeAmbiguous, NullSenderSkipAuthorUnusable,
+		NullSenderSkipEnvelopeUnsupported:
+		return true
+	default:
+		return false
+	}
+}
+
+// HeaderFromNullSenderDomain classifies a null-sender message from the
+// header fields collected by the bounded header callbacks. It returns the
+// canonical single From mailbox domain for an eligible automatic reply or
+// disposition notification, or the closed reason why the message must stay
+// unsigned: existing DKIM2 protocol fields, an RFC 3464 delivery-status
+// report, an undecidable Content-Type, or an unusable author.
+func (m Message) HeaderFromNullSenderDomain() (string, NullSenderSkip) {
+	domain, class := dkim2.ClassifyHeaderFromNullSender(m.raw)
+	switch class {
+	case dkim2.HeaderFromNullSenderEligible:
+		return domain, ""
+	case dkim2.HeaderFromNullSenderProtocolFields:
+		return "", NullSenderSkipProtocolFields
+	case dkim2.HeaderFromNullSenderDeliveryStatus:
+		return "", NullSenderSkipDeliveryStatus
+	case dkim2.HeaderFromNullSenderContentTypeAmbiguous:
+		return "", NullSenderSkipContentTypeAmbiguous
+	default:
+		return "", NullSenderSkipAuthorUnusable
+	}
 }
 
 // NullReversePath reports whether the exact normalized SMTP sender is null.
@@ -421,6 +463,9 @@ type Result struct {
 	Outcome   Disposition
 	Actions   []Action
 	Domains   DomainObservation
+	// NullSenderSkip carries the closed reason of an originator continue
+	// that the header_from policy produced without a daemon call.
+	NullSenderSkip NullSenderSkip
 }
 
 // String returns a content-free result diagnostic.
@@ -451,6 +496,7 @@ type Observer interface {
 		DomainObservation,
 	)
 	RecordAction(string, string)
+	RecordNullSenderSkip(string)
 }
 
 // FailureClass identifies one closed local failure.

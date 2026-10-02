@@ -25,6 +25,7 @@ const (
 	metricMessageFailures      = "dkim2_milter_message_failures_total"
 	metricMessageSize          = "dkim2_milter_message_size_bytes"
 	metricMessages             = "dkim2_milter_messages_total"
+	metricNullSenderSkips      = "dkim2_milter_null_sender_skips_total"
 	metricReadiness            = "dkim2_milter_readiness"
 	metricRecipientCount       = "dkim2_milter_recipient_count"
 	maxObservedMessageBytes    = resource.MaximumMessageBytes
@@ -46,6 +47,7 @@ type Registry struct {
 	recipients prometheus.Histogram
 	callbacks  *prometheus.CounterVec
 	actions    *prometheus.CounterVec
+	skips      *prometheus.CounterVec
 
 	invalid atomic.Bool
 }
@@ -105,6 +107,10 @@ func NewRegistry() *Registry {
 			Name: metricActions,
 			Help: "Completed bounded adapter actions.",
 		}, []string{keyActionKind, keyResultClass}),
+		skips: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: metricNullSenderSkips,
+			Help: "Null-sender messages the header_from originator policy left unsigned, by closed reason.",
+		}, []string{keyNullSenderSkip}),
 	}
 	collectors := []prometheus.Collector{
 		result.readiness,
@@ -118,6 +124,7 @@ func NewRegistry() *Registry {
 		result.recipients,
 		result.callbacks,
 		result.actions,
+		result.skips,
 	}
 	for _, collector := range collectors {
 		if err := registry.Register(collector); err != nil {
@@ -194,6 +201,14 @@ func (r *Registry) RecordMessage(
 	r.recipients.Observe(float64(recipients))
 }
 
+// RecordNullSenderSkip counts one closed header_from null-sender skip reason.
+func (r *Registry) RecordNullSenderSkip(reason string) {
+	defer containMetricPanic()
+	if r.usable() && closedMetricValue(keyNullSenderSkip, reason) {
+		r.skips.WithLabelValues(reason).Inc()
+	}
+}
+
 // RecordCallback records one closed callback and state outcome.
 func (r *Registry) RecordCallback(
 	callbackClass string,
@@ -254,7 +269,7 @@ func (r *Registry) usable() bool {
 		r.readiness != nil && r.lifecycle != nil && r.admissions != nil &&
 		r.messages != nil && r.failures != nil && r.failOpen != nil &&
 		r.duration != nil && r.size != nil && r.recipients != nil &&
-		r.callbacks != nil && r.actions != nil
+		r.callbacks != nil && r.actions != nil && r.skips != nil
 }
 
 // closedMetricValue applies the exact low-cardinality vocabulary.

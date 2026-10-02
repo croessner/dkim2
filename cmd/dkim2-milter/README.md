@@ -187,7 +187,15 @@ signing:
 
 With `header_from`, a transaction with reverse path `<>`, such as a Sieve
 vacation or notify reply or an RFC 8098 disposition notification, is signed
-with the domain of the single RFC 5322 From mailbox. The adapter reads From
+with the domain of the single RFC 5322 From mailbox. Delivery-status
+notifications are never signed here: a null-sender message that already
+carries a `DKIM2-Signature` or `Message-Instance` field, or whose top-level
+`Content-Type` is `multipart/report` with `report-type=delivery-status`
+(compared case-insensitively), or whose top-level `Content-Type` is repeated
+or unparsable, continues unchanged without daemon I/O. A DSN therefore keeps
+whatever the `postfix_dsn` route decided, signed or deliberately unsigned
+under `unsigned_original: continue`, even when it passes an egress listener
+that also carries auto-replies. The adapter reads From
 from the header fields its bounded header callbacks collected (the
 `limits.header_*` settings apply) and requires exactly one From field with
 exactly one mailbox whose addr-spec is ASCII and whose domain is a canonical
@@ -195,7 +203,11 @@ DNS name; the From domain replaces the envelope evidence under either
 `domain_source`. A missing or repeated From field, a group, several
 mailboxes, an address literal, an SMTPUTF8 author, or an SMTPUTF8 recipient
 is not applicable and continues unsigned without daemon I/O, exactly like an
-unsupported envelope sender. Otherwise the request carries `mail_from` `<>`,
+unsupported envelope sender. Every such skip is logged as the event
+`null_sender.skipped` and counted in `dkim2_milter_null_sender_skips_total`
+with the closed `null_sender_skip` label `dkim2_protocol_fields`,
+`delivery_status_report`, `content_type_ambiguous`, `author_unusable`, or
+`envelope_unsupported`. Otherwise the request carries `mail_from` `<>`,
 `null_sender: header_from`, and the From domain; the daemon must itself be
 configured with `signing.policy.originator.null_sender: header_from` (a daemon
 that keeps its `reject` default answers 400, which the adapter handles as a

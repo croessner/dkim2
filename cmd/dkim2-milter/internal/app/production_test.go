@@ -145,6 +145,9 @@ type orderedHandler struct {
 	closePanic bool
 }
 
+// RecordNullSenderSkip satisfies the observer contract for this fixture.
+func (*orderedTelemetry) RecordNullSenderSkip(string) {}
+
 // Handle is an unused content-free application test seam.
 func (*orderedHandler) Handle(context.Context, milter.Message) (milter.Result, error) {
 	return milter.Result{}, &milter.Error{Class: milter.FailureInternal}

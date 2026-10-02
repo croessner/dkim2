@@ -238,9 +238,13 @@ func (h *Handler) Handle(
 			return milter.Result{}, err
 		}
 		if !applicable {
+			var skip milter.NullSenderSkip
+			if message.NullReversePath() {
+				_, skip = state.nullSenderDomain(message)
+			}
 			return milter.Result{
 				Operation: operationSign, Result: verificationNone,
-				Outcome: milter.DispositionContinue,
+				Outcome: milter.DispositionContinue, NullSenderSkip: skip,
 			}, nil
 		}
 	}
@@ -393,11 +397,8 @@ func (guard *handlerGuard) signingDomain(message milter.Message) (string, bool, 
 		if guard.mode != modeOriginator || guard.nullSender != milter.NullSenderHeaderFrom {
 			return "", false, &milter.Error{Class: milter.FailureContract}
 		}
-		if !message.SupportsASCIISigningEnvelope() {
-			return "", false, nil
-		}
-		domain, applicable := message.HeaderFromSigningDomain()
-		return domain, applicable, nil
+		domain, skip := guard.nullSenderDomain(message)
+		return domain, skip == "", nil
 	}
 	envelopeDomain, applicable := message.SigningDomain()
 	if !applicable {
@@ -414,6 +415,22 @@ func (guard *handlerGuard) signingDomain(message milter.Message) (string, bool, 
 	default:
 		return "", false, &milter.Error{Class: milter.FailureContract}
 	}
+}
+
+// nullSenderDomain classifies one null-sender message under the header_from
+// policy. Messages carrying DKIM2 protocol fields, RFC 3464 delivery-status
+// reports, an undecidable Content-Type, an unusable author, or an
+// unsupported recipient path are skipped with a closed reason; delivery-status
+// notifications stay on the dedicated Section 12 route.
+func (guard *handlerGuard) nullSenderDomain(message milter.Message) (string, milter.NullSenderSkip) {
+	domain, skip := message.HeaderFromNullSenderDomain()
+	if skip != "" {
+		return "", skip
+	}
+	if !message.SupportsASCIISigningEnvelope() {
+		return "", milter.NullSenderSkipEnvelopeUnsupported
+	}
+	return domain, ""
 }
 
 // privateState returns the retained state only within the daemon package.

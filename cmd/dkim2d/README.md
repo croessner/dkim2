@@ -514,8 +514,12 @@ invalid with `signing.backend: disabled`. The environment override is
   `originator` profile for that tenant and domain as for any other sender (an
   absent or inactive profile answers 204) and signs `mf=<>` with `rt=` equal to
   the actual recipients. The library refuses the signature again if the
-  profile domain is not the From domain. The declaration is refused with a
-  non-null reverse path, and `/v1/revise` and batch revision never admit a
+  profile domain is not the From domain. A message that already carries a
+  `DKIM2-Signature` or `Message-Instance` field, or whose top-level
+  `Content-Type` is `multipart/report` with `report-type=delivery-status`
+  (or is repeated or unparsable), is refused as an invalid contract:
+  delivery-status notifications are signed only on `POST /v1/dsn/sign`. The
+  declaration is refused with a non-null reverse path, and `/v1/revise` and batch revision never admit a
   null reverse path.
 
 The rationale is draft-ietf-dkim-dkim2-spec Section 8.5, which allows `mf=<>`,

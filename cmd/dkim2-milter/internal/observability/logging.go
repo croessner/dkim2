@@ -24,6 +24,7 @@ const (
 	eventConnectionAdmission = "connection.admission"
 	eventLifecycleTransition = "lifecycle.transition"
 	eventMessageCompleted    = "message.completed"
+	eventNullSenderSkipped   = "null_sender.skipped"
 	eventReadinessTransition = "readiness.transition"
 	keyActionKind            = "action_kind"
 	keyAdmission             = "admission"
@@ -40,6 +41,7 @@ const (
 	keyLifecycleState        = "lifecycle_state"
 	keyMessageSizeBucket     = "message_size_bucket"
 	keyMode                  = "mode"
+	keyNullSenderSkip        = "null_sender_skip"
 	keyOperation             = "operation"
 	keyRecipientBucket       = "recipient_count_bucket"
 	keyResultClass           = "result_class"
@@ -234,6 +236,7 @@ func allowedEventID(eventID string) bool {
 		eventConnectionAdmission,
 		eventLifecycleTransition,
 		eventMessageCompleted,
+		eventNullSenderSkipped,
 		eventReadinessTransition:
 		return true
 	default:
@@ -287,10 +290,15 @@ func closedVocabulary(key string) []string {
 		}
 	case keyMode:
 		return []string{valueModeInbound, "ordinary_transit", "originator", valueModePostfixDSN}
+	case keyNullSenderSkip:
+		return []string{
+			"author_unusable", "content_type_ambiguous", "delivery_status_report",
+			"dkim2_protocol_fields", "envelope_unsupported",
+		}
 	case keyOperation:
 		return []string{
 			"action", "callback", "config", "connection", "lifecycle", "message",
-			"readiness",
+			"null_sender", "readiness",
 		}
 	case keyRecipientBucket:
 		return []string{"0", "1", "2_10", "11_100", "101_1000", valueRecipientsGTE}
@@ -328,6 +336,8 @@ func eventRequirements(eventID string) (string, []string, bool) {
 			keyMessageSizeBucket, keyMode, keyOperation, keyRecipientBucket, keyResultClass,
 			keyDomainRole, keyDomains, keyDomainCount, keyDomainsTruncated,
 		}, true
+	case eventNullSenderSkipped:
+		return "null_sender", []string{keyMode, keyNullSenderSkip, keyOperation}, true
 	case eventReadinessTransition:
 		return "readiness", []string{keyOperation, "ready", keyResultClass}, true
 	default:

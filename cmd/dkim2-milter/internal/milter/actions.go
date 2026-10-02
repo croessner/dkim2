@@ -32,7 +32,7 @@ func validResult(result Result, mode, authservID string) bool {
 	wantOperation, ok := operationForMode(mode)
 	if !ok || result.Operation != wantOperation ||
 		!validDisposition(result.Outcome) ||
-		!validActions(result) {
+		!validActions(result) || !validNullSenderSkip(result, mode) {
 		return false
 	}
 	switch mode {
@@ -47,6 +47,17 @@ func validResult(result Result, mode, authservID string) bool {
 			validTransitResult(result)
 	}
 	return false
+}
+
+// validNullSenderSkip confines a skip reason to the mutation-free originator
+// continue that the header_from policy produces locally.
+func validNullSenderSkip(result Result, mode string) bool {
+	if result.NullSenderSkip == "" {
+		return true
+	}
+	return mode == modeOriginator && result.NullSenderSkip.Known() &&
+		result.Outcome == DispositionContinue && result.Result == resultNone &&
+		len(result.Actions) == 0
 }
 
 // validResultOutcome enforces the exact daemon result/disposition matrix.

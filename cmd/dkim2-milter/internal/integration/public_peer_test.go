@@ -925,6 +925,53 @@ func TestOriginatorHeaderFromNullSenderSignsThroughPublicSocket(t *testing.T) {
 	assertPrivateOutputAbsent(t, process.log)
 }
 
+// TestOriginatorHeaderFromNullSenderLeavesDSNUnchangedThroughPublicSocket
+// proves a delivery-status notification on a header_from originator route is
+// accepted unchanged without a daemon call or tempfail, so bounces keep their
+// Section 12 path.
+func TestOriginatorHeaderFromNullSenderLeavesDSNUnchangedThroughPublicSocket(t *testing.T) {
+	service := &generatedDaemonService{
+		sign: func(generatedfixture.SignRequest) generatedfixture.OperationResponse {
+			t.Error("delivery-status notification reached the originator sign route")
+			return generatedfixture.OperationResponse{}
+		},
+	}
+	fixture := newGeneratedDaemonFixture(t, service)
+	process := startExecutableWithSigning(
+		t,
+		fixture.endpoint,
+		integrationModeOrigin,
+		"tempfail",
+		2*time.Second,
+		"\nsigning:\n  tenant: "+integrationTenant+
+			"\n  domain_source: envelope_sender\n  null_sender: header_from\n  dsn_domain: dsn.example.test",
+	)
+	for _, headers := range [][][2]string{
+		{{"From", " MAILER-DAEMON@example.test"}, {"Content-Type", " multipart/report; report-type=delivery-status; boundary=b"}},
+		{{"Message-Instance", " m=1; h=sha256:AA=="}, {string(generated.DKIM2Signature), " i=1; d=example.test"}, {"From", " MAILER-DAEMON@example.test"}},
+	} {
+		peer := dialPublicPeer(t, process.socket)
+		peer.negotiate(t)
+		peer.callback(t, peerConnect, []byte("relay.example.test\x00U"))
+		peer.callback(t, peerHelo, []byte("relay.example.test\x00"))
+		peer.callback(t, peerMail, []byte("<>\x00"))
+		peer.callback(t, peerRecipient, []byte("<sender@example.net>\x00"))
+		for _, header := range headers {
+			peer.callback(t, peerHeader, []byte(header[0]+"\x00"+header[1]+"\x00"))
+		}
+		peer.callback(t, peerEOH, nil)
+		peer.callback(t, peerBody, []byte("report\r\n"))
+		peer.send(t, peerEOM, nil)
+		if frame := peer.receive(t); frame.command != adapterAccept {
+			t.Fatalf("excluded null-sender EOM frame = %#v", frame)
+		}
+		peer.send(t, peerQuit, nil)
+		peer.close()
+	}
+	process.stop(t)
+	assertPrivateOutputAbsent(t, process.log)
+}
+
 // TestPostfixDSNWithoutEvidenceContinuesThroughPublicSocket proves the
 // dedicated adapter can share the normal non-SMTP Milter chain without
 // granting DSN authority or rejecting an unrelated transaction.
@@ -1118,8 +1165,12 @@ func waitForSocket(t *testing.T, path string, command *exec.Cmd, logPath string)
 	t.Helper()
 	deadline := time.Now().Add(publicStartupTimeout)
 	for time.Now().Before(deadline) {
+		// The socket inode exists between bind and listen, so readiness is
+		// the logged active lifecycle state that follows a listening socket.
 		state, err := os.Lstat(path)
-		if err == nil && state.Mode()&os.ModeSocket != 0 {
+		logged, _ := os.ReadFile(logPath)
+		if err == nil && state.Mode()&os.ModeSocket != 0 &&
+			bytes.Contains(logged, []byte(`"lifecycle_state":"active"`)) {
 			return
 		}
 		if command.ProcessState != nil {

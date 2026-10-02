@@ -191,3 +191,43 @@ func TestLoggingBucketsFreezeExactBoundaries(t *testing.T) {
 		t.Fatal("closed logging bucket boundary changed")
 	}
 }
+
+// TestRuntimeRecordsClosedNullSenderSkips proves every header_from skip
+// reason is logged and counted while an open value creates neither.
+func TestRuntimeRecordsClosedNullSenderSkips(t *testing.T) {
+	var output bytes.Buffer
+	runtime, err := New(observabilitySnapshot(t, "info"), &output)
+	if err != nil {
+		t.Fatal("runtime construction failed")
+	}
+	runtime.RecordNullSenderSkip("user@example.test")
+	if output.Len() != 0 {
+		t.Fatal("open null-sender skip value was logged")
+	}
+	reasons := []milter.NullSenderSkip{
+		milter.NullSenderSkipProtocolFields, milter.NullSenderSkipDeliveryStatus,
+		milter.NullSenderSkipContentTypeAmbiguous, milter.NullSenderSkipAuthorUnusable,
+		milter.NullSenderSkipEnvelopeUnsupported,
+	}
+	for _, reason := range reasons {
+		runtime.RecordNullSenderSkip(string(reason))
+		if !bytes.Contains(output.Bytes(), []byte(`"null_sender_skip":"`+string(reason)+`"`)) {
+			t.Fatalf("null-sender skip %q was not logged", reason)
+		}
+	}
+	if !bytes.Contains(output.Bytes(), []byte(`"event_id":"`+eventNullSenderSkipped+`"`)) {
+		t.Fatal("null-sender skip event missing")
+	}
+	exposition, err := runtime.Gather()
+	if err != nil {
+		t.Fatal("metric gathering failed")
+	}
+	for _, reason := range reasons {
+		if !bytes.Contains(exposition, []byte(metricNullSenderSkips+`{null_sender_skip="`+string(reason)+`"} 1`)) {
+			t.Fatalf("null-sender skip %q was not counted", reason)
+		}
+	}
+	if bytes.Contains(exposition, []byte("user@example.test")) {
+		t.Fatal("open value created a series")
+	}
+}

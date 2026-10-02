@@ -158,6 +158,21 @@ func (r *Runtime) RecordAction(actionKind string, resultClass string) {
 	r.registry.RecordAction(actionKind, resultClass)
 }
 
+// RecordNullSenderSkip logs and counts one closed header_from null-sender
+// skip reason. Only the originator mode produces it.
+func (r *Runtime) RecordNullSenderSkip(reason string) {
+	if r == nil || !closedMetricValue(keyNullSenderSkip, reason) {
+		return
+	}
+	r.logger.Info(
+		eventNullSenderSkipped,
+		slog.String(keyMode, "originator"),
+		slog.String(keyNullSenderSkip, reason),
+		slog.String(keyOperation, "null_sender"),
+	)
+	r.registry.RecordNullSenderSkip(reason)
+}
+
 // durationBucket maps a duration to one closed logging class.
 func durationBucket(duration time.Duration) string {
 	for _, candidate := range []struct {

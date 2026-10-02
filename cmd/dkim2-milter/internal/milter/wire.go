@@ -634,6 +634,9 @@ func (s *Session) endMessage(ctx context.Context) (frames [][]byte, resultErr er
 	defer cancel()
 	result, err := callHandler(operationContext, s.handler, message)
 	domains = result.Domains
+	if err == nil && validResult(result, s.mode, s.authservID) && result.NullSenderSkip != "" {
+		s.observeNullSenderSkip(result.NullSenderSkip)
+	}
 	if err != nil {
 		class := classifyHandlerError(operationContext, err)
 		failureClass = string(class)

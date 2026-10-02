@@ -372,7 +372,11 @@ By default the originator adapter tempfails every exact null reverse-path
 meant only for originator instances on trusted egress listeners and never for
 an inbound or MX-facing listener, a null reverse path selects the canonical
 DNS domain of the single RFC 5322 From mailbox from the callback-collected
-header fields, independently of `signing.domain_source`. A missing or
+header fields, independently of `signing.domain_source`. A message that
+already carries `DKIM2-Signature` or `Message-Instance`, or whose top-level
+`Content-Type` is `multipart/report` with `report-type=delivery-status`, or
+whose top-level `Content-Type` is repeated or unparsable, is never signed
+here: delivery-status notifications stay on the Section 12 route. A missing or
 repeated From field, a group, several mailboxes, an address literal, an
 SMTPUTF8 author, or an unsupported recipient path is not applicable and
 continues before daemon I/O. Otherwise the sign request carries `mail_from`

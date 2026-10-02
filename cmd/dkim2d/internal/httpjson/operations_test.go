@@ -125,6 +125,32 @@ func TestMapSignRequestAdmitsNullSenderOnlyWithHeaderFromDeclaration(t *testing.
 	}
 }
 
+// TestMapSignRequestRefusesNullSenderReportsAndSignedMail proves the daemon
+// never admits a delivery-status notification or DKIM2-bearing message on
+// the header_from originator path, while an RFC 8098 MDN still maps.
+func TestMapSignRequestRefusesNullSenderReportsAndSignedMail(t *testing.T) {
+	declaration := generated.NullSenderHeaderFrom
+	request := func(header string) generated.SignRequest {
+		value := operationRequestFixture(t, []byte("From: postmaster@example.test\r\n"+header+"\r\nreport\r\n"))
+		value.Smtp.MailFrom = mustProtectedString(t, "<>")
+		value.NullSender = &declaration
+		return value
+	}
+	for name, header := range map[string]string{
+		"dsn":              "Content-Type: multipart/report; report-type=delivery-status; boundary=b\r\n",
+		"dkim2 signature":  "DKIM2-Signature: i=1; d=example.test\r\n",
+		"message instance": "Message-Instance: m=1; h=sha256:AA==\r\n",
+	} {
+		if _, err := MapSignRequest(request(header)); !IsMappingError(err, MappingInvalidContract) {
+			t.Fatalf("%s error = %v", name, err)
+		}
+	}
+	mapped, err := MapSignRequest(request("Content-Type: multipart/report; report-type=disposition-notification; boundary=b\r\n"))
+	if err != nil || !mapped.HeaderFromNullSender() {
+		t.Fatalf("MDN mapping error = %v", err)
+	}
+}
+
 // TestStrictAdapterAnswersRefusedNullSenderAsInvalidContract proves a daemon
 // whose policy does not admit header_from refuses the declaration exactly
 // like any other null reverse path on the originator route.

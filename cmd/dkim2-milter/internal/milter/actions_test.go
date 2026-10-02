@@ -351,3 +351,32 @@ func TestInboundDiagnosticRetainsAuthorityAndOutcome(t *testing.T) {
 		t.Fatal("forged outcome accepted")
 	}
 }
+
+// TestValidResultConfinesNullSenderSkipToOriginatorContinue proves a skip
+// reason can only accompany the mutation-free originator continue.
+func TestValidResultConfinesNullSenderSkipToOriginatorContinue(t *testing.T) {
+	skip := Result{
+		Operation: "sign", Result: resultNone, Outcome: DispositionContinue,
+		NullSenderSkip: NullSenderSkipDeliveryStatus,
+	}
+	if !validResult(skip, modeOriginator, "") {
+		t.Fatal("originator continue with a closed skip reason was refused")
+	}
+	open := skip
+	open.NullSenderSkip = "user@example.test"
+	accepted := skip
+	accepted.Outcome = DispositionAccept
+	inbound := skip
+	inbound.Operation = "process"
+	for name, candidate := range map[string]struct {
+		result Result
+		mode   string
+	}{
+		"open reason": {open, modeOriginator}, "accept": {accepted, modeOriginator},
+		"inbound": {inbound, modeInbound},
+	} {
+		if validResult(candidate.result, candidate.mode, "") {
+			t.Fatalf("%s skip result was admitted", name)
+		}
+	}
+}

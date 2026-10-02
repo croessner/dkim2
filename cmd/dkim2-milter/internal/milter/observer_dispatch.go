@@ -17,6 +17,7 @@ const (
 	observationCallback
 	observationMessage
 	observationAction
+	observationNullSenderSkip
 )
 
 type observationEvent struct {
@@ -136,6 +137,11 @@ func (d *observerDispatcher) RecordAction(action, result string) {
 	d.submit(observationEvent{kind: observationAction, first: action, second: result})
 }
 
+// RecordNullSenderSkip queues one closed null-sender skip reason without blocking mail.
+func (d *observerDispatcher) RecordNullSenderSkip(reason string) {
+	d.submit(observationEvent{kind: observationNullSenderSkip, first: reason})
+}
+
 // submit performs a nonblocking best-effort enqueue under close synchronization.
 func (d *observerDispatcher) submit(event observationEvent) {
 	if d == nil {
@@ -196,5 +202,7 @@ func (d *observerDispatcher) deliver(event observationEvent) {
 		)
 	case observationAction:
 		d.target.RecordAction(event.first, event.second)
+	case observationNullSenderSkip:
+		d.target.RecordNullSenderSkip(event.first)
 	}
 }

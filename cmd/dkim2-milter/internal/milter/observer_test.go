@@ -57,6 +57,9 @@ func (o *blockingObserver) block() {
 	<-o.release
 }
 
+// RecordNullSenderSkip satisfies the observer contract for this fixture.
+func (*privateObserver) RecordNullSenderSkip(string) {}
+
 // RecordConnectionAdmission blocks at the injected latency seam.
 func (o *blockingObserver) RecordConnectionAdmission(string) { o.block() }
 
@@ -83,6 +86,9 @@ func (o *recordingObserver) RecordConnectionAdmission(value string) {
 	defer o.mu.Unlock()
 	o.admissions = append(o.admissions, value)
 }
+
+// RecordNullSenderSkip satisfies the observer contract for this fixture.
+func (*blockingObserver) RecordNullSenderSkip(string) {}
 
 // RecordCallback captures one closed callback tuple.
 func (o *recordingObserver) RecordCallback(callback, state, result string, _ time.Duration) {
@@ -122,6 +128,9 @@ func (o *recordingObserver) RecordAction(action, result string) {
 	defer o.mu.Unlock()
 	o.actions = append(o.actions, action+"/"+result)
 }
+
+// RecordNullSenderSkip satisfies the observer contract for this fixture.
+func (*recordingObserver) RecordNullSenderSkip(string) {}
 
 // TestObserverReceivesCompleteClosedEOMFacts proves the production observation boundary.
 func TestObserverReceivesCompleteClosedEOMFacts(t *testing.T) {

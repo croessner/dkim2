@@ -154,6 +154,17 @@ func (s *Session) observeMessage(
 	}, observer)
 }
 
+// observeNullSenderSkip reports one closed header_from null-sender skip reason.
+func (s *Session) observeNullSenderSkip(reason NullSenderSkip) {
+	if s == nil || s.admission == nil || !reason.Known() {
+		return
+	}
+	observer := s.admission.observerSnapshot()
+	safelyObserve(func() {
+		observer.RecordNullSenderSkip(string(reason))
+	}, observer)
+}
+
 // observeAction reports one frame outcome without retaining its payload.
 func (s *Session) observeAction(command byte, result string) {
 	if s == nil || s.admission == nil {

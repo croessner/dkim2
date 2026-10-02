@@ -33,6 +33,7 @@ type lifecycleTelemetry interface {
 		milter.DomainObservation,
 	)
 	RecordAction(string, string)
+	RecordNullSenderSkip(string)
 }
 
 // operationHandler owns the daemon client used by connection sessions.

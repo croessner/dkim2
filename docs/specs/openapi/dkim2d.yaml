@@ -1119,8 +1119,12 @@ components:
         binds the signing domain to the single RFC 5322 From mailbox: the
         context domain must equal that mailbox domain, and the daemon admits
         the request only when its own signing.policy.originator.null_sender
-        policy is header_from. Without both opt-ins the request is refused
-        as an invalid contract.
+        policy is header_from. A message that already carries a
+        DKIM2-Signature or Message-Instance field, or whose top-level
+        Content-Type is multipart/report with report-type delivery-status,
+        is never eligible: delivery-status notifications are signed only on
+        /v1/dsn/sign. Without both opt-ins, or for such a message, the
+        request is refused as an invalid contract.
       enum:
         - header_from
       x-enum-varnames:

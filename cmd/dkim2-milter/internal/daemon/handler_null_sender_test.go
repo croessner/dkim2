@@ -13,6 +13,9 @@ import (
 // nullSenderRecipient is the single ASCII forward path of every fixture.
 const nullSenderRecipient = "<bob@example.net>"
 
+// nullSenderAuthorDomain is the canonical From domain of the signed fixtures.
+const nullSenderAuthorDomain = "author.example.test"
+
 // nullSenderSignRecorder serves one sign route and records the exact null
 // sender declaration, envelope sender, and context domain it received.
 type nullSenderSignRecorder struct {
@@ -84,8 +87,8 @@ func TestHandlerSignsNullSenderWithHeaderFromDomain(t *testing.T) {
 			message := nullSenderMessage(t, "From: Vacation <NoReply@Author.Example.TEST>\r\n", nullSenderRecipient)
 			result, err := handler.Handle(t.Context(), message)
 			if err != nil || recorder.calls != 1 || recorder.mailFrom != "<>" ||
-				recorder.domain != "author.example.test" || recorder.nullSender != string(generated.NullSenderHeaderFrom) ||
-				result.Domains.Domains() != "author.example.test" {
+				recorder.domain != nullSenderAuthorDomain || recorder.nullSender != string(generated.NullSenderHeaderFrom) ||
+				result.Domains.Domains() != nullSenderAuthorDomain {
 				t.Fatalf("Handle() result=%v error=%v calls=%d mail_from=%v domain=%v null_sender=%v",
 					result, err, recorder.calls, recorder.mailFrom, recorder.domain, recorder.nullSender)
 			}
@@ -99,23 +102,56 @@ func TestHandlerSignsNullSenderWithHeaderFromDomain(t *testing.T) {
 func TestHandlerLeavesUnusableNullSenderAuthorsUnsigned(t *testing.T) {
 	recorder := &nullSenderSignRecorder{}
 	handler := newNullSenderHandler(t, recorder.server(t).URL, milter.DomainSourceEnvelopeSender, milter.NullSenderHeaderFrom)
-	for name, testCase := range map[string]struct{ header, recipient string }{
-		"missing From":       {header: "Sender: a@example.test\r\n", recipient: nullSenderRecipient},
-		"two From fields":    {header: "From: a@example.test\r\nFrom: b@example.test\r\n", recipient: nullSenderRecipient},
-		"two mailboxes":      {header: "From: a@example.test, b@example.test\r\n", recipient: nullSenderRecipient},
-		"group":              {header: "From: Team: a@example.test;\r\n", recipient: nullSenderRecipient},
-		"address literal":    {header: "From: a@[192.0.2.1]\r\n", recipient: nullSenderRecipient},
-		"SMTPUTF8 author":    {header: "From: a@b\xc3\xbccher.example\r\n", recipient: nullSenderRecipient},
-		"SMTPUTF8 recipient": {header: "From: a@example.test\r\n", recipient: "<b\xc3\xb6b@example.net>"},
+	for name, testCase := range map[string]struct {
+		header, recipient string
+		skip              milter.NullSenderSkip
+	}{
+		"missing From":       {header: "Sender: a@example.test\r\n", recipient: nullSenderRecipient, skip: milter.NullSenderSkipAuthorUnusable},
+		"two From fields":    {header: "From: a@example.test\r\nFrom: b@example.test\r\n", recipient: nullSenderRecipient, skip: milter.NullSenderSkipAuthorUnusable},
+		"two mailboxes":      {header: "From: a@example.test, b@example.test\r\n", recipient: nullSenderRecipient, skip: milter.NullSenderSkipAuthorUnusable},
+		"group":              {header: "From: Team: a@example.test;\r\n", recipient: nullSenderRecipient, skip: milter.NullSenderSkipAuthorUnusable},
+		"address literal":    {header: "From: a@[192.0.2.1]\r\n", recipient: nullSenderRecipient, skip: milter.NullSenderSkipAuthorUnusable},
+		"SMTPUTF8 author":    {header: "From: a@b\xc3\xbccher.example\r\n", recipient: nullSenderRecipient, skip: milter.NullSenderSkipAuthorUnusable},
+		"SMTPUTF8 recipient": {header: "From: a@example.test\r\n", recipient: "<b\xc3\xb6b@example.net>", skip: milter.NullSenderSkipEnvelopeUnsupported},
+		"unsigned DSN": {
+			header:    "From: MAILER-DAEMON@example.test\r\nContent-Type: Multipart/Report; Report-Type=\"Delivery-Status\"; boundary=b\r\n",
+			recipient: nullSenderRecipient, skip: milter.NullSenderSkipDeliveryStatus,
+		},
+		"DKIM2-signed DSN": {
+			header:    "Message-Instance: m=1; h=sha256:AA==\r\nDKIM2-Signature: i=1; d=example.test\r\nFrom: MAILER-DAEMON@example.test\r\nContent-Type: multipart/report; report-type=delivery-status; boundary=b\r\n",
+			recipient: nullSenderRecipient, skip: milter.NullSenderSkipProtocolFields,
+		},
+		"forwarded DKIM2 field": {
+			header:    "DKIM2-Signature: i=1; d=example.test\r\nFrom: a@example.test\r\n",
+			recipient: nullSenderRecipient, skip: milter.NullSenderSkipProtocolFields,
+		},
 	} {
 		result, err := handler.Handle(t.Context(), nullSenderMessage(t, testCase.header, testCase.recipient))
 		if err != nil || result.Operation != operationSign || result.Result != verificationNone ||
-			result.Outcome != milter.DispositionContinue || len(result.Actions) != 0 {
-			t.Fatalf("%s: Handle()=(%v,%v)", name, result, err)
+			result.Outcome != milter.DispositionContinue || len(result.Actions) != 0 ||
+			result.NullSenderSkip != testCase.skip {
+			t.Fatalf("%s: Handle()=(%v,%v) skip=%q", name, result, err, result.NullSenderSkip)
 		}
 	}
 	if recorder.calls != 0 {
 		t.Fatalf("unusable null-sender authors reached the daemon: calls=%d", recorder.calls)
+	}
+}
+
+// TestHandlerStillSignsNullSenderDispositionNotification proves an RFC 8098
+// MDN, a multipart/report that is not a delivery-status report, keeps the
+// header_from originator signing.
+func TestHandlerStillSignsNullSenderDispositionNotification(t *testing.T) {
+	recorder := &nullSenderSignRecorder{}
+	handler := newNullSenderHandler(t, recorder.server(t).URL, milter.DomainSourceEnvelopeSender, milter.NullSenderHeaderFrom)
+	message := nullSenderMessage(t,
+		"From: alice@author.example.test\r\nContent-Type: multipart/report; report-type=disposition-notification; boundary=b\r\n",
+		nullSenderRecipient,
+	)
+	result, err := handler.Handle(t.Context(), message)
+	if err != nil || recorder.calls != 1 || recorder.domain != nullSenderAuthorDomain ||
+		recorder.nullSender != string(generated.NullSenderHeaderFrom) || result.NullSenderSkip != "" {
+		t.Fatalf("MDN Handle() result=%v error=%v calls=%d domain=%v", result, err, recorder.calls, recorder.domain)
 	}
 }
 

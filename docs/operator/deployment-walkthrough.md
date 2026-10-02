@@ -455,6 +455,14 @@ sequenceDiagram
    Milter and `signing.policy.originator.null_sender: header_from` in the
    daemon. Both opt-ins are required, both default to `reject`, and the
    request must carry the explicit `null_sender: header_from` declaration.
+   Only automatic replies and disposition notifications are signed this way;
+   DSNs always stay on the Section 12 path. A null-sender message that already
+   carries `DKIM2-Signature` or `Message-Instance`, or whose top-level
+   `Content-Type` is `multipart/report; report-type=delivery-status`, passes
+   the originator Milter unchanged without a daemon call, so a bounce that the
+   `postfix_dsn` route signed, or deliberately left unsigned under
+   `unsigned_original: continue`, keeps that outcome when it crosses an egress
+   listener shared with auto-replies; the daemon refuses such a request too.
    The signing domain is then the domain of the single RFC 5322 From mailbox,
    which the daemon and the library check again, and the signature carries
    `mf=<>` and the actual recipient in `rt=`; Draft-06 Section 8.5 admits

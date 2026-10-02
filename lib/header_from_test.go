@@ -3,6 +3,7 @@ package dkim2
 import (
 	"bytes"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/croessner/dkim2/internal/rawmsg"
@@ -131,5 +132,75 @@ func TestHeaderFromNullSenderSigningRefusesForeignOrAmbiguousAuthors(t *testing.
 	))
 	if !errors.Is(err, newSigningError(SigningErrorInvalidRequest)) {
 		t.Fatalf("generic null-sender request error=%v", err)
+	}
+}
+
+// TestClassifyHeaderFromNullSenderExcludesReportsAndProtocolHistory proves
+// that DKIM2-bearing mail and RFC 3464 delivery-status notifications never
+// qualify for header_from originator signing, while automatic replies and
+// RFC 8098 disposition notifications do.
+func TestClassifyHeaderFromNullSenderExcludesReportsAndProtocolHistory(t *testing.T) {
+	const author = "From: MAILER-DAEMON <postmaster@example.test>\r\n"
+	for _, testCase := range []struct {
+		name   string
+		header string
+		want   HeaderFromNullSenderClass
+	}{
+		{name: "vacation", header: "Auto-Submitted: auto-replied\r\nContent-Type: text/plain; charset=utf-8\r\n", want: HeaderFromNullSenderEligible},
+		{name: "no content type", header: "Auto-Submitted: auto-replied\r\n", want: HeaderFromNullSenderEligible},
+		{name: "mdn", header: "Content-Type: multipart/report; report-type=disposition-notification; boundary=b\r\n", want: HeaderFromNullSenderEligible},
+		{name: "report without type", header: "Content-Type: multipart/report; boundary=b\r\n", want: HeaderFromNullSenderEligible},
+		{name: "dsn", header: "Content-Type: multipart/report; report-type=delivery-status; boundary=b\r\n", want: HeaderFromNullSenderDeliveryStatus},
+		{name: "dsn mixed case quoted", header: "Content-Type: Multipart/Report; Report-Type=\"Delivery-Status\";\r\n boundary=\"b\"\r\n", want: HeaderFromNullSenderDeliveryStatus},
+		{name: "dsn lower field name", header: "content-type: multipart/report; boundary=b; REPORT-TYPE=delivery-status\r\n", want: HeaderFromNullSenderDeliveryStatus},
+		{name: "dkim2 signature", header: "DKIM2-Signature: i=1; d=example.test\r\n", want: HeaderFromNullSenderProtocolFields},
+		{name: "message instance", header: "Message-Instance: m=1; h=sha256:AA==\r\n", want: HeaderFromNullSenderProtocolFields},
+		{name: "signed dsn", header: "DKIM2-Signature: i=1\r\nContent-Type: multipart/report; report-type=delivery-status; boundary=b\r\n", want: HeaderFromNullSenderProtocolFields},
+		{name: "repeated content type", header: "Content-Type: text/plain\r\nContent-Type: multipart/report; report-type=delivery-status; boundary=b\r\n", want: HeaderFromNullSenderContentTypeAmbiguous},
+		{name: "unparsable content type", header: "Content-Type: multipart/report; report-type=delivery-status; report-type=x\r\n", want: HeaderFromNullSenderContentTypeAmbiguous},
+		{name: "overlong content type", header: "Content-Type: text/plain" + strings.Repeat(";\r\n x=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", maxContentTypeValueBytes/40) + "\r\n", want: HeaderFromNullSenderContentTypeAmbiguous},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			raw := []byte(author + testCase.header + "To: bob@example.net\r\n\r\nbody\r\n")
+			domain, class := ClassifyHeaderFromNullSender(raw)
+			wantDomain := ""
+			if testCase.want == HeaderFromNullSenderEligible {
+				wantDomain = testSigningDomain
+			}
+			if class != testCase.want || domain != wantDomain {
+				t.Fatalf("ClassifyHeaderFromNullSender() = %q, %q; want %q", domain, class, testCase.want)
+			}
+		})
+	}
+	if _, class := ClassifyHeaderFromNullSender([]byte("Subject: x\r\n\r\nbody\r\n")); class != HeaderFromNullSenderAuthorUnusable {
+		t.Fatalf("missing author class = %q", class)
+	}
+}
+
+// TestHeaderFromNullSenderSigningRefusesDeliveryStatusAndSignedMail proves
+// the library refuses originator signing of a DSN or DKIM2-bearing message
+// even with an exact From-bound profile, and still signs an RFC 8098 MDN.
+func TestHeaderFromNullSenderSigningRefusesDeliveryStatusAndSignedMail(t *testing.T) {
+	fixture := newPublicSigningFixture(t)
+	recipient := []byte("<bob@example.net>")
+	sign := func(raw []byte) error {
+		_, _, err := fixture.facade.SignOriginator(t.Context(), NewHeaderFromNullSenderSigningRequest(
+			raw, [][]byte{recipient}, fixture.nullSenderTicket(t, raw, recipient), fixture.profile,
+			SigningMetadata{}, SigningTransportFinalNetworkPreDotStuffing,
+		))
+		return err
+	}
+	for _, header := range []string{
+		"Content-Type: multipart/report; report-type=delivery-status; boundary=b\r\n",
+		"Message-Instance: m=1; h=sha256:AA==\r\n",
+	} {
+		raw := []byte("From: postmaster@example.test\r\n" + header + "To: bob@example.net\r\n\r\nbody\r\n")
+		if err := sign(raw); !errors.Is(err, newSigningError(SigningErrorAuthorizationDenied)) {
+			t.Fatalf("excluded null-sender message error=%v", err)
+		}
+	}
+	mdn := []byte("From: alice@example.test\r\nContent-Type: multipart/report; report-type=disposition-notification; boundary=b\r\nTo: bob@example.net\r\n\r\n--b\r\nContent-Type: text/plain\r\n\r\nread\r\n--b--\r\n")
+	if err := sign(mdn); err != nil {
+		t.Fatalf("MDN signing error=%v", err)
 	}
 }

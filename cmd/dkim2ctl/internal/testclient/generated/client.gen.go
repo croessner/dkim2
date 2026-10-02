@@ -1884,7 +1884,7 @@ type MessageInput struct {
 // MessageInputFidelity defines model for MessageInput.Fidelity.
 type MessageInputFidelity string
 
-// NullSenderPolicy Declares that an originator adapter on a trusted egress route signs a message whose smtp.mail_from is the null reverse path "<>", such as an automatic reply or a disposition notification. It is required exactly when mail_from is "<>" and refused otherwise. header_from binds the signing domain to the single RFC 5322 From mailbox: the context domain must equal that mailbox domain, and the daemon admits the request only when its own signing.policy.originator.null_sender policy is header_from. Without both opt-ins the request is refused as an invalid contract.
+// NullSenderPolicy Declares that an originator adapter on a trusted egress route signs a message whose smtp.mail_from is the null reverse path "<>", such as an automatic reply or a disposition notification. It is required exactly when mail_from is "<>" and refused otherwise. header_from binds the signing domain to the single RFC 5322 From mailbox: the context domain must equal that mailbox domain, and the daemon admits the request only when its own signing.policy.originator.null_sender policy is header_from. A message that already carries a DKIM2-Signature or Message-Instance field, or whose top-level Content-Type is multipart/report with report-type delivery-status, is never eligible: delivery-status notifications are signed only on /v1/dsn/sign. Without both opt-ins, or for such a message, the request is refused as an invalid contract.
 type NullSenderPolicy string
 
 // OperationResponse Result and disposition are coherent: pass permits accept or continue, fail and permerror require reject, and temperror requires tempfail. Only accept may carry actions.
@@ -2093,7 +2093,7 @@ type SignRequest struct {
 	Draft      DraftVersion   `json:"draft"`
 	Message    MessageInput   `json:"message"`
 
-	// NullSender Declares that an originator adapter on a trusted egress route signs a message whose smtp.mail_from is the null reverse path "<>", such as an automatic reply or a disposition notification. It is required exactly when mail_from is "<>" and refused otherwise. header_from binds the signing domain to the single RFC 5322 From mailbox: the context domain must equal that mailbox domain, and the daemon admits the request only when its own signing.policy.originator.null_sender policy is header_from. Without both opt-ins the request is refused as an invalid contract.
+	// NullSender Declares that an originator adapter on a trusted egress route signs a message whose smtp.mail_from is the null reverse path "<>", such as an automatic reply or a disposition notification. It is required exactly when mail_from is "<>" and refused otherwise. header_from binds the signing domain to the single RFC 5322 From mailbox: the context domain must equal that mailbox domain, and the daemon admits the request only when its own signing.policy.originator.null_sender policy is header_from. A message that already carries a DKIM2-Signature or Message-Instance field, or whose top-level Content-Type is multipart/report with report-type delivery-status, is never eligible: delivery-status notifications are signed only on /v1/dsn/sign. Without both opt-ins, or for such a message, the request is refused as an invalid contract.
 	NullSender *NullSenderPolicy `json:"null_sender,omitempty"`
 	Smtp       SMTPInput         `json:"smtp"`
 }
