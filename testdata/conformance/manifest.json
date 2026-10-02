@@ -106,7 +106,7 @@
     {
       "id": "milter-public-peer-source",
       "path": "cmd/dkim2-milter/internal/integration/public_peer_test.go",
-      "sha256": "ca340869efdd2d275126b8195ee41a75e2a98db39e02e64e649e38375a9d9ae4",
+      "sha256": "f0539eafb493f7c2f05d56fa86039748a630fc5399c0949b7c7c0542698f8d72",
       "module": "cmd/dkim2-milter"
     },
     {
@@ -305,6 +305,12 @@
       "id": "signing-limits-source",
       "path": "lib/signing_limits_test.go",
       "sha256": "c6213a559efb899248b1d014fca1e8d2c2e067c06a46f71d5be5e8ed42443179",
+      "module": "lib"
+    },
+    {
+      "id": "signing-null-sender-source",
+      "path": "lib/header_from_test.go",
+      "sha256": "9d34f4bba7f27074375b5f360deca3769b9d612a07886917056a5a9a78600fb4",
       "module": "lib"
     },
     {
@@ -654,6 +660,23 @@
         "milter-negative-source"
       ],
       "producer": "milter-negative-tests"
+    },
+    {
+      "suite": "milter",
+      "case_id": "null-sender-header-from-originator",
+      "class": "adapter_contract",
+      "authority": [
+        "RFC 5322 Section 3.6.2",
+        "docs/specs/implementation/milter-adapter.md Datasource And Private Signing Backend"
+      ],
+      "provenance": "regression_reproducer",
+      "runner": "milter_fixture",
+      "required_platform": "portable",
+      "expected_outcome": "pass",
+      "artifacts": [
+        "milter-public-peer-source"
+      ],
+      "producer": "milter-public-fixture-tests"
     },
     {
       "suite": "milter",
@@ -1521,6 +1544,24 @@
         "signing-facade-source",
         "signing-provenance",
         "signing-public",
+        "signing-test-key"
+      ],
+      "producer": "library-facade-tests"
+    },
+    {
+      "suite": "signing",
+      "case_id": "null-sender-header-from-facade",
+      "class": "documented_interpretation",
+      "authority": [
+        "draft-ietf-dkim-dkim2-spec-06 Sections 8.5 and 8.8",
+        "docs/specs/implementation/milter-adapter.md Datasource And Private Signing Backend"
+      ],
+      "provenance": "regression_reproducer",
+      "runner": "portable_vector",
+      "required_platform": "portable",
+      "expected_outcome": "pass",
+      "artifacts": [
+        "signing-null-sender-source",
         "signing-test-key"
       ],
       "producer": "library-facade-tests"

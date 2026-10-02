@@ -360,6 +360,7 @@ var portableDefinitions = []runnerDefinition{
 			{key: "signing\x00dsn-propagation-rebuild", testName: "TestDSNPropagationDraft06GoldenVectors", artifacts: []string{"signing-dsn-propagation"}},
 			{key: "signing\x00envelope-facade", testName: "TestPublicEnvelopeSnapshotsAndOrderedGroupMatching", artifacts: []string{signingFacadeArtifact, signingProvenanceArtifact, signingPublicArtifact, signingTestKeyArtifact}},
 			{key: "signing\x00next-domain-facade", testName: "TestPublicNextDomainCreationReleaseAndCompletion", artifacts: []string{signingFacadeArtifact, signingProvenanceArtifact, signingPublicArtifact, signingTestKeyArtifact}},
+			{key: "signing\x00null-sender-header-from-facade", testName: "TestHeaderFromNullSenderSigningVerifiesWithNullMailFrom", artifacts: []string{"signing-null-sender-source", signingTestKeyArtifact}},
 			{key: "signing\x00origin-facade", testName: "TestPublicOriginatorSigningAlgorithmsAndImmutableBytes", artifacts: []string{signingFacadeArtifact, signingProvenanceArtifact, signingPublicArtifact, signingTestKeyArtifact}},
 			{key: "signing\x00restricted-release", testName: "TestPublicLocalOnlyReleaseIsExactAtomicAndNilOnDenial", artifacts: []string{signingFacadeArtifact, signingProvenanceArtifact, signingPublicArtifact, "signing-release-source", signingTestKeyArtifact}},
 			{key: "signing\x00revision-facade", testName: "TestPublicExistingSigningDerivesForwarderAndReviser", artifacts: []string{signingFacadeArtifact, signingProvenanceArtifact, signingPublicArtifact, signingTestKeyArtifact}},
@@ -493,6 +494,11 @@ var portableDefinitions = []runnerDefinition{
 			{
 				key:       "milter\x00envelope-domain-originator",
 				testName:  "TestOriginatorEnvelopeSenderDomainSelectionRunsThroughPublicSocket",
+				artifacts: []string{milterPublicPeerArtifact},
+			},
+			{
+				key:       "milter\x00null-sender-header-from-originator",
+				testName:  "TestOriginatorHeaderFromNullSenderSignsThroughPublicSocket",
 				artifacts: []string{milterPublicPeerArtifact},
 			},
 			{
