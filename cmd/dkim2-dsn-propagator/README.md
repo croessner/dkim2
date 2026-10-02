@@ -167,7 +167,7 @@ and fail closed when the variable is absent.
 | `server.max_in_flight_transactions` | integer | `64` | Concurrent transaction bound. |
 | `daemon.endpoint` | string | required | Canonical loopback HTTP origin of `dkim2d`. |
 | `daemon.capability_file` | string | required | Protected 32-byte propagation capability. |
-| `daemon.request_timeout` | duration | `5s` | Propagation-call deadline. |
+| `daemon.request_timeout` | duration | `5s` | Propagation-call deadline, at most `180s`; for SMTP-sized notifications it must exceed the daemon's `server.request_deadline`. |
 | `daemon.commit_timeout` | duration | `2s` | Commit-call deadline. |
 | `daemon.pending_lease` | duration | `120s` | Operator-declared value of the daemon's `dsn_propagation.pending_lease`. |
 | `reinjection.endpoint` | string | required | Canonical loopback SMTP origin of the submission listener. |

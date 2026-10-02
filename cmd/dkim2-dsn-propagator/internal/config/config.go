@@ -607,7 +607,10 @@ func parseValues(values map[string]rawValue) (parsedValues, error) {
 		return parsedValues{}, err
 	}
 	if parsed.requestTimeout, err = parseDuration(
-		values["daemon.request_timeout"], 100*time.Millisecond, 30*time.Second,
+		// A propagation call at the 128 MiB ceiling may run up to the
+		// daemon's 120-second request deadline; the adapter deadline must be
+		// able to exceed it, matching the Milter's 180-second ceiling.
+		values["daemon.request_timeout"], 100*time.Millisecond, 180*time.Second,
 	); err != nil {
 		return parsedValues{}, err
 	}

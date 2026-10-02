@@ -208,3 +208,28 @@ func TestProtectedFileRules(t *testing.T) {
 		t.Fatal("a symlinked configuration was read")
 	}
 }
+
+// TestProductionMessageSizeDeadlines pins the documented 112 MiB values: a
+// propagation deadline above the daemon's 120 seconds inside a 300-second
+// lease, and the 180-second ceiling of the propagation call deadline.
+func TestProductionMessageSizeDeadlines(t *testing.T) {
+	document := strings.Replace(baseDocument(),
+		"daemon:\n  endpoint: http://127.0.0.1:8080\n",
+		"daemon:\n  endpoint: http://127.0.0.1:8080\n  request_timeout: 150s\n  pending_lease: 300s\n", 1)
+	document = strings.Replace(document,
+		"reinjection:\n  endpoint: smtp://127.0.0.1:10025\n",
+		"reinjection:\n  endpoint: smtp://127.0.0.1:10025\n  data_timeout: 120s\n", 1)
+	document += "limits:\n  message_bytes: 117440512\n"
+	snapshot, err := Load(writeConfiguration(t, document))
+	if err != nil || snapshot.RequestTimeout() != 150*time.Second || snapshot.MessageBytes() != 117440512 {
+		t.Fatalf("production propagator configuration rejected: %v", err)
+	}
+	for _, timeout := range []string{"180s", "181s"} {
+		candidate := strings.Replace(document, "request_timeout: 150s", "request_timeout: "+timeout, 1)
+		candidate = strings.Replace(candidate, "pending_lease: 300s", "pending_lease: 1h", 1)
+		_, err := Load(writeConfiguration(t, candidate))
+		if (timeout == "180s") != (err == nil) {
+			t.Fatalf("request_timeout %s error=%v", timeout, err)
+		}
+	}
+}
