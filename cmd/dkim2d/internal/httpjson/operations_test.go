@@ -84,6 +84,67 @@ func TestGenericOperationRequestsRejectNullReversePath(t *testing.T) {
 	}
 }
 
+// TestMapSignRequestAdmitsNullSenderOnlyWithHeaderFromDeclaration proves the
+// null reverse path maps only with the explicit header_from declaration and a
+// context domain equal to the single From mailbox domain, and that the
+// declaration never travels with an ordinary reverse path.
+func TestMapSignRequestAdmitsNullSenderOnlyWithHeaderFromDeclaration(t *testing.T) {
+	declaration := generated.NullSenderHeaderFrom
+	request := operationRequestFixture(t, []byte("From: Vacation <noreply@example.test>\r\n\r\naway\r\n"))
+	request.Smtp.MailFrom = mustProtectedString(t, "<>")
+	request.NullSender = &declaration
+	mapped, err := MapSignRequest(request)
+	if err != nil || !mapped.HeaderFromNullSender() || string(mapped.ReversePath()) != "<>" ||
+		mapped.Domain() != "example.test" {
+		t.Fatalf("MapSignRequest(header_from) declared=%t error=%v", mapped.HeaderFromNullSender(), err)
+	}
+
+	foreign := request
+	foreign.Context.Domain = "example.net"
+	unknown := generated.NullSenderPolicy("envelope_sender")
+	undeclaredValue := request
+	undeclaredValue.NullSender = &unknown
+	ordinarySender := request
+	ordinarySender.Smtp.MailFrom = mustProtectedString(t, "<sender@example.test>")
+	twoAuthors := operationRequestFixture(t, []byte("From: a@example.test, b@example.test\r\n\r\naway\r\n"))
+	twoAuthors.Smtp.MailFrom = mustProtectedString(t, "<>")
+	twoAuthors.NullSender = &declaration
+	noAuthor := operationRequestFixture(t, []byte("Subject: none\r\n\r\naway\r\n"))
+	noAuthor.Smtp.MailFrom = mustProtectedString(t, "<>")
+	noAuthor.NullSender = &declaration
+	undeclared := request
+	undeclared.NullSender = nil
+	for name, candidate := range map[string]generated.SignRequest{
+		"foreign context domain": foreign, "unknown declaration": undeclaredValue,
+		"ordinary sender": ordinarySender, "two authors": twoAuthors, "no author": noAuthor,
+		"undeclared null sender": undeclared,
+	} {
+		if _, err := MapSignRequest(candidate); !IsMappingError(err, MappingInvalidContract) {
+			t.Fatalf("%s error = %v", name, err)
+		}
+	}
+}
+
+// TestStrictAdapterAnswersRefusedNullSenderAsInvalidContract proves a daemon
+// whose policy does not admit header_from refuses the declaration exactly
+// like any other null reverse path on the originator route.
+func TestStrictAdapterAnswersRefusedNullSenderAsInvalidContract(t *testing.T) {
+	service := &operationServiceStub{err: &app.NullSenderRefusedError{}}
+	adapter, err := newStrictAdapter(&adapterReadinessStub{}, &adapterProcessorStub{}, service)
+	if err != nil {
+		t.Fatalf("newStrictAdapter() error = %v", err)
+	}
+	declaration := generated.NullSenderHeaderFrom
+	request := operationRequestFixture(t, []byte("From: noreply@example.test\r\n\r\naway\r\n"))
+	request.Smtp.MailFrom = mustProtectedString(t, "<>")
+	request.NullSender = &declaration
+	response, err := adapter.SignMessage(context.Background(), generated.SignMessageRequestObject{Body: &request})
+	var strict *strictAdapterError
+	if response != nil || !errors.As(err, &strict) || strict.class != strictFailureInvalidContract || service.signCalls != 1 {
+		t.Fatalf("refused null sender response=%v calls=%d error=%v", response, service.signCalls, err)
+	}
+}
+
 // TestMapDeliveryStatusRequestReservesExactNullSenderEvidence proves the
 // Postfix-exclusive route admits no caller-selected representation and keeps
 // the exact outer DSN envelope before profile resolution.

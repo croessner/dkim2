@@ -69,8 +69,30 @@ type handlerGuard struct {
 	tenant       string
 	domain       string
 	domainSource milter.DomainSource
+	nullSender   milter.NullSenderPolicy
 	dsnDomain    string
 	authservID   string
+}
+
+// HandlerOption configures one optional mode-confined handler policy.
+type HandlerOption func(*handlerOptions)
+
+// handlerOptions collects optional policies before they are validated
+// against the adapter mode.
+type handlerOptions struct {
+	nullSender milter.NullSenderPolicy
+}
+
+// WithNullSenderPolicy selects how an originator handler treats a null
+// reverse path. Any value other than reject is refused outside originator mode.
+func WithNullSenderPolicy(policy milter.NullSenderPolicy) HandlerOption {
+	return func(options *handlerOptions) { options.nullSender = policy }
+}
+
+// validFor reports whether the collected options are admissible for mode.
+func (o handlerOptions) validFor(mode string) bool {
+	return o.nullSender.Known() &&
+		(mode == modeOriginator || o.nullSender == milter.NullSenderReject)
 }
 
 // NewHandler constructs a generated-client boundary with a confined transport.
@@ -83,8 +105,16 @@ func NewHandler(
 	domainSource milter.DomainSource,
 	dsnDomain string,
 	authservID string,
+	opts ...HandlerOption,
 ) (*Handler, error) {
-	if capability == nil ||
+	options := handlerOptions{nullSender: milter.NullSenderReject}
+	for _, apply := range opts {
+		if apply == nil {
+			return nil, &Error{}
+		}
+		apply(&options)
+	}
+	if !options.validFor(mode) || capability == nil ||
 		(mode != modeInbound && mode != modeOriginator && mode != modeOrdinaryTransit &&
 			mode != modePostfixDSN) ||
 		!validSigningIdentity(mode, tenant, domain, domainSource, dsnDomain) ||
@@ -131,7 +161,8 @@ func NewHandler(
 	return &Handler{state: &handlerState{guard: &handlerGuard{
 		client: client, transport: transport, capability: capability, mode: mode,
 		mu: &sync.RWMutex{}, tenant: tenant, domain: domain,
-		domainSource: domainSource, dsnDomain: dsnDomain, authservID: authservID,
+		domainSource: domainSource, nullSender: options.nullSender,
+		dsnDomain: dsnDomain, authservID: authservID,
 	},
 	}}, nil
 }
@@ -240,6 +271,11 @@ func (h *Handler) Handle(
 		}
 		return state.mapProcess(response)
 	case modeOriginator:
+		var nullSender *generated.NullSenderPolicy
+		if message.NullReversePath() {
+			declaration := generated.NullSenderHeaderFrom
+			nullSender = &declaration
+		}
 		response, callErr := state.client.SignMessageWithResponse(
 			operationContext,
 			generated.SignMessageJSONRequestBody{
@@ -250,6 +286,7 @@ func (h *Handler) Handle(
 				Context: generated.SigningContext{
 					Tenant: state.tenant, Domain: signingDomain,
 				},
+				NullSender: nullSender,
 			},
 		)
 		if callErr != nil {
@@ -343,14 +380,24 @@ func observedDomains(state *handlerGuard, message milter.Message) milter.DomainO
 }
 
 // signingDomain assesses supported reverse-path evidence and resolves one exact
-// originator domain without fallback. Null senders fail closed until the
-// adapter can authenticate the complete Draft-06 DSN prerequisites itself.
+// originator domain without fallback. A null sender fails closed unless the
+// trusted-route header_from policy is configured; then the single From
+// mailbox domain is the signing domain whatever the domain source, and an
+// author that yields no canonical DNS domain is not applicable exactly like
+// an unsupported envelope sender.
 func (guard *handlerGuard) signingDomain(message milter.Message) (string, bool, error) {
 	if guard == nil {
 		return "", false, &milter.Error{Class: milter.FailureContract}
 	}
 	if message.NullReversePath() {
-		return "", false, &milter.Error{Class: milter.FailureContract}
+		if guard.mode != modeOriginator || guard.nullSender != milter.NullSenderHeaderFrom {
+			return "", false, &milter.Error{Class: milter.FailureContract}
+		}
+		if !message.SupportsASCIISigningEnvelope() {
+			return "", false, nil
+		}
+		domain, applicable := message.HeaderFromSigningDomain()
+		return domain, applicable, nil
 	}
 	envelopeDomain, applicable := message.SigningDomain()
 	if !applicable {
@@ -399,6 +446,7 @@ func (h *Handler) Close() error {
 	state.tenant = ""
 	state.domain = ""
 	state.domainSource = ""
+	state.nullSender = ""
 	state.dsnDomain = ""
 	state.authservID = ""
 	return nil

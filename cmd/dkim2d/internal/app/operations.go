@@ -5,6 +5,8 @@ import (
 	"context"
 	"fmt"
 	"io"
+
+	"github.com/croessner/dkim2"
 )
 
 const operationRedacted = "dkim2d_operation{redacted}"
@@ -71,6 +73,9 @@ type operationRequestState struct {
 	tenant             string
 	domain             string
 	fidelity           MessageFidelity
+	// headerFromNullSender marks the explicit trusted-route originator
+	// declaration that alone carries a null reverse path.
+	headerFromNullSender bool
 }
 
 // NewRevisionOperationRequest snapshots distinct incoming verification
@@ -91,6 +96,7 @@ func NewRevisionOperationRequest(
 		tenant,
 		domain,
 		fidelity,
+		false,
 	)
 	if err != nil || len(incomingRecipients) == 0 {
 		return OperationRequest{}, &DomainError{}
@@ -128,20 +134,46 @@ func NewOperationRequest(
 		tenant,
 		domain,
 		fidelity,
+		false,
 	)
 }
 
-// newOperationRequest snapshots common validated operation evidence.
+// NewHeaderFromNullSenderOperationRequest snapshots one originator request
+// whose SMTP reverse path is null and whose caller declared the header_from
+// policy. The requested signing domain must equal the single RFC 5322 From
+// mailbox domain of the message, so the declaration cannot select a foreign
+// identity. Whether the daemon admits the declaration at all is the signing
+// service's policy decision.
+func NewHeaderFromNullSenderOperationRequest(
+	raw []byte,
+	recipients [][]byte,
+	tenant, domain string,
+	fidelity MessageFidelity,
+) (OperationRequest, error) {
+	author, ok := dkim2.HeaderFromDomain(raw)
+	if !ok || author != domain {
+		return OperationRequest{}, &DomainError{}
+	}
+	return newOperationRequest(
+		OperationSign, raw, []byte("<>"), recipients, tenant, domain, fidelity, true,
+	)
+}
+
+// newOperationRequest snapshots common validated operation evidence. A null
+// reverse path is admitted exactly for the header_from originator request.
 func newOperationRequest(
 	operation Operation,
 	raw, reverse []byte,
 	recipients [][]byte,
 	tenant, domain string,
 	fidelity MessageFidelity,
+	headerFromNullSender bool,
 ) (OperationRequest, error) {
+	nullSender := bytes.Equal(reverse, []byte("<>"))
 	if (operation != OperationSign && operation != OperationRevise) ||
 		len(raw) == 0 || len(recipients) == 0 || tenant == "" || domain == "" ||
-		!AdmitsOperationFidelity(operation, fidelity) || bytes.Equal(reverse, []byte("<>")) {
+		!AdmitsOperationFidelity(operation, fidelity) || nullSender != headerFromNullSender ||
+		(headerFromNullSender && operation != OperationSign) {
 		return OperationRequest{}, &DomainError{}
 	}
 	clonedRecipients := make([][]byte, len(recipients))
@@ -151,7 +183,14 @@ func newOperationRequest(
 	return OperationRequest{state: &operationRequestState{
 		operation: operation, raw: bytes.Clone(raw), reverse: bytes.Clone(reverse),
 		recipients: clonedRecipients, tenant: tenant, domain: domain, fidelity: fidelity,
+		headerFromNullSender: headerFromNullSender,
 	}}, nil
+}
+
+// HeaderFromNullSender reports whether the request is the explicit
+// header_from originator declaration for a null reverse path.
+func (r OperationRequest) HeaderFromNullSender() bool {
+	return r.state != nil && r.state.headerFromNullSender
 }
 
 // Operation returns the closed use case.

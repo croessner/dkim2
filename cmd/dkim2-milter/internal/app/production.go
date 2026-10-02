@@ -151,6 +151,7 @@ func newDaemonHandler(
 		snapshot.DomainSource(),
 		snapshot.DSNDomain(),
 		snapshot.AuthservID(),
+		daemon.WithNullSenderPolicy(snapshot.NullSender()),
 	)
 	if err != nil {
 		return nil, errApplication

@@ -284,6 +284,57 @@ func TestDeliveryStatusUnsignedOriginalPolicyDefaultsToRejectAndFailsClosed(t *t
 	}
 }
 
+// TestOriginatorNullSenderPolicyDefaultsToRejectAndFailsClosed proves the
+// originator null-sender policy is reject unless header_from is spelled
+// exactly, and that a disabled signer refuses the relaxation.
+func TestOriginatorNullSenderPolicyDefaultsToRejectAndFailsClosed(t *testing.T) {
+	clearStableEnvironment(t)
+	for name, document := range map[string]string{"disabled backend": disabledYAML(), "flat-file signing": signingYAML()} {
+		snapshot, err := Load([]byte(document), FlagValues{})
+		if err != nil || snapshot.Signing().Policies().OriginatorNullSender() != NullSenderReject {
+			t.Fatalf("omitted %s null_sender did not default to reject: code=%s", name, CodeOf(err))
+		}
+	}
+	if (SigningPoliciesConfig{}).OriginatorNullSender() != NullSenderReject {
+		t.Fatal("absent policy view relaxed the null-sender policy")
+	}
+	withPolicy := func(value string) string {
+		return strings.Replace(signingYAML(), "  backend: flat_file",
+			"  backend: flat_file\n  policy:\n    originator:\n      null_sender: "+value, 1)
+	}
+	for value, want := range map[string]NullSenderPolicy{
+		valueNullSenderReject: NullSenderReject, valueNullSenderHeaderFrom: NullSenderHeaderFrom,
+	} {
+		snapshot, err := Load([]byte(withPolicy(value)), FlagValues{})
+		if err != nil || snapshot.Signing().Policies().OriginatorNullSender() != want {
+			t.Fatalf("null_sender %q code=%s", value, CodeOf(err))
+		}
+		if snapshot.Signing().Policies().Originator().DoNotModify() ||
+			snapshot.Signing().Policies().Originator().DoNotExplode() ||
+			snapshot.Signing().Policies().DeliveryStatusUnsignedOriginal() != UnsignedOriginalReject {
+			t.Fatal("null_sender changed another signing policy")
+		}
+	}
+	for _, value := range []string{"accept", "Header_From", "HEADER_FROM", "header-from", "true", "\"\"", "\"reject \"", "envelope_sender"} {
+		if _, err := Load([]byte(withPolicy(value)), FlagValues{}); err == nil {
+			t.Fatalf("unknown null_sender value %q was accepted", value)
+		}
+	}
+	disabledHeaderFrom := disabledYAML() + "signing:\n  policy:\n    originator:\n      null_sender: header_from\n"
+	if _, err := Load([]byte(disabledHeaderFrom), FlagValues{}); CodeOf(err) != CodeInvalidMatrix {
+		t.Fatalf("header_from under a disabled signer code=%s", CodeOf(err))
+	}
+	t.Setenv(envSigningPolicyOriginatorNullSender, "header_from")
+	environment, err := Load([]byte(signingYAML()), FlagValues{})
+	if err != nil || environment.Signing().Policies().OriginatorNullSender() != NullSenderHeaderFrom {
+		t.Fatalf("environment null_sender override code=%s", CodeOf(err))
+	}
+	t.Setenv(envSigningPolicyOriginatorNullSender, "permit")
+	if _, err := Load([]byte(signingYAML()), FlagValues{}); err == nil {
+		t.Fatal("invalid null_sender environment value was accepted")
+	}
+}
+
 // TestNetworkSigningConfigurationIsConditionalAndVerified proves network
 // providers require exact backend-specific fields and reject irrelevant ones.
 func TestNetworkSigningConfigurationIsConditionalAndVerified(t *testing.T) {

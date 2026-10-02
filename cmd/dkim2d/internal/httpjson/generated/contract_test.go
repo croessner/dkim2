@@ -38,6 +38,7 @@ const (
 	testPropertyMessage            = "message"
 	testPropertyIncomingSMTP       = "incoming_smtp"
 	testPropertyReporting          = "reporting"
+	testPropertyNullSender         = "null_sender"
 	testPropertySMTP               = "smtp"
 	testPropertyContext            = "context"
 	testPropertyActions            = "actions"
@@ -637,7 +638,7 @@ func assertObjectInventories(t *testing.T, document *openapi3.T) {
 			},
 		},
 		"SignRequest": {
-			properties: []string{testPropertyAPIVersion, testPropertyContext, testPropertyDraft, testPropertyMessage, testPropertySMTP},
+			properties: []string{testPropertyAPIVersion, testPropertyContext, testPropertyDraft, testPropertyMessage, testPropertyNullSender, testPropertySMTP},
 			required:   []string{testPropertyAPIVersion, testPropertyContext, testPropertyDraft, testPropertyMessage, testPropertySMTP},
 		},
 		"ReviseRequest": {
@@ -843,6 +844,7 @@ func assertFrozenEnums(t *testing.T, document *openapi3.T) {
 		"APIVersion":        {"v1"},
 		"DraftVersion":      {"draft-ietf-dkim-dkim2-spec-06"},
 		"VerificationState": {"PASS", "FAIL", "PERMERROR", "TEMPERROR"},
+		"NullSenderPolicy":  {"header_from"},
 		"VerificationReason": {
 			"none", "limit_exceeded", "malformed_message", "malformed_protocol",
 			"duplicate_hash_algorithm", "invalid_recipe_json", "duplicate_selector",

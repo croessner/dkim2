@@ -7,6 +7,8 @@ import (
 	"io"
 	"strings"
 	"time"
+
+	"github.com/croessner/dkim2"
 )
 
 const redacted = "dkim2_milter_message{redacted}"
@@ -48,6 +50,25 @@ const (
 	// daemon authenticates the highest embedded DKIM2 d= value.
 	DomainSourceVerifiedEmbedded DomainSource = "verified_embedded"
 )
+
+// NullSenderPolicy selects how an originator adapter treats a transaction
+// whose SMTP reverse path is null.
+type NullSenderPolicy string
+
+const (
+	// NullSenderReject refuses every null reverse path as a contract failure.
+	// It is the default and the only value outside originator mode.
+	NullSenderReject NullSenderPolicy = "reject"
+	// NullSenderHeaderFrom signs a null reverse path with the domain of the
+	// single RFC 5322 From mailbox. It is meant solely for originator
+	// adapters attached to trusted egress listeners, never to an MX.
+	NullSenderHeaderFrom NullSenderPolicy = "header_from"
+)
+
+// Known reports whether the policy belongs to the closed vocabulary.
+func (p NullSenderPolicy) Known() bool {
+	return p == NullSenderReject || p == NullSenderHeaderFrom
+}
 
 // DomainObservation is one bounded operator-visible projection of processed
 // domains without mailbox local parts or metric-label authority.
@@ -268,6 +289,15 @@ func canonicalASCIIEnvelopeDomain(path []byte, allowNull bool) (string, bool) {
 		canonical[index] = current
 	}
 	return string(canonical), true
+}
+
+// HeaderFromSigningDomain derives the canonical DNS domain of the single
+// RFC 5322 From mailbox from the header fields collected by the bounded
+// header callbacks. It is the null-sender identity source of the header_from
+// originator policy and reports false for any missing, repeated, group,
+// multi-mailbox, literal, or SMTPUTF8 author.
+func (m Message) HeaderFromSigningDomain() (string, bool) {
+	return dkim2.HeaderFromDomain(m.raw)
 }
 
 // NullReversePath reports whether the exact normalized SMTP sender is null.

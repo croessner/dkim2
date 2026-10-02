@@ -137,6 +137,51 @@ func TestLoadAcceptsOriginatorEnvelopeSenderDomainSelection(t *testing.T) {
 	}
 }
 
+// TestLoadNullSenderPolicyIsOriginatorOnlyAndDefaultsToReject proves the
+// trusted-route opt-in defaults to reject, accepts only the closed spelling,
+// and cannot be set on an inbound, transit, or Postfix DSN adapter.
+func TestLoadNullSenderPolicyIsOriginatorOnlyAndDefaultsToReject(t *testing.T) {
+	for _, mode := range []Mode{ModeInbound, ModeOriginator, ModeOrdinaryTransit, ModePostfixDSN} {
+		snapshot, err := Load(writeConfig(t, validConfig(mode)))
+		if err != nil || snapshot.NullSender() != milter.NullSenderReject ||
+			snapshot.Effective().SigningNullSender != milter.NullSenderReject {
+			t.Fatalf("%s null_sender default = %q error=%v", mode, snapshot.NullSender(), err)
+		}
+	}
+	for _, source := range []string{"  domain: example.test", "  domain_source: envelope_sender"} {
+		for value, want := range map[string]milter.NullSenderPolicy{
+			"reject": milter.NullSenderReject, "header_from": milter.NullSenderHeaderFrom,
+		} {
+			document := strings.Replace(validConfig(ModeOriginator), "  domain: example.test",
+				source+"\n  null_sender: "+value, 1)
+			snapshot, err := Load(writeConfig(t, document))
+			if err != nil || snapshot.NullSender() != want || snapshot.Effective().SigningNullSender != want {
+				t.Fatalf("originator null_sender %q with %q error=%v", value, source, err)
+			}
+		}
+	}
+	for _, value := range []string{"accept", "Header_From", "header-from", "envelope_sender", "\"\"", "true"} {
+		document := strings.Replace(validConfig(ModeOriginator), "  domain: example.test",
+			"  domain: example.test\n  null_sender: "+value, 1)
+		if _, err := Load(writeConfig(t, document)); err == nil {
+			t.Fatalf("originator accepted null_sender %q", value)
+		}
+	}
+	for _, mode := range []Mode{ModeOrdinaryTransit, ModePostfixDSN} {
+		for _, value := range []string{"reject", "header_from"} {
+			document := strings.Replace(validConfig(mode), "  tenant: tenant-a",
+				"  tenant: tenant-a\n  null_sender: "+value, 1)
+			if _, err := Load(writeConfig(t, document)); err == nil {
+				t.Fatalf("%s accepted explicit null_sender %q", mode, value)
+			}
+		}
+	}
+	inbound := validConfig(ModeInbound) + "signing:\n  null_sender: header_from\n"
+	if _, err := Load(writeConfig(t, inbound)); err == nil {
+		t.Fatal("inbound adapter accepted the null_sender opt-in")
+	}
+}
+
 // TestLoadRejectsPostfixDSNEnvelopeSenderDomainSelection proves the removed
 // original-envelope handoff cannot remain a signing-domain authority.
 func TestLoadRejectsPostfixDSNEnvelopeSenderDomainSelection(t *testing.T) {

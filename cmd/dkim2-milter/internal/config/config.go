@@ -150,6 +150,7 @@ type snapshotState struct {
 	tenant              string
 	domain              string
 	domainSource        milter.DomainSource
+	nullSender          milter.NullSenderPolicy
 	dsnDomain           string
 	allowRecipientGroup bool
 	authResultsEnabled  bool
@@ -166,26 +167,27 @@ type snapshotState struct {
 
 // Effective is the bounded non-sensitive operator view of a Snapshot.
 type Effective struct {
-	Version               string              `json:"version"`
-	Mode                  Mode                `json:"mode"`
-	FailureMode           FailureMode         `json:"failure_mode"`
-	SocketMode            string              `json:"socket_mode"`
-	ShutdownTimeout       string              `json:"shutdown_timeout"`
-	MaxConnections        int                 `json:"max_connections"`
-	MaxInFlightMessages   int                 `json:"max_in_flight_messages"`
-	MaxBufferedBytes      int64               `json:"max_buffered_bytes"`
-	RequestTimeout        string              `json:"request_timeout"`
-	SigningDomainSource   milter.DomainSource `json:"signing_domain_source"`
-	DSNSigningAuthority   bool                `json:"dsn_signing_authority"`
-	AllowRecipientGroup   bool                `json:"allow_recipient_group"`
-	AuthenticationResults bool                `json:"authentication_results"`
-	MessageBytes          int64               `json:"message_bytes"`
-	HeaderBytes           int64               `json:"header_bytes"`
-	HeaderCount           int                 `json:"header_count"`
-	HeaderFieldBytes      int                 `json:"header_field_bytes"`
-	RecipientCount        int                 `json:"recipient_count"`
-	LogLevel              string              `json:"log_level"`
-	MetricsEnabled        bool                `json:"metrics_enabled"`
+	Version               string                  `json:"version"`
+	Mode                  Mode                    `json:"mode"`
+	FailureMode           FailureMode             `json:"failure_mode"`
+	SocketMode            string                  `json:"socket_mode"`
+	ShutdownTimeout       string                  `json:"shutdown_timeout"`
+	MaxConnections        int                     `json:"max_connections"`
+	MaxInFlightMessages   int                     `json:"max_in_flight_messages"`
+	MaxBufferedBytes      int64                   `json:"max_buffered_bytes"`
+	RequestTimeout        string                  `json:"request_timeout"`
+	SigningDomainSource   milter.DomainSource     `json:"signing_domain_source"`
+	SigningNullSender     milter.NullSenderPolicy `json:"signing_null_sender"`
+	DSNSigningAuthority   bool                    `json:"dsn_signing_authority"`
+	AllowRecipientGroup   bool                    `json:"allow_recipient_group"`
+	AuthenticationResults bool                    `json:"authentication_results"`
+	MessageBytes          int64                   `json:"message_bytes"`
+	HeaderBytes           int64                   `json:"header_bytes"`
+	HeaderCount           int                     `json:"header_count"`
+	HeaderFieldBytes      int                     `json:"header_field_bytes"`
+	RecipientCount        int                     `json:"recipient_count"`
+	LogLevel              string                  `json:"log_level"`
+	MetricsEnabled        bool                    `json:"metrics_enabled"`
 }
 
 // Load reads one strict YAML file and validates all stable paths.
@@ -235,6 +237,10 @@ func stableFieldSpecs() []fieldSpec {
 			defaultValue: string(milter.DomainSourceStatic),
 		},
 		{path: "signing.allow_recipient_group", kind: valueBool, defaultValue: canonicalFalse},
+		{
+			path: "signing.null_sender", kind: valueString,
+			defaultValue: string(milter.NullSenderReject),
+		},
 		{path: "authentication_results.enabled", kind: valueBool, defaultValue: canonicalFalse},
 		{path: "authentication_results.authserv_id", kind: valueString},
 		{path: "failure.mode", kind: valueString, defaultValue: "tempfail"},
@@ -611,6 +617,7 @@ func validateValues(values map[string]rawValue) (Snapshot, error) {
 	tenant, domain := text("signing.tenant"), text("signing.domain")
 	dsnDomain := text("signing.dsn_domain")
 	domainSource := milter.DomainSource(text("signing.domain_source"))
+	nullSender := milter.NullSenderPolicy(text("signing.null_sender"))
 	authservID := text("authentication_results.authserv_id")
 	return Snapshot{state: &snapshotState{
 		socket: text("server.socket"), socketMode: parsed.socketMode,
@@ -618,7 +625,7 @@ func validateValues(values map[string]rawValue) (Snapshot, error) {
 		maxInFlightMessages: parsed.maxInFlight, maxBufferedBytes: parsed.maxBuffered,
 		daemonEndpoint: text("daemon.endpoint"), capabilityFile: text("daemon.capability_file"),
 		requestTimeout: parsed.requestTimeout, mode: mode, tenant: tenant, domain: domain,
-		domainSource: domainSource, dsnDomain: dsnDomain,
+		domainSource: domainSource, nullSender: nullSender, dsnDomain: dsnDomain,
 		allowRecipientGroup: parsed.allowRecipientGroup,
 		authResultsEnabled:  parsed.authResultsEnabled, authservID: authservID,
 		failureMode: failure, messageBytes: parsed.messageBytes,
@@ -728,10 +735,25 @@ func validModeOwnedSigningFields(
 	mode Mode,
 	allowRecipientGroup bool,
 ) bool {
+	if !validNullSenderPolicy(values, mode) {
+		return false
+	}
 	if mode == ModeInbound {
 		return validInboundSigningFields(values, allowRecipientGroup)
 	}
 	return validOutboundSigningFields(values, mode, allowRecipientGroup)
+}
+
+// validNullSenderPolicy accepts the closed null-sender vocabulary and confines
+// any explicit setting to originator mode: header_from is a trusted-route
+// opt-in, and every other mode has no originator null-sender decision to make.
+func validNullSenderPolicy(values map[string]rawValue, mode Mode) bool {
+	value := values["signing.null_sender"]
+	policy := milter.NullSenderPolicy(value.text)
+	if !policy.Known() {
+		return false
+	}
+	return mode == ModeOriginator || !value.explicit && policy == milter.NullSenderReject
 }
 
 // validInboundSigningFields rejects every signing authority on an inbound-only
@@ -1060,6 +1082,14 @@ func (s Snapshot) DomainSource() milter.DomainSource {
 	return s.state.domainSource
 }
 
+// NullSender returns the validated originator null-sender policy.
+func (s Snapshot) NullSender() milter.NullSenderPolicy {
+	if s.state == nil {
+		return ""
+	}
+	return s.state.nullSender
+}
+
 // DSNDomain returns the reserved legacy originator DSN-domain prerequisite.
 func (s Snapshot) DSNDomain() string {
 	if s.state == nil {
@@ -1161,6 +1191,7 @@ func (s Snapshot) Effective() Effective {
 		MaxConnections: s.state.maxConnections, MaxInFlightMessages: s.state.maxInFlightMessages,
 		MaxBufferedBytes: s.state.maxBufferedBytes, RequestTimeout: s.state.requestTimeout.String(),
 		SigningDomainSource:   s.state.domainSource,
+		SigningNullSender:     s.state.nullSender,
 		DSNSigningAuthority:   s.state.dsnDomain != "" || s.state.mode == ModePostfixDSN,
 		AllowRecipientGroup:   s.state.allowRecipientGroup,
 		AuthenticationResults: s.state.authResultsEnabled,

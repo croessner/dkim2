@@ -873,6 +873,58 @@ func TestOriginatorNullSenderTempfailsBeforeDaemonThroughPublicSocket(t *testing
 	assertPrivateOutputAbsent(t, process.log)
 }
 
+// TestOriginatorHeaderFromNullSenderSignsThroughPublicSocket proves the
+// trusted-route opt-in collects From through the header callbacks, derives
+// the signing domain from it, and declares header_from to the daemon.
+func TestOriginatorHeaderFromNullSenderSignsThroughPublicSocket(t *testing.T) {
+	calls := 0
+	service := &generatedDaemonService{
+		sign: func(body generatedfixture.SignRequest) generatedfixture.OperationResponse {
+			calls++
+			mailFrom, err := body.Smtp.MailFrom.Bytes()
+			if err != nil || string(mailFrom) != "<>" || body.NullSender == nil ||
+				*body.NullSender != generatedfixture.NullSenderHeaderFrom ||
+				body.Context.Tenant != integrationTenant || body.Context.Domain != "author.example.test" {
+				t.Error("null-sender request was not declared and bound to the From domain")
+			}
+			return fixtureOperationResponse("sign", generated.ActionPlan{
+				{Name: generated.MessageInstance, Type: generated.AddHeader, Value: testMessageInstanceValue},
+				{Name: generated.DKIM2Signature, Type: generated.AddHeader, Value: testSignatureValue},
+			})
+		},
+	}
+	fixture := newGeneratedDaemonFixture(t, service)
+	process := startExecutableWithSigning(
+		t,
+		fixture.endpoint,
+		integrationModeOrigin,
+		"tempfail",
+		2*time.Second,
+		"\nsigning:\n  tenant: "+integrationTenant+
+			"\n  domain_source: envelope_sender\n  null_sender: header_from\n  dsn_domain: dsn.example.test",
+	)
+	peer := dialPublicPeer(t, process.socket)
+	peer.negotiate(t)
+	peer.callback(t, peerConnect, []byte("submission.example.test\x00U"))
+	peer.callback(t, peerHelo, []byte("submission.example.test\x00"))
+	peer.callback(t, peerMail, []byte("<>\x00"))
+	peer.callback(t, peerRecipient, []byte("<recipient@example.net>\x00"))
+	peer.callback(t, peerHeader, []byte("From\x00 Vacation <NoReply@Author.Example.TEST>\x00"))
+	peer.callback(t, peerHeader, []byte("Auto-Submitted\x00 auto-replied\x00"))
+	peer.callback(t, peerEOH, nil)
+	peer.callback(t, peerBody, []byte("away\r\n"))
+	peer.send(t, peerEOM, nil)
+	frames := []adapterFrame{peer.receive(t), peer.receive(t), peer.receive(t)}
+	if calls != 1 || frames[0].command != adapterAddHeader ||
+		frames[1].command != adapterAddHeader || frames[2].command != adapterAccept {
+		t.Fatalf("header_from null-sender EOM frames = %#v calls=%d", frames, calls)
+	}
+	peer.send(t, peerQuit, nil)
+	peer.close()
+	process.stop(t)
+	assertPrivateOutputAbsent(t, process.log)
+}
+
 // TestPostfixDSNWithoutEvidenceContinuesThroughPublicSocket proves the
 // dedicated adapter can share the normal non-SMTP Milter chain without
 // granting DSN authority or rejecting an unrelated transaction.

@@ -451,6 +451,7 @@ signing:
     originator:
       donotmodify: true
       donotexplode: true
+      null_sender: reject
     ordinary_transit:
       donotmodify: false
       donotexplode: true
@@ -495,6 +496,38 @@ is verified and signed, or refused, exactly as without the policy. Every other
 evidence failure is also unaffected. Each outcome is counted in
 `dkim2d_dsn_evidence_total` with `evidence_stage="embedded_unsigned"` and
 `result="failure"` (refused) or `result="not_applicable"` (left unsigned).
+
+`signing.policy.originator.null_sender` decides whether `POST /v1/sign`
+admits a null reverse path. It accepts exactly `reject` (the default) or
+`header_from`; any other value is refused at load time, and `header_from` is
+invalid with `signing.backend: disabled`. The environment override is
+`DKIM2D_SIGNING_POLICY_ORIGINATOR_NULL_SENDER`.
+
+- `reject` keeps the fail-closed behavior: a sign request with
+  `smtp.mail_from` `<>` is an invalid contract (HTTP 400) before any
+  datastore access, whether or not it carries a declaration.
+- `header_from` admits a null reverse path only when the request also carries
+  `null_sender: header_from` and its `context.domain` equals the domain of the
+  single RFC 5322 From mailbox: exactly one From field holding exactly one
+  ASCII mailbox with a canonical DNS domain; groups, several mailboxes,
+  address literals, and SMTPUTF8 authors are refused. The daemon resolves the
+  `originator` profile for that tenant and domain as for any other sender (an
+  absent or inactive profile answers 204) and signs `mf=<>` with `rt=` equal to
+  the actual recipients. The library refuses the signature again if the
+  profile domain is not the From domain. The declaration is refused with a
+  non-null reverse path, and `/v1/revise` and batch revision never admit a
+  null reverse path.
+
+The rationale is draft-ietf-dkim-dkim2-spec Section 8.5, which allows `mf=<>`,
+and Section 8.8, under which a null `mf=` requires no `d=` match. Automatic
+replies, Sieve notifications, and RFC 8098 disposition notifications from our
+own systems use the null reverse path and would otherwise leave without
+DKIM2. A null sender is trivial to forge, so the trust decision belongs to
+the MTA listener: enable `header_from` only on a daemon whose originator
+callers sit exclusively on trusted egress routes (authenticated submission,
+own relay hubs, internal application sockets), never for an adapter attached
+to an inbound or MX-facing listener. Bounces keep their dedicated
+`POST /v1/dsn/sign` route.
 
 Downstream local policy may ignore `donotmodify` or `donotexplode`, but the
 draft forbids releasing the resulting modified or exploded message to an MTA

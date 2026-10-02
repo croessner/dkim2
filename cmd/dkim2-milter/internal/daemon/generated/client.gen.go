@@ -509,6 +509,21 @@ func (e MessageInputFidelity) Valid() bool {
 	}
 }
 
+// Defines values for NullSenderPolicy.
+const (
+	NullSenderHeaderFrom NullSenderPolicy = "header_from"
+)
+
+// Valid indicates whether the value is a known member of the NullSenderPolicy enum.
+func (e NullSenderPolicy) Valid() bool {
+	switch e {
+	case NullSenderHeaderFrom:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for OperationResponseOperation.
 const (
 	DeliveryStatus OperationResponseOperation = "delivery_status"
@@ -1452,6 +1467,9 @@ type MessageInput struct {
 // MessageInputFidelity defines model for MessageInput.Fidelity.
 type MessageInputFidelity string
 
+// NullSenderPolicy Declares that an originator adapter on a trusted egress route signs a message whose smtp.mail_from is the null reverse path "<>", such as an automatic reply or a disposition notification. It is required exactly when mail_from is "<>" and refused otherwise. header_from binds the signing domain to the single RFC 5322 From mailbox: the context domain must equal that mailbox domain, and the daemon admits the request only when its own signing.policy.originator.null_sender policy is header_from. Without both opt-ins the request is refused as an invalid contract.
+type NullSenderPolicy string
+
 // OperationResponse Result and disposition are coherent: pass permits accept or continue, fail and permerror require reject, and temperror requires tempfail. Only accept may carry actions.
 type OperationResponse struct {
 	Actions     ActionPlan                 `json:"actions"`
@@ -1605,7 +1623,10 @@ type SignRequest struct {
 	Context    SigningContext `json:"context"`
 	Draft      DraftVersion   `json:"draft"`
 	Message    MessageInput   `json:"message"`
-	Smtp       SMTPInput      `json:"smtp"`
+
+	// NullSender Declares that an originator adapter on a trusted egress route signs a message whose smtp.mail_from is the null reverse path "<>", such as an automatic reply or a disposition notification. It is required exactly when mail_from is "<>" and refused otherwise. header_from binds the signing domain to the single RFC 5322 From mailbox: the context domain must equal that mailbox domain, and the daemon admits the request only when its own signing.policy.originator.null_sender policy is header_from. Without both opt-ins the request is refused as an invalid contract.
+	NullSender *NullSenderPolicy `json:"null_sender,omitempty"`
+	Smtp       SMTPInput         `json:"smtp"`
 }
 
 // SignatureSetResult defines model for SignatureSetResult.

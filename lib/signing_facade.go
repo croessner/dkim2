@@ -182,15 +182,32 @@ type OriginatorSigningRequest struct {
 	profile      SigningProfile
 	metadata     SigningMetadata
 	transport    SigningTransportForm
+	// headerFromNullSender records the explicit trusted-route opt-in that
+	// alone admits a null reverse path and binds d= to the From domain.
+	headerFromNullSender bool
 }
 
-// NewOriginatorSigningRequest snapshots one originator signing request.
+// NewOriginatorSigningRequest snapshots one originator signing request. A
+// null reverse path is refused on this path; see
+// NewHeaderFromNullSenderSigningRequest.
 func NewOriginatorSigningRequest(rawMessage, reversePath []byte, forwardPaths [][]byte, ticket RouteCopyTicket, profile SigningProfile, metadata SigningMetadata, transport SigningTransportForm) OriginatorSigningRequest {
 	return OriginatorSigningRequest{
 		raw: bytes.Clone(rawMessage), reversePath: bytes.Clone(reversePath),
 		forwardPaths: cloneByteSlices(forwardPaths), ticket: ticket, profile: profile,
 		metadata: metadata, transport: transport,
 	}
+}
+
+// NewHeaderFromNullSenderSigningRequest snapshots one originator signing
+// request for a message our own trusted systems emit with the null reverse
+// path, such as an automatic reply or an RFC 8098 disposition notification.
+// The signature carries mf=<> and the given recipients in rt=; SignOriginator
+// admits it only when the profile domain equals HeaderFromDomain of the
+// message. The caller owns the decision that the submission route is trusted.
+func NewHeaderFromNullSenderSigningRequest(rawMessage []byte, forwardPaths [][]byte, ticket RouteCopyTicket, profile SigningProfile, metadata SigningMetadata, transport SigningTransportForm) OriginatorSigningRequest {
+	request := NewOriginatorSigningRequest(rawMessage, []byte("<>"), forwardPaths, ticket, profile, metadata, transport)
+	request.headerFromNullSender = true
+	return request
 }
 
 // String returns a constant secret-safe request summary.
@@ -374,7 +391,9 @@ func (s *Signer) VerifyForRevision(ctx context.Context, request VerifyRequest) (
 	}, VerifiedRevisionInput{value: capability}, nil
 }
 
-// SignOriginator executes the sole originator request path.
+// SignOriginator executes the sole originator request path. A null reverse
+// path is admitted only through NewHeaderFromNullSenderSigningRequest and only
+// when the profile domain is the single From mailbox domain.
 func (s *Signer) SignOriginator(ctx context.Context, request OriginatorSigningRequest) (SigningResult, SigningRecovery, error) {
 	if s == nil || !s.initialized || ctx == nil {
 		return SigningResult{}, SigningRecovery{}, newSigningError(SigningErrorInvalidRequest)
@@ -387,12 +406,18 @@ func (s *Signer) SignOriginator(ctx context.Context, request OriginatorSigningRe
 		!request.profile.value.ValidForLimits(s.limits) || !request.metadata.value.Valid() {
 		return SigningResult{}, SigningRecovery{}, newSigningError(SigningErrorInvalidRequest)
 	}
-	if bytes.Equal(request.reversePath, []byte("<>")) {
+	nullSender := bytes.Equal(request.reversePath, []byte("<>"))
+	if nullSender != request.headerFromNullSender {
 		return SigningResult{}, SigningRecovery{}, newSigningError(SigningErrorInvalidRequest)
 	}
 	message, err := rawmsg.Parse(request.raw)
 	if err != nil {
 		return SigningResult{}, SigningRecovery{}, newSigningError(SigningErrorMalformedInput)
+	}
+	if nullSender {
+		if author, ok := HeaderFromDomain(request.raw); !ok || author != request.profile.value.Domain() {
+			return SigningResult{}, SigningRecovery{}, newSigningError(SigningErrorAuthorizationDenied)
+		}
 	}
 	plan, err := s.planner.PlanOriginator(ctx, signing.OriginatorPlanRequest{
 		Message: message, Ticket: request.ticket.value,

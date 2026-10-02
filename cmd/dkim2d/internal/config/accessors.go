@@ -401,6 +401,15 @@ func (c SigningPoliciesConfig) DeliveryStatusUnsignedOriginal() UnsignedOriginal
 	return c.state.unsignedOriginal
 }
 
+// OriginatorNullSender returns the originator null-sender policy. An absent
+// configuration view reports the fail-closed reject default.
+func (c SigningPoliciesConfig) OriginatorNullSender() NullSenderPolicy {
+	if c.state == nil {
+		return NullSenderReject
+	}
+	return c.state.nullSender
+}
+
 // DoNotModify reports whether the daemon requests the authenticated donotmodify flag.
 func (c SigningFlagPolicyConfig) DoNotModify() bool {
 	return c.state != nil && c.state.doNotModify

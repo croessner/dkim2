@@ -263,6 +263,9 @@ func (a *strictAdapter) SignMessage(
 	}
 	assessment, err := executeSignOperation(ctx, a.operations, domainRequest)
 	if err != nil {
+		if app.IsNullSenderRefused(err) {
+			return nil, &strictAdapterError{class: strictFailureInvalidContract}
+		}
 		return nil, classifyStrictContextFailure(ctx)
 	}
 	if !assessment.Valid() || assessment.Operation() != app.OperationSign {

@@ -1107,6 +1107,24 @@ components:
           $ref: "#/components/schemas/SMTPInput"
         context:
           $ref: "#/components/schemas/SigningContext"
+        null_sender:
+          $ref: "#/components/schemas/NullSenderPolicy"
+    NullSenderPolicy:
+      type: string
+      description: >
+        Declares that an originator adapter on a trusted egress route signs
+        a message whose smtp.mail_from is the null reverse path "<>", such
+        as an automatic reply or a disposition notification. It is required
+        exactly when mail_from is "<>" and refused otherwise. header_from
+        binds the signing domain to the single RFC 5322 From mailbox: the
+        context domain must equal that mailbox domain, and the daemon admits
+        the request only when its own signing.policy.originator.null_sender
+        policy is header_from. Without both opt-ins the request is refused
+        as an invalid contract.
+      enum:
+        - header_from
+      x-enum-varnames:
+        - NullSenderHeaderFrom
     ReviseRequest:
       type: object
       additionalProperties: false

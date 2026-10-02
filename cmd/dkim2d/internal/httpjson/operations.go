@@ -14,11 +14,41 @@ import (
 )
 
 // MapSignRequest maps one generated originator request to domain-owned values.
+// The null_sender declaration is required exactly for a null reverse path.
 func MapSignRequest(input generated.SignRequest) (app.OperationRequest, error) {
+	if input.NullSender != nil {
+		return mapHeaderFromNullSenderRequest(input)
+	}
 	return mapOperationRequest(
 		app.OperationSign, input.ApiVersion, input.Draft,
 		input.Message, input.Smtp, nil, input.Context,
 	)
+}
+
+// mapHeaderFromNullSenderRequest admits the null reverse path only with the
+// explicit header_from declaration and a context domain equal to the single
+// From mailbox domain. Every other shape is an invalid contract.
+func mapHeaderFromNullSenderRequest(input generated.SignRequest) (app.OperationRequest, error) {
+	if input.NullSender == nil || *input.NullSender != generated.NullSenderHeaderFrom {
+		return app.OperationRequest{}, newMappingError(MappingInvalidContract)
+	}
+	operation, err := decodeOperationInput(
+		input.ApiVersion, input.Draft, input.Message, input.Smtp, input.Context,
+	)
+	if err != nil {
+		return app.OperationRequest{}, err
+	}
+	if !bytes.Equal(operation.reverse, []byte("<>")) {
+		return app.OperationRequest{}, newMappingError(MappingInvalidContract)
+	}
+	request, err := app.NewHeaderFromNullSenderOperationRequest(
+		operation.raw, operation.recipients, input.Context.Tenant, input.Context.Domain,
+		operation.fidelity,
+	)
+	if err != nil {
+		return app.OperationRequest{}, newMappingError(MappingInvalidContract)
+	}
+	return request, nil
 }
 
 // MapReviseRequest maps one generated ordinary-transit request to domain-owned values.
@@ -90,27 +120,14 @@ func mapOperationRequest(
 	incomingSMTP *generated.SMTPInput,
 	signing generated.SigningContext,
 ) (app.OperationRequest, error) {
-	if apiVersion != generated.V1 || draft != generated.DraftIetfDkimDkim2Spec06 ||
-		message.Fidelity == nil || !message.Fidelity.Valid() ||
-		!validTenant(signing.Tenant) || !validSigningDomain(signing.Domain) {
-		return app.OperationRequest{}, newMappingError(MappingInvalidContract)
-	}
-	encoded, err := message.RawRfc5322Base64.Bytes()
-	if err != nil {
-		return app.OperationRequest{}, newMappingError(MappingInvalidContract)
-	}
-	raw, err := decodeCanonicalBase64(encoded)
-	if err != nil || len(raw) == 0 {
-		return app.OperationRequest{}, err
-	}
-	reverse, recipients, err := mapSigningSMTP(smtp)
+	decoded, err := decodeOperationInput(apiVersion, draft, message, smtp, signing)
 	if err != nil {
 		return app.OperationRequest{}, err
 	}
+	raw, reverse, recipients, fidelity := decoded.raw, decoded.reverse, decoded.recipients, decoded.fidelity
 	if operation == app.OperationSign && bytes.Equal(reverse, []byte("<>")) {
 		return app.OperationRequest{}, newMappingError(MappingInvalidContract)
 	}
-	fidelity := app.MessageFidelity(*message.Fidelity)
 	if operation == app.OperationRevise {
 		if bytes.Equal(reverse, []byte("<>")) {
 			return app.OperationRequest{}, newMappingError(MappingInvalidContract)
@@ -144,6 +161,50 @@ func mapOperationRequest(
 		return app.OperationRequest{}, newMappingError(MappingInvalidContract)
 	}
 	return request, nil
+}
+
+// decodedOperationInput carries the shared exact admission result of one
+// sign or revise request before operation-specific envelope rules apply.
+type decodedOperationInput struct {
+	raw        []byte
+	reverse    []byte
+	recipients [][]byte
+	fidelity   app.MessageFidelity
+}
+
+// decodeOperationInput owns the version, fidelity, identity, message, and
+// envelope admission rules shared by every sign and revise request shape.
+func decodeOperationInput(
+	apiVersion generated.APIVersion,
+	draft generated.DraftVersion,
+	message generated.MessageInput,
+	smtp generated.SMTPInput,
+	signing generated.SigningContext,
+) (decodedOperationInput, error) {
+	if apiVersion != generated.V1 || draft != generated.DraftIetfDkimDkim2Spec06 ||
+		message.Fidelity == nil || !message.Fidelity.Valid() ||
+		!validTenant(signing.Tenant) || !validSigningDomain(signing.Domain) {
+		return decodedOperationInput{}, newMappingError(MappingInvalidContract)
+	}
+	encoded, err := message.RawRfc5322Base64.Bytes()
+	if err != nil {
+		return decodedOperationInput{}, newMappingError(MappingInvalidContract)
+	}
+	raw, err := decodeCanonicalBase64(encoded)
+	if err != nil {
+		return decodedOperationInput{}, err
+	}
+	if len(raw) == 0 {
+		return decodedOperationInput{}, newMappingError(MappingInvalidContract)
+	}
+	reverse, recipients, err := mapSigningSMTP(smtp)
+	if err != nil {
+		return decodedOperationInput{}, err
+	}
+	return decodedOperationInput{
+		raw: raw, reverse: reverse, recipients: recipients,
+		fidelity: app.MessageFidelity(*message.Fidelity),
+	}, nil
 }
 
 // mapSigningSMTP validates one complete ASCII signing-envelope evidence set.

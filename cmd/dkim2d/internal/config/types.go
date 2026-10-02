@@ -64,6 +64,7 @@ const (
 	pathSigningMaxLoadBytes                 = "signing.max_load_bytes"
 	pathSigningPolicyOriginatorDoNotModify  = "signing.policy.originator.donotmodify"
 	pathSigningPolicyOriginatorDoNotExplode = "signing.policy.originator.donotexplode"
+	pathSigningPolicyOriginatorNullSender   = "signing.policy.originator.null_sender"
 	pathSigningPolicyTransitDoNotModify     = "signing.policy.ordinary_transit.donotmodify"
 	pathSigningPolicyTransitDoNotExplode    = "signing.policy.ordinary_transit.donotexplode"
 	pathSigningPolicyDeliveryDoNotModify    = "signing.policy.delivery_status.donotmodify"
@@ -71,6 +72,7 @@ const (
 	pathSigningPolicyDeliveryUnsigned       = "signing.policy.delivery_status.unsigned_original"
 	envSigningPolicyOriginatorDoNotModify   = "DKIM2D_SIGNING_POLICY_ORIGINATOR_DONOTMODIFY"
 	envSigningPolicyOriginatorDoNotExplode  = "DKIM2D_SIGNING_POLICY_ORIGINATOR_DONOTEXPLODE"
+	envSigningPolicyOriginatorNullSender    = "DKIM2D_SIGNING_POLICY_ORIGINATOR_NULL_SENDER"
 	envSigningPolicyTransitDoNotModify      = "DKIM2D_SIGNING_POLICY_ORDINARY_TRANSIT_DONOTMODIFY"
 	envSigningPolicyTransitDoNotExplode     = "DKIM2D_SIGNING_POLICY_ORDINARY_TRANSIT_DONOTEXPLODE"
 	envSigningPolicyDeliveryDoNotModify     = "DKIM2D_SIGNING_POLICY_DELIVERY_STATUS_DONOTMODIFY"
@@ -144,6 +146,9 @@ const (
 
 	valueUnsignedOriginalReject   = "reject"
 	valueUnsignedOriginalContinue = "continue"
+
+	valueNullSenderReject     = "reject"
+	valueNullSenderHeaderFrom = "header_from"
 
 	flagListen        = "listen"
 	flagPolicyMode    = "policy-mode"
@@ -340,6 +345,7 @@ func stableFieldSpecs() []fieldSpec {
 		{path: pathSigningMaxLoadBytes, env: "DKIM2D_SIGNING_MAX_LOAD_BYTES", kind: valueUint, defaultVal: "16777216", hasDefault: true},
 		{path: pathSigningPolicyOriginatorDoNotModify, env: envSigningPolicyOriginatorDoNotModify, kind: valueBool, defaultVal: canonicalFalse, hasDefault: true},
 		{path: pathSigningPolicyOriginatorDoNotExplode, env: envSigningPolicyOriginatorDoNotExplode, kind: valueBool, defaultVal: canonicalFalse, hasDefault: true},
+		{path: pathSigningPolicyOriginatorNullSender, env: envSigningPolicyOriginatorNullSender, kind: valueString, defaultVal: valueNullSenderReject, hasDefault: true},
 		{path: pathSigningPolicyTransitDoNotModify, env: envSigningPolicyTransitDoNotModify, kind: valueBool, defaultVal: canonicalFalse, hasDefault: true},
 		{path: pathSigningPolicyTransitDoNotExplode, env: envSigningPolicyTransitDoNotExplode, kind: valueBool, defaultVal: canonicalFalse, hasDefault: true},
 		{path: pathSigningPolicyDeliveryDoNotModify, env: envSigningPolicyDeliveryDoNotModify, kind: valueBool, defaultVal: canonicalFalse, hasDefault: true},

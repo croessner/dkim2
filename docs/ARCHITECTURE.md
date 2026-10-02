@@ -75,6 +75,7 @@
 
 | 0.1.0-draft | 2026-09-16 | Christian Roessner / Codex | Adopted upstream `{postfix_internal_origin}` with transaction-scoped EOH proof, bounce/null-sender selection, and unchanged notify/verify/non-null bounce messages; removed downstream macro compatibility. |
 | 0.1.0-draft | 2026-09-26 | Christian Roessner / Claude | Separated an embedded DSN original without any DKIM2-Signature field (closed stage `embedded_unsigned`) from failed embedded verification and added the explicit, default-`reject` daemon compatibility policy `signing.policy.delivery_status.unsigned_original`. Under `continue`, `POST /v1/dsn/sign` answers bodyless 204 and the `postfix_dsn` adapter delivers the RFC 3464 report unsigned and unchanged; Section 12 covers only DKIM2-signed originals, and any original carrying a DKIM2-Signature is never relaxed. |
+| 0.1.0-draft | 2026-10-02 | Christian Roessner / Claude | Added the explicit, default-`reject` trusted-route opt-in for originator signing of a null reverse path: Milter `signing.null_sender: header_from`, daemon `signing.policy.originator.null_sender: header_from`, and the `null_sender` declaration on `POST /v1/sign`. The signing domain is the canonical domain of the single RFC 5322 From mailbox, checked by the adapter, the daemon mapper, and the library, and the signature carries `mf=<>` (Draft-06 Sections 8.5 and 8.8). Trust comes from the MTA listener; the opt-in must never be enabled on an inbound or MX-facing Milter. `/v1/revise` and batch revision still refuse a null reverse path. |
 
 ## 1. Purpose
 
@@ -2134,8 +2135,14 @@ folding remain invalid. The Postfix bounce wire-profile constructor is an
 explicit trusted-adapter boundary: daemon code selects it only after
 authentication of the dedicated route capability; no API body field can
 enable it. Generic library and Exim paths remain strict, and no generic HTTP
-DSN route exists. The originator Milter continues to reject null senders and
-cannot use the daemon DSN route as a fallback.
+DSN route exists. The originator Milter rejects null senders by default and
+cannot use the daemon DSN route as a fallback. Only the explicit trusted-route
+opt-in (`signing.null_sender: header_from` in the Milter and
+`signing.policy.originator.null_sender: header_from` in the daemon) signs a
+null reverse path as an ordinary originator signature with `mf=<>`, bound to
+the single RFC 5322 From mailbox domain; it is meant for automatic replies
+and disposition notifications from internal egress routes and must never be
+enabled for an inbound or MX-facing Milter.
 
 Revision signing:
 

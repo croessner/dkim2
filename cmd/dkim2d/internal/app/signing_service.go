@@ -38,6 +38,23 @@ type signingPolicies struct {
 	// original carries no DKIM2-Signature header field leave unsigned and
 	// unchanged. The zero value is the fail-closed reject default.
 	continueUnsignedOriginal bool
+	// admitHeaderFromNullSender admits the explicit header_from originator
+	// declaration for a null reverse path. The zero value refuses it.
+	admitHeaderFromNullSender bool
+}
+
+// NullSenderRefusedError reports a header_from null-sender sign request that
+// this daemon's originator policy does not admit. The HTTP boundary answers
+// it exactly like any other null reverse path on the originator route.
+type NullSenderRefusedError struct{}
+
+// Error returns a constant content-free diagnostic.
+func (*NullSenderRefusedError) Error() string { return "dkim2d null-sender signing not admitted" }
+
+// IsNullSenderRefused reports whether err is the closed null-sender refusal.
+func IsNullSenderRefused(err error) bool {
+	var refused *NullSenderRefusedError
+	return errors.As(err, &refused)
 }
 
 // metadata constructs validated library-owned signing metadata in canonical flag order.
@@ -63,6 +80,8 @@ func signingPoliciesFromConfig(policy config.SigningPoliciesConfig) signingPolic
 		deliveryStatus:  convert(policy.DeliveryStatus()),
 		continueUnsignedOriginal: policy.DeliveryStatusUnsignedOriginal() ==
 			config.UnsignedOriginalContinue,
+		admitHeaderFromNullSender: policy.OriginatorNullSender() ==
+			config.NullSenderHeaderFrom,
 	}
 }
 
@@ -285,11 +304,16 @@ func (l datasourceSigningLease) Close() error {
 	return l.lease.Close()
 }
 
-// Sign performs exact originator policy resolution and signing.
+// Sign performs exact originator policy resolution and signing. A
+// header_from null-sender request is refused before any datastore access
+// unless the daemon policy admits it.
 func (s *SigningService) Sign(
 	ctx context.Context,
 	request OperationRequest,
 ) (SigningAssessment, error) {
+	if s != nil && request.HeaderFromNullSender() && !s.policies.admitHeaderFromNullSender {
+		return SigningAssessment{}, &NullSenderRefusedError{}
+	}
 	execution, err := s.execute(ctx, request, OperationSign)
 	if err != nil {
 		return SigningAssessment{}, err
@@ -503,7 +527,16 @@ func completeOperation(
 	ticket = tickets[0]
 	var result dkim2.SigningResult
 	var recovery dkim2.SigningRecovery
-	if operation == OperationSign {
+	switch {
+	case operation == OperationSign && request.HeaderFromNullSender():
+		result, recovery, err = signer.SignOriginator(
+			ctx,
+			dkim2.NewHeaderFromNullSenderSigningRequest(
+				raw, recipients, ticket, profile, metadata,
+				dkim2.SigningTransportFinalNetworkPreDotStuffing,
+			),
+		)
+	case operation == OperationSign:
 		result, recovery, err = signer.SignOriginator(
 			ctx,
 			dkim2.NewOriginatorSigningRequest(
@@ -511,7 +544,7 @@ func completeOperation(
 				dkim2.SigningTransportFinalNetworkPreDotStuffing,
 			),
 		)
-	} else {
+	default:
 		result, recovery, err = signer.SignExisting(
 			ctx,
 			dkim2.NewExistingSigningRequest(

@@ -141,8 +141,11 @@ classified as local or foreign, no signing route is registered, and
 for every credential. Do not add an unused sign or delivery-status capability
 to the inbound route to satisfy the datasource.
 
-The originator Milter continues to tempfail every `MAIL FROM <>` message before
-daemon I/O. Locally generated Postfix bounces use a separate `postfix_dsn`
+The originator Milter in this rendering keeps the default
+`signing.null_sender: reject` and tempfails every `MAIL FROM <>` message before
+daemon I/O. The `header_from` opt-in for automatic replies is reserved for
+originator instances on trusted egress listeners and is described in the
+[deployment walkthrough](deployment-walkthrough.md), Section 3.4. Locally generated Postfix bounces use a separate `postfix_dsn`
 Milter route whose signing block contains only the administrative tenant and
 `domain_source: verified_embedded`; it must not contain `signing.domain` or
 `signing.dsn_domain`. The adapter admits that route only for the exact

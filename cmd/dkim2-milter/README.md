@@ -169,10 +169,47 @@ datasource fallback. Every originator configuration also retains one exact
 canonical `dsn_domain` as a stable, reserved prerequisite for future DSN
 support. It is not signing authority by itself.
 
-The originator adapter tempfails every null reverse-path before daemon I/O.
-Generic Milter callbacks remain insufficient evidence. Only a separate
-`postfix_dsn` instance may accept `MAIL FROM <>`, after exact Postfix-only EOH
-origin-enum validation; do not route null senders to the originator socket. A
+By default (`signing.null_sender: reject`) the originator adapter tempfails
+every null reverse-path before daemon I/O: generic Milter callbacks are no
+evidence that our own system generated the message. An originator instance
+attached only to trusted egress listeners, such as an authenticated
+submission hub, an own relay hub, or an internal application socket, may set
+the explicit opt-in:
+
+```yaml
+mode: originator
+signing:
+  tenant: tenant-a
+  domain_source: envelope_sender
+  null_sender: header_from
+  dsn_domain: dsn.example.test
+```
+
+With `header_from`, a transaction with reverse path `<>`, such as a Sieve
+vacation or notify reply or an RFC 8098 disposition notification, is signed
+with the domain of the single RFC 5322 From mailbox. The adapter reads From
+from the header fields its bounded header callbacks collected (the
+`limits.header_*` settings apply) and requires exactly one From field with
+exactly one mailbox whose addr-spec is ASCII and whose domain is a canonical
+DNS name; the From domain replaces the envelope evidence under either
+`domain_source`. A missing or repeated From field, a group, several
+mailboxes, an address literal, an SMTPUTF8 author, or an SMTPUTF8 recipient
+is not applicable and continues unsigned without daemon I/O, exactly like an
+unsupported envelope sender. Otherwise the request carries `mail_from` `<>`,
+`null_sender: header_from`, and the From domain; the daemon must itself be
+configured with `signing.policy.originator.null_sender: header_from` (a daemon
+that keeps its `reject` default answers 400, which the adapter handles as a
+contract failure under `failure.mode`), signs
+`mf=<>` with `rt=` equal to the actual recipient, and answers 204 for a domain
+without an active `originator` profile. The single-recipient rule and every
+other check stay unchanged. `null_sender` is accepted only in `originator`
+mode; any explicit value in another mode fails configuration validation.
+Never set `header_from` on an instance attached to an inbound or MX-facing
+listener: there a null sender is a claim by an arbitrary SMTP client.
+
+Bounces are not auto-replies. Only a separate `postfix_dsn` instance may sign
+Postfix bounces, after exact Postfix-only EOH origin-enum validation; do not
+route `bounce(8)` output to the originator socket. A
 `postfix_dsn` instance may share the normal non-SMTP Milter chain: when the
 origin macro is absent or `external` it continues without daemon I/O or
 mutation. Duplicate macro members in one callback, conflicting callback

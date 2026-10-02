@@ -225,8 +225,9 @@ verification, replay, or signing. Delivery-status signing uses
 mismatched credentials produce the same closed 403 shape. The header is
 removed before generated handlers run. A Milter instance loads only the
 capability for its fixed mode, so compromise of an inbound adapter cannot
-authorize sign, revise, or delivery-status signing. Originator continues to
-tempfail `<>`; only `postfix_dsn` may load and use the DSN capability.
+authorize sign, revise, or delivery-status signing. Originator tempfails `<>`
+unless the trusted-route opt-in `signing.null_sender: header_from` is set;
+only `postfix_dsn` may load and use the DSN capability.
 
 ## Closed Action Plan
 
@@ -366,7 +367,18 @@ Every originator route also retains one separate canonical
 `signing.dsn_domain`. This stable configuration path is a reserved prerequisite
 for future DSN support, not sufficient signing authority.
 
-The originator adapter tempfails every exact null reverse-path `<>`. The
+By default the originator adapter tempfails every exact null reverse-path
+`<>`. With the explicit `signing.null_sender: header_from` opt-in, which is
+meant only for originator instances on trusted egress listeners and never for
+an inbound or MX-facing listener, a null reverse path selects the canonical
+DNS domain of the single RFC 5322 From mailbox from the callback-collected
+header fields, independently of `signing.domain_source`. A missing or
+repeated From field, a group, several mailboxes, an address literal, an
+SMTPUTF8 author, or an unsupported recipient path is not applicable and
+continues before daemon I/O. Otherwise the sign request carries `mail_from`
+`<>`, the From domain, and `null_sender: header_from`; the daemon admits it
+only under `signing.policy.originator.null_sender: header_from`, rechecks the
+From binding, and signs `mf=<>` with the actual recipient in `rt=`. The
 separate `postfix_dsn` adapter accepts only exact `bounce` provenance from
 `{postfix_internal_origin}` and then delegates RFC 6522 and Draft-04 Section 12
 evidence checks to the daemon. External or absent provenance never authorizes
@@ -428,6 +440,7 @@ The initial stable paths include:
 | `signing.tenant` | conditional | required for signing/revision modes |
 | `signing.domain` | conditional | required for static originator/transit routes; absent for envelope-derived originator and verified-embedded Postfix DSN routes |
 | `signing.domain_source` | `static` | `static`, `envelope_sender` for originator only, or explicit `verified_embedded` for `postfix_dsn` only |
+| `signing.null_sender` | `reject` | `reject` or `header_from`; any explicit value is accepted only for originator; `header_from` signs a null reverse path with the single From mailbox domain and is reserved for trusted egress listeners |
 | `signing.dsn_domain` | originator required | reserved legacy originator prerequisite; forbidden in other modes and never sufficient to authorize null-sender signing |
 | `signing.allow_recipient_group` | `false` | reserved; `true` is rejected until per-message Bcc evidence exists |
 | `authentication_results.enabled` | `false` | inbound mode only |
@@ -539,7 +552,8 @@ forbidden. SMTPUTF8 octets are preserved for inbound processing under RFC
 An originator non-null, non-ASCII reverse path cannot select an exact signing
 domain and is therefore not applicable; it continues before daemon,
 datasource, or private-key access. Every null sender fails closed before those
-boundaries until the trusted DSN evidence gate exists. Ordinary-transit mode
+boundaries unless the trusted-route `signing.null_sender: header_from` opt-in
+derives the signing domain from the single From mailbox. Ordinary-transit mode
 still fails closed on every non-ASCII
 envelope path before those boundaries because revision cannot discard inherited
 custody evidence.

@@ -178,7 +178,7 @@ func TestStableFieldBindings(t *testing.T) {
 func TestStablePathSetIsExact(t *testing.T) {
 	specs := stableFieldSpecs()
 	golden := stableFieldGoldenContract()
-	if len(specs) != 123 || len(specs) != len(golden) {
+	if len(specs) != 124 || len(specs) != len(golden) {
 		t.Fatal("stable path count changed")
 	}
 	for index, expected := range golden {
@@ -273,6 +273,7 @@ func stableFieldGoldenContract() []stableFieldGolden {
 		{path: "signing.max_load_bytes", environment: "DKIM2D_SIGNING_MAX_LOAD_BYTES", defaultValue: "16777216", hasDefault: true},
 		{path: "signing.policy.originator.donotmodify", environment: envSigningPolicyOriginatorDoNotModify, defaultValue: "false", hasDefault: true},
 		{path: "signing.policy.originator.donotexplode", environment: envSigningPolicyOriginatorDoNotExplode, defaultValue: "false", hasDefault: true},
+		{path: "signing.policy.originator.null_sender", environment: envSigningPolicyOriginatorNullSender, defaultValue: valueNullSenderReject, hasDefault: true},
 		{path: "signing.policy.ordinary_transit.donotmodify", environment: envSigningPolicyTransitDoNotModify, defaultValue: "false", hasDefault: true},
 		{path: "signing.policy.ordinary_transit.donotexplode", environment: envSigningPolicyTransitDoNotExplode, defaultValue: "false", hasDefault: true},
 		{path: "signing.policy.delivery_status.donotmodify", environment: envSigningPolicyDeliveryDoNotModify, defaultValue: "false", hasDefault: true},

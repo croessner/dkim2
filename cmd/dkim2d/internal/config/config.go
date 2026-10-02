@@ -65,6 +65,22 @@ const (
 	UnsignedOriginalContinue
 )
 
+// NullSenderPolicy is the explicit originator policy for a sign request whose
+// SMTP reverse path is null. The zero value is the fail-closed default, so an
+// unset policy never admits null-sender originator signing.
+type NullSenderPolicy uint8
+
+const (
+	// NullSenderReject refuses every null reverse path on the originator
+	// route as an invalid contract. It is the default.
+	NullSenderReject NullSenderPolicy = iota
+	// NullSenderHeaderFrom admits a null reverse path only when the caller
+	// declares the header_from policy and the requested signing domain is
+	// the single RFC 5322 From mailbox domain. It is meant solely for
+	// daemons whose originator callers sit on trusted egress routes.
+	NullSenderHeaderFrom
+)
+
 // ReplayBackend identifies one closed replay-store selection.
 type ReplayBackend uint8
 
@@ -206,6 +222,7 @@ type signingPoliciesState struct {
 	ordinaryTransit  signingFlagPolicyState
 	deliveryStatus   signingFlagPolicyState
 	unsignedOriginal UnsignedOriginalPolicy
+	nullSender       NullSenderPolicy
 }
 
 type ldapSigningState struct {
@@ -1005,7 +1022,8 @@ func parseSigning(
 }
 
 // parseSigningPolicies validates and freezes the six daemon-owned signing
-// requests and the delivery-status unsigned-original compatibility policy.
+// requests, the delivery-status unsigned-original compatibility policy, and
+// the originator null-sender policy.
 func parseSigningPolicies(values map[string]rawValue) (signingPoliciesState, error) {
 	read := func(modifyPath, explodePath string) (signingFlagPolicyState, error) {
 		modify, err := boolValue(values, modifyPath)
@@ -1034,10 +1052,27 @@ func parseSigningPolicies(values map[string]rawValue) (signingPoliciesState, err
 	if err != nil {
 		return signingPoliciesState{}, err
 	}
+	nullSender, err := parseNullSenderPolicy(text(values, pathSigningPolicyOriginatorNullSender))
+	if err != nil {
+		return signingPoliciesState{}, err
+	}
 	return signingPoliciesState{
 		originator: originator, ordinaryTransit: transit, deliveryStatus: delivery,
-		unsignedOriginal: unsignedOriginal,
+		unsignedOriginal: unsignedOriginal, nullSender: nullSender,
 	}, nil
+}
+
+// parseNullSenderPolicy maps the exact lowercase policy spelling onto the
+// closed originator null-sender vocabulary. Any other value fails closed.
+func parseNullSenderPolicy(value string) (NullSenderPolicy, error) {
+	switch value {
+	case valueNullSenderReject:
+		return NullSenderReject, nil
+	case valueNullSenderHeaderFrom:
+		return NullSenderHeaderFrom, nil
+	default:
+		return NullSenderReject, newError(CodeInvalidField)
+	}
 }
 
 // parseUnsignedOriginalPolicy maps the exact lowercase policy spelling onto
@@ -1059,7 +1094,8 @@ func (p signingPoliciesState) anyEnabled() bool {
 	return p.originator.doNotModify || p.originator.doNotExplode ||
 		p.ordinaryTransit.doNotModify || p.ordinaryTransit.doNotExplode ||
 		p.deliveryStatus.doNotModify || p.deliveryStatus.doNotExplode ||
-		p.unsignedOriginal != UnsignedOriginalReject
+		p.unsignedOriginal != UnsignedOriginalReject ||
+		p.nullSender != NullSenderReject
 }
 
 // parseLDAPSigning validates one verified-TLS single-authority LDAP subtree.
