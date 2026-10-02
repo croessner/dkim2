@@ -326,6 +326,14 @@ func runServe(
 			_ = stopApplication(application, snapshot.ShutdownTimeout(), deps)
 		}
 	}()
+	// Subscribe to termination signals before startup opens the LMTP
+	// listener, so a SIGTERM that arrives while startup completes requests the
+	// orderly shutdown instead of terminating the process with the default
+	// signal action.
+	done, err := applicationDone(application)
+	if err != nil {
+		return errCommandRuntime
+	}
 	startContext, startCancel := deps.withTimeout(ctx, app.StartTimeout)
 	if startContext == nil || startCancel == nil {
 		return errCommandRuntime
@@ -335,10 +343,6 @@ func runServe(
 		return errCommandRuntime
 	}
 	startCancel()
-	done, err := applicationDone(application)
-	if err != nil {
-		return errCommandRuntime
-	}
 	if done == nil {
 		cleanupPending = false
 		return stopApplication(application, snapshot.ShutdownTimeout(), deps)

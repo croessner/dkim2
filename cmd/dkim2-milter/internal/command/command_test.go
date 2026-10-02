@@ -291,7 +291,8 @@ func TestCommandHelpVersionAndShapeNeverBootstrap(t *testing.T) {
 	}
 }
 
-// TestRunServeUsesFxLifecycleAndConfiguredBounds proves config-to-runtime orchestration.
+// TestRunServeUsesFxLifecycleAndConfiguredBounds proves config-to-runtime
+// orchestration and that the termination-signal subscription precedes start.
 func TestRunServeUsesFxLifecycleAndConfiguredBounds(t *testing.T) {
 	snapshot := commandSnapshot(t)
 	done := make(chan os.Signal)
@@ -325,7 +326,7 @@ func TestRunServeUsesFxLifecycleAndConfiguredBounds(t *testing.T) {
 		t.Fatal(err)
 	}
 	if loads != 1 || builds != 1 ||
-		!equalStrings(application.callSnapshot(), []string{testStartCall, testDoneCall, testStopCall}) {
+		!equalStrings(application.callSnapshot(), []string{testDoneCall, testStartCall, testStopCall}) {
 		t.Fatalf("loads=%d builds=%d calls=%v", loads, builds, application.callSnapshot())
 	}
 	if application.startLeft <= 0 || application.startLeft > app.StartTimeout ||
@@ -362,7 +363,7 @@ func TestRunServeContainsWaitAndStopPanics(t *testing.T) {
 				t.Fatalf("runServe() error = %v", err)
 			}
 			if calls := test.application.callSnapshot(); len(calls) < 2 ||
-				calls[0] != testStartCall || calls[len(calls)-1] != testStopCall {
+				calls[0] != testDoneCall || calls[len(calls)-1] != testStopCall {
 				t.Fatalf("panic cleanup calls = %v", calls)
 			}
 		})
