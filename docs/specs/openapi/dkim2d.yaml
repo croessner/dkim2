@@ -2026,7 +2026,12 @@ components:
         closed reason vocabulary. Consumers validate authority and result and
         must not use diagnostic comments for policy. Legacy bare results remain
         accepted. Origin and failure-index properties are omitted by this
-        privacy-preserving profile.
+        privacy-preserving profile. Successful sign, revise, and delivery_status
+        operations may append one X-DKIM2-Info action after their protocol fields
+        when signing.interop_info.enabled is true. It is unsigned diagnostic
+        metadata, never authentication evidence. Earlier diagnostic fields are
+        preserved. Consumers must reject duplicates, misplaced info actions,
+        and info actions on process, non-accept, or non-pass outcomes.
       type: object
       additionalProperties: false
       required:
@@ -2043,6 +2048,7 @@ components:
           enum:
             - Message-Instance
             - DKIM2-Signature
+            - X-DKIM2-Info
             - Authentication-Results
         value:
           type: string

@@ -106,7 +106,7 @@
     {
       "id": "milter-public-peer-source",
       "path": "cmd/dkim2-milter/internal/integration/public_peer_test.go",
-      "sha256": "e78b5c0fcc02ee108755141a32b02f344b4e80b01066f31eeff382065c3cbec9",
+      "sha256": "693edf5a40d0f1f4ad1887bcd48f99e15630e7533c49d47320e9def7f5696f66",
       "module": "cmd/dkim2-milter"
     },
     {

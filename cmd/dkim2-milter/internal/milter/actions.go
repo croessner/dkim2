@@ -25,6 +25,7 @@ const (
 	headerAuthResults = "Authentication-Results"
 	headerMessage     = "Message-Instance"
 	headerDKIM2       = "DKIM2-Signature"
+	headerInteropInfo = "X-DKIM2-Info"
 )
 
 // validResult proves the complete operation/action matrix without side effects.
@@ -157,6 +158,9 @@ func validOriginatorResult(result Result) bool {
 	if result.Outcome != DispositionAccept {
 		return len(result.Actions) == 0
 	}
+	if len(result.Actions) > 0 && result.Actions[len(result.Actions)-1].Name == headerInteropInfo {
+		result.Actions = result.Actions[:len(result.Actions)-1]
+	}
 	return result.Result == resultPass &&
 		len(result.Actions) == 2 &&
 		result.Actions[0].Name == headerMessage &&
@@ -171,6 +175,9 @@ func validTransitResult(result Result) bool {
 	if result.Result != resultPass {
 		return false
 	}
+	if len(result.Actions) > 0 && result.Actions[len(result.Actions)-1].Name == headerInteropInfo {
+		result.Actions = result.Actions[:len(result.Actions)-1]
+	}
 	if len(result.Actions) == 1 {
 		return result.Actions[0].Name == headerDKIM2
 	}
@@ -182,7 +189,7 @@ func validTransitResult(result Result) bool {
 // validActionName accepts only the exact append-only field matrix.
 func validActionName(value string) bool {
 	return value == headerMessage || value == headerDKIM2 ||
-		value == headerAuthResults
+		value == headerAuthResults || value == headerInteropInfo
 }
 
 // authenticationConflict detects exact local authserv-id authority.

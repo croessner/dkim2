@@ -1396,3 +1396,13 @@ No deferred layer may introduce a parallel signing profile, key handle,
 custody checker, field formatter, hash gate, recipe direction, authorization
 model, or public signing result. Any change requires a reviewed durable spec
 amendment before implementation.
+
+### Unrestricted signing identity projection
+
+`UnrestrictedSignedMessage.SigningIdentity()` exposes the signing domain and
+Unix timestamp from the newly generated DKIM2 signature, using the library's
+existing raw-message and signature parsers. Zero or incoherent results return
+a typed signing error. The accessor does not expose inherited signatures or
+add an accessor to restricted result variants. Applications can combine this
+projection with `Facts().Algorithms()` for bounded informational reporting
+without importing library internals or duplicating protocol parsing.

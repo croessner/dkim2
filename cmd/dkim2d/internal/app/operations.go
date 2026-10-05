@@ -443,7 +443,7 @@ func NewOperationResult(
 			result != OperationPermerror && result != OperationTemperror) ||
 		(disposition != OperationAccept && disposition != OperationContinue &&
 			disposition != OperationReject && disposition != OperationTempfail) ||
-		len(fields) > 2 || (disposition != OperationAccept && len(fields) != 0) ||
+		len(fields) > 3 || (disposition != OperationAccept && len(fields) != 0) ||
 		!validOperationOutcome(result, disposition) {
 		return OperationResult{}, &DomainError{}
 	}

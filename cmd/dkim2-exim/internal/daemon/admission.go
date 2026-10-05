@@ -69,7 +69,8 @@ func AdmitProcessJSON(body []byte, authservID string) (adapter.Plan, error) {
 	return plan, nil
 }
 
-// admitOperation proves the exact operation/result/disposition/action matrix.
+// admitOperation validates the wire envelope and delegates action ownership
+// to the authoritative adapter filter plan matrix.
 func admitOperation(value generated.OperationResponse, operation string) (adapter.Plan, error) {
 	if value.ApiVersion != generated.V1 ||
 		value.Draft != generated.DraftIetfDkimDkim2Spec06 ||
@@ -82,16 +83,21 @@ func admitOperation(value generated.OperationResponse, operation string) (adapte
 		return adapter.Plan{}, contractError()
 	}
 	actions, ok := admitActions(value.Actions)
-	if !ok || !validOperationActions(operation, value.Result, value.Disposition, actions) {
+	if !ok {
 		return adapter.Plan{}, contractError()
 	}
 	result, ok := mapOperationResult(value.Result)
 	if !ok {
 		return adapter.Plan{}, contractError()
 	}
-	planOperation := adapter.FilterSign
-	if operation == daemonOperationRevise {
+	var planOperation adapter.FilterOperation
+	switch operation {
+	case daemonOperationSign:
+		planOperation = adapter.FilterSign
+	case daemonOperationRevise:
 		planOperation = adapter.FilterRevise
+	default:
+		return adapter.Plan{}, contractError()
 	}
 	plan, err := adapter.NewFilterPlan(planOperation, result, disposition, actions)
 	if err != nil {
@@ -125,41 +131,6 @@ func admitActions(values generated.ActionPlan) ([]adapter.Action, bool) {
 		output[index] = action
 	}
 	return output, true
-}
-
-// validOperationActions enforces exact sign and revise append-only plans.
-func validOperationActions(
-	operation string,
-	result generated.OperationResponseResult,
-	disposition generated.Disposition,
-	actions []adapter.Action,
-) bool {
-	if disposition != generated.DispositionAccept {
-		return len(actions) == 0
-	}
-	if result != generated.OperationResponseResultPass {
-		return false
-	}
-	for _, action := range actions {
-		if len(action.Value()) == 0 ||
-			action.Value()[0] != ' ' && action.Value()[0] != '\t' {
-			return false
-		}
-	}
-	switch operation {
-	case daemonOperationSign:
-		return len(actions) == 2 &&
-			actions[0].Name() == string(generated.MessageInstance) &&
-			actions[1].Name() == string(generated.DKIM2Signature)
-	case daemonOperationRevise:
-		return (len(actions) == 1 &&
-			actions[0].Name() == string(generated.DKIM2Signature)) ||
-			len(actions) == 2 &&
-				actions[0].Name() == string(generated.MessageInstance) &&
-				actions[1].Name() == string(generated.DKIM2Signature)
-	default:
-		return false
-	}
 }
 
 // validResultDisposition enforces the authoritative operation result matrix.

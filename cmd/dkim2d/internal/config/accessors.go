@@ -401,6 +401,11 @@ func (c SigningPoliciesConfig) DeliveryStatusUnsignedOriginal() UnsignedOriginal
 	return c.state.unsignedOriginal
 }
 
+// InteropInfoEnabled reports whether outgoing signing emits unsigned interop diagnostics.
+func (c SigningPoliciesConfig) InteropInfoEnabled() bool {
+	return c.state != nil && c.state.interopInfo
+}
+
 // OriginatorNullSender returns the originator null-sender policy. An absent
 // configuration view reports the fail-closed reject default.
 func (c SigningPoliciesConfig) OriginatorNullSender() NullSenderPolicy {

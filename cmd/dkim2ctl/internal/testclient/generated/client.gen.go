@@ -37,6 +37,7 @@ const (
 	AuthenticationResults AddHeaderActionName = "Authentication-Results"
 	DKIM2Signature        AddHeaderActionName = "DKIM2-Signature"
 	MessageInstance       AddHeaderActionName = "Message-Instance"
+	XDKIM2Info            AddHeaderActionName = "X-DKIM2-Info"
 )
 
 // Valid indicates whether the value is a known member of the AddHeaderActionName enum.
@@ -47,6 +48,8 @@ func (e AddHeaderActionName) Valid() bool {
 	case DKIM2Signature:
 		return true
 	case MessageInstance:
+		return true
+	case XDKIM2Info:
 		return true
 	default:
 		return false
@@ -1571,7 +1574,7 @@ type APIVersion string
 // ActionPlan defines model for ActionPlan.
 type ActionPlan = []AddHeaderAction
 
-// AddHeaderAction Daemon-owned header action. Authentication-Results carries one dkim2 result, optionally followed by a bounded diagnostic comment from the closed reason vocabulary. Consumers validate authority and result and must not use diagnostic comments for policy. Legacy bare results remain accepted. Origin and failure-index properties are omitted by this privacy-preserving profile.
+// AddHeaderAction Daemon-owned header action. Authentication-Results carries one dkim2 result, optionally followed by a bounded diagnostic comment from the closed reason vocabulary. Consumers validate authority and result and must not use diagnostic comments for policy. Legacy bare results remain accepted. Origin and failure-index properties are omitted by this privacy-preserving profile. Successful sign, revise, and delivery_status operations may append one X-DKIM2-Info action after their protocol fields when signing.interop_info.enabled is true. It is unsigned diagnostic metadata, never authentication evidence. Earlier diagnostic fields are preserved. Consumers must reject duplicates, misplaced info actions, and info actions on process, non-accept, or non-pass outcomes.
 type AddHeaderAction struct {
 	Name  AddHeaderActionName `json:"name"`
 	Type  AddHeaderActionType `json:"type"`

@@ -145,7 +145,17 @@ func TestExecutableSigningModeMatrix(t *testing.T) {
 				{Name: generated.MessageInstance, Type: generated.AddHeader, Value: testMessageInstanceValue},
 				{Name: generated.DKIM2Signature, Type: generated.AddHeader, Value: testSignatureValue},
 			},
-			wantHeaders: []string{"Message-Instance", "DKIM2-Signature"},
+			wantHeaders: []string{string(generated.MessageInstance), string(generated.DKIM2Signature)},
+		},
+		{
+			name: "originator interop info", mode: integrationModeOrigin,
+			operation: generated.Sign,
+			actions: generated.ActionPlan{
+				{Name: generated.MessageInstance, Type: generated.AddHeader, Value: testMessageInstanceValue},
+				{Name: generated.DKIM2Signature, Type: generated.AddHeader, Value: testSignatureValue},
+				{Name: generated.XDKIM2Info, Type: generated.AddHeader, Value: " draft=ietf-dkim-dkim2-spec-06; sw=dkim2d;"},
+			},
+			wantHeaders: []string{string(generated.MessageInstance), string(generated.DKIM2Signature), string(generated.XDKIM2Info)},
 		},
 		{
 			name: "ordinary transit", mode: "ordinary_transit",
@@ -153,7 +163,7 @@ func TestExecutableSigningModeMatrix(t *testing.T) {
 			actions: generated.ActionPlan{
 				{Name: generated.DKIM2Signature, Type: generated.AddHeader, Value: "v=2; s=2"},
 			},
-			wantHeaders: []string{"DKIM2-Signature"},
+			wantHeaders: []string{string(generated.DKIM2Signature)},
 		},
 	}
 	for _, testCase := range tests {

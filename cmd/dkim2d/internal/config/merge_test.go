@@ -178,7 +178,7 @@ func TestStableFieldBindings(t *testing.T) {
 func TestStablePathSetIsExact(t *testing.T) {
 	specs := stableFieldSpecs()
 	golden := stableFieldGoldenContract()
-	if len(specs) != 127 || len(specs) != len(golden) {
+	if len(specs) != 128 || len(specs) != len(golden) {
 		t.Fatal("stable path count changed")
 	}
 	for index, expected := range golden {
@@ -274,6 +274,7 @@ func stableFieldGoldenContract() []stableFieldGolden {
 		{path: "signing.allow_recipient_group", environment: "DKIM2D_SIGNING_ALLOW_RECIPIENT_GROUP", defaultValue: "false", hasDefault: true}, //nolint:goconst
 		{path: "signing.limit_profile", environment: "DKIM2D_SIGNING_LIMIT_PROFILE", defaultValue: limitProfileSmall, hasDefault: true},
 		{path: "signing.max_load_bytes", environment: "DKIM2D_SIGNING_MAX_LOAD_BYTES", defaultValue: "16777216", hasDefault: true},
+		{path: pathSigningInteropInfo, environment: envSigningInteropInfo, defaultValue: "false", hasDefault: true},
 		{path: "signing.policy.originator.donotmodify", environment: envSigningPolicyOriginatorDoNotModify, defaultValue: "false", hasDefault: true},
 		{path: "signing.policy.originator.donotexplode", environment: envSigningPolicyOriginatorDoNotExplode, defaultValue: "false", hasDefault: true},
 		{path: "signing.policy.originator.null_sender", environment: envSigningPolicyOriginatorNullSender, defaultValue: valueNullSenderReject, hasDefault: true},

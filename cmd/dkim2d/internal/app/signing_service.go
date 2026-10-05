@@ -31,6 +31,7 @@ type signingFlagPolicy struct {
 }
 
 type signingPolicies struct {
+	interopInfo     bool
 	originator      signingFlagPolicy
 	ordinaryTransit signingFlagPolicy
 	deliveryStatus  signingFlagPolicy
@@ -75,6 +76,7 @@ func signingPoliciesFromConfig(policy config.SigningPoliciesConfig) signingPolic
 		return signingFlagPolicy{doNotModify: source.DoNotModify(), doNotExplode: source.DoNotExplode()}
 	}
 	return signingPolicies{
+		interopInfo:     policy.InteropInfoEnabled(),
 		originator:      convert(policy.Originator()),
 		ordinaryTransit: convert(policy.OrdinaryTransit()),
 		deliveryStatus:  convert(policy.DeliveryStatus()),
@@ -443,7 +445,7 @@ func (s *SigningService) execute(
 		return operationExecution{}, &DomainError{}
 	}
 	result, err := completeOperation(
-		ctx, request, operation, signer, profile, recipients, disclosure, metadata,
+		ctx, request, operation, signer, profile, recipients, disclosure, metadata, s.policies.interopInfo,
 	)
 	if err != nil {
 		return operationExecution{}, err
@@ -483,6 +485,7 @@ func completeOperation(
 	recipients [][]byte,
 	disclosure dkim2.RouteDisclosure,
 	metadata dkim2.SigningMetadata,
+	interopInfo bool,
 ) (OperationResult, error) {
 	raw := request.RawMessage()
 	reverse := request.ReversePath()
@@ -563,13 +566,9 @@ func completeOperation(
 	if !ok {
 		return OperationResult{}, &DomainError{}
 	}
-	generated := unrestricted.GeneratedFields()
-	fields := make([]CompletedField, len(generated))
-	for index := range generated {
-		fields[index], err = NewCompletedField(generated[index])
-		if err != nil {
-			return OperationResult{}, &DomainError{}
-		}
+	fields, err := completedSigningFields(unrestricted, interopInfo)
+	if err != nil {
+		return OperationResult{}, err
 	}
 	return NewOperationResult(operation, OperationPass, OperationAccept, fields)
 }

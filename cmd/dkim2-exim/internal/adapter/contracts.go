@@ -23,6 +23,7 @@ const (
 	headerAuthenticationResults = "Authentication-Results"
 	headerMessageInstance       = "Message-Instance"
 	headerDKIM2Signature        = "DKIM2-Signature"
+	headerInteropInfo           = "X-DKIM2-Info"
 )
 
 // Fidelity identifies the exact Exim-derived daemon representation.
@@ -596,6 +597,9 @@ func validPlanActions(
 			return false
 		}
 	}
+	if len(actions) > 0 && actions[len(actions)-1].name == headerInteropInfo {
+		actions = actions[:len(actions)-1]
+	}
 	switch operation {
 	case OperationSign:
 		return len(actions) == 2 &&
@@ -823,7 +827,7 @@ func validHeader(value []byte) bool {
 func validActionName(value string) bool {
 	return value == headerAuthenticationResults ||
 		value == headerMessageInstance ||
-		value == headerDKIM2Signature
+		value == headerDKIM2Signature || value == headerInteropInfo
 }
 
 // stringsContainFraming rejects bytes that would alter a field boundary.

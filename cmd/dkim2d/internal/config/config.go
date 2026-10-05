@@ -230,6 +230,7 @@ type signingFlagPolicyState struct {
 }
 
 type signingPoliciesState struct {
+	interopInfo      bool
 	originator       signingFlagPolicyState
 	ordinaryTransit  signingFlagPolicyState
 	deliveryStatus   signingFlagPolicyState
@@ -1076,8 +1077,8 @@ func parseSigning(
 }
 
 // parseSigningPolicies validates and freezes the six daemon-owned signing
-// requests, the delivery-status unsigned-original compatibility policy, and
-// the originator null-sender policy.
+// requests, delivery-status and null-sender compatibility policies, and
+// optional interop reporting.
 func parseSigningPolicies(values map[string]rawValue) (signingPoliciesState, error) {
 	read := func(modifyPath, explodePath string) (signingFlagPolicyState, error) {
 		modify, err := boolValue(values, modifyPath)
@@ -1110,8 +1111,13 @@ func parseSigningPolicies(values map[string]rawValue) (signingPoliciesState, err
 	if err != nil {
 		return signingPoliciesState{}, err
 	}
+	interopInfo, err := boolValue(values, pathSigningInteropInfo)
+	if err != nil {
+		return signingPoliciesState{}, err
+	}
 	return signingPoliciesState{
-		originator: originator, ordinaryTransit: transit, deliveryStatus: delivery,
+		interopInfo: interopInfo,
+		originator:  originator, ordinaryTransit: transit, deliveryStatus: delivery,
 		unsignedOriginal: unsignedOriginal, nullSender: nullSender,
 	}, nil
 }

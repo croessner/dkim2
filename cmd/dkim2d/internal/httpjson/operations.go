@@ -279,7 +279,7 @@ func projectCompletedField(field []byte) (string, string, error) {
 	}
 	name := string(field[:colon])
 	if name != "Message-Instance" && name != "DKIM2-Signature" &&
-		name != "Authentication-Results" {
+		name != "Authentication-Results" && name != "X-DKIM2-Info" {
 		return "", "", newMappingError(MappingInternalContract)
 	}
 	value := field[colon+1 : len(field)-2]
@@ -312,6 +312,9 @@ func validOperationActionMatrix(
 ) bool {
 	if disposition != generated.DispositionAccept {
 		return len(actions) == 0
+	}
+	if len(actions) > 0 && actions[len(actions)-1].Name == generated.XDKIM2Info {
+		actions = actions[:len(actions)-1]
 	}
 	switch operation {
 	case generated.Sign:

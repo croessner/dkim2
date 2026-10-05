@@ -350,3 +350,29 @@ func FuzzOperationAdmission(f *testing.F) {
 		_, _ = AdmitOperationJSON(body, operation)
 	})
 }
+
+// TestInteropInfoOperationAdmission proves optional outgoing diagnostics survive the real JSON boundary.
+func TestInteropInfoOperationAdmission(t *testing.T) {
+	for _, operation := range []generated.OperationResponseOperation{generated.Sign, generated.Revise} {
+		value := validOperationFixture()
+		value.Operation = operation
+		info := generated.AddHeaderAction{Type: generated.AddHeader, Name: generated.XDKIM2Info, Value: " draft=ietf-dkim-dkim2-spec-06; sw=dkim2d;"}
+		value.Actions = append(value.Actions, info)
+		body, err := json.Marshal(value)
+		if err != nil {
+			t.Fatal(err)
+		}
+		plan, err := AdmitOperationJSON(body, string(operation))
+		if err != nil || len(plan.Actions()) != 3 {
+			t.Fatal("optional interop action rejected at JSON boundary")
+		}
+		value.Actions = append(generated.ActionPlan{info}, value.Actions[:2]...)
+		body, err = json.Marshal(value)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err = AdmitOperationJSON(body, string(operation)); err == nil {
+			t.Fatal("misplaced interop action admitted")
+		}
+	}
+}

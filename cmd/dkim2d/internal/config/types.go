@@ -65,6 +65,8 @@ const (
 	pathSigningAllowGroup                   = "signing.allow_recipient_group"
 	pathSigningLimitProfile                 = "signing.limit_profile"
 	pathSigningMaxLoadBytes                 = "signing.max_load_bytes"
+	pathSigningInteropInfo                  = "signing.interop_info.enabled"
+	envSigningInteropInfo                   = "DKIM2D_SIGNING_INTEROP_INFO_ENABLED"
 	pathSigningPolicyOriginatorDoNotModify  = "signing.policy.originator.donotmodify"
 	pathSigningPolicyOriginatorDoNotExplode = "signing.policy.originator.donotexplode"
 	pathSigningPolicyOriginatorNullSender   = "signing.policy.originator.null_sender"
@@ -351,6 +353,7 @@ func stableFieldSpecs() []fieldSpec {
 		{path: pathSigningAllowGroup, env: "DKIM2D_SIGNING_ALLOW_RECIPIENT_GROUP", kind: valueBool, defaultVal: canonicalFalse, hasDefault: true},
 		{path: pathSigningLimitProfile, env: "DKIM2D_SIGNING_LIMIT_PROFILE", kind: valueString, defaultVal: limitProfileSmall, hasDefault: true},
 		{path: pathSigningMaxLoadBytes, env: "DKIM2D_SIGNING_MAX_LOAD_BYTES", kind: valueUint, defaultVal: "16777216", hasDefault: true},
+		{path: pathSigningInteropInfo, env: envSigningInteropInfo, kind: valueBool, defaultVal: canonicalFalse, hasDefault: true},
 		{path: pathSigningPolicyOriginatorDoNotModify, env: envSigningPolicyOriginatorDoNotModify, kind: valueBool, defaultVal: canonicalFalse, hasDefault: true},
 		{path: pathSigningPolicyOriginatorDoNotExplode, env: envSigningPolicyOriginatorDoNotExplode, kind: valueBool, defaultVal: canonicalFalse, hasDefault: true},
 		{path: pathSigningPolicyOriginatorNullSender, env: envSigningPolicyOriginatorNullSender, kind: valueString, defaultVal: valueNullSenderReject, hasDefault: true},

@@ -8,6 +8,8 @@ server:
 replay:
   backend: disabled
 signing:
+  interop_info:
+    enabled: false
   backend: postgresql
   reload_interval: 1m
   policy:

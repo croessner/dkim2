@@ -1942,6 +1942,20 @@ Valkey-specific design notes:
   protocol failure. Strict deployments may choose stronger local write-safety
   settings or fail closed when the replay store is degraded.
 
+### Optional outgoing interoperability diagnostics
+
+The daemon may append one `X-DKIM2-Info` field to successful sign, ordinary
+revision, and locally generated DSN action plans when
+`signing.interop_info.enabled` is true (default false). This local policy
+uses the newly generated signature's domain, algorithms, and UTC signing date;
+fixed metadata identifies Draft-06, `github.com/croessner/dkim2`, and `dkim2d`.
+The existing Draft-06 Section 4 exclusion of `X-` fields applies unchanged.
+Metadata never becomes authentication evidence or a protocol input. Prior
+informational fields remain byte-preserved. The API and adapters accept at
+most one trailing info action, only on successful outgoing plans. Batch and
+received-DSN propagation contracts are unchanged. See the daemon README for
+configuration and coordinated-upgrade requirements.
+
 ## 8. Milter Adapter Design
 
 The first Milter should be operational glue, not the reference engine.

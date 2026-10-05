@@ -515,6 +515,47 @@ evidence failure is also unaffected. Each outcome is counted in
 `dkim2d_dsn_evidence_total` with `evidence_stage="embedded_unsigned"` and
 `result="failure"` (refused) or `result="not_applicable"` (left unsigned).
 
+### Optional interoperability header
+
+Set `signing.interop_info.enabled: true` (environment override:
+`DKIM2D_SIGNING_INTEROP_INFO_ENABLED=true`) to append one `X-DKIM2-Info`
+field after successful `/v1/sign`, `/v1/revise`, and `/v1/dsn/sign` operations.
+The default is `false`; scalar environment placeholders follow the normal
+configuration rules. The path is stable for the `dkim2d-config-v1` window.
+
+```yaml
+signing:
+  interop_info:
+    enabled: true
+```
+
+For example, an RSA signing operation on 2026-10-05 produces:
+
+```text
+X-DKIM2-Info: draft=ietf-dkim-dkim2-spec-06;
+    repo=github.com/croessner/dkim2; date=2026-10-05; sw=dkim2d;
+    action=sign d=example.test a=rsa-sha256;
+```
+
+`sw` identifies the software. `repo` points to this implementation, and `date`
+is the UTC date of the actual signature timestamp, not the software build date.
+`d` and the comma-separated, deduplicated `a` list come from the generated
+signature, including both algorithms for dual signing. `action=sign` describes
+signature creation, including a transit or delivery-status signature.
+
+This is a local diagnostic convention, not a DKIM2 requirement. Draft-06
+Section 4 excludes `X-` fields from authentication. Never trust this header as
+an authentication result. Existing informational headers are preserved; each
+successful local operation adds its own. Failure, unsigned/no-op, and inbound
+verification paths do not add it. The standalone library, batch revision, and
+received-DSN propagation interfaces retain their existing output contracts.
+
+Upgrade the daemon and adapters together before enabling this option: older
+strict clients reject the additional action. Current Milter, Exim, and
+`dkim2ctl` clients admit exactly one trailing informational field on successful
+outgoing action plans. The API sends unfolded field values; transport framing
+remains owned by the adapter.
+
 `signing.policy.originator.null_sender` decides whether `POST /v1/sign`
 admits a null reverse path. It accepts exactly `reject` (the default) or
 `header_from`; any other value is refused at load time, and `header_from` is

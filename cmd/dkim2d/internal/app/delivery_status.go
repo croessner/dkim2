@@ -179,13 +179,9 @@ func (s *SigningService) signAuthorizedDeliveryStatus(
 	if !ok {
 		return OperationResult{}, &DomainError{}
 	}
-	generated := unrestricted.GeneratedFields()
-	fields := make([]CompletedField, len(generated))
-	for index := range generated {
-		fields[index], err = NewCompletedField(generated[index])
-		if err != nil {
-			return OperationResult{}, &DomainError{}
-		}
+	fields, err := completedSigningFields(unrestricted, s.policies.interopInfo)
+	if err != nil {
+		return OperationResult{}, err
 	}
 	return NewOperationResult(OperationDeliveryStatus, OperationPass, OperationAccept, fields)
 }
