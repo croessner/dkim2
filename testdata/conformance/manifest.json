@@ -118,7 +118,7 @@
     {
       "id": "openapi-independent-oracle-source",
       "path": "cmd/dkim2ctl/internal/testclient/public_socket_test.go",
-      "sha256": "c37814828b265a019d0c1848917ac311010ef82c3e069ef5f5a8268b42a8b481",
+      "sha256": "dd56447c6c121991f6f1c5c99494b8f70007387a7d65e131cb4b98894a1511a6",
       "module": "cmd/dkim2ctl"
     },
     {
@@ -196,19 +196,19 @@
     {
       "id": "postfix-qualification-dockerfile",
       "path": "contrib/qualification/postfix-milter/Dockerfile",
-      "sha256": "a52ffbc111d02e1d8dfe0bf8ac2d40d6857bab09a4091d02126c27892487e89d",
+      "sha256": "2b58e6f5d5cd4898dd3ebb3022d8f2a315def4fd88470db6b812a4e17402ae8b",
       "module": "contrib/qualification/postfix-milter"
     },
     {
       "id": "postfix-qualification-policy-source",
       "path": "tools/postfix_qualification_policy_test.go",
-      "sha256": "539ccd75a233f529b1c75a45501e741d1e5342dda233ffbffebd80cf98abb040",
+      "sha256": "51fecfeff2ea5b76c5167cf8850158c4ec9f79aa7f0caec471242b602905c4dd",
       "module": "tools"
     },
     {
       "id": "postfix-qualification-runner",
       "path": "contrib/qualification/postfix-milter/run.sh",
-      "sha256": "74db61ed7058f0b890e3e1eddc4504f0a469f16671d7b994077ebbab900ba2b9",
+      "sha256": "b3c148b4c8be9e27d6e8d0f3780c60d2a483d564ca889ae8f766cc8663484d0b",
       "module": "contrib/qualification/postfix-milter"
     },
     {
@@ -352,13 +352,13 @@
     {
       "id": "valkey-harness-script",
       "path": "scripts/test-valkey.sh",
-      "sha256": "8dbe79cbf85d8fda313928c8c05ddd2148205b4af642fcac1a48811e0491d0e8",
+      "sha256": "ac1105a60a9263f6a81546b03897d31302485f6561b53ec946767cb6d2675256",
       "module": "scripts"
     },
     {
       "id": "valkey-replay-source",
       "path": "cmd/dkim2d/internal/replay/valkey/real_valkey_integration_test.go",
-      "sha256": "0048539115ff3b7eb58a5e7edce5975540308156fc615d463d61ee310fb50a73",
+      "sha256": "54ca228f0804fc1aae19e75248a70ab01be1b2740d33e1ef25e83440e5406212",
       "module": "cmd/dkim2d"
     },
     {

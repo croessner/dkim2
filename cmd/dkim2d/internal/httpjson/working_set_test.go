@@ -97,7 +97,7 @@ func TestMaximumLegalWorkingSetProof(t *testing.T) {
 	}
 	claimWorkingSet(t, ledger, workingSetFixedStorage, maximumFixedRequestStorageBytes)
 
-	// Go 1.27.0 io.ReadAll retains its completed chunks while allocating the
+	// Go 1.27.2 io.ReadAll retains its completed chunks while allocating the
 	// exact final body snapshot. The new snapshot is claimed first so the
 	// transient overlap contributes to high water.
 	if err := ledger.BeginBodyRead(); err != nil {
@@ -105,7 +105,7 @@ func TestMaximumLegalWorkingSetProof(t *testing.T) {
 	}
 	if live := ledger.Snapshot().Live; live != maximumFixedRequestStorageBytes+
 		ceiling.readAllIntermediate+ceiling.processBodyCapacity {
-		t.Fatal("BeginBodyRead() did not charge the Go 1.27.0 transient")
+		t.Fatal("BeginBodyRead() did not charge the Go 1.27.2 transient")
 	}
 	if err := ledger.FinishBodyRead(); err != nil {
 		t.Fatal("FinishBodyRead() failed")
@@ -311,7 +311,7 @@ func TestPinnedWorkingSetCapacityBounds(t *testing.T) {
 		uint64(cap(body)) != maximumProcessBodyCapacityBytes ||
 		probe.offered != maximumReadAllIntermediateBytes ||
 		probe.offered+uint64(cap(body)) != 858_093_888 {
-		t.Fatalf("Go 1.27.0 io.ReadAll capacity inventory: final=%d intermediate=%d", cap(body), probe.offered)
+		t.Fatalf("Go 1.27.2 io.ReadAll capacity inventory: final=%d intermediate=%d", cap(body), probe.offered)
 	}
 	decoderProbe := &workingSetJSONProbe{remaining: uint64(maxProcessBodyBytes)}
 	var decodedArray []any
@@ -321,15 +321,15 @@ func TestPinnedWorkingSetCapacityBounds(t *testing.T) {
 	retained, overlap := decoderProbe.capacity, decoderProbe.previous+decoderProbe.capacity
 	if retained != maximumJSONDecoderRetainedBytes ||
 		overlap != maximumJSONDecoderCapacityBytes {
-		t.Fatalf("Go 1.27.0 JSON capacity inventory: retained=%d overlap=%d", retained, overlap)
+		t.Fatalf("Go 1.27.2 JSON capacity inventory: retained=%d overlap=%d", retained, overlap)
 	}
 	if roundWorkingSetPage(uint64(maxEncodedMessageBytes), 8*1024) !=
 		maximumEncodedMessageCapacityBytes {
-		t.Fatal("Go 1.27.0 Base64 allocation inventory drifted")
+		t.Fatal("Go 1.27.2 Base64 allocation inventory drifted")
 	}
 	if decoded := base64.StdEncoding.DecodedLen(maxEncodedMessageBytes); uint64(decoded) != maximumBase64DecodedCapacityBytes ||
 		decoded != dkim2.HardMaxRawMessageBytes+1 {
-		t.Fatal("Go 1.27.0 Base64 decoded capacity inventory drifted")
+		t.Fatal("Go 1.27.2 Base64 decoded capacity inventory drifted")
 	}
 	t.Logf("measured ReadAll final=%d intermediate=%d; JSON retained=%d overlap=%d", cap(body), probe.offered, retained, overlap)
 	if maximumValidationGenericStructureBytes/uint64(maxJSONTokens) < 5_800 {
@@ -345,7 +345,7 @@ func TestPinnedWorkingSetCapacityBounds(t *testing.T) {
 	if len(lines) != rawmsg.HardMaxBodyLines ||
 		cap(lines) != rawmsg.HardMaxBodyLines ||
 		maximumLibraryBodyLineIndexBytes != 251_658_240 {
-		t.Fatal("Go 1.27.0 BodyLine capacity inventory drifted")
+		t.Fatal("Go 1.27.2 BodyLine capacity inventory drifted")
 	}
 }
 
@@ -721,7 +721,7 @@ func (p *workingSetJSONProbe) Read(output []byte) (int, error) {
 	return int(count), nil
 }
 
-// workingSetReadAllProbe records each actual Go 1.27.0 intermediate allocation.
+// workingSetReadAllProbe records each actual Go 1.27.2 intermediate allocation.
 type workingSetReadAllProbe struct {
 	remaining uint64
 	offered   uint64

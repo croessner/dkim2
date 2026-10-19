@@ -319,7 +319,7 @@ func mapValueResult(result resultReader) valueOutcome {
 }
 
 // mapBulkValue proves one bulk-string previous value against the pinned
-// v1.0.77 cache frame and the closed propagation value grammar.
+// v1.0.79 cache frame and the closed propagation value grammar.
 func mapBulkValue(result resultReader, raw string) valueOutcome {
 	if _, _, ok := dkim2.ParseReplayPropagationValue(raw); !ok {
 		return valueFailure(dkim2.ReplayErrorInconsistent, recoveryRestart)

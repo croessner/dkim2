@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 export GOEXPERIMENT=runtimesecret
-export GOTOOLCHAIN=go1.27.0
+export GOTOOLCHAIN=go1.27.2
 
 project=dkim2-postfix-qualification
 compose_file=contrib/qualification/postfix-milter/compose.yaml
@@ -117,8 +117,8 @@ ensure_image() {
 }
 
 ensure_image \
-  golang:1.27.0-trixie@sha256:df98008ecd2b0ecc9f0a94d1b07e3564a9c92b555369b33d9b5f60d0765b2db7 \
-  sha256:ccb6f18cbf10486608b5fea50834a621b9fada5dd869841f08c486ba307155a3 \
+  golang:1.27.2-trixie@sha256:47667934874913a449b96faa7ef4777fa285d9ec29126ee80ed61c45b7cccf0e \
+  sha256:99668476f0893c0b7a4f4c1b6d3913a3b966a4af7e275173e06bbf12e9bebb88 \
   linux/amd64
 ensure_image \
   debian@sha256:4e401d95de7083948053197a9c3913343cd06b706bf15eb6a0c3ccd26f436a0e \
@@ -130,7 +130,7 @@ ensure_image \
   linux/amd64
 
 docker tag \
-  golang:1.27.0-trixie@sha256:df98008ecd2b0ecc9f0a94d1b07e3564a9c92b555369b33d9b5f60d0765b2db7 \
+  golang:1.27.2-trixie@sha256:47667934874913a449b96faa7ef4777fa285d9ec29126ee80ed61c45b7cccf0e \
   dkim2-postfix-qualification-build:verified
 docker tag \
   debian@sha256:4e401d95de7083948053197a9c3913343cd06b706bf15eb6a0c3ccd26f436a0e \
@@ -287,7 +287,7 @@ run_once() {
     --arg manifest "$manifest" \
     --arg producer "$producer" \
     --arg postfix_image "chrroessner/postfix@sha256:736180b4fa352bb55bdca9e93e9201c7df7a419dad6622ed601d9dde028ae254" \
-    --arg golang_image "golang:1.27.0-trixie@sha256:df98008ecd2b0ecc9f0a94d1b07e3564a9c92b555369b33d9b5f60d0765b2db7" \
+    --arg golang_image "golang:1.27.2-trixie@sha256:47667934874913a449b96faa7ef4777fa285d9ec29126ee80ed61c45b7cccf0e" \
     --arg debian_image "debian@sha256:4e401d95de7083948053197a9c3913343cd06b706bf15eb6a0c3ccd26f436a0e" \
     --argjson fragments "$fragments" \
     --arg lane "$lane" \

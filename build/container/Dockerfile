@@ -1,7 +1,7 @@
 FROM scratch AS context-audit
 COPY . /context
 
-FROM --platform=$BUILDPLATFORM busybox:1.37.0@sha256:9532d8c39891ca2ecde4d30d7710e01fb739c87a8b9299685c63704296b16028 AS build-metadata
+FROM --platform=$BUILDPLATFORM busybox:1.37.0@sha256:bdf57e528e45e4433820e045b29b4597825a1c9e38353532d90a01445013f82e AS build-metadata
 ARG TARGETARCH
 ARG VERSION
 ARG REVISION
@@ -32,7 +32,7 @@ RUN case "${VERSION}" in \
     && test "${DIRTY}" = clean -o "${DIRTY}" = dirty \
     && printf '%s\n' dkim2-build-metadata-v1 > /validated
 
-FROM --platform=$BUILDPLATFORM golang:1.27.0-bookworm@sha256:ded31c68586d2e49e760acc2e65a884b23d032e9bbbed0ae0c55abd3fcaf4452 AS build
+FROM --platform=$BUILDPLATFORM golang:1.27.2-bookworm@sha256:5cf287a799e6b94384bad13d16b14904c531f51ba65792237e122ce42b392f61 AS build
 ENV GOEXPERIMENT=runtimesecret
 ARG TARGETARCH
 ARG VERSION

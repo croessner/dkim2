@@ -2,13 +2,13 @@ module github.com/croessner/dkim2/cmd/dkim2ctl
 
 go 1.27
 
-toolchain go1.27.0
+toolchain go1.27.2
 
 require (
 	github.com/croessner/dkim2 v0.1.0-rc.1
 	github.com/oapi-codegen/runtime v1.7.0
 	github.com/spf13/cobra v1.10.2
-	golang.org/x/sys v0.47.0
+	golang.org/x/sys v0.49.0
 )
 
 require (

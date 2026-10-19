@@ -145,7 +145,7 @@ func validPostfixQualificationReportForTest() postfixQualificationReport {
 		State:                   passState,
 		ImageIdentities: map[string]string{
 			"debian":  "debian@sha256:4e401d95de7083948053197a9c3913343cd06b706bf15eb6a0c3ccd26f436a0e",
-			"golang":  "golang:1.27.0-trixie@sha256:df98008ecd2b0ecc9f0a94d1b07e3564a9c92b555369b33d9b5f60d0765b2db7",
+			"golang":  "golang:1.27.2-trixie@sha256:47667934874913a449b96faa7ef4777fa285d9ec29126ee80ed61c45b7cccf0e",
 			"postfix": "chrroessner/postfix@sha256:736180b4fa352bb55bdca9e93e9201c7df7a419dad6622ed601d9dde028ae254",
 		},
 		RuntimeIdentity: postfixQualificationRuntimeIdentity{

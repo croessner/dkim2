@@ -321,8 +321,8 @@ func TestResolverSoleWaiterCancellationDuringPrepareCannotCacheOrDeleteReplaceme
 	<-prepareEntered
 	cancel()
 	select {
-	case <-firstDone:
-		t.Fatal("sole waiter detached while its canceled flight was still preparing publication")
+	case earlyErr := <-firstDone:
+		t.Fatalf("sole waiter detached while its canceled flight was still preparing publication (failed=%t)", earlyErr != nil)
 	case <-time.After(25 * time.Millisecond):
 	}
 	close(releaseOldPrepare)

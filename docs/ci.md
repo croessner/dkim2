@@ -97,9 +97,9 @@ The workflow publishes the exact stable version only; it does not create
 
 ## Qualification compiler and evidence scope
 
-Postfix and Exim qualification use the digest-pinned Go 1.27.0 Trixie
+Postfix and Exim qualification use the digest-pinned Go 1.27.2 Trixie
 compiler image, with `GOEXPERIMENT=runtimesecret` and exact toolchain selection.
-The product image keeps its Go 1.27.0 Bookworm build environment. The toolchain
+The product image keeps its Go 1.27.2 Bookworm build environment. The toolchain
 contract checks both qualification Dockerfiles and their evidence producers
 and consumers. Changing the compiler identity invalidates earlier
 qualification evidence; fresh Postfix and source-matched Exim runs are required
@@ -117,3 +117,44 @@ Go toolchain. Filesystem scanners must distinguish source from ignored local
 build artifacts and disclose exclusions and parse failures. Module-level
 advisories require affected-package and import-path revalidation before they
 are classified as product vulnerabilities.
+
+
+## Toolchain refresh and generator compatibility
+
+The 2026-10-19 refresh pins Go 1.27.2 with `GOEXPERIMENT=runtimesecret`,
+`golangci-lint` 2.15.0, `govulncheck` 1.9.0 and the Valkey 9.1.2 integration
+fixture. `actionlint` 1.7.12 and `oapi-codegen` 2.8.0 remain current for this
+refresh. Container evidence tools are Syft 1.54.1 and Trivy 0.76.0; the
+allowlist records checked archive and extracted binary hashes for all four
+supported platforms. Compiler images, BuildKit and GitHub Actions use verified
+immutable upstream identities. BusyBox retains the 1.37.0 release with a
+refreshed digest; the registry's `latest` lane also tracks `unstable` and is
+not a release-selection policy.
+
+Dependency updates must remain buildable as a group. `oapi-codegen` 2.8.0's
+overlay loader uses `gopkg.in/yaml.v3.Node`. Newer Speakeasy overlay releases
+use the distinct `go.yaml.in/yaml/v3.Node`, while the newest unversioned
+`go-yit` revision uses YAML v4. A blanket transitive `@latest` update therefore
+fails compilation. Retain the generator's own compatible requirements:
+
+- `github.com/speakeasy-api/openapi v1.24.0`;
+- `github.com/speakeasy-api/jsonpath v0.6.3`;
+- `github.com/dprotaso/go-yit v0.0.0-20220510233725-9ba8df137936`.
+
+Revisit this group together when a compatible generator release is available.
+Do not patch generated code or vendor sources to bridge incompatible YAML
+node types. `make generate-openapi` and `make check-openapi` prove the selected
+graph; no REST contract change is part of this refresh.
+
+The Valkey client is pinned to 1.0.79, with updated module checksum evidence
+and unchanged reviewed license/NOTICE hashes. The existing MD4 confinement in
+the LDAP vendor tree remains in force and is reproduced by `make vendor`.
+Valkey 9.1.2's removal of ineffective sanitation flags from `ACL GETUSER` is
+handled by the narrow parser compatibility rule documented in the
+[replay-store guide](replay-store-valkey.md), with unit and real-server tests.
+
+Run pinned CI tools with `scripts/install-ci-tools.sh`; set `GOBIN` to an
+absolute private directory and put it on `PATH` when a host also has older
+global tool installations. Regenerate vendor before testing new module pins,
+and avoid editing sources while snapshot-bound workspace, product-build or
+qualification checks are running.

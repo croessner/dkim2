@@ -74,7 +74,7 @@ test "$(grep -Fxc \
   "FROM --platform=$build_platform $go_reference AS build" \
   "$containerfile")" -eq 1
 test "$buildkit_reference" = \
-  "moby/buildkit:buildx-stable-1@sha256:0168606be2315b7c807a03b3d8aa79beefdb31c98740cebdffdfeebf31190c9f"
+  "moby/buildkit:buildx-stable-1@sha256:cec9f139f45e93c5c69c60f8b07cfad9f43f4ef6b6a6cd917527fea5ff2e3dea"
 jq -e '
   . == {
     schema:"dkim2-container-build-inputs-v1",
@@ -83,21 +83,21 @@ jq -e '
         name:"metadata-validator",
         uri:"docker-image://docker.io/library/busybox",
         reference:"busybox:1.37.0",
-        digest:"9532d8c39891ca2ecde4d30d7710e01fb739c87a8b9299685c63704296b16028",
+        digest:"bdf57e528e45e4433820e045b29b4597825a1c9e38353532d90a01445013f82e",
         purpose:"build-only metadata validation"
       },
       {
         name:"go-builder",
         uri:"docker-image://docker.io/library/golang",
-        reference:"golang:1.27.0-bookworm",
-        digest:"ded31c68586d2e49e760acc2e65a884b23d032e9bbbed0ae0c55abd3fcaf4452",
+        reference:"golang:1.27.2-bookworm",
+        digest:"5cf287a799e6b94384bad13d16b14904c531f51ba65792237e122ce42b392f61",
         purpose:"build-only Go compilation"
       },
       {
         name:"buildkit",
         uri:"docker-image://moby/buildkit",
         reference:"moby/buildkit:buildx-stable-1",
-        digest:"0168606be2315b7c807a03b3d8aa79beefdb31c98740cebdffdfeebf31190c9f",
+        digest:"cec9f139f45e93c5c69c60f8b07cfad9f43f4ef6b6a6cd917527fea5ff2e3dea",
         purpose:"isolated BuildKit executor"
       }
     ]

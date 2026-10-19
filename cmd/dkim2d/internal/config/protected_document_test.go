@@ -60,8 +60,8 @@ func TestCreateProtectedDocumentConcurrentForeignWinnerCannotBeOverwritten(t *te
 	}
 	if err := CreateProtectedDocument(t.Context(), path, desired, 4096); CodeOf(err) != CodeProtectedConflict {
 		close(release)
-		<-result
-		t.Fatal("concurrent foreign winner was overwritten")
+		winnerErr := <-result
+		t.Fatalf("concurrent foreign winner was overwritten (winner_failed=%t)", winnerErr != nil)
 	}
 	close(release)
 	if err := <-result; err != nil {

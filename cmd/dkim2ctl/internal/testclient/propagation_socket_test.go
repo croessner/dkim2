@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"io"
 	"net"
 	"net/http"
@@ -221,7 +222,9 @@ func TestPropagationFixturesRunOverLoopbackSocket(t *testing.T) {
 	t.Cleanup(func() {
 		_ = server.Close()
 		_ = listener.Close()
-		<-done
+		if serveErr := <-done; !errors.Is(serveErr, http.ErrServerClosed) {
+			t.Error("fixture server did not stop with the expected closed-server result")
+		}
 	})
 
 	directory := t.TempDir()

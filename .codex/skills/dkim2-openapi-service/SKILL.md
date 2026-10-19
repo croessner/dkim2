@@ -15,7 +15,7 @@ source of truth.
 
 - Change OpenAPI before changing REST handler behavior.
 - Use `oapi-codegen` pinned to
-  `github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.7.1`.
+  `github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.8.0`.
 - Commit generated artifacts and review generated diffs.
 - Keep generated DTOs at HTTP/client boundaries only.
 - Map generated request/response objects to explicit domain types.

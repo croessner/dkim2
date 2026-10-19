@@ -308,9 +308,9 @@ boundary:
 - OpenTelemetry owns distributed traces through a central observability runtime.
 - Prometheus owns metrics through a process-local registry.
 - OpenAPI owns the HTTP contract and generated client/server DTOs.
-- The pinned OTLP HTTP exporter selects `x/net v0.55.0`; Go 1.26 consequently
-  synchronizes `cmd/dkim2ctl`'s pruned Cobra indirects and module sum, which the
-  workspace stale-metadata check must track.
+- The pinned OTLP HTTP exporter participates in the workspace graph selecting
+  `x/net v0.61.0`. Go 1.27.2 synchronizes pruned indirect requirements and
+  module sums; the workspace stale-metadata check must track that complete graph.
 - `golangci-lint`, `go vet`, `go test`, race tests, OpenAPI checks, and
   `govulncheck` belong in guardrails.
 
@@ -2448,7 +2448,7 @@ services.
 
 ## 14. Development Quality Gates
 
-The active compiler contract is exact Go 1.27.0 with
+The active compiler contract is exact Go 1.27.2 with
 `GOEXPERIMENT=runtimesecret`. Historical delivery entries below retain their
 original compiler identity and do not define an additional supported lane.
 Make and direct test scripts set the experiment internally.

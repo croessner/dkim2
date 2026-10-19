@@ -38,8 +38,8 @@ done
 if grep -Eq '^check-openapi:.*check-workspace' Makefile; then
   fail 'normal generated-source checks must not depend on private module-proof reconstruction'
 fi
-grep -Fq 'OPENAPI_GO_TOOLCHAIN := go1.27.0' Makefile ||
-  fail 'OpenAPI generation must use the reproducible Go 1.27.0 toolchain'
+grep -Fq 'OPENAPI_GO_TOOLCHAIN := go1.27.2' Makefile ||
+  fail 'OpenAPI generation must use the reproducible Go 1.27.2 toolchain'
 grep -A5 '^check-vendor:' Makefile | grep -q -- '-mod=vendor' ||
   fail 'vendor validation must use Go vendor resolution directly'
 if grep -Eq '(^|[[:space:]])rg([[:space:]]|$$)' Makefile; then
@@ -61,7 +61,7 @@ permission_declarations=$(grep -Ec '^[[:space:]]*permissions:' "$mirror_workflow
 test "$permission_declarations" -eq 1 ||
   fail 'mirror workflow must declare built-in token permissions exactly once'
 
-mirror_action='actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0'
+mirror_action='actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0'
 mirror_actions=$(sed -n 's/^[[:space:]]*uses:[[:space:]]*//p' "$mirror_workflow")
 test "$mirror_actions" = "$mirror_action" ||
   fail 'mirror workflow must use only the pinned GitHub App token action'

@@ -59,7 +59,7 @@ evidence passes.
 | PostgreSQL signing datasource | PostgreSQL `18.3-alpine` image at the pinned digest | DDL/upgrades, roles, verified TLS, v2/v3 loading, v3 onboarding and observed lock contention, runtime signing, parity, and denials | no automatic older/newer PostgreSQL claim |
 | MySQL signing datasource | MySQL `8.4` image at the pinned digest | DDL/upgrades, exact grants/definers, verified TLS, v2/v3 loading, v3 onboarding and observed lock contention, runtime signing, parity, and denials | no generic MySQL 8 claim |
 | MariaDB signing datasource | MariaDB `10.11` image at the pinned digest | common MySQL contract, exact grants/definers, verified TLS, v2/v3 loading, v3 onboarding and observed lock contention, runtime signing, parity, and denials | no other MariaDB line or MySQL-compatible fork claim |
-| Valkey replay | Valkey `9.1.0` exact binary | TLS/authority policy, ACL audit, persistence and topology attestation, atomic command, parity, and recovery | no cluster, Sentinel, managed, or alternate-version claim |
+| Valkey replay | Valkey `9.1.2` exact binary | TLS/authority policy, ACL audit, persistence and topology attestation, atomic command, parity, and recovery | no cluster, Sentinel, managed, or alternate-version claim |
 | Flat-file signing datasource | current supported Linux and macOS filesystem implementations | descriptor confinement, ownership/mode/link checks, atomic reload, race and abuse evidence | unsupported platforms return `unsupported_platform` |
 
 MySQL and MariaDB deliberately share `signing.backend: mysql`; qualification is

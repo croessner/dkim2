@@ -2,4 +2,4 @@
 package buildidentity
 
 // GoVersion includes the mandatory experiment suffix embedded by the pinned compiler.
-const GoVersion = "go1.27.0-X:runtimesecret"
+const GoVersion = "go1.27.2-X:runtimesecret"

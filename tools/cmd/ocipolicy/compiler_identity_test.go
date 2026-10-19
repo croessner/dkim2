@@ -13,7 +13,7 @@ import (
 func TestInspectBinaryBuildRequiresMeasuredCompilerAndExperiment(t *testing.T) {
 	directory := t.TempDir()
 	for name, content := range map[string]string{
-		"go.mod":  "module github.com/croessner/dkim2/cmd/dkim2d\n\ngo 1.27\n\ntoolchain go1.27.0\n",
+		"go.mod":  "module github.com/croessner/dkim2/cmd/dkim2d\n\ngo 1.27\n\ntoolchain go1.27.2\n",
 		"main.go": "package main\nfunc main() {}\n",
 	} {
 		if err := os.WriteFile(filepath.Join(directory, name), []byte(content), 0o600); err != nil {
@@ -42,7 +42,7 @@ func TestInspectBinaryBuildRequiresMeasuredCompilerAndExperiment(t *testing.T) {
 	if _, err = inspectBinaryBuild("dkim2d", "linux/amd64", content); err != nil {
 		t.Fatalf("real compiler identity rejected: %v", err)
 	}
-	stale := bytes.ReplaceAll(content, []byte("go1.27.0"), []byte("go1.26.6"))
+	stale := bytes.ReplaceAll(content, []byte("go1.27.2"), []byte("go1.26.6"))
 	if bytes.Equal(stale, content) {
 		t.Fatal("compiler probe lacks embedded identity")
 	}

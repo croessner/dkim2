@@ -335,8 +335,8 @@ func TestProviderCancellationWhileBlockedOnOccupiedSlotRestoresReadyState(t *tes
 			runtime.Gosched()
 		}
 		select {
-		case <-result:
-			t.Fatal("occupied-slot operation returned before cancellation")
+		case earlyErr := <-result:
+			t.Fatalf("occupied-slot operation returned before cancellation (failed=%t)", earlyErr != nil)
 		default:
 		}
 		cancel()

@@ -101,8 +101,8 @@ import "golang.org/x/crypto/md4" //nolint:staticcheck
 	writeVendorFixture(t, root, "modules.txt", `# github.com/go-ldap/ldap/v3 v3.4.14
 ## explicit; go 1.25.0
 github.com/go-ldap/ldap/v3
-# golang.org/x/crypto v0.55.0
-## explicit; go 1.25.0
+# golang.org/x/crypto v0.58.0
+## explicit; go 1.26.0
 golang.org/x/crypto/md4
 `)
 	return root

@@ -716,9 +716,9 @@ func TestSocketRuntimeNeverRepublishesReadinessDuringClose(t *testing.T) {
 		if err := runtime.Close(context.Background()); err != nil {
 			t.Fatalf("Close() error = %v", err)
 		}
-		<-startDone
+		startErr := <-startDone
 		if runtime.Ready() {
-			t.Fatalf("Ready() = true after close in iteration %d", iteration)
+			t.Fatalf("Ready() = true after close in iteration %d (start_failed=%t)", iteration, startErr != nil)
 		}
 	}
 }

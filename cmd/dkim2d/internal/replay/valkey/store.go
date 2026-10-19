@@ -377,7 +377,7 @@ func mapResult(result resultReader) mappingOutcome {
 	return mapServerKind(kind)
 }
 
-// mapOK proves exact simple-string OK with the pinned v1.0.77 cache frame.
+// mapOK proves exact simple-string OK with the pinned v1.0.79 cache frame.
 func mapOK(result resultReader) mappingOutcome {
 	message, err := result.ToMessage()
 	if err != nil {

@@ -301,7 +301,7 @@ provider-neutral snapshot through the library bridge.
 The first SQL implementation is PostgreSQL. It uses a pinned, maintained Go
 driver in `cmd/dkim2d` only and the standard context-aware transaction
 boundary. Dependency selection is reviewed for cancellation behavior, TLS
-control, maintained Go 1.26 support, and vulnerability status. No ORM, dynamic
+control, maintained Go 1.27.2 support, and vulnerability status. No ORM, dynamic
 query builder, schema auto-migrator, or driver abstraction enters `lib`.
 
 ### Signing registry and daemon

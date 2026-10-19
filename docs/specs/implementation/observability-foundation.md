@@ -53,17 +53,16 @@ copied into logs, attributes, metrics, REST, or CLI output.
 
 ## Dependencies
 
-The daemon pins `github.com/prometheus/client_golang v1.24.1` and
+The daemon pins `github.com/prometheus/client_golang v1.25.0` and
 `go.opentelemetry.io/otel`, `go.opentelemetry.io/otel/sdk`, and
-`go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp` at `v1.46.0`.
+`go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp` at `v1.47.0`.
 No HTTP auto-instrumentation is used. Workspace sums and vendor output remain
 reproducible; no dependency enters `lib/go.mod`.
 
-The exact OTLP HTTP exporter selects `golang.org/x/net v0.55.0`. Under Go 1.26
-that workspace graph makes `go work sync` retain Cobra's pruned indirect
-requirements and the four-entry `cmd/dkim2ctl/go.sum`. The workspace guardrail
-therefore treats that sum as synchronized metadata; it is not optional drift,
-a version downgrade, or a replacement directive.
+The workspace graph selects `golang.org/x/net v0.61.0`. Under Go 1.27.2,
+`go work sync` retains the pruned indirect requirements and module sums for
+all workspace members. The workspace guardrail treats every module sum as
+synchronized metadata; no local replacement directive is retained.
 
 ## Configuration
 

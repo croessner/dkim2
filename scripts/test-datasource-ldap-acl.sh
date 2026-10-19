@@ -1,6 +1,6 @@
 #!/bin/sh
 export GOEXPERIMENT=runtimesecret
-export GOTOOLCHAIN=go1.27.0
+export GOTOOLCHAIN=go1.27.2
 
 set -eu
 

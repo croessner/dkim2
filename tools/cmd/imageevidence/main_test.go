@@ -267,7 +267,7 @@ func testOCIReport(revision string, version string) ociReport {
 					SHA256:   strings.Repeat("a", 64),
 					Typeflag: tar.TypeReg,
 					Build: binaryBuildInfo{
-						GoVersion: "go1.27.0-X:runtimesecret",
+						GoVersion: "go1.27.2-X:runtimesecret",
 						Main: moduleBuildInfo{
 							Path:    "github.com/croessner/dkim2/cmd/dkim2d",
 							Version: "(devel)",
@@ -304,7 +304,7 @@ func TestValidateSBOMRejectsTamperStaleCandidateAndWrongTool(t *testing.T) {
 	binary := strings.Repeat("f", 64)
 	version := "0.0.0-dev"
 	build := binaryBuildInfo{
-		GoVersion: "go1.27.0-X:runtimesecret",
+		GoVersion: "go1.27.2-X:runtimesecret",
 		Main: moduleBuildInfo{
 			Path:    "github.com/croessner/dkim2/cmd/dkim2d",
 			Version: "(devel)",
@@ -315,7 +315,7 @@ func TestValidateSBOMRejectsTamperStaleCandidateAndWrongTool(t *testing.T) {
 		Trimpath: "true",
 	}
 	document := []byte(fmt.Sprintf(
-		`{"spdxVersion":"SPDX-2.3","dataLicense":"CC0-1.0","SPDXID":"SPDXRef-DOCUMENT","name":"dkim2d@%s","documentNamespace":"https://github.com/croessner/dkim2/sbom/%s","creationInfo":{"created":"1970-01-01T00:00:00Z","creators":["Organization: Anchore, Inc","Tool: syft-1.46.0"],"licenseListVersion":"3.28"},"packages":[{"SPDXID":"SPDXRef-Root","name":"dkim2d@%s","versionInfo":"%s","licenseConcluded":"NOASSERTION","licenseDeclared":"NOASSERTION","downloadLocation":"NOASSERTION","filesAnalyzed":false,"copyrightText":"NOASSERTION","supplier":"NOASSERTION","externalRefs":[{"referenceCategory":"PACKAGE-MANAGER","referenceLocator":"pkg:oci/dkim2d","referenceType":"purl"}]},{"SPDXID":"SPDXRef-Module","name":"github.com/croessner/dkim2/cmd/dkim2d","versionInfo":"UNKNOWN","licenseConcluded":"NOASSERTION","licenseDeclared":"NOASSERTION","downloadLocation":"NOASSERTION","filesAnalyzed":false,"copyrightText":"NOASSERTION","supplier":"NOASSERTION","externalRefs":[{"referenceCategory":"PACKAGE-MANAGER","referenceLocator":"pkg:golang/github.com/croessner/dkim2/cmd/dkim2d","referenceType":"purl"}]},{"SPDXID":"SPDXRef-Stdlib","name":"stdlib","versionInfo":"go1.27.0-X:runtimesecret","licenseConcluded":"NOASSERTION","licenseDeclared":"NOASSERTION","downloadLocation":"NOASSERTION","filesAnalyzed":false,"copyrightText":"NOASSERTION","supplier":"NOASSERTION","externalRefs":[{"referenceCategory":"PACKAGE-MANAGER","referenceLocator":"pkg:golang/stdlib@go1.27.0-X:runtimesecret","referenceType":"purl"}]}],"files":[{"SPDXID":"SPDXRef-Binary","fileName":"usr/local/bin/dkim2d","fileTypes":["APPLICATION","BINARY"],"checksums":[{"algorithm":"SHA256","checksumValue":"%s"}],"licenseConcluded":"NOASSERTION","licenseInfoInFiles":["NOASSERTION"],"copyrightText":"NOASSERTION","comment":""}],"relationships":[{"spdxElementId":"SPDXRef-DOCUMENT","relationshipType":"DESCRIBES","relatedSpdxElement":"SPDXRef-Root"},{"spdxElementId":"SPDXRef-Root","relationshipType":"CONTAINS","relatedSpdxElement":"SPDXRef-Module"},{"spdxElementId":"SPDXRef-Root","relationshipType":"CONTAINS","relatedSpdxElement":"SPDXRef-Stdlib"},{"spdxElementId":"SPDXRef-Root","relationshipType":"CONTAINS","relatedSpdxElement":"SPDXRef-Binary"}]}`,
+		`{"spdxVersion":"SPDX-2.3","dataLicense":"CC0-1.0","SPDXID":"SPDXRef-DOCUMENT","name":"dkim2d@%s","documentNamespace":"https://github.com/croessner/dkim2/sbom/%s","creationInfo":{"created":"1970-01-01T00:00:00Z","creators":["Organization: Anchore, Inc","Tool: syft-1.46.0"],"licenseListVersion":"3.28"},"packages":[{"SPDXID":"SPDXRef-Root","name":"dkim2d@%s","versionInfo":"%s","licenseConcluded":"NOASSERTION","licenseDeclared":"NOASSERTION","downloadLocation":"NOASSERTION","filesAnalyzed":false,"copyrightText":"NOASSERTION","supplier":"NOASSERTION","externalRefs":[{"referenceCategory":"PACKAGE-MANAGER","referenceLocator":"pkg:oci/dkim2d","referenceType":"purl"}]},{"SPDXID":"SPDXRef-Module","name":"github.com/croessner/dkim2/cmd/dkim2d","versionInfo":"UNKNOWN","licenseConcluded":"NOASSERTION","licenseDeclared":"NOASSERTION","downloadLocation":"NOASSERTION","filesAnalyzed":false,"copyrightText":"NOASSERTION","supplier":"NOASSERTION","externalRefs":[{"referenceCategory":"PACKAGE-MANAGER","referenceLocator":"pkg:golang/github.com/croessner/dkim2/cmd/dkim2d","referenceType":"purl"}]},{"SPDXID":"SPDXRef-Stdlib","name":"stdlib","versionInfo":"go1.27.2-X:runtimesecret","licenseConcluded":"NOASSERTION","licenseDeclared":"NOASSERTION","downloadLocation":"NOASSERTION","filesAnalyzed":false,"copyrightText":"NOASSERTION","supplier":"NOASSERTION","externalRefs":[{"referenceCategory":"PACKAGE-MANAGER","referenceLocator":"pkg:golang/stdlib@go1.27.2-X:runtimesecret","referenceType":"purl"}]}],"files":[{"SPDXID":"SPDXRef-Binary","fileName":"usr/local/bin/dkim2d","fileTypes":["APPLICATION","BINARY"],"checksums":[{"algorithm":"SHA256","checksumValue":"%s"}],"licenseConcluded":"NOASSERTION","licenseInfoInFiles":["NOASSERTION"],"copyrightText":"NOASSERTION","comment":""}],"relationships":[{"spdxElementId":"SPDXRef-DOCUMENT","relationshipType":"DESCRIBES","relatedSpdxElement":"SPDXRef-Root"},{"spdxElementId":"SPDXRef-Root","relationshipType":"CONTAINS","relatedSpdxElement":"SPDXRef-Module"},{"spdxElementId":"SPDXRef-Root","relationshipType":"CONTAINS","relatedSpdxElement":"SPDXRef-Stdlib"},{"spdxElementId":"SPDXRef-Root","relationshipType":"CONTAINS","relatedSpdxElement":"SPDXRef-Binary"}]}`,
 		subject,
 		strings.TrimPrefix(subject, "sha256:"),
 		subject,
@@ -477,7 +477,7 @@ func TestValidateProvenanceRejectsAuthorityAndWrongDescriptor(t *testing.T) {
 	}
 	wrongBuilder := strings.Replace(
 		string(content),
-		"0168606be2315b7c807a03b3d8aa79beefdb31c98740cebdffdfeebf31190c9f",
+		"cec9f139f45e93c5c69c60f8b07cfad9f43f4ef6b6a6cd917527fea5ff2e3dea",
 		strings.Repeat("9", 64),
 		1,
 	)
@@ -816,9 +816,9 @@ func writeProvenance(
 		candidate,
 		authority,
 		revision,
-		"9532d8c39891ca2ecde4d30d7710e01fb739c87a8b9299685c63704296b16028",
-		"ded31c68586d2e49e760acc2e65a884b23d032e9bbbed0ae0c55abd3fcaf4452",
-		"0168606be2315b7c807a03b3d8aa79beefdb31c98740cebdffdfeebf31190c9f",
+		"bdf57e528e45e4433820e045b29b4597825a1c9e38353532d90a01445013f82e",
+		"5cf287a799e6b94384bad13d16b14904c531f51ba65792237e122ce42b392f61",
+		"cec9f139f45e93c5c69c60f8b07cfad9f43f4ef6b6a6cd917527fea5ff2e3dea",
 		strings.TrimPrefix(report.Platforms[0].ManifestDigest, "sha256:"),
 		arm64Digest,
 	)
@@ -838,7 +838,7 @@ func writeBuildInputPolicy(t *testing.T, root string) {
 	if err := os.MkdirAll(directory, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	content := `{"schema":"dkim2-container-build-inputs-v1","images":[{"name":"metadata-validator","uri":"docker-image://docker.io/library/busybox","reference":"busybox:1.37.0","digest":"9532d8c39891ca2ecde4d30d7710e01fb739c87a8b9299685c63704296b16028","purpose":"build-only metadata validation"},{"name":"go-builder","uri":"docker-image://docker.io/library/golang","reference":"golang:1.27.0-bookworm","digest":"ded31c68586d2e49e760acc2e65a884b23d032e9bbbed0ae0c55abd3fcaf4452","purpose":"build-only Go compilation"},{"name":"buildkit","uri":"docker-image://moby/buildkit","reference":"moby/buildkit:buildx-stable-1","digest":"0168606be2315b7c807a03b3d8aa79beefdb31c98740cebdffdfeebf31190c9f","purpose":"isolated BuildKit executor"}]}`
+	content := `{"schema":"dkim2-container-build-inputs-v1","images":[{"name":"metadata-validator","uri":"docker-image://docker.io/library/busybox","reference":"busybox:1.37.0","digest":"bdf57e528e45e4433820e045b29b4597825a1c9e38353532d90a01445013f82e","purpose":"build-only metadata validation"},{"name":"go-builder","uri":"docker-image://docker.io/library/golang","reference":"golang:1.27.2-bookworm","digest":"5cf287a799e6b94384bad13d16b14904c531f51ba65792237e122ce42b392f61","purpose":"build-only Go compilation"},{"name":"buildkit","uri":"docker-image://moby/buildkit","reference":"moby/buildkit:buildx-stable-1","digest":"cec9f139f45e93c5c69c60f8b07cfad9f43f4ef6b6a6cd917527fea5ff2e3dea","purpose":"isolated BuildKit executor"}]}`
 	if err := os.WriteFile(
 		filepath.Join(directory, "build-inputs.json"),
 		[]byte(content),

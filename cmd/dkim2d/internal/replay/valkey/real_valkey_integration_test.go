@@ -24,7 +24,7 @@ const (
 	integrationSaveSchedule        = "3600 1"
 )
 
-// TestRealValkeyHarness proves the production parser, audit plan, and provider contract against Valkey 9.1.0.
+// TestRealValkeyHarness proves the production parser, audit plan, and provider contract against Valkey 9.1.2.
 func TestRealValkeyHarness(t *testing.T) {
 	socket := requiredIntegrationSocket(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -100,7 +100,7 @@ func runRealSecurityAudit(
 		auditPhaseConstruction,
 	)
 	if err != nil {
-		t.Fatalf("real eleven-command security audit failed: %s", dkim2.ReplayErrorCodeOf(err))
+		t.Fatalf("real eleven-command security audit failed after command %d: %s", wire.commands, dkim2.ReplayErrorCodeOf(err))
 	}
 	if wire.commands != auditCommandCount {
 		t.Fatalf("real security audit sent %d commands, want %d", wire.commands, auditCommandCount)

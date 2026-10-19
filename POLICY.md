@@ -5,7 +5,7 @@ incomplete if any mandatory rule is missed.
 
 ## Must Rules
 
-- MUST: Keep the project on Go 1.27.0 across `go.work`, module metadata, CI,
+- MUST: Keep the project on Go 1.27.2 across `go.work`, module metadata, CI,
   generated code, Docker or packaging files, and documentation.
 - MUST: Export `GOEXPERIMENT=runtimesecret` internally in every Make and
   direct-script Go test entry point; direct Go tests must prefix it explicitly.

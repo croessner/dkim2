@@ -1,6 +1,6 @@
 #!/bin/sh
 export GOEXPERIMENT=runtimesecret
-export GOTOOLCHAIN=go1.27.0
+export GOTOOLCHAIN=go1.27.2
 set -eu
 
 protected_test_tmp=
@@ -293,7 +293,7 @@ for subject in \
   'PostgreSQL `18.3-alpine`' \
   'MySQL `8.4`' \
   'MariaDB `10.11`' \
-  'Valkey `9.1.0`'; do
+  'Valkey `9.1.2`'; do
   grep -Fq "$subject" docs/reference/compatibility.md
 done
 
@@ -362,7 +362,7 @@ done
 grep -Fq 'delivery_status' docs/reference/known-limitations.md
 grep -Fq 'unsupported_chain' docs/reference/known-limitations.md
 grep -Fq 'at-least-once' docs/reference/known-limitations.md
-grep -Fq 'valkey-server` 9.1.0' docs/reference/known-limitations.md
+grep -Fq 'valkey-server` 9.1.2' docs/reference/known-limitations.md
 refute 'no DSN is propagated backwards' docs/reference/known-limitations.md
 for required in \
   '/v1/dsn/propagate' \

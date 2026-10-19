@@ -126,8 +126,8 @@ func TestResolverNoncompliantTransportRemainsOneBoundedWorkerUntilReleased(t *te
 	}
 	cancel()
 	select {
-	case <-firstDone:
-		t.Fatal("last caller detached and orphaned a noncompliant transport worker")
+	case earlyErr := <-firstDone:
+		t.Fatalf("last caller detached and orphaned a noncompliant transport worker (failed=%t)", earlyErr != nil)
 	case <-time.After(25 * time.Millisecond):
 	}
 	if outcome, resolveErr := resolver.Resolve(context.Background(), testSigningDomain, "still-held", AlgorithmRSASHA256); resolveErr != nil || outcome.Status() != KeyOutcomeTemporary || active.Load() != 1 {

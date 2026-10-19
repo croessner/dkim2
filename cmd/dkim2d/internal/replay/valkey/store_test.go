@@ -1072,7 +1072,7 @@ func TestInvariantAndPanicDegradationIsSticky(t *testing.T) {
 	}
 }
 
-// TestNativeAdapterBuildsAndDispatchesExactCompletedCommand verifies the real v1.0.77 path.
+// TestNativeAdapterBuildsAndDispatchesExactCompletedCommand verifies the real v1.0.79 path.
 func TestNativeAdapterBuildsAndDispatchesExactCompletedCommand(t *testing.T) {
 	key := slotZeroStorageKey()
 	client := &nativeClientProbe{}

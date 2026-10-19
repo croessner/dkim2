@@ -26,7 +26,7 @@ ordinary request uses the generated OpenAPI client and generated DTOs.
 This specification is governed by `AGENTS.md`, `POLICY.md`,
 `docs/ARCHITECTURE.md`, the M13 daemon specification,
 `docs/specs/openapi/dkim2d.yaml`, its generated client, the pinned drafts,
-RFC 8259, RFC 9110 through RFC 9112, Go 1.26 contracts, and `Makefile`.
+RFC 8259, RFC 9110 through RFC 9112, Go 1.27.2 contracts, and `Makefile`.
 Authority is ordered as follows:
 
 1. the two draft baselines above for protocol meaning;
