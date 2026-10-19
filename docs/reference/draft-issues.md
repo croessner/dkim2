@@ -34,6 +34,15 @@ is independently observed.
   interpretation: every supported tuple is compared, a mismatch fails, and an
   unknown-only predecessor is unsupported rather than silently accepted.
 
+- `DKIM2-ISSUE-0018` records the existing explicit trusted-route null-sender
+  originator policy. `header_from` binds signing to the single canonical From
+  mailbox domain while retaining `mf=<>`; the default remains rejection.
+  Delivery-status reports, ambiguous MIME and existing DKIM2 protocol history
+  stay off this route. DSNs retain their dedicated Section 12 path. This is
+  an implemented local interpretation, not a draft requirement to enable it.
+  The two public-facade conformance cases are bound to this entry; their
+  earlier omission from this register was a documentation defect.
+
 The repository has not filed, commented on, or modified any upstream issue as
 part of this release-candidate work.
 
@@ -44,4 +53,4 @@ part of this release-candidate work.
 `DKIM2-ISSUE-0007`, `DKIM2-ISSUE-0008`, `DKIM2-ISSUE-0009`,
 `DKIM2-ISSUE-0010`, `DKIM2-ISSUE-0011`, `DKIM2-ISSUE-0012`,
 `DKIM2-ISSUE-0013`, `DKIM2-ISSUE-0014`, `DKIM2-ISSUE-0015`,
-`DKIM2-ISSUE-0016`, and `DKIM2-ISSUE-0017`.
+`DKIM2-ISSUE-0016`, `DKIM2-ISSUE-0017`, and `DKIM2-ISSUE-0018`.

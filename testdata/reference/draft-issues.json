@@ -268,6 +268,21 @@
       "public_effect": "recipe-less-history-compares-supported-tuples",
       "resolution_criterion": "draft-defines-recipe-less-unchanged-transition",
       "claim_classes": ["documented_interpretation"]
+    },
+    {
+      "id": "DKIM2-ISSUE-0018",
+      "title": "Trusted null-sender originator signing requires explicit local interpretation",
+      "sections": ["Draft-06 Section 12.1", "Draft-06 Sections 8.5 and 8.8"],
+      "class": "ambiguity",
+      "local_status": "implemented_interpretation",
+      "upstream_status": "not_reported",
+      "behavior_owner": "lib/header_from.go",
+      "conformance_cases": ["signing/null-sender-delivery-status-excluded", "signing/null-sender-header-from-facade"],
+      "test_refs": ["lib/header_from_test.go#TestHeaderFromNullSenderSigningRefusesDeliveryStatusAndSignedMail", "lib/header_from_test.go#TestHeaderFromNullSenderSigningVerifiesWithNullMailFrom"],
+      "external_cases": [],
+      "public_effect": "trusted-null-sender-signing-excludes-dsns",
+      "resolution_criterion": "draft-clarifies-null-sender-originator-identity",
+      "claim_classes": ["documented_interpretation", "local_security_policy"]
     }
   ]
 }
