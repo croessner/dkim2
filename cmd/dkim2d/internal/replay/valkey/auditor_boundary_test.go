@@ -265,3 +265,37 @@ func TestSecurityAuditorCommandDescriptorLengthBoundary(t *testing.T) {
 	clear(atCap)
 	clear(overCap)
 }
+
+// TestSecurityAuditorCurrentACLFlags preserves least authority when current Valkey omits deprecated sanitation flags.
+func TestSecurityAuditorCurrentACLFlags(t *testing.T) {
+	const allowedCommands = "-@all +ping +set"
+	for _, test := range []struct {
+		name      string
+		flags     []string
+		passwords []string
+		commands  string
+		want      auditValidation
+	}{
+		{"current", []string{"on"}, []string{syntheticPasswordHash}, allowedCommands, auditAccepted},
+		{"legacy", []string{"on", "sanitize-payload"}, []string{syntheticPasswordHash}, allowedCommands, auditAccepted},
+		{"disabled", []string{"off"}, []string{syntheticPasswordHash}, allowedCommands, auditPolicyMismatch},
+		{"passwordless", []string{"on", "nopass"}, nil, allowedCommands, auditPolicyMismatch},
+		{"missing password", []string{"on"}, nil, allowedCommands, auditPolicyMismatch},
+		{"excess command", []string{"on"}, []string{syntheticPasswordHash}, "-@all +ping +set +get", auditPolicyMismatch},
+		{"unsafe legacy", []string{"on", "skip-sanitize-payload"}, []string{syntheticPasswordHash}, allowedCommands, auditPolicyMismatch},
+		{"empty", nil, []string{syntheticPasswordHash}, allowedCommands, auditMalformed},
+		{"duplicate", []string{"on", "on"}, []string{syntheticPasswordHash}, allowedCommands, auditMalformed},
+		{"unknown", []string{"on", "future"}, []string{syntheticPasswordHash}, allowedCommands, auditMalformed},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			flags := make([]resp2Value, 0, len(test.flags))
+			for _, flag := range test.flags {
+				flags = append(flags, bulkAuditValue(flag))
+			}
+			value := aclAuditValue(test.commands, "~dkim2:replay:v1:*", "", "db=0", flags, nil, test.passwords)
+			if got := validateACLGetUser(value); got != test.want {
+				t.Fatalf("ACL classification = %d, want %d", got, test.want)
+			}
+		})
+	}
+}

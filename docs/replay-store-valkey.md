@@ -80,7 +80,7 @@ retry.
 The production compatibility floor is the database-permission capability
 shipped by Valkey 9.1. The auditor proves the exact `ACL GETUSER databases`
 field instead of trusting a version banner. The mandatory integration harness
-is intentionally pinned to exactly Valkey `9.1.0`.
+is intentionally pinned to exactly Valkey `9.1.2`.
 
 ## Required ACLs
 
@@ -92,6 +92,15 @@ on sanitize-payload
 ~dkim2:replay:v1:*
 db=0
 ```
+
+Valkey 9.1.2 emits only `on` in the enabled user's `flags` array. Its
+`sanitize-payload` and `skip-sanitize-payload` configuration tokens are
+backward-compatible no-ops, as defined by the upstream
+[`ACLSetUser` implementation](https://github.com/valkey-io/valkey/blob/9.1.2/src/acl.c).
+The auditor accepts that exact enabled-only shape and the earlier
+`on sanitize-payload` shape. It still refuses an explicit legacy
+`skip-sanitize-payload`, `nopass`, duplicate/unknown flags and a disabled user.
+This does not change the required command, key, database or password grants.
 
 It must have one password hash, no selectors, and no channel patterns. `AUTH`
 and `HELLO` are Valkey pre-authentication behavior, not application grants.
@@ -209,7 +218,7 @@ make test-valkey
 make guardrails
 ```
 
-`make test-valkey` requires `valkey-server` exactly `9.1.0`; a missing or wrong
+`make test-valkey` requires `valkey-server` exactly `9.1.2`; a missing or wrong
 binary fails rather than skipping. The target starts a private temporary Unix
 socket with TCP disabled, synthetic users and protected keys, finite
 noeviction memory, RDB persistence, and no external authority. It executes the
@@ -219,7 +228,7 @@ process and removes its directory on success, failure, timeout, or signal.
 ## Dependency And Supply-Chain Boundary
 
 The library module has no Valkey or daemon dependency. The
-`github.com/valkey-io/valkey-go` dependency is pinned to `v1.0.77`, licensed
+`github.com/valkey-io/valkey-go` dependency is pinned to `v1.0.79`, licensed
 under Apache-2.0, vendored reproducibly, and used only by the daemon-owned
 Valkey provider. Command modules import the public library facade and never
 `lib/internal`.

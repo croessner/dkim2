@@ -1135,7 +1135,7 @@ func (f aclUserFields) complete() bool {
 
 // validACLFlags validates bounded official-style scalar flag tokens.
 func validACLFlags(values []resp2Value) bool {
-	if len(values) < 2 || len(values) > 3 {
+	if len(values) < 1 || len(values) > 3 {
 		return false
 	}
 	stateCount := 0
@@ -1156,12 +1156,14 @@ func validACLFlags(values []resp2Value) bool {
 			return false
 		}
 	}
-	return stateCount == 1 && sanitizeCount == 1 && nopassCount <= 1
+	return stateCount == 1 && sanitizeCount <= 1 && nopassCount <= 1
 }
 
-// exactFlags reports the exact canonical two-flag set.
+// exactFlags accepts the current enabled-only shape or its legacy sanitized form.
+// Valkey 9.1.2 no longer emits the deprecated, ineffective sanitation flags;
+// explicit skip-sanitize-payload, nopass and unknown flags remain forbidden.
 func exactFlags(values []resp2Value) bool {
-	if len(values) != 2 {
+	if len(values) < 1 || len(values) > 2 {
 		return false
 	}
 	seenOn := false
@@ -1182,7 +1184,7 @@ func exactFlags(values []resp2Value) bool {
 			return false
 		}
 	}
-	return seenOn && seenSanitize
+	return seenOn
 }
 
 // validPasswordHashes validates all protected official SHA-256 hash scalars.
