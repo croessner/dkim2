@@ -128,7 +128,10 @@ Current contents:
 
 ## Operator Navigation
 
-Start with
+Start with the [Postfix administrator guide](docs/operator/postfix-admin.md)
+for the installation order, route decisions, parameter rationale and acceptance
+matrix, and the [deployment walkthrough](docs/operator/deployment-walkthrough.md)
+for illustrated mail flows. Continue with
 [`docs/operator/postfix-compose.md`](docs/operator/postfix-compose.md) for the
 implemented hardened Postfix deployment, trust topology, protected state,
 configuration, validation, lifecycle, backup, restore, and troubleshooting.

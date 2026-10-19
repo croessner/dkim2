@@ -8,6 +8,11 @@ preserving the existing trust boundaries. Protocol behavior remains pinned to
 
 ## Reference map
 
+New administrators should start with [Postfix and DKIM2](postfix-admin.md) for
+the route decisions, installation sequence, Postfix parameter rationale and
+acceptance matrix, then use the [illustrated walkthrough](deployment-walkthrough.md)
+to follow each message path.
+
 This guide is the durable deployment entry point. Use
 [`cmd/dkim2d/README.md`](../../cmd/dkim2d/README.md) for typed configuration,
 protected generations, process/sign/revise capabilities, flat-file signing,
@@ -862,7 +867,7 @@ post-restore IDs.
 ## Troubleshooting and current limits
 
 Invalid config, missing capability, partial/mixed generation, weak mode,
-unsupported filesystem, daemon loss, Milter loss, overload, and ambiguous
+invalid protected-file layout, daemon loss, Milter loss, overload, and ambiguous
 state fail closed or tempfail. Inspect bounded result classes, readiness,
 low-cardinality metrics, and secret-safe logs. Do not print raw config,
 capabilities, key files, messages, envelope values, selectors, DNS TXT,
