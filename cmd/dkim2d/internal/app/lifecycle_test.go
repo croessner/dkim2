@@ -235,6 +235,7 @@ type lifecycleHTTPRuntimeFake struct {
 	activateRelease <-chan struct{}
 	terminalEntered chan struct{}
 	terminalRelease <-chan struct{}
+	terminalDone    chan struct{}
 	omitObserver    bool
 }
 
@@ -264,9 +265,14 @@ func (r *lifecycleHTTPRuntimeFake) RejectNewRequests() {
 	}
 }
 
-// Serve blocks until listener closure unless configured to fail before transfer.
+// Serve blocks until listener closure unless configured to return early; completion follows terminal notification.
 func (r *lifecycleHTTPRuntimeFake) Serve() error {
-	defer r.terminated.Store(true)
+	defer func() {
+		r.terminated.Store(true)
+		if r.terminalDone != nil {
+			close(r.terminalDone)
+		}
+	}()
 	defer func() {
 		if r.terminalEntered != nil {
 			close(r.terminalEntered)
@@ -545,12 +551,15 @@ func TestLifecycleStartStopOrder(t *testing.T) {
 	}
 }
 
-// TestLifecycleEarlyServeExitPreventsCommitAndRollsBack freezes fatal linearization.
+// TestLifecycleEarlyServeExitPreventsCommitAndRollsBack orders terminal notification before the first liveness sample.
 func TestLifecycleEarlyServeExitPreventsCommitAndRollsBack(t *testing.T) {
 	order := &lifecycleOrder{}
 	replay := &lifecycleReplayFake{order: order, ready: true}
+	terminalDone := make(chan struct{})
 	runtime := &lifecycleHTTPRuntimeFake{
 		order: order, serve: make(chan struct{}), started: make(chan struct{}), earlyReturn: true,
+		terminalDone: terminalDone,
+		servingHook:  func(int) { <-terminalDone },
 	}
 	factory := &lifecycleHTTPFactoryFake{
 		order:    order,
