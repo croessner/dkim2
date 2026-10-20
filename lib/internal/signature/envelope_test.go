@@ -6,6 +6,8 @@ import (
 	"testing"
 )
 
+const testIPv4LiteralPath = "<user@[192.0.2.1]>"
+
 // TestParseAcceptsRFC5321EnvelopePaths verifies null, mailbox, quoted, routed, and literal paths.
 func TestParseAcceptsRFC5321EnvelopePaths(t *testing.T) {
 	tests := []struct {
@@ -18,7 +20,7 @@ func TestParseAcceptsRFC5321EnvelopePaths(t *testing.T) {
 		{name: "quoted local part", tag: "mf", path: `<"quoted local"@example.test>`},
 		{name: "quoted pair", tag: "rt", path: `<"quoted\\\"local"@example.test>`},
 		{name: "source route", tag: "rt", path: "<@route.example,@next.example:user@example.test>"},
-		{name: "ipv4 address literal", tag: "rt", path: "<user@[192.0.2.1]>"},
+		{name: "ipv4 address literal", tag: "rt", path: testIPv4LiteralPath},
 		{name: "ipv6 address literal", tag: "rt", path: "<user@[IPv6:2001:db8::1]>"},
 		{name: "general address literal", tag: "rt", path: "<user@[X400:printable-value]>"},
 	}
@@ -84,8 +86,10 @@ func TestParseRejectsNonRFC5321EnvelopePaths(t *testing.T) {
 		{name: "invalid ipv4 literal", tag: "rt", path: "<user@[999.0.2.1]>"},
 		{name: "invalid ipv6 literal", tag: "rt", path: "<user@[IPv6:not-an-address]>"},
 		{name: "invalid general literal", tag: "rt", path: "<user@[X400:bad\\value]>"},
-		{name: "utf8 local part", tag: "mf", path: "<séndér@example.test>"},
-		{name: "utf8 domain", tag: "mf", path: "<sender@éxample.test>"},
+		{name: "recorded u-label domain", tag: "mf", path: "<sender@éxample.test>"},
+		{name: "recorded u-label recipient", tag: "rt", path: "<user@bücher.example>"},
+		{name: "invalid utf8 local part", tag: "mf", path: "<s\xffnder@example.test>"},
+		{name: "invalid a-label", tag: "rt", path: "<user@xn--bcher-kvb.example>"},
 	}
 
 	for _, tt := range tests {

@@ -238,7 +238,7 @@
     {
       "id": "recipe-draft07-steps-source",
       "path": "lib/internal/recipe/draft07_test.go",
-      "sha256": "adec41b9b1dc50c94e83e9facbe188ed83d820b1078286805ab1c1800bd5a7a5",
+      "sha256": "81a8c3f1a316a9d3f44886f32d3b92a42cb8d379b9e509f80140ee2676753826",
       "module": "lib"
     },
     {

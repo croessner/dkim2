@@ -2,6 +2,7 @@ package recipe
 
 import (
 	"bytes"
+	"errors"
 	"testing"
 )
 
@@ -142,5 +143,20 @@ func TestGenerateRoundTripsBinaryBodyLines(t *testing.T) {
 	}
 	if got := string(generation.DecodedJSON()); got != `{"b":[{"u":["//4="]}]}` {
 		t.Fatalf("DecodedJSON() = %q", got)
+	}
+}
+
+// TestApplyRejectsNonUTF8HeaderBinaryDataWithBoundedError proves the
+// documented limit that header values reconstructed from "u" steps must still
+// be valid RFC 6532 header text: application fails closed with the bounded
+// invalid_state code, which verification history maps to an invalid
+// application (PERMERROR) rather than a limit or internal-contract stop.
+func TestApplyRejectsNonUTF8HeaderBinaryDataWithBoundedError(t *testing.T) {
+	current := mustRecipeState(t, []byte("Subject: now\r\n\r\nbody\r\n"))
+	plan := mustParseRecipe(t, `{"h":{"subject":[{"u":["/w=="]}]}}`)
+	previous, _, err := mustApplier(t, Limits{}).Apply(current, plan)
+	var typed *Error
+	if previous.Valid() || !errors.As(err, &typed) || typed.Code() != ErrorCodeInvalidState || typed.Class() != ErrorClassState {
+		t.Fatalf("Apply() valid=%t code=%s", previous.Valid(), recipeTestErrorCode(err))
 	}
 }

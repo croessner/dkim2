@@ -105,7 +105,6 @@ func checkIssueContent(root string, content []byte) (IssueLog, error) {
 	expectedTBA := map[string]bool{
 		"Draft-07 Section 1.1": false,
 		"Draft-07 Section 13":  false,
-		"Draft-07 Section 18":  false,
 		"Draft-07 Section 19":  false,
 		"Draft-07 Section 20":  false,
 	}

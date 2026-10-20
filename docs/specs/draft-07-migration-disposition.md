@@ -210,3 +210,28 @@ Open follow-ups owned by later packages:
   acceptance and is re-qualified in package 8. Header `u` values that are not
   valid UTF-8 are rejected by the raw-message parser during reconstruction;
   this fail-closed limit is documented in package 8.
+
+## 9. Package 3 state
+
+- Custody: `signature.custodyTransitionAllowed` now applies Draft-07 Section
+  7.1 in both directions. A null `mf=` hop and an `nd=` hop relaxed-match a
+  previous `rt=` (Parameter1) against their own `d=` (Parameter2); before,
+  null `mf=` hops were always rejected and `nd=` entry required an exact
+  match. Ordinary hops and the exact continuation after `nd=` are unchanged.
+  Domain literals never match.
+- IDNA: the new `lib/internal/domainname` package owns U-label to A-label
+  conversion (D4) on `golang.org/x/net/idna`, which is added to the library
+  module as a reviewed dependency together with `golang.org/x/text`. Plain
+  LDH ASCII names keep their previous handling; `xn--` labels and U-labels are
+  validated by the strict registration profile.
+- Envelopes: SMTP paths accept RFC 6531 UTF-8 local parts and U-label
+  domains. Comparisons use A-labels (`CanonicalEnvelopePath`), signers record
+  A-labels with otherwise unchanged bytes (`RecordableEnvelopePath`), and
+  recorded `mf=`/`rt=` values containing U-labels fail closed.
+- `DKIM2-ISSUE-0003` now records the Section 18 interpretation and the known
+  NV8/XV8 validator gap. The Draft-06 `TBA` issues for policy guidance
+  (`0002`) and Security Considerations (`0005`) are no longer `TBA` in
+  Draft-07 and are re-evaluated in package 8.
+- From-domain conversion is wired in package 4; adapter SMTPUTF8 signing
+  policy (the Milter still rejects SMTPUTF8 originator envelopes) is reviewed
+  in package 7.

@@ -172,6 +172,27 @@ func TestVerifierRequiresUsedRecipientsWithoutOrder(t *testing.T) {
 	}
 }
 
+// TestVerifierMatchesULabelEnvelopeAgainstRecordedALabel reproduces Draft-07
+// Section 18: the current SMTPUTF8 envelope is mapped to A-labels before it is
+// compared with the A-label paths recorded by the signer.
+func TestVerifierMatchesULabelEnvelopeAgainstRecordedALabel(t *testing.T) {
+	fixture := newRSAVerificationFixtureWithEnvelopeAt(t, testTimestampSeconds,
+		[]byte("<s\xc3\xa9nder@xn--bcher-kva.example>"),
+		[][]byte{[]byte("<rcpt@xn--bcher-kva.example>")},
+	)
+	verifier := mustVerifierForFixture(t, fixture)
+	result, err := verifier.Verify(context.Background(), Request{
+		Message:  fixture.message,
+		Envelope: NewEnvelope([]byte("<s\xc3\xa9nder@B\xc3\xbccher.example>"), [][]byte{[]byte("<rcpt@b\xc3\xbccher.example>")}),
+	})
+	if err != nil {
+		t.Fatalf("Verify() error = %v", err)
+	}
+	if !hasEnvelopeCheck(result, EnvelopeStatusPass, CheckStatusPass) {
+		t.Fatalf("checks=%#v, want U-label envelope pass", result.Checks())
+	}
+}
+
 // TestVerifierLowercasesOnlyEnvelopeDomains verifies ASCII domain folding without local-part normalization.
 func TestVerifierLowercasesOnlyEnvelopeDomains(t *testing.T) {
 	fixture := newRSAVerificationFixtureWithEnvelopeAt(t, testTimestampSeconds,
@@ -226,19 +247,20 @@ func TestVerifierLowercasesOnlyEnvelopeDomains(t *testing.T) {
 	}
 }
 
-// TestVerifierRejectsSMTPUTF8EnvelopePathsAtParserBoundary verifies draft-05 imports ASCII RFC 5321 paths.
-func TestVerifierRejectsSMTPUTF8EnvelopePathsAtParserBoundary(t *testing.T) {
-	eaiPath := []byte("<\xc3\xbc@example.test>")
+// TestVerifierEnvelopePathsFollowDraft07EAIRules verifies Draft-07 Section
+// 18 at the parser boundary: a recorded RFC 6531 UTF-8 local part is accepted
+// unchanged, while a recorded U-label domain fails closed because signers
+// must record A-labels.
+func TestVerifierEnvelopePathsFollowDraft07EAIRules(t *testing.T) {
 	fixture := newRSAVerificationFixture(t)
-	raw := bytes.Replace(
-		[]byte(fixture.raw),
-		[]byte(base64.StdEncoding.EncodeToString([]byte("<rcpt@example.test>"))),
-		[]byte(base64.StdEncoding.EncodeToString(eaiPath)),
-		1,
-	)
-	_, err := parseVerificationFixture(string(raw))
-	if !signature.IsErrorCode(err, signature.ErrorCodeInvalidEnvelopePath) {
-		t.Fatalf("parseVerificationFixture() error = %v, want invalid envelope path", err)
+	recorded := []byte(base64.StdEncoding.EncodeToString([]byte("<rcpt@example.test>")))
+	utf8Local := bytes.Replace([]byte(fixture.raw), recorded, []byte(base64.StdEncoding.EncodeToString([]byte("<\xc3\xbc@example.test>"))), 1)
+	if _, err := parseVerificationFixture(string(utf8Local)); err != nil {
+		t.Fatalf("parseVerificationFixture(UTF-8 local part) error = %v", err)
+	}
+	uLabel := bytes.Replace([]byte(fixture.raw), recorded, []byte(base64.StdEncoding.EncodeToString([]byte("<rcpt@b\xc3\xbccher.example>"))), 1)
+	if _, err := parseVerificationFixture(string(uLabel)); !signature.IsErrorCode(err, signature.ErrorCodeInvalidEnvelopePath) {
+		t.Fatalf("parseVerificationFixture(U-label domain) error = %v, want invalid envelope path", err)
 	}
 }
 

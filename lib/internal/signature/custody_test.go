@@ -39,7 +39,10 @@ func TestCustodyOrdinaryAdjacencyMatchesPreviousRecipientInOneDirection(t *testi
 	}
 }
 
-// TestCustodyNextDomainTransitionsAreExact verifies ordinary entry, runs, and ordinary termination.
+// TestCustodyNextDomainTransitionsAreExact verifies ordinary entry, runs, and
+// ordinary termination. Entry into an nd= hop uses the Draft-07 Section 7.1
+// relaxed match with the previous rt= as Parameter1 and the nd= hop's d= as
+// Parameter2; continuation after nd= stays exact.
 func TestCustodyNextDomainTransitionsAreExact(t *testing.T) {
 	ordinary := ordinaryCustodySignature(1, "origin.test", "<sender@origin.test>", "<other@elsewhere.test>", "<next@entry.example>")
 	entry := nextDomainCustodySignature(2, "entry.example", "middle.example")
@@ -60,8 +63,8 @@ func TestCustodyNextDomainTransitionsAreExact(t *testing.T) {
 		t.Fatalf("ordinary-to-nd location sequence=%d tag=%s", typed.ObservedNumber(), typed.TagName())
 	}
 	parentEntry := nextDomainCustodySignature(2, "example", "middle.example")
-	if _, err := ValidateCustody([]Signature{ordinary, parentEntry}, CustodyLimits{}); !IsErrorCode(err, ErrorCodeCustodyMismatch) {
-		t.Fatalf("parent ordinary-to-nd code=%s", custodyTestCode(err))
+	if _, err := ValidateCustody([]Signature{ordinary, parentEntry}, CustodyLimits{}); err != nil {
+		t.Fatalf("parent-domain ordinary-to-nd code=%s, want relaxed match", custodyTestCode(err))
 	}
 	badContinuation := nextDomainCustodySignature(3, "sub.middle.example", "exit.example")
 	if _, err := ValidateCustody([]Signature{ordinary, entry, badContinuation}, CustodyLimits{}); !IsErrorCode(err, ErrorCodeCustodyMismatch) {
@@ -82,8 +85,8 @@ func TestCustodyNullReversePathAndBoundsFailClosed(t *testing.T) {
 		t.Fatalf("direct null reverse path code=%s", custodyTestCode(err))
 	}
 	nextNull := ordinaryCustodySignature(2, "relay.test", "<>", "<final@dest.test>")
-	if _, err := ValidateCustody([]Signature{directNull, nextNull}, CustodyLimits{}); !IsErrorCode(err, ErrorCodeCustodyMismatch) {
-		t.Fatalf("adjacent null reverse path code=%s", custodyTestCode(err))
+	if _, err := ValidateCustody([]Signature{directNull, nextNull}, CustodyLimits{}); err != nil {
+		t.Fatalf("adjacent null reverse path code=%s, want Draft-07 rt/d match", custodyTestCode(err))
 	}
 	oversized := make([]Signature, DefaultLimits().MaxSignatures+1)
 	if _, err := ValidateCustody(oversized, CustodyLimits{}); !IsErrorCode(err, ErrorCodeLimitExceeded) {
@@ -92,6 +95,48 @@ func TestCustodyNullReversePathAndBoundsFailClosed(t *testing.T) {
 	gap := []Signature{ordinaryCustodySignature(1, "one.test", "<a@one.test>", "<b@two.test>"), ordinaryCustodySignature(3, "two.test", "<b@two.test>", "<c@three.test>")}
 	if _, err := ValidateCustody(gap, CustodyLimits{}); !IsErrorCode(err, ErrorCodeSequenceGap) {
 		t.Fatalf("custody gap code=%s", custodyTestCode(err))
+	}
+}
+
+// TestCustodyNullReversePathUsesPreviousRecipientAsParameter1 reproduces the
+// Draft-07 Section 7.1 rule for a null mf=: the previous rt= domain is
+// Parameter1 and the current d= is Parameter2, so a recipient below d=
+// matches while the reverse direction, near misses, and literals never do.
+func TestCustodyNullReversePathUsesPreviousRecipientAsParameter1(t *testing.T) {
+	first := ordinaryCustodySignature(1, "origin.test", "<sender@origin.test>", "<bounce@mx.relay.example>")
+	tests := []struct {
+		name   string
+		domain string
+		pass   bool
+	}{
+		{name: "parent signer", domain: "relay.example", pass: true},
+		{name: "exact signer", domain: "mx.relay.example", pass: true},
+		{name: "child signer", domain: "sub.mx.relay.example", pass: false},
+		{name: "near miss", domain: "lay.example", pass: false},
+		{name: "unrelated", domain: "other.example", pass: false},
+	}
+	for _, test := range tests {
+		next := ordinaryCustodySignature(2, test.domain, "<>", "<final@dest.test>")
+		_, err := ValidateCustody([]Signature{first, next}, CustodyLimits{})
+		if test.pass && err != nil || !test.pass && !IsErrorCode(err, ErrorCodeCustodyMismatch) {
+			t.Fatalf("%s: code=%s pass=%t", test.name, custodyTestCode(err), test.pass)
+		}
+	}
+	literal := ordinaryCustodySignature(1, "origin.test", "<sender@origin.test>", "<bounce@[192.0.2.1]>")
+	if _, err := ValidateCustody([]Signature{literal, ordinaryCustodySignature(2, "relay.example", "<>", "<final@dest.test>")}, CustodyLimits{}); !IsErrorCode(err, ErrorCodeCustodyMismatch) {
+		t.Fatalf("domain literal recipient code=%s", custodyTestCode(err))
+	}
+}
+
+// TestCustodyNextDomainEntryUsesPreviousRecipientAsParameter1 reproduces the
+// Draft-07 Section 7.1 nd= entry rule in both directions.
+func TestCustodyNextDomainEntryUsesPreviousRecipientAsParameter1(t *testing.T) {
+	first := ordinaryCustodySignature(1, "origin.test", "<sender@origin.test>", "<user@mx.entry.example>")
+	if _, err := ValidateCustody([]Signature{first, nextDomainCustodySignature(2, "entry.example", "exit.example")}, CustodyLimits{}); err != nil {
+		t.Fatalf("parent nd signer code=%s", custodyTestCode(err))
+	}
+	if _, err := ValidateCustody([]Signature{first, nextDomainCustodySignature(2, "sub.mx.entry.example", "exit.example")}, CustodyLimits{}); !IsErrorCode(err, ErrorCodeCustodyMismatch) {
+		t.Fatalf("child nd signer code=%s", custodyTestCode(err))
 	}
 }
 

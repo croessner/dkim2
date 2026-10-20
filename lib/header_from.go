@@ -2,12 +2,11 @@ package dkim2
 
 import (
 	"bytes"
-	"io"
 	"mime"
-	"net/mail"
 	"strings"
 
 	"github.com/croessner/dkim2/internal/keyresolver"
+	"github.com/croessner/dkim2/internal/mailbox"
 	"github.com/croessner/dkim2/internal/rawmsg"
 )
 
@@ -121,82 +120,22 @@ func HeaderFromDomain(rawMessage []byte) (string, bool) {
 	return domain, class == HeaderFromNullSenderEligible
 }
 
-// headerFromMailboxDomain parses one unfolded From value as exactly one
-// mailbox and returns its canonical DNS domain.
+// headerFromMailboxDomain parses one unfolded From value through the shared
+// author parser and returns its canonical DNS domain. The null-sender route
+// layers a stricter profile over the general From grammar: the mailbox must
+// not be written as an RFC 6854 group and its addr-spec must be ASCII.
 func headerFromMailboxDomain(value []byte) (string, bool) {
-	if len(value) == 0 || len(value) > maxHeaderFromValueBytes || !singleMailboxShape(value) {
+	if len(value) > maxHeaderFromValueBytes {
 		return "", false
 	}
-	parser := mail.AddressParser{WordDecoder: &mime.WordDecoder{
-		// The display name never contributes to the identity, so an
-		// unknown encoded-word charset must not refuse the mailbox.
-		CharsetReader: func(_ string, input io.Reader) (io.Reader, error) { return input, nil },
-	}}
-	addresses, err := parser.ParseList(string(value))
-	if err != nil || len(addresses) != 1 || addresses[0] == nil {
-		return "", false
-	}
-	address := addresses[0].Address
-	at := strings.LastIndexByte(address, '@')
-	if at < 1 || at == len(address)-1 || !asciiPrintable(address) {
-		return "", false
-	}
-	domain := address[at+1:]
-	if domain[0] == '[' {
+	author, status := mailbox.ParseAuthor(value)
+	if status != mailbox.StatusSingle || author.InGroup() || !author.ASCII() {
 		return "", false
 	}
 	limits := keyresolver.DefaultLimits()
-	canonical, err := keyresolver.CanonicalSigningDomain(domain, limits.MaxSigningDomainBytes, limits.MaxSigningDomainLabels)
+	canonical, err := keyresolver.CanonicalSigningDomain(author.Domain(), limits.MaxSigningDomainBytes, limits.MaxSigningDomainLabels)
 	if err != nil {
 		return "", false
 	}
 	return canonical, true
-}
-
-// singleMailboxShape rejects RFC 5322 group syntax and mailbox lists before
-// address parsing. A top-level ':' or ';' marks a group and a top-level ','
-// a list; quoted strings, comments, and angle-addr contents are skipped so
-// that their literal punctuation does not count.
-func singleMailboxShape(value []byte) bool {
-	inQuote, angle, comment := false, 0, 0
-	for index := 0; index < len(value); index++ {
-		current := value[index]
-		switch {
-		case current == '\\' && (inQuote || comment > 0):
-			index++
-		case inQuote:
-			inQuote = current != '"'
-		case comment > 0:
-			switch current {
-			case '(':
-				comment++
-			case ')':
-				comment--
-			}
-		case current == '"':
-			inQuote = true
-		case current == '(':
-			comment++
-		case current == '<':
-			angle++
-		case current == '>':
-			if angle == 0 {
-				return false
-			}
-			angle--
-		case angle == 0 && bytes.IndexByte([]byte(":;,"), current) >= 0:
-			return false
-		}
-	}
-	return !inQuote && angle == 0 && comment == 0
-}
-
-// asciiPrintable reports whether value holds only visible ASCII and space.
-func asciiPrintable(value string) bool {
-	for index := 0; index < len(value); index++ {
-		if value[index] < 0x20 || value[index] > 0x7e {
-			return false
-		}
-	}
-	return true
 }

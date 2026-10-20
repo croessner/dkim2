@@ -175,8 +175,10 @@ The core must preserve:
   expected to receive.
 - CRLF handling decisions.
 - Line indexes for recipe generation and application.
-- EAI/SMTPUTF8-relevant values as bytes unless and until the DKIM2 draft defines
-  additional semantics.
+- EAI/SMTPUTF8-relevant message values as bytes. Draft-07 Section 18 defines
+  the only EAI transformation: SMTP and From domains are mapped from U-labels
+  to A-labels before recording and comparison, owned by
+  `lib/internal/domainname`; local parts are never changed.
 
 The core must not depend on `net/mail` for canonicalization, signing, recipe
 handling, or verification. Standard library parsers can be useful for optional
@@ -682,6 +684,12 @@ Important invariants:
 - The highest `i=` signature must match the current SMTP envelope when it uses
   `mf=` and `rt=`. A highest signature using `nd=` requires explicit
   out-of-band trust and cannot produce a default verification pass.
+- Adjacent custody follows Draft-07 Section 7.1 with the asymmetric relaxed
+  match of Section 7.2 (labels are stripped only from Parameter1): an ordinary
+  hop matches its `mf=` (Parameter1) against a previous `rt=` (Parameter2); a
+  null `mf=` hop and an `nd=` hop match a previous `rt=` (Parameter1) against
+  their own `d=` (Parameter2); the hop after `nd=` must use exactly `d=nd`.
+  Domain literals never match, and `i=1` is not checked against a predecessor.
 - The signature only signs DKIM2 protocol fields, while the message content is
   covered through Message-Instance hashes.
 
@@ -2751,13 +2759,14 @@ interpretation choices in code.
    `Authentication-Results` style output, or policy. This decision must be
    revisited if later drafts add DNSSEC guidance, especially when the currently
    open Security Considerations section is completed.
-6. EAI handling before the draft is complete:
-   EAI/SMTPUTF8-relevant message and envelope values are handled in a
-   byte-preserving manner until the DKIM2 EAI section defines additional
-   semantics. The implementation must not invent Unicode normalization, IDNA
-   mapping, or local-part normalization rules. Tests should prove that
-   EAI-capable inputs are not corrupted, not that non-draft EAI semantics are
-   enforced.
+6. EAI handling under Draft-07 Section 18:
+   envelope and From domains are mapped from U-labels to lowercase A-labels
+   with a strict IDNA2008 registration profile (no compatibility mapping, NFC
+   required, Bidi and joiner rules). Signers record A-labels in `mf=` and
+   `rt=`; recorded U-labels fail closed. RFC 6531 UTF-8 local parts are
+   recorded and compared unchanged. Message bytes are never rewritten. The
+   profile from `golang.org/x/net/idna` collapses the IDNA2008 NV8 and XV8
+   categories, a documented validator limitation (`DKIM2-ISSUE-0003`).
 7. `Authentication-Results` output:
    `dkim2d` may optionally produce action-plan entries for adding
    `Authentication-Results` header fields. This output is configured local

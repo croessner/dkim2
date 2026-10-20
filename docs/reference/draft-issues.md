@@ -1,7 +1,7 @@
 # DKIM2 Draft Issue Log
 
 This log binds the first preview to
-`draft-ietf-dkim-dkim2-spec-07` and historical
+`draft-ietf-dkim-dkim2-spec-07` and
 `draft-ietf-dkim-dkim2-dns-01`. The strict machine source is
 `testdata/reference/draft-issues.json`; stable issue IDs are never reused.
 Local implementation status and upstream draft status are intentionally
@@ -10,12 +10,18 @@ is independently observed.
 
 ## Open upstream text
 
-- `DKIM2-ISSUE-0001` through `DKIM2-ISSUE-0005` cover every literal Draft-07
-  `TBA`: architecture references, full-chain policy guidance, EAI, IANA, and
-  Security Considerations. No protocol behavior is invented for these areas.
-- `DKIM2-ISSUE-0006` records the tag-name case interpretation and the exact
-  MailAuthLens disagreement. It is an external observation, not normative
-  authority or full interoperability evidence.
+- `DKIM2-ISSUE-0001`, `DKIM2-ISSUE-0002`, `DKIM2-ISSUE-0004`, and
+  `DKIM2-ISSUE-0005` cover the Draft-06 `TBA` areas: architecture references,
+  full-chain policy guidance, IANA, and Security Considerations. Draft-07
+  keeps `TBA` only for architecture references and IANA; the remaining two
+  entries are re-evaluated with the Draft-07 qualification. No protocol
+  behavior is invented for these areas.
+- `DKIM2-ISSUE-0003` records the Draft-07 Section 18 U-label to A-label
+  mapping and the known IDNA2008 category gap of the strict profile.
+- `DKIM2-ISSUE-0006` records that uppercase header tag names are rejected
+  under Draft-07 Sections 9 and 10 instead of being ignored under the lenient
+  reading of Section 8. Earlier external observations predate this rule and
+  require re-qualification.
 - `DKIM2-ISSUE-0007` through `DKIM2-ISSUE-0010` own the byte model, recipe,
   policy-projection, and restricted-release interpretations exercised by the
   conformance manifest.

@@ -936,6 +936,8 @@ func testForbiddenDependencyClassifier(t *testing.T) {
 		dependencyModulePath + "/internal/datasource": true,
 		dependencyModulePath + "/internal/replay":     true,
 		reviewedExternalModulePath + "/unix":          true,
+		"golang.org/x/net/idna":                       true,
+		"golang.org/x/net/http2":                      false,
 		"example.com/safe":                            false,
 	} {
 		if got := reviewedLibraryImport(imported); got != reviewed {
@@ -1205,11 +1207,16 @@ func forbiddenLibraryDependency(imported string) (string, bool) {
 	}
 }
 
+// reviewedIDNAModules lists the external modules reviewed for the Draft-07
+// Section 18 domain conversion owner: golang.org/x/net for its idna package and
+// golang.org/x/text as that package's normalization and Bidi dependency.
+var reviewedIDNAModules = []string{"golang.org/x/net", "golang.org/x/text"}
+
 // reviewedExternalModule permits the current intentionally reviewed external
 // module set. Future dependencies may extend this gate only with explicit
 // architecture, security, and boundary review.
 func reviewedExternalModule(modulePath string) bool {
-	return modulePath == reviewedExternalModulePath
+	return modulePath == reviewedExternalModulePath || slices.Contains(reviewedIDNAModules, modulePath)
 }
 
 // reviewedLibraryImport permits standard packages, local packages, and imports
@@ -1222,7 +1229,8 @@ func reviewedLibraryImport(imported string) bool {
 	return imported == dependencyModulePath ||
 		strings.HasPrefix(imported, dependencyModulePath+"/") ||
 		reviewedExternalModule(imported) ||
-		strings.HasPrefix(imported, reviewedExternalModulePath+"/")
+		strings.HasPrefix(imported, reviewedExternalModulePath+"/") ||
+		imported == "golang.org/x/net/idna"
 }
 
 // parseModuleDependencies conservatively extracts every require, tool, and

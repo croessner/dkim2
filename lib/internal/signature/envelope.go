@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"net/netip"
 	"strings"
+	"unicode/utf8"
 
+	"github.com/croessner/dkim2/internal/domainname"
 	"github.com/croessner/dkim2/internal/tagvalue"
 )
 
@@ -14,9 +16,27 @@ const MaxEnvelopePathBytes = 256
 // ValidEnvelopePath reports whether exact path bytes satisfy the shared SMTP path contract.
 func ValidEnvelopePath(path []byte, allowNull bool) bool { return validEnvelopePath(path, allowNull) }
 
-// CanonicalEnvelopePath validates and clones a path with every grammar-owned ASCII domain folded.
+// CanonicalEnvelopePath validates and clones a path for comparison: every
+// grammar-owned ASCII domain is case-folded and the mailbox domain is mapped
+// from U-labels to lowercase A-labels (Draft-07 Section 18). Local parts are
+// never changed.
 func CanonicalEnvelopePath(path []byte, allowNull bool) ([]byte, bool) {
 	return canonicalEnvelopePath(path, allowNull)
+}
+
+// RecordableEnvelopePath validates a caller-supplied SMTP path and returns the
+// bytes a signer records in mf= or rt=. Draft-07 Section 18 requires U-label
+// mailbox domains to be recorded as A-labels, so such a domain is replaced by
+// its lowercase A-label form; every other path keeps its exact bytes.
+func RecordableEnvelopePath(path []byte, allowNull bool) ([]byte, bool) {
+	parts, valid := parseEnvelopeParts(path, allowNull)
+	if !valid {
+		return nil, false
+	}
+	if parts.null || parts.literal || domainname.IsASCII(path[parts.domainStart:parts.domainEnd]) {
+		return bytes.Clone(path), true
+	}
+	return parts.render(path, false)
 }
 
 // CanonicalEnvelopeDomain returns the canonical DNS mailbox domain from one
@@ -55,7 +75,7 @@ func parseEnvelopePath(value string, limits tagvalue.Limits, fieldIndex int, rec
 	}
 
 	decoded := parsed.Decoded()
-	if !validEnvelopePath(decoded, tagName == "mf") {
+	if !validRecordedEnvelopePath(decoded, tagName == "mf") {
 		return EnvelopePath{}, newError(ErrorCodeInvalidEnvelopePath, ErrorLocation{FieldIndex: fieldIndex, RecipientIndex: recipientIndex}, ErrorDetails{
 			TagName: TagName(tagName),
 		}, nil)
@@ -100,30 +120,61 @@ func parseRecipientPaths(value string, limits Limits, fieldIndex int) ([]Envelop
 	return paths, nil
 }
 
-// validEnvelopePath checks RFC 5321 reverse-path or forward-path syntax.
+// validEnvelopePath checks RFC 5321 reverse-path or forward-path syntax with
+// the RFC 6531 UTF-8 extensions for local parts and U-label domains.
 func validEnvelopePath(path []byte, allowNull bool) bool {
-	_, valid := canonicalEnvelopePath(path, allowNull)
+	_, valid := parseEnvelopeParts(path, allowNull)
 	return valid
 }
 
-// canonicalEnvelopePath owns SMTP path parsing and case-insensitive Domain normalization.
+// validRecordedEnvelopePath checks a path recorded in a DKIM2-Signature. Its
+// mailbox domain must already be ASCII because Draft-07 Section 18 requires
+// signers to record A-labels; recorded U-labels fail closed.
+func validRecordedEnvelopePath(path []byte, allowNull bool) bool {
+	parts, valid := parseEnvelopeParts(path, allowNull)
+	return valid && (parts.null || domainname.IsASCII(path[parts.domainStart:parts.domainEnd]))
+}
+
+// canonicalEnvelopePath owns SMTP path parsing, case-insensitive Domain
+// normalization, and U-label to A-label mapping for comparisons.
 func canonicalEnvelopePath(path []byte, allowNull bool) ([]byte, bool) {
-	if len(path) < 2 || len(path) > MaxEnvelopePathBytes || path[0] != '<' || path[len(path)-1] != '>' {
+	parts, valid := parseEnvelopeParts(path, allowNull)
+	if !valid {
 		return nil, false
+	}
+	if parts.null {
+		return bytes.Clone(path), true
+	}
+	return parts.render(path, true)
+}
+
+// envelopeParts records the validated grammar positions of one SMTP path.
+type envelopeParts struct {
+	null        bool
+	literal     bool
+	routeEnd    int
+	domainStart int
+	domainEnd   int
+	asciiDomain string
+}
+
+// parseEnvelopeParts validates one bracketed path and locates its source
+// route and mailbox domain. A non-literal mailbox domain is converted once to
+// its lowercase A-label form.
+func parseEnvelopeParts(path []byte, allowNull bool) (envelopeParts, bool) {
+	if len(path) < 2 || len(path) > MaxEnvelopePathBytes || path[0] != '<' || path[len(path)-1] != '>' {
+		return envelopeParts{}, false
 	}
 	inner := path[1 : len(path)-1]
 	if len(inner) == 0 {
-		if !allowNull {
-			return nil, false
-		}
-		return bytes.Clone(path), true
+		return envelopeParts{null: true}, allowNull
 	}
 	mailboxOffset := 1
 	routeEnd := 0
 	if inner[0] == '@' {
 		separator := bytes.IndexByte(inner, ':')
 		if separator <= 1 || !validSourceRoute(inner[:separator]) {
-			return nil, false
+			return envelopeParts{}, false
 		}
 		routeEnd = 1 + separator
 		mailboxOffset += separator + 1
@@ -132,14 +183,43 @@ func canonicalEnvelopePath(path []byte, allowNull bool) ([]byte, bool) {
 
 	domainStart, valid := smtpMailboxDomainStart(inner)
 	if !valid {
+		return envelopeParts{}, false
+	}
+	parts := envelopeParts{
+		routeEnd:    routeEnd,
+		domainStart: mailboxOffset + domainStart,
+		domainEnd:   len(path) - 1,
+	}
+	domain := path[parts.domainStart:parts.domainEnd]
+	if domain[0] == '[' {
+		parts.literal = true
+		return parts, true
+	}
+	parts.asciiDomain, valid = domainname.ToASCII(domain)
+	return parts, valid
+}
+
+// render rebuilds the path with the A-label mailbox domain. When foldRoute is
+// true, the obsolete source route is case-folded as well, which is the
+// comparison form; the recording form keeps route bytes unchanged.
+func (p envelopeParts) render(path []byte, foldRoute bool) ([]byte, bool) {
+	output := make([]byte, 0, len(path)+len(p.asciiDomain))
+	output = append(output, path[:p.domainStart]...)
+	if foldRoute && p.routeEnd > 1 {
+		lowerASCIILetters(output[1:p.routeEnd])
+	}
+	if p.literal {
+		literal := bytes.Clone(path[p.domainStart:p.domainEnd])
+		lowerASCIILetters(literal)
+		output = append(output, literal...)
+	} else {
+		output = append(output, p.asciiDomain...)
+	}
+	output = append(output, '>')
+	if len(output) > MaxEnvelopePathBytes {
 		return nil, false
 	}
-	canonical := bytes.Clone(path)
-	if routeEnd > 1 {
-		lowerASCIILetters(canonical[1:routeEnd])
-	}
-	lowerASCIILetters(canonical[mailboxOffset+domainStart : len(canonical)-1])
-	return canonical, true
+	return output, true
 }
 
 // validSourceRoute checks the obsolete A-d-l syntax that RFC 5321 requires receivers to accept.
@@ -168,8 +248,9 @@ func smtpMailboxDomainStart(mailbox []byte) (int, bool) {
 	if domain[0] == '[' {
 		return localEnd + 1, validAddressLiteral(domain)
 	}
+	_, valid := domainname.ToASCII(domain)
 
-	return localEnd + 1, validSMTPDomain(domain)
+	return localEnd + 1, valid && utf8.Valid(local)
 }
 
 // smtpLocalPartEnd returns the byte immediately after an RFC 5321 Dot-string or Quoted-string.
@@ -190,7 +271,7 @@ func smtpLocalPartEnd(mailbox []byte) (int, bool) {
 				}
 				continue
 			}
-			if !isSMTPQuotedText(b) {
+			if !isSMTPQuotedText(b) && b < utf8.RuneSelf {
 				return 0, false
 			}
 		}
@@ -222,8 +303,13 @@ func validDotString(local []byte) bool {
 	return len(local) > 0
 }
 
-// isSMTPAtext reports whether b is an ASCII RFC 5322 atext byte imported by RFC 5321.
+// isSMTPAtext reports whether b is an RFC 5322 atext byte imported by RFC
+// 5321, extended by RFC 6531 with UTF-8 non-ASCII bytes whose sequence
+// validity is checked for the whole local part.
 func isSMTPAtext(b byte) bool {
+	if b >= utf8.RuneSelf {
+		return true
+	}
 	if isASCIILetter(b) || isASCIIDigit(b) {
 		return true
 	}

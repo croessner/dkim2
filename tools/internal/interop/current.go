@@ -793,7 +793,7 @@ func buildCurrentComparison(
 			CandidateID: "mailauthlens", CaseID: "signature-mixed-case", Operation: "signature-parse",
 			ClaimClass: "documented_interpretation", FixtureSHA256: parserFixture.SHA256,
 			LocalProducer: parserProducer, ExternalProducer: mailauthlens.digest, State: "unsupported",
-			Limitation: "documented-interpretation-differs",
+			Limitation: "draft07-requalification-required",
 		},
 		{
 			CandidateID: "stalwart-mail-auth", CaseID: "signature-parse",
@@ -808,9 +808,13 @@ func buildCurrentComparison(
 			LocalProducer: parserProducer, ExternalProducer: turscar.digest, State: "agreement",
 		},
 		{
+			// The external observation predates the Draft-07 lowercase tag-name
+			// rule; the local parser now rejects mixed case, so the old
+			// agreement no longer holds until the peer is re-qualified.
 			CandidateID: "turscar-dkim2", CaseID: "signature-mixed-case", Operation: "signature-parse",
 			ClaimClass: "documented_interpretation", FixtureSHA256: parserFixture.SHA256,
-			LocalProducer: parserProducer, ExternalProducer: turscar.digest, State: "agreement",
+			LocalProducer: parserProducer, ExternalProducer: turscar.digest, State: "unsupported",
+			Limitation: "draft07-requalification-required",
 		},
 	}
 	return ComparisonReport{

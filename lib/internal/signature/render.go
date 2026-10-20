@@ -529,7 +529,9 @@ func canonicalTargetRequest(request TargetRequest, limits RenderLimits) (TargetR
 	return request, nil
 }
 
-// canonicalizeEnvelope validates exactly one supported envelope form and detaches bytes.
+// canonicalizeEnvelope validates exactly one supported envelope form and
+// detaches the recorded bytes, mapping U-label mailbox domains to A-labels as
+// Draft-07 Section 18 requires before mf= and rt= are recorded.
 func canonicalizeEnvelope(request *TargetRequest, limits RenderLimits) error {
 	hasNextDomain := request.NextDomain != ""
 	hasOrdinary := len(request.MailFrom) != 0 || len(request.Recipients) != 0
@@ -547,15 +549,17 @@ func canonicalizeEnvelope(request *TargetRequest, limits RenderLimits) error {
 	if len(request.Recipients) == 0 || len(request.Recipients) > limits.MaxRecipients {
 		return renderLimitError("max_recipients", limits.MaxRecipients, len(request.Recipients))
 	}
-	if !validEnvelopePath(request.MailFrom, true) {
+	mailFrom, valid := RecordableEnvelopePath(request.MailFrom, true)
+	if !valid {
 		return newError(ErrorCodeInvalidEnvelopePath, ErrorLocation{}, ErrorDetails{TagName: "mf"}, nil)
 	}
-	totalBytes := len(request.MailFrom)
-	request.MailFrom = bytes.Clone(request.MailFrom)
+	totalBytes := len(mailFrom)
+	request.MailFrom = mailFrom
 	recipients := make([][]byte, len(request.Recipients))
 	seen := make(map[string]struct{}, len(request.Recipients))
-	for index, recipient := range request.Recipients {
-		if !validEnvelopePath(recipient, false) {
+	for index, input := range request.Recipients {
+		recipient, valid := RecordableEnvelopePath(input, false)
+		if !valid {
 			return newError(ErrorCodeInvalidEnvelopePath, ErrorLocation{RecipientIndex: index}, ErrorDetails{TagName: "rt"}, nil)
 		}
 		if _, exists := seen[string(recipient)]; exists {

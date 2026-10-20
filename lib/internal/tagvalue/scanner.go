@@ -58,10 +58,9 @@ func (k KnownTags) Contains(name string) bool {
 
 // Tag stores one immutable DKIM2 tag specification.
 type Tag struct {
-	name    string
-	rawName string
-	value   string
-	known   bool
+	name  string
+	value string
+	known bool
 }
 
 // Name returns the exact validated tag name.
@@ -69,10 +68,10 @@ func (t Tag) Name() string {
 	return t.name
 }
 
-// RawName returns the validated tag identifier with its original ASCII spelling,
-// which equals Name because neither scanner mode folds names.
+// RawName returns the validated tag identifier with its original ASCII
+// spelling, which equals Name because neither scanner mode folds names.
 func (t Tag) RawName() string {
-	return t.rawName
+	return t.name
 }
 
 // Value returns the case-sensitive parser-owned tag value.
@@ -260,10 +259,9 @@ func parseTagSpec(input []byte, offset int, tagIndex int, known KnownTags, limit
 	}
 
 	return Tag{
-		name:    name,
-		rawName: string(rawName),
-		value:   string(rawValue),
-		known:   knownTag,
+		name:  name,
+		value: string(rawValue),
+		known: knownTag,
 	}, nil
 }
 

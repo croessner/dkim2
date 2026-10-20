@@ -427,16 +427,24 @@ func custodyError(code ErrorCode, parsed Signature, details ErrorDetails) *Error
 	return newError(code, ErrorLocation{FieldIndex: parsed.HeaderIndex()}, details, nil)
 }
 
-// custodyTransitionAllowed applies the exact directional adjacent-hop rules.
+// custodyTransitionAllowed applies the Draft-07 Section 7.1 adjacent-hop
+// rules. After an nd= hop the next d= must equal nd= exactly. Otherwise a
+// previous rt= recipient must relaxed-match: with the current mf= as
+// Parameter1 for an ordinary hop, and as Parameter2 against the current d=
+// (with rt= as Parameter1) for a null mf= or an nd= hop.
 func custodyTransitionAllowed(previous, current custodyEntry) bool {
 	if previous.hasNextDomain {
 		return current.domain == previous.nextDomain
 	}
-	if current.hasNextDomain {
-		_, ok := previous.recipients[current.domain]
-		return ok
+	if current.hasNextDomain || current.nullReverse {
+		for recipientDomain := range previous.recipients {
+			if RelaxedDomainMatch(current.domain, recipientDomain) {
+				return true
+			}
+		}
+		return false
 	}
-	if current.nullReverse || current.mailDomain == "" {
+	if current.mailDomain == "" {
 		return false
 	}
 	for recipientDomain := range previous.recipients {
@@ -460,10 +468,12 @@ func custodyPathDomain(path []byte) (string, bool) {
 	return canonicalDNSName(mailbox[separator+1:])
 }
 
-// RelaxedDomainMatch applies the Section 7 relaxed domain match: labels are
-// removed only from the left of candidate until it equals base, so base may be
-// equal to or a parent domain of candidate but never the reverse. It is the
-// single owner of that rule for custody, Section 14.4 identity, and outer
+// RelaxedDomainMatch applies the Draft-07 Section 7.2 relaxed domain match
+// with base as Parameter2 and candidate as Parameter1: labels are removed only
+// from the left of candidate until it equals base, so base may be equal to or
+// a parent domain of candidate but never the reverse. Both inputs are
+// canonical lowercase A-label DNS names; domain literals never reach it. It is
+// the single owner of that rule for custody, Section 14.4 identity, and outer
 // signer alignment.
 func RelaxedDomainMatch(base, candidate string) bool {
 	return candidate == base || strings.HasSuffix(candidate, "."+base)

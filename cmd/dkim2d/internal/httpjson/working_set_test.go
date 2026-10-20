@@ -407,7 +407,7 @@ func assertProtocolWorkingSetSourceBounds(t testing.TB) {
 		unsafe.Sizeof(signature.EnvelopePath{}) != 96 ||
 		unsafe.Sizeof(signature.Set{}) != 112 ||
 		unsafe.Sizeof(signature.Flag{}) != 24 ||
-		unsafe.Sizeof(tagvalue.Tag{}) != 56 {
+		unsafe.Sizeof(tagvalue.Tag{}) != 40 {
 		t.Fatal("protocol extraction working-set source bounds drifted")
 	}
 }

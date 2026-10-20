@@ -21,11 +21,10 @@ The manifest keeps the source of every claim visible:
 - `adapter_contract` covers Milter, delivery-status propagation, real
   Postfix, and source-linked real Exim integration behavior.
 
-Draft-07 still marks architecture references, EAI considerations, IANA
-considerations, and security considerations as `TBA`. The implementation does
-not turn those sections into protocol claims. In particular, signing remains
-ASCII-envelope-only, while inbound SMTPUTF8 handling is bounded by the
-documented RFC 6531 interpretation.
+Draft-07 still marks architecture references and IANA considerations as
+`TBA`. The implementation does not turn those sections into protocol claims.
+The library maps SMTPUTF8 envelope domains to A-labels as Draft-07 Section 18
+requires; adapter support for SMTPUTF8 signing is qualified separately.
 
 ## Capability status
 
