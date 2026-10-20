@@ -120,7 +120,7 @@ func TestInboundRequestCarriesNoTenant(t *testing.T) {
 	t.Parallel()
 	request := generated.ProcessRequest{
 		ApiVersion: generated.V1,
-		Draft:      generated.DraftIetfDkimDkim2Spec06,
+		Draft:      generated.DraftIetfDkimDkim2Spec07,
 	}
 	if request.Context != nil {
 		t.Fatal("the inbound process request gained a tenant context")

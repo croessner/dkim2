@@ -1,7 +1,7 @@
 # DKIM2 Signing And Revision
 
 > Historical Draft-04 implementation record. The original scope and evidence
-> below are preserved; current Draft-06 authority is the migration disposition
+> below are preserved; current Draft-07 authority is the migration disposition
 > and current durable architecture.
 
 Status: implemented; independently reviewed.
@@ -30,7 +30,7 @@ This specification is governed by:
 - `docs/specs/implementation/recipe-application.md`.
 - `docs/specs/implementation/recipe-generation.md`.
 - [draft-ietf-dkim-dkim2-spec-04](https://datatracker.ietf.org/doc/html/draft-ietf-dkim-dkim2-spec-04), especially role Sections 2.1 through 2.6 and Sections 3, 6, 7, 8, 9, 13, 14, and 16.
-- [draft-ietf-dkim-dkim2-dns-00](https://datatracker.ietf.org/doc/html/draft-ietf-dkim-dkim2-dns-00) only for selector-to-public-key-record compatibility.
+- [draft-ietf-dkim-dkim2-dns-01](https://datatracker.ietf.org/doc/html/draft-ietf-dkim-dkim2-dns-01) only for selector-to-public-key-record compatibility.
 - RFC 4648 for canonical padded Base64.
 - RFC 5321 for SMTP reverse-path and forward-path syntax.
 - RFC 5322 for message and header-field framing.

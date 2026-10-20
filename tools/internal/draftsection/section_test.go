@@ -2,9 +2,9 @@ package draftsection
 
 import "testing"
 
-// TestCitationValidCoversTheClosedDraft06Structure proves every pinned section
+// TestCitationValidCoversTheClosedDraft07Structure proves every pinned section
 // and the active list/range grammars without binding only corrected authorities.
-func TestCitationValidCoversTheClosedDraft06Structure(t *testing.T) {
+func TestCitationValidCoversTheClosedDraft07Structure(t *testing.T) {
 	for section := range sectionOrder {
 		for _, prefix := range []string{fullDraft, shortDraft} {
 			if !CitationValid(prefix + " Section " + section) {
@@ -13,11 +13,11 @@ func TestCitationValidCoversTheClosedDraft06Structure(t *testing.T) {
 		}
 	}
 	for _, citation := range []string{
-		fullDraft + " Sections 3.1 and 7.3",
-		fullDraft + " Sections 4, 6.1, and 9.6",
-		fullDraft + " Sections 3 through 11",
-		fullDraft + " Sections 4 through 7.2",
-		shortDraft + " Sections 8 through 11",
+		fullDraft + " Sections 3.1 and 9.3",
+		fullDraft + " Sections 4, 6.1, and 12.8",
+		fullDraft + " Sections 3 through 14",
+		fullDraft + " Sections 4 through 9.2",
+		shortDraft + " Sections 10 through 14",
 	} {
 		if !CitationValid(citation) {
 			t.Fatalf("CitationValid rejected %q", citation)
@@ -25,20 +25,20 @@ func TestCitationValidCoversTheClosedDraft06Structure(t *testing.T) {
 	}
 }
 
-// TestCitationValidRejectsUnknownMalformedAndReverseDraft06Sections freezes the
+// TestCitationValidRejectsUnknownMalformedAndReverseDraft07Sections freezes the
 // fail-closed boundary while leaving authorities for other documents untouched.
-func TestCitationValidRejectsUnknownMalformedAndReverseDraft06Sections(t *testing.T) {
+func TestCitationValidRejectsUnknownMalformedAndReverseDraft07Sections(t *testing.T) {
 	for _, citation := range []string{
 		fullDraft + " Section 5.3",
 		fullDraft + " Sections 5.5 and 9.6",
 		fullDraft + " Section 9.7",
-		fullDraft + " Sections 11 through 3",
+		fullDraft + " Sections 14 through 3",
 		fullDraft + " Sections 3 through 3",
-		fullDraft + " Section 3 and 7.3",
+		fullDraft + " Section 3 and 9.3",
 		fullDraft + " Sections 3.1",
 		fullDraft + " Sections 3.1, 3.1",
 		fullDraft + " section 3.1",
-		shortDraft + " Section 19",
+		shortDraft + " Section 22",
 		"See " + shortDraft + " Section 5.3",
 		"authority: " + fullDraft + " Section 5.3",
 	} {

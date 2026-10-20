@@ -173,7 +173,7 @@ func TestLocalHopRunNextDomainMembers(t *testing.T) {
 	}
 }
 
-// TestLocalHopRunImaginaryHopPair proves the Section 9.3 imaginary-hop scheme
+// TestLocalHopRunImaginaryHopPair proves the Section 12.3 imaginary-hop scheme
 // between two local domains is absorbed into the run.
 func TestLocalHopRunImaginaryHopPair(t *testing.T) {
 	_, ordered := mustRunMessage(t,
@@ -332,7 +332,7 @@ func TestLocalHopRunRedactsFormatting(t *testing.T) {
 }
 
 // TestRunMemberVerificationVerifiesEveryMember proves each named sequence is
-// verified over its Section 9.6 input with the local keys.
+// verified over its Section 12.8 input with the local keys.
 func TestRunMemberVerificationVerifiesEveryMember(t *testing.T) {
 	message, _ := mustRunMessage(t,
 		runHop(runRemoteDomain, "<sender@remote.example>", runLocalRecipient),

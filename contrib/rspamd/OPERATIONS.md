@@ -440,7 +440,7 @@ reload after `SCRIPT FLUSH`; do not grant broad keyspace access.
 
 The cache identity is a versioned HMAC over length-prefixed exact inputs: SMTP
 peer, message bytes, sender path, recipient count and original ordered recipient
-paths including duplicates, Draft-06 identifier, and verifier projection
+paths including duplicates, Draft-07 identifier, and verifier projection
 schema, plus the immutable configured authority generation. Do not replace it
 with the Rspamd task digest or greylist hashes. Rotate the authority generation
 before activating any authority change; old entries then become unreachable

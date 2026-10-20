@@ -27,7 +27,7 @@ local function response(state, verdict, replay, actions)
   })[verdict]
   return {
     api_version = 'v1',
-    draft = 'draft-ietf-dkim-dkim2-spec-06',
+    draft = 'draft-ietf-dkim-dkim2-spec-07',
     verification = {
       state = state, primary_reason = 'none', scope = 'current',
       historical_content = 'not_evaluated', historical_signatures = 'not_evaluated',
@@ -309,7 +309,7 @@ projected.policy.primary_reason = 'protocol_pass'
 projected.policy.dns_testing_effective = false
 projected.verifier_projection = {
   schema = 'dkim2.verifier-projection.v1',
-  draft = 'draft-ietf-dkim-dkim2-spec-06',
+  draft = 'draft-ietf-dkim-dkim2-spec-07',
   binding_algorithm = 'sha-256',
   binding = string.rep('A', 43) .. '=',
   hops = {

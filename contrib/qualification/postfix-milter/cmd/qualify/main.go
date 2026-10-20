@@ -1530,7 +1530,7 @@ func reviseViaDaemon(
 func signDSNViaDaemon(tenant string, outer smtpEnvelope, message []byte) ([]byte, error) {
 	request := map[string]any{
 		"api_version": "v1",
-		"draft":       "draft-ietf-dkim-dkim2-spec-06",
+		"draft":       "draft-ietf-dkim-dkim2-spec-07",
 		"message": map[string]any{
 			"raw_rfc5322_base64": base64.StdEncoding.EncodeToString(message),
 		},
@@ -1550,7 +1550,7 @@ func callSigningRoute(
 ) ([]byte, error) {
 	request := map[string]any{
 		"api_version": "v1",
-		"draft":       "draft-ietf-dkim-dkim2-spec-06",
+		"draft":       "draft-ietf-dkim-dkim2-spec-07",
 		"message": map[string]any{
 			"raw_rfc5322_base64": base64.StdEncoding.EncodeToString(message),
 			"fidelity":           "raw_rfc5322",
@@ -2079,7 +2079,7 @@ func classifyReceivedNotification(
 	defer clear(capability)
 	request := map[string]any{
 		"api_version": "v1",
-		"draft":       "draft-ietf-dkim-dkim2-spec-06",
+		"draft":       "draft-ietf-dkim-dkim2-spec-07",
 		"message": map[string]any{
 			"raw_rfc5322_base64": base64.StdEncoding.EncodeToString(notice),
 			"fidelity":           "raw_rfc5322",

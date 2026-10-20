@@ -27,12 +27,12 @@ const (
 	// HeaderFromNullSenderProtocolFields marks a message that already carries
 	// a DKIM2-Signature or Message-Instance header field. A new originator
 	// instance would conflict with that history, and such null-sender mail is
-	// a signed delivery-status notification that belongs on the Section 12
+	// a signed delivery-status notification that belongs on the Section 16
 	// path.
 	HeaderFromNullSenderProtocolFields HeaderFromNullSenderClass = "dkim2_protocol_fields"
 	// HeaderFromNullSenderDeliveryStatus marks an RFC 3464 delivery-status
 	// notification, a top-level multipart/report with report-type
-	// delivery-status. DSNs are signed only through the Section 12 route,
+	// delivery-status. DSNs are signed only through the Section 16 route,
 	// never as originator mail.
 	HeaderFromNullSenderDeliveryStatus HeaderFromNullSenderClass = "delivery_status_report"
 	// HeaderFromNullSenderContentTypeAmbiguous marks a message whose
@@ -51,10 +51,10 @@ const maxContentTypeValueBytes = 8192
 // ClassifyHeaderFromNullSender decides whether a message with a null reverse
 // path may be signed as originator mail under the header_from policy and, if
 // so, returns the canonical From domain that binds d=. Draft-ietf-dkim-dkim2-
-// spec Section 8.8 requires no d= match when mf= is "<>", so the signer binds
+// spec Section 10.8 requires no d= match when mf= is "<>", so the signer binds
 // d= to the message author instead of choosing it freely. Messages carrying
 // DKIM2 protocol fields and RFC 3464 delivery-status notifications are never
-// eligible; DSNs stay on the dedicated Section 12 route. Only the header
+// eligible; DSNs stay on the dedicated Section 16 route. Only the header
 // section is parsed, so the body is never copied.
 func ClassifyHeaderFromNullSender(rawMessage []byte) (string, HeaderFromNullSenderClass) {
 	if end := bytes.Index(rawMessage, []byte("\r\n\r\n")); end >= 0 {

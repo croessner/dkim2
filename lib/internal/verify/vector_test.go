@@ -12,7 +12,7 @@ import (
 	"github.com/croessner/dkim2/internal/canonical"
 )
 
-const syntheticVectorSeed = "draft-ietf-dkim-dkim2-spec-06 synthetic static verifier vector"
+const syntheticVectorSeed = "draft-ietf-dkim-dkim2-spec-07 synthetic static verifier vector"
 
 type deterministicReader struct {
 	state uint64
@@ -58,10 +58,10 @@ func TestEd25519VectorSignsSignatureInputDigest(t *testing.T) {
 	digest := sha256.Sum256(input.Bytes())
 
 	if !ed25519.Verify(fixture.ed25519PublicKey, digest[:], fixture.signatureBytes) {
-		t.Fatal("Ed25519 vector did not verify over Section 9.6 SHA-256 digest bytes")
+		t.Fatal("Ed25519 vector did not verify over Section 12.8 SHA-256 digest bytes")
 	}
 	if ed25519.Verify(fixture.ed25519PublicKey, input.Bytes(), fixture.signatureBytes) {
-		t.Fatal("Ed25519 vector unexpectedly verified over raw Section 9.6 bytes")
+		t.Fatal("Ed25519 vector unexpectedly verified over raw Section 12.8 bytes")
 	}
 }
 
@@ -126,7 +126,7 @@ func (r *deterministicReader) Read(p []byte) (int, error) {
 	return len(p), nil
 }
 
-// signatureInputForFixture returns M3 Section 9.6 bytes for a fixture target.
+// signatureInputForFixture returns M3 Section 12.8 bytes for a fixture target.
 func signatureInputForFixture(t *testing.T, fixture verificationFixture) canonical.ByteInput {
 	t.Helper()
 

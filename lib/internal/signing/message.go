@@ -207,7 +207,7 @@ func (m CompletedMessage) EnvelopeForm() SignatureEnvelopeForm {
 	return m.envelopeForm
 }
 
-// Role returns the role derived by the exact Section 9.1 hash gate.
+// Role returns the role derived by the exact Section 12.1 hash gate.
 func (m CompletedMessage) Role() DerivedRole {
 	if !m.Valid() {
 		return ""
@@ -593,7 +593,7 @@ func (c Coordinator) proveCompletedHashes(message rawmsg.Message, expected HashT
 	return nil
 }
 
-// proveCompletedSignature derives the final Section 9.6 input and verifies every generated set.
+// proveCompletedSignature derives the final Section 12.8 input and verifies every generated set.
 func (c Coordinator) proveCompletedSignature(message rawmsg.Message, signatures []signature.Signature, completed CompletedSigningField) error {
 	ordered, err := signature.OrderBySequence(signatures)
 	if err != nil || len(ordered) == 0 {

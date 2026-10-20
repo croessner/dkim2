@@ -14,7 +14,7 @@ import (
 func validOperationFixture() generated.OperationResponse {
 	return generated.OperationResponse{
 		ApiVersion:  generated.V1,
-		Draft:       generated.DraftIetfDkimDkim2Spec06,
+		Draft:       generated.DraftIetfDkimDkim2Spec07,
 		Operation:   generated.Sign,
 		Result:      generated.OperationResponseResultPass,
 		Disposition: generated.DispositionAccept,
@@ -254,7 +254,7 @@ func validProcessFixture() generated.ProcessResponse {
 			Value: "mx.example.test; dkim2=pass",
 		}},
 		ApiVersion: generated.V1, Disposition: generated.DispositionAccept,
-		Draft: generated.DraftIetfDkimDkim2Spec06,
+		Draft: generated.DraftIetfDkimDkim2Spec07,
 		Authentication: generated.AuthenticationResult{
 			PrimaryReason: generated.AuthenticationResultPrimaryReasonNone,
 			State:         generated.PASS,
@@ -297,9 +297,9 @@ func validProcessFixture() generated.ProcessResponse {
 	}
 }
 
-// TestDraft06PermanentReasonsDoNotDefer proves every new protocol infraction
+// TestDraft07PermanentReasonsDoNotDefer proves every new protocol infraction
 // becomes an admitted permanent rejection rather than an Exim deferral.
-func TestDraft06PermanentReasonsDoNotDefer(t *testing.T) {
+func TestDraft07PermanentReasonsDoNotDefer(t *testing.T) {
 	for _, reason := range []generated.VerificationReason{
 		generated.VerificationReasonDuplicateHashAlgorithm,
 		generated.VerificationReasonInvalidRecipeJson,
@@ -309,7 +309,7 @@ func TestDraft06PermanentReasonsDoNotDefer(t *testing.T) {
 		value := validProcessFixture()
 		value.Actions = generated.ActionPlan{}
 		value.Disposition = generated.DispositionReject
-		value.Draft = generated.DraftIetfDkimDkim2Spec06
+		value.Draft = generated.DraftIetfDkimDkim2Spec07
 		value.Verification.State = generated.PERMERROR
 		value.Verification.PrimaryReason = reason
 		value.Authentication.State = generated.PERMERROR
@@ -356,7 +356,7 @@ func TestInteropInfoOperationAdmission(t *testing.T) {
 	for _, operation := range []generated.OperationResponseOperation{generated.Sign, generated.Revise} {
 		value := validOperationFixture()
 		value.Operation = operation
-		info := generated.AddHeaderAction{Type: generated.AddHeader, Name: generated.XDKIM2Info, Value: " draft=ietf-dkim-dkim2-spec-06; sw=dkim2d;"}
+		info := generated.AddHeaderAction{Type: generated.AddHeader, Name: generated.XDKIM2Info, Value: " draft=ietf-dkim-dkim2-spec-07; sw=dkim2d;"}
 		value.Actions = append(value.Actions, info)
 		body, err := json.Marshal(value)
 		if err != nil {

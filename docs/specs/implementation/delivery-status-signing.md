@@ -1,7 +1,7 @@
 # Delivery-Status Evidence and Signing
 
 > Historical Draft-04 implementation record. The original scope and evidence
-> below are preserved; current Draft-06 authority is the migration disposition
+> below are preserved; current Draft-07 authority is the migration disposition
 > and current durable architecture.
 
 Status: M25 implemented; outgoing initial DSN signing is enabled only through
@@ -160,7 +160,7 @@ mandatory fields, uniqueness, linkage, cryptographic verification, or limits.
 
 ### Unsigned Returned Originals
 
-Added 2026-09-26 against the Draft-06 baseline. Section 12 of
+Added 2026-09-26 against the Draft-07 baseline. Section 12 of
 draft-ietf-dkim-dkim2-spec defines DSN handling only for DKIM2-signed
 originals: the report goes to the `mf=` of the highest DKIM2-Signature, and
 `mf=<>` forbids sending one. It is silent about an original without any

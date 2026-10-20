@@ -106,7 +106,7 @@ const (
 	PolicyReasonReceivedDSNStructureInvalid PolicyReason = "received_dsn_structure_invalid"
 	// PolicyReasonReceivedDSNEmbeddedUnverified reports permanent verification failure of the embedded original.
 	PolicyReasonReceivedDSNEmbeddedUnverified PolicyReason = "received_dsn_embedded_unverified"
-	// PolicyReasonReceivedDSNEmbeddedAbsent reports an unsigned embedded original outside Section 12.1.2.
+	// PolicyReasonReceivedDSNEmbeddedAbsent reports an unsigned embedded original outside Section 16.3.
 	PolicyReasonReceivedDSNEmbeddedAbsent PolicyReason = "received_dsn_embedded_absent"
 	// PolicyReasonReceivedDSNTemporaryFailure reports a temporary key or datasource failure during received-DSN evaluation.
 	PolicyReasonReceivedDSNTemporaryFailure PolicyReason = "received_dsn_temporary_failure"
@@ -618,7 +618,7 @@ func EvaluatePolicy(result VerifyResult, options ...PolicyOption) (PolicyDecisio
 }
 
 // EvaluateAuthenticationPolicy evaluates local policy from the authoritative
-// final Draft-06 result, extended by the received-DSN facts when
+// final Draft-07 result, extended by the received-DSN facts when
 // WithReceivedDSNEvaluation attached them; a final state other than PASS keeps
 // the outer policy and retains the facts as the outer-policy finding.
 func EvaluateAuthenticationPolicy(result AuthenticationResult, options ...PolicyOption) (PolicyDecision, error) {

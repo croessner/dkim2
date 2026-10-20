@@ -1064,7 +1064,7 @@ func TestSigningCanonicalAndInputBudgetsUseExactSpeculativeAndFinalWork(t *testi
 			}
 			// CompleteField rebuilds the selected branch once. CompleteMessage
 			// then hashes the current message and rebuilds the same final
-			// Section 9.6 input from the reparsed completed message.
+			// Section 12.8 input from the reparsed completed message.
 			required += finalPass + baselineHarness.request.Plan.generation.currentCanonical + finalPass
 
 			exactHarness := test.harness(t)

@@ -1,5 +1,5 @@
 // Package dkim2 provides verification and signing for
-// draft-ietf-dkim-dkim2-spec-06.
+// draft-ietf-dkim-dkim2-spec-07.
 //
 // A Verifier requires an injected PublicKeyProvider. VerifyRequest owns cloned
 // raw RFC 5322 bytes; those bytes are the sole authority for message and DKIM2
@@ -49,7 +49,7 @@
 // when explicitly typed temporary; otherwise it is a provider contract error.
 //
 // NewDNSPublicKeyProvider constructs the DNS-backed provider for the tested
-// draft-ietf-dkim-dkim2-dns-00 behavior baseline. The 2026-09-14 migration
+// draft-ietf-dkim-dkim2-dns-01 behavior baseline. The 2026-09-14 migration
 // from the individual DNS draft changed identifiers, not normative behavior. The
 // provider derives an absolute
 // <selector>._domainkey.<signing-domain>. owner from signed values, so transports
@@ -96,7 +96,7 @@
 // NewSigner exposes exactly three request paths. SignOriginator creates the
 // initial Message-Instance and DKIM2-Signature. SignExisting consumes only a
 // capability issued by VerifyForRevision and derives hash-unchanged forwarding
-// or revision from the Section 9.1 digest gate; callers cannot select the role.
+// or revision from the Section 12.1 digest gate; callers cannot select the role.
 // SignNextDomain consumes the same sealed revision evidence plus a fresh,
 // single-use published-next-domain capability and emits one terminal nd=
 // signature. All paths snapshot the raw message plus the independently observed
@@ -127,7 +127,7 @@
 // bounded versioned JSON, publishes complete snapshots atomically, and stops
 // serving after a failed reload until explicit recovery.
 //
-// Verifier.EvaluateReceivedDSN exposes the read-only Draft-06 Section 12.1.2
+// Verifier.EvaluateReceivedDSN exposes the read-only Draft-07 Section 16.3
 // evaluation of an inbound DKIM2-signed delivery-status notification after the
 // caller verified the outer message as an ordinary message with the same
 // verifier. It takes the exact outer bytes, the observed null reverse path and
@@ -135,12 +135,12 @@
 // in order RFC 6522 and strict generic RFC 3464 structure, embedded-original
 // verification through the dedicated embedded verifiers, local-hop identity,
 // outer-signer alignment, recipient linkage, failure class, and the previous
-// hop. The completion signature's Section 8.4 window is evaluated at the outer
+// hop. The completion signature's Section 10.4 window is evaluated at the outer
 // DSN's highest-signature t= instead of the clock, because a DSN may
 // legitimately arrive long after the forwarding it reports on. "Local" is
 // datasource authority over the completion signature's d=, never an address
 // in mf=; a verified foreign signer naming a local address is not_local. The
-// local hop is a run: the completion signature plus every Section 9.3 nd= or
+// local hop is a run: the completion signature plus every Section 12.3 nd= or
 // same-tenant imaginary-hop member below it, each verified cryptographically;
 // a non-verifying member or an nd= previous hop is an unsupported chain. The
 // result is the closed delivery_status projection with bounded sequence facts
@@ -153,7 +153,7 @@
 // state other than PASS keeps the outer policy unchanged.
 //
 // Signer.RebuildDSNForPropagation and Signer.SignPropagatedDSN implement
-// Draft-06 Section 12.1.1 propagation of a received DSN to the previous hop.
+// Draft-07 Section 16.2 propagation of a received DSN to the previous hop.
 // The signer re-runs the received-DSN evaluation on the exact request bytes
 // with the mandatory tenant-bound LocalAuthority, and only an eligible
 // evaluation is rebuilt: the local hop run's DKIM2-Signature fields and every
@@ -162,7 +162,7 @@
 // removed as fixed local policy, the run is descended through the
 // authenticated recipes with every intermediate state re-proven, and the
 // previous hop signature is verified over the reconstructed state with its
-// Section 8.4 window evaluated at the completion signature's t=. Body
+// Section 10.4 window evaluated at the completion signature's t=. Body
 // evidence that was unavailable at any point degrades the embedded part to
 // text/rfc822-headers. The rebuilt header block keeps the pruned wire order
 // for every name the run's recipes did not rewrite, custody is validated over

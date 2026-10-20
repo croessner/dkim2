@@ -2,8 +2,8 @@
 
 Status: repository qualification, 2026-09-14. This is not a production deployment
 receipt or a claim that every recommendation is implemented. The message
-baseline remains `draft-ietf-dkim-dkim2-spec-06`. The DNS baseline is
-`draft-ietf-dkim-dkim2-dns-00`. The individual Sender Policy
+baseline remains `draft-ietf-dkim-dkim2-spec-07`. The DNS baseline is
+`draft-ietf-dkim-dkim2-dns-01`. The individual Sender Policy
 proposal is outside this change and supplies no behavior or configuration.
 
 The subsequent [API and mail-flow review](../reports/api-and-mailflow-review-2026-09-14.md)
@@ -109,7 +109,7 @@ labels alone proves a production installation complies.
 
 | BCP section | Status | Repository evidence and remaining work |
 | --- | --- | --- |
-| 1–2, terminology | covered | Architecture pins Draft-06; no second protocol model introduced. |
+| 1–2, terminology | covered | Architecture pins Draft-07; no second protocol model introduced. |
 | 3.1, key size | covered/operator | `lib/internal/keyresolver`, signing tests, native onboarding. Verify deployed profiles independently. |
 | 3.2, multiple algorithms | covered/operator | `lib/signing_facade_test.go`, `lib/signing_datasource_integration_test.go`; actual selected profiles need inspection. |
 | 3.3, DKIM1 coexistence | operator | DKIM1 is explicitly outside the library. Prove both signatures after the final filter in the owning mailstack. |

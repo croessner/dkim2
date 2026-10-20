@@ -283,7 +283,7 @@ func MapInboundResult(
 	}
 	return generated.ProcessResponse{
 		ApiVersion:         generated.V1,
-		Draft:              generated.DraftIetfDkimDkim2Spec06,
+		Draft:              generated.DraftIetfDkimDkim2Spec07,
 		Verification:       verificationDTO,
 		Authentication:     authentication,
 		Policy:             policyDTO,
@@ -317,7 +317,7 @@ func mapVerifierProjection(result dkim2.VerifyResult) (*generated.VerifierProjec
 	}
 	binding := projection.Binding()
 	return &generated.VerifierProjection{
-		Schema: generated.Dkim2VerifierProjectionV1, Draft: generated.DraftIetfDkimDkim2Spec06,
+		Schema: generated.Dkim2VerifierProjectionV1, Draft: generated.DraftIetfDkimDkim2Spec07,
 		BindingAlgorithm: generated.Sha256, Binding: slices.Clone(binding[:]), Hops: mappedHops,
 	}, nil
 }
@@ -986,7 +986,7 @@ func mapHistoricalState(value dkim2.HistoricalState) (generated.VerificationResu
 	return mapHistoricalContent(value)
 }
 
-// mapStrictIdentityApplicable maps the Draft-06 singleton false invariant.
+// mapStrictIdentityApplicable maps the Draft-07 singleton false invariant.
 func mapStrictIdentityApplicable(value bool) (generated.KeyPolicyResultStrictIdentityApplicable, bool) {
 	if value {
 		return false, false

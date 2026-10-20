@@ -24,7 +24,7 @@ const (
 	HistoricalTargetSignatureUnverified HistoricalTargetOutcome = "signature_unverified"
 	// HistoricalTargetTimestampRejected reports a t= outside the window at the reference instant.
 	HistoricalTargetTimestampRejected HistoricalTargetOutcome = "timestamp_rejected"
-	// HistoricalTargetAlignmentRejected reports a failed Section 11.4 d=/mf= match of the target itself.
+	// HistoricalTargetAlignmentRejected reports a failed Section 14.4 d=/mf= match of the target itself.
 	HistoricalTargetAlignmentRejected HistoricalTargetOutcome = "alignment_rejected"
 	// HistoricalTargetCustodyRejected reports a broken custody link in the chain below and including the target.
 	HistoricalTargetCustodyRejected HistoricalTargetOutcome = "custody_rejected"
@@ -53,7 +53,7 @@ type HistoricalTargetRequest struct {
 	State recipe.State
 	// Sequence selects the non-highest DKIM2-Signature i= to verify.
 	Sequence uint64
-	// ReferenceTime is the instant at which the Section 8.4 window is evaluated.
+	// ReferenceTime is the instant at which the Section 10.4 window is evaluated.
 	ReferenceTime time.Time
 	// MaxTimestamp is the t= the target must not exceed, the completion instant.
 	MaxTimestamp uint64
@@ -79,11 +79,11 @@ func (r HistoricalTargetRequest) valid() bool {
 // VerifyHistoricalTarget verifies the non-highest DKIM2-Signature selected by
 // request.Sequence over the reconstructed state at its instance. It re-proves
 // the state's header hash, and its body hash when known, against that
-// instance, computes the Section 9.6 input over the state's header block,
+// instance, computes the Section 12.8 input over the state's header block,
 // evaluates the signature sets with the current-target crypto and key
-// provider, evaluates the Section 8.4 window at the request reference instant
+// provider, evaluates the Section 10.4 window at the request reference instant
 // with the additional bound that t= must not exceed MaxTimestamp, and applies
-// the Section 11.4 relaxed d=/mf= match through the shared custody rules of
+// the Section 14.4 relaxed d=/mf= match through the shared custody rules of
 // the chain as it existed when the target signed. Custody is validated over
 // the whole chain below and including the target, exactly as the
 // current-target verifier validates the chain below its target; a broken

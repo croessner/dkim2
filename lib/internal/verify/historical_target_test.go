@@ -108,7 +108,7 @@ func TestHistoricalTargetVerificationRejectsSignatureFailures(t *testing.T) {
 	}
 }
 
-// TestHistoricalTargetVerificationTimestampWindow proves the Section 8.4
+// TestHistoricalTargetVerificationTimestampWindow proves the Section 10.4
 // window is evaluated at the completion t= and that the previous t= must not
 // exceed it.
 func TestHistoricalTargetVerificationTimestampWindow(t *testing.T) {

@@ -11,7 +11,7 @@ are superseded only for this field; the other audit invariants are unchanged.
 
 
 > Historical Draft-04 implementation record. The original scope and evidence
-> below are preserved; current Draft-06 authority is the migration disposition,
+> below are preserved; current Draft-07 authority is the migration disposition,
 > the current replay runbook, and current durable architecture.
 
 Status: implementation and closeout evidence prepared; external exact-artifact review and commit pending.

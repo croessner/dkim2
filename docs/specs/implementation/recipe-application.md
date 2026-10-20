@@ -1,7 +1,7 @@
 # DKIM2 Recipe Application
 
 > Historical Draft-04 implementation record. The original scope and evidence
-> below are preserved; current Draft-06 authority is the migration disposition
+> below are preserved; current Draft-07 authority is the migration disposition
 > and current durable architecture.
 
 ## Status

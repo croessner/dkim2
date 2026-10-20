@@ -285,7 +285,7 @@ that need final Nauthilus outcomes must run after or depend on the unscored
 to the state symbols merely to reproduce the daemon disposition; the adapter
 already enforces terminal reject and temporary-failure outcomes.
 Unknown or future compliance values fail closed until the module and the
-versioned daemon contract are updated together. The current Draft-06 wire
+versioned daemon contract are updated together. The current Draft-07 wire
 contract intentionally has no `donotmodify` `honored` or `violated` state,
 because dkim2d cannot yet derive the required authenticated modification facts.
 

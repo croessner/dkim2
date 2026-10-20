@@ -8,7 +8,7 @@ import (
 
 const (
 	// DraftIdentifier is the exact behavior baseline bound into replay identities.
-	DraftIdentifier         = "draft-ietf-dkim-dkim2-spec-06"
+	DraftIdentifier         = "draft-ietf-dkim-dkim2-spec-07"
 	identityRedactedText    = "replay_identity"
 	identitySetRedactedText = "replay_identity_set"
 )
@@ -59,7 +59,7 @@ func (Identity) Format(state fmt.State, _ rune) { _, _ = io.WriteString(state, i
 
 // IdentitySet is an immutable compatibility wrapper around the single message identity.
 //
-// Deprecated: Draft-06 replay equality is message-wide. New code should use Identity.
+// Deprecated: Draft-07 replay equality is message-wide. New code should use Identity.
 type IdentitySet struct{ state *identitySetState }
 
 // identitySetState owns one immutable message-wide identity and authenticated flag.
@@ -129,7 +129,7 @@ func (s IdentitySet) Valid() bool {
 	return true
 }
 
-// Len returns one for a valid Draft-06 message identity.
+// Len returns one for a valid Draft-07 message identity.
 func (s IdentitySet) Len() int {
 	if !s.Valid() {
 		return 0

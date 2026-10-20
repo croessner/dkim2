@@ -111,7 +111,7 @@ type ReceivedEvaluatorConfig struct {
 	RunLimits verify.LocalHopRunLimits
 }
 
-// ReceivedEvaluator owns the read-only Draft-06 Section 12.1.2 evaluation of
+// ReceivedEvaluator owns the read-only Draft-07 Section 16.3 evaluation of
 // an inbound DKIM2-signed delivery-status notification. It never authorizes
 // signing and never rebuilds a report.
 type ReceivedEvaluator struct {
@@ -305,7 +305,7 @@ type receivedState struct {
 	unsupported    bool
 }
 
-// Evaluate runs the seven Section 12.1.2 stages in order and stops at the
+// Evaluate runs the seven Section 16.3 stages in order and stops at the
 // first failure. Protocol outcomes are encoded in the returned evaluation;
 // only invalid requests, cancellation, and internal contract violations
 // return a Go error.
@@ -393,7 +393,7 @@ func (e ReceivedEvaluator) evaluateStructure(raw []byte, state *receivedState, e
 }
 
 // evaluateEmbedded verifies the embedded original's highest signature and
-// instance. The completion signature's Section 8.4 window is evaluated at the
+// instance. The completion signature's Section 10.4 window is evaluated at the
 // outer DSN's highest-signature t= instead of the clock, because a DSN may
 // legitimately arrive long after the forwarding it reports on.
 func (e ReceivedEvaluator) evaluateEmbedded(ctx context.Context, state *receivedState, evaluation *ReceivedEvaluation) (bool, error) {
@@ -466,8 +466,8 @@ func verifierContractError(err error) bool {
 	return class == verify.ErrorClassInternal || class == verify.ErrorClassRequest
 }
 
-// evaluateLocalHop applies Section 12.1.2 item 2: verified completion
-// signature, datasource locality of its d=, Section 11.4 relaxed d=/mf=
+// evaluateLocalHop applies Section 16.3 item 2: verified completion
+// signature, datasource locality of its d=, Section 14.4 relaxed d=/mf=
 // match, and exact mf= equality with the outer recipient. It then extends
 // and cryptographically verifies the local hop run.
 func (e ReceivedEvaluator) evaluateLocalHop(ctx context.Context, state *receivedState, evaluation *ReceivedEvaluation) (bool, error) {
@@ -512,7 +512,7 @@ func (e ReceivedEvaluator) evaluateLocalHop(ctx context.Context, state *received
 	return e.evaluateRun(ctx, state, evaluation)
 }
 
-// completionBindsOuterRecipient checks the Section 11.4 relaxed d=/mf= match
+// completionBindsOuterRecipient checks the Section 14.4 relaxed d=/mf= match
 // and the exact outer-recipient binding of the completion signature.
 func completionBindsOuterRecipient(state *receivedState, completion signature.Signature, form EvidenceForm) bool {
 	evidence, err := authenticatedEvidenceFrom(form, state.ordered, state.target)
@@ -575,7 +575,7 @@ func (e ReceivedEvaluator) evaluateRun(ctx context.Context, state *receivedState
 	return false, nil
 }
 
-// evaluateOuterAlignment applies Section 12.1.2 item 1 with the relaxed domain match.
+// evaluateOuterAlignment applies Section 16.3 item 1 with the relaxed domain match.
 func evaluateOuterAlignment(state *receivedState, evaluation *ReceivedEvaluation) bool {
 	for _, domain := range state.evidence.recipientDomains {
 		if signature.RelaxedDomainMatch(state.outerSigner, domain) {

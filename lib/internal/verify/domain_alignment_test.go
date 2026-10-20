@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// TestVerifierChecksSigningDomainAgainstMailFrom verifies Sections 8.8, 9.4, and 11.4.
+// TestVerifierChecksSigningDomainAgainstMailFrom verifies Sections 10.8, 7, and 14.4.
 func TestVerifierChecksSigningDomainAgainstMailFrom(t *testing.T) {
 	tests := []struct {
 		name       string

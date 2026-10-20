@@ -94,7 +94,7 @@ func TestEvidenceEvaluatorRejectsChangedOriginalEvidence(t *testing.T) {
 // TestEvidenceEvaluatorClassifiesOriginalWithoutDKIM2Signature reproduces a
 // Postfix bounce for inbound internet mail that carries only DKIM1 evidence:
 // an embedded original without any DKIM2-Signature header field is outside the
-// Section 12 DSN model and must be reported as unsigned, not as a failure.
+// Section 16 DSN model and must be reported as unsigned, not as a failure.
 func TestEvidenceEvaluatorClassifiesOriginalWithoutDKIM2Signature(t *testing.T) {
 	const headers = "From: sender@example.test\r\n" +
 		"DKIM-Signature: v=1; a=rsa-sha256; d=example.test; s=legacy; h=from; bh=AAAA; b=AAAA\r\n" +

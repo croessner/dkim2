@@ -305,7 +305,7 @@ func parseRenderedSignatureField(field []byte) (rawmsg.HeaderField, error) {
 	return fields[0], nil
 }
 
-// matchesUnsignedTagSequence compares exact Section 9.6 logical tags after nulling every signature.
+// matchesUnsignedTagSequence compares exact Section 12.8 logical tags after nulling every signature.
 func matchesUnsignedTagSequence(complete tagvalue.Field, unsigned tagvalue.Field) bool {
 	completeTags := complete.Tags()
 	unsignedTags := unsigned.Tags()
@@ -352,7 +352,7 @@ func logicalUnsignedTagValue(tag tagvalue.Tag) ([]byte, bool) {
 	return unsigned, true
 }
 
-// signatureValueWithoutWSP applies the Section 9.6 WSP deletion rule to one tag value.
+// signatureValueWithoutWSP applies the Section 12.8 WSP deletion rule to one tag value.
 func signatureValueWithoutWSP(value string) []byte {
 	withoutWSP := make([]byte, 0, len(value))
 	for index := 0; index < len(value); index++ {

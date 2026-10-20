@@ -1,7 +1,7 @@
 # LDAP And SQL Datasource Providers And Legacy Migration
 
 > Historical Draft-04 implementation record. The original scope and evidence
-> below are preserved; current Draft-06 authority is the migration disposition
+> below are preserved; current Draft-07 authority is the migration disposition
 > and current durable architecture.
 
 Status: completed historical delivery; current runtime custody is superseded as
@@ -46,7 +46,7 @@ This specification is governed by:
 - `docs/specs/spec-and-prompt-template.md`;
 - `docs/specs/openapi/dkim2d.yaml`;
 - `draft-ietf-dkim-dkim2-spec-04`, dated 2026-07-05;
-- `draft-ietf-dkim-dkim2-dns-00`, dated 2026-03-18, as the historical behavior
+- `draft-ietf-dkim-dkim2-dns-01`, dated 2026-03-18, as the historical behavior
   and vector identifier retained by this repository;
 - RFC 4511, RFC 4512, RFC 4513, RFC 4515, RFC 4517, and RFC 4519 for LDAP
   protocol, schema, authentication, filters, syntaxes, and standard schema;

@@ -10,7 +10,7 @@ import (
 )
 
 // DraftIdentifier identifies the exact DKIM2 behavior baseline implemented by this verification facade.
-const DraftIdentifier = "draft-ietf-dkim-dkim2-spec-06"
+const DraftIdentifier = "draft-ietf-dkim-dkim2-spec-07"
 
 // ResultState identifies one of the four public DKIM2 verification outcomes.
 type ResultState string

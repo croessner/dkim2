@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-// TestCustodyDirectAlignmentUsesOnlyMailFromLabelReduction locks Section 9.4 direction.
+// TestCustodyDirectAlignmentUsesOnlyMailFromLabelReduction locks Section 7 direction.
 func TestCustodyDirectAlignmentUsesOnlyMailFromLabelReduction(t *testing.T) {
 	pass := []Signature{ordinaryCustodySignature(1, "example.test", "<\"sender@local\"@sub.example.test>", "<next@relay.test>")}
 	result, err := ValidateCustody(pass, CustodyLimits{})

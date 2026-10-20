@@ -99,7 +99,7 @@ func TestVerifierFailsClosedForDuplicateTargets(t *testing.T) {
 	}
 }
 
-// TestVerifierRejectsCurrentSignatureReferencingOlderInstance records the Section 8.2 interpretation.
+// TestVerifierRejectsCurrentSignatureReferencingOlderInstance records the Section 10.2 interpretation.
 func TestVerifierRejectsCurrentSignatureReferencingOlderInstance(t *testing.T) {
 	fixture := newRSAVerificationFixture(t)
 	hashSet := "sha256:" + fixture.headerDigestBase64 + ":" + fixture.bodyDigestBase64

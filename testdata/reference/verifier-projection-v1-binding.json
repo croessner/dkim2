@@ -1,6 +1,6 @@
 {
   "schema": "dkim2.verifier-projection.v1",
-  "draft": "draft-ietf-dkim-dkim2-spec-06",
+  "draft": "draft-ietf-dkim-dkim2-spec-07",
   "binding_algorithm": "sha-256",
   "hop": {
     "sequence": 1,
@@ -28,7 +28,7 @@
   "expected": {
     "recipe_descriptor_digest_base64": "sciPR7Tn1MkjmO+sjFlTgwkNuFWcwbygwqnUTvzXqu4=",
     "hop_content_digest_base64": "+nbPYta6mOU7GrL1Zi0b4Y3IyarOF1xoxoFI8l7SAjc=",
-    "projection_binding_base64": "mOBskY9a9xU6WI7KYvu5516JdfNHyHP1w5rdLkwslZk=",
-    "hop_binding_base64": "G0pGpIzm4NVVQUBEh0QBSGLYV/bnVho93IxzWA/jm9U="
+    "projection_binding_base64": "D6aM5Ffe41p2FgsYmXAsoKJKK+FwLM1hE0cVzLXvI7w=",
+    "hop_binding_base64": "GNG4bZy96CTV6CaTiZOMtmaBH+p7MEyRKSflAIwhTKU="
   }
 }

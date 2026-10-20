@@ -20,9 +20,9 @@
   "properties": {
     "base_revision": {"pattern": "^[0-9a-f]{40}$", "type": "string"},
     "candidate_snapshot_sha256": {"$ref": "#/$defs/sha256"},
-    "dns_draft": {"const": "draft-ietf-dkim-dkim2-dns-00"},
+    "dns_draft": {"const": "draft-ietf-dkim-dkim2-dns-01"},
     "manifest_sha256": {"$ref": "#/$defs/sha256"},
-    "message_draft": {"const": "draft-ietf-dkim-dkim2-spec-06"},
+    "message_draft": {"const": "draft-ietf-dkim-dkim2-spec-07"},
     "platform": {"const": "linux"},
     "privacy_scan": {"const": "passed"},
     "producer_sha256": {"$ref": "#/$defs/sha256"},

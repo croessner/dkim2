@@ -61,7 +61,7 @@ func newErrorResponse(
 		ApiVersion: generated.V1,
 		Category:   category,
 		Code:       code,
-		Draft:      generated.DraftIetfDkimDkim2Spec06,
+		Draft:      generated.DraftIetfDkimDkim2Spec07,
 	}, maxErrorResponseBytes)
 	if err != nil {
 		return preMarshaledResponse{}, err
@@ -130,7 +130,7 @@ func validSuccessResponse(value any) bool {
 // members, so that an incoherent internal result never reaches the wire.
 func validPropagationResponse(response generated.DSNPropagateResponse) bool {
 	if response.ApiVersion != generated.V1 ||
-		response.Draft != generated.DraftIetfDkimDkim2Spec06 ||
+		response.Draft != generated.DraftIetfDkimDkim2Spec07 ||
 		response.Operation != generated.PropagationOperationDeliveryStatusPropagation ||
 		!response.Result.Valid() || !response.Disposition.Valid() ||
 		!response.Replay.Class.Valid() ||
@@ -203,7 +203,7 @@ func validPropagationOutput(output generated.PropagationOutput) bool {
 // validPropagationCommitResponse validates the closed committed singleton.
 func validPropagationCommitResponse(response generated.DSNPropagateCommitResponse) bool {
 	return response.ApiVersion == generated.V1 &&
-		response.Draft == generated.DraftIetfDkimDkim2Spec06 &&
+		response.Draft == generated.DraftIetfDkimDkim2Spec07 &&
 		response.State == generated.PropagationStateCommitted
 }
 
@@ -282,11 +282,11 @@ func validStatusResponse(value any) bool {
 	switch response := value.(type) {
 	case generated.HealthResponse:
 		return response.ApiVersion == generated.V1 &&
-			response.Draft == generated.DraftIetfDkimDkim2Spec06 &&
+			response.Draft == generated.DraftIetfDkimDkim2Spec07 &&
 			response.Status == generated.Alive
 	case generated.ReadinessResponse:
 		return response.ApiVersion == generated.V1 &&
-			response.Draft == generated.DraftIetfDkimDkim2Spec06 &&
+			response.Draft == generated.DraftIetfDkimDkim2Spec07 &&
 			response.Status == generated.Ready
 	default:
 		return false
@@ -296,7 +296,7 @@ func validStatusResponse(value any) bool {
 // validProcessResponse validates every closed generated enum and coherence rule before commit.
 func validProcessResponse(response generated.ProcessResponse) bool {
 	if response.ApiVersion != generated.V1 ||
-		response.Draft != generated.DraftIetfDkimDkim2Spec06 ||
+		response.Draft != generated.DraftIetfDkimDkim2Spec07 ||
 		!response.Disposition.Valid() ||
 		!validProcessActions(response) ||
 		!response.Replay.Class.Valid() ||
@@ -337,7 +337,7 @@ func validVerifierProjection(projection *generated.VerifierProjection, verificat
 	if projection == nil {
 		return true
 	}
-	if projection.Schema != generated.Dkim2VerifierProjectionV1 || projection.Draft != generated.DraftIetfDkimDkim2Spec06 ||
+	if projection.Schema != generated.Dkim2VerifierProjectionV1 || projection.Draft != generated.DraftIetfDkimDkim2Spec07 ||
 		projection.BindingAlgorithm != generated.Sha256 || len(projection.Binding) != 32 ||
 		len(projection.Hops) == 0 || len(projection.Hops) > 128 || verification.Target == nil ||
 		strconv.Itoa(len(projection.Hops)) != verification.Target.Sequence {
@@ -429,7 +429,7 @@ func sortedUniqueStrings(values []string) bool {
 	return true
 }
 
-// validAuthenticationResponse enforces the Draft-06 final authentication projection.
+// validAuthenticationResponse enforces the Draft-07 final authentication projection.
 func validAuthenticationResponse(
 	authentication generated.AuthenticationResult,
 	verification generated.VerificationState,
@@ -479,7 +479,7 @@ func validProcessActions(response generated.ProcessResponse) bool {
 // validOperationResponse validates one complete sign or revision response.
 func validOperationResponse(response generated.OperationResponse) bool {
 	if response.ApiVersion != generated.V1 ||
-		response.Draft != generated.DraftIetfDkimDkim2Spec06 ||
+		response.Draft != generated.DraftIetfDkimDkim2Spec07 ||
 		!response.Operation.Valid() || !response.Result.Valid() ||
 		!response.Disposition.Valid() ||
 		!validWireOperationOutcome(response.Result, response.Disposition) ||

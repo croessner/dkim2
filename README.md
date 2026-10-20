@@ -1,12 +1,10 @@
 # DKIM2 Reference Implementation
 
 This repository contains an actively developed Go reference implementation of
-DKIM2 based on `draft-ietf-dkim-dkim2-spec-06`. The tested DNS behavior
-baseline remains `draft-ietf-dkim-dkim2-dns-00`; the IETF replaced that document
-with `draft-ietf-dkim-dkim2-dns-00` on 2026-07-20 without changing its
-normative body. Moving durable identifiers and versioned vectors to the working
-group name is a separate reviewed baseline update, not an implicit behavior
-change.
+DKIM2 based on `draft-ietf-dkim-dkim2-spec-07` with the DNS companion
+`draft-ietf-dkim-dkim2-dns-01`. The migration from Draft-07 and DNS-00 is
+tracked in `docs/specs/draft-07-migration-disposition.md`; until every work
+package listed there is complete, this baseline is not a conformance claim.
 
 The first design goal is precision: the core implementation must work from a
 controlled RFC 5322 message representation, preserve wire-significant details,
@@ -159,11 +157,11 @@ The preview's public API, compatibility, issue, and limitation entry point is
 
 The source-linked Exim adapter, packaging validators, operations guide, and
 five-row qualification runner are implemented. Its current capability is
-`unqualified_draft06`: the historical Draft-04 matrix passed all five supported
+`unqualified_draft07`: the historical Draft-04 matrix passed all five supported
 rows with 43 cases per row, but that candidate-bound evidence is not relabeled
-or imported for Draft-06. Portable and full Draft-06 conformance omit Exim
+or imported for Draft-07. Portable and full Draft-07 conformance omit Exim
 execution and reject an evidence root until a fresh, separately authorized
-five-row Draft-06 run is bound to unchanged candidate bytes. No prebuilt
+five-row Draft-07 run is bound to unchanged candidate bytes. No prebuilt
 universal Exim binary or container image is claimed. LDAP, PostgreSQL, MySQL,
 and MariaDB datasource providers,
 deployable schema artifacts, and the offline legacy OpenDKIM migration are
@@ -179,7 +177,7 @@ claims; an arbitrary worktree or mirror checkout does not.
 The public library signs origin messages, hash-unchanged forwarding copies,
 recipe-backed revisions, and authorized next-domain transitions. Signing uses
 exact outgoing SMTP envelope evidence, authority-issued copy tickets, opaque
-private-key handles, deterministic Draft-06 fields, final message reparsing,
+private-key handles, deterministic Draft-07 fields, final message reparsing,
 custody checks, and cryptographic self-verification. Local-only and
 out-of-band outputs remain closed until their exact route-bound release.
 
@@ -203,7 +201,7 @@ in-memory signer from the same generation and uses no local private manifest.
 Inbound delivery-status notifications are evaluated read-only inside
 `POST /v1/process` and projected as the closed `delivery_status` fact.
 "Local" is datasource authority over a signing domain, never an address in
-`mf=`, and no received-DSN fact can authorize a signing operation. Draft-06
+`mf=`, and no received-DSN fact can authorize a signing operation. Draft-07
 Section 12.1.1 propagation is a separate replay-gated route,
 `POST /v1/dsn/propagate` with `POST /v1/dsn/propagate/commit`, whose signing
 authority is the removed completion signature's domain and whose recipient is

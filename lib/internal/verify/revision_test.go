@@ -491,7 +491,7 @@ func TestRevisionSignatureOutcomePrecedenceIsOrderIndependent(t *testing.T) {
 	}
 }
 
-// TestVerifyRevisionProofAllowsSignedRecipientSupersetsAndRejectsUnsignedRecipients locks Section 9.2 membership.
+// TestVerifyRevisionProofAllowsSignedRecipientSupersetsAndRejectsUnsignedRecipients locks Section 12.2 membership.
 func TestVerifyRevisionProofAllowsSignedRecipientSupersetsAndRejectsUnsignedRecipients(t *testing.T) {
 	recipients := [][]byte{[]byte("<a@example.test>"), []byte("<b@example.test>")}
 	fixture := newRSAVerificationFixtureWithEnvelopeAt(t, testTimestampSeconds, []byte("<>"), recipients)

@@ -70,7 +70,7 @@ func FuzzHeaderHashInput(f *testing.F) {
 	})
 }
 
-// FuzzSignatureInput exercises Section 9.6 canonicalization with parser-owned DKIM2 fields.
+// FuzzSignatureInput exercises Section 12.8 canonicalization with parser-owned DKIM2 fields.
 func FuzzSignatureInput(f *testing.F) {
 	for _, seed := range [][]byte{
 		[]byte("alpha beta"),

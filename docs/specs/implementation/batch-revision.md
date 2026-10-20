@@ -31,7 +31,7 @@ replaced by canonical standard base64 of the corresponding complete message.
 ```json
 {
   "api_version": "v1",
-  "draft": "draft-ietf-dkim-dkim2-spec-06",
+  "draft": "draft-ietf-dkim-dkim2-spec-07",
   "binding": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   "original": {
     "message": {"raw_rfc5322_base64": "...", "fidelity": "raw_rfc5322"},
@@ -141,7 +141,7 @@ envelope, before rewriting an SRS recipient:
 ```json
 {
   "api_version": "v1",
-  "draft": "draft-ietf-dkim-dkim2-spec-06",
+  "draft": "draft-ietf-dkim-dkim2-spec-07",
   "message": {"raw_rfc5322_base64": "...", "fidelity": "raw_rfc5322"},
   "outer_smtp": {"mail_from": "<>", "rcpt_to": ["<issued-token@return.forwarder.example>"]},
   "context": {"tenant": "tenant-a", "reporting_mta": "mx.forwarder.example"}
@@ -252,7 +252,7 @@ options are mutually exclusive.
 
 An external copy can additionally contain `via: {"smtp": SMTPInput, "context":
 SigningContext}`. This optional single controlled intermediate hop implements
-Draft 06 section 9.3 when the receiving domain and final return/signing domain
+Draft 07 section 12.3 when the receiving domain and final return/signing domain
 differ. Both contexts must belong to the same tenant. Exact ordinary-transit
 profiles for both signing domains and exact local authority over the intermediate
 recipient domain are resolved from the same SigningAuthority lease. The MTA
@@ -289,7 +289,7 @@ header set. Original/current protocol evidence cannot be stripped or replaced to
 restart a chain. Existing public-library fidelity, recipe and body bounds stay
 in force.
 
-Normative baseline: [Draft 06, sections 8.5, 8.6, 8.10, 9 and 11.8](https://datatracker.ietf.org/doc/html/draft-ietf-dkim-dkim2-spec-06).
+Normative baseline: [Draft 07, sections 8.5, 8.6, 8.10, 9 and 11.8](https://datatracker.ietf.org/doc/html/draft-ietf-dkim-dkim2-spec-07).
 The server returns the baseline version explicitly; it does not claim an RFC or
 a later operational-profile conformance.
 

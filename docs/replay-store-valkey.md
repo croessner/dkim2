@@ -1,6 +1,6 @@
 # Replay Store And Valkey Operations
 
-DKIM2 replay detection composes the final Draft-06 authentication result while
+DKIM2 replay detection composes the final Draft-07 authentication result while
 leaving message-local signature, hash, recipe, custody, and envelope evidence
 immutable. Unexpected replay produces final `FAIL` with reason
 `duplicate_message_without_exploded`; ambiguity produces `TEMPERROR`.
@@ -189,7 +189,7 @@ when the namespace and fixed 68-byte storage-key shape stay unchanged:
 4. resume traffic only after the drain and restart are complete.
 
 Instant, partial, mixed-draft, mixed-instance, dual-epoch, fallback, and online
-migration states are unsupported and fail closed. Starting Draft-06 before the
+migration states are unsupported and fail closed. Starting Draft-07 before the
 Draft-05 retention window drains creates a bounded replay-detection gap for
 old records; it is not a compatible rolling-upgrade mode and must be treated as
 an operator policy violation.

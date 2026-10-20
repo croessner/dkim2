@@ -8,7 +8,7 @@ import (
 	"github.com/croessner/dkim2/internal/niliface"
 )
 
-// AuthenticationReason identifies the authoritative Draft-06 result reason.
+// AuthenticationReason identifies the authoritative Draft-07 result reason.
 type AuthenticationReason = ReasonCode
 
 const (
@@ -38,7 +38,7 @@ const (
 	AuthenticationReplayIndeterminate AuthenticationReplayClass = "indeterminate"
 )
 
-// Known reports whether the class belongs to the closed Draft-06 vocabulary.
+// Known reports whether the class belongs to the closed Draft-07 vocabulary.
 func (c AuthenticationReplayClass) Known() bool {
 	switch c {
 	case AuthenticationReplayNotChecked, AuthenticationReplayDisabled, AuthenticationReplayFirstSeen, AuthenticationReplayExploded, AuthenticationReplayReplayed, AuthenticationReplayIndeterminate:
@@ -48,7 +48,7 @@ func (c AuthenticationReplayClass) Known() bool {
 	}
 }
 
-// AuthenticationResult is one sealed final stateful Draft-06 result.
+// AuthenticationResult is one sealed final stateful Draft-07 result.
 type AuthenticationResult struct{ state *authenticationResultState }
 
 type authenticationResultState struct {
@@ -124,7 +124,7 @@ type Authenticator struct {
 	disabled  bool
 }
 
-// NewAuthenticator constructs one enabled fail-closed Draft-06 authenticator.
+// NewAuthenticator constructs one enabled fail-closed Draft-07 authenticator.
 func NewAuthenticator(verifier *Verifier, store ReplayStore, deriver *ReplayDeriver, retention ReplayRetention) (*Authenticator, error) {
 	if verifier == nil || verifier.state == nil || niliface.IsNil(store) || deriver == nil || !retention.Valid() {
 		return nil, newAPIError(APIErrorCodeInvalidOption)

@@ -29,7 +29,7 @@ func (p *countingPlanKeyProvider) LookupKey(ctx context.Context, query verify.Ke
 	return p.delegate.LookupKey(ctx, query)
 }
 
-// TestHashPlanOriginatorAndExistingRoles locks the exact Section 9.1 role gate.
+// TestHashPlanOriginatorAndExistingRoles locks the exact Section 12.1 role gate.
 func TestHashPlanOriginatorAndExistingRoles(t *testing.T) {
 	fixture := newRevisionTestFixture(t, nil, false)
 	coordinator, verifier := newTestHashPlanCoordinator(t, fixture)

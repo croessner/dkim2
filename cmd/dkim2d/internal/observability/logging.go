@@ -121,7 +121,7 @@ var allowedLogValues = map[string][]string{
 	"debug_module": {"message_shape", "dns", valueReplay},
 	keyDisposition: {valueAccept, "continue", valueReject, valueTempfail},
 	keyDNSResult:   {valueFound, "missing", valueInvalid, "ambiguous", valueTemporary, valueInternal},
-	"draft":        {"draft-ietf-dkim-dkim2-spec-06"},
+	"draft":        {"draft-ietf-dkim-dkim2-spec-07"},
 	"error_class":  {valueNone, "canceled", "deadline", valueTimeout, valueTransport, "tls", "encoding", "shutdown", valueInternal},
 	keyEventID:     {"config.accepted", "lifecycle.transition", "readiness.transition", "http.request.completed", "process.completed", "dsn.evidence.completed", "dsn.received.completed", "dsn.propagation.completed", "dns.lookup.completed", "replay.coordinate.completed", "datasource.operation.completed", "telemetry.export.failed"},
 	keyEvidenceStage: {

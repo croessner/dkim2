@@ -224,7 +224,7 @@ func (c *localAuthorityCache) lookup(ctx context.Context, domain string) (LocalA
 }
 
 // DetectLocalHopRun extends the local hop run backwards from the completion
-// signature over Section 9.3 nd= members and same-tenant imaginary-hop
+// signature over Section 12.3 nd= members and same-tenant imaginary-hop
 // members. The caller must already have proven that the completion signature
 // verified and that its d= is a local authority domain; this function checks
 // only the extension rules and the custody structure. It never verifies

@@ -286,7 +286,7 @@ minutes. The corresponding environment variables are
 ### Inbound policy mode
 
 `policy.mode` defaults to `strict`; omitting it enables enforcement. Operators
-must select a compatibility policy explicitly when the Draft-06 verifier is
+must select a compatibility policy explicitly when the Draft-07 verifier is
 introduced beside an existing inbound path:
 
 - `strict` accepts `PASS`, rejects `FAIL` and `PERMERROR`, and temporarily
@@ -532,7 +532,7 @@ signing:
 For example, an RSA signing operation on 2026-10-05 produces:
 
 ```text
-X-DKIM2-Info: draft=ietf-dkim-dkim2-spec-06;
+X-DKIM2-Info: draft=ietf-dkim-dkim2-spec-07;
     repo=github.com/croessner/dkim2; date=2026-10-05; sw=dkim2d;
     action=sign d=example.test a=rsa-sha256;
 ```
@@ -543,7 +543,7 @@ is the UTC date of the actual signature timestamp, not the software build date.
 signature, including both algorithms for dual signing. `action=sign` describes
 signature creation, including a transit or delivery-status signature.
 
-This is a local diagnostic convention, not a DKIM2 requirement. Draft-06
+This is a local diagnostic convention, not a DKIM2 requirement. Draft-07
 Section 4 excludes `X-` fields from authentication. Never trust this header as
 an authentication result. Existing informational headers are preserved; each
 successful local operation adds its own. Failure, unsigned/no-op, and inbound

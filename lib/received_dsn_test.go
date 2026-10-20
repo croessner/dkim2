@@ -134,7 +134,7 @@ func TestEvaluateReceivedDSNStageOutcomes(t *testing.T) {
 }
 
 // TestEvaluateReceivedDSNRunAcrossNextDomainAndImaginaryHops proves the public
-// facade reports the run length across both Section 9.3 custody schemes.
+// facade reports the run length across both Section 12.3 custody schemes.
 func TestEvaluateReceivedDSNRunAcrossNextDomainAndImaginaryHops(t *testing.T) {
 	corruptMember := receivedDSNNextDomainHop(receivedDSNLocalDomain, receivedDSNForwardDomain)
 	corruptMember.CorruptSignature = true

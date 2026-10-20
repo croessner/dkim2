@@ -19,7 +19,7 @@ import (
 	"github.com/croessner/dkim2/internal/verify"
 )
 
-// DerivedRole identifies the role selected by the exact Section 9.1 hash gate.
+// DerivedRole identifies the role selected by the exact Section 12.1 hash gate.
 type DerivedRole string
 
 const (
@@ -477,7 +477,7 @@ func (p UnsignedOperationPlan) Format(state fmt.State, _ rune) {
 	_, _ = io.WriteString(state, p.String())
 }
 
-// HashPlanCoordinator owns pure Section 9.1 planning dependencies.
+// HashPlanCoordinator owns pure Section 12.1 planning dependencies.
 type HashPlanCoordinator struct {
 	revision      RevisionVerifier
 	generator     recipe.Generator

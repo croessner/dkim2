@@ -180,13 +180,13 @@ for reference in draft-issues.md compatibility.md known-limitations.md; do
 done
 
 for required in \
-  'draft-ietf-dkim-dkim2-spec-06' \
-  'draft-ietf-dkim-dkim2-dns-00' \
+  'draft-ietf-dkim-dkim2-spec-07' \
+  'draft-ietf-dkim-dkim2-dns-01' \
   '127.0.0.1:2525' \
   'milter_protocol = 6' \
   'milter_default_action = tempfail' \
   'Exim' \
-  'unqualified_draft06' \
+  'unqualified_draft07' \
   'LDAP' \
   'SQL' \
   'PostgreSQL' \
@@ -196,8 +196,8 @@ for required in \
   grep -Fq "$required" "$guide"
 done
 
-grep -Fq 'draft-ietf-dkim-dkim2-spec-06' README.md
-grep -Fq 'unqualified_draft06' README.md
+grep -Fq 'draft-ietf-dkim-dkim2-spec-07' README.md
+grep -Fq 'unqualified_draft07' README.md
 
 # The walkthrough is the conceptual map; it must stay indexed, pinned to the
 # same baselines, and must not restate the procedure it links to.
@@ -205,10 +205,10 @@ for reference in README.md docs/reference/README.md; do
   grep -Fq 'operator/deployment-walkthrough.md' "$reference"
 done
 for required in \
-  'draft-ietf-dkim-dkim2-spec-06' \
-  'draft-ietf-dkim-dkim2-dns-00' \
+  'draft-ietf-dkim-dkim2-spec-07' \
+  'draft-ietf-dkim-dkim2-dns-01' \
   'postfix-compose.md' \
-  'unqualified_draft06' \
+  'unqualified_draft07' \
   'milter_reconstructed_crlf' \
   'lmtp_delivered_crlf' \
   '{postfix_internal_origin}' \
@@ -238,7 +238,7 @@ for document in \
   docs/reference/known-limitations.md \
   docs/reference/release-candidate.md \
   "$exim_operations"; do
-  grep -Fq 'unqualified_draft06' "$document"
+  grep -Fq 'unqualified_draft07' "$document"
 done
 for required in \
   'duplicate_hash_algorithm' \
@@ -450,7 +450,7 @@ done
 for document in README.md "$guide"; do
   grep -Fq 'Exim adapter' "$document"
   grep -Fq 'matrix' "$document"
-  grep -Fq 'unqualified_draft06' "$document"
+  grep -Fq 'unqualified_draft07' "$document"
   grep -Fq 'LDAP' "$document"
   grep -Fq 'SQL' "$document"
   refute 'deferred_ldap_sql_migration' "$document"
@@ -468,5 +468,5 @@ refute_pattern \
   --include='*.md' --include='*.yaml' --include='*.cf'
 
 # Current companion authority is separate from immutable historical reports.
-grep -Fq draft-ietf-dkim-dkim2-dns-00 docs/specs/companion-conformance.md
-grep -Fq draft-ietf-dkim-dkim2-dns-00 docs/ARCHITECTURE.md
+grep -Fq draft-ietf-dkim-dkim2-dns-01 docs/specs/companion-conformance.md
+grep -Fq draft-ietf-dkim-dkim2-dns-01 docs/ARCHITECTURE.md

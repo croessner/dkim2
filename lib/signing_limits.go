@@ -36,7 +36,7 @@ type SigningLimits struct {
 	MaxTotalSignatureSets int
 	// MaxPublicKeyLookups bounds inherited and generated publication lookups.
 	MaxPublicKeyLookups int
-	// MaxSignatureInputBytes bounds one Section 9.6 input.
+	// MaxSignatureInputBytes bounds one Section 12.8 input.
 	MaxSignatureInputBytes int
 	// MaxCanonicalWorkBytes bounds aggregate canonical work.
 	MaxCanonicalWorkBytes int

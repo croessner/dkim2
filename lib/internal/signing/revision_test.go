@@ -690,7 +690,7 @@ func revisionTestSignatureFieldWithFlags(sequence, messageInstance uint64, envel
 		flagTag + "; d=" + revisionTestDomain + "; s=" + signatureSet + ";"
 }
 
-// revisionTestSignedSet signs one target's Section 9.6 digest.
+// revisionTestSignedSet signs one target's Section 12.8 digest.
 func revisionTestSignedSet(t *testing.T, privateKey ed25519.PrivateKey, message rawmsg.Message, sequence uint64) string {
 	t.Helper()
 	canonicalizer, err := canonical.NewCanonicalizer()

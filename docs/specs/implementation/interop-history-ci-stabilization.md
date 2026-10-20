@@ -1,7 +1,7 @@
 # Interoperability, Chain Verification, and CI Simplification Specification
 
 > Historical Draft-04 implementation record. The original scope and evidence
-> below are preserved; current Draft-06 authority is the migration disposition
+> below are preserved; current Draft-07 authority is the migration disposition
 > and current durable architecture.
 
 Status: implementation-ready stabilization contract.

@@ -13,7 +13,7 @@ func knownFieldBody(mailFrom string, recipients []string, raw string) []byte {
 		quotedRecipients[index] = fmt.Sprintf("%q", recipient)
 	}
 	return fmt.Appendf(nil,
-		`{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-06","message":{"raw_rfc5322_base64":"%s"},"smtp":{"mail_from":%q,"rcpt_to":[%s]}}`,
+		`{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-07","message":{"raw_rfc5322_base64":"%s"},"smtp":{"mail_from":%q,"rcpt_to":[%s]}}`,
 		raw,
 		mailFrom,
 		strings.Join(quotedRecipients, ","),
@@ -122,7 +122,7 @@ func TestKnownFieldPreflightEnforcesRawEncodedExactAndOneOver(t *testing.T) {
 func TestKnownFieldPreflightIgnoresCaseVariantUnknownFields(t *testing.T) {
 	body := []byte(`{
 		"api_version":"v1",
-		"draft":"draft-ietf-dkim-dkim2-spec-06",
+		"draft":"draft-ietf-dkim-dkim2-spec-07",
 		"message":{"raw_rfc5322_base64":""},
 		"smtp":{"mail_from":"","rcpt_to":[""]},
 		"SMTP":{"MAIL_FROM":"` + strings.Repeat("x", maxSMTPPathBytes+1) + `","RCPT_TO":[` +
@@ -156,7 +156,7 @@ func TestRawMessageEscapingIsRejectedOnlyAfterResourceAndSchemaStages(t *testing
 // stays mandatory on every message-carrying operation and that the commit
 // operation, whose contract carries no message, refuses a smuggled one.
 func TestRouteRawMessageRuleIsContractAware(t *testing.T) {
-	commit := []byte(`{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-06","commit_token":"` + strings.Repeat("A", 43) + `"}`)
+	commit := []byte(`{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-07","commit_token":"` + strings.Repeat("A", 43) + `"}`)
 	constants, err := preflightJSON(commit)
 	if err != nil {
 		t.Fatalf("commit preflight: %v", err)
@@ -169,7 +169,7 @@ func TestRouteRawMessageRuleIsContractAware(t *testing.T) {
 			t.Fatalf("%s without message accepted: %v", path, err)
 		}
 	}
-	smuggled := []byte(`{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-06","commit_token":"` + strings.Repeat("A", 43) + `","message":{"raw_rfc5322_base64":"QQ=="}}`)
+	smuggled := []byte(`{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-07","commit_token":"` + strings.Repeat("A", 43) + `","message":{"raw_rfc5322_base64":"QQ=="}}`)
 	constants, err = preflightJSON(smuggled)
 	if err != nil {
 		t.Fatalf("smuggled preflight: %v", err)

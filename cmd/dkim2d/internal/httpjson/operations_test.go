@@ -352,7 +352,7 @@ func TestStrictAdapterReturnsBodylessOriginatorNotApplicable(t *testing.T) {
 func TestStrictAdapterReturnsBodylessDeliveryStatusNotApplicable(t *testing.T) {
 	raw := base64.StdEncoding.EncodeToString([]byte("From: postmaster@example.test\r\n\r\nreport\r\n"))
 	request := generated.DSNSignRequest{
-		ApiVersion: generated.V1, Draft: generated.DraftIetfDkimDkim2Spec06,
+		ApiVersion: generated.V1, Draft: generated.DraftIetfDkimDkim2Spec07,
 		Message: generated.DSNMessageInput{RawRfc5322Base64: mustProtectedString(t, raw)},
 		OuterSmtp: generated.SMTPInput{
 			MailFrom: mustProtectedString(t, "<>"),
@@ -432,14 +432,14 @@ func TestGeneratedStrictHandlerWritesBodylessNotApplicableResponses(t *testing.T
 	raw := base64.StdEncoding.EncodeToString(
 		[]byte("From: sender@example.test\r\nSubject: unsigned\r\n\r\nbody\r\n"),
 	)
-	processBody := `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-06",` +
+	processBody := `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-07",` +
 		`"message":{"raw_rfc5322_base64":"` + raw + `","fidelity":"milter_reconstructed_crlf"},` +
 		`"smtp":{"mail_from":"<sender@example.test>","rcpt_to":["<recipient@example.test>"]}}`
-	signBody := `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-06",` +
+	signBody := `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-07",` +
 		`"message":{"raw_rfc5322_base64":"` + raw + `","fidelity":"milter_reconstructed_crlf"},` +
 		`"smtp":{"mail_from":"<sender@example.test>","rcpt_to":["<recipient@example.test>"]},` +
 		`"context":{"tenant":"tenant-a","domain":"example.test"}}`
-	dsnBody := `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-06",` +
+	dsnBody := `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-07",` +
 		`"message":{"raw_rfc5322_base64":"` + raw + `"},` +
 		`"outer_smtp":{"mail_from":"<>","rcpt_to":["<sender@example.test>"]},` +
 		`"context":{"tenant":"tenant-a"}}`
@@ -615,7 +615,7 @@ func operationRequestFixture(t *testing.T, raw []byte) generated.SignRequest {
 	fidelity := generated.MilterReconstructedCrlf
 	return generated.SignRequest{
 		ApiVersion: generated.V1,
-		Draft:      generated.DraftIetfDkimDkim2Spec06,
+		Draft:      generated.DraftIetfDkimDkim2Spec07,
 		Message: generated.MessageInput{
 			RawRfc5322Base64: message,
 			Fidelity:         &fidelity,

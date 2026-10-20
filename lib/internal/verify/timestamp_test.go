@@ -163,7 +163,7 @@ func hasTimestampCheck(result Result, status TimestampStatus, checkStatus CheckS
 }
 
 // TestRequestReferenceTimeReplacesClock verifies that a non-zero
-// Request.ReferenceTime evaluates the Section 8.4 window at that instant
+// Request.ReferenceTime evaluates the Section 10.4 window at that instant
 // instead of the injected clock, while the zero value keeps the clock.
 func TestRequestReferenceTimeReplacesClock(t *testing.T) {
 	signed := time.Unix(int64(testTimestampSeconds), 0)

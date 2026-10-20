@@ -8,7 +8,7 @@
   "required": ["schema", "draft", "expectation", "cases"],
   "properties": {
     "schema": {"const": "dkim2.dsn-propagate-fixture.v1"},
-    "draft": {"const": "draft-ietf-dkim-dkim2-spec-06"},
+    "draft": {"const": "draft-ietf-dkim-dkim2-spec-07"},
     "expectation": {"enum": ["valid", "invalid"]},
     "cases": {
       "type": "array",

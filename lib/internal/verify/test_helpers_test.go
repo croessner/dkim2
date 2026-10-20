@@ -90,7 +90,7 @@ func newEd25519VerificationFixture(t *testing.T) verificationFixture {
 	return fixture
 }
 
-// newEd25519RawInputSignatureFixture signs raw Section 9.6 bytes as a negative control.
+// newEd25519RawInputSignatureFixture signs raw Section 12.8 bytes as a negative control.
 func newEd25519RawInputSignatureFixture(t *testing.T) verificationFixture {
 	t.Helper()
 

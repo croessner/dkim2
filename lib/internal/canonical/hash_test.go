@@ -77,7 +77,7 @@ func TestSHA256DigestRemainsFixedForSignatureInput(t *testing.T) {
 	}
 }
 
-// TestDigestRejectsSignatureInput proves Message-Instance algorithms cannot hash Section 9.6 input.
+// TestDigestRejectsSignatureInput proves Message-Instance algorithms cannot hash Section 12.8 input.
 func TestDigestRejectsSignatureInput(t *testing.T) {
 	input, err := NewCanonicalBytes(KindSignatureInput, []byte("signature\r\n"), Metadata{})
 	if err != nil {
@@ -109,7 +109,7 @@ func TestSHA256DigestRejectsZeroCanonicalizer(t *testing.T) {
 	}
 }
 
-// TestSHA256DigestRejectsMessageHashKinds proves fixed Section 9.6 hashing cannot replace h= hashing.
+// TestSHA256DigestRejectsMessageHashKinds proves fixed Section 12.8 hashing cannot replace h= hashing.
 func TestSHA256DigestRejectsMessageHashKinds(t *testing.T) {
 	canonicalizer, err := NewCanonicalizer()
 	if err != nil {

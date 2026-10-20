@@ -16,7 +16,7 @@ const targetNameSignatureSet = "signature_set"
 
 var knownSignatureInputTags = tagvalue.MustKnownTags("i", "m", "t", "mf", "rt", "nd", "d", "s", "n", "f")
 
-// SignatureInputSelection identifies the immutable header source and target for Section 9.6 input.
+// SignatureInputSelection identifies the immutable header source and target for Section 12.8 input.
 type SignatureInputSelection struct {
 	// Headers is the sole authority for protocol field parsing and rendering.
 	Headers rawmsg.HeaderBlock
@@ -37,7 +37,7 @@ func (s SignatureInputSelection) Format(state fmt.State, _ rune) {
 	_, _ = io.WriteString(state, s.String())
 }
 
-// SigningInputSelection identifies structured existing and newly generated Section 9.6 input.
+// SigningInputSelection identifies structured existing and newly generated Section 12.8 input.
 type SigningInputSelection struct {
 	// Headers is the sole authority for inherited complete protocol fields.
 	Headers rawmsg.HeaderBlock
@@ -68,7 +68,7 @@ type signatureInputRecord struct {
 	canonicalBytes []byte
 }
 
-// SignatureInput builds DKIM2 Section 9.6 canonical signature input.
+// SignatureInput builds DKIM2 Section 12.8 canonical signature input.
 func (c Canonicalizer) SignatureInput(selection SignatureInputSelection) (ByteInput, error) {
 	protocolFieldCount := len(selection.Headers.FieldsByName(instance.HeaderName)) + len(selection.Headers.FieldsByName(signature.HeaderName))
 	if protocolFieldCount > c.options.Limits.MaxFieldCount {
@@ -128,7 +128,7 @@ func (c Canonicalizer) SignatureInput(selection SignatureInputSelection) (ByteIn
 	})
 }
 
-// SignatureInputFromMessage builds Section 9.6 input from parser-owned headers.
+// SignatureInputFromMessage builds Section 12.8 input from parser-owned headers.
 func (c Canonicalizer) SignatureInputFromMessage(message rawmsg.Message, targetSequence uint64) (ByteInput, error) {
 	return c.SignatureInput(SignatureInputSelection{
 		Headers:        message.Headers(),
@@ -136,7 +136,7 @@ func (c Canonicalizer) SignatureInputFromMessage(message rawmsg.Message, targetS
 	})
 }
 
-// SigningInput builds Section 9.6 input without inserting an incomplete field into a message.
+// SigningInput builds Section 12.8 input without inserting an incomplete field into a message.
 //
 //nolint:gocyclo // The fail-closed sequence mirrors one normative ordered construction.
 func (c Canonicalizer) SigningInput(selection SigningInputSelection) (ByteInput, error) {
@@ -468,7 +468,7 @@ func (c Canonicalizer) signatureInputTargetRecord(headers rawmsg.HeaderBlock, ta
 	}, nil
 }
 
-// canonicalizeSignatureInputField applies Section 9.6 to one complete field.
+// canonicalizeSignatureInputField applies Section 12.8 to one complete field.
 func (c Canonicalizer) canonicalizeSignatureInputField(field rawmsg.HeaderField) ([]byte, error) {
 	canonicalBytes := canonicalizeSignatureInputFieldBytes(field.NameLower(), field.UnfoldedValue())
 	if len(canonicalBytes) > c.options.Limits.MaxFieldBytes {
@@ -684,7 +684,7 @@ func trimSignatureInputWSP(input []byte) []byte {
 	return input[start:end]
 }
 
-// isSignatureInputWSP reports whether b is WSP deleted by Section 9.6.
+// isSignatureInputWSP reports whether b is WSP deleted by Section 12.8.
 func isSignatureInputWSP(b byte) bool {
 	return b == ' ' || b == '\t'
 }

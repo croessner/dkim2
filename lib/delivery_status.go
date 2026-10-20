@@ -30,7 +30,7 @@ const (
 	// DSNEvidenceStageEmbeddedVerification identifies embedded cryptographic evidence failure.
 	DSNEvidenceStageEmbeddedVerification DSNEvidenceStage = "embedded_verification"
 	// DSNEvidenceStageEmbeddedUnsigned identifies a well-formed embedded
-	// original without any DKIM2-Signature header field. Draft-06 Section 12
+	// original without any DKIM2-Signature header field. Draft-07 Section 16
 	// defines DKIM2 DSN handling only for DKIM2-signed originals, so such a
 	// report cannot be authorized for signing. The wrapped cause remains
 	// SigningErrorAuthorizationDenied; only a caller with an explicit

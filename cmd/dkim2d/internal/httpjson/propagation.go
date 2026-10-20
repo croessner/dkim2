@@ -15,7 +15,7 @@ import (
 // daemon-owned domain request. The route admits exactly the null reverse path
 // and one forward path; the signing domain is never a request member.
 func MapPropagationRequest(input generated.DSNPropagateRequest) (app.PropagationRequest, error) {
-	if input.ApiVersion != generated.V1 || input.Draft != generated.DraftIetfDkimDkim2Spec06 ||
+	if input.ApiVersion != generated.V1 || input.Draft != generated.DraftIetfDkimDkim2Spec07 ||
 		!input.Message.Fidelity.Valid() || !validTenant(input.Context.Tenant) ||
 		!validSigningDomain(input.Context.ReportingMta) {
 		return app.PropagationRequest{}, newMappingError(MappingInvalidContract)
@@ -55,7 +55,7 @@ func MapPropagationRequest(input generated.DSNPropagateRequest) (app.Propagation
 
 // MapPropagationCommitRequest extracts one bounded opaque commit token.
 func MapPropagationCommitRequest(input generated.DSNPropagateCommitRequest) (string, error) {
-	if input.ApiVersion != generated.V1 || input.Draft != generated.DraftIetfDkimDkim2Spec06 {
+	if input.ApiVersion != generated.V1 || input.Draft != generated.DraftIetfDkimDkim2Spec07 {
 		return "", newMappingError(MappingInvalidContract)
 	}
 	token, err := input.CommitToken.Bytes()
@@ -90,7 +90,7 @@ func MapPropagationResult(result app.PropagationResult) (generated.DSNPropagateR
 	}
 	response := generated.DSNPropagateResponse{
 		ApiVersion:     generated.V1,
-		Draft:          generated.DraftIetfDkimDkim2Spec06,
+		Draft:          generated.DraftIetfDkimDkim2Spec07,
 		Operation:      generated.PropagationOperationDeliveryStatusPropagation,
 		Result:         resultClass,
 		Disposition:    disposition,
@@ -184,7 +184,7 @@ func MapPropagationCommitResult(
 	}
 	return generated.DSNPropagateCommitResponse{
 		ApiVersion: generated.V1,
-		Draft:      generated.DraftIetfDkimDkim2Spec06,
+		Draft:      generated.DraftIetfDkimDkim2Spec07,
 		State:      generated.PropagationStateCommitted,
 	}, nil
 }

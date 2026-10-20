@@ -24,7 +24,7 @@ func (o RunMemberOutcome) Known() bool {
 }
 
 // VerifyEmbeddedSignatures verifies the named non-highest DKIM2-Signature
-// sequences of an already extracted embedded original over the Section 9.6
+// sequences of an already extracted embedded original over the Section 12.8
 // fields they cover. The fields are present in the embedded original as is,
 // so no historical reconstruction is needed. It applies the same bounded key
 // lookup order and set semantics as the all-hop revision proof and does not

@@ -125,7 +125,7 @@ func FuzzCustodyTransitions(f *testing.F) {
 	})
 }
 
-// FuzzUnsignedSignatureTarget exercises completion and Section 9.6 unsigned rebuilding.
+// FuzzUnsignedSignatureTarget exercises completion and Section 12.8 unsigned rebuilding.
 func FuzzUnsignedSignatureTarget(f *testing.F) {
 	f.Add([]byte("selector"), []byte("signature"))
 	f.Add([]byte("bad selector"), bytes.Repeat([]byte{0xff}, 128))

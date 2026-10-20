@@ -525,12 +525,12 @@ func snapshotPublicResult(result VerifyResult) publicResultSnapshot {
 // loadDNSGoldenManifest validates both active draft identifiers and public key encodings.
 func loadDNSGoldenManifest(t testing.TB, corpus publicGoldenCorpus) dnsGoldenManifest {
 	t.Helper()
-	raw, err := os.ReadFile("testdata/vectors/draft-ietf-dkim-dkim2-dns-00/dns-golden.json")
+	raw, err := os.ReadFile("testdata/vectors/draft-ietf-dkim-dkim2-dns-01/dns-golden.json")
 	if err != nil {
 		t.Fatal("DNS golden manifest unavailable")
 	}
 	var manifest dnsGoldenManifest
-	if json.Unmarshal(raw, &manifest) != nil || manifest.MessageDraft != DraftIdentifier || manifest.DNSDraft != "draft-ietf-dkim-dkim2-dns-00" {
+	if json.Unmarshal(raw, &manifest) != nil || manifest.MessageDraft != DraftIdentifier || manifest.DNSDraft != "draft-ietf-dkim-dkim2-dns-01" {
 		t.Fatal("invalid DNS golden manifest")
 	}
 	rsaDER := x509.MarshalPKCS1PublicKey(corpus.rsaKey(t))

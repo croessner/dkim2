@@ -1,14 +1,14 @@
 # DNS Key Resolver
 
 > Historical Draft-04 implementation record. The original scope and evidence
-> below are preserved; current Draft-06 authority is the migration disposition
+> below are preserved; current Draft-07 authority is the migration disposition
 > and current durable architecture.
 
 ## Status
 
 - Increment: DNS key resolution after the public current-verification facade.
 - Protocol baseline: `draft-ietf-dkim-dkim2-spec-04` and
-  `draft-ietf-dkim-dkim2-dns-00`.
+  `draft-ietf-dkim-dkim2-dns-01`.
 - Architecture owner: `lib/internal/keyresolver`, with a public provider
   adapter in the root library package.
 - Status: implemented; final unchanged-diff proof and milestone commit pending.
@@ -36,7 +36,7 @@ The binding sources are, in order:
 
 1. `draft-ietf-dkim-dkim2-spec-04` for current DKIM2 signature algorithms and
    the numeric `i=` sequence model.
-2. `draft-ietf-dkim-dkim2-dns-00` for selectors, textual key records, and the DNS
+2. `draft-ietf-dkim-dkim2-dns-01` for selectors, textual key records, and the DNS
    TXT binding.
 3. RFC 1034 and RFC 1035 for DNS names and resource-record behavior.
 4. RFC 6376 where DNS-04 incorporates DKIM key semantics.

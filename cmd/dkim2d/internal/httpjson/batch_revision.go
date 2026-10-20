@@ -30,7 +30,7 @@ func mapBatchRevisionRequestWithin(input generated.BatchRevisionRequest, aggrega
 	if aggregateBytes < 1 || aggregateBytes > app.HardMaxBatchRevisionMessageBytes {
 		return app.BatchRevisionRequest{}, newMappingError(MappingInternalContract)
 	}
-	if input.ApiVersion != generated.V1 || input.Draft != generated.DraftIetfDkimDkim2Spec06 ||
+	if input.ApiVersion != generated.V1 || input.Draft != generated.DraftIetfDkimDkim2Spec07 ||
 		len(input.Copies) == 0 || len(input.Copies) > app.MaxBatchRevisionCopies {
 		return app.BatchRevisionRequest{}, newMappingError(MappingInvalidContract)
 	}
@@ -135,7 +135,7 @@ func MapBatchRevisionResult(result app.BatchRevisionResult) (generated.BatchRevi
 	if !result.Valid() {
 		return generated.BatchRevisionResponse{}, newMappingError(MappingInternalContract)
 	}
-	response := generated.BatchRevisionResponse{ApiVersion: generated.V1, Draft: generated.DraftIetfDkimDkim2Spec06,
+	response := generated.BatchRevisionResponse{ApiVersion: generated.V1, Draft: generated.DraftIetfDkimDkim2Spec07,
 		Binding: result.Binding(), OriginalSha256: result.OriginalSHA256(),
 		Result: generated.BatchRevisionResponseResult(result.Result()), Disposition: generated.Disposition(result.Disposition()),
 		Outputs: make([]generated.BatchRevisionOutput, 0, len(result.Outputs()))}
@@ -160,7 +160,7 @@ func MapBatchRevisionResult(result app.BatchRevisionResult) (generated.BatchRevi
 
 // validBatchRevisionResponse enforces the closed output matrix and exact protected header framing.
 func validBatchRevisionResponse(response generated.BatchRevisionResponse) bool {
-	if response.ApiVersion != generated.V1 || response.Draft != generated.DraftIetfDkimDkim2Spec06 ||
+	if response.ApiVersion != generated.V1 || response.Draft != generated.DraftIetfDkimDkim2Spec07 ||
 		!validBatchWireDigest(response.Binding) || !validBatchWireDigest(response.OriginalSha256) ||
 		!validWireOperationOutcome(generated.OperationResponseResult(response.Result), response.Disposition) ||
 		response.Disposition == generated.DispositionContinue || len(response.Outputs) > app.MaxBatchRevisionCopies {

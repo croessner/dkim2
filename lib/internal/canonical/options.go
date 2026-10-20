@@ -2,7 +2,7 @@ package canonical
 
 const (
 	// DraftBaseline identifies the active DKIM2 canonicalization draft.
-	DraftBaseline = "draft-ietf-dkim-dkim2-spec-06"
+	DraftBaseline = "draft-ietf-dkim-dkim2-spec-07"
 	// HashAlgorithmSHA256 identifies the supported SHA-256 Message-Instance hash.
 	HashAlgorithmSHA256 HashAlgorithm = "sha256"
 	// HashAlgorithmSHA512 identifies the supported SHA-512 Message-Instance hash.
@@ -17,7 +17,7 @@ const (
 	KindBodyHashInput Kind = "body_hash_input"
 	// KindHeaderHashInput identifies Section 6.2 header hash input.
 	KindHeaderHashInput Kind = "header_hash_input"
-	// KindSignatureInput identifies Section 9.6 signature input.
+	// KindSignatureInput identifies Section 12.8 signature input.
 	KindSignatureInput Kind = "signature_input"
 )
 

@@ -1,14 +1,14 @@
 # Observability Foundation Implementation Specification
 
 > Historical Draft-04 implementation record. The original scope and evidence
-> below are preserved; current Draft-06 authority is the migration disposition
+> below are preserved; current Draft-07 authority is the migration disposition
 > and current durable architecture.
 
 Status: implemented and independently reviewed.
 
 Implementation base: `9cf158f27609dbe1116aca136a8e7685cff99902`.
 Protocol behavior remains pinned to `draft-ietf-dkim-dkim2-spec-04` and the
-historical `draft-ietf-dkim-dkim2-dns-00` baseline. Telemetry is non-normative:
+historical `draft-ietf-dkim-dkim2-dns-01` baseline. Telemetry is non-normative:
 it cannot define, repair, override, or become input to protocol, DNS, policy,
 replay, HTTP, health, or readiness truth.
 

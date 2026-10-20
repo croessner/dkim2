@@ -35,7 +35,7 @@ const (
 	DSNPropagationStagePreflight DSNPropagationStage = "preflight"
 	// DSNPropagationStageEvaluation identifies the received-DSN evaluation.
 	DSNPropagationStageEvaluation DSNPropagationStage = "evaluation"
-	// DSNPropagationStageRebuild identifies the Section 12.1.1 rebuild.
+	// DSNPropagationStageRebuild identifies the Section 16.2 rebuild.
 	DSNPropagationStageRebuild DSNPropagationStage = "rebuild"
 	// DSNPropagationStageSigning identifies the propagation signing operation.
 	DSNPropagationStageSigning DSNPropagationStage = "signing"
@@ -108,7 +108,7 @@ func newDSNPropagationError(stage DSNPropagationStage, cause error) error {
 type DSNPropagationOutcome string
 
 const (
-	// DSNPropagationRebuilt reports an unsigned Section 12.1.1 report ready for SignPropagatedDSN.
+	// DSNPropagationRebuilt reports an unsigned Section 16.2 report ready for SignPropagatedDSN.
 	DSNPropagationRebuilt DSNPropagationOutcome = "rebuilt"
 	// DSNPropagationNotEligible reports an evaluation whose propagation projection is not eligible.
 	DSNPropagationNotEligible DSNPropagationOutcome = "not_eligible"
@@ -402,9 +402,9 @@ func (PropagatedDSN) MarshalText() ([]byte, error) {
 	return nil, newSigningError(SigningErrorInvalidRequest)
 }
 
-// RebuildDSNForPropagation evaluates one received DSN under Draft-06 Section
-// 12.1.2 with the signer's own verifier and, when the evaluation is eligible,
-// rebuilds it under Section 12.1.1 into an unsigned report addressed to the
+// RebuildDSNForPropagation evaluates one received DSN under Draft-07 Section
+// 16.3 with the signer's own verifier and, when the evaluation is eligible,
+// rebuilds it under Section 16.2 into an unsigned report addressed to the
 // authenticated previous hop. The signing domain is the canonical d= of the
 // removed completion signature; neither the request nor the adapter can
 // select it. Protocol outcomes are returned in the evidence; only invalid

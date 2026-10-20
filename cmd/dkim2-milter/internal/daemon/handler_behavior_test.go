@@ -108,7 +108,7 @@ func TestHandlerUsesExactInboundGeneratedOperation(t *testing.T) {
 		reporting, _ := document["reporting"].(map[string]any)
 		recipients, _ := smtpInput["rcpt_to"].([]any)
 		if document["api_version"] != "v1" ||
-			document["draft"] != "draft-ietf-dkim-dkim2-spec-06" ||
+			document["draft"] != "draft-ietf-dkim-dkim2-spec-07" ||
 			messageInput["fidelity"] != "milter_reconstructed_crlf" ||
 			messageInput["raw_rfc5322_base64"] != expectedRaw ||
 			smtpInput["mail_from"] != "<a@example.test>" ||
@@ -380,7 +380,7 @@ func TestHandlerNonOKResponseIsContractFailure(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
 		writer.Header().Set("Content-Type", "application/json")
 		writer.WriteHeader(http.StatusServiceUnavailable)
-		_, _ = io.WriteString(writer, `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-06","code":"service_unavailable","category":"availability"}`)
+		_, _ = io.WriteString(writer, `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-07","code":"service_unavailable","category":"availability"}`)
 	}))
 	defer server.Close()
 	handler, err := NewHandler(
@@ -497,7 +497,7 @@ func TestObservedDomainsMatchesAuthoritativeRouteSelection(t *testing.T) {
 }
 
 // TestHandlerTempfailsNullReversePathUntilPrevalidatedDSNGateExists reproduces
-// the missing Draft-06 Section 12.1 trusted-evidence gate.
+// the missing Draft-07 Section 16.1 trusted-evidence gate.
 func TestHandlerTempfailsNullReversePathUntilPrevalidatedDSNGateExists(t *testing.T) {
 	calls := 0
 	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
@@ -884,7 +884,7 @@ func validOperationResponse(operation generated.OperationResponseOperation) gene
 	return generated.OperationResponse{
 		Actions: generated.ActionPlan{}, ApiVersion: generated.V1,
 		Disposition: generated.DispositionReject,
-		Draft:       generated.DraftIetfDkimDkim2Spec06,
+		Draft:       generated.DraftIetfDkimDkim2Spec07,
 		Operation:   operation, Result: generated.OperationResponseResultFail,
 	}
 }
@@ -898,7 +898,7 @@ func validProcessResponse() generated.ProcessResponse {
 		}},
 		ApiVersion:  generated.V1,
 		Disposition: generated.DispositionAccept,
-		Draft:       generated.DraftIetfDkimDkim2Spec06,
+		Draft:       generated.DraftIetfDkimDkim2Spec07,
 		Authentication: generated.AuthenticationResult{
 			PrimaryReason: generated.AuthenticationResultPrimaryReasonNone,
 			State:         generated.PASS,
@@ -933,9 +933,9 @@ func validProcessResponse() generated.ProcessResponse {
 	}
 }
 
-// TestDraft06PermanentReasonsDoNotTempfail proves every new protocol
+// TestDraft07PermanentReasonsDoNotTempfail proves every new protocol
 // infraction remains a permanent rejection at the Milter daemon boundary.
-func TestDraft06PermanentReasonsDoNotTempfail(t *testing.T) {
+func TestDraft07PermanentReasonsDoNotTempfail(t *testing.T) {
 	for _, reason := range []generated.VerificationReason{
 		generated.VerificationReasonDuplicateHashAlgorithm,
 		generated.VerificationReasonInvalidRecipeJson,
@@ -945,7 +945,7 @@ func TestDraft06PermanentReasonsDoNotTempfail(t *testing.T) {
 		value := validProcessResponse()
 		value.Actions = generated.ActionPlan{}
 		value.Disposition = generated.DispositionReject
-		value.Draft = generated.DraftIetfDkimDkim2Spec06
+		value.Draft = generated.DraftIetfDkimDkim2Spec07
 		value.Verification.State = generated.PERMERROR
 		value.Verification.PrimaryReason = reason
 		value.Authentication.State = generated.PERMERROR

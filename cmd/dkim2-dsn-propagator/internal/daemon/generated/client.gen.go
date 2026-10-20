@@ -262,13 +262,13 @@ func (e DeliveryStatusProjectionStructure) Valid() bool {
 
 // Defines values for DraftVersion.
 const (
-	DraftIetfDkimDkim2Spec06 DraftVersion = "draft-ietf-dkim-dkim2-spec-06"
+	DraftIetfDkimDkim2Spec07 DraftVersion = "draft-ietf-dkim-dkim2-spec-07"
 )
 
 // Valid indicates whether the value is a known member of the DraftVersion enum.
 func (e DraftVersion) Valid() bool {
 	switch e {
-	case DraftIetfDkimDkim2Spec06:
+	case DraftIetfDkimDkim2Spec07:
 		return true
 	default:
 		return false

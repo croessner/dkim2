@@ -115,7 +115,7 @@ not change the stored value into a textual key format.
 `delivery_status` is the profile use for null-reverse-path delivery-status
 notifications. Every domain this deployment forwards mail under needs an
 active `delivery_status` profile in addition to the transit profile that signs
-the forwarded copy, because Draft-06 Section 12.1.1 propagation signs the
+the forwarded copy, because Draft-07 Section 16.2 propagation signs the
 rebuilt notification under the removed completion signature's own domain. A
 local domain that holds a transit profile but no active `delivery_status`
 profile is a permanent refusal: the propagation route answers `permerror` with

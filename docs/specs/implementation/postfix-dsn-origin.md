@@ -1,7 +1,7 @@
 # Postfix DSN Origin for the Milter Adapter
 
 Status: active upstream Postfix adapter contract, migrated 2026-09-16.
-This is not a DKIM2 wire-protocol extension. The DKIM2 baseline is Draft-06.
+This is not a DKIM2 wire-protocol extension. The DKIM2 baseline is Draft-07.
 
 ## Authority and scope
 
@@ -53,7 +53,7 @@ and the snapshot's `MILTER_README` provenance section.
 Postfix provenance proves only that the local MTA generated the outer bounce.
 The library still parses the exact three-part RFC 6522 report and verifies the
 relevant embedded DKIM2 signatures and Message-Instance evidence required by
-Draft-06 Section 12.1. For a complete embedded message it verifies header and
+Draft-07 Section 16.1. For a complete embedded message it verifies header and
 body hashes; for `text/rfc822-headers` it uses the restricted header-only path.
 Signature cryptography, timestamps, custody structure, and authenticated
 `d=`, `mf=`, and `rt=` values remain mandatory.

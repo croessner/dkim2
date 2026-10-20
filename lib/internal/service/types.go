@@ -8,7 +8,7 @@ import (
 )
 
 // DraftIdentifier is the exact behavior baseline carried by service results.
-const DraftIdentifier = "draft-ietf-dkim-dkim2-spec-06"
+const DraftIdentifier = "draft-ietf-dkim-dkim2-spec-07"
 
 const hardMaxSignatureFacts = 16
 

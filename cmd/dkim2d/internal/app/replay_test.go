@@ -194,7 +194,7 @@ func TestReplayCoordinatorAcceptsFrozenGoldenPass(t *testing.T) {
 	}
 }
 
-// TestReplayCoordinatorCollapsesRecipientsToOneMessageIdentity proves Draft-06 equality.
+// TestReplayCoordinatorCollapsesRecipientsToOneMessageIdentity proves Draft-07 equality.
 func TestReplayCoordinatorCollapsesRecipientsToOneMessageIdentity(t *testing.T) {
 	recipients := [][]byte{
 		[]byte("<third@example.test>"),
@@ -912,7 +912,7 @@ func authenticReplayDomain(
 func goldenReplayDomain(t *testing.T, mode config.PolicyMode) DomainResult {
 	t.Helper()
 	corpusBytes, err := os.ReadFile(
-		"../../../../lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-06/public-golden.json",
+		"../../../../lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-07/public-golden.json",
 	)
 	if err != nil {
 		t.Fatal("golden replay fixture unavailable")

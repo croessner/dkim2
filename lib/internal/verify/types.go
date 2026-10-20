@@ -109,7 +109,7 @@ type Request struct {
 	RequireEnvelope bool
 	// SkipEnvelopeForNonCurrentTarget explicitly disables envelope matching for diagnostic non-current targets.
 	SkipEnvelopeForNonCurrentTarget bool
-	// ReferenceTime replaces the verifier clock for the Section 8.4 timestamp
+	// ReferenceTime replaces the verifier clock for the Section 10.4 timestamp
 	// window of the selected signature when non-zero. Callers set it when the
 	// signature is evaluated relative to another authenticated instant, such as
 	// an embedded original's completion signature judged against the outer

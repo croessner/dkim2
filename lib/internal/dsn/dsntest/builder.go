@@ -51,7 +51,7 @@ func (k Key) Public() ed25519.PublicKey {
 type Hop struct {
 	// Domain is the d= signing domain.
 	Domain string
-	// Key signs the Section 9.6 input for this hop.
+	// Key signs the Section 12.8 input for this hop.
 	Key Key
 	// Timestamp is the t= value; zero selects DefaultTimestamp.
 	Timestamp uint64
@@ -203,7 +203,7 @@ func HeaderBlock(message []byte) []byte {
 	return append([]byte(nil), message[:separator+2]...)
 }
 
-// signCandidate computes the Section 9.6 signature for one target sequence.
+// signCandidate computes the Section 12.8 signature for one target sequence.
 func signCandidate(canonicalizer canonical.Canonicalizer, candidate []byte, sequence uint64, hop Hop) (string, error) {
 	message, err := rawmsg.Parse(candidate)
 	if err != nil {

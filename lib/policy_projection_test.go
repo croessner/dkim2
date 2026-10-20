@@ -65,8 +65,8 @@ func TestMalformedHistoriedMessageFailsClosedAcrossServiceAndFacade(t *testing.T
 	}
 }
 
-// TestDraft06MalformedFieldsRemainTargetUnavailableAcrossPublicPolicy proves parser failures keep exact fail-closed authority.
-func TestDraft06MalformedFieldsRemainTargetUnavailableAcrossPublicPolicy(t *testing.T) {
+// TestDraft07MalformedFieldsRemainTargetUnavailableAcrossPublicPolicy proves parser failures keep exact fail-closed authority.
+func TestDraft07MalformedFieldsRemainTargetUnavailableAcrossPublicPolicy(t *testing.T) {
 	base := string(publicProviderFixture(t))
 	hashStart := strings.Index(base, "h=")
 	signatureStart := strings.Index(base, "s=")

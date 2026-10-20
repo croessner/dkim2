@@ -18,8 +18,8 @@
     "base_revision": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
     "candidate_snapshot_sha256": {"$ref": "#/$defs/digest"},
     "product_version": {"const": "v0.1.0-rc.1"},
-    "message_draft": {"const": "draft-ietf-dkim-dkim2-spec-06"},
-    "dns_draft": {"const": "draft-ietf-dkim-dkim2-dns-00"},
+    "message_draft": {"const": "draft-ietf-dkim-dkim2-spec-07"},
+    "dns_draft": {"const": "draft-ietf-dkim-dkim2-dns-01"},
     "release_plan_sha256": {"$ref": "#/$defs/digest"},
     "api_sha256": {"$ref": "#/$defs/digest"},
     "api_declarations": {"type": "integer", "minimum": 1},
@@ -39,7 +39,7 @@
       "additionalProperties": false,
       "required": ["exim", "ldap_sql_migration"],
       "properties": {
-        "exim": {"const": "unqualified_draft06"},
+        "exim": {"const": "unqualified_draft07"},
         "ldap_sql_migration": {"const": "implemented"}
       }
     },

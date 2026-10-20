@@ -13,7 +13,7 @@ import (
 
 const signatureInputSecretMarker = "secret"
 
-// TestSignatureInputOrdersFieldsAndNullsTarget verifies Section 9.6 field order.
+// TestSignatureInputOrdersFieldsAndNullsTarget verifies Section 12.8 field order.
 func TestSignatureInputOrdersFieldsAndNullsTarget(t *testing.T) {
 	msg := mustParseSignatureMessage(t,
 		messageInstanceLine(2, " \tlate value")+
@@ -73,7 +73,7 @@ func TestSignatureInputNullsMultiAlgorithmSets(t *testing.T) {
 	}
 }
 
-// TestSignatureInputPreservesTargetTagSpellingAndTerminator verifies Draft-06 target rendering fidelity.
+// TestSignatureInputPreservesTargetTagSpellingAndTerminator verifies Draft-07 target rendering fidelity.
 func TestSignatureInputPreservesTargetTagSpellingAndTerminator(t *testing.T) {
 	hash := sha256HashText()
 	signatureText := base64Text("target signature")
@@ -96,7 +96,7 @@ func TestSignatureInputPreservesTargetTagSpellingAndTerminator(t *testing.T) {
 	}
 }
 
-// TestSignatureInputPreservesNextDomainEnvelopeForm verifies Draft-06 nd= target rendering.
+// TestSignatureInputPreservesNextDomainEnvelopeForm verifies Draft-07 nd= target rendering.
 func TestSignatureInputPreservesNextDomainEnvelopeForm(t *testing.T) {
 	msg := mustParseSignatureMessage(t,
 		messageInstanceLine(1, "state")+
@@ -114,7 +114,7 @@ func TestSignatureInputPreservesNextDomainEnvelopeForm(t *testing.T) {
 	}
 }
 
-// TestSignatureInputDeletesAllWSP verifies Section 9.6 does not compress WSP.
+// TestSignatureInputDeletesAllWSP verifies Section 12.8 does not compress WSP.
 func TestSignatureInputDeletesAllWSP(t *testing.T) {
 	msg := mustParseSignatureMessage(t,
 		"Message-Instance:\tm = 1 ; h = sha256:"+sha256HashText()+":"+sha256HashText()+" ; x = alpha beta;\r\n"+

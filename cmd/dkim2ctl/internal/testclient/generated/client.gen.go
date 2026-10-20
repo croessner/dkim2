@@ -547,13 +547,13 @@ func (e Disposition) Valid() bool {
 
 // Defines values for DraftVersion.
 const (
-	DraftIetfDkimDkim2Spec06 DraftVersion = "draft-ietf-dkim-dkim2-spec-06"
+	DraftIetfDkimDkim2Spec07 DraftVersion = "draft-ietf-dkim-dkim2-spec-07"
 )
 
 // Valid indicates whether the value is a known member of the DraftVersion enum.
 func (e DraftVersion) Valid() bool {
 	switch e {
-	case DraftIetfDkimDkim2Spec06:
+	case DraftIetfDkimDkim2Spec07:
 		return true
 	default:
 		return false
@@ -1653,14 +1653,14 @@ type BatchRevisionCopy struct {
 	Message MessageInput `json:"message"`
 	Smtp    SMTPInput    `json:"smtp"`
 
-	// Via Optional single controlled intermediate hop for an external copy, implementing Draft 06 section 9.3 with ordinary mf/rt signatures. The MTA supplies the exact non-null intermediate reverse path and one controlled intermediate recipient. Both signing contexts must have the same tenant; exact transit profiles for both domains and local authority over the intermediate recipient domain are required. The initial fanout still counts every actual local and external copy. Intermediate and final signatures are released only together, in one output. No real SMTP transfer is claimed for this imaginary hop. Not permitted on local copies. No free domain-alignment exception.
+	// Via Optional single controlled intermediate hop for an external copy, implementing Draft 07 section 12.3 with ordinary mf/rt signatures. The MTA supplies the exact non-null intermediate reverse path and one controlled intermediate recipient. Both signing contexts must have the same tenant; exact transit profiles for both domains and local authority over the intermediate recipient domain are required. The initial fanout still counts every actual local and external copy. Intermediate and final signatures are released only together, in one output. No real SMTP transfer is claimed for this imaginary hop. Not permitted on local copies. No free domain-alignment exception.
 	Via *BatchRevisionHop `json:"via,omitempty"`
 }
 
 // BatchRevisionCopyDelivery defines model for BatchRevisionCopy.Delivery.
 type BatchRevisionCopyDelivery string
 
-// BatchRevisionHop Optional single controlled intermediate hop for an external copy, implementing Draft 06 section 9.3 with ordinary mf/rt signatures. The MTA supplies the exact non-null intermediate reverse path and one controlled intermediate recipient. Both signing contexts must have the same tenant; exact transit profiles for both domains and local authority over the intermediate recipient domain are required. The initial fanout still counts every actual local and external copy. Intermediate and final signatures are released only together, in one output. No real SMTP transfer is claimed for this imaginary hop. Not permitted on local copies. No free domain-alignment exception.
+// BatchRevisionHop Optional single controlled intermediate hop for an external copy, implementing Draft 07 section 12.3 with ordinary mf/rt signatures. The MTA supplies the exact non-null intermediate reverse path and one controlled intermediate recipient. Both signing contexts must have the same tenant; exact transit profiles for both domains and local authority over the intermediate recipient domain are required. The initial fanout still counts every actual local and external copy. Intermediate and final signatures are released only together, in one output. No real SMTP transfer is claimed for this imaginary hop. Not permitted on local copies. No free domain-alignment exception.
 type BatchRevisionHop struct {
 	Context SigningContext `json:"context"`
 	Smtp    SMTPInput      `json:"smtp"`

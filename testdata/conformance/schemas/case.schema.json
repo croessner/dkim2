@@ -121,7 +121,7 @@
     "authority": {"items": {"maxLength": 160, "minLength": 1, "type": "string"}, "maxItems": 16, "minItems": 1, "type": "array"},
     "case_id": {"maxLength": 128, "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$", "type": "string"},
     "class": {"enum": ["draft_normative", "rfc_normative", "documented_interpretation", "local_security_policy", "openapi_contract", "adapter_contract"]},
-    "dns_draft": {"const": "draft-ietf-dkim-dkim2-dns-00"},
+    "dns_draft": {"const": "draft-ietf-dkim-dkim2-dns-01"},
     "dns_record": {
       "additionalProperties": false,
       "properties": {
@@ -141,7 +141,7 @@
       "required": ["record_b64", "algorithm", "expected"],
       "type": "object"
     },
-    "message_draft": {"const": "draft-ietf-dkim-dkim2-spec-06"},
+    "message_draft": {"const": "draft-ietf-dkim-dkim2-spec-07"},
     "milter": {"$ref": "#/$defs/milterOperation"},
     "openapi": {"$ref": "#/$defs/openapiOperation"},
     "policy": {

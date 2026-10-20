@@ -50,7 +50,7 @@ local ineligible_response = {
 
 package.preload['dkim2.verifier'] = function()
   return {
-    draft = 'draft-ietf-dkim-dkim2-spec-06',
+    draft = 'draft-ietf-dkim-dkim2-spec-07',
     projection_schema = 'dkim2.verifier-projection.v1',
     symbols = { check = 'DKIM2_CHECK', not_applicable = 'DKIM2_NOT_APPLICABLE' },
     configure = function() return true end,

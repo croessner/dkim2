@@ -1,6 +1,6 @@
 {
   "schema": "dkim2.dsn-propagate-fixture.v1",
-  "draft": "draft-ietf-dkim-dkim2-spec-06",
+  "draft": "draft-ietf-dkim-dkim2-spec-07",
   "expectation": "valid",
   "cases": [
     {
@@ -8,7 +8,7 @@
       "schema": "DSNPropagateRequest",
       "document": {
         "api_version": "v1",
-        "draft": "draft-ietf-dkim-dkim2-spec-06",
+        "draft": "draft-ietf-dkim-dkim2-spec-07",
         "message": {
           "raw_rfc5322_base64": "Q29udGVudC1UeXBlOiBtdWx0aXBhcnQvcmVwb3J0OyByZXBvcnQtdHlwZT1kZWxpdmVyeS1zdGF0dXMNCg0K",
           "fidelity": "lmtp_delivered_crlf"
@@ -31,7 +31,7 @@
       "schema": "DSNPropagateRequest",
       "document": {
         "api_version": "v1",
-        "draft": "draft-ietf-dkim-dkim2-spec-06",
+        "draft": "draft-ietf-dkim-dkim2-spec-07",
         "message": {
           "raw_rfc5322_base64": "Q29udGVudC1UeXBlOiBtdWx0aXBhcnQvcmVwb3J0OyByZXBvcnQtdHlwZT1kZWxpdmVyeS1zdGF0dXMNCg0K",
           "fidelity": "raw_rfc5322"
@@ -54,7 +54,7 @@
       "schema": "DSNPropagateResponse",
       "document": {
         "api_version": "v1",
-        "draft": "draft-ietf-dkim-dkim2-spec-06",
+        "draft": "draft-ietf-dkim-dkim2-spec-07",
         "operation": "delivery_status_propagation",
         "result": "pass",
         "disposition": "accept",
@@ -83,7 +83,7 @@
       "schema": "DSNPropagateResponse",
       "document": {
         "api_version": "v1",
-        "draft": "draft-ietf-dkim-dkim2-spec-06",
+        "draft": "draft-ietf-dkim-dkim2-spec-07",
         "operation": "delivery_status_propagation",
         "result": "pass",
         "disposition": "discard",
@@ -105,7 +105,7 @@
       "schema": "DSNPropagateResponse",
       "document": {
         "api_version": "v1",
-        "draft": "draft-ietf-dkim-dkim2-spec-06",
+        "draft": "draft-ietf-dkim-dkim2-spec-07",
         "operation": "delivery_status_propagation",
         "result": "permerror",
         "disposition": "discard",
@@ -128,7 +128,7 @@
       "schema": "DSNPropagateResponse",
       "document": {
         "api_version": "v1",
-        "draft": "draft-ietf-dkim-dkim2-spec-06",
+        "draft": "draft-ietf-dkim-dkim2-spec-07",
         "operation": "delivery_status_propagation",
         "result": "permerror",
         "disposition": "discard",
@@ -151,7 +151,7 @@
       "schema": "DSNPropagateResponse",
       "document": {
         "api_version": "v1",
-        "draft": "draft-ietf-dkim-dkim2-spec-06",
+        "draft": "draft-ietf-dkim-dkim2-spec-07",
         "operation": "delivery_status_propagation",
         "result": "fail",
         "disposition": "reject",
@@ -173,7 +173,7 @@
       "schema": "DSNPropagateResponse",
       "document": {
         "api_version": "v1",
-        "draft": "draft-ietf-dkim-dkim2-spec-06",
+        "draft": "draft-ietf-dkim-dkim2-spec-07",
         "operation": "delivery_status_propagation",
         "result": "temperror",
         "disposition": "tempfail",
@@ -195,7 +195,7 @@
       "schema": "DSNPropagateResponse",
       "document": {
         "api_version": "v1",
-        "draft": "draft-ietf-dkim-dkim2-spec-06",
+        "draft": "draft-ietf-dkim-dkim2-spec-07",
         "operation": "delivery_status_propagation",
         "result": "fail",
         "disposition": "reject",
@@ -209,7 +209,7 @@
       "schema": "DSNPropagateResponse",
       "document": {
         "api_version": "v1",
-        "draft": "draft-ietf-dkim-dkim2-spec-06",
+        "draft": "draft-ietf-dkim-dkim2-spec-07",
         "operation": "delivery_status_propagation",
         "result": "temperror",
         "disposition": "tempfail",
@@ -223,7 +223,7 @@
       "schema": "DSNPropagateResponse",
       "document": {
         "api_version": "v1",
-        "draft": "draft-ietf-dkim-dkim2-spec-06",
+        "draft": "draft-ietf-dkim-dkim2-spec-07",
         "operation": "delivery_status_propagation",
         "result": "pass",
         "disposition": "accept",
@@ -252,7 +252,7 @@
       "schema": "DSNPropagateCommitRequest",
       "document": {
         "api_version": "v1",
-        "draft": "draft-ietf-dkim-dkim2-spec-06",
+        "draft": "draft-ietf-dkim-dkim2-spec-07",
         "commit_token": "Q29tbWl0VG9rZW5FeGFtcGxlMDAx"
       }
     },
@@ -261,7 +261,7 @@
       "schema": "DSNPropagateCommitResponse",
       "document": {
         "api_version": "v1",
-        "draft": "draft-ietf-dkim-dkim2-spec-06",
+        "draft": "draft-ietf-dkim-dkim2-spec-07",
         "state": "committed"
       }
     },
@@ -270,7 +270,7 @@
       "schema": "ProcessRequest",
       "document": {
         "api_version": "v1",
-        "draft": "draft-ietf-dkim-dkim2-spec-06",
+        "draft": "draft-ietf-dkim-dkim2-spec-07",
         "message": {
           "raw_rfc5322_base64": "Q29udGVudC1UeXBlOiBtdWx0aXBhcnQvcmVwb3J0OyByZXBvcnQtdHlwZT1kZWxpdmVyeS1zdGF0dXMNCg0K",
           "fidelity": "lmtp_delivered_crlf"
@@ -291,7 +291,7 @@
       "schema": "ProcessResponse",
       "document": {
         "api_version": "v1",
-        "draft": "draft-ietf-dkim-dkim2-spec-06",
+        "draft": "draft-ietf-dkim-dkim2-spec-07",
         "verification": {
           "state": "PASS",
           "primary_reason": "none",

@@ -100,9 +100,9 @@ the prior transport representation, and restarts in dependency order. Do not
 delete evidence during rollback. A stale socket is removed only after verifying
 that no prior service process owns it.
 
-The current capability is `unqualified_draft06`. The pinned upstream, Debian,
+The current capability is `unqualified_draft07`. The pinned upstream, Debian,
 and Ubuntu source-package matrix qualifies a release only when all five rows
-are freshly executed and imported against the exact unchanged Draft-06
+are freshly executed and imported against the exact unchanged Draft-07
 candidate snapshot. The historical Draft-04 matrix must not be relabeled or
 reused. The repository does not claim a published image, package, tag, or
 stable release until the separate release workflow creates it.

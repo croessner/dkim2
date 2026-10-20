@@ -20,7 +20,7 @@ type signatureEvaluation struct {
 	ignored   int
 }
 
-// signatureInputDigest calculates SHA-256 over Section 9.6 input bytes.
+// signatureInputDigest calculates SHA-256 over Section 12.8 input bytes.
 func signatureInputDigest(canonicalizer canonical.Canonicalizer, message rawmsg.Message, target Target) ([]byte, error) {
 	signatureInput, err := canonicalizer.SignatureInput(canonical.SignatureInputSelection{
 		Headers:        message.Headers(),
@@ -206,7 +206,7 @@ func providerKeyErrorPairValid(
 	return mapped == key.Metadata.Status && mapped != KeyStatusProviderError || IsErrorCode(err, ErrorCodeProviderError) && mapped == KeyStatusProviderError
 }
 
-// verifySignatureDigest verifies one decoded signature over Section 9.6 digest bytes.
+// verifySignatureDigest verifies one decoded signature over Section 12.8 digest bytes.
 func verifySignatureDigest(algorithm Algorithm, material any, digest []byte, signatureBytes []byte, target Target, index int) error {
 	err := cryptodkim2.VerifyDigest(algorithm, material, digest, signatureBytes, cryptodkim2.DefaultLimits())
 	if err == nil {

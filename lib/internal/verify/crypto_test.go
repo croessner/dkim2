@@ -45,7 +45,7 @@ func TestVerifierReportsWrongKey(t *testing.T) {
 	}
 }
 
-// TestVerifierReportsModifiedSignatureInput verifies Section 9.6 input changes fail crypto.
+// TestVerifierReportsModifiedSignatureInput verifies Section 12.8 input changes fail crypto.
 func TestVerifierReportsModifiedSignatureInput(t *testing.T) {
 	fixture := newEd25519VerificationFixture(t)
 	changed := fixture.withRaw(strings.Replace(fixture.raw, "t=1700000000", "t=1700000001", 1))

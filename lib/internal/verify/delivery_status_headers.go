@@ -32,7 +32,7 @@ func (e HeaderEvidence) Status() TargetStatus {
 
 // VerifyDeliveryStatusHeadersOnly verifies the restricted evidence carried by a
 // DSN text/rfc822-headers original. It requires RFC 5322 header-only framing,
-// validates the highest DKIM2 target header hash, Section 9.6 signature,
+// validates the highest DKIM2 target header hash, Section 12.8 signature,
 // timestamp, and custody structure without inventing current-envelope evidence,
 // and never evaluates or substitutes body evidence.
 func (v Verifier) VerifyDeliveryStatusHeadersOnly(ctx context.Context, request Request) (HeaderEvidence, error) {

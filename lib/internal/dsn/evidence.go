@@ -42,7 +42,7 @@ const (
 	EvidenceErrorCodeVerificationIndeterminate EvidenceErrorCode = "verification_indeterminate"
 	// EvidenceErrorCodeUnsignedEmbeddedMessage reports a well-formed embedded
 	// original that carries no DKIM2-Signature header field at all. Such an
-	// original is outside the Section 12 DSN model; it is never a relaxed form
+	// original is outside the Section 16 DSN model; it is never a relaxed form
 	// of a failing signature, which keeps EvidenceErrorCodeVerificationFailed.
 	EvidenceErrorCodeUnsignedEmbeddedMessage EvidenceErrorCode = "unsigned_embedded_message"
 )
@@ -140,7 +140,7 @@ func (e Evidence) RecipientDomains() []string {
 	return append([]string(nil), e.recipientDomains...)
 }
 
-// EvidenceEvaluator owns the narrow Draft-06 Section 12 embedded-original verification boundary.
+// EvidenceEvaluator owns the narrow Draft-07 Section 16 embedded-original verification boundary.
 type EvidenceEvaluator struct {
 	verifier verify.Verifier
 }

@@ -25,7 +25,7 @@ const (
 // members. Every ambiguous or contradictory combination fails closed.
 func validDSNPropagate(value generated.DSNPropagateResponse) bool {
 	if value.ApiVersion != generated.V1 ||
-		value.Draft != generated.DraftIetfDkimDkim2Spec06 ||
+		value.Draft != generated.DraftIetfDkimDkim2Spec07 ||
 		value.Operation != generated.PropagationOperationDeliveryStatusPropagation ||
 		!value.Result.Valid() || !value.Disposition.Valid() ||
 		!value.Replay.Class.Valid() ||
@@ -117,7 +117,7 @@ func protectedValue(value wire.ProtectedString) (string, bool) {
 // validDSNPropagateCommit validates the complete coordinate commit response.
 func validDSNPropagateCommit(value generated.DSNPropagateCommitResponse) bool {
 	return value.ApiVersion == generated.V1 &&
-		value.Draft == generated.DraftIetfDkimDkim2Spec06 &&
+		value.Draft == generated.DraftIetfDkimDkim2Spec07 &&
 		value.State == generated.PropagationStateCommitted
 }
 

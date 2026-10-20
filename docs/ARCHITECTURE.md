@@ -12,9 +12,9 @@
 | Owner | Christian Roessner / Codex |
 | Language | English |
 | Classification | Public living design document |
-| Baseline specification | `draft-ietf-dkim-dkim2-spec-06`, dated 2026-08-25 |
-| Related specification | `draft-ietf-dkim-dkim2-dns-00`, dated 2026-07-20; identifiers migrated 2026-09-14 after a repeated byte-identical XML middle comparison |
-| Baseline status check | IETF archive sources checked 2026-09-14. Message baseline: `draft-ietf-dkim-dkim2-spec-06`; DNS baseline: `draft-ietf-dkim-dkim2-dns-00`. See `docs/specs/companion-conformance.md` for companion coverage and reporting exceptions. |
+| Baseline specification | `draft-ietf-dkim-dkim2-spec-07`, dated 2026-10-18 |
+| Related specification | `draft-ietf-dkim-dkim2-dns-01`, dated 2026-10-18 |
+| Baseline status check | IETF archive sources checked 2026-10-19. Message baseline: `draft-ietf-dkim-dkim2-spec-07`; DNS baseline: `draft-ietf-dkim-dkim2-dns-01`. See `docs/specs/companion-conformance.md` for companion coverage and reporting exceptions. |
 | Change control | While this document is still `0.1.0-draft`, startup decisions may be added without a version bump; after the first committed planning baseline, material architecture changes require a revision-history entry and may require a new version |
 | Supersedes | None |
 | Next planned revision | When the DKIM2 draft or a material architecture decision changes |
@@ -78,6 +78,7 @@
 | 0.1.0-draft | 2026-10-02 | Christian Roessner / Claude | Added the explicit, default-`reject` trusted-route opt-in for originator signing of a null reverse path: Milter `signing.null_sender: header_from`, daemon `signing.policy.originator.null_sender: header_from`, and the `null_sender` declaration on `POST /v1/sign`. The signing domain is the canonical domain of the single RFC 5322 From mailbox, checked by the adapter, the daemon mapper, and the library, and the signature carries `mf=<>` (Draft-06 Sections 8.5 and 8.8). Trust comes from the MTA listener; the opt-in must never be enabled on an inbound or MX-facing Milter. `/v1/revise` and batch revision still refuse a null reverse path. |
 | 0.1.0-draft | 2026-10-02 | Christian Roessner / Claude | Kept delivery-status notifications off the header_from originator path: a null-sender message carrying `DKIM2-Signature` or `Message-Instance`, or a top-level `multipart/report; report-type=delivery-status` (or an undecidable Content-Type), is not applicable in the Milter (continue unchanged, closed `null_sender_skip` reason logged and counted) and refused by the daemon and the library, so DSNs keep their Section 12 outcome on egress listeners shared with auto-replies. The Milter and DSN propagator now subscribe to termination signals before startup. |
 | 0.1.0-draft | 2026-10-02 | Christian Roessner / Claude | Made SMTP-sized complete-fanout revision configurable: `server.working_set_bytes` (default 8 GiB) bounds every admission permit, and `server.batch_revision.max_aggregate_message_bytes` (default shared sizing, at most 512 MiB) with `server.batch_revision.max_in_flight` gives `/v1/revise/batch` a dedicated working-set sizing and admission pool proven jointly with the shared pool. The capability route now advertises the enforced aggregate and request bounds instead of fixed constants, and the DSN propagator's call deadline accepts up to 180 seconds. |
+| 0.1.0-draft | 2026-10-20 | Christian Roessner / Claude | Advanced the message baseline to `draft-ietf-dkim-dkim2-spec-07` and the DNS companion to `draft-ietf-dkim-dkim2-dns-01`. Draft identifiers, generated contracts, versioned vectors, and section citations move together; behavior changes follow the work packages in `docs/specs/draft-07-migration-disposition.md`. |
 
 ## 1. Purpose
 
@@ -88,12 +89,13 @@ is written.
 
 The design uses these reviewed behavior baselines as its source of truth:
 
-- `draft-ietf-dkim-dkim2-spec-06`
-- `draft-ietf-dkim-dkim2-dns-00` for the implemented DNS behavior and vectors.
+- `draft-ietf-dkim-dkim2-spec-07`
+- `draft-ietf-dkim-dkim2-dns-01` for the implemented DNS behavior and vectors.
 
-The IETF replaced the DNS document with the working-group
-`draft-ietf-dkim-dkim2-dns-00` on 2026-07-20. Its normative body is unchanged.
-The 2026-09-14 companion migration explicitly advances DNS identifiers and vectors to the WG successor without changing DNS behavior. Historical audit records retain their original identifiers.
+The Draft-07 and DNS-01 migration disposition, including every behavior change
+and local interpretation, is recorded in
+`docs/specs/draft-07-migration-disposition.md`. Historical audit records retain
+their original identifiers.
 
 The repository does not silently rename baselines: durable identifiers and
 versioned vectors migrate together in a separately reviewed update.
@@ -562,14 +564,14 @@ Responsibilities:
 - Body hash input generation.
 - Header hash input generation.
 - Signature input generation over Message-Instance and DKIM2-Signature fields.
-- Strict coverage of the Draft-06 Section 4 excluded-header set, including
+- Strict coverage of the Draft-07 Section 4 excluded-header set, including
   exact ARC exclusions, the `Received-*` class, and future ARC near misses.
   The inventory rationale follows the
   [header-field maintenance survey](https://datatracker.ietf.org/doc/draft-gondwana-email-header-maintenance/)
   and treats `Received-SPF` as the
   [RFC 7208](https://www.rfc-editor.org/rfc/rfc7208) example.
 - Stable sorting and duplicate-header ordering rules.
-- An immutable Draft-06 Section 4 plus Section 6.2 signed-header relevance
+- An immutable Draft-07 Section 4 plus Section 6.2 signed-header relevance
   classifier exposed through a validated fallible method set for recipe
   generation without duplicating the exclusion table.
 
@@ -652,7 +654,7 @@ Responsibilities:
 
 - Parse required tags: `i=`, `m=`, `t=`, `d=`, `s=`.
 - Require exactly one chain-of-custody form: `nd=`, or both `mf=` and `rt=`.
-- Parse optional tags: `n=`, `f=`, extension tags, including the Draft-06
+- Parse optional tags: `n=`, `f=`, extension tags, including the Draft-07
   `feedhere` flag.
 - Validate signature sequence numbers and gaps.
 - Build incomplete signature fields with empty signature values for signing.
@@ -979,7 +981,7 @@ type Envelope struct {
 
 The current envelope is mandatory for normal inbound DKIM2 verification
 because the latest `DKIM2-Signature` must match the actual `MAIL FROM` and
-`RCPT TO` values. Draft-06 permits a highest signature with `nd=` only when
+`RCPT TO` values. Draft-07 permits a highest signature with `nd=` only when
 out-of-band arrangements exist; the secure default is non-success unless that
 trust is explicitly modeled.
 
@@ -1038,7 +1040,7 @@ Request sketch:
 {
   "api_version": "v1",
   "operation": "process",
-  "draft": "draft-ietf-dkim-dkim2-spec-06",
+  "draft": "draft-ietf-dkim-dkim2-spec-07",
   "smtp": {
     "mail_from": "<bounce@example.org>",
     "rcpt_to": ["<user@example.net>"],
@@ -1144,7 +1146,7 @@ Generation rules:
   review, generated-code review, and regression tests.
 
 The active `DraftVersion` enum contains only
-`draft-ietf-dkim-dkim2-spec-06`. Draft-06 adds the public verification reasons
+`draft-ietf-dkim-dkim2-spec-07`. Draft-06 adds the public verification reasons
 `duplicate_hash_algorithm`, `invalid_recipe_json`, `duplicate_selector`, and
 `too_many_signatures`; the OpenAPI document owns these values and every
 generated consumer must reject unknown enum values rather than default them.
@@ -1879,7 +1881,7 @@ algorithm selection are deliberately not identity inputs. The projection is
 framed as `dkim2-replay-origin-v1`; the deployment HMAC frame is
 `dkim2-replay-v2` and reports algorithm `dkim2-replay-hmac-sha256-v2`.
 
-The Draft-06 identifier rotates the replay HMAC epoch. Operators must use the
+The Draft-07 identifier rotates the replay HMAC epoch. Operators must use the
 documented drain-only transition: Draft-05 and Draft-06 instances never process
 replay traffic concurrently, old records become unreachable, and the resulting
 detection gap is bounded by configured retention. The 68-byte storage key,
@@ -1949,8 +1951,8 @@ The daemon may append one `X-DKIM2-Info` field to successful sign, ordinary
 revision, and locally generated DSN action plans when
 `signing.interop_info.enabled` is true (default false). This local policy
 uses the newly generated signature's domain, algorithms, and UTC signing date;
-fixed metadata identifies Draft-06, `github.com/croessner/dkim2`, and `dkim2d`.
-The existing Draft-06 Section 4 exclusion of `X-` fields applies unchanged.
+fixed metadata identifies Draft-07, `github.com/croessner/dkim2`, and `dkim2d`.
+The existing Draft-07 Section 4 exclusion of `X-` fields applies unchanged.
 Metadata never becomes authentication evidence or a protocol input. Prior
 informational fields remain byte-preserved. The API and adapters accept at
 most one trailing info action, only on successful outgoing plans. Batch and
@@ -2068,9 +2070,9 @@ used as optional smoke targets, but they do not define the default support floor
 unless a release plan names them explicitly.
 
 The historical five-row evidence is Draft-04 evidence and cannot qualify the
-Draft-06 candidate. Until a fresh separately authorized five-row Linux run is
-bound to unchanged Draft-06 candidate bytes, the active capability token is
-`unqualified_draft06`; portable and otherwise-full conformance run without
+Draft-07 candidate. Until a fresh separately authorized five-row Linux run is
+bound to unchanged Draft-07 candidate bytes, the active capability token is
+`unqualified_draft07`; portable and otherwise-full conformance run without
 imported Exim evidence and reject any stale qualification claim.
 
 ## 10. Verification Flow
@@ -2099,7 +2101,7 @@ Inbound verification should follow the draft order closely:
 17. Produce an action plan.
 
 A non-origin Message-Instance with no Recipe is a valid unchanged-state
-transition under Draft-06. Verification compares the unchanged canonical state
+transition under Draft-07. Verification compares the unchanged canonical state
 against every supported tuple in the preceding instance and continues only on
 complete agreement; an invalid or present malformed Recipe remains a distinct
 PERMERROR.
@@ -2187,7 +2189,7 @@ final closeout review remains separate. The architecture decisions are:
 
 1. A DKIM2-signed inbound null-sender `multipart/report` is first verified as
    an ordinary message. Only then does `/v1/process` evaluate it as a DSN
-   under Draft-06 Section 12.1.2: RFC 6522 structure, embedded-original
+   under Draft-07 Section 16.3: RFC 6522 structure, embedded-original
    verification, local-hop identity, outer-signer alignment with the local
    hop's `rt=`, RFC 3464 recipient linkage, and failure class. The result is
    a closed read-only `delivery_status` projection. It can never authorize

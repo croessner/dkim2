@@ -188,7 +188,7 @@ func TestVerifierReportsUnknownOnlySignatureSets(t *testing.T) {
 	}
 }
 
-// TestVerifierIgnoresUnknownSignatureSetBesideSupportedPass verifies Section 3.4 aggregation.
+// TestVerifierIgnoresUnknownSignatureSetBesideSupportedPass verifies Section 3.5 aggregation.
 func TestVerifierIgnoresUnknownSignatureSetBesideSupportedPass(t *testing.T) {
 	fixture := newSupportedAndUnknownSignatureFixture(t)
 	verifier := mustVerifierWithKeys(t, []StaticKey{{
@@ -504,7 +504,7 @@ func baseMessageDigests(t *testing.T) (string, string) {
 	return mustDigest(t, headerHash).Base64(), mustDigest(t, bodyHash).Base64()
 }
 
-// signatureDigestForTarget returns the SHA-256 digest over Section 9.6 input.
+// signatureDigestForTarget returns the SHA-256 digest over Section 12.8 input.
 func signatureDigestForTarget(t *testing.T, message rawmsg.Message, target uint64) []byte {
 	t.Helper()
 

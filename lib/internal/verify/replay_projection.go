@@ -101,7 +101,7 @@ func newReplayProjection(digest [32]byte, exploded bool) ReplayProjection {
 	return ReplayProjection{draft: replay.DraftIdentifier, originDigest: digest, hasOriginDigest: true, exploded: exploded, sealed: true}
 }
 
-// originReplayDigest hashes the exact Draft-06 origin header and body hash inputs.
+// originReplayDigest hashes the exact Draft-07 origin header and body hash inputs.
 func originReplayDigest(message rawmsg.Message) ([32]byte, bool) {
 	canonicalizer, err := canonical.NewCanonicalizer()
 	if err != nil {

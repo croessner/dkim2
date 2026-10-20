@@ -47,7 +47,7 @@ func (l batchLimits) requestBytes() int64 {
 // batchCapabilities advertises the enforced deployment bounds without resolving keys or signing.
 func batchCapabilities(limits batchLimits) generated.BatchRevisionCapabilities {
 	return generated.BatchRevisionCapabilities{
-		ApiVersion: generated.V1, Draft: generated.DraftIetfDkimDkim2Spec06,
+		ApiVersion: generated.V1, Draft: generated.DraftIetfDkimDkim2Spec07,
 		Protocol: generated.BatchRevisionV1, OriginalCurrent: true, FullFanout: true, ControlledVia: true,
 		MaxCopies: app.MaxBatchRevisionCopies, MaxControlledHops: 1,
 		MaxAggregateMessageBytes: int64(limits.aggregateBytes()),

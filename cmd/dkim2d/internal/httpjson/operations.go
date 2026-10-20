@@ -62,7 +62,7 @@ func MapReviseRequest(input generated.ReviseRequest) (app.OperationRequest, erro
 // MapDeliveryStatusRequest maps one generated DSN-sign request to the
 // dedicated daemon-owned evidence request.
 func MapDeliveryStatusRequest(input generated.DSNSignRequest) (app.DeliveryStatusRequest, error) {
-	if input.ApiVersion != generated.V1 || input.Draft != generated.DraftIetfDkimDkim2Spec06 ||
+	if input.ApiVersion != generated.V1 || input.Draft != generated.DraftIetfDkimDkim2Spec07 ||
 		!validTenant(input.Context.Tenant) {
 		return app.DeliveryStatusRequest{}, newMappingError(MappingInvalidContract)
 	}
@@ -181,7 +181,7 @@ func decodeOperationInput(
 	smtp generated.SMTPInput,
 	signing generated.SigningContext,
 ) (decodedOperationInput, error) {
-	if apiVersion != generated.V1 || draft != generated.DraftIetfDkimDkim2Spec06 ||
+	if apiVersion != generated.V1 || draft != generated.DraftIetfDkimDkim2Spec07 ||
 		message.Fidelity == nil || !message.Fidelity.Valid() ||
 		!validTenant(signing.Tenant) || !validSigningDomain(signing.Domain) {
 		return decodedOperationInput{}, newMappingError(MappingInvalidContract)
@@ -262,7 +262,7 @@ func MapOperationResult(result app.OperationResult) (generated.OperationResponse
 		return generated.OperationResponse{}, newMappingError(MappingInternalContract)
 	}
 	return generated.OperationResponse{
-		ApiVersion: generated.V1, Draft: generated.DraftIetfDkimDkim2Spec06,
+		ApiVersion: generated.V1, Draft: generated.DraftIetfDkimDkim2Spec07,
 		Operation: operation, Result: resultClass, Disposition: disposition,
 		Actions: actions,
 	}, nil

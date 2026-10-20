@@ -446,7 +446,7 @@ func TestReceivedEvaluationEmbeddedUnverifiedAndTemporary(t *testing.T) {
 	}
 }
 
-// TestReceivedEvaluationLocalHopIdentity proves the four-part Section 12.1.2
+// TestReceivedEvaluationLocalHopIdentity proves the four-part Section 16.3
 // item 2 rule and its tenant-less, foreign, mismatched, and outage outcomes.
 func TestReceivedEvaluationLocalHopIdentity(t *testing.T) {
 	stopped := func(localHop LocalHopResult) projection {
@@ -784,7 +784,7 @@ func TestReceivedEvaluationConcurrentReuse(t *testing.T) {
 }
 
 // TestReceivedEvaluationCompletionWindowUsesOuterTimestamp proves the
-// completion signature's Section 8.4 window is evaluated against the outer
+// completion signature's Section 10.4 window is evaluated against the outer
 // DSN's highest-signature t= rather than the wall clock: a DSN generated one
 // day after a forwarding that happened long ago still verifies when it is
 // evaluated later, while a DSN generated too long after the forwarding or
@@ -823,7 +823,7 @@ func TestReceivedEvaluationCompletionWindowUsesOuterTimestamp(t *testing.T) {
 
 // TestReceivedEvaluationParentDomainForeignSignerIsNotLocal proves that a
 // verified completion signature under a foreign parent domain that names a
-// local address in mf= passes the Section 11.4 relaxed match and still stops
+// local address in mf= passes the Section 14.4 relaxed match and still stops
 // at the locality gate as not_local: the authority is asked about the signer's
 // d=, never about the mf= domain.
 func TestReceivedEvaluationParentDomainForeignSignerIsNotLocal(t *testing.T) {

@@ -160,9 +160,9 @@ type RevisionCustodyLinkStatus string
 const (
 	// RevisionCustodyOrigin reports the first signature without a predecessor.
 	RevisionCustodyOrigin RevisionCustodyLinkStatus = "origin"
-	// RevisionCustodyOrdinaryToOrdinaryPass reports a passing Section 9.4 link.
+	// RevisionCustodyOrdinaryToOrdinaryPass reports a passing Section 7 link.
 	RevisionCustodyOrdinaryToOrdinaryPass RevisionCustodyLinkStatus = "ordinary_to_ordinary_pass"
-	// RevisionCustodyOrdinaryToNextDomainPass reports a passing Section 9.3 authorization link.
+	// RevisionCustodyOrdinaryToNextDomainPass reports a passing Section 12.3 authorization link.
 	RevisionCustodyOrdinaryToNextDomainPass RevisionCustodyLinkStatus = "ordinary_to_next_domain_pass"
 	// RevisionCustodyNextDomainToSignaturePass reports a passing nd= to d= link.
 	RevisionCustodyNextDomainToSignaturePass RevisionCustodyLinkStatus = "next_domain_to_signature_pass"
@@ -371,13 +371,13 @@ func (u RevisionUsage) KeyLookups() int { return u.keyLookups }
 // ProviderCalls returns actual provider callback count.
 func (u RevisionUsage) ProviderCalls() int { return u.providerCalls }
 
-// CanonicalBytes returns aggregate Section 6 and Section 9.6 input bytes.
+// CanonicalBytes returns aggregate Section 6 and Section 12.8 input bytes.
 func (u RevisionUsage) CanonicalBytes() int { return u.canonicalBytes }
 
 // CurrentCanonicalBytes returns current Section 6 hash input work.
 func (u RevisionUsage) CurrentCanonicalBytes() int { return u.currentCanonicalBytes }
 
-// SignatureCanonicalBytes returns aggregate Section 9.6 input work.
+// SignatureCanonicalBytes returns aggregate Section 12.8 input work.
 func (u RevisionUsage) SignatureCanonicalBytes() int { return u.signatureCanonicalBytes }
 
 // History returns bounded recipe/history usage.

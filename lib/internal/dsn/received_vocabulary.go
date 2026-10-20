@@ -48,7 +48,7 @@ func (r EmbeddedResult) Known() bool {
 	}
 }
 
-// LocalHopResult is the closed outcome of the Section 12.1.2 item 2 identity stage.
+// LocalHopResult is the closed outcome of the Section 16.3 item 2 identity stage.
 type LocalHopResult string
 
 const (
@@ -74,7 +74,7 @@ func (r LocalHopResult) Known() bool {
 	}
 }
 
-// OuterAlignmentResult is the closed outcome of the Section 12.1.2 item 1 alignment stage.
+// OuterAlignmentResult is the closed outcome of the Section 16.3 item 1 alignment stage.
 type OuterAlignmentResult string
 
 const (

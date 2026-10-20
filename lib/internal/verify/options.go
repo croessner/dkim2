@@ -14,7 +14,7 @@ import (
 
 const (
 	// DraftBaseline identifies the active DKIM2 verification draft.
-	DraftBaseline = "draft-ietf-dkim-dkim2-spec-06"
+	DraftBaseline = "draft-ietf-dkim-dkim2-spec-07"
 	// AlgorithmRSASHA256 identifies RSA with SHA-256 and PKCS#1 v1.5 verification.
 	AlgorithmRSASHA256 = signature.AlgorithmRSASHA256
 	// AlgorithmEd25519SHA256 identifies Ed25519 verification over SHA-256 digest bytes.
@@ -102,9 +102,9 @@ type RevisionLimits struct {
 	MaxTotalSignatureSets int
 	// MaxPublicKeyLookups bounds supported inherited sets and provider calls.
 	MaxPublicKeyLookups int
-	// MaxCanonicalWorkBytes bounds aggregate Section 9.6 canonical input bytes.
+	// MaxCanonicalWorkBytes bounds aggregate Section 12.8 canonical input bytes.
 	MaxCanonicalWorkBytes int
-	// MaxSignatureInputBytes bounds one Section 9.6 canonical input.
+	// MaxSignatureInputBytes bounds one Section 12.8 canonical input.
 	MaxSignatureInputBytes int
 	// MaxDecodedRecipeBytes bounds each inherited decoded recipe.
 	MaxDecodedRecipeBytes int

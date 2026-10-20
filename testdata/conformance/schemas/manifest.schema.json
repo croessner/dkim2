@@ -34,7 +34,7 @@
       "additionalProperties": false,
       "properties": {
         "daemon": {"const": "supported"},
-        "exim": {"const": "unqualified_draft06"},
+        "exim": {"const": "unqualified_draft07"},
         "library": {"const": "supported"},
         "milter": {"const": "partial"},
         "postfix": {"const": "partial_linux"}
@@ -48,8 +48,8 @@
     "artifacts": {"items": {"$ref": "#/$defs/artifact"}, "maxItems": 4096, "minItems": 1, "type": "array"},
     "capabilities": {"$ref": "#/$defs/capabilities"},
     "cases": {"items": {"$ref": "#/$defs/case"}, "maxItems": 16384, "minItems": 1, "type": "array"},
-    "dns_draft": {"const": "draft-ietf-dkim-dkim2-dns-00"},
-    "message_draft": {"const": "draft-ietf-dkim-dkim2-spec-06"},
+    "dns_draft": {"const": "draft-ietf-dkim-dkim2-dns-01"},
+    "message_draft": {"const": "draft-ietf-dkim-dkim2-spec-07"},
     "schema": {"const": "dkim2.conformance-manifest.v1"},
     "suite_version": {"const": "1"},
     "suites": {"items": {"maxLength": 128, "not": {"const": "exim"}, "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$", "type": "string"}, "maxItems": 4096, "minItems": 1, "type": "array"}

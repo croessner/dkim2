@@ -406,7 +406,7 @@ func contextGoldenInboundProcessor(
 	t.Helper()
 
 	corpusBytes, err := os.ReadFile(
-		"../../../../lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-06/public-golden.json",
+		"../../../../lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-07/public-golden.json",
 	)
 	if err != nil {
 		t.Fatal("context golden fixture unavailable")

@@ -264,7 +264,7 @@ func (h *Handler) Handle(
 			operationContext,
 			generated.ProcessMessageJSONRequestBody{
 				ApiVersion: generated.V1,
-				Draft:      generated.DraftIetfDkimDkim2Spec06,
+				Draft:      generated.DraftIetfDkimDkim2Spec07,
 				Message:    request.message,
 				Reporting:  reporting,
 				Smtp:       request.smtp,
@@ -284,7 +284,7 @@ func (h *Handler) Handle(
 			operationContext,
 			generated.SignMessageJSONRequestBody{
 				ApiVersion: generated.V1,
-				Draft:      generated.DraftIetfDkimDkim2Spec06,
+				Draft:      generated.DraftIetfDkimDkim2Spec07,
 				Message:    request.message,
 				Smtp:       request.smtp,
 				Context: generated.SigningContext{
@@ -302,7 +302,7 @@ func (h *Handler) Handle(
 			operationContext,
 			generated.ReviseMessageJSONRequestBody{
 				ApiVersion:   generated.V1,
-				Draft:        generated.DraftIetfDkimDkim2Spec06,
+				Draft:        generated.DraftIetfDkimDkim2Spec07,
 				Message:      request.message,
 				Smtp:         request.smtp,
 				IncomingSmtp: request.smtp,
@@ -328,7 +328,7 @@ func (h *Handler) Handle(
 			operationContext,
 			generated.SignDeliveryStatusJSONRequestBody{
 				ApiVersion: generated.V1,
-				Draft:      generated.DraftIetfDkimDkim2Spec06,
+				Draft:      generated.DraftIetfDkimDkim2Spec07,
 				Message:    request.dsnMessage,
 				OuterSmtp:  request.smtp,
 				Context: generated.DeliveryStatusContext{
@@ -421,7 +421,7 @@ func (guard *handlerGuard) signingDomain(message milter.Message) (string, bool, 
 // policy. Messages carrying DKIM2 protocol fields, RFC 3464 delivery-status
 // reports, an undecidable Content-Type, an unusable author, or an
 // unsupported recipient path are skipped with a closed reason; delivery-status
-// notifications stay on the dedicated Section 12 route.
+// notifications stay on the dedicated Section 16 route.
 func (guard *handlerGuard) nullSenderDomain(message milter.Message) (string, milter.NullSenderSkip) {
 	domain, skip := message.HeaderFromNullSenderDomain()
 	if skip != "" {
@@ -982,7 +982,7 @@ func mapOperation(
 ) (milter.Result, error) {
 	if value == nil ||
 		value.ApiVersion != generated.V1 ||
-		value.Draft != generated.DraftIetfDkimDkim2Spec06 ||
+		value.Draft != generated.DraftIetfDkimDkim2Spec07 ||
 		string(value.Operation) != operation ||
 		!value.Operation.Valid() || !value.Result.Valid() ||
 		!value.Disposition.Valid() || value.Actions == nil ||
@@ -1101,7 +1101,7 @@ func consumeJSONValue(decoder *json.Decoder, depth int) bool {
 // validProcessContract validates every closed nested response fact and bound.
 func validProcessContract(value *generated.ProcessResponse, authservID string) bool {
 	if value == nil || value.ApiVersion != generated.V1 ||
-		value.Draft != generated.DraftIetfDkimDkim2Spec06 ||
+		value.Draft != generated.DraftIetfDkimDkim2Spec07 ||
 		!value.Disposition.Valid() || value.Actions == nil ||
 		!validProcessReportAction(value, authservID) ||
 		!validAuthenticationContract(value.Authentication) ||

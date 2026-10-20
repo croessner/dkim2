@@ -5,7 +5,7 @@ info:
   description: >
     Verification, signing, revision, policy, and replay API for the DKIM2
     reference daemon. Protocol behavior is pinned to
-    draft-ietf-dkim-dkim2-spec-06.
+    draft-ietf-dkim-dkim2-spec-07.
 paths:
   /metrics:
     get:
@@ -1493,7 +1493,7 @@ components:
           $ref: "#/components/schemas/SigningContext"
       description: >
         Optional single controlled intermediate hop for an external copy,
-        implementing Draft 06 section 9.3 with ordinary mf/rt signatures.
+        implementing Draft 07 section 12.3 with ordinary mf/rt signatures.
         The MTA supplies the exact non-null intermediate reverse path and
         one controlled intermediate recipient. Both signing contexts must
         have the same tenant; exact transit profiles for both domains and
@@ -2597,7 +2597,7 @@ components:
     DraftVersion:
       type: string
       enum:
-        - draft-ietf-dkim-dkim2-spec-06
+        - draft-ietf-dkim-dkim2-spec-07
     CanonicalUint64:
       type: string
       pattern: "^[1-9][0-9]{0,19}$"

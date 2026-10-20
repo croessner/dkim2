@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	dsnPropagationVectorPath      = "testdata/vectors/draft-ietf-dkim-dkim2-spec-06/dsn-propagation-golden.json"
+	dsnPropagationVectorPath      = "testdata/vectors/draft-ietf-dkim-dkim2-spec-07/dsn-propagation-golden.json"
 	dsnPropagationVectorWriteFlag = "DKIM2_WRITE_DSN_PROPAGATION_VECTORS"
 )
 
@@ -252,10 +252,10 @@ func TestDSNPropagationGoldenVectorsRegenerate(t *testing.T) {
 	}
 }
 
-// TestDSNPropagationDraft06GoldenVectors proves every frozen case rebuilds
+// TestDSNPropagationDraft07GoldenVectors proves every frozen case rebuilds
 // and signs to its recorded outcome and byte-exact output from the corpus
 // input alone, under the published keys and the fixed clock and entropy.
-func TestDSNPropagationDraft06GoldenVectors(t *testing.T) {
+func TestDSNPropagationDraft07GoldenVectors(t *testing.T) {
 	corpus := loadDSNPropagationVectorCorpus(t)
 	specs := make(map[string]propagationCase)
 	for _, entry := range dsnPropagationVectorSpecs() {

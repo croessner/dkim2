@@ -10,7 +10,7 @@ import (
 	"github.com/croessner/dkim2/internal/signing"
 )
 
-// SigningRole identifies the role derived by the exact Section 9.1 hash gate.
+// SigningRole identifies the role derived by the exact Section 12.1 hash gate.
 type SigningRole string
 
 const (

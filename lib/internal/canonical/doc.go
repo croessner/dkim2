@@ -1,15 +1,15 @@
 // Package canonical owns DKIM2 canonical byte transformations and digest
-// result containers for the draft-ietf-dkim-dkim2-spec-06 baseline.
+// result containers for the draft-ietf-dkim-dkim2-spec-07 baseline.
 //
 // This package is the library-internal source of truth for Section 6.1 body
-// hash input, Section 6.2 header hash input, and Section 9.6 signature input.
+// hash input, Section 6.2 header hash input, and Section 12.8 signature input.
 // Later builders consume immutable rawmsg, instance, and signature parser
 // views instead of reparsing raw RFC 5322 messages or DKIM2 tag lists.
 //
 // Section 6.1 body input is MIME-agnostic and works on parser-owned body
 // octets. Section 6.2 header input excludes the draft-defined header classes,
 // including Delivered-To under Section 4, lowercases field names, applies
-// header-hash whitespace rules, and sorts deterministically. Section 9.6
+// header-hash whitespace rules, and sorts deterministically. Section 12.8
 // signature input signs only DKIM2 protocol fields and uses its own all-WSP
 // deletion rule. These transformations are
 // intentionally distinct so later code cannot apply header hash rules to

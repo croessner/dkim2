@@ -119,7 +119,7 @@ func TestSigningInputRequiresExactGeneratedPlannerBytes(t *testing.T) {
 	}
 }
 
-// TestSigningInputOrdersSemanticSequencesAndNullsOnlyTarget verifies the Section 9.6 order.
+// TestSigningInputOrdersSemanticSequencesAndNullsOnlyTarget verifies the Section 12.8 order.
 func TestSigningInputOrdersSemanticSequencesAndNullsOnlyTarget(t *testing.T) {
 	headers := mustParseSignatureMessage(t,
 		messageInstanceLine(2, "second")+
@@ -389,7 +389,7 @@ func mustSigningTarget(t *testing.T, sequence, instanceNumber uint64, sets []sig
 	return target
 }
 
-// signingCanonicalField independently applies the draft Section 9.6 field transform.
+// signingCanonicalField independently applies the draft Section 12.8 field transform.
 func signingCanonicalField(t *testing.T, field []byte) []byte {
 	t.Helper()
 	colon := bytes.IndexByte(field, ':')

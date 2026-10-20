@@ -8,7 +8,7 @@ import (
 	"github.com/croessner/dkim2/internal/replay"
 )
 
-// TestOriginReplayDigestGolden freezes the Draft-06 origin framing and digest.
+// TestOriginReplayDigestGolden freezes the Draft-07 origin framing and digest.
 func TestOriginReplayDigestGolden(t *testing.T) {
 	raw, err := hex.DecodeString("46726f6d3a20616c696365406578616d706c652e746573740d0a5375626a6563743a207265706c61790d0a0d0a68656c6c6f0d0a")
 	if err != nil {
@@ -22,7 +22,7 @@ func TestOriginReplayDigestGolden(t *testing.T) {
 	if !ok {
 		t.Fatal("origin replay digest unavailable")
 	}
-	if got, want := hex.EncodeToString(digest[:]), "63519c8a3d2e4d5f6fb9e689259be264a058a3a9fbc8bb5a9a904bef0e9d9cd5"; got != want {
+	if got, want := hex.EncodeToString(digest[:]), "a515a2d51d4dcfca2dd5e37d6eda025a4301c28df689bbabbe771b2efd203cca"; got != want {
 		t.Fatalf("origin digest = %s, want %s", got, want)
 	}
 }
@@ -32,7 +32,7 @@ func TestOriginReplayFrameGolden(t *testing.T) {
 	header, _ := hex.DecodeString("66726f6d3a616c696365406578616d706c652e746573740d0a7375626a6563743a7265706c61790d0a")
 	body, _ := hex.DecodeString("68656c6c6f0d0a")
 	got := hex.EncodeToString(originReplayFrame(header, body))
-	want := "646b696d322d7265706c61792d6f726967696e2d76310001010000001d64726166742d696574662d646b696d2d646b696d322d737065632d303602000000000000002966726f6d3a616c696365406578616d706c652e746573740d0a7375626a6563743a7265706c61790d0a03000000000000000768656c6c6f0d0a"
+	want := "646b696d322d7265706c61792d6f726967696e2d76310001010000001d64726166742d696574662d646b696d2d646b696d322d737065632d303702000000000000002966726f6d3a616c696365406578616d706c652e746573740d0a7375626a6563743a7265706c61790d0a03000000000000000768656c6c6f0d0a"
 	if got != want {
 		t.Fatalf("origin frame = %s, want %s", got, want)
 	}

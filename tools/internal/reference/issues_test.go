@@ -11,9 +11,9 @@ import (
 	"github.com/croessner/dkim2/tools/internal/interop"
 )
 
-// TestDraft06IssueIdentityAndClassBijection freezes current issue identity and manifest linkage.
-func TestDraft06IssueIdentityAndClassBijection(t *testing.T) {
-	const draft06 = "draft-ietf-dkim-dkim2-spec-06"
+// TestDraft07IssueIdentityAndClassBijection freezes current issue identity and manifest linkage.
+func TestDraft07IssueIdentityAndClassBijection(t *testing.T) {
+	const draft07 = "draft-ietf-dkim-dkim2-spec-07"
 	root := repositoryRoot(t)
 	content, err := os.ReadFile(filepath.Join(root, issuePath))
 	if err != nil {
@@ -23,14 +23,14 @@ func TestDraft06IssueIdentityAndClassBijection(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if log.MessageDraft != draft06 {
-		t.Fatalf("issue message_draft = %q, want %q", log.MessageDraft, draft06)
+	if log.MessageDraft != draft07 {
+		t.Fatalf("issue message_draft = %q, want %q", log.MessageDraft, draft07)
 	}
 }
 
-// TestLoadIssueLogRejectsUnknownDraft06Section proves issue authorities cannot
-// cite a section outside the pinned Draft-06 structure.
-func TestLoadIssueLogRejectsUnknownDraft06Section(t *testing.T) {
+// TestLoadIssueLogRejectsUnknownDraft07Section proves issue authorities cannot
+// cite a section outside the pinned Draft-07 structure.
+func TestLoadIssueLogRejectsUnknownDraft07Section(t *testing.T) {
 	root := repositoryRoot(t)
 	content, err := os.ReadFile(filepath.Join(root, issuePath))
 	if err != nil {
@@ -38,8 +38,8 @@ func TestLoadIssueLogRejectsUnknownDraft06Section(t *testing.T) {
 	}
 	mutated := strings.Replace(
 		string(content),
-		"Draft-06 Section 1.1",
-		"Draft-06 Section 5.3",
+		"Draft-07 Section 1.1",
+		"Draft-07 Section 5.3",
 		1,
 	)
 	if _, err := LoadIssueLog([]byte(mutated)); err == nil || err.Error() != "issues_section" {
@@ -47,9 +47,9 @@ func TestLoadIssueLogRejectsUnknownDraft06Section(t *testing.T) {
 	}
 }
 
-// TestDraft06MigrationIssueAuthorityBindings freezes the issue authority and
-// exact interpretation-case bijection for recipe-less Draft-06 history.
-func TestDraft06MigrationIssueAuthorityBindings(t *testing.T) {
+// TestDraft07MigrationIssueAuthorityBindings freezes the issue authority and
+// exact interpretation-case bijection for recipe-less Draft-07 history.
+func TestDraft07MigrationIssueAuthorityBindings(t *testing.T) {
 	root := repositoryRoot(t)
 	content, err := os.ReadFile(filepath.Join(root, issuePath))
 	if err != nil {
@@ -63,10 +63,10 @@ func TestDraft06MigrationIssueAuthorityBindings(t *testing.T) {
 		if issue.ID != "DKIM2-ISSUE-0017" {
 			continue
 		}
-		if !slices.Equal(issue.Sections, []string{"Draft-06 Sections 7.2, 9.1, and 11.2"}) ||
+		if !slices.Equal(issue.Sections, []string{"Draft-07 Sections 9.2, 12.1, and 14.2"}) ||
 			!slices.Equal(issue.ConformanceCases, []string{
-				"verification/draft06-recipe-less-unchanged",
-				"verification/draft06-recipe-less-unknown-only",
+				"verification/draft07-recipe-less-unchanged",
+				"verification/draft07-recipe-less-unknown-only",
 			}) {
 			t.Fatalf("DKIM2-ISSUE-0017 authority/bijection = %q/%q", issue.Sections, issue.ConformanceCases)
 		}

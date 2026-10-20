@@ -1,7 +1,7 @@
 # DKIM2 Draft-06 Library Vectors
 
 This directory pins protocol evidence to
-`draft-ietf-dkim-dkim2-spec-06`.
+`draft-ietf-dkim-dkim2-spec-07`.
 
 - `public-golden.json` covers public verification, policy, malformed input,
   sequence, timestamp, envelope, and provider outcomes.
@@ -13,7 +13,7 @@ This directory pins protocol evidence to
   the explicit next-domain creation/continuation/completion chain, normal
   insertion, and header-only insertion.
 - `received-dsn-golden.json` covers the read-only received-DSN evaluation of
-  Draft-06 Section 12.1.2: the closed `delivery_status` projection for every
+  Draft-07 Section 16.3: the closed `delivery_status` projection for every
   stage outcome, complete and headers-only originals, the local-hop-run
   schemes, the foreign parent-domain signer that names a local address, and
   the completion-signature window evaluated at the outer DSN's `t=`. Its

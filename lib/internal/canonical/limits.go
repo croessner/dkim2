@@ -17,7 +17,7 @@ type Limits struct {
 	MaxBodyInputBytes int
 	// MaxHeaderInputBytes bounds Section 6.2 canonical header input bytes.
 	MaxHeaderInputBytes int
-	// MaxSignatureInputBytes bounds Section 9.6 canonical signature input bytes.
+	// MaxSignatureInputBytes bounds Section 12.8 canonical signature input bytes.
 	MaxSignatureInputBytes int
 	// MaxFieldBytes bounds one canonicalized header or protocol field.
 	MaxFieldBytes int

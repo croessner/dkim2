@@ -1,7 +1,7 @@
 {
   "schema": "dkim2.conformance-manifest.v1",
-  "message_draft": "draft-ietf-dkim-dkim2-spec-06",
-  "dns_draft": "draft-ietf-dkim-dkim2-dns-00",
+  "message_draft": "draft-ietf-dkim-dkim2-spec-07",
+  "dns_draft": "draft-ietf-dkim-dkim2-dns-01",
   "suite_version": "1",
   "suites": [
     "canonical",
@@ -19,7 +19,7 @@
   ],
   "capabilities": {
     "daemon": "supported",
-    "exim": "unqualified_draft06",
+    "exim": "unqualified_draft07",
     "library": "supported",
     "milter": "partial",
     "postfix": "partial_linux"
@@ -27,44 +27,44 @@
   "artifacts": [
     {
       "id": "canonical-body",
-      "path": "lib/internal/canonical/testdata/golden/body-canonicalization-draft-ietf-dkim-dkim2-spec-06.json",
-      "sha256": "2e6e0cbba4a8e2e72d8a2dec84105a04a3f16f3c2d7ea7a42d3be035ef7ecc2a",
+      "path": "lib/internal/canonical/testdata/golden/body-canonicalization-draft-ietf-dkim-dkim2-spec-07.json",
+      "sha256": "4a5da7bff0c82551796c480199c0cffc793a71b6ba94ab53682c10f12cd5e3ed",
       "module": "lib"
     },
     {
       "id": "canonical-digest-source",
       "path": "lib/internal/canonical/hash_test.go",
-      "sha256": "06d980d6ba02ab7af49a960e572a6b2280e0b38e6ef796b5f23f13e5de045d58",
+      "sha256": "8e7f1cccc0e478cf6bd3efb71fcbc32faf36a3e9d2c43441d538ca822f49e00a",
       "module": "lib"
     },
     {
       "id": "canonical-header",
-      "path": "lib/internal/canonical/testdata/golden/header-canonicalization-draft-ietf-dkim-dkim2-spec-06.json",
-      "sha256": "10a2fd3eae8ddce9762724dcc55f6ec6a654a42872e2972163e385226129d066",
+      "path": "lib/internal/canonical/testdata/golden/header-canonicalization-draft-ietf-dkim-dkim2-spec-07.json",
+      "sha256": "d0efd700dcecbff5f38aef6ec7f021ced4ba57a54f6d936af2d78996528dd49f",
       "module": "lib"
     },
     {
       "id": "canonical-header-source",
       "path": "lib/internal/canonical/header_test.go",
-      "sha256": "fc74ec361cf33e591feb2606e00df595ed5e9596de1c9224661704a9e380ca7a",
+      "sha256": "4ee8b661c6f0482c66d4c2a2ef30e61020d8832e120eaf50cad7119bd74ceae0",
       "module": "lib"
     },
     {
       "id": "canonical-signature",
-      "path": "lib/internal/canonical/testdata/golden/signature-input-draft-ietf-dkim-dkim2-spec-06.json",
-      "sha256": "37344d8aa9a8a9b55890aa23f57d20b2690938bff5cc922a257cbe90b0737a4b",
+      "path": "lib/internal/canonical/testdata/golden/signature-input-draft-ietf-dkim-dkim2-spec-07.json",
+      "sha256": "44c83622ac60b18bcdc204f90965e3af6fcca8e38b7a35219932e12d8b9a7730",
       "module": "lib"
     },
     {
       "id": "custody-positive-source",
       "path": "lib/internal/signature/custody_golden_test.go",
-      "sha256": "1e252f274e759f72ee8a894f166db04e324a9d58453c85f791e71cd8f87e4421",
+      "sha256": "5c0565e200cf2fb8f38fdf76e4dd4e58e6b18f26348df1f9b483fa164fde9a86",
       "module": "lib"
     },
     {
       "id": "daemon-replay-source",
       "path": "cmd/dkim2d/internal/app/replay_test.go",
-      "sha256": "98c6f44184704f5bd7168cdfab51bc26e78cdbf3fa1112003a659c6ad4d3423d",
+      "sha256": "3a85390e594cb550c72f3e85bb2d7938da582d4ccded522366b56fd323008b5f",
       "module": "cmd/dkim2d"
     },
     {
@@ -75,26 +75,26 @@
     },
     {
       "id": "dns-records",
-      "path": "lib/testdata/vectors/draft-ietf-dkim-dkim2-dns-00/dns-golden.json",
-      "sha256": "1e0510e58a4cfe1bb3ac29c41688e0c05441519b98622965dc433a62e9c431d0",
+      "path": "lib/testdata/vectors/draft-ietf-dkim-dkim2-dns-01/dns-golden.json",
+      "sha256": "fe0c87946ebe30bb09ee04fd198198d3594e6eb3caf1445b6a7c3748795a65b8",
       "module": "lib"
     },
     {
-      "id": "instance-draft06-source",
+      "id": "instance-draft07-source",
       "path": "lib/internal/instance/parser_test.go",
-      "sha256": "083c55844931d93c82cb786beb607e08001dc79f15cd8680920e0ca9162e15f1",
+      "sha256": "8ee3ad047c85f7172d0a1439cd677698e05b62f825379bc73f5c7d869c3de802",
       "module": "lib"
     },
     {
       "id": "milter-fixture-data",
-      "path": "testdata/conformance/milter/draft-ietf-dkim-dkim2-spec-06/portable-fixtures.json",
-      "sha256": "fee087f57cbcf620ca71a58f5b0cd9e9dbced55701acf9e37e18708a5c785427",
+      "path": "testdata/conformance/milter/draft-ietf-dkim-dkim2-spec-07/portable-fixtures.json",
+      "sha256": "300b8a73ca59771444823343bf53d834c8165a3798e647627a1c96032733260d",
       "module": "testdata/conformance"
     },
     {
       "id": "milter-fixture-source",
       "path": "cmd/dkim2-milter/internal/integration/milter_fixture_test.go",
-      "sha256": "a5478a25cceed0f85a5d5597fe260713fc79b7b3598a078acc863d8a809aec7a",
+      "sha256": "2398d96a5461fddeb73e27cc6b7164c20ea77337e396d9f9328c4fcaed72283f",
       "module": "cmd/dkim2-milter"
     },
     {
@@ -106,79 +106,79 @@
     {
       "id": "milter-public-peer-source",
       "path": "cmd/dkim2-milter/internal/integration/public_peer_test.go",
-      "sha256": "693edf5a40d0f1f4ad1887bcd48f99e15630e7533c49d47320e9def7f5696f66",
+      "sha256": "706f6bbeb19af46cf398f78175df053f531b82f6e0a241f1c56a0d03e3b4527d",
       "module": "cmd/dkim2-milter"
     },
     {
       "id": "openapi-daemon-boundary-source",
       "path": "cmd/dkim2d/internal/httpjson/dkim2ctl_integration_test.go",
-      "sha256": "2cf016358d2344d3caa48890b7361c259e1d26a0216afd145852e0d3de36418e",
+      "sha256": "3845d619ac1cb1c7eb81fcd873073d05152a457019b7a8d67eac7cfdcd5a8c3d",
       "module": "cmd/dkim2d"
     },
     {
       "id": "openapi-independent-oracle-source",
       "path": "cmd/dkim2ctl/internal/testclient/public_socket_test.go",
-      "sha256": "dd56447c6c121991f6f1c5c99494b8f70007387a7d65e131cb4b98894a1511a6",
+      "sha256": "dc127cbe8101d5147d85e7254bb4ac3022be9246e71ef06df7837c1f33bde1dc",
       "module": "cmd/dkim2ctl"
     },
     {
       "id": "openapi-invalid-json-source",
       "path": "cmd/dkim2d/internal/httpjson/json_preflight_test.go",
-      "sha256": "b9b3a38f2310d511530c126397cab43636bfebb4a4f7d92d5dc1de732b9fa5e7",
+      "sha256": "cc66f38fb4fcde32faa3684072bfb3edb77232aefe2233c4f524a6d32e616eb5",
       "module": "cmd/dkim2d"
     },
     {
       "id": "openapi-negative-source",
       "path": "cmd/dkim2ctl/internal/testclient/negative_test.go",
-      "sha256": "9cdac3adbf6faa894dc2252c8190e25a43d99fefdfa3913c49c491d588ed46c2",
+      "sha256": "8d37baf051866232e387b4b4914a08314e9b9e0df3b7286511815eb1f20a064e",
       "module": "cmd/dkim2ctl"
     },
     {
       "id": "openapi-operation-source",
       "path": "cmd/dkim2ctl/internal/testclient/operations_test.go",
-      "sha256": "572db2fbc9e027302020d518aceb619c3ad7d934235bc84549cf0d368fa6809e",
+      "sha256": "e9de5a2db759e764bbbfed605e767ede2b6014bd3d54f7459b0a1fbd47067319",
       "module": "cmd/dkim2ctl"
     },
     {
       "id": "openapi-process-negative-fixture",
-      "path": "cmd/dkim2ctl/testdata/fixtures/draft-ietf-dkim-dkim2-spec-06/process-negative.json",
-      "sha256": "b474155d1cc142f1cbe894352cc44b3eb821824012fbb85eee262be0cae063e0",
+      "path": "cmd/dkim2ctl/testdata/fixtures/draft-ietf-dkim-dkim2-spec-07/process-negative.json",
+      "sha256": "8879143e98a90cb7c2332bcf3286dd89ea040fb30518b54e9f17bb4ea3e06403",
       "module": "cmd/dkim2ctl"
     },
     {
       "id": "openapi-process-report-fixture",
-      "path": "cmd/dkim2ctl/testdata/fixtures/draft-ietf-dkim-dkim2-spec-06/process-report.json",
-      "sha256": "5eda699c77fecee1ca5554c284810eaa96475690afd0bd06d59ad9e4ef2fda54",
+      "path": "cmd/dkim2ctl/testdata/fixtures/draft-ietf-dkim-dkim2-spec-07/process-report.json",
+      "sha256": "03ad13eaa0555c031795ab2663c64e00f82881fda257fc7904bf3d864fb20aef",
       "module": "cmd/dkim2ctl"
     },
     {
       "id": "openapi-revise-fixture",
-      "path": "cmd/dkim2ctl/testdata/fixtures/draft-ietf-dkim-dkim2-spec-06/revise.json",
-      "sha256": "dab1bc892c8b33f70264a1b44adab1c93aafc397565c1a361eace07030115740",
+      "path": "cmd/dkim2ctl/testdata/fixtures/draft-ietf-dkim-dkim2-spec-07/revise.json",
+      "sha256": "ce2f76194acc25c2980a7ab7b7f96d680bd6e48f4698cda71870eee64f3b01ac",
       "module": "cmd/dkim2ctl"
     },
     {
       "id": "openapi-route-negative-fixture",
-      "path": "cmd/dkim2ctl/testdata/fixtures/draft-ietf-dkim-dkim2-spec-06/route-negative.json",
-      "sha256": "cbd38186e5e9d84ca7b9deaed88e7f93bb876b367005012c07546c0d59e401f8",
+      "path": "cmd/dkim2ctl/testdata/fixtures/draft-ietf-dkim-dkim2-spec-07/route-negative.json",
+      "sha256": "d22c7a9aedc7d2be504f7e77f6cff63d8446a23f68635a9385eb732755f5b8c6",
       "module": "cmd/dkim2ctl"
     },
     {
       "id": "openapi-sign-fixture",
-      "path": "cmd/dkim2ctl/testdata/fixtures/draft-ietf-dkim-dkim2-spec-06/sign.json",
-      "sha256": "4717d7d132129d8a031ac276c48e7210a7d2add8bf9d655306805ef8fa3144dd",
+      "path": "cmd/dkim2ctl/testdata/fixtures/draft-ietf-dkim-dkim2-spec-07/sign.json",
+      "sha256": "f800fa598809b5a9a20ecf8e39ff20cdc5dee238a568efa0b2f46c78ce062b8e",
       "module": "cmd/dkim2ctl"
     },
     {
       "id": "openapi-wire-response-source",
       "path": "cmd/dkim2d/internal/httpjson/http_wire_response.go",
-      "sha256": "b0cfecca20bd7e7f19455dc3db8ce632316786c8dc8e8e5a8807b38f33d9c43b",
+      "sha256": "1a4a4d60eaf5f2f17b6fa7122c126ab95de204fc7ca6c3d9ca987d08782f6937",
       "module": "cmd/dkim2d"
     },
     {
       "id": "policy-invalid-recipe-source",
       "path": "lib/policy_projection_test.go",
-      "sha256": "8597a63b88c02d303e9252e7ea8e4561b506573caa8fb92f7f32500e9c7bb094",
+      "sha256": "e3769bb75f830ecf6761558cc339522eb0bf2eeb4886846092d75104519bab94",
       "module": "lib"
     },
     {
@@ -208,13 +208,13 @@
     {
       "id": "postfix-qualification-runner",
       "path": "contrib/qualification/postfix-milter/run.sh",
-      "sha256": "b3c148b4c8be9e27d6e8d0f3780c60d2a483d564ca889ae8f766cc8663484d0b",
+      "sha256": "d1fa06b6adc9d355624481ecc5e2edd2a214a87fd3e48f44f88a70a3d9513aa8",
       "module": "contrib/qualification/postfix-milter"
     },
     {
       "id": "postfix-qualification-runtime",
       "path": "contrib/qualification/postfix-milter/cmd/qualify/main.go",
-      "sha256": "569c512c9daf603254839503a72f2dcde4a8daceca96fbad0cd3c8f736ef9251",
+      "sha256": "15795aa1457eebadb052c01f5d6cf85b56e28ab0b16241d7d77f1774abed6b8d",
       "module": "contrib/qualification/postfix-milter"
     },
     {
@@ -225,20 +225,20 @@
     },
     {
       "id": "recipe-application",
-      "path": "lib/internal/recipe/testdata/golden/recipe-application-draft-ietf-dkim-dkim2-spec-06.json",
-      "sha256": "3217775e7fc00d83ce07ebbb86f016a44d7c9b1869cdd08667f5adce24983400",
+      "path": "lib/internal/recipe/testdata/golden/recipe-application-draft-ietf-dkim-dkim2-spec-07.json",
+      "sha256": "bdea799e23f8a1a38ab49eafbd2cdc1fb22a9eaa981b7cf265ff3c098be1b305",
       "module": "lib"
     },
     {
-      "id": "recipe-draft06-source",
+      "id": "recipe-draft07-source",
       "path": "lib/internal/recipe/parser_test.go",
       "sha256": "1159149f0301a509307205db00c2d30f4e57e2538849a1500b035695227e1935",
       "module": "lib"
     },
     {
       "id": "recipe-generation",
-      "path": "lib/internal/recipe/testdata/golden/recipe-generation-draft-ietf-dkim-dkim2-spec-06.json",
-      "sha256": "1ff29eb3ee5ba44598b3fda69b98f2eed7c7778816c1900aba09fddae6eb5a28",
+      "path": "lib/internal/recipe/testdata/golden/recipe-generation-draft-ietf-dkim-dkim2-spec-07.json",
+      "sha256": "c869092eb19a62584f25452a4788d4828e94f7b282b8d36c6851548629a7e39f",
       "module": "lib"
     },
     {
@@ -256,7 +256,7 @@
     {
       "id": "replay-deriver-source",
       "path": "lib/internal/replay/deriver_test.go",
-      "sha256": "9696c752a4110bfff59c9764d5f2068f946cdb5f6bf9b3c1956fadd2843bd267",
+      "sha256": "8901bebc1b18a8d8799e5c3e0caefec563a23cc2a7e78cd68f8248844a39aa21",
       "module": "lib"
     },
     {
@@ -272,33 +272,33 @@
       "module": "lib"
     },
     {
-      "id": "service-draft06-source",
-      "path": "lib/internal/service/draft06_test.go",
-      "sha256": "7d078eb276322331ea4a0dc1a2ae0b2b0faa66c7c81f9eb815efbeb7654c49f4",
+      "id": "service-draft07-source",
+      "path": "lib/internal/service/draft07_test.go",
+      "sha256": "ab9ad12bc47d4be954374f58124989c4265763694068811b1baf66b7194d0ed2",
       "module": "lib"
     },
     {
       "id": "signature-negative-source",
       "path": "lib/internal/signature/parser_test.go",
-      "sha256": "754e3ef41aff3152b01f52146ae21c34f995e423ef815d6fdaa20de97ab39eef",
+      "sha256": "fbc96d3344f60450c4a7129e5aaaa1e1444eba86116f28d1c86f14e35ce36796",
       "module": "lib"
     },
     {
       "id": "signing-custody",
-      "path": "lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-06/custody-crypto-golden.json",
-      "sha256": "bc2e961694bb19dbaf870a28f78e7bd5542bc276f0a79f0cfd62b50c45156a35",
+      "path": "lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-07/custody-crypto-golden.json",
+      "sha256": "cd48e1ba538d5d0622f02c6d84af617973ff73bfd9cec2a1044fcb8274eaea98",
       "module": "lib"
     },
     {
       "id": "signing-dsn-propagation",
-      "path": "lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-06/dsn-propagation-golden.json",
-      "sha256": "3dc46c801bee5a371ff2275c984275ec906a67ae5a8384ee1af783cce4e05ca5",
+      "path": "lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-07/dsn-propagation-golden.json",
+      "sha256": "6a90d61c2e66d7c5c51422569a7054a799a1fd73a0d4f879f20bc6d4a005ceb7",
       "module": "lib"
     },
     {
       "id": "signing-facade-source",
       "path": "lib/signing_facade_test.go",
-      "sha256": "3005bf9d7990e48e44af6c0ddcbc66c517644ac2fe37f1062657b44644f54c18",
+      "sha256": "b717ed69fb0ba6fdf3d0dd91224b63b46adf5bbcb0da91be10dfe1c25bc8465a",
       "module": "lib"
     },
     {
@@ -316,19 +316,19 @@
     {
       "id": "signing-plan-source",
       "path": "lib/internal/signing/plan_test.go",
-      "sha256": "a60371067e55f59ba7bddb7b578398671b64b0a65c73c9a64f06ce456117845b",
+      "sha256": "584df5c86e2e8435683acc1c48dec25dbdbcbf639dd94ea66c47c6c784bb17e2",
       "module": "lib"
     },
     {
       "id": "signing-provenance",
-      "path": "lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-06/README.md",
-      "sha256": "ff9a7fac4bb573c3c48a2517cfb0679b028905303b90c156ce0f396888a119cc",
+      "path": "lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-07/README.md",
+      "sha256": "6c67932a34a53ae4935f82c8cfe3d73223ac56bf4ff3994b46882c46823958d8",
       "module": "lib"
     },
     {
       "id": "signing-public",
-      "path": "lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-06/signing-golden.json",
-      "sha256": "939f90a8ca5323924b3bc050b8673708d9571026bdf753dd964c7808ee20f4a3",
+      "path": "lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-07/signing-golden.json",
+      "sha256": "b89a1a62000599414c709a754cf461a1de58dd448ad1ad71fb8b8bc42d40fe04",
       "module": "lib"
     },
     {
@@ -340,12 +340,12 @@
     {
       "id": "signing-revision-source",
       "path": "lib/internal/signing/revision_test.go",
-      "sha256": "572e054958bcf27a8679b6f759f42263021f0f89001d2cf039975bee6bc69f39",
+      "sha256": "5bfe18eb5948dfaaa5b99839faa85956a181e45285b9d57751c45360f924ace6",
       "module": "lib"
     },
     {
       "id": "signing-test-key",
-      "path": "lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-06/signing-test-rsa.pem",
+      "path": "lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-07/signing-test-rsa.pem",
       "sha256": "788d3df47546f9d6e53979c2080b60358e5c59bb7e4196231b8e9a7f6ab2231e",
       "module": "lib"
     },
@@ -362,27 +362,27 @@
       "module": "cmd/dkim2d"
     },
     {
-      "id": "verification-draft06-source",
-      "path": "lib/internal/verify/draft06_test.go",
-      "sha256": "16cfdf0c3293692beba1369a07fa717229c00744d7d8aea261b8048412472335",
+      "id": "verification-draft07-source",
+      "path": "lib/internal/verify/draft07_test.go",
+      "sha256": "56b4fdbe3664b9c28102a8da74f4961910f46de9824a448d268983f41511f9eb",
       "module": "lib"
     },
     {
       "id": "verification-multisignature-source",
       "path": "lib/internal/verify/multisignature_test.go",
-      "sha256": "713fd0465e79309ce2fa02de62916843ee6e59be0f2014e828a9974d575c1329",
+      "sha256": "43c85beaa889b1a508e02923241e6559cca78d6d7120e54d7a17d67cc6868b4f",
       "module": "lib"
     },
     {
       "id": "verification-public",
-      "path": "lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-06/public-golden.json",
-      "sha256": "12763019f6d4f30ab6f5e5fd972e9b971f2954fff1b1706cfacc7fd9978b68f9",
+      "path": "lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-07/public-golden.json",
+      "sha256": "e24b427c36a4b779f55f18570e40528f9a2143a847ec6788a62ae90dfc77e7ed",
       "module": "lib"
     },
     {
       "id": "verification-received-dsn",
-      "path": "lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-06/received-dsn-golden.json",
-      "sha256": "fd470271fa1972d3e7a89d238f39ad016dcbbfb7d2bc34f335eb51700156d980",
+      "path": "lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-07/received-dsn-golden.json",
+      "sha256": "c640b153a7785803864823bb3b0c197c161a0561427b26d25c3ca3479bbd106f",
       "module": "lib"
     }
   ],
@@ -392,7 +392,7 @@
       "case_id": "body-hash-input",
       "class": "draft_normative",
       "authority": [
-        "draft-ietf-dkim-dkim2-spec-06 Sections 6.1 and 9.6"
+        "draft-ietf-dkim-dkim2-spec-07 Sections 6.1 and 12.8"
       ],
       "provenance": "manual_derivation",
       "runner": "portable_vector",
@@ -405,10 +405,10 @@
     },
     {
       "suite": "canonical",
-      "case_id": "draft04-to-draft06-header-boundary",
+      "case_id": "draft04-to-draft07-header-boundary",
       "class": "draft_normative",
       "authority": [
-        "draft-ietf-dkim-dkim2-spec-06 Section 6.2"
+        "draft-ietf-dkim-dkim2-spec-07 Section 6.2"
       ],
       "provenance": "cross_primitive",
       "runner": "portable_vector",
@@ -421,10 +421,10 @@
     },
     {
       "suite": "canonical",
-      "case_id": "draft06-digest-algorithms",
+      "case_id": "draft07-digest-algorithms",
       "class": "draft_normative",
       "authority": [
-        "draft-ietf-dkim-dkim2-spec-06 Sections 3.1, 7.3, and 9.6"
+        "draft-ietf-dkim-dkim2-spec-07 Sections 3.1, 9.3, and 12.8"
       ],
       "provenance": "regression_reproducer",
       "runner": "portable_vector",
@@ -437,10 +437,10 @@
     },
     {
       "suite": "canonical",
-      "case_id": "draft06-header-exclusions",
+      "case_id": "draft07-header-exclusions",
       "class": "draft_normative",
       "authority": [
-        "draft-ietf-dkim-dkim2-spec-06 Section 6.2"
+        "draft-ietf-dkim-dkim2-spec-07 Section 6.2"
       ],
       "provenance": "regression_reproducer",
       "runner": "portable_vector",
@@ -453,10 +453,10 @@
     },
     {
       "suite": "canonical",
-      "case_id": "draft06-to-draft04-header-boundary",
+      "case_id": "draft07-to-draft04-header-boundary",
       "class": "draft_normative",
       "authority": [
-        "draft-ietf-dkim-dkim2-spec-06 Section 6.2"
+        "draft-ietf-dkim-dkim2-spec-07 Section 6.2"
       ],
       "provenance": "cross_primitive",
       "runner": "portable_vector",
@@ -472,7 +472,7 @@
       "case_id": "header-hash-input",
       "class": "draft_normative",
       "authority": [
-        "draft-ietf-dkim-dkim2-spec-06 Sections 4, 6.2, and 9.6"
+        "draft-ietf-dkim-dkim2-spec-07 Sections 4, 6.2, and 12.8"
       ],
       "provenance": "manual_derivation",
       "runner": "portable_vector",
@@ -488,7 +488,7 @@
       "case_id": "signature-input",
       "class": "draft_normative",
       "authority": [
-        "draft-ietf-dkim-dkim2-spec-06 Section 9.6"
+        "draft-ietf-dkim-dkim2-spec-07 Section 12.8"
       ],
       "provenance": "manual_derivation",
       "runner": "portable_vector",
@@ -504,7 +504,7 @@
       "case_id": "dns-negative-record-states",
       "class": "draft_normative",
       "authority": [
-        "draft-ietf-dkim-dkim2-dns-00 Sections 3.2 through 3.4.2"
+        "draft-ietf-dkim-dkim2-dns-01 Sections 3.2 through 3.4.2"
       ],
       "provenance": "regression_reproducer",
       "runner": "portable_vector",
@@ -520,7 +520,7 @@
       "case_id": "dns-records",
       "class": "draft_normative",
       "authority": [
-        "draft-ietf-dkim-dkim2-dns-00 Sections 3.2 through 3.4.2"
+        "draft-ietf-dkim-dkim2-dns-01 Sections 3.2 through 3.4.2"
       ],
       "provenance": "manual_derivation",
       "runner": "portable_vector",
@@ -533,65 +533,65 @@
     },
     {
       "suite": "instance",
-      "case_id": "draft06-dual-hash",
+      "case_id": "draft07-dual-hash",
       "class": "draft_normative",
       "authority": [
-        "draft-ietf-dkim-dkim2-spec-06 Sections 3.1 and 7.3"
+        "draft-ietf-dkim-dkim2-spec-07 Sections 3.1 and 9.3"
       ],
       "provenance": "regression_reproducer",
       "runner": "portable_vector",
       "required_platform": "portable",
       "expected_outcome": "pass",
       "artifacts": [
-        "instance-draft06-source"
+        "instance-draft07-source"
       ],
       "producer": "instance-tests"
     },
     {
       "suite": "instance",
-      "case_id": "draft06-duplicate-extension-hash",
+      "case_id": "draft07-duplicate-extension-hash",
       "class": "draft_normative",
       "authority": [
-        "draft-ietf-dkim-dkim2-spec-06 Sections 3.1 and 7.3"
+        "draft-ietf-dkim-dkim2-spec-07 Sections 3.1 and 9.3"
       ],
       "provenance": "regression_reproducer",
       "runner": "portable_vector",
       "required_platform": "portable",
       "expected_outcome": "pass",
       "artifacts": [
-        "instance-draft06-source"
+        "instance-draft07-source"
       ],
       "producer": "instance-tests"
     },
     {
       "suite": "instance",
-      "case_id": "draft06-duplicate-hash",
+      "case_id": "draft07-duplicate-hash",
       "class": "draft_normative",
       "authority": [
-        "draft-ietf-dkim-dkim2-spec-06 Sections 3.1 and 7.3"
+        "draft-ietf-dkim-dkim2-spec-07 Sections 3.1 and 9.3"
       ],
       "provenance": "regression_reproducer",
       "runner": "portable_vector",
       "required_platform": "portable",
       "expected_outcome": "pass",
       "artifacts": [
-        "instance-draft06-source"
+        "instance-draft07-source"
       ],
       "producer": "instance-tests"
     },
     {
       "suite": "instance",
-      "case_id": "draft06-sha512-uppercase",
+      "case_id": "draft07-sha512-uppercase",
       "class": "draft_normative",
       "authority": [
-        "draft-ietf-dkim-dkim2-spec-06 Sections 3.1 and 7.3"
+        "draft-ietf-dkim-dkim2-spec-07 Sections 3.1 and 9.3"
       ],
       "provenance": "regression_reproducer",
       "runner": "portable_vector",
       "required_platform": "portable",
       "expected_outcome": "pass",
       "artifacts": [
-        "instance-draft06-source"
+        "instance-draft07-source"
       ],
       "producer": "instance-tests"
     },
@@ -666,7 +666,7 @@
       "case_id": "null-sender-delivery-status-unchanged",
       "class": "adapter_contract",
       "authority": [
-        "draft-ietf-dkim-dkim2-spec-06 Section 12.1",
+        "draft-ietf-dkim-dkim2-spec-07 Section 16.1",
         "docs/specs/implementation/milter-adapter.md Datasource And Private Signing Backend"
       ],
       "provenance": "regression_reproducer",
@@ -800,7 +800,7 @@
     },
     {
       "suite": "openapi",
-      "case_id": "draft06-invalid-json-diagnostics",
+      "case_id": "draft07-invalid-json-diagnostics",
       "class": "openapi_contract",
       "authority": [
         "docs/specs/openapi/dkim2d.yaml request bodies",
@@ -979,10 +979,10 @@
     },
     {
       "suite": "policy",
-      "case_id": "draft06-invalid-recipe-json",
+      "case_id": "draft07-invalid-recipe-json",
       "class": "draft_normative",
       "authority": [
-        "draft-ietf-dkim-dkim2-spec-06 Section 11.2"
+        "draft-ietf-dkim-dkim2-spec-07 Section 14.2"
       ],
       "provenance": "regression_reproducer",
       "runner": "portable_vector",
@@ -998,7 +998,7 @@
       "case_id": "projection-modes",
       "class": "documented_interpretation",
       "authority": [
-        "draft-ietf-dkim-dkim2-spec-06 Section 10",
+        "draft-ietf-dkim-dkim2-spec-07 Section 13",
         "docs/specs/implementation/policy-engine.md Policy Projection"
       ],
       "provenance": "manual_derivation",
@@ -1107,7 +1107,7 @@
       "case_id": "utf8-binary",
       "class": "documented_interpretation",
       "authority": [
-        "draft-ietf-dkim-dkim2-spec-06 Section 2.9",
+        "draft-ietf-dkim-dkim2-spec-07 Section 2.9",
         "docs/ARCHITECTURE.md Precision Before Convenience"
       ],
       "provenance": "manual_derivation",
@@ -1124,7 +1124,7 @@
       "case_id": "application",
       "class": "documented_interpretation",
       "authority": [
-        "draft-ietf-dkim-dkim2-spec-06 Sections 5 and 7.2",
+        "draft-ietf-dkim-dkim2-spec-07 Sections 5 and 9.2",
         "docs/specs/implementation/recipe-application.md Application Contract"
       ],
       "provenance": "manual_derivation",
@@ -1138,33 +1138,33 @@
     },
     {
       "suite": "recipe",
-      "case_id": "draft06-lowercase-recipe",
+      "case_id": "draft07-lowercase-recipe",
       "class": "draft_normative",
       "authority": [
-        "draft-ietf-dkim-dkim2-spec-06 Section 5.1"
+        "draft-ietf-dkim-dkim2-spec-07 Section 5.1"
       ],
       "provenance": "regression_reproducer",
       "runner": "portable_vector",
       "required_platform": "portable",
       "expected_outcome": "pass",
       "artifacts": [
-        "recipe-draft06-source"
+        "recipe-draft07-source"
       ],
       "producer": "recipe-tests"
     },
     {
       "suite": "recipe",
-      "case_id": "draft06-nonlowercase-recipe",
+      "case_id": "draft07-nonlowercase-recipe",
       "class": "draft_normative",
       "authority": [
-        "draft-ietf-dkim-dkim2-spec-06 Section 5.1"
+        "draft-ietf-dkim-dkim2-spec-07 Section 5.1"
       ],
       "provenance": "regression_reproducer",
       "runner": "portable_vector",
       "required_platform": "portable",
       "expected_outcome": "pass",
       "artifacts": [
-        "recipe-draft06-source"
+        "recipe-draft07-source"
       ],
       "producer": "recipe-tests"
     },
@@ -1173,7 +1173,7 @@
       "case_id": "generation",
       "class": "documented_interpretation",
       "authority": [
-        "draft-ietf-dkim-dkim2-spec-06 Sections 4 through 7.2",
+        "draft-ietf-dkim-dkim2-spec-07 Sections 4 through 9.2",
         "docs/specs/implementation/recipe-generation.md Generation Contract"
       ],
       "provenance": "manual_derivation",
@@ -1206,7 +1206,7 @@
       "case_id": "parser-negative",
       "class": "draft_normative",
       "authority": [
-        "draft-ietf-dkim-dkim2-spec-06 Sections 5 and 7.2",
+        "draft-ietf-dkim-dkim2-spec-07 Sections 5 and 9.2",
         "RFC 8259 Sections 6 and 7"
       ],
       "provenance": "regression_reproducer",
@@ -1268,7 +1268,7 @@
     },
     {
       "suite": "replay",
-      "case_id": "identity-draft06-epoch",
+      "case_id": "identity-draft07-epoch",
       "class": "local_security_policy",
       "authority": [
         "docs/replay-store-valkey.md Replay Identity Contract"
@@ -1384,7 +1384,7 @@
       "case_id": "custody-cryptography",
       "class": "draft_normative",
       "authority": [
-        "draft-ietf-dkim-dkim2-spec-06 Sections 3 and 9.6"
+        "draft-ietf-dkim-dkim2-spec-07 Sections 3 and 12.8"
       ],
       "provenance": "cross_primitive",
       "runner": "portable_vector",
@@ -1418,7 +1418,7 @@
       "case_id": "custody-transitions",
       "class": "draft_normative",
       "authority": [
-        "draft-ietf-dkim-dkim2-spec-06 Sections 7 through 9.2"
+        "draft-ietf-dkim-dkim2-spec-07 Sections 9 through 12.2"
       ],
       "provenance": "manual_derivation",
       "runner": "portable_vector",
@@ -1432,10 +1432,10 @@
     },
     {
       "suite": "signing",
-      "case_id": "draft06-duplicate-selector",
+      "case_id": "draft07-duplicate-selector",
       "class": "draft_normative",
       "authority": [
-        "draft-ietf-dkim-dkim2-spec-06 Sections 8.9 and 11.2"
+        "draft-ietf-dkim-dkim2-spec-07 Sections 10.9 and 14.2"
       ],
       "provenance": "regression_reproducer",
       "runner": "portable_vector",
@@ -1448,10 +1448,10 @@
     },
     {
       "suite": "signing",
-      "case_id": "draft06-same-algorithm-pair",
+      "case_id": "draft07-same-algorithm-pair",
       "class": "draft_normative",
       "authority": [
-        "draft-ietf-dkim-dkim2-spec-06 Sections 8.9 and 11.2"
+        "draft-ietf-dkim-dkim2-spec-07 Sections 10.9 and 14.2"
       ],
       "provenance": "regression_reproducer",
       "runner": "portable_vector",
@@ -1464,10 +1464,10 @@
     },
     {
       "suite": "signing",
-      "case_id": "draft06-third-same-algorithm",
+      "case_id": "draft07-third-same-algorithm",
       "class": "draft_normative",
       "authority": [
-        "draft-ietf-dkim-dkim2-spec-06 Sections 8.9 and 11.2"
+        "draft-ietf-dkim-dkim2-spec-07 Sections 10.9 and 14.2"
       ],
       "provenance": "regression_reproducer",
       "runner": "portable_vector",
@@ -1483,7 +1483,7 @@
       "case_id": "dsn-propagation-rebuild",
       "class": "draft_normative",
       "authority": [
-        "draft-ietf-dkim-dkim2-spec-06 Section 12.1.1"
+        "draft-ietf-dkim-dkim2-spec-07 Section 16.2"
       ],
       "provenance": "manual_derivation",
       "runner": "portable_vector",
@@ -1499,7 +1499,7 @@
       "case_id": "envelope-facade",
       "class": "draft_normative",
       "authority": [
-        "draft-ietf-dkim-dkim2-spec-06 Sections 8.5, 8.6, and 9"
+        "draft-ietf-dkim-dkim2-spec-07 Sections 10.5, 10.6, and 12"
       ],
       "provenance": "manual_derivation",
       "runner": "portable_vector",
@@ -1534,7 +1534,7 @@
       "case_id": "local-sha256-output-policy",
       "class": "local_security_policy",
       "authority": [
-        "draft-ietf-dkim-dkim2-spec-06 Section 3",
+        "draft-ietf-dkim-dkim2-spec-07 Section 3",
         "local signing compatibility policy"
       ],
       "provenance": "cross_primitive",
@@ -1551,7 +1551,7 @@
       "case_id": "next-domain-facade",
       "class": "draft_normative",
       "authority": [
-        "draft-ietf-dkim-dkim2-spec-06 Sections 8.7, 8.8, 9.3, and 9.4"
+        "draft-ietf-dkim-dkim2-spec-07 Sections 10.7, 10.8, 12.3, and 7"
       ],
       "provenance": "cross_primitive",
       "runner": "portable_vector",
@@ -1570,7 +1570,7 @@
       "case_id": "null-sender-delivery-status-excluded",
       "class": "documented_interpretation",
       "authority": [
-        "draft-ietf-dkim-dkim2-spec-06 Section 12.1",
+        "draft-ietf-dkim-dkim2-spec-07 Section 16.1",
         "RFC 3464 Section 2",
         "RFC 6522 Section 3"
       ],
@@ -1589,7 +1589,7 @@
       "case_id": "null-sender-header-from-facade",
       "class": "documented_interpretation",
       "authority": [
-        "draft-ietf-dkim-dkim2-spec-06 Sections 8.5 and 8.8",
+        "draft-ietf-dkim-dkim2-spec-07 Sections 10.5 and 10.8",
         "docs/specs/implementation/milter-adapter.md Datasource And Private Signing Backend"
       ],
       "provenance": "regression_reproducer",
@@ -1607,7 +1607,7 @@
       "case_id": "origin-facade",
       "class": "draft_normative",
       "authority": [
-        "draft-ietf-dkim-dkim2-spec-06 Sections 8 and 9"
+        "draft-ietf-dkim-dkim2-spec-07 Sections 10 and 12"
       ],
       "provenance": "cross_primitive",
       "runner": "portable_vector",
@@ -1626,7 +1626,7 @@
       "case_id": "public-facade",
       "class": "draft_normative",
       "authority": [
-        "draft-ietf-dkim-dkim2-spec-06 Sections 3 and 9.6"
+        "draft-ietf-dkim-dkim2-spec-07 Sections 3 and 12.8"
       ],
       "provenance": "cross_primitive",
       "runner": "portable_vector",
@@ -1663,7 +1663,7 @@
       "case_id": "revision-facade",
       "class": "draft_normative",
       "authority": [
-        "draft-ietf-dkim-dkim2-spec-06 Sections 7 through 9"
+        "draft-ietf-dkim-dkim2-spec-07 Sections 9 through 12"
       ],
       "provenance": "cross_primitive",
       "runner": "portable_vector",
@@ -1682,7 +1682,7 @@
       "case_id": "signature-grammar-negative",
       "class": "draft_normative",
       "authority": [
-        "draft-ietf-dkim-dkim2-spec-06 Section 8"
+        "draft-ietf-dkim-dkim2-spec-07 Section 10"
       ],
       "provenance": "regression_reproducer",
       "runner": "portable_vector",
@@ -1698,7 +1698,7 @@
       "case_id": "tag-case-interpretation",
       "class": "documented_interpretation",
       "authority": [
-        "draft-ietf-dkim-dkim2-spec-06 Sections 5 and 8",
+        "draft-ietf-dkim-dkim2-spec-07 Sections 5 and 10",
         "docs/specs/implementation/dkim2-tag-parsers.md Shared Parsing Rules"
       ],
       "provenance": "manual_derivation",
@@ -1715,7 +1715,7 @@
       "case_id": "unchanged-no-redundant-instance",
       "class": "local_security_policy",
       "authority": [
-        "draft-ietf-dkim-dkim2-spec-06 Sections 7.2 and 9.1",
+        "draft-ietf-dkim-dkim2-spec-07 Sections 9.2 and 12.1",
         "local minimal-transition policy"
       ],
       "provenance": "cross_primitive",
@@ -1729,74 +1729,74 @@
     },
     {
       "suite": "verification",
-      "case_id": "draft06-diagnostics",
+      "case_id": "draft07-diagnostics",
       "class": "draft_normative",
       "authority": [
-        "draft-ietf-dkim-dkim2-spec-06 Section 11.2"
+        "draft-ietf-dkim-dkim2-spec-07 Section 14.2"
       ],
       "provenance": "cross_primitive",
       "runner": "portable_vector",
       "required_platform": "portable",
       "expected_outcome": "pass",
       "artifacts": [
-        "service-draft06-source"
+        "service-draft07-source"
       ],
-      "producer": "service-draft06-tests"
+      "producer": "service-draft07-tests"
     },
     {
       "suite": "verification",
-      "case_id": "draft06-dual-mismatch",
+      "case_id": "draft07-dual-mismatch",
       "class": "draft_normative",
       "authority": [
-        "draft-ietf-dkim-dkim2-spec-06 Sections 3.1, 7.3, and 11.7"
+        "draft-ietf-dkim-dkim2-spec-07 Sections 3.1, 9.3, and 14.7"
       ],
       "provenance": "regression_reproducer",
       "runner": "portable_vector",
       "required_platform": "portable",
       "expected_outcome": "pass",
       "artifacts": [
-        "verification-draft06-source"
+        "verification-draft07-source"
       ],
-      "producer": "verification-draft06-tests"
+      "producer": "verification-draft07-tests"
     },
     {
       "suite": "verification",
-      "case_id": "draft06-recipe-less-unchanged",
+      "case_id": "draft07-recipe-less-unchanged",
       "class": "documented_interpretation",
       "authority": [
-        "draft-ietf-dkim-dkim2-spec-06 Sections 7.2, 9.1, and 11.2"
+        "draft-ietf-dkim-dkim2-spec-07 Sections 9.2, 12.1, and 14.2"
       ],
       "provenance": "cross_primitive",
       "runner": "portable_vector",
       "required_platform": "portable",
       "expected_outcome": "pass",
       "artifacts": [
-        "verification-draft06-source"
+        "verification-draft07-source"
       ],
-      "producer": "verification-draft06-tests"
+      "producer": "verification-draft07-tests"
     },
     {
       "suite": "verification",
-      "case_id": "draft06-recipe-less-unknown-only",
+      "case_id": "draft07-recipe-less-unknown-only",
       "class": "documented_interpretation",
       "authority": [
-        "draft-ietf-dkim-dkim2-spec-06 Sections 7.2, 9.1, and 11.2"
+        "draft-ietf-dkim-dkim2-spec-07 Sections 9.2, 12.1, and 14.2"
       ],
       "provenance": "cross_primitive",
       "runner": "portable_vector",
       "required_platform": "portable",
       "expected_outcome": "pass",
       "artifacts": [
-        "verification-draft06-source"
+        "verification-draft07-source"
       ],
-      "producer": "verification-draft06-tests"
+      "producer": "verification-draft07-tests"
     },
     {
       "suite": "verification",
-      "case_id": "draft06-same-algorithm-positional",
+      "case_id": "draft07-same-algorithm-positional",
       "class": "draft_normative",
       "authority": [
-        "draft-ietf-dkim-dkim2-spec-06 Sections 8.9, 11.2, and 11.6"
+        "draft-ietf-dkim-dkim2-spec-07 Sections 10.9, 14.2, and 14.6"
       ],
       "provenance": "cross_primitive",
       "runner": "portable_vector",
@@ -1805,31 +1805,31 @@
       "artifacts": [
         "verification-multisignature-source"
       ],
-      "producer": "verification-draft06-tests"
+      "producer": "verification-draft07-tests"
     },
     {
       "suite": "verification",
-      "case_id": "draft06-sha512-only",
+      "case_id": "draft07-sha512-only",
       "class": "draft_normative",
       "authority": [
-        "draft-ietf-dkim-dkim2-spec-06 Sections 3.1, 7.3, and 11.7"
+        "draft-ietf-dkim-dkim2-spec-07 Sections 3.1, 9.3, and 14.7"
       ],
       "provenance": "regression_reproducer",
       "runner": "portable_vector",
       "required_platform": "portable",
       "expected_outcome": "pass",
       "artifacts": [
-        "verification-draft06-source"
+        "verification-draft07-source"
       ],
-      "producer": "verification-draft06-tests"
+      "producer": "verification-draft07-tests"
     },
     {
       "suite": "verification",
       "case_id": "negative-crypto-dns",
       "class": "draft_normative",
       "authority": [
-        "draft-ietf-dkim-dkim2-spec-06 Sections 3, 10, 11.5, and 11.6",
-        "draft-ietf-dkim-dkim2-dns-00 Sections 3.3 through 3.4.2"
+        "draft-ietf-dkim-dkim2-spec-07 Sections 3, 13, 14.5, and 14.6",
+        "draft-ietf-dkim-dkim2-dns-01 Sections 3.3 through 3.4.2"
       ],
       "provenance": "cross_primitive",
       "runner": "portable_vector",
@@ -1845,7 +1845,7 @@
       "case_id": "negative-envelope",
       "class": "draft_normative",
       "authority": [
-        "draft-ietf-dkim-dkim2-spec-06 Sections 8.5, 8.6, 10, and 11",
+        "draft-ietf-dkim-dkim2-spec-07 Sections 10.5, 10.6, 13, and 14",
         "RFC 5321 Section 4.1.1"
       ],
       "provenance": "manual_derivation",
@@ -1862,7 +1862,7 @@
       "case_id": "negative-hash",
       "class": "draft_normative",
       "authority": [
-        "draft-ietf-dkim-dkim2-spec-06 Sections 6, 10.1, and 11.7"
+        "draft-ietf-dkim-dkim2-spec-07 Sections 6, 13, and 14.7"
       ],
       "provenance": "cross_primitive",
       "runner": "portable_vector",
@@ -1878,7 +1878,7 @@
       "case_id": "negative-structure",
       "class": "draft_normative",
       "authority": [
-        "draft-ietf-dkim-dkim2-spec-06 Sections 4, 7, 8, 10, and 11.2",
+        "draft-ietf-dkim-dkim2-spec-07 Sections 4, 9, 10, 13, and 14.2",
         "RFC 5322 Section 2.2"
       ],
       "provenance": "regression_reproducer",
@@ -1895,7 +1895,7 @@
       "case_id": "negative-time",
       "class": "draft_normative",
       "authority": [
-        "draft-ietf-dkim-dkim2-spec-06 Sections 8.4 and 11.3"
+        "draft-ietf-dkim-dkim2-spec-07 Sections 10.4 and 14.3"
       ],
       "provenance": "manual_derivation",
       "runner": "portable_vector",
@@ -1911,7 +1911,7 @@
       "case_id": "public-facade",
       "class": "draft_normative",
       "authority": [
-        "draft-ietf-dkim-dkim2-spec-06 Sections 3 through 11"
+        "draft-ietf-dkim-dkim2-spec-07 Sections 3 through 14"
       ],
       "provenance": "cross_primitive",
       "runner": "portable_vector",
@@ -1927,7 +1927,7 @@
       "case_id": "received-dsn-evaluation",
       "class": "draft_normative",
       "authority": [
-        "draft-ietf-dkim-dkim2-spec-06 Section 12.1.2"
+        "draft-ietf-dkim-dkim2-spec-07 Section 16.3"
       ],
       "provenance": "manual_derivation",
       "runner": "portable_vector",

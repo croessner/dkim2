@@ -10,7 +10,7 @@ import (
 
 // completedSigningFields snapshots proved signing fields and optionally appends
 // diagnostic metadata derived solely from the newly generated signature. X- fields
-// are unsigned under Draft-06 Section 4; this metadata is never authentication evidence.
+// are unsigned under Draft-07 Section 4; this metadata is never authentication evidence.
 func completedSigningFields(message dkim2.UnrestrictedSignedMessage, interopInfo bool) ([]CompletedField, error) {
 	generated := message.GeneratedFields()
 	fields := make([]CompletedField, 0, len(generated)+1)
@@ -46,7 +46,7 @@ func signingInteropField(message dkim2.UnrestrictedSignedMessage) (CompletedFiel
 		}
 	}
 	date := time.Unix(int64(timestamp), 0).UTC().Format(time.DateOnly)
-	return NewCompletedField([]byte("X-DKIM2-Info: draft=ietf-dkim-dkim2-spec-06;\r\n" +
+	return NewCompletedField([]byte("X-DKIM2-Info: draft=ietf-dkim-dkim2-spec-07;\r\n" +
 		"\trepo=github.com/croessner/dkim2; date=" + date + "; sw=dkim2d;\r\n" +
 		"\taction=sign d=" + domain + " a=" + strings.Join(algorithms, ",") + ";\r\n"))
 }

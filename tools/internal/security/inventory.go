@@ -21,9 +21,9 @@ import (
 
 const (
 	// MessageDraft is the exact DKIM2 behavior baseline used by security evidence.
-	MessageDraft = "draft-ietf-dkim-dkim2-spec-06"
+	MessageDraft = "draft-ietf-dkim-dkim2-spec-07"
 	// DNSDraft is the exact historical DNS behavior baseline used by security evidence.
-	DNSDraft = "draft-ietf-dkim-dkim2-dns-00"
+	DNSDraft = "draft-ietf-dkim-dkim2-dns-01"
 	// BaseRevision is the fixed trusted implementation anchor for candidate admission.
 	BaseRevision = "f30fecbd35ae3afd1b590ddfe55ee45f0cf6555a"
 	// FuzzDuration is the minimum unchanged-candidate duration for each target.

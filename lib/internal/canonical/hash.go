@@ -25,7 +25,7 @@ func (c Canonicalizer) Digest(input ByteInput) (Digest, error) {
 	}
 }
 
-// SHA256Digest calculates the fixed Section 9.6 signature-input SHA-256 digest.
+// SHA256Digest calculates the fixed Section 12.8 signature-input SHA-256 digest.
 func (c Canonicalizer) SHA256Digest(input ByteInput) (Digest, error) {
 	if err := c.validateDigestInput(input, KindSignatureInput); err != nil {
 		return Digest{}, err

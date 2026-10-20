@@ -155,7 +155,7 @@ func publicProviderFixture(t testing.TB) []byte {
 		"DKIM2-Signature: i=1; m=1; t=" + strconv.FormatInt(1700000000, 10) + "; mf=PD4=; rt=PHJjcHRAZXhhbXBsZS50ZXN0Pg==; d=example.test; s=selector.test:rsa-sha256:" + signature + ";\r\n\r\nbody\r\n")
 }
 
-// publicEd25519Fixture builds a current Ed25519-SHA256 message signed over the Section 9.6 digest.
+// publicEd25519Fixture builds a current Ed25519-SHA256 message signed over the Section 12.8 digest.
 func publicEd25519Fixture(t *testing.T) ([]byte, ed25519.PublicKey) {
 	t.Helper()
 	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)

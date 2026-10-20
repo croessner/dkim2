@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	contractDraft            = "draft-ietf-dkim-dkim2-spec-06"
+	contractDraft            = "draft-ietf-dkim-dkim2-spec-07"
 	fixtureSchemaName        = "dkim2.dsn-propagate-fixture.v1"
 	fixtureMaxDepth          = 32
 	fixtureMaxTokens         = 1 << 16

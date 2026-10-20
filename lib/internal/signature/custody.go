@@ -460,10 +460,10 @@ func custodyPathDomain(path []byte) (string, bool) {
 	return canonicalDNSName(mailbox[separator+1:])
 }
 
-// RelaxedDomainMatch applies the Section 9.4 relaxed domain match: labels are
+// RelaxedDomainMatch applies the Section 7 relaxed domain match: labels are
 // removed only from the left of candidate until it equals base, so base may be
 // equal to or a parent domain of candidate but never the reverse. It is the
-// single owner of that rule for custody, Section 11.4 identity, and outer
+// single owner of that rule for custody, Section 14.4 identity, and outer
 // signer alignment.
 func RelaxedDomainMatch(base, candidate string) bool {
 	return candidate == base || strings.HasSuffix(candidate, "."+base)

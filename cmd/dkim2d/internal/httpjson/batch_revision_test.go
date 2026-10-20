@@ -105,7 +105,7 @@ func newBatchBoundaryFixtureWith(t *testing.T, messageBody []byte, externalCopie
 	}
 	original = append(original, raw[offset:]...)
 	current := append([]byte("Received: by queue.hosted.test\r\n"), original...)
-	request := generated.BatchRevisionRequest{ApiVersion: generated.V1, Draft: generated.DraftIetfDkimDkim2Spec06, Binding: strings.Repeat("a", 64),
+	request := generated.BatchRevisionRequest{ApiVersion: generated.V1, Draft: generated.DraftIetfDkimDkim2Spec07, Binding: strings.Repeat("a", 64),
 		Original: generated.BatchRevisionOriginal{Message: batchWireMessage(t, original), Smtp: batchWireSMTP(t, "<sender@hosted.test>", "<alias@hosted.test>")}}
 	request.Copies = []generated.BatchRevisionCopy{
 		{Id: "local", Delivery: generated.Local, Message: batchWireMessage(t, current), Smtp: batchWireSMTP(t, "<sender@hosted.test>", "<local@hosted.test>")},
