@@ -78,17 +78,14 @@ certification, or universal interoperability claim.
 - Propagation cannot complete when the previous hop's public key was rotated
   away or revoked between forwarding and the arrival of the notification. The
   previous hop's signature is verified over the reconstructed state, with the
-  Draft-07 Section 10.4 window evaluated at the completion signature's `t=`,
+  Draft-07 Section 14.3 window evaluated at the completion signature's `t=`,
   before its `mf=` may become a recipient; without a resolvable key the
   outcome is a permanent refusal, not a best-effort delivery.
-- An EAI previous hop cannot be propagated to. The signed-envelope grammar of
-  this implementation is ASCII-only, so a previous-hop `mf=` carrying a
-  non-ASCII address does not parse, the embedded signature therefore does not
-  verify, and the outcome is `embedded = unverified` with a propagation state
-  that is never `eligible`. The refusal happens at signature parsing, before
-  any rebuild. The `smtputf8_required` fact still exists for notifications
-  whose rebuilt header fields carry non-ASCII bytes for other reasons; it is
-  computed over every rendered byte outside the embedded original's body, and
+- An EAI previous hop with an RFC 6531 UTF-8 local part is propagated to:
+  recorded `mf=` paths keep the local part and carry an A-label domain
+  (Draft-07 Section 18), and the rebuilt report sets `smtputf8_required`. The
+  fact is computed over every rendered byte outside the embedded original's
+  body, and
   the adapter fails closed when the re-injection listener does not advertise a
   required `SMTPUTF8` or `8BITMIME` extension.
 - Propagation is at-least-once, bounded by the two-phase replay gate. A

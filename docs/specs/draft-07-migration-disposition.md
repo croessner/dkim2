@@ -452,3 +452,29 @@ Open follow-ups owned by later packages:
   RFC 6532 UTF-8 for an internationalized author.
 - Evidence: a byte-exact parser reproducer, header `u` reconstruction, a
   generator round trip, and an end-to-end PASS for a Latin-1 `Subject`.
+
+## 15. SMTPUTF8 signing
+
+- Draft-07 Section 18 only constrains how envelope domains are recorded, but
+  leaving SMTPUTF8 mail unsigned (Milter originator), deferring it (Milter
+  transit, Exim), or rejecting it in the daemon mapping made EAI mail
+  unsignable end to end. Four layers had ASCII-only gates: the Milter session
+  and signing-domain derivation, the Exim outbound scalars and daemon mapping,
+  the daemon HTTP envelope mapping, and the library route planner.
+- The library route planner now admits every path the shared SMTP path grammar
+  accepts. New public helpers `ValidEnvelopePath` and `EnvelopePathDomain`
+  give adapters one owner for SMTPUTF8 admission and A-label domain mapping.
+- The daemon mapping checks UTF-8 plus NUL and CR/LF framing; the library
+  owns the grammar. `context.domain` stays an A-label.
+- The Milter signs SMTPUTF8 envelopes in originator and transit mode and maps
+  a U-label envelope-sender domain to its A-label; a non-ASCII path without
+  the `SMTPUTF8` parameter still fails closed. Exim admits valid UTF-8
+  outgoing scalars for sign and revise.
+- DSN propagation to a previous hop with a UTF-8 local part was already
+  possible and is now pinned by a test, including `smtputf8_required`.
+- Evidence: a library reproducer signing a UTF-8 local part and U-label
+  domains that records A-labels and verifies against the UTF-8 envelope, the
+  daemon mapping, Milter originator and transit sessions, Milter A-label
+  domain derivation, Exim contract, mapping, and filter tests, and the DSN
+  propagation test. A real Postfix or Exim SMTPUTF8 signing run is not part of
+  this package.

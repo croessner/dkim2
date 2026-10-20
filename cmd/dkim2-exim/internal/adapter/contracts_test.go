@@ -223,8 +223,10 @@ func TestLocalScanRequestLimits(t *testing.T) {
 	}
 }
 
-// TestEnvelopeContractsPreserveInboundUTF8AndRejectOutboundUTF8 proves authority rules.
-func TestEnvelopeContractsPreserveInboundUTF8AndRejectOutboundUTF8(t *testing.T) {
+// TestEnvelopeContractsPreserveInboundAndOutboundUTF8 proves authority rules:
+// SMTPUTF8 envelopes are valid in both directions (Draft-07 Section 18), while
+// invalid UTF-8 and framing bytes fail closed.
+func TestEnvelopeContractsPreserveInboundAndOutboundUTF8(t *testing.T) {
 	incoming, err := NewIncomingEvidence(
 		[]byte("mü@example"), [][]byte{[]byte("rü@example")}, SessionSMTP,
 	)
@@ -239,10 +241,12 @@ func TestEnvelopeContractsPreserveInboundUTF8AndRejectOutboundUTF8(t *testing.T)
 		{nil, []byte("bounce@example")},
 		{[]byte("sender@example"), []byte("recipient@example")},
 		{[]byte{1}, []byte{0x7f}},
+		{[]byte("mü@example"), []byte("recipient@example")},
+		{[]byte("sender@example"), []byte("rü@bücher.example")},
 	}
 	for _, current := range validCases {
 		if _, err := NewOutgoingEnvelope(current.sender, current.recipient); err != nil {
-			t.Fatal("valid ASCII outgoing envelope failed")
+			t.Fatal("valid outgoing envelope failed")
 		}
 	}
 	invalidCases := []struct {
@@ -250,8 +254,8 @@ func TestEnvelopeContractsPreserveInboundUTF8AndRejectOutboundUTF8(t *testing.T)
 		recipient []byte
 	}{
 		{nil, nil},
-		{[]byte("mü@example"), []byte("recipient@example")},
-		{[]byte("sender@example"), []byte("rü@example")},
+		{[]byte("m\xffu@example"), []byte("recipient@example")},
+		{[]byte("sender@example"), []byte("r\xe9@example")},
 		{[]byte("sender\nexample"), []byte("recipient@example")},
 		{[]byte("sender@example"), []byte("recipient\x00example")},
 		{bytes.Repeat([]byte{'s'}, maxEnvelopeBytes+1), []byte("recipient@example")},

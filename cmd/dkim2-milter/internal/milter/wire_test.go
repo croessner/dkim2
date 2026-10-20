@@ -156,9 +156,18 @@ func allZeroBytes(value []byte) bool {
 	return true
 }
 
-// TestOriginatorSMTPUTF8ReachesApplicabilityBoundary proves valid EAI envelope
-// evidence is retained for a mutation-free signing applicability decision.
-func TestOriginatorSMTPUTF8ReachesApplicabilityBoundary(t *testing.T) {
+// TestSigningModesSMTPUTF8ReachesApplicabilityBoundary proves valid EAI
+// envelope evidence is retained for a signing decision in both originator and
+// transit mode (Draft-07 Section 18); transit no longer tempfails it.
+func TestSigningModesSMTPUTF8ReachesApplicabilityBoundary(t *testing.T) {
+	for _, mode := range []string{modeOriginator, modeTransit} {
+		testSigningModeSMTPUTF8(t, mode)
+	}
+}
+
+// testSigningModeSMTPUTF8 drives one signing mode through SMTPUTF8 envelopes.
+func testSigningModeSMTPUTF8(t *testing.T, mode string) {
+	t.Helper()
 	for _, testCase := range []struct {
 		name      string
 		mail      []byte
@@ -184,7 +193,7 @@ func TestOriginatorSMTPUTF8ReachesApplicabilityBoundary(t *testing.T) {
 			handler := &testHandler{result: Result{
 				Operation: operationSign, Result: resultNone, Outcome: DispositionContinue,
 			}}
-			session := testSession(t, handler, false, modeOriginator, "")
+			session := testSession(t, handler, false, mode, "")
 			input := appendPeerFrames(
 				peerFrame(commandNegotiate, negotiationPayload()),
 				peerFrame(commandConnect, []byte("mx\x00U")),
@@ -218,8 +227,8 @@ func TestMessageSigningDomainUsesOnlyCanonicalEnvelopeSenderDNS(t *testing.T) {
 		{name: "source route", reverse: "<@relay.test:sender@example.test>", want: exampleDomain, ok: true},
 		{name: "null sender", reverse: "<>"},
 		{name: "domain literal", reverse: "<sender@[192.0.2.1]>"},
-		{name: "SMTPUTF8 local part", reverse: "<séndér@example.test>"},
-		{name: "SMTPUTF8 domain", reverse: "<sender@exämple.test>"},
+		{name: "SMTPUTF8 local part", reverse: "<séndér@example.test>", want: exampleDomain, ok: true},
+		{name: "SMTPUTF8 U-label domain maps to A-label", reverse: "<sender@exämple.test>", want: "xn--exmple-cua.test", ok: true},
 		{name: "unframed", reverse: "sender@example.test"},
 		{name: "malformed", reverse: "<sender@example.test"},
 	}

@@ -433,7 +433,7 @@ func TestHandlerDerivesOriginatorDomainFromEnvelopeSender(t *testing.T) {
 		result.Domains.Domains() != testDomain {
 		t.Fatalf("Handle() result=%v error=%v, calls=%d", result, err, calls)
 	}
-	for _, reverse := range []string{"<sender@[192.0.2.1]>", "<séndér@example.test>", "<sender@täst.example>"} {
+	for _, reverse := range []string{"<sender@[192.0.2.1]>"} {
 		message, err := milter.NewMessage(
 			[]byte("From: sender@example.test\r\n\r\nbody"),
 			[]byte(reverse),
@@ -449,22 +449,26 @@ func TestHandlerDerivesOriginatorDomainFromEnvelopeSender(t *testing.T) {
 			t.Fatalf("Handle(%q)=(%v,%v)", reverse, result, handleErr)
 		}
 	}
-	message, err = milter.NewMessage(
-		[]byte("From: sender@example.test\r\n\r\nbody"),
-		[]byte("<sender@example.test>"),
-		[][]byte{[]byte("<réçipient@example.test>")},
-	)
-	if err != nil {
-		t.Fatal(err)
+	// SMTPUTF8 envelopes are signable (Draft-07 Section 18): a UTF-8 local
+	// part keeps the envelope domain, and a UTF-8 recipient is accepted.
+	for _, envelope := range [][2]string{
+		{"<séndér@example.test>", "<recipient@example.test>"},
+		{"<sender@example.test>", "<réçipient@example.test>"},
+	} {
+		message, err := milter.NewMessage(
+			[]byte("From: sender@example.test\r\n\r\nbody"),
+			[]byte(envelope[0]),
+			[][]byte{[]byte(envelope[1])},
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, handleErr := handler.Handle(t.Context(), message); handleErr != nil {
+			t.Fatalf("Handle(%q -> %q) error=%v", envelope[0], envelope[1], handleErr)
+		}
 	}
-	result, handleErr := handler.Handle(t.Context(), message)
-	if handleErr != nil || result.Operation != operationSign ||
-		result.Result != verificationNone || result.Outcome != milter.DispositionContinue ||
-		len(result.Actions) != 0 {
-		t.Fatalf("Handle(EAI recipient)=(%v,%v)", result, handleErr)
-	}
-	if calls != 1 {
-		t.Fatalf("invalid envelope domains reached daemon: calls=%d", calls)
+	if calls != 3 {
+		t.Fatalf("SMTPUTF8 envelopes did not reach the daemon exactly once each: calls=%d", calls)
 	}
 }
 

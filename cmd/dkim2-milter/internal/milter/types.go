@@ -216,22 +216,25 @@ func (m Message) Raw() []byte { return bytes.Clone(m.raw) }
 // ReversePath returns an isolated copy of exact callback bytes.
 func (m Message) ReversePath() []byte { return bytes.Clone(m.reverse) }
 
-// SigningDomain derives one canonical ASCII DNS domain only when the complete
-// originator envelope fits the current ASCII signing boundary.
+// SigningDomain derives the canonical lowercase A-label DNS domain of the
+// reverse path when the complete originator envelope is signable. SMTPUTF8
+// paths are supported: a U-label domain maps to its A-label through the
+// library's strict IDNA owner (Draft-07 Section 18).
 func (m Message) SigningDomain() (string, bool) {
-	if !m.SupportsASCIISigningEnvelope() {
+	if !m.SupportsSigningEnvelope() {
 		return "", false
 	}
-	return canonicalASCIIEnvelopeDomain(m.reverse, true)
+	return dkim2.EnvelopePathDomain(m.reverse)
 }
 
-// RecipientDomainObservation derives distinct canonical ASCII DNS domains from
-// exact validated recipient paths and bounds only their operator-visible list.
+// RecipientDomainObservation derives distinct canonical A-label DNS domains
+// from exact validated recipient paths and bounds only their operator-visible
+// list.
 func (m Message) RecipientDomainObservation() DomainObservation {
 	seen := make(map[string]struct{}, len(m.recipients))
 	visible := make([]string, 0, maxObservedDomains)
 	for _, recipient := range m.recipients {
-		domain, ok := canonicalASCIIEnvelopeDomain(recipient, false)
+		domain, ok := dkim2.EnvelopePathDomain(recipient)
 		if !ok {
 			continue
 		}
@@ -256,39 +259,6 @@ func (m Message) RecipientDomainObservation() DomainObservation {
 		return DomainObservation{}
 	}
 	return observation
-}
-
-// canonicalASCIIEnvelopeDomain returns the mailbox DNS domain without its local
-// part, address literals, SMTPUTF8 normalization, aliases, or fallback.
-func canonicalASCIIEnvelopeDomain(path []byte, allowNull bool) (string, bool) {
-	if len(path) == 2 || !asciiBytes(path) || !validEnvelopePath(path, allowNull) {
-		return "", false
-	}
-	mailbox := path[1 : len(path)-1]
-	if mailbox[0] == '@' {
-		separator := bytes.IndexByte(mailbox, ':')
-		if separator < 2 || !validSourceRoute(mailbox[:separator]) {
-			return "", false
-		}
-		mailbox = mailbox[separator+1:]
-	}
-	localEnd, ok := smtpLocalEnd(mailbox)
-	if !ok || localEnd >= len(mailbox) || mailbox[localEnd] != '@' {
-		return "", false
-	}
-	domain := mailbox[localEnd+1:]
-	if len(domain) == 0 || domain[0] == '[' || !asciiBytes(domain) ||
-		!validSMTPDomain(domain) {
-		return "", false
-	}
-	canonical := make([]byte, len(domain))
-	for index, current := range domain {
-		if current >= 'A' && current <= 'Z' {
-			current += 'a' - 'A'
-		}
-		canonical[index] = current
-	}
-	return string(canonical), true
 }
 
 // NullSenderSkip is the closed reason why the header_from originator policy
@@ -345,15 +315,15 @@ func (m Message) HeaderFromNullSenderDomain() (string, NullSenderSkip) {
 // NullReversePath reports whether the exact normalized SMTP sender is null.
 func (m Message) NullReversePath() bool { return bytes.Equal(m.reverse, []byte("<>")) }
 
-// SupportsASCIISigningEnvelope reports whether every exact SMTP path fits the
-// pinned originator signing boundary without normalization or inference.
-func (m Message) SupportsASCIISigningEnvelope() bool {
-	if len(m.recipients) == 0 || !asciiBytes(m.reverse) ||
-		!validEnvelopePath(m.reverse, true) {
+// SupportsSigningEnvelope reports whether every exact SMTP path satisfies the
+// library's signing path grammar, including RFC 6531 SMTPUTF8 local parts and
+// U-label domains, without normalization or inference.
+func (m Message) SupportsSigningEnvelope() bool {
+	if len(m.recipients) == 0 || !dkim2.ValidEnvelopePath(m.reverse, true) {
 		return false
 	}
 	for _, recipient := range m.recipients {
-		if !asciiBytes(recipient) || !validEnvelopePath(recipient, false) {
+		if !dkim2.ValidEnvelopePath(recipient, false) {
 			return false
 		}
 	}

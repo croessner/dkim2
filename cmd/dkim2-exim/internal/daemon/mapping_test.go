@@ -182,21 +182,26 @@ func TestMapReviseRequestKeepsIncomingAndOutgoingDistinct(t *testing.T) {
 }
 
 // TestRequestMappingRejectsInvalidAuthority proves generated DTO creation
-// fails before non-ASCII outgoing or invalid administrative values escape.
+// carries SMTPUTF8 paths but fails before invalid UTF-8 or invalid
+// administrative values escape.
 func TestRequestMappingRejectsInvalidAuthority(t *testing.T) {
 	if _, err := mapSMTP(
-		[]byte("<séndér@example.test>"),
+		[]byte("<séndér@bücher.example>"),
+		[][]byte{[]byte("<récipient@example.net>")},
+	); err != nil {
+		t.Fatalf("SMTPUTF8 outgoing envelope was rejected: %v", err)
+	}
+	if _, err := mapSMTP(
+		[]byte("<s\xffnder@example.test>"),
 		[][]byte{[]byte("<recipient@example.net>")},
-		true,
 	); err == nil {
-		t.Fatal("non-ASCII outgoing sender was accepted")
+		t.Fatal("invalid UTF-8 outgoing sender was accepted")
 	}
 	if _, err := mapSMTP(
 		[]byte("<sender@example.test>"),
-		[][]byte{[]byte("<récipient@example.net>")},
-		true,
+		[][]byte{[]byte("<r\xe9cipient@example.net>")},
 	); err == nil {
-		t.Fatal("non-ASCII outgoing recipient was accepted")
+		t.Fatal("invalid UTF-8 outgoing recipient was accepted")
 	}
 	if validSigningContext("Tenant", "example.test") ||
 		validSigningContext("tenant", "Example.test") ||

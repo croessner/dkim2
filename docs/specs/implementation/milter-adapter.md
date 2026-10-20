@@ -552,15 +552,13 @@ form, and then supplies the normalized RFC path to DKIM2. No mailbox byte is
 otherwise changed. Angle-bracket stripping, Unicode normalization, case
 folding, IDNA conversion, mailbox reparsing, and lossy string trimming are
 forbidden. SMTPUTF8 octets are preserved for inbound processing under RFC
-6531/6532, but the pinned M10 signing baseline supports ASCII SMTP paths only.
-An originator non-null, non-ASCII reverse path cannot select an exact signing
-domain and is therefore not applicable; it continues before daemon,
-datasource, or private-key access. Every null sender fails closed before those
+6531/6532. Since the Draft-07 migration, signing accepts SMTPUTF8 paths in
+originator and transit mode: the library validates every path and maps a
+U-label envelope-sender domain to its A-label for `envelope_sender` domain
+selection (Draft-07 Section 18); a non-ASCII path without the `SMTPUTF8`
+parameter still fails closed. Every null sender fails closed before those
 boundaries unless the trusted-route `signing.null_sender: header_from` opt-in
-derives the signing domain from the single From mailbox. Ordinary-transit mode
-still fails closed on every non-ASCII
-envelope path before those boundaries because revision cannot discard inherited
-custody evidence.
+derives the signing domain from the single From mailbox.
 
 Headers are stored as an ordered sequence, never in `textproto.MIMEHeader` or a
 map. Duplicate fields and original name casing are preserved. For each callback

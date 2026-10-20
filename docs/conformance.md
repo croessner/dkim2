@@ -24,7 +24,8 @@ The manifest keeps the source of every claim visible:
 Draft-07 still marks architecture references and IANA considerations as
 `TBA`. The implementation does not turn those sections into protocol claims.
 The library maps SMTPUTF8 envelope domains to A-labels as Draft-07 Section 18
-requires; adapter support for SMTPUTF8 signing is qualified separately.
+requires, and the Milter and Exim adapters sign SMTPUTF8 envelopes through it;
+a real-MTA SMTPUTF8 signing run is qualified separately.
 
 ## Capability status
 

@@ -530,10 +530,11 @@ OpenAPI-first, separately reviewed contract.
 
 SMTPUTF8 bytes are preserved in inbound envelope paths and RFC 6532 message
 content. The adapter performs no Unicode normalization, case folding, IDNA
-conversion, address rewriting or ASCII downgrade. The M10/M16 signing and
-ordinary-transit revision contract currently admits only ASCII outgoing
-envelope paths: `filter sign` and `filter revise` reject a non-ASCII
-`$return_path` or recipient before evidence access, datasource access or any
+conversion, address rewriting or ASCII downgrade. Since the Draft-07
+migration, `filter sign` and `filter revise` admit SMTPUTF8 outgoing envelope
+paths that are valid UTF-8; the daemon and library record U-label domains as
+A-labels (Draft-07 Section 18). Invalid UTF-8 in `$return_path` or a
+recipient is rejected before evidence access, datasource access or any
 daemon authority. UTF-8 and NUL body octets remain legal on those paths.
 Invalid structure, NUL in a header/envelope/session scalar or lossy Exim
 expansion fails closed.

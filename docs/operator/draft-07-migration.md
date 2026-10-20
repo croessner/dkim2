@@ -103,6 +103,15 @@ Replay counting is now local delivery policy (Draft-07 Section 15.1):
   - Other tempfails answer `451 4.7.1`.
   - DKIM2 rejections answer `550 5.7.1`.
   - The Exim `local_scan` texts now start with these enhanced status codes.
+- **SMTPUTF8 signing:** Envelopes with UTF-8 local parts or U-label domains
+  are now signed in originator and transit mode by both the Milter and Exim.
+  `mf=` and `rt=` record local parts unchanged and domains as A-labels
+  (Draft-07 Section 18). The Milter's `envelope_sender` domain source maps a
+  U-label sender domain to its A-label before the signing-domain lookup, so
+  the datasource must hold the A-label form. A non-ASCII path without the
+  SMTP `SMTPUTF8` parameter still fails closed. Previously the Milter left
+  such originator mail unsigned and deferred it in transit mode, and Exim
+  deferred it.
 - **Inbound DSN authority:** It comes from the DSN's `i=1` signer, so a
   forwarded DSN keeps its originator's authority.
 - **DSN From:** An MTA-generated DSN is a new `i=1` message, and its From must
@@ -136,11 +145,6 @@ Replay counting is now local delivery policy (Draft-07 Section 15.1):
   `timestamp_invalid`.
 - **Mailbox parser:** The From mailbox parser does not accept obsolete RFC
   5322 route syntax (`obs-route`). Such a From is not authentic.
-- **EAI envelopes:** Adapter signing stays ASCII-path only.
-  - The Milter continues unsigned for a non-ASCII originator path and
-    tempfails non-ASCII transit paths.
-  - Exim rejects non-ASCII outbound scalars.
-  - Inbound SMTPUTF8 messages are preserved and verified.
 - **Algorithm allow-list:** Draft-07 Section 3 requires verifiers to
   implement all five algorithms (SHA-256, SHA-512, `rsa-sha256`,
   `ed25519-sha256`, `mldsa44-ed25519-sha512`). DNS-01 makes the last two

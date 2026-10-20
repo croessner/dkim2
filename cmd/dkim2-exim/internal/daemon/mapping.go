@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/base64"
 	"strings"
-	"unicode/utf8"
 
 	"github.com/croessner/dkim2/cmd/dkim2-exim/internal/adapter"
 	"github.com/croessner/dkim2/cmd/dkim2-exim/internal/daemon/generated"
@@ -22,7 +21,7 @@ func MapProcessRequest(
 	if err != nil {
 		return generated.ProcessRequest{}, err
 	}
-	smtp, err := mapSMTP(input.MailFrom(), input.Recipients(), false)
+	smtp, err := mapSMTP(input.MailFrom(), input.Recipients())
 	if err != nil {
 		return generated.ProcessRequest{}, err
 	}
@@ -51,9 +50,7 @@ func MapSignRequest(
 		return generated.SignRequest{}, contractError()
 	}
 	outgoing := input.Outgoing()
-	smtp, err := mapSMTP(
-		outgoing.MailFrom(), [][]byte{outgoing.Recipient()}, true,
-	)
+	smtp, err := mapSMTP(outgoing.MailFrom(), [][]byte{outgoing.Recipient()})
 	if err != nil {
 		return generated.SignRequest{}, err
 	}
@@ -82,9 +79,7 @@ func MapReviseRequest(
 
 	// Current transport authority is validated before inherited evidence is read.
 	outgoing := input.Outgoing()
-	currentSMTP, err := mapSMTP(
-		outgoing.MailFrom(), [][]byte{outgoing.Recipient()}, true,
-	)
+	currentSMTP, err := mapSMTP(outgoing.MailFrom(), [][]byte{outgoing.Recipient()})
 	if err != nil {
 		return generated.ReviseRequest{}, err
 	}
@@ -96,7 +91,7 @@ func MapReviseRequest(
 	if !ok {
 		return generated.ReviseRequest{}, contractError()
 	}
-	incomingSMTP, err := mapSMTP(incoming.MailFrom(), incoming.Recipients(), false)
+	incomingSMTP, err := mapSMTP(incoming.MailFrom(), incoming.Recipients())
 	if err != nil {
 		return generated.ReviseRequest{}, err
 	}
@@ -161,10 +156,10 @@ func newMessageInput(
 }
 
 // mapSMTP canonicalizes Exim address expansions into protected RFC 5321 paths.
+// SMTPUTF8 paths are carried byte-exact for verification and signing alike.
 func mapSMTP(
 	mailFrom []byte,
 	recipients [][]byte,
-	asciiOnly bool,
 ) (generated.SMTPInput, error) {
 	defer clearSMTP(mailFrom, recipients)
 	canonicalMailFrom, err := adapter.CanonicalEximPath(mailFrom, true)
@@ -174,7 +169,7 @@ func mapSMTP(
 	canonicalRecipients := make([][]byte, len(recipients))
 	defer clearSMTP(canonicalMailFrom, canonicalRecipients)
 	if len(canonicalMailFrom) > 256 || len(recipients) == 0 || len(recipients) > 2_000 ||
-		!validSMTPScalar(canonicalMailFrom, asciiOnly) {
+		!adapter.ValidEnvelopeScalar(canonicalMailFrom) {
 		return generated.SMTPInput{}, adapter.NewError(adapter.FailureFidelity)
 	}
 	reverse, err := wire.NewProtectedString(string(canonicalMailFrom))
@@ -185,7 +180,7 @@ func mapSMTP(
 	for index, recipient := range recipients {
 		canonicalRecipient, canonicalErr := adapter.CanonicalEximPath(recipient, false)
 		if canonicalErr != nil || len(canonicalRecipient) > 256 ||
-			!validSMTPScalar(canonicalRecipient, asciiOnly) {
+			!adapter.ValidEnvelopeScalar(canonicalRecipient) {
 			return generated.SMTPInput{}, adapter.NewError(adapter.FailureFidelity)
 		}
 		canonicalRecipients[index] = canonicalRecipient
@@ -195,20 +190,6 @@ func mapSMTP(
 		}
 	}
 	return generated.SMTPInput{MailFrom: reverse, RcptTo: forward}, nil
-}
-
-// validSMTPScalar enforces framing and optional signing ASCII constraints.
-func validSMTPScalar(value []byte, asciiOnly bool) bool {
-	if !utf8.Valid(value) {
-		return false
-	}
-	for _, current := range value {
-		if current == 0 || current == '\r' || current == '\n' ||
-			asciiOnly && current > 0x7f {
-			return false
-		}
-	}
-	return true
 }
 
 // appendCRLF appends deterministic LF-to-CRLF conversion within the daemon cap.

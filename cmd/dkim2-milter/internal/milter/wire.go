@@ -345,9 +345,6 @@ func (s *Session) handleMail(payload []byte) error {
 		return &Error{Class: FailureCapacity}
 	}
 	s.reverse = bytes.Clone(path)
-	if s.mode == modeTransit && !asciiBytes(s.reverse) {
-		return &Error{Class: FailureFidelity}
-	}
 	s.state = stateMail
 	return nil
 }
@@ -362,8 +359,7 @@ func (s *Session) handleRecipient(payload []byte) error {
 	if s.mode != modeInbound && s.mode != modePostfixDSN && len(s.recipients) >= 1 {
 		return &Error{Class: FailureContract}
 	}
-	if (!asciiBytes(path) && !s.smtpUTF8) ||
-		(s.mode == modeTransit && !asciiBytes(path)) {
+	if !asciiBytes(path) && !s.smtpUTF8 {
 		return &Error{Class: FailureFidelity}
 	}
 	if !s.reserve(int64(len(path))) {

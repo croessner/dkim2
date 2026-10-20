@@ -106,13 +106,13 @@ func TestHandlerLeavesUnusableNullSenderAuthorsUnsigned(t *testing.T) {
 		header, recipient string
 		skip              milter.NullSenderSkip
 	}{
-		"missing From":       {header: "Sender: a@example.test\r\n", recipient: nullSenderRecipient, skip: milter.NullSenderSkipAuthorUnusable},
-		"two From fields":    {header: "From: a@example.test\r\nFrom: b@example.test\r\n", recipient: nullSenderRecipient, skip: milter.NullSenderSkipAuthorUnusable},
-		"two mailboxes":      {header: "From: a@example.test, b@example.test\r\n", recipient: nullSenderRecipient, skip: milter.NullSenderSkipAuthorUnusable},
-		"group":              {header: "From: Team: a@example.test;\r\n", recipient: nullSenderRecipient, skip: milter.NullSenderSkipAuthorUnusable},
-		"address literal":    {header: "From: a@[192.0.2.1]\r\n", recipient: nullSenderRecipient, skip: milter.NullSenderSkipAuthorUnusable},
-		"SMTPUTF8 author":    {header: "From: a@b\xc3\xbccher.example\r\n", recipient: nullSenderRecipient, skip: milter.NullSenderSkipAuthorUnusable},
-		"SMTPUTF8 recipient": {header: "From: a@example.test\r\n", recipient: "<b\xc3\xb6b@example.net>", skip: milter.NullSenderSkipEnvelopeUnsupported},
+		"missing From":      {header: "Sender: a@example.test\r\n", recipient: nullSenderRecipient, skip: milter.NullSenderSkipAuthorUnusable},
+		"two From fields":   {header: "From: a@example.test\r\nFrom: b@example.test\r\n", recipient: nullSenderRecipient, skip: milter.NullSenderSkipAuthorUnusable},
+		"two mailboxes":     {header: "From: a@example.test, b@example.test\r\n", recipient: nullSenderRecipient, skip: milter.NullSenderSkipAuthorUnusable},
+		"group":             {header: "From: Team: a@example.test;\r\n", recipient: nullSenderRecipient, skip: milter.NullSenderSkipAuthorUnusable},
+		"address literal":   {header: "From: a@[192.0.2.1]\r\n", recipient: nullSenderRecipient, skip: milter.NullSenderSkipAuthorUnusable},
+		"SMTPUTF8 author":   {header: "From: a@b\xc3\xbccher.example\r\n", recipient: nullSenderRecipient, skip: milter.NullSenderSkipAuthorUnusable},
+		"invalid recipient": {header: "From: a@example.test\r\n", recipient: "<b@[bad>", skip: milter.NullSenderSkipEnvelopeUnsupported},
 		"unsigned DSN": {
 			header:    "From: MAILER-DAEMON@example.test\r\nContent-Type: Multipart/Report; Report-Type=\"Delivery-Status\"; boundary=b\r\n",
 			recipient: nullSenderRecipient, skip: milter.NullSenderSkipDeliveryStatus,

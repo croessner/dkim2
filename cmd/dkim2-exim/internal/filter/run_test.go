@@ -309,7 +309,7 @@ func TestRunRejectsEnvelopeBeforeEvidenceAndDaemon(t *testing.T) {
 		adapter.SessionSMTP,
 	)
 	tests := [][]string{
-		{testLocator, "<séndér@example.test>", testTransportRecipient},
+		{testLocator, "<s\xffnder@example.test>", testTransportRecipient},
 		{testLocator, testTransportSender, "<first@example.test>", "<second@example.test>"},
 	}
 	for _, arguments := range tests {

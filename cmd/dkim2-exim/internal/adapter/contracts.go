@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"slices"
+	"unicode/utf8"
 )
 
 const (
@@ -383,8 +384,8 @@ type OutgoingEnvelope struct {
 
 // NewOutgoingEnvelope validates and copies one single-recipient batch.
 func NewOutgoingEnvelope(mailFrom, recipient []byte) (OutgoingEnvelope, error) {
-	if len(recipient) == 0 || !validOutboundScalar(mailFrom) ||
-		!validOutboundScalar(recipient) {
+	if len(recipient) == 0 || !ValidEnvelopeScalar(mailFrom) ||
+		!ValidEnvelopeScalar(recipient) {
 		return OutgoingEnvelope{}, NewError(FailureInvalidRequest)
 	}
 	if len(mailFrom) > maxEnvelopeBytes || len(recipient) > maxEnvelopeBytes {
@@ -814,14 +815,13 @@ func validScalar(value []byte) bool {
 	return !bytes.ContainsAny(value, "\x00\r\n")
 }
 
-// validOutboundScalar accepts ASCII-only transport authority without framing bytes.
-func validOutboundScalar(value []byte) bool {
-	for _, current := range value {
-		if current == 0 || current == '\r' || current == '\n' || current > 0x7f {
-			return false
-		}
-	}
-	return true
+// ValidEnvelopeScalar accepts one Exim envelope scalar as valid UTF-8 without
+// NUL or CR/LF framing bytes. SMTPUTF8 local parts and U-label domains are
+// signable (Draft-07 Section 18); the daemon and library own the path grammar
+// and record domains as A-labels. It is the single Exim-side scalar rule for
+// outgoing envelopes and daemon request mapping.
+func ValidEnvelopeScalar(value []byte) bool {
+	return utf8.Valid(value) && !bytes.ContainsAny(value, "\x00\r\n")
 }
 
 // validHeader accepts exact LF folding and one terminal LF.
@@ -856,8 +856,8 @@ func validOutgoingEnvelope(outgoing OutgoingEnvelope) bool {
 	return len(outgoing.recipient) > 0 &&
 		len(outgoing.mailFrom) <= maxEnvelopeBytes &&
 		len(outgoing.recipient) <= maxEnvelopeBytes &&
-		validOutboundScalar(outgoing.mailFrom) &&
-		validOutboundScalar(outgoing.recipient)
+		ValidEnvelopeScalar(outgoing.mailFrom) &&
+		ValidEnvelopeScalar(outgoing.recipient)
 }
 
 // prepareTransportMessage owns and proves the exact completed LF representation.

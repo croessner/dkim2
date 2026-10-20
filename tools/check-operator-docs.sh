@@ -354,7 +354,7 @@ grep -Fq 'HEALTHCHECK --interval=10s --timeout=3s --retries=3 CMD ["/usr/local/b
   "$containerfile"
 grep -Fq 'no `HEALTHCHECK`' "$propagator"
 grep -Fq 'at-least-once' "$propagator"
-grep -Fq 'embedded = unverified' docs/reference/known-limitations.md
+grep -Fq 'An EAI previous hop with an RFC 6531 UTF-8 local part is propagated to' docs/reference/known-limitations.md
 for document in "$datasources" "$ldap_reference" "$rotation"; do
   grep -Fq 'delivery_status' "$document"
   grep -Fq 'unprovisioned_domain' "$document"

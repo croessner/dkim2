@@ -241,16 +241,29 @@ func TestMapReviseRequestPreservesDistinctEnvelopeEvidence(t *testing.T) {
 	}
 }
 
-// TestMapOperationRequestFailsClosedOnSMTPUTF8Signing proves current signing bounds.
-func TestMapOperationRequestFailsClosedOnSMTPUTF8Signing(t *testing.T) {
+// TestMapOperationRequestAdmitsSMTPUTF8Signing proves SMTPUTF8 envelopes
+// reach the signing service byte-exact (Draft-07 Section 18), while NUL and
+// CR/LF framing bytes still fail closed.
+func TestMapOperationRequestAdmitsSMTPUTF8Signing(t *testing.T) {
 	request := operationRequestFixture(t, []byte("From: sender@example.test\r\n\r\n"))
-	protected, err := wire.NewProtectedString("<séndér@example.test>")
+	protected, err := wire.NewProtectedString("<séndér@bücher.example>")
 	if err != nil {
 		t.Fatal("protected fixture construction failed")
 	}
 	request.Smtp.MailFrom = protected
-	if _, err := MapSignRequest(request); !IsMappingError(err, MappingInvalidContract) {
-		t.Fatalf("SMTPUTF8 signing error = %v", err)
+	mapped, err := MapSignRequest(request)
+	if err != nil || string(mapped.ReversePath()) != "<séndér@bücher.example>" {
+		t.Fatalf("SMTPUTF8 signing mapping error = %v", err)
+	}
+	for _, framed := range []string{"<a\x00b@example.test>", "<a\rb@example.test>", "<a\nb@example.test>"} {
+		bad, badErr := wire.NewProtectedString(framed)
+		if badErr != nil {
+			continue
+		}
+		request.Smtp.MailFrom = bad
+		if _, err := MapSignRequest(request); !IsMappingError(err, MappingInvalidContract) {
+			t.Fatalf("framed path mapping error = %v", err)
+		}
 	}
 }
 

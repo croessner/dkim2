@@ -95,7 +95,8 @@ func MapDeliveryStatusRequest(input generated.DSNSignRequest) (app.DeliveryStatu
 	return request, nil
 }
 
-// mapDSNOuterRecipients validates the single exact ASCII outer DSN recipient.
+// mapDSNOuterRecipients validates the single exact outer DSN recipient,
+// including an SMTPUTF8 path.
 func mapDSNOuterRecipients(values []wire.ProtectedString) ([][]byte, error) {
 	if len(values) != 1 {
 		return nil, newMappingError(MappingInvalidContract)
@@ -104,7 +105,7 @@ func mapDSNOuterRecipients(values []wire.ProtectedString) ([][]byte, error) {
 	if err != nil {
 		return nil, newMappingError(MappingInvalidContract)
 	}
-	if len(path) == 0 || len(path) > maxSMTPPathBytes || !utf8.Valid(path) || !asciiEnvelopePath(path) {
+	if len(path) == 0 || len(path) > maxSMTPPathBytes || !utf8.Valid(path) || !framedEnvelopePath(path) {
 		return nil, newMappingError(MappingInvalidContract)
 	}
 	return [][]byte{bytes.Clone(path)}, nil
@@ -207,11 +208,12 @@ func decodeOperationInput(
 	}, nil
 }
 
-// mapSigningSMTP validates one complete ASCII signing-envelope evidence set.
+// mapSigningSMTP validates one complete signing-envelope evidence set,
+// including SMTPUTF8 paths.
 func mapSigningSMTP(smtp generated.SMTPInput) ([]byte, [][]byte, error) {
 	reverse, err := smtp.MailFrom.Bytes()
 	if err != nil || len(reverse) > maxSMTPPathBytes || !utf8.Valid(reverse) ||
-		!asciiEnvelopePath(reverse) {
+		!framedEnvelopePath(reverse) {
 		return nil, nil, newMappingError(MappingInvalidContract)
 	}
 	if len(smtp.RcptTo) == 0 || len(smtp.RcptTo) > dkim2.HardMaxRecipients {
@@ -222,7 +224,7 @@ func mapSigningSMTP(smtp generated.SMTPInput) ([]byte, [][]byte, error) {
 	for index := range smtp.RcptTo {
 		path, pathErr := smtp.RcptTo[index].Bytes()
 		if pathErr != nil || len(path) > maxSMTPPathBytes || !utf8.Valid(path) ||
-			!asciiEnvelopePath(path) {
+			!framedEnvelopePath(path) {
 			return nil, nil, newMappingError(MappingInvalidContract)
 		}
 		total += len(path)
@@ -362,14 +364,12 @@ func asciiDNSAlphanumeric(value byte) bool {
 	return value >= 'a' && value <= 'z' || value >= '0' && value <= '9'
 }
 
-// asciiEnvelopePath enforces the current signing-engine baseline.
-func asciiEnvelopePath(value []byte) bool {
-	for _, current := range value {
-		if current > 0x7f || current == 0 || current == '\r' || current == '\n' {
-			return false
-		}
-	}
-	return true
+// framedEnvelopePath rejects NUL and CR/LF framing bytes in one SMTP path.
+// UTF-8 SMTPUTF8 paths are admitted (callers check utf8.Valid); the library
+// owns the path grammar and records U-label domains as A-labels (Draft-07
+// Section 18).
+func framedEnvelopePath(value []byte) bool {
+	return !bytes.ContainsAny(value, "\x00\r\n")
 }
 
 // executeSignOperation invokes only the originator applicability boundary.

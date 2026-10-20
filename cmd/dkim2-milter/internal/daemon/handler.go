@@ -427,7 +427,7 @@ func (guard *handlerGuard) nullSenderDomain(message milter.Message) (string, mil
 	if skip != "" {
 		return "", skip
 	}
-	if !message.SupportsASCIISigningEnvelope() {
+	if !message.SupportsSigningEnvelope() {
 		return "", milter.NullSenderSkipEnvelopeUnsupported
 	}
 	return domain, ""

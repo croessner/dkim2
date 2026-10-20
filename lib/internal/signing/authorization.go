@@ -893,16 +893,15 @@ func revisionPredecessor(capability VerifiedRevisionInput, profileDomain string)
 	return "", "", false
 }
 
-// envelopeDomain extracts one canonical DNS domain from validated SMTP path bytes.
+// envelopeDomain extracts one canonical lowercase A-label DNS domain from
+// validated SMTP path bytes through the shared path grammar owner, so U-label
+// domains and source routes follow the same rule as recording (Draft-07
+// Section 18).
 func envelopeDomain(path []byte) (string, bool) {
-	if !signature.ValidEnvelopePath(path, false) {
+	domain, valid := EnvelopePathDomain(path)
+	if !valid {
 		return "", false
 	}
-	at := bytes.LastIndexByte(path, '@')
-	if at < 2 || at >= len(path)-2 {
-		return "", false
-	}
-	domain := strings.ToLower(string(path[at+1 : len(path)-1]))
 	return domain, canonicalAuthorizationDomain(domain)
 }
 

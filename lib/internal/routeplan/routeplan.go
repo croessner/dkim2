@@ -1828,13 +1828,10 @@ func checkedCharge(total *int, amount, limit int) bool {
 	return true
 }
 
-// validPath accepts only bounded ASCII bracketed RFC 5321 path evidence.
+// validPath accepts bounded bracketed RFC 5321 path evidence under the shared
+// SMTP path grammar, including SMTPUTF8 local parts and U-label domains, which
+// the signer records with A-label domains (Draft-07 Section 18).
 func validPath(path []byte, allowNull bool) bool {
-	for _, value := range path {
-		if value > 0x7f {
-			return false
-		}
-	}
 	return signature.ValidEnvelopePath(path, allowNull)
 }
 

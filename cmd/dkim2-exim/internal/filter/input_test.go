@@ -113,17 +113,18 @@ func TestBuildRequestTreatsPipeAddressAsOneOpaqueArg(t *testing.T) {
 	}
 }
 
-// TestBuildRequestRejectsOutboundSMTPUTF8BeforeEvidence proves unsupported
-// transport authority cannot reach the immutable evidence owner.
-func TestBuildRequestRejectsOutboundSMTPUTF8BeforeEvidence(t *testing.T) {
+// TestBuildRequestRejectsInvalidOutboundUTF8BeforeEvidence proves outgoing
+// envelope bytes that are not valid UTF-8 cannot reach the immutable evidence
+// owner; valid SMTPUTF8 paths are signable (Draft-07 Section 18).
+func TestBuildRequestRejectsInvalidOutboundUTF8BeforeEvidence(t *testing.T) {
 	incoming, _ := adapter.NewIncomingEvidence(
 		[]byte("<old@example.test>"),
 		[][]byte{[]byte("<received@example.test>")},
 		adapter.SessionSMTP,
 	)
 	for _, arguments := range [][]string{
-		{testLocator, "<séndér@example.test>", testTransportRecipient},
-		{testLocator, testTransportSender, "<réçipient@example.test>"},
+		{testLocator, "<s\xffnder@example.test>", testTransportRecipient},
+		{testLocator, testTransportSender, "<r\xe9cipient@example.test>"},
 	} {
 		loader := &evidenceStub{incoming: incoming}
 		_, err := BuildRequest(context.Background(),
@@ -133,7 +134,7 @@ func TestBuildRequestRejectsOutboundSMTPUTF8BeforeEvidence(t *testing.T) {
 			loader)
 
 		if err == nil || loader.calls != 0 {
-			t.Fatal("non-ASCII outgoing envelope reached evidence authority")
+			t.Fatal("invalid UTF-8 outgoing envelope reached evidence authority")
 		}
 	}
 }
@@ -205,4 +206,25 @@ func FuzzInvocationParsing(f *testing.F) {
 		_, _ = parseInvocation(operation, []string{first, second})
 		_, _ = parseInvocation(operation, []string{first, second, first})
 	})
+}
+
+// TestBuildRequestAdmitsOutboundSMTPUTF8 proves a valid SMTPUTF8 outgoing
+// envelope reaches the evidence owner byte-exact (Draft-07 Section 18).
+func TestBuildRequestAdmitsOutboundSMTPUTF8(t *testing.T) {
+	incoming, _ := adapter.NewIncomingEvidence(
+		[]byte("<old@example.test>"),
+		[][]byte{[]byte("<received@example.test>")},
+		adapter.SessionSMTP,
+	)
+	loader := &evidenceStub{incoming: incoming}
+	request, err := BuildRequest(context.Background(),
+		adapter.FilterRevise,
+		[]string{testLocator, "<séndér@bücher.example>", "<réçipient@example.test>"},
+		[]byte("Subject: \xc3\xa9\n\nbody\n"),
+		loader)
+	if err != nil || loader.calls != 1 ||
+		string(request.Outgoing().MailFrom()) != "<séndér@bücher.example>" ||
+		string(request.Outgoing().Recipient()) != "<réçipient@example.test>" {
+		t.Fatalf("SMTPUTF8 outgoing envelope was not admitted: %v", err)
+	}
 }
