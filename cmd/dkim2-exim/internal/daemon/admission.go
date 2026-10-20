@@ -66,6 +66,14 @@ func AdmitProcessJSON(body []byte, authservID string) (adapter.Plan, error) {
 	if err != nil {
 		return adapter.Plan{}, contractError()
 	}
+	// Only a tempfail outcome carries the key reason; a permissive policy may
+	// still continue past the same TEMPERROR.
+	if disposition == adapter.DispositionTempfail && value.Authentication.State == generated.TEMPERROR &&
+		value.Authentication.PrimaryReason == generated.AuthenticationResultPrimaryReasonProviderTemporary {
+		if plan, err = plan.WithTemporaryKey(); err != nil {
+			return adapter.Plan{}, contractError()
+		}
+	}
 	return plan, nil
 }
 

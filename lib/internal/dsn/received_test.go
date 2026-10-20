@@ -151,6 +151,8 @@ type receivedSpec struct {
 	outerRecipient string
 	outerUnsigned  bool
 	outerTimestamp uint64
+	// outerForwarders sign the outer report after its i=1 originator.
+	outerForwarders []dsntest.Hop
 }
 
 // defaultReceivedHops returns the ordinary two-hop forwarded chain.
@@ -206,6 +208,7 @@ func (s receivedSpec) build(t *testing.T) []byte {
 		signer := receivedHop(signerDomain, "<>", recipient)
 		signer.Timestamp = s.outerTimestamp
 		report.Signer = &signer
+		report.Forwarders = s.outerForwarders
 	}
 	raw, err := report.Build()
 	if err != nil {
@@ -489,6 +492,31 @@ func TestReceivedEvaluationLocalHopIdentity(t *testing.T) {
 	}
 }
 
+// TestReceivedEvaluationTakesAuthorityFromOuterOriginator reproduces Draft-07
+// Section 16.3 item 1: authority comes from the d= of the DSN's i=1 signature,
+// so a forwarded DSN keeps its originator's authority, and a forged
+// originator is not rescued by a later forwarder that happens to match.
+func TestReceivedEvaluationTakesAuthorityFromOuterOriginator(t *testing.T) {
+	recipient := receivedLocalMailFrom
+	for _, testCase := range []struct {
+		name       string
+		originator string
+		forwarder  string
+		want       OuterAlignmentResult
+	}{
+		{name: "multi-hop outer keeps originator authority", originator: receivedDestinationDomain, forwarder: receivedOtherDomain, want: OuterAlignmentAligned},
+		{name: "wrong originator with matching latest signer", originator: receivedOtherDomain, forwarder: receivedDestinationDomain, want: OuterAlignmentMisaligned},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			spec := receivedSpec{outerSigner: testCase.originator, outerForwarders: []dsntest.Hop{receivedHop(testCase.forwarder, "<>", recipient)}}
+			evaluation, err := evaluateReceived(t, spec, newReceivedAuthority(receivedLocalDomain))
+			if err != nil || evaluation.OuterAlignment() != testCase.want {
+				t.Fatalf("OuterAlignment()=%q error=%v", evaluation.OuterAlignment(), err)
+			}
+		})
+	}
+}
+
 // TestReceivedEvaluationOuterAlignment proves the outer signer must relaxed-match a completion rt= domain.
 func TestReceivedEvaluationOuterAlignment(t *testing.T) {
 	for _, testCase := range []struct {
@@ -630,6 +658,14 @@ func TestReceivedEvaluationPreviousHopClassification(t *testing.T) {
 			receivedHop(receivedRemoteDomain, "<>", receivedLocalRecipient),
 			receivedHop(receivedLocalDomain, receivedLocalMailFrom, receivedDestination),
 		}, local: []string{receivedLocalDomain}, want: PropagationForbiddenNullPreviousSender, wantLowest: 2},
+		// A local hop that relayed with a null reverse path ends the run: it
+		// is valid custody, but a DSN must never be sent to "<>" (Section 16),
+		// so the chain is not propagated past it.
+		{name: "local null-sender hop ends run", hops: []dsntest.Hop{
+			receivedHop(receivedRemoteDomain, "<sender@remote.example>", receivedLocalRecipient),
+			receivedHop(receivedLocalDomain, "<>", receivedForwardMailFrom),
+			receivedHop(receivedForwardDomain, receivedForwardMailFrom, forwardDestination),
+		}, recipient: receivedForwardMailFrom, local: []string{receivedLocalDomain, receivedForwardDomain}, want: PropagationForbiddenNullPreviousSender, wantLowest: 3},
 		{name: "ambiguous previous recipient", hops: []dsntest.Hop{
 			receivedHop(receivedRemoteDomain, "<sender@remote.example>", receivedLocalRecipient, "<other@local.example>"),
 			receivedHop(receivedLocalDomain, receivedLocalMailFrom, receivedDestination),
@@ -784,37 +820,65 @@ func TestReceivedEvaluationConcurrentReuse(t *testing.T) {
 }
 
 // TestReceivedEvaluationCompletionWindowUsesOuterTimestamp proves the
-// completion signature's Section 10.4 window is evaluated against the outer
+// completion signature's Section 14.3 window is evaluated against the outer
 // DSN's highest-signature t= rather than the wall clock: a DSN generated one
 // day after a forwarding that happened long ago still verifies when it is
 // evaluated later, while a DSN generated too long after the forwarding or
-// before the forwarding does not.
+// before the forwarding does not. The exact 14-day boundary is pinned for
+// both the complete and the headers-only evidence form, and a forwarded
+// multi-hop outer report uses its highest t= as the reference.
 func TestReceivedEvaluationCompletionWindowUsesOuterTimestamp(t *testing.T) {
 	const day = 24 * 60 * 60
 	completion := dsntest.DefaultTimestamp
-	for _, testCase := range []struct {
-		name  string
-		outer uint64
-		now   time.Time
-		want  EmbeddedResult
-	}{
-		{name: "old forwarding, DSN generated a day later, evaluated a month later", outer: completion + day, now: time.Unix(int64(completion)+30*day, 0), want: EmbeddedVerified},
+	later := time.Unix(int64(completion)+30*day, 0)
+	type windowCase struct {
+		name        string
+		outer       uint64
+		forwarder   uint64
+		headersOnly bool
+		now         time.Time
+		want        EmbeddedResult
+	}
+	cases := []windowCase{
+		{name: "old forwarding, DSN generated a day later, evaluated a month later", outer: completion + day, now: later, want: EmbeddedVerified},
 		{name: "old forwarding, DSN generated after the maximum age", outer: completion + 30*day, now: time.Unix(int64(completion)+30*day+60, 0), want: EmbeddedUnverified},
 		{name: "DSN generated more than a day before the forwarding", outer: completion - 25*60*60, now: time.Unix(int64(completion)+60, 0), want: EmbeddedUnverified},
 		{name: "DSN generated within skew before the forwarding", outer: completion - 60, now: time.Unix(int64(completion)+60, 0), want: EmbeddedVerified},
-	} {
+		{name: "forwarded outer report uses its highest t=", outer: completion + day, forwarder: completion + 15*day, now: later, want: EmbeddedUnverified},
+	}
+	for _, headersOnly := range []bool{false, true} {
+		form := string(EvidenceFormComplete)
+		if headersOnly {
+			form = string(EvidenceFormHeadersOnly)
+		}
+		verified := EmbeddedVerified
+		if headersOnly {
+			verified = EmbeddedVerifiedHeadersOnly
+		}
+		cases = append(cases,
+			windowCase{name: form + " at the exact maximum age", outer: completion + 14*day, headersOnly: headersOnly, now: later, want: verified},
+			windowCase{name: form + " one second past the maximum age", outer: completion + 14*day + 1, headersOnly: headersOnly, now: later, want: EmbeddedUnverified},
+		)
+	}
+	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
 			verifier, _ := mustReceivedVerifierAt(t, "", testCase.now)
 			evaluator, err := NewReceivedEvaluator(verifier, ReceivedEvaluatorConfig{})
 			if err != nil {
 				t.Fatal(err)
 			}
-			raw := receivedSpec{outerTimestamp: testCase.outer}.build(t)
+			spec := receivedSpec{outerTimestamp: testCase.outer, headersOnly: testCase.headersOnly}
+			if testCase.forwarder != 0 {
+				forwarder := receivedHop(receivedOtherDomain, "<>", receivedLocalMailFrom)
+				forwarder.Timestamp = testCase.forwarder
+				spec.outerForwarders = []dsntest.Hop{forwarder}
+			}
+			raw := spec.build(t)
 			evaluation, err := evaluator.Evaluate(context.Background(), ReceivedRequest{Raw: raw, OuterRecipient: []byte(receivedLocalMailFrom), Authority: newReceivedAuthority(receivedLocalDomain)})
 			if err != nil || evaluation.Embedded() != testCase.want {
 				t.Fatalf("projection=%+v error=%v want embedded=%q", projectionOf(evaluation), err, testCase.want)
 			}
-			if testCase.want == EmbeddedVerified && evaluation.Propagation() != PropagationEligible {
+			if testCase.want != EmbeddedUnverified && evaluation.Propagation() != PropagationEligible {
 				t.Fatalf("projection=%+v", projectionOf(evaluation))
 			}
 		})

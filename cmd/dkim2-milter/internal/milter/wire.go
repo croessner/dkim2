@@ -57,8 +57,9 @@ const (
 )
 
 const (
-	fixedRejectReply   = "550 5.7.1 DKIM2 policy rejection"
-	fixedTempfailReply = "451 4.7.1 DKIM2 service unavailable"
+	fixedRejectReply      = "550 5.7.1 DKIM2 policy rejection"
+	fixedTempfailReply    = "451 4.7.1 DKIM2 service unavailable"
+	fixedKeyTempfailReply = "451 4.7.5 DKIM2 public key temporarily unavailable"
 )
 
 type callbackState uint8
@@ -704,6 +705,9 @@ func (s *Session) serializeResult(
 	case DispositionReject:
 		return failureFrames(fixedRejectReply), nil
 	case DispositionTempfail:
+		if result.TemporaryKey {
+			return failureFrames(fixedKeyTempfailReply), nil
+		}
 		return failureFrames(fixedTempfailReply), nil
 	case DispositionAccept:
 		return s.serializeAcceptance(result.Actions, localAuthenticationResults), nil

@@ -634,8 +634,43 @@ harness_test_malformed_response(void)
   HARNESS_ASSERT(header_last->type != '*');
   HARNESS_ASSERT(return_text != NULL);
   HARNESS_ASSERT(strcmp(
-    CCS return_text, "DKIM2 service temporarily unavailable") == 0);
+    CCS return_text, "4.7.1 DKIM2 service temporarily unavailable") == 0);
   HARNESS_ASSERT(lseek(fd, 0, SEEK_CUR) == HARNESS_BODY_OFFSET);
+  close(fd);
+  close(peer.listener);
+  unlink(socket_path);
+  free(return_text);
+  harness_headers_free();
+}
+
+/* harness_test_key_temporary proves the Draft-07 Section 13 451 4.7.5 text
+   for a tempfail caused by a temporary public-key lookup failure. */
+static void
+harness_test_key_temporary(void)
+{
+  struct harness_peer peer;
+  char socket_path[sizeof(((struct sockaddr_un *)0)->sun_path)];
+  pthread_t thread;
+  uschar *return_text = NULL;
+  int fd;
+  int result;
+
+  memset(&peer, 0, sizeof(peer));
+  peer.listener = harness_socket(socket_path, sizeof(socket_path));
+  if (peer.listener < 0)
+    return;
+  peer.response_length = harness_response(
+    peer.response, 3U, 9U, NULL, 0U, 0U, NULL, 0U, NULL);
+  harness_prepare_globals(socket_path);
+  harness_headers_reset();
+  fd = harness_body_fd();
+  thread = harness_start_peer(&peer);
+  result = local_scan(fd, &return_text);
+  HARNESS_ASSERT(pthread_join(thread, NULL) == 0);
+  HARNESS_ASSERT(result == LOCAL_SCAN_TEMPREJECT_NOLOGHDR);
+  HARNESS_ASSERT(return_text != NULL);
+  HARNESS_ASSERT(strcmp(
+    CCS return_text, "4.7.5 DKIM2 public key temporarily unavailable") == 0);
   close(fd);
   close(peer.listener);
   unlink(socket_path);
@@ -668,7 +703,7 @@ harness_test_reject(void)
   HARNESS_ASSERT(pthread_join(thread, NULL) == 0);
   HARNESS_ASSERT(result == LOCAL_SCAN_REJECT_NOLOGHDR);
   HARNESS_ASSERT(strcmp(
-    CCS return_text, "DKIM2 policy rejected the message") == 0);
+    CCS return_text, "5.7.1 DKIM2 policy rejected the message") == 0);
   HARNESS_ASSERT(header_list->type != '*' && header_last->type != '*');
   close(fd);
   close(peer.listener);
@@ -736,7 +771,7 @@ harness_test_tempfail(void)
   HARNESS_ASSERT(result == LOCAL_SCAN_TEMPREJECT_NOLOGHDR);
   HARNESS_ASSERT(peer.request_valid);
   HARNESS_ASSERT(strcmp(
-    CCS return_text, "DKIM2 service temporarily unavailable") == 0);
+    CCS return_text, "4.7.1 DKIM2 service temporarily unavailable") == 0);
   HARNESS_ASSERT(header_list->type != '*' && header_last->type != '*');
   close(fd);
   close(peer.listener);
@@ -928,6 +963,7 @@ main(void)
   harness_test_accept_without_locator();
   harness_test_malformed_response();
   harness_test_reject();
+  harness_test_key_temporary();
   harness_test_tempfail();
   harness_test_pre_body_config_failure();
   harness_test_fail_open_declaration_rejected();

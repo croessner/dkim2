@@ -409,8 +409,9 @@ add value bytes
 ```
 
 Reason codes are `none`, `policy_reject`, `service_unavailable`, `timeout`,
-`invalid_request`, `fidelity`, `contract`, `resource` and `internal`, assigned
-contiguous values zero through eight. Locator presence is derived strictly:
+`invalid_request`, `fidelity`, `contract`, `resource`, `internal` and
+`key_temporary`, assigned contiguous values zero through nine. Tempfail
+decisions accept the reasons two through nine. Locator presence is derived strictly:
 exactly 32 unpadded base64url octets may follow only an accepting response;
 any other trailing byte is invalid. Removal occurrences are non-zero, unique
 and strictly descending. `removal_count` cannot exceed the request
@@ -567,12 +568,17 @@ that pointer, causing Exim to expose precisely that value as
 `$local_scan_data`. On accept without evidence it assigns `NULL`. Reject and
 temporary-reject assign only the corresponding fixed Exim-store string:
 
-- `DKIM2 policy rejected the message`
-- `DKIM2 service temporarily unavailable`
+- `5.7.1 DKIM2 policy rejected the message`
+- `4.7.1 DKIM2 service temporarily unavailable`
+- `4.7.5 DKIM2 public key temporarily unavailable`
 
-Exim owns the corresponding 550 versus 451 SMTP status through the selected
-return macro; the module does not call `smtp_printf()` or embed a second status
-code in `return_text`. No daemon, message or identity text is reflected. The
+Exim owns the 550 versus 451 SMTP reply code through the selected return
+macro; the module does not call `smtp_printf()`. Each text starts with the
+RFC 3463 enhanced status code that follows that reply code. The `4.7.5` text
+is selected only for the DXI1 tempfail reason `key_temporary` (9), which the
+Go adapter emits when the daemon reports TEMPERROR `provider_temporary` with a
+tempfail disposition (Draft-07 Section 13); every other tempfail keeps
+`4.7.1`. No daemon, message or identity text is reflected. The
 NOLOGHDR variants are required so Exim does not copy raw rejected headers into
 its reject log.
 

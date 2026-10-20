@@ -400,6 +400,9 @@ func responseFromPlan(
 		decision, reason, removals = ipc.DecisionReject, ipc.ReasonPolicyReject, nil
 	case adapter.DispositionTempfail:
 		decision, reason, removals = ipc.DecisionTempfail, ipc.ReasonServiceUnavailable, nil
+		if plan.TemporaryKey() {
+			reason = ipc.ReasonKeyTemporary
+		}
 	default:
 		return ipc.Response{}, adapter.NewError(adapter.FailureContract)
 	}

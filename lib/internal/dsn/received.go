@@ -367,8 +367,8 @@ func (e ReceivedEvaluator) evaluateStructure(raw []byte, state *receivedState, e
 		}
 		return true, nil
 	}
-	outerSignature, ok := highestSignature(report.RawMessage())
-	if !ok || outerSignature.TimestampSeconds() > maxReferenceUnixSeconds {
+	authority, reference, ok := outerSignatureRoles(report.RawMessage())
+	if !ok || reference.TimestampSeconds() > maxReferenceUnixSeconds {
 		return true, newReceivedError(ReceivedStageStructure, ReceivedErrorInvalidRequest, nil)
 	}
 	status, ok := parseDeliveryStatusBody(report.DeliveryStatus().BodyBytes(), deliveryStatusProfileReceivedReport)
@@ -383,7 +383,7 @@ func (e ReceivedEvaluator) evaluateStructure(raw []byte, state *receivedState, e
 		return true, nil
 	}
 	state.report, state.status, state.embedded = report, status, embedded
-	state.outerSigner, state.outerTimestamp = outerSignature.Domain(), outerSignature.TimestampSeconds()
+	state.outerSigner, state.outerTimestamp = authority.Domain(), reference.TimestampSeconds()
 	evaluation.structure = StructureValid
 	evaluation.form = EvidenceFormComplete
 	if report.OriginalMessage().ContentType() == ContentTypeRFC822Headers {
@@ -393,7 +393,7 @@ func (e ReceivedEvaluator) evaluateStructure(raw []byte, state *receivedState, e
 }
 
 // evaluateEmbedded verifies the embedded original's highest signature and
-// instance. The completion signature's Section 10.4 window is evaluated at the
+// instance. The completion signature's Section 14.3 window is evaluated at the
 // outer DSN's highest-signature t= instead of the clock, because a DSN may
 // legitimately arrive long after the forwarding it reports on.
 func (e ReceivedEvaluator) evaluateEmbedded(ctx context.Context, state *receivedState, evaluation *ReceivedEvaluation) (bool, error) {
@@ -657,17 +657,21 @@ func historicalInstancesSupported(instances []instance.MessageInstance, previous
 	return true
 }
 
-// highestSignature returns the outer report's highest DKIM2-Signature, whose
-// canonical d= identifies the outer signer and whose t= is the reference
-// instant for the embedded completion signature.
-func highestSignature(message rawmsg.Message) (signature.Signature, bool) {
+// outerSignatureRoles returns the two outer report signatures the inbound
+// evaluation relies on. Draft-07 Section 16.3 item 1 takes returned-recipient
+// authority from the d= of the DSN's i=1 signature, its originator, even when
+// the DSN was itself forwarded; the highest signature's t= stays the
+// reference instant for the embedded completion signature. An empty,
+// unordered, or non-contiguous chain fails closed on its own, independent of
+// the outer verification that already guarantees contiguity.
+func outerSignatureRoles(message rawmsg.Message) (signature.Signature, signature.Signature, bool) {
 	signatures, err := signature.Extract(message)
 	if err != nil || len(signatures) == 0 {
-		return signature.Signature{}, false
+		return signature.Signature{}, signature.Signature{}, false
 	}
 	ordered, err := signature.OrderBySequence(signatures)
-	if err != nil {
-		return signature.Signature{}, false
+	if err != nil || signature.ValidateSequence(ordered) != nil || ordered[0].Sequence() != 1 {
+		return signature.Signature{}, signature.Signature{}, false
 	}
-	return ordered[len(ordered)-1], true
+	return ordered[0], ordered[len(ordered)-1], true
 }

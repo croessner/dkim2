@@ -8,6 +8,7 @@ import (
 
 	"github.com/croessner/dkim2/cmd/dkim2-exim/internal/adapter"
 	"github.com/croessner/dkim2/cmd/dkim2-exim/internal/daemon/generated"
+	"github.com/croessner/dkim2/cmd/dkim2-exim/internal/ipc"
 )
 
 // validOperationFixture returns one complete generated signing response.
@@ -364,6 +365,53 @@ func TestInteropInfoOperationAdmission(t *testing.T) {
 		}
 		if _, err = AdmitOperationJSON(body, string(operation)); err == nil {
 			t.Fatal("misplaced interop action admitted")
+		}
+	}
+}
+
+// TestProcessAdmissionMarksTemporaryKeyTempfail proves Draft-07 Section 13:
+// a tempfail caused by a temporary public-key lookup is marked so local_scan
+// answers 451 4.7.5, while other TEMPERROR tempfails keep the generic reason.
+func TestProcessAdmissionMarksTemporaryKeyTempfail(t *testing.T) {
+	for _, testCase := range []struct {
+		name   string
+		reason generated.VerificationReason
+		key    bool
+	}{
+		{name: "temporary key lookup", reason: generated.VerificationReasonProviderTemporary, key: true},
+		{name: "provider contract", reason: generated.VerificationReasonProviderContract, key: false},
+	} {
+		value := validProcessFixture()
+		value.Actions = generated.ActionPlan{}
+		value.Disposition = generated.DispositionTempfail
+		value.Verification.State = generated.TEMPERROR
+		value.Verification.PrimaryReason = testCase.reason
+		value.Authentication.State = generated.TEMPERROR
+		value.Authentication.PrimaryReason = generated.AuthenticationResultPrimaryReason(testCase.reason)
+		value.Verification.Scope = generated.Current
+		value.Verification.HistoricalContent = generated.VerificationResultHistoricalContentNotEvaluated
+		value.Verification.HistoricalSignatures = generated.VerificationResultHistoricalSignaturesNotEvaluated
+		value.Verification.Checks[0].Reason = testCase.reason
+		value.Policy.Verdict = generated.PolicyResultVerdictTempfail
+		value.Policy.PrimaryReason = generated.ProtocolTemperror
+		value.Policy.Findings[0].Reason = generated.ProtocolTemperror
+		value.Policy.Findings[0].Severity = generated.Temporary
+		value.Replay.Class = generated.NotChecked
+		body, err := json.Marshal(value)
+		if err != nil {
+			t.Fatal("temporary response encoding failed")
+		}
+		plan, err := AdmitProcessJSON(body, "mx.example.test")
+		if err != nil || plan.Disposition() != adapter.DispositionTempfail || plan.TemporaryKey() != testCase.key {
+			t.Fatalf("%s: admitted temporaryKey=%t error=%v", testCase.name, plan.TemporaryKey(), err)
+		}
+		response, err := responseFromPlan(plan, nil, 1, nil)
+		wantReason := ipc.ReasonServiceUnavailable
+		if testCase.key {
+			wantReason = ipc.ReasonKeyTemporary
+		}
+		if err != nil || response.Reason() != wantReason {
+			t.Fatalf("%s: response reason mismatch error=%v", testCase.name, err)
 		}
 	}
 }

@@ -1022,3 +1022,20 @@ func TestRebuildBoundsSizeAmplification(t *testing.T) {
 		t.Fatalf("at-bound rebuild outcome=%q error=%v", again.Outcome(), err)
 	}
 }
+
+// TestRebuildRemovesDestinationEvidence is the Draft-07 Section 16.2 privacy
+// sentinel: the propagated report must not reveal where the local system
+// forwarded the message. No part, header, or embedded field may carry the
+// downstream destination domain or the failed final recipient.
+func TestRebuildRemovesDestinationEvidence(t *testing.T) {
+	for _, headersOnly := range []bool{false, true} {
+		original := defaultPropagationOriginal(rebuildFullRecipe)
+		report, _ := mustRebuild(t, propagationSpec{original: original, headersOnly: headersOnly})
+		rendered := strings.ToLower(string(report.Bytes()))
+		for _, sentinel := range []string{receivedDestinationDomain, receivedDestinationRaw} {
+			if strings.Contains(rendered, sentinel) {
+				t.Fatalf("headersOnly=%t: propagated report reveals the forwarding destination", headersOnly)
+			}
+		}
+	}
+}

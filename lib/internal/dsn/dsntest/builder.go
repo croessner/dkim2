@@ -282,6 +282,9 @@ type Report struct {
 	Original []byte
 	// Signer optionally signs the outer report as i=1 with mf=<> and its recipients.
 	Signer *Hop
+	// Forwarders are further outer hops signed after Signer as i=2 and up,
+	// modeling a DSN that was itself forwarded before reaching its verifier.
+	Forwarders []Hop
 	// Boundary overrides the MIME boundary when non-empty.
 	Boundary string
 }
@@ -304,7 +307,8 @@ func (r Report) Build() ([]byte, error) {
 	if r.Signer == nil {
 		return []byte(headers + "\r\n" + body), nil
 	}
-	signed, err := (Original{Headers: headers, Body: body, Hops: []Hop{*r.Signer}}).Build()
+	hops := append([]Hop{*r.Signer}, r.Forwarders...)
+	signed, err := (Original{Headers: headers, Body: body, Hops: hops}).Build()
 	if err != nil {
 		return nil, err
 	}

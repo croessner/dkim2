@@ -158,6 +158,9 @@ const (
 	ReasonResource
 	// ReasonInternal identifies a closed invariant.
 	ReasonInternal
+	// ReasonKeyTemporary identifies a daemon TEMPERROR caused by a temporary
+	// public-key lookup failure, answered with 451 4.7.5 (Draft-07 Section 13).
+	ReasonKeyTemporary
 )
 
 // AddName identifies the sole inbound header field that may be added.
@@ -350,6 +353,9 @@ func (r Request) Session() Session { return r.session }
 
 // Decision returns the closed response decision.
 func (r Response) Decision() Decision { return r.decision }
+
+// Reason returns the closed response reason.
+func (r Response) Reason() Reason { return r.reason }
 
 // Removals returns immutable occurrence copies.
 func (r Response) Removals() []uint16 { return slices.Clone(r.removals) }
@@ -725,7 +731,7 @@ func validDecisionReason(response Response) bool {
 	case DecisionReject:
 		return response.reason == ReasonPolicyReject
 	case DecisionTempfail:
-		return response.reason >= ReasonServiceUnavailable && response.reason <= ReasonInternal
+		return response.reason >= ReasonServiceUnavailable && response.reason <= ReasonKeyTemporary
 	default:
 		return false
 	}

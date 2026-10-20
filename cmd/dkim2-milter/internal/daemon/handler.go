@@ -631,6 +631,9 @@ func (guard *handlerGuard) mapProcess(response *generated.ProcessMessageResponse
 	return milter.Result{
 		Operation: operationProcess, Result: result,
 		Outcome: milter.Disposition(value.Disposition), Actions: actions,
+		TemporaryKey: value.Disposition == generated.DispositionTempfail &&
+			value.Authentication.State == generated.TEMPERROR &&
+			value.Authentication.PrimaryReason == generated.AuthenticationResultPrimaryReasonProviderTemporary,
 	}, nil
 }
 

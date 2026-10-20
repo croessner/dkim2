@@ -629,6 +629,11 @@ Daemon dispositions map deterministically:
 | `continue` | apply the exact inbound report action when present, then accept | none |
 | `reject` | reject unchanged | `550 5.7.1 DKIM2 policy rejection` |
 | `tempfail` | temporary failure unchanged | `451 4.7.1 DKIM2 service unavailable` |
+| `tempfail` after TEMPERROR `provider_temporary` | temporary failure unchanged | `451 4.7.5 DKIM2 public key temporarily unavailable` |
+
+The `4.7.5` reply follows Draft-07 Section 13: a temporary public-key (DNS)
+lookup failure is signalled distinctly, while adapter, transport, and other
+daemon tempfails keep `4.7.1`. Every DKIM2 rejection uses `5.7.1`.
 
 Three routes also define a bodyless HTTP 204 applicability variant, which the
 adapter maps to `continue` without any action: `/v1/process` (unsigned inbound

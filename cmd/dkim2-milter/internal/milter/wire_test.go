@@ -451,3 +451,33 @@ func appendPeerFrames(frames ...[]byte) []byte {
 	}
 	return output
 }
+
+// TestTemporaryKeyTempfailUsesSection13Reply proves Draft-07 Section 13: a
+// daemon tempfail caused by a temporary public-key lookup answers 451 4.7.5,
+// while every other tempfail keeps the generic 451 4.7.1 reply.
+func TestTemporaryKeyTempfailUsesSection13Reply(t *testing.T) {
+	for _, testCase := range []struct {
+		temporaryKey bool
+		want         string
+	}{
+		{temporaryKey: true, want: fixedKeyTempfailReply},
+		{temporaryKey: false, want: fixedTempfailReply},
+	} {
+		handler := &testHandler{result: Result{
+			Operation: "process", Result: "temperror", Outcome: DispositionTempfail, TemporaryKey: testCase.temporaryKey,
+		}}
+		session := testSession(t, handler, true, modeInbound, testAuthservID)
+		if !session.startTransaction(0) {
+			t.Fatal("startTransaction() failed")
+		}
+		session.reverse = []byte("<from@example>")
+		session.recipients = [][]byte{[]byte("<to@example>")}
+		session.headers = []headerField{{name: []byte("From"), value: []byte(" from@example")}}
+		session.headerBytes = int64(len("From: from@example\r\n"))
+		frames, err := session.endMessage(context.Background())
+		if err != nil || len(frames) != 1 || len(frames[0]) < 5 || frames[0][4] != replyCode ||
+			!bytes.Contains(frames[0], []byte(testCase.want)) {
+			t.Fatalf("temporaryKey=%t frames=%x error=%v", testCase.temporaryKey, frames, err)
+		}
+	}
+}

@@ -1025,3 +1025,51 @@ func (c closeTracker) Close() error {
 	*c.closed = true
 	return nil
 }
+
+// TestProcessMappingMarksTemporaryKeyTempfail proves the Draft-07 Section 13
+// key-lookup tempfail is recognized only for a TEMPERROR provider_temporary
+// tempfail and not for other temporary reasons.
+func TestProcessMappingMarksTemporaryKeyTempfail(t *testing.T) {
+	for _, testCase := range []struct {
+		reason generated.VerificationReason
+		want   bool
+	}{
+		{reason: generated.VerificationReasonProviderTemporary, want: true},
+		{reason: generated.VerificationReasonProviderContract, want: false},
+	} {
+		value := validProcessResponse()
+		value.Actions = generated.ActionPlan{}
+		value.Disposition = generated.DispositionTempfail
+		value.Verification.State = generated.TEMPERROR
+		value.Verification.PrimaryReason = testCase.reason
+		value.Authentication.State = generated.TEMPERROR
+		value.Authentication.PrimaryReason = generated.AuthenticationResultPrimaryReason(testCase.reason)
+		value.Verification.Scope = generated.Current
+		value.Verification.HistoricalContent = generated.VerificationResultHistoricalContentNotEvaluated
+		value.Verification.HistoricalSignatures = generated.VerificationResultHistoricalSignaturesNotEvaluated
+		value.Verification.Checks[0].Reason = testCase.reason
+		value.Policy.Verdict = generated.PolicyResultVerdictTempfail
+		value.Policy.PrimaryReason = generated.ProtocolTemperror
+		value.Policy.Findings[0].Reason = generated.ProtocolTemperror
+		value.Policy.Findings[0].Severity = generated.Temporary
+		value.Replay.Class = generated.NotChecked
+		body, err := json.Marshal(value)
+		if err != nil {
+			t.Fatal("temporary response encoding failed")
+		}
+		response := &generated.ProcessMessageResponse{
+			Body:    body,
+			JSON200: &value,
+			HTTPResponse: &http.Response{
+				StatusCode:    http.StatusOK,
+				ContentLength: int64(len(body)),
+				Header:        http.Header{"Content-Type": []string{testMediaTypeJSON}},
+				Request:       &http.Request{Method: http.MethodPost, URL: &url.URL{Path: routeProcess}},
+			},
+		}
+		result, err := (&handlerGuard{authservID: testAuthservID}).mapProcess(response)
+		if err != nil || result.Outcome != milter.DispositionTempfail || result.TemporaryKey != testCase.want {
+			t.Fatalf("reason %q mapped temporaryKey=%t error=%v", testCase.reason, result.TemporaryKey, err)
+		}
+	}
+}

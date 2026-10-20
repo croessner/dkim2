@@ -68,6 +68,7 @@ static const char dkim2_build_id[DKIM2_BUILD_ID_BYTES + 1U]
 #define DKIM2_REASON_CONTRACT 6U
 #define DKIM2_REASON_RESOURCE 7U
 #define DKIM2_REASON_INTERNAL 8U
+#define DKIM2_REASON_KEY_TEMPORARY 9U
 
 #define DKIM2_ADD_NONE 0U
 #define DKIM2_ADD_AUTHENTICATION_RESULTS 1U
@@ -959,7 +960,7 @@ dkim2_decode_response(
        response->reason != DKIM2_REASON_POLICY_REJECT) ||
       (response->decision == DKIM2_DECISION_TEMPFAIL &&
        (response->reason < DKIM2_REASON_SERVICE_UNAVAILABLE ||
-        response->reason > DKIM2_REASON_INTERNAL)) ||
+        response->reason > DKIM2_REASON_KEY_TEMPORARY)) ||
       (response->decision != DKIM2_DECISION_ACCEPT &&
        response->decision != DKIM2_DECISION_REJECT &&
        response->decision != DKIM2_DECISION_TEMPFAIL))
@@ -1079,17 +1080,32 @@ dkim2_log_failure(enum dkim2_failure failure)
   log_write(0, LOG_MAIN, "dkim2 local_scan failure class=%s", names[index]);
 }
 
-/* dkim2_fixed_return installs one local, content-free Exim reply. */
+/* dkim2_fixed_return installs one local, content-free Exim reply. Each text
+   starts with the RFC 3463 enhanced status code that Exim places after the
+   550 or 451 reply code: 5.7.1 for a DKIM2 rejection, 4.7.5 for a temporary
+   public-key lookup failure (Draft-07 Section 13), 4.7.1 otherwise. */
 static int
-dkim2_fixed_return(uschar **return_text, int reject)
+dkim2_fixed_return(uschar **return_text, int reject, int key_temporary)
 {
   static const unsigned char reject_text[] =
-    "DKIM2 policy rejected the message";
+    "5.7.1 DKIM2 policy rejected the message";
   static const unsigned char tempfail_text[] =
-    "DKIM2 service temporarily unavailable";
-  const unsigned char *value = reject ? reject_text : tempfail_text;
-  size_t length = reject ? sizeof(reject_text) - 1U : sizeof(tempfail_text) - 1U;
+    "4.7.1 DKIM2 service temporarily unavailable";
+  static const unsigned char key_text[] =
+    "4.7.5 DKIM2 public key temporarily unavailable";
+  const unsigned char *value = tempfail_text;
+  size_t length = sizeof(tempfail_text) - 1U;
 
+  if (reject)
+    {
+    value = reject_text;
+    length = sizeof(reject_text) - 1U;
+    }
+  else if (key_temporary)
+    {
+    value = key_text;
+    length = sizeof(key_text) - 1U;
+    }
   *return_text = dkim2_store_text(value, length);
   return reject ? LOCAL_SCAN_REJECT_NOLOGHDR : LOCAL_SCAN_TEMPREJECT_NOLOGHDR;
 }
@@ -1140,9 +1156,10 @@ local_scan(int fd, uschar **return_text)
     result = LOCAL_SCAN_ACCEPT;
     }
   else if (response.decision == DKIM2_DECISION_REJECT)
-    result = dkim2_fixed_return(return_text, 1);
+    result = dkim2_fixed_return(return_text, 1, 0);
   else
-    result = dkim2_fixed_return(return_text, 0);
+    result = dkim2_fixed_return(
+      return_text, 0, response.reason == DKIM2_REASON_KEY_TEMPORARY);
   if (request_frame)
     memset(request_frame, 0, request_length);
   if (response_frame)
@@ -1161,5 +1178,5 @@ fail:
   free(request_frame);
   free(response_frame);
   dkim2_free_request(&request);
-  return dkim2_fixed_return(return_text, 0);
+  return dkim2_fixed_return(return_text, 0, 0);
 }

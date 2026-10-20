@@ -520,10 +520,11 @@ const (
 
 // Plan is one complete admitted daemon outcome and ordered mutation list.
 type Plan struct {
-	operation   Operation
-	result      Result
-	disposition Disposition
-	actions     []Action
+	operation    Operation
+	result       Result
+	disposition  Disposition
+	actions      []Action
+	temporaryKey bool
 }
 
 // NewPlan validates one process outcome and its receive-time action ownership.
@@ -658,6 +659,21 @@ func (p Plan) Result() Result { return p.result }
 
 // Disposition returns the closed daemon disposition.
 func (p Plan) Disposition() Disposition { return p.disposition }
+
+// WithTemporaryKey marks a process TEMPERROR tempfail as caused by a
+// temporary public-key lookup failure, which Draft-07 Section 13 answers with
+// 451 4.7.5. Any other plan shape is a contract failure.
+func (p Plan) WithTemporaryKey() (Plan, error) {
+	if p.operation != OperationProcess || p.result != ResultTemperror || p.disposition != DispositionTempfail {
+		return Plan{}, NewError(FailureContract)
+	}
+	p.actions = slices.Clone(p.actions)
+	p.temporaryKey = true
+	return p, nil
+}
+
+// TemporaryKey reports whether the tempfail stems from a temporary key lookup.
+func (p Plan) TemporaryKey() bool { return p.temporaryKey }
 
 // Actions returns an immutable action copy.
 func (p Plan) Actions() []Action { return slices.Clone(p.actions) }

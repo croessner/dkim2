@@ -466,6 +466,9 @@ type Result struct {
 	// NullSenderSkip carries the closed reason of an originator continue
 	// that the header_from policy produced without a daemon call.
 	NullSenderSkip NullSenderSkip
+	// TemporaryKey marks a tempfail caused by a temporary public-key lookup
+	// failure, which Draft-07 Section 13 answers with 451 4.7.5.
+	TemporaryKey bool
 }
 
 // String returns a content-free result diagnostic.

@@ -371,3 +371,53 @@ Open follow-ups owned by later packages:
   deliveries not counted, forwarded first-seen/replayed/exploded and store
   ambiguity cases (library and daemon), and the updated wire matrix and
   dkim2ctl fixtures.
+
+## 13. Package 7 state
+
+- Inbound DSN authority (Section 16.3 item 1): the evaluator takes
+  returned-recipient authority from the d= of the DSN's i=1 signature, its
+  originator, and keeps the highest outer t= as the reference instant for the
+  embedded completion signature. A forged originator is not rescued by a
+  later outer signer that matches, and a forwarded multi-hop DSN keeps its
+  originator's authority. An outer chain without an i=1 signature fails
+  closed.
+- Propagation (Section 16.2) already met D8 and is now pinned by tests:
+  - the output is a fresh singleton with one i=1 signature and one m=1
+    instance, proven by `ProvePropagatedReport`;
+  - every local run signature is removed, including nd= members;
+  - parts 1 and 2 are generated fresh from local facts only, and the embedded
+    original no longer carries the forwarding destination (privacy sentinel
+    over the complete and headers-only forms);
+  - the headers-only fallback covers unavailable bodies.
+- Null senders: no DSN is signed for or propagated to `<>`. A local hop
+  that relayed with `mf=<>` is valid custody since package 3, but it ends the
+  local run and makes propagation `forbidden_null_previous_sender`. This is
+  deliberate, because the hop's reverse path is the only possible propagation
+  target.
+- SMTP replies (Section 13):
+  - Milter answers a daemon tempfail caused by TEMPERROR `provider_temporary`
+    with `451 4.7.5 DKIM2 public key temporarily unavailable`; other
+    tempfails keep `451 4.7.1`, and rejections keep `550 5.7.1`.
+  - Exim gains the DXI1 tempfail reason `key_temporary` (9), and its
+    local_scan texts now lead with the enhanced status codes `5.7.1`, `4.7.1`,
+    and `4.7.5`.
+- Transmitted bytes (Section 17):
+  - The Postfix/Milter qualification verifies the captured downstream bytes
+    with the public verifier (`validateSignedMessage`).
+  - The Exim real matrix re-submits its captured sign output, which the
+    inbound process and revision authority must verify before revising. The
+    captured revise output is not yet re-verified; that check belongs to the
+    package 8 interoperability requalification.
+- Real MTA runs: `make conformance-postfix` passed against this tree. The Exim
+  real matrix needs an external patched Exim source tree
+  (`DKIM2_EXIM_QUALIFICATION_SOURCE_ROOT`) and runs in the package 8
+  requalification. The Exim C changes are covered by
+  `make test-exim-local-scan`, including the `4.7.5` reply.
+- SMTPUTF8 adapters (Section 18): adapter signing stays ASCII-path only.
+  - Section 18 constrains how envelope domains are recorded (A-labels, which
+    the library enforces since package 3); it does not oblige an adapter to
+    sign EAI envelopes.
+  - The Milter continues unsigned for a non-ASCII originator path and
+    tempfails non-ASCII transit paths. Exim rejects non-ASCII outbound
+    scalars. Both fail closed.
+  - Inbound SMTPUTF8 bytes are preserved for verification.
