@@ -138,6 +138,9 @@ const (
 	ReasonDuplicateHashAlgorithm Reason = "duplicate_hash_algorithm"
 	// ReasonInvalidRecipeJSON reports malformed authenticated recipe JSON.
 	ReasonInvalidRecipeJSON Reason = "invalid_recipe_json"
+	// ReasonFromNotAuthentic reports a From header field state that is not
+	// Authentic for its responsible signature (Draft-07 Section 14.8).
+	ReasonFromNotAuthentic Reason = "from_not_authentic"
 	// ReasonDuplicateSelector reports a repeated selector in one signature field.
 	ReasonDuplicateSelector Reason = "duplicate_selector"
 	// ReasonTooManySignatures reports a third signature occurrence for one algorithm.
@@ -187,7 +190,7 @@ const (
 // Known reports whether the reason belongs to the closed service vocabulary.
 func (r Reason) Known() bool {
 	switch r {
-	case ReasonNone, ReasonInvalidRequest, ReasonLimitExceeded, ReasonMalformedMessage, ReasonMalformedProtocol, ReasonDuplicateHashAlgorithm, ReasonInvalidRecipeJSON, ReasonDuplicateSelector, ReasonTooManySignatures, ReasonMissingProtocol, ReasonSequenceInvalid, ReasonUnsupportedAlgorithm, ReasonHashMismatch, ReasonSignatureMismatch, ReasonMissingKey, ReasonInvalidKey, ReasonAmbiguousKey, ReasonRevokedKey, ReasonUnsupportedKeyType, ReasonKeyAlgorithmMismatch, ReasonProviderTemporary, ReasonProviderPermanent, ReasonProviderContract, ReasonTimestampInvalid, ReasonEnvelopeMismatch, ReasonDomainAlignmentMismatch, ReasonNextDomainMismatch, ReasonOutOfBandRequired, ReasonInternalContract:
+	case ReasonNone, ReasonInvalidRequest, ReasonLimitExceeded, ReasonMalformedMessage, ReasonMalformedProtocol, ReasonDuplicateHashAlgorithm, ReasonInvalidRecipeJSON, ReasonFromNotAuthentic, ReasonDuplicateSelector, ReasonTooManySignatures, ReasonMissingProtocol, ReasonSequenceInvalid, ReasonUnsupportedAlgorithm, ReasonHashMismatch, ReasonSignatureMismatch, ReasonMissingKey, ReasonInvalidKey, ReasonAmbiguousKey, ReasonRevokedKey, ReasonUnsupportedKeyType, ReasonKeyAlgorithmMismatch, ReasonProviderTemporary, ReasonProviderPermanent, ReasonProviderContract, ReasonTimestampInvalid, ReasonEnvelopeMismatch, ReasonDomainAlignmentMismatch, ReasonNextDomainMismatch, ReasonOutOfBandRequired, ReasonInternalContract:
 		return true
 	default:
 		return false

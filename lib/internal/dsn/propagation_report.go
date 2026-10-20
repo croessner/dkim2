@@ -63,6 +63,7 @@ func propagationHumanText(reportingMTA string, language propagationLanguage) str
 // propagationReportInput carries every value the report generator renders.
 type propagationReportInput struct {
 	reportingMTA        string
+	authorDomain        string
 	timestamp           uint64
 	token               []byte
 	nextHop             []byte
@@ -117,7 +118,10 @@ func renderPropagationReport(input propagationReportInput) (renderedPropagationR
 		return renderedPropagationReport{}, err
 	}
 	var outer bytes.Buffer
-	outer.WriteString("From: Mail Delivery System <MAILER-DAEMON@" + input.reportingMTA + ">\r\n")
+	// The propagated report is a new message (Draft-07 Section 16.2) whose
+	// single signature must make its From Authentic (Section 11), so the
+	// author domain is the propagation signing domain itself.
+	outer.WriteString("From: Mail Delivery System <MAILER-DAEMON@" + input.authorDomain + ">\r\n")
 	outer.WriteString("To: " + string(input.nextHop) + "\r\n")
 	outer.WriteString("Subject: " + propagationSubject + "\r\n")
 	outer.WriteString("Date: " + time.Unix(int64(input.timestamp), 0).UTC().Format(time.RFC1123Z) + "\r\n")
@@ -172,7 +176,7 @@ func (input propagationReportInput) machinePart() string {
 
 // valid reports whether every rendered value is present and well formed.
 func (input propagationReportInput) valid() bool {
-	if input.reportingMTA == "" || input.timestamp == 0 || input.timestamp > maxReferenceUnixSeconds ||
+	if input.reportingMTA == "" || input.authorDomain == "" || input.timestamp == 0 || input.timestamp > maxReferenceUnixSeconds ||
 		!validPropagationToken(input.token) || len(input.nextHop) < 3 || len(input.finalRecipient) == 0 ||
 		!validPropagationStatus(input.status) || len(input.originalHeaders) == 0 {
 		return false

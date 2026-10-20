@@ -30,7 +30,7 @@ const authorizationTranscriptDomain = "dkim2/signing-authorization/v1"
 type AuthorizationPurpose string
 
 const (
-	// AuthorizationPolicy evaluates inherited modification and explosion restrictions.
+	// AuthorizationPolicy lets local policy authorize bound modification facts.
 	AuthorizationPolicy AuthorizationPurpose = "policy"
 	// AuthorizationDisclosure permits one exact ordered multi-recipient rt set.
 	AuthorizationDisclosure AuthorizationPurpose = "recipient_disclosure"
@@ -185,19 +185,17 @@ func (q AuthorizationQuery) GoString() string { return q.String() }
 // Format routes every query formatting form through the redacted summary.
 func (q AuthorizationQuery) Format(state fmt.State, _ rune) { _, _ = io.WriteString(state, q.String()) }
 
-// NewPolicyAuthorizationQuery binds inherited policy to one exact route ticket.
+// NewPolicyAuthorizationQuery binds bound modification facts to one exact
+// route ticket for local policy authorization. Under Draft-07 no inherited
+// flag restricts the result, so the query restriction is always unrestricted.
 func NewPolicyAuthorizationQuery(capability VerifiedRevisionInput, ticket routeplan.CopyTicket, facts ModificationFacts) (AuthorizationQuery, error) {
 	if !capability.Valid() || !ticket.Valid() || ticket.Purpose() == routeplan.PurposeOrigin ||
 		!ticket.MatchesRevisionBinding(capability.seal[:]) || !facts.validFor(capability, ticket) {
 		return AuthorizationQuery{}, newError(ErrorCodeInvalidRequest, ErrorLocation{Phase: PhasePreflight}, ErrorDetails{})
 	}
+	// Draft-07 Section 10.10 removed donotmodify and donotexplode, so inherited
+	// flags never restrict release; the authorizer decides on the bound facts.
 	restriction := RestrictionUnrestricted
-	for _, inherited := range capability.proof.Facts().Flags() {
-		if inherited.DoNotModify() && (facts.bodyChanged || facts.existingHeadersChanged) ||
-			inherited.DoNotExplode() && (ticket.TotalMultiplicity() > 1 || len(ticket.DisclosureRecipients()) > 1) {
-			restriction = RestrictionLocalOnly
-		}
-	}
 	query := newAuthorizationQuery(AuthorizationPolicy, ticket, capability.seal[:],
 		boolBytes(facts.bodyChanged), boolBytes(facts.existingHeadersChanged), []byte(restriction))
 	query.restriction = restriction
@@ -682,7 +680,9 @@ type Metadata struct {
 	requested    []string
 }
 
-// NewSigningMetadata validates immutable nonce presence and caller-requestable flags.
+// NewSigningMetadata validates immutable nonce presence and caller-requestable
+// flags. Only feedback is requestable: Draft-07 Section 10.10 removed
+// donotmodify and donotexplode, so requesting them fails closed.
 func NewSigningMetadata(nonce []byte, noncePresent bool, requested []string) (Metadata, error) {
 	if noncePresent != (nonce != nil) || len(nonce) > DefaultLimits().MaxNonceBytes {
 		return Metadata{}, newError(ErrorCodeInvalidRequest, ErrorLocation{Phase: PhasePreflight}, ErrorDetails{})
@@ -693,7 +693,7 @@ func NewSigningMetadata(nonce []byte, noncePresent bool, requested []string) (Me
 	seen := make(map[string]struct{}, len(requested))
 	for _, flag := range requested {
 		switch flag {
-		case signature.FlagDoNotModify, signature.FlagDoNotExplode, signature.FlagFeedback:
+		case signature.FlagFeedback:
 		default:
 			return Metadata{}, newError(ErrorCodeInvalidRequest, ErrorLocation{Phase: PhasePreflight}, ErrorDetails{})
 		}
@@ -726,7 +726,12 @@ func (m Metadata) Format(state fmt.State, _ rune) { _, _ = io.WriteString(state,
 // EffectiveMetadata contains fixed-order derived and inherited signing flags.
 type EffectiveMetadata struct{ flags []string }
 
-// DeriveEffectiveMetadata combines caller requests, every authenticated prior flag, and route facts.
+// DeriveEffectiveMetadata combines caller requests, route facts, and feedback
+// authorization. Draft-07 Section 12.5 requires an intermediary that sends
+// copies to more than one address to set exploded on the signature it creates,
+// and forbids exploded on i=1, so originator and delivery-status signatures
+// never carry it. exploded reports what this signer did and is therefore not
+// inherited from earlier signatures.
 func DeriveEffectiveMetadata(metadata Metadata, capability VerifiedRevisionInput, ticket routeplan.CopyTicket, feedback Authorization, session *AuthorizationSession) (EffectiveMetadata, error) {
 	if !ticket.Valid() || !metadataValid(metadata) {
 		return EffectiveMetadata{}, newError(ErrorCodeInvalidRequest, ErrorLocation{Phase: PhasePreflight}, ErrorDetails{})
@@ -747,14 +752,7 @@ func DeriveEffectiveMetadata(metadata Metadata, capability VerifiedRevisionInput
 	for _, flag := range metadata.requested {
 		values[flag] = true
 	}
-	if capability.Valid() {
-		for _, facts := range capability.proof.Facts().Flags() {
-			values[signature.FlagDoNotModify] = values[signature.FlagDoNotModify] || facts.DoNotModify()
-			values[signature.FlagDoNotExplode] = values[signature.FlagDoNotExplode] || facts.DoNotExplode()
-			values[signature.FlagExploded] = values[signature.FlagExploded] || facts.Exploded()
-		}
-	}
-	if ticket.TotalMultiplicity() > 1 || len(ticket.DisclosureRecipients()) > 1 {
+	if intermediaryPurpose(ticket.Purpose()) && (ticket.TotalMultiplicity() > 1 || len(ticket.DisclosureRecipients()) > 1) {
 		values[signature.FlagExploded] = true
 	}
 	if feedback.Valid() {
@@ -765,6 +763,12 @@ func DeriveEffectiveMetadata(metadata Metadata, capability VerifiedRevisionInput
 		values[signature.FlagFeedHere] = true
 	}
 	return effectiveMetadataFromValues(values), nil
+}
+
+// intermediaryPurpose reports whether a signing purpose adds a signature to an
+// existing DKIM2 chain rather than creating an i=1 signature.
+func intermediaryPurpose(purpose routeplan.Purpose) bool {
+	return purpose == routeplan.PurposeRevision || purpose == routeplan.PurposeNextDomain
 }
 
 // zeroRevisionInput reports whether no inherited revision capability was supplied.
@@ -805,10 +809,7 @@ func effectiveMetadataWithFeedbackIntent(base EffectiveMetadata) EffectiveMetada
 
 // effectiveMetadataFromValues applies the sole fixed known-flag order.
 func effectiveMetadataFromValues(values map[string]bool) EffectiveMetadata {
-	order := []string{
-		signature.FlagDoNotModify, signature.FlagDoNotExplode, signature.FlagFeedback,
-		signature.FlagFeedHere, signature.FlagExploded,
-	}
+	order := []string{signature.FlagFeedback, signature.FlagFeedHere, signature.FlagExploded}
 	flags := make([]string, 0, len(values))
 	for _, flag := range order {
 		if values[flag] {

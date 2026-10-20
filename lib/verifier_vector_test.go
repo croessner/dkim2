@@ -205,7 +205,7 @@ func publicGoldenCases(corpus publicGoldenCorpus) []publicGoldenCase {
 		{name: "current_envelope_mismatch_permerror", vector: "mail_exact", mode: goldenProviderKeys, reverse: []byte("<Sender@other.test>"), state: ResultStatePERMERROR, reason: ReasonEnvelopeMismatch, class: CheckClassEnvelope, custody: CustodyStructureNotPresent, sequence: 1, instance: 1},
 		pass("relaxed_d_alignment_pass", "alignment_relaxed"),
 		{name: "d_alignment_mismatch_permerror", vector: "alignment_mismatch", mode: goldenProviderKeys, state: ResultStatePERMERROR, reason: ReasonDomainAlignmentMismatch, class: CheckClassDomainAlignment, custody: CustodyStructureNotPresent, sequence: 1, instance: 1},
-		{name: "intermediate_nd_successor_pass", vector: "intermediate_nd", mode: goldenProviderKeys, state: ResultStatePASS, reason: ReasonNone, class: CheckClassNextDomain, custody: CustodyStructureNDLinksEvaluated, sequence: 2, instance: 1},
+		{name: "intermediate_nd_from_not_authentic", vector: "intermediate_nd", mode: goldenProviderKeys, state: ResultStatePERMERROR, reason: ReasonFromNotAuthentic, class: CheckClassProtocol, custody: CustodyStructureNDLinksEvaluated, sequence: 2, instance: 1},
 		{name: "terminal_current_nd_permerror", vector: "terminal_nd", mode: goldenProviderKeys, state: ResultStatePERMERROR, reason: ReasonOutOfBandRequired, class: CheckClassNextDomain, custody: CustodyStructureTerminalNDRequiresOOB, sequence: 1, instance: 1},
 	}
 	for index := range cases {
@@ -233,7 +233,7 @@ func expectedPublicGoldenSignatures(testCase publicGoldenCase) []publicGoldenSig
 	case "supported_mixed_fail":
 		return []publicGoldenSignatureFact{passRSA, {algorithm: AlgorithmEd25519SHA256, status: SignatureStatusFAIL, reason: ReasonSignatureMismatch}}
 	}
-	if testCase.malformedProtocol {
+	if testCase.malformedProtocol || testCase.reason == ReasonFromNotAuthentic {
 		return nil
 	}
 	if testCase.corruptSignature {
@@ -261,6 +261,9 @@ func expectedPublicGoldenChecks(testCase publicGoldenCase) []publicGoldenCheckFa
 	}
 	if testCase.malformedProtocol {
 		return []publicGoldenCheckFact{{class: CheckClassProtocol, reason: ReasonMalformedProtocol}}
+	}
+	if testCase.reason == ReasonFromNotAuthentic {
+		return []publicGoldenCheckFact{{class: CheckClassProtocol, reason: ReasonFromNotAuthentic}}
 	}
 	facts := []publicGoldenCheckFact{
 		{class: CheckClassBodyHash, reason: ReasonNone},

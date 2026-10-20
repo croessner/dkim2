@@ -142,7 +142,6 @@ func startPropagateRouteHarness(t *testing.T) *propagateRouteHarness {
 	service, err := app.NewPropagationCoordinator(app.PropagationDependencies{
 		Verifier: verifier, Evaluator: verifier, PublicKeys: provider,
 		Authority: propagateRouteAuthority{authority}, Authorities: authorities,
-		Policy: config.SigningFlagPolicyConfig{},
 		Replay: propagationReplay, TokenRetention: propagateRouteRetention, Clock: clock.Now,
 	})
 	if err != nil {

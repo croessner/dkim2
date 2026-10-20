@@ -78,10 +78,6 @@ func (r SigningBodyUnavailableReason) Known() bool {
 type SignedMessageFlag string
 
 const (
-	// SignedMessageFlagDoNotModify reports emitted donotmodify.
-	SignedMessageFlagDoNotModify SignedMessageFlag = "donotmodify"
-	// SignedMessageFlagDoNotExplode reports emitted donotexplode.
-	SignedMessageFlagDoNotExplode SignedMessageFlag = "donotexplode"
 	// SignedMessageFlagFeedback reports emitted feedback.
 	SignedMessageFlagFeedback SignedMessageFlag = "feedback"
 	// SignedMessageFlagFeedHere reports emitted feedhere.
@@ -92,8 +88,7 @@ const (
 
 // Known reports whether flag belongs to the emitted closed vocabulary.
 func (f SignedMessageFlag) Known() bool {
-	return f == SignedMessageFlagDoNotModify || f == SignedMessageFlagDoNotExplode ||
-		f == SignedMessageFlagFeedback || f == SignedMessageFlagFeedHere ||
+	return f == SignedMessageFlagFeedback || f == SignedMessageFlagFeedHere ||
 		f == SignedMessageFlagExploded
 }
 
@@ -199,7 +194,6 @@ func validSigningAlgorithms(algorithms []Algorithm) bool {
 // validSignedFlags enforces the sole canonical known-flag order without duplicates.
 func validSignedFlags(flags []SignedMessageFlag) bool {
 	order := []SignedMessageFlag{
-		SignedMessageFlagDoNotModify, SignedMessageFlagDoNotExplode,
 		SignedMessageFlagFeedback, SignedMessageFlagFeedHere, SignedMessageFlagExploded,
 	}
 	next := 0

@@ -43,11 +43,6 @@ type SigningPoliciesConfig struct {
 	state *signingPoliciesState
 }
 
-// SigningFlagPolicyConfig is one immutable view of a use-specific signing policy.
-type SigningFlagPolicyConfig struct {
-	state *signingFlagPolicyState
-}
-
 // LDAPSigningConfig is one immutable structurally opaque LDAP configuration view.
 type LDAPSigningConfig struct {
 	state *ldapSigningState
@@ -367,30 +362,6 @@ func (c SigningConfig) Policies() SigningPoliciesConfig {
 	return SigningPoliciesConfig{state: &c.state.policies}
 }
 
-// Originator returns the policy for originator signing.
-func (c SigningPoliciesConfig) Originator() SigningFlagPolicyConfig {
-	if c.state == nil {
-		return SigningFlagPolicyConfig{}
-	}
-	return SigningFlagPolicyConfig{state: &c.state.originator}
-}
-
-// OrdinaryTransit returns the policy for ordinary-transit revision signing.
-func (c SigningPoliciesConfig) OrdinaryTransit() SigningFlagPolicyConfig {
-	if c.state == nil {
-		return SigningFlagPolicyConfig{}
-	}
-	return SigningFlagPolicyConfig{state: &c.state.ordinaryTransit}
-}
-
-// DeliveryStatus returns the policy for delivery-status signing.
-func (c SigningPoliciesConfig) DeliveryStatus() SigningFlagPolicyConfig {
-	if c.state == nil {
-		return SigningFlagPolicyConfig{}
-	}
-	return SigningFlagPolicyConfig{state: &c.state.deliveryStatus}
-}
-
 // DeliveryStatusUnsignedOriginal returns the delivery-status compatibility
 // policy for a returned original without any DKIM2-Signature header field.
 // An absent configuration view reports the fail-closed reject default.
@@ -413,16 +384,6 @@ func (c SigningPoliciesConfig) OriginatorNullSender() NullSenderPolicy {
 		return NullSenderReject
 	}
 	return c.state.nullSender
-}
-
-// DoNotModify reports whether the daemon requests the authenticated donotmodify flag.
-func (c SigningFlagPolicyConfig) DoNotModify() bool {
-	return c.state != nil && c.state.doNotModify
-}
-
-// DoNotExplode reports whether the daemon requests the authenticated donotexplode flag.
-func (c SigningFlagPolicyConfig) DoNotExplode() bool {
-	return c.state != nil && c.state.doNotExplode
 }
 
 // LDAP returns the selected verified LDAP configuration.

@@ -167,9 +167,9 @@ taxonomy. The finalizer arms the cache only for an effective soft reject or
 greylist action. Every permanent reject or accepted/continued terminal result
 consumes the entry.
 
-The module emits only zero-score, option-free symbols. This includes closed
-symbols for the daemon's authenticated `donotmodify` and `donotexplode`
-compliance states; they are observations, not caller-selectable requests. No
+The module emits only zero-score, option-free symbols. Draft-07 removed the
+`donotmodify` and `donotexplode` flags, so the module no longer emits the former
+`DKIM2_DONOTMODIFY_*` and `DKIM2_DONOTEXPLODE_*` compliance symbols. No
 domain, selector, recipient, message identifier, daemon error, response body,
 replay key, or provider data is placed in symbol options.
 
@@ -216,13 +216,6 @@ DKIM2_POLICY_ACCEPT
 DKIM2_POLICY_CONTINUE
 DKIM2_POLICY_REJECT
 DKIM2_POLICY_TEMPFAIL
-DKIM2_DONOTMODIFY_NOT_REQUESTED
-DKIM2_DONOTMODIFY_INDETERMINATE
-DKIM2_DONOTMODIFY_NOT_EVALUATED
-DKIM2_DONOTEXPLODE_NOT_REQUESTED
-DKIM2_DONOTEXPLODE_VIOLATED
-DKIM2_DONOTEXPLODE_INDETERMINATE
-DKIM2_DONOTEXPLODE_NOT_EVALUATED
 DKIM2_SERVICE_ERROR
 DKIM2_NAUTHILUS_PERMIT
 DKIM2_NAUTHILUS_DENY
@@ -284,10 +277,10 @@ that need final Nauthilus outcomes must run after or depend on the unscored
 `DKIM2_NAUTHILUS_POLICY` postfilter. Do not assign positive or negative scores
 to the state symbols merely to reproduce the daemon disposition; the adapter
 already enforces terminal reject and temporary-failure outcomes.
-Unknown or future compliance values fail closed until the module and the
-versioned daemon contract are updated together. The current Draft-07 wire
-contract intentionally has no `donotmodify` `honored` or `violated` state,
-because dkim2d cannot yet derive the required authenticated modification facts.
+Unknown or future policy members and values fail closed until the module and
+the versioned daemon contract are updated together. The Draft-07 wire contract
+has no `do_not_modify` or `do_not_explode` policy or hop members; a response
+that still carries them is rejected as a service error.
 
 ## Fidelity boundary
 

@@ -168,9 +168,11 @@ func TestCompleteMessageReportsHashUnchangedAuthorizationFacts(t *testing.T) {
 	}
 }
 
-// TestCompleteMessageRetainsLocalOnlyOutputWithoutAByteEscape proves the restricted ordinary variant.
-func TestCompleteMessageRetainsLocalOnlyOutputWithoutAByteEscape(t *testing.T) {
-	fixture := newRevisionTestFixtureWithFlags(t, nil, false, []string{signature.FlagDoNotModify})
+// TestCompleteMessageIgnoresRemovedDonotmodifyFlag reproduces the Draft-07
+// Section 10.10 removal of donotmodify: an inherited donotmodify spelling is an
+// inert unknown flag, so a locally revised message completes unrestricted.
+func TestCompleteMessageIgnoresRemovedDonotmodifyFlag(t *testing.T) {
+	fixture := newRevisionTestFixtureWithFlags(t, nil, false, []string{removedFlagDoNotModify})
 	harness := newExistingSignerHarnessForFixture(
 		t, fixture, [][]byte{[]byte("<next@example.test>")}, AlgorithmEd25519SHA256,
 	)
@@ -235,18 +237,18 @@ func TestCompleteMessageRetainsLocalOnlyOutputWithoutAByteEscape(t *testing.T) {
 		t.Fatalf("CompleteMessage() result=%t recovery=%t error=%v", result.Valid(), recovery.Valid(), err)
 	}
 	if result.Role() != RoleReviser || result.NewInstanceNumber() != 2 ||
-		result.Sequence() != 2 || result.Restriction() != RestrictionLocalOnly {
-		t.Fatalf("restricted facts role=%q m=%d i=%d restriction=%q",
+		result.Sequence() != 2 || result.Restriction() != RestrictionUnrestricted {
+		t.Fatalf("revised facts role=%q m=%d i=%d restriction=%q",
 			result.Role(), result.NewInstanceNumber(), result.Sequence(), result.Restriction())
 	}
-	if raw, ok := result.UnrestrictedBytes(); ok || raw != nil {
-		t.Fatalf("local-only result exposed bytes: ok=%t bytes=%d", ok, len(raw))
+	if raw, ok := result.UnrestrictedBytes(); !ok || len(raw) == 0 {
+		t.Fatalf("revised result withheld bytes: ok=%t bytes=%d", ok, len(raw))
 	}
 	facts := result.Authorizations()
 	if len(facts) != 1 || facts[0].Purpose() != AuthorizationPolicy ||
 		facts[0].Status() != AuthorizationAuthorized ||
-		facts[0].Restriction() != RestrictionLocalOnly {
-		t.Fatalf("local-only authorization facts = %#v", facts)
+		facts[0].Restriction() != RestrictionUnrestricted {
+		t.Fatalf("revision authorization facts = %#v", facts)
 	}
 	unknownReason := result
 	unknownReason.unavailable = recipe.BodyUnavailableReason("future")
@@ -269,7 +271,7 @@ func TestCompleteMessageRetainsLocalOnlyOutputWithoutAByteEscape(t *testing.T) {
 func TestCompleteMessagePreservesHeaderOnlyFraming(t *testing.T) {
 	harness := rebindOriginMessage(
 		t, newSignerHarness(t, AlgorithmEd25519SHA256),
-		[]byte("Subject: header only\r\n"), "header-only-route",
+		[]byte("From: sender@signer.example.test\r\nSubject: header only\r\n"), "header-only-route",
 	)
 	message := harness.request.Message
 	coordinator := harness.newCoordinator(t, harness.defaultSigner(t), Limits{})
@@ -295,7 +297,7 @@ func TestCompleteMessagePreservesHeaderOnlyFraming(t *testing.T) {
 
 // TestCompleteMessageHashesGeneralHeadersOutsideProtocolLimits proves independent canonical bounds.
 func TestCompleteMessageHashesGeneralHeadersOutsideProtocolLimits(t *testing.T) {
-	manyHeaders := bytes.Repeat([]byte("X-Ordinary: value\r\n"), 300)
+	manyHeaders := append([]byte("From: sender@signer.example.test\r\n"), bytes.Repeat([]byte("X-Ordinary: value\r\n"), 300)...)
 	manyHeaders = append(manyHeaders, []byte("\r\nbody\r\n")...)
 	harness := rebindOriginMessage(
 		t, newSignerHarness(t, AlgorithmEd25519SHA256), manyHeaders, "many-headers-route",
@@ -311,13 +313,13 @@ func TestCompleteMessageHashesGeneralHeadersOutsideProtocolLimits(t *testing.T) 
 	}
 	raw, ok := result.UnrestrictedBytes()
 	reparsed, parseErr := rawmsg.Parse(raw)
-	if !ok || parseErr != nil || reparsed.Metadata().HeaderFields != 302 {
+	if !ok || parseErr != nil || reparsed.Metadata().HeaderFields != 303 {
 		t.Fatalf("completed general headers exposed=%t fields=%d error=%v",
 			ok, reparsed.Metadata().HeaderFields, parseErr)
 	}
 
 	var large bytes.Buffer
-	large.WriteString("X-Large: ")
+	large.WriteString("From: sender@signer.example.test\r\nX-Large: ")
 	for index := range 16 {
 		if index > 0 {
 			large.WriteString("\r\n\t")
@@ -449,5 +451,24 @@ func TestCompleteFieldRejectsTransportBeforeEveryCallback(t *testing.T) {
 	}
 	if events := harness.events.snapshot(); len(events) != 0 {
 		t.Fatalf("invalid transport crossed callbacks: %v", events)
+	}
+}
+
+// TestOriginatorSigningRequiresAuthenticFrom reproduces Draft-07 Section
+// 12.4: an originator must choose d= so that the From header field is
+// Authentic, so signing a foreign or missing From fails closed before any
+// private-key callback.
+func TestOriginatorSigningRequiresAuthenticFrom(t *testing.T) {
+	for name, raw := range map[string]string{
+		"foreign From":  "From: sender@other.test\r\nSubject: x\r\n\r\nbody\r\n",
+		"missing From":  "Subject: x\r\n\r\nbody\r\n",
+		"two mailboxes": "From: a@signer.example.test, b@signer.example.test\r\nSubject: x\r\n\r\nbody\r\n",
+	} {
+		harness := rebindOriginMessage(t, newSignerHarness(t, AlgorithmEd25519SHA256), []byte(raw), "from-route")
+		coordinator := harness.newCoordinator(t, harness.defaultSigner(t), Limits{})
+		field, recovery, err := coordinator.CompleteField(context.Background(), harness.request)
+		if field.Valid() || recovery.Valid() || !IsErrorCode(err, ErrorCodeChainFailure) {
+			t.Fatalf("%s: CompleteField() field=%t recovery=%t error=%v", name, field.Valid(), recovery.Valid(), err)
+		}
 	}
 }

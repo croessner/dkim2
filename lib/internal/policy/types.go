@@ -72,28 +72,6 @@ func (a ActionKind) Known() bool {
 	return a == ActionAccept || a == ActionReject || a == ActionTempfail || a == ActionContinue
 }
 
-// ComplianceState identifies one bounded request-compliance assessment.
-type ComplianceState string
-
-const (
-	// ComplianceNotRequested reports that no authenticated request exists.
-	ComplianceNotRequested ComplianceState = "not_requested"
-	// ComplianceHonored reports positively established compliance.
-	ComplianceHonored ComplianceState = "honored"
-	// ComplianceViolated reports a proven later-hop violation.
-	ComplianceViolated ComplianceState = "violated"
-	// ComplianceIndeterminate reports incomplete positive evidence.
-	ComplianceIndeterminate ComplianceState = "indeterminate"
-	// ComplianceNotEvaluated reports that historical evaluation did not run.
-	ComplianceNotEvaluated ComplianceState = "not_evaluated"
-)
-
-// Known reports whether the state belongs to the closed compliance vocabulary.
-func (c ComplianceState) Known() bool {
-	return c == ComplianceNotRequested || c == ComplianceHonored || c == ComplianceViolated ||
-		c == ComplianceIndeterminate || c == ComplianceNotEvaluated
-}
-
 // TransitionState identifies one authenticated message-state transition.
 type TransitionState string
 
@@ -178,13 +156,6 @@ const (
 	ReasonDNSTestingEffective           PolicyReason = "dns_testing_effective"
 	ReasonDNSTestingMixed               PolicyReason = "dns_testing_mixed"
 	ReasonDNSTestingIneligible          PolicyReason = "dns_testing_ineligible"
-	ReasonDoNotModifyHonored            PolicyReason = "donotmodify_honored"
-	ReasonDoNotModifyViolated           PolicyReason = "donotmodify_violated"
-	ReasonDoNotModifyIndeterminate      PolicyReason = "donotmodify_indeterminate"
-	ReasonDoNotModifyNotEvaluated       PolicyReason = "donotmodify_not_evaluated"
-	ReasonDoNotExplodeViolated          PolicyReason = "donotexplode_violated"
-	ReasonDoNotExplodeIndeterminate     PolicyReason = "donotexplode_indeterminate"
-	ReasonDoNotExplodeNotEvaluated      PolicyReason = "donotexplode_not_evaluated"
 	ReasonFeedbackRequested             PolicyReason = "feedback_requested"
 	ReasonFeedbackRelaySelected         PolicyReason = "feedback_relay_selected"
 	ReasonFeedHereInert                 PolicyReason = "feedhere_inert"
@@ -208,9 +179,7 @@ func (r PolicyReason) Known() bool {
 		ReasonProtocolPass, ReasonProtocolFail, ReasonProtocolPermerror, ReasonProtocolTemperror,
 		ReasonPermissiveOverride, ReasonTestingModeObserve,
 		ReasonDNSTestingEffective, ReasonDNSTestingMixed, ReasonDNSTestingIneligible,
-		ReasonDoNotModifyHonored, ReasonDoNotModifyViolated, ReasonDoNotModifyIndeterminate,
-		ReasonDoNotModifyNotEvaluated, ReasonDoNotExplodeViolated, ReasonDoNotExplodeIndeterminate,
-		ReasonDoNotExplodeNotEvaluated, ReasonFeedbackRequested, ReasonFeedbackRelaySelected,
+		ReasonFeedbackRequested, ReasonFeedbackRelaySelected,
 		ReasonFeedHereInert, ReasonExplodedReported,
 		ReasonReceivedDSNOuterPolicy, ReasonReceivedDSNStructureInvalid, ReasonReceivedDSNEmbeddedUnverified,
 		ReasonReceivedDSNEmbeddedAbsent, ReasonReceivedDSNTemporaryFailure, ReasonReceivedDSNTenantUnavailable,
@@ -225,20 +194,17 @@ func (r PolicyReason) Known() bool {
 // severityForReason returns the frozen severity paired with one known reason.
 func severityForReason(reason PolicyReason) FindingSeverity {
 	switch reason {
-	case ReasonProtocolPass, ReasonDoNotModifyHonored,
+	case ReasonProtocolPass,
 		ReasonFeedbackRequested, ReasonFeedbackRelaySelected, ReasonFeedHereInert, ReasonExplodedReported,
 		ReasonReceivedDSNOuterPolicy, ReasonReceivedDSNEmbeddedAbsent, ReasonReceivedDSNNotLocal, ReasonReceivedDSNLinked:
 		return SeverityInfo
 	case ReasonPermissiveOverride, ReasonTestingModeObserve, ReasonDNSTestingEffective,
-		ReasonDNSTestingMixed, ReasonDNSTestingIneligible, ReasonDoNotModifyIndeterminate,
-		ReasonDoNotModifyNotEvaluated, ReasonDoNotExplodeIndeterminate, ReasonDoNotExplodeNotEvaluated,
-		ReasonReceivedDSNTenantUnavailable:
+		ReasonDNSTestingMixed, ReasonDNSTestingIneligible, ReasonReceivedDSNTenantUnavailable:
 		return SeverityWarning
 	case ReasonProtocolTemperror, ReasonReceivedDSNTemporaryFailure:
 		return SeverityTemporary
 	case ReasonInvalidInput, ReasonLimitExceeded, ReasonInternalContract, ReasonProtocolFail,
-		ReasonProtocolPermerror, ReasonDoNotModifyViolated, ReasonDoNotExplodeViolated,
-		ReasonReceivedDSNStructureInvalid, ReasonReceivedDSNEmbeddedUnverified,
+		ReasonProtocolPermerror, ReasonReceivedDSNStructureInvalid, ReasonReceivedDSNEmbeddedUnverified,
 		ReasonReceivedDSNIdentityMismatch, ReasonReceivedDSNRecipientUnlinked:
 		return SeverityPermanent
 	default:

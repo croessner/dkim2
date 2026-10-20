@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/croessner/dkim2"
-	"github.com/croessner/dkim2/cmd/dkim2d/internal/config"
 	"github.com/croessner/dkim2/cmd/dkim2d/internal/propagationtest"
 )
 
@@ -142,8 +141,8 @@ func (f *propagationFixture) newCoordinator(t *testing.T, replay PropagationRepl
 	t.Helper()
 	coordinator, err := NewPropagationCoordinator(PropagationDependencies{
 		Verifier: f.verifier, Evaluator: f.verifier, PublicKeys: f.provider,
-		Authority: kitAuthority{f.authority}, Policy: config.SigningFlagPolicyConfig{},
-		Replay: replay, TokenRetention: propagationTestRetention, Clock: f.clock.Now,
+		Authority: kitAuthority{f.authority},
+		Replay:    replay, TokenRetention: propagationTestRetention, Clock: f.clock.Now,
 	})
 	if err != nil {
 		t.Fatalf("coordinator: %v", err)
@@ -632,7 +631,7 @@ func TestPropagationSharesTheTenantAuthorityAcrossRequests(t *testing.T) {
 	coordinator, err := NewPropagationCoordinator(PropagationDependencies{
 		Verifier: fixture.verifier, Evaluator: fixture.verifier, PublicKeys: fixture.provider,
 		Authority: kitAuthority{fixture.authority}, Authorities: authorities,
-		Policy: config.SigningFlagPolicyConfig{}, Replay: fixture.enabledReplay(t),
+		Replay:         fixture.enabledReplay(t),
 		TokenRetention: propagationTestRetention, Clock: fixture.clock.Now,
 	})
 	if err != nil {

@@ -43,6 +43,9 @@ const (
 	RevisionProofProviderContract RevisionProofOutcome = "provider_contract"
 	// RevisionProofLimitExceeded reports bounded all-hop work exhaustion.
 	RevisionProofLimitExceeded RevisionProofOutcome = "limit_exceeded"
+	// RevisionProofFromNotAuthentic reports a From state of the authenticated
+	// history that is not Authentic (Draft-07 Sections 11 and 14.8).
+	RevisionProofFromNotAuthentic RevisionProofOutcome = "from_not_authentic"
 )
 
 // Known reports whether outcome belongs to the closed revision proof vocabulary.
@@ -51,7 +54,8 @@ func (o RevisionProofOutcome) Known() bool {
 	case RevisionProofVerified, RevisionProofTerminalNextDomainAuthorizationRequired,
 		RevisionProofProtocolRejected, RevisionProofInvalidRecipeJSON, RevisionProofHashMismatch, RevisionProofSignatureMismatch,
 		RevisionProofUnsupported, RevisionProofProviderTemporary,
-		RevisionProofProviderRejected, RevisionProofProviderContract, RevisionProofLimitExceeded:
+		RevisionProofProviderRejected, RevisionProofProviderContract, RevisionProofLimitExceeded,
+		RevisionProofFromNotAuthentic:
 		return true
 	default:
 		return false
@@ -75,18 +79,10 @@ func (s RevisionProofRevalidation) Known() bool {
 
 // RevisionFlagFacts stores bounded authenticated policy facts for one inherited signature.
 type RevisionFlagFacts struct {
-	doNotModify  bool
-	doNotExplode bool
-	feedback     bool
-	feedHere     bool
-	exploded     bool
+	feedback bool
+	feedHere bool
+	exploded bool
 }
-
-// DoNotModify reports authenticated donotmodify presence.
-func (f RevisionFlagFacts) DoNotModify() bool { return f.doNotModify }
-
-// DoNotExplode reports authenticated donotexplode presence.
-func (f RevisionFlagFacts) DoNotExplode() bool { return f.doNotExplode }
 
 // Feedback reports authenticated feedback presence.
 func (f RevisionFlagFacts) Feedback() bool { return f.feedback }
@@ -750,6 +746,9 @@ func (v Verifier) verifyRevisionBase(ctx context.Context, input verificationInpu
 	if outcome := rejectedRevisionHistoryOutcome(walk); outcome != "" {
 		return revisionBaseProof{}, outcome, nil
 	}
+	if !historyFromAuthentic(state, walk, input.signatures) {
+		return revisionBaseProof{}, RevisionProofFromNotAuthentic, nil
+	}
 	if walk.Usage().CanonicalBytes() > limits.MaxCanonicalWorkBytes-canonicalWork {
 		return revisionBaseProof{}, RevisionProofLimitExceeded, nil
 	}
@@ -821,11 +820,9 @@ func (v Verifier) preflightRevisionSignatures(ctx context.Context, input verific
 		}
 		parsedFlags := parsed.Flags()
 		flagFacts := RevisionFlagFacts{
-			doNotModify:  parsedFlags.HasKnown(signature.FlagDoNotModify),
-			doNotExplode: parsedFlags.HasKnown(signature.FlagDoNotExplode),
-			feedback:     parsedFlags.HasKnown(signature.FlagFeedback),
-			feedHere:     parsedFlags.HasKnown(signature.FlagFeedHere),
-			exploded:     parsedFlags.HasKnown(signature.FlagExploded),
+			feedback: parsedFlags.HasKnown(signature.FlagFeedback),
+			feedHere: parsedFlags.HasKnown(signature.FlagFeedHere),
+			exploded: parsedFlags.HasKnown(signature.FlagExploded),
 		}
 		sets := parsed.SignatureSets()
 		if len(sets) > math.MaxInt-totalSets {

@@ -62,7 +62,7 @@ func TestRevisionProofFailuresRetainSelectedPolicyAuthority(t *testing.T) {
 	if err != nil {
 		t.Fatalf("policy.NewSignatureFact() error = %v", err)
 	}
-	hop, err := policy.NewAuthenticatedHopFact(1, policy.TransitionOrigin, false, false, false, false, false)
+	hop, err := policy.NewAuthenticatedHopFact(1, policy.TransitionOrigin, false, false, false)
 	if err != nil {
 		t.Fatalf("policy.NewAuthenticatedHopFact() error = %v", err)
 	}

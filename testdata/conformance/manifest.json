@@ -106,7 +106,7 @@
     {
       "id": "milter-public-peer-source",
       "path": "cmd/dkim2-milter/internal/integration/public_peer_test.go",
-      "sha256": "706f6bbeb19af46cf398f78175df053f531b82f6e0a241f1c56a0d03e3b4527d",
+      "sha256": "9bed42b59ddf4cffb16c5e47fcfd96ab3269ccebe87107c71cd09892e5cfa20a",
       "module": "cmd/dkim2-milter"
     },
     {
@@ -118,7 +118,7 @@
     {
       "id": "openapi-independent-oracle-source",
       "path": "cmd/dkim2ctl/internal/testclient/public_socket_test.go",
-      "sha256": "dc127cbe8101d5147d85e7254bb4ac3022be9246e71ef06df7837c1f33bde1dc",
+      "sha256": "70d8736c4bcaa84864fe5483b7952bc9b740424efc2ccdb2a2e17f3586fe5e18",
       "module": "cmd/dkim2ctl"
     },
     {
@@ -130,7 +130,7 @@
     {
       "id": "openapi-negative-source",
       "path": "cmd/dkim2ctl/internal/testclient/negative_test.go",
-      "sha256": "8d37baf051866232e387b4b4914a08314e9b9e0df3b7286511815eb1f20a064e",
+      "sha256": "7ddd650a91ec358cecf3b6f7028f8359feeef64608bf051209ecb2334aba8710",
       "module": "cmd/dkim2ctl"
     },
     {
@@ -172,7 +172,7 @@
     {
       "id": "openapi-wire-response-source",
       "path": "cmd/dkim2d/internal/httpjson/http_wire_response.go",
-      "sha256": "1a4a4d60eaf5f2f17b6fa7122c126ab95de204fc7ca6c3d9ca987d08782f6937",
+      "sha256": "c06b117b5976cc5b7589b49bf25a5819cae58705686145b70e241b0fa2a8e1b4",
       "module": "cmd/dkim2d"
     },
     {
@@ -184,7 +184,7 @@
     {
       "id": "policy-positive-source",
       "path": "lib/policy_api_test.go",
-      "sha256": "3d283722ee57cb4aa485c130e48a7349de5d54604f02032f0f99cfa664198e14",
+      "sha256": "7d97e4ddb71192333cc7d4dc1e52aae3ae6ebce0e2ff1c87b5c83f9600bdec46",
       "module": "lib"
     },
     {
@@ -280,7 +280,7 @@
     {
       "id": "service-draft07-source",
       "path": "lib/internal/service/draft07_test.go",
-      "sha256": "ab9ad12bc47d4be954374f58124989c4265763694068811b1baf66b7194d0ed2",
+      "sha256": "8eb6e6ebd2e25c4521473fb2c9234c68292ed5fa197ee82d1fcf702e13fdef71",
       "module": "lib"
     },
     {
@@ -298,19 +298,25 @@
     {
       "id": "signing-dsn-propagation",
       "path": "lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-07/dsn-propagation-golden.json",
-      "sha256": "6a90d61c2e66d7c5c51422569a7054a799a1fd73a0d4f879f20bc6d4a005ceb7",
+      "sha256": "653946d7b8536fc80a9574b468b244635b16863b95247b18331c51360c0bb849",
       "module": "lib"
     },
     {
       "id": "signing-facade-source",
       "path": "lib/signing_facade_test.go",
-      "sha256": "b717ed69fb0ba6fdf3d0dd91224b63b46adf5bbcb0da91be10dfe1c25bc8465a",
+      "sha256": "11cf11bd76d686618054190388aeca962a356adc0d49b53da6de194811c47055",
       "module": "lib"
     },
     {
       "id": "signing-limits-source",
       "path": "lib/signing_limits_test.go",
       "sha256": "c6213a559efb899248b1d014fca1e8d2c2e067c06a46f71d5be5e8ed42443179",
+      "module": "lib"
+    },
+    {
+      "id": "signing-message-source",
+      "path": "lib/internal/signing/message_test.go",
+      "sha256": "0686b996322800fad8cab1c944a12564b7c7ff75d3eb9fcbfad663fc0a0099e8",
       "module": "lib"
     },
     {
@@ -322,7 +328,7 @@
     {
       "id": "signing-plan-source",
       "path": "lib/internal/signing/plan_test.go",
-      "sha256": "263c2aa1ebe0a925898804d1ed0e0e3956ab5d45ebf6653c63f858962ec76742",
+      "sha256": "3df0425528633c3a697b2ce03c26e978339e1ac00c5b8d006ca0bd7bc86475a9",
       "module": "lib"
     },
     {
@@ -334,13 +340,13 @@
     {
       "id": "signing-public",
       "path": "lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-07/signing-golden.json",
-      "sha256": "b89a1a62000599414c709a754cf461a1de58dd448ad1ad71fb8b8bc42d40fe04",
+      "sha256": "bb0f82f2445e270f676455698cf8dd63f385e6293b456253b1203bb3ff3f22da",
       "module": "lib"
     },
     {
       "id": "signing-release-source",
       "path": "lib/signing_restricted_release_test.go",
-      "sha256": "b1aeb38196eb2ac5d0f3093a39e2b89379f579c17b0143fced8de83224f6fcac",
+      "sha256": "ab7422a5e89f4a5e5bd0523d0ebd863d87b83569efa1a41771c7ba029fcbf4aa",
       "module": "lib"
     },
     {
@@ -371,6 +377,12 @@
       "id": "verification-draft07-source",
       "path": "lib/internal/verify/draft07_test.go",
       "sha256": "56b4fdbe3664b9c28102a8da74f4961910f46de9824a448d268983f41511f9eb",
+      "module": "lib"
+    },
+    {
+      "id": "verification-from-authenticity-source",
+      "path": "lib/internal/verify/from_authenticity_test.go",
+      "sha256": "604dfce6f04cf460a1fef4cbe9e9ffdcb94bb7aa925366fbe8be7d0b2702b5f4",
       "module": "lib"
     },
     {
@@ -1550,6 +1562,22 @@
     },
     {
       "suite": "signing",
+      "case_id": "draft07-originator-authentic-from",
+      "class": "draft_normative",
+      "authority": [
+        "draft-ietf-dkim-dkim2-spec-07 Section 12.4"
+      ],
+      "provenance": "regression_reproducer",
+      "runner": "portable_vector",
+      "required_platform": "portable",
+      "expected_outcome": "pass",
+      "artifacts": [
+        "signing-message-source"
+      ],
+      "producer": "signing-golden-tests"
+    },
+    {
+      "suite": "signing",
       "case_id": "draft07-same-algorithm-pair",
       "class": "draft_normative",
       "authority": [
@@ -1858,6 +1886,22 @@
       "expected_outcome": "pass",
       "artifacts": [
         "verification-draft07-source"
+      ],
+      "producer": "verification-draft07-tests"
+    },
+    {
+      "suite": "verification",
+      "case_id": "draft07-from-authenticity",
+      "class": "draft_normative",
+      "authority": [
+        "draft-ietf-dkim-dkim2-spec-07 Sections 11 and 14.8"
+      ],
+      "provenance": "regression_reproducer",
+      "runner": "portable_vector",
+      "required_platform": "portable",
+      "expected_outcome": "pass",
+      "artifacts": [
+        "verification-from-authenticity-source"
       ],
       "producer": "verification-draft07-tests"
     },

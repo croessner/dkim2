@@ -26,7 +26,7 @@ func TestFeedbackCausalityAndRelaySelection(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			decision := mustEvaluateCompliance(t, ModeStrict, mustComplianceHistory(t, HistoryComplete, tt.hops...), DefaultLimits())
+			decision := mustEvaluateProjection(t, ModeStrict, mustHistoryProjection(t, HistoryComplete, tt.hops...), DefaultLimits())
 			intent := decision.FeedbackIntent()
 			if !intent.Valid() || intent.Requested() != tt.requested || intent.RelayRequired() != tt.relayRequired || intent.RelaySequence() != tt.relaySequence || intent.HistoryCoverage() != HistoryComplete {
 				t.Fatalf("intent = %#v", intent)
@@ -41,7 +41,7 @@ func TestFeedbackCausalityAndRelaySelection(t *testing.T) {
 // TestCurrentFeedbackIntentDoesNotClaimCompleteHistory verifies current PASS semantics.
 func TestCurrentFeedbackIntentDoesNotClaimCompleteHistory(t *testing.T) {
 	set := mustProjectionSignatureFact(t, SetAlgorithmRSA, SetStatusPass, SetReasonNone, false, false)
-	hop, err := NewAuthenticatedHopFact(2, TransitionNotEvaluated, false, false, true, true, false)
+	hop, err := NewAuthenticatedHopFact(2, TransitionNotEvaluated, true, true, false)
 	if err != nil {
 		t.Fatalf("NewAuthenticatedHopFact() error = %v", err)
 	}
@@ -49,7 +49,7 @@ func TestCurrentFeedbackIntentDoesNotClaimCompleteHistory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewSelectedProjection() error = %v", err)
 	}
-	decision := mustEvaluateCompliance(t, ModeStrict, projection, DefaultLimits())
+	decision := mustEvaluateProjection(t, ModeStrict, projection, DefaultLimits())
 	intent := decision.FeedbackIntent()
 	if !intent.Requested() || !intent.RelayRequired() || intent.RelaySequence() != 2 || intent.HistoryCoverage() != HistoryNotEvaluated ||
 		!hasSequencedFinding(decision, ReasonFeedbackRequested, 2) || !hasSequencedFinding(decision, ReasonFeedbackRelaySelected, 2) {
@@ -60,7 +60,7 @@ func TestCurrentFeedbackIntentDoesNotClaimCompleteHistory(t *testing.T) {
 // TestCurrentFeedbackRequestWithoutRelayPreservesHistoryUncertainty verifies no absence claim.
 func TestCurrentFeedbackRequestWithoutRelayPreservesHistoryUncertainty(t *testing.T) {
 	set := mustProjectionSignatureFact(t, SetAlgorithmRSA, SetStatusPass, SetReasonNone, false, false)
-	hop, err := NewAuthenticatedHopFact(2, TransitionNotEvaluated, false, false, true, false, false)
+	hop, err := NewAuthenticatedHopFact(2, TransitionNotEvaluated, true, false, false)
 	if err != nil {
 		t.Fatalf("NewAuthenticatedHopFact() error = %v", err)
 	}
@@ -68,7 +68,7 @@ func TestCurrentFeedbackRequestWithoutRelayPreservesHistoryUncertainty(t *testin
 	if err != nil {
 		t.Fatalf("NewSelectedProjection() error = %v", err)
 	}
-	intent := mustEvaluateCompliance(t, ModeStrict, projection, DefaultLimits()).FeedbackIntent()
+	intent := mustEvaluateProjection(t, ModeStrict, projection, DefaultLimits()).FeedbackIntent()
 	if !intent.Requested() || intent.RelayRequired() || intent.RelaySequence() != 0 || intent.HistoryCoverage() != HistoryNotEvaluated {
 		t.Fatalf("current request-only intent = %#v", intent)
 	}
@@ -76,10 +76,10 @@ func TestCurrentFeedbackRequestWithoutRelayPreservesHistoryUncertainty(t *testin
 
 // TestFeedbackFindingLimitIsPrecounted verifies no partial intent or decision.
 func TestFeedbackFindingLimitIsPrecounted(t *testing.T) {
-	projection := mustComplianceHistory(t, HistoryComplete, mustFeedbackHop(t, 1, true, true))
+	projection := mustHistoryProjection(t, HistoryComplete, mustFeedbackHop(t, 1, true, true))
 	limits := DefaultLimits()
 	limits.MaxFindings = 3
-	if decision := mustEvaluateCompliance(t, ModeStrict, projection, limits); len(decision.Findings()) != 3 || !decision.FeedbackIntent().RelayRequired() {
+	if decision := mustEvaluateProjection(t, ModeStrict, projection, limits); len(decision.Findings()) != 3 || !decision.FeedbackIntent().RelayRequired() {
 		t.Fatalf("exact feedback limit = %#v", decision)
 	}
 	limits.MaxFindings = 2
@@ -107,7 +107,7 @@ func mustFeedbackHop(t *testing.T, sequence uint64, feedback, feedHere bool) Hop
 	if sequence == 1 {
 		transition = TransitionOrigin
 	}
-	hop, err := NewAuthenticatedHopFact(sequence, transition, false, false, feedback, feedHere, false)
+	hop, err := NewAuthenticatedHopFact(sequence, transition, feedback, feedHere, false)
 	if err != nil {
 		t.Fatalf("NewAuthenticatedHopFact() error = %v", err)
 	}

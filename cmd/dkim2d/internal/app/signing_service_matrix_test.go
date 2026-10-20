@@ -535,10 +535,7 @@ func TestSigningServiceSelectsPoliciesAndFailsClosedOnRevisionVerification(t *te
 		fixture.publicKeys,
 		fixture.runtime,
 		false,
-		signingPolicies{
-			originator:      signingFlagPolicy{doNotModify: true},
-			ordinaryTransit: signingFlagPolicy{doNotExplode: true},
-		},
+		signingPolicies{},
 	)
 	if err != nil {
 		t.Fatalf("NewSigningService() error = %v", err)
@@ -553,11 +550,8 @@ func TestSigningServiceSelectsPoliciesAndFailsClosedOnRevisionVerification(t *te
 		t.Fatal("active originator signing was not applicable")
 	}
 	assertSigningServicePass(t, signed, err, signingServiceOriginSelector)
-	if !slices.ContainsFunc(signed.Fields(), func(field CompletedField) bool {
-		return bytes.HasPrefix(field.Bytes(), []byte("DKIM2-Signature:")) &&
-			bytes.Contains(field.Bytes(), []byte("f=donotmodify"))
-	}) {
-		t.Fatal("originator policy omitted donotmodify")
+	if slices.ContainsFunc(signed.Fields(), signingServiceFieldHasRemovedFlag) {
+		t.Fatal("originator signature emitted a flag removed by Draft-07")
 	}
 
 	inherited := insertSigningServiceFields(signed.Fields(), raw)
@@ -566,11 +560,8 @@ func TestSigningServiceSelectsPoliciesAndFailsClosedOnRevisionVerification(t *te
 	)
 	revised, err := service.Revise(context.Background(), reviseRequest)
 	assertSigningServicePass(t, revised, err, signingServiceTransitSelector)
-	if !slices.ContainsFunc(revised.Fields(), func(field CompletedField) bool {
-		return bytes.HasPrefix(field.Bytes(), []byte("DKIM2-Signature:")) &&
-			bytes.Contains(field.Bytes(), []byte("donotexplode"))
-	}) {
-		t.Fatal("ordinary-transit policy omitted donotexplode")
+	if slices.ContainsFunc(revised.Fields(), signingServiceFieldHasRemovedFlag) {
+		t.Fatal("ordinary-transit signature emitted a flag removed by Draft-07")
 	}
 
 	outgoingReverse := []byte("<forwarded@origin.example.test>")
@@ -624,15 +615,12 @@ func TestSigningServiceSelectsPoliciesAndFailsClosedOnRevisionVerification(t *te
 	}
 }
 
-// TestSigningServiceAppliesOnlyInjectedOriginatorFlags proves daemon policy changes output without caller input.
-func TestSigningServiceAppliesOnlyInjectedOriginatorFlags(t *testing.T) {
+// TestSigningServiceEmitsNoRemovedDraft06Flags proves the daemon requests no
+// caller flags: Draft-07 Section 10.10 removed donotmodify and donotexplode, and
+// an i=1 originator signature never carries exploded.
+func TestSigningServiceEmitsNoRemovedDraft06Flags(t *testing.T) {
 	fixture := newSigningServiceFixture(t)
-	service, err := NewSigningService(
-		fixture.publicKeys,
-		fixture.runtime,
-		false,
-		signingPolicies{originator: signingFlagPolicy{doNotModify: true, doNotExplode: true}},
-	)
+	service, err := NewSigningService(fixture.publicKeys, fixture.runtime, false, signingPolicies{})
 	if err != nil {
 		t.Fatalf("NewSigningService() error = %v", err)
 	}
@@ -648,15 +636,21 @@ func TestSigningServiceAppliesOnlyInjectedOriginatorFlags(t *testing.T) {
 		t.Fatal("active originator signing was not applicable")
 	}
 	assertSigningServicePass(t, result, err, signingServiceOriginSelector)
-	if !slices.ContainsFunc(result.Fields(), func(field CompletedField) bool {
+	if slices.ContainsFunc(result.Fields(), func(field CompletedField) bool {
 		value := field.Bytes()
 		return bytes.HasPrefix(value, []byte("DKIM2-Signature:")) &&
-			bytes.Contains(value, []byte("f=donotmodify,donotexplode")) &&
-			!bytes.Contains(value, []byte(",exploded")) &&
-			!bytes.Contains(value, []byte("f=exploded"))
+			(signingServiceFieldHasRemovedFlag(field) || bytes.Contains(value, []byte("exploded")))
 	}) {
-		t.Fatal("originator policy flags were absent, reordered, or polluted by exploded")
+		t.Fatal("originator signature emitted a removed or exploded flag")
 	}
+}
+
+// signingServiceFieldHasRemovedFlag reports whether a completed DKIM2-Signature
+// field carries a donotmodify or donotexplode flag removed by Draft-07.
+func signingServiceFieldHasRemovedFlag(field CompletedField) bool {
+	value := field.Bytes()
+	return bytes.HasPrefix(value, []byte("DKIM2-Signature:")) &&
+		(bytes.Contains(value, []byte("donotmodify")) || bytes.Contains(value, []byte("donotexplode")))
 }
 
 // TestSigningServiceRevisesDistinctEximEnvelopeAfterReceivedAddition proves an

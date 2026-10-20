@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/croessner/dkim2"
-	"github.com/croessner/dkim2/cmd/dkim2d/internal/config"
 	"github.com/croessner/dkim2/cmd/dkim2d/internal/signingstore"
 )
 
@@ -109,8 +108,6 @@ type PropagationDependencies struct {
 	// is nil the coordinator owns a private registry, which keeps the
 	// negative cache alive across requests but not across routes.
 	Authorities *LocalAuthorityRegistry
-	// Policy carries the delivery-status signing flags.
-	Policy config.SigningFlagPolicyConfig
 	// Replay is the two-phase propagation replay gate.
 	Replay PropagationReplayService
 	// TokenRetention bounds how long an issued commit token stays resolvable.
@@ -131,7 +128,6 @@ type PropagationCoordinator struct {
 	newSigner   propagationSignerFactory
 	authority   SigningAuthority
 	authorities *LocalAuthorityRegistry
-	policy      signingFlagPolicy
 	gate        PropagationReplayService
 	tokens      *propagationTokenLedger
 	clock       func() time.Time
@@ -173,8 +169,7 @@ func NewPropagationCoordinator(deps PropagationDependencies) (*PropagationCoordi
 	return &PropagationCoordinator{
 		verifier: deps.Verifier, evaluator: deps.Evaluator, newSigner: factory,
 		authority: deps.Authority, authorities: authorities,
-		policy: signingFlagPolicy{doNotModify: deps.Policy.DoNotModify(), doNotExplode: deps.Policy.DoNotExplode()},
-		gate:   deps.Replay, tokens: tokens, clock: clock,
+		gate: deps.Replay, tokens: tokens, clock: clock,
 	}, nil
 }
 
@@ -472,7 +467,7 @@ func (c *PropagationCoordinator) sign(
 	projection DeliveryStatusProjection,
 	replayClass ReplayResultClass,
 ) (PropagationResult, error) {
-	metadata, err := c.policy.metadata()
+	metadata, err := daemonSigningMetadata()
 	if err != nil {
 		return PropagationResult{}, &DomainError{}
 	}

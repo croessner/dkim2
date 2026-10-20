@@ -164,7 +164,9 @@ func (c *ReplayCoordinator) Coordinate(ctx context.Context, domain DomainResult)
 	return c.coordinateEnabled(ctx, verification, policy)
 }
 
-// coordinateEnabled derives every key before sequentially mutating the selected store.
+// coordinateEnabled derives every key before sequentially mutating the selected
+// store. An authenticated exploded flag alone marks repeated identities as
+// expected copies; Draft-07 removed donotexplode, so no compliance state vetoes it.
 func (c *ReplayCoordinator) coordinateEnabled(
 	ctx context.Context,
 	verification dkim2.VerifyResult,
@@ -180,7 +182,7 @@ func (c *ReplayCoordinator) coordinateEnabled(
 	if identityErr != nil || !identities.Valid() || identities.Len() == 0 {
 		return indeterminateReplayOutcome(false), nil
 	}
-	effectiveExploded := identities.Exploded() && policy.DoNotExplodeCompliance() != dkim2.PolicyComplianceViolated
+	effectiveExploded := identities.Exploded()
 
 	keys := make([]dkim2.ReplayKey, identities.Len())
 	for index := range identities.Len() {

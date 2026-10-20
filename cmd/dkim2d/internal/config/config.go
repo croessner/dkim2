@@ -224,16 +224,8 @@ type signingState struct {
 	mysql               sqlSigningState
 }
 
-type signingFlagPolicyState struct {
-	doNotModify  bool
-	doNotExplode bool
-}
-
 type signingPoliciesState struct {
 	interopInfo      bool
-	originator       signingFlagPolicyState
-	ordinaryTransit  signingFlagPolicyState
-	deliveryStatus   signingFlagPolicyState
 	unsignedOriginal UnsignedOriginalPolicy
 	nullSender       NullSenderPolicy
 }
@@ -1076,33 +1068,11 @@ func parseSigning(
 	return result, nil
 }
 
-// parseSigningPolicies validates and freezes the six daemon-owned signing
-// requests, delivery-status and null-sender compatibility policies, and
-// optional interop reporting.
+// parseSigningPolicies validates and freezes the delivery-status and
+// null-sender compatibility policies and optional interop reporting. The
+// Draft-06 donotmodify and donotexplode request keys are rejected earlier by
+// the YAML preflight and rejectRemovedEnvironment.
 func parseSigningPolicies(values map[string]rawValue) (signingPoliciesState, error) {
-	read := func(modifyPath, explodePath string) (signingFlagPolicyState, error) {
-		modify, err := boolValue(values, modifyPath)
-		if err != nil {
-			return signingFlagPolicyState{}, err
-		}
-		explode, err := boolValue(values, explodePath)
-		if err != nil {
-			return signingFlagPolicyState{}, err
-		}
-		return signingFlagPolicyState{doNotModify: modify, doNotExplode: explode}, nil
-	}
-	originator, err := read(pathSigningPolicyOriginatorDoNotModify, pathSigningPolicyOriginatorDoNotExplode)
-	if err != nil {
-		return signingPoliciesState{}, err
-	}
-	transit, err := read(pathSigningPolicyTransitDoNotModify, pathSigningPolicyTransitDoNotExplode)
-	if err != nil {
-		return signingPoliciesState{}, err
-	}
-	delivery, err := read(pathSigningPolicyDeliveryDoNotModify, pathSigningPolicyDeliveryDoNotExplode)
-	if err != nil {
-		return signingPoliciesState{}, err
-	}
 	unsignedOriginal, err := parseUnsignedOriginalPolicy(text(values, pathSigningPolicyDeliveryUnsigned))
 	if err != nil {
 		return signingPoliciesState{}, err
@@ -1116,9 +1086,7 @@ func parseSigningPolicies(values map[string]rawValue) (signingPoliciesState, err
 		return signingPoliciesState{}, err
 	}
 	return signingPoliciesState{
-		interopInfo: interopInfo,
-		originator:  originator, ordinaryTransit: transit, deliveryStatus: delivery,
-		unsignedOriginal: unsignedOriginal, nullSender: nullSender,
+		interopInfo: interopInfo, unsignedOriginal: unsignedOriginal, nullSender: nullSender,
 	}, nil
 }
 
@@ -1148,13 +1116,10 @@ func parseUnsignedOriginalPolicy(value string) (UnsignedOriginalPolicy, error) {
 	}
 }
 
-// anyEnabled reports whether the policy would request a flag or a
-// compatibility relaxation from a disabled signer.
+// anyEnabled reports whether the policy would request a compatibility
+// relaxation from a disabled signer.
 func (p signingPoliciesState) anyEnabled() bool {
-	return p.originator.doNotModify || p.originator.doNotExplode ||
-		p.ordinaryTransit.doNotModify || p.ordinaryTransit.doNotExplode ||
-		p.deliveryStatus.doNotModify || p.deliveryStatus.doNotExplode ||
-		p.unsignedOriginal != UnsignedOriginalReject ||
+	return p.unsignedOriginal != UnsignedOriginalReject ||
 		p.nullSender != NullSenderReject
 }
 

@@ -7,7 +7,7 @@ import (
 
 // TestSelectedProjectionAuthenticatesOnlyPassingCurrentFlags verifies current provenance.
 func TestSelectedProjectionAuthenticatesOnlyPassingCurrentFlags(t *testing.T) {
-	hop, err := NewAuthenticatedHopFact(2, TransitionNotEvaluated, true, true, true, true, true)
+	hop, err := NewAuthenticatedHopFact(2, TransitionNotEvaluated, true, true, true)
 	if err != nil {
 		t.Fatalf("NewAuthenticatedHopFact() error = %v", err)
 	}
@@ -207,7 +207,7 @@ func decisionHasReason(decision Decision, reason PolicyReason) bool {
 
 // TestProjectionCopiesStorage verifies immutable fact ownership.
 func TestProjectionCopiesStorage(t *testing.T) {
-	hop, _ := NewAuthenticatedHopFact(1, TransitionOrigin, true, false, false, false, false)
+	hop, _ := NewAuthenticatedHopFact(1, TransitionOrigin, true, false, false)
 	facts := []SignatureFact{mustProjectionSignatureFact(t, SetAlgorithmEd25519, SetStatusPass, SetReasonNone, false, false)}
 	projection, err := NewSelectedProjection(ProtocolPASS, VerificationReasonNone, 1, []HopFact{hop}, facts, DefaultLimits())
 	if err != nil {
@@ -468,7 +468,7 @@ func mustProjectionSignatureFact(t *testing.T, algorithm SetAlgorithm, status Se
 // mustProjectionHop constructs one coherent synthetic authenticated hop.
 func mustProjectionHop(t *testing.T, sequence uint64, transition TransitionState) HopFact {
 	t.Helper()
-	hop, err := NewAuthenticatedHopFact(sequence, transition, false, false, false, false, false)
+	hop, err := NewAuthenticatedHopFact(sequence, transition, false, false, false)
 	if err != nil {
 		t.Fatalf("NewAuthenticatedHopFact() error = %v", err)
 	}

@@ -16,6 +16,13 @@ import (
 	"github.com/croessner/dkim2/internal/verify"
 )
 
+// Draft-06 flag spellings that Draft-07 Section 10.10 removed; they are inert
+// unknown flags when inherited and are never requestable.
+const (
+	removedFlagDoNotModify  = "donotmodify"
+	removedFlagDoNotExplode = "donotexplode"
+)
+
 type authorizerFunc func(context.Context, AuthorizationQuery) (AuthorizationResult, error)
 
 // Authorize delegates one test authorization.
@@ -179,6 +186,8 @@ func (*nilTestAuthorizer) Authorize(context.Context, AuthorizationQuery) (Author
 func TestSigningMetadataRejectsDerivedFlagsAndDerivesFixedOrder(t *testing.T) {
 	for _, flags := range [][]string{
 		{signature.FlagExploded}, {signature.FlagFeedHere}, {"future"}, {signature.FlagFeedback, signature.FlagFeedback},
+		// Draft-07 Section 10.10 removed donotmodify and donotexplode.
+		{removedFlagDoNotModify}, {removedFlagDoNotExplode}, {signature.FlagFeedback, removedFlagDoNotModify},
 	} {
 		if _, err := NewSigningMetadata(nil, false, flags); err == nil {
 			t.Fatalf("NewSigningMetadata(%v) accepted", flags)
@@ -193,8 +202,7 @@ func TestSigningMetadataRejectsDerivedFlagsAndDerivesFixedOrder(t *testing.T) {
 	if metadata, err := NewSigningMetadata([]byte("printable nonce"), true, nil); err != nil {
 		t.Fatalf("space-bearing nonce rejected: metadata=%v error=%v", metadata, err)
 	}
-	metadata, err := NewSigningMetadata([]byte("nonce"), true,
-		[]string{signature.FlagFeedback, signature.FlagDoNotExplode, signature.FlagDoNotModify})
+	metadata, err := NewSigningMetadata([]byte("nonce"), true, []string{signature.FlagFeedback})
 	if err != nil {
 		t.Fatalf("NewSigningMetadata() error = %v", err)
 	}
@@ -203,7 +211,9 @@ func TestSigningMetadataRejectsDerivedFlagsAndDerivesFixedOrder(t *testing.T) {
 	if err != nil {
 		t.Fatalf("DeriveEffectiveMetadata() error = %v", err)
 	}
-	want := []string{signature.FlagDoNotModify, signature.FlagDoNotExplode, signature.FlagFeedback, signature.FlagExploded}
+	// Draft-07 Section 12.5: an originator (i=1) never sets exploded, even
+	// when it delivers to more than one recipient.
+	want := []string{signature.FlagFeedback}
 	if got := effective.Flags(); fmt.Sprint(got) != fmt.Sprint(want) {
 		t.Fatalf("fixed flags = %v, want %v", got, want)
 	}
@@ -240,10 +250,13 @@ func TestEffectiveMetadataRejectsCapabilityTicketMixing(t *testing.T) {
 	}
 }
 
-// TestInheritedPolicyAndFeedbackBindExactTicketAndMultiRecipientMultiplicity proves closed derivation.
+// TestInheritedPolicyAndFeedbackBindExactTicketAndMultiRecipientMultiplicity
+// proves closed derivation. Inherited Draft-06 donotmodify and donotexplode
+// spellings are inert unknown flags under Draft-07 Section 10.10, so a body
+// change plus multi-recipient fanout stays unrestricted.
 func TestInheritedPolicyAndFeedbackBindExactTicketAndMultiRecipientMultiplicity(t *testing.T) {
 	capability := testRevisionCapabilityWithFlags(t, []string{
-		signature.FlagDoNotModify, signature.FlagDoNotExplode, signature.FlagFeedback,
+		removedFlagDoNotModify, removedFlagDoNotExplode, signature.FlagFeedback,
 	}, false)
 	ticket := testBoundRouteTicket(t, capability, routeplan.PurposeRevision,
 		[][]byte{[]byte("<a@example.test>"), []byte("<b@example.test>")})
@@ -253,7 +266,7 @@ func TestInheritedPolicyAndFeedbackBindExactTicketAndMultiRecipientMultiplicity(
 		t.Fatalf("NewPolicyAuthorizationQuery() error = %v", err)
 	}
 	facts, restriction, ok := policyQuery.PolicyFacts()
-	if !ok || !facts.BodyChanged() || restriction != RestrictionLocalOnly {
+	if !ok || !facts.BodyChanged() || restriction != RestrictionUnrestricted {
 		t.Fatalf("policy facts = %#v/%q/%t", facts, restriction, ok)
 	}
 	if _, err := NewPolicyAuthorizationQuery(capability, ticket, ModificationFacts{}); !IsErrorCode(err, ErrorCodeInvalidRequest) {
@@ -267,9 +280,8 @@ func TestInheritedPolicyAndFeedbackBindExactTicketAndMultiRecipientMultiplicity(
 	if err != nil {
 		t.Fatalf("DeriveEffectiveMetadata(no feedback) error = %v", err)
 	}
-	if got := withoutFeedback.Flags(); fmt.Sprint(got) != fmt.Sprint([]string{
-		signature.FlagDoNotModify, signature.FlagDoNotExplode, signature.FlagExploded,
-	}) {
+	// Prior flags are not inherited; an intermediary fanout sets exploded.
+	if got := withoutFeedback.Flags(); fmt.Sprint(got) != fmt.Sprint([]string{signature.FlagExploded}) {
 		t.Fatalf("inherited/multi-recipient flags = %v", got)
 	}
 
@@ -289,7 +301,7 @@ func TestInheritedPolicyAndFeedbackBindExactTicketAndMultiRecipientMultiplicity(
 	}
 	effective, err := DeriveEffectiveMetadata(metadata, capability, ticket, feedback, session)
 	if err != nil || fmt.Sprint(effective.Flags()) != fmt.Sprint([]string{
-		signature.FlagDoNotModify, signature.FlagDoNotExplode, signature.FlagFeedHere, signature.FlagExploded,
+		signature.FlagFeedHere, signature.FlagExploded,
 	}) {
 		t.Fatalf("effective feedback flags=%v error=%v", effective.Flags(), err)
 	}
@@ -301,7 +313,7 @@ func TestInheritedPolicyAndFeedbackBindExactTicketAndMultiRecipientMultiplicity(
 		t.Fatalf("cross-ticket policy facts error = %v", err)
 	}
 	otherCapability := testRevisionCapabilityWithFlags(t, []string{
-		signature.FlagDoNotModify, signature.FlagDoNotExplode, signature.FlagFeedback,
+		removedFlagDoNotModify, removedFlagDoNotExplode, signature.FlagFeedback,
 	}, true)
 	if otherCapability.seal == capability.seal {
 		t.Fatal("cross-capability fixture did not produce distinct sealed evidence")

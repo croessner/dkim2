@@ -15,7 +15,7 @@ import (
 
 // TestBatchRevisionSealsLocalAndPrivateExternalCopies exercises actual originator and transit cryptography.
 func TestBatchRevisionSealsLocalAndPrivateExternalCopies(t *testing.T) {
-	service, fixture, original := newBatchRevisionFixture(t, signingFlagPolicy{})
+	service, fixture, original := newBatchRevisionFixture(t)
 	current := append([]byte("Received: by queue.example.test; Tue, 14 Nov 2023 22:13:20 +0000\r\n"), original...)
 	request := newBatchRevisionTestRequest(t, original, current, 2)
 	result, err := service.ReviseBatch(context.Background(), request)
@@ -81,7 +81,7 @@ func inspectBatchRevisionStages(t *testing.T, service *SigningService, request B
 	if err != nil {
 		t.Fatal("diagnostic policy unavailable")
 	}
-	metadata, err := service.policies.ordinaryTransit.metadata()
+	metadata, err := daemonSigningMetadata()
 	if err != nil {
 		t.Fatal("diagnostic metadata invalid")
 	}
@@ -100,22 +100,24 @@ func inspectBatchRevisionStages(t *testing.T, service *SigningService, request B
 	}
 }
 
-// TestBatchRevisionRejectsInvalidEvidenceAndAuthenticatedRestrictions proves no partial release or unsigned restart.
-func TestBatchRevisionRejectsInvalidEvidenceAndAuthenticatedRestrictions(t *testing.T) {
+// TestBatchRevisionRejectsInvalidEvidenceWithoutRemovedFlagRestrictions proves
+// no partial release or unsigned restart. Draft-07 Section 10.10 removed
+// donotmodify and donotexplode, so local fanout and changed content are no
+// longer restricted by inherited flags; only invalid evidence fails.
+func TestBatchRevisionRejectsInvalidEvidenceWithoutRemovedFlagRestrictions(t *testing.T) {
 	for _, test := range []struct {
 		name                          string
-		policy                        signingFlagPolicy
 		mutateOriginal, mutateCurrent bool
 		external                      int
 		want                          OperationResultClass
 	}{
-		{name: "donotexplode local plus external", policy: signingFlagPolicy{doNotExplode: true}, external: 1, want: OperationPermerror},
-		{name: "donotmodify changed body", policy: signingFlagPolicy{doNotModify: true}, mutateCurrent: true, external: 2, want: OperationPermerror},
+		{name: "local plus external", external: 1, want: OperationPass},
+		{name: "changed body", mutateCurrent: true, external: 2, want: OperationPass},
 		{name: "corrupt original", mutateOriginal: true, external: 2, want: OperationPermerror},
-		{name: "donotmodify received only", policy: signingFlagPolicy{doNotModify: true}, external: 2, want: OperationPass},
+		{name: "received only", external: 2, want: OperationPass},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			service, _, original := newBatchRevisionFixture(t, test.policy)
+			service, _, original := newBatchRevisionFixture(t)
 			if test.mutateOriginal {
 				original = append(original, []byte("unverified extra line\r\n")...)
 			}
@@ -136,7 +138,7 @@ func TestBatchRevisionRejectsInvalidEvidenceAndAuthenticatedRestrictions(t *test
 
 // TestBatchRevisionRejectsRemovedProtocolFieldsAndWrongEnvelope protects the original/current evidence boundary.
 func TestBatchRevisionRejectsRemovedProtocolFieldsAndWrongEnvelope(t *testing.T) {
-	service, _, original := newBatchRevisionFixture(t, signingFlagPolicy{})
+	service, _, original := newBatchRevisionFixture(t)
 	for _, raw := range [][]byte{signingServiceRawMessage(), bytes.Replace(original, []byte("DKIM2-Signature:"), []byte("X-Removed-DKIM2-Signature:"), 1)} {
 		result, err := service.ReviseBatch(context.Background(), newBatchRevisionTestRequest(t, original, raw, 2))
 		if err != nil || result.Result() == OperationPass || len(result.Outputs()) != 0 {
@@ -153,7 +155,7 @@ func TestBatchRevisionRejectsRemovedProtocolFieldsAndWrongEnvelope(t *testing.T)
 
 // TestBatchRevisionInputBoundsAndRedaction rejects ambiguous plans without exposing protected input.
 func TestBatchRevisionInputBoundsAndRedaction(t *testing.T) {
-	_, _, original := newBatchRevisionFixture(t, signingFlagPolicy{})
+	_, _, original := newBatchRevisionFixture(t)
 	request := newBatchRevisionTestRequest(t, original, original, 2)
 	for _, copies := range [][]BatchCopy{nil, request.state.copies[:1], {request.state.copies[1], request.state.copies[1]}} {
 		if _, err := NewBatchRevisionRequest(strings.Repeat("a", 64), request.state.original, copies); err == nil {
@@ -167,11 +169,11 @@ func TestBatchRevisionInputBoundsAndRedaction(t *testing.T) {
 	}
 }
 
-// newBatchRevisionFixture signs a real inherited message with configurable authenticated originator requests.
-func newBatchRevisionFixture(t *testing.T, policy signingFlagPolicy) (*SigningService, signingServiceFixture, []byte) {
+// newBatchRevisionFixture signs a real inherited message with the daemon's originator metadata.
+func newBatchRevisionFixture(t *testing.T) (*SigningService, signingServiceFixture, []byte) {
 	t.Helper()
 	fixture := newSigningServiceFixture(t)
-	service, err := NewSigningService(fixture.publicKeys, fixture.runtime, false, signingPolicies{originator: policy})
+	service, err := NewSigningService(fixture.publicKeys, fixture.runtime, false, signingPolicies{})
 	if err != nil {
 		t.Fatal("service construction failed")
 	}

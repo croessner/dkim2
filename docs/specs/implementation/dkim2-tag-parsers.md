@@ -382,9 +382,10 @@ syntax that the DNS record format copies from DKIM2.
 - `n=` is optional, simple printable ASCII excluding semicolon, and must not
   exceed 64 characters. Unknown semantics are preserved only as bounded parser
   data; it must not become a correlation key in default logs or metrics.
-- `f=` contains comma-separated flags. Known flags are `donotmodify`,
-  `donotexplode`, `feedback`, `feedhere`, and `exploded`. Unknown flags are
-  ignored for semantic decisions. Duplicate known flags are invalid to avoid
+- `f=` contains comma-separated flags. Known flags are `feedback`,
+  `feedhere`, and `exploded`. Draft-07 Section 10.10 removed `donotmodify`
+  and `donotexplode`; they now parse as ordinary unknown flags. Unknown flags
+  are ignored for semantic decisions. Duplicate known flags are invalid to avoid
   ambiguous policy inputs.
 - `DKIM2-Signature` extension tags are ignored after syntactic validation and
   duplicate detection.

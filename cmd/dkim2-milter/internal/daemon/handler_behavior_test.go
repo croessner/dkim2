@@ -745,15 +745,13 @@ func TestProcessContractAdmitsMultiInstanceTestingContinue(t *testing.T) {
 		Value: testAuthservID + "; dkim2=pass",
 	}}
 	value.Disposition = generated.DispositionContinue
-	value.Policy.DoNotExplode = generated.PolicyResultDoNotExplodeNotRequested
-	value.Policy.DoNotModify = generated.PolicyResultDoNotModifyIndeterminate
 	value.Policy.Feedback.HistoryCoverage = generated.PolicyFeedbackHistoryCoverageComplete
 	value.Policy.Mode = generated.Testing
 	value.Policy.PrimaryReason = generated.TestingModeObserve
 	value.Policy.Verdict = generated.PolicyResultVerdictContinue
 	sequence := generated.CanonicalUint64("2")
 	value.Policy.Findings = []generated.PolicyFinding{
-		{Reason: generated.DonotmodifyIndeterminate, Sequence: &sequence, Severity: generated.Warning},
+		{Reason: generated.ExplodedReported, Sequence: &sequence, Severity: generated.Info},
 		{Reason: generated.TestingModeObserve, Severity: generated.Warning},
 	}
 	value.Replay.Class = generated.NotChecked
@@ -917,8 +915,6 @@ func validProcessResponse() generated.ProcessResponse {
 			State:                generated.PASS,
 		},
 		Policy: generated.PolicyResult{
-			DoNotExplode: generated.PolicyResultDoNotExplodeNotEvaluated,
-			DoNotModify:  generated.PolicyResultDoNotModifyNotEvaluated,
 			Feedback: generated.PolicyFeedback{
 				HistoryCoverage: generated.PolicyFeedbackHistoryCoverageNotEvaluated,
 			},

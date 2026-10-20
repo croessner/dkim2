@@ -502,19 +502,14 @@ true value.
 - `mode`: `strict`, `permissive`, or `testing`;
 - `verdict`: `accept`, `reject`, `tempfail`, or `continue`;
 - `primary_reason`: one exact M7 public policy reason;
-- `do_not_modify`: one compliance value;
-- `do_not_explode`: one compliance value;
 - `dns_testing_effective`: boolean;
 - `feedback`: `PolicyFeedback`;
 - `findings`: array, `maxItems: 128`, of `PolicyFinding`.
 
-Current-scope verification reports both compliance properties as
-`not_evaluated`. Full-chain verification preserves the authenticated policy
-projection: `do_not_modify` is `not_requested`, `indeterminate`, or
-`not_evaluated`; `do_not_explode` is `not_requested`,
-`violated`, `indeterminate`, or `not_evaluated`. `honored` is intentionally
-not a valid explosion-compliance value because absence of a later authenticated
-`exploded` report is not positive single-recipient evidence.
+Draft-07 Section 10.10 removed `donotmodify` and `donotexplode`, so the
+former `do_not_modify` and `do_not_explode` compliance properties, the matching
+`VerifierHop` booleans, and the `donotmodify_*`/`donotexplode_*` policy reasons
+were removed from the contract.
 
 The policy-reason enum is the exact reachable decision/finding inventory. The
 error-only public constants `invalid_input`, `limit_exceeded`, and
@@ -523,9 +518,6 @@ error-only public constants `invalid_input`, `limit_exceeded`, and
 `protocol_pass`, `protocol_fail`, `protocol_permerror`, `protocol_temperror`,
 `permissive_override`, `testing_mode_observe`, `dns_testing_effective`,
 `dns_testing_mixed`, `dns_testing_ineligible`,
-`donotmodify_indeterminate`, `donotmodify_not_evaluated`,
-`donotexplode_violated`, `donotexplode_indeterminate`,
-`donotexplode_not_evaluated`,
 `feedback_requested`, `feedback_relay_selected`, `feedhere_inert`, and
 `exploded_reported`.
 

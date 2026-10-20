@@ -218,8 +218,8 @@ Out of scope:
 
 - DNS TXT lookup, DNS key-record parsing, caching, DNSSEC diagnostics, network
   retries, or resolver timeouts; these belong to M6.
-- Local accept/reject/tempfail action policy, `donotmodify`, `donotexplode`,
-  `feedback`, `feedhere`, or action plans; these belong to M7.
+- Local accept/reject/tempfail action policy, `donotmodify`, `donotexplode`
+  (both removed in Draft-07), `feedback`, `feedhere`, or action plans; these belong to M7.
 - Recipe JSON parsing, application, reconstruction, or generation; these
   belong to M8 and M9.
 - Signing, revision signing, private-key handles, or message mutation; these

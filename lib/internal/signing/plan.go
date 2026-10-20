@@ -887,7 +887,8 @@ func (c HashPlanCoordinator) currentHashes(ctx context.Context, message rawmsg.M
 	return tuple, work, nil
 }
 
-// modificationFacts derives donotmodify evidence independently from the hash gate.
+// modificationFacts derives bound modification evidence for local policy
+// authorization independently from the hash gate.
 func (c HashPlanCoordinator) modificationFacts(ctx context.Context, capability VerifiedRevisionInput, ticket routeplan.CopyTicket, current rawmsg.Message, hashes HashTuple) (ModificationFacts, error) {
 	if err := ctx.Err(); err != nil {
 		return ModificationFacts{}, err

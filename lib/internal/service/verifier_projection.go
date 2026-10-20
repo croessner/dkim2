@@ -38,8 +38,6 @@ type VerifierHopFact struct {
 	Binding            [32]byte
 	Sequence           uint64
 	MessageInstance    uint64
-	DoNotModify        bool
-	DoNotExplode       bool
 	Feedback           bool
 	FeedHere           bool
 	Exploded           bool
@@ -145,7 +143,7 @@ func mapVerifierProjection(source verify.VerifierProjection) (VerifierProjection
 			HistoryHeaderState: string(sourceHop.HistoryHeaderState()), HistoryBodyState: string(sourceHop.HistoryBodyState()),
 			BodyAvailability: string(sourceHop.BodyAvailability()), Binding: sourceHop.HopBinding(),
 			Sequence: sourceHop.Sequence(), MessageInstance: sourceHop.MessageInstance(),
-			DoNotModify: flags.DoNotModify(), DoNotExplode: flags.DoNotExplode(), Feedback: flags.Feedback(), FeedHere: flags.FeedHere(), Exploded: flags.Exploded(),
+			Feedback: flags.Feedback(), FeedHere: flags.FeedHere(), Exploded: flags.Exploded(),
 			Recipe: VerifierRecipeDescriptor{AffectedHeaders: descriptor.AffectedHeaders(), ChangeClasses: mappedClasses, Digest: descriptor.Digest(), BodyMode: string(descriptor.BodyMode())},
 		}
 	}

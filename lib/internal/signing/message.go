@@ -450,10 +450,7 @@ func (c Coordinator) CompleteMessage(ctx context.Context, completed CompletedSig
 
 // validGeneratedFlags requires the sole canonical known-flag order without duplicates.
 func validGeneratedFlags(flags []string) bool {
-	order := []string{
-		signature.FlagDoNotModify, signature.FlagDoNotExplode, signature.FlagFeedback,
-		signature.FlagFeedHere, signature.FlagExploded,
-	}
+	order := []string{signature.FlagFeedback, signature.FlagFeedHere, signature.FlagExploded}
 	next := 0
 	for _, flag := range flags {
 		for next < len(order) && order[next] != flag {

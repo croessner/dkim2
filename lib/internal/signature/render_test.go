@@ -33,7 +33,7 @@ func TestUnsignedTargetAndCompleteFieldRemainDistinct(t *testing.T) {
 		Domain:     "Example.TEST",
 		Sets:       []SetPlan{{Selector: signatureTestEd1Selector, Algorithm: AlgorithmEd25519SHA256}, {Selector: signatureTestRSA1Selector, Algorithm: AlgorithmRSASHA256}},
 		Nonce:      []byte{}, NoncePresent: true,
-		Flags: []string{FlagExploded, FlagDoNotModify},
+		Flags: []string{FlagExploded, FlagFeedback},
 	}
 	target, err := NewUnsignedTarget(request, RenderLimits{})
 	if err != nil {
@@ -53,7 +53,7 @@ func TestUnsignedTargetAndCompleteFieldRemainDistinct(t *testing.T) {
 		"\ts=rsa1:rsa-sha256:,\r\n" +
 		"\ted1:ed25519-sha256:;\r\n" +
 		"\tn=;\r\n" +
-		"\tf=donotmodify,exploded;\r\n"
+		"\tf=feedback,exploded;\r\n"
 	if unsigned != wantUnsigned {
 		t.Fatalf("UnsignedBytes() deterministic equality=false got_length=%d want_length=%d", len(unsigned), len(wantUnsigned))
 	}
@@ -301,7 +301,7 @@ func rebuildUnsignedFixture(t *testing.T) (UnsignedTarget, CompleteField, []byte
 			{Selector: signatureTestRSASelector, Algorithm: AlgorithmRSASHA256},
 		},
 		Nonce: []byte("nonce"), NoncePresent: true,
-		Flags: []string{FlagDoNotModify, FlagFeedback},
+		Flags: []string{FlagFeedHere, FlagFeedback},
 	}, RenderLimits{})
 	if err != nil {
 		t.Fatalf("NewUnsignedTarget() code=%s", signatureTestErrorCode(err))
@@ -460,14 +460,30 @@ func TestTargetUsesFrozenFlagOrder(t *testing.T) {
 		Sequence: 1, InstanceNumber: 1, Timestamp: 1, MailFrom: []byte("<>"),
 		Recipients: [][]byte{[]byte("<user@example.test>")}, Domain: signatureTestDomain,
 		Sets:  []SetPlan{{Selector: signatureTestSelector, Algorithm: AlgorithmRSASHA256}},
-		Flags: []string{FlagExploded, FlagFeedHere, FlagFeedback, FlagDoNotExplode, FlagDoNotModify},
+		Flags: []string{FlagExploded, FlagFeedHere, FlagFeedback},
 	}, RenderLimits{})
 	if err != nil {
 		t.Fatalf("NewUnsignedTarget() code=%s", signatureTestErrorCode(err))
 	}
-	want := []byte("\tf=donotmodify,donotexplode,feedback,feedhere,exploded;\r\n")
+	want := []byte("\tf=feedback,feedhere,exploded;\r\n")
 	if !bytes.Contains(target.UnsignedBytes(), want) {
 		t.Fatal("generated flags did not use the frozen closed order")
+	}
+}
+
+// TestTargetRejectsRemovedDraft06Flags verifies that generated signatures
+// cannot emit the donotmodify or donotexplode flags removed by Draft-07.
+func TestTargetRejectsRemovedDraft06Flags(t *testing.T) {
+	for _, flag := range []string{removedFlagDoNotModify, removedFlagDoNotExplode} {
+		_, err := NewUnsignedTarget(TargetRequest{
+			Sequence: 1, InstanceNumber: 1, Timestamp: 1, MailFrom: []byte("<>"),
+			Recipients: [][]byte{[]byte("<user@example.test>")}, Domain: signatureTestDomain,
+			Sets:  []SetPlan{{Selector: signatureTestSelector, Algorithm: AlgorithmRSASHA256}},
+			Flags: []string{flag},
+		}, RenderLimits{})
+		if !IsErrorCode(err, ErrorCodeMalformedFlag) {
+			t.Fatalf("NewUnsignedTarget(%s) code=%s, want malformed flag", flag, signatureTestErrorCode(err))
+		}
 	}
 }
 

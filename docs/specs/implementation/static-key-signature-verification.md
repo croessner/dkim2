@@ -282,8 +282,8 @@ Out of scope:
   diagnostics, revoked-key handling, or resolver temp/permanent error split.
 - Recipe JSON parsing, recipe application, recipe generation, previous
   instance reconstruction, or previous-instance hash validation.
-- Local policy evaluation, `donotmodify`, `donotexplode`, feedback action
-  planning, replay detection, or trust-boundary reporting.
+- Local policy evaluation, `donotmodify`, `donotexplode` (both removed in
+  Draft-07), feedback action planning, replay detection, or trust-boundary reporting.
 - `cmd/dkim2d`, `cmd/dkim2-milter`, and `cmd/dkim2ctl` changes.
 - OpenAPI contracts or generated artifacts.
 - Concrete logging, tracing, metrics, Prometheus labels, OpenTelemetry

@@ -43,10 +43,7 @@ func findingReasonAllowed(reason PolicyReason) bool {
 // findingRequiresSequence reports whether the frozen emission row requires a hop sequence.
 func findingRequiresSequence(reason PolicyReason) bool {
 	switch reason {
-	case ReasonDoNotModifyHonored, ReasonDoNotModifyViolated, ReasonDoNotModifyIndeterminate,
-		ReasonDoNotModifyNotEvaluated, ReasonDoNotExplodeViolated, ReasonDoNotExplodeIndeterminate,
-		ReasonDoNotExplodeNotEvaluated, ReasonFeedbackRequested, ReasonFeedbackRelaySelected,
-		ReasonFeedHereInert, ReasonExplodedReported:
+	case ReasonFeedbackRequested, ReasonFeedbackRelaySelected, ReasonFeedHereInert, ReasonExplodedReported:
 		return true
 	default:
 		return false
@@ -68,8 +65,6 @@ type Decision struct {
 	mode                Mode
 	verdict             Verdict
 	primaryReason       PolicyReason
-	modifyState         ComplianceState
-	explodeState        ComplianceState
 	feedbackIntent      FeedbackIntent
 	dnsTestingEffective bool
 	findings            []Finding
@@ -90,12 +85,6 @@ func (d Decision) Verdict() Verdict { return d.verdict }
 // PrimaryReason returns the deterministic decision reason.
 func (d Decision) PrimaryReason() PolicyReason { return d.primaryReason }
 
-// DoNotModifyCompliance returns aggregate authenticated modification compliance.
-func (d Decision) DoNotModifyCompliance() ComplianceState { return d.modifyState }
-
-// DoNotExplodeCompliance returns aggregate authenticated explosion compliance.
-func (d Decision) DoNotExplodeCompliance() ComplianceState { return d.explodeState }
-
 // FeedbackIntent returns bounded authenticated feedback intent by value.
 func (d Decision) FeedbackIntent() FeedbackIntent { return d.feedbackIntent }
 
@@ -110,7 +99,7 @@ func (d Decision) Actions() []Action { return slices.Clone(d.actions) }
 
 // IsZero reports whether the decision carries no initialized policy state.
 func (d Decision) IsZero() bool {
-	return !d.initialized && !d.authenticationFinal && d.protocol == "" && d.mode == "" && d.verdict == "" && d.primaryReason == "" && d.modifyState == "" && d.explodeState == "" && !d.feedbackIntent.Valid() && !d.dnsTestingEffective && len(d.findings) == 0 && len(d.actions) == 0
+	return !d.initialized && !d.authenticationFinal && d.protocol == "" && d.mode == "" && d.verdict == "" && d.primaryReason == "" && !d.feedbackIntent.Valid() && !d.dnsTestingEffective && len(d.findings) == 0 && len(d.actions) == 0
 }
 
 // Valid reports whether decision state satisfies closed base invariants.
@@ -131,14 +120,6 @@ func (d Decision) Valid() bool {
 	if !validFindingOrder(remainder) || dnsFindingCount(remainder) > 1 {
 		return false
 	}
-	if !d.dnsTestingEffective && d.mode == ModeStrict && d.protocol == ProtocolPASS {
-		modifyViolation, explodeViolation := complianceViolations(remainder)
-		if modifyViolation {
-			expectedVerdict, expectedPrimary = VerdictReject, ReasonDoNotModifyViolated
-		} else if explodeViolation {
-			expectedVerdict, expectedPrimary = VerdictReject, ReasonDoNotExplodeViolated
-		}
-	}
 	dsnVerdict, dsnReason, dsnReplace, dsnCoherent := receivedDSNDecisionCoherent(d.protocol, d.mode, remainder)
 	if !dsnCoherent {
 		return false
@@ -147,7 +128,7 @@ func (d Decision) Valid() bool {
 		expectedVerdict, expectedPrimary = dsnVerdict, dsnReason
 	}
 	if d.verdict != expectedVerdict || d.primaryReason != expectedPrimary || !dnsDecisionCoherent(d.protocol, d.dnsTestingEffective, remainder) ||
-		!feedbackFindingCoherent(d.feedbackIntent, d.findings) || !complianceFindingCoherent(d.modifyState, d.findings, true) || !complianceFindingCoherent(d.explodeState, d.findings, false) {
+		!feedbackFindingCoherent(d.feedbackIntent, d.findings) {
 		return false
 	}
 	return true
@@ -168,7 +149,7 @@ func dnsDecisionCoherent(protocol ProtocolClass, effective bool, findings []Find
 // basicValid checks closed fields, actions, and individual finding shape.
 func (d Decision) basicValid() bool {
 	if !d.initialized || !d.protocol.Known() || !d.mode.Known() || !d.verdict.Known() ||
-		!findingReasonAllowed(d.primaryReason) || !d.modifyState.Known() || !d.explodeState.Known() ||
+		!findingReasonAllowed(d.primaryReason) ||
 		!d.feedbackIntent.Valid() || len(d.findings) == 0 || len(d.actions) != 1 || d.actions[0].kind != actionForVerdict(d.verdict) {
 		return false
 	}
@@ -197,7 +178,7 @@ func (d Decision) expectedBaseOutcome() (Verdict, PolicyReason, []PolicyReason) 
 	return VerdictContinue, ReasonDNSTestingEffective, reasons
 }
 
-// newAuthenticationDecision seals a non-overridable final replay outcome while retaining authenticated compliance facts.
+// newAuthenticationDecision seals a non-overridable final replay outcome while retaining authenticated policy findings.
 func newAuthenticationDecision(protocol ProtocolClass, mode Mode, source Decision) (Decision, error) {
 	if !source.Valid() || source.protocol != ProtocolPASS ||
 		(protocol != ProtocolFAIL && protocol != ProtocolTEMPERROR) {
@@ -214,7 +195,7 @@ func newAuthenticationDecision(protocol ProtocolClass, mode Mode, source Decisio
 		case current.reason == ReasonProtocolPass || current.reason == ReasonTestingModeObserve || current.reason == ReasonPermissiveOverride ||
 			current.reason == ReasonDNSTestingEffective || current.reason == ReasonDNSTestingMixed || current.reason == ReasonDNSTestingIneligible:
 			continue
-		case complianceFindingClass(current.reason) == receivedDSNFindingClass:
+		case findingClass(current.reason) == receivedDSNFindingClass:
 			// The final replay outcome is not PASS, so the received-DSN row
 			// table yields the outer-policy row: the facts are retained as a
 			// finding but no longer replace the verdict.
@@ -231,7 +212,6 @@ func newAuthenticationDecision(protocol ProtocolClass, mode Mode, source Decisio
 	verdict := strictVerdict(protocol)
 	decision := Decision{
 		protocol: protocol, mode: mode, verdict: verdict, primaryReason: reason,
-		modifyState: source.modifyState, explodeState: source.explodeState,
 		feedbackIntent: source.feedbackIntent, findings: findings,
 		actions: []Action{{kind: actionForVerdict(verdict)}}, initialized: true,
 		authenticationFinal: true,
@@ -242,21 +222,11 @@ func newAuthenticationDecision(protocol ProtocolClass, mode Mode, source Decisio
 	return decision, nil
 }
 
-// complianceViolations reports proven modification and explosion findings.
-func complianceViolations(findings []Finding) (bool, bool) {
-	modify, explode := false, false
-	for _, finding := range findings {
-		modify = modify || finding.reason == ReasonDoNotModifyViolated
-		explode = explode || finding.reason == ReasonDoNotExplodeViolated
-	}
-	return modify, explode
-}
-
 // dnsFindingCount counts the closed DNS classification findings.
 func dnsFindingCount(findings []Finding) int {
 	count := 0
 	for _, finding := range findings {
-		if complianceFindingClass(finding.reason) == 1 {
+		if findingClass(finding.reason) == 1 {
 			count++
 		}
 	}
@@ -264,10 +234,9 @@ func dnsFindingCount(findings []Finding) int {
 }
 
 // newDecision constructs one immutable validated policy decision.
-func newDecision(protocol ProtocolClass, mode Mode, verdict Verdict, primary PolicyReason, modifyState, explodeState ComplianceState, feedback FeedbackIntent, dnsEffective bool, findings []Finding) (Decision, error) {
+func newDecision(protocol ProtocolClass, mode Mode, verdict Verdict, primary PolicyReason, feedback FeedbackIntent, dnsEffective bool, findings []Finding) (Decision, error) {
 	decision := Decision{
 		protocol: protocol, mode: mode, verdict: verdict, primaryReason: primary,
-		modifyState: modifyState, explodeState: explodeState,
 		feedbackIntent: feedback, dnsTestingEffective: dnsEffective,
 		findings: slices.Clone(findings), actions: []Action{{kind: actionForVerdict(verdict)}}, initialized: true,
 	}
@@ -278,14 +247,14 @@ func newDecision(protocol ProtocolClass, mode Mode, verdict Verdict, primary Pol
 }
 
 // receivedDSNFindingClass is the finding class of the single received-DSN row finding.
-const receivedDSNFindingClass = 7
+const receivedDSNFindingClass = 5
 
-// validFindingOrder enforces compliance class and ascending sequence order.
+// validFindingOrder enforces finding class and ascending sequence order.
 func validFindingOrder(findings []Finding) bool {
 	previousClass := 0
 	previousSequence := uint64(0)
 	for _, finding := range findings {
-		class := complianceFindingClass(finding.reason)
+		class := findingClass(finding.reason)
 		sequence, hasSequence := finding.Sequence()
 		if class == 0 || class < previousClass || hasSequence != findingRequiresSequence(finding.reason) || class == previousClass && hasSequence && sequence <= previousSequence {
 			return false
@@ -295,21 +264,17 @@ func validFindingOrder(findings []Finding) bool {
 	return true
 }
 
-// complianceFindingClass returns the frozen finding class order.
-func complianceFindingClass(reason PolicyReason) int {
+// findingClass returns the frozen finding class order.
+func findingClass(reason PolicyReason) int {
 	switch reason {
 	case ReasonDNSTestingEffective, ReasonDNSTestingMixed, ReasonDNSTestingIneligible:
 		return 1
-	case ReasonDoNotModifyHonored, ReasonDoNotModifyViolated, ReasonDoNotModifyIndeterminate, ReasonDoNotModifyNotEvaluated:
-		return 2
-	case ReasonDoNotExplodeViolated, ReasonDoNotExplodeIndeterminate, ReasonDoNotExplodeNotEvaluated:
-		return 3
 	case ReasonFeedbackRequested:
-		return 4
+		return 2
 	case ReasonFeedbackRelaySelected, ReasonFeedHereInert:
-		return 5
+		return 3
 	case ReasonExplodedReported:
-		return 6
+		return 4
 	case ReasonReceivedDSNOuterPolicy, ReasonReceivedDSNStructureInvalid, ReasonReceivedDSNEmbeddedUnverified,
 		ReasonReceivedDSNEmbeddedAbsent, ReasonReceivedDSNTemporaryFailure, ReasonReceivedDSNTenantUnavailable,
 		ReasonReceivedDSNIdentityMismatch, ReasonReceivedDSNNotLocal, ReasonReceivedDSNRecipientUnlinked,
@@ -317,41 +282,6 @@ func complianceFindingClass(reason PolicyReason) int {
 		return receivedDSNFindingClass
 	default:
 		return 0
-	}
-}
-
-// complianceFindingCoherent binds aggregate states to their per-request findings.
-func complianceFindingCoherent(state ComplianceState, findings []Finding, modify bool) bool {
-	hasClass, hasViolated, hasHonored, hasIndeterminate, hasNotEvaluated := false, false, false, false, false
-	for _, finding := range findings {
-		if modify && complianceFindingClass(finding.reason) != 2 || !modify && complianceFindingClass(finding.reason) != 3 {
-			continue
-		}
-		hasClass = true
-		switch finding.reason {
-		case ReasonDoNotModifyViolated, ReasonDoNotExplodeViolated:
-			hasViolated = true
-		case ReasonDoNotModifyHonored:
-			hasHonored = true
-		case ReasonDoNotModifyIndeterminate, ReasonDoNotExplodeIndeterminate:
-			hasIndeterminate = true
-		case ReasonDoNotModifyNotEvaluated, ReasonDoNotExplodeNotEvaluated:
-			hasNotEvaluated = true
-		}
-	}
-	switch state {
-	case ComplianceViolated:
-		return hasViolated
-	case ComplianceHonored:
-		return modify && hasHonored && !hasViolated && !hasIndeterminate && !hasNotEvaluated
-	case ComplianceIndeterminate:
-		return !hasViolated && (hasIndeterminate || !hasClass)
-	case ComplianceNotEvaluated:
-		return !hasViolated && !hasIndeterminate && (hasNotEvaluated || !hasClass)
-	case ComplianceNotRequested:
-		return !hasClass
-	default:
-		return false
 	}
 }
 

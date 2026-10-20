@@ -22,13 +22,14 @@
 // returns exactly one matching disposition action.
 //
 // The public verifier authenticates every inherited signature flag on aggregate
-// PASS. Complete history can therefore evaluate donotmodify and donotexplode
-// across the authenticated chain. Feedback output is bounded
+// PASS. Draft-07 Section 10.10 removed the donotmodify and donotexplode flags:
+// received spellings are inert unknown flags, signing never emits them, and
+// policy derives no compliance state from them. Feedback output is bounded
 // intent without a destination or route. DNS t=y is authenticated key metadata,
 // not the local testing mode; coherent all-set testing makes PASS and the
 // closed eligible failure rows non-terminal without rewriting verification
-// state. Effective testing PASS also suppresses flag-derived compliance,
-// feedback, and exploded output. Pre-target malformed, missing, sequence, or
+// state. Effective testing PASS also suppresses flag-derived feedback and
+// exploded output. Pre-target malformed, missing, sequence, or
 // limit outcomes remain valid fact-free PERMERROR results for policy
 // evaluation. Policy results, findings, actions, and errors contain only bounded
 // enums, booleans, counts, and sequence numbers, never message, identity,

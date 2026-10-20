@@ -147,85 +147,62 @@ func TestSigningConfigurationIsDefaultDisabledAndConditionallyComplete(t *testin
 	}
 }
 
-// TestSigningFlagPolicyMapsExactUsesAndPreservesDisabledDefaults proves the closed six-leaf contract.
-func TestSigningFlagPolicyMapsExactUsesAndPreservesDisabledDefaults(t *testing.T) {
+// TestRemovedDraft06SigningFlagKeysFailWithMigrationGuidance reproduces the
+// Draft-07 Section 10.10 removal of donotmodify and donotexplode: every former
+// signing.policy.<use>.donotmodify|donotexplode key and its DKIM2D_*
+// environment variable fails closed with fixed, value-free migration guidance,
+// even when set to false and even under a disabled signer.
+func TestRemovedDraft06SigningFlagKeysFailWithMigrationGuidance(t *testing.T) {
 	clearStableEnvironment(t)
-	disabled, err := Load([]byte(disabledYAML()), FlagValues{})
-	if err != nil {
-		t.Fatalf("Load(disabled) code = %s", CodeOf(err))
+	if _, err := Load([]byte(signingYAML()), FlagValues{}); err != nil {
+		t.Fatalf("Load(signing) without removed keys code = %s", CodeOf(err))
 	}
-	policies := disabled.Signing().Policies()
-	for name, policy := range map[string]SigningFlagPolicyConfig{
-		testSigningUseOriginator: policies.Originator(),
-		"ordinary_transit":       policies.OrdinaryTransit(),
-		"delivery_status":        policies.DeliveryStatus(),
-	} {
-		if policy.DoNotModify() || policy.DoNotExplode() {
-			t.Fatalf("omitted %s policy enabled a flag", name)
+	const secretMarker = "removed-key-secret-marker"
+	fields := removedFields()
+	if len(fields) != 6 {
+		t.Fatalf("removed field count = %d, want 6", len(fields))
+	}
+	for _, field := range fields {
+		segments := strings.Split(field.path, ".")
+		if len(segments) != 4 || segments[0] != "signing" || segments[1] != "policy" {
+			t.Fatalf("removed path %q is outside signing.policy", field.path)
 		}
-	}
-
-	document := strings.Replace(signingYAML(), "  backend: flat_file", `  backend: flat_file
-  policy:
-    originator:
-      donotmodify: true
-      donotexplode: false
-    ordinary_transit:
-      donotmodify: false
-      donotexplode: true
-    delivery_status:
-      donotmodify: true
-      donotexplode: true`, 1)
-	enabled, err := Load([]byte(document), FlagValues{})
-	if err != nil {
-		t.Fatalf("Load(policy) code = %s", CodeOf(err))
-	}
-	policies = enabled.Signing().Policies()
-	if !policies.Originator().DoNotModify() || policies.Originator().DoNotExplode() ||
-		policies.OrdinaryTransit().DoNotModify() || !policies.OrdinaryTransit().DoNotExplode() ||
-		!policies.DeliveryStatus().DoNotModify() || !policies.DeliveryStatus().DoNotExplode() {
-		t.Fatal("signing policy leaves mapped to the wrong use")
-	}
-
-	overrides := []struct {
-		name string
-		read func(SigningPoliciesConfig) bool
-	}{
-		{envSigningPolicyOriginatorDoNotModify, func(p SigningPoliciesConfig) bool { return p.Originator().DoNotModify() }},
-		{envSigningPolicyOriginatorDoNotExplode, func(p SigningPoliciesConfig) bool { return p.Originator().DoNotExplode() }},
-		{envSigningPolicyTransitDoNotModify, func(p SigningPoliciesConfig) bool { return p.OrdinaryTransit().DoNotModify() }},
-		{envSigningPolicyTransitDoNotExplode, func(p SigningPoliciesConfig) bool { return p.OrdinaryTransit().DoNotExplode() }},
-		{envSigningPolicyDeliveryDoNotModify, func(p SigningPoliciesConfig) bool { return p.DeliveryStatus().DoNotModify() }},
-		{envSigningPolicyDeliveryDoNotExplode, func(p SigningPoliciesConfig) bool { return p.DeliveryStatus().DoNotExplode() }},
-	}
-	for _, override := range overrides {
-		t.Setenv(override.name, "true")
-		environment, loadErr := Load([]byte(signingYAML()), FlagValues{})
-		if loadErr != nil || !override.read(environment.Signing().Policies()) {
-			t.Fatalf("environment policy override %s failed with code %s", override.name, CodeOf(loadErr))
+		leaf := "  policy:\n    " + segments[2] + ":\n      " + segments[3] + ": "
+		for name, document := range map[string]string{
+			"signing true":   strings.Replace(signingYAML(), "  backend: flat_file", "  backend: flat_file\n"+leaf+"true", 1),
+			"signing false":  strings.Replace(signingYAML(), "  backend: flat_file", "  backend: flat_file\n"+leaf+"false", 1),
+			"disabled false": disabledYAML() + "signing:\n" + leaf + "false\n",
+			"secret value":   strings.Replace(signingYAML(), "  backend: flat_file", "  backend: flat_file\n"+leaf+"\""+secretMarker+"\"", 1),
+		} {
+			_, err := Load([]byte(document), FlagValues{})
+			assertRemovedFieldError(t, err, field.path, secretMarker, name)
 		}
+		t.Run(field.env, func(t *testing.T) {
+			t.Setenv(field.env, secretMarker)
+			_, err := Load([]byte(signingYAML()), FlagValues{})
+			assertRemovedFieldError(t, err, field.env, secretMarker, "environment")
+		})
 	}
-	t.Setenv(envSigningPolicyDeliveryDoNotExplode, "not-a-boolean")
-	if _, loadErr := Load([]byte(signingYAML()), FlagValues{}); loadErr == nil {
-		t.Fatal("invalid signing policy environment boolean was accepted")
+	unknown := strings.Replace(signingYAML(), "  backend: flat_file", "  backend: flat_file\n  policy:\n    originator:\n      exploded: false", 1)
+	if _, err := Load([]byte(unknown), FlagValues{}); CodeOf(err) != CodeInvalidYAML {
+		t.Fatalf("unknown signing policy key code = %s, want %s", CodeOf(err), CodeInvalidYAML)
 	}
 }
 
-// TestSigningFlagPolicyFailsClosedForDisabledAndUnknownPolicy proves unsafe policy input is rejected.
-func TestSigningFlagPolicyFailsClosedForDisabledAndUnknownPolicy(t *testing.T) {
-	clearStableEnvironment(t)
-	for _, document := range []string{
-		strings.Replace(disabledYAML(), "signing:\n", "signing:\n", 1) + "signing:\n  policy:\n    originator:\n      donotmodify: true\n",
-		strings.Replace(signingYAML(), "  backend: flat_file", "  backend: flat_file\n  policy:\n    originator:\n      exploded: false", 1),
-		strings.Replace(signingYAML(), "  backend: flat_file", "  backend: flat_file\n  policy:\n    default:\n      donotmodify: true", 1),
-	} {
-		if _, err := Load([]byte(document), FlagValues{}); err == nil {
-			t.Fatal("unsafe signing policy input was accepted")
-		}
+// assertRemovedFieldError checks one removed-key failure names the exact key,
+// carries Draft-07 migration guidance, and never echoes the configured value.
+func assertRemovedFieldError(t *testing.T, err error, key, secretMarker, name string) {
+	t.Helper()
+	if CodeOf(err) != CodeRemovedField {
+		t.Fatalf("%s %s code = %s, want %s", key, name, CodeOf(err), CodeRemovedField)
 	}
-	falseOnly := disabledYAML() + "signing:\n  policy:\n    originator:\n      donotmodify: false\n"
-	if _, err := Load([]byte(falseOnly), FlagValues{}); err != nil {
-		t.Fatalf("explicit false disabled policy failed with code %s", CodeOf(err))
+	migration, ok := MigrationOf(err)
+	if !ok || !strings.Contains(migration, key+" was removed in Draft-07") ||
+		!strings.Contains(migration, "donotmodify and donotexplode") || !strings.Contains(migration, "delete this setting") {
+		t.Fatalf("%s %s migration = %q", key, name, migration)
+	}
+	if !strings.HasPrefix(err.Error(), string(CodeRemovedField)+": ") || strings.Contains(err.Error(), secretMarker) {
+		t.Fatalf("%s %s error = %q", key, name, err.Error())
 	}
 }
 
@@ -255,9 +232,8 @@ func TestDeliveryStatusUnsignedOriginalPolicyDefaultsToRejectAndFailsClosed(t *t
 		if err != nil || snapshot.Signing().Policies().DeliveryStatusUnsignedOriginal() != want {
 			t.Fatalf("unsigned_original %q code=%s", value, CodeOf(err))
 		}
-		if snapshot.Signing().Policies().DeliveryStatus().DoNotModify() ||
-			snapshot.Signing().Policies().DeliveryStatus().DoNotExplode() {
-			t.Fatal("unsigned_original changed the delivery-status signing flags")
+		if snapshot.Signing().Policies().OriginatorNullSender() != NullSenderReject {
+			t.Fatal("unsigned_original changed the originator null-sender policy")
 		}
 	}
 	for _, value := range []string{"accept", "Continue", "CONTINUE", "true", "\"\"", "\"reject \"", "sign"} {
@@ -309,9 +285,7 @@ func TestOriginatorNullSenderPolicyDefaultsToRejectAndFailsClosed(t *testing.T) 
 		if err != nil || snapshot.Signing().Policies().OriginatorNullSender() != want {
 			t.Fatalf("null_sender %q code=%s", value, CodeOf(err))
 		}
-		if snapshot.Signing().Policies().Originator().DoNotModify() ||
-			snapshot.Signing().Policies().Originator().DoNotExplode() ||
-			snapshot.Signing().Policies().DeliveryStatusUnsignedOriginal() != UnsignedOriginalReject {
+		if snapshot.Signing().Policies().DeliveryStatusUnsignedOriginal() != UnsignedOriginalReject {
 			t.Fatal("null_sender changed another signing policy")
 		}
 	}

@@ -129,8 +129,8 @@ func assertPlanRecipeReconstructs(t *testing.T, revision UnsignedOperationPlan, 
 	}
 }
 
-// TestHashPlanGateDimensionsAndDonotmodifyFacts proves body/header decisions remain independent.
-func TestHashPlanGateDimensionsAndDonotmodifyFacts(t *testing.T) {
+// TestHashPlanGateDimensionsAndModificationFacts proves body/header decisions remain independent.
+func TestHashPlanGateDimensionsAndModificationFacts(t *testing.T) {
 	fixture := newRevisionTestFixture(t, nil, false)
 	fixture.message = mustParseRevisionMessage(t, []byte(strings.Replace(
 		string(fixture.message.RawBytes()), "Subject: current\r\n",

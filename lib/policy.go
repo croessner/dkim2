@@ -78,20 +78,6 @@ const (
 	PolicyReasonDNSTestingMixed PolicyReason = "dns_testing_mixed"
 	// PolicyReasonDNSTestingIneligible reports declarations on an ineligible failure.
 	PolicyReasonDNSTestingIneligible PolicyReason = "dns_testing_ineligible"
-	// PolicyReasonDoNotModifyHonored reports proven compliance with a modification request.
-	PolicyReasonDoNotModifyHonored PolicyReason = "donotmodify_honored"
-	// PolicyReasonDoNotModifyViolated reports a proven prohibited later modification.
-	PolicyReasonDoNotModifyViolated PolicyReason = "donotmodify_violated"
-	// PolicyReasonDoNotModifyIndeterminate reports incomplete modification evidence.
-	PolicyReasonDoNotModifyIndeterminate PolicyReason = "donotmodify_indeterminate"
-	// PolicyReasonDoNotModifyNotEvaluated reports unavailable modification history.
-	PolicyReasonDoNotModifyNotEvaluated PolicyReason = "donotmodify_not_evaluated"
-	// PolicyReasonDoNotExplodeViolated reports a proven later explosion.
-	PolicyReasonDoNotExplodeViolated PolicyReason = "donotexplode_violated"
-	// PolicyReasonDoNotExplodeIndeterminate reports incomplete explosion evidence.
-	PolicyReasonDoNotExplodeIndeterminate PolicyReason = "donotexplode_indeterminate"
-	// PolicyReasonDoNotExplodeNotEvaluated reports unavailable explosion history.
-	PolicyReasonDoNotExplodeNotEvaluated PolicyReason = "donotexplode_not_evaluated"
 	// PolicyReasonFeedbackRequested reports an authenticated feedback request.
 	PolicyReasonFeedbackRequested PolicyReason = "feedback_requested"
 	// PolicyReasonFeedbackRelaySelected reports the selected authenticated relay.
@@ -141,25 +127,6 @@ const (
 
 // Known reports whether the severity belongs to the closed vocabulary.
 func (s PolicyFindingSeverity) Known() bool { return policy.FindingSeverity(s).Known() }
-
-// PolicyCompliance identifies one authenticated request-compliance state.
-type PolicyCompliance string
-
-const (
-	// PolicyComplianceNotRequested reports that no authenticated request exists.
-	PolicyComplianceNotRequested PolicyCompliance = "not_requested"
-	// PolicyComplianceHonored reports positively established compliance.
-	PolicyComplianceHonored PolicyCompliance = "honored"
-	// PolicyComplianceViolated reports a proven later-hop violation.
-	PolicyComplianceViolated PolicyCompliance = "violated"
-	// PolicyComplianceIndeterminate reports incomplete positive evidence.
-	PolicyComplianceIndeterminate PolicyCompliance = "indeterminate"
-	// PolicyComplianceNotEvaluated reports that historical evaluation did not run.
-	PolicyComplianceNotEvaluated PolicyCompliance = "not_evaluated"
-)
-
-// Known reports whether the state belongs to the closed vocabulary.
-func (c PolicyCompliance) Known() bool { return policy.ComplianceState(c).Known() }
 
 // PolicyHistoryCoverage identifies authenticated policy-history coverage.
 type PolicyHistoryCoverage string
@@ -255,19 +222,16 @@ func publicFindingReasonAllowed(reason PolicyReason) bool {
 // publicSeverityForReason returns the frozen public severity for one known reason.
 func publicSeverityForReason(reason PolicyReason) PolicyFindingSeverity {
 	switch reason {
-	case PolicyReasonProtocolPass, PolicyReasonDoNotModifyHonored,
+	case PolicyReasonProtocolPass,
 		PolicyReasonFeedbackRequested, PolicyReasonFeedbackRelaySelected, PolicyReasonFeedHereInert, PolicyReasonExplodedReported,
 		PolicyReasonReceivedDSNOuterPolicy, PolicyReasonReceivedDSNEmbeddedAbsent, PolicyReasonReceivedDSNNotLocal, PolicyReasonReceivedDSNLinked:
 		return PolicySeverityInfo
 	case PolicyReasonPermissiveOverride, PolicyReasonTestingModeObserve, PolicyReasonDNSTestingEffective,
-		PolicyReasonDNSTestingMixed, PolicyReasonDNSTestingIneligible, PolicyReasonDoNotModifyIndeterminate,
-		PolicyReasonDoNotModifyNotEvaluated, PolicyReasonDoNotExplodeIndeterminate, PolicyReasonDoNotExplodeNotEvaluated,
-		PolicyReasonReceivedDSNTenantUnavailable:
+		PolicyReasonDNSTestingMixed, PolicyReasonDNSTestingIneligible, PolicyReasonReceivedDSNTenantUnavailable:
 		return PolicySeverityWarning
 	case PolicyReasonProtocolTemperror, PolicyReasonReceivedDSNTemporaryFailure:
 		return PolicySeverityTemporary
-	case PolicyReasonProtocolFail, PolicyReasonProtocolPermerror, PolicyReasonDoNotModifyViolated, PolicyReasonDoNotExplodeViolated,
-		PolicyReasonReceivedDSNStructureInvalid, PolicyReasonReceivedDSNEmbeddedUnverified,
+	case PolicyReasonProtocolFail, PolicyReasonProtocolPermerror, PolicyReasonReceivedDSNStructureInvalid, PolicyReasonReceivedDSNEmbeddedUnverified,
 		PolicyReasonReceivedDSNIdentityMismatch, PolicyReasonReceivedDSNRecipientUnlinked:
 		return PolicySeverityPermanent
 	default:
@@ -278,9 +242,7 @@ func publicSeverityForReason(reason PolicyReason) PolicyFindingSeverity {
 // publicFindingRequiresSequence reports whether a finding must identify an authenticated hop.
 func publicFindingRequiresSequence(reason PolicyReason) bool {
 	switch reason {
-	case PolicyReasonDoNotModifyHonored, PolicyReasonDoNotModifyViolated, PolicyReasonDoNotModifyIndeterminate,
-		PolicyReasonDoNotModifyNotEvaluated, PolicyReasonDoNotExplodeViolated, PolicyReasonDoNotExplodeIndeterminate,
-		PolicyReasonDoNotExplodeNotEvaluated, PolicyReasonFeedbackRequested, PolicyReasonFeedbackRelaySelected,
+	case PolicyReasonFeedbackRequested, PolicyReasonFeedbackRelaySelected,
 		PolicyReasonFeedHereInert, PolicyReasonExplodedReported:
 		return true
 	default:
@@ -413,8 +375,6 @@ type policyDecisionState struct {
 	mode              PolicyMode
 	verdict           PolicyVerdict
 	primaryReason     PolicyReason
-	modify            PolicyCompliance
-	explode           PolicyCompliance
 	feedback          PolicyFeedbackIntent
 	dnsEffective      bool
 	findings          []PolicyFinding
@@ -455,22 +415,6 @@ func (d PolicyDecision) PrimaryReason() PolicyReason {
 	return d.state.primaryReason
 }
 
-// DoNotModifyCompliance returns aggregate authenticated modification compliance.
-func (d PolicyDecision) DoNotModifyCompliance() PolicyCompliance {
-	if d.state == nil {
-		return ""
-	}
-	return d.state.modify
-}
-
-// DoNotExplodeCompliance returns aggregate authenticated explosion compliance.
-func (d PolicyDecision) DoNotExplodeCompliance() PolicyCompliance {
-	if d.state == nil {
-		return ""
-	}
-	return d.state.explode
-}
-
 // FeedbackIntent returns bounded authenticated feedback intent by value.
 func (d PolicyDecision) FeedbackIntent() PolicyFeedbackIntent {
 	if d.state == nil {
@@ -509,7 +453,7 @@ func (d PolicyDecision) IsZero() bool {
 func (d PolicyDecision) Valid() bool {
 	if d.state == nil || !d.state.initialized || !d.state.verificationState.Known() ||
 		!d.state.mode.Known() || !d.state.verdict.Known() || !d.state.primaryReason.Known() ||
-		!d.state.modify.Known() || !d.state.explode.Known() || !d.state.feedback.Valid() ||
+		!d.state.feedback.Valid() ||
 		!d.state.actionPlan.Valid() || len(d.state.findings) == 0 {
 		return false
 	}
@@ -552,8 +496,6 @@ func publicDecisionMatchesSource(d PolicyDecision) bool {
 	if !state.source.Valid() || PolicyMode(state.source.Mode()) != state.mode ||
 		PolicyVerdict(state.source.Verdict()) != state.verdict ||
 		PolicyReason(state.source.PrimaryReason()) != state.primaryReason ||
-		PolicyCompliance(state.source.DoNotModifyCompliance()) != state.modify ||
-		PolicyCompliance(state.source.DoNotExplodeCompliance()) != state.explode ||
 		state.source.DNSTestingEffective() != state.dnsEffective {
 		return false
 	}
@@ -709,8 +651,7 @@ func adaptPolicyDecision(state ResultState, input policy.Decision) (PolicyDecisi
 	feedback := input.FeedbackIntent()
 	decision := PolicyDecision{state: &policyDecisionState{
 		verificationState: state, mode: PolicyMode(input.Mode()), verdict: PolicyVerdict(input.Verdict()),
-		primaryReason: PolicyReason(input.PrimaryReason()), modify: PolicyCompliance(input.DoNotModifyCompliance()),
-		explode: PolicyCompliance(input.DoNotExplodeCompliance()), feedback: PolicyFeedbackIntent{
+		primaryReason: PolicyReason(input.PrimaryReason()), feedback: PolicyFeedbackIntent{
 			state: &policyFeedbackIntentState{
 				requested: feedback.Requested(), relayRequired: feedback.RelayRequired(),
 				relaySequence: feedback.RelaySequence(), history: PolicyHistoryCoverage(feedback.HistoryCoverage()),

@@ -185,8 +185,8 @@ func (a *Authenticator) AuthenticateVerified(ctx context.Context, verification V
 	if storeErr != nil || check == ReplayCheckDisabled || check != ReplayCheckFirstSeen && check != ReplayCheckReplayed {
 		return newAuthenticationResult(verification, ResultStateTEMPERROR, AuthenticationReasonReplayIndeterminate, AuthenticationReplayIndeterminate), nil
 	}
-	decision, policyErr := EvaluatePolicy(verification, WithPolicyMode(PolicyModeStrict))
-	effectiveExploded := policyErr == nil && identities.Exploded() && decision.DoNotExplodeCompliance() != PolicyComplianceViolated
+	_, policyErr := EvaluatePolicy(verification, WithPolicyMode(PolicyModeStrict))
+	effectiveExploded := policyErr == nil && identities.Exploded()
 	if effectiveExploded {
 		return newAuthenticationResult(verification, ResultStatePASS, ReasonNone, AuthenticationReplayExploded), nil
 	}

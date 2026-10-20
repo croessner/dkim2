@@ -241,30 +241,22 @@ Inspect symbols only for finite states. The module intentionally does not add
 domain, selector, recipient, message ID, response text, or daemon errors as
 symbol options.
 
-## Policy and compliance symbols
+## Policy symbols
 
-`donotmodify` and `donotexplode` are authenticated DKIM2 requests carried by
-the verified chain. They are not Rspamd configuration switches. The adapter
-validates the daemon's closed policy values and publishes one zero-score symbol
-for each result so local composites and monitoring can observe them.
+Draft-07 Section 10.10 removed the `donotmodify` and `donotexplode` flags. The
+daemon no longer reports their compliance states and the adapter no longer
+emits the former `DKIM2_DONOTMODIFY_*` and `DKIM2_DONOTEXPLODE_*` symbols.
+Remove any composite or score that references them. A daemon response that
+still carries the removed `do_not_modify` or `do_not_explode` members fails
+closed as a service error.
 
-Current `donotmodify` values are `not_requested`, `indeterminate`, and
-`not_evaluated`. The current verifier cannot yet produce the authenticated
-transition facts required to serialize `honored` or `violated`; an unexpected
-future value fails closed.
-
-Current `donotexplode` values are `not_requested`, `violated`, `indeterminate`,
-and `not_evaluated`. A violation can contribute to a daemon-owned terminal
-policy decision. Operators must not recreate or override that decision with a
-Rspamd score.
-
-A monitoring composite may group finite states without changing disposition,
-for example:
+A monitoring composite may group finite policy states without changing
+disposition, for example:
 
 ```ucl
 composites {
   DKIM2_POLICY_OBSERVE {
-    expression = "DKIM2_DONOTMODIFY_INDETERMINATE | DKIM2_DONOTEXPLODE_INDETERMINATE";
+    expression = "DKIM2_POLICY_CONTINUE | DKIM2_REPLAY_INDETERMINATE";
     score = 0.0;
   }
 }

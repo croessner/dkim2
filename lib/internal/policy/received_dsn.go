@@ -230,7 +230,7 @@ func receivedDSNRowVerdict(mode Mode, reason PolicyReason) (Verdict, bool) {
 // receivedDSNFindingReason returns the single received-DSN finding reason when present.
 func receivedDSNFindingReason(findings []Finding) (PolicyReason, bool) {
 	for _, finding := range findings {
-		if complianceFindingClass(finding.reason) == receivedDSNFindingClass {
+		if findingClass(finding.reason) == receivedDSNFindingClass {
 			return finding.reason, true
 		}
 	}
@@ -241,7 +241,7 @@ func receivedDSNFindingReason(findings []Finding) (PolicyReason, bool) {
 func receivedDSNFindingCount(findings []Finding) int {
 	count := 0
 	for _, finding := range findings {
-		if complianceFindingClass(finding.reason) == receivedDSNFindingClass {
+		if findingClass(finding.reason) == receivedDSNFindingClass {
 			count++
 		}
 	}

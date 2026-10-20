@@ -428,6 +428,44 @@ func TestCommandClosesOwnerReturnedAlongsideLoadError(t *testing.T) {
 	}
 }
 
+// TestCommandPrintsRemovedConfigurationKeyMigration proves a configuration key
+// removed by Draft-07 fails validate and serve with exit 1 and its fixed,
+// value-free migration guidance instead of the generic runtime diagnostic.
+func TestCommandPrintsRemovedConfigurationKeyMigration(t *testing.T) {
+	t.Parallel()
+	const secretMarker = "removed-key-command-marker"
+	_, loadErr := config.Load([]byte("signing:\n  policy:\n    ordinary_transit:\n      donotexplode: \""+secretMarker+"\"\n"), config.FlagValues{})
+	if config.CodeOf(loadErr) != config.CodeRemovedField {
+		t.Fatalf("config.Load() code = %s, want %s", config.CodeOf(loadErr), config.CodeRemovedField)
+	}
+	want := "dkim2d: configuration key signing.policy.ordinary_transit.donotexplode was removed in Draft-07 " +
+		"because the donotmodify and donotexplode flags no longer exist and have no effect; delete this setting\n"
+	for _, name := range []string{validateCommandName, serveCommandName} {
+		t.Run(name, func(t *testing.T) {
+			var stdout bytes.Buffer
+			var stderr bytes.Buffer
+			exit := executeWithDependencies(
+				[]string{name, testConfigFlag, testConfigPath},
+				&stdout,
+				&stderr,
+				commandDependencies{
+					load: func(string, config.FlagValues) (bootstrapOwner, error) {
+						return nil, commandLoadFailure(loadErr)
+					},
+					build: func(bootstrapOwner, time.Duration) (managedApplication, error) {
+						t.Fatal("removed configuration key reached Fx build")
+						return nil, nil
+					},
+					withTimeout: context.WithTimeout,
+				},
+			)
+			if exit != 1 || stdout.String() != "" || stderr.String() != want || strings.Contains(stderr.String(), secretMarker) {
+				t.Fatalf("result = %d/%q/%q", exit, stdout.String(), stderr.String())
+			}
+		})
+	}
+}
+
 // TestCommandPreservesTransferWhenStartCancelPanics proves cancellation cannot reclaim ownership.
 func TestCommandPreservesTransferWhenStartCancelPanics(t *testing.T) {
 	t.Parallel()

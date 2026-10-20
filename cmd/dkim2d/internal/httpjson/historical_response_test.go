@@ -89,8 +89,6 @@ func assertHistoricalPolicyResponse(t *testing.T, decoded generated.ProcessRespo
 
 	if decoded.Verification.State != generated.PASS || decoded.Verification.Scope != generated.Chain ||
 		decoded.Policy.Mode != generated.Testing || decoded.Policy.Verdict != generated.PolicyResultVerdictContinue ||
-		decoded.Policy.DoNotModify != generated.PolicyResultDoNotModifyNotRequested ||
-		decoded.Policy.DoNotExplode != generated.PolicyResultDoNotExplodeNotRequested ||
 		decoded.Policy.Feedback.HistoryCoverage != generated.PolicyFeedbackHistoryCoverageComplete ||
 		decoded.Replay.Class != generated.Disabled || decoded.Disposition != generated.DispositionContinue ||
 		len(decoded.Actions) != 1 || decoded.Actions[0].Type != generated.AddHeader ||
@@ -138,8 +136,6 @@ func TestMapDomainResultAcceptsAuthenticatedMultiInstancePolicy(t *testing.T) {
 	}
 	decision, err := dkim2.EvaluatePolicy(result, dkim2.WithPolicyMode(dkim2.PolicyModeTesting))
 	if err != nil || !decision.Valid() || decision.Verdict() != dkim2.PolicyVerdictContinue ||
-		decision.DoNotModifyCompliance() != dkim2.PolicyComplianceNotRequested ||
-		decision.DoNotExplodeCompliance() != dkim2.PolicyComplianceNotRequested ||
 		decision.FeedbackIntent().HistoryCoverage() != dkim2.PolicyHistoryComplete {
 		t.Fatal("authentic historical policy decision was incoherent")
 	}
@@ -149,9 +145,7 @@ func TestMapDomainResultAcceptsAuthenticatedMultiInstancePolicy(t *testing.T) {
 		t.Fatalf("authentic historical result did not map: %v", err)
 	}
 	_, policy, valid := projection.domainValues()
-	if !valid || policy.DoNotModify != generated.PolicyResultDoNotModifyNotRequested ||
-		policy.DoNotExplode != generated.PolicyResultDoNotExplodeNotRequested ||
-		policy.Feedback.HistoryCoverage != generated.PolicyFeedbackHistoryCoverageComplete {
+	if !valid || policy.Feedback.HistoryCoverage != generated.PolicyFeedbackHistoryCoverageComplete {
 		t.Fatal("historical policy projection changed authenticated coverage")
 	}
 }

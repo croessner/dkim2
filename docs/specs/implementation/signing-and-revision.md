@@ -6,6 +6,28 @@
 
 Status: implemented; independently reviewed.
 
+## Draft-07 Flag Removal
+
+Draft-07 Section 10.10 removed the `donotmodify` and `donotexplode` flags;
+unrecognized flags have no effect. The current implementation therefore:
+
+- accepts only `feedback` as a caller-requestable flag; requesting
+  `donotmodify` or `donotexplode` fails closed before provider callbacks;
+- never emits either flag and uses the generated flag order `feedback`,
+  `feedhere`, then `exploded`;
+- treats inherited `donotmodify` or `donotexplode` spellings as inert unknown
+  flags, so they never yield a `local_only` restriction, deny fanout, or deny
+  external forwarding. The policy authorization callback still receives the
+  bound modification facts and decides on its own; and
+- removes the daemon-owned `signing.policy.<use>.donotmodify` and
+  `signing.policy.<use>.donotexplode` configuration keys (see the operator
+  documentation for the migration error).
+
+The `local_only` restriction type and its in-control release path remain in
+the closed result vocabulary, but no Draft-07 protocol fact produces it.
+Sections below that describe `donotmodify` or `donotexplode` restrictions are
+the historical Draft-04 record.
+
 This specification defines the public-library signing and revision boundary for
 Originators, unchanged Forwarders, and Revisers. It covers deterministic
 `Message-Instance` and `DKIM2-Signature` generation, exact hash gating,
@@ -259,7 +281,8 @@ The capability is bound to:
 - complete ordinary/`nd=` custody facts;
 - every existing signature timestamp passing the existing deterministic
   14-day maximum-age and future-tolerance policy, not only the highest target;
-- authenticated `donotmodify`, `donotexplode`, and `exploded` facts; and
+- authenticated `feedback`, `feedhere`, and `exploded` facts (Draft-04 also
+  sealed the removed `donotmodify` and `donotexplode` facts); and
 - whether the only unresolved condition is a cryptographically clean terminal
   `nd=` requiring out-of-band authorization.
 
@@ -466,9 +489,11 @@ cryptographically bind omitted `mf=`/`rt=` values, so once released the
 protocol still relies on the documented OOB receiver arrangement and must not
 claim replay prevention outside that arrangement.
 
-### Authenticated Policy Restrictions
+### Authenticated Policy Restrictions (Historical, Removed In Draft-07)
 
-Authenticated `donotmodify` and `donotexplode` requests are not silently
+Draft-07 removed both flags, so none of the restrictions below are derived
+anymore. In the Draft-04 record, authenticated `donotmodify` and
+`donotexplode` requests are not silently
 converted into permission to forward externally.
 
 - `donotmodify` is evaluated independently of the Section 9.1 hash gate. The
@@ -592,7 +617,8 @@ result. The library cannot technically prevent an adapter from duplicating or
 misrouting returned bytes; adapter contracts and later integration tests must
 enforce the retained ticket/parent restriction.
 
-Callers may request only `donotmodify`, `donotexplode`, and `feedback` directly.
+Callers may request only `feedback` directly; Draft-07 removed the formerly
+requestable `donotmodify` and `donotexplode` flags.
 `exploded` is derived from the parent total carried by each ticket and emitted
 identically on every copy whenever distinct output multiplicity is greater
 than one; callers cannot suppress or forge it. `feedhere` is eligible
@@ -600,14 +626,14 @@ only when a fully verified prior signature authenticated `feedback` and the
 sealed privacy-routing policy authorizes feedback relay through this exact hop.
 Unknown flags, caller-requested `exploded`, causally unsupported `feedhere`, or
 metadata/ticket/parent disagreement fails before provider callbacks.
-When present, generated flags use the fixed order `donotmodify`,
-`donotexplode`, `feedback`, `feedhere`, then `exploded`.
+When present, generated flags use the fixed order `feedback`, `feedhere`, then
+`exploded`.
 
-Any fully verified prior authenticated `donotmodify` or `donotexplode` flag is
-effective, not only a flag on the highest signature. The sealed policy
-authorization binds the exact capability, sealed parent and copy ticket,
-derived multiplicity, modification facts, intended route scope, and resulting
-`unrestricted` or `local_only` restriction.
+Inherited `donotmodify` or `donotexplode` spellings are inert unknown flags
+under Draft-07 and never restrict the result. The sealed policy authorization
+binds the exact capability, sealed parent and copy ticket, derived
+multiplicity, modification facts, intended route scope, and the resulting
+`unrestricted` restriction.
 
 ### Recipient Disclosure And Bcc Privacy
 
@@ -1146,16 +1172,18 @@ incidental diagnostics.
   explicit fresh reissuance after rejection, provider-observation drift,
   selector/key mismatch, and
   intended-envelope/receiver/route replay.
-- `donotmodify`, `donotexplode`, `exploded`, local-only restriction, and
-  external denial matrices are closed and exhaustive.
+- `exploded` derivation and the Draft-07 inertness of inherited `donotmodify`
+  and `donotexplode` spellings are covered; the historical Draft-04
+  `donotmodify`/`donotexplode` local-only and external denial matrices were
+  removed with the flags.
 - API-shape tests prove only unrestricted output has a generic byte accessor.
   Local-only release succeeds once on the same ticket's sealed in-control
   route; external/wrong/cross-ticket/stale/replayed routes, concurrent double
   release, enum/type downgrade, interface assertion, formatting, and marshaling
   yield no bytes. OOB-restricted output has the symmetric route-bound proof.
-- `donotmodify` rejects body change and removal/rewrite/refolding/reordering of
-  any prior header occurrence, including excluded headers and hash-equal
-  mutations; only additions remain eligible without a local-only override.
+- Historical Draft-04: `donotmodify` rejected body change and
+  removal/rewrite/refolding/reordering of any prior header occurrence; Draft-07
+  removed the flag and an inherited spelling no longer restricts revision.
 - One recipient works by default; two require exact group-disclosure
   authorization; duplicates and secret-bearing diagnostics are rejected.
 - Sealed fanout tests cover a positive Bcc-safe separate-copy plan with
@@ -1164,7 +1192,8 @@ incidental diagnostics.
   burn-and-explicit-replacement, cross-parent/cross-copy mixing, attempted
   post-result extra copy, stale route, unknown fanout, metadata/ticket
   disagreement, local-only fanout, identical parent-derived `exploded`,
-  inherited `donotexplode`, and causally valid/invalid `feedhere`.
+  inherited Draft-06 `donotexplode` spellings that stay inert, and causally
+  valid/invalid `feedhere`.
 - Fanout-bound tests cover 128 copies exact and 129 one-over, descriptor/work
   exact and one-over, 64 MiB unique source bytes exact and one-over, explicit
   shared-source dedup versus equal independent buffers, a huge same-recipient
@@ -1356,16 +1385,14 @@ recorded during implementation closeout.
 
 ## Daemon-Owned Signing Flag Policy
 
-`dkim2d` may inject `donotmodify` and `donotexplode` independently for
-originator, ordinary-transit, and delivery-status signing. The six typed YAML
-leaves default to false and are frozen at startup. The application maps each
-closed signing use to its own immutable policy before provider or private-key
-work, then delegates metadata validation and canonical ordering to the library.
-
-The HTTP request contract contains no flag input. `exploded` remains a factual
-report derived only from sealed route fanout multiplicity and cannot be added,
-suppressed, or forged through configuration. An ordinary-transit policy can
-add a request but cannot remove an inherited authenticated restriction.
+`dkim2d` requests no caller flags for originator, ordinary-transit, or
+delivery-status signing. Draft-07 removed `donotmodify` and `donotexplode`, so
+the former six `signing.policy.<use>.donotmodify|donotexplode` YAML leaves and
+their `DKIM2D_SIGNING_POLICY_<USE>_DONOTMODIFY|DONOTEXPLODE` environment
+variables are rejected at startup with a `config_removed_field` migration
+error naming the key. The HTTP request contract contains no flag input.
+`exploded` remains a factual report derived only from sealed route fanout
+multiplicity and cannot be added, suppressed, or forged through configuration.
 
 ## Explicit M11 And Later Deferments
 

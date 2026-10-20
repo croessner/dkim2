@@ -9,10 +9,6 @@ import (
 )
 
 const (
-	// FlagDoNotModify is the parser-known donotmodify policy flag.
-	FlagDoNotModify = "donotmodify"
-	// FlagDoNotExplode is the parser-known donotexplode policy flag.
-	FlagDoNotExplode = "donotexplode"
 	// FlagFeedback is the parser-known feedback policy flag.
 	FlagFeedback = "feedback"
 	// FlagFeedHere is the parser-known privacy-preserving feedback destination flag.
@@ -127,9 +123,11 @@ func parseFlags(value string, limits Limits, fieldIndex int) (Flags, error) {
 }
 
 // knownFlag reports whether name is one of the parser-known f= flags.
+// Draft-07 Section 10.10 removed donotmodify and donotexplode, so those
+// spellings are ordinary unknown flags with no effect.
 func knownFlag(name string) bool {
 	switch name {
-	case FlagDoNotModify, FlagDoNotExplode, FlagFeedback, FlagFeedHere, FlagExploded:
+	case FlagFeedback, FlagFeedHere, FlagExploded:
 		return true
 	default:
 		return false

@@ -14,18 +14,11 @@ signing:
   reload_interval: 1m
   policy:
     originator:
-      donotmodify: false
-      donotexplode: false
       # reject (default) refuses a null reverse path on /v1/sign; header_from
       # signs it with the single From mailbox domain. Enable header_from only
       # when every sign-capability holder sits on a trusted egress route.
       null_sender: reject
-    ordinary_transit:
-      donotmodify: false
-      donotexplode: false
     delivery_status:
-      donotmodify: false
-      donotexplode: false
       # reject (default) refuses a bounce whose returned original carries no
       # DKIM2-Signature; continue lets it leave unsigned and unchanged.
       unsigned_original: reject

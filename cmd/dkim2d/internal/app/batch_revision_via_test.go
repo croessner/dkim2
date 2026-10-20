@@ -29,7 +29,7 @@ type batchTestAuthority struct {
 func TestBatchRevisionControlledReturnRejectsUntrustedEvidence(t *testing.T) {
 	for _, name := range []string{"tampered body", "decoded recipient", "different issued recipient", "wrong tenant", "temporary outer key"} {
 		t.Run(name, func(t *testing.T) {
-			f := newBatchViaFixture(t, signingFlagPolicy{})
+			f := newBatchViaFixture(t)
 			batch, err := f.forwarder.ReviseBatch(context.Background(), f.request)
 			if err != nil || batch.Result() != OperationPass {
 				t.Fatal("forward fixture failed")
@@ -158,13 +158,13 @@ type batchViaFixture struct {
 }
 
 // newBatchViaFixture signs actual SMTP input whose hosted recipient differs from the return domain.
-func newBatchViaFixture(t *testing.T, policy signingFlagPolicy) batchViaFixture {
+func newBatchViaFixture(t *testing.T) batchViaFixture {
 	t.Helper()
-	return newBatchViaFixtureAt(t, policy, time.Time{})
+	return newBatchViaFixtureAt(t, time.Time{})
 }
 
 // newBatchViaFixtureAt optionally uses current time for exported integration inputs.
-func newBatchViaFixtureAt(t *testing.T, policy signingFlagPolicy, at time.Time) batchViaFixture {
+func newBatchViaFixtureAt(t *testing.T, at time.Time) batchViaFixture {
 	t.Helper()
 	f := newPropagationFixture(t)
 	if !at.IsZero() {
@@ -181,7 +181,7 @@ func newBatchViaFixtureAt(t *testing.T, policy signingFlagPolicy, at time.Time) 
 		f.provider.Publish(key)
 		keys = append(keys, key)
 	}
-	origin := &SigningService{publicKeys: f.provider, store: newBatchTestAuthority(keys[0]), clock: f.clock.Now, policies: signingPolicies{originator: policy}}
+	origin := &SigningService{publicKeys: f.provider, store: newBatchTestAuthority(keys[0]), clock: f.clock.Now}
 	forwarder := &SigningService{publicKeys: f.provider, store: newBatchTestAuthority(keys[1], keys[2]), clock: f.clock.Now}
 	remote := &SigningService{publicKeys: f.provider, store: newBatchTestAuthority(keys[3]), clock: f.clock.Now}
 	f.authority = propagationtest.NewAuthority().AddProfile(propagationTestTenant, keys[1]).AddProfile(propagationTestTenant, keys[2])
@@ -236,7 +236,7 @@ func newBatchViaFixtureAt(t *testing.T, policy signingFlagPolicy, at time.Time) 
 
 // TestBatchRevisionControlledViaProducesVerifiablePrivateCopies proves the reference imaginary-hop route.
 func TestBatchRevisionControlledViaProducesVerifiablePrivateCopies(t *testing.T) {
-	f := newBatchViaFixture(t, signingFlagPolicy{})
+	f := newBatchViaFixture(t)
 	result, err := f.forwarder.ReviseBatch(context.Background(), f.request)
 	if err != nil || result.Result() != OperationPass || len(result.Outputs()) != 2 {
 		inspectBatchRevisionStages(t, f.forwarder, f.request)
@@ -260,13 +260,9 @@ func TestBatchRevisionControlledViaProducesVerifiablePrivateCopies(t *testing.T)
 
 // TestBatchRevisionControlledViaRejectsUnauthorizedOrInvalidRoutes proves no alignment or policy bypass.
 func TestBatchRevisionControlledViaRejectsUnauthorizedOrInvalidRoutes(t *testing.T) {
-	for _, name := range []string{"missing via", "unowned intermediate recipient", "wrong final sender domain", "missing final profile", "donotexplode", "null final sender", "temporary intermediate key"} {
+	for _, name := range []string{"missing via", "unowned intermediate recipient", "wrong final sender domain", "missing final profile", "null final sender", "temporary intermediate key"} {
 		t.Run(name, func(t *testing.T) {
-			policy := signingFlagPolicy{}
-			if name == "donotexplode" {
-				policy.doNotExplode = true
-			}
-			f := newBatchViaFixture(t, policy)
+			f := newBatchViaFixture(t)
 			branch := &f.request.state.copies[2]
 			want := OperationPermerror
 			switch name {
@@ -371,7 +367,7 @@ func recordBatchRemoteCustody(t *testing.T, f batchViaFixture, raw, reverse []by
 
 // TestBatchRevisionControlledViaDSNReturnsAcrossBothOwnedHops proves the complete library propagation path.
 func TestBatchRevisionControlledViaDSNReturnsAcrossBothOwnedHops(t *testing.T) {
-	f := newBatchViaFixture(t, signingFlagPolicy{})
+	f := newBatchViaFixture(t)
 	batch, err := f.forwarder.ReviseBatch(context.Background(), f.request)
 	if err != nil || batch.Result() != OperationPass {
 		t.Fatal("forward signing failed")

@@ -17,7 +17,6 @@ func TestClosedVocabularies(t *testing.T) {
 		{name: "verification reason", known: []bool{VerificationReasonNone.Known(), VerificationReasonHashMismatch.Known(), VerificationReasonSignatureMismatch.Known(), VerificationReasonInvalidKey.Known(), VerificationReasonProviderTemporary.Known(), VerificationReasonInternalContract.Known()}, unknown: []bool{VerificationReason("").Known(), VerificationReason("future").Known()}},
 		{name: "verdict", known: []bool{VerdictAccept.Known(), VerdictReject.Known(), VerdictTempfail.Known(), VerdictContinue.Known()}, unknown: []bool{Verdict("").Known(), Verdict("future").Known()}},
 		{name: "action", known: []bool{ActionAccept.Known(), ActionReject.Known(), ActionTempfail.Known(), ActionContinue.Known()}, unknown: []bool{ActionKind("").Known(), ActionKind("future").Known()}},
-		{name: "compliance", known: []bool{ComplianceNotRequested.Known(), ComplianceHonored.Known(), ComplianceViolated.Known(), ComplianceIndeterminate.Known(), ComplianceNotEvaluated.Known()}, unknown: []bool{ComplianceState("").Known(), ComplianceState("future").Known()}},
 		{name: "transition", known: []bool{TransitionOrigin.Known(), TransitionUnchanged.Known(), TransitionBodyChanged.Known(), TransitionHeadersChanged.Known(), TransitionBodyAndHeadersChanged.Known(), TransitionHeaderAdditionOnly.Known(), TransitionIndeterminate.Known(), TransitionNotEvaluated.Known()}, unknown: []bool{TransitionState("").Known(), TransitionState("future").Known()}},
 		{name: "target form", known: []bool{TargetSelected.Known(), TargetUnavailable.Known()}, unknown: []bool{TargetForm("").Known(), TargetForm("future").Known()}},
 		{name: "severity", known: []bool{SeverityInfo.Known(), SeverityWarning.Known(), SeverityPermanent.Known(), SeverityTemporary.Known()}, unknown: []bool{FindingSeverity("").Known(), FindingSeverity("future").Known()}},
@@ -43,9 +42,7 @@ func TestPolicyReasonVocabulary(t *testing.T) {
 	expected := []PolicyReason{
 		"invalid_input", "limit_exceeded", "internal_contract", "protocol_pass", "protocol_fail", "protocol_permerror", "protocol_temperror",
 		"permissive_override", "testing_mode_observe", "dns_testing_effective", "dns_testing_mixed", "dns_testing_ineligible",
-		"donotmodify_honored", "donotmodify_violated", "donotmodify_indeterminate", "donotmodify_not_evaluated",
-		"donotexplode_violated", "donotexplode_indeterminate", "donotexplode_not_evaluated", "feedback_requested",
-		"feedback_relay_selected", "feedhere_inert", "exploded_reported",
+		"feedback_requested", "feedback_relay_selected", "feedhere_inert", "exploded_reported",
 		"received_dsn_outer_policy", "received_dsn_structure_invalid", "received_dsn_embedded_unverified",
 		"received_dsn_embedded_absent", "received_dsn_temporary_failure", "received_dsn_tenant_unavailable",
 		"received_dsn_identity_mismatch", "received_dsn_not_local", "received_dsn_recipient_unlinked",
@@ -56,9 +53,7 @@ func TestPolicyReasonVocabulary(t *testing.T) {
 		ReasonProtocolPass, ReasonProtocolFail, ReasonProtocolPermerror, ReasonProtocolTemperror,
 		ReasonPermissiveOverride, ReasonTestingModeObserve,
 		ReasonDNSTestingEffective, ReasonDNSTestingMixed, ReasonDNSTestingIneligible,
-		ReasonDoNotModifyHonored, ReasonDoNotModifyViolated, ReasonDoNotModifyIndeterminate,
-		ReasonDoNotModifyNotEvaluated, ReasonDoNotExplodeViolated, ReasonDoNotExplodeIndeterminate,
-		ReasonDoNotExplodeNotEvaluated, ReasonFeedbackRequested, ReasonFeedbackRelaySelected,
+		ReasonFeedbackRequested, ReasonFeedbackRelaySelected,
 		ReasonFeedHereInert, ReasonExplodedReported,
 		ReasonReceivedDSNOuterPolicy, ReasonReceivedDSNStructureInvalid, ReasonReceivedDSNEmbeddedUnverified,
 		ReasonReceivedDSNEmbeddedAbsent, ReasonReceivedDSNTemporaryFailure, ReasonReceivedDSNTenantUnavailable,
@@ -78,11 +73,21 @@ func TestPolicyReasonVocabulary(t *testing.T) {
 		}
 		seen[reason] = struct{}{}
 	}
-	if len(actual) != 33 {
-		t.Fatalf("reason count = %d, want 33", len(actual))
+	if len(actual) != 26 {
+		t.Fatalf("reason count = %d, want 26", len(actual))
 	}
 	if PolicyReason("").Known() || PolicyReason("future").Known() {
 		t.Fatal("unknown policy reason accepted")
+	}
+	// Draft-07 Section 10.10 removed donotmodify and donotexplode, so their
+	// former compliance reasons are no longer part of the vocabulary.
+	for _, removed := range []PolicyReason{
+		"donotmodify_honored", "donotmodify_violated", "donotmodify_indeterminate", "donotmodify_not_evaluated",
+		"donotexplode_violated", "donotexplode_indeterminate", "donotexplode_not_evaluated",
+	} {
+		if removed.Known() {
+			t.Fatalf("removed policy reason %q accepted", removed)
+		}
 	}
 }
 
@@ -106,10 +111,7 @@ func TestFindingSequenceContract(t *testing.T) {
 		}
 	}
 	for _, reason := range []PolicyReason{
-		ReasonDoNotModifyHonored, ReasonDoNotModifyViolated, ReasonDoNotModifyIndeterminate,
-		ReasonDoNotModifyNotEvaluated, ReasonDoNotExplodeViolated, ReasonDoNotExplodeIndeterminate,
-		ReasonDoNotExplodeNotEvaluated, ReasonFeedbackRequested, ReasonFeedbackRelaySelected,
-		ReasonFeedHereInert, ReasonExplodedReported,
+		ReasonFeedbackRequested, ReasonFeedbackRelaySelected, ReasonFeedHereInert, ReasonExplodedReported,
 	} {
 		finding, err := newFinding(reason, 1, true)
 		if err != nil || !finding.Valid() {
@@ -153,13 +155,6 @@ func TestPolicyReasonSeverityMatrix(t *testing.T) {
 		{ReasonDNSTestingEffective, SeverityWarning},
 		{ReasonDNSTestingMixed, SeverityWarning},
 		{ReasonDNSTestingIneligible, SeverityWarning},
-		{ReasonDoNotModifyHonored, SeverityInfo},
-		{ReasonDoNotModifyViolated, SeverityPermanent},
-		{ReasonDoNotModifyIndeterminate, SeverityWarning},
-		{ReasonDoNotModifyNotEvaluated, SeverityWarning},
-		{ReasonDoNotExplodeViolated, SeverityPermanent},
-		{ReasonDoNotExplodeIndeterminate, SeverityWarning},
-		{ReasonDoNotExplodeNotEvaluated, SeverityWarning},
 		{ReasonFeedbackRequested, SeverityInfo},
 		{ReasonFeedbackRelaySelected, SeverityInfo},
 		{ReasonFeedHereInert, SeverityInfo},
@@ -175,8 +170,8 @@ func TestPolicyReasonSeverityMatrix(t *testing.T) {
 		{ReasonReceivedDSNRecipientUnlinked, SeverityPermanent},
 		{ReasonReceivedDSNLinked, SeverityInfo},
 	}
-	if len(tests) != 33 {
-		t.Fatalf("severity row count = %d, want 33", len(tests))
+	if len(tests) != 26 {
+		t.Fatalf("severity row count = %d, want 26", len(tests))
 	}
 	for _, tt := range tests {
 		if got := severityForReason(tt.reason); got != tt.severity {

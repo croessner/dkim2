@@ -1515,8 +1515,6 @@ func validFixtureProcessResponse() generatedfixture.ProcessResponse {
 			State:         generatedfixture.PASS,
 		},
 		Policy: generatedfixture.PolicyResult{
-			DoNotExplode: generatedfixture.PolicyResultDoNotExplodeNotEvaluated,
-			DoNotModify:  generatedfixture.PolicyResultDoNotModifyNotEvaluated,
 			Feedback: generatedfixture.PolicyFeedback{
 				HistoryCoverage: generatedfixture.PolicyFeedbackHistoryCoverageNotEvaluated,
 			},

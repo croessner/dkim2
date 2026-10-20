@@ -21,8 +21,6 @@ type verifierProjectionGolden struct {
 		SignatureAlgorithms    []string `json:"signature_algorithms"`
 		SignatureState         string   `json:"signature_state"`
 		CustodyTransition      string   `json:"custody_transition"`
-		DoNotModify            bool     `json:"do_not_modify"`
-		DoNotExplode           bool     `json:"do_not_explode"`
 		Feedback               bool     `json:"feedback"`
 		FeedHere               bool     `json:"feed_here"`
 		Exploded               bool     `json:"exploded"`
@@ -75,7 +73,7 @@ func TestVerifierProjectionBindingGolden(t *testing.T) {
 		custody: VerifierCustodyTransition(fixture.Hop.CustodyTransition), recipeMode: VerifierRecipeMode(fixture.Hop.RecipeMode),
 		headerState: HistoryDimensionState(fixture.Hop.HistoryHeaderState), bodyState: HistoryDimensionState(fixture.Hop.HistoryBodyState),
 		bodyAvailable: recipe.BodyAvailability(fixture.Hop.BodyAvailability),
-		flags:         RevisionFlagFacts{doNotModify: fixture.Hop.DoNotModify, doNotExplode: fixture.Hop.DoNotExplode, feedback: fixture.Hop.Feedback, feedHere: fixture.Hop.FeedHere, exploded: fixture.Hop.Exploded},
+		flags:         RevisionFlagFacts{feedback: fixture.Hop.Feedback, feedHere: fixture.Hop.FeedHere, exploded: fixture.Hop.Exploded},
 		sealed:        true,
 	}
 	contentDigest := verifierHopContentDigest(hop)

@@ -264,13 +264,15 @@ func TestEvaluatePolicyUsesSealedAuthenticatedFlags(t *testing.T) {
 	if err != nil {
 		t.Fatalf("EvaluatePolicy(flags) error = %v", err)
 	}
-	if decision.FeedbackIntent().Requested() != true || decision.DoNotModifyCompliance() != PolicyComplianceIndeterminate || decision.DoNotExplodeCompliance() != PolicyComplianceIndeterminate {
+	if decision.FeedbackIntent().Requested() != true || decision.Verdict() != PolicyVerdictAccept {
 		t.Fatalf("flag decision = %#v", decision)
 	}
 	if !decision.FeedbackIntent().RelayRequired() || decision.FeedbackIntent().RelaySequence() != 1 {
 		t.Fatalf("feedback intent = %#v", decision.FeedbackIntent())
 	}
-	wantFlagReasons := []PolicyReason{PolicyReasonProtocolPass, PolicyReasonDoNotModifyIndeterminate, PolicyReasonDoNotExplodeIndeterminate, PolicyReasonFeedbackRequested, PolicyReasonFeedbackRelaySelected, PolicyReasonExplodedReported}
+	// The removed Draft-06 donotmodify and donotexplode flags in the fixture are
+	// inert unknown flags under Draft-07 Section 10.10 and produce no findings.
+	wantFlagReasons := []PolicyReason{PolicyReasonProtocolPass, PolicyReasonFeedbackRequested, PolicyReasonFeedbackRelaySelected, PolicyReasonExplodedReported}
 	flagFindings := decision.Findings()
 	gotFlagReasons := make([]PolicyReason, len(flagFindings))
 	for index, finding := range flagFindings {
@@ -344,7 +346,7 @@ func TestEvaluatePolicySuppressesTestingSignerFlags(t *testing.T) {
 			t.Fatalf("EvaluatePolicy(%s) error = %v", mode, evaluateErr)
 		}
 		intent := decision.FeedbackIntent()
-		if decision.Verdict() != PolicyVerdictContinue || decision.PrimaryReason() != PolicyReasonDNSTestingEffective || decision.DoNotModifyCompliance() != PolicyComplianceNotRequested || decision.DoNotExplodeCompliance() != PolicyComplianceNotRequested || intent.Requested() || intent.RelayRequired() || intent.RelaySequence() != 0 {
+		if decision.Verdict() != PolicyVerdictContinue || decision.PrimaryReason() != PolicyReasonDNSTestingEffective || intent.Requested() || intent.RelayRequired() || intent.RelaySequence() != 0 {
 			t.Fatalf("testing flag decision %q = %#v", mode, decision)
 		}
 		for _, finding := range decision.Findings() {
@@ -427,7 +429,6 @@ func TestPublicPolicyVocabulariesAreClosed(t *testing.T) {
 		PolicyModeStrict, PolicyModePermissive, PolicyModeTesting,
 		PolicyVerdictAccept, PolicyVerdictReject, PolicyVerdictTempfail, PolicyVerdictContinue,
 		PolicySeverityInfo, PolicySeverityWarning, PolicySeverityPermanent, PolicySeverityTemporary,
-		PolicyComplianceNotRequested, PolicyComplianceHonored, PolicyComplianceViolated, PolicyComplianceIndeterminate, PolicyComplianceNotEvaluated,
 		PolicyHistoryNotEvaluated, PolicyHistoryComplete, PolicyHistoryIndeterminate,
 		PolicyActionAccept, PolicyActionReject, PolicyActionTempfail, PolicyActionContinue,
 	} {
@@ -435,7 +436,7 @@ func TestPublicPolicyVocabulariesAreClosed(t *testing.T) {
 			t.Fatalf("known value rejected: %v", value)
 		}
 	}
-	for _, value := range []interface{ Known() bool }{PolicyMode(""), PolicyMode("future"), PolicyVerdict(""), PolicyVerdict("future"), PolicyFindingSeverity(""), PolicyFindingSeverity("future"), PolicyCompliance(""), PolicyCompliance("future"), PolicyHistoryCoverage(""), PolicyHistoryCoverage("future"), PolicyActionKind(""), PolicyActionKind("future")} {
+	for _, value := range []interface{ Known() bool }{PolicyMode(""), PolicyMode("future"), PolicyVerdict(""), PolicyVerdict("future"), PolicyFindingSeverity(""), PolicyFindingSeverity("future"), PolicyHistoryCoverage(""), PolicyHistoryCoverage("future"), PolicyActionKind(""), PolicyActionKind("future")} {
 		if value.Known() {
 			t.Fatalf("unknown value accepted: %v", value)
 		}
@@ -445,13 +446,16 @@ func TestPublicPolicyVocabulariesAreClosed(t *testing.T) {
 		PolicyReasonProtocolPass, PolicyReasonProtocolFail, PolicyReasonProtocolPermerror, PolicyReasonProtocolTemperror,
 		PolicyReasonPermissiveOverride, PolicyReasonTestingModeObserve,
 		PolicyReasonDNSTestingEffective, PolicyReasonDNSTestingMixed, PolicyReasonDNSTestingIneligible,
-		PolicyReasonDoNotModifyHonored, PolicyReasonDoNotModifyViolated, PolicyReasonDoNotModifyIndeterminate, PolicyReasonDoNotModifyNotEvaluated,
-		PolicyReasonDoNotExplodeViolated, PolicyReasonDoNotExplodeIndeterminate, PolicyReasonDoNotExplodeNotEvaluated,
 		PolicyReasonFeedbackRequested, PolicyReasonFeedbackRelaySelected, PolicyReasonFeedHereInert, PolicyReasonExplodedReported,
 	}
 	for _, reason := range reasons {
 		if !reason.Known() {
 			t.Fatalf("known reason rejected: %q", reason)
+		}
+	}
+	for _, removed := range []PolicyReason{"donotmodify_violated", "donotexplode_violated", "donotmodify_honored"} {
+		if removed.Known() {
+			t.Fatalf("removed Draft-06 reason accepted: %q", removed)
 		}
 	}
 	if PolicyReason("").Known() || PolicyReason("future-secret").Known() || (PolicyFinding{}).Valid() || (PolicyFeedbackIntent{}).Valid() || (PolicyAction{}).Valid() || (PolicyActionPlan{}).Valid() || !(PolicyDecision{}).IsZero() {
@@ -473,8 +477,7 @@ func TestPublicPolicyVocabulariesAreClosed(t *testing.T) {
 		t.Fatal("incoherent public finding accepted")
 	}
 	for _, partial := range []PolicyDecision{
-		{state: &policyDecisionState{modify: PolicyComplianceNotEvaluated}},
-		{state: &policyDecisionState{explode: PolicyComplianceNotEvaluated}},
+		{state: &policyDecisionState{primaryReason: PolicyReasonProtocolPass}},
 		{state: &policyDecisionState{feedback: PolicyFeedbackIntent{state: &policyFeedbackIntentState{initialized: true}}}},
 		{state: &policyDecisionState{dnsEffective: true}},
 	} {
@@ -533,7 +536,7 @@ func expectedPublicBaseOutcome(state ResultState, mode PolicyMode) (PolicyVerdic
 // selectedPolicyResult constructs one library-owned selected projection for facade seam tests.
 func selectedPolicyResult(t *testing.T, protocol policy.ProtocolClass, verificationReason policy.VerificationReason, state ResultState, reason ReasonCode, flags bool) VerifyResult {
 	t.Helper()
-	hop, err := policy.NewAuthenticatedHopFact(1, policy.TransitionOrigin, flags, flags, flags, flags, flags)
+	hop, err := policy.NewAuthenticatedHopFact(1, policy.TransitionOrigin, flags, flags, flags)
 	if err != nil {
 		t.Fatalf("NewAuthenticatedHopFact() error = %v", err)
 	}
@@ -629,16 +632,6 @@ func TestPolicyDecisionClonesAndSupportsConcurrentReuse(t *testing.T) {
 		func() PolicyDecision {
 			got := clonePublicPolicyDecision(decision)
 			got.state.dnsEffective = true
-			return got
-		}(),
-		func() PolicyDecision {
-			got := clonePublicPolicyDecision(decision)
-			got.state.modify = PolicyComplianceViolated
-			return got
-		}(),
-		func() PolicyDecision {
-			got := clonePublicPolicyDecision(decision)
-			got.state.explode = PolicyComplianceViolated
 			return got
 		}(),
 		func() PolicyDecision {

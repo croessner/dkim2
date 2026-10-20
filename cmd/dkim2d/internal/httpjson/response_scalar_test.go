@@ -225,11 +225,6 @@ func TestPolicyReasonMappingCoversReachablePolicy(t *testing.T) {
 		{dkim2.PolicyReasonDNSTestingEffective, generated.DnsTestingEffective},
 		{dkim2.PolicyReasonDNSTestingMixed, generated.DnsTestingMixed},
 		{dkim2.PolicyReasonDNSTestingIneligible, generated.DnsTestingIneligible},
-		{dkim2.PolicyReasonDoNotModifyIndeterminate, generated.DonotmodifyIndeterminate},
-		{dkim2.PolicyReasonDoNotModifyNotEvaluated, generated.DonotmodifyNotEvaluated},
-		{dkim2.PolicyReasonDoNotExplodeViolated, generated.DonotexplodeViolated},
-		{dkim2.PolicyReasonDoNotExplodeIndeterminate, generated.DonotexplodeIndeterminate},
-		{dkim2.PolicyReasonDoNotExplodeNotEvaluated, generated.DonotexplodeNotEvaluated},
 		{dkim2.PolicyReasonFeedbackRequested, generated.FeedbackRequested},
 		{dkim2.PolicyReasonFeedbackRelaySelected, generated.FeedbackRelaySelected},
 		{dkim2.PolicyReasonFeedHereInert, generated.FeedhereInert},
@@ -240,8 +235,9 @@ func TestPolicyReasonMappingCoversReachablePolicy(t *testing.T) {
 		dkim2.PolicyReasonInvalidInput,
 		dkim2.PolicyReasonLimitExceeded,
 		dkim2.PolicyReasonInternalContract,
-		dkim2.PolicyReasonDoNotModifyHonored,
-		dkim2.PolicyReasonDoNotModifyViolated,
+		// Draft-07 Section 10.10 removed donotmodify and donotexplode.
+		dkim2.PolicyReason("donotmodify_violated"),
+		dkim2.PolicyReason("donotexplode_violated"),
 	}
 	for _, reason := range rejected {
 		if _, ok := mapPolicyReason(reason); ok {
@@ -252,33 +248,11 @@ func TestPolicyReasonMappingCoversReachablePolicy(t *testing.T) {
 
 // TestMultiInstancePolicyMappingsCoverReachableStates proves full-chain output is preserved exactly.
 func TestMultiInstancePolicyMappingsCoverReachableStates(t *testing.T) {
-	assertScalarMapping(t, "modification compliance", mapDoNotModify, []scalarMappingCase[dkim2.PolicyCompliance, generated.PolicyResultDoNotModify]{
-		{dkim2.PolicyComplianceNotRequested, generated.PolicyResultDoNotModifyNotRequested},
-		{dkim2.PolicyComplianceIndeterminate, generated.PolicyResultDoNotModifyIndeterminate},
-		{dkim2.PolicyComplianceNotEvaluated, generated.PolicyResultDoNotModifyNotEvaluated},
-	})
-	assertScalarMapping(t, "explosion compliance", mapDoNotExplode, []scalarMappingCase[dkim2.PolicyCompliance, generated.PolicyResultDoNotExplode]{
-		{dkim2.PolicyComplianceNotRequested, generated.PolicyResultDoNotExplodeNotRequested},
-		{dkim2.PolicyComplianceViolated, generated.PolicyResultDoNotExplodeViolated},
-		{dkim2.PolicyComplianceIndeterminate, generated.PolicyResultDoNotExplodeIndeterminate},
-		{dkim2.PolicyComplianceNotEvaluated, generated.PolicyResultDoNotExplodeNotEvaluated},
-	})
 	assertScalarMapping(t, "policy history", mapPolicyHistoryCoverage, []scalarMappingCase[dkim2.PolicyHistoryCoverage, generated.PolicyFeedbackHistoryCoverage]{
 		{dkim2.PolicyHistoryComplete, generated.PolicyFeedbackHistoryCoverageComplete},
 		{dkim2.PolicyHistoryIndeterminate, generated.PolicyFeedbackHistoryCoverageIndeterminate},
 		{dkim2.PolicyHistoryNotEvaluated, generated.PolicyFeedbackHistoryCoverageNotEvaluated},
 	})
-	for _, value := range []dkim2.PolicyCompliance{
-		dkim2.PolicyComplianceHonored,
-		dkim2.PolicyComplianceViolated,
-	} {
-		if _, ok := mapDoNotModify(value); ok {
-			t.Fatalf("unreachable modification compliance %q mapped", value)
-		}
-	}
-	if _, ok := mapDoNotExplode(dkim2.PolicyComplianceHonored); ok {
-		t.Fatal("unreachable honored explosion compliance mapped")
-	}
 	if got, ok := mapStrictIdentityApplicable(false); !ok || got != generated.False {
 		t.Fatalf("mapStrictIdentityApplicable(false) = %t/%t", got, ok)
 	}
@@ -324,8 +298,6 @@ func TestScalarMappingsRejectZeroAndFutureValues(t *testing.T) {
 	rejectScalarMapping(t, "policy verdict", mapPolicyVerdict, []dkim2.PolicyVerdict{"", futureMappingValue})
 	rejectScalarMapping(t, "disposition", mapDisposition, []FinalDisposition{0, 255})
 	rejectScalarMapping(t, "policy reason", mapPolicyReason, []dkim2.PolicyReason{"", futureMappingValue, dkim2.PolicyReasonInvalidInput})
-	rejectScalarMapping(t, "modification compliance", mapDoNotModify, []dkim2.PolicyCompliance{"", futureMappingValue})
-	rejectScalarMapping(t, "explosion compliance", mapDoNotExplode, []dkim2.PolicyCompliance{"", futureMappingValue})
 	rejectScalarMapping(t, "policy history", mapPolicyHistoryCoverage, []dkim2.PolicyHistoryCoverage{"", futureMappingValue})
 	rejectScalarMapping(t, "policy finding severity", mapPolicyFindingSeverity, []dkim2.PolicyFindingSeverity{"", futureMappingValue})
 }

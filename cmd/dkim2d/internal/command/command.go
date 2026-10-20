@@ -97,6 +97,30 @@ var (
 	errCommandRuntime = errors.New("dkim2d command runtime failure")
 )
 
+// configMigrationError carries fixed schema-owned migration guidance for a
+// configuration key a protocol revision removed. The guidance names only the
+// key and never configuration values, so it is safe to print on stderr.
+type configMigrationError struct {
+	guidance string
+}
+
+// Error returns a constant content-free command failure summary.
+func (*configMigrationError) Error() string { return "dkim2d configuration migration required" }
+
+// commandLoadFailure maps one protected-load failure onto the command error
+// surface: removed-key failures keep their fixed migration guidance and every
+// other failure stays the content-free runtime class.
+func commandLoadFailure(err error) error {
+	var migration *configMigrationError
+	if errors.As(err, &migration) && migration.guidance != "" {
+		return migration
+	}
+	if guidance, ok := config.MigrationOf(err); ok {
+		return &configMigrationError{guidance: guidance}
+	}
+	return errCommandRuntime
+}
+
 // bootstrapOwner retains the command-owned protected generation until startup transfers it.
 type bootstrapOwner interface {
 	Close() error
@@ -176,7 +200,8 @@ func productionDependencies() commandDependencies {
 		load: func(path string, flags config.FlagValues) (bootstrapOwner, error) {
 			owner, err := config.LoadProtected(path, flags)
 			if err != nil {
-				return nil, errCommandRuntime
+				// Removed keys keep fixed migration guidance; all else stays content-free.
+				return nil, commandLoadFailure(err)
 			}
 			return &protectedBootstrap{owner: owner}, nil
 		},
@@ -197,7 +222,8 @@ func Execute(args []string, stdout, stderr io.Writer) int {
 	return executeWithDependencies(args, stdout, stderr, productionDependencies())
 }
 
-// executeWithDependencies runs a deterministic command instance.
+// executeWithDependencies runs a deterministic command instance. Removed-key
+// configuration failures print their fixed migration guidance on stderr.
 func executeWithDependencies(
 	args []string,
 	stdout io.Writer,
@@ -227,9 +253,13 @@ func executeWithDependencies(
 		return 2
 	}
 	err = root.Execute()
+	var migration *configMigrationError
 	switch {
 	case err == nil:
 		return 0
+	case errors.As(err, &migration):
+		writeDiagnostic(stderr, "dkim2d: "+migration.guidance+"\n")
+		return 1
 	case errors.Is(err, errCommandRuntime):
 		writeDiagnostic(stderr, commandRuntimeDiagnostic)
 		return 1
@@ -596,6 +626,7 @@ func newValidateCommand(deps commandDependencies) (*cobra.Command, error) {
 }
 
 // runValidate loads and releases one complete immutable protected generation.
+// Removed-key load failures keep their fixed migration guidance.
 func runValidate(configPath string, deps commandDependencies) error {
 	if !filepath.IsAbs(configPath) || filepath.Clean(configPath) != configPath ||
 		deps.load == nil {
@@ -610,7 +641,7 @@ func runValidate(configPath string, deps commandDependencies) error {
 		if owner != nil {
 			_ = closeBootstrap(owner)
 		}
-		return errCommandRuntime
+		return err
 	}
 	if owner == nil {
 		return errCommandRuntime
@@ -657,6 +688,7 @@ func newServeCommand(deps commandDependencies) (*cobra.Command, error) {
 }
 
 // runServe transfers protected ownership only after a successful Fx start.
+// Removed-key load failures keep their fixed migration guidance.
 func runServe(
 	startContext context.Context,
 	configPath string,
@@ -671,7 +703,7 @@ func runServe(
 		if owner != nil {
 			_ = closeBootstrap(owner)
 		}
-		return errCommandRuntime
+		return err
 	}
 	if owner == nil {
 		return errCommandRuntime
@@ -708,7 +740,8 @@ func runServe(
 	return waitAndStop(startContext, application, stopTimeout, deps)
 }
 
-// loadBootstrap contains protected-loader and injected dependency panics.
+// loadBootstrap contains protected-loader and injected dependency panics and
+// maps load failures through commandLoadFailure.
 func loadBootstrap(
 	load func(string, config.FlagValues) (bootstrapOwner, error),
 	path string,
@@ -725,7 +758,7 @@ func loadBootstrap(
 	}
 	owner, err := load(path, flags)
 	if err != nil {
-		return owner, errCommandRuntime
+		return owner, commandLoadFailure(err)
 	}
 	return owner, nil
 }

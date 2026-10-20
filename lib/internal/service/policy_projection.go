@@ -31,7 +31,7 @@ func buildSelectedPolicyProjection(state State, reason Reason, target Target, in
 			transition = policy.TransitionOrigin
 		}
 		hop, err := policy.NewAuthenticatedHopFact(target.Sequence, transition,
-			candidate.DoNotModify(), candidate.DoNotExplode(), candidate.Feedback(), candidate.FeedHere(), candidate.Exploded())
+			candidate.Feedback(), candidate.FeedHere(), candidate.Exploded())
 		if err != nil {
 			return policy.Projection{}, err
 		}

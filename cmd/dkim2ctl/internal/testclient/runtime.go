@@ -1058,7 +1058,6 @@ func validDiagnosticSelector(status generated.SignatureSetResultStatus, selector
 // validPolicyProjection validates every closed policy enum and bound.
 func validPolicyProjection(value generated.PolicyResult) bool {
 	if !value.Mode.Valid() || !value.PrimaryReason.Valid() ||
-		!value.DoNotModify.Valid() || !value.DoNotExplode.Valid() ||
 		!value.Feedback.HistoryCoverage.Valid() ||
 		len(value.Findings) < 1 || len(value.Findings) > 128 {
 		return false

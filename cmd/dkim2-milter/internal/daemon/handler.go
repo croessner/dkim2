@@ -921,7 +921,7 @@ func validVerificationMembers(data []byte) bool {
 func validPolicyMembers(data []byte) bool {
 	document, ok := requiredJSONObject(
 		data,
-		"dns_testing_effective", "do_not_explode", "do_not_modify", "feedback",
+		"dns_testing_effective", "feedback",
 		"findings", "mode", "primary_reason", "verdict",
 	)
 	if !ok {
@@ -1235,7 +1235,6 @@ func verificationCoverageCoherent(state generated.VerificationState, scope gener
 // validPolicyContract validates the complete generated policy projection.
 func validPolicyContract(value generated.PolicyResult) bool {
 	if !value.Mode.Valid() || !value.Verdict.Valid() || !value.PrimaryReason.Valid() ||
-		!value.DoNotModify.Valid() || !value.DoNotExplode.Valid() ||
 		!value.Feedback.HistoryCoverage.Valid() || len(value.Findings) < 1 ||
 		len(value.Findings) > 128 ||
 		value.Feedback.RelaySequence != nil && !canonicalUint64(*value.Feedback.RelaySequence) {

@@ -292,7 +292,7 @@ func TestSigningServiceSignsAuthenticatedDeliveryStatus(t *testing.T) {
 		fixture.publicKeys,
 		fixture.runtime,
 		false,
-		signingPolicies{deliveryStatus: signingFlagPolicy{doNotModify: true, doNotExplode: true}},
+		signingPolicies{},
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -303,11 +303,11 @@ func TestSigningServiceSignsAuthenticatedDeliveryStatus(t *testing.T) {
 	service.store = recorder
 	result, err := signDeliveryStatusResult(context.Background(), t, service, request)
 	assertSigningServicePass(t, result, err, signingServiceDSNSelector)
-	if !slices.ContainsFunc(result.Fields(), func(field CompletedField) bool {
+	if slices.ContainsFunc(result.Fields(), func(field CompletedField) bool {
 		return bytes.HasPrefix(field.Bytes(), []byte("DKIM2-Signature:")) &&
-			bytes.Contains(field.Bytes(), []byte("f=donotmodify,donotexplode"))
+			(bytes.Contains(field.Bytes(), []byte("donotmodify")) || bytes.Contains(field.Bytes(), []byte("donotexplode")))
 	}) {
-		t.Fatal("delivery-status policy flags were not isolated onto the DSN signature")
+		t.Fatal("delivery-status signature emitted a flag removed by Draft-07")
 	}
 	if recorder.acquires != 1 || len(recorder.domains) != 1 ||
 		recorder.domains[0] != signingServiceOriginDomain ||

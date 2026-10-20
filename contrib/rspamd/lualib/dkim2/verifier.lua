@@ -40,13 +40,6 @@ local symbols = {
   policy_continue = 'DKIM2_POLICY_CONTINUE',
   policy_reject = 'DKIM2_POLICY_REJECT',
   policy_tempfail = 'DKIM2_POLICY_TEMPFAIL',
-  donotmodify_not_requested = 'DKIM2_DONOTMODIFY_NOT_REQUESTED',
-  donotmodify_indeterminate = 'DKIM2_DONOTMODIFY_INDETERMINATE',
-  donotmodify_not_evaluated = 'DKIM2_DONOTMODIFY_NOT_EVALUATED',
-  donotexplode_not_requested = 'DKIM2_DONOTEXPLODE_NOT_REQUESTED',
-  donotexplode_violated = 'DKIM2_DONOTEXPLODE_VIOLATED',
-  donotexplode_indeterminate = 'DKIM2_DONOTEXPLODE_INDETERMINATE',
-  donotexplode_not_evaluated = 'DKIM2_DONOTEXPLODE_NOT_EVALUATED',
   service_error = 'DKIM2_SERVICE_ERROR',
 }
 
@@ -128,22 +121,9 @@ local replay_classes = {
   indeterminate = true,
 }
 
-local donotmodify_states = {
-  not_requested = true,
-  indeterminate = true,
-  not_evaluated = true,
-}
-
-local donotexplode_states = {
-  not_requested = true,
-  violated = true,
-  indeterminate = true,
-  not_evaluated = true,
-}
-
 local verification_reasons = {
   none = true, limit_exceeded = true, malformed_message = true, malformed_protocol = true,
-  duplicate_hash_algorithm = true, invalid_recipe_json = true, duplicate_selector = true,
+  duplicate_hash_algorithm = true, invalid_recipe_json = true, from_not_authentic = true, duplicate_selector = true,
   too_many_signatures = true, missing_protocol = true, sequence_invalid = true,
   unsupported_algorithm = true, hash_mismatch = true, signature_mismatch = true,
   missing_key = true, invalid_key = true, ambiguous_key = true, revoked_key = true,
@@ -165,10 +145,7 @@ local policy_reasons = {
   protocol_pass = true, protocol_fail = true, protocol_permerror = true,
   protocol_temperror = true, permissive_override = true, testing_mode_observe = true,
   dns_testing_effective = true, dns_testing_mixed = true, dns_testing_ineligible = true,
-  donotmodify_indeterminate = true, donotmodify_not_evaluated = true,
-  donotexplode_violated = true, donotexplode_indeterminate = true,
-  donotexplode_not_evaluated = true, feedback_requested = true,
-  feedback_relay_selected = true, feedhere_inert = true, exploded_reported = true,
+  feedback_requested = true, feedback_relay_selected = true, feedhere_inert = true, exploded_reported = true,
 }
 
 local settings = {
@@ -461,7 +438,7 @@ local function valid_projection_hop(value, expected_sequence)
   local required = {
     'sequence', 'message_instance', 'hop_binding', 'signer_domain',
     'signature_algorithms', 'signature_state', 'custody_transition',
-    'do_not_modify', 'do_not_explode', 'feedback', 'feed_here', 'exploded',
+    'feedback', 'feed_here', 'exploded',
     'recipe_mode', 'recipe_has_header_changes', 'recipe_body_mode', 'recipe_digest',
     'change_classes', 'affected_headers', 'history_header_state', 'history_body_state',
     'body_availability', 'change_count', 'affected_header_count',
@@ -471,7 +448,6 @@ local function valid_projection_hop(value, expected_sequence)
       not valid_base64_digest(value.hop_binding) or not valid_domain(value.signer_domain) or
       not sorted_unique_strings(value.signature_algorithms, 4, signature_algorithms) or
       value.signature_state ~= 'pass' or not custody_transitions[value.custody_transition] or
-      type(value.do_not_modify) ~= 'boolean' or type(value.do_not_explode) ~= 'boolean' or
       type(value.feedback) ~= 'boolean' or type(value.feed_here) ~= 'boolean' or
       type(value.exploded) ~= 'boolean' or not recipe_modes[value.recipe_mode] or
       type(value.recipe_has_header_changes) ~= 'boolean' or
@@ -590,11 +566,9 @@ end
 -- valid_policy_result validates the complete closed local policy object.
 local function valid_policy_result(value)
   if not exact_keys(value, {
-      'mode', 'verdict', 'primary_reason', 'do_not_modify', 'do_not_explode',
-      'dns_testing_effective', 'feedback', 'findings',
+      'mode', 'verdict', 'primary_reason', 'dns_testing_effective', 'feedback', 'findings',
     }, {}) or not policy_modes[value.mode] or not policy_verdicts[value.verdict] or
-      not policy_reasons[value.primary_reason] or not donotmodify_states[value.do_not_modify] or
-      not donotexplode_states[value.do_not_explode] or
+      not policy_reasons[value.primary_reason] or
       type(value.dns_testing_effective) ~= 'boolean' or
       not exact_keys(value.feedback,
         { 'requested', 'relay_required', 'history_coverage' }, { 'relay_sequence' }) or
@@ -708,8 +682,6 @@ local function projection_hop_record(hop)
     record_field('signature_algorithms', { strings = hop.signature_algorithms }),
     record_field('signature_state', { string = hop.signature_state }),
     record_field('custody_transition', { string = hop.custody_transition }),
-    record_field('do_not_modify', { boolean = hop.do_not_modify }),
-    record_field('do_not_explode', { boolean = hop.do_not_explode }),
     record_field('feedback', { boolean = hop.feedback }),
     record_field('feed_here', { boolean = hop.feed_here }),
     record_field('exploded', { boolean = hop.exploded }),
@@ -762,8 +734,6 @@ local function policy_attributes(response, include_received_dsn)
     ['dkim2.local_policy_mode'] = { string = response.policy.mode },
     ['dkim2.local_policy_verdict'] = { string = response.policy.verdict },
     ['dkim2.local_policy_reason'] = { string = response.policy.primary_reason },
-    ['dkim2.do_not_modify_state'] = { string = response.policy.do_not_modify },
-    ['dkim2.do_not_explode_state'] = { string = response.policy.do_not_explode },
     ['dkim2.dns_testing_effective'] = { boolean = response.policy.dns_testing_effective },
     ['dkim2.disposition'] = { string = response.disposition },
     ['dkim2.chain'] = { records = records },
@@ -924,8 +894,6 @@ local function apply_response(task, response)
     insert_symbol(task, replay_symbol)
   end
   insert_symbol(task, symbols['policy_' .. response.policy.verdict])
-  insert_symbol(task, symbols['donotmodify_' .. response.policy.do_not_modify])
-  insert_symbol(task, symbols['donotexplode_' .. response.policy.do_not_explode])
   apply_delivery_status(task, response.delivery_status)
   apply_authentication_results(task, response.actions)
   if response.disposition == 'reject' then

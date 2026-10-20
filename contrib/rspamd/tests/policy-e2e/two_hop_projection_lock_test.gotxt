@@ -26,8 +26,6 @@ type policyE2EProjectionFixture struct {
 			SignatureAlgorithms    []string `json:"signature_algorithms"`
 			SignatureState         string   `json:"signature_state"`
 			CustodyTransition      string   `json:"custody_transition"`
-			DoNotModify            bool     `json:"do_not_modify"`
-			DoNotExplode           bool     `json:"do_not_explode"`
 			Feedback               bool     `json:"feedback"`
 			FeedHere               bool     `json:"feed_here"`
 			Exploded               bool     `json:"exploded"`
@@ -103,7 +101,6 @@ func policyE2EBoundHops(t *testing.T, fixture policyE2EProjectionFixture) []Veri
 			bodyState:     HistoryDimensionState(source.HistoryBodyState),
 			bodyAvailable: recipe.BodyAvailability(source.BodyAvailability),
 			flags: RevisionFlagFacts{
-				doNotModify: source.DoNotModify, doNotExplode: source.DoNotExplode,
 				feedback: source.Feedback, feedHere: source.FeedHere, exploded: source.Exploded,
 			},
 			sealed: true,
@@ -140,7 +137,7 @@ func policyE2ERecipeDescriptor(t *testing.T, mode string) recipe.Descriptor {
 	if mode == string(VerifierRecipeUnchanged) {
 		return recipe.UnchangedDescriptor()
 	}
-	parser, err := recipe.NewParser(recipe.DefaultLimits())
+	parser, err := recipe.NewParser(recipe.DefaultLimits(), allHeadersRelevant{})
 	if err != nil {
 		t.Fatalf("create recipe parser: %v", err)
 	}

@@ -178,7 +178,7 @@ func TestStableFieldBindings(t *testing.T) {
 func TestStablePathSetIsExact(t *testing.T) {
 	specs := stableFieldSpecs()
 	golden := stableFieldGoldenContract()
-	if len(specs) != 128 || len(specs) != len(golden) {
+	if len(specs) != 122 || len(specs) != len(golden) {
 		t.Fatal("stable path count changed")
 	}
 	for index, expected := range golden {
@@ -275,13 +275,7 @@ func stableFieldGoldenContract() []stableFieldGolden {
 		{path: "signing.limit_profile", environment: "DKIM2D_SIGNING_LIMIT_PROFILE", defaultValue: limitProfileSmall, hasDefault: true},
 		{path: "signing.max_load_bytes", environment: "DKIM2D_SIGNING_MAX_LOAD_BYTES", defaultValue: "16777216", hasDefault: true},
 		{path: pathSigningInteropInfo, environment: envSigningInteropInfo, defaultValue: "false", hasDefault: true},
-		{path: "signing.policy.originator.donotmodify", environment: envSigningPolicyOriginatorDoNotModify, defaultValue: "false", hasDefault: true},
-		{path: "signing.policy.originator.donotexplode", environment: envSigningPolicyOriginatorDoNotExplode, defaultValue: "false", hasDefault: true},
 		{path: "signing.policy.originator.null_sender", environment: envSigningPolicyOriginatorNullSender, defaultValue: valueNullSenderReject, hasDefault: true},
-		{path: "signing.policy.ordinary_transit.donotmodify", environment: envSigningPolicyTransitDoNotModify, defaultValue: "false", hasDefault: true},
-		{path: "signing.policy.ordinary_transit.donotexplode", environment: envSigningPolicyTransitDoNotExplode, defaultValue: "false", hasDefault: true},
-		{path: "signing.policy.delivery_status.donotmodify", environment: envSigningPolicyDeliveryDoNotModify, defaultValue: "false", hasDefault: true},
-		{path: "signing.policy.delivery_status.donotexplode", environment: envSigningPolicyDeliveryDoNotExplode, defaultValue: "false", hasDefault: true},
 		{path: "signing.policy.delivery_status.unsigned_original", environment: envSigningPolicyDeliveryUnsigned, defaultValue: "reject", hasDefault: true},
 		{path: "signing.ldap.address", environment: "DKIM2D_SIGNING_LDAP_ADDRESS"},
 		{path: "signing.ldap.server_name", environment: "DKIM2D_SIGNING_LDAP_SERVER_NAME"},
@@ -378,21 +372,27 @@ func assertRawValue(t *testing.T, values map[string]rawValue, path, text string,
 	}
 }
 
-// clearStableEnvironment isolates literal environment-source tests.
+// clearStableEnvironment isolates literal environment-source tests, including
+// the reserved environment variables of removed keys.
 func clearStableEnvironment(t *testing.T) {
 	t.Helper()
+	names := make([]string, 0, len(stableFieldSpecs())+len(removedFields()))
 	for _, spec := range stableFieldSpecs() {
-		if spec.env == "" {
-			continue
+		if spec.env != "" {
+			names = append(names, spec.env)
 		}
-		value, present := os.LookupEnv(spec.env)
+	}
+	for _, field := range removedFields() {
+		names = append(names, field.env)
+	}
+	for _, name := range names {
+		value, present := os.LookupEnv(name)
 		if !present {
 			continue
 		}
-		if err := os.Unsetenv(spec.env); err != nil {
+		if err := os.Unsetenv(name); err != nil {
 			t.Fatal("failed to isolate configuration environment")
 		}
-		name := spec.env
 		t.Cleanup(func() {
 			if err := os.Setenv(name, value); err != nil {
 				t.Fatal("failed to restore configuration environment")

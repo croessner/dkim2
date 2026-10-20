@@ -142,6 +142,7 @@ func Targets() []FuzzTarget {
 		target("lib/internal/keyresolver/fuzz_test.go", "FuzzKeyDecodingCoherence", "DNS public key", "draft_normative", "bounded algorithm and key-shape coherence"),
 		target("lib/internal/keyresolver/fuzz_test.go", "FuzzOwnerConstruction", "DNS owner name", "draft_normative", "label count and owner byte caps"),
 		target("lib/internal/keyresolver/fuzz_test.go", "FuzzTXTLookupTraversal", "DNS TXT response", "local_security_policy", "RR count byte and cancellation caps"),
+		target("lib/internal/mailbox/fuzz_test.go", "FuzzParseAuthor", "From author address list", "draft_normative", "bounded tokens comments and mailbox count"),
 		target("lib/internal/observability/fuzz_test.go", "FuzzObservationEventValidation", "library observation event", "local_security_policy", "closed bounded event vocabulary"),
 		target("lib/internal/policy/fuzz_test.go", "FuzzSealedPolicyEvaluation", "sealed policy evidence", "documented_interpretation", "bounded immutable finding projection"),
 		target("lib/internal/rawmsg/fuzz_test.go", "FuzzParseSmallInputs", "raw RFC 5322 message", "rfc_normative", "total line field and header caps"),

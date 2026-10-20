@@ -632,18 +632,14 @@ func compareGeneratedFlags(left, right string) int {
 // generatedFlagRank returns the frozen order of parser-known flags.
 func generatedFlagRank(name string) int {
 	switch name {
-	case FlagDoNotModify:
-		return 0
-	case FlagDoNotExplode:
-		return 1
 	case FlagFeedback:
-		return 2
+		return 0
 	case FlagFeedHere:
-		return 3
+		return 1
 	case FlagExploded:
-		return 4
+		return 2
 	default:
-		return 5
+		return 3
 	}
 }
 

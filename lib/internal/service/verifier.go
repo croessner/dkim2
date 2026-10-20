@@ -182,6 +182,8 @@ func mapRevisionProofFailure(current Result, outcome verify.RevisionProofOutcome
 		reason, class = ReasonOutOfBandRequired, CheckNextDomain
 	case verify.RevisionProofInvalidRecipeJSON:
 		reason = ReasonInvalidRecipeJSON
+	case verify.RevisionProofFromNotAuthentic:
+		reason = ReasonFromNotAuthentic
 	case verify.RevisionProofProtocolRejected:
 	default:
 		reason, class = ReasonInternalContract, CheckInternalContract
@@ -226,7 +228,7 @@ func attachRevisionProof(current Result, proof verify.RevisionProof) Result {
 		}
 		flags := signatureFact.Flags()
 		hop, err := policy.NewAuthenticatedHopFact(signatureFact.Sequence(), transition,
-			flags.DoNotModify(), flags.DoNotExplode(), flags.Feedback(), flags.FeedHere(), flags.Exploded())
+			flags.Feedback(), flags.FeedHere(), flags.Exploded())
 		if err != nil {
 			return internalContractResult(current.Target())
 		}

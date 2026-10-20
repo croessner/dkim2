@@ -51,10 +51,10 @@
       "domain": "example.test",
       "next_domain": "",
       "algorithms": ["rsa-sha256", "ed25519-sha256"],
-      "flags": ["donotmodify", "donotexplode", "feedback", "feedhere", "exploded"],
+      "flags": ["feedback", "feedhere", "exploded"],
       "recipient_count": 1,
-      "unsigned_sha256": "9ac36452e48ce12894fd99f0911edf01f4dd0917b835e88e1fae76429b41ef29",
-      "complete_sha256": "1f122e7c4b011310a740c4751b7fae0bd3a304d1a618eaddfb65913f050e8d61"
+      "unsigned_sha256": "f94004a13a128aea6bafe71c7da7ce47ecc94e65234f8beac41bbd530cd48a81",
+      "complete_sha256": "b7c089fd7d3bdbd213208bde05f66a2ad1c14124f1ea04a9cb862b2f1f31e089"
     },
     {
       "name": "terminal-next-domain-creation",
@@ -103,10 +103,10 @@
       "domain": "example.test",
       "next_domain": "",
       "algorithms": ["ed25519-sha256"],
-      "flags": ["donotmodify"],
+      "flags": ["feedback"],
       "recipient_count": 1,
-      "unsigned_sha256": "3c010a315084a6b10f1906ad700d452cfba3971fa612c7f883ec7e5ecff7f94b",
-      "complete_sha256": "f407999764802ea02b237646a5372cf9f6ad13ce215079ad3b0835c7d299c145"
+      "unsigned_sha256": "7005a28c32d9b74f54e0c7f308d8f1e885584dbe5a53b3fffd1fc408fa26cb99",
+      "complete_sha256": "ed44c4eefaea5a515114ff3d24cff0ed3f2dde17f173056d54f55e649307c449"
     }
   ],
   "insertions": [

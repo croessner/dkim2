@@ -222,7 +222,10 @@ func (p envelopeParts) render(path []byte, foldRoute bool) ([]byte, bool) {
 	return output, true
 }
 
-// validSourceRoute checks the obsolete A-d-l syntax that RFC 5321 requires receivers to accept.
+// validSourceRoute checks the obsolete A-d-l syntax that RFC 5321 requires
+// receivers to accept. Source-route domains are deliberately ASCII-only: the
+// route is never a DKIM2 identity, and Draft-07 Section 18 conversion applies
+// only to the mailbox domain.
 func validSourceRoute(route []byte) bool {
 	parts := bytes.Split(route, []byte{','})
 	for _, part := range parts {
@@ -234,7 +237,10 @@ func validSourceRoute(route []byte) bool {
 	return len(parts) > 0
 }
 
-// smtpMailboxDomainStart validates one mailbox and locates its grammar-owned Domain.
+// smtpMailboxDomainStart validates one mailbox local part and address
+// literal and locates its grammar-owned Domain. A DNS domain is validated
+// once by the caller: parseEnvelopeParts converts it with domainname.ToASCII
+// and CanonicalEnvelopeDomain re-checks the already canonical A-label form.
 func smtpMailboxDomainStart(mailbox []byte) (int, bool) {
 	localEnd, ok := smtpLocalPartEnd(mailbox)
 	if !ok || localEnd >= len(mailbox) || mailbox[localEnd] != '@' {
@@ -248,9 +254,8 @@ func smtpMailboxDomainStart(mailbox []byte) (int, bool) {
 	if domain[0] == '[' {
 		return localEnd + 1, validAddressLiteral(domain)
 	}
-	_, valid := domainname.ToASCII(domain)
 
-	return localEnd + 1, valid && utf8.Valid(local)
+	return localEnd + 1, utf8.Valid(local)
 }
 
 // smtpLocalPartEnd returns the byte immediately after an RFC 5321 Dot-string or Quoted-string.

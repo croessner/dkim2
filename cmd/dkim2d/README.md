@@ -467,26 +467,27 @@ signing:
   private_manifest_file: /var/lib/dkim2d/protected/0123456789abcdef0123456789abcdef/private-manifest
   policy:
     originator:
-      donotmodify: true
-      donotexplode: true
       null_sender: reject
-    ordinary_transit:
-      donotmodify: false
-      donotexplode: true
     delivery_status:
-      donotmodify: true
-      donotexplode: true
       unsigned_original: reject
 ```
 
-The six optional `signing.policy` booleans default to `false`. They are
-daemon-owned authenticated requests; REST callers cannot select or override
-them. `exploded` is never configuration: signing derives it only from a sealed
-multi-copy route plan. An enabled policy is invalid with `signing.backend:
-disabled`. Environment overrides use
-`DKIM2D_SIGNING_POLICY_<USE>_DONOTMODIFY` and
-`DKIM2D_SIGNING_POLICY_<USE>_DONOTEXPLODE`, where `<USE>` is `ORIGINATOR`,
-`ORDINARY_TRANSIT`, or `DELIVERY_STATUS`.
+The daemon requests no signing flags. Draft-07 Section 10.10 removed the
+`donotmodify` and `donotexplode` flags, so the former six
+`signing.policy.<use>.donotmodify` and `signing.policy.<use>.donotexplode`
+keys (`<use>` is `originator`, `ordinary_transit`, or `delivery_status`) and
+their `DKIM2D_SIGNING_POLICY_<USE>_DONOTMODIFY` and
+`DKIM2D_SIGNING_POLICY_<USE>_DONOTEXPLODE` environment variables are no longer
+accepted. If any of them is present, even set to `false`, `dkim2d validate` and
+`dkim2d serve` exit with status 1 and print, for example:
+
+```text
+dkim2d: configuration key signing.policy.originator.donotmodify was removed in Draft-07 because the donotmodify and donotexplode flags no longer exist and have no effect; delete this setting
+```
+
+Delete the setting (or unset the environment variable) to migrate; there is no
+replacement. `exploded` is never configuration: signing derives it only from a
+sealed multi-copy route plan.
 
 `signing.policy.delivery_status.unsigned_original` is the explicit
 compatibility policy of `POST /v1/dsn/sign` for a returned original that carries
@@ -592,10 +593,9 @@ own relay hubs, internal application sockets), never for an adapter attached
 to an inbound or MX-facing listener. Bounces keep their dedicated
 `POST /v1/dsn/sign` route.
 
-Downstream local policy may ignore `donotmodify` or `donotexplode`, but the
-draft forbids releasing the resulting modified or exploded message to an MTA
-outside that system's control. Existing fail-closed authorization and
-`local_only` restrictions remain authoritative.
+Received `donotmodify` or `donotexplode` spellings are inert unknown flags
+under Draft-07: they never restrict revision, fanout, or external release.
+Existing fail-closed authorization remains authoritative.
 
 ### Received delivery-status evaluation and propagation
 

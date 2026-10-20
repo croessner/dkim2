@@ -9,12 +9,16 @@ import (
 	"github.com/spf13/viper"
 )
 
-// mergeValues captures explicit source presence, applies precedence, and proves
-// the owned result against one isolated Viper merge.
+// mergeValues rejects removed environment keys, captures explicit source
+// presence, applies precedence, and proves the owned result against one
+// isolated Viper merge.
 func mergeValues(yamlBytes []byte, yamlValues map[string]rawValue, flags FlagValues) (map[string]rawValue, map[string]Presence, error) {
 	specs := stableFieldSpecs()
 	specByPath, err := indexFieldSpecs(specs)
 	if err != nil {
+		return nil, nil, err
+	}
+	if err := rejectRemovedEnvironment(); err != nil {
 		return nil, nil, err
 	}
 	if err := validateYAMLValues(yamlValues, specByPath); err != nil {

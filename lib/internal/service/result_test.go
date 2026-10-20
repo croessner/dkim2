@@ -51,7 +51,7 @@ func TestAuthenticatedOriginCompletesPolicyProjection(t *testing.T) {
 	if err != nil {
 		t.Fatalf("policy.NewSignatureFact() error = %v", err)
 	}
-	hop, err := policy.NewAuthenticatedHopFact(1, policy.TransitionOrigin, false, false, false, false, false)
+	hop, err := policy.NewAuthenticatedHopFact(1, policy.TransitionOrigin, false, false, false)
 	if err != nil {
 		t.Fatalf("policy.NewAuthenticatedHopFact() error = %v", err)
 	}
@@ -76,8 +76,13 @@ func TestAuthenticatedOriginCompletesPolicyProjection(t *testing.T) {
 		t.Fatalf("policy.NewEvaluator() error = %v", err)
 	}
 	decision, err := evaluator.EvaluateProjection(completed)
-	if err != nil || decision.DoNotModifyCompliance() != policy.ComplianceNotRequested || decision.DoNotExplodeCompliance() != policy.ComplianceNotRequested {
-		t.Fatalf("origin compliance = modify=%q explode=%q error=%v", decision.DoNotModifyCompliance(), decision.DoNotExplodeCompliance(), err)
+	if err != nil || !decision.Valid() || decision.Verdict() == policy.VerdictReject {
+		t.Fatalf("origin decision = verdict=%q primary=%q error=%v", decision.Verdict(), decision.PrimaryReason(), err)
+	}
+	for _, finding := range decision.Findings() {
+		if _, sequenced := finding.Sequence(); sequenced {
+			t.Fatalf("flagless origin produced hop finding %q", finding.Reason())
+		}
 	}
 }
 
@@ -87,7 +92,7 @@ func TestAuthenticatedOriginPreservesSignedFlags(t *testing.T) {
 	if err != nil {
 		t.Fatalf("policy.NewSignatureFact() error = %v", err)
 	}
-	hop, err := policy.NewAuthenticatedHopFact(1, policy.TransitionOrigin, true, true, true, true, true)
+	hop, err := policy.NewAuthenticatedHopFact(1, policy.TransitionOrigin, true, true, true)
 	if err != nil {
 		t.Fatalf("policy.NewAuthenticatedHopFact() error = %v", err)
 	}
@@ -99,7 +104,7 @@ func TestAuthenticatedOriginPreservesSignedFlags(t *testing.T) {
 
 	completed := current.withAuthenticatedOrigin().PolicyProjection()
 	hops := completed.Hops()
-	if len(hops) != 1 || !hops[0].DoNotModify() || !hops[0].DoNotExplode() || !hops[0].Feedback() || !hops[0].FeedHere() || !hops[0].Exploded() || len(completed.SignatureFacts()) != 1 {
+	if len(hops) != 1 || !hops[0].Feedback() || !hops[0].FeedHere() || !hops[0].Exploded() || len(completed.SignatureFacts()) != 1 {
 		t.Fatalf("completed origin lost authenticated facts: projection=%#v hops=%#v", completed, hops)
 	}
 }

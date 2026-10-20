@@ -79,8 +79,8 @@ func assertPublicPolicyFuzzOutcome(t *testing.T, seed publicPolicyFuzzSeed, deci
 	if !decision.Valid() || decision.VerificationState() != result.State() || len(actions) != 1 || actions[0].Kind() != PolicyActionKind(decision.Verdict()) || actions[0].Terminal() != (decision.Verdict() != PolicyVerdictContinue) || len(decision.Findings()) > findingLimit || len(decision.Findings()) > HardMaxPolicyFindings {
 		t.Fatalf("public policy decision violated contract: %#v", decision)
 	}
-	if decision.DoNotModifyCompliance() == PolicyComplianceHonored || decision.DoNotExplodeCompliance() == PolicyComplianceHonored {
-		t.Fatal("current-only public result produced false honor")
+	if result.State() == ResultStatePASS && !decision.DNSTestingEffective() && decision.Verdict() == PolicyVerdictReject {
+		t.Fatal("authenticated hop flags turned a public PASS into reject")
 	}
 	if decision.DNSTestingEffective() && (result.State() != ResultStatePASS && result.State() != ResultStateFAIL && result.State() != ResultStatePERMERROR || decision.PrimaryReason() != PolicyReasonDNSTestingEffective) {
 		t.Fatal("DNS testing widened an ineligible public result")
@@ -198,5 +198,5 @@ func publicPolicyFuzzSnapshot(decision PolicyDecision, err error) any {
 		}
 		return []any{"unknown_error", err.Error()}
 	}
-	return []any{decision.VerificationState(), decision.Mode(), decision.Verdict(), decision.PrimaryReason(), decision.DoNotModifyCompliance(), decision.DoNotExplodeCompliance(), decision.FeedbackIntent(), decision.DNSTestingEffective(), decision.Findings(), decision.ActionPlan().Actions(), fmt.Sprint(decision)}
+	return []any{decision.VerificationState(), decision.Mode(), decision.Verdict(), decision.PrimaryReason(), decision.FeedbackIntent(), decision.DNSTestingEffective(), decision.Findings(), decision.ActionPlan().Actions(), fmt.Sprint(decision)}
 }

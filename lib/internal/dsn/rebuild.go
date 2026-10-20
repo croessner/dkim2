@@ -640,7 +640,8 @@ func (s *rebuildState) render(evaluation ReceivedEvaluation, request RebuildRequ
 		return notReconstructableReport(RebuildFailureInternal), nil
 	}
 	input := propagationReportInput{
-		reportingMTA: request.ReportingMTA, timestamp: request.Timestamp, token: bytes.Clone(request.MessageIDToken),
+		reportingMTA: request.ReportingMTA, authorDomain: evaluation.CompletionDomain(),
+		timestamp: request.Timestamp, token: bytes.Clone(request.MessageIDToken),
 		nextHop: s.nextHop, finalRecipient: s.recipient[1 : len(s.recipient)-1],
 		status: propagationStatus(evaluation.status), originalContentType: contentType,
 		originalHeaders: headers, originalBody: original[len(headers):],

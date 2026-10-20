@@ -37,8 +37,6 @@ local function response(state, verdict, replay, actions)
     authentication = { state = state, primary_reason = 'none' },
     policy = {
       mode = 'strict', verdict = verdict, primary_reason = policy_reason,
-      do_not_modify = 'not_requested',
-      do_not_explode = 'not_requested',
       dns_testing_effective = false,
       feedback = { requested = false, relay_required = false, history_coverage = 'not_evaluated' },
       findings = { { reason = policy_reason, severity = 'info' } },
@@ -256,8 +254,10 @@ assert(last_request.context.tenant == 'tenant-a')
 assert(accepted.pre_result == nil)
 assert(contains(accepted.symbols, 'DKIM2_PASS'))
 assert(contains(accepted.symbols, 'DKIM2_REPLAY_FIRST_SEEN'))
-assert(contains(accepted.symbols, 'DKIM2_DONOTMODIFY_NOT_REQUESTED'))
-assert(contains(accepted.symbols, 'DKIM2_DONOTEXPLODE_NOT_REQUESTED'))
+-- Draft-07 removed donotmodify and donotexplode, so no symbols derive from them.
+for _, symbol in ipairs(accepted.symbols) do
+  assert(not symbol:find('DONOT', 1, true))
+end
 assert(#accepted.alterations.remove['Authentication-Results'] == 1)
 assert(accepted.alterations.remove['Authentication-Results'][1] == 1)
 assert(accepted.alterations.add['Authentication-Results'].value ==
@@ -279,18 +279,15 @@ assert(rejected.pre_result.action == 'reject')
 assert(contains(rejected.symbols, 'DKIM2_REPLAYED'))
 
 pending_response = response('PASS', 'reject', 'first_seen')
-pending_response.policy.do_not_modify = 'indeterminate'
-pending_response.policy.do_not_explode = 'violated'
 local policy_rejected = new_task({ ['DKIM2-Signature'] = true })
 callback(policy_rejected)
 assert(policy_rejected.pre_result.action == 'reject')
 assert(contains(policy_rejected.symbols, 'DKIM2_PASS'))
 assert(contains(policy_rejected.symbols, 'DKIM2_POLICY_REJECT'))
-assert(contains(policy_rejected.symbols, 'DKIM2_DONOTMODIFY_INDETERMINATE'))
-assert(contains(policy_rejected.symbols, 'DKIM2_DONOTEXPLODE_VIOLATED'))
 
 pending_response = response('PASS', 'accept', 'first_seen')
-pending_response.policy.do_not_modify = 'honored'
+-- The removed Draft-06 policy member is an unknown key and fails closed.
+pending_response.policy.do_not_modify = 'not_requested'
 local unknown_policy_state = new_task({ ['DKIM2-Signature'] = true })
 callback(unknown_policy_state)
 assert(unknown_policy_state.pre_result.action == 'soft reject')
@@ -316,8 +313,8 @@ projected.verifier_projection = {
     {
       sequence = '1', message_instance = '1', hop_binding = string.rep('B', 43) .. '=',
       signer_domain = 'origin.example', signature_algorithms = { 'ed25519-sha256' },
-      signature_state = 'pass', custody_transition = 'origin', do_not_modify = false,
-      do_not_explode = false, feedback = false, feed_here = false, exploded = false,
+      signature_state = 'pass', custody_transition = 'origin',
+      feedback = false, feed_here = false, exploded = false,
       recipe_mode = 'unchanged', recipe_has_header_changes = false,
       recipe_body_mode = 'absent', recipe_digest = string.rep('C', 43) .. '=',
       change_classes = {}, affected_headers = {}, history_header_state = 'matched',

@@ -541,7 +541,7 @@ func mapRevisionProofOutcome(outcome verify.RevisionProofOutcome) (RevisionVerif
 		return RevisionVerificationVerified, true
 	case verify.RevisionProofTerminalNextDomainAuthorizationRequired:
 		return RevisionVerificationTerminalNextDomainAuthorizationRequired, true
-	case verify.RevisionProofProtocolRejected, verify.RevisionProofInvalidRecipeJSON:
+	case verify.RevisionProofProtocolRejected, verify.RevisionProofInvalidRecipeJSON, verify.RevisionProofFromNotAuthentic:
 		return RevisionVerificationProtocolRejected, true
 	case verify.RevisionProofHashMismatch, verify.RevisionProofSignatureMismatch:
 		return RevisionVerificationProtocolRejected, true
@@ -612,8 +612,6 @@ func (v RevisionVerifier) seal(capability VerifiedRevisionInput) [sha256.Size]by
 		transcript.addUint64("signature_sequence", fact.Sequence())
 		transcript.addUint64("signature_instance", fact.Instance())
 		transcript.addUint64("signature_timestamp", fact.Timestamp())
-		transcript.addBool("donotmodify", fact.Flags().DoNotModify())
-		transcript.addBool("donotexplode", fact.Flags().DoNotExplode())
 		transcript.addBool("feedback", fact.Flags().Feedback())
 		transcript.addBool("feedhere", fact.Flags().FeedHere())
 		transcript.addBool("exploded", fact.Flags().Exploded())

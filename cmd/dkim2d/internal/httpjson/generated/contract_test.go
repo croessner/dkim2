@@ -33,8 +33,6 @@ const (
 	testPropertyDraft              = "draft"
 	testPropertyFeedback           = "feedback"
 	testPropertyDisposition        = "disposition"
-	testPropertyDoNotExplode       = "do_not_explode"
-	testPropertyDoNotModify        = "do_not_modify"
 	testPropertyMessage            = "message"
 	testPropertyIncomingSMTP       = "incoming_smtp"
 	testPropertyReporting          = "reporting"
@@ -668,14 +666,14 @@ func assertObjectInventories(t *testing.T, document *openapi3.T) {
 		"VerifierHop": {
 			properties: []string{
 				"affected_header_count", "affected_headers", "body_availability", "change_classes", "change_count",
-				"custody_transition", testPropertyDoNotExplode, testPropertyDoNotModify, string(Exploded), "feed_here", testPropertyFeedback,
+				"custody_transition", string(Exploded), "feed_here", testPropertyFeedback,
 				"history_body_state", "history_header_state", "hop_binding", "message_instance", "recipe_body_mode",
 				"recipe_digest", "recipe_has_header_changes", "recipe_mode", testPropertySequence, "signature_algorithms",
 				"signature_state", "signer_domain",
 			},
 			required: []string{
 				"affected_header_count", "affected_headers", "body_availability", "change_classes", "change_count",
-				"custody_transition", testPropertyDoNotExplode, testPropertyDoNotModify, string(Exploded), "feed_here", testPropertyFeedback,
+				"custody_transition", string(Exploded), "feed_here", testPropertyFeedback,
 				"history_body_state", "history_header_state", "hop_binding", "message_instance", "recipe_body_mode",
 				"recipe_digest", "recipe_has_header_changes", "recipe_mode", testPropertySequence, "signature_algorithms",
 				"signature_state", "signer_domain",
@@ -729,11 +727,11 @@ func assertObjectInventories(t *testing.T, document *openapi3.T) {
 		},
 		"PolicyResult": {
 			properties: []string{
-				testPropertyDNSTesting, "do_not_explode", "do_not_modify", "feedback",
+				testPropertyDNSTesting, "feedback",
 				"findings", "mode", testPropertyPrimaryReason, "verdict",
 			},
 			required: []string{
-				testPropertyDNSTesting, "do_not_explode", "do_not_modify", "feedback",
+				testPropertyDNSTesting, "feedback",
 				"findings", "mode", testPropertyPrimaryReason, "verdict",
 			},
 		},
@@ -847,7 +845,7 @@ func assertFrozenEnums(t *testing.T, document *openapi3.T) {
 		"NullSenderPolicy":  {"header_from"},
 		"VerificationReason": {
 			"none", "limit_exceeded", "malformed_message", "malformed_protocol",
-			"duplicate_hash_algorithm", "invalid_recipe_json", "duplicate_selector",
+			"duplicate_hash_algorithm", "invalid_recipe_json", "from_not_authentic", "duplicate_selector",
 			"too_many_signatures",
 			"missing_protocol", "sequence_invalid", "unsupported_algorithm",
 			"hash_mismatch", "signature_mismatch", "missing_key", "invalid_key",
@@ -861,9 +859,6 @@ func assertFrozenEnums(t *testing.T, document *openapi3.T) {
 			"protocol_pass", "protocol_fail", "protocol_permerror",
 			"protocol_temperror", "permissive_override", "testing_mode_observe",
 			"dns_testing_effective", "dns_testing_mixed", "dns_testing_ineligible",
-			"donotmodify_indeterminate", "donotmodify_not_evaluated",
-			"donotexplode_violated",
-			"donotexplode_indeterminate", "donotexplode_not_evaluated",
 			"feedback_requested", "feedback_relay_selected", "feedhere_inert",
 			"exploded_reported",
 			"received_dsn_outer_policy", "received_dsn_structure_invalid",
@@ -916,10 +911,6 @@ func assertFrozenEnums(t *testing.T, document *openapi3.T) {
 		[]string{"strict", "permissive", "testing"})
 	assertPropertyEnum(t, document, "PolicyResult", "verdict",
 		[]string{testValueAccept, testValueReject, testValueTempfail, "continue"})
-	assertPropertyEnum(t, document, "PolicyResult", "do_not_modify",
-		[]string{"not_requested", testValueIndeterminate, testValueNotEvaluated})
-	assertPropertyEnum(t, document, "PolicyResult", "do_not_explode",
-		[]string{"not_requested", "violated", testValueIndeterminate, testValueNotEvaluated})
 	assertPropertyEnum(t, document, "PolicyFeedback", "history_coverage",
 		[]string{testValueComplete, testValueIndeterminate, testValueNotEvaluated})
 	assertPropertyEnum(t, document, "PolicyFinding", "severity",

@@ -4,12 +4,8 @@ import "testing"
 
 // TestEvaluatorFindingHardBoundaryDoesNotTruncate proves exact 128 output and one-over no-decision behavior.
 func TestEvaluatorFindingHardBoundaryDoesNotTruncate(t *testing.T) {
-	hops := make([]HopFact, 42)
-	for index := range hops {
-		feedback := index == 0
-		hops[index] = mustProjectionHopWithFlags(t, uint64(index+1), transitionForTestIndex(index), true, true, feedback, false, true)
-	}
-	exactProjection, err := newHistoricalProjection(42, HistoryComplete, hops, DefaultLimits())
+	hops := maximumOutputHops(t)
+	exactProjection, err := newHistoricalProjection(uint64(len(hops)), HistoryComplete, hops, DefaultLimits())
 	if err != nil {
 		t.Fatalf("newHistoricalProjection(exact) error = %v", err)
 	}
@@ -21,8 +17,9 @@ func TestEvaluatorFindingHardBoundaryDoesNotTruncate(t *testing.T) {
 	if err != nil || !exact.Valid() || len(exact.Findings()) != 128 || len(exact.Actions()) != 1 {
 		t.Fatalf("exact decision = findings %d actions %d error %v", len(exact.Findings()), len(exact.Actions()), err)
 	}
-	hops[1] = mustProjectionHopWithFlags(t, 2, transitionForTestIndex(1), true, true, true, false, true)
-	overProjection, err := newHistoricalProjection(42, HistoryComplete, hops, DefaultLimits())
+	last := len(hops) - 1
+	hops[last] = mustProjectionHopWithFlags(t, uint64(last+1), transitionForTestIndex(last), true, false, true)
+	overProjection, err := newHistoricalProjection(uint64(len(hops)), HistoryComplete, hops, DefaultLimits())
 	if err != nil {
 		t.Fatalf("newHistoricalProjection(over) error = %v", err)
 	}
@@ -66,11 +63,8 @@ func TestDecisionRejectsZeroMultipleUnknownAndMismatchedActions(t *testing.T) {
 
 // TestEvaluatorAllocationRemainsBoundedAtMaximumOutput guards proportional allocation at the 128-finding boundary.
 func TestEvaluatorAllocationRemainsBoundedAtMaximumOutput(t *testing.T) {
-	hops := make([]HopFact, 42)
-	for index := range hops {
-		hops[index] = mustProjectionHopWithFlags(t, uint64(index+1), transitionForTestIndex(index), true, true, index == 0, false, true)
-	}
-	projection, err := newHistoricalProjection(42, HistoryComplete, hops, DefaultLimits())
+	hops := maximumOutputHops(t)
+	projection, err := newHistoricalProjection(uint64(len(hops)), HistoryComplete, hops, DefaultLimits())
 	if err != nil {
 		t.Fatalf("newHistoricalProjection() error = %v", err)
 	}
@@ -89,10 +83,24 @@ func TestEvaluatorAllocationRemainsBoundedAtMaximumOutput(t *testing.T) {
 	}
 }
 
-// mustProjectionHopWithFlags constructs one exact abuse-boundary hop.
-func mustProjectionHopWithFlags(t *testing.T, sequence uint64, transition TransitionState, modify, explode, feedback, feedHere, exploded bool) HopFact {
+// maximumOutputHops builds a complete history whose evaluation yields exactly
+// the hard finding limit: 63 hops each report feedback and exploded (126
+// findings), one final exploded-only hop adds one, and protocol_pass completes
+// 128.
+func maximumOutputHops(t *testing.T) []HopFact {
 	t.Helper()
-	hop, err := NewAuthenticatedHopFact(sequence, transition, modify, explode, feedback, feedHere, exploded)
+	hops := make([]HopFact, 64)
+	for index := range hops {
+		feedback := index < len(hops)-1
+		hops[index] = mustProjectionHopWithFlags(t, uint64(index+1), transitionForTestIndex(index), feedback, false, true)
+	}
+	return hops
+}
+
+// mustProjectionHopWithFlags constructs one exact abuse-boundary hop.
+func mustProjectionHopWithFlags(t *testing.T, sequence uint64, transition TransitionState, feedback, feedHere, exploded bool) HopFact {
+	t.Helper()
+	hop, err := NewAuthenticatedHopFact(sequence, transition, feedback, feedHere, exploded)
 	if err != nil {
 		t.Fatalf("NewAuthenticatedHopFact() error = %v", err)
 	}

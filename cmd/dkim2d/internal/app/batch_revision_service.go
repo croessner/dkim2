@@ -38,7 +38,7 @@ func (s *SigningService) ReviseBatch(ctx context.Context, request BatchRevisionR
 		}
 		return batchRevisionFailure(request, OperationTemperror), nil
 	}
-	metadata, err := s.policies.ordinaryTransit.metadata()
+	metadata, err := daemonSigningMetadata()
 	if err != nil {
 		return BatchRevisionResult{}, &DomainError{}
 	}

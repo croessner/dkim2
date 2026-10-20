@@ -28,21 +28,19 @@ func (f SigningTransportForm) Known() bool {
 	return f == SigningTransportFinalNetworkPreDotStuffing
 }
 
-// SigningFlag identifies one caller-requestable baseline flag.
+// SigningFlag identifies one caller-requestable baseline flag. Draft-07
+// Section 10.10 removed donotmodify and donotexplode, so feedback is the sole
+// requestable flag.
 type SigningFlag string
 
 const (
-	// SigningFlagDoNotModify requests authenticated donotmodify.
-	SigningFlagDoNotModify SigningFlag = "donotmodify"
-	// SigningFlagDoNotExplode requests authenticated donotexplode.
-	SigningFlagDoNotExplode SigningFlag = "donotexplode"
 	// SigningFlagFeedback requests authenticated feedback.
 	SigningFlagFeedback SigningFlag = "feedback"
 )
 
 // Known reports whether the flag may be requested by a caller.
 func (f SigningFlag) Known() bool {
-	return f == SigningFlagDoNotModify || f == SigningFlagDoNotExplode || f == SigningFlagFeedback
+	return f == SigningFlagFeedback
 }
 
 // SigningMetadata is immutable optional nonce and requested-flag metadata.

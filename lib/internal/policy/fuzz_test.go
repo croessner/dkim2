@@ -88,8 +88,8 @@ func assertSealedPolicyFuzzOutcome(t *testing.T, projection Projection, decision
 	if !decision.Valid() || len(decision.Actions()) != 1 || len(decision.Findings()) > limits.MaxFindings || len(decision.Findings()) > hardMaxFindings {
 		t.Fatalf("successful decision violated bounds: %#v", decision)
 	}
-	if projection.HistoryCoverage() != HistoryComplete && (decision.DoNotModifyCompliance() == ComplianceHonored || decision.DoNotModifyCompliance() == ComplianceViolated || decision.DoNotExplodeCompliance() == ComplianceHonored || decision.DoNotExplodeCompliance() == ComplianceViolated) {
-		t.Fatal("incomplete history produced false honor or violation")
+	if projection.Protocol() == ProtocolPASS && !decision.DNSTestingEffective() && decision.Verdict() == VerdictReject {
+		t.Fatal("authenticated hop flags changed a PASS verdict to reject")
 	}
 	if decision.DNSTestingEffective() != fuzzDNSTestingShouldBeEffective(projection) {
 		t.Fatal("DNS testing treatment disagreed with exact eligibility")
@@ -99,11 +99,11 @@ func assertSealedPolicyFuzzOutcome(t *testing.T, projection Projection, decision
 	}
 }
 
-// assertTestingPassSuppressesFuzzFlags rejects feedback, compliance, and sequenced findings.
+// assertTestingPassSuppressesFuzzFlags rejects feedback intent and sequenced findings.
 func assertTestingPassSuppressesFuzzFlags(t *testing.T, decision Decision) {
 	t.Helper()
 	intent := decision.FeedbackIntent()
-	if intent.Requested() || intent.RelayRequired() || decision.DoNotModifyCompliance() != ComplianceNotEvaluated || decision.DoNotExplodeCompliance() != ComplianceNotEvaluated {
+	if intent.Requested() || intent.RelayRequired() {
 		t.Fatal("testing PASS retained authenticated flag effects")
 	}
 	for _, finding := range decision.Findings() {
@@ -136,7 +136,7 @@ func fuzzPolicyProjection(protocolSeed, formSeed, transitionSeed int, flags uint
 	}
 	hops := []HopFact(nil)
 	if protocol == ProtocolPASS {
-		hop, err := NewAuthenticatedHopFact(target, TransitionOrigin, flags&1 != 0, flags&2 != 0, flags&4 != 0, flags&8 != 0, flags&16 != 0)
+		hop, err := NewAuthenticatedHopFact(target, TransitionOrigin, flags&1 != 0, flags&2 != 0, flags&4 != 0)
 		if err != nil {
 			return Projection{}, err
 		}
@@ -157,7 +157,7 @@ func fuzzHistoricalHops(count int, transition TransitionState, flags uint8) []Ho
 		if index == 1 {
 			state = TransitionOrigin
 		}
-		hop, err := NewAuthenticatedHopFact(uint64(index), state, flags&1 != 0, flags&2 != 0, flags&4 != 0, flags&8 != 0, flags&16 != 0)
+		hop, err := NewAuthenticatedHopFact(uint64(index), state, flags&1 != 0, flags&2 != 0, flags&4 != 0)
 		if err != nil {
 			return nil
 		}
@@ -325,5 +325,5 @@ func policyFuzzSnapshot(decision Decision, err error) any {
 		}
 		return []any{"unknown_error", err.Error()}
 	}
-	return []any{decision.Protocol(), decision.Mode(), decision.Verdict(), decision.PrimaryReason(), decision.DoNotModifyCompliance(), decision.DoNotExplodeCompliance(), decision.FeedbackIntent(), decision.DNSTestingEffective(), decision.Findings(), decision.Actions()}
+	return []any{decision.Protocol(), decision.Mode(), decision.Verdict(), decision.PrimaryReason(), decision.FeedbackIntent(), decision.DNSTestingEffective(), decision.Findings(), decision.Actions()}
 }

@@ -952,12 +952,25 @@ func TestForgedPublicSigningFactsFailClosed(t *testing.T) {
 	}
 }
 
-// TestPublicLocalOnlyResultIsConstructedWithoutByteEscape proves a genuine
-// inherited donotmodify violation produces only the restricted variant.
-func TestPublicLocalOnlyResultIsConstructedWithoutByteEscape(t *testing.T) {
+// TestPublicRemovedDraft06FlagsAreNotRequestableAndRevisionStaysUnrestricted
+// reproduces the Draft-07 Section 10.10 removal of donotmodify and
+// donotexplode: callers cannot request them, and a locally revised in-control
+// copy completes as an ordinary unrestricted result.
+func TestPublicRemovedDraft06FlagsAreNotRequestableAndRevisionStaysUnrestricted(t *testing.T) {
+	for _, removed := range []SigningFlag{"donotmodify", "donotexplode"} {
+		if removed.Known() {
+			t.Fatalf("removed flag %q is requestable", removed)
+		}
+		if _, err := NewSigningMetadata(nil, false, []SigningFlag{removed}); err == nil {
+			t.Fatalf("NewSigningMetadata(%q) accepted a removed flag", removed)
+		}
+		if SignedMessageFlag(removed).Known() {
+			t.Fatalf("removed flag %q is an emitted signed-message flag", removed)
+		}
+	}
 	fixture := newPublicSigningFixture(t)
 	raw := []byte("From: alice@example.test\r\nSubject: protected\r\n\r\nbody\r\n")
-	metadata, err := NewSigningMetadata(nil, false, []SigningFlag{SigningFlagDoNotModify})
+	metadata, err := NewSigningMetadata(nil, false, []SigningFlag{SigningFlagFeedback})
 	if err != nil {
 		t.Fatalf("NewSigningMetadata() error = %v", err)
 	}
@@ -995,12 +1008,12 @@ func TestPublicLocalOnlyResultIsConstructedWithoutByteEscape(t *testing.T) {
 	if err != nil || recovery.Valid() || !result.Valid() {
 		t.Fatalf("SignExisting() valid=%v recovery=%v error=%v", result.Valid(), recovery.Valid(), err)
 	}
-	local, ok := result.LocalOnly()
-	if !ok || !local.Valid() || local.Facts().Restriction() != SigningRestrictionLocalOnly {
-		t.Fatalf("local-only result valid=%v facts=%#v", ok && local.Valid(), local.Facts())
+	revisedMessage, ok := result.Unrestricted()
+	if !ok || !revisedMessage.Valid() || revisedMessage.Facts().Restriction() != SigningRestrictionUnrestricted {
+		t.Fatalf("revised result unrestricted=%v facts=%#v", ok, revisedMessage.Facts())
 	}
-	if _, ok := result.Unrestricted(); ok {
-		t.Fatal("local-only result also exposed unrestricted variant")
+	if _, ok := result.LocalOnly(); ok {
+		t.Fatal("revised result exposed a local-only variant")
 	}
 }
 
@@ -1587,8 +1600,10 @@ func TestPublicBccFanoutKeepsCopiesIsolated(t *testing.T) {
 			t.Fatalf("SignOriginator(%d) recovery=%v error=%v", index, recovery.Valid(), signErr)
 		}
 		signed, ok := result.Unrestricted()
+		// Draft-07 Section 12.5: an originator Bcc fanout is i=1 and never
+		// carries exploded.
 		if !ok || signed.Facts().Multiplicity() != 2 ||
-			!slices.Contains(signed.Facts().Flags(), SignedMessageFlagExploded) {
+			slices.Contains(signed.Facts().Flags(), SignedMessageFlagExploded) {
 			t.Fatalf("copy %d facts=%#v", index, signed.Facts())
 		}
 		current := []byte(base64.StdEncoding.EncodeToString(recipients[index]))

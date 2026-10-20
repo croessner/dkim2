@@ -80,7 +80,7 @@ func (s *SigningService) SignDeliveryStatus(ctx context.Context, request Deliver
 		s.observeDSNEvidence(dkim2.DSNEvidenceStagePreflight, telemetryResultTemporary)
 		return SigningAssessment{}, err
 	}
-	metadata, err := s.policies.deliveryStatus.metadata()
+	metadata, err := daemonSigningMetadata()
 	if err != nil {
 		s.observeDSNEvidence(dkim2.DSNEvidenceStagePreflight, telemetryResultInternal)
 		return SigningAssessment{}, &DomainError{}

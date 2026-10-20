@@ -506,8 +506,8 @@ paths:
         the reference library, and releases exact completed header fields
         only for external copies. Every copy has exactly one recipient.
         Local delivery is independent; failure here never rolls it back.
-        Authenticated modification and fanout restrictions gate every
-        external output. Caller assertions are not verification evidence.
+        Local policy authorization gates every external output. Caller
+        assertions are not verification evidence.
         All external outputs succeed together or outputs is empty. This
         endpoint does not originate unsigned messages or deliver mail.
         The framed JSON limit is 361053016 bytes; the aggregate decoded
@@ -2095,8 +2095,6 @@ components:
         - signature_algorithms
         - signature_state
         - custody_transition
-        - do_not_modify
-        - do_not_explode
         - feedback
         - feed_here
         - exploded
@@ -2151,10 +2149,6 @@ components:
             - ordinary
             - next_domain
             - terminal_next_domain
-        do_not_modify:
-          type: boolean
-        do_not_explode:
-          type: boolean
         feedback:
           type: boolean
         feed_here:
@@ -2366,8 +2360,6 @@ components:
         - mode
         - verdict
         - primary_reason
-        - do_not_modify
-        - do_not_explode
         - dns_testing_effective
         - feedback
         - findings
@@ -2387,28 +2379,6 @@ components:
             - continue
         primary_reason:
           $ref: "#/components/schemas/PolicyReason"
-        do_not_modify:
-          type: string
-          enum:
-            - not_requested
-            - indeterminate
-            - not_evaluated
-          x-enum-varnames:
-            - PolicyResultDoNotModifyNotRequested
-            - PolicyResultDoNotModifyIndeterminate
-            - PolicyResultDoNotModifyNotEvaluated
-        do_not_explode:
-          type: string
-          enum:
-            - not_requested
-            - violated
-            - indeterminate
-            - not_evaluated
-          x-enum-varnames:
-            - PolicyResultDoNotExplodeNotRequested
-            - PolicyResultDoNotExplodeViolated
-            - PolicyResultDoNotExplodeIndeterminate
-            - PolicyResultDoNotExplodeNotEvaluated
         dns_testing_effective:
           type: boolean
         feedback:
@@ -2494,6 +2464,7 @@ components:
             - malformed_protocol
             - duplicate_hash_algorithm
             - invalid_recipe_json
+            - from_not_authentic
             - duplicate_selector
             - too_many_signatures
             - missing_protocol
@@ -2623,6 +2594,7 @@ components:
         - malformed_protocol
         - duplicate_hash_algorithm
         - invalid_recipe_json
+        - from_not_authentic
         - duplicate_selector
         - too_many_signatures
         - missing_protocol
@@ -2657,11 +2629,6 @@ components:
         - dns_testing_effective
         - dns_testing_mixed
         - dns_testing_ineligible
-        - donotmodify_indeterminate
-        - donotmodify_not_evaluated
-        - donotexplode_violated
-        - donotexplode_indeterminate
-        - donotexplode_not_evaluated
         - feedback_requested
         - feedback_relay_selected
         - feedhere_inert

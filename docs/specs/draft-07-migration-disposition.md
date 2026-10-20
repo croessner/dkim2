@@ -232,6 +232,48 @@ Open follow-ups owned by later packages:
   NV8/XV8 validator gap. The Draft-06 `TBA` issues for policy guidance
   (`0002`) and Security Considerations (`0005`) are no longer `TBA` in
   Draft-07 and are re-evaluated in package 8.
+- Package 7 item: `verify/local_hop_run.go` derives local-run membership
+  through `CanonicalEnvelopeDomain(mf=)`, which rejects a null `mf=`. Such a
+  hop is valid custody since this package, so a local run containing it must
+  be handled explicitly in the DSN rebuild (D8).
 - From-domain conversion is wired in package 4; adapter SMTPUTF8 signing
   policy (the Milter still rejects SMTPUTF8 originator envelopes) is reviewed
   in package 7.
+
+## 10. Package 4 state
+
+- From parser: `lib/internal/mailbox` is the single bounded RFC 5322 author
+  parser (RFC 6854 groups, RFC 6532 UTF-8, comments, obsolete dotted phrases
+  and local parts). Obsolete route syntax and empty list elements are
+  rejected as unsupported. The library no longer uses `net/mail`; the
+  null-sender `header_from` classifier layers its stricter profile (no
+  group, ASCII addr-spec) over this parser.
+- From authenticity (D3): the all-hop revision proof evaluates every From
+  state of the authenticated history from `m=1` on. A state begins at `m=1`
+  and wherever the From fields differ from the previous instance; each must
+  be exactly one From field with one non-literal mailbox whose domain
+  relaxed-matches the `d=` of the lowest `i=` whose `m=` covers that
+  instance. Failure yields the new outcome `from_not_authentic`, mapped to
+  PERMERROR and added to the public, policy, OpenAPI, daemon, and rspamd
+  reason vocabularies. A pre-entry From restored by an `r=` at `m=1` is never
+  reconstructed by the walk and receives no assertion. The golden vector
+  `intermediate_nd` (From outside `i=1` `d=`) is now this negative case.
+- Signing (Section 12.4): the signer refuses (`chain_failure`) when an
+  originator, or a revision that replaced the From fields, would leave the
+  outgoing From non-Authentic for the profile domain.
+- Propagated DSNs (Section 16.2) are new messages, so their From is now
+  `MAILER-DAEMON@<propagation signing domain>`; `Reporting-MTA` and the
+  Message-ID host stay the configured reporting MTA. The DSN propagation
+  corpus was regenerated; its Draft-06 version is kept under
+  `lib/testdata/vectors/history/draft-ietf-dkim-dkim2-spec-06/`.
+- `exploded` (Section 12.5): set only by intermediary purposes (revision,
+  `nd=` hop) that fan out to more than one recipient; originator and
+  delivery-status signatures (`i=1`) never carry it, and prior flags are not
+  inherited. Draft-07 states no verifier rejection for an `i=1` `exploded`;
+  replay policy treatment is decided in package 6.
+- `donotmodify`/`donotexplode` (Section 10.10) are removed everywhere and
+  parse as inert unknown flags; their daemon configuration keys fail with a
+  migration error.
+- Follow-up: without `donotmodify`, nothing produces the `local_only`
+  restriction anymore. `LocalOnlySignedMessage` and its release path are
+  unreachable and should be removed in a separate cleanup.

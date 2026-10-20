@@ -56,13 +56,7 @@ func FuzzSigningRequest(f *testing.F) {
 			}
 		}
 
-		flags := make([]string, 0, 3)
-		if flagBits&1 != 0 {
-			flags = append(flags, signature.FlagDoNotModify)
-		}
-		if flagBits&2 != 0 {
-			flags = append(flags, signature.FlagDoNotExplode)
-		}
+		flags := make([]string, 0, 1)
 		if flagBits&4 != 0 {
 			flags = append(flags, signature.FlagFeedback)
 		}

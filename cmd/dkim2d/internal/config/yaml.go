@@ -232,7 +232,8 @@ func buildYAMLSchema() (*yamlSchemaNode, error) {
 }
 
 // collectYAMLMapping validates one declared mapping and flattens its scalar
-// leaves while preserving exact YAML scalar kinds.
+// leaves while preserving exact YAML scalar kinds. Keys removed by a protocol
+// revision fail with fixed migration guidance instead of a generic error.
 func collectYAMLMapping(
 	node *yaml.Node,
 	schema *yamlSchemaNode,
@@ -259,13 +260,16 @@ func collectYAMLMapping(
 		}
 		seenKeys[key] = struct{}{}
 
-		child := schema.children[key]
-		if child == nil {
-			return newError(CodeInvalidYAML)
-		}
 		path := key
 		if prefix != "" {
 			path = prefix + "." + key
+		}
+		child := schema.children[key]
+		if child == nil {
+			if removed, ok := removedYAMLKey(path, valueNode); ok {
+				return newRemovedYAMLKeyError(removed)
+			}
+			return newError(CodeInvalidYAML)
 		}
 
 		if child.leaf {

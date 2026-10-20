@@ -79,6 +79,7 @@ const (
 	AuthenticationResultPrimaryReasonDuplicateMessageWithoutExploded AuthenticationResultPrimaryReason = "duplicate_message_without_exploded"
 	AuthenticationResultPrimaryReasonDuplicateSelector               AuthenticationResultPrimaryReason = "duplicate_selector"
 	AuthenticationResultPrimaryReasonEnvelopeMismatch                AuthenticationResultPrimaryReason = "envelope_mismatch"
+	AuthenticationResultPrimaryReasonFromNotAuthentic                AuthenticationResultPrimaryReason = "from_not_authentic"
 	AuthenticationResultPrimaryReasonHashMismatch                    AuthenticationResultPrimaryReason = "hash_mismatch"
 	AuthenticationResultPrimaryReasonInternalContract                AuthenticationResultPrimaryReason = "internal_contract"
 	AuthenticationResultPrimaryReasonInvalidKey                      AuthenticationResultPrimaryReason = "invalid_key"
@@ -120,6 +121,8 @@ func (e AuthenticationResultPrimaryReason) Valid() bool {
 	case AuthenticationResultPrimaryReasonDuplicateSelector:
 		return true
 	case AuthenticationResultPrimaryReasonEnvelopeMismatch:
+		return true
+	case AuthenticationResultPrimaryReasonFromNotAuthentic:
 		return true
 	case AuthenticationResultPrimaryReasonHashMismatch:
 		return true
@@ -811,11 +814,6 @@ const (
 	DnsTestingEffective           PolicyReason = "dns_testing_effective"
 	DnsTestingIneligible          PolicyReason = "dns_testing_ineligible"
 	DnsTestingMixed               PolicyReason = "dns_testing_mixed"
-	DonotexplodeIndeterminate     PolicyReason = "donotexplode_indeterminate"
-	DonotexplodeNotEvaluated      PolicyReason = "donotexplode_not_evaluated"
-	DonotexplodeViolated          PolicyReason = "donotexplode_violated"
-	DonotmodifyIndeterminate      PolicyReason = "donotmodify_indeterminate"
-	DonotmodifyNotEvaluated       PolicyReason = "donotmodify_not_evaluated"
 	ExplodedReported              PolicyReason = "exploded_reported"
 	FeedbackRelaySelected         PolicyReason = "feedback_relay_selected"
 	FeedbackRequested             PolicyReason = "feedback_requested"
@@ -846,16 +844,6 @@ func (e PolicyReason) Valid() bool {
 	case DnsTestingIneligible:
 		return true
 	case DnsTestingMixed:
-		return true
-	case DonotexplodeIndeterminate:
-		return true
-	case DonotexplodeNotEvaluated:
-		return true
-	case DonotexplodeViolated:
-		return true
-	case DonotmodifyIndeterminate:
-		return true
-	case DonotmodifyNotEvaluated:
 		return true
 	case ExplodedReported:
 		return true
@@ -896,51 +884,6 @@ func (e PolicyReason) Valid() bool {
 	case ReceivedDsnTenantUnavailable:
 		return true
 	case TestingModeObserve:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for PolicyResultDoNotExplode.
-const (
-	PolicyResultDoNotExplodeIndeterminate PolicyResultDoNotExplode = "indeterminate"
-	PolicyResultDoNotExplodeNotEvaluated  PolicyResultDoNotExplode = "not_evaluated"
-	PolicyResultDoNotExplodeNotRequested  PolicyResultDoNotExplode = "not_requested"
-	PolicyResultDoNotExplodeViolated      PolicyResultDoNotExplode = "violated"
-)
-
-// Valid indicates whether the value is a known member of the PolicyResultDoNotExplode enum.
-func (e PolicyResultDoNotExplode) Valid() bool {
-	switch e {
-	case PolicyResultDoNotExplodeIndeterminate:
-		return true
-	case PolicyResultDoNotExplodeNotEvaluated:
-		return true
-	case PolicyResultDoNotExplodeNotRequested:
-		return true
-	case PolicyResultDoNotExplodeViolated:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for PolicyResultDoNotModify.
-const (
-	PolicyResultDoNotModifyIndeterminate PolicyResultDoNotModify = "indeterminate"
-	PolicyResultDoNotModifyNotEvaluated  PolicyResultDoNotModify = "not_evaluated"
-	PolicyResultDoNotModifyNotRequested  PolicyResultDoNotModify = "not_requested"
-)
-
-// Valid indicates whether the value is a known member of the PolicyResultDoNotModify enum.
-func (e PolicyResultDoNotModify) Valid() bool {
-	switch e {
-	case PolicyResultDoNotModifyIndeterminate:
-		return true
-	case PolicyResultDoNotModifyNotEvaluated:
-		return true
-	case PolicyResultDoNotModifyNotRequested:
 		return true
 	default:
 		return false
@@ -1182,6 +1125,7 @@ const (
 	VerificationReasonDuplicateHashAlgorithm  VerificationReason = "duplicate_hash_algorithm"
 	VerificationReasonDuplicateSelector       VerificationReason = "duplicate_selector"
 	VerificationReasonEnvelopeMismatch        VerificationReason = "envelope_mismatch"
+	VerificationReasonFromNotAuthentic        VerificationReason = "from_not_authentic"
 	VerificationReasonHashMismatch            VerificationReason = "hash_mismatch"
 	VerificationReasonInternalContract        VerificationReason = "internal_contract"
 	VerificationReasonInvalidKey              VerificationReason = "invalid_key"
@@ -1219,6 +1163,8 @@ func (e VerificationReason) Valid() bool {
 	case VerificationReasonDuplicateSelector:
 		return true
 	case VerificationReasonEnvelopeMismatch:
+		return true
+	case VerificationReasonFromNotAuthentic:
 		return true
 	case VerificationReasonHashMismatch:
 		return true
@@ -1936,21 +1882,13 @@ type PolicyReason string
 
 // PolicyResult defines model for PolicyResult.
 type PolicyResult struct {
-	DnsTestingEffective bool                     `json:"dns_testing_effective"`
-	DoNotExplode        PolicyResultDoNotExplode `json:"do_not_explode"`
-	DoNotModify         PolicyResultDoNotModify  `json:"do_not_modify"`
-	Feedback            PolicyFeedback           `json:"feedback"`
-	Findings            []PolicyFinding          `json:"findings"`
-	Mode                PolicyResultMode         `json:"mode"`
-	PrimaryReason       PolicyReason             `json:"primary_reason"`
-	Verdict             PolicyResultVerdict      `json:"verdict"`
+	DnsTestingEffective bool                `json:"dns_testing_effective"`
+	Feedback            PolicyFeedback      `json:"feedback"`
+	Findings            []PolicyFinding     `json:"findings"`
+	Mode                PolicyResultMode    `json:"mode"`
+	PrimaryReason       PolicyReason        `json:"primary_reason"`
+	Verdict             PolicyResultVerdict `json:"verdict"`
 }
-
-// PolicyResultDoNotExplode defines model for PolicyResult.DoNotExplode.
-type PolicyResultDoNotExplode string
-
-// PolicyResultDoNotModify defines model for PolicyResult.DoNotModify.
-type PolicyResultDoNotModify string
 
 // PolicyResultMode defines model for PolicyResult.Mode.
 type PolicyResultMode string
@@ -2185,8 +2123,6 @@ type VerifierHop struct {
 	ChangeClasses          []VerifierHopChangeClasses       `json:"change_classes"`
 	ChangeCount            int                              `json:"change_count"`
 	CustodyTransition      VerifierHopCustodyTransition     `json:"custody_transition"`
-	DoNotExplode           bool                             `json:"do_not_explode"`
-	DoNotModify            bool                             `json:"do_not_modify"`
 	Exploded               bool                             `json:"exploded"`
 	FeedHere               bool                             `json:"feed_here"`
 	Feedback               bool                             `json:"feedback"`
@@ -2492,7 +2428,7 @@ type ClientInterface interface {
 
 	// ReviseBatchWithBody Revise the external copies of one complete message fanout.
 	//
-	// The separately authorized trusted MTA supplies the exact original message and incoming envelope, and every actual local and external copy with its current message and prepared outgoing envelope. The daemon verifies the original itself, seals the entire fanout with the reference library, and releases exact completed header fields only for external copies. Every copy has exactly one recipient. Local delivery is independent; failure here never rolls it back. Authenticated modification and fanout restrictions gate every external output. Caller assertions are not verification evidence. All external outputs succeed together or outputs is empty. This endpoint does not originate unsigned messages or deliver mail. The framed JSON limit is 361053016 bytes; the aggregate decoded original and current message limit is 268435456 bytes. Each message also obeys the deployment's configured server.message_bytes ceiling.
+	// The separately authorized trusted MTA supplies the exact original message and incoming envelope, and every actual local and external copy with its current message and prepared outgoing envelope. The daemon verifies the original itself, seals the entire fanout with the reference library, and releases exact completed header fields only for external copies. Every copy has exactly one recipient. Local delivery is independent; failure here never rolls it back. Local policy authorization gates every external output. Caller assertions are not verification evidence. All external outputs succeed together or outputs is empty. This endpoint does not originate unsigned messages or deliver mail. The framed JSON limit is 361053016 bytes; the aggregate decoded original and current message limit is 268435456 bytes. Each message also obeys the deployment's configured server.message_bytes ceiling.
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -2501,7 +2437,7 @@ type ClientInterface interface {
 
 	// ReviseBatch Revise the external copies of one complete message fanout.
 	//
-	// The separately authorized trusted MTA supplies the exact original message and incoming envelope, and every actual local and external copy with its current message and prepared outgoing envelope. The daemon verifies the original itself, seals the entire fanout with the reference library, and releases exact completed header fields only for external copies. Every copy has exactly one recipient. Local delivery is independent; failure here never rolls it back. Authenticated modification and fanout restrictions gate every external output. Caller assertions are not verification evidence. All external outputs succeed together or outputs is empty. This endpoint does not originate unsigned messages or deliver mail. The framed JSON limit is 361053016 bytes; the aggregate decoded original and current message limit is 268435456 bytes. Each message also obeys the deployment's configured server.message_bytes ceiling.
+	// The separately authorized trusted MTA supplies the exact original message and incoming envelope, and every actual local and external copy with its current message and prepared outgoing envelope. The daemon verifies the original itself, seals the entire fanout with the reference library, and releases exact completed header fields only for external copies. Every copy has exactly one recipient. Local delivery is independent; failure here never rolls it back. Local policy authorization gates every external output. Caller assertions are not verification evidence. All external outputs succeed together or outputs is empty. This endpoint does not originate unsigned messages or deliver mail. The framed JSON limit is 361053016 bytes; the aggregate decoded original and current message limit is 268435456 bytes. Each message also obeys the deployment's configured server.message_bytes ceiling.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -2811,7 +2747,7 @@ func (c *Client) ReviseMessage(ctx context.Context, body ReviseMessageJSONReques
 
 // ReviseBatchWithBody Revise the external copies of one complete message fanout.
 //
-// The separately authorized trusted MTA supplies the exact original message and incoming envelope, and every actual local and external copy with its current message and prepared outgoing envelope. The daemon verifies the original itself, seals the entire fanout with the reference library, and releases exact completed header fields only for external copies. Every copy has exactly one recipient. Local delivery is independent; failure here never rolls it back. Authenticated modification and fanout restrictions gate every external output. Caller assertions are not verification evidence. All external outputs succeed together or outputs is empty. This endpoint does not originate unsigned messages or deliver mail. The framed JSON limit is 361053016 bytes; the aggregate decoded original and current message limit is 268435456 bytes. Each message also obeys the deployment's configured server.message_bytes ceiling.
+// The separately authorized trusted MTA supplies the exact original message and incoming envelope, and every actual local and external copy with its current message and prepared outgoing envelope. The daemon verifies the original itself, seals the entire fanout with the reference library, and releases exact completed header fields only for external copies. Every copy has exactly one recipient. Local delivery is independent; failure here never rolls it back. Local policy authorization gates every external output. Caller assertions are not verification evidence. All external outputs succeed together or outputs is empty. This endpoint does not originate unsigned messages or deliver mail. The framed JSON limit is 361053016 bytes; the aggregate decoded original and current message limit is 268435456 bytes. Each message also obeys the deployment's configured server.message_bytes ceiling.
 //
 // Takes any type of body and a specified content type.
 //
@@ -2830,7 +2766,7 @@ func (c *Client) ReviseBatchWithBody(ctx context.Context, contentType string, bo
 
 // ReviseBatch Revise the external copies of one complete message fanout.
 //
-// The separately authorized trusted MTA supplies the exact original message and incoming envelope, and every actual local and external copy with its current message and prepared outgoing envelope. The daemon verifies the original itself, seals the entire fanout with the reference library, and releases exact completed header fields only for external copies. Every copy has exactly one recipient. Local delivery is independent; failure here never rolls it back. Authenticated modification and fanout restrictions gate every external output. Caller assertions are not verification evidence. All external outputs succeed together or outputs is empty. This endpoint does not originate unsigned messages or deliver mail. The framed JSON limit is 361053016 bytes; the aggregate decoded original and current message limit is 268435456 bytes. Each message also obeys the deployment's configured server.message_bytes ceiling.
+// The separately authorized trusted MTA supplies the exact original message and incoming envelope, and every actual local and external copy with its current message and prepared outgoing envelope. The daemon verifies the original itself, seals the entire fanout with the reference library, and releases exact completed header fields only for external copies. Every copy has exactly one recipient. Local delivery is independent; failure here never rolls it back. Local policy authorization gates every external output. Caller assertions are not verification evidence. All external outputs succeed together or outputs is empty. This endpoint does not originate unsigned messages or deliver mail. The framed JSON limit is 361053016 bytes; the aggregate decoded original and current message limit is 268435456 bytes. Each message also obeys the deployment's configured server.message_bytes ceiling.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -3525,7 +3461,7 @@ type ClientWithResponsesInterface interface {
 
 	// ReviseBatchWithBodyWithResponse Revise the external copies of one complete message fanout.
 	//
-	// The separately authorized trusted MTA supplies the exact original message and incoming envelope, and every actual local and external copy with its current message and prepared outgoing envelope. The daemon verifies the original itself, seals the entire fanout with the reference library, and releases exact completed header fields only for external copies. Every copy has exactly one recipient. Local delivery is independent; failure here never rolls it back. Authenticated modification and fanout restrictions gate every external output. Caller assertions are not verification evidence. All external outputs succeed together or outputs is empty. This endpoint does not originate unsigned messages or deliver mail. The framed JSON limit is 361053016 bytes; the aggregate decoded original and current message limit is 268435456 bytes. Each message also obeys the deployment's configured server.message_bytes ceiling.
+	// The separately authorized trusted MTA supplies the exact original message and incoming envelope, and every actual local and external copy with its current message and prepared outgoing envelope. The daemon verifies the original itself, seals the entire fanout with the reference library, and releases exact completed header fields only for external copies. Every copy has exactly one recipient. Local delivery is independent; failure here never rolls it back. Local policy authorization gates every external output. Caller assertions are not verification evidence. All external outputs succeed together or outputs is empty. This endpoint does not originate unsigned messages or deliver mail. The framed JSON limit is 361053016 bytes; the aggregate decoded original and current message limit is 268435456 bytes. Each message also obeys the deployment's configured server.message_bytes ceiling.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -3534,7 +3470,7 @@ type ClientWithResponsesInterface interface {
 
 	// ReviseBatchWithResponse Revise the external copies of one complete message fanout.
 	//
-	// The separately authorized trusted MTA supplies the exact original message and incoming envelope, and every actual local and external copy with its current message and prepared outgoing envelope. The daemon verifies the original itself, seals the entire fanout with the reference library, and releases exact completed header fields only for external copies. Every copy has exactly one recipient. Local delivery is independent; failure here never rolls it back. Authenticated modification and fanout restrictions gate every external output. Caller assertions are not verification evidence. All external outputs succeed together or outputs is empty. This endpoint does not originate unsigned messages or deliver mail. The framed JSON limit is 361053016 bytes; the aggregate decoded original and current message limit is 268435456 bytes. Each message also obeys the deployment's configured server.message_bytes ceiling.
+	// The separately authorized trusted MTA supplies the exact original message and incoming envelope, and every actual local and external copy with its current message and prepared outgoing envelope. The daemon verifies the original itself, seals the entire fanout with the reference library, and releases exact completed header fields only for external copies. Every copy has exactly one recipient. Local delivery is independent; failure here never rolls it back. Local policy authorization gates every external output. Caller assertions are not verification evidence. All external outputs succeed together or outputs is empty. This endpoint does not originate unsigned messages or deliver mail. The framed JSON limit is 361053016 bytes; the aggregate decoded original and current message limit is 268435456 bytes. Each message also obeys the deployment's configured server.message_bytes ceiling.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -5963,7 +5899,7 @@ func (c *ClientWithResponses) ReviseMessageWithResponse(ctx context.Context, bod
 
 // ReviseBatchWithBodyWithResponse Revise the external copies of one complete message fanout.
 //
-// The separately authorized trusted MTA supplies the exact original message and incoming envelope, and every actual local and external copy with its current message and prepared outgoing envelope. The daemon verifies the original itself, seals the entire fanout with the reference library, and releases exact completed header fields only for external copies. Every copy has exactly one recipient. Local delivery is independent; failure here never rolls it back. Authenticated modification and fanout restrictions gate every external output. Caller assertions are not verification evidence. All external outputs succeed together or outputs is empty. This endpoint does not originate unsigned messages or deliver mail. The framed JSON limit is 361053016 bytes; the aggregate decoded original and current message limit is 268435456 bytes. Each message also obeys the deployment's configured server.message_bytes ceiling.
+// The separately authorized trusted MTA supplies the exact original message and incoming envelope, and every actual local and external copy with its current message and prepared outgoing envelope. The daemon verifies the original itself, seals the entire fanout with the reference library, and releases exact completed header fields only for external copies. Every copy has exactly one recipient. Local delivery is independent; failure here never rolls it back. Local policy authorization gates every external output. Caller assertions are not verification evidence. All external outputs succeed together or outputs is empty. This endpoint does not originate unsigned messages or deliver mail. The framed JSON limit is 361053016 bytes; the aggregate decoded original and current message limit is 268435456 bytes. Each message also obeys the deployment's configured server.message_bytes ceiling.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -5978,7 +5914,7 @@ func (c *ClientWithResponses) ReviseBatchWithBodyWithResponse(ctx context.Contex
 
 // ReviseBatchWithResponse Revise the external copies of one complete message fanout.
 //
-// The separately authorized trusted MTA supplies the exact original message and incoming envelope, and every actual local and external copy with its current message and prepared outgoing envelope. The daemon verifies the original itself, seals the entire fanout with the reference library, and releases exact completed header fields only for external copies. Every copy has exactly one recipient. Local delivery is independent; failure here never rolls it back. Authenticated modification and fanout restrictions gate every external output. Caller assertions are not verification evidence. All external outputs succeed together or outputs is empty. This endpoint does not originate unsigned messages or deliver mail. The framed JSON limit is 361053016 bytes; the aggregate decoded original and current message limit is 268435456 bytes. Each message also obeys the deployment's configured server.message_bytes ceiling.
+// The separately authorized trusted MTA supplies the exact original message and incoming envelope, and every actual local and external copy with its current message and prepared outgoing envelope. The daemon verifies the original itself, seals the entire fanout with the reference library, and releases exact completed header fields only for external copies. Every copy has exactly one recipient. Local delivery is independent; failure here never rolls it back. Local policy authorization gates every external output. Caller assertions are not verification evidence. All external outputs succeed together or outputs is empty. This endpoint does not originate unsigned messages or deliver mail. The framed JSON limit is 361053016 bytes; the aggregate decoded original and current message limit is 268435456 bytes. Each message also obeys the deployment's configured server.message_bytes ceiling.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //

@@ -17,7 +17,7 @@ func TestVerifierAttachesSelectedParsedFlagCandidate(t *testing.T) {
 		t.Fatalf("passing Verify() = %q error=%v", passResult.Status(), err)
 	}
 	passCandidate, ok := passResult.TargetFlagCandidate()
-	if !ok || passCandidate.Sequence() != passResult.Target().Sequence || passCandidate.DoNotModify() || passCandidate.DoNotExplode() || passCandidate.Feedback() || passCandidate.FeedHere() || passCandidate.Exploded() {
+	if !ok || passCandidate.Sequence() != passResult.Target().Sequence || passCandidate.Feedback() || passCandidate.FeedHere() || passCandidate.Exploded() {
 		t.Fatalf("passing candidate = %#v/%v", passCandidate, ok)
 	}
 
@@ -28,16 +28,18 @@ func TestVerifierAttachesSelectedParsedFlagCandidate(t *testing.T) {
 		t.Fatalf("non-PASS Verify() = %q error=%v", nonPass.Status(), err)
 	}
 	nonPassCandidate, ok := nonPass.TargetFlagCandidate()
-	if !ok || nonPassCandidate.Sequence() != nonPass.Target().Sequence || !nonPassCandidate.DoNotModify() || !nonPassCandidate.DoNotExplode() || !nonPassCandidate.Feedback() || !nonPassCandidate.FeedHere() || !nonPassCandidate.Exploded() {
+	if !ok || nonPassCandidate.Sequence() != nonPass.Target().Sequence || !nonPassCandidate.Feedback() || !nonPassCandidate.FeedHere() || !nonPassCandidate.Exploded() {
 		t.Fatalf("non-PASS candidate = %#v/%v", nonPassCandidate, ok)
 	}
 }
 
-// TestTargetFlagCandidateUsesAlreadyParsedKnownFlags verifies bounded candidate derivation.
+// TestTargetFlagCandidateUsesAlreadyParsedKnownFlags verifies bounded candidate
+// derivation; the removed Draft-06 donotmodify and donotexplode spellings in
+// the fixture are inert unknown flags.
 func TestTargetFlagCandidateUsesAlreadyParsedKnownFlags(t *testing.T) {
 	parsed := parsedPolicySignature(t)
 	candidate := newTargetFlagCandidate(parsed)
-	if !candidate.Valid() || candidate.Sequence() != 1 || !candidate.DoNotModify() || !candidate.DoNotExplode() || !candidate.Feedback() || !candidate.FeedHere() || !candidate.Exploded() {
+	if !candidate.Valid() || candidate.Sequence() != 1 || !candidate.Feedback() || !candidate.FeedHere() || !candidate.Exploded() {
 		t.Fatalf("candidate = %#v", candidate)
 	}
 	result := NewResult(Target{Sequence: 1, InstanceNumber: 1}, TargetStatusPass, nil, nil).withTargetFlagCandidate(candidate)

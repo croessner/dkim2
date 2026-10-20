@@ -318,12 +318,10 @@ type Result struct {
 
 // TargetFlagCandidate stores bounded parser-owned evidence for the selected target.
 type TargetFlagCandidate struct {
-	sequence     uint64
-	doNotModify  bool
-	doNotExplode bool
-	feedback     bool
-	feedHere     bool
-	exploded     bool
+	sequence uint64
+	feedback bool
+	feedHere bool
+	exploded bool
 }
 
 // Valid reports whether the candidate identifies a positive target sequence.
@@ -331,12 +329,6 @@ func (c TargetFlagCandidate) Valid() bool { return c.sequence > 0 }
 
 // Sequence returns the parsed target signature sequence.
 func (c TargetFlagCandidate) Sequence() uint64 { return c.sequence }
-
-// DoNotModify reports whether parsed target flags contain donotmodify.
-func (c TargetFlagCandidate) DoNotModify() bool { return c.doNotModify }
-
-// DoNotExplode reports whether parsed target flags contain donotexplode.
-func (c TargetFlagCandidate) DoNotExplode() bool { return c.doNotExplode }
 
 // Feedback reports whether parsed target flags contain feedback.
 func (c TargetFlagCandidate) Feedback() bool { return c.feedback }

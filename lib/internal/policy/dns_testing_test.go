@@ -42,7 +42,7 @@ func TestDNSTestingEligibleRows(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			projection := mustDNSProjection(t, tt.protocol, tt.reason, tt.facts)
 			for _, mode := range []Mode{ModeStrict, ModePermissive, ModeTesting} {
-				decision := mustEvaluateCompliance(t, mode, projection, DefaultLimits())
+				decision := mustEvaluateProjection(t, mode, projection, DefaultLimits())
 				if decision.Protocol() != tt.protocol || !slices.Equal(dnsFindingReasons(decision), []PolicyReason{tt.dns}) {
 					t.Fatalf("mode %q decision = %#v", mode, decision)
 				}
@@ -64,7 +64,7 @@ func TestDNSTestingMixedPermanentReasonsUseServicePrimaryOrder(t *testing.T) {
 		mustProjectionSignatureFact(t, SetAlgorithmEd25519, SetStatusPass, SetReasonNone, true, false),
 	}
 	projection := mustDNSProjection(t, ProtocolPERMERROR, VerificationReasonRevokedKey, facts)
-	decision := mustEvaluateCompliance(t, ModeStrict, projection, DefaultLimits())
+	decision := mustEvaluateProjection(t, ModeStrict, projection, DefaultLimits())
 	if decision.PrimaryReason() != ReasonDNSTestingEffective || decision.Verdict() != VerdictContinue {
 		t.Fatalf("mixed permanent decision = %#v", decision)
 	}
@@ -103,7 +103,7 @@ func TestDNSTestingIneligibleAndMixedRowsRemainBasePolicy(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			decision := mustEvaluateCompliance(t, ModeStrict, mustDNSProjection(t, tt.protocol, tt.reason, tt.facts), DefaultLimits())
+			decision := mustEvaluateProjection(t, ModeStrict, mustDNSProjection(t, tt.protocol, tt.reason, tt.facts), DefaultLimits())
 			wantDNS := []PolicyReason(nil)
 			if tt.dns != "" {
 				wantDNS = []PolicyReason{tt.dns}
@@ -118,7 +118,7 @@ func TestDNSTestingIneligibleAndMixedRowsRemainBasePolicy(t *testing.T) {
 // TestDNSTestingIgnoresStrictIdentityOnlyMetadata verifies t=s is not t=y.
 func TestDNSTestingIgnoresStrictIdentityOnlyMetadata(t *testing.T) {
 	fact := mustProjectionSignatureFact(t, SetAlgorithmRSA, SetStatusPass, SetReasonNone, false, true)
-	decision := mustEvaluateCompliance(t, ModeStrict, mustDNSProjection(t, ProtocolPASS, VerificationReasonNone, []SignatureFact{fact}), DefaultLimits())
+	decision := mustEvaluateProjection(t, ModeStrict, mustDNSProjection(t, ProtocolPASS, VerificationReasonNone, []SignatureFact{fact}), DefaultLimits())
 	if len(dnsFindingReasons(decision)) != 0 || decision.DNSTestingEffective() {
 		t.Fatalf("strict-identity-only decision = %#v", decision)
 	}
@@ -129,7 +129,7 @@ func TestProjectionRejectsAggregateReasonAndSetIncoherence(t *testing.T) {
 	pass := mustProjectionSignatureFact(t, SetAlgorithmRSA, SetStatusPass, SetReasonNone, true, false)
 	fail := mustProjectionSignatureFact(t, SetAlgorithmRSA, SetStatusFail, SetReasonSignatureMismatch, true, false)
 	permanent := mustEligiblePermanentFact(t, VerificationReasonInvalidKey, true)
-	hop := mustComplianceHop(t, 1, TransitionOrigin, false, false, false)
+	hop := mustHistoryHop(t, 1, TransitionOrigin, false)
 	tests := []struct {
 		name     string
 		protocol ProtocolClass
@@ -184,7 +184,7 @@ func mustDNSProjection(t *testing.T, protocol ProtocolClass, reason Verification
 	t.Helper()
 	var hops []HopFact
 	if protocol == ProtocolPASS {
-		hops = []HopFact{mustComplianceHop(t, 1, TransitionOrigin, false, false, false)}
+		hops = []HopFact{mustHistoryHop(t, 1, TransitionOrigin, false)}
 	}
 	projection, err := NewSelectedProjection(protocol, reason, 1, hops, facts, DefaultLimits())
 	if err != nil {

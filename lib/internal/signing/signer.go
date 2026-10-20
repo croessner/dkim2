@@ -542,6 +542,9 @@ func (c Coordinator) preflight(ctx context.Context, request SignFieldRequest) (p
 	}); err != nil {
 		return preparedSigningOperation{}, mapSignaturePreflightError(err, ErrorCodeChainFailure)
 	}
+	if !authenticFromForSigning(request) {
+		return preparedSigningOperation{}, newError(ErrorCodeChainFailure, ErrorLocation{Phase: PhasePreflight}, ErrorDetails{})
+	}
 	prepared := preparedSigningOperation{base: base}
 	if request.Capability.Valid() {
 		prepared.revision, err = c.revision.PrepareRevalidationForSigningAt(ctx, request.Capability, request.Plan.instant)
@@ -734,6 +737,26 @@ func (c Coordinator) prepareBranch(request SignFieldRequest, metadata EffectiveM
 	return preparedSigningBranch{
 		target: target, input: input, digest: sha256.Sum256(input.Bytes()), size: size, metadata: metadata,
 	}, nil
+}
+
+// authenticFromForSigning applies Draft-07 Section 12.4: when an originator
+// signs, or when a revision replaced the From header field relative to the
+// verified incoming message, the profile signing domain must make the
+// outgoing From header field Authentic. Otherwise the result would be an
+// invalid DKIM2 message, so signing fails as a chain failure. An unchanged
+// From was already proven Authentic by the incoming revision proof.
+func authenticFromForSigning(request SignFieldRequest) bool {
+	outgoing := request.Message.Headers()
+	if request.Capability.Valid() {
+		incoming, err := rawmsg.Parse(request.Capability.raw)
+		if err != nil {
+			return false
+		}
+		if verify.SameFromState(incoming.Headers(), outgoing) {
+			return true
+		}
+	}
+	return verify.FromAuthenticFor(outgoing, request.Profile.domain)
 }
 
 // requestEnvelopeForm derives the sole generated signature shape from closed request evidence.

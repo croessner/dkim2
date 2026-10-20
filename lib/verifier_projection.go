@@ -103,7 +103,7 @@ type verifierHopState struct {
 	recipe                                                                VerifierRecipeDescriptor
 	binding                                                               [32]byte
 	sequence, instance                                                    uint64
-	doNotModify, doNotExplode, feedback, feedHere, exploded               bool
+	feedback, feedHere, exploded                                          bool
 }
 
 // Valid reports whether the hop owns complete cloned evidence.
@@ -199,12 +199,6 @@ func (h VerifierHop) HopBinding() [32]byte {
 	return h.state.binding
 }
 
-// DoNotModify reports authenticated donotmodify presence.
-func (h VerifierHop) DoNotModify() bool { return h.Valid() && h.state.doNotModify }
-
-// DoNotExplode reports authenticated donotexplode presence.
-func (h VerifierHop) DoNotExplode() bool { return h.Valid() && h.state.doNotExplode }
-
 // Feedback reports authenticated feedback presence.
 func (h VerifierHop) Feedback() bool { return h.Valid() && h.state.feedback }
 
@@ -292,7 +286,7 @@ func adaptVerifierProjection(source service.VerifierProjection) (VerifierProject
 	for index, sourceHop := range sourceHops {
 		descriptor := sourceHop.Recipe
 		publicDescriptor := VerifierRecipeDescriptor{state: &verifierRecipeDescriptorState{affectedHeaders: slices.Clone(descriptor.AffectedHeaders), changeClasses: slices.Clone(descriptor.ChangeClasses), digest: descriptor.Digest, bodyMode: descriptor.BodyMode}}
-		hops[index] = VerifierHop{state: &verifierHopState{domain: sourceHop.SignerDomain, algorithms: slices.Clone(sourceHop.Algorithms), custody: sourceHop.CustodyTransition, recipeMode: sourceHop.RecipeMode, headerState: sourceHop.HistoryHeaderState, bodyState: sourceHop.HistoryBodyState, bodyAvailability: sourceHop.BodyAvailability, recipe: publicDescriptor, binding: sourceHop.Binding, sequence: sourceHop.Sequence, instance: sourceHop.MessageInstance, doNotModify: sourceHop.DoNotModify, doNotExplode: sourceHop.DoNotExplode, feedback: sourceHop.Feedback, feedHere: sourceHop.FeedHere, exploded: sourceHop.Exploded}}
+		hops[index] = VerifierHop{state: &verifierHopState{domain: sourceHop.SignerDomain, algorithms: slices.Clone(sourceHop.Algorithms), custody: sourceHop.CustodyTransition, recipeMode: sourceHop.RecipeMode, headerState: sourceHop.HistoryHeaderState, bodyState: sourceHop.HistoryBodyState, bodyAvailability: sourceHop.BodyAvailability, recipe: publicDescriptor, binding: sourceHop.Binding, sequence: sourceHop.Sequence, instance: sourceHop.MessageInstance, feedback: sourceHop.Feedback, feedHere: sourceHop.FeedHere, exploded: sourceHop.Exploded}}
 		if !hops[index].Valid() {
 			return VerifierProjection{}, false
 		}

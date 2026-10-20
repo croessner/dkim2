@@ -157,7 +157,7 @@
       "upstream_status": "not_upstream_issue",
       "behavior_owner": "lib/internal/routeplan",
       "conformance_cases": ["signing/restricted-release"],
-      "test_refs": ["lib/signing_restricted_release_test.go#TestPublicLocalOnlyReleaseIsExactAtomicAndNilOnDenial"],
+      "test_refs": ["lib/signing_restricted_release_test.go#TestPublicOutOfBandReleaseIsExactAtomicAndNilOnDenial"],
       "external_cases": [],
       "public_effect": "restricted-release-contract",
       "resolution_criterion": "local-security-contract-retained",

@@ -9,6 +9,10 @@
 // existing A-labels are validated by decoding. Output is a lowercase ASCII
 // A-label domain. A failure never returns partial output.
 //
+// Plain ASCII names without an "xn--" label take an LDH fast path that keeps
+// their previous handling; it does not apply the IDNA hyphen rule for
+// reserved "??--" labels, which is harmless for DNS lookup and comparison.
+//
 // Known limitation: golang.org/x/net/idna collapses the IDNA2008 NV8 and XV8
 // categories into "valid", so it is not a complete strict IDNA2008 validator.
 package domainname

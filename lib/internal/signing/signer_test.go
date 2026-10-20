@@ -227,7 +227,7 @@ func newSignerHarness(t *testing.T, algorithms ...Algorithm) signerHarness {
 	if err != nil {
 		t.Fatalf("NewHashPlanCoordinator() error = %v", err)
 	}
-	message, err := rawmsg.Parse([]byte("Subject: signer harness\r\n\r\nbody\r\n"))
+	message, err := rawmsg.Parse([]byte("From: sender@signer.example.test\r\nSubject: signer harness\r\n\r\nbody\r\n"))
 	if err != nil {
 		t.Fatalf("rawmsg.Parse() error = %v", err)
 	}

@@ -138,8 +138,6 @@ func TestPolicySnapshotMapsOneAuthenticCurrentDecision(t *testing.T) {
 	if mapped.Mode != generated.Strict ||
 		mapped.Verdict != generated.PolicyResultVerdictReject ||
 		mapped.PrimaryReason != generated.ProtocolPermerror ||
-		mapped.DoNotModify != generated.PolicyResultDoNotModifyNotEvaluated ||
-		mapped.DoNotExplode != generated.PolicyResultDoNotExplodeNotEvaluated ||
 		mapped.Feedback.HistoryCoverage != generated.PolicyFeedbackHistoryCoverageNotEvaluated ||
 		len(mapped.Findings) == 0 {
 		t.Fatal("mapped policy shape is incoherent")
@@ -163,8 +161,6 @@ func TestPolicySnapshotRejectsEveryForgedAggregateField(t *testing.T) {
 		{name: "mode", mutate: func(value *policySnapshot) { value.state.mode = dkim2.PolicyModePermissive }},
 		{name: "verdict", mutate: func(value *policySnapshot) { value.state.verdict = dkim2.PolicyVerdictAccept }},
 		{name: "primary reason", mutate: func(value *policySnapshot) { value.state.primaryReason = dkim2.PolicyReasonInternalContract }},
-		{name: "modify compliance", mutate: func(value *policySnapshot) { value.state.doNotModify = dkim2.PolicyComplianceHonored }},
-		{name: "explode compliance", mutate: func(value *policySnapshot) { value.state.doNotExplode = dkim2.PolicyComplianceViolated }},
 		{name: "feedback requested", mutate: func(value *policySnapshot) { value.state.feedbackRequested = !value.state.feedbackRequested }},
 		{name: "feedback relay required", mutate: func(value *policySnapshot) {
 			value.state.feedbackRelayRequired = !value.state.feedbackRelayRequired
@@ -514,12 +510,6 @@ func assertAuthenticMappedCell(t *testing.T, result dkim2.VerifyResult, testCase
 	wantScope, _ := mapVerificationScope(result.Scope())
 	wantContent, _ := mapHistoricalContent(result.HistoricalContent())
 	wantSignatures, _ := mapHistoricalSignatures(result.HistoricalSignatures())
-	wantModify := generated.PolicyResultDoNotModifyNotEvaluated
-	wantExplode := generated.PolicyResultDoNotExplodeNotEvaluated
-	if testCase.state == dkim2.ResultStatePASS {
-		wantModify = generated.PolicyResultDoNotModifyNotRequested
-		wantExplode = generated.PolicyResultDoNotExplodeNotRequested
-	}
 	if !valid || verification.State != wantState || verification.PrimaryReason != wantReason ||
 		verification.Scope != wantScope ||
 		verification.HistoricalContent != wantContent ||
@@ -530,9 +520,7 @@ func assertAuthenticMappedCell(t *testing.T, result dkim2.VerifyResult, testCase
 		len(verification.Checks) != result.CheckCount() ||
 		len(verification.SignatureSets) != result.SignatureSetCount() ||
 		policyResult.Mode != wantMode || policyResult.Verdict != wantVerdict ||
-		policyResult.PrimaryReason != wantPolicyReason ||
-		policyResult.DoNotModify != wantModify ||
-		policyResult.DoNotExplode != wantExplode {
+		policyResult.PrimaryReason != wantPolicyReason {
 		t.Fatal("authentic matrix cell mapped incorrect state or policy")
 	}
 }

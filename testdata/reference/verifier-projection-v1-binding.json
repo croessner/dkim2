@@ -9,8 +9,6 @@
     "signature_algorithms": ["ed25519-sha256", "rsa-sha256"],
     "signature_state": "pass",
     "custody_transition": "origin",
-    "do_not_modify": false,
-    "do_not_explode": true,
     "feedback": true,
     "feed_here": false,
     "exploded": false,
@@ -27,8 +25,8 @@
   },
   "expected": {
     "recipe_descriptor_digest_base64": "sciPR7Tn1MkjmO+sjFlTgwkNuFWcwbygwqnUTvzXqu4=",
-    "hop_content_digest_base64": "+nbPYta6mOU7GrL1Zi0b4Y3IyarOF1xoxoFI8l7SAjc=",
-    "projection_binding_base64": "D6aM5Ffe41p2FgsYmXAsoKJKK+FwLM1hE0cVzLXvI7w=",
-    "hop_binding_base64": "GNG4bZy96CTV6CaTiZOMtmaBH+p7MEyRKSflAIwhTKU="
+    "hop_content_digest_base64": "okySfZTmPTFr1l2nggd9U1qJzuHjjLuVJjxE0aqTs68=",
+    "projection_binding_base64": "W/qQtmGTRMOYQK+DPPgj1ogfm98huEHF2KGBmk153Z4=",
+    "hop_binding_base64": "pteJ94LzSXMj+k7FsrRVvPd6+k3uG/AGGl8UW2WwCSY="
   }
 }

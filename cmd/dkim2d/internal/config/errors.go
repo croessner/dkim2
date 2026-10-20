@@ -40,19 +40,36 @@ const (
 	CodeProtectedConflict Code = "config_protected_conflict"
 	// CodeProtectedTransferred identifies an invalid ownership transfer or owner use after transfer.
 	CodeProtectedTransferred Code = "config_protected_transferred"
+	// CodeRemovedField identifies a configuration key whose meaning a protocol
+	// revision removed; the failure carries fixed migration guidance.
+	CodeRemovedField Code = "config_removed_field"
 )
 
-// Error is one stable content-free configuration failure.
+// Error is one stable content-free configuration failure. migration is either
+// empty or one fixed schema-owned migration sentence; it never contains
+// configuration values.
 type Error struct {
-	code Code
+	code      Code
+	migration string
 }
 
-// Error returns only the stable failure code.
+// Error returns the stable failure code and any fixed migration guidance.
 func (e *Error) Error() string {
 	if e == nil {
 		return string(CodeInternal)
 	}
+	if e.migration != "" {
+		return string(e.code) + ": " + e.migration
+	}
 	return string(e.code)
+}
+
+// Migration returns the fixed schema-owned migration guidance, if any.
+func (e *Error) Migration() string {
+	if e == nil {
+		return ""
+	}
+	return e.migration
 }
 
 // Code returns the stable content-free failure class.
@@ -66,6 +83,21 @@ func (e *Error) Code() Code {
 // newError constructs one content-free configuration error.
 func newError(code Code) error {
 	return &Error{code: code}
+}
+
+// newRemovedFieldError constructs one removed-key failure carrying fixed
+// schema-owned migration guidance.
+func newRemovedFieldError(migration string) error {
+	return &Error{code: CodeRemovedField, migration: migration}
+}
+
+// MigrationOf extracts fixed migration guidance from a removed-key failure.
+func MigrationOf(err error) (string, bool) {
+	var typed *Error
+	if errors.As(err, &typed) && typed.Code() == CodeRemovedField && typed.Migration() != "" {
+		return typed.Migration(), true
+	}
+	return "", false
 }
 
 // CodeOf extracts a stable code without exposing an underlying value.

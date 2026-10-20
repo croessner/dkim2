@@ -4,6 +4,26 @@
 > below are preserved; current Draft-07 authority is the migration disposition
 > and current durable architecture.
 
+## Draft-07 Flag Removal
+
+Draft-07 Section 10.10 removed the `donotmodify` and `donotexplode` flags and
+states that an unrecognized flag has no effect. The current policy engine
+therefore:
+
+- parses both spellings as ordinary unknown flags (`Known() == false`) with no
+  policy meaning;
+- carries no `donotmodify` or `donotexplode` booleans in authenticated hop
+  facts, verifier projections, or policy projections;
+- has no modification or explosion compliance state, no `donotmodify_*` or
+  `donotexplode_*` policy reasons, and no compliance-driven reject in strict
+  mode; and
+- keeps authenticated `exploded` reports as informational
+  `exploded_reported` findings only.
+
+Sections below that describe `donotmodify` or `donotexplode` evaluation,
+compliance states, or violation matrices are the historical Draft-04 record
+and no longer describe implemented behavior.
+
 ## Status
 
 - Increment: local policy evaluation after current DKIM2 verification and DNS
@@ -30,8 +50,8 @@ turning deployment policy into cryptographic truth.
 The initial public verifier still has `scope=current` and reports historical
 content and historical signatures as `not_evaluated`. Consequently, this
 increment can evaluate the current four-state result and authenticated flags on
-the current passing signature, but it cannot claim that historical
-`donotmodify` or `donotexplode` requests were honored. The policy package
+the current passing signature. (The Draft-04 record also tracked historical
+`donotmodify` and `donotexplode` requests, which Draft-07 removed.) The policy package
 defines the authenticated historical-fact contract needed by recipe and full
 chain verification later; synthetic package tests exercise that contract now.
 
@@ -229,7 +249,8 @@ The implementation seam is frozen as follows:
 
 1. The core verifier builds `verify.TargetFlagCandidate` directly from the
    selected parsed target signature. It contains target sequence plus exactly
-   five booleans: donotmodify, donotexplode, feedback, feedhere, and exploded.
+   three booleans: feedback, feedhere, and exploded (Draft-04 also carried the
+   removed donotmodify and donotexplode booleans).
    Its fields are unexported and it exposes only value accessors. It contains no
    raw flag strings, unknown flags, or signature object.
 2. `verify.Result` gains an unexported candidate field. Production
@@ -330,8 +351,9 @@ public constructor.
 One hop fact contains only:
 
 - A positive `i=` sequence number.
-- Whether `donotmodify`, `donotexplode`, `feedback`, `feedhere`, and
-  `exploded` were present in that authenticated signature.
+- Whether `feedback`, `feedhere`, and `exploded` were present in that
+  authenticated signature. Draft-07 removed `donotmodify` and `donotexplode`,
+  which are no longer recorded.
 - A closed transition state. Sequence 1 uses `origin`; every later sequence
   describes the transition from the message state covered by the immediately
   preceding authenticated signature to the state covered by this signature:
@@ -404,9 +426,10 @@ explicit non-terminal disposition and is not `accept`, `PASS`, or temporary
 deferral. Adapters later translate dispositions into their own protocol
 operations; this increment does not produce SMTP text or codes.
 
-### Compliance States
+### Compliance States (Historical, Removed In Draft-07)
 
-Each `donotmodify` and `donotexplode` check has one closed state:
+The current engine has no compliance states. In the Draft-04 record, each
+`donotmodify` and `donotexplode` check had one closed state:
 
 - `not_requested`
 - `honored`
@@ -446,13 +469,6 @@ testing_mode_observe
 dns_testing_effective
 dns_testing_mixed
 dns_testing_ineligible
-donotmodify_honored
-donotmodify_violated
-donotmodify_indeterminate
-donotmodify_not_evaluated
-donotexplode_violated
-donotexplode_indeterminate
-donotexplode_not_evaluated
 feedback_requested
 feedback_relay_selected
 feedhere_inert
@@ -484,13 +500,6 @@ Empty or unknown reason/severity values are invalid. The exhaustive mapping is:
 | Coherent all-set DNS testing makes `PASS`, eligible `FAIL`, or eligible `PERMERROR` non-terminal | `dns_testing_effective` | `warning` | One DNS finding |
 | At least one set declares DNS testing but another relevant set does not | `dns_testing_mixed` | `warning` | One DNS finding |
 | Testing metadata exists on a top-level state/reason excluded by the eligibility matrix | `dns_testing_ineligible` | `warning` | One DNS finding |
-| Complete nonviolating modification evidence | `donotmodify_honored` | `info` | Internal future model; current verifier emits no such finding |
-| Proven later prohibited modification | `donotmodify_violated` | `permanent` | Internal future model; current verifier emits no such finding |
-| Indeterminate modification transition | `donotmodify_indeterminate` | `warning` | One modification finding at request sequence |
-| Modification request with incomplete/current-only history | `donotmodify_not_evaluated` | `warning` | One modification finding at request sequence |
-| Proven later exploded report | `donotexplode_violated` | `permanent` | One explosion-request finding at request sequence |
-| Complete history without positive single-recipient evidence | `donotexplode_indeterminate` | `warning` | One explosion-request finding at request sequence |
-| Explosion request with incomplete/current-only history | `donotexplode_not_evaluated` | `warning` | One explosion-request finding at request sequence |
 | Authenticated feedback request | `feedback_requested` | `info` | One feedback finding at request sequence |
 | Highest eligible feedback relay | `feedback_relay_selected` | `info` | One relay finding at selected sequence |
 | Authenticated feedhere with no earlier/same-hop feedback | `feedhere_inert` | `info` | One inert-relay finding at sequence |
@@ -500,9 +509,8 @@ No request, no DNS testing declaration, and no optional report emit no finding.
 Findings contain only reason, severity, optional sequence number, and bounded
 booleans. They contain no human-authored messages or protocol input.
 
-Finding order is exact: protocol, mode, DNS testing, `donotmodify`,
-`donotexplode`, feedback request, feedback relay/inert relay, then exploded
-report. Within one class, sequence is ascending; fixed enum order breaks a
+Finding order is exact: protocol, mode, DNS testing, feedback request,
+feedback relay/inert relay, exploded report, then the received-DSN row. Within one class, sequence is ascending; fixed enum order breaks a
 same-sequence tie. Errors return before findings and therefore are not part of
 this ordering.
 
@@ -512,20 +520,15 @@ Every successful evaluation has exactly one primary reason. The precedence is:
 
 1. `dns_testing_effective` when DNS testing makes `PASS`, eligible `FAIL`, or
    eligible `PERMERROR` non-terminal, regardless of local mode.
-2. In strict mode with protocol `PASS`, `donotmodify_violated` in the internal
-   future model, then currently reachable `donotexplode_violated`, when a
-   proven violation changes accept to reject. Both findings remain present
-   when both are violated after authenticated transition minting is
-   implemented.
-3. `testing_mode_observe` for every local-testing-mode decision not covered by
+2. `testing_mode_observe` for every local-testing-mode decision not covered by
    step 1.
-4. `permissive_override` when permissive mode accepts `FAIL` or `PERMERROR`.
-5. Otherwise the matching protocol reason: `protocol_pass`, `protocol_fail`,
+3. `permissive_override` when permissive mode accepts `FAIL` or `PERMERROR`.
+4. Otherwise the matching protocol reason: `protocol_pass`, `protocol_fail`,
    `protocol_permerror`, or `protocol_temperror`.
 
-`dns_testing_mixed`, `dns_testing_ineligible`, honored,
-indeterminate, not-evaluated, feedback, inert relay, and exploded-report
-reasons are never primary. Invalid input, limit, and internal contract return
+`dns_testing_mixed`, `dns_testing_ineligible`, feedback, inert relay, and
+exploded-report reasons are never primary. Received-DSN rows are applied last
+by their own row table. Invalid input, limit, and internal contract return
 no decision; their error reason is therefore not a primary decision reason.
 
 ## Policy Matrices
@@ -546,9 +549,11 @@ The output retains the original verification state in every cell. Permissive
 acceptance does not describe the message as cryptographically valid. Testing
 mode does not accept the message; it withholds a DKIM2 terminal decision.
 
-### Proven Flag-Violation Matrix
+### Proven Flag-Violation Matrix (Historical, Removed In Draft-07)
 
-This matrix is evaluated only over complete authenticated historical facts:
+Draft-07 removed `donotmodify` and `donotexplode`; no authenticated flag can
+change a verdict. The Draft-04 record evaluated this matrix only over complete
+authenticated historical facts:
 
 | Base state | Condition | Strict | Permissive | Testing |
 | --- | --- | --- | --- | --- |
@@ -613,9 +618,9 @@ When effective testing is true, all local modes use this matrix:
 
 For effective testing `PASS`, parsed current flags remain present only inside
 the sealed verifier projection for provenance auditing. Policy suppresses all
-hop-derived do-not compliance findings, feedback/feedhere intent, and exploded
-reports because a testing signer cannot receive operational authentication
-weight. Compliance and feedback history remain `not_evaluated`. Historical
+hop-derived feedback/feedhere intent and exploded reports because a testing
+signer cannot receive operational authentication weight. Feedback history
+remains `not_evaluated`. Historical
 projections cannot carry DNS signature facts under the current sealed contract,
 so no synthetic historical DNS exception is inferred.
 
@@ -632,18 +637,17 @@ Evaluation order is fixed:
 2. Copy the original verification state into the decision.
 3. Determine conservative effective DNS testing state from bounded key facts.
 4. Apply the DNS testing matrix when eligible; otherwise apply the base matrix.
-5. Evaluate authenticated historical flag compliance.
-6. In strict mode, proven flag violations override only a `PASS` base verdict
-   to `reject`. They never convert `TEMPERROR` to reject or tempfail a permanent
-   state.
-7. Derive feedback intent and informational exploded state.
-8. Produce deterministic findings and exactly one disposition action.
+5. Derive feedback intent and informational exploded state. Draft-07 removed
+   `donotmodify` and `donotexplode`, so no flag compliance is evaluated and no
+   flag overrides a verdict.
+6. Produce deterministic findings and exactly one disposition action.
 
 ## Flag Semantics
 
-### `donotmodify`
+### `donotmodify` (Historical, Removed In Draft-07)
 
-For each authenticated request at sequence `r`, inspect only authenticated
+Draft-07 removed this flag; received spellings are inert unknown flags. In the
+Draft-04 record, for each authenticated request at sequence `r`, inspect only authenticated
 transitions attributable to hops with sequence greater than `r`:
 
 - `body_changed`, `headers_removed_or_changed`, or
@@ -657,9 +661,10 @@ Multiple requests are retained only as bounded findings; one proven violation
 is enough for the aggregate state. The engine never inspects added header
 content to guess whether it changes display or reply behavior.
 
-### `donotexplode` And `exploded`
+### `donotexplode` (Historical, Removed In Draft-07) And `exploded`
 
-For each authenticated request at sequence `r`, a fact with `exploded=true`
+Draft-07 removed `donotexplode`; received spellings are inert unknown flags. In
+the Draft-04 record, for each authenticated request at sequence `r`, a fact with `exploded=true`
 violates the request only when its sequence is greater than `r`. An
 `exploded` report before or on the requesting hop does not. Incomplete history
 yields `not_evaluated`. Even complete signature history with no later report
@@ -790,8 +795,8 @@ Package documentation and synthetic examples must explain:
 - `continue` means no DKIM2 terminal decision, not accept;
 - current-only verification cannot establish historical flag compliance;
 - only authenticated facts influence policy;
-- `donotmodify`, `donotexplode`, `exploded`, `feedback`, and `feedhere`
-  semantics and limitations;
+- `exploded`, `feedback`, and `feedhere` semantics and limitations, and the
+  Draft-07 removal of `donotmodify` and `donotexplode`;
 - DNS `t=y` differs from local testing mode and cannot rewrite verification;
 - no feedback is sent and no route identity is exposed.
 
@@ -861,6 +866,8 @@ reason, compliance enums, booleans, and counts.
 
 ### Flag Evaluation
 
+- Historical Draft-04 plan; Draft-07 tests instead prove that `donotmodify`
+  and `donotexplode` parse as inert unknown flags and never affect policy.
 - `donotmodify` followed by body change, header removal/change, both, unchanged,
   header-addition-only, indeterminate, and incomplete history.
 - Request at several sequences, violation before request, violation on same
@@ -919,7 +926,8 @@ slices:
 1. Internal policy contracts, limits, config, errors, and closed base matrix.
 2. Verify-owned parsed target-flag candidate, authenticated hop-fact model,
    complete pre-retention key facts, and exhaustive service projection sealing.
-3. `donotmodify`, `donotexplode`, and `exploded` compliance evaluation.
+3. `donotmodify`, `donotexplode`, and `exploded` compliance evaluation
+   (Draft-07 removed the first two; only `exploded` reports remain).
 4. Feedback/feedhere intent plus exact DNS `t=y` eligibility/reason treatment.
 5. Action planner, public immutable facade projection, no-reparse bridge, and
    current-verifier integration.
@@ -1062,8 +1070,9 @@ the highest-risk work was the final literal DNS-04 `t=y` reconciliation.
   closed.
 - Only authenticated facts can affect policy, feedback, or exploded findings.
 - Current-only verification reports historical compliance as not evaluated.
-- Later-hop `donotmodify` and `donotexplode` semantics match draft-04 without
-  treating header additions or same-hop flags as automatic violations.
+- Later-hop `donotmodify` and `donotexplode` semantics matched draft-04 without
+  treating header additions or same-hop flags as automatic violations; Draft-07
+  removed both flags and the engine no longer evaluates them.
 - Feedback/feedhere output is bounded intent only and leaks no route identity.
 - DNS `t=y` is applied conservatively according to DNS-04 and never selects
   local testing mode or rewrites protocol state.
@@ -1085,7 +1094,8 @@ the highest-risk work was the final literal DNS-04 `t=y` reconciliation.
 - Settled: current-only history is not evaluated, not honored.
 - Settled: only authenticated flag facts influence policy.
 - Settled: same-hop request/report pairs are not later-hop violations.
-- Settled: header additions alone do not violate `donotmodify`.
+- Settled (historical): header additions alone did not violate `donotmodify`;
+  Draft-07 removed the flag.
 - Settled: `feedhere` without an earlier or same-hop feedback request is inert;
   the highest eligible authenticated feedhere sequence is the local
   nearest-relay interpretation, and later feedback is not retroactive.

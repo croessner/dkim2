@@ -2,16 +2,23 @@ package signature
 
 import "testing"
 
+// Draft-06 flag spellings that Draft-07 Section 10.10 removed; they must parse
+// as inert unknown flags and must never be generated.
+const (
+	removedFlagDoNotModify  = "donotmodify"
+	removedFlagDoNotExplode = "donotexplode"
+)
+
 // TestParseFlagsPreservesKnownAndUnknown verifies f= flag parser data.
 func TestParseFlagsPreservesKnownAndUnknown(t *testing.T) {
-	parsed, err := Parse(dkim2SignatureField(t, 0, signatureValueWith("f", "donotmodify, X-Unknown")))
+	parsed, err := Parse(dkim2SignatureField(t, 0, signatureValueWith("f", "feedback, X-Unknown")))
 	if err != nil {
 		t.Fatalf("Parse() error = %v", err)
 	}
 
 	flags := parsed.Flags()
-	if !flags.HasKnown(FlagDoNotModify) {
-		t.Fatalf("Flags().HasKnown(%q) = false", FlagDoNotModify)
+	if !flags.HasKnown(FlagFeedback) {
+		t.Fatalf("Flags().HasKnown(%q) = false", FlagFeedback)
 	}
 	values := flags.Values()
 	if len(values) != 2 {
@@ -19,6 +26,32 @@ func TestParseFlagsPreservesKnownAndUnknown(t *testing.T) {
 	}
 	if values[1].Name() != "X-Unknown" || values[1].Known() {
 		t.Fatalf("unknown flag = %#v", values[1])
+	}
+}
+
+// TestParseFlagsTreatsRemovedDraft06FlagsAsUnknown reproduces the Draft-07
+// Section 10.10 removal of donotmodify and donotexplode: both spellings parse
+// as inert unknown flags, may repeat without a duplicate-known error, and are
+// never reported as known.
+func TestParseFlagsTreatsRemovedDraft06FlagsAsUnknown(t *testing.T) {
+	parsed, err := Parse(dkim2SignatureField(t, 0, signatureValueWith("f", removedFlagDoNotModify+", "+removedFlagDoNotExplode+", "+removedFlagDoNotModify)))
+	if err != nil {
+		t.Fatalf("Parse() error = %v, want inert unknown flags", err)
+	}
+	flags := parsed.Flags()
+	for _, name := range []string{removedFlagDoNotModify, removedFlagDoNotExplode} {
+		if flags.HasKnown(name) {
+			t.Fatalf("Flags().HasKnown(%q) = true, want removed flag to be unknown", name)
+		}
+	}
+	values := flags.Values()
+	if len(values) != 3 {
+		t.Fatalf("Flags().Values() length = %d, want 3", len(values))
+	}
+	for index, want := range []string{removedFlagDoNotModify, removedFlagDoNotExplode, removedFlagDoNotModify} {
+		if values[index].Name() != want || values[index].Known() {
+			t.Fatalf("Flags().Values()[%d] = %#v, want unknown %q", index, values[index], want)
+		}
 	}
 }
 
@@ -61,7 +94,7 @@ func TestParseFlagsAreCaseSensitive(t *testing.T) {
 
 // TestParseRejectsMalformedFlags verifies f= flag token syntax.
 func TestParseRejectsMalformedFlags(t *testing.T) {
-	tests := []string{"", "donotmodify,", "bad flag", "bad:flag"}
+	tests := []string{"", "feedback,", "bad flag", "bad:flag"}
 	for _, value := range tests {
 		t.Run("flag", func(t *testing.T) {
 			_, err := Parse(dkim2SignatureField(t, 0, signatureValueWith("f", value)))

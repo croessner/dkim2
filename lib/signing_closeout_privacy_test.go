@@ -53,7 +53,7 @@ func TestSigningCloseoutPrivacyMatrix(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewSigningMetadata() error = %v", err)
 	}
-	raw := []byte("From: " + signingCloseoutSecretMarker + "@example.test\r\nSubject: marker\r\n\r\nbody\r\n")
+	raw := []byte("From: " + signingCloseoutSecretMarker + "@" + signingCloseoutSecretMarker + ".example\r\nSubject: marker\r\n\r\nbody\r\n")
 	reversePath := []byte("<sender@" + signingCloseoutSecretMarker + ".example>")
 	source, err := NewSigningSource(raw)
 	if err != nil {
@@ -109,12 +109,7 @@ func TestSigningCloseoutPrivacyMatrix(t *testing.T) {
 		assertSigningCloseoutValuePrivacy(t, value)
 	}
 
-	localScenario := prepareLocalReleaseScenario(t)
 	oobScenario := prepareNextDomainReleaseScenario(t)
-	assertSigningCloseoutRestrictedPrivacy(t, localScenario.restricted, [][]byte{
-		localScenario.raw, localScenario.reversePath, localScenario.routeScope,
-		localScenario.forwardPaths[0],
-	})
 	assertSigningCloseoutRestrictedPrivacy(t, oobScenario.releaseVariant, [][]byte{
 		oobScenario.raw, oobScenario.reversePath, oobScenario.routeScope,
 		oobScenario.receiver, oobScenario.forwardPaths[0],

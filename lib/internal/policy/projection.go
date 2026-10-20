@@ -15,6 +15,7 @@ const (
 	VerificationReasonMalformedProtocol       VerificationReason = "malformed_protocol"
 	VerificationReasonDuplicateHashAlgorithm  VerificationReason = "duplicate_hash_algorithm"
 	VerificationReasonInvalidRecipeJSON       VerificationReason = "invalid_recipe_json"
+	VerificationReasonFromNotAuthentic        VerificationReason = "from_not_authentic"
 	VerificationReasonDuplicateSelector       VerificationReason = "duplicate_selector"
 	VerificationReasonTooManySignatures       VerificationReason = "too_many_signatures"
 	VerificationReasonMissingProtocol         VerificationReason = "missing_protocol"
@@ -43,7 +44,7 @@ const (
 func (r VerificationReason) Known() bool {
 	switch r {
 	case VerificationReasonNone, VerificationReasonLimitExceeded, VerificationReasonMalformedMessage,
-		VerificationReasonMalformedProtocol, VerificationReasonDuplicateHashAlgorithm, VerificationReasonInvalidRecipeJSON,
+		VerificationReasonMalformedProtocol, VerificationReasonDuplicateHashAlgorithm, VerificationReasonInvalidRecipeJSON, VerificationReasonFromNotAuthentic,
 		VerificationReasonDuplicateSelector, VerificationReasonTooManySignatures, VerificationReasonMissingProtocol, VerificationReasonSequenceInvalid,
 		VerificationReasonUnsupportedAlgorithm, VerificationReasonHashMismatch, VerificationReasonSignatureMismatch,
 		VerificationReasonMissingKey, VerificationReasonInvalidKey, VerificationReasonAmbiguousKey,
@@ -244,18 +245,16 @@ func (f SignatureFact) StrictIdentityDeclared() bool { return f.strictIdentityDe
 
 // HopFact stores one authenticated flag and transition fact.
 type HopFact struct {
-	sequence     uint64
-	transition   TransitionState
-	doNotModify  bool
-	doNotExplode bool
-	feedback     bool
-	feedHere     bool
-	exploded     bool
+	sequence   uint64
+	transition TransitionState
+	feedback   bool
+	feedHere   bool
+	exploded   bool
 }
 
 // NewAuthenticatedHopFact constructs one authenticated fact for service-owned minting.
-func NewAuthenticatedHopFact(sequence uint64, transition TransitionState, doNotModify, doNotExplode, feedback, feedHere, exploded bool) (HopFact, error) {
-	fact := HopFact{sequence: sequence, transition: transition, doNotModify: doNotModify, doNotExplode: doNotExplode, feedback: feedback, feedHere: feedHere, exploded: exploded}
+func NewAuthenticatedHopFact(sequence uint64, transition TransitionState, feedback, feedHere, exploded bool) (HopFact, error) {
+	fact := HopFact{sequence: sequence, transition: transition, feedback: feedback, feedHere: feedHere, exploded: exploded}
 	if !fact.Valid() {
 		return HopFact{}, newError(ErrorInternalContract)
 	}
@@ -270,12 +269,6 @@ func (h HopFact) Sequence() uint64 { return h.sequence }
 
 // Transition returns the authenticated transition state.
 func (h HopFact) Transition() TransitionState { return h.transition }
-
-// DoNotModify reports the authenticated modification request.
-func (h HopFact) DoNotModify() bool { return h.doNotModify }
-
-// DoNotExplode reports the authenticated explosion request.
-func (h HopFact) DoNotExplode() bool { return h.doNotExplode }
 
 // Feedback reports the authenticated feedback request.
 func (h HopFact) Feedback() bool { return h.feedback }
@@ -337,7 +330,7 @@ func revisionFailureProtocolReasonAllowed(protocol ProtocolClass, reason Verific
 		switch reason {
 		case VerificationReasonUnsupportedAlgorithm, VerificationReasonProviderPermanent,
 			VerificationReasonProviderContract, VerificationReasonLimitExceeded,
-			VerificationReasonOutOfBandRequired, VerificationReasonInvalidRecipeJSON,
+			VerificationReasonOutOfBandRequired, VerificationReasonInvalidRecipeJSON, VerificationReasonFromNotAuthentic,
 			VerificationReasonMalformedProtocol, VerificationReasonInternalContract:
 			return true
 		default:
@@ -508,6 +501,7 @@ func (p Projection) verificationReasonFactsCoherent() bool {
 func (p Projection) eligiblePermanentPrimaryCoherent() bool {
 	if p.verificationReason == VerificationReasonMalformedMessage || p.verificationReason == VerificationReasonMalformedProtocol ||
 		p.verificationReason == VerificationReasonDuplicateHashAlgorithm || p.verificationReason == VerificationReasonInvalidRecipeJSON ||
+		p.verificationReason == VerificationReasonFromNotAuthentic ||
 		p.verificationReason == VerificationReasonDuplicateSelector || p.verificationReason == VerificationReasonTooManySignatures ||
 		p.verificationReason == VerificationReasonMissingProtocol || p.verificationReason == VerificationReasonSequenceInvalid {
 		return false
@@ -548,7 +542,7 @@ func (p Projection) eligiblePermanentPrimaryCoherent() bool {
 func permanentProjectionReasonRank(reason VerificationReason) int {
 	for index, candidate := range []VerificationReason{
 		VerificationReasonInternalContract, VerificationReasonLimitExceeded, VerificationReasonMalformedMessage,
-		VerificationReasonMalformedProtocol, VerificationReasonDuplicateHashAlgorithm, VerificationReasonInvalidRecipeJSON,
+		VerificationReasonMalformedProtocol, VerificationReasonDuplicateHashAlgorithm, VerificationReasonInvalidRecipeJSON, VerificationReasonFromNotAuthentic,
 		VerificationReasonDuplicateSelector, VerificationReasonTooManySignatures, VerificationReasonMissingProtocol, VerificationReasonSequenceInvalid,
 		VerificationReasonUnsupportedAlgorithm, VerificationReasonMissingKey, VerificationReasonRevokedKey,
 		VerificationReasonUnsupportedKeyType, VerificationReasonKeyAlgorithmMismatch, VerificationReasonInvalidKey,

@@ -68,7 +68,6 @@ type policySnapshotState struct {
 	mode                                     dkim2.PolicyMode
 	verdict                                  dkim2.PolicyVerdict
 	primaryReason                            dkim2.PolicyReason
-	doNotModify, doNotExplode                dkim2.PolicyCompliance
 	dnsTestingEffective                      bool
 	feedbackRequested, feedbackRelayRequired bool
 	feedbackRelaySequence                    uint64
@@ -368,7 +367,7 @@ func mapVerifierHop(hop dkim2.VerifierHop, index int) (generated.VerifierHop, er
 	return generated.VerifierHop{
 		Sequence: sequence, MessageInstance: messageInstance, HopBinding: slices.Clone(hopBinding[:]),
 		SignerDomain: hop.SignerDomain(), SignatureAlgorithms: mappedAlgorithms, SignatureState: generated.VerifierHopSignatureStatePass,
-		CustodyTransition: custody, DoNotModify: hop.DoNotModify(), DoNotExplode: hop.DoNotExplode(), Feedback: hop.Feedback(), FeedHere: hop.FeedHere(), Exploded: hop.Exploded(),
+		CustodyTransition: custody, Feedback: hop.Feedback(), FeedHere: hop.FeedHere(), Exploded: hop.Exploded(),
 		RecipeMode: recipeMode, RecipeHasHeaderChanges: descriptor.HasHeaderChanges(), RecipeBodyMode: bodyMode, RecipeDigest: slices.Clone(recipeDigest[:]),
 		ChangeClasses: mappedClasses, AffectedHeaders: mappedHeaders, HistoryHeaderState: headerState, HistoryBodyState: bodyState, BodyAvailability: bodyAvailability,
 		ChangeCount: descriptor.ChangeCount(), AffectedHeaderCount: descriptor.AffectedHeaderCount(),
@@ -544,7 +543,6 @@ func capturePolicy(decision dkim2.PolicyDecision) policySnapshot {
 	return policySnapshot{state: &policySnapshotState{
 		source: decision, valid: decision.Valid(), verificationState: decision.VerificationState(),
 		mode: decision.Mode(), verdict: decision.Verdict(), primaryReason: decision.PrimaryReason(),
-		doNotModify: decision.DoNotModifyCompliance(), doNotExplode: decision.DoNotExplodeCompliance(),
 		dnsTestingEffective: decision.DNSTestingEffective(),
 		feedbackRequested:   feedback.Requested(), feedbackRelayRequired: feedback.RelayRequired(),
 		feedbackRelaySequence: feedback.RelaySequence(), feedbackHistory: feedback.HistoryCoverage(),
@@ -660,11 +658,9 @@ func mapPolicySnapshot(input policySnapshot, verificationState dkim2.ResultState
 	mode, modeOK := mapPolicyMode(view.mode)
 	verdict, verdictOK := mapPolicyVerdict(view.verdict)
 	primaryReason, reasonOK := mapPolicyReason(view.primaryReason)
-	modify, modifyOK := mapDoNotModify(view.doNotModify)
-	explode, explodeOK := mapDoNotExplode(view.doNotExplode)
 	history, historyOK := mapPolicyHistoryCoverage(view.feedbackHistory)
 	if !view.valid || view.verificationState != verificationState ||
-		!modeOK || !verdictOK || !reasonOK || !modifyOK || !explodeOK || !historyOK ||
+		!modeOK || !verdictOK || !reasonOK || !historyOK ||
 		len(view.findings) == 0 || len(view.findings) > dkim2.HardMaxPolicyFindings ||
 		!view.actionValid || dkim2.PolicyVerdict(view.actionKind) != view.verdict ||
 		!feedbackCoherent(input) || !policySnapshotMatchesSource(input) {
@@ -694,7 +690,7 @@ func mapPolicySnapshot(input policySnapshot, verificationState dkim2.ResultState
 	}
 	return generated.PolicyResult{
 		Mode: mode, Verdict: verdict, PrimaryReason: primaryReason,
-		DoNotModify: modify, DoNotExplode: explode, DnsTestingEffective: view.dnsTestingEffective,
+		DnsTestingEffective: view.dnsTestingEffective,
 		Feedback: generated.PolicyFeedback{
 			Requested: view.feedbackRequested, RelayRequired: view.feedbackRelayRequired,
 			RelaySequence: relaySequence, HistoryCoverage: history,
@@ -716,8 +712,6 @@ func policySnapshotMatchesSource(input policySnapshot) bool {
 		input.state.mode == want.mode &&
 		input.state.verdict == want.verdict &&
 		input.state.primaryReason == want.primaryReason &&
-		input.state.doNotModify == want.doNotModify &&
-		input.state.doNotExplode == want.doNotExplode &&
 		input.state.dnsTestingEffective == want.dnsTestingEffective &&
 		input.state.feedbackRequested == want.feedbackRequested &&
 		input.state.feedbackRelayRequired == want.feedbackRelayRequired &&
@@ -768,6 +762,8 @@ func mapVerificationReason(value dkim2.ReasonCode) (generated.VerificationReason
 		return generated.VerificationReasonDuplicateHashAlgorithm, true
 	case dkim2.ReasonInvalidRecipeJSON:
 		return generated.VerificationReasonInvalidRecipeJson, true
+	case dkim2.ReasonFromNotAuthentic:
+		return generated.VerificationReasonFromNotAuthentic, true
 	case dkim2.ReasonDuplicateSelector:
 		return generated.VerificationReasonDuplicateSelector, true
 	case dkim2.ReasonTooManySignatures:
@@ -1015,11 +1011,6 @@ var policyReasonWire = map[dkim2.PolicyReason]generated.PolicyReason{
 	dkim2.PolicyReasonDNSTestingEffective:           generated.DnsTestingEffective,
 	dkim2.PolicyReasonDNSTestingMixed:               generated.DnsTestingMixed,
 	dkim2.PolicyReasonDNSTestingIneligible:          generated.DnsTestingIneligible,
-	dkim2.PolicyReasonDoNotModifyIndeterminate:      generated.DonotmodifyIndeterminate,
-	dkim2.PolicyReasonDoNotModifyNotEvaluated:       generated.DonotmodifyNotEvaluated,
-	dkim2.PolicyReasonDoNotExplodeViolated:          generated.DonotexplodeViolated,
-	dkim2.PolicyReasonDoNotExplodeIndeterminate:     generated.DonotexplodeIndeterminate,
-	dkim2.PolicyReasonDoNotExplodeNotEvaluated:      generated.DonotexplodeNotEvaluated,
 	dkim2.PolicyReasonFeedbackRequested:             generated.FeedbackRequested,
 	dkim2.PolicyReasonFeedbackRelaySelected:         generated.FeedbackRelaySelected,
 	dkim2.PolicyReasonFeedHereInert:                 generated.FeedhereInert,
@@ -1040,36 +1031,6 @@ var policyReasonWire = map[dkim2.PolicyReason]generated.PolicyReason{
 func mapPolicyReason(value dkim2.PolicyReason) (generated.PolicyReason, bool) {
 	mapped, ok := policyReasonWire[value]
 	return mapped, ok
-}
-
-// mapDoNotModify maps every reachable modification-compliance state.
-func mapDoNotModify(value dkim2.PolicyCompliance) (generated.PolicyResultDoNotModify, bool) {
-	switch value {
-	case dkim2.PolicyComplianceNotRequested:
-		return generated.PolicyResultDoNotModifyNotRequested, true
-	case dkim2.PolicyComplianceIndeterminate:
-		return generated.PolicyResultDoNotModifyIndeterminate, true
-	case dkim2.PolicyComplianceNotEvaluated:
-		return generated.PolicyResultDoNotModifyNotEvaluated, true
-	default:
-		return "", false
-	}
-}
-
-// mapDoNotExplode maps every reachable explosion-compliance state.
-func mapDoNotExplode(value dkim2.PolicyCompliance) (generated.PolicyResultDoNotExplode, bool) {
-	switch value {
-	case dkim2.PolicyComplianceNotRequested:
-		return generated.PolicyResultDoNotExplodeNotRequested, true
-	case dkim2.PolicyComplianceViolated:
-		return generated.PolicyResultDoNotExplodeViolated, true
-	case dkim2.PolicyComplianceIndeterminate:
-		return generated.PolicyResultDoNotExplodeIndeterminate, true
-	case dkim2.PolicyComplianceNotEvaluated:
-		return generated.PolicyResultDoNotExplodeNotEvaluated, true
-	default:
-		return "", false
-	}
 }
 
 // mapPolicyHistoryCoverage maps explicit authenticated feedback-history coverage.

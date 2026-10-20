@@ -557,8 +557,7 @@ func verificationCoverageCoherent(state generated.VerificationState, scope gener
 // validPolicyResponse validates one complete generated local-policy projection.
 func validPolicyResponse(response generated.PolicyResult) bool {
 	if !response.Mode.Valid() || !response.Verdict.Valid() ||
-		!response.PrimaryReason.Valid() || !response.DoNotModify.Valid() ||
-		!response.DoNotExplode.Valid() || !response.Feedback.HistoryCoverage.Valid() ||
+		!response.PrimaryReason.Valid() || !response.Feedback.HistoryCoverage.Valid() ||
 		len(response.Findings) == 0 || len(response.Findings) > dkim2.HardMaxPolicyFindings ||
 		(response.Feedback.RelaySequence != nil) != response.Feedback.RelayRequired {
 		return false

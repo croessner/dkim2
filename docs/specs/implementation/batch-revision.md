@@ -277,9 +277,10 @@ The original is verified with the actual incoming envelope via
 `Signer.VerifyForRevision`. Its sealed capability binds all route entries.
 One `PlanRouteFanout` covers both local and external copies. The reference
 library derives multiplicity and `exploded`, creates a private single-recipient
-ticket for each external copy and computes actual modification facts. An
-authenticated `donotmodify` or `donotexplode` restriction that would limit an
-external release to local control is rejected. Local copy descriptors do not
+ticket for each external copy and computes actual modification facts. Draft-07
+Section 10.10 removed `donotmodify` and `donotexplode`; inherited spellings
+are inert unknown flags and never restrict an external release. Any result
+restricted to local control is still rejected. Local copy descriptors do not
 create a global local-delivery veto.
 
 Temporary DNS/key/provider failures produce `temperror`/`tempfail`. Invalid

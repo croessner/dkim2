@@ -74,7 +74,7 @@ func exportBatchFixture(t *testing.T, directory string) batchViaFixture {
 	if err := os.Mkdir(directory, 0700); err != nil {
 		t.Fatal("fixture directory must not already exist")
 	}
-	f := newBatchViaFixtureAt(t, signingFlagPolicy{}, time.Now().UTC())
+	f := newBatchViaFixtureAt(t, time.Now().UTC())
 	keys := append([]propagationtest.SigningKey(nil), f.origin.store.(*batchTestAuthority).keys...)
 	keys = append(keys, f.forwarder.store.(*batchTestAuthority).keys...)
 	keys = append(keys, f.remote.store.(*batchTestAuthority).keys...)

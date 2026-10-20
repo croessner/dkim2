@@ -315,8 +315,6 @@
           "mode": "strict",
           "verdict": "accept",
           "primary_reason": "received_dsn_linked",
-          "do_not_modify": "not_requested",
-          "do_not_explode": "not_requested",
           "dns_testing_effective": false,
           "feedback": {
             "requested": false,

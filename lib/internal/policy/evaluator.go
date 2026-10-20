@@ -31,7 +31,7 @@ func (e Evaluator) evaluateBase(protocol ProtocolClass) (Decision, error) {
 		}
 		findings = append(findings, finding)
 	}
-	return newDecision(protocol, e.config.Mode, verdict, primary, ComplianceNotEvaluated, ComplianceNotEvaluated, FeedbackIntent{history: HistoryNotEvaluated}, false, findings)
+	return newDecision(protocol, e.config.Mode, verdict, primary, FeedbackIntent{history: HistoryNotEvaluated}, false, findings)
 }
 
 // EvaluateProjection applies policy to one service-sealed internal projection.
@@ -65,7 +65,7 @@ func (e Evaluator) EvaluateProjection(projection Projection) (Decision, error) {
 		hops = nil
 	}
 	feedback := summarizeFeedback(hops, projection.HistoryCoverage())
-	derivedCount := countComplianceFindings(hops) + feedback.feedbackFindingCount()
+	derivedCount := countReportFindings(hops) + feedback.feedbackFindingCount()
 	if dns.reason != "" {
 		derivedCount++
 	}
@@ -76,12 +76,9 @@ func (e Evaluator) EvaluateProjection(projection Projection) (Decision, error) {
 	if derivedCount > e.config.Limits.MaxFindings || len(baseReasons) > e.config.Limits.MaxFindings-derivedCount {
 		return Decision{}, newLimitError(limitNameFindings, e.config.Limits.MaxFindings, len(baseReasons)+derivedCount)
 	}
-	compliance := complianceEvaluation{modifyState: initialComplianceState(projection), explodeState: initialComplianceState(projection)}
-	if !suppressAuthenticatedFlags {
-		compliance, err = evaluateCompliance(projection)
-		if err != nil {
-			return Decision{}, err
-		}
+	reports, err := explodedReportFindings(hops)
+	if err != nil {
+		return Decision{}, err
 	}
 	findings := make([]Finding, 0, len(baseReasons)+derivedCount)
 	for _, reason := range baseReasons {
@@ -98,29 +95,20 @@ func (e Evaluator) EvaluateProjection(projection Projection) (Decision, error) {
 		}
 		findings = append(findings, finding)
 	}
-	findings = append(findings, compliance.modify...)
-	findings = append(findings, compliance.explode...)
 	feedbackRequests, feedbackRelays, err := feedbackFindings(hops, feedback)
 	if err != nil {
 		return Decision{}, err
 	}
 	findings = append(findings, feedbackRequests...)
 	findings = append(findings, feedbackRelays...)
-	findings = append(findings, compliance.reports...)
-	if !dns.effective && e.config.Mode == ModeStrict && projection.Protocol() == ProtocolPASS {
-		if compliance.modifyState == ComplianceViolated {
-			verdict, primary = VerdictReject, ReasonDoNotModifyViolated
-		} else if compliance.explodeState == ComplianceViolated {
-			verdict, primary = VerdictReject, ReasonDoNotExplodeViolated
-		}
-	}
+	findings = append(findings, reports...)
 	if hasReceivedDSN {
 		findings, verdict, primary, err = e.applyReceivedDSNRow(projection.Protocol(), receivedDSN, findings, verdict, primary)
 		if err != nil {
 			return Decision{}, err
 		}
 	}
-	return newDecision(projection.Protocol(), e.config.Mode, verdict, primary, compliance.modifyState, compliance.explodeState, feedback.intent, dns.effective, findings)
+	return newDecision(projection.Protocol(), e.config.Mode, verdict, primary, feedback.intent, dns.effective, findings)
 }
 
 // applyReceivedDSNRow evaluates the received-DSN row table last: the selected
@@ -139,7 +127,7 @@ func (e Evaluator) applyReceivedDSNRow(protocol ProtocolClass, facts ReceivedDSN
 	return findings, verdict, primary, nil
 }
 
-// EvaluateAuthenticationProjection applies non-overridable replay failure after deriving authenticated compliance facts.
+// EvaluateAuthenticationProjection applies non-overridable replay failure after deriving authenticated policy facts.
 func (e Evaluator) EvaluateAuthenticationProjection(projection Projection, protocol ProtocolClass) (Decision, error) {
 	decision, err := e.EvaluateProjection(projection)
 	if err != nil {

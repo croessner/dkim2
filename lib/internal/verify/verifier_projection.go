@@ -403,7 +403,7 @@ func algorithmsAsStrings(algorithms []Algorithm) []string {
 
 // appendVerifierFlags appends authenticated booleans in fixed schema order.
 func appendVerifierFlags(output []byte, flags RevisionFlagFacts) []byte {
-	for _, value := range []bool{flags.doNotModify, flags.doNotExplode, flags.feedback, flags.feedHere, flags.exploded} {
+	for _, value := range []bool{flags.feedback, flags.feedHere, flags.exploded} {
 		if value {
 			output = append(output, 1)
 		} else {

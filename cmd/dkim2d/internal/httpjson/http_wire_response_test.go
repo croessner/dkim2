@@ -40,8 +40,7 @@ func TestProcessWireResponseEmitsRequiredEmptyVerifierCollections(t *testing.T) 
 	}
 
 	response := validWireProcessResponse()
-	if response.Policy.DoNotModify != authenticPolicy.DoNotModify || response.Policy.DoNotExplode != authenticPolicy.DoNotExplode ||
-		response.Policy.Feedback.HistoryCoverage != authenticPolicy.Feedback.HistoryCoverage {
+	if response.Policy.Feedback.HistoryCoverage != authenticPolicy.Feedback.HistoryCoverage {
 		t.Fatalf("wire fixture policy differs from authentic origin: fixture=%#v authentic=%#v", response.Policy, authenticPolicy)
 	}
 	response.VerifierProjection = projection
@@ -323,8 +322,6 @@ func validWireProcessResponse() generated.ProcessResponse {
 			}},
 		},
 		Policy: generated.PolicyResult{
-			DoNotExplode: generated.PolicyResultDoNotExplodeNotRequested,
-			DoNotModify:  generated.PolicyResultDoNotModifyNotRequested,
 			Feedback: generated.PolicyFeedback{
 				HistoryCoverage: generated.PolicyFeedbackHistoryCoverageComplete,
 			},

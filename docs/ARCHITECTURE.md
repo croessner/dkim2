@@ -801,7 +801,9 @@ Owns local policy decisions over verified protocol facts.
 Responsibilities:
 
 - Map sealed protocol results to accept/reject/tempfail/continue decisions.
-- Evaluate `donotmodify`, `donotexplode`, and `feedback` flags.
+- Evaluate `feedback`, `feedhere`, and `exploded` flags. Draft-07 Section
+  10.10 removed `donotmodify` and `donotexplode`; received spellings are inert
+  unknown flags with no policy effect.
 - Allow deployments to choose strict, permissive, and testing modes.
 - Produce exactly one bounded disposition action for each successful decision.
 - Keep policy separate from cryptographic correctness.
@@ -2114,7 +2116,8 @@ Inbound verification should follow the draft order closely:
 11. Apply recipes where requested to reconstruct previous instances.
 12. Validate previous instance hashes.
 13. Check chain-of-custody relationships.
-14. Evaluate flags such as `donotmodify` and `donotexplode`.
+14. Evaluate flags such as `feedback`, `feedhere`, and `exploded`; the removed
+    Draft-06 `donotmodify` and `donotexplode` spellings are inert.
 15. Produce protocol findings.
 16. Apply local policy.
 17. Produce an action plan.

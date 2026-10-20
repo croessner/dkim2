@@ -259,7 +259,6 @@ func verificationCoverageCoherent(state generated.VerificationState, scope gener
 // validPolicy validates every bounded generated policy fact.
 func validPolicy(value generated.PolicyResult) bool {
 	if !value.Mode.Valid() || !value.Verdict.Valid() || !value.PrimaryReason.Valid() ||
-		!value.DoNotModify.Valid() || !value.DoNotExplode.Valid() ||
 		!value.Feedback.HistoryCoverage.Valid() || len(value.Findings) < 1 ||
 		len(value.Findings) > maxResultFacts ||
 		value.Feedback.RelaySequence != nil && !canonicalUint64(*value.Feedback.RelaySequence) {
@@ -309,8 +308,8 @@ func requiredProcessMembers(body []byte) bool {
 		}
 	}
 	policy, ok := requiredObject(
-		document["policy"], "dns_testing_effective", "do_not_explode", "do_not_modify",
-		"feedback", "findings", "mode", "primary_reason", "verdict",
+		document["policy"], "dns_testing_effective", "feedback", "findings", "mode",
+		"primary_reason", "verdict",
 	)
 	if !ok {
 		return false

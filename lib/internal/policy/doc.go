@@ -4,11 +4,11 @@
 //
 // Strict policy is the default. Permissive and testing modes are explicit, and
 // continue is a non-terminal disposition rather than accept or PASS. Current
-// verifier projections authenticate only the current passing hop, so historical
-// donotmodify and donotexplode compliance remains not_evaluated. Synthetic
-// complete-history projections enforce strictly later-hop ordering: header
-// additions alone do not violate donotmodify, and donotexplode requires a later
-// authenticated exploded report.
+// verifier projections authenticate only the current passing hop. Draft-07
+// Section 10.10 removed the donotmodify and donotexplode flags; received
+// spellings are inert unknown flags, so authenticated hop flags never produce
+// compliance findings or change the verdict. Authenticated exploded markers are
+// reported as informational findings only.
 //
 // Feedback is bounded intent only. Feedhere requires an authenticated feedback
 // request at the same or a lower sequence and exposes no route. DNS t=y is

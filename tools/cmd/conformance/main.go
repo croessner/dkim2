@@ -364,7 +364,7 @@ var portableDefinitions = []runnerDefinition{
 			{key: "signing\x00null-sender-delivery-status-excluded", testName: "TestHeaderFromNullSenderSigningRefusesDeliveryStatusAndSignedMail", artifacts: []string{"signing-null-sender-source", signingTestKeyArtifact}},
 			{key: "signing\x00null-sender-header-from-facade", testName: "TestHeaderFromNullSenderSigningVerifiesWithNullMailFrom", artifacts: []string{"signing-null-sender-source", signingTestKeyArtifact}},
 			{key: "signing\x00origin-facade", testName: "TestPublicOriginatorSigningAlgorithmsAndImmutableBytes", artifacts: []string{signingFacadeArtifact, signingProvenanceArtifact, signingPublicArtifact, signingTestKeyArtifact}},
-			{key: "signing\x00restricted-release", testName: "TestPublicLocalOnlyReleaseIsExactAtomicAndNilOnDenial", artifacts: []string{signingFacadeArtifact, signingProvenanceArtifact, signingPublicArtifact, "signing-release-source", signingTestKeyArtifact}},
+			{key: "signing\x00restricted-release", testName: "TestPublicOutOfBandReleaseIsExactAtomicAndNilOnDenial", artifacts: []string{signingFacadeArtifact, signingProvenanceArtifact, signingPublicArtifact, "signing-release-source", signingTestKeyArtifact}},
 			{key: "signing\x00revision-facade", testName: "TestPublicExistingSigningDerivesForwarderAndReviser", artifacts: []string{signingFacadeArtifact, signingProvenanceArtifact, signingPublicArtifact, signingTestKeyArtifact}},
 			{key: "signing\x00limits-negative", testName: "TestPublicSigningMessageLimitExactAndOneOver", artifacts: []string{"signing-limits-source"}},
 			{key: "verification\x00received-dsn-evaluation", testName: "TestReceivedDSNDraft07GoldenVectors", artifacts: []string{"verification-received-dsn"}},
@@ -580,6 +580,7 @@ var portableDefinitions = []runnerDefinition{
 		name: "signing-golden-tests", module: libraryModule, pkg: "./internal/signing",
 		timeout: 3 * time.Minute,
 		cases: []runnerCase{
+			{key: "signing\x00draft07-originator-authentic-from", testName: "TestOriginatorSigningRequiresAuthenticFrom", artifacts: []string{"signing-message-source"}},
 			{key: "signing\x00local-sha256-output-policy", testName: "TestSignerMayEmitSHA256FromSHA512OnlyHistory", artifacts: []string{"signing-revision-source"}},
 			{key: "signing\x00public-facade", testName: "TestDraft07SigningGoldenVectors", artifacts: []string{signingProvenanceArtifact, signingPublicArtifact}},
 			{key: "signing\x00unchanged-no-redundant-instance", testName: "TestHashPlanOriginatorAndExistingRoles", artifacts: []string{"signing-plan-source"}},
@@ -609,6 +610,7 @@ var portableDefinitions = []runnerDefinition{
 		name: "verification-draft07-tests", module: libraryModule, pkg: "./internal/verify",
 		timeout: 3 * time.Minute,
 		cases: []runnerCase{
+			{key: "verification\x00draft07-from-authenticity", testName: "TestFromAuthenticityFollowsDraft07Section11", artifacts: []string{"verification-from-authenticity-source"}},
 			{key: "verification\x00draft07-dual-mismatch", testName: "TestVerifierRejectsOneMismatchingSupportedTuple", artifacts: []string{verificationDraft07Artifact}},
 			{key: "verification\x00draft07-recipe-less-unchanged", testName: "TestHistoryAcceptsRecipeLessUnchangedTransitionMatrix", artifacts: []string{verificationDraft07Artifact}},
 			{key: "verification\x00draft07-recipe-less-unknown-only", testName: "TestHistoryAcceptsRecipeLessUnchangedTransitionMatrix", artifacts: []string{verificationDraft07Artifact}},

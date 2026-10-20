@@ -25,16 +25,8 @@ type SigningService struct {
 	dsnObserver dsnEvidenceObserver
 }
 
-type signingFlagPolicy struct {
-	doNotModify  bool
-	doNotExplode bool
-}
-
 type signingPolicies struct {
-	interopInfo     bool
-	originator      signingFlagPolicy
-	ordinaryTransit signingFlagPolicy
-	deliveryStatus  signingFlagPolicy
+	interopInfo bool
 	// continueUnsignedOriginal lets a delivery-status report whose returned
 	// original carries no DKIM2-Signature header field leave unsigned and
 	// unchanged. The zero value is the fail-closed reject default.
@@ -58,28 +50,18 @@ func IsNullSenderRefused(err error) bool {
 	return errors.As(err, &refused)
 }
 
-// metadata constructs validated library-owned signing metadata in canonical flag order.
-func (p signingFlagPolicy) metadata() (dkim2.SigningMetadata, error) {
-	flags := make([]dkim2.SigningFlag, 0, 2)
-	if p.doNotModify {
-		flags = append(flags, dkim2.SigningFlagDoNotModify)
-	}
-	if p.doNotExplode {
-		flags = append(flags, dkim2.SigningFlagDoNotExplode)
-	}
-	return dkim2.NewSigningMetadata(nil, false, flags)
+// daemonSigningMetadata constructs the validated library-owned metadata every
+// daemon signing use requests: no nonce and no caller-requested flags. Draft-07
+// Section 10.10 removed the formerly configurable donotmodify and donotexplode
+// requests; derived flags such as exploded and feedhere remain library-owned.
+func daemonSigningMetadata() (dkim2.SigningMetadata, error) {
+	return dkim2.NewSigningMetadata(nil, false, nil)
 }
 
 // signingPoliciesFromConfig freezes validated configuration into application policy.
 func signingPoliciesFromConfig(policy config.SigningPoliciesConfig) signingPolicies {
-	convert := func(source config.SigningFlagPolicyConfig) signingFlagPolicy {
-		return signingFlagPolicy{doNotModify: source.DoNotModify(), doNotExplode: source.DoNotExplode()}
-	}
 	return signingPolicies{
-		interopInfo:     policy.InteropInfoEnabled(),
-		originator:      convert(policy.Originator()),
-		ordinaryTransit: convert(policy.OrdinaryTransit()),
-		deliveryStatus:  convert(policy.DeliveryStatus()),
+		interopInfo: policy.InteropInfoEnabled(),
 		continueUnsignedOriginal: policy.DeliveryStatusUnsignedOriginal() ==
 			config.UnsignedOriginalContinue,
 		admitHeaderFromNullSender: policy.OriginatorNullSender() ==
@@ -375,11 +357,7 @@ func (s *SigningService) execute(
 	if err := ctx.Err(); err != nil {
 		return operationExecution{}, err
 	}
-	policy := s.policies.originator
-	if operation == OperationRevise {
-		policy = s.policies.ordinaryTransit
-	}
-	metadata, err := policy.metadata()
+	metadata, err := daemonSigningMetadata()
 	if err != nil {
 		return operationExecution{}, &DomainError{}
 	}

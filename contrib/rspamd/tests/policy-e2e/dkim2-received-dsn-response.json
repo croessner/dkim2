@@ -28,8 +28,6 @@
     "mode": "strict",
     "verdict": "continue",
     "primary_reason": "protocol_pass",
-    "do_not_modify": "not_requested",
-    "do_not_explode": "indeterminate",
     "dns_testing_effective": false,
     "feedback": {
       "requested": false,
@@ -73,8 +71,6 @@
         ],
         "signature_state": "pass",
         "custody_transition": "origin",
-        "do_not_modify": false,
-        "do_not_explode": true,
         "feedback": true,
         "feed_here": false,
         "exploded": false,

@@ -1897,7 +1897,6 @@ func composePropagation(
 		PublicKeys:     operation.publicKeys,
 		Authority:      operation.store,
 		Authorities:    authorities,
-		Policy:         snapshot.Signing().Policies().DeliveryStatus(),
 		Replay:         gate,
 		TokenRetention: propagationTokenRetention(snapshot.PropagationPendingLease()),
 		Clock:          time.Now,

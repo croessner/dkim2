@@ -212,12 +212,10 @@ func (v Verifier) attachAuthenticatedHistory(ctx context.Context, current Result
 func newTargetFlagCandidate(parsed signature.Signature) TargetFlagCandidate {
 	flags := parsed.Flags()
 	return TargetFlagCandidate{
-		sequence:     parsed.Sequence(),
-		doNotModify:  flags.HasKnown(signature.FlagDoNotModify),
-		doNotExplode: flags.HasKnown(signature.FlagDoNotExplode),
-		feedback:     flags.HasKnown(signature.FlagFeedback),
-		feedHere:     flags.HasKnown(signature.FlagFeedHere),
-		exploded:     flags.HasKnown(signature.FlagExploded),
+		sequence: parsed.Sequence(),
+		feedback: flags.HasKnown(signature.FlagFeedback),
+		feedHere: flags.HasKnown(signature.FlagFeedHere),
+		exploded: flags.HasKnown(signature.FlagExploded),
 	}
 }
 

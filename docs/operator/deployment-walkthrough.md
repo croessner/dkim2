@@ -297,9 +297,9 @@ sequenceDiagram
    fallback.
 6. The daemon computes the body and header hashes, adds `Message-Instance:
    m=1` with no Recipe, builds `DKIM2-Signature: i=1` with the observed
-   `mf=` and `rt=`, the daemon-owned `donotmodify` and `donotexplode` flags
-   from its policy, signs through an opaque key handle, and verifies its own
-   output before answering. The private key never leaves the daemon.
+   `mf=` and `rt=` and no caller-requested flags (Draft-07 removed the
+   former `donotmodify` and `donotexplode` flags), signs through an opaque
+   key handle, and verifies its own output before answering. The private key never leaves the daemon.
 7. The Milter applies the ordered action plan, `Message-Instance` then
    `DKIM2-Signature`, and Postfix queues the message with the envelope the
    Milter observed, so the onward SMTP transaction carries the signed `mf=`

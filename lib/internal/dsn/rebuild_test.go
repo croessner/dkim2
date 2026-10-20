@@ -207,7 +207,7 @@ func TestRebuildRunOfOneSignatureRestoresPreviousState(t *testing.T) {
 	parsed, status, embedded := mustParseRebuilt(t, report.Bytes())
 	headers := parsed.RawMessage().Headers()
 	for name, want := range map[string]string{
-		rebuildFromName:      " Mail Delivery System <MAILER-DAEMON@" + rebuildReportingMTA + ">",
+		rebuildFromName:      " Mail Delivery System <MAILER-DAEMON@" + receivedLocalDomain + ">",
 		"to":                 " " + rebuildPreviousSender,
 		rebuildSubjectName:   " " + propagationSubject,
 		"date":               " Tue, 14 Nov 2023 23:13:20 +0000",
@@ -825,7 +825,7 @@ func TestRebuildRefusesSourceRoutedPreviousHopPaths(t *testing.T) {
 		})
 	}
 	input := propagationReportInput{
-		reportingMTA: rebuildReportingMTA, timestamp: rebuildTimestamp, token: []byte(rebuildToken),
+		reportingMTA: rebuildReportingMTA, authorDomain: receivedLocalDomain, timestamp: rebuildTimestamp, token: []byte(rebuildToken),
 		nextHop: []byte("<@relay.example:sender@remote.example>"), finalRecipient: []byte("user@local.example"),
 		status: []byte(receivedFailedStatus), originalContentType: ContentTypeRFC822Headers, originalHeaders: []byte("Subject: x\r\n"),
 	}
@@ -965,7 +965,7 @@ func TestPropagationFixedPartsBoundCoversWorstCase(t *testing.T) {
 		t.Fatalf("next hop length=%d", len(nextHop))
 	}
 	input := propagationReportInput{
-		reportingMTA: reportingMTA, timestamp: rebuildTimestamp, token: []byte(strings.Repeat("t", propagationMaxTokenBytes)),
+		reportingMTA: reportingMTA, authorDomain: reportingMTA, timestamp: rebuildTimestamp, token: []byte(strings.Repeat("t", propagationMaxTokenBytes)),
 		nextHop: []byte(nextHop), finalRecipient: []byte(nextHop[1 : len(nextHop)-1]), status: []byte("5.7.1"),
 		envelopeID: []byte(strings.Repeat("+2B", propagationMaxEnvelopeIDBytes/3)), hasEnvelopeID: true,
 		originalRecipient: []byte("rfc822;" + strings.Repeat("+2B", 64) + "@" + nextHop[strings.IndexByte(nextHop, '@')+1:len(nextHop)-1]), hasOriginal: true,
