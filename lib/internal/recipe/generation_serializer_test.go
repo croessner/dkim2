@@ -267,7 +267,7 @@ func TestSerializeGenerationPlanRejectsCRLFAndArithmeticOverflow(t *testing.T) {
 	for _, literal := range [][]byte{[]byte("bad\rvalue"), []byte("bad\nvalue")} {
 		counter := newGenerationCounter(limits)
 		preflight := newSerializationPreflight(limits.RecipeLimits, &counter)
-		if err := preflight.validateLiteral(literal, DimensionBody, ""); !IsErrorCode(err, ErrorCodeSerializationFailure) || counter.jsonBytes != 0 {
+		if err := preflight.validateLiteral(StepKindData, literal, DimensionBody, ""); !IsErrorCode(err, ErrorCodeSerializationFailure) || counter.jsonBytes != 0 {
 			t.Fatalf("line break literal: json=%d code=%s", counter.jsonBytes, recipeTestErrorCode(err))
 		}
 	}

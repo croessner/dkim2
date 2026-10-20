@@ -129,7 +129,7 @@ func mustExternalGenerator(t *testing.T) recipe.Generator {
 // mustExternalParser constructs a strict parser under the exact generator limits.
 func mustExternalParser(t *testing.T, limits recipe.Limits) recipe.Parser {
 	t.Helper()
-	parser, err := recipe.NewParser(limits)
+	parser, err := recipe.NewParser(limits, canonical.NewHeaderRelevance())
 	if err != nil {
 		t.Fatal("parser setup failed")
 	}

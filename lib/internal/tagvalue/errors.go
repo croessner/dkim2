@@ -12,8 +12,6 @@ type ErrorCode string
 const (
 	// ErrorCodeEmptyTagSpec reports an empty tag spec except for a final semicolon.
 	ErrorCodeEmptyTagSpec ErrorCode = "empty_tag_spec"
-	// ErrorCodeMissingTagTerminator reports a tag list whose final tag lacks its semicolon.
-	ErrorCodeMissingTagTerminator ErrorCode = "missing_tag_terminator"
 	// ErrorCodeMissingEquals reports a tag spec without a name/value separator.
 	ErrorCodeMissingEquals ErrorCode = "missing_equals"
 	// ErrorCodeInvalidTagName reports a tag name outside DKIM2 tag syntax.
@@ -39,7 +37,7 @@ const (
 // Known reports whether code belongs to the closed tag-value vocabulary.
 func (c ErrorCode) Known() bool {
 	switch c {
-	case ErrorCodeEmptyTagSpec, ErrorCodeMissingTagTerminator, ErrorCodeMissingEquals,
+	case ErrorCodeEmptyTagSpec, ErrorCodeMissingEquals,
 		ErrorCodeInvalidTagName, ErrorCodeInvalidTagValue, ErrorCodeDuplicateTag,
 		ErrorCodeLimitExceeded, ErrorCodeInvalidOptions, ErrorCodeInvalidBase64Alphabet,
 		ErrorCodeInvalidBase64Padding, ErrorCodeInvalidBase64Length, ErrorCodeInvalidBase64PadBits:

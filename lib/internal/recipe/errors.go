@@ -27,6 +27,10 @@ const (
 	ErrorCodeInvalidHeaderName ErrorCode = "invalid_header_name"
 	// ErrorCodeNonLowercaseHeaderName reports a decoded recipe key that is not lowercase.
 	ErrorCodeNonLowercaseHeaderName ErrorCode = "non_lowercase_header_name"
+	// ErrorCodeNonLowercaseKey reports a decoded JSON object key that is not lowercase.
+	ErrorCodeNonLowercaseKey ErrorCode = "non_lowercase_key"
+	// ErrorCodeUnsignedHeaderRecipe reports a header recipe for a field that is never signed.
+	ErrorCodeUnsignedHeaderRecipe ErrorCode = "unsigned_header_recipe"
 	// ErrorCodeHeaderNameCollision reports ASCII case-folded key duplication.
 	ErrorCodeHeaderNameCollision ErrorCode = "header_name_collision"
 	// ErrorCodeInvalidHeaderRecipe reports an invalid h member shape.
@@ -41,7 +45,7 @@ const (
 	ErrorCodeCopyRangeOrder ErrorCode = "copy_range_order"
 	// ErrorCodeCopyRangeOutOfBounds reports a range outside its source.
 	ErrorCodeCopyRangeOutOfBounds ErrorCode = "copy_range_out_of_bounds"
-	// ErrorCodeInvalidLiteral reports invalid UTF-8 or line-breaking data.
+	// ErrorCodeInvalidLiteral reports invalid UTF-8, invalid base64, or line-breaking data.
 	ErrorCodeInvalidLiteral ErrorCode = "invalid_literal"
 	// ErrorCodeSourceUnavailable reports a copy operation without source bytes.
 	ErrorCodeSourceUnavailable ErrorCode = "source_unavailable"
@@ -70,7 +74,8 @@ func (c ErrorCode) Known() bool {
 	switch c {
 	case ErrorCodeInvalidOptions, ErrorCodeInvalidState, ErrorCodeLimitExceeded, ErrorCodeInvalidJSON,
 		ErrorCodeDuplicateMember, ErrorCodeInvalidTopLevel, ErrorCodeMissingRecipeDimension,
-		ErrorCodeInvalidHeaderName, ErrorCodeNonLowercaseHeaderName, ErrorCodeHeaderNameCollision, ErrorCodeInvalidHeaderRecipe,
+		ErrorCodeInvalidHeaderName, ErrorCodeNonLowercaseHeaderName, ErrorCodeNonLowercaseKey, ErrorCodeUnsignedHeaderRecipe,
+		ErrorCodeHeaderNameCollision, ErrorCodeInvalidHeaderRecipe,
 		ErrorCodeInvalidBodyRecipe, ErrorCodeInvalidStep, ErrorCodeInvalidCopyRange,
 		ErrorCodeCopyRangeOrder, ErrorCodeCopyRangeOutOfBounds, ErrorCodeInvalidLiteral,
 		ErrorCodeSourceUnavailable, ErrorCodeInvalidGenerator, ErrorCodeInvalidRequest,
@@ -281,7 +286,7 @@ func classForCode(code ErrorCode) ErrorClass {
 	case ErrorCodeInvalidJSON, ErrorCodeDuplicateMember:
 		return ErrorClassSyntax
 	case ErrorCodeInvalidTopLevel, ErrorCodeMissingRecipeDimension, ErrorCodeInvalidHeaderName, ErrorCodeNonLowercaseHeaderName,
-		ErrorCodeHeaderNameCollision, ErrorCodeInvalidHeaderRecipe,
+		ErrorCodeNonLowercaseKey, ErrorCodeUnsignedHeaderRecipe, ErrorCodeHeaderNameCollision, ErrorCodeInvalidHeaderRecipe,
 		ErrorCodeInvalidBodyRecipe, ErrorCodeInvalidStep, ErrorCodeInvalidLiteral:
 		return ErrorClassSchema
 	case ErrorCodeInvalidCopyRange, ErrorCodeCopyRangeOrder, ErrorCodeCopyRangeOutOfBounds:

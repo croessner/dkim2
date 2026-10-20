@@ -63,9 +63,9 @@
 //
 // DNS key records use PKCS#1 RSAPublicKey DER for RSA and exactly 32 raw bytes
 // for Ed25519. Empty p= is revoked. Non-empty p= accepts omitted terminal
-// Base64 padding as WG DNS-00 specifies while still requiring canonical zero pad
-// bits. The parser follows the WG DNS-00 k= prose and RFC 6376 Erratum 5137 by
-// recognizing lowercase k= despite the inherited ABNF typo. The active DKIM2
+// Base64 padding as DNS-01 specifies while still requiring canonical zero pad
+// bits. The parser recognizes lowercase k= as the DNS-01 grammar requires; the
+// inherited DNS-00 ABNF typo is corrected there. The active DKIM2
 // signature grammar exposes no q= option; DNS TXT is the only lookup binding.
 // Testing t=y and strict-identity t=s declarations reach
 // KeyPolicyMetadata, but do not change cryptographic state or prescribe an MTA

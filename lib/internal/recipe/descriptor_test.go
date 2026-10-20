@@ -8,7 +8,7 @@ import (
 
 // TestDescriptorIsDeterministicBoundedAndPrivacyMinimized locks the policy projection boundary.
 func TestDescriptorIsDeterministicBoundedAndPrivacyMinimized(t *testing.T) {
-	parser, err := NewParser(DefaultLimits())
+	parser, err := NewParser(DefaultLimits(), testHeaderRelevance{relevant: true})
 	if err != nil {
 		t.Fatalf("NewParser() error = %v", err)
 	}
@@ -46,7 +46,7 @@ func TestDescriptorIsDeterministicBoundedAndPrivacyMinimized(t *testing.T) {
 
 // TestDescriptorDistinguishesClosedRecipeShapes locks exact canonical framing inputs.
 func TestDescriptorDistinguishesClosedRecipeShapes(t *testing.T) {
-	parser, err := NewParser(DefaultLimits())
+	parser, err := NewParser(DefaultLimits(), testHeaderRelevance{relevant: true})
 	if err != nil {
 		t.Fatalf("NewParser() error = %v", err)
 	}

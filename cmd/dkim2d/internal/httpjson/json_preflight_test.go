@@ -6,6 +6,9 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/croessner/dkim2"
+	"github.com/croessner/dkim2/cmd/dkim2d/internal/httpjson/generated"
 )
 
 // TestJSONPreflightAcceptsExactRFC8259Text proves valid syntax and decoded constants.
@@ -504,4 +507,15 @@ func maximumEscapedUnknownJSONDocument() []byte {
 	document.WriteString(suffix)
 
 	return []byte(document.String())
+}
+
+// TestSupportedDraftVersionMatchesLibraryAndContract proves that the lexical
+// preflight, the generated OpenAPI enum, and the library behavior baseline name
+// the same draft, so a migration cannot advance one boundary alone.
+func TestSupportedDraftVersionMatchesLibraryAndContract(t *testing.T) {
+	t.Parallel()
+
+	if supportedDraftVersion != dkim2.DraftIdentifier || string(generated.DraftIetfDkimDkim2Spec07) != dkim2.DraftIdentifier {
+		t.Fatalf("draft baselines differ: preflight=%q contract=%q library=%q", supportedDraftVersion, generated.DraftIetfDkimDkim2Spec07, dkim2.DraftIdentifier)
+	}
 }

@@ -8,10 +8,19 @@ import (
 
 var scannerKnownTags = MustKnownTags("m", "h", "r", "empty")
 
-// TestScanRejectsMissingFinalSemicolon reproduces the draft-05 tag terminator requirement.
-func TestScanRejectsMissingFinalSemicolon(t *testing.T) {
-	if _, err := ScanTerminated([]byte("m=1; h=abc"), scannerKnownTags, Limits{}); !IsErrorCode(err, ErrorCodeMissingTagTerminator) {
-		t.Fatalf("Scan() error = %v, want missing tag terminator", err)
+// TestScanHeaderAcceptsOptionalFinalSemicolon reproduces the Draft-07 Section 8
+// tag-list rule that makes the final semicolon optional in header fields.
+func TestScanHeaderAcceptsOptionalFinalSemicolon(t *testing.T) {
+	for _, input := range []string{"m=1; h=abc", "m=1; h=abc;", "m=1; h=abc; \t"} {
+		field, err := ScanHeader([]byte(input), scannerKnownTags, Limits{})
+		if err != nil || field.Len() != 2 {
+			t.Fatalf("ScanHeader(%q) len/error = %d/%v, want two tags", input, field.Len(), err)
+		}
+	}
+	for _, input := range []string{"", " ", ";", "m=1;;", ";m=1"} {
+		if _, err := ScanHeader([]byte(input), scannerKnownTags, Limits{}); !IsErrorCode(err, ErrorCodeEmptyTagSpec) {
+			t.Fatalf("ScanHeader(%q) error = %v, want empty tag-spec", input, err)
+		}
 	}
 }
 
@@ -42,35 +51,37 @@ func TestScanAcceptsTagListsWithOptionalFinalSemicolon(t *testing.T) {
 	}
 }
 
-// TestScanCanonicalizesNamesAndPreservesValues verifies case-sensitive values.
-func TestScanCanonicalizesNamesAndPreservesValues(t *testing.T) {
-	field, err := ScanTerminated([]byte("M = 1; H = AbC+/==; X_Ext = ValueWithCASE;"), scannerKnownTags, Limits{})
+// TestScanHeaderPreservesLowercaseNamesAndValues verifies exact names and
+// case-sensitive values in header tag lists.
+func TestScanHeaderPreservesLowercaseNamesAndValues(t *testing.T) {
+	field, err := ScanHeader([]byte("m = 1; h = AbC+/==; x_ext = ValueWithCASE;"), scannerKnownTags, Limits{})
 	if err != nil {
-		t.Fatalf("Scan() error = %v", err)
+		t.Fatalf("ScanHeader() error = %v", err)
 	}
-
 	tag, ok := field.Get("m")
-	if !ok {
-		t.Fatal("missing canonical m tag")
+	if !ok || tag.Name() != "m" || tag.RawName() != "m" || tag.Value() != "1" || !tag.Known() {
+		t.Fatalf("m tag = %#v/%v", tag, ok)
 	}
-	if tag.Name() != "m" || tag.RawName() != "M" || tag.Value() != "1" || !tag.Known() {
-		t.Fatalf("m tag = %#v", tag)
-	}
-
-	tag, ok = field.Get("h")
-	if !ok {
-		t.Fatal("missing canonical h tag")
-	}
-	if tag.Value() != "AbC+/==" {
+	if tag, ok = field.Get("h"); !ok || tag.Value() != "AbC+/==" {
 		t.Fatalf("h value = %q, want case-sensitive value", tag.Value())
 	}
-
 	unknown := field.UnknownTags()
-	if len(unknown) != 1 {
-		t.Fatalf("UnknownTags length = %d, want 1", len(unknown))
+	if len(unknown) != 1 || unknown[0].Name() != "x_ext" || unknown[0].Value() != "ValueWithCASE" || unknown[0].Known() {
+		t.Fatalf("unknown tags = %#v", unknown)
 	}
-	if unknown[0].Name() != "x_ext" || unknown[0].RawName() != "X_Ext" || unknown[0].Value() != "ValueWithCASE" || unknown[0].Known() {
-		t.Fatalf("unknown tag = %#v", unknown[0])
+}
+
+// TestScanHeaderRejectsUppercaseTagNames reproduces the Draft-07 Sections 9
+// and 10 requirement that every header tag name is lowercase, including
+// unknown extension names.
+func TestScanHeaderRejectsUppercaseTagNames(t *testing.T) {
+	for _, input := range []string{"M=1;", "m=1; H=abc;", "m=1; X_ext=v;", "m=1; x_Ext=v", "M=1; m=1;"} {
+		if _, err := ScanHeader([]byte(input), scannerKnownTags, Limits{}); !IsErrorCode(err, ErrorCodeInvalidTagName) {
+			t.Fatalf("ScanHeader(%q) error = %v, want invalid tag name", input, err)
+		}
+	}
+	if _, err := ScanHeader([]byte("m=1; m=2;"), scannerKnownTags, Limits{}); !IsErrorCode(err, ErrorCodeDuplicateTag) {
+		t.Fatalf("ScanHeader() error = %v, want exact duplicate", err)
 	}
 }
 
@@ -94,30 +105,25 @@ func TestScanTreatsDNSCompatibleTagNamesCaseSensitively(t *testing.T) {
 	if upper.Name() != "M" || lower.Name() != "m" {
 		t.Fatalf("Name() = upper %q lower %q, want exact DNS spelling", upper.Name(), lower.Name())
 	}
-
-	_, err = ScanTerminated([]byte("m=1; M=2;"), scannerKnownTags, Limits{})
-	if !IsErrorCode(err, ErrorCodeDuplicateTag) {
-		t.Fatalf("ScanTerminated() error = %v, want case-insensitive duplicate", err)
-	}
 }
 
-// TestKnownTagsUsesExactDNSAndFoldedHeaderLookup verifies coherent mode-specific classification.
-func TestKnownTagsUsesExactDNSAndFoldedHeaderLookup(t *testing.T) {
+// TestKnownTagsUsesExactLookup verifies case-sensitive classification in both
+// DNS and header tag lists.
+func TestKnownTagsUsesExactLookup(t *testing.T) {
 	known := MustKnownTags("m", "X_Ext")
 	if !known.Contains("m") || !known.Contains("X_Ext") || known.Contains("M") || known.Contains("x_ext") {
 		t.Fatalf("Contains() did not use exact case-sensitive lookup")
 	}
-	if _, err := NewKnownTags("m", "M"); !IsErrorCode(err, ErrorCodeInvalidOptions) {
-		t.Fatalf("NewKnownTags() error = %v, want folded duplicate rejection", err)
+	if _, err := NewKnownTags("m", "m"); !IsErrorCode(err, ErrorCodeInvalidOptions) {
+		t.Fatalf("NewKnownTags() error = %v, want duplicate rejection", err)
 	}
-
 	dnsField, err := Scan([]byte("X_Ext=value;"), known, Limits{})
 	if err != nil || !dnsField.Tags()[0].Known() {
 		t.Fatalf("Scan() field/error = %#v/%v, want exact known tag", dnsField, err)
 	}
-	headerField, err := ScanTerminated([]byte("x_EXT=value;"), known, Limits{})
-	if err != nil || !headerField.Tags()[0].Known() || headerField.Tags()[0].Name() != "x_ext" {
-		t.Fatalf("ScanTerminated() field/error = %#v/%v, want folded known tag", headerField, err)
+	headerField, err := ScanHeader([]byte("m=value"), known, Limits{})
+	if err != nil || !headerField.Tags()[0].Known() || headerField.Tags()[0].Name() != "m" {
+		t.Fatalf("ScanHeader() field/error = %#v/%v, want exact known tag", headerField, err)
 	}
 }
 
@@ -148,8 +154,8 @@ func TestScanRejectsMalformedDNSFWS(t *testing.T) {
 			t.Fatalf("Scan(%q) error = %v, want invalid tag value", input, err)
 		}
 	}
-	if _, err := ScanTerminated([]byte("m=1;\r\n h=2;"), scannerKnownTags, Limits{}); !IsErrorCode(err, ErrorCodeInvalidTagValue) {
-		t.Fatalf("ScanTerminated() error = %v, want already-unfolded input enforcement", err)
+	if _, err := ScanHeader([]byte("m=1;\r\n h=2;"), scannerKnownTags, Limits{}); !IsErrorCode(err, ErrorCodeInvalidTagValue) {
+		t.Fatalf("ScanHeader() error = %v, want already-unfolded input enforcement", err)
 	}
 }
 

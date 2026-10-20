@@ -105,7 +105,7 @@ func assertPlanRecipeReconstructs(t *testing.T, revision UnsignedOperationPlan, 
 	t.Helper()
 	model, ok := revision.MessageInstance()
 	encodedRecipe, recipeOK := model.Recipe()
-	parser, parserErr := recipe.NewParser(recipe.DefaultLimits())
+	parser, parserErr := recipe.NewParser(recipe.DefaultLimits(), canonical.NewHeaderRelevance())
 	parsedRecipe, _, parseErr := parser.Parse(encodedRecipe.Decoded())
 	applier, applierErr := recipe.NewApplier(recipe.DefaultLimits())
 	currentState, stateErr := recipe.NewState(revised)

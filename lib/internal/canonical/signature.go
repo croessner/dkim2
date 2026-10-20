@@ -502,8 +502,11 @@ func appendSignatureInputValueWithoutWSP(output []byte, value []byte) []byte {
 }
 
 // renderIncompleteSignatureValue renders target tags with null signature strings.
+// Tags are separated by semicolons, and the optional final semicolon of
+// Draft-07 Section 8 is retained exactly when the received field carries it,
+// because Section 12.8 signs the incomplete field as it appears in the message.
 func renderIncompleteSignatureValue(unfoldedValue []byte, target signature.Signature) ([]byte, error) {
-	tagField, err := tagvalue.ScanTerminated(unfoldedValue, knownSignatureInputTags, tagvalue.DefaultLimits())
+	tagField, err := tagvalue.ScanHeader(unfoldedValue, knownSignatureInputTags, tagvalue.DefaultLimits())
 	if err != nil {
 		return nil, signatureAmbiguousSelectionError("dkim2_signature", target.Sequence(), target.HeaderIndex(), err)
 	}
@@ -515,12 +518,14 @@ func renderIncompleteSignatureValue(unfoldedValue []byte, target signature.Signa
 
 	var rendered bytes.Buffer
 	sawSignatureTag := false
-	for _, tag := range tags {
+	for index, tag := range tags {
+		if index > 0 {
+			rendered.WriteByte(';')
+		}
 		rendered.WriteString(tag.RawName())
 		rendered.WriteByte('=')
 		if tag.Name() != "s" {
 			rendered.WriteString(tag.Value())
-			rendered.WriteByte(';')
 			continue
 		}
 
@@ -530,10 +535,12 @@ func renderIncompleteSignatureValue(unfoldedValue []byte, target signature.Signa
 			return nil, signatureAmbiguousSelectionError("dkim2_signature", target.Sequence(), target.HeaderIndex(), renderErr)
 		}
 		rendered.Write(nullValue)
-		rendered.WriteByte(';')
 	}
 	if !sawSignatureTag {
 		return nil, signatureAmbiguousSelectionError("dkim2_signature", target.Sequence(), target.HeaderIndex(), nil)
+	}
+	if trimmed := trimSignatureInputWSP(unfoldedValue); len(trimmed) > 0 && trimmed[len(trimmed)-1] == ';' {
+		rendered.WriteByte(';')
 	}
 
 	return rendered.Bytes(), nil

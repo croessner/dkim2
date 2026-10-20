@@ -2,7 +2,7 @@
 
 This repository contains an actively developed Go reference implementation of
 DKIM2 based on `draft-ietf-dkim-dkim2-spec-07` with the DNS companion
-`draft-ietf-dkim-dkim2-dns-01`. The migration from Draft-07 and DNS-00 is
+`draft-ietf-dkim-dkim2-dns-01`. The migration from Draft-06 and DNS-00 is
 tracked in `docs/specs/draft-07-migration-disposition.md`; until every work
 package listed there is complete, this baseline is not a conformance claim.
 

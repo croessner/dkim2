@@ -70,7 +70,6 @@ func TestPlanBodySeparatesDisclosureAndUnavailablePolicies(t *testing.T) {
 		t.Fatalf("copy-only unavailable: reason=%s code=%s", unavailable.UnavailableReason(), recipeTestErrorCode(err))
 	}
 	for _, target := range [][]byte{
-		append([]byte("A:x\r\n\r\n"), 0xff, '\r', '\n'),
 		[]byte("A:x\r\n\r\ntail"),
 	} {
 		unavailable, _, err = mustPlanBody(t, target, current, AllowUnavailableBody, AllowLiterals, GenerationLimits{}, nil)
@@ -179,13 +178,22 @@ func TestPlanBodyErrorsRemainSecretSafe(t *testing.T) {
 		t.Fatalf("privacy failure atomicity: valid=%t usage=%t", failed.Valid(), usage.Valid())
 	}
 	assertClosedSafeGenerationError(t, err, ErrorCodeBodyUnrepresentable, ErrorClassRepresentation, protected)
-	failed, usage, err = mustPlanBody(t,
-		append([]byte("A:x\r\n\r\n"), 0xff, '\r', '\n'), []byte("A:x\r\n\r\ncurrent\r\n"),
-		RejectUnavailableBody, AllowLiterals, GenerationLimits{}, nil)
-	if failed.Valid() || !usage.Valid() {
-		t.Fatalf("binary privacy failure atomicity: valid=%t usage=%t", failed.Valid(), usage.Valid())
+}
+
+// TestPlanBodyEmitsBinaryDataForNonUTF8Lines reproduces the Draft-07 Section 5
+// "u" step: a previous body line that is not valid UTF-8 is representable as
+// a base64-carried literal instead of forcing an unavailable body.
+func TestPlanBodyEmitsBinaryDataForNonUTF8Lines(t *testing.T) {
+	previous := append([]byte("A:x\r\n\r\n"), 0xff, '\r', '\n', 'o', 'k', '\r', '\n')
+	result, _, err := mustPlanBody(t, previous, []byte("A:x\r\n\r\ncurrent\r\n"), RejectUnavailableBody, AllowLiterals, GenerationLimits{}, nil)
+	if err != nil || !result.Valid() {
+		t.Fatalf("binary line planning: valid=%t code=%s", result.Valid(), recipeTestErrorCode(err))
 	}
-	assertClosedSafeGenerationError(t, err, ErrorCodeBodyUnrepresentable, ErrorClassRepresentation, string([]byte{0xff}))
+	steps := result.stepsCopy()
+	if len(steps) != 2 || steps[0].kind != StepKindBinaryData || steps[1].kind != StepKindData ||
+		len(steps[0].data) != 1 || !bytes.Equal(steps[0].data[0], []byte{0xff}) {
+		t.Fatalf("binary line steps = %d", len(steps))
+	}
 }
 
 // TestPlanBodyNeverConvertsLimitsToUnavailable verifies the narrow b:null policy.

@@ -45,10 +45,21 @@ type verifierProjectionGolden struct {
 	} `json:"expected"`
 }
 
+// allHeadersRelevant classifies every header as signed for encoding-only fixtures.
+type allHeadersRelevant struct{}
+
+// Validate implements recipe.HeaderRelevance.
+func (allHeadersRelevant) Validate() error { return nil }
+
+// IsRelevantHeader implements recipe.HeaderRelevance by accepting every name.
+func (allHeadersRelevant) IsRelevantHeader(string) (bool, error) { return true, nil }
+
 // TestVerifierProjectionBindingGolden locks the cross-repository canonical byte contract.
 func TestVerifierProjectionBindingGolden(t *testing.T) {
 	fixture := loadVerifierProjectionGolden(t)
-	parser, err := recipe.NewParser(recipe.DefaultLimits())
+	// The golden locks the projection byte encoding, not recipe validity, so
+	// a permissive classifier keeps the fixture's arbitrary header names.
+	parser, err := recipe.NewParser(recipe.DefaultLimits(), allHeadersRelevant{})
 	if err != nil {
 		t.Fatalf("NewParser() error = %v", err)
 	}

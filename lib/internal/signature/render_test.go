@@ -325,19 +325,19 @@ func TestTargetEnforcesSharedSignatureSetCardinality(t *testing.T) {
 		Recipients: [][]byte{[]byte("<user@example.test>")}, Domain: signatureTestDomain,
 	}
 	accepted := base
-	accepted.Sets = []SetPlan{{Selector: signatureTestFirstSelector, Algorithm: AlgorithmRSASHA256}, {Selector: signatureTestSecondSelector, Algorithm: Algorithm("RSA-SHA256")}}
+	accepted.Sets = []SetPlan{{Selector: signatureTestFirstSelector, Algorithm: AlgorithmRSASHA256}, {Selector: signatureTestSecondSelector, Algorithm: AlgorithmRSASHA256}}
 	if _, err := NewUnsignedTarget(accepted, RenderLimits{}); err != nil {
 		t.Fatalf("NewUnsignedTarget(two same algorithm) code=%s", signatureTestErrorCode(err))
 	}
 	extension := base
-	extension.Sets = []SetPlan{{Selector: signatureTestFirstSelector, Algorithm: Algorithm("FUTURE-SHA999")}, {Selector: signatureTestSecondSelector, Algorithm: Algorithm(testExtensionAlgorithm)}}
+	extension.Sets = []SetPlan{{Selector: signatureTestFirstSelector, Algorithm: Algorithm(testExtensionAlgorithm)}, {Selector: signatureTestSecondSelector, Algorithm: Algorithm(testExtensionAlgorithm)}}
 	extensionTarget, err := NewUnsignedTarget(extension, RenderLimits{})
 	if err != nil {
 		t.Fatalf("NewUnsignedTarget(two extension signatures) code=%s", signatureTestErrorCode(err))
 	}
 	extensionComplete, err := extensionTarget.Complete([]SetValue{
 		{Selector: signatureTestFirstSelector, Algorithm: Algorithm(testExtensionAlgorithm), Signature: bytes.Repeat([]byte{0x41}, 48)},
-		{Selector: signatureTestSecondSelector, Algorithm: Algorithm("FUTURE-SHA999"), Signature: bytes.Repeat([]byte{0x42}, 48)},
+		{Selector: signatureTestSecondSelector, Algorithm: Algorithm(testExtensionAlgorithm), Signature: bytes.Repeat([]byte{0x42}, 48)},
 	})
 	if err != nil {
 		t.Fatalf("Complete(two extension signatures) code=%s", signatureTestErrorCode(err))
@@ -356,7 +356,7 @@ func TestTargetEnforcesSharedSignatureSetCardinality(t *testing.T) {
 		code ErrorCode
 	}{
 		{name: "duplicate selector", sets: []SetPlan{{Selector: "same", Algorithm: AlgorithmRSASHA256}, {Selector: "SAME", Algorithm: AlgorithmEd25519SHA256}}, code: ErrorCodeDuplicateSelector},
-		{name: "third extension algorithm", sets: []SetPlan{{Selector: signatureTestFirstSelector, Algorithm: Algorithm("future")}, {Selector: signatureTestSecondSelector, Algorithm: Algorithm("FUTURE")}, {Selector: signatureTestThirdSelector, Algorithm: Algorithm("future")}}, code: ErrorCodeTooManySignatures},
+		{name: "third extension algorithm", sets: []SetPlan{{Selector: signatureTestFirstSelector, Algorithm: Algorithm("future")}, {Selector: signatureTestSecondSelector, Algorithm: Algorithm("future")}, {Selector: signatureTestThirdSelector, Algorithm: Algorithm("future")}}, code: ErrorCodeTooManySignatures},
 		{name: "total set limit", sets: []SetPlan{{Selector: signatureTestFirstSelector, Algorithm: Algorithm("future-one")}, {Selector: signatureTestSecondSelector, Algorithm: Algorithm("future-two")}, {Selector: signatureTestThirdSelector, Algorithm: Algorithm("future-three")}}, code: ErrorCodeLimitExceeded},
 	}
 	for _, test := range tests {

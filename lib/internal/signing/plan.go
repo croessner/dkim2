@@ -505,7 +505,7 @@ func NewHashPlanCoordinator(revision RevisionVerifier, generationLimits recipe.G
 	if err != nil {
 		return HashPlanCoordinator{}, newError(ErrorCodeInvalidOptions, ErrorLocation{Phase: PhaseOptions}, ErrorDetails{})
 	}
-	parser, err := recipe.NewParser(generator.Limits().RecipeLimits)
+	parser, err := recipe.NewParser(generator.Limits().RecipeLimits, canonical.NewHeaderRelevance())
 	if err != nil {
 		return HashPlanCoordinator{}, newError(ErrorCodeInvalidOptions, ErrorLocation{Phase: PhaseOptions}, ErrorDetails{})
 	}

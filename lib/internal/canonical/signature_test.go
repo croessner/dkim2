@@ -73,26 +73,42 @@ func TestSignatureInputNullsMultiAlgorithmSets(t *testing.T) {
 	}
 }
 
-// TestSignatureInputPreservesTargetTagSpellingAndTerminator verifies Draft-07 target rendering fidelity.
-func TestSignatureInputPreservesTargetTagSpellingAndTerminator(t *testing.T) {
+// TestSignatureInputPreservesTargetValueSpellingAndTerminator verifies Draft-07
+// target rendering fidelity for case-sensitive values and for target fields with
+// and without the optional final semicolon.
+func TestSignatureInputPreservesTargetValueSpellingAndTerminator(t *testing.T) {
 	hash := sha256HashText()
 	signatureText := base64Text("target signature")
+	for _, terminator := range []string{";", ""} {
+		msg := mustParseSignatureMessage(t,
+			"Message-Instance: m=1; h=sha256:"+hash+":"+hash+";\r\n"+
+				"DKIM2-Signature: i=1; m=1; t=1700000001; mf=PD4=; rt=PHJjcHRAZXhhbXBsZS5pbnZhbGlkPg==; d=Signer.Invalid; s=Sel-A:rsa-sha256:"+signatureText+"; x_case=ValueCASE"+terminator+"\r\n")
+		canonicalizer := mustCanonicalizer(t)
+
+		got, err := canonicalizer.SignatureInputFromMessage(msg, 1)
+		if err != nil {
+			t.Fatalf("SignatureInputFromMessage(terminator=%q) error = %v", terminator, err)
+		}
+
+		wantTarget := "dkim2-signature:i=1;m=1;t=1700000001;mf=PD4=;rt=PHJjcHRAZXhhbXBsZS5pbnZhbGlkPg==;d=Signer.Invalid;s=Sel-A:rsa-sha256:;x_case=ValueCASE" + terminator + "\r\n"
+		if !bytes.HasSuffix(got.Bytes(), []byte(wantTarget)) {
+			t.Fatalf("SignatureInputFromMessage() = %q, want target suffix %q", got.Bytes(), wantTarget)
+		}
+		if bytes.Contains(got.Bytes(), []byte(signatureText)) {
+			t.Fatalf("SignatureInputFromMessage() kept target signature bytes: %q", got.Bytes())
+		}
+	}
+}
+
+// TestSignatureInputRejectsUppercaseTargetTagName reproduces the Draft-07
+// Section 10 lowercase tag-name requirement at the canonicalization boundary.
+func TestSignatureInputRejectsUppercaseTargetTagName(t *testing.T) {
+	hash := sha256HashText()
 	msg := mustParseSignatureMessage(t,
 		"Message-Instance: m=1; h=sha256:"+hash+":"+hash+";\r\n"+
-			"DKIM2-Signature: I=1; M=1; T=1700000001; MF=PD4=; RT=PHJjcHRAZXhhbXBsZS5pbnZhbGlkPg==; D=Signer.Invalid; S=Sel-A:RSA-SHA256:"+signatureText+"; X_CaSe=ValueCASE;\r\n")
-	canonicalizer := mustCanonicalizer(t)
-
-	got, err := canonicalizer.SignatureInputFromMessage(msg, 1)
-	if err != nil {
-		t.Fatalf("SignatureInputFromMessage() error = %v", err)
-	}
-
-	wantTarget := "dkim2-signature:I=1;M=1;T=1700000001;MF=PD4=;RT=PHJjcHRAZXhhbXBsZS5pbnZhbGlkPg==;D=Signer.Invalid;S=Sel-A:RSA-SHA256:;X_CaSe=ValueCASE;\r\n"
-	if !bytes.HasSuffix(got.Bytes(), []byte(wantTarget)) {
-		t.Fatalf("SignatureInputFromMessage() = %q, want target suffix %q", got.Bytes(), wantTarget)
-	}
-	if bytes.Contains(got.Bytes(), []byte(signatureText)) {
-		t.Fatalf("SignatureInputFromMessage() kept target signature bytes: %q", got.Bytes())
+			"DKIM2-Signature: i=1; m=1; t=1700000001; mf=PD4=; rt=PHJjcHRAZXhhbXBsZS5pbnZhbGlkPg==; d=signer.invalid; S=sel:rsa-sha256:"+base64Text("sig")+";\r\n")
+	if _, err := mustCanonicalizer(t).SignatureInputFromMessage(msg, 1); err == nil {
+		t.Fatal("SignatureInputFromMessage() accepted an uppercase target tag name")
 	}
 }
 

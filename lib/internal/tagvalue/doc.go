@@ -1,12 +1,12 @@
 // Package tagvalue owns shared DKIM2 tag-list scanning rules.
 //
-// Scan accepts case-sensitive DNS-compatible tag lists, unfolds valid CRLF WSP
-// FWS, and permits an optional final semicolon.
-// ScanTerminated owns the stricter draft-ietf-dkim-dkim2-spec-07 header-field
-// rule that every tag has a semicolon terminator and tag names are matched
-// case-insensitively after raw-header unfolding. Both split semicolon-separated
-// tag specifications, preserve case-sensitive values, and reject ambiguous or
-// duplicated tags before semantic parsers run.
+// Both scanners implement the draft-ietf-dkim-dkim2-spec-07 Section 8
+// tag-list grammar: at least one tag-spec, an optional final semicolon,
+// case-sensitive names and values, and no duplicated tags. Scan is the DNS key
+// record mode and unfolds valid CRLF WSP FWS. ScanHeader is the
+// Message-Instance and DKIM2-Signature mode: it receives raw-header unfolded
+// input and rejects any uppercase tag name under Sections 9 and 10, including
+// unknown extension names.
 // It also owns DKIM2 base64string parsing: space and tab FWS are stripped,
 // non-canonical pad bits fail, and encoded plus decoded byte views remain
 // immutable after parsing. ParseBase64String requires standard RFC 4648

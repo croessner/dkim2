@@ -346,7 +346,8 @@ var portableDefinitions = []runnerDefinition{
 			{key: "instance\x00draft07-dual-hash", testName: "TestHashSetAcceptsMixedSupportedAlgorithmsInWireOrder", artifacts: []string{instanceDraft07Artifact}},
 			{key: "instance\x00draft07-duplicate-extension-hash", testName: "TestHashSetRejectsDuplicateExtensionName", artifacts: []string{instanceDraft07Artifact}},
 			{key: "instance\x00draft07-duplicate-hash", testName: "TestParseRejectsDuplicateHashAlgorithms", artifacts: []string{instanceDraft07Artifact}},
-			{key: "instance\x00draft07-sha512-uppercase", testName: "TestHashSetAcceptsSHA512", artifacts: []string{instanceDraft07Artifact}},
+			{key: "instance\x00draft07-hash-name-case-sensitive", testName: "TestHashNamesAreCaseSensitive", artifacts: []string{instanceDraft07Artifact}},
+			{key: "instance\x00draft07-sha512", testName: "TestHashSetAcceptsSHA512", artifacts: []string{instanceDraft07Artifact}},
 		},
 	},
 	{
@@ -396,8 +397,12 @@ var portableDefinitions = []runnerDefinition{
 		timeout: 2 * time.Minute,
 		cases: []runnerCase{
 			{key: "recipe\x00application", testName: "TestGoldenRecipeApplicationDraft07", artifacts: []string{"recipe-application"}},
+			{key: "recipe\x00draft07-binary-data-negative", testName: "TestParserRejectsMalformedBinaryDataSteps", artifacts: []string{"recipe-draft07-steps-source"}},
+			{key: "recipe\x00draft07-binary-data-step", testName: "TestGenerateRoundTripsBinaryBodyLines", artifacts: []string{"recipe-draft07-steps-source"}},
+			{key: "recipe\x00draft07-lowercase-json-keys", testName: "TestParserRejectsNonLowercaseJSONKeys", artifacts: []string{"recipe-draft07-steps-source"}},
 			{key: "recipe\x00draft07-lowercase-recipe", testName: "TestParserAcceptsEscapedLowercaseHeaderKey", artifacts: []string{"recipe-draft07-source"}},
 			{key: "recipe\x00draft07-nonlowercase-recipe", testName: "TestParserRejectsNonLowercaseHeaderKey", artifacts: []string{"recipe-draft07-source"}},
+			{key: "recipe\x00draft07-unsigned-header-recipe", testName: "TestParserRejectsRecipesForUnsignedHeaders", artifacts: []string{"recipe-draft07-steps-source"}},
 			{key: "recipe\x00generation", testName: "TestSerializeGenerationPlanMatchesDraft07Goldens", artifacts: []string{"recipe-generation"}},
 			{key: "recipe\x00limit-boundaries", testName: "TestEveryRecipeHardMaximumAcceptsExactAndRejectsOneOver", artifacts: []string{"recipe-limits-source"}},
 			{key: "recipe\x00parser-negative", testName: "TestParserAdditionalDraftAndRFC8259Vectors", artifacts: []string{"recipe-negative-source"}},
@@ -586,10 +591,11 @@ var portableDefinitions = []runnerDefinition{
 		cases: []runnerCase{
 			{key: "signing\x00custody-transitions", testName: "TestDraft07CustodyGoldenVectors", artifacts: []string{"custody-positive-source", signingProvenanceArtifact}},
 			{key: "signing\x00draft07-duplicate-selector", testName: "TestParseRejectsDuplicateSelectors", artifacts: []string{signatureNegativeArtifact}},
+			{key: "signing\x00draft07-optional-final-semicolon", testName: "TestParseAcceptsOptionalFinalSemicolon", artifacts: []string{signatureNegativeArtifact}},
 			{key: "signing\x00draft07-same-algorithm-pair", testName: "TestParseAllowsTwoSameAlgorithmDifferentSelectors", artifacts: []string{signatureNegativeArtifact}},
 			{key: "signing\x00draft07-third-same-algorithm", testName: "TestParseRejectsThirdSameAlgorithm", artifacts: []string{signatureNegativeArtifact}},
 			{key: "signing\x00signature-grammar-negative", testName: "TestParseRejectsSharedTagSyntaxErrors", artifacts: []string{signatureNegativeArtifact}},
-			{key: "signing\x00tag-case-interpretation", testName: "TestParseAcceptsInteropFWSAndMixedCaseTags", artifacts: []string{signatureNegativeArtifact}},
+			{key: "signing\x00tag-case-interpretation", testName: "TestParseRejectsMixedCaseTagNames", artifacts: []string{signatureNegativeArtifact}},
 		},
 	},
 	{

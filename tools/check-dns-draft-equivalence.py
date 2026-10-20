@@ -7,7 +7,7 @@ import sys
 import xml.etree.ElementTree as ET
 
 archive = Path(sys.argv[1])
-names = ("draft-chuang-dkim2-dns-04", "draft-ietf-dkim-dkim2-dns-01")
+names = ("draft-chuang-dkim2-dns-04", "draft-ietf-dkim-dkim2-dns-00")
 bodies = []
 receipts = {}
 for name in names:

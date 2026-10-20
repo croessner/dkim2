@@ -120,7 +120,9 @@ func (b *generationPlanBudget) appendCopy(steps *[]step, occurrence int, dimensi
 	return nil
 }
 
-// appendDataLiteral adds or extends one adjacent data step under shared limits.
+// appendDataLiteral adds or extends one adjacent literal step under shared
+// limits. Valid UTF-8 values become "d" literals and other values become "u"
+// literals (Draft-07 Section 5); adjacent literals merge only within one kind.
 func (b *generationPlanBudget) appendDataLiteral(steps *[]step, value []byte, dimension Dimension, maxSteps int, stepLimitName string) error {
 	validationWork, ok := checkedMultiply(len(value), 2)
 	if ok {
@@ -132,16 +134,18 @@ func (b *generationPlanBudget) appendDataLiteral(steps *[]step, value []byte, di
 	if err := b.counter.chargeWork(validationWork, dimension); err != nil {
 		return err
 	}
-	if !validDataLiteral(value) {
+	kind := literalKindFor(value)
+	if !kind.validLiteral(value) {
 		return generationInvariantErrorForDimension(dimension)
 	}
-	if len(value) > b.limits.MaxDataStringBytes {
-		return generationLimitError(limitNameMaxDataStringBytes, b.limits.MaxDataStringBytes, len(value), dimension)
+	jsonBytes := kind.literalJSONBytes(value)
+	if jsonBytes > b.limits.MaxDataStringBytes {
+		return generationLimitError(limitNameMaxDataStringBytes, b.limits.MaxDataStringBytes, jsonBytes, dimension)
 	}
-	if err := b.counter.chargeLiteralString(len(value), dimension); err != nil {
+	if err := b.counter.chargeLiteralString(jsonBytes, dimension); err != nil {
 		return err
 	}
-	if len(*steps) > 0 && (*steps)[len(*steps)-1].kind == StepKindData {
+	if len(*steps) > 0 && (*steps)[len(*steps)-1].kind == kind {
 		if err := b.counter.chargeWork(1, dimension); err != nil {
 			return err
 		}
@@ -152,7 +156,7 @@ func (b *generationPlanBudget) appendDataLiteral(steps *[]step, value []byte, di
 	if err := b.counter.chargeWork(1, dimension); err != nil {
 		return err
 	}
-	dataStep := step{kind: StepKindData, data: [][]byte{bytes.Clone(value)}, initialized: true}
+	dataStep := step{kind: kind, data: [][]byte{bytes.Clone(value)}, initialized: true}
 	if err := b.appendStep(steps, dataStep, dimension, maxSteps, stepLimitName); err != nil {
 		return err
 	}

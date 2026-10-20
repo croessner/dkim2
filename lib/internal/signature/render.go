@@ -268,7 +268,7 @@ func (t UnsignedTarget) RebuildUnsignedFromComplete(complete CompleteField) (Uns
 	if err != nil {
 		return UnsignedTarget{}, renderConstructionError("s")
 	}
-	completeTags, err := tagvalue.ScanTerminated(completeField.UnfoldedValue(), knownSignatureTags, tagvalue.DefaultLimits())
+	completeTags, err := tagvalue.ScanHeader(completeField.UnfoldedValue(), knownSignatureTags, tagvalue.DefaultLimits())
 	if err != nil {
 		return UnsignedTarget{}, renderConstructionError("s")
 	}
@@ -276,7 +276,7 @@ func (t UnsignedTarget) RebuildUnsignedFromComplete(complete CompleteField) (Uns
 	if err != nil {
 		return UnsignedTarget{}, renderConstructionError("s")
 	}
-	unsignedTags, err := tagvalue.ScanTerminated(unsignedField.UnfoldedValue(), knownSignatureTags, tagvalue.DefaultLimits())
+	unsignedTags, err := tagvalue.ScanHeader(unsignedField.UnfoldedValue(), knownSignatureTags, tagvalue.DefaultLimits())
 	if err != nil || !matchesUnsignedTagSequence(completeTags, unsignedTags) {
 		return UnsignedTarget{}, renderConstructionError("s")
 	}
@@ -430,7 +430,7 @@ func (t UnsignedTarget) canonicalCompletionPlan(inputs []completionInput) ([]ren
 	seen := make(map[string]struct{}, len(canonical))
 	for index := range canonical {
 		selector, ok := canonicalDNSName([]byte(canonical[index].selector))
-		algorithm, algorithmOK := canonicalTokenName([]byte(canonical[index].algorithm))
+		algorithm, algorithmOK := tagvalue.ParseTextstring([]byte(canonical[index].algorithm))
 		if !ok || !algorithmOK {
 			return nil, renderConstructionError("s")
 		}
@@ -585,7 +585,7 @@ func canonicalizeSetPlans(input []SetPlan, limits RenderLimits) ([]SetPlan, erro
 	output := make([]SetPlan, 0, min(len(input), limits.MaxSignatureSets))
 	for index, plan := range input[:inspectionCount] {
 		selector, ok := canonicalDNSName([]byte(plan.Selector))
-		algorithm, algorithmOK := canonicalTokenName([]byte(plan.Algorithm))
+		algorithm, algorithmOK := tagvalue.ParseTextstring([]byte(plan.Algorithm))
 		if !ok || !algorithmOK {
 			return nil, renderConstructionError("s")
 		}
@@ -606,7 +606,7 @@ func canonicalizeGeneratedFlags(input []string) ([]string, error) {
 	output := make([]string, 0, len(input))
 	seen := make(map[string]struct{}, len(input))
 	for index, raw := range input {
-		name, ok := canonicalTokenName([]byte(raw))
+		name, ok := tagvalue.ParseTextstring([]byte(raw))
 		if !ok || !knownFlag(name) {
 			return nil, malformedFlagError(0, index)
 		}

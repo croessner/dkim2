@@ -40,7 +40,7 @@ func (p Parser) ParseField(field rawmsg.HeaderField) (MessageInstance, error) {
 		return MessageInstance{}, newError(ErrorCodeWrongHeaderField, ErrorLocation{FieldIndex: field.Index()}, ErrorDetails{}, nil)
 	}
 
-	tagField, err := tagvalue.ScanTerminated(field.UnfoldedValue(), knownMessageInstanceTags, p.limits.TagLimits)
+	tagField, err := tagvalue.ScanHeader(field.UnfoldedValue(), knownMessageInstanceTags, p.limits.TagLimits)
 	if err != nil {
 		return MessageInstance{}, err
 	}

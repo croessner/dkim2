@@ -114,7 +114,7 @@ func TestErrorClassMappingOverridesCallerDetails(t *testing.T) {
 	if constructed.Class() != ErrorClassRequest {
 		t.Fatalf("constructed class = %q, want %q", constructed.Class(), ErrorClassRequest)
 	}
-	parser, err := NewParser(Limits{})
+	parser, err := NewParser(Limits{}, testHeaderRelevance{relevant: true})
 	if err != nil {
 		t.Fatalf("NewParser() code=%s", recipeTestErrorCode(err))
 	}

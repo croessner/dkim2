@@ -67,9 +67,10 @@ func TestParseAcceptsDKIM2Signature(t *testing.T) {
 	}
 }
 
-// TestParseAcceptsInteropFWSAndMixedCaseTags freezes the documented header-tag interpretation.
-func TestParseAcceptsInteropFWSAndMixedCaseTags(t *testing.T) {
-	value := strings.Replace(validSignatureValue(), "i=2", "I = 2", 1)
+// TestParseAcceptsInteropFWSAroundTags freezes WSP tolerance around tag names
+// and values.
+func TestParseAcceptsInteropFWSAroundTags(t *testing.T) {
+	value := strings.Replace(validSignatureValue(), "i=2", "i = 2", 1)
 	value = strings.Replace(value, "m=3", "m = 3", 1)
 	parsed, err := Parse(dkim2SignatureField(t, 0, value))
 	if err != nil {
@@ -80,10 +81,25 @@ func TestParseAcceptsInteropFWSAndMixedCaseTags(t *testing.T) {
 	}
 }
 
-// TestParseRejectsMissingFinalSemicolon reproduces the Draft-07 DKIM2-Signature terminator rule.
-func TestParseRejectsMissingFinalSemicolon(t *testing.T) {
-	if _, err := Parse(headerField(t, 0, "DKIM2-Signature", validSignatureValue())); err == nil {
-		t.Fatal("Parse() succeeded without the required final semicolon")
+// TestParseRejectsMixedCaseTagNames reproduces the Draft-07 Section 10
+// requirement that every DKIM2-Signature tag name is lowercase. An uppercase
+// alias of a known tag is a syntax error, never a missing tag.
+func TestParseRejectsMixedCaseTagNames(t *testing.T) {
+	for _, value := range []string{
+		strings.Replace(validSignatureValue(), "i=2", "I=2", 1),
+		validSignatureValue() + "; X_ext=1",
+	} {
+		if _, err := Parse(dkim2SignatureField(t, 0, value)); !tagvalue.IsErrorCode(err, tagvalue.ErrorCodeInvalidTagName) {
+			t.Fatalf("Parse() error = %v, want invalid tag name", err)
+		}
+	}
+}
+
+// TestParseAcceptsOptionalFinalSemicolon reproduces the Draft-07 Section 8
+// rule that the final DKIM2-Signature semicolon is optional.
+func TestParseAcceptsOptionalFinalSemicolon(t *testing.T) {
+	if _, err := Parse(headerField(t, 0, "DKIM2-Signature", validSignatureValue())); err != nil {
+		t.Fatalf("Parse() without final semicolon error = %v", err)
 	}
 }
 
@@ -207,7 +223,7 @@ func TestParseRejectsSharedTagSyntaxErrors(t *testing.T) {
 		in   string
 		code tagvalue.ErrorCode
 	}{
-		{name: "duplicate tag", in: validSignatureValue() + "; I=4", code: tagvalue.ErrorCodeDuplicateTag},
+		{name: "duplicate tag", in: validSignatureValue() + "; i=4", code: tagvalue.ErrorCodeDuplicateTag},
 		{name: "empty interior tag", in: strings.Replace(validSignatureValue(), "; m=", ";; m=", 1), code: tagvalue.ErrorCodeEmptyTagSpec},
 		{name: "invalid extension tag", in: validSignatureValue() + "; x-bad=1", code: tagvalue.ErrorCodeInvalidTagName},
 		{name: "nonce semicolon", in: signatureValueWith("n", "bad;nonce"), code: tagvalue.ErrorCodeMissingEquals},
@@ -314,10 +330,25 @@ func TestParseRejectsDuplicateSelectors(t *testing.T) {
 	}
 }
 
+// TestParseAlgorithmNamesAreCaseSensitive reproduces the Draft-07 Sections
+// 2.14 and 10.9 rule that signature algorithm names are case-sensitive: an
+// uppercase spelling of a supported algorithm is an unknown algorithm.
+func TestParseAlgorithmNamesAreCaseSensitive(t *testing.T) {
+	value := signatureValueWith("s", testSelector+":ED25519-SHA256:"+base64OfByte(0xaa, 64))
+	parsed, err := Parse(dkim2SignatureField(t, 0, value))
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	sets := parsed.SignatureSets()
+	if len(sets) != 1 || sets[0].Algorithm() != "ED25519-SHA256" || sets[0].KnownAlgorithm() {
+		t.Fatalf("SignatureSets() = %#v, want one unknown uppercase algorithm", sets)
+	}
+}
+
 // TestParseAllowsTwoSameAlgorithmDifferentSelectors proves the Draft-07 per-algorithm allowance.
 func TestParseAllowsTwoSameAlgorithmDifferentSelectors(t *testing.T) {
 	value := testSelector + ":rsa-sha256:" + base64OfByte(0xaa, 64) +
-		", selector2:RSA-SHA256:" + base64OfByte(0xbb, 64)
+		", selector2:rsa-sha256:" + base64OfByte(0xbb, 64)
 	parsed, err := Parse(dkim2SignatureField(t, 0, signatureValueWith("s", value)))
 	if err != nil {
 		t.Fatalf("Parse() error = %v, want two same-algorithm sets", err)
@@ -331,7 +362,7 @@ func TestParseAllowsTwoSameAlgorithmDifferentSelectors(t *testing.T) {
 // TestParseRejectsThirdSameAlgorithm proves the Draft-07 per-algorithm upper bound.
 func TestParseRejectsThirdSameAlgorithm(t *testing.T) {
 	value := "one:" + testExtensionAlgorithm + ":" + base64OfByte(0xaa, 48) +
-		", two:FUTURE-SHA999:" + base64OfByte(0xbb, 48) +
+		", two:" + testExtensionAlgorithm + ":" + base64OfByte(0xbb, 48) +
 		", three:" + testExtensionAlgorithm + ":" + base64OfByte(0xcc, 48)
 	_, err := Parse(dkim2SignatureField(t, 0, signatureValueWith("s", value)))
 	if !IsErrorCode(err, ErrorCodeTooManySignatures) {

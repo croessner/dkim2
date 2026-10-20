@@ -40,7 +40,7 @@ func (p Parser) ParseField(field rawmsg.HeaderField) (Signature, error) {
 		return Signature{}, newError(ErrorCodeWrongHeaderField, ErrorLocation{FieldIndex: field.Index()}, ErrorDetails{}, nil)
 	}
 
-	tagField, err := tagvalue.ScanTerminated(field.UnfoldedValue(), knownSignatureTags, p.limits.TagLimits)
+	tagField, err := tagvalue.ScanHeader(field.UnfoldedValue(), knownSignatureTags, p.limits.TagLimits)
 	if err != nil {
 		return Signature{}, err
 	}

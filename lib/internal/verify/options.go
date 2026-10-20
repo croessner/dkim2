@@ -215,7 +215,7 @@ func NewVerifier(provider KeyProvider, options ...Option) (Verifier, error) {
 	recipeLimits.MaxDataStringBytes = min(
 		recipeLimits.MaxDataStringBytes, recipeLimits.MaxTotalLiteralBytes,
 	)
-	revisionParser, err := recipe.NewParser(recipeLimits)
+	revisionParser, err := recipe.NewParser(recipeLimits, canonical.NewHeaderRelevance())
 	if err != nil {
 		return Verifier{}, invalidOptionError("history_parser", 0)
 	}
@@ -227,7 +227,7 @@ func NewVerifier(provider KeyProvider, options ...Option) (Verifier, error) {
 	if err != nil {
 		return Verifier{}, invalidOptionError("history_canonicalizer", 0)
 	}
-	parser, err := recipe.NewParser(recipe.Limits{})
+	parser, err := recipe.NewParser(recipe.Limits{}, canonical.NewHeaderRelevance())
 	if err != nil {
 		return Verifier{}, invalidOptionError("history_parser", 0)
 	}

@@ -13,21 +13,29 @@ import (
 // Parser converts decoded Draft-07 recipe JSON into immutable plans.
 type Parser struct {
 	limits      Limits
+	relevance   HeaderRelevance
 	initialized bool
 }
 
 // NewParser constructs a strict recipe parser with resolved restrictive limits.
-func NewParser(limits Limits) (Parser, error) {
+// The header relevance classifier is mandatory because Draft-07 Section 5.1
+// forbids recipes for header fields that are not signed; the parser rejects
+// such recipes instead of leaving the rule to each caller.
+func NewParser(limits Limits, relevance HeaderRelevance) (Parser, error) {
 	resolved, err := limits.normalized()
 	if err != nil {
 		return Parser{}, err
 	}
-	return Parser{limits: resolved, initialized: true}, nil
+	if !stableHeaderRelevance(relevance) {
+		return Parser{}, newError(ErrorCodeInvalidOptions, ErrorLocation{}, ErrorDetails{Class: ErrorClassOptions}, nil)
+	}
+	return Parser{limits: resolved, relevance: relevance, initialized: true}, nil
 }
 
-// Valid reports whether the parser owns coherent resolved limits.
+// Valid reports whether the parser owns coherent resolved limits and a stable
+// header relevance classifier.
 func (p Parser) Valid() bool {
-	return p.initialized && p.limits.Validate() == nil
+	return p.initialized && p.limits.Validate() == nil && stableHeaderRelevance(p.relevance)
 }
 
 // Parse parses one complete decoded RFC 8259 recipe object.
@@ -48,7 +56,7 @@ func (p Parser) Parse(input []byte) (Recipe, Usage, error) {
 	if err != nil {
 		return Recipe{}, counter.usage(), err
 	}
-	semantic := recipeDecoder{limits: p.limits, usage: counter}
+	semantic := recipeDecoder{limits: p.limits, relevance: p.relevance, usage: counter}
 	parsed, err := semantic.decodeRoot(root)
 	if err != nil {
 		return Recipe{}, counter.usage(), err
@@ -183,6 +191,9 @@ func (s *jsonScanner) parseObject(headerNames bool) (jsonValue, error) {
 		}
 		if _, duplicate := seen[name]; duplicate {
 			return jsonValue{}, newError(ErrorCodeDuplicateMember, ErrorLocation{Offset: memberOffset, MemberIndex: len(members)}, ErrorDetails{Class: ErrorClassSyntax}, nil)
+		}
+		if !headerNames && name != strings.ToLower(name) {
+			return jsonValue{}, newError(ErrorCodeNonLowercaseKey, ErrorLocation{Offset: memberOffset, MemberIndex: len(members)}, ErrorDetails{Class: ErrorClassSchema}, nil)
 		}
 		seen[name] = struct{}{}
 		s.skipWhitespace()
@@ -562,6 +573,7 @@ func (s *jsonScanner) syntaxError() *Error {
 
 type recipeDecoder struct {
 	limits           Limits
+	relevance        HeaderRelevance
 	usage            *usageCounter
 	headerNames      int
 	totalHeaderBytes int
@@ -626,6 +638,9 @@ func (d *recipeDecoder) decodeHeaders(value jsonValue) ([]headerPlan, error) {
 		if member.name != canonicalName {
 			return nil, newError(ErrorCodeNonLowercaseHeaderName, ErrorLocation{Offset: member.offset, HeaderOrdinal: ordinal}, ErrorDetails{Dimension: DimensionHeader}, nil)
 		}
+		if err := d.requireSignedHeader(canonicalName, member.offset, ordinal); err != nil {
+			return nil, err
+		}
 		d.headerNames++
 		if d.headerNames > d.limits.MaxHeaderNames {
 			return nil, parserLimitError(limitNameMaxHeaderNames, d.limits.MaxHeaderNames, d.headerNames, member.offset)
@@ -652,6 +667,20 @@ func (d *recipeDecoder) decodeHeaders(value jsonValue) ([]headerPlan, error) {
 		return nil, err
 	}
 	return plans, nil
+}
+
+// requireSignedHeader enforces the Draft-07 Section 5.1 MUST NOT for recipes
+// that name header fields excluded from signing by Section 4. A classifier
+// failure fails closed as an invariant error.
+func (d *recipeDecoder) requireSignedHeader(canonicalName string, offset, ordinal int) error {
+	relevant, err := d.relevance.IsRelevantHeader(canonicalName)
+	if err != nil {
+		return headerRelevanceInvariantError()
+	}
+	if !relevant {
+		return newError(ErrorCodeUnsignedHeaderRecipe, ErrorLocation{Offset: offset, HeaderOrdinal: ordinal}, ErrorDetails{Dimension: DimensionHeader}, nil)
+	}
+	return nil
 }
 
 // sortHeaderPlans orders deterministic metadata while charging every comparison.
@@ -682,7 +711,7 @@ func (d *recipeDecoder) decodeBody(value jsonValue) (BodyMode, []step, error) {
 	return BodyModeSteps, steps, nil
 }
 
-// decodeSteps parses one ordered array of exact c or d objects.
+// decodeSteps parses one ordered array of exact c, d, or u objects.
 func (d *recipeDecoder) decodeSteps(value jsonValue, dimension Dimension, headerName string, maximum int, limitName string) ([]step, error) {
 	if value.kind != jsonArray {
 		code := ErrorCodeInvalidHeaderRecipe
@@ -723,6 +752,8 @@ func (d *recipeDecoder) decodeSteps(value jsonValue, dimension Dimension, header
 			}
 		case "d":
 			parsed, err = d.decodeData(member.value, dimension, headerName, index)
+		case "u":
+			parsed, err = d.decodeBinaryData(member.value, dimension, headerName, index)
 		default:
 			err = newError(ErrorCodeInvalidStep, ErrorLocation{Offset: member.offset, StepIndex: index}, ErrorDetails{Dimension: dimension}, nil)
 		}
@@ -771,26 +802,56 @@ func (d *recipeDecoder) decodeCopy(value jsonValue, dimension Dimension, stepInd
 
 // decodeData validates nonempty immutable UTF-8 literal arrays and dimension limits.
 func (d *recipeDecoder) decodeData(value jsonValue, dimension Dimension, headerName string, stepIndex int) (step, error) {
+	literals, err := d.decodeLiterals(value, dimension, headerName, stepIndex, StepKindData, func(text []byte) ([]byte, bool) {
+		return text, validDataLiteral(text)
+	})
+	if err != nil {
+		return step{}, err
+	}
+	return newDataStep(literals)
+}
+
+// decodeBinaryData validates a nonempty "u" array of canonical base64 lines.
+// Decoded bytes need not be UTF-8 but must not contain CR or LF; a valid UTF-8
+// value is accepted because Draft-07 only says "u" SHOULD NOT replace "d".
+func (d *recipeDecoder) decodeBinaryData(value jsonValue, dimension Dimension, headerName string, stepIndex int) (step, error) {
+	literals, err := d.decodeLiterals(value, dimension, headerName, stepIndex, StepKindBinaryData, func(text []byte) ([]byte, bool) {
+		decoded, ok := decodeBase64Line(text)
+		return decoded, ok && validBinaryLiteral(decoded)
+	})
+	if err != nil {
+		return step{}, err
+	}
+	return newBinaryDataStep(literals)
+}
+
+// decodeLiterals decodes one literal array with a kind-specific decoder and
+// applies the shared dimension limits to the decoded bytes.
+func (d *recipeDecoder) decodeLiterals(value jsonValue, dimension Dimension, headerName string, stepIndex int, kind StepKind, decode func([]byte) ([]byte, bool)) ([][]byte, error) {
 	if value.kind != jsonArray || len(value.items) == 0 {
-		return step{}, newError(ErrorCodeInvalidLiteral, ErrorLocation{Offset: value.offset, StepIndex: stepIndex}, ErrorDetails{Dimension: dimension, StepKind: StepKindData}, nil)
+		return nil, newError(ErrorCodeInvalidLiteral, ErrorLocation{Offset: value.offset, StepIndex: stepIndex}, ErrorDetails{Dimension: dimension, StepKind: kind}, nil)
 	}
 	literals := make([][]byte, 0, len(value.items))
 	for _, item := range value.items {
-		if item.kind != jsonString || !validDataLiteral(item.text) {
-			return step{}, newError(ErrorCodeInvalidLiteral, ErrorLocation{Offset: item.offset, StepIndex: stepIndex}, ErrorDetails{Dimension: dimension, StepKind: StepKindData}, nil)
+		if item.kind != jsonString {
+			return nil, newError(ErrorCodeInvalidLiteral, ErrorLocation{Offset: item.offset, StepIndex: stepIndex}, ErrorDetails{Dimension: dimension, StepKind: kind}, nil)
 		}
-		if dimension == DimensionHeader && len(headerName)+1+len(item.text) > d.limits.MaxHeaderLineBytes {
-			return step{}, parserLimitError(limitNameMaxHeaderLineBytes, d.limits.MaxHeaderLineBytes, len(headerName)+1+len(item.text), item.offset)
+		literal, ok := decode(item.text)
+		if !ok {
+			return nil, newError(ErrorCodeInvalidLiteral, ErrorLocation{Offset: item.offset, StepIndex: stepIndex}, ErrorDetails{Dimension: dimension, StepKind: kind}, nil)
 		}
-		if dimension == DimensionHeader && len(headerName)+1+len(item.text)+2 > d.limits.MaxHeaderFieldBytes {
-			return step{}, parserLimitError(limitNameMaxHeaderFieldBytes, d.limits.MaxHeaderFieldBytes, len(headerName)+1+len(item.text)+2, item.offset)
+		if dimension == DimensionHeader && len(headerName)+1+len(literal) > d.limits.MaxHeaderLineBytes {
+			return nil, parserLimitError(limitNameMaxHeaderLineBytes, d.limits.MaxHeaderLineBytes, len(headerName)+1+len(literal), item.offset)
 		}
-		if dimension == DimensionBody && len(item.text) > d.limits.MaxBodyLineBytes {
-			return step{}, parserLimitError(limitNameMaxBodyLineBytes, d.limits.MaxBodyLineBytes, len(item.text), item.offset)
+		if dimension == DimensionHeader && len(headerName)+1+len(literal)+2 > d.limits.MaxHeaderFieldBytes {
+			return nil, parserLimitError(limitNameMaxHeaderFieldBytes, d.limits.MaxHeaderFieldBytes, len(headerName)+1+len(literal)+2, item.offset)
 		}
-		literals = append(literals, append([]byte(nil), item.text...))
+		if dimension == DimensionBody && len(literal) > d.limits.MaxBodyLineBytes {
+			return nil, parserLimitError(limitNameMaxBodyLineBytes, d.limits.MaxBodyLineBytes, len(literal), item.offset)
+		}
+		literals = append(literals, append([]byte(nil), literal...))
 	}
-	return newDataStep(literals)
+	return literals, nil
 }
 
 // exactPositiveInt converts an exact integral JSON number without float64 rounding.

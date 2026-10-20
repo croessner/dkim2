@@ -29,14 +29,14 @@ PKCS#1 RSA representation and raw 32-byte Ed25519 representation, and names
 only reserved `.test` lookup owners. DNS vector tests enter through the public
 TXT transport, DNS provider, and verifier APIs; they perform no network calls.
 
-The internal draft-06 recipe-application fixture lives at
+The internal draft-07 recipe-application fixture lives at
 `lib/internal/recipe/testdata/golden/recipe-application-draft-ietf-dkim-dkim2-spec-07.json`.
 Its package-local loader proves bottom-up header reconstruction, top-down body
 reconstruction, copied terminal-line fidelity, deterministic cross-name
 grouping, and truthful unavailable-body handling. It remains internal because
 M8 deliberately exposes no public history result or recipe API.
 
-The internal draft-06 recipe-generation fixture lives at
+The internal draft-07 recipe-generation fixture lives at
 `lib/internal/recipe/testdata/golden/recipe-generation-draft-ietf-dkim-dkim2-spec-07.json`.
 It retains exact compact decoded JSON together with synthetic previous/current
 states, disclosure and unavailable-body policies, closed outcomes,

@@ -168,6 +168,11 @@ Draft-07 and DNS-01. Replay goldens bound to the draft identifier were
 recomputed. Protocol behavior is still the Draft-06 behavior until the
 following packages land.
 
+Versioned fixture directories were renamed in place because package 1 keeps
+behavior unchanged. Before a later package changes the semantics of a fixture,
+it copies the Draft-06 version of that fixture to a history location named
+for Draft-06, so earlier evidence is never silently overwritten.
+
 Open follow-ups owned by later packages:
 
 - `testdata/reference/draft-issues.json` entries whose substance changed in
@@ -178,3 +183,30 @@ Open follow-ups owned by later packages:
   `DNS-04` citations are replaced in package 8.
 - Unprefixed section numbers in Markdown documentation and operator
   replay-epoch transition text are updated in package 8.
+
+## 8. Package 2 state
+
+- Header tag lists: the shared scanner has one header mode (`ScanHeader`) with
+  an optional final semicolon and mandatory lowercase tag names, including
+  unknown extensions (D5). The previous `missing_tag_terminator` code is
+  removed. Canonical signature input keeps the presence or absence of the
+  final semicolon of the target field exactly as received.
+- Textstrings: hash, signature algorithm, and flag names are parsed through
+  `tagvalue.ParseTextstring` without case folding. Uppercase spellings of
+  supported names are unknown names; duplicates compare by exact spelling.
+- tval needed no code change: the scanner already accepts a nonempty printable
+  run with internal white space, which equals the D5 reading.
+- Recipes: `u` steps (canonical base64, decoded CR/LF forbidden, valid UTF-8
+  accepted), lowercase keys in every JSON object, and rejection of recipes
+  for unsigned header fields. The recipe parser now requires a header
+  relevance classifier. The generator emits `u` literals for body lines that
+  are not valid UTF-8 instead of declaring the body unavailable.
+- Test fixtures that used recipes for `X-` fields (DSN rebuild tests) now use
+  signed field names. The verifier-projection encoding golden keeps its
+  arbitrary header names through a permissive classifier because it locks the
+  byte encoding, not recipe validity.
+- Known follow-ups: interop evidence for `signature-mixed-case`
+  (`tools/internal/interop/current.go`) still records the Draft-06 local
+  acceptance and is re-qualified in package 8. Header `u` values that are not
+  valid UTF-8 are rejected by the raw-message parser during reconstruction;
+  this fail-closed limit is documented in package 8.

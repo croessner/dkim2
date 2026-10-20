@@ -453,7 +453,7 @@ func TestHistoryClosedContractsRejectZeroAndIncoherentValues(t *testing.T) {
 	if HistoryCoverage("future").Known() || HistoryStopReason("future").Known() || HistoryDimensionState("future").Known() || HistoryRecipeMode("future").Known() || (HistoryUsage{}).Valid() || (HistoryTransition{}).Valid() || (HistoryWalk{}).Valid() {
 		t.Fatal("unknown or zero history value became valid")
 	}
-	parser, _ := recipe.NewParser(recipe.Limits{})
+	parser, _ := recipe.NewParser(recipe.Limits{}, canonical.NewHeaderRelevance())
 	applier, _ := recipe.NewApplier(recipe.Limits{})
 	canonicalizer, _ := canonical.NewCanonicalizer()
 	for _, test := range []struct {
@@ -511,7 +511,7 @@ func TestHistoryWalkRejectsImpossibleFoldPairs(t *testing.T) {
 // TestHistoryLimitErrorCarriesStableDetails verifies bounded cumulative diagnostics.
 func TestHistoryLimitErrorCarriesStableDetails(t *testing.T) {
 	usage := HistoryUsage{initialized: true}
-	parser, _ := recipe.NewParser(recipe.Limits{})
+	parser, _ := recipe.NewParser(recipe.Limits{}, canonical.NewHeaderRelevance())
 	_, recipeUsage, _ := parser.Parse([]byte(`{"b":null}`))
 	limits := DefaultHistoryLimits()
 	limits.MaxCumulativeWorkUnits = recipeUsage.WorkUnits() - 1
@@ -676,7 +676,7 @@ func TestHistoryCumulativeUsageLimitsAreImmediate(t *testing.T) {
 // mustHistoryCoordinator constructs the fixed internal coordinator.
 func mustHistoryCoordinator(t *testing.T, limits HistoryLimits) HistoryCoordinator {
 	t.Helper()
-	parser, err := recipe.NewParser(recipe.Limits{})
+	parser, err := recipe.NewParser(recipe.Limits{}, canonical.NewHeaderRelevance())
 	if err != nil {
 		t.Fatal(err)
 	}

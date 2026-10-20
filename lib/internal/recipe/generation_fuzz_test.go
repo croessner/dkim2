@@ -249,7 +249,7 @@ func assertGenerationFuzzResult(t *testing.T, generator recipe.Generator, genera
 // assertGeneratedRoundTrip proves strict same-limit apply and canonical equality for known dimensions.
 func assertGeneratedRoundTrip(t *testing.T, generator recipe.Generator, previous, current recipe.State, generation recipe.Generation) {
 	t.Helper()
-	parser, err := recipe.NewParser(generator.Limits().RecipeLimits)
+	parser, err := recipe.NewParser(generator.Limits().RecipeLimits, canonical.NewHeaderRelevance())
 	if err != nil {
 		t.Fatal("strict parser setup failed")
 	}

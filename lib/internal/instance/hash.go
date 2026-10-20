@@ -63,7 +63,7 @@ func parseHashSet(input []byte, tagLimits tagvalue.Limits, fieldIndex int, hashI
 	rawName, _ := trimWSP(components[0])
 	rawHeaderHash, _ := trimWSP(components[1])
 	rawBodyHash, _ := trimWSP(components[2])
-	name, ok := canonicalHashName(rawName)
+	name, ok := tagvalue.ParseTextstring(rawName)
 	if !ok || len(rawHeaderHash) == 0 || len(rawBodyHash) == 0 {
 		return HashSet{}, malformedHashSetError(fieldIndex, hashIndex)
 	}
@@ -147,29 +147,6 @@ func malformedHashSetError(fieldIndex int, hashIndex int) *Error {
 	return newError(ErrorCodeMalformedHashSet, ErrorLocation{FieldIndex: fieldIndex, HashIndex: hashIndex}, ErrorDetails{
 		TagName: "h",
 	}, nil)
-}
-
-// canonicalHashName validates and lowercases one hash algorithm name.
-func canonicalHashName(input []byte) (string, bool) {
-	if len(input) == 0 {
-		return "", false
-	}
-
-	output := make([]byte, len(input))
-	for i, b := range input {
-		if b >= 'A' && b <= 'Z' {
-			output[i] = b + ('a' - 'A')
-			continue
-		}
-		if (b >= 'a' && b <= 'z') || (b >= '0' && b <= '9') || b == '_' || b == '-' {
-			output[i] = b
-			continue
-		}
-
-		return "", false
-	}
-
-	return string(output), true
 }
 
 // validUnknownHashComponent rejects control-bearing hash components while permitting WSP.

@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"io"
 	"slices"
+
+	"github.com/croessner/dkim2/internal/tagvalue"
 )
 
 const (
@@ -40,7 +42,7 @@ func (f Flags) Values() []Flag {
 
 // HasKnown reports whether a known canonical flag is present.
 func (f Flags) HasKnown(name string) bool {
-	canonical, ok := canonicalTokenName([]byte(name))
+	canonical, ok := tagvalue.ParseTextstring([]byte(name))
 	if !ok || !knownFlag(canonical) {
 		return false
 	}
@@ -103,7 +105,7 @@ func parseFlags(value string, limits Limits, fieldIndex int) (Flags, error) {
 	flags := make([]Flag, 0, len(parts))
 	for i, part := range parts {
 		trimmed, _ := trimWSP(part)
-		name, ok := canonicalTokenName(trimmed)
+		name, ok := tagvalue.ParseTextstring(trimmed)
 		if !ok {
 			return Flags{}, malformedFlagError(fieldIndex, i)
 		}

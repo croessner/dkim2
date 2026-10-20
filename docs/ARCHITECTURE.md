@@ -604,7 +604,8 @@ Important invariants:
 - `m=1` is the origin instance.
 - Gaps make verification impossible per the draft.
 - `sha256` and `sha512` are implemented; decoded values are exactly 32 and 64
-  octets respectively, algorithm names are unique case-insensitively, unknown
+  octets respectively, algorithm names are case-sensitive textstrings that are
+  unique by exact spelling (`SHA256` is an unknown name, not `sha256`), unknown
   extension names remain forward-compatible, and verification requires every
   supplied supported tuple to agree.
 - Hash algorithms unknown to the verifier are ignored, not treated as success.
@@ -641,9 +642,17 @@ Design notes:
   verification semantics or the public model.
 - The `b:null` body member must be represented explicitly because body
   unavailability has policy meaning; a null whole recipe is not a valid form.
-- Encoded header-name object keys are lowercase. Parsing rejects decoded mixed
-  or uppercase spellings, including escaped spellings, while message-header
-  matching remains case-insensitive.
+- Every decoded JSON object key is lowercase, including unknown top-level
+  extension keys; header-name keys reject mixed or uppercase spellings,
+  including escaped spellings, while message-header matching remains
+  case-insensitive.
+- Steps are exactly one of `c`, `d`, or `u`. A `u` step carries canonical
+  base64 of a line or value that is not valid UTF-8; decoded bytes must not
+  contain CR or LF. The generator emits `d` for valid UTF-8 literals and `u`
+  otherwise. String budgets apply to the serialized JSON string, so a `u`
+  literal is charged its base64 length.
+- The parser requires a header relevance classifier and rejects recipes for
+  header fields that are never signed (Draft-07 Sections 4 and 5.1).
 
 ### 5.6 `lib/internal/signature`
 
@@ -655,7 +664,9 @@ Responsibilities:
 - Parse required tags: `i=`, `m=`, `t=`, `d=`, `s=`.
 - Require exactly one chain-of-custody form: `nd=`, or both `mf=` and `rt=`.
 - Parse optional tags: `n=`, `f=`, extension tags, including the Draft-07
-  `feedhere` flag.
+  `feedhere` flag. Tag names must be lowercase and the final semicolon is
+  optional (Draft-07 Sections 8 and 10); algorithm and flag names are
+  case-sensitive textstrings.
 - Validate signature sequence numbers and gaps.
 - Build incomplete signature fields with empty signature values for signing.
 - Verify chain-of-custody input at the header level.
@@ -684,7 +695,7 @@ Responsibilities:
   `selector._domainkey.domain.` owner while preserving dotted selector labels.
 - Consume one already-concatenated TXT RR payload while retaining RR boundaries
   and failing closed on a multi-record RRset.
-- Parse WG DNS-00 records through `internal/tagvalue`, including revocation,
+- Parse DNS-01 records through `internal/tagvalue`, including revocation,
   ignored extension/retired tags, DNS-optional terminal Base64 padding with
   canonical pad bits, and bounded `t=y`/`t=s` metadata.
 - Decode RSA public DER as either PKCS#1 `RSAPublicKey` or X.509
@@ -703,7 +714,7 @@ Design notes:
 - The root package owns public transport/provider adapters; keyresolver does not
   import the root package or own four-state verification mapping.
 - Derived qnames and cache keys are sensitive and never enter errors or results.
-- WG DNS-00 lowercase `k=` follows prose and RFC 6376 Erratum 5137; no signature
+- DNS-01 lowercase `k=` follows the corrected DNS-01 grammar; no signature
   `q=` API is invented for the active DKIM2 grammar.
 - DNSSEC is diagnostic-only. Testing and strict-identity flags are metadata,
   not cryptographic verdict or MTA policy.
@@ -1146,8 +1157,8 @@ Generation rules:
   review, generated-code review, and regression tests.
 
 The active `DraftVersion` enum contains only
-`draft-ietf-dkim-dkim2-spec-07`. Draft-06 adds the public verification reasons
-`duplicate_hash_algorithm`, `invalid_recipe_json`, `duplicate_selector`, and
+`draft-ietf-dkim-dkim2-spec-07`. Since Draft-06 the public verification reasons
+include `duplicate_hash_algorithm`, `invalid_recipe_json`, `duplicate_selector`, and
 `too_many_signatures`; the OpenAPI document owns these values and every
 generated consumer must reject unknown enum values rather than default them.
 
@@ -1458,7 +1469,7 @@ Every operation also binds a protected deployment-unique `authority_id` and
 canonical provider authority descriptor; every command rejects same-class
 backend substitution before I/O.
 DNS mutation is outside the initial native onboarding contract. The tool
-exports deterministic WG DNS-00 records through a create-only protected-document
+exports deterministic DNS-01 records through a create-only protected-document
 primitive: exact existing bytes are idempotent, foreign existing bytes are a
 conflict, and no export path is ever replaced. A racing create is accepted only
 after an exact descriptor-native readback proves the installed artifact;
@@ -2825,7 +2836,7 @@ interpretation choices in code.
 16. Native domain onboarding:
     M23 adds an offline privileged workflow that clones one complete native
     generation, adds one exact domain with freshly generated RSA and/or
-    Ed25519 credentials, exports WG DNS-00 records, proves the configured fresh
+    Ed25519 credentials, exports DNS-01 records, proves the configured fresh
     recursive resolver path against staged SPKI, and activates only through
     exact current, state, readback, and
     candidate-content-digest fences. Publication state is fenced separately

@@ -905,12 +905,12 @@ func TestRebuildKeepsWireOrderForUntouchedNames(t *testing.T) {
 	if string(subject.UnfoldedValue()) != rebuildOriginSubject {
 		t.Fatalf("subject=%q", subject.UnfoldedValue())
 	}
-	restored := defaultPropagationOriginal(`{"h":{"x-restored":[{"d":[" value"]}],"subject":[{"d":[" origin"]}]},"b":[{"d":["origin body"]}]}`)
+	restored := defaultPropagationOriginal(`{"h":{"keywords":[{"d":[" value"]}],"subject":[{"d":[" origin"]}]},"b":[{"d":["origin body"]}]}`)
 	restored.Headers = trace + rebuildCurrentHeaders
-	restored.Revisions[0].Headers = trace + "From: sender@remote.example\r\nSubject: origin\r\nMessage-ID: <origin@remote.example>\r\nX-Restored: value\r\n"
+	restored.Revisions[0].Headers = trace + "From: sender@remote.example\r\nSubject: origin\r\nMessage-ID: <origin@remote.example>\r\nKeywords: value\r\n"
 	report, _ = mustRebuild(t, propagationSpec{original: restored})
 	_, _, embedded = mustParseRebuilt(t, report.Bytes())
-	want = []string{"dkim2-signature", "message-instance", "received", "x-origin-trace", rebuildFromName, rebuildSubjectName, rebuildMessageIDName, "x-restored"}
+	want = []string{"dkim2-signature", "message-instance", "received", "x-origin-trace", rebuildFromName, rebuildSubjectName, rebuildMessageIDName, "keywords"}
 	if got := headerNames(embedded.Headers()); strings.Join(got, ",") != strings.Join(want, ",") {
 		t.Fatalf("restored header order=%v want=%v", got, want)
 	}
@@ -993,8 +993,8 @@ func TestPropagationFixedPartsBoundCoversWorstCase(t *testing.T) {
 // property the specification guarantees, and that a rebuilt report stays
 // within that bound even when the descent restores large signed fields.
 func TestRebuildBoundsSizeAmplification(t *testing.T) {
-	pad := "X-Pad: " + strings.Repeat("p", 900) + "\r\n"
-	restored := defaultPropagationOriginal(`{"h":{"subject":[{"d":[" origin"]}],"x-pad":[{"c":[1,1]}]},"b":[{"d":["origin body"]}]}`)
+	pad := "Comments: " + strings.Repeat("p", 900) + "\r\n"
+	restored := defaultPropagationOriginal(`{"h":{"comments":[{"c":[1,1]}],"subject":[{"d":[" origin"]}]},"b":[{"d":["origin body"]}]}`)
 	restored.Headers = pad + rebuildCurrentHeaders
 	restored.Revisions[0].Headers = pad + rebuildOriginHeaders
 	spec := propagationSpec{original: restored}

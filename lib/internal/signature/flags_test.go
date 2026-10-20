@@ -17,7 +17,7 @@ func TestParseFlagsPreservesKnownAndUnknown(t *testing.T) {
 	if len(values) != 2 {
 		t.Fatalf("Flags().Values() length = %d, want 2", len(values))
 	}
-	if values[1].Name() != "x-unknown" || values[1].Known() {
+	if values[1].Name() != "X-Unknown" || values[1].Known() {
 		t.Fatalf("unknown flag = %#v", values[1])
 	}
 }
@@ -35,9 +35,27 @@ func TestParseFlagsRecognizesFeedHere(t *testing.T) {
 
 // TestParseRejectsDuplicateKnownFlags verifies f= ambiguity handling.
 func TestParseRejectsDuplicateKnownFlags(t *testing.T) {
-	_, err := Parse(dkim2SignatureField(t, 0, signatureValueWith("f", "feedback, Feedback")))
+	_, err := Parse(dkim2SignatureField(t, 0, signatureValueWith("f", "feedback, feedback")))
 	if !IsErrorCode(err, ErrorCodeDuplicateKnownFlag) {
 		t.Fatalf("Parse() error = %v, want duplicate known flag", err)
+	}
+}
+
+// TestParseFlagsAreCaseSensitive reproduces the Draft-07 Sections 2.14 and
+// 10.10 rule that flag names are case-sensitive: an uppercase spelling of a
+// known flag is an unknown flag with no effect.
+func TestParseFlagsAreCaseSensitive(t *testing.T) {
+	parsed, err := Parse(dkim2SignatureField(t, 0, signatureValueWith("f", "Exploded, feedback, Feedback")))
+	if err != nil {
+		t.Fatalf("Parse() error = %v, want distinct case-sensitive flags", err)
+	}
+	flags := parsed.Flags()
+	if flags.HasKnown(FlagExploded) || !flags.HasKnown(FlagFeedback) {
+		t.Fatalf("HasKnown(exploded/feedback) = %t/%t, want false/true", flags.HasKnown(FlagExploded), flags.HasKnown(FlagFeedback))
+	}
+	values := flags.Values()
+	if len(values) != 3 || values[0].Name() != "Exploded" || values[0].Known() || values[2].Name() != "Feedback" || values[2].Known() {
+		t.Fatalf("Flags().Values() = %#v, want unknown uppercase spellings", values)
 	}
 }
 

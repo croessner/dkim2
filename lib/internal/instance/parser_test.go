@@ -49,11 +49,12 @@ func TestParseAcceptsMessageInstance(t *testing.T) {
 	}
 }
 
-// TestParseRejectsMissingFinalSemicolon reproduces the Draft-07 Message-Instance terminator rule.
-func TestParseRejectsMissingFinalSemicolon(t *testing.T) {
+// TestParseAcceptsOptionalFinalSemicolon reproduces the Draft-07 Section 8
+// rule that the final Message-Instance semicolon is optional.
+func TestParseAcceptsOptionalFinalSemicolon(t *testing.T) {
 	value := "m=1; h=sha256:" + base64OfByte(1, 32) + ":" + base64OfByte(2, 32)
-	if _, err := Parse(headerField(t, 0, "Message-Instance", value)); err == nil {
-		t.Fatal("Parse() succeeded without the required final semicolon")
+	if _, err := Parse(headerField(t, 0, "Message-Instance", value)); err != nil {
+		t.Fatalf("Parse() without final semicolon error = %v", err)
 	}
 }
 
@@ -115,7 +116,9 @@ func TestParseRejectsSharedTagSyntaxErrors(t *testing.T) {
 		in   string
 		code tagvalue.ErrorCode
 	}{
-		{name: "duplicate tag", in: "m=1; h=sha256:" + base64OfByte(1, 32) + ":" + base64OfByte(2, 32) + "; M=2", code: tagvalue.ErrorCodeDuplicateTag},
+		{name: "duplicate tag", in: "m=1; h=sha256:" + base64OfByte(1, 32) + ":" + base64OfByte(2, 32) + "; m=2", code: tagvalue.ErrorCodeDuplicateTag},
+		{name: "uppercase known tag", in: "M=1; h=sha256:" + base64OfByte(1, 32) + ":" + base64OfByte(2, 32), code: tagvalue.ErrorCodeInvalidTagName},
+		{name: "uppercase extension tag", in: "m=1; h=sha256:" + base64OfByte(1, 32) + ":" + base64OfByte(2, 32) + "; X_ext=1", code: tagvalue.ErrorCodeInvalidTagName},
 		{name: "empty interior tag", in: "m=1;; h=sha256:" + base64OfByte(1, 32) + ":" + base64OfByte(2, 32), code: tagvalue.ErrorCodeEmptyTagSpec},
 		{name: "invalid extension tag", in: "m=1; h=sha256:" + base64OfByte(1, 32) + ":" + base64OfByte(2, 32) + "; x-bad=1", code: tagvalue.ErrorCodeInvalidTagName},
 	}
@@ -155,7 +158,7 @@ func TestParseRejectsMalformedHashSets(t *testing.T) {
 // TestParseRejectsDuplicateHashAlgorithms verifies h= ambiguity handling.
 func TestParseRejectsDuplicateHashAlgorithms(t *testing.T) {
 	value := "sha256:" + base64OfByte(1, 32) + ":" + base64OfByte(2, 32) +
-		", SHA256:" + base64OfByte(3, 32) + ":" + base64OfByte(4, 32)
+		", sha256:" + base64OfByte(3, 32) + ":" + base64OfByte(4, 32)
 	_, err := Parse(messageInstanceField(t, 0, "m=1; h="+value))
 	if !IsErrorCode(err, ErrorCodeDuplicateHashName) {
 		t.Fatalf("Parse() error = %v, want duplicate hash name", err)
@@ -164,7 +167,7 @@ func TestParseRejectsDuplicateHashAlgorithms(t *testing.T) {
 
 // TestHashSetAcceptsSHA512 proves the Draft-07 Message-Instance SHA-512 tuple contract.
 func TestHashSetAcceptsSHA512(t *testing.T) {
-	parsed, err := Parse(messageInstanceField(t, 0, "m=1; h=SHA512:"+base64OfByte(1, 64)+":"+base64OfByte(2, 64)))
+	parsed, err := Parse(messageInstanceField(t, 0, "m=1; h=sha512:"+base64OfByte(1, 64)+":"+base64OfByte(2, 64)))
 	if err != nil {
 		t.Fatalf("Parse() error = %v, want SHA-512 acceptance", err)
 	}
@@ -183,7 +186,7 @@ func TestHashSetAcceptsSHA512(t *testing.T) {
 // TestHashSetAcceptsMixedSupportedAlgorithmsInWireOrder proves dual-hash parsing.
 func TestHashSetAcceptsMixedSupportedAlgorithmsInWireOrder(t *testing.T) {
 	value := "sha512:" + base64OfByte(1, 64) + ":" + base64OfByte(2, 64) +
-		", SHA256:" + base64OfByte(3, 32) + ":" + base64OfByte(4, 32)
+		", sha256:" + base64OfByte(3, 32) + ":" + base64OfByte(4, 32)
 	parsed, err := Parse(messageInstanceField(t, 0, "m=1; h="+value))
 	if err != nil {
 		t.Fatalf("Parse() error = %v", err)
@@ -191,6 +194,37 @@ func TestHashSetAcceptsMixedSupportedAlgorithmsInWireOrder(t *testing.T) {
 	hashes, status := parsed.SupportedHashSets()
 	if status != HashSelectionStatusSelected || len(hashes) != 2 || hashes[0].Name() != HashAlgorithmSHA512 || hashes[1].Name() != HashAlgorithmSHA256 {
 		t.Fatalf("SupportedHashSets() status=%s hashes=%#v", status, hashes)
+	}
+}
+
+// TestHashNamesAreCaseSensitive reproduces the Draft-07 Section 2.14 and 9.3
+// rule that hash names are case-sensitive textstrings: uppercase spellings are
+// unknown algorithms, are never folded onto supported names, and count as
+// distinct names for duplicate detection.
+func TestHashNamesAreCaseSensitive(t *testing.T) {
+	parsed, err := Parse(messageInstanceField(t, 0, "m=1; h=SHA256:"+base64OfByte(1, 32)+":"+base64OfByte(2, 32)))
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	hashes := parsed.HashSets()
+	if len(hashes) != 1 || hashes[0].Name() != "SHA256" || hashes[0].Known() {
+		t.Fatalf("HashSets() = %#v, want one unknown SHA256 tuple", hashes)
+	}
+	if _, status := parsed.SupportedHashSets(); status != HashSelectionStatusUnsupported {
+		t.Fatalf("SupportedHashSets() status = %s, want unsupported", status)
+	}
+
+	mixed := "sha256:" + base64OfByte(1, 32) + ":" + base64OfByte(2, 32) + ", SHA256:" + base64OfByte(3, 32) + ":" + base64OfByte(4, 32)
+	if parsed, err = Parse(messageInstanceField(t, 0, "m=1; h="+mixed)); err != nil {
+		t.Fatalf("Parse(sha256, SHA256) error = %v, want distinct names", err)
+	}
+	if supported, status := parsed.SupportedHashSets(); status != HashSelectionStatusSelected || len(supported) != 1 || supported[0].Name() != HashAlgorithmSHA256 {
+		t.Fatalf("SupportedHashSets() status=%s hashes=%#v, want only lowercase sha256", status, supported)
+	}
+
+	duplicate := "sha256:" + base64OfByte(1, 32) + ":" + base64OfByte(2, 32) + ", sha256:" + base64OfByte(3, 32) + ":" + base64OfByte(4, 32)
+	if _, err = Parse(messageInstanceField(t, 0, "m=1; h="+duplicate)); !IsErrorCode(err, ErrorCodeDuplicateHashName) {
+		t.Fatalf("Parse(sha256, sha256) error = %v, want duplicate hash name", err)
 	}
 }
 
@@ -207,10 +241,11 @@ func TestHashSetRejectsWrongSHA512Lengths(t *testing.T) {
 	}
 }
 
-// TestHashSetRejectsDuplicateExtensionName proves case-equivalent extension names fail closed.
+// TestHashSetRejectsDuplicateExtensionName proves exactly repeated extension
+// names fail closed; differently cased names are distinct textstrings.
 func TestHashSetRejectsDuplicateExtensionName(t *testing.T) {
 	value := "future-hash:" + base64OfByte(1, 12) + ":" + base64OfByte(2, 12) +
-		", FUTURE-HASH:" + base64OfByte(3, 12) + ":" + base64OfByte(4, 12)
+		", future-hash:" + base64OfByte(3, 12) + ":" + base64OfByte(4, 12)
 	_, err := Parse(messageInstanceField(t, 0, "m=1; h="+value))
 	if !IsErrorCode(err, ErrorCodeDuplicateHashName) {
 		t.Fatalf("Parse() error = %v, want duplicate extension hash name", err)

@@ -65,7 +65,7 @@ Implement the M2 parser contract in the library core:
 - Parse `Message-Instance` header fields from M1 `rawmsg.HeaderField` values.
 - Parse `DKIM2-Signature` header fields from M1 `rawmsg.HeaderField` values.
 - Use one shared strict tag-value parser for DKIM2 header tag lists.
-- Treat DKIM2 header tag identifiers case-insensitively and tag values
+- Require lowercase DKIM2 header tag identifiers and treat tag values
   case-sensitively unless a tag-specific rule explicitly says otherwise.
 - Reject duplicate tag names, including duplicate extension tag names, within
   one field.
@@ -240,25 +240,29 @@ syntax that the DNS record format copies from DKIM2.
   `signature` packages must not implement parallel semicolon splitting,
   duplicate detection, FWS trimming, base64 FWS stripping, or tag-name
   validation.
-- For DKIM2 header fields, tag identifiers before `=` are case-insensitive.
-  The implementation canonicalizes tag identifiers to lowercase for matching
-  and duplicate detection. Generic DNS-compatible tag lists retain
-  case-sensitive tag identifiers as required by DNS draft-04 Section 3.2.
+- Tag identifiers before `=` are case-sensitive and never folded (Draft-07
+  Section 8). Draft-07 Sections 9 and 10 require every `Message-Instance` and
+  `DKIM2-Signature` tag name, including unknown extension names, to be
+  lowercase; the header scanner rejects any uppercase tag name as a syntax
+  error before semantic dispatch, so `M=1` is invalid rather than an ignored
+  tag plus a missing `m=`. A lenient reading of Section 8 would ignore such
+  tags; this repository follows the fail-closed reading. DNS key-record tag
+  lists keep the generic case-sensitive rule of DNS-01 Section 3.2.
 - Tag values after `=` are case-sensitive unless a tag-specific draft rule
   explicitly says otherwise.
 - WSP and FWS around tag names, `=`, tag values, commas, and colons is handled
   only where the relevant ABNF permits it.
-- Semicolons terminate header-field tags. Unencoded semicolons inside a tag
-  value are invalid, empty tag specifications are invalid, and every
-  `Message-Instance` or `DKIM2-Signature` tag including the final tag must have
-  the semicolon required by the draft-04 `mi-tag-list` and `sig-tag-list`
-  ABNF. The shared scanner must expose this as an explicit strict header mode:
-  DKIM2 DNS draft-04 Section 3.2 permits an optional final semicolon, so the
-  reusable tag-list core must remain capable of parsing that DNS grammar
-  without weakening the two header parsers.
+- Semicolons separate tags and the final semicolon is optional in both header
+  fields and DNS records (Draft-07 Section 8). Unencoded semicolons inside a
+  tag value are invalid, a tag list needs at least one tag-spec, and empty
+  interior tag specifications are invalid. Canonical signature input retains
+  the presence or absence of the final semicolon exactly.
 - Tags with duplicate names make the entire field invalid. This applies to
-  required tags, optional tags, and extension tags after case-insensitive
-  canonicalization.
+  required tags, optional tags, and extension tags under exact name
+  comparison.
+- Hash algorithm, signature algorithm, and flag names are case-sensitive
+  textstrings (Draft-07 Section 2.14). An uppercase spelling of a supported
+  name is an unknown name and is never folded onto the supported one.
 - Unknown extension tags are syntactically validated and then ignored by
   semantic results. They must not produce success data, but they still
   participate in duplicate detection and resource limits. Their values must
@@ -527,8 +531,8 @@ raw errors, or message-derived strings.
 Unit tests:
 
 - Shared tag scanner accepts semicolon-separated tags with and without a final
-  trailing semicolon in generic DNS-compatible mode, while strict header mode
-  rejects a missing final terminator.
+  trailing semicolon in both DNS and header mode; header mode rejects any
+  uppercase tag name.
 - Shared tag scanner rejects empty interior tag specs, missing `=`, invalid
   tag names, unencoded semicolons in values, duplicate known tags, duplicate
   extension tags, and fields over configured limits.

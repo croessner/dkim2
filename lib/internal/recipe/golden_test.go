@@ -33,7 +33,7 @@ func TestGoldenRecipeApplicationDraft07(t *testing.T) {
 		t.Fatalf("fixture draft = %q, want %q", fixture.Draft, recipeApplicationDraftBaseline)
 	}
 
-	parser, err := NewParser(DefaultLimits())
+	parser, err := NewParser(DefaultLimits(), testHeaderRelevance{relevant: true})
 	if err != nil {
 		t.Fatalf("NewParser() error = %v", err)
 	}

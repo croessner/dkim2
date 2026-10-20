@@ -14,12 +14,53 @@ type StepKind string
 const (
 	// StepKindCopy identifies an inclusive source-range copy.
 	StepKindCopy StepKind = "copy"
-	// StepKindData identifies literal data emission.
+	// StepKindData identifies UTF-8 literal data emission ("d").
 	StepKindData StepKind = "data"
+	// StepKindBinaryData identifies base64-carried literal emission ("u") for
+	// lines or values that are not valid UTF-8 (Draft-07 Section 5).
+	StepKindBinaryData StepKind = "binary_data"
 )
 
 // Known reports whether kind belongs to the Draft-07 recipe vocabulary.
-func (k StepKind) Known() bool { return k == StepKindCopy || k == StepKindData }
+func (k StepKind) Known() bool {
+	return k == StepKindCopy || k == StepKindData || k == StepKindBinaryData
+}
+
+// literalJSONBytes returns the JSON string length one decoded literal occupies
+// in serialized recipe JSON: the literal itself for "d" and its canonical
+// base64 length for "u". Parser string budgets apply to this length, so the
+// generator charges the same quantity.
+func (k StepKind) literalJSONBytes(literal []byte) int {
+	if k == StepKindBinaryData {
+		return (len(literal) + 2) / 3 * 4
+	}
+	return len(literal)
+}
+
+// literalKindFor selects "d" for valid UTF-8 literals and "u" otherwise.
+func literalKindFor(literal []byte) StepKind {
+	if utf8.Valid(literal) {
+		return StepKindData
+	}
+	return StepKindBinaryData
+}
+
+// literalStep reports whether kind emits decoded literal lines or values.
+func (k StepKind) literalStep() bool { return k == StepKindData || k == StepKindBinaryData }
+
+// validLiteral applies the kind-specific decoded literal invariant: "d"
+// literals are valid UTF-8 without CR or LF, while "u" literals only exclude
+// CR and LF after base64 decoding.
+func (k StepKind) validLiteral(literal []byte) bool {
+	switch k {
+	case StepKindData:
+		return validDataLiteral(literal)
+	case StepKindBinaryData:
+		return validBinaryLiteral(literal)
+	default:
+		return false
+	}
+}
 
 // BodyMode identifies the body member form in one parsed recipe.
 type BodyMode string
@@ -67,9 +108,9 @@ func (s step) copyRange() (int, int, bool) {
 	return s.copyStart, s.copyEnd, s.initialized && s.kind == StepKindCopy
 }
 
-// dataValues returns deep-cloned literals when this is a data step.
+// dataValues returns deep-cloned literals when this is a "d" or "u" step.
 func (s step) dataValues() [][]byte {
-	if !s.initialized || s.kind != StepKindData {
+	if !s.initialized || !s.kind.literalStep() {
 		return nil
 	}
 	return cloneBytesList(s.data)
@@ -87,7 +128,7 @@ func (s step) valid() bool {
 		return false
 	}
 	for _, literal := range s.data {
-		if !validDataLiteral(literal) {
+		if !s.kind.validLiteral(literal) {
 			return false
 		}
 	}
@@ -120,9 +161,23 @@ func newDataStep(data [][]byte) (step, error) {
 	return candidate, nil
 }
 
+// newBinaryDataStep constructs one immutable nonempty "u" step from decoded literals.
+func newBinaryDataStep(data [][]byte) (step, error) {
+	candidate := step{kind: StepKindBinaryData, data: cloneBytesList(data), initialized: true}
+	if len(data) == 0 || !candidate.valid() {
+		return step{}, newError(ErrorCodeInvalidLiteral, ErrorLocation{}, ErrorDetails{StepKind: StepKindBinaryData}, nil)
+	}
+	return candidate, nil
+}
+
 // validDataLiteral enforces the shared decoded UTF-8 and line-break invariant.
 func validDataLiteral(literal []byte) bool {
-	return utf8.Valid(literal) && !bytes.ContainsAny(literal, "\r\n")
+	return utf8.Valid(literal) && validBinaryLiteral(literal)
+}
+
+// validBinaryLiteral enforces the decoded line-break invariant shared by "d" and "u" steps.
+func validBinaryLiteral(literal []byte) bool {
+	return !bytes.ContainsAny(literal, "\r\n")
 }
 
 // clone returns a detached step value.

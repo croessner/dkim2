@@ -82,7 +82,7 @@
     {
       "id": "instance-draft07-source",
       "path": "lib/internal/instance/parser_test.go",
-      "sha256": "8ee3ad047c85f7172d0a1439cd677698e05b62f825379bc73f5c7d869c3de802",
+      "sha256": "73c7608bc74bf58032042942dc80c7a8cf7566ebdc670cc0dc8cfe633f7266aa",
       "module": "lib"
     },
     {
@@ -124,7 +124,7 @@
     {
       "id": "openapi-invalid-json-source",
       "path": "cmd/dkim2d/internal/httpjson/json_preflight_test.go",
-      "sha256": "cc66f38fb4fcde32faa3684072bfb3edb77232aefe2233c4f524a6d32e616eb5",
+      "sha256": "a5ed675c0bc82d28d69a73ab4ba9bb7d9cbc54784d111edfb6615c79a52b12db",
       "module": "cmd/dkim2d"
     },
     {
@@ -232,7 +232,13 @@
     {
       "id": "recipe-draft07-source",
       "path": "lib/internal/recipe/parser_test.go",
-      "sha256": "1159149f0301a509307205db00c2d30f4e57e2538849a1500b035695227e1935",
+      "sha256": "42382f2049361f008eabaec3673b69cf0f5dd0198b676012ebb57fd975b09ba2",
+      "module": "lib"
+    },
+    {
+      "id": "recipe-draft07-steps-source",
+      "path": "lib/internal/recipe/draft07_test.go",
+      "sha256": "adec41b9b1dc50c94e83e9facbe188ed83d820b1078286805ab1c1800bd5a7a5",
       "module": "lib"
     },
     {
@@ -250,7 +256,7 @@
     {
       "id": "recipe-negative-source",
       "path": "lib/internal/recipe/parser_contract_test.go",
-      "sha256": "64c8a1f99a3c80492566736e8019beb65400a01e3741c96d46e5000766c4ebcf",
+      "sha256": "e4dd64d5d67366bb5cb527373408075e4c70e8388f90fda04f147be3bcc46b1d",
       "module": "lib"
     },
     {
@@ -280,7 +286,7 @@
     {
       "id": "signature-negative-source",
       "path": "lib/internal/signature/parser_test.go",
-      "sha256": "fbc96d3344f60450c4a7129e5aaaa1e1444eba86116f28d1c86f14e35ce36796",
+      "sha256": "e9eb04ddb1865b0e566c2063f4ce05b5fc701923b53740992ce73db27476b301",
       "module": "lib"
     },
     {
@@ -316,13 +322,13 @@
     {
       "id": "signing-plan-source",
       "path": "lib/internal/signing/plan_test.go",
-      "sha256": "584df5c86e2e8435683acc1c48dec25dbdbcbf639dd94ea66c47c6c784bb17e2",
+      "sha256": "263c2aa1ebe0a925898804d1ed0e0e3956ab5d45ebf6653c63f858962ec76742",
       "module": "lib"
     },
     {
       "id": "signing-provenance",
       "path": "lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-07/README.md",
-      "sha256": "6c67932a34a53ae4935f82c8cfe3d73223ac56bf4ff3994b46882c46823958d8",
+      "sha256": "6e8b0899db0f1bbbad36e69a21c5bdf38ad5a5085635541d9526f5d4d3d119d7",
       "module": "lib"
     },
     {
@@ -581,7 +587,23 @@
     },
     {
       "suite": "instance",
-      "case_id": "draft07-sha512-uppercase",
+      "case_id": "draft07-hash-name-case-sensitive",
+      "class": "draft_normative",
+      "authority": [
+        "draft-ietf-dkim-dkim2-spec-07 Sections 2.14 and 9.3"
+      ],
+      "provenance": "regression_reproducer",
+      "runner": "portable_vector",
+      "required_platform": "portable",
+      "expected_outcome": "pass",
+      "artifacts": [
+        "instance-draft07-source"
+      ],
+      "producer": "instance-tests"
+    },
+    {
+      "suite": "instance",
+      "case_id": "draft07-sha512",
       "class": "draft_normative",
       "authority": [
         "draft-ietf-dkim-dkim2-spec-07 Sections 3.1 and 9.3"
@@ -1138,6 +1160,54 @@
     },
     {
       "suite": "recipe",
+      "case_id": "draft07-binary-data-negative",
+      "class": "draft_normative",
+      "authority": [
+        "draft-ietf-dkim-dkim2-spec-07 Section 5"
+      ],
+      "provenance": "regression_reproducer",
+      "runner": "portable_vector",
+      "required_platform": "portable",
+      "expected_outcome": "pass",
+      "artifacts": [
+        "recipe-draft07-steps-source"
+      ],
+      "producer": "recipe-tests"
+    },
+    {
+      "suite": "recipe",
+      "case_id": "draft07-binary-data-step",
+      "class": "draft_normative",
+      "authority": [
+        "draft-ietf-dkim-dkim2-spec-07 Section 5"
+      ],
+      "provenance": "regression_reproducer",
+      "runner": "portable_vector",
+      "required_platform": "portable",
+      "expected_outcome": "pass",
+      "artifacts": [
+        "recipe-draft07-steps-source"
+      ],
+      "producer": "recipe-tests"
+    },
+    {
+      "suite": "recipe",
+      "case_id": "draft07-lowercase-json-keys",
+      "class": "draft_normative",
+      "authority": [
+        "draft-ietf-dkim-dkim2-spec-07 Section 5"
+      ],
+      "provenance": "regression_reproducer",
+      "runner": "portable_vector",
+      "required_platform": "portable",
+      "expected_outcome": "pass",
+      "artifacts": [
+        "recipe-draft07-steps-source"
+      ],
+      "producer": "recipe-tests"
+    },
+    {
+      "suite": "recipe",
       "case_id": "draft07-lowercase-recipe",
       "class": "draft_normative",
       "authority": [
@@ -1165,6 +1235,22 @@
       "expected_outcome": "pass",
       "artifacts": [
         "recipe-draft07-source"
+      ],
+      "producer": "recipe-tests"
+    },
+    {
+      "suite": "recipe",
+      "case_id": "draft07-unsigned-header-recipe",
+      "class": "draft_normative",
+      "authority": [
+        "draft-ietf-dkim-dkim2-spec-07 Sections 4 and 5.1"
+      ],
+      "provenance": "regression_reproducer",
+      "runner": "portable_vector",
+      "required_platform": "portable",
+      "expected_outcome": "pass",
+      "artifacts": [
+        "recipe-draft07-steps-source"
       ],
       "producer": "recipe-tests"
     },
@@ -1448,6 +1534,22 @@
     },
     {
       "suite": "signing",
+      "case_id": "draft07-optional-final-semicolon",
+      "class": "draft_normative",
+      "authority": [
+        "draft-ietf-dkim-dkim2-spec-07 Section 8"
+      ],
+      "provenance": "regression_reproducer",
+      "runner": "portable_vector",
+      "required_platform": "portable",
+      "expected_outcome": "pass",
+      "artifacts": [
+        "signature-negative-source"
+      ],
+      "producer": "signature-tests"
+    },
+    {
+      "suite": "signing",
       "case_id": "draft07-same-algorithm-pair",
       "class": "draft_normative",
       "authority": [
@@ -1698,7 +1800,7 @@
       "case_id": "tag-case-interpretation",
       "class": "documented_interpretation",
       "authority": [
-        "draft-ietf-dkim-dkim2-spec-07 Sections 5 and 10",
+        "draft-ietf-dkim-dkim2-spec-07 Sections 8, 9, and 10",
         "docs/specs/implementation/dkim2-tag-parsers.md Shared Parsing Rules"
       ],
       "provenance": "manual_derivation",

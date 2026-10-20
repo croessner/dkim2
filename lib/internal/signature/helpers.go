@@ -59,26 +59,3 @@ func trimWSP(input []byte) ([]byte, int) {
 func isWSP(b byte) bool {
 	return b == ' ' || b == '\t'
 }
-
-// canonicalTokenName validates and lowercases an algorithm or flag token.
-func canonicalTokenName(input []byte) (string, bool) {
-	if len(input) == 0 {
-		return "", false
-	}
-
-	output := make([]byte, len(input))
-	for i, b := range input {
-		if b >= 'A' && b <= 'Z' {
-			output[i] = b + ('a' - 'A')
-			continue
-		}
-		if (b >= 'a' && b <= 'z') || (b >= '0' && b <= '9') || b == '_' || b == '-' {
-			output[i] = b
-			continue
-		}
-
-		return "", false
-	}
-
-	return string(output), true
-}

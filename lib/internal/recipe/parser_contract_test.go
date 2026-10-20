@@ -25,7 +25,7 @@ func TestParserAdditionalDraftAndRFC8259Vectors(t *testing.T) {
 		name, input string
 		code        ErrorCode
 	}{
-		{"uppercase dimensions", `{"H":{},"B":null}`, ErrorCodeMissingRecipeDimension},
+		{"uppercase dimensions", `{"H":{},"B":null}`, ErrorCodeNonLowercaseKey},
 		{"escaped header collision", `{"h":{"Subject":[],"\u0073ubject":[]}}`, ErrorCodeHeaderNameCollision},
 		{"escaped step duplicate", `{"b":[{"c":[1,1],"\u0063":[2,2]}]}`, ErrorCodeDuplicateMember},
 		{"escaped unknown duplicate", `{"x":{"y":1,"\u0079":2},"b":null}`, ErrorCodeDuplicateMember},

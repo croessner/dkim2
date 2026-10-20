@@ -57,13 +57,18 @@ func (g Generator) proveSerializedGeneration(request GenerationRequest, serializ
 		return generationProof{}, err
 	}
 
-	parser, err := NewParser(g.limits.RecipeLimits)
+	parser, err := NewParser(g.limits.RecipeLimits, g.relevance)
 	if err != nil {
 		return generationProof{}, generationInvariantErrorForDimension(DimensionRecipe)
 	}
 	parsed, parseUsage, err := parser.Parse(serialized.decodedJSON)
 	if usageErr := counter.recordParseProofUsage(parseUsage); usageErr != nil {
 		return generationProof{}, usageErr
+	}
+	if IsErrorCode(err, ErrorCodeUnsignedHeaderRecipe) || IsErrorCode(err, ErrorCodeHeaderRelevance) {
+		// The planner only emits relevant headers, so a proof-parse relevance
+		// rejection means the classifier changed its answer between phases.
+		return generationProof{}, headerRelevanceInvariantError()
 	}
 	if err != nil || !parsed.initialized || !generationBodyModelMatches(serialized, parsed) {
 		return generationProof{}, generationInvariantErrorForDimension(DimensionRecipe)

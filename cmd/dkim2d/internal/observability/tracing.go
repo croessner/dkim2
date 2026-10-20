@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/croessner/dkim2"
 	"github.com/croessner/dkim2/cmd/dkim2d/internal/config"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -26,7 +27,7 @@ import (
 
 const (
 	traceInstrumentationName = "github.com/croessner/dkim2/cmd/dkim2d"
-	traceDraftValue          = "draft-ietf-dkim-dkim2-spec-07"
+	traceDraftValue          = dkim2.DraftIdentifier
 	traceShutdownBudget      = 5 * time.Second
 )
 

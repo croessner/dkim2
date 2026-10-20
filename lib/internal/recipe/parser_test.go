@@ -274,7 +274,7 @@ func TestParserPreservesImmutabilityAndDiagnosticPrivacy(t *testing.T) {
 // mustParser constructs one parser or fails the test.
 func mustParser(t *testing.T, limits Limits) Parser {
 	t.Helper()
-	parser, err := NewParser(limits)
+	parser, err := NewParser(limits, testHeaderRelevance{relevant: true})
 	if err != nil {
 		t.Fatal(err)
 	}

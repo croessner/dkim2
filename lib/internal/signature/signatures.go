@@ -54,7 +54,7 @@ func parseSignatureSet(input []byte, limits tagvalue.Limits, fieldIndex int, sig
 	if !ok {
 		return Set{}, malformedSignatureSetError(fieldIndex, signatureIndex)
 	}
-	algorithm, ok := canonicalTokenName(rawAlgorithm)
+	algorithm, ok := tagvalue.ParseTextstring(rawAlgorithm)
 	if !ok || len(rawSignature) == 0 {
 		return Set{}, malformedSignatureSetError(fieldIndex, signatureIndex)
 	}

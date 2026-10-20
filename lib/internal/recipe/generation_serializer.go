@@ -253,11 +253,11 @@ func (p *serializationPreflight) validateSteps(steps []step, dimension Dimension
 			previousCopyEnd = end
 			continue
 		}
-		if !instruction.initialized || instruction.kind != StepKindData || instruction.copyStart != 0 || instruction.copyEnd != 0 || len(instruction.data) == 0 {
+		if !instruction.initialized || !instruction.kind.literalStep() || instruction.copyStart != 0 || instruction.copyEnd != 0 || len(instruction.data) == 0 {
 			return generationInvariantErrorForDimension(dimension)
 		}
 		for _, literal := range instruction.data {
-			if err := p.validateLiteral(literal, dimension, headerName); err != nil {
+			if err := p.validateLiteral(instruction.kind, literal, dimension, headerName); err != nil {
 				return err
 			}
 		}
@@ -284,8 +284,9 @@ func (p *serializationPreflight) validateCopy(start, end int, dimension Dimensio
 	return nil
 }
 
-// validateLiteral enforces decoded string, aggregate, and dimension line ceilings.
-func (p *serializationPreflight) validateLiteral(literal []byte, dimension Dimension, headerName string) error {
+// validateLiteral enforces serialized string, aggregate, and decoded dimension
+// line ceilings with the same quantities the parser charges.
+func (p *serializationPreflight) validateLiteral(kind StepKind, literal []byte, dimension Dimension, headerName string) error {
 	validationWork, ok := checkedMultiply(len(literal), 2)
 	if ok {
 		validationWork, ok = checkedAdd(validationWork, 1)
@@ -296,17 +297,18 @@ func (p *serializationPreflight) validateLiteral(literal []byte, dimension Dimen
 	if err := p.chargeWork(validationWork); err != nil {
 		return err
 	}
-	if !validDataLiteral(literal) {
+	if !kind.validLiteral(literal) {
 		return serializationFailureError(dimension)
 	}
 	dataStrings, ok := checkedAdd(p.dataStrings, 1)
 	if !ok || dataStrings > p.limits.MaxDataStrings {
 		return generationLimitError(limitNameMaxDataStrings, p.limits.MaxDataStrings, dataStrings, dimension)
 	}
-	if len(literal) > p.limits.MaxDataStringBytes {
-		return generationLimitError(limitNameMaxDataStringBytes, p.limits.MaxDataStringBytes, len(literal), dimension)
+	jsonBytes := kind.literalJSONBytes(literal)
+	if jsonBytes > p.limits.MaxDataStringBytes {
+		return generationLimitError(limitNameMaxDataStringBytes, p.limits.MaxDataStringBytes, jsonBytes, dimension)
 	}
-	total, ok := checkedAdd(p.literalBytes, len(literal))
+	total, ok := checkedAdd(p.literalBytes, jsonBytes)
 	if !ok || total > p.limits.MaxTotalLiteralBytes {
 		return generationLimitError(limitNameMaxTotalLiteralBytes, p.limits.MaxTotalLiteralBytes, total, dimension)
 	}
@@ -733,7 +735,11 @@ func (e *recipeJSONEmitter) emitSteps(steps []step) error {
 				return err
 			}
 		} else {
-			if err := e.writeMemberNameString("d"); err != nil {
+			member := "d"
+			if instruction.kind == StepKindBinaryData {
+				member = "u"
+			}
+			if err := e.writeMemberNameString(member); err != nil {
 				return err
 			}
 			if err := e.beginContainer("["); err != nil {
@@ -744,6 +750,9 @@ func (e *recipeJSONEmitter) emitSteps(steps []step) error {
 					if err := e.appendTokenString(","); err != nil {
 						return err
 					}
+				}
+				if instruction.kind == StepKindBinaryData {
+					literal = encodeBase64Line(literal)
 				}
 				if err := e.writeJSONStringBytes(literal); err != nil {
 					return err

@@ -1,9 +1,6 @@
 package recipe
 
 import (
-	"bytes"
-	"unicode/utf8"
-
 	"github.com/croessner/dkim2/internal/rawmsg"
 )
 
@@ -294,7 +291,9 @@ func (b *generationPlanBudget) planBodyLines(target, source [][]byte, policy Lit
 	return steps, "", nil
 }
 
-// bodyLiteralContent charges representability scans before validating one terminated line.
+// bodyLiteralContent charges representability scans before validating one
+// terminated line. A line is representable when it has no embedded CR or LF;
+// lines that are not valid UTF-8 are emitted as "u" literals.
 func bodyLiteralContent(encoded []byte, counter *generationCounter) ([]byte, bool, error) {
 	if err := counter.chargeWork(1, DimensionBody); err != nil {
 		return nil, false, err
@@ -313,7 +312,7 @@ func bodyLiteralContent(encoded []byte, counter *generationCounter) ([]byte, boo
 	if err := counter.chargeWork(validationWork, DimensionBody); err != nil {
 		return nil, false, err
 	}
-	return content, utf8.Valid(content) && !bytes.ContainsAny(content, "\r\n"), nil
+	return content, validBinaryLiteral(content), nil
 }
 
 // chargeBodyPlanPass accounts for final step and literal validation scans.

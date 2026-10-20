@@ -12,6 +12,7 @@ import (
 func FuzzApplyBody(f *testing.F) {
 	f.Add("one\r\ntwo\r\n", `{"b":[{"c":[1,1]},{"d":["x"]}]}`)
 	f.Add("tail", `{"b":[{"c":[1,1]}]}`)
+	f.Add("one\r\n", `{"b":[{"u":["/w=="]},{"c":[1,1]}]}`)
 	f.Fuzz(func(t *testing.T, body, encodedRecipe string) {
 		if len(body) > 2048 || len(encodedRecipe) > 2048 {
 			t.Skip()

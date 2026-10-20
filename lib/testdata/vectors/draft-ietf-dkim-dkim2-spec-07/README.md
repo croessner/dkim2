@@ -1,4 +1,4 @@
-# DKIM2 Draft-06 Library Vectors
+# DKIM2 Draft-07 Library Vectors
 
 This directory pins protocol evidence to
 `draft-ietf-dkim-dkim2-spec-07`.

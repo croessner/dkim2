@@ -22,11 +22,13 @@ func FuzzParseRecipe(f *testing.F) {
 		[]byte(`{"h":null}`), []byte(`{"b":[null]}`), []byte(`null`),
 		[]byte(`{"b":[{"z":true}]}`),
 		[]byte(`{"b":[{"c":[1,999999]}]}`),
+		[]byte(`{"b":[{"u":["/w=="]},{"u":["/x=="]},{"u":["DQo="]}]}`),
+		[]byte(`{"h":{"subject":[{"u":["b2xk"]}]},"B":null}`),
 		{0xff},
 	} {
 		f.Add(seed)
 	}
-	parser, err := NewParser(Limits{})
+	parser, err := NewParser(Limits{}, testHeaderRelevance{relevant: true})
 	if err != nil {
 		f.Fatal(err)
 	}
