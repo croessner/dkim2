@@ -2,9 +2,12 @@
 
 This repository contains an actively developed Go reference implementation of
 DKIM2 based on `draft-ietf-dkim-dkim2-spec-07` with the DNS companion
-`draft-ietf-dkim-dkim2-dns-01`. The migration from Draft-06 and DNS-00 is
-tracked in `docs/specs/draft-07-migration-disposition.md`; until every work
-package listed there is complete, this baseline is not a conformance claim.
+`draft-ietf-dkim-dkim2-dns-01`. The completed migration from Draft-06 and
+DNS-00 is recorded in `docs/specs/draft-07-migration-disposition.md`; operator
+upgrade steps and known limitations are in
+`docs/operator/draft-07-migration.md`. The baseline is not an external
+conformance claim until the real Exim matrix and external interoperability
+peers are requalified against Draft-07.
 
 The first design goal is precision: the core implementation must work from a
 controlled RFC 5322 message representation, preserve wire-significant details,
