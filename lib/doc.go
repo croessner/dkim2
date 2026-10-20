@@ -191,10 +191,10 @@
 // lease and commits it in two phases.
 //
 // SigningResult is a closed sum. Only UnrestrictedSignedMessage has Bytes.
-// LocalOnlySignedMessage and OutOfBandAcceptanceSignedMessage deliberately have
-// no generic byte, marshal, text, or release surface. Their type-specific
-// release methods atomically consume the same ticket lineage only after proving
-// the exact sealed in-control route or OOB receiver, envelope, and route. A
+// OutOfBandAcceptanceSignedMessage deliberately has no generic byte, marshal,
+// text, or release surface. Its type-specific release method atomically
+// consumes the same ticket lineage only after proving the exact sealed OOB
+// receiver, envelope, and route. A
 // terminal next-domain result remains OOB-restricted until that release or a
 // later authorized ordinary completion. Once an adapter legitimately receives
 // released bytes, it can still duplicate or misroute them; the library does not

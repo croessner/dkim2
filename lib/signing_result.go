@@ -111,8 +111,7 @@ func (f SigningAuthorizationFact) Valid() bool {
 			f.restriction == SigningRestrictionOutOfBandAcceptance
 	case SigningAuthorizationPolicy:
 		return f.status == SigningAuthorizationAuthorized &&
-			(f.restriction == SigningRestrictionUnrestricted ||
-				f.restriction == SigningRestrictionLocalOnly)
+			f.restriction == SigningRestrictionUnrestricted
 	case SigningAuthorizationFeedbackRelay:
 		return f.restriction == SigningRestrictionUnrestricted
 	case SigningAuthorizationRecipientDisclosure:
@@ -298,7 +297,6 @@ func (f SignedMessageFacts) GoString() string { return f.String() }
 func (f SignedMessageFacts) Format(state fmt.State, _ rune) { _, _ = io.WriteString(state, f.String()) }
 
 type unrestrictedResultMarker bool
-type localOnlyResultMarker bool
 type outOfBandResultMarker bool
 
 // UnrestrictedSignedMessage is a fully proved message with a generic byte-copy accessor.
@@ -349,14 +347,6 @@ func (m UnrestrictedSignedMessage) GoString() string { return m.String() }
 // Format routes every message formatting form through the redacted summary.
 func (m UnrestrictedSignedMessage) Format(state fmt.State, _ rune) {
 	_, _ = io.WriteString(state, m.String())
-}
-
-// LocalOnlySignedMessage is a fully proved restricted result with no byte,
-// marshal, text, or generic release accessor.
-type LocalOnlySignedMessage struct {
-	message signing.CompletedMessage
-	facts   SignedMessageFacts
-	marker  localOnlyResultMarker
 }
 
 // OutOfBandAcceptanceSignedMessage is a terminal nd= result with no generic byte escape.
@@ -410,58 +400,17 @@ func (m OutOfBandAcceptanceSignedMessage) Format(state fmt.State, _ rune) {
 	_, _ = io.WriteString(state, m.String())
 }
 
-// Valid reports whether this is a coherent local-only result.
-func (m LocalOnlySignedMessage) Valid() bool {
-	return bool(m.marker) && m.message.Valid() && m.facts.Valid() &&
-		m.facts.restriction == SigningRestrictionLocalOnly
-}
-
-// Facts returns bounded immutable operation facts.
-func (m LocalOnlySignedMessage) Facts() SignedMessageFacts { return m.facts }
-
-// ReleaseToInControl atomically releases bytes only to the exact sealed local route.
-func (m LocalOnlySignedMessage) ReleaseToInControl(
-	ctx context.Context,
-	ticket RouteCopyTicket,
-	routeScope []byte,
-) ([]byte, error) {
-	if !m.Valid() || !ticket.Valid() {
-		return nil, newSigningError(SigningErrorInvalidRequest)
-	}
-	output, err := m.message.ReleaseLocalOnly(ctx, ticket.value, routeScope)
-	if err != nil {
-		return nil, mapOperationError(err)
-	}
-	return output, nil
-}
-
-// String returns a constant secret-safe message summary.
-func (m LocalOnlySignedMessage) String() string { return "dkim2.LocalOnlySignedMessage{redacted}" }
-
-// GoString returns the constant secret-safe message Go representation.
-func (m LocalOnlySignedMessage) GoString() string { return m.String() }
-
-// Format routes every message formatting form through the redacted summary.
-func (m LocalOnlySignedMessage) Format(state fmt.State, _ rune) {
-	_, _ = io.WriteString(state, m.String())
-}
-
 // SigningResult is a closed signing result sum.
 type SigningResult struct {
 	unrestricted UnrestrictedSignedMessage
-	localOnly    LocalOnlySignedMessage
 	outOfBand    OutOfBandAcceptanceSignedMessage
 	kind         SigningRestriction
 }
 
 // Valid reports whether exactly one coherent result variant is present.
 func (r SigningResult) Valid() bool {
-	return r.kind == SigningRestrictionUnrestricted && r.unrestricted.Valid() &&
-		!r.localOnly.Valid() && !r.outOfBand.Valid() ||
-		r.kind == SigningRestrictionLocalOnly && r.localOnly.Valid() &&
-			!r.unrestricted.Valid() && !r.outOfBand.Valid() ||
-		r.kind == SigningRestrictionOutOfBandAcceptance && r.outOfBand.Valid() &&
-			!r.unrestricted.Valid() && !r.localOnly.Valid()
+	return r.kind == SigningRestrictionUnrestricted && r.unrestricted.Valid() && !r.outOfBand.Valid() ||
+		r.kind == SigningRestrictionOutOfBandAcceptance && r.outOfBand.Valid() && !r.unrestricted.Valid()
 }
 
 // OutOfBandAcceptance returns the OOB-restricted no-byte variant when present.
@@ -478,14 +427,6 @@ func (r SigningResult) Unrestricted() (UnrestrictedSignedMessage, bool) {
 		return UnrestrictedSignedMessage{}, false
 	}
 	return r.unrestricted, true
-}
-
-// LocalOnly returns the restricted no-byte variant when present.
-func (r SigningResult) LocalOnly() (LocalOnlySignedMessage, bool) {
-	if !r.Valid() || r.kind != SigningRestrictionLocalOnly {
-		return LocalOnlySignedMessage{}, false
-	}
-	return r.localOnly, true
 }
 
 // String returns a constant secret-safe result summary.
@@ -527,10 +468,6 @@ func newSigningResult(message signing.CompletedMessage) SigningResult {
 		multiplicity:   message.Multiplicity(),
 		restriction:    SigningRestriction(message.Restriction()),
 		authorizations: authorizations, valid: true,
-	}
-	if facts.restriction == SigningRestrictionLocalOnly {
-		value := LocalOnlySignedMessage{message: message, facts: facts, marker: true}
-		return SigningResult{localOnly: value, kind: facts.restriction}
 	}
 	if facts.restriction == SigningRestrictionOutOfBandAcceptance {
 		value := OutOfBandAcceptanceSignedMessage{message: message, facts: facts, marker: true}

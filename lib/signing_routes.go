@@ -116,9 +116,10 @@ func NewExistingRouteEntry(capability VerifiedRevisionInput, source SigningSourc
 	return RouteEntry{value: value}, nil
 }
 
-// NewInControlExistingRouteEntry constructs an existing-message route eligible
-// for local-only release; inbound receiver evidence is required exactly for
-// terminal next-domain completion and absent for ordinary predecessors.
+// NewInControlExistingRouteEntry constructs an existing-message route that
+// stays under the operator's control; inbound receiver evidence is required
+// exactly for terminal next-domain completion and absent for ordinary
+// predecessors.
 func NewInControlExistingRouteEntry(
 	capability VerifiedRevisionInput,
 	source SigningSource,

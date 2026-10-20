@@ -192,7 +192,7 @@ func TestCompleteMessageIgnoresRemovedDonotmodifyFlag(t *testing.T) {
 	entry, err := NewClassifiedBoundRouteEntry(
 		harness.request.Capability, source, routeplan.PurposeRevision, []byte("<rcpt@example.test>"),
 		[][]byte{[]byte("<next@example.test>")}, routeplan.DisclosureSingle,
-		routeplan.RouteInControl, []byte("local-only-route"), nil,
+		routeplan.RouteInControl, []byte("in-control-route"), nil,
 	)
 	if err != nil {
 		t.Fatalf("NewBoundRouteEntry() error = %v", err)

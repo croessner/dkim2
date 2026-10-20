@@ -304,7 +304,7 @@
     {
       "id": "signing-facade-source",
       "path": "lib/signing_facade_test.go",
-      "sha256": "11cf11bd76d686618054190388aeca962a356adc0d49b53da6de194811c47055",
+      "sha256": "80f9c174d7761d201f9f447417543604ccd4745d9c8286343db7465b7ecad4d7",
       "module": "lib"
     },
     {
@@ -316,7 +316,7 @@
     {
       "id": "signing-message-source",
       "path": "lib/internal/signing/message_test.go",
-      "sha256": "0686b996322800fad8cab1c944a12564b7c7ff75d3eb9fcbfad663fc0a0099e8",
+      "sha256": "623da4c4cc43eec232b75223eeb0f36859cb83ac321b6640670d1916a4838782",
       "module": "lib"
     },
     {

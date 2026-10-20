@@ -75,7 +75,7 @@ func (f AuthorizationFact) Valid() bool {
 		return f.status == AuthorizationAuthorized && f.restriction == RestrictionOutOfBand
 	case AuthorizationPolicy:
 		return f.status == AuthorizationAuthorized &&
-			(f.restriction == RestrictionUnrestricted || f.restriction == RestrictionLocalOnly)
+			f.restriction == RestrictionUnrestricted
 	case AuthorizationFeedbackRelay:
 		return f.restriction == RestrictionUnrestricted
 	case AuthorizationDisclosure:
@@ -142,7 +142,7 @@ func (m CompletedMessage) Valid() bool {
 	if !m.validFacts() {
 		return false
 	}
-	restricted := m.restriction == RestrictionLocalOnly || m.restriction == RestrictionOutOfBand
+	restricted := m.restriction == RestrictionOutOfBand
 	reservationCoherent := !restricted && m.reservation == nil ||
 		restricted && m.reservation != nil && m.reservation.RestrictedReleaseRequired()
 	return reservationCoherent
@@ -309,19 +309,6 @@ func (m CompletedMessage) UnrestrictedBytes() ([]byte, bool) {
 	return bytes.Clone(m.raw), true
 }
 
-// ReleaseLocalOnly atomically releases bytes to the exact sealed in-control route.
-func (m CompletedMessage) ReleaseLocalOnly(
-	ctx context.Context,
-	ticket routeplan.CopyTicket,
-	routeScope []byte,
-) ([]byte, error) {
-	proof, err := routeplan.NewLocalReleaseProof(ticket, routeScope)
-	if err != nil {
-		return nil, err
-	}
-	return m.releaseRestricted(ctx, proof, RestrictionLocalOnly)
-}
-
 // ReleaseOutOfBand atomically releases bytes to the exact sealed OOB receiver route.
 func (m CompletedMessage) ReleaseOutOfBand(
 	ctx context.Context,
@@ -414,10 +401,7 @@ func (c Coordinator) CompleteMessage(ctx context.Context, completed CompletedSig
 	}
 	bodyUnavailable := completed.plan.GenerationFacts().BodyOutcome() == recipe.BodyGenerationUnavailable
 	releaseRequirement := routeplan.ReleaseUnrestricted
-	switch completed.restriction {
-	case RestrictionLocalOnly:
-		releaseRequirement = routeplan.ReleaseLocalOnly
-	case RestrictionOutOfBand:
+	if completed.restriction == RestrictionOutOfBand {
 		releaseRequirement = routeplan.ReleaseOutOfBand
 	}
 	restricted := releaseRequirement.Restricted()

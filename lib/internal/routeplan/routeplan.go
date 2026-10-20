@@ -96,7 +96,7 @@ type RouteClass string
 const (
 	// RouteExternal identifies an ordinary route that cannot release restricted output.
 	RouteExternal RouteClass = "external"
-	// RouteInControl identifies a sealed in-control route eligible for local-only release.
+	// RouteInControl identifies a sealed route that stays under the operator's control.
 	RouteInControl RouteClass = "in_control"
 	// RouteOutOfBand identifies a sealed receiver arrangement eligible for OOB release.
 	RouteOutOfBand RouteClass = "out_of_band"
@@ -972,7 +972,7 @@ func (r Reservation) ReplacementRequired() bool {
 	return r.coordinator != nil && r.ticket.Valid() && r.state == reservationBurned
 }
 
-// RestrictedReleaseRequired reports whether successful local-only signing awaits route-bound release.
+// RestrictedReleaseRequired reports whether successful restricted signing awaits route-bound release.
 func (r *Reservation) RestrictedReleaseRequired() bool {
 	if r == nil || r.releaseMu == nil {
 		return false
@@ -1003,35 +1003,24 @@ type ReleaseRequirement string
 const (
 	// ReleaseUnrestricted completes signing without a restricted release phase.
 	ReleaseUnrestricted ReleaseRequirement = "unrestricted"
-	// ReleaseLocalOnly requires a same-ticket sealed in-control route proof.
-	ReleaseLocalOnly ReleaseRequirement = "local_only"
 	// ReleaseOutOfBand requires a same-ticket sealed OOB receiver and envelope proof.
 	ReleaseOutOfBand ReleaseRequirement = "out_of_band"
 )
 
 // Known reports whether requirement belongs to the closed release vocabulary.
 func (r ReleaseRequirement) Known() bool {
-	return r == ReleaseUnrestricted || r == ReleaseLocalOnly || r == ReleaseOutOfBand
+	return r == ReleaseUnrestricted || r == ReleaseOutOfBand
 }
 
 // Restricted reports whether successful signing retains an authority release phase.
 func (r ReleaseRequirement) Restricted() bool {
-	return r == ReleaseLocalOnly || r == ReleaseOutOfBand
+	return r == ReleaseOutOfBand
 }
 
 // RestrictedReleaseProof is an opaque exact-ticket release authorization.
 type RestrictedReleaseProof struct {
 	requirement ReleaseRequirement
 	query       TicketQuery
-}
-
-// NewLocalReleaseProof proves one exact in-control route against its sealed ticket.
-func NewLocalReleaseProof(ticket CopyTicket, routeScope []byte) (RestrictedReleaseProof, error) {
-	if !ticket.Valid() || ticket.binding.routeClass != RouteInControl ||
-		len(routeScope) == 0 || !protectedBindingEqual(ticket.binding.route, routeScope) {
-		return RestrictedReleaseProof{}, newError(ErrorInvalidRequest)
-	}
-	return RestrictedReleaseProof{requirement: ReleaseLocalOnly, query: ticket.query()}, nil
 }
 
 // NewOutOfBandReleaseProof proves one exact OOB receiver, envelope, and route.
@@ -1113,8 +1102,6 @@ func releaseRequirementMatchesRoute(requirement ReleaseRequirement, routeClass R
 	switch requirement {
 	case ReleaseUnrestricted:
 		return routeClass.Known()
-	case ReleaseLocalOnly:
-		return routeClass == RouteInControl
 	case ReleaseOutOfBand:
 		return routeClass == RouteOutOfBand
 	default:

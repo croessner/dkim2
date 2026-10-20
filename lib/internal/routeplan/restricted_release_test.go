@@ -11,7 +11,7 @@ import (
 	"testing"
 )
 
-// TestRestrictedReleaseProofsRequireExactSealedRouteClass proves local and OOB directionality.
+// TestRestrictedReleaseProofsRequireExactSealedRouteClass proves OOB release directionality.
 func TestRestrictedReleaseProofsRequireExactSealedRouteClass(t *testing.T) {
 	source := mustSource(t, []byte("Subject: restricted release\r\n\r\nbody\r\n"))
 	tests := []struct {
@@ -21,12 +21,6 @@ func TestRestrictedReleaseProofsRequireExactSealedRouteClass(t *testing.T) {
 		requirement ReleaseRequirement
 		proof       func(CopyTicket) (RestrictedReleaseProof, error)
 	}{
-		{
-			name: "local", routeClass: RouteInControl, requirement: ReleaseLocalOnly,
-			proof: func(ticket CopyTicket) (RestrictedReleaseProof, error) {
-				return NewLocalReleaseProof(ticket, []byte("route-0"))
-			},
-		},
 		{
 			name: "out of band", routeClass: RouteOutOfBand,
 			receiver: []byte("receiver-transaction"), requirement: ReleaseOutOfBand,
@@ -69,44 +63,42 @@ func TestRestrictedReleaseProofsRequireExactSealedRouteClass(t *testing.T) {
 	}
 }
 
-// TestRestrictedReleaseRejectsWrongExternalCrossTicketAndModeWithoutConsumption proves local failures are noncommitting.
+// TestRestrictedReleaseRejectsWrongExternalCrossTicketAndModeWithoutConsumption proves OOB failures are noncommitting.
 func TestRestrictedReleaseRejectsWrongExternalCrossTicketAndModeWithoutConsumption(t *testing.T) {
 	source := mustSource(t, []byte("Subject: restricted negatives\r\n\r\nbody\r\n"))
 	coordinator := mustCoordinator(t, NewMemoryAuthority(), Limits{})
 	_, tickets, err := coordinator.Finalize(context.Background(), mustPlanRequest(t, []Entry{
-		mustClassifiedEntry(t, source, 0, RouteInControl, nil),
-		mustClassifiedEntry(t, source, 1, RouteInControl, nil),
+		mustClassifiedEntry(t, source, 0, RouteOutOfBand, []byte("receiver")),
+		mustClassifiedEntry(t, source, 1, RouteOutOfBand, []byte("receiver")),
 		mustClassifiedEntry(t, source, 2, RouteExternal, nil),
 	}))
 	if err != nil {
 		t.Fatalf("Finalize() error = %v", err)
 	}
-	if proof, proofErr := NewLocalReleaseProof(tickets[0], []byte("wrong-route")); proof.Valid() ||
-		!IsErrorCode(proofErr, ErrorInvalidRequest) {
+	if proof, proofErr := NewOutOfBandReleaseProof(
+		tickets[0], tickets[0].binding.reversePath, tickets[0].binding.forwardPaths,
+		tickets[0].binding.outboundReceiver, []byte("wrong-route"),
+	); proof.Valid() || !IsErrorCode(proofErr, ErrorInvalidRequest) {
 		t.Fatalf("wrong route proof valid=%t error=%v", proof.Valid(), proofErr)
 	}
-	if proof, proofErr := NewLocalReleaseProof(tickets[2], []byte("route-2")); proof.Valid() ||
-		!IsErrorCode(proofErr, ErrorInvalidRequest) {
+	if proof, proofErr := NewOutOfBandReleaseProof(
+		tickets[2], tickets[2].binding.reversePath, tickets[2].binding.forwardPaths,
+		[]byte("receiver"), []byte("route-2"),
+	); proof.Valid() || !IsErrorCode(proofErr, ErrorInvalidRequest) {
 		t.Fatalf("external route proof valid=%t error=%v", proof.Valid(), proofErr)
 	}
-	firstProof, err := NewLocalReleaseProof(tickets[0], []byte("route-0"))
-	if err != nil {
-		t.Fatalf("first proof error = %v", err)
-	}
-	secondProof, err := NewLocalReleaseProof(tickets[1], []byte("route-1"))
-	if err != nil {
-		t.Fatalf("second proof error = %v", err)
-	}
+	firstProof := mustOutOfBandReleaseProof(t, tickets[0])
+	secondProof := mustOutOfBandReleaseProof(t, tickets[1])
 	reservation := mustBurnedReservation(t, coordinator, tickets[0])
-	if err := reservation.CommitSuccessfulSigning(ReleaseLocalOnly); err != nil {
+	if err := reservation.CommitSuccessfulSigning(ReleaseOutOfBand); err != nil {
 		t.Fatalf("CommitSuccessfulSigning() error = %v", err)
 	}
 	if err := reservation.ConsumeRestrictedRelease(context.Background(), secondProof); !IsErrorCode(err, ErrorState) {
 		t.Fatalf("cross-ticket proof error = %v", err)
 	}
-	oobProof := firstProof
-	oobProof.requirement = ReleaseOutOfBand
-	if err := reservation.ConsumeRestrictedRelease(context.Background(), oobProof); !IsErrorCode(err, ErrorState) {
+	wrongModeProof := firstProof
+	wrongModeProof.requirement = ReleaseUnrestricted
+	if err := reservation.ConsumeRestrictedRelease(context.Background(), wrongModeProof); !IsErrorCode(err, ErrorState) {
 		t.Fatalf("wrong-mode proof error = %v", err)
 	}
 	if err := reservation.ConsumeRestrictedRelease(context.Background(), firstProof); err != nil {
@@ -123,10 +115,8 @@ func TestSuccessfulSigningRejectsRouteRequirementMismatch(t *testing.T) {
 		receiver    []byte
 		requirement ReleaseRequirement
 	}{
-		{name: "external local-only", routeClass: RouteExternal, requirement: ReleaseLocalOnly},
 		{name: "external OOB", routeClass: RouteExternal, requirement: ReleaseOutOfBand},
 		{name: "in-control OOB", routeClass: RouteInControl, requirement: ReleaseOutOfBand},
-		{name: "OOB local-only", routeClass: RouteOutOfBand, receiver: []byte("receiver"), requirement: ReleaseLocalOnly},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			coordinator := mustCoordinator(t, NewMemoryAuthority(), Limits{})
@@ -161,7 +151,6 @@ func TestReceiverEvidenceIsOrthogonalToOutboundRelease(t *testing.T) {
 	}{
 		{name: "external unrestricted", routeClass: RouteExternal, requirement: ReleaseUnrestricted},
 		{name: "in-control unrestricted", routeClass: RouteInControl, requirement: ReleaseUnrestricted},
-		{name: "in-control local-only", routeClass: RouteInControl, requirement: ReleaseLocalOnly},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			coordinator := mustCoordinator(t, NewMemoryAuthority(), Limits{})
@@ -181,15 +170,7 @@ func TestReceiverEvidenceIsOrthogonalToOutboundRelease(t *testing.T) {
 			if err := reservation.CommitSuccessfulSigning(test.requirement); err != nil {
 				t.Fatalf("CommitSuccessfulSigning() error = %v", err)
 			}
-			if test.requirement == ReleaseLocalOnly {
-				proof, proofErr := NewLocalReleaseProof(tickets[0], []byte("route-0"))
-				if proofErr != nil {
-					t.Fatalf("NewLocalReleaseProof() error = %v", proofErr)
-				}
-				if err := reservation.ConsumeRestrictedRelease(context.Background(), proof); err != nil {
-					t.Fatalf("ConsumeRestrictedRelease() error = %v", err)
-				}
-			} else if reservation.RestrictedReleaseRequired() {
+			if reservation.RestrictedReleaseRequired() {
 				t.Fatal("unrestricted completion retained release phase")
 			}
 		})
@@ -230,10 +211,6 @@ func TestOutOfBandReleaseProofRequiresExactReceiverEnvelopeAndRoute(t *testing.T
 			}
 		})
 	}
-	if proof, proofErr := NewLocalReleaseProof(ticket, []byte("route-0")); proof.Valid() ||
-		!IsErrorCode(proofErr, ErrorInvalidRequest) {
-		t.Fatalf("OOB ticket became local proof: valid=%t error=%v", proof.Valid(), proofErr)
-	}
 }
 
 // TestRestrictedReleaseConcurrentConsumptionHasOneWinner proves one atomic release phase.
@@ -241,17 +218,14 @@ func TestRestrictedReleaseConcurrentConsumptionHasOneWinner(t *testing.T) {
 	source := mustSource(t, []byte("Subject: concurrent release\r\n\r\nbody\r\n"))
 	coordinator := mustCoordinator(t, NewMemoryAuthority(), Limits{})
 	_, tickets, err := coordinator.Finalize(context.Background(), mustPlanRequest(t, []Entry{
-		mustClassifiedEntry(t, source, 0, RouteInControl, nil),
+		mustClassifiedEntry(t, source, 0, RouteOutOfBand, []byte("receiver")),
 	}))
 	if err != nil {
 		t.Fatalf("Finalize() error = %v", err)
 	}
-	proof, err := NewLocalReleaseProof(tickets[0], []byte("route-0"))
-	if err != nil {
-		t.Fatalf("NewLocalReleaseProof() error = %v", err)
-	}
+	proof := mustOutOfBandReleaseProof(t, tickets[0])
 	reservation := mustBurnedReservation(t, coordinator, tickets[0])
-	if err := reservation.CommitSuccessfulSigning(ReleaseLocalOnly); err != nil {
+	if err := reservation.CommitSuccessfulSigning(ReleaseOutOfBand); err != nil {
 		t.Fatalf("CommitSuccessfulSigning() error = %v", err)
 	}
 	const workers = 16
@@ -428,14 +402,14 @@ func TestRestrictedReleaseTypesAreRedactedAndHaveNoGenericSerialization(t *testi
 		}
 	}
 	proof := RestrictedReleaseProof{
-		requirement: ReleaseLocalOnly,
+		requirement: ReleaseOutOfBand,
 		query: TicketQuery{
 			parentID: filledDigest(1), ticketID: filledDigest(2),
 			binding: filledDigest(3), seal: filledDigest(4),
 		},
 	}
 	formatted := fmt.Sprintf("%v %+v %#v %s", proof, proof, proof, proof)
-	if strings.Contains(formatted, "local_only") || !strings.Contains(formatted, "redacted") {
+	if strings.Contains(formatted, "out_of_band") || !strings.Contains(formatted, "redacted") {
 		t.Fatalf("unsafe proof formatting %q", formatted)
 	}
 }
@@ -451,6 +425,19 @@ func mustBurnedReservation(t *testing.T, coordinator Coordinator, ticket CopyTic
 		t.Fatalf("PrepareExternalBoundary() error = %v", err)
 	}
 	return &reservation
+}
+
+// mustOutOfBandReleaseProof proves one OOB fixture ticket against its own sealed bindings.
+func mustOutOfBandReleaseProof(t *testing.T, ticket CopyTicket) RestrictedReleaseProof {
+	t.Helper()
+	proof, err := NewOutOfBandReleaseProof(
+		ticket, ticket.binding.reversePath, ticket.binding.forwardPaths,
+		ticket.binding.outboundReceiver, ticket.binding.route,
+	)
+	if err != nil {
+		t.Fatalf("NewOutOfBandReleaseProof() error = %v", err)
+	}
+	return proof
 }
 
 // filledDigest constructs one nonzero opaque digest fixture.

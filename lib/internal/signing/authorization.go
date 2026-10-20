@@ -113,15 +113,13 @@ type ForwardingRestriction string
 const (
 	// RestrictionUnrestricted permits the later ordinary release path.
 	RestrictionUnrestricted ForwardingRestriction = "unrestricted"
-	// RestrictionLocalOnly permits only the later exact in-control route release.
-	RestrictionLocalOnly ForwardingRestriction = "local_only"
 	// RestrictionOutOfBand requires the later exact OOB acceptance release path.
 	RestrictionOutOfBand ForwardingRestriction = "requires_out_of_band_acceptance"
 )
 
 // Known reports whether restriction belongs to the closed output vocabulary.
 func (r ForwardingRestriction) Known() bool {
-	return r == RestrictionUnrestricted || r == RestrictionLocalOnly || r == RestrictionOutOfBand
+	return r == RestrictionUnrestricted || r == RestrictionOutOfBand
 }
 
 // AuthorizationQuery is an immutable exact operation authorization request.

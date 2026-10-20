@@ -56,16 +56,13 @@ type SigningRestriction string
 const (
 	// SigningRestrictionUnrestricted permits ordinary message release.
 	SigningRestrictionUnrestricted SigningRestriction = "unrestricted"
-	// SigningRestrictionLocalOnly prevents generic message-byte release.
-	SigningRestrictionLocalOnly SigningRestriction = "local_only"
 	// SigningRestrictionOutOfBandAcceptance requires exact OOB-bound release.
 	SigningRestrictionOutOfBandAcceptance SigningRestriction = "requires_out_of_band_acceptance"
 )
 
 // Known reports whether restriction belongs to the closed signing vocabulary.
 func (r SigningRestriction) Known() bool {
-	return r == SigningRestrictionUnrestricted || r == SigningRestrictionLocalOnly ||
-		r == SigningRestrictionOutOfBandAcceptance
+	return r == SigningRestrictionUnrestricted || r == SigningRestrictionOutOfBandAcceptance
 }
 
 // SigningOutOfBandFacts exposes exact values only across the trusted authorizer boundary.

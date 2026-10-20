@@ -375,9 +375,6 @@ func (c Coordinator) CompleteField(ctx context.Context, request SignFieldRequest
 			return fail(callErr)
 		}
 		policyRestriction := authorization.Restriction()
-		if restriction == RestrictionOutOfBand && policyRestriction == RestrictionLocalOnly {
-			return fail(newError(ErrorCodeAuthorizationDenied, ErrorLocation{Phase: PhaseCallback}, ErrorDetails{}))
-		}
 		if restriction != RestrictionOutOfBand {
 			restriction = policyRestriction
 		}
@@ -574,17 +571,6 @@ func (c Coordinator) preflight(ctx context.Context, request SignFieldRequest) (p
 		prepared.policy, err = NewPolicyAuthorizationQuery(request.Capability, request.Ticket, request.Plan.modifications)
 		if err != nil {
 			return preparedSigningOperation{}, err
-		}
-		if prepared.policy.restriction == RestrictionLocalOnly &&
-			request.Ticket.RouteClass() != routeplan.RouteInControl {
-			return preparedSigningOperation{}, newError(
-				ErrorCodeAuthorizationDenied, ErrorLocation{Phase: PhasePreflight}, ErrorDetails{},
-			)
-		}
-		if prepared.hasSend && prepared.policy.restriction == RestrictionLocalOnly {
-			return preparedSigningOperation{}, newError(
-				ErrorCodeAuthorizationDenied, ErrorLocation{Phase: PhasePreflight}, ErrorDetails{},
-			)
 		}
 		prepared.hasPolicy = true
 		if capabilityHasFeedback(request.Capability) {

@@ -513,7 +513,7 @@ func (f publicSigningFixture) existingTicketFor(t *testing.T, capability Verifie
 	return tickets[0]
 }
 
-// existingInControlTicket plans one capability-bound local-only release route.
+// existingInControlTicket plans one capability-bound in-control route.
 func (f publicSigningFixture) existingInControlTicket(t *testing.T, capability VerifiedRevisionInput, raw []byte, disclosure RouteDisclosure) RouteCopyTicket {
 	t.Helper()
 	source, err := NewSigningSource(raw)
@@ -639,13 +639,13 @@ func TestPublicOriginatorSigningAlgorithmsAndImmutableBytes(t *testing.T) {
 }
 
 // TestPublicInvalidTransportFailsBeforeCallbacksAndRestrictedAPIHasNoBytes
-// proves closed transport preflight and the local-only API shape.
+// proves closed transport preflight and the restricted API shape.
 func TestPublicInvalidTransportFailsBeforeCallbacksAndRestrictedAPIHasNoBytes(t *testing.T) {
-	if _, ok := reflect.TypeFor[LocalOnlySignedMessage]().MethodByName("Bytes"); ok {
-		t.Fatal("LocalOnlySignedMessage exposes Bytes")
+	if _, ok := reflect.TypeFor[OutOfBandAcceptanceSignedMessage]().MethodByName("Bytes"); ok {
+		t.Fatal("OutOfBandAcceptanceSignedMessage exposes Bytes")
 	}
-	if _, ok := reflect.TypeFor[LocalOnlySignedMessage]().MethodByName("MarshalText"); ok {
-		t.Fatal("LocalOnlySignedMessage exposes MarshalText")
+	if _, ok := reflect.TypeFor[OutOfBandAcceptanceSignedMessage]().MethodByName("MarshalText"); ok {
+		t.Fatal("OutOfBandAcceptanceSignedMessage exposes MarshalText")
 	}
 	if _, ok := reflect.TypeFor[SigningResult]().MethodByName("Bytes"); ok {
 		t.Fatal("SigningResult exposes generic Bytes")
@@ -1012,8 +1012,8 @@ func TestPublicRemovedDraft06FlagsAreNotRequestableAndRevisionStaysUnrestricted(
 	if !ok || !revisedMessage.Valid() || revisedMessage.Facts().Restriction() != SigningRestrictionUnrestricted {
 		t.Fatalf("revised result unrestricted=%v facts=%#v", ok, revisedMessage.Facts())
 	}
-	if _, ok := result.LocalOnly(); ok {
-		t.Fatal("revised result exposed a local-only variant")
+	if _, ok := result.OutOfBandAcceptance(); ok {
+		t.Fatal("revised in-control result exposed a restricted variant")
 	}
 }
 

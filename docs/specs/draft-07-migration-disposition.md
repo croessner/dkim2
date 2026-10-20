@@ -274,9 +274,12 @@ Open follow-ups owned by later packages:
 - `donotmodify`/`donotexplode` (Section 10.10) are removed everywhere and
   parse as inert unknown flags; their daemon configuration keys fail with a
   migration error.
-- Follow-up: without `donotmodify`, nothing produces the `local_only`
-  restriction anymore. `LocalOnlySignedMessage` and its release path are
-  unreachable and should be removed in a separate cleanup.
+- Follow-up (done): without `donotmodify`, nothing produced the `local_only`
+  restriction anymore. The unreachable `local_only` restriction values in the
+  public, signing, and route-plan vocabularies, `LocalOnlySignedMessage`,
+  `SigningResult.LocalOnly`, and the in-control release proof were removed in
+  a separate cleanup. In-control routes remain and sign unrestricted output;
+  route-plan restricted-release tests now exercise the OOB proof.
 - Review follow-ups: Draft-07 Sections 2.11 and 13 make every Signer
   requirement part of a Validly Signed message, so an `i=1` signature carrying
   `exploded` is now rejected as `malformed_protocol` PERMERROR (fixtures that

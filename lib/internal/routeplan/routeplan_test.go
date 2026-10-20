@@ -297,7 +297,7 @@ func TestTicketLifecycleIsAtomicAndRequiresReplacementAfterBoundary(t *testing.T
 	authority := NewMemoryAuthority()
 	coordinator := mustCoordinator(t, authority, Limits{})
 	_, tickets, err := coordinator.Finalize(context.Background(), mustPlanRequest(t, []Entry{
-		mustClassifiedEntry(t, mustSource(t, []byte("Subject: state\r\n\r\nbody\r\n")), 0, RouteInControl, nil),
+		mustClassifiedEntry(t, mustSource(t, []byte("Subject: state\r\n\r\nbody\r\n")), 0, RouteOutOfBand, []byte("receiver")),
 	}))
 	if err != nil {
 		t.Fatalf("Finalize() error = %v", err)
@@ -367,12 +367,9 @@ func TestTicketLifecycleIsAtomicAndRequiresReplacementAfterBoundary(t *testing.T
 	if err := replacementReservation.PrepareExternalBoundary(context.Background()); err != nil {
 		t.Fatalf("replacement burn error = %v", err)
 	}
-	proof, err := NewLocalReleaseProof(replacement, replacement.binding.route)
-	if err != nil {
-		t.Fatalf("NewLocalReleaseProof() error = %v", err)
-	}
-	if err := replacementReservation.CommitSuccessfulSigning(ReleaseLocalOnly); err != nil {
-		t.Fatalf("CommitSuccessfulSigning(local-only) error = %v", err)
+	proof := mustOutOfBandReleaseProof(t, replacement)
+	if err := replacementReservation.CommitSuccessfulSigning(ReleaseOutOfBand); err != nil {
+		t.Fatalf("CommitSuccessfulSigning(out-of-band) error = %v", err)
 	}
 	if err := replacementReservation.ConsumeRestrictedRelease(context.Background(), proof); err != nil {
 		t.Fatalf("ConsumeRestrictedRelease() error = %v", err)
@@ -389,18 +386,20 @@ func TestSuccessfulSigningCommitClosesReplacementAndSeparatesRestrictedRelease(t
 		requirement ReleaseRequirement
 	}{
 		{name: "unrestricted", requirement: ReleaseUnrestricted},
-		{name: "local only", requirement: ReleaseLocalOnly},
+		{name: "out of band", requirement: ReleaseOutOfBand},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			coordinator := mustCoordinator(t, NewMemoryAuthority(), Limits{})
 			routeClass := RouteExternal
-			if test.requirement == ReleaseLocalOnly {
-				routeClass = RouteInControl
+			var receiver []byte
+			if test.requirement == ReleaseOutOfBand {
+				routeClass = RouteOutOfBand
+				receiver = []byte("receiver")
 			}
 			_, tickets, err := coordinator.Finalize(context.Background(), mustPlanRequest(t, []Entry{
 				mustClassifiedEntry(
 					t, mustSource(t, []byte("Subject: success\r\n\r\nbody\r\n")),
-					0, routeClass, nil,
+					0, routeClass, receiver,
 				),
 			}))
 			if err != nil {
@@ -428,10 +427,7 @@ func TestSuccessfulSigningCommitClosesReplacementAndSeparatesRestrictedRelease(t
 			}
 			proof := RestrictedReleaseProof{}
 			if restricted {
-				proof, err = NewLocalReleaseProof(tickets[0], tickets[0].binding.route)
-				if err != nil {
-					t.Fatalf("NewLocalReleaseProof() error = %v", err)
-				}
+				proof = mustOutOfBandReleaseProof(t, tickets[0])
 			}
 			releaseErr := reservation.ConsumeRestrictedRelease(context.Background(), proof)
 			if restricted && releaseErr != nil {
@@ -1010,7 +1006,7 @@ func TestPostCallCancellationRetainsOnlyValidatedCommittedTransitions(t *testing
 	}}
 	coordinator := mustCoordinator(t, authority, Limits{})
 	_, tickets, err := coordinator.Finalize(context.Background(), mustPlanRequest(t, []Entry{
-		mustClassifiedEntry(t, mustSource(t, []byte("Subject: cancel\r\n\r\nbody\r\n")), 0, RouteInControl, nil),
+		mustClassifiedEntry(t, mustSource(t, []byte("Subject: cancel\r\n\r\nbody\r\n")), 0, RouteOutOfBand, []byte("receiver")),
 	}))
 	if err != nil {
 		t.Fatalf("Finalize() error = %v", err)
@@ -1058,12 +1054,9 @@ func TestPostCallCancellationRetainsOnlyValidatedCommittedTransitions(t *testing
 	if err != nil || replacementReservation.PrepareExternalBoundary(context.Background()) != nil {
 		t.Fatalf("replacement burn setup error=%v", err)
 	}
-	proof, err := NewLocalReleaseProof(replacement, replacement.binding.route)
-	if err != nil {
-		t.Fatalf("NewLocalReleaseProof() error = %v", err)
-	}
-	if err := replacementReservation.CommitSuccessfulSigning(ReleaseLocalOnly); err != nil {
-		t.Fatalf("CommitSuccessfulSigning(local-only) error = %v", err)
+	proof := mustOutOfBandReleaseProof(t, replacement)
+	if err := replacementReservation.CommitSuccessfulSigning(ReleaseOutOfBand); err != nil {
+		t.Fatalf("CommitSuccessfulSigning(out-of-band) error = %v", err)
 	}
 	ctx, cancelCall = context.WithCancel(context.Background())
 	cancel = cancelCall

@@ -180,8 +180,8 @@ The public library signs origin messages, hash-unchanged forwarding copies,
 recipe-backed revisions, and authorized next-domain transitions. Signing uses
 exact outgoing SMTP envelope evidence, authority-issued copy tickets, opaque
 private-key handles, deterministic Draft-07 fields, final message reparsing,
-custody checks, and cryptographic self-verification. Local-only and
-out-of-band outputs remain closed until their exact route-bound release.
+custody checks, and cryptographic self-verification. Out-of-band outputs
+remain closed until their exact route-bound release.
 
 Datasource selection is exact and fail closed. Providers return immutable
 same-generation profiles and policies with opaque private-key handle IDs; they

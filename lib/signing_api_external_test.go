@@ -15,7 +15,6 @@ import (
 // public API from an external consumer package.
 func TestRestrictedSigningResultsExposeNoByteOrMarshalSurface(t *testing.T) {
 	for _, value := range []any{
-		dkim2.LocalOnlySignedMessage{},
 		dkim2.OutOfBandAcceptanceSignedMessage{},
 		dkim2.SigningResult{},
 	} {
@@ -32,7 +31,6 @@ func TestRestrictedSigningResultsExposeNoByteOrMarshalSurface(t *testing.T) {
 		}
 	}
 	for _, value := range []any{
-		dkim2.LocalOnlySignedMessage{},
 		dkim2.OutOfBandAcceptanceSignedMessage{},
 	} {
 		if _, ok := value.(interface{ Bytes() []byte }); ok {
@@ -58,7 +56,6 @@ func TestRestrictedSigningResultsExposeNoByteOrMarshalSurface(t *testing.T) {
 	}
 	unrestricted := reflect.TypeFor[dkim2.UnrestrictedSignedMessage]()
 	for _, restricted := range []reflect.Type{
-		reflect.TypeFor[dkim2.LocalOnlySignedMessage](),
 		reflect.TypeFor[dkim2.OutOfBandAcceptanceSignedMessage](),
 	} {
 		if restricted.AssignableTo(unrestricted) || restricted.ConvertibleTo(unrestricted) {

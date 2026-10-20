@@ -16,16 +16,17 @@ unrecognized flags have no effect. The current implementation therefore:
 - never emits either flag and uses the generated flag order `feedback`,
   `feedhere`, then `exploded`;
 - treats inherited `donotmodify` or `donotexplode` spellings as inert unknown
-  flags, so they never yield a `local_only` restriction, deny fanout, or deny
-  external forwarding. The policy authorization callback still receives the
+  flags, so they never restrict release, deny fanout, or deny external
+  forwarding. The policy authorization callback still receives the
   bound modification facts and decides on its own; and
 - removes the daemon-owned `signing.policy.<use>.donotmodify` and
   `signing.policy.<use>.donotexplode` configuration keys (see the operator
   documentation for the migration error).
 
-The `local_only` restriction type and its in-control release path remain in
-the closed result vocabulary, but no Draft-07 protocol fact produces it.
-Sections below that describe `donotmodify` or `donotexplode` restrictions are
+The former `local_only` restriction, its `LocalOnlySignedMessage` result
+variant, and its in-control release path were removed because no Draft-07
+protocol fact produced them. In-control routes remain a route class and sign
+unrestricted output. Sections below that describe `donotmodify` or `donotexplode` restrictions are
 the historical Draft-04 record.
 
 This specification defines the public-library signing and revision boundary for
@@ -512,7 +513,7 @@ converted into permission to forward externally.
   multiple copies/recipients for external forwarding is denied. A closed
   local-policy authorization can only yield the same `local_only` restriction.
 - The immutable signing result has the strongest effective restriction in its
-  closed type. `local_only` and `requires_out_of_band_acceptance` can never be
+  closed type. `requires_out_of_band_acceptance` can never be
   converted, asserted, formatted, or unwrapped as unrestricted output.
 - Existing authenticated `exploded` state is preserved. The new signature
   adds the `exploded` flag when this operation signs a disclosed multi-recipient
@@ -566,8 +567,7 @@ directly. Bcc-safe fanout therefore uses separate tickets and separately signed
 messages without exposing another copy's recipients. Duplicate, extra, stale,
 or reused tickets and cross-parent/cross-copy mixing fail closed
 where presented to the library. Unknown or underreported total multiplicity fails
-closed; a separately authorized local-only parent can produce only
-`local_only` results.
+closed.
 
 `lib/internal/routeplan` is the invariant-owning leaf. An injected
 context-aware `RouteFanoutAuthority` is the only issuer/sealer of parent plans,
@@ -924,11 +924,6 @@ algorithms, recipe/body-unavailable state, authorization classes, and the exact
 restriction. Its public API is a closed sum:
 
 - `UnrestrictedSignedMessage` alone has a generic byte-copy accessor.
-- `LocalOnlySignedMessage` has no generic byte accessor. Release proves that
-  the requested destination is the exact same copy ticket's sealed
-  in-control route scope, then atomically consumes that ticket lineage's
-  release phase. External, changed, cross-ticket, stale, replayed, or unknown
-  routes fail closed without bytes.
 - `OutOfBandAcceptanceSignedMessage` has no generic byte accessor and uses the
   exact OOB release contract above.
 
@@ -962,7 +957,7 @@ The root package owns the public immutable facade and bridge:
   signer-service, and closed callback contracts without duplicating their
   invariants;
 - closed OOB, policy, and recipient-disclosure authorization interfaces;
-- closed unrestricted/local-only/OOB signed-message result variants and their
+- closed unrestricted/OOB signed-message result variants and their
   route-bound release capabilities; and
 - mapping internal typed errors to bounded public errors.
 
@@ -1174,13 +1169,13 @@ incidental diagnostics.
   intended-envelope/receiver/route replay.
 - `exploded` derivation and the Draft-07 inertness of inherited `donotmodify`
   and `donotexplode` spellings are covered; the historical Draft-04
-  `donotmodify`/`donotexplode` local-only and external denial matrices were
+  `donotmodify`/`donotexplode` restricted and external denial matrices were
   removed with the flags.
 - API-shape tests prove only unrestricted output has a generic byte accessor.
-  Local-only release succeeds once on the same ticket's sealed in-control
-  route; external/wrong/cross-ticket/stale/replayed routes, concurrent double
-  release, enum/type downgrade, interface assertion, formatting, and marshaling
-  yield no bytes. OOB-restricted output has the symmetric route-bound proof.
+  OOB release succeeds once on the same ticket's sealed receiver, envelope,
+  and route; external/wrong/cross-ticket/stale/replayed routes, concurrent
+  double release, enum/type downgrade, interface assertion, formatting, and
+  marshaling yield no bytes.
 - Historical Draft-04: `donotmodify` rejected body change and
   removal/rewrite/refolding/reordering of any prior header occurrence; Draft-07
   removed the flag and an inherited spelling no longer restricts revision.
@@ -1191,7 +1186,7 @@ incidental diagnostics.
   rejection, parent/ticket replay, concurrent double-consume,
   burn-and-explicit-replacement, cross-parent/cross-copy mixing, attempted
   post-result extra copy, stale route, unknown fanout, metadata/ticket
-  disagreement, local-only fanout, identical parent-derived `exploded`,
+  disagreement, identical parent-derived `exploded`,
   inherited Draft-06 `donotexplode` spellings that stay inert, and causally
   valid/invalid `feedhere`.
 - Fanout-bound tests cover 128 copies exact and 129 one-over, descriptor/work
@@ -1301,8 +1296,8 @@ recorded during implementation closeout.
 - Revision requires an exact sealed capability; OOB, policy, and group
   disclosure use closed operation-bound authorization.
 - Every restricted result is a closed route-bound type without a generic byte
-  accessor; local-only and OOB release prove and consume their exact authorized
-  ticket route, and restriction downgrade/external release fails closed.
+  accessor; OOB release proves and consumes its exact authorized ticket
+  route, and restriction downgrade/external release fails closed.
 - RSA, Ed25519, and dual-algorithm output verify; selectors are distinct and
   private keys never cross the handle.
 - Formatting, folding, padded Base64, insertion, and output are deterministic
