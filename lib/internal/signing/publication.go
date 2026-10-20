@@ -40,7 +40,7 @@ type PublishedNextDomainCapability struct {
 
 // Valid reports whether the capability has complete immutable publication evidence.
 func (c PublishedNextDomainCapability) Valid() bool {
-	return c.domain != "" && c.selector != "" && c.algorithm.Known() && c.publicKey != nil &&
+	return c.domain != "" && c.selector != "" && SignableAlgorithm(c.algorithm) && c.publicKey != nil &&
 		c.observation != [sha256.Size]byte{} && c.nonce != [sha256.Size]byte{} && !c.issuedAt.IsZero() && c.expiresAt.After(c.issuedAt) &&
 		c.seal != [sha256.Size]byte{}
 }

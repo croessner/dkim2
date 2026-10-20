@@ -512,6 +512,17 @@ func (e *Engine) Revise(ctx context.Context, req ReviseRequest) (*ReviseResult, 
 The facade should expose protocol results in a structured way. It should not
 force callers to parse human-readable messages.
 
+Current verification algorithm vocabulary: `AlgorithmRSASHA256`,
+`AlgorithmEd25519SHA256`, `AlgorithmMLDSA44Ed25519SHA512`, and the bounded
+`AlgorithmUnknown`. Custom key providers return composite keys through
+`FoundCompositePublicKey`, which takes the raw 1344-byte DNS form and returns an
+invalid-key result for any other size or an unparsable ML-DSA-44 component;
+`PublicKeyResult.CompositePublicKey` returns a detached copy. The DNS provider
+decodes `k=mldsa44-ed25519-sha512` records into the same variant. Signature-set
+facts, the `dkim2d` REST `SignatureSetResult.algorithm` and
+`VerifierHop.signature_algorithms` enums, and observation events report the
+composite algorithm explicitly.
+
 ### 5.2 `lib/internal/rawmsg`
 
 Owns the controlled RFC 5322 message representation.
@@ -707,8 +718,11 @@ Responsibilities:
   ignored extension/retired tags, DNS-optional terminal Base64 padding with
   canonical pad bits, and bounded `t=y`/`t=s` metadata.
 - Decode RSA public DER as either PKCS#1 `RSAPublicKey` or X.509
-  `SubjectPublicKeyInfo`, and raw 32-byte Ed25519 public keys, while reusing
-  `internal/verify` as the authoritative crypto/key-validation owner.
+  `SubjectPublicKeyInfo`, raw 32-byte Ed25519 public keys, and raw 1344-byte
+  `k=mldsa44-ed25519-sha512` composite keys (1312-byte ML-DSA-44 public key
+  followed by the 32-byte Ed25519 public key), while reusing
+  `internal/cryptodkim2` as the authoritative crypto/key-validation owner.
+  Any other composite length is an invalid key.
 - Distinguish missing, revoked, invalid, ambiguous, unsupported key type,
   algorithm mismatch, temporary, permanent, and provider-contract states.
 - Cache only TTL-backed stable results under bounded deterministic LRU policy.
@@ -2278,9 +2292,20 @@ Crypto code should wrap standard, audited Go libraries.
 
 Rules:
 
-- Use `crypto/rsa` and `crypto/ed25519`.
+- Use `crypto/rsa`, `crypto/ed25519`, and `crypto/mldsa`.
 - Implement SHA-256 and SHA-512 for Message-Instance body and header hashes.
   RSA-SHA256 and Ed25519-SHA256 signature inputs continue to use SHA-256.
+- Verifiers implement every Draft-07 Section 3 algorithm: `rsa-sha256`,
+  `ed25519-sha256`, and the composite `mldsa44-ed25519-sha512`. The composite
+  follows Draft-07 Section 3.4: SHA-512 over the Section 12.8 input, pure
+  ML-DSA-44 with an empty context over that 64-byte digest, then PureEd25519
+  over the same digest; the 2484-byte signature is the ML-DSA-44 signature
+  followed by the Ed25519 signature, and both halves must verify. The default
+  verifier algorithm policy includes the composite, so verifier construction
+  fails closed when the cryptographic runtime lacks ML-DSA-44.
+- Signing remains restricted to `rsa-sha256` and `ed25519-sha256`. Composite
+  signing, composite credential storage, and composite key generation are not
+  implemented.
 - Accept and preserve syntactically valid unknown algorithm tokens at protocol
   parsing boundaries for draft forward compatibility, but never execute them.
   Ignore unknown Message-Instance hash tuples only as the active draft permits,
@@ -2310,7 +2335,9 @@ whitespace; RR boundaries are never concatenated. RSA records accept either
 PKCS#1 `RSAPublicKey` or X.509 `SubjectPublicKeyInfo` public DER as an explicit
 interoperability allowance. Both representations retain the same RSA structural
 and cryptographic policy checks; other key containers remain invalid. Ed25519
-records contain exactly 32 raw public bytes. The resolver
+records contain exactly 32 raw public bytes. `k=mldsa44-ed25519-sha512` records
+contain exactly 1344 raw bytes: the ML-DSA-44 public key followed by the Ed25519
+public key. The resolver
 supports context cancellation, bounded TTL/LRU caching, bounded coalescing, and
 non-blocking saturation. DNSSEC remains diagnostic-only and does not alter
 verification or cache behavior.

@@ -277,3 +277,39 @@ Open follow-ups owned by later packages:
 - Follow-up: without `donotmodify`, nothing produces the `local_only`
   restriction anymore. `LocalOnlySignedMessage` and its release path are
   unreachable and should be removed in a separate cleanup.
+- Review follow-ups: Draft-07 Sections 2.11 and 13 make every Signer
+  requirement part of a Validly Signed message, so an `i=1` signature carrying
+  `exploded` is now rejected as `malformed_protocol` PERMERROR (fixtures that
+  placed `exploded` on `i=1` were corrected). MTA-generated DSNs are new
+  `i=1` messages: their From must relaxed-match the DSN signing domain
+  (Postfix bounce From `MAILER-DAEMON@$myhostname` requires `$myhostname`
+  equal to or below that domain) — an operator note for package 8. The
+  verifier-projection binding stays `v1` but is draft-bound; its Draft-07 hop
+  encoding change is documented in `openapi-daemon-foundation.md`.
+
+## 11. Package 5 state
+
+- `signature.AlgorithmMLDSA44Ed25519SHA512` is a known verification
+  algorithm. `cryptodkim2` owns `CompositePublicKey` (raw ML-DSA-44 key
+  followed by raw Ed25519 key, exactly 1344 bytes; SPKI wrappers, other
+  parameter sets, and trailing bytes fail) and verifies the Section 3.4
+  construction: SHA-512 over the Section 12.8 input, pure ML-DSA-44 with an
+  empty context and PureEd25519 over that digest, signature exactly 2484
+  bytes, both halves required, no alternate profile.
+- Digests: `VerifyDigest` takes a 32-byte digest for `rsa-sha256` and
+  `ed25519-sha256` and a 64-byte digest for the composite. The verifier
+  derives both digests once from the same canonical input and selects per
+  algorithm in the current, revision, and historical-target paths; the
+  replay projection keeps the SHA-256 digest.
+- DNS: `k=mldsa44-ed25519-sha512` is a supported key type mapped only to the
+  composite algorithm. Existing PKCS#1 and SPKI RSA parsing is unchanged.
+- The default verifier enables all three Draft-07 algorithms. A runtime
+  without ML-DSA (Go FIPS 140-3 module v1.0.0) fails verifier construction.
+- Signing: `signing.SignableAlgorithm` keeps signing to `rsa-sha256` and
+  `ed25519-sha256`. Composite signing waits for resolution of the conflict
+  between Section 3.4 and the LAMPS construction cited by DNS-01.
+- Evidence: primitive round trips with deterministic keys, corrupted and
+  swapped halves, truncation, trailing bytes, nonempty ML-DSA context,
+  wrong-digest Ed25519 half, wrong digest sizes, wrong key types, and an
+  end-to-end composite DKIM2 message through the verifier. `rsa-sha1`-only
+  signature sets never PASS.

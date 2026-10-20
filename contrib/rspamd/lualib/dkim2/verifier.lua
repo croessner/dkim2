@@ -423,6 +423,7 @@ end
 local signature_algorithms = {
   ['rsa-sha256'] = true, ['rsa-sha512'] = true,
   ['ed25519-sha256'] = true, ['ed25519-sha512'] = true,
+  ['mldsa44-ed25519-sha512'] = true,
 }
 local custody_transitions = {
   origin = true, ordinary = true, next_domain = true, terminal_next_domain = true,
@@ -497,7 +498,8 @@ local check_classes = {
   domain_alignment = true, next_domain = true, provider = true, internal_contract = true,
 }
 local signature_set_algorithms = {
-  ['rsa-sha256'] = true, ['ed25519-sha256'] = true, unknown = true,
+  ['rsa-sha256'] = true, ['ed25519-sha256'] = true,
+  ['mldsa44-ed25519-sha512'] = true, unknown = true,
 }
 local signature_set_states = {
   pass = true, fail = true, permerror = true, temperror = true, ignored = true,

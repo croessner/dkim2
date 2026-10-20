@@ -793,15 +793,18 @@ func (e ReplayResultClass) Valid() bool {
 
 // Defines values for SignatureSetResultAlgorithm.
 const (
-	Ed25519Sha256 SignatureSetResultAlgorithm = "ed25519-sha256"
-	RsaSha256     SignatureSetResultAlgorithm = "rsa-sha256"
-	Unknown       SignatureSetResultAlgorithm = "unknown"
+	Ed25519Sha256        SignatureSetResultAlgorithm = "ed25519-sha256"
+	Mldsa44Ed25519Sha512 SignatureSetResultAlgorithm = "mldsa44-ed25519-sha512"
+	RsaSha256            SignatureSetResultAlgorithm = "rsa-sha256"
+	Unknown              SignatureSetResultAlgorithm = "unknown"
 )
 
 // Valid indicates whether the value is a known member of the SignatureSetResultAlgorithm enum.
 func (e SignatureSetResultAlgorithm) Valid() bool {
 	switch e {
 	case Ed25519Sha256:
+		return true
+	case Mldsa44Ed25519Sha512:
 		return true
 	case RsaSha256:
 		return true
@@ -1216,10 +1219,11 @@ func (e VerifierHopRecipeMode) Valid() bool {
 
 // Defines values for VerifierHopSignatureAlgorithms.
 const (
-	VerifierAlgorithmEd25519SHA256 VerifierHopSignatureAlgorithms = "ed25519-sha256"
-	VerifierAlgorithmEd25519SHA512 VerifierHopSignatureAlgorithms = "ed25519-sha512"
-	VerifierAlgorithmRSASHA256     VerifierHopSignatureAlgorithms = "rsa-sha256"
-	VerifierAlgorithmRSASHA512     VerifierHopSignatureAlgorithms = "rsa-sha512"
+	VerifierAlgorithmEd25519SHA256        VerifierHopSignatureAlgorithms = "ed25519-sha256"
+	VerifierAlgorithmEd25519SHA512        VerifierHopSignatureAlgorithms = "ed25519-sha512"
+	VerifierAlgorithmMLDSA44Ed25519SHA512 VerifierHopSignatureAlgorithms = "mldsa44-ed25519-sha512"
+	VerifierAlgorithmRSASHA256            VerifierHopSignatureAlgorithms = "rsa-sha256"
+	VerifierAlgorithmRSASHA512            VerifierHopSignatureAlgorithms = "rsa-sha512"
 )
 
 // Valid indicates whether the value is a known member of the VerifierHopSignatureAlgorithms enum.
@@ -1228,6 +1232,8 @@ func (e VerifierHopSignatureAlgorithms) Valid() bool {
 	case VerifierAlgorithmEd25519SHA256:
 		return true
 	case VerifierAlgorithmEd25519SHA512:
+		return true
+	case VerifierAlgorithmMLDSA44Ed25519SHA512:
 		return true
 	case VerifierAlgorithmRSASHA256:
 		return true

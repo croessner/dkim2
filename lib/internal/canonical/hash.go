@@ -35,6 +35,17 @@ func (c Canonicalizer) SHA256Digest(input ByteInput) (Digest, error) {
 	return NewDigest(HashAlgorithmSHA256, sum[:])
 }
 
+// SHA512Digest calculates the Section 12.8 signature-input SHA-512 digest
+// signed by the mldsa44-ed25519-sha512 composite algorithm (Section 3.4).
+func (c Canonicalizer) SHA512Digest(input ByteInput) (Digest, error) {
+	if err := c.validateDigestInput(input, KindSignatureInput); err != nil {
+		return Digest{}, err
+	}
+	sum := sha512.Sum512(input.Bytes())
+
+	return NewDigest(HashAlgorithmSHA512, sum[:])
+}
+
 // validateDigestInput enforces constructed receiver state and purpose-specific byte kinds.
 func (c Canonicalizer) validateDigestInput(input ByteInput, allowedKinds ...Kind) error {
 	if err := c.options.Validate(); err != nil {

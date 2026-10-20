@@ -906,6 +906,8 @@ func mapAlgorithm(value dkim2.Algorithm) (generated.SignatureSetResultAlgorithm,
 		return generated.RsaSha256, true
 	case dkim2.AlgorithmEd25519SHA256:
 		return generated.Ed25519Sha256, true
+	case dkim2.AlgorithmMLDSA44Ed25519SHA512:
+		return generated.Mldsa44Ed25519Sha512, true
 	case dkim2.AlgorithmUnknown:
 		return generated.Unknown, true
 	default:

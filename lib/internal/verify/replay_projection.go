@@ -72,12 +72,12 @@ func (ReplayProjection) Format(state fmt.State, _ rune) {
 func (p ReplayProjection) clone() ReplayProjection { return p }
 
 // buildReplayProjection seals exact origin intermediates only after aggregate current PASS.
-func buildReplayProjection(input verificationInput, targetSignature signature.Signature, targetInstance instance.MessageInstance, hashes hashCheckResults, signatureDigest []byte, result Result) (ReplayProjection, bool) {
+func buildReplayProjection(input verificationInput, targetSignature signature.Signature, targetInstance instance.MessageInstance, hashes hashCheckResults, digests signatureDigests, result Result) (ReplayProjection, bool) {
 	target := result.Target()
 	if !aggregateCurrentPass(result) || target.Sequence != highestSignatureSequence(input.signatures) ||
 		target.InstanceNumber != highestInstanceNumber(input.instances) || targetSignature.Sequence() != target.Sequence ||
 		targetSignature.InstanceNumber() != target.InstanceNumber || targetInstance.Number() != target.InstanceNumber ||
-		!hashes.hasLocalHeaderSHA256 || !hashes.hasLocalBodySHA256 || len(signatureDigest) != sha256.Size ||
+		!hashes.hasLocalHeaderSHA256 || !hashes.hasLocalBodySHA256 || len(digests.sha256) != sha256.Size ||
 		!resultHasEnvelopePass(result) || resultHasTestingOnlyPass(result) || len(input.signatures) != int(target.Sequence) {
 		return ReplayProjection{}, false
 	}

@@ -578,7 +578,7 @@ type revisionSignatureProof struct {
 
 type revisionPreparedSignature struct {
 	parsed signature.Signature
-	digest []byte
+	digest signatureDigests
 	fact   RevisionSignatureFact
 	plan   revisionSignatureSetPlan
 }
@@ -908,7 +908,7 @@ func (v Verifier) prepareRevisionSignatureSets(parsed signature.Signature) (revi
 		}
 	}
 
-	for _, algorithm := range [...]Algorithm{AlgorithmRSASHA256, AlgorithmEd25519SHA256} {
+	for _, algorithm := range [...]Algorithm{AlgorithmRSASHA256, AlgorithmEd25519SHA256, AlgorithmMLDSA44Ed25519SHA512} {
 		for index, set := range sets {
 			if enabled[index] && Algorithm(set.Algorithm()) == algorithm {
 				plan.order = append(plan.order, index)
@@ -925,7 +925,7 @@ func (v Verifier) prepareRevisionSignatureSets(parsed signature.Signature) (revi
 }
 
 // evaluateRevisionSignatureSets executes one preflighted plan and summarizes results in source order.
-func (v Verifier) evaluateRevisionSignatureSets(ctx context.Context, parsed signature.Signature, digest []byte, target Target, plan revisionSignatureSetPlan) signatureEvaluation {
+func (v Verifier) evaluateRevisionSignatureSets(ctx context.Context, parsed signature.Signature, digests signatureDigests, target Target, plan revisionSignatureSetPlan) signatureEvaluation {
 	sets := parsed.SignatureSets()
 	evaluation := signatureEvaluation{
 		checks: make([]CheckResult, 0, len(sets)),
@@ -935,7 +935,7 @@ func (v Verifier) evaluateRevisionSignatureSets(ctx context.Context, parsed sign
 		if ctx == nil || ctx.Err() != nil {
 			return evaluation
 		}
-		evaluation.sets[index] = v.evaluateSignatureSet(ctx, parsed, sets[index], index, digest, target)
+		evaluation.sets[index] = v.evaluateSignatureSet(ctx, parsed, sets[index], index, digests, target)
 		if ctx.Err() != nil {
 			return evaluation
 		}
@@ -971,25 +971,25 @@ func revisionEnvelopeShapeValid(envelope Envelope, terminalNextDomain bool) bool
 	return true
 }
 
-// revisionSignatureInputDigest returns a digest plus exact canonical work bytes.
-func revisionSignatureInputDigest(message rawmsg.Message, target Target, remaining int) ([]byte, int, error) {
+// revisionSignatureInputDigest returns the signature-input digests plus exact canonical work bytes.
+func revisionSignatureInputDigest(message rawmsg.Message, target Target, remaining int) (signatureDigests, int, error) {
 	limits := canonical.DefaultLimits()
 	if remaining < limits.MaxSignatureInputBytes {
 		limits.MaxSignatureInputBytes = remaining
 	}
 	canonicalizer, err := canonical.NewCanonicalizer(canonical.WithLimits(limits))
 	if err != nil {
-		return nil, 0, err
+		return signatureDigests{}, 0, err
 	}
 	input, err := canonicalizer.SignatureInput(canonical.SignatureInputSelection{Headers: message.Headers(), TargetSequence: target.Sequence})
 	if err != nil {
-		return nil, 0, err
+		return signatureDigests{}, 0, err
 	}
-	digest, err := canonicalizer.SHA256Digest(input)
+	digests, err := computeSignatureDigests(canonicalizer, input)
 	if err != nil {
-		return nil, 0, err
+		return signatureDigests{}, 0, err
 	}
-	return digest.Bytes(), canonicalWorkBytes(input), nil
+	return digests, canonicalWorkBytes(input), nil
 }
 
 // revisionSignatureOutcome folds one inherited field without accepting mixed known failures.

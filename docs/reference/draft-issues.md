@@ -49,6 +49,13 @@ is independently observed.
   The two public-facade conformance cases are bound to this entry; their
   earlier omission from this register was a documentation defect.
 
+- `DKIM2-ISSUE-0019` records that Draft-07 Section 3.4 defines the
+  `mldsa44-ed25519-sha512` signature input (SHA-512 of the canonical input,
+  pure ML-DSA-44 with empty context, then PureEd25519) while DNS-01 cites the
+  LAMPS composite construction, which uses a different message
+  representative. Verification implements Section 3.4 only; composite
+  signing and interoperability claims wait for working-group clarification.
+
 The repository has not filed, commented on, or modified any upstream issue as
 part of this release-candidate work.
 
@@ -59,4 +66,5 @@ part of this release-candidate work.
 `DKIM2-ISSUE-0007`, `DKIM2-ISSUE-0008`, `DKIM2-ISSUE-0009`,
 `DKIM2-ISSUE-0010`, `DKIM2-ISSUE-0011`, `DKIM2-ISSUE-0012`,
 `DKIM2-ISSUE-0013`, `DKIM2-ISSUE-0014`, `DKIM2-ISSUE-0015`,
-`DKIM2-ISSUE-0016`, `DKIM2-ISSUE-0017`, and `DKIM2-ISSUE-0018`.
+`DKIM2-ISSUE-0016`, `DKIM2-ISSUE-0017`, `DKIM2-ISSUE-0018`, and
+`DKIM2-ISSUE-0019`.

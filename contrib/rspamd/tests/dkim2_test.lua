@@ -492,4 +492,32 @@ local plain_attributes = assert(verifier.policy_attributes(projected, true))
 assert(plain_attributes['dkim2.received_dsn_propagation'] == nil,
   'a message that is not a received notification carries no propagation class')
 
+-- The Draft-07 composite algorithm is part of both closed daemon vocabularies.
+projected.verifier_projection.hops[1].signature_algorithms = { 'ed25519-sha256', 'mldsa44-ed25519-sha512' }
+assert(verifier.policy_attributes(projected), 'composite hop algorithm must be admitted')
+projected.verifier_projection.hops[1].signature_algorithms = { 'mldsa44-ed25519-sha256' }
+assert(verifier.policy_attributes(projected) == nil, 'unknown hop algorithm must fail closed')
+projected.verifier_projection.hops[1].signature_algorithms = { 'ed25519-sha256' }
+
+for _, case in ipairs({
+  { algorithm = 'mldsa44-ed25519-sha512', valid = true },
+  { algorithm = 'mldsa44-ed25519-sha256', valid = false },
+}) do
+  pending_response = response('PASS', 'accept', 'first_seen', {
+    { type = 'add_header', name = 'Authentication-Results', value = 'mx.example.test; dkim2=pass' },
+  })
+  pending_response.verification.signature_sets = {
+    {
+      algorithm = case.algorithm, status = 'pass', reason = 'none',
+      key_policy = { testing_declared = false, strict_identity_declared = false, strict_identity_applicable = false },
+    },
+  }
+  local composite_task = new_task({ ['DKIM2-Signature'] = true })
+  callback(composite_task)
+  assert((composite_task.pre_result == nil) == case.valid, 'unexpected signature-set admission: ' .. case.algorithm)
+  if case.valid then
+    assert(contains(composite_task.symbols, 'DKIM2_PASS'))
+  end
+end
+
 print('dkim2 Rspamd Lua contract tests: PASS')

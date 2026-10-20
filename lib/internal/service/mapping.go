@@ -591,7 +591,7 @@ func (a *mappingAccumulator) requireCompleteCurrentChecks() {
 			a.addFact(CheckInternalContract, severityPermanent, ReasonInternalContract)
 		}
 	}
-	for _, algorithm := range []Algorithm{AlgorithmRSASHA256, AlgorithmEd25519SHA256, AlgorithmUnknown} {
+	for _, algorithm := range []Algorithm{AlgorithmRSASHA256, AlgorithmEd25519SHA256, AlgorithmMLDSA44Ed25519SHA512, AlgorithmUnknown} {
 		if a.signatureChecks[algorithm] != a.signatureSets[algorithm] {
 			a.addFact(CheckInternalContract, severityPermanent, ReasonInternalContract)
 		}
@@ -729,6 +729,8 @@ func mapAlgorithm(algorithm verify.Algorithm) (Algorithm, bool) {
 		return AlgorithmRSASHA256, true
 	case verify.AlgorithmEd25519SHA256:
 		return AlgorithmEd25519SHA256, true
+	case verify.AlgorithmMLDSA44Ed25519SHA512:
+		return AlgorithmMLDSA44Ed25519SHA512, true
 	case verify.AlgorithmUnknown:
 		return AlgorithmUnknown, true
 	default:
@@ -742,9 +744,11 @@ func knownAlgorithm(algorithm verify.Algorithm) bool {
 	return known
 }
 
-// supportedAlgorithm reports whether a check names a required baseline algorithm.
+// supportedAlgorithm reports whether a check names one of the Draft-07
+// Section 3 verifier-mandatory algorithms.
 func supportedAlgorithm(algorithm verify.Algorithm) bool {
-	return algorithm == verify.AlgorithmRSASHA256 || algorithm == verify.AlgorithmEd25519SHA256
+	return algorithm == verify.AlgorithmRSASHA256 || algorithm == verify.AlgorithmEd25519SHA256 ||
+		algorithm == verify.AlgorithmMLDSA44Ed25519SHA512
 }
 
 // knownErrorCode rejects arbitrary internal tokens while allowing success.

@@ -20,25 +20,59 @@ type signatureEvaluation struct {
 	ignored   int
 }
 
-// signatureInputDigest calculates SHA-256 over Section 12.8 input bytes.
-func signatureInputDigest(canonicalizer canonical.Canonicalizer, message rawmsg.Message, target Target) ([]byte, error) {
+// signatureDigests holds the Section 12.8 signature-input digests: SHA-256
+// for rsa-sha256 and ed25519-sha256, SHA-512 for mldsa44-ed25519-sha512.
+type signatureDigests struct {
+	sha256 []byte
+	sha512 []byte
+}
+
+// forAlgorithm returns the digest the algorithm signs, or nil for an
+// algorithm without a digest contract.
+func (d signatureDigests) forAlgorithm(algorithm Algorithm) []byte {
+	switch algorithm {
+	case signature.AlgorithmRSASHA256, signature.AlgorithmEd25519SHA256:
+		return d.sha256
+	case signature.AlgorithmMLDSA44Ed25519SHA512:
+		return d.sha512
+	default:
+		return nil
+	}
+}
+
+// computeSignatureDigests derives both signature-input digests from one
+// canonical Section 12.8 input.
+func computeSignatureDigests(canonicalizer canonical.Canonicalizer, input canonical.ByteInput) (signatureDigests, error) {
+	sha256Digest, err := canonicalizer.SHA256Digest(input)
+	if err != nil {
+		return signatureDigests{}, err
+	}
+	sha512Digest, err := canonicalizer.SHA512Digest(input)
+	if err != nil {
+		return signatureDigests{}, err
+	}
+	return signatureDigests{sha256: sha256Digest.Bytes(), sha512: sha512Digest.Bytes()}, nil
+}
+
+// signatureInputDigest calculates the digests over Section 12.8 input bytes.
+func signatureInputDigest(canonicalizer canonical.Canonicalizer, message rawmsg.Message, target Target) (signatureDigests, error) {
 	signatureInput, err := canonicalizer.SignatureInput(canonical.SignatureInputSelection{
 		Headers:        message.Headers(),
 		TargetSequence: target.Sequence,
 	})
 	if err != nil {
-		return nil, malformedStateError(CheckKindSignature, target, err)
+		return signatureDigests{}, malformedStateError(CheckKindSignature, target, err)
 	}
-	digest, err := canonicalizer.SHA256Digest(signatureInput)
+	digests, err := computeSignatureDigests(canonicalizer, signatureInput)
 	if err != nil {
-		return nil, malformedStateError(CheckKindSignature, target, err)
+		return signatureDigests{}, malformedStateError(CheckKindSignature, target, err)
 	}
 
-	return digest.Bytes(), nil
+	return digests, nil
 }
 
 // evaluateSignatureSets checks every signature set for the selected target.
-func (v Verifier) evaluateSignatureSets(ctx context.Context, targetSignature signature.Signature, digest []byte, target Target) signatureEvaluation {
+func (v Verifier) evaluateSignatureSets(ctx context.Context, targetSignature signature.Signature, digests signatureDigests, target Target) signatureEvaluation {
 	sets := targetSignature.SignatureSets()
 	evaluation := signatureEvaluation{
 		checks: make([]CheckResult, 0, len(sets)),
@@ -60,7 +94,7 @@ func (v Verifier) evaluateSignatureSets(ctx context.Context, targetSignature sig
 		if ctx == nil || ctx.Err() != nil {
 			break
 		}
-		setResult := v.evaluateSignatureSet(ctx, targetSignature, set, index, digest, target)
+		setResult := v.evaluateSignatureSet(ctx, targetSignature, set, index, digests, target)
 		evaluation.sets = append(evaluation.sets, setResult)
 		evaluation.checks = append(evaluation.checks, signatureCheckResult(setResult, target))
 		evaluation.account(setResult)
@@ -89,7 +123,7 @@ func (e *signatureEvaluation) account(setResult SignatureSetResult) {
 }
 
 // evaluateSignatureSet checks one selector:algorithm:signature tuple.
-func (v Verifier) evaluateSignatureSet(ctx context.Context, targetSignature signature.Signature, set signature.Set, index int, digest []byte, target Target) SignatureSetResult {
+func (v Verifier) evaluateSignatureSet(ctx context.Context, targetSignature signature.Signature, set signature.Set, index int, digests signatureDigests, target Target) SignatureSetResult {
 	algorithm := Algorithm(set.Algorithm())
 	result := SignatureSetResult{
 		Index:     index,
@@ -170,7 +204,7 @@ func (v Verifier) evaluateSignatureSet(ctx context.Context, targetSignature sign
 	}
 
 	result.KeyStatus = KeyStatusFound
-	if err := verifySignatureDigest(algorithm, material, digest, set.Signature().Decoded(), target, index); err != nil {
+	if err := verifySignatureDigest(algorithm, material, digests.forAlgorithm(algorithm), set.Signature().Decoded(), target, index); err != nil {
 		result.Status = SignatureSetStatusFail
 		result.Selector = set.Selector()
 

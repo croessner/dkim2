@@ -403,3 +403,52 @@ func signDSNOriginalForRecipient(
 	}
 	return signed.Bytes()
 }
+
+// TestDSNSigningRequiresAuthenticReportFrom reproduces Draft-07 Sections
+// 11 and 12.4 for MTA-generated DSNs: the report is a new i=1 message, so its
+// From must relaxed-match the DSN signing domain or signing fails closed.
+func TestDSNSigningRequiresAuthenticReportFrom(t *testing.T) {
+	fixture := newPublicSigningFixture(t)
+	original := signDSNOriginal(t, fixture)
+	outer := []byte("From: postmaster@other.test\r\n" +
+		"Content-Type: multipart/report; report-type=delivery-status; boundary=dsn\r\n\r\n" +
+		"--dsn\r\nContent-Type: text/plain\r\n\r\nhuman\r\n" +
+		"--dsn\r\nContent-Type: message/delivery-status\r\n\r\nReporting-MTA: dns; example.test\r\n\r\nFinal-Recipient: rfc822; bob@example.test\r\nAction: failed\r\nStatus: 5.1.1\r\n\r\n" +
+		"--dsn\r\nContent-Type: message/rfc822\r\n\r\n" + string(original) + "\r\n--dsn--\r\n")
+	identity, err := NewDSNIdentity("example.test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	evidence, err := fixture.facade.EvaluateDSNForSigning(context.Background(), NewDSNSigningEvidenceRequest(
+		outer, []byte("<>"), [][]byte{[]byte("<alice@example.test>")}, identity,
+	))
+	if err != nil || !evidence.Valid() {
+		t.Fatalf("EvaluateDSNForSigning() evidence=%t error=%v", evidence.Valid(), err)
+	}
+	source, err := NewSigningSource(outer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	entry, err := NewDeliveryStatusRouteEntry(
+		source, []byte("<>"), [][]byte{[]byte("<alice@example.test>")},
+		RouteDisclosureSingle, []byte("delivery-status-from-test"),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan, err := NewRouteFanoutRequest([]RouteEntry{entry})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, tickets, err := fixture.facade.PlanRouteFanout(context.Background(), plan)
+	if err != nil || len(tickets) != 1 {
+		t.Fatalf("PlanRouteFanout() tickets=%d error=%v", len(tickets), err)
+	}
+	result, recovery, err := fixture.facade.SignDSN(context.Background(), NewDSNSigningRequest(
+		evidence, tickets[0], fixture.profile, SigningMetadata{}, SigningTransportFinalNetworkPreDotStuffing,
+	))
+	var signingErr *SigningError
+	if result.Valid() || recovery.Valid() || !errors.As(err, &signingErr) || signingErr.Code() != SigningErrorChainFailure {
+		t.Fatalf("SignDSN() result=%t recovery=%t error=%v, want chain_failure", result.Valid(), recovery.Valid(), err)
+	}
+}

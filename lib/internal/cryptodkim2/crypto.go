@@ -100,9 +100,27 @@ func ValidatePublicKey(algorithm signature.Algorithm, material any, limits Limit
 			return nil, newError(ErrorCodeInvalidKey)
 		}
 		return ed25519.PublicKey(bytes.Clone(key)), nil
+	case signature.AlgorithmMLDSA44Ed25519SHA512:
+		key, ok := material.(CompositePublicKey)
+		if !ok {
+			return nil, newError(ErrorCodeWrongKeyType)
+		}
+		if !key.valid() {
+			return nil, newError(ErrorCodeInvalidKey)
+		}
+		return key.clone(), nil
 	default:
 		return nil, newError(ErrorCodeUnsupportedAlgorithm)
 	}
+}
+
+// digestBytes returns the signature-input digest size each algorithm signs:
+// SHA-256 for rsa-sha256 and ed25519-sha256, SHA-512 for the composite.
+func digestBytes(algorithm signature.Algorithm) int {
+	if algorithm == signature.AlgorithmMLDSA44Ed25519SHA512 {
+		return crypto.SHA512.Size()
+	}
+	return crypto.SHA256.Size()
 }
 
 // ValidRSAPublicKeyStructure reports whether key satisfies basic RFC 8017 shape invariants.
@@ -117,9 +135,6 @@ func ValidateSignatureLength(algorithm signature.Algorithm, material any, length
 	if err != nil {
 		return err
 	}
-	if length <= 0 || length > resolved.MaxSignatureBytes {
-		return newError(ErrorCodeInvalidSignatureLength)
-	}
 	validated, err := ValidatePublicKey(algorithm, material, resolved)
 	if err != nil {
 		return err
@@ -131,6 +146,12 @@ func ValidateSignatureLength(algorithm signature.Algorithm, material any, length
 func validateSignatureLengthValidated(algorithm signature.Algorithm, validated any, length int, resolved Limits) error {
 	if !algorithm.Known() {
 		return newError(ErrorCodeUnsupportedAlgorithm)
+	}
+	if composite, ok := validated.(CompositePublicKey); ok && composite.valid() {
+		if length != CompositeSignatureBytes {
+			return newError(ErrorCodeInvalidSignatureLength)
+		}
+		return nil
 	}
 	if length <= 0 || length > resolved.MaxSignatureBytes {
 		return newError(ErrorCodeInvalidSignatureLength)
@@ -150,9 +171,11 @@ func validateSignatureLengthValidated(algorithm signature.Algorithm, validated a
 	return nil
 }
 
-// VerifyDigest validates all inputs and verifies one SHA-256 digest signature.
+// VerifyDigest validates all inputs and verifies one signature over the
+// algorithm-specific signature-input digest (32 bytes for rsa-sha256 and
+// ed25519-sha256, 64 bytes for mldsa44-ed25519-sha512).
 func VerifyDigest(algorithm signature.Algorithm, material any, digest, signatureBytes []byte, limits Limits) error {
-	if len(digest) != crypto.SHA256.Size() {
+	if len(digest) != digestBytes(algorithm) {
 		return newError(ErrorCodeInvalidDigestLength)
 	}
 	resolved, err := limits.normalized()
@@ -175,6 +198,10 @@ func VerifyDigest(algorithm signature.Algorithm, material any, digest, signature
 		if !ed25519.Verify(key, digest, signatureBytes) {
 			return newError(ErrorCodeSignatureMismatch)
 		}
+	case CompositePublicKey:
+		if !verifyComposite(key, digest, signatureBytes) {
+			return newError(ErrorCodeSignatureMismatch)
+		}
 	default:
 		return newError(ErrorCodeWrongKeyType)
 	}
@@ -193,6 +220,8 @@ func ClonePublicKey(material any) any {
 		return cloneRSAKey(key)
 	case ed25519.PublicKey:
 		return ed25519.PublicKey(bytes.Clone(key))
+	case CompositePublicKey:
+		return key.clone()
 	default:
 		return nil
 	}

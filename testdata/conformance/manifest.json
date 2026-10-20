@@ -184,7 +184,7 @@
     {
       "id": "policy-positive-source",
       "path": "lib/policy_api_test.go",
-      "sha256": "7d97e4ddb71192333cc7d4dc1e52aae3ae6ebce0e2ff1c87b5c83f9600bdec46",
+      "sha256": "16c801a2c93bb90fe00645e7e8fee8141003e89cd7c32307ac42e50166d87fc6",
       "module": "lib"
     },
     {
@@ -352,7 +352,7 @@
     {
       "id": "signing-revision-source",
       "path": "lib/internal/signing/revision_test.go",
-      "sha256": "5bfe18eb5948dfaaa5b99839faa85956a181e45285b9d57751c45360f924ace6",
+      "sha256": "ce02ab21e11399d6d2a3d8db3825334b4ae76d8d1a261a07ce3edc7798c632ae",
       "module": "lib"
     },
     {
@@ -372,6 +372,12 @@
       "path": "cmd/dkim2d/internal/replay/valkey/real_valkey_integration_test.go",
       "sha256": "54ca228f0804fc1aae19e75248a70ab01be1b2740d33e1ef25e83440e5406212",
       "module": "cmd/dkim2d"
+    },
+    {
+      "id": "verification-composite-source",
+      "path": "lib/internal/verify/composite_test.go",
+      "sha256": "1e08ef7aba7ea986f2fe64429c9457b14eab66eac21a082687286f7ff88801fb",
+      "module": "lib"
     },
     {
       "id": "verification-draft07-source",
@@ -1856,6 +1862,22 @@
         "signing-plan-source"
       ],
       "producer": "signing-golden-tests"
+    },
+    {
+      "suite": "verification",
+      "case_id": "draft07-composite-signature",
+      "class": "documented_interpretation",
+      "authority": [
+        "draft-ietf-dkim-dkim2-spec-07 Section 3.4"
+      ],
+      "provenance": "regression_reproducer",
+      "runner": "portable_vector",
+      "required_platform": "portable",
+      "expected_outcome": "pass",
+      "artifacts": [
+        "verification-composite-source"
+      ],
+      "producer": "verification-draft07-tests"
     },
     {
       "suite": "verification",

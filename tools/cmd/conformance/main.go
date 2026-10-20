@@ -610,6 +610,7 @@ var portableDefinitions = []runnerDefinition{
 		name: "verification-draft07-tests", module: libraryModule, pkg: "./internal/verify",
 		timeout: 3 * time.Minute,
 		cases: []runnerCase{
+			{key: "verification\x00draft07-composite-signature", testName: "TestVerifierPassesDraft07CompositeSignature", artifacts: []string{"verification-composite-source"}},
 			{key: "verification\x00draft07-from-authenticity", testName: "TestFromAuthenticityFollowsDraft07Section11", artifacts: []string{"verification-from-authenticity-source"}},
 			{key: "verification\x00draft07-dual-mismatch", testName: "TestVerifierRejectsOneMismatchingSupportedTuple", artifacts: []string{verificationDraft07Artifact}},
 			{key: "verification\x00draft07-recipe-less-unchanged", testName: "TestHistoryAcceptsRecipeLessUnchangedTransitionMatrix", artifacts: []string{verificationDraft07Artifact}},

@@ -6,6 +6,21 @@ certification, or universal interoperability claim.
 - Draft-07 architecture references, full-chain policy guidance, EAI, IANA,
   and Security Considerations still contain `TBA` text. The implementation
   does not invent normative behavior for those sections.
+- Composite `mldsa44-ed25519-sha512` verification follows Draft-07
+  Section 3.4: SHA-512 over the Section 12.8 input, pure ML-DSA-44 with an
+  empty context, then PureEd25519 over the same 64-byte digest, with the
+  signature formed as the ML-DSA-44 signature followed by the Ed25519
+  signature. DNS-01 instead cites the LAMPS composite ML-DSA construction,
+  which uses a different signature input. The two drafts are not yet aligned; signatures produced
+  with the LAMPS construction do not verify here, and the implementation
+  follows the signature draft until the drafts agree.
+- Composite signing is not implemented. The library, `dkim2d`, the signing
+  datasource providers, domain administration, and key generation offer only
+  `rsa-sha256` and `ed25519-sha256` credentials; the composite algorithm is a
+  verification-only capability.
+- The default verifier requires all three Draft-07 Section 3 algorithms. On a
+  Go FIPS 140-3 cryptographic module without ML-DSA-44, verifier construction
+  fails closed instead of silently dropping the composite algorithm.
 - External discovery found runnable parser overlap with MailAuthLens and
   Turscar. It found a tag-case interpretation difference with MailAuthLens.
   Stalwart's observed source revision has no `Cargo.lock`, so no immutable

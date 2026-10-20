@@ -272,7 +272,7 @@ func TestEvaluatePolicyUsesSealedAuthenticatedFlags(t *testing.T) {
 	}
 	// The removed Draft-06 donotmodify and donotexplode flags in the fixture are
 	// inert unknown flags under Draft-07 Section 10.10 and produce no findings.
-	wantFlagReasons := []PolicyReason{PolicyReasonProtocolPass, PolicyReasonFeedbackRequested, PolicyReasonFeedbackRelaySelected, PolicyReasonExplodedReported}
+	wantFlagReasons := []PolicyReason{PolicyReasonProtocolPass, PolicyReasonFeedbackRequested, PolicyReasonFeedbackRelaySelected}
 	flagFindings := decision.Findings()
 	gotFlagReasons := make([]PolicyReason, len(flagFindings))
 	for index, finding := range flagFindings {
@@ -748,7 +748,7 @@ func signedPublicFlaggedPolicyMessage(t testing.TB, timestamp int64) ([]byte, *r
 	build := func(signature string) string {
 		return "From: sender@example.test\r\nSubject: flagged policy\r\n" +
 			"Message-Instance: m=1; h=sha256:" + headerDigest.Base64() + ":" + bodyDigest.Base64() + ";\r\n" +
-			"DKIM2-Signature: i=1; m=1; t=" + strconv.FormatInt(timestamp, 10) + "; mf=PD4=; rt=PHJjcHRAZXhhbXBsZS50ZXN0Pg==; f=donotmodify,donotexplode,feedback,feedhere,exploded,TOXIC-UNKNOWN; d=example.test; s=selector.test:rsa-sha256:" + signature + ";\r\n\r\nbody line\r\n"
+			"DKIM2-Signature: i=1; m=1; t=" + strconv.FormatInt(timestamp, 10) + "; mf=PD4=; rt=PHJjcHRAZXhhbXBsZS50ZXN0Pg==; f=donotmodify,donotexplode,feedback,feedhere,TOXIC-UNKNOWN; d=example.test; s=selector.test:rsa-sha256:" + signature + ";\r\n\r\nbody line\r\n"
 	}
 	placeholder := base64.StdEncoding.EncodeToString(make([]byte, 128))
 	unsigned, err := rawmsg.Parse([]byte(build(placeholder)))

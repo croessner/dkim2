@@ -14,6 +14,8 @@ const (
 	AlgorithmRSASHA256 = signature.AlgorithmRSASHA256
 	// AlgorithmEd25519SHA256 identifies an Ed25519-SHA256 key query.
 	AlgorithmEd25519SHA256 = signature.AlgorithmEd25519SHA256
+	// AlgorithmMLDSA44Ed25519SHA512 aliases the composite Draft-07 algorithm.
+	AlgorithmMLDSA44Ed25519SHA512 = signature.AlgorithmMLDSA44Ed25519SHA512
 )
 
 // Query owns one validated canonical DNS public-key lookup tuple.

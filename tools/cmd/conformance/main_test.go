@@ -365,8 +365,8 @@ func TestConfiguredRunnersEmitExactEvidence(t *testing.T) {
 	if err != nil {
 		t.Fatalf("executeRunners() error = %v", err)
 	}
-	if len(evidence) != 97 {
-		t.Fatalf("executeRunners() evidence count = %d, want 97", len(evidence))
+	if len(evidence) != 98 {
+		t.Fatalf("executeRunners() evidence count = %d, want 98", len(evidence))
 	}
 }
 

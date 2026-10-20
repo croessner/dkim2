@@ -894,7 +894,13 @@ func assertFrozenEnums(t *testing.T, document *openapi3.T) {
 		"internal_contract",
 	})
 	assertPropertyEnum(t, document, "SignatureSetResult", "algorithm",
-		[]string{"rsa-sha256", "ed25519-sha256", "unknown"})
+		[]string{"rsa-sha256", "ed25519-sha256", "mldsa44-ed25519-sha512", "unknown"})
+	hopAlgorithms := requiredSchema(t, document, "VerifierHop").Properties["signature_algorithms"]
+	if hopAlgorithms == nil || hopAlgorithms.Value == nil || hopAlgorithms.Value.Items == nil ||
+		hopAlgorithms.Value.Items.Value == nil ||
+		!slices.Contains(hopAlgorithms.Value.Items.Value.Enum, any("mldsa44-ed25519-sha512")) {
+		t.Fatal("VerifierHop.signature_algorithms omits the Draft-07 composite algorithm")
+	}
 	assertPropertyEnum(t, document, "SignatureSetResult", "status",
 		[]string{"pass", "fail", "permerror", testValueTemperror, "ignored"})
 	strictIdentity := requiredSchema(t, document, "KeyPolicyResult").

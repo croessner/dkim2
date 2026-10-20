@@ -9,6 +9,7 @@ import (
 	"io"
 	"math/big"
 
+	"github.com/croessner/dkim2/internal/cryptodkim2"
 	"github.com/croessner/dkim2/internal/keyresolver"
 )
 
@@ -25,6 +26,10 @@ const (
 	AlgorithmRSASHA256 Algorithm = "rsa-sha256"
 	// AlgorithmEd25519SHA256 identifies Ed25519-SHA256 verification.
 	AlgorithmEd25519SHA256 Algorithm = "ed25519-sha256"
+	// AlgorithmMLDSA44Ed25519SHA512 identifies Draft-07 Section 3.4 composite
+	// ML-DSA-44 plus Ed25519 verification over a SHA-512 digest. The library
+	// verifies this algorithm but does not sign with it.
+	AlgorithmMLDSA44Ed25519SHA512 Algorithm = "mldsa44-ed25519-sha512"
 	// AlgorithmUnknown represents an unrecognized message-derived algorithm without retaining its spelling.
 	AlgorithmUnknown Algorithm = "unknown"
 )
@@ -32,7 +37,7 @@ const (
 // Known reports whether the algorithm is in the closed public vocabulary.
 func (a Algorithm) Known() bool {
 	switch a {
-	case AlgorithmRSASHA256, AlgorithmEd25519SHA256, AlgorithmUnknown:
+	case AlgorithmRSASHA256, AlgorithmEd25519SHA256, AlgorithmMLDSA44Ed25519SHA512, AlgorithmUnknown:
 		return true
 	default:
 		return false
@@ -167,7 +172,10 @@ type publicKeyResultState struct {
 	algorithm  Algorithm
 	rsaKey     *rsa.PublicKey
 	ed25519Key ed25519.PublicKey
-	metadata   KeyPolicyMetadata
+	// compositeKey holds the validated raw DNS form: ML-DSA-44 public key
+	// followed by the Ed25519 public key.
+	compositeKey []byte
+	metadata     KeyPolicyMetadata
 }
 
 // KeyPolicyMetadata carries bounded DNS key declarations without raw record data.
@@ -205,6 +213,23 @@ func FoundEd25519PublicKey(key ed25519.PublicKey) PublicKeyResult {
 		status:     PublicKeyStatusFound,
 		algorithm:  AlgorithmEd25519SHA256,
 		ed25519Key: ed25519.PublicKey(bytes.Clone(key)),
+	}}
+}
+
+// FoundCompositePublicKey constructs a found mldsa44-ed25519-sha512 result
+// from the raw DNS p= form: the 1312-byte ML-DSA-44 public key followed by the
+// 32-byte Ed25519 public key. The material is cloned and structurally
+// validated; any other size, an unparsable ML-DSA-44 component, or a runtime
+// without ML-DSA-44 support fails closed as an invalid-key result.
+func FoundCompositePublicKey(raw []byte) PublicKeyResult {
+	key, err := cryptodkim2.ParseCompositePublicKey(raw)
+	if err != nil {
+		return InvalidPublicKey(AlgorithmMLDSA44Ed25519SHA512)
+	}
+	return PublicKeyResult{state: &publicKeyResultState{
+		status:       PublicKeyStatusFound,
+		algorithm:    AlgorithmMLDSA44Ed25519SHA512,
+		compositeKey: key.Bytes(),
 	}}
 }
 
@@ -293,6 +318,16 @@ func (r PublicKeyResult) Ed25519PublicKey() (ed25519.PublicKey, bool) {
 	}
 
 	return ed25519.PublicKey(bytes.Clone(r.state.ed25519Key)), true
+}
+
+// CompositePublicKey returns an independent copy of the raw composite
+// mldsa44-ed25519-sha512 public key when that variant is present.
+func (r PublicKeyResult) CompositePublicKey() ([]byte, bool) {
+	if r.state == nil || r.state.compositeKey == nil {
+		return nil, false
+	}
+
+	return bytes.Clone(r.state.compositeKey), true
 }
 
 // IsZero reports whether no declared provider outcome is present.

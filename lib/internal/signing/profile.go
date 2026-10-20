@@ -56,10 +56,20 @@ type Credential struct {
 	handle    PrivateKeyHandle
 }
 
+// SignableAlgorithm reports whether this implementation can create
+// signatures with algorithm. Composite mldsa44-ed25519-sha512 signing stays
+// unimplemented until the conflict between Draft-07 Section 3.4 and the
+// LAMPS composite construction cited by DNS-01 is resolved, so only
+// rsa-sha256 and ed25519-sha256 are signable; verification supports all
+// three Draft-07 algorithms.
+func SignableAlgorithm(algorithm Algorithm) bool {
+	return algorithm == AlgorithmRSASHA256 || algorithm == AlgorithmEd25519SHA256
+}
+
 // NewCredential validates one provider-neutral signing credential.
 func NewCredential(selector string, algorithm Algorithm, publicKey any, handle PrivateKeyHandle, limits Limits) (Credential, error) {
 	resolved, err := limits.normalized()
-	if err != nil || !handle.Valid() || !algorithm.Known() {
+	if err != nil || !handle.Valid() || !SignableAlgorithm(algorithm) {
 		return Credential{}, newError(ErrorCodeInvalidRequest, ErrorLocation{Phase: PhasePreflight}, ErrorDetails{})
 	}
 	query, queryErr := keyresolver.NewQuery("credential.invalid", selector, algorithm, keyresolver.DefaultLimits())

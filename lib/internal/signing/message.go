@@ -172,7 +172,7 @@ func (m CompletedMessage) validBasicFacts() bool {
 // validCompletedAlgorithms requires canonical one- or two-algorithm order.
 func validCompletedAlgorithms(algorithms []Algorithm) bool {
 	for index, algorithm := range algorithms {
-		if !algorithm.Known() || index > 0 && algorithm != AlgorithmEd25519SHA256 ||
+		if !SignableAlgorithm(algorithm) || index > 0 && algorithm != AlgorithmEd25519SHA256 ||
 			index == 0 && len(algorithms) == 2 && algorithm != AlgorithmRSASHA256 {
 			return false
 		}

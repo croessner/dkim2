@@ -314,6 +314,27 @@ func TestVerifiedRevisionInputCrossesExplicitNullBodyHistory(t *testing.T) {
 	}
 }
 
+// TestRevisionProofChecksFromRewriteAcrossNullBodyHistory reproduces Draft-07
+// Sections 11 and 14.8 across a b:null transition: the header state is still
+// reconstructed, so a From rewrite at m=2 must be Authentic for the reviser's
+// d=, while an aligned rewrite passes.
+func TestRevisionProofChecksFromRewriteAcrossNullBodyHistory(t *testing.T) {
+	recipe := `{"h":{"from":[{"d":[" sender@example.test"]}],"subject":[{"d":["previous"]}]},"b":null}`
+	for currentFrom, want := range map[string]RevisionVerificationStatus{
+		"list@sub.example.test": RevisionVerificationVerified,
+		"list@other.test":       RevisionVerificationProtocolRejected,
+	} {
+		fixture := newRevisionTestFixtureWithFrom(t, &recipe, false, nil, canonical.HashAlgorithmSHA256, currentFrom)
+		verifier := newRevisionTestVerifier(t, fixture, nil)
+		result, capability, err := verifier.VerifyForRevision(context.Background(), RevisionRequest{
+			Message: fixture.message, Envelope: fixture.envelope,
+		})
+		if err != nil || result.Status() != want || capability.Valid() != (want == RevisionVerificationVerified) {
+			t.Fatalf("From %s: VerifyForRevision() = %q/%t/%v, want %q", currentFrom, result.Status(), capability.Valid(), err, want)
+		}
+	}
+}
+
 // TestVerifiedRevisionInputRechecksFourteenDayExpiryAtConsumption locks capability lifetime.
 func TestVerifiedRevisionInputRechecksFourteenDayExpiryAtConsumption(t *testing.T) {
 	fixture := newRevisionTestFixture(t, nil, false)
@@ -553,11 +574,18 @@ func newRevisionTestFixtureWithFlags(t *testing.T, recipeJSON *string, terminal 
 // newRevisionTestFixtureWithHash creates one valid fixture with controlled Message-Instance hashes.
 func newRevisionTestFixtureWithHash(t *testing.T, recipeJSON *string, terminal bool, flags []string, algorithm canonical.HashAlgorithm) revisionTestFixture {
 	t.Helper()
+	return newRevisionTestFixtureWithFrom(t, recipeJSON, terminal, flags, algorithm, "sender@example.test")
+}
+
+// newRevisionTestFixtureWithFrom builds the revision fixture with an explicit
+// current From value; the m=1 state always carries sender@example.test.
+func newRevisionTestFixtureWithFrom(t *testing.T, recipeJSON *string, terminal bool, flags []string, algorithm canonical.HashAlgorithm, currentFrom string) revisionTestFixture {
+	t.Helper()
 	seed := sha256.Sum256([]byte("dkim2 revision verifier test key"))
 	privateKey := ed25519.NewKeyFromSeed(seed[:])
 	publicKey := privateKey.Public().(ed25519.PublicKey)
 
-	currentContent := []byte("From: sender@example.test\r\nSubject: current\r\n\r\ncurrent body\r\n")
+	currentContent := []byte("From: " + currentFrom + "\r\nSubject: current\r\n\r\ncurrent body\r\n")
 	currentHeader, currentBody := revisionTestDigests(t, currentContent, algorithm)
 	instanceFields := []string{"Message-Instance: m=1; h=" + string(algorithm) + ":" + currentHeader + ":" + currentBody + ";\r\n"}
 	signatureFields := []string{}

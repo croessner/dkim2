@@ -16,14 +16,18 @@ const (
 	AlgorithmRSASHA256 Algorithm = "rsa-sha256"
 	// AlgorithmEd25519SHA256 is the baseline Ed25519 signature algorithm name.
 	AlgorithmEd25519SHA256 Algorithm = "ed25519-sha256"
+	// AlgorithmMLDSA44Ed25519SHA512 is the Draft-07 Section 3.4 composite
+	// ML-DSA-44 plus Ed25519 signature algorithm over a SHA-512 digest.
+	AlgorithmMLDSA44Ed25519SHA512 Algorithm = "mldsa44-ed25519-sha512"
 )
 
 // Algorithm identifies one canonical supported or extension signing-algorithm token.
 type Algorithm string
 
-// Known reports whether algorithm belongs to the baseline signature vocabulary.
+// Known reports whether algorithm belongs to the Draft-07 Section 3 signature
+// vocabulary that every verifier implements.
 func (a Algorithm) Known() bool {
-	return a == AlgorithmRSASHA256 || a == AlgorithmEd25519SHA256
+	return a == AlgorithmRSASHA256 || a == AlgorithmEd25519SHA256 || a == AlgorithmMLDSA44Ed25519SHA512
 }
 
 // Limits contains fail-closed DKIM2-Signature parser resource settings.

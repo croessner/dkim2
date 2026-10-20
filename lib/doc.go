@@ -37,8 +37,9 @@
 //
 // Provider status is exactly found, missing, invalid, ambiguous, revoked,
 // unsupported_key_type, or algorithm_mismatch, and a declared status accompanies
-// a nil error. Found results contain a matching *rsa.PublicKey or
-// ed25519.PublicKey; accepted public material is cloned before use. Private
+// a nil error. Found results contain a matching *rsa.PublicKey,
+// ed25519.PublicKey, or raw composite mldsa44-ed25519-sha512 key built with
+// FoundCompositePublicKey; accepted public material is cloned before use. Private
 // keys, crypto.Signer, open-ended material, mismatched algorithms, and
 // inconsistent status/material pairs are not accepted. Provider failures are
 // classified only through typed temporary or permanent errors, never error
@@ -62,8 +63,12 @@
 // provider cache. TTL-aware injected transports may enable bounded positive,
 // authoritative-negative, and stable-error caching.
 //
-// DNS key records use PKCS#1 RSAPublicKey DER for RSA and exactly 32 raw bytes
-// for Ed25519. Empty p= is revoked. Non-empty p= accepts omitted terminal
+// DNS key records use PKCS#1 RSAPublicKey DER for RSA, exactly 32 raw bytes
+// for Ed25519, and exactly 1344 raw bytes (1312-byte ML-DSA-44 public key
+// followed by the 32-byte Ed25519 public key) for k=mldsa44-ed25519-sha512.
+// Composite verification follows Draft-07 Section 3.4; composite signing is not
+// implemented, and verifier construction fails closed on a cryptographic
+// runtime without ML-DSA-44. Empty p= is revoked. Non-empty p= accepts omitted terminal
 // Base64 padding as DNS-01 specifies while still requiring canonical zero pad
 // bits. The parser recognizes lowercase k= as the DNS-01 grammar requires; the
 // inherited DNS-00 ABNF typo is corrected there. The active DKIM2

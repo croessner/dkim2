@@ -34,13 +34,15 @@ func TestMessageDigestAndSignatureStatusAreImmutable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("signatureInputDigest() error = %v", err)
 	}
-	originalDigest := bytes.Clone(digest)
-	digest[0] ^= 0xff
+	originalSHA256, originalSHA512 := bytes.Clone(digest.sha256), bytes.Clone(digest.sha512)
+	digest.sha256[0] ^= 0xff
+	digest.sha512[0] ^= 0xff
 	freshDigest, err := signatureInputDigest(canonicalizer, fixture.message, Target{Sequence: 1, InstanceNumber: 1})
 	if err != nil {
 		t.Fatalf("second signatureInputDigest() error = %v", err)
 	}
-	if !bytes.Equal(freshDigest, originalDigest) || bytes.Equal(freshDigest, digest) {
+	if !bytes.Equal(freshDigest.sha256, originalSHA256) || !bytes.Equal(freshDigest.sha512, originalSHA512) ||
+		bytes.Equal(freshDigest.sha256, digest.sha256) || bytes.Equal(freshDigest.sha512, digest.sha512) {
 		t.Fatal("signatureInputDigest() exposed mutable digest storage")
 	}
 }

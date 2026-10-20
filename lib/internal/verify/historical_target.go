@@ -148,7 +148,7 @@ func (v Verifier) VerifyHistoricalTarget(ctx context.Context, embedded EmbeddedI
 	if err != nil {
 		return HistoricalTargetSignatureUnverified, nil
 	}
-	digest, err := canonicalizer.SHA256Digest(signatureInput)
+	digests, err := computeSignatureDigests(canonicalizer, signatureInput)
 	if err != nil {
 		return "", malformedStateError(CheckKindSignature, target, err)
 	}
@@ -156,7 +156,7 @@ func (v Verifier) VerifyHistoricalTarget(ctx context.Context, embedded EmbeddedI
 	if outcome != "" {
 		return HistoricalTargetSignatureUnverified, nil
 	}
-	evaluation := v.evaluateRevisionSignatureSets(ctx, parsed, digest.Bytes(), target, plan)
+	evaluation := v.evaluateRevisionSignatureSets(ctx, parsed, digests, target, plan)
 	if err := ctx.Err(); err != nil {
 		return "", err
 	}

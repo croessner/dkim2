@@ -8,6 +8,7 @@ import (
 	"crypto/rsa"
 	"crypto/sha256"
 	"encoding/base64"
+	"github.com/croessner/dkim2/internal/cryptodkim2"
 	"strconv"
 	"strings"
 	"testing"
@@ -138,7 +139,7 @@ func buildVerificationFixtureWithEnvelopeAt(t *testing.T, algorithm Algorithm, t
 	}
 	bodyDigest := mustDigest(t, bodyHash)
 	headerDigest := mustDigest(t, headerHash)
-	placeholder := base64.StdEncoding.EncodeToString(bytesOf(0xa5, placeholderSignatureLength(algorithm)))
+	placeholder := foldLongBase64(base64.StdEncoding.EncodeToString(bytesOf(0xa5, placeholderSignatureLength(algorithm))))
 	unsignedRaw := rawWithSignatureSetEnvelopeAt(headerDigest.Base64(), bodyDigest.Base64(), string(algorithm), placeholder, timestamp, reversePath, forwardPaths)
 	unsigned := mustParseVerificationMessage(t, unsignedRaw)
 	input, err := canonicalizer.SignatureInput(canonical.SignatureInputSelection{
@@ -150,7 +151,7 @@ func buildVerificationFixtureWithEnvelopeAt(t *testing.T, algorithm Algorithm, t
 	}
 	digest := sha256.Sum256(input.Bytes())
 	signatureBytes := signer(digest[:], input.Bytes())
-	signatureText := base64.StdEncoding.EncodeToString(signatureBytes)
+	signatureText := foldLongBase64(base64.StdEncoding.EncodeToString(signatureBytes))
 	signedRaw := rawWithSignatureSetEnvelopeAt(headerDigest.Base64(), bodyDigest.Base64(), string(algorithm), signatureText, timestamp, reversePath, forwardPaths)
 	fixture, err := parseVerificationFixture(signedRaw)
 	if err != nil {
@@ -366,8 +367,28 @@ func placeholderSignatureLength(algorithm Algorithm) int {
 	if algorithm == AlgorithmEd25519SHA256 {
 		return ed25519.SignatureSize
 	}
+	if algorithm == signature.AlgorithmMLDSA44Ed25519SHA512 {
+		return cryptodkim2.CompositeSignatureBytes
+	}
 
 	return 128
+}
+
+// foldLongBase64 folds base64 values longer than one header line with FWS,
+// which base64string permits; shorter values stay unchanged.
+func foldLongBase64(value string) string {
+	const width = 76
+	if len(value) <= 900 {
+		return value
+	}
+	var folded strings.Builder
+	for start := 0; start < len(value); start += width {
+		if start > 0 {
+			folded.WriteString("\r\n\t")
+		}
+		folded.WriteString(value[start:min(start+width, len(value))])
+	}
+	return folded.String()
 }
 
 // bytesOf returns repeated bytes for synthetic base64 fields.

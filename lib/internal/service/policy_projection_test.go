@@ -49,7 +49,7 @@ func (p passingPolicyProvider) LookupKey(context.Context, verify.KeyQuery) (veri
 // TestServiceAloneUpgradesPassingCandidateAndDiscardsNonPassFlags verifies provenance ownership.
 func TestServiceAloneUpgradesPassingCandidateAndDiscardsNonPassFlags(t *testing.T) {
 	const timestamp = uint64(1700000000)
-	raw := strings.Replace(string(syntheticCurrentMessage(t, timestamp, 1, 1)), "; d=example.test;", "; f=donotmodify,donotexplode,feedback,feedhere,exploded,TOXIC-UNKNOWN; d=example.test;", 1)
+	raw := strings.Replace(string(syntheticCurrentMessage(t, timestamp, 1, 1)), "; d=example.test;", "; f=donotmodify,donotexplode,feedback,feedhere,TOXIC-UNKNOWN; d=example.test;", 1)
 	config := DefaultConfig()
 	config.Clock = func() time.Time { return time.Unix(int64(timestamp), 0) }
 	coordinator, err := NewVerifier(&countingProvider{}, config)
@@ -77,7 +77,7 @@ func TestServiceAloneUpgradesPassingCandidateAndDiscardsNonPassFlags(t *testing.
 	passing := passingResult.PolicyProjection()
 	hops := passing.Hops()
 	if !passing.Valid() || passing.Protocol() != policy.ProtocolPASS || passing.HistoryCoverage() != policy.HistoryComplete || len(hops) != 1 ||
-		hops[0].Sequence() != 1 || hops[0].Transition() != policy.TransitionOrigin || !hops[0].Feedback() || !hops[0].FeedHere() || !hops[0].Exploded() {
+		hops[0].Sequence() != 1 || hops[0].Transition() != policy.TransitionOrigin || !hops[0].Feedback() || !hops[0].FeedHere() || hops[0].Exploded() {
 		t.Fatalf("PASS projection = %#v hops=%#v", passing, hops)
 	}
 }
@@ -213,7 +213,7 @@ func signedFlaggedPolicyMessageSets(t *testing.T, timestamp uint64, setCount int
 		}
 		return "From: sender@example.test\r\nSubject: flagged policy\r\n" +
 			"Message-Instance: m=1; h=sha256:" + headerDigest.Base64() + ":" + bodyDigest.Base64() + ";\r\n" +
-			"DKIM2-Signature: i=1; m=1; t=" + strconv.FormatUint(timestamp, 10) + "; mf=PD4=; rt=PHJjcHRAZXhhbXBsZS50ZXN0Pg==; f=donotmodify,donotexplode,feedback,feedhere,exploded,TOXIC-UNKNOWN; d=example.test; s=" + strings.Join(sets, ",") + ";\r\n\r\nbody line\r\n"
+			"DKIM2-Signature: i=1; m=1; t=" + strconv.FormatUint(timestamp, 10) + "; mf=PD4=; rt=PHJjcHRAZXhhbXBsZS50ZXN0Pg==; f=donotmodify,donotexplode,feedback,feedhere,TOXIC-UNKNOWN; d=example.test; s=" + strings.Join(sets, ",") + ";\r\n\r\nbody line\r\n"
 	}
 	placeholder := base64.StdEncoding.EncodeToString(make([]byte, 128))
 	unsigned, err := rawmsg.Parse([]byte(build(placeholder)))

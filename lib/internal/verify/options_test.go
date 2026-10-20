@@ -37,15 +37,16 @@ func TestNewVerifierRejectsTypedNilKeyProvider(t *testing.T) {
 	}
 }
 
-// TestDefaultAlgorithmPolicyMatchesM4Contract verifies the M4 verifier defaults.
-func TestDefaultAlgorithmPolicyMatchesM4Contract(t *testing.T) {
+// TestDefaultAlgorithmPolicyMatchesDraft07Contract verifies that the default
+// verifier enables all three algorithms Draft-07 Section 3 makes mandatory.
+func TestDefaultAlgorithmPolicyMatchesDraft07Contract(t *testing.T) {
 	policy := DefaultAlgorithmPolicy()
 	algorithms := policy.Algorithms()
-	if len(algorithms) != 2 {
-		t.Fatalf("default algorithm count = %d, want 2", len(algorithms))
+	if len(algorithms) != 3 {
+		t.Fatalf("default algorithm count = %d, want 3", len(algorithms))
 	}
-	if algorithms[0] != AlgorithmRSASHA256 || algorithms[1] != AlgorithmEd25519SHA256 {
-		t.Fatalf("default algorithms = %#v, want rsa-sha256 and ed25519-sha256", algorithms)
+	if algorithms[0] != AlgorithmRSASHA256 || algorithms[1] != AlgorithmEd25519SHA256 || algorithms[2] != AlgorithmMLDSA44Ed25519SHA512 {
+		t.Fatalf("default algorithms = %#v, want rsa-sha256, ed25519-sha256, and mldsa44-ed25519-sha512", algorithms)
 	}
 	if policy.MinRSABits != 1024 {
 		t.Fatalf("MinRSABits = %d, want 1024", policy.MinRSABits)

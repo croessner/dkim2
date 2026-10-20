@@ -509,7 +509,11 @@ true value.
 Draft-07 Section 10.10 removed `donotmodify` and `donotexplode`, so the
 former `do_not_modify` and `do_not_explode` compliance properties, the matching
 `VerifierHop` booleans, and the `donotmodify_*`/`donotexplode_*` policy reasons
-were removed from the contract.
+were removed from the contract. The `dkim2.verifier-projection.v1` binding is
+draft-bound: it frames the exact draft identifier, and under Draft-07 its hop
+encoding no longer contains the two booleans, so every hop and projection
+binding value differs from Draft-06. Consumers must recompute bindings with the
+matching draft and never compare bindings across drafts.
 
 The policy-reason enum is the exact reachable decision/finding inventory. The
 error-only public constants `invalid_input`, `limit_exceeded`, and

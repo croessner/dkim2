@@ -271,3 +271,23 @@ func hasSignatureSet(result Result, algorithm Algorithm, status SignatureSetStat
 
 	return false
 }
+
+// TestVerifierRejectsExplodedOnFirstSignature reproduces Draft-07 Section
+// 12.5: exploded MUST NOT be set on i=1, and Sections 2.11 and 13 make that
+// Signer requirement part of a Validly Signed message. A later signature may
+// carry exploded, and the uppercase spelling is an inert unknown flag.
+func TestVerifierRejectsExplodedOnFirstSignature(t *testing.T) {
+	fixture := newRSAVerificationFixture(t)
+	for flags, wantRejected := range map[string]bool{"exploded": true, "feedback, exploded": true, "Exploded": false, "feedback": false} {
+		message := mustParseVerificationMessage(t, baseVerificationHeaders()+
+			"DKIM2-Signature: "+signatureField(1, testSelector+":"+string(AlgorithmRSASHA256)+":"+fixture.signatureBase64)+" f="+flags+";\r\n\r\n"+verificationBody())
+		parsed, err := signature.Parse(message.Headers().FieldsByName(signature.HeaderName)[0])
+		if err != nil {
+			t.Fatalf("signature.Parse(f=%s) error = %v", flags, err)
+		}
+		err = validateSignatureCollection([]signature.Signature{parsed})
+		if wantRejected != IsErrorCode(err, ErrorCodeMalformedState) || !wantRejected && err != nil {
+			t.Fatalf("f=%s validateSignatureCollection() error = %v, want rejected=%t", flags, err, wantRejected)
+		}
+	}
+}

@@ -21,14 +21,14 @@ func TestVerifierAttachesSelectedParsedFlagCandidate(t *testing.T) {
 		t.Fatalf("passing candidate = %#v/%v", passCandidate, ok)
 	}
 
-	toxicRaw := strings.Replace(passing.raw, "; d=example.test;", "; f=donotmodify,donotexplode,feedback,feedhere,exploded,TOXIC-UNKNOWN; d=example.test;", 1)
+	toxicRaw := strings.Replace(passing.raw, "; d=example.test;", "; f=donotmodify,donotexplode,feedback,feedhere,TOXIC-UNKNOWN; d=example.test;", 1)
 	toxic := passing.withRaw(toxicRaw)
 	nonPass, err := mustVerifierForFixture(t, toxic).Verify(context.Background(), Request{Message: toxic.message, Envelope: matchingEnvelope()})
 	if err != nil || nonPass.Status() == TargetStatusPass {
 		t.Fatalf("non-PASS Verify() = %q error=%v", nonPass.Status(), err)
 	}
 	nonPassCandidate, ok := nonPass.TargetFlagCandidate()
-	if !ok || nonPassCandidate.Sequence() != nonPass.Target().Sequence || !nonPassCandidate.Feedback() || !nonPassCandidate.FeedHere() || !nonPassCandidate.Exploded() {
+	if !ok || nonPassCandidate.Sequence() != nonPass.Target().Sequence || !nonPassCandidate.Feedback() || !nonPassCandidate.FeedHere() || nonPassCandidate.Exploded() {
 		t.Fatalf("non-PASS candidate = %#v/%v", nonPassCandidate, ok)
 	}
 }
@@ -39,7 +39,7 @@ func TestVerifierAttachesSelectedParsedFlagCandidate(t *testing.T) {
 func TestTargetFlagCandidateUsesAlreadyParsedKnownFlags(t *testing.T) {
 	parsed := parsedPolicySignature(t)
 	candidate := newTargetFlagCandidate(parsed)
-	if !candidate.Valid() || candidate.Sequence() != 1 || !candidate.Feedback() || !candidate.FeedHere() || !candidate.Exploded() {
+	if !candidate.Valid() || candidate.Sequence() != 1 || !candidate.Feedback() || !candidate.FeedHere() || candidate.Exploded() {
 		t.Fatalf("candidate = %#v", candidate)
 	}
 	result := NewResult(Target{Sequence: 1, InstanceNumber: 1}, TargetStatusPass, nil, nil).withTargetFlagCandidate(candidate)
@@ -66,7 +66,7 @@ func TestTargetFlagCandidateUsesAlreadyParsedKnownFlags(t *testing.T) {
 func parsedPolicySignature(t *testing.T) signature.Signature {
 	t.Helper()
 	raw := []byte("From: sender@example.test\r\n" +
-		"DKIM2-Signature: i=1; m=1; t=1700000000; mf=PD4=; rt=PHJjcHRAZXhhbXBsZS50ZXN0Pg==; d=example.test; s=selector:rsa-sha256:QQ==; f=donotmodify,donotexplode,feedback,feedhere,exploded,TOXIC-UNKNOWN;\r\n\r\nbody\r\n")
+		"DKIM2-Signature: i=1; m=1; t=1700000000; mf=PD4=; rt=PHJjcHRAZXhhbXBsZS50ZXN0Pg==; d=example.test; s=selector:rsa-sha256:QQ==; f=donotmodify,donotexplode,feedback,feedhere,TOXIC-UNKNOWN;\r\n\r\nbody\r\n")
 	message, err := rawmsg.Parse(raw)
 	if err != nil {
 		t.Fatalf("rawmsg.Parse() error = %v", err)
