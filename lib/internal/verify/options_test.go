@@ -115,20 +115,6 @@ func TestNewVerifierRejectsUnsafeOptions(t *testing.T) {
 			code: ErrorCodeUnsupportedAlgorithm,
 		},
 		{
-			name: "negative future tolerance",
-			option: WithTimestampPolicy(TimestampPolicy{
-				FutureTolerance: -time.Second,
-			}),
-			code: ErrorCodeInvalidOptions,
-		},
-		{
-			name: "negative max age",
-			option: WithTimestampPolicy(TimestampPolicy{
-				MaxAge: -time.Second,
-			}),
-			code: ErrorCodeInvalidOptions,
-		},
-		{
 			name: "zero signature set limit",
 			option: WithLimits(Limits{
 				MaxEnvelopeRecipients: 1,
@@ -168,11 +154,8 @@ func TestNewVerifierUsesValidatedDefaults(t *testing.T) {
 	if got := options.Clock.Now(); !got.Equal(fixedNow) {
 		t.Fatalf("Clock.Now() = %s, want fixed time", got)
 	}
-	if options.TimestampPolicy.FutureTolerance != 5*time.Minute {
-		t.Fatalf("FutureTolerance = %s, want 5m", options.TimestampPolicy.FutureTolerance)
-	}
-	if options.TimestampPolicy.MaxAge != 14*24*time.Hour {
-		t.Fatalf("MaxAge = %s, want 14 days", options.TimestampPolicy.MaxAge)
+	if signatureFutureTolerance != 24*time.Hour || signatureMaxAge != 14*24*time.Hour || revisionInstantSkew != 5*time.Minute {
+		t.Fatalf("timestamp windows = %s/%s/%s, want 1d/14d/5m", signatureFutureTolerance, signatureMaxAge, revisionInstantSkew)
 	}
 
 	algorithms := options.AlgorithmPolicy.Algorithms()

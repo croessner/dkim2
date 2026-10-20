@@ -75,7 +75,7 @@ func TestFlightWaiterLimitAllowsExactAndRejectsOneOver(t *testing.T) {
 	work := func(context.Context) flightResult {
 		close(entered)
 		<-release
-		return flightResult{outcome: newStatusOutcome(KeyOutcomeMissing, AlgorithmRSASHA256, newMetadata(false, false))}
+		return flightResult{outcome: newStatusOutcome(KeyOutcomeMissing, AlgorithmRSASHA256)}
 	}
 	var waiters sync.WaitGroup
 	for index := range 2 {
@@ -103,7 +103,7 @@ func TestFlightWaiterCancellationDoesNotCancelLivePeer(t *testing.T) {
 	work := func(ctx context.Context) flightResult {
 		entered <- ctx
 		<-release
-		return flightResult{outcome: newStatusOutcome(KeyOutcomeMissing, AlgorithmRSASHA256, newMetadata(false, false))}
+		return flightResult{outcome: newStatusOutcome(KeyOutcomeMissing, AlgorithmRSASHA256)}
 	}
 	firstDone := make(chan error, 1)
 	go func() {
@@ -139,7 +139,7 @@ func TestFlightLastWaiterCancellationCancelsWorker(t *testing.T) {
 	work := func(ctx context.Context) flightResult {
 		<-ctx.Done()
 		close(workerCanceled)
-		return flightResult{outcome: newStatusOutcome(KeyOutcomeTemporary, AlgorithmRSASHA256, newMetadata(false, false))}
+		return flightResult{outcome: newStatusOutcome(KeyOutcomeTemporary, AlgorithmRSASHA256)}
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
@@ -169,7 +169,7 @@ func TestFlightWaiterAndGlobalSaturationAreImmediate(t *testing.T) {
 	work := func(context.Context) flightResult {
 		close(entered)
 		<-release
-		return flightResult{outcome: newStatusOutcome(KeyOutcomeMissing, AlgorithmRSASHA256, newMetadata(false, false))}
+		return flightResult{outcome: newStatusOutcome(KeyOutcomeMissing, AlgorithmRSASHA256)}
 	}
 	firstDone := make(chan struct{})
 	go func() {
@@ -198,7 +198,7 @@ func TestFlightCompletionCancellationRacePrefersCaller(t *testing.T) {
 		go func() {
 			_, _, err := group.do(ctx, key, func(context.Context) flightResult {
 				<-release
-				return flightResult{outcome: newStatusOutcome(KeyOutcomeMissing, AlgorithmRSASHA256, newMetadata(false, false))}
+				return flightResult{outcome: newStatusOutcome(KeyOutcomeMissing, AlgorithmRSASHA256)}
 			})
 			done <- err
 		}()
@@ -224,7 +224,7 @@ func TestFlightRetiresCanceledZeroWaiterBeforeReplacement(t *testing.T) {
 			<-ctx.Done()
 			close(oldCanceled)
 			<-oldRelease
-			return flightResult{outcome: newStatusOutcome(KeyOutcomeTemporary, AlgorithmRSASHA256, newMetadata(false, false))}
+			return flightResult{outcome: newStatusOutcome(KeyOutcomeTemporary, AlgorithmRSASHA256)}
 		})
 		firstDone <- err
 	}()
@@ -239,7 +239,7 @@ func TestFlightRetiresCanceledZeroWaiterBeforeReplacement(t *testing.T) {
 		_, _, err := group.do(context.Background(), key, func(context.Context) flightResult {
 			close(newEntered)
 			<-newRelease
-			return flightResult{outcome: newStatusOutcome(KeyOutcomeMissing, AlgorithmRSASHA256, newMetadata(false, false))}
+			return flightResult{outcome: newStatusOutcome(KeyOutcomeMissing, AlgorithmRSASHA256)}
 		})
 		secondDone <- err
 	}()
@@ -277,7 +277,7 @@ func TestFlightJoinPrunesCanceledWaiterBeforeLimit(t *testing.T) {
 		_, _, err := group.do(oldCtx, key, func(ctx context.Context) flightResult {
 			<-ctx.Done()
 			<-oldRelease
-			return flightResult{outcome: newStatusOutcome(KeyOutcomeTemporary, AlgorithmRSASHA256, newMetadata(false, false))}
+			return flightResult{outcome: newStatusOutcome(KeyOutcomeTemporary, AlgorithmRSASHA256)}
 		})
 		oldDone <- err
 	}()
@@ -294,7 +294,7 @@ func TestFlightJoinPrunesCanceledWaiterBeforeLimit(t *testing.T) {
 		_, saturated, err := group.do(context.Background(), key, func(context.Context) flightResult {
 			close(newEntered)
 			<-newRelease
-			return flightResult{outcome: newStatusOutcome(KeyOutcomeMissing, AlgorithmRSASHA256, newMetadata(false, false))}
+			return flightResult{outcome: newStatusOutcome(KeyOutcomeMissing, AlgorithmRSASHA256)}
 		})
 		newDone <- struct {
 			err       error
@@ -342,7 +342,7 @@ func TestFlightParentCancellationAndInvalidConstructionFailClosed(t *testing.T) 
 		result, _, _ := group.do(context.Background(), key, func(ctx context.Context) flightResult {
 			close(started)
 			<-ctx.Done()
-			return flightResult{outcome: newStatusOutcome(KeyOutcomeTemporary, AlgorithmRSASHA256, newMetadata(false, false))}
+			return flightResult{outcome: newStatusOutcome(KeyOutcomeTemporary, AlgorithmRSASHA256)}
 		})
 		done <- result
 	}()
@@ -396,7 +396,7 @@ func TestFlightGlobalLimitAllowsExactSlotsAndRejectsOneOver(t *testing.T) {
 	work := func(context.Context) flightResult {
 		entered.Add(1)
 		<-release
-		return flightResult{outcome: newStatusOutcome(KeyOutcomeMissing, AlgorithmRSASHA256, newMetadata(false, false))}
+		return flightResult{outcome: newStatusOutcome(KeyOutcomeMissing, AlgorithmRSASHA256)}
 	}
 	var waiters sync.WaitGroup
 	for _, selector := range []byte{'a', 'b'} {

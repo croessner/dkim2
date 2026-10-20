@@ -50,11 +50,7 @@ func adaptServiceResultWithProjection(input service.Result, projection policy.Pr
 		if !algorithmOK || !statusOK || !reasonOK {
 			return internalContractResult(newVerificationTarget(input.Target().Sequence, input.Target().Instance))
 		}
-		metadata := newKeyPolicyMetadata(fact.KeyPolicy.TestingDeclared, fact.KeyPolicy.StrictIdentityDeclared)
-		if fact.KeyPolicy.StrictIdentityApplicable {
-			return internalContractResult(newVerificationTarget(input.Target().Sequence, input.Target().Instance))
-		}
-		publicSignatures = append(publicSignatures, newSignatureSetFact(algorithm, status, factReason, fact.Selector, metadata))
+		publicSignatures = append(publicSignatures, newSignatureSetFact(algorithm, status, factReason, fact.Selector))
 	}
 	scope, content, historicalSignatures, ok := adaptHistory(input)
 	if !ok {

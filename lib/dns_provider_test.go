@@ -22,15 +22,14 @@ func TestDNSPublicKeyProviderMapsResolverOutcomes(t *testing.T) {
 		lookup    TXTLookupResult
 		algorithm Algorithm
 		status    PublicKeyStatus
-		metadata  bool
 	}{
 		{name: "missing", lookup: mustPublicAbsentLookup(t), algorithm: AlgorithmRSASHA256, status: PublicKeyStatusMissing},
 		{name: testNameAmbiguous, lookup: mustPublicAmbiguousLookup(t), algorithm: AlgorithmRSASHA256, status: PublicKeyStatusAmbiguous},
 		{name: testNameInvalid, lookup: mustPublicFoundLookup(t, []byte("v=DKIM1; p=%%%")), algorithm: AlgorithmRSASHA256, status: PublicKeyStatusInvalid},
-		{name: testNameRevoked, lookup: mustPublicFoundLookup(t, []byte("v=DKIM1; p=; t=y:s")), algorithm: AlgorithmRSASHA256, status: PublicKeyStatusRevoked, metadata: true},
-		{name: testNameUnsupported, lookup: mustPublicFoundLookup(t, []byte("v=DKIM1; k=future; p=QQ==; t=y:s")), algorithm: AlgorithmRSASHA256, status: PublicKeyStatusUnsupportedKeyType, metadata: true},
-		{name: testNameMismatch, lookup: mustPublicFoundLookup(t, []byte("v=DKIM1; k=ed25519; p="+edKey+"; t=y:s")), algorithm: AlgorithmRSASHA256, status: PublicKeyStatusAlgorithmMismatch, metadata: true},
-		{name: "found", lookup: mustPublicFoundLookup(t, []byte("v=DKIM1; k=ed25519; p="+edKey+"; t=y:s")), algorithm: AlgorithmEd25519SHA256, status: PublicKeyStatusFound, metadata: true},
+		{name: testNameRevoked, lookup: mustPublicFoundLookup(t, []byte("v=DKIM1; p=; t=y:s")), algorithm: AlgorithmRSASHA256, status: PublicKeyStatusRevoked},
+		{name: testNameUnsupported, lookup: mustPublicFoundLookup(t, []byte("v=DKIM1; k=future; p=QQ==; t=y:s")), algorithm: AlgorithmRSASHA256, status: PublicKeyStatusUnsupportedKeyType},
+		{name: testNameMismatch, lookup: mustPublicFoundLookup(t, []byte("v=DKIM1; k=ed25519; p="+edKey+"; t=y:s")), algorithm: AlgorithmRSASHA256, status: PublicKeyStatusAlgorithmMismatch},
+		{name: "found", lookup: mustPublicFoundLookup(t, []byte("v=DKIM1; k=ed25519; p="+edKey+"; t=y:s")), algorithm: AlgorithmEd25519SHA256, status: PublicKeyStatusFound},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -46,12 +45,8 @@ func TestDNSPublicKeyProviderMapsResolverOutcomes(t *testing.T) {
 				t.Fatalf("NewDNSPublicKeyProvider() error = %v", err)
 			}
 			result, err := provider.LookupPublicKey(context.Background(), newPublicKeyQuery("example.test", "selector", tt.algorithm))
-			metadata := result.KeyPolicyMetadata()
-			if err != nil || calls != 1 || result.Status() != tt.status || metadata.TestingDeclared() != tt.metadata {
-				t.Fatalf("LookupPublicKey() = %q metadata=%#v calls=%d error=%v", result.Status(), metadata, calls, err)
-			}
-			if tt.metadata && (!metadata.StrictIdentityDeclared() || metadata.StrictIdentityApplicable()) {
-				t.Fatalf("strict metadata = %#v", metadata)
+			if err != nil || calls != 1 || result.Status() != tt.status {
+				t.Fatalf("LookupPublicKey() = %q calls=%d error=%v", result.Status(), calls, err)
 			}
 		})
 	}

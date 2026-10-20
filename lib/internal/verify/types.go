@@ -58,38 +58,6 @@ type KeyMetadata struct {
 	Status KeyStatus
 	// Source records a low-cardinality provider source token.
 	Source string
-	// Policy carries bounded DNS key declarations without raw record data.
-	Policy KeyPolicyMetadata
-}
-
-// KeyPolicyMetadata carries bounded key-policy declarations across verifier boundaries.
-type KeyPolicyMetadata struct {
-	// TestingDeclared reports whether a DNS key record declared testing mode.
-	TestingDeclared bool
-	// StrictIdentityDeclared reports whether a DNS key record declared strict identity.
-	StrictIdentityDeclared bool
-	// StrictIdentityApplicable remains false for the active numeric DKIM2 i= grammar.
-	StrictIdentityApplicable bool
-}
-
-// Valid reports whether metadata is coherent with the active DKIM2 draft.
-func (m KeyPolicyMetadata) Valid() bool { return !m.StrictIdentityApplicable }
-
-// AllowedForStatus reports whether DNS declarations may accompany one provider key status.
-func (m KeyPolicyMetadata) AllowedForStatus(status KeyStatus, providerFailed bool) bool {
-	if m == (KeyPolicyMetadata{}) {
-		return true
-	}
-	if providerFailed {
-		return false
-	}
-	switch status {
-	case KeyStatusFound, KeyStatusInvalid, KeyStatusRevoked, KeyStatusUnsupportedKeyType,
-		KeyStatusAlgorithmMismatch, KeyStatusWrongType, KeyStatusPolicyRejected:
-		return true
-	default:
-		return false
-	}
 }
 
 // ValidProviderSource reports whether a source is an empty or bounded low-cardinality token.

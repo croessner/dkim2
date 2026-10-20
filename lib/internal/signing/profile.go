@@ -63,7 +63,7 @@ type Credential struct {
 // rsa-sha256 and ed25519-sha256 are signable; verification supports all
 // three Draft-07 algorithms.
 func SignableAlgorithm(algorithm Algorithm) bool {
-	return algorithm == AlgorithmRSASHA256 || algorithm == AlgorithmEd25519SHA256
+	return algorithm.Signable()
 }
 
 // NewCredential validates one provider-neutral signing credential.

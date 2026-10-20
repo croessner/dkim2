@@ -223,9 +223,6 @@ func TestPolicyReasonMappingCoversReachablePolicy(t *testing.T) {
 		{dkim2.PolicyReasonProtocolTemperror, generated.ProtocolTemperror},
 		{dkim2.PolicyReasonPermissiveOverride, generated.PermissiveOverride},
 		{dkim2.PolicyReasonTestingModeObserve, generated.TestingModeObserve},
-		{dkim2.PolicyReasonDNSTestingEffective, generated.DnsTestingEffective},
-		{dkim2.PolicyReasonDNSTestingMixed, generated.DnsTestingMixed},
-		{dkim2.PolicyReasonDNSTestingIneligible, generated.DnsTestingIneligible},
 		{dkim2.PolicyReasonFeedbackRequested, generated.FeedbackRequested},
 		{dkim2.PolicyReasonFeedbackRelaySelected, generated.FeedbackRelaySelected},
 		{dkim2.PolicyReasonFeedHereInert, generated.FeedhereInert},
@@ -254,12 +251,6 @@ func TestMultiInstancePolicyMappingsCoverReachableStates(t *testing.T) {
 		{dkim2.PolicyHistoryIndeterminate, generated.PolicyFeedbackHistoryCoverageIndeterminate},
 		{dkim2.PolicyHistoryNotEvaluated, generated.PolicyFeedbackHistoryCoverageNotEvaluated},
 	})
-	if got, ok := mapStrictIdentityApplicable(false); !ok || got != generated.False {
-		t.Fatalf("mapStrictIdentityApplicable(false) = %t/%t", got, ok)
-	}
-	if _, ok := mapStrictIdentityApplicable(true); ok {
-		t.Fatal("impossible strict-identity applicability mapped")
-	}
 }
 
 // TestCanonicalUint64MappingRejectsZero proves target and sequence strings stay exact.

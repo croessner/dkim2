@@ -488,21 +488,20 @@ of `message`, `protocol`, `body_hash`, `header_hash`, `signature`, `key`,
 `timestamp`, `envelope`, `domain_alignment`, `next_domain`, `provider`, or
 `internal_contract`. `reason` uses the verification reason enum.
 
-`SignatureSetResult` has exactly required `algorithm`, `status`, `reason`, and
-`key_policy`. `algorithm` is `rsa-sha256`, `ed25519-sha256`, or `unknown`;
-`status` is `pass`, `fail`, `permerror`, `temperror`, or `ignored`; `reason`
-uses the verification reason enum. `key_policy` has exactly three required
-booleans: `testing_declared`, `strict_identity_declared`, and
-`strict_identity_applicable`. The last property is a singleton `false`, matching
-the current public facade invariant; OpenAPI cannot advertise an impossible
-true value.
+`SignatureSetResult` has exactly required `algorithm`, `status`, and `reason`
+plus the optional failed-signature `selector`. `algorithm` is `rsa-sha256`,
+`ed25519-sha256`, `mldsa44-ed25519-sha512`, or `unknown`; `status` is `pass`,
+`fail`, `permerror`, `temperror`, or `ignored`; `reason` uses the
+verification reason enum. The former `key_policy` object
+(`testing_declared`, `strict_identity_declared`, `strict_identity_applicable`)
+and its `KeyPolicyResult` schema were removed: DNS-01 Section 3.4.1 retires
+the DNS key-record `t=` tag, so no DNS testing or strict-identity fact exists.
 
 `PolicyResult` has exactly these required properties:
 
 - `mode`: `strict`, `permissive`, or `testing`;
 - `verdict`: `accept`, `reject`, `tempfail`, or `continue`;
 - `primary_reason`: one exact M7 public policy reason;
-- `dns_testing_effective`: boolean;
 - `feedback`: `PolicyFeedback`;
 - `findings`: array, `maxItems: 128`, of `PolicyFinding`.
 
@@ -516,12 +515,15 @@ binding value differs from Draft-06. Consumers must recompute bindings with the
 matching draft and never compare bindings across drafts.
 
 The policy-reason enum is the exact reachable decision/finding inventory. The
+former `dns_testing_effective` property and the `dns_testing_effective`,
+`dns_testing_mixed`, and `dns_testing_ineligible` reasons were removed with the
+retired DNS `t=` tag; the configured local `testing` mode and its
+`testing_mode_observe` reason are unchanged. The
 error-only public constants `invalid_input`, `limit_exceeded`, and
 `internal_contract` are not serializable:
 
 `protocol_pass`, `protocol_fail`, `protocol_permerror`, `protocol_temperror`,
-`permissive_override`, `testing_mode_observe`, `dns_testing_effective`,
-`dns_testing_mixed`, `dns_testing_ineligible`,
+`permissive_override`, `testing_mode_observe`,
 `feedback_requested`, `feedback_relay_selected`, `feedhere_inert`, and
 `exploded_reported`.
 
@@ -2937,7 +2939,8 @@ store state.
   Invalid JSON encoding, scalar integrity, type, or bounds remains HTTP 400/413
   and cannot be represented as domain input.
 - Four verification states, three policy modes, four policy verdicts, all
-  closed findings/feedback/compliance, and DNS testing behavior map exactly.
+  closed findings/feedback/compliance map exactly; no DNS testing field or
+  reason exists after DNS-01 retired the `t=` tag.
 - Replay is untouched for non-PASS or non-accept; disabled uses no deriver.
 - Identity order, complete derivation before mutation, zero-write derivation
   failure, terminal-context precedence during derivation,

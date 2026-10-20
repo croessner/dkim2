@@ -159,7 +159,7 @@ func (v Verifier) verifyCurrentExtracted(ctx context.Context, input verification
 	if err := ctx.Err(); err != nil {
 		return Result{}, err
 	}
-	timestamp := v.checkTimestamp(input.request, targetSignature, target)
+	timestamp := v.checkTimestamps(input.request, input.signatures, target)
 	nextDomain := checkNextDomain(targetSignature, target, currentSequence)
 	envelope := v.checkEnvelope(input.request, targetSignature, target, currentSequence, deliveryStatusEnvelope)
 	domainAlignment, err := checkDomainAlignment(custody, target)
@@ -177,7 +177,7 @@ func (v Verifier) verifyCurrentExtracted(ctx context.Context, input verification
 	if !aggregateCurrentPass(result) {
 		return result, nil
 	}
-	if projection, ok := buildReplayProjection(input, targetSignature, targetInstance, hashes, digest, result); ok {
+	if projection, ok := buildReplayProjection(input, targetSignature, targetInstance, result); ok {
 		result = result.withReplayProjection(projection)
 	}
 	return result, nil

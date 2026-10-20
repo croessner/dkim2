@@ -32,7 +32,8 @@ func (t *dnsExampleTransport) LookupTXT(ctx context.Context, _ string) (dkim2.TX
 	return t.lookup, nil
 }
 
-// ExampleNewDNSPublicKeyProvider demonstrates injected DNS verification and bounded metadata.
+// ExampleNewDNSPublicKeyProvider demonstrates injected DNS verification; the
+// fixture record carries the retired t=y:s tag, which DNS-01 ignores.
 func ExampleNewDNSPublicKeyProvider() {
 	transport, err := newDNSExampleTransport()
 	if err != nil {
@@ -57,16 +58,13 @@ func ExampleNewDNSPublicKeyProvider() {
 		return
 	}
 	fact := result.SignatureSets()[0]
-	metadata := fact.KeyPolicyMetadata()
 	fmt.Println(result.State(), result.PrimaryReason())
 	fmt.Println(fact.Algorithm(), fact.Status(), fact.Reason())
-	fmt.Println(metadata.TestingDeclared(), metadata.StrictIdentityDeclared(), metadata.StrictIdentityApplicable())
 	fmt.Println("lookups", transport.calls)
 
 	// Output:
 	// PASS none
 	// rsa-sha256 pass none
-	// true true false
 	// lookups 1
 }
 

@@ -34,6 +34,7 @@ local symbols = {
   replay_exploded = 'DKIM2_REPLAY_EXPLODED',
   replay_replayed = 'DKIM2_REPLAYED',
   replay_not_checked = 'DKIM2_REPLAY_NOT_CHECKED',
+  replay_not_eligible = 'DKIM2_REPLAY_NOT_ELIGIBLE',
   replay_disabled = 'DKIM2_REPLAY_DISABLED',
   replay_indeterminate = 'DKIM2_REPLAY_INDETERMINATE',
   policy_accept = 'DKIM2_POLICY_ACCEPT',
@@ -114,6 +115,7 @@ local policy_verdicts = {
 
 local replay_classes = {
   not_checked = true,
+  not_eligible = true,
   disabled = true,
   first_seen = true,
   exploded = true,
@@ -144,7 +146,6 @@ authentication_reasons.replay_evidence_unavailable = true
 local policy_reasons = {
   protocol_pass = true, protocol_fail = true, protocol_permerror = true,
   protocol_temperror = true, permissive_override = true, testing_mode_observe = true,
-  dns_testing_effective = true, dns_testing_mixed = true, dns_testing_ineligible = true,
   feedback_requested = true, feedback_relay_selected = true, feedhere_inert = true, exploded_reported = true,
 }
 
@@ -343,7 +344,7 @@ local function valid_outcome(value)
   if authentication ~= verification then
     return false
   end
-  if replay == 'disabled' or replay == 'first_seen' or replay == 'exploded' then
+  if replay == 'disabled' or replay == 'first_seen' or replay == 'exploded' or replay == 'not_eligible' then
     return verification == 'PASS'
   end
   return replay == 'not_checked' and
@@ -520,14 +521,9 @@ end
 
 -- valid_signature_set validates one closed signature-set result.
 local function valid_signature_set(value)
-  if not exact_keys(value, { 'algorithm', 'status', 'reason', 'key_policy' }, { 'selector' }) or
+  if not exact_keys(value, { 'algorithm', 'status', 'reason' }, { 'selector' }) or
       not signature_set_algorithms[value.algorithm] or not signature_set_states[value.status] or
-      not verification_reasons[value.reason] or
-      not exact_keys(value.key_policy,
-        { 'testing_declared', 'strict_identity_declared', 'strict_identity_applicable' }, {}) or
-      type(value.key_policy.testing_declared) ~= 'boolean' or
-      type(value.key_policy.strict_identity_declared) ~= 'boolean' or
-      value.key_policy.strict_identity_applicable ~= false then
+      not verification_reasons[value.reason] then
     return false
   end
   return value.selector == nil or type(value.selector) == 'string' and
@@ -568,10 +564,9 @@ end
 -- valid_policy_result validates the complete closed local policy object.
 local function valid_policy_result(value)
   if not exact_keys(value, {
-      'mode', 'verdict', 'primary_reason', 'dns_testing_effective', 'feedback', 'findings',
+      'mode', 'verdict', 'primary_reason', 'feedback', 'findings',
     }, {}) or not policy_modes[value.mode] or not policy_verdicts[value.verdict] or
       not policy_reasons[value.primary_reason] or
-      type(value.dns_testing_effective) ~= 'boolean' or
       not exact_keys(value.feedback,
         { 'requested', 'relay_required', 'history_coverage' }, { 'relay_sequence' }) or
       type(value.feedback.requested) ~= 'boolean' or
@@ -736,7 +731,6 @@ local function policy_attributes(response, include_received_dsn)
     ['dkim2.local_policy_mode'] = { string = response.policy.mode },
     ['dkim2.local_policy_verdict'] = { string = response.policy.verdict },
     ['dkim2.local_policy_reason'] = { string = response.policy.primary_reason },
-    ['dkim2.dns_testing_effective'] = { boolean = response.policy.dns_testing_effective },
     ['dkim2.disposition'] = { string = response.disposition },
     ['dkim2.chain'] = { records = records },
   }

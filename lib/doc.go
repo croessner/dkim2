@@ -25,11 +25,9 @@
 // PASS. Draft-07 Section 10.10 removed the donotmodify and donotexplode flags:
 // received spellings are inert unknown flags, signing never emits them, and
 // policy derives no compliance state from them. Feedback output is bounded
-// intent without a destination or route. DNS t=y is authenticated key metadata,
-// not the local testing mode; coherent all-set testing makes PASS and the
-// closed eligible failure rows non-terminal without rewriting verification
-// state. Effective testing PASS also suppresses flag-derived feedback and
-// exploded output. Pre-target malformed, missing, sequence, or
+// intent without a destination or route. The retired DNS key-record t= tag
+// carries no policy meaning; only the explicitly configured local testing mode
+// relaxes a verdict. Pre-target malformed, missing, sequence, or
 // limit outcomes remain valid fact-free PERMERROR results for policy
 // evaluation. Policy results, findings, actions, and errors contain only bounded
 // enums, booleans, counts, and sequence numbers, never message, identity,
@@ -73,11 +71,11 @@
 // bits. The parser recognizes lowercase k= as the DNS-01 grammar requires; the
 // inherited DNS-00 ABNF typo is corrected there. The active DKIM2
 // signature grammar exposes no q= option; DNS TXT is the only lookup binding.
-// Testing t=y and strict-identity t=s declarations reach
-// KeyPolicyMetadata, but do not change cryptographic state or prescribe an MTA
-// action. StrictIdentityApplicable is false because the active DKIM2 i= is a
-// numeric sequence. DNSSECStatus is bounded transport diagnostic metadata and
-// never changes key acceptance, cache lifetime, or verification facts.
+// The t= tag is retired by DNS-01 Section 3.4.1: it is validated only by the
+// generic tag-list rules and is otherwise ignored, so DNS key records never
+// yield testing or strict-identity semantics. DNSSECStatus is bounded
+// transport diagnostic metadata and never changes key acceptance, cache
+// lifetime, or verification facts.
 //
 // DNSProviderConfig bounds cache capacity, TTL classes, transport concurrency,
 // coalesced waiters, and lookup duration. Non-final canceled waiters leave a

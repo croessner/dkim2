@@ -172,3 +172,29 @@ func TestIdentityFormattingNeverExposesDigestMaterial(t *testing.T) {
 		t.Fatal("Identity unexpectedly exposes JSON serialization")
 	}
 }
+
+// directOriginSource is one sealed origin source for a single-signature message.
+type directOriginSource struct{ originDigestSource }
+
+// ReplayEligible reports a direct originator delivery.
+func (directOriginSource) ReplayEligible() bool { return false }
+
+// TestIdentitySetCarriesReplayEligibility proves the origin identity stays
+// valid for DSN propagation while a direct delivery is marked ineligible.
+func TestIdentitySetCarriesReplayEligibility(t *testing.T) {
+	for _, test := range []struct {
+		source   IdentitySource
+		eligible bool
+	}{
+		{originDigestSource{digest: sha256.Sum256([]byte("origin"))}, true},
+		{directOriginSource{originDigestSource{digest: sha256.Sum256([]byte("origin"))}}, false},
+	} {
+		set, err := NewIdentitySet(test.source)
+		if err != nil || !set.Valid() || set.Len() != 1 || set.Eligible() != test.eligible {
+			t.Fatalf("set valid=%t eligible=%t error=%v, want eligible=%t", set.Valid(), set.Eligible(), err, test.eligible)
+		}
+	}
+	if (IdentitySet{}).Eligible() {
+		t.Fatal("zero identity set reported replay eligibility")
+	}
+}

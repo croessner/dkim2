@@ -169,7 +169,6 @@ func TestPolicySnapshotRejectsEveryForgedAggregateField(t *testing.T) {
 		{name: "feedback history", mutate: func(value *policySnapshot) {
 			value.state.feedbackHistory = dkim2.PolicyHistoryComplete
 		}},
-		{name: "DNS testing", mutate: func(value *policySnapshot) { value.state.dnsTestingEffective = !value.state.dnsTestingEffective }},
 		{name: "empty findings", mutate: func(value *policySnapshot) { value.state.findings = nil }},
 		{name: "extra finding", mutate: func(value *policySnapshot) {
 			value.state.findings = append(value.state.findings, policyFindingSnapshot{})
@@ -387,8 +386,10 @@ func (p selectedMatrixProvider) LookupPublicKey(_ context.Context, query dkim2.P
 	}
 }
 
-// TestMapDomainResultMapsAuthenticSelectedSignatureAndKeyPolicy proves end-to-end selected output.
-func TestMapDomainResultMapsAuthenticSelectedSignatureAndKeyPolicy(t *testing.T) {
+// TestMapDomainResultMapsAuthenticSelectedSignatureWithRetiredTag proves end-to-end
+// selected output for a key record carrying the retired DNS t= tag, which
+// DNS-01 Section 3.4.1 ignores.
+func TestMapDomainResultMapsAuthenticSelectedSignatureWithRetiredTag(t *testing.T) {
 	corpus := loadSelectedGoldenCorpus(t)
 	vector, ok := corpus.Vectors["rsa_pass"]
 	if !ok {
@@ -432,11 +433,8 @@ func TestMapDomainResultMapsAuthenticSelectedSignatureAndKeyPolicy(t *testing.T)
 		len(verification.SignatureSets) != 1 ||
 		verification.SignatureSets[0].Algorithm != generated.RsaSha256 ||
 		verification.SignatureSets[0].Status != generated.SignatureSetResultStatusPass ||
-		verification.SignatureSets[0].Reason != generated.VerificationReasonNone ||
-		!verification.SignatureSets[0].KeyPolicy.TestingDeclared ||
-		!verification.SignatureSets[0].KeyPolicy.StrictIdentityDeclared ||
-		bool(verification.SignatureSets[0].KeyPolicy.StrictIdentityApplicable) {
-		t.Fatal("selected signature or DNS key policy was not mapped exactly")
+		verification.SignatureSets[0].Reason != generated.VerificationReasonNone {
+		t.Fatal("selected signature was not mapped exactly")
 	}
 }
 

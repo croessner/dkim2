@@ -17,8 +17,10 @@
 // bytes. Ed25519-SHA256 verifies Ed25519 over SHA-256 digest bytes of the same
 // input.
 //
-// Timestamp checks use an injected Clock and explicit TimestampPolicy so tests
-// and callers can evaluate future and stale signatures deterministically.
+// Timestamp checks use an injected Clock or an explicit request reference
+// instant and the fixed Draft-07 Section 14.3 windows (14 days of age, one day
+// in the future) on every signature, so tests and callers evaluate future and
+// stale signatures deterministically.
 // Current SMTP envelope state is carried by immutable Envelope values.
 // Matching follows draft-ietf-dkim-dkim2-spec-07 Sections 12.2 and 14.4: ASCII
 // domain bytes are lowercased, local-part and non-ASCII bytes remain

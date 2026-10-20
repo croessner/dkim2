@@ -20,7 +20,9 @@ certification, or universal interoperability claim.
   verification-only capability.
 - The default verifier requires all three Draft-07 Section 3 algorithms. On a
   Go FIPS 140-3 cryptographic module without ML-DSA-44, verifier construction
-  fails closed instead of silently dropping the composite algorithm.
+  fails closed instead of silently dropping the composite algorithm. A
+  library caller that narrows the allowed algorithms below these three runs a
+  documented non-conformant verifier mode.
 - External discovery found runnable parser overlap with MailAuthLens and
   Turscar. It found a tag-case interpretation difference with MailAuthLens.
   Stalwart's observed source revision has no `Cargo.lock`, so no immutable

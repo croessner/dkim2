@@ -94,7 +94,9 @@ func TestHashPlanDeliveryStatusPropagationBoundsSuppliedInstant(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	tolerance := verify.DefaultTimestampPolicy().FutureTolerance
+	// The revision-instant skew is pinned literally; it is independent of the
+	// one-day Draft-07 signature future tolerance.
+	tolerance := 5 * time.Minute
 	for name, offset := range map[string]time.Duration{"same instant": 0, "within skew": tolerance} {
 		now = base
 		instant, err := revision.CaptureOperationInstant()

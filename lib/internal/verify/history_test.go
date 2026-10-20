@@ -436,11 +436,6 @@ func TestAggregateCurrentPassRejectsForgedFacts(t *testing.T) {
 			got.signatureSets[len(got.signatureSets)-1].Algorithm = AlgorithmRSASHA256
 			return got
 		}(),
-		func() Result {
-			got := withIgnored()
-			got.signatureSets[len(got.signatureSets)-1].KeyPolicy.TestingDeclared = true
-			return got
-		}(),
 	} {
 		if aggregateCurrentPass(forged) {
 			t.Fatal("forged aggregate PASS accepted")

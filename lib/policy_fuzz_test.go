@@ -10,8 +10,7 @@ import (
 )
 
 type publicPolicyFuzzSeed struct {
-	result       VerifyResult
-	dnsEffective bool
+	result VerifyResult
 }
 
 // FuzzEvaluatePolicySealedResults exercises real library-created results under restrictive public options.
@@ -61,7 +60,7 @@ func runPublicPolicyFuzzCase(t *testing.T, results []publicPolicyFuzzSeed, resul
 	assertPublicPolicyFuzzOutcome(t, seed, decision, err, findingLimit)
 }
 
-// assertPublicPolicyFuzzOutcome validates error disjointness, bounds, and exact DNS treatment.
+// assertPublicPolicyFuzzOutcome validates error disjointness, bounds, and PASS verdict direction.
 func assertPublicPolicyFuzzOutcome(t *testing.T, seed publicPolicyFuzzSeed, decision PolicyDecision, err error, findingLimit int) {
 	t.Helper()
 	if err != nil {
@@ -79,30 +78,8 @@ func assertPublicPolicyFuzzOutcome(t *testing.T, seed publicPolicyFuzzSeed, deci
 	if !decision.Valid() || decision.VerificationState() != result.State() || len(actions) != 1 || actions[0].Kind() != PolicyActionKind(decision.Verdict()) || actions[0].Terminal() != (decision.Verdict() != PolicyVerdictContinue) || len(decision.Findings()) > findingLimit || len(decision.Findings()) > HardMaxPolicyFindings {
 		t.Fatalf("public policy decision violated contract: %#v", decision)
 	}
-	if result.State() == ResultStatePASS && !decision.DNSTestingEffective() && decision.Verdict() == PolicyVerdictReject {
+	if result.State() == ResultStatePASS && decision.Verdict() == PolicyVerdictReject {
 		t.Fatal("authenticated hop flags turned a public PASS into reject")
-	}
-	if decision.DNSTestingEffective() && (result.State() != ResultStatePASS && result.State() != ResultStateFAIL && result.State() != ResultStatePERMERROR || decision.PrimaryReason() != PolicyReasonDNSTestingEffective) {
-		t.Fatal("DNS testing widened an ineligible public result")
-	}
-	if decision.DNSTestingEffective() != seed.dnsEffective {
-		t.Fatalf("DNS testing effective = %t, want seeded %t", decision.DNSTestingEffective(), seed.dnsEffective)
-	}
-	if decision.DNSTestingEffective() && result.State() == ResultStatePASS {
-		assertPublicTestingPassSuppressesFlags(t, decision)
-	}
-}
-
-// assertPublicTestingPassSuppressesFlags rejects public feedback and sequenced findings.
-func assertPublicTestingPassSuppressesFlags(t *testing.T, decision PolicyDecision) {
-	t.Helper()
-	if decision.FeedbackIntent().Requested() || decision.FeedbackIntent().RelayRequired() {
-		t.Fatal("testing PASS retained public feedback intent")
-	}
-	for _, finding := range decision.Findings() {
-		if _, sequenced := finding.Sequence(); sequenced {
-			t.Fatal("testing PASS emitted public hop-derived finding")
-		}
 	}
 }
 
@@ -147,18 +124,6 @@ func fuzzLibraryResults(f *testing.F) []publicPolicyFuzzSeed {
 		f.Fatalf("Verify(flagged) error = %v", err)
 	}
 	results = append(results, publicPolicyFuzzSeed{result: flagged})
-	flaggedTestingProvider := publicProviderFunc(func(context.Context, PublicKeyQuery) (PublicKeyResult, error) {
-		return withKeyPolicyMetadata(FoundRSAPublicKey(flaggedKey), newKeyPolicyMetadata(true, false)), nil
-	})
-	flaggedTestingVerifier, err := NewVerifier(flaggedTestingProvider, WithVerificationClock(func() time.Time { return time.Unix(publicVectorClock, 0) }))
-	if err != nil {
-		f.Fatalf("NewVerifier(flagged testing) error = %v", err)
-	}
-	flaggedTesting, err := flaggedTestingVerifier.Verify(context.Background(), NewVerifyRequest(flaggedRaw, []byte("<>"), [][]byte{[]byte("<rcpt@example.test>")}))
-	if err != nil {
-		f.Fatalf("Verify(flagged testing) error = %v", err)
-	}
-	results = append(results, publicPolicyFuzzSeed{result: flaggedTesting, dnsEffective: true})
 	manifest := loadDNSGoldenManifest(f, corpus)
 	allTesting := &dnsVectorTransport{lookup: func(_ context.Context, owner string) (TXTLookupResult, error) {
 		if owner == dnsVectorEdOwner {
@@ -166,18 +131,18 @@ func fuzzLibraryResults(f *testing.F) []publicPolicyFuzzSeed {
 		}
 		return foundPublicTXT(f, manifest.RSATestingTXT, DNSSECStatusUnavailable), nil
 	}}
-	results = append(results, publicPolicyFuzzSeed{result: verifyVector("supported_mixed_fail", mustDNSVectorProvider(f, allTesting, DefaultDNSProviderConfig())), dnsEffective: true})
+	results = append(results, publicPolicyFuzzSeed{result: verifyVector(goldenVectorSupportedMixedFail, mustDNSVectorProvider(f, allTesting, DefaultDNSProviderConfig()))})
 	passTesting := dnsPassTransport(f, manifest.RSATestingTXT, manifest.Ed25519LowerTXT+"; t=y", DNSSECStatusUnavailable)
-	results = append(results, publicPolicyFuzzSeed{result: verifyVector(goldenVectorRSAPass, mustDNSVectorProvider(f, passTesting, DefaultDNSProviderConfig())), dnsEffective: true})
+	results = append(results, publicPolicyFuzzSeed{result: verifyVector(goldenVectorRSAPass, mustDNSVectorProvider(f, passTesting, DefaultDNSProviderConfig()))})
 	postKeyTesting := dnsPassTransport(f, manifest.RSATestingTXT, manifest.Ed25519LowerTXT+"; t=y", DNSSECStatusUnavailable)
-	results = append(results, publicPolicyFuzzSeed{result: verifyVector("age_over", mustDNSVectorProvider(f, postKeyTesting, DefaultDNSProviderConfig())), dnsEffective: true})
+	results = append(results, publicPolicyFuzzSeed{result: verifyVector("age_over", mustDNSVectorProvider(f, postKeyTesting, DefaultDNSProviderConfig()))})
 	mixedTesting := &dnsVectorTransport{lookup: func(_ context.Context, owner string) (TXTLookupResult, error) {
 		if owner == dnsVectorEdOwner {
 			return foundPublicTXT(f, manifest.Ed25519LowerTXT, DNSSECStatusUnavailable), nil
 		}
 		return foundPublicTXT(f, manifest.RSATestingTXT, DNSSECStatusUnavailable), nil
 	}}
-	results = append(results, publicPolicyFuzzSeed{result: verifyVector("supported_mixed_fail", mustDNSVectorProvider(f, mixedTesting, DefaultDNSProviderConfig()), WithMaxSignatureFacts(1))})
+	results = append(results, publicPolicyFuzzSeed{result: verifyVector(goldenVectorSupportedMixedFail, mustDNSVectorProvider(f, mixedTesting, DefaultDNSProviderConfig()), WithMaxSignatureFacts(1))})
 	return results
 }
 
@@ -198,5 +163,5 @@ func publicPolicyFuzzSnapshot(decision PolicyDecision, err error) any {
 		}
 		return []any{"unknown_error", err.Error()}
 	}
-	return []any{decision.VerificationState(), decision.Mode(), decision.Verdict(), decision.PrimaryReason(), decision.FeedbackIntent(), decision.DNSTestingEffective(), decision.Findings(), decision.ActionPlan().Actions(), fmt.Sprint(decision)}
+	return []any{decision.VerificationState(), decision.Mode(), decision.Verdict(), decision.PrimaryReason(), decision.FeedbackIntent(), decision.Findings(), decision.ActionPlan().Actions(), fmt.Sprint(decision)}
 }

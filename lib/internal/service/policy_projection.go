@@ -114,10 +114,10 @@ func policySignatureFact(fact SignatureSetFact) (policy.SignatureFact, error) {
 	algorithm, algorithmOK := policySetAlgorithm(fact.Algorithm)
 	status, statusOK := policySetStatus(fact.Status)
 	reason, reasonOK := policySetReason(fact.Reason)
-	if !algorithmOK || !statusOK || !reasonOK || !fact.KeyPolicy.Valid() {
+	if !algorithmOK || !statusOK || !reasonOK {
 		return policy.SignatureFact{}, newError(ErrorInvalidRequest)
 	}
-	return policy.NewSignatureFact(algorithm, status, reason, fact.KeyPolicy.TestingDeclared, fact.KeyPolicy.StrictIdentityDeclared)
+	return policy.NewSignatureFact(algorithm, status, reason)
 }
 
 // policySetAlgorithm maps the complete bounded algorithm vocabulary.

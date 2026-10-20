@@ -64,13 +64,13 @@
     {
       "id": "daemon-replay-source",
       "path": "cmd/dkim2d/internal/app/replay_test.go",
-      "sha256": "3a85390e594cb550c72f3e85bb2d7938da582d4ccded522366b56fd323008b5f",
+      "sha256": "35f2f200c5a6b1dffeb7818e4d14d1751a5f19b111cad76252bf1e1bad7fd57e",
       "module": "cmd/dkim2d"
     },
     {
       "id": "dns-negative-source",
       "path": "lib/dns_provider_test.go",
-      "sha256": "bc213b46efe06c99e46c3dd91d77ddbb428f83a7fd42b5023acdda5a334c49ef",
+      "sha256": "a504caf3d1f0b93a0bd62bcb961abefd75a50f456d60e9a312afabadd4306341",
       "module": "lib"
     },
     {
@@ -118,7 +118,7 @@
     {
       "id": "openapi-independent-oracle-source",
       "path": "cmd/dkim2ctl/internal/testclient/public_socket_test.go",
-      "sha256": "70d8736c4bcaa84864fe5483b7952bc9b740424efc2ccdb2a2e17f3586fe5e18",
+      "sha256": "3edf41201aa3e9d63835024b4d4cbaba8c55b360596ac0318c2be43ae44af976",
       "module": "cmd/dkim2ctl"
     },
     {
@@ -130,7 +130,7 @@
     {
       "id": "openapi-negative-source",
       "path": "cmd/dkim2ctl/internal/testclient/negative_test.go",
-      "sha256": "7ddd650a91ec358cecf3b6f7028f8359feeef64608bf051209ecb2334aba8710",
+      "sha256": "6a9a45d56d497e28e0baab458a6c1abe4b2b9e4bd7c6e191b0e437fc4099b032",
       "module": "cmd/dkim2ctl"
     },
     {
@@ -148,7 +148,7 @@
     {
       "id": "openapi-process-report-fixture",
       "path": "cmd/dkim2ctl/testdata/fixtures/draft-ietf-dkim-dkim2-spec-07/process-report.json",
-      "sha256": "03ad13eaa0555c031795ab2663c64e00f82881fda257fc7904bf3d864fb20aef",
+      "sha256": "0b46a05449743854f6f7b5d20d2130ec3c546946cb763e1536fd5a0033f2dec7",
       "module": "cmd/dkim2ctl"
     },
     {
@@ -172,19 +172,19 @@
     {
       "id": "openapi-wire-response-source",
       "path": "cmd/dkim2d/internal/httpjson/http_wire_response.go",
-      "sha256": "c06b117b5976cc5b7589b49bf25a5819cae58705686145b70e241b0fa2a8e1b4",
+      "sha256": "b8b33b3f1b0174b68e00875f36bfc409f4c4fadfcb6cff1d7f09afd21f78f0cb",
       "module": "cmd/dkim2d"
     },
     {
       "id": "policy-invalid-recipe-source",
       "path": "lib/policy_projection_test.go",
-      "sha256": "e3769bb75f830ecf6761558cc339522eb0bf2eeb4886846092d75104519bab94",
+      "sha256": "50ed875778be59de8819f44d21645529d85b70b1ee490efbbde19bc7e7c99096",
       "module": "lib"
     },
     {
       "id": "policy-positive-source",
       "path": "lib/policy_api_test.go",
-      "sha256": "16c801a2c93bb90fe00645e7e8fee8141003e89cd7c32307ac42e50166d87fc6",
+      "sha256": "eeb3bb312ec3d712bc4e71156ab32f83ac483927e461b2236239c0e5648197d1",
       "module": "lib"
     },
     {
@@ -262,7 +262,7 @@
     {
       "id": "replay-deriver-source",
       "path": "lib/internal/replay/deriver_test.go",
-      "sha256": "8901bebc1b18a8d8799e5c3e0caefec563a23cc2a7e78cd68f8248844a39aa21",
+      "sha256": "c93fc0c40a8b5b0291e38655549b68d206ae396a34252bc9b42c9c66feb50cd0",
       "module": "lib"
     },
     {
@@ -280,7 +280,7 @@
     {
       "id": "service-draft07-source",
       "path": "lib/internal/service/draft07_test.go",
-      "sha256": "8eb6e6ebd2e25c4521473fb2c9234c68292ed5fa197ee82d1fcf702e13fdef71",
+      "sha256": "10fc2b35337713516543a88a1da9540d7042c4bfbb9d8b819a7dd0e6343808c6",
       "module": "lib"
     },
     {

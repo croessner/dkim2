@@ -19,12 +19,12 @@ func FuzzSealedPolicyEvaluation(f *testing.F) {
 		f.Add(0, 0, 0, transition, uint8(31), 0, 2, 128, uint64(2))
 		f.Add(0, 0, 0, transition, uint8(31), 1, 2, 127, uint64(2))
 	}
-	for dns := range 14 {
-		f.Add(dns%3, dns%4, 0, 0, uint8(1<<uint(dns%5)), dns, 1, 128, uint64(1))
+	for set := range 14 {
+		f.Add(set%3, set%4, 0, 0, uint8(1<<uint(set%5)), set, 1, 128, uint64(1))
 	}
 	for mode := range 3 {
-		for _, dns := range []int{1, 4, 5, 6, 8, 9, 10, 11, 12} {
-			f.Add(mode, 2, 0, 0, uint8(0), dns, 1, 127, uint64(1))
+		for _, set := range []int{1, 4, 5, 6, 8, 9, 10, 11, 12} {
+			f.Add(mode, 2, 0, 0, uint8(0), set, 1, 127, uint64(1))
 		}
 	}
 	for unavailable := range 6 {
@@ -34,13 +34,13 @@ func FuzzSealedPolicyEvaluation(f *testing.F) {
 	f.Add(0, 0, 0, 1, uint8(31), 1, 127, 127, uint64(128))
 	f.Add(2, 3, 0, 7, uint8(16), 3, 129, 129, uint64(0))
 
-	f.Fuzz(func(t *testing.T, modeSeed, protocolSeed, formSeed, transitionSeed int, flags uint8, dnsSeed, hopSeed, findingSeed int, targetSeed uint64) {
-		runSealedPolicyFuzzCase(t, modeSeed, protocolSeed, formSeed, transitionSeed, flags, dnsSeed, hopSeed, findingSeed, targetSeed)
+	f.Fuzz(func(t *testing.T, modeSeed, protocolSeed, formSeed, transitionSeed int, flags uint8, setSeed, hopSeed, findingSeed int, targetSeed uint64) {
+		runSealedPolicyFuzzCase(t, modeSeed, protocolSeed, formSeed, transitionSeed, flags, setSeed, hopSeed, findingSeed, targetSeed)
 	})
 }
 
 // runSealedPolicyFuzzCase constructs twice, evaluates twice, and delegates closed property checks.
-func runSealedPolicyFuzzCase(t *testing.T, modeSeed, protocolSeed, formSeed, transitionSeed int, flags uint8, dnsSeed, hopSeed, findingSeed int, targetSeed uint64) {
+func runSealedPolicyFuzzCase(t *testing.T, modeSeed, protocolSeed, formSeed, transitionSeed int, flags uint8, setSeed, hopSeed, findingSeed int, targetSeed uint64) {
 	t.Helper()
 	limits := DefaultLimits()
 	limits.MaxFindings = boundedFuzzLimit(findingSeed, hardMaxFindings)
@@ -49,8 +49,8 @@ func runSealedPolicyFuzzCase(t *testing.T, modeSeed, protocolSeed, formSeed, tra
 	if err != nil {
 		t.Fatalf("known fuzz config failed: %v", err)
 	}
-	projection, constructionErr := fuzzPolicyProjection(protocolSeed, formSeed, transitionSeed, flags, dnsSeed, hopSeed, targetSeed)
-	projectionAgain, constructionErrAgain := fuzzPolicyProjection(protocolSeed, formSeed, transitionSeed, flags, dnsSeed, hopSeed, targetSeed)
+	projection, constructionErr := fuzzPolicyProjection(protocolSeed, formSeed, transitionSeed, flags, setSeed, hopSeed, targetSeed)
+	projectionAgain, constructionErrAgain := fuzzPolicyProjection(protocolSeed, formSeed, transitionSeed, flags, setSeed, hopSeed, targetSeed)
 	if fmt.Sprint(constructionErr) != fmt.Sprint(constructionErrAgain) || !reflect.DeepEqual(projection, projectionAgain) {
 		t.Fatal("projection construction was nondeterministic")
 	}
@@ -72,7 +72,7 @@ func runSealedPolicyFuzzCase(t *testing.T, modeSeed, protocolSeed, formSeed, tra
 	assertSealedPolicyFuzzOutcome(t, projection, decision, evaluateErr, limits)
 }
 
-// assertSealedPolicyFuzzOutcome validates error disjointness, bounds, history, and DNS treatment.
+// assertSealedPolicyFuzzOutcome validates error disjointness, bounds, and PASS treatment.
 func assertSealedPolicyFuzzOutcome(t *testing.T, projection Projection, decision Decision, evaluateErr error, limits Limits) {
 	t.Helper()
 	if evaluateErr != nil {
@@ -88,33 +88,13 @@ func assertSealedPolicyFuzzOutcome(t *testing.T, projection Projection, decision
 	if !decision.Valid() || len(decision.Actions()) != 1 || len(decision.Findings()) > limits.MaxFindings || len(decision.Findings()) > hardMaxFindings {
 		t.Fatalf("successful decision violated bounds: %#v", decision)
 	}
-	if projection.Protocol() == ProtocolPASS && !decision.DNSTestingEffective() && decision.Verdict() == VerdictReject {
+	if projection.Protocol() == ProtocolPASS && decision.Verdict() == VerdictReject {
 		t.Fatal("authenticated hop flags changed a PASS verdict to reject")
-	}
-	if decision.DNSTestingEffective() != fuzzDNSTestingShouldBeEffective(projection) {
-		t.Fatal("DNS testing treatment disagreed with exact eligibility")
-	}
-	if decision.DNSTestingEffective() && projection.Protocol() == ProtocolPASS {
-		assertTestingPassSuppressesFuzzFlags(t, decision)
-	}
-}
-
-// assertTestingPassSuppressesFuzzFlags rejects feedback intent and sequenced findings.
-func assertTestingPassSuppressesFuzzFlags(t *testing.T, decision Decision) {
-	t.Helper()
-	intent := decision.FeedbackIntent()
-	if intent.Requested() || intent.RelayRequired() {
-		t.Fatal("testing PASS retained authenticated flag effects")
-	}
-	for _, finding := range decision.Findings() {
-		if _, sequenced := finding.Sequence(); sequenced {
-			t.Fatal("testing PASS emitted hop-derived finding")
-		}
 	}
 }
 
 // fuzzPolicyProjection builds one bounded selected, historical, unavailable, or rejected projection.
-func fuzzPolicyProjection(protocolSeed, formSeed, transitionSeed int, flags uint8, dnsSeed, hopSeed int, targetSeed uint64) (Projection, error) {
+func fuzzPolicyProjection(protocolSeed, formSeed, transitionSeed int, flags uint8, setSeed, hopSeed int, targetSeed uint64) (Projection, error) {
 	if boundedFuzzIndex(formSeed, 2) == 1 {
 		reasons := []PreTargetReason{PreTargetLimitExceeded, PreTargetMalformedMessage, PreTargetMalformedProtocol, PreTargetMissingProtocol, PreTargetSequenceInvalid, PreTargetInternalContract}
 		return NewUnavailableProjection(reasons[boundedFuzzIndex(transitionSeed, len(reasons))])
@@ -131,7 +111,7 @@ func fuzzPolicyProjection(protocolSeed, formSeed, transitionSeed int, flags uint
 		if targetSeed != ^uint64(0) {
 			target = uint64(count)
 		}
-		coverage := []HistoryCoverage{HistoryComplete, HistoryIndeterminate, HistoryNotEvaluated}[boundedFuzzIndex(dnsSeed, 3)]
+		coverage := []HistoryCoverage{HistoryComplete, HistoryIndeterminate, HistoryNotEvaluated}[boundedFuzzIndex(setSeed, 3)]
 		return newHistoricalProjection(target, coverage, hops, DefaultLimits())
 	}
 	hops := []HopFact(nil)
@@ -142,7 +122,7 @@ func fuzzPolicyProjection(protocolSeed, formSeed, transitionSeed int, flags uint
 		}
 		hops = []HopFact{hop}
 	}
-	reason, facts, err := fuzzSignatureFacts(protocol, dnsSeed)
+	reason, facts, err := fuzzSignatureFacts(protocol, setSeed)
 	if err != nil {
 		return Projection{}, err
 	}
@@ -166,143 +146,61 @@ func fuzzHistoricalHops(count int, transition TransitionState, flags uint8) []Ho
 	return hops
 }
 
-// fuzzSignatureFacts returns a coherent aggregate reason and pre-retention fact set for one DNS class.
-func fuzzSignatureFacts(protocol ProtocolClass, dnsSeed int) (VerificationReason, []SignatureFact, error) {
-	dnsClass := boundedFuzzIndex(dnsSeed, 14)
-	testing := dnsClass == 1 || dnsClass == 2 || dnsClass == 4 || dnsClass == 5 || dnsClass == 6 || dnsClass >= 8 && dnsClass <= 12
-	plainSecond := dnsClass == 2
-	newFact := func(algorithm SetAlgorithm, status SetStatus, reason SetReason, declared bool) (SignatureFact, error) {
-		return NewSignatureFact(algorithm, status, reason, declared, false)
-	}
+// fuzzSignatureFacts returns a coherent aggregate reason and pre-retention fact set for one set class.
+func fuzzSignatureFacts(protocol ProtocolClass, setSeed int) (VerificationReason, []SignatureFact, error) {
+	setClass := boundedFuzzIndex(setSeed, 14)
 	var reason VerificationReason
 	var first SignatureFact
 	var err error
 	switch protocol {
 	case ProtocolPASS:
 		reason = VerificationReasonNone
-		first, err = newFact(SetAlgorithmRSA, SetStatusPass, SetReasonNone, testing)
+		first, err = NewSignatureFact(SetAlgorithmRSA, SetStatusPass, SetReasonNone)
 	case ProtocolFAIL:
-		if dnsClass == 4 || dnsClass == 5 {
+		if setClass == 4 || setClass == 5 {
 			reason = VerificationReasonHashMismatch
-			first, err = newFact(SetAlgorithmRSA, SetStatusPass, SetReasonNone, testing)
+			first, err = NewSignatureFact(SetAlgorithmRSA, SetStatusPass, SetReasonNone)
 		} else {
 			reason = VerificationReasonSignatureMismatch
-			first, err = newFact(SetAlgorithmRSA, SetStatusFail, SetReasonSignatureMismatch, testing)
+			first, err = NewSignatureFact(SetAlgorithmRSA, SetStatusFail, SetReasonSignatureMismatch)
 		}
 	case ProtocolPERMERROR:
-		switch dnsClass {
+		switch setClass {
 		case 1, 2:
 			reason = VerificationReasonInvalidKey
-			first, err = newFact(SetAlgorithmRSA, SetStatusPermerror, SetReasonInvalidKey, testing)
+			first, err = NewSignatureFact(SetAlgorithmRSA, SetStatusPermerror, SetReasonInvalidKey)
 		case 4:
 			reason = VerificationReasonRevokedKey
-			first, err = newFact(SetAlgorithmRSA, SetStatusPermerror, SetReasonRevokedKey, true)
+			first, err = NewSignatureFact(SetAlgorithmRSA, SetStatusPermerror, SetReasonRevokedKey)
 		case 5:
 			reason = VerificationReasonUnsupportedKeyType
-			first, err = newFact(SetAlgorithmRSA, SetStatusPermerror, SetReasonUnsupportedKeyType, true)
+			first, err = NewSignatureFact(SetAlgorithmRSA, SetStatusPermerror, SetReasonUnsupportedKeyType)
 		case 6:
 			reason = VerificationReasonKeyAlgorithmMismatch
-			first, err = newFact(SetAlgorithmRSA, SetStatusPermerror, SetReasonKeyAlgorithmMismatch, true)
+			first, err = NewSignatureFact(SetAlgorithmRSA, SetStatusPermerror, SetReasonKeyAlgorithmMismatch)
 		case 8, 9, 10, 11, 12:
-			reason = []VerificationReason{VerificationReasonTimestampInvalid, VerificationReasonEnvelopeMismatch, VerificationReasonDomainAlignmentMismatch, VerificationReasonNextDomainMismatch, VerificationReasonOutOfBandRequired}[dnsClass-8]
-			first, err = newFact(SetAlgorithmRSA, SetStatusPass, SetReasonNone, true)
+			reason = []VerificationReason{VerificationReasonTimestampInvalid, VerificationReasonEnvelopeMismatch, VerificationReasonDomainAlignmentMismatch, VerificationReasonNextDomainMismatch, VerificationReasonOutOfBandRequired}[setClass-8]
+			first, err = NewSignatureFact(SetAlgorithmRSA, SetStatusPass, SetReasonNone)
 		default:
 			reason = VerificationReasonMissingKey
-			first, err = newFact(SetAlgorithmRSA, SetStatusPermerror, SetReasonMissingKey, false)
+			first, err = NewSignatureFact(SetAlgorithmRSA, SetStatusPermerror, SetReasonMissingKey)
 		}
 	case ProtocolTEMPERROR:
 		reason = VerificationReasonProviderTemporary
-		first, err = newFact(SetAlgorithmRSA, SetStatusTemperror, SetReasonProviderTemporary, false)
+		first, err = NewSignatureFact(SetAlgorithmRSA, SetStatusTemperror, SetReasonProviderTemporary)
 	}
 	if err != nil {
 		return "", nil, err
 	}
 	facts := []SignatureFact{first}
-	if plainSecond {
-		second, secondErr := newFact(SetAlgorithmEd25519, SetStatusPass, SetReasonNone, false)
+	if setClass == 2 || setClass == 3 || setClass == 7 {
+		second, secondErr := NewSignatureFact(SetAlgorithmEd25519, SetStatusPass, SetReasonNone)
 		if secondErr != nil {
 			return "", nil, secondErr
 		}
 		facts = append(facts, second)
 	}
-	if dnsClass == 3 || dnsClass == 7 {
-		declared, declaredErr := newFact(SetAlgorithmEd25519, SetStatusPass, SetReasonNone, true)
-		if declaredErr != nil {
-			return "", nil, declaredErr
-		}
-		facts = append(facts, declared)
-	}
 	return reason, facts, nil
-}
-
-// fuzzDNSTestingShouldBeEffective independently states the exact effective subset over a valid projection.
-func fuzzDNSTestingShouldBeEffective(projection Projection) bool {
-	if projection.Form() != TargetSelected {
-		return false
-	}
-	facts := projection.SignatureFacts()
-	supported := 0
-	permanent := false
-	for _, fact := range facts {
-		if fact.Algorithm() == SetAlgorithmUnknown || fact.Status() == SetStatusIgnored {
-			continue
-		}
-		supported++
-		if !fact.TestingDeclared() {
-			return false
-		}
-		switch projection.Protocol() {
-		case ProtocolPASS:
-			if fact.Status() != SetStatusPass || fact.Reason() != SetReasonNone {
-				return false
-			}
-		case ProtocolFAIL:
-			if projection.VerificationReason() == VerificationReasonHashMismatch && (fact.Status() != SetStatusPass || fact.Reason() != SetReasonNone) {
-				return false
-			}
-			if projection.VerificationReason() == VerificationReasonSignatureMismatch && !fuzzPassingOrSignatureFailure(fact) {
-				return false
-			}
-		case ProtocolPERMERROR:
-			if fact.Status() == SetStatusPass && fact.Reason() == SetReasonNone {
-				continue
-			}
-			if fact.Status() != SetStatusPermerror || !fuzzEligiblePermanentReason(VerificationReason(fact.Reason())) {
-				return false
-			}
-			permanent = true
-		default:
-			return false
-		}
-	}
-	if supported == 0 {
-		return false
-	}
-	switch projection.Protocol() {
-	case ProtocolPASS:
-		return projection.VerificationReason() == VerificationReasonNone
-	case ProtocolFAIL:
-		return projection.VerificationReason() == VerificationReasonHashMismatch || projection.VerificationReason() == VerificationReasonSignatureMismatch
-	case ProtocolPERMERROR:
-		return fuzzPostKeyPermanentReason(projection.VerificationReason()) && !permanent || permanent && fuzzEligiblePermanentReason(projection.VerificationReason())
-	default:
-		return false
-	}
-}
-
-// fuzzPassingOrSignatureFailure states the two eligible signature-mismatch set rows.
-func fuzzPassingOrSignatureFailure(fact SignatureFact) bool {
-	return fact.Status() == SetStatusPass && fact.Reason() == SetReasonNone || fact.Status() == SetStatusFail && fact.Reason() == SetReasonSignatureMismatch
-}
-
-// fuzzEligiblePermanentReason states the four DNS testing-eligible permanent reasons independently.
-func fuzzEligiblePermanentReason(reason VerificationReason) bool {
-	return reason == VerificationReasonInvalidKey || reason == VerificationReasonRevokedKey || reason == VerificationReasonUnsupportedKeyType || reason == VerificationReasonKeyAlgorithmMismatch
-}
-
-// fuzzPostKeyPermanentReason independently states the five eligible post-key failures.
-func fuzzPostKeyPermanentReason(reason VerificationReason) bool {
-	return reason == VerificationReasonTimestampInvalid || reason == VerificationReasonEnvelopeMismatch || reason == VerificationReasonDomainAlignmentMismatch || reason == VerificationReasonNextDomainMismatch || reason == VerificationReasonOutOfBandRequired
 }
 
 // boundedFuzzIndex maps arbitrary signed fuzz input into a nonnegative closed index.
@@ -325,5 +223,5 @@ func policyFuzzSnapshot(decision Decision, err error) any {
 		}
 		return []any{"unknown_error", err.Error()}
 	}
-	return []any{decision.Protocol(), decision.Mode(), decision.Verdict(), decision.PrimaryReason(), decision.FeedbackIntent(), decision.DNSTestingEffective(), decision.Findings(), decision.Actions()}
+	return []any{decision.Protocol(), decision.Mode(), decision.Verdict(), decision.PrimaryReason(), decision.FeedbackIntent(), decision.Findings(), decision.Actions()}
 }

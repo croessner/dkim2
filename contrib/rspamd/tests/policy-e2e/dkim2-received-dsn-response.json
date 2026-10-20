@@ -28,7 +28,6 @@
     "mode": "strict",
     "verdict": "continue",
     "primary_reason": "protocol_pass",
-    "dns_testing_effective": false,
     "feedback": {
       "requested": false,
       "relay_required": false,

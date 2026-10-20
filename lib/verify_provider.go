@@ -175,28 +175,7 @@ type publicKeyResultState struct {
 	// compositeKey holds the validated raw DNS form: ML-DSA-44 public key
 	// followed by the Ed25519 public key.
 	compositeKey []byte
-	metadata     KeyPolicyMetadata
 }
-
-// KeyPolicyMetadata carries bounded DNS key declarations without raw record data.
-type KeyPolicyMetadata struct {
-	testingDeclared        bool
-	strictIdentityDeclared bool
-}
-
-// newKeyPolicyMetadata constructs immutable DNS policy metadata.
-func newKeyPolicyMetadata(testingDeclared, strictIdentityDeclared bool) KeyPolicyMetadata {
-	return KeyPolicyMetadata{testingDeclared: testingDeclared, strictIdentityDeclared: strictIdentityDeclared}
-}
-
-// TestingDeclared reports whether the DNS key record declared t=y.
-func (m KeyPolicyMetadata) TestingDeclared() bool { return m.testingDeclared }
-
-// StrictIdentityDeclared reports whether the DNS key record declared t=s.
-func (m KeyPolicyMetadata) StrictIdentityDeclared() bool { return m.strictIdentityDeclared }
-
-// StrictIdentityApplicable reports false because active DKIM2 i= is a numeric sequence.
-func (m KeyPolicyMetadata) StrictIdentityApplicable() bool { return false }
 
 // FoundRSAPublicKey constructs a found RSA-SHA256 result with cloned public material.
 func FoundRSAPublicKey(key *rsa.PublicKey) PublicKeyResult {
@@ -268,16 +247,6 @@ func newPublicKeyResult(status PublicKeyStatus, algorithm Algorithm) PublicKeyRe
 	return PublicKeyResult{state: &publicKeyResultState{status: status, algorithm: algorithm}}
 }
 
-// withKeyPolicyMetadata attaches bounded DNS declarations to one provider result.
-func withKeyPolicyMetadata(result PublicKeyResult, metadata KeyPolicyMetadata) PublicKeyResult {
-	if result.state == nil {
-		return result
-	}
-	state := *result.state
-	state.metadata = metadata
-	return PublicKeyResult{state: &state}
-}
-
 // Status returns the declared closed lookup outcome.
 func (r PublicKeyResult) Status() PublicKeyStatus {
 	if r.state == nil {
@@ -292,14 +261,6 @@ func (r PublicKeyResult) Algorithm() Algorithm {
 		return ""
 	}
 	return r.state.algorithm
-}
-
-// KeyPolicyMetadata returns immutable bounded DNS key declarations.
-func (r PublicKeyResult) KeyPolicyMetadata() KeyPolicyMetadata {
-	if r.state == nil {
-		return KeyPolicyMetadata{}
-	}
-	return r.state.metadata
 }
 
 // RSAPublicKey returns an independent RSA public-key copy when that variant is present.

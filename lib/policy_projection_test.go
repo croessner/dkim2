@@ -138,7 +138,7 @@ func TestFacadeZerosMismatchedSelectedReasonWithoutRewritingVerification(t *test
 		t.Fatalf("service Verify() error = %v", err)
 	}
 	original := serviceResult.PolicyProjection()
-	ambiguous, err := policy.NewSignatureFact(policy.SetAlgorithmRSA, policy.SetStatusPermerror, policy.SetReasonAmbiguousKey, false, false)
+	ambiguous, err := policy.NewSignatureFact(policy.SetAlgorithmRSA, policy.SetStatusPermerror, policy.SetReasonAmbiguousKey)
 	if err != nil {
 		t.Fatalf("NewSignatureFact(ambiguous) error = %v", err)
 	}

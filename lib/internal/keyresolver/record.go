@@ -3,7 +3,6 @@ package keyresolver
 import (
 	"bytes"
 	"errors"
-	"strings"
 
 	"github.com/croessner/dkim2/internal/tagvalue"
 )
@@ -11,7 +10,10 @@ import (
 // DNSDraftIdentifier records the active DNS key-record behavior baseline.
 const DNSDraftIdentifier = "draft-ietf-dkim-dkim2-dns-01"
 
-var dnsRecordTags = tagvalue.MustKnownTags("v", "h", "k", "n", "p", "s", "t")
+// dnsRecordTags lists recognized DNS-01 key-record tags. The retired t= tag
+// (DNS-01 Section 3.4.1) is intentionally absent: it is scanned under the
+// generic tag-list rules like any unknown tag and otherwise ignored.
+var dnsRecordTags = tagvalue.MustKnownTags("v", "h", "k", "n", "p", "s")
 
 // KeyType identifies one bounded DNS key type or unsupported declaration.
 type KeyType string
@@ -66,7 +68,6 @@ type Record struct {
 	status      RecordStatus
 	keyType     KeyType
 	publicKey   []byte
-	metadata    Metadata
 	initialized bool
 }
 
@@ -82,12 +83,9 @@ func (r Record) KeyType() KeyType { return r.keyType }
 // PublicKeyData returns detached decoded p= bytes for supported non-revoked records.
 func (r Record) PublicKeyData() []byte { return bytes.Clone(r.publicKey) }
 
-// Metadata returns immutable bounded key policy declarations.
-func (r Record) Metadata() Metadata { return r.metadata }
-
 // Valid reports whether record state is internally coherent and parser-owned.
 func (r Record) Valid() bool {
-	if !r.initialized || r.draft != DNSDraftIdentifier || !r.status.Known() || !r.keyType.Known() || !r.metadata.Valid() {
+	if !r.initialized || r.draft != DNSDraftIdentifier || !r.status.Known() || !r.keyType.Known() {
 		return false
 	}
 	switch r.status {
@@ -121,8 +119,6 @@ const (
 	RecordErrorInvalidKeyType RecordErrorCode = "invalid_key_type"
 	// RecordErrorInvalidPublicKeyData reports malformed or over-limit p= Base64 data.
 	RecordErrorInvalidPublicKeyData RecordErrorCode = "invalid_public_key_data"
-	// RecordErrorInvalidFlags reports malformed t= flag-list syntax.
-	RecordErrorInvalidFlags RecordErrorCode = "invalid_flags"
 )
 
 // Known reports whether the error code belongs to the closed parser vocabulary.
@@ -130,7 +126,7 @@ func (c RecordErrorCode) Known() bool {
 	switch c {
 	case RecordErrorContract, RecordErrorInvalidSyntax, RecordErrorLimitExceeded, RecordErrorInvalidVersion,
 		RecordErrorMissingPublicKey, RecordErrorInvalidKeyType,
-		RecordErrorInvalidPublicKeyData, RecordErrorInvalidFlags:
+		RecordErrorInvalidPublicKeyData:
 		return true
 	default:
 		return false
@@ -208,11 +204,7 @@ func ParseRecord(input []byte, limits Limits) (Record, error) {
 	if err != nil {
 		return Record{}, err
 	}
-	metadata, err := parsedMetadata(field)
-	if err != nil {
-		return Record{}, err
-	}
-	base := Record{draft: DNSDraftIdentifier, keyType: keyType, metadata: metadata, initialized: true}
+	base := Record{draft: DNSDraftIdentifier, keyType: keyType, initialized: true}
 	if publicKeyTag.Value() == "" {
 		base.status = RecordStatusRevoked
 		return base, nil
@@ -266,29 +258,6 @@ func parsedKeyType(field tagvalue.Field) (KeyType, error) {
 		}
 		return KeyTypeUnsupported, nil
 	}
-}
-
-// parsedMetadata validates t= members and retains only recognized bounded flags.
-func parsedMetadata(field tagvalue.Field) (Metadata, error) {
-	tag, ok := field.Get("t")
-	if !ok {
-		return newMetadata(false, false), nil
-	}
-	testing := false
-	strict := false
-	for raw := range strings.SplitSeq(tag.Value(), ":") {
-		flag := strings.Trim(raw, " \t")
-		if !validHyphenatedWord(flag) {
-			return Metadata{}, newRecordError(RecordErrorInvalidFlags)
-		}
-		switch flag {
-		case "y":
-			testing = true
-		case "s":
-			strict = true
-		}
-	}
-	return newMetadata(testing, strict), nil
 }
 
 // validHyphenatedWord enforces DNS-04 ALPHA edge and ALPHA/DIGIT/hyphen interior syntax.

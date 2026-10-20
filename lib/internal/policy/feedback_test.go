@@ -40,7 +40,7 @@ func TestFeedbackCausalityAndRelaySelection(t *testing.T) {
 
 // TestCurrentFeedbackIntentDoesNotClaimCompleteHistory verifies current PASS semantics.
 func TestCurrentFeedbackIntentDoesNotClaimCompleteHistory(t *testing.T) {
-	set := mustProjectionSignatureFact(t, SetAlgorithmRSA, SetStatusPass, SetReasonNone, false, false)
+	set := mustProjectionSignatureFact(t, SetAlgorithmRSA, SetStatusPass, SetReasonNone)
 	hop, err := NewAuthenticatedHopFact(2, TransitionNotEvaluated, true, true, false)
 	if err != nil {
 		t.Fatalf("NewAuthenticatedHopFact() error = %v", err)
@@ -59,7 +59,7 @@ func TestCurrentFeedbackIntentDoesNotClaimCompleteHistory(t *testing.T) {
 
 // TestCurrentFeedbackRequestWithoutRelayPreservesHistoryUncertainty verifies no absence claim.
 func TestCurrentFeedbackRequestWithoutRelayPreservesHistoryUncertainty(t *testing.T) {
-	set := mustProjectionSignatureFact(t, SetAlgorithmRSA, SetStatusPass, SetReasonNone, false, false)
+	set := mustProjectionSignatureFact(t, SetAlgorithmRSA, SetStatusPass, SetReasonNone)
 	hop, err := NewAuthenticatedHopFact(2, TransitionNotEvaluated, true, false, false)
 	if err != nil {
 		t.Fatalf("NewAuthenticatedHopFact() error = %v", err)

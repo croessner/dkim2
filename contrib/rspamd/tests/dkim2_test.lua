@@ -37,7 +37,6 @@ local function response(state, verdict, replay, actions)
     authentication = { state = state, primary_reason = 'none' },
     policy = {
       mode = 'strict', verdict = verdict, primary_reason = policy_reason,
-      dns_testing_effective = false,
       feedback = { requested = false, relay_required = false, history_coverage = 'not_evaluated' },
       findings = { { reason = policy_reason, severity = 'info' } },
     },
@@ -278,6 +277,24 @@ callback(rejected)
 assert(rejected.pre_result.action == 'reject')
 assert(contains(rejected.symbols, 'DKIM2_REPLAYED'))
 
+-- A passing direct i=1-only delivery is outside Draft-07 replay counting.
+pending_response = response('PASS', 'accept', 'not_eligible', {
+  { type = 'add_header', name = 'Authentication-Results', value = 'mx.example.test; dkim2=pass' },
+})
+local direct_delivery = new_task({ ['DKIM2-Signature'] = true })
+callback(direct_delivery)
+assert(contains(direct_delivery.symbols, 'DKIM2_PASS'))
+assert(contains(direct_delivery.symbols, 'DKIM2_REPLAY_NOT_ELIGIBLE'))
+assert(not contains(direct_delivery.symbols, 'DKIM2_SERVICE_ERROR'))
+
+-- A skipped replay beside PASS/accept is an incoherent daemon response.
+pending_response = response('PASS', 'accept', 'not_checked', {
+  { type = 'add_header', name = 'Authentication-Results', value = 'mx.example.test; dkim2=pass' },
+})
+local skipped_after_pass = new_task({ ['DKIM2-Signature'] = true })
+callback(skipped_after_pass)
+assert(contains(skipped_after_pass.symbols, 'DKIM2_SERVICE_ERROR'))
+
 pending_response = response('PASS', 'reject', 'first_seen')
 local policy_rejected = new_task({ ['DKIM2-Signature'] = true })
 callback(policy_rejected)
@@ -303,7 +320,6 @@ projected.verification.historical_signatures = 'complete'
 projected.verification.custody_structure = 'nd_links_evaluated'
 projected.policy.mode = 'strict'
 projected.policy.primary_reason = 'protocol_pass'
-projected.policy.dns_testing_effective = false
 projected.verifier_projection = {
   schema = 'dkim2.verifier-projection.v1',
   draft = 'draft-ietf-dkim-dkim2-spec-07',
@@ -509,7 +525,6 @@ for _, case in ipairs({
   pending_response.verification.signature_sets = {
     {
       algorithm = case.algorithm, status = 'pass', reason = 'none',
-      key_policy = { testing_declared = false, strict_identity_declared = false, strict_identity_applicable = false },
     },
   }
   local composite_task = new_task({ ['DKIM2-Signature'] = true })

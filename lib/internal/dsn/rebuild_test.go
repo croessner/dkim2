@@ -601,7 +601,13 @@ func TestRebuildNotReconstructableCauses(t *testing.T) {
 			return original
 		}, RebuildNotReconstructable, RebuildFailurePreviousHopTimestamp},
 		{"previous hop beyond maximum age", func(original dsntest.Original) dsntest.Original {
-			original.Hops[0].Timestamp = original.Hops[1].Timestamp - 15*24*3600
+			// The completion is dated one day after the outer DSN (the
+			// Section 14.3 future limit) and the previous hop one second
+			// beyond 14 days before the completion. The previous hop still
+			// passes the all-signature check against the outer reference, so
+			// only the rebuild's completion-relative window rejects it.
+			original.Hops[1].Timestamp = dsntest.DefaultTimestamp + 120 + 24*3600
+			original.Hops[0].Timestamp = original.Hops[1].Timestamp - 14*24*3600 - 1
 			return original
 		}, RebuildNotReconstructable, RebuildFailurePreviousHopTimestamp},
 	}

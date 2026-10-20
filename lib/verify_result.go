@@ -333,16 +333,11 @@ type SignatureSetFact struct {
 	status    SignatureStatus
 	reason    ReasonCode
 	selector  string
-	metadata  KeyPolicyMetadata
 }
 
-// newSignatureSetFact constructs immutable bounded signature-set metadata.
-func newSignatureSetFact(algorithm Algorithm, status SignatureStatus, reason ReasonCode, selector string, metadata ...KeyPolicyMetadata) SignatureSetFact {
-	fact := SignatureSetFact{algorithm: algorithm, status: status, reason: reason, selector: selector}
-	if len(metadata) == 1 {
-		fact.metadata = metadata[0]
-	}
-	return fact
+// newSignatureSetFact constructs immutable bounded signature-set facts.
+func newSignatureSetFact(algorithm Algorithm, status SignatureStatus, reason ReasonCode, selector string) SignatureSetFact {
+	return SignatureSetFact{algorithm: algorithm, status: status, reason: reason, selector: selector}
 }
 
 // Selector returns the failed supported signature selector when present.
@@ -362,9 +357,6 @@ func (f SignatureSetFact) Status() SignatureStatus {
 func (f SignatureSetFact) Reason() ReasonCode {
 	return f.reason
 }
-
-// KeyPolicyMetadata returns bounded DNS key declarations for this signature set.
-func (f SignatureSetFact) KeyPolicyMetadata() KeyPolicyMetadata { return f.metadata }
 
 // VerifyResult is an immutable structured current-verification outcome.
 type VerifyResult struct {
@@ -491,7 +483,7 @@ func verifyResultDataValid(data verifyResultData) bool {
 		}
 	}
 	for _, fact := range data.signatures {
-		if !fact.algorithm.Known() || !fact.status.Known() || !fact.reason.Known() || fact.metadata.StrictIdentityApplicable() || !publicResultKeyPolicyCoherent(fact) {
+		if !fact.algorithm.Known() || !fact.status.Known() || !fact.reason.Known() {
 			return false
 		}
 		if (fact.status == SignatureStatusFAIL) != (fact.selector != "") || len(fact.selector) > 253 {
@@ -500,19 +492,6 @@ func verifyResultDataValid(data verifyResultData) bool {
 	}
 
 	return true
-}
-
-// publicResultKeyPolicyCoherent restricts DNS metadata to unique-record result reasons.
-func publicResultKeyPolicyCoherent(fact SignatureSetFact) bool {
-	if !fact.metadata.TestingDeclared() && !fact.metadata.StrictIdentityDeclared() {
-		return true
-	}
-	switch fact.reason {
-	case ReasonNone, ReasonSignatureMismatch, ReasonInvalidKey, ReasonRevokedKey, ReasonUnsupportedKeyType, ReasonKeyAlgorithmMismatch:
-		return true
-	default:
-		return false
-	}
 }
 
 // internalContractResult returns a bounded fail-closed result for invalid adapter input.

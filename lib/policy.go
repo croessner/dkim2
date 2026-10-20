@@ -72,12 +72,6 @@ const (
 	PolicyReasonPermissiveOverride PolicyReason = "permissive_override"
 	// PolicyReasonTestingModeObserve reports explicit local observation mode.
 	PolicyReasonTestingModeObserve PolicyReason = "testing_mode_observe"
-	// PolicyReasonDNSTestingEffective reports DNS testing made policy non-terminal.
-	PolicyReasonDNSTestingEffective PolicyReason = "dns_testing_effective"
-	// PolicyReasonDNSTestingMixed reports incomplete testing declarations across relevant sets.
-	PolicyReasonDNSTestingMixed PolicyReason = "dns_testing_mixed"
-	// PolicyReasonDNSTestingIneligible reports declarations on an ineligible failure.
-	PolicyReasonDNSTestingIneligible PolicyReason = "dns_testing_ineligible"
 	// PolicyReasonFeedbackRequested reports an authenticated feedback request.
 	PolicyReasonFeedbackRequested PolicyReason = "feedback_requested"
 	// PolicyReasonFeedbackRelaySelected reports the selected authenticated relay.
@@ -226,8 +220,7 @@ func publicSeverityForReason(reason PolicyReason) PolicyFindingSeverity {
 		PolicyReasonFeedbackRequested, PolicyReasonFeedbackRelaySelected, PolicyReasonFeedHereInert, PolicyReasonExplodedReported,
 		PolicyReasonReceivedDSNOuterPolicy, PolicyReasonReceivedDSNEmbeddedAbsent, PolicyReasonReceivedDSNNotLocal, PolicyReasonReceivedDSNLinked:
 		return PolicySeverityInfo
-	case PolicyReasonPermissiveOverride, PolicyReasonTestingModeObserve, PolicyReasonDNSTestingEffective,
-		PolicyReasonDNSTestingMixed, PolicyReasonDNSTestingIneligible, PolicyReasonReceivedDSNTenantUnavailable:
+	case PolicyReasonPermissiveOverride, PolicyReasonTestingModeObserve, PolicyReasonReceivedDSNTenantUnavailable:
 		return PolicySeverityWarning
 	case PolicyReasonProtocolTemperror, PolicyReasonReceivedDSNTemporaryFailure:
 		return PolicySeverityTemporary
@@ -376,7 +369,6 @@ type policyDecisionState struct {
 	verdict           PolicyVerdict
 	primaryReason     PolicyReason
 	feedback          PolicyFeedbackIntent
-	dnsEffective      bool
 	findings          []PolicyFinding
 	actionPlan        PolicyActionPlan
 	source            policy.Decision
@@ -421,11 +413,6 @@ func (d PolicyDecision) FeedbackIntent() PolicyFeedbackIntent {
 		return PolicyFeedbackIntent{}
 	}
 	return d.state.feedback
-}
-
-// DNSTestingEffective reports whether eligible DNS testing changed policy treatment.
-func (d PolicyDecision) DNSTestingEffective() bool {
-	return d.state != nil && d.state.dnsEffective
 }
 
 // Findings returns an independent ordered copy of policy findings.
@@ -495,8 +482,7 @@ func publicDecisionMatchesSource(d PolicyDecision) bool {
 	state := d.state
 	if !state.source.Valid() || PolicyMode(state.source.Mode()) != state.mode ||
 		PolicyVerdict(state.source.Verdict()) != state.verdict ||
-		PolicyReason(state.source.PrimaryReason()) != state.primaryReason ||
-		state.source.DNSTestingEffective() != state.dnsEffective {
+		PolicyReason(state.source.PrimaryReason()) != state.primaryReason {
 		return false
 	}
 	protocol, ok := publicPolicyProtocol(state.verificationState)
@@ -657,7 +643,7 @@ func adaptPolicyDecision(state ResultState, input policy.Decision) (PolicyDecisi
 				relaySequence: feedback.RelaySequence(), history: PolicyHistoryCoverage(feedback.HistoryCoverage()),
 				initialized: true,
 			},
-		}, dnsEffective: input.DNSTestingEffective(), findings: findings,
+		}, findings: findings,
 		actionPlan: PolicyActionPlan{
 			actions:     []PolicyAction{{kind: PolicyActionKind(actions[0].Kind()), initialized: true}},
 			initialized: true,

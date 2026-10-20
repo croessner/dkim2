@@ -197,17 +197,17 @@
     {
       "id": "DKIM2-ISSUE-0013",
       "title": "DNS strict-identity flag conflicts with numeric signature i tag",
-      "sections": ["DNS-04 Section 3.4.4", "Draft-07 Section 10.1"],
+      "sections": ["DNS-01 Section 3.4.1", "DNS-04 Section 3.4.4", "Draft-07 Section 10.1"],
       "class": "discrepancy",
-      "local_status": "implemented_interpretation",
-      "upstream_status": "not_reported",
+      "local_status": "superseded_by_baseline",
+      "upstream_status": "resolved_in_later_draft",
       "behavior_owner": "lib/internal/keyresolver",
       "conformance_cases": [],
-      "test_refs": ["lib/internal/keyresolver/record_test.go#TestParseRecordAcceptsClosedLegalMatrix"],
+      "test_refs": ["lib/internal/keyresolver/cache_test.go#TestResolverIgnoresRetiredTestingTagOnCacheMissAndHit", "lib/internal/keyresolver/record_test.go#TestParseRecordIgnoresRetiredTestingTag", "lib/policy_api_test.go#TestEvaluatePolicyIgnoresRetiredDNSTestingTag"],
       "external_cases": [],
-      "public_effect": "strict-identity-metadata-only",
-      "resolution_criterion": "drafts-align-strict-identity",
-      "claim_classes": ["documented_interpretation", "draft_normative"]
+      "public_effect": "retired-t-tag-ignored",
+      "resolution_criterion": "dns-01-retires-t-tag",
+      "claim_classes": ["draft_normative"]
     },
     {
       "id": "DKIM2-ISSUE-0014",

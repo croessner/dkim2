@@ -421,7 +421,7 @@ func TestRevisionProofRevalidationChecksEveryTimestampWithOneClock(t *testing.T)
 		t.Fatalf("issuance outcome/proof/error = %q/%v/%v", outcome, proof.Valid(), err)
 	}
 
-	now = time.Unix(int64(testTimestampSeconds), 0).Add(defaultMaxSignatureAge + time.Second)
+	now = time.Unix(int64(testTimestampSeconds), 0).Add(signatureMaxAge + time.Second)
 	revalidation, err := verifier.RevalidateRevisionProof(context.Background(), proof)
 	if err != nil || revalidation != RevisionProofTimestampInvalid {
 		t.Fatalf("RevalidateRevisionProof() = %q/%v, want timestamp_invalid", revalidation, err)
@@ -451,23 +451,6 @@ func TestVerifyRevisionProofRejectsTargetOverridesAndUnsafeTimePolicyBeforeWork(
 		outcome, proof, verifyErr := verifier.VerifyRevisionProof(context.Background(), request)
 		if verifyErr == nil || outcome.Known() || proof.Valid() || providerCalls != 0 || clockCalls != 0 {
 			t.Fatalf("override result = %q/%v/%v calls=%d/%d", outcome, proof.Valid(), verifyErr, providerCalls, clockCalls)
-		}
-	}
-
-	for _, policy := range []TimestampPolicy{
-		{FutureTolerance: defaultFutureTolerance, MaxAge: 0},
-		{FutureTolerance: defaultFutureTolerance, MaxAge: time.Hour},
-		{FutureTolerance: defaultFutureTolerance, MaxAge: 15 * 24 * time.Hour},
-		{FutureTolerance: 0, MaxAge: defaultMaxSignatureAge},
-		{FutureTolerance: defaultFutureTolerance + time.Second, MaxAge: defaultMaxSignatureAge},
-	} {
-		unsafeVerifier, newErr := NewVerifier(provider, WithClock(clock), WithTimestampPolicy(policy))
-		if newErr != nil {
-			t.Fatalf("NewVerifier(custom policy) error = %v", newErr)
-		}
-		outcome, proof, verifyErr := unsafeVerifier.VerifyRevisionProof(context.Background(), Request{Message: fixture.message})
-		if verifyErr == nil || outcome.Known() || proof.Valid() || providerCalls != 0 || clockCalls != 0 {
-			t.Fatalf("unsafe policy result = %q/%v/%v calls=%d/%d", outcome, proof.Valid(), verifyErr, providerCalls, clockCalls)
 		}
 	}
 }
@@ -560,7 +543,7 @@ func TestVerifyRevisionProofPreflightsWholeChainBeforeProviderCallbacks(t *testi
 		t.Fatal("sequential fixture lacks second timestamp")
 	}
 	timestampEnd := laterTimestamp + len("t="+strconv.FormatUint(testTimestampSeconds, 10))
-	futureRaw := fixture.raw[:laterTimestamp] + "t=" + strconv.FormatUint(testTimestampSeconds+uint64(defaultFutureTolerance/time.Second)+1, 10) + fixture.raw[timestampEnd:]
+	futureRaw := fixture.raw[:laterTimestamp] + "t=" + strconv.FormatUint(testTimestampSeconds+uint64(signatureFutureTolerance/time.Second)+1, 10) + fixture.raw[timestampEnd:]
 	future := mustParseVerificationMessage(t, futureRaw)
 	providerCalls := 0
 	provider := providerFunc(func(_ context.Context, query KeyQuery) (PublicKey, error) {
@@ -591,11 +574,11 @@ func TestVerifyRevisionProofPreflightsWholeChainBeforeProviderCallbacks(t *testi
 	}{
 		{
 			name:      "old hop future",
-			timestamp: testTimestampSeconds + uint64(defaultFutureTolerance/time.Second) + 1,
+			timestamp: testTimestampSeconds + uint64(signatureFutureTolerance/time.Second) + 1,
 		},
 		{
 			name:      "old hop expired",
-			timestamp: testTimestampSeconds - uint64(defaultMaxSignatureAge/time.Second) - 1,
+			timestamp: testTimestampSeconds - uint64(signatureMaxAge/time.Second) - 1,
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {

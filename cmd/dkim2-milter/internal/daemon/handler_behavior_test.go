@@ -777,9 +777,6 @@ func TestRequiredResponseMembersRejectZeroValueAmbiguity(t *testing.T) {
 		{name: "signature sets absent", mutate: func(document map[string]any) {
 			delete(document["verification"].(map[string]any), "signature_sets")
 		}},
-		{name: "DNS testing absent", mutate: func(document map[string]any) {
-			delete(document["policy"].(map[string]any), "dns_testing_effective")
-		}},
 		{name: "feedback requested absent", mutate: func(document map[string]any) {
 			delete(document["policy"].(map[string]any)["feedback"].(map[string]any), "requested")
 		}},
@@ -792,16 +789,11 @@ func TestRequiredResponseMembersRejectZeroValueAmbiguity(t *testing.T) {
 		{name: "optional finding sequence null", mutate: func(document map[string]any) {
 			document["policy"].(map[string]any)["findings"].([]any)[0].(map[string]any)["sequence"] = nil
 		}},
-		{name: "key-policy testing absent", mutate: func(document map[string]any) {
+		{name: "signature reason absent", mutate: func(document map[string]any) {
 			verification := document["verification"].(map[string]any)
 			verification["signature_sets"] = []any{map[string]any{
 				"algorithm": "ed25519-sha256",
-				"key_policy": map[string]any{
-					"strict_identity_applicable": false,
-					"strict_identity_declared":   false,
-				},
-				"reason": "none",
-				"status": verificationPass,
+				"status":    verificationPass,
 			}}
 		}},
 	} {

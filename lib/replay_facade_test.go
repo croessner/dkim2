@@ -277,7 +277,7 @@ func TestReplayFacadeContractSurfaceIsExact(t *testing.T) {
 		replayMethodFormat, replayMethodGoString, replayMethodString, replayMethodValid,
 	})
 	assertExactReplayMethods(t, reflect.TypeFor[ReplayIdentitySet](), []string{
-		"Exploded", replayMethodFormat, replayMethodGoString, "Identity", "Len", replayMethodString, replayMethodValid,
+		"Eligible", "Exploded", replayMethodFormat, replayMethodGoString, "Identity", "Len", replayMethodString, replayMethodValid,
 	})
 	assertExactReplayMethods(t, reflect.TypeFor[ReplayKey](), []string{
 		replayMethodFormat, replayMethodGoString, replayMethodMarshalJSON, replayMethodMarshalText,

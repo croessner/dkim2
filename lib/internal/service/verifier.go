@@ -46,7 +46,6 @@ func NewVerifier(provider verify.KeyProvider, config Config) (Verifier, error) {
 	}
 	core, err := verify.NewVerifier(provider,
 		verify.WithAlgorithmPolicy(config.AlgorithmPolicy),
-		verify.WithTimestampPolicy(config.TimestampPolicy),
 		verify.WithClock(config.Clock),
 		verify.WithLimits(verify.Limits{
 			MaxInstanceHashSets:   config.Limits.MaxInstanceHashSets,

@@ -23,6 +23,8 @@ type ReplayResultClass = outcome.ReplayClass
 const (
 	// ReplayResultNotChecked means the verification and policy gate skipped replay.
 	ReplayResultNotChecked = outcome.ReplayNotChecked
+	// ReplayResultNotEligible means a passing direct i=1-only delivery was not counted.
+	ReplayResultNotEligible = outcome.ReplayNotEligible
 	// ReplayResultDisabled means explicit local configuration disabled replay.
 	ReplayResultDisabled = outcome.ReplayDisabled
 	// ReplayResultFirstSeen means every authenticated identity was newly retained.
@@ -165,7 +167,8 @@ func (c *ReplayCoordinator) Coordinate(ctx context.Context, domain DomainResult)
 }
 
 // coordinateEnabled derives every key before sequentially mutating the selected
-// store. An authenticated exploded flag alone marks repeated identities as
+// store. Messages authenticated only by the originator's i=1 signature are not
+// replay-eligible and leave the store untouched. An authenticated exploded flag alone marks repeated identities as
 // expected copies; Draft-07 removed donotexplode, so no compliance state vetoes it.
 func (c *ReplayCoordinator) coordinateEnabled(
 	ctx context.Context,
@@ -181,6 +184,13 @@ func (c *ReplayCoordinator) coordinateEnabled(
 	}
 	if identityErr != nil || !identities.Valid() || identities.Len() == 0 {
 		return indeterminateReplayOutcome(false), nil
+	}
+	if !identities.Eligible() {
+		disposition, ok := dispositionForPolicy(policy.Verdict())
+		if !ok {
+			return ReplayOutcome{}, &ReplayCoordinatorError{}
+		}
+		return newReplayOutcome(ReplayResultNotEligible, disposition, false), nil
 	}
 	effectiveExploded := identities.Exploded()
 
@@ -352,6 +362,8 @@ func (o ReplayOutcome) Valid() bool {
 	}
 	switch o.state.class {
 	case ReplayResultNotChecked:
+		return !o.state.possibleMutation
+	case ReplayResultNotEligible:
 		return !o.state.possibleMutation
 	case ReplayResultDisabled:
 		return o.state.disposition.Known() && !o.state.possibleMutation

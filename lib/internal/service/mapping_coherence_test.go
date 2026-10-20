@@ -62,51 +62,6 @@ func TestSignatureKeyStatusCoherenceMatrix(t *testing.T) {
 	}
 }
 
-// TestSignatureKeyPolicyMetadataCoherence verifies exact propagation and illegal status pairs.
-func TestSignatureKeyPolicyMetadataCoherence(t *testing.T) {
-	metadata := verify.KeyPolicyMetadata{TestingDeclared: true, StrictIdentityDeclared: true}
-	allowed := []struct {
-		status verify.SignatureSetStatus
-		key    verify.KeyStatus
-	}{
-		{verify.SignatureSetStatusPass, verify.KeyStatusFound},
-		{verify.SignatureSetStatusFail, verify.KeyStatusFound},
-		{verify.SignatureSetStatusInvalidKey, verify.KeyStatusInvalid},
-		{verify.SignatureSetStatusRevokedKey, verify.KeyStatusRevoked},
-		{verify.SignatureSetStatusUnsupportedKeyType, verify.KeyStatusUnsupportedKeyType},
-		{verify.SignatureSetStatusKeyAlgorithmMismatch, verify.KeyStatusAlgorithmMismatch},
-		{verify.SignatureSetStatusWrongKeyType, verify.KeyStatusWrongType},
-		{verify.SignatureSetStatusKeyPolicyRejected, verify.KeyStatusPolicyRejected},
-	}
-	for _, pair := range allowed {
-		accumulator := testAccumulator()
-		selector := ""
-		if pair.status == verify.SignatureSetStatusFail {
-			selector = failedSelector
-		}
-		accumulator.mapSignatureSet(verify.SignatureSetResult{Algorithm: verify.AlgorithmRSASHA256, Selector: selector, Status: pair.status, KeyStatus: pair.key, KeyPolicy: metadata})
-		if len(accumulator.signatures) != 1 || accumulator.signatures[0].KeyPolicy != (KeyPolicyMetadata{TestingDeclared: true, StrictIdentityDeclared: true}) {
-			t.Fatalf("metadata for %q/%q = %#v", pair.status, pair.key, accumulator.signatures)
-		}
-	}
-	for _, status := range []verify.SignatureSetStatus{
-		verify.SignatureSetStatusNotChecked, verify.SignatureSetStatusDisabledAlgorithm,
-		verify.SignatureSetStatusMissingKey, verify.SignatureSetStatusAmbiguousKey,
-		verify.SignatureSetStatusProviderError,
-		verify.SignatureSetStatusProviderTemporary, verify.SignatureSetStatusProviderPermanent,
-		verify.SignatureSetStatusProviderContract, verify.SignatureSetStatusUnsupportedAlgorithm,
-	} {
-		if signatureKeyPolicyCoherent(status, metadata) {
-			t.Fatalf("metadata accepted for %q", status)
-		}
-	}
-	bad := verify.SignatureSetResult{Algorithm: verify.AlgorithmRSASHA256, Status: verify.SignatureSetStatusPass, KeyStatus: verify.KeyStatusFound, KeyPolicy: verify.KeyPolicyMetadata{StrictIdentityApplicable: true}}
-	result := mapVerificationResult(newVerifyResultWithDefaultCustody(verify.Target{Sequence: 1, InstanceNumber: 1}, verify.TargetStatusPass, requiredPassChecks(verify.Target{Sequence: 1, InstanceNumber: 1}), []verify.SignatureSetResult{bad}), DefaultLimits())
-	if result.State() != StatePERMERROR || result.PrimaryReason() != ReasonInternalContract {
-		t.Fatalf("invalid applicable metadata mapped to %q/%q", result.State(), result.PrimaryReason())
-	}
-}
-
 // TestMappingRejectsDuplicateAndInconsistentFacts verifies synthetic M4 corruption fails closed.
 func TestMappingRejectsDuplicateAndInconsistentFacts(t *testing.T) {
 	target := verify.Target{Sequence: 1, InstanceNumber: 1}
@@ -315,7 +270,6 @@ func TestEveryKnownTimestampAndNextDomainStatusIsMapped(t *testing.T) {
 		{Kind: verify.CheckKindTimestamp, Status: verify.CheckStatusPass, TimestampStatus: verify.TimestampStatusPass},
 		{Kind: verify.CheckKindTimestamp, Status: verify.CheckStatusFail, Code: verify.ErrorCodeTimestampInvalid, TimestampStatus: verify.TimestampStatusFuture},
 		{Kind: verify.CheckKindTimestamp, Status: verify.CheckStatusFail, Code: verify.ErrorCodeTimestampInvalid, TimestampStatus: verify.TimestampStatusExpired},
-		{Kind: verify.CheckKindTimestamp, Status: verify.CheckStatusPass, TimestampStatus: verify.TimestampStatusNoMaxAge},
 		{Kind: verify.CheckKindTimestamp, Status: verify.CheckStatusNotApplicable, TimestampStatus: verify.TimestampStatusNotApplicable},
 		{Kind: verify.CheckKindTimestamp, Status: verify.CheckStatusFail, Code: verify.ErrorCodeTimestampInvalid, TimestampStatus: verify.TimestampStatusInvalid},
 	}

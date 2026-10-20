@@ -20,7 +20,7 @@
         "verification_state": "PASS",
         "authentication_state": "PASS",
         "policy_verdict": "accept",
-        "replay_class": "first_seen",
+        "replay_class": "not_eligible",
         "actions": [],
         "delivery_status": {
           "structure": "valid",
@@ -48,7 +48,7 @@
         "verification_state": "PASS",
         "authentication_state": "PASS",
         "policy_verdict": "accept",
-        "replay_class": "first_seen",
+        "replay_class": "not_eligible",
         "actions": [],
         "delivery_status": {
           "structure": "valid",

@@ -113,19 +113,6 @@ func TestNonFoundPublicKeyResultsCarryNoMaterial(t *testing.T) {
 	}
 }
 
-// TestPublicKeyResultCarriesImmutablePolicyMetadata verifies bounded DNS declarations.
-func TestPublicKeyResultCarriesImmutablePolicyMetadata(t *testing.T) {
-	metadata := newKeyPolicyMetadata(true, true)
-	result := withKeyPolicyMetadata(RevokedPublicKey(AlgorithmRSASHA256), metadata)
-	got := result.KeyPolicyMetadata()
-	if !got.TestingDeclared() || !got.StrictIdentityDeclared() || got.StrictIdentityApplicable() {
-		t.Fatalf("metadata = testing %v strict %v applicable %v", got.TestingDeclared(), got.StrictIdentityDeclared(), got.StrictIdentityApplicable())
-	}
-	if MissingPublicKey(AlgorithmRSASHA256).KeyPolicyMetadata().TestingDeclared() {
-		t.Fatal("static missing result carried DNS policy metadata")
-	}
-}
-
 // TestZeroPublicKeyResultIsNotSuccess verifies fail-closed zero-value behavior.
 func TestZeroPublicKeyResultIsNotSuccess(t *testing.T) {
 	var result PublicKeyResult

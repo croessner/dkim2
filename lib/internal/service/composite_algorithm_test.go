@@ -25,7 +25,7 @@ func TestCompositeAlgorithmMapsThroughServiceVocabulary(t *testing.T) {
 	if !ok || projected != policy.SetAlgorithmMLDSA44Ed25519 || !projected.Known() {
 		t.Fatalf("policySetAlgorithm() = %q/%v", projected, ok)
 	}
-	if _, err := policy.NewSignatureFact(projected, policy.SetStatusPass, policy.SetReasonNone, false, false); err != nil {
+	if _, err := policy.NewSignatureFact(projected, policy.SetStatusPass, policy.SetReasonNone); err != nil {
 		t.Fatalf("policy.NewSignatureFact() error = %v", err)
 	}
 }

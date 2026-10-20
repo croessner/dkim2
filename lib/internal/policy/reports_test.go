@@ -34,7 +34,7 @@ func TestRemovedDraft06RequestsCarryNoPolicyMeaning(t *testing.T) {
 // TestExplodedReportsDistinguishCurrentPartialAndCompleteCoverage verifies
 // exploded reports remain informational at every coverage level.
 func TestExplodedReportsDistinguishCurrentPartialAndCompleteCoverage(t *testing.T) {
-	passSet := mustProjectionSignatureFact(t, SetAlgorithmRSA, SetStatusPass, SetReasonNone, false, false)
+	passSet := mustProjectionSignatureFact(t, SetAlgorithmRSA, SetStatusPass, SetReasonNone)
 	currentHop := mustHistoryHop(t, 1, TransitionOrigin, true)
 	current, err := NewSelectedProjection(ProtocolPASS, VerificationReasonNone, 1, []HopFact{currentHop}, []SignatureFact{passSet}, DefaultLimits())
 	if err != nil {
@@ -220,16 +220,6 @@ func hasSequencedFinding(decision Decision, reason PolicyReason, sequence uint64
 	for _, finding := range decision.Findings() {
 		got, ok := finding.Sequence()
 		if finding.Reason() == reason && ok && got == sequence {
-			return true
-		}
-	}
-	return false
-}
-
-// hasFindingReason reports whether a decision contains one reason.
-func hasFindingReason(decision Decision, reason PolicyReason) bool {
-	for _, finding := range decision.Findings() {
-		if finding.Reason() == reason {
 			return true
 		}
 	}

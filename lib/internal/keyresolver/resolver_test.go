@@ -34,16 +34,15 @@ func TestResolverMapsClosedDNSAndRecordOutcomes(t *testing.T) {
 		result     LookupResult
 		algorithm  Algorithm
 		wantStatus KeyOutcomeStatus
-		metadata   bool
 	}{
 		{name: "nxdomain", result: mustAbsentLookup(t, AbsenceNXDOMAIN), algorithm: AlgorithmRSASHA256, wantStatus: KeyOutcomeMissing},
 		{name: "nodata", result: mustAbsentLookup(t, AbsenceNODATA), algorithm: AlgorithmRSASHA256, wantStatus: KeyOutcomeMissing},
 		{name: "ambiguous", result: mustAmbiguousLookup(t, 2), algorithm: AlgorithmRSASHA256, wantStatus: KeyOutcomeAmbiguous},
 		{name: "malformed record", result: mustFoundLookup(t, []byte("v=DKIM1; p=%%%")), algorithm: AlgorithmRSASHA256, wantStatus: KeyOutcomeInvalid},
-		{name: "revoked resolver state", result: mustFoundLookup(t, []byte("v=DKIM1; p=; t=y")), algorithm: AlgorithmRSASHA256, wantStatus: KeyOutcomeRevoked, metadata: true},
-		{name: "unsupported resolver state", result: mustFoundLookup(t, []byte("v=DKIM1; k=future; p=QQ==; t=y")), algorithm: AlgorithmRSASHA256, wantStatus: KeyOutcomeUnsupportedKeyType, metadata: true},
-		{name: "mismatch", result: mustFoundLookup(t, []byte("v=DKIM1; k=ed25519; p="+edKey+"; t=y")), algorithm: AlgorithmRSASHA256, wantStatus: KeyOutcomeAlgorithmMismatch, metadata: true},
-		{name: "found ed25519", result: mustFoundLookup(t, []byte("v=DKIM1; k=ed25519; p="+edKey+"; t=y:s")), algorithm: AlgorithmEd25519SHA256, wantStatus: KeyOutcomeFound, metadata: true},
+		{name: "revoked resolver state", result: mustFoundLookup(t, []byte("v=DKIM1; p=; t=y")), algorithm: AlgorithmRSASHA256, wantStatus: KeyOutcomeRevoked},
+		{name: "unsupported resolver state", result: mustFoundLookup(t, []byte("v=DKIM1; k=future; p=QQ==; t=y")), algorithm: AlgorithmRSASHA256, wantStatus: KeyOutcomeUnsupportedKeyType},
+		{name: "mismatch", result: mustFoundLookup(t, []byte("v=DKIM1; k=ed25519; p="+edKey+"; t=y")), algorithm: AlgorithmRSASHA256, wantStatus: KeyOutcomeAlgorithmMismatch},
+		{name: "found ed25519", result: mustFoundLookup(t, []byte("v=DKIM1; k=ed25519; p="+edKey+"; t=y:s")), algorithm: AlgorithmEd25519SHA256, wantStatus: KeyOutcomeFound},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -59,11 +58,8 @@ func TestResolverMapsClosedDNSAndRecordOutcomes(t *testing.T) {
 				t.Fatalf("NewResolver() error = %v", err)
 			}
 			outcome, err := resolver.Resolve(context.Background(), "example.test", testSelector, tt.algorithm)
-			if err != nil || calls != 1 || !outcome.Valid() || outcome.Status() != tt.wantStatus || outcome.Metadata().TestingDeclared() != tt.metadata {
-				t.Fatalf("Resolve() = status %q valid=%v metadata=%#v calls=%d error=%v", outcome.Status(), outcome.Valid(), outcome.Metadata(), calls, err)
-			}
-			if tt.name == "found ed25519" && (!outcome.Metadata().StrictIdentityDeclared() || outcome.Metadata().StrictIdentityApplicable()) {
-				t.Fatalf("strict metadata = declared %v applicable %v", outcome.Metadata().StrictIdentityDeclared(), outcome.Metadata().StrictIdentityApplicable())
+			if err != nil || calls != 1 || !outcome.Valid() || outcome.Status() != tt.wantStatus {
+				t.Fatalf("Resolve() = status %q valid=%v calls=%d error=%v", outcome.Status(), outcome.Valid(), calls, err)
 			}
 		})
 	}

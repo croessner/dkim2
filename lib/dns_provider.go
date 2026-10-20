@@ -119,32 +119,31 @@ func (p *DNSPublicKeyProvider) LookupPublicKey(ctx context.Context, query Public
 		}
 		return PublicKeyResult{}, newAPIError(APIErrorCodeInvalidProvider)
 	}
-	metadata := newKeyPolicyMetadata(outcome.Metadata().TestingDeclared(), outcome.Metadata().StrictIdentityDeclared())
 	baseAlgorithm := query.Algorithm()
 	switch outcome.Status() {
 	case keyresolver.KeyOutcomeFound:
 		switch key := outcome.Material().(type) {
 		case *rsa.PublicKey:
-			return withKeyPolicyMetadata(FoundRSAPublicKey(key), metadata), nil
+			return FoundRSAPublicKey(key), nil
 		case ed25519.PublicKey:
-			return withKeyPolicyMetadata(FoundEd25519PublicKey(key), metadata), nil
+			return FoundEd25519PublicKey(key), nil
 		case cryptodkim2.CompositePublicKey:
-			return withKeyPolicyMetadata(FoundCompositePublicKey(key.Bytes()), metadata), nil
+			return FoundCompositePublicKey(key.Bytes()), nil
 		default:
 			return PublicKeyResult{}, newAPIError(APIErrorCodeInvalidProvider)
 		}
 	case keyresolver.KeyOutcomeMissing:
 		return MissingPublicKey(baseAlgorithm), nil
 	case keyresolver.KeyOutcomeInvalid:
-		return withKeyPolicyMetadata(InvalidPublicKey(baseAlgorithm), metadata), nil
+		return InvalidPublicKey(baseAlgorithm), nil
 	case keyresolver.KeyOutcomeAmbiguous:
 		return AmbiguousPublicKey(baseAlgorithm), nil
 	case keyresolver.KeyOutcomeRevoked:
-		return withKeyPolicyMetadata(RevokedPublicKey(baseAlgorithm), metadata), nil
+		return RevokedPublicKey(baseAlgorithm), nil
 	case keyresolver.KeyOutcomeUnsupportedKeyType:
-		return withKeyPolicyMetadata(UnsupportedKeyTypePublicKey(baseAlgorithm), metadata), nil
+		return UnsupportedKeyTypePublicKey(baseAlgorithm), nil
 	case keyresolver.KeyOutcomeAlgorithmMismatch:
-		return withKeyPolicyMetadata(AlgorithmMismatchPublicKey(baseAlgorithm), metadata), nil
+		return AlgorithmMismatchPublicKey(baseAlgorithm), nil
 	case keyresolver.KeyOutcomeTemporary:
 		return PublicKeyResult{}, NewTemporaryProviderError()
 	case keyresolver.KeyOutcomePermanent:

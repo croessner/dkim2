@@ -287,7 +287,7 @@ func firstErrString(err error) string {
 // recordsEqual compares only bounded record facts and detached material.
 func recordsEqual(left, right Record) bool {
 	return left.Draft() == right.Draft() && left.Status() == right.Status() && left.KeyType() == right.KeyType() &&
-		left.Metadata() == right.Metadata() && bytes.Equal(left.PublicKeyData(), right.PublicKeyData()) && left.Valid() == right.Valid()
+		bytes.Equal(left.PublicKeyData(), right.PublicKeyData()) && left.Valid() == right.Valid()
 }
 
 // fuzzLookupResult constructs one fuzz-selected public transport shape without unbounded payload slices.
@@ -340,16 +340,15 @@ func lookupResultsEqual(left, right LookupResult) bool {
 
 // fuzzKeyRecord constructs supported, unsupported, revoked, or invalid injected record state.
 func fuzzKeyRecord(material []byte, keyTypeByte byte) Record {
-	metadata := newMetadata(keyTypeByte&4 != 0, keyTypeByte&8 != 0)
 	switch keyTypeByte % 5 {
 	case 0:
-		return keyDataRecord(KeyTypeRSA, material, metadata)
+		return keyDataRecord(KeyTypeRSA, material)
 	case 1:
-		return keyDataRecord(KeyTypeEd25519, material, metadata)
+		return keyDataRecord(KeyTypeEd25519, material)
 	case 2:
-		return Record{draft: DNSDraftIdentifier, status: RecordStatusUnsupportedKeyType, keyType: KeyTypeUnsupported, metadata: metadata, initialized: true}
+		return Record{draft: DNSDraftIdentifier, status: RecordStatusUnsupportedKeyType, keyType: KeyTypeUnsupported, initialized: true}
 	case 3:
-		return Record{draft: DNSDraftIdentifier, status: RecordStatusRevoked, keyType: KeyTypeRSA, metadata: metadata, initialized: true}
+		return Record{draft: DNSDraftIdentifier, status: RecordStatusRevoked, keyType: KeyTypeRSA, initialized: true}
 	default:
 		return Record{}
 	}
@@ -357,7 +356,7 @@ func fuzzKeyRecord(material []byte, keyTypeByte byte) Record {
 
 // keyOutcomesEqual compares bounded key facts and cloned material.
 func keyOutcomesEqual(left, right KeyOutcome) bool {
-	return left.Status() == right.Status() && left.Algorithm() == right.Algorithm() && left.Metadata() == right.Metadata() &&
+	return left.Status() == right.Status() && left.Algorithm() == right.Algorithm() &&
 		reflect.DeepEqual(left.Material(), right.Material()) && left.Valid() == right.Valid() && left.IsZero() == right.IsZero()
 }
 

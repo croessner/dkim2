@@ -62,6 +62,8 @@ func replayObservation(result ReplayOutcome) (string, string) {
 	switch result.Class() {
 	case ReplayResultNotChecked:
 		state = "not_checked"
+	case ReplayResultNotEligible:
+		state = "not_eligible"
 	case ReplayResultDisabled:
 		state = "disabled"
 	case ReplayResultFirstSeen:

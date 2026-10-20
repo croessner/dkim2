@@ -197,16 +197,6 @@ func (r Reason) Known() bool {
 	}
 }
 
-// KeyPolicyMetadata carries bounded DNS key declarations through service mapping.
-type KeyPolicyMetadata struct {
-	TestingDeclared          bool
-	StrictIdentityDeclared   bool
-	StrictIdentityApplicable bool
-}
-
-// Valid reports whether policy metadata is coherent with the active DKIM2 draft.
-func (m KeyPolicyMetadata) Valid() bool { return !m.StrictIdentityApplicable }
-
 // Algorithm identifies a bounded signature algorithm family.
 type Algorithm string
 
@@ -283,14 +273,13 @@ func (l Limits) Validate() error {
 type Config struct {
 	Limits          Limits
 	AlgorithmPolicy verify.AlgorithmPolicy
-	TimestampPolicy verify.TimestampPolicy
 	Clock           verify.Clock
 }
 
 // DefaultConfig returns restrictive current-verification defaults.
 func DefaultConfig() Config {
 	options := verify.DefaultOptions()
-	return Config{Limits: DefaultLimits(), AlgorithmPolicy: options.AlgorithmPolicy, TimestampPolicy: options.TimestampPolicy, Clock: options.Clock}
+	return Config{Limits: DefaultLimits(), AlgorithmPolicy: options.AlgorithmPolicy, Clock: options.Clock}
 }
 
 // Request owns raw RFC 5322 and current SMTP envelope bytes.

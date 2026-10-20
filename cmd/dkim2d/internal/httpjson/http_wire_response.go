@@ -307,7 +307,7 @@ func validProcessResponse(response generated.ProcessResponse) bool {
 		return false
 	}
 	switch response.Replay.Class {
-	case generated.Disabled, generated.FirstSeen, generated.Exploded:
+	case generated.Disabled, generated.FirstSeen, generated.Exploded, generated.NotEligible:
 		return response.Verification.State == generated.PASS &&
 			string(response.Disposition) == string(response.Policy.Verdict)
 	case generated.Replayed:
@@ -446,7 +446,7 @@ func validAuthenticationResponse(
 		return authentication.State == generated.TEMPERROR &&
 			(authentication.PrimaryReason == generated.AuthenticationResultPrimaryReasonReplayIndeterminate ||
 				authentication.PrimaryReason == generated.AuthenticationResultPrimaryReasonReplayEvidenceUnavailable)
-	case generated.Disabled, generated.FirstSeen, generated.Exploded, generated.NotChecked:
+	case generated.Disabled, generated.FirstSeen, generated.Exploded, generated.NotChecked, generated.NotEligible:
 		return authentication.State == verification
 	default:
 		return false
@@ -538,7 +538,7 @@ func validVerificationResponse(response generated.VerificationResult) bool {
 	}
 	for _, signature := range response.SignatureSets {
 		if !signature.Algorithm.Valid() || !signature.Status.Valid() ||
-			!signature.Reason.Valid() || !signature.KeyPolicy.StrictIdentityApplicable.Valid() {
+			!signature.Reason.Valid() {
 			return false
 		}
 	}

@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"errors"
+	"reflect"
 	"slices"
 	"strconv"
 	"sync"
@@ -124,16 +125,11 @@ func TestEvaluatePolicyUnavailableMatrix(t *testing.T) {
 				if err != nil {
 					t.Fatalf("EvaluatePolicy() error = %v", err)
 				}
-				if result.State() != ResultStatePERMERROR || result.Target() != (VerificationTarget{}) || decision.VerificationState() != ResultStatePERMERROR || decision.Verdict() != mode.verdict || decision.PrimaryReason() != mode.primary || decision.DNSTestingEffective() {
-					t.Fatalf("decision = state %q verdict %q reason %q dns %t", decision.VerificationState(), decision.Verdict(), decision.PrimaryReason(), decision.DNSTestingEffective())
+				if result.State() != ResultStatePERMERROR || result.Target() != (VerificationTarget{}) || decision.VerificationState() != ResultStatePERMERROR || decision.Verdict() != mode.verdict || decision.PrimaryReason() != mode.primary {
+					t.Fatalf("decision = state %q verdict %q reason %q", decision.VerificationState(), decision.Verdict(), decision.PrimaryReason())
 				}
 				if actions := decision.ActionPlan().Actions(); len(actions) != 1 || actions[0].Kind() != mode.action || actions[0].Terminal() != (mode.action != PolicyActionContinue) {
 					t.Fatalf("actions = %#v", actions)
-				}
-				for _, finding := range decision.Findings() {
-					if finding.Reason() == PolicyReasonDNSTestingEffective || finding.Reason() == PolicyReasonDNSTestingMixed || finding.Reason() == PolicyReasonDNSTestingIneligible {
-						t.Fatalf("unavailable decision invented DNS finding %q", finding.Reason())
-					}
 				}
 			})
 		}
@@ -283,144 +279,36 @@ func TestEvaluatePolicyUsesSealedAuthenticatedFlags(t *testing.T) {
 	}
 }
 
-// TestEvaluatePolicyUsesEligibleDNSTesting proves all-relevant DNS testing metadata changes only eligible policy.
-func TestEvaluatePolicyUsesEligibleDNSTesting(t *testing.T) {
+// TestEvaluatePolicyIgnoresRetiredDNSTestingTag proves DNS-01 Section 3.4.1:
+// key records carrying the retired t= tag produce exactly the policy decisions
+// of records without it, so DNS can never relax a local policy verdict.
+func TestEvaluatePolicyIgnoresRetiredDNSTestingTag(t *testing.T) {
 	corpus := loadPublicGoldenCorpus(t)
 	manifest := loadDNSGoldenManifest(t, corpus)
-	transport := &dnsVectorTransport{lookup: func(_ context.Context, owner string) (TXTLookupResult, error) {
-		if owner == dnsVectorEdOwner {
-			return foundPublicTXT(t, manifest.Ed25519LowerTXT+"; t=y", DNSSECStatusUnavailable), nil
-		}
-		return foundPublicTXT(t, manifest.RSADefaultTXT+"; t=y", DNSSECStatusUnavailable), nil
-	}}
-	dnsResult := verifyDNSVector(context.Background(), t, corpus, "supported_mixed_fail", mustDNSVectorProvider(t, transport, DefaultDNSProviderConfig()))
-	dnsDecision, err := EvaluatePolicy(dnsResult)
-	if err != nil {
-		t.Fatalf("EvaluatePolicy(DNS) error = %v", err)
+	tagged := func() PublicKeyProvider {
+		return mustDNSVectorProvider(t, dnsPassTransport(t, manifest.RSATestingStrictTXT, manifest.Ed25519LowerTXT+"; t=y:s", DNSSECStatusUnavailable), DefaultDNSProviderConfig())
 	}
-	if dnsDecision.VerificationState() != ResultStateFAIL || dnsDecision.Verdict() != PolicyVerdictContinue || dnsDecision.PrimaryReason() != PolicyReasonDNSTestingEffective || !dnsDecision.DNSTestingEffective() {
-		t.Fatalf("DNS decision = %q/%q/%q/%t", dnsDecision.VerificationState(), dnsDecision.Verdict(), dnsDecision.PrimaryReason(), dnsDecision.DNSTestingEffective())
+	untagged := func() PublicKeyProvider {
+		return mustDNSVectorProvider(t, dnsPassTransport(t, manifest.RSADefaultTXT, manifest.Ed25519LowerTXT, DNSSECStatusUnavailable), DefaultDNSProviderConfig())
 	}
-	static := verifyDNSVector(context.Background(), t, corpus, "supported_mixed_fail", publicGoldenProvider{mode: goldenProviderKeys, rsa: corpus.rsaKey(t), ed: corpus.edKey(t)})
-	staticDecision, err := EvaluatePolicy(static)
-	if err != nil || staticDecision.DNSTestingEffective() || staticDecision.Verdict() != PolicyVerdictReject {
-		t.Fatalf("static decision = %q/%t/%v", staticDecision.Verdict(), staticDecision.DNSTestingEffective(), err)
-	}
-}
-
-// TestEvaluatePolicyTreatsPassingTestingSignerAsNonTerminal proves DNS testing never grants authentication policy weight.
-func TestEvaluatePolicyTreatsPassingTestingSignerAsNonTerminal(t *testing.T) {
-	corpus := loadPublicGoldenCorpus(t)
-	manifest := loadDNSGoldenManifest(t, corpus)
-	transport := dnsPassTransport(t, manifest.RSATestingTXT, manifest.Ed25519LowerTXT+"; t=y", DNSSECStatusUnavailable)
-	result := verifyDNSVector(context.Background(), t, corpus, goldenVectorRSAPass, mustDNSVectorProvider(t, transport, DefaultDNSProviderConfig()))
-	for _, mode := range []PolicyMode{PolicyModeStrict, PolicyModePermissive, PolicyModeTesting} {
-		decision, err := EvaluatePolicy(result, WithPolicyMode(mode))
-		if err != nil {
-			t.Fatalf("EvaluatePolicy(%s) error = %v", mode, err)
-		}
-		actions := decision.ActionPlan().Actions()
-		if result.State() != ResultStatePASS || decision.VerificationState() != ResultStatePASS || decision.Verdict() != PolicyVerdictContinue || decision.PrimaryReason() != PolicyReasonDNSTestingEffective || !decision.DNSTestingEffective() || len(actions) != 1 || actions[0].Kind() != PolicyActionContinue || actions[0].Terminal() {
-			t.Fatalf("testing PASS mode %q = state %q verdict %q reason %q dns %t actions %#v", mode, decision.VerificationState(), decision.Verdict(), decision.PrimaryReason(), decision.DNSTestingEffective(), actions)
-		}
-	}
-}
-
-// TestEvaluatePolicySuppressesTestingSignerFlags proves a testing PASS grants no authenticated policy side effects.
-func TestEvaluatePolicySuppressesTestingSignerFlags(t *testing.T) {
-	raw, key := signedPublicFlaggedPolicyMessage(t, publicVectorClock)
-	provider := publicProviderFunc(func(context.Context, PublicKeyQuery) (PublicKeyResult, error) {
-		return withKeyPolicyMetadata(FoundRSAPublicKey(key), newKeyPolicyMetadata(true, false)), nil
-	})
-	verifier, err := NewVerifier(provider, WithVerificationClock(func() time.Time { return time.Unix(publicVectorClock, 0) }))
-	if err != nil {
-		t.Fatalf("NewVerifier() error = %v", err)
-	}
-	result, err := verifier.Verify(context.Background(), NewVerifyRequest(raw, []byte("<>"), [][]byte{[]byte("<rcpt@example.test>")}))
-	if err != nil || result.State() != ResultStatePASS {
-		t.Fatalf("Verify() = %q, %v", result.State(), err)
-	}
-	for _, mode := range []PolicyMode{PolicyModeStrict, PolicyModePermissive, PolicyModeTesting} {
-		decision, evaluateErr := EvaluatePolicy(result, WithPolicyMode(mode))
-		if evaluateErr != nil {
-			t.Fatalf("EvaluatePolicy(%s) error = %v", mode, evaluateErr)
-		}
-		intent := decision.FeedbackIntent()
-		if decision.Verdict() != PolicyVerdictContinue || decision.PrimaryReason() != PolicyReasonDNSTestingEffective || intent.Requested() || intent.RelayRequired() || intent.RelaySequence() != 0 {
-			t.Fatalf("testing flag decision %q = %#v", mode, decision)
-		}
-		for _, finding := range decision.Findings() {
-			if _, sequenced := finding.Sequence(); sequenced {
-				t.Fatalf("testing signer flag produced finding %#v", finding)
+	for _, vector := range []string{goldenVectorRSAPass, goldenVectorSupportedMixedFail, "age_over", "alignment_mismatch", "terminal_nd"} {
+		withTag := verifyDNSVector(context.Background(), t, corpus, vector, tagged())
+		withoutTag := verifyDNSVector(context.Background(), t, corpus, vector, untagged())
+		for _, mode := range []PolicyMode{PolicyModeStrict, PolicyModePermissive, PolicyModeTesting} {
+			tagDecision, tagErr := EvaluatePolicy(withTag, WithPolicyMode(mode))
+			plainDecision, plainErr := EvaluatePolicy(withoutTag, WithPolicyMode(mode))
+			if tagErr != nil || plainErr != nil {
+				t.Fatalf("%s/%s EvaluatePolicy() errors = %v/%v", vector, mode, tagErr, plainErr)
+			}
+			if tagDecision.Verdict() != plainDecision.Verdict() || tagDecision.PrimaryReason() != plainDecision.PrimaryReason() ||
+				!reflect.DeepEqual(tagDecision.Findings(), plainDecision.Findings()) {
+				t.Fatalf("%s/%s retired t= changed decision: %q/%q vs %q/%q", vector, mode, tagDecision.Verdict(), tagDecision.PrimaryReason(), plainDecision.Verdict(), plainDecision.PrimaryReason())
+			}
+			if mode == PolicyModeStrict && withTag.State() != ResultStatePASS && tagDecision.Verdict() != PolicyVerdictReject {
+				t.Fatalf("%s strict non-PASS verdict = %q", vector, tagDecision.Verdict())
 			}
 		}
 	}
-}
-
-// TestEvaluatePolicyUsesPostKeyPermanentDNSTesting proves coherent post-key failures receive literal DNS testing treatment.
-func TestEvaluatePolicyUsesPostKeyPermanentDNSTesting(t *testing.T) {
-	corpus := loadPublicGoldenCorpus(t)
-	manifest := loadDNSGoldenManifest(t, corpus)
-	newProvider := func() PublicKeyProvider {
-		return mustDNSVectorProvider(t, dnsPassTransport(t, manifest.RSATestingTXT, manifest.Ed25519LowerTXT+"; t=y", DNSSECStatusUnavailable), DefaultDNSProviderConfig())
-	}
-	results := []VerifyResult{
-		verifyDNSVector(context.Background(), t, corpus, "age_over", newProvider()),
-		verifyDNSVector(context.Background(), t, corpus, "alignment_mismatch", newProvider()),
-		verifyDNSVector(context.Background(), t, corpus, "terminal_nd", newProvider()),
-	}
-	vector := corpus.Vectors["mail_exact"]
-	verifier, err := NewVerifier(newProvider(), WithVerificationClock(func() time.Time { return time.Unix(publicVectorClock, 0) }))
-	if err != nil {
-		t.Fatalf("NewVerifier(envelope) error = %v", err)
-	}
-	envelope, err := verifier.Verify(context.Background(), NewVerifyRequest(decodeGoldenBytes(t, vector.Raw), []byte("<sender@example.test>"), decodeGoldenPaths(t, vector.Forward)))
-	if err != nil {
-		t.Fatalf("Verify(envelope) error = %v", err)
-	}
-	results = append(results, envelope)
-	wantReasons := []ReasonCode{ReasonTimestampInvalid, ReasonDomainAlignmentMismatch, ReasonOutOfBandRequired, ReasonEnvelopeMismatch}
-	for index, result := range results {
-		decision, evaluateErr := EvaluatePolicy(result)
-		if evaluateErr != nil || result.State() != ResultStatePERMERROR || result.PrimaryReason() != wantReasons[index] || decision.VerificationState() != ResultStatePERMERROR || decision.Verdict() != PolicyVerdictContinue || decision.PrimaryReason() != PolicyReasonDNSTestingEffective || !decision.DNSTestingEffective() {
-			t.Fatalf("post-key row %q = result %q/%q decision %q/%q/%t error %v", wantReasons[index], result.State(), result.PrimaryReason(), decision.Verdict(), decision.PrimaryReason(), decision.DNSTestingEffective(), evaluateErr)
-		}
-	}
-}
-
-// TestEvaluatePolicyUsesHiddenPreRetentionDNSFacts proves public output narrowing cannot erase sealed policy metadata.
-func TestEvaluatePolicyUsesHiddenPreRetentionDNSFacts(t *testing.T) {
-	corpus := loadPublicGoldenCorpus(t)
-	manifest := loadDNSGoldenManifest(t, corpus)
-	vector := corpus.Vectors["supported_mixed_fail"]
-	retentionTransport := &dnsVectorTransport{lookup: func(_ context.Context, owner string) (TXTLookupResult, error) {
-		if owner == dnsVectorEdOwner {
-			return foundPublicTXT(t, manifest.Ed25519LowerTXT, DNSSECStatusUnavailable), nil
-		}
-		return foundPublicTXT(t, manifest.RSADefaultTXT+"; t=y", DNSSECStatusUnavailable), nil
-	}}
-	retainedVerifier, err := NewVerifier(mustDNSVectorProvider(t, retentionTransport, DefaultDNSProviderConfig()), WithVerificationClock(func() time.Time { return time.Unix(publicVectorClock, 0) }), WithMaxSignatureFacts(1))
-	if err != nil {
-		t.Fatalf("NewVerifier(retention) error = %v", err)
-	}
-	retained, err := retainedVerifier.Verify(context.Background(), NewVerifyRequest(decodeGoldenBytes(t, vector.Raw), decodeGoldenBytes(t, vector.Reverse), decodeGoldenPaths(t, vector.Forward)))
-	if err != nil || retained.State() != ResultStateFAIL || retained.SignatureSetCount() != 1 || !retained.SignatureSets()[0].KeyPolicyMetadata().TestingDeclared() {
-		t.Fatalf("Verify(retention) count/error = %d/%v", retained.SignatureSetCount(), err)
-	}
-	retainedDecision, err := EvaluatePolicy(retained)
-	if err != nil || retainedDecision.DNSTestingEffective() || retainedDecision.Verdict() != PolicyVerdictReject || !policyDecisionHasReason(retainedDecision, PolicyReasonDNSTestingMixed) {
-		t.Fatalf("retained decision = %q/%t/%v reason=%q projection_reason=%q facts=%#v public=%#v", retainedDecision.Verdict(), retainedDecision.DNSTestingEffective(), err, retained.PrimaryReason(), retained.sealedPolicyProjection().VerificationReason(), retained.sealedPolicyProjection().SignatureFacts(), retained.SignatureSets())
-	}
-}
-
-// policyDecisionHasReason reports whether one public decision contains a reason.
-func policyDecisionHasReason(decision PolicyDecision, reason PolicyReason) bool {
-	for _, finding := range decision.Findings() {
-		if finding.Reason() == reason {
-			return true
-		}
-	}
-	return false
 }
 
 // TestPublicPolicyVocabulariesAreClosed proves every public enum rejects zero and unknown future values.
@@ -445,7 +333,6 @@ func TestPublicPolicyVocabulariesAreClosed(t *testing.T) {
 		PolicyReasonInvalidInput, PolicyReasonLimitExceeded, PolicyReasonInternalContract,
 		PolicyReasonProtocolPass, PolicyReasonProtocolFail, PolicyReasonProtocolPermerror, PolicyReasonProtocolTemperror,
 		PolicyReasonPermissiveOverride, PolicyReasonTestingModeObserve,
-		PolicyReasonDNSTestingEffective, PolicyReasonDNSTestingMixed, PolicyReasonDNSTestingIneligible,
 		PolicyReasonFeedbackRequested, PolicyReasonFeedbackRelaySelected, PolicyReasonFeedHereInert, PolicyReasonExplodedReported,
 	}
 	for _, reason := range reasons {
@@ -453,9 +340,9 @@ func TestPublicPolicyVocabulariesAreClosed(t *testing.T) {
 			t.Fatalf("known reason rejected: %q", reason)
 		}
 	}
-	for _, removed := range []PolicyReason{"donotmodify_violated", "donotexplode_violated", "donotmodify_honored"} {
+	for _, removed := range []PolicyReason{"donotmodify_violated", "donotexplode_violated", "donotmodify_honored", "dns_testing_effective", "dns_testing_mixed", "dns_testing_ineligible"} {
 		if removed.Known() {
-			t.Fatalf("removed Draft-06 reason accepted: %q", removed)
+			t.Fatalf("removed reason accepted: %q", removed)
 		}
 	}
 	if PolicyReason("").Known() || PolicyReason("future-secret").Known() || (PolicyFinding{}).Valid() || (PolicyFeedbackIntent{}).Valid() || (PolicyAction{}).Valid() || (PolicyActionPlan{}).Valid() || !(PolicyDecision{}).IsZero() {
@@ -479,7 +366,6 @@ func TestPublicPolicyVocabulariesAreClosed(t *testing.T) {
 	for _, partial := range []PolicyDecision{
 		{state: &policyDecisionState{primaryReason: PolicyReasonProtocolPass}},
 		{state: &policyDecisionState{feedback: PolicyFeedbackIntent{state: &policyFeedbackIntentState{initialized: true}}}},
-		{state: &policyDecisionState{dnsEffective: true}},
 	} {
 		if partial.IsZero() {
 			t.Fatal("partially initialized public decision reported zero")
@@ -540,7 +426,7 @@ func selectedPolicyResult(t *testing.T, protocol policy.ProtocolClass, verificat
 	if err != nil {
 		t.Fatalf("NewAuthenticatedHopFact() error = %v", err)
 	}
-	signature, err := policy.NewSignatureFact(policy.SetAlgorithmRSA, policy.SetStatusPass, policy.SetReasonNone, false, false)
+	signature, err := policy.NewSignatureFact(policy.SetAlgorithmRSA, policy.SetStatusPass, policy.SetReasonNone)
 	if err != nil {
 		t.Fatalf("NewSignatureFact() error = %v", err)
 	}
@@ -627,11 +513,6 @@ func TestPolicyDecisionClonesAndSupportsConcurrentReuse(t *testing.T) {
 			findingState := *got.state.findings[0].state
 			findingState.reason = PolicyReasonProtocolPass
 			got.state.findings[0].state = &findingState
-			return got
-		}(),
-		func() PolicyDecision {
-			got := clonePublicPolicyDecision(decision)
-			got.state.dnsEffective = true
 			return got
 		}(),
 		func() PolicyDecision {

@@ -30,13 +30,13 @@ func TestDecodeKeyAcceptsRSACompatibilityRepresentations(t *testing.T) {
 		{name: "X.509 SubjectPublicKeyInfo", der: spki},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			record := keyDataRecord(KeyTypeRSA, tt.der, newMetadata(true, true))
+			record := keyDataRecord(KeyTypeRSA, tt.der)
 			outcome, decodeErr := DecodeKey(record, AlgorithmRSASHA256)
 			if decodeErr != nil {
 				t.Fatalf("DecodeKey() error = %v", decodeErr)
 			}
-			if outcome.Status() != KeyOutcomeFound || !outcome.Valid() || !outcome.Metadata().TestingDeclared() || !outcome.Metadata().StrictIdentityDeclared() {
-				t.Fatalf("outcome = status %q valid=%v metadata=%#v", outcome.Status(), outcome.Valid(), outcome.Metadata())
+			if outcome.Status() != KeyOutcomeFound || !outcome.Valid() {
+				t.Fatalf("outcome = status %q valid=%v", outcome.Status(), outcome.Valid())
 			}
 			decoded, ok := outcome.Material().(*rsa.PublicKey)
 			if !ok || decoded.N.Cmp(key.N) != 0 || decoded.E != key.E {
@@ -63,7 +63,7 @@ func TestDecodeKeyAcceptsStructurallyValidRSAOutsideCryptoPolicy(t *testing.T) {
 		{name: "above crypto maximum", bits: 8193, exponent: 65537},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			outcome, err := DecodeKey(keyDataRecord(KeyTypeRSA, x509.MarshalPKCS1PublicKey(syntheticRSAKey(test.bits, test.exponent)), newMetadata(false, false)), AlgorithmRSASHA256)
+			outcome, err := DecodeKey(keyDataRecord(KeyTypeRSA, x509.MarshalPKCS1PublicKey(syntheticRSAKey(test.bits, test.exponent))), AlgorithmRSASHA256)
 			if err != nil || outcome.Status() != KeyOutcomeFound || !outcome.Valid() {
 				t.Fatalf("DecodeKey(%d bits, e=%d) status=%s valid=%v error=%v, want found", test.bits, test.exponent, outcome.Status(), outcome.Valid(), err)
 			}
@@ -120,7 +120,7 @@ func TestDecodeKeyRejectsWrongRSAContainersAndShape(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			outcome, decodeErr := DecodeKey(keyDataRecord(KeyTypeRSA, tt.der, newMetadata(false, false)), AlgorithmRSASHA256)
+			outcome, decodeErr := DecodeKey(keyDataRecord(KeyTypeRSA, tt.der), AlgorithmRSASHA256)
 			if decodeErr != nil || outcome.Status() != KeyOutcomeInvalid || !outcome.Valid() || outcome.Material() != nil {
 				t.Fatalf("DecodeKey() = status %q valid=%v material=%T error=%v, want invalid", outcome.Status(), outcome.Valid(), outcome.Material(), decodeErr)
 			}
@@ -131,7 +131,7 @@ func TestDecodeKeyRejectsWrongRSAContainersAndShape(t *testing.T) {
 // TestDecodeKeyAcceptsRawEd25519AndRejectsWrappedOrWrongLength verifies RFC 8463 representation.
 func TestDecodeKeyAcceptsRawEd25519AndRejectsWrappedOrWrongLength(t *testing.T) {
 	raw := bytes.Repeat([]byte{0x42}, ed25519.PublicKeySize)
-	outcome, err := DecodeKey(keyDataRecord(KeyTypeEd25519, raw, newMetadata(false, false)), AlgorithmEd25519SHA256)
+	outcome, err := DecodeKey(keyDataRecord(KeyTypeEd25519, raw), AlgorithmEd25519SHA256)
 	if err != nil || outcome.Status() != KeyOutcomeFound {
 		t.Fatalf("DecodeKey() = %q/%v, want found", outcome.Status(), err)
 	}
@@ -155,7 +155,7 @@ func TestDecodeKeyAcceptsRawEd25519AndRejectsWrappedOrWrongLength(t *testing.T) 
 	}
 	pemPublic := pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: spki})
 	for _, value := range [][]byte{raw[:31], append(bytes.Clone(raw), 0), privateKey, spki, pkcs8, pemPublic} {
-		bad, decodeErr := DecodeKey(keyDataRecord(KeyTypeEd25519, value, newMetadata(false, false)), AlgorithmEd25519SHA256)
+		bad, decodeErr := DecodeKey(keyDataRecord(KeyTypeEd25519, value), AlgorithmEd25519SHA256)
 		if decodeErr != nil || bad.Status() != KeyOutcomeInvalid || bad.Material() != nil {
 			t.Fatalf("DecodeKey(wrong representation len=%d) = %q/%v", len(value), bad.Status(), decodeErr)
 		}
@@ -165,11 +165,11 @@ func TestDecodeKeyAcceptsRawEd25519AndRejectsWrappedOrWrongLength(t *testing.T) 
 // TestKeyOutcomeMaterialSupportsConcurrentCallerMutation verifies per-call detached key copies.
 func TestKeyOutcomeMaterialSupportsConcurrentCallerMutation(t *testing.T) {
 	rsaKey := syntheticRSAKey(1024, 65537)
-	rsaOutcome, err := DecodeKey(keyDataRecord(KeyTypeRSA, x509.MarshalPKCS1PublicKey(rsaKey), newMetadata(false, false)), AlgorithmRSASHA256)
+	rsaOutcome, err := DecodeKey(keyDataRecord(KeyTypeRSA, x509.MarshalPKCS1PublicKey(rsaKey)), AlgorithmRSASHA256)
 	if err != nil {
 		t.Fatalf("DecodeKey(RSA) error = %v", err)
 	}
-	edOutcome, err := DecodeKey(keyDataRecord(KeyTypeEd25519, bytes.Repeat([]byte{0x42}, ed25519.PublicKeySize), newMetadata(false, false)), AlgorithmEd25519SHA256)
+	edOutcome, err := DecodeKey(keyDataRecord(KeyTypeEd25519, bytes.Repeat([]byte{0x42}, ed25519.PublicKeySize)), AlgorithmEd25519SHA256)
 	if err != nil {
 		t.Fatalf("DecodeKey(Ed25519) error = %v", err)
 	}
@@ -200,22 +200,21 @@ func syntheticRSAKey(bits, exponent int) *rsa.PublicKey {
 
 // TestDecodeKeyPreservesClosedNonFoundStatesAndCoherence verifies precedence without decoding.
 func TestDecodeKeyPreservesClosedNonFoundStatesAndCoherence(t *testing.T) {
-	metadata := newMetadata(true, false)
 	tests := []struct {
 		name      string
 		record    Record
 		algorithm Algorithm
 		status    KeyOutcomeStatus
 	}{
-		{name: "revoked decode state", record: Record{draft: DNSDraftIdentifier, status: RecordStatusRevoked, keyType: KeyTypeRSA, metadata: metadata, initialized: true}, algorithm: AlgorithmRSASHA256, status: KeyOutcomeRevoked},
-		{name: "unsupported decode state", record: Record{draft: DNSDraftIdentifier, status: RecordStatusUnsupportedKeyType, keyType: KeyTypeUnsupported, metadata: metadata, initialized: true}, algorithm: AlgorithmRSASHA256, status: KeyOutcomeUnsupportedKeyType},
-		{name: "rsa requested ed", record: keyDataRecord(KeyTypeRSA, []byte("not DER"), metadata), algorithm: AlgorithmEd25519SHA256, status: KeyOutcomeAlgorithmMismatch},
-		{name: "ed requested rsa", record: keyDataRecord(KeyTypeEd25519, []byte("not raw32"), metadata), algorithm: AlgorithmRSASHA256, status: KeyOutcomeAlgorithmMismatch},
+		{name: "revoked decode state", record: Record{draft: DNSDraftIdentifier, status: RecordStatusRevoked, keyType: KeyTypeRSA, initialized: true}, algorithm: AlgorithmRSASHA256, status: KeyOutcomeRevoked},
+		{name: "unsupported decode state", record: Record{draft: DNSDraftIdentifier, status: RecordStatusUnsupportedKeyType, keyType: KeyTypeUnsupported, initialized: true}, algorithm: AlgorithmRSASHA256, status: KeyOutcomeUnsupportedKeyType},
+		{name: "rsa requested ed", record: keyDataRecord(KeyTypeRSA, []byte("not DER")), algorithm: AlgorithmEd25519SHA256, status: KeyOutcomeAlgorithmMismatch},
+		{name: "ed requested rsa", record: keyDataRecord(KeyTypeEd25519, []byte("not raw32")), algorithm: AlgorithmRSASHA256, status: KeyOutcomeAlgorithmMismatch},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			outcome, err := DecodeKey(tt.record, tt.algorithm)
-			if err != nil || outcome.Status() != tt.status || !outcome.Valid() || outcome.Material() != nil || !outcome.Metadata().TestingDeclared() {
+			if err != nil || outcome.Status() != tt.status || !outcome.Valid() || outcome.Material() != nil {
 				t.Fatalf("DecodeKey() = status %q valid=%v material=%T error=%v", outcome.Status(), outcome.Valid(), outcome.Material(), err)
 			}
 		})
@@ -230,7 +229,7 @@ func TestDecodeKeyRejectsUnknownContractsWithoutMaterial(t *testing.T) {
 		algorithm Algorithm
 	}{
 		{name: "zero record", record: Record{}, algorithm: AlgorithmRSASHA256},
-		{name: "unknown requested algorithm", record: keyDataRecord(KeyTypeRSA, []byte("SECRET-MARKER"), newMetadata(false, false)), algorithm: "future-sha999"},
+		{name: "unknown requested algorithm", record: keyDataRecord(KeyTypeRSA, []byte("SECRET-MARKER")), algorithm: "future-sha999"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -246,6 +245,6 @@ func TestDecodeKeyRejectsUnknownContractsWithoutMaterial(t *testing.T) {
 }
 
 // keyDataRecord constructs parser-owned key data for decode-focused tests.
-func keyDataRecord(keyType KeyType, publicKey []byte, metadata Metadata) Record {
-	return Record{draft: DNSDraftIdentifier, status: RecordStatusKeyData, keyType: keyType, publicKey: bytes.Clone(publicKey), metadata: metadata, initialized: true}
+func keyDataRecord(keyType KeyType, publicKey []byte) Record {
+	return Record{draft: DNSDraftIdentifier, status: RecordStatusKeyData, keyType: keyType, publicKey: bytes.Clone(publicKey), initialized: true}
 }

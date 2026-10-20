@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/rsa"
+	"encoding/base64"
 	"errors"
 	"math"
 	"math/big"
@@ -56,7 +57,7 @@ func TestOutcomeCacheAdmitsOnlyStableClosedStates(t *testing.T) {
 	clock := &fakeCacheClock{now: time.Unix(100, 0)}
 	cache := newOutcomeCache(16, clock.Now)
 	for index, status := range []KeyOutcomeStatus{KeyOutcomeFound, KeyOutcomeMissing, KeyOutcomeRevoked, KeyOutcomeInvalid, KeyOutcomeAmbiguous, KeyOutcomeUnsupportedKeyType, KeyOutcomeAlgorithmMismatch} {
-		outcome := newStatusOutcome(status, AlgorithmRSASHA256, newMetadata(false, false))
+		outcome := newStatusOutcome(status, AlgorithmRSASHA256)
 		if status == KeyOutcomeFound {
 			outcome = foundEdOutcome(byte(index))
 		}
@@ -65,7 +66,7 @@ func TestOutcomeCacheAdmitsOnlyStableClosedStates(t *testing.T) {
 		}
 	}
 	for index, status := range []KeyOutcomeStatus{KeyOutcomeTemporary, KeyOutcomePermanent, KeyOutcomeProviderContract} {
-		outcome := newStatusOutcome(status, AlgorithmRSASHA256, newMetadata(false, false))
+		outcome := newStatusOutcome(status, AlgorithmRSASHA256)
 		if cache.put(cacheKey{owner: cacheOwner(byte('x' + index)), algorithm: AlgorithmRSASHA256}, outcome, time.Second) {
 			t.Fatalf("forbidden status %q admitted", status)
 		}
@@ -110,7 +111,7 @@ func TestOutcomeCacheSeparatesAlgorithmsClonesMutationAndRejectsCorruption(t *te
 	edOutcome := foundEdOutcome(0x42)
 	cache.put(edKey, edOutcome, time.Minute)
 	edOutcome.material.(ed25519.PublicKey)[0] = 0x11
-	cache.put(rsaKey, newStatusOutcome(KeyOutcomeMissing, AlgorithmRSASHA256, newMetadata(false, false)), time.Minute)
+	cache.put(rsaKey, newStatusOutcome(KeyOutcomeMissing, AlgorithmRSASHA256), time.Minute)
 	got, hit, corrupt := cache.get(edKey)
 	if !hit || corrupt {
 		t.Fatal("Ed25519 cache miss")
@@ -126,7 +127,7 @@ func TestOutcomeCacheSeparatesAlgorithmsClonesMutationAndRejectsCorruption(t *te
 
 	rsaSource := syntheticRSAKey(1024, 65537)
 	rsaOriginal := new(big.Int).Set(rsaSource.N)
-	rsaOutcome := KeyOutcome{status: KeyOutcomeFound, algorithm: AlgorithmRSASHA256, material: rsaSource, metadata: newMetadata(false, false), initialized: true}
+	rsaOutcome := KeyOutcome{status: KeyOutcomeFound, algorithm: AlgorithmRSASHA256, material: rsaSource, initialized: true}
 	cache.put(rsaKey, rsaOutcome, time.Minute)
 	rsaOutcome.material.(*rsa.PublicKey).N.SetInt64(17)
 	gotRSA, hit, corrupt := cache.get(rsaKey)
@@ -195,18 +196,14 @@ func TestOutcomeCachePutPurgesNilAndExpiredEntriesBeforeEviction(t *testing.T) {
 	}
 }
 
-// TestOutcomeCacheRejectsMalformedKeysAndImpossibleMetadata verifies cache contract admission.
-func TestOutcomeCacheRejectsMalformedKeysAndImpossibleMetadata(t *testing.T) {
+// TestOutcomeCacheRejectsMalformedKeys verifies cache contract admission.
+func TestOutcomeCacheRejectsMalformedKeys(t *testing.T) {
 	clock := &fakeCacheClock{now: time.Unix(100, 0)}
 	cache := newOutcomeCache(4, clock.Now)
 	for _, owner := range []string{"relative", "bad_name._domainkey.example.test.", "a._domainkey." + string(make([]byte, 254)) + "."} {
-		if cache.put(cacheKey{owner: owner, algorithm: AlgorithmRSASHA256}, newStatusOutcome(KeyOutcomeMissing, AlgorithmRSASHA256, newMetadata(false, false)), time.Minute) {
+		if cache.put(cacheKey{owner: owner, algorithm: AlgorithmRSASHA256}, newStatusOutcome(KeyOutcomeMissing, AlgorithmRSASHA256), time.Minute) {
 			t.Fatalf("malformed owner admitted")
 		}
-	}
-	badMetadata := newStatusOutcome(KeyOutcomeMissing, AlgorithmRSASHA256, newMetadata(true, false))
-	if cache.put(cacheKey{owner: cacheOwner('m'), algorithm: AlgorithmRSASHA256}, badMetadata, time.Minute) {
-		t.Fatal("missing outcome with record metadata admitted")
 	}
 }
 
@@ -499,8 +496,8 @@ func cacheAmbiguousLookup(t *testing.T, ttl time.Duration) LookupResult {
 func foundEdOutcome(value byte) KeyOutcome {
 	return KeyOutcome{
 		status: KeyOutcomeFound, algorithm: AlgorithmEd25519SHA256,
-		material: ed25519.PublicKey(bytes.Repeat([]byte{value}, ed25519.PublicKeySize)),
-		metadata: newMetadata(true, true), initialized: true,
+		material:    ed25519.PublicKey(bytes.Repeat([]byte{value}, ed25519.PublicKeySize)),
+		initialized: true,
 	}
 }
 
@@ -517,4 +514,54 @@ func cacheMustMaterial(t *testing.T, cache *outcomeCache, key cacheKey) ed25519.
 // cacheOwner constructs one canonical bounded internal cache owner.
 func cacheOwner(selector byte) string {
 	return string([]byte{selector}) + "._domainkey.example.test."
+}
+
+// TestResolverIgnoresRetiredTestingTagOnCacheMissAndHit verifies DNS-01
+// Section 3.4.1: every t= spelling, including former flags and formerly
+// malformed values, resolves to the same found key as a record without t=,
+// both from transport and from the outcome cache. Generic tag-list violations
+// that involve t= still fail closed as invalid records.
+func TestResolverIgnoresRetiredTestingTagOnCacheMissAndHit(t *testing.T) {
+	edKey := base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{0x24}, ed25519.PublicKeySize))
+	base := "v=DKIM1; k=ed25519; p=" + edKey
+	want := ed25519.PublicKey(bytes.Repeat([]byte{0x24}, ed25519.PublicKeySize))
+	for _, suffix := range []string{"", "; t=y", "; t=s", "; t=y:s", "; t=future-flag:other", "; t=bad!"} {
+		t.Run("suffix "+suffix, func(t *testing.T) {
+			clock := &fakeCacheClock{now: time.Unix(100, 0)}
+			var calls atomic.Int32
+			resolver, err := NewResolver(resolverTransportFunc(func(context.Context, string) (LookupResult, error) {
+				calls.Add(1)
+				return cacheFoundLookup(t, []byte(base+suffix), time.Minute), nil
+			}), DefaultLimits(), WithResolverClock(clock.Now))
+			if err != nil {
+				t.Fatal(err)
+			}
+			for attempt := range 2 {
+				outcome, resolveErr := resolver.Resolve(context.Background(), "example.test", testSelector, AlgorithmEd25519SHA256)
+				if resolveErr != nil || outcome.Status() != KeyOutcomeFound || !outcome.Valid() {
+					t.Fatalf("attempt %d Resolve() = %q/%v", attempt, outcome.Status(), resolveErr)
+				}
+				if got, ok := outcome.Material().(ed25519.PublicKey); !ok || !bytes.Equal(got, want) {
+					t.Fatalf("attempt %d material = %T", attempt, outcome.Material())
+				}
+			}
+			if calls.Load() != 1 {
+				t.Fatalf("cache hit did not serve second resolve: calls = %d", calls.Load())
+			}
+		})
+	}
+	for _, suffix := range []string{"; t=y; t=y", "; t=y; t=s", "; t=y\x01s", "; t=y\x7f"} {
+		t.Run("generic violation", func(t *testing.T) {
+			resolver, err := NewResolver(resolverTransportFunc(func(context.Context, string) (LookupResult, error) {
+				return cacheFoundLookup(t, []byte(base+suffix), time.Minute), nil
+			}), DefaultLimits())
+			if err != nil {
+				t.Fatal(err)
+			}
+			outcome, resolveErr := resolver.Resolve(context.Background(), "example.test", testSelector, AlgorithmEd25519SHA256)
+			if resolveErr != nil || outcome.Status() != KeyOutcomeInvalid || outcome.Material() != nil {
+				t.Fatalf("Resolve() = %q/%v, want invalid", outcome.Status(), resolveErr)
+			}
+		})
+	}
 }

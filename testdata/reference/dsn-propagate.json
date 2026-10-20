@@ -315,7 +315,6 @@
           "mode": "strict",
           "verdict": "accept",
           "primary_reason": "received_dsn_linked",
-          "dns_testing_effective": false,
           "feedback": {
             "requested": false,
             "relay_required": false,

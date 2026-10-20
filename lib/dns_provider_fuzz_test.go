@@ -234,7 +234,7 @@ func publicKeyResultsEqual(left, right PublicKeyResult) bool {
 	rightRSA, rightRSAOK := right.RSAPublicKey()
 	leftEd, leftEdOK := left.Ed25519PublicKey()
 	rightEd, rightEdOK := right.Ed25519PublicKey()
-	return left.Status() == right.Status() && left.Algorithm() == right.Algorithm() && left.KeyPolicyMetadata() == right.KeyPolicyMetadata() &&
+	return left.Status() == right.Status() && left.Algorithm() == right.Algorithm() &&
 		leftRSAOK == rightRSAOK && leftEdOK == rightEdOK && reflect.DeepEqual(leftRSA, rightRSA) && bytes.Equal(leftEd, rightEd) && left.IsZero() == right.IsZero()
 }
 

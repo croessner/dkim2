@@ -58,7 +58,7 @@ func TestDraft07ProtocolInfractionsMapToDistinctPermanentReasons(t *testing.T) {
 // TestRevisionProofFailuresRetainSelectedPolicyAuthority covers every closed history failure outcome.
 func TestRevisionProofFailuresRetainSelectedPolicyAuthority(t *testing.T) {
 	passFact := SignatureSetFact{Algorithm: AlgorithmRSASHA256, Status: SignaturePASS, Reason: ReasonNone}
-	policyFact, err := policy.NewSignatureFact(policy.SetAlgorithmRSA, policy.SetStatusPass, policy.SetReasonNone, false, false)
+	policyFact, err := policy.NewSignatureFact(policy.SetAlgorithmRSA, policy.SetStatusPass, policy.SetReasonNone)
 	if err != nil {
 		t.Fatalf("policy.NewSignatureFact() error = %v", err)
 	}

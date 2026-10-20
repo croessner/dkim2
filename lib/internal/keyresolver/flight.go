@@ -122,7 +122,7 @@ func (g *flightGroup) run(ctx context.Context, key cacheKey, flight *resolverFli
 	g.pruneCanceledWaitersLocked(flight)
 	// This liveness and identity check is the cache-publication linearization point.
 	if ctx.Err() != nil || g.flights[key] != flight || len(flight.waiterCtx) == 0 {
-		result = flightResult{outcome: newStatusOutcome(KeyOutcomeTemporary, key.algorithm, newMetadata(false, false))}
+		result = flightResult{outcome: newStatusOutcome(KeyOutcomeTemporary, key.algorithm)}
 	} else if prepared {
 		g.publication.cache.commitAdmission(admission)
 	}

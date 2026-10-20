@@ -28,7 +28,7 @@ func TestDNSProviderDiagnosticsDiscardToxicMatrix(t *testing.T) {
 		newPublicKeyQuery("example.test", "selector", AlgorithmRSASHA256),
 	} {
 		result, lookupErr := provider.LookupPublicKey(context.Background(), query)
-		assertPublicDNSMarkerAbsent(t, marker, fmt.Sprintf("%v %#v %v %v", lookupErr, result, result.Status(), result.KeyPolicyMetadata()))
+		assertPublicDNSMarkerAbsent(t, marker, fmt.Sprintf("%v %#v %v", lookupErr, result, result.Status()))
 	}
 
 	for _, record := range []string{
@@ -47,7 +47,7 @@ func TestDNSProviderDiagnosticsDiscardToxicMatrix(t *testing.T) {
 			t.Fatal("toxic record provider construction failed")
 		}
 		result, caseErr := caseProvider.LookupPublicKey(context.Background(), newPublicKeyQuery("example.test", "selector", AlgorithmRSASHA256))
-		assertPublicDNSMarkerAbsent(t, marker, fmt.Sprintf("%v %#v %v %v", caseErr, result, result.Status(), result.KeyPolicyMetadata()))
+		assertPublicDNSMarkerAbsent(t, marker, fmt.Sprintf("%v %#v %v", caseErr, result, result.Status()))
 	}
 
 	const cacheMarker = "public-dns-toxic-cache-key"
@@ -76,7 +76,7 @@ func TestDNSProviderDiagnosticsDiscardToxicMatrix(t *testing.T) {
 		if caseErr != nil || result.Status() != PublicKeyStatusInvalid {
 			t.Fatal("valid Base64 toxic key bytes did not fail as structured invalid state")
 		}
-		formatted := fmt.Sprintf("%v %#v %v %v", caseErr, result, result.Status(), result.KeyPolicyMetadata())
+		formatted := fmt.Sprintf("%v %#v %v", caseErr, result, result.Status())
 		assertPublicDNSMarkerAbsent(t, cacheMarker, formatted)
 		assertPublicDNSMarkerAbsent(t, encodedMarker, formatted)
 	}
@@ -85,7 +85,7 @@ func TestDNSProviderDiagnosticsDiscardToxicMatrix(t *testing.T) {
 	}
 }
 
-// TestDNSProviderConcurrentMutationIsolation verifies detached TXT, key, metadata, cache, and result storage.
+// TestDNSProviderConcurrentMutationIsolation verifies detached TXT, key, cache, and result storage.
 func TestDNSProviderConcurrentMutationIsolation(t *testing.T) {
 	corpus := loadPublicGoldenCorpus(t)
 	manifest := loadDNSGoldenManifest(t, corpus)
@@ -134,8 +134,7 @@ func TestDNSProviderConcurrentMutationIsolation(t *testing.T) {
 					{query: newPublicKeyQuery("example.test", "ed.test", AlgorithmEd25519SHA256), lookup: edLookup},
 				} {
 					result, lookupErr := provider.LookupPublicKey(context.Background(), tt.query)
-					metadata := result.KeyPolicyMetadata()
-					if lookupErr != nil || result.Status() != PublicKeyStatusFound || !metadata.TestingDeclared() || !metadata.StrictIdentityDeclared() || metadata.StrictIdentityApplicable() {
+					if lookupErr != nil || result.Status() != PublicKeyStatusFound {
 						t.Error("concurrent DNS result lost immutable facts")
 						return
 					}

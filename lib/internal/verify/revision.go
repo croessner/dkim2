@@ -223,7 +223,6 @@ type RevisionProof struct {
 	facts       RevisionFacts
 	replay      ReplayProjection
 	verifier    VerifierProjection
-	policy      TimestampPolicy
 	initialized bool
 }
 
@@ -233,14 +232,13 @@ type RevisionProof struct {
 // initialize or alter its timestamp or policy binding.
 type RevisionInstant struct {
 	now         time.Time
-	policy      TimestampPolicy
 	owner       *revisionInstantOwner
 	initialized bool
 }
 
 // Valid reports whether the instant was captured under the fixed revision policy.
 func (i RevisionInstant) Valid() bool {
-	return i.initialized && i.owner != nil && revisionTimestampPolicySafe(i.policy) && revisionClockInstantSafe(i.now)
+	return i.initialized && i.owner != nil && revisionClockInstantSafe(i.now)
 }
 
 // UnixSeconds returns the exact nonnegative operation timestamp.
@@ -252,19 +250,20 @@ func (i RevisionInstant) UnixSeconds() uint64 {
 }
 
 // WithinSkewOf reports whether i was captured by the same verifier as
-// reference under the same policy and lies within the policy's future
-// tolerance of reference in either direction. It lets a signing plan accept
+// reference and lies within the fixed five-minute operation skew of reference
+// in either direction. The skew is independent of the Draft-07 signature
+// timestamp windows. It lets a signing plan accept
 // a caller-supplied instant, such as the one a report was rendered at, only
 // when it is bounded by a fresh capture of the same clock.
 func (i RevisionInstant) WithinSkewOf(reference RevisionInstant) bool {
-	if !i.Valid() || !reference.Valid() || i.owner != reference.owner || i.policy != reference.policy {
+	if !i.Valid() || !reference.Valid() || i.owner != reference.owner {
 		return false
 	}
 	difference := i.now.Sub(reference.now)
 	if difference < 0 {
 		difference = -difference
 	}
-	return difference <= i.policy.FutureTolerance
+	return difference <= revisionInstantSkew
 }
 
 // Time returns the exact immutable captured instant to trusted internal consumers.
@@ -281,7 +280,7 @@ func (p RevisionProof) IsZero() bool { return reflect.ValueOf(p).IsZero() }
 // Valid reports whether proof is one of the two clean all-hop states.
 func (p RevisionProof) Valid() bool {
 	if !p.initialized || (p.state != RevisionProofVerified && p.state != RevisionProofTerminalNextDomainAuthorizationRequired) ||
-		p.draft != DraftBaseline || !p.facts.Valid() || !revisionTimestampPolicySafe(p.policy) {
+		p.draft != DraftBaseline || !p.facts.Valid() {
 		return false
 	}
 	terminal := p.state == RevisionProofTerminalNextDomainAuthorizationRequired
@@ -340,7 +339,7 @@ func (p RevisionProof) Format(state fmt.State, _ rune) { _, _ = io.WriteString(s
 
 // VerifyRevisionProof verifies every inherited signature and all authenticated history without using Result.
 func (v Verifier) VerifyRevisionProof(ctx context.Context, request Request) (RevisionProofOutcome, RevisionProof, error) {
-	if ctx == nil || !request.Message.Initialized() || request.TargetSequence != 0 || request.SkipEnvelopeForNonCurrentTarget || !v.valid() || !revisionTimestampPolicySafe(v.options.TimestampPolicy) {
+	if ctx == nil || !request.Message.Initialized() || request.TargetSequence != 0 || request.SkipEnvelopeForNonCurrentTarget || !v.valid() {
 		return "", RevisionProof{}, newError(ErrorCodeInternalMisuse, ErrorLocation{}, ErrorDetails{Class: ErrorClassInternal}, nil)
 	}
 	if err := ctx.Err(); err != nil {
@@ -371,14 +370,14 @@ func (v Verifier) VerifyRevisionProofAfterCurrent(ctx context.Context, request R
 
 // CaptureRevisionInstant captures one representable nonnegative operation time.
 func (v Verifier) CaptureRevisionInstant() (RevisionInstant, error) {
-	if !v.valid() || !revisionTimestampPolicySafe(v.options.TimestampPolicy) {
+	if !v.valid() {
 		return RevisionInstant{}, newError(ErrorCodeInternalMisuse, ErrorLocation{}, ErrorDetails{Class: ErrorClassInternal}, nil)
 	}
 	now, err := captureRevisionClock(v.options.Clock)
 	if err != nil {
 		return RevisionInstant{}, err
 	}
-	return RevisionInstant{now: now, policy: v.options.TimestampPolicy, owner: v.revisionOwner, initialized: true}, nil
+	return RevisionInstant{now: now, owner: v.revisionOwner, initialized: true}, nil
 }
 
 // VerifyRevisionProofAt verifies inherited proof at one verifier-owned instant.
@@ -393,7 +392,7 @@ func (v Verifier) VerifyRevisionProofAt(ctx context.Context, request Request, in
 // PrepareRevisionProofAt performs all provider-free revision work at one operation instant.
 func (v Verifier) PrepareRevisionProofAt(ctx context.Context, request Request, instant RevisionInstant) (RevisionProofOutcome, PreparedRevisionProof, error) {
 	if ctx == nil || !request.Message.Initialized() || request.TargetSequence != 0 || request.SkipEnvelopeForNonCurrentTarget || !v.valid() ||
-		!instant.Valid() || instant.policy != v.options.TimestampPolicy || instant.owner != v.revisionOwner {
+		!instant.Valid() || instant.owner != v.revisionOwner {
 		return "", PreparedRevisionProof{}, newError(ErrorCodeInternalMisuse, ErrorLocation{}, ErrorDetails{Class: ErrorClassInternal}, nil)
 	}
 	if err := ctx.Err(); err != nil {
@@ -508,14 +507,9 @@ func revisionSetsFromCurrent(current Result, count int) ([]RevisionSetFact, bool
 	return result, passes > 0
 }
 
-// revisionTimestampPolicySafe enforces exact 14-day age and non-widened future tolerance.
-func revisionTimestampPolicySafe(policy TimestampPolicy) bool {
-	return policy.Validate() == nil && policy == DefaultTimestampPolicy()
-}
-
 // RevalidateRevisionProof rechecks every inherited timestamp against one newly captured clock.
 func (v Verifier) RevalidateRevisionProof(ctx context.Context, proof RevisionProof) (RevisionProofRevalidation, error) {
-	if ctx == nil || !v.valid() || !proof.Valid() || proof.policy != v.options.TimestampPolicy {
+	if ctx == nil || !v.valid() || !proof.Valid() {
 		return "", newError(ErrorCodeInternalMisuse, ErrorLocation{}, ErrorDetails{Class: ErrorClassInternal}, nil)
 	}
 	if err := ctx.Err(); err != nil {
@@ -530,15 +524,15 @@ func (v Verifier) RevalidateRevisionProof(ctx context.Context, proof RevisionPro
 
 // RevalidateRevisionProofAt rechecks inherited timestamps at one verifier-owned instant.
 func (v Verifier) RevalidateRevisionProofAt(ctx context.Context, proof RevisionProof, instant RevisionInstant) (RevisionProofRevalidation, error) {
-	if ctx == nil || !v.valid() || !proof.Valid() || proof.policy != v.options.TimestampPolicy ||
-		!instant.Valid() || instant.policy != v.options.TimestampPolicy || instant.owner != v.revisionOwner {
+	if ctx == nil || !v.valid() || !proof.Valid() ||
+		!instant.Valid() || instant.owner != v.revisionOwner {
 		return "", newError(ErrorCodeInternalMisuse, ErrorLocation{}, ErrorDetails{Class: ErrorClassInternal}, nil)
 	}
 	if err := ctx.Err(); err != nil {
 		return "", err
 	}
 	for _, fact := range proof.facts.signatures {
-		if timestampStatusAt(instant.now, fact.timestamp, proof.policy) != TimestampStatusPass {
+		if timestampStatusAt(instant.now, fact.timestamp) != TimestampStatusPass {
 			return RevisionProofTimestampInvalid, nil
 		}
 	}
@@ -662,7 +656,7 @@ func (v Verifier) completePreparedRevisionProof(input verificationInput, base re
 	}
 	var replayProjection ReplayProjection
 	if base.hasOriginDigest {
-		replayProjection = newReplayProjection(base.originDigest, exploded)
+		replayProjection = newReplayProjection(base.originDigest, exploded, len(input.signatures) > 1)
 	}
 	verifierProjection, hasVerifierProjection := v.buildVerifierProjection(input, base, signatures)
 	if proofState == RevisionProofVerified && !hasVerifierProjection {
@@ -671,7 +665,7 @@ func (v Verifier) completePreparedRevisionProof(input verificationInput, base re
 	if proofState != RevisionProofVerified {
 		verifierProjection = VerifierProjection{}
 	}
-	proof := RevisionProof{state: proofState, draft: DraftBaseline, facts: facts, replay: replayProjection, verifier: verifierProjection, policy: v.options.TimestampPolicy, initialized: true}
+	proof := RevisionProof{state: proofState, draft: DraftBaseline, facts: facts, replay: replayProjection, verifier: verifierProjection, initialized: true}
 	if !proof.Valid() {
 		return "", RevisionProof{}, newError(ErrorCodeInternalMisuse, ErrorLocation{}, ErrorDetails{Class: ErrorClassInternal}, nil)
 	}
@@ -753,22 +747,16 @@ func (v Verifier) verifyRevisionBase(ctx context.Context, input verificationInpu
 		return revisionBaseProof{}, RevisionProofLimitExceeded, nil
 	}
 	canonicalWork += walk.Usage().CanonicalBytes()
-	originMessage := input.request.Message
-	if target.InstanceNumber > 1 {
-		transitions := walk.Transitions()
-		if len(transitions) != int(target.InstanceNumber-1) {
-			return revisionBaseProof{highestSignature: highestSignature, highestInstance: highestInstance, custody: custody, history: walk, canonicalWork: canonicalWork, currentCanonicalWork: currentCanonicalWork, hashes: hashFacts}, "", nil
-		}
-		state, ok := transitions[len(transitions)-1].ReconstructedState()
-		if !ok {
-			return revisionBaseProof{highestSignature: highestSignature, highestInstance: highestInstance, custody: custody, history: walk, canonicalWork: canonicalWork, currentCanonicalWork: currentCanonicalWork, hashes: hashFacts}, "", nil
-		}
-		originMessage, err = state.Materialize()
-		if err != nil {
-			return revisionBaseProof{highestSignature: highestSignature, highestInstance: highestInstance, custody: custody, history: walk, canonicalWork: canonicalWork, currentCanonicalWork: currentCanonicalWork, hashes: hashFacts}, "", nil
-		}
+	// The replay identity is the m=1 hash declaration set, which the complete
+	// authenticated walk proved against the reconstructed origin state.
+	if target.InstanceNumber > 1 && len(walk.Transitions()) != int(target.InstanceNumber-1) {
+		return revisionBaseProof{highestSignature: highestSignature, highestInstance: highestInstance, custody: custody, history: walk, canonicalWork: canonicalWork, currentCanonicalWork: currentCanonicalWork, hashes: hashFacts}, "", nil
 	}
-	originDigest, ok := originReplayDigest(originMessage)
+	origin, err := instanceByNumber(input.instances, 1)
+	if err != nil {
+		return revisionBaseProof{highestSignature: highestSignature, highestInstance: highestInstance, custody: custody, history: walk, canonicalWork: canonicalWork, currentCanonicalWork: currentCanonicalWork, hashes: hashFacts}, "", nil
+	}
+	originDigest, ok := originReplayDigest(origin)
 	if !ok {
 		return revisionBaseProof{highestSignature: highestSignature, highestInstance: highestInstance, custody: custody, history: walk, canonicalWork: canonicalWork, currentCanonicalWork: currentCanonicalWork, hashes: hashFacts}, "", nil
 	}
@@ -815,7 +803,7 @@ func (v Verifier) preflightRevisionSignatures(ctx context.Context, input verific
 			return revisionSignatureProof{}, nil, RevisionProofProtocolRejected, nil
 		}
 		timestamp := parsed.TimestampSeconds()
-		if timestampStatusAt(now, timestamp, v.options.TimestampPolicy) != TimestampStatusPass {
+		if timestampStatusAt(now, timestamp) != TimestampStatusPass {
 			return revisionSignatureProof{}, nil, RevisionProofProtocolRejected, nil
 		}
 		parsedFlags := parsed.Flags()
@@ -1091,7 +1079,7 @@ func captureRevisionClock(clock Clock) (now time.Time, err error) {
 	if seconds < 0 || !time.Unix(seconds, int64(now.Nanosecond())).Equal(now) {
 		return time.Time{}, newError(ErrorCodeInternalMisuse, ErrorLocation{}, ErrorDetails{Class: ErrorClassInternal}, nil)
 	}
-	if _, ok := safeAddDuration(now, defaultFutureTolerance); !ok {
+	if _, ok := safeAddDuration(now, signatureFutureTolerance); !ok {
 		return time.Time{}, newError(ErrorCodeInternalMisuse, ErrorLocation{}, ErrorDetails{Class: ErrorClassInternal}, nil)
 	}
 	return now, nil
@@ -1103,6 +1091,6 @@ func revisionClockInstantSafe(now time.Time) bool {
 	if seconds < 0 || !time.Unix(seconds, int64(now.Nanosecond())).Equal(now) {
 		return false
 	}
-	_, ok := safeAddDuration(now, defaultFutureTolerance)
+	_, ok := safeAddDuration(now, signatureFutureTolerance)
 	return ok
 }

@@ -181,7 +181,7 @@ func TestResolverDiagnosticsDiscardDNSToxicMatrix(t *testing.T) {
 		{domain: testSigningDomain, selector: testSelector},
 	} {
 		outcome, resolveErr := resolver.Resolve(context.Background(), query.domain, query.selector, AlgorithmRSASHA256)
-		assertResolverMarkerAbsent(t, marker, fmt.Sprintf("%v %#v %v", resolveErr, outcome, outcome.Metadata()))
+		assertResolverMarkerAbsent(t, marker, fmt.Sprintf("%v %#v", resolveErr, outcome))
 	}
 
 	for _, record := range []string{
@@ -192,7 +192,7 @@ func TestResolverDiagnosticsDiscardDNSToxicMatrix(t *testing.T) {
 		"p=" + marker,
 	} {
 		parsed, parseErr := ParseRecord([]byte(record), limits)
-		assertResolverMarkerAbsent(t, marker, fmt.Sprintf("%v %#v %v", parseErr, parsed, parsed.Metadata()))
+		assertResolverMarkerAbsent(t, marker, fmt.Sprintf("%v %#v", parseErr, parsed))
 	}
 
 	const cacheMarker = "dns-toxic-cache-key"
@@ -207,7 +207,7 @@ func TestResolverDiagnosticsDiscardDNSToxicMatrix(t *testing.T) {
 	}
 	for range 2 {
 		outcome, resolveErr := cacheResolver.Resolve(context.Background(), testSigningDomain, cacheMarker, AlgorithmRSASHA256)
-		formatted := fmt.Sprintf("%v %#v %v", resolveErr, outcome, outcome.Metadata())
+		formatted := fmt.Sprintf("%v %#v", resolveErr, outcome)
 		assertResolverMarkerAbsent(t, cacheMarker, formatted)
 		assertResolverMarkerAbsent(t, encodedMarker, formatted)
 	}

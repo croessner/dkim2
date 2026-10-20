@@ -33,10 +33,7 @@ func TestVerifierObservationBridgeEmitsDNSAndVerify(t *testing.T) {
 	collector := &observationCollector{}
 	verifier, err := NewVerifier(
 		publicProviderFunc(func(context.Context, PublicKeyQuery) (PublicKeyResult, error) {
-			providerResult := withKeyPolicyMetadata(
-				FoundEd25519PublicKey(publicKey),
-				newKeyPolicyMetadata(true, true),
-			)
+			providerResult := FoundEd25519PublicKey(publicKey)
 			publicKey[0] ^= 0xff
 			return providerResult, nil
 		}),

@@ -178,7 +178,7 @@ func validProcess(value generated.ProcessResponse, authservID string) bool {
 // validProcessMatrix preserves replay and policy coordinator semantics.
 func validProcessMatrix(value generated.ProcessResponse) bool {
 	switch value.Replay.Class {
-	case generated.Disabled, generated.FirstSeen, generated.Exploded:
+	case generated.Disabled, generated.FirstSeen, generated.Exploded, generated.NotEligible:
 		return value.Verification.State == generated.PASS &&
 			value.Authentication.State == generated.PASS &&
 			value.Authentication.PrimaryReason == generated.AuthenticationResultPrimaryReasonNone &&
@@ -231,7 +231,7 @@ func validVerification(value generated.VerificationResult) bool {
 	}
 	for _, signature := range value.SignatureSets {
 		if !signature.Algorithm.Valid() || !signature.Status.Valid() ||
-			!signature.Reason.Valid() || bool(signature.KeyPolicy.StrictIdentityApplicable) ||
+			!signature.Reason.Valid() ||
 			!validSignatureSelector(signature.Status, signature.Selector) {
 			return false
 		}
@@ -308,7 +308,7 @@ func requiredProcessMembers(body []byte) bool {
 		}
 	}
 	policy, ok := requiredObject(
-		document["policy"], "dns_testing_effective", "feedback", "findings", "mode",
+		document["policy"], "feedback", "findings", "mode",
 		"primary_reason", "verdict",
 	)
 	if !ok {
@@ -325,7 +325,7 @@ func requiredProcessMembers(body []byte) bool {
 	return replayOK
 }
 
-// requiredSignatureSetMembers proves every signature set and key-policy shape.
+// requiredSignatureSetMembers proves every signature set shape.
 func requiredSignatureSetMembers(data []byte) bool {
 	var signatures []json.RawMessage
 	if json.Unmarshal(data, &signatures) != nil || signatures == nil {
@@ -333,15 +333,9 @@ func requiredSignatureSetMembers(data []byte) bool {
 	}
 	for _, signature := range signatures {
 		fields, ok := requiredObject(
-			signature, "algorithm", "key_policy", "reason", "status",
+			signature, "algorithm", "reason", "status",
 		)
 		if !ok || !validOptionalJSONMember(fields, "selector") {
-			return false
-		}
-		if _, ok = requiredObject(
-			fields["key_policy"],
-			"strict_identity_applicable", "strict_identity_declared", "testing_declared",
-		); !ok {
 			return false
 		}
 	}

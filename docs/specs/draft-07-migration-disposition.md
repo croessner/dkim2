@@ -313,3 +313,61 @@ Open follow-ups owned by later packages:
   wrong-digest Ed25519 half, wrong digest sizes, wrong key types, and an
   end-to-end composite DKIM2 message through the verifier. `rsa-sha1`-only
   signature sets never PASS.
+
+## 12. Package 6 state
+
+- Time windows (Section 14.3): signature age (14 days) and future tolerance
+  (one day) are protocol constants checked on every DKIM2-Signature against
+  the request reference instant (explicit `ReferenceTime`, otherwise the
+  verifier clock). A failure is attributed to the lowest offending `i=`. The
+  former configurable `TimestampPolicy` is gone. The revision and signing
+  instant skew is a separate fixed five-minute constant.
+- DNS `t=` (DNS-01 Section 3.4.1): retired. Typed `t=y`/`t=s` parsing, cache
+  admission rules, testing-only PASS overrides, the public `KeyPolicyMetadata`
+  and DNS-testing APIs, and the OpenAPI `key_policy`/`dns_testing` members are
+  removed. DKIM2-ISSUE-0013 is superseded. The separately configured local
+  testing policy mode is unchanged.
+- Section 14 reasons: a message without DKIM2 header fields is PERMERROR
+  `missing_protocol` for explicit verification, while `/v1/process` keeps its
+  no-op. More than one key TXT record is PERMERROR `ambiguous_key` (Section
+  14.5). A Recipe the verifier will not process for complexity reports
+  `limit_exceeded`, never `invalid_recipe_json`. Expired and future
+  timestamps share `timestamp_invalid`, and the timestamp check carries the
+  distinguishing status.
+- Replay (Section 15.1, local policy): replay detection is delivery policy
+  layered over validity. A detected replay sets the `AuthenticationResult` to
+  `FAIL duplicate_message_without_exploded`, while the `VerifyResult` stays
+  `PASS`.
+  - Identity: the authenticated `m=1` hash declarations (SHA-256 pair,
+    otherwise SHA-512 pair), framed as `dkim2-replay-origin-declaration-v1`,
+    replace the reconstructed origin bytes. A `"b":null` Recipe therefore no
+    longer yields `replay_evidence_unavailable`. Body-only equality was
+    rejected because it merges distinct originals that share a body.
+  - Eligibility: only messages with more than one DKIM2-Signature are counted.
+    A direct `i=1`-only delivery, including every DSN singleton, reports the
+    new replay class `not_eligible` with no store command, both in the
+    library authenticator and in the daemon coordinator. The class is added to
+    the OpenAPI enum, the daemon outcome and telemetry allowlists, the Milter,
+    Exim, dkim2ctl, and rspamd coherence checks, and the rspamd symbol
+    `DKIM2_REPLAY_NOT_ELIGIBLE`. `not_checked` beside PASS/accept stays
+    incoherent everywhere. DSN propagation coordinates keep using the same
+    identity regardless of eligibility.
+  - Exploded: an authenticated flag on any chain signature remains a policy
+    input.
+  - Operators: the frame change and draft identifier rotate the replay
+    identity space through the existing drain-only epoch procedure. The
+    68-byte key grammar, namespace, ACLs, and store commands are unchanged.
+- Known limitation: no REST member carries a delivery instant, so
+  `/v1/verify` of a stored message evaluates Section 14.3 against the daemon
+  clock and an old message fails closed with `timestamp_invalid`. Only library
+  callers can pass `ReferenceTime`. An explicit offline delivery instant on the
+  wire is tracked for the migration notes.
+- Breaking public Go API removals: `KeyPolicyMetadata`, the DNS-testing
+  accessors, and the timestamp-policy option. They are listed for the
+  migration notes.
+- Evidence: declaration golden frame and digest, equality across Recipes and
+  base64 folding, SHA-256-only/mixed grouping, SHA-512-only separation,
+  changed-header separation, the null-body revision reproducer, direct
+  deliveries not counted, forwarded first-seen/replayed/exploded and store
+  ambiguity cases (library and daemon), and the updated wire matrix and
+  dkim2ctl fixtures.

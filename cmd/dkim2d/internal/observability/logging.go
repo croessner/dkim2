@@ -45,6 +45,7 @@ const (
 	valueNone          = "none"
 	valueNeutral       = "neutral"
 	valueNotChecked    = "not_checked"
+	valueNotEligible   = "not_eligible"
 	valueNotUsed       = "not_used"
 	valuePolicy        = "policy"
 	valuePanic         = "panic"
@@ -138,7 +139,7 @@ var allowedLogValues = map[string][]string{
 	keyProvider:              {"flat_file", "memory", "ldap", "postgresql", "mysql"},
 	keyProviderState:         {"initializing", "ready", "degraded", "closed"},
 	keyReasonClass:           {valueNone, valueProtocol, valuePolicy, valueAvailability, "invalid_request", keyMethod, valueInternal},
-	keyReplayState:           {valueNotChecked, valueDisabled, valueFirstSeen, valueReplayed, valueIndeterminate},
+	keyReplayState:           {valueNotChecked, valueNotEligible, valueDisabled, valueFirstSeen, valueReplayed, valueIndeterminate},
 	"replay_store_result":    {"not_used", valueSuccess, valueTemporary, valueInternal},
 	keyResult:                {valueSuccess, valueFailure, valueTemporary, valueInternal, "ok", valuePermanent, valueAccept, valueReject, "discard", valueTempfail, "not_applicable"},
 	"route":                  {"/healthz", "/readyz", "/metrics", "/v1/process", "/v1/sign", "/v1/revise", "/v1/revise/batch", "/v1/revise/batch/capabilities", "/v1/dsn/sign", "/v1/dsn/propagate", "/v1/dsn/propagate/commit", valueUnmatched},

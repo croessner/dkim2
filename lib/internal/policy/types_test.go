@@ -41,7 +41,7 @@ func TestClosedVocabularies(t *testing.T) {
 func TestPolicyReasonVocabulary(t *testing.T) {
 	expected := []PolicyReason{
 		"invalid_input", "limit_exceeded", "internal_contract", "protocol_pass", "protocol_fail", "protocol_permerror", "protocol_temperror",
-		"permissive_override", "testing_mode_observe", "dns_testing_effective", "dns_testing_mixed", "dns_testing_ineligible",
+		"permissive_override", "testing_mode_observe",
 		"feedback_requested", "feedback_relay_selected", "feedhere_inert", "exploded_reported",
 		"received_dsn_outer_policy", "received_dsn_structure_invalid", "received_dsn_embedded_unverified",
 		"received_dsn_embedded_absent", "received_dsn_temporary_failure", "received_dsn_tenant_unavailable",
@@ -52,7 +52,6 @@ func TestPolicyReasonVocabulary(t *testing.T) {
 		ReasonInvalidInput, ReasonLimitExceeded, ReasonInternalContract,
 		ReasonProtocolPass, ReasonProtocolFail, ReasonProtocolPermerror, ReasonProtocolTemperror,
 		ReasonPermissiveOverride, ReasonTestingModeObserve,
-		ReasonDNSTestingEffective, ReasonDNSTestingMixed, ReasonDNSTestingIneligible,
 		ReasonFeedbackRequested, ReasonFeedbackRelaySelected,
 		ReasonFeedHereInert, ReasonExplodedReported,
 		ReasonReceivedDSNOuterPolicy, ReasonReceivedDSNStructureInvalid, ReasonReceivedDSNEmbeddedUnverified,
@@ -73,8 +72,8 @@ func TestPolicyReasonVocabulary(t *testing.T) {
 		}
 		seen[reason] = struct{}{}
 	}
-	if len(actual) != 26 {
-		t.Fatalf("reason count = %d, want 26", len(actual))
+	if len(actual) != 23 {
+		t.Fatalf("reason count = %d, want 23", len(actual))
 	}
 	if PolicyReason("").Known() || PolicyReason("future").Known() {
 		t.Fatal("unknown policy reason accepted")
@@ -96,7 +95,6 @@ func TestFindingSequenceContract(t *testing.T) {
 	for _, reason := range []PolicyReason{
 		ReasonProtocolPass, ReasonProtocolFail, ReasonProtocolPermerror, ReasonProtocolTemperror,
 		ReasonPermissiveOverride, ReasonTestingModeObserve,
-		ReasonDNSTestingEffective, ReasonDNSTestingMixed, ReasonDNSTestingIneligible,
 		ReasonReceivedDSNOuterPolicy, ReasonReceivedDSNStructureInvalid, ReasonReceivedDSNEmbeddedUnverified,
 		ReasonReceivedDSNEmbeddedAbsent, ReasonReceivedDSNTemporaryFailure, ReasonReceivedDSNTenantUnavailable,
 		ReasonReceivedDSNIdentityMismatch, ReasonReceivedDSNNotLocal, ReasonReceivedDSNRecipientUnlinked,
@@ -152,9 +150,6 @@ func TestPolicyReasonSeverityMatrix(t *testing.T) {
 		{ReasonProtocolTemperror, SeverityTemporary},
 		{ReasonPermissiveOverride, SeverityWarning},
 		{ReasonTestingModeObserve, SeverityWarning},
-		{ReasonDNSTestingEffective, SeverityWarning},
-		{ReasonDNSTestingMixed, SeverityWarning},
-		{ReasonDNSTestingIneligible, SeverityWarning},
 		{ReasonFeedbackRequested, SeverityInfo},
 		{ReasonFeedbackRelaySelected, SeverityInfo},
 		{ReasonFeedHereInert, SeverityInfo},
@@ -170,8 +165,8 @@ func TestPolicyReasonSeverityMatrix(t *testing.T) {
 		{ReasonReceivedDSNRecipientUnlinked, SeverityPermanent},
 		{ReasonReceivedDSNLinked, SeverityInfo},
 	}
-	if len(tests) != 26 {
-		t.Fatalf("severity row count = %d, want 26", len(tests))
+	if len(tests) != 23 {
+		t.Fatalf("severity row count = %d, want 23", len(tests))
 	}
 	for _, tt := range tests {
 		if got := severityForReason(tt.reason); got != tt.severity {

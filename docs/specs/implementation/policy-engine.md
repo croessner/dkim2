@@ -24,6 +24,29 @@ Sections below that describe `donotmodify` or `donotexplode` evaluation,
 compliance states, or violation matrices are the historical Draft-04 record
 and no longer describe implemented behavior.
 
+## DNS-01 Testing Tag Retirement
+
+`draft-ietf-dkim-dkim2-dns-01` Section 3.4.1 retires the DNS key-record `t=`
+tag and says it SHOULD be ignored; its historical `t=y` (testing) and `t=s`
+(strict identity) meanings now concern DKIM1 only. The current policy engine
+therefore:
+
+- receives no DNS testing or strict-identity fact: signature-set facts carry
+  only algorithm, status, and reason;
+- has no DNS testing eligibility matrix, no DNS-testing verdict override, and
+  no suppression of authenticated flags, feedback intent, or exploded reports
+  for a testing signer;
+- has no `dns_testing_effective`, `dns_testing_mixed`, or
+  `dns_testing_ineligible` reasons and no `DNSTestingEffective` decision
+  accessor; and
+- keeps the explicitly configured local `testing` policy mode and its
+  `testing_mode_observe` reason unchanged. That mode is operator policy and
+  was never derived from DNS.
+
+Sections below that describe DNS `t=y` treatment, DNS testing findings, the
+DNS testing eligibility matrix, or DNS `t=s` are the historical record and no
+longer describe implemented behavior.
+
 ## Status
 
 - Increment: local policy evaluation after current DKIM2 verification and DNS
@@ -566,7 +589,7 @@ An indeterminate or not-evaluated check never becomes a violation and never
 becomes proof of honor. It adds a bounded finding but leaves the base matrix in
 control.
 
-### DNS Testing Eligibility And Matrix
+### DNS Testing Eligibility And Matrix (Historical, Removed By DNS-01 `t=` Retirement)
 
 Effective DNS testing is computed from the sealed complete pre-retention set
 facts, never from the optionally narrowed public `SignatureSets()` accessor.

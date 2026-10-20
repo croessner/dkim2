@@ -897,15 +897,9 @@ func validVerificationMembers(data []byte) bool {
 	for _, signature := range signatures {
 		fields, valid := requiredJSONObject(
 			signature,
-			"algorithm", "key_policy", "reason", "status",
+			"algorithm", "reason", "status",
 		)
 		if !valid || !validOptionalJSONMember(fields, "selector") {
-			return false
-		}
-		if _, valid = requiredJSONObject(
-			fields["key_policy"],
-			"strict_identity_applicable", "strict_identity_declared", "testing_declared",
-		); !valid {
 			return false
 		}
 	}
@@ -921,7 +915,7 @@ func validVerificationMembers(data []byte) bool {
 func validPolicyMembers(data []byte) bool {
 	document, ok := requiredJSONObject(
 		data,
-		"dns_testing_effective", "feedback",
+		"feedback",
 		"findings", "mode", "primary_reason", "verdict",
 	)
 	if !ok {
@@ -1154,7 +1148,7 @@ func validProcessOutcomeMatrix(value *generated.ProcessResponse) bool {
 		return false
 	}
 	switch value.Replay.Class {
-	case generated.Disabled, generated.FirstSeen, generated.Exploded:
+	case generated.Disabled, generated.FirstSeen, generated.Exploded, generated.NotEligible:
 		return value.Verification.State == generated.PASS &&
 			value.Authentication.State == generated.PASS &&
 			value.Authentication.PrimaryReason == generated.AuthenticationResultPrimaryReasonNone &&
@@ -1207,7 +1201,7 @@ func validVerificationContract(value generated.VerificationResult) bool {
 	}
 	for _, signature := range value.SignatureSets {
 		if !signature.Algorithm.Valid() || !signature.Status.Valid() ||
-			!signature.Reason.Valid() || bool(signature.KeyPolicy.StrictIdentityApplicable) ||
+			!signature.Reason.Valid() ||
 			!validSignatureSelector(signature.Status, signature.Selector) {
 			return false
 		}

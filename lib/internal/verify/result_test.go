@@ -14,7 +14,7 @@ func TestStatusVocabularyIsStable(t *testing.T) {
 		{name: "check", ok: CheckStatusPass.Known() && CheckStatusFail.Known() && !CheckStatus("raw secret").Known()},
 		{name: "signature set", ok: SignatureSetStatusMissingKey.Known() && SignatureSetStatusInvalidKey.Known() && SignatureSetStatusWrongKeyType.Known() && SignatureSetStatusKeyPolicyRejected.Known() && SignatureSetStatusProviderError.Known() && !SignatureSetStatus("private-key").Known()},
 		{name: "key", ok: KeyStatusFound.Known() && KeyStatusDisabledAlgorithm.Known() && KeyStatusAmbiguous.Known() && KeyStatusWrongType.Known() && KeyStatusPolicyRejected.Known() && KeyStatusProviderError.Known() && !KeyStatus("selector.example").Known()},
-		{name: "timestamp", ok: TimestampStatusNoMaxAge.Known() && TimestampStatusFuture.Known() && TimestampStatusNotApplicable.Known() && !TimestampStatus("2026-raw").Known()},
+		{name: "timestamp", ok: !TimestampStatus("no_max_age").Known() && TimestampStatusFuture.Known() && TimestampStatusNotApplicable.Known() && !TimestampStatus("2026-raw").Known()},
 		{name: "envelope", ok: EnvelopeStatusMismatch.Known() && EnvelopeStatusRecipientValueMismatch.Known() && EnvelopeStatusNotApplicable.Known() && !EnvelopeStatus("<user@example.test>").Known()},
 		{name: "domain alignment", ok: DomainAlignmentStatusPass.Known() && DomainAlignmentStatusNotApplicable.Known() && !DomainAlignmentStatus("<user@example.test>").Known()},
 		{name: "hash", ok: HashStatusUnsupported.Known() && HashStatusMismatch.Known() && !HashStatus("raw-hash").Known()},

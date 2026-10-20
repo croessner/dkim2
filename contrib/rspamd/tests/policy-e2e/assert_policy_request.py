@@ -26,7 +26,6 @@ RESOURCE_KEYS = {
     "dkim2.local_policy_mode",
     "dkim2.local_policy_verdict",
     "dkim2.local_policy_reason",
-    "dkim2.dns_testing_effective",
     "dkim2.disposition",
     "dkim2.chain",
 }
@@ -182,7 +181,6 @@ def assert_request(
         "dkim2.local_policy_mode": {"string": policy["mode"]},
         "dkim2.local_policy_verdict": {"string": policy["verdict"]},
         "dkim2.local_policy_reason": {"string": policy["primary_reason"]},
-        "dkim2.dns_testing_effective": {"boolean": policy["dns_testing_effective"]},
         "dkim2.disposition": {"string": response["disposition"]},
     }
     for name, expected in expected_scalars.items():

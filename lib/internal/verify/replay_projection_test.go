@@ -1,48 +1,96 @@
 package verify
 
 import (
+	"context"
 	"encoding/hex"
 	"testing"
 
+	"github.com/croessner/dkim2/internal/instance"
 	"github.com/croessner/dkim2/internal/rawmsg"
 	"github.com/croessner/dkim2/internal/replay"
 )
 
-// TestOriginReplayDigestGolden freezes the Draft-07 origin framing and digest.
-func TestOriginReplayDigestGolden(t *testing.T) {
-	raw, err := hex.DecodeString("46726f6d3a20616c696365406578616d706c652e746573740d0a5375626a6563743a207265706c61790d0a0d0a68656c6c6f0d0a")
+// replayTestInstance parses one Message-Instance header value for replay identity tests.
+func replayTestInstance(t *testing.T, value string) instance.MessageInstance {
+	t.Helper()
+	message, err := rawmsg.Parse([]byte("Message-Instance: " + value + "\r\n\r\n"))
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("rawmsg.Parse() error = %v", err)
 	}
-	message, err := rawmsg.Parse(raw)
+	parsed, err := instance.Parse(message.Headers().FieldsByName("message-instance")[0])
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("instance.Parse() error = %v", err)
 	}
-	digest, ok := originReplayDigest(message)
+	return parsed
+}
+
+// replayTestDigest returns the origin identity for one m=1 instance value.
+func replayTestDigest(t *testing.T, value string) [32]byte {
+	t.Helper()
+	digest, ok := originReplayDigest(replayTestInstance(t, value))
 	if !ok {
-		t.Fatal("origin replay digest unavailable")
+		t.Fatalf("origin replay digest unavailable for %q", value)
 	}
-	if got, want := hex.EncodeToString(digest[:]), "a515a2d51d4dcfca2dd5e37d6eda025a4301c28df689bbabbe771b2efd203cca"; got != want {
+	return digest
+}
+
+const (
+	replayTestSHA256A = "sha256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=:AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE="
+	replayTestSHA256B = "sha256:AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI=:AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE="
+	replayTestSHA512  = "sha512:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==:AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQ=="
+)
+
+// TestOriginReplayDigestGolden freezes the declaration framing and digest.
+func TestOriginReplayDigestGolden(t *testing.T) {
+	digest := replayTestDigest(t, "m=1; h="+replayTestSHA256A)
+	if got, want := hex.EncodeToString(digest[:]), "aaace41463fad481490988780c7fa79fd6d00389f052f63b5c7b3edca5707720"; got != want {
 		t.Fatalf("origin digest = %s, want %s", got, want)
 	}
 }
 
 // TestOriginReplayFrameGolden freezes the complete independently constructed frame.
 func TestOriginReplayFrameGolden(t *testing.T) {
-	header, _ := hex.DecodeString("66726f6d3a616c696365406578616d706c652e746573740d0a7375626a6563743a7265706c61790d0a")
-	body, _ := hex.DecodeString("68656c6c6f0d0a")
-	got := hex.EncodeToString(originReplayFrame(header, body))
-	want := "646b696d322d7265706c61792d6f726967696e2d76310001010000001d64726166742d696574662d646b696d2d646b696d322d737065632d303702000000000000002966726f6d3a616c696365406578616d706c652e746573740d0a7375626a6563743a7265706c61790d0a03000000000000000768656c6c6f0d0a"
+	got := hex.EncodeToString(originReplayFrame("sha256", []byte{0xaa}, []byte{0xbb, 0xcc}))
+	want := "646b696d322d7265706c61792d6f726967696e2d6465636c61726174696f6e2d76310001010000001d64726166742d696574662d646b696d2d646b696d322d737065632d303702000000067368613235360300000001aa0400000002bbcc"
 	if got != want {
 		t.Fatalf("origin frame = %s, want %s", got, want)
+	}
+}
+
+// TestOriginReplayDigestFollowsDeclarationEquality pins the local Draft-07
+// Section 15.1 equality: identical m=1 declarations group (independent of a
+// Recipe or base64 folding), a changed header
+// hash separates, SHA-256 is preferred so SHA-256-only and mixed sets group,
+// and a SHA-512-only set never groups with a mixed set.
+func TestOriginReplayDigestFollowsDeclarationEquality(t *testing.T) {
+	sha256Only := replayTestDigest(t, "m=1; h="+replayTestSHA256A)
+	mixed := replayTestDigest(t, "m=1; h="+replayTestSHA512+","+replayTestSHA256A)
+	sha512Only := replayTestDigest(t, "m=1; h="+replayTestSHA512)
+	changedHeader := replayTestDigest(t, "m=1; h="+replayTestSHA256B)
+	withRecipe := replayTestDigest(t, "m=1; h="+replayTestSHA256A+"; r=eyJiIjpudWxsfQ==")
+	folded := replayTestDigest(t, "m=1; h=sha256:AAAAAAAAAAAAAAAAAAAAAA\r\n AAAAAAAAAAAAAAAAAAAAA=:AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=")
+	if sha256Only != mixed || sha256Only != withRecipe || sha256Only != folded {
+		t.Fatal("equal SHA-256 declarations produced distinct identities")
+	}
+	if sha512Only == mixed || sha512Only == sha256Only {
+		t.Fatal("SHA-512-only declaration grouped with a SHA-256 declaration")
+	}
+	if changedHeader == sha256Only {
+		t.Fatal("changed signed header hash kept the same identity")
+	}
+	if _, ok := originReplayDigest(replayTestInstance(t, "m=2; h="+replayTestSHA256A)); ok {
+		t.Fatal("non-origin instance produced a replay identity")
+	}
+	if _, ok := originReplayDigest(replayTestInstance(t, "m=1; h=sha3:AA==:AA==")); ok {
+		t.Fatal("unknown-only declaration produced a replay identity")
 	}
 }
 
 // TestReplayProjectionIsFixedSizeAndRedacted proves only sealed origin facts cross the boundary.
 func TestReplayProjectionIsFixedSizeAndRedacted(t *testing.T) {
 	digest := [32]byte{1, 2, 3}
-	projection := newReplayProjection(digest, true)
-	if !projection.Valid() || projection.Draft() != replay.DraftIdentifier || !projection.Exploded() || projection.OriginReplayAlgorithm() != originReplayAlgorithm {
+	projection := newReplayProjection(digest, true, true)
+	if !projection.Valid() || projection.Draft() != replay.DraftIdentifier || !projection.Exploded() || !projection.ReplayEligible() || projection.OriginReplayAlgorithm() != originReplayAlgorithm {
 		t.Fatalf("projection invalid: %v", projection)
 	}
 	got, ok := projection.OriginReplayDigest()
@@ -51,5 +99,36 @@ func TestReplayProjectionIsFixedSizeAndRedacted(t *testing.T) {
 	}
 	if projection.String() != replayProjectionRedactedText {
 		t.Fatal("projection formatting was not redacted")
+	}
+	if newReplayProjection(digest, false, false).ReplayEligible() {
+		t.Fatal("single-signature projection reported replay eligibility")
+	}
+}
+
+// TestRevisionReplayIdentitySurvivesNullBodyRecipe reproduces the defect where
+// a "b":null Recipe made the origin body unrecoverable and the replay identity
+// unavailable. The identity now comes from the authenticated m=1 declarations,
+// and a single-signature message stays ineligible for replay counting.
+func TestRevisionReplayIdentitySurvivesNullBodyRecipe(t *testing.T) {
+	fixture := newCurrentHistoryVerificationFixture(t, `{"h":{"subject":[{"d":["previous"]}]},"b":null}`)
+	verifier := mustVerifierForFixture(t, fixture)
+	outcome, proof, err := verifier.VerifyRevisionProof(context.Background(), Request{Message: fixture.message, Envelope: matchingEnvelope()})
+	if err != nil || outcome != RevisionProofVerified || !proof.Valid() {
+		t.Fatalf("VerifyRevisionProof() outcome=%q valid=%t error=%v", outcome, proof.Valid(), err)
+	}
+	projection, ok := proof.ReplayProjection()
+	if !ok || !projection.Valid() {
+		t.Fatal("null-body Recipe left no replay identity")
+	}
+	origin, err := instanceByNumber(fixture.instances, 1)
+	if err != nil {
+		t.Fatalf("instanceByNumber() error = %v", err)
+	}
+	want, _ := originReplayDigest(origin)
+	if got, _ := projection.OriginReplayDigest(); got != want {
+		t.Fatal("revision replay identity differs from the m=1 declaration identity")
+	}
+	if projection.ReplayEligible() {
+		t.Fatal("single-signature revision proof reported replay eligibility")
 	}
 }

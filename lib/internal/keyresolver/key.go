@@ -51,7 +51,6 @@ type KeyOutcome struct {
 	status      KeyOutcomeStatus
 	algorithm   Algorithm
 	material    any
-	metadata    Metadata
 	initialized bool
 }
 
@@ -64,12 +63,9 @@ func (o KeyOutcome) Algorithm() Algorithm { return o.algorithm }
 // Material returns an independent copy of supported public-key material.
 func (o KeyOutcome) Material() any { return cloneKeyMaterial(o.material) }
 
-// Metadata returns immutable bounded DNS key declarations.
-func (o KeyOutcome) Metadata() Metadata { return o.metadata }
-
 // Valid reports whether the outcome is initialized and internally coherent.
 func (o KeyOutcome) Valid() bool {
-	if !o.initialized || !o.status.Known() || !o.algorithm.Known() || !o.metadata.Valid() {
+	if !o.initialized || !o.status.Known() || !o.algorithm.Known() {
 		return false
 	}
 	switch o.status {
@@ -97,12 +93,12 @@ func (o KeyOutcome) Valid() bool {
 
 // IsZero reports whether the outcome carries no initialized resolver state.
 func (o KeyOutcome) IsZero() bool {
-	return !o.initialized && o.status == "" && o.algorithm == "" && o.material == nil && !o.metadata.Valid()
+	return !o.initialized && o.status == "" && o.algorithm == "" && o.material == nil
 }
 
 // newStatusOutcome constructs one material-free initialized resolver result.
-func newStatusOutcome(status KeyOutcomeStatus, algorithm Algorithm, metadata Metadata) KeyOutcome {
-	return KeyOutcome{status: status, algorithm: algorithm, metadata: metadata, initialized: true}
+func newStatusOutcome(status KeyOutcomeStatus, algorithm Algorithm) KeyOutcome {
+	return KeyOutcome{status: status, algorithm: algorithm, initialized: true}
 }
 
 // DecodeKey decodes one parsed DNS record for a supported requested algorithm.
@@ -110,7 +106,7 @@ func DecodeKey(record Record, requested Algorithm) (KeyOutcome, error) {
 	if !record.Valid() || !requested.Known() {
 		return KeyOutcome{}, newResolverError(ErrorClassContract)
 	}
-	base := KeyOutcome{algorithm: requested, metadata: record.Metadata(), initialized: true}
+	base := KeyOutcome{algorithm: requested, initialized: true}
 	switch record.Status() {
 	case RecordStatusRevoked:
 		base.status = KeyOutcomeRevoked

@@ -175,7 +175,6 @@ func sanitizeKeyMetadata(metadata KeyMetadata) KeyMetadata {
 	if metadata.Source == "" {
 		metadata.Source = staticKeyProviderSource
 	}
-	metadata.Policy = KeyPolicyMetadata{}
 
 	return metadata
 }

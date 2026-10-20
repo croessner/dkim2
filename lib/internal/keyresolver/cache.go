@@ -253,24 +253,20 @@ func cacheOutcomeValidForKey(outcome KeyOutcome, key cacheKey) bool {
 	switch outcome.Status() {
 	case KeyOutcomeFound, KeyOutcomeMissing, KeyOutcomeRevoked, KeyOutcomeInvalid,
 		KeyOutcomeAmbiguous, KeyOutcomeUnsupportedKeyType, KeyOutcomeAlgorithmMismatch:
-		if (outcome.Status() == KeyOutcomeMissing || outcome.Status() == KeyOutcomeAmbiguous) &&
-			(outcome.Metadata().TestingDeclared() || outcome.Metadata().StrictIdentityDeclared()) {
-			return false
-		}
 		return true
 	default:
 		return false
 	}
 }
 
-// cloneKeyOutcome returns detached key material and immutable metadata.
+// cloneKeyOutcome returns a detached copy of key material and outcome state.
 func cloneKeyOutcome(outcome KeyOutcome) KeyOutcome {
 	if !outcome.Valid() {
 		return KeyOutcome{}
 	}
 	return KeyOutcome{
 		status: outcome.status, algorithm: outcome.algorithm,
-		material: cloneKeyMaterial(outcome.material), metadata: outcome.metadata,
+		material:    cloneKeyMaterial(outcome.material),
 		initialized: true,
 	}
 }

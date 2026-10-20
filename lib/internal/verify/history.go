@@ -846,14 +846,13 @@ func accountAggregateSignatureCheck(check CheckResult, supported map[Algorithm]i
 // accountAggregateSignatureSet admits one exact supported PASS or ignored-unknown set.
 func accountAggregateSignatureSet(set SignatureSetResult, supported map[Algorithm]int) (bool, bool) {
 	if set.Status == SignatureSetStatusPass && knownAlgorithm(set.Algorithm) &&
-		set.KeyStatus == KeyStatusFound && set.KeyPolicy.Valid() {
+		set.KeyStatus == KeyStatusFound {
 		supported[set.Algorithm]++
 		return false, true
 	}
 	if set.Status == SignatureSetStatusUnsupportedAlgorithm &&
 		set.Algorithm == AlgorithmUnknown &&
-		set.KeyStatus == KeyStatusUnsupportedAlgorithm &&
-		set.KeyPolicy == (KeyPolicyMetadata{}) {
+		set.KeyStatus == KeyStatusUnsupportedAlgorithm {
 		return true, true
 	}
 	return false, false

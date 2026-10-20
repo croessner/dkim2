@@ -800,7 +800,7 @@ func TestReceivedEvaluationCompletionWindowUsesOuterTimestamp(t *testing.T) {
 	}{
 		{name: "old forwarding, DSN generated a day later, evaluated a month later", outer: completion + day, now: time.Unix(int64(completion)+30*day, 0), want: EmbeddedVerified},
 		{name: "old forwarding, DSN generated after the maximum age", outer: completion + 30*day, now: time.Unix(int64(completion)+30*day+60, 0), want: EmbeddedUnverified},
-		{name: "DSN generated before the forwarding beyond skew", outer: completion - 3600, now: time.Unix(int64(completion)+60, 0), want: EmbeddedUnverified},
+		{name: "DSN generated more than a day before the forwarding", outer: completion - 25*60*60, now: time.Unix(int64(completion)+60, 0), want: EmbeddedUnverified},
 		{name: "DSN generated within skew before the forwarding", outer: completion - 60, now: time.Unix(int64(completion)+60, 0), want: EmbeddedVerified},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {

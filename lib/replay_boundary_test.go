@@ -322,7 +322,7 @@ func auditReplayPublicAPI(root string, files []parsedReplayFile) replayPublicAPI
 			"AuthenticationReasonReplayIndeterminate":             true,
 			"AuthenticationReasonReplayEvidenceUnavailable":       true,
 			"AuthenticationReasonDuplicateMessageWithoutExploded": true,
-			"AuthenticationReplayNotChecked":                      true, "AuthenticationReplayDisabled": true,
+			"AuthenticationReplayNotChecked":                      true, "AuthenticationReplayNotEligible": true, "AuthenticationReplayDisabled": true,
 			"AuthenticationReplayFirstSeen": true, "AuthenticationReplayExploded": true,
 			"AuthenticationReplayReplayed": true, "AuthenticationReplayIndeterminate": true,
 			"ReplayPropagationKeyDomainLabel": true, "ReplayPropagationStatePending": true,

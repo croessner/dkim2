@@ -3,6 +3,18 @@
 > Historical Draft-04 implementation record. The original scope and evidence
 > below are preserved; current Draft-07 authority is the migration disposition
 > and current durable architecture.
+>
+> Current behavior: `draft-ietf-dkim-dkim2-dns-01` Section 3.4.1 retires the
+> key-record `t=` tag ("SHOULD be ignored"); its historical `t=y` (testing)
+> and `t=s` (strict identity) meanings now concern DKIM1 only. The resolver no
+> longer parses `t=` flags and no longer exposes testing or strict-identity
+> metadata (`KeyPolicyMetadata`, `testing_declared`,
+> `strict_identity_declared`, `strict_identity_applicable` were removed). `t=`
+> is an ordinary ignored tag under the generic tag-list rules: duplicates,
+> control bytes, framing, and size limits still fail closed, but any value,
+> including a formerly malformed flag list, decodes to the same key as a
+> record without `t=` on cache miss and cache hit. Statements below about `t=`
+> metadata describe the superseded Draft-04 increment only.
 
 ## Status
 
@@ -309,7 +321,8 @@ transports may enable caching.
 - They do not constrain hashes, service type, or policy.
 - Their presence and values are not retained or exposed.
 
-`t=`:
+`t=` (superseded; retired by DNS-01 Section 3.4.1 and now ignored after
+generic tag-list validation):
 
 - Optional colon-separated flags.
 - Recognized `y` becomes `testing=true` metadata.
@@ -825,9 +838,10 @@ tracked.
 - Settled: multiple TXT records are a typed ambiguous permanent state.
 - Settled: `k=` follows DNS-04 prose despite the `%x76` ABNF defect.
 - Settled: `q=` is not invented for the active DKIM2 signature grammar.
-- Settled: `t=y` and `t=s` are bounded metadata; local action waits for policy.
+- Superseded: `t=y` and `t=s` were bounded metadata in this increment; DNS-01
+  retires `t=`, which is now ignored.
 - Settled: DNSSEC cannot alter conformance results.
 - Settled: transport calls use absolute names.
-- Open: the draft working group must reconcile `t=s` with numeric signature
-  sequence `i=`.
+- Resolved: DNS-01 retires `t=`, removing the `t=s` conflict with the numeric
+  signature sequence `i=` (`DKIM2-ISSUE-0013`).
 - Open: later draft text may define DNSSEC or additional lookup bindings.

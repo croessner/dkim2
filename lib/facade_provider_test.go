@@ -33,7 +33,7 @@ func TestFacadeVerifiesEd25519WithClonedProviderKey(t *testing.T) {
 	raw, publicKey := publicEd25519Fixture(t)
 	verifier, err := NewVerifier(publicProviderFunc(func(context.Context, PublicKeyQuery) (PublicKeyResult, error) {
 		// The found-result constructor is the provider-to-library ownership boundary.
-		result := withKeyPolicyMetadata(FoundEd25519PublicKey(publicKey), newKeyPolicyMetadata(true, true))
+		result := FoundEd25519PublicKey(publicKey)
 		publicKey[0] ^= 0xff
 		return result, nil
 	}), WithVerificationClock(func() time.Time { return time.Unix(1700000000, 0) }))
@@ -55,10 +55,6 @@ func TestFacadeVerifiesEd25519WithClonedProviderKey(t *testing.T) {
 		signatures[0].Algorithm() != AlgorithmEd25519SHA256 || signatures[0].Status() != SignatureStatusPASS || signatures[0].Reason() != ReasonNone {
 		t.Fatalf("bounded facts = checks:%d signatures:%#v", len(checks), signatures)
 	}
-	metadata := signatures[0].KeyPolicyMetadata()
-	if !metadata.TestingDeclared() || !metadata.StrictIdentityDeclared() || metadata.StrictIdentityApplicable() {
-		t.Fatalf("pass metadata = %#v", metadata)
-	}
 	for _, check := range checks {
 		if !check.Class().Known() || !check.Reason().Known() {
 			t.Fatalf("unknown public check fact = %q/%q", check.Class(), check.Reason())
@@ -71,15 +67,15 @@ func TestFacadeVerifiesEd25519WithClonedProviderKey(t *testing.T) {
 	}
 }
 
-// TestFacadePreservesDNSMetadataWithoutChangingSignatureFailure verifies verdict neutrality.
-func TestFacadePreservesDNSMetadataWithoutChangingSignatureFailure(t *testing.T) {
+// TestFacadeReportsSignatureFailureForWrongProviderKey verifies a wrong key yields FAIL.
+func TestFacadeReportsSignatureFailureForWrongProviderKey(t *testing.T) {
 	raw, _ := publicEd25519Fixture(t)
 	wrongKey, _, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		t.Fatalf("ed25519.GenerateKey() error = %v", err)
 	}
 	verifier, err := NewVerifier(publicProviderFunc(func(context.Context, PublicKeyQuery) (PublicKeyResult, error) {
-		return withKeyPolicyMetadata(FoundEd25519PublicKey(wrongKey), newKeyPolicyMetadata(true, true)), nil
+		return FoundEd25519PublicKey(wrongKey), nil
 	}), WithVerificationClock(func() time.Time { return time.Unix(1700000000, 0) }))
 	if err != nil {
 		t.Fatalf("NewVerifier() error = %v", err)
@@ -88,10 +84,6 @@ func TestFacadePreservesDNSMetadataWithoutChangingSignatureFailure(t *testing.T)
 	sets := result.SignatureSets()
 	if verifyErr != nil || result.State() != ResultStateFAIL || len(sets) != 1 || sets[0].Reason() != ReasonSignatureMismatch {
 		t.Fatalf("Verify() = %q/%q sets=%#v error=%v", result.State(), result.PrimaryReason(), sets, verifyErr)
-	}
-	metadata := sets[0].KeyPolicyMetadata()
-	if !metadata.TestingDeclared() || !metadata.StrictIdentityDeclared() || metadata.StrictIdentityApplicable() {
-		t.Fatalf("fail metadata = %#v", metadata)
 	}
 }
 

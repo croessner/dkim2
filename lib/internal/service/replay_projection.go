@@ -19,6 +19,7 @@ type replayProjectionState struct {
 	originDigest    [32]byte
 	hasOriginDigest bool
 	exploded        bool
+	eligible        bool
 	sealed          bool
 }
 
@@ -45,6 +46,9 @@ func (p ReplayProjection) OriginReplayDigest() ([32]byte, bool) {
 
 // Exploded returns the authenticated complete-chain OR fact.
 func (p ReplayProjection) Exploded() bool { return p.Valid() && p.state.exploded }
+
+// ReplayEligible reports whether local replay policy applies to the message.
+func (p ReplayProjection) ReplayEligible() bool { return p.Valid() && p.state.eligible }
 
 // String returns a constant representation without authenticated digest bytes.
 func (ReplayProjection) String() string { return serviceReplayProjectionRedactedText }
@@ -75,6 +79,6 @@ func mapReplayProjection(source verify.ReplayProjection) (ReplayProjection, bool
 	if !present {
 		return ReplayProjection{}, false
 	}
-	projection := ReplayProjection{state: &replayProjectionState{draft: replay.DraftIdentifier, originDigest: digest, hasOriginDigest: true, exploded: source.Exploded(), sealed: true}}
+	projection := ReplayProjection{state: &replayProjectionState{draft: replay.DraftIdentifier, originDigest: digest, hasOriginDigest: true, exploded: source.Exploded(), eligible: source.ReplayEligible(), sealed: true}}
 	return projection, projection.Valid()
 }

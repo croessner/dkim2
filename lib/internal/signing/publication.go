@@ -300,7 +300,6 @@ func publicationCallbackError(result verify.PublicKey, callErr, ctxErr error) er
 // validatePublishedResult validates one nil-error provider result and returns detached exact key material.
 func validatePublishedResult(result verify.PublicKey, credential Credential, ctxErr error) (any, error) {
 	if result.Algorithm != credential.algorithm || !result.Metadata.Status.Known() ||
-		!result.Metadata.Policy.Valid() || !result.Metadata.Policy.AllowedForStatus(result.Metadata.Status, false) ||
 		!verify.ValidProviderSource(result.Metadata.Source) {
 		return nil, newError(ErrorCodeInternalInvariant, ErrorLocation{Phase: PhaseCallback}, ErrorDetails{})
 	}
@@ -355,7 +354,7 @@ func detachProviderPublicKey(algorithm Algorithm, material any) any {
 	}
 }
 
-// publicationObservation binds exact material and bounded provider policy facts.
+// publicationObservation binds exact material and bounded provider status facts.
 func publicationObservation(algorithm Algorithm, material any, metadata verify.KeyMetadata) [sha256.Size]byte {
 	h := sha256.New()
 	writeAuthorizationPart(h, []byte("dkim2/publication-observation/v1"))
@@ -368,9 +367,6 @@ func publicationObservation(algorithm Algorithm, material any, metadata verify.K
 	}
 	writeAuthorizationPart(h, []byte(metadata.Status))
 	writeAuthorizationPart(h, []byte(metadata.Source))
-	writeAuthorizationPart(h, boolBytes(metadata.Policy.TestingDeclared))
-	writeAuthorizationPart(h, boolBytes(metadata.Policy.StrictIdentityDeclared))
-	writeAuthorizationPart(h, boolBytes(metadata.Policy.StrictIdentityApplicable))
 	var result [sha256.Size]byte
 	copy(result[:], h.Sum(nil))
 	return result

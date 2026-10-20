@@ -132,7 +132,7 @@ func validResultRecord(record ResultRecord) bool {
 		validOptionalEnum(record.AuthenticationState, "PASS", "FAIL", "PERMERROR", "TEMPERROR") &&
 		validOptionalEnum(record.PolicyVerdict, "accept", "reject", "tempfail", "continue") &&
 		validOptionalEnum(record.ReplayClass,
-			"not_checked", "disabled", "first_seen", "exploded", "replayed", "indeterminate")
+			"not_checked", "not_eligible", "disabled", "first_seen", "exploded", "replayed", "indeterminate")
 }
 
 // validDurationBucket checks the exact bounded timing vocabulary.

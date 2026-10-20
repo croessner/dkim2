@@ -29,6 +29,9 @@ func (s originDigestSource) OriginReplayDigest() ([32]byte, bool) { return s.dig
 // Exploded reports no expected fanout for the golden vector.
 func (originDigestSource) Exploded() bool { return false }
 
+// ReplayEligible reports an intermediary-handled message for the golden vector.
+func (originDigestSource) ReplayEligible() bool { return true }
+
 // TestDraft07PublishedReplayKey verifies the normative message-wide HMAC vector.
 func TestDraft07PublishedReplayKey(t *testing.T) {
 	digestBytes, err := hex.DecodeString("63519c8a3d2e4d5f6fb9e689259be264a058a3a9fbc8bb5a9a904bef0e9d9cd5")

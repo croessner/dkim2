@@ -151,7 +151,7 @@ func inputContractDefect(checks []verify.CheckResult, sets []verify.SignatureSet
 		}
 	}
 	for _, set := range sets {
-		if _, known := mapAlgorithm(set.Algorithm); !known || !set.Status.Known() || !set.KeyStatus.Known() || !set.KeyPolicy.Valid() || !signatureKeyPolicyCoherent(set.Status, set.KeyPolicy) || set.Index < 0 || !signatureKeyPairValid(set.Status, set.KeyStatus) || !signatureAlgorithmCoherent(set.Algorithm, set.Status) {
+		if _, known := mapAlgorithm(set.Algorithm); !known || !set.Status.Known() || !set.KeyStatus.Known() || set.Index < 0 || !signatureKeyPairValid(set.Status, set.KeyStatus) || !signatureAlgorithmCoherent(set.Algorithm, set.Status) {
 			return true
 		}
 	}
@@ -469,7 +469,7 @@ func (a *mappingAccumulator) mapNextDomainCheck(class CheckClass, check verify.C
 func (a *mappingAccumulator) mapSignatureSet(set verify.SignatureSetResult) {
 	algorithm, algorithmKnown := mapAlgorithm(set.Algorithm)
 	trackedIndex := set.Index >= 0 && set.Index < hardMaxSignatureFacts
-	if !algorithmKnown || !set.Status.Known() || !set.KeyStatus.Known() || !set.KeyPolicy.Valid() || !signatureKeyPolicyCoherent(set.Status, set.KeyPolicy) || set.Index < 0 || trackedIndex && a.setIndices[set.Index] || !signatureKeyPairValid(set.Status, set.KeyStatus) || !signatureAlgorithmCoherent(set.Algorithm, set.Status) {
+	if !algorithmKnown || !set.Status.Known() || !set.KeyStatus.Known() || set.Index < 0 || trackedIndex && a.setIndices[set.Index] || !signatureKeyPairValid(set.Status, set.KeyStatus) || !signatureAlgorithmCoherent(set.Algorithm, set.Status) {
 		a.add(severityPermanent, ReasonInternalContract)
 		a.appendSignature(SignatureSetFact{Algorithm: AlgorithmUnknown, Status: SignaturePERMERROR, Reason: ReasonInternalContract})
 		return
@@ -478,7 +478,7 @@ func (a *mappingAccumulator) mapSignatureSet(set verify.SignatureSetResult) {
 		a.setIndices[set.Index] = true
 	}
 	a.signatureSets[algorithm]++
-	fact := SignatureSetFact{Algorithm: algorithm, KeyPolicy: serviceKeyPolicyMetadata(set.KeyPolicy)}
+	fact := SignatureSetFact{Algorithm: algorithm}
 	switch set.Status {
 	case verify.SignatureSetStatusPass:
 		if set.KeyStatus != verify.KeyStatusFound || algorithm == AlgorithmUnknown {
@@ -556,31 +556,6 @@ func signatureKeyPairValid(status verify.SignatureSetStatus, keyStatus verify.Ke
 		return keyStatus == verify.KeyStatusProviderContract
 	default:
 		return false
-	}
-}
-
-// signatureKeyPolicyCoherent restricts DNS metadata to unique-record key states.
-func signatureKeyPolicyCoherent(status verify.SignatureSetStatus, metadata verify.KeyPolicyMetadata) bool {
-	if metadata == (verify.KeyPolicyMetadata{}) {
-		return true
-	}
-	switch status {
-	case verify.SignatureSetStatusPass, verify.SignatureSetStatusFail, verify.SignatureSetStatusInvalidKey,
-		verify.SignatureSetStatusRevokedKey, verify.SignatureSetStatusUnsupportedKeyType,
-		verify.SignatureSetStatusKeyAlgorithmMismatch, verify.SignatureSetStatusWrongKeyType,
-		verify.SignatureSetStatusKeyPolicyRejected:
-		return true
-	default:
-		return false
-	}
-}
-
-// serviceKeyPolicyMetadata maps verifier-owned bounded DNS declarations.
-func serviceKeyPolicyMetadata(metadata verify.KeyPolicyMetadata) KeyPolicyMetadata {
-	return KeyPolicyMetadata{
-		TestingDeclared:          metadata.TestingDeclared,
-		StrictIdentityDeclared:   metadata.StrictIdentityDeclared,
-		StrictIdentityApplicable: metadata.StrictIdentityApplicable,
 	}
 }
 

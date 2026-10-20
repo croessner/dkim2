@@ -153,9 +153,6 @@ const (
 	ReasonProtocolTemperror             PolicyReason = "protocol_temperror"
 	ReasonPermissiveOverride            PolicyReason = "permissive_override"
 	ReasonTestingModeObserve            PolicyReason = "testing_mode_observe"
-	ReasonDNSTestingEffective           PolicyReason = "dns_testing_effective"
-	ReasonDNSTestingMixed               PolicyReason = "dns_testing_mixed"
-	ReasonDNSTestingIneligible          PolicyReason = "dns_testing_ineligible"
 	ReasonFeedbackRequested             PolicyReason = "feedback_requested"
 	ReasonFeedbackRelaySelected         PolicyReason = "feedback_relay_selected"
 	ReasonFeedHereInert                 PolicyReason = "feedhere_inert"
@@ -178,7 +175,6 @@ func (r PolicyReason) Known() bool {
 	case ReasonInvalidInput, ReasonLimitExceeded, ReasonInternalContract,
 		ReasonProtocolPass, ReasonProtocolFail, ReasonProtocolPermerror, ReasonProtocolTemperror,
 		ReasonPermissiveOverride, ReasonTestingModeObserve,
-		ReasonDNSTestingEffective, ReasonDNSTestingMixed, ReasonDNSTestingIneligible,
 		ReasonFeedbackRequested, ReasonFeedbackRelaySelected,
 		ReasonFeedHereInert, ReasonExplodedReported,
 		ReasonReceivedDSNOuterPolicy, ReasonReceivedDSNStructureInvalid, ReasonReceivedDSNEmbeddedUnverified,
@@ -198,8 +194,7 @@ func severityForReason(reason PolicyReason) FindingSeverity {
 		ReasonFeedbackRequested, ReasonFeedbackRelaySelected, ReasonFeedHereInert, ReasonExplodedReported,
 		ReasonReceivedDSNOuterPolicy, ReasonReceivedDSNEmbeddedAbsent, ReasonReceivedDSNNotLocal, ReasonReceivedDSNLinked:
 		return SeverityInfo
-	case ReasonPermissiveOverride, ReasonTestingModeObserve, ReasonDNSTestingEffective,
-		ReasonDNSTestingMixed, ReasonDNSTestingIneligible, ReasonReceivedDSNTenantUnavailable:
+	case ReasonPermissiveOverride, ReasonTestingModeObserve, ReasonReceivedDSNTenantUnavailable:
 		return SeverityWarning
 	case ReasonProtocolTemperror, ReasonReceivedDSNTemporaryFailure:
 		return SeverityTemporary

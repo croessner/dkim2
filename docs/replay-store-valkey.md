@@ -1,9 +1,12 @@
 # Replay Store And Valkey Operations
 
-DKIM2 replay detection composes the final Draft-07 authentication result while
-leaving message-local signature, hash, recipe, custody, and envelope evidence
-immutable. Unexpected replay produces final `FAIL` with reason
-`duplicate_message_without_exploded`; ambiguity produces `TEMPERROR`.
+DKIM2 replay detection is local delivery policy (Draft-07 Section 15.1). It
+composes the final Draft-07 authentication result while leaving message-local
+signature, hash, recipe, custody, and envelope evidence immutable. Unexpected
+replay produces final `FAIL` with reason `duplicate_message_without_exploded`;
+ambiguity produces `TEMPERROR`. Only messages carrying more than one
+DKIM2-Signature are counted; a direct delivery carrying only the originator's
+`i=1` signature reports `not_eligible` and performs no store command.
 
 The library exposes a storage-neutral `CheckAndRemember` contract with bounded
 memory and disabled implementations. The production implementation is owned by
@@ -49,8 +52,9 @@ script, transaction, pipeline, read command, or TTL mutation is added, so the
 application ACL grant stays exactly `+ping +set`. `/v1/process` records keep
 their single first-seen `SET NX PX` command and `v1` value unchanged.
 
-The single key represents the independently reconstructed `m=1` canonical
-header and body inputs, not a recipient or terminal route. Authenticated
+The single key represents the authenticated `m=1` Message-Instance hash
+declarations (SHA-256 preferred, SHA-512 only when no SHA-256 pair exists),
+not a recipient or terminal route. Authenticated
 `exploded` changes a successful store result to the accepted `exploded` class,
 but the seen fact is still retained. The synchronous implementation accepts the
 first unmarked copy and rejects later unmarked copies during retention; expiry,

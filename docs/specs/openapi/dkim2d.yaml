@@ -2313,7 +2313,6 @@ components:
         - algorithm
         - status
         - reason
-        - key_policy
       properties:
         algorithm:
           type: string
@@ -2332,30 +2331,12 @@ components:
             - ignored
         reason:
           $ref: "#/components/schemas/VerificationReason"
-        key_policy:
-          $ref: "#/components/schemas/KeyPolicyResult"
         selector:
           type: string
           description: Canonical selector for a failed supported signature; absent for every other result.
           minLength: 1
           maxLength: 253
           pattern: '^[A-Za-z0-9_](?:[A-Za-z0-9_-]{0,61}[A-Za-z0-9_])?(?:\.[A-Za-z0-9_](?:[A-Za-z0-9_-]{0,61}[A-Za-z0-9_])?)*$'
-    KeyPolicyResult:
-      type: object
-      additionalProperties: false
-      required:
-        - testing_declared
-        - strict_identity_declared
-        - strict_identity_applicable
-      properties:
-        testing_declared:
-          type: boolean
-        strict_identity_declared:
-          type: boolean
-        strict_identity_applicable:
-          type: boolean
-          enum:
-            - false
     PolicyResult:
       type: object
       additionalProperties: false
@@ -2363,7 +2344,6 @@ components:
         - mode
         - verdict
         - primary_reason
-        - dns_testing_effective
         - feedback
         - findings
       properties:
@@ -2382,8 +2362,6 @@ components:
             - continue
         primary_reason:
           $ref: "#/components/schemas/PolicyReason"
-        dns_testing_effective:
-          type: boolean
         feedback:
           $ref: "#/components/schemas/PolicyFeedback"
         findings:
@@ -2442,8 +2420,15 @@ components:
       properties:
         class:
           type: string
+          description: >-
+            Local replay delivery-policy class. not_checked means replay was
+            skipped because verification or policy did not reach PASS/accept.
+            not_eligible means the message passed but carried only the
+            originator's i=1 DKIM2-Signature, so no intermediary re-sent it
+            and Draft-07 Section 15.1 replay counting does not apply.
           enum:
             - not_checked
+            - not_eligible
             - disabled
             - first_seen
             - exploded
@@ -2629,9 +2614,6 @@ components:
         - protocol_temperror
         - permissive_override
         - testing_mode_observe
-        - dns_testing_effective
-        - dns_testing_mixed
-        - dns_testing_ineligible
         - feedback_requested
         - feedback_relay_selected
         - feedhere_inert

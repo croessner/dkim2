@@ -11,7 +11,7 @@ func TestSelectedProjectionAuthenticatesOnlyPassingCurrentFlags(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewAuthenticatedHopFact() error = %v", err)
 	}
-	set := mustProjectionSignatureFact(t, SetAlgorithmRSA, SetStatusPass, SetReasonNone, true, false)
+	set := mustProjectionSignatureFact(t, SetAlgorithmRSA, SetStatusPass, SetReasonNone)
 	for _, tt := range []struct {
 		protocol ProtocolClass
 		reason   VerificationReason
@@ -21,7 +21,7 @@ func TestSelectedProjectionAuthenticatesOnlyPassingCurrentFlags(t *testing.T) {
 		{protocol: ProtocolPASS, reason: VerificationReasonNone, wantHops: 1, facts: []SignatureFact{set}},
 		{protocol: ProtocolFAIL, reason: VerificationReasonHashMismatch, facts: []SignatureFact{set}},
 		{protocol: ProtocolPERMERROR, reason: VerificationReasonInternalContract, facts: []SignatureFact{set}},
-		{protocol: ProtocolTEMPERROR, reason: VerificationReasonProviderTemporary, facts: []SignatureFact{mustProjectionSignatureFact(t, SetAlgorithmRSA, SetStatusTemperror, SetReasonProviderTemporary, false, false)}},
+		{protocol: ProtocolTEMPERROR, reason: VerificationReasonProviderTemporary, facts: []SignatureFact{mustProjectionSignatureFact(t, SetAlgorithmRSA, SetStatusTemperror, SetReasonProviderTemporary)}},
 	} {
 		hops := []HopFact(nil)
 		if tt.protocol == ProtocolPASS {
@@ -63,7 +63,7 @@ func TestSelectedProjectionAuthenticatesOnlyPassingCurrentFlags(t *testing.T) {
 // TestCompleteOriginHistoryPreservesCurrentEvidence verifies the one-hop completion invariant.
 func TestCompleteOriginHistoryPreservesCurrentEvidence(t *testing.T) {
 	hop := mustProjectionHop(t, 1, TransitionOrigin)
-	set := mustProjectionSignatureFact(t, SetAlgorithmRSA, SetStatusPass, SetReasonNone, true, true)
+	set := mustProjectionSignatureFact(t, SetAlgorithmRSA, SetStatusPass, SetReasonNone)
 	current, err := NewSelectedProjection(ProtocolPASS, VerificationReasonNone, 1, []HopFact{hop}, []SignatureFact{set}, DefaultLimits())
 	if err != nil {
 		t.Fatalf("NewSelectedProjection() error = %v", err)
@@ -71,7 +71,7 @@ func TestCompleteOriginHistoryPreservesCurrentEvidence(t *testing.T) {
 
 	completed, err := current.CompleteOriginHistory(DefaultLimits())
 	if err != nil || !completed.Valid() || completed.HistoryCoverage() != HistoryComplete || len(completed.Hops()) != 1 || len(completed.SignatureFacts()) != 1 ||
-		!completed.SignatureFacts()[0].TestingDeclared() || !completed.SignatureFacts()[0].StrictIdentityDeclared() {
+		completed.SignatureFacts()[0] != current.SignatureFacts()[0] {
 		t.Fatalf("CompleteOriginHistory() = %#v error=%v", completed, err)
 	}
 	if current.HistoryCoverage() != HistoryNotEvaluated {
@@ -81,7 +81,7 @@ func TestCompleteOriginHistoryPreservesCurrentEvidence(t *testing.T) {
 
 // TestCompleteOriginHistoryRejectsIneligibleProjections verifies fail-closed completion.
 func TestCompleteOriginHistoryRejectsIneligibleProjections(t *testing.T) {
-	pass := mustProjectionSignatureFact(t, SetAlgorithmRSA, SetStatusPass, SetReasonNone, false, false)
+	pass := mustProjectionSignatureFact(t, SetAlgorithmRSA, SetStatusPass, SetReasonNone)
 	for _, test := range []struct {
 		name    string
 		target  uint64
@@ -109,10 +109,10 @@ func TestCompleteOriginHistoryRejectsIneligibleProjections(t *testing.T) {
 	}
 }
 
-// TestRevisionFailureProjectionSeparatesCurrentTestingFactsFromInheritedFailure locks fail-closed history provenance.
-func TestRevisionFailureProjectionSeparatesCurrentTestingFactsFromInheritedFailure(t *testing.T) {
+// TestRevisionFailureProjectionSeparatesCurrentFactsFromInheritedFailure locks fail-closed history provenance.
+func TestRevisionFailureProjectionSeparatesCurrentFactsFromInheritedFailure(t *testing.T) {
 	hop := mustProjectionHop(t, 2, TransitionNotEvaluated)
-	pass := mustProjectionSignatureFact(t, SetAlgorithmRSA, SetStatusPass, SetReasonNone, true, false)
+	pass := mustProjectionSignatureFact(t, SetAlgorithmRSA, SetStatusPass, SetReasonNone)
 	current, err := NewSelectedProjection(ProtocolPASS, VerificationReasonNone, 2, []HopFact{hop}, []SignatureFact{pass}, DefaultLimits())
 	if err != nil {
 		t.Fatal(err)
@@ -126,7 +126,7 @@ func TestRevisionFailureProjectionSeparatesCurrentTestingFactsFromInheritedFailu
 		t.Fatal(err)
 	}
 	decision, err := evaluator.EvaluateProjection(projection)
-	if err != nil || decision.Verdict() != VerdictReject || decision.DNSTestingEffective() || !decisionHasReason(decision, ReasonDNSTestingIneligible) {
+	if err != nil || decision.Verdict() != VerdictReject || decision.PrimaryReason() != ReasonProtocolFail {
 		t.Fatalf("EvaluateProjection() = %#v error=%v", decision, err)
 	}
 	if forged, forgeErr := NewRevisionFailureProjection(ProtocolPASS, VerificationReasonNone, current, DefaultLimits()); !IsErrorCode(forgeErr, ErrorInternalContract) || !forged.IsZero() {
@@ -140,7 +140,7 @@ func TestRevisionFailureProjectionSeparatesCurrentTestingFactsFromInheritedFailu
 // TestRevisionFailureProjectionAllowsOnlyServiceOutcomePairs locks the exact service-to-policy history-failure seam.
 func TestRevisionFailureProjectionAllowsOnlyServiceOutcomePairs(t *testing.T) {
 	hop := mustProjectionHop(t, 2, TransitionNotEvaluated)
-	pass := mustProjectionSignatureFact(t, SetAlgorithmRSA, SetStatusPass, SetReasonNone, false, false)
+	pass := mustProjectionSignatureFact(t, SetAlgorithmRSA, SetStatusPass, SetReasonNone)
 	current, err := NewSelectedProjection(ProtocolPASS, VerificationReasonNone, 2, []HopFact{hop}, []SignatureFact{pass}, DefaultLimits())
 	if err != nil {
 		t.Fatal(err)
@@ -195,20 +195,10 @@ func TestRevisionFailureProjectionAllowsOnlyServiceOutcomePairs(t *testing.T) {
 	}
 }
 
-// decisionHasReason reports whether one sealed decision carries the requested bounded reason.
-func decisionHasReason(decision Decision, reason PolicyReason) bool {
-	for _, finding := range decision.Findings() {
-		if finding.Reason() == reason {
-			return true
-		}
-	}
-	return false
-}
-
 // TestProjectionCopiesStorage verifies immutable fact ownership.
 func TestProjectionCopiesStorage(t *testing.T) {
 	hop, _ := NewAuthenticatedHopFact(1, TransitionOrigin, true, false, false)
-	facts := []SignatureFact{mustProjectionSignatureFact(t, SetAlgorithmEd25519, SetStatusPass, SetReasonNone, false, false)}
+	facts := []SignatureFact{mustProjectionSignatureFact(t, SetAlgorithmEd25519, SetStatusPass, SetReasonNone)}
 	projection, err := NewSelectedProjection(ProtocolPASS, VerificationReasonNone, 1, []HopFact{hop}, facts, DefaultLimits())
 	if err != nil {
 		t.Fatalf("NewSelectedProjection() error = %v", err)
@@ -304,7 +294,7 @@ func TestHistoricalProjectionEnforcesCoverageAndBounds(t *testing.T) {
 
 // TestSelectedProjectionEnforcesCompleteSignatureFactHardBound verifies exact and one-over counts.
 func TestSelectedProjectionEnforcesCompleteSignatureFactHardBound(t *testing.T) {
-	fact := mustProjectionSignatureFact(t, SetAlgorithmRSA, SetStatusPermerror, SetReasonMissingKey, false, false)
+	fact := mustProjectionSignatureFact(t, SetAlgorithmRSA, SetStatusPermerror, SetReasonMissingKey)
 	exact := make([]SignatureFact, 16)
 	for index := range exact {
 		exact[index] = fact
@@ -320,11 +310,11 @@ func TestSelectedProjectionEnforcesCompleteSignatureFactHardBound(t *testing.T) 
 
 // TestPermanentProjectionRequiresACompatibleOutcomeDriver rejects forged aggregate reasons over unrelated set facts.
 func TestPermanentProjectionRequiresACompatibleOutcomeDriver(t *testing.T) {
-	pass := mustProjectionSignatureFact(t, SetAlgorithmRSA, SetStatusPass, SetReasonNone, false, false)
-	fail := mustProjectionSignatureFact(t, SetAlgorithmRSA, SetStatusFail, SetReasonSignatureMismatch, false, false)
-	missing := mustProjectionSignatureFact(t, SetAlgorithmRSA, SetStatusPermerror, SetReasonMissingKey, false, false)
-	provider := mustProjectionSignatureFact(t, SetAlgorithmRSA, SetStatusPermerror, SetReasonProviderPermanent, false, false)
-	ignored := mustProjectionSignatureFact(t, SetAlgorithmUnknown, SetStatusIgnored, SetReasonUnsupportedAlgorithm, false, false)
+	pass := mustProjectionSignatureFact(t, SetAlgorithmRSA, SetStatusPass, SetReasonNone)
+	fail := mustProjectionSignatureFact(t, SetAlgorithmRSA, SetStatusFail, SetReasonSignatureMismatch)
+	missing := mustProjectionSignatureFact(t, SetAlgorithmRSA, SetStatusPermerror, SetReasonMissingKey)
+	provider := mustProjectionSignatureFact(t, SetAlgorithmRSA, SetStatusPermerror, SetReasonProviderPermanent)
+	ignored := mustProjectionSignatureFact(t, SetAlgorithmUnknown, SetStatusIgnored, SetReasonUnsupportedAlgorithm)
 	invalid := []struct {
 		name   string
 		reason VerificationReason
@@ -399,7 +389,7 @@ func TestSignatureFactStatusReasonAlgorithmMatrix(t *testing.T) {
 		}{SetAlgorithmRSA, SetStatusPermerror, reason})
 	}
 	for _, row := range valid {
-		if fact, err := NewSignatureFact(row.algorithm, row.status, row.reason, false, false); err != nil || !fact.Valid() {
+		if fact, err := NewSignatureFact(row.algorithm, row.status, row.reason); err != nil || !fact.Valid() {
 			t.Fatalf("valid row %q/%q/%q = %#v error=%v", row.algorithm, row.status, row.reason, fact, err)
 		}
 	}
@@ -407,21 +397,18 @@ func TestSignatureFactStatusReasonAlgorithmMatrix(t *testing.T) {
 		algorithm SetAlgorithm
 		status    SetStatus
 		reason    SetReason
-		testing   bool
 	}{
-		{SetAlgorithmUnknown, SetStatusPass, SetReasonNone, false},
-		{SetAlgorithmRSA, SetStatusPass, SetReasonSignatureMismatch, false},
-		{SetAlgorithmUnknown, SetStatusFail, SetReasonSignatureMismatch, false},
-		{SetAlgorithmRSA, SetStatusIgnored, SetReasonUnsupportedAlgorithm, false},
-		{SetAlgorithmRSA, SetStatusTemperror, SetReasonProviderTemporary, true},
-		{SetAlgorithmRSA, SetStatusPermerror, SetReasonMissingKey, true},
-		{SetAlgorithmUnknown, SetStatusPermerror, SetReasonMissingKey, false},
-		{SetAlgorithmRSA, SetStatusPermerror, SetReasonProviderTemporary, false},
-		{SetAlgorithmRSA, SetStatusPermerror, SetReasonUnsupportedAlgorithm, false},
-		{SetAlgorithm("future"), SetStatusPermerror, SetReasonInternalContract, false},
+		{SetAlgorithmUnknown, SetStatusPass, SetReasonNone},
+		{SetAlgorithmRSA, SetStatusPass, SetReasonSignatureMismatch},
+		{SetAlgorithmUnknown, SetStatusFail, SetReasonSignatureMismatch},
+		{SetAlgorithmRSA, SetStatusIgnored, SetReasonUnsupportedAlgorithm},
+		{SetAlgorithmUnknown, SetStatusPermerror, SetReasonMissingKey},
+		{SetAlgorithmRSA, SetStatusPermerror, SetReasonProviderTemporary},
+		{SetAlgorithmRSA, SetStatusPermerror, SetReasonUnsupportedAlgorithm},
+		{SetAlgorithm("future"), SetStatusPermerror, SetReasonInternalContract},
 	}
 	for _, row := range invalid {
-		if fact, err := NewSignatureFact(row.algorithm, row.status, row.reason, row.testing, false); err == nil || fact.Valid() {
+		if fact, err := NewSignatureFact(row.algorithm, row.status, row.reason); err == nil || fact.Valid() {
 			t.Fatalf("invalid row %q/%q/%q = %#v error=%v", row.algorithm, row.status, row.reason, fact, err)
 		}
 	}
@@ -429,10 +416,10 @@ func TestSignatureFactStatusReasonAlgorithmMatrix(t *testing.T) {
 
 // TestCurrentProjectionBindsProtocolToSignatureOutcomes verifies aggregate coherence.
 func TestCurrentProjectionBindsProtocolToSignatureOutcomes(t *testing.T) {
-	pass := mustProjectionSignatureFact(t, SetAlgorithmRSA, SetStatusPass, SetReasonNone, false, false)
-	fail := mustProjectionSignatureFact(t, SetAlgorithmRSA, SetStatusFail, SetReasonSignatureMismatch, false, false)
-	temporary := mustProjectionSignatureFact(t, SetAlgorithmRSA, SetStatusTemperror, SetReasonProviderTemporary, false, false)
-	permanent := mustProjectionSignatureFact(t, SetAlgorithmRSA, SetStatusPermerror, SetReasonMissingKey, false, false)
+	pass := mustProjectionSignatureFact(t, SetAlgorithmRSA, SetStatusPass, SetReasonNone)
+	fail := mustProjectionSignatureFact(t, SetAlgorithmRSA, SetStatusFail, SetReasonSignatureMismatch)
+	temporary := mustProjectionSignatureFact(t, SetAlgorithmRSA, SetStatusTemperror, SetReasonProviderTemporary)
+	permanent := mustProjectionSignatureFact(t, SetAlgorithmRSA, SetStatusPermerror, SetReasonMissingKey)
 	hop := mustProjectionHop(t, 1, TransitionOrigin)
 	for _, tt := range []struct {
 		name     string
@@ -456,9 +443,9 @@ func TestCurrentProjectionBindsProtocolToSignatureOutcomes(t *testing.T) {
 }
 
 // mustProjectionSignatureFact constructs one coherent test set fact.
-func mustProjectionSignatureFact(t *testing.T, algorithm SetAlgorithm, status SetStatus, reason SetReason, testing, strict bool) SignatureFact {
+func mustProjectionSignatureFact(t *testing.T, algorithm SetAlgorithm, status SetStatus, reason SetReason) SignatureFact {
 	t.Helper()
-	fact, err := NewSignatureFact(algorithm, status, reason, testing, strict)
+	fact, err := NewSignatureFact(algorithm, status, reason)
 	if err != nil {
 		t.Fatalf("NewSignatureFact() error = %v", err)
 	}

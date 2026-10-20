@@ -71,7 +71,7 @@ func (e Entry) ValidForLimits(limits datasource.Limits) bool { return e.validFor
 // validForLimits verifies every exact entry fact under one datasource contract.
 func (e Entry) validForLimits(limits datasource.Limits) bool {
 	if limits.Validate() != nil || !e.complete || !e.handleID.Valid() || !e.handle.Valid() ||
-		!e.profileID.Valid() || !e.algorithm.Known() || len(e.uses) == 0 ||
+		!e.profileID.Valid() || !e.algorithm.Signable() || len(e.uses) == 0 ||
 		e.handleID.ByteLen() > limits.MaxIdentifierBytes ||
 		e.profileID.ByteLen() > limits.MaxIdentifierBytes {
 		return false

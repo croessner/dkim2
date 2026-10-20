@@ -135,19 +135,6 @@ func TestVerifyResultZeroValueCannotPass(t *testing.T) {
 	}
 }
 
-// TestVerifyResultRejectsMetadataWithoutUniqueKey verifies public invariant ownership.
-func TestVerifyResultRejectsMetadataWithoutUniqueKey(t *testing.T) {
-	result := newVerifyResult(verifyResultData{
-		state: ResultStatePERMERROR, scope: VerificationScopeCurrent,
-		historicalContent: HistoricalStateNotEvaluated, historicalSignatures: HistoricalStateNotEvaluated,
-		custodyStructure: CustodyStructureNotPresent, primaryReason: ReasonMissingKey,
-		signatures: []SignatureSetFact{newSignatureSetFact(AlgorithmRSASHA256, SignatureStatusPERMERROR, ReasonMissingKey, "", newKeyPolicyMetadata(true, false))},
-	})
-	if result.PrimaryReason() != ReasonInternalContract {
-		t.Fatalf("PrimaryReason() = %q", result.PrimaryReason())
-	}
-}
-
 // TestVerifyResultRejectsImpossibleCustodyPass proves indeterminate and terminal custody cannot pass.
 func TestVerifyResultRejectsImpossibleCustodyPass(t *testing.T) {
 	for _, custody := range []CustodyStructure{

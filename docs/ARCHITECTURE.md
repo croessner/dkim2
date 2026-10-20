@@ -715,8 +715,10 @@ Responsibilities:
 - Consume one already-concatenated TXT RR payload while retaining RR boundaries
   and failing closed on a multi-record RRset.
 - Parse DNS-01 records through `internal/tagvalue`, including revocation,
-  ignored extension/retired tags, DNS-optional terminal Base64 padding with
-  canonical pad bits, and bounded `t=y`/`t=s` metadata.
+  ignored extension/retired tags, and DNS-optional terminal Base64 padding with
+  canonical pad bits. The `t=` tag is retired by DNS-01 Section 3.4.1: it is
+  checked only by the generic tag-list rules (duplicates, control bytes,
+  framing, size limits) and is otherwise ignored like any unknown tag.
 - Decode RSA public DER as either PKCS#1 `RSAPublicKey` or X.509
   `SubjectPublicKeyInfo`, raw 32-byte Ed25519 public keys, and raw 1344-byte
   `k=mldsa44-ed25519-sha512` composite keys (1312-byte ML-DSA-44 public key
@@ -738,8 +740,9 @@ Design notes:
 - Derived qnames and cache keys are sensitive and never enter errors or results.
 - DNS-01 lowercase `k=` follows the corrected DNS-01 grammar; no signature
   `q=` API is invented for the active DKIM2 grammar.
-- DNSSEC is diagnostic-only. Testing and strict-identity flags are metadata,
-  not cryptographic verdict or MTA policy.
+- DNSSEC is diagnostic-only. DNS key records never yield testing or
+  strict-identity semantics; their historical `t=y`/`t=s` meanings concern
+  DKIM1 only.
 - A final canceled waiter cancels and owns the flight until a compliant
   transport returns. No helper goroutine masks an injected transport that
   ignores context.
@@ -827,8 +830,9 @@ Design notes:
 - A message can be cryptographically valid and still fail local policy.
 - A message can be cryptographically invalid but still be accepted by a
   permissive deployment policy.
-- DNS `t=y` is independent of local testing mode. A coherent testing signer is
-  handled as unsigned policy input with `continue`, while the authoritative
+- DNS key records carry no policy input: the retired `t=` tag is ignored
+  (DNS-01 Section 3.4.1). Only the explicitly configured local `testing`
+  policy mode relaxes a verdict to `continue`, and the authoritative
   verification state remains unchanged.
 - The result model must preserve that distinction.
 
@@ -1909,12 +1913,31 @@ Replay storage requirements:
   misconfigured, and other closed error outcomes, with degradation represented
   separately as store state.
 
+Replay detection is local delivery policy (Draft-07 Section 15.1), layered
+over the stateless DKIM2 validity result: a detected replay makes the
+`AuthenticationResult` `FAIL` with `duplicate_message_without_exploded` while
+the underlying `VerifyResult` stays `PASS`. Only messages carrying more than
+one DKIM2-Signature are counted, because the Section 15.1 concern is copies
+re-sent by an intermediary; a message carrying only the originator's `i=1`
+signature is a direct delivery and reports replay class `not_eligible` without
+touching the store. `not_checked` stays reserved for results that did not reach
+PASS/accept, so a daemon that skipped replay after PASS remains detectable. An authenticated `exploded` flag on any signature in the
+chain marks repeated copies as expected.
+
 Replay key material is one message-wide fixed-size SHA-256 projection of the
-exact canonical header and body inputs reconstructed and independently verified
-at `m=1`. Current recipients, terminal signatures, routes, and advertised hash
-algorithm selection are deliberately not identity inputs. The projection is
-framed as `dkim2-replay-origin-v1`; the deployment HMAC frame is
-`dkim2-replay-v2` and reports algorithm `dkim2-replay-hmac-sha256-v2`.
+authenticated `m=1` Message-Instance hash declarations: the SHA-256
+header-hash and body-hash pair, or the SHA-512 pair only when no SHA-256 pair
+exists. Every copy of one original carries byte-identical `m=1` declarations,
+so the identity needs neither the reconstructed origin bytes nor an available
+body; a `"b":null` Recipe therefore no longer makes the identity unavailable.
+The local equality is deliberately finer than the body-only prose of Section
+15.1, which would merge distinct originals that share a body. A SHA-512-only
+origin never groups with a mixed-algorithm origin. Current recipients, terminal
+signatures, routes, and later instances are deliberately not identity inputs.
+The projection is framed as `dkim2-replay-origin-declaration-v1`; the
+deployment HMAC frame is `dkim2-replay-v2` and reports algorithm
+`dkim2-replay-hmac-sha256-v2`. DSN propagation coordinates use the same
+projection regardless of replay eligibility.
 
 The Draft-07 identifier rotates the replay HMAC epoch. Operators must use the
 documented drain-only transition: Draft-05 and Draft-06 instances never process

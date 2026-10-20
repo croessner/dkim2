@@ -718,9 +718,9 @@ func TestProcessRouteClassifiesDuplicateContentType(t *testing.T) {
 // TestProcessRouteProjectsDeliveryStatus proves the process route emits the
 // projection with tenant precedence, keeps it absent for a non-DSN message,
 // records the received-DSN policy finding, maps a datasource outage to a
-// temporary local hop with a tempfail disposition, and reports a repeated
-// notification as a replay under the outer policy. Each first-seen call uses
-// its own notification because the route shares the daemon's replay store.
+// temporary local hop with a tempfail disposition, and does not count a
+// repeated notification as a replay: a DSN carries only its generator's i=1
+// signature, so it is a direct delivery outside Draft-07 Section 15.1.
 func TestProcessRouteProjectsDeliveryStatus(t *testing.T) {
 	harness := startPropagateRouteHarness(t)
 	status, body := harness.post(t, processPath, localCapabilityHeader, harness.processSecret, harness.processBody(t, propagationtest.CaseNullPreviousSender, ""))
@@ -757,14 +757,14 @@ func TestProcessRouteProjectsDeliveryStatus(t *testing.T) {
 		t.Fatalf("outage projection = %v", projection)
 	}
 	status, body = harness.post(t, processPath, localCapabilityHeader, harness.processSecret, harness.processBody(t, propagationtest.CaseRunOfOne, propagateRouteTenant))
-	if status != http.StatusOK || body["disposition"] != "reject" {
-		t.Fatalf("replayed status=%d disposition=%v", status, body["disposition"])
+	if status != http.StatusOK || body["disposition"] != testDispositionAccept {
+		t.Fatalf("repeated status=%d disposition=%v", status, body["disposition"])
 	}
-	if replay := body["replay"].(map[string]any); replay["class"] != "replayed" {
-		t.Fatalf("replayed notification replay = %v", replay)
+	if replay := body["replay"].(map[string]any); replay["class"] != "not_eligible" {
+		t.Fatalf("repeated direct notification replay = %v", replay)
 	}
 	if projection = body["delivery_status"].(map[string]any); projection["local_hop"] != testLocalHopLocal {
-		t.Fatalf("replayed projection = %v", projection)
+		t.Fatalf("repeated projection = %v", projection)
 	}
 	process := harness.processBody(t, propagationtest.CaseNextDomainRun, propagateRouteTenant)
 	process = strings.Replace(process, `"mail_from":"<>"`, `"mail_from":"<bounce@destination.example>"`, 1)

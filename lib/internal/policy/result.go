@@ -66,7 +66,6 @@ type Decision struct {
 	verdict             Verdict
 	primaryReason       PolicyReason
 	feedbackIntent      FeedbackIntent
-	dnsTestingEffective bool
 	findings            []Finding
 	actions             []Action
 	initialized         bool
@@ -88,9 +87,6 @@ func (d Decision) PrimaryReason() PolicyReason { return d.primaryReason }
 // FeedbackIntent returns bounded authenticated feedback intent by value.
 func (d Decision) FeedbackIntent() FeedbackIntent { return d.feedbackIntent }
 
-// DNSTestingEffective reports whether DNS testing changed policy treatment.
-func (d Decision) DNSTestingEffective() bool { return d.dnsTestingEffective }
-
 // Findings returns an independent ordered copy of policy findings.
 func (d Decision) Findings() []Finding { return slices.Clone(d.findings) }
 
@@ -99,7 +95,7 @@ func (d Decision) Actions() []Action { return slices.Clone(d.actions) }
 
 // IsZero reports whether the decision carries no initialized policy state.
 func (d Decision) IsZero() bool {
-	return !d.initialized && !d.authenticationFinal && d.protocol == "" && d.mode == "" && d.verdict == "" && d.primaryReason == "" && !d.feedbackIntent.Valid() && !d.dnsTestingEffective && len(d.findings) == 0 && len(d.actions) == 0
+	return !d.initialized && !d.authenticationFinal && d.protocol == "" && d.mode == "" && d.verdict == "" && d.primaryReason == "" && !d.feedbackIntent.Valid() && len(d.findings) == 0 && len(d.actions) == 0
 }
 
 // Valid reports whether decision state satisfies closed base invariants.
@@ -117,7 +113,7 @@ func (d Decision) Valid() bool {
 		}
 	}
 	remainder := d.findings[len(expectedReasons):]
-	if !validFindingOrder(remainder) || dnsFindingCount(remainder) > 1 {
+	if !validFindingOrder(remainder) {
 		return false
 	}
 	dsnVerdict, dsnReason, dsnReplace, dsnCoherent := receivedDSNDecisionCoherent(d.protocol, d.mode, remainder)
@@ -127,21 +123,9 @@ func (d Decision) Valid() bool {
 	if dsnReplace {
 		expectedVerdict, expectedPrimary = dsnVerdict, dsnReason
 	}
-	if d.verdict != expectedVerdict || d.primaryReason != expectedPrimary || !dnsDecisionCoherent(d.protocol, d.dnsTestingEffective, remainder) ||
+	if d.verdict != expectedVerdict || d.primaryReason != expectedPrimary ||
 		!feedbackFindingCoherent(d.feedbackIntent, d.findings) {
 		return false
-	}
-	return true
-}
-
-// dnsDecisionCoherent binds the single DNS classification to protocol treatment.
-func dnsDecisionCoherent(protocol ProtocolClass, effective bool, findings []Finding) bool {
-	count := dnsFindingCount(findings)
-	if count > 1 || effective != hasFinding(findings, ReasonDNSTestingEffective) {
-		return false
-	}
-	if effective {
-		return protocol == ProtocolPASS || protocol == ProtocolFAIL || protocol == ProtocolPERMERROR
 	}
 	return true
 }
@@ -161,21 +145,14 @@ func (d Decision) basicValid() bool {
 	return true
 }
 
-// expectedBaseOutcome derives mode findings and DNS-effective precedence.
+// expectedBaseOutcome derives mode findings and the base verdict.
 func (d Decision) expectedBaseOutcome() (Verdict, PolicyReason, []PolicyReason) {
 	if d.authenticationFinal {
 		verdict := strictVerdict(d.protocol)
 		reason := reasonForProtocol(d.protocol)
 		return verdict, reason, []PolicyReason{reason}
 	}
-	verdict, primary, reasons := baseOutcome(d.protocol, d.mode)
-	if !d.dnsTestingEffective {
-		return verdict, primary, reasons
-	}
-	if d.mode == ModePermissive && len(reasons) == 2 && reasons[1] == ReasonPermissiveOverride {
-		reasons = reasons[:1]
-	}
-	return VerdictContinue, ReasonDNSTestingEffective, reasons
+	return baseOutcome(d.protocol, d.mode)
 }
 
 // newAuthenticationDecision seals a non-overridable final replay outcome while retaining authenticated policy findings.
@@ -192,8 +169,7 @@ func newAuthenticationDecision(protocol ProtocolClass, mode Mode, source Decisio
 	derived := make([]Finding, 0, len(source.findings))
 	for _, current := range source.findings {
 		switch {
-		case current.reason == ReasonProtocolPass || current.reason == ReasonTestingModeObserve || current.reason == ReasonPermissiveOverride ||
-			current.reason == ReasonDNSTestingEffective || current.reason == ReasonDNSTestingMixed || current.reason == ReasonDNSTestingIneligible:
+		case current.reason == ReasonProtocolPass || current.reason == ReasonTestingModeObserve || current.reason == ReasonPermissiveOverride:
 			continue
 		case findingClass(current.reason) == receivedDSNFindingClass:
 			// The final replay outcome is not PASS, so the received-DSN row
@@ -222,23 +198,12 @@ func newAuthenticationDecision(protocol ProtocolClass, mode Mode, source Decisio
 	return decision, nil
 }
 
-// dnsFindingCount counts the closed DNS classification findings.
-func dnsFindingCount(findings []Finding) int {
-	count := 0
-	for _, finding := range findings {
-		if findingClass(finding.reason) == 1 {
-			count++
-		}
-	}
-	return count
-}
-
 // newDecision constructs one immutable validated policy decision.
-func newDecision(protocol ProtocolClass, mode Mode, verdict Verdict, primary PolicyReason, feedback FeedbackIntent, dnsEffective bool, findings []Finding) (Decision, error) {
+func newDecision(protocol ProtocolClass, mode Mode, verdict Verdict, primary PolicyReason, feedback FeedbackIntent, findings []Finding) (Decision, error) {
 	decision := Decision{
 		protocol: protocol, mode: mode, verdict: verdict, primaryReason: primary,
-		feedbackIntent: feedback, dnsTestingEffective: dnsEffective,
-		findings: slices.Clone(findings), actions: []Action{{kind: actionForVerdict(verdict)}}, initialized: true,
+		feedbackIntent: feedback,
+		findings:       slices.Clone(findings), actions: []Action{{kind: actionForVerdict(verdict)}}, initialized: true,
 	}
 	if !decision.Valid() {
 		return Decision{}, newError(ErrorInternalContract)
@@ -267,8 +232,6 @@ func validFindingOrder(findings []Finding) bool {
 // findingClass returns the frozen finding class order.
 func findingClass(reason PolicyReason) int {
 	switch reason {
-	case ReasonDNSTestingEffective, ReasonDNSTestingMixed, ReasonDNSTestingIneligible:
-		return 1
 	case ReasonFeedbackRequested:
 		return 2
 	case ReasonFeedbackRelaySelected, ReasonFeedHereInert:
@@ -283,16 +246,6 @@ func findingClass(reason PolicyReason) int {
 	default:
 		return 0
 	}
-}
-
-// hasFinding reports whether one exact reason is present.
-func hasFinding(findings []Finding, reason PolicyReason) bool {
-	for _, finding := range findings {
-		if finding.reason == reason {
-			return true
-		}
-	}
-	return false
 }
 
 // feedbackFindingCoherent binds intent booleans and selected sequence to findings.

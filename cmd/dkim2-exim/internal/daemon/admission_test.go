@@ -153,12 +153,12 @@ func TestRequiredProcessMembersRejectNestedAmbiguity(t *testing.T) {
 		{name: "finding sequence null", mutate: func(document map[string]any) {
 			document["policy"].(map[string]any)["findings"].([]any)[0].(map[string]any)["sequence"] = nil
 		}},
-		{name: "key policy member absent", mutate: func(document map[string]any) {
+		{name: "signature reason absent", mutate: func(document map[string]any) {
 			signature := document["verification"].(map[string]any)["signature_sets"].([]any)[0].(map[string]any)
-			delete(signature["key_policy"].(map[string]any), "testing_declared")
+			delete(signature, "reason")
 		}},
-		{name: "key policy null", mutate: func(document map[string]any) {
-			document["verification"].(map[string]any)["signature_sets"].([]any)[0].(map[string]any)["key_policy"] = nil
+		{name: "signature reason null", mutate: func(document map[string]any) {
+			document["verification"].(map[string]any)["signature_sets"].([]any)[0].(map[string]any)["reason"] = nil
 		}},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -269,13 +269,8 @@ func validProcessFixture() generated.ProcessResponse {
 			Scope:                generated.Chain,
 			SignatureSets: []generated.SignatureSetResult{{
 				Algorithm: generated.Ed25519Sha256,
-				KeyPolicy: generated.KeyPolicyResult{
-					StrictIdentityApplicable: false,
-					StrictIdentityDeclared:   false,
-					TestingDeclared:          false,
-				},
-				Reason: generated.VerificationReasonNone,
-				Status: generated.SignatureSetResultStatusPass,
+				Reason:    generated.VerificationReasonNone,
+				Status:    generated.SignatureSetResultStatusPass,
 			}},
 			State: generated.PASS,
 		},

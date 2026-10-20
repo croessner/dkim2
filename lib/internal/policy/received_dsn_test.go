@@ -62,9 +62,9 @@ func receivedDSNRows(t *testing.T) []receivedDSNFactsRow {
 // mustReceivedDSNProjection seals a PASS projection carrying the facts.
 func mustReceivedDSNProjection(t *testing.T, protocol ProtocolClass, reason VerificationReason, facts ReceivedDSNFacts, hops []HopFact) Projection {
 	t.Helper()
-	signatureFacts := []SignatureFact{mustProjectionSignatureFact(t, SetAlgorithmEd25519, SetStatusPass, SetReasonNone, false, false)}
+	signatureFacts := []SignatureFact{mustProjectionSignatureFact(t, SetAlgorithmEd25519, SetStatusPass, SetReasonNone)}
 	if protocol != ProtocolPASS {
-		signatureFacts = []SignatureFact{mustProjectionSignatureFact(t, SetAlgorithmEd25519, SetStatusFail, SetReasonSignatureMismatch, false, false)}
+		signatureFacts = []SignatureFact{mustProjectionSignatureFact(t, SetAlgorithmEd25519, SetStatusFail, SetReasonSignatureMismatch)}
 	}
 	base, err := NewSelectedProjection(protocol, reason, 1, hops, signatureFacts, DefaultLimits())
 	if err != nil {

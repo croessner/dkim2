@@ -155,11 +155,6 @@ func TestPublicationProviderMatrixRejectsResultErrorAndTypedNilPairs(t *testing.
 			var typedNil *publicationTestError
 			return verify.PublicKey{}, typedNil
 		}, code: ErrorCodeInternalInvariant},
-		{name: "missing with disallowed policy", fn: func(_ context.Context, q verify.KeyQuery) (verify.PublicKey, error) {
-			return verify.PublicKey{Algorithm: q.Algorithm, Metadata: verify.KeyMetadata{
-				Status: verify.KeyStatusMissing, Policy: verify.KeyPolicyMetadata{TestingDeclared: true},
-			}}, nil
-		}, code: ErrorCodeInternalInvariant},
 		{name: "oversized provider source", fn: func(_ context.Context, q verify.KeyQuery) (verify.PublicKey, error) {
 			return verify.PublicKey{Algorithm: q.Algorithm, Material: public, Metadata: verify.KeyMetadata{
 				Status: verify.KeyStatusFound, Source: strings.Repeat("a", 65),

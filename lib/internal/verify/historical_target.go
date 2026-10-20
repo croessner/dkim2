@@ -135,8 +135,8 @@ func (v Verifier) VerifyHistoricalTarget(ctx context.Context, embedded EmbeddedI
 	if parsed.TimestampSeconds() > request.MaxTimestamp {
 		return HistoricalTargetTimestampRejected, nil
 	}
-	switch timestampStatusAt(request.ReferenceTime, parsed.TimestampSeconds(), v.options.TimestampPolicy) {
-	case TimestampStatusPass, TimestampStatusNoMaxAge:
+	switch timestampStatusAt(request.ReferenceTime, parsed.TimestampSeconds()) {
+	case TimestampStatusPass:
 	default:
 		return HistoricalTargetTimestampRejected, nil
 	}

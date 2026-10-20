@@ -24,8 +24,6 @@ func TestNewResultRejectsUnknownAndImpossibleFacts(t *testing.T) {
 		{name: "unknown reason", state: StatePERMERROR, custody: CustodyNotEvaluated, reason: Reason("raw-secret")},
 		{name: "unknown check", state: StatePERMERROR, custody: CustodyNotEvaluated, reason: ReasonInternalContract, checks: []CheckFact{{Class: CheckClass("raw-secret"), Reason: ReasonInternalContract}}},
 		{name: "unknown signature", state: StatePERMERROR, custody: CustodyNotPresent, reason: ReasonInternalContract, signatures: []SignatureSetFact{{Algorithm: Algorithm("raw-secret"), Status: SignaturePASS, Reason: ReasonNone}}},
-		{name: "applicable strict metadata", state: StatePERMERROR, custody: CustodyNotPresent, reason: ReasonInternalContract, signatures: []SignatureSetFact{{Algorithm: AlgorithmRSASHA256, Status: SignaturePASS, Reason: ReasonNone, KeyPolicy: KeyPolicyMetadata{StrictIdentityApplicable: true}}}},
-		{name: "metadata without unique key", state: StatePERMERROR, custody: CustodyNotPresent, reason: ReasonMissingKey, signatures: []SignatureSetFact{{Algorithm: AlgorithmRSASHA256, Status: SignaturePERMERROR, Reason: ReasonMissingKey, KeyPolicy: KeyPolicyMetadata{TestingDeclared: true}}}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -47,7 +45,7 @@ func TestServiceErrorRejectsUnknownDiagnosticTokens(t *testing.T) {
 
 // TestAuthenticatedOriginCompletesPolicyProjection reproduces the one-hop projection split.
 func TestAuthenticatedOriginCompletesPolicyProjection(t *testing.T) {
-	signatureFact, err := policy.NewSignatureFact(policy.SetAlgorithmRSA, policy.SetStatusPass, policy.SetReasonNone, true, true)
+	signatureFact, err := policy.NewSignatureFact(policy.SetAlgorithmRSA, policy.SetStatusPass, policy.SetReasonNone)
 	if err != nil {
 		t.Fatalf("policy.NewSignatureFact() error = %v", err)
 	}
@@ -68,7 +66,7 @@ func TestAuthenticatedOriginCompletesPolicyProjection(t *testing.T) {
 		t.Fatalf("completed origin = scope=%q content=%q signatures=%q projection=%#v", result.Scope(), result.HistoricalContent(), result.HistoricalSignatures(), completed)
 	}
 	if hops, facts := completed.Hops(), completed.SignatureFacts(); len(hops) != 1 || len(facts) != 1 || hops[0].Sequence() != 1 ||
-		hops[0].Transition() != policy.TransitionOrigin || !facts[0].TestingDeclared() || !facts[0].StrictIdentityDeclared() {
+		hops[0].Transition() != policy.TransitionOrigin || facts[0] != signatureFact {
 		t.Fatalf("completed facts = hops=%#v signatures=%#v", hops, facts)
 	}
 	evaluator, err := policy.NewEvaluator(policy.DefaultConfig())
@@ -88,7 +86,7 @@ func TestAuthenticatedOriginCompletesPolicyProjection(t *testing.T) {
 
 // TestAuthenticatedOriginPreservesSignedFlags verifies the upgrade cannot replace authenticated hop facts.
 func TestAuthenticatedOriginPreservesSignedFlags(t *testing.T) {
-	signatureFact, err := policy.NewSignatureFact(policy.SetAlgorithmEd25519, policy.SetStatusPass, policy.SetReasonNone, false, false)
+	signatureFact, err := policy.NewSignatureFact(policy.SetAlgorithmEd25519, policy.SetStatusPass, policy.SetReasonNone)
 	if err != nil {
 		t.Fatalf("policy.NewSignatureFact() error = %v", err)
 	}

@@ -29,7 +29,6 @@ const (
 	testSignPath                   = "/v1/sign"
 	testPropertyAPIVersion         = "api_version"
 	testPropertyClass              = "class"
-	testPropertyDNSTesting         = "dns_testing_effective"
 	testPropertyDraft              = "draft"
 	testPropertyFeedback           = "feedback"
 	testPropertyDisposition        = "disposition"
@@ -718,20 +717,16 @@ func assertObjectInventories(t *testing.T, document *openapi3.T) {
 			required:   []string{testPropertyClass, testPropertyReason},
 		},
 		"SignatureSetResult": {
-			properties: []string{"algorithm", "key_policy", testPropertyReason, "selector", testPropertyStatus},
-			required:   []string{"algorithm", "key_policy", testPropertyReason, testPropertyStatus},
-		},
-		"KeyPolicyResult": {
-			properties: []string{"strict_identity_applicable", "strict_identity_declared", "testing_declared"},
-			required:   []string{"strict_identity_applicable", "strict_identity_declared", "testing_declared"},
+			properties: []string{"algorithm", testPropertyReason, "selector", testPropertyStatus},
+			required:   []string{"algorithm", testPropertyReason, testPropertyStatus},
 		},
 		"PolicyResult": {
 			properties: []string{
-				testPropertyDNSTesting, "feedback",
+				"feedback",
 				"findings", "mode", testPropertyPrimaryReason, "verdict",
 			},
 			required: []string{
-				testPropertyDNSTesting, "feedback",
+				"feedback",
 				"findings", "mode", testPropertyPrimaryReason, "verdict",
 			},
 		},
@@ -858,7 +853,6 @@ func assertFrozenEnums(t *testing.T, document *openapi3.T) {
 		"PolicyReason": {
 			"protocol_pass", "protocol_fail", "protocol_permerror",
 			"protocol_temperror", "permissive_override", "testing_mode_observe",
-			"dns_testing_effective", "dns_testing_mixed", "dns_testing_ineligible",
 			"feedback_requested", "feedback_relay_selected", "feedhere_inert",
 			"exploded_reported",
 			"received_dsn_outer_policy", "received_dsn_structure_invalid",
@@ -903,15 +897,8 @@ func assertFrozenEnums(t *testing.T, document *openapi3.T) {
 	}
 	assertPropertyEnum(t, document, "SignatureSetResult", "status",
 		[]string{"pass", "fail", "permerror", testValueTemperror, "ignored"})
-	strictIdentity := requiredSchema(t, document, "KeyPolicyResult").
-		Properties["strict_identity_applicable"].Value
-	if strictIdentity == nil || !strictIdentity.Type.Is("boolean") ||
-		len(strictIdentity.Enum) != 1 {
-		t.Fatal("strict_identity_applicable is not a boolean singleton")
-	}
-	strictIdentityValue, ok := strictIdentity.Enum[0].(bool)
-	if !ok || strictIdentityValue {
-		t.Fatal("strict_identity_applicable is not singleton false")
+	if _, retired := document.Components.Schemas["KeyPolicyResult"]; retired {
+		t.Fatal("KeyPolicyResult must stay removed: DNS-01 retired the t= tag")
 	}
 	assertPropertyEnum(t, document, "PolicyResult", "mode",
 		[]string{"strict", "permissive", "testing"})
@@ -922,7 +909,7 @@ func assertFrozenEnums(t *testing.T, document *openapi3.T) {
 	assertPropertyEnum(t, document, "PolicyFinding", "severity",
 		[]string{"info", "warning", "permanent", "temporary"})
 	assertPropertyEnum(t, document, "ReplayResult", "class",
-		[]string{"not_checked", "disabled", "first_seen", "exploded", "replayed", testValueIndeterminate})
+		[]string{"not_checked", "not_eligible", "disabled", "first_seen", "exploded", "replayed", testValueIndeterminate})
 	assertPropertyEnum(t, document, "HealthResponse", "status", []string{"alive"})
 	assertPropertyEnum(t, document, "ReadinessResponse", "status", []string{"ready"})
 	assertPropertyEnum(t, document, "ErrorResponse", "category",

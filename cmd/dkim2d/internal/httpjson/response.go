@@ -22,13 +22,10 @@ type verificationCheckSnapshot struct {
 }
 
 type signatureSetSnapshot struct {
-	algorithm                dkim2.Algorithm
-	status                   dkim2.SignatureStatus
-	reason                   dkim2.ReasonCode
-	selector                 string
-	testingDeclared          bool
-	strictIdentityDeclared   bool
-	strictIdentityApplicable bool
+	algorithm dkim2.Algorithm
+	status    dkim2.SignatureStatus
+	reason    dkim2.ReasonCode
+	selector  string
 }
 
 type verificationSnapshot struct {
@@ -68,7 +65,6 @@ type policySnapshotState struct {
 	mode                                     dkim2.PolicyMode
 	verdict                                  dkim2.PolicyVerdict
 	primaryReason                            dkim2.PolicyReason
-	dnsTestingEffective                      bool
 	feedbackRequested, feedbackRelayRequired bool
 	feedbackRelaySequence                    uint64
 	feedbackHistory                          dkim2.PolicyHistoryCoverage
@@ -407,6 +403,7 @@ func mapAuthenticationResult(verification dkim2.VerifyResult, replay app.ReplayR
 		state = generated.TEMPERROR
 		reason = generated.AuthenticationResultPrimaryReasonReplayIndeterminate
 	case app.ReplayResultNotChecked:
+	case app.ReplayResultNotEligible:
 	case app.ReplayResultDisabled:
 	case app.ReplayResultFirstSeen:
 	case app.ReplayResultExploded:
@@ -474,6 +471,8 @@ func mapReplayClass(value app.ReplayResultClass) (generated.ReplayResultClass, b
 	switch value {
 	case app.ReplayResultNotChecked:
 		return generated.NotChecked, true
+	case app.ReplayResultNotEligible:
+		return generated.NotEligible, true
 	case app.ReplayResultDisabled:
 		return generated.Disabled, true
 	case app.ReplayResultFirstSeen:
@@ -499,16 +498,12 @@ func captureVerification(result dkim2.VerifyResult) verificationSnapshot {
 	signatures := result.SignatureSets()
 	signatureSnapshots := make([]signatureSetSnapshot, len(signatures))
 	for index, signature := range signatures {
-		metadata := signature.KeyPolicyMetadata()
 		selector, _ := signature.Selector()
 		signatureSnapshots[index] = signatureSetSnapshot{
-			algorithm:                signature.Algorithm(),
-			status:                   signature.Status(),
-			reason:                   signature.Reason(),
-			selector:                 selector,
-			testingDeclared:          metadata.TestingDeclared(),
-			strictIdentityDeclared:   metadata.StrictIdentityDeclared(),
-			strictIdentityApplicable: metadata.StrictIdentityApplicable(),
+			algorithm: signature.Algorithm(),
+			status:    signature.Status(),
+			reason:    signature.Reason(),
+			selector:  selector,
 		}
 	}
 	target := result.Target()
@@ -543,8 +538,7 @@ func capturePolicy(decision dkim2.PolicyDecision) policySnapshot {
 	return policySnapshot{state: &policySnapshotState{
 		source: decision, valid: decision.Valid(), verificationState: decision.VerificationState(),
 		mode: decision.Mode(), verdict: decision.Verdict(), primaryReason: decision.PrimaryReason(),
-		dnsTestingEffective: decision.DNSTestingEffective(),
-		feedbackRequested:   feedback.Requested(), feedbackRelayRequired: feedback.RelayRequired(),
+		feedbackRequested: feedback.Requested(), feedbackRelayRequired: feedback.RelayRequired(),
 		feedbackRelaySequence: feedback.RelaySequence(), feedbackHistory: feedback.HistoryCoverage(),
 		findings: findingSnapshots, actionValid: actions.Valid() && len(actionValues) == 1 && actionValues[0].Valid(),
 		actionKind: actionKind,
@@ -587,8 +581,7 @@ func mapVerificationSnapshot(input verificationSnapshot) (generated.Verification
 		algorithm, algorithmOK := mapAlgorithm(fact.algorithm)
 		status, statusOK := mapSignatureStatus(fact.status)
 		reason, factReasonOK := mapVerificationReason(fact.reason)
-		applicable, applicableOK := mapStrictIdentityApplicable(fact.strictIdentityApplicable)
-		if !algorithmOK || !statusOK || !factReasonOK || !applicableOK ||
+		if !algorithmOK || !statusOK || !factReasonOK ||
 			(fact.status == dkim2.SignatureStatusFAIL) != (fact.selector != "") || len(fact.selector) > 253 {
 			return generated.VerificationResult{}, newMappingError(MappingInternalContract)
 		}
@@ -596,11 +589,6 @@ func mapVerificationSnapshot(input verificationSnapshot) (generated.Verification
 			Algorithm: algorithm,
 			Status:    status,
 			Reason:    reason,
-			KeyPolicy: generated.KeyPolicyResult{
-				TestingDeclared:          fact.testingDeclared,
-				StrictIdentityDeclared:   fact.strictIdentityDeclared,
-				StrictIdentityApplicable: applicable,
-			},
 		}
 		if fact.selector != "" {
 			signatureSets[index].Selector = &fact.selector
@@ -690,7 +678,6 @@ func mapPolicySnapshot(input policySnapshot, verificationState dkim2.ResultState
 	}
 	return generated.PolicyResult{
 		Mode: mode, Verdict: verdict, PrimaryReason: primaryReason,
-		DnsTestingEffective: view.dnsTestingEffective,
 		Feedback: generated.PolicyFeedback{
 			Requested: view.feedbackRequested, RelayRequired: view.feedbackRelayRequired,
 			RelaySequence: relaySequence, HistoryCoverage: history,
@@ -712,7 +699,6 @@ func policySnapshotMatchesSource(input policySnapshot) bool {
 		input.state.mode == want.mode &&
 		input.state.verdict == want.verdict &&
 		input.state.primaryReason == want.primaryReason &&
-		input.state.dnsTestingEffective == want.dnsTestingEffective &&
 		input.state.feedbackRequested == want.feedbackRequested &&
 		input.state.feedbackRelayRequired == want.feedbackRelayRequired &&
 		input.state.feedbackRelaySequence == want.feedbackRelaySequence &&
@@ -984,14 +970,6 @@ func mapHistoricalState(value dkim2.HistoricalState) (generated.VerificationResu
 	return mapHistoricalContent(value)
 }
 
-// mapStrictIdentityApplicable maps the Draft-07 singleton false invariant.
-func mapStrictIdentityApplicable(value bool) (generated.KeyPolicyResultStrictIdentityApplicable, bool) {
-	if value {
-		return false, false
-	}
-	return generated.False, true
-}
-
 // mapCanonicalUint64 renders one positive identifier without JSON numeric loss.
 func mapCanonicalUint64(value uint64) (generated.CanonicalUint64, bool) {
 	if value == 0 {
@@ -1010,9 +988,6 @@ var policyReasonWire = map[dkim2.PolicyReason]generated.PolicyReason{
 	dkim2.PolicyReasonProtocolTemperror:             generated.ProtocolTemperror,
 	dkim2.PolicyReasonPermissiveOverride:            generated.PermissiveOverride,
 	dkim2.PolicyReasonTestingModeObserve:            generated.TestingModeObserve,
-	dkim2.PolicyReasonDNSTestingEffective:           generated.DnsTestingEffective,
-	dkim2.PolicyReasonDNSTestingMixed:               generated.DnsTestingMixed,
-	dkim2.PolicyReasonDNSTestingIneligible:          generated.DnsTestingIneligible,
 	dkim2.PolicyReasonFeedbackRequested:             generated.FeedbackRequested,
 	dkim2.PolicyReasonFeedbackRelaySelected:         generated.FeedbackRelaySelected,
 	dkim2.PolicyReasonFeedHereInert:                 generated.FeedhereInert,

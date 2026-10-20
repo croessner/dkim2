@@ -22,6 +22,7 @@ type IdentitySource interface {
 type originIdentitySource interface {
 	OriginReplayDigest() ([32]byte, bool)
 	Exploded() bool
+	ReplayEligible() bool
 }
 
 type legacyIdentitySource interface {
@@ -67,6 +68,7 @@ type identitySetState struct {
 	identity   Identity
 	identities []Identity
 	exploded   bool
+	eligible   bool
 	valid      bool
 }
 
@@ -87,7 +89,7 @@ func NewIdentitySet(source IdentitySource) (set IdentitySet, resultErr error) {
 			return IdentitySet{}, NewError(ErrorCodeInvalidRequest)
 		}
 		identity := Identity{state: &identityState{originDigest: digest, hasOriginDigest: true, draft: 2}}
-		return IdentitySet{state: &identitySetState{identity: identity, identities: []Identity{identity}, exploded: origin.Exploded(), valid: true}}, nil
+		return IdentitySet{state: &identitySetState{identity: identity, identities: []Identity{identity}, exploded: origin.Exploded(), eligible: origin.ReplayEligible(), valid: true}}, nil
 	}
 	legacy, ok := source.(legacyIdentitySource)
 	if !ok {
@@ -113,7 +115,7 @@ func NewIdentitySet(source IdentitySource) (set IdentitySet, resultErr error) {
 		identities[index] = Identity{state: &identityState{originDigest: digest, hasOriginDigest: true, recipientDigest: recipient, draft: 2}}
 		previous = recipient
 	}
-	return IdentitySet{state: &identitySetState{identity: identities[0], identities: identities, exploded: legacy.Exploded(), valid: true}}, nil
+	return IdentitySet{state: &identitySetState{identity: identities[0], identities: identities, exploded: legacy.Exploded(), eligible: true, valid: true}}, nil
 }
 
 // Valid reports whether the set contains the single message-wide identity.
@@ -148,6 +150,12 @@ func (s IdentitySet) Identity(index int) (Identity, error) {
 
 // Exploded returns the authenticated complete-chain OR fact for a valid set.
 func (s IdentitySet) Exploded() bool { return s.Valid() && s.state.exploded }
+
+// Eligible reports whether local replay policy counts this message. Messages
+// authenticated only by the originator's i=1 signature are direct deliveries,
+// not intermediary re-sends (Draft-07 Section 15.1), and are not counted.
+// The identity remains valid for DSN propagation coordinates.
+func (s IdentitySet) Eligible() bool { return s.Valid() && s.state.eligible }
 
 // String returns a constant representation without authenticated digest bytes.
 func (IdentitySet) String() string { return identitySetRedactedText }

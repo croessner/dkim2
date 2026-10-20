@@ -18,6 +18,7 @@ import (
 const (
 	publicVectorClock                = int64(1700000000)
 	goldenVectorRSAPass              = "rsa_pass"
+	goldenVectorSupportedMixedFail   = "supported_mixed_fail"
 	goldenVectorEd25519Pass          = "ed25519_pass"
 	goldenVectorMalformed            = "malformed_message"
 	goldenVectorMissingProtocol      = "missing_protocol"
@@ -100,6 +101,8 @@ type publicGoldenCase struct {
 	malformedProtocol bool
 	checks            []publicGoldenCheckFact
 	signatures        []publicGoldenSignatureFact
+	// clock overrides publicVectorClock when nonzero.
+	clock int64
 }
 
 type publicGoldenCheckFact struct {
@@ -136,7 +139,11 @@ func TestPublicDraft07GoldenVectors(t *testing.T) {
 				forward = decodeGoldenPaths(t, vector.Forward)
 			}
 			provider := publicGoldenProvider{mode: testCase.mode, rsa: corpus.rsaKey(t), ed: corpus.edKey(t)}
-			verifier, err := NewVerifier(provider, WithVerificationClock(func() time.Time { return time.Unix(publicVectorClock, 0) }))
+			clock := publicVectorClock
+			if testCase.clock != 0 {
+				clock = testCase.clock
+			}
+			verifier, err := NewVerifier(provider, WithVerificationClock(func() time.Time { return time.Unix(clock, 0) }))
 			if err != nil {
 				t.Fatalf("NewVerifier() failed for %s", testCase.name)
 			}
@@ -177,7 +184,7 @@ func publicGoldenCases(corpus publicGoldenCorpus) []publicGoldenCase {
 		{name: "sha256_plus_mismatching_sha512_fails", vector: "sha_unknown_hash_pass", mode: goldenProviderKeys, state: ResultStateFAIL, reason: ReasonHashMismatch, class: CheckClassBodyHash, custody: CustodyStructureNotPresent, sequence: 1, instance: 1},
 		{name: "mismatching_sha512_only_fails", vector: "unknown_hash_only", mode: goldenProviderKeys, state: ResultStateFAIL, reason: ReasonHashMismatch, class: CheckClassBodyHash, custody: CustodyStructureNotPresent, sequence: 1, instance: 1},
 		{name: "unknown_signature_only_permerror", vector: "unknown_signature_only", mode: goldenProviderKeys, state: ResultStatePERMERROR, reason: ReasonUnsupportedAlgorithm, class: CheckClassSignature, custody: CustodyStructureNotPresent, sequence: 1, instance: 1},
-		{name: "supported_pass_plus_supported_bad_signature_fail", vector: "supported_mixed_fail", mode: goldenProviderKeys, state: ResultStateFAIL, reason: ReasonSignatureMismatch, class: CheckClassSignature, custody: CustodyStructureNotPresent, sequence: 1, instance: 1},
+		{name: "supported_pass_plus_supported_bad_signature_fail", vector: goldenVectorSupportedMixedFail, mode: goldenProviderKeys, state: ResultStateFAIL, reason: ReasonSignatureMismatch, class: CheckClassSignature, custody: CustodyStructureNotPresent, sequence: 1, instance: 1},
 		{name: "body_hash_mismatch_fail", vector: "body_mismatch", mode: goldenProviderKeys, state: ResultStateFAIL, reason: ReasonHashMismatch, class: CheckClassBodyHash, custody: CustodyStructureNotPresent, sequence: 1, instance: 1},
 		{name: "header_hash_mismatch_fail", vector: "header_mismatch", mode: goldenProviderKeys, state: ResultStateFAIL, reason: ReasonHashMismatch, class: CheckClassHeaderHash, custody: CustodyStructureNotPresent, sequence: 1, instance: 1},
 		{name: "supported_signature_mismatch_fail", vector: goldenVectorRSAPass, mode: goldenProviderKeys, corruptSignature: true, state: ResultStateFAIL, reason: ReasonSignatureMismatch, class: CheckClassSignature, custody: CustodyStructureNotPresent, sequence: 1, instance: 1},
@@ -192,8 +199,11 @@ func publicGoldenCases(corpus publicGoldenCorpus) []publicGoldenCase {
 		{name: "unclassified_provider_deadline_permerror", vector: goldenVectorRSAPass, mode: goldenProviderUnclassifiedDeadline, state: ResultStatePERMERROR, reason: ReasonProviderContract, class: CheckClassProvider, custody: CustodyStructureNotPresent, sequence: 1, instance: 1},
 		pass("timestamp_exact_14_days_pass", "age_exact"),
 		{name: "timestamp_14_days_plus_one_permerror", vector: "age_over", mode: goldenProviderKeys, state: ResultStatePERMERROR, reason: ReasonTimestampInvalid, class: CheckClassTimestamp, custody: CustodyStructureNotPresent, sequence: 1, instance: 1},
-		pass("timestamp_exact_five_minutes_future_pass", "future_exact"),
-		{name: "timestamp_five_minutes_plus_one_permerror", vector: "future_over", mode: goldenProviderKeys, state: ResultStatePERMERROR, reason: ReasonTimestampInvalid, class: CheckClassTimestamp, custody: CustodyStructureNotPresent, sequence: 1, instance: 1},
+		// future_exact is signed 300 seconds after publicVectorClock and
+		// future_over 301 seconds after it; the clock is moved back so both
+		// sit on the Draft-07 Section 14.3 one-day future boundary.
+		{name: "timestamp_exact_one_day_future_pass", vector: "future_exact", mode: goldenProviderKeys, state: ResultStatePASS, reason: ReasonNone, custody: CustodyStructureNotPresent, sequence: 1, instance: 1, clock: publicVectorClock + 300 - 86400},
+		{name: "timestamp_one_day_plus_one_permerror", vector: "future_over", mode: goldenProviderKeys, state: ResultStatePERMERROR, reason: ReasonTimestampInvalid, class: CheckClassTimestamp, custody: CustodyStructureNotPresent, sequence: 1, instance: 1, clock: publicVectorClock + 300 - 86400},
 		{name: "timestamp_large_parseable_permerror", vector: "timestamp_large", mode: goldenProviderKeys, state: ResultStatePERMERROR, reason: ReasonTimestampInvalid, class: CheckClassTimestamp, custody: CustodyStructureNotPresent, sequence: 1, instance: 1},
 		pass("mail_from_exact_pass", "mail_exact"),
 		{name: "mail_from_ascii_domain_case_pass", vector: "mail_domain_case", mode: goldenProviderKeys, reverse: []byte("<Sender@example.test>"), state: ResultStatePASS, reason: ReasonNone, class: CheckClassEnvelope, custody: CustodyStructureNotPresent, sequence: 1, instance: 1},
@@ -230,7 +240,7 @@ func expectedPublicGoldenSignatures(testCase publicGoldenCase) []publicGoldenSig
 		return []publicGoldenSignatureFact{passRSA, publicGoldenSignatureFact{algorithm: AlgorithmUnknown, status: SignatureStatusIgnored, reason: ReasonUnsupportedAlgorithm}}
 	case "unknown_signature_only":
 		return []publicGoldenSignatureFact{{algorithm: AlgorithmUnknown, status: SignatureStatusIgnored, reason: ReasonUnsupportedAlgorithm}}
-	case "supported_mixed_fail":
+	case goldenVectorSupportedMixedFail:
 		return []publicGoldenSignatureFact{passRSA, {algorithm: AlgorithmEd25519SHA256, status: SignatureStatusFAIL, reason: ReasonSignatureMismatch}}
 	}
 	if testCase.malformedProtocol || testCase.reason == ReasonFromNotAuthentic {

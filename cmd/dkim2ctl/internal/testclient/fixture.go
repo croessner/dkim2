@@ -657,7 +657,7 @@ func validateProcessInput(input fixtureProcessInput, expectation fixtureExpectat
 		!validOptionalEnum(expectation.AuthenticationState, "PASS", "FAIL", "PERMERROR", "TEMPERROR") ||
 		!validOptionalEnum(expectation.PolicyVerdict, "accept", "reject", "tempfail", "continue") ||
 		!validOptionalEnum(expectation.ReplayClass,
-			"not_checked", "disabled", "first_seen", "exploded", "replayed", "indeterminate") ||
+			"not_checked", "not_eligible", "disabled", "first_seen", "exploded", "replayed", "indeterminate") ||
 		!validExpectedActions(expectation.Actions) {
 		return 0, NewExitError(ExitFixture)
 	}

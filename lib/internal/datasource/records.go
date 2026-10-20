@@ -36,7 +36,7 @@ type Credential struct {
 
 // NewCredential validates and detaches one provider-neutral signing credential.
 func NewCredential(selector string, algorithm Algorithm, publicKeySPKI []byte, handleID KeyHandleID, limits Limits) (Credential, error) {
-	if limits.Validate() != nil || !algorithm.Known() || !handleID.Valid() ||
+	if limits.Validate() != nil || !algorithm.Signable() || !handleID.Valid() ||
 		len(publicKeySPKI) == 0 {
 		return Credential{}, NewError(ErrorCodeInvalidRequest)
 	}

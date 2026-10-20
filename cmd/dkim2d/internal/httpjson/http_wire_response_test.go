@@ -241,7 +241,9 @@ func TestPreMarshaledResponseRejectsForgedStatusCodeCategoryCrossProducts(t *tes
 }
 
 // TestProcessWireValidationRejectsSkippedReplayAfterPass proves the final
-// response boundary preserves the exact replay coordinator matrix.
+// response boundary preserves the exact replay coordinator matrix: a skipped
+// replay beside PASS/accept is incoherent, while a direct i=1-only delivery
+// reports its own not_eligible class (Draft-07 Section 15.1).
 func TestProcessWireValidationRejectsSkippedReplayAfterPass(t *testing.T) {
 	response := validWireProcessResponse()
 	if !validProcessResponse(response) {
@@ -250,6 +252,14 @@ func TestProcessWireValidationRejectsSkippedReplayAfterPass(t *testing.T) {
 	response.Replay.Class = generated.NotChecked
 	if validProcessResponse(response) {
 		t.Fatal("PASS plus accept with skipped replay was accepted")
+	}
+	response.Replay.Class = generated.NotEligible
+	if !validProcessResponse(response) {
+		t.Fatal("PASS plus accept for a direct delivery was rejected")
+	}
+	response.Disposition = generated.DispositionReject
+	if validProcessResponse(response) {
+		t.Fatal("direct delivery with a disposition beside the policy verdict was accepted")
 	}
 	response = validWireProcessResponse()
 	response.Actions = generated.ActionPlan{{

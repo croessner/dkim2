@@ -11,7 +11,7 @@ func NewEvaluator(config Config) (Evaluator, error) {
 	return Evaluator{config: config}, nil
 }
 
-// evaluateBase applies the closed mode matrix without historical or DNS facts.
+// evaluateBase applies the closed mode matrix without historical facts.
 func (e Evaluator) evaluateBase(protocol ProtocolClass) (Decision, error) {
 	if err := e.config.Validate(); err != nil {
 		return Decision{}, err
@@ -31,7 +31,7 @@ func (e Evaluator) evaluateBase(protocol ProtocolClass) (Decision, error) {
 		}
 		findings = append(findings, finding)
 	}
-	return newDecision(protocol, e.config.Mode, verdict, primary, FeedbackIntent{history: HistoryNotEvaluated}, false, findings)
+	return newDecision(protocol, e.config.Mode, verdict, primary, FeedbackIntent{history: HistoryNotEvaluated}, findings)
 }
 
 // EvaluateProjection applies policy to one service-sealed internal projection.
@@ -45,30 +45,13 @@ func (e Evaluator) EvaluateProjection(projection Projection) (Decision, error) {
 	if !projection.Valid() {
 		return Decision{}, newError(ErrorInternalContract)
 	}
-	dns, err := evaluateDNSTesting(projection)
-	if err != nil {
-		return Decision{}, err
-	}
 	verdict, primary, baseReasons := baseOutcome(projection.Protocol(), e.config.Mode)
-	if dns.effective {
-		verdict, primary = VerdictContinue, ReasonDNSTestingEffective
-		if e.config.Mode == ModePermissive && len(baseReasons) == 2 && baseReasons[1] == ReasonPermissiveOverride {
-			baseReasons = baseReasons[:1]
-		}
-	}
 	hops := projection.Hops()
 	if len(hops) > e.config.Limits.MaxAuthenticatedHops {
 		return Decision{}, newLimitError(limitNameAuthenticatedHops, e.config.Limits.MaxAuthenticatedHops, len(hops))
 	}
-	suppressAuthenticatedFlags := dns.effective && projection.Protocol() == ProtocolPASS
-	if suppressAuthenticatedFlags {
-		hops = nil
-	}
 	feedback := summarizeFeedback(hops, projection.HistoryCoverage())
 	derivedCount := countReportFindings(hops) + feedback.feedbackFindingCount()
-	if dns.reason != "" {
-		derivedCount++
-	}
 	receivedDSN, hasReceivedDSN := projection.ReceivedDSN()
 	if hasReceivedDSN {
 		derivedCount++
@@ -88,13 +71,6 @@ func (e Evaluator) EvaluateProjection(projection Projection) (Decision, error) {
 		}
 		findings = append(findings, finding)
 	}
-	if dns.reason != "" {
-		finding, findingErr := newFinding(dns.reason, 0, false)
-		if findingErr != nil {
-			return Decision{}, findingErr
-		}
-		findings = append(findings, finding)
-	}
 	feedbackRequests, feedbackRelays, err := feedbackFindings(hops, feedback)
 	if err != nil {
 		return Decision{}, err
@@ -108,7 +84,7 @@ func (e Evaluator) EvaluateProjection(projection Projection) (Decision, error) {
 			return Decision{}, err
 		}
 	}
-	return newDecision(projection.Protocol(), e.config.Mode, verdict, primary, feedback.intent, dns.effective, findings)
+	return newDecision(projection.Protocol(), e.config.Mode, verdict, primary, feedback.intent, findings)
 }
 
 // applyReceivedDSNRow evaluates the received-DSN row table last: the selected

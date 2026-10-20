@@ -20,11 +20,11 @@
 // scanner. Lowercase k= is recognized according to the draft prose and RFC 6376
 // Erratum 5137 despite the inherited ABNF typo. DNS TXT is the sole lookup
 // binding because the active signature grammar has no q=. Unknown and retired
-// tags are ignored after generic validation, duplicate tags fail closed, empty
-// p= is revoked, and t=y/t=s become bounded metadata. Non-empty p= permits
-// omitted terminal Base64 padding as DNS-04 specifies, but canonical zero pad
-// bits remain mandatory. Strict identity remains inapplicable while DKIM2 i=
-// is numeric.
+// tags are ignored after generic validation, duplicate tags fail closed, and
+// empty p= is revoked. The t= tag is retired by DNS-01 Section 3.4.1: it is
+// subject only to the generic tag-list rules and never yields testing or
+// strict-identity semantics. Non-empty p= permits omitted terminal Base64
+// padding as DNS-04 specifies, but canonical zero pad bits remain mandatory.
 //
 // DecodeKey accepts PKCS#1 RSAPublicKey DER and X.509 SubjectPublicKeyInfo DER
 // containing RSA, or exactly 32 raw Ed25519 public-key bytes, and keeps

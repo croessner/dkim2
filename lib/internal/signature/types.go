@@ -30,6 +30,14 @@ func (a Algorithm) Known() bool {
 	return a == AlgorithmRSASHA256 || a == AlgorithmEd25519SHA256 || a == AlgorithmMLDSA44Ed25519SHA512
 }
 
+// Signable reports whether this implementation can create signatures with
+// the algorithm. Composite mldsa44-ed25519-sha512 signing stays unimplemented
+// until the conflict between Draft-07 Section 3.4 and the LAMPS construction
+// cited by DNS-01 is resolved; verification supports all known algorithms.
+func (a Algorithm) Signable() bool {
+	return a == AlgorithmRSASHA256 || a == AlgorithmEd25519SHA256
+}
+
 // Limits contains fail-closed DKIM2-Signature parser resource settings.
 type Limits struct {
 	// TagLimits bounds shared DKIM2 tag-list and base64string parsing.

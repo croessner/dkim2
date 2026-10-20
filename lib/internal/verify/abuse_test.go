@@ -93,19 +93,18 @@ func TestStaticKeyProviderRejectsMalformedLookupTuples(t *testing.T) {
 // TestVerifierTimestampBoundaries verifies exact future and age boundaries are accepted.
 func TestVerifierTimestampBoundaries(t *testing.T) {
 	now := time.Unix(int64(testTimestampSeconds), 0)
-	policy := TimestampPolicy{FutureTolerance: 5 * time.Minute, MaxAge: time.Hour}
 
 	tests := []struct {
 		name      string
 		timestamp uint64
 	}{
-		{name: "exact future tolerance", timestamp: uint64(now.Add(policy.FutureTolerance).Unix())},
-		{name: "exact max age", timestamp: uint64(now.Add(-policy.MaxAge).Unix())},
+		{name: "exact future tolerance", timestamp: uint64(now.Add(signatureFutureTolerance).Unix())},
+		{name: "exact max age", timestamp: uint64(now.Add(-signatureMaxAge).Unix())},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			fixture := newRSAVerificationFixtureAt(t, tt.timestamp)
-			verifier := mustVerifierForFixtureWithOptions(t, fixture, WithClock(func() time.Time { return now }), WithTimestampPolicy(policy))
+			verifier := mustVerifierForFixtureWithOptions(t, fixture, WithClock(func() time.Time { return now }))
 
 			result, err := verifier.Verify(context.Background(), Request{Message: fixture.message, Envelope: matchingEnvelope()})
 			if err != nil {

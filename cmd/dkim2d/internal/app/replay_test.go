@@ -2,17 +2,13 @@ package app
 
 import (
 	"context"
-	"crypto"
-	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
 	"os"
-	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -21,8 +17,6 @@ import (
 
 	"github.com/croessner/dkim2"
 	"github.com/croessner/dkim2/cmd/dkim2d/internal/config"
-	"github.com/croessner/dkim2/internal/canonical"
-	"github.com/croessner/dkim2/internal/rawmsg"
 )
 
 const replayTestTimestamp = int64(1_700_000_000)
@@ -181,16 +175,16 @@ func (*typedNilReplayStore) CheckAndRemember(
 	return 0, nil
 }
 
-// TestReplayCoordinatorAcceptsFrozenGoldenPass proves the checked-in protocol vector reaches replay.
-func TestReplayCoordinatorAcceptsFrozenGoldenPass(t *testing.T) {
+// TestReplayCoordinatorSkipsDirectFrozenGoldenPass proves the checked-in
+// single-signature protocol vector is a direct delivery that Draft-07 Section
+// 15.1 does not count: it reaches a PASS outcome without any store mutation.
+func TestReplayCoordinatorSkipsDirectFrozenGoldenPass(t *testing.T) {
 	domain := goldenReplayDomain(t, config.PolicyStrict)
-	coordinator, store := scriptedReplayCoordinator(t, []replayStoreResponse{{
-		check: dkim2.ReplayCheckFirstSeen,
-	}})
+	coordinator, store := scriptedReplayCoordinator(t, nil)
 	outcome, coordinateErr := coordinator.Coordinate(context.Background(), domain)
-	assertReplayOutcome(t, outcome, coordinateErr, ReplayResultFirstSeen, FinalDispositionAccept, true)
-	if store.Calls() != 1 {
-		t.Fatal("frozen golden PASS did not process its complete replay identity set")
+	assertReplayOutcome(t, outcome, coordinateErr, ReplayResultNotEligible, FinalDispositionAccept, false)
+	if store.Calls() != 0 {
+		t.Fatal("direct single-signature PASS mutated the replay store")
 	}
 }
 
@@ -905,7 +899,7 @@ func authenticReplayDomain(
 ) DomainResult {
 	t.Helper()
 	raw, key := signedAppReplayMessage(t, recipients)
-	return processReplayDomain(t, raw, recipients, replayTestProvider{key: key}, mode)
+	return processReplayDomain(t, raw, []byte(replayRelayPath), recipients, replayTestProvider{key: key}, mode)
 }
 
 // goldenReplayDomain loads one frozen public PASS vector through the daemon domain seam.
@@ -933,6 +927,7 @@ func goldenReplayDomain(t *testing.T, mode config.PolicyMode) DomainResult {
 	return processReplayDomain(
 		t,
 		decodeAppGolden(t, vector.Raw),
+		[]byte("<>"),
 		recipients,
 		appGoldenProvider{
 			key: &rsa.PublicKey{
@@ -950,6 +945,7 @@ func malformedReplayDomain(t *testing.T, mode config.PolicyMode) DomainResult {
 	return processReplayDomain(
 		t,
 		[]byte("not-rfc5322"),
+		[]byte("<>"),
 		[][]byte{[]byte("<malformed@example.test>")},
 		noLookupProvider{},
 		mode,
@@ -967,6 +963,7 @@ func temporaryReplayDomain(
 	return processReplayDomain(
 		t,
 		raw,
+		[]byte(replayRelayPath),
 		recipients,
 		replayTestProvider{err: dkim2.NewTemporaryProviderError()},
 		mode,
@@ -987,13 +984,14 @@ func failedReplayDomain(
 		"body fail\r\n",
 		1,
 	))
-	return processReplayDomain(t, corrupted, recipients, replayTestProvider{key: key}, mode)
+	return processReplayDomain(t, corrupted, []byte(replayRelayPath), recipients, replayTestProvider{key: key}, mode)
 }
 
 // processReplayDomain runs one exact verification and server-owned policy pair.
 func processReplayDomain(
 	t *testing.T,
 	raw []byte,
+	mailFrom []byte,
 	recipients [][]byte,
 	provider dkim2.PublicKeyProvider,
 	mode config.PolicyMode,
@@ -1014,7 +1012,7 @@ func processReplayDomain(
 	}
 	domain, err := processor.Process(
 		context.Background(),
-		dkim2.NewVerifyRequest(raw, []byte("<>"), recipients),
+		dkim2.NewVerifyRequest(raw, mailFrom, recipients),
 	)
 	if err != nil || !domain.valid() {
 		t.Fatal("replay domain fixture processing failed")
@@ -1022,59 +1020,17 @@ func processReplayDomain(
 	return domain
 }
 
-// signedAppReplayMessage creates one passing synthetic fixture with exact recipients.
+// replayRelayPath is the SMTP reverse-path of the fixtures' forwarding hop.
+const replayRelayPath = forwardedReplayRelayPath
+
+// signedAppReplayMessage creates one passing replay-eligible two-hop fixture
+// with exact final recipients.
 func signedAppReplayMessage(
 	t *testing.T,
 	recipients [][]byte,
 ) ([]byte, *rsa.PublicKey) {
 	t.Helper()
-	key, err := rsa.GenerateKey(rand.Reader, 1024)
-	if err != nil {
-		t.Fatal("replay RSA fixture construction failed")
-	}
-	canonicalizer, err := canonical.NewCanonicalizer()
-	if err != nil {
-		t.Fatal("replay canonicalizer construction failed")
-	}
-	base, err := rawmsg.Parse([]byte(
-		"From: sender@example.test\r\nSubject: replay coordinator\r\n\r\nbody line\r\n",
-	))
-	if err != nil {
-		t.Fatal("replay base message construction failed")
-	}
-	headerHash, _ := canonicalizer.HeaderHashFromMessage(base)
-	bodyHash, _ := canonicalizer.BodyHashFromMessage(base)
-	headerDigest, _ := headerHash.Digest()
-	bodyDigest, _ := bodyHash.Digest()
-	encodedRecipients := make([]string, len(recipients))
-	for index, recipient := range recipients {
-		encodedRecipients[index] = base64.StdEncoding.EncodeToString(recipient)
-	}
-	build := func(signature string) string {
-		return "From: sender@example.test\r\nSubject: replay coordinator\r\n" +
-			"Message-Instance: m=1; h=sha256:" + headerDigest.Base64() + ":" + bodyDigest.Base64() + ";\r\n" +
-			"DKIM2-Signature: i=1; m=1; t=" + strconv.FormatInt(replayTestTimestamp, 10) +
-			"; mf=PD4=; rt=" + strings.Join(encodedRecipients, ",") +
-			"; d=example.test; s=selector.test:rsa-sha256:" + signature +
-			";\r\n\r\nbody line\r\n"
-	}
-	placeholder := base64.StdEncoding.EncodeToString(make([]byte, 128))
-	unsigned, err := rawmsg.Parse([]byte(build(placeholder)))
-	if err != nil {
-		t.Fatal("replay unsigned fixture construction failed")
-	}
-	input, err := canonicalizer.SignatureInput(canonical.SignatureInputSelection{
-		Headers: unsigned.Headers(), TargetSequence: 1,
-	})
-	if err != nil {
-		t.Fatal("replay signature-input fixture construction failed")
-	}
-	digest := sha256.Sum256(input.Bytes())
-	sealed, err := rsa.SignPKCS1v15(rand.Reader, key, crypto.SHA256, digest[:])
-	if err != nil {
-		t.Fatal("replay signature fixture construction failed")
-	}
-	return []byte(build(base64.StdEncoding.EncodeToString(sealed))), &key.PublicKey
+	return signedForwardedReplayMessage(t, replayTestTimestamp, recipients, "")
 }
 
 // expectedReplayStorageOrder derives the exact sealed set order through the public seam.

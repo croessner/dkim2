@@ -2,6 +2,7 @@ package keyresolver
 
 import (
 	"bytes"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -11,17 +12,14 @@ const (
 	decodedDNSKeyData = "ABCD"
 )
 
-// TestParseRecordAcceptsClosedLegalMatrix verifies defaults, supported types, FWS, and metadata.
+// TestParseRecordAcceptsClosedLegalMatrix verifies defaults, supported types, FWS, and ignored retired tags.
 func TestParseRecordAcceptsClosedLegalMatrix(t *testing.T) {
 	tests := []struct {
-		name       string
-		record     string
-		status     RecordStatus
-		keyType    KeyType
-		keyData    string
-		testing    bool
-		strict     bool
-		applicable bool
+		name    string
+		record  string
+		status  RecordStatus
+		keyType KeyType
+		keyData string
 	}{
 		{name: "p only defaults", record: "p=" + validDNSKeyData, status: RecordStatusKeyData, keyType: KeyTypeRSA, keyData: decodedDNSKeyData},
 		{name: "version and rsa", record: "v=DKIM1; k=rsa; p=" + validDNSKeyData + ";", status: RecordStatusKeyData, keyType: KeyTypeRSA, keyData: decodedDNSKeyData},
@@ -29,18 +27,18 @@ func TestParseRecordAcceptsClosedLegalMatrix(t *testing.T) {
 		{name: "folded base64", record: "v=DKIM1;\r\n\tk=rsa; p=QU\r\n JDRA==", status: RecordStatusKeyData, keyType: KeyTypeRSA, keyData: decodedDNSKeyData},
 		{name: "revoked empty", record: "p=", status: RecordStatusRevoked, keyType: KeyTypeRSA},
 		{name: "revoked whitespace", record: "k=ed25519; p= \t", status: RecordStatusRevoked, keyType: KeyTypeEd25519},
-		{name: "revoked metadata", record: "k=ed25519; p=; t=y:s", status: RecordStatusRevoked, keyType: KeyTypeEd25519, testing: true, strict: true},
+		{name: "revoked with retired t", record: "k=ed25519; p=; t=y:s", status: RecordStatusRevoked, keyType: KeyTypeEd25519},
 		{name: "unsupported record", record: "k=future-key2; p=" + validDNSKeyData, status: RecordStatusUnsupportedKeyType, keyType: KeyTypeUnsupported},
 		{name: "unsupported rsa case", record: "k=RSA; p=" + validDNSKeyData, status: RecordStatusUnsupportedKeyType, keyType: KeyTypeUnsupported},
 		{name: "unsupported ed case", record: "k=Ed25519; p=" + validDNSKeyData, status: RecordStatusUnsupportedKeyType, keyType: KeyTypeUnsupported},
-		{name: "unsupported metadata", record: "k=future-key2; p=" + validDNSKeyData + "; t=y:s", status: RecordStatusUnsupportedKeyType, keyType: KeyTypeUnsupported, testing: true, strict: true},
+		{name: "unsupported with retired t", record: "k=future-key2; p=" + validDNSKeyData + "; t=y:s", status: RecordStatusUnsupportedKeyType, keyType: KeyTypeUnsupported},
 		{name: "unpadded one character", record: "p=QUI", status: RecordStatusKeyData, keyType: KeyTypeRSA, keyData: "AB"},
 		{name: "unpadded two characters", record: "p=QQ", status: RecordStatusKeyData, keyType: KeyTypeRSA, keyData: "A"},
-		{name: "testing", record: "p=" + validDNSKeyData + "; t=y", status: RecordStatusKeyData, keyType: KeyTypeRSA, keyData: decodedDNSKeyData, testing: true},
-		{name: "strict", record: "p=" + validDNSKeyData + "; t=s", status: RecordStatusKeyData, keyType: KeyTypeRSA, keyData: decodedDNSKeyData, strict: true},
-		{name: "combined flags", record: "p=" + validDNSKeyData + "; t=y : s : y : future-flag", status: RecordStatusKeyData, keyType: KeyTypeRSA, keyData: decodedDNSKeyData, testing: true, strict: true},
-		{name: "folded flags", record: "p=" + validDNSKeyData + "; t=y\r\n \t:\r\n s", status: RecordStatusKeyData, keyType: KeyTypeRSA, keyData: decodedDNSKeyData, testing: true, strict: true},
-		{name: "uppercase unknown flags", record: "p=" + validDNSKeyData + "; t=Y:Y:Future", status: RecordStatusKeyData, keyType: KeyTypeRSA, keyData: decodedDNSKeyData},
+		{name: "retired testing flag", record: "p=" + validDNSKeyData + "; t=y", status: RecordStatusKeyData, keyType: KeyTypeRSA, keyData: decodedDNSKeyData},
+		{name: "retired strict flag", record: "p=" + validDNSKeyData + "; t=s", status: RecordStatusKeyData, keyType: KeyTypeRSA, keyData: decodedDNSKeyData},
+		{name: "retired combined flags", record: "p=" + validDNSKeyData + "; t=y : s : y : future-flag", status: RecordStatusKeyData, keyType: KeyTypeRSA, keyData: decodedDNSKeyData},
+		{name: "retired folded flags", record: "p=" + validDNSKeyData + "; t=y\r\n \t:\r\n s", status: RecordStatusKeyData, keyType: KeyTypeRSA, keyData: decodedDNSKeyData},
+		{name: "retired uppercase flags", record: "p=" + validDNSKeyData + "; t=Y:Y:Future", status: RecordStatusKeyData, keyType: KeyTypeRSA, keyData: decodedDNSKeyData},
 		{name: "retired and unknown ignored", record: "p=" + validDNSKeyData + "; h=; n=operator note; s=odd value; future_tag=opaque", status: RecordStatusKeyData, keyType: KeyTypeRSA, keyData: decodedDNSKeyData},
 		{name: "uppercase aliases unknown", record: "V=DKIM2; K=ed25519; p=" + validDNSKeyData, status: RecordStatusKeyData, keyType: KeyTypeRSA, keyData: decodedDNSKeyData},
 	}
@@ -55,9 +53,8 @@ func TestParseRecordAcceptsClosedLegalMatrix(t *testing.T) {
 			if !bytes.Equal(input, before) {
 				t.Fatal("ParseRecord() mutated input")
 			}
-			metadata := parsed.Metadata()
-			if !parsed.Valid() || parsed.Status() != tt.status || parsed.KeyType() != tt.keyType || string(parsed.PublicKeyData()) != tt.keyData || metadata.TestingDeclared() != tt.testing || metadata.StrictIdentityDeclared() != tt.strict || metadata.StrictIdentityApplicable() != tt.applicable || parsed.Draft() != DNSDraftIdentifier {
-				t.Fatalf("ParseRecord() = status=%q type=%q data=%q metadata=%#v draft=%q", parsed.Status(), parsed.KeyType(), parsed.PublicKeyData(), metadata, parsed.Draft())
+			if !parsed.Valid() || parsed.Status() != tt.status || parsed.KeyType() != tt.keyType || string(parsed.PublicKeyData()) != tt.keyData || parsed.Draft() != DNSDraftIdentifier {
+				t.Fatalf("ParseRecord() = status=%q type=%q data=%q draft=%q", parsed.Status(), parsed.KeyType(), parsed.PublicKeyData(), parsed.Draft())
 			}
 		})
 	}
@@ -115,7 +112,7 @@ func TestParseRecordRejectsDuplicateDefinedRetiredAndUnknownTags(t *testing.T) {
 	for _, record := range []string{
 		"p=QQ==; p=Qg==", "v=DKIM1; v=DKIM1; p=QQ==", "k=rsa; k=rsa; p=QQ==",
 		"p=QQ==; h=; h=sha256", "p=QQ==; n=a; n=b", "p=QQ==; s=*; s=email",
-		"p=QQ==; future=x; future=y", "p=QQ==; V=x; V=y",
+		"p=QQ==; future=x; future=y", "p=QQ==; V=x; V=y", "p=QQ==; t=y; t=y", "p=QQ==; t=bad!; t=s",
 	} {
 		if _, err := ParseRecord([]byte(record), DefaultLimits()); !IsRecordErrorCode(err, RecordErrorInvalidSyntax) {
 			t.Fatalf("duplicate record %q error = %v", record, err)
@@ -123,12 +120,21 @@ func TestParseRecordRejectsDuplicateDefinedRetiredAndUnknownTags(t *testing.T) {
 	}
 }
 
-// TestParseRecordRejectsMalformedFlags verifies empty and non-hyphenated members.
-func TestParseRecordRejectsMalformedFlags(t *testing.T) {
-	for _, flags := range []string{"", ":y", "y:", "y::s", "_future", "-future", "future-", "future_flag", "future flag", "1future"} {
-		record := "p=" + validDNSKeyData + "; t=" + flags
-		if _, err := ParseRecord([]byte(record), DefaultLimits()); !IsRecordErrorCode(err, RecordErrorInvalidFlags) {
-			t.Fatalf("flags %q error = %v", flags, err)
+// TestParseRecordIgnoresRetiredTestingTag verifies DNS-01 Section 3.4.1:
+// any syntactically valid t= value, including formerly malformed flag lists,
+// leaves the parsed record identical to one without t=.
+func TestParseRecordIgnoresRetiredTestingTag(t *testing.T) {
+	baseline, err := ParseRecord([]byte("p="+validDNSKeyData), DefaultLimits())
+	if err != nil {
+		t.Fatalf("baseline ParseRecord() error = %v", err)
+	}
+	for _, flags := range []string{"", "y", "s", "y:s", ":y", "y:", "y::s", "_future", "future_flag", "future flag", "1future", "bad!"} {
+		parsed, err := ParseRecord([]byte("p="+validDNSKeyData+"; t="+flags), DefaultLimits())
+		if err != nil {
+			t.Fatalf("t=%q error = %v", flags, err)
+		}
+		if !reflect.DeepEqual(parsed, baseline) {
+			t.Fatalf("t=%q changed parsed record: %#v", flags, parsed)
 		}
 	}
 }
@@ -235,8 +241,8 @@ func TestUnsupportedKeyTypeValidatesBase64ButSkipsKeyDecode(t *testing.T) {
 	}
 }
 
-// TestParsedRecordAndMetadataAreImmutable verifies detached key data and closed metadata.
-func TestParsedRecordAndMetadataAreImmutable(t *testing.T) {
+// TestParsedRecordIsImmutable verifies detached key data and closed record vocabulary.
+func TestParsedRecordIsImmutable(t *testing.T) {
 	input := []byte("p=" + validDNSKeyData + "; t=y:s")
 	parsed, err := ParseRecord(input, DefaultLimits())
 	if err != nil {
@@ -245,11 +251,11 @@ func TestParsedRecordAndMetadataAreImmutable(t *testing.T) {
 	input[0] = 'X'
 	data := parsed.PublicKeyData()
 	data[0] = 'Z'
-	if string(parsed.PublicKeyData()) != decodedDNSKeyData || !parsed.Metadata().Valid() {
-		t.Fatalf("parsed record mutated: data=%q metadata=%#v", parsed.PublicKeyData(), parsed.Metadata())
+	if string(parsed.PublicKeyData()) != decodedDNSKeyData || !parsed.Valid() {
+		t.Fatalf("parsed record mutated: data=%q", parsed.PublicKeyData())
 	}
-	if RecordStatus("").Known() || KeyType("").Known() || (Metadata{}).Valid() {
-		t.Fatal("zero record or metadata state accepted")
+	if RecordStatus("").Known() || KeyType("").Known() || (Record{}).Valid() {
+		t.Fatal("zero record state accepted")
 	}
 }
 

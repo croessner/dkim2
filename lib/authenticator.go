@@ -12,11 +12,14 @@ import (
 type AuthenticationReason = ReasonCode
 
 const (
-	// AuthenticationReasonDuplicateMessageWithoutExploded reports unexpected replay.
+	// AuthenticationReasonDuplicateMessageWithoutExploded reports an unexpected
+	// replay. It is a local delivery-policy rejection (Draft-07 Section 15.1);
+	// the underlying VerifyResult still reports the DKIM2 validity PASS.
 	AuthenticationReasonDuplicateMessageWithoutExploded ReasonCode = "duplicate_message_without_exploded"
 	// AuthenticationReasonReplayIndeterminate reports unavailable or ambiguous replay storage.
 	AuthenticationReasonReplayIndeterminate ReasonCode = "replay_indeterminate"
-	// AuthenticationReasonReplayEvidenceUnavailable reports missing reconstructed m=1 authority.
+	// AuthenticationReasonReplayEvidenceUnavailable reports a missing
+	// authenticated m=1 hash declaration identity.
 	AuthenticationReasonReplayEvidenceUnavailable ReasonCode = "replay_evidence_unavailable"
 )
 
@@ -26,6 +29,10 @@ type AuthenticationReplayClass string
 const (
 	// AuthenticationReplayNotChecked means replay is inapplicable before final PASS.
 	AuthenticationReplayNotChecked AuthenticationReplayClass = "not_checked"
+	// AuthenticationReplayNotEligible means the message passed but only the
+	// originator's i=1 signature authenticated it, so no intermediary re-sent
+	// it and Draft-07 Section 15.1 replay counting does not apply.
+	AuthenticationReplayNotEligible AuthenticationReplayClass = "not_eligible"
 	// AuthenticationReplayDisabled means the explicit no-store mode accepted the message.
 	AuthenticationReplayDisabled AuthenticationReplayClass = "disabled"
 	// AuthenticationReplayFirstSeen means the message-wide identity was inserted once.
@@ -41,14 +48,16 @@ const (
 // Known reports whether the class belongs to the closed Draft-07 vocabulary.
 func (c AuthenticationReplayClass) Known() bool {
 	switch c {
-	case AuthenticationReplayNotChecked, AuthenticationReplayDisabled, AuthenticationReplayFirstSeen, AuthenticationReplayExploded, AuthenticationReplayReplayed, AuthenticationReplayIndeterminate:
+	case AuthenticationReplayNotChecked, AuthenticationReplayNotEligible, AuthenticationReplayDisabled, AuthenticationReplayFirstSeen, AuthenticationReplayExploded, AuthenticationReplayReplayed, AuthenticationReplayIndeterminate:
 		return true
 	default:
 		return false
 	}
 }
 
-// AuthenticationResult is one sealed final stateful Draft-07 result.
+// AuthenticationResult is one sealed final stateful Draft-07 result. It layers
+// local replay delivery policy over the stateless DKIM2 validity result, which
+// Verification returns unchanged.
 type AuthenticationResult struct{ state *authenticationResultState }
 
 type authenticationResultState struct {
@@ -169,6 +178,9 @@ func (a *Authenticator) AuthenticateVerified(ctx context.Context, verification V
 	identities, identityErr := ReplayIdentities(verification)
 	if identityErr != nil || !identities.Valid() || identities.Len() != 1 {
 		return newAuthenticationResult(verification, ResultStateTEMPERROR, AuthenticationReasonReplayEvidenceUnavailable, AuthenticationReplayIndeterminate), nil
+	}
+	if !identities.Eligible() {
+		return newAuthenticationResult(verification, ResultStatePASS, ReasonNone, AuthenticationReplayNotEligible), nil
 	}
 	identity, identityErr := identities.Identity(0)
 	if identityErr != nil {

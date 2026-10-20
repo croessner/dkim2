@@ -166,8 +166,7 @@ func (v Verifier) evaluateSignatureSet(ctx context.Context, targetSignature sign
 
 		return result
 	}
-	if !key.Metadata.Policy.Valid() || !key.Metadata.Policy.AllowedForStatus(key.Metadata.Status, err != nil) ||
-		!ValidProviderSource(key.Metadata.Source) {
+	if !ValidProviderSource(key.Metadata.Source) {
 		result.Status = SignatureSetStatusProviderContract
 		result.KeyStatus = KeyStatusProviderContract
 
@@ -184,7 +183,6 @@ func (v Verifier) evaluateSignatureSet(ctx context.Context, targetSignature sign
 		case KeyStatusMissing, KeyStatusInvalid, KeyStatusAmbiguous, KeyStatusRevoked, KeyStatusUnsupportedKeyType, KeyStatusAlgorithmMismatch:
 			result.KeyStatus = key.Metadata.Status
 			result.Status = signatureSetStatusFromKeyStatus(key.Metadata.Status)
-			result.KeyPolicy = key.Metadata.Policy
 		default:
 			result.KeyStatus = KeyStatusProviderContract
 			result.Status = SignatureSetStatusProviderContract
@@ -192,8 +190,6 @@ func (v Verifier) evaluateSignatureSet(ctx context.Context, targetSignature sign
 
 		return result
 	}
-	result.KeyPolicy = key.Metadata.Policy
-
 	material, keyStatus, err := validatePublicKeyMaterial(algorithm, key.Material, v.options.AlgorithmPolicy)
 	if err != nil {
 		result.Status, result.KeyStatus = signatureSetStatusFromKeyError(
@@ -223,7 +219,7 @@ func providerKeyErrorPairValid(
 	err error,
 	failureClass ProviderFailureClass,
 ) bool {
-	if key.Metadata.Policy != (KeyPolicyMetadata{}) || key.Material != nil {
+	if key.Material != nil {
 		return false
 	}
 	if failureClass.Known() {

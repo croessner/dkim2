@@ -74,16 +74,16 @@ func (r Resolver) Resolve(ctx context.Context, signingDomain, selector string, a
 	query, err := NewQuery(signingDomain, selector, algorithm, r.limits)
 	if err != nil {
 		if IsErrorClass(err, ErrorClassPermanent) {
-			return newStatusOutcome(KeyOutcomePermanent, algorithm, newMetadata(false, false)), nil
+			return newStatusOutcome(KeyOutcomePermanent, algorithm), nil
 		}
-		return newStatusOutcome(KeyOutcomeProviderContract, algorithm, newMetadata(false, false)), nil
+		return newStatusOutcome(KeyOutcomeProviderContract, algorithm), nil
 	}
 	key := cacheKey{owner: query.AbsoluteOwner(), algorithm: algorithm}
 	if cached, hit, corrupt := r.cache.get(key); corrupt {
 		if err := ctx.Err(); err != nil {
 			return KeyOutcome{}, err
 		}
-		return newStatusOutcome(KeyOutcomeProviderContract, algorithm, newMetadata(false, false)), nil
+		return newStatusOutcome(KeyOutcomeProviderContract, algorithm), nil
 	} else if hit {
 		if err := ctx.Err(); err != nil {
 			return KeyOutcome{}, err
@@ -100,10 +100,10 @@ func (r Resolver) Resolve(ctx context.Context, signingDomain, selector string, a
 		return KeyOutcome{}, flightErr
 	}
 	if saturated {
-		return newStatusOutcome(KeyOutcomeTemporary, algorithm, newMetadata(false, false)), nil
+		return newStatusOutcome(KeyOutcomeTemporary, algorithm), nil
 	}
 	if !resolved.outcome.Valid() {
-		return newStatusOutcome(KeyOutcomeProviderContract, algorithm, newMetadata(false, false)), nil
+		return newStatusOutcome(KeyOutcomeProviderContract, algorithm), nil
 	}
 	return cloneKeyOutcome(resolved.outcome), nil
 }
@@ -114,45 +114,45 @@ func (r Resolver) resolveLookup(ctx context.Context, query Query) flightResult {
 	lookup, lookupErr := r.transport.LookupTXT(ctx, query.AbsoluteOwner())
 	observedAt := r.cache.clock()
 	if ctx.Err() != nil {
-		return flightResult{outcome: newStatusOutcome(KeyOutcomeTemporary, algorithm, newMetadata(false, false))}
+		return flightResult{outcome: newStatusOutcome(KeyOutcomeTemporary, algorithm)}
 	}
 	if lookupErr != nil {
 		return flightResult{outcome: r.transportFailure(algorithm, lookup, lookupErr)}
 	}
 	if !lookup.IsZero() && !lookupResultValid(lookup) {
-		return flightResult{outcome: newStatusOutcome(KeyOutcomeProviderContract, algorithm, newMetadata(false, false))}
+		return flightResult{outcome: newStatusOutcome(KeyOutcomeProviderContract, algorithm)}
 	}
 	if lookup.IsZero() {
-		return flightResult{outcome: newStatusOutcome(KeyOutcomeProviderContract, algorithm, newMetadata(false, false))}
+		return flightResult{outcome: newStatusOutcome(KeyOutcomeProviderContract, algorithm)}
 	}
 	if lookup.Status() == LookupStatusAbsent {
-		outcome := newStatusOutcome(KeyOutcomeMissing, algorithm, newMetadata(false, false))
+		outcome := newStatusOutcome(KeyOutcomeMissing, algorithm)
 		return flightResult{outcome: outcome, expiry: boundedCacheExpiry(observedAt, lookup.NegativeTTL(), r.limits.MaxNegativeTTL)}
 	}
 	if lookup.RecordCount() > r.limits.MaxTXTRecords {
-		outcome := newStatusOutcome(KeyOutcomeAmbiguous, algorithm, newMetadata(false, false))
+		outcome := newStatusOutcome(KeyOutcomeAmbiguous, algorithm)
 		return flightResult{outcome: outcome, expiry: boundedCacheExpiry(observedAt, lookup.PositiveTTL(), r.limits.MaxStableErrorTTL)}
 	}
 	records := lookup.Records()
 	if len(records) != 1 {
-		return flightResult{outcome: newStatusOutcome(KeyOutcomeProviderContract, algorithm, newMetadata(false, false))}
+		return flightResult{outcome: newStatusOutcome(KeyOutcomeProviderContract, algorithm)}
 	}
 	payload := records[0].Payload()
 	if len(payload) > r.limits.MaxTXTRecordBytes {
-		outcome := newStatusOutcome(KeyOutcomeInvalid, algorithm, newMetadata(false, false))
+		outcome := newStatusOutcome(KeyOutcomeInvalid, algorithm)
 		return flightResult{outcome: outcome, expiry: boundedCacheExpiry(observedAt, lookup.PositiveTTL(), r.limits.MaxStableErrorTTL)}
 	}
 	record, parseErr := ParseRecord(payload, r.limits)
 	if parseErr != nil {
 		if IsRecordErrorCode(parseErr, RecordErrorContract) {
-			return flightResult{outcome: newStatusOutcome(KeyOutcomeProviderContract, algorithm, newMetadata(false, false))}
+			return flightResult{outcome: newStatusOutcome(KeyOutcomeProviderContract, algorithm)}
 		}
-		outcome := newStatusOutcome(KeyOutcomeInvalid, algorithm, newMetadata(false, false))
+		outcome := newStatusOutcome(KeyOutcomeInvalid, algorithm)
 		return flightResult{outcome: outcome, expiry: boundedCacheExpiry(observedAt, lookup.PositiveTTL(), r.limits.MaxStableErrorTTL)}
 	}
 	outcome, decodeErr := DecodeKey(record, algorithm)
 	if decodeErr != nil {
-		return flightResult{outcome: newStatusOutcome(KeyOutcomeProviderContract, algorithm, record.Metadata())}
+		return flightResult{outcome: newStatusOutcome(KeyOutcomeProviderContract, algorithm)}
 	}
 	ttlCap := r.limits.MaxStableErrorTTL
 	if outcome.Status() == KeyOutcomeFound {
@@ -164,15 +164,15 @@ func (r Resolver) resolveLookup(ctx context.Context, query Query) flightResult {
 // transportFailure maps disjoint caller and typed transport failures without raw causes.
 func (r Resolver) transportFailure(algorithm Algorithm, lookup LookupResult, err error) KeyOutcome {
 	if !lookup.IsZero() {
-		return newStatusOutcome(KeyOutcomeProviderContract, algorithm, newMetadata(false, false))
+		return newStatusOutcome(KeyOutcomeProviderContract, algorithm)
 	}
 	switch TransportErrorClassOf(err) {
 	case TransportErrorTemporary:
-		return newStatusOutcome(KeyOutcomeTemporary, algorithm, newMetadata(false, false))
+		return newStatusOutcome(KeyOutcomeTemporary, algorithm)
 	case TransportErrorPermanent:
-		return newStatusOutcome(KeyOutcomePermanent, algorithm, newMetadata(false, false))
+		return newStatusOutcome(KeyOutcomePermanent, algorithm)
 	default:
-		return newStatusOutcome(KeyOutcomeProviderContract, algorithm, newMetadata(false, false))
+		return newStatusOutcome(KeyOutcomeProviderContract, algorithm)
 	}
 }
 

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/ed25519"
 	"crypto/mldsa"
+	"sync"
 )
 
 const (
@@ -20,10 +21,16 @@ const (
 	CompositeSignatureBytes = mldsa44SignatureBytes + ed25519.SignatureSize
 )
 
+// compositeAvailability caches the one-time ML-DSA-44 runtime probe.
+var compositeAvailability = sync.OnceValue(func() bool {
+	_, err := mldsa.NewPrivateKey(mldsa.MLDSA44(), make([]byte, mldsa.PrivateKeySize))
+	return err == nil
+})
+
 // CompositeAvailable reports an error when the cryptographic runtime cannot
 // provide ML-DSA-44, for example under the Go FIPS 140-3 module v1.0.0.
 func CompositeAvailable() error {
-	if _, err := mldsa.NewPrivateKey(mldsa.MLDSA44(), make([]byte, mldsa.PrivateKeySize)); err != nil {
+	if !compositeAvailability() {
 		return newError(ErrorCodeUnsupportedAlgorithm)
 	}
 	return nil
@@ -64,16 +71,14 @@ func (k CompositePublicKey) valid() bool {
 	return k.mldsa != nil && len(k.ed) == ed25519.PublicKeySize
 }
 
-// clone returns a detached copy of the composite key.
+// clone returns a detached copy of the composite key. The parsed ML-DSA
+// public key is immutable and shared, so only the Ed25519 slice is copied and
+// no key expansion is repeated on the verification hot path.
 func (k CompositePublicKey) clone() CompositePublicKey {
 	if !k.valid() {
 		return CompositePublicKey{}
 	}
-	parsed, err := ParseCompositePublicKey(k.Bytes())
-	if err != nil {
-		return CompositePublicKey{}
-	}
-	return parsed
+	return CompositePublicKey{mldsa: k.mldsa, ed: ed25519.PublicKey(bytes.Clone(k.ed))}
 }
 
 // verifyComposite applies Draft-07 Section 3.4: pure ML-DSA-44 with an empty

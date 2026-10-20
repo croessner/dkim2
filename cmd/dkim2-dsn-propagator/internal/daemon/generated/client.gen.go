@@ -408,6 +408,7 @@ const (
 	FirstSeen     ReplayResultClass = "first_seen"
 	Indeterminate ReplayResultClass = "indeterminate"
 	NotChecked    ReplayResultClass = "not_checked"
+	NotEligible   ReplayResultClass = "not_eligible"
 	Replayed      ReplayResultClass = "replayed"
 )
 
@@ -423,6 +424,8 @@ func (e ReplayResultClass) Valid() bool {
 	case Indeterminate:
 		return true
 	case NotChecked:
+		return true
+	case NotEligible:
 		return true
 	case Replayed:
 		return true
@@ -597,10 +600,11 @@ type PropagationSMTPInput struct {
 
 // ReplayResult defines model for ReplayResult.
 type ReplayResult struct {
+	// Class Local replay delivery-policy class. not_checked means replay was skipped because verification or policy did not reach PASS/accept. not_eligible means the message passed but carried only the originator's i=1 DKIM2-Signature, so no intermediary re-sent it and Draft-07 Section 15.1 replay counting does not apply.
 	Class ReplayResultClass `json:"class"`
 }
 
-// ReplayResultClass defines model for ReplayResult.Class.
+// ReplayResultClass Local replay delivery-policy class. not_checked means replay was skipped because verification or policy did not reach PASS/accept. not_eligible means the message passed but carried only the originator's i=1 DKIM2-Signature, so no intermediary re-sent it and Draft-07 Section 15.1 replay counting does not apply.
 type ReplayResultClass string
 
 // BadRequest defines model for BadRequest.

@@ -9,6 +9,7 @@ import (
 	"os"
 	"reflect"
 	"slices"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -63,12 +64,9 @@ type publicCheckSnapshot struct {
 }
 
 type publicSignatureSnapshot struct {
-	Algorithm  Algorithm
-	Status     SignatureStatus
-	Reason     ReasonCode
-	Testing    bool
-	Strict     bool
-	Applicable bool
+	Algorithm Algorithm
+	Status    SignatureStatus
+	Reason    ReasonCode
 }
 
 // TestDNSDraft04PublicPassVectors verifies RSA, Ed25519, combined, and default key tags.
@@ -146,38 +144,26 @@ func TestDNSDraft04PublicStateMatrix(t *testing.T) {
 	}
 }
 
-// TestDNSDraft04MetadataIsVerdictNeutral verifies t=y, t=s, and combined declarations.
-func TestDNSDraft04MetadataIsVerdictNeutral(t *testing.T) {
+// TestDNSRetiredTestingTagIsIgnored verifies DNS-01 Section 3.4.1: records
+// carrying t=y, t=s, t=y:s, or a malformed t= value yield exactly the public
+// facts of the same record without t=, on success and on every key failure.
+func TestDNSRetiredTestingTagIsIgnored(t *testing.T) {
 	corpus := loadPublicGoldenCorpus(t)
 	manifest := loadDNSGoldenManifest(t, corpus)
 	baseline := verifyDNSVector(context.Background(), t, corpus, goldenVectorRSAPass, mustDNSVectorProvider(t, dnsPassTransport(t, manifest.RSADefaultTXT, manifest.Ed25519LowerTXT, DNSSECStatusUnavailable), DefaultDNSProviderConfig()))
 	baselineSnapshot := snapshotPublicResult(baseline)
-	for _, tt := range []struct {
-		name, record    string
-		testing, strict bool
-	}{
-		{name: "testing", record: manifest.RSATestingTXT, testing: true},
-		{name: "strict", record: manifest.RSAStrictTXT, strict: true},
-		{name: "combined", record: manifest.RSATestingStrictTXT, testing: true, strict: true},
+	for _, tt := range []struct{ name, record string }{
+		{name: "testing", record: manifest.RSATestingTXT},
+		{name: "strict", record: manifest.RSAStrictTXT},
+		{name: "combined", record: manifest.RSATestingStrictTXT},
+		{name: "malformed", record: manifest.RSADefaultTXT + "; t=bad!"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			result := verifyDNSVector(context.Background(), t, corpus, goldenVectorRSAPass, mustDNSVectorProvider(t, dnsPassTransport(t, tt.record, manifest.Ed25519LowerTXT, DNSSECStatusUnavailable), DefaultDNSProviderConfig()))
-			metadata := result.SignatureSets()[0].KeyPolicyMetadata()
-			if metadata.TestingDeclared() != tt.testing || metadata.StrictIdentityDeclared() != tt.strict || metadata.StrictIdentityApplicable() {
-				t.Fatalf("metadata = testing %v strict %v applicable %v", metadata.TestingDeclared(), metadata.StrictIdentityDeclared(), metadata.StrictIdentityApplicable())
-			}
-			expected := baselineSnapshot
-			expected.Signatures = slices.Clone(baselineSnapshot.Signatures)
-			expected.Signatures[0].Testing = tt.testing
-			expected.Signatures[0].Strict = tt.strict
-			if !reflect.DeepEqual(snapshotPublicResult(result), expected) {
-				t.Fatal("metadata changed a verdict fact")
+			result := verifyDNSVector(context.Background(), t, corpus, goldenVectorRSAPass, mustDNSVectorProvider(t, dnsPassTransport(t, tt.record, manifest.Ed25519LowerTXT+"; t=y:s", DNSSECStatusUnavailable), DefaultDNSProviderConfig()))
+			if !reflect.DeepEqual(snapshotPublicResult(result), baselineSnapshot) {
+				t.Fatal("retired t= tag changed a public verification fact")
 			}
 		})
-	}
-	static := verifyDNSVector(context.Background(), t, corpus, goldenVectorRSAPass, publicGoldenProvider{mode: goldenProviderKeys, rsa: corpus.rsaKey(t), ed: corpus.edKey(t)})
-	if metadata := static.SignatureSets()[0].KeyPolicyMetadata(); metadata.TestingDeclared() || metadata.StrictIdentityDeclared() || metadata.StrictIdentityApplicable() {
-		t.Fatalf("static provider metadata was nonzero: %#v", metadata)
 	}
 
 	for _, tt := range []struct {
@@ -189,33 +175,17 @@ func TestDNSDraft04MetadataIsVerdictNeutral(t *testing.T) {
 		{name: testNameUnsupported, record: "k=future; p=QQ==; t=y:s", reason: ReasonUnsupportedKeyType},
 		{name: testNameMismatch, record: "k=ed25519; p=" + manifest.Ed25519Raw + "; t=y:s", reason: ReasonKeyAlgorithmMismatch},
 	} {
-		t.Run(tt.name+" metadata", func(t *testing.T) {
-			result := verifyDNSVector(context.Background(), t, corpus, goldenVectorRSAPass, mustDNSVectorProvider(t, &dnsVectorTransport{lookup: fixedPublicRecord(t, tt.record)}, DefaultDNSProviderConfig()))
-			fact := result.SignatureSets()[0]
-			metadata := fact.KeyPolicyMetadata()
-			if fact.Reason() != tt.reason || !metadata.TestingDeclared() || !metadata.StrictIdentityDeclared() || metadata.StrictIdentityApplicable() {
-				t.Fatalf("negative metadata = %q/%v/%v/%v", fact.Reason(), metadata.TestingDeclared(), metadata.StrictIdentityDeclared(), metadata.StrictIdentityApplicable())
+		t.Run(tt.name+" with retired t", func(t *testing.T) {
+			withTag := verifyDNSVector(context.Background(), t, corpus, goldenVectorRSAPass, mustDNSVectorProvider(t, &dnsVectorTransport{lookup: fixedPublicRecord(t, tt.record)}, DefaultDNSProviderConfig()))
+			withoutTag := verifyDNSVector(context.Background(), t, corpus, goldenVectorRSAPass, mustDNSVectorProvider(t, &dnsVectorTransport{lookup: fixedPublicRecord(t, strings.TrimSuffix(tt.record, "; t=y:s"))}, DefaultDNSProviderConfig()))
+			if fact := withTag.SignatureSets()[0]; fact.Reason() != tt.reason {
+				t.Fatalf("negative reason = %q", fact.Reason())
+			}
+			if !reflect.DeepEqual(snapshotPublicResult(withTag), snapshotPublicResult(withoutTag)) {
+				t.Fatal("retired t= tag changed a key failure fact")
 			}
 		})
 	}
-
-	failing := &dnsVectorTransport{lookup: func(_ context.Context, owner string) (TXTLookupResult, error) {
-		if owner == dnsVectorEdOwner {
-			return foundPublicTXT(t, manifest.Ed25519LowerTXT+"; t=y:s", DNSSECStatusUnavailable), nil
-		}
-		return foundPublicTXT(t, manifest.RSADefaultTXT, DNSSECStatusUnavailable), nil
-	}}
-	failResult := verifyDNSVector(context.Background(), t, corpus, "supported_mixed_fail", mustDNSVectorProvider(t, failing, DefaultDNSProviderConfig()))
-	for _, fact := range failResult.SignatureSets() {
-		if fact.Status() == SignatureStatusFAIL {
-			metadata := fact.KeyPolicyMetadata()
-			if !metadata.TestingDeclared() || !metadata.StrictIdentityDeclared() || metadata.StrictIdentityApplicable() {
-				t.Fatalf("FAIL metadata = %#v", metadata)
-			}
-			return
-		}
-	}
-	t.Fatal("missing DNS-backed FAIL signature fact")
 }
 
 // TestDNSDraft04DNSSECAndCacheHistoryAreInvisible verifies operational history neutrality.
@@ -248,12 +218,6 @@ func TestDNSDraft04DNSSECAndCacheHistoryAreInvisible(t *testing.T) {
 			uncached = snapshotPublicResult(first)
 		} else if !reflect.DeepEqual(snapshotPublicResult(first), uncached) {
 			t.Fatal("cache-enabled facts differ from cache-disabled facts")
-		}
-		for _, fact := range first.SignatureSets() {
-			metadata := fact.KeyPolicyMetadata()
-			if !metadata.TestingDeclared() || !metadata.StrictIdentityDeclared() || metadata.StrictIdentityApplicable() {
-				t.Fatalf("cache capacity %d metadata = %#v", cacheEntries, metadata)
-			}
 		}
 		wantCalls := int32(4)
 		if cacheEntries > 0 {
@@ -327,7 +291,7 @@ func TestDNSDraft04Precedence(t *testing.T) {
 		}
 		return foundPublicTXT(t, "k=ed25519; p="+manifest.Ed25519Raw, DNSSECStatusUnavailable), nil
 	}}
-	result := verifyDNSVector(context.Background(), t, corpus, "supported_mixed_fail", mustDNSVectorProvider(t, mixed, DefaultDNSProviderConfig()))
+	result := verifyDNSVector(context.Background(), t, corpus, goldenVectorSupportedMixedFail, mustDNSVectorProvider(t, mixed, DefaultDNSProviderConfig()))
 	facts := snapshotPublicResult(result).Signatures
 	checks := nonPassingPublicChecks(result)
 	if result.State() != ResultStateFAIL || result.PrimaryReason() != ReasonSignatureMismatch || len(facts) != 2 ||
@@ -516,8 +480,7 @@ func snapshotPublicResult(result VerifyResult) publicResultSnapshot {
 		snapshot.Checks = append(snapshot.Checks, publicCheckSnapshot{Class: fact.Class(), Reason: fact.Reason()})
 	}
 	for _, fact := range result.SignatureSets() {
-		metadata := fact.KeyPolicyMetadata()
-		snapshot.Signatures = append(snapshot.Signatures, publicSignatureSnapshot{Algorithm: fact.Algorithm(), Status: fact.Status(), Reason: fact.Reason(), Testing: metadata.TestingDeclared(), Strict: metadata.StrictIdentityDeclared(), Applicable: metadata.StrictIdentityApplicable()})
+		snapshot.Signatures = append(snapshot.Signatures, publicSignatureSnapshot{Algorithm: fact.Algorithm(), Status: fact.Status(), Reason: fact.Reason()})
 	}
 	return snapshot
 }

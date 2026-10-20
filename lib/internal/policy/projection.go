@@ -7,7 +7,7 @@ const hardMaxSignatureFacts = 16
 // VerificationReason identifies the authoritative aggregate verification reason.
 type VerificationReason string
 
-// Closed verification reason constants required by DNS testing policy.
+// Closed verification reason constants mirrored from service verification outcomes.
 const (
 	VerificationReasonNone                    VerificationReason = "none"
 	VerificationReasonLimitExceeded           VerificationReason = "limit_exceeded"
@@ -185,18 +185,16 @@ func (r SetReason) Known() bool {
 	}
 }
 
-// SignatureFact stores bounded pre-retention signature and DNS policy metadata.
+// SignatureFact stores bounded pre-retention signature-set outcome facts.
 type SignatureFact struct {
-	algorithm              SetAlgorithm
-	status                 SetStatus
-	reason                 SetReason
-	testingDeclared        bool
-	strictIdentityDeclared bool
+	algorithm SetAlgorithm
+	status    SetStatus
+	reason    SetReason
 }
 
 // NewSignatureFact constructs one coherent sealed signature-set fact.
-func NewSignatureFact(algorithm SetAlgorithm, status SetStatus, reason SetReason, testing, strict bool) (SignatureFact, error) {
-	fact := SignatureFact{algorithm: algorithm, status: status, reason: reason, testingDeclared: testing, strictIdentityDeclared: strict}
+func NewSignatureFact(algorithm SetAlgorithm, status SetStatus, reason SetReason) (SignatureFact, error) {
+	fact := SignatureFact{algorithm: algorithm, status: status, reason: reason}
 	if !fact.Valid() {
 		return SignatureFact{}, newError(ErrorInternalContract)
 	}
@@ -208,12 +206,6 @@ func (f SignatureFact) Valid() bool {
 	if !f.algorithm.Known() || !f.status.Known() || !f.reason.Known() {
 		return false
 	}
-	metadata := f.testingDeclared || f.strictIdentityDeclared
-	metadataAllowed := f.status == SetStatusPass || f.status == SetStatusFail || f.status == SetStatusPermerror &&
-		(f.reason == SetReasonInvalidKey || f.reason == SetReasonRevokedKey || f.reason == SetReasonUnsupportedKeyType || f.reason == SetReasonKeyAlgorithmMismatch)
-	if metadata && !metadataAllowed {
-		return false
-	}
 	switch f.status {
 	case SetStatusPass:
 		return f.reason == SetReasonNone && f.algorithm != SetAlgorithmUnknown
@@ -222,7 +214,7 @@ func (f SignatureFact) Valid() bool {
 	case SetStatusTemperror:
 		return f.reason == SetReasonProviderTemporary && f.algorithm != SetAlgorithmUnknown
 	case SetStatusIgnored:
-		return f.reason == SetReasonUnsupportedAlgorithm && f.algorithm == SetAlgorithmUnknown && !f.testingDeclared && !f.strictIdentityDeclared
+		return f.reason == SetReasonUnsupportedAlgorithm && f.algorithm == SetAlgorithmUnknown
 	case SetStatusPermerror:
 		return f.reason != SetReasonNone && f.reason != SetReasonSignatureMismatch && f.reason != SetReasonUnsupportedAlgorithm && f.reason != SetReasonProviderTemporary &&
 			(f.algorithm != SetAlgorithmUnknown || f.reason == SetReasonInternalContract)
@@ -239,12 +231,6 @@ func (f SignatureFact) Status() SetStatus { return f.status }
 
 // Reason returns the bounded set reason.
 func (f SignatureFact) Reason() SetReason { return f.reason }
-
-// TestingDeclared reports authenticated DNS testing metadata.
-func (f SignatureFact) TestingDeclared() bool { return f.testingDeclared }
-
-// StrictIdentityDeclared reports bounded DNS strict-identity metadata.
-func (f SignatureFact) StrictIdentityDeclared() bool { return f.strictIdentityDeclared }
 
 // HopFact stores one authenticated flag and transition fact.
 type HopFact struct {
@@ -500,7 +486,7 @@ func (p Projection) verificationReasonFactsCoherent() bool {
 	}
 }
 
-// eligiblePermanentPrimaryCoherent locks mixed DNS-eligible key reason precedence.
+// eligiblePermanentPrimaryCoherent locks mixed key-failure reason precedence.
 func (p Projection) eligiblePermanentPrimaryCoherent() bool {
 	if p.verificationReason == VerificationReasonMalformedMessage || p.verificationReason == VerificationReasonMalformedProtocol ||
 		p.verificationReason == VerificationReasonDuplicateHashAlgorithm || p.verificationReason == VerificationReasonInvalidRecipeJSON ||
@@ -579,22 +565,6 @@ func permanentSetReasonRank(reason VerificationReason) int {
 		return 6
 	case VerificationReasonProviderContract:
 		return 7
-	default:
-		return -1
-	}
-}
-
-// eligiblePermanentRank mirrors authoritative service primary-reason ordering.
-func eligiblePermanentRank(reason VerificationReason) int {
-	switch reason {
-	case VerificationReasonRevokedKey:
-		return 0
-	case VerificationReasonUnsupportedKeyType:
-		return 1
-	case VerificationReasonKeyAlgorithmMismatch:
-		return 2
-	case VerificationReasonInvalidKey:
-		return 3
 	default:
 		return -1
 	}

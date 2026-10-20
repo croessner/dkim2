@@ -896,7 +896,7 @@ func strictSortedStrings(values []string) bool {
 // validProcessOutcome validates the final authentication, replay, and disposition matrix.
 func validProcessOutcome(value generated.ProcessResponse) bool {
 	switch value.Replay.Class {
-	case generated.Disabled, generated.FirstSeen, generated.Exploded:
+	case generated.Disabled, generated.FirstSeen, generated.Exploded, generated.NotEligible:
 		return value.Verification.State == generated.PASS && value.Authentication.State == generated.PASS &&
 			value.Authentication.PrimaryReason == generated.AuthenticationResultPrimaryReasonNone &&
 			string(value.Disposition) == string(value.Policy.Verdict)
@@ -1039,7 +1039,7 @@ func validVerificationProjection(value generated.VerificationResult) bool {
 	}
 	for _, signature := range value.SignatureSets {
 		if !signature.Algorithm.Valid() || !signature.Status.Valid() ||
-			!signature.Reason.Valid() || !signature.KeyPolicy.StrictIdentityApplicable.Valid() ||
+			!signature.Reason.Valid() ||
 			!validDiagnosticSelector(signature.Status, signature.Selector) {
 			return false
 		}

@@ -471,21 +471,6 @@ func (e HealthResponseStatus) Valid() bool {
 	}
 }
 
-// Defines values for KeyPolicyResultStrictIdentityApplicable.
-const (
-	False KeyPolicyResultStrictIdentityApplicable = false
-)
-
-// Valid indicates whether the value is a known member of the KeyPolicyResultStrictIdentityApplicable enum.
-func (e KeyPolicyResultStrictIdentityApplicable) Valid() bool {
-	switch e {
-	case False:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for MessageInputFidelity.
 const (
 	EximLocalScanObservedCrlf MessageInputFidelity = "exim_local_scan_observed_crlf"
@@ -620,9 +605,6 @@ func (e PolicyFindingSeverity) Valid() bool {
 
 // Defines values for PolicyReason.
 const (
-	DnsTestingEffective           PolicyReason = "dns_testing_effective"
-	DnsTestingIneligible          PolicyReason = "dns_testing_ineligible"
-	DnsTestingMixed               PolicyReason = "dns_testing_mixed"
 	ExplodedReported              PolicyReason = "exploded_reported"
 	FeedbackRelaySelected         PolicyReason = "feedback_relay_selected"
 	FeedbackRequested             PolicyReason = "feedback_requested"
@@ -648,12 +630,6 @@ const (
 // Valid indicates whether the value is a known member of the PolicyReason enum.
 func (e PolicyReason) Valid() bool {
 	switch e {
-	case DnsTestingEffective:
-		return true
-	case DnsTestingIneligible:
-		return true
-	case DnsTestingMixed:
-		return true
 	case ExplodedReported:
 		return true
 	case FeedbackRelaySelected:
@@ -766,6 +742,7 @@ const (
 	FirstSeen     ReplayResultClass = "first_seen"
 	Indeterminate ReplayResultClass = "indeterminate"
 	NotChecked    ReplayResultClass = "not_checked"
+	NotEligible   ReplayResultClass = "not_eligible"
 	Replayed      ReplayResultClass = "replayed"
 )
 
@@ -781,6 +758,8 @@ func (e ReplayResultClass) Valid() bool {
 	case Indeterminate:
 		return true
 	case NotChecked:
+		return true
+	case NotEligible:
 		return true
 	case Replayed:
 		return true
@@ -1401,16 +1380,6 @@ type HealthResponse struct {
 // HealthResponseStatus defines model for HealthResponse.Status.
 type HealthResponseStatus string
 
-// KeyPolicyResult defines model for KeyPolicyResult.
-type KeyPolicyResult struct {
-	StrictIdentityApplicable KeyPolicyResultStrictIdentityApplicable `json:"strict_identity_applicable"`
-	StrictIdentityDeclared   bool                                    `json:"strict_identity_declared"`
-	TestingDeclared          bool                                    `json:"testing_declared"`
-}
-
-// KeyPolicyResultStrictIdentityApplicable defines model for KeyPolicyResult.StrictIdentityApplicable.
-type KeyPolicyResultStrictIdentityApplicable bool
-
 // MessageInput defines model for MessageInput.
 type MessageInput struct {
 	Fidelity         *MessageInputFidelity `json:"fidelity,omitempty"`
@@ -1465,12 +1434,11 @@ type PolicyReason string
 
 // PolicyResult defines model for PolicyResult.
 type PolicyResult struct {
-	DnsTestingEffective bool                `json:"dns_testing_effective"`
-	Feedback            PolicyFeedback      `json:"feedback"`
-	Findings            []PolicyFinding     `json:"findings"`
-	Mode                PolicyResultMode    `json:"mode"`
-	PrimaryReason       PolicyReason        `json:"primary_reason"`
-	Verdict             PolicyResultVerdict `json:"verdict"`
+	Feedback      PolicyFeedback      `json:"feedback"`
+	Findings      []PolicyFinding     `json:"findings"`
+	Mode          PolicyResultMode    `json:"mode"`
+	PrimaryReason PolicyReason        `json:"primary_reason"`
+	Verdict       PolicyResultVerdict `json:"verdict"`
 }
 
 // PolicyResultMode defines model for PolicyResult.Mode.
@@ -1530,10 +1498,11 @@ type ReadinessResponseStatus string
 
 // ReplayResult defines model for ReplayResult.
 type ReplayResult struct {
+	// Class Local replay delivery-policy class. not_checked means replay was skipped because verification or policy did not reach PASS/accept. not_eligible means the message passed but carried only the originator's i=1 DKIM2-Signature, so no intermediary re-sent it and Draft-07 Section 15.1 replay counting does not apply.
 	Class ReplayResultClass `json:"class"`
 }
 
-// ReplayResultClass defines model for ReplayResult.Class.
+// ReplayResultClass Local replay delivery-policy class. not_checked means replay was skipped because verification or policy did not reach PASS/accept. not_eligible means the message passed but carried only the originator's i=1 DKIM2-Signature, so no intermediary re-sent it and Draft-07 Section 15.1 replay counting does not apply.
 type ReplayResultClass string
 
 // ReportingContext defines model for ReportingContext.
@@ -1577,7 +1546,6 @@ type SignRequest struct {
 // SignatureSetResult defines model for SignatureSetResult.
 type SignatureSetResult struct {
 	Algorithm SignatureSetResultAlgorithm `json:"algorithm"`
-	KeyPolicy KeyPolicyResult             `json:"key_policy"`
 	Reason    VerificationReason          `json:"reason"`
 
 	// Selector Canonical selector for a failed supported signature; absent for every other result.

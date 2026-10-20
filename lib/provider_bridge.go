@@ -55,11 +55,6 @@ func (b publicKeyBridge) LookupKey(
 	if result.IsZero() || !result.Status().Known() || result.Algorithm() != algorithm {
 		return verify.PublicKey{}, verify.NewProviderFailure(verify.ProviderFailureContract)
 	}
-	metadata := result.KeyPolicyMetadata()
-	if (result.Status() == PublicKeyStatusMissing || result.Status() == PublicKeyStatusAmbiguous) &&
-		(metadata.TestingDeclared() || metadata.StrictIdentityDeclared()) {
-		return verify.PublicKey{}, verify.NewProviderFailure(verify.ProviderFailureContract)
-	}
 
 	internalAlgorithm := verify.Algorithm(result.Algorithm())
 	switch result.Status() {
@@ -69,7 +64,7 @@ func (b publicKeyBridge) LookupKey(
 		if publicResultHasMaterial(result) {
 			return verify.PublicKey{}, verify.NewProviderFailure(verify.ProviderFailureContract)
 		}
-		return verify.PublicKey{Algorithm: internalAlgorithm, Metadata: verify.KeyMetadata{Status: internalKeyStatus(result.Status()), Policy: internalKeyPolicyMetadata(result.KeyPolicyMetadata())}}, nil
+		return verify.PublicKey{Algorithm: internalAlgorithm, Metadata: verify.KeyMetadata{Status: internalKeyStatus(result.Status())}}, nil
 	default:
 		return verify.PublicKey{}, verify.NewProviderFailure(verify.ProviderFailureContract)
 	}
@@ -147,7 +142,7 @@ func foundInternalPublicKey(result PublicKeyResult, algorithm verify.Algorithm) 
 	if publicMaterialVariants(hasRSA, hasEd, hasComposite) != 1 {
 		return verify.PublicKey{}, verify.NewProviderFailure(verify.ProviderFailureContract)
 	}
-	metadata := verify.KeyMetadata{Status: verify.KeyStatusFound, Policy: internalKeyPolicyMetadata(result.KeyPolicyMetadata())}
+	metadata := verify.KeyMetadata{Status: verify.KeyStatusFound}
 	switch algorithm {
 	case verify.AlgorithmRSASHA256:
 		if !hasRSA || rsaKey == nil || rsaKey.N == nil {
@@ -224,14 +219,5 @@ func internalKeyStatus(status PublicKeyStatus) verify.KeyStatus {
 		return verify.KeyStatusAlgorithmMismatch
 	default:
 		return verify.KeyStatusProviderContract
-	}
-}
-
-// internalKeyPolicyMetadata maps bounded public DNS declarations into verifier facts.
-func internalKeyPolicyMetadata(metadata KeyPolicyMetadata) verify.KeyPolicyMetadata {
-	return verify.KeyPolicyMetadata{
-		TestingDeclared:          metadata.TestingDeclared(),
-		StrictIdentityDeclared:   metadata.StrictIdentityDeclared(),
-		StrictIdentityApplicable: metadata.StrictIdentityApplicable(),
 	}
 }

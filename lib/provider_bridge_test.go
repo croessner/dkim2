@@ -111,46 +111,6 @@ func TestPublicProviderBridgePreservesDeclaredNonFoundStatus(t *testing.T) {
 	}
 }
 
-// TestPublicProviderBridgePreservesPolicyMetadata verifies metadata survives every declared early return.
-func TestPublicProviderBridgePreservesPolicyMetadata(t *testing.T) {
-	for _, result := range []PublicKeyResult{
-		withKeyPolicyMetadata(InvalidPublicKey(AlgorithmRSASHA256), newKeyPolicyMetadata(true, true)),
-		withKeyPolicyMetadata(RevokedPublicKey(AlgorithmRSASHA256), newKeyPolicyMetadata(true, true)),
-		withKeyPolicyMetadata(UnsupportedKeyTypePublicKey(AlgorithmRSASHA256), newKeyPolicyMetadata(true, true)),
-		withKeyPolicyMetadata(AlgorithmMismatchPublicKey(AlgorithmRSASHA256), newKeyPolicyMetadata(true, true)),
-	} {
-		bridge := publicKeyBridge{provider: publicProviderFunc(func(context.Context, PublicKeyQuery) (PublicKeyResult, error) { return result, nil })}
-		key, err := bridge.LookupKey(context.Background(), verify.KeyQuery{Domain: testSigningDomain, Selector: testSelector, Algorithm: verify.AlgorithmRSASHA256})
-		if err != nil || !key.Metadata.Policy.TestingDeclared || !key.Metadata.Policy.StrictIdentityDeclared || key.Metadata.Policy.StrictIdentityApplicable {
-			t.Fatalf("LookupKey() metadata=%#v error=%v", key.Metadata.Policy, err)
-		}
-	}
-}
-
-// TestPublicProviderBridgeRejectsMetadataWithoutUniqueRecord verifies closed metadata legality.
-func TestPublicProviderBridgeRejectsMetadataWithoutUniqueRecord(t *testing.T) {
-	for _, result := range []PublicKeyResult{
-		withKeyPolicyMetadata(MissingPublicKey(AlgorithmRSASHA256), newKeyPolicyMetadata(true, false)),
-		withKeyPolicyMetadata(AmbiguousPublicKey(AlgorithmRSASHA256), newKeyPolicyMetadata(false, true)),
-	} {
-		bridge := publicKeyBridge{provider: publicProviderFunc(func(context.Context, PublicKeyQuery) (PublicKeyResult, error) { return result, nil })}
-		_, err := bridge.LookupKey(context.Background(), verify.KeyQuery{Domain: testSigningDomain, Selector: testSelector, Algorithm: verify.AlgorithmRSASHA256})
-		if verify.ProviderFailureClassOf(err) != verify.ProviderFailureContract {
-			t.Fatalf("LookupKey() error = %v", err)
-		}
-	}
-}
-
-// TestPublicProviderBridgePreservesFoundMetadata verifies successful key metadata mapping.
-func TestPublicProviderBridgePreservesFoundMetadata(t *testing.T) {
-	result := withKeyPolicyMetadata(FoundEd25519PublicKey(make(ed25519.PublicKey, ed25519.PublicKeySize)), newKeyPolicyMetadata(true, true))
-	bridge := publicKeyBridge{provider: publicProviderFunc(func(context.Context, PublicKeyQuery) (PublicKeyResult, error) { return result, nil })}
-	key, err := bridge.LookupKey(context.Background(), verify.KeyQuery{Domain: testSigningDomain, Selector: testSelector, Algorithm: verify.AlgorithmEd25519SHA256})
-	if err != nil || !key.Metadata.Policy.TestingDeclared || !key.Metadata.Policy.StrictIdentityDeclared || key.Metadata.Policy.StrictIdentityApplicable {
-		t.Fatalf("LookupKey() metadata=%#v error=%v", key.Metadata.Policy, err)
-	}
-}
-
 // TestPublicProviderBridgePreservesEd25519Type verifies cloning retains the named key type.
 func TestPublicProviderBridgePreservesEd25519Type(t *testing.T) {
 	key := make(ed25519.PublicKey, ed25519.PublicKeySize)

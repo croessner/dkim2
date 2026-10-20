@@ -29,8 +29,17 @@ const (
 	defaultMaxSignatureSets      = 16
 	defaultMaxEnvelopeRecipients = 2000
 	defaultRSAMinBits            = 1024
-	defaultFutureTolerance       = 5 * time.Minute
-	defaultMaxSignatureAge       = 14 * 24 * time.Hour
+	// signatureMaxAge is the fixed Draft-07 Section 14.3 maximum signature
+	// age relative to the delivery instant.
+	signatureMaxAge = 14 * 24 * time.Hour
+	// signatureFutureTolerance is the fixed Draft-07 Section 14.3 limit for
+	// signatures dated after the delivery instant.
+	signatureFutureTolerance = 24 * time.Hour
+	// revisionInstantSkew bounds how far a caller-supplied revision, signing,
+	// or DSN-rebuild instant may deviate from a fresh capture of the same
+	// verifier clock. It is an operation guard, independent of the protocol
+	// timestamp windows.
+	revisionInstantSkew = 5 * time.Minute
 )
 
 // Algorithm aliases the signature owner's closed algorithm vocabulary.
@@ -43,8 +52,6 @@ type Clock func() time.Time
 type Options struct {
 	// AlgorithmPolicy controls known signature algorithms and RSA key size.
 	AlgorithmPolicy AlgorithmPolicy
-	// TimestampPolicy controls local timestamp acceptance windows.
-	TimestampPolicy TimestampPolicy
 	// Limits bounds verification result and request dimensions.
 	Limits Limits
 	// RevisionLimits bounds cumulative all-hop revision proof work.
@@ -78,14 +85,6 @@ type AlgorithmPolicy struct {
 	MaxRSABits int
 }
 
-// TimestampPolicy contains local timestamp validation settings.
-type TimestampPolicy struct {
-	// FutureTolerance permits small clock skew for future t= values.
-	FutureTolerance time.Duration
-	// MaxAge bounds stale t= values when positive; zero disables the age cap.
-	MaxAge time.Duration
-}
-
 // Limits contains fail-closed verification resource settings.
 type Limits struct {
 	// MaxInstanceHashSets bounds h= sets parsed from one Message-Instance.
@@ -116,7 +115,6 @@ type RevisionLimits struct {
 func DefaultOptions() Options {
 	return Options{
 		AlgorithmPolicy: DefaultAlgorithmPolicy(),
-		TimestampPolicy: DefaultTimestampPolicy(),
 		Limits:          DefaultLimits(),
 		RevisionLimits:  DefaultRevisionLimits(),
 		Clock:           systemClock,
@@ -142,14 +140,6 @@ func DefaultAlgorithmPolicy() AlgorithmPolicy {
 	}
 }
 
-// DefaultTimestampPolicy returns deterministic local timestamp defaults.
-func DefaultTimestampPolicy() TimestampPolicy {
-	return TimestampPolicy{
-		FutureTolerance: defaultFutureTolerance,
-		MaxAge:          defaultMaxSignatureAge,
-	}
-}
-
 // DefaultLimits returns restrictive verification resource defaults.
 func DefaultLimits() Limits {
 	return Limits{
@@ -163,13 +153,6 @@ func DefaultLimits() Limits {
 func WithAlgorithmPolicy(policy AlgorithmPolicy) Option {
 	return func(options *Options) {
 		options.AlgorithmPolicy = policy
-	}
-}
-
-// WithTimestampPolicy replaces verifier timestamp policy.
-func WithTimestampPolicy(policy TimestampPolicy) Option {
-	return func(options *Options) {
-		options.TimestampPolicy = policy
 	}
 }
 
@@ -264,9 +247,6 @@ func (o Options) Validate() error {
 	if err := o.AlgorithmPolicy.Validate(); err != nil {
 		return err
 	}
-	if err := o.TimestampPolicy.Validate(); err != nil {
-		return err
-	}
 	if err := o.Limits.Validate(); err != nil {
 		return err
 	}
@@ -341,18 +321,6 @@ func (p AlgorithmPolicy) Allows(algorithm Algorithm) bool {
 // Algorithms returns the enabled signature algorithms as an immutable copy.
 func (p AlgorithmPolicy) Algorithms() []Algorithm {
 	return slices.Clone(p.AllowedAlgorithms)
-}
-
-// Validate rejects unsafe timestamp policy settings.
-func (p TimestampPolicy) Validate() error {
-	if p.FutureTolerance < 0 {
-		return invalidOptionError("future_tolerance", int(p.FutureTolerance))
-	}
-	if p.MaxAge < 0 {
-		return invalidOptionError("max_age", int(p.MaxAge))
-	}
-
-	return nil
 }
 
 // Validate rejects unsafe verification limit settings.

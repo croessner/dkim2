@@ -20,8 +20,7 @@ import (
 )
 
 type passingPolicyProvider struct {
-	key     *rsa.PublicKey
-	testing bool
+	key *rsa.PublicKey
 }
 
 type mixedPolicyProvider struct {
@@ -29,11 +28,11 @@ type mixedPolicyProvider struct {
 	ed25519Key ed25519.PublicKey
 }
 
-// LookupKey returns algorithm-specific keys with testing only on RSA.
+// LookupKey returns algorithm-specific keys for the mixed-algorithm fixture.
 func (p mixedPolicyProvider) LookupKey(_ context.Context, query verify.KeyQuery) (verify.PublicKey, error) {
 	switch query.Algorithm {
 	case verify.AlgorithmRSASHA256:
-		return verify.PublicKey{Algorithm: query.Algorithm, Material: p.rsaKey, Metadata: verify.KeyMetadata{Status: verify.KeyStatusFound, Policy: verify.KeyPolicyMetadata{TestingDeclared: true}}}, nil
+		return verify.PublicKey{Algorithm: query.Algorithm, Material: p.rsaKey, Metadata: verify.KeyMetadata{Status: verify.KeyStatusFound}}, nil
 	case verify.AlgorithmEd25519SHA256:
 		return verify.PublicKey{Algorithm: query.Algorithm, Material: p.ed25519Key, Metadata: verify.KeyMetadata{Status: verify.KeyStatusFound}}, nil
 	default:
@@ -43,7 +42,7 @@ func (p mixedPolicyProvider) LookupKey(_ context.Context, query verify.KeyQuery)
 
 // LookupKey returns the exact synthetic RSA key used by a projection fixture.
 func (p passingPolicyProvider) LookupKey(context.Context, verify.KeyQuery) (verify.PublicKey, error) {
-	return verify.PublicKey{Algorithm: verify.AlgorithmRSASHA256, Material: p.key, Metadata: verify.KeyMetadata{Status: verify.KeyStatusFound, Policy: verify.KeyPolicyMetadata{TestingDeclared: p.testing}}}, nil
+	return verify.PublicKey{Algorithm: verify.AlgorithmRSASHA256, Material: p.key, Metadata: verify.KeyMetadata{Status: verify.KeyStatusFound}}, nil
 }
 
 // TestServiceAloneUpgradesPassingCandidateAndDiscardsNonPassFlags verifies provenance ownership.
@@ -89,7 +88,7 @@ func TestPolicyProjectionPreservesPreRetentionSignatureFacts(t *testing.T) {
 	config.Clock = func() time.Time { return time.Unix(int64(timestamp), 0) }
 	config.Limits.MaxSignatureFacts = 1
 	config.Limits.MaxSignatureSets = 2
-	raw, provider := signedMixedTestingPolicyMessage(t, timestamp)
+	raw, provider := signedMixedPolicyMessage(t, timestamp)
 	coordinator, err := NewVerifier(provider, config)
 	if err != nil {
 		t.Fatalf("NewVerifier(passing) error = %v", err)
@@ -102,28 +101,18 @@ func TestPolicyProjectionPreservesPreRetentionSignatureFacts(t *testing.T) {
 	if len(result.SignatureSets()) != 1 || len(projection.SignatureFacts()) != 2 || !projection.Valid() || projection.Protocol() != policy.ProtocolPASS {
 		t.Fatalf("retention result=%d projection=%#v", len(result.SignatureSets()), projection)
 	}
-	if result.SignatureSets()[0].KeyPolicy.TestingDeclared {
-		t.Fatal("public retained slice unexpectedly contains DNS testing metadata")
-	}
-	sealedTesting := false
-	for _, fact := range projection.SignatureFacts() {
-		sealedTesting = sealedTesting || fact.TestingDeclared()
-	}
-	if !sealedTesting {
-		t.Fatal("hidden pre-retention DNS testing metadata was lost")
-	}
 	evaluator, err := policy.NewEvaluator(policy.DefaultConfig())
 	if err != nil {
 		t.Fatalf("policy.NewEvaluator() error = %v", err)
 	}
 	decision, err := evaluator.EvaluateProjection(projection)
-	if err != nil || !decision.Valid() || !serviceDecisionHasReason(decision, policy.ReasonDNSTestingMixed) {
+	if err != nil || !decision.Valid() || decision.Verdict() == policy.VerdictReject {
 		t.Fatalf("pre-retention evaluation = %#v error=%v", decision, err)
 	}
 }
 
-// signedMixedTestingPolicyMessage creates valid Ed25519/plain and RSA/testing sets.
-func signedMixedTestingPolicyMessage(t *testing.T, timestamp uint64) ([]byte, mixedPolicyProvider) {
+// signedMixedPolicyMessage creates valid Ed25519 and RSA signature sets.
+func signedMixedPolicyMessage(t *testing.T, timestamp uint64) ([]byte, mixedPolicyProvider) {
 	t.Helper()
 	rsaPrivate, err := rsa.GenerateKey(rand.Reader, 1024)
 	if err != nil {
@@ -165,16 +154,6 @@ func signedMixedTestingPolicyMessage(t *testing.T, timestamp uint64) ([]byte, mi
 		t.Fatalf("rsa.SignPKCS1v15() error = %v", err)
 	}
 	return []byte(build(base64.StdEncoding.EncodeToString(edSignature), base64.StdEncoding.EncodeToString(rsaSignature))), mixedPolicyProvider{rsaKey: &rsaPrivate.PublicKey, ed25519Key: edPublic}
-}
-
-// serviceDecisionHasReason reports whether an internal policy decision contains one reason.
-func serviceDecisionHasReason(decision policy.Decision, reason policy.PolicyReason) bool {
-	for _, finding := range decision.Findings() {
-		if finding.Reason() == reason {
-			return true
-		}
-	}
-	return false
 }
 
 // signedFlaggedPolicyMessage creates a real passing RSA fixture with all five known flags.
@@ -245,12 +224,13 @@ func TestUnavailablePolicyProjectionCoversExactReasons(t *testing.T) {
 	}
 }
 
-// TestPolicySignatureFactMappingRejectsMetadataOnIneligibleOutcomes verifies DNS fact coherence.
-func TestPolicySignatureFactMappingRejectsMetadataOnIneligibleOutcomes(t *testing.T) {
+// TestPolicySignatureFactMappingRejectsIncoherentOutcomes verifies closed signature fact coherence.
+func TestPolicySignatureFactMappingRejectsIncoherentOutcomes(t *testing.T) {
 	valid := []SignatureSetFact{
-		{Algorithm: AlgorithmRSASHA256, Status: SignaturePASS, Reason: ReasonNone, KeyPolicy: KeyPolicyMetadata{TestingDeclared: true}},
-		{Algorithm: AlgorithmRSASHA256, Status: SignatureFAIL, Reason: ReasonSignatureMismatch, KeyPolicy: KeyPolicyMetadata{StrictIdentityDeclared: true}},
-		{Algorithm: AlgorithmRSASHA256, Status: SignaturePERMERROR, Reason: ReasonInvalidKey, KeyPolicy: KeyPolicyMetadata{TestingDeclared: true}},
+		{Algorithm: AlgorithmRSASHA256, Status: SignaturePASS, Reason: ReasonNone},
+		{Algorithm: AlgorithmRSASHA256, Status: SignatureFAIL, Reason: ReasonSignatureMismatch},
+		{Algorithm: AlgorithmRSASHA256, Status: SignaturePERMERROR, Reason: ReasonInvalidKey},
+		{Algorithm: AlgorithmRSASHA256, Status: SignaturePERMERROR, Reason: ReasonMissingKey},
 		{Algorithm: AlgorithmUnknown, Status: SignatureIgnored, Reason: ReasonUnsupportedAlgorithm},
 		{Algorithm: AlgorithmRSASHA256, Status: SignatureTEMPERROR, Reason: ReasonProviderTemporary},
 	}
@@ -260,9 +240,9 @@ func TestPolicySignatureFactMappingRejectsMetadataOnIneligibleOutcomes(t *testin
 		}
 	}
 	invalid := []SignatureSetFact{
-		{Algorithm: AlgorithmRSASHA256, Status: SignatureTEMPERROR, Reason: ReasonProviderTemporary, KeyPolicy: KeyPolicyMetadata{TestingDeclared: true}},
-		{Algorithm: AlgorithmRSASHA256, Status: SignaturePERMERROR, Reason: ReasonMissingKey, KeyPolicy: KeyPolicyMetadata{TestingDeclared: true}},
-		{Algorithm: AlgorithmUnknown, Status: SignatureIgnored, Reason: ReasonUnsupportedAlgorithm, KeyPolicy: KeyPolicyMetadata{StrictIdentityDeclared: true}},
+		{Algorithm: AlgorithmRSASHA256, Status: SignaturePASS, Reason: ReasonSignatureMismatch},
+		{Algorithm: AlgorithmRSASHA256, Status: SignatureIgnored, Reason: ReasonUnsupportedAlgorithm},
+		{Algorithm: Algorithm("future"), Status: SignaturePASS, Reason: ReasonNone},
 	}
 	for _, fact := range invalid {
 		if mapped, err := policySignatureFact(fact); err == nil || mapped.Valid() {

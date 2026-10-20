@@ -224,6 +224,8 @@ func replayOutcomeFromAuthentication(authentication dkim2.AuthenticationResult, 
 	switch authentication.ReplayClass() {
 	case dkim2.AuthenticationReplayNotChecked:
 		class = ReplayResultNotChecked
+	case dkim2.AuthenticationReplayNotEligible:
+		class = ReplayResultNotEligible
 	case dkim2.AuthenticationReplayDisabled:
 		class = ReplayResultDisabled
 	case dkim2.AuthenticationReplayFirstSeen:

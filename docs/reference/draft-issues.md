@@ -25,9 +25,15 @@ is independently observed.
 - `DKIM2-ISSUE-0007` through `DKIM2-ISSUE-0010` own the byte model, recipe,
   policy-projection, and restricted-release interpretations exercised by the
   conformance manifest.
-- `DKIM2-ISSUE-0011` through `DKIM2-ISSUE-0014` preserve the DNS-04 ABNF,
-  query-method, strict-identity, and multiple-record discrepancies without
+- `DKIM2-ISSUE-0011`, `DKIM2-ISSUE-0012`, and `DKIM2-ISSUE-0014` preserve
+  the DNS-04 ABNF, query-method, and multiple-record discrepancies without
   silently rewriting either pinned draft.
+- `DKIM2-ISSUE-0013` (DNS strict-identity flag versus the numeric signature
+  `i=` tag) is superseded by the baseline: DNS-01 Section 3.4.1 retires the
+  key-record `t=` tag, which verifiers SHOULD ignore. The `t=` tag is now
+  subject only to the generic tag-list rules and never yields testing or
+  strict-identity semantics. The explicitly configured local policy testing
+  mode is unrelated and unchanged.
 
 ## Adapter and preview limitations
 

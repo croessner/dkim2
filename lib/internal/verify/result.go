@@ -150,8 +150,6 @@ const (
 	TimestampStatusFuture TimestampStatus = "future"
 	// TimestampStatusExpired records a timestamp older than maximum age.
 	TimestampStatusExpired TimestampStatus = "expired"
-	// TimestampStatusNoMaxAge records an explicitly disabled maximum-age cap.
-	TimestampStatusNoMaxAge TimestampStatus = "no_max_age"
 	// TimestampStatusNotApplicable records a timestamp check outside the target semantics.
 	TimestampStatusNotApplicable TimestampStatus = "not_applicable"
 	// TimestampStatusInvalid records malformed parser-owned timestamp state.
@@ -296,8 +294,6 @@ type SignatureSetResult struct {
 	Status SignatureSetStatus
 	// KeyStatus records associated key lookup and validation state.
 	KeyStatus KeyStatus
-	// KeyPolicy carries bounded DNS declarations from the selected key record.
-	KeyPolicy KeyPolicyMetadata
 }
 
 // Result stores immutable bounded verification facts for service coordination.
@@ -501,7 +497,7 @@ func (s CustodyStatus) Known() bool {
 // Known reports whether status is part of the timestamp-status vocabulary.
 func (s TimestampStatus) Known() bool {
 	switch s {
-	case TimestampStatusNotChecked, TimestampStatusPass, TimestampStatusFuture, TimestampStatusExpired, TimestampStatusNoMaxAge, TimestampStatusNotApplicable, TimestampStatusInvalid:
+	case TimestampStatusNotChecked, TimestampStatusPass, TimestampStatusFuture, TimestampStatusExpired, TimestampStatusNotApplicable, TimestampStatusInvalid:
 		return true
 	default:
 		return false

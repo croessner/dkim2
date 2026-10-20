@@ -9,10 +9,8 @@ import (
 	"errors"
 	"io"
 	"log"
-	"math/big"
 	"net"
 	"net/http"
-	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -75,22 +73,11 @@ func (h *contextCommittedPanicHandler) ProcessMessage(
 	panic(errors.New("context committed panic"))
 }
 
-type contextGoldenCorpus struct {
-	Draft       string `json:"draft"`
-	RSAModulus  string `json:"rsa_modulus_base64"`
-	RSAExponent int    `json:"rsa_exponent"`
-	Vectors     map[string]struct {
-		Raw     string   `json:"raw_base64"`
-		Reverse string   `json:"reverse_path_base64"`
-		Forward []string `json:"forward_paths_base64"`
-	} `json:"vectors"`
-}
-
 type contextGoldenProvider struct {
 	key *rsa.PublicKey
 }
 
-// LookupPublicKey returns the frozen RSA key for the selected golden vector.
+// LookupPublicKey returns the RSA key of the synthetic forwarded fixture.
 func (p contextGoldenProvider) LookupPublicKey(
 	_ context.Context,
 	query dkim2.PublicKeyQuery,
@@ -398,36 +385,18 @@ func contextProcessRequest(address, body string) string {
 		body
 }
 
-// contextGoldenInboundProcessor constructs one real PASS-to-replay app pipeline.
+// contextGoldenInboundProcessor constructs one real PASS-to-replay app
+// pipeline over a replay-eligible forwarded message.
 func contextGoldenInboundProcessor(
 	t *testing.T,
 	store dkim2.ReplayStore,
 ) (*app.InboundProcessor, string) {
 	t.Helper()
 
-	corpusBytes, err := os.ReadFile(
-		"../../../../lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-07/public-golden.json",
-	)
-	if err != nil {
-		t.Fatal("context golden fixture unavailable")
-	}
-	var corpus contextGoldenCorpus
-	if json.Unmarshal(corpusBytes, &corpus) != nil || corpus.Draft != dkim2.DraftIdentifier {
-		t.Fatal("context golden fixture invalid")
-	}
-	vector, ok := corpus.Vectors["rsa_pass"]
-	if !ok {
-		t.Fatal("context golden PASS vector unavailable")
-	}
-	modulus, err := base64.StdEncoding.DecodeString(corpus.RSAModulus)
-	if err != nil {
-		t.Fatal("context golden RSA modulus invalid")
-	}
+	recipient := "<rcpt@example.test>"
+	raw, key := signedForwardedReplayMessage(t, 1_700_000_000, [][]byte{[]byte(recipient)}, "")
 	verifier, err := dkim2.NewVerifier(
-		contextGoldenProvider{key: &rsa.PublicKey{
-			N: new(big.Int).SetBytes(modulus),
-			E: corpus.RSAExponent,
-		}},
+		contextGoldenProvider{key: key},
 		dkim2.WithVerificationClock(func() time.Time {
 			return time.Unix(1_700_000_000, 0)
 		}),
@@ -465,28 +434,16 @@ func contextGoldenInboundProcessor(
 	if err != nil {
 		t.Fatal("context inbound processor construction failed")
 	}
-	reverse, err := base64.StdEncoding.DecodeString(vector.Reverse)
-	if err != nil {
-		t.Fatal("context reverse-path fixture invalid")
-	}
-	recipients := make([]string, len(vector.Forward))
-	for index, encoded := range vector.Forward {
-		value, decodeErr := base64.StdEncoding.DecodeString(encoded)
-		if decodeErr != nil {
-			t.Fatal("context forward-path fixture invalid")
-		}
-		recipients[index] = string(value)
-	}
 	body, err := json.Marshal(map[string]any{
 		testKeyAPIVersion: "v1",
 		testDraftName:     dkim2.DraftIdentifier,
 		testKeyMessage: map[string]any{
-			testKeyRawMessage: vector.Raw,
+			testKeyRawMessage: base64.StdEncoding.EncodeToString(raw),
 			testKeyFidelity:   "raw_rfc5322",
 		},
 		testKeySMTP: map[string]any{
-			testKeyMailFrom: string(reverse),
-			testKeyRcptTo:   recipients,
+			testKeyMailFrom: forwardedReplayRelayPath,
+			testKeyRcptTo:   []string{recipient},
 		},
 	})
 	if err != nil {

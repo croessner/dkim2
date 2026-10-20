@@ -259,7 +259,9 @@ func TestRevisionInstantWithinSkewOf(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	tolerance := DefaultTimestampPolicy().FutureTolerance
+	// The revision-instant skew is pinned literally; it is independent of the
+	// one-day Draft-07 signature future tolerance.
+	tolerance := 5 * time.Minute
 	for name, offset := range map[string]time.Duration{"same": 0, "earlier within": -tolerance, "later within": tolerance} {
 		now = time.Unix(int64(historicalCompletionTimestamp), 0).Add(offset)
 		candidate, err := verifier.CaptureRevisionInstant()

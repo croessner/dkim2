@@ -6,25 +6,26 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/croessner/dkim2/internal/canonical"
 	"github.com/croessner/dkim2/internal/instance"
-	"github.com/croessner/dkim2/internal/rawmsg"
 	"github.com/croessner/dkim2/internal/replay"
 	"github.com/croessner/dkim2/internal/signature"
 )
 
 const (
-	originReplayDomainLabel      = "dkim2-replay-origin-v1"
-	originReplayAlgorithm        = "dkim2-replay-origin-sha256-v1"
+	originReplayDomainLabel      = "dkim2-replay-origin-declaration-v1"
+	originReplayAlgorithm        = "dkim2-replay-origin-declaration-sha256-v1"
 	replayProjectionRedactedText = "verify.ReplayProjection{redacted}"
 )
 
-// ReplayProjection carries sealed aggregate-chain-PASS replay facts.
+// ReplayProjection carries sealed aggregate-chain-PASS replay facts. The origin
+// digest is the m=1 hash declaration identity: SHA-256 is preferred, so a
+// SHA-512-only origin never groups with a mixed-algorithm origin.
 type ReplayProjection struct {
 	draft           string
 	originDigest    [32]byte
 	hasOriginDigest bool
 	exploded        bool
+	eligible        bool
 	sealed          bool
 }
 
@@ -57,6 +58,12 @@ func (p ReplayProjection) OriginReplayAlgorithm() string {
 // Exploded returns the authenticated complete-chain OR fact.
 func (p ReplayProjection) Exploded() bool { return p.Valid() && p.exploded }
 
+// ReplayEligible reports whether local replay policy applies. Draft-07
+// Section 15.1 concerns copies re-sent by an intermediary, so a message that
+// carries only the originator's i=1 signature is not counted; the identity
+// itself stays available for DSN propagation.
+func (p ReplayProjection) ReplayEligible() bool { return p.Valid() && p.eligible }
+
 // String returns a constant representation without authenticated digest bytes.
 func (ReplayProjection) String() string { return replayProjectionRedactedText }
 
@@ -72,13 +79,12 @@ func (ReplayProjection) Format(state fmt.State, _ rune) {
 func (p ReplayProjection) clone() ReplayProjection { return p }
 
 // buildReplayProjection seals exact origin intermediates only after aggregate current PASS.
-func buildReplayProjection(input verificationInput, targetSignature signature.Signature, targetInstance instance.MessageInstance, hashes hashCheckResults, digests signatureDigests, result Result) (ReplayProjection, bool) {
+func buildReplayProjection(input verificationInput, targetSignature signature.Signature, targetInstance instance.MessageInstance, result Result) (ReplayProjection, bool) {
 	target := result.Target()
 	if !aggregateCurrentPass(result) || target.Sequence != highestSignatureSequence(input.signatures) ||
 		target.InstanceNumber != highestInstanceNumber(input.instances) || targetSignature.Sequence() != target.Sequence ||
 		targetSignature.InstanceNumber() != target.InstanceNumber || targetInstance.Number() != target.InstanceNumber ||
-		!hashes.hasLocalHeaderSHA256 || !hashes.hasLocalBodySHA256 || len(digests.sha256) != sha256.Size ||
-		!resultHasEnvelopePass(result) || resultHasTestingOnlyPass(result) || len(input.signatures) != int(target.Sequence) {
+		!resultHasEnvelopePass(result) || len(input.signatures) != int(target.Sequence) {
 		return ReplayProjection{}, false
 	}
 	exploded, complete := authenticatedExploded(input.signatures, target.Sequence)
@@ -89,60 +95,78 @@ func buildReplayProjection(input verificationInput, targetSignature signature.Si
 	if target.InstanceNumber != 1 {
 		return ReplayProjection{}, false
 	}
-	digest, ok := originReplayDigest(input.request.Message)
+	digest, ok := originReplayDigest(targetInstance)
 	if !ok {
 		return ReplayProjection{}, false
 	}
-	return newReplayProjection(digest, exploded), true
+	return newReplayProjection(digest, exploded, len(input.signatures) > 1), true
 }
 
 // newReplayProjection seals a verifier-computed fixed-size origin fact.
-func newReplayProjection(digest [32]byte, exploded bool) ReplayProjection {
-	return ReplayProjection{draft: replay.DraftIdentifier, originDigest: digest, hasOriginDigest: true, exploded: exploded, sealed: true}
+// eligible is true only when more than one DKIM2-Signature authenticated the
+// message, that is, when at least one intermediary handled it.
+func newReplayProjection(digest [32]byte, exploded, eligible bool) ReplayProjection {
+	return ReplayProjection{draft: replay.DraftIdentifier, originDigest: digest, hasOriginDigest: true, exploded: exploded, eligible: eligible, sealed: true}
 }
 
-// originReplayDigest hashes the exact Draft-07 origin header and body hash inputs.
-func originReplayDigest(message rawmsg.Message) ([32]byte, bool) {
-	canonicalizer, err := canonical.NewCanonicalizer()
-	if err != nil {
+// originReplayDigest derives the message-wide replay identity from the hash
+// declarations of the authenticated m=1 Message-Instance. Every copy of one
+// original carries byte-identical m=1 declarations, so equality needs neither
+// the reconstructed origin bytes nor an available body (a "b":null Recipe).
+// SHA-256 is preferred and SHA-512 is used only when no SHA-256 tuple exists,
+// so a SHA-512-only origin never groups with a mixed-algorithm origin. The
+// caller must pass the m=1 instance proven by verification.
+func originReplayDigest(origin instance.MessageInstance) ([32]byte, bool) {
+	if origin.Number() != 1 {
 		return [32]byte{}, false
 	}
-	header, err := canonicalizer.HeaderHashInputFromMessage(message)
-	if err != nil {
+	hashSets, status := origin.SupportedHashSets()
+	if status != instance.HashSelectionStatusSelected {
 		return [32]byte{}, false
 	}
-	body, err := canonicalizer.BodyHashInputFromMessage(message)
-	if err != nil {
+	selected, found := preferredReplayHashSet(hashSets)
+	if !found {
 		return [32]byte{}, false
 	}
-	frame := originReplayFrame(header.Bytes(), body.Bytes())
-	return sha256.Sum256(frame), true
+	header, headerOK := selected.HeaderHash()
+	body, bodyOK := selected.BodyHash()
+	if !headerOK || !bodyOK || header.DecodedLen() == 0 || body.DecodedLen() == 0 {
+		return [32]byte{}, false
+	}
+	// Decoded digests make the identity independent of base64 folding whitespace.
+	return sha256.Sum256(originReplayFrame(selected.Name(), header.Decoded(), body.Decoded())), true
 }
 
-// originReplayFrame builds the frozen length-delimited origin input.
-func originReplayFrame(header, body []byte) []byte {
-	frame := make([]byte, 0, len(originReplayDomainLabel)+64+len(header)+len(body))
+// preferredReplayHashSet selects the SHA-256 tuple, else the SHA-512 tuple.
+func preferredReplayHashSet(hashSets []instance.HashSet) (instance.HashSet, bool) {
+	for _, preferred := range []string{instance.HashAlgorithmSHA256, instance.HashAlgorithmSHA512} {
+		for _, candidate := range hashSets {
+			if candidate.Name() == preferred {
+				return candidate, true
+			}
+		}
+	}
+	return instance.HashSet{}, false
+}
+
+// originReplayFrame builds the frozen length-delimited declaration input.
+func originReplayFrame(algorithm string, header, body []byte) []byte {
+	frame := make([]byte, 0, len(originReplayDomainLabel)+64+len(algorithm)+len(header)+len(body))
 	frame = append(frame, originReplayDomainLabel...)
 	frame = append(frame, 0, 1, 1)
 	frame = appendUint32ReplayField(frame, []byte(replay.DraftIdentifier))
 	frame = append(frame, 2)
-	frame = appendUint64ReplayField(frame, header)
+	frame = appendUint32ReplayField(frame, []byte(algorithm))
 	frame = append(frame, 3)
-	return appendUint64ReplayField(frame, body)
+	frame = appendUint32ReplayField(frame, header)
+	frame = append(frame, 4)
+	return appendUint32ReplayField(frame, body)
 }
 
 // appendUint32ReplayField appends a network-order 32-bit byte length and value.
 func appendUint32ReplayField(output, value []byte) []byte {
 	var length [4]byte
 	binary.BigEndian.PutUint32(length[:], uint32(len(value)))
-	output = append(output, length[:]...)
-	return append(output, value...)
-}
-
-// appendUint64ReplayField appends a network-order 64-bit byte length and value.
-func appendUint64ReplayField(output, value []byte) []byte {
-	var length [8]byte
-	binary.BigEndian.PutUint64(length[:], uint64(len(value)))
 	output = append(output, length[:]...)
 	return append(output, value...)
 }
@@ -159,20 +183,6 @@ func resultHasEnvelopePass(result Result) bool {
 		}
 	}
 	return count == 1
-}
-
-// resultHasTestingOnlyPass reports whether every authoritative passing set is testing-declared.
-func resultHasTestingOnlyPass(result Result) bool {
-	passing := 0
-	for _, set := range result.signatureSets {
-		if set.Status == SignatureSetStatusPass {
-			passing++
-			if !set.KeyPolicy.TestingDeclared {
-				return false
-			}
-		}
-	}
-	return passing > 0
 }
 
 // authenticatedExploded ORs the complete signature chain covered by the highest input.

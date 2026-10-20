@@ -13,13 +13,32 @@ type timestampEvaluation struct {
 	pass  bool
 }
 
-// checkTimestamp applies local timestamp policy to the selected signature at
-// the request's reference instant, which defaults to the verifier clock.
-func (v Verifier) checkTimestamp(request Request, targetSignature signature.Signature, target Target) timestampEvaluation {
-	status := v.timestampStatus(request, targetSignature.TimestampSeconds())
+// checkTimestamps applies Draft-07 Section 14.3 to every DKIM2-Signature at
+// the request's delivery reference instant, which defaults to the verifier
+// clock: any signature older than 14 days or more than one day in the future
+// makes the message invalid. The check reports the first offending signature
+// in ascending i= order, or the selected target when every signature passes.
+func (v Verifier) checkTimestamps(request Request, signatures []signature.Signature, target Target) timestampEvaluation {
+	reference := v.referenceTime(request)
+	status := TimestampStatusPass
+	checkTarget := target
+	ordered, err := signature.OrderBySequence(signatures)
+	if err != nil {
+		// Sequence validity is enforced before this check; an unordered chain
+		// here is ambiguous attribution and fails closed.
+		status = TimestampStatusInvalid
+		ordered = nil
+	}
+	for _, parsed := range ordered {
+		if current := timestampStatusAt(reference, parsed.TimestampSeconds()); current != TimestampStatusPass {
+			status = current
+			checkTarget = Target{Sequence: parsed.Sequence(), InstanceNumber: parsed.InstanceNumber()}
+			break
+		}
+	}
 	checkStatus := CheckStatusFail
 	code := ErrorCodeTimestampInvalid
-	if status == TimestampStatusPass || status == TimestampStatusNoMaxAge {
+	if status == TimestampStatusPass {
 		checkStatus = CheckStatusPass
 		code = ""
 	}
@@ -30,16 +49,10 @@ func (v Verifier) checkTimestamp(request Request, targetSignature signature.Sign
 			Status:          checkStatus,
 			Code:            code,
 			TimestampStatus: status,
-			Target:          target,
+			Target:          checkTarget,
 		},
 		pass: checkStatus == CheckStatusPass,
 	}
-}
-
-// timestampStatus classifies t= seconds using deterministic verifier policy
-// at the request's reference instant.
-func (v Verifier) timestampStatus(request Request, seconds uint64) TimestampStatus {
-	return timestampStatusAt(v.referenceTime(request), seconds, v.options.TimestampPolicy)
 }
 
 // referenceTime returns the explicit request reference instant or the clock reading.
@@ -50,24 +63,22 @@ func (v Verifier) referenceTime(request Request) time.Time {
 	return v.options.Clock.Now()
 }
 
-// timestampStatusAt classifies one timestamp against an already captured clock.
-func timestampStatusAt(now time.Time, seconds uint64, policy TimestampPolicy) TimestampStatus {
+// timestampStatusAt classifies one timestamp against an already captured
+// reference instant with the fixed Draft-07 Section 14.3 windows.
+func timestampStatusAt(now time.Time, seconds uint64) TimestampStatus {
 	if seconds > maxRepresentableUnixSeconds {
 		return TimestampStatusInvalid
 	}
 
 	timestamp := time.Unix(int64(seconds), 0)
-	futureLimit, ok := safeAddDuration(now, policy.FutureTolerance)
+	futureLimit, ok := safeAddDuration(now, signatureFutureTolerance)
 	if !ok {
 		return TimestampStatusInvalid
 	}
 	if timestamp.After(futureLimit) {
 		return TimestampStatusFuture
 	}
-	if policy.MaxAge <= 0 {
-		return TimestampStatusNoMaxAge
-	}
-	if now.After(timestamp) && now.Sub(timestamp) > policy.MaxAge {
+	if now.After(timestamp) && now.Sub(timestamp) > signatureMaxAge {
 		return TimestampStatusExpired
 	}
 

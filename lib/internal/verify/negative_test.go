@@ -119,8 +119,8 @@ func TestVerifierNegativeVectors(t *testing.T) {
 		{
 			name: "stale timestamp",
 			run: func(t *testing.T) (Result, error) {
-				fixture := newRSAVerificationFixtureAt(t, uint64(now.Add(-2*time.Hour).Unix()))
-				verifier := mustVerifierForFixtureWithOptions(t, fixture, WithClock(func() time.Time { return now }), WithTimestampPolicy(TimestampPolicy{FutureTolerance: 5 * time.Minute, MaxAge: time.Hour}))
+				fixture := newRSAVerificationFixtureAt(t, uint64(now.Add(-15*24*time.Hour).Unix()))
+				verifier := mustVerifierForFixtureWithOptions(t, fixture, WithClock(func() time.Time { return now }))
 
 				return verifier.Verify(context.Background(), Request{Message: fixture.message, Envelope: matchingEnvelope()})
 			},
@@ -129,8 +129,8 @@ func TestVerifierNegativeVectors(t *testing.T) {
 		{
 			name: "future timestamp",
 			run: func(t *testing.T) (Result, error) {
-				fixture := newRSAVerificationFixtureAt(t, uint64(now.Add(10*time.Minute).Unix()))
-				verifier := mustVerifierForFixtureWithOptions(t, fixture, WithClock(func() time.Time { return now }), WithTimestampPolicy(TimestampPolicy{FutureTolerance: 5 * time.Minute, MaxAge: time.Hour}))
+				fixture := newRSAVerificationFixtureAt(t, uint64(now.Add(25*time.Hour).Unix()))
+				verifier := mustVerifierForFixtureWithOptions(t, fixture, WithClock(func() time.Time { return now }))
 
 				return verifier.Verify(context.Background(), Request{Message: fixture.message, Envelope: matchingEnvelope()})
 			},
