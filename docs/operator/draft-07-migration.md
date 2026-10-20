@@ -124,9 +124,16 @@ Replay counting is now local delivery policy (Draft-07 Section 15.1):
   which would merge distinct originals that share a body.
   - SHA-256 is preferred.
   - A SHA-512-only origin never matches a mixed-algorithm origin.
-- **Delivery instant:** `/v1/verify` carries no delivery instant. A stored
-  message is checked against the daemon clock, so an old message fails closed
-  with `timestamp_invalid`. Only library callers can pass a reference time.
+- **Delivery instant:** The daemon verifies only live mail through
+  `/v1/process`; there is no stored-message verification route. Section 14.3
+  windows are evaluated against the daemon clock, which is the delivery
+  instant for live mail. `/v1/dsn/sign` judges the reported original at the
+  RFC 3464 `Arrival-Date` of the local MTA's report, so a bounce generated
+  after a long queue lifetime still gets signed. An absent, future, or more
+  than 14 days old `Arrival-Date` falls back to the daemon clock. Library callers that re-verify stored messages must
+  construct the verifier with `WithVerificationClock` set to the original
+  delivery instant; otherwise an old message fails closed with
+  `timestamp_invalid`.
 - **Mailbox parser:** The From mailbox parser does not accept obsolete RFC
   5322 route syntax (`obs-route`). Such a From is not authentic.
 - **EAI envelopes:** Adapter signing stays ASCII-path only.

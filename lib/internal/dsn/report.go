@@ -1,6 +1,9 @@
 package dsn
 
-import "bytes"
+import (
+	"bytes"
+	"time"
+)
 
 // deliveryStatusRecipient stores the bounded facts of one validated RFC 3464
 // per-recipient group. Paths are canonical DKIM2 envelope paths; the raw
@@ -42,6 +45,8 @@ func (g *deliveryStatusRecipient) clear() {
 type deliveryStatusReport struct {
 	envelopeID    []byte
 	hasEnvelopeID bool
+	arrival       time.Time
+	hasArrival    bool
 	recipients    []deliveryStatusRecipient
 }
 
@@ -160,6 +165,9 @@ func (r *deliveryStatusReport) finishGroup(index int, group deliveryStatusFieldG
 		if group.has(deliveryStatusFieldOriginalEnvelopeID) {
 			r.envelopeID = bytes.Clone(group.originalEnvelopeID)
 			r.hasEnvelopeID = true
+		}
+		if group.has(deliveryStatusFieldArrivalDate) {
+			r.arrival, r.hasArrival = parseDeliveryStatusDate(group.arrivalDate)
 		}
 		return true
 	}

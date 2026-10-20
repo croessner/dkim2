@@ -357,11 +357,20 @@ Open follow-ups owned by later packages:
   - Operators: the frame change and draft identifier rotate the replay
     identity space through the existing drain-only epoch procedure. The
     68-byte key grammar, namespace, ACLs, and store commands are unchanged.
-- Known limitation: no REST member carries a delivery instant, so
-  `/v1/verify` of a stored message evaluates Section 14.3 against the daemon
-  clock and an old message fails closed with `timestamp_invalid`. Only library
-  callers can pass `ReferenceTime`. The limitation is listed in
+- Delivery instant: the daemon has no stored-message verification route; it
+  verifies live mail through `/v1/process`, where the daemon clock is the
+  delivery instant Section 14.3 requires. Library callers re-verifying stored
+  messages pass the original delivery instant through
+  `WithVerificationClock`; without it an old message fails closed with
+  `timestamp_invalid`. No REST field is needed. See
   `docs/operator/draft-07-migration.md`.
+- DSN signing reference instant: `/v1/dsn/sign` previously verified the
+  embedded original at bounce time, so a message bounced after the queue
+  lifetime with an older signature lost its DSN as `timestamp_invalid`. The
+  evidence evaluator now uses the per-message RFC 3464 `Arrival-Date` of the
+  local MTA's report as the Section 14.3 reference, accepted only within
+  [clock - 14 days, clock + 5 minutes]; otherwise the verifier clock applies.
+  Inbound DSN evaluation keeps the outer highest `t=` reference.
 - Breaking public Go API removals: `KeyPolicyMetadata` and the DNS-testing
   accessors (the timestamp policy was internal to the verifier). They are
   listed in `docs/operator/draft-07-migration.md`.

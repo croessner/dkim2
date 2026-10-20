@@ -609,6 +609,13 @@ type evidenceFixture struct {
 // newEvidenceFixture constructs either a complete or header-only signed embedded original.
 func newEvidenceFixture(t *testing.T, headersOnly bool) evidenceFixture {
 	t.Helper()
+	return newEvidenceFixtureAt(t, headersOnly, time.Unix(int64(evidenceTimestamp), 0).Add(time.Minute))
+}
+
+// newEvidenceFixtureAt constructs the signed embedded original with a
+// verifier whose clock reads now, the instant the DSN is generated.
+func newEvidenceFixtureAt(t *testing.T, headersOnly bool, now time.Time) evidenceFixture {
+	t.Helper()
 	key, err := rsa.GenerateKey(rand.Reader, 1024)
 	if err != nil {
 		t.Fatalf("rsa.GenerateKey() error=%v", err)
@@ -662,9 +669,7 @@ func newEvidenceFixture(t *testing.T, headersOnly bool) evidenceFixture {
 	if err != nil {
 		t.Fatalf("verify.NewStaticKeyProvider() error=%v", err)
 	}
-	verifier, err := verify.NewVerifier(provider, verify.WithClock(func() time.Time {
-		return time.Unix(int64(evidenceTimestamp), 0).Add(time.Minute)
-	}))
+	verifier, err := verify.NewVerifier(provider, verify.WithClock(func() time.Time { return now }))
 	if err != nil {
 		t.Fatalf("verify.NewVerifier() error=%v", err)
 	}
@@ -722,3 +727,62 @@ func mustEvidenceReportWithDeliveryStatus(t *testing.T, contentType ContentType,
 	}
 	return report
 }
+
+// TestEvidenceEvaluatorJudgesOriginalAtArrivalDate reproduces a DSN generated
+// after a long queue lifetime: Draft-07 Section 14.3 evaluates signature
+// windows at delivery, so the local MTA's RFC 3464 Arrival-Date is the
+// reference instant. An absent, future, or implausibly old Arrival-Date keeps
+// the verifier clock, which is never more permissive.
+func TestEvidenceEvaluatorJudgesOriginalAtArrivalDate(t *testing.T) {
+	const day = 24 * time.Hour
+	signed := time.Unix(int64(evidenceTimestamp), 0)
+	now := signed.Add(16 * day)
+	for _, form := range []struct {
+		contentType ContentType
+		headersOnly bool
+	}{
+		{contentType: ContentTypeRFC822},
+		{contentType: ContentTypeRFC822Headers, headersOnly: true},
+	} {
+		for _, testCase := range []struct {
+			name    string
+			arrival *time.Time
+			now     time.Time
+			pass    bool
+		}{
+			// The arrival reference also governs the future bound: a signature
+			// two days after arrival fails, although it is within one day of
+			// the bounce clock.
+			{name: "signature after arrival future tolerance", arrival: timePointer(signed.Add(-2 * day)), now: signed.Add(day), pass: false},
+			{name: "arrival before maximum age", arrival: timePointer(signed.Add(5 * day)), pass: true},
+			{name: "no arrival date", arrival: nil, pass: false},
+			{name: "arrival in the future", arrival: timePointer(now.Add(time.Hour)), pass: false},
+			{name: "arrival beyond the plausible queue lifetime", arrival: timePointer(signed.Add(day)), pass: false},
+		} {
+			t.Run(string(form.contentType)+"/"+testCase.name, func(t *testing.T) {
+				clock := now
+				if !testCase.now.IsZero() {
+					clock = testCase.now
+				}
+				fixture := newEvidenceFixtureAt(t, form.headersOnly, clock)
+				perMessage := "Reporting-MTA: dns; example.test\r\n"
+				if testCase.arrival != nil {
+					perMessage += "Arrival-Date: " + testCase.arrival.In(time.FixedZone("", -5*3600)).Format("Mon, 2 Jan 2006 15:04:05 -0700") + "\r\n"
+				}
+				report := mustEvidenceReportWithDeliveryStatus(t, form.contentType, fixture.raw, perMessage+"\r\n"+
+					"Final-Recipient: rfc822; recipient@example.test\r\nAction: failed\r\nStatus: 5.1.1\r\n")
+				evaluator, err := NewEvidenceEvaluator(fixture.verifier)
+				if err != nil {
+					t.Fatalf("NewEvidenceEvaluator() error=%v", err)
+				}
+				evidence, err := evaluator.Evaluate(context.Background(), EvidenceRequest{Report: report})
+				if pass := err == nil && evidence.Valid(); pass != testCase.pass {
+					t.Fatalf("Evaluate() pass=%t want %t error=%v", pass, testCase.pass, err)
+				}
+			})
+		}
+	}
+}
+
+// timePointer returns a pointer to one fixed instant for table tests.
+func timePointer(value time.Time) *time.Time { return &value }

@@ -96,3 +96,20 @@ func safeAddDuration(value time.Time, duration time.Duration) (result time.Time,
 
 	return value.Add(duration), true
 }
+
+// DeliveryReference returns arrival as the Section 14.3 reference instant for
+// a message that a local MTA reports on after delivery, for example in a DSN
+// generated when the queue lifetime expired. The reported instant is used only
+// when it lies within [clock-signatureMaxAge, clock+revisionInstantSkew]; an
+// absent or out-of-range instant reports false so callers keep the verifier
+// clock, which is never more permissive for the maximum-age limit.
+func (v Verifier) DeliveryReference(arrival time.Time) (time.Time, bool) {
+	if arrival.IsZero() || v.options.Clock == nil {
+		return time.Time{}, false
+	}
+	now := v.options.Clock.Now()
+	if arrival.After(now.Add(revisionInstantSkew)) || arrival.Before(now.Add(-signatureMaxAge)) {
+		return time.Time{}, false
+	}
+	return arrival, true
+}

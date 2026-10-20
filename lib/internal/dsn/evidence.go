@@ -176,6 +176,11 @@ func (e EvidenceEvaluator) Evaluate(ctx context.Context, request EvidenceRequest
 	verificationRequest := verify.Request{
 		Message: parsed,
 	}
+	if arrival, ok := deliveryStatusArrival(request.Report, request.PostfixBounceOrder); ok {
+		if reference, inRange := e.verifier.DeliveryReference(arrival); inRange {
+			verificationRequest.ReferenceTime = reference
+		}
+	}
 	switch original.ContentType() {
 	case ContentTypeRFC822:
 		result, verifyErr := e.verifier.VerifyDeliveryStatusComplete(ctx, verificationRequest)
@@ -270,6 +275,30 @@ const (
 	maxDeliveryStatusTotalFields     = 2048
 	maxDeliveryStatusCommentDepth    = 16
 )
+
+// deliveryStatusArrival returns the per-message Arrival-Date of the local
+// MTA's RFC 3464 report, the instant the reported message was delivered.
+// Draft-07 Section 14.3 evaluates signature windows at delivery, so a DSN
+// generated after a long queue lifetime must not judge the original at bounce
+// time. The body is parsed with the same profiles as recipient linkage.
+func deliveryStatusArrival(report Report, postfixBounceOrder bool) (time.Time, bool) {
+	body := report.DeliveryStatus().BodyBytes()
+	defer clear(body)
+	profiles := []deliveryStatusProfile{deliveryStatusProfileStrictSequence}
+	if postfixBounceOrder {
+		profiles = append(profiles, deliveryStatusProfilePostfixBounce)
+	}
+	for _, profile := range profiles {
+		parsed, valid := parseDeliveryStatusBody(body, profile)
+		if !valid {
+			continue
+		}
+		arrival, present := parsed.arrival, parsed.hasArrival
+		parsed.clear()
+		return arrival, present
+	}
+	return time.Time{}, false
+}
 
 // deliveryStatusLinksRecipient validates the bounded RFC 3464 field-block
 // structure and requires one complete recipient group to name an authenticated
@@ -839,43 +868,53 @@ func validDeliveryStatusOptionalRecipientFields(group deliveryStatusFieldGroup) 
 	return true
 }
 
+// validDeliveryStatusDate reports whether value is one valid RFC 822 date-time.
 func validDeliveryStatusDate(value []byte) bool {
+	_, valid := parseDeliveryStatusDate(value)
+	return valid
+}
+
+// parseDeliveryStatusDate parses one bounded RFC 822 date-time with a numeric
+// zone into the instant it names. Comments and linear whitespace are
+// normalized first; every other deviation fails closed.
+func parseDeliveryStatusDate(value []byte) (time.Time, bool) {
 	normalized, valid := normalizeDeliveryStatusDateCFWS(value)
 	if !valid {
-		return false
+		return time.Time{}, false
 	}
 	defer clear(normalized)
 	parts := bytes.Fields(normalized)
 	weekday := -1
 	if len(parts) == 6 {
 		if len(parts[0]) != 4 || parts[0][3] != ',' {
-			return false
+			return time.Time{}, false
 		}
 		weekday = deliveryStatusWeekday(parts[0][:3])
 		if weekday < 0 {
-			return false
+			return time.Time{}, false
 		}
 		parts = parts[1:]
 	}
 	if len(parts) != 5 {
-		return false
+		return time.Time{}, false
 	}
 	day, valid := deliveryStatusDecimal(parts[0], 1, 2)
 	month := deliveryStatusMonth(parts[1])
 	year, yearValid := deliveryStatusDecimal(parts[2], 2, 4)
 	hour, minute, second, timeValid := deliveryStatusClock(parts[3])
-	if !valid || month == 0 || !yearValid || !timeValid ||
-		!validDeliveryStatusNumericZone(parts[4]) {
-		return false
+	offset, zoneValid := deliveryStatusZoneOffset(parts[4])
+	if !valid || month == 0 || !yearValid || !timeValid || !zoneValid {
+		return time.Time{}, false
 	}
 	if len(parts[2]) == 2 {
 		year += 1900
 	}
 	parsed := time.Date(year, month, day, hour, minute, second, 0, time.UTC)
-	if parsed.Year() != year || parsed.Month() != month || parsed.Day() != day {
-		return false
+	if parsed.Year() != year || parsed.Month() != month || parsed.Day() != day ||
+		weekday >= 0 && int(parsed.Weekday()) != weekday {
+		return time.Time{}, false
 	}
-	return weekday < 0 || int(parsed.Weekday()) == weekday
+	return parsed.Add(-offset), true
 }
 
 // normalizeDeliveryStatusDateCFWS removes bounded RFC 822 comments and
@@ -996,13 +1035,22 @@ func deliveryStatusClock(value []byte) (int, int, int, bool) {
 		hourValid && minuteValid && secondValid && hour < 24 && minute < 60 && second < 60
 }
 
-func validDeliveryStatusNumericZone(value []byte) bool {
+// deliveryStatusZoneOffset parses one RFC 822 numeric zone (+hhmm or -hhmm)
+// into its offset east of UTC.
+func deliveryStatusZoneOffset(value []byte) (time.Duration, bool) {
 	if len(value) != 5 || value[0] != '+' && value[0] != '-' {
-		return false
+		return 0, false
 	}
 	hour, hourValid := deliveryStatusDecimal(value[1:3], 2, 2)
 	minute, minuteValid := deliveryStatusDecimal(value[3:], 2, 2)
-	return hourValid && minuteValid && hour < 24 && minute < 60
+	if !hourValid || !minuteValid || hour >= 24 || minute >= 60 {
+		return 0, false
+	}
+	offset := time.Duration(hour)*time.Hour + time.Duration(minute)*time.Minute
+	if value[0] == '-' {
+		offset = -offset
+	}
+	return offset, true
 }
 
 func validDeliveryStatusRawAddress(value []byte) bool {
