@@ -14,7 +14,7 @@ boundaries remain intact. The corpus contains public RSA and Ed25519 key
 material only; it contains no private keys, seeds, credentials, or production
 identifiers.
 
-The frozen header, body, and Section 9.6 inputs and their RSA/Ed25519
+The frozen header, body, and Section 12.8 inputs and their RSA/Ed25519
 signatures were independently cross-checked with a Node.js standard-library
 renderer that imported no repository or internal packages. The cross-check
 covered RSA, Ed25519, combined algorithms, timestamp boundaries, unknown hash

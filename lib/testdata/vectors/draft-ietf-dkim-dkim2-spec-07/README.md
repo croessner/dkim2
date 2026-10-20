@@ -7,7 +7,7 @@ This directory pins protocol evidence to
   sequence, timestamp, envelope, and provider outcomes.
 - `custody-crypto-golden.json` covers RSA/Ed25519 cryptography and the complete
   ordinary/next-domain custody transition matrix.
-- `signing-golden.json` covers byte-exact Message-Instance fields, Section 9.6
+- `signing-golden.json` covers byte-exact Message-Instance fields, Section 12.8
   canonical input, RSA/Ed25519/dual unsigned and complete signature fields,
   one-recipient Bcc-safe copy shape, restriction and derived-flag field shapes,
   the explicit next-domain creation/continuation/completion chain, normal

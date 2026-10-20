@@ -10,12 +10,16 @@ is independently observed.
 
 ## Open upstream text
 
-- `DKIM2-ISSUE-0001`, `DKIM2-ISSUE-0002`, `DKIM2-ISSUE-0004`, and
-  `DKIM2-ISSUE-0005` cover the Draft-06 `TBA` areas: architecture references,
-  full-chain policy guidance, IANA, and Security Considerations. Draft-07
-  keeps `TBA` only for architecture references and IANA; the remaining two
-  entries are re-evaluated with the Draft-07 qualification. No protocol
-  behavior is invented for these areas.
+- `DKIM2-ISSUE-0001` and `DKIM2-ISSUE-0004` cover the Draft-07 `TBA` areas:
+  architecture references and IANA. No protocol behavior is invented for
+  these areas.
+- `DKIM2-ISSUE-0002` and `DKIM2-ISSUE-0005` covered the Draft-06 `TBA`
+  areas for full-chain policy guidance and Security Considerations. Both are
+  superseded by the Draft-07 baseline: Section 13 assigns acceptance of a
+  Validly Signed message to local policy, which the policy engine owns, and
+  Section 20 publishes the security considerations (unsigned header fields,
+  resource limits, null Recipes, RSA key size), which the bounded recipe and
+  verifier limits already enforce.
 - `DKIM2-ISSUE-0003` records the Draft-07 Section 18 U-label to A-label
   mapping and the known IDNA2008 category gap of the strict profile.
 - `DKIM2-ISSUE-0006` records that uppercase header tag names are rejected
@@ -25,9 +29,11 @@ is independently observed.
 - `DKIM2-ISSUE-0007` through `DKIM2-ISSUE-0010` own the byte model, recipe,
   policy-projection, and restricted-release interpretations exercised by the
   conformance manifest.
-- `DKIM2-ISSUE-0011`, `DKIM2-ISSUE-0012`, and `DKIM2-ISSUE-0014` preserve
-  the DNS-04 ABNF, query-method, and multiple-record discrepancies without
-  silently rewriting either pinned draft.
+- `DKIM2-ISSUE-0011` and `DKIM2-ISSUE-0012` preserve the DNS ABNF and
+  query-method discrepancies without silently rewriting either pinned draft.
+- `DKIM2-ISSUE-0014` is superseded by the baseline: Draft-07 Section 14.5
+  makes more than one key record an error, which matches the existing
+  fail-closed `ambiguous_key` PERMERROR.
 - `DKIM2-ISSUE-0013` (DNS strict-identity flag versus the numeric signature
   `i=` tag) is superseded by the baseline: DNS-01 Section 3.4.1 retires the
   key-record `t=` tag, which verifiers SHOULD ignore. The `t=` tag is now
@@ -50,7 +56,7 @@ is independently observed.
   originator policy. `header_from` binds signing to the single canonical From
   mailbox domain while retaining `mf=<>`; the default remains rejection.
   Delivery-status reports, ambiguous MIME and existing DKIM2 protocol history
-  stay off this route. DSNs retain their dedicated Section 12 path. This is
+  stay off this route. DSNs retain their dedicated Section 16 path. This is
   an implemented local interpretation, not a draft requirement to enable it.
   The two public-facade conformance cases are bound to this entry; their
   earlier omission from this register was a documentation defect.

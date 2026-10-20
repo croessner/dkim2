@@ -288,7 +288,7 @@ func isFinalTrailingSemicolon(segments []tagSegment, index int, segment tagSegme
 	return len(trimmed) == 0 && len(segments) > 1
 }
 
-// unfoldDNSFWS removes CRLF only when followed by required DNS-04 white space.
+// unfoldDNSFWS removes CRLF only when followed by required DNS-01 white space.
 func unfoldDNSFWS(input []byte) ([]byte, error) {
 	unfolded := make([]byte, 0, len(input))
 	for index := 0; index < len(input); index++ {

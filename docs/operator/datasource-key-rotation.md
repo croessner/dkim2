@@ -152,7 +152,7 @@ with `propagation_failure: unprovisioned_domain`.
 A previous hop's own key rotation is outside this deployment's control and is
 a documented limit rather than a failure to repair. Propagation verifies the
 previous hop's signature over the reconstructed state, with the Draft-07
-Section 8.4 window evaluated at the completion signature's `t=`, before that
+Section 10.4 window evaluated at the completion signature's `t=`, before that
 hop's `mf=` may become a recipient. If the previous hop rotated its key away
 between forwarding and the arrival of the notification, propagation is refused
 permanently; retrying, relaxing verification, or delivering unsigned is not

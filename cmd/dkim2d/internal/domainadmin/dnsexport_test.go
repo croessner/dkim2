@@ -153,7 +153,7 @@ func protectedArtifactSnapshot(t *testing.T, path string) ([]byte, os.FileInfo, 
 	return content, info, names
 }
 
-// TestStagedDNSSetEncodesRSAAndEd25519AndRoundTrips freezes exact DNS-04 key representation.
+// TestStagedDNSSetEncodesRSAAndEd25519AndRoundTrips freezes exact DNS-01 key representation.
 func TestStagedDNSSetEncodesRSAAndEd25519AndRoundTrips(t *testing.T) {
 	set, candidate, plan, staged := stagedDNSFixture(t)
 	defer set.Close()       //nolint:errcheck // Test cleanup has no recovery.

@@ -360,11 +360,11 @@ Open follow-ups owned by later packages:
 - Known limitation: no REST member carries a delivery instant, so
   `/v1/verify` of a stored message evaluates Section 14.3 against the daemon
   clock and an old message fails closed with `timestamp_invalid`. Only library
-  callers can pass `ReferenceTime`. An explicit offline delivery instant on the
-  wire is tracked for the migration notes.
-- Breaking public Go API removals: `KeyPolicyMetadata`, the DNS-testing
-  accessors, and the timestamp-policy option. They are listed for the
-  migration notes.
+  callers can pass `ReferenceTime`. The limitation is listed in
+  `docs/operator/draft-07-migration.md`.
+- Breaking public Go API removals: `KeyPolicyMetadata` and the DNS-testing
+  accessors (the timestamp policy was internal to the verifier). They are
+  listed in `docs/operator/draft-07-migration.md`.
 - Evidence: declaration golden frame and digest, equality across Recipes and
   base64 folding, SHA-256-only/mixed grouping, SHA-512-only separation,
   changed-header separation, the null-body revision reproducer, direct
@@ -412,7 +412,9 @@ Open follow-ups owned by later packages:
   real matrix needs an external patched Exim source tree
   (`DKIM2_EXIM_QUALIFICATION_SOURCE_ROOT`) and runs in the package 8
   requalification. The Exim C changes are covered by
-  `make test-exim-local-scan`, including the `4.7.5` reply.
+  `make test-exim-local-scan`, including the `4.7.5` reply. The package 8
+  Exim run must capture the reply lines and prove each carries exactly one
+  enhanced status code (no Exim-added duplicate before the local_scan text).
 - SMTPUTF8 adapters (Section 18): adapter signing stays ASCII-path only.
   - Section 18 constrains how envelope domains are recorded (A-labels, which
     the library enforces since package 3); it does not oblige an adapter to

@@ -199,7 +199,7 @@ func dnsPolicyBoundaryRSAKey(bits, exponent int) *rsa.PublicKey {
 	return &rsa.PublicKey{N: modulus, E: exponent}
 }
 
-// TestDNSPublicKeyProviderAcceptsDNSCompatibleKeyRepresentations verifies DNS-04 padding and RSA container compatibility.
+// TestDNSPublicKeyProviderAcceptsDNSCompatibleKeyRepresentations verifies DNS-01 padding and RSA container compatibility.
 func TestDNSPublicKeyProviderAcceptsDNSCompatibleKeyRepresentations(t *testing.T) {
 	rsaModulus := new(big.Int).Lsh(big.NewInt(1), 1023)
 	rsaModulus.SetBit(rsaModulus, 0, 1)

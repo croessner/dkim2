@@ -85,7 +85,7 @@ func TestScanHeaderRejectsUppercaseTagNames(t *testing.T) {
 	}
 }
 
-// TestScanTreatsDNSCompatibleTagNamesCaseSensitively verifies DNS-04 Section 3.2 name matching.
+// TestScanTreatsDNSCompatibleTagNamesCaseSensitively verifies DNS-01 Section 3.2 name matching.
 func TestScanTreatsDNSCompatibleTagNamesCaseSensitively(t *testing.T) {
 	field, err := Scan([]byte("m=1; M=2;"), scannerKnownTags, Limits{})
 	if err != nil {
@@ -127,7 +127,7 @@ func TestKnownTagsUsesExactLookup(t *testing.T) {
 	}
 }
 
-// TestScanHandlesDNSFWS verifies DNS-04 folding around specs and within values.
+// TestScanHandlesDNSFWS verifies DNS-01 folding around specs and within values.
 func TestScanHandlesDNSFWS(t *testing.T) {
 	field, err := Scan([]byte("m=1;\r\n\th=abc; x_ext=one\r\n two;"), scannerKnownTags, Limits{})
 	if err != nil {

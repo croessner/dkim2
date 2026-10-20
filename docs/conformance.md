@@ -77,8 +77,8 @@ is followed by a bounded assertion that exactly one unsigned message remains
 held in the `maildrop` queue because cleanup cannot reach the Milter.
 
 The manifest binds two byte-exact Draft-07 vector families for this path:
-`received-dsn-golden.json` for Section 12.1.2 evaluation and
-`dsn-propagation-golden.json` for the Section 12.1.1 rebuild, report
+`received-dsn-golden.json` for Section 16.3 evaluation and
+`dsn-propagation-golden.json` for the Section 16.2 rebuild, report
 generation, and propagation signing, both under
 `lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-07/`. Their cases are
 `verification/received-dsn-evaluation` and `signing/dsn-propagation-rebuild`.

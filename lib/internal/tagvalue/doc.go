@@ -11,7 +11,7 @@
 // non-canonical pad bits fail, and encoded plus decoded byte views remain
 // immutable after parsing. ParseBase64String requires standard RFC 4648
 // padding for protocol header fields. ParseOptionalPaddingBase64String is the
-// DNS-04 mode; it accepts omitted terminal padding and returns canonical padded
+// DNS-01 mode; it accepts omitted terminal padding and returns canonical padded
 // encoded bytes without relaxing alphabet, pad-bit, or resource limits.
 //
 // Errors from this package are structured and bounded. They expose stable

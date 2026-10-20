@@ -578,7 +578,8 @@ RFC 3463 enhanced status code that follows that reply code. The `4.7.5` text
 is selected only for the DXI1 tempfail reason `key_temporary` (9), which the
 Go adapter emits when the daemon reports TEMPERROR `provider_temporary` with a
 tempfail disposition (Draft-07 Section 13); every other tempfail keeps
-`4.7.1`. No daemon, message or identity text is reflected. The
+`4.7.1`. Operators therefore find the daemon reason `provider_temporary` for
+every `4.7.5` reply. No daemon, message or identity text is reflected. The
 NOLOGHDR variants are required so Exim does not copy raw rejected headers into
 its reject log.
 

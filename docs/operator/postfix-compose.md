@@ -396,7 +396,7 @@ only the missing outer brackets as documented.
 
 Forwarded mail that fails at a later hop produces a delivery-status
 notification addressed to the return path this system signed. Draft-07
-Section 12.1.1 requires that notification to be rebuilt for, and delivered to,
+Section 16.2 requires that notification to be rebuilt for, and delivered to,
 the previous hop of the forwarded message. The transport component is
 `dkim2-dsn-propagator`, an MTA-neutral adapter that is not a Milter: it
 receives one notification over LMTP, calls the daemon's
@@ -758,15 +758,15 @@ timeouts still fits inside the new lease.
 
 Draft-07 is a closed protocol-baseline change. Upgrade the daemon, Milter,
 generated clients, fixtures, and configuration references as one digest-pinned
-set; do not run a Draft-04 adapter or client against a Draft-06 daemon. The
+set; do not run a Draft-06 adapter or client against a Draft-07 daemon. The
 wire enum changes to `draft-ietf-dkim-dkim2-spec-07`, and verification may now
 return `duplicate_hash_algorithm`, `invalid_recipe_json`,
 `duplicate_selector`, or `too_many_signatures` as permanent non-4xx results.
 
-Replay migration is drain-only. Stop SMTP admission, drain every Draft-04
+Replay migration is drain-only. Stop SMTP admission, drain every Draft-06
 instance and its in-flight replay work, retain the old deployment offline for
 the complete configured retention period, and only then admit traffic to the
-Draft-06 deployment. Never operate mixed Draft-04/Draft-06 instances, a
+Draft-07 deployment. Never operate mixed Draft-06/Draft-07 instances, a
 rolling upgrade, fallback, or dual replay epochs. Old replay records are
 intentionally unreachable after the Draft-07 epoch activates, so the possible
 detection gap is bounded by that retention period. Follow the exact procedure

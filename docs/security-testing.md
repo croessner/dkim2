@@ -42,7 +42,7 @@ functions or proof locations drift.
 
 Delivery-status propagation contributes two `draft_normative` fuzz targets to
 that inventory, `FuzzReceivedDSN` over the received-notification parser path
-and `FuzzRebuild` over the Section 12.1.1 rebuild input. The
+and `FuzzRebuild` over the Section 16.2 rebuild input. The
 received-notification and rebuild bounds are owned by the existing
 `verification`, `recipe`, `raw-message`, `tag-fields`, and `signing` entries.
 The propagation adapter's transport bounds, the LMTP message, command, data

@@ -53,11 +53,11 @@ This specification is governed by:
 - `POLICY.md`
 - `docs/ARCHITECTURE.md`
 - `docs/specs/openapi/dkim2d.yaml`
-- `draft-ietf-dkim-dkim2-spec-07`, Section 8.5 (`mf=`), Section 8.6 (`rt=`),
-  Section 8.7 (`nd=`), Section 9.3 (custody schemes), Section 11.4 (domain
-  alignment), and Sections 12 through 12.1.2
-- `docs/specs/draft-06-migration-disposition.md`, which records that Section
-  12 carries the Draft-05 text forward with RFC 6522 terminology only
+- `draft-ietf-dkim-dkim2-spec-07`, Section 10.5 (`mf=`), Section 10.6 (`rt=`),
+  Section 10.7 (`nd=`), Section 12.3 (custody schemes), Section 14.4 (domain
+  alignment), and Sections 16 through 16.3
+- `docs/specs/draft-06-migration-disposition.md`, which records that Draft-06
+  Section 12 carries the Draft-05 text forward with RFC 6522 terminology only
 - RFC 6522 (`multipart/report`), RFC 3464 (`message/delivery-status`),
   RFC 3461 (`ORCPT`, `ENVID`, xtext), RFC 3834 (automatic responses),
   RFC 2033 (LMTP), RFC 5321 and RFC 5322
@@ -74,8 +74,8 @@ This specification is governed by:
 
 If these sources disagree, implementation stops until the durable authority is
 reconciled. The active protocol baseline is `draft-ietf-dkim-dkim2-spec-07`.
-Section numbers cited here are the Draft-05 numbers that the Draft-06
-migration disposition carried forward unchanged.
+Section numbers cited here are Draft-07 numbers unless a citation names
+another draft explicitly.
 
 The RFC 3464, RFC 3834, and RFC 2033 statements in this specification were
 confirmed against the RFC text on 2026-09-04. The confirmed facts are:
@@ -109,7 +109,7 @@ Three things are missing:
    signature is verified, but the RFC 6522 structure, the embedded original,
    and the Draft-07 Section 16.3 linkage between the DSN and a message this
    system previously signed are not evaluated. No structured DSN fact reaches
-   the Milter, Rspamd, or any policy consumer. The Section 12.1.2 checks exist
+   the Milter, Rspamd, or any policy consumer. The Section 16.3 checks exist
    as internal machinery in `lib/internal/dsn/evidence.go` but are reachable
    only through the outgoing signing facade, which evaluates the outer
    recipient against an *outgoing* envelope.
@@ -147,7 +147,7 @@ After this work the product:
    embedded original message and reports whether the DSN is linked to a
    message this system signed, without ever using that fact as a signing
    authority;
-3. rebuilds a linked DSN according to Section 12.1.1 into a new
+3. rebuilds a linked DSN according to Section 16.2 into a new
    single-signature, single-Message-Instance DSN addressed to the previous
    hop's `mf=`, or reports that propagation is impossible or forbidden;
 4. signs that rebuilt DSN with the domain proven by the removed local
@@ -167,7 +167,7 @@ After this work the product:
    RFC 3834, and RFC 2033 statements against the RFC text. Add the
    received-DSN evaluation facade to the library, including the local-hop-run
    and local-authority rules.
-2. Add the Section 12.1.1 rebuild to the library: the one-hop-run descent
+2. Add the Section 16.2 rebuild to the library: the one-hop-run descent
    seam in `verify` with historical signature verification, the header-only
    serializer, the unsigned-field policy, deterministic report generation,
    and the propagation signing facade.
@@ -202,7 +202,7 @@ Planning estimate:
 | --- | --- |
 | Estimated size | large |
 | Estimated wall-clock effort | 4-6 engineering days |
-| Highest-risk area | Section 12.1.1 rebuild correctness, historical signature verification, and the propagation authority boundary |
+| Highest-risk area | Section 16.2 rebuild correctness, historical signature verification, and the propagation authority boundary |
 | Expected prompt count | 8-10 |
 | Required final gate | `make guardrails` plus the opt-in real Postfix qualification |
 
@@ -301,23 +301,25 @@ Out of scope:
   authority domain, and its `mf=` equals the observed outer DSN recipient
   exactly. An earlier signature `i=j` belongs to the run when either
   (a) it is an `nd=` signature whose `nd=` equals the `d=` of `i=j+1` and
-  whose `d=` is a local authority domain, the Section 9.3 `nd=` scheme; or
+  whose `d=` is a local authority domain, the Section 12.3 `nd=` scheme; or
   (b) it carries `mf=` and `rt=`, the `mf=` of `i=j+1` relaxed-matches one of
-  its `rt=` paths under the existing Section 9.4 custody check, its `d=`
-  relaxed-matches its own `mf=` domain under Section 11.4, and its `d=`, its
+  its `rt=` paths under the existing Section 7 custody check, its `d=`
+  relaxed-matches its own `mf=` domain under Section 14.4, and its `d=`, its
   `mf=` domain, and every `rt=` domain are local authority domains, the
-  Section 9.3 imaginary-hop scheme.
+  Section 12.3 imaginary-hop scheme.
   Every run member must verify cryptographically over the state it signed;
   a run member that does not verify makes the projection
   `unsupported_chain`, because the keys are local and a non-verifying local
-  signature is either forged or damaged, and Section 12.1 requires all
-  relevant signatures to verify. The highest-only reading of Section 12.1
-  for the embedded verification in the evaluation is a local interpretation.
+  signature is either forged or damaged. Draft-07 Section 16.1 requires only
+  that the reported message was Provisionally Verified, so verifying every
+  local run member is a stricter local rule. The embedded verification of the
+  highest signature and highest Message-Instance hashes follows Draft-07
+  Section 16.3 items 2 and 3 directly.
   Rule (b) also absorbs a genuine earlier hop between two domains of the
   same tenant; that is intended, because such a hop is indistinguishable
   from an imaginary one and the tenant controls both ends. Draft-07 Section
-  8.7 guarantees that an `nd=` run ends in one signature with `mf=` and
-  `rt=`. A run therefore has one or more members. Section 12.1.1 requires
+  10.7 guarantees that an `nd=` run ends in one signature with `mf=` and
+  `rt=`. A run therefore has one or more members. Section 16.2 requires
   *every* signature that the Forwarder added to be removed, which is the
   whole run. Rule (b) applies only when the member above the candidate is
   itself an `mf=`/`rt=` signature; an `nd=` member above a candidate ends
@@ -338,7 +340,7 @@ Out of scope:
   the message and the projection is `terminal_origin`.
 - **Propagation**: building and sending a new DSN to the previous hop's `mf=`.
 
-### Received DSN evaluation (Section 12.1.2)
+### Received DSN evaluation (Section 16.3)
 
 Evaluation runs only after the ordinary inbound verification of the outer
 message. It never replaces it. The outer DSN's own DKIM2 signature, replay
@@ -374,8 +376,8 @@ The evaluation proves, in this order, and stops at the first failure:
    Draft-07 Section 16.3 applies only when "the included original message
    is also DKIM2 signed", so evaluation stops with `propagation =
    not_applicable` and every later member `not_evaluated`.
-3. **Local hop identity**: this is Section 12.1.2 item 2. The completion
-   signature `i=n` must (a) verify, with its Section 8.4 timestamp window
+3. **Local hop identity**: this is Section 16.3 item 2. The completion
+   signature `i=n` must (a) verify, with its Section 10.4 timestamp window
    evaluated against the outer DSN's highest-signature `t=` instead of the
    current clock, because a DSN may legitimately arrive long after the
    forwarding: the completion `t=` must not exceed the outer `t=` plus the
@@ -383,10 +385,10 @@ The evaluation proves, in this order, and stops at the first failure:
    must stay within the verifier's maximum age, (b) have a `d=` that is a
    local authority domain for the tenant, resolved through the datasource
    before the
-   projection is emitted, (c) satisfy the Section 11.4 relaxed domain match
+   projection is emitted, (c) satisfy the Section 14.4 relaxed domain match
    between its `d=` and its `mf=` domain, and (d) have an `mf=` that is
    byte-equal to the observed outer DSN recipient after lowercasing the
-   domain part of both, the Section 11.4 comparison rule with a
+   domain part of both, the Section 14.4 comparison rule with a
    case-sensitive local part. Outcomes: `local` when all four
    hold; `not_local` when (b) fails, which is the legitimate state of a relay
    carrying somebody else's DSN; `mismatch` when (b) holds but (c) or (d)
@@ -399,7 +401,7 @@ The evaluation proves, in this order, and stops at the first failure:
    `/v1/process` path; readiness and latency documentation must state it,
    and a datasource outage maps to `local_hop = temperror`, never to
    `not_local`.
-4. **Outer signer alignment**: this is Section 12.1.2 item 1. The outer DSN
+4. **Outer signer alignment**: this is Section 16.3 item 1. The outer DSN
    signer's `d=` relaxed-matches the domain of at least one `rt=` path of
    the completion signature: the outer `d=` is equal to, or a parent domain
    of, that `rt=` domain, so a recipient domain may be signed by its
@@ -452,7 +454,7 @@ carries a temporary meaning.
 
 Run-member verification inside `/v1/process` needs no reconstruction: a
 DKIM2-Signature covers only the Message-Instance and DKIM2-Signature fields
-named by Section 9.6, which are present in the embedded original as is. It
+named by Section 12.8, which are present in the embedded original as is. It
 adds bounded key fetches per run member under the existing signature-set
 limit, deduplicated by the provider cache. A member is verified across all of
 its supported signature sets with the same all-hop semantics as chain
@@ -488,7 +490,7 @@ as a policy finding on the single `PolicyDecision`, which keeps one policy
 authority and one action plan.
 
 `local_hop = not_local` is accepted because a DSN in transit through a relay
-is valid mail for that relay; the relay is not the party Section 12.1.2 speaks
+is valid mail for that relay; the relay is not the party Section 16.3 speaks
 to. Operators who do not relay may reject it with ordinary MTA policy.
 
 The Authentication-Results reporting action stays exactly as it is. No DSN
@@ -501,7 +503,7 @@ therefore restricted to the RFC 8601 `pvalue` token syntax, in which `_` is
 permitted, so that no renaming is needed later. This specification does not
 extend the reporting action or the Milter validator.
 
-### Rebuild (Section 12.1.1)
+### Rebuild (Section 16.2)
 
 Rebuild is attempted only when the evaluation reached `propagation =
 eligible`. It produces a new RFC 6522 report from the embedded original as
@@ -521,13 +523,13 @@ follows.
    emit.
 2. **Verify the previous hop.** The previous hop signature `i=k-1` must
    verify cryptographically over the reconstructed state at its instance,
-   with the same custody and Section 9.6 rules the current-target verifier
+   with the same custody and Section 12.8 rules the current-target verifier
    applies. Custody is validated over the whole chain below and including
    `i=k-1`, exactly as the current-target verifier validates the chain below
    its target; a broken link below the previous hop is reported as the
    distinct outcome `custody_rejected`, not as an alignment failure of the
-   previous hop itself. This is stricter than Section 12.1.1 requires and is
-   a recorded local interpretation. The verifier's Section 8.4 timestamp window is evaluated with the
+   previous hop itself. This is stricter than Section 16.2 requires and is
+   a recorded local interpretation. The verifier's Section 10.4 timestamp window is evaluated with the
    completion signature's `t=`, the moment this system forwarded the message,
    as the reference time instead of the current time, and the previous hop's
    `t=` must not exceed the completion `t=`; a DSN that arrives long after
@@ -535,7 +537,7 @@ follows.
    recorded as such. The previous hop's public key is fetched at propagation
    time; a key that was rotated away or revoked since forwarding makes the
    DSN `not_reconstructable`, which is recorded as a known limit. The Section
-   11.4 relaxed domain match between its `d=`
+   14.4 relaxed domain match between its `d=`
    and its `mf=` domain must pass. Its `mf=` must be non-null; a null `mf=`
    is `forbidden_null_previous_sender` and Draft-07 Section 16 forbids sending
    any DSN. This step is the only authority for calling the previous hop's
@@ -563,7 +565,7 @@ follows.
    previous hop `rt=` or `mf=` that carries an obsolete RFC 5321 source route
    is `not_reconstructable`; the rebuild never emits a source route in
    `Final-Recipient` or `To:`. This is local policy;
-   Section 12.1.1 speaks of "the state the message was in when it was
+   Section 16.2 speaks of "the state the message was in when it was
    forwarded", and fields above `i=k-1` describe our reception and the onward
    path, not that state, and would leak topology to the previous hop. The
    rule is fixed and not configurable: it is a privacy property of the
@@ -600,7 +602,7 @@ follows.
      `Original-Recipient` whose decoded address equals that same `rt=` path,
      and then copied verbatim. The status code, the ENVID, and that
      conditional `Original-Recipient` are the only upstream-derived bytes in
-     the report; Section 12.1.1 targets the human-readable reason, and the
+     the report; Section 16.2 targets the human-readable reason, and the
      enhanced status class is needed by the previous hop for its own DSN.
    - no `Remote-MTA`, `Diagnostic-Code`, `Will-Retry-Until`, `Last-Attempt-Date`,
      or extension fields, because they describe the onward destination.
@@ -618,7 +620,7 @@ follows.
    revision can add languages without changing the public facade; the first
    implementation registers only `en`. Operator-supplied text is not
    accepted because the part is signed and any free text is a channel for
-   destination-specific information. This satisfies the Section 12.1.1
+   destination-specific information. This satisfies the Section 16.2
    requirement to remove destination-specific information.
 8. **Outer message.** `From: Mail Delivery System <MAILER-DAEMON@<reporting_mta>>`,
    `To:` set to the previous hop's `mf=` addr-spec inside RFC 5322 angle
@@ -1442,7 +1444,7 @@ Final gate:
 - Settled: "local" means datasource authority over the signing domain. An
   `mf=` value is evidence of routing, never of identity.
 - Settled: the local hop is a run, not a single signature, because this
-  product itself emits `nd=` and imaginary-hop chains and Section 12.1.1
+  product itself emits `nd=` and imaginary-hop chains and Section 16.2
   requires every added signature to be removed.
 - Settled: a previous hop that is an `nd=` signature is out of scope
   (`unsupported_chain`) rather than approximated.
@@ -1523,8 +1525,9 @@ Final gate:
   in the response, and the adapter fails closed with `451` when the
   re-injection listener cannot take an `SMTPUTF8` message it needs to send.
 - Settled: every local hop run member must verify; a non-verifying member is
-  `unsupported_chain`. The highest-only embedded verification in the
-  evaluation is a recorded interpretation of Section 12.1.
+  `unsupported_chain`. This is stricter than the Draft-07 Section 16.1
+  provisional-verification requirement. The highest-only embedded verification
+  in the evaluation follows Draft-07 Section 16.3 items 2 and 3.
 - Settled: `PropagationDisposition` is a distinct schema so that the shared
   `Disposition` enum and every generated client remain unchanged.
 - Settled: the unsigned-field removal rule in rebuild step 4 is fixed and not

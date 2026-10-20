@@ -145,7 +145,7 @@ certification, or universal interoperability claim.
   [native-domain runbook](../operator/native-domain-onboarding.md).
 - Product images are Linux `amd64` and `arm64`; release preparation does not
   publish them or create `latest`, stable, minor, or major aliases.
-- The Draft-06 replay identifier is a drain-only epoch rotation. Draft-04 and
+- The Draft-07 replay identifier is a drain-only epoch rotation. Draft-06 and
   Draft-07 replay traffic cannot overlap; old records become unreachable and
   the resulting detection gap is bounded by the configured retention period.
 

@@ -70,7 +70,7 @@
     {
       "id": "dns-negative-source",
       "path": "lib/dns_provider_test.go",
-      "sha256": "a504caf3d1f0b93a0bd62bcb961abefd75a50f456d60e9a312afabadd4306341",
+      "sha256": "5437f03273e4f330076d0ed2d31950e12362f67b59291039ece7e0e35a15fe44",
       "module": "lib"
     },
     {
@@ -334,7 +334,7 @@
     {
       "id": "signing-provenance",
       "path": "lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-07/README.md",
-      "sha256": "6e8b0899db0f1bbbad36e69a21c5bdf38ad5a5085635541d9526f5d4d3d119d7",
+      "sha256": "0e7eae572d36f4808988d8a535a631c510259489584d6794bccb77410035f126",
       "module": "lib"
     },
     {

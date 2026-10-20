@@ -133,9 +133,12 @@ value against the case-exact legacy schema. A mapping may declare a separate
 canonical `source_selector` and DKIM2 `selector`: protected import resolves the
 former and DNS proof plus the published credential use the latter. Omitting
 `source_selector` preserves the same-selector migration behavior. This explicit
-split is required when an inherited DKIM RSA record contains SPKI DER while
-DNS-04 requires PKCS#1 `RSAPublicKey` DER; operators must publish a distinct
-DKIM2 selector rather than replacing or weakening the existing DKIM record.
+split is required when an inherited DKIM RSA record contains SPKI DER: DNS-01
+accepts both PKCS#1 `RSAPublicKey` and SPKI DER for verification, but the
+native DKIM2 publication path emits exactly one canonical form, PKCS#1
+`RSAPublicKey` DER, and DNS proof compares against that form. Operators must
+publish a distinct DKIM2 selector rather than replacing or weakening the
+existing DKIM record.
 Other noncanonical selector or domain input remains rejected.
 
 An inactive historical row may retain the exact legacy `DKIMDomain: *`

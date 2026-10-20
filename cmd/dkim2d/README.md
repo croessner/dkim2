@@ -185,7 +185,7 @@ YAML scalar typing; quoted placeholders remain strings. Missing or malformed
 variables fail closed, map keys are never expanded, and secret bytes remain in
 their protected files.
 
-`dns export` produces DNS-04 records for operator publication. `prove` and
+`dns export` produces DNS-01 records for operator publication. `prove` and
 `activate` use a fresh configured recursive resolver path and compare exact
 SPKI material. This is not a direct authoritative-server observation and does
 not claim recursive-cache bypass. After activation, whether completed directly
@@ -338,7 +338,7 @@ embedded DKIM2 object first and resolves `delivery_status` policy by the exact
 canonical authenticated highest `d=` value.
 
 A returned original that carries no `DKIM2-Signature` header field at all is
-outside draft-ietf-dkim-dkim2-spec Section 12, which defines DSN handling only
+outside draft-ietf-dkim-dkim2-spec Section 16, which defines DSN handling only
 for DKIM2-signed originals. Such a report is refused by default exactly like
 failed embedded evidence (`permerror`/`reject`, evidence stage
 `embedded_unsigned`). The explicit compatibility policy
@@ -502,7 +502,7 @@ is invalid with `signing.backend: disabled`. The environment override is
   and Postfix delivers the bounce unsigned and unchanged, as a classic RFC 3464
   notification.
 
-The rationale is transitional: draft-ietf-dkim-dkim2-spec Section 12 defines
+The rationale is transitional: draft-ietf-dkim-dkim2-spec Section 16 defines
 DSNs only for DKIM2-signed originals and is silent about originals without a
 DKIM2 signature. While inbound mail is accepted without DKIM2, a bounce for
 such mail must still reach its sender; refusing it keeps the original message
@@ -582,8 +582,8 @@ invalid with `signing.backend: disabled`. The environment override is
   declaration is refused with a non-null reverse path, and `/v1/revise` and batch revision never admit a
   null reverse path.
 
-The rationale is draft-ietf-dkim-dkim2-spec Section 8.5, which allows `mf=<>`,
-and Section 8.8, under which a null `mf=` requires no `d=` match. Automatic
+The rationale is draft-ietf-dkim-dkim2-spec Section 10.5, which allows `mf=<>`,
+and Section 10.8, under which a null `mf=` requires no `d=` match. Automatic
 replies, Sieve notifications, and RFC 8098 disposition notifications from our
 own systems use the null reverse path and would otherwise leave without
 DKIM2. A null sender is trivial to forge, so the trust decision belongs to

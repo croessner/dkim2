@@ -177,7 +177,7 @@ func TestJournalStrictDecodeRejectsDuplicateUnknownAndTamperedEvidence(t *testin
 	}
 }
 
-// TestBuildDNSBatchesRequiresParserValidCandidateRecords freezes DNS-04 round-trip validation.
+// TestBuildDNSBatchesRequiresParserValidCandidateRecords freezes DNS-01 round-trip validation.
 func TestBuildDNSBatchesRequiresParserValidCandidateRecords(t *testing.T) {
 	plan, prepared := preparedCampaign(t, 1)
 	defer plan.Close()     //nolint:errcheck // Test cleanup has no recovery.

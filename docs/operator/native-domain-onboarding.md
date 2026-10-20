@@ -158,7 +158,7 @@ dkim2d datasource domain dns export \
 ```
 
 The output is a protected file, never stdout. It contains deterministic
-DNS-04 zone-file presentation with TXT chunks no longer than 200 ASCII octets.
+DNS-01 zone-file presentation with TXT chunks no longer than 200 ASCII octets.
 All chunks for a key form one TXT RR. RSA uses PKCS#1 public DER in `p=`;
 Ed25519 uses the raw 32-byte public key. The exporter round-trips the record
 through the repository DNS parser and back to the staged SPKI.

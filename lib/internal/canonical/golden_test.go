@@ -135,7 +135,7 @@ func TestGoldenHeaderCanonicalizationFixture(t *testing.T) {
 	}
 }
 
-// TestGoldenSignatureCanonicalizationFixture verifies a draft-versioned Section 9.6 fixture.
+// TestGoldenSignatureCanonicalizationFixture verifies a draft-versioned Section 12.8 fixture.
 func TestGoldenSignatureCanonicalizationFixture(t *testing.T) {
 	fixture := loadGoldenJSON[signatureGoldenFixture](t, "testdata/golden/signature-input-draft-ietf-dkim-dkim2-spec-07.json")
 	if fixture.Draft != DraftBaseline {

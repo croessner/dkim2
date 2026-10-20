@@ -136,7 +136,7 @@ domain. Postfix DSN mode does not accept `envelope_sender` because the bounded
 Postfix contract intentionally carries no original envelope.
 
 A bounce whose returned original carries no `DKIM2-Signature` header field at
-all is outside draft-ietf-dkim-dkim2-spec Section 12. The daemon refuses it by
+all is outside draft-ietf-dkim-dkim2-spec Section 16. The daemon refuses it by
 default, and the adapter then answers `550 5.7.1`, which leaves the original
 message queued at Postfix. When the daemon operator explicitly configures
 `signing.policy.delivery_status.unsigned_original: continue`, the daemon

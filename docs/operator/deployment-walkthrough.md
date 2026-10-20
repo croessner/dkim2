@@ -33,34 +33,34 @@ Three properties of that chain matter for a deployment:
 
 - **The signature binds the SMTP envelope.** A signature records the `MAIL
   FROM` used to send the message in `mf=` and the `RCPT TO` values in `rt=`
-  (Sections 8.5 and 8.6). A verifier checks the highest signature's `mf=` and
-  `rt=` exactly against the envelope it observes (Section 11.4), checks that
+  (Sections 10.5 and 10.6). A verifier checks the highest signature's `mf=` and
+  `rt=` exactly against the envelope it observes (Section 14.4), checks that
   each signature's `d=` relaxed-matches its own `mf=` domain, and checks that
   every `mf=` after the first matches an `rt=` of the previous signature
-  (Section 9.4). A message that arrives with an envelope the last signer did
+  (Section 7). A message that arrives with an envelope the last signer did
   not record does not verify.
 - **The message state is documented in a Message-Instance.** Every message
   carries a `Message-Instance` field with a revision number `m=`, the header
   and body hashes of that revision, and, for `m>1`, a Recipe `r=` that
-  recreates the previous revision (Sections 5 and 7). A forwarder that changes
+  recreates the previous revision (Sections 5 and 9). A forwarder that changes
   the message becomes a Reviser: it adds a new instance whose Recipe lets the
   verifier undo the change and validate the earlier signatures over the
-  earlier state (Sections 9.1 and 11). A forwarder that changes nothing may
+  earlier state (Sections 12.1 and 14). A forwarder that changes nothing may
   add only a signature, or, if the envelope is unchanged too, nothing at all.
 - **Bounces stay inside the chain.** A delivery-status notification is
   addressed to the `mf=` of the highest signature, never to an address taken
   from the message, and is not sent at all when that `mf=` is null
-  (Section 12). A forwarder that receives such a notification may rebuild it
-  for its own previous hop (Section 12.1.1), and a receiver can authenticate a
+  (Section 16). A forwarder that receives such a notification may rebuild it
+  for its own previous hop (Section 16.2), and a receiver can authenticate a
   notification against the signatures of the embedded original
-  (Section 12.1.2).
+  (Section 16.3).
 
 What that buys an operator, in the draft's own terms: forwarding survives
 because changes are documented rather than destructive; a replayed message is
 distinguishable from one that was intended for the address it arrives at,
 because the envelope is signed and the `exploded` flag reports a legitimate
-fan-out (Sections 1 and 8.10); and bounces are authenticated and passed back
-along the chain instead of becoming backscatter (Section 12). Replay
+fan-out (Sections 1 and 10.10); and bounces are authenticated and passed back
+along the chain instead of becoming backscatter (Section 16). Replay
 *detection*, the decision to refuse a second copy, is local security policy
 in this implementation, not protocol verification; see
 [`docs/conformance.md`](../conformance.md).
@@ -184,10 +184,10 @@ sequenceDiagram
    envelope, timestamps, DNS key fetch, signature and hash verification,
    Recipe application to reconstruct earlier instances, chain of custody, and
    flags. DNS timeouts are `TEMPERROR`; an absent, multiple, malformed, or
-   revoked key record is `PERMERROR` (Section 11.5). Lookups are cached for
+   revoked key record is `PERMERROR` (Section 14.5). Lookups are cached for
    the shorter of the DNS TTL and a configured cap.
 5. The verification state is one of `PASS`, `FAIL`, `PERMERROR`, or
-   `TEMPERROR` (Section 11.1). The daemon then applies the replay gate and the
+   `TEMPERROR` (Section 14.1). The daemon then applies the replay gate and the
    configured policy mode. Replay is a stored first-seen coordinate derived
    from the message's own signed identity through a keyed HMAC; the result
    classes are `not_checked`, `disabled`, `first_seen`, `exploded`,
@@ -353,7 +353,7 @@ sequenceDiagram
 3. The daemon first verifies the message for revision against the inherited
    envelope. A bare `PASS` is not revision authority; signing uses only the
    sealed verified input that call returns.
-4. The hash gate decides the shape of the revision (Section 9.1 of the draft,
+4. The hash gate decides the shape of the revision (Section 12.1 of the draft,
    made deterministic by local policy): if the current header and body
    hashes equal the highest instance, no new `Message-Instance` is added and
    only `DKIM2-Signature: i+1` is emitted; if either differs, exactly one
@@ -362,7 +362,7 @@ sequenceDiagram
    minimal, and are proven by applying them before use.
 5. Custody must be continuous: the new signature's `mf=` domain must
    relaxed-match an `rt=` domain of the previous signature, and its `d=` must
-   align with its own `mf=` domain (Sections 9.4 and 11.4). Unrelated domains
+   align with its own `mf=` domain (Sections 7 and 14.4). Unrelated domains
    are a permanent policy rejection, not a configuration to bypass.
 6. If the forwarder installed its own local return path, which is exactly the
    premise of delivery-status propagation, the outgoing `MAIL FROM` differs
@@ -385,7 +385,7 @@ flowchart TD
     dsn --> prop["Propagation, Section 3.5"]
 ```
 
-A next-domain transition with `nd=` (Section 9.3) is a library capability with
+A next-domain transition with `nd=` (Section 12.3) is a library capability with
 its own out-of-band authorization and has no Milter mode; see
 [`signing-and-revision.md`](../specs/implementation/signing-and-revision.md).
 
@@ -456,7 +456,7 @@ sequenceDiagram
    daemon. Both opt-ins are required, both default to `reject`, and the
    request must carry the explicit `null_sender: header_from` declaration.
    Only automatic replies and disposition notifications are signed this way;
-   DSNs always stay on the Section 12 path. A null-sender message that already
+   DSNs always stay on the Section 16 path. A null-sender message that already
    carries `DKIM2-Signature` or `Message-Instance`, or whose top-level
    `Content-Type` is `multipart/report; report-type=delivery-status`, passes
    the originator Milter unchanged without a daemon call, so a bounce that the
@@ -466,7 +466,7 @@ sequenceDiagram
    The signing domain is then the domain of the single RFC 5322 From mailbox,
    which the daemon and the library check again, and the signature carries
    `mf=<>` and the actual recipient in `rt=`; Draft-07 Section 10.5 admits
-   `mf=<>` and Section 8.8 requires no `d=` match for it. A domain without an
+   `mf=<>` and Section 10.8 requires no `d=` match for it. A domain without an
    active `originator` profile stays unsigned. This opt-in must never be
    enabled on an inbound or MX-facing Milter, and the daemon opt-in is only
    sound while every holder of the sign capability sits on such a trusted
@@ -480,7 +480,7 @@ sequenceDiagram
    so that one comparison is marked not applicable while cryptography, hashes,
    timestamp, custody, `d=`, `mf=`, and `rt=` are still verified. The outer
    recipient must equal the authenticated embedded `mf=` exactly, which is the
-   Section 12 addressing rule, and at least one RFC 3464 recipient must link to
+   Section 16 addressing rule, and at least one RFC 3464 recipient must link to
    an authenticated `rt=`. The Postfix bounce wire form is admitted only on
    this capability-authenticated route.
 5. Only after verification does the daemon derive the signing domain from the
@@ -504,7 +504,7 @@ The reverse direction: `example.test` forwarded a message from `origin.test`
 to `destination.test` with its own local return path, and `destination.test`
 could not deliver it. Its notification comes back to the local return path.
 Draft-07 Section 16.3 says the receiver should authenticate it, and
-Section 12.1.1 says a forwarder may rebuild it for the previous hop, with the
+Section 16.2 says a forwarder may rebuild it for the previous hop, with the
 forwarder's own signatures and modifications removed.
 
 Two daemon surfaces cover this. `POST /v1/process` evaluates every received
@@ -528,7 +528,7 @@ sequenceDiagram
     Dest->>MTA: DSN to the local return path
     MTA->>Prop: LMTP, null sender, one recipient
     Prop->>Daemon: POST /v1/dsn/propagate with propagate capability
-    Daemon->>Daemon: verify outer DSN, evaluate Section 12.1.2
+    Daemon->>Daemon: verify outer DSN, evaluate Section 16.3
     Daemon->>Replay: reserve coordinate, pending with lease
     Daemon->>Daemon: rebuild, verify previous hop, sign new DSN
     Daemon-->>Prop: accept, next_hop_recipient, commit_token, bytes
@@ -745,7 +745,7 @@ qualification claim for any MTA other than Postfix.
   not raw wire bytes; Postfix's own `Received` field is outside it. The
   Postfix and Milter qualification is the implemented adapter path.
 - Exim is `unqualified_draft07`: the adapter is implemented, but its five-row
-  evidence is historical Draft-04 evidence and does not qualify the Draft-06
+  evidence is historical Draft-04 evidence and does not qualify the Draft-07
   candidate.
 - `postfix_dsn` requires upstream provenance and real-Postfix qualification of
   the exact deployed image; socket fixtures alone do not qualify production.
@@ -756,7 +756,7 @@ qualification claim for any MTA other than Postfix.
   rotated away, cannot reach an EAI previous hop, is at-least-once, is
   one-to-one with the notifications a destination sends, and costs one extra
   pass for an own imaginary hop below an own `nd=` chain.
-- Replay identity is a drain-only epoch: Draft-04 and Draft-06 traffic never
+- Replay identity is a drain-only epoch: Draft-06 and Draft-07 traffic never
   overlap, and the detection gap is bounded by the retention period.
 
 The complete list, with stable identifiers, is

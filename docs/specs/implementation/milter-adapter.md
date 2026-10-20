@@ -632,7 +632,9 @@ Daemon dispositions map deterministically:
 | `tempfail` after TEMPERROR `provider_temporary` | temporary failure unchanged | `451 4.7.5 DKIM2 public key temporarily unavailable` |
 
 The `4.7.5` reply follows Draft-07 Section 13: a temporary public-key (DNS)
-lookup failure is signalled distinctly, while adapter, transport, and other
+lookup failure is signalled distinctly. It is derived only from the daemon
+result TEMPERROR with primary reason `provider_temporary`, so operators find
+that reason in the daemon logs for every `4.7.5` reply, while adapter, transport, and other
 daemon tempfails keep `4.7.1`. Every DKIM2 rejection uses `5.7.1`.
 
 Three routes also define a bodyless HTTP 204 applicability variant, which the

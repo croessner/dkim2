@@ -25,7 +25,7 @@ const (
 	txtChunkBytes    = 200
 )
 
-// DNSRecord owns one canonical DNS-04 record derived from staged readback.
+// DNSRecord owns one canonical DNS-01 record derived from staged readback.
 type DNSRecord struct {
 	domain     []byte
 	selector   []byte
@@ -256,7 +256,7 @@ func findStagedCredential(
 	return datasourceadmin.CredentialRow{}, false
 }
 
-// newDNSRecord converts canonical SPKI to the exact DNS-04 public-key representation.
+// newDNSRecord converts canonical SPKI to the exact DNS-01 public-key representation.
 func newDNSRecord(
 	ctx context.Context,
 	domain string,
@@ -316,7 +316,7 @@ func newDNSRecord(
 	return record, nil
 }
 
-// ValidateCanonicalDNSRecord proves one native credential through the production DNS-04 parser path.
+// ValidateCanonicalDNSRecord proves one native credential through the production DNS-01 parser path.
 func ValidateCanonicalDNSRecord(
 	ctx context.Context,
 	domain string,

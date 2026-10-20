@@ -102,6 +102,8 @@ Current contents:
   activation, retirement, and rollback runbook.
 - `docs/operator/opendkim-migration.md`: protected dry-run, apply, publication,
   and higher-generation rollback workflow.
+- `docs/operator/draft-07-migration.md`: Draft-07/DNS-01 upgrade, replay-store
+  transition, removed configuration, mail-flow changes, and known limitations.
 - `docs/replay-store-valkey.md`: production replay-store topology, ACL,
   persistence, replication, rotation, integration, and dependency guidance.
 - `docs/conformance.md`: public evidence classes, tested capability boundaries,
@@ -202,7 +204,7 @@ Inbound delivery-status notifications are evaluated read-only inside
 `POST /v1/process` and projected as the closed `delivery_status` fact.
 "Local" is datasource authority over a signing domain, never an address in
 `mf=`, and no received-DSN fact can authorize a signing operation. Draft-07
-Section 12.1.1 propagation is a separate replay-gated route,
+Section 16.2 propagation is a separate replay-gated route,
 `POST /v1/dsn/propagate` with `POST /v1/dsn/propagate/commit`, whose signing
 authority is the removed completion signature's domain and whose recipient is
 the cryptographically verified previous hop's `mf=`. Forwarding domains

@@ -85,7 +85,7 @@ func TestParseRecordRejectsVersionAndRequiredTagContradictions(t *testing.T) {
 	}
 }
 
-// TestParseRecordRejectsMalformedKeyTypes verifies DNS-04 hyphenated-word syntax.
+// TestParseRecordRejectsMalformedKeyTypes verifies DNS-01 hyphenated-word syntax.
 func TestParseRecordRejectsMalformedKeyTypes(t *testing.T) {
 	for _, keyType := range []string{"", "_future", "-future", "future-", "future_key", "future key", "1future"} {
 		record := "k=" + keyType + "; p=" + validDNSKeyData
