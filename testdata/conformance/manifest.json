@@ -220,7 +220,7 @@
     {
       "id": "rawmsg-positive-source",
       "path": "lib/internal/rawmsg/parser_test.go",
-      "sha256": "f4077fbd2a64bdae54e6fd9949724e7ed8c0236ac2a4b690be6b5ddc33532f87",
+      "sha256": "3b93347d3e8fd8498e87ff5dee111f8e1558d5b59183f3b46f435edbb309c0fd",
       "module": "lib"
     },
     {
@@ -238,7 +238,7 @@
     {
       "id": "recipe-draft07-steps-source",
       "path": "lib/internal/recipe/draft07_test.go",
-      "sha256": "81a8c3f1a316a9d3f44886f32d3b92a42cb8d379b9e509f80140ee2676753826",
+      "sha256": "5582a2fb7fcfc7621c53e7ce5724254ee4322a510e55f3169d372440cbf38320",
       "module": "lib"
     },
     {

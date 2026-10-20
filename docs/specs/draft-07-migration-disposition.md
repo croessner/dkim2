@@ -423,3 +423,23 @@ Open follow-ups owned by later packages:
     tempfails non-ASCII transit paths. Exim rejects non-ASCII outbound
     scalars. Both fail closed.
   - Inbound SMTPUTF8 bytes are preserved for verification.
+
+## 14. 8-bit header values
+
+- Header field values are byte strings. Before this change the raw-message
+  parser required valid UTF-8, so any message with a legacy unencoded 8-bit
+  header (for example a Latin-1 `Subject`) failed as `malformed_message`, and a
+  Recipe `u` step could not restore a non-UTF-8 header value.
+- Draft-07 Sections 5 and 18 hash messages as bytes and define `u` steps for
+  values that are not valid UTF-8. The parser now enforces CRLF framing only.
+  Bare CR or LF in a value stays malformed.
+- Downstream owners already treated such values safely: the recipe generator
+  emits `u` literals for headers, and both adapters already passed 8-bit
+  header octets. The DKIM2-Signature and Message-Instance parsers stay
+  ASCII-only, so an 8-bit byte in any of their tag values is still malformed.
+- Operator-visible change: a legacy unencoded 8-bit `From` is no longer a
+  `malformed_message`; it parses as a message and fails Section 11 as
+  `from_not_authentic` (PERMERROR), because the mailbox parser requires
+  RFC 6532 UTF-8 for an internationalized author.
+- Evidence: a byte-exact parser reproducer, header `u` reconstruction, a
+  generator round trip, and an end-to-end PASS for a Latin-1 `Subject`.

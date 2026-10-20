@@ -664,6 +664,12 @@ Design notes:
   contain CR or LF. The generator emits `d` for valid UTF-8 literals and `u`
   otherwise. String budgets apply to the serialized JSON string, so a `u`
   literal is charged its base64 length.
+- Header field values are byte strings. The raw-message parser enforces CRLF
+  folding only, so RFC 6532 UTF-8 and legacy unencoded 8-bit octets are both
+  preserved exactly, hashed as bytes, and reconstructed from `u` steps.
+  Any future REST, log, trace, or metric surface for header-derived bytes must
+  base64-encode or validate them, because `encoding/json` silently replaces
+  invalid UTF-8 with U+FFFD.
 - The parser requires a header relevance classifier and rejects recipes for
   header fields that are never signed (Draft-07 Sections 4 and 5.1).
 

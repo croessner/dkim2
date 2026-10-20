@@ -151,7 +151,6 @@ func TestParseRejectsMalformedHeaders(t *testing.T) {
 		{name: "whitespace name", raw: []byte("Bad Name: value\r\n\r\nbody")},
 		{name: "non ascii name", raw: []byte("Bad\xff: value\r\n\r\nbody")},
 		{name: "control name", raw: []byte("Bad\x1f: value\r\n\r\nbody")},
-		{name: "invalid utf8 value", raw: []byte("X-Bytes: \xff\xfe\r\n\r\nbody")},
 	}
 
 	for _, tt := range tests {
@@ -386,6 +385,33 @@ func TestParseNegativeChecklistExposesStructuredErrors(t *testing.T) {
 				t.Fatalf("LimitName = %q, want %q", parserErr.LimitName(), tt.limitName)
 			}
 		})
+	}
+}
+
+// TestParsePreservesNonUTF8HeaderBytes reproduces the Draft-07 Sections 5
+// and 18 byte model: header values may carry bytes that are not valid UTF-8
+// (a legacy unencoded Latin-1 field, or a value a "u" Recipe step restores),
+// and they are stored byte-exact while CR/LF framing stays strict.
+func TestParsePreservesNonUTF8HeaderBytes(t *testing.T) {
+	raw := []byte("Subject: caf\xe9\r\nX-Bytes: \xff\xfe\r\n folded \x80\r\n\r\nbody\r\n")
+	msg, err := Parse(raw)
+	if err != nil {
+		t.Fatalf("Parse returned error: %v", err)
+	}
+	if !bytes.Equal(msg.Headers().OriginalBytes(), raw[:len(raw)-len("\r\nbody\r\n")]) {
+		t.Fatal("header block was not preserved byte-exact")
+	}
+	fields := msg.Headers().FieldsByName("x-bytes")
+	if len(fields) != 1 || !bytes.Equal(fields[0].UnfoldedValue(), []byte(" \xff\xfe folded \x80")) {
+		t.Fatal("non-UTF-8 header value was not preserved")
+	}
+	for _, malformed := range [][]byte{
+		[]byte("X-Bytes: \xff\rx\r\n\r\nbody"),
+		[]byte("X-Bytes: \xff\nx\r\n\r\nbody"),
+	} {
+		if _, err := Parse(malformed); err == nil {
+			t.Fatal("bare CR or LF in an 8-bit header value was accepted")
+		}
 	}
 }
 

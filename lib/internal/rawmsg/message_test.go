@@ -161,14 +161,6 @@ func TestHeaderConstructorsRejectSplitBrainViews(t *testing.T) {
 			original:  []byte("Subject: folded\r\n value\r\n"),
 			errorCode: ErrorCodeInvalidInvariant,
 		},
-		{
-			name:      "invalid utf8 field body",
-			rawName:   []byte("Subject"),
-			rawValue:  []byte(" \xff\xfe"),
-			unfolded:  []byte(" \xff\xfe"),
-			original:  []byte("Subject: \xff\xfe\r\n"),
-			errorCode: ErrorCodeMalformedHeader,
-		},
 	}
 
 	for _, test := range tests {

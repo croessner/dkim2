@@ -2,7 +2,6 @@ package recipe
 
 import (
 	"bytes"
-	"errors"
 	"testing"
 )
 
@@ -146,17 +145,41 @@ func TestGenerateRoundTripsBinaryBodyLines(t *testing.T) {
 	}
 }
 
-// TestApplyRejectsNonUTF8HeaderBinaryDataWithBoundedError proves the
-// documented limit that header values reconstructed from "u" steps must still
-// be valid RFC 6532 header text: application fails closed with the bounded
-// invalid_state code, which verification history maps to an invalid
-// application (PERMERROR) rather than a limit or internal-contract stop.
-func TestApplyRejectsNonUTF8HeaderBinaryDataWithBoundedError(t *testing.T) {
+// TestApplyBinaryDataReconstructsNonUTF8HeaderBytes reproduces the Draft-07
+// Section 5 "u" step for header fields: a previous header value that is not
+// valid UTF-8 is reconstructed byte-exact.
+func TestApplyBinaryDataReconstructsNonUTF8HeaderBytes(t *testing.T) {
 	current := mustRecipeState(t, []byte("Subject: now\r\n\r\nbody\r\n"))
 	plan := mustParseRecipe(t, `{"h":{"subject":[{"u":["/w=="]}]}}`)
 	previous, _, err := mustApplier(t, Limits{}).Apply(current, plan)
-	var typed *Error
-	if previous.Valid() || !errors.As(err, &typed) || typed.Code() != ErrorCodeInvalidState || typed.Class() != ErrorClassState {
+	if err != nil || !previous.Valid() {
 		t.Fatalf("Apply() valid=%t code=%s", previous.Valid(), recipeTestErrorCode(err))
+	}
+	subjects := previous.Headers().FieldsByName(testRecipeHeaderName)
+	if len(subjects) != 1 || !bytes.Equal(subjects[0].OriginalBytes(), []byte("subject:\xff\r\n")) {
+		t.Fatal("reconstructed non-UTF-8 header bytes mismatch")
+	}
+}
+
+// TestGenerateRoundTripsBinaryHeaderValues proves that a previous header
+// value that is not valid UTF-8 serializes as a "u" step and passes the
+// generator's own parse, apply, and rehash proof.
+func TestGenerateRoundTripsBinaryHeaderValues(t *testing.T) {
+	previous := mustGenerationState(t, []byte("Subject: caf\xe9\r\n\r\nbody\r\n"))
+	current := mustGenerationState(t, []byte("Subject: new\r\n\r\nbody\r\n"))
+	request, err := NewGenerationRequest(previous, current, RejectUnavailableBody, AllowLiterals)
+	if err != nil {
+		t.Fatalf("NewGenerationRequest() code=%s", recipeTestErrorCode(err))
+	}
+	generator, err := NewGenerator(GenerationLimits{}, testHeaderRelevance{relevant: true})
+	if err != nil {
+		t.Fatalf("NewGenerator() code=%s", recipeTestErrorCode(err))
+	}
+	generation, _, err := generator.Generate(request)
+	if err != nil || !generation.Valid() {
+		t.Fatalf("Generate() valid=%t code=%s", generation.Valid(), recipeTestErrorCode(err))
+	}
+	if !bytes.Contains(generation.DecodedJSON(), []byte(`"u":[`)) {
+		t.Fatalf("DecodedJSON() = %q, want a u step", generation.DecodedJSON())
 	}
 }

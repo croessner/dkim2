@@ -2,7 +2,6 @@ package rawmsg
 
 import (
 	"bytes"
-	"unicode/utf8"
 )
 
 // HeaderBlock stores immutable header fields in RFC 5322 occurrence order.
@@ -352,11 +351,11 @@ func invalidHeaderFieldNameOffset(name []byte) int {
 	return -1
 }
 
-// validHeaderFieldValue validates UTF-8 extensions and folded CRLF framing.
+// validHeaderFieldValue validates folded CRLF framing only. Field values are
+// byte strings: Draft-07 Sections 5 and 18 hash messages as bytes and give
+// Recipes "u" steps for header values that are not valid UTF-8, so 8-bit
+// content (RFC 6532 UTF-8 or legacy unencoded octets) is preserved exactly.
 func validHeaderFieldValue(value []byte) bool {
-	if !utf8.Valid(value) {
-		return false
-	}
 	for index := 0; index < len(value); index++ {
 		switch value[index] {
 		case '\r':

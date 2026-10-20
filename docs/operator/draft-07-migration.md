@@ -87,6 +87,11 @@ Replay counting is now local delivery policy (Draft-07 Section 15.1):
   case-sensitive.
 - **From authentication:** A message whose From is not authentic for the
   responsible signer (Draft-07 Section 11) is PERMERROR `from_not_authentic`.
+  This includes a legacy unencoded 8-bit `From`, which earlier failed as
+  `malformed_message`.
+- **8-bit header bytes:** Header values that are not valid UTF-8 (for example
+  an unencoded Latin-1 `Subject`) are accepted and hashed as bytes instead of
+  failing as `malformed_message`.
 - **Exploded flag:** An `exploded` flag on the `i=1` signature is PERMERROR
   `malformed_protocol`.
 - **Composite algorithm:** `mldsa44-ed25519-sha512` signatures and keys
@@ -122,9 +127,6 @@ Replay counting is now local delivery policy (Draft-07 Section 15.1):
 - **Delivery instant:** `/v1/verify` carries no delivery instant. A stored
   message is checked against the daemon clock, so an old message fails closed
   with `timestamp_invalid`. Only library callers can pass a reference time.
-- **Recipe `u` steps:** A `u` step that reconstructs a header value that is
-  not valid UTF-8 fails closed during history reconstruction. Body lines are
-  unaffected.
 - **Mailbox parser:** The From mailbox parser does not accept obsolete RFC
   5322 route syntax (`obs-route`). Such a From is not authentic.
 - **EAI envelopes:** Adapter signing stays ASCII-path only.
