@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/croessner/dkim2"
 )
 
 const (
@@ -257,6 +259,49 @@ func TestDeliveryStatusUnsignedOriginalPolicyDefaultsToRejectAndFailsClosed(t *t
 	t.Setenv(envSigningPolicyDeliveryUnsigned, "permit")
 	if _, err := Load([]byte(signingYAML()), FlagValues{}); err == nil {
 		t.Fatal("invalid unsigned_original environment value was accepted")
+	}
+}
+
+// TestDeliveryStatusReportingDomainIsExplicitCanonicalAndFailsClosed proves
+// the reporting-MTA DSN identity is absent by default, accepts only one
+// canonical DNS domain, and is refused by a daemon whose signer is disabled.
+func TestDeliveryStatusReportingDomainIsExplicitCanonicalAndFailsClosed(t *testing.T) {
+	clearStableEnvironment(t)
+	for name, document := range map[string]string{"disabled backend": disabledYAML(), "flat-file backend": signingYAML()} {
+		snapshot, err := Load([]byte(document), FlagValues{})
+		if _, ok := snapshot.Signing().Policies().DeliveryStatusReportingIdentity(); err != nil || ok {
+			t.Fatalf("omitted %s reporting_domain selected an identity: code=%s", name, CodeOf(err))
+		}
+	}
+	if _, ok := (SigningPoliciesConfig{}).DeliveryStatusReportingIdentity(); ok {
+		t.Fatal("absent policy view selected a reporting identity")
+	}
+	withDomain := func(value string) string {
+		return strings.Replace(signingYAML(), "  backend: flat_file",
+			"  backend: flat_file\n  policy:\n    delivery_status:\n      reporting_domain: "+value, 1)
+	}
+	snapshot, err := Load([]byte(withDomain("reports.example.test")), FlagValues{})
+	identity, ok := snapshot.Signing().Policies().DeliveryStatusReportingIdentity()
+	want, wantErr := dkim2.NewDSNIdentity("reports.example.test")
+	if err != nil || !ok || wantErr != nil || identity != want {
+		t.Fatalf("reporting_domain ok=%t code=%s", ok, CodeOf(err))
+	}
+	if snapshot.Signing().Policies().DeliveryStatusUnsignedOriginal() != UnsignedOriginalReject {
+		t.Fatal("reporting_domain changed the unsigned-original policy")
+	}
+	for _, value := range []string{"\"\"", "Reports.Example.Test", "reports.example.test.", "\"*.example.test\"", "user@example.test", "\"192.0.2.1\"", "localhost", "test", "\"reports example.test\""} {
+		if _, err := Load([]byte(withDomain(value)), FlagValues{}); CodeOf(err) != CodeInvalidField {
+			t.Fatalf("invalid reporting_domain %q code=%s", value, CodeOf(err))
+		}
+	}
+	disabled := disabledYAML() + "signing:\n  policy:\n    delivery_status:\n      reporting_domain: reports.example.test\n"
+	if _, err := Load([]byte(disabled), FlagValues{}); CodeOf(err) != CodeInvalidMatrix {
+		t.Fatalf("reporting_domain under a disabled signer code=%s", CodeOf(err))
+	}
+	t.Setenv(envSigningPolicyDeliveryReporting, "reports.example.test")
+	environment, err := Load([]byte(signingYAML()), FlagValues{})
+	if identity, ok := environment.Signing().Policies().DeliveryStatusReportingIdentity(); err != nil || !ok || identity != want {
+		t.Fatalf("environment reporting_domain override ok=%t code=%s", ok, CodeOf(err))
 	}
 }
 

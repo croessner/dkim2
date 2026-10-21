@@ -97,9 +97,7 @@ func (s *SigningService) SignDeliveryStatus(ctx context.Context, request Deliver
 		s.observeDSNEvidence(dkim2.DSNEvidenceStagePreflight, telemetryResultInternal)
 		return SigningAssessment{}, &DomainError{}
 	}
-	evidenceRequest := dkim2.NewPostfixDerivedDSNSigningEvidenceRequest(
-		request.RawMessage(), request.OuterReversePath(), request.OuterRecipients(),
-	)
+	evidenceRequest := s.deliveryStatusEvidenceRequest(request)
 	evidence, err := evidenceSigner.EvaluateDSNForSigning(ctx, evidenceRequest)
 	if err != nil {
 		if s.policies.continueUnsignedOriginal &&
@@ -114,6 +112,22 @@ func (s *SigningService) SignDeliveryStatus(ctx context.Context, request Deliver
 	return deliveryStatusAssessment(s.signAuthorizedDeliveryStatus(ctx, request, evidence, metadata, operationTime))
 }
 
+// deliveryStatusEvidenceRequest selects the DSN signing identity: the
+// operator-configured reporting MTA domain when one is set, otherwise the
+// authenticated embedded d=. Both paths keep the full embedded verification
+// and recipient linkage; neither takes a domain from the message or caller.
+func (s *SigningService) deliveryStatusEvidenceRequest(request DeliveryStatusRequest) dkim2.DSNSigningEvidenceRequest {
+	if s.policies.reportingIdentity.Valid() {
+		return dkim2.NewPostfixReportingDSNSigningEvidenceRequest(
+			request.RawMessage(), request.OuterReversePath(), request.OuterRecipients(),
+			s.policies.reportingIdentity,
+		)
+	}
+	return dkim2.NewPostfixDerivedDSNSigningEvidenceRequest(
+		request.RawMessage(), request.OuterReversePath(), request.OuterRecipients(),
+	)
+}
+
 // deliveryStatusAssessment seals one applicable delivery-status result while
 // propagating an operation error unchanged.
 func deliveryStatusAssessment(result OperationResult, err error) (SigningAssessment, error) {
@@ -124,7 +138,8 @@ func deliveryStatusAssessment(result OperationResult, err error) (SigningAssessm
 }
 
 // signAuthorizedDeliveryStatus resolves the delivery_status profile for the
-// authenticated embedded d= and signs the exact DSN. It runs only after the
+// evidence signing identity (the reporting MTA domain or the authenticated
+// embedded d=) and signs the exact DSN. It runs only after the
 // library issued opaque evidence, so no profile or key is touched earlier.
 func (s *SigningService) signAuthorizedDeliveryStatus(
 	ctx context.Context,

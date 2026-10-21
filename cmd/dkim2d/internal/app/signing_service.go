@@ -34,6 +34,9 @@ type signingPolicies struct {
 	// admitHeaderFromNullSender admits the explicit header_from originator
 	// declaration for a null reverse path. The zero value refuses it.
 	admitHeaderFromNullSender bool
+	// reportingIdentity signs Postfix-generated DSNs under the reporting
+	// MTA's own domain. The zero value keeps the embedded original's d=.
+	reportingIdentity dkim2.DSNIdentity
 }
 
 // NullSenderRefusedError reports a header_from null-sender sign request that
@@ -66,7 +69,18 @@ func signingPoliciesFromConfig(policy config.SigningPoliciesConfig) signingPolic
 			config.UnsignedOriginalContinue,
 		admitHeaderFromNullSender: policy.OriginatorNullSender() ==
 			config.NullSenderHeaderFrom,
+		reportingIdentity: reportingIdentityFromConfig(policy),
 	}
+}
+
+// reportingIdentityFromConfig returns the configured reporting-MTA DSN
+// identity or the zero value that keeps derived embedded d= signing.
+func reportingIdentityFromConfig(policy config.SigningPoliciesConfig) dkim2.DSNIdentity {
+	identity, ok := policy.DeliveryStatusReportingIdentity()
+	if !ok {
+		return dkim2.DSNIdentity{}
+	}
+	return identity
 }
 
 // selectPolicy validates the optional compatibility constructor argument.

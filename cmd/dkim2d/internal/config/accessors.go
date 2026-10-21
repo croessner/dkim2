@@ -5,6 +5,7 @@ import (
 	"io"
 	"time"
 
+	"github.com/croessner/dkim2"
 	"github.com/croessner/dkim2/cmd/dkim2d/internal/replay/valkey"
 )
 
@@ -370,6 +371,16 @@ func (c SigningPoliciesConfig) DeliveryStatusUnsignedOriginal() UnsignedOriginal
 		return UnsignedOriginalReject
 	}
 	return c.state.unsignedOriginal
+}
+
+// DeliveryStatusReportingIdentity returns the operator-configured
+// reporting-MTA identity that signs Postfix-generated DSNs, and whether one is
+// configured. Without it, DSN signing keeps the embedded original's d=.
+func (c SigningPoliciesConfig) DeliveryStatusReportingIdentity() (dkim2.DSNIdentity, bool) {
+	if c.state == nil || !c.state.reportingIdentity.Valid() {
+		return dkim2.DSNIdentity{}, false
+	}
+	return c.state.reportingIdentity, true
 }
 
 // InteropInfoEnabled reports whether outgoing signing emits unsigned interop diagnostics.

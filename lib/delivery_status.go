@@ -137,6 +137,7 @@ type DSNSigningEvidenceRequest struct {
 	outerForwardPaths        [][]byte
 	identity                 DSNIdentity
 	deriveIdentity           bool
+	reportingIdentity        bool
 	postfixBounceWireProfile bool
 }
 
@@ -165,6 +166,33 @@ func NewPostfixDerivedDSNSigningEvidenceRequest(
 		outerRaw: bytes.Clone(outerRaw), outerReversePath: bytes.Clone(outerReversePath),
 		outerForwardPaths: cloneByteSlices(outerForwardPaths), deriveIdentity: true,
 		postfixBounceWireProfile: true,
+	}
+}
+
+// NewPostfixReportingDSNSigningEvidenceRequest snapshots a Postfix-generated
+// DSN evidence request that signs under the reporting MTA's own identity
+// instead of the embedded original's d=.
+//
+// Draft-07 Sections 12.4 and 16.1 make an MTA-generated DSN a new i=1
+// message whose From must be Authentic for its signing domain. Postfix
+// bounce(8) writes From MAILER-DAEMON@$myhostname, so only the reporting MTA's
+// domain can sign it Authentic. The embedded original still has to verify and
+// link to the outer recipient exactly as on the derived path; only the signer
+// domain is the operator-configured reporting identity, never a value taken
+// from the message or the caller.
+//
+// Security precondition: as for NewPostfixDerivedDSNSigningEvidenceRequest,
+// trusted adapters must select this constructor only after independently
+// proving that Postfix bounce(8) generated the DSN.
+func NewPostfixReportingDSNSigningEvidenceRequest(
+	outerRaw, outerReversePath []byte,
+	outerForwardPaths [][]byte,
+	reporting DSNIdentity,
+) DSNSigningEvidenceRequest {
+	return DSNSigningEvidenceRequest{
+		outerRaw: bytes.Clone(outerRaw), outerReversePath: bytes.Clone(outerReversePath),
+		outerForwardPaths: cloneByteSlices(outerForwardPaths), identity: reporting,
+		reportingIdentity: true, postfixBounceWireProfile: true,
 	}
 }
 
@@ -204,8 +232,9 @@ func (e DSNSigningEvidence) Valid() bool {
 		len(e.forwardPaths) == 1 && e.identity.Valid() && e.evidence.Valid()
 }
 
-// SigningDomain returns the canonical identity derived from authenticated
-// embedded DKIM2 evidence. Invalid evidence returns an empty string.
+// SigningDomain returns the canonical DSN signing identity: the domain derived
+// from authenticated embedded DKIM2 evidence, or the reporting-MTA identity
+// bound by its dedicated request. Invalid evidence returns an empty string.
 func (e DSNSigningEvidence) SigningDomain() string {
 	if !e.Valid() {
 		return ""
@@ -247,8 +276,8 @@ func (r DSNSigningRequest) Format(state fmt.State, _ rune) { _, _ = io.WriteStri
 
 // EvaluateDSNForSigning derives the sole opaque authorization for a null
 // reverse-path DSN after RFC 6522/3464 structure and recipient linkage,
-// embedded DKIM2 verification, and either derived or compatibility-bound
-// identity alignment all pass. A returned original without any
+// embedded DKIM2 verification, and either derived, compatibility-bound, or
+// reporting-MTA identity selection all pass. A returned original without any
 // DKIM2-Signature header field fails with DSNEvidenceStageEmbeddedUnsigned;
 // one that carries such a field always takes the strict verification path.
 func (s *Signer) EvaluateDSNForSigning(ctx context.Context, request DSNSigningEvidenceRequest) (DSNSigningEvidence, error) {
@@ -293,7 +322,7 @@ func (s *Signer) EvaluateDSNForSigning(ctx context.Context, request DSNSigningEv
 				newSigningError(SigningErrorAuthorizationDenied),
 			)
 		}
-	} else if evidence.SigningDomain() != identity.domain {
+	} else if !request.reportingIdentity && evidence.SigningDomain() != identity.domain {
 		return DSNSigningEvidence{}, newDSNEvidenceError(
 			DSNEvidenceStageSigningDomain,
 			newSigningError(SigningErrorAuthorizationDenied),

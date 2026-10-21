@@ -143,6 +143,58 @@ policy resolution. A caller, adapter, outer envelope, tenant default, suffix,
 alias, or wildcard cannot preselect or replace it. At least one RFC 3464
 original/final recipient must link to an authenticated highest `rt=` path.
 
+### Reporting MTA Identity
+
+Draft-07 Sections 12.4 and 16.1 make an MTA-generated DSN a new `i=1`
+message whose From header field must be Authentic for its signing domain.
+Postfix bounce(8) writes `From: MAILER-DAEMON@$myhostname`, so a report
+signed under the embedded original's `d=` is Authentic only when
+`$myhostname` lies at or below that domain. For every other domain the
+library signer refuses the report with `chain_failure`, which the Postfix
+adapter maps to a refused bounce.
+
+`dkim2d` therefore owns the optional operator setting
+`signing.policy.delivery_status.reporting_domain`
+(`DKIM2D_SIGNING_POLICY_DELIVERY_STATUS_REPORTING_DOMAIN`). It accepts exactly
+one canonical lowercase DNS domain with at least two labels and a non-numeric
+top label; any other value, including an explicitly empty one, fails at load
+time, and it is invalid with `signing.backend: disabled`. When it is set, the
+Postfix route evaluates the report with
+`NewPostfixReportingDSNSigningEvidenceRequest`:
+
+- The embedded original is verified, linked to the RFC 3464 recipients, and
+  bound to the outer recipient through its `mf=` exactly as on the derived
+  path. Every evidence failure still happens before datasource access.
+- The evidence signing identity is the configured reporting domain instead of
+  the embedded `d=`, and the daemon resolves the `delivery_status` policy for
+  that tenant/domain pair. The library rejects a profile for any other domain.
+- The reporting domain is operator configuration. It is never taken from the
+  report, the outer envelope, the Milter request, or a tenant default.
+
+With the setting, a bounce of inbound mail is signed as well: a report whose
+returned original carries a remote sender's verified signature no longer
+fails at policy lookup for that foreign `d=`. Section 16.1 makes the
+generating system sign its DSN, and the exposure stays bounded: the outer
+recipient must byte-equal the verified embedded `mf=`, the embedded highest
+signature must pass cryptographic verification, and the DSN signature binds
+that `rt=`. The signed report can therefore only go to the sender address the
+original already proved, and Postfix writes the outer header, text, and status
+parts.
+
+The reporting identity is still subject to Section 12.4. If the configured
+domain is not at or above the domain in the report's From header field, every
+bounce fails closed with `chain_failure`.
+
+The setting does not change `unsigned_original`. When it is absent, the
+derived embedded-`d=` behavior described above applies unchanged.
+
+Draft-07 Section 16.3 item 1 lets a DSN receiver check that the DSN's `i=1`
+signing domain relaxed-matches a recipient of the returned message. A bounce
+that a sending MTA generates for a remote recipient cannot meet that check
+under either identity: neither the embedded `d=` nor the reporting domain is
+the remote recipient's domain. The reporting identity keeps the report a
+Validly Signed Draft-07 message with an Authentic From.
+
 Generic library DSNs retain strict RFC 3464 field ordering and reject folding.
 The Postfix-exclusive daemon route additionally recognizes only the current
 bounce(8) wire profile: its two `X-<mail-name>-*` fields occur before

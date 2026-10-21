@@ -228,6 +228,9 @@ type signingPoliciesState struct {
 	interopInfo      bool
 	unsignedOriginal UnsignedOriginalPolicy
 	nullSender       NullSenderPolicy
+	// reportingIdentity is the optional reporting-MTA DSN signing identity.
+	// The zero value keeps DSN signing under the embedded original's d=.
+	reportingIdentity dkim2.DSNIdentity
 }
 
 type ldapSigningState struct {
@@ -1086,9 +1089,40 @@ func parseSigningPolicies(values map[string]rawValue) (signingPoliciesState, err
 	if err != nil {
 		return signingPoliciesState{}, err
 	}
+	reportingIdentity, err := parseReportingIdentity(values)
+	if err != nil {
+		return signingPoliciesState{}, err
+	}
 	return signingPoliciesState{
 		interopInfo: interopInfo, unsignedOriginal: unsignedOriginal, nullSender: nullSender,
+		reportingIdentity: reportingIdentity,
 	}, nil
+}
+
+// parseReportingIdentity validates the optional reporting-MTA DSN signing
+// domain. An absent key selects no identity; a present key must already be
+// the canonical DNS domain the library would derive, so the configured and
+// effective spellings never differ (validSigningDomain). Anything else,
+// including an explicitly empty value, fails closed.
+func parseReportingIdentity(values map[string]rawValue) (dkim2.DSNIdentity, error) {
+	value, present := values[pathSigningPolicyDeliveryReporting]
+	if !present {
+		return dkim2.DSNIdentity{}, nil
+	}
+	identity, err := dkim2.NewDSNIdentity(value.text)
+	if err != nil || !validSigningDomain(value.text) {
+		return dkim2.DSNIdentity{}, newError(CodeInvalidField)
+	}
+	return identity, nil
+}
+
+// validSigningDomain accepts one canonical lowercase DNS signing domain: the
+// ValidTLSServerName label rules, at least two labels, and a non-numeric top
+// label, so neither a bare host name nor an address literal can sign.
+func validSigningDomain(value string) bool {
+	dot := strings.LastIndexByte(value, '.')
+	return ValidTLSServerName(value) && dot > 0 &&
+		strings.Trim(value[dot+1:], "0123456789") != ""
 }
 
 // parseNullSenderPolicy maps the exact lowercase policy spelling onto the
@@ -1121,7 +1155,7 @@ func parseUnsignedOriginalPolicy(value string) (UnsignedOriginalPolicy, error) {
 // relaxation from a disabled signer.
 func (p signingPoliciesState) anyEnabled() bool {
 	return p.unsignedOriginal != UnsignedOriginalReject ||
-		p.nullSender != NullSenderReject
+		p.nullSender != NullSenderReject || p.reportingIdentity.Valid()
 }
 
 // parseLDAPSigning validates one verified-TLS single-authority LDAP subtree.

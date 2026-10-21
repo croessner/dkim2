@@ -285,7 +285,11 @@ Open follow-ups owned by later packages:
   placed `exploded` on `i=1` were corrected). MTA-generated DSNs are new
   `i=1` messages: their From must relaxed-match the DSN signing domain
   (Postfix bounce From `MAILER-DAEMON@$myhostname` requires `$myhostname`
-  equal to or below that domain) — an operator note for package 8. The
+  equal to or below that domain) — an operator note for package 8.
+  Follow-up (done): `signing.policy.delivery_status.reporting_domain` lets
+  the Postfix DSN route sign under the reporting MTA's own domain after the
+  unchanged embedded verification, so a host that bounces for several domains
+  keeps an Authentic From (see `delivery-status-signing.md`). The
   verifier-projection binding stays `v1` but is draft-bound; its Draft-07 hop
   encoding change is documented in `openapi-daemon-foundation.md`.
 

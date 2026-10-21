@@ -130,8 +130,9 @@ than one outer DSN recipient.
 
 `verified_embedded` is required for `postfix_dsn`; `domain` must be absent. The
 daemon verifies the embedded original first, derives the exact canonical
-highest `d=`, and only then resolves the tenant/domain `delivery_status`
-profile. Neither the outer null sender nor Milter configuration preselects the
+highest `d=` (or uses its operator-configured
+`signing.policy.delivery_status.reporting_domain`), and only then resolves the
+tenant/domain `delivery_status` profile. Neither the outer null sender nor Milter configuration preselects the
 domain. Postfix DSN mode does not accept `envelope_sender` because the bounded
 Postfix contract intentionally carries no original envelope.
 

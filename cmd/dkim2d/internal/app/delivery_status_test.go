@@ -741,6 +741,107 @@ func TestSigningServiceSelectsTwoDerivedDSNDomains(t *testing.T) {
 	}
 }
 
+// TestSigningServiceSignsBounceUnderReportingMTADomain reproduces a Postfix
+// bounce whose From is MAILER-DAEMON at the reporting MTA: under the derived
+// embedded d= the report cannot be Authentic (Draft-07 Section 12.4) and is
+// refused, while the configured reporting identity resolves that domain's
+// delivery_status profile and signs it.
+func TestSigningServiceSignsBounceUnderReportingMTADomain(t *testing.T) {
+	fixture := newSigningServiceFixture(t)
+	service, err := NewSigningService(fixture.publicKeys, fixture.runtime, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	service.clock = func() time.Time { return time.Unix(1_700_000_000, 0) }
+	baseStore := service.store
+	signed := authenticatedDeliveryStatusRequest(t, service)
+	embedded := signed.RawMessage()
+	start := bytes.Index(embedded, []byte("Content-Type: message/rfc822\r\n\r\n"))
+	end := bytes.LastIndex(embedded, []byte("\r\n--dsn--\r\n"))
+	if start < 0 || end <= start {
+		t.Fatal("fixture report has no embedded original")
+	}
+	original := embedded[start+len("Content-Type: message/rfc822\r\n\r\n") : end]
+	reportingHost := "mx." + signingServiceAlternateDomain
+	request := deliveryStatusRequestReportedBy(
+		t, signingServiceOriginDomain, "MAILER-DAEMON@"+reportingHost, reportingHost, original,
+	)
+
+	derived, err := signDeliveryStatusResult(context.Background(), t, service, request)
+	if err != nil || !derived.Valid() || derived.Result() != OperationPermerror ||
+		derived.Disposition() != OperationReject || len(derived.Fields()) != 0 {
+		t.Fatalf("derived identity result=%v error=%v", derived, err)
+	}
+
+	identity, err := dkim2.NewDSNIdentity(signingServiceAlternateDomain)
+	if err != nil {
+		t.Fatal(err)
+	}
+	service.policies.reportingIdentity = identity
+	recorder := &deliveryStatusPolicyRecorder{next: baseStore}
+	service.store = recorder
+	result, err := signDeliveryStatusResult(context.Background(), t, service, request)
+	assertSigningServicePass(t, result, err, signingServiceAlternateDSNSelector)
+	if recorder.acquires != 1 || len(recorder.domains) != 1 ||
+		recorder.domains[0] != signingServiceAlternateDomain ||
+		len(recorder.uses) != 1 || recorder.uses[0] != signingstore.PolicyDeliveryStatus {
+		t.Fatalf("reporting policy route domains=%v uses=%v acquires=%d", recorder.domains, recorder.uses, recorder.acquires)
+	}
+}
+
+// TestSigningServiceReportingIdentityKeepsEvidenceGates proves the reporting
+// identity never reaches the datasource for a report whose embedded evidence
+// fails, and that the unsigned-original policy keeps its own meaning.
+func TestSigningServiceReportingIdentityKeepsEvidenceGates(t *testing.T) {
+	fixture := newSigningServiceFixture(t)
+	identity, err := dkim2.NewDSNIdentity(signingServiceAlternateDomain)
+	if err != nil {
+		t.Fatal(err)
+	}
+	service, err := NewSigningService(fixture.publicKeys, fixture.runtime, false,
+		signingPolicies{reportingIdentity: identity})
+	if err != nil {
+		t.Fatal(err)
+	}
+	service.clock = func() time.Time { return time.Unix(1_700_000_000, 0) }
+	request := authenticatedDeliveryStatusRequest(t, service)
+	tampered, err := NewPostfixDeliveryStatusRequest(
+		bytes.Replace(request.RawMessage(), []byte("original body"), []byte("altered body"), 1),
+		request.OuterReversePath(), request.OuterRecipients(), request.Tenant(),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	spy := &deliveryStatusAcquireSpy{}
+	service.store = spy
+	result, err := signDeliveryStatusResult(context.Background(), t, service, tampered)
+	if err != nil || !result.Valid() || result.Result() != OperationPermerror || spy.calls != 0 {
+		t.Fatalf("tampered report result=%v error=%v acquires=%d", result, err, spy.calls)
+	}
+	assessment, err := service.SignDeliveryStatus(context.Background(), unsignedDeliveryStatusRequest(t))
+	if err != nil || !assessment.Valid() || spy.calls != 0 {
+		t.Fatalf("unsigned original assessment=%t error=%v acquires=%d", assessment.Valid(), err, spy.calls)
+	}
+	if _, applicable := assessment.Result(); !applicable {
+		t.Fatal("reporting identity relaxed the unsigned-original reject default")
+	}
+}
+
+// TestSigningPoliciesFromConfigMapsReportingIdentity proves the stable
+// configuration leaf reaches the application policy and is absent by default.
+func TestSigningPoliciesFromConfigMapsReportingIdentity(t *testing.T) {
+	document := lifecyclePropagationSnapshot(t, false)
+	if signingPoliciesFromConfig(document.Signing().Policies()).reportingIdentity.Valid() {
+		t.Fatal("omitted reporting_domain selected a DSN identity")
+	}
+	t.Setenv("DKIM2D_SIGNING_POLICY_DELIVERY_STATUS_REPORTING_DOMAIN", signingServiceAlternateDomain)
+	document = lifecyclePropagationSnapshot(t, false)
+	want, err := dkim2.NewDSNIdentity(signingServiceAlternateDomain)
+	if err != nil || signingPoliciesFromConfig(document.Signing().Policies()).reportingIdentity != want {
+		t.Fatal("reporting_domain did not reach the application")
+	}
+}
+
 // TestSigningServiceClassifiesDerivedDSNPolicyFailures proves policy lookup
 // happens only after authentication and retains fail-closed resolution classes.
 func TestSigningServiceClassifiesDerivedDSNPolicyFailures(t *testing.T) {
@@ -888,10 +989,18 @@ func unsignedDeliveryStatusRequest(t *testing.T) DeliveryStatusRequest {
 // shared synthetic RFC 6522 report addressed to its original sender.
 func deliveryStatusRequestAround(t *testing.T, domain string, embedded []byte) DeliveryStatusRequest {
 	t.Helper()
-	outer := []byte("From: postmaster@" + domain + "\r\n" +
+	return deliveryStatusRequestReportedBy(t, domain, "postmaster@"+domain, domain, embedded)
+}
+
+// deliveryStatusRequestReportedBy wraps one exact embedded original in the
+// shared synthetic report whose From and Reporting-MTA name the given
+// reporting MTA, addressed to the original sender in domain.
+func deliveryStatusRequestReportedBy(t *testing.T, domain, from, reportingMTA string, embedded []byte) DeliveryStatusRequest {
+	t.Helper()
+	outer := []byte("From: " + from + "\r\n" +
 		"Content-Type: multipart/report; report-type=delivery-status; boundary=dsn\r\n\r\n" +
 		"--dsn\r\nContent-Type: text/plain\r\n\r\nhuman\r\n" +
-		"--dsn\r\nContent-Type: message/delivery-status\r\n\r\nReporting-MTA: dns; " + domain + "\r\n\r\nFinal-Recipient: rfc822; recipient@" + domain + "\r\nAction: failed\r\nStatus: 5.1.1\r\n\r\n" +
+		"--dsn\r\nContent-Type: message/delivery-status\r\n\r\nReporting-MTA: dns; " + reportingMTA + "\r\n\r\nFinal-Recipient: rfc822; recipient@" + domain + "\r\nAction: failed\r\nStatus: 5.1.1\r\n\r\n" +
 		"--dsn\r\nContent-Type: message/rfc822\r\n\r\n" + string(embedded) + "\r\n--dsn--\r\n")
 	request, err := NewPostfixDeliveryStatusRequest(
 		outer,

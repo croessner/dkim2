@@ -361,7 +361,10 @@ configured domain. The bounded Postfix origin enum authorizes only the route;
 the daemon verifies the complete embedded object, derives the canonical
 authenticated highest `d=`, and only then resolves the exact tenant/domain
 `delivery_status` policy. No outer-envelope or caller-selected domain can
-participate in that lookup.
+participate in that lookup. A daemon that sets
+`signing.policy.delivery_status.reporting_domain` resolves that operator-owned
+reporting MTA domain instead, after the same embedded verification; the
+adapter configuration and request are identical in both cases.
 
 Every originator route also retains one separate canonical
 `signing.dsn_domain`. This stable configuration path is a reserved prerequisite

@@ -338,7 +338,9 @@ Milter callback syntax remains fail-closed. The implementation does not infer
 DSN signing authority from message headers, HELO, recipients, suffixes,
 wildcards, tenant defaults, or caller-selected domains. It verifies the
 embedded DKIM2 object first and resolves `delivery_status` policy by the exact
-canonical authenticated highest `d=` value.
+canonical authenticated highest `d=` value, or, when the operator sets
+`signing.policy.delivery_status.reporting_domain`, by that reporting MTA
+domain (see below).
 
 A returned original that carries no `DKIM2-Signature` header field at all is
 outside draft-ietf-dkim-dkim2-spec Section 16, which defines DSN handling only
@@ -491,6 +493,23 @@ dkim2d: configuration key signing.policy.originator.donotmodify was removed in D
 Delete the setting (or unset the environment variable) to migrate; there is no
 replacement. `exploded` is never configuration: signing derives it only from a
 sealed multi-copy route plan.
+
+`signing.policy.delivery_status.reporting_domain` is optional and absent by
+default. Draft-07 Section 12.4 requires an MTA-generated DSN's From to be
+Authentic for its signing domain, and Postfix writes
+`From: MAILER-DAEMON@$myhostname`. Set it to the reporting MTA's own domain
+(the domain at or above `$myhostname`) so that `POST /v1/dsn/sign` signs every
+bounce under that domain's `delivery_status` policy instead of the embedded
+original's `d=`; without it, a bounce for any other domain fails with
+`chain_failure`. With the setting, bounces of inbound mail
+whose verified original carries a foreign `d=` are signed as well; the outer
+recipient must still equal that original's verified `mf=`. A reporting domain
+that is not at or above the bounce From domain fails every bounce closed with
+`chain_failure`. The value must be one canonical lowercase DNS domain with at
+least two labels and a non-numeric top label. Any other value is refused at
+load time, and the key is invalid with `signing.backend: disabled`. The
+embedded evidence is verified exactly as without the setting. The environment
+override is `DKIM2D_SIGNING_POLICY_DELIVERY_STATUS_REPORTING_DOMAIN`.
 
 `signing.policy.delivery_status.unsigned_original` is the explicit
 compatibility policy of `POST /v1/dsn/sign` for a returned original that carries

@@ -70,8 +70,10 @@ const (
 	envSigningInteropInfo                 = "DKIM2D_SIGNING_INTEROP_INFO_ENABLED"
 	pathSigningPolicyOriginatorNullSender = "signing.policy.originator.null_sender"
 	pathSigningPolicyDeliveryUnsigned     = "signing.policy.delivery_status.unsigned_original"
+	pathSigningPolicyDeliveryReporting    = "signing.policy.delivery_status.reporting_domain"
 	envSigningPolicyOriginatorNullSender  = "DKIM2D_SIGNING_POLICY_ORIGINATOR_NULL_SENDER"
 	envSigningPolicyDeliveryUnsigned      = "DKIM2D_SIGNING_POLICY_DELIVERY_STATUS_UNSIGNED_ORIGINAL"
+	envSigningPolicyDeliveryReporting     = "DKIM2D_SIGNING_POLICY_DELIVERY_STATUS_REPORTING_DOMAIN"
 	pathSigningLDAPAddress                = "signing.ldap.address"
 	pathSigningLDAPServerName             = "signing.ldap.server_name"
 	pathSigningLDAPCAFile                 = "signing.ldap.ca_file"
@@ -346,6 +348,7 @@ func stableFieldSpecs() []fieldSpec {
 		{path: pathSigningInteropInfo, env: envSigningInteropInfo, kind: valueBool, defaultVal: canonicalFalse, hasDefault: true},
 		{path: pathSigningPolicyOriginatorNullSender, env: envSigningPolicyOriginatorNullSender, kind: valueString, defaultVal: valueNullSenderReject, hasDefault: true},
 		{path: pathSigningPolicyDeliveryUnsigned, env: envSigningPolicyDeliveryUnsigned, kind: valueString, defaultVal: valueUnsignedOriginalReject, hasDefault: true},
+		{path: pathSigningPolicyDeliveryReporting, env: envSigningPolicyDeliveryReporting, kind: valueString},
 		{path: pathSigningLDAPAddress, env: "DKIM2D_SIGNING_LDAP_ADDRESS", kind: valueString},
 		{path: pathSigningLDAPServerName, env: "DKIM2D_SIGNING_LDAP_SERVER_NAME", kind: valueString},
 		{path: pathSigningLDAPCAFile, env: "DKIM2D_SIGNING_LDAP_CA_FILE", kind: valueString},

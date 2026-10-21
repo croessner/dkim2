@@ -162,6 +162,25 @@ serve multiple domains without trusting the outer envelope or caller-selected
 domain. Missing, ambiguous, unavailable, or mismatched policy/profile data
 fails closed.
 
+Under Draft-07 a bounce is a new `i=1` message whose From must be Authentic
+for its signing domain (Section 12.4). Postfix writes
+`From: MAILER-DAEMON@$myhostname`, so with the derived identity only bounces
+for originals signed at or above `$myhostname`'s domain can be signed; every
+other bounce is refused with `chain_failure`. A host that bounces for several
+domains sets the reporting MTA's own domain on the DSN daemon and gives that
+domain a `delivery_status` policy:
+
+```yaml
+signing:
+  policy:
+    delivery_status:
+      reporting_domain: reports.example.test   # $myhostname is mx.reports.example.test
+```
+
+The daemon still verifies the complete embedded evidence and the outer
+recipient linkage first, then signs every bounce as `d=reports.example.test`. The
+Milter configuration is unchanged.
+
 For a rejected DSN before policy resolution, inspect the single
 `dsn.evidence.completed` log event or the matching
 `dkim2d_dsn_evidence_total{evidence_stage=...,result=...}` counter. The closed
@@ -566,7 +585,8 @@ case, and a rewritten address is indistinguishable from a misrouted one.
 
 The propagation signing domain is the canonical `d=` of the removed, verified
 completion signature. The outgoing delivery-status authority, which derives
-the domain from the embedded highest `d=`, does not apply and is not reachable
+the domain from the embedded highest `d=` or uses the configured
+`reporting_domain`, does not apply and is not reachable
 through the propagation capability. Every domain this deployment forwards mail
 under therefore needs an active `delivery_status` signing profile for the
 tenant, in addition to whatever `originator`, `ordinary_transit`, or
