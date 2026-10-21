@@ -2,7 +2,7 @@ module github.com/croessner/dkim2
 
 go 1.27
 
-toolchain go1.27.2
+toolchain go1.27.3
 
 require (
 	golang.org/x/net v0.61.0

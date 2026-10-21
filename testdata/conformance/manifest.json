@@ -196,19 +196,19 @@
     {
       "id": "postfix-qualification-dockerfile",
       "path": "contrib/qualification/postfix-milter/Dockerfile",
-      "sha256": "2b58e6f5d5cd4898dd3ebb3022d8f2a315def4fd88470db6b812a4e17402ae8b",
+      "sha256": "93e38b0f44e127020a51aea6cb103743e33347aefc67eb7531d11e4ee570f5a3",
       "module": "contrib/qualification/postfix-milter"
     },
     {
       "id": "postfix-qualification-policy-source",
       "path": "tools/postfix_qualification_policy_test.go",
-      "sha256": "51fecfeff2ea5b76c5167cf8850158c4ec9f79aa7f0caec471242b602905c4dd",
+      "sha256": "1d8ff5adf009f7246f41ef6a8f785c64246686f8570f57c4d1589dd2d6e4b955",
       "module": "tools"
     },
     {
       "id": "postfix-qualification-runner",
       "path": "contrib/qualification/postfix-milter/run.sh",
-      "sha256": "d1fa06b6adc9d355624481ecc5e2edd2a214a87fd3e48f44f88a70a3d9513aa8",
+      "sha256": "13d5935c94487359354a6e54cc038f80129c0244b44f05f18f736ebbd7d6d950",
       "module": "contrib/qualification/postfix-milter"
     },
     {
@@ -364,7 +364,7 @@
     {
       "id": "valkey-harness-script",
       "path": "scripts/test-valkey.sh",
-      "sha256": "ac1105a60a9263f6a81546b03897d31302485f6561b53ec946767cb6d2675256",
+      "sha256": "d35a201c1ac2d4938601c502d1e9a1cf1f1b6f7e706442a120cf668226277592",
       "module": "scripts"
     },
     {

@@ -26,7 +26,7 @@ const (
 	currentCutoffPath     = ".artifacts/interop/observation-cutoff.txt"
 	maxProducerBytes      = int64(128 << 20)
 	maxPeerOutputBytes    = 1 << 20
-	peerRunnerImage       = "golang:1.27.2-bookworm@sha256:5cf287a799e6b94384bad13d16b14904c531f51ba65792237e122ce42b392f61"
+	peerRunnerImage       = "golang:1.27.3-bookworm@sha256:21ade014faf952365b9ecbd8dbdb87176fbacb82fac9fb132d9f2a7b8cc3f132"
 )
 
 var currentSourceFiles = map[string][]string{

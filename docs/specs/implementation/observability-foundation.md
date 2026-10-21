@@ -59,7 +59,7 @@ The daemon pins `github.com/prometheus/client_golang v1.25.0` and
 No HTTP auto-instrumentation is used. Workspace sums and vendor output remain
 reproducible; no dependency enters `lib/go.mod`.
 
-The workspace graph selects `golang.org/x/net v0.61.0`. Under Go 1.27.2,
+The workspace graph selects `golang.org/x/net v0.61.0`. Under Go 1.27.3,
 `go work sync` retains the pruned indirect requirements and module sums for
 all workspace members. The workspace guardrail treats every module sum as
 synchronized metadata; no local replacement directive is retained.

@@ -1,8 +1,8 @@
 # DKIM2 Development Guidelines
 
-This repository is a Go 1.27.2 multi-module workspace for a DKIM2 reference
+This repository is a Go 1.27.3 multi-module workspace for a DKIM2 reference
 implementation. Keep `go.work`, every module `go.mod`, generated code,
-documentation, CI, and local guardrails aligned with Go 1.27.2 whenever toolchain
+documentation, CI, and local guardrails aligned with Go 1.27.3 whenever toolchain
 details change.
 
 The implementation baseline is `draft-ietf-dkim-dkim2-spec-07` plus
@@ -34,7 +34,7 @@ before substantial work in its area:
 
 ## Required Workflow
 
-- Always use exact Go 1.27.2 and `GOEXPERIMENT=runtimesecret`. Make targets
+- Always use exact Go 1.27.3 and `GOEXPERIMENT=runtimesecret`. Make targets
   and direct test scripts export the experiment internally; direct Go test
   invocations must prefix it explicitly. Run `make check-go-toolchain-contract`.
 

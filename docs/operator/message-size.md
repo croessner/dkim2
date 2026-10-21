@@ -99,7 +99,7 @@ the retained raw input. The 100 MiB configuration test rejects an insufficient
 HTTP reserves one working-set unit per active request, derived from
 `server.message_bytes`, within an 8 GiB process budget. These are
 ownership-accounting bounds, not allocations at startup and not container
-memory settings. The pinned Go 1.27.2 current-verification inventory peaks at
+memory settings. The pinned Go 1.27.3 current-verification inventory peaks at
 2,750,757,184 bytes at the closed library ceiling, below the 3,403,988,992-byte
 reservation that ceiling derives. The largest phase is generic JSON validation.
 The exact ReadAll capacities at that ceiling are 361,054,208 final plus

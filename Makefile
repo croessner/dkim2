@@ -1,5 +1,5 @@
 export GOEXPERIMENT := runtimesecret
-export GOTOOLCHAIN := go1.27.2
+export GOTOOLCHAIN := go1.27.3
 ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 PRODUCT_MODULES := ./lib ./cmd/dkim2d ./cmd/dkim2-milter ./cmd/dkim2-exim ./cmd/dkim2ctl ./cmd/dkim2-dsn-propagator
 TOOL_MODULES := ./tools
@@ -27,9 +27,9 @@ OPENAPI_CLIENT_WIRE := $(ROOT)/cmd/dkim2ctl/internal/testclient/wire/protected_s
 OPENAPI_MILTER_WIRE := $(ROOT)/cmd/dkim2-milter/internal/daemon/wire/protected_string.gen.go
 OPENAPI_EXIM_WIRE := $(ROOT)/cmd/dkim2-exim/internal/daemon/wire/protected_string.gen.go
 OPENAPI_PROPAGATOR_WIRE := $(ROOT)/cmd/dkim2-dsn-propagator/internal/daemon/wire/protected_string.gen.go
-OPENAPI_GO_TOOLCHAIN := go1.27.2
+OPENAPI_GO_TOOLCHAIN := go1.27.3
 VENDOR_LF_PATHS := github.com/vmware-labs/yaml-jsonpath/LICENSE github.com/vmware-labs/yaml-jsonpath/NOTICE
-# OTLP's x/net graph makes Go 1.27.2 synchronize dkim2ctl's pruned module sums.
+# OTLP's x/net graph makes Go 1.27.3 synchronize dkim2ctl's pruned module sums.
 WORKSPACE_SYNC_FILES := go.work go.work.sum lib/go.mod lib/go.sum cmd/dkim2d/go.mod cmd/dkim2d/go.sum cmd/dkim2-milter/go.mod cmd/dkim2-milter/go.sum cmd/dkim2-exim/go.mod cmd/dkim2-exim/go.sum cmd/dkim2ctl/go.mod cmd/dkim2ctl/go.sum cmd/dkim2-dsn-propagator/go.mod cmd/dkim2-dsn-propagator/go.sum tools/go.mod tools/go.sum
 WORKSPACE_ABSENT_SUM_FILES :=
 EXIM_C_DIR := $(ROOT)/cmd/dkim2-exim/exim

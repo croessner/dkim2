@@ -17,29 +17,29 @@ class ToolchainContractTest(unittest.TestCase):
             with self.subTest(path=path):
                 content = (ROOT / path).read_text()
                 self.assertRegex(content, r'(?m)^go 1\.27(?:\.0)?$')
-                self.assertRegex(content, r'(?m)^toolchain go1\.27\.2$')
+                self.assertRegex(content, r'(?m)^toolchain go1\.27\.3$')
                 self.assertNotRegex(content, r'(?m)^(?:go|toolchain) .*1\.26')
 
     def test_make_and_direct_entry_points_own_experiment(self):
         """Unsetting the caller environment must not remove the compiler experiment."""
         make = (ROOT / 'Makefile').read_text()
         self.assertIn('export GOEXPERIMENT := runtimesecret', make)
-        self.assertIn('export GOTOOLCHAIN := go1.27.2', make)
-        self.assertIn('OPENAPI_GO_TOOLCHAIN := go1.27.2', make)
+        self.assertIn('export GOTOOLCHAIN := go1.27.3', make)
+        self.assertIn('OPENAPI_GO_TOOLCHAIN := go1.27.3', make)
         self.assertRegex(make, r'(?m)^guardrails:.*check-go-toolchain-contract')
         for path in SCRIPTS:
             with self.subTest(path=path):
                 self.assertRegex((ROOT / path).read_text(), r'(?m)^export GOEXPERIMENT=runtimesecret$')
-                self.assertRegex((ROOT / path).read_text(), r'(?m)^export GOTOOLCHAIN=go1\.27\.2$')
+                self.assertRegex((ROOT / path).read_text(), r'(?m)^export GOTOOLCHAIN=go1\.27\.3$')
 
     def test_ci_and_image_provenance_share_exact_compiler(self):
         """CI and authenticated image inputs cannot keep a second first-party lane."""
-        self.assertEqual(json.loads((ROOT / 'build/ci/toolchain.json').read_text())['go']['version'], '1.27.2')
+        self.assertEqual(json.loads((ROOT / 'build/ci/toolchain.json').read_text())['go']['version'], '1.27.3')
         for path in (ROOT / '.github/workflows').glob('*.yml'):
             for version in re.findall(r'go-version:\s*[\'"]([^\'"]+)', path.read_text()):
-                self.assertEqual(version, '1.27.2', path.name)
+                self.assertEqual(version, '1.27.3', path.name)
         docker = (ROOT / 'build/container/Dockerfile').read_text()
-        self.assertRegex(docker, r'golang:1\.27\.2-bookworm@sha256:[0-9a-f]{64}')
+        self.assertRegex(docker, r'golang:1\.27\.3-bookworm@sha256:[0-9a-f]{64}')
         self.assertNotIn('golang:1.26', docker)
 
     def test_qualification_images_share_compiler_and_experiment(self):
@@ -48,10 +48,10 @@ class ToolchainContractTest(unittest.TestCase):
                      'cmd/dkim2-exim/exim/tests/container/Dockerfile'):
             with self.subTest(path=name):
                 content = (ROOT / name).read_text()
-                self.assertRegex(content, r'golang:1\.27\.2-trixie@sha256:[0-9a-f]{64}')
+                self.assertRegex(content, r'golang:1\.27\.3-trixie@sha256:[0-9a-f]{64}')
                 self.assertIn('ENV GOEXPERIMENT=runtimesecret', content)
-                self.assertIn('ENV GOTOOLCHAIN=go1.27.2', content)
-        image = re.search(r'golang:1\.27\.2-trixie@sha256:[0-9a-f]{64}',
+                self.assertIn('ENV GOTOOLCHAIN=go1.27.3', content)
+        image = re.search(r'golang:1\.27\.3-trixie@sha256:[0-9a-f]{64}',
                           (ROOT / 'contrib/qualification/postfix-milter/Dockerfile').read_text()).group()
         for name in ('contrib/qualification/postfix-milter/run.sh',
                      'cmd/dkim2-exim/exim/tests/container/Dockerfile',
@@ -61,7 +61,7 @@ class ToolchainContractTest(unittest.TestCase):
             with self.subTest(path=name):
                 self.assertIn(image, (ROOT / name).read_text())
         builder = (ROOT / 'cmd/dkim2-exim/exim/tests/build-real-matrix-inputs-container.sh').read_text()
-        for setting in ('GOEXPERIMENT=runtimesecret', 'GOTOOLCHAIN=go1.27.2'):
+        for setting in ('GOEXPERIMENT=runtimesecret', 'GOTOOLCHAIN=go1.27.3'):
             self.assertIn('export ' + setting, builder)
             self.assertIn('--env ' + setting, builder)
 

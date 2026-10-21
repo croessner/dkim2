@@ -104,7 +104,7 @@ func validatePostfixReportBinding(
 	}
 	if len(report.ImageIdentities) != 3 ||
 		report.ImageIdentities["debian"] != "debian@sha256:4e401d95de7083948053197a9c3913343cd06b706bf15eb6a0c3ccd26f436a0e" ||
-		report.ImageIdentities["golang"] != "golang:1.27.2-trixie@sha256:47667934874913a449b96faa7ef4777fa285d9ec29126ee80ed61c45b7cccf0e" ||
+		report.ImageIdentities["golang"] != "golang:1.27.3-trixie@sha256:604106102d33b1084e37ca08adf98ac0813624ae8595bd0d7f3965ecebded09c" ||
 		report.ImageIdentities["postfix"] != "chrroessner/postfix@sha256:736180b4fa352bb55bdca9e93e9201c7df7a419dad6622ed601d9dde028ae254" {
 		return errors.New("runner_identity")
 	}

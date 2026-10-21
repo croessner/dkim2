@@ -38,8 +38,8 @@ done
 if grep -Eq '^check-openapi:.*check-workspace' Makefile; then
   fail 'normal generated-source checks must not depend on private module-proof reconstruction'
 fi
-grep -Fq 'OPENAPI_GO_TOOLCHAIN := go1.27.2' Makefile ||
-  fail 'OpenAPI generation must use the reproducible Go 1.27.2 toolchain'
+grep -Fq 'OPENAPI_GO_TOOLCHAIN := go1.27.3' Makefile ||
+  fail 'OpenAPI generation must use the reproducible Go 1.27.3 toolchain'
 grep -A5 '^check-vendor:' Makefile | grep -q -- '-mod=vendor' ||
   fail 'vendor validation must use Go vendor resolution directly'
 if grep -Eq '(^|[[:space:]])rg([[:space:]]|$$)' Makefile; then

@@ -10,24 +10,24 @@ import (
 )
 
 const (
-	// Go 1.27.2 io.ReadAll in src/io/io.go retains a 497,039,680-byte sum of
+	// Go 1.27.3 io.ReadAll in src/io/io.go retains a 497,039,680-byte sum of
 	// intermediate chunk capacities at this exact input maximum while it
 	// allocates the final exact-size result.
 	maximumProcessBodyCapacityBytes = uint64((maxProcessBodyBytes + 8191) / 8192 * 8192)
 	maximumReadAllIntermediateBytes = uint64(497_039_680)
 
-	// The Go 1.27.2 decoder measurement retains a 512 MiB buffer and replaces
+	// The Go 1.27.3 decoder measurement retains a 512 MiB buffer and replaces
 	// a 256 MiB buffer at the final growth. Both allocations are live during
 	// replacement; the runtime probe locks these effective capacities.
 	maximumJSONDecoderRetainedBytes = uint64(512 << 20)
 	maximumJSONDecoderCapacityBytes = uint64(256<<20 + 512<<20)
 
-	// Large Base64 byte/string storage rounds to the Go 1.27.2 8 KiB runtime
+	// Large Base64 byte/string storage rounds to the Go 1.27.3 8 KiB runtime
 	// allocation page even though its logical maximum remains 178,956,972.
 	maximumEncodedMessageCapacityBytes = uint64((maxEncodedMessageBytes + 8191) / 8192 * 8192)
 	maximumRawMessageCapacityBytes     = uint64(dkim2.HardMaxRawMessageBytes)
 
-	// Go 1.27.2 encoding/base64.DecodeString allocates DecodedLen before it
+	// Go 1.27.3 encoding/base64.DecodeString allocates DecodedLen before it
 	// subtracts canonical padding, so the maximum result has one spare byte.
 	maximumBase64DecodedCapacityBytes = maximumRawMessageCapacityBytes + 1
 
@@ -43,7 +43,7 @@ const (
 	// RFC 8259 string decoding never expands beyond the source text, while the
 	// lexical 8,192-token ceiling bounds maps, slices, interfaces, numbers, and
 	// transient container growth. A second complete body capacity provides more
-	// than 5.8 KiB of Go 1.27.2 structure per accepted token, independently of the
+	// than 5.8 KiB of Go 1.27.3 structure per accepted token, independently of the
 	// generated DTO layout and in addition to every retained decoded string.
 	maximumValidationGenericStringBytes    = maximumProcessBodyCapacityBytes
 	maximumValidationGenericStructureBytes = maximumProcessBodyCapacityBytes
@@ -546,7 +546,7 @@ func (l *workingSetLedger) ReleaseAll() {
 	l.live = 0
 }
 
-// BeginBodyRead reserves the maximum Go 1.27.2 ReadAll overlap before reading.
+// BeginBodyRead reserves the maximum Go 1.27.3 ReadAll overlap before reading.
 func (l *workingSetLedger) BeginBodyRead() error {
 	if err := l.Claim(workingSetBodyReadChunks, l.sizing.readAllIntermediate); err != nil {
 		return err
@@ -713,7 +713,7 @@ func (l *workingSetLedger) failLocked(code workingSetErrorCode) error {
 // live during the swap, so its overlap is exactly one and a half times the
 // power of two that covers the body. Measurement reproduces that ratio at
 // every size, not merely at the ceiling. Two conditions carry that equality:
-// the Go 1.27.2 default jsonv2 decoder doubles from 64 bytes, and the boundary
+// the Go 1.27.3 default jsonv2 decoder doubles from 64 bytes, and the boundary
 // hands the generated decoder a bytes.Reader that fills every requested slice,
 // so a short read can never force one extra doubling. TestPinnedWorkingSetCapacityBounds
 // keeps the ceiling equality pinned, which is what detects a decoder change.
@@ -733,14 +733,14 @@ const (
 	// workingSetUnitHeadroomBytes is the fixed allowance added to the proven
 	// phase high-water mark before it becomes the per-request reservation.
 	workingSetUnitHeadroomBytes = uint64(64 << 20)
-	// workingSetPageBytes is the Go 1.27.2 large-allocation rounding page.
+	// workingSetPageBytes is the Go 1.27.3 large-allocation rounding page.
 	workingSetPageBytes = uint64(8192)
 	// workingSetBodyLineCeiling mirrors the parser's closed BodyLine ceiling.
 	// Production accounting keeps the literal, and
 	// TestWorkingSetBodyLineLiteralsMatchTheParser compares all three literals
 	// against rawmsg and the concrete Go object size.
 	workingSetBodyLineCeiling = uint64(2_097_152)
-	// workingSetBodyLineBytes is one Go 1.27.2 BodyLine value.
+	// workingSetBodyLineBytes is one Go 1.27.3 BodyLine value.
 	workingSetBodyLineBytes = uint64(40)
 	// workingSetBodyLineGenerations counts the parser, validated and canonical
 	// indexes that current verification retains at the same time.

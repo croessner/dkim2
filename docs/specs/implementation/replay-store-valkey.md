@@ -353,7 +353,7 @@ parent/internal import cycle or duplicated replay taxonomy is permitted.
 It must not appear in `lib/go.mod`.
 
 The dependency review is fixed to `v1.0.79`: Apache-2.0 license, module
-`go 1.25.0`, compatible with the repository's Go 1.27.2 toolchain, and
+`go 1.25.0`, compatible with the repository's Go 1.27.3 toolchain, and
 `golang.org/x/sys v0.43.0` in its module graph. M12 records the direct
 dependency rationale, runs license and vulnerability checks against the
 vendored graph, and rejects a version or checksum drift without a new review.

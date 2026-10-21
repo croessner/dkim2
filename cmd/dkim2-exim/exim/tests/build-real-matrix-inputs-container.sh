@@ -2,14 +2,14 @@
 # Builds five source-matched Exim binaries in a disposable pinned Linux container.
 set -euo pipefail
 export GOEXPERIMENT=runtimesecret
-export GOTOOLCHAIN=go1.27.2
+export GOTOOLCHAIN=go1.27.3
 umask 077
 
 script_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)
 repository_root=$(CDPATH='' cd -- "$script_dir/../../../.." && pwd -P)
 source_root=${DKIM2_EXIM_QUALIFICATION_SOURCE_ROOT:-}
 input_root=${DKIM2_EXIM_REAL_MATRIX_INPUT_ROOT:-}
-base_image=golang:1.27.2-trixie@sha256:47667934874913a449b96faa7ef4777fa285d9ec29126ee80ed61c45b7cccf0e
+base_image=golang:1.27.3-trixie@sha256:604106102d33b1084e37ca08adf98ac0813624ae8595bd0d7f3965ecebded09c
 
 # fail emits one bounded build-input failure.
 fail() {
@@ -30,7 +30,7 @@ mkdir -m 0700 "$input_root"
 
 docker run --rm --platform linux/amd64 \
   --env GOEXPERIMENT=runtimesecret \
-  --env GOTOOLCHAIN=go1.27.2 \
+  --env GOTOOLCHAIN=go1.27.3 \
   --env "DKIM2_BUILD_BASE_REVISION=$base_revision" \
   --env "DKIM2_BUILD_CANDIDATE_SNAPSHOT_SHA256=$candidate_snapshot_sha256" \
   --volume "$repository_root:/workspace:ro" \
@@ -117,7 +117,7 @@ docker run --rm --platform linux/amd64 \
       binary_sha=$(sha256sum "/output/$row/exim" | awk "{print \$1}")
       printf "%s\\n" \
         format=dkim2-exim-container-build-input-v1 \
-        image=golang:1.27.2-trixie@sha256:47667934874913a449b96faa7ef4777fa285d9ec29126ee80ed61c45b7cccf0e \
+        image=golang:1.27.3-trixie@sha256:604106102d33b1084e37ca08adf98ac0813624ae8595bd0d7f3965ecebded09c \
         platform=linux-amd64 \
         mta_uid=999 \
         base_revision="$DKIM2_BUILD_BASE_REVISION" \

@@ -2,7 +2,7 @@ module github.com/croessner/dkim2/cmd/dkim2-exim
 
 go 1.27
 
-toolchain go1.27.2
+toolchain go1.27.3
 
 require (
 	github.com/croessner/dkim2 v0.1.0-rc.1

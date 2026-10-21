@@ -89,8 +89,8 @@ jq -e '
       {
         name:"go-builder",
         uri:"docker-image://docker.io/library/golang",
-        reference:"golang:1.27.2-bookworm",
-        digest:"5cf287a799e6b94384bad13d16b14904c531f51ba65792237e122ce42b392f61",
+        reference:"golang:1.27.3-bookworm",
+        digest:"21ade014faf952365b9ecbd8dbdb87176fbacb82fac9fb132d9f2a7b8cc3f132",
         purpose:"build-only Go compilation"
       },
       {

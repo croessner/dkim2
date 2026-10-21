@@ -1,6 +1,6 @@
 #!/bin/sh
 export GOEXPERIMENT=runtimesecret
-export GOTOOLCHAIN=go1.27.2
+export GOTOOLCHAIN=go1.27.3
 set -eu
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)

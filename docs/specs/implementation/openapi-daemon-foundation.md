@@ -58,7 +58,7 @@ This specification is governed by:
   message reuse;
 - the official `oapi-codegen` v2.8.0 documentation, including its OpenAPI 3.0
   support boundary, strict-server composition, and runtime validation limits;
-- the Go 1.27.2 `net/http`, `encoding/json`, `net`, `context`, and `crypto/tls`
+- the Go 1.27.3 `net/http`, `encoding/json`, `net`, `context`, and `crypto/tls`
   contracts;
 - `Makefile`.
 
@@ -664,7 +664,7 @@ tests.
 
 ## Generation And Validation Toolchain
 
-A dedicated Go 1.27.2 module at `tools/` is added to `go.work` and pins both a
+A dedicated Go 1.27.3 module at `tools/` is added to `go.work` and pins both a
 tool directive for
 `github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen` and the exact module
 `github.com/oapi-codegen/oapi-codegen/v2 v2.8.0`. Both the tools module and
@@ -781,11 +781,11 @@ HTTP/1.0 response version selected by Go. A request with major version 1 and
 minor version 1 or greater is processed under the server's highest supported
 HTTP/1.1 semantics and receives an HTTP/1.1 response. RFC 9110 recommends that
 handling for a higher minor version; M13 makes it a required local contract.
-Unsupported major versions remain Go-owned 505 except for Go 1.27.2's special
+Unsupported major versions remain Go-owned 505 except for Go 1.27.3's special
 acceptance of the exact cleartext `PRI * HTTP/2.0` request-line tuple. Go first
 performs its normal request-line, transfer-framing, field, and Host parsing.
 For this Go-specific exception, an "empty-header" tuple or a tuple "carrying
-headers" is classified from the parsed header map that Go 1.27.2 presents to its
+headers" is classified from the parsed header map that Go 1.27.3 presents to its
 `isH2Upgrade` check after `readTransfer`, not from raw wire field occurrence.
 `readTransfer` removes one Go-compatible `Transfer-Encoding: chunked` field
 and removes any syntactically valid Content-Length field that chunked
@@ -912,10 +912,10 @@ supported HTTP/1, must select 400 rather than being interpreted after Go's
 permissive unfolding. Unsupported-major requests retain their separately
 frozen Go 501/505 precedence.
 No second complete HTTP parser is introduced: the classifier owns only the
-framing facts that Go 1.27.2 either discards or maps too coarsely for the required
+framing facts that Go 1.27.3 either discards or maps too coarsely for the required
 RFC 9112 outcomes.
 
-Go 1.27.2 does not accept every semantically valid list-empty spelling. If
+Go 1.27.3 does not accept every semantically valid list-empty spelling. If
 `single_chunked` is already one Go-compatible field value, the layer replays it
 unchanged. Otherwise it rewrites only those captured field lines without
 changing their aggregate or individual lengths. The occurrence containing the
@@ -934,7 +934,7 @@ changes no request-line, non-framing field, body, or chunk bytes and publishes
 the immutable `single_chunked` fact before Go can write a response.
 
 Multiple/malformed Host and ordinary missing Host remain Go-owned pre-handler
-400. Go 1.27.2 exempts CONNECT from its missing-Host check and removes the Host
+400. Go 1.27.3 exempts CONNECT from its missing-Host check and removes the Host
 field before the handler; the captured Host metadata therefore supplies that
 otherwise-lost RFC check and the equivalent local mandatory-presence check for
 HTTP/1.0 absolute-form, whose URI authority otherwise masks an absent field
@@ -957,7 +957,7 @@ path, authorization, readiness, body, or domain work.
 
 Go applies transfer parsing to textual requests with major version 2 or
 higher before rejecting the unsupported version. M13 preserves that concrete
-Go boundary: "admitted" in the unsupported-major branch means that Go 1.27.2's
+Go boundary: "admitted" in the unsupported-major branch means that Go 1.27.3's
 transfer parser returned no error, not that the private supported-HTTP/1
 semantic class is `single_chunked`. A transfer-coding form rejected by Go
 remains Go-owned 501 and is never rewritten to 400. A Go-compatible exact
@@ -1125,7 +1125,7 @@ The exact server defaults and allowed ranges are:
 | accepted connections | 128 | fixed |
 | shutdown drain | 30 s | 1 s through 120 s |
 
-Go 1.27.2's HTTP parser adds a fixed 4,096-byte initial-buffer allowance to
+Go 1.27.3's HTTP parser adds a fixed 4,096-byte initial-buffer allowance to
 `MaxHeaderBytes`. M13 therefore documents and tests the effective 69,632-byte
 request-head read budget instead of claiming an unenforceable 65,536-byte
 wire cutoff. Oversize-head tests use a raw connection and prove rejection
@@ -1143,7 +1143,7 @@ not operator-widenable, and uses no global state.
 
 The handler deadline begins on entry to the exact outer path gate, before
 readiness, admission, or body reads. `http.Server.ReadTimeout` is the
-configured `server.read_timeout`. Go 1.27.2 anchors its whole-request read
+configured `server.read_timeout`. Go 1.27.3 anchors its whole-request read
 deadline to a fresh per-request read start, not to TCP accept time. M13 closes
 after one request, but retains Go's per-request anchor rather than inventing an
 accept-time deadline.
@@ -1209,7 +1209,7 @@ is the `bad_framing` case above. Other request fields retain Go's RFC-permitted
 unfold-to-SP behavior. This explicit split prevents Go's permissive MIME
 unfolding from changing the private classifiers' security decisions.
 
-Go 1.27.2 consults only its first parsed `Expect` field and would therefore reject
+Go 1.27.3 consults only its first parsed `Expect` field and would therefore reject
 some legal empty/repeated list forms or auto-handle only part of a mixed list.
 The first-head layer narrowly replaces the case-insensitive six-byte field name
 of every captured `Expect` occurrence with the valid inert six-byte name
@@ -1397,7 +1397,7 @@ connection-cap token through the same wrapper. This applies to path, method,
 media, readiness, admission, limit, timeout, and malformed-body decisions as
 applicable.
 
-Go 1.27.2 still unconditionally closes the original request body after the
+Go 1.27.3 still unconditionally closes the original request body after the
 handler returns. Its server-side early-close path may discard bytes already
 present in the fixed connection read buffer and is internally capped at
 262,144 bytes, but the expired read deadline prevents waiting for or reading
@@ -1463,7 +1463,7 @@ Application-controlled process responses use this ordered precedence:
    decision regardless of the private supported-HTTP/1 framing class;
 5. supported HTTP/1 semantics plus Go/local mandatory Host presence and syntax,
    otherwise Go-owned or captured-metadata 400/505; after Go's checks but
-   before local Host validation, the exact Go 1.27.2 HTTP/2-preface exception is
+   before local Host validation, the exact Go 1.27.3 HTTP/2-preface exception is
    intercepted as the explicit pre-handler header-only 505;
 6. complete request-target at most 8,192 octets, otherwise header-only 414;
 7. for HTTP/1.0 only, any captured Transfer-Encoding, otherwise 400 and close;
@@ -2682,7 +2682,7 @@ store state.
 - Exact route, encoded/doubled/dot/trailing path, unknown path, method, Allow,
   query, Content-Type, Content-Encoding, GET body, HEAD, OPTIONS, and
   `OPTIONS *` cases exercise the ordered mapper. HTTP/1.0, HTTP/1.1,
-  higher HTTP/1 minor versions processed as 1.1, the exact Go 1.27.2 HTTP/2
+  higher HTTP/1 minor versions processed as 1.1, the exact Go 1.27.3 HTTP/2
   preface tuple returning the frozen header-only 505 after Go parsing but
   before local Host validation, including a raw vector with the trailing `SM`
   preface octets, tuple variants with exact, missing, malformed, and duplicate
