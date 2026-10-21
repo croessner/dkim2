@@ -97,7 +97,7 @@ func (d *Deriver) derive(ctx context.Context, identity Identity, frameLabel stri
 		<-d.state.continueHMAC
 	}
 
-	frame := replayHMACFrame(identity, frameLabel)
+	frame := replayHMACFrame(identity, frameLabel, DraftIdentifier)
 	mac := hmac.New(sha256.New, d.state.secret[:])
 	if _, err := mac.Write(frame); err != nil {
 		return Key{}, NewError(ErrorCodeInternalInvariant)
@@ -193,14 +193,16 @@ func UseStorageKey(key Key, use func(string) error) (resultErr error) {
 }
 
 // replayHMACFrame builds the exact versioned length-delimited identity input
-// under the selected domain-separation frame label.
-func replayHMACFrame(identity Identity, frameLabel string) []byte {
+// under the selected domain-separation frame label. The draft identifier is a
+// length-delimited frame field, so keys derived under different drafts never
+// share an HMAC input even with the same secret, epoch, and origin digest.
+func replayHMACFrame(identity Identity, frameLabel string, draft string) []byte {
 	state := identity.state
 	frame := make([]byte, 0, 96)
 	frame = append(frame, frameLabel...)
 	frame = append(frame, 0, 2)
 	frame = append(frame, 1)
-	frame = appendUint32Bytes(frame, []byte(DraftIdentifier))
+	frame = appendUint32Bytes(frame, []byte(draft))
 	frame = append(frame, 2)
 	frame = appendUint32Bytes(frame, state.originDigest[:])
 	return frame

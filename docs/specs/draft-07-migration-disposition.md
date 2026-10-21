@@ -111,8 +111,8 @@ instead of reconstructed bytes. A replay of one original always carries the
 same declarations; the body-only description in §15.1 would additionally merge
 distinct originals that share a body. Only messages with more than one
 DKIM2-Signature are eligible. A detected replay is a delivery-policy result,
-not a verification failure. The draft identifier change rotates the replay
-epoch and secret through the existing drain procedure.
+not a verification failure. The draft identifier is bound into the replay
+HMAC frame, so the upgrade keeps the epoch and secret and runs in place.
 
 **D3 From.** The From hashed at `m=1` aligns with `i=1`; each later changed From
 aligns with the lowest `i` whose `m` covers the change. A pre-entry From
@@ -355,9 +355,10 @@ Open follow-ups owned by later packages:
     identity regardless of eligibility.
   - Exploded: an authenticated flag on any chain signature remains a policy
     input.
-  - Operators: the frame change and draft identifier rotate the replay
-    identity space through the existing drain-only epoch procedure. The
-    68-byte key grammar, namespace, ACLs, and store commands are unchanged.
+  - Operators: the frame change and draft identifier separate the Draft-07
+    replay identity space from Draft-06 under the same epoch and secret, so
+    the upgrade runs in place without a drain. The 68-byte key grammar,
+    namespace, ACLs, and store commands are unchanged.
 - Delivery instant: the daemon has no stored-message verification route; it
   verifies live mail through `/v1/process`, where the daemon clock is the
   delivery instant Section 14.3 requires. Library callers re-verifying stored

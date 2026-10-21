@@ -796,7 +796,9 @@ provider can publish ready:
 - persistence and replication are explicitly configured and documented for
   the accepted replay-loss window; asynchronous failover is never advertised
   as globally exactly-once; and
-- secret rotation declares the complete drain-only contract defined above.
+- secret or epoch rotation declares the complete drain-only contract defined
+  above; a draft upgrade keeps the epoch and secret set and relies on the
+  draft-bound HMAC frame for key separation.
 
 `ClientConfig` is a redacted value whose validator proves locally:
 

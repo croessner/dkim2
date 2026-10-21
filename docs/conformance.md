@@ -147,9 +147,10 @@ The Draft-07 unsigned-header set changes canonical bytes in both directions:
 the eight added exact names and `Received-*` are excluded, while only the three
 named ARC fields are excluded and an unknown `ARC-*` field is signed. The
 manifest contains one executable incompatibility case in each direction.
-Replay identity is a separate drain-only epoch rotation; see
-[`replay-store-valkey.md`](replay-store-valkey.md) for the no-mixed-version
-procedure and retention-bounded detection gap.
+Replay identity is draft-bound inside the replay HMAC frame, so a draft
+upgrade runs in place with the same epoch and secret; see
+[`replay-store-valkey.md`](replay-store-valkey.md) for the key separation
+evidence and the retention-bounded loss of replay continuity.
 
 The separate repository security profile consumes these reports without
 reclassifying their claims. See `docs/security-testing.md` and run

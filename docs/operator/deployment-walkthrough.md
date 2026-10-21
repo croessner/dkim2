@@ -756,8 +756,9 @@ qualification claim for any MTA other than Postfix.
   rotated away, cannot reach an EAI previous hop, is at-least-once, is
   one-to-one with the notifications a destination sends, and costs one extra
   pass for an own imaginary hop below an own `nd=` chain.
-- Replay identity is a drain-only epoch: Draft-06 and Draft-07 traffic never
-  overlap, and the detection gap is bounded by the retention period.
+- Replay identity is draft-bound: an in-place draft upgrade keeps the epoch
+  and secret, and a message first seen under the previous draft can be
+  accepted once more after the upgrade, bounded by the retention period.
 
 The complete list, with stable identifiers, is
 [`docs/reference/known-limitations.md`](../reference/known-limitations.md).

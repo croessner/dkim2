@@ -763,22 +763,21 @@ wire enum changes to `draft-ietf-dkim-dkim2-spec-07`, and verification may now
 return `duplicate_hash_algorithm`, `invalid_recipe_json`,
 `duplicate_selector`, or `too_many_signatures` as permanent non-4xx results.
 
-Replay migration is drain-only. Stop SMTP admission, drain every Draft-06
-instance and its in-flight replay work, retain the old deployment offline for
-the complete configured retention period, and only then admit traffic to the
-Draft-07 deployment. Never operate mixed Draft-06/Draft-07 instances, a
-rolling upgrade, fallback, or dual replay epochs. Old replay records are
-intentionally unreachable after the Draft-07 epoch activates, so the possible
-detection gap is bounded by that retention period. Follow the exact procedure
-in [`../replay-store-valkey.md`](../replay-store-valkey.md); the Valkey
-namespace, key width, ACL, and topology do not otherwise change.
+The replay store upgrades in place. Keep the replay epoch, HMAC secret, and
+`rotation_state: unchanged`; no drain or retention wait is needed. The draft
+identifier is bound into the replay HMAC frame, so Draft-07 never reads or
+overwrites Draft-06 records, which expire by TTL. A message first seen under
+Draft-06 that still verifies under Draft-07 can be accepted once more after
+the upgrade, bounded by the configured retention period. See
+[`../replay-store-valkey.md`](../replay-store-valkey.md); the Valkey
+namespace, key width, ACL, and topology do not change.
 
 The message baseline change does not migrate the DNS identifier. Keep
 `draft-ietf-dkim-dkim2-dns-01` and its versioned vectors until the deferred
 working-group DNS rename receives a separate reviewed update.
-Rollback must restore the complete prior Draft-04 application set only after
-the Draft-07 replay epoch has likewise drained; an online cross-version
-rollback is unsupported.
+Rollback restores the complete prior application set as one digest-pinned
+set. The replay store needs no drain for it because the epoch and secret are
+unchanged; the same bounded loss of replay continuity applies in reverse.
 
 Stop SMTP admission first. Let Postfix finish active sessions, retain its named
 queue volume, and stop Postfix before replacing socket owners. For an upgrade

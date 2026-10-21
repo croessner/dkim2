@@ -136,9 +136,11 @@ certification, or universal interoperability claim.
   [native-domain runbook](../operator/native-domain-onboarding.md).
 - Product images are Linux `amd64` and `arm64`; release preparation does not
   publish them or create `latest`, stable, minor, or major aliases.
-- The Draft-07 replay identifier is a drain-only epoch rotation. Draft-06 and
-  Draft-07 replay traffic cannot overlap; old records become unreachable and
-  the resulting detection gap is bounded by the configured retention period.
+- The Draft-07 replay identifier is draft-bound inside the replay HMAC frame.
+  An in-place upgrade keeps the epoch and secret, but Draft-06 records are not
+  consulted: a message first seen under Draft-06 that still verifies under
+  Draft-07 can be accepted once more, bounded by the configured retention
+  period.
 
 Stable IDs and resolution criteria for draft and interpretation limits are in
 [the issue log](draft-issues.md).

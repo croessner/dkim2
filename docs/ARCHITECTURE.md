@@ -1945,12 +1945,14 @@ deployment HMAC frame is `dkim2-replay-v2` and reports algorithm
 `dkim2-replay-hmac-sha256-v2`. DSN propagation coordinates use the same
 projection regardless of replay eligibility.
 
-The Draft-07 identifier rotates the replay HMAC epoch. Operators must use the
-documented drain-only transition: Draft-05 and Draft-06 instances never process
-replay traffic concurrently, old records become unreachable, and the resulting
-detection gap is bounded by configured retention. The 68-byte storage key,
-`dkim2:replay:v1:*` ACL namespace, storage privileges, and provider ownership
-do not change.
+The draft identifier is a length-delimited field of the replay HMAC frame, so
+keys of different drafts never collide under one epoch and secret. A draft
+upgrade therefore runs in place with the same epoch and secret: previous-draft
+records are not consulted and expire by TTL, and the resulting loss of replay
+continuity is bounded by configured retention. Drain-only transitions are
+reserved for secret or epoch rotation that must keep replay continuity. The
+68-byte storage key, `dkim2:replay:v1:*` ACL namespace, storage privileges, and
+provider ownership do not change.
 
 Sender identities, `Message-ID`, selectors, signer nonces, raw recipients, and
 other creator-private facts are not replay-key inputs.

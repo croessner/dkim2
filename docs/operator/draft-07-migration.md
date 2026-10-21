@@ -28,22 +28,25 @@ A mixed-draft deployment is unsupported and fails closed.
 
 The replay identity changed in two ways:
 
-- The draft identifier is bound into the identity, which rotates the replay
-  HMAC epoch.
+- The draft identifier is bound into the replay HMAC frame, so Draft-07 keys
+  never equal Draft-06 keys, even under the same epoch and secret.
 - The identity is now derived from the authenticated `m=1` hash declarations,
   framed as `dkim2-replay-origin-declaration-v1`.
 
-Records written by Draft-06 instances are therefore unreachable. Follow the
-existing drain-only procedure in `docs/replay-store-valkey.md`:
+Upgrade in place. Keep the existing replay epoch, HMAC secret, and
+`replay.valkey.attestation.rotation_state: unchanged`, and restart every daemon
+instance that shares the store on the Draft-07 release. No drain or retention
+wait is needed, and Draft-06 records expire by their own TTL.
 
-1. Stop replay traffic.
-2. Keep the drained Draft-06 deployment quiescent for the complete retention
-   window.
-3. Restart every instance with the new epoch and secret set.
-4. Resume traffic.
-
-Starting Draft-07 earlier leaves a bounded replay-detection gap for old
-records. It is not a supported rolling upgrade.
+What is lost is replay continuity with Draft-06 records. A message first seen
+before the upgrade and replayed afterwards can be accepted as `first_seen` once
+more, and only if it still verifies under Draft-07; its next copy is detected
+again. A delivery-status notification propagated before the upgrade may be
+propagated once more, within the at-least-once propagation contract. The exposure
+ends when the Draft-06 records would have expired. See
+[`../replay-store-valkey.md`](../replay-store-valkey.md) for the key
+derivation evidence and for the drain-only procedure that still applies to
+secret or epoch rotation.
 
 The Valkey key grammar, namespace, ACL, and commands do not change.
 

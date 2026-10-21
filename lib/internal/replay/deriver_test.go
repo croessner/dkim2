@@ -1,7 +1,11 @@
 package replay
 
 import (
+	"bytes"
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -124,6 +128,62 @@ func TestDraft07IdentitySeparatesEpoch(t *testing.T) {
 	if got := mustDerivedStorageKey(t, sequenceBytes(0xa0), 0x01020304, source); got == draft04Key {
 		t.Fatal("Draft-07 replay identity reused the Draft-04 HMAC epoch")
 	}
+}
+
+// TestReplayKeysSeparateDrafts proves that an in-place draft upgrade with an
+// unchanged secret and epoch cannot match records written under the previous
+// draft. The Draft-06 release used the same frame layout with only the draft
+// identifier differing, so this models the exact keys that release stored.
+func TestReplayKeysSeparateDrafts(t *testing.T) {
+	const previousDraft = "draft-ietf-dkim-dkim2-spec-06"
+	const epoch = 2
+	secret := sequenceBytes(0xa0)
+	set, err := NewIdentitySet(originDigestSource{digest: sequenceDigest(0x00)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	identity, err := set.Identity(0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	deriver, err := NewDeriver(secret, epoch)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = deriver.Close(context.Background()) })
+	derivers := map[string]func(context.Context, Identity) (Key, error){
+		keyDomainLabel:            deriver.Derive,
+		PropagationKeyDomainLabel: deriver.DerivePropagation,
+	}
+	for label, derive := range derivers {
+		current := replayHMACFrame(identity, label, DraftIdentifier)
+		previous := replayHMACFrame(identity, label, previousDraft)
+		if bytes.Equal(current, previous) {
+			t.Fatalf("%s frame does not bind the draft identifier", label)
+		}
+		key, err := derive(context.Background(), identity)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var production string
+		if err := UseStorageKey(key, func(value string) error { production = value; return nil }); err != nil {
+			t.Fatal(err)
+		}
+		if want := frameStorageKey(secret, epoch, current); production != want {
+			t.Fatalf("%s production key does not match the current-draft frame model", label)
+		}
+		if production == frameStorageKey(secret, epoch, previous) {
+			t.Fatalf("%s key collides across drafts under one secret and epoch", label)
+		}
+	}
+}
+
+// frameStorageKey independently computes the published storage-key encoding
+// of one HMAC frame for cross-draft comparison.
+func frameStorageKey(secret []byte, epoch uint32, frame []byte) string {
+	mac := hmac.New(sha256.New, secret)
+	_, _ = mac.Write(frame)
+	return fmt.Sprintf("dkim2:replay:v1:%08x:%s", epoch, base64.RawURLEncoding.EncodeToString(mac.Sum(nil)))
 }
 
 // TestDeriverProducesExactAllZeroPresentDigestKey verifies digest presence is independent of value.

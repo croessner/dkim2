@@ -181,22 +181,62 @@ replication, OOM, and stale-evidence failures require revalidation. Application
 credential drift and internal contract failures require provider reconstruction
 or process restart.
 
-Draft-06 to Draft-07 migration and every later secret or epoch rotation is
-drain-only. The draft identifier is authenticated inside the replay HMAC
-frame, so Draft-06 records are intentionally unreachable from Draft-07 even
-when the namespace and fixed 68-byte storage-key shape stay unchanged:
+### Draft upgrades are in place
+
+A draft upgrade, such as Draft-06 to Draft-07, keeps the replay epoch and HMAC
+secret and is the supported, non-disruptive path: replace the daemon release
+with the same shared epoch and secret and keep serving traffic. No drain,
+quiescent retention wait, or epoch change is required.
+
+This is safe because the draft identifier is a length-delimited field of the
+replay HMAC frame (`replayHMACFrame` in `lib/internal/replay/deriver.go`) for
+both the `dkim2-replay-v2` first-seen frame and the
+`dkim2-replay-propagation-v1` propagation frame. The Valkey provider uses the
+derived 68-byte storage key verbatim. Under one secret and epoch, a key written
+by one draft and a key looked up by another draft therefore differ unless
+HMAC-SHA-256 collides. `TestReplayKeysSeparateDrafts` pins this separation
+against the production deriver. Records of the previous draft are never misread
+and never overwritten; they stay in the same namespace until their own TTL
+expires, bounded by the configured retention.
+
+The only protection lost is continuity with records written before the
+upgrade:
+
+- A message first seen under the previous draft and replayed after the upgrade
+  can be reported `first_seen` once more, and only if it still verifies and
+  passes policy under the new draft. A message that no longer verifies never
+  reaches the store. The second acceptance writes a new-draft record, so every
+  later copy is detected as a replay again. The exposure ends when the
+  previous draft's record would have expired.
+- A delivery-status propagation coordinate reserved or committed under the
+  previous draft is not visible after the upgrade, so a notification already
+  propagated before the upgrade may be propagated once more. Propagation is
+  at-least-once, so this stays inside its contract.
+
+Upgrade every daemon instance that shares the store as one release. Instances
+of different drafts sharing a store cannot corrupt each other's records, but
+while both run each draft detects replays only among its own records. Keep that
+overlap to the restart itself. A rollback to the previous draft is the same
+in-place operation in reverse, with the same bounded continuity loss.
+
+### Secret and epoch rotation is drain-only
+
+Changing the HMAC secret or the epoch makes every existing record unreachable.
+When the rotation must not lose replay continuity, it is drain-only:
 
 1. stop all replay traffic;
-2. keep the drained Draft-06 deployment, epoch, and secret authoritative and
-   quiescent for the complete thirty-day hard maximum retention;
+2. keep the drained deployment, epoch, and secret authoritative and quiescent
+   for the complete thirty-day hard maximum retention;
 3. restart every active instance with the new shared epoch and secret set; and
 4. resume traffic only after the drain and restart are complete.
 
-Instant, partial, mixed-draft, mixed-instance, dual-epoch, fallback, and online
-migration states are unsupported and fail closed. Starting Draft-07 before the
-Draft-06 retention window drains creates a bounded replay-detection gap for
-old records; it is not a compatible rolling-upgrade mode and must be treated as
-an operator policy violation.
+Instant, partial, mixed-instance, dual-epoch, fallback, and online rotation
+states are unsupported and fail closed. Rotating early creates a replay
+detection gap bounded by the configured retention for every message seen
+before the rotation. The attestation
+`replay.valkey.attestation.rotation_state: drain_completed` declares this
+contract; an in-place draft upgrade keeps `unchanged` because the epoch and
+secret set do not change.
 
 ## Ownership Of Later Runtime Work
 
