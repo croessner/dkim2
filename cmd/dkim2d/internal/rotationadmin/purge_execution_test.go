@@ -11,7 +11,7 @@ import (
 // TestExecutePurgeRejectsUnknownResultWithoutRetry freezes no-blind-retry handling.
 func TestExecutePurgeRejectsUnknownResultWithoutRetry(t *testing.T) {
 	request, authority, inventory := purgeExecutionFixture(t)
-	executor := &purgeExecutionFake{result: PurgeExecutionResult{Unknown: true}}
+	executor := &purgeExecutionFake{result: datasourceadmin.PurgeExecutionResult{Unknown: true}}
 	if _, err := ExecutePurge(t.Context(), request, datasourceadmin.BackendLDAP, authority, purgeExecutionPolicy(), inventory, executor); err == nil {
 		t.Fatal("unknown destruction result was accepted")
 	}
@@ -23,7 +23,7 @@ func TestExecutePurgeRejectsUnknownResultWithoutRetry(t *testing.T) {
 // TestExecutePurgePassesOnlyExactProtectedTargets freezes the provider command fence.
 func TestExecutePurgePassesOnlyExactProtectedTargets(t *testing.T) {
 	request, authority, inventory := purgeExecutionFixture(t)
-	executor := &purgeExecutionFake{result: PurgeExecutionResult{Committed: true}}
+	executor := &purgeExecutionFake{result: datasourceadmin.PurgeExecutionResult{Committed: true}}
 	result, err := ExecutePurge(context.Background(), request, datasourceadmin.BackendLDAP, authority, purgeExecutionPolicy(), inventory, executor)
 	if err != nil || !result.Committed || executor.calls != 1 || executor.targets != 1 || executor.current != 2 {
 		t.Fatal("exact protected purge command was not dispatched")
@@ -35,7 +35,7 @@ func TestExecutePurgePassesOnlyExactProtectedTargets(t *testing.T) {
 func TestExecutePurgeRequiresReceiptReconciliationForAbsentTargets(t *testing.T) {
 	request, authority, inventory := purgeExecutionFixture(t)
 	absent := datasourceadmin.RetentionInventory{Version: inventory.Version, Current: inventory.Current, Generations: []datasourceadmin.RetentionGeneration{purgeGeneration(t, 2)}}
-	executor := &purgeExecutionFake{result: PurgeExecutionResult{Committed: true}, reconcileResult: PurgeExecutionResult{Committed: true}}
+	executor := &purgeExecutionFake{result: datasourceadmin.PurgeExecutionResult{Committed: true}, reconcileResult: datasourceadmin.PurgeExecutionResult{Committed: true}}
 	result, err := ExecutePurge(t.Context(), request, datasourceadmin.BackendLDAP, authority, purgeExecutionPolicy(), absent, executor)
 	if err != nil || !result.Committed || executor.calls != 0 || executor.reconcileCalls != 1 {
 		t.Fatal("absent target bypassed provider receipt reconciliation")
@@ -43,35 +43,35 @@ func TestExecutePurgeRequiresReceiptReconciliationForAbsentTargets(t *testing.T)
 }
 
 type purgeExecutionFake struct {
-	result          PurgeExecutionResult
+	result          datasourceadmin.PurgeExecutionResult
 	calls           int
 	targets         int
 	current         uint64
-	reconcileResult PurgeExecutionResult
+	reconcileResult datasourceadmin.PurgeExecutionResult
 	reconcileCalls  int
 }
 
 // Reconcile records the explicit receipt-readback path without mutation.
-func (f *purgeExecutionFake) Reconcile(ctx context.Context, command PurgeCommand) (PurgeExecutionResult, error) {
+func (f *purgeExecutionFake) Reconcile(ctx context.Context, command datasourceadmin.PurgeCommand) (datasourceadmin.PurgeExecutionResult, error) {
 	f.reconcileCalls++
 	if err := command.WithTargets(ctx, func(targets []admincontract.PurgeTarget) error {
 		f.targets = len(targets)
 		return nil
 	}); err != nil {
-		return PurgeExecutionResult{}, err
+		return datasourceadmin.PurgeExecutionResult{}, err
 	}
 	return f.reconcileResult, nil
 }
 
 // Purge records only bounded command facts for the execution-fence reproducer.
-func (f *purgeExecutionFake) Purge(ctx context.Context, command PurgeCommand) (PurgeExecutionResult, error) {
+func (f *purgeExecutionFake) Purge(ctx context.Context, command datasourceadmin.PurgeCommand) (datasourceadmin.PurgeExecutionResult, error) {
 	f.calls++
 	f.current = command.CurrentGeneration()
 	if err := command.WithTargets(ctx, func(targets []admincontract.PurgeTarget) error {
 		f.targets = len(targets)
 		return nil
 	}); err != nil {
-		return PurgeExecutionResult{}, err
+		return datasourceadmin.PurgeExecutionResult{}, err
 	}
 	return f.result, nil
 }

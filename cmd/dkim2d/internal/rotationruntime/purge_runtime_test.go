@@ -136,15 +136,15 @@ type purgeRuntimeExecutor struct {
 }
 
 // Purge confirms the one exact provider callback after extracting bounded targets.
-func (e *purgeRuntimeExecutor) Purge(ctx context.Context, command rotationadmin.PurgeCommand) (rotationadmin.PurgeExecutionResult, error) {
+func (e *purgeRuntimeExecutor) Purge(ctx context.Context, command datasourceadmin.PurgeCommand) (datasourceadmin.PurgeExecutionResult, error) {
 	e.calls++
 	if err := command.WithTargets(ctx, func(targets []admincontract.PurgeTarget) error {
 		e.targets = len(targets)
 		return nil
 	}); err != nil {
-		return rotationadmin.PurgeExecutionResult{}, err
+		return datasourceadmin.PurgeExecutionResult{}, err
 	}
-	return rotationadmin.PurgeExecutionResult{Committed: true}, nil
+	return datasourceadmin.PurgeExecutionResult{Committed: true}, nil
 }
 
 // TestPurgePlanAndApplyUseFreshInventoryAndTheDedicatedExecutor proves the

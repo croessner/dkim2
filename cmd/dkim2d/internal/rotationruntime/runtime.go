@@ -29,7 +29,7 @@ const (
 // CampaignRuntime composes the one real provider-backed offline campaign owner.
 type CampaignRuntime struct {
 	backend        campaignBackend
-	purge          rotationadmin.PurgeExecutor
+	purge          datasourceadmin.PurgeExecutor
 	recovery       datasourceadmin.RetentionRecoveryReader
 	terminal       datasourceadmin.TerminalRecorder
 	coord          *rotationadmin.Coordinator
@@ -600,7 +600,7 @@ func openMySQLRuntime(ctx context.Context, configuration *rotationadmin.Config, 
 }
 
 // newComposedRuntime is the sole production constructor for lifecycle mutation.
-func newComposedRuntime(backend campaignBackend, purge rotationadmin.PurgeExecutor, recovery retentionRecoverySource, terminal datasourceadmin.TerminalRecorder, class string, generations datasourceadmin.GenerationLimits, authority datasourceadmin.AuthorityDescriptor, configuration *rotationadmin.Config, proof *rotationadmin.DNSBatchProver) (*CampaignRuntime, error) {
+func newComposedRuntime(backend campaignBackend, purge datasourceadmin.PurgeExecutor, recovery retentionRecoverySource, terminal datasourceadmin.TerminalRecorder, class string, generations datasourceadmin.GenerationLimits, authority datasourceadmin.AuthorityDescriptor, configuration *rotationadmin.Config, proof *rotationadmin.DNSBatchProver) (*CampaignRuntime, error) {
 	if backend == nil || purge == nil || recovery == nil || terminal == nil || configuration == nil || proof == nil || datasourceadmin.ValidatePurgeAuthority(datasourceadmin.BackendClass(class), authority) != nil {
 		return nil, errUnavailable
 	}

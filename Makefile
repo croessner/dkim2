@@ -442,6 +442,10 @@ check-boundaries:
 	! go list -deps ./lib/... | grep -Eq 'github.com/croessner/dkim2/cmd/|oapi-codegen|cobra|viper|fx|prometheus'; \
 	! go -C cmd/dkim2-exim list -deps ./... | grep -Eq 'github.com/croessner/dkim2/cmd/dkim2-milter|github.com/croessner/dkim2/cmd/dkim2d/internal'; \
 	! grep -REq --include='*.go' 'cmd/dkim2-milter|cmd/dkim2d/internal|\"C\"' cmd/dkim2-exim; \
+	if go -C cmd/dkim2d list -deps ./internal/datasource/... | grep -Eq 'cmd/dkim2d/internal/(rotationadmin|domainadmin)$$'; then \
+		echo 'datasource providers must not import rotationadmin or domainadmin' >&2; exit 1; \
+	fi; \
+	go -C cmd/dkim2d list -tags=datasourceintegration -test -deps ./... >/dev/null; \
 	scripts/check-securefile-parity.sh
 
 .PHONY: vendor

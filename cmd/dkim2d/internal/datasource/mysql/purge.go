@@ -9,7 +9,6 @@ import (
 
 	"github.com/croessner/dkim2/admincontract"
 	"github.com/croessner/dkim2/cmd/dkim2d/internal/datasourceadmin"
-	"github.com/croessner/dkim2/cmd/dkim2d/internal/rotationadmin"
 )
 
 const (
@@ -53,9 +52,9 @@ func OpenPurgeExecutor(ctx context.Context, config ConnectionConfig) (*PurgeExec
 
 // Purge invokes the one fixed destructive routine once per exact target. It
 // deliberately leaves an error result unknown rather than retrying a commit.
-func (e *PurgeExecutor) Purge(ctx context.Context, command rotationadmin.PurgeCommand) (rotationadmin.PurgeExecutionResult, error) {
+func (e *PurgeExecutor) Purge(ctx context.Context, command datasourceadmin.PurgeCommand) (datasourceadmin.PurgeExecutionResult, error) {
 	if e == nil || e.database == nil || ctx == nil || ctx.Err() != nil {
-		return rotationadmin.PurgeExecutionResult{Unknown: true}, datasourceadmin.NewError(datasourceadmin.CodeUnavailable)
+		return datasourceadmin.PurgeExecutionResult{Unknown: true}, datasourceadmin.NewError(datasourceadmin.CodeUnavailable)
 	}
 	err := command.WithTargets(ctx, func(targets []admincontract.PurgeTarget) error {
 		plan := command.PlanDigest().Bytes()
@@ -72,16 +71,16 @@ func (e *PurgeExecutor) Purge(ctx context.Context, command rotationadmin.PurgeCo
 		return nil
 	})
 	if err != nil {
-		return rotationadmin.PurgeExecutionResult{Unknown: true}, datasourceadmin.NewError(datasourceadmin.CodeUnavailable)
+		return datasourceadmin.PurgeExecutionResult{Unknown: true}, datasourceadmin.NewError(datasourceadmin.CodeUnavailable)
 	}
-	return rotationadmin.PurgeExecutionResult{Committed: true}, nil
+	return datasourceadmin.PurgeExecutionResult{Committed: true}, nil
 }
 
 // Reconcile reads exact target and receipt state after an uncertain procedure
 // result. It repeats a call only after proving an exact target never committed.
-func (e *PurgeExecutor) Reconcile(ctx context.Context, command rotationadmin.PurgeCommand) (rotationadmin.PurgeExecutionResult, error) {
+func (e *PurgeExecutor) Reconcile(ctx context.Context, command datasourceadmin.PurgeCommand) (datasourceadmin.PurgeExecutionResult, error) {
 	if e == nil || e.database == nil || ctx == nil || ctx.Err() != nil {
-		return rotationadmin.PurgeExecutionResult{Unknown: true}, datasourceadmin.NewError(datasourceadmin.CodeUnavailable)
+		return datasourceadmin.PurgeExecutionResult{Unknown: true}, datasourceadmin.NewError(datasourceadmin.CodeUnavailable)
 	}
 	err := command.WithTargets(ctx, func(targets []admincontract.PurgeTarget) error {
 		var current string
@@ -119,14 +118,14 @@ func (e *PurgeExecutor) Reconcile(ctx context.Context, command rotationadmin.Pur
 		return nil
 	})
 	if err != nil {
-		return rotationadmin.PurgeExecutionResult{Unknown: true}, datasourceadmin.NewError(datasourceadmin.CodeUnavailable)
+		return datasourceadmin.PurgeExecutionResult{Unknown: true}, datasourceadmin.NewError(datasourceadmin.CodeUnavailable)
 	}
-	return rotationadmin.PurgeExecutionResult{Committed: true}, nil
+	return datasourceadmin.PurgeExecutionResult{Committed: true}, nil
 }
 
 // reconcilePresentTarget proves that one target never committed before the
 // fixed procedure is called again with unchanged protected command facts.
-func (e *PurgeExecutor) reconcilePresentTarget(ctx context.Context, command rotationadmin.PurgeCommand, target admincontract.PurgeTarget, plan []byte) error {
+func (e *PurgeExecutor) reconcilePresentTarget(ctx context.Context, command datasourceadmin.PurgeCommand, target admincontract.PurgeTarget, plan []byte) error {
 	var schema, state string
 	var digest []byte
 	var wasActive bool

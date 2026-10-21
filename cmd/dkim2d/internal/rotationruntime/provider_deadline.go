@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/croessner/dkim2/cmd/dkim2d/internal/datasourceadmin"
-	"github.com/croessner/dkim2/cmd/dkim2d/internal/rotationadmin"
 )
 
 // providerContext bounds one backend interaction without shortening the
@@ -139,27 +138,27 @@ func (b *deadlineCampaignBackend) Close() error {
 }
 
 type deadlinePurgeExecutor struct {
-	executor rotationadmin.PurgeExecutor
+	executor datasourceadmin.PurgeExecutor
 	maximum  time.Duration
 }
 
-func (e *deadlinePurgeExecutor) Purge(ctx context.Context, command rotationadmin.PurgeCommand) (rotationadmin.PurgeExecutionResult, error) {
+func (e *deadlinePurgeExecutor) Purge(ctx context.Context, command datasourceadmin.PurgeCommand) (datasourceadmin.PurgeExecutionResult, error) {
 	child, cancel, err := providerContext(ctx, e.maximum)
 	if err != nil {
-		return rotationadmin.PurgeExecutionResult{}, err
+		return datasourceadmin.PurgeExecutionResult{}, err
 	}
 	defer cancel()
 	return e.executor.Purge(child, command)
 }
 
-func (e *deadlinePurgeExecutor) Reconcile(ctx context.Context, command rotationadmin.PurgeCommand) (rotationadmin.PurgeExecutionResult, error) {
-	reconciler, ok := e.executor.(rotationadmin.PurgeReconciler)
+func (e *deadlinePurgeExecutor) Reconcile(ctx context.Context, command datasourceadmin.PurgeCommand) (datasourceadmin.PurgeExecutionResult, error) {
+	reconciler, ok := e.executor.(datasourceadmin.PurgeReconciler)
 	if !ok {
-		return rotationadmin.PurgeExecutionResult{}, errUnavailable
+		return datasourceadmin.PurgeExecutionResult{}, errUnavailable
 	}
 	child, cancel, err := providerContext(ctx, e.maximum)
 	if err != nil {
-		return rotationadmin.PurgeExecutionResult{}, err
+		return datasourceadmin.PurgeExecutionResult{}, err
 	}
 	defer cancel()
 	return reconciler.Reconcile(child, command)

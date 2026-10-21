@@ -10,7 +10,6 @@ import (
 
 	"github.com/croessner/dkim2/admincontract"
 	"github.com/croessner/dkim2/cmd/dkim2d/internal/datasourceadmin"
-	"github.com/croessner/dkim2/cmd/dkim2d/internal/rotationadmin"
 	goldap "github.com/go-ldap/ldap/v3"
 )
 
@@ -44,31 +43,31 @@ func NewPurgeExecutor(connector AdministrationConnector, generations datasourcea
 
 // Purge executes one exact protected plan once. It never retries a failed LDAP
 // delete because an LDAP disconnect can leave an unknown partial tree.
-func (e *PurgeExecutor) Purge(ctx context.Context, command rotationadmin.PurgeCommand) (rotationadmin.PurgeExecutionResult, error) {
+func (e *PurgeExecutor) Purge(ctx context.Context, command datasourceadmin.PurgeCommand) (datasourceadmin.PurgeExecutionResult, error) {
 	return e.apply(ctx, command, false)
 }
 
 // Reconcile explicitly resumes an interrupted exact plan. It first proves the
 // same noncurrent root and then removes only descendants of that root; an
 // absent root is the sole idempotent completion proof.
-func (e *PurgeExecutor) Reconcile(ctx context.Context, command rotationadmin.PurgeCommand) (rotationadmin.PurgeExecutionResult, error) {
+func (e *PurgeExecutor) Reconcile(ctx context.Context, command datasourceadmin.PurgeCommand) (datasourceadmin.PurgeExecutionResult, error) {
 	return e.apply(ctx, command, true)
 }
 
 // apply opens one purger session and applies or explicitly reconciles every
 // exact target without allowing the caller to choose arbitrary LDAP DNs.
-func (e *PurgeExecutor) apply(ctx context.Context, command rotationadmin.PurgeCommand, reconcile bool) (rotationadmin.PurgeExecutionResult, error) {
+func (e *PurgeExecutor) apply(ctx context.Context, command datasourceadmin.PurgeCommand, reconcile bool) (datasourceadmin.PurgeExecutionResult, error) {
 	if e == nil || e.connector == nil || ctx == nil || ctx.Err() != nil {
-		return rotationadmin.PurgeExecutionResult{Unknown: true}, datasourceadmin.NewError(datasourceadmin.CodeInvalid)
+		return datasourceadmin.PurgeExecutionResult{Unknown: true}, datasourceadmin.NewError(datasourceadmin.CodeInvalid)
 	}
 	raw, err := e.connector.Connect(ctx)
 	if err != nil || raw == nil {
-		return rotationadmin.PurgeExecutionResult{Unknown: true}, datasourceadmin.NewError(datasourceadmin.CodeUnavailable)
+		return datasourceadmin.PurgeExecutionResult{Unknown: true}, datasourceadmin.NewError(datasourceadmin.CodeUnavailable)
 	}
 	client, ok := raw.(purgeClient)
 	if !ok {
 		_ = raw.Close()
-		return rotationadmin.PurgeExecutionResult{Unknown: true}, datasourceadmin.NewError(datasourceadmin.CodeInvalid)
+		return datasourceadmin.PurgeExecutionResult{Unknown: true}, datasourceadmin.NewError(datasourceadmin.CodeInvalid)
 	}
 	defer client.Close() //nolint:errcheck // The outcome is already classified by the mutation/readback path.
 	err = command.WithTargets(ctx, func(targets []admincontract.PurgeTarget) error {
@@ -81,14 +80,14 @@ func (e *PurgeExecutor) apply(ctx context.Context, command rotationadmin.PurgeCo
 	})
 	if err != nil {
 		client.Discard()
-		return rotationadmin.PurgeExecutionResult{Unknown: true}, datasourceadmin.NewError(datasourceadmin.CodeUnavailable)
+		return datasourceadmin.PurgeExecutionResult{Unknown: true}, datasourceadmin.NewError(datasourceadmin.CodeUnavailable)
 	}
-	return rotationadmin.PurgeExecutionResult{Committed: true}, nil
+	return datasourceadmin.PurgeExecutionResult{Committed: true}, nil
 }
 
 // applyTarget verifies current and lock state before resolving the exact target
 // subtree. The root is deleted only after every descendant has been removed.
-func (e *PurgeExecutor) applyTarget(ctx context.Context, client purgeClient, command rotationadmin.PurgeCommand, target admincontract.PurgeTarget, reconcile bool) error {
+func (e *PurgeExecutor) applyTarget(ctx context.Context, client purgeClient, command datasourceadmin.PurgeCommand, target admincontract.PurgeTarget, reconcile bool) error {
 	if target.Generation == 0 || target.Generation == command.CurrentGeneration() || !target.ContentDigest.Valid() ||
 		(target.Lifecycle != "active_history" && target.Lifecycle != "never_active") {
 		return errors.New("ldap purge denied")

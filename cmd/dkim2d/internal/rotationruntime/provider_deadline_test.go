@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/croessner/dkim2/cmd/dkim2d/internal/datasourceadmin"
-	"github.com/croessner/dkim2/cmd/dkim2d/internal/rotationadmin"
 )
 
 type deadlineBackendProbe struct {
@@ -16,14 +15,14 @@ type deadlineBackendProbe struct {
 
 type deadlinePurgeProbe struct{ remaining []time.Duration }
 
-func (p *deadlinePurgeProbe) Purge(ctx context.Context, _ rotationadmin.PurgeCommand) (rotationadmin.PurgeExecutionResult, error) {
+func (p *deadlinePurgeProbe) Purge(ctx context.Context, _ datasourceadmin.PurgeCommand) (datasourceadmin.PurgeExecutionResult, error) {
 	p.remaining = append(p.remaining, remainingDeadline(ctx))
-	return rotationadmin.PurgeExecutionResult{}, nil
+	return datasourceadmin.PurgeExecutionResult{}, nil
 }
 
-func (p *deadlinePurgeProbe) Reconcile(ctx context.Context, _ rotationadmin.PurgeCommand) (rotationadmin.PurgeExecutionResult, error) {
+func (p *deadlinePurgeProbe) Reconcile(ctx context.Context, _ datasourceadmin.PurgeCommand) (datasourceadmin.PurgeExecutionResult, error) {
 	p.remaining = append(p.remaining, remainingDeadline(ctx))
-	return rotationadmin.PurgeExecutionResult{}, nil
+	return datasourceadmin.PurgeExecutionResult{}, nil
 }
 
 type deadlineTerminalProbe struct{ remaining []time.Duration }
@@ -127,8 +126,8 @@ func TestProviderBoundaryCapsPurgeTerminalAndRecovery(t *testing.T) {
 	const maximum = 2 * time.Minute
 	purgeProbe := &deadlinePurgeProbe{}
 	purge := &deadlinePurgeExecutor{executor: purgeProbe, maximum: maximum}
-	_, _ = purge.Purge(outer, rotationadmin.PurgeCommand{})
-	_, _ = purge.Reconcile(outer, rotationadmin.PurgeCommand{})
+	_, _ = purge.Purge(outer, datasourceadmin.PurgeCommand{})
+	_, _ = purge.Reconcile(outer, datasourceadmin.PurgeCommand{})
 	terminalProbe := &deadlineTerminalProbe{}
 	terminal := &deadlineTerminalRecorder{recorder: terminalProbe, maximum: maximum}
 	_ = terminal.RecordTerminal(outer, datasourceadmin.TerminalRecord{})
