@@ -101,6 +101,9 @@ const (
 	AlgorithmRSASHA256 = datasource.AlgorithmRSASHA256
 	// AlgorithmEd25519SHA256 identifies Ed25519-SHA256 credentials.
 	AlgorithmEd25519SHA256 = datasource.AlgorithmEd25519SHA256
+	// AlgorithmMLDSA44Ed25519SHA512 identifies LAMPS composite
+	// mldsa44-ed25519-sha512 credentials.
+	AlgorithmMLDSA44Ed25519SHA512 = datasource.AlgorithmMLDSA44Ed25519SHA512
 )
 
 // ProfileUse identifies one administrative profile-selection purpose.

@@ -6,18 +6,12 @@ certification, or universal interoperability claim.
 - Draft-07 architecture references, full-chain policy guidance, EAI, IANA,
   and Security Considerations still contain `TBA` text. The implementation
   does not invent normative behavior for those sections.
-- Composite `mldsa44-ed25519-sha512` verification follows Draft-07
-  Section 3.4: SHA-512 over the Section 12.8 input, pure ML-DSA-44 with an
-  empty context, then PureEd25519 over the same 64-byte digest, with the
-  signature formed as the ML-DSA-44 signature followed by the Ed25519
-  signature. DNS-01 instead cites the LAMPS composite ML-DSA construction,
-  which uses a different signature input. The two drafts are not yet aligned; signatures produced
-  with the LAMPS construction do not verify here, and the implementation
-  follows the signature draft until the drafts agree.
-- Composite signing is not implemented. The library, `dkim2d`, the signing
-  datasource providers, domain administration, and key generation offer only
-  `rsa-sha256` and `ed25519-sha256` credentials; the composite algorithm is a
-  verification-only capability.
+- Composite `mldsa44-ed25519-sha512` signing and verification follow the
+  LAMPS id-MLDSA44-Ed25519-SHA512 construction cited by DNS-01 and used in the
+  DKIM2 interoperability round, not a literal reading of Draft-07 Section 3.4,
+  which does not spell out the message representative. If the working group
+  settles on a different representative, the two constructions do not
+  interoperate (`DKIM2-ISSUE-0019`).
 - The default verifier requires all three Draft-07 Section 3 algorithms. On a
   Go FIPS 140-3 cryptographic module without ML-DSA-44, verifier construction
   fails closed instead of silently dropping the composite algorithm. A

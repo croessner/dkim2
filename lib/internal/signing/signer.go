@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/rsa"
-	"crypto/sha256"
 	"errors"
 	"fmt"
 	"io"
@@ -28,19 +27,22 @@ const (
 	PrivateKeySigned PrivateKeySignStatus = "signed"
 )
 
-// PrivateKeySignRequest carries only the closed algorithm and one SHA-256 digest.
+// PrivateKeySignRequest carries only the closed algorithm and the digest of
+// the Section 12.8 signature input that algorithm signs: SHA-256 for
+// rsa-sha256 and ed25519-sha256, SHA-512 for mldsa44-ed25519-sha512.
 type PrivateKeySignRequest struct {
 	algorithm   Algorithm
-	digest      [sha256.Size]byte
+	digest      []byte
 	initialized bool
 }
 
-// NewPrivateKeySignRequest constructs one immutable native-digest request.
-func NewPrivateKeySignRequest(algorithm Algorithm, digest [sha256.Size]byte) (PrivateKeySignRequest, error) {
-	if !algorithm.Known() {
+// NewPrivateKeySignRequest constructs one immutable native-digest request and
+// requires the digest size the algorithm signs.
+func NewPrivateKeySignRequest(algorithm Algorithm, digest []byte) (PrivateKeySignRequest, error) {
+	if !SignableAlgorithm(algorithm) || len(digest) != cryptodkim2.DigestBytes(algorithm) {
 		return PrivateKeySignRequest{}, newError(ErrorCodeInvalidRequest, ErrorLocation{Phase: PhasePreflight}, ErrorDetails{})
 	}
-	return PrivateKeySignRequest{algorithm: algorithm, digest: digest, initialized: true}, nil
+	return PrivateKeySignRequest{algorithm: algorithm, digest: bytes.Clone(digest), initialized: true}, nil
 }
 
 // Valid reports whether the request was constructed for one closed algorithm.
@@ -49,8 +51,8 @@ func (r PrivateKeySignRequest) Valid() bool { return r.initialized && r.algorith
 // Algorithm returns the requested baseline signature algorithm.
 func (r PrivateKeySignRequest) Algorithm() Algorithm { return r.algorithm }
 
-// Digest returns the exact SHA-256 digest by value.
-func (r PrivateKeySignRequest) Digest() [sha256.Size]byte { return r.digest }
+// Digest returns a copy of the exact signature-input digest.
+func (r PrivateKeySignRequest) Digest() []byte { return bytes.Clone(r.digest) }
 
 // String returns a constant secret-safe private request summary.
 func (r PrivateKeySignRequest) String() string { return "signing.PrivateKeySignRequest{redacted}" }
@@ -85,7 +87,7 @@ func (r PrivateKeySignResult) Format(state fmt.State, _ rune) {
 	_, _ = io.WriteString(state, r.String())
 }
 
-// PrivateKeySigner signs one native SHA-256 digest through an opaque key handle.
+// PrivateKeySigner signs one native signature-input digest through an opaque key handle.
 type PrivateKeySigner interface {
 	SignDigest(context.Context, PrivateKeyHandle, PrivateKeySignRequest) (PrivateKeySignResult, error)
 }
@@ -283,9 +285,13 @@ func NewCoordinator(revision RevisionVerifier, routes routeplan.Coordinator, pub
 type preparedSigningBranch struct {
 	target   signature.UnsignedTarget
 	input    canonical.ByteInput
-	digest   [sha256.Size]byte
 	size     int
 	metadata EffectiveMetadata
+}
+
+// digestFor returns the signature-input digest one credential algorithm signs.
+func (b preparedSigningBranch) digestFor(algorithm Algorithm) []byte {
+	return cryptodkim2.SignatureInputDigest(algorithm, b.input.Bytes())
 }
 
 type preparedSigningOperation struct {
@@ -416,7 +422,8 @@ func (c Coordinator) CompleteField(ctx context.Context, request SignFieldRequest
 		if err := ctx.Err(); err != nil {
 			return fail(err)
 		}
-		signRequest, requestErr := NewPrivateKeySignRequest(credential.algorithm, branch.digest)
+		digest := branch.digestFor(credential.algorithm)
+		signRequest, requestErr := NewPrivateKeySignRequest(credential.algorithm, digest)
 		if requestErr != nil {
 			return fail(requestErr)
 		}
@@ -425,7 +432,7 @@ func (c Coordinator) CompleteField(ctx context.Context, request SignFieldRequest
 		if resultErr != nil {
 			return fail(resultErr)
 		}
-		if selfErr := cryptodkim2.SelfVerifyDigest(credential.algorithm, credential.publicKey, branch.digest[:], signatureBytes, cryptoLimits); selfErr != nil {
+		if selfErr := cryptodkim2.SelfVerifyDigest(credential.algorithm, credential.publicKey, digest, signatureBytes, cryptoLimits); selfErr != nil {
 			return fail(newError(ErrorCodeCryptographicSelfCheck, ErrorLocation{Phase: PhaseCallback, Algorithm: credential.algorithm}, ErrorDetails{}))
 		}
 		if err := ctx.Err(); err != nil {
@@ -517,8 +524,11 @@ func (c Coordinator) preflight(ctx context.Context, request SignFieldRequest) (p
 			return preparedSigningOperation{}, newError(ErrorCodeKeyMismatch, ErrorLocation{Phase: PhasePreflight, Algorithm: credential.algorithm}, ErrorDetails{})
 		}
 		length := c.limits.Ed25519SignatureBytes
-		if key, ok := validated.(*rsa.PublicKey); ok {
+		switch key := validated.(type) {
+		case *rsa.PublicKey:
 			length = key.Size()
+		case cryptodkim2.CompositePublicKey:
+			length = cryptodkim2.CompositeSignatureBytes
 		}
 		if err := cryptodkim2.ValidateSignatureLength(credential.algorithm, validated, length, cryptoLimits); err != nil {
 			return preparedSigningOperation{}, newError(ErrorCodeKeyMismatch, ErrorLocation{Phase: PhasePreflight, Algorithm: credential.algorithm}, ErrorDetails{})
@@ -721,7 +731,7 @@ func (c Coordinator) prepareBranch(request SignFieldRequest, metadata EffectiveM
 		return preparedSigningBranch{}, limitError(LimitNameMaxCanonicalWorkBytes, c.limits.MaxCanonicalWorkBytes, request.Plan.generation.canonical+input.Len())
 	}
 	return preparedSigningBranch{
-		target: target, input: input, digest: sha256.Sum256(input.Bytes()), size: size, metadata: metadata,
+		target: target, input: input, size: size, metadata: metadata,
 	}, nil
 }
 
@@ -898,6 +908,6 @@ func (c Coordinator) recoverFailure(ctx context.Context, reservation *routeplan.
 func (c Coordinator) cryptoLimits() cryptodkim2.Limits {
 	return cryptodkim2.Limits{
 		MinRSABits: c.limits.MinRSABits, MaxRSABits: c.limits.MaxRSABits,
-		RequiredRSAExponent: c.limits.RequiredRSAExponent, MaxSignatureBytes: c.limits.MaxPrivateSignatureBytes,
+		RequiredRSAExponent: c.limits.RequiredRSAExponent, MaxSignatureBytes: c.limits.cryptoSignatureCap(),
 	}
 }

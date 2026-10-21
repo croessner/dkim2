@@ -28,12 +28,16 @@ type signatureDigests struct {
 }
 
 // forAlgorithm returns the digest the algorithm signs, or nil for an
-// algorithm without a digest contract.
+// algorithm without a digest contract. The algorithm-to-hash mapping is
+// owned by cryptodkim2.DigestBytes, the same owner the signer uses.
 func (d signatureDigests) forAlgorithm(algorithm Algorithm) []byte {
-	switch algorithm {
-	case signature.AlgorithmRSASHA256, signature.AlgorithmEd25519SHA256:
+	if !algorithm.Signable() {
+		return nil
+	}
+	switch cryptodkim2.DigestBytes(algorithm) {
+	case len(d.sha256):
 		return d.sha256
-	case signature.AlgorithmMLDSA44Ed25519SHA512:
+	case len(d.sha512):
 		return d.sha512
 	default:
 		return nil

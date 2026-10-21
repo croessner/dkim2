@@ -85,10 +85,11 @@ func (a publicRouteMemoryAuthority) ConsumeRelease(ctx context.Context, query Ro
 }
 
 type publicSigningProvider struct {
-	rsaKey  *rsa.PrivateKey
-	edKey   ed25519.PrivateKey
-	lookups atomic.Int64
-	signs   atomic.Int64
+	rsaKey       *rsa.PrivateKey
+	edKey        ed25519.PrivateKey
+	compositeKey CompositeSigningKey
+	lookups      atomic.Int64
+	signs        atomic.Int64
 }
 
 // LookupPublicKey serves immutable public material for generated test credentials.
@@ -99,6 +100,11 @@ func (p *publicSigningProvider) LookupPublicKey(_ context.Context, query PublicK
 		return FoundRSAPublicKey(&p.rsaKey.PublicKey), nil
 	case AlgorithmEd25519SHA256:
 		return FoundEd25519PublicKey(p.edKey.Public().(ed25519.PublicKey)), nil
+	case AlgorithmMLDSA44Ed25519SHA512:
+		if !p.compositeKey.Valid() {
+			return MissingPublicKey(query.Algorithm()), nil
+		}
+		return FoundCompositePublicKey(p.compositeKey.PublicKey()), nil
 	default:
 		return MissingPublicKey(query.Algorithm()), nil
 	}
@@ -117,6 +123,8 @@ func (p *publicSigningProvider) SignDigest(_ context.Context, _ PrivateKeyHandle
 		return NewPrivateKeySignResult(signatureBytes), nil
 	case AlgorithmEd25519SHA256:
 		return NewPrivateKeySignResult(ed25519.Sign(p.edKey, digest[:])), nil
+	case AlgorithmMLDSA44Ed25519SHA512:
+		return p.compositeKey.SignDigest(request)
 	default:
 		return PrivateKeySignResult{}, nil
 	}
@@ -544,27 +552,31 @@ func TestPublicOriginatorSigningAlgorithmsAndImmutableBytes(t *testing.T) {
 	rsaKey := loadPublicSigningRSAKey(t)
 	seed := sha256.Sum256([]byte("dkim2-public-originator-ed25519-test-key"))
 	edKey := ed25519.NewKeyFromSeed(seed[:])
+	compositeKey, err := GenerateCompositeSigningKey()
+	if err != nil {
+		t.Fatalf("GenerateCompositeSigningKey() error = %v", err)
+	}
 	raw := []byte("From: alice@example.test\r\nTo: bob@example.net\r\nSubject: root facade\r\n\r\nbody\r\n")
 	for _, testCase := range []struct {
 		name       string
-		profile    func(PrivateKeyHandle, PrivateKeyHandle) (SigningProfile, error)
+		profile    func(rsaHandle, edHandle, compositeHandle PrivateKeyHandle) (SigningProfile, error)
 		algorithms []Algorithm
 	}{
-		{name: testRSASelector, algorithms: []Algorithm{AlgorithmRSASHA256}, profile: func(rsaHandle, _ PrivateKeyHandle) (SigningProfile, error) {
+		{name: testRSASelector, algorithms: []Algorithm{AlgorithmRSASHA256}, profile: func(rsaHandle, _, _ PrivateKeyHandle) (SigningProfile, error) {
 			credential, credentialErr := NewRSASigningCredential(testRSASelector, &rsaKey.PublicKey, rsaHandle)
 			if credentialErr != nil {
 				return SigningProfile{}, credentialErr
 			}
 			return NewRSASigningProfile("example.test", credential)
 		}},
-		{name: "ed25519", algorithms: []Algorithm{AlgorithmEd25519SHA256}, profile: func(_, edHandle PrivateKeyHandle) (SigningProfile, error) {
+		{name: "ed25519", algorithms: []Algorithm{AlgorithmEd25519SHA256}, profile: func(_, edHandle, _ PrivateKeyHandle) (SigningProfile, error) {
 			credential, credentialErr := NewEd25519SigningCredential("ed", edKey.Public().(ed25519.PublicKey), edHandle)
 			if credentialErr != nil {
 				return SigningProfile{}, credentialErr
 			}
 			return NewEd25519SigningProfile("example.test", credential)
 		}},
-		{name: "dual", algorithms: []Algorithm{AlgorithmRSASHA256, AlgorithmEd25519SHA256}, profile: func(rsaHandle, edHandle PrivateKeyHandle) (SigningProfile, error) {
+		{name: "dual", algorithms: []Algorithm{AlgorithmRSASHA256, AlgorithmEd25519SHA256}, profile: func(rsaHandle, edHandle, _ PrivateKeyHandle) (SigningProfile, error) {
 			rsaCredential, credentialErr := NewRSASigningCredential(testRSASelector, &rsaKey.PublicKey, rsaHandle)
 			if credentialErr != nil {
 				return SigningProfile{}, credentialErr
@@ -575,66 +587,112 @@ func TestPublicOriginatorSigningAlgorithmsAndImmutableBytes(t *testing.T) {
 			}
 			return NewDualSigningProfile("example.test", rsaCredential, edCredential)
 		}},
+		{name: "composite", algorithms: []Algorithm{AlgorithmMLDSA44Ed25519SHA512}, profile: func(_, _, compositeHandle PrivateKeyHandle) (SigningProfile, error) {
+			credential, credentialErr := NewCompositeSigningCredential("pq", compositeKey.PublicKey(), compositeHandle)
+			if credentialErr != nil {
+				return SigningProfile{}, credentialErr
+			}
+			return NewCompositeSigningProfile("example.test", credential)
+		}},
+		{name: "all three reordered", algorithms: []Algorithm{AlgorithmRSASHA256, AlgorithmEd25519SHA256, AlgorithmMLDSA44Ed25519SHA512}, profile: func(rsaHandle, edHandle, compositeHandle PrivateKeyHandle) (SigningProfile, error) {
+			rsaCredential, credentialErr := NewRSASigningCredential(testRSASelector, &rsaKey.PublicKey, rsaHandle)
+			if credentialErr != nil {
+				return SigningProfile{}, credentialErr
+			}
+			edCredential, credentialErr := NewEd25519SigningCredential("ed", edKey.Public().(ed25519.PublicKey), edHandle)
+			if credentialErr != nil {
+				return SigningProfile{}, credentialErr
+			}
+			compositeCredential, credentialErr := NewCompositeSigningCredential("pq", compositeKey.PublicKey(), compositeHandle)
+			if credentialErr != nil {
+				return SigningProfile{}, credentialErr
+			}
+			return NewMultiSigningProfile("example.test", compositeCredential, edCredential, rsaCredential)
+		}},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
-			provider := &publicSigningProvider{rsaKey: rsaKey, edKey: edKey}
-			authorizer := &authorizeOrdinary{}
-			facade, err := NewSigner(
-				provider, publicRouteMemoryAuthority{value: routeplan.NewMemoryAuthority()},
-				authorizer, provider, WithSigningClock(func() time.Time { return time.Unix(1_700_000_000, 0) }),
-			)
-			if err != nil {
-				t.Fatalf("NewSigner() error = %v", err)
-			}
-			rsaHandle, _ := NewPrivateKeyHandle([]byte("rsa-key"))
-			edHandle, _ := NewPrivateKeyHandle([]byte("ed-key"))
-			profile, err := testCase.profile(rsaHandle, edHandle)
-			if err != nil {
-				t.Fatalf("profile() error = %v", err)
-			}
-			source, _ := NewSigningSource(raw)
-			entry, err := NewOriginatorRouteEntry(
-				source, []byte("<alice@example.test>"), [][]byte{[]byte("<bob@example.net>")},
-				RouteDisclosureSingle, []byte("local-route"),
-			)
-			if err != nil {
-				t.Fatalf("NewOriginatorRouteEntry() error = %v", err)
-			}
-			fanout, _ := NewRouteFanoutRequest([]RouteEntry{entry})
-			plan, tickets, err := facade.PlanRouteFanout(context.Background(), fanout)
-			if err != nil || !plan.Valid() || len(tickets) != 1 {
-				t.Fatalf("PlanRouteFanout() plan=%v tickets=%d error=%v", plan.Valid(), len(tickets), err)
-			}
-			result, recovery, err := facade.SignOriginator(context.Background(), NewOriginatorSigningRequest(
-				raw, []byte("<alice@example.test>"), [][]byte{[]byte("<bob@example.net>")},
-				tickets[0], profile, SigningMetadata{}, SigningTransportFinalNetworkPreDotStuffing,
-			))
-			if err != nil || recovery.Valid() || !result.Valid() {
-				t.Fatalf("SignOriginator() valid=%v recovery=%v error=%v", result.Valid(), recovery.Valid(), err)
-			}
-			signed, ok := result.Unrestricted()
-			if !ok || !signed.Valid() {
-				t.Fatal("SignOriginator() did not return unrestricted output")
-			}
-			if facts := signed.Facts(); facts.Role() != SigningRoleOriginator ||
-				facts.Sequence() != 1 || facts.NewInstanceNumber() != 1 ||
-				!reflect.DeepEqual(facts.Algorithms(), testCase.algorithms) {
-				t.Fatalf("Facts() = %#v", facts)
-			}
-			first := signed.Bytes()
-			second := signed.Bytes()
-			if len(first) <= len(raw) || !bytes.Contains(first, []byte("Message-Instance:")) ||
-				!bytes.Contains(first, []byte("DKIM2-Signature:")) || !bytes.Equal(first, second) {
-				t.Fatal("signed output is incomplete or unstable")
-			}
-			first[0] ^= 0xff
-			if bytes.Equal(first, signed.Bytes()) {
-				t.Fatal("Bytes() retained caller mutation")
-			}
-			if got := provider.signs.Load(); got != int64(len(testCase.algorithms)) {
-				t.Fatalf("private signing calls = %d", got)
-			}
+			provider := &publicSigningProvider{rsaKey: rsaKey, edKey: edKey, compositeKey: compositeKey}
+			assertPublicOriginatorSigning(t, provider, raw, testCase.profile, testCase.algorithms)
 		})
+	}
+}
+
+// assertPublicOriginatorSigning signs raw as originator with one profile,
+// checks the immutable output and callback count, and verifies the result.
+func assertPublicOriginatorSigning(
+	t *testing.T,
+	provider *publicSigningProvider,
+	raw []byte,
+	newProfile func(rsaHandle, edHandle, compositeHandle PrivateKeyHandle) (SigningProfile, error),
+	algorithms []Algorithm,
+) {
+	t.Helper()
+	authorizer := &authorizeOrdinary{}
+	facade, err := NewSigner(
+		provider, publicRouteMemoryAuthority{value: routeplan.NewMemoryAuthority()},
+		authorizer, provider, WithSigningClock(func() time.Time { return time.Unix(1_700_000_000, 0) }),
+	)
+	if err != nil {
+		t.Fatalf("NewSigner() error = %v", err)
+	}
+	rsaHandle, _ := NewPrivateKeyHandle([]byte("rsa-key"))
+	edHandle, _ := NewPrivateKeyHandle([]byte("ed-key"))
+	compositeHandle, _ := NewPrivateKeyHandle([]byte("composite-key"))
+	profile, err := newProfile(rsaHandle, edHandle, compositeHandle)
+	if err != nil {
+		t.Fatalf("profile() error = %v", err)
+	}
+	source, _ := NewSigningSource(raw)
+	entry, err := NewOriginatorRouteEntry(
+		source, []byte("<alice@example.test>"), [][]byte{[]byte("<bob@example.net>")},
+		RouteDisclosureSingle, []byte("local-route"),
+	)
+	if err != nil {
+		t.Fatalf("NewOriginatorRouteEntry() error = %v", err)
+	}
+	fanout, _ := NewRouteFanoutRequest([]RouteEntry{entry})
+	plan, tickets, err := facade.PlanRouteFanout(context.Background(), fanout)
+	if err != nil || !plan.Valid() || len(tickets) != 1 {
+		t.Fatalf("PlanRouteFanout() plan=%v tickets=%d error=%v", plan.Valid(), len(tickets), err)
+	}
+	result, recovery, err := facade.SignOriginator(context.Background(), NewOriginatorSigningRequest(
+		raw, []byte("<alice@example.test>"), [][]byte{[]byte("<bob@example.net>")},
+		tickets[0], profile, SigningMetadata{}, SigningTransportFinalNetworkPreDotStuffing,
+	))
+	if err != nil || recovery.Valid() || !result.Valid() {
+		t.Fatalf("SignOriginator() valid=%v recovery=%v error=%v", result.Valid(), recovery.Valid(), err)
+	}
+	signed, ok := result.Unrestricted()
+	if !ok || !signed.Valid() {
+		t.Fatal("SignOriginator() did not return unrestricted output")
+	}
+	if facts := signed.Facts(); facts.Role() != SigningRoleOriginator ||
+		facts.Sequence() != 1 || facts.NewInstanceNumber() != 1 ||
+		!reflect.DeepEqual(facts.Algorithms(), algorithms) {
+		t.Fatalf("Facts() = %#v", facts)
+	}
+	first := signed.Bytes()
+	second := signed.Bytes()
+	if len(first) <= len(raw) || !bytes.Contains(first, []byte("Message-Instance:")) ||
+		!bytes.Contains(first, []byte("DKIM2-Signature:")) || !bytes.Equal(first, second) {
+		t.Fatal("signed output is incomplete or unstable")
+	}
+	first[0] ^= 0xff
+	if bytes.Equal(first, signed.Bytes()) {
+		t.Fatal("Bytes() retained caller mutation")
+	}
+	if got := provider.signs.Load(); got != int64(len(algorithms)) {
+		t.Fatalf("private signing calls = %d", got)
+	}
+	verifier, err := NewVerifier(provider, WithVerificationClock(func() time.Time { return time.Unix(1_700_000_000, 0) }))
+	if err != nil {
+		t.Fatalf("NewVerifier() error = %v", err)
+	}
+	verified, err := verifier.Verify(t.Context(), NewVerifyRequest(
+		signed.Bytes(), []byte("<alice@example.test>"), [][]byte{[]byte("<bob@example.net>")},
+	))
+	if err != nil || verified.State() != ResultStatePASS {
+		t.Fatalf("Verify(signed) state=%q error=%v", verified.State(), err)
 	}
 }
 
@@ -1554,8 +1612,9 @@ func TestPublicSigningTypesExcludePrivateAndOpenMaterial(t *testing.T) {
 			}
 		}
 	}
-	digest := sha256.Sum256([]byte("test"))
-	if got := (PrivateKeySignRequest{digest: digest, algorithm: AlgorithmRSASHA256, valid: true}).Digest(); got != digest {
+	sum := sha256.Sum256([]byte("test"))
+	digest := sum[:]
+	if got := (PrivateKeySignRequest{digest: digest, algorithm: AlgorithmRSASHA256, valid: true}).Digest(); !bytes.Equal(got, digest) {
 		t.Fatal("digest accessor changed immutable request")
 	}
 }

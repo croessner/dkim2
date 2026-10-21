@@ -8,6 +8,7 @@ import (
 
 	"github.com/croessner/dkim2/internal/datasource"
 	"github.com/croessner/dkim2/internal/keyresolver"
+	"github.com/croessner/dkim2/internal/signature"
 	"github.com/croessner/dkim2/internal/signing"
 )
 
@@ -403,10 +404,7 @@ func buildBindingGroups(
 			byAlgorithm[entry.algorithm] = entry.handleID
 		}
 		handles := make([]datasource.KeyHandleID, 0, len(candidates))
-		for _, algorithm := range []datasource.Algorithm{
-			datasource.AlgorithmRSASHA256,
-			datasource.AlgorithmEd25519SHA256,
-		} {
+		for _, algorithm := range signature.SigningAlgorithmOrder() {
 			if handleID, present := byAlgorithm[algorithm]; present {
 				handles = append(handles, handleID)
 			}

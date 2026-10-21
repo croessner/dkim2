@@ -10,15 +10,18 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/croessner/dkim2/internal/cryptodkim2"
 	"github.com/croessner/dkim2/internal/provider"
 	"github.com/croessner/dkim2/internal/rawmsg"
 	"github.com/croessner/dkim2/internal/recipe"
 	"github.com/croessner/dkim2/internal/routeplan"
+	"github.com/croessner/dkim2/internal/signature"
 	"github.com/croessner/dkim2/internal/verify"
 )
 
@@ -32,6 +35,8 @@ const (
 	eventAuthorizeRecipientDisclosure = "authorize:recipient_disclosure"
 	eventSignRSA                      = "sign:rsa-sha256"
 	eventSignEd25519                  = "sign:ed25519-sha256"
+	eventSignComposite                = "sign:mldsa44-ed25519-sha512"
+	eventPublishComposite             = "publish:mldsa44-ed25519-sha512"
 	eventRouteReserve                 = "route:reserve"
 	eventRouteBurn                    = "route:burn"
 	eventRouteReplace                 = "route:replace"
@@ -208,6 +213,8 @@ func (h signerHarness) defaultSigner(t *testing.T) PrivateKeySigner {
 			signatureBytes, err = rsa.SignPKCS1v15(rand.Reader, key.(*rsa.PrivateKey), crypto.SHA256, digest[:])
 		case AlgorithmEd25519SHA256:
 			signatureBytes = ed25519.Sign(key.(ed25519.PrivateKey), digest[:])
+		case AlgorithmMLDSA44Ed25519SHA512:
+			signatureBytes, err = cryptodkim2.SignCompositeDigest(key.(cryptodkim2.CompositePrivateKey), digest)
 		default:
 			t.Fatalf("private signer received unknown algorithm %q", request.Algorithm())
 		}
@@ -479,6 +486,13 @@ func newTestSigningProfile(t *testing.T, domain string, algorithms []Algorithm) 
 			seed := sha256.Sum256([]byte("signer-harness-ed25519"))
 			key := ed25519.NewKeyFromSeed(seed[:])
 			publicKey, privateKey = key.Public().(ed25519.PublicKey), key
+		case AlgorithmMLDSA44Ed25519SHA512:
+			selector, handleText = "composite-selector", "composite-handle"
+			key, keyErr := cryptodkim2.NewCompositePrivateKey(bytes.Repeat([]byte{0x6c}, cryptodkim2.CompositePrivateKeyBytes))
+			if keyErr != nil {
+				t.Fatalf("NewCompositePrivateKey() error = %v", keyErr)
+			}
+			publicKey, privateKey = key.PublicKey(), key
 		default:
 			t.Fatalf("unsupported harness algorithm %q", algorithm)
 		}
@@ -503,13 +517,19 @@ func newTestSigningProfile(t *testing.T, domain string, algorithms []Algorithm) 
 
 // TestPrivateKeySignRequestAndResultAreClosedImmutableAndRedacted proves the opaque callback DTO contract.
 func TestPrivateKeySignRequestAndResultAreClosedImmutableAndRedacted(t *testing.T) {
-	var zeroDigest [sha256.Size]byte
+	zeroDigest := make([]byte, sha256.Size)
 	request, err := NewPrivateKeySignRequest(AlgorithmEd25519SHA256, zeroDigest)
-	if err != nil || !request.Valid() || request.Algorithm() != AlgorithmEd25519SHA256 || request.Digest() != zeroDigest {
+	if err != nil || !request.Valid() || request.Algorithm() != AlgorithmEd25519SHA256 || !bytes.Equal(request.Digest(), zeroDigest) {
 		t.Fatalf("zero-digest request valid=%t algorithm=%q error=%v", request.Valid(), request.Algorithm(), err)
 	}
 	if invalid, requestErr := NewPrivateKeySignRequest(Algorithm("future"), zeroDigest); !IsErrorCode(requestErr, ErrorCodeInvalidRequest) || invalid.Valid() {
 		t.Fatalf("unknown-algorithm request valid=%t error=%v", invalid.Valid(), requestErr)
+	}
+	if invalid, requestErr := NewPrivateKeySignRequest(AlgorithmMLDSA44Ed25519SHA512, zeroDigest); !IsErrorCode(requestErr, ErrorCodeInvalidRequest) || invalid.Valid() {
+		t.Fatalf("composite request with a SHA-256 digest valid=%t error=%v", invalid.Valid(), requestErr)
+	}
+	if composite, requestErr := NewPrivateKeySignRequest(AlgorithmMLDSA44Ed25519SHA512, make([]byte, 64)); requestErr != nil || !composite.Valid() || len(composite.Digest()) != 64 {
+		t.Fatalf("composite request valid=%t error=%v", composite.Valid(), requestErr)
 	}
 
 	source := []byte("SECRET detached signature")
@@ -654,7 +674,7 @@ func TestCoordinatorRejectsInvalidDependencies(t *testing.T) {
 		{name: "zero publication", revision: harness.revision, routes: harness.routes, publication: &PublicationAuthority{}, authorizer: validAuthorizer, signer: validSigner},
 		{name: "typed nil authorizer", revision: harness.revision, routes: harness.routes, publication: harness.publication, authorizer: nilAuthorizer, signer: validSigner},
 		{name: "typed nil signer", revision: harness.revision, routes: harness.routes, publication: harness.publication, authorizer: validAuthorizer, signer: nilSigner},
-		{name: "widened signer limit", revision: harness.revision, routes: harness.routes, publication: harness.publication, authorizer: validAuthorizer, signer: validSigner, limits: Limits{MaxPrivateSigningCalls: 3}},
+		{name: "widened signer limit", revision: harness.revision, routes: harness.routes, publication: harness.publication, authorizer: validAuthorizer, signer: validSigner, limits: Limits{MaxPrivateSigningCalls: 4}},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -690,10 +710,21 @@ func TestOriginSigningSupportsRSAEd25519AndDualInCanonicalOrder(t *testing.T) {
 				eventSignRSA, eventSignEd25519,
 			},
 		},
+		{
+			name: "composite", algorithms: []Algorithm{AlgorithmMLDSA44Ed25519SHA512},
+			wantEvents: []string{eventRouteReserve, eventRouteBurn, eventPublishComposite, eventSignComposite},
+		},
+		{
+			name: "all three canonicalize reversed input", algorithms: []Algorithm{AlgorithmMLDSA44Ed25519SHA512, AlgorithmEd25519SHA256, AlgorithmRSASHA256},
+			wantEvents: []string{
+				eventRouteReserve, eventRouteBurn, eventPublishRSA, eventPublishEd25519, eventPublishComposite,
+				eventSignRSA, eventSignEd25519, eventSignComposite,
+			},
+		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			harness := newSignerHarness(t, test.algorithms...)
-			var digests [][sha256.Size]byte
+			var digests [][]byte
 			delegate := harness.defaultSigner(t)
 			signer := privateSignerFunc(func(ctx context.Context, handle PrivateKeyHandle, request PrivateKeySignRequest) (PrivateKeySignResult, error) {
 				digests = append(digests, request.Digest())
@@ -709,14 +740,30 @@ func TestOriginSigningSupportsRSAEd25519AndDualInCanonicalOrder(t *testing.T) {
 				t.Fatalf("callback order = %v, want %v", got, test.wantEvents)
 			}
 			for index := 1; index < len(digests); index++ {
-				if digests[index] != digests[0] {
-					t.Fatal("dual signing did not share one canonical SHA-256 digest")
+				if len(digests[index]) == len(digests[0]) && !bytes.Equal(digests[index], digests[0]) {
+					t.Fatal("same-hash signing did not share one canonical digest")
+				}
+			}
+			canonical := make([]Algorithm, 0, len(test.algorithms))
+			for _, algorithm := range signature.SigningAlgorithmOrder() {
+				if slices.Contains(test.algorithms, algorithm) {
+					canonical = append(canonical, algorithm)
+				}
+			}
+			if len(digests) != len(canonical) {
+				t.Fatalf("signer calls = %d, want %d", len(digests), len(canonical))
+			}
+			for index, algorithm := range canonical {
+				if len(digests[index]) != cryptodkim2.DigestBytes(algorithm) {
+					t.Fatalf("%s received a %d-byte digest", algorithm, len(digests[index]))
 				}
 			}
 			field := string(completed.field.Bytes())
-			if len(test.algorithms) == 2 &&
-				strings.Index(field, "rsa-selector:rsa-sha256:") > strings.Index(field, "ed-selector:ed25519-sha256:") {
-				t.Fatal("dual complete field did not render RSA before Ed25519")
+			rsaAt, edAt, compositeAt := strings.Index(field, "rsa-selector:rsa-sha256:"),
+				strings.Index(field, "ed-selector:ed25519-sha256:"),
+				strings.Index(field, "composite-selector:mldsa44-ed25519-sha512:")
+			if rsaAt >= 0 && edAt >= 0 && rsaAt > edAt || edAt >= 0 && compositeAt >= 0 && edAt > compositeAt {
+				t.Fatal("complete field did not render sets in canonical order")
 			}
 		})
 	}

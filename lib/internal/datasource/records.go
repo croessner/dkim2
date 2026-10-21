@@ -3,7 +3,6 @@ package datasource
 import (
 	"bytes"
 	"crypto/sha256"
-	"crypto/x509"
 	"fmt"
 	"io"
 	"strings"
@@ -22,6 +21,9 @@ const (
 	AlgorithmRSASHA256 = signature.AlgorithmRSASHA256
 	// AlgorithmEd25519SHA256 identifies one Ed25519-SHA256 signing credential.
 	AlgorithmEd25519SHA256 = signature.AlgorithmEd25519SHA256
+	// AlgorithmMLDSA44Ed25519SHA512 identifies one LAMPS composite
+	// mldsa44-ed25519-sha512 signing credential.
+	AlgorithmMLDSA44Ed25519SHA512 = signature.AlgorithmMLDSA44Ed25519SHA512
 )
 
 // Credential contains one immutable public signing credential and opaque handle ID.
@@ -50,14 +52,11 @@ func NewCredential(selector string, algorithm Algorithm, publicKeySPKI []byte, h
 	if err != nil {
 		return Credential{}, err
 	}
-	parsed, err := x509.ParsePKIXPublicKey(publicKeySPKI)
+	parsed, err := cryptodkim2.ParseSigningPublicKeySPKI(algorithm, publicKeySPKI)
 	if err != nil {
 		return Credential{}, NewError(ErrorCodeInvalidRequest)
 	}
-	canonicalSPKI, err := x509.MarshalPKIXPublicKey(parsed)
-	if err != nil || !bytes.Equal(canonicalSPKI, publicKeySPKI) {
-		return Credential{}, NewError(ErrorCodeInvalidRequest)
-	}
+	canonicalSPKI := publicKeySPKI
 	validated, err := cryptodkim2.ValidatePublicKey(algorithm, parsed, cryptodkim2.DefaultLimits())
 	if err != nil {
 		return Credential{}, NewError(ErrorCodeInvalidRequest)
@@ -195,7 +194,7 @@ func NewProfile(
 		seenSelectors[credential.selector] = struct{}{}
 		seenHandles[credential.handleID] = struct{}{}
 	}
-	for _, algorithm := range []Algorithm{AlgorithmRSASHA256, AlgorithmEd25519SHA256} {
+	for _, algorithm := range signature.SigningAlgorithmOrder() {
 		for _, credential := range credentials {
 			if credential.algorithm == algorithm {
 				ordered = append(ordered, cloneCredential(credential))
@@ -495,8 +494,4 @@ func canonicalDatasourceSelector(value string, maxBytes, maxLabels int) (string,
 }
 
 // publicKeysEqual compares exact supported public-key material without exposing it.
-func publicKeysEqual(left, right any) bool {
-	leftSPKI, leftErr := x509.MarshalPKIXPublicKey(left)
-	rightSPKI, rightErr := x509.MarshalPKIXPublicKey(right)
-	return leftErr == nil && rightErr == nil && bytes.Equal(leftSPKI, rightSPKI)
-}
+func publicKeysEqual(left, right any) bool { return cryptodkim2.PublicKeysEqual(left, right) }

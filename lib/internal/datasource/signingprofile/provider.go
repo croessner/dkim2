@@ -221,14 +221,11 @@ func parseBindingUse(value string) (datasource.ProfileUse, bool) {
 
 // parseBindingAlgorithm maps the closed public algorithm vocabulary.
 func parseBindingAlgorithm(value string) (datasource.Algorithm, bool) {
-	switch value {
-	case "rsa-sha256":
-		return datasource.AlgorithmRSASHA256, true
-	case "ed25519-sha256":
-		return datasource.AlgorithmEd25519SHA256, true
-	default:
+	algorithm := datasource.Algorithm(value)
+	if !algorithm.Signable() {
 		return "", false
 	}
+	return algorithm, true
 }
 
 // Close releases the confined datasource descriptor exactly once.

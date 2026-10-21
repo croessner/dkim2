@@ -61,6 +61,22 @@ func TestCampaignContractGolden(t *testing.T) {
 	}
 }
 
+// TestFrozenWorkAcceptsEverySignableAlgorithm proves a profile may bind one
+// credential per signable algorithm, including mldsa44-ed25519-sha512.
+func TestFrozenWorkAcceptsEverySignableAlgorithm(t *testing.T) {
+	work := []WorkItem{{
+		Tenant: "tenant", Domain: "example.test", Use: useOriginator, Profile: "profile",
+		Algorithms: []string{algorithmEd25519, algorithmComposite, algorithmRSA},
+	}}
+	if _, err := FrozenWorkDigest(work); err != nil {
+		t.Fatalf("FrozenWorkDigest(three algorithms) error = %v", err)
+	}
+	work[0].Algorithms = []string{algorithmEd25519, algorithmComposite, algorithmComposite, algorithmRSA}
+	if _, err := FrozenWorkDigest(work); err == nil {
+		t.Fatal("FrozenWorkDigest(duplicate composite) accepted")
+	}
+}
+
 // TestCampaignContractRejectsSemanticDrift covers unsafe cross-repository variants.
 func TestCampaignContractRejectsSemanticDrift(t *testing.T) {
 	base := WorkItem{Tenant: "tenant", Domain: "example.test", Use: useOriginator, Profile: "profile", Algorithms: []string{algorithmEd25519, algorithmRSA}}

@@ -24,13 +24,16 @@ func HardLimits() Limits {
 	return Limits{
 		MaxIdentifierBytes: 128, MaxDomainBytes: 253, MaxDomainLabels: 127,
 		MaxSelectorBytes: 253, MaxSelectorLabels: 127, MaxProfiles: 131072,
-		MaxCredentialsPerProfile: 2, MaxHandles: 262144, MaxPolicies: 262144,
+		MaxCredentialsPerProfile: 3, MaxHandles: 262144, MaxPolicies: 262144,
 		MaxJSONFileBytes: 512 << 20, MaxJSONDepth: 16, MaxJSONStringBytes: 16 << 10,
 		MaxDecodedStringBytes: 512 << 20, MaxDecodedPublicKeyBytes: 2048, MaxRecords: 1 << 20,
 	}
 }
 
-// DefaultLimits returns the restrictive default datasource limits.
+// DefaultLimits returns the restrictive default datasource limits. MaxRecords
+// is derived, not chosen: MaxProfiles*MaxCredentialsPerProfile + MaxProfiles +
+// MaxHandles + MaxPolicies, so every profile can carry one credential per
+// signable algorithm. ProductionLimits follows the same derivation.
 func DefaultLimits() Limits {
 	limits := HardLimits()
 	limits.MaxProfiles = 1024
@@ -38,7 +41,7 @@ func DefaultLimits() Limits {
 	limits.MaxPolicies = 4096
 	limits.MaxJSONFileBytes = 1 << 20
 	limits.MaxDecodedStringBytes = 1 << 20
-	limits.MaxRecords = 9216
+	limits.MaxRecords = 10240
 	return limits
 }
 
@@ -50,7 +53,7 @@ func ProductionLimits() Limits {
 	limits.MaxPolicies = 65536
 	limits.MaxJSONFileBytes = 128 << 20
 	limits.MaxDecodedStringBytes = 128 << 20
-	limits.MaxRecords = 229376
+	limits.MaxRecords = 262144
 	return limits
 }
 

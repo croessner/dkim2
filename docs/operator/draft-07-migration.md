@@ -181,6 +181,19 @@ exhaustive `switch` over them:
 - `AlgorithmMLDSA44Ed25519SHA512` and `FoundCompositePublicKey`
 - the result reason `from_not_authentic`
 
+Composite signing changes the private-key callback:
+
+- `PrivateKeySignRequest.Digest` returns a `[]byte` whose length depends on
+  the algorithm: 32 bytes of SHA-256 for `rsa-sha256` and `ed25519-sha256`,
+  64 bytes of SHA-512 for `mldsa44-ed25519-sha512`. It replaces the former
+  fixed-size 32-byte array.
+- A `PrivateKeySigner` that holds composite keys signs through
+  `CompositeSigningKey.SignDigest`; it must not rebuild the construction.
+- New constructors: `NewCompositeSigningCredential`,
+  `NewCompositeSigningProfile`, and `NewMultiSigningProfile` for up to one
+  credential per algorithm. Key handling uses `GenerateCompositeSigningKey`,
+  `ParseCompositeSigningKeyPKCS8`, and `ParseCompositePublicKeySPKI`.
+
 The exported API baseline (`testdata/reference/go-api-base.json`) is bound to
 a reviewed commit. Regenerate it, then update the bound revision, when the
 Draft-07 migration is committed.

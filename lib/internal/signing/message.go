@@ -3,7 +3,6 @@ package signing
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
 	"errors"
 	"fmt"
 	"io"
@@ -162,20 +161,31 @@ func (m CompletedMessage) validFacts() bool {
 // validBasicFacts validates initialized, bounded, and closed result dimensions.
 func (m CompletedMessage) validBasicFacts() bool {
 	return m.initialized && len(m.raw) > 0 && m.role.Known() && m.sequence > 0 &&
-		m.envelopeForm.Known() && len(m.algorithms) > 0 && len(m.algorithms) <= 2 &&
+		m.envelopeForm.Known() && len(m.algorithms) > 0 && len(m.algorithms) <= len(signature.SigningAlgorithmOrder()) &&
 		m.recipeOutcome.Known() && m.flags != nil && m.multiplicity > 0 &&
 		m.multiplicity <= DefaultLimits().MaxParentOutputCopiesAndTickets &&
 		authorizationFactsValid(m.authorizations) && m.restriction.Known() &&
 		(m.envelopeForm == SignatureEnvelopeNextDomain) == (m.restriction == RestrictionOutOfBand)
 }
 
-// validCompletedAlgorithms requires canonical one- or two-algorithm order.
-func validCompletedAlgorithms(algorithms []Algorithm) bool {
-	for index, algorithm := range algorithms {
-		if !SignableAlgorithm(algorithm) || index > 0 && algorithm != AlgorithmEd25519SHA256 ||
-			index == 0 && len(algorithms) == 2 && algorithm != AlgorithmRSASHA256 {
+// validCompletedAlgorithms requires distinct signable algorithms in strictly
+// increasing canonical signing order.
+func validCompletedAlgorithms(algorithms []Algorithm) bool { return CanonicalAlgorithms(algorithms) }
+
+// CanonicalAlgorithms reports whether algorithms are one or more distinct
+// signable algorithms in strictly increasing canonical signing order. It is
+// the single owner of emitted signature-set order.
+func CanonicalAlgorithms(algorithms []Algorithm) bool {
+	if len(algorithms) == 0 {
+		return false
+	}
+	previous := -1
+	for _, algorithm := range algorithms {
+		rank, ranked := algorithm.SigningRank()
+		if !ranked || rank <= previous {
 			return false
 		}
+		previous = rank
 	}
 	return true
 }
@@ -590,7 +600,6 @@ func (c Coordinator) proveCompletedSignature(message rawmsg.Message, signatures 
 	if err != nil || !bytes.Equal(input.Bytes(), completed.input.Bytes()) {
 		return newError(ErrorCodeInternalInvariant, ErrorLocation{Phase: PhaseComplete}, ErrorDetails{})
 	}
-	digest := sha256.Sum256(input.Bytes())
 	sets := target.SignatureSets()
 	if len(sets) != len(completed.profile.credentials) {
 		return newError(ErrorCodeCryptographicSelfCheck, ErrorLocation{Phase: PhaseComplete}, ErrorDetails{})
@@ -600,7 +609,7 @@ func (c Coordinator) proveCompletedSignature(message rawmsg.Message, signatures 
 		credential := completed.profile.credentials[index]
 		if !set.KnownAlgorithm() || set.Selector() != credential.selector ||
 			Algorithm(set.Algorithm()) != credential.algorithm ||
-			cryptodkim2.VerifyDigest(credential.algorithm, credential.publicKey, digest[:], set.Signature().Decoded(), limits) != nil {
+			cryptodkim2.VerifyDigest(credential.algorithm, credential.publicKey, cryptodkim2.SignatureInputDigest(credential.algorithm, input.Bytes()), set.Signature().Decoded(), limits) != nil {
 			return newError(ErrorCodeCryptographicSelfCheck, ErrorLocation{
 				Phase: PhaseComplete, Algorithm: credential.algorithm,
 			}, ErrorDetails{})

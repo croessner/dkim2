@@ -1,13 +1,9 @@
 package signing
 
 import (
-	"bytes"
-	"crypto/ed25519"
-	"crypto/rsa"
 	"crypto/sha256"
 	"fmt"
 	"io"
-	"math/big"
 	"slices"
 
 	"github.com/croessner/dkim2/internal/cryptodkim2"
@@ -57,11 +53,8 @@ type Credential struct {
 }
 
 // SignableAlgorithm reports whether this implementation can create
-// signatures with algorithm. Composite mldsa44-ed25519-sha512 signing stays
-// unimplemented until the conflict between Draft-07 Section 3.4 and the
-// LAMPS composite construction cited by DNS-01 is resolved, so only
-// rsa-sha256 and ed25519-sha256 are signable; verification supports all
-// three Draft-07 algorithms.
+// signatures with algorithm: every Draft-07 Section 3 algorithm, with the
+// composite following the LAMPS construction owned by cryptodkim2.
 func SignableAlgorithm(algorithm Algorithm) bool {
 	return algorithm.Signable()
 }
@@ -78,7 +71,7 @@ func NewCredential(selector string, algorithm Algorithm, publicKey any, handle P
 	}
 	validated, validationErr := cryptodkim2.ValidatePublicKey(algorithm, publicKey, cryptodkim2.Limits{
 		MinRSABits: resolved.MinRSABits, MaxRSABits: resolved.MaxRSABits,
-		RequiredRSAExponent: resolved.RequiredRSAExponent, MaxSignatureBytes: resolved.MaxPrivateSignatureBytes,
+		RequiredRSAExponent: resolved.RequiredRSAExponent, MaxSignatureBytes: resolved.cryptoSignatureCap(),
 	})
 	if validationErr != nil {
 		return Credential{}, newError(ErrorCodeKeyMismatch, ErrorLocation{Phase: PhasePreflight, Algorithm: algorithm}, ErrorDetails{})
@@ -113,7 +106,8 @@ func (c Credential) GoString() string { return c.String() }
 // Format routes every credential formatting form through the redacted summary.
 func (c Credential) Format(state fmt.State, _ rune) { _, _ = io.WriteString(state, c.String()) }
 
-// Profile contains one canonical domain and one or two canonical-order credentials.
+// Profile contains one canonical domain and up to one credential per
+// signable algorithm in canonical signing order.
 type Profile struct {
 	domain      string
 	credentials []Credential
@@ -121,7 +115,7 @@ type Profile struct {
 
 // NewProfile validates domain, unique algorithms/selectors, and canonical credential order.
 func NewProfile(domain string, credentials []Credential) (Profile, error) {
-	if len(credentials) == 0 || len(credentials) > 2 {
+	if len(credentials) == 0 || len(credentials) > len(signature.SigningAlgorithmOrder()) {
 		return Profile{}, newError(ErrorCodeInvalidRequest, ErrorLocation{Phase: PhasePreflight}, ErrorDetails{})
 	}
 	canonicalDomain := ""
@@ -148,7 +142,7 @@ func NewProfile(domain string, credentials []Credential) (Profile, error) {
 		seenAlgorithms[credential.algorithm] = struct{}{}
 		seenSelectors[credential.selector] = struct{}{}
 	}
-	for _, algorithm := range []Algorithm{signature.AlgorithmRSASHA256, signature.AlgorithmEd25519SHA256} {
+	for _, algorithm := range signature.SigningAlgorithmOrder() {
 		for _, credential := range credentials {
 			if credential.algorithm == algorithm {
 				ordered = append(ordered, cloneCredential(credential))
@@ -211,34 +205,13 @@ func cloneCredential(input Credential) Credential {
 	return input
 }
 
-// cloneSigningPublicKey returns detached supported public-key material.
-func cloneSigningPublicKey(material any) any {
-	switch key := material.(type) {
-	case *rsa.PublicKey:
-		if key == nil || key.N == nil {
-			return (*rsa.PublicKey)(nil)
-		}
-		return &rsa.PublicKey{N: new(big.Int).Set(key.N), E: key.E}
-	case ed25519.PublicKey:
-		return ed25519.PublicKey(bytes.Clone(key))
-	default:
-		return nil
-	}
-}
+// cloneSigningPublicKey returns detached supported public-key material
+// through the cryptographic owner.
+func cloneSigningPublicKey(material any) any { return cryptodkim2.ClonePublicKey(material) }
 
-// publicKeysEqual compares exact algorithm-specific public material.
-func publicKeysEqual(left, right any) bool {
-	switch l := left.(type) {
-	case *rsa.PublicKey:
-		r, ok := right.(*rsa.PublicKey)
-		return ok && l != nil && r != nil && l.N != nil && r.N != nil && l.E == r.E && l.N.Cmp(r.N) == 0
-	case ed25519.PublicKey:
-		r, ok := right.(ed25519.PublicKey)
-		return ok && bytes.Equal(l, r)
-	default:
-		return false
-	}
-}
+// publicKeysEqual compares exact algorithm-specific public material through
+// the cryptographic owner.
+func publicKeysEqual(left, right any) bool { return cryptodkim2.PublicKeysEqual(left, right) }
 
 // credentialsEqual compares canonical credential facts including opaque handles.
 func credentialsEqual(left, right []Credential) bool {

@@ -97,14 +97,13 @@ codes, 14.8 From check, 15 replay.
 
 ## 5. Local interpretations
 
-**D1 Composite.** Verify per spec-07 §3.4: SHA-512 over the §12.8 canonical
-input, pure ML-DSA-44 with empty context, then PureEd25519, both over the
-64-byte digest. Signature is ML-DSA followed by Ed25519 (2484 bytes); DNS
-`p=` is the raw ML-DSA public key followed by the raw Ed25519 public key (1344
-bytes). Both halves must pass. DNS-01 references the LAMPS composite
-construction, which differs; this conflict is a known external issue.
-Composite signing and interoperability claims wait for working-group
-clarification. RSA signing remains available.
+**D1 Composite.** Sign and verify with the LAMPS id-MLDSA44-Ed25519-SHA512
+construction cited by DNS-01 and used in the DKIM2 interoperability round
+(Section 16). Signature is ML-DSA-44 followed by Ed25519 (2484 bytes); DNS
+`p=` is the raw ML-DSA-44 public key followed by the raw Ed25519 public key
+(1344 bytes). Both halves must pass. The literal Section 3.4 reading (bare
+SHA-512 digest, empty context) is superseded (`DKIM2-ISSUE-0019`). RSA and
+Ed25519 signing remain available.
 
 **D2 Replay.** Equality stays at the `m=1` header and body, taken from the
 `i=1`-signed `m=1` hash declarations (sha256 preferred, otherwise sha512)
@@ -308,9 +307,8 @@ Open follow-ups owned by later packages:
   composite algorithm. Existing PKCS#1 and SPKI RSA parsing is unchanged.
 - The default verifier enables all three Draft-07 algorithms. A runtime
   without ML-DSA (Go FIPS 140-3 module v1.0.0) fails verifier construction.
-- Signing: `signing.SignableAlgorithm` keeps signing to `rsa-sha256` and
-  `ed25519-sha256`. Composite signing waits for resolution of the conflict
-  between Section 3.4 and the LAMPS construction cited by DNS-01.
+- Signing: originally restricted to `rsa-sha256` and `ed25519-sha256`;
+  composite signing was added with the LAMPS construction (Section 16).
 - Evidence: primitive round trips with deterministic keys, corrupted and
   swapped halves, truncation, trailing bytes, nonempty ML-DSA context,
   wrong-digest Ed25519 half, wrong digest sizes, wrong key types, and an
@@ -493,6 +491,14 @@ Open follow-ups owned by later packages:
 - Verification now uses the LAMPS representative `"CompositeAlgorithmSignatures2025"
   || "COMPSIG-MLDSA44-Ed25519-SHA512" || 0x00 || SHA-512(M)`, with the label
   as the ML-DSA-44 context. The earlier construction no longer verifies.
+- Signing: a profile holds at most one credential per algorithm, up to all
+  three, and emits signature sets in the order `rsa-sha256`,
+  `ed25519-sha256`, `mldsa44-ed25519-sha512`. The `PrivateKeySigner` callback
+  receives the per-algorithm digest (64-byte SHA-512 for the composite), and
+  `dkim2.CompositeSigningKey.SignDigest` applies the construction for key
+  custodians. Datasource profiles accept three credentials; the default and
+  production record ceilings grow to 10240 and 262144 so every profile can
+  carry all three.
 - `lib/internal/cryptodkim2` owns the construction for verification and
   signing (`SignCompositeDigest`, hedged ML-DSA-44 with self-verification)
   and the exact PKCS#8 and SubjectPublicKeyInfo encodings under OID
@@ -501,7 +507,9 @@ Open follow-ups owned by later packages:
   the vector public key; the context-bearing variant is rejected), a
   Stalwart-signed DKIM2 message that verifies end to end, and a negative case
   for the earlier bare-digest construction, including an Ed25519 half over
-  the bare digest beside a correct ML-DSA half. The vectors are copied unchanged
+  the bare digest beside a correct ML-DSA half, and public-facade signing of
+  composite-only and RSA, Ed25519, and composite profiles that verify end to
+  end. The vectors are copied unchanged
   from Stalwart mail-auth with provenance in
   `lib/testdata/vectors/external/stalwart-mail-auth/README.md`.
 - Line length: Stalwart's expected-output files keep the 3484-byte signature

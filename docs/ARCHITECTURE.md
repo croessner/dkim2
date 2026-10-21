@@ -2339,9 +2339,17 @@ Rules:
   (`lib/testdata/vectors/external/stalwart-mail-auth`). The default
   verifier algorithm policy includes the composite, so verifier construction
   fails closed when the cryptographic runtime lacks ML-DSA-44.
-- Signing remains restricted to `rsa-sha256` and `ed25519-sha256`. Composite
-  signing, composite credential storage, and composite key generation are not
-  implemented.
+- Signing supports `rsa-sha256`, `ed25519-sha256`, and
+  `mldsa44-ed25519-sha512`. A signing profile holds at most one credential
+  per algorithm and emits one signature set per credential in the canonical
+  order `rsa-sha256`, `ed25519-sha256`, `mldsa44-ed25519-sha512`
+  (`signature.SigningAlgorithmOrder`). The signer computes the per-algorithm
+  signature-input digest (SHA-256, or SHA-512 for the composite) and hands it
+  to the `PrivateKeySigner` callback; the library still never holds private
+  keys. A composite key custodian signs through
+  `dkim2.CompositeSigningKey.SignDigest`, so the LAMPS construction keeps one
+  owner. Generated RSA signatures stay bounded at 1024 bytes; composite
+  signatures must be exactly 2484 bytes.
 - Accept and preserve syntactically valid unknown algorithm tokens at protocol
   parsing boundaries for draft forward compatibility, but never execute them.
   Ignore unknown Message-Instance hash tuples only as the active draft permits,

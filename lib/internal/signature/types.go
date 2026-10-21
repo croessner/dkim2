@@ -31,11 +31,31 @@ func (a Algorithm) Known() bool {
 }
 
 // Signable reports whether this implementation can create signatures with
-// the algorithm. Composite mldsa44-ed25519-sha512 signing stays unimplemented
-// until the conflict between Draft-07 Section 3.4 and the LAMPS construction
-// cited by DNS-01 is resolved; verification supports all known algorithms.
+// the algorithm. Every Draft-07 Section 3 algorithm is signable; the
+// composite mldsa44-ed25519-sha512 follows the LAMPS construction owned by
+// cryptodkim2.
 func (a Algorithm) Signable() bool {
-	return a == AlgorithmRSASHA256 || a == AlgorithmEd25519SHA256
+	_, ranked := a.SigningRank()
+	return ranked
+}
+
+// signingAlgorithmOrder is the single canonical order of signature sets a
+// signer emits and of credentials in a signing profile.
+var signingAlgorithmOrder = [...]Algorithm{AlgorithmRSASHA256, AlgorithmEd25519SHA256, AlgorithmMLDSA44Ed25519SHA512}
+
+// SigningAlgorithmOrder returns the canonical signing order: rsa-sha256,
+// ed25519-sha256, then mldsa44-ed25519-sha512.
+func SigningAlgorithmOrder() []Algorithm { return signingAlgorithmOrder[:] }
+
+// SigningRank returns the position of a signable algorithm in the canonical
+// signing order.
+func (a Algorithm) SigningRank() (int, bool) {
+	for rank, algorithm := range signingAlgorithmOrder {
+		if a == algorithm {
+			return rank, true
+		}
+	}
+	return 0, false
 }
 
 // Limits contains fail-closed DKIM2-Signature parser resource settings.

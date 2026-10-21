@@ -5,6 +5,7 @@ import (
 	"crypto/ed25519"
 	"crypto/mldsa"
 	"crypto/rand"
+	"crypto/x509"
 	"io"
 
 	"github.com/croessner/dkim2/internal/signature"
@@ -53,19 +54,33 @@ func NewCompositePrivateKey(seeds []byte) (CompositePrivateKey, error) {
 	if err != nil {
 		return CompositePrivateKey{}, newError(ErrorCodeInvalidKey)
 	}
-	return CompositePrivateKey{
+	key := CompositePrivateKey{
 		mldsa: mlKey,
 		ed:    ed25519.NewKeyFromSeed(seeds[compositeSeedBytes:]),
 		seeds: bytes.Clone(seeds),
-	}, nil
+	}
+	if !key.valid() {
+		key.Clear()
+		return CompositePrivateKey{}, newError(ErrorCodeInvalidKey)
+	}
+	return key, nil
 }
 
 // GenerateCompositePrivateKey creates a fresh composite key from the system
 // random source.
 func GenerateCompositePrivateKey() (CompositePrivateKey, error) {
+	return GenerateCompositePrivateKeyFrom(rand.Reader)
+}
+
+// GenerateCompositePrivateKeyFrom creates a fresh composite key from 64 bytes
+// of the supplied entropy source. A short or failing read fails closed.
+func GenerateCompositePrivateKeyFrom(random io.Reader) (CompositePrivateKey, error) {
+	if random == nil {
+		return CompositePrivateKey{}, newError(ErrorCodeInvalidKey)
+	}
 	seeds := make([]byte, CompositePrivateKeyBytes)
 	defer clear(seeds)
-	if _, err := io.ReadFull(rand.Reader, seeds); err != nil {
+	if _, err := io.ReadFull(random, seeds); err != nil {
 		return CompositePrivateKey{}, newError(ErrorCodeInvalidKey)
 	}
 	return NewCompositePrivateKey(seeds)
@@ -110,9 +125,21 @@ func (k *CompositePrivateKey) Clear() {
 	*k = CompositePrivateKey{}
 }
 
-// valid reports whether both component keys and their seeds are present.
+// Valid reports whether both component keys and their seeds are present.
+// Seeds zeroed through Clear on a copy sharing the backing array are invalid,
+// so a cleared key never marshals or signs.
+func (k CompositePrivateKey) Valid() bool { return k.valid() }
+
+// valid reports whether both component keys and non-zero seeds are present.
 func (k CompositePrivateKey) valid() bool {
-	return k.mldsa != nil && len(k.ed) == ed25519.PrivateKeySize && len(k.seeds) == CompositePrivateKeyBytes
+	if k.mldsa == nil || len(k.ed) != ed25519.PrivateKeySize || len(k.seeds) != CompositePrivateKeyBytes {
+		return false
+	}
+	var accumulated byte
+	for _, value := range k.seeds {
+		accumulated |= value
+	}
+	return accumulated != 0
 }
 
 // SignCompositeDigest signs one 64-byte SHA-512 digest of the Section 12.8
@@ -158,4 +185,24 @@ func (k CompositePublicKey) MarshalSPKI() []byte {
 		return nil
 	}
 	return append(bytes.Clone(compositeSPKIPrefix), raw...)
+}
+
+// ParseSigningPublicKeySPKI decodes one canonical SubjectPublicKeyInfo for a
+// signable algorithm: the exact id-MLDSA44-Ed25519-SHA512 encoding for the
+// composite, and a crypto/x509 encoding that round-trips byte for byte for
+// rsa-sha256 and ed25519-sha256. It is the single SPKI owner for stored
+// signing credentials.
+func ParseSigningPublicKeySPKI(algorithm signature.Algorithm, spki []byte) (any, error) {
+	if algorithm == signature.AlgorithmMLDSA44Ed25519SHA512 {
+		return ParseCompositeSPKI(spki)
+	}
+	parsed, err := x509.ParsePKIXPublicKey(spki)
+	if err != nil {
+		return nil, newError(ErrorCodeInvalidKey)
+	}
+	canonical, err := x509.MarshalPKIXPublicKey(parsed)
+	if err != nil || !bytes.Equal(canonical, spki) {
+		return nil, newError(ErrorCodeInvalidKey)
+	}
+	return parsed, nil
 }

@@ -182,12 +182,14 @@ func (f SignedMessageFacts) Valid() bool {
 		validSigningAuthorizationFacts(f)
 }
 
-// validSigningAlgorithms enforces the sole canonical one- or two-set order.
+// validSigningAlgorithms delegates the canonical signature-set order to the
+// signing owner.
 func validSigningAlgorithms(algorithms []Algorithm) bool {
-	return len(algorithms) == 1 &&
-		(algorithms[0] == AlgorithmRSASHA256 || algorithms[0] == AlgorithmEd25519SHA256) ||
-		len(algorithms) == 2 && algorithms[0] == AlgorithmRSASHA256 &&
-			algorithms[1] == AlgorithmEd25519SHA256
+	internal := make([]signing.Algorithm, len(algorithms))
+	for index, algorithm := range algorithms {
+		internal[index] = signing.Algorithm(algorithm)
+	}
+	return signing.CanonicalAlgorithms(internal)
 }
 
 // validSignedFlags enforces the sole canonical known-flag order without duplicates.

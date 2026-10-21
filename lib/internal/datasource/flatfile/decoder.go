@@ -473,10 +473,13 @@ func (d profileDTO) build(limits datasource.Limits) (datasource.Profile, error) 
 	if err != nil {
 		return datasource.Profile{}, malformed()
 	}
-	if len(d.credentials) == 2 &&
-		(d.credentials[0].algorithm != string(datasource.AlgorithmRSASHA256) ||
-			d.credentials[1].algorithm != string(datasource.AlgorithmEd25519SHA256)) {
-		return datasource.Profile{}, malformed()
+	previousRank := -1
+	for _, credential := range d.credentials {
+		rank, ranked := datasource.Algorithm(credential.algorithm).SigningRank()
+		if !ranked || rank <= previousRank {
+			return datasource.Profile{}, malformed()
+		}
+		previousRank = rank
 	}
 	credentials := make([]datasource.Credential, 0, len(d.credentials))
 	for _, input := range d.credentials {
@@ -511,13 +514,8 @@ func (d profileDTO) build(limits datasource.Limits) (datasource.Profile, error) 
 
 // build converts one credential DTO through public-key and datasource owners.
 func (d credentialDTO) build(limits datasource.Limits) (datasource.Credential, error) {
-	var algorithm datasource.Algorithm
-	switch d.algorithm {
-	case string(datasource.AlgorithmRSASHA256):
-		algorithm = datasource.AlgorithmRSASHA256
-	case string(datasource.AlgorithmEd25519SHA256):
-		algorithm = datasource.AlgorithmEd25519SHA256
-	default:
+	algorithm := datasource.Algorithm(d.algorithm)
+	if !algorithm.Signable() {
 		return datasource.Credential{}, malformed()
 	}
 	handleID, err := buildHandleID(d.handleID, limits)

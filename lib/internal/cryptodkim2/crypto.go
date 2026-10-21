@@ -5,6 +5,8 @@ import (
 	"crypto"
 	"crypto/ed25519"
 	"crypto/rsa"
+	"crypto/sha256"
+	"crypto/sha512"
 	"math/big"
 
 	"github.com/croessner/dkim2/internal/signature"
@@ -117,6 +119,13 @@ func ValidatePublicKey(algorithm signature.Algorithm, material any, limits Limit
 // digestBytes returns the signature-input digest size each algorithm signs:
 // SHA-256 for rsa-sha256 and ed25519-sha256, SHA-512 for the composite.
 func digestBytes(algorithm signature.Algorithm) int {
+	return DigestBytes(algorithm)
+}
+
+// DigestBytes returns the Section 12.8 signature-input digest size an
+// algorithm signs: 64 bytes (SHA-512) for mldsa44-ed25519-sha512 and 32 bytes
+// (SHA-256) otherwise.
+func DigestBytes(algorithm signature.Algorithm) int {
 	if algorithm == signature.AlgorithmMLDSA44Ed25519SHA512 {
 		return crypto.SHA512.Size()
 	}
@@ -233,4 +242,35 @@ func cloneRSAKey(key *rsa.PublicKey) *rsa.PublicKey {
 		return nil
 	}
 	return &rsa.PublicKey{N: new(big.Int).Set(key.N), E: key.E}
+}
+
+// SignatureInputDigest returns the digest of one Section 12.8 signature input
+// that algorithm signs or verifies: SHA-512 for mldsa44-ed25519-sha512 and
+// SHA-256 for rsa-sha256 and ed25519-sha256. It is the single digest owner
+// for signing.
+func SignatureInputDigest(algorithm signature.Algorithm, input []byte) []byte {
+	if DigestBytes(algorithm) == crypto.SHA512.Size() {
+		sum := sha512.Sum512(input)
+		return sum[:]
+	}
+	sum := sha256.Sum256(input)
+	return sum[:]
+}
+
+// PublicKeysEqual compares exact algorithm-specific public key material for
+// every signable algorithm.
+func PublicKeysEqual(left, right any) bool {
+	switch l := left.(type) {
+	case *rsa.PublicKey:
+		r, ok := right.(*rsa.PublicKey)
+		return ok && l != nil && r != nil && l.N != nil && r.N != nil && l.E == r.E && l.N.Cmp(r.N) == 0
+	case ed25519.PublicKey:
+		r, ok := right.(ed25519.PublicKey)
+		return ok && len(l) == ed25519.PublicKeySize && bytes.Equal(l, r)
+	case CompositePublicKey:
+		r, ok := right.(CompositePublicKey)
+		return ok && l.valid() && bytes.Equal(l.Bytes(), r.Bytes())
+	default:
+		return false
+	}
 }

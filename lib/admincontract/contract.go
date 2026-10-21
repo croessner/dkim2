@@ -37,6 +37,7 @@ const (
 	useOriginator          = "originator"
 	algorithmEd25519       = "ed25519-sha256"
 	algorithmRSA           = "rsa-sha256"
+	algorithmComposite     = "mldsa44-ed25519-sha512"
 	lifecycleActiveHistory = "active_history"
 	lifecycleNeverActive   = "never_active"
 	lifecycleAborted       = "aborted"
@@ -44,6 +45,10 @@ const (
 	operationNormal        = "normal"
 	receiptPurged          = "purged"
 )
+
+// signableAlgorithms is the closed set of algorithms a work item may bind; a
+// profile holds at most one credential per algorithm.
+var signableAlgorithms = []string{algorithmEd25519, algorithmRSA, algorithmComposite}
 
 // Mode identifies a closed rotation operation class.
 type Mode string
@@ -351,7 +356,7 @@ func validWork(work []WorkItem) bool {
 	previous := ""
 	for _, item := range work {
 		if !validText(item.Tenant, 128) || !validDNSName(item.Domain) || !validUse(item.Use) ||
-			!validText(item.Profile, 128) || len(item.Algorithms) == 0 || len(item.Algorithms) > 2 {
+			!validText(item.Profile, 128) || len(item.Algorithms) == 0 || len(item.Algorithms) > len(signableAlgorithms) {
 			return false
 		}
 		algorithmPrevious := ""
@@ -399,7 +404,7 @@ func validUse(value string) bool {
 }
 
 // validAlgorithm accepts the closed native signing algorithm vocabulary.
-func validAlgorithm(value string) bool { return value == algorithmEd25519 || value == algorithmRSA }
+func validAlgorithm(value string) bool { return slices.Contains(signableAlgorithms, value) }
 
 // validEmergencyReason accepts only closed high-priority reason classes.
 func validEmergencyReason(value string) bool {

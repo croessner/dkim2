@@ -16,10 +16,16 @@ const (
 	maxRenderedFieldBytes  = 64 * 1024
 	maxRenderedLineBytes   = 998
 	maxGeneratedRecipients = 128
-	maxGeneratedSets       = 2
+	// maxGeneratedSets allows one set per signable algorithm.
+	maxGeneratedSets       = len(signingAlgorithmOrder)
 	maxEnvelopePathBytes   = 32 * 1024
 	maxGeneratedNonceBytes = 64
-	maxSignatureBytes      = 1024
+	// maxSignatureBytes admits the 2484-byte mldsa44-ed25519-sha512 value,
+	// the largest signable signature.
+	maxSignatureBytes = 2484
+	// maxRSASignatureBytes is the rsa-sha256 value size of the largest
+	// admitted 8192-bit modulus.
+	maxRSASignatureBytes = 1024
 )
 
 // SetPlan identifies one signature set whose value will be supplied later.
@@ -463,8 +469,14 @@ func validateGeneratedSignatureLength(algorithm Algorithm, length int, limits Re
 	if length <= 0 || length > limits.MaxSignatureBytes {
 		return renderLimitError("max_signature_bytes", limits.MaxSignatureBytes, length)
 	}
+	if algorithm == AlgorithmRSASHA256 && length > maxRSASignatureBytes {
+		return renderLimitError("max_signature_bytes", maxRSASignatureBytes, length)
+	}
 	if algorithm == AlgorithmEd25519SHA256 && length != ed25519SignatureBytes {
 		return newError(ErrorCodeInvalidSignatureLength, ErrorLocation{}, ErrorDetails{TagName: "s", Limit: ed25519SignatureBytes, Count: length}, nil)
+	}
+	if algorithm == AlgorithmMLDSA44Ed25519SHA512 && length != maxSignatureBytes {
+		return newError(ErrorCodeInvalidSignatureLength, ErrorLocation{}, ErrorDetails{TagName: "s", Limit: maxSignatureBytes, Count: length}, nil)
 	}
 	return nil
 }
@@ -655,16 +667,13 @@ func compareSetPlans(left, right SetPlan) int {
 	return strings.Compare(left.Selector, right.Selector)
 }
 
-// generatedAlgorithmRank preserves the established supported-algorithm order.
+// generatedAlgorithmRank follows the canonical signing order and places any
+// other algorithm after every signable one.
 func generatedAlgorithmRank(algorithm Algorithm) int {
-	switch algorithm {
-	case AlgorithmRSASHA256:
-		return 0
-	case AlgorithmEd25519SHA256:
-		return 1
-	default:
-		return 2
+	if rank, ranked := algorithm.SigningRank(); ranked {
+		return rank
 	}
+	return len(signingAlgorithmOrder)
 }
 
 // validGeneratedNonce accepts printable ASCII except the tag terminator.
