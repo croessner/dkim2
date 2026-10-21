@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+
+	"github.com/croessner/dkim2/headerfold"
 )
 
 const (
@@ -283,13 +285,35 @@ func TestActionAndResultFormattingNeverExposeValues(t *testing.T) {
 	}
 }
 
-// TestActionFrameLimitIncludesWireOverhead proves values cannot exceed Milter framing.
+// foldableValue returns an unfolded header value whose Postfix-folded form
+// has exactly target octets, with every physical line inside RFC 5322 limits.
+func foldableValue(target int) string {
+	var builder strings.Builder
+	folded, line := 0, 0
+	for folded < target {
+		if line == 63 && target-folded > 2 {
+			builder.WriteByte('\t')
+			folded += 2
+			line = 0
+			continue
+		}
+		builder.WriteByte('a')
+		folded++
+		line++
+	}
+	return builder.String()
+}
+
+// TestActionFrameLimitIncludesWireOverhead proves folded values cannot exceed Milter framing.
 func TestActionFrameLimitIncludesWireOverhead(t *testing.T) {
 	name := headerDKIM2
 	limit := maxMilterFrameLength - len(name) - 3
 	base := Result{
 		Operation: operationRevise, Result: resultPass, Outcome: DispositionAccept,
-		Actions: []Action{{Kind: ActionAddHeader, Name: name, Value: strings.Repeat("a", limit)}},
+		Actions: []Action{{Kind: ActionAddHeader, Name: name, Value: foldableValue(limit)}},
+	}
+	if len(headerfold.Restore(base.Actions[0].Value)) != limit {
+		t.Fatal("fixture does not fold to the exact frame limit")
 	}
 	if !validResult(base, modeTransit, "") {
 		t.Fatal("exact maximum action frame was rejected")
@@ -378,5 +402,53 @@ func TestValidResultConfinesNullSenderSkipToOriginatorContinue(t *testing.T) {
 		if validResult(candidate.result, candidate.mode, "") {
 			t.Fatalf("%s skip result was admitted", name)
 		}
+	}
+}
+
+// TestLongSignatureFieldIsRefoldedForPostfix reproduces a composite-algorithm
+// DKIM2-Signature whose daemon projection is one unfolded value of several
+// kilobytes. Postfix stores a Milter header value line by line, so the
+// adapter must restore the library's CRLF+TAB fold points as LF+TAB; otherwise
+// the queued field exceeds the RFC 5322 998-octet line limit, every DSN that
+// returns it fails MIME parsing, and SMTP output breaks it at arbitrary bytes.
+func TestLongSignatureFieldIsRefoldedForPostfix(t *testing.T) {
+	chunk := strings.Repeat("A", 64)
+	signature := strings.TrimSuffix(strings.Repeat(chunk+"\t", 52), "\t")
+	value := " i=1;\tm=1;\tt=1792590164;\tmf=PHNlbmRlckBleGFtcGxlLnRlc3Q+;\trt=PHJjcHRAZXhhbXBsZS50ZXN0Pg==;" +
+		"\td=example.test;\ts=sel:mldsa44-ed25519-sha512:" + signature + ";"
+	if len(value) <= 998 {
+		t.Fatalf("fixture is not over-long: %d", len(value))
+	}
+	session := testSession(t, &testHandler{}, false, modeOriginator, "")
+	frames, err := session.serializeResult(Result{
+		Operation: operationSign, Result: resultPass, Outcome: DispositionAccept,
+		Actions: []Action{
+			{Kind: ActionAddHeader, Name: headerMessage, Value: " v=1; m=1"},
+			{Kind: ActionAddHeader, Name: headerDKIM2, Value: value},
+		},
+	}, nil)
+	if err != nil || len(frames) != 3 || len(frames[1]) < 5 || frames[1][4] != replyAddHeader {
+		t.Fatalf("serializeResult() frames=%d error=%v", len(frames), err)
+	}
+	if !bytes.Equal(frames[0][5:], []byte(headerMessage+"\x00 v=1; m=1\x00")) {
+		t.Fatalf("short field changed: %q", frames[0][5:])
+	}
+	payload := frames[1][5:]
+	name, rest, ok := bytes.Cut(payload, []byte{0})
+	if !ok || string(name) != headerDKIM2 || !bytes.HasSuffix(rest, []byte{0}) {
+		t.Fatalf("header payload framing invalid")
+	}
+	emitted := rest[:len(rest)-1]
+	if bytes.Contains(emitted, []byte("\r")) {
+		t.Fatal("Milter header value must use LF folding, never CR")
+	}
+	for _, line := range bytes.Split(emitted, []byte("\n")) {
+		if len(line) > 998-len(headerDKIM2)-1 {
+			t.Fatalf("emitted physical line has %d octets", len(line))
+		}
+	}
+	if bytes.Count(emitted, []byte("\n\t")) != strings.Count(value, "\t") ||
+		string(bytes.ReplaceAll(emitted, []byte("\n"), nil)) != value {
+		t.Fatal("refolding changed the field beyond restoring fold points")
 	}
 }

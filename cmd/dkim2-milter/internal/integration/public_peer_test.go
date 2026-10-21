@@ -323,12 +323,12 @@ func TestExecutableActionDisconnectRecovers(t *testing.T) {
 						{
 							Name:  generatedfixture.MessageInstance,
 							Type:  generatedfixture.AddHeader,
-							Value: strings.Repeat("m", 65_000),
+							Value: strings.TrimSuffix(strings.Repeat(strings.Repeat("m", 63)+"\t", 1_000), "\t"),
 						},
 						{
 							Name:  generatedfixture.DKIM2Signature,
 							Type:  generatedfixture.AddHeader,
-							Value: strings.Repeat("s", 65_000),
+							Value: strings.TrimSuffix(strings.Repeat(strings.Repeat("s", 63)+"\t", 1_000), "\t"),
 						},
 					},
 					ApiVersion:  generatedfixture.V1,

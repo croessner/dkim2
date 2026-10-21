@@ -2,6 +2,7 @@ package filter
 
 import (
 	"bytes"
+	"strings"
 	"testing"
 
 	"github.com/croessner/dkim2/cmd/dkim2-exim/internal/adapter"
@@ -173,4 +174,38 @@ func FuzzTransform(f *testing.F) {
 		}
 		_, _ = Transform(message, plan)
 	})
+}
+
+// TestTransformRefoldsLongSignatureFields reproduces a composite-algorithm
+// DKIM2-Signature whose projected value is one unfolded line of several
+// kilobytes. The filter must restore the fold points so every written line
+// stays within RFC 5322 limits and the field is otherwise unchanged.
+func TestTransformRefoldsLongSignatureFields(t *testing.T) {
+	signature := strings.TrimSuffix(strings.Repeat(strings.Repeat("A", 64)+"\t", 52), "\t")
+	value := " i=1;\tm=1;\td=example.test;\ts=sel:mldsa44-ed25519-sha512:" + signature + ";"
+	first, err := adapter.NewAction(adapter.ActionAddHeader, "Message-Instance", " i=1; m=a")
+	if err != nil {
+		t.Fatal("message-instance action failed")
+	}
+	second, err := adapter.NewAction(adapter.ActionAddHeader, "DKIM2-Signature", value)
+	if err != nil {
+		t.Fatal("signature action failed")
+	}
+	plan, err := adapter.NewFilterPlan(adapter.FilterSign, adapter.ResultPass, adapter.DispositionAccept, []adapter.Action{first, second})
+	if err != nil {
+		t.Fatal("sign plan failed")
+	}
+	output, err := Transform([]byte("Subject: preserved\n\nbody\n"), plan)
+	if err != nil {
+		t.Fatalf("Transform() error = %v", err)
+	}
+	for _, line := range bytes.Split(output, []byte("\n")) {
+		if len(line) > 998 {
+			t.Fatalf("written line has %d octets", len(line))
+		}
+	}
+	want := "DKIM2-Signature:" + strings.ReplaceAll(value, "\t", "\n\t") + "\n"
+	if !bytes.Contains(output, []byte(want)) {
+		t.Fatal("signature field was not restored to its folded form")
+	}
 }

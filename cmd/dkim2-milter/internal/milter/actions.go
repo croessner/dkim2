@@ -2,6 +2,7 @@ package milter
 
 import (
 	"github.com/croessner/dkim2/authresults"
+	"github.com/croessner/dkim2/headerfold"
 	"strings"
 	"unicode/utf8"
 )
@@ -113,13 +114,16 @@ func validActions(result Result) bool {
 	}
 	total := 0
 	for _, action := range result.Actions {
+		// Limits apply to the folded value that serialization writes.
+		folded := headerfold.Restore(action.Value)
 		if action.Kind != ActionAddHeader || !validActionName(action.Name) ||
 			action.Value == "" ||
-			len(action.Name)+len(action.Value)+3 > maxMilterFrameLength ||
-			strings.ContainsAny(action.Value, "\r\n\x00") {
+			len(action.Name)+len(folded)+3 > maxMilterFrameLength ||
+			strings.ContainsAny(action.Value, "\r\n\x00") ||
+			!headerfold.WithinLineLimit(action.Name, folded) {
 			return false
 		}
-		total += len(action.Name) + len(action.Value) + 3
+		total += len(action.Name) + len(folded) + 3
 		if total > maxActionAggregateBytes {
 			return false
 		}

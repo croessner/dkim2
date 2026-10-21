@@ -935,14 +935,18 @@ recipient mutation and body-only replacement are invalid on this path.
 
 The filter inserts the ordered fields at the end of the inherited header block,
 immediately before the existing header/body separator, matching the M10
-insertion position and action order. Each action is rendered exactly as
-`name + ":" + value + LF`; the OpenAPI value already contains the exact
-post-colon bytes, including required legal leading SP or HTAB folding
-whitespace. Missing or illegal post-colon folding whitespace is a contract
-failure. Independent tests prove byte and canonical equivalence with the M16
-action value and detect any added or removed whitespace. The value is the
-daemon-proved canonical-equivalent legal unfolding, not the original folded
-M10 bytes. The
+insertion position and action order. Each action is rendered as
+`name + ":" + headerfold.Restore(value) + LF`; the OpenAPI value already
+contains the exact post-colon bytes, including required legal leading SP or
+HTAB folding whitespace. Missing or illegal post-colon folding whitespace is a
+contract failure. The value is the daemon-proved canonical-equivalent legal
+unfolding of the library-rendered field, whose frozen grammar emits a TAB only
+directly after a CRLF. `lib/headerfold` therefore restores an LF line break
+before every TAB after the first value octet, so the written field regains the
+library's fold points; a field with a physical line over 998 octets is a
+contract failure. Without this, a composite-algorithm `DKIM2-Signature` would
+be written as one multi-kilobyte line. Independent tests prove canonical
+equivalence with the action value. The
 adapter does not prepend, reorder or refold inherited fields. A header-only
 message remains header-only unless the authoritative completed-message proof
 requires otherwise; the adapter never invents a body separator independently.

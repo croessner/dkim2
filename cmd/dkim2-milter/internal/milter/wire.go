@@ -12,6 +12,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/croessner/dkim2/cmd/dkim2-milter/internal/resource"
+	"github.com/croessner/dkim2/headerfold"
 	"golang.org/x/net/idna"
 )
 
@@ -749,7 +750,9 @@ func (s *Session) serializeAcceptance(
 		payload = append(payload, action.Name...)
 		payload = append(payload, 0)
 		payload = append(payload, valuePrefix...)
-		payload = append(payload, action.Value...)
+		// Postfix stores Milter header values line by line; restore the
+		// projected fold points so no queued line exceeds RFC 5322 limits.
+		payload = append(payload, headerfold.Restore(action.Value)...)
 		payload = append(payload, 0)
 		frames = append(frames, encodeFrame(command, payload))
 	}

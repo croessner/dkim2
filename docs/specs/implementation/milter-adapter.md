@@ -285,6 +285,17 @@ adapter must not claim rollback atomicity: a transport failure after a partial
 write is an indeterminate MTA-side outcome. It closes the connection and never
 uses fail-open after the first possible mutation byte.
 
+The daemon projects every added field value without its CRLF line breaks but
+keeps the whitespace that followed them. The library's frozen field grammar
+emits a TAB only directly after such a CRLF, so every TAB after the first
+value octet marks one original fold point. Before serialization the Milter and
+the Exim filter restore those fold points as LF+TAB (`lib/headerfold`), the
+folded form Postfix and Exim store line by line. A plan whose restored field
+still has a physical line over 998 octets fails validation. Without the
+restoration a composite-algorithm `DKIM2-Signature` (several kilobytes) would
+be queued as one line: DSNs returning it fail MIME parsing and SMTP output
+breaks it at arbitrary octets.
+
 ## Datasource And Private Signing Backend
 
 Signing is disabled by default. Existing inbound-only daemon configurations

@@ -6,6 +6,7 @@ import (
 	"slices"
 
 	"github.com/croessner/dkim2/cmd/dkim2-exim/internal/adapter"
+	"github.com/croessner/dkim2/headerfold"
 )
 
 const maxTransformedBytes = maxInputBytes + 3*(65_535+len("DKIM2-Signature")+2)
@@ -47,8 +48,13 @@ func TransformLimited(message []byte, plan adapter.Plan, limits Limits) ([]byte,
 	additions := make([]byte, 0, len(actions)*(len("DKIM2-Signature:")+2))
 	defer clear(additions)
 	for _, action := range actions {
-		value := action.Value()
-		if len(value) == 0 || value[0] != ' ' && value[0] != '\t' {
+		if len(action.Value()) == 0 || action.Value()[0] != ' ' && action.Value()[0] != '\t' {
+			return nil, adapter.NewError(adapter.FailureContract)
+		}
+		// Restore the projected fold points; a composite-algorithm signature
+		// would otherwise be written as one line beyond the RFC 5322 limit.
+		value := headerfold.Restore(action.Value())
+		if !headerfold.WithinLineLimit(action.Name(), value) {
 			return nil, adapter.NewError(adapter.FailureContract)
 		}
 		if len(action.Name())+1+len(value)+1 > maxTransformedBytes-len(additions) {

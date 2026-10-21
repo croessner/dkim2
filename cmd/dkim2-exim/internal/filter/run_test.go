@@ -166,7 +166,7 @@ func TestRunNeverRetriesAfterLargePartialOutput(t *testing.T) {
 	first, _ := adapter.NewAction(
 		adapter.ActionAddHeader,
 		"Message-Instance",
-		" "+strings.Repeat("x", 65_000),
+		" "+strings.TrimSuffix(strings.Repeat(strings.Repeat("x", 63)+"\t", 1_000), "\t"),
 	)
 	second, _ := adapter.NewAction(
 		adapter.ActionAddHeader,
