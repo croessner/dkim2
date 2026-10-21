@@ -141,14 +141,7 @@ func mapNativeKeyMaterial(
 
 // parseLDAPAlgorithm maps one exact native signing algorithm.
 func parseLDAPAlgorithm(value []byte) (provider.Algorithm, error) {
-	switch string(value) {
-	case string(provider.AlgorithmRSASHA256):
-		return provider.AlgorithmRSASHA256, nil
-	case string(provider.AlgorithmEd25519SHA256):
-		return provider.AlgorithmEd25519SHA256, nil
-	default:
-		return "", provider.NewError(provider.ErrorCodeMalformedData)
-	}
+	return provider.ParseAlgorithm(string(value))
 }
 
 // closeNativeMaterials clears every retained native-key value.
@@ -621,14 +614,9 @@ func mapCredential(entry Entry, limits provider.Limits) (uint64, credentialRecor
 	if err != nil {
 		return 0, credentialRecord{}, err
 	}
-	var algorithm provider.Algorithm
-	switch string(values[attrAlgorithm]) {
-	case string(provider.AlgorithmRSASHA256):
-		algorithm = provider.AlgorithmRSASHA256
-	case string(provider.AlgorithmEd25519SHA256):
-		algorithm = provider.AlgorithmEd25519SHA256
-	default:
-		return 0, credentialRecord{}, provider.NewError(provider.ErrorCodeMalformedData)
+	algorithm, err := parseLDAPAlgorithm(values[attrAlgorithm])
+	if err != nil {
+		return 0, credentialRecord{}, err
 	}
 	credential, err := provider.NewCredential(
 		string(values[attrSelector]), algorithm,

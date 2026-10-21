@@ -43,9 +43,9 @@ func (a Algorithm) Signable() bool {
 // signer emits and of credentials in a signing profile.
 var signingAlgorithmOrder = [...]Algorithm{AlgorithmRSASHA256, AlgorithmEd25519SHA256, AlgorithmMLDSA44Ed25519SHA512}
 
-// SigningAlgorithmOrder returns the canonical signing order: rsa-sha256,
+// SigningAlgorithmOrder returns a detached copy of the canonical signing order: rsa-sha256,
 // ed25519-sha256, then mldsa44-ed25519-sha512.
-func SigningAlgorithmOrder() []Algorithm { return signingAlgorithmOrder[:] }
+func SigningAlgorithmOrder() []Algorithm { return slices.Clone(signingAlgorithmOrder[:]) }
 
 // SigningRank returns the position of a signable algorithm in the canonical
 // signing order.

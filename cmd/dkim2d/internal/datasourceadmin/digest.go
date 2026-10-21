@@ -258,7 +258,7 @@ func validPlanShape(plan PlanProjection) bool {
 	return validOperationID(plan.OperationID) && validOperationID(plan.Authority.AuthorityID) && backendKnown &&
 		plan.Intent.Version == domainIntentVersionV1 && plan.Intent.Domain != "" && plan.Intent.TenantID != "" &&
 		plan.Intent.ProfileUse != "" && plan.Intent.Rollout != "" && plan.Intent.Compatibility != "" &&
-		plan.ProfileID != "" && len(plan.Credentials) > 0 && len(plan.Credentials) <= 2 &&
+		plan.ProfileID != "" && len(plan.Credentials) > 0 && len(plan.Credentials) <= len(provider.SigningAlgorithms()) &&
 		len(plan.Intent.Algorithms) == len(plan.Credentials) && plan.CandidateGeneration != 0 &&
 		plan.DNS.ExportTTLSeconds != 0 && plan.DNS.ProofLifetimeSeconds != 0
 }
@@ -400,8 +400,8 @@ func validPlanIntent(intent PlanIntent, profileID string, credentials []Allocate
 		return false
 	}
 	for _, credential := range credentials {
-		algorithm := provider.Algorithm(credential.Algorithm)
-		if (algorithm != provider.AlgorithmRSASHA256 && algorithm != provider.AlgorithmEd25519SHA256) ||
+		algorithm, err := provider.ParseAlgorithm(credential.Algorithm)
+		if err != nil ||
 			provider.ValidateDomainSelector(intent.Domain, credential.Selector, algorithm) != nil ||
 			ValidateHandleDeclaration(credential.HandleID) != nil {
 			return false

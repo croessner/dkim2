@@ -91,7 +91,7 @@ All 23 attributes are single-valued.
 | `dkim2RecordStatus` | `RNSDKIM2at:7` | exact IA5 text | `active` or `disabled` |
 | `dkim2NotBefore` | `RNSDKIM2at:8` | canonical UTC RFC3339Nano | optional half-open validity start |
 | `dkim2NotAfter` | `RNSDKIM2at:9` | canonical UTC RFC3339Nano | optional half-open validity end |
-| `dkim2Algorithm` | `RNSDKIM2at:10` | exact IA5 text | `rsa-sha256` or `ed25519-sha256` |
+| `dkim2Algorithm` | `RNSDKIM2at:10` | exact IA5 text | `rsa-sha256`, `ed25519-sha256`, or `mldsa44-ed25519-sha512` |
 | `dkim2Selector` | `RNSDKIM2at:11` | exact IA5 text | canonical lowercase ASCII DNS selector |
 | `dkim2PublicKeySPKI` | `RNSDKIM2at:12` | octet string | canonical public SubjectPublicKeyInfo DER |
 | `dkim2TenantID` | `RNSDKIM2at:13` | exact IA5 text | exact administrative tenant identity |

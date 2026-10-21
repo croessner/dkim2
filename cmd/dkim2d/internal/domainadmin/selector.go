@@ -80,6 +80,8 @@ func selectorPrefix(algorithm provider.Algorithm) (string, error) {
 		return "d2e-", nil
 	case provider.AlgorithmRSASHA256:
 		return "d2r-", nil
+	case provider.AlgorithmMLDSA44Ed25519SHA512:
+		return "d2m-", nil
 	default:
 		return "", newError(CodeInvalidIntent)
 	}

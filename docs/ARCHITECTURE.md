@@ -2350,6 +2350,13 @@ Rules:
   `dkim2.CompositeSigningKey.SignDigest`, so the LAMPS construction keeps one
   owner. Generated RSA signatures stay bounded at 1024 bytes; composite
   signatures must be exactly 2484 bytes.
+- In `dkim2d`, `cmd/dkim2d/internal/signingstore` is the single custody key
+  codec for all three algorithms: PKCS#8 parsing and canonical re-encoding,
+  public SPKI derivation, key generation for onboarding and rotation, signing,
+  and best-effort clearing. Composite custody keys are held as
+  `*dkim2.CompositeSigningKey`, so the daemon never rebuilds the
+  construction. Datasource mappers and administration admit algorithms only
+  through `provider.ParseAlgorithm`.
 - Accept and preserve syntactically valid unknown algorithm tokens at protocol
   parsing boundaries for draft forward compatibility, but never execute them.
   Ignore unknown Message-Instance hash tuples only as the active draft permits,

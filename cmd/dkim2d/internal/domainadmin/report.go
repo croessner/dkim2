@@ -3,7 +3,9 @@ package domainadmin
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/croessner/dkim2/provider"
 	"io"
+	"strconv"
 
 	"github.com/croessner/dkim2/cmd/dkim2d/internal/datasourceadmin"
 )
@@ -12,25 +14,26 @@ const reportSchema = "dkim2-domain-report-v1"
 
 // Report is one opaque validated bounded operator result.
 type Report struct {
-	toolVersion            string
-	command                Command
-	state                  OperationState
-	backend                string
-	expectedCurrent        uint64
-	current                uint64
-	currentKnown           bool
-	candidate              uint64
-	credentialCount        uint32
-	rsaCredentialCount     uint32
-	ed25519CredentialCount uint32
-	planComplete           bool
-	receiptPresent         bool
-	receiptPhase           ReceiptPhase
-	lockRelation           LockRelation
-	runtimeSmokeRequired   bool
-	result                 OnboardingResultClass
-	failure                ErrorCode
-	initialized            bool
+	toolVersion              string
+	command                  Command
+	state                    OperationState
+	backend                  string
+	expectedCurrent          uint64
+	current                  uint64
+	currentKnown             bool
+	candidate                uint64
+	credentialCount          uint32
+	rsaCredentialCount       uint32
+	ed25519CredentialCount   uint32
+	compositeCredentialCount uint32
+	planComplete             bool
+	receiptPresent           bool
+	receiptPhase             ReceiptPhase
+	lockRelation             LockRelation
+	runtimeSmokeRequired     bool
+	result                   OnboardingResultClass
+	failure                  ErrorCode
+	initialized              bool
 }
 
 // reportDocument is the sole closed machine-output schema.
@@ -46,6 +49,7 @@ type reportDocument struct {
 	CredentialCount           *uint32               `json:"credential_count,omitempty"`
 	RSACredentialCount        *uint32               `json:"rsa_credential_count,omitempty"`
 	Ed25519CredentialCount    *uint32               `json:"ed25519_credential_count,omitempty"`
+	CompositeCredentialCount  *uint32               `json:"mldsa44_ed25519_credential_count,omitempty"`
 	PlanComplete              bool                  `json:"plan_complete"`
 	ReceiptPresent            bool                  `json:"receipt_present,omitempty"`
 	ReceiptPhase              ReceiptPhase          `json:"receipt_phase,omitempty"`
@@ -74,8 +78,9 @@ func NewCommandReport(
 		currentKnown: result.CurrentGenerationKnown,
 		candidate:    result.CandidateGeneration, credentialCount: result.CredentialCount,
 		rsaCredentialCount: result.RSACredentialCount, ed25519CredentialCount: result.Ed25519CredentialCount,
-		runtimeSmokeRequired: result.RuntimeVerificationRequired,
-		result:               result.Result, failure: result.Failure, initialized: true,
+		compositeCredentialCount: result.CompositeCredentialCount,
+		runtimeSmokeRequired:     result.RuntimeVerificationRequired,
+		result:                   result.Result, failure: result.Failure, initialized: true,
 	}
 	if !report.valid() {
 		return Report{}, newError(CodeProtectedInput)
@@ -97,7 +102,8 @@ func NewStatusReport(
 		currentKnown: status.CurrentGenerationKnown,
 		candidate:    status.CandidateGeneration, credentialCount: status.CredentialCount,
 		rsaCredentialCount: status.RSACredentialCount, ed25519CredentialCount: status.Ed25519CredentialCount,
-		lockRelation: status.LockRelation, result: OnboardingResultSuccess,
+		compositeCredentialCount: status.CompositeCredentialCount,
+		lockRelation:             status.LockRelation, result: OnboardingResultSuccess,
 		failure: status.Failure, initialized: true,
 	}
 	if !report.valid() {
@@ -121,21 +127,21 @@ func EncodeReport(report Report, machine bool, maximum uint32) ([]byte, error) {
 		}
 	} else if report.planComplete && report.currentKnown {
 		encoded = fmt.Appendf(nil,
-			"schema=%s tool_version=%s command=%s state=%s backend=%s expected_current_generation=%d current_generation=%d candidate_generation=%d credential_count=%d rsa_credential_count=%d ed25519_credential_count=%d plan_complete=%t receipt_present=%t receipt_phase=%s lock_relation=%s runtime_smoke_required=%t result=%s failure=%s\n",
+			"schema=%s tool_version=%s command=%s state=%s backend=%s expected_current_generation=%d current_generation=%d candidate_generation=%d credential_count=%d rsa_credential_count=%d ed25519_credential_count=%d%s plan_complete=%t receipt_present=%t receipt_phase=%s lock_relation=%s runtime_smoke_required=%t result=%s failure=%s\n",
 			document.Schema, document.ToolVersion, document.Command, document.State,
 			document.Backend, report.expectedCurrent, report.current,
 			report.candidate, report.credentialCount, report.rsaCredentialCount,
-			report.ed25519CredentialCount, document.PlanComplete, document.ReceiptPresent,
+			report.ed25519CredentialCount, report.compositeCountField(), document.PlanComplete, document.ReceiptPresent,
 			document.ReceiptPhase, document.LockRelation, document.RuntimeSmokeRequired,
 			document.Result, document.Failure,
 		)
 	} else if report.planComplete {
 		encoded = fmt.Appendf(nil,
-			"schema=%s tool_version=%s command=%s state=%s backend=%s expected_current_generation=%d candidate_generation=%d credential_count=%d rsa_credential_count=%d ed25519_credential_count=%d plan_complete=%t receipt_present=%t receipt_phase=%s lock_relation=%s runtime_smoke_required=%t result=%s failure=%s\n",
+			"schema=%s tool_version=%s command=%s state=%s backend=%s expected_current_generation=%d candidate_generation=%d credential_count=%d rsa_credential_count=%d ed25519_credential_count=%d%s plan_complete=%t receipt_present=%t receipt_phase=%s lock_relation=%s runtime_smoke_required=%t result=%s failure=%s\n",
 			document.Schema, document.ToolVersion, document.Command, document.State,
 			document.Backend, report.expectedCurrent, report.candidate,
 			report.credentialCount, report.rsaCredentialCount,
-			report.ed25519CredentialCount, document.PlanComplete, document.ReceiptPresent,
+			report.ed25519CredentialCount, report.compositeCountField(), document.PlanComplete, document.ReceiptPresent,
 			document.ReceiptPhase, document.LockRelation, document.RuntimeSmokeRequired,
 			document.Result, document.Failure,
 		)
@@ -172,8 +178,21 @@ func (r Report) document() reportDocument {
 		document.CredentialCount = &r.credentialCount
 		document.RSACredentialCount = &r.rsaCredentialCount
 		document.Ed25519CredentialCount = &r.ed25519CredentialCount
+		if r.compositeCredentialCount != 0 {
+			document.CompositeCredentialCount = &r.compositeCredentialCount
+		}
 	}
 	return document
+}
+
+// compositeCountField renders the human mldsa44-ed25519-sha512 credential
+// count only when a composite credential exists, so reports of RSA and
+// Ed25519 operations keep their established form.
+func (r Report) compositeCountField() string {
+	if r.compositeCredentialCount == 0 {
+		return ""
+	}
+	return " mldsa44_ed25519_credential_count=" + strconv.FormatUint(uint64(r.compositeCredentialCount), 10)
 }
 
 // valid enforces closed enums and prevents identity-shaped free text.
@@ -249,15 +268,15 @@ func (r Report) validWorkflow() bool {
 // hasOperationFacts reports whether any public plan-derived fact is present.
 func (r Report) hasOperationFacts() bool {
 	return r.expectedCurrent != 0 || r.current != 0 || r.currentKnown || r.candidate != 0 || r.credentialCount != 0 ||
-		r.rsaCredentialCount != 0 || r.ed25519CredentialCount != 0
+		r.rsaCredentialCount != 0 || r.ed25519CredentialCount != 0 || r.compositeCredentialCount != 0
 }
 
 // validOperationFacts enforces bounded exact generation and credential relationships.
 func (r Report) validOperationFacts() bool {
 	return (r.currentKnown || r.current == 0) && r.candidate > r.expectedCurrent &&
-		r.credentialCount >= 1 && r.credentialCount <= 2 &&
-		r.rsaCredentialCount <= 1 && r.ed25519CredentialCount <= 1 &&
-		r.rsaCredentialCount+r.ed25519CredentialCount == r.credentialCount
+		r.credentialCount >= 1 && int(r.credentialCount) <= len(provider.SigningAlgorithms()) &&
+		r.rsaCredentialCount <= 1 && r.ed25519CredentialCount <= 1 && r.compositeCredentialCount <= 1 &&
+		r.rsaCredentialCount+r.ed25519CredentialCount+r.compositeCredentialCount == r.credentialCount
 }
 
 // validReportResultFailure enforces one exact result-to-failure correspondence.

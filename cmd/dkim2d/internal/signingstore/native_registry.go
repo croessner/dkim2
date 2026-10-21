@@ -3,10 +3,7 @@ package signingstore
 import (
 	"bytes"
 	"crypto"
-	"crypto/ed25519"
-	"crypto/rsa"
 	"crypto/sha256"
-	"crypto/x509"
 	"fmt"
 	"io"
 	"sync"
@@ -192,39 +189,11 @@ func parseNativePrivateKey(
 		!nativeAlgorithmKnown(algorithm) {
 		return nil, [sha256.Size]byte{}, &Error{}
 	}
-	key, err := x509.ParsePKCS8PrivateKey(encoded)
+	key, derived, err := parsePKCS8PrivateKey(encoded, custodyAlgorithm(algorithm), true)
 	if err != nil {
 		return nil, [sha256.Size]byte{}, &Error{}
 	}
-	canonical, err := x509.MarshalPKCS8PrivateKey(key)
-	if err != nil || !bytes.Equal(canonical, encoded) {
-		clear(canonical)
-		clearPrivateKey(key)
-		return nil, [sha256.Size]byte{}, &Error{}
-	}
-	clear(canonical)
-	var public any
-	switch typed := key.(type) {
-	case *rsa.PrivateKey:
-		if algorithm != provider.AlgorithmRSASHA256 || typed.Validate() != nil ||
-			typed.N.BitLen() < 1024 || len(typed.Primes) != 2 {
-			clearPrivateKey(key)
-			return nil, [sha256.Size]byte{}, &Error{}
-		}
-		public = &typed.PublicKey
-	case ed25519.PrivateKey:
-		if algorithm != provider.AlgorithmEd25519SHA256 ||
-			len(typed) != ed25519.PrivateKeySize {
-			clearPrivateKey(key)
-			return nil, [sha256.Size]byte{}, &Error{}
-		}
-		public = typed.Public()
-	default:
-		clearPrivateKey(key)
-		return nil, [sha256.Size]byte{}, &Error{}
-	}
-	derived, err := x509.MarshalPKIXPublicKey(public)
-	if err != nil || !bytes.Equal(derived, publicSPKI) {
+	if !bytes.Equal(derived, publicSPKI) {
 		clear(derived)
 		clearPrivateKey(key)
 		return nil, [sha256.Size]byte{}, &Error{}
@@ -237,6 +206,5 @@ func parseNativePrivateKey(
 // nativeAlgorithmKnown reports whether native custody supports the exact
 // closed signing algorithm.
 func nativeAlgorithmKnown(algorithm provider.Algorithm) bool {
-	return algorithm == provider.AlgorithmRSASHA256 ||
-		algorithm == provider.AlgorithmEd25519SHA256
+	return custodyAlgorithm(algorithm) != dkim2.AlgorithmUnknown
 }

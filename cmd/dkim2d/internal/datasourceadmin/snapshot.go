@@ -270,14 +270,11 @@ func closeNativeMaterials(materials []*signingstore.NativeKeyMaterial) {
 
 // parseAdministrativeAlgorithm maps the closed native signing vocabulary.
 func parseAdministrativeAlgorithm(value string) (provider.Algorithm, error) {
-	switch value {
-	case string(provider.AlgorithmRSASHA256):
-		return provider.AlgorithmRSASHA256, nil
-	case string(provider.AlgorithmEd25519SHA256):
-		return provider.AlgorithmEd25519SHA256, nil
-	default:
+	algorithm, err := provider.ParseAlgorithm(value)
+	if err != nil {
 		return "", newError(CodeInvalid)
 	}
+	return algorithm, nil
 }
 
 // parseAdministrativeValidity validates one canonical optional UTC interval.

@@ -41,7 +41,7 @@ func NewDomainAddition(
 	profileID string,
 	credentials []DomainCredential,
 ) (*DomainAddition, error) {
-	if intent.Version != domainIntentVersionV1 || len(credentials) == 0 || len(credentials) > 2 ||
+	if intent.Version != domainIntentVersionV1 || len(credentials) == 0 || len(credentials) > len(provider.SigningAlgorithms()) ||
 		len(intent.Algorithms) != len(credentials) {
 		return nil, newError(CodeInvalid)
 	}

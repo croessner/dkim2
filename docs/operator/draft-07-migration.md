@@ -95,8 +95,21 @@ Replay counting is now local delivery policy (Draft-07 Section 15.1):
 - **Exploded flag:** An `exploded` flag on the `i=1` signature is PERMERROR
   `malformed_protocol`.
 - **Composite algorithm:** `mldsa44-ed25519-sha512` signatures and keys
-  (`k=mldsa44-ed25519-sha512`) are verified under the LAMPS composite
-  construction; see "Known Limitations".
+  (`k=mldsa44-ed25519-sha512`) are verified and signed under the LAMPS
+  composite construction; see "Known Limitations".
+  - A signing profile may hold one credential per algorithm, up to all three.
+    The signature sets are emitted in the order `rsa-sha256`,
+    `ed25519-sha256`, `mldsa44-ed25519-sha512`.
+  - `dkim2d` custody accepts composite PKCS#8 keys under OID
+    1.3.6.1.5.5.7.6.39 with the manifest and datasource algorithm
+    `mldsa44-ed25519-sha512`.
+  - Domain onboarding and rotation generate composite keys with `d2m-`
+    selectors and export `k=mldsa44-ed25519-sha512` records with the raw
+    1344-byte key.
+  - Domain reports add `mldsa44_ed25519_credential_count` only when a
+    composite credential exists.
+  - SQL datasources apply `contrib/schema/*/007_composite_algorithm.sql`
+    before storing composite credentials.
 - **SMTP replies (Draft-07 Section 13):**
   - A tempfail caused by a temporary public-key (DNS) lookup failure answers
     `451 4.7.5`. The matching daemon reason is `provider_temporary`.

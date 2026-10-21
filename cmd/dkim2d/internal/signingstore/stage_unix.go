@@ -17,6 +17,9 @@ import (
 	"syscall"
 
 	"golang.org/x/sys/unix"
+
+	"github.com/croessner/dkim2"
+	"github.com/croessner/dkim2/provider"
 )
 
 const registryManifestFile = "private-manifest.json"
@@ -203,14 +206,8 @@ func prepareRegistryStage(
 		}
 		digest := sha256.Sum256(spki)
 		clear(spki)
-		algorithm := manifestRSASHA256
-		if input.key.Algorithm() == "" {
-			clear(encoded)
-			return nil, nil, &Error{}
-		}
-		if input.key.Algorithm() == manifestEd25519SHA256 {
-			algorithm = manifestEd25519SHA256
-		} else if input.key.Algorithm() != manifestRSASHA256 {
+		algorithm := string(input.key.Algorithm())
+		if custodyAlgorithm(provider.Algorithm(algorithm)) == dkim2.AlgorithmUnknown {
 			clear(encoded)
 			return nil, nil, &Error{}
 		}

@@ -16,6 +16,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/croessner/dkim2"
 	"github.com/croessner/dkim2/cmd/dkim2d/internal/datasourceadmin"
 	"github.com/croessner/dkim2/provider"
 )
@@ -203,6 +204,51 @@ func TestStagedDNSSetEncodesRSAAndEd25519AndRoundTrips(t *testing.T) {
 	}
 	if !set.staged.Digest().Equal(staged.Digest()) {
 		t.Fatal("staged DNS set lost its exact backend readback evidence")
+	}
+}
+
+// TestStagedDNSSetEncodesCompositeAndRoundTrips proves a candidate with all
+// three algorithms exports k=mldsa44-ed25519-sha512 with the raw 1344-byte
+// composite key, which round-trips through the DNS-01 parser to its SPKI.
+func TestStagedDNSSetEncodesCompositeAndRoundTrips(t *testing.T) {
+	set, candidate, plan, _ := stagedDNSFixtureFor(t,
+		provider.AlgorithmEd25519SHA256, provider.AlgorithmMLDSA44Ed25519SHA512, provider.AlgorithmRSASHA256)
+	defer set.Close()       //nolint:errcheck // Test cleanup has no recovery.
+	defer candidate.Close() //nolint:errcheck // Test cleanup has no recovery.
+	defer plan.Close()      //nolint:errcheck // Test cleanup has no recovery.
+	composites := 0
+	var zone []byte
+	if err := set.WithRecords(t.Context(), func(records []DNSRecord) error {
+		if len(records) != 3 {
+			t.Fatalf("triple staged candidate produced %d DNS records", len(records))
+		}
+		for _, record := range records {
+			if record.algorithm != provider.AlgorithmMLDSA44Ed25519SHA512 {
+				continue
+			}
+			composites++
+			if !bytes.HasPrefix(record.payload, []byte("v=DKIM1; k=mldsa44-ed25519-sha512; p=")) ||
+				!bytes.HasPrefix(record.selector, []byte("d2m-")) {
+				t.Fatal("composite DNS record has the wrong key type or selector namespace")
+			}
+			separator := bytes.LastIndex(record.payload, []byte("; p="))
+			decoded, err := base64.StdEncoding.DecodeString(string(record.payload[separator+4:]))
+			if err != nil || len(decoded) != 1344 {
+				t.Fatal("composite DNS value is not the raw 1344-byte key")
+			}
+			spki, err := dkim2.MarshalCompositePublicKeySPKI(decoded)
+			if err != nil || !bytes.Equal(spki, record.publicSPKI) {
+				t.Fatal("composite raw DNS value did not reproduce staged SPKI")
+			}
+		}
+		var formatErr error
+		zone, formatErr = formatDNSExport(records, 3600, 1<<20)
+		return formatErr
+	}); err != nil || composites != 1 {
+		t.Fatalf("read staged composite DNS record: composites=%d error=%v", composites, err)
+	}
+	if !bytes.Contains(zone, []byte("; algorithm=mldsa44-ed25519-sha512 selector=d2m-")) {
+		t.Fatal("zone export omitted the composite record")
 	}
 }
 
@@ -470,6 +516,15 @@ func stagedDNSFixture(
 	t *testing.T,
 ) (*StagedDNSSet, *datasourceadmin.PublicationEnvelope, *Plan, datasourceadmin.StagedEvidence) {
 	t.Helper()
+	return stagedDNSFixtureFor(t, provider.AlgorithmEd25519SHA256, provider.AlgorithmRSASHA256)
+}
+
+// stagedDNSFixtureFor constructs one staged candidate for the given algorithms.
+func stagedDNSFixtureFor(
+	t *testing.T,
+	algorithms ...provider.Algorithm,
+) (*StagedDNSSet, *datasourceadmin.PublicationEnvelope, *Plan, datasourceadmin.StagedEvidence) {
+	t.Helper()
 	limits := DefaultLimits()
 	allocator, err := newIdentityAllocator(limits, &incrementingEntropy{})
 	if err != nil {
@@ -483,7 +538,7 @@ func stagedDNSFixture(
 	) (*datasourceadmin.CollisionInventory, error) {
 		return datasourceadmin.NewCollisionInventory(ctx, lock, datasourceadmin.Inventory{}, nil, generationLimits)
 	}}
-	intent := testIntent(t, provider.AlgorithmEd25519SHA256, provider.AlgorithmRSASHA256)
+	intent := testIntent(t, algorithms...)
 	allocation, _, err := allocator.allocateForTest(t.Context(), intent, reader, locker, 41, testAdminGenerationLimits())
 	if err != nil {
 		t.Fatal("construct DNS allocation")

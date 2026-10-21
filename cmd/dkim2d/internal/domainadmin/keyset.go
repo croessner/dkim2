@@ -2,11 +2,7 @@ package domainadmin
 
 import (
 	"context"
-	"crypto"
-	"crypto/ed25519"
 	"crypto/rand"
-	"crypto/rsa"
-	"crypto/x509"
 	"fmt"
 	"io"
 	"sync"
@@ -218,43 +214,18 @@ func (*KeyGenerationInput) Format(state fmt.State, _ rune) { _, _ = io.WriteStri
 // MarshalJSON rejects generic key-generation-input serialization.
 func (*KeyGenerationInput) MarshalJSON() ([]byte, error) { return nil, newError(CodeProtectedInput) }
 
-// generateCredential creates canonical PKCS#8 and derived SPKI for one algorithm.
+// generateCredential creates canonical PKCS#8 and derived SPKI for one
+// algorithm through the signing-store key codec, the single custody owner.
 func (g *KeyGenerator) generateCredential(
 	ctx context.Context,
 	identity AllocatedIdentity,
 ) (generatedCredential, error) {
-	var private crypto.PrivateKey
-	var public any
-	var err error
 	reader := contextEntropyReader{ctx: ctx, source: g.entropy}
-	switch identity.algorithm {
-	case provider.AlgorithmEd25519SHA256:
-		var publicKey ed25519.PublicKey
-		publicKey, private, err = ed25519.GenerateKey(reader)
-		public = publicKey
-	case provider.AlgorithmRSASHA256:
-		var privateKey *rsa.PrivateKey
-		privateKey, err = rsa.GenerateKey(reader, g.policy.RSAModulusBits)
-		if err == nil && (privateKey == nil || privateKey.E != g.policy.RSAExponent ||
-			privateKey.N.BitLen() != g.policy.RSAModulusBits) {
-			err = newError(CodeUnavailable)
-		}
-		private = privateKey
-		if privateKey != nil {
-			public = &privateKey.PublicKey
-		}
-	default:
+	if _, err := provider.ParseAlgorithm(string(identity.algorithm)); err != nil {
 		return generatedCredential{}, newError(CodeInvalidIntent)
 	}
-	if private != nil {
-		defer signingstore.ClearPrivateKey(private)
-	}
-	if err != nil || ctx.Err() != nil {
-		return generatedCredential{}, newError(CodeUnavailable)
-	}
-	privatePKCS8, privateErr := x509.MarshalPKCS8PrivateKey(private)
-	publicSPKI, publicErr := x509.MarshalPKIXPublicKey(public)
-	if privateErr != nil || publicErr != nil || len(privatePKCS8) == 0 || len(publicSPKI) == 0 {
+	privatePKCS8, publicSPKI, err := signingstore.GeneratePrivateKey(identity.algorithm, reader, g.policy.RSAModulusBits)
+	if err != nil || ctx.Err() != nil || len(privatePKCS8) == 0 || len(publicSPKI) == 0 {
 		clear(privatePKCS8)
 		clear(publicSPKI)
 		return generatedCredential{}, newError(CodeUnavailable)

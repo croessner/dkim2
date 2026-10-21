@@ -27,7 +27,16 @@ const (
 	fixtureHandle      = "origin-key"
 	fixtureProfile     = "origin-profile"
 	fixtureManifestUse = manifestOriginator
-	fixtureAlgorithm   = manifestRSASHA256
+	fixtureAlgorithm   = string(provider.AlgorithmRSASHA256)
+
+	fixtureFieldAlgorithm = "algorithm"
+	fixtureFieldHandleID  = "handle_id"
+	fixtureFieldVersion   = "version"
+	fixtureFieldUse       = "use"
+	fixtureFieldTenantID  = "tenant_id"
+	fixtureFieldStatus    = "status"
+	fixtureTenant         = "tenant-a"
+	fixtureStatusActive   = "active"
 )
 
 type signingStorePublicKeys struct {
@@ -76,7 +85,7 @@ func TestStoreComposesDatasourceProjectionAndOpaqueSigner(t *testing.T) {
 	t.Cleanup(func() { _ = store.Close(context.Background()) })
 	profile, err := store.ResolvePolicy(
 		context.Background(),
-		"tenant-a",
+		fixtureTenant,
 		"example.test",
 		PolicyOriginator,
 		time.Now().UTC(),
@@ -86,7 +95,7 @@ func TestStoreComposesDatasourceProjectionAndOpaqueSigner(t *testing.T) {
 	}
 	if other, otherErr := store.ResolvePolicy(
 		context.Background(),
-		"tenant-a",
+		fixtureTenant,
 		"example.test",
 		PolicyOrdinaryTransit,
 		time.Now().UTC(),
@@ -241,7 +250,7 @@ func TestRuntimeReloadPublishesOnlyCompleteGenerations(t *testing.T) {
 		t.Fatal("Reload() published an invalid candidate")
 	}
 	if profile, resolveErr := oldLease.ResolvePolicy(
-		context.Background(), "tenant-a", "example.test",
+		context.Background(), fixtureTenant, "example.test",
 		PolicyOriginator, time.Now().UTC(),
 	); resolveErr != nil || !profile.Valid() {
 		t.Fatalf("old lease was lost after failed reload: %v", resolveErr)
@@ -263,13 +272,13 @@ func TestRuntimeReloadPublishesOnlyCompleteGenerations(t *testing.T) {
 		t.Fatalf("Acquire(new) error = %v", err)
 	}
 	if profile, resolveErr := newLease.ResolvePolicy(
-		context.Background(), "tenant-a", "example.test",
+		context.Background(), fixtureTenant, "example.test",
 		PolicyOriginator, time.Now().UTC(),
 	); resolveErr != nil || !profile.Valid() {
 		t.Fatalf("new lease is not complete: %v", resolveErr)
 	}
 	if profile, resolveErr := oldLease.ResolvePolicy(
-		context.Background(), "tenant-a", "example.test",
+		context.Background(), fixtureTenant, "example.test",
 		PolicyOriginator, time.Now().UTC(),
 	); resolveErr != nil || !profile.Valid() {
 		t.Fatalf("old in-flight lease did not complete: %v", resolveErr)
@@ -307,20 +316,20 @@ func newSigningStoreFixture(t *testing.T) signingStoreFixture {
 	const manifestFile = "private-manifest.json"
 	const privateFile = "origin-private.pem"
 	datasourceDocument := map[string]any{
-		"version": "dkim2-datasource-v1",
-		"handles": []any{map[string]any{"id": fixtureHandle}},
+		fixtureFieldVersion: "dkim2-datasource-v1",
+		"handles":           []any{map[string]any{"id": fixtureHandle}},
 		"profiles": []any{map[string]any{
-			"id": fixtureProfile, fixtureDomainField: fixtureDomain, "status": "active",
+			"id": fixtureProfile, fixtureDomainField: fixtureDomain, fixtureFieldStatus: fixtureStatusActive,
 			"credentials": []any{map[string]any{
-				"algorithm": fixtureAlgorithm, "selector": "s1",
-				"public_key_spki": base64.StdEncoding.EncodeToString(spki),
-				"handle_id":       fixtureHandle,
+				fixtureFieldAlgorithm: fixtureAlgorithm, "selector": "s1",
+				"public_key_spki":    base64.StdEncoding.EncodeToString(spki),
+				fixtureFieldHandleID: fixtureHandle,
 			}},
 		}},
 		"policies": []any{map[string]any{
-			"tenant_id": "tenant-a", fixtureDomainField: fixtureDomain,
-			"use": fixtureManifestUse, "profile_id": fixtureProfile,
-			"status": "active", "rollout": "enforce", "compatibility": "strict",
+			fixtureFieldTenantID: fixtureTenant, fixtureDomainField: fixtureDomain,
+			fixtureFieldUse: fixtureManifestUse, "profile_id": fixtureProfile,
+			fixtureFieldStatus: fixtureStatusActive, "rollout": "enforce", "compatibility": "strict",
 		}},
 	}
 	datasourceBytes, err := json.Marshal(datasourceDocument)
@@ -329,10 +338,10 @@ func newSigningStoreFixture(t *testing.T) signingStoreFixture {
 	}
 	digest := sha256.Sum256(spki)
 	manifestDocument := map[string]any{
-		"version": manifestVersion,
+		fixtureFieldVersion: manifestVersion,
 		"entries": []any{map[string]any{
-			"tenant_id": "tenant-a", fixtureDomainField: fixtureDomain, "use": fixtureManifestUse,
-			"handle_id": fixtureHandle, "algorithm": fixtureAlgorithm,
+			fixtureFieldTenantID: fixtureTenant, fixtureDomainField: fixtureDomain, fixtureFieldUse: fixtureManifestUse,
+			fixtureFieldHandleID: fixtureHandle, fixtureFieldAlgorithm: fixtureAlgorithm,
 			"public_spki_sha256": base64.StdEncoding.EncodeToString(digest[:]),
 			"private_key_file":   privateFile,
 		}},

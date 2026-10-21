@@ -267,35 +267,9 @@ func newDNSRecord(
 	if ctx == nil || ctx.Err() != nil {
 		return DNSRecord{}, newError(CodeUnavailable)
 	}
-	public, err := x509.ParsePKIXPublicKey(publicSPKI)
+	keyType, dnsKey, err := dnsKeyValue(algorithm, publicSPKI)
 	if err != nil {
-		return DNSRecord{}, newError(CodeDNSInvalid)
-	}
-	canonicalSPKI, err := x509.MarshalPKIXPublicKey(public)
-	if err != nil || !bytes.Equal(canonicalSPKI, publicSPKI) {
-		clear(canonicalSPKI)
-		return DNSRecord{}, newError(CodeDNSInvalid)
-	}
-	clear(canonicalSPKI)
-	var keyType string
-	var dnsKey []byte
-	switch algorithm {
-	case provider.AlgorithmRSASHA256:
-		key, ok := public.(*rsa.PublicKey)
-		if !ok || key == nil {
-			return DNSRecord{}, newError(CodeDNSAlgorithmMismatch)
-		}
-		keyType = "rsa"
-		dnsKey = x509.MarshalPKCS1PublicKey(key)
-	case provider.AlgorithmEd25519SHA256:
-		key, ok := public.(ed25519.PublicKey)
-		if !ok || len(key) != ed25519.PublicKeySize {
-			return DNSRecord{}, newError(CodeDNSAlgorithmMismatch)
-		}
-		keyType = "ed25519"
-		dnsKey = bytes.Clone(key)
-	default:
-		return DNSRecord{}, newError(CodeDNSUnsupported)
+		return DNSRecord{}, err
 	}
 	defer clear(dnsKey)
 	payload := []byte("v=DKIM1; k=" + keyType + "; p=" + base64.StdEncoding.EncodeToString(dnsKey))
@@ -332,15 +306,72 @@ func ValidateCanonicalDNSRecord(
 	return nil
 }
 
-// dkim2Algorithm maps only the two supported staged algorithm families.
+// FormatCanonicalDNSRecord renders the zone-file publication of one credential
+// through the same record owner, parser round-trip, and presentation as the
+// domain DNS export. It carries only public material.
+func FormatCanonicalDNSRecord(
+	ctx context.Context,
+	domain string,
+	selector string,
+	algorithm provider.Algorithm,
+	publicSPKI []byte,
+	ttl uint64,
+) ([]byte, error) {
+	record, err := newDNSRecord(ctx, domain, selector, algorithm, publicSPKI)
+	if err != nil {
+		return nil, err
+	}
+	defer clearDNSRecord(&record)
+	return formatDNSExport([]DNSRecord{record}, ttl, int(DefaultLimits().MaxDocumentBytes))
+}
+
+// dnsKeyValue derives the DNS-01 key-record k= token and raw p= bytes from
+// one canonical credential SPKI: PKCS#1 for rsa, the raw 32-byte key for
+// ed25519, and the raw 1344-byte ML-DSA-44 || Ed25519 key for the composite.
+// Non-canonical SPKI or a key of another algorithm fails closed.
+func dnsKeyValue(algorithm provider.Algorithm, publicSPKI []byte) (string, []byte, error) {
+	if algorithm == provider.AlgorithmMLDSA44Ed25519SHA512 {
+		raw, err := dkim2.ParseCompositePublicKeySPKI(publicSPKI)
+		if err != nil {
+			return "", nil, newError(CodeDNSAlgorithmMismatch)
+		}
+		return string(provider.AlgorithmMLDSA44Ed25519SHA512), raw, nil
+	}
+	public, err := x509.ParsePKIXPublicKey(publicSPKI)
+	if err != nil {
+		return "", nil, newError(CodeDNSInvalid)
+	}
+	canonicalSPKI, err := x509.MarshalPKIXPublicKey(public)
+	equal := err == nil && bytes.Equal(canonicalSPKI, publicSPKI)
+	clear(canonicalSPKI)
+	if !equal {
+		return "", nil, newError(CodeDNSInvalid)
+	}
+	switch algorithm {
+	case provider.AlgorithmRSASHA256:
+		key, ok := public.(*rsa.PublicKey)
+		if !ok || key == nil {
+			return "", nil, newError(CodeDNSAlgorithmMismatch)
+		}
+		return "rsa", x509.MarshalPKCS1PublicKey(key), nil
+	case provider.AlgorithmEd25519SHA256:
+		key, ok := public.(ed25519.PublicKey)
+		if !ok || len(key) != ed25519.PublicKeySize {
+			return "", nil, newError(CodeDNSAlgorithmMismatch)
+		}
+		return "ed25519", bytes.Clone(key), nil
+	default:
+		return "", nil, newError(CodeDNSUnsupported)
+	}
+}
+
+// dkim2Algorithm maps one admitted credential algorithm to the verifier
+// algorithm of the same name; anything else maps to unknown.
 func dkim2Algorithm(algorithm provider.Algorithm) dkim2.Algorithm {
-	if algorithm == provider.AlgorithmEd25519SHA256 {
-		return dkim2.AlgorithmEd25519SHA256
+	if _, err := provider.ParseAlgorithm(string(algorithm)); err != nil {
+		return dkim2.AlgorithmUnknown
 	}
-	if algorithm == provider.AlgorithmRSASHA256 {
-		return dkim2.AlgorithmRSASHA256
-	}
-	return dkim2.AlgorithmUnknown
+	return dkim2.Algorithm(algorithm)
 }
 
 type exactRecordTransport struct {
@@ -385,17 +416,8 @@ func validateDNSRecordRoundTrip(ctx context.Context, record DNSRecord) error {
 
 // resultSPKI reconstructs canonical SPKI from one found parser result.
 func resultSPKI(result dkim2.PublicKeyResult) ([]byte, error) {
-	if key, ok := result.RSAPublicKey(); ok {
-		value, err := x509.MarshalPKIXPublicKey(key)
-		if err == nil {
-			return value, nil
-		}
-	}
-	if key, ok := result.Ed25519PublicKey(); ok {
-		value, err := x509.MarshalPKIXPublicKey(key)
-		if err == nil {
-			return value, nil
-		}
+	if value, ok := result.PublicKeySPKI(); ok {
+		return value, nil
 	}
 	return nil, newError(CodeDNSInvalid)
 }
@@ -609,7 +631,7 @@ func formatDNSExport(records []DNSRecord, ttl uint64, maximum int) ([]byte, erro
 	output.WriteByte('\n')
 	for _, record := range records {
 		if len(record.owner) == 0 || len(record.selector) == 0 || len(record.payload) == 0 ||
-			(record.algorithm != provider.AlgorithmRSASHA256 && record.algorithm != provider.AlgorithmEd25519SHA256) {
+			dkim2Algorithm(record.algorithm) == dkim2.AlgorithmUnknown {
 			return nil, newError(CodeDNSInvalid)
 		}
 		output.WriteString("; algorithm=")

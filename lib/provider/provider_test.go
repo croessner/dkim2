@@ -158,3 +158,22 @@ func TestBridgeValuesAreRedacted(t *testing.T) {
 		}
 	}
 }
+
+// TestParseAlgorithmAdmitsOnlySignableAlgorithms proves stored credential
+// algorithms are admitted through one closed vocabulary in signing order.
+func TestParseAlgorithmAdmitsOnlySignableAlgorithms(t *testing.T) {
+	for _, algorithm := range SigningAlgorithms() {
+		parsed, err := ParseAlgorithm(string(algorithm))
+		if err != nil || parsed != algorithm {
+			t.Fatalf("ParseAlgorithm(%q) = %q, %v", algorithm, parsed, err)
+		}
+	}
+	if got := SigningAlgorithms(); len(got) != 3 || got[2] != AlgorithmMLDSA44Ed25519SHA512 {
+		t.Fatalf("SigningAlgorithms() = %v", got)
+	}
+	for _, value := range []string{"", "unknown", "rsa-sha1", "RSA-SHA256", "ed25519-sha512"} {
+		if _, err := ParseAlgorithm(value); err == nil {
+			t.Fatalf("ParseAlgorithm(%q) accepted", value)
+		}
+	}
+}

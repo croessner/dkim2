@@ -18,11 +18,12 @@ import (
 	"time"
 
 	"github.com/croessner/dkim2"
+	"github.com/croessner/dkim2/provider"
 	"golang.org/x/sys/unix"
 )
 
 const (
-	testEd25519Algorithm = manifestEd25519SHA256
+	testEd25519Algorithm = string(provider.AlgorithmEd25519SHA256)
 	testPKCS8PEMType     = privateKeyPEMType
 )
 

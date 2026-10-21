@@ -465,12 +465,5 @@ func parseTime(value string) (time.Time, error) {
 
 // parseAlgorithm maps one exact closed algorithm string.
 func parseAlgorithm(value string) (provider.Algorithm, error) {
-	switch value {
-	case string(provider.AlgorithmRSASHA256):
-		return provider.AlgorithmRSASHA256, nil
-	case string(provider.AlgorithmEd25519SHA256):
-		return provider.AlgorithmEd25519SHA256, nil
-	default:
-		return "", provider.NewError(provider.ErrorCodeMalformedData)
-	}
+	return provider.ParseAlgorithm(value)
 }

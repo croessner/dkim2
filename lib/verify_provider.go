@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/rsa"
+	"crypto/x509"
 	"fmt"
 	"io"
 	"math/big"
@@ -26,9 +27,9 @@ const (
 	AlgorithmRSASHA256 Algorithm = "rsa-sha256"
 	// AlgorithmEd25519SHA256 identifies Ed25519-SHA256 verification.
 	AlgorithmEd25519SHA256 Algorithm = "ed25519-sha256"
-	// AlgorithmMLDSA44Ed25519SHA512 identifies Draft-07 Section 3.4 composite
-	// ML-DSA-44 plus Ed25519 verification over a SHA-512 digest. The library
-	// verifies this algorithm but does not sign with it.
+	// AlgorithmMLDSA44Ed25519SHA512 identifies the Draft-07 Section 3.4
+	// composite ML-DSA-44 plus Ed25519 algorithm under the LAMPS
+	// id-MLDSA44-Ed25519-SHA512 construction, for signing and verification.
 	AlgorithmMLDSA44Ed25519SHA512 Algorithm = "mldsa44-ed25519-sha512"
 	// AlgorithmUnknown represents an unrecognized message-derived algorithm without retaining its spelling.
 	AlgorithmUnknown Algorithm = "unknown"
@@ -289,6 +290,28 @@ func (r PublicKeyResult) CompositePublicKey() ([]byte, bool) {
 	}
 
 	return bytes.Clone(r.state.compositeKey), true
+}
+
+// PublicKeySPKI returns the canonical SubjectPublicKeyInfo DER of the found
+// public key of any variant, so publication tooling can compare DNS results
+// with stored credentials through one encoder.
+func (r PublicKeyResult) PublicKeySPKI() ([]byte, bool) {
+	if r.state == nil {
+		return nil, false
+	}
+	switch {
+	case r.state.rsaKey != nil:
+		encoded, err := x509.MarshalPKIXPublicKey(r.state.rsaKey)
+		return encoded, err == nil
+	case r.state.ed25519Key != nil:
+		encoded, err := x509.MarshalPKIXPublicKey(r.state.ed25519Key)
+		return encoded, err == nil
+	case r.state.compositeKey != nil:
+		encoded, err := MarshalCompositePublicKeySPKI(r.state.compositeKey)
+		return encoded, err == nil
+	default:
+		return nil, false
+	}
 }
 
 // IsZero reports whether no declared provider outcome is present.

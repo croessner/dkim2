@@ -63,7 +63,7 @@ func LoadIntent(path string) (Intent, error) {
 
 // newIntent validates every value through authoritative datasource owners.
 func newIntent(document intentDocument) (Intent, error) {
-	if document.Version != intentVersion || len(document.Algorithms) == 0 || len(document.Algorithms) > 2 {
+	if document.Version != intentVersion || len(document.Algorithms) == 0 || len(document.Algorithms) > len(provider.SigningAlgorithms()) {
 		return Intent{}, newError(CodeInvalidIntent)
 	}
 	use, err := provider.ParseProfileUse(document.ProfileUse)
@@ -80,8 +80,8 @@ func newIntent(document intentDocument) (Intent, error) {
 	}
 	algorithms := make([]provider.Algorithm, 0, len(document.Algorithms))
 	for _, value := range document.Algorithms {
-		algorithm := provider.Algorithm(value)
-		if algorithm != provider.AlgorithmRSASHA256 && algorithm != provider.AlgorithmEd25519SHA256 {
+		algorithm, err := provider.ParseAlgorithm(value)
+		if err != nil {
 			return Intent{}, newError(CodeInvalidIntent)
 		}
 		if slices.Contains(algorithms, algorithm) {

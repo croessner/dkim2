@@ -122,10 +122,13 @@ pointer and monotonic old-current history under the documented assertions.
 Fresh installations apply
 [`001_dkim2_datasource.sql`](../../contrib/schema/postgresql/001_dkim2_datasource.sql)
 and every ordered forward migration through
-[`006_campaign_source_binding.sql`](../../contrib/schema/postgresql/006_campaign_source_binding.sql)
+[`007_composite_algorithm.sql`](../../contrib/schema/postgresql/007_composite_algorithm.sql)
 through a schema administrator. Existing v1 installations apply
 [`002_native_key_custody.sql`](../../contrib/schema/postgresql/002_native_key_custody.sql),
 then publish a complete higher v2 generation before restarting a v2 daemon.
+Installations already at `006` apply `007_composite_algorithm.sql` before
+storing any `mldsa44-ed25519-sha512` credential or custody key; until then the
+database rejects that algorithm and onboarding fails closed.
 
 The DDL creates runtime, compatibility-publisher, snapshot, staging, and
 activation `NOLOGIN` roles. Create separate TLS-authenticated login roles
@@ -159,11 +162,13 @@ unsupported.
 Fresh installations apply
 [`001_dkim2_datasource.sql`](../../contrib/schema/mysql/001_dkim2_datasource.sql)
 and every ordered forward migration through
-[`006_campaign_source_binding.sql`](../../contrib/schema/mysql/006_campaign_source_binding.sql)
+[`007_composite_algorithm.sql`](../../contrib/schema/mysql/007_composite_algorithm.sql)
 inside one dedicated database. The exact disposable qualification versions are
 MySQL 8.4 and MariaDB 10.11; see the
 [`compatibility statement`](../reference/compatibility.md#qualified-storage-services)
-before assuming another release is supported.
+before assuming another release is supported. Installations already at
+`006` apply `007_composite_algorithm.sql` before storing any
+`mldsa44-ed25519-sha512` credential or custody key.
 
 Create distinct runtime, compatibility-publisher, snapshot, staging,
 activation, purge, and terminal-only closer site accounts with exact source restrictions, mandatory TLS,

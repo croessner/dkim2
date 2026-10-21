@@ -197,11 +197,8 @@ func OpenRegistry(rootFD int, manifestFile string) (*Registry, error) {
 			return nil, &Error{}
 		}
 		use, useErr := provider.ParseProfileUse(entry.Use)
-		algorithm := provider.AlgorithmRSASHA256
-		if entry.Algorithm == manifestEd25519SHA256 {
-			algorithm = provider.AlgorithmEd25519SHA256
-		}
-		if useErr != nil {
+		algorithm, algorithmErr := provider.ParseAlgorithm(entry.Algorithm)
+		if useErr != nil || algorithmErr != nil {
 			return nil, &Error{}
 		}
 		binding, bindingErr := provider.NewBinding(

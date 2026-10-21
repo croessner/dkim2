@@ -5,5 +5,7 @@ profile_use: originator
 algorithms:
   - ed25519-sha256
   - rsa-sha256
+  # Add the post-quantum composite beside the classic algorithms:
+  # - mldsa44-ed25519-sha512
 rollout: enforce
 compatibility: strict

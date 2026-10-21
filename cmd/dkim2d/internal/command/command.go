@@ -70,6 +70,7 @@ const (
   dkim2d datasource rotation abort --config <absolute-path> --journal <absolute-path> --apply [--machine]
   dkim2d datasource rotation purge plan --config <absolute-path> --journal <absolute-path> --output <absolute-path> [--machine]
   dkim2d datasource rotation purge apply --config <absolute-path> --journal <absolute-path> --plan <absolute-path> --apply [--machine]
+  dkim2d datasource key generate --algorithm <algorithm> --domain <domain> --selector <selector> --private-key <absolute-path> [--rsa-bits <bits>] [--ttl <seconds>] [--machine]
   dkim2d probe
   dkim2d --version
 
@@ -429,7 +430,11 @@ func newDatasourceCommand(
 	if err != nil {
 		return nil, err
 	}
-	group.AddCommand(bootstrap, rollback, domain, rotation)
+	key, err := newKeyCommand(stdout)
+	if err != nil {
+		return nil, err
+	}
+	group.AddCommand(bootstrap, rollback, domain, rotation, key)
 	return group, nil
 }
 

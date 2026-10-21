@@ -2,12 +2,8 @@ package rotationadmin
 
 import (
 	"context"
-	"crypto"
-	"crypto/ed25519"
 	"crypto/rand"
-	"crypto/rsa"
 	"crypto/sha256"
-	"crypto/x509"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -33,39 +29,18 @@ type KeyFactory interface {
 // NativeKeyFactory is the production crypto/rand key generator.
 type NativeKeyFactory struct{ RSABits int }
 
-// Generate creates canonical PKCS#8 and SPKI bytes for one native algorithm.
+// Generate creates canonical PKCS#8 and SPKI bytes for one native algorithm
+// through the signing-store key codec.
 func (f NativeKeyFactory) Generate(ctx context.Context, algorithm string) (GeneratedKey, error) {
 	if ctx == nil || ctx.Err() != nil || (f.RSABits != 2048 && f.RSABits != 3072 && f.RSABits != 4096) {
 		return GeneratedKey{}, errInvalid
 	}
-	reader := &contextReader{ctx: ctx, source: rand.Reader}
-	var private crypto.PrivateKey
-	var public any
-	var err error
-	switch algorithm {
-	case string(provider.AlgorithmEd25519SHA256):
-		var edPublic ed25519.PublicKey
-		edPublic, private, err = ed25519.GenerateKey(reader)
-		public = edPublic
-	case string(provider.AlgorithmRSASHA256):
-		var rsaPrivate *rsa.PrivateKey
-		rsaPrivate, err = rsa.GenerateKey(reader, f.RSABits)
-		private = rsaPrivate
-		if rsaPrivate != nil {
-			public = &rsaPrivate.PublicKey
-		}
-	default:
+	if _, err := provider.ParseAlgorithm(algorithm); err != nil {
 		return GeneratedKey{}, errInvalid
 	}
-	if private != nil {
-		defer signingstore.ClearPrivateKey(private)
-	}
-	if err != nil || ctx.Err() != nil {
-		return GeneratedKey{}, errBackend
-	}
-	privatePKCS8, privateErr := x509.MarshalPKCS8PrivateKey(private)
-	publicSPKI, publicErr := x509.MarshalPKIXPublicKey(public)
-	if privateErr != nil || publicErr != nil || len(privatePKCS8) == 0 || len(publicSPKI) == 0 {
+	reader := &contextReader{ctx: ctx, source: rand.Reader}
+	privatePKCS8, publicSPKI, err := signingstore.GeneratePrivateKey(provider.Algorithm(algorithm), reader, f.RSABits)
+	if err != nil || ctx.Err() != nil || len(privatePKCS8) == 0 || len(publicSPKI) == 0 {
 		clear(privatePKCS8)
 		clear(publicSPKI)
 		return GeneratedKey{}, errBackend
@@ -429,8 +404,11 @@ func derivedIdentity(kind, operation string, generation uint64, ordinal int, alg
 func derivedSelector(operation string, generation uint64, ordinal int, algorithm string) string {
 	sum := sha256.Sum256(fmt.Appendf(nil, "DKIM2-CAMPAIGN-SELECTOR-V1\x00%s\x00%d\x00%d\x00%s", operation, generation, ordinal, algorithm))
 	prefix := "e"
-	if algorithm == string(provider.AlgorithmRSASHA256) {
+	switch algorithm {
+	case string(provider.AlgorithmRSASHA256):
 		prefix = "r"
+	case string(provider.AlgorithmMLDSA44Ed25519SHA512):
+		prefix = "m"
 	}
 	return prefix + hex.EncodeToString(sum[:12])
 }

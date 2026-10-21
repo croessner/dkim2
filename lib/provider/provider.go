@@ -18,6 +18,7 @@ import (
 	"github.com/croessner/dkim2/internal/datasource/signingprofile"
 	"github.com/croessner/dkim2/internal/keyresolver"
 	"github.com/croessner/dkim2/internal/niliface"
+	"github.com/croessner/dkim2/internal/signature"
 )
 
 const redacted = "dkim2.provider{redacted}"
@@ -105,6 +106,20 @@ const (
 	// mldsa44-ed25519-sha512 credentials.
 	AlgorithmMLDSA44Ed25519SHA512 = datasource.AlgorithmMLDSA44Ed25519SHA512
 )
+
+// ParseAlgorithm accepts exactly one signable credential algorithm token.
+// It is the single owner of algorithm admission for stored credentials.
+func ParseAlgorithm(value string) (Algorithm, error) {
+	algorithm := Algorithm(value)
+	if !algorithm.Signable() {
+		return "", datasource.NewError(datasource.ErrorCodeMalformedData)
+	}
+	return algorithm, nil
+}
+
+// SigningAlgorithms returns the signable credential algorithms in canonical
+// signing order: rsa-sha256, ed25519-sha256, mldsa44-ed25519-sha512.
+func SigningAlgorithms() []Algorithm { return signature.SigningAlgorithmOrder() }
 
 // ProfileUse identifies one administrative profile-selection purpose.
 type ProfileUse = datasource.ProfileUse

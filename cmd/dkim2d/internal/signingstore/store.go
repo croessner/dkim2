@@ -8,7 +8,6 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
-	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -27,8 +26,6 @@ const (
 	manifestOriginator      = "originator"
 	manifestOrdinaryTransit = "ordinary_transit"
 	manifestDeliveryStatus  = "delivery_status"
-	manifestRSASHA256       = "rsa-sha256"
-	manifestEd25519SHA256   = "ed25519-sha256"
 	privateKeyPEMType       = "PRIVATE KEY"
 	maxManifestBytes        = 256 << 10
 	maxPrivateBytes         = 64 << 10
@@ -240,24 +237,21 @@ func signPrivateCredential(
 	if err := ctx.Err(); err != nil {
 		return dkim2.PrivateKeySignResult{}, err
 	}
+	if request.Algorithm() != credential.algorithm ||
+		!privateKeyMatchesAlgorithm(credential.key, credential.algorithm) {
+		return dkim2.PrivateKeySignResult{}, dkim2.NewPermanentProviderError()
+	}
 	digest := request.Digest()
+	defer clear(digest)
 	var signature []byte
 	var err error
-	switch {
-	case request.Algorithm() == dkim2.AlgorithmRSASHA256 &&
-		credential.algorithm == dkim2.AlgorithmRSASHA256:
-		key, ok := credential.key.(*rsa.PrivateKey)
-		if !ok {
-			return dkim2.PrivateKeySignResult{}, dkim2.NewPermanentProviderError()
-		}
-		signature, err = rsa.SignPKCS1v15(rand.Reader, key, crypto.SHA256, digest[:])
-	case request.Algorithm() == dkim2.AlgorithmEd25519SHA256 &&
-		credential.algorithm == dkim2.AlgorithmEd25519SHA256:
-		key, ok := credential.key.(ed25519.PrivateKey)
-		if !ok {
-			return dkim2.PrivateKeySignResult{}, dkim2.NewPermanentProviderError()
-		}
-		signature = ed25519.Sign(key, digest[:])
+	switch key := credential.key.(type) {
+	case *rsa.PrivateKey:
+		signature, err = rsa.SignPKCS1v15(rand.Reader, key, crypto.SHA256, digest)
+	case ed25519.PrivateKey:
+		signature = ed25519.Sign(key, digest)
+	case *dkim2.CompositeSigningKey:
+		return signCompositeDigest(key, request)
 	default:
 		return dkim2.PrivateKeySignResult{}, dkim2.NewPermanentProviderError()
 	}
@@ -265,6 +259,21 @@ func signPrivateCredential(
 		return dkim2.PrivateKeySignResult{}, dkim2.NewTemporaryProviderError()
 	}
 	return dkim2.NewPrivateKeySignResult(signature), nil
+}
+
+// signCompositeDigest signs through the library-owned LAMPS construction.
+// Request and algorithm mismatches are excluded by the caller, so a failure
+// is a failed self-verification of corrupted key material: permanent, not a
+// condition that retrying could cure.
+func signCompositeDigest(
+	key *dkim2.CompositeSigningKey,
+	request dkim2.PrivateKeySignRequest,
+) (dkim2.PrivateKeySignResult, error) {
+	result, err := key.SignDigest(request)
+	if err != nil {
+		return dkim2.PrivateKeySignResult{}, dkim2.NewPermanentProviderError()
+	}
+	return result, nil
 }
 
 // Close makes future operations fail closed and releases the datasource root.
@@ -475,13 +484,8 @@ func validateManifestEntry(
 	default:
 		return "", dkim2.AlgorithmUnknown, [sha256.Size]byte{}, &Error{}
 	}
-	var algorithm dkim2.Algorithm
-	switch entry.Algorithm {
-	case manifestRSASHA256:
-		algorithm = dkim2.AlgorithmRSASHA256
-	case manifestEd25519SHA256:
-		algorithm = dkim2.AlgorithmEd25519SHA256
-	default:
+	algorithm := custodyAlgorithm(provider.Algorithm(entry.Algorithm))
+	if algorithm == dkim2.AlgorithmUnknown {
 		return "", dkim2.AlgorithmUnknown, [sha256.Size]byte{}, &Error{}
 	}
 	decoded, err := base64.StdEncoding.DecodeString(entry.PublicSPKISHA256)
@@ -510,34 +514,8 @@ func parsePrivateKey(
 		return nil, [sha256.Size]byte{}, &Error{}
 	}
 	defer clear(block.der)
-	key, err := x509.ParsePKCS8PrivateKey(block.der)
+	key, spki, err := parsePKCS8PrivateKey(block.der, algorithm, false)
 	if err != nil {
-		return nil, [sha256.Size]byte{}, &Error{}
-	}
-	var public any
-	switch typed := key.(type) {
-	case *rsa.PrivateKey:
-		if algorithm != dkim2.AlgorithmRSASHA256 ||
-			typed.Validate() != nil || typed.N.BitLen() < 1024 ||
-			len(typed.Primes) != 2 {
-			clearPrivateKey(key)
-			return nil, [sha256.Size]byte{}, &Error{}
-		}
-		public = &typed.PublicKey
-	case ed25519.PrivateKey:
-		if algorithm != dkim2.AlgorithmEd25519SHA256 ||
-			len(typed) != ed25519.PrivateKeySize {
-			clearPrivateKey(key)
-			return nil, [sha256.Size]byte{}, &Error{}
-		}
-		public = typed.Public()
-	default:
-		clearPrivateKey(key)
-		return nil, [sha256.Size]byte{}, &Error{}
-	}
-	spki, err := x509.MarshalPKIXPublicKey(public)
-	if err != nil {
-		clearPrivateKey(key)
 		return nil, [sha256.Size]byte{}, &Error{}
 	}
 	digest := sha256.Sum256(spki)
@@ -570,6 +548,8 @@ func clearPrivateKey(key crypto.PrivateKey) {
 	switch typed := key.(type) {
 	case ed25519.PrivateKey:
 		clear(typed)
+	case *dkim2.CompositeSigningKey:
+		typed.Clear()
 	case *rsa.PrivateKey:
 		if typed == nil {
 			return

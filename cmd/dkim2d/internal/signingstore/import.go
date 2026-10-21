@@ -1,33 +1,11 @@
 package signingstore
 
 import (
-	"crypto"
-	"crypto/ed25519"
-	"crypto/rsa"
-	"crypto/x509"
 	"fmt"
 	"io"
 
 	"github.com/croessner/dkim2"
 )
-
-// publicSPKI derives canonical public material from one validated private key.
-func publicSPKI(key crypto.PrivateKey) ([]byte, error) {
-	var public any
-	switch typed := key.(type) {
-	case *rsa.PrivateKey:
-		public = &typed.PublicKey
-	case ed25519.PrivateKey:
-		public = typed.Public()
-	default:
-		return nil, &Error{}
-	}
-	encoded, err := x509.MarshalPKIXPublicKey(public)
-	if err != nil {
-		return nil, &Error{}
-	}
-	return encoded, nil
-}
 
 // ImportedPrivateKey is one short-lived validated legacy private-key value.
 type ImportedPrivateKey struct {
@@ -95,7 +73,7 @@ func (k *ImportedPrivateKey) NativePKCS8DER() []byte {
 	if err != nil {
 		return nil
 	}
-	encoded, err := x509.MarshalPKCS8PrivateKey(key)
+	encoded, err := marshalPKCS8PrivateKey(key)
 	clearPrivateKey(key)
 	if err != nil || len(encoded) == 0 || len(encoded) > maxPrivateBytes {
 		clear(encoded)

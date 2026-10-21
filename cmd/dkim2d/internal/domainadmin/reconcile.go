@@ -118,6 +118,7 @@ type StatusResult struct {
 	CredentialCount           uint32
 	RSACredentialCount        uint32
 	Ed25519CredentialCount    uint32
+	CompositeCredentialCount  uint32
 	PlanComplete              bool
 	ReceiptPresent            bool
 	ReceiptPhase              ReceiptPhase
@@ -182,7 +183,8 @@ func ObserveStatus(
 		CurrentGenerationKnown: true,
 		CandidateGeneration:    facts.candidate, CredentialCount: facts.credentials,
 		RSACredentialCount: facts.rsa, Ed25519CredentialCount: facts.ed25519,
-		PlanComplete: true,
+		CompositeCredentialCount: facts.composite,
+		PlanComplete:             true,
 	}, nil
 }
 

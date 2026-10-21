@@ -50,6 +50,13 @@ func TestCompositeSigningKeyCodecRoundTrips(t *testing.T) {
 		got != "dkim2.CompositeSigningKey{redacted} dkim2.CompositeSigningKey{redacted} dkim2.CompositeSigningKey{redacted} dkim2.CompositeSigningKey{redacted}" {
 		t.Fatalf("formatted key = %q", got)
 	}
+	found := FoundCompositePublicKey(raw)
+	if resultSPKI, ok := found.PublicKeySPKI(); !ok || !bytes.Equal(resultSPKI, spki) {
+		t.Fatal("PublicKeyResult.PublicKeySPKI() differs from the key SPKI")
+	}
+	if _, ok := MissingPublicKey(AlgorithmMLDSA44Ed25519SHA512).PublicKeySPKI(); ok {
+		t.Fatal("missing result produced an SPKI")
+	}
 	shared := first
 	first.Clear()
 	if first.Valid() || first.MarshalPKCS8() != nil {
