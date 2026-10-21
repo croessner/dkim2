@@ -262,10 +262,7 @@ func (t *pgxAdministrationTransaction) ReadCurrentOptional(ctx context.Context, 
 		query = queryAdminCurrentForUpdate
 	}
 	var row MetadataRow
-	err := t.tx.QueryRow(ctx, query).Scan(
-		&row.Generation, &row.SchemaVersion, &row.DatasetState, &row.OperationID,
-		&row.CandidateDigest, &row.SourceGeneration, &row.PointerDigest, &row.WasActive,
-	)
+	err := t.tx.QueryRow(ctx, query).Scan(row.CurrentScanDestinations()...)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return MetadataRow{}, false, nil
 	}
@@ -285,10 +282,7 @@ func (t *pgxAdministrationTransaction) LockCandidateRoot(
 	if err := fence.WithProtectedValues(ctx, func(operation string, digest []byte) error {
 		queryErr = candidateRootPGError(t.tx.QueryRow(
 			ctx, queryAdminCandidateRootForUpdate, fence.Generation(), operation, digest,
-		).Scan(
-			&row.Generation, &row.SchemaVersion, &row.DatasetState,
-			&row.OperationID, &row.CandidateDigest, &row.SourceGeneration, &row.WasActive,
-		))
+		).Scan(row.ScanDestinations()...))
 		return nil
 	}); err != nil {
 		return MetadataRow{}, err
@@ -353,10 +347,7 @@ func (t *pgxAdministrationTransaction) GenerationPage(ctx context.Context, after
 	output := make([]MetadataRow, 0, limit)
 	for rows.Next() {
 		var row MetadataRow
-		if err := rows.Scan(
-			&row.Generation, &row.SchemaVersion, &row.DatasetState,
-			&row.OperationID, &row.CandidateDigest, &row.SourceGeneration, &row.WasActive,
-		); err != nil {
+		if err := rows.Scan(row.ScanDestinations()...); err != nil {
 			return nil, datasourceadmin.NewError(datasourceadmin.CodeUnavailable)
 		}
 		output = append(output, row)
@@ -402,7 +393,8 @@ func (t *pgxAdministrationTransaction) ReleaseLock(ctx context.Context, revision
 	return t.execProcedure(ctx, queryAdminRelease, strconv.FormatUint(revision, 10), owner)
 }
 
-// InsertGeneration inserts one exact v3 staging root.
+// InsertGeneration inserts one exact v3 staging root. A sourceless candidate
+// binds SQL NULL, which the source-binding CHECK accepts.
 func (t *pgxAdministrationTransaction) InsertGeneration(ctx context.Context, row MetadataRow) error {
 	_, err := t.tx.Exec(ctx, queryAdminInsertGeneration, row.Generation, row.OperationID, row.CandidateDigest, row.SourceGeneration)
 	return adminPGError(err)

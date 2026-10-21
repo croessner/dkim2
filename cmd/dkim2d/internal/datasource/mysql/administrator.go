@@ -32,7 +32,7 @@ FROM dkim2_dataset_generations WHERE generation > ? ORDER BY generation LIMIT ?`
 	queryAdminGenerationsForUpdate = queryAdminGenerations + ` FOR UPDATE`
 	queryAdminClaim                = `CALL dkim2_v3_claim_lock(?, ?)`
 	queryAdminRelease              = `CALL dkim2_v3_release_lock(?, ?)`
-	queryAdminInsertGeneration     = `CALL dkim2_v3_insert_generation(?, ?, ?, ?)`
+	queryAdminInsertGeneration     = `CALL dkim2_v3_insert_generation(?, ?, ?, ?, ?)`
 	queryAdminInsertHandle         = `CALL dkim2_v3_insert_handle(?, ?, ?, ?, ?)`
 	queryAdminInsertProfile        = `CALL dkim2_v3_insert_profile(?, ?, ?, ?, ?, ?, ?, ?, ?)`
 	queryAdminInsertCredential     = `CALL dkim2_v3_insert_credential(?, ?, ?, ?, ?, ?, ?, ?, ?)`
@@ -245,10 +245,7 @@ func (t *sqlAdministrationTransaction) ReadCurrentOptional(ctx context.Context, 
 		query = queryAdminCurrentForUpdate
 	}
 	var row sqlsnapshot.MetadataRow
-	err := t.queryRow(ctx, query).Scan(
-		&row.Generation, &row.SchemaVersion, &row.DatasetState, &row.OperationID,
-		&row.CandidateDigest, &row.SourceGeneration, &row.PointerDigest, &row.WasActive,
-	)
+	err := t.queryRow(ctx, query).Scan(row.CurrentScanDestinations()...)
 	if errors.Is(err, sql.ErrNoRows) {
 		return sqlsnapshot.MetadataRow{}, false, nil
 	}
@@ -269,10 +266,7 @@ func (t *sqlAdministrationTransaction) LockCandidateRoot(
 		queryErr = candidateRootMySQLError(t.queryRow(
 			ctx, queryAdminCandidateRootForUpdate, fence.Generation(),
 			operation, digest, strconv.FormatUint(fence.Revision(), 10),
-		).Scan(
-			&row.Generation, &row.SchemaVersion, &row.DatasetState,
-			&row.OperationID, &row.CandidateDigest, &row.SourceGeneration, &row.WasActive,
-		))
+		).Scan(row.ScanDestinations()...))
 		return nil
 	}); err != nil {
 		return sqlsnapshot.MetadataRow{}, err
@@ -310,7 +304,7 @@ func (t *sqlAdministrationTransaction) GenerationPage(ctx context.Context, after
 	output := make([]sqlsnapshot.MetadataRow, 0, limit)
 	for rows.Next() {
 		var row sqlsnapshot.MetadataRow
-		if err := rows.Scan(&row.Generation, &row.SchemaVersion, &row.DatasetState, &row.OperationID, &row.CandidateDigest, &row.SourceGeneration, &row.WasActive); err != nil {
+		if err := rows.Scan(row.ScanDestinations()...); err != nil {
 			return nil, datasourceadmin.NewError(datasourceadmin.CodeUnavailable)
 		}
 		output = append(output, row)
@@ -428,7 +422,8 @@ func (t *sqlAdministrationTransaction) ReleaseLock(ctx context.Context, revision
 	return successfulRoutine(err)
 }
 
-// InsertGeneration invokes the fixed v3 root routine.
+// InsertGeneration invokes the fixed v3 root routine. A sourceless candidate
+// binds SQL NULL; the routine rejects only explicit zero or forward sources.
 func (t *sqlAdministrationTransaction) InsertGeneration(ctx context.Context, row sqlsnapshot.MetadataRow) error {
 	if row.OperationID == nil || t.lockRevision == 0 {
 		return datasourceadmin.NewError(datasourceadmin.CodeConflict)

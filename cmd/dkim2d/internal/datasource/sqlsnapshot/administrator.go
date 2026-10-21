@@ -428,7 +428,10 @@ func metadataRowsBytes(rows []MetadataRow) uint64 {
 }
 
 func metadataRowBytes(row MetadataRow) uint64 {
-	total := uint64(len(row.Generation) + len(row.SchemaVersion) + len(row.DatasetState) + len(row.SourceGeneration) + len(row.CandidateDigest) + len(row.PointerDigest))
+	total := uint64(len(row.Generation) + len(row.SchemaVersion) + len(row.DatasetState) + len(row.CandidateDigest) + len(row.PointerDigest))
+	if row.SourceGeneration != nil {
+		total += uint64(len(*row.SourceGeneration))
+	}
 	if row.OperationID != nil {
 		total += uint64(len(*row.OperationID))
 	}
@@ -748,10 +751,11 @@ func (a *Administrator) Stage(
 		metadata := MetadataRow{
 			Generation: generationText, SchemaVersion: datasourceadmin.SchemaVersionV3,
 			DatasetState: datasetStateStaging, OperationID: &operationText,
-			CandidateDigest: candidate.Digest().Bytes(), SourceGeneration: strconv.FormatUint(candidate.SourceGeneration(), 10),
+			CandidateDigest: candidate.Digest().Bytes(),
 		}
-		if candidate.SourceGeneration() == 0 {
-			metadata.SourceGeneration = ""
+		if source := candidate.SourceGeneration(); source != 0 {
+			sourceText := strconv.FormatUint(source, 10)
+			metadata.SourceGeneration = &sourceText
 		}
 		rows, rowsErr := candidateDatasetRows(ctx, candidate, metadata)
 		if rowsErr != nil {
@@ -1229,12 +1233,11 @@ func generationInfoFromMetadata(row MetadataRow, current bool) (datasourceadmin.
 		if err != nil {
 			return datasourceadmin.GenerationInfo{}, datasourceadmin.NewError(datasourceadmin.CodeConflict)
 		}
-		if row.SourceGeneration != "" {
-			sourceGeneration, err = parseGeneration(row.SourceGeneration)
-			if err != nil || sourceGeneration >= generation {
-				return datasourceadmin.GenerationInfo{}, datasourceadmin.NewError(datasourceadmin.CodeConflict)
-			}
+		source, sourcePresent, sourceErr := row.frozenSource()
+		if sourceErr != nil || sourcePresent && source >= generation {
+			return datasourceadmin.GenerationInfo{}, datasourceadmin.NewError(datasourceadmin.CodeConflict)
 		}
+		sourceGeneration = source
 	}
 	return datasourceadmin.GenerationInfo{
 		Generation: generation, Current: current, State: state,
@@ -1334,11 +1337,11 @@ func candidateFromSnapshot(
 	}
 	err = binding.WithValue(ctx, func(value string) error {
 		var candidateErr error
-		if metadata.SourceGeneration != "" {
-			source, sourceErr := parseGeneration(metadata.SourceGeneration)
-			if sourceErr != nil {
-				return sourceErr
-			}
+		source, sourcePresent, sourceErr := metadata.frozenSource()
+		if sourceErr != nil {
+			return sourceErr
+		}
+		if sourcePresent {
 			candidate, candidateErr = datasourceadmin.NewCampaignPublicationEnvelope(value, source, content)
 		} else {
 			candidate, candidateErr = datasourceadmin.NewPublicationEnvelope(value, content)

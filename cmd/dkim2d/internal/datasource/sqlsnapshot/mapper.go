@@ -19,9 +19,41 @@ type MetadataRow struct {
 	DatasetState     string
 	OperationID      *string
 	CandidateDigest  []byte
-	SourceGeneration string
+	SourceGeneration *string
 	PointerDigest    []byte
 	WasActive        bool
+}
+
+// ScanDestinations returns the scan targets for the shared generation
+// metadata projection in column order. source_generation is nullable because
+// legacy and v2 generations never carry a frozen campaign source.
+func (r *MetadataRow) ScanDestinations() []any {
+	return []any{
+		&r.Generation, &r.SchemaVersion, &r.DatasetState, &r.OperationID,
+		&r.CandidateDigest, &r.SourceGeneration, &r.WasActive,
+	}
+}
+
+// CurrentScanDestinations returns the scan targets for the current-pointer
+// projection, which adds the pointer digest before was_active.
+func (r *MetadataRow) CurrentScanDestinations() []any {
+	return []any{
+		&r.Generation, &r.SchemaVersion, &r.DatasetState, &r.OperationID,
+		&r.CandidateDigest, &r.SourceGeneration, &r.PointerDigest, &r.WasActive,
+	}
+}
+
+// frozenSource parses the optional frozen campaign source. Absence is
+// reported as false; a present but malformed value is an error.
+func (r MetadataRow) frozenSource() (uint64, bool, error) {
+	if r.SourceGeneration == nil {
+		return 0, false, nil
+	}
+	source, err := parseGeneration(*r.SourceGeneration)
+	if err != nil {
+		return 0, false, err
+	}
+	return source, true, nil
 }
 
 // HandleRow is one explicit opaque handle projection.
@@ -339,11 +371,11 @@ func verifyProtectedGeneration(rows DatasetRows, generation uint64) error {
 		context.Background(),
 		func(operation string) error {
 			var candidateErr error
-			if rows.Current.SourceGeneration != "" {
-				source, sourceErr := parseGeneration(rows.Current.SourceGeneration)
-				if sourceErr != nil {
-					return sourceErr
-				}
+			source, sourcePresent, sourceErr := rows.Current.frozenSource()
+			if sourceErr != nil {
+				return sourceErr
+			}
+			if sourcePresent {
 				candidate, candidateErr = datasourceadmin.NewCampaignPublicationEnvelope(operation, source, content)
 			} else {
 				candidate, candidateErr = datasourceadmin.NewPublicationEnvelope(operation, content)
