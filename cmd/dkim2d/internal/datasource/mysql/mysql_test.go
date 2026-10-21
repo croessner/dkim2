@@ -295,17 +295,43 @@ func TestRotationCampaignUpgradeDefinesForwardCandidateFence(t *testing.T) {
 }
 
 // TestCampaignSourceBindingMigrationKeepsFrozenSourceInProviderMetadata proves
-// the MySQL-family routines cannot stage a candidate without its frozen source.
+// the MySQL-family routines cannot stage a candidate without its frozen source
+// and leave routine authority to the reviewed site-owned grant template.
 func TestCampaignSourceBindingMigrationKeepsFrozenSourceInProviderMetadata(t *testing.T) {
 	t.Parallel()
-	path := filepath.Join("..", "..", "..", "..", "..", "contrib", "schema", "mysql", "006_campaign_source_binding.sql")
-	document, err := os.ReadFile(path)
+	schema := filepath.Join("..", "..", "..", "..", "..", "contrib", "schema", "mysql")
+	document, err := os.ReadFile(filepath.Join(schema, "006_campaign_source_binding.sql"))
 	if err != nil {
 		t.Fatal("read MySQL-family source-binding migration")
 	}
-	for _, required := range []string{"source_generation", "selected_source", "selected_source = 0", "source_generation < generation", "dkim2_v3_lock_candidate_root", "REVOKE EXECUTE ON PROCEDURE dkim2_v3_lock_candidate_root FROM PUBLIC", "GRANT EXECUTE ON PROCEDURE dkim2_v3_lock_candidate_root TO dkim2_activator", "REVOKE EXECUTE ON PROCEDURE dkim2_v3_insert_generation FROM PUBLIC", "GRANT EXECUTE ON PROCEDURE dkim2_v3_insert_generation TO dkim2_stager"} {
-		if !strings.Contains(string(document), required) {
+	text := string(document)
+	for _, required := range []string{
+		"source_generation", "selected_source", "selected_source = 0", "source_generation < generation",
+		"DROP PROCEDURE dkim2_v3_lock_candidate_root", "DROP PROCEDURE dkim2_v3_insert_generation",
+		"Apply the reviewed\n-- 002_least_privilege_grants.sql.example after this upgrade.",
+	} {
+		if !strings.Contains(text, required) {
 			t.Fatal("MySQL-family source-binding migration contract incomplete")
+		}
+	}
+	// MySQL has no PUBLIC role and the NOLOGIN roles exist only in PostgreSQL;
+	// such statements abort fresh installs and grant nothing on upgrades.
+	upper := strings.ToUpper(text)
+	for _, forbidden := range []string{"GRANT ", "REVOKE ", " PUBLIC", "DKIM2_ACTIVATOR", "DKIM2_STAGER"} {
+		if strings.Contains(upper, forbidden) {
+			t.Fatal("MySQL-family source-binding migration owns routine authority")
+		}
+	}
+	grants, err := os.ReadFile(filepath.Join(schema, "002_least_privilege_grants.sql.example"))
+	if err != nil {
+		t.Fatal("read committed MySQL grant template")
+	}
+	for _, required := range []string{
+		"GRANT EXECUTE ON PROCEDURE __DATABASE__.dkim2_v3_lock_candidate_root TO __ACTIVATION_ACCOUNT__;",
+		"GRANT EXECUTE ON PROCEDURE __DATABASE__.dkim2_v3_insert_generation TO __STAGING_ACCOUNT__;",
+	} {
+		if !strings.Contains(string(grants), required) {
+			t.Fatal("MySQL grant template omits recreated source-binding routines")
 		}
 	}
 }

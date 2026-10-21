@@ -43,8 +43,9 @@ BEGIN
     INSERT INTO dkim2_dataset_generations (generation, schema_version, dataset_state, operation_id, candidate_digest, source_generation, was_active)
     VALUES (selected_generation, 'dkim2-datasource-v3', 'staging', selected_operation, selected_digest, selected_source, FALSE);
 END//
-REVOKE EXECUTE ON PROCEDURE dkim2_v3_lock_candidate_root FROM PUBLIC//
-GRANT EXECUTE ON PROCEDURE dkim2_v3_lock_candidate_root TO dkim2_activator//
-REVOKE EXECUTE ON PROCEDURE dkim2_v3_insert_generation FROM PUBLIC//
-GRANT EXECUTE ON PROCEDURE dkim2_v3_insert_generation TO dkim2_stager//
 DELIMITER ;
+
+-- Recreating a routine drops its EXECUTE privileges; MySQL-family servers
+-- never expose new routines to unprivileged accounts by default.
+-- Accounts and grants remain a site-owned operation. Apply the reviewed
+-- 002_least_privilege_grants.sql.example after this upgrade.
