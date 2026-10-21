@@ -95,8 +95,8 @@ Replay counting is now local delivery policy (Draft-07 Section 15.1):
 - **Exploded flag:** An `exploded` flag on the `i=1` signature is PERMERROR
   `malformed_protocol`.
 - **Composite algorithm:** `mldsa44-ed25519-sha512` signatures and keys
-  (`k=mldsa44-ed25519-sha512`) are verified. They are never produced; see
-  "Known Limitations".
+  (`k=mldsa44-ed25519-sha512`) are verified under the LAMPS composite
+  construction; see "Known Limitations".
 - **SMTP replies (Draft-07 Section 13):**
   - A tempfail caused by a temporary public-key (DNS) lookup failure answers
     `451 4.7.5`. The matching daemon reason is `provider_temporary`.
@@ -121,10 +121,13 @@ Replay counting is now local delivery policy (Draft-07 Section 15.1):
 
 ## Known Limitations
 
-- **Composite signing:** It stays disabled. DNS-01 cites the LAMPS
-  composite-signature construction, which differs from Draft-07 Section 3.4.
-  The verifier implements Section 3.4. No interoperability claim is made
-  until the working group resolves the conflict.
+- **Composite construction:** `mldsa44-ed25519-sha512` follows the LAMPS
+  composite construction (`draft-ietf-lamps-pq-composite-sigs`) that DNS-01
+  cites and the DKIM2 interoperability round uses, not a literal reading of
+  Draft-07 Section 3.4, which does not spell out the message representative.
+  Signatures from Stalwart mail-auth verify. If the working group settles on
+  a different representative, signatures of the two constructions do not
+  interoperate (`DKIM2-ISSUE-0019`).
 - **IDNA:** Domains use a strict IDNA2008 profile from `golang.org/x/net/idna`.
   That package merges some IDNA2008 code-point categories, so it is not a
   complete strict validator (`DKIM2-ISSUE-0003`).

@@ -10,32 +10,31 @@ import (
 	"github.com/croessner/dkim2/internal/signature"
 )
 
-// compositeTestKeys returns deterministic ML-DSA-44 and Ed25519 test keys.
-func compositeTestKeys(t *testing.T) (*mldsa.PrivateKey, ed25519.PrivateKey) {
+// compositeTestKeys returns one deterministic composite signing key.
+func compositeTestKeys(t *testing.T) CompositePrivateKey {
 	t.Helper()
-	mlKey, err := mldsa.NewPrivateKey(mldsa.MLDSA44(), bytes.Repeat([]byte{0x42}, mldsa.PrivateKeySize))
+	key, err := NewCompositePrivateKey(append(bytes.Repeat([]byte{0x42}, 32), bytes.Repeat([]byte{0x24}, 32)...))
 	if err != nil {
-		t.Fatalf("mldsa.NewPrivateKey() error = %v", err)
+		t.Fatalf("NewCompositePrivateKey() error = %v", err)
 	}
-	return mlKey, ed25519.NewKeyFromSeed(bytes.Repeat([]byte{0x24}, ed25519.SeedSize))
+	return key
 }
 
-// compositeTestSignature signs digest per Draft-07 Section 3.4: pure
-// ML-DSA-44 with empty context, then PureEd25519, concatenated in that order.
-func compositeTestSignature(t *testing.T, mlKey *mldsa.PrivateKey, edKey ed25519.PrivateKey, digest []byte) []byte {
+// compositeTestSignature signs digest through the production LAMPS signer.
+func compositeTestSignature(t *testing.T, key CompositePrivateKey, digest []byte) []byte {
 	t.Helper()
-	mlSignature, err := mlKey.SignDeterministic(digest, &mldsa.Options{})
+	signatureBytes, err := SignCompositeDigest(key, digest)
 	if err != nil {
-		t.Fatalf("SignDeterministic() error = %v", err)
+		t.Fatalf("SignCompositeDigest() error = %v", err)
 	}
-	return append(mlSignature, ed25519.Sign(edKey, digest)...)
+	return signatureBytes
 }
 
-// TestCompositeVerifiesDraft07Construction proves the exact Section 3.4
-// construction and the fixed DNS key and signature sizes.
-func TestCompositeVerifiesDraft07Construction(t *testing.T) {
-	mlKey, edKey := compositeTestKeys(t)
-	raw := append(mlKey.PublicKey().Bytes(), edKey.Public().(ed25519.PublicKey)...)
+// TestCompositeVerifiesLAMPSConstruction proves the composite construction
+// and the fixed DNS key and signature sizes.
+func TestCompositeVerifiesLAMPSConstruction(t *testing.T) {
+	signer := compositeTestKeys(t)
+	raw := signer.PublicKey().Bytes()
 	if len(raw) != CompositePublicKeyBytes {
 		t.Fatalf("raw composite key = %d bytes, want %d", len(raw), CompositePublicKeyBytes)
 	}
@@ -44,7 +43,7 @@ func TestCompositeVerifiesDraft07Construction(t *testing.T) {
 		t.Fatalf("ParseCompositePublicKey() error = %v", err)
 	}
 	sum := sha512.Sum512([]byte("canonical signature input"))
-	signatureBytes := compositeTestSignature(t, mlKey, edKey, sum[:])
+	signatureBytes := compositeTestSignature(t, signer, sum[:])
 	if len(signatureBytes) != CompositeSignatureBytes {
 		t.Fatalf("composite signature = %d bytes, want %d", len(signatureBytes), CompositeSignatureBytes)
 	}
@@ -56,19 +55,25 @@ func TestCompositeVerifiesDraft07Construction(t *testing.T) {
 // TestCompositeRejectsEveryPartialOrConfusedForm requires both halves under
 // the same input and rejects alternate profiles and malformed material.
 func TestCompositeRejectsEveryPartialOrConfusedForm(t *testing.T) {
-	mlKey, edKey := compositeTestKeys(t)
-	raw := append(mlKey.PublicKey().Bytes(), edKey.Public().(ed25519.PublicKey)...)
+	signer := compositeTestKeys(t)
+	raw := signer.PublicKey().Bytes()
 	key, err := ParseCompositePublicKey(raw)
 	if err != nil {
 		t.Fatalf("ParseCompositePublicKey() error = %v", err)
 	}
 	sum := sha512.Sum512([]byte("canonical signature input"))
-	good := compositeTestSignature(t, mlKey, edKey, sum[:])
+	good := compositeTestSignature(t, signer, sum[:])
 	mlLen := len(good) - ed25519.SignatureSize
-	contextSigned, err := mlKey.SignDeterministic(sum[:], &mldsa.Options{Context: "dkim2"})
+	representative := compositeRepresentative(sum[:])
+	contextSigned, err := signer.mldsa.SignDeterministic(representative, &mldsa.Options{Context: "dkim2"})
 	if err != nil {
 		t.Fatal(err)
 	}
+	emptyContextSigned, err := signer.mldsa.SignDeterministic(sum[:], &mldsa.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	edKey := signer.ed
 	other := sha512.Sum512([]byte("other input"))
 	tests := map[string][]byte{
 		"corrupted ml-dsa half":  flipByte(good, 10),
@@ -77,6 +82,8 @@ func TestCompositeRejectsEveryPartialOrConfusedForm(t *testing.T) {
 		"truncated":              good[:len(good)-1],
 		"trailing byte":          append(append([]byte(nil), good...), 0),
 		"ml-dsa with context":    append(contextSigned, good[mlLen:]...),
+		"draft-07 bare digest":   append(emptyContextSigned, ed25519.Sign(edKey, sum[:])...),
+		"ed25519 over digest":    append(append([]byte(nil), good[:mlLen]...), ed25519.Sign(edKey, sum[:])...),
 		"ed25519 over other":     append(append([]byte(nil), good[:mlLen]...), ed25519.Sign(edKey, other[:])...),
 		"ml-dsa only":            good[:mlLen],
 	}

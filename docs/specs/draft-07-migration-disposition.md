@@ -481,3 +481,31 @@ Open follow-ups owned by later packages:
   domain derivation, Exim contract, mapping, and filter tests, and the DSN
   propagation test. A real Postfix or Exim SMTPUTF8 signing run is not part of
   this package.
+
+## 16. Composite construction
+
+- The DKIM2 interoperability round (Stalwart mail-auth in interim operation)
+  signs `mldsa44-ed25519-sha512` with the `draft-ietf-lamps-pq-composite-sigs`
+  id-MLDSA44-Ed25519-SHA512 construction that DNS-01 cites. Draft-07 Section
+  3.4 names the components but not the message representative, and the
+  earlier literal reading (ML-DSA-44 and Ed25519 directly over SHA-512 with
+  an empty ML-DSA context) does not interoperate.
+- Verification now uses the LAMPS representative `"CompositeAlgorithmSignatures2025"
+  || "COMPSIG-MLDSA44-Ed25519-SHA512" || 0x00 || SHA-512(M)`, with the label
+  as the ML-DSA-44 context. The earlier construction no longer verifies.
+- `lib/internal/cryptodkim2` owns the construction for verification and
+  signing (`SignCompositeDigest`, hedged ML-DSA-44 with self-verification)
+  and the exact PKCS#8 and SubjectPublicKeyInfo encodings under OID
+  1.3.6.1.5.5.7.6.39.
+- Evidence: the LAMPS known-answer vector (raw and PKCS#8 private keys derive
+  the vector public key; the context-bearing variant is rejected), a
+  Stalwart-signed DKIM2 message that verifies end to end, and a negative case
+  for the earlier bare-digest construction, including an Ed25519 half over
+  the bare digest beside a correct ML-DSA half. The vectors are copied unchanged
+  from Stalwart mail-auth with provenance in
+  `lib/testdata/vectors/external/stalwart-mail-auth/README.md`.
+- Line length: Stalwart's expected-output files keep the 3484-byte signature
+  on one line (its unfolded `Dkim2Signed::write` form), which exceeds the
+  RFC 5322 998-octet limit this implementation keeps enforcing. On the wire
+  Stalwart folds through its `HeaderFolder` writer, so live interoperability
+  is unaffected; the interop test folds only the removed signature value.

@@ -2326,10 +2326,17 @@ Rules:
   RSA-SHA256 and Ed25519-SHA256 signature inputs continue to use SHA-256.
 - Verifiers implement every Draft-07 Section 3 algorithm: `rsa-sha256`,
   `ed25519-sha256`, and the composite `mldsa44-ed25519-sha512`. The composite
-  follows Draft-07 Section 3.4: SHA-512 over the Section 12.8 input, pure
-  ML-DSA-44 with an empty context over that 64-byte digest, then PureEd25519
-  over the same digest; the 2484-byte signature is the ML-DSA-44 signature
-  followed by the Ed25519 signature, and both halves must verify. The default
+  follows the `draft-ietf-lamps-pq-composite-sigs` id-MLDSA44-Ed25519-SHA512
+  construction that DNS-01 cites and the DKIM2 interoperability round uses:
+  the message representative is `"CompositeAlgorithmSignatures2025" ||
+  "COMPSIG-MLDSA44-Ed25519-SHA512" || 0x00 || SHA-512(M)` over the Section
+  12.8 input `M`; ML-DSA-44 signs it with the label as its context and
+  PureEd25519 signs it directly; the 2484-byte signature is the ML-DSA-44
+  signature followed by the Ed25519 signature, and both halves must verify.
+  `lib/internal/cryptodkim2` is the single owner of this construction and of
+  the exact PKCS#8 and SubjectPublicKeyInfo encodings (OID
+  1.3.6.1.5.5.7.6.39). Stalwart mail-auth signatures verify
+  (`lib/testdata/vectors/external/stalwart-mail-auth`). The default
   verifier algorithm policy includes the composite, so verifier construction
   fails closed when the cryptographic runtime lacks ML-DSA-44.
 - Signing remains restricted to `rsa-sha256` and `ed25519-sha256`. Composite

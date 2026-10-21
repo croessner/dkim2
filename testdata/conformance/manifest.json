@@ -376,7 +376,7 @@
     {
       "id": "verification-composite-source",
       "path": "lib/internal/verify/composite_test.go",
-      "sha256": "1e08ef7aba7ea986f2fe64429c9457b14eab66eac21a082687286f7ff88801fb",
+      "sha256": "0437a20eefd5de10832e5e951aba57c3c958bfd2e8e259eabfe4879e73a5da34",
       "module": "lib"
     },
     {

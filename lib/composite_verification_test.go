@@ -4,9 +4,9 @@ import (
 	"bytes"
 	"context"
 	"crypto/ed25519"
-	"crypto/mldsa"
 	"crypto/sha512"
 	"encoding/base64"
+	"github.com/croessner/dkim2/internal/cryptodkim2"
 	"strings"
 	"testing"
 	"time"
@@ -22,17 +22,15 @@ const (
 )
 
 // publicCompositeFixture builds a current DKIM2 message signed with the
-// Draft-07 Section 3.4 mldsa44-ed25519-sha512 construction: SHA-512 over the
-// Section 12.8 input, pure ML-DSA-44 with an empty context, then PureEd25519
-// over the same 64-byte digest. It returns the raw message, the raw DNS p=
-// key form, and the decoded signature value.
+// LAMPS mldsa44-ed25519-sha512 construction over SHA-512 of the Section 12.8
+// input through the production composite signer. It returns the raw message,
+// the raw DNS p= key form, and the decoded signature value.
 func publicCompositeFixture(t *testing.T) ([]byte, []byte, []byte) {
 	t.Helper()
-	mlKey, err := mldsa.NewPrivateKey(mldsa.MLDSA44(), bytes.Repeat([]byte{0x42}, mldsa.PrivateKeySize))
+	signer, err := cryptodkim2.NewCompositePrivateKey(append(bytes.Repeat([]byte{0x42}, 32), bytes.Repeat([]byte{0x24}, 32)...))
 	if err != nil {
-		t.Fatalf("mldsa.NewPrivateKey() error = %v", err)
+		t.Fatalf("NewCompositePrivateKey() error = %v", err)
 	}
-	edKey := ed25519.NewKeyFromSeed(bytes.Repeat([]byte{0x24}, ed25519.SeedSize))
 	placeholder := foldCompositeBase64(base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{0xa5}, compositeTestSignatureBytes)))
 	unsigned := publicFixtureForAlgorithm(t, string(AlgorithmMLDSA44Ed25519SHA512), placeholder)
 	message, err := rawmsg.Parse(unsigned)
@@ -48,17 +46,15 @@ func publicCompositeFixture(t *testing.T) ([]byte, []byte, []byte) {
 		t.Fatalf("SignatureInput() error = %v", err)
 	}
 	digest := sha512.Sum512(input.Bytes())
-	mlSignature, err := mlKey.SignDeterministic(digest[:], &mldsa.Options{})
+	signatureBytes, err := cryptodkim2.SignCompositeDigest(signer, digest[:])
 	if err != nil {
-		t.Fatalf("SignDeterministic() error = %v", err)
+		t.Fatalf("SignCompositeDigest() error = %v", err)
 	}
-	signatureBytes := append(mlSignature, ed25519.Sign(edKey, digest[:])...)
 	if len(signatureBytes) != compositeTestSignatureBytes {
 		t.Fatalf("composite signature length = %d", len(signatureBytes))
 	}
 	signed := bytes.Replace(unsigned, []byte(placeholder), []byte(foldCompositeBase64(base64.StdEncoding.EncodeToString(signatureBytes))), 1)
-	publicKey := append(mlKey.PublicKey().Bytes(), edKey.Public().(ed25519.PublicKey)...)
-	return signed, publicKey, signatureBytes
+	return signed, signer.PublicKey().Bytes(), signatureBytes
 }
 
 // foldCompositeBase64 folds a long base64 tag value with CRLF HTAB so every

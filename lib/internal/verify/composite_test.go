@@ -3,8 +3,6 @@ package verify
 import (
 	"bytes"
 	"context"
-	"crypto/ed25519"
-	"crypto/mldsa"
 	"crypto/sha512"
 	"encoding/base64"
 	"strings"
@@ -15,29 +13,24 @@ import (
 )
 
 // newCompositeVerificationFixture signs a synthetic DKIM2 message with the
-// Draft-07 Section 3.4 mldsa44-ed25519-sha512 construction over SHA-512 of
-// the exact Section 12.8 input, and returns its raw DNS public key.
+// LAMPS mldsa44-ed25519-sha512 construction over SHA-512 of the exact
+// Section 12.8 input, and returns its composite public key.
 func newCompositeVerificationFixture(t *testing.T) (verificationFixture, cryptodkim2.CompositePublicKey) {
 	t.Helper()
-	mlKey, err := mldsa.NewPrivateKey(mldsa.MLDSA44(), bytes.Repeat([]byte{0x31}, mldsa.PrivateKeySize))
+	signer, err := cryptodkim2.NewCompositePrivateKey(append(bytes.Repeat([]byte{0x31}, 32), bytes.Repeat([]byte{0x13}, 32)...))
 	if err != nil {
-		t.Fatalf("mldsa.NewPrivateKey() error = %v", err)
+		t.Fatalf("NewCompositePrivateKey() error = %v", err)
 	}
-	edKey := ed25519.NewKeyFromSeed(bytes.Repeat([]byte{0x13}, ed25519.SeedSize))
 	fixture := buildVerificationFixtureWithEnvelopeAt(t, signature.AlgorithmMLDSA44Ed25519SHA512, testTimestampSeconds,
 		[]byte("<>"), [][]byte{[]byte("<rcpt@example.test>")}, func(_ []byte, input []byte) []byte {
 			sum := sha512.Sum512(input)
-			mlSignature, signErr := mlKey.SignDeterministic(sum[:], &mldsa.Options{})
+			signatureBytes, signErr := cryptodkim2.SignCompositeDigest(signer, sum[:])
 			if signErr != nil {
-				t.Fatalf("SignDeterministic() error = %v", signErr)
+				t.Fatalf("SignCompositeDigest() error = %v", signErr)
 			}
-			return append(mlSignature, ed25519.Sign(edKey, sum[:])...)
+			return signatureBytes
 		})
-	key, err := cryptodkim2.ParseCompositePublicKey(append(mlKey.PublicKey().Bytes(), edKey.Public().(ed25519.PublicKey)...))
-	if err != nil {
-		t.Fatalf("ParseCompositePublicKey() error = %v", err)
-	}
-	return fixture, key
+	return fixture, signer.PublicKey()
 }
 
 // TestVerifierPassesDraft07CompositeSignature proves end-to-end verification

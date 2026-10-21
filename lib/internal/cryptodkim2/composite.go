@@ -81,17 +81,39 @@ func (k CompositePublicKey) clone() CompositePublicKey {
 	return CompositePublicKey{mldsa: k.mldsa, ed: ed25519.PublicKey(bytes.Clone(k.ed))}
 }
 
-// verifyComposite applies Draft-07 Section 3.4: pure ML-DSA-44 with an empty
-// application context and PureEd25519 both verify the same 64-byte SHA-512
-// digest, and the signature is the ML-DSA-44 value immediately followed by
-// the Ed25519 value. Both halves must verify; there is no fallback to another
-// composite construction. The DNS-01 reference to the LAMPS composite
-// construction conflicts with this procedure and is a documented limitation.
+// compositePrefix and compositeLabel are the fixed domain separators of the
+// draft-ietf-lamps-pq-composite-sigs id-MLDSA44-Ed25519-SHA512 construction.
+const (
+	compositePrefix = "CompositeAlgorithmSignatures2025"
+	compositeLabel  = "COMPSIG-MLDSA44-Ed25519-SHA512"
+)
+
+// compositeRepresentative builds the LAMPS message representative
+// M' = Prefix || Label || len(ctx) || ctx || SHA-512(M) for the empty
+// application context DKIM2 uses. digest is SHA-512 over the Section 12.8
+// signature input.
+func compositeRepresentative(digest []byte) []byte {
+	representative := make([]byte, 0, len(compositePrefix)+len(compositeLabel)+1+len(digest))
+	representative = append(representative, compositePrefix...)
+	representative = append(representative, compositeLabel...)
+	representative = append(representative, 0)
+	return append(representative, digest...)
+}
+
+// verifyComposite verifies mldsa44-ed25519-sha512 under the
+// draft-ietf-lamps-pq-composite-sigs construction that DNS-01 cites and that
+// the DKIM2 interoperability round uses (Draft-07 Section 3.4 does not yet
+// spell out the representative): ML-DSA-44 verifies the message
+// representative with the composite label as its context, PureEd25519
+// verifies the same representative, and the signature is the ML-DSA-44 value
+// immediately followed by the Ed25519 value. Both halves must verify; there
+// is no fallback to another construction.
 func verifyComposite(key CompositePublicKey, digest, signatureBytes []byte) bool {
 	if !key.valid() || len(signatureBytes) != CompositeSignatureBytes {
 		return false
 	}
-	mlOK := mldsa.Verify(key.mldsa, digest, signatureBytes[:mldsa44SignatureBytes], &mldsa.Options{}) == nil
-	edOK := ed25519.Verify(key.ed, digest, signatureBytes[mldsa44SignatureBytes:])
+	representative := compositeRepresentative(digest)
+	mlOK := mldsa.Verify(key.mldsa, representative, signatureBytes[:mldsa44SignatureBytes], &mldsa.Options{Context: compositeLabel}) == nil
+	edOK := ed25519.Verify(key.ed, representative, signatureBytes[mldsa44SignatureBytes:])
 	return mlOK && edOK
 }
