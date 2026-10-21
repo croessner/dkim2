@@ -57,6 +57,12 @@ Replay counting is now local delivery policy (Draft-07 Section 15.1):
   the rspamd symbol `DKIM2_REPLAY_NOT_ELIGIBLE`.
 - `not_checked` keeps its old meaning: verification or policy did not reach
   PASS/accept.
+- A receiver that relied on single-shot replay of direct mail, such as a
+  reflector, sets `replay.count_direct_deliveries: true` to keep counting
+  `i=1`-only messages as local delivery policy. A retransmitted direct
+  message is then rejected as a replay, and of recipients split into
+  separate transactions only the first is delivered, so ordinary mailbox
+  receivers keep the default.
 
 ## Removed Configuration And Signals
 

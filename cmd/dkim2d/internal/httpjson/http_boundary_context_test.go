@@ -413,6 +413,7 @@ func contextGoldenInboundProcessor(
 		deriver,
 		store,
 		dkim2.DefaultReplayRetention(),
+		dkim2.ReplayCountingPolicy{},
 	)
 	if err != nil {
 		t.Fatal("context replay coordinator construction failed")

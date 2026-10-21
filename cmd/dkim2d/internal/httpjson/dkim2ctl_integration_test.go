@@ -452,6 +452,7 @@ func newDKIM2ctlInboundProcessor(
 		deriver,
 		dkim2ctlFirstSeenStore{facts: facts},
 		dkim2.DefaultReplayRetention(),
+		dkim2.ReplayCountingPolicy{},
 	)
 	if err != nil {
 		t.Fatalf("construct enabled replay coordinator: %v", err)

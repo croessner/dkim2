@@ -64,7 +64,7 @@
     {
       "id": "daemon-replay-source",
       "path": "cmd/dkim2d/internal/app/replay_test.go",
-      "sha256": "35f2f200c5a6b1dffeb7818e4d14d1751a5f19b111cad76252bf1e1bad7fd57e",
+      "sha256": "f3d16504b4dafa8e70690c4d1b72a101a453378ddaee575bd2e5b6cd9e978839",
       "module": "cmd/dkim2d"
     },
     {
@@ -112,7 +112,7 @@
     {
       "id": "openapi-daemon-boundary-source",
       "path": "cmd/dkim2d/internal/httpjson/dkim2ctl_integration_test.go",
-      "sha256": "3845d619ac1cb1c7eb81fcd873073d05152a457019b7a8d67eac7cfdcd5a8c3d",
+      "sha256": "98da769bdf313254d3ca8a9a03a70901c0bf6690d62eeb0e6ea71f1d3b44da22",
       "module": "cmd/dkim2d"
     },
     {

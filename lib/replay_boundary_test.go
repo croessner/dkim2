@@ -294,7 +294,7 @@ func auditReplayPublicAPI(root string, files []parsedReplayFile) replayPublicAPI
 			"NewReplayRetention": true, "DefaultReplayRetention": true,
 			"NewReplayDeriver": true, "NewReplayMemoryStore": true,
 			"NewReplayDisabledStore": true, useReplayStorageKeyFunction: true,
-			"NewAuthenticator": true, "NewDisabledAuthenticator": true,
+			"NewAuthenticator": true, "NewDisabledAuthenticator": true, "DirectDeliveryReplayCountingPolicy": true, "WithDirectDeliveryReplayCounting": true,
 			"NewReplayLease": true, "FormatReplayPropagationPending": true, "ParseReplayPropagationValue": true,
 		},
 		types: map[string]bool{
@@ -302,7 +302,7 @@ func auditReplayPublicAPI(root string, files []parsedReplayFile) replayPublicAPI
 			"ReplayErrorCode": true, "ReplayError": true, "ReplayRetention": true,
 			"ReplayStore": true, "ManagedReplayStore": true,
 			"ReplayIdentity": true, "ReplayIdentitySet": true, "ReplayDeriver": true,
-			"ReplayLimits": true, "ReplayClock": true, "ReplayClockFunc": true,
+			"ReplayLimits": true, "ReplayClock": true, "ReplayClockFunc": true, "ReplayCountingPolicy": true, "AuthenticatorOption": true,
 			replayMemoryConfigType: true, "ReplayMemoryStore": true, "ReplayDisabledStore": true,
 			"AuthenticationReplayClass": true, "AuthenticationReason": true,
 			"AuthenticationResult": true, "Authenticator": true,

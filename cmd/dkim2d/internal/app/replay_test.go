@@ -175,6 +175,31 @@ func (*typedNilReplayStore) CheckAndRemember(
 	return 0, nil
 }
 
+// TestReplayCoordinatorCountsDirectDeliveriesUnderLocalPolicy proves the
+// configured direct-delivery counting policy reaches /v1/process: the same
+// single-signature vector is counted and mutates the store once.
+func TestReplayCoordinatorCountsDirectDeliveriesUnderLocalPolicy(t *testing.T) {
+	domain := goldenReplayDomain(t, config.PolicyStrict)
+	inner, err := dkim2.NewReplayDeriver(replayTestSecret(), 1)
+	if err != nil {
+		t.Fatal("replay deriver construction failed")
+	}
+	t.Cleanup(func() { _ = inner.Close(context.Background()) })
+	store := &recordingReplayStore{responses: []replayStoreResponse{{check: dkim2.ReplayCheckFirstSeen}}}
+	coordinator, err := newEnabledReplayCoordinator(
+		&recordingReplayDeriver{inner: inner, failAt: -1, invalidAt: -1}, store,
+		dkim2.DefaultReplayRetention(), dkim2.DirectDeliveryReplayCountingPolicy(),
+	)
+	if err != nil {
+		t.Fatal("replay coordinator construction failed")
+	}
+	outcome, coordinateErr := coordinator.Coordinate(context.Background(), domain)
+	assertReplayOutcome(t, outcome, coordinateErr, ReplayResultFirstSeen, FinalDispositionAccept, true)
+	if store.Calls() != 1 {
+		t.Fatalf("direct delivery store calls = %d, want 1", store.Calls())
+	}
+}
+
 // TestReplayCoordinatorSkipsDirectFrozenGoldenPass proves the checked-in
 // single-signature protocol vector is a direct delivery that Draft-07 Section
 // 15.1 does not count: it reaches a PASS outcome without any store mutation.
@@ -681,13 +706,13 @@ func TestReplayOutcomeRejectsImpossibleMatrixMembers(t *testing.T) {
 func TestReplayCoordinatorFailsClosedOnHostileContextsAndConstruction(t *testing.T) {
 	var nilDeriver *typedNilReplayDeriver
 	var nilStore *typedNilReplayStore
-	if coordinator, err := newEnabledReplayCoordinator(nilDeriver, &recordingReplayStore{}, dkim2.DefaultReplayRetention()); coordinator != nil || !IsReplayCoordinatorError(err) {
+	if coordinator, err := newEnabledReplayCoordinator(nilDeriver, &recordingReplayStore{}, dkim2.DefaultReplayRetention(), dkim2.ReplayCountingPolicy{}); coordinator != nil || !IsReplayCoordinatorError(err) {
 		t.Fatal("typed-nil deriver construction did not fail closed")
 	}
-	if coordinator, err := newEnabledReplayCoordinator(&typedNilReplayDeriver{}, nilStore, dkim2.DefaultReplayRetention()); coordinator != nil || !IsReplayCoordinatorError(err) {
+	if coordinator, err := newEnabledReplayCoordinator(&typedNilReplayDeriver{}, nilStore, dkim2.DefaultReplayRetention(), dkim2.ReplayCountingPolicy{}); coordinator != nil || !IsReplayCoordinatorError(err) {
 		t.Fatal("typed-nil store construction did not fail closed")
 	}
-	if coordinator, err := newEnabledReplayCoordinator(&typedNilReplayDeriver{}, &recordingReplayStore{}, dkim2.ReplayRetention{}); coordinator != nil || !IsReplayCoordinatorError(err) {
+	if coordinator, err := newEnabledReplayCoordinator(&typedNilReplayDeriver{}, &recordingReplayStore{}, dkim2.ReplayRetention{}, dkim2.ReplayCountingPolicy{}); coordinator != nil || !IsReplayCoordinatorError(err) {
 		t.Fatal("invalid retention construction did not fail closed")
 	}
 
@@ -905,6 +930,14 @@ func authenticReplayDomain(
 // goldenReplayDomain loads one frozen public PASS vector through the daemon domain seam.
 func goldenReplayDomain(t *testing.T, mode config.PolicyMode) DomainResult {
 	t.Helper()
+	raw, recipients, provider := goldenReplayInput(t)
+	return processReplayDomain(t, raw, []byte("<>"), recipients, provider, mode)
+}
+
+// goldenReplayInput loads the frozen single-signature public PASS vector, its
+// final recipients, and its public-key provider.
+func goldenReplayInput(t *testing.T) ([]byte, [][]byte, dkim2.PublicKeyProvider) {
+	t.Helper()
 	corpusBytes, err := os.ReadFile(
 		"../../../../lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-07/public-golden.json",
 	)
@@ -924,19 +957,8 @@ func goldenReplayDomain(t *testing.T, mode config.PolicyMode) DomainResult {
 	for index, encoded := range vector.Forward {
 		recipients[index] = decodeAppGolden(t, encoded)
 	}
-	return processReplayDomain(
-		t,
-		decodeAppGolden(t, vector.Raw),
-		[]byte("<>"),
-		recipients,
-		appGoldenProvider{
-			key: &rsa.PublicKey{
-				N: new(big.Int).SetBytes(modulus),
-				E: corpus.RSAExponent,
-			},
-		},
-		mode,
-	)
+	provider := appGoldenProvider{key: &rsa.PublicKey{N: new(big.Int).SetBytes(modulus), E: corpus.RSAExponent}}
+	return decodeAppGolden(t, vector.Raw), recipients, provider
 }
 
 // malformedReplayDomain constructs one authentic pre-target PERMERROR domain result.
@@ -1078,6 +1100,7 @@ func mustReplayCoordinator(
 		deriver,
 		store,
 		dkim2.DefaultReplayRetention(),
+		dkim2.ReplayCountingPolicy{},
 	)
 	if err != nil {
 		t.Fatal("replay coordinator construction failed")

@@ -783,6 +783,12 @@ func (c ReplayConfig) Retention() time.Duration {
 	return c.state.retention
 }
 
+// CountDirectDeliveries reports whether local replay policy also counts
+// messages authenticated only by the originator's i=1 signature.
+func (c ReplayConfig) CountDirectDeliveries() bool {
+	return c.state != nil && c.state.countDirect
+}
+
 // RevalidateInterval returns the Valkey authority revalidation interval.
 func (c ReplayConfig) RevalidateInterval() time.Duration {
 	if c.state == nil {

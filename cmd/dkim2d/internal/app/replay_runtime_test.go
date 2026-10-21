@@ -701,6 +701,92 @@ func TestReplayRuntimeMemoryProjectsExactParametersAndOwnedClones(t *testing.T) 
 	}
 }
 
+// TestReplayRuntimeCarriesDirectDeliveryCountingPolicy proves the configured
+// local replay policy reaches the runtime that builds authenticators.
+func TestReplayRuntimeCarriesDirectDeliveryCountingPolicy(t *testing.T) {
+	for _, enabled := range []bool{false, true} {
+		document := runtimeMemoryYAML()
+		if enabled {
+			document = strings.Replace(document, "  epoch: 7\n", "  epoch: 7\n  count_direct_deliveries: true\n", 1)
+		}
+		material := runtimeMaterial(t, document)
+		factories := replayRuntimeFactories{
+			newDeriver:  dkim2.NewReplayDeriver,
+			newMemory:   dkim2.NewReplayMemoryStore,
+			newDisabled: newDisabledReplayStore,
+			clock:       &runtimeFixedClock{now: time.Unix(1_700_000_000, 0)},
+		}
+		runtime, err := newReplayRuntime(context.Background(), material, factories)
+		if err != nil || runtime == nil || runtime.state.counting.CountsDirectDeliveries() != enabled {
+			t.Fatalf("count_direct_deliveries=%t runtime policy=%v error=%v", enabled, runtime != nil && runtime.state.counting.CountsDirectDeliveries(), err)
+		}
+		if runtime.state.coordinator.state.counting.CountsDirectDeliveries() != enabled {
+			t.Fatal("process replay coordinator did not receive the counting policy")
+		}
+		if err := closeReplayRuntimeBounded(runtime); err != nil {
+			t.Fatal("memory owners did not close")
+		}
+	}
+}
+
+// TestInboundProcessCountsDirectDeliveriesEndToEnd proves the production
+// /v1/process path with a real memory store and bound authenticator: with
+// count_direct_deliveries a direct i=1 message is first_seen and accepted
+// once, then replayed and rejected; without it both are not_eligible.
+func TestInboundProcessCountsDirectDeliveriesEndToEnd(t *testing.T) {
+	raw, recipients, provider := goldenReplayInput(t)
+	for _, test := range []struct {
+		enabled bool
+		want    []ReplayResultClass
+		final   []FinalDisposition
+	}{
+		{enabled: false, want: []ReplayResultClass{ReplayResultNotEligible, ReplayResultNotEligible}, final: []FinalDisposition{FinalDispositionAccept, FinalDispositionAccept}},
+		{enabled: true, want: []ReplayResultClass{ReplayResultFirstSeen, ReplayResultReplayed}, final: []FinalDisposition{FinalDispositionAccept, FinalDispositionReject}},
+	} {
+		document := runtimeMemoryYAML()
+		if test.enabled {
+			document = strings.Replace(document, "  epoch: 7\n", "  epoch: 7\n  count_direct_deliveries: true\n", 1)
+		}
+		runtime, err := newReplayRuntime(context.Background(), runtimeMaterial(t, document), replayRuntimeFactories{
+			newDeriver: dkim2.NewReplayDeriver, newMemory: dkim2.NewReplayMemoryStore,
+			newDisabled: newDisabledReplayStore, clock: &runtimeFixedClock{now: time.Unix(replayTestTimestamp, 0)},
+		})
+		if err != nil {
+			t.Fatalf("newReplayRuntime() error = %v", err)
+		}
+		verifier, err := dkim2.NewVerifier(provider, dkim2.WithVerificationClock(func() time.Time { return time.Unix(replayTestTimestamp, 0) }))
+		if err != nil {
+			t.Fatal("verifier construction failed")
+		}
+		authentication, err := runtime.NewAuthenticator(&DNSVerifier{verifier: verifier, provider: provider})
+		if err != nil {
+			t.Fatalf("NewAuthenticator() error = %v", err)
+		}
+		domain, err := NewDomainProcessor(verifier, config.PolicyStrict, authentication)
+		if err != nil {
+			t.Fatal("domain processor construction failed")
+		}
+		processor, err := NewInboundProcessor(domain, runtime)
+		if err != nil {
+			t.Fatal("inbound processor construction failed")
+		}
+		for index := range test.want {
+			result, err := processor.Process(context.Background(), dkim2.NewVerifyRequest(raw, []byte("<>"), recipients))
+			if err != nil {
+				t.Fatalf("Process() error = %v", err)
+			}
+			outcome, err := result.Replay()
+			if err != nil || outcome.Class() != test.want[index] || outcome.Disposition() != test.final[index] {
+				t.Fatalf("enabled=%t delivery %d replay=%q disposition=%q error=%v",
+					test.enabled, index, outcome.Class(), outcome.Disposition(), err)
+			}
+		}
+		if err := closeReplayRuntimeBounded(runtime); err != nil {
+			t.Fatal("memory owners did not close")
+		}
+	}
+}
+
 // TestReplayRuntimeValkeyUsesOneStartupBorrowAndFreshAuditBorrows proves authority separation.
 func TestReplayRuntimeValkeyUsesOneStartupBorrowAndFreshAuditBorrows(t *testing.T) {
 	material := runtimeMaterial(t, runtimeValkeyYAML())

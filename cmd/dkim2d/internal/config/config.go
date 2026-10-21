@@ -264,6 +264,7 @@ type replayState struct {
 	maxInFlight         uint32
 	maxAdmissionWaiters uint32
 	revalidateInterval  time.Duration
+	countDirect         bool
 	valkey              valkeyState
 	operatorAttestation valkey.OperatorAttestation
 	hasReplayConfig     bool
@@ -1330,6 +1331,10 @@ func parseReplay(values map[string]rawValue, presence map[string]Presence, backe
 	if err != nil {
 		return replayState{}, err
 	}
+	countDirect, err := boolValue(values, pathReplayCountDirect)
+	if err != nil {
+		return replayState{}, err
+	}
 	hmacPath := text(values, pathReplayHMACFile)
 	if !validProtectedPath(hmacPath) ||
 		!sameGenerationPaths(generation, capabilityPath, hmacPath) ||
@@ -1344,6 +1349,7 @@ func parseReplay(values map[string]rawValue, presence map[string]Presence, backe
 	result.pruneBudget = uint32(pruneBudget)
 	result.maxInFlight = uint32(maxInFlight)
 	result.maxAdmissionWaiters = uint32(maxAdmissionWaiters)
+	result.countDirect = countDirect
 	result.hasReplayConfig = true
 	if backend == ReplayMemory {
 		return result, nil

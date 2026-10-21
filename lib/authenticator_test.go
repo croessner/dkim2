@@ -132,7 +132,7 @@ func forwardedReplayRequest(raw []byte) VerifyRequest {
 }
 
 // newTestAuthenticator constructs one enabled authenticator over a fixed clock and store.
-func newTestAuthenticator(t *testing.T, key *rsa.PublicKey, timestamp int64, store ReplayStore) *Authenticator {
+func newTestAuthenticator(t *testing.T, key *rsa.PublicKey, timestamp int64, store ReplayStore, options ...AuthenticatorOption) *Authenticator {
 	t.Helper()
 	verifier, err := NewVerifier(publicProviderFunc(func(context.Context, PublicKeyQuery) (PublicKeyResult, error) {
 		return FoundRSAPublicKey(key), nil
@@ -145,7 +145,7 @@ func newTestAuthenticator(t *testing.T, key *rsa.PublicKey, timestamp int64, sto
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = deriver.Close(context.Background()) })
-	authenticator, err := NewAuthenticator(verifier, store, deriver, DefaultReplayRetention())
+	authenticator, err := NewAuthenticator(verifier, store, deriver, DefaultReplayRetention(), options...)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -177,6 +177,39 @@ func TestAuthenticatorDoesNotCountDirectDeliveries(t *testing.T) {
 		if err != nil || !result.Valid() || result.State() != ResultStatePASS || result.ReplayClass() != AuthenticationReplayNotEligible {
 			t.Fatalf("direct delivery state=%q replay=%q error=%v", result.State(), result.ReplayClass(), err)
 		}
+	}
+}
+
+// TestAuthenticatorCountsDirectDeliveriesWhenLocalPolicyRequestsIt proves
+// the opt-in local replay policy counts i=1-only messages: the first delivery
+// is first_seen and an identical second delivery is a replay.
+func TestAuthenticatorCountsDirectDeliveriesWhenLocalPolicyRequestsIt(t *testing.T) {
+	const timestamp = int64(1700000000)
+	raw, key := signedPublicReplayMessage(t, timestamp, [][]byte{[]byte("<rcpt@example.test>")})
+	authenticator := newTestAuthenticator(t, key, timestamp, newTestReplayMemoryStore(t), WithDirectDeliveryReplayCounting())
+	request := NewVerifyRequest(raw, []byte("<>"), [][]byte{[]byte("<rcpt@example.test>")})
+	first, err := authenticator.Authenticate(context.Background(), request)
+	if err != nil || first.State() != ResultStatePASS || first.ReplayClass() != AuthenticationReplayFirstSeen {
+		t.Fatalf("first direct delivery state=%q replay=%q error=%v", first.State(), first.ReplayClass(), err)
+	}
+	second, err := authenticator.Authenticate(context.Background(), request)
+	if err != nil || second.State() != ResultStateFAIL || second.ReplayClass() != AuthenticationReplayReplayed {
+		t.Fatalf("second direct delivery state=%q replay=%q error=%v", second.State(), second.ReplayClass(), err)
+	}
+	verifier, err := NewVerifier(publicProviderFunc(func(context.Context, PublicKeyQuery) (PublicKeyResult, error) {
+		return FoundRSAPublicKey(key), nil
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := NewDisabledAuthenticator(verifier, WithDirectDeliveryReplayCounting()); err == nil {
+		t.Fatal("direct-delivery counting accepted without a replay store")
+	}
+	if DirectDeliveryReplayCountingPolicy().Counts(ReplayIdentitySet{}) || (ReplayCountingPolicy{}).Counts(ReplayIdentitySet{}) {
+		t.Fatal("an invalid identity set was counted")
+	}
+	if _, err := NewAuthenticator(verifier, newTestReplayMemoryStore(t), nil, DefaultReplayRetention(), nil); err == nil {
+		t.Fatal("nil authenticator option accepted")
 	}
 }
 

@@ -814,6 +814,23 @@ replay:
 Memory replay is bounded but process-local. Restart, multiple daemon instances,
 and failover do not share its state.
 
+By default replay counting follows Draft-07 Section 15.1: a message carrying
+only the originator's `i=1` DKIM2-Signature is a direct delivery, reports the
+replay class `not_eligible`, and touches no store. A receiver that acts on
+every accepted message, such as a public reflector, may set
+`replay.count_direct_deliveries: true` (`DKIM2D_REPLAY_COUNT_DIRECT_DELIVERIES`)
+with the memory or Valkey backend. Direct deliveries are then counted like
+re-sent messages: the first is `first_seen`, an identical later one is
+`replayed`. The key is rejected with `replay.backend: disabled`.
+
+The option is meant for single-shot services such as a reflector, not for
+ordinary mailbox receivers. With it enabled:
+
+- a legitimate SMTP retransmission of a direct message, for example after a
+  lost `250` reply, is rejected as a replay;
+- when a sending MTA splits recipients into separate transactions, only the
+  first transaction is delivered.
+
 ### Production Valkey replay
 
 Valkey is the default backend, but missing authority or attestation fields

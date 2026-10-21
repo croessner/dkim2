@@ -131,22 +131,66 @@ type Authenticator struct {
 	deriver   *ReplayDeriver
 	retention ReplayRetention
 	disabled  bool
+	counting  ReplayCountingPolicy
+}
+
+// ReplayCountingPolicy is the local delivery policy that decides which
+// authenticated messages replay detection counts (Draft-07 Section 15.1). It
+// is the single owner of that decision for every replay path. The zero value
+// is the default: only messages re-sent by an intermediary are counted.
+type ReplayCountingPolicy struct{ direct bool }
+
+// DirectDeliveryReplayCountingPolicy also counts direct deliveries that carry
+// only the originator's i=1 signature.
+func DirectDeliveryReplayCountingPolicy() ReplayCountingPolicy {
+	return ReplayCountingPolicy{direct: true}
+}
+
+// CountsDirectDeliveries reports whether i=1-only messages are counted.
+func (p ReplayCountingPolicy) CountsDirectDeliveries() bool { return p.direct }
+
+// Counts reports whether replay detection counts the message of a valid
+// identity set under this policy.
+func (p ReplayCountingPolicy) Counts(identities ReplayIdentitySet) bool {
+	return identities.Eligible() || p.direct && identities.Valid()
+}
+
+// AuthenticatorOption configures optional local replay delivery policy.
+type AuthenticatorOption func(*Authenticator)
+
+// WithDirectDeliveryReplayCounting makes local replay policy count messages
+// authenticated only by the originator's i=1 signature. Draft-07 Section 15.1
+// leaves replay counting to local delivery policy and does not count such
+// direct deliveries by default; a receiver that acts on every accepted
+// message, such as a reflector, may count them so an identical direct
+// delivery is reported as a replay. The constructors enforce that it is used
+// only with an enabled replay store.
+func WithDirectDeliveryReplayCounting() AuthenticatorOption {
+	return func(a *Authenticator) { a.counting = DirectDeliveryReplayCountingPolicy() }
 }
 
 // NewAuthenticator constructs one enabled fail-closed Draft-07 authenticator.
-func NewAuthenticator(verifier *Verifier, store ReplayStore, deriver *ReplayDeriver, retention ReplayRetention) (*Authenticator, error) {
+func NewAuthenticator(verifier *Verifier, store ReplayStore, deriver *ReplayDeriver, retention ReplayRetention, options ...AuthenticatorOption) (*Authenticator, error) {
 	if verifier == nil || verifier.state == nil || niliface.IsNil(store) || deriver == nil || !retention.Valid() {
 		return nil, newAPIError(APIErrorCodeInvalidOption)
 	}
 	if managed, ok := store.(ManagedReplayStore); ok && managed.State() == ReplayStoreDisabled {
 		return nil, newAPIError(APIErrorCodeInvalidOption)
 	}
-	return &Authenticator{verifier: verifier, store: store, deriver: deriver, retention: retention}, nil
+	authenticator := &Authenticator{verifier: verifier, store: store, deriver: deriver, retention: retention}
+	for _, option := range options {
+		if option == nil {
+			return nil, newAPIError(APIErrorCodeInvalidOption)
+		}
+		option(authenticator)
+	}
+	return authenticator, nil
 }
 
-// NewDisabledAuthenticator constructs the sole explicit no-store authentication mode.
-func NewDisabledAuthenticator(verifier *Verifier) (*Authenticator, error) {
-	if verifier == nil || verifier.state == nil {
+// NewDisabledAuthenticator constructs the sole explicit no-store authentication
+// mode. Replay options require a store, so any option fails closed.
+func NewDisabledAuthenticator(verifier *Verifier, options ...AuthenticatorOption) (*Authenticator, error) {
+	if verifier == nil || verifier.state == nil || len(options) != 0 {
 		return nil, newAPIError(APIErrorCodeInvalidOption)
 	}
 	return &Authenticator{verifier: verifier, disabled: true}, nil
@@ -179,7 +223,7 @@ func (a *Authenticator) AuthenticateVerified(ctx context.Context, verification V
 	if identityErr != nil || !identities.Valid() || identities.Len() != 1 {
 		return newAuthenticationResult(verification, ResultStateTEMPERROR, AuthenticationReasonReplayEvidenceUnavailable, AuthenticationReplayIndeterminate), nil
 	}
-	if !identities.Eligible() {
+	if !a.counting.Counts(identities) {
 		return newAuthenticationResult(verification, ResultStatePASS, ReasonNone, AuthenticationReplayNotEligible), nil
 	}
 	identity, identityErr := identities.Identity(0)

@@ -79,6 +79,7 @@ type replayCoordinatorState struct {
 	deriver   replayKeyDeriver
 	store     dkim2.ReplayStore
 	retention dkim2.ReplayRetention
+	counting  dkim2.ReplayCountingPolicy
 }
 
 // ReplayOutcome is one immutable replay aggregate and final daemon disposition.
@@ -98,13 +99,15 @@ func NewDisabledReplayCoordinator() *ReplayCoordinator {
 	return &ReplayCoordinator{state: &replayCoordinatorState{disabled: true}}
 }
 
-// NewEnabledReplayCoordinator constructs one provider-neutral enabled replay policy.
+// NewEnabledReplayCoordinator constructs one provider-neutral enabled replay
+// policy. counting is the local Draft-07 Section 15.1 counting policy.
 func NewEnabledReplayCoordinator(
 	deriver *dkim2.ReplayDeriver,
 	store dkim2.ReplayStore,
 	retention dkim2.ReplayRetention,
+	counting dkim2.ReplayCountingPolicy,
 ) (*ReplayCoordinator, error) {
-	return newEnabledReplayCoordinator(deriver, store, retention)
+	return newEnabledReplayCoordinator(deriver, store, retention, counting)
 }
 
 // newEnabledReplayCoordinator constructs an enabled coordinator through narrow testable seams.
@@ -112,12 +115,13 @@ func newEnabledReplayCoordinator(
 	deriver replayKeyDeriver,
 	store dkim2.ReplayStore,
 	retention dkim2.ReplayRetention,
+	counting dkim2.ReplayCountingPolicy,
 ) (*ReplayCoordinator, error) {
 	if nilInterface(deriver) || nilInterface(store) || !retention.Valid() {
 		return nil, &ReplayCoordinatorError{}
 	}
 	return &ReplayCoordinator{state: &replayCoordinatorState{
-		deriver: deriver, store: store, retention: retention,
+		deriver: deriver, store: store, retention: retention, counting: counting,
 	}}, nil
 }
 
@@ -168,7 +172,8 @@ func (c *ReplayCoordinator) Coordinate(ctx context.Context, domain DomainResult)
 
 // coordinateEnabled derives every key before sequentially mutating the selected
 // store. Messages authenticated only by the originator's i=1 signature are not
-// replay-eligible and leave the store untouched. An authenticated exploded flag alone marks repeated identities as
+// replay-eligible and leave the store untouched unless the local counting
+// policy counts direct deliveries. An authenticated exploded flag alone marks repeated identities as
 // expected copies; Draft-07 removed donotexplode, so no compliance state vetoes it.
 func (c *ReplayCoordinator) coordinateEnabled(
 	ctx context.Context,
@@ -185,7 +190,7 @@ func (c *ReplayCoordinator) coordinateEnabled(
 	if identityErr != nil || !identities.Valid() || identities.Len() == 0 {
 		return indeterminateReplayOutcome(false), nil
 	}
-	if !identities.Eligible() {
+	if !c.state.counting.Counts(identities) {
 		disposition, ok := dispositionForPolicy(policy.Verdict())
 		if !ok {
 			return ReplayOutcome{}, &ReplayCoordinatorError{}

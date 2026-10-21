@@ -127,7 +127,7 @@ func startPropagateRouteHarness(t *testing.T) *propagateRouteHarness {
 	if err := domain.BindReceivedDSN(binding); err != nil {
 		t.Fatalf("bind: %v", err)
 	}
-	replay, err := app.NewEnabledReplayCoordinator(deriver, store, retention)
+	replay, err := app.NewEnabledReplayCoordinator(deriver, store, retention, dkim2.ReplayCountingPolicy{})
 	if err != nil {
 		t.Fatalf("replay coordinator: %v", err)
 	}

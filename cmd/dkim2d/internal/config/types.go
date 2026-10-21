@@ -58,6 +58,7 @@ const (
 	pathReplayMaxInFlight                 = "replay.limits.max_in_flight"
 	pathReplayMaxAdmission                = "replay.limits.max_admission_waiters"
 	pathReplayRevalidate                  = "replay.revalidate_interval"
+	pathReplayCountDirect                 = "replay.count_direct_deliveries"
 	pathSigningBackend                    = "signing.backend"
 	pathSigningDatasource                 = "signing.datasource_file"
 	pathSigningManifest                   = "signing.private_manifest_file"
@@ -334,6 +335,7 @@ func stableFieldSpecs() []fieldSpec {
 		{path: pathReplayMaxInFlight, env: "DKIM2D_REPLAY_LIMITS_MAX_IN_FLIGHT", kind: valueUint, defaultVal: "1024", hasDefault: true},
 		{path: pathReplayMaxAdmission, env: "DKIM2D_REPLAY_LIMITS_MAX_ADMISSION_WAITERS", kind: valueUint, defaultVal: "1024", hasDefault: true},
 		{path: pathReplayRevalidate, env: "DKIM2D_REPLAY_REVALIDATE_INTERVAL", kind: valueDuration, defaultVal: defaultReadTimeout, hasDefault: true},
+		{path: pathReplayCountDirect, env: "DKIM2D_REPLAY_COUNT_DIRECT_DELIVERIES", kind: valueBool, defaultVal: canonicalFalse, hasDefault: true},
 		{path: pathSigningBackend, env: "DKIM2D_SIGNING_BACKEND", kind: valueString, defaultVal: valueBackendDisabled, hasDefault: true},
 		{path: pathSigningDatasource, env: "DKIM2D_SIGNING_DATASOURCE_FILE", kind: valueString},
 		{path: pathSigningManifest, env: "DKIM2D_SIGNING_PRIVATE_MANIFEST_FILE", kind: valueString},

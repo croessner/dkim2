@@ -178,7 +178,7 @@ func TestStableFieldBindings(t *testing.T) {
 func TestStablePathSetIsExact(t *testing.T) {
 	specs := stableFieldSpecs()
 	golden := stableFieldGoldenContract()
-	if len(specs) != 122 || len(specs) != len(golden) {
+	if len(specs) != 123 || len(specs) != len(golden) {
 		t.Fatal("stable path count changed")
 	}
 	for index, expected := range golden {
@@ -266,6 +266,7 @@ func stableFieldGoldenContract() []stableFieldGolden {
 		{path: "replay.limits.max_in_flight", environment: "DKIM2D_REPLAY_LIMITS_MAX_IN_FLIGHT", defaultValue: "1024", hasDefault: true},
 		{path: "replay.limits.max_admission_waiters", environment: "DKIM2D_REPLAY_LIMITS_MAX_ADMISSION_WAITERS", defaultValue: "1024", hasDefault: true},
 		{path: "replay.revalidate_interval", environment: "DKIM2D_REPLAY_REVALIDATE_INTERVAL", defaultValue: "30" + "s", hasDefault: true},
+		{path: "replay.count_direct_deliveries", environment: "DKIM2D_REPLAY_COUNT_DIRECT_DELIVERIES", defaultValue: "fal" + "se", hasDefault: true},
 		{path: "signing.backend", environment: "DKIM2D_SIGNING_BACKEND", defaultValue: "disabled", hasDefault: true},
 		{path: "signing.datasource_file", environment: "DKIM2D_SIGNING_DATASOURCE_FILE"},
 		{path: "signing.private_manifest_file", environment: "DKIM2D_SIGNING_PRIVATE_MANIFEST_FILE"},

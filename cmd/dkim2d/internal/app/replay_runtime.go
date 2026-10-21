@@ -120,6 +120,7 @@ type replayRuntimeState struct {
 	auditorSource    replayAuditorSource
 	auditorUsername  string
 	revalidatePeriod time.Duration
+	counting         dkim2.ReplayCountingPolicy
 	startCleanup     replayCleanupStarter
 	close            replayRuntimeClose
 }
@@ -344,7 +345,7 @@ func constructMemoryReplayRuntime(
 		if operationErr != nil || store == nil {
 			return nil
 		}
-		coordinator, operationErr = NewEnabledReplayCoordinator(deriver, store, retention)
+		coordinator, operationErr = NewEnabledReplayCoordinator(deriver, store, retention, replayCounting(replayConfig))
 		if operationErr != nil || coordinator == nil {
 			return nil
 		}
@@ -356,6 +357,7 @@ func constructMemoryReplayRuntime(
 	return &ReplayRuntime{state: &replayRuntimeState{
 		backend: config.ReplayMemory, coordinator: coordinator, deriver: deriver,
 		retention: retention, closeDeriver: deriver.Close, store: store, startCleanup: startReplayRuntimeCleanup,
+		counting: replayCounting(replayConfig),
 	}}
 }
 
@@ -410,7 +412,7 @@ func constructValkeyReplayRuntime(
 			if operationErr != nil || nilInterface(store) {
 				return nil
 			}
-			coordinator, operationErr = NewEnabledReplayCoordinator(deriver, store, retention)
+			coordinator, operationErr = NewEnabledReplayCoordinator(deriver, store, retention, replayCounting(replayConfig))
 			if operationErr != nil || coordinator == nil {
 				return nil
 			}
@@ -429,6 +431,7 @@ func constructValkeyReplayRuntime(
 		closeDeriver:     deriver.Close,
 		store:            store,
 		authority:        store,
+		counting:         replayCounting(replayConfig),
 		auditorSource:    auditorSource,
 		auditorUsername:  valkeyConfig.AuditorUsername(),
 		revalidatePeriod: replayConfig.RevalidateInterval(),
@@ -447,6 +450,14 @@ func replayLimits(replayConfig config.ReplayConfig) dkim2.ReplayLimits {
 	}
 }
 
+// replayCounting maps the configured local replay counting policy.
+func replayCounting(replayConfig config.ReplayConfig) dkim2.ReplayCountingPolicy {
+	if replayConfig.CountDirectDeliveries() {
+		return dkim2.DirectDeliveryReplayCountingPolicy()
+	}
+	return dkim2.ReplayCountingPolicy{}
+}
+
 // NewAuthenticator binds the runtime replay authority to the owned DNS verifier.
 func (r *ReplayRuntime) NewAuthenticator(verifier *DNSVerifier) (*dkim2.Authenticator, error) {
 	if r == nil || r.state == nil || verifier == nil || verifier.verifier == nil || nilInterface(r.state.store) {
@@ -459,7 +470,11 @@ func (r *ReplayRuntime) NewAuthenticator(verifier *DNSVerifier) (*dkim2.Authenti
 	if r.state.backend == config.ReplayDisabled {
 		auth, err = dkim2.NewDisabledAuthenticator(verifier.verifier)
 	} else {
-		auth, err = dkim2.NewAuthenticator(verifier.verifier, r.state.store, r.state.deriver, r.state.retention)
+		var options []dkim2.AuthenticatorOption
+		if r.state.counting.CountsDirectDeliveries() {
+			options = append(options, dkim2.WithDirectDeliveryReplayCounting())
+		}
+		auth, err = dkim2.NewAuthenticator(verifier.verifier, r.state.store, r.state.deriver, r.state.retention, options...)
 	}
 	if err != nil || auth == nil {
 		return nil, &ReplayRuntimeError{}
