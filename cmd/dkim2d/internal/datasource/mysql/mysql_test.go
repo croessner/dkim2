@@ -336,6 +336,55 @@ func TestCampaignSourceBindingMigrationKeepsFrozenSourceInProviderMetadata(t *te
 	}
 }
 
+// TestCurrentFenceSourceMigrationMatchesLockedCurrentScan proves the
+// recreated locked current routine projects the same eight columns, in the
+// same order, as the unlocked current read the adapter scans, and leaves
+// routine authority to the reviewed site-owned grant template.
+func TestCurrentFenceSourceMigrationMatchesLockedCurrentScan(t *testing.T) {
+	t.Parallel()
+	schema := filepath.Join("..", "..", "..", "..", "..", "contrib", "schema", "mysql")
+	document, err := os.ReadFile(filepath.Join(schema, "008_current_fence_source.sql"))
+	if err != nil {
+		t.Fatal("read MySQL-family current fence source migration")
+	}
+	text := string(document)
+	for _, required := range []string{
+		"Forward-only",
+		"DROP PROCEDURE dkim2_v3_current_for_update//",
+		"CREATE PROCEDURE dkim2_v3_current_for_update()",
+		"SQL SECURITY DEFINER MODIFIES SQL DATA",
+		"SELECT CAST(current_generation.generation AS CHAR), dataset.schema_version,\n" +
+			"           dataset.dataset_state, dataset.operation_id, dataset.candidate_digest,\n" +
+			"           CAST(dataset.source_generation AS CHAR), current_generation.candidate_digest,\n" +
+			"           dataset.was_active",
+		"WHERE current_generation.singleton = 1\n     FOR UPDATE;",
+		"Apply the reviewed\n-- 002_least_privilege_grants.sql.example after this upgrade.",
+	} {
+		if !strings.Contains(text, required) {
+			t.Fatal("MySQL-family current fence source migration contract incomplete")
+		}
+	}
+	if !strings.Contains(strings.Join(strings.Fields(queryAdminCurrent), " "),
+		"dataset.candidate_digest, CAST(dataset.source_generation AS CHAR), current_generation.candidate_digest, dataset.was_active") ||
+		queryAdminCurrentForUpdate != "CALL dkim2_v3_current_for_update()" {
+		t.Fatal("MySQL-family locked and unlocked current projections diverged")
+	}
+	upper := strings.ToUpper(text)
+	for _, forbidden := range []string{"GRANT ", "REVOKE ", " PUBLIC", "DKIM2_ACTIVATOR", "DKIM2_STAGER"} {
+		if strings.Contains(upper, forbidden) {
+			t.Fatal("MySQL-family current fence source migration owns routine authority")
+		}
+	}
+	grants, err := os.ReadFile(filepath.Join(schema, "002_least_privilege_grants.sql.example"))
+	if err != nil {
+		t.Fatal("read committed MySQL grant template")
+	}
+	if !strings.Contains(string(grants),
+		"GRANT EXECUTE ON PROCEDURE __DATABASE__.dkim2_v3_current_for_update TO __ACTIVATION_ACCOUNT__;") {
+		t.Fatal("MySQL grant template omits the recreated locked current routine")
+	}
+}
+
 // TestCandidateRootLockClassifiesAbsenceAndBackendFailure proves only an
 // authoritative empty result or exact denial signal is a conflict.
 func TestCandidateRootLockClassifiesAbsenceAndBackendFailure(t *testing.T) {

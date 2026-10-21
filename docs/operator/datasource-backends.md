@@ -122,13 +122,19 @@ pointer and monotonic old-current history under the documented assertions.
 Fresh installations apply
 [`001_dkim2_datasource.sql`](../../contrib/schema/postgresql/001_dkim2_datasource.sql)
 and every ordered forward migration through
-[`007_composite_algorithm.sql`](../../contrib/schema/postgresql/007_composite_algorithm.sql)
+[`008_staging_seal_policy.sql`](../../contrib/schema/postgresql/008_staging_seal_policy.sql)
 through a schema administrator. Existing v1 installations apply
 [`002_native_key_custody.sql`](../../contrib/schema/postgresql/002_native_key_custody.sql),
 then publish a complete higher v2 generation before restarting a v2 daemon.
 Installations already at `006` apply `007_composite_algorithm.sql` before
 storing any `mldsa44-ed25519-sha512` credential or custody key; until then the
 database rejects that algorithm and onboarding fails closed.
+Installations already at `007` apply `008_staging_seal_policy.sql` with all
+DKIM2 writers stopped. Before it, the staging role's row-level security policy
+rejects the seal of its own staged candidate, so native v3 staging cannot
+commit a generation. The migration keeps the staging-only check for inserted
+rows and adds a separate update policy that admits only the lock owner's
+`staging` to `committed` seal of an inactive v3 candidate.
 
 The DDL creates runtime, compatibility-publisher, snapshot, staging, and
 activation `NOLOGIN` roles. Create separate TLS-authenticated login roles
@@ -162,13 +168,18 @@ unsupported.
 Fresh installations apply
 [`001_dkim2_datasource.sql`](../../contrib/schema/mysql/001_dkim2_datasource.sql)
 and every ordered forward migration through
-[`007_composite_algorithm.sql`](../../contrib/schema/mysql/007_composite_algorithm.sql)
+[`008_current_fence_source.sql`](../../contrib/schema/mysql/008_current_fence_source.sql)
 inside one dedicated database. The exact disposable qualification versions are
 MySQL 8.4 and MariaDB 10.11; see the
 [`compatibility statement`](../reference/compatibility.md#qualified-storage-services)
 before assuming another release is supported. Installations already at
 `006` apply `007_composite_algorithm.sql` before storing any
-`mldsa44-ed25519-sha512` credential or custody key.
+`mldsa44-ed25519-sha512` credential or custody key. Installations already at
+`007` apply `008_current_fence_source.sql`, which recreates
+`dkim2_v3_current_for_update` with the source generation column that the
+locked current read expects; before it, every native v3 activation fails
+closed. Recreating the routine drops its `EXECUTE` grant, so re-apply the
+reviewed `002_least_privilege_grants.sql.example` after this upgrade.
 
 Create distinct runtime, compatibility-publisher, snapshot, staging,
 activation, purge, and terminal-only closer site accounts with exact source restrictions, mandatory TLS,

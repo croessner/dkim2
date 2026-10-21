@@ -217,6 +217,7 @@ cp contrib/schema/postgresql/004_rotation_campaign_retention.sql "$work/certs/00
 cp contrib/schema/postgresql/005_campaign_terminal_closure.sql "$work/certs/005_dkim2_postgresql_terminal.sql"
 cp contrib/schema/postgresql/006_campaign_source_binding.sql "$work/certs/006_dkim2_postgresql_source.sql"
 cp contrib/schema/postgresql/007_composite_algorithm.sql "$work/certs/007_dkim2_postgresql_composite.sql"
+cp contrib/schema/postgresql/008_staging_seal_policy.sql "$work/certs/008_dkim2_postgresql_seal.sql"
 cp contrib/schema/mysql/001_dkim2_datasource.sql \
 	"$work/certs/001_dkim2_mysql_datasource.sql"
 cp contrib/schema/mysql/003_native_domain_onboarding.sql \
@@ -225,6 +226,7 @@ cp contrib/schema/mysql/004_rotation_campaign_retention.sql "$work/certs/004_dki
 cp contrib/schema/mysql/005_campaign_terminal_closure.sql "$work/certs/005_dkim2_mysql_terminal.sql"
 cp contrib/schema/mysql/006_campaign_source_binding.sql "$work/certs/006_dkim2_mysql_source.sql"
 cp contrib/schema/mysql/007_composite_algorithm.sql "$work/certs/007_dkim2_mysql_composite.sql"
+cp contrib/schema/mysql/008_current_fence_source.sql "$work/certs/008_dkim2_mysql_current.sql"
 sed \
 	-e 's/__DATABASE__/dkim2_fresh/g' \
 	-e "s/__RUNTIME_ACCOUNT__/'dkim2_runtime_login'@'%'/g" \
@@ -422,6 +424,7 @@ chmod 0644 "$work/postgresql-bootstrap.sql"
 		'\ir /run/dkim2/005_dkim2_postgresql_terminal.sql' \
 		'\ir /run/dkim2/006_dkim2_postgresql_source.sql' \
 		'\ir /run/dkim2/007_dkim2_postgresql_composite.sql' \
+		'\ir /run/dkim2/008_dkim2_postgresql_seal.sql' \
 		'GRANT dkim2_purger TO dkim2_purger_login;' \
 		'GRANT dkim2_closer TO dkim2_closer_login;' \
 		'GRANT dkim2_snapshot TO dkim2_snapshot_login;' \
@@ -435,6 +438,7 @@ chmod 0644 "$work/postgresql-bootstrap.sql"
 		'\ir /run/dkim2/005_dkim2_postgresql_terminal.sql' \
 		'\ir /run/dkim2/006_dkim2_postgresql_source.sql' \
 		'\ir /run/dkim2/007_dkim2_postgresql_composite.sql' \
+		'\ir /run/dkim2/008_dkim2_postgresql_seal.sql' \
 		'GRANT dkim2_publisher TO dkim2_publisher_login;' \
 		'\connect dkim2_corrupt' \
 		'CREATE SCHEMA IF NOT EXISTS dkim2_datasource;' \
@@ -445,6 +449,7 @@ chmod 0644 "$work/postgresql-bootstrap.sql"
 		'\ir /run/dkim2/005_dkim2_postgresql_terminal.sql' \
 		'\ir /run/dkim2/006_dkim2_postgresql_source.sql' \
 		'\ir /run/dkim2/007_dkim2_postgresql_composite.sql' \
+		'\ir /run/dkim2/008_dkim2_postgresql_seal.sql' \
 		'GRANT dkim2_publisher TO dkim2_publisher_login;' \
 		'\connect dkim2_fresh' \
 		'CREATE SCHEMA IF NOT EXISTS dkim2_datasource;' \
@@ -453,7 +458,8 @@ chmod 0644 "$work/postgresql-bootstrap.sql"
 		'\ir /run/dkim2/004_dkim2_postgresql_rotation.sql' \
 		'\ir /run/dkim2/005_dkim2_postgresql_terminal.sql' \
 		'\ir /run/dkim2/006_dkim2_postgresql_source.sql' \
-		'\ir /run/dkim2/007_dkim2_postgresql_composite.sql'
+		'\ir /run/dkim2/007_dkim2_postgresql_composite.sql' \
+		'\ir /run/dkim2/008_dkim2_postgresql_seal.sql'
 } >"$work/postgresql-dataset.sql"
 chmod 0644 "$work/postgresql-dataset.sql"
 
@@ -537,7 +543,8 @@ write_mysql_dataset() {
 				'SOURCE /run/dkim2/004_dkim2_mysql_rotation.sql;' \
 				'SOURCE /run/dkim2/005_dkim2_mysql_terminal.sql;' \
 				'SOURCE /run/dkim2/006_dkim2_mysql_source.sql;' \
-				'SOURCE /run/dkim2/007_dkim2_mysql_composite.sql;'
+				'SOURCE /run/dkim2/007_dkim2_mysql_composite.sql;' \
+				'SOURCE /run/dkim2/008_dkim2_mysql_current.sql;'
 			for table in dkim2_dataset_generations dkim2_current_generation \
 				dkim2_handles dkim2_profiles dkim2_credentials dkim2_policies \
 				dkim2_key_material; do
@@ -593,6 +600,7 @@ write_mysql_dataset() {
 			'SOURCE /run/dkim2/005_dkim2_mysql_terminal.sql;' \
 			'SOURCE /run/dkim2/006_dkim2_mysql_source.sql;' \
 			'SOURCE /run/dkim2/007_dkim2_mysql_composite.sql;' \
+			'SOURCE /run/dkim2/008_dkim2_mysql_current.sql;' \
 			'SOURCE /run/dkim2/002_dkim2_mysql_fresh_grants.sql;' \
 			'CREATE TABLE dkim2_integration_ready (singleton BOOLEAN PRIMARY KEY);' \
 			'INSERT INTO dkim2_integration_ready VALUES (TRUE);'

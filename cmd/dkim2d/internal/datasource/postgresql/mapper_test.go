@@ -169,6 +169,44 @@ func TestCampaignSourceBindingMigrationKeepsFrozenSourceInProviderMetadata(t *te
 	}
 }
 
+// TestStagingSealPolicyMigrationSplitsInsertAndSeal proves the forward
+// migration lets the lock-owning stager seal its own candidate to committed
+// while new stager rows stay staging-only and no other authority widens.
+func TestStagingSealPolicyMigrationSplitsInsertAndSeal(t *testing.T) {
+	t.Parallel()
+	path := filepath.Join("..", "..", "..", "..", "..", "contrib", "schema", "postgresql", "008_staging_seal_policy.sql")
+	document, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal("read PostgreSQL staging seal policy migration")
+	}
+	text := string(document)
+	for _, required := range []string{
+		"Forward-only",
+		"DROP POLICY dataset_stage_v3 ON dkim2_datasource.dataset_generations;",
+		"CREATE POLICY dataset_stage_v3 ON dkim2_datasource.dataset_generations\n  FOR INSERT TO dkim2_stager",
+		"CREATE POLICY dataset_seal_v3 ON dkim2_datasource.dataset_generations\n  FOR UPDATE TO dkim2_stager",
+		"dataset_state = 'staging'", "dataset_state = 'committed'", "NOT was_active",
+		"candidate_digest IS NOT NULL", "administration_lock_owned_by(operation_id)",
+		"campaign_candidate_generation_is_forward(generation)",
+	} {
+		if !strings.Contains(text, required) {
+			t.Fatal("PostgreSQL staging seal policy contract incomplete")
+		}
+	}
+	_, policies, _ := strings.Cut(text, "CREATE POLICY dataset_stage_v3")
+	insert, seal, found := strings.Cut(policies, "CREATE POLICY dataset_seal_v3")
+	if !found || strings.Contains(insert, "dataset_state = 'committed'") ||
+		!strings.Contains(seal, "WITH CHECK (\n    schema_version = 'dkim2-datasource-v3'\n    AND dataset_state = 'committed'") {
+		t.Fatal("PostgreSQL staging policies do not separate inserted and sealed states")
+	}
+	upper := strings.ToUpper(text)
+	for _, forbidden := range []string{"GRANT ", "FOR ALL", "FOR DELETE", "DISABLE ROW LEVEL SECURITY", "USING (TRUE)"} {
+		if strings.Contains(upper, forbidden) {
+			t.Fatal("PostgreSQL staging seal policy migration widened authority")
+		}
+	}
+}
+
 // TestActivationQueriesFenceCurrentPointerAndCandidateRoot proves activation
 // locks exact candidate metadata and compares the previously read pointer.
 func TestActivationQueriesFenceCurrentPointerAndCandidateRoot(t *testing.T) {
