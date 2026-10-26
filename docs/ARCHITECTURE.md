@@ -81,6 +81,7 @@
 | 0.1.0-draft | 2026-10-20 | Christian Roessner / Claude | Advanced the message baseline to `draft-ietf-dkim-dkim2-spec-07` and the DNS companion to `draft-ietf-dkim-dkim2-dns-01`. Draft identifiers, generated contracts, versioned vectors, and section citations move together; behavior changes follow the work packages in `docs/specs/draft-07-migration-disposition.md`. |
 | 0.1.0-draft | 2026-10-21 | Christian Roessner / Claude | Added the optional daemon-owned `signing.policy.delivery_status.reporting_domain`: Draft-07 Section 12.4 requires the From of an MTA-generated DSN (`MAILER-DAEMON@$myhostname`) to be Authentic for its signing domain, so the Postfix DSN route can sign under the reporting MTA domain instead of the embedded `d=`. Embedded verification, RFC 3464 linkage, and outer-recipient/`mf=` binding are unchanged and still precede datasource access; the identity is operator configuration only, absent by default, canonical-only, and refused with a disabled signer. |
 | 0.1.0-draft | 2026-10-21 | Christian Roessner / Claude | Restored the projected fold points of added header fields in the Milter and Exim adapters through the shared `lib/headerfold` package: every TAB after the first value octet becomes LF+TAB, and a field with a physical line over 998 octets fails validation. A composite-algorithm `DKIM2-Signature` was otherwise queued as one multi-kilobyte line, so DSNs returning it failed MIME parsing and SMTP output broke it. |
+| 0.1.0-draft | 2026-10-26 | Christian Roessner / Claude | Removed the post-quantum `mldsa44-ed25519-sha512` composite (ML-DSA-44 plus Ed25519, LAMPS construction) from the library, `dkim2d`, the adapters, `dkim2ctl`, the OpenAPI contract, the Rspamd contrib, and the vectors. The DKIM working group has not settled the DKIM2 post-quantum construction (October 2026 list discussion: separate multiple signatures, LAMPS composite, or plain ML-DSA-44; to be revisited at IETF 127), so the implementation does not ship a construction that may not be standardized. The baseline stays `draft-ietf-dkim-dkim2-spec-07` plus `draft-ietf-dkim-dkim2-dns-01` with this documented deviation (`DKIM2-ISSUE-0019`): composite sets are unknown algorithms ignored with `unsupported_algorithm`, `k=mldsa44-ed25519-sha512` records are unsupported key types, composite credentials fail closed, and forward SQL migration `009_remove_composite_algorithm.sql` restores the two-algorithm constraints and refuses to run while composite rows remain. `lib/headerfold` and the adapter refolding stay. |
 
 ## 1. Purpose
 
@@ -515,15 +516,12 @@ The facade should expose protocol results in a structured way. It should not
 force callers to parse human-readable messages.
 
 Current verification algorithm vocabulary: `AlgorithmRSASHA256`,
-`AlgorithmEd25519SHA256`, `AlgorithmMLDSA44Ed25519SHA512`, and the bounded
-`AlgorithmUnknown`. Custom key providers return composite keys through
-`FoundCompositePublicKey`, which takes the raw 1344-byte DNS form and returns an
-invalid-key result for any other size or an unparsable ML-DSA-44 component;
-`PublicKeyResult.CompositePublicKey` returns a detached copy. The DNS provider
-decodes `k=mldsa44-ed25519-sha512` records into the same variant. Signature-set
-facts, the `dkim2d` REST `SignatureSetResult.algorithm` and
-`VerifierHop.signature_algorithms` enums, and observation events report the
-composite algorithm explicitly.
+`AlgorithmEd25519SHA256`, and the bounded `AlgorithmUnknown`. The
+post-quantum `mldsa44-ed25519-sha512` composite of Draft-07 Section 3.4 is
+deliberately not implemented while the working group settles its construction
+(`DKIM2-ISSUE-0019`): a composite signature set is reported as
+`AlgorithmUnknown` with `unsupported_algorithm`, like any other unknown token,
+and a `k=mldsa44-ed25519-sha512` DNS record is an unsupported key type.
 
 ### 5.2 `lib/internal/rawmsg`
 
@@ -728,11 +726,10 @@ Responsibilities:
   checked only by the generic tag-list rules (duplicates, control bytes,
   framing, size limits) and is otherwise ignored like any unknown tag.
 - Decode RSA public DER as either PKCS#1 `RSAPublicKey` or X.509
-  `SubjectPublicKeyInfo`, raw 32-byte Ed25519 public keys, and raw 1344-byte
-  `k=mldsa44-ed25519-sha512` composite keys (1312-byte ML-DSA-44 public key
-  followed by the 32-byte Ed25519 public key), while reusing
+  `SubjectPublicKeyInfo` and raw 32-byte Ed25519 public keys, while reusing
   `internal/cryptodkim2` as the authoritative crypto/key-validation owner.
-  Any other composite length is an invalid key.
+  Every other `k=` value, including `mldsa44-ed25519-sha512`, is an
+  unsupported key type.
 - Distinguish missing, revoked, invalid, ambiguous, unsupported key type,
   algorithm mismatch, temporary, permanent, and provider-contract states.
 - Cache only TTL-backed stable results under bounded deterministic LRU policy.
@@ -2325,42 +2322,29 @@ Crypto code should wrap standard, audited Go libraries.
 
 Rules:
 
-- Use `crypto/rsa`, `crypto/ed25519`, and `crypto/mldsa`.
+- Use `crypto/rsa` and `crypto/ed25519`.
 - Implement SHA-256 and SHA-512 for Message-Instance body and header hashes.
   RSA-SHA256 and Ed25519-SHA256 signature inputs continue to use SHA-256.
-- Verifiers implement every Draft-07 Section 3 algorithm: `rsa-sha256`,
-  `ed25519-sha256`, and the composite `mldsa44-ed25519-sha512`. The composite
-  follows the `draft-ietf-lamps-pq-composite-sigs` id-MLDSA44-Ed25519-SHA512
-  construction that DNS-01 cites and the DKIM2 interoperability round uses:
-  the message representative is `"CompositeAlgorithmSignatures2025" ||
-  "COMPSIG-MLDSA44-Ed25519-SHA512" || 0x00 || SHA-512(M)` over the Section
-  12.8 input `M`; ML-DSA-44 signs it with the label as its context and
-  PureEd25519 signs it directly; the 2484-byte signature is the ML-DSA-44
-  signature followed by the Ed25519 signature, and both halves must verify.
-  `lib/internal/cryptodkim2` is the single owner of this construction and of
-  the exact PKCS#8 and SubjectPublicKeyInfo encodings (OID
-  1.3.6.1.5.5.7.6.39). Stalwart mail-auth signatures verify
-  (`lib/testdata/vectors/external/stalwart-mail-auth`). The default
-  verifier algorithm policy includes the composite, so verifier construction
-  fails closed when the cryptographic runtime lacks ML-DSA-44.
-- Signing supports `rsa-sha256`, `ed25519-sha256`, and
-  `mldsa44-ed25519-sha512`. A signing profile holds at most one credential
-  per algorithm and emits one signature set per credential in the canonical
-  order `rsa-sha256`, `ed25519-sha256`, `mldsa44-ed25519-sha512`
-  (`signature.SigningAlgorithmOrder`). The signer computes the per-algorithm
-  signature-input digest (SHA-256, or SHA-512 for the composite) and hands it
-  to the `PrivateKeySigner` callback; the library still never holds private
-  keys. A composite key custodian signs through
-  `dkim2.CompositeSigningKey.SignDigest`, so the LAMPS construction keeps one
-  owner. Generated RSA signatures stay bounded at 1024 bytes; composite
-  signatures must be exactly 2484 bytes.
+- Verifiers and signers implement `rsa-sha256` and `ed25519-sha256`. The
+  post-quantum `mldsa44-ed25519-sha512` composite of Draft-07 Section 3.4 is a
+  deliberate deviation (`DKIM2-ISSUE-0019`): the DKIM working group has not
+  settled the DKIM2 post-quantum construction (separate multiple signatures,
+  the LAMPS composite, or plain ML-DSA-44; to be revisited at IETF 127), so no
+  construction that may not be standardized ships. Composite sets are unknown
+  algorithms, and the default verifier policy cannot enable the token.
+- A signing profile holds at most one credential per algorithm and emits one
+  signature set per credential in the canonical order `rsa-sha256`,
+  `ed25519-sha256` (`signature.SigningAlgorithmOrder`). The signer computes
+  the per-algorithm signature-input digest (`cryptodkim2.DigestBytes`,
+  SHA-256 for both algorithms) and hands it to the `PrivateKeySigner`
+  callback; the library still never holds private keys. Generated RSA
+  signatures stay bounded at 1024 bytes.
 - In `dkim2d`, `cmd/dkim2d/internal/signingstore` is the single custody key
-  codec for all three algorithms: PKCS#8 parsing and canonical re-encoding,
+  codec for both algorithms: PKCS#8 parsing and canonical re-encoding,
   public SPKI derivation, key generation for onboarding and rotation, signing,
-  and best-effort clearing. Composite custody keys are held as
-  `*dkim2.CompositeSigningKey`, so the daemon never rebuilds the
-  construction. Datasource mappers and administration admit algorithms only
-  through `provider.ParseAlgorithm`.
+  and best-effort clearing. Datasource mappers and administration admit
+  algorithms only through `provider.ParseAlgorithm`, so a stored composite
+  credential is malformed data.
 - Accept and preserve syntactically valid unknown algorithm tokens at protocol
   parsing boundaries for draft forward compatibility, but never execute them.
   Ignore unknown Message-Instance hash tuples only as the active draft permits,
@@ -2390,9 +2374,8 @@ whitespace; RR boundaries are never concatenated. RSA records accept either
 PKCS#1 `RSAPublicKey` or X.509 `SubjectPublicKeyInfo` public DER as an explicit
 interoperability allowance. Both representations retain the same RSA structural
 and cryptographic policy checks; other key containers remain invalid. Ed25519
-records contain exactly 32 raw public bytes. `k=mldsa44-ed25519-sha512` records
-contain exactly 1344 raw bytes: the ML-DSA-44 public key followed by the Ed25519
-public key. The resolver
+records contain exactly 32 raw public bytes. Every other key type, including
+`k=mldsa44-ed25519-sha512`, is an unsupported key type. The resolver
 supports context cancellation, bounded TTL/LRU caching, bounded coalescing, and
 non-blocking saturation. DNSSEC remains diagnostic-only and does not alter
 verification or cache behavior.

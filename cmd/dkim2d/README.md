@@ -727,21 +727,21 @@ diagnostic client or another adapter. The datasource is the closed
 [`docs/specs/implementation/datasource-providers.md`](../../docs/specs/implementation/datasource-providers.md).
 The private manifest is `dkim2-private-keys-v1`; every entry binds one exact
 tenant, domain, `originator`, `ordinary_transit`, or `delivery_status` use, opaque datasource
-handle, `rsa-sha256`, `ed25519-sha256`, or `mldsa44-ed25519-sha512`
-algorithm, canonical Base64 SHA-256 digest of the public SPKI, and
-direct-child private-key filename. A private-key child is one unencrypted
-PKCS#8 `PRIVATE KEY` PEM whose derived public key matches that digest,
-algorithm, datasource credential, and handle. A `mldsa44-ed25519-sha512` child
-is the exact id-MLDSA44-Ed25519-SHA512 PKCS#8 encoding (OID
-1.3.6.1.5.5.7.6.39) of the 32-byte ML-DSA-44 seed followed by the 32-byte
-Ed25519 seed.
+handle, `rsa-sha256` or `ed25519-sha256` algorithm, canonical Base64 SHA-256
+digest of the public SPKI, and direct-child private-key filename. A
+private-key child is one unencrypted PKCS#8 `PRIVATE KEY` PEM whose derived
+public key matches that digest, algorithm, datasource credential, and handle.
+The post-quantum `mldsa44-ed25519-sha512` composite is not supported (see
+[`docs/reference/known-limitations.md`](../../docs/reference/known-limitations.md));
+a manifest entry, datasource credential, or key that declares it fails the
+complete load.
 
 Generate a custody key and its public credential offline:
 
 ```text
-dkim2d datasource key generate --algorithm mldsa44-ed25519-sha512 \
-  --domain example.test --selector pq-20261021 \
-  --private-key /absolute/staging/path/pq-20261021.pem [--ttl 3600] [--machine]
+dkim2d datasource key generate --algorithm ed25519-sha256 \
+  --domain example.test --selector ed-20261021 \
+  --private-key /absolute/staging/path/ed-20261021.pem [--ttl 3600] [--machine]
 ```
 
 The command creates the PEM file with mode `0600` and never replaces an
@@ -749,10 +749,9 @@ existing path. Standard output carries only public material: the
 `public_key_spki` value for the datasource credential, the
 `public_spki_sha256` value for the manifest entry, and the zone-file TXT
 record from the same record owner and DNS-01 parser round trip as the domain
-DNS export. `--rsa-bits` selects 2048, 3072, or 4096 for `rsa-sha256`.
-OpenSSL cannot produce the composite encoding; use this command for
-`mldsa44-ed25519-sha512` keys. The OpenDKIM bootstrap imports only legacy
-`rsa` and `ed25519` keys. Unknown fields, duplicate
+DNS export. `--algorithm` accepts `rsa-sha256` or `ed25519-sha256`;
+`--rsa-bits` selects 2048, 3072, or 4096 for `rsa-sha256`. The OpenDKIM
+bootstrap imports only legacy `rsa` and `ed25519` keys. Unknown fields, duplicate
 bindings, aliasing children, mixed identities, encrypted or legacy PEM, and
 partial generations fail the complete load. Documentation and test fixtures
 use reserved `.test` identities; operators supply only their own authorized

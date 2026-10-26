@@ -61,13 +61,18 @@ is independently observed.
   The two public-facade conformance cases are bound to this entry; their
   earlier omission from this register was a documentation defect.
 
-- `DKIM2-ISSUE-0019` records that Draft-07 Section 3.4 names the
-  `mldsa44-ed25519-sha512` components without spelling out the message
-  representative, while DNS-01 cites the LAMPS composite construction. The
-  implementation follows LAMPS (prefix, label, empty context, SHA-512 of the
-  canonical input; ML-DSA-44 with the label as context), as the DKIM2
-  interoperability round and Stalwart mail-auth do; a Stalwart-signed message
-  verifies.
+- `DKIM2-ISSUE-0019` records a deliberate deviation: Draft-07 Section 3.4
+  names the post-quantum `mldsa44-ed25519-sha512` algorithm without spelling
+  out its message representative, DNS-01 Section 3.3 cites the LAMPS composite
+  construction for the matching key type, and the DKIM working group has not
+  settled the DKIM2 post-quantum construction (the October 2026 list
+  discussion weighs separate multiple signatures, the LAMPS composite, and
+  plain ML-DSA-44; it is to be revisited at IETF 127). The implementation does
+  not ship a construction that may not be standardized: the algorithm and the
+  `k=mldsa44-ed25519-sha512` key type are not implemented and are handled
+  exactly like any other unknown algorithm or key type, and signing
+  credentials that declare it fail closed. The baseline stays
+  `draft-ietf-dkim-dkim2-spec-07` plus `draft-ietf-dkim-dkim2-dns-01`.
 
 The repository has not filed, commented on, or modified any upstream issue as
 part of this release-candidate work.

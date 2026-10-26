@@ -420,16 +420,15 @@ a stable DKIM2 prefix with at least 128 bits of `crypto/rand` entropy encoded in
 a closed DNS-label-safe alphabet. Time alone is never a selector and failed or
 aborted selectors are never reused automatically.
 
-Selector prefixes are `d2r-` for `rsa-sha256`, `d2e-` for `ed25519-sha256`,
-and `d2m-` for `mldsa44-ed25519-sha512`. Rotation campaigns derive their own
-selectors with the single-letter prefixes `r`, `e`, and `m`; the two
-namespaces are deliberately distinct.
+Selector prefixes are `d2r-` for `rsa-sha256` and `d2e-` for
+`ed25519-sha256`. Rotation campaigns derive their own selectors with the
+single-letter prefixes `r` and `e`; the two namespaces are deliberately
+distinct. Intents that name any other algorithm, including the unsupported
+post-quantum `mldsa44-ed25519-sha512`, are invalid.
 
 RSA generation uses the configured approved modulus size and exponent policy.
-Ed25519 generation uses the standard library. `mldsa44-ed25519-sha512`
-generation draws the two 32-byte seeds from the same entropy source and stores
-them as the exact id-MLDSA44-Ed25519-SHA512 PKCS#8 encoding (OID
-1.3.6.1.5.5.7.6.39). All three go through the signing-store key codec. Every key is immediately
+Ed25519 generation uses the standard library. Both go through the
+signing-store key codec. Every key is immediately
 serialized as canonical unencrypted PKCS#8 DER, reparsed through the existing
 native-key validator, and checked against canonical public SPKI. Invalid,
 unsupported, duplicate, mismatched, over-limit, or partially generated key
@@ -449,13 +448,7 @@ only the canonical owner names, TTL policy, algorithm, selector, and public
 DNS-04 record.
 
 RSA `p=` contains the draft-required PKCS#1 public DER representation.
-Ed25519 `p=` contains exactly the raw 32-byte public key.
-`mldsa44-ed25519-sha512` uses `k=mldsa44-ed25519-sha512`, and `p=` contains
-exactly the raw 1344-byte ML-DSA-44 public key followed by the Ed25519 public
-key. That record is about 1.9 KB of TXT RDATA. The export already splits it
-into character-strings of at most 255 octets; the authoritative servers and
-the resolvers that serve the selector must answer it over EDNS0 or TCP.
-Stored SPKI is never
+Ed25519 `p=` contains exactly the raw 32-byte public key. Stored SPKI is never
 copied directly into `p=`. Export uses a documented RFC 1035 zone-file
 presentation with deterministic quoting and chunks of at most 200 ASCII octets;
 all chunks belong to exactly one TXT RR. A realistic RSA record must therefore
@@ -758,8 +751,7 @@ nonoverlapping. Commands never assemble or start the daemon.
 Human and machine complete-operation reports contain schema, tool version,
 operation state, backend class, expected and candidate generations, bounded
 credential and algorithm counts (`rsa_credential_count` and
-`ed25519_credential_count` always, `mldsa44_ed25519_credential_count` only
-when non-zero, so the per-algorithm counts sum to `credential_count`), phase
+`ed25519_credential_count`, which sum to `credential_count`), phase
 booleans, result, and closed failure
 class. Current generation has separate explicit presence: success and full
 status require an authoritative value, including an explicitly present zero

@@ -490,7 +490,8 @@ of `message`, `protocol`, `body_hash`, `header_hash`, `signature`, `key`,
 
 `SignatureSetResult` has exactly required `algorithm`, `status`, and `reason`
 plus the optional failed-signature `selector`. `algorithm` is `rsa-sha256`,
-`ed25519-sha256`, `mldsa44-ed25519-sha512`, or `unknown`; `status` is `pass`,
+`ed25519-sha256`, or `unknown` (an unsupported algorithm such as the
+post-quantum `mldsa44-ed25519-sha512` is reported as `unknown`); `status` is `pass`,
 `fail`, `permerror`, `temperror`, or `ignored`; `reason` uses the
 verification reason enum. The former `key_policy` object
 (`testing_declared`, `strict_identity_declared`, `strict_identity_applicable`)

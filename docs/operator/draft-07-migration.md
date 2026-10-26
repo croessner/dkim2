@@ -103,22 +103,21 @@ Replay counting is now local delivery policy (Draft-07 Section 15.1):
   failing as `malformed_message`.
 - **Exploded flag:** An `exploded` flag on the `i=1` signature is PERMERROR
   `malformed_protocol`.
-- **Composite algorithm:** `mldsa44-ed25519-sha512` signatures and keys
-  (`k=mldsa44-ed25519-sha512`) are verified and signed under the LAMPS
-  composite construction; see "Known Limitations".
-  - A signing profile may hold one credential per algorithm, up to all three.
-    The signature sets are emitted in the order `rsa-sha256`,
-    `ed25519-sha256`, `mldsa44-ed25519-sha512`.
-  - `dkim2d` custody accepts composite PKCS#8 keys under OID
-    1.3.6.1.5.5.7.6.39 with the manifest and datasource algorithm
-    `mldsa44-ed25519-sha512`.
-  - Domain onboarding and rotation generate composite keys with `d2m-`
-    selectors and export `k=mldsa44-ed25519-sha512` records with the raw
-    1344-byte key.
-  - Domain reports add `mldsa44_ed25519_credential_count` only when a
-    composite credential exists.
-  - SQL datasources apply `contrib/schema/*/007_composite_algorithm.sql`
-    before storing composite credentials.
+- **Composite algorithm:** `mldsa44-ed25519-sha512` (Draft-07 Section 3.4)
+  is deliberately not implemented; see "Known Limitations".
+  - A composite signature set is ignored with `unsupported_algorithm`, like
+    any unknown algorithm; other sets of the same signature still verify. A
+    `k=mldsa44-ed25519-sha512` DNS record is an unsupported key type.
+  - A signing profile holds at most one `rsa-sha256` and one
+    `ed25519-sha256` credential, emitted in that order.
+  - `dkim2d` custody, the private-key manifest, datasource credentials,
+    `dkim2d datasource key generate`, onboarding, and rotation accept only
+    `rsa-sha256` and `ed25519-sha256`; anything that declares the composite
+    fails closed.
+  - Installations that applied `contrib/schema/*/007_composite_algorithm.sql`
+    remove composite rows and then apply
+    `contrib/schema/*/009_remove_composite_algorithm.sql`; see
+    [Removed Composite Algorithm](datasource-backends.md#removed-composite-algorithm).
 - **SMTP replies (Draft-07 Section 13):**
   - A tempfail caused by a temporary public-key (DNS) lookup failure answers
     `451 4.7.5`. The matching daemon reason is `provider_temporary`.
@@ -143,13 +142,13 @@ Replay counting is now local delivery policy (Draft-07 Section 15.1):
 
 ## Known Limitations
 
-- **Composite construction:** `mldsa44-ed25519-sha512` follows the LAMPS
-  composite construction (`draft-ietf-lamps-pq-composite-sigs`) that DNS-01
-  cites and the DKIM2 interoperability round uses, not a literal reading of
-  Draft-07 Section 3.4, which does not spell out the message representative.
-  Signatures from Stalwart mail-auth verify. If the working group settles on
-  a different representative, signatures of the two constructions do not
-  interoperate (`DKIM2-ISSUE-0019`).
+- **Composite algorithm:** The DKIM working group has not settled the DKIM2
+  post-quantum construction (October 2026 list discussion: separate multiple
+  signatures, the LAMPS composite, or plain ML-DSA-44; to be revisited at
+  IETF 127). The implementation therefore does not ship
+  `mldsa44-ed25519-sha512` at all. This deliberately deviates from the
+  Draft-07 Section 3 verifier requirement and the DNS-01 Section 3.3 SHOULD
+  for the key type (`DKIM2-ISSUE-0019`).
 - **IDNA:** Domains use a strict IDNA2008 profile from `golang.org/x/net/idna`.
   That package merges some IDNA2008 code-point categories, so it is not a
   complete strict validator (`DKIM2-ISSUE-0003`).
@@ -171,11 +170,10 @@ Replay counting is now local delivery policy (Draft-07 Section 15.1):
 - **Mailbox parser:** The From mailbox parser does not accept obsolete RFC
   5322 route syntax (`obs-route`). Such a From is not authentic.
 - **Algorithm allow-list:** Draft-07 Section 3 requires verifiers to
-  implement all five algorithms (SHA-256, SHA-512, `rsa-sha256`,
-  `ed25519-sha256`, `mldsa44-ed25519-sha512`). DNS-01 makes the last two
-  signing algorithms only SHOULD; the default verifier follows the stricter
-  Draft-07 rule. Removing an algorithm from the verifier's allowed set is a
-  documented non-conformant local mode.
+  implement SHA-256, SHA-512, `rsa-sha256`, `ed25519-sha256`, and
+  `mldsa44-ed25519-sha512`. The default verifier implements all of them
+  except the composite (see above). Removing a further algorithm from the
+  verifier's allowed set is a documented non-conformant local mode.
 - **Exim qualification:** The real Exim matrix for Draft-07 still needs to be
   run against an external patched Exim source tree. That run must prove:
   - revise output verifies after transmission;
@@ -200,21 +198,24 @@ exhaustive `switch` over them:
 
 - `AuthenticationReplayNotEligible` (`not_eligible`), also as the REST
   `ReplayResult.class` value `not_eligible`
-- `AlgorithmMLDSA44Ed25519SHA512` and `FoundCompositePublicKey`
 - the result reason `from_not_authentic`
 
-Composite signing changes the private-key callback:
+The private-key callback changed shape:
 
-- `PrivateKeySignRequest.Digest` returns a `[]byte` whose length depends on
-  the algorithm: 32 bytes of SHA-256 for `rsa-sha256` and `ed25519-sha256`,
-  64 bytes of SHA-512 for `mldsa44-ed25519-sha512`. It replaces the former
-  fixed-size 32-byte array.
-- A `PrivateKeySigner` that holds composite keys signs through
-  `CompositeSigningKey.SignDigest`; it must not rebuild the construction.
-- New constructors: `NewCompositeSigningCredential`,
-  `NewCompositeSigningProfile`, and `NewMultiSigningProfile` for up to one
-  credential per algorithm. Key handling uses `GenerateCompositeSigningKey`,
-  `ParseCompositeSigningKeyPKCS8`, and `ParseCompositePublicKeySPKI`.
+- `PrivateKeySignRequest.Digest` returns a `[]byte` (32 bytes of SHA-256 for
+  `rsa-sha256` and `ed25519-sha256`) instead of the former fixed-size 32-byte
+  array.
+
+Composite support that existed briefly during the Draft-07 migration was
+removed again. Library consumers that used it must drop
+`AlgorithmMLDSA44Ed25519SHA512`, `ObservationAlgorithmMLDSA44Ed25519`,
+`FoundCompositePublicKey`, `PublicKeyResult.CompositePublicKey`,
+`CompositeSigningCredential`, `NewCompositeSigningCredential`,
+`NewCompositeSigningProfile`, `NewMultiSigningProfile`, the
+`SigningCredential` interface, `CompositeSigningKey`,
+`GenerateCompositeSigningKey`, `GenerateCompositeSigningKeyFrom`,
+`ParseCompositeSigningKeyPKCS8`, `ParseCompositePublicKeySPKI`,
+`MarshalCompositePublicKeySPKI`, and `provider.AlgorithmMLDSA44Ed25519SHA512`.
 
 The exported API baseline (`testdata/reference/go-api-base.json`) is bound to
 a reviewed commit. Regenerate it, then update the bound revision, when the

@@ -944,8 +944,9 @@ unfolding of the library-rendered field, whose frozen grammar emits a TAB only
 directly after a CRLF. `lib/headerfold` therefore restores an LF line break
 before every TAB after the first value octet, so the written field regains the
 library's fold points; a field with a physical line over 998 octets is a
-contract failure. Without this, a composite-algorithm `DKIM2-Signature` would
-be written as one multi-kilobyte line. Independent tests prove canonical
+contract failure. Without this, a long `DKIM2-Signature` (for example an
+8192-bit RSA set with many recipients) would be written as one multi-kilobyte
+line. Independent tests prove canonical
 equivalence with the action value. The
 adapter does not prepend, reorder or refold inherited fields. A header-only
 message remains header-only unless the authoritative completed-message proof

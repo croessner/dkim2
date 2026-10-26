@@ -122,19 +122,21 @@ pointer and monotonic old-current history under the documented assertions.
 Fresh installations apply
 [`001_dkim2_datasource.sql`](../../contrib/schema/postgresql/001_dkim2_datasource.sql)
 and every ordered forward migration through
-[`008_staging_seal_policy.sql`](../../contrib/schema/postgresql/008_staging_seal_policy.sql)
+[`009_remove_composite_algorithm.sql`](../../contrib/schema/postgresql/009_remove_composite_algorithm.sql)
 through a schema administrator. Existing v1 installations apply
 [`002_native_key_custody.sql`](../../contrib/schema/postgresql/002_native_key_custody.sql),
 then publish a complete higher v2 generation before restarting a v2 daemon.
-Installations already at `006` apply `007_composite_algorithm.sql` before
-storing any `mldsa44-ed25519-sha512` credential or custody key; until then the
-database rejects that algorithm and onboarding fails closed.
+Installations already at `006` apply `007_composite_algorithm.sql`; it is
+shipped history that `009` reverses.
 Installations already at `007` apply `008_staging_seal_policy.sql` with all
 DKIM2 writers stopped. Before it, the staging role's row-level security policy
 rejects the seal of its own staged candidate, so native v3 staging cannot
 commit a generation. The migration keeps the staging-only check for inserted
 rows and adds a separate update policy that admits only the lock owner's
 `staging` to `committed` seal of an inactive v3 candidate.
+Installations already at `008` apply `009_remove_composite_algorithm.sql`
+with all DKIM2 writers stopped, following
+[Removed composite algorithm](#removed-composite-algorithm).
 
 The DDL creates runtime, compatibility-publisher, snapshot, staging, and
 activation `NOLOGIN` roles. Create separate TLS-authenticated login roles
@@ -168,18 +170,21 @@ unsupported.
 Fresh installations apply
 [`001_dkim2_datasource.sql`](../../contrib/schema/mysql/001_dkim2_datasource.sql)
 and every ordered forward migration through
-[`008_current_fence_source.sql`](../../contrib/schema/mysql/008_current_fence_source.sql)
+[`009_remove_composite_algorithm.sql`](../../contrib/schema/mysql/009_remove_composite_algorithm.sql)
 inside one dedicated database. The exact disposable qualification versions are
 MySQL 8.4 and MariaDB 10.11; see the
 [`compatibility statement`](../reference/compatibility.md#qualified-storage-services)
 before assuming another release is supported. Installations already at
-`006` apply `007_composite_algorithm.sql` before storing any
-`mldsa44-ed25519-sha512` credential or custody key. Installations already at
+`006` apply `007_composite_algorithm.sql`; it is shipped history that `009`
+reverses. Installations already at
 `007` apply `008_current_fence_source.sql`, which recreates
 `dkim2_v3_current_for_update` with the source generation column that the
 locked current read expects; before it, every native v3 activation fails
 closed. Recreating the routine drops its `EXECUTE` grant, so re-apply the
 reviewed `002_least_privilege_grants.sql.example` after this upgrade.
+Installations already at `008` apply `009_remove_composite_algorithm.sql`
+with all DKIM2 writers stopped, following
+[Removed composite algorithm](#removed-composite-algorithm).
 
 Create distinct runtime, compatibility-publisher, snapshot, staging,
 activation, purge, and terminal-only closer site accounts with exact source restrictions, mandatory TLS,
@@ -334,6 +339,36 @@ add endpoints, identities, domains, selectors, handles, LDAP values, SQL text,
 or raw errors to telemetry. Alert when readiness remains false beyond one
 configured reload interval or datasource operations enter a non-success class;
 correlate through bounded logs without widening redaction.
+
+## Removed Composite Algorithm
+
+The post-quantum `mldsa44-ed25519-sha512` composite is no longer a known
+algorithm (see
+[`known-limitations.md`](../reference/known-limitations.md#post-quantum-composite-algorithm)).
+Every backend admits stored algorithms through one owner, so a credential, a
+custody key, or a private-key manifest entry that declares it is malformed
+data:
+
+- The runtime signing loader of LDAP, PostgreSQL, and MySQL/MariaDB reads only
+  the generation that `cn=current` or the current row selects; flat-file
+  datasources hold one generation. A current generation with a composite row
+  fails the complete load, and an invalid refresh keeps the prior snapshot
+  while readiness degrades.
+- Retired generations do not affect runtime loading or signing. Administration
+  reads are wider: onboarding and campaign collision checks parse the current
+  and every outstanding generation, and `dkim2d datasource rotation purge plan`
+  and `purge apply` verify every retained v2 or v3 generation. While any
+  retained generation still holds a composite row, those commands fail closed.
+
+Upgrade order: with the previous release, publish and activate a generation
+without composite credentials, retire the composite selectors from DNS after
+the usual overlap, and purge every generation that still holds composite rows
+with `dkim2d datasource rotation purge plan` and `purge apply`. Then apply SQL
+migration `009_remove_composite_algorithm.sql`, which refuses to change
+anything while a composite row remains in any generation, and finally upgrade
+`dkim2d`. LDAP needs no schema change. If a composite generation has to be
+removed after the upgrade, remove it with the backend's own reviewed tooling
+under the same backup and audit controls.
 
 ## Backup, Restore, And Rotation
 

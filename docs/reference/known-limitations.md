@@ -6,17 +6,10 @@ certification, or universal interoperability claim.
 - Draft-07 architecture references, full-chain policy guidance, EAI, IANA,
   and Security Considerations still contain `TBA` text. The implementation
   does not invent normative behavior for those sections.
-- Composite `mldsa44-ed25519-sha512` signing and verification follow the
-  LAMPS id-MLDSA44-Ed25519-SHA512 construction cited by DNS-01 and used in the
-  DKIM2 interoperability round, not a literal reading of Draft-07 Section 3.4,
-  which does not spell out the message representative. If the working group
-  settles on a different representative, the two constructions do not
-  interoperate (`DKIM2-ISSUE-0019`).
-- The default verifier requires all three Draft-07 Section 3 algorithms. On a
-  Go FIPS 140-3 cryptographic module without ML-DSA-44, verifier construction
-  fails closed instead of silently dropping the composite algorithm. A
-  library caller that narrows the allowed algorithms below these three runs a
-  documented non-conformant verifier mode.
+- The post-quantum `mldsa44-ed25519-sha512` composite algorithm of Draft-07
+  Section 3.4 and its DNS-01 key type are deliberately not implemented; see
+  [Post-Quantum Composite Algorithm](#post-quantum-composite-algorithm)
+  (`DKIM2-ISSUE-0019`).
 - External discovery found runnable parser overlap with MailAuthLens and
   Turscar. It found a tag-case interpretation difference with MailAuthLens.
   Stalwart's observed source revision has no `Cargo.lock`, so no immutable
@@ -144,3 +137,32 @@ certification, or universal interoperability claim.
 
 Stable IDs and resolution criteria for draft and interpretation limits are in
 [the issue log](draft-issues.md).
+
+## Post-Quantum Composite Algorithm
+
+The implementation baseline stays `draft-ietf-dkim-dkim2-spec-07` plus
+`draft-ietf-dkim-dkim2-dns-01`, with one deliberate deviation: the
+`mldsa44-ed25519-sha512` algorithm (ML-DSA-44 plus Ed25519 in the LAMPS
+composite construction) is not implemented, although Draft-07 Section 3.4
+lists it and DNS-01 Section 3.3 says verifiers SHOULD support the matching
+`k=mldsa44-ed25519-sha512` key type. The DKIM working group has not settled
+the DKIM2 post-quantum construction: the October 2026 list discussion weighs
+separate multiple signatures, the LAMPS composite, and plain ML-DSA-44, and
+the topic is to be revisited at IETF 127. The implementation does not ship a
+construction that may not be standardized.
+
+- Verification treats `mldsa44-ed25519-sha512` exactly like any other unknown
+  algorithm: such a signature set is ignored with `unsupported_algorithm`, its
+  key is never fetched, and the remaining sets are still evaluated, so an
+  RSA or Ed25519 set in the same signature can still pass. A signature whose
+  only set uses the composite is `permerror` with `unsupported_algorithm`. A
+  `k=mldsa44-ed25519-sha512` DNS record is an unsupported key type.
+- Signing never emits the composite. A signing profile, datasource
+  credential, custody key, or private-key manifest entry that declares it
+  fails closed as an invalid or malformed request, and
+  `dkim2d datasource key generate`, domain onboarding, and DNS export no
+  longer offer it. SQL migration `009_remove_composite_algorithm.sql` removes
+  it from the stored-algorithm constraints; see
+  [Removed Composite Algorithm](../operator/datasource-backends.md#removed-composite-algorithm).
+- The default verifier enables `rsa-sha256` and `ed25519-sha256` only. The
+  library no longer exports composite key, credential, or profile constructors.

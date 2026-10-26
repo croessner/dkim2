@@ -292,7 +292,8 @@ value octet marks one original fold point. Before serialization the Milter and
 the Exim filter restore those fold points as LF+TAB (`lib/headerfold`), the
 folded form Postfix and Exim store line by line. A plan whose restored field
 still has a physical line over 998 octets fails validation. Without the
-restoration a composite-algorithm `DKIM2-Signature` (several kilobytes) would
+restoration a long `DKIM2-Signature` (several kilobytes, for example an
+8192-bit RSA set with many recipients) would
 be queued as one line: DSNs returning it fail MIME parsing and SMTP output
 breaks it at arbitrary octets.
 
