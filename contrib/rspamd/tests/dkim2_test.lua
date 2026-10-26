@@ -508,15 +508,18 @@ local plain_attributes = assert(verifier.policy_attributes(projected, true))
 assert(plain_attributes['dkim2.received_dsn_propagation'] == nil,
   'a message that is not a received notification carries no propagation class')
 
--- The Draft-07 composite algorithm is part of both closed daemon vocabularies.
+-- The unsettled post-quantum composite is outside both closed daemon
+-- vocabularies; dkim2d reports such sets as unknown, so a composite token in a
+-- daemon response is a contract violation that fails closed.
 projected.verifier_projection.hops[1].signature_algorithms = { 'ed25519-sha256', 'mldsa44-ed25519-sha512' }
-assert(verifier.policy_attributes(projected), 'composite hop algorithm must be admitted')
+assert(verifier.policy_attributes(projected) == nil, 'composite hop algorithm must fail closed')
 projected.verifier_projection.hops[1].signature_algorithms = { 'mldsa44-ed25519-sha256' }
 assert(verifier.policy_attributes(projected) == nil, 'unknown hop algorithm must fail closed')
 projected.verifier_projection.hops[1].signature_algorithms = { 'ed25519-sha256' }
 
 for _, case in ipairs({
-  { algorithm = 'mldsa44-ed25519-sha512', valid = true },
+  { algorithm = 'ed25519-sha256', valid = true },
+  { algorithm = 'mldsa44-ed25519-sha512', valid = false },
   { algorithm = 'mldsa44-ed25519-sha256', valid = false },
 }) do
   pending_response = response('PASS', 'accept', 'first_seen', {

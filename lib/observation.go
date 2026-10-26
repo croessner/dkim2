@@ -78,8 +78,6 @@ const (
 	ObservationAlgorithmEd25519 = internalobs.AlgorithmEd25519
 	// ObservationAlgorithmUnknown identifies a bounded unknown family.
 	ObservationAlgorithmUnknown = internalobs.AlgorithmUnknown
-	// ObservationAlgorithmMLDSA44Ed25519 identifies the composite ML-DSA-44 plus Ed25519 family.
-	ObservationAlgorithmMLDSA44Ed25519 = internalobs.AlgorithmMLDSA44Ed25519
 	// ObservationCacheNotUsed identifies a lookup without caching.
 	ObservationCacheNotUsed = internalobs.CacheNotUsed
 	// ObservationCacheHit identifies a cache hit.

@@ -20,42 +20,30 @@ type signatureEvaluation struct {
 	ignored   int
 }
 
-// signatureDigests holds the Section 12.8 signature-input digests: SHA-256
-// for rsa-sha256 and ed25519-sha256, SHA-512 for mldsa44-ed25519-sha512.
+// signatureDigests holds the Section 12.8 signature-input digest: SHA-256
+// for rsa-sha256 and ed25519-sha256.
 type signatureDigests struct {
 	sha256 []byte
-	sha512 []byte
 }
 
 // forAlgorithm returns the digest the algorithm signs, or nil for an
 // algorithm without a digest contract. The algorithm-to-hash mapping is
 // owned by cryptodkim2.DigestBytes, the same owner the signer uses.
 func (d signatureDigests) forAlgorithm(algorithm Algorithm) []byte {
-	if !algorithm.Signable() {
+	if !algorithm.Signable() || cryptodkim2.DigestBytes(algorithm) != len(d.sha256) {
 		return nil
 	}
-	switch cryptodkim2.DigestBytes(algorithm) {
-	case len(d.sha256):
-		return d.sha256
-	case len(d.sha512):
-		return d.sha512
-	default:
-		return nil
-	}
+	return d.sha256
 }
 
-// computeSignatureDigests derives both signature-input digests from one
+// computeSignatureDigests derives the signature-input digest from one
 // canonical Section 12.8 input.
 func computeSignatureDigests(canonicalizer canonical.Canonicalizer, input canonical.ByteInput) (signatureDigests, error) {
 	sha256Digest, err := canonicalizer.SHA256Digest(input)
 	if err != nil {
 		return signatureDigests{}, err
 	}
-	sha512Digest, err := canonicalizer.SHA512Digest(input)
-	if err != nil {
-		return signatureDigests{}, err
-	}
-	return signatureDigests{sha256: sha256Digest.Bytes(), sha512: sha512Digest.Bytes()}, nil
+	return signatureDigests{sha256: sha256Digest.Bytes()}, nil
 }
 
 // signatureInputDigest calculates the digests over Section 12.8 input bytes.

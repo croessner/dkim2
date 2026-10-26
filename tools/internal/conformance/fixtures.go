@@ -287,7 +287,7 @@ func (o DNSOperation) validate() error {
 	if _, err := decodePadded(o.RecordB64, 1<<20); err != nil {
 		return err
 	}
-	if !stringSet("rsa-sha256", "ed25519-sha256", "mldsa44-ed25519-sha512")[o.Algorithm] {
+	if !stringSet("rsa-sha256", "ed25519-sha256")[o.Algorithm] {
 		return errors.New("fixture_invalid")
 	}
 	return o.Expected.validate(operationDNS)

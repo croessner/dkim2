@@ -326,17 +326,10 @@ func FormatCanonicalDNSRecord(
 }
 
 // dnsKeyValue derives the DNS-01 key-record k= token and raw p= bytes from
-// one canonical credential SPKI: PKCS#1 for rsa, the raw 32-byte key for
-// ed25519, and the raw 1344-byte ML-DSA-44 || Ed25519 key for the composite.
-// Non-canonical SPKI or a key of another algorithm fails closed.
+// one canonical credential SPKI: PKCS#1 for rsa and the raw 32-byte key for
+// ed25519. Non-canonical SPKI, a key of another algorithm, or any other
+// algorithm fails closed.
 func dnsKeyValue(algorithm provider.Algorithm, publicSPKI []byte) (string, []byte, error) {
-	if algorithm == provider.AlgorithmMLDSA44Ed25519SHA512 {
-		raw, err := dkim2.ParseCompositePublicKeySPKI(publicSPKI)
-		if err != nil {
-			return "", nil, newError(CodeDNSAlgorithmMismatch)
-		}
-		return string(provider.AlgorithmMLDSA44Ed25519SHA512), raw, nil
-	}
 	public, err := x509.ParsePKIXPublicKey(publicSPKI)
 	if err != nil {
 		return "", nil, newError(CodeDNSInvalid)

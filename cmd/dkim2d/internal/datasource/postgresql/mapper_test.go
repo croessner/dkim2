@@ -200,7 +200,7 @@ func TestStagingSealPolicyMigrationSplitsInsertAndSeal(t *testing.T) {
 		t.Fatal("PostgreSQL staging policies do not separate inserted and sealed states")
 	}
 	upper := strings.ToUpper(text)
-	for _, forbidden := range []string{"GRANT ", "FOR ALL", "FOR DELETE", "DISABLE ROW LEVEL SECURITY", "USING (TRUE)"} {
+	for _, forbidden := range []string{sqlGrantStatement, "FOR ALL", "FOR DELETE", "DISABLE ROW LEVEL SECURITY", "USING (TRUE)"} {
 		if strings.Contains(upper, forbidden) {
 			t.Fatal("PostgreSQL staging seal policy migration widened authority")
 		}
@@ -387,3 +387,52 @@ func minimalRows(t *testing.T) DatasetRows {
 		}},
 	}
 }
+
+// TestCompositeRemovalMigrationFailsClosedAndRestoresAllowlist proves the
+// forward migration refuses to run while composite rows remain in any
+// generation, then restores the rsa-sha256 and ed25519-sha256 allowlist on
+// both algorithm constraints without widening authority.
+func TestCompositeRemovalMigrationFailsClosedAndRestoresAllowlist(t *testing.T) {
+	t.Parallel()
+	path := filepath.Join("..", "..", "..", "..", "..", "contrib", "schema", "postgresql", "009_remove_composite_algorithm.sql")
+	document, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal("read PostgreSQL composite removal migration")
+	}
+	text := string(document)
+	guard, constraints, found := strings.Cut(text, "ALTER TABLE")
+	if !found || !strings.Contains(text, "Forward-only") || !strings.Contains(text, "BEGIN;") ||
+		!strings.Contains(text, "COMMIT;") ||
+		!strings.Contains(guard, "LOCK TABLE dkim2_datasource.credentials,\n  dkim2_datasource.key_material IN ACCESS EXCLUSIVE MODE;") ||
+		!strings.Contains(guard, "FROM dkim2_datasource.credentials\n     WHERE algorithm = 'mldsa44-ed25519-sha512'") ||
+		!strings.Contains(guard, "FROM dkim2_datasource.key_material\n     WHERE algorithm = 'mldsa44-ed25519-sha512'") ||
+		!strings.Contains(guard, "RAISE EXCEPTION 'mldsa44-ed25519-sha512 rows remain;") {
+		t.Fatal("PostgreSQL composite removal migration does not fail closed before altering constraints")
+	}
+	for _, required := range []string{
+		"ADD CONSTRAINT credentials_algorithm_check\n  CHECK (algorithm IN ('rsa-sha256', 'ed25519-sha256'));",
+		"ADD CONSTRAINT key_material_algorithm_check\n  CHECK (algorithm IN ('rsa-sha256', 'ed25519-sha256'));",
+	} {
+		if !strings.Contains("ALTER TABLE"+constraints, required) {
+			t.Fatal("PostgreSQL composite removal migration does not restore the allowlist")
+		}
+	}
+	upper := strings.ToUpper(text)
+	for _, forbidden := range compositeRemovalForbiddenStatements {
+		if strings.Contains(upper, forbidden) {
+			t.Fatal("PostgreSQL composite removal migration mutates data or authority")
+		}
+	}
+}
+
+// sqlGrantStatement is the upper-case GRANT keyword that migrations owning no
+// authority must never contain.
+const sqlGrantStatement = "GRANT "
+
+// sqlRevokeStatement is the upper-case REVOKE keyword that migrations owning
+// no authority must never contain.
+const sqlRevokeStatement = "REVOKE "
+
+// compositeRemovalForbiddenStatements lists data and authority statements the
+// composite removal migration must never contain.
+var compositeRemovalForbiddenStatements = []string{sqlGrantStatement, sqlRevokeStatement, "DELETE ", "UPDATE ", "DROP TABLE"}

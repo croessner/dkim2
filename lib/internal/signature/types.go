@@ -16,24 +16,21 @@ const (
 	AlgorithmRSASHA256 Algorithm = "rsa-sha256"
 	// AlgorithmEd25519SHA256 is the baseline Ed25519 signature algorithm name.
 	AlgorithmEd25519SHA256 Algorithm = "ed25519-sha256"
-	// AlgorithmMLDSA44Ed25519SHA512 is the Draft-07 Section 3.4 composite
-	// ML-DSA-44 plus Ed25519 signature algorithm over a SHA-512 digest.
-	AlgorithmMLDSA44Ed25519SHA512 Algorithm = "mldsa44-ed25519-sha512"
 )
 
 // Algorithm identifies one canonical supported or extension signing-algorithm token.
 type Algorithm string
 
-// Known reports whether algorithm belongs to the Draft-07 Section 3 signature
-// vocabulary that every verifier implements.
+// Known reports whether algorithm belongs to the implemented signature
+// vocabulary. The Draft-07 Section 3.4 post-quantum composite is deliberately
+// outside it until the working group settles that construction, so such sets
+// stay unknown, unsupported algorithms.
 func (a Algorithm) Known() bool {
-	return a == AlgorithmRSASHA256 || a == AlgorithmEd25519SHA256 || a == AlgorithmMLDSA44Ed25519SHA512
+	return a == AlgorithmRSASHA256 || a == AlgorithmEd25519SHA256
 }
 
 // Signable reports whether this implementation can create signatures with
-// the algorithm. Every Draft-07 Section 3 algorithm is signable; the
-// composite mldsa44-ed25519-sha512 follows the LAMPS construction owned by
-// cryptodkim2.
+// the algorithm. Every implemented algorithm is signable.
 func (a Algorithm) Signable() bool {
 	_, ranked := a.SigningRank()
 	return ranked
@@ -41,10 +38,10 @@ func (a Algorithm) Signable() bool {
 
 // signingAlgorithmOrder is the single canonical order of signature sets a
 // signer emits and of credentials in a signing profile.
-var signingAlgorithmOrder = [...]Algorithm{AlgorithmRSASHA256, AlgorithmEd25519SHA256, AlgorithmMLDSA44Ed25519SHA512}
+var signingAlgorithmOrder = [...]Algorithm{AlgorithmRSASHA256, AlgorithmEd25519SHA256}
 
-// SigningAlgorithmOrder returns a detached copy of the canonical signing order: rsa-sha256,
-// ed25519-sha256, then mldsa44-ed25519-sha512.
+// SigningAlgorithmOrder returns a detached copy of the canonical signing order:
+// rsa-sha256, then ed25519-sha256.
 func SigningAlgorithmOrder() []Algorithm { return slices.Clone(signingAlgorithmOrder[:]) }
 
 // SigningRank returns the position of a signable algorithm in the canonical

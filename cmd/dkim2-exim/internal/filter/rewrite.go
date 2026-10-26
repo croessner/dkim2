@@ -51,8 +51,8 @@ func TransformLimited(message []byte, plan adapter.Plan, limits Limits) ([]byte,
 		if len(action.Value()) == 0 || action.Value()[0] != ' ' && action.Value()[0] != '\t' {
 			return nil, adapter.NewError(adapter.FailureContract)
 		}
-		// Restore the projected fold points; a composite-algorithm signature
-		// would otherwise be written as one line beyond the RFC 5322 limit.
+		// Restore the projected fold points; a long signature field would
+		// otherwise be written as one line beyond the RFC 5322 limit.
 		value := headerfold.Restore(action.Value())
 		if !headerfold.WithinLineLimit(action.Name(), value) {
 			return nil, adapter.NewError(adapter.FailureContract)

@@ -86,10 +86,6 @@ const (
 	AlgorithmEd25519
 	// AlgorithmUnknown identifies a bounded unsupported family.
 	AlgorithmUnknown
-	// AlgorithmMLDSA44Ed25519 identifies the Draft-07 composite
-	// mldsa44-ed25519-sha512 family. It is appended after AlgorithmUnknown so
-	// existing numeric values stay stable.
-	AlgorithmMLDSA44Ed25519
 )
 
 // CacheResult identifies one bounded cache outcome.
@@ -278,9 +274,7 @@ func validReason(value Reason) bool { return value >= ReasonNone && value <= Rea
 func validError(value ErrorClass) bool { return value >= ErrorNone && value <= ErrorInternal }
 
 // validAlgorithm validates one algorithm.
-func validAlgorithm(value Algorithm) bool {
-	return value >= AlgorithmNone && value <= AlgorithmMLDSA44Ed25519
-}
+func validAlgorithm(value Algorithm) bool { return value >= AlgorithmNone && value <= AlgorithmUnknown }
 
 // validCache validates one cache outcome.
 func validCache(value CacheResult) bool { return value >= CacheNotUsed && value <= CacheMiss }

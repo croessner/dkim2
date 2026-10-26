@@ -405,7 +405,7 @@ func TestValidResultConfinesNullSenderSkipToOriginatorContinue(t *testing.T) {
 	}
 }
 
-// TestLongSignatureFieldIsRefoldedForPostfix reproduces a composite-algorithm
+// TestLongSignatureFieldIsRefoldedForPostfix reproduces a long (8192-bit RSA)
 // DKIM2-Signature whose daemon projection is one unfolded value of several
 // kilobytes. Postfix stores a Milter header value line by line, so the
 // adapter must restore the library's CRLF+TAB fold points as LF+TAB; otherwise
@@ -413,9 +413,9 @@ func TestValidResultConfinesNullSenderSkipToOriginatorContinue(t *testing.T) {
 // returns it fails MIME parsing, and SMTP output breaks it at arbitrary bytes.
 func TestLongSignatureFieldIsRefoldedForPostfix(t *testing.T) {
 	chunk := strings.Repeat("A", 64)
-	signature := strings.TrimSuffix(strings.Repeat(chunk+"\t", 52), "\t")
+	signature := strings.TrimSuffix(strings.Repeat(chunk+"\t", 22), "\t")
 	value := " i=1;\tm=1;\tt=1792590164;\tmf=PHNlbmRlckBleGFtcGxlLnRlc3Q+;\trt=PHJjcHRAZXhhbXBsZS50ZXN0Pg==;" +
-		"\td=example.test;\ts=sel:mldsa44-ed25519-sha512:" + signature + ";"
+		"\td=example.test;\ts=sel:rsa-sha256:" + signature + ";"
 	if len(value) <= 998 {
 		t.Fatalf("fixture is not over-long: %d", len(value))
 	}

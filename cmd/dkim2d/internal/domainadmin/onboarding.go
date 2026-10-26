@@ -40,7 +40,6 @@ type OnboardingResult struct {
 	CredentialCount             uint32
 	RSACredentialCount          uint32
 	Ed25519CredentialCount      uint32
-	CompositeCredentialCount    uint32
 	RuntimeVerificationRequired bool
 	PlanComplete                bool
 	ReceiptPresent              bool
@@ -2079,7 +2078,6 @@ func (o *Onboarding) successfulResult(
 		ExpectedCurrentGeneration: facts.expected, CurrentGeneration: facts.current, CurrentGenerationKnown: true,
 		CandidateGeneration: facts.candidate, CredentialCount: facts.credentials,
 		RSACredentialCount: facts.rsa, Ed25519CredentialCount: facts.ed25519,
-		CompositeCredentialCount:    facts.composite,
 		RuntimeVerificationRequired: runtimeRequired, PlanComplete: true,
 	}
 	o.observe(ctx, OnboardingObservation{Command: command, State: state, Backend: backend, Result: result.Result})
@@ -2108,7 +2106,6 @@ func (o *Onboarding) failureForJournal(
 		result.CredentialCount = facts.credentials
 		result.RSACredentialCount = facts.rsa
 		result.Ed25519CredentialCount = facts.ed25519
-		result.CompositeCredentialCount = facts.composite
 	}
 	return result, err
 }

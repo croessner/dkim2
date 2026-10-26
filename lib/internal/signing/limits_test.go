@@ -31,14 +31,14 @@ func TestDefaultLimitsMatchDurableSigningContract(t *testing.T) {
 		MaxParentOutputCopiesAndTickets: 128,
 		MaxEnvelopePathBytes:            32 * 1024,
 		MaxDecodedRecipeBytes:           45 * 1024,
-		MaxGeneratedSignatureSets:       3,
+		MaxGeneratedSignatureSets:       2,
 		MaxAuthorizationCalls:           4,
-		MaxPrivateSigningCalls:          3,
+		MaxPrivateSigningCalls:          2,
 		MaxNonceBytes:                   64,
 		MinRSABits:                      1024,
 		MaxRSABits:                      8192,
 		RequiredRSAExponent:             65537,
-		MaxPrivateSignatureBytes:        2484,
+		MaxPrivateSignatureBytes:        1024,
 		Ed25519PublicKeyBytes:           32,
 		Ed25519SignatureBytes:           64,
 		MaxNewInstances:                 1,
@@ -105,7 +105,7 @@ func TestLimitsRejectCrossResourceIncoherence(t *testing.T) {
 	rsaCallback := DefaultLimits()
 	rsaCallback.MaxPrivateSignatureBytes--
 	if err := rsaCallback.Validate(); !IsErrorCode(err, ErrorCodeInvalidOptions) {
-		t.Fatalf("composite callback incoherence code=%s", testErrorCode(err))
+		t.Fatalf("RSA callback incoherence code=%s", testErrorCode(err))
 	}
 }
 

@@ -14,22 +14,15 @@ import (
 
 // parsePKCS8PrivateKey is the keystore's single PKCS#8 owner. It decodes one
 // unencrypted PKCS#8 DER private key for exactly the expected signing
-// algorithm and returns it with its canonical public SPKI. Composite keys use
-// the exact id-MLDSA44-Ed25519-SHA512 encoding and are held as
-// *dkim2.CompositeSigningKey; RSA and Ed25519 keys use crypto/x509. When
-// canonical is true the DER must re-encode byte for byte.
+// algorithm and returns it with its canonical public SPKI through
+// crypto/x509. Only RSA and Ed25519 keys are admitted; any other key type or
+// algorithm fails closed. When canonical is true the DER must re-encode byte
+// for byte.
 func parsePKCS8PrivateKey(
 	der []byte,
 	algorithm dkim2.Algorithm,
 	canonical bool,
 ) (crypto.PrivateKey, []byte, error) {
-	if algorithm == dkim2.AlgorithmMLDSA44Ed25519SHA512 {
-		key, err := dkim2.ParseCompositeSigningKeyPKCS8(der)
-		if err != nil {
-			return nil, nil, &Error{}
-		}
-		return &key, key.PublicKeySPKI(), nil
-	}
 	key, err := x509.ParsePKCS8PrivateKey(der)
 	if err != nil {
 		return nil, nil, &Error{}
@@ -73,8 +66,6 @@ func privateKeyMatchesAlgorithm(key crypto.PrivateKey, algorithm dkim2.Algorithm
 			typed.N.BitLen() >= 1024 && len(typed.Primes) == 2
 	case ed25519.PrivateKey:
 		return algorithm == dkim2.AlgorithmEd25519SHA256 && len(typed) == ed25519.PrivateKeySize
-	case *dkim2.CompositeSigningKey:
-		return algorithm == dkim2.AlgorithmMLDSA44Ed25519SHA512 && typed != nil && typed.Valid()
 	default:
 		return false
 	}
@@ -83,12 +74,6 @@ func privateKeyMatchesAlgorithm(key crypto.PrivateKey, algorithm dkim2.Algorithm
 // marshalPKCS8PrivateKey returns the canonical unencrypted PKCS#8 DER of one
 // custody key. The result carries secret material the caller must clear.
 func marshalPKCS8PrivateKey(key crypto.PrivateKey) ([]byte, error) {
-	if composite, ok := key.(*dkim2.CompositeSigningKey); ok {
-		if composite == nil || !composite.Valid() {
-			return nil, &Error{}
-		}
-		return composite.MarshalPKCS8(), nil
-	}
 	encoded, err := x509.MarshalPKCS8PrivateKey(key)
 	if err != nil {
 		return nil, &Error{}
@@ -104,11 +89,6 @@ func publicSPKI(key crypto.PrivateKey) ([]byte, error) {
 		public = &typed.PublicKey
 	case ed25519.PrivateKey:
 		public = typed.Public()
-	case *dkim2.CompositeSigningKey:
-		if typed == nil || !typed.Valid() {
-			return nil, &Error{}
-		}
-		return typed.PublicKeySPKI(), nil
 	default:
 		return nil, &Error{}
 	}
@@ -148,10 +128,6 @@ func GeneratePrivateKey(
 		}
 	case dkim2.AlgorithmEd25519SHA256:
 		_, key, err = ed25519.GenerateKey(random)
-	case dkim2.AlgorithmMLDSA44Ed25519SHA512:
-		var composite dkim2.CompositeSigningKey
-		composite, err = dkim2.GenerateCompositeSigningKeyFrom(random)
-		key = &composite
 	default:
 		return nil, nil, &Error{}
 	}

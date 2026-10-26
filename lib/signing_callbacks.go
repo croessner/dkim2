@@ -14,7 +14,7 @@ import (
 
 // PrivateKeySignRequest carries only one closed algorithm and the native
 // digest of the Section 12.8 signature input that algorithm signs: SHA-256
-// for rsa-sha256 and ed25519-sha256, SHA-512 for mldsa44-ed25519-sha512.
+// for rsa-sha256 and ed25519-sha256.
 type PrivateKeySignRequest struct {
 	algorithm Algorithm
 	digest    []byte
@@ -30,13 +30,12 @@ func (r PrivateKeySignRequest) Algorithm() Algorithm {
 }
 
 // Digest returns a copy of the native signature-input digest: 32 bytes for
-// rsa-sha256 and ed25519-sha256, 64 bytes for mldsa44-ed25519-sha512.
+// rsa-sha256 and ed25519-sha256.
 func (r PrivateKeySignRequest) Digest() []byte { return bytes.Clone(r.digest) }
 
 // Valid reports whether the request was created by the signing facade.
 func (r PrivateKeySignRequest) Valid() bool {
-	return r.valid && (r.algorithm == AlgorithmRSASHA256 || r.algorithm == AlgorithmEd25519SHA256 ||
-		r.algorithm == AlgorithmMLDSA44Ed25519SHA512)
+	return r.valid && (r.algorithm == AlgorithmRSASHA256 || r.algorithm == AlgorithmEd25519SHA256)
 }
 
 // String returns a constant secret-safe request summary.
@@ -93,8 +92,6 @@ func (b privateKeySignerBridge) SignDigest(ctx context.Context, handle signing.P
 		algorithm = AlgorithmRSASHA256
 	case signing.AlgorithmEd25519SHA256:
 		algorithm = AlgorithmEd25519SHA256
-	case signing.AlgorithmMLDSA44Ed25519SHA512:
-		algorithm = AlgorithmMLDSA44Ed25519SHA512
 	default:
 		return signing.PrivateKeySignResult{}, provider.NewFailure(provider.FailureContract)
 	}

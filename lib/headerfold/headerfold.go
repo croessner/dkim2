@@ -6,8 +6,9 @@
 // emits a TAB only directly after such a CRLF, so every TAB after the first
 // value octet marks one original fold point. The package lives in the library
 // because the library is the only module both adapters share. Adapters that hand fields to an MTA must
-// restore those line breaks: a composite-algorithm DKIM2-Signature is several
-// kilobytes long and would otherwise exceed the RFC 5322 line limit.
+// restore those line breaks: a DKIM2-Signature with a large RSA set or many
+// recipients is several kilobytes long and would otherwise exceed the RFC 5322
+// line limit.
 package headerfold
 
 import "strings"

@@ -35,8 +35,6 @@ const (
 	eventAuthorizeRecipientDisclosure = "authorize:recipient_disclosure"
 	eventSignRSA                      = "sign:rsa-sha256"
 	eventSignEd25519                  = "sign:ed25519-sha256"
-	eventSignComposite                = "sign:mldsa44-ed25519-sha512"
-	eventPublishComposite             = "publish:mldsa44-ed25519-sha512"
 	eventRouteReserve                 = "route:reserve"
 	eventRouteBurn                    = "route:burn"
 	eventRouteReplace                 = "route:replace"
@@ -213,8 +211,6 @@ func (h signerHarness) defaultSigner(t *testing.T) PrivateKeySigner {
 			signatureBytes, err = rsa.SignPKCS1v15(rand.Reader, key.(*rsa.PrivateKey), crypto.SHA256, digest[:])
 		case AlgorithmEd25519SHA256:
 			signatureBytes = ed25519.Sign(key.(ed25519.PrivateKey), digest[:])
-		case AlgorithmMLDSA44Ed25519SHA512:
-			signatureBytes, err = cryptodkim2.SignCompositeDigest(key.(cryptodkim2.CompositePrivateKey), digest)
 		default:
 			t.Fatalf("private signer received unknown algorithm %q", request.Algorithm())
 		}
@@ -486,13 +482,6 @@ func newTestSigningProfile(t *testing.T, domain string, algorithms []Algorithm) 
 			seed := sha256.Sum256([]byte("signer-harness-ed25519"))
 			key := ed25519.NewKeyFromSeed(seed[:])
 			publicKey, privateKey = key.Public().(ed25519.PublicKey), key
-		case AlgorithmMLDSA44Ed25519SHA512:
-			selector, handleText = "composite-selector", "composite-handle"
-			key, keyErr := cryptodkim2.NewCompositePrivateKey(bytes.Repeat([]byte{0x6c}, cryptodkim2.CompositePrivateKeyBytes))
-			if keyErr != nil {
-				t.Fatalf("NewCompositePrivateKey() error = %v", keyErr)
-			}
-			publicKey, privateKey = key.PublicKey(), key
 		default:
 			t.Fatalf("unsupported harness algorithm %q", algorithm)
 		}
@@ -525,11 +514,8 @@ func TestPrivateKeySignRequestAndResultAreClosedImmutableAndRedacted(t *testing.
 	if invalid, requestErr := NewPrivateKeySignRequest(Algorithm("future"), zeroDigest); !IsErrorCode(requestErr, ErrorCodeInvalidRequest) || invalid.Valid() {
 		t.Fatalf("unknown-algorithm request valid=%t error=%v", invalid.Valid(), requestErr)
 	}
-	if invalid, requestErr := NewPrivateKeySignRequest(AlgorithmMLDSA44Ed25519SHA512, zeroDigest); !IsErrorCode(requestErr, ErrorCodeInvalidRequest) || invalid.Valid() {
-		t.Fatalf("composite request with a SHA-256 digest valid=%t error=%v", invalid.Valid(), requestErr)
-	}
-	if composite, requestErr := NewPrivateKeySignRequest(AlgorithmMLDSA44Ed25519SHA512, make([]byte, 64)); requestErr != nil || !composite.Valid() || len(composite.Digest()) != 64 {
-		t.Fatalf("composite request valid=%t error=%v", composite.Valid(), requestErr)
+	if invalid, requestErr := NewPrivateKeySignRequest(AlgorithmEd25519SHA256, make([]byte, 64)); !IsErrorCode(requestErr, ErrorCodeInvalidRequest) || invalid.Valid() {
+		t.Fatalf("request with a SHA-512-sized digest valid=%t error=%v", invalid.Valid(), requestErr)
 	}
 
 	source := []byte("SECRET detached signature")
@@ -710,17 +696,6 @@ func TestOriginSigningSupportsRSAEd25519AndDualInCanonicalOrder(t *testing.T) {
 				eventSignRSA, eventSignEd25519,
 			},
 		},
-		{
-			name: "composite", algorithms: []Algorithm{AlgorithmMLDSA44Ed25519SHA512},
-			wantEvents: []string{eventRouteReserve, eventRouteBurn, eventPublishComposite, eventSignComposite},
-		},
-		{
-			name: "all three canonicalize reversed input", algorithms: []Algorithm{AlgorithmMLDSA44Ed25519SHA512, AlgorithmEd25519SHA256, AlgorithmRSASHA256},
-			wantEvents: []string{
-				eventRouteReserve, eventRouteBurn, eventPublishRSA, eventPublishEd25519, eventPublishComposite,
-				eventSignRSA, eventSignEd25519, eventSignComposite,
-			},
-		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			harness := newSignerHarness(t, test.algorithms...)
@@ -759,10 +734,9 @@ func TestOriginSigningSupportsRSAEd25519AndDualInCanonicalOrder(t *testing.T) {
 				}
 			}
 			field := string(completed.field.Bytes())
-			rsaAt, edAt, compositeAt := strings.Index(field, "rsa-selector:rsa-sha256:"),
-				strings.Index(field, "ed-selector:ed25519-sha256:"),
-				strings.Index(field, "composite-selector:mldsa44-ed25519-sha512:")
-			if rsaAt >= 0 && edAt >= 0 && rsaAt > edAt || edAt >= 0 && compositeAt >= 0 && edAt > compositeAt {
+			rsaAt, edAt := strings.Index(field, "rsa-selector:rsa-sha256:"),
+				strings.Index(field, "ed-selector:ed25519-sha256:")
+			if rsaAt >= 0 && edAt >= 0 && rsaAt > edAt {
 				t.Fatal("complete field did not render sets in canonical order")
 			}
 		})

@@ -896,7 +896,7 @@ func (v Verifier) prepareRevisionSignatureSets(parsed signature.Signature) (revi
 		}
 	}
 
-	for _, algorithm := range [...]Algorithm{AlgorithmRSASHA256, AlgorithmEd25519SHA256, AlgorithmMLDSA44Ed25519SHA512} {
+	for _, algorithm := range [...]Algorithm{AlgorithmRSASHA256, AlgorithmEd25519SHA256} {
 		for index, set := range sets {
 			if enabled[index] && Algorithm(set.Algorithm()) == algorithm {
 				plan.order = append(plan.order, index)

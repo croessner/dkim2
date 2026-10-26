@@ -45,40 +45,6 @@ func TestDomainReportsHaveClosedBoundedMachineAndHumanSchemas(t *testing.T) {
 	}
 }
 
-// TestDomainReportCountsCompositeCredentialsOnlyWhenPresent proves the
-// composite count is additive and reports without composite stay unchanged.
-func TestDomainReportCountsCompositeCredentialsOnlyWhenPresent(t *testing.T) {
-	report, err := NewCommandReport("test-version", CommandActivate, datasourceadmin.BackendLDAP, OnboardingResult{
-		State: StateActivated, Result: OnboardingResultSuccess, Failure: CodeNone,
-		ExpectedCurrentGeneration: 7, CurrentGeneration: 8, CurrentGenerationKnown: true, CandidateGeneration: 8,
-		CredentialCount: 3, RSACredentialCount: 1, Ed25519CredentialCount: 1, CompositeCredentialCount: 1,
-		RuntimeVerificationRequired: true, PlanComplete: true,
-	})
-	if err != nil {
-		t.Fatal("construct composite command report")
-	}
-	machine, err := EncodeReport(report, true, 4096)
-	if err != nil || !bytes.Contains(machine, []byte(`"ed25519_credential_count":1,"mldsa44_ed25519_credential_count":1,"plan_complete"`)) {
-		t.Fatalf("machine report = %s", machine)
-	}
-	human, err := EncodeReport(report, false, 4096)
-	if err != nil || !bytes.Contains(human, []byte("ed25519_credential_count=1 mldsa44_ed25519_credential_count=1 plan_complete")) {
-		t.Fatalf("human report = %s", human)
-	}
-	for _, mismatch := range []OnboardingResult{
-		{CredentialCount: 3, RSACredentialCount: 1, Ed25519CredentialCount: 1},
-		{CredentialCount: 2, CompositeCredentialCount: 2},
-		{CredentialCount: 4, RSACredentialCount: 1, Ed25519CredentialCount: 1, CompositeCredentialCount: 2},
-	} {
-		mismatch.State, mismatch.Result, mismatch.Failure = StateActivated, OnboardingResultSuccess, CodeNone
-		mismatch.ExpectedCurrentGeneration, mismatch.CurrentGeneration, mismatch.CandidateGeneration = 7, 8, 8
-		mismatch.CurrentGenerationKnown, mismatch.PlanComplete = true, true
-		if _, err := NewCommandReport("test-version", CommandActivate, datasourceadmin.BackendLDAP, mismatch); err == nil {
-			t.Fatal("incoherent credential counts accepted")
-		}
-	}
-}
-
 // TestReceiptStatusReportExposesOnlyBoundedRecoveryClasses freezes identity-free pre-plan output.
 func TestReceiptStatusReportExposesOnlyBoundedRecoveryClasses(t *testing.T) {
 	report, err := NewStatusReport("test-version", datasourceadmin.BackendPostgreSQL, StatusResult{

@@ -37,7 +37,6 @@ const (
 	useOriginator          = "originator"
 	algorithmEd25519       = "ed25519-sha256"
 	algorithmRSA           = "rsa-sha256"
-	algorithmComposite     = "mldsa44-ed25519-sha512"
 	lifecycleActiveHistory = "active_history"
 	lifecycleNeverActive   = "never_active"
 	lifecycleAborted       = "aborted"
@@ -48,7 +47,7 @@ const (
 
 // signableAlgorithms is the closed set of algorithms a work item may bind; a
 // profile holds at most one credential per algorithm.
-var signableAlgorithms = []string{algorithmEd25519, algorithmRSA, algorithmComposite}
+var signableAlgorithms = []string{algorithmEd25519, algorithmRSA}
 
 // Mode identifies a closed rotation operation class.
 type Mode string

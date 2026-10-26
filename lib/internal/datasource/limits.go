@@ -24,7 +24,7 @@ func HardLimits() Limits {
 	return Limits{
 		MaxIdentifierBytes: 128, MaxDomainBytes: 253, MaxDomainLabels: 127,
 		MaxSelectorBytes: 253, MaxSelectorLabels: 127, MaxProfiles: 131072,
-		MaxCredentialsPerProfile: 3, MaxHandles: 262144, MaxPolicies: 262144,
+		MaxCredentialsPerProfile: 2, MaxHandles: 262144, MaxPolicies: 262144,
 		MaxJSONFileBytes: 512 << 20, MaxJSONDepth: 16, MaxJSONStringBytes: 16 << 10,
 		MaxDecodedStringBytes: 512 << 20, MaxDecodedPublicKeyBytes: 2048, MaxRecords: 1 << 20,
 	}
@@ -41,7 +41,7 @@ func DefaultLimits() Limits {
 	limits.MaxPolicies = 4096
 	limits.MaxJSONFileBytes = 1 << 20
 	limits.MaxDecodedStringBytes = 1 << 20
-	limits.MaxRecords = 10240
+	limits.MaxRecords = 9216
 	return limits
 }
 
@@ -53,7 +53,7 @@ func ProductionLimits() Limits {
 	limits.MaxPolicies = 65536
 	limits.MaxJSONFileBytes = 128 << 20
 	limits.MaxDecodedStringBytes = 128 << 20
-	limits.MaxRecords = 262144
+	limits.MaxRecords = 229376
 	return limits
 }
 

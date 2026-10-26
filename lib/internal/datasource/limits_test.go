@@ -11,14 +11,14 @@ func TestLimitProfilesMatchFrozenMaxima(t *testing.T) {
 	wantDefault := Limits{
 		MaxIdentifierBytes: 128, MaxDomainBytes: 253, MaxDomainLabels: 127,
 		MaxSelectorBytes: 253, MaxSelectorLabels: 127, MaxProfiles: 1024,
-		MaxCredentialsPerProfile: 3, MaxHandles: 2048, MaxPolicies: 4096,
+		MaxCredentialsPerProfile: 2, MaxHandles: 2048, MaxPolicies: 4096,
 		MaxJSONFileBytes: 1_048_576, MaxJSONDepth: 16, MaxJSONStringBytes: 16_384,
 		MaxDecodedStringBytes: 1_048_576, MaxDecodedPublicKeyBytes: 2_048,
-		MaxRecords: 10_240,
+		MaxRecords: 9_216,
 	}
 	wantProduction := wantDefault
 	wantProduction.MaxProfiles, wantProduction.MaxHandles, wantProduction.MaxPolicies = 32768, 65536, 65536
-	wantProduction.MaxJSONFileBytes, wantProduction.MaxDecodedStringBytes, wantProduction.MaxRecords = 128<<20, 128<<20, 262144
+	wantProduction.MaxJSONFileBytes, wantProduction.MaxDecodedStringBytes, wantProduction.MaxRecords = 128<<20, 128<<20, 229376
 	wantHard := wantDefault
 	wantHard.MaxProfiles, wantHard.MaxHandles, wantHard.MaxPolicies = 131072, 262144, 262144
 	wantHard.MaxJSONFileBytes, wantHard.MaxDecodedStringBytes, wantHard.MaxRecords = 512<<20, 512<<20, 1<<20
@@ -95,7 +95,7 @@ func TestUsageConstructionDerivesExactRecordCountAndKeepsFieldsPrivate(t *testin
 	}
 	if usage.Profiles() != limits.MaxProfiles || usage.Credentials() != limits.MaxProfiles*limits.MaxCredentialsPerProfile ||
 		usage.Handles() != limits.MaxHandles || usage.Policies() != limits.MaxPolicies ||
-		usage.Records() != 1048576 || usage.Bytes() != limits.MaxDecodedStringBytes {
+		usage.Records() != 917504 || usage.Bytes() != limits.MaxDecodedStringBytes {
 		t.Fatalf("usage maxima = profiles=%d credentials=%d handles=%d policies=%d records=%d bytes=%d",
 			usage.Profiles(), usage.Credentials(), usage.Handles(), usage.Policies(), usage.Records(), usage.Bytes())
 	}

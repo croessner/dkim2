@@ -2,7 +2,9 @@ package command
 
 import (
 	"bytes"
+	"crypto"
 	"crypto/sha256"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
@@ -11,8 +13,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/croessner/dkim2"
 )
 
 const (
@@ -38,14 +38,14 @@ func runKeyCommandForTest(t *testing.T, args ...string) (int, string, string) {
 	return exit, stdout, stderr
 }
 
-// TestKeyGenerateWritesCompositeCustodyKeyAndPublicRecord proves the composite
-// key lands only in a new owner-only file and stdout carries public material.
-func TestKeyGenerateWritesCompositeCustodyKeyAndPublicRecord(t *testing.T) {
+// TestKeyGenerateWritesCustodyKeyAndPublicRecord proves the generated key
+// lands only in a new owner-only file and stdout carries public material.
+func TestKeyGenerateWritesCustodyKeyAndPublicRecord(t *testing.T) {
 	t.Parallel()
-	path := filepath.Join(t.TempDir(), "pq.pem")
+	path := filepath.Join(t.TempDir(), "ed.pem")
 	exit, stdout, stderr := runKeyCommandForTest(t,
-		keyAlgorithmFlag, "mldsa44-ed25519-sha512", keyDomainFlag, keyTestDomain,
-		keySelectorFlag, "pq-20261021", keyPrivateFlag, path, "--machine")
+		keyAlgorithmFlag, keyTestEd25519, keyDomainFlag, keyTestDomain,
+		keySelectorFlag, "ed-20261021", keyPrivateFlag, path, "--machine")
 	if exit != 0 || stderr != "" {
 		t.Fatalf("exit=%d stderr=%q", exit, stderr)
 	}
@@ -68,26 +68,32 @@ func TestKeyGenerateWritesCompositeCustodyKeyAndPublicRecord(t *testing.T) {
 	if block == nil || block.Type != "PRIVATE KEY" || len(rest) != 0 {
 		t.Fatal("generated key is not one PKCS#8 PEM block")
 	}
-	key, err := dkim2.ParseCompositeSigningKeyPKCS8(block.Bytes)
+	key, err := x509.ParsePKCS8PrivateKey(block.Bytes)
 	if err != nil {
-		t.Fatal("generated key is not a composite PKCS#8 key")
+		t.Fatal("generated key is not a PKCS#8 key")
 	}
-	spki := key.PublicKeySPKI()
-	key.Clear()
+	signer, ok := key.(interface{ Public() crypto.PublicKey })
+	if !ok {
+		t.Fatal("generated key has no public half")
+	}
+	spki, err := x509.MarshalPKIXPublicKey(signer.Public())
+	if err != nil {
+		t.Fatal("marshal generated public key")
+	}
 	digest := sha256.Sum256(spki)
 	if document.PublicKeySPKI != base64.StdEncoding.EncodeToString(spki) ||
 		document.PublicSPKISHA256 != base64.StdEncoding.EncodeToString(digest[:]) {
 		t.Fatal("printed public credential does not match the key file")
 	}
-	if !strings.Contains(document.DNSZone, "pq-20261021._domainkey.example.test. 3600 IN TXT") ||
-		!strings.Contains(document.DNSZone, `"v=DKIM1; k=mldsa44-ed25519-sha512; p=`) {
+	if !strings.Contains(document.DNSZone, "ed-20261021._domainkey.example.test. 3600 IN TXT") ||
+		!strings.Contains(document.DNSZone, `"v=DKIM1; k=ed25519; p=`) {
 		t.Fatalf("DNS zone = %q", document.DNSZone)
 	}
 
 	before := bytes.Clone(encoded)
 	exit, _, _ = runKeyCommandForTest(t,
-		keyAlgorithmFlag, "mldsa44-ed25519-sha512", keyDomainFlag, keyTestDomain,
-		keySelectorFlag, "pq-20261021", keyPrivateFlag, path)
+		keyAlgorithmFlag, keyTestEd25519, keyDomainFlag, keyTestDomain,
+		keySelectorFlag, "ed-20261021", keyPrivateFlag, path)
 	after, err := os.ReadFile(path)
 	if exit != 1 || err != nil || !bytes.Equal(before, after) {
 		t.Fatalf("existing key file was not preserved: exit=%d", exit)
@@ -109,6 +115,7 @@ func TestKeyGenerateTextOutputAndShapeFailures(t *testing.T) {
 	}
 	for _, args := range [][]string{
 		{keyAlgorithmFlag, "rsa-sha1", keyDomainFlag, keyTestDomain, keySelectorFlag, "s", keyPrivateFlag, filepath.Join(directory, "a.pem")},
+		{keyAlgorithmFlag, "mldsa44-ed25519-sha512", keyDomainFlag, keyTestDomain, keySelectorFlag, "s", keyPrivateFlag, filepath.Join(directory, "pq.pem")},
 		{keyAlgorithmFlag, keyTestEd25519, keyDomainFlag, keyTestDomain, keySelectorFlag, "bad selector", keyPrivateFlag, filepath.Join(directory, "b.pem")},
 		{keyAlgorithmFlag, keyTestEd25519, keyDomainFlag, keyTestDomain, keySelectorFlag, "s", keyPrivateFlag, "relative.pem"},
 		{keyAlgorithmFlag, "rsa-sha256", keyDomainFlag, keyTestDomain, keySelectorFlag, "s", keyPrivateFlag, filepath.Join(directory, "c.pem"), "--rsa-bits", "1024"},

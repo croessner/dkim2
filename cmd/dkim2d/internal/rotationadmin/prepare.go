@@ -404,11 +404,8 @@ func derivedIdentity(kind, operation string, generation uint64, ordinal int, alg
 func derivedSelector(operation string, generation uint64, ordinal int, algorithm string) string {
 	sum := sha256.Sum256(fmt.Appendf(nil, "DKIM2-CAMPAIGN-SELECTOR-V1\x00%s\x00%d\x00%d\x00%s", operation, generation, ordinal, algorithm))
 	prefix := "e"
-	switch algorithm {
-	case string(provider.AlgorithmRSASHA256):
+	if algorithm == string(provider.AlgorithmRSASHA256) {
 		prefix = "r"
-	case string(provider.AlgorithmMLDSA44Ed25519SHA512):
-		prefix = "m"
 	}
 	return prefix + hex.EncodeToString(sum[:12])
 }

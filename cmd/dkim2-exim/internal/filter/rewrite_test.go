@@ -176,13 +176,13 @@ func FuzzTransform(f *testing.F) {
 	})
 }
 
-// TestTransformRefoldsLongSignatureFields reproduces a composite-algorithm
+// TestTransformRefoldsLongSignatureFields reproduces a long (8192-bit RSA)
 // DKIM2-Signature whose projected value is one unfolded line of several
 // kilobytes. The filter must restore the fold points so every written line
 // stays within RFC 5322 limits and the field is otherwise unchanged.
 func TestTransformRefoldsLongSignatureFields(t *testing.T) {
-	signature := strings.TrimSuffix(strings.Repeat(strings.Repeat("A", 64)+"\t", 52), "\t")
-	value := " i=1;\tm=1;\td=example.test;\ts=sel:mldsa44-ed25519-sha512:" + signature + ";"
+	signature := strings.TrimSuffix(strings.Repeat(strings.Repeat("A", 64)+"\t", 22), "\t")
+	value := " i=1;\tm=1;\td=example.test;\ts=sel:rsa-sha256:" + signature + ";"
 	first, err := adapter.NewAction(adapter.ActionAddHeader, "Message-Instance", " i=1; m=a")
 	if err != nil {
 		t.Fatal("message-instance action failed")

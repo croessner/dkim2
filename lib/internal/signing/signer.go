@@ -28,8 +28,8 @@ const (
 )
 
 // PrivateKeySignRequest carries only the closed algorithm and the digest of
-// the Section 12.8 signature input that algorithm signs: SHA-256 for
-// rsa-sha256 and ed25519-sha256, SHA-512 for mldsa44-ed25519-sha512.
+// the Section 12.8 signature input that algorithm signs (SHA-256 for
+// rsa-sha256 and ed25519-sha256).
 type PrivateKeySignRequest struct {
 	algorithm   Algorithm
 	digest      []byte
@@ -524,11 +524,8 @@ func (c Coordinator) preflight(ctx context.Context, request SignFieldRequest) (p
 			return preparedSigningOperation{}, newError(ErrorCodeKeyMismatch, ErrorLocation{Phase: PhasePreflight, Algorithm: credential.algorithm}, ErrorDetails{})
 		}
 		length := c.limits.Ed25519SignatureBytes
-		switch key := validated.(type) {
-		case *rsa.PublicKey:
+		if key, ok := validated.(*rsa.PublicKey); ok {
 			length = key.Size()
-		case cryptodkim2.CompositePublicKey:
-			length = cryptodkim2.CompositeSignatureBytes
 		}
 		if err := cryptodkim2.ValidateSignatureLength(credential.algorithm, validated, length, cryptoLimits); err != nil {
 			return preparedSigningOperation{}, newError(ErrorCodeKeyMismatch, ErrorLocation{Phase: PhasePreflight, Algorithm: credential.algorithm}, ErrorDetails{})
@@ -908,6 +905,6 @@ func (c Coordinator) recoverFailure(ctx context.Context, reservation *routeplan.
 func (c Coordinator) cryptoLimits() cryptodkim2.Limits {
 	return cryptodkim2.Limits{
 		MinRSABits: c.limits.MinRSABits, MaxRSABits: c.limits.MaxRSABits,
-		RequiredRSAExponent: c.limits.RequiredRSAExponent, MaxSignatureBytes: c.limits.cryptoSignatureCap(),
+		RequiredRSAExponent: c.limits.RequiredRSAExponent, MaxSignatureBytes: c.limits.MaxPrivateSignatureBytes,
 	}
 }

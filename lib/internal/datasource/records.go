@@ -21,9 +21,6 @@ const (
 	AlgorithmRSASHA256 = signature.AlgorithmRSASHA256
 	// AlgorithmEd25519SHA256 identifies one Ed25519-SHA256 signing credential.
 	AlgorithmEd25519SHA256 = signature.AlgorithmEd25519SHA256
-	// AlgorithmMLDSA44Ed25519SHA512 identifies one LAMPS composite
-	// mldsa44-ed25519-sha512 signing credential.
-	AlgorithmMLDSA44Ed25519SHA512 = signature.AlgorithmMLDSA44Ed25519SHA512
 )
 
 // Credential contains one immutable public signing credential and opaque handle ID.

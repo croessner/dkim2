@@ -6,7 +6,7 @@ import (
 	"crypto/ed25519"
 	"crypto/rsa"
 	"crypto/sha256"
-	"crypto/sha512"
+	"crypto/x509"
 	"math/big"
 
 	"github.com/croessner/dkim2/internal/signature"
@@ -102,33 +102,19 @@ func ValidatePublicKey(algorithm signature.Algorithm, material any, limits Limit
 			return nil, newError(ErrorCodeInvalidKey)
 		}
 		return ed25519.PublicKey(bytes.Clone(key)), nil
-	case signature.AlgorithmMLDSA44Ed25519SHA512:
-		key, ok := material.(CompositePublicKey)
-		if !ok {
-			return nil, newError(ErrorCodeWrongKeyType)
-		}
-		if !key.valid() {
-			return nil, newError(ErrorCodeInvalidKey)
-		}
-		return key.clone(), nil
 	default:
 		return nil, newError(ErrorCodeUnsupportedAlgorithm)
 	}
 }
 
-// digestBytes returns the signature-input digest size each algorithm signs:
-// SHA-256 for rsa-sha256 and ed25519-sha256, SHA-512 for the composite.
+// digestBytes returns the signature-input digest size each algorithm signs.
 func digestBytes(algorithm signature.Algorithm) int {
 	return DigestBytes(algorithm)
 }
 
 // DigestBytes returns the Section 12.8 signature-input digest size an
-// algorithm signs: 64 bytes (SHA-512) for mldsa44-ed25519-sha512 and 32 bytes
-// (SHA-256) otherwise.
-func DigestBytes(algorithm signature.Algorithm) int {
-	if algorithm == signature.AlgorithmMLDSA44Ed25519SHA512 {
-		return crypto.SHA512.Size()
-	}
+// algorithm signs: 32 bytes (SHA-256) for rsa-sha256 and ed25519-sha256.
+func DigestBytes(signature.Algorithm) int {
 	return crypto.SHA256.Size()
 }
 
@@ -156,12 +142,6 @@ func validateSignatureLengthValidated(algorithm signature.Algorithm, validated a
 	if !algorithm.Known() {
 		return newError(ErrorCodeUnsupportedAlgorithm)
 	}
-	if composite, ok := validated.(CompositePublicKey); ok && composite.valid() {
-		if length != CompositeSignatureBytes {
-			return newError(ErrorCodeInvalidSignatureLength)
-		}
-		return nil
-	}
 	if length <= 0 || length > resolved.MaxSignatureBytes {
 		return newError(ErrorCodeInvalidSignatureLength)
 	}
@@ -182,7 +162,7 @@ func validateSignatureLengthValidated(algorithm signature.Algorithm, validated a
 
 // VerifyDigest validates all inputs and verifies one signature over the
 // algorithm-specific signature-input digest (32 bytes for rsa-sha256 and
-// ed25519-sha256, 64 bytes for mldsa44-ed25519-sha512).
+// ed25519-sha256).
 func VerifyDigest(algorithm signature.Algorithm, material any, digest, signatureBytes []byte, limits Limits) error {
 	if len(digest) != digestBytes(algorithm) {
 		return newError(ErrorCodeInvalidDigestLength)
@@ -207,10 +187,6 @@ func VerifyDigest(algorithm signature.Algorithm, material any, digest, signature
 		if !ed25519.Verify(key, digest, signatureBytes) {
 			return newError(ErrorCodeSignatureMismatch)
 		}
-	case CompositePublicKey:
-		if !verifyComposite(key, digest, signatureBytes) {
-			return newError(ErrorCodeSignatureMismatch)
-		}
 	default:
 		return newError(ErrorCodeWrongKeyType)
 	}
@@ -229,8 +205,6 @@ func ClonePublicKey(material any) any {
 		return cloneRSAKey(key)
 	case ed25519.PublicKey:
 		return ed25519.PublicKey(bytes.Clone(key))
-	case CompositePublicKey:
-		return key.clone()
 	default:
 		return nil
 	}
@@ -245,14 +219,9 @@ func cloneRSAKey(key *rsa.PublicKey) *rsa.PublicKey {
 }
 
 // SignatureInputDigest returns the digest of one Section 12.8 signature input
-// that algorithm signs or verifies: SHA-512 for mldsa44-ed25519-sha512 and
-// SHA-256 for rsa-sha256 and ed25519-sha256. It is the single digest owner
-// for signing.
-func SignatureInputDigest(algorithm signature.Algorithm, input []byte) []byte {
-	if DigestBytes(algorithm) == crypto.SHA512.Size() {
-		sum := sha512.Sum512(input)
-		return sum[:]
-	}
+// that algorithm signs or verifies: SHA-256 for rsa-sha256 and
+// ed25519-sha256. It is the single digest owner for signing.
+func SignatureInputDigest(_ signature.Algorithm, input []byte) []byte {
 	sum := sha256.Sum256(input)
 	return sum[:]
 }
@@ -267,10 +236,26 @@ func PublicKeysEqual(left, right any) bool {
 	case ed25519.PublicKey:
 		r, ok := right.(ed25519.PublicKey)
 		return ok && len(l) == ed25519.PublicKeySize && bytes.Equal(l, r)
-	case CompositePublicKey:
-		r, ok := right.(CompositePublicKey)
-		return ok && l.valid() && bytes.Equal(l.Bytes(), r.Bytes())
 	default:
 		return false
 	}
+}
+
+// ParseSigningPublicKeySPKI decodes one canonical SubjectPublicKeyInfo for a
+// signable algorithm: a crypto/x509 encoding that round-trips byte for byte
+// for rsa-sha256 and ed25519-sha256. Unknown algorithms fail closed. It is the
+// single SPKI owner for stored signing credentials.
+func ParseSigningPublicKeySPKI(algorithm signature.Algorithm, spki []byte) (any, error) {
+	if !algorithm.Signable() {
+		return nil, newError(ErrorCodeUnsupportedAlgorithm)
+	}
+	parsed, err := x509.ParsePKIXPublicKey(spki)
+	if err != nil {
+		return nil, newError(ErrorCodeInvalidKey)
+	}
+	canonical, err := x509.MarshalPKIXPublicKey(parsed)
+	if err != nil || !bytes.Equal(canonical, spki) {
+		return nil, newError(ErrorCodeInvalidKey)
+	}
+	return parsed, nil
 }

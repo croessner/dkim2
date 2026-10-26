@@ -250,8 +250,6 @@ func signPrivateCredential(
 		signature, err = rsa.SignPKCS1v15(rand.Reader, key, crypto.SHA256, digest)
 	case ed25519.PrivateKey:
 		signature = ed25519.Sign(key, digest)
-	case *dkim2.CompositeSigningKey:
-		return signCompositeDigest(key, request)
 	default:
 		return dkim2.PrivateKeySignResult{}, dkim2.NewPermanentProviderError()
 	}
@@ -259,21 +257,6 @@ func signPrivateCredential(
 		return dkim2.PrivateKeySignResult{}, dkim2.NewTemporaryProviderError()
 	}
 	return dkim2.NewPrivateKeySignResult(signature), nil
-}
-
-// signCompositeDigest signs through the library-owned LAMPS construction.
-// Request and algorithm mismatches are excluded by the caller, so a failure
-// is a failed self-verification of corrupted key material: permanent, not a
-// condition that retrying could cure.
-func signCompositeDigest(
-	key *dkim2.CompositeSigningKey,
-	request dkim2.PrivateKeySignRequest,
-) (dkim2.PrivateKeySignResult, error) {
-	result, err := key.SignDigest(request)
-	if err != nil {
-		return dkim2.PrivateKeySignResult{}, dkim2.NewPermanentProviderError()
-	}
-	return result, nil
 }
 
 // Close makes future operations fail closed and releases the datasource root.
@@ -548,8 +531,6 @@ func clearPrivateKey(key crypto.PrivateKey) {
 	switch typed := key.(type) {
 	case ed25519.PrivateKey:
 		clear(typed)
-	case *dkim2.CompositeSigningKey:
-		typed.Clear()
 	case *rsa.PrivateKey:
 		if typed == nil {
 			return

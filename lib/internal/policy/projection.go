@@ -119,16 +119,13 @@ const (
 	SetAlgorithmRSA SetAlgorithm = "rsa-sha256"
 	// SetAlgorithmEd25519 identifies Ed25519-SHA256.
 	SetAlgorithmEd25519 SetAlgorithm = "ed25519-sha256"
-	// SetAlgorithmMLDSA44Ed25519 identifies composite ML-DSA-44 plus Ed25519 over SHA-512.
-	SetAlgorithmMLDSA44Ed25519 SetAlgorithm = "mldsa44-ed25519-sha512"
 	// SetAlgorithmUnknown identifies an ignored unknown algorithm.
 	SetAlgorithmUnknown SetAlgorithm = "unknown"
 )
 
 // Known reports whether algorithm belongs to the closed vocabulary.
 func (a SetAlgorithm) Known() bool {
-	return a == SetAlgorithmRSA || a == SetAlgorithmEd25519 || a == SetAlgorithmMLDSA44Ed25519 ||
-		a == SetAlgorithmUnknown
+	return a == SetAlgorithmRSA || a == SetAlgorithmEd25519 || a == SetAlgorithmUnknown
 }
 
 // SetStatus identifies one sealed signature-set outcome.

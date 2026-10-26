@@ -10,7 +10,6 @@ type operationReportFacts struct {
 	credentials uint32
 	rsa         uint32
 	ed25519     uint32
-	composite   uint32
 }
 
 // journalReportFacts derives bounded report facts from one protected complete operation.
@@ -46,14 +45,12 @@ func planReportFactsLocked(plan *Plan) (operationReportFacts, bool) {
 			facts.rsa++
 		case provider.AlgorithmEd25519SHA256:
 			facts.ed25519++
-		case provider.AlgorithmMLDSA44Ed25519SHA512:
-			facts.composite++
 		default:
 			return operationReportFacts{}, false
 		}
 	}
-	if facts.candidate <= facts.expected || facts.rsa > 1 || facts.ed25519 > 1 || facts.composite > 1 ||
-		facts.rsa+facts.ed25519+facts.composite != facts.credentials {
+	if facts.candidate <= facts.expected || facts.rsa > 1 || facts.ed25519 > 1 ||
+		facts.rsa+facts.ed25519 != facts.credentials {
 		return operationReportFacts{}, false
 	}
 	return facts, true

@@ -23,9 +23,6 @@ const (
 	KeyTypeRSA KeyType = "rsa"
 	// KeyTypeEd25519 identifies raw Ed25519 public-key data.
 	KeyTypeEd25519 KeyType = "ed25519"
-	// KeyTypeMLDSA44Ed25519SHA512 identifies raw ML-DSA-44 followed by raw
-	// Ed25519 public-key data (DNS-01 Section 3.3).
-	KeyTypeMLDSA44Ed25519SHA512 KeyType = "mldsa44-ed25519-sha512"
 	// KeyTypeUnsupported records a valid but unrecognized key type without retaining spelling.
 	KeyTypeUnsupported KeyType = "unsupported"
 )
@@ -33,7 +30,7 @@ const (
 // Known reports whether the key type belongs to the closed parser vocabulary.
 func (k KeyType) Known() bool {
 	switch k {
-	case KeyTypeRSA, KeyTypeEd25519, KeyTypeMLDSA44Ed25519SHA512, KeyTypeUnsupported:
+	case KeyTypeRSA, KeyTypeEd25519, KeyTypeUnsupported:
 		return true
 	default:
 		return false
@@ -90,8 +87,7 @@ func (r Record) Valid() bool {
 	}
 	switch r.status {
 	case RecordStatusKeyData:
-		return (r.keyType == KeyTypeRSA || r.keyType == KeyTypeEd25519 || r.keyType == KeyTypeMLDSA44Ed25519SHA512) &&
-			len(r.publicKey) > 0
+		return (r.keyType == KeyTypeRSA || r.keyType == KeyTypeEd25519) && len(r.publicKey) > 0
 	case RecordStatusRevoked:
 		return len(r.publicKey) == 0
 	case RecordStatusUnsupportedKeyType:
@@ -250,8 +246,6 @@ func parsedKeyType(field tagvalue.Field) (KeyType, error) {
 		return KeyTypeRSA, nil
 	case "ed25519":
 		return KeyTypeEd25519, nil
-	case "mldsa44-ed25519-sha512":
-		return KeyTypeMLDSA44Ed25519SHA512, nil
 	default:
 		if !validHyphenatedWord(value) {
 			return "", newRecordError(RecordErrorInvalidKeyType)

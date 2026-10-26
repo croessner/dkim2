@@ -304,7 +304,7 @@
     {
       "id": "signing-facade-source",
       "path": "lib/signing_facade_test.go",
-      "sha256": "415238d0793cc64122220a18bd9e1f5d4141dbdb2e784f5871e9fe9848366c62",
+      "sha256": "3fd8ab6e38a2e2554c127414b7ac50f0f1af74c45ade75e84859fe0286f686c2",
       "module": "lib"
     },
     {
@@ -374,9 +374,9 @@
       "module": "cmd/dkim2d"
     },
     {
-      "id": "verification-composite-source",
-      "path": "lib/internal/verify/composite_test.go",
-      "sha256": "0437a20eefd5de10832e5e951aba57c3c958bfd2e8e259eabfe4879e73a5da34",
+      "id": "verification-composite-unsupported-source",
+      "path": "lib/unsupported_composite_test.go",
+      "sha256": "122970d6fb25191c049c7145213790d4694a230f59366ff7858285cce441d974",
       "module": "lib"
     },
     {
@@ -1865,19 +1865,20 @@
     },
     {
       "suite": "verification",
-      "case_id": "draft07-composite-signature",
+      "case_id": "composite-algorithm-unsupported",
       "class": "documented_interpretation",
       "authority": [
-        "draft-ietf-dkim-dkim2-spec-07 Section 3.4"
+        "draft-ietf-dkim-dkim2-spec-07 Section 3.4",
+        "draft-ietf-dkim-dkim2-dns-01 Section 3.3"
       ],
       "provenance": "regression_reproducer",
       "runner": "portable_vector",
       "required_platform": "portable",
       "expected_outcome": "pass",
       "artifacts": [
-        "verification-composite-source"
+        "verification-composite-unsupported-source"
       ],
-      "producer": "verification-draft07-tests"
+      "producer": "library-facade-tests"
     },
     {
       "suite": "verification",

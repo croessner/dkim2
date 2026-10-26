@@ -1,7 +1,6 @@
 package signingprofile
 
 import (
-	"bytes"
 	"crypto/ed25519"
 	"crypto/rsa"
 	"crypto/x509"
@@ -12,7 +11,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/croessner/dkim2/internal/cryptodkim2"
 	"github.com/croessner/dkim2/internal/datasource"
 	"github.com/croessner/dkim2/internal/signing"
 )
@@ -618,18 +616,14 @@ func TestRegistryRejectsConflictingDerivedProfileGroups(t *testing.T) {
 		datasource.ErrorCodeAmbiguous,
 	)
 
-	_, composite := newSingleCredentialEntry(
-		t, profileID, "example.test", "composite", datasource.AlgorithmMLDSA44Ed25519SHA512,
-		"key.group.composite", handle, datasource.ProfileUseOriginator, 0x72,
-	)
-	_, fourth := newSingleCredentialEntry(
-		t, profileID, "example.test", "fourth", datasource.AlgorithmEd25519SHA256,
-		"key.group.fourth", handle, datasource.ProfileUseOriginator, 0x62,
+	_, third := newSingleCredentialEntry(
+		t, profileID, "example.test", "third", datasource.AlgorithmEd25519SHA256,
+		"key.group.third", handle, datasource.ProfileUseOriginator, 0x62,
 	)
 	assertRegistryConstructionError(
 		t,
 		"credentials one over",
-		[]Entry{rsaOne, selectorEd, composite, fourth},
+		[]Entry{rsaOne, selectorEd, third},
 		datasource.DefaultLimits(),
 		datasource.ErrorCodeLimitExceeded,
 	)
@@ -872,12 +866,6 @@ func newDatasourceCredential(
 		for index := range publicKey.(ed25519.PublicKey) {
 			publicKey.(ed25519.PublicKey)[index] = edSeed + byte(index)
 		}
-	case datasource.AlgorithmMLDSA44Ed25519SHA512:
-		key, err := cryptodkim2.NewCompositePrivateKey(bytes.Repeat([]byte{edSeed | 1}, cryptodkim2.CompositePrivateKeyBytes))
-		if err != nil {
-			t.Fatalf("cryptodkim2.NewCompositePrivateKey() error = %v", err)
-		}
-		return mustDatasourceCredential(t, selector, algorithm, key.PublicKey().MarshalSPKI(), handleID)
 	default:
 		t.Fatal("unsupported credential fixture algorithm")
 	}
@@ -885,18 +873,6 @@ func newDatasourceCredential(
 	if err != nil {
 		t.Fatalf("x509.MarshalPKIXPublicKey() error = %v", err)
 	}
-	return mustDatasourceCredential(t, selector, algorithm, spki, handleID)
-}
-
-// mustDatasourceCredential validates one fixture credential from canonical SPKI.
-func mustDatasourceCredential(
-	t *testing.T,
-	selector string,
-	algorithm datasource.Algorithm,
-	spki []byte,
-	handleID datasource.KeyHandleID,
-) datasource.Credential {
-	t.Helper()
 	credential, err := datasource.NewCredential(
 		selector,
 		algorithm,

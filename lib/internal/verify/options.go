@@ -19,8 +19,6 @@ const (
 	AlgorithmRSASHA256 = signature.AlgorithmRSASHA256
 	// AlgorithmEd25519SHA256 identifies Ed25519 verification over SHA-256 digest bytes.
 	AlgorithmEd25519SHA256 = signature.AlgorithmEd25519SHA256
-	// AlgorithmMLDSA44Ed25519SHA512 aliases the Draft-07 composite algorithm.
-	AlgorithmMLDSA44Ed25519SHA512 = signature.AlgorithmMLDSA44Ed25519SHA512
 	// AlgorithmUnknown is the bounded result token for algorithms outside the active contract.
 	AlgorithmUnknown Algorithm = "unknown"
 )
@@ -134,7 +132,7 @@ func DefaultRevisionLimits() RevisionLimits {
 // DefaultAlgorithmPolicy returns the active signature algorithm allowlist.
 func DefaultAlgorithmPolicy() AlgorithmPolicy {
 	return AlgorithmPolicy{
-		AllowedAlgorithms: []Algorithm{AlgorithmRSASHA256, AlgorithmEd25519SHA256, AlgorithmMLDSA44Ed25519SHA512},
+		AllowedAlgorithms: []Algorithm{AlgorithmRSASHA256, AlgorithmEd25519SHA256},
 		MinRSABits:        defaultRSAMinBits,
 		MaxRSABits:        cryptodkim2.DefaultLimits().MaxRSABits,
 	}
@@ -302,12 +300,6 @@ func (p AlgorithmPolicy) Validate() error {
 			return invalidOptionError("allowed_algorithms", len(p.AllowedAlgorithms))
 		}
 		seen[algorithm] = struct{}{}
-		if algorithm == AlgorithmMLDSA44Ed25519SHA512 && cryptodkim2.CompositeAvailable() != nil {
-			// A runtime without ML-DSA (such as the Go FIPS module v1.0.0)
-			// cannot implement the mandatory Draft-07 composite algorithm, so
-			// construction fails instead of silently ignoring it.
-			return unsupportedAlgorithmError(algorithm)
-		}
 	}
 
 	return nil

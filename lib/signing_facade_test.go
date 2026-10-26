@@ -85,11 +85,10 @@ func (a publicRouteMemoryAuthority) ConsumeRelease(ctx context.Context, query Ro
 }
 
 type publicSigningProvider struct {
-	rsaKey       *rsa.PrivateKey
-	edKey        ed25519.PrivateKey
-	compositeKey CompositeSigningKey
-	lookups      atomic.Int64
-	signs        atomic.Int64
+	rsaKey  *rsa.PrivateKey
+	edKey   ed25519.PrivateKey
+	lookups atomic.Int64
+	signs   atomic.Int64
 }
 
 // LookupPublicKey serves immutable public material for generated test credentials.
@@ -100,11 +99,6 @@ func (p *publicSigningProvider) LookupPublicKey(_ context.Context, query PublicK
 		return FoundRSAPublicKey(&p.rsaKey.PublicKey), nil
 	case AlgorithmEd25519SHA256:
 		return FoundEd25519PublicKey(p.edKey.Public().(ed25519.PublicKey)), nil
-	case AlgorithmMLDSA44Ed25519SHA512:
-		if !p.compositeKey.Valid() {
-			return MissingPublicKey(query.Algorithm()), nil
-		}
-		return FoundCompositePublicKey(p.compositeKey.PublicKey()), nil
 	default:
 		return MissingPublicKey(query.Algorithm()), nil
 	}
@@ -123,8 +117,6 @@ func (p *publicSigningProvider) SignDigest(_ context.Context, _ PrivateKeyHandle
 		return NewPrivateKeySignResult(signatureBytes), nil
 	case AlgorithmEd25519SHA256:
 		return NewPrivateKeySignResult(ed25519.Sign(p.edKey, digest[:])), nil
-	case AlgorithmMLDSA44Ed25519SHA512:
-		return p.compositeKey.SignDigest(request)
 	default:
 		return PrivateKeySignResult{}, nil
 	}
@@ -552,31 +544,27 @@ func TestPublicOriginatorSigningAlgorithmsAndImmutableBytes(t *testing.T) {
 	rsaKey := loadPublicSigningRSAKey(t)
 	seed := sha256.Sum256([]byte("dkim2-public-originator-ed25519-test-key"))
 	edKey := ed25519.NewKeyFromSeed(seed[:])
-	compositeKey, err := GenerateCompositeSigningKey()
-	if err != nil {
-		t.Fatalf("GenerateCompositeSigningKey() error = %v", err)
-	}
 	raw := []byte("From: alice@example.test\r\nTo: bob@example.net\r\nSubject: root facade\r\n\r\nbody\r\n")
 	for _, testCase := range []struct {
 		name       string
-		profile    func(rsaHandle, edHandle, compositeHandle PrivateKeyHandle) (SigningProfile, error)
+		profile    func(rsaHandle, edHandle PrivateKeyHandle) (SigningProfile, error)
 		algorithms []Algorithm
 	}{
-		{name: testRSASelector, algorithms: []Algorithm{AlgorithmRSASHA256}, profile: func(rsaHandle, _, _ PrivateKeyHandle) (SigningProfile, error) {
+		{name: testRSASelector, algorithms: []Algorithm{AlgorithmRSASHA256}, profile: func(rsaHandle, _ PrivateKeyHandle) (SigningProfile, error) {
 			credential, credentialErr := NewRSASigningCredential(testRSASelector, &rsaKey.PublicKey, rsaHandle)
 			if credentialErr != nil {
 				return SigningProfile{}, credentialErr
 			}
 			return NewRSASigningProfile("example.test", credential)
 		}},
-		{name: "ed25519", algorithms: []Algorithm{AlgorithmEd25519SHA256}, profile: func(_, edHandle, _ PrivateKeyHandle) (SigningProfile, error) {
+		{name: "ed25519", algorithms: []Algorithm{AlgorithmEd25519SHA256}, profile: func(_, edHandle PrivateKeyHandle) (SigningProfile, error) {
 			credential, credentialErr := NewEd25519SigningCredential("ed", edKey.Public().(ed25519.PublicKey), edHandle)
 			if credentialErr != nil {
 				return SigningProfile{}, credentialErr
 			}
 			return NewEd25519SigningProfile("example.test", credential)
 		}},
-		{name: "dual", algorithms: []Algorithm{AlgorithmRSASHA256, AlgorithmEd25519SHA256}, profile: func(rsaHandle, edHandle, _ PrivateKeyHandle) (SigningProfile, error) {
+		{name: "dual", algorithms: []Algorithm{AlgorithmRSASHA256, AlgorithmEd25519SHA256}, profile: func(rsaHandle, edHandle PrivateKeyHandle) (SigningProfile, error) {
 			rsaCredential, credentialErr := NewRSASigningCredential(testRSASelector, &rsaKey.PublicKey, rsaHandle)
 			if credentialErr != nil {
 				return SigningProfile{}, credentialErr
@@ -587,31 +575,9 @@ func TestPublicOriginatorSigningAlgorithmsAndImmutableBytes(t *testing.T) {
 			}
 			return NewDualSigningProfile("example.test", rsaCredential, edCredential)
 		}},
-		{name: "composite", algorithms: []Algorithm{AlgorithmMLDSA44Ed25519SHA512}, profile: func(_, _, compositeHandle PrivateKeyHandle) (SigningProfile, error) {
-			credential, credentialErr := NewCompositeSigningCredential("pq", compositeKey.PublicKey(), compositeHandle)
-			if credentialErr != nil {
-				return SigningProfile{}, credentialErr
-			}
-			return NewCompositeSigningProfile("example.test", credential)
-		}},
-		{name: "all three reordered", algorithms: []Algorithm{AlgorithmRSASHA256, AlgorithmEd25519SHA256, AlgorithmMLDSA44Ed25519SHA512}, profile: func(rsaHandle, edHandle, compositeHandle PrivateKeyHandle) (SigningProfile, error) {
-			rsaCredential, credentialErr := NewRSASigningCredential(testRSASelector, &rsaKey.PublicKey, rsaHandle)
-			if credentialErr != nil {
-				return SigningProfile{}, credentialErr
-			}
-			edCredential, credentialErr := NewEd25519SigningCredential("ed", edKey.Public().(ed25519.PublicKey), edHandle)
-			if credentialErr != nil {
-				return SigningProfile{}, credentialErr
-			}
-			compositeCredential, credentialErr := NewCompositeSigningCredential("pq", compositeKey.PublicKey(), compositeHandle)
-			if credentialErr != nil {
-				return SigningProfile{}, credentialErr
-			}
-			return NewMultiSigningProfile("example.test", compositeCredential, edCredential, rsaCredential)
-		}},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
-			provider := &publicSigningProvider{rsaKey: rsaKey, edKey: edKey, compositeKey: compositeKey}
+			provider := &publicSigningProvider{rsaKey: rsaKey, edKey: edKey}
 			assertPublicOriginatorSigning(t, provider, raw, testCase.profile, testCase.algorithms)
 		})
 	}
@@ -623,7 +589,7 @@ func assertPublicOriginatorSigning(
 	t *testing.T,
 	provider *publicSigningProvider,
 	raw []byte,
-	newProfile func(rsaHandle, edHandle, compositeHandle PrivateKeyHandle) (SigningProfile, error),
+	newProfile func(rsaHandle, edHandle PrivateKeyHandle) (SigningProfile, error),
 	algorithms []Algorithm,
 ) {
 	t.Helper()
@@ -637,8 +603,7 @@ func assertPublicOriginatorSigning(
 	}
 	rsaHandle, _ := NewPrivateKeyHandle([]byte("rsa-key"))
 	edHandle, _ := NewPrivateKeyHandle([]byte("ed-key"))
-	compositeHandle, _ := NewPrivateKeyHandle([]byte("composite-key"))
-	profile, err := newProfile(rsaHandle, edHandle, compositeHandle)
+	profile, err := newProfile(rsaHandle, edHandle)
 	if err != nil {
 		t.Fatalf("profile() error = %v", err)
 	}

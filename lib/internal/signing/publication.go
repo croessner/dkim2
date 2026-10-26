@@ -349,15 +349,6 @@ func detachProviderPublicKey(algorithm Algorithm, material any) any {
 			return nil
 		}
 		return &rsa.PublicKey{N: new(big.Int).Set(key.N), E: key.E}
-	case cryptodkim2.CompositePublicKey:
-		if algorithm != AlgorithmMLDSA44Ed25519SHA512 {
-			return nil
-		}
-		detached, err := cryptodkim2.ParseCompositePublicKey(key.Bytes())
-		if err != nil {
-			return nil
-		}
-		return detached
 	default:
 		return nil
 	}
@@ -393,8 +384,6 @@ func publicKeyTranscript(material any) []byte {
 		return result
 	case ed25519.PublicKey:
 		return append([]byte(nil), key...)
-	case cryptodkim2.CompositePublicKey:
-		return key.Bytes()
 	default:
 		return nil
 	}

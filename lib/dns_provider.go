@@ -9,7 +9,6 @@ import (
 	"io"
 	"time"
 
-	"github.com/croessner/dkim2/internal/cryptodkim2"
 	"github.com/croessner/dkim2/internal/keyresolver"
 	"github.com/croessner/dkim2/internal/niliface"
 )
@@ -127,8 +126,6 @@ func (p *DNSPublicKeyProvider) LookupPublicKey(ctx context.Context, query Public
 			return FoundRSAPublicKey(key), nil
 		case ed25519.PublicKey:
 			return FoundEd25519PublicKey(key), nil
-		case cryptodkim2.CompositePublicKey:
-			return FoundCompositePublicKey(key.Bytes()), nil
 		default:
 			return PublicKeyResult{}, newAPIError(APIErrorCodeInvalidProvider)
 		}
@@ -183,8 +180,6 @@ func resolverAlgorithm(algorithm Algorithm) (keyresolver.Algorithm, bool) {
 		return keyresolver.AlgorithmRSASHA256, true
 	case AlgorithmEd25519SHA256:
 		return keyresolver.AlgorithmEd25519SHA256, true
-	case AlgorithmMLDSA44Ed25519SHA512:
-		return keyresolver.AlgorithmMLDSA44Ed25519SHA512, true
 	default:
 		return "", false
 	}

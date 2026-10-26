@@ -32,6 +32,7 @@ func TestParseRecordAcceptsClosedLegalMatrix(t *testing.T) {
 		{name: "unsupported rsa case", record: "k=RSA; p=" + validDNSKeyData, status: RecordStatusUnsupportedKeyType, keyType: KeyTypeUnsupported},
 		{name: "unsupported ed case", record: "k=Ed25519; p=" + validDNSKeyData, status: RecordStatusUnsupportedKeyType, keyType: KeyTypeUnsupported},
 		{name: "unsupported with retired t", record: "k=future-key2; p=" + validDNSKeyData + "; t=y:s", status: RecordStatusUnsupportedKeyType, keyType: KeyTypeUnsupported},
+		{name: "post-quantum composite stays unsupported", record: "v=DKIM1; k=mldsa44-ed25519-sha512; p=" + validDNSKeyData, status: RecordStatusUnsupportedKeyType, keyType: KeyTypeUnsupported},
 		{name: "unpadded one character", record: "p=QUI", status: RecordStatusKeyData, keyType: KeyTypeRSA, keyData: "AB"},
 		{name: "unpadded two characters", record: "p=QQ", status: RecordStatusKeyData, keyType: KeyTypeRSA, keyData: "A"},
 		{name: "retired testing flag", record: "p=" + validDNSKeyData + "; t=y", status: RecordStatusKeyData, keyType: KeyTypeRSA, keyData: decodedDNSKeyData},

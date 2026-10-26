@@ -13,8 +13,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/croessner/dkim2/internal/cryptodkim2"
 )
 
 const (
@@ -169,9 +167,6 @@ func TestProfileCanonicalizesCredentialsAndRejectsDuplicates(t *testing.T) {
 	edCredential := mustModelCredential(
 		t, "ed", AlgorithmEd25519SHA256, "key.example.ed", limits,
 	)
-	compositeCredential := mustModelCredential(
-		t, "composite", AlgorithmMLDSA44Ed25519SHA512, "key.example.composite", limits,
-	)
 
 	profile, err := NewProfile(
 		profileID, "EXAMPLE.TEST", RecordStatusActive,
@@ -208,7 +203,7 @@ func TestProfileCanonicalizesCredentialsAndRejectsDuplicates(t *testing.T) {
 		code        ErrorCode
 	}{
 		{name: "empty", credentials: nil, code: ErrorCodeInvalidRequest},
-		{name: "too many", credentials: []Credential{rsaCredential, edCredential, compositeCredential, rsaCredential}, code: ErrorCodeLimitExceeded},
+		{name: "too many", credentials: []Credential{rsaCredential, edCredential, rsaCredential}, code: ErrorCodeLimitExceeded},
 		{name: "duplicate algorithm", credentials: []Credential{rsaCredential, sameAlgorithm}, code: ErrorCodeInvalidRequest},
 		{name: "duplicate selector", credentials: []Credential{rsaCredential, sameSelector}, code: ErrorCodeInvalidRequest},
 		{name: "duplicate handle", credentials: []Credential{rsaCredential, sameHandle}, code: ErrorCodeInvalidRequest},
@@ -733,12 +728,6 @@ func modelPublicKeySPKI(t *testing.T, algorithm Algorithm) []byte {
 		publicKey = modelRSAPublicKey()
 	case AlgorithmEd25519SHA256:
 		publicKey = ed25519.PublicKey(bytes.Repeat([]byte{0x42}, ed25519.PublicKeySize))
-	case AlgorithmMLDSA44Ed25519SHA512:
-		key, err := cryptodkim2.NewCompositePrivateKey(bytes.Repeat([]byte{0x43}, cryptodkim2.CompositePrivateKeyBytes))
-		if err != nil {
-			t.Fatalf("cryptodkim2.NewCompositePrivateKey() error = %v", err)
-		}
-		return key.PublicKey().MarshalSPKI()
 	default:
 		t.Fatalf("unsupported fixture algorithm")
 	}

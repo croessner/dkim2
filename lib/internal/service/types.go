@@ -205,17 +205,13 @@ const (
 	AlgorithmRSASHA256 Algorithm = "rsa-sha256"
 	// AlgorithmEd25519SHA256 identifies Ed25519-SHA256.
 	AlgorithmEd25519SHA256 Algorithm = "ed25519-sha256"
-	// AlgorithmMLDSA44Ed25519SHA512 identifies the Draft-07 composite
-	// ML-DSA-44 plus Ed25519 algorithm over SHA-512.
-	AlgorithmMLDSA44Ed25519SHA512 Algorithm = "mldsa44-ed25519-sha512"
 	// AlgorithmUnknown bounds unrecognized algorithm spellings.
 	AlgorithmUnknown Algorithm = "unknown"
 )
 
 // Known reports whether the algorithm belongs to the bounded service vocabulary.
 func (a Algorithm) Known() bool {
-	return a == AlgorithmRSASHA256 || a == AlgorithmEd25519SHA256 || a == AlgorithmMLDSA44Ed25519SHA512 ||
-		a == AlgorithmUnknown
+	return a == AlgorithmRSASHA256 || a == AlgorithmEd25519SHA256 || a == AlgorithmUnknown
 }
 
 // SignatureStatus identifies one bounded signature-set outcome.

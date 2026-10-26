@@ -43,26 +43,27 @@ func assertRoundTrip(t *testing.T, field []byte) {
 	}
 }
 
-// TestRestoreRoundTripsCompositeSignatureField renders a real composite
-// DKIM2-Signature through the library grammar and proves the projection plus
-// Restore round trip, the exact case that previously produced a 4 KB line.
-func TestRestoreRoundTripsCompositeSignatureField(t *testing.T) {
+// TestRestoreRoundTripsLongSignatureField renders a real multi-kilobyte
+// DKIM2-Signature (an 8192-bit RSA set plus an Ed25519 set) through the
+// library grammar and proves the projection plus Restore round trip, the case
+// that previously produced an over-long unfolded line.
+func TestRestoreRoundTripsLongSignatureField(t *testing.T) {
 	target, err := signature.NewUnsignedTarget(signature.TargetRequest{
 		Sequence: 1, InstanceNumber: 1, Timestamp: 1_792_590_164,
 		MailFrom:   []byte("<sender@example.test>"),
 		Recipients: [][]byte{[]byte("<one@example.net>"), []byte("<two@example.net>")},
 		Domain:     "example.test",
 		Sets: []signature.SetPlan{
-			{Selector: "pq", Algorithm: signature.AlgorithmMLDSA44Ed25519SHA512},
 			{Selector: "rsa", Algorithm: signature.AlgorithmRSASHA256},
+			{Selector: "ed", Algorithm: signature.AlgorithmEd25519SHA256},
 		},
 	}, signature.RenderLimits{})
 	if err != nil {
 		t.Fatalf("NewUnsignedTarget() error = %v", err)
 	}
 	complete, err := target.Complete([]signature.SetValue{
-		{Selector: "pq", Algorithm: signature.AlgorithmMLDSA44Ed25519SHA512, Signature: bytes.Repeat([]byte{0x5a}, 2484)},
-		{Selector: "rsa", Algorithm: signature.AlgorithmRSASHA256, Signature: bytes.Repeat([]byte{0x33}, 256)},
+		{Selector: "rsa", Algorithm: signature.AlgorithmRSASHA256, Signature: bytes.Repeat([]byte{0x33}, 1024)},
+		{Selector: "ed", Algorithm: signature.AlgorithmEd25519SHA256, Signature: bytes.Repeat([]byte{0x5a}, 64)},
 	})
 	if err != nil {
 		t.Fatalf("Complete() error = %v", err)

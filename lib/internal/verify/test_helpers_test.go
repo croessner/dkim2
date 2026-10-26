@@ -8,7 +8,6 @@ import (
 	"crypto/rsa"
 	"crypto/sha256"
 	"encoding/base64"
-	"github.com/croessner/dkim2/internal/cryptodkim2"
 	"strconv"
 	"strings"
 	"testing"
@@ -367,17 +366,13 @@ func placeholderSignatureLength(algorithm Algorithm) int {
 	if algorithm == AlgorithmEd25519SHA256 {
 		return ed25519.SignatureSize
 	}
-	if algorithm == signature.AlgorithmMLDSA44Ed25519SHA512 {
-		return cryptodkim2.CompositeSignatureBytes
-	}
 
 	return 128
 }
 
 // foldLongBase64 folds base64 values longer than one header line with FWS,
 // which base64string permits; shorter values stay unchanged. RFC 5322 Section
-// 2.1.1 limits lines to 998 octets, so real composite s= values (3312 base64
-// characters) are always folded by signers.
+// 2.1.1 limits lines to 998 octets, so long s= values are folded by signers.
 func foldLongBase64(value string) string {
 	const width = 76
 	if len(value) <= 900 {

@@ -53,8 +53,8 @@ type Credential struct {
 }
 
 // SignableAlgorithm reports whether this implementation can create
-// signatures with algorithm: every Draft-07 Section 3 algorithm, with the
-// composite following the LAMPS construction owned by cryptodkim2.
+// signatures with algorithm: rsa-sha256 and ed25519-sha256. The unsettled
+// post-quantum composite is not implemented and fails closed.
 func SignableAlgorithm(algorithm Algorithm) bool {
 	return algorithm.Signable()
 }
@@ -71,7 +71,7 @@ func NewCredential(selector string, algorithm Algorithm, publicKey any, handle P
 	}
 	validated, validationErr := cryptodkim2.ValidatePublicKey(algorithm, publicKey, cryptodkim2.Limits{
 		MinRSABits: resolved.MinRSABits, MaxRSABits: resolved.MaxRSABits,
-		RequiredRSAExponent: resolved.RequiredRSAExponent, MaxSignatureBytes: resolved.cryptoSignatureCap(),
+		RequiredRSAExponent: resolved.RequiredRSAExponent, MaxSignatureBytes: resolved.MaxPrivateSignatureBytes,
 	})
 	if validationErr != nil {
 		return Credential{}, newError(ErrorCodeKeyMismatch, ErrorLocation{Phase: PhasePreflight, Algorithm: algorithm}, ErrorDetails{})

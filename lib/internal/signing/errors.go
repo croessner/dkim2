@@ -99,8 +99,6 @@ type Algorithm = signature.Algorithm
 const (
 	AlgorithmRSASHA256     = signature.AlgorithmRSASHA256
 	AlgorithmEd25519SHA256 = signature.AlgorithmEd25519SHA256
-	// AlgorithmMLDSA44Ed25519SHA512 is the LAMPS composite mldsa44-ed25519-sha512 algorithm.
-	AlgorithmMLDSA44Ed25519SHA512 = signature.AlgorithmMLDSA44Ed25519SHA512
 )
 
 // LimitName identifies one closed signing limit or coherence rule.

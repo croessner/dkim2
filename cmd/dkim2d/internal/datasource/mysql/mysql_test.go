@@ -317,7 +317,7 @@ func TestCampaignSourceBindingMigrationKeepsFrozenSourceInProviderMetadata(t *te
 	// MySQL has no PUBLIC role and the NOLOGIN roles exist only in PostgreSQL;
 	// such statements abort fresh installs and grant nothing on upgrades.
 	upper := strings.ToUpper(text)
-	for _, forbidden := range []string{"GRANT ", "REVOKE ", " PUBLIC", "DKIM2_ACTIVATOR", "DKIM2_STAGER"} {
+	for _, forbidden := range []string{sqlGrantStatement, sqlRevokeStatement, " PUBLIC", "DKIM2_ACTIVATOR", "DKIM2_STAGER"} {
 		if strings.Contains(upper, forbidden) {
 			t.Fatal("MySQL-family source-binding migration owns routine authority")
 		}
@@ -370,7 +370,7 @@ func TestCurrentFenceSourceMigrationMatchesLockedCurrentScan(t *testing.T) {
 		t.Fatal("MySQL-family locked and unlocked current projections diverged")
 	}
 	upper := strings.ToUpper(text)
-	for _, forbidden := range []string{"GRANT ", "REVOKE ", " PUBLIC", "DKIM2_ACTIVATOR", "DKIM2_STAGER"} {
+	for _, forbidden := range []string{sqlGrantStatement, sqlRevokeStatement, " PUBLIC", "DKIM2_ACTIVATOR", "DKIM2_STAGER"} {
 		if strings.Contains(upper, forbidden) {
 			t.Fatal("MySQL-family current fence source migration owns routine authority")
 		}
@@ -409,3 +409,51 @@ func TestCandidateRootLockClassifiesAbsenceAndBackendFailure(t *testing.T) {
 		})
 	}
 }
+
+// TestCompositeRemovalMigrationFailsClosedAndRestoresAllowlist proves the
+// MySQL-family forward migration signals before any constraint change while
+// composite rows remain in any generation, then restores the rsa-sha256 and
+// ed25519-sha256 allowlist without data or authority changes.
+func TestCompositeRemovalMigrationFailsClosedAndRestoresAllowlist(t *testing.T) {
+	t.Parallel()
+	schema := filepath.Join("..", "..", "..", "..", "..", "contrib", "schema", "mysql")
+	document, err := os.ReadFile(filepath.Join(schema, "009_remove_composite_algorithm.sql"))
+	if err != nil {
+		t.Fatal("read MySQL-family composite removal migration")
+	}
+	text := string(document)
+	guard, constraints, found := strings.Cut(text, "ALTER TABLE")
+	if !found || !strings.Contains(text, "Forward-only") ||
+		!strings.Contains(guard, "WHERE algorithm = 'mldsa44-ed25519-sha512')") ||
+		!strings.Contains(guard, "FROM dkim2_credentials") || !strings.Contains(guard, "FROM dkim2_key_material") ||
+		!strings.Contains(guard, "SIGNAL SQLSTATE '45000'") ||
+		!strings.Contains(guard, "CALL dkim2_require_no_composite_algorithm();\nDROP PROCEDURE dkim2_require_no_composite_algorithm;") {
+		t.Fatal("MySQL-family composite removal migration does not fail closed before altering constraints")
+	}
+	for _, required := range []string{
+		"ADD CONSTRAINT dkim2_credential_algorithm\n    CHECK (algorithm IN ('rsa-sha256', 'ed25519-sha256'));",
+		"ADD CONSTRAINT dkim2_key_algorithm\n    CHECK (algorithm IN ('rsa-sha256', 'ed25519-sha256'));",
+	} {
+		if !strings.Contains("ALTER TABLE"+constraints, required) {
+			t.Fatal("MySQL-family composite removal migration does not restore the allowlist")
+		}
+	}
+	upper := strings.ToUpper(text)
+	for _, forbidden := range compositeRemovalForbiddenStatements {
+		if strings.Contains(upper, forbidden) {
+			t.Fatal("MySQL-family composite removal migration mutates data or authority")
+		}
+	}
+}
+
+// sqlGrantStatement is the upper-case GRANT keyword that migrations owning no
+// authority must never contain.
+const sqlGrantStatement = "GRANT "
+
+// sqlRevokeStatement is the upper-case REVOKE keyword that migrations owning
+// no authority must never contain.
+const sqlRevokeStatement = "REVOKE "
+
+// compositeRemovalForbiddenStatements lists data and authority statements the
+// composite removal migration must never contain.
+var compositeRemovalForbiddenStatements = []string{sqlGrantStatement, sqlRevokeStatement, "DELETE ", "UPDATE ", "DROP TABLE"}

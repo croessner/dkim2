@@ -102,9 +102,6 @@ const (
 	AlgorithmRSASHA256 = datasource.AlgorithmRSASHA256
 	// AlgorithmEd25519SHA256 identifies Ed25519-SHA256 credentials.
 	AlgorithmEd25519SHA256 = datasource.AlgorithmEd25519SHA256
-	// AlgorithmMLDSA44Ed25519SHA512 identifies LAMPS composite
-	// mldsa44-ed25519-sha512 credentials.
-	AlgorithmMLDSA44Ed25519SHA512 = datasource.AlgorithmMLDSA44Ed25519SHA512
 )
 
 // ParseAlgorithm accepts exactly one signable credential algorithm token.
@@ -118,7 +115,7 @@ func ParseAlgorithm(value string) (Algorithm, error) {
 }
 
 // SigningAlgorithms returns the signable credential algorithms in canonical
-// signing order: rsa-sha256, ed25519-sha256, mldsa44-ed25519-sha512.
+// signing order: rsa-sha256, then ed25519-sha256.
 func SigningAlgorithms() []Algorithm { return signature.SigningAlgorithmOrder() }
 
 // ProfileUse identifies one administrative profile-selection purpose.

@@ -3,7 +3,6 @@ package signing
 import (
 	"math"
 
-	"github.com/croessner/dkim2/internal/cryptodkim2"
 	"github.com/croessner/dkim2/internal/instance"
 	"github.com/croessner/dkim2/internal/rawmsg"
 	"github.com/croessner/dkim2/internal/signature"
@@ -120,8 +119,7 @@ func (l Limits) Validate() error {
 		l.MaxGeneratedSignatureSets > l.MaxSignatureSetsPerField ||
 		l.MaxGeneratedSignatureSets > l.MaxTotalSignatureSets ||
 		l.MaxGeneratedSignatureSets > l.MaxPrivateSigningCalls ||
-		l.MaxPrivateSignatureBytes < (l.MaxRSABits+7)/8 ||
-		l.MaxPrivateSignatureBytes < cryptodkim2.CompositeSignatureBytes {
+		l.MaxPrivateSignatureBytes < (l.MaxRSABits+7)/8 {
 		return optionsError(LimitNameLimitCoherence, 0)
 	}
 	if _, err := instance.PreflightSigningField(1, l.MaxDecodedRecipeBytes, true, instance.RenderLimits{
@@ -198,12 +196,4 @@ func optionsError(name LimitName, actual int) *Error {
 // limitError constructs one bounded limit failure.
 func limitError(name LimitName, limit, actual int) *Error {
 	return newError(ErrorCodeLimitExceeded, ErrorLocation{Phase: PhasePreflight}, ErrorDetails{LimitName: name, Limit: limit, Actual: actual})
-}
-
-// cryptoSignatureCap maps the private signature ceiling to the cryptodkim2
-// cap for RSA and Ed25519 values. cryptodkim2 checks the 2484-byte composite
-// signature by its exact size, so only the smaller non-composite cap is
-// forwarded.
-func (l Limits) cryptoSignatureCap() int {
-	return min(l.MaxPrivateSignatureBytes, cryptodkim2.DefaultLimits().MaxSignatureBytes)
 }
