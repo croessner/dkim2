@@ -420,11 +420,14 @@ a stable DKIM2 prefix with at least 128 bits of `crypto/rand` entropy encoded in
 a closed DNS-label-safe alphabet. Time alone is never a selector and failed or
 aborted selectors are never reused automatically.
 
-Selector prefixes are `d2r-` for `rsa-sha256` and `d2e-` for
-`ed25519-sha256`. Rotation campaigns derive their own selectors with the
-single-letter prefixes `r` and `e`; the two namespaces are deliberately
-distinct. Intents that name any other algorithm, including the unsupported
-post-quantum `mldsa44-ed25519-sha512`, are invalid.
+Selector prefixes are `d2r-` for `rsa-sha256`, `d2e-` for
+`ed25519-sha256`, and `d2m-` for `mldsa44`. Rotation campaigns derive their
+own selectors with the single-letter prefixes `r`, `e`, and `m`; the two
+namespaces are deliberately distinct, and every selector of a profile is
+distinct across all `s=` groups. Intents that name any other algorithm,
+including the removed Draft-07 composite `mldsa44-ed25519-sha512`, are
+invalid. An `mldsa44` custody key is generated from a nonzero 32-byte seed
+and stored in the seed-only PKCS#8 form.
 
 RSA generation uses the configured approved modulus size and exponent policy.
 Ed25519 generation uses the standard library. Both go through the
@@ -750,8 +753,10 @@ nonoverlapping. Commands never assemble or start the daemon.
 
 Human and machine complete-operation reports contain schema, tool version,
 operation state, backend class, expected and candidate generations, bounded
-credential and algorithm counts (`rsa_credential_count` and
-`ed25519_credential_count`, which sum to `credential_count`), phase
+credential and algorithm counts (`rsa_credential_count`,
+`ed25519_credential_count`, and `mldsa44_credential_count`, which sum to
+`credential_count`; the `mldsa44` count is an additive field of the
+unchanged `dkim2-domain-report-v1` schema), phase
 booleans, result, and closed failure
 class. Current generation has separate explicit presence: success and full
 status require an authoritative value, including an explicitly present zero

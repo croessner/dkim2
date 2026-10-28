@@ -580,3 +580,87 @@ because the draft identifier is bound into the replay frame.
   provider failure, and unknown algorithm; REST JSON goldens for pass,
   permerror, and temperror sets; boundary rule tests in Milter, Exim, and
   `dkim2ctl`.
+
+## 13. ML-DSA-44 and key state
+
+- C1, C32, N2 to N4: pure ML-DSA-44 (`mldsa44`) is verified and signed.
+  Spec-08 Section 3.4: "the field values are input directly into the
+  signature algorithm without being hashed first", and the five octets
+  `DKIM2` are the context string for signing and verifying; this matches the
+  plan. `lib/internal/cryptodkim2` is the single owner of the message
+  representative (`MessageRepresentative`): SHA-256 of the Section 12.8 input
+  for `rsa-sha256` and `ed25519-sha256`, the complete input for `mldsa44`.
+  Signer (`signing`), verifier (`verify`, including revision and history
+  paths), and the signer's completion self-check use it. `MLDSA44SignerOptions`
+  owns the context string; custody signers call the hedged `crypto/mldsa`
+  `Sign`, never `SignDeterministic`.
+- Sizes are exact: a 1312-octet public key (any other length, an SPKI
+  wrapper, or another parameter set is `invalid_key`, Section 14.5
+  "malformed") and a 2420-octet signature (any other decoded length is
+  `invalid_signature_length` at parse time, the same malformed-field
+  classification as a wrong-length Ed25519 value). The single 1024-octet
+  signature cap became per-algorithm bounds: RSA 1024 (8192-bit modulus),
+  Ed25519 64, ML-DSA-44 2420; the generated-field and private-callback
+  ceilings are 2420 and may not be narrowed below it.
+- DNS: `k=mldsa44` with the raw key in `p=` is the local interpretation
+  `DKIM2-ISSUE-0020`; `h=` is ignored; `k=`/algorithm disagreement in either
+  direction is `key_algorithm_mismatch`. DNS-02's extra algorithm names
+  (`DKIM2-ISSUE-0021`) and its inconsistent composite key-type spelling
+  (`DKIM2-ISSUE-0022`) are recorded; both composite spellings are
+  unsupported key types. `DKIM2-ISSUE-0019` is superseded by the baseline.
+- Runtime guard: `cryptodkim2.MLDSA44Available` probes `crypto/mldsa`. Built
+  against the FIPS 140-3 Go Cryptographic Module v1.0.0 (no ML-DSA), verifier
+  policy validation rejects `mldsa44` (`unsupported_algorithm`), `mldsa44`
+  credentials fail with `unsupported_algorithm`, and `dkim2d serve` and
+  `dkim2d validate` refuse to start with a fixed diagnostic before loading
+  configuration. `make test-fips140-mldsa44` runs these guards under
+  `GOFIPS140=v1.0.0` as part of `make test`.
+- Signer layout: the existing fixed layout puts `mldsa44` in a separate `|`
+  group after the classical `sig-all` group; all values cover the same
+  unsigned field. Proven end to end with real keys: all three algorithms
+  pass; a verifier with `mldsa44` disabled by policy passes through the
+  classical group; a verifier allowing only `mldsa44` passes through its
+  group; an `mldsa44`-only profile emits one group. Profiles reject duplicate
+  selectors across every group.
+- Public API: `PrivateKeySignRequest.MessageRepresentative` (the deprecated
+  `Digest` returns nil for `mldsa44`), mldsa44 credential, profile, and
+  next-domain constructors, the sealed `SigningCredential` with
+  `NewSigningProfile`, `FoundMLDSA44PublicKey`,
+  `PublicKeyResult.MLDSA44PublicKey`, `MLDSA44SignerOptions`, and
+  `MLDSA44Available`; observation, service, and policy algorithm vocabularies
+  append `mldsa44` without renumbering. Breaking changes are listed in
+  `docs/reference/compatibility.md`. OpenAPI `SignatureSetResult.algorithm`
+  and `VerifierHop.signature_algorithms` gain `mldsa44`; every generated
+  artifact and the Rspamd vocabulary were regenerated or updated.
+- Custody: `cmd/dkim2d/internal/signingstore` loads the seed-only PKCS#8 form
+  (exact `crypto/x509` re-marshal, ML-DSA-44 parameter set, nonzero seed),
+  derives the SPKI and matches it against the stored credential, generates
+  keys from a 32-byte seed of the injected reader, and signs hedged. The seed
+  and expanded key live inside `crypto/mldsa` and cannot be zeroized; only
+  owned DER and seed buffers are cleared (documented gap).
+- Interop with `opendkim-manage-go` (commit f9148dc): a credential produced by
+  its `dkim2model.GenerateKeyPair` code path (seed-only PKCS#8, PKIX SPKI,
+  `v=DKIM1; k=mldsa44; p=...` without `h=`, the raw DER values it writes to
+  `dkim2PrivateKeyPKCS8` and `dkim2PublicKeySPKI`) loads through the shared
+  native custody codec, signs, and verifies against its DNS record through
+  the DNS key provider; the dkim2d DNS export renders the identical record.
+  LDAP needs no schema change.
+- Datasource limits: three credentials per profile; record ceilings
+  `1024*3 + 1024 + 2048 + 4096 = 10240` and
+  `32768*3 + 32768 + 65536 + 65536 = 262144`. Handle ceilings are unchanged.
+  Memory, flat-file, LDAP, and the shared SQL snapshot mapper (PostgreSQL,
+  MySQL, MariaDB) accept the same three-algorithm profile and reject it under
+  a two-credential bound. Forward migration `010_mldsa44_algorithm.sql`
+  (PostgreSQL, MySQL/MariaDB) widens the algorithm constraints and is wired
+  into `scripts/test-datasource-services.sh`.
+- Tools: `dkim2d datasource key generate --algorithm mldsa44`, the DNS
+  export, onboarding selectors (`d2m-`), rotation campaign selectors (`m`),
+  and the domain report (`mldsa44_credential_count`, additive within
+  `dkim2-domain-report-v1`) handle the algorithm.
+- Tests: a known-answer vector (fixed seed, deterministic signature with ctx
+  `DKIM2` reproduced byte for byte by OpenSSL 4.0.3, plus an OpenSSL hedged
+  signature verified by the shared verifier), wrong-length key and signature
+  reproducers, a 3228-character `s=` headerfold round trip, fuzz seeds,
+  phased-deployment and three-algorithm facade round trips, provider parity,
+  the opendkim-manage-go interop proof, migration contracts, and the FIPS
+  v1.0.0 fail-closed guards.

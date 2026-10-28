@@ -727,12 +727,17 @@ diagnostic client or another adapter. The datasource is the closed
 [`docs/specs/implementation/datasource-providers.md`](../../docs/specs/implementation/datasource-providers.md).
 The private manifest is `dkim2-private-keys-v1`; every entry binds one exact
 tenant, domain, `originator`, `ordinary_transit`, or `delivery_status` use, opaque datasource
-handle, `rsa-sha256` or `ed25519-sha256` algorithm, canonical Base64 SHA-256
+handle, `rsa-sha256`, `ed25519-sha256`, or `mldsa44` algorithm, canonical Base64 SHA-256
 digest of the public SPKI, and direct-child private-key filename. A
 private-key child is one unencrypted PKCS#8 `PRIVATE KEY` PEM whose derived
 public key matches that digest, algorithm, datasource credential, and handle.
-The post-quantum `mldsa44-ed25519-sha512` composite is not supported (see
-[`docs/reference/known-limitations.md`](../../docs/reference/known-limitations.md));
+An `mldsa44` key is the seed-only PKCS#8 form (OID 2.16.840.1.101.3.4.3.17,
+the 32-byte seed, 54 octets of DER) that `crypto/x509` and
+`opendkim-manage-go` produce; any other encoding, parameter set, or an
+all-zero seed fails the load. A flat-file profile lists its credentials in
+canonical order `rsa-sha256`, `ed25519-sha256`, `mldsa44` and holds at most
+three. The Draft-07 composite `mldsa44-ed25519-sha512` is not supported (see
+[`docs/reference/known-limitations.md`](../../docs/reference/known-limitations.md#post-quantum-algorithms));
 a manifest entry, datasource credential, or key that declares it fails the
 complete load.
 
@@ -749,8 +754,12 @@ existing path. Standard output carries only public material: the
 `public_key_spki` value for the datasource credential, the
 `public_spki_sha256` value for the manifest entry, and the zone-file TXT
 record from the same record owner and DNS-02 parser round trip as the domain
-DNS export. `--algorithm` accepts `rsa-sha256` or `ed25519-sha256`;
-`--rsa-bits` selects 2048, 3072, or 4096 for `rsa-sha256`. The OpenDKIM
+DNS export. `--algorithm` accepts `rsa-sha256`, `ed25519-sha256`, or
+`mldsa44`; `--rsa-bits` selects 2048, 3072, or 4096 for `rsa-sha256`. An
+`mldsa44` record is `v=DKIM1; k=mldsa44; p=<raw 1312-octet key>` without
+`h=` (local interpretation `DKIM2-ISSUE-0020`, the same form
+`opendkim-manage-go` publishes); its 1752-character `p=` value is split into
+TXT strings of at most 255 octets. The OpenDKIM
 bootstrap imports only legacy `rsa` and `ed25519` keys. Unknown fields, duplicate
 bindings, aliasing children, mixed identities, encrypted or legacy PEM, and
 partial generations fail the complete load. Documentation and test fixtures

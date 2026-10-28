@@ -20,7 +20,7 @@ func TestDomainReportsHaveClosedBoundedMachineAndHumanSchemas(t *testing.T) {
 	report, err := NewCommandReport("test-version", CommandActivate, datasourceadmin.BackendLDAP, OnboardingResult{
 		State: StateActivated, Result: OnboardingResultSuccess, Failure: CodeNone,
 		ExpectedCurrentGeneration: 7, CurrentGeneration: 8, CurrentGenerationKnown: true, CandidateGeneration: 8,
-		CredentialCount: 2, RSACredentialCount: 1, Ed25519CredentialCount: 1,
+		CredentialCount: 3, RSACredentialCount: 1, Ed25519CredentialCount: 1, MLDSA44CredentialCount: 1,
 		RuntimeVerificationRequired: true, PlanComplete: true,
 	})
 	if err != nil {
@@ -30,16 +30,17 @@ func TestDomainReportsHaveClosedBoundedMachineAndHumanSchemas(t *testing.T) {
 	if err != nil {
 		t.Fatal("encode bounded machine report")
 	}
-	want := "{\"schema\":\"dkim2-domain-report-v1\",\"tool_version\":\"test-version\",\"command\":\"activate\",\"state\":\"activated\",\"backend\":\"ldap\",\"expected_current_generation\":7,\"current_generation\":8,\"candidate_generation\":8,\"credential_count\":2,\"rsa_credential_count\":1,\"ed25519_credential_count\":1,\"plan_complete\":true,\"runtime_smoke_required\":true,\"result\":\"success\",\"failure\":\"none\"}\n"
+	want := "{\"schema\":\"dkim2-domain-report-v1\",\"tool_version\":\"test-version\",\"command\":\"activate\",\"state\":\"activated\",\"backend\":\"ldap\",\"expected_current_generation\":7,\"current_generation\":8,\"candidate_generation\":8,\"credential_count\":3,\"rsa_credential_count\":1,\"ed25519_credential_count\":1,\"mldsa44_credential_count\":1,\"plan_complete\":true,\"runtime_smoke_required\":true,\"result\":\"success\",\"failure\":\"none\"}\n"
 	if string(machine) != want {
 		t.Fatal("machine report schema drifted")
 	}
 	var decoded map[string]any
-	if json.Unmarshal(machine, &decoded) != nil || len(decoded) != 15 {
+	if json.Unmarshal(machine, &decoded) != nil || len(decoded) != 16 {
 		t.Fatal("machine report admitted an unknown field")
 	}
 	human, err := EncodeReport(report, false, 4096)
 	if err != nil || !bytes.Contains(human, []byte("runtime_smoke_required=true")) ||
+		!bytes.Contains(human, []byte("mldsa44_credential_count=1")) ||
 		bytes.Contains(human, []byte("verified")) {
 		t.Fatal("human report made an unsupported runtime verification claim")
 	}

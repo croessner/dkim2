@@ -203,7 +203,7 @@ func TestProfileCanonicalizesCredentialsAndRejectsDuplicates(t *testing.T) {
 		code        ErrorCode
 	}{
 		{name: "empty", credentials: nil, code: ErrorCodeInvalidRequest},
-		{name: "too many", credentials: []Credential{rsaCredential, edCredential, rsaCredential}, code: ErrorCodeLimitExceeded},
+		{name: "too many", credentials: []Credential{rsaCredential, edCredential, rsaCredential, edCredential}, code: ErrorCodeLimitExceeded},
 		{name: "duplicate algorithm", credentials: []Credential{rsaCredential, sameAlgorithm}, code: ErrorCodeInvalidRequest},
 		{name: "duplicate selector", credentials: []Credential{rsaCredential, sameSelector}, code: ErrorCodeInvalidRequest},
 		{name: "duplicate handle", credentials: []Credential{rsaCredential, sameHandle}, code: ErrorCodeInvalidRequest},

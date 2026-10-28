@@ -340,11 +340,49 @@ or raw errors to telemetry. Alert when readiness remains false beyond one
 configured reload interval or datasource operations enter a non-success class;
 correlate through bounded logs without widening redaction.
 
+## ML-DSA-44 Credentials
+
+Draft-08 Section 3.4 pure ML-DSA-44 (`mldsa44`) is a signable credential
+algorithm in every backend through the same admission owner
+(`provider.ParseAlgorithm`) and the same custody codec. A signing profile
+holds at most three credentials, one per algorithm (`rsa-sha256`,
+`ed25519-sha256`, `mldsa44`), with selectors distinct across the whole
+profile; the daemon emits `s=` as `rsa,ed25519 | mldsa44`.
+
+- LDAP: no schema change. `dkim2Algorithm` carries `mldsa44`,
+  `dkim2PublicKeySPKI` the 1334-octet PKIX SubjectPublicKeyInfo (OID
+  2.16.840.1.101.3.4.3.17), and `dkim2PrivateKeyPKCS8` the 54-octet
+  seed-only PKCS#8 DER. These are exactly the raw DER values
+  `opendkim-manage-go` writes.
+- PostgreSQL and MySQL/MariaDB: apply forward migration
+  `010_mldsa44_algorithm.sql`, which widens both algorithm constraints to
+  `rsa-sha256`, `ed25519-sha256`, `mldsa44`. The existing size checks already
+  cover the key sizes.
+- Flat files: list credentials in canonical order (`mldsa44` last) and point
+  the private-key manifest entry at a `PRIVATE KEY` PEM holding the seed-only
+  PKCS#8 DER.
+- The loader re-marshals every ML-DSA-44 key and requires the seed-only
+  encoding, the ML-DSA-44 parameter set, a nonzero seed, and a derived SPKI
+  equal to the stored one. Signing uses the hedged `crypto/mldsa` `Sign` with
+  the context string `DKIM2`.
+- `crypto/mldsa` keeps the seed and the expanded key internally without
+  mutable storage, so they cannot be zeroized; the daemon clears only the
+  PKCS#8 and seed buffers it owns. Treat process memory like any other
+  signing-key custody.
+- The datasource record ceilings are 10240 (default) and 262144
+  (production): `profiles * 3 + profiles + handles + policies`.
+
+Upgrade order: upgrade `dkim2d` (the new release accepts three credentials
+and ML-DSA-44 custody), apply `010_mldsa44_algorithm.sql`, then publish
+generations with `mldsa44` credentials and their `k=mldsa44` DNS records. A
+binary built against the FIPS 140-3 Go Cryptographic Module v1.0.0 refuses to
+start because it has no ML-DSA.
+
 ## Removed Composite Algorithm
 
-The post-quantum `mldsa44-ed25519-sha512` composite is no longer a known
-algorithm (see
-[`known-limitations.md`](../reference/known-limitations.md#post-quantum-composite-algorithm)).
+The Draft-07 post-quantum `mldsa44-ed25519-sha512` composite is no longer a
+known algorithm (see
+[`known-limitations.md`](../reference/known-limitations.md#post-quantum-algorithms)).
 Every backend admits stored algorithms through one owner, so a credential, a
 custody key, or a private-key manifest entry that declares it is malformed
 data:

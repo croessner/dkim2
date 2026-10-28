@@ -84,6 +84,7 @@
 | 0.1.0-draft | 2026-10-26 | Christian Roessner / Claude | Removed the post-quantum `mldsa44-ed25519-sha512` composite (ML-DSA-44 plus Ed25519, LAMPS construction) from the library, `dkim2d`, the adapters, `dkim2ctl`, the OpenAPI contract, the Rspamd contrib, and the vectors. The DKIM working group has not settled the DKIM2 post-quantum construction (October 2026 list discussion: separate multiple signatures, LAMPS composite, or plain ML-DSA-44; to be revisited at IETF 127), so the implementation does not ship a construction that may not be standardized. The baseline stays `draft-ietf-dkim-dkim2-spec-07` plus `draft-ietf-dkim-dkim2-dns-01` with this documented deviation (`DKIM2-ISSUE-0019`): composite sets are unknown algorithms ignored with `unsupported_algorithm`, `k=mldsa44-ed25519-sha512` records are unsupported key types, composite credentials fail closed, and forward SQL migration `009_remove_composite_algorithm.sql` restores the two-algorithm constraints and refuses to run while composite rows remain. `lib/headerfold` and the adapter refolding stay. |
 | 0.1.0-draft | 2026-10-28 | Christian Roessner / Claude | Advanced the message baseline to `draft-ietf-dkim-dkim2-spec-08` and the DNS companion to `draft-ietf-dkim-dkim2-dns-02`. Draft identifiers, generated contracts, versioned vectors (with Draft-07 and DNS-01 copies under `lib/testdata/vectors/history/`), draft-bound goldens, and section citations (new Sections 13.1 and 16.2) move together without a protocol behavior change; behavior changes follow the work packages in `docs/specs/draft-08-migration-disposition.md`. |
 | 0.1.0-draft | 2026-10-28 | Christian Roessner / Claude | Remapped verification states to Draft-08 Section 14.1 "Fully Verified DKIM2 Message": timestamp, envelope, MAIL FROM and `d=` alignment, `nd=`, custody adjacency (new `custody_mismatch`), unmet out-of-band, and From-authenticity failures are FAIL; a history with a null body Recipe is FAIL `body_history_unavailable` instead of a PASS with partial history and transit or revision signing refuses it; Recipe schema and application errors are PERMERROR `invalid_recipe`, separate from `invalid_recipe_json`. `policy.ProtocolForVerificationReason` is the single owner of the reason-to-state classification. Policy verdicts, Milter, and Exim SMTP outcomes are unchanged except for the null body Recipe history, which strict mode now rejects. |
+| 0.1.0-draft | 2026-10-28 | Christian Roessner / Claude | Added Draft-08 Section 3.4 pure ML-DSA-44 (`mldsa44`) for verification and signing. `lib/internal/cryptodkim2` owns each algorithm's message representative (SHA-256 digest for `rsa-sha256` and `ed25519-sha256`, the complete Section 12.8 input for `mldsa44`, signed with hedged `crypto/mldsa` and the context string `DKIM2`), exact 1312/2420-octet key and signature sizes, per-algorithm signature caps, and the ML-DSA runtime guard (the FIPS 140-3 Go Cryptographic Module v1.0.0 fails closed). DNS `k=mldsa44` with a raw `p=` is a local interpretation (`DKIM2-ISSUE-0020`); the signer emits `rsa,ed25519 \| mldsa44`; `PrivateKeySignRequest` carries the message representative; the composite stays unimplemented (`DKIM2-ISSUE-0019` superseded). |
 
 ## 1. Purpose
 
@@ -2337,29 +2338,39 @@ Crypto code should wrap standard, audited Go libraries.
 
 Rules:
 
-- Use `crypto/rsa` and `crypto/ed25519`.
+- Use `crypto/rsa`, `crypto/ed25519`, and `crypto/mldsa`.
 - Implement SHA-256 and SHA-512 for Message-Instance body and header hashes.
-  RSA-SHA256 and Ed25519-SHA256 signature inputs continue to use SHA-256.
-- Verifiers and signers implement `rsa-sha256` and `ed25519-sha256`. The
-  post-quantum `mldsa44-ed25519-sha512` composite of Draft-08 Section 3.4 is a
-  deliberate deviation (`DKIM2-ISSUE-0019`): the DKIM working group has not
-  settled the DKIM2 post-quantum construction (separate multiple signatures,
-  the LAMPS composite, or plain ML-DSA-44; to be revisited at IETF 127), so no
-  construction that may not be standardized ships. Composite sets are unknown
-  algorithms, and the default verifier policy cannot enable the token.
-- A signing profile holds at most one credential per algorithm and emits one
-  signature set per credential in the canonical order `rsa-sha256`,
-  `ed25519-sha256` (`signature.SigningAlgorithmOrder`). The signer computes
-  the per-algorithm signature-input digest (`cryptodkim2.DigestBytes`,
-  SHA-256 for both algorithms) and hands it to the `PrivateKeySigner`
-  callback; the library still never holds private keys. Generated RSA
-  signatures stay bounded at 1024 bytes.
+  RSA-SHA256 and Ed25519-SHA256 signature inputs continue to use SHA-256;
+  pure ML-DSA-44 signs the Section 12.8 input itself (no HashML-DSA).
+- Verifiers and signers implement the three Draft-08 Section 3 algorithms
+  `rsa-sha256`, `ed25519-sha256`, and `mldsa44`. The Draft-07 composite
+  `mldsa44-ed25519-sha512` that Draft-08 replaced stays an unknown algorithm
+  (`DKIM2-ISSUE-0019`, superseded by the baseline).
+- `lib/internal/cryptodkim2` is the single owner of the message
+  representative (`MessageRepresentative`: the SHA-256 digest for the
+  classical algorithms, the complete input for `mldsa44`), of the
+  `mldsa44` context string `DKIM2` (`MLDSA44SignerOptions`), of exact key and
+  signature sizes, of the per-algorithm signature caps (1024 octets for RSA,
+  64 for Ed25519, 2420 for ML-DSA-44), and of the ML-DSA runtime guard
+  (`MLDSA44Available`). A binary built against the FIPS 140-3 Go
+  Cryptographic Module v1.0.0, which has no ML-DSA, fails closed: verifier
+  policy validation, `mldsa44` credentials, and `dkim2d` startup refuse it.
+- A signing profile holds at most one credential per algorithm (at most
+  three) with selectors distinct across every `s=` group. The signer fixes
+  the layout before any value is computed: the classical credentials form
+  one `sig-all` group and an `mldsa44` credential is a separate `sig-any`
+  alternative (`rsa,ed25519 | mldsa44`); every signature covers the same
+  unsigned field rendered from that layout. The signer hands the
+  `PrivateKeySigner` callback the per-algorithm message representative; the
+  library still never holds private keys. Production ML-DSA signing uses the
+  hedged `crypto/mldsa` `Sign`, never `SignDeterministic`.
 - In `dkim2d`, `cmd/dkim2d/internal/signingstore` is the single custody key
-  codec for both algorithms: PKCS#8 parsing and canonical re-encoding,
-  public SPKI derivation, key generation for onboarding and rotation, signing,
-  and best-effort clearing. Datasource mappers and administration admit
-  algorithms only through `provider.ParseAlgorithm`, so a stored composite
-  credential is malformed data.
+  codec for all three algorithms: PKCS#8 parsing (seed-only form for
+  ML-DSA-44) and canonical re-encoding, public SPKI derivation, key
+  generation for onboarding and rotation, signing, and best-effort clearing.
+  Datasource mappers and administration admit algorithms only through
+  `provider.ParseAlgorithm`, so a stored composite credential is malformed
+  data.
 - Accept and preserve syntactically valid unknown algorithm tokens at protocol
   parsing boundaries for draft forward compatibility, but never execute them.
   Ignore unknown Message-Instance hash tuples only as the active draft permits,

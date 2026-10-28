@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/ed25519"
+	"crypto/mldsa"
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/base64"
@@ -326,9 +327,11 @@ func FormatCanonicalDNSRecord(
 }
 
 // dnsKeyValue derives the DNS-02 key-record k= token and raw p= bytes from
-// one canonical credential SPKI: PKCS#1 for rsa and the raw 32-byte key for
-// ed25519. Non-canonical SPKI, a key of another algorithm, or any other
-// algorithm fails closed.
+// one canonical credential SPKI: PKCS#1 for rsa, the raw 32-byte key for
+// ed25519, and the raw 1312-octet FIPS 204 key for mldsa44 (k=mldsa44, the
+// local interpretation DKIM2-ISSUE-0020 that opendkim-manage-go also
+// publishes). Non-canonical SPKI, a key of another algorithm or ML-DSA
+// parameter set, or any other algorithm fails closed.
 func dnsKeyValue(algorithm provider.Algorithm, publicSPKI []byte) (string, []byte, error) {
 	public, err := x509.ParsePKIXPublicKey(publicSPKI)
 	if err != nil {
@@ -353,6 +356,12 @@ func dnsKeyValue(algorithm provider.Algorithm, publicSPKI []byte) (string, []byt
 			return "", nil, newError(CodeDNSAlgorithmMismatch)
 		}
 		return "ed25519", bytes.Clone(key), nil
+	case provider.AlgorithmMLDSA44:
+		key, ok := public.(*mldsa.PublicKey)
+		if !ok || key == nil || key.Parameters() != mldsa.MLDSA44() {
+			return "", nil, newError(CodeDNSAlgorithmMismatch)
+		}
+		return string(provider.AlgorithmMLDSA44), key.Bytes(), nil
 	default:
 		return "", nil, newError(CodeDNSUnsupported)
 	}

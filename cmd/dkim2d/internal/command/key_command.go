@@ -61,7 +61,7 @@ func newKeyCommand(stdout io.Writer) (*cobra.Command, error) {
 		},
 	}
 	flags := generate.Flags()
-	flags.StringVar(&options.algorithm, "algorithm", "", "rsa-sha256 or ed25519-sha256")
+	flags.StringVar(&options.algorithm, "algorithm", "", "rsa-sha256, ed25519-sha256, or mldsa44")
 	flags.StringVar(&options.domain, "domain", "", "signing domain of the DNS key record")
 	flags.StringVar(&options.selector, "selector", "", "selector of the DNS key record")
 	flags.StringVar(&options.privateKey, "private-key", "", "absolute path of the new owner-only PKCS#8 PEM file")

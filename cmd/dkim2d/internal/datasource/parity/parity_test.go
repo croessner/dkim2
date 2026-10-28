@@ -29,6 +29,11 @@ const (
 	testActiveStatus            = "active"
 	testAlgorithm               = "ed25519-sha256"
 	testProfileUse              = "originator"
+	testLDAPHandleAttribute     = "dkim2HandleID"
+	testDomainField             = "domain"
+	testStatusField             = "status"
+	testRollout                 = "enforce"
+	testCompatibility           = "strict"
 )
 
 type resolver interface {
@@ -223,7 +228,7 @@ func ldapRecords(spki []byte) datasourceldap.DatasetRecords {
 		Handles: []datasourceldap.Entry{{
 			Class: datasourceldap.RecordClassHandle,
 			Attributes: map[string][][]byte{
-				testLDAPGenerationAttribute: value("1"), "dkim2HandleID": value(testHandle),
+				testLDAPGenerationAttribute: value("1"), testLDAPHandleAttribute: value(testHandle),
 			},
 		}},
 		Profiles: []datasourceldap.Entry{{
@@ -238,8 +243,8 @@ func ldapRecords(spki []byte) datasourceldap.DatasetRecords {
 			Attributes: map[string][][]byte{
 				testLDAPGenerationAttribute: value("1"), testLDAPProfileAttribute: value(testProfile),
 				"dkim2Algorithm": value(testAlgorithm), "dkim2Selector": value(testSelector),
-				"dkim2PublicKeySPKI": [][]byte{append([]byte(nil), spki...)},
-				"dkim2HandleID":      value(testHandle),
+				"dkim2PublicKeySPKI":    [][]byte{append([]byte(nil), spki...)},
+				testLDAPHandleAttribute: value(testHandle),
 			},
 		}},
 		Policies: []datasourceldap.Entry{{
@@ -248,7 +253,7 @@ func ldapRecords(spki []byte) datasourceldap.DatasetRecords {
 				testLDAPGenerationAttribute: value("1"), "dkim2TenantID": value(testTenant),
 				"dkim2SigningDomain": value(testDomain), "dkim2ProfileUse": value(testProfileUse),
 				testLDAPProfileAttribute: value(testProfile), "dkim2RecordStatus": value(testActiveStatus),
-				"dkim2Rollout": value("enforce"), "dkim2Compatibility": value("strict"),
+				"dkim2Rollout": value(testRollout), "dkim2Compatibility": value(testCompatibility),
 			},
 		}},
 	}
@@ -276,7 +281,7 @@ func postgresqlRows(spki, pkcs8 []byte) datasourcepostgresql.DatasetRows {
 		Policies: []datasourcepostgresql.PolicyRow{{
 			Generation: "1", TenantID: testTenant, Domain: testDomain,
 			Use: testProfileUse, ProfileID: testProfile, Status: testActiveStatus,
-			Rollout: "enforce", Compatibility: "strict",
+			Rollout: testRollout, Compatibility: testCompatibility,
 		}},
 		KeyMaterial: []datasourcepostgresql.KeyMaterialRow{{
 			Generation: "1", TenantID: testTenant, Domain: testDomain,
@@ -293,7 +298,7 @@ func flatDocument(t *testing.T, spki []byte) []byte {
 		"version": "dkim2-datasource-v1",
 		"handles": []any{map[string]any{"id": testHandle}},
 		"profiles": []any{map[string]any{
-			"id": testProfile, "domain": testDomain, "status": testActiveStatus,
+			"id": testProfile, testDomainField: testDomain, testStatusField: testActiveStatus,
 			"credentials": []any{map[string]any{
 				"algorithm": testAlgorithm, "selector": testSelector,
 				"public_key_spki": base64.StdEncoding.EncodeToString(spki),
@@ -301,9 +306,9 @@ func flatDocument(t *testing.T, spki []byte) []byte {
 			}},
 		}},
 		"policies": []any{map[string]any{
-			"tenant_id": testTenant, "domain": testDomain, "use": testProfileUse,
-			"profile_id": testProfile, "status": testActiveStatus, "rollout": "enforce",
-			"compatibility": "strict",
+			"tenant_id": testTenant, testDomainField: testDomain, "use": testProfileUse,
+			"profile_id": testProfile, testStatusField: testActiveStatus, "rollout": testRollout,
+			"compatibility": testCompatibility,
 		}},
 	})
 	if err != nil {

@@ -24,6 +24,7 @@ type Report struct {
 	credentialCount        uint32
 	rsaCredentialCount     uint32
 	ed25519CredentialCount uint32
+	mldsa44CredentialCount uint32
 	planComplete           bool
 	receiptPresent         bool
 	receiptPhase           ReceiptPhase
@@ -47,6 +48,7 @@ type reportDocument struct {
 	CredentialCount           *uint32               `json:"credential_count,omitempty"`
 	RSACredentialCount        *uint32               `json:"rsa_credential_count,omitempty"`
 	Ed25519CredentialCount    *uint32               `json:"ed25519_credential_count,omitempty"`
+	MLDSA44CredentialCount    *uint32               `json:"mldsa44_credential_count,omitempty"`
 	PlanComplete              bool                  `json:"plan_complete"`
 	ReceiptPresent            bool                  `json:"receipt_present,omitempty"`
 	ReceiptPhase              ReceiptPhase          `json:"receipt_phase,omitempty"`
@@ -75,8 +77,9 @@ func NewCommandReport(
 		currentKnown: result.CurrentGenerationKnown,
 		candidate:    result.CandidateGeneration, credentialCount: result.CredentialCount,
 		rsaCredentialCount: result.RSACredentialCount, ed25519CredentialCount: result.Ed25519CredentialCount,
-		runtimeSmokeRequired: result.RuntimeVerificationRequired,
-		result:               result.Result, failure: result.Failure, initialized: true,
+		mldsa44CredentialCount: result.MLDSA44CredentialCount,
+		runtimeSmokeRequired:   result.RuntimeVerificationRequired,
+		result:                 result.Result, failure: result.Failure, initialized: true,
 	}
 	if !report.valid() {
 		return Report{}, newError(CodeProtectedInput)
@@ -98,7 +101,8 @@ func NewStatusReport(
 		currentKnown: status.CurrentGenerationKnown,
 		candidate:    status.CandidateGeneration, credentialCount: status.CredentialCount,
 		rsaCredentialCount: status.RSACredentialCount, ed25519CredentialCount: status.Ed25519CredentialCount,
-		lockRelation: status.LockRelation, result: OnboardingResultSuccess,
+		mldsa44CredentialCount: status.MLDSA44CredentialCount,
+		lockRelation:           status.LockRelation, result: OnboardingResultSuccess,
 		failure: status.Failure, initialized: true,
 	}
 	if !report.valid() {
@@ -122,21 +126,21 @@ func EncodeReport(report Report, machine bool, maximum uint32) ([]byte, error) {
 		}
 	} else if report.planComplete && report.currentKnown {
 		encoded = fmt.Appendf(nil,
-			"schema=%s tool_version=%s command=%s state=%s backend=%s expected_current_generation=%d current_generation=%d candidate_generation=%d credential_count=%d rsa_credential_count=%d ed25519_credential_count=%d plan_complete=%t receipt_present=%t receipt_phase=%s lock_relation=%s runtime_smoke_required=%t result=%s failure=%s\n",
+			"schema=%s tool_version=%s command=%s state=%s backend=%s expected_current_generation=%d current_generation=%d candidate_generation=%d credential_count=%d rsa_credential_count=%d ed25519_credential_count=%d mldsa44_credential_count=%d plan_complete=%t receipt_present=%t receipt_phase=%s lock_relation=%s runtime_smoke_required=%t result=%s failure=%s\n",
 			document.Schema, document.ToolVersion, document.Command, document.State,
 			document.Backend, report.expectedCurrent, report.current,
 			report.candidate, report.credentialCount, report.rsaCredentialCount,
-			report.ed25519CredentialCount, document.PlanComplete, document.ReceiptPresent,
+			report.ed25519CredentialCount, report.mldsa44CredentialCount, document.PlanComplete, document.ReceiptPresent,
 			document.ReceiptPhase, document.LockRelation, document.RuntimeSmokeRequired,
 			document.Result, document.Failure,
 		)
 	} else if report.planComplete {
 		encoded = fmt.Appendf(nil,
-			"schema=%s tool_version=%s command=%s state=%s backend=%s expected_current_generation=%d candidate_generation=%d credential_count=%d rsa_credential_count=%d ed25519_credential_count=%d plan_complete=%t receipt_present=%t receipt_phase=%s lock_relation=%s runtime_smoke_required=%t result=%s failure=%s\n",
+			"schema=%s tool_version=%s command=%s state=%s backend=%s expected_current_generation=%d candidate_generation=%d credential_count=%d rsa_credential_count=%d ed25519_credential_count=%d mldsa44_credential_count=%d plan_complete=%t receipt_present=%t receipt_phase=%s lock_relation=%s runtime_smoke_required=%t result=%s failure=%s\n",
 			document.Schema, document.ToolVersion, document.Command, document.State,
 			document.Backend, report.expectedCurrent, report.candidate,
 			report.credentialCount, report.rsaCredentialCount,
-			report.ed25519CredentialCount, document.PlanComplete, document.ReceiptPresent,
+			report.ed25519CredentialCount, report.mldsa44CredentialCount, document.PlanComplete, document.ReceiptPresent,
 			document.ReceiptPhase, document.LockRelation, document.RuntimeSmokeRequired,
 			document.Result, document.Failure,
 		)
@@ -173,6 +177,7 @@ func (r Report) document() reportDocument {
 		document.CredentialCount = &r.credentialCount
 		document.RSACredentialCount = &r.rsaCredentialCount
 		document.Ed25519CredentialCount = &r.ed25519CredentialCount
+		document.MLDSA44CredentialCount = &r.mldsa44CredentialCount
 	}
 	return document
 }
@@ -250,15 +255,15 @@ func (r Report) validWorkflow() bool {
 // hasOperationFacts reports whether any public plan-derived fact is present.
 func (r Report) hasOperationFacts() bool {
 	return r.expectedCurrent != 0 || r.current != 0 || r.currentKnown || r.candidate != 0 || r.credentialCount != 0 ||
-		r.rsaCredentialCount != 0 || r.ed25519CredentialCount != 0
+		r.rsaCredentialCount != 0 || r.ed25519CredentialCount != 0 || r.mldsa44CredentialCount != 0
 }
 
 // validOperationFacts enforces bounded exact generation and credential relationships.
 func (r Report) validOperationFacts() bool {
 	return (r.currentKnown || r.current == 0) && r.candidate > r.expectedCurrent &&
 		r.credentialCount >= 1 && int(r.credentialCount) <= len(provider.SigningAlgorithms()) &&
-		r.rsaCredentialCount <= 1 && r.ed25519CredentialCount <= 1 &&
-		r.rsaCredentialCount+r.ed25519CredentialCount == r.credentialCount
+		r.rsaCredentialCount <= 1 && r.ed25519CredentialCount <= 1 && r.mldsa44CredentialCount <= 1 &&
+		r.rsaCredentialCount+r.ed25519CredentialCount+r.mldsa44CredentialCount == r.credentialCount
 }
 
 // validReportResultFailure enforces one exact result-to-failure correspondence.

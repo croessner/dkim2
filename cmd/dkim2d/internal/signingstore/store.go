@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto"
 	"crypto/ed25519"
+	"crypto/mldsa"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
@@ -201,7 +202,7 @@ func (g *Generation) ResolvePolicy(
 	return profile, nil
 }
 
-// SignDigest signs one canonical digest through an exact opaque handle.
+// SignDigest signs one message representative through an exact opaque handle.
 func (g *Generation) SignDigest(
 	ctx context.Context,
 	handle dkim2.PrivateKeyHandle,
@@ -225,7 +226,9 @@ func (g *Generation) SignDigest(
 	return signPrivateCredential(ctx, credential, request)
 }
 
-// signPrivateCredential signs one bounded digest through an already-selected key.
+// signPrivateCredential signs one bounded message representative through an
+// already-selected key: the SHA-256 digest for RSA and Ed25519, the complete
+// Section 12.8 input for ML-DSA-44.
 func signPrivateCredential(
 	ctx context.Context,
 	credential privateCredential,
@@ -250,6 +253,11 @@ func signPrivateCredential(
 		signature, err = rsa.SignPKCS1v15(rand.Reader, key, crypto.SHA256, digest)
 	case ed25519.PrivateKey:
 		signature = ed25519.Sign(key, digest)
+	case *mldsa.PrivateKey:
+		// Hedged (randomized) pure ML-DSA.Sign over the complete Section 12.8
+		// input with the "DKIM2" context string; SignDeterministic is never
+		// used for custody keys.
+		signature, err = key.Sign(rand.Reader, digest, dkim2.MLDSA44SignerOptions())
 	default:
 		return dkim2.PrivateKeySignResult{}, dkim2.NewPermanentProviderError()
 	}
@@ -526,7 +534,11 @@ func pemDecode(encoded []byte) (*decodedPEM, []byte) {
 	}, rest
 }
 
-// clearPrivateKey best-effort clears mutable private-key storage.
+// clearPrivateKey best-effort clears mutable private-key storage. An
+// *mldsa.PrivateKey keeps its seed and expanded key inside crypto/mldsa and
+// exposes no mutable storage, so it cannot be zeroized here; it is released
+// for garbage collection. Only the PKCS#8 DER and seed copies this package
+// owns are cleared (documented zeroization gap).
 func clearPrivateKey(key crypto.PrivateKey) {
 	switch typed := key.(type) {
 	case ed25519.PrivateKey:

@@ -355,7 +355,7 @@ Limits are immutable, validated, and nonzero. Defaults are also hard maxima:
 | signing-domain bytes / labels | 253 / 127 |
 | selector bytes / labels | 253 / 127 |
 | profiles | 1,024 |
-| credentials per profile | 2 |
+| credentials per profile | 3 |
 | registered handles | 2,048 |
 | policy bindings | 4,096 |
 | JSON file bytes | 1,048,576 |
@@ -363,7 +363,7 @@ Limits are immutable, validated, and nonzero. Defaults are also hard maxima:
 | one JSON string bytes | 16,384 |
 | aggregate decoded string bytes | 1,048,576 |
 | decoded public key bytes | 2,048 |
-| records examined per load | 9,216 |
+| records examined per load | 10,240 |
 
 Domain, selector, algorithm, RSA, signature-input, and signing-output limits are
 additionally narrowed by the existing M10 and keyresolver limits. A datasource
@@ -380,7 +380,9 @@ datasets succeed and one-over datasets fail.
 
 One examined record/work unit is each profile, nested credential, declared
 handle, and policy, so the maximum is
-`1024 + (1024 * 2) + 2048 + 4096 = 9216`. Limit arithmetic uses checked
+`1024 + (1024 * 3) + 2048 + 4096 = 10240` (three credentials per profile:
+`rsa-sha256`, `ed25519-sha256`, `mldsa44`; the production profile is
+`32768 + (32768 * 3) + 65536 + 65536 = 262144`). Limit arithmetic uses checked
 addition. Usage reports only bounded counts and byte totals, never raw values.
 A caller cannot disable a limit with zero, negative, overflowed, or
 maximum-integer sentinel values.

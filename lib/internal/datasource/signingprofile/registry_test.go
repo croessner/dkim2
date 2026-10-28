@@ -620,11 +620,13 @@ func TestRegistryRejectsConflictingDerivedProfileGroups(t *testing.T) {
 		t, profileID, "example.test", "third", datasource.AlgorithmEd25519SHA256,
 		"key.group.third", handle, datasource.ProfileUseOriginator, 0x62,
 	)
+	narrowed := datasource.DefaultLimits()
+	narrowed.MaxCredentialsPerProfile = 2
 	assertRegistryConstructionError(
 		t,
 		"credentials one over",
 		[]Entry{rsaOne, selectorEd, third},
-		datasource.DefaultLimits(),
+		narrowed,
 		datasource.ErrorCodeLimitExceeded,
 	)
 }

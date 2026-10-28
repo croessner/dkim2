@@ -91,15 +91,15 @@ All 23 attributes are single-valued.
 | `dkim2RecordStatus` | `RNSDKIM2at:7` | exact IA5 text | `active` or `disabled` |
 | `dkim2NotBefore` | `RNSDKIM2at:8` | canonical UTC RFC3339Nano | optional half-open validity start |
 | `dkim2NotAfter` | `RNSDKIM2at:9` | canonical UTC RFC3339Nano | optional half-open validity end |
-| `dkim2Algorithm` | `RNSDKIM2at:10` | exact IA5 text | `rsa-sha256` or `ed25519-sha256` |
+| `dkim2Algorithm` | `RNSDKIM2at:10` | exact IA5 text | `rsa-sha256`, `ed25519-sha256`, or `mldsa44` |
 | `dkim2Selector` | `RNSDKIM2at:11` | exact IA5 text | canonical lowercase ASCII DNS selector |
-| `dkim2PublicKeySPKI` | `RNSDKIM2at:12` | octet string | canonical public SubjectPublicKeyInfo DER |
+| `dkim2PublicKeySPKI` | `RNSDKIM2at:12` | octet string | canonical public SubjectPublicKeyInfo DER (1334 octets for `mldsa44`) |
 | `dkim2TenantID` | `RNSDKIM2at:13` | exact IA5 text | exact administrative tenant identity |
 | `dkim2ProfileUse` | `RNSDKIM2at:14` | exact IA5 text | `originator`, `ordinary_transit`, `next_domain_transit`, or `delivery_status` |
 | `dkim2Rollout` | `RNSDKIM2at:15` | exact IA5 text | `enforce`, `observe`, or `off` |
 | `dkim2Compatibility` | `RNSDKIM2at:16` | exact IA5 text | currently exactly `strict` |
 | `dkim2FeedbackRouteID` | `RNSDKIM2at:17` | exact IA5 text | optional opaque future-service route |
-| `dkim2PrivateKeyPKCS8` | `RNSDKIM2at:18` | octet string | canonical unencrypted private-key PKCS#8 DER |
+| `dkim2PrivateKeyPKCS8` | `RNSDKIM2at:18` | octet string | canonical unencrypted private-key PKCS#8 DER; `mldsa44` uses the seed-only form (54 octets) |
 | `dkim2CandidateDigest` | `RNSDKIM2at:19` | octet string | exact 32-byte canonical v3 candidate-content digest |
 | `dkim2OperationID` | `RNSDKIM2at:20` | exact IA5 text | canonical protected onboarding operation binding on a v3 generation root |
 | `dkim2WasActive` | `RNSDKIM2at:21` | LDAP boolean | optional exact `TRUE` monotonic history evidence on a generation root |

@@ -58,7 +58,7 @@ work; it does not reclaim storage. The operator documentation explicitly
 leaves deletion to a future separately reviewed procedure.
 
 The current compiled datasource ceilings are also below the intended large
-installation shape: 1024 profiles, 2048 handles, 4096 policies, 9216 aggregate
+installation shape: 1024 profiles, 2048 handles, 4096 policies, 10240 aggregate
 public records, a 4096-row administrative default, and a fixed 16 MiB runtime
 load budget. Additionally, administrative snapshot construction currently
 contains a profile lookup nested inside credential iteration. Raising counts
