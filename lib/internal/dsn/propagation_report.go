@@ -118,7 +118,7 @@ func renderPropagationReport(input propagationReportInput) (renderedPropagationR
 		return renderedPropagationReport{}, err
 	}
 	var outer bytes.Buffer
-	// The propagated report is a new message (Draft-07 Section 16.2) whose
+	// The propagated report is a new message (Draft-08 Section 16.3) whose
 	// single signature must make its From Authentic (Section 11), so the
 	// author domain is the propagation signing domain itself.
 	outer.WriteString("From: Mail Delivery System <MAILER-DAEMON@" + input.authorDomain + ">\r\n")

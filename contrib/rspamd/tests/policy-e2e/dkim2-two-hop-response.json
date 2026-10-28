@@ -1,6 +1,6 @@
 {
   "api_version": "v1",
-  "draft": "draft-ietf-dkim-dkim2-spec-07",
+  "draft": "draft-ietf-dkim-dkim2-spec-08",
   "verification": {
     "state": "PASS",
     "primary_reason": "none",
@@ -29,7 +29,7 @@
   "actions": [],
   "verifier_projection": {
     "schema": "dkim2.verifier-projection.v1",
-    "draft": "draft-ietf-dkim-dkim2-spec-07",
+    "draft": "draft-ietf-dkim-dkim2-spec-08",
     "binding_algorithm": "sha-256",
     "binding": "rokrVPuy8Jm9IC84oM+97OA99IPx4tqJbQxPWLCyAdw=",
     "hops": [

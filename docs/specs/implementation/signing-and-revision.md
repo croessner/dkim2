@@ -1,7 +1,7 @@
 # DKIM2 Signing And Revision
 
 > Historical Draft-04 implementation record. The original scope and evidence
-> below are preserved; current Draft-07 authority is the migration disposition
+> below are preserved; current Draft-08 authority is the migration disposition
 > and current durable architecture.
 
 Status: implemented; independently reviewed.
@@ -24,7 +24,7 @@ unrecognized flags have no effect. The current implementation therefore:
   documentation for the migration error).
 
 The former `local_only` restriction, its `LocalOnlySignedMessage` result
-variant, and its in-control release path were removed because no Draft-07
+variant, and its in-control release path were removed because no Draft-08
 protocol fact produced them. In-control routes remain a route class and sign
 unrestricted output. Sections below that describe `donotmodify` or `donotexplode` restrictions are
 the historical Draft-04 record.
@@ -53,7 +53,7 @@ This specification is governed by:
 - `docs/specs/implementation/recipe-application.md`.
 - `docs/specs/implementation/recipe-generation.md`.
 - [draft-ietf-dkim-dkim2-spec-04](https://datatracker.ietf.org/doc/html/draft-ietf-dkim-dkim2-spec-04), especially role Sections 2.1 through 2.6 and Sections 3, 6, 7, 8, 9, 13, 14, and 16.
-- [draft-ietf-dkim-dkim2-dns-01](https://datatracker.ietf.org/doc/html/draft-ietf-dkim-dkim2-dns-01) only for selector-to-public-key-record compatibility.
+- [draft-ietf-dkim-dkim2-dns-02](https://datatracker.ietf.org/doc/html/draft-ietf-dkim-dkim2-dns-02) only for selector-to-public-key-record compatibility.
 - RFC 4648 for canonical padded Base64.
 - RFC 5321 for SMTP reverse-path and forward-path syntax.
 - RFC 5322 for message and header-field framing.
@@ -630,7 +630,7 @@ When present, generated flags use the fixed order `feedback`, `feedhere`, then
 `exploded`.
 
 Inherited `donotmodify` or `donotexplode` spellings are inert unknown flags
-under Draft-07 and never restrict the result. The sealed policy authorization
+under Draft-08 and never restrict the result. The sealed policy authorization
 binds the exact capability, sealed parent and copy ticket, derived
 multiplicity, modification facts, intended route scope, and the resulting
 `unrestricted` restriction.
@@ -1167,7 +1167,7 @@ incidental diagnostics.
   explicit fresh reissuance after rejection, provider-observation drift,
   selector/key mismatch, and
   intended-envelope/receiver/route replay.
-- `exploded` derivation and the Draft-07 inertness of inherited `donotmodify`
+- `exploded` derivation and the Draft-08 inertness of inherited `donotmodify`
   and `donotexplode` spellings are covered; the historical Draft-04
   `donotmodify`/`donotexplode` restricted and external denial matrices were
   removed with the flags.

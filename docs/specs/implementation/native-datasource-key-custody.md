@@ -1,7 +1,7 @@
 # Native Datasource Private-Key Custody
 
 > Historical Draft-04 implementation record. The original scope and evidence
-> below are preserved; current Draft-07 authority is the migration disposition
+> below are preserved; current Draft-08 authority is the migration disposition
 > and current durable architecture.
 
 Status: complete.
@@ -32,7 +32,7 @@ This specification is governed by:
 - `docs/specs/spec-and-prompt-template.md`;
 - `docs/specs/openapi/dkim2d.yaml` as an explicitly unchanged boundary;
 - `draft-ietf-dkim-dkim2-spec-04`;
-- `draft-ietf-dkim-dkim2-dns-01` for the implemented DNS behavior baseline;
+- `draft-ietf-dkim-dkim2-dns-02` for the implemented DNS behavior baseline;
 - RFC 4511, RFC 4512, RFC 4513, RFC 4515, RFC 4517, RFC 4519, RFC 2696,
   and RFC 4528 for LDAP behavior;
 - PostgreSQL transactional, privilege, constraint, and trigger semantics;

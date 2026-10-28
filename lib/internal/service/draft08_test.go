@@ -31,8 +31,8 @@ func TestSignatureResultsPreserveOccurrenceOrder(t *testing.T) {
 	}
 }
 
-// TestDraft07ProtocolInfractionsMapToDistinctPermanentReasons proves the four Section 14.2 failures stay distinct.
-func TestDraft07ProtocolInfractionsMapToDistinctPermanentReasons(t *testing.T) {
+// TestDraft08ProtocolInfractionsMapToDistinctPermanentReasons proves the four Section 14.2 failures stay distinct.
+func TestDraft08ProtocolInfractionsMapToDistinctPermanentReasons(t *testing.T) {
 	tests := []struct {
 		code   verify.ErrorCode
 		reason Reason

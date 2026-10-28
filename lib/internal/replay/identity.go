@@ -8,7 +8,7 @@ import (
 
 const (
 	// DraftIdentifier is the exact behavior baseline bound into replay identities.
-	DraftIdentifier         = "draft-ietf-dkim-dkim2-spec-07"
+	DraftIdentifier         = "draft-ietf-dkim-dkim2-spec-08"
 	identityRedactedText    = "replay_identity"
 	identitySetRedactedText = "replay_identity_set"
 )
@@ -60,7 +60,7 @@ func (Identity) Format(state fmt.State, _ rune) { _, _ = io.WriteString(state, i
 
 // IdentitySet is an immutable compatibility wrapper around the single message identity.
 //
-// Deprecated: Draft-07 replay equality is message-wide. New code should use Identity.
+// Deprecated: Draft-08 replay equality is message-wide. New code should use Identity.
 type IdentitySet struct{ state *identitySetState }
 
 // identitySetState owns one immutable message-wide identity and authenticated flag.
@@ -131,7 +131,7 @@ func (s IdentitySet) Valid() bool {
 	return true
 }
 
-// Len returns one for a valid Draft-07 message identity.
+// Len returns one for a valid Draft-08 message identity.
 func (s IdentitySet) Len() int {
 	if !s.Valid() {
 		return 0
@@ -153,7 +153,7 @@ func (s IdentitySet) Exploded() bool { return s.Valid() && s.state.exploded }
 
 // Eligible reports whether local replay policy counts this message. Messages
 // authenticated only by the originator's i=1 signature are direct deliveries,
-// not intermediary re-sends (Draft-07 Section 15.1), and are not counted.
+// not intermediary re-sends (Draft-08 Section 15.1), and are not counted.
 // The identity remains valid for DSN propagation coordinates.
 func (s IdentitySet) Eligible() bool { return s.Valid() && s.state.eligible }
 

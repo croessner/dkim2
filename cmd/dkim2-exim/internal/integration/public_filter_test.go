@@ -417,7 +417,7 @@ func revisedResponse() generatedfixture.OperationResponse {
 		},
 		ApiVersion:  generatedfixture.V1,
 		Disposition: generatedfixture.DispositionAccept,
-		Draft:       generatedfixture.DraftIetfDkimDkim2Spec07,
+		Draft:       generatedfixture.DraftIetfDkimDkim2Spec08,
 		Operation:   generatedfixture.Revise,
 		Result:      generatedfixture.OperationResponseResultPass,
 	}
@@ -440,7 +440,7 @@ func signedResponse() generatedfixture.OperationResponse {
 		},
 		ApiVersion:  generatedfixture.V1,
 		Disposition: generatedfixture.DispositionAccept,
-		Draft:       generatedfixture.DraftIetfDkimDkim2Spec07,
+		Draft:       generatedfixture.DraftIetfDkimDkim2Spec08,
 		Operation:   generatedfixture.Sign,
 		Result:      generatedfixture.OperationResponseResultPass,
 	}

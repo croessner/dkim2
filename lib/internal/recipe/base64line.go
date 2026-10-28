@@ -2,7 +2,7 @@ package recipe
 
 import "encoding/base64"
 
-// decodeBase64Line decodes one Draft-07 Section 5 "base64-line": standard
+// decodeBase64Line decodes one Draft-08 Section 5 "base64-line": standard
 // RFC 4648 alphabet, length a multiple of four, at most two trailing "="
 // characters, zero pad bits, and no white space or line breaks anywhere. The
 // alphabet is checked explicitly because the standard decoder silently skips

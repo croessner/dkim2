@@ -14,7 +14,7 @@ import (
 
 const (
 	// DraftBaseline identifies the active DKIM2 verification draft.
-	DraftBaseline = "draft-ietf-dkim-dkim2-spec-07"
+	DraftBaseline = "draft-ietf-dkim-dkim2-spec-08"
 	// AlgorithmRSASHA256 identifies RSA with SHA-256 and PKCS#1 v1.5 verification.
 	AlgorithmRSASHA256 = signature.AlgorithmRSASHA256
 	// AlgorithmEd25519SHA256 identifies Ed25519 verification over SHA-256 digest bytes.
@@ -27,10 +27,10 @@ const (
 	defaultMaxSignatureSets      = 16
 	defaultMaxEnvelopeRecipients = 2000
 	defaultRSAMinBits            = 1024
-	// signatureMaxAge is the fixed Draft-07 Section 14.3 maximum signature
+	// signatureMaxAge is the fixed Draft-08 Section 14.3 maximum signature
 	// age relative to the delivery instant.
 	signatureMaxAge = 14 * 24 * time.Hour
-	// signatureFutureTolerance is the fixed Draft-07 Section 14.3 limit for
+	// signatureFutureTolerance is the fixed Draft-08 Section 14.3 limit for
 	// signatures dated after the delivery instant.
 	signatureFutureTolerance = 24 * time.Hour
 	// revisionInstantSkew bounds how far a caller-supplied revision, signing,

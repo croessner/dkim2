@@ -43,7 +43,7 @@ const (
 // TestOriginReplayDigestGolden freezes the declaration framing and digest.
 func TestOriginReplayDigestGolden(t *testing.T) {
 	digest := replayTestDigest(t, "m=1; h="+replayTestSHA256A)
-	if got, want := hex.EncodeToString(digest[:]), "aaace41463fad481490988780c7fa79fd6d00389f052f63b5c7b3edca5707720"; got != want {
+	if got, want := hex.EncodeToString(digest[:]), "8dafd38c8dae171b5d1a1f9a2be68a984a9844c8a7bf8ff8704ca5e407acd40e"; got != want {
 		t.Fatalf("origin digest = %s, want %s", got, want)
 	}
 }
@@ -51,13 +51,13 @@ func TestOriginReplayDigestGolden(t *testing.T) {
 // TestOriginReplayFrameGolden freezes the complete independently constructed frame.
 func TestOriginReplayFrameGolden(t *testing.T) {
 	got := hex.EncodeToString(originReplayFrame("sha256", []byte{0xaa}, []byte{0xbb, 0xcc}))
-	want := "646b696d322d7265706c61792d6f726967696e2d6465636c61726174696f6e2d76310001010000001d64726166742d696574662d646b696d2d646b696d322d737065632d303702000000067368613235360300000001aa0400000002bbcc"
+	want := "646b696d322d7265706c61792d6f726967696e2d6465636c61726174696f6e2d76310001010000001d64726166742d696574662d646b696d2d646b696d322d737065632d303802000000067368613235360300000001aa0400000002bbcc"
 	if got != want {
 		t.Fatalf("origin frame = %s, want %s", got, want)
 	}
 }
 
-// TestOriginReplayDigestFollowsDeclarationEquality pins the local Draft-07
+// TestOriginReplayDigestFollowsDeclarationEquality pins the local Draft-08
 // Section 15.1 equality: identical m=1 declarations group (independent of a
 // Recipe or base64 folding), a changed header
 // hash separates, SHA-256 is preferred so SHA-256-only and mixed sets group,

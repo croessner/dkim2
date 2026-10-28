@@ -732,7 +732,7 @@ func (c Coordinator) prepareBranch(request SignFieldRequest, metadata EffectiveM
 	}, nil
 }
 
-// authenticFromForSigning applies Draft-07 Section 12.4: when an originator
+// authenticFromForSigning applies Draft-08 Section 12.4: when an originator
 // signs, or when a revision replaced the From header field relative to the
 // verified incoming message, the profile signing domain must make the
 // outgoing From header field Authentic. Otherwise the result would be an

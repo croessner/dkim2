@@ -32,26 +32,26 @@ const (
 
 const alignedDeliveryStatus = `{"structure":"valid","embedded":"verified","outer_alignment":"aligned","recipient_linkage":"linked","local_hop":"local","propagation":"eligible"}`
 
-const propagateAcceptResponse = `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-07","operation":"delivery_status_propagation","result":"pass","disposition":"accept","replay":{"class":"first_seen"},"delivery_status":` +
+const propagateAcceptResponse = `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-08","operation":"delivery_status_propagation","result":"pass","disposition":"accept","replay":{"class":"first_seen"},"delivery_status":` +
 	alignedDeliveryStatus +
 	`,"propagation":{"raw_rfc5322_base64":"` + propagationSignedNotification +
 	`","next_hop_recipient":"` + propagationNextHop +
 	`","commit_token":"` + propagationCommitToken +
 	`","smtputf8_required":false,"eight_bit_mime_required":false}}`
 
-const propagateDiscardResponse = `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-07","operation":"delivery_status_propagation","result":"pass","disposition":"discard","replay":{"class":"not_checked"},"delivery_status":{"structure":"valid","embedded":"verified","outer_alignment":"aligned","recipient_linkage":"linked","local_hop":"local","propagation":"not_failure"}}`
+const propagateDiscardResponse = `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-08","operation":"delivery_status_propagation","result":"pass","disposition":"discard","replay":{"class":"not_checked"},"delivery_status":{"structure":"valid","embedded":"verified","outer_alignment":"aligned","recipient_linkage":"linked","local_hop":"local","propagation":"not_failure"}}`
 
-const propagatePermerrorResponse = `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-07","operation":"delivery_status_propagation","result":"permerror","disposition":"discard","replay":{"class":"not_checked"},"propagation_failure":"unprovisioned_domain","delivery_status":` +
+const propagatePermerrorResponse = `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-08","operation":"delivery_status_propagation","result":"permerror","disposition":"discard","replay":{"class":"not_checked"},"propagation_failure":"unprovisioned_domain","delivery_status":` +
 	alignedDeliveryStatus + `}`
 
-const propagateRejectResponse = `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-07","operation":"delivery_status_propagation","result":"fail","disposition":"reject","replay":{"class":"not_checked"},"delivery_status":{"structure":"valid","embedded":"verified","outer_alignment":"misaligned","recipient_linkage":"unlinked","local_hop":"not_local","propagation":"not_evaluated"}}`
+const propagateRejectResponse = `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-08","operation":"delivery_status_propagation","result":"fail","disposition":"reject","replay":{"class":"not_checked"},"delivery_status":{"structure":"valid","embedded":"verified","outer_alignment":"misaligned","recipient_linkage":"unlinked","local_hop":"not_local","propagation":"not_evaluated"}}`
 
-const propagateCommitResponse = `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-07","state":"committed"}`
+const propagateCommitResponse = `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-08","state":"committed"}`
 
-const receivedDSNProcessResponse = `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-07","authentication":{"state":"PASS","primary_reason":"none"},"verification":{"state":"PASS","primary_reason":"none","scope":"current","historical_content":"not_evaluated","historical_signatures":"not_evaluated","custody_structure":"not_evaluated","checks":[{"class":"protocol","reason":"none"}],"signature_sets":[]},"policy":{"mode":"strict","verdict":"accept","primary_reason":"protocol_pass","feedback":{"requested":false,"relay_required":false,"history_coverage":"not_evaluated"},"findings":[{"reason":"protocol_pass","severity":"info"}]},"replay":{"class":"not_eligible"},"disposition":"accept","actions":[],"delivery_status":` +
+const receivedDSNProcessResponse = `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-08","authentication":{"state":"PASS","primary_reason":"none"},"verification":{"state":"PASS","primary_reason":"none","scope":"current","historical_content":"not_evaluated","historical_signatures":"not_evaluated","custody_structure":"not_evaluated","checks":[{"class":"protocol","reason":"none"}],"signature_sets":[]},"policy":{"mode":"strict","verdict":"accept","primary_reason":"protocol_pass","feedback":{"requested":false,"relay_required":false,"history_coverage":"not_evaluated"},"findings":[{"reason":"protocol_pass","severity":"info"}]},"replay":{"class":"not_eligible"},"disposition":"accept","actions":[],"delivery_status":` +
 	alignedDeliveryStatus + `}`
 
-const unevaluatedDSNProcessResponse = `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-07","authentication":{"state":"PASS","primary_reason":"none"},"verification":{"state":"PASS","primary_reason":"none","scope":"current","historical_content":"not_evaluated","historical_signatures":"not_evaluated","custody_structure":"not_evaluated","checks":[{"class":"protocol","reason":"none"}],"signature_sets":[]},"policy":{"mode":"strict","verdict":"accept","primary_reason":"protocol_pass","feedback":{"requested":false,"relay_required":false,"history_coverage":"not_evaluated"},"findings":[{"reason":"protocol_pass","severity":"info"}]},"replay":{"class":"not_eligible"},"disposition":"accept","actions":[],"delivery_status":{"structure":"valid","embedded":"verified","outer_alignment":"aligned","recipient_linkage":"linked","local_hop":"not_evaluated","propagation":"not_evaluated"}}`
+const unevaluatedDSNProcessResponse = `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-08","authentication":{"state":"PASS","primary_reason":"none"},"verification":{"state":"PASS","primary_reason":"none","scope":"current","historical_content":"not_evaluated","historical_signatures":"not_evaluated","custody_structure":"not_evaluated","checks":[{"class":"protocol","reason":"none"}],"signature_sets":[]},"policy":{"mode":"strict","verdict":"accept","primary_reason":"protocol_pass","feedback":{"requested":false,"relay_required":false,"history_coverage":"not_evaluated"},"findings":[{"reason":"protocol_pass","severity":"info"}]},"replay":{"class":"not_eligible"},"disposition":"accept","actions":[],"delivery_status":{"structure":"valid","embedded":"verified","outer_alignment":"aligned","recipient_linkage":"linked","local_hop":"not_evaluated","propagation":"not_evaluated"}}`
 
 // propagationService is one daemon-compatible oracle for the propagation
 // routes and for the received delivery-status projection of the process route.
@@ -168,7 +168,7 @@ func (s *propagationService) writeError(
 ) {
 	s.writeJSON(
 		writer, status,
-		`{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-07","code":"`+
+		`{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-08","code":"`+
 			code+`","category":"request"}`,
 	)
 }

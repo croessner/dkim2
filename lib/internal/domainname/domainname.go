@@ -1,4 +1,4 @@
-// Package domainname owns the Draft-07 Section 18 conversion of protocol
+// Package domainname owns the Draft-08 Section 18 conversion of protocol
 // domain names from U-labels to A-labels.
 //
 // Input is treated as a protocol label sequence, not as browser or user input:
@@ -67,7 +67,7 @@ func ToASCII(domain []byte) (string, bool) {
 }
 
 // IsASCII reports whether domain contains only ASCII bytes, which is the form
-// Draft-07 Section 18 requires for domains recorded in DKIM2 header fields.
+// Draft-08 Section 18 requires for domains recorded in DKIM2 header fields.
 func IsASCII(domain []byte) bool {
 	for _, b := range domain {
 		if b >= 0x80 {

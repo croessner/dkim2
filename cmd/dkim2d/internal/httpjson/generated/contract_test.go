@@ -835,7 +835,7 @@ func assertFrozenEnums(t *testing.T, document *openapi3.T) {
 
 	expected := map[string][]string{
 		"APIVersion":        {"v1"},
-		"DraftVersion":      {"draft-ietf-dkim-dkim2-spec-07"},
+		"DraftVersion":      {"draft-ietf-dkim-dkim2-spec-08"},
 		"VerificationState": {"PASS", "FAIL", "PERMERROR", "TEMPERROR"},
 		"NullSenderPolicy":  {"header_from"},
 		"VerificationReason": {
@@ -1044,7 +1044,7 @@ func TestGeneratedRequestFormattingIsContentFree(t *testing.T) {
 	}
 	request := ProcessRequest{
 		ApiVersion: V1,
-		Draft:      DraftIetfDkimDkim2Spec07,
+		Draft:      DraftIetfDkimDkim2Spec08,
 		Message:    MessageInput{RawRfc5322Base64: protected},
 		Smtp: SMTPInput{
 			MailFrom: protected,

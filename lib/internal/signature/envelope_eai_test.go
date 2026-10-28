@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// TestCanonicalEnvelopePathMapsULabelsToALabels reproduces Draft-07 Section
+// TestCanonicalEnvelopePathMapsULabelsToALabels reproduces Draft-08 Section
 // 18: SMTP domains are mapped from U-labels to A-labels before comparison,
 // while local parts, including RFC 6531 UTF-8 local parts, stay unchanged.
 func TestCanonicalEnvelopePathMapsULabelsToALabels(t *testing.T) {

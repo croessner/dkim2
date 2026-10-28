@@ -12,7 +12,7 @@ func ValidEnvelopePath(path []byte, allowNull bool) bool {
 
 // EnvelopePathDomain returns the canonical lowercase A-label DNS domain of one
 // non-null SMTP path, converting a U-label domain with the strict IDNA profile
-// (Draft-07 Section 18). Null paths, address literals, and invalid paths
+// (Draft-08 Section 18). Null paths, address literals, and invalid paths
 // report false. Adapters use it to select a signing domain from an SMTPUTF8
 // envelope without their own IDNA mapping.
 func EnvelopePathDomain(path []byte) (string, bool) {

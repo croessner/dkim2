@@ -1,6 +1,6 @@
 package signature
 
-// maxSignatureSetsPerAlgorithm is the Draft-07 per-algorithm selector
+// maxSignatureSetsPerAlgorithm is the Draft-08 per-algorithm selector
 // cardinality within one DKIM2-Signature (at most two sets of the same
 // algorithm, for key rollover). It is not a credential-per-profile bound.
 const maxSignatureSetsPerAlgorithm = 2

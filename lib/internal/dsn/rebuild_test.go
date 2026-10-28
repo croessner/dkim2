@@ -1023,7 +1023,7 @@ func TestRebuildBoundsSizeAmplification(t *testing.T) {
 	}
 }
 
-// TestRebuildRemovesDestinationEvidence is the Draft-07 Section 16.2 privacy
+// TestRebuildRemovesDestinationEvidence is the Draft-08 Section 16.3 privacy
 // sentinel: the propagated report must not reveal where the local system
 // forwarded the message. No part, header, or embedded field may carry the
 // downstream destination domain or the failed final recipient.

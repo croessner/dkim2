@@ -100,7 +100,7 @@ func NewDisabledReplayCoordinator() *ReplayCoordinator {
 }
 
 // NewEnabledReplayCoordinator constructs one provider-neutral enabled replay
-// policy. counting is the local Draft-07 Section 15.1 counting policy.
+// policy. counting is the local Draft-08 Section 15.1 counting policy.
 func NewEnabledReplayCoordinator(
 	deriver *dkim2.ReplayDeriver,
 	store dkim2.ReplayStore,

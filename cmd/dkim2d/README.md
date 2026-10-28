@@ -188,7 +188,7 @@ YAML scalar typing; quoted placeholders remain strings. Missing or malformed
 variables fail closed, map keys are never expanded, and secret bytes remain in
 their protected files.
 
-`dns export` produces DNS-01 records for operator publication. `prove` and
+`dns export` produces DNS-02 records for operator publication. `prove` and
 `activate` use a fresh configured recursive resolver path and compare exact
 SPKI material. This is not a direct authoritative-server observation and does
 not claim recursive-cache bypass. After activation, whether completed directly
@@ -289,7 +289,7 @@ minutes. The corresponding environment variables are
 ### Inbound policy mode
 
 `policy.mode` defaults to `strict`; omitting it enables enforcement. Operators
-must select a compatibility policy explicitly when the Draft-07 verifier is
+must select a compatibility policy explicitly when the Draft-08 verifier is
 introduced beside an existing inbound path:
 
 - `strict` accepts `PASS`, rejects `FAIL` and `PERMERROR`, and temporarily
@@ -495,7 +495,7 @@ replacement. `exploded` is never configuration: signing derives it only from a
 sealed multi-copy route plan.
 
 `signing.policy.delivery_status.reporting_domain` is optional and absent by
-default. Draft-07 Section 12.4 requires an MTA-generated DSN's From to be
+default. Draft-08 Section 12.4 requires an MTA-generated DSN's From to be
 Authentic for its signing domain, and Postfix writes
 `From: MAILER-DAEMON@$myhostname`. Set it to the reporting MTA's own domain
 (the domain at or above `$myhostname`) so that `POST /v1/dsn/sign` signs every
@@ -555,7 +555,7 @@ signing:
 For example, an RSA signing operation on 2026-10-05 produces:
 
 ```text
-X-DKIM2-Info: draft=ietf-dkim-dkim2-spec-07;
+X-DKIM2-Info: draft=ietf-dkim-dkim2-spec-08;
     repo=github.com/croessner/dkim2; date=2026-10-05; sw=dkim2d;
     action=sign d=example.test a=rsa-sha256;
 ```
@@ -566,7 +566,7 @@ is the UTC date of the actual signature timestamp, not the software build date.
 signature, including both algorithms for dual signing. `action=sign` describes
 signature creation, including a transit or delivery-status signature.
 
-This is a local diagnostic convention, not a DKIM2 requirement. Draft-07
+This is a local diagnostic convention, not a DKIM2 requirement. Draft-08
 Section 4 excludes `X-` fields from authentication. Never trust this header as
 an authentication result. Existing informational headers are preserved; each
 successful local operation adds its own. Failure, unsigned/no-op, and inbound
@@ -616,7 +616,7 @@ to an inbound or MX-facing listener. Bounces keep their dedicated
 `POST /v1/dsn/sign` route.
 
 Received `donotmodify` or `donotexplode` spellings are inert unknown flags
-under Draft-07: they never restrict revision, fanout, or external release.
+under Draft-08: they never restrict revision, fanout, or external release.
 Existing fail-closed authorization remains authoritative.
 
 ### Received delivery-status evaluation and propagation
@@ -748,7 +748,7 @@ The command creates the PEM file with mode `0600` and never replaces an
 existing path. Standard output carries only public material: the
 `public_key_spki` value for the datasource credential, the
 `public_spki_sha256` value for the manifest entry, and the zone-file TXT
-record from the same record owner and DNS-01 parser round trip as the domain
+record from the same record owner and DNS-02 parser round trip as the domain
 DNS export. `--algorithm` accepts `rsa-sha256` or `ed25519-sha256`;
 `--rsa-bits` selects 2048, 3072, or 4096 for `rsa-sha256`. The OpenDKIM
 bootstrap imports only legacy `rsa` and `ed25519` keys. Unknown fields, duplicate
@@ -832,7 +832,7 @@ replay:
 Memory replay is bounded but process-local. Restart, multiple daemon instances,
 and failover do not share its state.
 
-By default replay counting follows Draft-07 Section 15.1: a message carrying
+By default replay counting follows Draft-08 Section 15.1: a message carrying
 only the originator's `i=1` DKIM2-Signature is a direct delivery, reports the
 replay class `not_eligible`, and touches no store. A receiver that acts on
 every accepted message, such as a public reflector, may set

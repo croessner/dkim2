@@ -17,11 +17,11 @@ const (
 	// StepKindData identifies UTF-8 literal data emission ("d").
 	StepKindData StepKind = "data"
 	// StepKindBinaryData identifies base64-carried literal emission ("u") for
-	// lines or values that are not valid UTF-8 (Draft-07 Section 5).
+	// lines or values that are not valid UTF-8 (Draft-08 Section 5).
 	StepKindBinaryData StepKind = "binary_data"
 )
 
-// Known reports whether kind belongs to the Draft-07 recipe vocabulary.
+// Known reports whether kind belongs to the Draft-08 recipe vocabulary.
 func (k StepKind) Known() bool {
 	return k == StepKindCopy || k == StepKindData || k == StepKindBinaryData
 }
@@ -239,7 +239,7 @@ func newHeaderPlan(name, canonicalName string, steps []step) (headerPlan, error)
 // clone returns a detached header plan.
 func (p headerPlan) clone() headerPlan { p.steps = cloneSteps(p.steps); return p }
 
-// Recipe stores one immutable parsed Draft-07 reconstruction plan.
+// Recipe stores one immutable parsed Draft-08 reconstruction plan.
 type Recipe struct {
 	headers         []headerPlan
 	hasHeaderRecipe bool

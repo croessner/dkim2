@@ -15,7 +15,7 @@ import (
 func validOperationFixture() generated.OperationResponse {
 	return generated.OperationResponse{
 		ApiVersion:  generated.V1,
-		Draft:       generated.DraftIetfDkimDkim2Spec07,
+		Draft:       generated.DraftIetfDkimDkim2Spec08,
 		Operation:   generated.Sign,
 		Result:      generated.OperationResponseResultPass,
 		Disposition: generated.DispositionAccept,
@@ -253,7 +253,7 @@ func validProcessFixture() generated.ProcessResponse {
 			Value: "mx.example.test; dkim2=pass",
 		}},
 		ApiVersion: generated.V1, Disposition: generated.DispositionAccept,
-		Draft: generated.DraftIetfDkimDkim2Spec07,
+		Draft: generated.DraftIetfDkimDkim2Spec08,
 		Authentication: generated.AuthenticationResult{
 			PrimaryReason: generated.AuthenticationResultPrimaryReasonNone,
 			State:         generated.PASS,
@@ -289,9 +289,9 @@ func validProcessFixture() generated.ProcessResponse {
 	}
 }
 
-// TestDraft07PermanentReasonsDoNotDefer proves every new protocol infraction
+// TestDraft08PermanentReasonsDoNotDefer proves every new protocol infraction
 // becomes an admitted permanent rejection rather than an Exim deferral.
-func TestDraft07PermanentReasonsDoNotDefer(t *testing.T) {
+func TestDraft08PermanentReasonsDoNotDefer(t *testing.T) {
 	for _, reason := range []generated.VerificationReason{
 		generated.VerificationReasonDuplicateHashAlgorithm,
 		generated.VerificationReasonInvalidRecipeJson,
@@ -301,7 +301,7 @@ func TestDraft07PermanentReasonsDoNotDefer(t *testing.T) {
 		value := validProcessFixture()
 		value.Actions = generated.ActionPlan{}
 		value.Disposition = generated.DispositionReject
-		value.Draft = generated.DraftIetfDkimDkim2Spec07
+		value.Draft = generated.DraftIetfDkimDkim2Spec08
 		value.Verification.State = generated.PERMERROR
 		value.Verification.PrimaryReason = reason
 		value.Authentication.State = generated.PERMERROR
@@ -348,7 +348,7 @@ func TestInteropInfoOperationAdmission(t *testing.T) {
 	for _, operation := range []generated.OperationResponseOperation{generated.Sign, generated.Revise} {
 		value := validOperationFixture()
 		value.Operation = operation
-		info := generated.AddHeaderAction{Type: generated.AddHeader, Name: generated.XDKIM2Info, Value: " draft=ietf-dkim-dkim2-spec-07; sw=dkim2d;"}
+		info := generated.AddHeaderAction{Type: generated.AddHeader, Name: generated.XDKIM2Info, Value: " draft=ietf-dkim-dkim2-spec-08; sw=dkim2d;"}
 		value.Actions = append(value.Actions, info)
 		body, err := json.Marshal(value)
 		if err != nil {
@@ -369,7 +369,7 @@ func TestInteropInfoOperationAdmission(t *testing.T) {
 	}
 }
 
-// TestProcessAdmissionMarksTemporaryKeyTempfail proves Draft-07 Section 13:
+// TestProcessAdmissionMarksTemporaryKeyTempfail proves Draft-08 Section 13:
 // a tempfail caused by a temporary public-key lookup is marked so local_scan
 // answers 451 4.7.5, while other TEMPERROR tempfails keep the generic reason.
 func TestProcessAdmissionMarksTemporaryKeyTempfail(t *testing.T) {

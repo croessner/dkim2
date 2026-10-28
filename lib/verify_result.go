@@ -10,7 +10,7 @@ import (
 )
 
 // DraftIdentifier identifies the exact DKIM2 behavior baseline implemented by this verification facade.
-const DraftIdentifier = "draft-ietf-dkim-dkim2-spec-07"
+const DraftIdentifier = "draft-ietf-dkim-dkim2-spec-08"
 
 // ResultState identifies one of the four public DKIM2 verification outcomes.
 type ResultState string
@@ -153,7 +153,7 @@ const (
 	// ReasonInvalidRecipeJSON reports malformed authenticated recipe JSON.
 	ReasonInvalidRecipeJSON ReasonCode = "invalid_recipe_json"
 	// ReasonFromNotAuthentic reports a From header field state that is not
-	// Authentic for its responsible signature (Draft-07 Section 14.8).
+	// Authentic for its responsible signature (Draft-08 Section 14.8).
 	ReasonFromNotAuthentic ReasonCode = "from_not_authentic"
 	// ReasonDuplicateSelector reports a repeated selector in one signature field.
 	ReasonDuplicateSelector ReasonCode = "duplicate_selector"

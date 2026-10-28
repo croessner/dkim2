@@ -94,7 +94,7 @@ func newRebuildError(code RebuildErrorCode, cause error) *RebuildError {
 type RebuildOutcome string
 
 const (
-	// RebuildRebuilt reports a complete Section 16.2 report ready for signing.
+	// RebuildRebuilt reports a complete Section 16.3 report ready for signing.
 	RebuildRebuilt RebuildOutcome = "rebuilt"
 	// RebuildNotReconstructable reports that the previous state could not be proven or rendered.
 	RebuildNotReconstructable RebuildOutcome = "not_reconstructable"
@@ -291,8 +291,8 @@ type rebuildState struct {
 	degraded     bool
 }
 
-// Rebuild turns an eligible evaluation into an unsigned Draft-07 Section
-// 16.2 report: it removes the local hop run and every unsigned field above
+// Rebuild turns an eligible evaluation into an unsigned Draft-08 Section
+// 16.3 report: it removes the local hop run and every unsigned field above
 // the previous hop, descends the run to the previous hop's instance while
 // re-proving every state, restores the pruned wire order for every header
 // name the run's recipes did not rewrite, proves the surviving protocol
@@ -437,7 +437,7 @@ func (s *rebuildState) prepareInitialState(evaluation ReceivedEvaluation) error 
 	return nil
 }
 
-// pruneHeaderBlock applies the Section 16.2 removal rules by field and tag
+// pruneHeaderBlock applies the Section 16.3 removal rules by field and tag
 // value. It returns the surviving field bytes in wire order and the surviving
 // protocol fields, whose bytes must reach the rebuilt report unchanged.
 func pruneHeaderBlock(headers rawmsg.HeaderBlock, input verify.EmbeddedInput, run verify.LocalHopRun) ([][]byte, []rawmsg.HeaderField, error) {
@@ -721,7 +721,7 @@ func mapRebuildContextError(ctx context.Context, err error) error {
 // ProvePropagatedReport re-parses a signed propagated report and requires
 // exactly one Message-Instance m=1 and one DKIM2-Signature i=1 under the
 // signing domain with mf=<> and rt= equal to the next-hop recipient, the
-// Draft-07 Section 16.2 single-signature invariant of a propagated DSN.
+// Draft-08 Section 16.3 single-signature invariant of a propagated DSN.
 func ProvePropagatedReport(raw, nextHop []byte, domain string) error {
 	message, err := rawmsg.Parse(raw)
 	if err != nil {

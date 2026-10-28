@@ -2,8 +2,8 @@
 
 This guide deploys the implemented daemon and Milter with Postfix while
 preserving the existing trust boundaries. Protocol behavior remains pinned to
-`draft-ietf-dkim-dkim2-spec-07` and the tested
-`draft-ietf-dkim-dkim2-dns-01` behavior. The authoritative HTTP contract remains
+`draft-ietf-dkim-dkim2-spec-08` and the tested
+`draft-ietf-dkim-dkim2-dns-02` behavior. The authoritative HTTP contract remains
 [`docs/specs/openapi/dkim2d.yaml`](../specs/openapi/dkim2d.yaml).
 
 ## Reference map
@@ -155,14 +155,14 @@ Milter route whose signing block contains only the administrative tenant and
 `domain_source: verified_embedded`; it must not contain `signing.domain` or
 `signing.dsn_domain`. The adapter admits that route only for the exact
 EOH-confirmed `{postfix_internal_origin}=bounce` value. The daemon then verifies
-the complete embedded Draft-07 evidence before datasource access, derives the
+the complete embedded Draft-08 evidence before datasource access, derives the
 canonical highest authenticated `d=`, and resolves the exact
 `delivery_status` policy for that tenant/domain pair. This permits one route to
 serve multiple domains without trusting the outer envelope or caller-selected
 domain. Missing, ambiguous, unavailable, or mismatched policy/profile data
 fails closed.
 
-Under Draft-07 a bounce is a new `i=1` message whose From must be Authentic
+Under Draft-08 a bounce is a new `i=1` message whose From must be Authentic
 for its signing domain (Section 12.4). Postfix writes
 `From: MAILER-DAEMON@$myhostname`, so with the derived identity only bounces
 for originals signed at or above `$myhostname`'s domain can be signed; every
@@ -387,7 +387,7 @@ no `main.cf` or `master.cf` setting changes that. Revise such mail through a
 client that presents both envelopes explicitly, as the qualification lane
 does through the daemon route; the Milter chain must not be attached to it.
 
-An unchanged-envelope ordinary-transit route must preserve Draft-07 custody
+An unchanged-envelope ordinary-transit route must preserve Draft-08 custody
 continuity: the successor `mf=` domain must relaxed-match a predecessor `rt=`
 domain, and each non-null signature `d=` must align with its own `mf=` domain.
 The isolated deployment test therefore uses one reserved mail domain across
@@ -414,8 +414,8 @@ only the missing outer brackets as documented.
 ## Delivery-status propagation
 
 Forwarded mail that fails at a later hop produces a delivery-status
-notification addressed to the return path this system signed. Draft-07
-Section 16.2 requires that notification to be rebuilt for, and delivered to,
+notification addressed to the return path this system signed. Draft-08
+Section 16.3 requires that notification to be rebuilt for, and delivered to,
 the previous hop of the forwarded message. The transport component is
 `dkim2-dsn-propagator`, an MTA-neutral adapter that is not a Milter: it
 receives one notification over LMTP, calls the daemon's
@@ -569,7 +569,7 @@ audit.
 - One reserved subdomain of a local authority domain, for example
   `returns.operator.test`, keyed by domain in `transport_maps` and listed in
   `relay_domains`. The signing `d=` must still relaxed-match the `mf=` domain
-  under Draft-07 Section 7, which a subdomain of the signing domain
+  under Draft-08 Section 7, which a subdomain of the signing domain
   satisfies. Use this when the return path carries a variable local part.
 - A regular-expression table over a variable-envelope return path prefix. This
   is the only shape that can accidentally capture ordinary mail, so anchor the
@@ -899,9 +899,9 @@ READMEs and linked durable specs.
 
 The source-linked Exim adapter, `local_scan()`, transport filter, packaging
 validation, and five-row qualification matrix runner are implemented separately from
-this Postfix deployment. Exim is `unqualified_draft07`: its exact five-row
+this Postfix deployment. Exim is `unqualified_draft08`: its exact five-row
 compatibility report is historical Draft-04 evidence and does not extend this
-Postfix deployment or qualify current Draft-07 bytes. No universal binary
+Postfix deployment or qualify current Draft-08 bytes. No universal binary
 package or Exim image is claimed.
 
 LDAP, PostgreSQL, MySQL, and MariaDB providers, drivers, pools, schema/DDL delivery, immutable

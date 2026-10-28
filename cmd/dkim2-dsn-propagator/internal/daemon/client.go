@@ -294,7 +294,7 @@ func (c *Client) Propagate(
 		callContext,
 		generated.PropagateDeliveryStatusJSONRequestBody{
 			ApiVersion: generated.V1,
-			Draft:      generated.DraftIetfDkimDkim2Spec07,
+			Draft:      generated.DraftIetfDkimDkim2Spec08,
 			Message: generated.PropagationMessageInput{
 				Fidelity:         generated.PropagationFidelityLMTPDeliveredCRLF,
 				RawRfc5322Base64: rawMessage,
@@ -327,7 +327,7 @@ func (guard *clientGuard) mapPropagationResponse(
 	}
 	body := response.JSON200
 	if body.ApiVersion != generated.V1 ||
-		body.Draft != generated.DraftIetfDkimDkim2Spec07 ||
+		body.Draft != generated.DraftIetfDkimDkim2Spec08 ||
 		body.Operation != generated.PropagationOperationDeliveryStatusPropagation ||
 		!body.Result.Valid() || !body.Disposition.Valid() ||
 		!body.Replay.Class.Valid() {
@@ -515,7 +515,7 @@ func (c *Client) Commit(ctx context.Context, result Result) error {
 		callContext,
 		generated.CommitDeliveryStatusPropagationJSONRequestBody{
 			ApiVersion:  generated.V1,
-			Draft:       generated.DraftIetfDkimDkim2Spec07,
+			Draft:       generated.DraftIetfDkimDkim2Spec08,
 			CommitToken: result.state.commitToken,
 		},
 	)
@@ -525,7 +525,7 @@ func (c *Client) Commit(ctx context.Context, result Result) error {
 	}
 	body := response.JSON200
 	if body.ApiVersion != generated.V1 ||
-		body.Draft != generated.DraftIetfDkimDkim2Spec07 ||
+		body.Draft != generated.DraftIetfDkimDkim2Spec08 ||
 		body.State != generated.PropagationStateCommitted {
 		return &Error{}
 	}

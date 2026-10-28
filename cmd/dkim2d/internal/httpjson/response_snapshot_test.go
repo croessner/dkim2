@@ -318,7 +318,7 @@ type selectedGoldenCorpus struct {
 func loadSelectedGoldenCorpus(t *testing.T) selectedGoldenCorpus {
 	t.Helper()
 
-	corpusBytes, err := os.ReadFile("../../../../lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-07/public-golden.json")
+	corpusBytes, err := os.ReadFile("../../../../lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-08/public-golden.json")
 	if err != nil {
 		t.Fatal("golden verification corpus unavailable")
 	}
@@ -388,7 +388,7 @@ func (p selectedMatrixProvider) LookupPublicKey(_ context.Context, query dkim2.P
 
 // TestMapDomainResultMapsAuthenticSelectedSignatureWithRetiredTag proves end-to-end
 // selected output for a key record carrying the retired DNS t= tag, which
-// DNS-01 Section 3.4.1 ignores.
+// DNS-02 Section 3.4.1 ignores.
 func TestMapDomainResultMapsAuthenticSelectedSignatureWithRetiredTag(t *testing.T) {
 	corpus := loadSelectedGoldenCorpus(t)
 	vector, ok := corpus.Vectors["rsa_pass"]

@@ -12,7 +12,7 @@
 //
 // Feedback is bounded intent only. Feedhere requires an authenticated feedback
 // request at the same or a lower sequence and exposes no route. The DNS key
-// record t= tag is retired by draft-ietf-dkim-dkim2-dns-01 Section 3.4.1 and
+// record t= tag is retired by draft-ietf-dkim-dkim2-dns-02 Section 3.4.1 and
 // carries no policy meaning; only the explicitly configured local testing mode
 // relaxes the verdict. Evaluation
 // never reparses messages or public facts, returns exactly one action on

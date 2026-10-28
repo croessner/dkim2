@@ -32,25 +32,25 @@ const (
 	verifyArtifactID    = "verify"
 )
 
-// TestDraft07Identity freezes the active message draft across code and manifest evidence.
-func TestDraft07Identity(t *testing.T) {
-	const draft07 = "draft-ietf-dkim-dkim2-spec-07"
-	if MessageDraft != draft07 {
-		t.Fatalf("MessageDraft = %q, want %q", MessageDraft, draft07)
+// TestDraft08Identity freezes the active message draft across code and manifest evidence.
+func TestDraft08Identity(t *testing.T) {
+	const draft08 = "draft-ietf-dkim-dkim2-spec-08"
+	if MessageDraft != draft08 {
+		t.Fatalf("MessageDraft = %q, want %q", MessageDraft, draft08)
 	}
 	root := filepath.Clean(filepath.Join("..", "..", ".."))
 	manifest, _, err := LoadManifest(root, "testdata/conformance/manifest.json")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if manifest.MessageDraft != draft07 {
-		t.Fatalf("manifest message_draft = %q, want %q", manifest.MessageDraft, draft07)
+	if manifest.MessageDraft != draft08 {
+		t.Fatalf("manifest message_draft = %q, want %q", manifest.MessageDraft, draft08)
 	}
 }
 
-// TestManifestRejectsUnknownDraft07SectionAuthority proves current normative
-// citations cannot name a section outside the pinned Draft-07 structure.
-func TestManifestRejectsUnknownDraft07SectionAuthority(t *testing.T) {
+// TestManifestRejectsUnknownDraft08SectionAuthority proves current normative
+// citations cannot name a section outside the pinned Draft-08 structure.
+func TestManifestRejectsUnknownDraft08SectionAuthority(t *testing.T) {
 	root := filepath.Clean(filepath.Join("..", "..", ".."))
 	manifest, _, err := LoadManifest(root, "testdata/conformance/manifest.json")
 	if err != nil {
@@ -62,9 +62,10 @@ func TestManifestRejectsUnknownDraft07SectionAuthority(t *testing.T) {
 	}
 }
 
-// TestDraft07MigrationCaseAuthorities freezes the semantic Draft-07 authority
-// for every new or reclassified migration case and the audit correction.
-func TestDraft07MigrationCaseAuthorities(t *testing.T) {
+// TestDraft08MigrationCaseAuthorities freezes the semantic Draft-08 authority
+// for every case the Draft-07 migration added or reclassified and the audit
+// correction.
+func TestDraft08MigrationCaseAuthorities(t *testing.T) {
 	type expectation struct {
 		class     string
 		authority []string
@@ -72,31 +73,31 @@ func TestDraft07MigrationCaseAuthorities(t *testing.T) {
 	const draft = MessageDraft + " "
 	want := map[string]expectation{
 		"canonical/body-hash-input":                      {draftNormativeClass, []string{draft + "Sections 6.1 and 12.8"}},
-		"canonical/draft04-to-draft07-header-boundary":   {draftNormativeClass, []string{draft + "Section 6.2"}},
-		"canonical/draft07-digest-algorithms":            {draftNormativeClass, []string{draft + "Sections 3.1, 9.3, and 12.8"}},
-		"canonical/draft07-header-exclusions":            {draftNormativeClass, []string{draft + "Section 6.2"}},
-		"canonical/draft07-to-draft04-header-boundary":   {draftNormativeClass, []string{draft + "Section 6.2"}},
-		"instance/draft07-dual-hash":                     {draftNormativeClass, []string{draft + "Sections 3.1 and 9.3"}},
-		"instance/draft07-duplicate-extension-hash":      {draftNormativeClass, []string{draft + "Sections 3.1 and 9.3"}},
-		"instance/draft07-duplicate-hash":                {draftNormativeClass, []string{draft + "Sections 3.1 and 9.3"}},
-		"instance/draft07-hash-name-case-sensitive":      {draftNormativeClass, []string{draft + "Sections 2.14 and 9.3"}},
-		"instance/draft07-sha512":                        {draftNormativeClass, []string{draft + "Sections 3.1 and 9.3"}},
-		"openapi/draft07-invalid-json-diagnostics":       {"openapi_contract", []string{"docs/specs/openapi/dkim2d.yaml request bodies", "RFC 8259 Sections 4 and 9"}},
-		"policy/draft07-invalid-recipe-json":             {draftNormativeClass, []string{draft + "Section 14.2"}},
-		"recipe/draft07-lowercase-recipe":                {draftNormativeClass, []string{draft + "Section 5.1"}},
-		"recipe/draft07-nonlowercase-recipe":             {draftNormativeClass, []string{draft + "Section 5.1"}},
-		"replay/identity-draft07-epoch":                  {localSecurityClass, []string{"docs/replay-store-valkey.md Replay Identity Contract"}},
-		"signing/draft07-duplicate-selector":             {draftNormativeClass, []string{draft + "Sections 10.9 and 14.2"}},
-		"signing/draft07-same-algorithm-pair":            {draftNormativeClass, []string{draft + "Sections 10.9 and 14.2"}},
-		"signing/draft07-third-same-algorithm":           {draftNormativeClass, []string{draft + "Sections 10.9 and 14.2"}},
+		"canonical/draft04-to-draft08-header-boundary":   {draftNormativeClass, []string{draft + "Section 6.2"}},
+		"canonical/draft08-digest-algorithms":            {draftNormativeClass, []string{draft + "Sections 3.1, 9.3, and 12.8"}},
+		"canonical/draft08-header-exclusions":            {draftNormativeClass, []string{draft + "Section 6.2"}},
+		"canonical/draft08-to-draft04-header-boundary":   {draftNormativeClass, []string{draft + "Section 6.2"}},
+		"instance/draft08-dual-hash":                     {draftNormativeClass, []string{draft + "Sections 3.1 and 9.3"}},
+		"instance/draft08-duplicate-extension-hash":      {draftNormativeClass, []string{draft + "Sections 3.1 and 9.3"}},
+		"instance/draft08-duplicate-hash":                {draftNormativeClass, []string{draft + "Sections 3.1 and 9.3"}},
+		"instance/draft08-hash-name-case-sensitive":      {draftNormativeClass, []string{draft + "Sections 2.14 and 9.3"}},
+		"instance/draft08-sha512":                        {draftNormativeClass, []string{draft + "Sections 3.1 and 9.3"}},
+		"openapi/draft08-invalid-json-diagnostics":       {"openapi_contract", []string{"docs/specs/openapi/dkim2d.yaml request bodies", "RFC 8259 Sections 4 and 9"}},
+		"policy/draft08-invalid-recipe-json":             {draftNormativeClass, []string{draft + "Section 14.2"}},
+		"recipe/draft08-lowercase-recipe":                {draftNormativeClass, []string{draft + "Section 5.1"}},
+		"recipe/draft08-nonlowercase-recipe":             {draftNormativeClass, []string{draft + "Section 5.1"}},
+		"replay/identity-draft08-epoch":                  {localSecurityClass, []string{"docs/replay-store-valkey.md Replay Identity Contract"}},
+		"signing/draft08-duplicate-selector":             {draftNormativeClass, []string{draft + "Sections 10.9 and 14.2"}},
+		"signing/draft08-same-algorithm-pair":            {draftNormativeClass, []string{draft + "Sections 10.9 and 14.2"}},
+		"signing/draft08-third-same-algorithm":           {draftNormativeClass, []string{draft + "Sections 10.9 and 14.2"}},
 		"signing/local-sha256-output-policy":             {localSecurityClass, []string{draft + "Section 3", "local signing compatibility policy"}},
 		"signing/unchanged-no-redundant-instance":        {localSecurityClass, []string{draft + "Sections 9.2 and 12.1", "local minimal-transition policy"}},
-		"verification/draft07-diagnostics":               {draftNormativeClass, []string{draft + "Section 14.2"}},
-		"verification/draft07-dual-mismatch":             {draftNormativeClass, []string{draft + "Sections 3.1, 9.3, and 14.7"}},
-		"verification/draft07-recipe-less-unchanged":     {"documented_interpretation", []string{draft + "Sections 9.2, 12.1, and 14.2"}},
-		"verification/draft07-recipe-less-unknown-only":  {"documented_interpretation", []string{draft + "Sections 9.2, 12.1, and 14.2"}},
-		"verification/draft07-same-algorithm-positional": {draftNormativeClass, []string{draft + "Sections 10.9, 14.2, and 14.6"}},
-		"verification/draft07-sha512-only":               {draftNormativeClass, []string{draft + "Sections 3.1, 9.3, and 14.7"}},
+		"verification/draft08-diagnostics":               {draftNormativeClass, []string{draft + "Section 14.2"}},
+		"verification/draft08-dual-mismatch":             {draftNormativeClass, []string{draft + "Sections 3.1, 9.3, and 14.7"}},
+		"verification/draft08-recipe-less-unchanged":     {"documented_interpretation", []string{draft + "Sections 9.2, 12.1, and 14.2"}},
+		"verification/draft08-recipe-less-unknown-only":  {"documented_interpretation", []string{draft + "Sections 9.2, 12.1, and 14.2"}},
+		"verification/draft08-same-algorithm-positional": {draftNormativeClass, []string{draft + "Sections 10.9, 14.2, and 14.6"}},
+		"verification/draft08-sha512-only":               {draftNormativeClass, []string{draft + "Sections 3.1, 9.3, and 14.7"}},
 	}
 	root := filepath.Clean(filepath.Join("..", "..", ".."))
 	manifest, _, err := LoadManifest(root, "testdata/conformance/manifest.json")
@@ -119,27 +120,27 @@ func TestDraft07MigrationCaseAuthorities(t *testing.T) {
 	}
 }
 
-// TestUnqualifiedDraft07RejectsEximEvidence freezes the evidence-free Draft-07 capability state.
-func TestUnqualifiedDraft07RejectsEximEvidence(t *testing.T) {
-	const unqualifiedDraft07 = "unqualified_draft07"
+// TestUnqualifiedDraft08RejectsEximEvidence freezes the evidence-free Draft-08 capability state.
+func TestUnqualifiedDraft08RejectsEximEvidence(t *testing.T) {
+	const unqualifiedDraft08 = "unqualified_draft08"
 	root := filepath.Clean(filepath.Join("..", "..", ".."))
 	manifest, _, err := LoadManifest(root, "testdata/conformance/manifest.json")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := manifest.Capabilities[capExim]; got != unqualifiedDraft07 {
-		t.Fatalf("Exim capability = %q, want %q", got, unqualifiedDraft07)
+	if got := manifest.Capabilities[capExim]; got != unqualifiedDraft08 {
+		t.Fatalf("Exim capability = %q, want %q", got, unqualifiedDraft08)
 	}
 	for _, manifestCase := range manifest.Cases {
 		if manifestCase.Suite == capExim {
-			t.Fatalf("unqualified Draft-07 manifest retained Exim case %s/%s", manifestCase.Suite, manifestCase.CaseID)
+			t.Fatalf("unqualified Draft-08 manifest retained Exim case %s/%s", manifestCase.Suite, manifestCase.CaseID)
 		}
 	}
 	manifest.Capabilities[capExim] = "qualified_linux"
 	if err := manifest.Validate(root); err == nil {
-		t.Fatal("manifest model admitted qualified Linux under Draft-07")
+		t.Fatal("manifest model admitted qualified Linux under Draft-08")
 	}
-	manifest.Capabilities[capExim] = unqualifiedDraft07
+	manifest.Capabilities[capExim] = unqualifiedDraft08
 	manifest.Suites = append(manifest.Suites, capExim)
 	sort.Strings(manifest.Suites)
 	manifest.Cases[0].Suite = capExim
@@ -151,7 +152,7 @@ func TestUnqualifiedDraft07RejectsEximEvidence(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := ValidateJSONSchema(root, "testdata/conformance/schemas/manifest.schema.json", manifestJSON, 1<<20); err == nil {
-		t.Fatal("manifest schema admitted an Exim suite under Draft-07")
+		t.Fatal("manifest schema admitted an Exim suite under Draft-08")
 	}
 	report := Report{
 		Schema: ReportSchema, MessageDraft: MessageDraft, DNSDraft: DNSDraft,
@@ -185,7 +186,7 @@ func TestUnqualifiedDraft07RejectsEximEvidence(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := ValidateJSONSchema(root, "testdata/conformance/schemas/report.schema.json", reportJSON, 1<<20); err == nil {
-		t.Fatal("report schema admitted an Exim suite under Draft-07")
+		t.Fatal("report schema admitted an Exim suite under Draft-08")
 	}
 }
 
@@ -248,10 +249,10 @@ func TestCaseRejectsNestedUnknownAndMultipleOperations(t *testing.T) {
 	base := `{
 	  "schema":"dkim2.conformance-case.v1",
 	  "case_id":"closed-case",
-	  "message_draft":"draft-ietf-dkim-dkim2-spec-07",
-	  "dns_draft":"draft-ietf-dkim-dkim2-dns-01",
+	  "message_draft":"draft-ietf-dkim-dkim2-spec-08",
+	  "dns_draft":"draft-ietf-dkim-dkim2-dns-02",
 	  "class":"draft_normative",
-	  "authority":["draft-ietf-dkim-dkim2-spec-07 Section 4"],
+	  "authority":["draft-ietf-dkim-dkim2-spec-08 Section 4"],
 	  "provenance":"manual_derivation",
 	  "verify":{"input":{"message_b64":"","reverse_path_b64":"","forward_paths_b64":[]%s},"expected":{"code":"pass","state":"pass"}}%s
 	}`
@@ -609,7 +610,7 @@ func testManifest(artifacts ...Artifact) Manifest {
 		Capabilities: map[string]string{
 			capLibrary: supportedCapability, capDaemon: supportedCapability,
 			capMilter: partialCapability, capPostfix: partialLinuxCapability,
-			capExim: EximUnqualifiedDraft07,
+			capExim: EximUnqualifiedDraft08,
 		},
 		Artifacts: artifacts, Cases: cases,
 	}
@@ -642,7 +643,7 @@ func runGit(t *testing.T, root string, arguments ...string) string {
 func TestReportJSONIsDeterministic(t *testing.T) {
 	report := Report{
 		Schema: ReportSchema, MessageDraft: MessageDraft, DNSDraft: DNSDraft,
-		Capabilities: map[string]string{"exim": EximUnqualifiedDraft07},
+		Capabilities: map[string]string{"exim": EximUnqualifiedDraft08},
 	}
 	first, err := json.Marshal(report)
 	if err != nil {
@@ -662,7 +663,7 @@ func TestHumanReportGolden(t *testing.T) {
 		Capabilities: map[string]string{
 			capLibrary: supportedCapability, capDaemon: supportedCapability,
 			capMilter: partialCapability, capPostfix: partialLinuxCapability,
-			capExim: EximUnqualifiedDraft07,
+			capExim: EximUnqualifiedDraft08,
 		},
 		Artifacts: []Artifact{{ID: verifyArtifactID, SHA256: strings.Repeat("6", 64)}},
 		Cases: []ManifestCase{

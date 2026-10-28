@@ -83,7 +83,7 @@ func (r *flippingHeaderRelevance) IsRelevantHeader(string) (bool, error) {
 	return r.calls <= r.flipAfter, nil
 }
 
-// TestPlanHeadersUsesInverseExactUnfoldedSemantics verifies core Draft-07 vectors.
+// TestPlanHeadersUsesInverseExactUnfoldedSemantics verifies core Draft-08 vectors.
 func TestPlanHeadersUsesInverseExactUnfoldedSemantics(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -740,7 +740,7 @@ func TestPlanHeadersEnforcesInputAndStateLimitsAtExactBoundaries(t *testing.T) {
 
 // TestRawMessageBoundaryRejectsImpossibleHeaderValues verifies generation
 // consumes validated evidence only. Bare CR or LF breaks field framing; 8-bit
-// bytes that are not valid UTF-8 are possible values (Draft-07 Section 5).
+// bytes that are not valid UTF-8 are possible values (Draft-08 Section 5).
 func TestRawMessageBoundaryRejectsImpossibleHeaderValues(t *testing.T) {
 	for _, value := range [][]byte{[]byte("bad\rvalue"), []byte("bad\nvalue")} {
 		original := append([]byte("A:"), value...)

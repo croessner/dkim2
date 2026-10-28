@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// TestParserAcceptsBinaryDataSteps reproduces the Draft-07 Section 5 "u" step:
+// TestParserAcceptsBinaryDataSteps reproduces the Draft-08 Section 5 "u" step:
 // each string is canonical base64 of one line that need not be valid UTF-8.
 func TestParserAcceptsBinaryDataSteps(t *testing.T) {
 	tests := []struct {
@@ -38,7 +38,7 @@ func TestParserAcceptsBinaryDataSteps(t *testing.T) {
 	}
 }
 
-// TestParserRejectsMalformedBinaryDataSteps reproduces the Draft-07 Section 5
+// TestParserRejectsMalformedBinaryDataSteps reproduces the Draft-08 Section 5
 // base64-line pattern and the decoded CR/LF prohibition.
 func TestParserRejectsMalformedBinaryDataSteps(t *testing.T) {
 	for _, input := range []string{
@@ -84,7 +84,7 @@ func TestApplyBinaryDataStepsEmitDecodedBytes(t *testing.T) {
 	}
 }
 
-// TestParserRejectsNonLowercaseJSONKeys reproduces the Draft-07 Section 5 rule
+// TestParserRejectsNonLowercaseJSONKeys reproduces the Draft-08 Section 5 rule
 // that every JSON key is lowercase, including unknown top-level keys that are
 // otherwise ignored for extensibility.
 func TestParserRejectsNonLowercaseJSONKeys(t *testing.T) {
@@ -106,7 +106,7 @@ func TestParserRejectsNonLowercaseJSONKeys(t *testing.T) {
 	}
 }
 
-// TestParserRejectsRecipesForUnsignedHeaders reproduces the Draft-07 Section
+// TestParserRejectsRecipesForUnsignedHeaders reproduces the Draft-08 Section
 // 5.1 MUST NOT for recipes naming header fields that are not signed.
 func TestParserRejectsRecipesForUnsignedHeaders(t *testing.T) {
 	parser, err := NewParser(Limits{}, testHeaderRelevance{relevant: false})
@@ -145,7 +145,7 @@ func TestGenerateRoundTripsBinaryBodyLines(t *testing.T) {
 	}
 }
 
-// TestApplyBinaryDataReconstructsNonUTF8HeaderBytes reproduces the Draft-07
+// TestApplyBinaryDataReconstructsNonUTF8HeaderBytes reproduces the Draft-08
 // Section 5 "u" step for header fields: a previous header value that is not
 // valid UTF-8 is reconstructed byte-exact.
 func TestApplyBinaryDataReconstructsNonUTF8HeaderBytes(t *testing.T) {

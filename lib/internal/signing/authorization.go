@@ -184,7 +184,7 @@ func (q AuthorizationQuery) GoString() string { return q.String() }
 func (q AuthorizationQuery) Format(state fmt.State, _ rune) { _, _ = io.WriteString(state, q.String()) }
 
 // NewPolicyAuthorizationQuery binds bound modification facts to one exact
-// route ticket for local policy authorization. Under Draft-07 no inherited
+// route ticket for local policy authorization. Under Draft-08 no inherited
 // flag restricts the result, so the query restriction is always unrestricted.
 func NewPolicyAuthorizationQuery(capability VerifiedRevisionInput, ticket routeplan.CopyTicket, facts ModificationFacts) (AuthorizationQuery, error) {
 	if !capability.Valid() || !ticket.Valid() || ticket.Purpose() == routeplan.PurposeOrigin ||
@@ -725,7 +725,7 @@ func (m Metadata) Format(state fmt.State, _ rune) { _, _ = io.WriteString(state,
 type EffectiveMetadata struct{ flags []string }
 
 // DeriveEffectiveMetadata combines caller requests, route facts, and feedback
-// authorization. Draft-07 Section 12.5 requires an intermediary that sends
+// authorization. Draft-08 Section 12.5 requires an intermediary that sends
 // copies to more than one address to set exploded on the signature it creates,
 // and forbids exploded on i=1, so originator and delivery-status signatures
 // never carry it. exploded reports what this signer did and is therefore not
@@ -893,7 +893,7 @@ func revisionPredecessor(capability VerifiedRevisionInput, profileDomain string)
 
 // envelopeDomain extracts one canonical lowercase A-label DNS domain from
 // validated SMTP path bytes through the shared path grammar owner, so U-label
-// domains and source routes follow the same rule as recording (Draft-07
+// domains and source routes follow the same rule as recording (Draft-08
 // Section 18).
 func envelopeDomain(path []byte) (string, bool) {
 	domain, valid := EnvelopePathDomain(path)

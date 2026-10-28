@@ -1,6 +1,6 @@
 {
   "api_version": "v1",
-  "draft": "draft-ietf-dkim-dkim2-spec-07",
+  "draft": "draft-ietf-dkim-dkim2-spec-08",
   "verification": {
     "state": "PASS",
     "primary_reason": "none",

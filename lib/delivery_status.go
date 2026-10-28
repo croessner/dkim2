@@ -30,7 +30,7 @@ const (
 	// DSNEvidenceStageEmbeddedVerification identifies embedded cryptographic evidence failure.
 	DSNEvidenceStageEmbeddedVerification DSNEvidenceStage = "embedded_verification"
 	// DSNEvidenceStageEmbeddedUnsigned identifies a well-formed embedded
-	// original without any DKIM2-Signature header field. Draft-07 Section 16
+	// original without any DKIM2-Signature header field. Draft-08 Section 16
 	// defines DKIM2 DSN handling only for DKIM2-signed originals, so such a
 	// report cannot be authorized for signing. The wrapped cause remains
 	// SigningErrorAuthorizationDenied; only a caller with an explicit
@@ -173,7 +173,7 @@ func NewPostfixDerivedDSNSigningEvidenceRequest(
 // DSN evidence request that signs under the reporting MTA's own identity
 // instead of the embedded original's d=.
 //
-// Draft-07 Sections 12.4 and 16.1 make an MTA-generated DSN a new i=1
+// Draft-08 Sections 12.4 and 16.2 make an MTA-generated DSN a new i=1
 // message whose From must be Authentic for its signing domain. Postfix
 // bounce(8) writes From MAILER-DAEMON@$myhostname, so only the reporting MTA's
 // domain can sign it Authentic. The embedded original still has to verify and

@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	receivedDSNVectorPath      = "testdata/vectors/draft-ietf-dkim-dkim2-spec-07/received-dsn-golden.json"
+	receivedDSNVectorPath      = "testdata/vectors/draft-ietf-dkim-dkim2-spec-08/received-dsn-golden.json"
 	receivedDSNVectorWriteFlag = "DKIM2_WRITE_RECEIVED_DSN_VECTORS"
 )
 
@@ -202,9 +202,9 @@ func TestReceivedDSNGoldenVectorsRegenerate(t *testing.T) {
 	}
 }
 
-// TestReceivedDSNDraft07GoldenVectors proves the frozen corpus evaluates to
+// TestReceivedDSNDraft08GoldenVectors proves the frozen corpus evaluates to
 // its recorded projection using only the keys and inputs the corpus publishes.
-func TestReceivedDSNDraft07GoldenVectors(t *testing.T) {
+func TestReceivedDSNDraft08GoldenVectors(t *testing.T) {
 	corpus := loadReceivedDSNVectorCorpus(t)
 	evaluator, err := NewVerifier(receivedDSNVectorProvider{keys: corpus.Keys}, receivedDSNClockOption())
 	if err != nil {

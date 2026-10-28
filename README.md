@@ -1,13 +1,15 @@
 # DKIM2 Reference Implementation
 
 This repository contains an actively developed Go reference implementation of
-DKIM2 based on `draft-ietf-dkim-dkim2-spec-07` with the DNS companion
-`draft-ietf-dkim-dkim2-dns-01`. The completed migration from Draft-06 and
-DNS-00 is recorded in `docs/specs/draft-07-migration-disposition.md`; operator
-upgrade steps and known limitations are in
-`docs/operator/draft-07-migration.md`. The baseline is not an external
-conformance claim until the real Exim matrix and external interoperability
-peers are requalified against Draft-07.
+DKIM2 based on `draft-ietf-dkim-dkim2-spec-08` with the DNS companion
+`draft-ietf-dkim-dkim2-dns-02`; the migration from Draft-07 and DNS-01 is in
+progress and recorded in `docs/specs/draft-08-migration-disposition.md`. Until
+its work packages are complete, protocol behavior is still the Draft-07
+behavior described in `docs/specs/draft-07-migration-disposition.md`, whose
+operator upgrade steps are in `docs/operator/draft-07-migration.md`. The
+baseline is not an external conformance claim until the migration is complete
+and the real Exim matrix and external interoperability peers are requalified
+against Draft-08.
 
 The first design goal is precision: the core implementation must work from a
 controlled RFC 5322 message representation, preserve wire-significant details,
@@ -105,7 +107,7 @@ Current contents:
   activation, retirement, and rollback runbook.
 - `docs/operator/opendkim-migration.md`: protected dry-run, apply, publication,
   and higher-generation rollback workflow.
-- `docs/operator/draft-07-migration.md`: Draft-07/DNS-01 upgrade, replay-store
+- `docs/operator/draft-07-migration.md`: historical Draft-07/DNS-01 upgrade, replay-store
   transition, removed configuration, mail-flow changes, and known limitations.
 - `docs/replay-store-valkey.md`: production replay-store topology, ACL,
   persistence, replication, rotation, integration, and dependency guidance.
@@ -162,11 +164,11 @@ The preview's public API, compatibility, issue, and limitation entry point is
 
 The source-linked Exim adapter, packaging validators, operations guide, and
 five-row qualification runner are implemented. Its current capability is
-`unqualified_draft07`: the historical Draft-04 matrix passed all five supported
+`unqualified_draft08`: the historical Draft-04 matrix passed all five supported
 rows with 43 cases per row, but that candidate-bound evidence is not relabeled
-or imported for Draft-07. Portable and full Draft-07 conformance omit Exim
+or imported for Draft-08. Portable and full Draft-08 conformance omit Exim
 execution and reject an evidence root until a fresh, separately authorized
-five-row Draft-07 run is bound to unchanged candidate bytes. No prebuilt
+five-row Draft-08 run is bound to unchanged candidate bytes. No prebuilt
 universal Exim binary or container image is claimed. LDAP, PostgreSQL, MySQL,
 and MariaDB datasource providers,
 deployable schema artifacts, and the offline legacy OpenDKIM migration are
@@ -182,7 +184,7 @@ claims; an arbitrary worktree or mirror checkout does not.
 The public library signs origin messages, hash-unchanged forwarding copies,
 recipe-backed revisions, and authorized next-domain transitions. Signing uses
 exact outgoing SMTP envelope evidence, authority-issued copy tickets, opaque
-private-key handles, deterministic Draft-07 fields, final message reparsing,
+private-key handles, deterministic Draft-08 fields, final message reparsing,
 custody checks, and cryptographic self-verification. Out-of-band outputs
 remain closed until their exact route-bound release.
 
@@ -206,8 +208,8 @@ in-memory signer from the same generation and uses no local private manifest.
 Inbound delivery-status notifications are evaluated read-only inside
 `POST /v1/process` and projected as the closed `delivery_status` fact.
 "Local" is datasource authority over a signing domain, never an address in
-`mf=`, and no received-DSN fact can authorize a signing operation. Draft-07
-Section 16.2 propagation is a separate replay-gated route,
+`mf=`, and no received-DSN fact can authorize a signing operation. Draft-08
+Section 16.3 propagation is a separate replay-gated route,
 `POST /v1/dsn/propagate` with `POST /v1/dsn/propagate/commit`, whose signing
 authority is the removed completion signature's domain and whose recipient is
 the cryptographically verified previous hop's `mf=`. Forwarding domains

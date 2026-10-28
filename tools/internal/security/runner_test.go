@@ -18,14 +18,14 @@ const (
 	testScanner   = "govulncheck@v1.3.0"
 )
 
-// TestDraft07InventoryAndUnqualifiedExim freezes security identity and capability admission.
-func TestDraft07InventoryAndUnqualifiedExim(t *testing.T) {
+// TestDraft08InventoryAndUnqualifiedExim freezes security identity and capability admission.
+func TestDraft08InventoryAndUnqualifiedExim(t *testing.T) {
 	const (
-		draft07            = "draft-ietf-dkim-dkim2-spec-07"
-		unqualifiedDraft07 = "unqualified_draft07"
+		draft08            = "draft-ietf-dkim-dkim2-spec-08"
+		unqualifiedDraft08 = "unqualified_draft08"
 	)
-	if MessageDraft != draft07 {
-		t.Fatalf("MessageDraft = %q, want %q", MessageDraft, draft07)
+	if MessageDraft != draft08 {
+		t.Fatalf("MessageDraft = %q, want %q", MessageDraft, draft08)
 	}
 	evidence := expectedEvidenceIdentities()
 	for index := range evidence {
@@ -38,14 +38,14 @@ func TestDraft07InventoryAndUnqualifiedExim(t *testing.T) {
 		GoVersion: testGoVersion, GOOS: testGOOS, GOARCH: testGOARCH,
 		Race: racePassState, FuzzTargets: len(Targets()), FuzzState: passState,
 		VulnerabilityState: passState, Evidence: evidence,
-		Exim: unqualifiedDraft07, Overall: passState,
+		Exim: unqualifiedDraft08, Overall: passState,
 	}
 	if err := report.Validate(BaseRevision); err != nil {
-		t.Fatalf("unqualified Draft-07 report rejected: %v", err)
+		t.Fatalf("unqualified Draft-08 report rejected: %v", err)
 	}
 	report.Exim = "qualified_linux"
 	if err := report.Validate(BaseRevision); err == nil {
-		t.Fatal("qualified Linux evidence was accepted for the unqualified Draft-07 state")
+		t.Fatal("qualified Linux evidence was accepted for the unqualified Draft-08 state")
 	}
 }
 
@@ -166,7 +166,7 @@ func TestSecurityReportRejectsFindingOverclaimAndEvidenceTamper(t *testing.T) {
 		GoVersion: testGoVersion, GOOS: testGOOS, GOARCH: testGOARCH,
 		Race: racePassState, FuzzTargets: len(Targets()), FuzzState: passState,
 		VulnerabilityState: passState, Evidence: evidence,
-		Exim: conformance.EximUnqualifiedDraft07, Overall: passState,
+		Exim: conformance.EximUnqualifiedDraft08, Overall: passState,
 	}
 	if err := report.Validate(BaseRevision); err != nil {
 		t.Fatal(err)
@@ -180,7 +180,7 @@ func TestSecurityReportRejectsFindingOverclaimAndEvidenceTamper(t *testing.T) {
 	if err := report.Validate(BaseRevision); err == nil {
 		t.Fatal("Exim overclaim was accepted")
 	}
-	report.Exim = conformance.EximUnqualifiedDraft07
+	report.Exim = conformance.EximUnqualifiedDraft08
 	report.Evidence[0].SHA256 = "marker-private-key"
 	if err := report.Validate(BaseRevision); err == nil {
 		t.Fatal("tampered evidence was accepted")
@@ -544,7 +544,7 @@ func TestSecuritySchemasAcceptExactEvidenceAndRejectUnknownMembers(t *testing.T)
 		GoVersion: testGoVersion, GOOS: testGOOS, GOARCH: testGOARCH,
 		Race: racePassState, FuzzTargets: len(Targets()), FuzzState: passState,
 		VulnerabilityState: passState, Evidence: evidence,
-		Exim: conformance.EximUnqualifiedDraft07, Overall: passState,
+		Exim: conformance.EximUnqualifiedDraft08, Overall: passState,
 	}
 	if err := validateSchemaValue(
 		root,

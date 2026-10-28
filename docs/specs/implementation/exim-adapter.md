@@ -1,15 +1,15 @@
 # Exim Adapter Implementation Specification
 
 > Historical Draft-04 implementation record. The original scope and evidence
-> below are preserved; current Draft-07 authority is the migration disposition
+> below are preserved; current Draft-08 authority is the migration disposition
 > and current durable architecture. Its `qualified_linux` evidence does not
-> qualify Draft-07.
+> qualify Draft-08.
 
 Status: implementation-ready planning baseline.
 
 Implementation base: `487ad434d106954e72d1cd241de543918c0fd260`.
 Protocol behavior remains pinned to `draft-ietf-dkim-dkim2-spec-04` and the
-historical `draft-ietf-dkim-dkim2-dns-01` identifier. This increment adds an Exim
+historical `draft-ietf-dkim-dkim2-dns-02` identifier. This increment adds an Exim
 adapter family around the existing daemon contract. It does not change the
 pinned DKIM2 or DNS semantics.
 
@@ -533,7 +533,7 @@ content. The adapter performs no Unicode normalization, case folding, IDNA
 conversion, address rewriting or ASCII downgrade. Since the Draft-07
 migration, `filter sign` and `filter revise` admit SMTPUTF8 outgoing envelope
 paths that are valid UTF-8; the daemon and library record U-label domains as
-A-labels (Draft-07 Section 18). Invalid UTF-8 in `$return_path` or a
+A-labels (Draft-08 Section 18). Invalid UTF-8 in `$return_path` or a
 recipient is rejected before evidence access, datasource access or any
 daemon authority. UTF-8 and NUL body octets remain legal on those paths.
 Invalid structure, NUL in a header/envelope/session scalar or lossy Exim
@@ -578,7 +578,7 @@ macro; the module does not call `smtp_printf()`. Each text starts with the
 RFC 3463 enhanced status code that follows that reply code. The `4.7.5` text
 is selected only for the DXI1 tempfail reason `key_temporary` (9), which the
 Go adapter emits when the daemon reports TEMPERROR `provider_temporary` with a
-tempfail disposition (Draft-07 Section 13); every other tempfail keeps
+tempfail disposition (Draft-08 Section 13); every other tempfail keeps
 `4.7.1`. Operators therefore find the daemon reason `provider_temporary` for
 every `4.7.5` reply. No daemon, message or identity text is reflected. The
 NOLOGHDR variants are required so Exim does not copy raw rejected headers into

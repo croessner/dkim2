@@ -1,7 +1,7 @@
 # Delivery-Status Evidence and Signing
 
 > Historical Draft-04 implementation record. The original scope and evidence
-> below are preserved; current Draft-07 authority is the migration disposition
+> below are preserved; current Draft-08 authority is the migration disposition
 > and current durable architecture.
 
 Status: M25 implemented; outgoing initial DSN signing is enabled only through
@@ -145,7 +145,7 @@ original/final recipient must link to an authenticated highest `rt=` path.
 
 ### Reporting MTA Identity
 
-Draft-07 Sections 12.4 and 16.1 make an MTA-generated DSN a new `i=1`
+Draft-08 Sections 12.4 and 16.2 make an MTA-generated DSN a new `i=1`
 message whose From header field must be Authentic for its signing domain.
 Postfix bounce(8) writes `From: MAILER-DAEMON@$myhostname`, so a report
 signed under the embedded original's `d=` is Authentic only when
@@ -173,7 +173,7 @@ Postfix route evaluates the report with
 
 With the setting, a bounce of inbound mail is signed as well: a report whose
 returned original carries a remote sender's verified signature no longer
-fails at policy lookup for that foreign `d=`. Section 16.1 makes the
+fails at policy lookup for that foreign `d=`. Section 16.2 makes the
 generating system sign its DSN, and the exposure stays bounded: the outer
 recipient must byte-equal the verified embedded `mf=`, the embedded highest
 signature must pass cryptographic verification, and the DSN signature binds
@@ -188,12 +188,12 @@ bounce fails closed with `chain_failure`.
 The setting does not change `unsigned_original`. When it is absent, the
 derived embedded-`d=` behavior described above applies unchanged.
 
-Draft-07 Section 16.3 item 1 lets a DSN receiver check that the DSN's `i=1`
+Draft-08 Section 16.4 item 1 lets a DSN receiver check that the DSN's `i=1`
 signing domain relaxed-matches a recipient of the returned message. A bounce
 that a sending MTA generates for a remote recipient cannot meet that check
 under either identity: neither the embedded `d=` nor the reporting domain is
 the remote recipient's domain. The reporting identity keeps the report a
-Validly Signed Draft-07 message with an Authentic From.
+Validly Signed Draft-08 message with an Authentic From.
 
 Generic library DSNs retain strict RFC 3464 field ordering and reject folding.
 The Postfix-exclusive daemon route additionally recognizes only the current
@@ -212,7 +212,7 @@ mandatory fields, uniqueness, linkage, cryptographic verification, or limits.
 
 ### Unsigned Returned Originals
 
-Added 2026-09-26 against the Draft-07 baseline. Section 12 of
+Added 2026-09-26 against the Draft-08 baseline. Section 12 of
 draft-ietf-dkim-dkim2-spec defines DSN handling only for DKIM2-signed
 originals: the report goes to the `mf=` of the highest DKIM2-Signature, and
 `mf=<>` forbids sending one. It is silent about an original without any

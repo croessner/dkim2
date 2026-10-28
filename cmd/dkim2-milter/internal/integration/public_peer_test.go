@@ -153,7 +153,7 @@ func TestExecutableSigningModeMatrix(t *testing.T) {
 			actions: generated.ActionPlan{
 				{Name: generated.MessageInstance, Type: generated.AddHeader, Value: testMessageInstanceValue},
 				{Name: generated.DKIM2Signature, Type: generated.AddHeader, Value: testSignatureValue},
-				{Name: generated.XDKIM2Info, Type: generated.AddHeader, Value: " draft=ietf-dkim-dkim2-spec-07; sw=dkim2d;"},
+				{Name: generated.XDKIM2Info, Type: generated.AddHeader, Value: " draft=ietf-dkim-dkim2-spec-08; sw=dkim2d;"},
 			},
 			wantHeaders: []string{string(generated.MessageInstance), string(generated.DKIM2Signature), string(generated.XDKIM2Info)},
 		},
@@ -333,7 +333,7 @@ func TestExecutableActionDisconnectRecovers(t *testing.T) {
 					},
 					ApiVersion:  generatedfixture.V1,
 					Disposition: generatedfixture.DispositionAccept,
-					Draft:       generatedfixture.DraftIetfDkimDkim2Spec07,
+					Draft:       generatedfixture.DraftIetfDkimDkim2Spec08,
 					Operation:   generatedfixture.Sign,
 					Result:      generatedfixture.OperationResponseResultPass,
 				}
@@ -844,7 +844,7 @@ func TestOriginatorEnvelopeSenderDomainSelectionRunsThroughPublicSocket(t *testi
 }
 
 // TestOriginatorNullSenderTempfailsBeforeDaemonThroughPublicSocket proves the
-// adapter stays closed until it can authenticate Draft-07 DSN prerequisites.
+// adapter stays closed until it can authenticate Draft-08 DSN prerequisites.
 func TestOriginatorNullSenderTempfailsBeforeDaemonThroughPublicSocket(t *testing.T) {
 	const dsnDomain = "dsn.example.test"
 	service := &generatedDaemonService{
@@ -1416,7 +1416,7 @@ func assertFixtureMessage(
 	}
 	defer clear(mailFrom)
 	if api != generatedfixture.V1 ||
-		draft != generatedfixture.DraftIetfDkimDkim2Spec07 ||
+		draft != generatedfixture.DraftIetfDkimDkim2Spec08 ||
 		message.Fidelity == nil ||
 		*message.Fidelity != generatedfixture.MilterReconstructedCrlf ||
 		!bytes.Equal(raw, []byte(
@@ -1460,7 +1460,7 @@ func fixtureOperationResponse(
 	return generatedfixture.OperationResponse{
 		Actions: fixtureActions, ApiVersion: generatedfixture.V1,
 		Disposition: generatedfixture.DispositionAccept,
-		Draft:       generatedfixture.DraftIetfDkimDkim2Spec07,
+		Draft:       generatedfixture.DraftIetfDkimDkim2Spec08,
 		Operation:   generatedfixture.OperationResponseOperation(operation),
 		Result:      generatedfixture.OperationResponseResultPass,
 	}
@@ -1494,7 +1494,7 @@ func validFixtureProcessResponse() generatedfixture.ProcessResponse {
 		Actions:     generatedfixture.ActionPlan{},
 		ApiVersion:  generatedfixture.V1,
 		Disposition: generatedfixture.DispositionAccept,
-		Draft:       generatedfixture.DraftIetfDkimDkim2Spec07,
+		Draft:       generatedfixture.DraftIetfDkimDkim2Spec08,
 		Authentication: generatedfixture.AuthenticationResult{
 			PrimaryReason: generatedfixture.AuthenticationResultPrimaryReasonNone,
 			State:         generatedfixture.PASS,

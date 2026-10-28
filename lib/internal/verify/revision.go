@@ -44,7 +44,7 @@ const (
 	// RevisionProofLimitExceeded reports bounded all-hop work exhaustion.
 	RevisionProofLimitExceeded RevisionProofOutcome = "limit_exceeded"
 	// RevisionProofFromNotAuthentic reports a From state of the authenticated
-	// history that is not Authentic (Draft-07 Sections 11 and 14.8).
+	// history that is not Authentic (Draft-08 Sections 11 and 14.8).
 	RevisionProofFromNotAuthentic RevisionProofOutcome = "from_not_authentic"
 )
 
@@ -251,7 +251,7 @@ func (i RevisionInstant) UnixSeconds() uint64 {
 
 // WithinSkewOf reports whether i was captured by the same verifier as
 // reference and lies within the fixed five-minute operation skew of reference
-// in either direction. The skew is independent of the Draft-07 signature
+// in either direction. The skew is independent of the Draft-08 signature
 // timestamp windows. It lets a signing plan accept
 // a caller-supplied instant, such as the one a report was rendered at, only
 // when it is bounded by a fresh capture of the same clock.

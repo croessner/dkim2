@@ -7,8 +7,8 @@ Vector files should make the exact draft version explicit because the DKIM2
 draft is still changing.
 
 The public verification corpus lives at
-`lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-07/public-golden.json`. It is
-synthetic-only and targets exactly `draft-ietf-dkim-dkim2-spec-07`. Raw RFC
+`lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-08/public-golden.json`. It is
+synthetic-only and targets exactly `draft-ietf-dkim-dkim2-spec-08`. Raw RFC
 5322 and SMTP envelope bytes are Base64 encoded so fixed CRLF and byte
 boundaries remain intact. The corpus contains public RSA and Ed25519 key
 material only; it contains no private keys, seeds, credentials, or production
@@ -23,21 +23,21 @@ material. Tests decode these bytes only as input to the public root-package
 facade; they do not invoke internal verification or canonicalization APIs.
 
 The DNS-backed public verification manifest lives at
-`lib/testdata/vectors/draft-ietf-dkim-dkim2-dns-01/dns-golden.json`. It binds the
-same synthetic messages to `draft-ietf-dkim-dkim2-dns-01`, stores only the public
+`lib/testdata/vectors/draft-ietf-dkim-dkim2-dns-02/dns-golden.json`. It binds the
+same synthetic messages to `draft-ietf-dkim-dkim2-dns-02`, stores only the public
 PKCS#1 RSA representation and raw 32-byte Ed25519 representation, and names
 only reserved `.test` lookup owners. DNS vector tests enter through the public
 TXT transport, DNS provider, and verifier APIs; they perform no network calls.
 
-The internal draft-07 recipe-application fixture lives at
-`lib/internal/recipe/testdata/golden/recipe-application-draft-ietf-dkim-dkim2-spec-07.json`.
+The internal Draft-08 recipe-application fixture lives at
+`lib/internal/recipe/testdata/golden/recipe-application-draft-ietf-dkim-dkim2-spec-08.json`.
 Its package-local loader proves bottom-up header reconstruction, top-down body
 reconstruction, copied terminal-line fidelity, deterministic cross-name
 grouping, and truthful unavailable-body handling. It remains internal because
 M8 deliberately exposes no public history result or recipe API.
 
-The internal draft-07 recipe-generation fixture lives at
-`lib/internal/recipe/testdata/golden/recipe-generation-draft-ietf-dkim-dkim2-spec-07.json`.
+The internal Draft-08 recipe-generation fixture lives at
+`lib/internal/recipe/testdata/golden/recipe-generation-draft-ietf-dkim-dkim2-spec-08.json`.
 It retains exact compact decoded JSON together with synthetic previous/current
 states, disclosure and unavailable-body policies, closed outcomes,
 reconstructed semantics, and Section 6 canonical evidence. Package-local fuzz,

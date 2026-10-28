@@ -37,7 +37,7 @@ type VerificationService interface {
 	Assess(context.Context, dkim2.VerifyRequest) (dkim2.VerificationAssessment, error)
 }
 
-// AuthenticationService is the narrow library-owned final Draft-07 boundary.
+// AuthenticationService is the narrow library-owned final Draft-08 boundary.
 type AuthenticationService interface {
 	AuthenticateVerified(context.Context, dkim2.VerifyResult) (dkim2.AuthenticationResult, error)
 }
@@ -153,7 +153,7 @@ func (v *DNSVerifier) Assess(
 	return v.verifier.Assess(ctx, request)
 }
 
-// EvaluateReceivedDSN delegates the Section 16.3 received-DSN evaluation to
+// EvaluateReceivedDSN delegates the Section 16.4 received-DSN evaluation to
 // the instance verifier so that it shares the verification key provider.
 func (v *DNSVerifier) EvaluateReceivedDSN(
 	ctx context.Context,
@@ -396,7 +396,7 @@ func (r DomainResult) Verification() (dkim2.VerifyResult, error) {
 	return r.verification, nil
 }
 
-// Authentication returns the authoritative final Draft-07 result when configured.
+// Authentication returns the authoritative final Draft-08 result when configured.
 func (r DomainResult) Authentication() (dkim2.AuthenticationResult, bool) {
 	return r.authentication, r.valid() && r.applicable && r.authentication.Valid()
 }

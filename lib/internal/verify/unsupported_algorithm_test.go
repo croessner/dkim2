@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-// compositeAlgorithmToken is the Draft-07 Section 3.4 post-quantum composite
+// compositeAlgorithmToken is the Draft-08 Section 3.4 post-quantum composite
 // token this implementation deliberately does not support.
 const compositeAlgorithmToken Algorithm = "mldsa44-ed25519-sha512"
 
@@ -24,7 +24,7 @@ func TestAlgorithmPolicyRejectsPostQuantumComposite(t *testing.T) {
 	}
 }
 
-// TestVerifierNeverPassesRSASHA1OnlySignatures reproduces DNS-01 Section 3.3:
+// TestVerifierNeverPassesRSASHA1OnlySignatures reproduces DNS-02 Section 3.3:
 // rsa-sha1 MUST NOT be validated, so a signature set holding only rsa-sha1 is
 // an ignored unknown algorithm and cannot yield PASS.
 func TestVerifierNeverPassesRSASHA1OnlySignatures(t *testing.T) {

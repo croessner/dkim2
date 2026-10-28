@@ -40,7 +40,7 @@ func TestCustodyOrdinaryAdjacencyMatchesPreviousRecipientInOneDirection(t *testi
 }
 
 // TestCustodyNextDomainTransitionsAreExact verifies ordinary entry, runs, and
-// ordinary termination. Entry into an nd= hop uses the Draft-07 Section 7.1
+// ordinary termination. Entry into an nd= hop uses the Draft-08 Section 7.1
 // relaxed match with the previous rt= as Parameter1 and the nd= hop's d= as
 // Parameter2; continuation after nd= stays exact.
 func TestCustodyNextDomainTransitionsAreExact(t *testing.T) {
@@ -86,7 +86,7 @@ func TestCustodyNullReversePathAndBoundsFailClosed(t *testing.T) {
 	}
 	nextNull := ordinaryCustodySignature(2, "relay.test", "<>", "<final@dest.test>")
 	if _, err := ValidateCustody([]Signature{directNull, nextNull}, CustodyLimits{}); err != nil {
-		t.Fatalf("adjacent null reverse path code=%s, want Draft-07 rt/d match", custodyTestCode(err))
+		t.Fatalf("adjacent null reverse path code=%s, want Draft-08 rt/d match", custodyTestCode(err))
 	}
 	oversized := make([]Signature, DefaultLimits().MaxSignatures+1)
 	if _, err := ValidateCustody(oversized, CustodyLimits{}); !IsErrorCode(err, ErrorCodeLimitExceeded) {
@@ -99,7 +99,7 @@ func TestCustodyNullReversePathAndBoundsFailClosed(t *testing.T) {
 }
 
 // TestCustodyNullReversePathUsesPreviousRecipientAsParameter1 reproduces the
-// Draft-07 Section 7.1 rule for a null mf=: the previous rt= domain is
+// Draft-08 Section 7.1 rule for a null mf=: the previous rt= domain is
 // Parameter1 and the current d= is Parameter2, so a recipient below d=
 // matches while the reverse direction, near misses, and literals never do.
 func TestCustodyNullReversePathUsesPreviousRecipientAsParameter1(t *testing.T) {
@@ -129,7 +129,7 @@ func TestCustodyNullReversePathUsesPreviousRecipientAsParameter1(t *testing.T) {
 }
 
 // TestCustodyNextDomainEntryUsesPreviousRecipientAsParameter1 reproduces the
-// Draft-07 Section 7.1 nd= entry rule in both directions.
+// Draft-08 Section 7.1 nd= entry rule in both directions.
 func TestCustodyNextDomainEntryUsesPreviousRecipientAsParameter1(t *testing.T) {
 	first := ordinaryCustodySignature(1, "origin.test", "<sender@origin.test>", "<user@mx.entry.example>")
 	if _, err := ValidateCustody([]Signature{first, nextDomainCustodySignature(2, "entry.example", "exit.example")}, CustodyLimits{}); err != nil {

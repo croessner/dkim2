@@ -278,7 +278,7 @@ func MapInboundResult(
 	}
 	return generated.ProcessResponse{
 		ApiVersion:         generated.V1,
-		Draft:              generated.DraftIetfDkimDkim2Spec07,
+		Draft:              generated.DraftIetfDkimDkim2Spec08,
 		Verification:       verificationDTO,
 		Authentication:     authentication,
 		Policy:             policyDTO,
@@ -312,7 +312,7 @@ func mapVerifierProjection(result dkim2.VerifyResult) (*generated.VerifierProjec
 	}
 	binding := projection.Binding()
 	return &generated.VerifierProjection{
-		Schema: generated.Dkim2VerifierProjectionV1, Draft: generated.DraftIetfDkimDkim2Spec07,
+		Schema: generated.Dkim2VerifierProjectionV1, Draft: generated.DraftIetfDkimDkim2Spec08,
 		BindingAlgorithm: generated.Sha256, Binding: slices.Clone(binding[:]), Hops: mappedHops,
 	}, nil
 }

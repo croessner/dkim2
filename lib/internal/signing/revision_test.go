@@ -314,7 +314,7 @@ func TestVerifiedRevisionInputCrossesExplicitNullBodyHistory(t *testing.T) {
 	}
 }
 
-// TestRevisionProofChecksFromRewriteAcrossNullBodyHistory reproduces Draft-07
+// TestRevisionProofChecksFromRewriteAcrossNullBodyHistory reproduces Draft-08
 // Sections 11 and 14.8 across a b:null transition: the header state is still
 // reconstructed, so a From rewrite at m=2 must be Authentic for the reviser's
 // d=, while an aligned rewrite passes.

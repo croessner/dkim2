@@ -111,7 +111,7 @@ type ReceivedEvaluatorConfig struct {
 	RunLimits verify.LocalHopRunLimits
 }
 
-// ReceivedEvaluator owns the read-only Draft-07 Section 16.3 evaluation of
+// ReceivedEvaluator owns the read-only Draft-08 Section 16.4 evaluation of
 // an inbound DKIM2-signed delivery-status notification. It never authorizes
 // signing and never rebuilds a report.
 type ReceivedEvaluator struct {
@@ -305,7 +305,7 @@ type receivedState struct {
 	unsupported    bool
 }
 
-// Evaluate runs the seven Section 16.3 stages in order and stops at the
+// Evaluate runs the seven Section 16.4 stages in order and stops at the
 // first failure. Protocol outcomes are encoded in the returned evaluation;
 // only invalid requests, cancellation, and internal contract violations
 // return a Go error.
@@ -466,7 +466,7 @@ func verifierContractError(err error) bool {
 	return class == verify.ErrorClassInternal || class == verify.ErrorClassRequest
 }
 
-// evaluateLocalHop applies Section 16.3 item 2: verified completion
+// evaluateLocalHop applies Section 16.4 item 2: verified completion
 // signature, datasource locality of its d=, Section 14.4 relaxed d=/mf=
 // match, and exact mf= equality with the outer recipient. It then extends
 // and cryptographically verifies the local hop run.
@@ -575,7 +575,7 @@ func (e ReceivedEvaluator) evaluateRun(ctx context.Context, state *receivedState
 	return false, nil
 }
 
-// evaluateOuterAlignment applies Section 16.3 item 1 with the relaxed domain match.
+// evaluateOuterAlignment applies Section 16.4 item 1 with the relaxed domain match.
 func evaluateOuterAlignment(state *receivedState, evaluation *ReceivedEvaluation) bool {
 	for _, domain := range state.evidence.recipientDomains {
 		if signature.RelaxedDomainMatch(state.outerSigner, domain) {
@@ -658,7 +658,7 @@ func historicalInstancesSupported(instances []instance.MessageInstance, previous
 }
 
 // outerSignatureRoles returns the two outer report signatures the inbound
-// evaluation relies on. Draft-07 Section 16.3 item 1 takes returned-recipient
+// evaluation relies on. Draft-08 Section 16.4 item 1 takes returned-recipient
 // authority from the d= of the DSN's i=1 signature, its originator, even when
 // the DSN was itself forwarded; the highest signature's t= stays the
 // reference instant for the embedded completion signature. An empty,

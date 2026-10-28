@@ -73,7 +73,7 @@ func TestSignatureInputNullsMultiAlgorithmSets(t *testing.T) {
 	}
 }
 
-// TestSignatureInputPreservesTargetValueSpellingAndTerminator verifies Draft-07
+// TestSignatureInputPreservesTargetValueSpellingAndTerminator verifies Draft-08
 // target rendering fidelity for case-sensitive values and for target fields with
 // and without the optional final semicolon.
 func TestSignatureInputPreservesTargetValueSpellingAndTerminator(t *testing.T) {
@@ -100,7 +100,7 @@ func TestSignatureInputPreservesTargetValueSpellingAndTerminator(t *testing.T) {
 	}
 }
 
-// TestSignatureInputRejectsUppercaseTargetTagName reproduces the Draft-07
+// TestSignatureInputRejectsUppercaseTargetTagName reproduces the Draft-08
 // Section 10 lowercase tag-name requirement at the canonicalization boundary.
 func TestSignatureInputRejectsUppercaseTargetTagName(t *testing.T) {
 	hash := sha256HashText()
@@ -112,7 +112,7 @@ func TestSignatureInputRejectsUppercaseTargetTagName(t *testing.T) {
 	}
 }
 
-// TestSignatureInputPreservesNextDomainEnvelopeForm verifies Draft-07 nd= target rendering.
+// TestSignatureInputPreservesNextDomainEnvelopeForm verifies Draft-08 nd= target rendering.
 func TestSignatureInputPreservesNextDomainEnvelopeForm(t *testing.T) {
 	msg := mustParseSignatureMessage(t,
 		messageInstanceLine(1, "state")+

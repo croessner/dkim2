@@ -5,7 +5,7 @@ info:
   description: >
     Verification, signing, revision, policy, and replay API for the DKIM2
     reference daemon. Protocol behavior is pinned to
-    draft-ietf-dkim-dkim2-spec-07.
+    draft-ietf-dkim-dkim2-spec-08.
 paths:
   /metrics:
     get:
@@ -1493,7 +1493,7 @@ components:
           $ref: "#/components/schemas/SigningContext"
       description: >
         Optional single controlled intermediate hop for an external copy,
-        implementing Draft 07 section 12.3 with ordinary mf/rt signatures.
+        implementing Draft 08 section 12.3 with ordinary mf/rt signatures.
         The MTA supplies the exact non-null intermediate reverse path and
         one controlled intermediate recipient. Both signing contexts must
         have the same tenant; exact transit profiles for both domains and
@@ -2422,7 +2422,7 @@ components:
             skipped because verification or policy did not reach PASS/accept.
             not_eligible means the message passed but carried only the
             originator's i=1 DKIM2-Signature, so no intermediary re-sent it
-            and Draft-07 Section 15.1 replay counting does not apply.
+            and Draft-08 Section 15.1 replay counting does not apply.
           enum:
             - not_checked
             - not_eligible
@@ -2553,7 +2553,7 @@ components:
     DraftVersion:
       type: string
       enum:
-        - draft-ietf-dkim-dkim2-spec-07
+        - draft-ietf-dkim-dkim2-spec-08
     CanonicalUint64:
       type: string
       pattern: "^[1-9][0-9]{0,19}$"

@@ -8,8 +8,8 @@ import (
 	"github.com/croessner/dkim2/internal/recipe"
 )
 
-// TestCanonicalHeaderRelevanceAlignsWithDraft07 proves the production seam and complete exclusion surface.
-func TestCanonicalHeaderRelevanceAlignsWithDraft07(t *testing.T) {
+// TestCanonicalHeaderRelevanceAlignsWithDraft08 proves the production seam and complete exclusion surface.
+func TestCanonicalHeaderRelevanceAlignsWithDraft08(t *testing.T) {
 	relevance := canonical.NewHeaderRelevance()
 	var contract recipe.HeaderRelevance = relevance
 	if err := contract.Validate(); err != nil {
@@ -23,13 +23,13 @@ func TestCanonicalHeaderRelevanceAlignsWithDraft07(t *testing.T) {
 	} {
 		relevant, err := contract.IsRelevantHeader(name)
 		if err != nil || relevant {
-			t.Fatalf("excluded Draft-07 classification: name=%s relevant=%t error=%t", name, relevant, err != nil)
+			t.Fatalf("excluded Draft-08 classification: name=%s relevant=%t error=%t", name, relevant, err != nil)
 		}
 	}
 	for _, name := range []string{"from", "subject", "resent-from", "arcade", "x", "message-id"} {
 		relevant, err := contract.IsRelevantHeader(name)
 		if err != nil || !relevant {
-			t.Fatalf("signed Draft-07 classification: name=%s relevant=%t error=%t", name, relevant, err != nil)
+			t.Fatalf("signed Draft-08 classification: name=%s relevant=%t error=%t", name, relevant, err != nil)
 		}
 	}
 	for _, name := range []string{"", "Subject", "bad name", "café"} {

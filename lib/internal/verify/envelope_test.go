@@ -172,7 +172,7 @@ func TestVerifierRequiresUsedRecipientsWithoutOrder(t *testing.T) {
 	}
 }
 
-// TestVerifierMatchesULabelEnvelopeAgainstRecordedALabel reproduces Draft-07
+// TestVerifierMatchesULabelEnvelopeAgainstRecordedALabel reproduces Draft-08
 // Section 18: the current SMTPUTF8 envelope is mapped to A-labels before it is
 // compared with the A-label paths recorded by the signer.
 func TestVerifierMatchesULabelEnvelopeAgainstRecordedALabel(t *testing.T) {
@@ -247,11 +247,11 @@ func TestVerifierLowercasesOnlyEnvelopeDomains(t *testing.T) {
 	}
 }
 
-// TestVerifierEnvelopePathsFollowDraft07EAIRules verifies Draft-07 Section
+// TestVerifierEnvelopePathsFollowDraft08EAIRules verifies Draft-08 Section
 // 18 at the parser boundary: a recorded RFC 6531 UTF-8 local part is accepted
 // unchanged, while a recorded U-label domain fails closed because signers
 // must record A-labels.
-func TestVerifierEnvelopePathsFollowDraft07EAIRules(t *testing.T) {
+func TestVerifierEnvelopePathsFollowDraft08EAIRules(t *testing.T) {
 	fixture := newRSAVerificationFixture(t)
 	recorded := []byte(base64.StdEncoding.EncodeToString([]byte("<rcpt@example.test>")))
 	utf8Local := bytes.Replace([]byte(fixture.raw), recorded, []byte(base64.StdEncoding.EncodeToString([]byte("<\xc3\xbc@example.test>"))), 1)

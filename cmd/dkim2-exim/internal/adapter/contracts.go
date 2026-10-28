@@ -662,7 +662,7 @@ func (p Plan) Result() Result { return p.result }
 func (p Plan) Disposition() Disposition { return p.disposition }
 
 // WithTemporaryKey marks a process TEMPERROR tempfail as caused by a
-// temporary public-key lookup failure, which Draft-07 Section 13 answers with
+// temporary public-key lookup failure, which Draft-08 Section 13 answers with
 // 451 4.7.5. Any other plan shape is a contract failure.
 func (p Plan) WithTemporaryKey() (Plan, error) {
 	if p.operation != OperationProcess || p.result != ResultTemperror || p.disposition != DispositionTempfail {
@@ -817,7 +817,7 @@ func validScalar(value []byte) bool {
 
 // ValidEnvelopeScalar accepts one Exim envelope scalar as valid UTF-8 without
 // NUL or CR/LF framing bytes. SMTPUTF8 local parts and U-label domains are
-// signable (Draft-07 Section 18); the daemon and library own the path grammar
+// signable (Draft-08 Section 18); the daemon and library own the path grammar
 // and record domains as A-labels. It is the single Exim-side scalar rule for
 // outgoing envelopes and daemon request mapping.
 func ValidEnvelopeScalar(value []byte) bool {

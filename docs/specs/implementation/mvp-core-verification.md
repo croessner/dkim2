@@ -1,7 +1,7 @@
 # MVP Core Verification
 
 > Historical Draft-04 implementation record. The original scope and evidence
-> below are preserved; current Draft-07 authority is the migration disposition
+> below are preserved; current Draft-08 authority is the migration disposition
 > and current durable architecture.
 
 Status: completed under an explicit maintainer exception for the external
@@ -45,7 +45,7 @@ This spec is governed by:
 - `.gitignore`
 - `draft-ietf-dkim-dkim2-spec-04`, dated 2026-07-05, especially Sections 3,
   4, 6, 7, 8, 9.2 through 9.6, 10, and 11
-- `draft-ietf-dkim-dkim2-dns-01`, dated 2026-03-18, only for algorithm and future
+- `draft-ietf-dkim-dkim2-dns-02`, dated 2026-03-18, only for algorithm and future
   key-provider context; M5 performs no DNS parsing or lookup
 - RFC 5321 for SMTP envelope evidence
 - RFC 5322 and RFC 6532 for message bytes and internationalized header input

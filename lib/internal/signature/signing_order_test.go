@@ -23,7 +23,7 @@ func TestSigningAlgorithmOrderIsDetached(t *testing.T) {
 }
 
 // TestPostQuantumCompositeIsOutsideTheAlgorithmVocabulary pins the deliberate
-// deviation from DNS-01: the unsettled mldsa44-ed25519-sha512 construction is
+// deviation from DNS-02: the unsettled mldsa44-ed25519-sha512 construction is
 // neither known nor signable, so it is handled like any extension token.
 func TestPostQuantumCompositeIsOutsideTheAlgorithmVocabulary(t *testing.T) {
 	composite := Algorithm("mldsa44-ed25519-sha512")

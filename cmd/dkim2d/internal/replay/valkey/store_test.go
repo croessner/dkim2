@@ -1222,7 +1222,7 @@ func deriveValidReplayKey(
 	derive func(*dkim2.ReplayDeriver, context.Context, dkim2.ReplayIdentity) (dkim2.ReplayKey, error),
 ) dkim2.ReplayKey {
 	t.Helper()
-	corpusBytes, err := os.ReadFile("../../../../../lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-07/public-golden.json")
+	corpusBytes, err := os.ReadFile("../../../../../lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-08/public-golden.json")
 	if err != nil {
 		t.Fatal("public replay corpus read failed")
 	}

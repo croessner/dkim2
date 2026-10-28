@@ -224,7 +224,7 @@ func TestLocalScanRequestLimits(t *testing.T) {
 }
 
 // TestEnvelopeContractsPreserveInboundAndOutboundUTF8 proves authority rules:
-// SMTPUTF8 envelopes are valid in both directions (Draft-07 Section 18), while
+// SMTPUTF8 envelopes are valid in both directions (Draft-08 Section 18), while
 // invalid UTF-8 and framing bytes fail closed.
 func TestEnvelopeContractsPreserveInboundAndOutboundUTF8(t *testing.T) {
 	incoming, err := NewIncomingEvidence(

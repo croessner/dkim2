@@ -330,7 +330,7 @@ func validateSignatureCollection(signatures []signature.Signature) error {
 		}
 	}
 	for _, parsed := range signatures {
-		// Draft-07 Section 12.5 forbids exploded on i=1; Sections 2.11 and 13
+		// Draft-08 Section 12.5 forbids exploded on i=1; Sections 2.11 and 13
 		// make every Signer requirement part of a Validly Signed message.
 		if parsed.Sequence() == 1 && parsed.Flags().HasKnown(signature.FlagExploded) {
 			return malformedStateError(CheckKindSignature, Target{Sequence: 1}, nil)

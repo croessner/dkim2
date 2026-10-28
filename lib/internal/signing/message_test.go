@@ -454,7 +454,7 @@ func TestCompleteFieldRejectsTransportBeforeEveryCallback(t *testing.T) {
 	}
 }
 
-// TestOriginatorSigningRequiresAuthenticFrom reproduces Draft-07 Section
+// TestOriginatorSigningRequiresAuthenticFrom reproduces Draft-08 Section
 // 12.4: an originator must choose d= so that the From header field is
 // Authentic, so signing a foreign or missing From fails closed before any
 // private-key callback.

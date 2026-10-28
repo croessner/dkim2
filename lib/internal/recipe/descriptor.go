@@ -71,7 +71,7 @@ func (d Descriptor) AffectedHeaders() []string {
 	return slices.Clone(d.headerNames)
 }
 
-// BodyMode returns the exact Draft-07 body member form.
+// BodyMode returns the exact Draft-08 body member form.
 func (d Descriptor) BodyMode() BodyMode {
 	if !d.Valid() {
 		return ""

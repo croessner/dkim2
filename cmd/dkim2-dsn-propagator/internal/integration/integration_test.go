@@ -58,7 +58,7 @@ func (d *daemonFixture) PropagateDeliveryStatus(
 		return fixture.PropagateDeliveryStatus200JSONResponse{
 			Body: fixture.DSNPropagateResponse{
 				ApiVersion:  fixture.V1,
-				Draft:       fixture.DraftIetfDkimDkim2Spec07,
+				Draft:       fixture.DraftIetfDkimDkim2Spec08,
 				Operation:   fixture.PropagationOperationDeliveryStatusPropagation,
 				Result:      fixture.PropagationResultFail,
 				Disposition: fixture.PropagationDispositionReject,
@@ -83,7 +83,7 @@ func (d *daemonFixture) PropagateDeliveryStatus(
 	return fixture.PropagateDeliveryStatus200JSONResponse{
 		Body: fixture.DSNPropagateResponse{
 			ApiVersion:  fixture.V1,
-			Draft:       fixture.DraftIetfDkimDkim2Spec07,
+			Draft:       fixture.DraftIetfDkimDkim2Spec08,
 			Operation:   fixture.PropagationOperationDeliveryStatusPropagation,
 			Result:      fixture.PropagationResultPass,
 			Disposition: fixture.PropagationDispositionAccept,
@@ -117,7 +117,7 @@ func (d *daemonFixture) CommitDeliveryStatusPropagation(
 	return fixture.CommitDeliveryStatusPropagation200JSONResponse{
 		Body: fixture.DSNPropagateCommitResponse{
 			ApiVersion: fixture.V1,
-			Draft:      fixture.DraftIetfDkimDkim2Spec07,
+			Draft:      fixture.DraftIetfDkimDkim2Spec08,
 			State:      fixture.PropagationStateCommitted,
 		},
 	}, nil

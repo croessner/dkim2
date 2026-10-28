@@ -12,7 +12,7 @@ import (
 	"github.com/croessner/dkim2/internal/canonical"
 )
 
-const syntheticVectorSeed = "draft-ietf-dkim-dkim2-spec-07 synthetic static verifier vector"
+const syntheticVectorSeed = "draft-ietf-dkim-dkim2-spec-08 synthetic static verifier vector"
 
 type deterministicReader struct {
 	state uint64

@@ -48,10 +48,10 @@ func fromTestState(t *testing.T, fromLines ...string) recipe.State {
 	return state
 }
 
-// TestFromAuthenticityFollowsDraft07Section11 reproduces the Draft-07
+// TestFromAuthenticityFollowsDraft08Section11 reproduces the Draft-08
 // Sections 11 and 14.8 rules on the From states of an authenticated history.
 // States are ordered from the highest m= down to m=1.
-func TestFromAuthenticityFollowsDraft07Section11(t *testing.T) {
+func TestFromAuthenticityFollowsDraft08Section11(t *testing.T) {
 	origin := fromTestSignature(t, 1, 1, "example.test")
 	forwarder := fromTestSignature(t, 2, 1, "forwarder.test")
 	reviser := fromTestSignature(t, 2, 2, "list.test")

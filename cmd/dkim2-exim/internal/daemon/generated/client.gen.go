@@ -361,13 +361,13 @@ func (e Disposition) Valid() bool {
 
 // Defines values for DraftVersion.
 const (
-	DraftIetfDkimDkim2Spec07 DraftVersion = "draft-ietf-dkim-dkim2-spec-07"
+	DraftIetfDkimDkim2Spec08 DraftVersion = "draft-ietf-dkim-dkim2-spec-08"
 )
 
 // Valid indicates whether the value is a known member of the DraftVersion enum.
 func (e DraftVersion) Valid() bool {
 	switch e {
-	case DraftIetfDkimDkim2Spec07:
+	case DraftIetfDkimDkim2Spec08:
 		return true
 	default:
 		return false
@@ -1494,11 +1494,11 @@ type ReadinessResponseStatus string
 
 // ReplayResult defines model for ReplayResult.
 type ReplayResult struct {
-	// Class Local replay delivery-policy class. not_checked means replay was skipped because verification or policy did not reach PASS/accept. not_eligible means the message passed but carried only the originator's i=1 DKIM2-Signature, so no intermediary re-sent it and Draft-07 Section 15.1 replay counting does not apply.
+	// Class Local replay delivery-policy class. not_checked means replay was skipped because verification or policy did not reach PASS/accept. not_eligible means the message passed but carried only the originator's i=1 DKIM2-Signature, so no intermediary re-sent it and Draft-08 Section 15.1 replay counting does not apply.
 	Class ReplayResultClass `json:"class"`
 }
 
-// ReplayResultClass Local replay delivery-policy class. not_checked means replay was skipped because verification or policy did not reach PASS/accept. not_eligible means the message passed but carried only the originator's i=1 DKIM2-Signature, so no intermediary re-sent it and Draft-07 Section 15.1 replay counting does not apply.
+// ReplayResultClass Local replay delivery-policy class. not_checked means replay was skipped because verification or policy did not reach PASS/accept. not_eligible means the message passed but carried only the originator's i=1 DKIM2-Signature, so no intermediary re-sent it and Draft-08 Section 15.1 replay counting does not apply.
 type ReplayResultClass string
 
 // ReportingContext defines model for ReportingContext.

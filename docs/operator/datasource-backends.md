@@ -295,8 +295,8 @@ cannot both succeed.
 The profile use is part of the published generation, not a runtime switch.
 Every domain this deployment forwards mail under needs an active
 `delivery_status` profile in addition to the `ordinary_transit` or
-`next_domain_transit` profile that signs the forwarded copy. Draft-07
-Section 16.2 propagation signs the rebuilt delivery-status notification
+`next_domain_transit` profile that signs the forwarded copy. Draft-08
+Section 16.3 propagation signs the rebuilt delivery-status notification
 under the removed completion signature's own domain, so the outgoing
 delivery-status authority that derives a domain from an embedded signature
 does not apply and is not reachable through the propagation capability.

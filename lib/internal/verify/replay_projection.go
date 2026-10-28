@@ -58,7 +58,7 @@ func (p ReplayProjection) OriginReplayAlgorithm() string {
 // Exploded returns the authenticated complete-chain OR fact.
 func (p ReplayProjection) Exploded() bool { return p.Valid() && p.exploded }
 
-// ReplayEligible reports whether local replay policy applies. Draft-07
+// ReplayEligible reports whether local replay policy applies. Draft-08
 // Section 15.1 concerns copies re-sent by an intermediary, so a message that
 // carries only the originator's i=1 signature is not counted; the identity
 // itself stays available for DSN propagation.

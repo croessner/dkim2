@@ -1,7 +1,7 @@
 # Raw Message Model
 
 > Historical Draft-04 implementation record. The original scope and evidence
-> below are preserved; current Draft-07 authority is the migration disposition
+> below are preserved; current Draft-08 authority is the migration disposition
 > and current durable architecture.
 
 Status: completed.
@@ -28,7 +28,7 @@ This spec is governed by:
 - `Makefile`
 - `draft-ietf-dkim-dkim2-spec-04`, dated 2026-07-05, as the active DKIM2
   architecture baseline
-- `draft-ietf-dkim-dkim2-dns-01`, dated 2026-03-18, as the related DNS baseline
+- `draft-ietf-dkim-dkim2-dns-02`, dated 2026-03-18, as the related DNS baseline
   even though M1 does not implement DNS behavior
 - RFC 5322 Internet Message Format semantics for header fields, header
   continuation, header/body separation, and CRLF line endings

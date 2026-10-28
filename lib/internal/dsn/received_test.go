@@ -449,7 +449,7 @@ func TestReceivedEvaluationEmbeddedUnverifiedAndTemporary(t *testing.T) {
 	}
 }
 
-// TestReceivedEvaluationLocalHopIdentity proves the four-part Section 16.3
+// TestReceivedEvaluationLocalHopIdentity proves the four-part Section 16.4
 // item 2 rule and its tenant-less, foreign, mismatched, and outage outcomes.
 func TestReceivedEvaluationLocalHopIdentity(t *testing.T) {
 	stopped := func(localHop LocalHopResult) projection {
@@ -492,8 +492,8 @@ func TestReceivedEvaluationLocalHopIdentity(t *testing.T) {
 	}
 }
 
-// TestReceivedEvaluationTakesAuthorityFromOuterOriginator reproduces Draft-07
-// Section 16.3 item 1: authority comes from the d= of the DSN's i=1 signature,
+// TestReceivedEvaluationTakesAuthorityFromOuterOriginator reproduces Draft-08
+// Section 16.4 item 1: authority comes from the d= of the DSN's i=1 signature,
 // so a forwarded DSN keeps its originator's authority, and a forged
 // originator is not rescued by a later forwarder that happens to match.
 func TestReceivedEvaluationTakesAuthorityFromOuterOriginator(t *testing.T) {

@@ -1,7 +1,7 @@
 # DKIM2 Datasource Providers
 
 > Historical Draft-04 implementation record. The original scope and evidence
-> below are preserved; current Draft-07 authority is the migration disposition
+> below are preserved; current Draft-08 authority is the migration disposition
 > and current durable architecture.
 
 Status: completed; implementation and completion evidence recorded.
@@ -25,7 +25,7 @@ This specification is governed by:
 - `docs/specs/spec-and-prompt-template.md`.
 - `docs/specs/implementation/signing-and-revision.md`.
 - [draft-ietf-dkim-dkim2-spec-04](https://datatracker.ietf.org/doc/html/draft-ietf-dkim-dkim2-spec-04), especially Sections 4, 7, 8, and 9.
-- [draft-ietf-dkim-dkim2-dns-01](https://datatracker.ietf.org/doc/html/draft-ietf-dkim-dkim2-dns-01), especially the signing-key and algorithm constraints.
+- [draft-ietf-dkim-dkim2-dns-02](https://datatracker.ietf.org/doc/html/draft-ietf-dkim-dkim2-dns-02), especially the signing-key and algorithm constraints.
 - RFC 5321 and RFC 5322 where SMTP envelope and message-domain facts enter
   profile selection.
 - RFC 8259 for the flat-file JSON representation.
@@ -706,7 +706,7 @@ must never be staged or committed.
   measured-versus-planned comparison is unavailable because this durable
   specification contained no planning estimate.
 - The 2026-07-24 Datatracker check found that
-  `draft-ietf-dkim-dkim2-dns-01` replaced
+  `draft-ietf-dkim-dkim2-dns-02` replaced
   `draft-chuang-dkim2-dns-04` on 2026-07-20 with a normatively identical body.
   M11 behavior and tests remain explicitly pinned to the reviewed historical
   `-04` identifier; identifier and vector migration is a separate reviewed

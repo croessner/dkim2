@@ -26,7 +26,7 @@ const forwardedReplayRelayPath = "<relay@example.test>"
 // signedForwardedReplayMessage creates one passing two-hop synthetic message:
 // the originator's i=1 signature to the relay and the relay's i=2 signature to
 // the exact final recipients, both over one m=1 instance and one RSA key.
-// Draft-07 Section 15.1 counts only such intermediary re-sends as replays, so
+// Draft-08 Section 15.1 counts only such intermediary re-sends as replays, so
 // this is the minimal replay-eligible fixture. flags is appended verbatim to
 // the i=2 tag list (for example "; f=exploded").
 func signedForwardedReplayMessage(t testing.TB, timestamp int64, recipients [][]byte, flags string) ([]byte, *rsa.PublicKey) {

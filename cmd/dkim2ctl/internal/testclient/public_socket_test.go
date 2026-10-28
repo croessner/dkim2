@@ -168,7 +168,7 @@ func (s *conformanceService) ServeHTTP(writer http.ResponseWriter, request *http
 	case "/readyz":
 		s.writeJSON(
 			writer, http.StatusOK,
-			`{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-07","status":"ready"}`,
+			`{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-08","status":"ready"}`,
 			true,
 		)
 		return
@@ -275,7 +275,7 @@ func (s *conformanceService) writeError(
 	status int,
 	code string,
 ) {
-	body := `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-07","code":"` +
+	body := `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-08","code":"` +
 		code + `","category":"request"}`
 	s.writeJSON(writer, status, body, false)
 }
@@ -317,10 +317,10 @@ func decodeGeneratedBody(request *http.Request, destination any) bool {
 	return decoder.Decode(&trailing) == io.EOF
 }
 
-const processReportResponse = `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-07","authentication":{"state":"PASS","primary_reason":"none"},"verification":{"state":"PASS","primary_reason":"none","scope":"chain","historical_content":"complete","historical_signatures":"complete","custody_structure":"not_present","checks":[{"class":"protocol","reason":"none"}],"signature_sets":[],"target":{"sequence":"1","instance":"1"}},"verifier_projection":{"schema":"dkim2.verifier-projection.v1","draft":"draft-ietf-dkim-dkim2-spec-07","binding_algorithm":"sha-256","binding":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=","hops":[{"sequence":"1","message_instance":"1","hop_binding":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=","signer_domain":"example.test","signature_algorithms":["rsa-sha256"],"signature_state":"pass","custody_transition":"origin","feedback":false,"feed_here":false,"exploded":false,"recipe_mode":"unchanged","recipe_has_header_changes":false,"recipe_body_mode":"absent","recipe_digest":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=","change_classes":[],"affected_headers":[],"history_header_state":"matched","history_body_state":"matched","body_availability":"known","change_count":0,"affected_header_count":0}]},"policy":{"mode":"strict","verdict":"accept","primary_reason":"protocol_pass","feedback":{"requested":false,"relay_required":false,"history_coverage":"complete"},"findings":[{"reason":"protocol_pass","severity":"info"}]},"replay":{"class":"not_eligible"},"disposition":"accept","actions":[{"type":"add_header","name":"Authentication-Results","value":"mx.example.test; dkim2=pass"}]}`
-const signContinueResponse = `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-07","operation":"sign","result":"pass","disposition":"continue","actions":[]}`
-const reviseUnchangedResponse = `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-07","operation":"revise","result":"pass","disposition":"accept","actions":[{"type":"add_header","name":"DKIM2-Signature","value":"v=1; a=ed25519-sha256; d=example.test; s=test; b=unchanged"}]}`
-const reviseChangedResponse = `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-07","operation":"revise","result":"pass","disposition":"accept","actions":[{"type":"add_header","name":"Message-Instance","value":"v=1; i=2; h=sha256:synthetic"},{"type":"add_header","name":"DKIM2-Signature","value":"v=1; a=ed25519-sha256; d=example.test; s=test; b=changed"}]}`
+const processReportResponse = `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-08","authentication":{"state":"PASS","primary_reason":"none"},"verification":{"state":"PASS","primary_reason":"none","scope":"chain","historical_content":"complete","historical_signatures":"complete","custody_structure":"not_present","checks":[{"class":"protocol","reason":"none"}],"signature_sets":[],"target":{"sequence":"1","instance":"1"}},"verifier_projection":{"schema":"dkim2.verifier-projection.v1","draft":"draft-ietf-dkim-dkim2-spec-08","binding_algorithm":"sha-256","binding":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=","hops":[{"sequence":"1","message_instance":"1","hop_binding":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=","signer_domain":"example.test","signature_algorithms":["rsa-sha256"],"signature_state":"pass","custody_transition":"origin","feedback":false,"feed_here":false,"exploded":false,"recipe_mode":"unchanged","recipe_has_header_changes":false,"recipe_body_mode":"absent","recipe_digest":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=","change_classes":[],"affected_headers":[],"history_header_state":"matched","history_body_state":"matched","body_availability":"known","change_count":0,"affected_header_count":0}]},"policy":{"mode":"strict","verdict":"accept","primary_reason":"protocol_pass","feedback":{"requested":false,"relay_required":false,"history_coverage":"complete"},"findings":[{"reason":"protocol_pass","severity":"info"}]},"replay":{"class":"not_eligible"},"disposition":"accept","actions":[{"type":"add_header","name":"Authentication-Results","value":"mx.example.test; dkim2=pass"}]}`
+const signContinueResponse = `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-08","operation":"sign","result":"pass","disposition":"continue","actions":[]}`
+const reviseUnchangedResponse = `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-08","operation":"revise","result":"pass","disposition":"accept","actions":[{"type":"add_header","name":"DKIM2-Signature","value":"v=1; a=ed25519-sha256; d=example.test; s=test; b=unchanged"}]}`
+const reviseChangedResponse = `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-08","operation":"revise","result":"pass","disposition":"accept","actions":[{"type":"add_header","name":"Message-Instance","value":"v=1; i=2; h=sha256:synthetic"},{"type":"add_header","name":"DKIM2-Signature","value":"v=1; a=ed25519-sha256; d=example.test; s=test; b=changed"}]}`
 
 // TestProcessReportFixtureUsesCompletedOriginPolicy verifies the frozen daemon response is internally coherent.
 func TestProcessReportFixtureUsesCompletedOriginPolicy(t *testing.T) {

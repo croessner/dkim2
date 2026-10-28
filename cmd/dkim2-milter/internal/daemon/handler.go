@@ -264,7 +264,7 @@ func (h *Handler) Handle(
 			operationContext,
 			generated.ProcessMessageJSONRequestBody{
 				ApiVersion: generated.V1,
-				Draft:      generated.DraftIetfDkimDkim2Spec07,
+				Draft:      generated.DraftIetfDkimDkim2Spec08,
 				Message:    request.message,
 				Reporting:  reporting,
 				Smtp:       request.smtp,
@@ -284,7 +284,7 @@ func (h *Handler) Handle(
 			operationContext,
 			generated.SignMessageJSONRequestBody{
 				ApiVersion: generated.V1,
-				Draft:      generated.DraftIetfDkimDkim2Spec07,
+				Draft:      generated.DraftIetfDkimDkim2Spec08,
 				Message:    request.message,
 				Smtp:       request.smtp,
 				Context: generated.SigningContext{
@@ -302,7 +302,7 @@ func (h *Handler) Handle(
 			operationContext,
 			generated.ReviseMessageJSONRequestBody{
 				ApiVersion:   generated.V1,
-				Draft:        generated.DraftIetfDkimDkim2Spec07,
+				Draft:        generated.DraftIetfDkimDkim2Spec08,
 				Message:      request.message,
 				Smtp:         request.smtp,
 				IncomingSmtp: request.smtp,
@@ -328,7 +328,7 @@ func (h *Handler) Handle(
 			operationContext,
 			generated.SignDeliveryStatusJSONRequestBody{
 				ApiVersion: generated.V1,
-				Draft:      generated.DraftIetfDkimDkim2Spec07,
+				Draft:      generated.DraftIetfDkimDkim2Spec08,
 				Message:    request.dsnMessage,
 				OuterSmtp:  request.smtp,
 				Context: generated.DeliveryStatusContext{
@@ -979,7 +979,7 @@ func mapOperation(
 ) (milter.Result, error) {
 	if value == nil ||
 		value.ApiVersion != generated.V1 ||
-		value.Draft != generated.DraftIetfDkimDkim2Spec07 ||
+		value.Draft != generated.DraftIetfDkimDkim2Spec08 ||
 		string(value.Operation) != operation ||
 		!value.Operation.Valid() || !value.Result.Valid() ||
 		!value.Disposition.Valid() || value.Actions == nil ||
@@ -1098,7 +1098,7 @@ func consumeJSONValue(decoder *json.Decoder, depth int) bool {
 // validProcessContract validates every closed nested response fact and bound.
 func validProcessContract(value *generated.ProcessResponse, authservID string) bool {
 	if value == nil || value.ApiVersion != generated.V1 ||
-		value.Draft != generated.DraftIetfDkimDkim2Spec07 ||
+		value.Draft != generated.DraftIetfDkimDkim2Spec08 ||
 		!value.Disposition.Valid() || value.Actions == nil ||
 		!validProcessReportAction(value, authservID) ||
 		!validAuthenticationContract(value.Authentication) ||

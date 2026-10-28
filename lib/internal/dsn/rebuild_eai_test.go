@@ -7,7 +7,7 @@ import (
 
 // TestRebuildPropagatesToSMTPUTF8PreviousHop proves that a DSN can be
 // propagated to a previous hop whose recorded mf= carries an RFC 6531 UTF-8
-// local part (Draft-07 Sections 16.2 and 18): the next-hop recipient keeps the
+// local part (Draft-08 Sections 16.3 and 18): the next-hop recipient keeps the
 // exact recorded path and the rebuilt report requires an SMTPUTF8
 // re-injection. Recorded domains are always A-labels, so the domain part needs
 // no separate case here.

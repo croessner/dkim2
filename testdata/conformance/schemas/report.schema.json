@@ -6,7 +6,7 @@
       "additionalProperties": false,
       "properties": {
         "daemon": {"const": "supported"},
-        "exim": {"const": "unqualified_draft07"},
+        "exim": {"const": "unqualified_draft08"},
         "library": {"const": "supported"},
         "milter": {"const": "partial"},
         "postfix": {"const": "partial_linux"}
@@ -56,10 +56,10 @@
     "capabilities": {"$ref": "#/$defs/capabilities"},
     "cases": {"items": {"$ref": "#/$defs/case"}, "maxItems": 16384, "type": "array"},
     "counts": {"items": {"$ref": "#/$defs/count"}, "maxItems": 30, "type": "array"},
-    "dns_draft": {"const": "draft-ietf-dkim-dkim2-dns-01"},
+    "dns_draft": {"const": "draft-ietf-dkim-dkim2-dns-02"},
     "manifest_schema": {"const": "dkim2.conformance-manifest.v1"},
     "manifest_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
-    "message_draft": {"const": "draft-ietf-dkim-dkim2-spec-07"},
+    "message_draft": {"const": "draft-ietf-dkim-dkim2-spec-08"},
     "overall": {"enum": ["pass", "fail"]},
     "platform": {"enum": ["portable", "linux"]},
     "profile": {"enum": ["portable", "full"]},

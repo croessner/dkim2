@@ -272,7 +272,7 @@ func hasSignatureSet(result Result, algorithm Algorithm, status SignatureSetStat
 	return false
 }
 
-// TestVerifierRejectsExplodedOnFirstSignature reproduces Draft-07 Section
+// TestVerifierRejectsExplodedOnFirstSignature reproduces Draft-08 Section
 // 12.5: exploded MUST NOT be set on i=1, and Sections 2.11 and 13 make that
 // Signer requirement part of a Validly Signed message. A later signature may
 // carry exploded, and the uppercase spelling is an inert unknown flag.

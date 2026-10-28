@@ -3,11 +3,11 @@
 The first preview is a tested reference candidate, not a final DKIM2 standard,
 certification, or universal interoperability claim.
 
-- Draft-07 architecture references, full-chain policy guidance, EAI, IANA,
+- Draft-08 architecture references, full-chain policy guidance, EAI, IANA,
   and Security Considerations still contain `TBA` text. The implementation
   does not invent normative behavior for those sections.
-- The post-quantum `mldsa44-ed25519-sha512` composite algorithm of Draft-07
-  Section 3.4 and its DNS-01 key type are deliberately not implemented; see
+- The post-quantum `mldsa44-ed25519-sha512` composite algorithm of Draft-08
+  Section 3.4 and its DNS-02 key type are deliberately not implemented; see
   [Post-Quantum Composite Algorithm](#post-quantum-composite-algorithm)
   (`DKIM2-ISSUE-0019`).
 - External discovery found runnable parser overlap with MailAuthLens and
@@ -20,9 +20,9 @@ certification, or universal interoperability claim.
   signing, verification, recipe, custody, SMTP, replay, daemon, OpenAPI,
   telemetry, or deployment behavior.
 - Postfix/Milter qualification is implemented. Exim is
-  `unqualified_draft07`; the five source-linked upstream, Debian, and Ubuntu
+  `unqualified_draft08`; the five source-linked upstream, Debian, and Ubuntu
   rows in the compatibility report are historical Draft-04 evidence. There is
-  no current Draft-07 Exim execution claim, universal local-scan binary, or
+  no current Draft-08 Exim execution claim, universal local-scan binary, or
   Exim container image.
 - The daemon supports outgoing null-reverse-path DSN signing only through the
   Postfix-exclusive route, `delivery_status` profile, route ticket, and
@@ -32,7 +32,7 @@ certification, or universal interoperability claim.
   `{postfix_internal_origin}` macro and accepts only EOH-confirmed `bounce`
   with a null outer sender and one recipient. `notify`, `verify`, empty or
   absent values, and non-null double-bounce/postmaster copies remain unchanged.
-  Received-DSN evaluation and Draft-07 Section 16.2 DSN propagation are
+  Received-DSN evaluation and Draft-08 Section 16.3 DSN propagation are
   implemented against
   [delivery-status-propagation.md](../specs/implementation/delivery-status-propagation.md)
   through the read-only `delivery_status` projection of `POST /v1/process`,
@@ -65,12 +65,12 @@ certification, or universal interoperability claim.
 - Propagation cannot complete when the previous hop's public key was rotated
   away or revoked between forwarding and the arrival of the notification. The
   previous hop's signature is verified over the reconstructed state, with the
-  Draft-07 Section 14.3 window evaluated at the completion signature's `t=`,
+  Draft-08 Section 14.3 window evaluated at the completion signature's `t=`,
   before its `mf=` may become a recipient; without a resolvable key the
   outcome is a permanent refusal, not a best-effort delivery.
 - An EAI previous hop with an RFC 6531 UTF-8 local part is propagated to:
   recorded `mf=` paths keep the local part and carry an A-label domain
-  (Draft-07 Section 18), and the rebuilt report sets `smtputf8_required`. The
+  (Draft-08 Section 18), and the rebuilt report sets `smtputf8_required`. The
   fact is computed over every rendered byte outside the embedded original's
   body, and
   the adapter fails closed when the re-injection listener does not advertise a
@@ -129,10 +129,10 @@ certification, or universal interoperability claim.
   [native-domain runbook](../operator/native-domain-onboarding.md).
 - Product images are Linux `amd64` and `arm64`; release preparation does not
   publish them or create `latest`, stable, minor, or major aliases.
-- The Draft-07 replay identifier is draft-bound inside the replay HMAC frame.
+- The Draft-08 replay identifier is draft-bound inside the replay HMAC frame.
   An in-place upgrade keeps the epoch and secret, but Draft-06 records are not
   consulted: a message first seen under Draft-06 that still verifies under
-  Draft-07 can be accepted once more, bounded by the configured retention
+  Draft-08 can be accepted once more, bounded by the configured retention
   period.
 
 Stable IDs and resolution criteria for draft and interpretation limits are in
@@ -140,11 +140,11 @@ Stable IDs and resolution criteria for draft and interpretation limits are in
 
 ## Post-Quantum Composite Algorithm
 
-The implementation baseline stays `draft-ietf-dkim-dkim2-spec-07` plus
-`draft-ietf-dkim-dkim2-dns-01`, with one deliberate deviation: the
+The implementation baseline stays `draft-ietf-dkim-dkim2-spec-08` plus
+`draft-ietf-dkim-dkim2-dns-02`, with one deliberate deviation: the
 `mldsa44-ed25519-sha512` algorithm (ML-DSA-44 plus Ed25519 in the LAMPS
-composite construction) is not implemented, although Draft-07 Section 3.4
-lists it and DNS-01 Section 3.3 says verifiers SHOULD support the matching
+composite construction) is not implemented, although Draft-08 Section 3.4
+lists it and DNS-02 Section 3.3 says verifiers SHOULD support the matching
 `k=mldsa44-ed25519-sha512` key type. The DKIM working group has not settled
 the DKIM2 post-quantum construction: the October 2026 list discussion weighs
 separate multiple signatures, the LAMPS composite, and plain ML-DSA-44, and

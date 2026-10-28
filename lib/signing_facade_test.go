@@ -28,7 +28,7 @@ import (
 	internalsigning "github.com/croessner/dkim2/internal/signing"
 )
 
-const publicSigningRSAFixture = "testdata/vectors/draft-ietf-dkim-dkim2-spec-07/signing-test-rsa.pem"
+const publicSigningRSAFixture = "testdata/vectors/draft-ietf-dkim-dkim2-spec-08/signing-test-rsa.pem"
 
 type publicRouteMemoryAuthority struct {
 	value *routeplan.MemoryAuthority
@@ -1624,7 +1624,7 @@ func TestPublicBccFanoutKeepsCopiesIsolated(t *testing.T) {
 			t.Fatalf("SignOriginator(%d) recovery=%v error=%v", index, recovery.Valid(), signErr)
 		}
 		signed, ok := result.Unrestricted()
-		// Draft-07 Section 12.5: an originator Bcc fanout is i=1 and never
+		// Draft-08 Section 12.5: an originator Bcc fanout is i=1 and never
 		// carries exploded.
 		if !ok || signed.Facts().Multiplicity() != 2 ||
 			slices.Contains(signed.Facts().Flags(), SignedMessageFlagExploded) {

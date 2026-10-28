@@ -27,7 +27,7 @@ local function response(state, verdict, replay, actions)
   })[verdict]
   return {
     api_version = 'v1',
-    draft = 'draft-ietf-dkim-dkim2-spec-07',
+    draft = 'draft-ietf-dkim-dkim2-spec-08',
     verification = {
       state = state, primary_reason = 'none', scope = 'current',
       historical_content = 'not_evaluated', historical_signatures = 'not_evaluated',
@@ -277,7 +277,7 @@ callback(rejected)
 assert(rejected.pre_result.action == 'reject')
 assert(contains(rejected.symbols, 'DKIM2_REPLAYED'))
 
--- A passing direct i=1-only delivery is outside Draft-07 replay counting.
+-- A passing direct i=1-only delivery is outside Draft-08 replay counting.
 pending_response = response('PASS', 'accept', 'not_eligible', {
   { type = 'add_header', name = 'Authentication-Results', value = 'mx.example.test; dkim2=pass' },
 })
@@ -322,7 +322,7 @@ projected.policy.mode = 'strict'
 projected.policy.primary_reason = 'protocol_pass'
 projected.verifier_projection = {
   schema = 'dkim2.verifier-projection.v1',
-  draft = 'draft-ietf-dkim-dkim2-spec-07',
+  draft = 'draft-ietf-dkim-dkim2-spec-08',
   binding_algorithm = 'sha-256',
   binding = string.rep('A', 43) .. '=',
   hops = {

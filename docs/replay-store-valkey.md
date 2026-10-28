@@ -1,7 +1,7 @@
 # Replay Store And Valkey Operations
 
-DKIM2 replay detection is local delivery policy (Draft-07 Section 15.1). It
-composes the final Draft-07 authentication result while leaving message-local
+DKIM2 replay detection is local delivery policy (Draft-08 Section 15.1). It
+composes the final Draft-08 authentication result while leaving message-local
 signature, hash, recipe, custody, and envelope evidence immutable. Unexpected
 replay produces final `FAIL` with reason `duplicate_message_without_exploded`;
 ambiguity produces `TEMPERROR`. Only messages carrying more than one

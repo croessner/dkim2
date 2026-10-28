@@ -466,7 +466,7 @@ func newReceivedDSNEvaluator(core verify.Verifier, limits VerificationLimits) (d
 }
 
 // EvaluateReceivedDSN evaluates one inbound DKIM2-signed delivery-status
-// notification under Draft-07 Section 16.3 after the caller verified the
+// notification under Draft-08 Section 16.4 after the caller verified the
 // outer message as an ordinary message with this verifier. It shares the
 // verifier's key provider, limits, clock, and observation sink and adds the
 // tenant-bound local authority carried by the request. The request must carry

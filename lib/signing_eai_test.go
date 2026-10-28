@@ -8,7 +8,7 @@ import (
 )
 
 // TestPublicOriginatorSignsSMTPUTF8Envelope reproduces SMTPUTF8 signing
-// (Draft-07 Section 18): an RFC 6531 envelope with UTF-8 local parts and
+// (Draft-08 Section 18): an RFC 6531 envelope with UTF-8 local parts and
 // U-label domains is signed with mf= and rt= recording the local parts
 // unchanged and the domains as A-labels, and the result verifies against the
 // original UTF-8 envelope.

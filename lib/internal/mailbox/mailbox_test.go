@@ -33,7 +33,7 @@ func TestParseAuthorAcceptsSingleMailboxForms(t *testing.T) {
 	}
 }
 
-// TestParseAuthorClassifiesNonAuthenticForms reproduces the Draft-07 Section
+// TestParseAuthorClassifiesNonAuthenticForms reproduces the Draft-08 Section
 // 11 rule that multiple addresses and domain literals can never be Authentic.
 func TestParseAuthorClassifiesNonAuthenticForms(t *testing.T) {
 	tests := map[string]Status{

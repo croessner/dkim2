@@ -1,15 +1,15 @@
 # Security Hardening Implementation Specification
 
 > Historical Draft-04 implementation record. The original scope and evidence
-> below are preserved; current Draft-07 authority is the migration disposition
+> below are preserved; current Draft-08 authority is the migration disposition
 > and current durable architecture. Its `qualified_linux` evidence does not
-> qualify Draft-07.
+> qualify Draft-08.
 
 Status: implemented; independent review and commit closeout pending.
 
 Implementation base: `5f51ed500351c7efabe0ab70579d9a62639f6f43`.
 Protocol behavior remains pinned to `draft-ietf-dkim-dkim2-spec-04` and the
-historical `draft-ietf-dkim-dkim2-dns-01` behavior baseline. This increment
+historical `draft-ietf-dkim-dkim2-dns-02` behavior baseline. This increment
 hardens the existing library, daemon, generated-client, datasource, replay,
 observability, Milter, conformance, and build boundaries. It does not change
 the pinned protocol baseline and must not turn local security policy into a
@@ -37,7 +37,7 @@ revision, candidate snapshot, and verifier digest. See
 This specification is governed, in order, by:
 
 1. `draft-ietf-dkim-dkim2-spec-04` for DKIM2 protocol meaning;
-2. `draft-ietf-dkim-dkim2-dns-01` for the repository's tested DNS record
+2. `draft-ietf-dkim-dkim2-dns-02` for the repository's tested DNS record
    behavior;
 3. RFC 5321, RFC 5322, RFC 6376, RFC 6531, RFC 6532, RFC 8259, and RFC 8601
    for the SMTP, message, DKIM heritage, internationalized-message, JSON, and

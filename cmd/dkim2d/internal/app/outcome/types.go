@@ -18,7 +18,7 @@ const (
 	// ReplayIndeterminate means replay storage cannot be classified safely.
 	ReplayIndeterminate
 	// ReplayNotEligible means a passing direct i=1-only delivery is outside
-	// Draft-07 Section 15.1 replay counting and touched no store.
+	// Draft-08 Section 15.1 replay counting and touched no store.
 	ReplayNotEligible
 )
 

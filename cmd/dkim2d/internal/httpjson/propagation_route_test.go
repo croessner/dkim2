@@ -720,7 +720,7 @@ func TestProcessRouteClassifiesDuplicateContentType(t *testing.T) {
 // records the received-DSN policy finding, maps a datasource outage to a
 // temporary local hop with a tempfail disposition, and does not count a
 // repeated notification as a replay: a DSN carries only its generator's i=1
-// signature, so it is a direct delivery outside Draft-07 Section 15.1.
+// signature, so it is a direct delivery outside Draft-08 Section 15.1.
 func TestProcessRouteProjectsDeliveryStatus(t *testing.T) {
 	harness := startPropagateRouteHarness(t)
 	status, body := harness.post(t, processPath, localCapabilityHeader, harness.processSecret, harness.processBody(t, propagationtest.CaseNullPreviousSender, ""))

@@ -1,7 +1,7 @@
 # Compatibility Statement
 
-The preview baseline implements `draft-ietf-dkim-dkim2-spec-07` with the
-`draft-ietf-dkim-dkim2-dns-01` DNS behavior identifier. A later draft
+The preview baseline implements `draft-ietf-dkim-dkim2-spec-08` with the
+`draft-ietf-dkim-dkim2-dns-02` DNS behavior identifier. A later draft
 is a reviewed behavior migration, not an automatic compatibility update.
 
 ## Public surfaces
@@ -38,9 +38,9 @@ is a reviewed behavior migration, not an automatic compatibility update.
   propagator module introduces the frozen configuration root
   `dkim2-dsn-propagator-config-v1` documented in
   [`cmd/dkim2-dsn-propagator/README.md`](../../cmd/dkim2-dsn-propagator/README.md).
-- Exim compatibility is `unqualified_draft07`. The exact five source-linked
+- Exim compatibility is `unqualified_draft08`. The exact five source-linked
   rows in the dated compatibility report are historical Draft-04 evidence and
-  do not qualify Draft-07. There is no portable Exim report, universal
+  do not qualify Draft-08. There is no portable Exim report, universal
   local-scan ABI binary, binary package, or container image.
 
 ## Qualified storage services
@@ -92,7 +92,7 @@ digest-pinned set. The commit route answers
 cannot resolve, which is the caller's instruction to defer rather than to
 retry immediately.
 
-The `POST /v1/process` schema is the one canonical Draft-07 contract for both
+The `POST /v1/process` schema is the one canonical Draft-08 contract for both
 current-only and authenticated multi-instance results. Its closed policy enums
 contain only states produced by the current verifier and policy projection;
 there are no deprecated aliases, version fallbacks, or alternate legacy

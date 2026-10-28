@@ -18,14 +18,14 @@ func ValidEnvelopePath(path []byte, allowNull bool) bool { return validEnvelopeP
 
 // CanonicalEnvelopePath validates and clones a path for comparison: every
 // grammar-owned ASCII domain is case-folded and the mailbox domain is mapped
-// from U-labels to lowercase A-labels (Draft-07 Section 18). Local parts are
+// from U-labels to lowercase A-labels (Draft-08 Section 18). Local parts are
 // never changed.
 func CanonicalEnvelopePath(path []byte, allowNull bool) ([]byte, bool) {
 	return canonicalEnvelopePath(path, allowNull)
 }
 
 // RecordableEnvelopePath validates a caller-supplied SMTP path and returns the
-// bytes a signer records in mf= or rt=. Draft-07 Section 18 requires U-label
+// bytes a signer records in mf= or rt=. Draft-08 Section 18 requires U-label
 // mailbox domains to be recorded as A-labels, so such a domain is replaced by
 // its lowercase A-label form; every other path keeps its exact bytes.
 func RecordableEnvelopePath(path []byte, allowNull bool) ([]byte, bool) {
@@ -128,7 +128,7 @@ func validEnvelopePath(path []byte, allowNull bool) bool {
 }
 
 // validRecordedEnvelopePath checks a path recorded in a DKIM2-Signature. Its
-// mailbox domain must already be ASCII because Draft-07 Section 18 requires
+// mailbox domain must already be ASCII because Draft-08 Section 18 requires
 // signers to record A-labels; recorded U-labels fail closed.
 func validRecordedEnvelopePath(path []byte, allowNull bool) bool {
 	parts, valid := parseEnvelopeParts(path, allowNull)
@@ -224,7 +224,7 @@ func (p envelopeParts) render(path []byte, foldRoute bool) ([]byte, bool) {
 
 // validSourceRoute checks the obsolete A-d-l syntax that RFC 5321 requires
 // receivers to accept. Source-route domains are deliberately ASCII-only: the
-// route is never a DKIM2 identity, and Draft-07 Section 18 conversion applies
+// route is never a DKIM2 identity, and Draft-08 Section 18 conversion applies
 // only to the mailbox domain.
 func validSourceRoute(route []byte) bool {
 	parts := bytes.Split(route, []byte{','})

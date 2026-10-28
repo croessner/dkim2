@@ -30,7 +30,7 @@ const (
 	keyDraft       = "draft"
 	keyProjection  = "delivery_status"
 	keyPropagation = "propagation"
-	valueDraft     = "draft-ietf-dkim-dkim2-spec-07"
+	valueDraft     = "draft-ietf-dkim-dkim2-spec-08"
 	testNextHop    = "<previous@hop.example>"
 )
 

@@ -743,7 +743,7 @@ func TestSigningServiceSelectsTwoDerivedDSNDomains(t *testing.T) {
 
 // TestSigningServiceSignsBounceUnderReportingMTADomain reproduces a Postfix
 // bounce whose From is MAILER-DAEMON at the reporting MTA: under the derived
-// embedded d= the report cannot be Authentic (Draft-07 Section 12.4) and is
+// embedded d= the report cannot be Authentic (Draft-08 Section 12.4) and is
 // refused, while the configured reporting identity resolves that domain's
 // delivery_status profile and signs it.
 func TestSigningServiceSignsBounceUnderReportingMTADomain(t *testing.T) {

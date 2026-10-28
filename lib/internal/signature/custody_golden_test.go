@@ -27,9 +27,9 @@ type custodyGoldenSignature struct {
 	NextDomain string   `json:"next_domain"`
 }
 
-// TestDraft07CustodyGoldenVectors locks immutable adjacent custody semantics.
-func TestDraft07CustodyGoldenVectors(t *testing.T) {
-	data, err := os.ReadFile("../../testdata/vectors/draft-ietf-dkim-dkim2-spec-07/custody-crypto-golden.json")
+// TestDraft08CustodyGoldenVectors locks immutable adjacent custody semantics.
+func TestDraft08CustodyGoldenVectors(t *testing.T) {
+	data, err := os.ReadFile("../../testdata/vectors/draft-ietf-dkim-dkim2-spec-08/custody-crypto-golden.json")
 	if err != nil {
 		t.Fatalf("ReadFile() error = %v", err)
 	}
@@ -37,7 +37,7 @@ func TestDraft07CustodyGoldenVectors(t *testing.T) {
 	if err := json.Unmarshal(data, &golden); err != nil {
 		t.Fatalf("json.Unmarshal() error = %v", err)
 	}
-	if golden.Draft != "draft-ietf-dkim-dkim2-spec-07" || len(golden.CustodyCases) == 0 {
+	if golden.Draft != "draft-ietf-dkim-dkim2-spec-08" || len(golden.CustodyCases) == 0 {
 		t.Fatal("custody golden file has wrong or empty draft contract")
 	}
 	for _, test := range golden.CustodyCases {

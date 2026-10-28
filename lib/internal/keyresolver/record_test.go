@@ -86,7 +86,7 @@ func TestParseRecordRejectsVersionAndRequiredTagContradictions(t *testing.T) {
 	}
 }
 
-// TestParseRecordRejectsMalformedKeyTypes verifies DNS-01 hyphenated-word syntax.
+// TestParseRecordRejectsMalformedKeyTypes verifies DNS-02 hyphenated-word syntax.
 func TestParseRecordRejectsMalformedKeyTypes(t *testing.T) {
 	for _, keyType := range []string{"", "_future", "-future", "future-", "future_key", "future key", "1future"} {
 		record := "k=" + keyType + "; p=" + validDNSKeyData
@@ -121,7 +121,7 @@ func TestParseRecordRejectsDuplicateDefinedRetiredAndUnknownTags(t *testing.T) {
 	}
 }
 
-// TestParseRecordIgnoresRetiredTestingTag verifies DNS-01 Section 3.4.1:
+// TestParseRecordIgnoresRetiredTestingTag verifies DNS-02 Section 3.4.1:
 // any syntactically valid t= value, including formerly malformed flag lists,
 // leaves the parsed record identical to one without t=.
 func TestParseRecordIgnoresRetiredTestingTag(t *testing.T) {

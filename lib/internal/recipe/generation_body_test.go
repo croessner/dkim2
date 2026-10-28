@@ -180,7 +180,7 @@ func TestPlanBodyErrorsRemainSecretSafe(t *testing.T) {
 	assertClosedSafeGenerationError(t, err, ErrorCodeBodyUnrepresentable, ErrorClassRepresentation, protected)
 }
 
-// TestPlanBodyEmitsBinaryDataForNonUTF8Lines reproduces the Draft-07 Section 5
+// TestPlanBodyEmitsBinaryDataForNonUTF8Lines reproduces the Draft-08 Section 5
 // "u" step: a previous body line that is not valid UTF-8 is representable as
 // a base64-carried literal instead of forcing an unavailable body.
 func TestPlanBodyEmitsBinaryDataForNonUTF8Lines(t *testing.T) {

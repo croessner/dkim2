@@ -115,7 +115,7 @@ func TestBuildRequestTreatsPipeAddressAsOneOpaqueArg(t *testing.T) {
 
 // TestBuildRequestRejectsInvalidOutboundUTF8BeforeEvidence proves outgoing
 // envelope bytes that are not valid UTF-8 cannot reach the immutable evidence
-// owner; valid SMTPUTF8 paths are signable (Draft-07 Section 18).
+// owner; valid SMTPUTF8 paths are signable (Draft-08 Section 18).
 func TestBuildRequestRejectsInvalidOutboundUTF8BeforeEvidence(t *testing.T) {
 	incoming, _ := adapter.NewIncomingEvidence(
 		[]byte("<old@example.test>"),
@@ -209,7 +209,7 @@ func FuzzInvocationParsing(f *testing.F) {
 }
 
 // TestBuildRequestAdmitsOutboundSMTPUTF8 proves a valid SMTPUTF8 outgoing
-// envelope reaches the evidence owner byte-exact (Draft-07 Section 18).
+// envelope reaches the evidence owner byte-exact (Draft-08 Section 18).
 func TestBuildRequestAdmitsOutboundSMTPUTF8(t *testing.T) {
 	incoming, _ := adapter.NewIncomingEvidence(
 		[]byte("<old@example.test>"),

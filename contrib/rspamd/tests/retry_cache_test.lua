@@ -62,7 +62,7 @@ local input = {
   content = 'From: sender@example.test\r\n\r\nbody\r\n',
   mail_from = '<sender@example.test>',
   rcpt_to = { '<z@example.test>', '<a@example.test>', '<z@example.test>' },
-  draft = 'draft-ietf-dkim-dkim2-spec-07',
+  draft = 'draft-ietf-dkim-dkim2-spec-08',
   projection_schema = 'dkim2.verifier-projection.v1',
 }
 local key = assert(cache:identity(input))

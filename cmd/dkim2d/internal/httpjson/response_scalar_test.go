@@ -16,13 +16,13 @@ type scalarMappingCase[Input comparable, Output comparable] struct {
 	want  Output
 }
 
-// TestDraft07VersionAndProtocolReasons proves the generated contract and the
-// domain mapper expose the complete Draft-07 permanent-error vocabulary.
-func TestDraft07VersionAndProtocolReasons(t *testing.T) {
-	if !generated.DraftIetfDkimDkim2Spec07.Valid() ||
+// TestDraft08VersionAndProtocolReasons proves the generated contract and the
+// domain mapper expose the complete Draft-08 permanent-error vocabulary.
+func TestDraft08VersionAndProtocolReasons(t *testing.T) {
+	if !generated.DraftIetfDkimDkim2Spec08.Valid() ||
 		generated.DraftVersion("draft-ietf-dkim-dkim2-spec-04").Valid() ||
 		generated.DraftVersion(futureMappingValue).Valid() {
-		t.Fatal("generated Draft-07 enum is not closed")
+		t.Fatal("generated Draft-08 enum is not closed")
 	}
 	for _, testCase := range []scalarMappingCase[dkim2.ReasonCode, generated.VerificationReason]{
 		{dkim2.ReasonDuplicateHashAlgorithm, generated.VerificationReasonDuplicateHashAlgorithm},
@@ -32,7 +32,7 @@ func TestDraft07VersionAndProtocolReasons(t *testing.T) {
 	} {
 		mapped, ok := mapVerificationReason(testCase.input)
 		if !ok || mapped != testCase.want || !mapped.Valid() {
-			t.Fatalf("Draft-07 reason %q mapped to %q/%t", testCase.input, mapped, ok)
+			t.Fatalf("Draft-08 reason %q mapped to %q/%t", testCase.input, mapped, ok)
 		}
 	}
 	if generated.VerificationReason(futureMappingValue).Valid() {

@@ -55,7 +55,7 @@ func TestParseFlagsTreatsRemovedDraft06FlagsAsUnknown(t *testing.T) {
 	}
 }
 
-// TestParseFlagsRecognizesFeedHere reproduces the Draft-07 feedhere flag contract.
+// TestParseFlagsRecognizesFeedHere reproduces the Draft-08 feedhere flag contract.
 func TestParseFlagsRecognizesFeedHere(t *testing.T) {
 	parsed, err := Parse(dkim2SignatureField(t, 0, signatureValueWith("f", "feedhere")))
 	if err != nil {
@@ -74,7 +74,7 @@ func TestParseRejectsDuplicateKnownFlags(t *testing.T) {
 	}
 }
 
-// TestParseFlagsAreCaseSensitive reproduces the Draft-07 Sections 2.14 and
+// TestParseFlagsAreCaseSensitive reproduces the Draft-08 Sections 2.14 and
 // 10.10 rule that flag names are case-sensitive: an uppercase spelling of a
 // known flag is an unknown flag with no effect.
 func TestParseFlagsAreCaseSensitive(t *testing.T) {

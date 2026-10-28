@@ -1,7 +1,7 @@
 # OpenAPI Daemon Foundation
 
 > Historical Draft-04 implementation record. The original scope and evidence
-> below are preserved; current Draft-07 authority is the migration disposition
+> below are preserved; current Draft-08 authority is the migration disposition
 > and current durable architecture.
 
 <!-- mutable-status:start -->
@@ -43,7 +43,7 @@ This specification is governed by:
 - `docs/specs/openapi/oapi-codegen.server.yml`;
 - `docs/specs/openapi/oapi-codegen.client.yml`;
 - `draft-ietf-dkim-dkim2-spec-04`;
-- `draft-ietf-dkim-dkim2-dns-01`, under the repository's documented historical
+- `draft-ietf-dkim-dkim2-dns-02`, under the repository's documented historical
   DNS baseline policy;
 - RFC 4648 for strict canonical padded Base64;
 - RFC 5321 for SMTP reverse-path and forward-path bytes;
@@ -495,7 +495,7 @@ post-quantum `mldsa44-ed25519-sha512` is reported as `unknown`); `status` is `pa
 `fail`, `permerror`, `temperror`, or `ignored`; `reason` uses the
 verification reason enum. The former `key_policy` object
 (`testing_declared`, `strict_identity_declared`, `strict_identity_applicable`)
-and its `KeyPolicyResult` schema were removed: DNS-01 Section 3.4.1 retires
+and its `KeyPolicyResult` schema were removed: DNS-02 Section 3.4.1 retires
 the DNS key-record `t=` tag, so no DNS testing or strict-identity fact exists.
 
 `PolicyResult` has exactly these required properties:
@@ -510,7 +510,7 @@ Draft-07 Section 10.10 removed `donotmodify` and `donotexplode`, so the
 former `do_not_modify` and `do_not_explode` compliance properties, the matching
 `VerifierHop` booleans, and the `donotmodify_*`/`donotexplode_*` policy reasons
 were removed from the contract. The `dkim2.verifier-projection.v1` binding is
-draft-bound: it frames the exact draft identifier, and under Draft-07 its hop
+draft-bound: it frames the exact draft identifier, and under Draft-08 its hop
 encoding no longer contains the two booleans, so every hop and projection
 binding value differs from Draft-06. Consumers must recompute bindings with the
 matching draft and never compare bindings across drafts.

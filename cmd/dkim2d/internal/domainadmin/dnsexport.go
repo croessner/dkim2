@@ -25,7 +25,7 @@ const (
 	txtChunkBytes    = 200
 )
 
-// DNSRecord owns one canonical DNS-01 record derived from staged readback.
+// DNSRecord owns one canonical DNS-02 record derived from staged readback.
 type DNSRecord struct {
 	domain     []byte
 	selector   []byte
@@ -256,7 +256,7 @@ func findStagedCredential(
 	return datasourceadmin.CredentialRow{}, false
 }
 
-// newDNSRecord converts canonical SPKI to the exact DNS-01 public-key representation.
+// newDNSRecord converts canonical SPKI to the exact DNS-02 public-key representation.
 func newDNSRecord(
 	ctx context.Context,
 	domain string,
@@ -290,7 +290,7 @@ func newDNSRecord(
 	return record, nil
 }
 
-// ValidateCanonicalDNSRecord proves one native credential through the production DNS-01 parser path.
+// ValidateCanonicalDNSRecord proves one native credential through the production DNS-02 parser path.
 func ValidateCanonicalDNSRecord(
 	ctx context.Context,
 	domain string,
@@ -325,7 +325,7 @@ func FormatCanonicalDNSRecord(
 	return formatDNSExport([]DNSRecord{record}, ttl, int(DefaultLimits().MaxDocumentBytes))
 }
 
-// dnsKeyValue derives the DNS-01 key-record k= token and raw p= bytes from
+// dnsKeyValue derives the DNS-02 key-record k= token and raw p= bytes from
 // one canonical credential SPKI: PKCS#1 for rsa and the raw 32-byte key for
 // ed25519. Non-canonical SPKI, a key of another algorithm, or any other
 // algorithm fails closed.

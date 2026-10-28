@@ -516,7 +516,7 @@ func cacheOwner(selector byte) string {
 	return string([]byte{selector}) + "._domainkey.example.test."
 }
 
-// TestResolverIgnoresRetiredTestingTagOnCacheMissAndHit verifies DNS-01
+// TestResolverIgnoresRetiredTestingTagOnCacheMissAndHit verifies DNS-02
 // Section 3.4.1: every t= spelling, including former flags and formerly
 // malformed values, resolves to the same found key as a record without t=,
 // both from transport and from the outcome cache. Generic tag-list violations

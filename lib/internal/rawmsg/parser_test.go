@@ -388,7 +388,7 @@ func TestParseNegativeChecklistExposesStructuredErrors(t *testing.T) {
 	}
 }
 
-// TestParsePreservesNonUTF8HeaderBytes reproduces the Draft-07 Sections 5
+// TestParsePreservesNonUTF8HeaderBytes reproduces the Draft-08 Sections 5
 // and 18 byte model: header values may carry bytes that are not valid UTF-8
 // (a legacy unencoded Latin-1 field, or a value a "u" Recipe step restores),
 // and they are stored byte-exact while CR/LF framing stays strict.

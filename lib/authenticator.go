@@ -8,12 +8,12 @@ import (
 	"github.com/croessner/dkim2/internal/niliface"
 )
 
-// AuthenticationReason identifies the authoritative Draft-07 result reason.
+// AuthenticationReason identifies the authoritative Draft-08 result reason.
 type AuthenticationReason = ReasonCode
 
 const (
 	// AuthenticationReasonDuplicateMessageWithoutExploded reports an unexpected
-	// replay. It is a local delivery-policy rejection (Draft-07 Section 15.1);
+	// replay. It is a local delivery-policy rejection (Draft-08 Section 15.1);
 	// the underlying VerifyResult still reports the DKIM2 validity PASS.
 	AuthenticationReasonDuplicateMessageWithoutExploded ReasonCode = "duplicate_message_without_exploded"
 	// AuthenticationReasonReplayIndeterminate reports unavailable or ambiguous replay storage.
@@ -31,7 +31,7 @@ const (
 	AuthenticationReplayNotChecked AuthenticationReplayClass = "not_checked"
 	// AuthenticationReplayNotEligible means the message passed but only the
 	// originator's i=1 signature authenticated it, so no intermediary re-sent
-	// it and Draft-07 Section 15.1 replay counting does not apply.
+	// it and Draft-08 Section 15.1 replay counting does not apply.
 	AuthenticationReplayNotEligible AuthenticationReplayClass = "not_eligible"
 	// AuthenticationReplayDisabled means the explicit no-store mode accepted the message.
 	AuthenticationReplayDisabled AuthenticationReplayClass = "disabled"
@@ -45,7 +45,7 @@ const (
 	AuthenticationReplayIndeterminate AuthenticationReplayClass = "indeterminate"
 )
 
-// Known reports whether the class belongs to the closed Draft-07 vocabulary.
+// Known reports whether the class belongs to the closed Draft-08 vocabulary.
 func (c AuthenticationReplayClass) Known() bool {
 	switch c {
 	case AuthenticationReplayNotChecked, AuthenticationReplayNotEligible, AuthenticationReplayDisabled, AuthenticationReplayFirstSeen, AuthenticationReplayExploded, AuthenticationReplayReplayed, AuthenticationReplayIndeterminate:
@@ -55,7 +55,7 @@ func (c AuthenticationReplayClass) Known() bool {
 	}
 }
 
-// AuthenticationResult is one sealed final stateful Draft-07 result. It layers
+// AuthenticationResult is one sealed final stateful Draft-08 result. It layers
 // local replay delivery policy over the stateless DKIM2 validity result, which
 // Verification returns unchanged.
 type AuthenticationResult struct{ state *authenticationResultState }
@@ -135,7 +135,7 @@ type Authenticator struct {
 }
 
 // ReplayCountingPolicy is the local delivery policy that decides which
-// authenticated messages replay detection counts (Draft-07 Section 15.1). It
+// authenticated messages replay detection counts (Draft-08 Section 15.1). It
 // is the single owner of that decision for every replay path. The zero value
 // is the default: only messages re-sent by an intermediary are counted.
 type ReplayCountingPolicy struct{ direct bool }
@@ -159,7 +159,7 @@ func (p ReplayCountingPolicy) Counts(identities ReplayIdentitySet) bool {
 type AuthenticatorOption func(*Authenticator)
 
 // WithDirectDeliveryReplayCounting makes local replay policy count messages
-// authenticated only by the originator's i=1 signature. Draft-07 Section 15.1
+// authenticated only by the originator's i=1 signature. Draft-08 Section 15.1
 // leaves replay counting to local delivery policy and does not count such
 // direct deliveries by default; a receiver that acts on every accepted
 // message, such as a reflector, may count them so an identical direct
@@ -169,7 +169,7 @@ func WithDirectDeliveryReplayCounting() AuthenticatorOption {
 	return func(a *Authenticator) { a.counting = DirectDeliveryReplayCountingPolicy() }
 }
 
-// NewAuthenticator constructs one enabled fail-closed Draft-07 authenticator.
+// NewAuthenticator constructs one enabled fail-closed Draft-08 authenticator.
 func NewAuthenticator(verifier *Verifier, store ReplayStore, deriver *ReplayDeriver, retention ReplayRetention, options ...AuthenticatorOption) (*Authenticator, error) {
 	if verifier == nil || verifier.state == nil || niliface.IsNil(store) || deriver == nil || !retention.Valid() {
 		return nil, newAPIError(APIErrorCodeInvalidOption)

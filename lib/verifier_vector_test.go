@@ -116,8 +116,8 @@ type publicGoldenSignatureFact struct {
 	reason    ReasonCode
 }
 
-// TestPublicDraft07GoldenVectors proves chain-authenticated verification through the root facade.
-func TestPublicDraft07GoldenVectors(t *testing.T) {
+// TestPublicDraft08GoldenVectors proves chain-authenticated verification through the root facade.
+func TestPublicDraft08GoldenVectors(t *testing.T) {
 	corpus := loadPublicGoldenCorpus(t)
 	cases := publicGoldenCases(corpus)
 	for _, testCase := range cases {
@@ -171,7 +171,7 @@ func TestPublicGoldenVectorBytesAreFrozenCRLF(t *testing.T) {
 	}
 }
 
-// publicGoldenCases returns the binding Draft-07 public result matrix.
+// publicGoldenCases returns the binding Draft-08 public result matrix.
 func publicGoldenCases(corpus publicGoldenCorpus) []publicGoldenCase {
 	pass := func(name, vector string) publicGoldenCase {
 		return publicGoldenCase{name: name, vector: vector, mode: goldenProviderKeys, state: ResultStatePASS, reason: ReasonNone, class: CheckClassBodyHash, custody: CustodyStructureNotPresent, sequence: 1, instance: 1}
@@ -201,7 +201,7 @@ func publicGoldenCases(corpus publicGoldenCorpus) []publicGoldenCase {
 		{name: "timestamp_14_days_plus_one_permerror", vector: "age_over", mode: goldenProviderKeys, state: ResultStatePERMERROR, reason: ReasonTimestampInvalid, class: CheckClassTimestamp, custody: CustodyStructureNotPresent, sequence: 1, instance: 1},
 		// future_exact is signed 300 seconds after publicVectorClock and
 		// future_over 301 seconds after it; the clock is moved back so both
-		// sit on the Draft-07 Section 14.3 one-day future boundary.
+		// sit on the Draft-08 Section 14.3 one-day future boundary.
 		{name: "timestamp_exact_one_day_future_pass", vector: "future_exact", mode: goldenProviderKeys, state: ResultStatePASS, reason: ReasonNone, custody: CustodyStructureNotPresent, sequence: 1, instance: 1, clock: publicVectorClock + 300 - 86400},
 		{name: "timestamp_one_day_plus_one_permerror", vector: "future_over", mode: goldenProviderKeys, state: ResultStatePERMERROR, reason: ReasonTimestampInvalid, class: CheckClassTimestamp, custody: CustodyStructureNotPresent, sequence: 1, instance: 1, clock: publicVectorClock + 300 - 86400},
 		{name: "timestamp_large_parseable_permerror", vector: "timestamp_large", mode: goldenProviderKeys, state: ResultStatePERMERROR, reason: ReasonTimestampInvalid, class: CheckClassTimestamp, custody: CustodyStructureNotPresent, sequence: 1, instance: 1},
@@ -380,10 +380,10 @@ func assertPublicGoldenFactImmutability(t *testing.T, result VerifyResult, name 
 	}
 }
 
-// loadPublicGoldenCorpus loads the frozen synthetic Draft-07 corpus.
+// loadPublicGoldenCorpus loads the frozen synthetic Draft-08 corpus.
 func loadPublicGoldenCorpus(t testing.TB) publicGoldenCorpus {
 	t.Helper()
-	raw, err := os.ReadFile("testdata/vectors/draft-ietf-dkim-dkim2-spec-07/public-golden.json")
+	raw, err := os.ReadFile("testdata/vectors/draft-ietf-dkim-dkim2-spec-08/public-golden.json")
 	if err != nil {
 		t.Fatal("golden corpus unavailable")
 	}

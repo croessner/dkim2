@@ -38,7 +38,7 @@ type ExcludedHeaderCounts struct {
 	XHeader int
 	// DKIMSignature counts excluded DKIM-Signature fields.
 	DKIMSignature int
-	// ExactUnsigned counts the eight exact Draft-07 registered exclusions.
+	// ExactUnsigned counts the eight exact Draft-08 registered exclusions.
 	ExactUnsigned int
 	// ARC counts the three exact excluded ARC fields.
 	ARC int

@@ -8,10 +8,10 @@ import (
 )
 
 // DNSDraftIdentifier records the active DNS key-record behavior baseline.
-const DNSDraftIdentifier = "draft-ietf-dkim-dkim2-dns-01"
+const DNSDraftIdentifier = "draft-ietf-dkim-dkim2-dns-02"
 
-// dnsRecordTags lists recognized DNS-01 key-record tags. The retired t= tag
-// (DNS-01 Section 3.4.1) is intentionally absent: it is scanned under the
+// dnsRecordTags lists recognized DNS-02 key-record tags. The retired t= tag
+// (DNS-02 Section 3.4.1) is intentionally absent: it is scanned under the
 // generic tag-list rules like any unknown tag and otherwise ignored.
 var dnsRecordTags = tagvalue.MustKnownTags("v", "h", "k", "n", "p", "s")
 
@@ -59,7 +59,7 @@ func (s RecordStatus) Known() bool {
 	}
 }
 
-// Record stores one immutable bounded DNS-01 key record interpretation.
+// Record stores one immutable bounded DNS-02 key record interpretation.
 type Record struct {
 	draft       string
 	status      RecordStatus
@@ -174,7 +174,7 @@ func IsRecordErrorCode(err error, code RecordErrorCode) bool {
 	return code.Known() && RecordErrorCodeOf(err) == code
 }
 
-// ParseRecord parses one already-concatenated bounded DNS-01 TXT key record.
+// ParseRecord parses one already-concatenated bounded DNS-02 TXT key record.
 func ParseRecord(input []byte, limits Limits) (Record, error) {
 	if err := limits.Validate(); err != nil {
 		return Record{}, newRecordError(RecordErrorContract)
@@ -254,7 +254,7 @@ func parsedKeyType(field tagvalue.Field) (KeyType, error) {
 	}
 }
 
-// validHyphenatedWord enforces DNS-01 ALPHA edge and ALPHA/DIGIT/hyphen interior syntax.
+// validHyphenatedWord enforces DNS-02 ALPHA edge and ALPHA/DIGIT/hyphen interior syntax.
 func validHyphenatedWord(value string) bool {
 	if len(value) == 0 || !asciiAlpha(value[0]) || !asciiAlphaDigit(value[len(value)-1]) {
 		return false

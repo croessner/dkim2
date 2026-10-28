@@ -13,7 +13,7 @@ type timestampEvaluation struct {
 	pass  bool
 }
 
-// checkTimestamps applies Draft-07 Section 14.3 to every DKIM2-Signature at
+// checkTimestamps applies Draft-08 Section 14.3 to every DKIM2-Signature at
 // the request's delivery reference instant, which defaults to the verifier
 // clock: any signature older than 14 days or more than one day in the future
 // makes the message invalid. The check reports the first offending signature
@@ -64,7 +64,7 @@ func (v Verifier) referenceTime(request Request) time.Time {
 }
 
 // timestampStatusAt classifies one timestamp against an already captured
-// reference instant with the fixed Draft-07 Section 14.3 windows.
+// reference instant with the fixed Draft-08 Section 14.3 windows.
 func timestampStatusAt(now time.Time, seconds uint64) TimestampStatus {
 	if seconds > maxRepresentableUnixSeconds {
 		return TimestampStatusInvalid

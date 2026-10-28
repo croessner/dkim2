@@ -151,7 +151,7 @@ func (a *strictAdapter) GetHealth(
 	date, datePresent := responseDate(ctx)
 	response, err := newStatusResponse(generated.HealthResponse{
 		ApiVersion: generated.V1,
-		Draft:      generated.DraftIetfDkimDkim2Spec07,
+		Draft:      generated.DraftIetfDkimDkim2Spec08,
 		Status:     generated.Alive,
 	}, false, date, datePresent)
 	return response, err
@@ -165,7 +165,7 @@ func (a *strictAdapter) HeadHealth(
 	date, datePresent := responseDate(ctx)
 	response, err := newStatusResponse(generated.HealthResponse{
 		ApiVersion: generated.V1,
-		Draft:      generated.DraftIetfDkimDkim2Spec07,
+		Draft:      generated.DraftIetfDkimDkim2Spec08,
 		Status:     generated.Alive,
 	}, true, date, datePresent)
 	return response, err
@@ -478,7 +478,7 @@ func (a *strictAdapter) readinessResponse(
 	}
 	return newStatusResponse(generated.ReadinessResponse{
 		ApiVersion: generated.V1,
-		Draft:      generated.DraftIetfDkimDkim2Spec07,
+		Draft:      generated.DraftIetfDkimDkim2Spec08,
 		Status:     generated.Ready,
 	}, head, date, datePresent)
 }

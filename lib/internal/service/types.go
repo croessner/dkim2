@@ -8,7 +8,7 @@ import (
 )
 
 // DraftIdentifier is the exact behavior baseline carried by service results.
-const DraftIdentifier = "draft-ietf-dkim-dkim2-spec-07"
+const DraftIdentifier = "draft-ietf-dkim-dkim2-spec-08"
 
 const hardMaxSignatureFacts = 16
 
@@ -139,7 +139,7 @@ const (
 	// ReasonInvalidRecipeJSON reports malformed authenticated recipe JSON.
 	ReasonInvalidRecipeJSON Reason = "invalid_recipe_json"
 	// ReasonFromNotAuthentic reports a From header field state that is not
-	// Authentic for its responsible signature (Draft-07 Section 14.8).
+	// Authentic for its responsible signature (Draft-08 Section 14.8).
 	ReasonFromNotAuthentic Reason = "from_not_authentic"
 	// ReasonDuplicateSelector reports a repeated selector in one signature field.
 	ReasonDuplicateSelector Reason = "duplicate_selector"

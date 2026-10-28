@@ -158,7 +158,7 @@ func allZeroBytes(value []byte) bool {
 
 // TestSigningModesSMTPUTF8ReachesApplicabilityBoundary proves valid EAI
 // envelope evidence is retained for a signing decision in both originator and
-// transit mode (Draft-07 Section 18); transit no longer tempfails it.
+// transit mode (Draft-08 Section 18); transit no longer tempfails it.
 func TestSigningModesSMTPUTF8ReachesApplicabilityBoundary(t *testing.T) {
 	for _, mode := range []string{modeOriginator, modeTransit} {
 		testSigningModeSMTPUTF8(t, mode)
@@ -461,7 +461,7 @@ func appendPeerFrames(frames ...[]byte) []byte {
 	return output
 }
 
-// TestTemporaryKeyTempfailUsesSection13Reply proves Draft-07 Section 13: a
+// TestTemporaryKeyTempfailUsesSection13Reply proves Draft-08 Section 13: a
 // daemon tempfail caused by a temporary public-key lookup answers 451 4.7.5,
 // while every other tempfail keeps the generic 451 4.7.1 reply.
 func TestTemporaryKeyTempfailUsesSection13Reply(t *testing.T) {

@@ -22,7 +22,7 @@ const (
 	propagationStageEvaluation = "evaluation"
 	// propagationStageReplay identifies the two-phase replay gate.
 	propagationStageReplay = "replay"
-	// propagationStageRebuild identifies the Section 16.2 rebuild.
+	// propagationStageRebuild identifies the Section 16.3 rebuild.
 	propagationStageRebuild = "rebuild"
 	// propagationStagePreviousHop identifies the previous-hop verification inside the rebuild.
 	propagationStagePreviousHop = "previous_hop_verification"
@@ -98,7 +98,7 @@ type propagationObserver interface {
 type PropagationDependencies struct {
 	// Verifier performs the ordinary inbound verification of the notification.
 	Verifier VerificationService
-	// Evaluator performs the Section 16.3 received-DSN evaluation.
+	// Evaluator performs the Section 16.4 received-DSN evaluation.
 	Evaluator ReceivedDSNEvaluator
 	// PublicKeys is the bounded DNS provider shared with verification.
 	PublicKeys dkim2.PublicKeyProvider
@@ -283,8 +283,8 @@ func (c *PropagationCoordinator) Propagate(
 // notification itself and classifies the assessment into the three states the
 // coherence matrix distinguishes. A notification without a DKIM2 field family
 // is not applicable and is a permanent refusal on this route, because the
-// adapter socket is reserved for our own return-path addresses and Draft-07
-// Section 16.3 has nothing to propagate from it. An assessment that is
+// adapter socket is reserved for our own return-path addresses and Draft-08
+// Section 16.4 has nothing to propagate from it. An assessment that is
 // unusable for any other reason stays temporary and never borrows the
 // permanent verdict.
 func (c *PropagationCoordinator) verifyOuter(
@@ -379,7 +379,7 @@ func (c *PropagationCoordinator) reserveAndSign(
 	return c.rebuildAndSign(ctx, request, lease, key, projection, replayClass, authority)
 }
 
-// rebuildAndSign performs the Section 16.2 rebuild with a request-scoped
+// rebuildAndSign performs the Section 16.3 rebuild with a request-scoped
 // signer and, when the derived signing domain holds an active delivery-status
 // profile, plans the single route ticket and signs the report.
 func (c *PropagationCoordinator) rebuildAndSign(

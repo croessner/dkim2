@@ -62,7 +62,7 @@ func TestPropagationFrameSeparatesIdentities(t *testing.T) {
 		t.Fatal(err)
 	}
 	processKey, propagationKey, againKey := storageKeyOf(t, process), storageKeyOf(t, propagation), storageKeyOf(t, again)
-	if processKey != "dkim2:replay:v1:01020304:ZLun_UVMvqko4ttsXAzUwgSNSQlK2cQm4be-RafRdNQ" {
+	if processKey != "dkim2:replay:v1:01020304:Wqtd3Caq3mDdmFAZQwrQV_5hxgUGk4Z24CNMv60Ppf8" {
 		t.Fatalf("process key changed: %s", processKey)
 	}
 	if propagationKey == processKey || propagationKey != againKey {
@@ -93,7 +93,7 @@ func TestPropagationFrameSeparatesIdentities(t *testing.T) {
 }
 
 // propagationVectorSuffix pins the propagation frame vector for the published identity and secret.
-const propagationVectorSuffix = "IgtnWPRJWxcb8SCgMlTBCjf7elo5jLjeLVZimyf0XEY"
+const propagationVectorSuffix = "1ibPLIe4Z2xyuKyBealCZeKyKfswVS4ThF_avXIAkBE"
 
 // TestPropagationStoredValueVocabulary proves the closed stored values round-trip and reject other strings.
 func TestPropagationStoredValueVocabulary(t *testing.T) {

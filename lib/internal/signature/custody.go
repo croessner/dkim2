@@ -427,7 +427,7 @@ func custodyError(code ErrorCode, parsed Signature, details ErrorDetails) *Error
 	return newError(code, ErrorLocation{FieldIndex: parsed.HeaderIndex()}, details, nil)
 }
 
-// custodyTransitionAllowed applies the Draft-07 Section 7.1 adjacent-hop
+// custodyTransitionAllowed applies the Draft-08 Section 7.1 adjacent-hop
 // rules. After an nd= hop the next d= must equal nd= exactly. Otherwise a
 // previous rt= recipient must relaxed-match: with the current mf= as
 // Parameter1 for an ordinary hop, and as Parameter2 against the current d=
@@ -468,7 +468,7 @@ func custodyPathDomain(path []byte) (string, bool) {
 	return canonicalDNSName(mailbox[separator+1:])
 }
 
-// RelaxedDomainMatch applies the Draft-07 Section 7.2 relaxed domain match
+// RelaxedDomainMatch applies the Draft-08 Section 7.2 relaxed domain match
 // with base as Parameter2 and candidate as Parameter1: labels are removed only
 // from the left of candidate until it equals base, so base may be equal to or
 // a parent domain of candidate but never the reverse. Both inputs are

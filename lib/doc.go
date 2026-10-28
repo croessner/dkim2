@@ -1,5 +1,5 @@
 // Package dkim2 provides verification and signing for
-// draft-ietf-dkim-dkim2-spec-07.
+// draft-ietf-dkim-dkim2-spec-08.
 //
 // A Verifier requires an injected PublicKeyProvider. VerifyRequest owns cloned
 // raw RFC 5322 bytes; those bytes are the sole authority for message and DKIM2
@@ -48,7 +48,7 @@
 // when explicitly typed temporary; otherwise it is a provider contract error.
 //
 // NewDNSPublicKeyProvider constructs the DNS-backed provider for the tested
-// draft-ietf-dkim-dkim2-dns-01 behavior baseline. The 2026-09-14 migration
+// draft-ietf-dkim-dkim2-dns-02 behavior baseline. The 2026-09-14 migration
 // from the individual DNS draft changed identifiers, not normative behavior. The
 // provider derives an absolute
 // <selector>._domainkey.<signing-domain>. owner from signed values, so transports
@@ -61,16 +61,16 @@
 // authoritative-negative, and stable-error caching.
 //
 // DNS key records use PKCS#1 RSAPublicKey DER for RSA and exactly 32 raw bytes
-// for Ed25519. The post-quantum Draft-07 Section 3.4 mldsa44-ed25519-sha512
+// for Ed25519. The post-quantum Draft-08 Section 3.4 mldsa44-ed25519-sha512
 // composite is deliberately not implemented while the working group has not
 // settled its construction: such signature sets are ignored as unsupported
 // algorithms and k=mldsa44-ed25519-sha512 records are unsupported key types,
 // exactly like any other unknown token. Empty p= is revoked. Non-empty p= accepts omitted terminal
-// Base64 padding as DNS-01 specifies while still requiring canonical zero pad
-// bits. The parser recognizes lowercase k= as the DNS-01 grammar requires; the
+// Base64 padding as DNS-02 specifies while still requiring canonical zero pad
+// bits. The parser recognizes lowercase k= as the DNS-02 grammar requires; the
 // inherited DNS-00 ABNF typo is corrected there. The active DKIM2
 // signature grammar exposes no q= option; DNS TXT is the only lookup binding.
-// The t= tag is retired by DNS-01 Section 3.4.1: it is validated only by the
+// The t= tag is retired by DNS-02 Section 3.4.1: it is validated only by the
 // generic tag-list rules and is otherwise ignored, so DNS key records never
 // yield testing or strict-identity semantics. DNSSECStatus is bounded
 // transport diagnostic metadata and never changes key acceptance, cache
@@ -130,7 +130,7 @@
 // bounded versioned JSON, publishes complete snapshots atomically, and stops
 // serving after a failed reload until explicit recovery.
 //
-// Verifier.EvaluateReceivedDSN exposes the read-only Draft-07 Section 16.3
+// Verifier.EvaluateReceivedDSN exposes the read-only Draft-08 Section 16.4
 // evaluation of an inbound DKIM2-signed delivery-status notification after the
 // caller verified the outer message as an ordinary message with the same
 // verifier. It takes the exact outer bytes, the observed null reverse path and
@@ -156,7 +156,7 @@
 // state other than PASS keeps the outer policy unchanged.
 //
 // Signer.RebuildDSNForPropagation and Signer.SignPropagatedDSN implement
-// Draft-07 Section 16.2 propagation of a received DSN to the previous hop.
+// Draft-08 Section 16.3 propagation of a received DSN to the previous hop.
 // The signer re-runs the received-DSN evaluation on the exact request bytes
 // with the mandatory tenant-bound LocalAuthority, and only an eligible
 // evaluation is rebuilt: the local hop run's DKIM2-Signature fields and every

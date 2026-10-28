@@ -37,10 +37,10 @@ func TestNewVerifierRejectsTypedNilKeyProvider(t *testing.T) {
 	}
 }
 
-// TestDefaultAlgorithmPolicyMatchesDraft07Contract verifies that the default
+// TestDefaultAlgorithmPolicyMatchesDraft08Contract verifies that the default
 // verifier enables rsa-sha256 and ed25519-sha256 only; the unsettled
 // post-quantum composite is deliberately not implemented.
-func TestDefaultAlgorithmPolicyMatchesDraft07Contract(t *testing.T) {
+func TestDefaultAlgorithmPolicyMatchesDraft08Contract(t *testing.T) {
 	policy := DefaultAlgorithmPolicy()
 	algorithms := policy.Algorithms()
 	if len(algorithms) != 2 {

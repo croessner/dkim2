@@ -140,7 +140,7 @@ func (e Evidence) RecipientDomains() []string {
 	return append([]string(nil), e.recipientDomains...)
 }
 
-// EvidenceEvaluator owns the narrow Draft-07 Section 16 embedded-original verification boundary.
+// EvidenceEvaluator owns the narrow Draft-08 Section 16 embedded-original verification boundary.
 type EvidenceEvaluator struct {
 	verifier verify.Verifier
 }
@@ -278,7 +278,7 @@ const (
 
 // deliveryStatusArrival returns the per-message Arrival-Date of the local
 // MTA's RFC 3464 report, the instant the reported message was delivered.
-// Draft-07 Section 14.3 evaluates signature windows at delivery, so a DSN
+// Draft-08 Section 14.3 evaluates signature windows at delivery, so a DSN
 // generated after a long queue lifetime must not judge the original at bounce
 // time. The body is parsed with the same profiles as recipient linkage.
 func deliveryStatusArrival(report Report, postfixBounceOrder bool) (time.Time, bool) {

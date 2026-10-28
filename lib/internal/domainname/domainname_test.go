@@ -7,7 +7,7 @@ import (
 
 const testALabelDomain = "xn--bcher-kva.example"
 
-// TestToASCIIConvertsValidLabels reproduces the Draft-07 Section 18 U-label to
+// TestToASCIIConvertsValidLabels reproduces the Draft-08 Section 18 U-label to
 // A-label mapping, A-label round trips, and ASCII case folding.
 func TestToASCIIConvertsValidLabels(t *testing.T) {
 	for input, want := range map[string]string{

@@ -1,5 +1,5 @@
 // Package mailbox owns bounded parsing of RFC 5322 author address lists for
-// DKIM2 From authenticity (Draft-07 Section 11).
+// DKIM2 From authenticity (Draft-08 Section 11).
 //
 // The parser accepts the RFC 5322 address-list grammar with the RFC 6854 group
 // update and the RFC 6532 UTF-8 extensions: display names, comments, folding

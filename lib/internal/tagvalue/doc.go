@@ -1,6 +1,6 @@
 // Package tagvalue owns shared DKIM2 tag-list scanning rules.
 //
-// Both scanners implement the draft-ietf-dkim-dkim2-spec-07 Section 8
+// Both scanners implement the draft-ietf-dkim-dkim2-spec-08 Section 8
 // tag-list grammar: at least one tag-spec, an optional final semicolon,
 // case-sensitive names and values, and no duplicated tags. Scan is the DNS key
 // record mode and unfolds valid CRLF WSP FWS. ScanHeader is the
@@ -11,7 +11,7 @@
 // non-canonical pad bits fail, and encoded plus decoded byte views remain
 // immutable after parsing. ParseBase64String requires standard RFC 4648
 // padding for protocol header fields. ParseOptionalPaddingBase64String is the
-// DNS-01 mode; it accepts omitted terminal padding and returns canonical padded
+// DNS-02 mode; it accepts omitted terminal padding and returns canonical padded
 // encoded bytes without relaxing alphabet, pad-bit, or resource limits.
 //
 // Errors from this package are structured and bounded. They expose stable

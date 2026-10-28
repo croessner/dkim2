@@ -503,7 +503,7 @@ func appendSignatureInputValueWithoutWSP(output []byte, value []byte) []byte {
 
 // renderIncompleteSignatureValue renders target tags with null signature strings.
 // Tags are separated by semicolons, and the optional final semicolon of
-// Draft-07 Section 8 is retained exactly when the received field carries it,
+// Draft-08 Section 8 is retained exactly when the received field carries it,
 // because Section 12.8 signs the incomplete field as it appears in the message.
 func renderIncompleteSignatureValue(unfoldedValue []byte, target signature.Signature) ([]byte, error) {
 	tagField, err := tagvalue.ScanHeader(unfoldedValue, knownSignatureInputTags, tagvalue.DefaultLimits())

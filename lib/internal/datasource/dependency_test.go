@@ -1207,7 +1207,7 @@ func forbiddenLibraryDependency(imported string) (string, bool) {
 	}
 }
 
-// reviewedIDNAModules lists the external modules reviewed for the Draft-07
+// reviewedIDNAModules lists the external modules reviewed for the Draft-08
 // Section 18 domain conversion owner: golang.org/x/net for its idna package and
 // golang.org/x/text as that package's normalization and Bidi dependency.
 var reviewedIDNAModules = []string{"golang.org/x/net", "golang.org/x/text"}

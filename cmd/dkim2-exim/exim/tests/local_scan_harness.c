@@ -643,7 +643,7 @@ harness_test_malformed_response(void)
   harness_headers_free();
 }
 
-/* harness_test_key_temporary proves the Draft-07 Section 13 451 4.7.5 text
+/* harness_test_key_temporary proves the Draft-08 Section 13 451 4.7.5 text
    for a tempfail caused by a temporary public-key lookup failure. */
 static void
 harness_test_key_temporary(void)

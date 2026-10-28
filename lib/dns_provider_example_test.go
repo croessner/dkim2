@@ -11,7 +11,7 @@ import (
 	dkim2 "github.com/croessner/dkim2"
 )
 
-//go:embed testdata/vectors/draft-ietf-dkim-dkim2-dns-01/dns-golden.json
+//go:embed testdata/vectors/draft-ietf-dkim-dkim2-dns-02/dns-golden.json
 var dnsExampleManifestJSON []byte
 
 type dnsExampleManifest struct {
@@ -33,7 +33,7 @@ func (t *dnsExampleTransport) LookupTXT(ctx context.Context, _ string) (dkim2.TX
 }
 
 // ExampleNewDNSPublicKeyProvider demonstrates injected DNS verification; the
-// fixture record carries the retired t=y:s tag, which DNS-01 ignores.
+// fixture record carries the retired t=y:s tag, which DNS-02 ignores.
 func ExampleNewDNSPublicKeyProvider() {
 	transport, err := newDNSExampleTransport()
 	if err != nil {

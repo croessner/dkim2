@@ -16,8 +16,8 @@ import (
 )
 
 const (
-	// compositeTestToken is the Draft-07 Section 3.4 post-quantum composite
-	// algorithm and DNS-01 key type this implementation deliberately does
+	// compositeTestToken is the Draft-08 Section 3.4 post-quantum composite
+	// algorithm and DNS-02 key type this implementation deliberately does
 	// not support while its construction is unsettled.
 	compositeTestToken = "mldsa44-ed25519-sha512"
 	// compositeTestSignatureBytes is the size of a real composite value, so
@@ -89,7 +89,7 @@ func mixedCompositeFixture(t *testing.T, includeEd25519 bool) ([]byte, ed25519.P
 	return bytes.Replace(unsigned, []byte(placeholder), []byte(signature), 1), privateKey.Public().(ed25519.PublicKey)
 }
 
-// compositeDNSTransport serves the Ed25519 key and a DNS-01
+// compositeDNSTransport serves the Ed25519 key and a DNS-02
 // k=mldsa44-ed25519-sha512 record, and records every queried owner name.
 type compositeDNSTransport struct {
 	mu      sync.Mutex

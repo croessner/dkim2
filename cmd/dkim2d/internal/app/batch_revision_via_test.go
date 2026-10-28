@@ -66,7 +66,7 @@ func TestBatchRevisionControlledReturnRejectsUntrustedEvidence(t *testing.T) {
 // TestBatchRevisionSignedNullSenderStillNeedsValidDSN reuses an unchanged real-signature conformance vector.
 func TestBatchRevisionSignedNullSenderStillNeedsValidDSN(t *testing.T) {
 	f := newPropagationFixture(t)
-	data, err := os.ReadFile("../../../../lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-07/received-dsn-golden.json")
+	data, err := os.ReadFile("../../../../lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-08/received-dsn-golden.json")
 	if err != nil {
 		t.Fatal("received DSN corpus unavailable")
 	}

@@ -13,7 +13,7 @@ local lua_util = require 'lua_util'
 local ucl = require 'ucl'
 
 local API_VERSION = 'v1'
-local DRAFT = 'draft-ietf-dkim-dkim2-spec-07'
+local DRAFT = 'draft-ietf-dkim-dkim2-spec-08'
 local PROJECTION_SCHEMA = 'dkim2.verifier-projection.v1'
 local PROCESS_PATH = '/v1/process'
 local MAX_MESSAGE_BYTES = 33554432

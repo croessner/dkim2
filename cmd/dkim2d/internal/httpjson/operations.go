@@ -62,7 +62,7 @@ func MapReviseRequest(input generated.ReviseRequest) (app.OperationRequest, erro
 // MapDeliveryStatusRequest maps one generated DSN-sign request to the
 // dedicated daemon-owned evidence request.
 func MapDeliveryStatusRequest(input generated.DSNSignRequest) (app.DeliveryStatusRequest, error) {
-	if input.ApiVersion != generated.V1 || input.Draft != generated.DraftIetfDkimDkim2Spec07 ||
+	if input.ApiVersion != generated.V1 || input.Draft != generated.DraftIetfDkimDkim2Spec08 ||
 		!validTenant(input.Context.Tenant) {
 		return app.DeliveryStatusRequest{}, newMappingError(MappingInvalidContract)
 	}
@@ -182,7 +182,7 @@ func decodeOperationInput(
 	smtp generated.SMTPInput,
 	signing generated.SigningContext,
 ) (decodedOperationInput, error) {
-	if apiVersion != generated.V1 || draft != generated.DraftIetfDkimDkim2Spec07 ||
+	if apiVersion != generated.V1 || draft != generated.DraftIetfDkimDkim2Spec08 ||
 		message.Fidelity == nil || !message.Fidelity.Valid() ||
 		!validTenant(signing.Tenant) || !validSigningDomain(signing.Domain) {
 		return decodedOperationInput{}, newMappingError(MappingInvalidContract)
@@ -264,7 +264,7 @@ func MapOperationResult(result app.OperationResult) (generated.OperationResponse
 		return generated.OperationResponse{}, newMappingError(MappingInternalContract)
 	}
 	return generated.OperationResponse{
-		ApiVersion: generated.V1, Draft: generated.DraftIetfDkimDkim2Spec07,
+		ApiVersion: generated.V1, Draft: generated.DraftIetfDkimDkim2Spec08,
 		Operation: operation, Result: resultClass, Disposition: disposition,
 		Actions: actions,
 	}, nil
@@ -366,7 +366,7 @@ func asciiDNSAlphanumeric(value byte) bool {
 
 // framedEnvelopePath rejects NUL and CR/LF framing bytes in one SMTP path.
 // UTF-8 SMTPUTF8 paths are admitted (callers check utf8.Valid); the library
-// owns the path grammar and records U-label domains as A-labels (Draft-07
+// owns the path grammar and records U-label domains as A-labels (Draft-08
 // Section 18).
 func framedEnvelopePath(value []byte) bool {
 	return !bytes.ContainsAny(value, "\x00\r\n")

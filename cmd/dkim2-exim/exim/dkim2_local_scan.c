@@ -1083,7 +1083,7 @@ dkim2_log_failure(enum dkim2_failure failure)
 /* dkim2_fixed_return installs one local, content-free Exim reply. Each text
    starts with the RFC 3463 enhanced status code that Exim places after the
    550 or 451 reply code: 5.7.1 for a DKIM2 rejection, 4.7.5 for a temporary
-   public-key lookup failure (Draft-07 Section 13), 4.7.1 otherwise. */
+   public-key lookup failure (Draft-08 Section 13), 4.7.1 otherwise. */
 static int
 dkim2_fixed_return(uschar **return_text, int reject, int key_temporary)
 {

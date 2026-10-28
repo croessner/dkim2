@@ -10,7 +10,7 @@ import (
 	"github.com/croessner/dkim2/internal/rawmsg"
 )
 
-// Parser converts decoded Draft-07 recipe JSON into immutable plans.
+// Parser converts decoded Draft-08 recipe JSON into immutable plans.
 type Parser struct {
 	limits      Limits
 	relevance   HeaderRelevance
@@ -18,7 +18,7 @@ type Parser struct {
 }
 
 // NewParser constructs a strict recipe parser with resolved restrictive limits.
-// The header relevance classifier is mandatory because Draft-07 Section 5.1
+// The header relevance classifier is mandatory because Draft-08 Section 5.1
 // forbids recipes for header fields that are not signed; the parser rejects
 // such recipes instead of leaving the rule to each caller.
 func NewParser(limits Limits, relevance HeaderRelevance) (Parser, error) {
@@ -669,7 +669,7 @@ func (d *recipeDecoder) decodeHeaders(value jsonValue) ([]headerPlan, error) {
 	return plans, nil
 }
 
-// requireSignedHeader enforces the Draft-07 Section 5.1 MUST NOT for recipes
+// requireSignedHeader enforces the Draft-08 Section 5.1 MUST NOT for recipes
 // that name header fields excluded from signing by Section 4. A classifier
 // failure fails closed as an invariant error.
 func (d *recipeDecoder) requireSignedHeader(canonicalName string, offset, ordinal int) error {
@@ -813,7 +813,7 @@ func (d *recipeDecoder) decodeData(value jsonValue, dimension Dimension, headerN
 
 // decodeBinaryData validates a nonempty "u" array of canonical base64 lines.
 // Decoded bytes need not be UTF-8 but must not contain CR or LF; a valid UTF-8
-// value is accepted because Draft-07 only says "u" SHOULD NOT replace "d".
+// value is accepted because Draft-08 only says "u" SHOULD NOT replace "d".
 func (d *recipeDecoder) decodeBinaryData(value jsonValue, dimension Dimension, headerName string, stepIndex int) (step, error) {
 	literals, err := d.decodeLiterals(value, dimension, headerName, stepIndex, StepKindBinaryData, func(text []byte) ([]byte, bool) {
 		decoded, ok := decodeBase64Line(text)

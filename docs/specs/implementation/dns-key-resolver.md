@@ -1,10 +1,10 @@
 # DNS Key Resolver
 
 > Historical Draft-04 implementation record. The original scope and evidence
-> below are preserved; current Draft-07 authority is the migration disposition
+> below are preserved; current Draft-08 authority is the migration disposition
 > and current durable architecture.
 >
-> Current behavior: `draft-ietf-dkim-dkim2-dns-01` Section 3.4.1 retires the
+> Current behavior: `draft-ietf-dkim-dkim2-dns-02` Section 3.4.1 retires the
 > key-record `t=` tag ("SHOULD be ignored"); its historical `t=y` (testing)
 > and `t=s` (strict identity) meanings now concern DKIM1 only. The resolver no
 > longer parses `t=` flags and no longer exposes testing or strict-identity
@@ -20,7 +20,7 @@
 
 - Increment: DNS key resolution after the public current-verification facade.
 - Protocol baseline: `draft-ietf-dkim-dkim2-spec-04` and
-  `draft-ietf-dkim-dkim2-dns-01`.
+  `draft-ietf-dkim-dkim2-dns-02`.
 - Architecture owner: `lib/internal/keyresolver`, with a public provider
   adapter in the root library package.
 - Status: implemented; final unchanged-diff proof and milestone commit pending.
@@ -48,7 +48,7 @@ The binding sources are, in order:
 
 1. `draft-ietf-dkim-dkim2-spec-04` for current DKIM2 signature algorithms and
    the numeric `i=` sequence model.
-2. `draft-ietf-dkim-dkim2-dns-01` for selectors, textual key records, and the DNS
+2. `draft-ietf-dkim-dkim2-dns-02` for selectors, textual key records, and the DNS
    TXT binding.
 3. RFC 1034 and RFC 1035 for DNS names and resource-record behavior.
 4. RFC 6376 where DNS-04 incorporates DKIM key semantics.
@@ -321,7 +321,7 @@ transports may enable caching.
 - They do not constrain hashes, service type, or policy.
 - Their presence and values are not retained or exposed.
 
-`t=` (superseded; retired by DNS-01 Section 3.4.1 and now ignored after
+`t=` (superseded; retired by DNS-02 Section 3.4.1 and now ignored after
 generic tag-list validation):
 
 - Optional colon-separated flags.
@@ -838,10 +838,10 @@ tracked.
 - Settled: multiple TXT records are a typed ambiguous permanent state.
 - Settled: `k=` follows DNS-04 prose despite the `%x76` ABNF defect.
 - Settled: `q=` is not invented for the active DKIM2 signature grammar.
-- Superseded: `t=y` and `t=s` were bounded metadata in this increment; DNS-01
+- Superseded: `t=y` and `t=s` were bounded metadata in this increment; DNS-02
   retires `t=`, which is now ignored.
 - Settled: DNSSEC cannot alter conformance results.
 - Settled: transport calls use absolute names.
-- Resolved: DNS-01 retires `t=`, removing the `t=s` conflict with the numeric
+- Resolved: DNS-02 retires `t=`, removing the `t=s` conflict with the numeric
   signature sequence `i=` (`DKIM2-ISSUE-0013`).
 - Open: later draft text may define DNSSEC or additional lookup bindings.

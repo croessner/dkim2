@@ -1,6 +1,6 @@
 package tagvalue
 
-// ParseTextstring validates one already-trimmed Draft-07 Section 2.14
+// ParseTextstring validates one already-trimmed Draft-08 Section 2.14
 // textstring value (1*ALPHADIGITD) and returns it unchanged. Textstring values
 // such as hash algorithm, signature algorithm, and flag names are
 // case-sensitive, so no case folding is applied: "SHA256" and "sha256" are

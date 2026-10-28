@@ -1,14 +1,14 @@
 # Milter Adapter Implementation Specification
 
 > Historical Draft-04 implementation record. The original scope and evidence
-> below are preserved; current Draft-07 authority is the migration disposition
+> below are preserved; current Draft-08 authority is the migration disposition
 > and current durable architecture.
 
 Status: implementation-ready planning baseline.
 
 Implementation base: `bf627cd81d2a46df35d5c42dde06e0f447cf017c`.
 Protocol behavior remains pinned to `draft-ietf-dkim-dkim2-spec-04` and the
-historical `draft-ietf-dkim-dkim2-dns-01` baseline. This increment adds the first
+historical `draft-ietf-dkim-dkim2-dns-02` baseline. This increment adds the first
 production HTTP signing and revision surface and the first SMTP/Milter adapter.
 It does not change the pinned draft behavior.
 
@@ -134,7 +134,7 @@ This is a documented limitation of the `ordinary_transit` Milter mode, not
 of the daemon route. A Milter observes only the outgoing SMTP transaction, so
 `handler.go` sends that envelope as both `smtp` and `incoming_smtp`. A
 forwarder that installs its own local return path, which is the premise of
-Draft-07 Section 16.2 delivery-status propagation, presents an outgoing
+Draft-08 Section 16.3 delivery-status propagation, presents an outgoing
 `MAIL FROM` that differs from the inherited one; the daemon then rejects the
 revision as a custody discontinuity (`disposition: reject`), exactly as it
 must for evidence it cannot distinguish from a forged envelope. Such a
@@ -570,7 +570,7 @@ forbidden. SMTPUTF8 octets are preserved for inbound processing under RFC
 6531/6532. Since the Draft-07 migration, signing accepts SMTPUTF8 paths in
 originator and transit mode: the library validates every path and maps a
 U-label envelope-sender domain to its A-label for `envelope_sender` domain
-selection (Draft-07 Section 18); a non-ASCII path without the `SMTPUTF8`
+selection (Draft-08 Section 18); a non-ASCII path without the `SMTPUTF8`
 parameter still fails closed. Every null sender fails closed before those
 boundaries unless the trusted-route `signing.null_sender: header_from` opt-in
 derives the signing domain from the single From mailbox.
@@ -644,7 +644,7 @@ Daemon dispositions map deterministically:
 | `tempfail` | temporary failure unchanged | `451 4.7.1 DKIM2 service unavailable` |
 | `tempfail` after TEMPERROR `provider_temporary` | temporary failure unchanged | `451 4.7.5 DKIM2 public key temporarily unavailable` |
 
-The `4.7.5` reply follows Draft-07 Section 13: a temporary public-key (DNS)
+The `4.7.5` reply follows Draft-08 Section 13: a temporary public-key (DNS)
 lookup failure is signalled distinctly. It is derived only from the daemon
 result TEMPERROR with primary reason `provider_temporary`, so operators find
 that reason in the daemon logs for every `4.7.5` reply, while adapter, transport, and other

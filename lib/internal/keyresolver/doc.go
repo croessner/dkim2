@@ -1,4 +1,4 @@
-// Package keyresolver owns bounded DNS-01 query, TXT transport, key-record,
+// Package keyresolver owns bounded DNS-02 query, TXT transport, key-record,
 // decoding, cache, and coalesced-flight semantics.
 //
 // Queries validate ASCII selectors and signing domains, preserve dotted
@@ -16,15 +16,15 @@
 // provenance. DNSSECStatus is a closed diagnostic value with no verdict or TTL
 // effect.
 //
-// ParseRecord implements draft-ietf-dkim-dkim2-dns-01 using the shared tagvalue
+// ParseRecord implements draft-ietf-dkim-dkim2-dns-02 using the shared tagvalue
 // scanner. Lowercase k= is recognized according to the draft prose and RFC 6376
 // Erratum 5137 despite the inherited ABNF typo. DNS TXT is the sole lookup
 // binding because the active signature grammar has no q=. Unknown and retired
 // tags are ignored after generic validation, duplicate tags fail closed, and
-// empty p= is revoked. The t= tag is retired by DNS-01 Section 3.4.1: it is
+// empty p= is revoked. The t= tag is retired by DNS-02 Section 3.4.1: it is
 // subject only to the generic tag-list rules and never yields testing or
 // strict-identity semantics. Non-empty p= permits omitted terminal Base64
-// padding as DNS-01 specifies, but canonical zero pad bits remain mandatory.
+// padding as DNS-02 specifies, but canonical zero pad bits remain mandatory.
 //
 // DecodeKey accepts PKCS#1 RSAPublicKey DER and X.509 SubjectPublicKeyInfo DER
 // containing RSA, or exactly 32 raw Ed25519 public-key bytes, and keeps

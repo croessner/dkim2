@@ -7,7 +7,7 @@ import (
 )
 
 const outputSchema = "dkim2ctl.result.v1"
-const draftVersion = "draft-ietf-dkim-dkim2-spec-07"
+const draftVersion = "draft-ietf-dkim-dkim2-spec-08"
 const outcomeMatch = "match"
 const outcomeMismatch = "mismatch"
 const outcomeError = "error"

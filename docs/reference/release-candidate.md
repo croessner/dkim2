@@ -1,9 +1,9 @@
 # Preview Release Candidate
 
 The prepared product candidate is exactly `v0.1.0-rc.1`. It is a local,
-non-publishing candidate for the pinned Draft-07 and DNS-01
+non-publishing candidate for the pinned Draft-08 and DNS-02
 behavior. It is not a stable release and it does not make either draft final.
-The Exim implementation is `unqualified_draft07`; the completed five-row,
+The Exim implementation is `unqualified_draft08`; the completed five-row,
 43-case-per-row source-linked matrix remains historical Draft-04 evidence. The
 database-provider work is implemented.
 
@@ -47,10 +47,10 @@ agreement is observation only. Current comparison availability and open draft
 issues are stated in the generated report and
 [`draft-issues.md`](draft-issues.md).
 
-Exim is exactly `unqualified_draft07` in the unpublished candidate report.
-Portable and full Draft-07 conformance contain no Exim case and reject imported
+Exim is exactly `unqualified_draft08` in the unpublished candidate report.
+Portable and full Draft-08 conformance contain no Exim case and reject imported
 evidence until a fresh separately authorized five-row run is bound to unchanged
-Draft-07 candidate bytes.
+Draft-08 candidate bytes.
 LDAP, PostgreSQL, MySQL, and MariaDB providers plus the offline legacy migration are implemented.
 
 The native-domain onboarding implementation is a later local closeout

@@ -404,7 +404,7 @@ func signDSNOriginalForRecipient(
 	return signed.Bytes()
 }
 
-// TestDSNSigningRequiresAuthenticReportFrom reproduces Draft-07 Sections
+// TestDSNSigningRequiresAuthenticReportFrom reproduces Draft-08 Sections
 // 11 and 12.4 for MTA-generated DSNs: the report is a new i=1 message, so its
 // From must relaxed-match the DSN signing domain or signing fails closed.
 func TestDSNSigningRequiresAuthenticReportFrom(t *testing.T) {
@@ -494,7 +494,7 @@ func signEvaluatedDSN(t *testing.T, fixture publicSigningFixture, outer []byte, 
 }
 
 // TestPostfixDSNSignsUnderReportingMTAIdentity reproduces an MTA-generated
-// bounce whose From names the reporting MTA: Draft-07 Section 12.4 makes the
+// bounce whose From names the reporting MTA: Draft-08 Section 12.4 makes the
 // derived embedded d= unusable for it, while the configured reporting identity
 // signs it after the same embedded verification and recipient linkage.
 func TestPostfixDSNSignsUnderReportingMTAIdentity(t *testing.T) {

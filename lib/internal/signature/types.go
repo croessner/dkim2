@@ -22,7 +22,7 @@ const (
 type Algorithm string
 
 // Known reports whether algorithm belongs to the implemented signature
-// vocabulary. The Draft-07 Section 3.4 post-quantum composite is deliberately
+// vocabulary. The Draft-08 Section 3.4 post-quantum composite is deliberately
 // outside it until the working group settles that construction, so such sets
 // stay unknown, unsupported algorithms.
 func (a Algorithm) Known() bool {

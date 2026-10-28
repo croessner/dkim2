@@ -15,10 +15,10 @@ import (
 	"github.com/croessner/dkim2/internal/signature"
 )
 
-// TestVerifierAppliesDraft07TimestampWindows reproduces the fixed Draft-07
+// TestVerifierAppliesDraft08TimestampWindows reproduces the fixed Draft-08
 // Section 14.3 windows: at most 14 days old and at most one day in the future,
 // with exact boundaries accepted and one second beyond rejected.
-func TestVerifierAppliesDraft07TimestampWindows(t *testing.T) {
+func TestVerifierAppliesDraft08TimestampWindows(t *testing.T) {
 	now := time.Unix(int64(testTimestampSeconds), 0).Add(time.Hour)
 
 	tests := []struct {
@@ -159,7 +159,7 @@ func checkStatusForTarget(status TargetStatus) CheckStatus {
 	return CheckStatusFail
 }
 
-// TestVerifierChecksTimestampsOfEverySignature reproduces Draft-07 Section
+// TestVerifierChecksTimestampsOfEverySignature reproduces Draft-08 Section
 // 14.3: any signature outside the windows makes the message invalid, not only
 // the selected highest signature. The failure is attributed to the offending
 // i=.

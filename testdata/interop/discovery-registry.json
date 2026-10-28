@@ -1,7 +1,7 @@
 {
   "schema": "dkim2.interop-discovery-registry.v1",
-  "message_draft": "draft-ietf-dkim-dkim2-spec-07",
-  "dns_draft": "draft-ietf-dkim-dkim2-dns-01",
+  "message_draft": "draft-ietf-dkim-dkim2-spec-08",
+  "dns_draft": "draft-ietf-dkim-dkim2-dns-02",
   "max_age_hours": 168,
   "retrieval_policy": {
     "max_redirects": 2,
@@ -61,14 +61,14 @@
     {
       "id": "ietf-dkim2-dns-04",
       "kind": "ietf_draft",
-      "url": "https://www.ietf.org/archive/id/draft-ietf-dkim-dkim2-dns-01.txt",
+      "url": "https://www.ietf.org/archive/id/draft-ietf-dkim-dkim2-dns-02.txt",
       "query": "exact historical DNS behavior baseline bytes",
       "required": true
     },
     {
       "id": "ietf-dkim2-spec-05",
       "kind": "ietf_draft",
-      "url": "https://www.ietf.org/archive/id/draft-ietf-dkim-dkim2-spec-07.txt",
+      "url": "https://www.ietf.org/archive/id/draft-ietf-dkim-dkim2-spec-08.txt",
       "query": "exact pinned message draft bytes published 2026-08-25",
       "required": true
     },

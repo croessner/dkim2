@@ -137,7 +137,7 @@ func TestReplayFacadeRejectsZeroAndCallerComposedPass(t *testing.T) {
 	}
 }
 
-// TestReplayFacadePreservesOneMessageWideIdentity verifies exact Draft-07 root facts.
+// TestReplayFacadePreservesOneMessageWideIdentity verifies exact Draft-08 root facts.
 func TestReplayFacadePreservesOneMessageWideIdentity(t *testing.T) {
 	const timestamp = int64(1700000000)
 	flaggedRaw, flaggedKey := signedPublicFlaggedPolicyMessage(t, timestamp)
@@ -541,7 +541,7 @@ func TestReplayFacadePrivacyCoversNestedAndContainerSurfaces(t *testing.T) {
 	for _, value := range values {
 		formatted := fmt.Sprintf("%v|%+v|%#v|%s|%q|%x|%X|%p", value, value, value, value, value, value, value, value)
 		for _, forbidden := range []string{
-			"draft-ietf-dkim-dkim2-spec-07", "rcpt@example.test",
+			"draft-ietf-dkim-dkim2-spec-08", "rcpt@example.test",
 			"dkim2:replay:v1:", storage, fmt.Sprintf("%x", storage),
 			fmt.Sprintf("%x", secret), "01020304", "protected callback failure marker",
 		} {

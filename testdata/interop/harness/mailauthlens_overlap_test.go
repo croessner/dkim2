@@ -2,7 +2,7 @@ package dkim2
 
 import "testing"
 
-// TestDNSKeyFWS verifies the peer accepts DNS-01 FWS with a DKIM1-compatible record.
+// TestDNSKeyFWS verifies the peer accepts DNS-02 FWS with a DKIM1-compatible record.
 func TestDNSKeyFWS(t *testing.T) {
 	record, err := ParseKeyRecord(
 		"v = DKIM1; k = ed25519; p = AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=;",

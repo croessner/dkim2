@@ -8,8 +8,8 @@ description: Enforce DKIM2 draft and RFC fidelity for protocol design, implement
 ## First Moves
 
 Read `AGENTS.md`, `POLICY.md`, and `docs/ARCHITECTURE.md` before changing
-behavior. Treat `draft-ietf-dkim-dkim2-spec-07` and
-`draft-ietf-dkim-dkim2-dns-01` as the active baseline until the architecture says
+behavior. Treat `draft-ietf-dkim-dkim2-spec-08` and
+`draft-ietf-dkim-dkim2-dns-02` as the active baseline until the architecture says
 otherwise.
 
 When a task depends on exact draft text, verify the draft text directly instead
@@ -44,7 +44,7 @@ Prefer draft-versioned golden vectors and negative vectors. Tests must prove:
 - Message-Instance hash behavior.
 - SHA-256 and SHA-512 Message-Instance verification, including duplicate-name
   rejection and all-supported-hash agreement.
-- Draft-07 unsigned-header, lowercase Recipe-key, signature-cardinality, and
+- Draft-08 unsigned-header, lowercase Recipe-key, signature-cardinality, and
   unchanged Message-Instance transition behavior.
 - Recipe parse, apply, generate, null-recipe, and resource-limit behavior.
 - DNS key-record state distinctions.

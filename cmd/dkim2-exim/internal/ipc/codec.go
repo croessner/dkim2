@@ -159,7 +159,7 @@ const (
 	// ReasonInternal identifies a closed invariant.
 	ReasonInternal
 	// ReasonKeyTemporary identifies a daemon TEMPERROR caused by a temporary
-	// public-key lookup failure, answered with 451 4.7.5 (Draft-07 Section 13).
+	// public-key lookup failure, answered with 451 4.7.5 (Draft-08 Section 13).
 	ReasonKeyTemporary
 )
 

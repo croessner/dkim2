@@ -122,7 +122,7 @@ func (b *generationPlanBudget) appendCopy(steps *[]step, occurrence int, dimensi
 
 // appendDataLiteral adds or extends one adjacent literal step under shared
 // limits. Valid UTF-8 values become "d" literals and other values become "u"
-// literals (Draft-07 Section 5); adjacent literals merge only within one kind.
+// literals (Draft-08 Section 5); adjacent literals merge only within one kind.
 func (b *generationPlanBudget) appendDataLiteral(steps *[]step, value []byte, dimension Dimension, maxSteps int, stepLimitName string) error {
 	validationWork, ok := checkedMultiply(len(value), 2)
 	if ok {

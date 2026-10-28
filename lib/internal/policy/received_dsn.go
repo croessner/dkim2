@@ -179,7 +179,7 @@ func (f ReceivedDSNFacts) RecipientLinkage() ReceivedDSNRecipientLinkage { retur
 // receivedDSNRowReason selects the first matching received-DSN row in stage
 // order for an outer verification of the given protocol class. The rows are
 // local policy; only the reject rows for an unverified embedded original and
-// an identity mismatch restate the Draft-07 Section 16.3 SHOULD.
+// an identity mismatch restate the Draft-08 Section 16.4 SHOULD.
 func receivedDSNRowReason(protocol ProtocolClass, facts ReceivedDSNFacts) PolicyReason {
 	switch {
 	case protocol != ProtocolPASS:

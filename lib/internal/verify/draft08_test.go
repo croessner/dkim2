@@ -14,7 +14,7 @@ import (
 
 // TestVerifierAcceptsSHA512Only proves current content verification does not require an advertised SHA-256 tuple.
 func TestVerifierAcceptsSHA512Only(t *testing.T) {
-	message, parsed := draft07HashFixture(t, []canonical.HashAlgorithm{canonical.HashAlgorithmSHA512}, "")
+	message, parsed := draft08HashFixture(t, []canonical.HashAlgorithm{canonical.HashAlgorithmSHA512}, "")
 	result, err := compareTargetHashes(mustCanonicalizer(t), message, parsed, Target{Sequence: 1, InstanceNumber: 1})
 	if err != nil || !result.pass || !result.hasLocalHeaderSHA256 {
 		t.Fatalf("compareTargetHashes() = pass:%t projection:%t error:%v", result.pass, result.hasLocalHeaderSHA256, err)
@@ -23,7 +23,7 @@ func TestVerifierAcceptsSHA512Only(t *testing.T) {
 
 // TestVerifierRejectsOneMismatchingSupportedTuple proves one known mismatch cannot be hidden by another known match.
 func TestVerifierRejectsOneMismatchingSupportedTuple(t *testing.T) {
-	message, parsed := draft07HashFixture(t, []canonical.HashAlgorithm{canonical.HashAlgorithmSHA256, canonical.HashAlgorithmSHA512}, canonical.HashAlgorithmSHA512)
+	message, parsed := draft08HashFixture(t, []canonical.HashAlgorithm{canonical.HashAlgorithmSHA256, canonical.HashAlgorithmSHA512}, canonical.HashAlgorithmSHA512)
 	result, err := compareTargetHashes(mustCanonicalizer(t), message, parsed, Target{Sequence: 1, InstanceNumber: 1})
 	if err != nil || result.pass || result.header.HashStatus != HashStatusMismatch {
 		t.Fatalf("compareTargetHashes() = pass:%t header:%q error:%v", result.pass, result.header.HashStatus, err)
@@ -77,8 +77,8 @@ func TestSignatureResultsPreserveOccurrenceOrder(t *testing.T) {
 	}
 }
 
-// draft07HashFixture constructs one parsed current Message-Instance with controlled supported tuples.
-func draft07HashFixture(t *testing.T, algorithms []canonical.HashAlgorithm, mismatch canonical.HashAlgorithm) (rawmsg.Message, instance.MessageInstance) {
+// draft08HashFixture constructs one parsed current Message-Instance with controlled supported tuples.
+func draft08HashFixture(t *testing.T, algorithms []canonical.HashAlgorithm, mismatch canonical.HashAlgorithm) (rawmsg.Message, instance.MessageInstance) {
 	t.Helper()
 	const base = "Subject:hashes\r\n\r\nbody\r\n"
 	baseMessage, err := rawmsg.Parse([]byte(base))

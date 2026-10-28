@@ -9,7 +9,7 @@ import (
 	"github.com/croessner/dkim2/internal/signature"
 )
 
-// fromAuthenticityAccepted applies Draft-07 Sections 11 and 14.8 to a
+// fromAuthenticityAccepted applies Draft-08 Sections 11 and 14.8 to a
 // complete authenticated history. states lists the reconstructed message
 // states from the current state (highest m=) down to the m=1 state. A From
 // state begins at m=1 and at every later instance whose From differs from
@@ -48,7 +48,7 @@ func fromAuthenticityAccepted(states []recipe.State, signatures []signature.Sign
 }
 
 // FromAuthenticFor reports whether the From header fields of headers form one
-// Authentic From state for signingDomain (Draft-07 Section 11). Signers use it
+// Authentic From state for signingDomain (Draft-08 Section 11). Signers use it
 // to choose d= under Section 12.4; verifiers apply the same rule per state.
 func FromAuthenticFor(headers rawmsg.HeaderBlock, signingDomain string) bool {
 	return fromStateAuthentic(fromHeaderValues(headers), signingDomain)
@@ -89,7 +89,7 @@ func sameFromValues(left, right [][]byte) bool {
 }
 
 // responsibleSignature selects the lowest numbered signature whose m= is at
-// least instanceNumber (Draft-07 Section 11). ordered is sorted by i=.
+// least instanceNumber (Draft-08 Section 11). ordered is sorted by i=.
 func responsibleSignature(ordered []signature.Signature, instanceNumber uint64) (signature.Signature, bool) {
 	for _, candidate := range ordered {
 		if candidate.InstanceNumber() >= instanceNumber {

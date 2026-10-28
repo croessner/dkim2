@@ -10,15 +10,15 @@ import (
 
 const testDigest = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 
-// TestDraft07Identity freezes interoperability registry admission to the current message draft.
-func TestDraft07Identity(t *testing.T) {
-	const draft07 = "draft-ietf-dkim-dkim2-spec-07"
-	if MessageDraft != draft07 {
-		t.Fatalf("MessageDraft = %q, want %q", MessageDraft, draft07)
+// TestDraft08Identity freezes interoperability registry admission to the current message draft.
+func TestDraft08Identity(t *testing.T) {
+	const draft08 = "draft-ietf-dkim-dkim2-spec-08"
+	if MessageDraft != draft08 {
+		t.Fatalf("MessageDraft = %q, want %q", MessageDraft, draft08)
 	}
 	registry := validRegistryForTest()
 	if err := registry.Validate(); err != nil {
-		t.Fatalf("Draft-07 registry rejected: %v", err)
+		t.Fatalf("Draft-08 registry rejected: %v", err)
 	}
 }
 

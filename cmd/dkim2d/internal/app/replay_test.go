@@ -201,7 +201,7 @@ func TestReplayCoordinatorCountsDirectDeliveriesUnderLocalPolicy(t *testing.T) {
 }
 
 // TestReplayCoordinatorSkipsDirectFrozenGoldenPass proves the checked-in
-// single-signature protocol vector is a direct delivery that Draft-07 Section
+// single-signature protocol vector is a direct delivery that Draft-08 Section
 // 15.1 does not count: it reaches a PASS outcome without any store mutation.
 func TestReplayCoordinatorSkipsDirectFrozenGoldenPass(t *testing.T) {
 	domain := goldenReplayDomain(t, config.PolicyStrict)
@@ -213,7 +213,7 @@ func TestReplayCoordinatorSkipsDirectFrozenGoldenPass(t *testing.T) {
 	}
 }
 
-// TestReplayCoordinatorCollapsesRecipientsToOneMessageIdentity proves Draft-07 equality.
+// TestReplayCoordinatorCollapsesRecipientsToOneMessageIdentity proves Draft-08 equality.
 func TestReplayCoordinatorCollapsesRecipientsToOneMessageIdentity(t *testing.T) {
 	recipients := [][]byte{
 		[]byte("<third@example.test>"),
@@ -939,7 +939,7 @@ func goldenReplayDomain(t *testing.T, mode config.PolicyMode) DomainResult {
 func goldenReplayInput(t *testing.T) ([]byte, [][]byte, dkim2.PublicKeyProvider) {
 	t.Helper()
 	corpusBytes, err := os.ReadFile(
-		"../../../../lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-07/public-golden.json",
+		"../../../../lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-08/public-golden.json",
 	)
 	if err != nil {
 		t.Fatal("golden replay fixture unavailable")

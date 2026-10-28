@@ -219,7 +219,7 @@ func (m Message) ReversePath() []byte { return bytes.Clone(m.reverse) }
 // SigningDomain derives the canonical lowercase A-label DNS domain of the
 // reverse path when the complete originator envelope is signable. SMTPUTF8
 // paths are supported: a U-label domain maps to its A-label through the
-// library's strict IDNA owner (Draft-07 Section 18).
+// library's strict IDNA owner (Draft-08 Section 18).
 func (m Message) SigningDomain() (string, bool) {
 	if !m.SupportsSigningEnvelope() {
 		return "", false
@@ -437,7 +437,7 @@ type Result struct {
 	// that the header_from policy produced without a daemon call.
 	NullSenderSkip NullSenderSkip
 	// TemporaryKey marks a tempfail caused by a temporary public-key lookup
-	// failure, which Draft-07 Section 13 answers with 451 4.7.5.
+	// failure, which Draft-08 Section 13 answers with 451 4.7.5.
 	TemporaryKey bool
 }
 

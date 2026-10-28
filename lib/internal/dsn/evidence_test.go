@@ -729,7 +729,7 @@ func mustEvidenceReportWithDeliveryStatus(t *testing.T, contentType ContentType,
 }
 
 // TestEvidenceEvaluatorJudgesOriginalAtArrivalDate reproduces a DSN generated
-// after a long queue lifetime: Draft-07 Section 14.3 evaluates signature
+// after a long queue lifetime: Draft-08 Section 14.3 evaluates signature
 // windows at delivery, so the local MTA's RFC 3464 Arrival-Date is the
 // reference instant. An absent, future, or implausibly old Arrival-Date keeps
 // the verifier clock, which is never more permissive.

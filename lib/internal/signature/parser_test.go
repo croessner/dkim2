@@ -81,7 +81,7 @@ func TestParseAcceptsInteropFWSAroundTags(t *testing.T) {
 	}
 }
 
-// TestParseRejectsMixedCaseTagNames reproduces the Draft-07 Section 10
+// TestParseRejectsMixedCaseTagNames reproduces the Draft-08 Section 10
 // requirement that every DKIM2-Signature tag name is lowercase. An uppercase
 // alias of a known tag is a syntax error, never a missing tag.
 func TestParseRejectsMixedCaseTagNames(t *testing.T) {
@@ -95,7 +95,7 @@ func TestParseRejectsMixedCaseTagNames(t *testing.T) {
 	}
 }
 
-// TestParseAcceptsOptionalFinalSemicolon reproduces the Draft-07 Section 8
+// TestParseAcceptsOptionalFinalSemicolon reproduces the Draft-08 Section 8
 // rule that the final DKIM2-Signature semicolon is optional.
 func TestParseAcceptsOptionalFinalSemicolon(t *testing.T) {
 	if _, err := Parse(headerField(t, 0, "DKIM2-Signature", validSignatureValue())); err != nil {
@@ -103,7 +103,7 @@ func TestParseAcceptsOptionalFinalSemicolon(t *testing.T) {
 	}
 }
 
-// TestParseAcceptsNextDomainEnvelopeForm reproduces the Draft-07 nd= envelope form.
+// TestParseAcceptsNextDomainEnvelopeForm reproduces the Draft-08 nd= envelope form.
 func TestParseAcceptsNextDomainEnvelopeForm(t *testing.T) {
 	parsed, err := Parse(dkim2SignatureField(t, 0, nextDomainSignatureValue()))
 	if err != nil {
@@ -330,7 +330,7 @@ func TestParseRejectsDuplicateSelectors(t *testing.T) {
 	}
 }
 
-// TestParseAlgorithmNamesAreCaseSensitive reproduces the Draft-07 Sections
+// TestParseAlgorithmNamesAreCaseSensitive reproduces the Draft-08 Sections
 // 2.14 and 10.9 rule that signature algorithm names are case-sensitive: an
 // uppercase spelling of a supported algorithm is an unknown algorithm.
 func TestParseAlgorithmNamesAreCaseSensitive(t *testing.T) {
@@ -345,7 +345,7 @@ func TestParseAlgorithmNamesAreCaseSensitive(t *testing.T) {
 	}
 }
 
-// TestParseAllowsTwoSameAlgorithmDifferentSelectors proves the Draft-07 per-algorithm allowance.
+// TestParseAllowsTwoSameAlgorithmDifferentSelectors proves the Draft-08 per-algorithm allowance.
 func TestParseAllowsTwoSameAlgorithmDifferentSelectors(t *testing.T) {
 	value := testSelector + ":rsa-sha256:" + base64OfByte(0xaa, 64) +
 		", selector2:rsa-sha256:" + base64OfByte(0xbb, 64)
@@ -359,7 +359,7 @@ func TestParseAllowsTwoSameAlgorithmDifferentSelectors(t *testing.T) {
 	}
 }
 
-// TestParseRejectsThirdSameAlgorithm proves the Draft-07 per-algorithm upper bound.
+// TestParseRejectsThirdSameAlgorithm proves the Draft-08 per-algorithm upper bound.
 func TestParseRejectsThirdSameAlgorithm(t *testing.T) {
 	value := "one:" + testExtensionAlgorithm + ":" + base64OfByte(0xaa, 48) +
 		", two:" + testExtensionAlgorithm + ":" + base64OfByte(0xbb, 48) +

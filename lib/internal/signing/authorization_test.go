@@ -211,7 +211,7 @@ func TestSigningMetadataRejectsDerivedFlagsAndDerivesFixedOrder(t *testing.T) {
 	if err != nil {
 		t.Fatalf("DeriveEffectiveMetadata() error = %v", err)
 	}
-	// Draft-07 Section 12.5: an originator (i=1) never sets exploded, even
+	// Draft-08 Section 12.5: an originator (i=1) never sets exploded, even
 	// when it delivers to more than one recipient.
 	want := []string{signature.FlagFeedback}
 	if got := effective.Flags(); fmt.Sprint(got) != fmt.Sprint(want) {
@@ -252,7 +252,7 @@ func TestEffectiveMetadataRejectsCapabilityTicketMixing(t *testing.T) {
 
 // TestInheritedPolicyAndFeedbackBindExactTicketAndMultiRecipientMultiplicity
 // proves closed derivation. Inherited Draft-06 donotmodify and donotexplode
-// spellings are inert unknown flags under Draft-07 Section 10.10, so a body
+// spellings are inert unknown flags under Draft-08 Section 10.10, so a body
 // change plus multi-recipient fanout stays unrestricted.
 func TestInheritedPolicyAndFeedbackBindExactTicketAndMultiRecipientMultiplicity(t *testing.T) {
 	capability := testRevisionCapabilityWithFlags(t, []string{

@@ -267,7 +267,7 @@ func TestEvaluatePolicyUsesSealedAuthenticatedFlags(t *testing.T) {
 		t.Fatalf("feedback intent = %#v", decision.FeedbackIntent())
 	}
 	// The removed Draft-06 donotmodify and donotexplode flags in the fixture are
-	// inert unknown flags under Draft-07 Section 10.10 and produce no findings.
+	// inert unknown flags under Draft-08 Section 10.10 and produce no findings.
 	wantFlagReasons := []PolicyReason{PolicyReasonProtocolPass, PolicyReasonFeedbackRequested, PolicyReasonFeedbackRelaySelected}
 	flagFindings := decision.Findings()
 	gotFlagReasons := make([]PolicyReason, len(flagFindings))
@@ -279,7 +279,7 @@ func TestEvaluatePolicyUsesSealedAuthenticatedFlags(t *testing.T) {
 	}
 }
 
-// TestEvaluatePolicyIgnoresRetiredDNSTestingTag proves DNS-01 Section 3.4.1:
+// TestEvaluatePolicyIgnoresRetiredDNSTestingTag proves DNS-02 Section 3.4.1:
 // key records carrying the retired t= tag produce exactly the policy decisions
 // of records without it, so DNS can never relax a local policy verdict.
 func TestEvaluatePolicyIgnoresRetiredDNSTestingTag(t *testing.T) {

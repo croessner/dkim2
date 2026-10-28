@@ -76,7 +76,7 @@ func assertFinalAuthenticationPolicy(t *testing.T, result AuthenticationResult, 
 
 // signedForwardedReplayMessage creates one passing two-hop synthetic fixture:
 // the originator's i=1 signature and an i=2 forwarder signature over the same
-// m=1 instance, so the message is replay-eligible under Draft-07 Section 15.1.
+// m=1 instance, so the message is replay-eligible under Draft-08 Section 15.1.
 func signedForwardedReplayMessage(t testing.TB, timestamp int64, flags string) ([]byte, *rsa.PublicKey) {
 	t.Helper()
 	key, err := rsa.GenerateKey(rand.Reader, 1024)
@@ -163,7 +163,7 @@ func newTestReplayMemoryStore(t *testing.T) *ReplayMemoryStore {
 	return store
 }
 
-// TestAuthenticatorDoesNotCountDirectDeliveries reproduces Draft-07 Section
+// TestAuthenticatorDoesNotCountDirectDeliveries reproduces Draft-08 Section
 // 15.1: a message carrying only the originator's i=1 signature was not re-sent
 // by an intermediary, so repeated direct (bulk) deliveries are not replays and
 // never touch the store, while verification still reports PASS.

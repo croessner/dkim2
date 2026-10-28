@@ -1,7 +1,7 @@
 # DKIM2 Tag Parsers
 
 > Historical Draft-04 implementation record. The original scope and evidence
-> below are preserved; current Draft-07 authority is the migration disposition
+> below are preserved; current Draft-08 authority is the migration disposition
 > and current durable architecture.
 
 Status: completed.
@@ -31,7 +31,7 @@ This spec is governed by:
 - `.gitignore`
 - `draft-ietf-dkim-dkim2-spec-04`, dated 2026-07-05, especially
   Sections 2.8, 2.12, 2.14, 7, 8, 9.6, 10, 11.2, and 11.4
-- `draft-ietf-dkim-dkim2-dns-01`, dated 2026-03-18, especially
+- `draft-ietf-dkim-dkim2-dns-02`, dated 2026-03-18, especially
   Section 3.2 for the shared DKIM2 tag-value syntax used by DNS records
 
 If this spec conflicts with a source document, stop and reconcile the durable
@@ -224,7 +224,7 @@ Out of scope:
 ## Protocol, Runtime Or Domain Semantics
 
 M2 is bound to `draft-ietf-dkim-dkim2-spec-04`, with
-`draft-ietf-dkim-dkim2-dns-01` used only for the shared DKIM2 tag-value list
+`draft-ietf-dkim-dkim2-dns-02` used only for the shared DKIM2 tag-value list
 syntax that the DNS record format copies from DKIM2.
 
 ### Shared Tag-Value Semantics
@@ -240,20 +240,20 @@ syntax that the DNS record format copies from DKIM2.
   `signature` packages must not implement parallel semicolon splitting,
   duplicate detection, FWS trimming, base64 FWS stripping, or tag-name
   validation.
-- Tag identifiers before `=` are case-sensitive and never folded (Draft-07
-  Section 8). Draft-07 Sections 9 and 10 require every `Message-Instance` and
+- Tag identifiers before `=` are case-sensitive and never folded (Draft-08
+  Section 8). Draft-08 Sections 9 and 10 require every `Message-Instance` and
   `DKIM2-Signature` tag name, including unknown extension names, to be
   lowercase; the header scanner rejects any uppercase tag name as a syntax
   error before semantic dispatch, so `M=1` is invalid rather than an ignored
   tag plus a missing `m=`. A lenient reading of Section 8 would ignore such
   tags; this repository follows the fail-closed reading. DNS key-record tag
-  lists keep the generic case-sensitive rule of DNS-01 Section 3.2.
+  lists keep the generic case-sensitive rule of DNS-02 Section 3.2.
 - Tag values after `=` are case-sensitive unless a tag-specific draft rule
   explicitly says otherwise.
 - WSP and FWS around tag names, `=`, tag values, commas, and colons is handled
   only where the relevant ABNF permits it.
 - Semicolons separate tags and the final semicolon is optional in both header
-  fields and DNS records (Draft-07 Section 8). Unencoded semicolons inside a
+  fields and DNS records (Draft-08 Section 8). Unencoded semicolons inside a
   tag value are invalid, a tag list needs at least one tag-spec, and empty
   interior tag specifications are invalid. Canonical signature input retains
   the presence or absence of the final semicolon exactly.
@@ -261,7 +261,7 @@ syntax that the DNS record format copies from DKIM2.
   required tags, optional tags, and extension tags under exact name
   comparison.
 - Hash algorithm, signature algorithm, and flag names are case-sensitive
-  textstrings (Draft-07 Section 2.14). An uppercase spelling of a supported
+  textstrings (Draft-08 Section 2.14). An uppercase spelling of a supported
   name is an unknown name and is never folded onto the supported one.
 - Unknown extension tags are syntactically validated and then ignored by
   semantic results. They must not produce success data, but they still

@@ -10,7 +10,7 @@ import (
 	"testing"
 )
 
-// TestVerifierPassesMessageWithNonUTF8HeaderBytes reproduces the Draft-07
+// TestVerifierPassesMessageWithNonUTF8HeaderBytes reproduces the Draft-08
 // Sections 5 and 18 byte model: header hashing treats the message as bytes,
 // so a legacy unencoded Latin-1 Subject must verify instead of being rejected
 // as a malformed message.

@@ -279,7 +279,7 @@ that need final Nauthilus outcomes must run after or depend on the unscored
 to the state symbols merely to reproduce the daemon disposition; the adapter
 already enforces terminal reject and temporary-failure outcomes.
 Unknown or future policy members and values fail closed until the module and
-the versioned daemon contract are updated together. The Draft-07 wire contract
+the versioned daemon contract are updated together. The Draft-08 wire contract
 has no `do_not_modify` or `do_not_explode` policy or hop members; a response
 that still carries them is rejected as a service error.
 

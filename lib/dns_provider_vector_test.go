@@ -144,7 +144,7 @@ func TestDNSDraft04PublicStateMatrix(t *testing.T) {
 	}
 }
 
-// TestDNSRetiredTestingTagIsIgnored verifies DNS-01 Section 3.4.1: records
+// TestDNSRetiredTestingTagIsIgnored verifies DNS-02 Section 3.4.1: records
 // carrying t=y, t=s, t=y:s, or a malformed t= value yield exactly the public
 // facts of the same record without t=, on success and on every key failure.
 func TestDNSRetiredTestingTagIsIgnored(t *testing.T) {
@@ -488,12 +488,12 @@ func snapshotPublicResult(result VerifyResult) publicResultSnapshot {
 // loadDNSGoldenManifest validates both active draft identifiers and public key encodings.
 func loadDNSGoldenManifest(t testing.TB, corpus publicGoldenCorpus) dnsGoldenManifest {
 	t.Helper()
-	raw, err := os.ReadFile("testdata/vectors/draft-ietf-dkim-dkim2-dns-01/dns-golden.json")
+	raw, err := os.ReadFile("testdata/vectors/draft-ietf-dkim-dkim2-dns-02/dns-golden.json")
 	if err != nil {
 		t.Fatal("DNS golden manifest unavailable")
 	}
 	var manifest dnsGoldenManifest
-	if json.Unmarshal(raw, &manifest) != nil || manifest.MessageDraft != DraftIdentifier || manifest.DNSDraft != "draft-ietf-dkim-dkim2-dns-01" {
+	if json.Unmarshal(raw, &manifest) != nil || manifest.MessageDraft != DraftIdentifier || manifest.DNSDraft != "draft-ietf-dkim-dkim2-dns-02" {
 		t.Fatal("invalid DNS golden manifest")
 	}
 	rsaDER := x509.MarshalPKCS1PublicKey(corpus.rsaKey(t))

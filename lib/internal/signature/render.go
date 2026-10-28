@@ -534,7 +534,7 @@ func canonicalTargetRequest(request TargetRequest, limits RenderLimits) (TargetR
 
 // canonicalizeEnvelope validates exactly one supported envelope form and
 // detaches the recorded bytes, mapping U-label mailbox domains to A-labels as
-// Draft-07 Section 18 requires before mf= and rt= are recorded.
+// Draft-08 Section 18 requires before mf= and rt= are recorded.
 func canonicalizeEnvelope(request *TargetRequest, limits RenderLimits) error {
 	hasNextDomain := request.NextDomain != ""
 	hasOrdinary := len(request.MailFrom) != 0 || len(request.Recipients) != 0

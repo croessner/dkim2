@@ -145,14 +145,14 @@ func Scan(input []byte, known KnownTags, limits Limits) (Field, error) {
 }
 
 // ScanHeader parses an unfolded Message-Instance or DKIM2-Signature tag list.
-// Draft-07 Section 8 makes the final semicolon optional, and Sections 9 and 10
+// Draft-08 Section 8 makes the final semicolon optional, and Sections 9 and 10
 // require every tag name, including unknown extension names, to be lowercase;
 // an uppercase name is a syntax error rather than an ignored tag.
 func ScanHeader(input []byte, known KnownTags, limits Limits) (Field, error) {
 	return scan(input, known, limits, scanModeHeader)
 }
 
-// scan parses one Draft-07 Section 8 tag-list under the selected field-family mode.
+// scan parses one Draft-08 Section 8 tag-list under the selected field-family mode.
 func scan(input []byte, known KnownTags, limits Limits, mode scanMode) (Field, error) {
 	limits = limits.normalize()
 	if err := limits.Validate(); err != nil {
@@ -288,7 +288,7 @@ func isFinalTrailingSemicolon(segments []tagSegment, index int, segment tagSegme
 	return len(trimmed) == 0 && len(segments) > 1
 }
 
-// unfoldDNSFWS removes CRLF only when followed by required DNS-01 white space.
+// unfoldDNSFWS removes CRLF only when followed by required DNS-02 white space.
 func unfoldDNSFWS(input []byte) ([]byte, error) {
 	unfolded := make([]byte, 0, len(input))
 	for index := 0; index < len(input); index++ {
@@ -319,7 +319,7 @@ func invalidUnfoldedLineBreak(input []byte) int {
 	return -1
 }
 
-// tagName validates the Draft-07 Section 8 tag-name grammar without folding case.
+// tagName validates the Draft-08 Section 8 tag-name grammar without folding case.
 func tagName(input []byte, maxNameBytes int) (string, bool) {
 	if len(input) == 0 || len(input) > maxNameBytes || !isASCIILetter(input[0]) {
 		return "", false

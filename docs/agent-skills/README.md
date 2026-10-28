@@ -27,8 +27,8 @@ Available skills:
 - `dkim2-review-audit`: reviewer/auditor stance for correctness, regressions,
   tests, security, boundaries, generated artifacts, and policy compliance.
 
-The active protocol baseline is `draft-ietf-dkim-dkim2-spec-07` with the
-unchanged companion `draft-ietf-dkim-dkim2-dns-01`. Draft-dependent work must
+The active protocol baseline is `draft-ietf-dkim-dkim2-spec-08` with the
+unchanged companion `draft-ietf-dkim-dkim2-dns-02`. Draft-dependent work must
 compare the authoritative draft text directly and keep protocol behavior,
 versioned vectors, generated contracts, and current documentation aligned.
 

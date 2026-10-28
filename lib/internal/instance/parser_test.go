@@ -49,7 +49,7 @@ func TestParseAcceptsMessageInstance(t *testing.T) {
 	}
 }
 
-// TestParseAcceptsOptionalFinalSemicolon reproduces the Draft-07 Section 8
+// TestParseAcceptsOptionalFinalSemicolon reproduces the Draft-08 Section 8
 // rule that the final Message-Instance semicolon is optional.
 func TestParseAcceptsOptionalFinalSemicolon(t *testing.T) {
 	value := "m=1; h=sha256:" + base64OfByte(1, 32) + ":" + base64OfByte(2, 32)
@@ -165,7 +165,7 @@ func TestParseRejectsDuplicateHashAlgorithms(t *testing.T) {
 	}
 }
 
-// TestHashSetAcceptsSHA512 proves the Draft-07 Message-Instance SHA-512 tuple contract.
+// TestHashSetAcceptsSHA512 proves the Draft-08 Message-Instance SHA-512 tuple contract.
 func TestHashSetAcceptsSHA512(t *testing.T) {
 	parsed, err := Parse(messageInstanceField(t, 0, "m=1; h=sha512:"+base64OfByte(1, 64)+":"+base64OfByte(2, 64)))
 	if err != nil {
@@ -197,7 +197,7 @@ func TestHashSetAcceptsMixedSupportedAlgorithmsInWireOrder(t *testing.T) {
 	}
 }
 
-// TestHashNamesAreCaseSensitive reproduces the Draft-07 Section 2.14 and 9.3
+// TestHashNamesAreCaseSensitive reproduces the Draft-08 Section 2.14 and 9.3
 // rule that hash names are case-sensitive textstrings: uppercase spellings are
 // unknown algorithms, are never folded onto supported names, and count as
 // distinct names for duplicate detection.
