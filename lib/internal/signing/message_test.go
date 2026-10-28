@@ -285,9 +285,9 @@ func TestCompleteMessagePreservesHeaderOnlyFraming(t *testing.T) {
 	}
 	raw, ok := result.UnrestrictedBytes()
 	if !ok || bytes.Contains(raw, []byte("\r\n\r\n")) ||
-		!bytes.HasPrefix(raw, message.RawBytes()) {
-		t.Fatalf("header-only framing exposed=%t separator=%t prefix=%t",
-			ok, bytes.Contains(raw, []byte("\r\n\r\n")), bytes.HasPrefix(raw, message.RawBytes()))
+		!bytes.HasSuffix(raw, message.RawBytes()) || !bytes.HasPrefix(bytes.ToLower(raw), []byte(instance.HeaderName+":")) {
+		t.Fatalf("header-only framing exposed=%t separator=%t suffix=%t",
+			ok, bytes.Contains(raw, []byte("\r\n\r\n")), bytes.HasSuffix(raw, message.RawBytes()))
 	}
 	reparsed, err := rawmsg.Parse(raw)
 	if err != nil || reparsed.Metadata().BodyBytes != 0 {

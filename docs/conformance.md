@@ -58,7 +58,10 @@ index 0, which Postfix places above that `Received` field. The Postfix profile
 pins the queued top-of-header order: `Message-Instance`, `DKIM2-Signature`,
 `Received` for Milter-signed SMTP, local, and bounce messages, and
 `Authentication-Results`, `Received`, `Message-Instance`, `DKIM2-Signature`,
-`Received` after inbound verification. For `non_smtpd_milters`, Postfix simulates SMTP callbacks and emits
+`Received` after inbound verification. A DSN relayed by
+`dkim2-dsn-propagator` through the Milter-free re-injection listener starts
+with that listener's `Received`, then the library-prepended
+`Message-Instance` and `DKIM2-Signature`. For `non_smtpd_milters`, Postfix simulates SMTP callbacks and emits
 unbracketed envelope mailbox fields. The adapter validates and frames those
 mailboxes as RFC 5321 paths without otherwise changing mailbox bytes. These
 facts are adapter limitations, not original-wire fidelity claims.

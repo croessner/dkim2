@@ -1620,7 +1620,7 @@ type BatchRevisionOriginal struct {
 	Smtp    SMTPInput    `json:"smtp"`
 }
 
-// BatchRevisionOutput Decode each complete header field and concatenate them in array order, then insert them at insertion_offset in the exact current bytes. Do not unfold, reorder, normalize, or insert an extra empty line. The result must match result_sha256 before release. Message body bytes are never returned. Each external signature contains only its own recipient.
+// BatchRevisionOutput Decode each complete header field and concatenate them in array order, then insert them at insertion_offset in the exact current bytes. Array order is top-down header order: each hop's block lists its optional Message-Instance before its DKIM2-Signature, and a later hop's block precedes the earlier hop's block. A Message-Instance appears only directly before the final DKIM2-Signature. Do not unfold, reorder, normalize, or insert an extra empty line. The result must match result_sha256 before release. Message body bytes are never returned. Each external signature contains only its own recipient.
 type BatchRevisionOutput struct {
 	// CurrentSha256 SHA-256 of the exact identified RFC 5322 message bytes.
 	CurrentSha256      BatchDigest            `json:"current_sha256"`
@@ -1629,7 +1629,7 @@ type BatchRevisionOutput struct {
 	// Id Opaque transaction-local identity without an address or secret.
 	Id BatchCopyID `json:"id"`
 
-	// InsertionOffset Byte offset in current message immediately after the final existing header field CRLF and before the empty separator line. The client verifies this location and inserts the completed fields there.
+	// InsertionOffset Byte offset in current message where the completed fields are inserted. It is always 0, the start of the header block: Message-Instance and DKIM2-Signature are trace header fields (Draft-08 Sections 9 and 10), and RFC 5322 Section 3.6 says trace fields SHOULD be kept in blocks prepended to the message. The client inserts the completed fields there, above the previous top field.
 	InsertionOffset int64 `json:"insertion_offset"`
 
 	// ResultSha256 SHA-256 of the exact identified RFC 5322 message bytes.

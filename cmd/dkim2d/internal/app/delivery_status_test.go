@@ -691,15 +691,17 @@ func postfixBounceShapeRequest(
 				"    this diagnostic line was folded by Postfix\r\n\r\n"), 1)
 	}
 	if options.embeddedReturnPath {
+		// Postfix writes Return-Path as the first embedded field, above the
+		// embedded message's own top-placed trace block.
 		raw = bytes.Replace(raw,
-			[]byte("--dsn\r\nContent-Type: message/rfc822\r\n\r\nFrom:"),
+			[]byte("--dsn\r\nContent-Type: message/rfc822\r\n\r\n"),
 			[]byte("--dsn\r\nContent-Type: message/rfc822\r\n\r\nReturn-Path: <sender@"+
-				signingServiceOriginDomain+">\r\nFrom:"), 1)
+				signingServiceOriginDomain+">\r\n"), 1)
 		if options.contentDescriptions {
 			raw = bytes.Replace(raw,
-				[]byte("--dsn\r\nContent-Description: Undelivered Message\r\nContent-Type: message/rfc822\r\n\r\nFrom:"),
+				[]byte("--dsn\r\nContent-Description: Undelivered Message\r\nContent-Type: message/rfc822\r\n\r\n"),
 				[]byte("--dsn\r\nContent-Description: Undelivered Message\r\nContent-Type: message/rfc822\r\n\r\nReturn-Path: <sender@"+
-					signingServiceOriginDomain+">\r\nFrom:"), 1)
+					signingServiceOriginDomain+">\r\n"), 1)
 		}
 	}
 	if bytes.Equal(raw, request.RawMessage()) {

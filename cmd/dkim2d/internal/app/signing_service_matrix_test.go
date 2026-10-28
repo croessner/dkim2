@@ -892,19 +892,18 @@ func assertSigningServicePass(
 	}
 }
 
-// insertSigningServiceFields reproduces validated end-of-header field insertion.
+// insertSigningServiceFields prepends completed fields as one top-of-header
+// trace block in their emitted order, the placement the library and the
+// adapters use, and keeps every inherited byte unchanged below it.
 func insertSigningServiceFields(fields []CompletedField, raw []byte) []byte {
-	separator := bytes.Index(raw, []byte("\r\n\r\n"))
-	if separator < 0 {
+	if !bytes.Contains(raw, []byte("\r\n\r\n")) {
 		return nil
 	}
-	insertion := separator + len("\r\n")
 	output := make([]byte, 0, len(raw)+1024)
-	output = append(output, raw[:insertion]...)
 	for _, field := range fields {
 		output = append(output, field.Bytes()...)
 	}
-	return append(output, raw[insertion:]...)
+	return append(output, raw...)
 }
 
 // newSigningServiceRequest constructs one exact application request fixture.

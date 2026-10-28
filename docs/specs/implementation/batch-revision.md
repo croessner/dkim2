@@ -116,8 +116,11 @@ conditional request headers are rejected on the capability route.
    order. For each output, match `current_sha256` to the frozen current variant.
 4. Decode `header_fields_base64` in array order. Concatenate the complete fields
    without whitespace changes or an extra empty line; insert at the returned
-   `insertion_offset`, immediately before the existing empty header/body
-   separator line. Verify that position against the frozen current message.
+   `insertion_offset`, which is always 0: the fields are trace fields
+   (Draft-08 Sections 9 and 10) and form one block prepended above the
+   previous top field (RFC 5322 Section 3.6). The array is in top-down order;
+   with a controlled intermediate hop the final hop's DKIM2-Signature comes
+   first. Verify that position against the frozen current message.
    Require the reconstructed SHA-256 to match `result_sha256`.
 5. Release only that reconstructed message and its already-bound outgoing
    envelope through the caller's delivery/ledger/TLS/archive enforcement.

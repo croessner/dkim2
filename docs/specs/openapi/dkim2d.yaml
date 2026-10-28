@@ -1572,11 +1572,15 @@ components:
           type: integer
           format: int64
           minimum: 0
-          maximum: 134217728
+          maximum: 0
           description: >
-            Byte offset in current message immediately after the final existing
-            header field CRLF and before the empty separator line. The client
-            verifies this location and inserts the completed fields there.
+            Byte offset in current message where the completed fields are
+            inserted. It is always 0, the start of the header block:
+            Message-Instance and DKIM2-Signature are trace header fields
+            (Draft-08 Sections 9 and 10), and RFC 5322 Section 3.6 says trace
+            fields SHOULD be kept in blocks prepended to the message. The
+            client inserts the completed fields there, above the previous top
+            field.
         header_fields_base64:
           type: array
           minItems: 1
@@ -1585,10 +1589,14 @@ components:
             $ref: "#/components/schemas/CompletedHeaderField"
       description: >
         Decode each complete header field and concatenate them in array order,
-        then insert them at insertion_offset in the exact current bytes. Do not
-        unfold, reorder, normalize, or insert an extra empty line. The result
-        must match result_sha256 before release. Message body bytes are never
-        returned. Each external signature contains only its own recipient.
+        then insert them at insertion_offset in the exact current bytes. Array
+        order is top-down header order: each hop's block lists its optional
+        Message-Instance before its DKIM2-Signature, and a later hop's block
+        precedes the earlier hop's block. A Message-Instance appears only
+        directly before the final DKIM2-Signature. Do not unfold, reorder,
+        normalize, or insert an extra empty line. The result must match
+        result_sha256 before release. Message body bytes are never returned.
+        Each external signature contains only its own recipient.
     CompletedHeaderField:
       type: string
       format: byte

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"slices"
+	"strings"
 
 	"github.com/croessner/dkim2/internal/cryptodkim2"
 	"github.com/croessner/dkim2/internal/instance"
@@ -392,7 +393,7 @@ func (c Coordinator) CompleteMessage(ctx context.Context, completed CompletedSig
 		fields = append(fields, completed.plan.RenderedInstance())
 	}
 	fields = append(fields, completed.field.Bytes())
-	inserted, err := rawmsg.InsertValidatedFields(rawmsg.InsertionRequest{
+	inserted, err := rawmsg.PrependValidatedFields(rawmsg.InsertionRequest{
 		Message: completed.message, TransportForm: completed.transport, Fields: fields,
 		Options: c.insertionOptions(),
 	})
@@ -510,12 +511,10 @@ func (c Coordinator) insertionOptions() rawmsg.ParserOptions {
 }
 
 // proveCompletedMessage reparses and proves all local protocol, hash, custody, and crypto facts.
+// Every check is independent of where the generated fields were placed: this
+// hop's fields are identified by their m= and i= values, not by position.
 func (c Coordinator) proveCompletedMessage(message rawmsg.Message, completed CompletedSigningField, generated [][]byte) error {
 	if message.Metadata().HeaderFields != completed.plan.SizeFacts().FinalHeaderFields() {
-		return newError(ErrorCodeProtocolTampering, ErrorLocation{Phase: PhaseComplete}, ErrorDetails{})
-	}
-	expectedProtocol := append(revisionProtocolFields(completed.message), cloneSlices(generated)...)
-	if !equalProtocolFields(expectedProtocol, revisionProtocolFields(message)) {
 		return newError(ErrorCodeProtocolTampering, ErrorLocation{Phase: PhaseComplete}, ErrorDetails{})
 	}
 
@@ -526,11 +525,6 @@ func (c Coordinator) proveCompletedMessage(message rawmsg.Message, completed Com
 	if err != nil {
 		return newError(ErrorCodeInternalInvariant, ErrorLocation{Phase: PhaseComplete}, ErrorDetails{})
 	}
-	instances, err := instanceParser.Extract(message)
-	if err != nil || len(instances) != int(completed.plan.SignatureInstance()) {
-		return newError(ErrorCodeSequenceFailure, ErrorLocation{Phase: PhaseComplete}, ErrorDetails{})
-	}
-
 	signatureLimits := signature.DefaultLimits()
 	signatureLimits.MaxSignatures = c.limits.MaxSignatures
 	signatureLimits.MaxSignatureSets = c.limits.MaxSignatureSetsPerField
@@ -538,6 +532,15 @@ func (c Coordinator) proveCompletedMessage(message rawmsg.Message, completed Com
 	if err != nil {
 		return newError(ErrorCodeInternalInvariant, ErrorLocation{Phase: PhaseComplete}, ErrorDetails{})
 	}
+	if err := proveCompletedProtocolFields(message, completed, generated, instanceParser, signatureParser); err != nil {
+		return err
+	}
+
+	instances, err := instanceParser.Extract(message)
+	if err != nil || len(instances) != int(completed.plan.SignatureInstance()) {
+		return newError(ErrorCodeSequenceFailure, ErrorLocation{Phase: PhaseComplete}, ErrorDetails{})
+	}
+
 	signatures, err := signatureParser.Extract(message)
 	if err != nil || len(signatures) != completed.plan.SizeFacts().SignatureFields() {
 		return newError(ErrorCodeSequenceFailure, ErrorLocation{Phase: PhaseComplete}, ErrorDetails{})
@@ -560,6 +563,49 @@ func (c Coordinator) proveCompletedMessage(message rawmsg.Message, completed Com
 		return err
 	}
 	return c.proveCompletedSignature(message, signatures, completed)
+}
+
+// proveCompletedProtocolFields splits the final protocol fields into this
+// hop's fields, identified by the plan's new m= and next i=, and inherited
+// fields. This hop's fields must equal the generated fields byte for byte and
+// in generated order, and the inherited fields must equal the source protocol
+// fields byte for byte and in source order. An extra, missing, altered, or
+// reordered field anywhere in the header block therefore fails closed, while
+// the physical position of the generated block is not part of the proof.
+func proveCompletedProtocolFields(message rawmsg.Message, completed CompletedSigningField, generated [][]byte,
+	instanceParser instance.Parser, signatureParser signature.Parser) error {
+	instanceName := strings.ToLower(instance.HeaderName)
+	signatureName := strings.ToLower(signature.HeaderName)
+	local := make([][]byte, 0, len(generated))
+	inherited := make([][]byte, 0)
+	for _, field := range message.Headers().Fields() {
+		own := false
+		switch field.NameLower() {
+		case instanceName:
+			parsed, err := instanceParser.ParseField(field)
+			if err != nil {
+				return newError(ErrorCodeSequenceFailure, ErrorLocation{Phase: PhaseComplete}, ErrorDetails{})
+			}
+			own = completed.plan.HasNewInstance() && parsed.Number() == completed.plan.NewInstanceNumber()
+		case signatureName:
+			parsed, err := signatureParser.ParseField(field)
+			if err != nil {
+				return newError(ErrorCodeSequenceFailure, ErrorLocation{Phase: PhaseComplete}, ErrorDetails{})
+			}
+			own = parsed.Sequence() == completed.plan.NextSequence()
+		default:
+			continue
+		}
+		if own {
+			local = append(local, field.OriginalBytes())
+			continue
+		}
+		inherited = append(inherited, field.OriginalBytes())
+	}
+	if !equalProtocolFields(generated, local) || !equalProtocolFields(revisionProtocolFields(completed.message), inherited) {
+		return newError(ErrorCodeProtocolTampering, ErrorLocation{Phase: PhaseComplete}, ErrorDetails{})
+	}
+	return nil
 }
 
 // proveCompletedHashes requires final current hashes to equal the already sealed plan tuple.
@@ -585,15 +631,19 @@ func (c Coordinator) proveCompletedHashes(message rawmsg.Message, expected HashT
 }
 
 // proveCompletedSignature derives the final Section 12.8 input and verifies every generated set.
+// The target is the highest i= signature, located through its own header
+// occurrence index rather than its physical rank among DKIM2-Signature fields.
 func (c Coordinator) proveCompletedSignature(message rawmsg.Message, signatures []signature.Signature, completed CompletedSigningField) error {
 	ordered, err := signature.OrderBySequence(signatures)
 	if err != nil || len(ordered) == 0 {
 		return newError(ErrorCodeSequenceFailure, ErrorLocation{Phase: PhaseComplete}, ErrorDetails{})
 	}
 	target := ordered[len(ordered)-1]
-	if target.Sequence() != completed.plan.NextSequence() ||
+	targetField, found := message.Headers().Field(target.HeaderIndex())
+	if !found || target.Sequence() != completed.plan.NextSequence() ||
 		target.InstanceNumber() != completed.plan.SignatureInstance() ||
-		!bytes.Equal(message.Headers().FieldsByName(signature.HeaderName)[len(signatures)-1].OriginalBytes(), completed.field.Bytes()) {
+		targetField.NameLower() != strings.ToLower(signature.HeaderName) ||
+		!bytes.Equal(targetField.OriginalBytes(), completed.field.Bytes()) {
 		return newError(ErrorCodeProtocolTampering, ErrorLocation{Phase: PhaseComplete}, ErrorDetails{})
 	}
 	input, err := c.canonical.SignatureInputFromMessage(message, target.Sequence())

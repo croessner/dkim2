@@ -214,7 +214,7 @@
     {
       "id": "postfix-qualification-runtime",
       "path": "contrib/qualification/postfix-milter/cmd/qualify/main.go",
-      "sha256": "d2a549cc8c02560849f18b8051d5cc61345d7136dac9e9842310e82bc4fdcccc",
+      "sha256": "53f6dc88be0550bcf558e4a4521eff2643bef3606d859c5c7496e2b0bef7408c",
       "module": "contrib/qualification/postfix-milter"
     },
     {
@@ -298,7 +298,7 @@
     {
       "id": "signing-dsn-propagation",
       "path": "lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-08/dsn-propagation-golden.json",
-      "sha256": "e4737d4536d61e99ceea3affc74c0420790f45793066c1b57b70fba9ac7e58db",
+      "sha256": "a14b5ee2ccc63f64176125cb9e9302e93144960106c0844d28166989c6448257",
       "module": "lib"
     },
     {
@@ -316,7 +316,7 @@
     {
       "id": "signing-message-source",
       "path": "lib/internal/signing/message_test.go",
-      "sha256": "eeb30b87d0d71c67d95b89c97e214bc4028f79c174ebc2105e011be6fcfdc658",
+      "sha256": "28c46cae4cef28df9dd384ef68c680da57cd1dd2a68dd3d53d09ec572e9f22f4",
       "module": "lib"
     },
     {
@@ -340,7 +340,7 @@
     {
       "id": "signing-public",
       "path": "lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-08/signing-golden.json",
-      "sha256": "f76c2eb756946a312b1d5d66c40f68b4b693c360cd607edf9bfefdf5f42420a4",
+      "sha256": "aba05bcb245dc7553aad9cec0527814c6fead9a84b049334779fe9a117216b1d",
       "module": "lib"
     },
     {

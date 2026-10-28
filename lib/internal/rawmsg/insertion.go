@@ -42,8 +42,13 @@ func (r InsertionRequest) Format(state fmt.State, _ rune) {
 	_, _ = io.WriteString(state, r.String())
 }
 
-// InsertValidatedFields inserts ordered complete fields without rewriting inherited bytes.
-func InsertValidatedFields(request InsertionRequest) (Message, error) {
+// PrependValidatedFields places ordered complete fields as one block at the
+// top of the header block without rewriting inherited bytes. Message-Instance
+// and DKIM2-Signature are trace fields (Draft-08 Sections 9 and 10), and RFC
+// 5322 Section 3.6 says trace fields SHOULD be kept in blocks prepended to the
+// message, so the block lands above the previous top field in request order.
+// This is the single library owner of whole-message trace-block placement.
+func PrependValidatedFields(request InsertionRequest) (Message, error) {
 	if !request.TransportForm.Known() {
 		return Message{}, invalidTransportFormError()
 	}
@@ -79,11 +84,10 @@ func InsertValidatedFields(request InsertionRequest) (Message, error) {
 	}
 
 	output := make([]byte, 0, len(sourceBytes)+addedBytes)
-	output = append(output, sourceBytes[:headerBytes]...)
 	for _, field := range request.Fields {
 		output = append(output, field...)
 	}
-	output = append(output, sourceBytes[headerBytes:]...)
+	output = append(output, sourceBytes...)
 
 	inserted, err := ParseWithOptions(output, request.Options)
 	if err != nil {
@@ -144,7 +148,9 @@ func validateInsertionFields(fields [][]byte, metadata ParserMetadata, options P
 	return total, nil
 }
 
-// insertionPreservedSource proves framing, inherited fields, and body remained byte-identical.
+// insertionPreservedSource proves the block occupies the leading field
+// positions in request order and that framing, every inherited field, and the
+// body remained byte-identical after it.
 func insertionPreservedSource(source Message, inserted Message, fields [][]byte) bool {
 	if !source.Initialized() || !inserted.Initialized() || source.Framing() != inserted.Framing() ||
 		!bytes.Equal(source.Body().Bytes(), inserted.Body().Bytes()) {
@@ -155,13 +161,13 @@ func insertionPreservedSource(source Message, inserted Message, fields [][]byte)
 	if len(insertedFields) != len(sourceFields)+len(fields) {
 		return false
 	}
-	for index := range sourceFields {
-		if !bytes.Equal(sourceFields[index].OriginalBytes(), insertedFields[index].OriginalBytes()) {
+	for index := range fields {
+		if !bytes.Equal(fields[index], insertedFields[index].OriginalBytes()) {
 			return false
 		}
 	}
-	for index := range fields {
-		if !bytes.Equal(fields[index], insertedFields[len(sourceFields)+index].OriginalBytes()) {
+	for index := range sourceFields {
+		if !bytes.Equal(sourceFields[index].OriginalBytes(), insertedFields[len(fields)+index].OriginalBytes()) {
 			return false
 		}
 	}

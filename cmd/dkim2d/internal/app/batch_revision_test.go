@@ -34,7 +34,7 @@ func TestBatchRevisionSealsLocalAndPrivateExternalCopies(t *testing.T) {
 		branch := request.state.copies[index+1]
 		actual := insertSigningServiceFields(output.Fields(), current)
 		if output.CurrentSHA256() != batchSHA256(current) || output.ResultSHA256() != batchSHA256(actual) ||
-			output.InsertionOffset() != bytes.Index(current, []byte("\r\n\r\n"))+2 || output.ID() != branch.id {
+			output.InsertionOffset() != BatchInsertionOffset || output.ID() != branch.id {
 			t.Fatal("exact output binding or placement lost")
 		}
 		assessment, verifyErr := verifier.Verify(context.Background(), dkim2.NewVerifyRequest(actual, branch.message.state.reverse, branch.message.state.recipients))

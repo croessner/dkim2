@@ -174,6 +174,11 @@ type BatchRevisionService interface {
 	ReviseBatch(context.Context, BatchRevisionRequest) (BatchRevisionResult, error)
 }
 
+// BatchInsertionOffset is the only insertion offset of a batch revision
+// output: the start of the header block, where the library prepends each
+// hop's Message-Instance and DKIM2-Signature trace block.
+const BatchInsertionOffset = 0
+
 // BatchRevisionOutput contains only exact generated headers and byte bindings.
 type BatchRevisionOutput struct {
 	id, currentSHA256, resultSHA256 string
@@ -193,7 +198,7 @@ func (o BatchRevisionOutput) ResultSHA256() string { return o.resultSHA256 }
 // InsertionOffset returns the library-proved insertion point in current bytes.
 func (o BatchRevisionOutput) InsertionOffset() int { return o.insertionOffset }
 
-// Fields returns isolated complete generated header fields in insertion order.
+// Fields returns isolated complete generated header fields in top-down insertion order.
 func (o BatchRevisionOutput) Fields() []CompletedField { return slices.Clone(o.fields) }
 
 // Format keeps signed material out of diagnostics.

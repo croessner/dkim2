@@ -132,12 +132,12 @@ func TestDraft08SigningGoldenVectors(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Complete() error = %v", err)
 			}
-			inserted, err := rawmsg.InsertValidatedFields(rawmsg.InsertionRequest{
+			inserted, err := rawmsg.PrependValidatedFields(rawmsg.InsertionRequest{
 				Message: source, TransportForm: rawmsg.TransportFormFinalNetworkPreDotStuffing,
 				Fields: [][]byte{instanceField, complete.Bytes()}, Options: rawmsg.DefaultParserOptions(),
 			})
 			if err != nil {
-				t.Fatalf("InsertValidatedFields() error = %v", err)
+				t.Fatalf("PrependValidatedFields() error = %v", err)
 			}
 			if (inserted.Framing() == rawmsg.MessageFramingHeaderOnly) != vector.HeaderOnly {
 				t.Fatalf("header-only framing = %t", inserted.Framing() == rawmsg.MessageFramingHeaderOnly)

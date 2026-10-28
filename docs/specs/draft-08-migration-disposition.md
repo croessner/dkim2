@@ -848,17 +848,44 @@ because the draft identifier is bound into the replay frame.
 - Owner: the daemon action plan carries no position field and the
   `add_header` enum is unchanged; the generated `ActionPlan` schema now
   documents the top-down block order and the SHOULD-level top placement.
-  Placement is applied by each adapter with its MTA primitive. No library
-  rule changed.
-- Not changed (open): library complete-message outputs still append the
-  generated fields after the last header field. This covers the unrestricted
-  signing results' `Bytes()`, `dkim2ctl` sign output, the
-  `/v1/revise/batch` `insertion_offset`, and the propagated DSN that
-  `dkim2-dsn-propagator` relays. Moving them needs a rework of the signing
-  completion proof, which binds the new signature to the last physical
-  DKIM2-Signature occurrence, a new REST contract for `insertion_offset`, and
-  regenerated golden vectors. These outputs are valid; a later change can
-  move them.
+  Placement is applied by each adapter with its MTA primitive.
+- Library complete-message outputs (resolved): `rawmsg.PrependValidatedFields`
+  is the single library owner of whole-message placement. It writes the
+  generated fields as one block at byte offset 0 in generated order
+  (Message-Instance, then DKIM2-Signature) and proves that the block holds
+  the leading field positions and that every inherited field, the framing,
+  and the body follow byte for byte. This covers the unrestricted and
+  released signing results' `Bytes()`, every daemon result that carries
+  library bytes, and the propagated DSN that `dkim2-dsn-propagator` relays.
+  `X-DKIM2-Info` is a daemon diagnostic action and is never part of a
+  library message. The Exim filter keeps its own one-step prepend: it writes
+  daemon action values (fold points restored, LF line ends) into an Exim
+  transport stream and imports no library internals, so sharing the rawmsg
+  owner would need a new public API for a single concatenation; the shared
+  rule is the plan order, which the daemon owns.
+- Completion proof: the signing self-check bound this hop's
+  DKIM2-Signature to the last physical DKIM2-Signature occurrence and
+  required the generated fields to follow every inherited protocol field.
+  Both assumptions encoded bottom placement and failed top-placed output with
+  `protocol_tampering`. `proveCompletedProtocolFields` now identifies this
+  hop's fields by the plan's new `m=` and next `i=`, requires them to equal
+  the generated fields byte for byte and in generated order, and requires
+  every other protocol field to equal the source protocol fields byte for
+  byte and in source order. The Section 12.8 target is located through its
+  own header occurrence index. The header-field count, hash, custody,
+  reference, and cryptographic checks are unchanged. A forged extra
+  DKIM2-Signature or Message-Instance anywhere in the header, an altered or
+  internally reordered generated block, and a reordered inherited chain all
+  still fail with `protocol_tampering`; the proof accepts the block at the
+  top, at the bottom, and between inherited fields.
+- `/v1/revise/batch` (REST behavior change): `insertion_offset` is now always
+  0 (`minimum: 0`, `maximum: 0`), the start of the current message. The
+  field stays required, so the wire shape is unchanged. `header_fields_base64`
+  lists the fields in top-down order; with a controlled intermediate hop the
+  final hop's DKIM2-Signature precedes the intermediate hop's
+  Message-Instance and DKIM2-Signature, and a Message-Instance may appear
+  only directly before the final DKIM2-Signature (previously only at index
+  0). The daemon's own response validation enforces both rules.
 - DSN rebuild (Section 16.3). The rebuild removes the local hop's
   DKIM2-Signature fields by `i=`, its Message-Instance fields by `m=`, and
   every hash-excluded field above the previous hop's DKIM2-Signature. The
@@ -871,9 +898,9 @@ because the draft identifier is bound into the replay frame.
   "good faith effort SHOULD" removal.
 - Postfix qualification: `validateTopTraceOrder` pins the queued top-of-header
   names for the SMTP origin, local submission, Milter-signed bounce, and
-  inbound cases above. The propagated notice keeps only its cardinality and
-  cryptographic checks, because the library still places its fields at the
-  bottom. `run.sh` had a stale config identity for
+  inbound cases above, and for the propagated notice: the Milter-free
+  re-injection listener's `Received`, then `Message-Instance`,
+  `DKIM2-Signature`, and the rebuilt report's `From`. `run.sh` had a stale config identity for
   `golang:1.27.3-trixie@sha256:604106...`: the Go 1.27.3 move updated the
   index digest but kept the Go 1.27.2 config digest (`sha256:99668476...`).
   The registry index resolves to the linux/amd64 manifest
@@ -889,6 +916,16 @@ because the draft identifier is bound into the replay frame.
   refusal without SMFIF_ADDHDRS; the portable Milter fixtures and the
   public-socket matrix updated to inserts; Exim prepend tests for Received,
   header-only, empty header block, and binary body; library verification of
-  bottom-placed, top-placed, and mixed chains, with a Reviser signing over a
-  top-placed predecessor; DSN rebuild with both hops top-placed, both
-  bottom-placed, both mixed orders, and a headers-only rebuild.
+  library-placed, top-placed, bottom-placed, and mixed chains, with a Reviser
+  signing over top-placed and bottom-placed predecessors; DSN rebuild with
+  both hops top-placed, both bottom-placed, both mixed orders, and a
+  headers-only rebuild; rawmsg prepend for normal, header-only, and folded
+  internationalized messages; completion-proof placement independence and
+  tamper rejection; the batch revision offset and top-down field order.
+- Vectors: the two `signing-golden.json` insertion digests were re-derived
+  independently as SHA-256 over generated fields followed by the inherited
+  bytes, matching the `manual_derivation` provenance; the 20 signed reports
+  of `dsn-propagation-golden.json` were regenerated with
+  `DKIM2_WRITE_DSN_PROPAGATION_VECTORS=1`, and the corpus test now verifies
+  every frozen report PASS under the published keys and checks its leading
+  trace block. Inputs and the frozen history copies are unchanged.

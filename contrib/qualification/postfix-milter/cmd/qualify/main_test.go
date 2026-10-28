@@ -65,3 +65,17 @@ func TestTopTraceOrderPinsMilterPlacement(t *testing.T) {
 		t.Fatal("truncated header block was accepted")
 	}
 }
+
+// TestTopTraceOrderPinsPropagatedPlacement proves the propagated notification
+// pin accepts the library-prepended block directly below the re-injection
+// Received field and rejects the former bottom placement.
+func TestTopTraceOrderPinsPropagatedPlacement(t *testing.T) {
+	top := []byte("Received: by reinjection\r\nMessage-Instance: m=1\r\nDKIM2-Signature: i=1\r\nFrom: MAILER-DAEMON@example.test\r\n\r\nbody\r\n")
+	if err := validateTopTraceOrder(top, propagatedTraceOrder...); err != nil {
+		t.Fatal("top-placed propagated report was rejected")
+	}
+	bottom := []byte("Received: by reinjection\r\nFrom: MAILER-DAEMON@example.test\r\nMessage-Instance: m=1\r\nDKIM2-Signature: i=1\r\n\r\nbody\r\n")
+	if validateTopTraceOrder(bottom, propagatedTraceOrder...) == nil {
+		t.Fatal("bottom-placed propagated report was accepted")
+	}
+}

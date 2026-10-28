@@ -8,9 +8,14 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/croessner/dkim2/internal/dsn/dsntest"
+	"github.com/croessner/dkim2/internal/instance"
+	"github.com/croessner/dkim2/internal/rawmsg"
+	"github.com/croessner/dkim2/internal/signature"
 )
 
 const (
@@ -307,7 +312,43 @@ func TestDSNPropagationDraft08GoldenVectors(t *testing.T) {
 			if !ok || !bytes.Equal(spec.build(t), raw) {
 				t.Fatal("corpus input drifted from the regenerating fixture")
 			}
+			if testCase.Expected.SignedRFC5322 != "" {
+				assertFrozenPropagatedDSN(t, fixture, testCase.Expected)
+			}
 		})
+	}
+}
+
+// assertFrozenPropagatedDSN proves one frozen signed report verifies PASS
+// under the published fixture keys at the previous hop's simulated view and
+// starts with its own Message-Instance and DKIM2-Signature block, the
+// top-of-header trace placement of RFC 5322 Section 3.6.
+func assertFrozenPropagatedDSN(t *testing.T, fixture propagationFixture, expected dsnPropagationVectorExpectation) {
+	t.Helper()
+	signed, err := base64.StdEncoding.DecodeString(expected.SignedRFC5322)
+	if err != nil {
+		t.Fatal(err)
+	}
+	next, err := base64.StdEncoding.DecodeString(expected.NextHop)
+	if err != nil {
+		t.Fatal(err)
+	}
+	parsed, err := rawmsg.Parse(signed)
+	if err != nil {
+		t.Fatalf("rawmsg.Parse(frozen) error=%v", err)
+	}
+	fields := parsed.Headers().Fields()
+	if len(fields) < 2 || fields[0].NameLower() != strings.ToLower(instance.HeaderName) ||
+		fields[1].NameLower() != strings.ToLower(signature.HeaderName) {
+		t.Fatal("frozen propagated report does not start with its trace block")
+	}
+	verifier, err := NewVerifier(fixture.provider, WithVerificationClock(func() time.Time { return time.Unix(propagationSigningClock+60, 0) }))
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := verifier.Verify(context.Background(), NewVerifyRequest(signed, []byte("<>"), [][]byte{next}))
+	if err != nil || result.State() != ResultStatePASS || result.Target().Sequence() != expected.SigningSequence {
+		t.Fatalf("Verify(frozen) state=%q reason=%q sequence=%d error=%v", result.State(), result.PrimaryReason(), result.Target().Sequence(), err)
 	}
 }
 

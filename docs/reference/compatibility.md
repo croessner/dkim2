@@ -235,9 +235,18 @@ adapters:
 - The daemon action plan, its `add_header` type, and the field order are
   unchanged; the OpenAPI `ActionPlan` description now documents the top-down
   block order.
-- Library completed-message outputs (signing results' `Bytes()`, `dkim2ctl`
-  output, `/v1/revise/batch` `insertion_offset`, propagated DSNs) still
-  append the fields at the end of the header block.
+- Library completed-message outputs place the block at the top too:
+  signing results' `Bytes()`, daemon results carrying library bytes, and
+  DSNs relayed by `dkim2-dsn-propagator` now start with `Message-Instance`
+  (when added) and `DKIM2-Signature` instead of ending the header block with
+  them.
+- REST: `/v1/revise/batch` `insertion_offset` is always 0 (OpenAPI
+  `maximum: 0`); it previously pointed after the final header field CRLF.
+  `header_fields_base64` is in top-down order: with a controlled intermediate
+  hop the final hop's `DKIM2-Signature` comes first, and a
+  `Message-Instance` may appear only directly before the final
+  `DKIM2-Signature`. Clients that insert the decoded fields at the returned
+  offset and compare `result_sha256` need no other change.
 
 Verification, revision, and the Section 16.3 DSN rebuild do not depend on
 placement and accept top-placed, bottom-placed, and mixed chains. A Section

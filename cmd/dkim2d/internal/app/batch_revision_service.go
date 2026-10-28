@@ -193,14 +193,16 @@ func completeBatchCopy(ctx context.Context, signer *dkim2.Signer, capability dki
 	}
 	last.currentSHA256 = first.currentSHA256
 	last.insertionOffset = first.insertionOffset
-	last.fields = append(first.Fields(), last.fields...)
+	// The final hop's block sits above the intermediate hop's block, so the
+	// top-down field order lists the final hop first.
+	last.fields = append(last.Fields(), first.fields...)
 	if len(last.fields) > 3 || batchSHA256(insertBatchFields(branch.message.state.raw, last.insertionOffset, last.fields)) != last.resultSHA256 {
 		return BatchRevisionOutput{}, &DomainError{}
 	}
 	return last, nil
 }
 
-// insertBatchFields applies an already library-proved append-only header delta without normalization.
+// insertBatchFields applies an already library-proved header delta at one exact offset without normalization.
 func insertBatchFields(raw []byte, offset int, fields []CompletedField) []byte {
 	result := append([]byte(nil), raw[:offset]...)
 	for _, field := range fields {
@@ -210,6 +212,9 @@ func insertBatchFields(raw []byte, offset int, fields []CompletedField) []byte {
 }
 
 // completeBatchRevision extracts only a public unrestricted result and verifies its exact insertion delta.
+// The library prepends this hop's trace block (Draft-08 Sections 9 and 10,
+// RFC 5322 Section 3.6), so the proved insertion offset is the start of the
+// current message.
 func completeBatchRevision(ctx context.Context, signer *dkim2.Signer, capability dkim2.VerifiedRevisionInput,
 	branch BatchCopy, ticket dkim2.RouteCopyTicket, profile dkim2.SigningProfile, metadata dkim2.SigningMetadata) (BatchRevisionOutput, error) {
 	message := branch.message.state
@@ -225,8 +230,8 @@ func completeBatchRevision(ctx context.Context, signer *dkim2.Signer, capability
 	}
 	fields := unrestricted.GeneratedFields()
 	completed := unrestricted.Bytes()
-	insertion := bytes.Index(message.raw, []byte("\r\n\r\n")) + 2
-	if insertion < 2 || len(fields) == 0 || len(fields) > 3 {
+	insertion := BatchInsertionOffset
+	if len(fields) == 0 || len(fields) > 3 {
 		return BatchRevisionOutput{}, &DomainError{}
 	}
 	combined := make([]byte, 0, len(completed))

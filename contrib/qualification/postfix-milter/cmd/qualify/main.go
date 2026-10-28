@@ -1920,12 +1920,14 @@ func waitForQueuedDSNExcluding(
 }
 
 // validatePropagatedNotice checks the propagated notification exactly as the
-// simulated previous hop would: one protocol field pair, the fixed
-// auto-response markers, and an independent cryptographic verification against
-// the null reverse path and the recipient the previous hop signed.
+// simulated previous hop would: one protocol field pair at the top of the
+// report below the re-injection Received field, the fixed auto-response
+// markers, and an independent cryptographic verification against the null
+// reverse path and the recipient the previous hop signed.
 func validatePropagatedNotice(raw []byte) error {
 	if countHeader(raw, "Message-Instance") != 1 ||
 		countHeader(raw, "DKIM2-Signature") != 1 ||
+		validateTopTraceOrder(raw, propagatedTraceOrder...) != nil ||
 		!headerHasExactValue(raw, "Auto-Submitted", "auto-replied") ||
 		!isDeliveryStatusReport(raw) {
 		return qualificationFailure(stagePropagationCardinality)
@@ -2456,6 +2458,11 @@ var (
 	// delivery-status Milter: the protocol fields above the Received field
 	// that Postfix's bounce daemon writes first.
 	milterSignedDSNTraceOrder = []string{"Message-Instance", "DKIM2-Signature", "Received"}
+	// propagatedTraceOrder is a delivery-status notification propagated by
+	// dkim2-dsn-propagator through the Milter-free re-injection listener:
+	// that listener's Received field, then the library-prepended
+	// Message-Instance and DKIM2-Signature, then the rebuilt report's From.
+	propagatedTraceOrder = []string{"Received", "Message-Instance", "DKIM2-Signature", "From"}
 	// inboundTraceOrder is the signed origin message received again by the
 	// inbound Milter: the local Authentication-Results above the inbound
 	// Postfix Received field, above the origin hop's own top block.

@@ -114,13 +114,13 @@
       "name": "normal",
       "header_only": false,
       "inherited_bytes": "Subject: normal\r\n\r\nbody\r\n",
-      "output_sha256": "9d8741a25b6f1a772297b44892be3a789dc4e46260eb0b9ae85a98484534c60f"
+      "output_sha256": "1eb9b9f9428dada04f33e2d917d60060451f9733fa4fbe72c19f0d6bc7f2fe4d"
     },
     {
       "name": "header-only",
       "header_only": true,
       "inherited_bytes": "Subject: header-only\r\n",
-      "output_sha256": "e65c9f489a9b95ae743e37594ed864bf64708d5483cd58599f64529f57c61c69"
+      "output_sha256": "20ab5b6f82b52871f8f44b0d27b29500627d0d91e22cc45759bb637a16c309e0"
     }
   ]
 }

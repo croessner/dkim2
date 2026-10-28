@@ -938,8 +938,9 @@ transport message, above the previous top field (Exim's own `Received`
 field), in action order. Message-Instance and DKIM2-Signature are trace
 fields (Draft-08 Sections 9 and 10), and RFC 5322 Section 3.6 says trace
 fields SHOULD be kept in blocks prepended to the message. Placement is outside
-the signed input, so the library's appended completed-message form and this
-prepended form verify identically. Each action is rendered as
+the signed input, so a bottom-placed form and this prepended form verify
+identically; the library's own completed-message output uses the same
+top-of-header block. Each action is rendered as
 `name + ":" + headerfold.Restore(value) + LF`; the OpenAPI value already
 contains the exact post-colon bytes, including required legal leading SP or
 HTAB folding whitespace. Missing or illegal post-colon folding whitespace is a

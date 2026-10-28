@@ -26,8 +26,8 @@ func FuzzSignedMessageInsertion(f *testing.F) {
 			Message: source, TransportForm: TransportFormFinalNetworkPreDotStuffing,
 			Fields: [][]byte{bytes.Clone(fieldSeed)}, Options: DefaultParserOptions(),
 		}
-		first, firstErr := InsertValidatedFields(request)
-		second, secondErr := InsertValidatedFields(request)
+		first, firstErr := PrependValidatedFields(request)
+		second, secondErr := PrependValidatedFields(request)
 		if (firstErr == nil) != (secondErr == nil) {
 			t.Fatalf("repeated insertion classification differs: first=%v second=%v", firstErr, secondErr)
 		}
@@ -44,11 +44,11 @@ func FuzzSignedMessageInsertion(f *testing.F) {
 			t.Fatalf("inserted field count=%d, want %d", len(insertedFields), len(sourceFields)+1)
 		}
 		for index := range sourceFields {
-			if !bytes.Equal(sourceFields[index].OriginalBytes(), insertedFields[index].OriginalBytes()) {
+			if !bytes.Equal(sourceFields[index].OriginalBytes(), insertedFields[index+1].OriginalBytes()) {
 				t.Fatalf("inherited field %d changed", index)
 			}
 		}
-		if !bytes.Equal(insertedFields[len(sourceFields)].OriginalBytes(), fieldSeed) ||
+		if !bytes.Equal(insertedFields[0].OriginalBytes(), fieldSeed) ||
 			!bytes.Equal(source.Body().Bytes(), first.Body().Bytes()) ||
 			source.Framing() != first.Framing() {
 			t.Fatal("successful insertion changed field payload, body, or framing")

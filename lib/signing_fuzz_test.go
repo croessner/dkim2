@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/rsa"
+	"strings"
 	"testing"
 	"time"
 
@@ -83,8 +84,12 @@ func FuzzSigningFacade(f *testing.F) {
 		if len(signedFields) != len(originalFields)+2 {
 			t.Fatalf("signed header count=%d, want %d", len(signedFields), len(originalFields)+2)
 		}
+		if signedFields[0].NameLower() != strings.ToLower(instance.HeaderName) ||
+			signedFields[1].NameLower() != strings.ToLower(signature.HeaderName) {
+			t.Fatal("generated trace fields are not the leading header block")
+		}
 		for index := range originalFields {
-			if !bytes.Equal(originalFields[index].OriginalBytes(), signedFields[index].OriginalBytes()) {
+			if !bytes.Equal(originalFields[index].OriginalBytes(), signedFields[index+2].OriginalBytes()) {
 				t.Fatalf("inherited header %d changed", index)
 			}
 		}

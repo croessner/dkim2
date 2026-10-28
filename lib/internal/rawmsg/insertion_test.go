@@ -7,22 +7,22 @@ import (
 	"testing"
 )
 
-// TestInsertValidatedFieldsPreservesNormalMessageBytes verifies insertion occurs before the existing separator.
-func TestInsertValidatedFieldsPreservesNormalMessageBytes(t *testing.T) {
+// TestPrependValidatedFieldsPreservesNormalMessageBytes verifies the block lands above the previous top field in request order.
+func TestPrependValidatedFieldsPreservesNormalMessageBytes(t *testing.T) {
 	source := mustParseInsertionMessage(t, []byte("From: sender@example.test\r\nSubject: original\r\n\r\n..legitimate\r\nbody\r\n"))
 	instanceField := []byte("Message-Instance: m=2;\r\n")
 	signatureField := []byte("DKIM2-Signature: i=2;\r\n")
 
-	inserted, err := InsertValidatedFields(InsertionRequest{
+	inserted, err := PrependValidatedFields(InsertionRequest{
 		Message:       source,
 		TransportForm: TransportFormFinalNetworkPreDotStuffing,
 		Fields:        [][]byte{instanceField, signatureField},
 		Options:       DefaultParserOptions(),
 	})
 	if err != nil {
-		t.Fatalf("InsertValidatedFields() error = %v", err)
+		t.Fatalf("PrependValidatedFields() error = %v", err)
 	}
-	want := []byte("From: sender@example.test\r\nSubject: original\r\nMessage-Instance: m=2;\r\nDKIM2-Signature: i=2;\r\n\r\n..legitimate\r\nbody\r\n")
+	want := []byte("Message-Instance: m=2;\r\nDKIM2-Signature: i=2;\r\nFrom: sender@example.test\r\nSubject: original\r\n\r\n..legitimate\r\nbody\r\n")
 	if got := inserted.RawBytes(); !bytes.Equal(got, want) {
 		t.Fatalf("inserted message bytes differ")
 	}
@@ -34,20 +34,20 @@ func TestInsertValidatedFieldsPreservesNormalMessageBytes(t *testing.T) {
 	}
 }
 
-// TestInsertValidatedFieldsPreservesHeaderOnlyFraming verifies insertion does not invent a separator.
-func TestInsertValidatedFieldsPreservesHeaderOnlyFraming(t *testing.T) {
+// TestPrependValidatedFieldsPreservesHeaderOnlyFraming verifies insertion does not invent a separator.
+func TestPrependValidatedFieldsPreservesHeaderOnlyFraming(t *testing.T) {
 	source := mustParseInsertionMessage(t, []byte("From: sender@example.test\r\n"))
 
-	inserted, err := InsertValidatedFields(InsertionRequest{
+	inserted, err := PrependValidatedFields(InsertionRequest{
 		Message:       source,
 		TransportForm: TransportFormFinalNetworkPreDotStuffing,
 		Fields:        [][]byte{[]byte("DKIM2-Signature: i=1;\r\n")},
 		Options:       DefaultParserOptions(),
 	})
 	if err != nil {
-		t.Fatalf("InsertValidatedFields() error = %v", err)
+		t.Fatalf("PrependValidatedFields() error = %v", err)
 	}
-	want := []byte("From: sender@example.test\r\nDKIM2-Signature: i=1;\r\n")
+	want := []byte("DKIM2-Signature: i=1;\r\nFrom: sender@example.test\r\n")
 	if got := inserted.RawBytes(); !bytes.Equal(got, want) {
 		t.Fatal("header-only insertion changed framing")
 	}
@@ -56,33 +56,34 @@ func TestInsertValidatedFieldsPreservesHeaderOnlyFraming(t *testing.T) {
 	}
 }
 
-// TestInsertValidatedFieldsPreservesFoldedInternationalizedHeaders verifies inherited valid RFC 6532 bytes are untouched.
-func TestInsertValidatedFieldsPreservesFoldedInternationalizedHeaders(t *testing.T) {
+// TestPrependValidatedFieldsPreservesFoldedInternationalizedHeaders verifies inherited valid RFC 6532 bytes are untouched.
+func TestPrependValidatedFieldsPreservesFoldedInternationalizedHeaders(t *testing.T) {
 	inherited := []byte("Subject: Gr\xc3\xbc\xc3\x9fe\r\n\tund Faltung\r\nX-Duplicate: one\r\nX-Duplicate: two\r\n")
 	sourceBytes := append(bytes.Clone(inherited), []byte("\r\nbody")...)
 	source := mustParseInsertionMessage(t, sourceBytes)
 
-	inserted, err := InsertValidatedFields(InsertionRequest{
+	inserted, err := PrependValidatedFields(InsertionRequest{
 		Message:       source,
 		TransportForm: TransportFormFinalNetworkPreDotStuffing,
 		Fields:        [][]byte{[]byte("DKIM2-Signature: i=2;\r\n")},
 		Options:       DefaultParserOptions(),
 	})
 	if err != nil {
-		t.Fatalf("InsertValidatedFields() error = %v", err)
+		t.Fatalf("PrependValidatedFields() error = %v", err)
 	}
-	if got := inserted.RawBytes(); !bytes.HasPrefix(got, inherited) {
+	added := []byte("DKIM2-Signature: i=2;\r\n")
+	if got := inserted.RawBytes(); !bytes.HasPrefix(got[len(added):], inherited) || !bytes.HasPrefix(got, added) {
 		t.Fatal("insertion changed folded or internationalized inherited header bytes")
 	}
 	for index, field := range source.Headers().Fields() {
-		if got := inserted.Headers().Fields()[index].OriginalBytes(); !bytes.Equal(got, field.OriginalBytes()) {
+		if got := inserted.Headers().Fields()[index+1].OriginalBytes(); !bytes.Equal(got, field.OriginalBytes()) {
 			t.Fatalf("inherited header occurrence %d changed", index)
 		}
 	}
 }
 
-// TestInsertValidatedFieldsRejectsTransportAndFieldAmbiguity verifies closed metadata and one-field payloads.
-func TestInsertValidatedFieldsRejectsTransportAndFieldAmbiguity(t *testing.T) {
+// TestPrependValidatedFieldsRejectsTransportAndFieldAmbiguity verifies closed metadata and one-field payloads.
+func TestPrependValidatedFieldsRejectsTransportAndFieldAmbiguity(t *testing.T) {
 	source := mustParseInsertionMessage(t, []byte("A: b\r\n"))
 	tests := []struct {
 		name   string
@@ -101,7 +102,7 @@ func TestInsertValidatedFieldsRejectsTransportAndFieldAmbiguity(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			result, err := InsertValidatedFields(InsertionRequest{
+			result, err := PrependValidatedFields(InsertionRequest{
 				Message: source, TransportForm: test.form, Fields: test.fields, Options: DefaultParserOptions(),
 			})
 			if result.Initialized() || !IsParserErrorCode(err, test.code) {
@@ -111,8 +112,8 @@ func TestInsertValidatedFieldsRejectsTransportAndFieldAmbiguity(t *testing.T) {
 	}
 }
 
-// TestInsertValidatedFieldsRejectsInvalidSourceAndOptions verifies invalid state never yields partial output.
-func TestInsertValidatedFieldsRejectsInvalidSourceAndOptions(t *testing.T) {
+// TestPrependValidatedFieldsRejectsInvalidSourceAndOptions verifies invalid state never yields partial output.
+func TestPrependValidatedFieldsRejectsInvalidSourceAndOptions(t *testing.T) {
 	valid := mustParseInsertionMessage(t, []byte("A: b\r\n"))
 	tests := []struct {
 		name    string
@@ -125,7 +126,7 @@ func TestInsertValidatedFieldsRejectsInvalidSourceAndOptions(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			result, err := InsertValidatedFields(InsertionRequest{
+			result, err := PrependValidatedFields(InsertionRequest{
 				Message: test.message, TransportForm: TransportFormFinalNetworkPreDotStuffing,
 				Fields: [][]byte{[]byte("X: y\r\n")}, Options: test.options,
 			})
@@ -136,8 +137,8 @@ func TestInsertValidatedFieldsRejectsInvalidSourceAndOptions(t *testing.T) {
 	}
 }
 
-// TestInsertValidatedFieldsRejectsWidenedHardLimits verifies insertion options only narrow defaults.
-func TestInsertValidatedFieldsRejectsWidenedHardLimits(t *testing.T) {
+// TestPrependValidatedFieldsRejectsWidenedHardLimits verifies insertion options only narrow defaults.
+func TestPrependValidatedFieldsRejectsWidenedHardLimits(t *testing.T) {
 	source := mustParseInsertionMessage(t, []byte("A: b\r\n"))
 	tests := []struct {
 		name   string
@@ -153,7 +154,7 @@ func TestInsertValidatedFieldsRejectsWidenedHardLimits(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			options := DefaultParserOptions()
 			test.mutate(&options)
-			result, err := InsertValidatedFields(InsertionRequest{
+			result, err := PrependValidatedFields(InsertionRequest{
 				Message: source, TransportForm: TransportFormFinalNetworkPreDotStuffing,
 				Fields: [][]byte{[]byte("X: y\r\n")}, Options: options,
 			})
@@ -166,8 +167,8 @@ func TestInsertValidatedFieldsRejectsWidenedHardLimits(t *testing.T) {
 	}
 }
 
-// TestInsertValidatedFieldsEnforcesExactNarrowedLimits verifies count and byte ceilings before allocation.
-func TestInsertValidatedFieldsEnforcesExactNarrowedLimits(t *testing.T) {
+// TestPrependValidatedFieldsEnforcesExactNarrowedLimits verifies count and byte ceilings before allocation.
+func TestPrependValidatedFieldsEnforcesExactNarrowedLimits(t *testing.T) {
 	source := mustParseInsertionMessage(t, []byte("A: b\r\n\r\nbody\r\n"))
 	field := []byte("X: y\r\n")
 	exactHeaderBytes := source.Metadata().HeaderBytes + len(field)
@@ -225,7 +226,7 @@ func TestInsertValidatedFieldsEnforcesExactNarrowedLimits(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			exact := DefaultParserOptions()
 			test.exact(&exact)
-			result, err := InsertValidatedFields(InsertionRequest{
+			result, err := PrependValidatedFields(InsertionRequest{
 				Message: source, TransportForm: TransportFormFinalNetworkPreDotStuffing,
 				Fields: [][]byte{field}, Options: exact,
 			})
@@ -235,7 +236,7 @@ func TestInsertValidatedFieldsEnforcesExactNarrowedLimits(t *testing.T) {
 
 			oneOver := DefaultParserOptions()
 			test.oneOver(&oneOver)
-			result, err = InsertValidatedFields(InsertionRequest{
+			result, err = PrependValidatedFields(InsertionRequest{
 				Message: source, TransportForm: TransportFormFinalNetworkPreDotStuffing,
 				Fields: [][]byte{field}, Options: oneOver,
 			})
@@ -249,8 +250,8 @@ func TestInsertValidatedFieldsEnforcesExactNarrowedLimits(t *testing.T) {
 	}
 }
 
-// TestInsertValidatedFieldsDetachesAllByteOwnership verifies requests and accessors cannot mutate output.
-func TestInsertValidatedFieldsDetachesAllByteOwnership(t *testing.T) {
+// TestPrependValidatedFieldsDetachesAllByteOwnership verifies requests and accessors cannot mutate output.
+func TestPrependValidatedFieldsDetachesAllByteOwnership(t *testing.T) {
 	sourceBytes := []byte("A: b\r\n\r\nbody\r\n")
 	source := mustParseInsertionMessage(t, sourceBytes)
 	field := []byte("X: y\r\n")
@@ -258,7 +259,7 @@ func TestInsertValidatedFieldsDetachesAllByteOwnership(t *testing.T) {
 		Message: source, TransportForm: TransportFormFinalNetworkPreDotStuffing,
 		Fields: [][]byte{field}, Options: DefaultParserOptions(),
 	}
-	inserted, err := InsertValidatedFields(request)
+	inserted, err := PrependValidatedFields(request)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -268,7 +269,7 @@ func TestInsertValidatedFieldsDetachesAllByteOwnership(t *testing.T) {
 	accessor := inserted.RawBytes()
 	accessor[0] = 'Z'
 
-	want := []byte("A: b\r\nX: y\r\n\r\nbody\r\n")
+	want := []byte("X: y\r\nA: b\r\n\r\nbody\r\n")
 	if got := inserted.RawBytes(); !bytes.Equal(got, want) {
 		t.Fatal("inserted message retained a mutable alias")
 	}

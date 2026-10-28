@@ -175,7 +175,7 @@ func validBatchRevisionResponse(response generated.BatchRevisionResponse) bool {
 	ids := make(map[string]bool, len(response.Outputs))
 	for _, output := range response.Outputs {
 		if !app.ValidBatchCopyID(output.Id) || ids[output.Id] || !validBatchWireDigest(output.CurrentSha256) ||
-			!validBatchWireDigest(output.ResultSha256) || output.InsertionOffset < 2 || output.InsertionOffset > app.HardMaxBatchRevisionMessageBytes ||
+			!validBatchWireDigest(output.ResultSha256) || output.InsertionOffset != app.BatchInsertionOffset ||
 			len(output.HeaderFieldsBase64) < 1 || len(output.HeaderFieldsBase64) > 3 {
 			return false
 		}
@@ -191,7 +191,7 @@ func validBatchRevisionResponse(response generated.BatchRevisionResponse) bool {
 			}
 			name, _, err := projectCompletedField(raw)
 			if err != nil || (name != batchInstanceHeaderName && name != batchSignatureHeaderName) ||
-				(name == batchInstanceHeaderName && index != 0) ||
+				(name == batchInstanceHeaderName && index != len(output.HeaderFieldsBase64)-2) ||
 				(index == len(output.HeaderFieldsBase64)-1 && name != batchSignatureHeaderName) {
 				return false
 			}
