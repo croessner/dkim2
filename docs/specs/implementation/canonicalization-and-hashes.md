@@ -273,10 +273,21 @@ when the caller explicitly selected that parser policy.
 Section 6.2 header hash canonicalization must apply the draft steps in order.
 M3 must implement them as one authoritative transformation path:
 
-1. Exclude these header fields case-insensitively before hashing:
-   `Received`, `Return-Path`, `Delivered-To`, `Authentication-Results`, any header field name
-   starting with `X-`, `DKIM-Signature`, any header field name starting with
-   `ARC-`, `Message-Instance`, and `DKIM2-Signature`.
+1. Exclude these header fields case-insensitively before hashing. The
+   Draft-08 Section 4.1 summary lists `Apparently-To`,
+   `ARC-Authentication-Results`, `ARC-Message-Signature`, `ARC-Seal`,
+   `Authentication-Results`, `Delivered-To`, `DKIM-Signature`,
+   `DL-Expansion-History`, `Original-Recipient`, `Received`, any header field
+   name starting with `Received-`, `Return-Path`, `SIO-Label-History`, any
+   header field name starting with `X-`, `X400-Received`, and `X400-Trace`;
+   Section 6.2 adds `Message-Instance` and `DKIM2-Signature`. Only the three
+   named ARC fields are excluded; other `ARC-*` names are signed.
+   `Auto-Submitted` and `VBR-Info` are signed: Draft-07 Section 4 listed both
+   as unsigned, Draft-08 removed them, so a hop that adds or changes either
+   field must describe the change in its Recipe. The single authoritative
+   table is `excludedHeaderKindForName` in `lib/internal/canonical/header.go`,
+   exposed to recipe parsing, recipe generation, signing, verification, and
+   the DSN rebuild through `canonical.HeaderRelevance`.
 2. Convert included header field names to lowercase ASCII. M1 already stores
    `NameLower()`, and M3 must use that view rather than revalidating names.
 3. Unfold continuation lines according to RFC 5322 by treating CRLF followed
@@ -287,7 +298,11 @@ M3 must implement them as one authoritative transformation path:
    boundary after unfolding.
 5. Delete all WSP characters at the end of each unfolded header field value.
 6. Delete WSP before and after the colon separator. The colon remains.
-7. Sort included header fields alphabetically by lowercase header field name.
+7. Sort included header fields in ascending octet order of the lower-cased
+   header field name (Draft-08 Section 6.2). The comparison is over the name
+   alone, not over the canonical line, so `a` sorts before `a-b` although `-`
+   (0x2d) sorts below `:` (0x3a); `-`, digits, `_`, and letters order by
+   their octet values.
 8. For duplicate included header field names, place duplicates in reverse
    occurrence order: the last occurrence in the RFC 5322 header block comes
    first, then the earlier matching occurrences moving upward.
@@ -541,9 +556,13 @@ Unit tests:
   including MIME-looking content and non-UTF-8 bytes.
 - Body SHA-256 returns deterministic 32-byte digest bytes and padded base64
   text for synthetic fixtures.
-- Header hash canonicalization excludes `Received`, `Return-Path`,
-  `Delivered-To`, `Authentication-Results`, `X-*`, `DKIM-Signature`, `ARC-*`,
-  `Message-Instance`, and `DKIM2-Signature` case-insensitively.
+- Header hash canonicalization excludes exactly the Draft-08 Section 4.1
+  summary set plus `Message-Instance` and `DKIM2-Signature`
+  case-insensitively, and signs `Auto-Submitted`, `VBR-Info`, and `ARC-*`
+  names other than the three ARC fields.
+- Header hash canonicalization orders fields by ascending octet value of the
+  lower-cased name, pinned with names that contain `-`, digits, `_`, and
+  mixed case.
 - Header hash canonicalization lowercases field names without changing field
   values except for required WSP handling.
 - Header hash canonicalization unfolds continuation lines while retaining the
@@ -719,9 +738,11 @@ document the exact blocker.
   message parser or tag parser.
 - Settled: Section 6.2 header hash canonicalization and Section 9.6 signature
   input canonicalization must use distinct whitespace rules.
-- Settled: Header hash input excludes `Received`, `Return-Path`,
-  `Delivered-To`, `Authentication-Results`, `X-*`, `DKIM-Signature`, `ARC-*`,
-  `Message-Instance`, and `DKIM2-Signature`.
+- Settled: Header hash input excludes the Draft-08 Section 4.1 summary set
+  (see Header Hash Input step 1) plus `Message-Instance` and
+  `DKIM2-Signature`. `Auto-Submitted` and `VBR-Info` are signed again under
+  Draft-08, as under Draft-04; the Draft-07 golden that excluded them is kept
+  under `lib/testdata/vectors/history/draft-ietf-dkim-dkim2-spec-07/`.
 - Settled: Duplicate included header names in header hash input are ordered
   from the last RFC 5322 header occurrence upward.
 - Settled: Body hash input is MIME-agnostic and follows the DKIM1 simple-style

@@ -268,3 +268,27 @@ func TestRecordErrorsAreBoundedAndSecretSafe(t *testing.T) {
 		t.Fatalf("ParseRecord() error = %v", err)
 	}
 }
+
+// TestParseRecordRejectsBareCRLF pins the DNS-02 Section 2.9 whitespace
+// tokens after the informational LWSP token was removed: folding is FWS, so a
+// CRLF must be followed by WSP, while folded whitespace between tags and
+// inside base64 stays legal.
+func TestParseRecordRejectsBareCRLF(t *testing.T) {
+	for _, record := range []string{
+		"v=DKIM1;\r\nk=rsa; p=" + validDNSKeyData,
+		"p=" + validDNSKeyData + "\r\n",
+		"p=QU\r\nJDRA==",
+	} {
+		if _, err := ParseRecord([]byte(record), DefaultLimits()); !IsRecordErrorCode(err, RecordErrorInvalidSyntax) {
+			t.Fatalf("bare CRLF record %q error = %v, want invalid syntax", record, err)
+		}
+	}
+	for _, record := range []string{
+		"v=DKIM1; \r\n\tk=rsa; p=" + validDNSKeyData,
+		"p=QU\r\n JDRA==",
+	} {
+		if parsed, err := ParseRecord([]byte(record), DefaultLimits()); err != nil || parsed.Status() != RecordStatusKeyData {
+			t.Fatalf("folded record %q status=%q error=%v", record, parsed.Status(), err)
+		}
+	}
+}

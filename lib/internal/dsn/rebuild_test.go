@@ -380,12 +380,12 @@ func TestRebuildUnsignedFieldPolicy(t *testing.T) {
 	original.Headers = "Received: from origin by remote (below-previous)\r\nX-Origin-Trace: below-previous\r\n" + rebuildCurrentHeaders
 	original.Revisions[0].Headers = "Received: from origin by remote (below-previous)\r\nX-Origin-Trace: below-previous\r\n" + rebuildOriginHeaders
 	original.Prepend = "Received: from local by destination (above-run)\r\nAuthentication-Results: destination.example; dkim2=pass\r\nDKIM-Signature: v=1; d=destination.example; s=sel; b=above-run\r\n"
-	original.Hops[1].UnsignedAbove = "Received: from remote by local (between-run-and-previous)\r\nX-Local-Trace: between\r\nReturn-Path: <forwarded@local.example>\r\nAuto-Submitted: no\r\n"
+	original.Hops[1].UnsignedAbove = "Received: from remote by local (between-run-and-previous)\r\nX-Local-Trace: between\r\nReturn-Path: <forwarded@local.example>\r\n"
 	original.Hops[0].UnsignedAbove = "X-Remote-Trace: above-previous\r\n"
 	report, _ := mustRebuild(t, propagationSpec{original: original})
 	_, _, embedded := mustParseRebuilt(t, report.Bytes())
 	headers := embedded.Headers()
-	for _, removed := range []string{"authentication-results", "dkim-signature", "x-local-trace", "return-path", "auto-submitted", "x-remote-trace"} {
+	for _, removed := range []string{"authentication-results", "dkim-signature", "x-local-trace", "return-path", "x-remote-trace"} {
 		if len(headers.FieldsByName(removed)) != 0 {
 			t.Fatalf("hash-excluded field %q above the previous hop survived", removed)
 		}
@@ -400,6 +400,68 @@ func TestRebuildUnsignedFieldPolicy(t *testing.T) {
 	}
 	if strings.Contains(string(report.Bytes()), "above-run") || strings.Contains(string(report.Bytes()), "between") || strings.Contains(string(report.Bytes()), "above-previous") {
 		t.Fatal("rebuilt report leaks fields above the previous hop")
+	}
+}
+
+// TestRebuildUndoesForwarderAutoSubmittedThroughRecipe proves the Draft-08
+// Section 4 consequence for propagation: Auto-Submitted is a signed field, so
+// a forwarder that adds it must describe the addition in its Recipe, and the
+// rebuild removes it by applying that Recipe rather than by the Section 16.3
+// hash-excluded pruning. The field position relative to the previous hop
+// signature must not matter. A Recipe that omits the addition cannot restore
+// the previous instance hash, so the rebuild fails closed with hash_mismatch
+// instead of silently dropping the field.
+func TestRebuildUndoesForwarderAutoSubmittedThroughRecipe(t *testing.T) {
+	const added = "Auto-Submitted: auto-forwarded\r\n"
+	const recipeJSON = `{"h":{"auto-submitted":[],"subject":[{"d":[" origin"]}]},"b":[{"d":["origin body"]}]}`
+	original := defaultPropagationOriginal(recipeJSON)
+	original.Headers = rebuildCurrentHeaders + added
+	aboveRun := func(raw []byte) []byte {
+		withoutField := strings.Replace(string(raw), added, "", 1)
+		firstField := strings.Index(withoutField, "\r\n") + len("\r\n")
+		return []byte(withoutField[:firstField] + added + withoutField[firstField:])
+	}
+	cases := []struct {
+		name   string
+		mutate func([]byte) []byte
+	}{
+		{name: "below previous hop"},
+		{name: "above previous hop", mutate: aboveRun},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			spec := propagationSpec{original: original, mutate: testCase.mutate}
+			if testCase.mutate != nil {
+				built, err := original.Build()
+				if err != nil {
+					t.Fatalf("Original.Build() error=%v", err)
+				}
+				moved := testCase.mutate(built)
+				previous := strings.Index(string(moved), "DKIM2-Signature: i=1;")
+				if position := strings.Index(string(moved), added); position < 0 || previous < 0 || position > previous {
+					t.Fatalf("fixture did not place Auto-Submitted above the previous hop: field=%d previous=%d", position, previous)
+				}
+			}
+			report, _ := mustRebuild(t, spec)
+			_, _, embedded := mustParseRebuilt(t, report.Bytes())
+			headers := embedded.Headers()
+			if len(headers.FieldsByName("auto-submitted")) != 0 {
+				t.Fatal("forwarder-added Auto-Submitted survived the local Recipe")
+			}
+			subject, _ := headers.LastFieldByName(rebuildSubjectName)
+			if string(subject.UnfoldedValue()) != rebuildOriginSubject || !bytes.Equal(embedded.Body().Bytes(), []byte(rebuildOriginBody)) {
+				t.Fatalf("rebuilt original subject=%q body differs=%t", subject.UnfoldedValue(), !bytes.Equal(embedded.Body().Bytes(), []byte(rebuildOriginBody)))
+			}
+		})
+	}
+
+	withoutRecipe := defaultPropagationOriginal(rebuildFullRecipe)
+	withoutRecipe.Headers = rebuildCurrentHeaders + added
+	evaluator := mustRebuildEvaluator(t, "")
+	evaluation := mustEvaluate(t, evaluator, propagationSpec{original: withoutRecipe})
+	report, err := evaluator.Rebuild(context.Background(), rebuildRequest(evaluation))
+	if err != nil || report.Outcome() != RebuildNotReconstructable || report.Failure() != RebuildFailureHashMismatch {
+		t.Fatalf("Recipe omitting a signed Auto-Submitted addition: outcome=%q failure=%q error=%v, want not_reconstructable hash_mismatch", report.Outcome(), report.Failure(), err)
 	}
 }
 

@@ -593,6 +593,43 @@ func TestPropagatedDSNRoundTrip(t *testing.T) {
 	}
 }
 
+// TestPropagatedDSNHashesAutoSubmitted proves that the propagated report
+// writes Auto-Submitted before its Message-Instance is hashed: Draft-08
+// Section 4 signs the field, so the untouched report verifies, while a
+// changed or removed Auto-Submitted field breaks the m=1 header hash.
+func TestPropagatedDSNHashesAutoSubmitted(t *testing.T) {
+	provider := newPropagationProvider(receivedDSNLocalDomain)
+	fixture := newPropagationFixture(t, provider)
+	propagated := fixture.mustSign(t, fixture.mustRebuild(t, propagationCase{original: propagationOriginal(propagationFullRecipe)}))
+	const field = "Auto-Submitted: auto-replied\r\n"
+	if strings.Count(string(propagated.Bytes()), field) != 1 {
+		t.Fatal("propagated DSN does not carry exactly one Auto-Submitted field")
+	}
+	verifier, err := NewVerifier(provider, WithVerificationClock(func() time.Time { return time.Unix(propagationSigningClock+60, 0) }))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, testCase := range []struct {
+		name      string
+		raw       []byte
+		wantState ResultState
+	}{
+		{"untouched", propagated.Bytes(), ResultStatePASS},
+		{"changed", []byte(strings.Replace(string(propagated.Bytes()), field, "Auto-Submitted: no\r\n", 1)), ResultStateFAIL},
+		{"removed", []byte(strings.Replace(string(propagated.Bytes()), field, "", 1)), ResultStateFAIL},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			result, err := verifier.Verify(context.Background(), NewVerifyRequest(testCase.raw, []byte("<>"), [][]byte{propagated.NextHopRecipient()}))
+			if err != nil || result.State() != testCase.wantState {
+				t.Fatalf("Verify() state=%q reason=%q error=%v, want %q", result.State(), result.PrimaryReason(), err, testCase.wantState)
+			}
+			if testCase.wantState == ResultStateFAIL && result.PrimaryReason() != ReasonHashMismatch {
+				t.Fatalf("Verify() reason=%q, want %q", result.PrimaryReason(), ReasonHashMismatch)
+			}
+		})
+	}
+}
+
 // TestPropagationEvidenceAndResultsArePrivateAndConcurrent proves redaction
 // of every type, the closed error shape, and independent concurrent rebuilds.
 func TestPropagationEvidenceAndResultsArePrivateAndConcurrent(t *testing.T) {

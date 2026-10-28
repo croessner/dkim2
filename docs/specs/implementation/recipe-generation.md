@@ -212,7 +212,9 @@ implementation is owned by `lib/internal/canonical`.
 
 The classifier covers the Section 4 exclusions plus the additional Section 6.2
 exclusions, notably `Message-Instance` and `DKIM2-Signature`, as well as
-`Delivered-To`, `X-*`, and all other draft-04 classes. The generator supplies
+`Delivered-To`, `X-*`, and all other Draft-08 Section 4.1 classes. Draft-08
+removed `Auto-Submitted` and `VBR-Info` from the unsigned set, so the
+generator now emits recipes for changes to both. The generator supplies
 only validated canonical lowercase ASCII names and never exposes them through
 errors or telemetry. The contract has explicit validation and fallible
 classification; nil, typed-nil, zero, invalid, erroring, out-of-domain, or

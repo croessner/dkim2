@@ -40,13 +40,13 @@
     {
       "id": "canonical-header",
       "path": "lib/internal/canonical/testdata/golden/header-canonicalization-draft-ietf-dkim-dkim2-spec-08.json",
-      "sha256": "2f873d36f797a9aa454a487738c3e32110edfc50e92a666f1e622e53f9526ee6",
+      "sha256": "c33521b2b13876f5ce91b6eb6fd3db534511a681cc89bb95f26e4c8ac4d44e43",
       "module": "lib"
     },
     {
       "id": "canonical-header-source",
       "path": "lib/internal/canonical/header_test.go",
-      "sha256": "56c6d89b36211bcf97ffbc5da7f519ac22e7a3a58acef30496c257fa03a4e0b3",
+      "sha256": "2ba6ae46df20972b697ca4c982004bda3c7111c431233163d3755dd7f8984a9c",
       "module": "lib"
     },
     {
@@ -298,7 +298,7 @@
     {
       "id": "signing-dsn-propagation",
       "path": "lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-08/dsn-propagation-golden.json",
-      "sha256": "4543d342953dcf86655707db9a6173abe5b9158654670bdf096bc7673fdc6920",
+      "sha256": "a75067b41d541325be340ea2ad4272ac715a466f288f8a1f52fa6deb4d8f8693",
       "module": "lib"
     },
     {

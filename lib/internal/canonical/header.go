@@ -192,11 +192,14 @@ func excludedHeaderKindForName(nameLower string) excludedHeaderKind {
 	}
 }
 
-// exactUnsignedHeaderName reports the Draft-08 exact registered-field exclusions.
+// exactUnsignedHeaderName reports the six Draft-08 Section 4 exact
+// registered-field exclusions outside the Received, ARC, and protocol
+// classes. Draft-08 removed Auto-Submitted and VBR-Info from this set, so both
+// are signed and any change to them must be described by a Recipe.
 func exactUnsignedHeaderName(nameLower string) bool {
 	switch nameLower {
-	case "apparently-to", "auto-submitted", "dl-expansion-history", "original-recipient",
-		"sio-label-history", "vbr-info", "x400-received", "x400-trace":
+	case "apparently-to", "dl-expansion-history", "original-recipient",
+		"sio-label-history", "x400-received", "x400-trace":
 		return true
 	default:
 		return false

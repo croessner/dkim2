@@ -286,3 +286,49 @@ because the draft identifier is bound into the replay frame.
 - Protocol behavior is still the Draft-07 behavior until the following
   packages land. Interoperability and Exim qualification remain
   `unqualified_draft08`.
+
+## 8. Package 2 state
+
+- C4: `Auto-Submitted` and `VBR-Info` are signed. The exact unsigned set in
+  `exactUnsignedHeaderName` (`lib/internal/canonical/header.go`) now holds
+  the six names `Apparently-To`, `DL-Expansion-History`,
+  `Original-Recipient`, `SIO-Label-History`, `X400-Received`, and
+  `X400-Trace`; together with the `Received`/`Received-*`, `Return-Path`,
+  `Delivered-To`, `Authentication-Results`, `X-*`, `DKIM-Signature`, and
+  three ARC classes it matches the Section 4.1 summary exactly, and
+  Section 6.2 adds `Message-Instance` and `DKIM2-Signature`. The canonical
+  `HeaderRelevance` classifier remains the single table used by the recipe
+  parser and generator, signing, verification, and the DSN rebuild.
+- Recipe consequence: recipes for `Auto-Submitted` and `VBR-Info` are legal
+  and are generated when a hop adds or changes either field; a recipe for a
+  Section 4.1 field is still rejected (`unsigned_header_recipe`).
+- DSN rebuild consequence: the Section 16.3 pruning rule removes only
+  hash-excluded fields above the previous hop signature. A forwarder-added
+  `Auto-Submitted` is now a signed field that the local Recipe must undo; the
+  rebuild applies that Recipe, independent of the field position, and fails
+  closed with `hash_mismatch` when the Recipe omits the addition. No
+  production change was needed in `lib/internal/dsn/rebuild.go`, because the
+  rebuild already delegates to the canonical classifier.
+- The propagated DSN writes `Auto-Submitted: auto-replied` before its `m=1`
+  header hash is computed; a test proves that the report verifies and that a
+  changed or removed field fails with `hash_mismatch`. No other producer adds
+  `Auto-Submitted` or `VBR-Info` after hashing.
+- C6: a regression test pins Section 6.2 ordering by ascending octet value of
+  the lower-cased names (`-`, digits, `_`, mixed case, and a name that is a
+  prefix of another). The implementation already compared bytes.
+- N1: DNS-01 defined LWSP for information only and used it in no
+  production, so DNS-02 removing it has no behavioral effect. A regression
+  test pins that a CRLF must be followed by WSP in a key record.
+- The Draft-07 to Draft-08 boundary test now proves that a Draft-07 header
+  hash over `Auto-Submitted` and `VBR-Info` FAILs under Draft-08 and that
+  Draft-08 signs both again as Draft-04 did.
+- Regenerated artifacts: the canonical header golden (inputs relabelled as
+  signed, canonical bytes, digest, and counts recomputed with the production
+  canonicalizer and checked against an independent SHA-256), the DSN
+  propagation corpus through `DKIM2_WRITE_DSN_PROPAGATION_VECTORS=1` (only
+  the signed report bytes changed, because each report carries the now
+  hashed `Auto-Submitted`), and the conformance manifest digests through
+  `make generate-conformance-manifest`. The Draft-07 copies stay under
+  `lib/testdata/vectors/history/draft-ietf-dkim-dkim2-spec-07/`.
+- Qualification and `dkim2ctl` fixtures compute hashes at run time through
+  the library and carry no frozen digests over these fields.

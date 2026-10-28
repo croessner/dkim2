@@ -574,6 +574,12 @@ follows.
    observations for diagnosis. A golden vector with interleaved
    hash-excluded fields above and below `i=k-1` pins the rule so that a
    later change to the Section 4 exclusion list breaks the vector visibly.
+   Signed fields are never pruned by this rule: Draft-08 Section 4 signs
+   `Auto-Submitted` and `VBR-Info`, so a forwarder that added either field
+   must have described the addition in its Recipe, and the rebuild removes
+   it by applying that Recipe. A Recipe that omits it cannot restore the
+   previous instance hash, and the rebuild fails closed with
+   `hash_mismatch`.
 5. **Body degradation.** If the embedded original was complete and the body at
    the previous hop's instance is reconstructable, the new third part is
    `message/rfc822` with the reconstructed message. If the embedded original
@@ -629,7 +635,9 @@ follows.
    `<reporting_mta>`, `Auto-Submitted: auto-replied`, which RFC 3834 Section
    5 permits for DSNs while forbidding `auto-generated`, and
    `MIME-Version: 1.0`. No `Received` header is generated; the MTA adds its
-   own on submission.
+   own on submission. `Auto-Submitted` is signed under Draft-08 Section 4,
+   so it is written before the `m=1` header hash is computed; a test proves
+   that changing or removing it breaks verification.
 9. **DKIM2 fields.** The new DSN carries exactly one Message-Instance `m=1`
    and exactly one DKIM2-Signature `i=1` with `mf=<>` and `rt=` equal to the
    previous hop's `mf=`. Draft-08 Section 16.3 requires the propagated DSN to
