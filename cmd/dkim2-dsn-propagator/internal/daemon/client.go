@@ -50,6 +50,9 @@ const (
 	DiscardNotFailure DiscardReason = "not_failure"
 	// DiscardNullPreviousSender marks a forbidden null previous sender.
 	DiscardNullPreviousSender DiscardReason = "null_previous_sender"
+	// DiscardIdentityMisaligned marks a propagation whose signing domain does
+	// not relaxed-match the previous hop's rt= (Draft-08 Section 16.2).
+	DiscardIdentityMisaligned DiscardReason = "identity_misaligned"
 	// DiscardUnsupportedChain marks a chain this implementation cannot descend.
 	DiscardUnsupportedChain DiscardReason = "unsupported_chain"
 	// DiscardNotReconstructable marks a permanently unrebuildable notification.
@@ -459,6 +462,8 @@ func discardReason(body *generated.DSNPropagateResponse) (DiscardReason, bool) {
 		return DiscardNotFailure, true
 	case generated.DeliveryStatusPropagationForbiddenNullPreviousSender:
 		return DiscardNullPreviousSender, true
+	case generated.DeliveryStatusPropagationForbiddenIdentityMisaligned:
+		return DiscardIdentityMisaligned, true
 	case generated.DeliveryStatusPropagationUnsupportedChain:
 		return DiscardUnsupportedChain, true
 	default:

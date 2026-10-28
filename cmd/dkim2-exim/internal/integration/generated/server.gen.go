@@ -264,6 +264,7 @@ func (e DeliveryStatusProjectionOuterAlignment) Valid() bool {
 // Defines values for DeliveryStatusProjectionPropagation.
 const (
 	DeliveryStatusPropagationEligible                    DeliveryStatusProjectionPropagation = "eligible"
+	DeliveryStatusPropagationForbiddenIdentityMisaligned DeliveryStatusProjectionPropagation = "forbidden_identity_misaligned"
 	DeliveryStatusPropagationForbiddenNullPreviousSender DeliveryStatusProjectionPropagation = "forbidden_null_previous_sender"
 	DeliveryStatusPropagationNotApplicable               DeliveryStatusProjectionPropagation = "not_applicable"
 	DeliveryStatusPropagationNotEvaluated                DeliveryStatusProjectionPropagation = "not_evaluated"
@@ -277,6 +278,8 @@ const (
 func (e DeliveryStatusProjectionPropagation) Valid() bool {
 	switch e {
 	case DeliveryStatusPropagationEligible:
+		return true
+	case DeliveryStatusPropagationForbiddenIdentityMisaligned:
 		return true
 	case DeliveryStatusPropagationForbiddenNullPreviousSender:
 		return true
@@ -2907,9 +2910,10 @@ func (response SignDeliveryStatus200JSONResponse) VisitSignDeliveryStatusRespons
 }
 
 type SignDeliveryStatus204ResponseHeaders struct {
-	CacheControl string
-	Connection   string
-	Date         *string
+	CacheControl         string
+	Connection           string
+	Date                 *string
+	XDKIM2UnsignedReason string
 }
 
 type SignDeliveryStatus204Response struct {
@@ -2922,6 +2926,7 @@ func (response SignDeliveryStatus204Response) VisitSignDeliveryStatusResponse(w 
 	if response.Headers.Date != nil {
 		w.Header().Set("Date", fmt.Sprint(*response.Headers.Date))
 	}
+	w.Header().Set("X-DKIM2-Unsigned-Reason", fmt.Sprint(response.Headers.XDKIM2UnsignedReason))
 	w.WriteHeader(204)
 	return nil
 }

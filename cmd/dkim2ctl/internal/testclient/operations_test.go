@@ -287,6 +287,9 @@ func TestOperationResponseAcceptsDocumentedNoContentApplicability(t *testing.T) 
 			},
 			Body: io.NopCloser(strings.NewReader("")),
 		}
+		if operation == OperationDSNSign {
+			response.Header.Set(headerUnsignedReason, "delivery_status_identity_unavailable")
+		}
 		fact, err := classifyResponse(operation, response)
 		if err != nil || fact.Operation != operation || fact.Status != http.StatusNoContent ||
 			fact.Process != nil || fact.Sign != nil || fact.Error != nil {
@@ -294,6 +297,12 @@ func TestOperationResponseAcceptsDocumentedNoContentApplicability(t *testing.T) 
 		}
 	}
 }
+
+// canonicalUnsignedReason is the canonical MIME key of the unsigned-reason header.
+var canonicalUnsignedReason = http.CanonicalHeaderKey(headerUnsignedReason)
+
+// testUnsignedOriginal is the unsigned-original compatibility reason.
+const testUnsignedOriginal = "unsigned_original"
 
 // TestOperationResponseRejectsMalformedNoContent proves 204 cannot smuggle a
 // body, representation metadata, or an unsupported revise no-op variant.
@@ -311,8 +320,12 @@ func TestOperationResponseRejectsMalformedNoContent(t *testing.T) {
 		{name: "wrong connection", operation: OperationProcess, extra: http.Header{headerConnection: {"keep-alive"}}},
 		{name: "duplicate connection", operation: OperationSign, extra: http.Header{headerConnection: {connectionClose, connectionClose}}},
 		{name: "revise", operation: OperationRevise},
-		{name: "delivery status body", operation: OperationDSNSign, body: "{}"},
-		{name: "delivery status content type", operation: OperationDSNSign, extra: http.Header{headerContentType: {mediaTypeJSON}}},
+		{name: "delivery status body", operation: OperationDSNSign, body: "{}", extra: http.Header{canonicalUnsignedReason: {testUnsignedOriginal}}},
+		{name: "delivery status content type", operation: OperationDSNSign, extra: http.Header{headerContentType: {mediaTypeJSON}, canonicalUnsignedReason: {testUnsignedOriginal}}},
+		{name: "delivery status without reason", operation: OperationDSNSign},
+		{name: "delivery status unknown reason", operation: OperationDSNSign, extra: http.Header{canonicalUnsignedReason: {"other"}}},
+		{name: "delivery status duplicate reason", operation: OperationDSNSign, extra: http.Header{canonicalUnsignedReason: {testUnsignedOriginal, testUnsignedOriginal}}},
+		{name: "sign with unsigned reason", operation: OperationSign, extra: http.Header{canonicalUnsignedReason: {testUnsignedOriginal}}},
 		{name: "propagation", operation: OperationDSNPropagate},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {

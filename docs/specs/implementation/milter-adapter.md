@@ -370,13 +370,16 @@ An originator route may select its signing domain from the strictly validated
 ASCII SMTP reverse-path while retaining one statically configured tenant.
 `postfix_dsn` instead requires `domain_source: verified_embedded` and no
 configured domain. The bounded Postfix origin enum authorizes only the route;
-the daemon verifies the complete embedded object, derives the canonical
-authenticated highest `d=`, and only then resolves the exact tenant/domain
-`delivery_status` policy. No outer-envelope or caller-selected domain can
-participate in that lookup. A daemon that sets
-`signing.policy.delivery_status.reporting_domain` resolves that operator-owned
-reporting MTA domain instead, after the same embedded verification; the
-adapter configuration and request are identical in both cases.
+the daemon verifies the complete embedded object and only then resolves the
+Draft-08 Section 16.2 signing identity: a tenant `delivery_status` profile
+domain that relaxed-matches an `rt=` address of the original's highest
+DKIM2-Signature and makes the bounce From Authentic. No outer-envelope or
+caller-selected domain can participate in that lookup;
+`signing.policy.delivery_status.reporting_domain` is only a preferred
+candidate when it matches. When no such domain exists the daemon answers 204
+with `X-DKIM2-Unsigned-Reason`, and the adapter continues without mutation
+(accept without signature); the adapter configuration and request are
+identical in every case.
 
 Every originator route also retains one separate canonical
 `signing.dsn_domain`. This stable configuration path is a reserved prerequisite

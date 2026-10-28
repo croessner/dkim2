@@ -34,8 +34,10 @@ type signingPolicies struct {
 	// admitHeaderFromNullSender admits the explicit header_from originator
 	// declaration for a null reverse path. The zero value refuses it.
 	admitHeaderFromNullSender bool
-	// reportingIdentity signs Postfix-generated DSNs under the reporting
-	// MTA's own domain. The zero value keeps the embedded original's d=.
+	// reportingIdentity is the operator-preferred DSN signing domain. It
+	// wins within its Draft-08 Section 16.2 linkage tier only when it
+	// relaxed-matches an rt= address of the reported message; it never
+	// signs on its own. The zero value states no preference.
 	reportingIdentity dkim2.DSNIdentity
 }
 
@@ -96,6 +98,9 @@ func selectPolicy(values []signingPolicies) (signingPolicies, error) {
 
 type dsnEvidenceObserver interface {
 	ObserveDSNEvidence(string, string)
+	// ObserveDSNUnsigned records one closed reason why a delivery-status
+	// report leaves unsigned.
+	ObserveDSNUnsigned(string)
 }
 
 // attachObservability binds the instance-owned observer before publication.

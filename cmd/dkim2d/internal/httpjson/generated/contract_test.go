@@ -15,6 +15,7 @@ import (
 const (
 	testHeaderCacheControl         = "Cache-Control"
 	testHeaderConnection           = "Connection"
+	testHeaderUnsignedReason       = "X-DKIM2-Unsigned-Reason"
 	testHeaderContentTypeOptions   = "X-Content-Type-Options"
 	testMethodGet                  = "GET"
 	testMethodPost                 = "POST"
@@ -361,7 +362,10 @@ func requiredResponseHeaders(path string, status string) []string {
 	if status == "304" {
 		return append(headers, "ETag")
 	}
-	if status == "204" && (path == testProcessPath || path == testSignPath || path == testDSNSignPath) {
+	if status == "204" && path == testDSNSignPath {
+		return append(headers, testHeaderUnsignedReason)
+	}
+	if status == "204" && (path == testProcessPath || path == testSignPath) {
 		return headers
 	}
 	headers = append(headers, "Content-Length", testHeaderContentTypeOptions)
@@ -445,6 +449,13 @@ func assertResponseHeaderSchemas(
 			!contentLength.Value.Type.Is("string") ||
 			contentLength.Value.Pattern != "^(0|[1-9][0-9]*)$" {
 			t.Fatalf("response %s for %s has invalid Content-Length pattern", status, operationID)
+		}
+	}
+	if headers[testHeaderUnsignedReason] != nil {
+		reason := headers[testHeaderUnsignedReason].Value.Schema
+		if reason == nil || reason.Value == nil || !reason.Value.Type.Is("string") ||
+			fmt.Sprint(reason.Value.Enum) != "[unsigned_original delivery_status_identity_unavailable delivery_status_from_not_authentic]" {
+			t.Fatalf("response %s for %s has invalid %s vocabulary", status, operationID, testHeaderUnsignedReason)
 		}
 	}
 	if headers["ETag"] != nil {
@@ -954,7 +965,7 @@ func assertPropagationEnums(t *testing.T, document *openapi3.T) {
 	assertPropertyEnum(t, document, "DeliveryStatusProjection", testPropertyPropagation,
 		[]string{
 			"not_applicable", "eligible", "terminal_origin", "not_failure",
-			"forbidden_null_previous_sender", "unsupported_chain",
+			"forbidden_null_previous_sender", "forbidden_identity_misaligned", "unsupported_chain",
 			"not_reconstructable", testValueNotEvaluated,
 		})
 	propagationDisposition := requiredSchema(t, document, "PropagationDisposition")

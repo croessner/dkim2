@@ -374,11 +374,14 @@ func TestStrictAdapterReturnsBodylessDeliveryStatusNotApplicable(t *testing.T) {
 		Context: generated.DeliveryStatusContext{Tenant: "tenant-a"},
 	}
 	for _, testCase := range []struct {
-		name    string
-		service app.OperationService
-		want    string
+		name       string
+		service    app.OperationService
+		want       string
+		wantReason string
 	}{
-		{name: "not applicable", service: &operationServiceStub{notApplicable: true}, want: "204"},
+		{name: "not applicable", service: &operationServiceStub{notApplicable: true}, want: "204", wantReason: "unsigned_original"},
+		{name: "identity unavailable", service: &operationServiceStub{notApplicable: true, unsignedReason: app.DeliveryStatusIdentityUnavailable}, want: "204", wantReason: "delivery_status_identity_unavailable"},
+		{name: "from not authentic", service: &operationServiceStub{notApplicable: true, unsignedReason: app.DeliveryStatusFromNotAuthentic}, want: "204", wantReason: "delivery_status_from_not_authentic"},
 		{name: "strict refusal", service: &operationServiceStub{}, want: "200"},
 		{name: "foreign operation", service: foreignDeliveryStatusService{operationServiceStub: &operationServiceStub{}}, want: "adapter_failure"},
 	} {
@@ -389,13 +392,14 @@ func TestStrictAdapterReturnsBodylessDeliveryStatusNotApplicable(t *testing.T) {
 			}
 			response, err := adapter.SignDeliveryStatus(context.Background(), generated.SignDeliveryStatusRequestObject{Body: &request})
 			got := "adapter_failure"
-			switch response.(type) {
+			reason := ""
+			switch typed := response.(type) {
 			case generated.SignDeliveryStatus204Response:
-				got = "204"
+				got, reason = "204", typed.Headers.XDKIM2UnsignedReason
 			case operationDeliveryStatusResponse:
 				got = "200"
 			}
-			if got != testCase.want || (got == "adapter_failure") != (err != nil) {
+			if got != testCase.want || reason != testCase.wantReason || (got == "adapter_failure") != (err != nil) {
 				t.Fatalf("SignDeliveryStatus() response=%T error=%v, want %s", response, err, testCase.want)
 			}
 		})
@@ -483,7 +487,8 @@ func TestGeneratedStrictHandlerWritesBodylessNotApplicableResponses(t *testing.T
 			if readErr != nil || closeErr != nil || response.StatusCode != http.StatusNoContent ||
 				len(body) != 0 || response.Header.Get("Content-Type") != "" ||
 				response.Header.Get("Content-Length") != "" ||
-				response.Header.Get("Cache-Control") != cacheControlNoStore || !response.Close {
+				response.Header.Get("Cache-Control") != cacheControlNoStore || !response.Close ||
+				(testCase.path == "/v1/dsn/sign") != (response.Header.Get("X-DKIM2-Unsigned-Reason") == "unsigned_original") {
 				t.Fatalf(
 					"wire response status=%d body=%q type=%q length=%q cache=%q close=%t read=%v close_err=%v",
 					response.StatusCode, body, response.Header.Get("Content-Type"),
@@ -544,6 +549,9 @@ type operationServiceStub struct {
 	dsnCalls      int
 	err           error
 	notApplicable bool
+	// unsignedReason selects the delivery-status unsigned reason; empty
+	// selects the unsigned-original compatibility reason.
+	unsignedReason app.DeliveryStatusUnsignedReason
 }
 
 // Sign returns one deterministic signing result.
@@ -583,7 +591,11 @@ func (s *operationServiceStub) SignDeliveryStatus(
 ) (app.SigningAssessment, error) {
 	s.dsnCalls++
 	if s.notApplicable {
-		return app.NewNotApplicableDeliveryStatusAssessment(), nil
+		reason := s.unsignedReason
+		if reason == "" {
+			reason = app.DeliveryStatusUnsignedOriginal
+		}
+		return app.NewUnsignedDeliveryStatusAssessment(reason), nil
 	}
 	return closedDeliveryStatusAssessment()
 }

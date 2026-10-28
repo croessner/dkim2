@@ -19,6 +19,7 @@ const (
 	receivedDSNOtherDomain       = "other.example"
 	receivedDSNParentDomain      = "example"
 	receivedDSNLocalRecipient    = "<user@local.example>"
+	receivedDSNForwardRecipient  = "<user@forward.local.example>"
 	receivedDSNLocalMailFrom     = "<forwarded@local.example>"
 	receivedDSNForwardMailFrom   = "<forwarded@forward.local.example>"
 	receivedDSNDestination       = "<dest@destination.example>"

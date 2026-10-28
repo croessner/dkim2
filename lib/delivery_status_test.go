@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -38,28 +39,20 @@ func TestDSNSigningRequiresDedicatedEvidenceAndRoute(t *testing.T) {
 		"--dsn\r\nContent-Type: text/plain\r\n\r\nhuman\r\n" +
 		"--dsn\r\nContent-Type: message/delivery-status\r\n\r\nReporting-MTA: dns; example.test\r\n\r\nFinal-Recipient: rfc822; bob@example.test\r\nAction: failed\r\nStatus: 5.1.1\r\n\r\n" +
 		"--dsn\r\nContent-Type: message/rfc822\r\n\r\n" + string(original) + "\r\n--dsn--\r\n")
-	identity, err := NewDSNIdentity("example.test")
-	if err != nil {
-		t.Fatal(err)
-	}
 	evidence, err := fixture.facade.EvaluateDSNForSigning(context.Background(), NewDSNSigningEvidenceRequest(
 		outer, []byte("<>"), [][]byte{[]byte("<alice@example.test>")},
-		identity,
 	))
 	if err != nil || !evidence.Valid() {
 		t.Fatalf("EvaluateDSNForSigning() evidence=%t error=%v", evidence.Valid(), err)
 	}
-	derived, err := fixture.facade.EvaluateDSNForSigning(
-		context.Background(),
-		NewDerivedDSNSigningEvidenceRequest(
-			outer, []byte("<>"), [][]byte{[]byte("<alice@example.test>")},
-		),
+	if evidence.Resolved() || evidence.SigningDomain() != "" {
+		t.Fatal("evaluated DSN evidence carried a signing identity before Section 16.2 resolution")
+	}
+	evidence, profile, err := fixture.facade.ResolveDSNSigningIdentity(
+		context.Background(), evidence, newDSNProfiles(t, testSigningDomain),
 	)
-	if err != nil || !derived.Valid() || derived.SigningDomain() != testSigningDomain {
-		t.Fatalf(
-			"EvaluateDSNForSigning(derived) evidence=%t domain=%q error=%v",
-			derived.Valid(), derived.SigningDomain(), err,
-		)
+	if err != nil || !evidence.Resolved() || evidence.SigningDomain() != testSigningDomain || profile.value.Domain() != testSigningDomain {
+		t.Fatalf("ResolveDSNSigningIdentity() domain=%q error=%v", evidence.SigningDomain(), err)
 	}
 	source, err := NewSigningSource(outer)
 	if err != nil {
@@ -81,7 +74,7 @@ func TestDSNSigningRequiresDedicatedEvidenceAndRoute(t *testing.T) {
 		t.Fatalf("PlanRouteFanout() tickets=%d error=%v", len(tickets), err)
 	}
 	result, recovery, err := fixture.facade.SignDSN(context.Background(), NewDSNSigningRequest(
-		evidence, tickets[0], fixture.profile, SigningMetadata{}, SigningTransportFinalNetworkPreDotStuffing,
+		evidence, tickets[0], profile, SigningMetadata{}, SigningTransportFinalNetworkPreDotStuffing,
 	))
 	if err != nil || recovery.Valid() || !result.Valid() {
 		t.Fatalf("SignDSN() result=%t recovery=%t error=%v", result.Valid(), recovery.Valid(), err)
@@ -106,7 +99,7 @@ func TestPostfixDSNCompatibilityRequiresExplicitProvenanceConstructor(t *testing
 		"Action: failed\r\nStatus: 5.1.1\r\n" +
 		"Diagnostic-Code: smtp; 550 synthetic rejection\r\n\r\n" +
 		"--dsn\r\nContent-Type: message/rfc822\r\n\r\n" + string(original) + "\r\n--dsn--\r\n")
-	_, err := fixture.facade.EvaluateDSNForSigning(context.Background(), NewDerivedDSNSigningEvidenceRequest(
+	_, err := fixture.facade.EvaluateDSNForSigning(context.Background(), NewDSNSigningEvidenceRequest(
 		outer,
 		[]byte("<>"),
 		[][]byte{[]byte("<alice@example.test>")},
@@ -114,7 +107,7 @@ func TestPostfixDSNCompatibilityRequiresExplicitProvenanceConstructor(t *testing
 	if !errors.Is(err, newSigningError(SigningErrorAuthorizationDenied)) {
 		t.Fatalf("generic Postfix-order evidence error=%v", err)
 	}
-	evidence, err := fixture.facade.EvaluateDSNForSigning(context.Background(), NewPostfixDerivedDSNSigningEvidenceRequest(
+	evidence, err := fixture.facade.EvaluateDSNForSigning(context.Background(), NewPostfixDSNSigningEvidenceRequest(
 		outer,
 		[]byte("<>"),
 		[][]byte{[]byte("<alice@example.test>")},
@@ -134,20 +127,15 @@ func TestDSNEvidenceRequiresOuterRecipientToMatchHighestMailFrom(t *testing.T) {
 		"--dsn\r\nContent-Type: text/plain\r\n\r\nhuman\r\n" +
 		"--dsn\r\nContent-Type: message/delivery-status\r\n\r\nReporting-MTA: dns; example.test\r\n\r\nFinal-Recipient: rfc822; bob@example.test\r\nAction: failed\r\nStatus: 5.1.1\r\n\r\n" +
 		"--dsn\r\nContent-Type: message/rfc822\r\n\r\n" + string(original) + "\r\n--dsn--\r\n")
-	identity, err := NewDSNIdentity("example.test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = fixture.facade.EvaluateDSNForSigning(context.Background(), NewDSNSigningEvidenceRequest(
+	_, err := fixture.facade.EvaluateDSNForSigning(context.Background(), NewDSNSigningEvidenceRequest(
 		outer, []byte("<>"), [][]byte{[]byte("<postmaster@example.test>")},
-		identity,
 	))
 	if !errors.Is(err, newSigningError(SigningErrorAuthorizationDenied)) {
 		t.Fatalf("outer recipient mismatch error = %v", err)
 	}
 	linkedMismatch := bytes.Replace(outer, []byte("bob@example.test"), []byte("other@example.test"), 1)
 	_, err = fixture.facade.EvaluateDSNForSigning(context.Background(), NewDSNSigningEvidenceRequest(
-		linkedMismatch, []byte("<>"), [][]byte{[]byte("<alice@example.test>")}, identity,
+		linkedMismatch, []byte("<>"), [][]byte{[]byte("<alice@example.test>")},
 	))
 	if !errors.Is(err, newSigningError(SigningErrorAuthorizationDenied)) {
 		t.Fatalf("delivery-status recipient mismatch error = %v", err)
@@ -164,33 +152,23 @@ func TestDSNEvidenceErrorsExposeOnlyClosedPipelineStages(t *testing.T) {
 		"--dsn\r\nContent-Type: text/plain\r\n\r\nhuman\r\n" +
 		"--dsn\r\nContent-Type: message/delivery-status\r\n\r\nReporting-MTA: dns; example.test\r\n\r\nFinal-Recipient: rfc822; bob@example.test\r\nAction: failed\r\nStatus: 5.1.1\r\n\r\n" +
 		"--dsn\r\nContent-Type: message/rfc822\r\n\r\n" + string(original) + "\r\n--dsn--\r\n")
-	identity, err := NewDSNIdentity("example.test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	otherIdentity, err := NewDSNIdentity("other.example.test")
-	if err != nil {
-		t.Fatal(err)
-	}
 	cases := []struct {
 		name      string
 		raw       []byte
 		recipient []byte
-		identity  DSNIdentity
 		wantStage DSNEvidenceStage
 	}{
-		{name: "mime", raw: []byte("private-marker"), recipient: []byte("<alice@example.test>"), identity: identity, wantStage: DSNEvidenceStageMIMEParse},
-		{name: "embedded-message", raw: bytes.Replace(outer, original, []byte("private-marker\r\n"), 1), recipient: []byte("<alice@example.test>"), identity: identity, wantStage: DSNEvidenceStageEmbeddedMessage},
-		{name: "embedded-verification", raw: bytes.Replace(outer, []byte("original body"), []byte("private-marker"), 1), recipient: []byte("<alice@example.test>"), identity: identity, wantStage: DSNEvidenceStageEmbeddedVerification},
-		{name: "embedded-unsigned", raw: bytes.Replace(outer, original, []byte("From: alice@example.test\r\nSubject: private-marker\r\n\r\noriginal body\r\n"), 1), recipient: []byte("<alice@example.test>"), identity: identity, wantStage: DSNEvidenceStageEmbeddedUnsigned},
-		{name: "delivery-status-linkage", raw: bytes.Replace(outer, []byte("bob@example.test"), []byte("other@example.test"), 1), recipient: []byte("<alice@example.test>"), identity: identity, wantStage: DSNEvidenceStageDeliveryStatusLinkage},
-		{name: "outer-recipient-linkage", raw: outer, recipient: []byte("<other@example.test>"), identity: identity, wantStage: DSNEvidenceStageOuterRecipientLinkage},
-		{name: "signing-domain", raw: outer, recipient: []byte("<alice@example.test>"), identity: otherIdentity, wantStage: DSNEvidenceStageSigningDomain},
+		{name: "mime", raw: []byte("private-marker"), recipient: []byte("<alice@example.test>"), wantStage: DSNEvidenceStageMIMEParse},
+		{name: "embedded-message", raw: bytes.Replace(outer, original, []byte("private-marker\r\n"), 1), recipient: []byte("<alice@example.test>"), wantStage: DSNEvidenceStageEmbeddedMessage},
+		{name: "embedded-verification", raw: bytes.Replace(outer, []byte("original body"), []byte("private-marker"), 1), recipient: []byte("<alice@example.test>"), wantStage: DSNEvidenceStageEmbeddedVerification},
+		{name: "embedded-unsigned", raw: bytes.Replace(outer, original, []byte("From: alice@example.test\r\nSubject: private-marker\r\n\r\noriginal body\r\n"), 1), recipient: []byte("<alice@example.test>"), wantStage: DSNEvidenceStageEmbeddedUnsigned},
+		{name: "delivery-status-linkage", raw: bytes.Replace(outer, []byte("bob@example.test"), []byte("other@example.test"), 1), recipient: []byte("<alice@example.test>"), wantStage: DSNEvidenceStageDeliveryStatusLinkage},
+		{name: "outer-recipient-linkage", raw: outer, recipient: []byte("<other@example.test>"), wantStage: DSNEvidenceStageOuterRecipientLinkage},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
 			_, err := fixture.facade.EvaluateDSNForSigning(context.Background(), NewDSNSigningEvidenceRequest(
-				testCase.raw, []byte("<>"), [][]byte{testCase.recipient}, testCase.identity,
+				testCase.raw, []byte("<>"), [][]byte{testCase.recipient},
 			))
 			if DSNEvidenceStageOf(err) != testCase.wantStage ||
 				!errors.Is(err, newSigningError(SigningErrorAuthorizationDenied)) && testCase.wantStage != DSNEvidenceStageMIMEParse {
@@ -231,7 +209,7 @@ func TestDSNEvidenceClassifiesOriginalWithoutDKIM2SignatureAsUnsigned(t *testing
 		{name: "failing", raw: bytes.Replace(outer, []byte("original body"), []byte("private-marker"), 1), wantStage: DSNEvidenceStageEmbeddedVerification},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
-			evidence, err := fixture.facade.EvaluateDSNForSigning(context.Background(), NewPostfixDerivedDSNSigningEvidenceRequest(
+			evidence, err := fixture.facade.EvaluateDSNForSigning(context.Background(), NewPostfixDSNSigningEvidenceRequest(
 				testCase.raw, []byte("<>"), [][]byte{[]byte("<alice@example.test>")},
 			))
 			if evidence.Valid() || DSNEvidenceStageOf(err) != testCase.wantStage ||
@@ -270,7 +248,7 @@ func TestDSNEvidencePreservesVerificationStageOnInFlightCancellation(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = signer.EvaluateDSNForSigning(ctx, NewPostfixDerivedDSNSigningEvidenceRequest(
+	_, err = signer.EvaluateDSNForSigning(ctx, NewPostfixDSNSigningEvidenceRequest(
 		outer, []byte("<>"), [][]byte{[]byte("<alice@example.test>")},
 	))
 	if !errors.Is(err, context.Canceled) ||
@@ -319,13 +297,8 @@ func TestDSNEvidenceAllowsAuthenticatedForeignOriginalRecipient(t *testing.T) {
 		"--dsn\r\nContent-Type: text/plain\r\n\r\nhuman\r\n" +
 		"--dsn\r\nContent-Type: message/delivery-status\r\n\r\nReporting-MTA: dns; example.test\r\n\r\nFinal-Recipient: rfc822; bob@remote.example.test\r\nAction: failed\r\nStatus: 5.1.1\r\n\r\n" +
 		"--dsn\r\nContent-Type: message/rfc822\r\n\r\n" + string(original) + "\r\n--dsn--\r\n")
-	identity, err := NewDSNIdentity("example.test")
-	if err != nil {
-		t.Fatal(err)
-	}
 	evidence, err := fixture.facade.EvaluateDSNForSigning(context.Background(), NewDSNSigningEvidenceRequest(
 		outer, []byte("<>"), [][]byte{[]byte("<alice@example.test>")},
-		identity,
 	))
 	if err != nil || !evidence.Valid() {
 		t.Fatalf("EvaluateDSNForSigning() evidence=%t error=%v", evidence.Valid(), err)
@@ -343,13 +316,8 @@ func TestDSNEvidenceDoesNotFabricateOriginalEnvelope(t *testing.T) {
 		"--dsn\r\nContent-Type: text/plain\r\n\r\nhuman\r\n" +
 		"--dsn\r\nContent-Type: message/delivery-status\r\n\r\nReporting-MTA: dns; example.test\r\n\r\nFinal-Recipient: rfc822; bob@remote.example.test\r\nAction: failed\r\nStatus: 5.1.1\r\n\r\n" +
 		"--dsn\r\nContent-Type: message/rfc822\r\n\r\n" + string(original) + "\r\n--dsn--\r\n")
-	identity, err := NewDSNIdentity("example.test")
-	if err != nil {
-		t.Fatal(err)
-	}
 	evidence, err := fixture.facade.EvaluateDSNForSigning(context.Background(), NewDSNSigningEvidenceRequest(
 		outer, []byte("<>"), [][]byte{[]byte("<alice@example.test>")},
-		identity,
 	))
 	if err != nil || !evidence.Valid() {
 		t.Fatalf("EvaluateDSNForSigning(expanded envelope) evidence=%t error=%v", evidence.Valid(), err)
@@ -370,14 +338,30 @@ func signDSNOriginalForRecipient(
 	recipient []byte,
 ) []byte {
 	t.Helper()
+	return signDSNOriginalForRecipients(t, fixture, [][]byte{recipient})
+}
+
+// signDSNOriginalForRecipients produces an authenticated original whose
+// highest rt= lists every exact recipient path; more than one recipient uses
+// the authorized group disclosure.
+func signDSNOriginalForRecipients(
+	t *testing.T,
+	fixture publicSigningFixture,
+	recipients [][]byte,
+) []byte {
+	t.Helper()
 	raw := []byte("From: alice@example.test\r\n\r\noriginal body\r\n")
 	source, err := NewSigningSource(raw)
 	if err != nil {
 		t.Fatal(err)
 	}
+	disclosure := RouteDisclosureSingle
+	if len(recipients) > 1 {
+		disclosure = RouteDisclosureAuthorizedGroup
+	}
 	entry, err := NewOriginatorRouteEntry(
-		source, []byte("<alice@example.test>"), [][]byte{recipient},
-		RouteDisclosureSingle, []byte("original-dsn-evidence"),
+		source, []byte("<alice@example.test>"), recipients,
+		disclosure, []byte("original-dsn-evidence"),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -391,7 +375,7 @@ func signDSNOriginalForRecipient(
 		t.Fatalf("PlanRouteFanout(original) tickets=%d error=%v", len(tickets), err)
 	}
 	result, recovery, err := fixture.facade.SignOriginator(context.Background(), NewOriginatorSigningRequest(
-		raw, []byte("<alice@example.test>"), [][]byte{recipient},
+		raw, []byte("<alice@example.test>"), recipients,
 		tickets[0], fixture.profile, SigningMetadata{}, SigningTransportFinalNetworkPreDotStuffing,
 	))
 	if err != nil || recovery.Valid() {
@@ -404,65 +388,97 @@ func signDSNOriginalForRecipient(
 	return signed.Bytes()
 }
 
-// TestDSNSigningRequiresAuthenticReportFrom reproduces Draft-08 Sections
-// 11 and 12.4 for MTA-generated DSNs: the report is a new i=1 message, so its
-// From must relaxed-match the DSN signing domain or signing fails closed.
-func TestDSNSigningRequiresAuthenticReportFrom(t *testing.T) {
-	fixture := newPublicSigningFixture(t)
-	original := signDSNOriginal(t, fixture)
-	outer := []byte("From: postmaster@other.test\r\n" +
-		"Content-Type: multipart/report; report-type=delivery-status; boundary=dsn\r\n\r\n" +
-		"--dsn\r\nContent-Type: text/plain\r\n\r\nhuman\r\n" +
-		"--dsn\r\nContent-Type: message/delivery-status\r\n\r\nReporting-MTA: dns; example.test\r\n\r\nFinal-Recipient: rfc822; bob@example.test\r\nAction: failed\r\nStatus: 5.1.1\r\n\r\n" +
-		"--dsn\r\nContent-Type: message/rfc822\r\n\r\n" + string(original) + "\r\n--dsn--\r\n")
-	identity, err := NewDSNIdentity("example.test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	evidence, err := fixture.facade.EvaluateDSNForSigning(context.Background(), NewDSNSigningEvidenceRequest(
-		outer, []byte("<>"), [][]byte{[]byte("<alice@example.test>")}, identity,
-	))
-	if err != nil || !evidence.Valid() {
-		t.Fatalf("EvaluateDSNForSigning() evidence=%t error=%v", evidence.Valid(), err)
-	}
-	source, err := NewSigningSource(outer)
-	if err != nil {
-		t.Fatal(err)
-	}
-	entry, err := NewDeliveryStatusRouteEntry(
-		source, []byte("<>"), [][]byte{[]byte("<alice@example.test>")},
-		RouteDisclosureSingle, []byte("delivery-status-from-test"),
-	)
-	if err != nil {
-		t.Fatal(err)
-	}
-	plan, err := NewRouteFanoutRequest([]RouteEntry{entry})
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, tickets, err := fixture.facade.PlanRouteFanout(context.Background(), plan)
-	if err != nil || len(tickets) != 1 {
-		t.Fatalf("PlanRouteFanout() tickets=%d error=%v", len(tickets), err)
-	}
-	result, recovery, err := fixture.facade.SignDSN(context.Background(), NewDSNSigningRequest(
-		evidence, tickets[0], fixture.profile, SigningMetadata{}, SigningTransportFinalNetworkPreDotStuffing,
-	))
-	var signingErr *SigningError
-	if result.Valid() || recovery.Valid() || !errors.As(err, &signingErr) || signingErr.Code() != SigningErrorChainFailure {
-		t.Fatalf("SignDSN() result=%t recovery=%t error=%v, want chain_failure", result.Valid(), recovery.Valid(), err)
-	}
+// dsnSubDomain is a profile domain below the fixture signing domain.
+const dsnSubDomain = "sub." + testSigningDomain
+
+// dsnProfiles is a test DSNProfileSource over a fixed set of local
+// delivery_status profile domains. It records every lookup in order.
+type dsnProfiles struct {
+	profiles map[string]SigningProfile
+	failures map[string]error
+	lookups  []string
 }
 
-// reportingMTADSN wraps one authenticated original in a Postfix-shaped report
-// whose From and Reporting-MTA name the reporting MTA, not the original signer.
-func reportingMTADSN(original []byte, reportingHost string) []byte {
-	return []byte("From: MAILER-DAEMON@" + reportingHost + "\r\n" +
+// DeliveryStatusProfile returns the fixed profile, its absence, or a failure.
+func (p *dsnProfiles) DeliveryStatusProfile(_ context.Context, domain string) (SigningProfile, bool, error) {
+	p.lookups = append(p.lookups, domain)
+	if err, failed := p.failures[domain]; failed {
+		return SigningProfile{}, false, err
+	}
+	profile, found := p.profiles[domain]
+	return profile, found, nil
+}
+
+// newDSNProfiles builds a profile source whose profiles all reuse the fixture
+// RSA credential, so any resolved identity can sign through the fixture.
+func newDSNProfiles(t *testing.T, domains ...string) *dsnProfiles {
+	t.Helper()
+	handle, err := NewPrivateKeyHandle([]byte("fixture-rsa"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	credential, err := NewRSASigningCredential(testRSASelector, &loadPublicSigningRSAKey(t).PublicKey, handle)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := &dsnProfiles{profiles: map[string]SigningProfile{}}
+	for _, domain := range domains {
+		profile, err := NewRSASigningProfile(domain, credential)
+		if err != nil {
+			t.Fatal(err)
+		}
+		source.profiles[domain] = profile
+	}
+	return source
+}
+
+// dsnReport wraps one authenticated original in an RFC 6522 report whose own
+// From, Reporting-MTA, and RFC 3464 Final-Recipient values are given.
+func dsnReport(original []byte, from, reportingHost string, finalRecipients ...string) []byte {
+	status := "Reporting-MTA: dns; " + reportingHost + "\r\n\r\n"
+	for _, recipient := range finalRecipients {
+		status += "Final-Recipient: rfc822; " + recipient + "\r\nAction: failed\r\nStatus: 5.1.1\r\n\r\n"
+	}
+	return []byte("From: " + from + "\r\n" +
 		"Content-Type: multipart/report; report-type=delivery-status; boundary=dsn\r\n\r\n" +
 		"--dsn\r\nContent-Type: text/plain\r\n\r\nhuman\r\n" +
-		"--dsn\r\nContent-Type: message/delivery-status\r\n\r\n" +
-		"Reporting-MTA: dns; " + reportingHost + "\r\n\r\n" +
-		"Final-Recipient: rfc822; bob@example.test\r\nAction: failed\r\nStatus: 5.1.1\r\n\r\n" +
+		"--dsn\r\nContent-Type: message/delivery-status\r\n\r\n" + status +
 		"--dsn\r\nContent-Type: message/rfc822\r\n\r\n" + string(original) + "\r\n--dsn--\r\n")
+}
+
+// resolveDSN evaluates one Postfix-route report addressed to the fixture
+// sender and resolves its Section 16.2 identity against source.
+func resolveDSN(
+	t *testing.T,
+	fixture publicSigningFixture,
+	outer []byte,
+	preferred string,
+	source DSNProfileSource,
+) (DSNSigningEvidence, SigningProfile, error) {
+	t.Helper()
+	request := NewPostfixDSNSigningEvidenceRequest(outer, []byte("<>"), [][]byte{[]byte("<alice@example.test>")})
+	if preferred != "" {
+		identity, err := NewDSNIdentity(preferred)
+		if err != nil {
+			t.Fatal(err)
+		}
+		request = request.WithPreferredIdentity(identity)
+	}
+	evidence, err := fixture.facade.EvaluateDSNForSigning(context.Background(), request)
+	if err != nil || !evidence.Valid() || evidence.Resolved() {
+		t.Fatalf("EvaluateDSNForSigning() valid=%t resolved=%t error=%v", evidence.Valid(), evidence.Resolved(), err)
+	}
+	return fixture.facade.ResolveDSNSigningIdentity(context.Background(), evidence, source)
+}
+
+// assertDSNUnsigned requires the explicit closed "cannot be DKIM2 signed"
+// outcome of one stage with the authorization-denied cause.
+func assertDSNUnsigned(t *testing.T, evidence DSNSigningEvidence, profile SigningProfile, err error, stage DSNEvidenceStage) {
+	t.Helper()
+	if evidence.Resolved() || profile.Valid() || DSNEvidenceStageOf(err) != stage ||
+		!errors.Is(err, newSigningError(SigningErrorAuthorizationDenied)) {
+		t.Fatalf("resolved=%t profile=%t stage=%q error=%v, want %q", evidence.Resolved(), profile.Valid(), DSNEvidenceStageOf(err), err, stage)
+	}
 }
 
 // signEvaluatedDSN plans the delivery-status route for an issued evidence and
@@ -475,7 +491,7 @@ func signEvaluatedDSN(t *testing.T, fixture publicSigningFixture, outer []byte, 
 	}
 	entry, err := NewDeliveryStatusRouteEntry(
 		source, []byte("<>"), [][]byte{[]byte("<alice@example.test>")},
-		RouteDisclosureSingle, []byte("delivery-status-reporting-test"),
+		RouteDisclosureSingle, []byte("delivery-status-identity-test"),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -493,71 +509,156 @@ func signEvaluatedDSN(t *testing.T, fixture publicSigningFixture, outer []byte, 
 	))
 }
 
-// TestPostfixDSNSignsUnderReportingMTAIdentity reproduces an MTA-generated
-// bounce whose From names the reporting MTA: Draft-08 Section 12.4 makes the
-// derived embedded d= unusable for it, while the configured reporting identity
-// signs it after the same embedded verification and recipient linkage.
-func TestPostfixDSNSignsUnderReportingMTAIdentity(t *testing.T) {
+// TestDSNSigningIdentityFollowsRecipientNotReportingDomain reproduces Draft-08
+// Section 16.2: the highest embedded rt= is under profile A (example.test),
+// the configured reporting domain is B (example.net). The report is signed
+// with A; B never signs because it does not relaxed-match an rt= address.
+func TestDSNSigningIdentityFollowsRecipientNotReportingDomain(t *testing.T) {
 	fixture := newPublicSigningFixture(t)
-	original := signDSNOriginal(t, fixture)
-	outer := reportingMTADSN(original, "mx.example.net")
-	recipients := [][]byte{[]byte("<alice@example.test>")}
-
-	derived, err := fixture.facade.EvaluateDSNForSigning(context.Background(), NewPostfixDerivedDSNSigningEvidenceRequest(
-		outer, []byte("<>"), recipients,
-	))
-	if err != nil || derived.SigningDomain() != testSigningDomain {
-		t.Fatalf("derived evidence domain=%q error=%v", derived.SigningDomain(), err)
+	outer := dsnReport(signDSNOriginal(t, fixture), "MAILER-DAEMON@mx.example.test", "mx.example.test", "bob@example.test")
+	source := newDSNProfiles(t, testSigningDomain, "example.net")
+	evidence, profile, err := resolveDSN(t, fixture, outer, "example.net", source)
+	if err != nil || evidence.SigningDomain() != testSigningDomain {
+		t.Fatalf("resolved domain=%q error=%v", evidence.SigningDomain(), err)
 	}
-	result, recovery, err := signEvaluatedDSN(t, fixture, outer, derived, fixture.profile)
-	var signingErr *SigningError
-	if result.Valid() || recovery.Valid() || !errors.As(err, &signingErr) || signingErr.Code() != SigningErrorChainFailure {
-		t.Fatalf("derived SignDSN() result=%t error=%v, want chain_failure", result.Valid(), err)
+	if slices.Contains(source.lookups, "example.net") {
+		t.Fatalf("non-matching reporting domain reached the profile source: %v", source.lookups)
 	}
-
-	reporting, err := NewDSNIdentity("example.net")
-	if err != nil {
-		t.Fatal(err)
-	}
-	evidence, err := fixture.facade.EvaluateDSNForSigning(context.Background(), NewPostfixReportingDSNSigningEvidenceRequest(
-		outer, []byte("<>"), recipients, reporting,
-	))
-	if err != nil || !evidence.Valid() || evidence.SigningDomain() != "example.net" {
-		t.Fatalf("reporting evidence valid=%t domain=%q error=%v", evidence.Valid(), evidence.SigningDomain(), err)
-	}
-	result, _, err = signEvaluatedDSN(t, fixture, outer, evidence, fixture.profile)
-	if result.Valid() || !errors.As(err, &signingErr) || signingErr.Code() != SigningErrorInvalidRequest {
-		t.Fatalf("embedded-domain profile under reporting identity result=%t error=%v", result.Valid(), err)
-	}
-	result, recovery, err = signEvaluatedDSN(t, fixture, outer, evidence, fixture.existingProfile)
+	result, recovery, err := signEvaluatedDSN(t, fixture, outer, evidence, profile)
 	if err != nil || recovery.Valid() || !result.Valid() {
-		t.Fatalf("reporting SignDSN() result=%t recovery=%t error=%v", result.Valid(), recovery.Valid(), err)
+		t.Fatalf("SignDSN() result=%t recovery=%t error=%v", result.Valid(), recovery.Valid(), err)
 	}
 	signed, ok := result.Unrestricted()
-	if !ok || !bytes.Contains(signed.Bytes(), []byte("d=example.net;")) {
-		t.Fatal("reporting DSN was not signed by the reporting identity")
-	}
-
-	foreignFrom := reportingMTADSN(original, "mx.other.test")
-	evidence, err = fixture.facade.EvaluateDSNForSigning(context.Background(), NewPostfixReportingDSNSigningEvidenceRequest(
-		foreignFrom, []byte("<>"), recipients, reporting,
-	))
-	if err != nil || !evidence.Valid() {
-		t.Fatalf("misconfigured reporting evidence valid=%t error=%v", evidence.Valid(), err)
-	}
-	result, recovery, err = signEvaluatedDSN(t, fixture, foreignFrom, evidence, fixture.existingProfile)
-	if result.Valid() || recovery.Valid() || !errors.As(err, &signingErr) || signingErr.Code() != SigningErrorChainFailure {
-		t.Fatalf("reporting identity outside the report From result=%t error=%v, want chain_failure", result.Valid(), err)
+	if !ok || !bytes.Contains(signed.Bytes(), []byte("d=example.test;")) {
+		t.Fatal("DSN was not signed with the rt=-matching profile domain")
 	}
 }
 
-// TestPostfixReportingDSNKeepsEmbeddedEvidenceGates proves the reporting
-// identity relaxes only the signer domain: unlinked recipients, tampered
-// originals, and an invalid identity still fail closed.
-func TestPostfixReportingDSNKeepsEmbeddedEvidenceGates(t *testing.T) {
+// TestDSNSigningIdentityPrefersMatchingReportingDomain proves the reporting
+// domain wins within its linkage tier only when it relaxed-matches rt=.
+func TestDSNSigningIdentityPrefersMatchingReportingDomain(t *testing.T) {
+	fixture := newPublicSigningFixture(t)
+	original := signDSNOriginalForRecipient(t, fixture, []byte("<bob@mx.sub.example.test>"))
+	outer := dsnReport(original, "MAILER-DAEMON@mx.sub.example.test", "mx.sub.example.test", "bob@mx.sub.example.test")
+	evidence, _, err := resolveDSN(t, fixture, outer, testSigningDomain, newDSNProfiles(t, dsnSubDomain, testSigningDomain))
+	if err != nil || evidence.SigningDomain() != testSigningDomain {
+		t.Fatalf("preferred matching domain=%q error=%v", evidence.SigningDomain(), err)
+	}
+}
+
+// TestDSNSigningIdentityPrefersLongestProfileDomain proves the most specific
+// matching profile domain signs when no preference applies.
+func TestDSNSigningIdentityPrefersLongestProfileDomain(t *testing.T) {
+	fixture := newPublicSigningFixture(t)
+	original := signDSNOriginalForRecipient(t, fixture, []byte("<bob@mx.sub.example.test>"))
+	outer := dsnReport(original, "MAILER-DAEMON@mx.sub.example.test", "mx.sub.example.test", "bob@mx.sub.example.test")
+	source := newDSNProfiles(t, dsnSubDomain, testSigningDomain)
+	evidence, profile, err := resolveDSN(t, fixture, outer, "", source)
+	if err != nil || evidence.SigningDomain() != dsnSubDomain || profile.value.Domain() != dsnSubDomain {
+		t.Fatalf("longest domain=%q error=%v", evidence.SigningDomain(), err)
+	}
+	if !slices.Equal(source.lookups, []string{"mx.sub.example.test", dsnSubDomain}) {
+		t.Fatalf("lookups=%v", source.lookups)
+	}
+}
+
+// TestDSNSigningIdentityPrefersRFC3464LinkedRecipient proves a profile that
+// matches the recipient named by the RFC 3464 Final-Recipient wins over a
+// longer profile that matches only an unlinked rt= recipient, although both
+// would make the report From Authentic.
+func TestDSNSigningIdentityPrefersRFC3464LinkedRecipient(t *testing.T) {
+	fixture := newPublicSigningFixture(t)
+	original := signDSNOriginalForRecipients(t, fixture, [][]byte{
+		[]byte("<bob@y.example.test>"), []byte("<carol@example.test>"),
+	})
+	outer := dsnReport(original, "MAILER-DAEMON@x.y.example.test", "x.y.example.test", "carol@example.test")
+	evidence, _, err := resolveDSN(t, fixture, outer, "", newDSNProfiles(t, "y.example.test", testSigningDomain))
+	if err != nil || evidence.SigningDomain() != testSigningDomain {
+		t.Fatalf("linked domain=%q error=%v", evidence.SigningDomain(), err)
+	}
+	unlinked := dsnReport(original, "MAILER-DAEMON@x.y.example.test", "x.y.example.test", "bob@y.example.test")
+	evidence, _, err = resolveDSN(t, fixture, unlinked, "", newDSNProfiles(t, "y.example.test", testSigningDomain))
+	if err != nil || evidence.SigningDomain() != "y.example.test" {
+		t.Fatalf("linked longest domain=%q error=%v", evidence.SigningDomain(), err)
+	}
+}
+
+// TestDSNSigningIdentityUnavailableLeavesReportUnsigned reproduces a report
+// for which no local delivery_status profile relaxed-matches rt=: the result
+// is the explicit identity_unavailable outcome, never another domain.
+func TestDSNSigningIdentityUnavailableLeavesReportUnsigned(t *testing.T) {
+	fixture := newPublicSigningFixture(t)
+	outer := dsnReport(signDSNOriginal(t, fixture), "MAILER-DAEMON@example.net", "mx.example.net", "bob@example.test")
+	evidence, profile, err := resolveDSN(t, fixture, outer, "example.net", newDSNProfiles(t, "example.net", "other.example.test"))
+	assertDSNUnsigned(t, evidence, profile, err, DSNEvidenceStageIdentityUnavailable)
+}
+
+// TestDSNSigningIdentityRequiresAuthenticReportFrom reproduces Draft-08
+// Sections 11 and 12.4 for MTA-generated DSNs: the report is a new i=1
+// message, so a matching profile whose domain cannot make the report From
+// Authentic yields the explicit from_not_authentic outcome.
+func TestDSNSigningIdentityRequiresAuthenticReportFrom(t *testing.T) {
+	fixture := newPublicSigningFixture(t)
+	outer := dsnReport(signDSNOriginal(t, fixture), "MAILER-DAEMON@mx.example.net", "mx.example.net", "bob@example.test")
+	evidence, profile, err := resolveDSN(t, fixture, outer, "example.net", newDSNProfiles(t, testSigningDomain, "example.net"))
+	assertDSNUnsigned(t, evidence, profile, err, DSNEvidenceStageFromNotAuthentic)
+
+	multiple := bytes.Replace(outer, []byte("From: MAILER-DAEMON@mx.example.net"), []byte("From: a@example.test, b@example.test"), 1)
+	evidence, profile, err = resolveDSN(t, fixture, multiple, "", newDSNProfiles(t, testSigningDomain))
+	assertDSNUnsigned(t, evidence, profile, err, DSNEvidenceStageFromNotAuthentic)
+}
+
+// TestDSNSigningIdentitySenderSideBounceIsUnsigned reproduces the sender-side
+// bounce: the highest embedded signature is ours (d=example.test) and its rt=
+// is remote. No local profile can relaxed-match the remote rt= address, so
+// Section 16.2 can never be satisfied and the report stays unsigned even
+// though the embedded original verifies and links.
+func TestDSNSigningIdentitySenderSideBounceIsUnsigned(t *testing.T) {
+	fixture := newPublicSigningFixture(t)
+	original := signDSNOriginalForRecipient(t, fixture, []byte("<bob@remote.example.net>"))
+	outer := dsnReport(original, "MAILER-DAEMON@example.test", "mx.example.test", "bob@remote.example.net")
+	evidence, profile, err := resolveDSN(t, fixture, outer, testSigningDomain, newDSNProfiles(t, testSigningDomain))
+	assertDSNUnsigned(t, evidence, profile, err, DSNEvidenceStageIdentityUnavailable)
+}
+
+// TestDSNSigningIdentityFailsClosedOnProfileSourceFailures proves an
+// undecided profile answer or a profile for another domain stops resolution
+// with the signing_domain stage instead of skipping to another candidate.
+func TestDSNSigningIdentityFailsClosedOnProfileSourceFailures(t *testing.T) {
+	fixture := newPublicSigningFixture(t)
+	outer := dsnReport(signDSNOriginal(t, fixture), "MAILER-DAEMON@example.test", "mx.example.test", "bob@example.test")
+	temporary := newDSNProfiles(t, "test")
+	temporary.failures = map[string]error{testSigningDomain: NewTemporaryProviderError()}
+	evidence, _, err := resolveDSN(t, fixture, outer, "", temporary)
+	if evidence.Resolved() || DSNEvidenceStageOf(err) != DSNEvidenceStageSigningDomain ||
+		ProviderErrorClassOf(err) != ProviderErrorClassTemporary {
+		t.Fatalf("temporary source stage=%q error=%v", DSNEvidenceStageOf(err), err)
+	}
+	mismatched := newDSNProfiles(t, "example.net")
+	mismatched.profiles[testSigningDomain] = mismatched.profiles["example.net"]
+	evidence, _, err = resolveDSN(t, fixture, outer, "", mismatched)
+	if evidence.Resolved() || DSNEvidenceStageOf(err) != DSNEvidenceStageSigningDomain ||
+		!errors.Is(err, newSigningError(SigningErrorInvalidRequest)) {
+		t.Fatalf("mismatched profile stage=%q error=%v", DSNEvidenceStageOf(err), err)
+	}
+	unresolved, err := fixture.facade.EvaluateDSNForSigning(context.Background(),
+		NewPostfixDSNSigningEvidenceRequest(outer, []byte("<>"), [][]byte{[]byte("<alice@example.test>")}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, _, err := signEvaluatedDSN(t, fixture, outer, unresolved, fixture.profile)
+	if result.Valid() || !errors.Is(err, newSigningError(SigningErrorInvalidRequest)) {
+		t.Fatalf("unresolved evidence signed result=%t error=%v", result.Valid(), err)
+	}
+}
+
+// TestPostfixDSNPreferenceKeepsEmbeddedEvidenceGates proves a preferred
+// identity relaxes nothing: unlinked outer recipients and tampered originals
+// still fail closed before any profile lookup.
+func TestPostfixDSNPreferenceKeepsEmbeddedEvidenceGates(t *testing.T) {
 	fixture := newPublicSigningFixture(t)
 	original := signDSNOriginal(t, fixture)
-	reporting, err := NewDSNIdentity("example.net")
+	preferred, err := NewDSNIdentity(testSigningDomain)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -565,17 +666,15 @@ func TestPostfixReportingDSNKeepsEmbeddedEvidenceGates(t *testing.T) {
 		name       string
 		outer      []byte
 		recipients [][]byte
-		identity   DSNIdentity
 		stage      DSNEvidenceStage
 	}{
-		{name: "invalid identity", outer: reportingMTADSN(original, "mx.example.net"), recipients: [][]byte{[]byte("<alice@example.test>")}, stage: DSNEvidenceStagePreflight},
-		{name: "foreign outer recipient", outer: reportingMTADSN(original, "mx.example.net"), recipients: [][]byte{[]byte("<mallory@example.test>")}, identity: reporting, stage: DSNEvidenceStageOuterRecipientLinkage},
-		{name: "tampered original", outer: reportingMTADSN(bytes.Replace(original, []byte("original body"), []byte("altered body"), 1), "mx.example.net"), recipients: [][]byte{[]byte("<alice@example.test>")}, identity: reporting, stage: DSNEvidenceStageEmbeddedVerification},
+		{name: "foreign outer recipient", outer: dsnReport(original, "MAILER-DAEMON@example.test", "mx.example.test", "bob@example.test"), recipients: [][]byte{[]byte("<mallory@example.test>")}, stage: DSNEvidenceStageOuterRecipientLinkage},
+		{name: "tampered original", outer: dsnReport(bytes.Replace(original, []byte("original body"), []byte("altered body"), 1), "MAILER-DAEMON@example.test", "mx.example.test", "bob@example.test"), recipients: [][]byte{[]byte("<alice@example.test>")}, stage: DSNEvidenceStageEmbeddedVerification},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
-			evidence, err := fixture.facade.EvaluateDSNForSigning(context.Background(), NewPostfixReportingDSNSigningEvidenceRequest(
-				testCase.outer, []byte("<>"), testCase.recipients, testCase.identity,
-			))
+			evidence, err := fixture.facade.EvaluateDSNForSigning(context.Background(), NewPostfixDSNSigningEvidenceRequest(
+				testCase.outer, []byte("<>"), testCase.recipients,
+			).WithPreferredIdentity(preferred))
 			if evidence.Valid() || DSNEvidenceStageOf(err) != testCase.stage {
 				t.Fatalf("evidence valid=%t stage=%q error=%v", evidence.Valid(), DSNEvidenceStageOf(err), err)
 			}

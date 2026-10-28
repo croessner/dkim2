@@ -316,6 +316,15 @@ func TestFailClosedMatrix(t *testing.T) {
 			outcome:    observability.OutcomeDiscardedNullPreviousSender,
 			replyClass: observability.ReplyAccepted,
 		},
+		"identity misaligned": {
+			body: propagateBody("pass", "discard", map[string]any{
+				keyProjection: projection("forbidden_identity_misaligned"),
+			}),
+			policy:     config.PermanentFailureReject,
+			reply:      lmtp.ReplyAccepted,
+			outcome:    observability.OutcomeDiscardedIdentityMisaligned,
+			replyClass: observability.ReplyAccepted,
+		},
 		"unsupported chain": {
 			body:       propagateBody("pass", "discard", map[string]any{keyProjection: projection("unsupported_chain")}),
 			policy:     config.PermanentFailureReject,

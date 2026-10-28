@@ -337,10 +337,12 @@ SMTPUTF8 envelopes remain not applicable and continue unchanged. Malformed
 Milter callback syntax remains fail-closed. The implementation does not infer
 DSN signing authority from message headers, HELO, recipients, suffixes,
 wildcards, tenant defaults, or caller-selected domains. It verifies the
-embedded DKIM2 object first and resolves `delivery_status` policy by the exact
-canonical authenticated highest `d=` value, or, when the operator sets
-`signing.policy.delivery_status.reporting_domain`, by that reporting MTA
-domain (see below).
+embedded DKIM2 object first and then chooses the signing domain under
+draft-ietf-dkim-dkim2-spec-08 Section 16.2: only a local `delivery_status`
+profile domain that relaxed-matches an `rt=` address of the highest
+DKIM2-Signature of the returned original, and whose domain makes the report
+From Authentic, can sign (see below). Otherwise the report leaves unsigned
+with HTTP 204 and an `X-DKIM2-Unsigned-Reason`.
 
 A returned original that carries no `DKIM2-Signature` header field at all is
 outside draft-ietf-dkim-dkim2-spec Section 16, which defines DSN handling only
@@ -495,21 +497,34 @@ replacement. `exploded` is never configuration: signing derives it only from a
 sealed multi-copy route plan.
 
 `signing.policy.delivery_status.reporting_domain` is optional and absent by
-default. Draft-08 Section 12.4 requires an MTA-generated DSN's From to be
-Authentic for its signing domain, and Postfix writes
-`From: MAILER-DAEMON@$myhostname`. Set it to the reporting MTA's own domain
-(the domain at or above `$myhostname`) so that `POST /v1/dsn/sign` signs every
-bounce under that domain's `delivery_status` policy instead of the embedded
-original's `d=`; without it, a bounce for any other domain fails with
-`chain_failure`. With the setting, bounces of inbound mail
-whose verified original carries a foreign `d=` are signed as well; the outer
-recipient must still equal that original's verified `mf=`. A reporting domain
-that is not at or above the bounce From domain fails every bounce closed with
-`chain_failure`. The value must be one canonical lowercase DNS domain with at
-least two labels and a non-numeric top label. Any other value is refused at
-load time, and the key is invalid with `signing.backend: disabled`. The
-embedded evidence is verified exactly as without the setting. The environment
-override is `DKIM2D_SIGNING_POLICY_DELIVERY_STATUS_REPORTING_DOMAIN`.
+default. It is the preferred Section 16.2 candidate of `POST /v1/dsn/sign`,
+not a signing identity of its own. The daemon signs a bounce only under a
+local `delivery_status` profile domain that relaxed-matches (Section 7.1 item
+4: the `rt=` address is Parameter1, `d=` is Parameter2) an `rt=` address of
+the highest DKIM2-Signature of the returned original and that makes the
+report's own From Authentic (Sections 11 and 12.4). Candidates are tried with
+RFC 3464-linked recipients first, then `reporting_domain` when it is itself a
+candidate, then the most specific domain, then octet order. A configured
+domain that does not match is never used. When no candidate has a profile,
+or none makes the From Authentic, the report leaves unsigned and unchanged
+(HTTP 204 with `X-DKIM2-Unsigned-Reason: delivery_status_identity_unavailable`
+or `delivery_status_from_not_authentic`) instead of failing. The value must be
+one canonical lowercase DNS domain with at least two labels and a non-numeric
+top label. Any other value is refused at load time, and the key is invalid
+with `signing.backend: disabled`. The environment override is
+`DKIM2D_SIGNING_POLICY_DELIVERY_STATUS_REPORTING_DOMAIN`.
+
+Behavior change of a stable path (Draft-08 migration): `reporting_domain` used
+to be the signing identity of every Postfix bounce and was signed even when it
+did not match the returned original's `rt=`; Draft-08 Section 16.2 forbids
+that. The path, its type, and its validation are unchanged; its meaning is now
+"preferred candidate when matching". Migration: keep the setting only if the
+domain is the recipient domain (or a parent) of the bounced mail you want
+signed under it, give every recipient domain whose bounces should be signed a
+`delivery_status` profile at or above that domain, and make sure the Postfix
+bounce From (`MAILER-DAEMON@$myorigin`) lies at or below that profile domain.
+See `docs/operator/postfix-compose.md` for the expected unsigned share and the
+`dkim2d_dsn_unsigned_total{unsigned_reason}` counter.
 
 `signing.policy.delivery_status.unsigned_original` is the explicit
 compatibility policy of `POST /v1/dsn/sign` for a returned original that carries
@@ -520,9 +535,10 @@ is invalid with `signing.backend: disabled`. The environment override is
 
 - `reject` keeps the fail-closed behavior: the operation answers
   `permerror`/`reject` and the Postfix DSN adapter refuses the bounce.
-- `continue` answers bodyless HTTP 204. The adapter continues without mutation
-  and Postfix delivers the bounce unsigned and unchanged, as a classic RFC 3464
-  notification.
+- `continue` answers bodyless HTTP 204 with
+  `X-DKIM2-Unsigned-Reason: unsigned_original`. The adapter continues without
+  mutation and Postfix delivers the bounce unsigned and unchanged, as a classic
+  RFC 3464 notification.
 
 The rationale is transitional: draft-ietf-dkim-dkim2-spec Section 16 defines
 DSNs only for DKIM2-signed originals and is silent about originals without a
@@ -536,7 +552,9 @@ case-insensitively, in either the `message/rfc822` or the
 is verified and signed, or refused, exactly as without the policy. Every other
 evidence failure is also unaffected. Each outcome is counted in
 `dkim2d_dsn_evidence_total` with `evidence_stage="embedded_unsigned"` and
-`result="failure"` (refused) or `result="not_applicable"` (left unsigned).
+`result="failure"` (refused) or `result="not_applicable"` (left unsigned);
+a report left unsigned is also counted in
+`dkim2d_dsn_unsigned_total{unsigned_reason="unsigned_original"}`.
 
 ### Optional interoperability header
 

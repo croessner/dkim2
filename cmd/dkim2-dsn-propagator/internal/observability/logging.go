@@ -53,6 +53,9 @@ const (
 	OutcomeDiscardedNotFailure TransactionOutcome = "discarded_not_failure"
 	// OutcomeDiscardedNullPreviousSender marks a forbidden null previous sender.
 	OutcomeDiscardedNullPreviousSender TransactionOutcome = "discarded_null_previous_sender"
+	// OutcomeDiscardedIdentityMisaligned marks a propagation whose signing
+	// domain cannot relaxed-match the previous hop's rt= address.
+	OutcomeDiscardedIdentityMisaligned TransactionOutcome = "discarded_identity_misaligned"
 	// OutcomeDiscardedUnsupportedChain marks an undescendable chain.
 	OutcomeDiscardedUnsupportedChain TransactionOutcome = "discarded_unsupported_chain"
 	// OutcomeDiscardedNotReconstructable marks an unrebuildable notification.
@@ -234,7 +237,7 @@ func closedVocabulary(key string) []string {
 	case keyTransactionOutcome:
 		return []string{
 			OutcomeAccepted, OutcomeRejected, OutcomeDiscardedTerminalOrigin,
-			OutcomeDiscardedNotFailure, OutcomeDiscardedNullPreviousSender,
+			OutcomeDiscardedNotFailure, OutcomeDiscardedNullPreviousSender, OutcomeDiscardedIdentityMisaligned,
 			OutcomeDiscardedUnsupportedChain, OutcomeDiscardedNotReconstructable,
 			OutcomeDiscardedUnprovisionedDomain, OutcomeDiscardedCommitted,
 			OutcomeDeferred, OutcomeContractFailure,

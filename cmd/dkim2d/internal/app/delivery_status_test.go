@@ -21,7 +21,8 @@ type deliveryStatusObservation struct {
 }
 
 type deliveryStatusObservationRecorder struct {
-	events []deliveryStatusObservation
+	events   []deliveryStatusObservation
+	unsigned []string
 }
 
 type deliveryStatusCancelingPublicKeys struct {
@@ -42,6 +43,11 @@ func (p *deliveryStatusCancelingPublicKeys) LookupPublicKey(
 // ObserveDSNEvidence records only the closed diagnostic pair under test.
 func (r *deliveryStatusObservationRecorder) ObserveDSNEvidence(stage, result string) {
 	r.events = append(r.events, deliveryStatusObservation{stage: stage, result: result})
+}
+
+// ObserveDSNUnsigned records one closed unsigned reason.
+func (r *deliveryStatusObservationRecorder) ObserveDSNUnsigned(reason string) {
+	r.unsigned = append(r.unsigned, reason)
 }
 
 // Acquire records forbidden profile access from an invalid DSN evidence request.
@@ -420,6 +426,10 @@ func TestSigningServiceContinuesUnsignedOriginalOnlyUnderExplicitPolicy(t *testi
 	if _, applicable := assessment.Result(); applicable {
 		t.Fatal("not-applicable delivery-status assessment exposed a result")
 	}
+	if reason, ok := assessment.UnsignedReason(); !ok || reason != DeliveryStatusUnsignedOriginal ||
+		len(recorder.unsigned) != 1 || recorder.unsigned[0] != string(DeliveryStatusUnsignedOriginal) {
+		t.Fatalf("unsigned reason=%q ok=%t observations=%v", reason, ok, recorder.unsigned)
+	}
 }
 
 // TestSigningServiceNeverRelaxesDKIM2OriginalsUnderContinuePolicy proves the
@@ -741,52 +751,128 @@ func TestSigningServiceSelectsTwoDerivedDSNDomains(t *testing.T) {
 	}
 }
 
-// TestSigningServiceSignsBounceUnderReportingMTADomain reproduces a Postfix
-// bounce whose From is MAILER-DAEMON at the reporting MTA: under the derived
-// embedded d= the report cannot be Authentic (Draft-08 Section 12.4) and is
-// refused, while the configured reporting identity resolves that domain's
-// delivery_status profile and signs it.
-func TestSigningServiceSignsBounceUnderReportingMTADomain(t *testing.T) {
+// embeddedOriginal extracts the exact embedded original of a fixture report.
+func embeddedOriginal(t *testing.T, request DeliveryStatusRequest) []byte {
+	t.Helper()
+	raw := request.RawMessage()
+	start := bytes.Index(raw, []byte("Content-Type: message/rfc822\r\n\r\n"))
+	end := bytes.LastIndex(raw, []byte("\r\n--dsn--\r\n"))
+	if start < 0 || end <= start {
+		t.Fatal("fixture report has no embedded original")
+	}
+	return raw[start+len("Content-Type: message/rfc822\r\n\r\n") : end]
+}
+
+// assertDeliveryStatusUnsigned requires the mutation-free unsigned
+// assessment with one closed reason and its single observation.
+func assertDeliveryStatusUnsigned(
+	t *testing.T,
+	assessment SigningAssessment,
+	err error,
+	recorder *deliveryStatusObservationRecorder,
+	want DeliveryStatusUnsignedReason,
+) {
+	t.Helper()
+	reason, unsigned := assessment.UnsignedReason()
+	if err != nil || !assessment.Valid() || assessment.Applicable() || !unsigned || reason != want ||
+		len(recorder.unsigned) != 1 || recorder.unsigned[0] != string(want) {
+		t.Fatalf("assessment valid=%t applicable=%t reason=%q error=%v observations=%v",
+			assessment.Valid(), assessment.Applicable(), reason, err, recorder.unsigned)
+	}
+}
+
+// TestSigningServiceSignsBounceUnderRecipientProfileNotReportingDomain
+// reproduces Draft-08 Section 16.2 on the daemon route. The reported message's
+// highest rt= is under profile A (origin.example.test) while reporting_domain
+// is B (alternate.example.test). B never signs because it does not
+// relaxed-match rt=; a Postfix From MAILER-DAEMON@mx.<A> is signed with A, and
+// a From under B leaves the report unsigned as from_not_authentic.
+func TestSigningServiceSignsBounceUnderRecipientProfileNotReportingDomain(t *testing.T) {
+	fixture := newSigningServiceFixture(t)
+	identity, err := dkim2.NewDSNIdentity(signingServiceAlternateDomain)
+	if err != nil {
+		t.Fatal(err)
+	}
+	service, err := NewSigningService(fixture.publicKeys, fixture.runtime, false,
+		signingPolicies{reportingIdentity: identity})
+	if err != nil {
+		t.Fatal(err)
+	}
+	service.clock = func() time.Time { return time.Unix(1_700_000_000, 0) }
+	baseStore := service.store
+	original := embeddedOriginal(t, authenticatedDeliveryStatusRequest(t, service))
+
+	matchingHost := "mx." + signingServiceOriginDomain
+	matching := deliveryStatusRequestReportedBy(
+		t, signingServiceOriginDomain, "MAILER-DAEMON@"+matchingHost, matchingHost, original,
+	)
+	recorder := &deliveryStatusPolicyRecorder{next: baseStore}
+	service.store = recorder
+	result, err := signDeliveryStatusResult(context.Background(), t, service, matching)
+	assertSigningServicePass(t, result, err, signingServiceDSNSelector)
+	if slices.Contains(recorder.domains, signingServiceAlternateDomain) ||
+		len(recorder.domains) != 1 || recorder.domains[0] != signingServiceOriginDomain {
+		t.Fatalf("policy route domains=%v", recorder.domains)
+	}
+
+	foreignHost := "mx." + signingServiceAlternateDomain
+	foreign := deliveryStatusRequestReportedBy(
+		t, signingServiceOriginDomain, "MAILER-DAEMON@"+foreignHost, foreignHost, original,
+	)
+	recorder = &deliveryStatusPolicyRecorder{next: baseStore}
+	service.store = recorder
+	observations := &deliveryStatusObservationRecorder{}
+	service.attachObservability(observations)
+	assessment, err := service.SignDeliveryStatus(context.Background(), foreign)
+	assertDeliveryStatusUnsigned(t, assessment, err, observations, DeliveryStatusFromNotAuthentic)
+	if slices.Contains(recorder.domains, signingServiceAlternateDomain) {
+		t.Fatalf("non-matching reporting domain reached the datasource: %v", recorder.domains)
+	}
+}
+
+// TestSigningServiceLeavesSenderSideBounceUnsigned reproduces the sender-side
+// bounce: the highest embedded signature is ours and its rt= is remote, so no
+// local delivery_status profile can relaxed-match it (Draft-08 Section 16.2)
+// and the report leaves unsigned as identity_unavailable instead of failing.
+func TestSigningServiceLeavesSenderSideBounceUnsigned(t *testing.T) {
 	fixture := newSigningServiceFixture(t)
 	service, err := NewSigningService(fixture.publicKeys, fixture.runtime, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	service.clock = func() time.Time { return time.Unix(1_700_000_000, 0) }
-	baseStore := service.store
-	signed := authenticatedDeliveryStatusRequest(t, service)
-	embedded := signed.RawMessage()
-	start := bytes.Index(embedded, []byte("Content-Type: message/rfc822\r\n\r\n"))
-	end := bytes.LastIndex(embedded, []byte("\r\n--dsn--\r\n"))
-	if start < 0 || end <= start {
-		t.Fatal("fixture report has no embedded original")
-	}
-	original := embedded[start+len("Content-Type: message/rfc822\r\n\r\n") : end]
-	reportingHost := "mx." + signingServiceAlternateDomain
-	request := deliveryStatusRequestReportedBy(
-		t, signingServiceOriginDomain, "MAILER-DAEMON@"+reportingHost, reportingHost, original,
+	domain := signingServiceOriginDomain
+	remote := "<recipient@remote.example.net>"
+	originalRaw := []byte("From: sender@" + domain + "\r\nTo: recipient@remote.example.net\r\n\r\noriginal body\r\n")
+	originalRequest, err := NewOperationRequest(
+		OperationSign, originalRaw, []byte("<sender@"+domain+">"), [][]byte{[]byte(remote)},
+		signingServiceTestTenant, domain, FidelityRawRFC5322,
 	)
-
-	derived, err := signDeliveryStatusResult(context.Background(), t, service, request)
-	if err != nil || !derived.Valid() || derived.Result() != OperationPermerror ||
-		derived.Disposition() != OperationReject || len(derived.Fields()) != 0 {
-		t.Fatalf("derived identity result=%v error=%v", derived, err)
-	}
-
-	identity, err := dkim2.NewDSNIdentity(signingServiceAlternateDomain)
 	if err != nil {
 		t.Fatal(err)
 	}
-	service.policies.reportingIdentity = identity
-	recorder := &deliveryStatusPolicyRecorder{next: baseStore}
-	service.store = recorder
-	result, err := signDeliveryStatusResult(context.Background(), t, service, request)
-	assertSigningServicePass(t, result, err, signingServiceAlternateDSNSelector)
-	if recorder.acquires != 1 || len(recorder.domains) != 1 ||
-		recorder.domains[0] != signingServiceAlternateDomain ||
-		len(recorder.uses) != 1 || recorder.uses[0] != signingstore.PolicyDeliveryStatus {
-		t.Fatalf("reporting policy route domains=%v uses=%v acquires=%d", recorder.domains, recorder.uses, recorder.acquires)
+	originalAssessment, err := service.Sign(context.Background(), originalRequest)
+	if err != nil {
+		t.Fatal(err)
 	}
+	signed, applicable := originalAssessment.Result()
+	if !applicable {
+		t.Fatal("originator signing was not applicable")
+	}
+	embedded := insertSigningServiceFields(signed.Fields(), originalRaw)
+	outer := []byte("From: MAILER-DAEMON@" + domain + "\r\n" +
+		"Content-Type: multipart/report; report-type=delivery-status; boundary=dsn\r\n\r\n" +
+		"--dsn\r\nContent-Type: text/plain\r\n\r\nhuman\r\n" +
+		"--dsn\r\nContent-Type: message/delivery-status\r\n\r\nReporting-MTA: dns; " + domain + "\r\n\r\nFinal-Recipient: rfc822; recipient@remote.example.net\r\nAction: failed\r\nStatus: 5.1.1\r\n\r\n" +
+		"--dsn\r\nContent-Type: message/rfc822\r\n\r\n" + string(embedded) + "\r\n--dsn--\r\n")
+	request, err := NewPostfixDeliveryStatusRequest(outer, []byte("<>"), [][]byte{[]byte("<sender@" + domain + ">")}, signingServiceTestTenant)
+	if err != nil {
+		t.Fatal(err)
+	}
+	observations := &deliveryStatusObservationRecorder{}
+	service.attachObservability(observations)
+	assessment, err := service.SignDeliveryStatus(context.Background(), request)
+	assertDeliveryStatusUnsigned(t, assessment, err, observations, DeliveryStatusIdentityUnavailable)
 }
 
 // TestSigningServiceReportingIdentityKeepsEvidenceGates proves the reporting
@@ -843,7 +929,10 @@ func TestSigningPoliciesFromConfigMapsReportingIdentity(t *testing.T) {
 }
 
 // TestSigningServiceClassifiesDerivedDSNPolicyFailures proves policy lookup
-// happens only after authentication and retains fail-closed resolution classes.
+// happens only after authentication and retains fail-closed resolution
+// classes. Draft-08 Section 16.2 changed the absent-profile row: a report
+// without any matching delivery_status profile now leaves unsigned with the
+// identity_unavailable reason instead of being rejected.
 func TestSigningServiceClassifiesDerivedDSNPolicyFailures(t *testing.T) {
 	fixture := newSigningServiceFixture(t)
 	base, err := NewSigningService(fixture.publicKeys, fixture.runtime, false)
@@ -855,10 +944,13 @@ func TestSigningServiceClassifiesDerivedDSNPolicyFailures(t *testing.T) {
 	for _, testCase := range []struct {
 		name        string
 		err         error
+		unsigned    DeliveryStatusUnsignedReason
 		result      OperationResultClass
 		disposition OperationDisposition
 	}{
-		{name: "missing", err: provider.NewError(provider.ErrorCodeNotFound), result: OperationPermerror, disposition: OperationReject},
+		{name: "missing", err: provider.NewError(provider.ErrorCodeNotFound), unsigned: DeliveryStatusIdentityUnavailable},
+		{name: "inactive", err: provider.NewError(provider.ErrorCodeInactive), unsigned: DeliveryStatusIdentityUnavailable},
+		{name: "malformed profile data", err: provider.NewError(provider.ErrorCodeMalformedData), result: OperationPermerror, disposition: OperationReject},
 		{name: "ambiguous", err: provider.NewError(provider.ErrorCodeAmbiguous), result: OperationTemperror, disposition: OperationTempfail},
 		{name: "provider unavailable", err: provider.NewError(provider.ErrorCodeUnavailable), result: OperationTemperror, disposition: OperationTempfail},
 	} {
@@ -867,6 +959,13 @@ func TestSigningServiceClassifiesDerivedDSNPolicyFailures(t *testing.T) {
 				publicKeys: fixture.publicKeys,
 				store:      policyFailureAuthority{err: testCase.err},
 				clock:      base.clock,
+			}
+			if testCase.unsigned != "" {
+				observations := &deliveryStatusObservationRecorder{}
+				service.attachObservability(observations)
+				assessment, err := service.SignDeliveryStatus(context.Background(), request)
+				assertDeliveryStatusUnsigned(t, assessment, err, observations, testCase.unsigned)
+				return
 			}
 			result, err := signDeliveryStatusResult(context.Background(), t, service, request)
 			if err != nil || !result.Valid() || result.Result() != testCase.result ||

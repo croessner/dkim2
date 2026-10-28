@@ -278,7 +278,8 @@ func receivedDSNObservation(projection DeliveryStatusProjection) (string, string
 	case dkim2.ReceivedDSNPropagationNotFailure:
 		return receivedDSNStageFailureClass, receivedDSNResultOK
 	case dkim2.ReceivedDSNPropagationTerminalOrigin, dkim2.ReceivedDSNPropagationUnsupportedChain,
-		dkim2.ReceivedDSNPropagationForbiddenNullPreviousSender, dkim2.ReceivedDSNPropagationNotReconstructable:
+		dkim2.ReceivedDSNPropagationForbiddenNullPreviousSender, dkim2.ReceivedDSNPropagationForbiddenIdentityMisaligned,
+		dkim2.ReceivedDSNPropagationNotReconstructable:
 		return receivedDSNStagePreviousHop, receivedDSNResultOK
 	default:
 		return receivedDSNStageCompleted, receivedDSNResultOK

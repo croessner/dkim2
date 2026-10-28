@@ -100,20 +100,24 @@ type EvidenceRequest struct {
 	PostfixBounceOrder bool
 }
 
-// Evidence stores the authenticated embedded DKIM2 target without retaining message content.
+// Evidence stores the authenticated embedded DKIM2 target without retaining
+// message content. recipientLinked is index-aligned with recipientDomains and
+// recipientPaths and records which highest-signature rt= paths a structurally
+// complete RFC 3464 recipient group names; it is set only by Evaluate.
 type Evidence struct {
 	form             EvidenceForm
 	target           verify.Target
 	mailFrom         []byte
-	signingDomain    string
 	recipientDomains []string
 	recipientPaths   [][]byte
+	recipientLinked  []bool
 }
 
 // Valid reports whether the evidence binds one supported original representation to an authenticated target.
 func (e Evidence) Valid() bool {
 	return (e.form == EvidenceFormComplete || e.form == EvidenceFormHeadersOnly) && e.target.Sequence > 0 && e.target.InstanceNumber > 0 &&
-		len(e.mailFrom) > 0 && !bytes.Equal(e.mailFrom, []byte("<>")) && e.signingDomain != "" && len(e.recipientDomains) > 0
+		len(e.mailFrom) > 0 && !bytes.Equal(e.mailFrom, []byte("<>")) && len(e.recipientDomains) > 0 &&
+		len(e.recipientPaths) == len(e.recipientDomains)
 }
 
 // Form returns the retained original representation.
@@ -129,11 +133,6 @@ func (e Evidence) Target() verify.Target {
 // MailFrom returns a detached exact highest-signature mf= path. It is retained
 // only to bind the outer DSN recipient to the authenticated original sender.
 func (e Evidence) MailFrom() []byte { return bytes.Clone(e.mailFrom) }
-
-// SigningDomain returns the canonical d= domain from the authenticated highest embedded DKIM2 signature.
-func (e Evidence) SigningDomain() string {
-	return e.signingDomain
-}
 
 // RecipientDomains returns detached canonical DNS domains from every highest embedded rt= recipient.
 func (e Evidence) RecipientDomains() []string {
@@ -194,10 +193,7 @@ func (e EvidenceEvaluator) Evaluate(ctx context.Context, request EvidenceRequest
 		if evidenceErr != nil {
 			return Evidence{}, newEvidenceError(EvidenceErrorCodeInvalidEmbeddedClaims, evidenceErr)
 		}
-		if !deliveryStatusLinksRecipient(request.Report, evidence.recipientPaths, request.PostfixBounceOrder) {
-			return Evidence{}, newEvidenceError(EvidenceErrorCodeDeliveryStatusLinkage, nil)
-		}
-		return evidence, nil
+		return withDeliveryStatusLinkage(request, evidence)
 	case ContentTypeRFC822Headers:
 		headerEvidence, verifyErr := e.verifier.VerifyDeliveryStatusHeadersOnly(ctx, verificationRequest)
 		if verifyErr != nil {
@@ -210,10 +206,7 @@ func (e EvidenceEvaluator) Evaluate(ctx context.Context, request EvidenceRequest
 		if evidenceErr != nil {
 			return Evidence{}, newEvidenceError(EvidenceErrorCodeInvalidEmbeddedClaims, evidenceErr)
 		}
-		if !deliveryStatusLinksRecipient(request.Report, evidence.recipientPaths, request.PostfixBounceOrder) {
-			return Evidence{}, newEvidenceError(EvidenceErrorCodeDeliveryStatusLinkage, nil)
-		}
-		return evidence, nil
+		return withDeliveryStatusLinkage(request, evidence)
 	default:
 		return Evidence{}, newEvidenceError(EvidenceErrorCodeInvalidEmbeddedMessage, nil)
 	}
@@ -261,7 +254,7 @@ func authenticatedEvidenceFrom(form EvidenceForm, signatures []signature.Signatu
 		}
 		return Evidence{
 			form: form, target: target, mailFrom: bytes.Clone(mailFrom),
-			signingDomain: parsed.Domain(), recipientDomains: domains, recipientPaths: paths,
+			recipientDomains: domains, recipientPaths: paths,
 		}, nil
 	}
 	return Evidence{}, newEvidenceError(EvidenceErrorCodeInvalidEmbeddedClaims, nil)
@@ -300,29 +293,74 @@ func deliveryStatusArrival(report Report, postfixBounceOrder bool) (time.Time, b
 	return time.Time{}, false
 }
 
+// withDeliveryStatusLinkage requires one complete RFC 3464 recipient group to
+// name an authenticated highest-signature rt= path and records, per rt= path,
+// whether it is linked. The per-path flags let the Draft-08 Section 16.2
+// identity order prefer RFC 3464-linked recipients.
+func withDeliveryStatusLinkage(request EvidenceRequest, evidence Evidence) (Evidence, error) {
+	linked, ok := deliveryStatusLinkedRecipients(request.Report, evidence.recipientPaths, request.PostfixBounceOrder)
+	if !ok {
+		return Evidence{}, newEvidenceError(EvidenceErrorCodeDeliveryStatusLinkage, nil)
+	}
+	evidence.recipientLinked = linked
+	return evidence, nil
+}
+
 // deliveryStatusLinksRecipient validates the bounded RFC 3464 field-block
 // structure and requires one complete recipient group to name an authenticated
 // highest-signature rt= path. Folding fails closed. RFC 3461 xtext is decoded
 // only for Original-Recipient; Final-Recipient is compared as its raw address.
 func deliveryStatusLinksRecipient(report Report, signed [][]byte, postfixBounceOrder bool) bool {
+	_, linked := deliveryStatusLinkedRecipients(report, signed, postfixBounceOrder)
+	return linked
+}
+
+// deliveryStatusLinkedRecipients applies the linkage rule of
+// deliveryStatusLinksRecipient and returns one flag per signed rt= path. The
+// strict sequence profile is tried first; the Postfix bounce profile only for
+// the trusted Postfix route and only when the strict profile links nothing.
+func deliveryStatusLinkedRecipients(report Report, signed [][]byte, postfixBounceOrder bool) ([]bool, bool) {
 	body := report.DeliveryStatus().BodyBytes()
 	defer clear(body)
-	if deliveryStatusBodyLinksRecipient(body, signed, deliveryStatusProfileStrictSequence) {
-		return true
+	if linked, ok := deliveryStatusBodyLinkedRecipients(body, signed, deliveryStatusProfileStrictSequence); ok {
+		return linked, true
 	}
-	return postfixBounceOrder && deliveryStatusBodyLinksRecipient(body, signed, deliveryStatusProfilePostfixBounce)
+	if !postfixBounceOrder {
+		return nil, false
+	}
+	return deliveryStatusBodyLinkedRecipients(body, signed, deliveryStatusProfilePostfixBounce)
 }
 
 // deliveryStatusBodyLinksRecipient validates one bounded RFC 3464 body under
 // the selected profile and reports whether a structurally complete recipient
 // group links to signed rt=. It retains no report facts after the comparison.
 func deliveryStatusBodyLinksRecipient(body []byte, signed [][]byte, profile deliveryStatusProfile) bool {
+	_, linked := deliveryStatusBodyLinkedRecipients(body, signed, profile)
+	return linked
+}
+
+// deliveryStatusBodyLinkedRecipients validates one bounded RFC 3464 body
+// under the selected profile and returns, index-aligned with signed, whether
+// a structurally complete recipient group names each rt= path. It reports
+// false when the body is invalid or links no path, and retains no report
+// facts after the comparison.
+func deliveryStatusBodyLinkedRecipients(body []byte, signed [][]byte, profile deliveryStatusProfile) ([]bool, bool) {
 	report, valid := parseDeliveryStatusBody(body, profile)
 	if !valid {
-		return false
+		return nil, false
 	}
 	defer report.clear()
-	return report.linksAny(signed)
+	linked := make([]bool, len(signed))
+	linkedAny := false
+	for index, path := range signed {
+		for _, recipient := range report.recipients {
+			if recipient.links([][]byte{path}) {
+				linked[index], linkedAny = true, true
+				break
+			}
+		}
+	}
+	return linked, linkedAny
 }
 
 // deliveryStatusProfile selects the RFC 3464 field-group rules of one parse.

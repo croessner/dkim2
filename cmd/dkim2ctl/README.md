@@ -44,7 +44,10 @@ distinct capability options. A `sign_dsn` fixture contains the byte-preserving
 outer DSN message, exact null outer envelope, and tenant; it has no caller-
 selected fidelity. The Postfix-exclusive route and its dedicated capability
 attest the representation. Its expected response operation is `delivery_status`.
-The daemon derives the domain only from verified embedded `d=` evidence.
+The daemon chooses the domain only among local profile domains that
+relaxed-match a verified embedded `rt=` address (Draft-08 Section 16.2); a
+report without such a domain is the 204 response, which must carry exactly one
+closed `X-DKIM2-Unsigned-Reason`.
 The two propagation fixture kinds require the fifth, distinct propagation
 capability option. A `propagate_dsn` fixture contains the byte-preserving
 received delivery-status notification, its selected fidelity, the observed

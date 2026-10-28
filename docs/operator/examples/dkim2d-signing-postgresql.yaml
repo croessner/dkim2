@@ -22,8 +22,9 @@ signing:
       # reject (default) refuses a bounce whose returned original carries no
       # DKIM2-Signature; continue lets it leave unsigned and unchanged.
       unsigned_original: reject
-      # Optional: sign Postfix bounces under the reporting MTA's own domain
-      # (at or above $myhostname) so their MAILER-DAEMON From is Authentic.
+      # Optional: preferred Draft-08 Section 16.2 signing domain. It is used
+      # only when it relaxed-matches an rt= recipient of the bounced message
+      # and lies at or above the bounce From (MAILER-DAEMON@$myorigin).
       # reporting_domain: reports.example.test
   postgresql:
     address: 192.0.2.20:5432

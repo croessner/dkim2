@@ -144,16 +144,23 @@ func TestEvaluateReceivedDSNRunAcrossNextDomainAndImaginaryHops(t *testing.T) {
 		propagation ReceivedDSNPropagation
 		runLength   int
 	}{
+		// Draft-08 Sections 16.2 and 16.3: the completion d= signs the
+		// propagated report, so the previous hop's rt= sits under it.
 		{name: "nd run", hops: []dsntest.Hop{
-			receivedDSNHop(receivedDSNRemoteDomain, "<sender@remote.example>", receivedDSNLocalRecipient),
+			receivedDSNHop(receivedDSNRemoteDomain, "<sender@remote.example>", receivedDSNForwardRecipient),
 			receivedDSNNextDomainHop(receivedDSNLocalDomain, receivedDSNForwardDomain),
 			receivedDSNHop(receivedDSNForwardDomain, receivedDSNForwardMailFrom, receivedDSNDestination),
 		}, propagation: ReceivedDSNPropagationEligible, runLength: 2},
 		{name: "imaginary hop run", hops: []dsntest.Hop{
-			receivedDSNHop(receivedDSNRemoteDomain, "<sender@remote.example>", receivedDSNLocalRecipient),
-			receivedDSNHop(receivedDSNLocalDomain, receivedDSNLocalRecipient, "<user@forward.local.example>"),
+			receivedDSNHop(receivedDSNRemoteDomain, "<sender@remote.example>", receivedDSNForwardRecipient),
+			receivedDSNHop(receivedDSNLocalDomain, receivedDSNForwardMailFrom, "<user@forward.local.example>"),
 			receivedDSNHop(receivedDSNForwardDomain, receivedDSNForwardMailFrom, receivedDSNDestination),
 		}, propagation: ReceivedDSNPropagationEligible, runLength: 2},
+		{name: "nd run identity misaligned", hops: []dsntest.Hop{
+			receivedDSNHop(receivedDSNRemoteDomain, "<sender@remote.example>", receivedDSNLocalRecipient),
+			receivedDSNNextDomainHop(receivedDSNLocalDomain, receivedDSNForwardDomain),
+			receivedDSNHop(receivedDSNForwardDomain, receivedDSNForwardMailFrom, receivedDSNDestination),
+		}, propagation: ReceivedDSNPropagationForbiddenIdentityMisaligned, runLength: 2},
 		{name: "non-verifying run member", hops: []dsntest.Hop{
 			receivedDSNHop(receivedDSNRemoteDomain, "<sender@remote.example>", receivedDSNLocalRecipient),
 			corruptMember,

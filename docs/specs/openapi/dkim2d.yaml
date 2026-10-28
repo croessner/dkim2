@@ -639,15 +639,23 @@ paths:
                 $ref: "#/components/schemas/OperationResponse"
         "204":
           description: >
-            Delivery-status signing is not applicable because the returned
-            original carries no DKIM2-Signature header field at all and the
-            daemon operator explicitly configured the compatibility policy
-            signing.policy.delivery_status.unsigned_original as continue. The
-            caller delivers the report unsigned and unchanged, as a classic
-            RFC 3464 notification, without a terminal decision or mutation.
-            Under the default reject policy this response is never produced.
-            A returned original carrying any DKIM2-Signature header field,
-            valid or not, is never relaxed.
+            The report cannot be DKIM2 signed and the caller delivers it
+            unsigned and unchanged, as a classic RFC 3464 notification,
+            without a terminal decision or mutation. The required
+            X-DKIM2-Unsigned-Reason header names the closed reason.
+            unsigned_original: the returned original carries no
+            DKIM2-Signature header field at all and the operator configured
+            signing.policy.delivery_status.unsigned_original as continue;
+            under the default reject policy this reason is never produced.
+            delivery_status_identity_unavailable: the embedded original
+            verified, but no local delivery_status profile domain
+            relaxed-matches an rt= address of its highest DKIM2-Signature
+            (Draft-08 Sections 7.1 item 4 and 16.2), for example a bounce of
+            a message this system sent to a remote recipient.
+            delivery_status_from_not_authentic: matching profile domains
+            exist, but none makes the report's own From header field
+            Authentic (Draft-08 Sections 11 and 12.4). A report is never
+            signed under a domain that fails either rule.
           headers:
             Cache-Control:
               $ref: "#/components/headers/CacheControl"
@@ -655,6 +663,8 @@ paths:
               $ref: "#/components/headers/Connection"
             Date:
               $ref: "#/components/headers/Date"
+            X-DKIM2-Unsigned-Reason:
+              $ref: "#/components/headers/UnsignedReason"
         "400":
           $ref: "#/components/responses/BadRequest"
         "403":
@@ -859,6 +869,17 @@ components:
       schema:
         type: string
         pattern: "^(Mon|Tue|Wed|Thu|Fri|Sat|Sun), [0-9]{2} (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) [0-9]{4} [0-9]{2}:[0-9]{2}:[0-9]{2} GMT$"
+    UnsignedReason:
+      description: >
+        Closed reason why a delivery-status report leaves unsigned. The value
+        never carries a domain, address, or other message-derived content.
+      required: true
+      schema:
+        type: string
+        enum:
+          - unsigned_original
+          - delivery_status_identity_unavailable
+          - delivery_status_from_not_authentic
     RetryAfter:
       description: Fixed retry delay in seconds.
       required: true
@@ -1750,6 +1771,7 @@ components:
             - terminal_origin
             - not_failure
             - forbidden_null_previous_sender
+            - forbidden_identity_misaligned
             - unsupported_chain
             - not_reconstructable
             - not_evaluated
@@ -1759,6 +1781,7 @@ components:
             - DeliveryStatusPropagationTerminalOrigin
             - DeliveryStatusPropagationNotFailure
             - DeliveryStatusPropagationForbiddenNullPreviousSender
+            - DeliveryStatusPropagationForbiddenIdentityMisaligned
             - DeliveryStatusPropagationUnsupportedChain
             - DeliveryStatusPropagationNotReconstructable
             - DeliveryStatusPropagationNotEvaluated

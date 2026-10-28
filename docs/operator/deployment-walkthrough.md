@@ -483,9 +483,13 @@ sequenceDiagram
    Section 16 addressing rule, and at least one RFC 3464 recipient must link to
    an authenticated `rt=`. The Postfix bounce wire form is admitted only on
    this capability-authenticated route.
-5. Only after verification does the daemon derive the signing domain from the
-   canonical authenticated highest embedded `d=` and resolve that tenant and
-   domain's `delivery_status` profile. The Milter configuration for this mode
+5. Only after verification does the daemon choose the signing domain under
+   Draft-08 Section 16.2: a tenant `delivery_status` profile domain that
+   relaxed-matches an `rt=` address of the original's highest DKIM2-Signature
+   and makes the bounce From (`MAILER-DAEMON@$myorigin`) Authentic. Without
+   such a domain the bounce leaves unsigned (HTTP 204 with
+   `X-DKIM2-Unsigned-Reason`, counted in `dkim2d_dsn_unsigned_total`); see
+   [postfix-compose.md](postfix-compose.md#dsn-signing-identity). The Milter configuration for this mode
    is `domain_source: verified_embedded` with no configured domain, so one
    instance can serve every local domain without trusting the outer envelope
    or a caller-selected domain.
@@ -618,7 +622,9 @@ no longer resolve after a restart, which is answered `409`, deferred as `451`,
 and re-served once the lease expires. Keeping the MTA's minimum retry interval
 above `dsn_propagation.pending_lease` is what stops that last window from
 wasting attempts. The outcomes `terminal_origin` (we originated it),
-`not_failure`, `forbidden_null_previous_sender`, `unsupported_chain`, and
+`not_failure`, `forbidden_null_previous_sender`,
+`forbidden_identity_misaligned` (the completion `d=` does not relaxed-match
+the previous hop's `rt=`, Draft-08 Section 16.2), `unsupported_chain`, and
 `not_reconstructable` are `discard`, each counted under its own class; a
 verification failure or a notification that is not ours is `reject`, which the
 adapter answers `550` or, under its single policy knob

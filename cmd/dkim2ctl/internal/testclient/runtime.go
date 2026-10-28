@@ -573,7 +573,9 @@ func validNoContentResponseMetadata(
 
 // validNoContentMetadata accepts only the OpenAPI operations with an explicit
 // bodyless applicability result (process, sign, and the delivery-status
-// unsigned-original compatibility no-op) and rejects representation metadata.
+// "not DKIM2 signed" outcome) and rejects representation metadata. The
+// delivery-status variant must carry exactly one closed
+// X-DKIM2-Unsigned-Reason; every other variant must carry none.
 func validNoContentMetadata(operation Operation, header http.Header, body []byte) bool {
 	if operation != OperationProcess && operation != OperationSign && operation != OperationDSNSign {
 		return false
@@ -582,7 +584,24 @@ func validNoContentMetadata(operation Operation, header http.Header, body []byte
 		headerPresent(header, headerContentType) || headerPresent(header, headerContentLength) {
 		return false
 	}
+	reason, present := optionalSingleHeader(header, headerUnsignedReason)
+	if (operation == OperationDSNSign) != present || present && !validUnsignedReason(reason) {
+		return false
+	}
 	return validOptionalDate(header)
+}
+
+// headerUnsignedReason names the closed delivery-status unsigned reason.
+const headerUnsignedReason = "X-DKIM2-Unsigned-Reason"
+
+// validUnsignedReason accepts exactly the OpenAPI UnsignedReason vocabulary.
+func validUnsignedReason(reason string) bool {
+	switch reason {
+	case "unsigned_original", "delivery_status_identity_unavailable", "delivery_status_from_not_authentic":
+		return true
+	default:
+		return false
+	}
 }
 
 // validOptionalDate accepts an absent Date field or one canonical HTTP-date.

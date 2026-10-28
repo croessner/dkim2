@@ -166,6 +166,7 @@ func validatePostfixFragments(fragments []PostfixQualificationFragment) error {
 		"postfix_bounce_dsn_evidence_signing",
 		"postfix_normal_cleanup_dsn_routing",
 		"postfix_received_visibility",
+		"postfix_sender_side_bounce_unsigned",
 		"smtp_milter_unavailable_tempfail",
 		"smtp_origin_signing",
 	}

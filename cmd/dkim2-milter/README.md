@@ -129,11 +129,13 @@ ordinary null-sender submission, absent or malformed EOH evidence, and more
 than one outer DSN recipient.
 
 `verified_embedded` is required for `postfix_dsn`; `domain` must be absent. The
-daemon verifies the embedded original first, derives the exact canonical
-highest `d=` (or uses its operator-configured
-`signing.policy.delivery_status.reporting_domain`), and only then resolves the
-tenant/domain `delivery_status` profile. Neither the outer null sender nor Milter configuration preselects the
-domain. Postfix DSN mode does not accept `envelope_sender` because the bounded
+daemon verifies the embedded original first and only then chooses the signing
+domain under draft-ietf-dkim-dkim2-spec-08 Section 16.2: a tenant
+`delivery_status` profile domain that relaxed-matches an `rt=` address of the
+original's highest DKIM2-Signature and makes the bounce From Authentic
+(`signing.policy.delivery_status.reporting_domain` is only a preferred
+candidate when it matches). Neither the outer null sender nor Milter
+configuration preselects the domain. Postfix DSN mode does not accept `envelope_sender` because the bounded
 Postfix contract intentionally carries no original envelope.
 
 A bounce whose returned original carries no `DKIM2-Signature` header field at
@@ -141,11 +143,18 @@ all is outside draft-ietf-dkim-dkim2-spec Section 16. The daemon refuses it by
 default, and the adapter then answers `550 5.7.1`, which leaves the original
 message queued at Postfix. When the daemon operator explicitly configures
 `signing.policy.delivery_status.unsigned_original: continue`, the daemon
-answers `/v1/dsn/sign` with bodyless HTTP 204 instead. The adapter accepts only
-the exact 204 envelope bound to `/v1/dsn/sign` (no body or representation
-headers, `Cache-Control: no-store`, `Connection: close`, HTTP/1.1, optional
-canonical `Date`) and continues without any mutation, so Postfix delivers the
-bounce unsigned and unchanged as a classic RFC 3464 notification. The policy
+answers `/v1/dsn/sign` with bodyless HTTP 204 instead. The daemon gives the
+same answer when Draft-08 forbids signing a verified bounce: no local profile
+domain relaxed-matches the original's `rt=` (for example a bounce of mail this
+system sent to a remote recipient), or none makes the bounce From Authentic.
+The adapter accepts only the exact 204 envelope bound to `/v1/dsn/sign` (no
+body or representation headers, `Cache-Control: no-store`, `Connection:
+close`, HTTP/1.1, optional canonical `Date`, exactly one
+`X-DKIM2-Unsigned-Reason` of `unsigned_original`,
+`delivery_status_identity_unavailable`, or
+`delivery_status_from_not_authentic`) and continues without any mutation, so
+Postfix delivers the bounce unsigned and unchanged as a classic RFC 3464
+notification. None of these outcomes tempfails or refuses the bounce. The policy
 lives only in the daemon; the adapter has no switch of its own. An original
 that carries any `DKIM2-Signature` field is never relaxed, and a malformed 204
 remains a contract failure handled by `failure.mode`.

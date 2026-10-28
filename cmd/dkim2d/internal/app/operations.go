@@ -347,15 +347,47 @@ type OperationResult struct {
 	valid       bool
 }
 
+// DeliveryStatusUnsignedReason is the closed reason why a delivery-status
+// report leaves unsigned and unchanged. The same vocabulary is the REST
+// X-DKIM2-Unsigned-Reason value and the dkim2d_dsn_unsigned_total label.
+type DeliveryStatusUnsignedReason string
+
+const (
+	// DeliveryStatusUnsignedOriginal reports a returned original without any
+	// DKIM2-Signature header field under the explicit continue policy.
+	DeliveryStatusUnsignedOriginal DeliveryStatusUnsignedReason = "unsigned_original"
+	// DeliveryStatusIdentityUnavailable reports that no local delivery_status
+	// profile domain relaxed-matches an rt= address of the reported
+	// message's highest DKIM2-Signature (Draft-08 Section 16.2).
+	DeliveryStatusIdentityUnavailable DeliveryStatusUnsignedReason = "delivery_status_identity_unavailable"
+	// DeliveryStatusFromNotAuthentic reports that matching profile domains
+	// exist but none makes the report From Authentic (Draft-08 Sections 11
+	// and 12.4).
+	DeliveryStatusFromNotAuthentic DeliveryStatusUnsignedReason = "delivery_status_from_not_authentic"
+)
+
+// Known reports whether the reason belongs to the closed vocabulary.
+func (r DeliveryStatusUnsignedReason) Known() bool {
+	switch r {
+	case DeliveryStatusUnsignedOriginal, DeliveryStatusIdentityUnavailable, DeliveryStatusFromNotAuthentic:
+		return true
+	default:
+		return false
+	}
+}
+
 // SigningAssessment separates signing applicability from an applicable
-// signing result so authoritative absence, or an explicitly configured
-// compatibility no-op, never becomes protocol failure. Only originator and
-// delivery-status signing have a not-applicable variant; revision never does.
+// signing result so authoritative absence, an explicitly configured
+// compatibility no-op, or a report that Draft-08 forbids signing never
+// becomes protocol failure. Only originator and delivery-status signing have
+// a not-applicable variant; revision never does. A not-applicable
+// delivery-status assessment always carries its closed unsigned reason.
 type SigningAssessment struct {
-	initialized bool
-	applicable  bool
-	operation   Operation
-	result      OperationResult
+	initialized    bool
+	applicable     bool
+	operation      Operation
+	result         OperationResult
+	unsignedReason DeliveryStatusUnsignedReason
 }
 
 // NewNotApplicableSigningAssessment constructs a mutation-free originator no-op.
@@ -363,12 +395,16 @@ func NewNotApplicableSigningAssessment() SigningAssessment {
 	return SigningAssessment{initialized: true, operation: OperationSign}
 }
 
-// NewNotApplicableDeliveryStatusAssessment constructs the mutation-free
-// delivery-status no-op issued only when the returned original carries no
-// DKIM2-Signature header field and the operator configured the continue
-// compatibility policy.
-func NewNotApplicableDeliveryStatusAssessment() SigningAssessment {
-	return SigningAssessment{initialized: true, operation: OperationDeliveryStatus}
+// NewUnsignedDeliveryStatusAssessment constructs the mutation-free
+// delivery-status outcome "not DKIM2 signed" for one closed reason: the
+// unsigned-original compatibility policy, or a report for which Draft-08
+// Section 16.2 or Sections 11 and 12.4 leave no signing identity. An unknown
+// reason yields the invalid zero assessment.
+func NewUnsignedDeliveryStatusAssessment(reason DeliveryStatusUnsignedReason) SigningAssessment {
+	if !reason.Known() {
+		return SigningAssessment{}
+	}
+	return SigningAssessment{initialized: true, operation: OperationDeliveryStatus, unsignedReason: reason}
 }
 
 // NewApplicableSigningAssessment seals exactly one valid originator or
@@ -388,11 +424,24 @@ func assessableOperation(operation Operation) bool {
 	return operation == OperationSign || operation == OperationDeliveryStatus
 }
 
-// Valid reports whether the assessment is one coherent closed variant.
+// Valid reports whether the assessment is one coherent closed variant: an
+// unsigned reason appears exactly on a not-applicable delivery-status variant.
 func (a SigningAssessment) Valid() bool {
+	unsignedDeliveryStatus := !a.applicable && a.operation == OperationDeliveryStatus
 	return a.initialized && assessableOperation(a.operation) &&
 		(a.applicable == a.result.Valid()) &&
-		(!a.applicable || a.result.Operation() == a.operation)
+		(!a.applicable || a.result.Operation() == a.operation) &&
+		(unsignedDeliveryStatus == a.unsignedReason.Known()) &&
+		(unsignedDeliveryStatus || a.unsignedReason == "")
+}
+
+// UnsignedReason returns the closed reason of a not-applicable
+// delivery-status assessment, or false for every other variant.
+func (a SigningAssessment) UnsignedReason() (DeliveryStatusUnsignedReason, bool) {
+	if !a.Valid() || a.applicable || a.operation != OperationDeliveryStatus {
+		return "", false
+	}
+	return a.unsignedReason, true
 }
 
 // Operation returns the assessed operation or the zero value when invalid.

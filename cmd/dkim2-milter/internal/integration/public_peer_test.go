@@ -498,6 +498,7 @@ func (s *generatedDaemonService) SignDeliveryStatus(
 		return generatedfixture.SignDeliveryStatus204Response{
 			Headers: generatedfixture.SignDeliveryStatus204ResponseHeaders{
 				CacheControl: publicResponseNoStore, Connection: publicResponseConnection,
+				XDKIM2UnsignedReason: "unsigned_original",
 			},
 		}, nil
 	}

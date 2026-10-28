@@ -346,11 +346,37 @@ func TestRebuildDSNForPropagationDerivesAuthorityFromCompletionSignature(t *test
 	member.Instance = 2
 	completion := receivedDSNHop(receivedDSNForwardDomain, receivedDSNForwardMailFrom, receivedDSNDestination)
 	completion.Instance = 2
-	nextDomainRun.Hops = []dsntest.Hop{nextDomainRun.Hops[0], member, completion}
+	// Draft-08 Sections 16.2 and 16.3: the previous hop's rt= sits under the
+	// completion d= that signs the propagated report.
+	nextDomainRun.Hops = []dsntest.Hop{alignedPropagationPrevious(nextDomainRun.Hops[0]), member, completion}
 	forwardFixture := newPropagationFixture(t, newPropagationProvider(receivedDSNLocalDomain, receivedDSNForwardDomain))
 	runEvidence := forwardFixture.mustRebuild(t, propagationCase{original: nextDomainRun, outerRecipient: receivedDSNForwardMailFrom, local: []string{receivedDSNLocalDomain, receivedDSNForwardDomain}})
 	if runEvidence.SigningDomain() != receivedDSNForwardDomain || runEvidence.Evaluation().LocalHopRunLength() != 2 {
 		t.Fatalf("run evidence domain=%q run=%d", runEvidence.SigningDomain(), runEvidence.Evaluation().LocalHopRunLength())
+	}
+}
+
+// TestRebuildDSNForPropagationRefusesMisalignedSigningIdentity reproduces
+// Draft-08 Sections 16.2 and 16.3 for propagation: the completion d=
+// (forward.local.example) would sign the propagated report, but the rebuilt
+// highest signature's rt= is user@local.example, a parent the completion
+// domain cannot relaxed-match. Propagation is refused before any rebuild.
+func TestRebuildDSNForPropagationRefusesMisalignedSigningIdentity(t *testing.T) {
+	misaligned := propagationOriginal(propagationFullRecipe)
+	member := receivedDSNNextDomainHop(receivedDSNLocalDomain, receivedDSNForwardDomain)
+	member.Instance = 2
+	completion := receivedDSNHop(receivedDSNForwardDomain, receivedDSNForwardMailFrom, receivedDSNDestination)
+	completion.Instance = 2
+	misaligned.Hops = []dsntest.Hop{misaligned.Hops[0], member, completion}
+	fixture := newPropagationFixture(t, newPropagationProvider(receivedDSNLocalDomain, receivedDSNForwardDomain))
+	request := propagationCase{
+		original: misaligned, outerRecipient: receivedDSNForwardMailFrom,
+		local: []string{receivedDSNLocalDomain, receivedDSNForwardDomain},
+	}.request(t)
+	evidence, err := fixture.signer.RebuildDSNForPropagation(context.Background(), request)
+	if err != nil || evidence.Rebuilt() || evidence.Outcome() != DSNPropagationNotEligible ||
+		evidence.Evaluation().Propagation() != ReceivedDSNPropagationForbiddenIdentityMisaligned || evidence.SigningDomain() != "" {
+		t.Fatalf("outcome=%q propagation=%q domain=%q error=%v", evidence.Outcome(), evidence.Evaluation().Propagation(), evidence.SigningDomain(), err)
 	}
 }
 

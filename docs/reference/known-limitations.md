@@ -34,6 +34,10 @@ certification, or universal interoperability claim.
   `{postfix_internal_origin}` macro and accepts only EOH-confirmed `bounce`
   with a null outer sender and one recipient. `notify`, `verify`, empty or
   absent values, and non-null double-bounce/postmaster copies remain unchanged.
+  A bounce is signed only when a local `delivery_status` profile domain
+  relaxed-matches an `rt=` recipient of the returned original (Draft-08
+  Section 16.2) and covers the bounce From; bounces of mail sent to remote
+  recipients always leave unsigned (`DKIM2-ISSUE-0023`).
   Received-DSN evaluation and Draft-08 Section 16.3 DSN propagation are
   implemented against
   [delivery-status-propagation.md](../specs/implementation/delivery-status-propagation.md)

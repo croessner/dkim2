@@ -217,7 +217,7 @@ There is no From replacement and no new action. A sender-side bounce (highest
 DS ours, `rt=` remote) can never match Section 16.2 and stays unsigned; this
 is recorded as a draft issue. Propagation (Section 16.3) gets the same
 `d=`/`rt=` check. DSN evidence keeps the current-target PASS gate, which is
-stricter than Section 16.2 Provisional Verification (local, unchanged by D5).
+stricter than Section 16.2 Provisional Verification (local, unchanged by D5). Implemented as recorded in Section 14.
 
 **D9 Trace placement.** Adopted at SHOULD level: adapters insert this hop's
 Message-Instance and DKIM2-Signature at the top of the header block (Milter
@@ -675,3 +675,111 @@ because the draft identifier is bound into the replay frame.
   1024 to 8192 bits, covering the Section 3.2 MUST range; tests prove both
   sides. Test fixtures that signed with 1024-bit keys moved to 2048 bits,
   including the public-facade RSA fixture and the candidate-digest golden.
+
+## 14. Delivery-status signing identity state
+
+- C8, C21, C38 to C40 and the reviewed DSN identity interpretation of
+  Section 5: no From replacement and no new adapter action. The normative basis, quoted from
+  spec-08:
+  - Section 16.2: "When creating a DSN there MUST be a relaxed domain match
+    between the Signing Domain (placed into the d= value of the
+    DKIM2-Signature header field of the DSN) and a recipient address in the
+    rt= value of the highest numbered DKIM2-Signature header field of the
+    message being reported upon (see Section 7.1 Item 4)."
+  - Section 7.1 item 4: "Signers of DSNs use this match when choosing d=" and
+    "The (decoded) value from rt= is Parameter1 to the algorithm, the d=
+    value is Parameter2." Section 7.2 steps 3 to 5 remove labels only from
+    the left of Parameter1, so `d=` must equal the `rt=` domain or a parent.
+  - Section 12.4: "the Signing Domain MUST be chosen so that the From header
+    field in the message will be Authentic (see Section 11)" and "If no
+    Signing Domain can make the From header field Authentic, the message
+    cannot ever be a Fully Verified DKIM2 Message." Section 11: "A From
+    header field is Authentic when there is a relaxed domain match (see
+    Section 7) between the email address in the From header field and the
+    Signing Domain found in the d= tag".
+  - Section 16.3: "The resultant DSN is sent to the MAIL FROM address from
+    the now highest numbered DKIM2-Signature header field. The DSN itself
+    MUST have only one DKIM2-Signature field and only one Message-Instance
+    header field: i.e. it is a new message."
+- Owner: `Signer.ResolveDSNSigningIdentity` (`lib/delivery_status.go`) over
+  `dsn.Evidence.SigningIdentityCandidates` (`lib/internal/dsn/identity.go`).
+  Candidates are the `rt=` domains of the highest embedded DKIM2-Signature
+  and their parents, each admitted by `signature.RelaxedDomainMatch`, the
+  existing single owner of Section 7.2 (also used for custody, Section 14.4
+  alignment, Section 16.4 item 1, and From authenticity). Order: candidates
+  of RFC 3464-linked recipients (Final-Recipient or decoded
+  Original-Recipient) first; within that tier `reporting_domain` first when it
+  is itself a candidate; then more labels first; then ascending octet order.
+  At most 64 candidates (`dsn.MaxSigningIdentityCandidates`). The first
+  candidate with a local `delivery_status` profile whose domain makes the
+  report From Authentic (`verify.FromAuthenticFor`) is bound; `SignDSN`
+  accepts only bound evidence and the matching profile.
+- Removed: the derived identity "embedded highest `d=`"
+  (`DSNSigningEvidenceRequest.deriveIdentity`, `dsn.Evidence.SigningDomain`)
+  and the reporting identity that signed regardless of `rt=`. The public
+  constructors `NewDerivedDSNSigningEvidenceRequest`,
+  `NewPostfixDerivedDSNSigningEvidenceRequest`, and
+  `NewPostfixReportingDSNSigningEvidenceRequest` are gone;
+  `NewDSNSigningEvidenceRequest` takes no identity,
+  `NewPostfixDSNSigningEvidenceRequest` and `WithPreferredIdentity` are new.
+- Outcome "not DKIM2 signed": no candidate with a profile is the library
+  stage `identity_unavailable`; candidates with a profile but no Authentic
+  From is `from_not_authentic`. `dkim2d` maps them to the unsigned
+  assessment: `POST /v1/dsn/sign` answers 204 with the new required header
+  `X-DKIM2-Unsigned-Reason` (`delivery_status_identity_unavailable`,
+  `delivery_status_from_not_authentic`; the existing compatibility outcome is
+  `unsigned_original`). The Milter `postfix_dsn` adapter and `dkim2ctl`
+  require exactly one closed reason and continue without mutation (accept
+  without signature); neither outcome tempfails or rejects mail. The Exim
+  adapter has no DSN signing route, so nothing changes there. Provider
+  not-found, inactive, or invalid-domain answers count as absence; malformed
+  profile data or a profile for another domain is a permanent refusal; an
+  unavailable or ambiguous provider is temporary.
+- Metric: `dkim2d_dsn_unsigned_total{unsigned_reason}` and the log event
+  `dsn.unsigned.completed`, emitted through the central observability
+  runtime; the label is the closed three-value reason vocabulary only.
+- Configuration: the stable path
+  `signing.policy.delivery_status.reporting_domain` keeps its syntax and
+  validation; its meaning changed from "signing identity" to "preferred
+  candidate when matching". The behavior change and migration notes are in
+  `cmd/dkim2d/README.md` and `docs/operator/postfix-compose.md` (Postfix
+  `MAILER-DAEMON@$myorigin` must sit at or below the DSN signing domain;
+  multi-domain hosts get signed DSNs only for recipient domains under a
+  matching profile; expected unsigned share).
+- Propagation (Section 16.3): the propagated report is signed by the
+  completion `d=`, and the rebuilt report's highest signature is the
+  previous hop, so that `d=` must relaxed-match the previous hop's `rt=`.
+  `classifyPreviousHop` refuses otherwise with the new propagation value
+  `forbidden_identity_misaligned` (library `ReceivedDSNPropagation`, OpenAPI
+  `DeliveryStatusProjection.propagation`, Rspamd vocabulary, propagation
+  matrix `pass`/`discard`, propagator outcome
+  `discarded_identity_misaligned`). Fixtures whose run members used sibling
+  domains were moved under the completion domain; the received-DSN and
+  propagation golden corpora gained one misaligned case each and were
+  regenerated.
+- Sender-side bounce: the highest embedded signature is ours and its `rt=` is
+  remote, so Section 16.2 can never be satisfied while Section 16.2 also
+  requires "appropriate Message-Instance and DKIM2-Signature fields". The
+  report leaves unsigned (`delivery_status_identity_unavailable`), recorded as
+  `DKIM2-ISSUE-0023`.
+- Kept local rule: DSN evidence still requires the embedded current target to
+  PASS. Section 16.2 says "The assurances in this section depend on the
+  message being reported upon having been Provisionally Verified", so this
+  gate is stricter than the draft and stays local policy (pass/non-pass was
+  not changed by the states and reasons remap).
+- Postfix qualification: the core lane now bounces one message to a failing
+  recipient under the local profile domain (`failed.origin.example.test`),
+  whose report must be signed with `d=origin.example.test`, and one to a
+  remote failing recipient, whose report must be delivered without
+  Message-Instance or DKIM2-Signature (new case
+  `postfix_sender_side_bounce_unsigned`).
+- Tests: candidate order (relaxed-match direction, longest domain,
+  RFC 3464-linked recipients, reporting domain only when matching,
+  determinism and bound), the library resolver (rt=-matching profile A signs
+  although `reporting_domain` is B, longest profile, linked recipient, no
+  matching profile, From mismatch and multi-address From, sender-side bounce,
+  profile source failures, unresolved evidence refused by `SignDSN`), the
+  daemon route (unsigned reasons, observation, absent/inactive/malformed/
+  ambiguous/unavailable profiles), REST 204 header mapping and OpenAPI
+  contract, Milter and `dkim2ctl` reason admission, propagation refusal
+  (internal, library, golden vectors, propagator outcome).

@@ -87,6 +87,19 @@ is independently observed.
   `mldsa44-ed25519` in its Section 3.3 table but `mldsa44-ed25519-sha512` in
   the Section 3.4.1 ABNF. Both spellings are unsupported key types.
 
+## Delivery-status identity
+
+- `DKIM2-ISSUE-0023` records that Draft-08 Section 16.2 requires both
+  "appropriate Message-Instance and DKIM2-Signature fields" on a DSN and a
+  relaxed domain match between the DSN's `d=` and an `rt=` address of the
+  reported message's highest DKIM2-Signature. For a sender-side bounce (the
+  highest signature is this system's and its `rt=` is a remote recipient) no
+  local domain can satisfy the match, so both MUSTs cannot hold at once. The
+  implementation never signs with a non-matching `d=`: such a report leaves
+  unsigned as a classic RFC 3464 notification with the reason
+  `delivery_status_identity_unavailable`. The same outcome applies when no
+  local `delivery_status` profile covers a recipient domain.
+
 The repository has not filed, commented on, or modified any upstream issue as
 part of this release-candidate work.
 
@@ -98,5 +111,5 @@ part of this release-candidate work.
 `DKIM2-ISSUE-0010`, `DKIM2-ISSUE-0011`, `DKIM2-ISSUE-0012`,
 `DKIM2-ISSUE-0013`, `DKIM2-ISSUE-0014`, `DKIM2-ISSUE-0015`,
 `DKIM2-ISSUE-0016`, `DKIM2-ISSUE-0017`, `DKIM2-ISSUE-0018`,
-`DKIM2-ISSUE-0019`, `DKIM2-ISSUE-0020`, `DKIM2-ISSUE-0021`, and
-`DKIM2-ISSUE-0022`.
+`DKIM2-ISSUE-0019`, `DKIM2-ISSUE-0020`, `DKIM2-ISSUE-0021`,
+`DKIM2-ISSUE-0022`, and `DKIM2-ISSUE-0023`.

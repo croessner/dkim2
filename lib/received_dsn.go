@@ -118,6 +118,10 @@ const (
 	ReceivedDSNPropagationNotFailure ReceivedDSNPropagation = "not_failure"
 	// ReceivedDSNPropagationForbiddenNullPreviousSender reports a previous hop with mf=<>.
 	ReceivedDSNPropagationForbiddenNullPreviousSender ReceivedDSNPropagation = "forbidden_null_previous_sender"
+	// ReceivedDSNPropagationForbiddenIdentityMisaligned reports a completion
+	// d= that does not relaxed-match the previous hop's rt= address, so the
+	// propagated report would violate Draft-08 Section 16.2.
+	ReceivedDSNPropagationForbiddenIdentityMisaligned ReceivedDSNPropagation = "forbidden_identity_misaligned"
 	// ReceivedDSNPropagationUnsupportedChain reports an nd= previous hop or a non-verifying run member.
 	ReceivedDSNPropagationUnsupportedChain ReceivedDSNPropagation = "unsupported_chain"
 	// ReceivedDSNPropagationNotReconstructable reports a rebuild-preventing condition visible without a rebuild.

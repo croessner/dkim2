@@ -266,6 +266,7 @@ func (e DeliveryStatusProjectionOuterAlignment) Valid() bool {
 // Defines values for DeliveryStatusProjectionPropagation.
 const (
 	DeliveryStatusPropagationEligible                    DeliveryStatusProjectionPropagation = "eligible"
+	DeliveryStatusPropagationForbiddenIdentityMisaligned DeliveryStatusProjectionPropagation = "forbidden_identity_misaligned"
 	DeliveryStatusPropagationForbiddenNullPreviousSender DeliveryStatusProjectionPropagation = "forbidden_null_previous_sender"
 	DeliveryStatusPropagationNotApplicable               DeliveryStatusProjectionPropagation = "not_applicable"
 	DeliveryStatusPropagationNotEvaluated                DeliveryStatusProjectionPropagation = "not_evaluated"
@@ -279,6 +280,8 @@ const (
 func (e DeliveryStatusProjectionPropagation) Valid() bool {
 	switch e {
 	case DeliveryStatusPropagationEligible:
+		return true
+	case DeliveryStatusPropagationForbiddenIdentityMisaligned:
 		return true
 	case DeliveryStatusPropagationForbiddenNullPreviousSender:
 		return true
@@ -3221,9 +3224,10 @@ type SignDeliveryStatusResponse200Headers struct {
 
 // SignDeliveryStatusResponse204Headers the declared response headers of an HTTP 204 response for SignDeliveryStatus
 type SignDeliveryStatusResponse204Headers struct {
-	CacheControl string
-	Connection   string
-	Date         *string
+	CacheControl         string
+	Connection           string
+	Date                 *string
+	XDKIM2UnsignedReason string
 }
 
 // SignDeliveryStatusResponse400Headers the declared response headers of an HTTP 400 response for SignDeliveryStatus
@@ -5725,6 +5729,13 @@ func ParseSignDeliveryStatusResponse(rsp *http.Response) (*SignDeliveryStatusRes
 				return nil, err
 			}
 			headers.Date = &value
+		}
+		if values := rsp.Header.Values("X-DKIM2-Unsigned-Reason"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "X-DKIM2-Unsigned-Reason", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.XDKIM2UnsignedReason = value
 		}
 		response.Headers204 = &headers
 	case rsp.StatusCode == 400:

@@ -122,6 +122,11 @@ const (
 	PropagationNotFailure PropagationResult = "not_failure"
 	// PropagationForbiddenNullPreviousSender reports a previous hop with mf=<>.
 	PropagationForbiddenNullPreviousSender PropagationResult = "forbidden_null_previous_sender"
+	// PropagationForbiddenIdentityMisaligned reports that the propagated
+	// report's signing domain, the completion d=, does not relaxed-match the
+	// rt= address of the previous hop, which becomes the highest signature of
+	// the rebuilt report (Draft-08 Sections 7.1 item 4, 16.2, and 16.3).
+	PropagationForbiddenIdentityMisaligned PropagationResult = "forbidden_identity_misaligned"
 	// PropagationUnsupportedChain reports a custody chain this system does not
 	// qualify for reconstruction: an nd= previous hop, a run member that does
 	// not verify, a run whose detection exceeded the bounded authority lookup
@@ -139,8 +144,8 @@ const (
 func (r PropagationResult) Known() bool {
 	switch r {
 	case PropagationNotApplicable, PropagationEligible, PropagationTerminalOrigin, PropagationNotFailure,
-		PropagationForbiddenNullPreviousSender, PropagationUnsupportedChain, PropagationNotReconstructable,
-		PropagationNotEvaluated:
+		PropagationForbiddenNullPreviousSender, PropagationForbiddenIdentityMisaligned, PropagationUnsupportedChain,
+		PropagationNotReconstructable, PropagationNotEvaluated:
 		return true
 	default:
 		return false

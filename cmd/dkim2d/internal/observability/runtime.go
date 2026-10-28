@@ -145,6 +145,20 @@ func (r *Runtime) ObserveDSNEvidence(stage, result string) {
 	)
 }
 
+// ObserveDSNUnsigned emits one closed reason why a delivery-status report
+// leaves unsigned and unchanged.
+func (r *Runtime) ObserveDSNUnsigned(reason string) {
+	if r == nil || r.metrics == nil || !closedMetricValue(keyUnsignedReason, reason) {
+		return
+	}
+	r.metrics.DSNUnsignedCompleted(reason)
+	r.Logger().Info(
+		"dsn.unsigned.completed",
+		slog.String("operation", valueDSNSign),
+		slog.String(keyUnsignedReason, reason),
+	)
+}
+
 // ObserveReceivedDSN emits one closed terminal received-DSN evaluation stage
 // on the process operation.
 func (r *Runtime) ObserveReceivedDSN(stage, result string) {

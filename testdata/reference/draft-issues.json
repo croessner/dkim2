@@ -347,6 +347,22 @@
       "resolution_criterion": "dns-draft-aligns-composite-key-type",
       "claim_classes": ["documented_interpretation"],
       "upstream_reference": "https://www.ietf.org/archive/id/draft-ietf-dkim-dkim2-dns-02.txt"
+    },
+    {
+      "id": "DKIM2-ISSUE-0023",
+      "title": "Draft-08 Section 16.2 leaves no conforming signing domain for a sender-side bounce",
+      "sections": ["Draft-08 Section 12.4", "Draft-08 Section 16.2", "Draft-08 Section 7.1"],
+      "class": "ambiguity",
+      "local_status": "implemented_interpretation",
+      "upstream_status": "not_reported",
+      "behavior_owner": "lib/delivery_status.go",
+      "conformance_cases": [],
+      "test_refs": ["cmd/dkim2d/internal/app/delivery_status_test.go#TestSigningServiceLeavesSenderSideBounceUnsigned", "lib/delivery_status_test.go#TestDSNSigningIdentitySenderSideBounceIsUnsigned"],
+      "external_cases": [],
+      "public_effect": "sender-side-bounce-unsigned",
+      "resolution_criterion": "draft-defines-sender-side-dsn-identity",
+      "claim_classes": ["documented_interpretation", "draft_normative"],
+      "upstream_reference": "https://www.ietf.org/archive/id/draft-ietf-dkim-dkim2-spec-08.txt"
     }
   ]
 }

@@ -641,7 +641,7 @@ func (guard *handlerGuard) mapProcess(response *generated.ProcessMessageResponse
 func validNoContentProcessResponse(response *generated.ProcessMessageResponse) bool {
 	return response != nil && validNoContentRouteResponse(
 		response.HTTPResponse, response.Body, response.JSON200 != nil, routeProcess,
-	)
+	) && !headerNamePresent(response.HTTPResponse.Header, unsignedReasonHeader)
 }
 
 // mapOperationResponse validates one sign response including its raw JSON envelope.
@@ -680,16 +680,34 @@ func mapOperationResponse(
 func validNoContentSignResponse(response *generated.SignMessageResponse) bool {
 	return response != nil && validNoContentRouteResponse(
 		response.HTTPResponse, response.Body, response.JSON200 != nil, routeSign,
-	)
+	) && !headerNamePresent(response.HTTPResponse.Header, unsignedReasonHeader)
 }
 
-// validNoContentDeliveryStatusResponse validates the delivery-status no-op
-// that the daemon issues only under its explicit unsigned-original
-// compatibility policy, bound to the dedicated DSN route.
+// unsignedReasonHeader names the closed reason of a delivery-status report
+// that leaves unsigned.
+const unsignedReasonHeader = "X-DKIM2-Unsigned-Reason"
+
+// validNoContentDeliveryStatusResponse validates the delivery-status
+// "not DKIM2 signed" response bound to the dedicated DSN route: the exact 204
+// envelope plus exactly one X-DKIM2-Unsigned-Reason from the closed OpenAPI
+// vocabulary (the unsigned-original compatibility policy, or a report that
+// Draft-08 Section 16.2 or Sections 11 and 12.4 forbid signing).
 func validNoContentDeliveryStatusResponse(response *generated.SignDeliveryStatusResponse) bool {
-	return response != nil && validNoContentRouteResponse(
+	if response == nil || !validNoContentRouteResponse(
 		response.HTTPResponse, response.Body, response.JSON200 != nil, routeDeliveryStatus,
-	)
+	) {
+		return false
+	}
+	values := response.HTTPResponse.Header.Values(unsignedReasonHeader)
+	if len(values) != 1 {
+		return false
+	}
+	switch values[0] {
+	case "unsigned_original", "delivery_status_identity_unavailable", "delivery_status_from_not_authentic":
+		return true
+	default:
+		return false
+	}
 }
 
 // validNoContentRouteResponse is the single no-content acceptance rule: the
@@ -773,9 +791,10 @@ func mapRevisionResponse(
 }
 
 // mapDeliveryStatusResponse validates one dedicated DSN response including
-// its exact generated-client HTTP envelope. A valid 204 means the returned
-// original carried no DKIM2-Signature and the daemon's compatibility policy
-// let the report leave unsigned: Postfix continues without any mutation.
+// its exact generated-client HTTP envelope. A valid 204 means the daemon
+// decided the report cannot be DKIM2 signed for one closed reason: Postfix
+// continues without any mutation and delivers the report unsigned. This is
+// never a tempfail, so a Draft-08 identity outcome cannot queue a bounce.
 func mapDeliveryStatusResponse(
 	response *generated.SignDeliveryStatusResponse,
 ) (milter.Result, error) {

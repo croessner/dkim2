@@ -106,7 +106,7 @@
     {
       "id": "milter-public-peer-source",
       "path": "cmd/dkim2-milter/internal/integration/public_peer_test.go",
-      "sha256": "9f5e9e7bd1540b8bccfff6f9d6ac08e20983c3ff37f760c3d7c526d4b37f584f",
+      "sha256": "981ea5bc9570058fea55e7f9f898bbc8ff328f48ee7de02453c7561c5b36a660",
       "module": "cmd/dkim2-milter"
     },
     {
@@ -136,7 +136,7 @@
     {
       "id": "openapi-operation-source",
       "path": "cmd/dkim2ctl/internal/testclient/operations_test.go",
-      "sha256": "eca85443412e16a334a687e0b557c2c91c358d14428ff34a9ed0ebd9193ce671",
+      "sha256": "ccd3c0bfd14f9c4d3cfc2afca85fe79d0c4dde4b0338724a1a1a8dae258f4e51",
       "module": "cmd/dkim2ctl"
     },
     {
@@ -214,7 +214,7 @@
     {
       "id": "postfix-qualification-runtime",
       "path": "contrib/qualification/postfix-milter/cmd/qualify/main.go",
-      "sha256": "cc06209e88e486d208b2ce2881410145d3be368add7e5e2b9a1b7f8f2c67703a",
+      "sha256": "3d590b29faee026e9b22e8351031bc355db1c094a87bc1f904ba157bd9fd6770",
       "module": "contrib/qualification/postfix-milter"
     },
     {
@@ -298,7 +298,7 @@
     {
       "id": "signing-dsn-propagation",
       "path": "lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-08/dsn-propagation-golden.json",
-      "sha256": "a75067b41d541325be340ea2ad4272ac715a466f288f8a1f52fa6deb4d8f8693",
+      "sha256": "e4737d4536d61e99ceea3affc74c0420790f45793066c1b57b70fba9ac7e58db",
       "module": "lib"
     },
     {
@@ -412,7 +412,7 @@
     {
       "id": "verification-received-dsn",
       "path": "lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-08/received-dsn-golden.json",
-      "sha256": "cc317cf0532b93e872b5e52a30a87f3f463f16486314870bba26ad7ed199eb8d",
+      "sha256": "53046f75694f203e314a1e05dcb2e1a241b52572b33ee6ebc9163625c1eef63a",
       "module": "lib"
     }
   ],

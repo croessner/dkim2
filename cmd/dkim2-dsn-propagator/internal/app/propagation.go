@@ -161,6 +161,8 @@ func discardOutcome(reason daemon.DiscardReason) (string, bool) {
 		return observability.OutcomeDiscardedNotFailure, true
 	case daemon.DiscardNullPreviousSender:
 		return observability.OutcomeDiscardedNullPreviousSender, true
+	case daemon.DiscardIdentityMisaligned:
+		return observability.OutcomeDiscardedIdentityMisaligned, true
 	case daemon.DiscardUnsupportedChain:
 		return observability.OutcomeDiscardedUnsupportedChain, true
 	case daemon.DiscardNotReconstructable:

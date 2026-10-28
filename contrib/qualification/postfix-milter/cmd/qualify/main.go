@@ -49,7 +49,12 @@ const (
 	daemonEndpoint        = "http://127.0.0.1:8080"
 	inboundDaemonEndpoint = "http://127.0.0.1:8081"
 	signingDomain         = "origin.example.test"
-	authservID            = "mx.receiver.example.test"
+	// localFailedDomain is a recipient domain under the local delivery_status
+	// profile domain whose deliveries fail, so its bounce satisfies Draft-08
+	// Section 16.2 (rt= under d=) and Postfix's MAILER-DAEMON@$myorigin From
+	// is Authentic for d=origin.example.test.
+	localFailedDomain = "failed." + signingDomain
+	authservID        = "mx.receiver.example.test"
 
 	// localTenant owns every domain this deployment signs for.
 	localTenant = "tenant-a"
@@ -117,6 +122,8 @@ const (
 	stageDSNQueue           qualificationStage = "dsn_queue"
 	stageDSNCardinality     qualificationStage = "dsn_cardinality"
 	stageDSNCrypto          qualificationStage = "dsn_crypto"
+	stageDSNIdentity        qualificationStage = "dsn_identity"
+	stageDSNUnsigned        qualificationStage = "dsn_unsigned"
 	stageInjectedSubmit     qualificationStage = "injected_submit"
 	stageInjectedValidation qualificationStage = "injected_validation"
 	stageFragment           qualificationStage = "fragment"
@@ -168,7 +175,7 @@ func validQualificationStage(stage qualificationStage) bool {
 		stageQueueInventory, stageLocalSubmit, stageLocalValidation,
 		stageInboundSubmit, stageInboundValidation, stageDSNInventory,
 		stageDSNSubmit, stageDSNQueue, stageDSNCardinality, stageDSNCrypto,
-		stageInjectedSubmit,
+		stageDSNIdentity, stageDSNUnsigned, stageInjectedSubmit,
 		stageInjectedValidation, stageFragment,
 		stagePropagationChain, stagePropagationNotice, stagePropagationRoute,
 		stagePropagationDelivery, stagePropagationCardinality,
@@ -1176,7 +1183,7 @@ func preparePostfix() error {
 		"mydestination=",
 		"mynetworks=127.0.0.0/8",
 		"relay_domains=receiver.example.test, " + signingDomain +
-			", failed.example.test, " + previousHopDomain,
+			", failed.example.test, " + localFailedDomain + ", " + previousHopDomain,
 		"smtpd_relay_restrictions=permit_mynetworks,reject_unauth_destination",
 		"smtpd_recipient_restrictions=permit_mynetworks,reject_unauth_destination",
 		"smtpd_milters=unix:" + originSocket,
@@ -1191,6 +1198,7 @@ func preparePostfix() error {
 		"relay_transport=smtp",
 		"transport_maps=inline:{" +
 			"failed.example.test=smtp-failure:[127.0.0.1]:2998, " +
+			localFailedDomain + "=smtp-failure:[127.0.0.1]:2998, " +
 			strings.Trim(forwardedRecipient, "<>") + "=smtp-failure:[127.0.0.1]:2998, " +
 			strings.Trim(returnPath, "<>") + "=" + propagationTransport +
 			":unix:" + propagatorSocket + "}",
@@ -1414,23 +1422,9 @@ func runSuccessQualification() error {
 	if err != nil {
 		return qualificationFailure(stageDSNInventory)
 	}
-	failureMessage := []byte(
-		"From: sender@" + signingDomain + "\r\n" +
-			"To: recipient@failed.example.test\r\n" +
-			"Subject: forced delivery failure\r\n\r\nbody\r\n",
-	)
-	if _, err := smtpSubmit(
-		2525,
-		"<sender@"+signingDomain+">",
-		[]string{"<recipient@failed.example.test>"},
-		failureMessage,
-		true,
-	); err != nil {
-		return qualificationFailure(stageDSNSubmit)
-	}
-	dsnRaw, err := waitForQueuedDSN(beforeDSN, 15*time.Second)
+	dsnRaw, err := submitForcedBounce(beforeDSN, "<recipient@"+localFailedDomain+">")
 	if err != nil {
-		return qualificationFailure(stageDSNQueue)
+		return err
 	}
 	if countHeader(dsnRaw, "Message-Instance") != 1 ||
 		countHeader(dsnRaw, "DKIM2-Signature") != 1 {
@@ -1442,6 +1436,21 @@ func runSuccessQualification() error {
 		[]string{"<sender@" + signingDomain + ">"},
 	) != nil {
 		return qualificationFailure(stageDSNCrypto)
+	}
+	if !signatureDomainIs(dsnRaw, signingDomain) {
+		return qualificationFailure(stageDSNIdentity)
+	}
+	beforeUnsigned, err := queueIDs()
+	if err != nil {
+		return qualificationFailure(stageDSNInventory)
+	}
+	unsignedRaw, err := submitForcedBounce(beforeUnsigned, "<recipient@failed.example.test>")
+	if err != nil {
+		return err
+	}
+	if countHeader(unsignedRaw, "Message-Instance") != 0 ||
+		countHeader(unsignedRaw, "DKIM2-Signature") != 0 {
+		return qualificationFailure(stageDSNUnsigned)
 	}
 	injected := []byte(
 		"From: postmaster@" + signingDomain + "\r\n" +
@@ -1473,6 +1482,7 @@ func runSuccessQualification() error {
 		"postfix_bounce_dsn_evidence_signing",
 		"postfix_normal_cleanup_dsn_routing",
 		"postfix_received_visibility",
+		"postfix_sender_side_bounce_unsigned",
 		"smtp_origin_signing",
 	}); err != nil {
 		return qualificationFailure(stageFragment)
@@ -2252,6 +2262,46 @@ func waitForQueuedDSN(before map[string]struct{}, timeout time.Duration) ([]byte
 		time.Sleep(50 * time.Millisecond)
 	}
 	return nil, errQualification
+}
+
+// submitForcedBounce submits one message from the local sender to a recipient
+// whose delivery fails and returns the queued Postfix bounce. The
+// delivery-status Milter has already decided whether the bounce is signed.
+func submitForcedBounce(before map[string]struct{}, recipient string) ([]byte, error) {
+	message := []byte(
+		"From: sender@" + signingDomain + "\r\n" +
+			"To: " + strings.Trim(recipient, "<>") + "\r\n" +
+			"Subject: forced delivery failure\r\n\r\nbody\r\n",
+	)
+	if _, err := smtpSubmit(2525, "<sender@"+signingDomain+">", []string{recipient}, message, true); err != nil {
+		return nil, qualificationFailure(stageDSNSubmit)
+	}
+	raw, err := waitForQueuedDSN(before, 15*time.Second)
+	if err != nil {
+		return nil, qualificationFailure(stageDSNQueue)
+	}
+	return raw, nil
+}
+
+// signatureDomainIs reports whether the single DKIM2-Signature carries
+// exactly the given d= tag value.
+func signatureDomainIs(raw []byte, domain string) bool {
+	headers, err := parseHeaderFields(raw)
+	if err != nil {
+		return false
+	}
+	for _, header := range headers {
+		if !strings.EqualFold(header.name, "DKIM2-Signature") {
+			continue
+		}
+		for _, tag := range strings.Split(header.value, ";") {
+			name, value, found := strings.Cut(strings.TrimSpace(tag), "=")
+			if found && strings.TrimSpace(name) == "d" {
+				return strings.TrimSpace(value) == domain
+			}
+		}
+	}
+	return false
 }
 
 // isDeliveryStatusReport identifies the bounded MIME markers without assuming signing success.

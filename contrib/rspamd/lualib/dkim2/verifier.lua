@@ -61,7 +61,8 @@ local delivery_status_members = {
   recipient_linkage = { 'linked', 'not_evaluated', 'unlinked' },
   local_hop = { 'local', 'mismatch', 'not_evaluated', 'not_local', 'temperror' },
   propagation = {
-    'eligible', 'forbidden_null_previous_sender', 'not_applicable',
+    'eligible', 'forbidden_identity_misaligned',
+    'forbidden_null_previous_sender', 'not_applicable',
     'not_evaluated', 'not_failure', 'not_reconstructable', 'terminal_origin',
     'unsupported_chain',
   },

@@ -430,7 +430,7 @@ The result is one closed `delivery_status` projection:
 | `local_hop` | `local`, `not_local`, `mismatch`, `temperror`, `not_evaluated` |
 | `outer_alignment` | `aligned`, `misaligned`, `not_evaluated` |
 | `recipient_linkage` | `linked`, `unlinked`, `not_evaluated` |
-| `propagation` | `not_applicable`, `eligible`, `terminal_origin`, `not_failure`, `forbidden_null_previous_sender`, `unsupported_chain`, `not_reconstructable`, `not_evaluated` |
+| `propagation` | `not_applicable`, `eligible`, `terminal_origin`, `not_failure`, `forbidden_null_previous_sender`, `forbidden_identity_misaligned`, `unsupported_chain`, `not_reconstructable`, `not_evaluated` |
 
 `propagation` is informational in `/v1/process`. It tells a policy consumer
 whether the propagation adapter would be able to act. It is computed from the
@@ -540,7 +540,12 @@ follows.
    14.4 relaxed domain match between its `d=`
    and its `mf=` domain must pass. Its `mf=` must be non-null; a null `mf=`
    is `forbidden_null_previous_sender` and Draft-08 Section 16 forbids sending
-   any DSN. This step is the only authority for calling the previous hop's
+   any DSN. The completion `d=`, which signs the propagated report, must
+   relaxed-match (Section 7.1 item 4: `rt=` address as Parameter1, `d=` as
+   Parameter2) the previous hop's single `rt=` address, because that hop is
+   the highest signature of the rebuilt report and Section 16.2 binds the
+   DSN's `d=` to it; otherwise the value is `forbidden_identity_misaligned`
+   and nothing is rebuilt. This step is the only authority for calling the previous hop's
    `mf=` "authenticated". The current-target verifiers cannot do this; a new
    historical-target verification seam is required.
 3. **Remove the local hop.** Remove exactly the DKIM2-Signature fields of the
@@ -825,7 +830,8 @@ The adapter:
    adapter accepts that responsibility and discharges it by a deliberate,
    counted, protocol-mandated non-delivery, which is not a frivolous loss.
    This is the disposition for every valid-but-not-propagable state: `terminal_origin`,
-   `not_failure`, `forbidden_null_previous_sender`, `unsupported_chain`,
+   `not_failure`, `forbidden_null_previous_sender`,
+   `forbidden_identity_misaligned`, `unsupported_chain`,
    `not_reconstructable`, and a replayed outer DSN. Each is counted under its
    own closed outcome so misrouting and unsupported chains stay visible.
 7. on `reject`, answers `550 5.7.1` with a bounded constant text. This is the
@@ -1034,7 +1040,7 @@ be tested against a closed matrix:
 | `embedded = temperror`, `local_hop = temperror`, replay store unavailable or ambiguous, datasource unavailable, key unavailable | `temperror` | `tempfail` |
 | propagation coordinate `pending` with a live lease | `temperror` | `tempfail` |
 | propagation coordinate `committed` | `pass` | `discard` |
-| `terminal_origin`, `not_failure`, `forbidden_null_previous_sender`, `unsupported_chain` | `pass` | `discard` |
+| `terminal_origin`, `not_failure`, `forbidden_null_previous_sender`, `forbidden_identity_misaligned`, `unsupported_chain` | `pass` | `discard` |
 | `not_reconstructable` | `permerror` | `discard`, `propagation_failure = not_reconstructable` |
 | `local` domain without an active `delivery_status` profile | `permerror` | `discard`, `propagation_failure = unprovisioned_domain` |
 | malformed request, unsupported fidelity, capability mismatch, missing tenant | HTTP 4xx, no body semantics | |
@@ -1141,9 +1147,10 @@ Adapter:
 
 - `dsn_propagator_transactions_total{outcome}` with `outcome` in `accepted`,
   `rejected`, `discarded_terminal_origin`, `discarded_not_failure`,
-  `discarded_null_previous_sender`, `discarded_unsupported_chain`,
-  `discarded_not_reconstructable`, `discarded_unprovisioned_domain`,
-  `discarded_committed`, `deferred`, `contract_failure`.
+  `discarded_null_previous_sender`, `discarded_identity_misaligned`,
+  `discarded_unsupported_chain`, `discarded_not_reconstructable`,
+  `discarded_unprovisioned_domain`, `discarded_committed`, `deferred`,
+  `contract_failure`.
 - `dsn_propagator_reinjection_total{outcome}` with `outcome` in `accepted`,
   `deferred`, `failed`, `smtputf8_unavailable`.
 - `dsn_propagator_commit_total{outcome}` with `outcome` in `committed`,

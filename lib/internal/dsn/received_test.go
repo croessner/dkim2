@@ -26,6 +26,7 @@ const (
 	receivedOtherDomain       = "other.example"
 	receivedParentDomain      = "example"
 	receivedLocalRecipient    = "<user@local.example>"
+	receivedForwardRecipient  = "<user@forward.local.example>"
 	receivedLocalMailFrom     = "<forwarded@local.example>"
 	receivedDestination       = "<dest@destination.example>"
 	receivedDestinationRaw    = "dest@destination.example"
@@ -634,16 +635,28 @@ func TestReceivedEvaluationPreviousHopClassification(t *testing.T) {
 	}{
 		{name: "terminal origin", hops: []dsntest.Hop{receivedHop(receivedLocalDomain, receivedLocalMailFrom, receivedDestination)},
 			local: []string{receivedLocalDomain}, want: PropagationTerminalOrigin, wantLowest: 1},
+		// Draft-08 Sections 16.2 and 16.3: the propagated report is signed by
+		// the completion d= (forward.local.example), so the previous hop's
+		// rt= must sit under that domain for a run to stay eligible.
 		{name: "nd run", hops: []dsntest.Hop{
-			receivedHop(receivedRemoteDomain, "<sender@remote.example>", receivedLocalRecipient),
+			receivedHop(receivedRemoteDomain, "<sender@remote.example>", receivedForwardRecipient),
 			receivedNextDomainHop(receivedLocalDomain, receivedForwardDomain),
 			receivedHop(receivedForwardDomain, receivedForwardMailFrom, forwardDestination),
 		}, recipient: receivedForwardMailFrom, local: []string{receivedLocalDomain, receivedForwardDomain}, want: PropagationEligible, wantLowest: 2},
 		{name: "imaginary hop run", hops: []dsntest.Hop{
-			receivedHop(receivedRemoteDomain, "<sender@remote.example>", receivedLocalRecipient),
-			receivedHop(receivedLocalDomain, receivedLocalRecipient, "<user@forward.local.example>"),
+			receivedHop(receivedRemoteDomain, "<sender@remote.example>", receivedForwardRecipient),
+			receivedHop(receivedLocalDomain, "<relay@forward.local.example>", "<user@forward.local.example>"),
 			receivedHop(receivedForwardDomain, receivedForwardMailFrom, forwardDestination),
 		}, recipient: receivedForwardMailFrom, local: []string{receivedLocalDomain, receivedForwardDomain}, want: PropagationEligible, wantLowest: 2},
+		{name: "nd run signing identity misaligned with previous rt", hops: []dsntest.Hop{
+			receivedHop(receivedRemoteDomain, "<sender@remote.example>", receivedLocalRecipient),
+			receivedNextDomainHop(receivedLocalDomain, receivedForwardDomain),
+			receivedHop(receivedForwardDomain, receivedForwardMailFrom, forwardDestination),
+		}, recipient: receivedForwardMailFrom, local: []string{receivedLocalDomain, receivedForwardDomain}, want: PropagationForbiddenIdentityMisaligned, wantLowest: 2},
+		{name: "single local hop under a child of previous rt", hops: []dsntest.Hop{
+			receivedHop(receivedRemoteDomain, "<sender@remote.example>", receivedLocalRecipient),
+			receivedHop(receivedForwardDomain, receivedForwardMailFrom, forwardDestination),
+		}, recipient: receivedForwardMailFrom, local: []string{receivedForwardDomain}, want: PropagationForbiddenIdentityMisaligned, wantLowest: 2},
 		{name: "previous hop is nd", hops: []dsntest.Hop{
 			receivedHop(receivedOriginDomain, "<sender@origin.example>", "<relay@remote.example>"),
 			receivedNextDomainHop(receivedRemoteDomain, receivedLocalDomain),

@@ -186,9 +186,9 @@ func newBatchViaFixtureAt(t *testing.T, at time.Time) batchViaFixture {
 	remote := &SigningService{publicKeys: f.provider, store: newBatchTestAuthority(keys[3]), clock: f.clock.Now}
 	f.authority = propagationtest.NewAuthority().AddProfile(propagationTestTenant, keys[1]).AddProfile(propagationTestTenant, keys[2])
 	f.coordinator = f.newCoordinator(t, f.enabledReplay(t))
-	raw := []byte("From: sender@origin.test\r\nTo: alias@hosted.test\r\nDate: " + f.clock.Now().Format(time.RFC1123Z) +
+	raw := []byte("From: sender@origin.test\r\nTo: alias@hosted.forwarder.test\r\nDate: " + f.clock.Now().Format(time.RFC1123Z) +
 		"\r\nMessage-ID: <batch-" + fmt.Sprint(f.clock.Now().UnixNano()) + "@origin.test>\r\nSubject: Native forwarding qualification\r\nX-Spacing:\t  exact\r\n\r\noriginal body\r\n")
-	signRequest, err := NewOperationRequest(OperationSign, raw, []byte("<sender@origin.test>"), [][]byte{[]byte("<alias@hosted.test>")}, propagationTestTenant, batchFixtureOriginDomain, FidelityRawRFC5322)
+	signRequest, err := NewOperationRequest(OperationSign, raw, []byte("<sender@origin.test>"), [][]byte{[]byte("<alias@hosted.forwarder.test>")}, propagationTestTenant, batchFixtureOriginDomain, FidelityRawRFC5322)
 	if err != nil {
 		t.Fatal("origin request invalid")
 	}
@@ -198,12 +198,12 @@ func newBatchViaFixtureAt(t *testing.T, at time.Time) batchViaFixture {
 		t.Fatal("origin signature failed")
 	}
 	original := insertSigningServiceFields(result.Fields(), raw)
-	current := append([]byte("Received: by queue.hosted.test\r\n"), original...)
-	incoming, err := NewBatchMessage(original, []byte("<sender@origin.test>"), [][]byte{[]byte("<alias@hosted.test>")}, FidelityRawRFC5322)
+	current := append([]byte("Received: by queue.hosted.forwarder.test\r\n"), original...)
+	incoming, err := NewBatchMessage(original, []byte("<sender@origin.test>"), [][]byte{[]byte("<alias@hosted.forwarder.test>")}, FidelityRawRFC5322)
 	if err != nil {
 		t.Fatal("original batch message invalid")
 	}
-	local, err := NewBatchMessage(current, []byte("<sender@origin.test>"), [][]byte{[]byte("<local@hosted.test>")}, FidelityLMTPDeliveredCRLF)
+	local, err := NewBatchMessage(current, []byte("<sender@origin.test>"), [][]byte{[]byte("<local@hosted.forwarder.test>")}, FidelityLMTPDeliveredCRLF)
 	if err != nil {
 		t.Fatal("local batch message invalid")
 	}
@@ -221,7 +221,7 @@ func newBatchViaFixtureAt(t *testing.T, at time.Time) batchViaFixture {
 		if err != nil {
 			t.Fatal("external batch copy invalid")
 		}
-		branch, err = branch.WithVia([]byte("<alias@hosted.test>"), [][]byte{[]byte("<router@forwarder.test>")}, propagationTestTenant, batchFixtureHostedDomain)
+		branch, err = branch.WithVia([]byte("<alias@hosted.forwarder.test>"), [][]byte{[]byte("<router@forwarder.test>")}, propagationTestTenant, batchFixtureHostedDomain)
 		if err != nil {
 			t.Fatal("controlled hop invalid")
 		}

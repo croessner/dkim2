@@ -330,8 +330,8 @@ func (a *strictAdapter) ReviseMessage(
 }
 
 // SignDeliveryStatus maps and executes one generated dedicated DSN operation.
-// The bodyless 204 variant is emitted only for the not-applicable assessment
-// produced by the explicit unsigned-original compatibility policy.
+// The bodyless 204 variant is emitted only for the unsigned assessment and
+// carries its closed reason in X-DKIM2-Unsigned-Reason.
 func (a *strictAdapter) SignDeliveryStatus(
 	ctx context.Context,
 	request generated.SignDeliveryStatusRequestObject,
@@ -351,10 +351,15 @@ func (a *strictAdapter) SignDeliveryStatus(
 		return nil, &strictAdapterError{class: strictFailureInternal}
 	}
 	if !assessment.Applicable() {
+		reason, unsigned := assessment.UnsignedReason()
+		if !unsigned {
+			return nil, &strictAdapterError{class: strictFailureInternal}
+		}
 		return generated.SignDeliveryStatus204Response{Headers: generated.SignDeliveryStatus204ResponseHeaders{
-			CacheControl: cacheControlNoStore,
-			Connection:   connectionCloseValue,
-			Date:         optionalResponseDate(ctx),
+			CacheControl:         cacheControlNoStore,
+			Connection:           connectionCloseValue,
+			Date:                 optionalResponseDate(ctx),
+			XDKIM2UnsignedReason: string(reason),
 		}}, nil
 	}
 	result, ok := assessment.Result()

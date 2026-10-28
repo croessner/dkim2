@@ -73,11 +73,16 @@ func dsnPropagationVectorSpecs() []dsnPropagationVectorSpec {
 	member.Instance = 2
 	completion := receivedDSNHop(receivedDSNForwardDomain, receivedDSNForwardMailFrom, receivedDSNDestination)
 	completion.Instance = 2
-	nextDomainRun.Hops = []dsntest.Hop{nextDomainRun.Hops[0], member, completion}
+	// Draft-08 Sections 16.2 and 16.3: the completion d= signs the propagated
+	// report, so every eligible run's previous hop rt= sits under it.
+	aligned := alignedPropagationPrevious(nextDomainRun.Hops[0])
+	misalignedRun := propagationOriginal(propagationFullRecipe)
+	misalignedRun.Hops = []dsntest.Hop{misalignedRun.Hops[0], member, completion}
+	nextDomainRun.Hops = []dsntest.Hop{aligned, member, completion}
 	imaginaryRun := propagationOriginal(propagationFullRecipe)
-	imaginary := receivedDSNHop(receivedDSNLocalDomain, receivedDSNLocalMailFrom, "<relay@forward.local.example>")
+	imaginary := receivedDSNHop(receivedDSNLocalDomain, receivedDSNForwardMailFrom, "<relay@forward.local.example>")
 	imaginary.Instance = 2
-	imaginaryRun.Hops = []dsntest.Hop{imaginaryRun.Hops[0], imaginary, completion}
+	imaginaryRun.Hops = []dsntest.Hop{aligned, imaginary, completion}
 	headerRecipe := propagationOriginal(propagationHeaderRecipe)
 	headerRecipe.Revisions[0].Body = propagationCurrentBody
 	bodyRecipe := propagationOriginal(propagationBodyRecipe)
@@ -108,7 +113,7 @@ func dsnPropagationVectorSpecs() []dsnPropagationVectorSpec {
 	multiMemberHeaderRecipe.Revisions[0].Body = propagationCurrentBody
 	multiMemberHeaderRecipe.Headers = "Received: from origin by remote (below-previous)\r\n" + propagationCurrentHeaders + "To: user@local.example\r\n"
 	multiMemberHeaderRecipe.Revisions[0].Headers = "Received: from origin by remote (below-previous)\r\n" + propagationOriginHeaders + "To: user@local.example\r\n"
-	multiMemberHeaderRecipe.Hops = []dsntest.Hop{multiMemberHeaderRecipe.Hops[0], member, completion}
+	multiMemberHeaderRecipe.Hops = []dsntest.Hop{alignedPropagationPrevious(multiMemberHeaderRecipe.Hops[0]), member, completion}
 	betweenMembers := propagationOriginal(propagationFullRecipe)
 	betweenMembers.Headers = "Received: from origin by remote (below-previous)\r\nX-Origin-Trace: below-previous\r\n" + propagationCurrentHeaders
 	betweenMembers.Revisions[0].Headers = "Received: from origin by remote (below-previous)\r\nX-Origin-Trace: below-previous\r\n" + propagationOriginHeaders
@@ -116,7 +121,7 @@ func dsnPropagationVectorSpecs() []dsnPropagationVectorSpec {
 	betweenMember.UnsignedAbove = "Received: from remote by local (between-previous-and-member)\r\nReturn-Path: <forwarded@local.example>\r\n"
 	betweenCompletion := completion
 	betweenCompletion.UnsignedAbove = "Received: from local by forward (between-members)\r\nX-Forward-Trace: between-members\r\n"
-	betweenMembers.Hops = []dsntest.Hop{betweenMembers.Hops[0], betweenMember, betweenCompletion}
+	betweenMembers.Hops = []dsntest.Hop{alignedPropagationPrevious(betweenMembers.Hops[0]), betweenMember, betweenCompletion}
 	betweenMembers.Prepend = "Received: from forward by destination (above-run)\r\n"
 	unsupportedTuple := propagationCase{original: propagationOriginal(propagationFullRecipe), mutate: func(raw []byte) []byte {
 		return bytes.Replace(raw, []byte("Message-Instance: m=1; h=sha256:"), []byte("Message-Instance: m=1; h=sha999:"), 1)
@@ -148,7 +153,16 @@ func dsnPropagationVectorSpecs() []dsnPropagationVectorSpec {
 		{"header_recipe_multi_member_run", propagationCase{original: multiMemberHeaderRecipe, outerRecipient: receivedDSNForwardMailFrom, local: both}},
 		{"unsigned_between_run_members", propagationCase{original: betweenMembers, outerRecipient: receivedDSNForwardMailFrom, local: both}},
 		{"unsupported_historical_tuple", unsupportedTuple},
+		{"run_identity_misaligned", propagationCase{original: misalignedRun, outerRecipient: receivedDSNForwardMailFrom, local: both}},
 	}
+}
+
+// alignedPropagationPrevious returns the previous hop of a run with its rt=
+// under the completion domain, so the propagated report's d= relaxed-matches
+// the rebuilt highest signature (Draft-08 Sections 16.2 and 16.3).
+func alignedPropagationPrevious(previous dsntest.Hop) dsntest.Hop {
+	previous.Recipients = []string{receivedDSNForwardRecipient}
+	return previous
 }
 
 // dsnPropagationVectorFixture builds the signer for the corpus keys.

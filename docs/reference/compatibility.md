@@ -184,6 +184,38 @@ values outside their enum, so every generated artifact and the Rspamd
 vocabulary are deployed with the daemon as one digest-pinned set. `dkim2d
 serve` and `dkim2d validate` refuse to start without ML-DSA support.
 
+### Delivery-status signing identity
+
+Draft-08 Section 16.2 binds the DSN signing domain to an `rt=` address of the
+reported message's highest DKIM2-Signature. Breaking changes to the exported
+root Go API:
+
+- `NewDerivedDSNSigningEvidenceRequest`,
+  `NewPostfixDerivedDSNSigningEvidenceRequest`, and
+  `NewPostfixReportingDSNSigningEvidenceRequest` are removed.
+  `NewDSNSigningEvidenceRequest` no longer takes a `DSNIdentity`; the new
+  `NewPostfixDSNSigningEvidenceRequest` replaces the Postfix constructors, and
+  `DSNSigningEvidenceRequest.WithPreferredIdentity` carries an optional
+  preferred domain that is used only when it matches.
+- `EvaluateDSNForSigning` binds no identity: `DSNSigningEvidence.SigningDomain`
+  is empty until `Signer.ResolveDSNSigningIdentity` (new) binds one through a
+  caller-supplied `DSNProfileSource` (new); `SignDSN` accepts only resolved
+  evidence (`DSNSigningEvidence.Resolved`, new).
+- `DSNEvidenceStage` adds `identity_unavailable` and `from_not_authentic`;
+  `signing_domain` now reports a failed identity resolution. `DSNIdentity`
+  adds `Domain`.
+- `ReceivedDSNPropagation` adds `forbidden_identity_misaligned`.
+
+HTTP wire `v1`: the `/v1/dsn/sign` 204 response gains the required header
+`X-DKIM2-Unsigned-Reason` (`unsigned_original`,
+`delivery_status_identity_unavailable`, `delivery_status_from_not_authentic`)
+and is also produced when Section 16.2 or Sections 11 and 12.4 leave no
+signing identity. `DeliveryStatusProjection.propagation` gains
+`forbidden_identity_misaligned`. The stable configuration path
+`signing.policy.delivery_status.reporting_domain` keeps its syntax; its meaning
+changed from "signing identity" to "preferred candidate when matching" (see
+`cmd/dkim2d/README.md`).
+
 The compatibility window begins only if all seven `v0.1.0-rc.1` module tags
 are later created under separately authorized release work. From then through
 `v0.1.0`, breaking exported Go API, HTTP wire `v1`, configuration, CLI machine

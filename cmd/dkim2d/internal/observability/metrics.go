@@ -39,6 +39,7 @@ type Metrics struct {
 	datasource      *prometheus.CounterVec
 	datasourceTime  *prometheus.HistogramVec
 	dsnEvidence     *prometheus.CounterVec
+	dsnUnsigned     *prometheus.CounterVec
 	dsnReceived     *prometheus.CounterVec
 	dsnPropagation  *prometheus.CounterVec
 	dropped         *prometheus.CounterVec
@@ -111,6 +112,10 @@ func NewMetrics() (*Metrics, error) {
 			Name: "dkim2d_dsn_evidence_total",
 			Help: "Completed content-free DSN evidence stages.",
 		}, []string{keyEvidenceStage, keyResult}),
+		dsnUnsigned: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "dkim2d_dsn_unsigned_total",
+			Help: "Delivery-status reports left unsigned by closed reason.",
+		}, []string{keyUnsignedReason}),
 		dsnReceived: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "dkim2d_dsn_received_total",
 			Help: "Completed received delivery-status evaluations by terminal stage.",
@@ -129,7 +134,7 @@ func NewMetrics() (*Metrics, error) {
 		metrics.httpInFlight, metrics.process, metrics.processDuration,
 		metrics.policy, metrics.dns, metrics.dnsDuration, metrics.replay,
 		metrics.replayDuration, metrics.datasource, metrics.datasourceTime, metrics.dsnEvidence,
-		metrics.dsnReceived, metrics.dsnPropagation, metrics.dropped,
+		metrics.dsnUnsigned, metrics.dsnReceived, metrics.dsnPropagation, metrics.dropped,
 	}
 	for _, collector := range collectors {
 		if err := metrics.registry.Register(collector); err != nil {
@@ -138,6 +143,16 @@ func NewMetrics() (*Metrics, error) {
 	}
 	metrics.readiness.Set(0)
 	return metrics, nil
+}
+
+// DSNUnsignedCompleted records one delivery-status report that leaves
+// unsigned for a closed reason. Unknown reasons are dropped.
+func (m *Metrics) DSNUnsignedCompleted(reason string) {
+	defer containMetricPanic()
+	if m == nil || !closedMetricValue(keyUnsignedReason, reason) {
+		return
+	}
+	m.dsnUnsigned.WithLabelValues(reason).Inc()
 }
 
 // DSNEvidenceCompleted records one terminal pre-policy DSN evidence stage.

@@ -8,6 +8,7 @@ import (
 
 	"github.com/croessner/dkim2"
 	"github.com/croessner/dkim2/cmd/dkim2d/internal/signingstore"
+	"github.com/croessner/dkim2/provider"
 )
 
 // DeliveryStatusRequest carries exact outer DSN evidence into the daemon's
@@ -67,9 +68,11 @@ func (r DeliveryStatusRequest) GoString() string { return r.String() }
 
 // SignDeliveryStatus signs one validated DSN only through the dedicated policy
 // use, library evidence boundary, and route purpose. A returned original
-// without any DKIM2-Signature header field yields the not-applicable
-// assessment only under the explicit continue compatibility policy; every
-// other evidence failure, and the default reject policy, keep the refusal.
+// without any DKIM2-Signature header field yields the unsigned assessment only
+// under the explicit continue compatibility policy; every other evidence
+// failure, and the default reject policy, keep the refusal. After the
+// evidence passed, a report that Draft-08 Section 16.2 or Sections 11 and
+// 12.4 forbid signing yields the unsigned assessment with its closed reason.
 func (s *SigningService) SignDeliveryStatus(ctx context.Context, request DeliveryStatusRequest) (SigningAssessment, error) {
 	if s == nil || ctx == nil || s.store == nil || nilInterface(s.publicKeys) || s.clock == nil ||
 		len(request.raw) == 0 {
@@ -97,35 +100,33 @@ func (s *SigningService) SignDeliveryStatus(ctx context.Context, request Deliver
 		s.observeDSNEvidence(dkim2.DSNEvidenceStagePreflight, telemetryResultInternal)
 		return SigningAssessment{}, &DomainError{}
 	}
-	evidenceRequest := s.deliveryStatusEvidenceRequest(request)
+	evidenceRequest := dkim2.NewPostfixDSNSigningEvidenceRequest(
+		request.RawMessage(), request.OuterReversePath(), request.OuterRecipients(),
+	).WithPreferredIdentity(s.policies.reportingIdentity)
 	evidence, err := evidenceSigner.EvaluateDSNForSigning(ctx, evidenceRequest)
 	if err != nil {
 		if s.policies.continueUnsignedOriginal &&
 			dkim2.DSNEvidenceStageOf(err) == dkim2.DSNEvidenceStageEmbeddedUnsigned {
 			s.observeDSNEvidence(dkim2.DSNEvidenceStageEmbeddedUnsigned, telemetryResultNotApplicable)
-			return NewNotApplicableDeliveryStatusAssessment(), nil
+			return s.unsignedDeliveryStatus(DeliveryStatusUnsignedOriginal), nil
 		}
 		s.observeDSNEvidenceFailure(err)
 		return deliveryStatusAssessment(operationFailureFromError(OperationDeliveryStatus, err))
 	}
 	s.observeDSNEvidence(dkim2.DSNEvidenceStageAuthorized, "success")
-	return deliveryStatusAssessment(s.signAuthorizedDeliveryStatus(ctx, request, evidence, metadata, operationTime))
+	return s.signAuthorizedDeliveryStatus(ctx, request, evidence, metadata, operationTime)
 }
 
-// deliveryStatusEvidenceRequest selects the DSN signing identity: the
-// operator-configured reporting MTA domain when one is set, otherwise the
-// authenticated embedded d=. Both paths keep the full embedded verification
-// and recipient linkage; neither takes a domain from the message or caller.
-func (s *SigningService) deliveryStatusEvidenceRequest(request DeliveryStatusRequest) dkim2.DSNSigningEvidenceRequest {
-	if s.policies.reportingIdentity.Valid() {
-		return dkim2.NewPostfixReportingDSNSigningEvidenceRequest(
-			request.RawMessage(), request.OuterReversePath(), request.OuterRecipients(),
-			s.policies.reportingIdentity,
-		)
+// unsignedDeliveryStatus records one closed unsigned outcome and returns its
+// mutation-free assessment.
+func (s *SigningService) unsignedDeliveryStatus(reason DeliveryStatusUnsignedReason) SigningAssessment {
+	if s != nil && !nilInterface(s.dsnObserver) {
+		func() {
+			defer func() { _ = recover() }()
+			s.dsnObserver.ObserveDSNUnsigned(string(reason))
+		}()
 	}
-	return dkim2.NewPostfixDerivedDSNSigningEvidenceRequest(
-		request.RawMessage(), request.OuterReversePath(), request.OuterRecipients(),
-	)
+	return NewUnsignedDeliveryStatusAssessment(reason)
 }
 
 // deliveryStatusAssessment seals one applicable delivery-status result while
@@ -137,29 +138,54 @@ func deliveryStatusAssessment(result OperationResult, err error) (SigningAssessm
 	return NewApplicableSigningAssessment(result)
 }
 
-// signAuthorizedDeliveryStatus resolves the delivery_status profile for the
-// evidence signing identity (the reporting MTA domain or the authenticated
-// embedded d=) and signs the exact DSN. It runs only after the
+// deliveryStatusProfileSource exposes one pinned signing generation to the
+// library's Draft-08 Section 16.2 identity resolver. It answers only the
+// delivery_status policy use of one tenant at one operation instant.
+type deliveryStatusProfileSource struct {
+	lease  SigningLease
+	tenant string
+	at     time.Time
+}
+
+// DeliveryStatusProfile resolves the delivery_status profile of one candidate
+// domain. A provider's permanent absence answer (not found, inactive, or a
+// domain it cannot hold) is reported as found=false; malformed profile data
+// and every temporary or undecided answer stay errors, so resolution never
+// skips past a broken more specific profile.
+func (p deliveryStatusProfileSource) DeliveryStatusProfile(ctx context.Context, domain string) (dkim2.SigningProfile, bool, error) {
+	profile, err := p.lease.ResolvePolicy(ctx, p.tenant, domain, signingstore.PolicyDeliveryStatus, p.at)
+	if err == nil {
+		return profile, true, nil
+	}
+	if deliveryStatusProfileAbsent(err) {
+		return dkim2.SigningProfile{}, false, nil
+	}
+	return dkim2.SigningProfile{}, false, err
+}
+
+// deliveryStatusProfileAbsent narrows the shared permanent-absence rule to
+// genuine absence: malformed provider data is a defect, not an absent profile.
+func deliveryStatusProfileAbsent(err error) bool {
+	return permanentPolicyResolutionFailure(err) && provider.ErrorCodeOf(err) != provider.ErrorCodeMalformedData
+}
+
+// signAuthorizedDeliveryStatus resolves the Draft-08 Section 16.2 signing
+// identity through the library resolver over the delivery_status profiles of
+// the pinned generation and signs the exact DSN. It runs only after the
 // library issued opaque evidence, so no profile or key is touched earlier.
+// A report without an admissible identity leaves unsigned with its reason.
 func (s *SigningService) signAuthorizedDeliveryStatus(
 	ctx context.Context,
 	request DeliveryStatusRequest,
 	evidence dkim2.DSNSigningEvidence,
 	metadata dkim2.SigningMetadata,
 	operationTime time.Time,
-) (OperationResult, error) {
+) (SigningAssessment, error) {
 	lease, err := s.store.Acquire(ctx)
 	if err != nil {
-		return NewOperationResult(OperationDeliveryStatus, OperationTemperror, OperationTempfail, nil)
+		return deliveryStatusAssessment(NewOperationResult(OperationDeliveryStatus, OperationTemperror, OperationTempfail, nil))
 	}
 	defer func() { _ = lease.Close() }()
-	profile, err := lease.ResolvePolicy(ctx, request.Tenant(), evidence.SigningDomain(), signingstore.PolicyDeliveryStatus, operationTime)
-	if err != nil {
-		if permanentPolicyResolutionFailure(err) {
-			return NewOperationResult(OperationDeliveryStatus, OperationPermerror, OperationReject, nil)
-		}
-		return NewOperationResult(OperationDeliveryStatus, OperationTemperror, OperationTempfail, nil)
-	}
 	signer, err := dkim2.NewSigner(
 		s.publicKeys,
 		dkim2.NewRequestRouteAuthority(),
@@ -168,8 +194,46 @@ func (s *SigningService) signAuthorizedDeliveryStatus(
 		dkim2.WithSigningClock(func() time.Time { return operationTime }),
 	)
 	if err != nil {
-		return OperationResult{}, &DomainError{}
+		return SigningAssessment{}, &DomainError{}
 	}
+	evidence, profile, err := signer.ResolveDSNSigningIdentity(ctx, evidence, deliveryStatusProfileSource{
+		lease: lease, tenant: request.Tenant(), at: operationTime,
+	})
+	if err != nil {
+		switch dkim2.DSNEvidenceStageOf(err) {
+		case dkim2.DSNEvidenceStageIdentityUnavailable:
+			return s.unsignedDeliveryStatus(DeliveryStatusIdentityUnavailable), nil
+		case dkim2.DSNEvidenceStageFromNotAuthentic:
+			return s.unsignedDeliveryStatus(DeliveryStatusFromNotAuthentic), nil
+		}
+		return deliveryStatusAssessment(deliveryStatusResolutionFailure(err))
+	}
+	return deliveryStatusAssessment(s.signResolvedDeliveryStatus(ctx, request, signer, evidence, profile, metadata))
+}
+
+// deliveryStatusResolutionFailure classifies a failed identity resolution
+// from the cause the library stage error wraps: a permanent provider answer
+// (malformed profile data) or an inconsistent profile is a permanent refusal,
+// everything else (unavailable, ambiguous, canceled) is temporary.
+func deliveryStatusResolutionFailure(err error) (OperationResult, error) {
+	var signingError *dkim2.SigningError
+	if permanentPolicyResolutionFailure(errors.Unwrap(err)) ||
+		errors.As(err, &signingError) && signingError.Code() == dkim2.SigningErrorInvalidRequest {
+		return NewOperationResult(OperationDeliveryStatus, OperationPermerror, OperationReject, nil)
+	}
+	return NewOperationResult(OperationDeliveryStatus, OperationTemperror, OperationTempfail, nil)
+}
+
+// signResolvedDeliveryStatus plans the dedicated delivery-status route and
+// signs the exact DSN under the resolved identity and profile.
+func (s *SigningService) signResolvedDeliveryStatus(
+	ctx context.Context,
+	request DeliveryStatusRequest,
+	signer *dkim2.Signer,
+	evidence dkim2.DSNSigningEvidence,
+	profile dkim2.SigningProfile,
+	metadata dkim2.SigningMetadata,
+) (OperationResult, error) {
 	source, err := dkim2.NewSigningSource(request.RawMessage())
 	if err != nil {
 		return operationPermanentFailure(OperationDeliveryStatus)

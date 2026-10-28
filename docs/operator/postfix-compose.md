@@ -155,40 +155,84 @@ Milter route whose signing block contains only the administrative tenant and
 `domain_source: verified_embedded`; it must not contain `signing.domain` or
 `signing.dsn_domain`. The adapter admits that route only for the exact
 EOH-confirmed `{postfix_internal_origin}=bounce` value. The daemon then verifies
-the complete embedded Draft-08 evidence before datasource access, derives the
-canonical highest authenticated `d=`, and resolves the exact
-`delivery_status` policy for that tenant/domain pair. This permits one route to
-serve multiple domains without trusting the outer envelope or caller-selected
-domain. Missing, ambiguous, unavailable, or mismatched policy/profile data
-fails closed.
+the complete embedded Draft-08 evidence before datasource access and chooses
+the signing domain under draft-ietf-dkim-dkim2-spec-08 Section 16.2. This
+permits one route to serve multiple domains without trusting the outer
+envelope or caller-selected domain. Ambiguous, unavailable, malformed, or
+mismatched policy/profile data fails closed.
 
-Under Draft-08 a bounce is a new `i=1` message whose From must be Authentic
-for its signing domain (Section 12.4). Postfix writes
-`From: MAILER-DAEMON@$myhostname`, so with the derived identity only bounces
-for originals signed at or above `$myhostname`'s domain can be signed; every
-other bounce is refused with `chain_failure`. A host that bounces for several
-domains sets the reporting MTA's own domain on the DSN daemon and gives that
-domain a `delivery_status` policy:
+#### DSN signing identity
+
+Section 16.2: "When creating a DSN there MUST be a relaxed domain match
+between the Signing Domain [...] and a recipient address in the rt= value of
+the highest numbered DKIM2-Signature header field of the message being
+reported upon". A bounce is also a new `i=1` message whose From must be
+Authentic for its signing domain (Sections 11 and 12.4). The daemon therefore
+signs a bounce only under a tenant `delivery_status` profile domain that
+
+- equals, or is a parent of, the domain of an `rt=` recipient of the returned
+  original's highest DKIM2-Signature, and
+- equals, or is a parent of, the domain of the bounce From.
+
+Candidates are tried with RFC 3464-linked recipients (`Final-Recipient`,
+`Original-Recipient`) first, then the optional `reporting_domain` when it is
+itself a candidate, then the most specific domain. There is no From rewrite
+and no fallback to another domain.
+
+Postfix writes the bounce From as `MAILER-DAEMON@$myorigin`. `$myorigin` must
+therefore sit at or below the DSN signing domain. On a single-domain host set
+`myorigin` to that domain (or a subdomain of it) and give that domain a
+`delivery_status` profile. A multi-domain host gets signed bounces only for
+recipient domains that lie under a profile domain at or above `$myorigin`;
+for example, with `myorigin = example.test`, a profile for `example.test` signs
+bounces for recipients in `example.test` and `mail.example.test`, but not for
+`other.test`.
+
+When no profile domain matches, or none makes the From Authentic, the report
+is not an error: the daemon answers `/v1/dsn/sign` with HTTP 204 and
+`X-DKIM2-Unsigned-Reason`, the adapter continues without mutation, and Postfix
+delivers the bounce unsigned and unchanged as a classic RFC 3464 notification.
+Each such report increments
+`dkim2d_dsn_unsigned_total{unsigned_reason=...}` and emits one
+`dsn.unsigned.completed` log event:
+
+- `delivery_status_identity_unavailable`: no profile domain matches an `rt=`
+  recipient. Every bounce of mail this system sent to a remote recipient (the
+  sender-side bounce, `DKIM2-ISSUE-0023`) lands here, so expect the unsigned
+  share to be roughly the share of your bounces that concern remote
+  recipients, plus bounces for local recipient domains without a matching
+  profile.
+- `delivery_status_from_not_authentic`: a profile matches `rt=`, but
+  `$myorigin` is not at or below it. This is a configuration defect; fix
+  `myorigin` or the profile domain.
+- `unsigned_original`: the returned original carries no `DKIM2-Signature` at
+  all and `unsigned_original: continue` is set (see below).
+
+`reporting_domain` (optional) only prefers one matching domain:
 
 ```yaml
 signing:
   policy:
     delivery_status:
-      reporting_domain: reports.example.test   # $myhostname is mx.reports.example.test
+      reporting_domain: example.test   # used only when it matches rt= and $myorigin
 ```
 
-The daemon still verifies the complete embedded evidence and the outer
-recipient linkage first, then signs every bounce as `d=reports.example.test`. The
-Milter configuration is unchanged.
+Migration from the Draft-07 behavior: `reporting_domain` used to sign every
+bounce, including bounces for recipients outside that domain. Draft-08
+forbids that, so such bounces now leave unsigned with
+`delivery_status_identity_unavailable`. Review the counter after the upgrade;
+a high `delivery_status_from_not_authentic` count means `$myorigin` does not
+sit under your DSN profile domain.
 
 For a rejected DSN before policy resolution, inspect the single
 `dsn.evidence.completed` log event or the matching
 `dkim2d_dsn_evidence_total{evidence_stage=...,result=...}` counter. The closed
 stage distinguishes outer MIME parsing, embedded-message parsing or
-verification, RFC 3464 linkage, outer-recipient linkage, and signing-domain
-derivation without logging the domain, selector, address, queue ID, signature,
-or message bytes. `authorized` proves evidence completed before datasource
-acquisition; it does not by itself prove policy resolution or signing.
+verification, RFC 3464 linkage, and outer-recipient linkage without logging
+the domain, selector, address, queue ID, signature, or message bytes.
+`authorized` proves evidence completed before datasource acquisition; it does
+not by itself prove policy resolution or signing. The later Section 16.2
+identity outcomes are counted in `dkim2d_dsn_unsigned_total` (see above).
 
 A bounce for inbound mail whose returned original carries no `DKIM2-Signature`
 header field at all appears as `evidence_stage="embedded_unsigned"`. By default
@@ -204,9 +248,11 @@ signing:
       unsigned_original: continue
 ```
 
-The daemon then answers `/v1/dsn/sign` with HTTP 204, the adapter continues
-without mutation, and Postfix delivers the bounce unsigned and unchanged as a
-classic RFC 3464 notification (`result="not_applicable"`). Bounces whose
+The daemon then answers `/v1/dsn/sign` with HTTP 204 and
+`X-DKIM2-Unsigned-Reason: unsigned_original`, the adapter continues without
+mutation, and Postfix delivers the bounce unsigned and unchanged as a classic
+RFC 3464 notification (`result="not_applicable"`, and
+`dkim2d_dsn_unsigned_total{unsigned_reason="unsigned_original"}`). Bounces whose
 returned original carries any `DKIM2-Signature` field are never relaxed. The
 Milter configuration needs no change.
 
@@ -584,10 +630,14 @@ case, and a rewritten address is indistinguishable from a misrouted one.
 ### Provisioning `delivery_status` for forwarding domains
 
 The propagation signing domain is the canonical `d=` of the removed, verified
-completion signature. The outgoing delivery-status authority, which derives
-the domain from the embedded highest `d=` or uses the configured
-`reporting_domain`, does not apply and is not reachable
-through the propagation capability. Every domain this deployment forwards mail
+completion signature. The outgoing delivery-status identity resolver and
+`reporting_domain` do not apply and are not reachable through the propagation
+capability. Draft-08 Sections 16.2 and 16.3 additionally require that domain
+to relaxed-match the `rt=` address of the previous hop, which becomes the
+highest signature of the rebuilt report; otherwise propagation is discarded
+with `delivery_status.propagation = forbidden_identity_misaligned`. A
+forwarding domain must therefore sign under the recipient domain the previous
+hop delivered to, or a parent of it. Every domain this deployment forwards mail
 under therefore needs an active `delivery_status` signing profile for the
 tenant, in addition to whatever `originator`, `ordinary_transit`, or
 `next_domain_transit` profiles it already holds.

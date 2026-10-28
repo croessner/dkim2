@@ -352,7 +352,7 @@ func (e ReceivedEvaluator) Evaluate(ctx context.Context, request ReceivedRequest
 	if err := ctx.Err(); err != nil {
 		return ReceivedEvaluation{}, contextError(ReceivedStagePreviousHop, err)
 	}
-	evaluation.propagation = classifyPreviousHop(state, evaluation.run)
+	evaluation.propagation = classifyPreviousHop(state, evaluation.run, evaluation.completion.domain)
 	return evaluation, nil
 }
 
@@ -619,8 +619,9 @@ func evaluateFailureClass(state *receivedState, evaluation *ReceivedEvaluation) 
 	return true
 }
 
-// classifyPreviousHop classifies i=k-1 and the conditions visible without a rebuild.
-func classifyPreviousHop(state *receivedState, run verify.LocalHopRun) PropagationResult {
+// classifyPreviousHop classifies i=k-1 and the conditions visible without a
+// rebuild. completionDomain is the d= that will sign the propagated report.
+func classifyPreviousHop(state *receivedState, run verify.LocalHopRun, completionDomain string) PropagationResult {
 	if state.unsupported || !run.Valid() {
 		return PropagationUnsupportedChain
 	}
@@ -633,10 +634,24 @@ func classifyPreviousHop(state *receivedState, run verify.LocalHopRun) Propagati
 	if run.PreviousHopNullSender() {
 		return PropagationForbiddenNullPreviousSender
 	}
-	if len(run.PreviousHopRecipients()) != 1 || !historicalInstancesSupported(state.input.Instances(), run.PreviousHopInstance()) {
+	recipients := run.PreviousHopRecipients()
+	if len(recipients) != 1 || !historicalInstancesSupported(state.input.Instances(), run.PreviousHopInstance()) {
 		return PropagationNotReconstructable
 	}
+	if !propagatedIdentityAligned(completionDomain, recipients[0]) {
+		return PropagationForbiddenIdentityMisaligned
+	}
 	return PropagationEligible
+}
+
+// propagatedIdentityAligned applies Draft-08 Section 16.2 to a propagated
+// report (Section 16.3): the rebuilt report's highest signature is the
+// previous hop, so the propagating signing domain must relaxed-match (rt=
+// address as Parameter1, d= as Parameter2) that hop's rt= address. An rt=
+// without a DNS domain, such as an address literal, never matches.
+func propagatedIdentityAligned(signingDomain string, previousRecipient []byte) bool {
+	recipientDomain, valid := signature.CanonicalEnvelopeDomain(previousRecipient, false)
+	return valid && signingDomain != "" && signature.RelaxedDomainMatch(signingDomain, recipientDomain)
 }
 
 // historicalInstancesSupported reports whether every extracted Message-Instance

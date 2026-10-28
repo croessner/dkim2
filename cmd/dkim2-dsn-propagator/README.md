@@ -216,7 +216,8 @@ process lifecycle and readiness:
 
 - `dsn_propagator_transactions_total{outcome}` with `outcome` in `accepted`,
   `rejected`, `discarded_terminal_origin`, `discarded_not_failure`,
-  `discarded_null_previous_sender`, `discarded_unsupported_chain`,
+  `discarded_null_previous_sender`, `discarded_identity_misaligned`,
+  `discarded_unsupported_chain`,
   `discarded_not_reconstructable`, `discarded_unprovisioned_domain`,
   `discarded_committed`, `deferred`, and `contract_failure`.
 - `dsn_propagator_reinjection_total{outcome}` with `outcome` in `accepted`,

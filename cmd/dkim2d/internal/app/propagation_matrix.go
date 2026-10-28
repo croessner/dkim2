@@ -113,6 +113,7 @@ func classifyPropagationEvaluation(projection DeliveryStatusProjection) propagat
 	case dkim2.ReceivedDSNPropagationTerminalOrigin,
 		dkim2.ReceivedDSNPropagationNotFailure,
 		dkim2.ReceivedDSNPropagationForbiddenNullPreviousSender,
+		dkim2.ReceivedDSNPropagationForbiddenIdentityMisaligned,
 		dkim2.ReceivedDSNPropagationUnsupportedChain,
 		dkim2.ReceivedDSNPropagationNotApplicable:
 		return discardedPropagation()

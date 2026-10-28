@@ -260,12 +260,14 @@ func mustRawSpec(t *testing.T, spec propagationSpec) []byte {
 // TestRebuildRemovesEveryRunMember proves nd= and imaginary-hop runs of
 // several signatures are removed completely and the previous hop is kept byte-exact.
 func TestRebuildRemovesEveryRunMember(t *testing.T) {
-	previous := receivedHop(receivedRemoteDomain, rebuildPreviousSender, receivedLocalRecipient)
+	// Draft-08 Sections 16.2 and 16.3: the previous hop's rt= sits under the
+	// completion d= that signs the propagated report.
+	previous := receivedHop(receivedRemoteDomain, rebuildPreviousSender, receivedForwardRecipient)
 	nextDomainMember := receivedNextDomainHop(receivedLocalDomain, receivedForwardDomain)
 	nextDomainMember.Instance = 2
 	nextDomainCompletion := receivedHop(receivedForwardDomain, receivedForwardMailFrom, receivedDestination)
 	nextDomainCompletion.Instance = 2
-	imaginaryMember := receivedHop(receivedLocalDomain, receivedLocalMailFrom, "<relay@forward.local.example>")
+	imaginaryMember := receivedHop(receivedLocalDomain, "<forwarded@forward.local.example>", "<relay@forward.local.example>")
 	imaginaryMember.Instance = 2
 	cases := []struct {
 		name      string

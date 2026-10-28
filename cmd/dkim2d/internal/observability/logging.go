@@ -33,6 +33,7 @@ const (
 	keyStatusClass     = "status_class"
 	keyDisposition     = "disposition"
 	keyEvidenceStage   = "evidence_stage"
+	keyUnsignedReason  = "unsigned_reason"
 	keyVerdict         = "verdict"
 	valueInternal      = "internal"
 	valueFailure       = "failure"
@@ -94,7 +95,7 @@ var allowedLogKeys = []string{
 	"lifecycle_state", "message_size_bucket", keyMethod, keyOperation,
 	keyPolicyMode, keyProvider, keyProviderState, keyReady, keyReasonClass, "recipient_count_bucket",
 	keyReplayState, "replay_store_result", keyResult, "route",
-	"signature_count_bucket", keyStage, keyStatusClass, "tracing_exporter", keyVerdict,
+	"signature_count_bucket", keyStage, keyStatusClass, "tracing_exporter", keyUnsignedReason, keyVerdict,
 }
 
 // receivedDSNStages is the closed stage vocabulary of dsn.received.completed
@@ -124,7 +125,7 @@ var allowedLogValues = map[string][]string{
 	keyDNSResult:   {valueFound, "missing", valueInvalid, "ambiguous", valueTemporary, valueInternal},
 	"draft":        {dkim2.DraftIdentifier},
 	"error_class":  {valueNone, "canceled", "deadline", valueTimeout, valueTransport, "tls", "encoding", "shutdown", valueInternal},
-	keyEventID:     {"config.accepted", "lifecycle.transition", "readiness.transition", "http.request.completed", "process.completed", "dsn.evidence.completed", "dsn.received.completed", "dsn.propagation.completed", "dns.lookup.completed", "replay.coordinate.completed", "datasource.operation.completed", "telemetry.export.failed"},
+	keyEventID:     {"config.accepted", "lifecycle.transition", "readiness.transition", "http.request.completed", "process.completed", "dsn.evidence.completed", "dsn.unsigned.completed", "dsn.received.completed", "dsn.propagation.completed", "dns.lookup.completed", "replay.coordinate.completed", "datasource.operation.completed", "telemetry.export.failed"},
 	keyEvidenceStage: {
 		string(dkim2.DSNEvidenceStagePreflight), string(dkim2.DSNEvidenceStageMIMEParse),
 		string(dkim2.DSNEvidenceStageEmbeddedMessage), string(dkim2.DSNEvidenceStageEmbeddedVerification),
@@ -132,6 +133,8 @@ var allowedLogValues = map[string][]string{
 		string(dkim2.DSNEvidenceStageOuterRecipientLinkage), string(dkim2.DSNEvidenceStageSigningDomain),
 		string(dkim2.DSNEvidenceStageAuthorized),
 	},
+	// keyUnsignedReason mirrors the closed REST X-DKIM2-Unsigned-Reason vocabulary.
+	keyUnsignedReason:        {"unsigned_original", "delivery_status_identity_unavailable", "delivery_status_from_not_authentic"},
 	"lifecycle_state":        {"starting", "active", "stopping", "stopped", "failed"},
 	keyMethod:                {"GET", "HEAD", "POST", "OPTIONS", "other"},
 	keyOperation:             {"config", "lifecycle", "readiness", "health", "metrics", valueProcess, valueSign, valueRevise, valueDSNSign, valuePropagation, "verify", "dns_lookup", valuePolicy, "replay_coordinate", "replay_store", "datasource_initial_load", "datasource_refresh", "datasource_resolve", "telemetry_export", valueUnmatched},

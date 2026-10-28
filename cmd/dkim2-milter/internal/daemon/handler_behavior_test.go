@@ -212,19 +212,66 @@ func TestMapSignAcceptsOnlyExactNotApplicableNoContent(t *testing.T) {
 }
 
 // TestMapDeliveryStatusAcceptsOnlyExactNotApplicableNoContent proves the DSN
-// no-op issued under the daemon's unsigned-original compatibility policy maps
-// to a mutation-free continue, bound to the dedicated DSN route and envelope.
+// "not DKIM2 signed" response maps to a mutation-free continue (accept
+// without signature), bound to the dedicated DSN route and envelope.
 func TestMapDeliveryStatusAcceptsOnlyExactNotApplicableNoContent(t *testing.T) {
-	assertNoContentMapping(t, routeDeliveryStatus, routeSign, operationDSNSign,
-		func(response *http.Response, body []byte, hasJSONDocument bool) (milter.Result, error) {
-			wrapped := &generated.SignDeliveryStatusResponse{HTTPResponse: response, Body: body}
-			if hasJSONDocument {
-				wrapped.JSON200 = &generated.OperationResponse{}
-			}
-			return mapDeliveryStatusResponse(wrapped)
-		})
+	mapDeliveryStatus := func(response *http.Response, body []byte, hasJSONDocument bool) (milter.Result, error) {
+		wrapped := &generated.SignDeliveryStatusResponse{HTTPResponse: response, Body: body}
+		if hasJSONDocument {
+			wrapped.JSON200 = &generated.OperationResponse{}
+		}
+		return mapDeliveryStatusResponse(wrapped)
+	}
+	assertNoContentMapping(t, routeDeliveryStatus, routeSign, operationDSNSign, mapDeliveryStatus)
 	if _, err := mapDeliveryStatusResponse(nil); err == nil {
 		t.Fatal("absent delivery-status response was accepted")
+	}
+	assertUnsignedReasonVocabulary(t, mapDeliveryStatus)
+}
+
+// testUnsignedOriginal is the unsigned-original compatibility reason.
+const testUnsignedOriginal = "unsigned_original"
+
+// assertUnsignedReasonVocabulary proves the DSN 204 requires exactly one
+// X-DKIM2-Unsigned-Reason from the closed vocabulary and that every closed
+// reason, including the Draft-08 Section 16.2 identity outcomes, continues
+// without mutation instead of tempfailing the bounce.
+func assertUnsignedReasonVocabulary(
+	t *testing.T,
+	mapResponse func(*http.Response, []byte, bool) (milter.Result, error),
+) {
+	t.Helper()
+	for _, testCase := range []struct {
+		name   string
+		values []string
+		accept bool
+	}{
+		{name: "unsigned original", values: []string{testUnsignedOriginal}, accept: true},
+		{name: "identity unavailable", values: []string{"delivery_status_identity_unavailable"}, accept: true},
+		{name: "from not authentic", values: []string{"delivery_status_from_not_authentic"}, accept: true},
+		{name: "missing"},
+		{name: "unknown", values: []string{"delivery_status_other"}},
+		{name: "duplicate", values: []string{testUnsignedOriginal, testUnsignedOriginal}},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			header := http.Header{
+				"Cache-Control": []string{cacheControlNoStore},
+				"Connection":    []string{connectionClose},
+			}
+			for _, value := range testCase.values {
+				header.Add(unsignedReasonHeader, value)
+			}
+			response := &http.Response{
+				StatusCode: http.StatusNoContent,
+				Request:    &http.Request{Method: http.MethodPost, URL: &url.URL{Path: routeDeliveryStatus}},
+				Close:      true, ProtoMajor: 1, ProtoMinor: 1, Header: header,
+			}
+			result, err := mapResponse(response, nil, false)
+			accepted := err == nil && result.Outcome == milter.DispositionContinue && len(result.Actions) == 0
+			if accepted != testCase.accept {
+				t.Fatalf("reason %v accepted=%t error=%v", testCase.values, accepted, err)
+			}
+		})
 	}
 }
 
@@ -252,6 +299,16 @@ func assertNoContentMapping(
 			"Date":          []string{validResponseDate},
 		},
 		ContentLength: 0,
+	}
+	if route == routeDeliveryStatus {
+		response.Header.Set(unsignedReasonHeader, "delivery_status_identity_unavailable")
+	} else {
+		foreignReason := *response
+		foreignReason.Header = response.Header.Clone()
+		foreignReason.Header.Set(unsignedReasonHeader, testUnsignedOriginal)
+		if _, foreignErr := mapResponse(&foreignReason, nil, false); foreignErr == nil {
+			t.Fatal("delivery-status unsigned reason was accepted on another route")
+		}
 	}
 	result, err := mapResponse(response, nil, false)
 	if err != nil || result.Operation != operation || result.Result != verificationNone ||

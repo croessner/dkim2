@@ -202,7 +202,7 @@ func TestOpenAPIContractClosesPropagationVocabularies(t *testing.T) {
 		"recipient_linkage": {"linked", "unlinked", contractNotEvaluatedValue},
 		"propagation": {
 			"not_applicable", "eligible", "terminal_origin", "not_failure",
-			"forbidden_null_previous_sender", "unsupported_chain", "not_reconstructable", contractNotEvaluatedValue,
+			"forbidden_null_previous_sender", "forbidden_identity_misaligned", "unsupported_chain", "not_reconstructable", contractNotEvaluatedValue,
 		},
 	} {
 		assertEnum(t, "DeliveryStatusProjection."+member, propertyOf(t, projection, member), values)

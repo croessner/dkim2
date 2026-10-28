@@ -22,7 +22,10 @@ import (
 )
 
 const (
-	batchFixtureHostedDomain      = "hosted.test"
+	// batchFixtureHostedDomain sits under batchFixtureForwarderDomain:
+	// Draft-08 Sections 16.2 and 16.3 require the propagating completion d=
+	// to relaxed-match the previous hop's rt= address (alias@<hosted>).
+	batchFixtureHostedDomain      = "hosted.forwarder.test"
 	batchFixtureOriginDomain      = "origin.test"
 	batchFixtureDestinationDomain = "destination.test"
 	batchFixtureGeneration        = "0123456789abcdef0123456789abcdef"
@@ -99,7 +102,7 @@ func exportBatchFixture(t *testing.T, directory string) batchViaFixture {
 		dns[key.Selector+"._domainkey."+key.Domain+"."] = "v=DKIM1; k=ed25519; p=" + base64.StdEncoding.EncodeToString(key.Public)
 	}
 	writeBatchFixtureFile(t, filepath.Join(directory, "original.eml"), f.request.state.original.state.raw)
-	writeBatchFixtureJSON(t, filepath.Join(directory, "original-envelope.json"), batchFixtureEnvelope{MailFrom: "<sender@origin.test>", RcptTo: []string{"<alias@hosted.test>"}})
+	writeBatchFixtureJSON(t, filepath.Join(directory, "original-envelope.json"), batchFixtureEnvelope{MailFrom: "<sender@origin.test>", RcptTo: []string{"<alias@hosted.forwarder.test>"}})
 	exportBatchFixtureAuthority(t, generationDir, keys[1:3], dns)
 	writeBatchFixtureJSON(t, filepath.Join(directory, "dns-txt.json"), dns)
 	for _, name := range []string{"process-capability", "batch-capability", "propagate-capability", "replay-hmac"} {

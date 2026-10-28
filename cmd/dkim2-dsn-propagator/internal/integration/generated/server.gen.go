@@ -183,6 +183,7 @@ func (e DeliveryStatusProjectionOuterAlignment) Valid() bool {
 // Defines values for DeliveryStatusProjectionPropagation.
 const (
 	DeliveryStatusPropagationEligible                    DeliveryStatusProjectionPropagation = "eligible"
+	DeliveryStatusPropagationForbiddenIdentityMisaligned DeliveryStatusProjectionPropagation = "forbidden_identity_misaligned"
 	DeliveryStatusPropagationForbiddenNullPreviousSender DeliveryStatusProjectionPropagation = "forbidden_null_previous_sender"
 	DeliveryStatusPropagationNotApplicable               DeliveryStatusProjectionPropagation = "not_applicable"
 	DeliveryStatusPropagationNotEvaluated                DeliveryStatusProjectionPropagation = "not_evaluated"
@@ -196,6 +197,8 @@ const (
 func (e DeliveryStatusProjectionPropagation) Valid() bool {
 	switch e {
 	case DeliveryStatusPropagationEligible:
+		return true
+	case DeliveryStatusPropagationForbiddenIdentityMisaligned:
 		return true
 	case DeliveryStatusPropagationForbiddenNullPreviousSender:
 		return true

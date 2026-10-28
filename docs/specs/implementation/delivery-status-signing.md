@@ -128,72 +128,67 @@ output fields and a temporary result.
 
 ### Alignment and Local Identity
 
-The authenticated highest embedded `d=` domain must have a daemon-owned
-delivery-status policy for the supplied tenant. It may not fall back to an
-originator profile. The embedded highest signature must verify and have a
-non-null `mf=` that exactly matches the one observed outer DSN recipient.
+The embedded highest signature must verify and have a non-null `mf=` that
+exactly matches the one observed outer DSN recipient. At least one RFC 3464
+original/final recipient must link to an authenticated highest `rt=` path.
 
 No original SMTP envelope is available independently at bounce time. The
 embedded verifier therefore marks current-envelope comparison not applicable
 instead of copying signed `mf=` and `rt=` claims into an observed envelope.
 It still verifies cryptography, available hashes, timestamp, custody, and the
-authenticated highest `d=`, `mf=`, and `rt=` fields. The daemon canonicalizes
-authenticated `d=` only after verification, then uses that exact value for
-policy resolution. A caller, adapter, outer envelope, tenant default, suffix,
-alias, or wildcard cannot preselect or replace it. At least one RFC 3464
-original/final recipient must link to an authenticated highest `rt=` path.
+authenticated highest `d=`, `mf=`, and `rt=` fields. Evidence evaluation
+(`EvaluateDSNForSigning`) touches no profile and binds no signing identity.
 
-### Reporting MTA Identity
+### Signing Identity (Draft-08 Section 16.2)
 
-Draft-08 Sections 12.4 and 16.2 make an MTA-generated DSN a new `i=1`
-message whose From header field must be Authentic for its signing domain.
-Postfix bounce(8) writes `From: MAILER-DAEMON@$myhostname`, so a report
-signed under the embedded original's `d=` is Authentic only when
-`$myhostname` lies at or below that domain. For every other domain the
-library signer refuses the report with `chain_failure`, which the Postfix
-adapter maps to a refused bounce.
+Draft-08 Section 16.2: "When creating a DSN there MUST be a relaxed domain
+match between the Signing Domain (placed into the d= value of the
+DKIM2-Signature header field of the DSN) and a recipient address in the rt=
+value of the highest numbered DKIM2-Signature header field of the message
+being reported upon". Section 7.1 item 4 fixes the direction: the `rt=`
+address is Parameter1 and the `d=` value Parameter2, so the signing domain is
+the `rt=` domain or one of its parents.
 
-`dkim2d` therefore owns the optional operator setting
-`signing.policy.delivery_status.reporting_domain`
-(`DKIM2D_SIGNING_POLICY_DELIVERY_STATUS_REPORTING_DOMAIN`). It accepts exactly
-one canonical lowercase DNS domain with at least two labels and a non-numeric
-top label; any other value, including an explicitly empty one, fails at load
-time, and it is invalid with `signing.backend: disabled`. When it is set, the
-Postfix route evaluates the report with
-`NewPostfixReportingDSNSigningEvidenceRequest`:
+`Signer.ResolveDSNSigningIdentity` is the single owner of the choice. It takes
+the evaluated evidence and a `DSNProfileSource` (the daemon passes the
+`delivery_status` profiles of the pinned signing generation for the request
+tenant) and walks `dsn.Evidence.SigningIdentityCandidates` in this order:
 
-- The embedded original is verified, linked to the RFC 3464 recipients, and
-  bound to the outer recipient through its `mf=` exactly as on the derived
-  path. Every evidence failure still happens before datasource access.
-- The evidence signing identity is the configured reporting domain instead of
-  the embedded `d=`, and the daemon resolves the `delivery_status` policy for
-  that tenant/domain pair. The library rejects a profile for any other domain.
-- The reporting domain is operator configuration. It is never taken from the
-  report, the outer envelope, the Milter request, or a tenant default.
+1. candidates that match an `rt=` address named by an RFC 3464
+   `Final-Recipient` or `Original-Recipient` field first;
+2. within that tier, the operator-preferred domain
+   (`signing.policy.delivery_status.reporting_domain`) first, but only when it
+   is itself a candidate;
+3. then the most specific domain (most labels) first;
+4. then ascending octet order as the final deterministic tie-break.
 
-With the setting, a bounce of inbound mail is signed as well: a report whose
-returned original carries a remote sender's verified signature no longer
-fails at policy lookup for that foreign `d=`. Section 16.2 makes the
-generating system sign its DSN, and the exposure stays bounded: the outer
-recipient must byte-equal the verified embedded `mf=`, the embedded highest
-signature must pass cryptographic verification, and the DSN signature binds
-that `rt=`. The signed report can therefore only go to the sender address the
-original already proved, and Postfix writes the outer header, text, and status
-parts.
+Candidates are the `rt=` domains and their parents (Section 7.2 step 5), each
+admitted by `signature.RelaxedDomainMatch`, the one owner of the rule; the
+list is bounded by `dsn.MaxSigningIdentityCandidates` (64). The first
+candidate that has a `delivery_status` profile and makes the report's own From
+header field Authentic (Sections 11 and 12.4, `verify.FromAuthenticFor`) is
+bound to the evidence, and `SignDSN` accepts only such resolved evidence and
+the matching profile. The previous derived identity "embedded highest `d=`"
+and the reporting identity that signed regardless of `rt=` are removed.
 
-The reporting identity is still subject to Section 12.4. If the configured
-domain is not at or above the domain in the report's From header field, every
-bounce fails closed with `chain_failure`.
+When no candidate has a profile the result is the closed stage
+`identity_unavailable`; when candidates have profiles but none makes the From
+Authentic it is `from_not_authentic`. Both mean "this report cannot be DKIM2
+signed": the daemon answers `POST /v1/dsn/sign` with HTTP 204 and
+`X-DKIM2-Unsigned-Reason: delivery_status_identity_unavailable` or
+`delivery_status_from_not_authentic`, the Postfix adapter continues without
+mutation, and Postfix delivers the report unsigned. A provider's
+not-found, inactive, or invalid-domain answer counts as absence; malformed
+profile data or a profile for another domain is a permanent refusal, and an
+unavailable or ambiguous provider is temporary. There is no fallback to a
+non-matching domain and no From rewrite.
 
-The setting does not change `unsigned_original`. When it is absent, the
-derived embedded-`d=` behavior described above applies unchanged.
-
-Draft-08 Section 16.4 item 1 lets a DSN receiver check that the DSN's `i=1`
-signing domain relaxed-matches a recipient of the returned message. A bounce
-that a sending MTA generates for a remote recipient cannot meet that check
-under either identity: neither the embedded `d=` nor the reporting domain is
-the remote recipient's domain. The reporting identity keeps the report a
-Validly Signed Draft-08 message with an Authentic From.
+A sender-side bounce (the highest embedded signature is this system's and its
+`rt=` is remote) can never satisfy Section 16.2 and always leaves unsigned
+(`DKIM2-ISSUE-0023`). The evidence gate keeps requiring a passing
+current target, which is stricter than the Section 16.2 Provisional
+Verification ("The assurances in this section depend on the message being
+reported upon having been Provisionally Verified") and is local policy.
 
 Generic library DSNs retain strict RFC 3464 field ordering and reject folding.
 The Postfix-exclusive daemon route additionally recognizes only the current
@@ -304,8 +299,14 @@ The daemon emits exactly one terminal pre-policy DSN evidence observation per
 request. `dsn.evidence.completed` and `dkim2d_dsn_evidence_total` carry only
 the closed `evidence_stage` and `result` classes. Stages are `preflight`,
 `mime_parse`, `embedded_message`, `embedded_verification`, `embedded_unsigned`,
-`embedded_claims`, `delivery_status_linkage`, `outer_recipient_linkage`,
-`signing_domain`, and successful `authorized`. `embedded_unsigned` records
+`embedded_claims`, `delivery_status_linkage`, `outer_recipient_linkage`, and
+successful `authorized` (`signing_domain` stays in the closed vocabulary but is
+no longer a pre-policy stage). After `authorized`, a report that leaves
+unsigned emits one `dsn.unsigned.completed` event and increments
+`dkim2d_dsn_unsigned_total{unsigned_reason}` with the closed reasons
+`unsigned_original`, `delivery_status_identity_unavailable`, and
+`delivery_status_from_not_authentic`, the same vocabulary as the REST
+`X-DKIM2-Unsigned-Reason` header. `embedded_unsigned` records
 `failure` under the default `reject` policy and `not_applicable` when the
 `continue` policy lets the report leave unsigned. No stage includes a domain, selector, address,
 message identifier, count, index, raw value, or provider diagnostic. This

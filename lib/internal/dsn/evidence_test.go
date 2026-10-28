@@ -42,8 +42,12 @@ func TestEvidenceEvaluatorAuthenticatesCompleteAndHeadersOnlyOriginals(t *testin
 				t.Fatalf("NewEvidenceEvaluator() error=%v", err)
 			}
 			evidence, err := evaluator.Evaluate(context.Background(), EvidenceRequest{Report: report})
+			// Draft-08 Section 16.2 no longer derives the DSN identity from
+			// the embedded highest d=; the evidence carries the per-rt=
+			// RFC 3464 linkage that orders the Section 16.2 candidates.
 			if err != nil || !evidence.Valid() || evidence.Form() != form.wantForm || evidence.Target().Sequence != 1 || evidence.Target().InstanceNumber != 1 ||
-				evidence.SigningDomain() != evidenceDomain || len(evidence.RecipientDomains()) != 1 || evidence.RecipientDomains()[0] != evidenceDomain {
+				len(evidence.RecipientDomains()) != 1 || evidence.RecipientDomains()[0] != evidenceDomain ||
+				len(evidence.recipientLinked) != 1 || !evidence.recipientLinked[0] {
 				t.Fatalf("Evaluate() evidence=%#v error=%v", evidence, err)
 			}
 			domains := evidence.RecipientDomains()
