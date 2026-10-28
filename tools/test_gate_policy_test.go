@@ -33,3 +33,23 @@ func TestGateTestsBypassTheResultCache(t *testing.T) {
 		}
 	}
 }
+
+// TestModuleProofReconstructionRunsInTheModuleProofGate keeps the host-cache
+// dependent private proxy test bound to the gate that owns that precondition.
+func TestModuleProofReconstructionRunsInTheModuleProofGate(t *testing.T) {
+	makefile := readRepositoryFile(t, "Makefile", 1<<20)
+	if !bytes.Contains(makefile, []byte(
+		"test-module-proof:\n\t@go -C tools test $(GATE_TEST_FLAGS) -tags moduleproof ./internal/reference\n",
+	)) {
+		t.Fatal("Makefile lost the module-proof reconstruction test gate")
+	}
+	prerequisites, ok := makefileRulePrerequisites(makefile, "check-reference")
+	if !ok || !slicesContainExact(prerequisites, "test-module-proof") {
+		t.Fatal("check-reference no longer runs the module-proof reconstruction test")
+	}
+	source := readRepositoryFile(t, "tools/internal/reference/proxy_moduleproof_test.go", 1<<20)
+	if !bytes.HasPrefix(source, []byte("//go:build moduleproof\n")) ||
+		!bytes.Contains(source, []byte("func TestBuildPrivateProxyIsDeterministicAndConfined(t *testing.T) {")) {
+		t.Fatal("module-proof reconstruction test is no longer bound to the moduleproof tag")
+	}
+}

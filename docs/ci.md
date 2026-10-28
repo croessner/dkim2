@@ -80,7 +80,12 @@ Guardrails or Conformance workflow. The Public Mirror workflow has no push
 trigger, so synchronization cannot recursively invoke itself.
 
 Historical private module-proof reconstruction is not a normal source-quality
-gate; ordinary CI validates the committed vendor tree directly with Go.
+gate; ordinary CI validates the committed vendor tree directly with Go. The
+reconstruction reads every committed module file from a provisioned host
+module cache with the network disabled, so its determinism and confinement
+test carries the `moduleproof` build tag and runs through
+`make test-module-proof` as part of `make check-reference`, not through
+`make test-tools`.
 
 ## Stable release
 

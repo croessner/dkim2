@@ -352,7 +352,10 @@ func requiredModuleGraph(root string, _ string, _ conformance.Snapshot) ([]modul
 			}
 		}
 	}
-	cache := filepath.Join(os.Getenv("HOME"), "go", "pkg", "mod", "cache", "download")
+	cache, err := moduleDownloadCache()
+	if err != nil {
+		return nil, err
+	}
 	processed := make(map[string]bool)
 	for {
 		progress := false
@@ -412,6 +415,31 @@ func requiredModuleGraph(root string, _ string, _ conformance.Snapshot) ([]modul
 		return strings.Compare(left.Path+"@"+left.Version, right.Path+"@"+right.Version)
 	})
 	return modules, nil
+}
+
+// moduleDownloadCache resolves the module download cache exactly as the go
+// command defaults it: GOMODCACHE, else the first GOPATH entry, else
+// $HOME/go. A relative or unresolvable location fails closed.
+func moduleDownloadCache() (string, error) {
+	modules := os.Getenv("GOMODCACHE")
+	if modules == "" {
+		gopath := ""
+		if entries := filepath.SplitList(os.Getenv("GOPATH")); len(entries) > 0 {
+			gopath = entries[0]
+		}
+		if gopath == "" {
+			home := os.Getenv("HOME")
+			if home == "" {
+				return "", errors.New("module_cache_location")
+			}
+			gopath = filepath.Join(home, "go")
+		}
+		modules = filepath.Join(gopath, "pkg", "mod")
+	}
+	if !filepath.IsAbs(modules) {
+		return "", errors.New("module_cache_location")
+	}
+	return filepath.Join(filepath.Clean(modules), "cache", "download"), nil
 }
 
 // goModHash computes the standard h1 content hash for one module file.
@@ -527,9 +555,9 @@ func populatePrivateProxy(
 		return nil, err
 	}
 	identities := []ModuleIdentity{candidate}
-	cache := filepath.Join(os.Getenv("HOME"), "go", "pkg", "mod", "cache", "download")
-	if configured := os.Getenv("GOMODCACHE"); configured != "" {
-		cache = filepath.Join(configured, "cache", "download")
+	cache, err := moduleDownloadCache()
+	if err != nil {
+		return nil, err
 	}
 	for _, dependency := range graphModules {
 		vendoredVersion, hasVendoredPackages := vendored[dependency.Path]

@@ -184,6 +184,13 @@ test-tools:
 		(cd $$module && go test $(GATE_TEST_FLAGS) ./...); \
 	done
 
+# The private module-proxy reconstruction reads committed module files from
+# the host module cache with the network disabled. It needs a provisioned
+# cache, so it runs with the module-proof gate instead of test-tools.
+.PHONY: test-module-proof
+test-module-proof:
+	@go -C tools test $(GATE_TEST_FLAGS) -tags moduleproof ./internal/reference
+
 # The Rspamd Policy E2E response fixtures carry verifier projection bindings
 # that must match the producer's binding functions for the current draft.
 .PHONY: check-rspamd-projection-binding
@@ -710,7 +717,7 @@ interop: check-interop
 		go -C tools run ./cmd/interop -root .. current
 
 .PHONY: check-reference
-check-reference: check-interop check-openapi check-operator-docs
+check-reference: check-interop check-openapi check-operator-docs test-module-proof
 	@GOCACHE="$${GOCACHE:-/tmp/dkim2-go-build-cache}" \
 		go -C tools run ./cmd/reference -root .. check-api
 	@GOCACHE="$${GOCACHE:-/tmp/dkim2-go-build-cache}" \

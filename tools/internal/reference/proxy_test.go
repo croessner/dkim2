@@ -1,7 +1,6 @@
 package reference
 
 import (
-	"archive/zip"
 	"os"
 	"path/filepath"
 	"strings"
@@ -87,49 +86,39 @@ func TestReadStableRegularRejectsLinkedPaths(t *testing.T) {
 	}
 }
 
-// TestBuildPrivateProxyIsDeterministicAndConfined verifies exact repeatability.
-func TestBuildPrivateProxyIsDeterministicAndConfined(t *testing.T) {
-	first, firstPath, firstCleanup, err := BuildPrivateProxy(repositoryRoot(t))
-	if err != nil {
-		t.Fatal(err)
-	}
-	second, secondPath, secondCleanup, err := BuildPrivateProxy(repositoryRoot(t))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if first.ProxySHA256 != second.ProxySHA256 || first.Modules[0] != second.Modules[0] {
-		t.Fatal("identical candidate produced different private proxy evidence")
-	}
-	if firstPath == secondPath || !strings.Contains(firstPath, ".artifacts/reference/.module-proof.") {
-		t.Fatal("proxy was not invocation-owned")
-	}
-	archive := filepath.Join(firstPath, "github.com/croessner/dkim2/@v/v0.1.0-rc.1.zip")
-	reader, err := zip.OpenReader(archive)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = reader.Close() }()
-	for _, file := range reader.File {
-		if strings.Contains(file.Name, "/cmd/") || strings.Contains(file.Name, "/temp/") ||
-			strings.Contains(file.Name, "/.artifacts/") || strings.Contains(file.Name, "/.git/") {
-			t.Fatalf("candidate module zip admitted forbidden path %q", file.Name)
+// TestModuleDownloadCacheFollowsGoCommandDefaults binds both proxy cache reads to one location rule.
+func TestModuleDownloadCacheFollowsGoCommandDefaults(t *testing.T) {
+	home := t.TempDir()
+	gopath := t.TempDir()
+	modules := t.TempDir()
+	for _, test := range []struct {
+		gomodcache string
+		gopath     string
+		home       string
+		want       string
+	}{
+		{gomodcache: modules, gopath: gopath, home: home, want: filepath.Join(modules, "cache", "download")},
+		{gopath: gopath + string(filepath.ListSeparator) + home, home: home, want: filepath.Join(gopath, "pkg", "mod", "cache", "download")},
+		{home: home, want: filepath.Join(home, "go", "pkg", "mod", "cache", "download")},
+	} {
+		t.Setenv("GOMODCACHE", test.gomodcache)
+		t.Setenv("GOPATH", test.gopath)
+		t.Setenv("HOME", test.home)
+		got, err := moduleDownloadCache()
+		if err != nil || got != test.want {
+			t.Fatalf("module download cache = %q, %v; want %q", got, err, test.want)
 		}
 	}
-	info, err := os.Stat(firstPath)
-	if err != nil || info.Mode().Perm() != 0o500 {
-		t.Fatal("private proxy is not read-only")
-	}
-	firstWork := filepath.Dir(firstPath)
-	secondWork := filepath.Dir(secondPath)
-	if err := firstCleanup(); err != nil {
-		t.Fatal(err)
-	}
-	if err := secondCleanup(); err != nil {
-		t.Fatal(err)
-	}
-	for _, path := range []string{firstWork, secondWork} {
-		if _, err := os.Stat(path); !os.IsNotExist(err) {
-			t.Fatalf("invocation-owned proxy work survived cleanup: %s", path)
+	for _, hostile := range []struct{ gomodcache, gopath, home string }{
+		{gomodcache: "relative/mod"},
+		{gopath: "relative/gopath"},
+		{},
+	} {
+		t.Setenv("GOMODCACHE", hostile.gomodcache)
+		t.Setenv("GOPATH", hostile.gopath)
+		t.Setenv("HOME", hostile.home)
+		if _, err := moduleDownloadCache(); err == nil {
+			t.Fatalf("ambiguous module cache location %+v was accepted", hostile)
 		}
 	}
 }
