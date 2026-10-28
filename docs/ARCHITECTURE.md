@@ -526,12 +526,13 @@ The facade should expose protocol results in a structured way. It should not
 force callers to parse human-readable messages.
 
 Current verification algorithm vocabulary: `AlgorithmRSASHA256`,
-`AlgorithmEd25519SHA256`, and the bounded `AlgorithmUnknown`. The
-post-quantum `mldsa44-ed25519-sha512` composite of Draft-08 Section 3.4 is
-deliberately not implemented while the working group settles its construction
-(`DKIM2-ISSUE-0019`): a composite signature set is reported as
-`AlgorithmUnknown` with `unsupported_algorithm`, like any other unknown token,
-and a `k=mldsa44-ed25519-sha512` DNS record is an unsupported key type.
+`AlgorithmEd25519SHA256`, `AlgorithmMLDSA44` (pure ML-DSA-44, Draft-08
+Section 3.4), and the bounded `AlgorithmUnknown`. The
+`mldsa44-ed25519-sha512` composite was a Draft-07 construct that Draft-08
+replaced with pure `mldsa44`; it has been removed and is now an unknown
+algorithm like any other unknown token: its set is the Section 14.6 step 4
+PERMERROR intermediate `unsupported_algorithm`, and a
+`k=mldsa44-ed25519-sha512` DNS record is an unsupported key type.
 
 ### 5.2 `lib/internal/rawmsg`
 
@@ -745,9 +746,11 @@ Responsibilities:
   checked only by the generic tag-list rules (duplicates, control bytes,
   framing, size limits) and is otherwise ignored like any unknown tag.
 - Decode RSA public DER as either PKCS#1 `RSAPublicKey` or X.509
-  `SubjectPublicKeyInfo` and raw 32-byte Ed25519 public keys, while reusing
-  `internal/cryptodkim2` as the authoritative crypto/key-validation owner.
-  Every other `k=` value, including `mldsa44-ed25519-sha512`, is an
+  `SubjectPublicKeyInfo`, raw 32-byte Ed25519 public keys, and raw 1312-byte
+  ML-DSA-44 public keys for `k=mldsa44` (a local interpretation,
+  `DKIM2-ISSUE-0020`), while reusing `internal/cryptodkim2` as the
+  authoritative crypto/key-validation owner. Every other `k=` value,
+  including the removed Draft-07 composite `mldsa44-ed25519-sha512`, is an
   unsupported key type.
 - Distinguish missing, revoked, invalid, ambiguous, unsupported key type,
   algorithm mismatch, temporary, permanent, and provider-contract states.
@@ -2407,8 +2410,9 @@ whitespace; RR boundaries are never concatenated. RSA records accept either
 PKCS#1 `RSAPublicKey` or X.509 `SubjectPublicKeyInfo` public DER as an explicit
 interoperability allowance. Both representations retain the same RSA structural
 and cryptographic policy checks; other key containers remain invalid. Ed25519
-records contain exactly 32 raw public bytes. Every other key type, including
-`k=mldsa44-ed25519-sha512`, is an unsupported key type. The resolver
+records contain exactly 32 raw public bytes, and `k=mldsa44` records exactly
+1312 raw ML-DSA-44 public bytes. Every other key type, including the removed
+Draft-07 composite `k=mldsa44-ed25519-sha512`, is an unsupported key type. The resolver
 supports context cancellation, bounded TTL/LRU caching, bounded coalescing, and
 non-blocking saturation. DNSSEC remains diagnostic-only and does not alter
 verification or cache behavior.

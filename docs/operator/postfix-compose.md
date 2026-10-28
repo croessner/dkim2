@@ -832,6 +832,9 @@ set; do not run a Draft-06 adapter or client against a Draft-07 daemon. The
 wire enum changes to `draft-ietf-dkim-dkim2-spec-07`, and verification may now
 return `duplicate_hash_algorithm`, `invalid_recipe_json`,
 `duplicate_selector`, or `too_many_signatures` as permanent non-4xx results.
+Draft-08 removed `too_many_signatures` again (several signatures per algorithm
+are allowed with distinct selectors; the local set bounds report
+`limit_exceeded`).
 
 The replay store upgrades in place. Keep the replay epoch, HMAC secret, and
 `rotation_state: unchanged`; no drain or retention wait is needed. The draft
