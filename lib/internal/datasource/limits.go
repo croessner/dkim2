@@ -19,14 +19,19 @@ type Limits struct {
 	MaxRecords               int
 }
 
-// HardLimits returns every non-widenable datasource maximum.
+// HardLimits returns every non-widenable datasource maximum. The ceiling
+// follows the same derivation as DefaultLimits, so a datasource that fills
+// MaxProfiles with MaxCredentialsPerProfile credentials each still fits:
+//
+//	MaxHandles = 131072*3 = 393216
+//	MaxRecords = 131072*3 + 131072 + 393216 + 262144 = 1179648
 func HardLimits() Limits {
 	return Limits{
 		MaxIdentifierBytes: 128, MaxDomainBytes: 253, MaxDomainLabels: 127,
 		MaxSelectorBytes: 253, MaxSelectorLabels: 127, MaxProfiles: 131072,
-		MaxCredentialsPerProfile: 3, MaxHandles: 262144, MaxPolicies: 262144,
+		MaxCredentialsPerProfile: 3, MaxHandles: 393216, MaxPolicies: 262144,
 		MaxJSONFileBytes: 512 << 20, MaxJSONDepth: 16, MaxJSONStringBytes: 16 << 10,
-		MaxDecodedStringBytes: 512 << 20, MaxDecodedPublicKeyBytes: 2048, MaxRecords: 1 << 20,
+		MaxDecodedStringBytes: 512 << 20, MaxDecodedPublicKeyBytes: 2048, MaxRecords: 1179648,
 	}
 }
 
@@ -58,7 +63,7 @@ func DefaultLimits() Limits {
 //	MaxHandles = 32768*3 = 98304
 //	MaxRecords = 32768*3 + 32768 + 98304 + 65536 = 294912
 //
-// Both stay within HardLimits (262144 handles, 1<<20 records).
+// Both stay within HardLimits (393216 handles, 1179648 records).
 func ProductionLimits() Limits {
 	limits := HardLimits()
 	limits.MaxProfiles = 32768

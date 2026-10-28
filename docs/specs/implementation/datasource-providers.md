@@ -347,7 +347,7 @@ must return the same domain result codes.
 
 ## Limits And Accounting
 
-Limits are immutable, validated, and nonzero. Defaults are also hard maxima:
+Limits are immutable, validated, and nonzero. The restrictive defaults are:
 
 | Limit | Value |
 | --- | ---: |
@@ -356,18 +356,26 @@ Limits are immutable, validated, and nonzero. Defaults are also hard maxima:
 | selector bytes / labels | 253 / 127 |
 | profiles | 1,024 |
 | credentials per profile | 3 |
-| registered handles | 2,048 |
+| registered handles | 3,072 |
 | policy bindings | 4,096 |
 | JSON file bytes | 1,048,576 |
 | JSON nesting depth | 16 |
 | one JSON string bytes | 16,384 |
 | aggregate decoded string bytes | 1,048,576 |
 | decoded public key bytes | 2,048 |
-| records examined per load | 10,240 |
+| records examined per load | 11,264 |
 
 Domain, selector, algorithm, RSA, signature-input, and signing-output limits are
 additionally narrowed by the existing M10 and keyresolver limits. A datasource
 configuration may lower but never raise a hard maximum.
+
+Handles and records are derived from profiles, credentials, and policies in
+every limit profile, hard maxima included: each credential owns one handle, so
+`handles = profiles * 3`, and
+`records = profiles * 3 + profiles + handles + policies`. The production
+profile is 32,768 profiles, 98,304 handles, 65,536 policies, and 294,912
+records; the hard maxima are 131,072 profiles, 393,216 handles, 262,144
+policies, and 1,179,648 records.
 
 The JSON scanner has a structural depth safety cap of 16; the closed valid
 schema reaches at most depth 5. File, depth, string, aggregate-string, and

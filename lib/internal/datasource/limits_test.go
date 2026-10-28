@@ -20,8 +20,8 @@ func TestLimitProfilesMatchFrozenMaxima(t *testing.T) {
 	wantProduction.MaxProfiles, wantProduction.MaxHandles, wantProduction.MaxPolicies = 32768, 98304, 65536
 	wantProduction.MaxJSONFileBytes, wantProduction.MaxDecodedStringBytes, wantProduction.MaxRecords = 128<<20, 128<<20, 294912
 	wantHard := wantDefault
-	wantHard.MaxProfiles, wantHard.MaxHandles, wantHard.MaxPolicies = 131072, 262144, 262144
-	wantHard.MaxJSONFileBytes, wantHard.MaxDecodedStringBytes, wantHard.MaxRecords = 512<<20, 512<<20, 1<<20
+	wantHard.MaxProfiles, wantHard.MaxHandles, wantHard.MaxPolicies = 131072, 393216, 262144
+	wantHard.MaxJSONFileBytes, wantHard.MaxDecodedStringBytes, wantHard.MaxRecords = 512<<20, 512<<20, 1179648
 	if hard, defaults, production := HardLimits(), DefaultLimits(), ProductionLimits(); hard != wantHard || defaults != wantDefault || production != wantProduction {
 		t.Fatalf("limit profile drift")
 	}
@@ -40,6 +40,26 @@ func TestLimitProfilesMatchFrozenMaxima(t *testing.T) {
 		if err := limits.Validate(); err != nil {
 			t.Fatalf("derived limits exceed hard limits: %v", err)
 		}
+	}
+}
+
+// TestHardLimitsContainTheirOwnDerivation proves the non-widenable ceiling
+// obeys the same one-handle-per-credential derivation as the narrower
+// profiles: a datasource at MaxProfiles with MaxCredentialsPerProfile
+// credentials each must fit MaxHandles and MaxRecords, otherwise the hard
+// profile would admit profiles whose credentials it then refuses to load.
+func TestHardLimitsContainTheirOwnDerivation(t *testing.T) {
+	hard := HardLimits()
+	credentials := hard.MaxProfiles * hard.MaxCredentialsPerProfile
+	if hard.MaxHandles != credentials {
+		t.Fatalf("hard MaxHandles = %d, want one handle per credential %d", hard.MaxHandles, credentials)
+	}
+	derived := credentials + hard.MaxProfiles + hard.MaxHandles + hard.MaxPolicies
+	if hard.MaxRecords < derived {
+		t.Fatalf("hard MaxRecords = %d, below derived %d", hard.MaxRecords, derived)
+	}
+	if _, err := NewUsage(hard.MaxProfiles, credentials, hard.MaxHandles, hard.MaxPolicies, 0, hard); err != nil {
+		t.Fatalf("full hard-limit usage rejected: %v", err)
 	}
 }
 
@@ -108,7 +128,7 @@ func TestUsageConstructionDerivesExactRecordCountAndKeepsFieldsPrivate(t *testin
 	}
 	if usage.Profiles() != limits.MaxProfiles || usage.Credentials() != limits.MaxProfiles*limits.MaxCredentialsPerProfile ||
 		usage.Handles() != limits.MaxHandles || usage.Policies() != limits.MaxPolicies ||
-		usage.Records() != 1048576 || usage.Bytes() != limits.MaxDecodedStringBytes {
+		usage.Records() != 1179648 || usage.Bytes() != limits.MaxDecodedStringBytes {
 		t.Fatalf("usage maxima = profiles=%d credentials=%d handles=%d policies=%d records=%d bytes=%d",
 			usage.Profiles(), usage.Credentials(), usage.Handles(), usage.Policies(), usage.Records(), usage.Bytes())
 	}
