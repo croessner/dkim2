@@ -298,7 +298,7 @@ func TestRuntimeReloadPublishesOnlyCompleteGenerations(t *testing.T) {
 func newSigningStoreFixture(t *testing.T) signingStoreFixture {
 	t.Helper()
 	root := t.TempDir()
-	key, err := rsa.GenerateKey(rand.Reader, 1024)
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		t.Fatalf("rsa.GenerateKey() error = %v", err)
 	}

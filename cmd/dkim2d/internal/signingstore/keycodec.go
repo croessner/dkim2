@@ -61,12 +61,13 @@ func custodyAlgorithm(algorithm provider.Algorithm) dkim2.Algorithm {
 }
 
 // privateKeyMatchesAlgorithm enforces the closed key-type, size, and
-// algorithm pairing accepted for signing custody.
+// algorithm pairing accepted for signing custody. RSA custody keys must meet
+// the 2048-bit signing floor.
 func privateKeyMatchesAlgorithm(key crypto.PrivateKey, algorithm dkim2.Algorithm) bool {
 	switch typed := key.(type) {
 	case *rsa.PrivateKey:
 		return algorithm == dkim2.AlgorithmRSASHA256 && typed.Validate() == nil &&
-			typed.N.BitLen() >= 1024 && len(typed.Primes) == 2
+			typed.N.BitLen() >= dkim2.MinSigningRSABits && len(typed.Primes) == 2
 	case ed25519.PrivateKey:
 		return algorithm == dkim2.AlgorithmEd25519SHA256 && len(typed) == ed25519.PrivateKeySize
 	case *mldsa.PrivateKey:

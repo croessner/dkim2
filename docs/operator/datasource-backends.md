@@ -372,6 +372,11 @@ profile; the daemon emits `s=` as `rsa,ed25519 | mldsa44`.
 - The datasource record ceilings are 10240 (default) and 262144
   (production): `profiles * 3 + profiles + handles + policies`.
 
+RSA signing floor: the release rejects RSA signing keys below 2048 bits.
+Before upgrading, list the modulus sizes of every RSA credential in the
+current generation (and of flat-file custody keys); a generation that still
+holds a smaller key fails the complete load. Rotate such keys first.
+
 Upgrade order: upgrade `dkim2d` (the new release accepts three credentials
 and ML-DSA-44 custody), apply `010_mldsa44_algorithm.sql`, then publish
 generations with `mldsa44` credentials and their `k=mldsa44` DNS records. A

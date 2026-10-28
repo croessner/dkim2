@@ -448,7 +448,7 @@ func assertPublicationDriftDenial(
 	requestFor datasourceSigningRequestFactory,
 ) {
 	t.Helper()
-	driftKey, err := rsa.GenerateKey(rand.Reader, 1024)
+	driftKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		t.Fatalf("rsa.GenerateKey(drift) error = %v", err)
 	}
@@ -494,7 +494,7 @@ type datasourceSigningIntegrationFixture struct {
 // registry, public signer, publication provider, and private signer graph.
 func newDatasourceSigningIntegrationFixture(t *testing.T) datasourceSigningIntegrationFixture {
 	t.Helper()
-	rsaKey, err := rsa.GenerateKey(rand.Reader, 1024)
+	rsaKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		t.Fatalf("rsa.GenerateKey() error = %v", err)
 	}

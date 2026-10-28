@@ -304,7 +304,7 @@
     {
       "id": "signing-facade-source",
       "path": "lib/signing_facade_test.go",
-      "sha256": "8322b7fc35f4c4ae79dac369c3e40567e0b36d723a3df1a9c9303a632a0bd7af",
+      "sha256": "ca163f340db079c3c8ec3a53a96445aa6fb8115c89983e7d561e883ba7ce0a62",
       "module": "lib"
     },
     {
@@ -334,7 +334,7 @@
     {
       "id": "signing-provenance",
       "path": "lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-08/README.md",
-      "sha256": "082f5c37f6fa6157b8847a0c1db1a26e98c1568cb79a3a3abc08a50bfca6520e",
+      "sha256": "a00584e76b4701d9de3bd17665375d9ae27ca357ff87553210a512836469de59",
       "module": "lib"
     },
     {
@@ -358,7 +358,7 @@
     {
       "id": "signing-test-key",
       "path": "lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-08/signing-test-rsa.pem",
-      "sha256": "788d3df47546f9d6e53979c2080b60358e5c59bb7e4196231b8e9a7f6ab2231e",
+      "sha256": "64f74e6f8f7e6f8c1721aaff1ac05c429caa2831d65796e98052f5ff84e3c3d3",
       "module": "lib"
     },
     {

@@ -9,7 +9,7 @@ import (
 
 // TestClearPrivateKeyErasesOwnedRSAAndEd25519Storage freezes the shared cleanup seam.
 func TestClearPrivateKeyErasesOwnedRSAAndEd25519Storage(t *testing.T) {
-	rsaKey, err := rsa.GenerateKey(rand.Reader, 1024)
+	rsaKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		t.Fatal("generate RSA cleanup fixture")
 	}

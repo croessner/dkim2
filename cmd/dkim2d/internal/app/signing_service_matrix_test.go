@@ -1151,7 +1151,7 @@ func newSigningServiceFixtureWithDualCredentials(t *testing.T, dual bool) signin
 // newSigningServiceRSAKey generates one independent protected test credential.
 func newSigningServiceRSAKey(t *testing.T) *rsa.PrivateKey {
 	t.Helper()
-	key, err := rsa.GenerateKey(rand.Reader, 1024)
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		t.Fatalf("rsa.GenerateKey() error = %v", err)
 	}

@@ -85,6 +85,7 @@
 | 0.1.0-draft | 2026-10-28 | Christian Roessner / Claude | Advanced the message baseline to `draft-ietf-dkim-dkim2-spec-08` and the DNS companion to `draft-ietf-dkim-dkim2-dns-02`. Draft identifiers, generated contracts, versioned vectors (with Draft-07 and DNS-01 copies under `lib/testdata/vectors/history/`), draft-bound goldens, and section citations (new Sections 13.1 and 16.2) move together without a protocol behavior change; behavior changes follow the work packages in `docs/specs/draft-08-migration-disposition.md`. |
 | 0.1.0-draft | 2026-10-28 | Christian Roessner / Claude | Remapped verification states to Draft-08 Section 14.1 "Fully Verified DKIM2 Message": timestamp, envelope, MAIL FROM and `d=` alignment, `nd=`, custody adjacency (new `custody_mismatch`), unmet out-of-band, and From-authenticity failures are FAIL; a history with a null body Recipe is FAIL `body_history_unavailable` instead of a PASS with partial history and transit or revision signing refuses it; Recipe schema and application errors are PERMERROR `invalid_recipe`, separate from `invalid_recipe_json`. `policy.ProtocolForVerificationReason` is the single owner of the reason-to-state classification. Policy verdicts, Milter, and Exim SMTP outcomes are unchanged except for the null body Recipe history, which strict mode now rejects. |
 | 0.1.0-draft | 2026-10-28 | Christian Roessner / Claude | Added Draft-08 Section 3.4 pure ML-DSA-44 (`mldsa44`) for verification and signing. `lib/internal/cryptodkim2` owns each algorithm's message representative (SHA-256 digest for `rsa-sha256` and `ed25519-sha256`, the complete Section 12.8 input for `mldsa44`, signed with hedged `crypto/mldsa` and the context string `DKIM2`), exact 1312/2420-octet key and signature sizes, per-algorithm signature caps, and the ML-DSA runtime guard (the FIPS 140-3 Go Cryptographic Module v1.0.0 fails closed). DNS `k=mldsa44` with a raw `p=` is a local interpretation (`DKIM2-ISSUE-0020`); the signer emits `rsa,ed25519 \| mldsa44`; `PrivateKeySignRequest` carries the message representative; the composite stays unimplemented (`DKIM2-ISSUE-0019` superseded). |
+| 0.1.0-draft | 2026-10-28 | Christian Roessner / Claude | Added the RSA signing floor: signing credentials, loaded signing profiles, and `dkim2d` custody keys require RSA moduli of at least 2048 bits (Draft-08 Section 3.2 SHOULD made a local MUST, `MinSigningRSABits`); verification keeps 1024 to 8192 bits. |
 
 ## 1. Purpose
 
@@ -2355,6 +2356,8 @@ Rules:
   (`MLDSA44Available`). A binary built against the FIPS 140-3 Go
   Cryptographic Module v1.0.0, which has no ML-DSA, fails closed: verifier
   policy validation, `mldsa44` credentials, and `dkim2d` startup refuse it.
+- RSA signing keys must have at least 2048 bits
+  (`cryptodkim2.MinSigningRSABits`); verification accepts 1024 to 8192.
 - A signing profile holds at most one credential per algorithm (at most
   three) with selectors distinct across every `s=` group. The signer fixes
   the layout before any value is computed: the classical credentials form

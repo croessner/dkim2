@@ -101,7 +101,7 @@ func TestNativeKeyMaterialFormattingIsSecretSafe(t *testing.T) {
 // nativeRSAMaterial constructs one canonical synthetic native record.
 func nativeRSAMaterial(t *testing.T, generation uint64, handle string) (*NativeKeyMaterial, []byte) {
 	t.Helper()
-	key, err := rsa.GenerateKey(rand.Reader, 1024)
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		t.Fatalf("rsa.GenerateKey() error = %v", err)
 	}

@@ -760,7 +760,8 @@ DNS export. `--algorithm` accepts `rsa-sha256`, `ed25519-sha256`, or
 `h=` (local interpretation `DKIM2-ISSUE-0020`, the same form
 `opendkim-manage-go` publishes); its 1752-character `p=` value is split into
 TXT strings of at most 255 octets. The OpenDKIM
-bootstrap imports only legacy `rsa` and `ed25519` keys. Unknown fields, duplicate
+bootstrap imports only legacy `rsa` and `ed25519` keys. RSA signing keys
+below 2048 bits are rejected everywhere (signing floor). Unknown fields, duplicate
 bindings, aliasing children, mixed identities, encrypted or legacy PEM, and
 partial generations fail the complete load. Documentation and test fixtures
 use reserved `.test` identities; operators supply only their own authorized

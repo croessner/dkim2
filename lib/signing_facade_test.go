@@ -245,7 +245,7 @@ func loadPublicSigningRSAKey(t *testing.T) *rsa.PrivateKey {
 		t.Fatal("test RSA key is not one exact PKCS#1 PEM block")
 	}
 	key, err := x509.ParsePKCS1PrivateKey(block.Bytes)
-	if err != nil || key.Validate() != nil || key.N.BitLen() != 1024 {
+	if err != nil || key.Validate() != nil || key.N.BitLen() != 2048 {
 		t.Fatalf("ParsePKCS1PrivateKey(test RSA key) error = %v", err)
 	}
 	return key

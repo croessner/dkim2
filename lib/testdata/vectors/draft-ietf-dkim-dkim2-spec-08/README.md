@@ -21,7 +21,8 @@ This directory pins protocol evidence to
   keys; regenerate it byte-deterministically with
   `DKIM2_WRITE_RECEIVED_DSN_VECTORS=1 go -C lib test . -run
   TestReceivedDSNGoldenVectorsRegenerate`.
-- `signing-test-rsa.pem` is a synthetic, test-only RSA key for deterministic
+- `signing-test-rsa.pem` is a synthetic, test-only 2048-bit RSA key (the
+  signing floor) for deterministic
   public-facade evidence under reserved `.test` domains. It is never selected
   by production configuration, and only its artifact digest may enter reports.
 

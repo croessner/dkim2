@@ -664,3 +664,14 @@ because the draft identifier is bound into the replay frame.
   phased-deployment and three-algorithm facade round trips, provider parity,
   the opendkim-manage-go interop proof, migration contracts, and the FIPS
   v1.0.0 fail-closed guards.
+- C2: the RSA signing floor is 2048 bits (`cryptodkim2.MinSigningRSABits`,
+  public `dkim2.MinSigningRSABits`). `signing.NewCredential`, used by the
+  public RSA credential constructor and the datasource-to-signing projection,
+  rejects smaller keys with `key_mismatch` and the detail
+  `limit_name=min_rsa_bits limit=2048 actual=<bits>`; `Credential.Valid`
+  re-checks it, so a profile holding such a key fails at load. `dkim2d`
+  custody (native datasource key material, flat-file PEM keys, legacy
+  import) and key generation enforce the same floor. Verification bounds stay
+  1024 to 8192 bits, covering the Section 3.2 MUST range; tests prove both
+  sides. Test fixtures that signed with 1024-bit keys moved to 2048 bits,
+  including the public-facade RSA fixture and the candidate-digest golden.

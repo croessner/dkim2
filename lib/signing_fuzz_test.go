@@ -94,7 +94,7 @@ func FuzzSigningFacade(f *testing.F) {
 // newPublicFuzzProfile constructs one reusable RSA key and public profile.
 func newPublicFuzzProfile(f *testing.F) (*rsa.PrivateKey, SigningProfile) {
 	f.Helper()
-	rsaKey, err := rsa.GenerateKey(rand.Reader, 1024)
+	rsaKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		f.Fatalf("rsa.GenerateKey() error = %v", err)
 	}

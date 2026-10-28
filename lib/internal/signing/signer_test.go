@@ -478,7 +478,7 @@ func newTestSigningProfile(t *testing.T, domain string, algorithms []Algorithm) 
 		switch algorithm {
 		case AlgorithmRSASHA256:
 			selector, handleText = "rsa-selector", "rsa-handle"
-			key, keyErr := rsa.GenerateKey(rand.Reader, DefaultLimits().MinRSABits)
+			key, keyErr := rsa.GenerateKey(rand.Reader, cryptodkim2.MinSigningRSABits)
 			if keyErr != nil {
 				t.Fatalf("rsa.GenerateKey() error = %v", keyErr)
 			}
@@ -599,7 +599,7 @@ func TestPrivateSignerResultMatrixRejectsAmbiguityBeforeCancellation(t *testing.
 // TestPrivateSignerResultLengthBoundsAndAliasing proves exact algorithm lengths and detached output.
 func TestPrivateSignerResultLengthBoundsAndAliasing(t *testing.T) {
 	edCredential, _ := testEd25519Credential(t, "signer-length-ed")
-	rsaKey, err := rsa.GenerateKey(rand.Reader, DefaultLimits().MinRSABits)
+	rsaKey, err := rsa.GenerateKey(rand.Reader, cryptodkim2.MinSigningRSABits)
 	if err != nil {
 		t.Fatalf("rsa.GenerateKey() error = %v", err)
 	}

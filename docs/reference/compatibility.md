@@ -155,12 +155,20 @@ Breaking changes to the exported root Go API (`github.com/croessner/dkim2`):
   built against the FIPS 140-3 Go Cryptographic Module v1.0.0, which has no
   ML-DSA; `MLDSA44Available` reports the condition.
 
+RSA signing floor (Draft-08 Section 3.2 SHOULD made a local MUST):
+`NewRSASigningCredential`, every internal signing credential, the
+datasource-to-signing projection, and `dkim2d` custody keys reject RSA
+moduli below 2048 bits (`MinSigningRSABits`) with `key_mismatch` and the
+secret-free detail `limit_name=min_rsa_bits limit=2048 actual=<bits>`; a
+signing profile that holds such a key fails at load. Verification keeps the
+1024 to 8192 bit bounds.
+
 Additive declarations: `AlgorithmMLDSA44`, `FoundMLDSA44PublicKey`,
 `PublicKeyResult.MLDSA44PublicKey`, `MLDSA44SigningCredential`,
 `NewMLDSA44SigningCredential`, `NewMLDSA44SigningProfile`, the sealed
 `SigningCredential` interface with `NewSigningProfile`,
 `NewMLDSA44NextDomainPublicationRequest`, `MLDSA44SignerOptions`,
-`MLDSA44Available`, `ObservationAlgorithmMLDSA44`, and
+`MLDSA44Available`, `MinSigningRSABits`, `ObservationAlgorithmMLDSA44`, and
 `PrivateKeySignRequest.MessageRepresentative`.
 
 Repository-internal packages (not a public surface, listed for sibling

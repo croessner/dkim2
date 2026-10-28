@@ -280,7 +280,7 @@ func newProtectedSigningFixture(t *testing.T) protectedSigningFixture {
 // generation for the protected-loader integration.
 func writeProtectedSigningStoreFiles(t *testing.T, generationPath string) {
 	t.Helper()
-	key, err := rsa.GenerateKey(rand.Reader, 1024)
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		t.Fatalf("rsa.GenerateKey() error = %v", err)
 	}

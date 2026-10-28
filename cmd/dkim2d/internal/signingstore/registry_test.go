@@ -201,7 +201,7 @@ func TestRegistryStagingFaultsNeverClaimAPartialGeneration(t *testing.T) {
 // importedRSAFixture returns one validated short-lived private-key owner.
 func importedRSAFixture(t *testing.T) *ImportedPrivateKey {
 	t.Helper()
-	key, err := rsa.GenerateKey(rand.Reader, 1024)
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		t.Fatal("generate RSA fixture")
 	}

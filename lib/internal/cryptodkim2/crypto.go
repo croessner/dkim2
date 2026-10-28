@@ -14,6 +14,11 @@ import (
 )
 
 const (
+	// MinSigningRSABits is the local signing floor: new signing credentials
+	// and loaded signing profiles require RSA moduli of at least 2048 bits
+	// (Draft-08 Section 3.2 SHOULD made a local MUST). Verification keeps the
+	// 1024 to 8192 bit bounds of Limits.
+	MinSigningRSABits   = 2048
 	hardMinRSABits      = 1024
 	hardMaxRSABits      = 8192
 	requiredRSAExponent = 65537
@@ -142,6 +147,18 @@ func ExpectedSignatureBytes(validated any) (int, bool) {
 	default:
 		return 0, false
 	}
+}
+
+// SigningKeyBelowFloor reports the modulus size of an RSA public key below
+// MinSigningRSABits; other algorithms and keys at or above the floor report
+// false.
+func SigningKeyBelowFloor(material any) (int, bool) {
+	key, ok := material.(*rsa.PublicKey)
+	if !ok || key == nil || key.N == nil {
+		return 0, false
+	}
+	bits := key.N.BitLen()
+	return bits, bits < MinSigningRSABits
 }
 
 // MaxSignatureBytesFor returns the per-algorithm decoded signature bound:

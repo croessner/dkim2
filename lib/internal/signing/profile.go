@@ -60,7 +60,9 @@ func SignableAlgorithm(algorithm Algorithm) bool {
 	return algorithm.Signable()
 }
 
-// NewCredential validates one provider-neutral signing credential.
+// NewCredential validates one provider-neutral signing credential. RSA keys
+// below cryptodkim2.MinSigningRSABits fail closed with key_mismatch and the
+// min_rsa_bits limit detail.
 func NewCredential(selector string, algorithm Algorithm, publicKey any, handle PrivateKeyHandle, limits Limits) (Credential, error) {
 	resolved, err := limits.normalized()
 	if err != nil || !handle.Valid() || !SignableAlgorithm(algorithm) {
@@ -74,6 +76,13 @@ func NewCredential(selector string, algorithm Algorithm, publicKey any, handle P
 	query, queryErr := keyresolver.NewQuery("credential.invalid", selector, algorithm, keyresolver.DefaultLimits())
 	if queryErr != nil {
 		return Credential{}, newError(ErrorCodeInvalidRequest, ErrorLocation{Phase: PhasePreflight}, ErrorDetails{})
+	}
+	if bits, below := cryptodkim2.SigningKeyBelowFloor(publicKey); below {
+		// Secret-free: the diagnostic names only the algorithm, the floor,
+		// and the public modulus size.
+		return Credential{}, newError(ErrorCodeKeyMismatch, ErrorLocation{Phase: PhasePreflight, Algorithm: algorithm}, ErrorDetails{
+			LimitName: LimitNameMinRSABits, Limit: cryptodkim2.MinSigningRSABits, Actual: bits,
+		})
 	}
 	validated, validationErr := cryptodkim2.ValidatePublicKey(algorithm, publicKey, cryptodkim2.Limits{
 		MinRSABits: resolved.MinRSABits, MaxRSABits: resolved.MaxRSABits,
@@ -97,6 +106,9 @@ func (c Credential) PublicKey() any { return cloneSigningPublicKey(c.publicKey) 
 // Valid reports whether the credential is internally coherent.
 func (c Credential) Valid() bool {
 	if c.selector == "" || !c.algorithm.Known() || !c.handle.Valid() {
+		return false
+	}
+	if _, below := cryptodkim2.SigningKeyBelowFloor(c.publicKey); below {
 		return false
 	}
 	_, err := cryptodkim2.ValidatePublicKey(c.algorithm, c.publicKey, cryptodkim2.DefaultLimits())

@@ -173,7 +173,7 @@ func (c *adversarialNextDomainClock) callCount() int {
 // newNextDomainRegressionFixture constructs one public RSA fixture with ordered authorization evidence.
 func newNextDomainRegressionFixture(t *testing.T) *nextDomainRegressionFixture {
 	t.Helper()
-	rsaKey, err := rsa.GenerateKey(rand.Reader, 1024)
+	rsaKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		t.Fatalf("rsa.GenerateKey() error = %v", err)
 	}
@@ -206,7 +206,7 @@ func newNextDomainRegressionFixtureWithClock(
 	clock func() time.Time,
 ) *nextDomainRegressionFixture {
 	t.Helper()
-	rsaKey, err := rsa.GenerateKey(rand.Reader, 1024)
+	rsaKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		t.Fatalf("rsa.GenerateKey() error = %v", err)
 	}
@@ -234,11 +234,11 @@ func newNextDomainRegressionFixtureWithClock(
 // newNextDomainDriftFixture constructs one fixture whose future selector can drift independently.
 func newNextDomainDriftFixture(t *testing.T, selector string) (*nextDomainRegressionFixture, *nextDomainSelectiveDriftProvider) {
 	t.Helper()
-	rsaKey, err := rsa.GenerateKey(rand.Reader, 1024)
+	rsaKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		t.Fatalf("rsa.GenerateKey() error = %v", err)
 	}
-	driftKey, err := rsa.GenerateKey(rand.Reader, 1024)
+	driftKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		t.Fatalf("rsa.GenerateKey(drift) error = %v", err)
 	}

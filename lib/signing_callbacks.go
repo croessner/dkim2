@@ -58,6 +58,12 @@ func (r PrivateKeySignRequest) Digest() []byte {
 // Signers use the default hedged (randomized) Sign, never SignDeterministic.
 func MLDSA44SignerOptions() *mldsa.Options { return cryptodkim2.MLDSA44SignerOptions() }
 
+// MinSigningRSABits is the local RSA signing floor: RSA signing credentials
+// and loaded signing profiles require a modulus of at least 2048 bits
+// (Draft-08 Section 3.2 SHOULD made a local MUST). Verification still
+// accepts 1024 to 8192 bits.
+const MinSigningRSABits = cryptodkim2.MinSigningRSABits
+
 // MLDSA44Available reports an error when the cryptographic runtime cannot
 // provide ML-DSA-44, for example a binary built against the FIPS 140-3 Go
 // Cryptographic Module v1.0.0. Verifier construction and mldsa44 signing
