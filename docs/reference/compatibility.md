@@ -223,8 +223,11 @@ reason `unsupported_algorithm` and its selector, exactly like a locally
 disabled algorithm. The combined state and primary reason do not change.
 Consumers that matched `ignored` (Rspamd `verifier.lua`, dashboards, parsers
 of the daemon response) must match `permerror` with `unsupported_algorithm`
-instead; a daemon response carrying `ignored` is now rejected by every
-generated client. The daemon, Milter, Exim adapter, delivery-status propagator, and every
+instead. A daemon response carrying `ignored` is rejected by the
+hand-written response validation of the Milter handler, the Exim adapter,
+and the `dkim2ctl` runtime (each checks `SignatureSetResult.status` against
+the regenerated closed enum) and by the Rspamd verifier; the generated
+clients themselves only decode the value. The daemon, Milter, Exim adapter, delivery-status propagator, and every
 generated client are regenerated from the same OpenAPI source and must be
 deployed and rolled back as one digest-pinned set. The exact multi-instance response states are
 documented in the
