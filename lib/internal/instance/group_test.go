@@ -101,12 +101,15 @@ func TestHashLayoutOfSingleGroup(t *testing.T) {
 	}
 }
 
-// TestHashAlternativeGroupsFailClosedUntilAlgebra pins that a value with a
-// "|" alternative group is rejected while the Section 14.7 combination is
-// not evaluated.
-func TestHashAlternativeGroupsFailClosedUntilAlgebra(t *testing.T) {
-	value := "sha256:" + base64OfByte(1, 32) + ":" + base64OfByte(2, 32) + "|future:YQ==:Yg=="
-	if _, err := Parse(messageInstanceField(t, 0, "m=1; h="+value)); !IsErrorCode(err, ErrorCodeMalformedHashSet) {
-		t.Fatalf("Parse() error = %v, want malformed hash set", err)
+// TestHashAlternativeGroupsParse proves "|" groups are parsed into the
+// hash-any layout now that the Section 14.7 algebra evaluates them.
+func TestHashAlternativeGroupsParse(t *testing.T) {
+	value := "sha256:" + base64OfByte(1, 32) + ":" + base64OfByte(2, 32) + " | future:YQ==:Yg==,sha512:" + base64OfByte(3, 64) + ":" + base64OfByte(4, 64)
+	parsed, err := Parse(messageInstanceField(t, 0, "m=1; h="+value))
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	if !slices.Equal(parsed.HashLayout().GroupSizes(), []int{1, 2}) || len(parsed.HashSets()) != 3 {
+		t.Fatalf("HashLayout() = %v", parsed.HashLayout().GroupSizes())
 	}
 }

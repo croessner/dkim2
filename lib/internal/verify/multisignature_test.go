@@ -78,7 +78,8 @@ func TestVerifierChecksSameAlgorithmSignaturesPositionally(t *testing.T) {
 		t.Fatal(err)
 	}
 	result, err = verifier.Verify(context.Background(), Request{Message: fixture.message, Envelope: matchingEnvelope()})
-	requireSameAlgorithmResult(t, "wrong second RSA material", result, err, TargetStatusMixed, SignatureSetStatusFail)
+	// Draft-08 Section 14.6 step 6: a sig-all group with one FAIL is FAIL.
+	requireSameAlgorithmResult(t, "wrong second RSA material", result, err, TargetStatusFail, SignatureSetStatusFail)
 	if !orderedSameAlgorithmQueries(provider.queries) {
 		t.Fatalf("crypto-mismatch key queries = %#v", provider.queries)
 	}
@@ -92,7 +93,9 @@ func TestVerifierChecksSameAlgorithmSignaturesPositionally(t *testing.T) {
 		t.Fatal(err)
 	}
 	result, err = verifier.Verify(context.Background(), Request{Message: fixture.message, Envelope: matchingEnvelope()})
-	requireSameAlgorithmResult(t, "second k= algorithm mismatch", result, err, TargetStatusMixed, SignatureSetStatusKeyAlgorithmMismatch)
+	// Draft-08 Section 14.6 steps 3 and 6: a key error is a PERMERROR
+	// intermediate, so the sig-all group is PERMERROR (unsupported).
+	requireSameAlgorithmResult(t, "second k= algorithm mismatch", result, err, TargetStatusUnsupported, SignatureSetStatusKeyAlgorithmMismatch)
 	if !orderedSameAlgorithmQueries(provider.queries) {
 		t.Fatalf("algorithm-mismatch key queries = %#v", provider.queries)
 	}
@@ -132,21 +135,24 @@ func TestVerifierAggregatesMultipleSignatureSets(t *testing.T) {
 			wantEd:     SignatureSetStatusPass,
 		},
 		{
+			// Draft-08 Section 14.6 step 6: one FAIL in the sig-all group is FAIL.
 			name: "mixed crypto failure",
 			keys: []StaticKey{
 				{Domain: testDomain, Selector: testSelector, Algorithm: AlgorithmRSASHA256, Material: fixture.rsaKey},
 				{Domain: testDomain, Selector: ed25519Selector, Algorithm: AlgorithmEd25519SHA256, Material: fixture.wrongEd25519},
 			},
-			wantStatus: TargetStatusMixed,
+			wantStatus: TargetStatusFail,
 			wantRSA:    SignatureSetStatusPass,
 			wantEd:     SignatureSetStatusFail,
 		},
 		{
+			// Draft-08 Section 14.6 steps 3 and 6: a missing key is a
+			// PERMERROR intermediate, so the sig-all group is PERMERROR.
 			name: "missing key mixed state",
 			keys: []StaticKey{
 				{Domain: testDomain, Selector: testSelector, Algorithm: AlgorithmRSASHA256, Material: fixture.rsaKey},
 			},
-			wantStatus: TargetStatusMixed,
+			wantStatus: TargetStatusUnsupported,
 			wantRSA:    SignatureSetStatusPass,
 			wantEd:     SignatureSetStatusMissingKey,
 		},
@@ -188,8 +194,11 @@ func TestVerifierReportsUnknownOnlySignatureSets(t *testing.T) {
 	}
 }
 
-// TestVerifierIgnoresUnknownSignatureSetBesideSupportedPass verifies Section 3.5 aggregation.
-func TestVerifierIgnoresUnknownSignatureSetBesideSupportedPass(t *testing.T) {
+// TestVerifierRejectsUnknownSignatureSetInsideSupportedGroup pins the
+// Draft-08 change from the removed Section 3.5 "disregard" rule: an
+// unimplemented algorithm is a PERMERROR intermediate (Section 14.6 step 4),
+// so a sig-all group holding it cannot pass even beside a supported PASS.
+func TestVerifierRejectsUnknownSignatureSetInsideSupportedGroup(t *testing.T) {
 	fixture := newSupportedAndUnknownSignatureFixture(t)
 	verifier := mustVerifierWithKeys(t, []StaticKey{{
 		Domain:    testDomain,
@@ -202,15 +211,15 @@ func TestVerifierIgnoresUnknownSignatureSetBesideSupportedPass(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Verify() error = %v", err)
 	}
-	if result.Status() != TargetStatusPass {
-		t.Fatalf("Status() = %q, want pass; sets=%#v checks=%#v", result.Status(), result.SignatureSets(), result.Checks())
+	if result.Status() != TargetStatusUnsupported {
+		t.Fatalf("Status() = %q, want unsupported; sets=%#v", result.Status(), result.SignatureSets())
 	}
 	if !hasSignatureSet(result, AlgorithmRSASHA256, SignatureSetStatusPass) ||
 		!hasSignatureSet(result, AlgorithmUnknown, SignatureSetStatusUnsupportedAlgorithm) {
-		t.Fatalf("sets = %#v, want supported pass plus ignored unknown", result.SignatureSets())
+		t.Fatalf("sets = %#v, want supported pass plus unknown PERMERROR", result.SignatureSets())
 	}
-	if projection, ok := result.ReplayProjection(); !ok || !projection.Valid() {
-		t.Fatal("supported PASS plus ignored unknown set did not produce replay projection")
+	if projection, ok := result.ReplayProjection(); ok || projection.Valid() {
+		t.Fatal("non-passing result produced replay projection")
 	}
 }
 

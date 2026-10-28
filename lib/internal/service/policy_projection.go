@@ -37,7 +37,7 @@ func buildSelectedPolicyProjection(state State, reason Reason, target Target, in
 		}
 		hops = []policy.HopFact{hop}
 	}
-	return policy.NewSelectedProjection(protocol, verificationReason, target.Sequence, hops, signatures, policy.DefaultLimits())
+	return policy.NewGroupedSelectedProjection(protocol, verificationReason, target.Sequence, hops, signatures, input.SignatureLayout(), policy.DefaultLimits())
 }
 
 // policyVerificationReason maps the authoritative aggregate service reason.

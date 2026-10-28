@@ -549,7 +549,9 @@ func mapRevisionProofOutcome(outcome verify.RevisionProofOutcome) (RevisionVerif
 		return RevisionVerificationUnsupported, true
 	case verify.RevisionProofProviderTemporary:
 		return RevisionVerificationProviderTemporary, true
-	case verify.RevisionProofProviderRejected:
+	case verify.RevisionProofProviderRejected, verify.RevisionProofMissingKey, verify.RevisionProofInvalidKey,
+		verify.RevisionProofRevokedKey, verify.RevisionProofAmbiguousKey, verify.RevisionProofUnsupportedKeyType,
+		verify.RevisionProofKeyAlgorithmMismatch:
 		return RevisionVerificationProviderRejected, true
 	case verify.RevisionProofProviderContract:
 		return RevisionVerificationProviderContract, true

@@ -3,6 +3,7 @@ package service
 import (
 	"slices"
 
+	"github.com/croessner/dkim2/internal/combine"
 	"github.com/croessner/dkim2/internal/verify"
 )
 
@@ -33,6 +34,7 @@ type mappingAccumulator struct {
 	envelopeStatus     verify.EnvelopeStatus
 	alignmentStatus    verify.DomainAlignmentStatus
 	nextDomainStatus   verify.NextDomainStatus
+	locallyDisabled    bool
 }
 
 // mapVerificationResult centrally maps protocol facts into the four-state service contract.
@@ -42,7 +44,10 @@ func mapVerificationResult(input verify.Result, limits Limits) Result {
 		return internalContractResult(target)
 	}
 	checks := input.Checks()
+	// Facts are mapped in field order so per-set reporting and the sealed
+	// policy facts line up with the parsed sig-any/sig-all layout.
 	sets := input.SignatureSets()
+	slices.SortStableFunc(sets, func(left, right verify.SignatureSetResult) int { return left.Index - right.Index })
 	accumulator := mappingAccumulator{
 		reason:             ReasonNone,
 		checks:             make([]CheckFact, 0, min(len(checks), limits.MaxCheckFacts)),
@@ -72,6 +77,7 @@ func mapVerificationResult(input verify.Result, limits Limits) Result {
 	for _, set := range sets {
 		accumulator.mapSignatureSet(set)
 	}
+	accumulator.applySignatureCombination(input.SignatureLayout(), sets)
 	accumulator.requireCompleteCurrentChecks()
 	if len(sets) <= hardMaxSignatureFacts {
 		accumulator.requireContiguousSetIndices(len(sets))
@@ -95,6 +101,9 @@ func mapVerificationResult(input verify.Result, limits Limits) Result {
 
 	slices.SortFunc(accumulator.checks, compareCheckFacts)
 	result := newResult(stateForSeverity(accumulator.severity), custody, target, accumulator.reason, accumulator.checks, accumulator.signatures)
+	if accumulator.locallyDisabled {
+		result = result.withLocallyDisabledAlgorithm()
+	}
 	if len(accumulator.completeSignatures) > hardMaxSignatureFacts {
 		return result
 	}
@@ -294,7 +303,11 @@ func (a *mappingAccumulator) mapHashCheck(class CheckClass, check verify.CheckRe
 	}
 }
 
-// mapSignatureCheck validates bounded signature-check consistency.
+// mapSignatureCheck validates bounded signature-check consistency. Per-set
+// checks are recorded as facts only; the aggregate severity of signatures is
+// decided once by the Section 14.6 combination in applySignatureCombination,
+// so a failing set in a losing alternative group cannot override a passing
+// group. Contract violations still fail closed.
 func (a *mappingAccumulator) mapSignatureCheck(class CheckClass, check verify.CheckResult) {
 	if !knownAlgorithm(check.Algorithm) {
 		a.addFact(CheckInternalContract, severityPermanent, ReasonInternalContract)
@@ -317,7 +330,7 @@ func (a *mappingAccumulator) mapSignatureCheck(class CheckClass, check verify.Ch
 		a.signatureChecks[AlgorithmUnknown]++
 	case verify.ErrorCodeSignatureMismatch:
 		if check.Status == verify.CheckStatusFail && supportedAlgorithm(check.Algorithm) {
-			a.addFact(class, severityFailure, ReasonSignatureMismatch)
+			a.appendCheck(CheckFact{Class: class, Reason: ReasonSignatureMismatch})
 			a.signatureChecks[Algorithm(check.Algorithm)]++
 		} else {
 			a.addFact(CheckInternalContract, severityPermanent, ReasonInternalContract)
@@ -329,11 +342,11 @@ func (a *mappingAccumulator) mapSignatureCheck(class CheckClass, check verify.Ch
 		}
 		switch check.ProviderFailureClass {
 		case verify.ProviderFailureTemporary:
-			a.addFact(CheckProvider, severityTemporary, ReasonProviderTemporary)
+			a.appendCheck(CheckFact{Class: CheckProvider, Reason: ReasonProviderTemporary})
 		case verify.ProviderFailurePermanent:
-			a.addFact(CheckProvider, severityPermanent, ReasonProviderPermanent)
+			a.appendCheck(CheckFact{Class: CheckProvider, Reason: ReasonProviderPermanent})
 		case verify.ProviderFailureContract, "":
-			a.addFact(CheckProvider, severityPermanent, ReasonProviderContract)
+			a.appendCheck(CheckFact{Class: CheckProvider, Reason: ReasonProviderContract})
 		default:
 			a.addFact(CheckInternalContract, severityPermanent, ReasonInternalContract)
 		}
@@ -341,11 +354,11 @@ func (a *mappingAccumulator) mapSignatureCheck(class CheckClass, check verify.Ch
 			a.signatureChecks[Algorithm(check.Algorithm)]++
 		}
 	default:
-		reason, severity := mapKeyErrorCode(check.Code)
-		if check.Status != verify.CheckStatusFail {
+		reason, _ := mapKeyErrorCode(check.Code)
+		if check.Status != verify.CheckStatusFail || reason == ReasonInternalContract {
 			a.addFact(CheckInternalContract, severityPermanent, ReasonInternalContract)
 		} else {
-			a.addFact(classForReason(reason), severity, reason)
+			a.appendCheck(CheckFact{Class: classForReason(reason), Reason: reason})
 			if supportedAlgorithm(check.Algorithm) {
 				a.signatureChecks[Algorithm(check.Algorithm)]++
 			}
@@ -465,7 +478,9 @@ func (a *mappingAccumulator) mapNextDomainCheck(class CheckClass, check verify.C
 	a.addFact(CheckInternalContract, severityPermanent, ReasonInternalContract)
 }
 
-// mapSignatureSet maps one supported, ignored, key, or provider outcome.
+// mapSignatureSet validates and records one per-set fact. Only contract
+// violations add severity here; the aggregate signature severity comes from
+// the Section 14.6 combination.
 func (a *mappingAccumulator) mapSignatureSet(set verify.SignatureSetResult) {
 	algorithm, algorithmKnown := mapAlgorithm(set.Algorithm)
 	trackedIndex := set.Index >= 0 && set.Index < hardMaxSignatureFacts
@@ -478,29 +493,38 @@ func (a *mappingAccumulator) mapSignatureSet(set verify.SignatureSetResult) {
 		a.setIndices[set.Index] = true
 	}
 	a.signatureSets[algorithm]++
+	fact := signatureSetFact(algorithm, set)
+	if fact.Reason == ReasonInternalContract {
+		a.add(severityPermanent, fact.Reason)
+	}
+	if fact.Status == SignaturePASS {
+		a.supportedPass++
+	}
+	a.appendSignature(fact)
+}
+
+// signatureSetFact projects one validated set result onto its bounded
+// per-set fact: PASS, FAIL with selector, TEMPERROR, PERMERROR with its
+// specific reason, or an ignored unknown algorithm.
+func signatureSetFact(algorithm Algorithm, set verify.SignatureSetResult) SignatureSetFact {
 	fact := SignatureSetFact{Algorithm: algorithm}
 	switch set.Status {
 	case verify.SignatureSetStatusPass:
 		if set.KeyStatus != verify.KeyStatusFound || algorithm == AlgorithmUnknown {
 			fact.Status, fact.Reason = SignaturePERMERROR, ReasonInternalContract
-			a.add(severityPermanent, fact.Reason)
 		} else {
 			fact.Status, fact.Reason = SignaturePASS, ReasonNone
-			a.supportedPass++
 		}
 	case verify.SignatureSetStatusFail:
 		if set.KeyStatus != verify.KeyStatusFound || algorithm == AlgorithmUnknown {
 			fact.Status, fact.Reason = SignaturePERMERROR, ReasonInternalContract
-			a.add(severityPermanent, fact.Reason)
 		} else {
 			fact.Status, fact.Reason = SignatureFAIL, ReasonSignatureMismatch
 			fact.Selector = set.Selector
-			a.add(severityFailure, fact.Reason)
 		}
 	case verify.SignatureSetStatusUnsupportedAlgorithm:
 		if set.KeyStatus != verify.KeyStatusUnsupportedAlgorithm || algorithm != AlgorithmUnknown {
 			fact.Status, fact.Reason = SignaturePERMERROR, ReasonInternalContract
-			a.add(severityPermanent, fact.Reason)
 		} else {
 			fact.Status, fact.Reason = SignatureIgnored, ReasonUnsupportedAlgorithm
 		}
@@ -508,15 +532,40 @@ func (a *mappingAccumulator) mapSignatureSet(set verify.SignatureSetResult) {
 		fact.Status, fact.Reason = SignatureTEMPERROR, ReasonProviderTemporary
 		if set.KeyStatus != verify.KeyStatusProviderTemporary {
 			fact.Status, fact.Reason = SignaturePERMERROR, ReasonInternalContract
-			a.add(severityPermanent, fact.Reason)
-		} else {
-			a.add(severityTemporary, fact.Reason)
 		}
 	default:
 		fact.Status, fact.Reason = SignaturePERMERROR, reasonForSignatureSet(set)
-		a.add(severityPermanent, fact.Reason)
 	}
-	a.appendSignature(fact)
+	return fact
+}
+
+// applySignatureCombination adds the one aggregate signature severity: the
+// Section 14.6 combination of the per-set results under the parsed layout,
+// computed by the single verify owner. PASS adds nothing; TEMPERROR and FAIL
+// add provider_temporary and signature_mismatch; PERMERROR adds the reason of
+// the decisive set, the first set whose intermediate equals the combined
+// result, so the public reason is deterministic.
+func (a *mappingAccumulator) applySignatureCombination(layout combine.Layout, sets []verify.SignatureSetResult) {
+	if len(sets) == 0 || a.hardOverflow {
+		return
+	}
+	outcome := verify.CombineSignatureSets(layout, sets)
+	if !outcome.Valid() {
+		a.add(severityPermanent, ReasonInternalContract)
+		return
+	}
+	switch outcome.Result() {
+	case combine.ResultPass:
+	case combine.ResultTempError:
+		a.add(severityTemporary, ReasonProviderTemporary)
+	case combine.ResultFail:
+		a.add(severityFailure, ReasonSignatureMismatch)
+	default:
+		decisive, _ := verify.SignatureSetAt(sets, outcome.Decisive())
+		algorithm, _ := mapAlgorithm(decisive.Algorithm)
+		a.add(severityPermanent, signatureSetFact(algorithm, decisive).Reason)
+		a.locallyDisabled = decisive.Status == verify.SignatureSetStatusDisabledAlgorithm
+	}
 }
 
 // signatureKeyPairValid exhaustively validates signature and key-status coherence.

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/croessner/dkim2/internal/canonical"
+	"github.com/croessner/dkim2/internal/combine"
 	"github.com/croessner/dkim2/internal/instance"
 	"github.com/croessner/dkim2/internal/rawmsg"
 	"github.com/croessner/dkim2/internal/recipe"
@@ -37,8 +38,20 @@ const (
 	RevisionProofUnsupported RevisionProofOutcome = "unsupported"
 	// RevisionProofProviderTemporary reports retryable public-key provider failure.
 	RevisionProofProviderTemporary RevisionProofOutcome = "provider_temporary"
-	// RevisionProofProviderRejected reports permanent public-key provider or key rejection.
+	// RevisionProofProviderRejected reports a permanent public-key provider failure.
 	RevisionProofProviderRejected RevisionProofOutcome = "provider_rejected"
+	// RevisionProofMissingKey reports an inherited signature whose key is absent.
+	RevisionProofMissingKey RevisionProofOutcome = "missing_key"
+	// RevisionProofInvalidKey reports an inherited signature whose key is malformed or rejected.
+	RevisionProofInvalidKey RevisionProofOutcome = "invalid_key"
+	// RevisionProofRevokedKey reports an inherited signature whose key is revoked.
+	RevisionProofRevokedKey RevisionProofOutcome = "revoked_key"
+	// RevisionProofAmbiguousKey reports an inherited signature with ambiguous key records.
+	RevisionProofAmbiguousKey RevisionProofOutcome = "ambiguous_key"
+	// RevisionProofUnsupportedKeyType reports an inherited signature whose key type is unsupported.
+	RevisionProofUnsupportedKeyType RevisionProofOutcome = "unsupported_key_type"
+	// RevisionProofKeyAlgorithmMismatch reports an inherited signature whose key does not match its algorithm.
+	RevisionProofKeyAlgorithmMismatch RevisionProofOutcome = "key_algorithm_mismatch"
 	// RevisionProofProviderContract reports an inconsistent provider result/error pair.
 	RevisionProofProviderContract RevisionProofOutcome = "provider_contract"
 	// RevisionProofLimitExceeded reports bounded all-hop work exhaustion.
@@ -55,7 +68,8 @@ func (o RevisionProofOutcome) Known() bool {
 		RevisionProofProtocolRejected, RevisionProofInvalidRecipeJSON, RevisionProofHashMismatch, RevisionProofSignatureMismatch,
 		RevisionProofUnsupported, RevisionProofProviderTemporary,
 		RevisionProofProviderRejected, RevisionProofProviderContract, RevisionProofLimitExceeded,
-		RevisionProofFromNotAuthentic:
+		RevisionProofFromNotAuthentic, RevisionProofMissingKey, RevisionProofInvalidKey, RevisionProofRevokedKey,
+		RevisionProofAmbiguousKey, RevisionProofUnsupportedKeyType, RevisionProofKeyAlgorithmMismatch:
 		return true
 	default:
 		return false
@@ -133,7 +147,7 @@ func (f RevisionFacts) Valid() bool {
 		previousInstance = fact.instance
 		totalSets += len(fact.sets)
 		for _, set := range fact.sets {
-			if set.state == RevisionSetSupportedPass {
+			if set.lookedUp {
 				supported++
 			}
 		}
@@ -471,11 +485,7 @@ func (v Verifier) executePreparedRevisionProof(ctx context.Context, prepared Pre
 		}
 		setFacts := make([]RevisionSetFact, len(evaluation.sets))
 		for setIndex, set := range evaluation.sets {
-			if set.Status == SignatureSetStatusPass {
-				setFacts[setIndex] = RevisionSetFact{index: setIndex, algorithm: set.Algorithm, state: RevisionSetSupportedPass}
-			} else {
-				setFacts[setIndex] = RevisionSetFact{index: setIndex, algorithm: AlgorithmUnknown, state: RevisionSetIgnoredUnknown}
-			}
+			setFacts[setIndex] = newRevisionSetFact(set)
 		}
 		candidate.fact.sets = setFacts
 		signatures.facts[candidate.fact.sequence-1] = candidate.fact
@@ -483,28 +493,21 @@ func (v Verifier) executePreparedRevisionProof(ctx context.Context, prepared Pre
 	return v.completePreparedRevisionProof(prepared.input, prepared.base, signatures)
 }
 
+// revisionSetsFromCurrent projects the already passing current target's
+// per-set facts; the current result must carry a Section 14.6 PASS.
 func revisionSetsFromCurrent(current Result, count int) ([]RevisionSetFact, bool) {
 	sets := current.SignatureSets()
-	if len(sets) != count {
+	if len(sets) != count || !CombineSignatureSets(current.SignatureLayout(), sets).Pass() {
 		return nil, false
 	}
 	result := make([]RevisionSetFact, len(sets))
-	passes := 0
 	for index, set := range sets {
-		if set.Index != index {
+		if set.Index != index || set.Status == SignatureSetStatusNotChecked {
 			return nil, false
 		}
-		switch set.Status {
-		case SignatureSetStatusPass:
-			result[index] = RevisionSetFact{index: index, algorithm: set.Algorithm, state: RevisionSetSupportedPass}
-			passes++
-		case SignatureSetStatusUnsupportedAlgorithm:
-			result[index] = RevisionSetFact{index: index, algorithm: AlgorithmUnknown, state: RevisionSetIgnoredUnknown}
-		default:
-			return nil, false
-		}
+		result[index] = newRevisionSetFact(set)
 	}
-	return result, passes > 0
+	return result, true
 }
 
 // RevalidateRevisionProof rechecks every inherited timestamp against one newly captured clock.
@@ -580,6 +583,7 @@ type revisionPreparedSignature struct {
 type revisionSignatureSetPlan struct {
 	results []SignatureSetResult
 	order   []int
+	layout  combine.Layout
 }
 
 // PreparedRevisionProof is an opaque provider-free all-hop verification plan.
@@ -821,7 +825,7 @@ func (v Verifier) preflightRevisionSignatures(ctx context.Context, input verific
 			return revisionSignatureProof{}, nil, RevisionProofLimitExceeded, nil
 		}
 		for _, set := range sets {
-			if set.KnownAlgorithm() {
+			if v.options.AlgorithmPolicy.ClassifyAlgorithm(Algorithm(set.Algorithm())) == KeyStatusFound {
 				if lookups == math.MaxInt {
 					return revisionSignatureProof{}, nil, RevisionProofLimitExceeded, nil
 				}
@@ -863,7 +867,10 @@ func (v Verifier) preflightRevisionSignatures(ctx context.Context, input verific
 	return proof, prepared, "", nil
 }
 
-// prepareRevisionSignatureSets classifies every set locally and builds fixed callback order before any provider call.
+// prepareRevisionSignatureSets classifies every set locally and builds fixed
+// callback order before any provider call. Unknown and locally disabled
+// algorithms are PERMERROR intermediates decided without a lookup; a field
+// in which no set can be looked up cannot pass.
 func (v Verifier) prepareRevisionSignatureSets(parsed signature.Signature) (revisionSignatureSetPlan, RevisionProofOutcome) {
 	sets := parsed.SignatureSets()
 	if len(sets) > v.options.Limits.MaxSignatureSets {
@@ -873,9 +880,9 @@ func (v Verifier) prepareRevisionSignatureSets(parsed signature.Signature) (revi
 	plan := revisionSignatureSetPlan{
 		results: make([]SignatureSetResult, len(sets)),
 		order:   make([]int, 0, len(sets)),
+		layout:  parsed.SignatureLayout(),
 	}
 	enabled := make([]bool, len(sets))
-	locallyRejected := false
 	for index, set := range sets {
 		algorithm := Algorithm(set.Algorithm())
 		switch status := v.options.AlgorithmPolicy.ClassifyAlgorithm(algorithm); status {
@@ -890,9 +897,8 @@ func (v Verifier) prepareRevisionSignatureSets(parsed signature.Signature) (revi
 			}
 		default:
 			plan.results[index] = SignatureSetResult{
-				Index: index, Algorithm: algorithm, Status: SignatureSetStatusDisabledAlgorithm, KeyStatus: status,
+				Index: index, Algorithm: algorithm, Status: SignatureSetStatusDisabledAlgorithm, KeyStatus: KeyStatusDisabledAlgorithm,
 			}
-			locallyRejected = true
 		}
 	}
 
@@ -902,9 +908,6 @@ func (v Verifier) prepareRevisionSignatureSets(parsed signature.Signature) (revi
 				plan.order = append(plan.order, index)
 			}
 		}
-	}
-	if locallyRejected {
-		return revisionSignatureSetPlan{}, RevisionProofProtocolRejected
 	}
 	if len(plan.order) == 0 {
 		return revisionSignatureSetPlan{}, RevisionProofUnsupported
@@ -918,6 +921,7 @@ func (v Verifier) evaluateRevisionSignatureSets(ctx context.Context, parsed sign
 	evaluation := signatureEvaluation{
 		checks: make([]CheckResult, 0, len(sets)),
 		sets:   append([]SignatureSetResult(nil), plan.results...),
+		layout: plan.layout,
 	}
 	for _, index := range plan.order {
 		if ctx == nil || ctx.Err() != nil {
@@ -930,8 +934,8 @@ func (v Verifier) evaluateRevisionSignatureSets(ctx context.Context, parsed sign
 	}
 	for _, setResult := range evaluation.sets {
 		evaluation.checks = append(evaluation.checks, signatureCheckResult(setResult, target))
-		evaluation.account(setResult)
 	}
+	evaluation.combine()
 	return evaluation
 }
 
@@ -980,43 +984,56 @@ func revisionSignatureInputDigest(message rawmsg.Message, target Target, remaini
 	return digests, canonicalWorkBytes(input), nil
 }
 
-// revisionSignatureOutcome folds one inherited field without accepting mixed known failures.
+// revisionSignatureOutcome maps the Section 14.6 combination of one
+// inherited field onto the closed revision vocabulary. A non-PASS result
+// reports the decisive set (the first set whose intermediate equals the
+// combined result), and permanent key failures keep their specific reason.
 func revisionSignatureOutcome(evaluation signatureEvaluation) RevisionProofOutcome {
-	hasTemporary, hasPermanent, hasMismatch := false, false, false
-	for _, set := range evaluation.sets {
-		switch set.Status {
-		case SignatureSetStatusPass, SignatureSetStatusUnsupportedAlgorithm:
-		case SignatureSetStatusProviderContract, SignatureSetStatusProviderError:
-			return RevisionProofProviderContract
-		case SignatureSetStatusProviderTemporary:
-			hasTemporary = true
-		case SignatureSetStatusFail:
-			hasMismatch = true
-		case SignatureSetStatusProviderPermanent, SignatureSetStatusMissingKey, SignatureSetStatusInvalidKey,
-			SignatureSetStatusAmbiguousKey, SignatureSetStatusRevokedKey, SignatureSetStatusUnsupportedKeyType,
-			SignatureSetStatusKeyAlgorithmMismatch, SignatureSetStatusWrongKeyType, SignatureSetStatusKeyPolicyRejected,
-			SignatureSetStatusDisabledAlgorithm:
-			hasPermanent = true
-		default:
-			return RevisionProofProtocolRejected
-		}
-	}
-	if hasPermanent {
-		return RevisionProofProviderRejected
-	}
-	if hasTemporary {
-		return RevisionProofProviderTemporary
-	}
-	if hasMismatch {
-		return RevisionProofSignatureMismatch
-	}
-	if evaluation.pass == 0 {
-		return RevisionProofUnsupported
-	}
-	if evaluation.fail != 0 || evaluation.other != 0 || evaluation.temporary != 0 {
+	outcome := evaluation.outcome
+	if !outcome.Valid() {
 		return RevisionProofProtocolRejected
 	}
-	return RevisionProofVerified
+	switch outcome.Result() {
+	case combine.ResultPass:
+		return RevisionProofVerified
+	case combine.ResultTempError:
+		return RevisionProofProviderTemporary
+	case combine.ResultFail:
+		return RevisionProofSignatureMismatch
+	default:
+		decisive, ok := SignatureSetAt(evaluation.sets, outcome.Decisive())
+		if !ok {
+			return RevisionProofProtocolRejected
+		}
+		return revisionPermanentSetOutcome(decisive.Status)
+	}
+}
+
+// revisionPermanentSetOutcome names the PERMERROR intermediate of one
+// decisive inherited set.
+func revisionPermanentSetOutcome(status SignatureSetStatus) RevisionProofOutcome {
+	switch status {
+	case SignatureSetStatusUnsupportedAlgorithm, SignatureSetStatusDisabledAlgorithm:
+		return RevisionProofUnsupported
+	case SignatureSetStatusMissingKey:
+		return RevisionProofMissingKey
+	case SignatureSetStatusInvalidKey, SignatureSetStatusWrongKeyType, SignatureSetStatusKeyPolicyRejected:
+		return RevisionProofInvalidKey
+	case SignatureSetStatusRevokedKey:
+		return RevisionProofRevokedKey
+	case SignatureSetStatusAmbiguousKey:
+		return RevisionProofAmbiguousKey
+	case SignatureSetStatusUnsupportedKeyType:
+		return RevisionProofUnsupportedKeyType
+	case SignatureSetStatusKeyAlgorithmMismatch:
+		return RevisionProofKeyAlgorithmMismatch
+	case SignatureSetStatusProviderPermanent:
+		return RevisionProofProviderRejected
+	case SignatureSetStatusProviderContract, SignatureSetStatusProviderError:
+		return RevisionProofProviderContract
+	default:
+		return RevisionProofProtocolRejected
+	}
 }
 
 // revisionHistoryAccepted permits complete proof or only explicit b:null body unavailability through m=1.

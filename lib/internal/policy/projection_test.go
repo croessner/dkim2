@@ -3,6 +3,8 @@ package policy
 import (
 	"math"
 	"testing"
+
+	"github.com/croessner/dkim2/internal/combine"
 )
 
 // TestSelectedProjectionAuthenticatesOnlyPassingCurrentFlags verifies current provenance.
@@ -160,6 +162,9 @@ func TestRevisionFailureProjectionAllowsOnlyServiceOutcomePairs(t *testing.T) {
 		{ProtocolPERMERROR, VerificationReasonInvalidRecipeJSON},
 		{ProtocolPERMERROR, VerificationReasonMalformedProtocol},
 		{ProtocolPERMERROR, VerificationReasonInternalContract},
+		// Inherited key failures keep their specific reason (Draft-08 migration D4).
+		{ProtocolPERMERROR, VerificationReasonMissingKey},
+		{ProtocolPERMERROR, VerificationReasonInvalidKey},
 	}
 	for _, test := range allowed {
 		projection, projectionErr := NewRevisionFailureProjection(test.protocol, test.reason, current, DefaultLimits())
@@ -171,7 +176,6 @@ func TestRevisionFailureProjectionAllowsOnlyServiceOutcomePairs(t *testing.T) {
 		protocol ProtocolClass
 		reason   VerificationReason
 	}{
-		{ProtocolPERMERROR, VerificationReasonMissingKey},
 		{ProtocolPERMERROR, VerificationReasonDuplicateSelector},
 		{ProtocolPERMERROR, VerificationReasonTimestampInvalid},
 		{ProtocolPERMERROR, VerificationReason("future")},
@@ -186,7 +190,7 @@ func TestRevisionFailureProjectionAllowsOnlyServiceOutcomePairs(t *testing.T) {
 	}
 	forged := current
 	forged.protocol = ProtocolPERMERROR
-	forged.verificationReason = VerificationReasonMissingKey
+	forged.verificationReason = VerificationReasonDuplicateSelector
 	forged.history = HistoryNotEvaluated
 	forged.hops = nil
 	forged.revisionFailure = true
@@ -330,6 +334,9 @@ func TestPermanentProjectionRequiresACompatibleOutcomeDriver(t *testing.T) {
 		{"alignment over missing", VerificationReasonDomainAlignmentMismatch, []SignatureFact{missing}},
 		{"next domain over provider", VerificationReasonNextDomainMismatch, []SignatureFact{provider}},
 		{"out of band over missing", VerificationReasonOutOfBandRequired, []SignatureFact{missing}},
+		// Draft-08 Section 14.6 step 4: an unknown algorithm in the group is a
+		// PERMERROR whose unsupported_algorithm reason outranks timestamp_invalid.
+		{"timestamp over unknown in group", VerificationReasonTimestampInvalid, []SignatureFact{pass, ignored}},
 		{"pre-target malformed message", VerificationReasonMalformedMessage, []SignatureFact{pass}},
 		{"pre-target malformed protocol", VerificationReasonMalformedProtocol, []SignatureFact{pass}},
 		{"pre-target missing protocol", VerificationReasonMissingProtocol, []SignatureFact{pass}},
@@ -354,7 +361,6 @@ func TestPermanentProjectionRequiresACompatibleOutcomeDriver(t *testing.T) {
 		{VerificationReasonUnsupportedAlgorithm, []SignatureFact{pass}},
 		{VerificationReasonUnsupportedAlgorithm, []SignatureFact{pass, missing}},
 		{VerificationReasonTimestampInvalid, []SignatureFact{pass}},
-		{VerificationReasonTimestampInvalid, []SignatureFact{pass, ignored}},
 		{VerificationReasonLimitExceeded, []SignatureFact{pass}},
 	}
 	for _, test := range valid {
@@ -432,7 +438,8 @@ func TestCurrentProjectionBindsProtocolToSignatureOutcomes(t *testing.T) {
 		{name: "PASS with permanent", protocol: ProtocolPASS, reason: VerificationReasonNone, hops: []HopFact{hop}, facts: []SignatureFact{pass, permanent}},
 		{name: "TEMPERROR with pass only", protocol: ProtocolTEMPERROR, reason: VerificationReasonProviderTemporary, facts: []SignatureFact{pass}},
 		{name: "TEMPERROR with permanent", protocol: ProtocolTEMPERROR, reason: VerificationReasonProviderTemporary, facts: []SignatureFact{temporary, permanent}},
-		{name: "FAIL with temporary", protocol: ProtocolFAIL, reason: VerificationReasonHashMismatch, facts: []SignatureFact{pass, temporary}},
+		{name: "FAIL by signature over temporary group", protocol: ProtocolFAIL, reason: VerificationReasonSignatureMismatch, facts: []SignatureFact{pass, temporary}},
+		{name: "hash FAIL over permanent signatures", protocol: ProtocolFAIL, reason: VerificationReasonHashMismatch, facts: []SignatureFact{pass, permanent}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			if projection, err := NewSelectedProjection(tt.protocol, tt.reason, 1, tt.hops, tt.facts, DefaultLimits()); !IsErrorCode(err, ErrorInternalContract) || !projection.IsZero() {
@@ -468,4 +475,24 @@ func transitionForTestIndex(index int) TransitionState {
 		return TransitionOrigin
 	}
 	return TransitionUnchanged
+}
+
+// TestGroupedProjectionRecomputesSection14_6 proves the sealed projection
+// recomputes the Draft-08 combination from its layout: a failing set in a
+// losing alternative group cannot block PASS, while the same facts in one
+// sig-all group are not a PASS.
+func TestGroupedProjectionRecomputesSection14_6(t *testing.T) {
+	pass := mustProjectionSignatureFact(t, SetAlgorithmRSA, SetStatusPass, SetReasonNone)
+	fail := mustProjectionSignatureFact(t, SetAlgorithmEd25519, SetStatusFail, SetReasonSignatureMismatch)
+	hop := mustProjectionHop(t, 1, TransitionOrigin)
+	alternative, _ := combine.NewLayout(1, 1)
+	if projection, err := NewGroupedSelectedProjection(ProtocolPASS, VerificationReasonNone, 1, []HopFact{hop}, []SignatureFact{fail, pass}, alternative, DefaultLimits()); err != nil || !projection.Valid() {
+		t.Fatalf("fail|pass PASS projection error = %v", err)
+	}
+	if _, err := NewSelectedProjection(ProtocolPASS, VerificationReasonNone, 1, []HopFact{hop}, []SignatureFact{fail, pass}, DefaultLimits()); !IsErrorCode(err, ErrorInternalContract) {
+		t.Fatalf("fail,pass PASS projection error = %v, want internal contract", err)
+	}
+	if _, err := NewGroupedSelectedProjection(ProtocolPASS, VerificationReasonNone, 1, []HopFact{hop}, []SignatureFact{pass}, alternative, DefaultLimits()); !IsErrorCode(err, ErrorInternalContract) {
+		t.Fatalf("layout not describing the facts error = %v, want internal contract", err)
+	}
 }

@@ -2,7 +2,6 @@ package verify
 
 import (
 	"context"
-	"crypto/subtle"
 	"math"
 
 	"github.com/croessner/dkim2/internal/canonical"
@@ -429,12 +428,11 @@ func (c HistoryCoordinator) validatePreviousWithin(state recipe.State, current, 
 	if current.Number() <= 1 || previous.Number()+1 != current.Number() {
 		return HistoryTransition{}, 0, historyError(ErrorCodeHistoryInstanceNotAdjacent)
 	}
-	sets, selection := previous.SupportedHashSets()
-	bodyState := HistoryDimensionUnsupported
-	if state.BodyState() == recipe.BodyAvailabilityUnavailable {
-		bodyState = HistoryDimensionUnavailable
-	}
-	if selection != instance.HashSelectionStatusSelected {
+	if !HashCombinationEvaluable(previous) {
+		bodyState := HistoryDimensionUnsupported
+		if state.BodyState() == recipe.BodyAvailabilityUnavailable {
+			bodyState = HistoryDimensionUnavailable
+		}
 		return HistoryTransition{current.Number(), previous.Number(), HistoryRecipeModeApplied, HistoryDimensionUnsupported, bodyState, state, true}, 0, nil
 	}
 	headerInput, bodyInput, bodyKnown, work, err := c.canonicalInputsWithin(state, remaining)
@@ -444,38 +442,14 @@ func (c HistoryCoordinator) validatePreviousWithin(state recipe.State, current, 
 		}
 		return HistoryTransition{}, 0, historyError(ErrorCodeHistoryInternalContract)
 	}
-	headerState := HistoryDimensionMatched
-	if bodyKnown {
-		bodyState = HistoryDimensionMatched
+	// Section 13: each lower Message-Instance h= is evaluated with the shared
+	// Section 14.7 algebra against the message recreated by the higher
+	// Recipes; below a null Recipe only header hashes can be checked.
+	evaluation, err := evaluateInstanceHashes(c.canonicalizer.Options().Limits, previous, headerInput, bodyInput, bodyKnown)
+	if err != nil {
+		return HistoryTransition{}, 0, historyError(ErrorCodeHistoryInternalContract)
 	}
-	for _, set := range sets {
-		algorithm, ok := canonicalHashAlgorithm(set.Name())
-		if !ok {
-			return HistoryTransition{}, 0, historyError(ErrorCodeHistoryInternalContract)
-		}
-		digester, newErr := canonical.NewCanonicalizer(canonical.WithLimits(c.canonicalizer.Options().Limits), canonical.WithHashAlgorithm(algorithm))
-		if newErr != nil {
-			return HistoryTransition{}, 0, historyError(ErrorCodeHistoryInternalContract)
-		}
-		headerDigest, headerErr := digester.Digest(headerInput)
-		expectedHeader, headerOK := set.HeaderHash()
-		expectedBody, bodyOK := set.BodyHash()
-		if headerErr != nil || !headerOK || !bodyOK {
-			return HistoryTransition{}, 0, historyError(ErrorCodeHistoryInternalContract)
-		}
-		if historyDigestState(headerDigest.Bytes(), expectedHeader.Decoded()) != HistoryDimensionMatched {
-			headerState = HistoryDimensionMismatch
-		}
-		if bodyKnown {
-			bodyDigest, bodyErr := digester.Digest(bodyInput)
-			if bodyErr != nil {
-				return HistoryTransition{}, 0, historyError(ErrorCodeHistoryInternalContract)
-			}
-			if historyDigestState(bodyDigest.Bytes(), expectedBody.Decoded()) != HistoryDimensionMatched {
-				bodyState = HistoryDimensionMismatch
-			}
-		}
-	}
+	headerState, bodyState := evaluation.historyDimensions(bodyKnown)
 	return HistoryTransition{current.Number(), previous.Number(), HistoryRecipeModeApplied, headerState, bodyState, state, true}, work, nil
 }
 
@@ -689,40 +663,21 @@ func (c HistoryCoordinator) proveCurrentHistoryState(initial recipe.State, curre
 	return usage, "", nil
 }
 
-// currentStateMatches binds direct Walk input to the already passing current tuple.
+// currentStateMatches binds direct Walk input to the already passing
+// current h= combination.
 func (c HistoryCoordinator) currentStateMatches(state recipe.State, current instance.MessageInstance, maxCanonicalBytes int) (bool, int, error) {
-	if state.BodyState() != recipe.BodyAvailabilityKnown {
-		return false, 0, nil
-	}
-	sets, selection := current.SupportedHashSets()
-	if selection != instance.HashSelectionStatusSelected {
+	if state.BodyState() != recipe.BodyAvailabilityKnown || !HashCombinationEvaluable(current) {
 		return false, 0, nil
 	}
 	headerInput, bodyInput, bodyKnown, work, canonicalErr := c.canonicalInputsWithin(state, maxCanonicalBytes)
 	if canonicalErr != nil || !bodyKnown {
 		return false, 0, canonicalErr
 	}
-	for _, set := range sets {
-		algorithm, ok := canonicalHashAlgorithm(set.Name())
-		headerExpected, headerOK := set.HeaderHash()
-		bodyExpected, bodyOK := set.BodyHash()
-		if !ok || !headerOK || !bodyOK {
-			return false, 0, nil
-		}
-		digester, err := canonical.NewCanonicalizer(canonical.WithLimits(c.canonicalizer.Options().Limits), canonical.WithHashAlgorithm(algorithm))
-		if err != nil {
-			return false, 0, err
-		}
-		headerDigest, headerErr := digester.Digest(headerInput)
-		bodyDigest, bodyErr := digester.Digest(bodyInput)
-		if headerErr != nil || bodyErr != nil {
-			return false, 0, historyError(ErrorCodeHistoryInternalContract)
-		}
-		if historyDigestState(headerDigest.Bytes(), headerExpected.Decoded()) != HistoryDimensionMatched || historyDigestState(bodyDigest.Bytes(), bodyExpected.Decoded()) != HistoryDimensionMatched {
-			return false, work, nil
-		}
+	evaluation, err := evaluateInstanceHashes(c.canonicalizer.Options().Limits, current, headerInput, bodyInput, true)
+	if err != nil {
+		return false, 0, historyError(ErrorCodeHistoryInternalContract)
 	}
-	return true, work, nil
+	return evaluation.pass(), work, nil
 }
 
 // historyParseStop maps parser and cumulative failures to one closed stop.
@@ -901,14 +856,6 @@ func (w HistoryWalk) withUnavailable(value bool) HistoryWalk {
 // newInternalContractHistoryWalk seals an impossible post-PASS integration failure.
 func newInternalContractHistoryWalk(target uint64) HistoryWalk {
 	return newHistoryWalk(HistoryCoverageUnreconstructable, HistoryStopInternalContract, target, target, nil, HistoryUsage{initialized: true})
-}
-
-// historyDigestState compares equal-length supported digests in constant time.
-func historyDigestState(actual, expected []byte) HistoryDimensionState {
-	if (len(actual) == 32 || len(actual) == 64) && len(expected) == len(actual) && subtle.ConstantTimeCompare(actual, expected) == 1 {
-		return HistoryDimensionMatched
-	}
-	return HistoryDimensionMismatch
 }
 
 // historyAdd adds nonnegative cumulative counters without overflow.

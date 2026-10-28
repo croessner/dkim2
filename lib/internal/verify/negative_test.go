@@ -114,7 +114,8 @@ func TestVerifierNegativeVectors(t *testing.T) {
 
 				return verifier.Verify(context.Background(), Request{Message: fixture.message, Envelope: matchingEnvelope()})
 			},
-			want: negativeVectorWant{targetStatus: TargetStatusFail, signatureStatus: SignatureSetStatusKeyPolicyRejected, algorithm: AlgorithmRSASHA256},
+			// A rejected key is a PERMERROR intermediate (Draft-08 Section 14.6 step 3).
+			want: negativeVectorWant{targetStatus: TargetStatusUnsupported, signatureStatus: SignatureSetStatusKeyPolicyRejected, algorithm: AlgorithmRSASHA256},
 		},
 		{
 			name: "stale timestamp",
@@ -185,7 +186,8 @@ func TestVerifierNegativeVectors(t *testing.T) {
 
 				return mustVerifierWithKeys(t, keys).Verify(context.Background(), Request{Message: fixture.message, Envelope: matchingEnvelope()})
 			},
-			want: negativeVectorWant{targetStatus: TargetStatusMixed, signatureStatus: SignatureSetStatusFail, algorithm: AlgorithmEd25519SHA256},
+			// Draft-08 Section 14.6 step 6: one FAIL in the sig-all group is FAIL.
+			want: negativeVectorWant{targetStatus: TargetStatusFail, signatureStatus: SignatureSetStatusFail, algorithm: AlgorithmEd25519SHA256},
 		},
 	}
 	for _, tt := range tests {

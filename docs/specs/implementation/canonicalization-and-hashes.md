@@ -468,8 +468,9 @@ Default behavior is restrictive:
 - Canonicalization helpers must not silently skip parser errors, sequence
   validation errors, missing target fields, duplicate target identifiers, or
   unsupported line-ending policy.
-- Unknown hash or signature algorithms are ignored for success, not treated as
-  pass.
+- Unknown hash or signature algorithms are PERMERROR intermediates of the
+  Draft-08 Section 14.6/14.7 combination, never a pass; they pass only
+  through another `|` group.
 - Section 6.2 excluded headers are omitted only from the header hash input.
   They remain visible to the raw message model and future policy layers where
   appropriate.

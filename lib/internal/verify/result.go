@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"io"
 	"slices"
+
+	"github.com/croessner/dkim2/internal/combine"
 )
 
 // CheckKind identifies one verification check dimension.
@@ -303,6 +305,7 @@ type Result struct {
 	status              TargetStatus
 	checks              []CheckResult
 	signatureSets       []SignatureSetResult
+	signatureLayout     combine.Layout
 	custody             CustodyStatus
 	targetFlags         TargetFlagCandidate
 	hasTargetFlags      bool
@@ -335,16 +338,29 @@ func (c TargetFlagCandidate) FeedHere() bool { return c.feedHere }
 // Exploded reports whether parsed target flags contain exploded.
 func (c TargetFlagCandidate) Exploded() bool { return c.exploded }
 
-// NewResult constructs immutable verification result facts.
+// NewResult constructs immutable verification result facts whose signature
+// sets form one sig-all group, the layout of an s= value without "|".
 func NewResult(target Target, status TargetStatus, checks []CheckResult, signatureSets []SignatureSetResult) Result {
+	layout, _ := combine.SingleGroup(len(signatureSets))
 	return Result{
-		draft:         DraftBaseline,
-		target:        target,
-		status:        boundedTargetStatus(status),
-		checks:        cloneCheckResults(checks),
-		signatureSets: cloneSignatureSetResults(signatureSets),
+		draft:           DraftBaseline,
+		target:          target,
+		status:          boundedTargetStatus(status),
+		checks:          cloneCheckResults(checks),
+		signatureSets:   cloneSignatureSetResults(signatureSets),
+		signatureLayout: layout,
 	}
 }
+
+// WithSignatureLayout returns a copy whose signature sets carry the parsed
+// sig-any/sig-all layout of the target field.
+func (r Result) WithSignatureLayout(layout combine.Layout) Result {
+	r.signatureLayout = layout
+	return r
+}
+
+// SignatureLayout returns the group layout of SignatureSets.
+func (r Result) SignatureLayout() combine.Layout { return r.signatureLayout }
 
 // NewResultWithCustody constructs immutable facts with established structural coverage.
 func NewResultWithCustody(target Target, status TargetStatus, checks []CheckResult, signatureSets []SignatureSetResult, custody CustodyStatus) Result {

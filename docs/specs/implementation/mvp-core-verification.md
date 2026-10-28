@@ -381,13 +381,13 @@ The binding mapping is:
 
 | Internal fact | Public state | Notes |
 | --- | --- | --- |
-| All required current checks pass and at least one supported signature set passes | `PASS` | Unknown algorithms are ignored, but may remain as bounded detail. |
-| Supported body or header hash mismatch | `FAIL` | Hash algorithm detail is bounded. |
-| Supported signature mismatch | `FAIL` | One supported pass plus one supported fail is still `FAIL`. |
+| All required current checks pass and the Section 14.6 signature combination is PASS | `PASS` | Non-passing sets of a losing `\|` group remain as bounded per-set detail. |
+| Section 14.7 hash combination is FAIL | `FAIL` | The decisive hash-set's mismatching dimension is reported. |
+| Section 14.6 signature combination is FAIL | `FAIL` | A pass and a fail in one `,` group is `FAIL`. |
 | Only unknown signature algorithms | `PERMERROR` | Nothing checkable exists; never PASS. |
-| Supported pass plus unknown algorithm | `PASS` | Draft-04 Section 3.4 requires the unknown algorithm to be ignored. |
-| SHA-256 plus unknown hash algorithm | eligible for `PASS` | The unknown hash is ignored; all other required checks must pass. |
-| Unknown hash algorithms without SHA-256 | `PERMERROR` | Nothing checkable covers the current message hashes. |
+| Supported pass plus unknown algorithm in one `,` group | `PERMERROR` | Draft-08 Section 14.6 step 4: the unknown set is a PERMERROR intermediate (`unsupported_algorithm`). Joined by `\|` the supported group can pass. |
+| Implemented hash plus unknown hash algorithm in one `,` group | `PERMERROR` | Draft-08 Section 14.7 step 2; `sha256\|x-new` passes through `sha256`. |
+| No hash group of implemented algorithms | `PERMERROR` | Nothing checkable covers the current message hashes. |
 | Missing, invalid, ambiguous, mismatched, or policy-rejected static key | `PERMERROR` | No DNS temporary semantics exist in M5. |
 | Temporary injected provider failure | `TEMPERROR` | Provider errors must be typed; arbitrary strings do not decide mapping. |
 | Missing/malformed DKIM2 field, tag, sequence, current instance, or request evidence | `PERMERROR` | Includes resource-limit failure. |
@@ -426,8 +426,7 @@ A public PASS means only:
 - The current raw message was parsed.
 - Current numbering and target selection were valid.
 - The highest/current instance hashes matched the current message.
-- Every supported signature set that M4 could check passed.
-- Unknown algorithms were ignored.
+- The Draft-08 Section 14.6 combination of the target `s=` sets passed.
 - Timestamp and applicable current envelope/domain checks passed.
 - Every structural `nd=` link that M4 encountered matched its immediate
   successor. This is structural custody evidence, not historical crypto or
@@ -460,9 +459,23 @@ link success. No M5 value may be named or documented as full-chain success.
 - SHA-256, RSA-SHA256, and Ed25519-SHA256 remain the required baseline.
 - RSA uses SHA-256 with PKCS#1 v1.5.
 - Ed25519 signs/verifies the native SHA-256 digest bytes of Section 9.6 input.
-- Every supported signature set must be checked when possible.
-- A failure in any supported set prevents PASS.
-- Unknown algorithms are ignored for aggregate verification.
+- Every implemented, enabled signature set is checked; an unknown or locally
+  disabled algorithm is a PERMERROR intermediate decided without a key
+  lookup.
+- Draft-08 combination algebra (single owner `verify.CombineSignatureSets`
+  over `lib/internal/combine`): per-set intermediates are PASS, FAIL
+  (signature mismatch), TEMPERROR (key temporarily unavailable), or
+  PERMERROR (any permanent key or provider error, unknown or disabled
+  algorithm). A `sig-all` (`,`) group is PASS when every set passes, else
+  TEMPERROR when every non-PASS set is TEMPERROR, else FAIL when any set
+  fails, else PERMERROR. The `sig-any` (`|`) result is PASS when any group
+  passes, else TEMPERROR, else FAIL, else PERMERROR. Hashes combine the same
+  way without TEMPERROR (`hash-all` all PASS, any FAIL, else PERMERROR;
+  `hash-any` any PASS, any FAIL, else PERMERROR).
+- The public reason of a non-PASS combination is the reason of the decisive
+  set: the first set in field order whose intermediate equals the combined
+  result (`signature_mismatch`, `provider_temporary`, or the specific
+  PERMERROR reason).
 - Unknown hash and signature algorithm detail is exposed only as the bounded
   token `unknown`.
 - Unknown algorithm names exposed in results are represented by the bounded
@@ -753,10 +766,11 @@ cannot run, record the exact blocker and largest equivalent passing subset.
   imports public root types.
 - Message/provider/protocol outcomes return a structured result with nil Go
   error; caller context and API misuse return only a Go error and zero result.
-- PASS requires all applicable current checks and every supported signature
-  set to pass.
-- Unknown signature algorithms are ignored; unknown-only is non-success.
-- Mixed supported pass/fail is FAIL.
+- PASS requires all applicable current checks and a Draft-08 Section 14.6
+  signature PASS.
+- Unknown signature algorithms are PERMERROR intermediates; unknown-only is
+  non-success.
+- A supported pass and fail in one `,` group is FAIL.
 - Temporary provider failure is the only M5 path to TEMPERROR.
 - Provider status/error pairs follow the closed contract; unknown or
   inconsistent pairs are PERMERROR `provider_contract`.
@@ -854,9 +868,10 @@ cannot run, record the exact blocker and largest equivalent passing subset.
   Section 11.1.
 - Settled: `mixed`, `unsupported`, and `indeterminate` remain internal detail
   and map to FAIL or PERMERROR according to typed causes.
-- Settled: Unknown algorithms are ignored when a supported path passes;
-  unknown-only is PERMERROR.
-- Settled: One failing supported signature set prevents PASS.
+- Settled (Draft-08): Unknown algorithms are PERMERROR intermediates; they
+  pass only through another `|` group. Unknown-only is PERMERROR.
+- Settled (Draft-08): One failing set prevents PASS of its `,` group; another
+  `|` group can still pass.
 - Settled: Structural/permanent PERMERROR facts outrank FAIL, FAIL outranks
   TEMPERROR, and TEMPERROR outranks PASS after caller-control Go errors.
 - Settled: Provider result/error combinations use the closed matrix; unknown

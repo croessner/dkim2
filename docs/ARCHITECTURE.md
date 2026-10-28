@@ -622,9 +622,14 @@ Important invariants:
 - `sha256` and `sha512` are implemented; decoded values are exactly 32 and 64
   octets respectively, algorithm names are case-sensitive textstrings that are
   unique by exact spelling (`SHA256` is an unknown name, not `sha256`), unknown
-  extension names remain forward-compatible, and verification requires every
-  supplied supported tuple to agree.
-- Hash algorithms unknown to the verifier are ignored, not treated as success.
+  extension names remain forward-compatible, and verification combines the
+  hash-sets with the Draft-08 Section 14.7 algebra (`hash-all` with `,`,
+  `hash-any` with `|`) through one owner, `verify.evaluateInstanceHashes`,
+  used for the current target, every history Message-Instance, the run
+  descent, and the headers-only DSN check (where a hash-set passes on its
+  header hash).
+- Hash algorithms unknown to the verifier are PERMERROR intermediates, never a
+  pass; they pass only through another `|` group.
 - Base64 values must honor the draft's padding requirement.
 
 ### 5.5 `lib/internal/recipe`

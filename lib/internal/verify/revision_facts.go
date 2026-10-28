@@ -19,13 +19,18 @@ type RevisionSetState string
 const (
 	// RevisionSetSupportedPass reports one known supported passing set.
 	RevisionSetSupportedPass RevisionSetState = "supported_pass"
-	// RevisionSetIgnoredUnknown reports one unknown extension ignored beside a pass.
+	// RevisionSetIgnoredUnknown reports one unknown-algorithm set in a field
+	// that passed through another Draft-08 sig-all group.
 	RevisionSetIgnoredUnknown RevisionSetState = "ignored_unknown"
+	// RevisionSetAlternativeNotPassed reports one implemented-algorithm set
+	// whose intermediate was not PASS (mismatch, key error, or locally
+	// disabled) in a field that passed through another sig-all group.
+	RevisionSetAlternativeNotPassed RevisionSetState = "alternative_not_passed"
 )
 
 // Known reports whether state belongs to the closed accepted-set vocabulary.
 func (s RevisionSetState) Known() bool {
-	return s == RevisionSetSupportedPass || s == RevisionSetIgnoredUnknown
+	return s == RevisionSetSupportedPass || s == RevisionSetIgnoredUnknown || s == RevisionSetAlternativeNotPassed
 }
 
 // RevisionSetFact stores one source-indexed accepted signature-set fact.
@@ -33,7 +38,25 @@ type RevisionSetFact struct {
 	index     int
 	algorithm Algorithm
 	state     RevisionSetState
+	lookedUp  bool
 }
+
+// newRevisionSetFact projects one evaluated set of a passing field onto
+// its accepted role and records whether it consumed a key lookup.
+func newRevisionSetFact(set SignatureSetResult) RevisionSetFact {
+	lookedUp := set.Status != SignatureSetStatusUnsupportedAlgorithm && set.Status != SignatureSetStatusDisabledAlgorithm
+	switch {
+	case set.Status == SignatureSetStatusPass:
+		return RevisionSetFact{index: set.Index, algorithm: set.Algorithm, state: RevisionSetSupportedPass, lookedUp: true}
+	case !knownAlgorithm(set.Algorithm):
+		return RevisionSetFact{index: set.Index, algorithm: AlgorithmUnknown, state: RevisionSetIgnoredUnknown}
+	default:
+		return RevisionSetFact{index: set.Index, algorithm: set.Algorithm, state: RevisionSetAlternativeNotPassed, lookedUp: lookedUp}
+	}
+}
+
+// LookedUp reports whether the set consumed a public-key lookup.
+func (f RevisionSetFact) LookedUp() bool { return f.lookedUp }
 
 // String returns a constant secret-safe set fact summary.
 func (f RevisionSetFact) String() string { return "verify.RevisionSetFact{redacted}" }
@@ -57,7 +80,9 @@ func (f RevisionSetFact) State() RevisionSetState { return f.state }
 
 // Valid reports whether the set fact is closed and coherent.
 func (f RevisionSetFact) Valid() bool {
-	return f.index >= 0 && (f.state == RevisionSetSupportedPass && knownAlgorithm(f.algorithm) || f.state == RevisionSetIgnoredUnknown && f.algorithm == AlgorithmUnknown)
+	return f.index >= 0 && (f.state == RevisionSetSupportedPass && knownAlgorithm(f.algorithm) && f.lookedUp ||
+		f.state == RevisionSetIgnoredUnknown && f.algorithm == AlgorithmUnknown && !f.lookedUp ||
+		f.state == RevisionSetAlternativeNotPassed && knownAlgorithm(f.algorithm))
 }
 
 // RevisionSignatureFact stores one complete inherited signature proof projection.

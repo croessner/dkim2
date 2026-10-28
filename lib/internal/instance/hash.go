@@ -55,20 +55,8 @@ func parseHashSets(value string, limits Limits, fieldIndex int) ([]HashSet, comb
 		seen[hashSet.name] = struct{}{}
 		hashes = append(hashes, hashSet)
 	}
-	if err := rejectAlternativeHashGroups(layout, fieldIndex); err != nil {
-		return nil, combine.Layout{}, err
-	}
 
 	return hashes, layout, nil
-}
-
-// rejectAlternativeHashGroups fails closed on more than one hash-all group
-// until the Section 14.7 combination algebra evaluates alternatives.
-func rejectAlternativeHashGroups(layout combine.Layout, fieldIndex int) error {
-	if layout.Groups() > 1 {
-		return malformedHashSetError(fieldIndex, 0)
-	}
-	return nil
 }
 
 // parseHashSet parses one hash-set = hash-name [FWS] ":" header-hash ":"

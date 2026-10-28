@@ -1038,10 +1038,22 @@ document the exact blocker.
 - Settled: Timestamp policy is explicit local verification policy over parsed
   `t=`, using an injected clock, a five-minute future tolerance, and a 14-day
   default maximum age per Section 11.3.
-- Settled: Unknown signature algorithms are ignored for aggregate success per
-  Section 3.4 while their bounded per-set facts remain visible under the fixed
-  `unknown` token. Unknown-only targets remain non-success and known failures
-  still prevent pass.
+- Settled (Draft-08, superseding the Section 3.4 "ignore" rule): signature
+  sets combine with the Section 14.6 algebra owned by
+  `verify.CombineSignatureSets`. An unknown or locally disabled algorithm is
+  a PERMERROR intermediate decided without a key lookup; per-set facts stay
+  visible under the fixed `unknown` token. A `,` group passes only when every
+  set passes, a `|` alternative passes when any group passes, and a non-PASS
+  result reports its decisive set (the first set whose intermediate equals
+  the combined result). A locally disabled algorithm maps to PERMERROR
+  `unsupported_algorithm`; the bounded observation reason `policy`
+  separates it from an unknown algorithm (`protocol`). The disabled
+  classification carries `KeyStatusDisabledAlgorithm`; the earlier
+  `policy_rejected` pairing surfaced as `internal_contract`.
+- Settled: Section 14.6 step 8 asks error text to name selectors; the
+  bounded Authentication-Results and public reason vocabulary cannot carry
+  selectors, so per-set facts carry them only for FAIL sets (documented
+  deviation).
 - Settled: Signing-domain alignment follows Sections 8.8, 9.4, and 11.4,
   using ASCII lowercase and exact or dot-boundary suffix comparison; `mf=<>`
   and every `nd=` signature are not applicable.

@@ -367,7 +367,7 @@ var portableDefinitions = []runnerDefinition{
 			{key: "signing\x00restricted-release", testName: "TestPublicOutOfBandReleaseIsExactAtomicAndNilOnDenial", artifacts: []string{signingFacadeArtifact, signingProvenanceArtifact, signingPublicArtifact, "signing-release-source", signingTestKeyArtifact}},
 			{key: "signing\x00revision-facade", testName: "TestPublicExistingSigningDerivesForwarderAndReviser", artifacts: []string{signingFacadeArtifact, signingProvenanceArtifact, signingPublicArtifact, signingTestKeyArtifact}},
 			{key: "signing\x00limits-negative", testName: "TestPublicSigningMessageLimitExactAndOneOver", artifacts: []string{"signing-limits-source"}},
-			{key: "verification\x00composite-algorithm-unsupported", testName: "TestVerifierIgnoresCompositeSetAndPassesSupportedSet", artifacts: []string{"verification-composite-unsupported-source"}},
+			{key: "verification\x00composite-algorithm-unsupported", testName: "TestVerifierCompositeBesideEd25519DependsOnSeparator", artifacts: []string{"verification-composite-unsupported-source"}},
 			{key: "verification\x00received-dsn-evaluation", testName: "TestReceivedDSNDraft08GoldenVectors", artifacts: []string{"verification-received-dsn"}},
 			{key: "verification\x00negative-crypto-dns", testName: verificationGoldenTest, artifacts: []string{verificationPublicArtifact}},
 			{key: "verification\x00negative-envelope", testName: verificationGoldenTest, artifacts: []string{verificationPublicArtifact}},

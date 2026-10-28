@@ -3,6 +3,7 @@ package service
 import (
 	"testing"
 
+	"github.com/croessner/dkim2/internal/combine"
 	"github.com/croessner/dkim2/internal/verify"
 )
 
@@ -18,7 +19,9 @@ func TestSignatureKeyStatusCoherenceMatrix(t *testing.T) {
 		{verify.SignatureSetStatusNotChecked, verify.KeyStatusNotChecked, SignaturePERMERROR, ReasonUnsupportedAlgorithm, severityPermanent},
 		{verify.SignatureSetStatusPass, verify.KeyStatusFound, SignaturePASS, ReasonNone, severityPass},
 		{verify.SignatureSetStatusFail, verify.KeyStatusFound, SignatureFAIL, ReasonSignatureMismatch, severityFailure},
-		{verify.SignatureSetStatusUnsupportedAlgorithm, verify.KeyStatusUnsupportedAlgorithm, SignatureIgnored, ReasonUnsupportedAlgorithm, severityPass},
+		// Reported per set as ignored, but a single unknown set is a
+		// PERMERROR combination (Draft-08 Section 14.6 step 4).
+		{verify.SignatureSetStatusUnsupportedAlgorithm, verify.KeyStatusUnsupportedAlgorithm, SignatureIgnored, ReasonUnsupportedAlgorithm, severityPermanent},
 		{verify.SignatureSetStatusDisabledAlgorithm, verify.KeyStatusDisabledAlgorithm, SignaturePERMERROR, ReasonUnsupportedAlgorithm, severityPermanent},
 		{verify.SignatureSetStatusMissingKey, verify.KeyStatusMissing, SignaturePERMERROR, ReasonMissingKey, severityPermanent},
 		{verify.SignatureSetStatusInvalidKey, verify.KeyStatusInvalid, SignaturePERMERROR, ReasonInvalidKey, severityPermanent},
@@ -52,7 +55,10 @@ func TestSignatureKeyStatusCoherenceMatrix(t *testing.T) {
 		if pair.status == verify.SignatureSetStatusFail {
 			selector = failedSelector
 		}
-		accumulator.mapSignatureSet(verify.SignatureSetResult{Algorithm: algorithm, Selector: selector, Status: pair.status, KeyStatus: pair.key})
+		set := verify.SignatureSetResult{Algorithm: algorithm, Selector: selector, Status: pair.status, KeyStatus: pair.key}
+		accumulator.mapSignatureSet(set)
+		// A single set is its own Section 14.6 combination result.
+		accumulator.applySignatureCombination(singleGroupLayout(t, 1), []verify.SignatureSetResult{set})
 		if len(accumulator.signatures) != 1 || accumulator.signatures[0].Status != pair.wantStatus || accumulator.signatures[0].Reason != pair.wantReason || accumulator.severity != pair.wantSeverity {
 			t.Fatalf("known pair %q/%q mapped to %#v severity=%d", pair.status, pair.key, accumulator.signatures, accumulator.severity)
 		}
@@ -367,7 +373,9 @@ func TestEveryKnownCheckStatusIsMapped(t *testing.T) {
 	}{
 		{verify.CheckResult{Kind: verify.CheckKindSignature, Status: verify.CheckStatusNotEvaluated, Algorithm: verify.AlgorithmRSASHA256}, ReasonInternalContract, severityPermanent},
 		{verify.CheckResult{Kind: verify.CheckKindSignature, Status: verify.CheckStatusPass, Algorithm: verify.AlgorithmRSASHA256}, ReasonNone, severityPass},
-		{verify.CheckResult{Kind: verify.CheckKindSignature, Status: verify.CheckStatusFail, Code: verify.ErrorCodeSignatureMismatch, Algorithm: verify.AlgorithmRSASHA256}, ReasonSignatureMismatch, severityFailure},
+		// Per-set signature checks are facts only; the Section 14.6
+		// combination owns the aggregate signature severity.
+		{verify.CheckResult{Kind: verify.CheckKindSignature, Status: verify.CheckStatusFail, Code: verify.ErrorCodeSignatureMismatch, Algorithm: verify.AlgorithmRSASHA256}, ReasonSignatureMismatch, severityPass},
 		{verify.CheckResult{Kind: verify.CheckKindSignature, Status: verify.CheckStatusUnsupported, Code: verify.ErrorCodeUnsupportedAlgorithm, Algorithm: verify.AlgorithmUnknown}, ReasonUnsupportedAlgorithm, severityPass},
 		{verify.CheckResult{Kind: verify.CheckKindSignature, Status: verify.CheckStatusSkipped, Algorithm: verify.AlgorithmRSASHA256}, ReasonInternalContract, severityPermanent},
 		{verify.CheckResult{Kind: verify.CheckKindNextDomain, Status: verify.CheckStatusNotApplicable, NextDomainStatus: verify.NextDomainStatusNotApplicable}, ReasonNone, severityPass},
@@ -388,4 +396,14 @@ func testAccumulator() mappingAccumulator {
 		reason: ReasonNone, required: make(map[verify.CheckKind]bool), setIndices: [hardMaxSignatureFacts]bool{},
 		signatureChecks: make(map[Algorithm]int), signatureSets: make(map[Algorithm]int), maxChecks: 128, maxSignatures: 16,
 	}
+}
+
+// singleGroupLayout returns the one-group layout of count signature sets.
+func singleGroupLayout(t *testing.T, count int) combine.Layout {
+	t.Helper()
+	layout, ok := combine.SingleGroup(count)
+	if !ok {
+		t.Fatal("SingleGroup rejected")
+	}
+	return layout
 }

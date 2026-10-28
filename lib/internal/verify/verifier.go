@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"github.com/croessner/dkim2/internal/canonical"
+	"github.com/croessner/dkim2/internal/combine"
 	"github.com/croessner/dkim2/internal/instance"
 	"github.com/croessner/dkim2/internal/recipe"
 	"github.com/croessner/dkim2/internal/signature"
@@ -170,7 +171,7 @@ func (v Verifier) verifyCurrentExtracted(ctx context.Context, input verification
 	checks = append(checks, timestamp.check, nextDomain.check, envelope.check, domainAlignment.check)
 	status := targetStatus(hashes.pass, timestamp.pass, envelope.pass, domainAlignment.pass, nextDomain, signatures)
 
-	result := NewResultWithCustody(target, status, checks, signatures.sets, custodyStatus(custody)).withTargetFlagCandidate(targetFlags)
+	result := NewResultWithCustody(target, status, checks, signatures.sets, custodyStatus(custody)).WithSignatureLayout(signatures.layout).withTargetFlagCandidate(targetFlags)
 	if !aggregateCurrentPass(result) {
 		return result, nil
 	}
@@ -382,31 +383,31 @@ func instanceByNumber(instances []instance.MessageInstance, number uint64) (inst
 	return instance.MessageInstance{}, targetMissingError("message_instance", number, Target{InstanceNumber: number})
 }
 
-// targetStatus summarizes protocol and signature-set facts for the selected target.
+// targetStatus summarizes protocol facts and the Section 14.6 signature
+// combination for the selected target. A failing hash, timestamp, envelope,
+// or alignment check is a failure; otherwise the combined signature result
+// decides: PASS, TEMPERROR (indeterminate), FAIL, or PERMERROR (no group
+// could be checked to a pass or a fail, reported as unsupported).
 func targetStatus(hashPass bool, timestampPass bool, envelopePass bool, domainAlignmentPass bool, nextDomain nextDomainEvaluation, signatures signatureEvaluation) TargetStatus {
 	if !hashPass || !timestampPass || !envelopePass || !domainAlignmentPass {
 		return TargetStatusFail
 	}
-	if signatures.pass > 0 && signatures.fail == 0 && signatures.other == 0 {
-		if signatures.temporary > 0 {
-			return TargetStatusIndeterminate
-		}
+	if !signatures.outcome.Valid() {
+		return TargetStatusUnsupported
+	}
+	switch signatures.outcome.Result() {
+	case combine.ResultPass:
 		if nextDomain.unsupported {
 			return TargetStatusUnsupported
 		}
 		return TargetStatusPass
-	}
-	if signatures.pass > 0 {
-		return TargetStatusMixed
-	}
-	if signatures.fail > 0 {
-		return TargetStatusFail
-	}
-	if signatures.temporary > 0 {
+	case combine.ResultTempError:
 		return TargetStatusIndeterminate
+	case combine.ResultFail:
+		return TargetStatusFail
+	default:
+		return TargetStatusUnsupported
 	}
-
-	return TargetStatusUnsupported
 }
 
 // checkEnvelope applies current-envelope matching semantics for the selected target.

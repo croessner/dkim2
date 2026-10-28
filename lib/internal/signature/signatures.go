@@ -44,20 +44,8 @@ func parseSignatureSets(value string, limits Limits, fieldIndex int) ([]Set, com
 		}
 		sets = append(sets, set)
 	}
-	if err := rejectAlternativeSignatureGroups(layout, fieldIndex); err != nil {
-		return nil, combine.Layout{}, err
-	}
 
 	return sets, layout, nil
-}
-
-// rejectAlternativeSignatureGroups fails closed on more than one sig-all
-// group until the Section 14.6 combination algebra evaluates alternatives.
-func rejectAlternativeSignatureGroups(layout combine.Layout, fieldIndex int) error {
-	if layout.Groups() > 1 {
-		return malformedSignatureSetError(fieldIndex, 0)
-	}
-	return nil
 }
 
 // parseSignatureSet parses one sig-set = selector [FWS] ":" [FWS] sig-name

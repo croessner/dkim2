@@ -368,9 +368,83 @@ because the draft identifier is bound into the replay frame.
   algorithm (the `mldsa44` credential of package 6) starts a separate `|`
   group. With today's two algorithms the output stays one `,` group, and the
   Message-Instance `h=` emission stays one `sha256` set.
-- Until package 4 enables the Section 14.6/14.7 algebra, a value with more
-  than one group fails closed (PERMERROR `malformed_protocol`); a public-path
-  test pins this for `s=` and `h=`.
+- Until package 4 enabled the Section 14.6/14.7 algebra, a value with more
+  than one group failed closed (PERMERROR `malformed_protocol`); package 4
+  lifted that rule.
 - Fuzz targets: `FuzzSplit` (exact rejoin and layout invariants) and the
   existing parser fuzzers with group seeds and layout and unsigned-rendering
   invariants.
+
+## 10. Package 4 state
+
+- C3, C33, C34: `lib/internal/combine` owns the Section 14.6 steps 5 to 7
+  and Section 14.7 steps 3 to 5 algebra (`combine.Signatures`,
+  `combine.Hashes`). Signature intermediates are PASS, FAIL (mismatch),
+  TEMPERROR (key temporarily unavailable), and PERMERROR (any permanent key
+  or provider error, unknown algorithm, algorithm disabled by local policy).
+  `sig-all`: every PASS is PASS; else every non-PASS TEMPERROR is TEMPERROR;
+  else any FAIL is FAIL; else PERMERROR. `sig-any`: any PASS, else any
+  TEMPERROR, else any FAIL, else PERMERROR. Hash-sets are PASS when header
+  and body hash match, FAIL otherwise, PERMERROR for an unimplemented
+  algorithm; `hash-all` all PASS, any FAIL, else PERMERROR; `hash-any` any
+  PASS, any FAIL, else PERMERROR; a single set is its intermediate; hashes
+  never yield TEMPERROR. The outcome names the decisive set: the first set in
+  field order whose intermediate equals the overall result.
+- Single owners in `verify`: `CombineSignatureSets` (per-set status to
+  intermediate, then the algebra) and `evaluateInstanceHashes`. They serve
+  the current target, inherited and revision signatures, historical
+  targets and run members, every history Message-Instance (each lower `h=`
+  against the message recreated by the higher Recipes; below a null Recipe
+  only header hashes are compared), the run descent, the headers-only DSN
+  check (C40, Section 16.4 item 3: a hash-set passes on its header hash), and
+  through the verifier the DSN evidence. The Draft-07 bucket rules
+  (`targetStatus` pass/fail/other counters, "every known hash must match,
+  unknown skipped", `revisionSignatureOutcome` precedence) are removed.
+- An unknown algorithm is a PERMERROR intermediate without a key lookup. A
+  locally disabled algorithm is also decided without a lookup; the reproducer
+  showed `ClassifyAlgorithm` returned `KeyStatusPolicyRejected`, which did
+  not pair with `SignatureSetStatusDisabledAlgorithm` and surfaced as
+  `internal_contract` (and as `provider_contract` through the static
+  provider). It now returns `KeyStatusDisabledAlgorithm`; the public result
+  is PERMERROR `unsupported_algorithm`, and the verification observation
+  event carries the bounded reason `policy` instead of `protocol` so
+  operators can separate "disabled locally" from "unknown". A disabled
+  algorithm in an inherited field no longer rejects the whole field before
+  lookups; it is a PERMERROR intermediate like any other.
+- Public reason of a non-PASS signature combination: FAIL is
+  `signature_mismatch`, TEMPERROR is `provider_temporary`, PERMERROR is the
+  decisive set's specific reason. The service mapping records per-set facts
+  without per-set severity and adds the one combined severity; per-set public
+  and REST reporting is unchanged (unknown algorithms stay `ignored` facts).
+  `verify.Result.SignatureLayout`, `policy.NewGroupedSelectedProjection`,
+  and the sealed policy projection carry the layout, and policy validation
+  recomputes the combination instead of the Draft-07 "PASS has no failing
+  set" invariants.
+- Inherited key errors: the collapse into `provider_permanent` was not a
+  documented privacy rule, only a coarse vocabulary. The revision proof
+  outcome gains `missing_key`, `invalid_key`, `revoked_key`,
+  `ambiguous_key`, `unsupported_key_type`, and `key_algorithm_mismatch`; the
+  service keeps these reasons, the signing revision capability maps them to
+  `provider_rejected` as before, and the policy revision-failure projection
+  admits them. Sealed revision facts gain `alternative_not_passed` (with the
+  key-lookup marker); lookups are counted for policy-enabled sets.
+- Package 3's fail-closed rule for more than one group is lifted; the
+  parsers accept `|` groups.
+- Section 14.6 step 8 (selectors in error text) cannot be carried by the
+  bounded Authentication-Results and reason vocabulary; FAIL per-set facts
+  carry the selector as before (documented deviation).
+- Changed expectations, each justified by the Draft-08 text: a supported
+  pass beside an unknown set in one `,` group is PERMERROR
+  `unsupported_algorithm` (Section 14.6 step 4; public golden case
+  `supported_pass_plus_unknown_signature_in_group_permerror` over the frozen
+  `supported_unknown_pass` vector); a pass beside a fail or a key error in
+  one group is FAIL respectively PERMERROR (the internal `mixed` status is no
+  longer produced); the composite-beside-Ed25519 case now depends on the
+  separator (`|` PASS, `,` PERMERROR `unsupported_algorithm`), and the
+  composite key is never fetched in either form.
+- Tests: combination tables and a decisive-set fuzz target
+  (`FuzzSignatureCombination`), real-key reproducers for every listed
+  signature case, separator byte-exactness (swapping `,` and `|` breaks
+  every signature), hash reproducers including headers-only, history groups,
+  revision alternatives and specific key reasons, the disabled-algorithm
+  reproducer, service and observation mapping.

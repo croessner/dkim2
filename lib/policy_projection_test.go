@@ -97,10 +97,6 @@ func TestDraft08MalformedFieldsRemainTargetUnavailableAcrossPublicPolicy(t *test
 	}{
 		{"duplicate hash", strings.Replace(base, "h="+hashValue, "h="+hashValue+","+hashValue, 1), ReasonDuplicateHashAlgorithm, service.ReasonDuplicateHashAlgorithm, policy.PreTargetDuplicateHashAlgorithm},
 		{"duplicate selector", strings.Replace(base, "s="+signatureValue, "s="+signatureValue+","+signatureValue, 1), ReasonDuplicateSelector, service.ReasonDuplicateSelector, policy.PreTargetDuplicateSelector},
-		// Alternative "|" groups fail closed until the Section 14.6/14.7
-		// combination algebra evaluates them.
-		{"alternative signature group", strings.Replace(base, "s="+signatureValue, "s="+signatureValue+"|alt.test:"+parts[1]+":"+parts[2], 1), ReasonMalformedProtocol, service.ReasonMalformedProtocol, policy.PreTargetMalformedProtocol},
-		{"alternative hash group", strings.Replace(base, "h="+hashValue, "h="+hashValue+"|future:YQ==:Yg==", 1), ReasonMalformedProtocol, service.ReasonMalformedProtocol, policy.PreTargetMalformedProtocol},
 		// Draft-08 Section 10.9 removed the per-algorithm cap; only the local
 		// max_signature_sets bound of 16 (counted across groups) remains.
 		{"signature sets above local bound", strings.Replace(base, "s="+signatureValue, "s="+strings.Join(many, ","), 1), ReasonLimitExceeded, service.ReasonLimitExceeded, policy.PreTargetLimitExceeded},

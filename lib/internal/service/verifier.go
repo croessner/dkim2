@@ -159,7 +159,10 @@ func (v Verifier) assessWithAbsencePolicy(ctx context.Context, request Request, 
 	return attachRevisionProof(current, proof), true, nil
 }
 
-// mapRevisionProofFailure prevents a current-only PASS from escaping after all-hop rejection.
+// mapRevisionProofFailure prevents a current-only PASS from escaping after
+// all-hop rejection. An inherited signature's permanent key failure keeps
+// its specific reason, as the current target does; no privacy rule requires
+// collapsing it into provider_permanent.
 func mapRevisionProofFailure(current Result, outcome verify.RevisionProofOutcome) Result {
 	state, reason, class := StatePERMERROR, ReasonMalformedProtocol, CheckProtocol
 	switch outcome {
@@ -173,6 +176,18 @@ func mapRevisionProofFailure(current Result, outcome verify.RevisionProofOutcome
 		state, reason, class = StateTEMPERROR, ReasonProviderTemporary, CheckProvider
 	case verify.RevisionProofProviderRejected:
 		reason, class = ReasonProviderPermanent, CheckProvider
+	case verify.RevisionProofMissingKey:
+		reason, class = ReasonMissingKey, CheckKey
+	case verify.RevisionProofInvalidKey:
+		reason, class = ReasonInvalidKey, CheckKey
+	case verify.RevisionProofRevokedKey:
+		reason, class = ReasonRevokedKey, CheckKey
+	case verify.RevisionProofAmbiguousKey:
+		reason, class = ReasonAmbiguousKey, CheckKey
+	case verify.RevisionProofUnsupportedKeyType:
+		reason, class = ReasonUnsupportedKeyType, CheckKey
+	case verify.RevisionProofKeyAlgorithmMismatch:
+		reason, class = ReasonKeyAlgorithmMismatch, CheckKey
 	case verify.RevisionProofProviderContract:
 		reason, class = ReasonProviderContract, CheckProvider
 	case verify.RevisionProofLimitExceeded:

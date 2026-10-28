@@ -229,14 +229,15 @@ func (c HistoryCoordinator) Descend(ctx context.Context, collection instance.Col
 	return descent, nil
 }
 
-// initialStateMatches re-proves the header hash, and the body hash when the
-// body is known, of the initial state against every supported tuple of the
-// current instance under the remaining canonical work ceiling. It reports
-// (matched, supported, canonical work, error); exhausting the ceiling is a
-// history limit error the caller maps onto its own closed outcome.
+// initialStateMatches re-proves the initial state against the current
+// instance's h= value with the shared Section 14.7 algebra (header-only when
+// the body is not known) under the remaining canonical work ceiling. It
+// reports (matched, supported, canonical work, error); a value without any
+// group of implemented algorithms is unsupported, and exhausting the
+// ceiling is a history limit error the caller maps onto its own closed
+// outcome.
 func (c HistoryCoordinator) initialStateMatches(state recipe.State, current instance.MessageInstance, remaining int) (bool, bool, int, error) {
-	sets, selection := current.SupportedHashSets()
-	if selection != instance.HashSelectionStatusSelected {
+	if !HashCombinationEvaluable(current) {
 		return false, false, 0, nil
 	}
 	headerInput, bodyInput, bodyKnown, work, err := c.canonicalInputsWithin(state, remaining)
@@ -246,30 +247,11 @@ func (c HistoryCoordinator) initialStateMatches(state recipe.State, current inst
 		}
 		return false, true, 0, historyError(ErrorCodeHistoryInvalidState)
 	}
-	for _, set := range sets {
-		algorithm, ok := canonicalHashAlgorithm(set.Name())
-		headerExpected, headerOK := set.HeaderHash()
-		bodyExpected, bodyOK := set.BodyHash()
-		if !ok || !headerOK || !bodyOK {
-			return false, true, work, historyError(ErrorCodeHistoryInternalContract)
-		}
-		digester, newErr := canonical.NewCanonicalizer(canonical.WithLimits(c.canonicalizer.Options().Limits), canonical.WithHashAlgorithm(algorithm))
-		if newErr != nil {
-			return false, true, work, historyError(ErrorCodeHistoryInternalContract)
-		}
-		headerDigest, headerErr := digester.Digest(headerInput)
-		if headerErr != nil || historyDigestState(headerDigest.Bytes(), headerExpected.Decoded()) != HistoryDimensionMatched {
-			return false, true, work, nil
-		}
-		if !bodyKnown {
-			continue
-		}
-		bodyDigest, bodyErr := digester.Digest(bodyInput)
-		if bodyErr != nil || historyDigestState(bodyDigest.Bytes(), bodyExpected.Decoded()) != HistoryDimensionMatched {
-			return false, true, work, nil
-		}
+	evaluation, err := evaluateInstanceHashes(c.canonicalizer.Options().Limits, current, headerInput, bodyInput, bodyKnown)
+	if err != nil {
+		return false, true, work, historyError(ErrorCodeHistoryInternalContract)
 	}
-	return true, true, work, nil
+	return evaluation.pass(), true, work, nil
 }
 
 // descentFailureForStop maps one sealed history stop onto the closed descent failure.

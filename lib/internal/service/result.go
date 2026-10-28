@@ -42,7 +42,22 @@ type Result struct {
 	hasReplayProjection   bool
 	verifierProjection    VerifierProjection
 	hasVerifierProjection bool
+	locallyDisabled       bool
 }
+
+// withLocallyDisabledAlgorithm marks an unsupported_algorithm PERMERROR whose
+// decisive set uses an algorithm this verifier implements but local policy
+// disables, so observation can tell it apart from an unknown algorithm.
+func (r Result) withLocallyDisabledAlgorithm() Result {
+	if r.state == StatePERMERROR && r.primaryReason == ReasonUnsupportedAlgorithm {
+		r.locallyDisabled = true
+	}
+	return r
+}
+
+// LocallyDisabledAlgorithm reports whether the unsupported_algorithm
+// outcome was decided by a locally disabled algorithm.
+func (r Result) LocallyDisabledAlgorithm() bool { return r.locallyDisabled }
 
 // newResult constructs an immutable populated service result.
 func newResult(state State, custody Custody, target Target, reason Reason, checks []CheckFact, signatures []SignatureSetFact) Result {

@@ -61,7 +61,7 @@ func adaptServiceResultWithProjection(input service.Result, projection policy.Pr
 		historicalContent: content, historicalSignatures: historicalSignatures,
 		custodyStructure: custody, target: newVerificationTarget(input.Target().Sequence, input.Target().Instance),
 		primaryReason: reason, checks: publicChecks, signatures: publicSignatures,
-		policyProjection: projection,
+		policyProjection: projection, locallyDisabled: input.LocallyDisabledAlgorithm(),
 	})
 }
 

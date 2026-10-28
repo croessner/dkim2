@@ -2,13 +2,18 @@ package verify
 
 import "github.com/croessner/dkim2/internal/cryptodkim2"
 
-// ClassifyAlgorithm reports the fail-closed policy state for algorithm.
+// ClassifyAlgorithm reports the fail-closed policy state for algorithm: an
+// algorithm this verifier does not implement is unsupported, and an
+// implemented algorithm that local policy does not allow is disabled. A
+// disabled algorithm is a local decision, not a key-policy rejection, so it
+// carries KeyStatusDisabledAlgorithm, the status its typed error and the
+// signature-set vocabulary pair with.
 func (p AlgorithmPolicy) ClassifyAlgorithm(algorithm Algorithm) KeyStatus {
 	switch {
 	case !knownAlgorithm(algorithm):
 		return KeyStatusUnsupportedAlgorithm
 	case !p.Allows(algorithm):
-		return KeyStatusPolicyRejected
+		return KeyStatusDisabledAlgorithm
 	default:
 		return KeyStatusFound
 	}

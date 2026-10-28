@@ -5,19 +5,19 @@ import (
 	"errors"
 
 	"github.com/croessner/dkim2/internal/canonical"
+	"github.com/croessner/dkim2/internal/combine"
 	"github.com/croessner/dkim2/internal/cryptodkim2"
 	"github.com/croessner/dkim2/internal/rawmsg"
 	"github.com/croessner/dkim2/internal/signature"
 )
 
+// signatureEvaluation holds per-set facts in field order and their Section
+// 14.6 combination under the parsed sig-any/sig-all layout.
 type signatureEvaluation struct {
-	checks    []CheckResult
-	sets      []SignatureSetResult
-	pass      int
-	fail      int
-	other     int
-	temporary int
-	ignored   int
+	checks  []CheckResult
+	sets    []SignatureSetResult
+	layout  combine.Layout
+	outcome combine.Outcome
 }
 
 // signatureDigests holds the Section 12.8 signature-input digest: SHA-256
@@ -63,12 +63,16 @@ func signatureInputDigest(canonicalizer canonical.Canonicalizer, message rawmsg.
 	return digests, nil
 }
 
-// evaluateSignatureSets checks every signature set for the selected target.
+// evaluateSignatureSets checks every signature set for the selected target
+// and combines the per-set intermediates with the shared Section 14.6
+// algebra. An unknown or locally disabled algorithm is decided without a key
+// lookup.
 func (v Verifier) evaluateSignatureSets(ctx context.Context, targetSignature signature.Signature, digests signatureDigests, target Target) signatureEvaluation {
 	sets := targetSignature.SignatureSets()
 	evaluation := signatureEvaluation{
 		checks: make([]CheckResult, 0, len(sets)),
 		sets:   make([]SignatureSetResult, 0, len(sets)),
+		layout: targetSignature.SignatureLayout(),
 	}
 	if len(sets) > v.options.Limits.MaxSignatureSets {
 		evaluation.checks = append(evaluation.checks, CheckResult{
@@ -77,7 +81,6 @@ func (v Verifier) evaluateSignatureSets(ctx context.Context, targetSignature sig
 			Code:   ErrorCodeLimitExceeded,
 			Target: target,
 		})
-		evaluation.fail++
 
 		return evaluation
 	}
@@ -89,29 +92,19 @@ func (v Verifier) evaluateSignatureSets(ctx context.Context, targetSignature sig
 		setResult := v.evaluateSignatureSet(ctx, targetSignature, set, index, digests, target)
 		evaluation.sets = append(evaluation.sets, setResult)
 		evaluation.checks = append(evaluation.checks, signatureCheckResult(setResult, target))
-		evaluation.account(setResult)
 		if ctx.Err() != nil {
 			break
 		}
 	}
+	evaluation.combine()
 
 	return evaluation
 }
 
-// account records one evaluated set in the closed aggregate result buckets.
-func (e *signatureEvaluation) account(setResult SignatureSetResult) {
-	switch setResult.Status {
-	case SignatureSetStatusPass:
-		e.pass++
-	case SignatureSetStatusFail, SignatureSetStatusInvalidKey, SignatureSetStatusWrongKeyType, SignatureSetStatusKeyPolicyRejected, SignatureSetStatusProviderError, SignatureSetStatusProviderPermanent, SignatureSetStatusProviderContract, SignatureSetStatusAmbiguousKey, SignatureSetStatusRevokedKey, SignatureSetStatusUnsupportedKeyType, SignatureSetStatusKeyAlgorithmMismatch:
-		e.fail++
-	case SignatureSetStatusProviderTemporary:
-		e.temporary++
-	case SignatureSetStatusUnsupportedAlgorithm:
-		e.ignored++
-	default:
-		e.other++
-	}
+// combine computes the Section 14.6 outcome of the evaluated sets. An
+// incomplete evaluation (cancellation) yields an invalid outcome.
+func (e *signatureEvaluation) combine() {
+	e.outcome = CombineSignatureSets(e.layout, e.sets)
 }
 
 // evaluateSignatureSet checks one selector:algorithm:signature tuple.

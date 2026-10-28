@@ -377,6 +377,7 @@ type verifyResultState struct {
 	hasReplayProjection   bool
 	verifierProjection    VerifierProjection
 	hasVerifierProjection bool
+	locallyDisabled       bool
 }
 
 const verifyResultRedactedText = "dkim2.VerifyResult{redacted}"
@@ -392,6 +393,7 @@ type verifyResultData struct {
 	checks               []CheckFact
 	signatures           []SignatureSetFact
 	policyProjection     policy.Projection
+	locallyDisabled      bool
 }
 
 // newVerifyResult constructs a result while cloning every collection owned by its caller.
@@ -412,7 +414,15 @@ func newVerifyResult(data verifyResultData) VerifyResult {
 		checks:               slices.Clone(data.checks),
 		signatures:           slices.Clone(data.signatures),
 		policyProjection:     data.policyProjection.Clone(),
+		locallyDisabled:      data.locallyDisabled && data.state == ResultStatePERMERROR && data.primaryReason == ReasonUnsupportedAlgorithm,
 	}}
+}
+
+// locallyDisabledAlgorithm reports whether an unsupported_algorithm
+// PERMERROR was decided by an implemented algorithm that local policy
+// disables rather than by an unknown algorithm.
+func (r VerifyResult) locallyDisabledAlgorithm() bool {
+	return r.state != nil && r.state.locallyDisabled
 }
 
 // withReplayProjection attaches one service-owned sealed projection to a coherent PASS result.

@@ -1,6 +1,10 @@
 package policy
 
-import "slices"
+import (
+	"slices"
+
+	"github.com/croessner/dkim2/internal/combine"
+)
 
 const hardMaxSignatureFacts = 16
 
@@ -272,14 +276,25 @@ type Projection struct {
 	history            HistoryCoverage
 	hops               []HopFact
 	signatureFacts     []SignatureFact
+	signatureLayout    combine.Layout
 	revisionFailure    bool
 	receivedDSN        ReceivedDSNFacts
 	hasReceivedDSN     bool
 }
 
-// NewSelectedProjection seals a selected target with aggregate reason provenance.
+// NewSelectedProjection seals a selected target with aggregate reason
+// provenance whose signature facts form one sig-all group, the layout of an
+// s= value without "|".
 func NewSelectedProjection(protocol ProtocolClass, reason VerificationReason, target uint64, hops []HopFact, signatures []SignatureFact, limits Limits) (Projection, error) {
-	projection := Projection{form: TargetSelected, protocol: protocol, verificationReason: reason, targetSequence: target, history: HistoryNotEvaluated, hops: slices.Clone(hops), signatureFacts: slices.Clone(signatures)}
+	layout, _ := combine.SingleGroup(len(signatures))
+	return NewGroupedSelectedProjection(protocol, reason, target, hops, signatures, layout, limits)
+}
+
+// NewGroupedSelectedProjection seals a selected target whose signature facts
+// are in field order under the parsed Draft-08 sig-any/sig-all layout. The
+// layout lets validation recompute the Section 14.6 combination exactly.
+func NewGroupedSelectedProjection(protocol ProtocolClass, reason VerificationReason, target uint64, hops []HopFact, signatures []SignatureFact, layout combine.Layout, limits Limits) (Projection, error) {
+	projection := Projection{form: TargetSelected, protocol: protocol, verificationReason: reason, targetSequence: target, history: HistoryNotEvaluated, hops: slices.Clone(hops), signatureFacts: slices.Clone(signatures), signatureLayout: layout}
 	if err := projection.validate(limits); err != nil {
 		return Projection{}, err
 	}
@@ -294,7 +309,7 @@ func NewRevisionFailureProjection(protocol ProtocolClass, reason VerificationRea
 	projection := Projection{
 		form: TargetSelected, protocol: protocol, verificationReason: reason,
 		targetSequence: current.targetSequence, history: HistoryNotEvaluated,
-		signatureFacts: slices.Clone(current.signatureFacts), revisionFailure: true,
+		signatureFacts: slices.Clone(current.signatureFacts), signatureLayout: current.signatureLayout, revisionFailure: true,
 	}
 	if err := projection.validate(limits); err != nil {
 		return Projection{}, err
@@ -312,6 +327,8 @@ func revisionFailureProtocolReasonAllowed(protocol ProtocolClass, reason Verific
 	case ProtocolPERMERROR:
 		switch reason {
 		case VerificationReasonUnsupportedAlgorithm, VerificationReasonProviderPermanent,
+			VerificationReasonMissingKey, VerificationReasonInvalidKey, VerificationReasonRevokedKey,
+			VerificationReasonAmbiguousKey, VerificationReasonUnsupportedKeyType, VerificationReasonKeyAlgorithmMismatch,
 			VerificationReasonProviderContract, VerificationReasonLimitExceeded,
 			VerificationReasonOutOfBandRequired, VerificationReasonInvalidRecipeJSON, VerificationReasonFromNotAuthentic,
 			VerificationReasonMalformedProtocol, VerificationReasonInternalContract:
@@ -421,67 +438,77 @@ func (p Projection) validateCurrent() error {
 	if len(p.hops) == 1 && (p.hops[0].sequence != p.targetSequence || !p.hops[0].Valid() || p.hops[0].transition != currentTransition(p.targetSequence)) {
 		return newError(ErrorInternalContract)
 	}
-	if !p.signatureProtocolCoherent() {
-		return newError(ErrorInternalContract)
-	}
 	if !p.verificationReasonFactsCoherent() {
 		return newError(ErrorInternalContract)
 	}
 	return nil
 }
 
-// validateRevisionFailure distinguishes passing current-set evidence from an outcome-driving inherited failure.
+// validateRevisionFailure distinguishes passing current-set evidence from
+// an outcome-driving inherited failure: the current facts must combine to a
+// Section 14.6 PASS under their layout.
 func (p Projection) validateRevisionFailure() error {
 	if !revisionFailureProtocolReasonAllowed(p.protocol, p.verificationReason) || len(p.hops) != 0 || len(p.signatureFacts) == 0 {
 		return newError(ErrorInternalContract)
 	}
-	supportedPass := false
-	for _, fact := range p.signatureFacts {
-		if fact.status == SetStatusPass {
-			supportedPass = true
-			continue
-		}
-		if fact.status != SetStatusIgnored {
-			return newError(ErrorInternalContract)
-		}
-	}
-	if !supportedPass {
+	if outcome := p.signatureOutcome(); !outcome.Pass() {
 		return newError(ErrorInternalContract)
 	}
 	return nil
 }
 
-// verificationReasonFactsCoherent binds outcome-driving set facts to aggregate reason.
+// signatureOutcome recomputes the Draft-08 Section 14.6 combination of the
+// sealed set facts under their layout: PASS, FAIL, TEMPERROR, or PERMERROR
+// (a permanent error or an unknown, ignored algorithm).
+func (p Projection) signatureOutcome() combine.Outcome {
+	intermediates := make([]combine.Result, len(p.signatureFacts))
+	for index, fact := range p.signatureFacts {
+		switch fact.status {
+		case SetStatusPass:
+			intermediates[index] = combine.ResultPass
+		case SetStatusFail:
+			intermediates[index] = combine.ResultFail
+		case SetStatusTemperror:
+			intermediates[index] = combine.ResultTempError
+		default:
+			intermediates[index] = combine.ResultPermError
+		}
+	}
+	return combine.Signatures(p.signatureLayout, intermediates)
+}
+
+// verificationReasonFactsCoherent binds the aggregate reason to the exact
+// Section 14.6 combination of the set facts. TEMPERROR and FAIL by
+// signature_mismatch are signature outcomes; hash_mismatch cannot hide a
+// permanent signature outcome; a PERMERROR reason must not rank behind the
+// decisive set's reason when signatures are permanent, and a set-derived
+// key or provider reason requires that decisive set.
 func (p Projection) verificationReasonFactsCoherent() bool {
+	outcome := p.signatureOutcome()
+	if !outcome.Valid() {
+		return false
+	}
 	switch p.protocol {
 	case ProtocolPASS:
-		return p.verificationReason == VerificationReasonNone
+		return p.verificationReason == VerificationReasonNone && outcome.Result() == combine.ResultPass
 	case ProtocolFAIL:
 		if p.verificationReason == VerificationReasonSignatureMismatch {
-			for _, fact := range p.signatureFacts {
-				if fact.status == SetStatusFail {
-					return true
-				}
-			}
-			return false
+			return outcome.Result() == combine.ResultFail
 		}
-		for _, fact := range p.signatureFacts {
-			if fact.status == SetStatusFail {
-				return false
-			}
-		}
-		return true
+		return outcome.Result() != combine.ResultPermError
 	case ProtocolTEMPERROR:
-		return p.verificationReason == VerificationReasonProviderTemporary
+		return p.verificationReason == VerificationReasonProviderTemporary && outcome.Result() == combine.ResultTempError
 	case ProtocolPERMERROR:
-		return p.eligiblePermanentPrimaryCoherent()
+		return p.eligiblePermanentPrimaryCoherent(outcome)
 	default:
 		return false
 	}
 }
 
-// eligiblePermanentPrimaryCoherent locks mixed key-failure reason precedence.
-func (p Projection) eligiblePermanentPrimaryCoherent() bool {
+// eligiblePermanentPrimaryCoherent locks permanent reason precedence against
+// the decisive set (the first set whose intermediate equals the combined
+// result). Pre-target reasons cannot be selected.
+func (p Projection) eligiblePermanentPrimaryCoherent(outcome combine.Outcome) bool {
 	if p.verificationReason == VerificationReasonMalformedMessage || p.verificationReason == VerificationReasonMalformedProtocol ||
 		p.verificationReason == VerificationReasonDuplicateHashAlgorithm || p.verificationReason == VerificationReasonInvalidRecipeJSON ||
 		p.verificationReason == VerificationReasonFromNotAuthentic ||
@@ -489,36 +516,15 @@ func (p Projection) eligiblePermanentPrimaryCoherent() bool {
 		p.verificationReason == VerificationReasonMissingProtocol || p.verificationReason == VerificationReasonSequenceInvalid {
 		return false
 	}
-	primaryRank := permanentProjectionReasonRank(p.verificationReason)
-	for _, fact := range p.signatureFacts {
-		factReason := VerificationReason("")
-		if fact.status == SetStatusPermerror {
-			factReason = VerificationReason(fact.reason)
-		}
-		if factReason != "" && permanentProjectionReasonRank(factReason) < primaryRank {
-			return false
-		}
+	setDerived := permanentSetReasonRank(p.verificationReason) >= 0
+	if outcome.Result() != combine.ResultPermError {
+		return !setDerived
 	}
-	wantRank := permanentSetReasonRank(p.verificationReason)
-	if wantRank < 0 {
-		return true
+	decisive := VerificationReason(p.signatureFacts[outcome.Decisive()].reason)
+	if setDerived {
+		return decisive == p.verificationReason
 	}
-	observedRank := 99
-	observed := false
-	for _, fact := range p.signatureFacts {
-		if fact.status != SetStatusPermerror {
-			continue
-		}
-		rank := permanentSetReasonRank(VerificationReason(fact.reason))
-		if rank < 0 {
-			return false
-		}
-		observed = true
-		if rank < observedRank {
-			observedRank = rank
-		}
-	}
-	return observed && observedRank == wantRank
+	return permanentProjectionReasonRank(p.verificationReason) <= permanentProjectionReasonRank(decisive)
 }
 
 // permanentProjectionReasonRank mirrors authoritative permanent service precedence.
@@ -580,41 +586,6 @@ func verificationReasonProtocolCoherent(protocol ProtocolClass, reason Verificat
 	}
 }
 
-// signatureProtocolCoherent binds aggregate protocol class to complete set outcomes.
-func (p Projection) signatureProtocolCoherent() bool {
-	supportedPass := 0
-	failures := 0
-	temporary := 0
-	permanent := 0
-	for _, fact := range p.signatureFacts {
-		switch fact.status {
-		case SetStatusPass:
-			supportedPass++
-		case SetStatusFail:
-			failures++
-		case SetStatusTemperror:
-			temporary++
-		case SetStatusPermerror:
-			permanent++
-		case SetStatusIgnored:
-		default:
-			return false
-		}
-	}
-	switch p.protocol {
-	case ProtocolPASS:
-		return supportedPass > 0 && failures == 0 && temporary == 0 && permanent == 0
-	case ProtocolFAIL:
-		return supportedPass+failures > 0 && temporary == 0 && permanent == 0
-	case ProtocolTEMPERROR:
-		return temporary > 0 && failures == 0 && permanent == 0
-	case ProtocolPERMERROR:
-		return true
-	default:
-		return false
-	}
-}
-
 // validateHistory enforces bounded explicit partial or contiguous complete history.
 func (p Projection) validateHistory() error {
 	if len(p.hops) == 0 || p.revisionFailure {
@@ -652,7 +623,7 @@ func (p Projection) validateHistory() error {
 func (p Projection) completedOriginEvidenceValid() bool {
 	return p.history == HistoryComplete && p.protocol == ProtocolPASS && p.verificationReason == VerificationReasonNone &&
 		p.targetSequence == 1 && len(p.hops) == 1 && p.hops[0].sequence == 1 && p.hops[0].transition == TransitionOrigin &&
-		p.signatureProtocolCoherent() && p.verificationReasonFactsCoherent()
+		p.verificationReasonFactsCoherent()
 }
 
 // currentTransition returns the only truthful transition for current-only verification.

@@ -90,13 +90,20 @@ func TestSignatureGroupsCountSetsAcrossGroupsForLimit(t *testing.T) {
 	}
 }
 
-// TestSignatureAlternativeGroupsFailClosedUntilAlgebra pins that a "|"
-// alternative group is rejected while the Section 14.6 combination is not
-// evaluated.
-func TestSignatureAlternativeGroupsFailClosedUntilAlgebra(t *testing.T) {
-	value := "one:ed25519-sha256:" + base64OfByte(0xaa, 64) + "|two:" + testExtensionAlgorithm + ":" + base64OfByte(0xbb, 48)
-	if _, err := Parse(dkim2SignatureField(t, 0, signatureValueWith("s", value))); !IsErrorCode(err, ErrorCodeMalformedSignatureSet) {
-		t.Fatalf("Parse() error = %v, want malformed signature set", err)
+// TestSignatureAlternativeGroupsParse proves "|" groups are parsed into the
+// sig-any layout and rendered unchanged into the Section 12.8 target.
+func TestSignatureAlternativeGroupsParse(t *testing.T) {
+	value := "one:rsa-sha256:" + base64OfByte(0xaa, 128) + " , two:ed25519-sha256:" + base64OfByte(0xbb, 64) + " | three:" + testExtensionAlgorithm + ":" + base64OfByte(0xcc, 48)
+	parsed, err := Parse(dkim2SignatureField(t, 0, signatureValueWith("s", value)))
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	if !slices.Equal(parsed.SignatureLayout().GroupSizes(), []int{2, 1}) {
+		t.Fatalf("SignatureLayout() = %v", parsed.SignatureLayout().GroupSizes())
+	}
+	unsigned, ok := parsed.UnsignedSignatureValue()
+	if !ok || string(unsigned) != "one:rsa-sha256:,two:ed25519-sha256:|three:"+testExtensionAlgorithm+":" {
+		t.Fatalf("UnsignedSignatureValue() = %q", unsigned)
 	}
 }
 

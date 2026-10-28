@@ -45,7 +45,7 @@ func foldTestBase64(value string) string {
 // carries a real Ed25519 set plus a composite set with a 2484-byte value. The
 // composite value is opaque here: the Section 12.8 input blanks every set
 // signature, so only the Ed25519 set is cryptographically meaningful.
-func mixedCompositeFixture(t *testing.T, includeEd25519 bool) ([]byte, ed25519.PublicKey) {
+func mixedCompositeFixture(t *testing.T, includeEd25519 bool, separator string) ([]byte, ed25519.PublicKey) {
 	t.Helper()
 	seed := sha256.Sum256([]byte("dkim2-unsupported-composite-ed25519"))
 	privateKey := ed25519.NewKeyFromSeed(seed[:])
@@ -67,7 +67,7 @@ func mixedCompositeFixture(t *testing.T, includeEd25519 bool) ([]byte, ed25519.P
 		foldTestBase64(base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{0x5a}, compositeTestSignatureBytes)))
 	sets := compositeSet
 	if includeEd25519 {
-		sets = compositeTestEdSelector + ":ed25519-sha256:" + placeholder + ",\r\n\t" + compositeSet
+		sets = compositeTestEdSelector + ":ed25519-sha256:" + placeholder + separator + "\r\n\t" + compositeSet
 	}
 	unsigned := []byte("From: sender@example.test\r\nSubject: provider facade\r\n" +
 		"Message-Instance: m=1; h=sha256:" + headerDigest.Base64() + ":" + bodyDigest.Base64() + ";\r\n" +
@@ -132,27 +132,38 @@ func verifyWithCompositeDNS(t *testing.T, transport *compositeDNSTransport, raw 
 	return result
 }
 
-// TestVerifierIgnoresCompositeSetAndPassesSupportedSet reproduces a received
-// message that carries an Ed25519 set plus an mldsa44-ed25519-sha512 set whose
-// selector publishes k=mldsa44-ed25519-sha512. The composite set is ignored
-// as an unsupported algorithm like any unknown token, its key is never
-// fetched, and the message still verifies through the Ed25519 set.
-func TestVerifierIgnoresCompositeSetAndPassesSupportedSet(t *testing.T) {
-	raw, edKey := mixedCompositeFixture(t, true)
-	transport := &compositeDNSTransport{t: t, edKey: edKey}
-	result := verifyWithCompositeDNS(t, transport, raw)
-	if result.State() != ResultStatePASS || result.PrimaryReason() != ReasonNone {
-		t.Fatalf("Verify() = %q/%q", result.State(), result.PrimaryReason())
-	}
-	sets := result.SignatureSets()
-	if len(sets) != 2 ||
-		sets[0].Algorithm() != AlgorithmEd25519SHA256 || sets[0].Status() != SignatureStatusPASS || sets[0].Reason() != ReasonNone ||
-		sets[1].Algorithm() != AlgorithmUnknown || sets[1].Status() != SignatureStatusIgnored || sets[1].Reason() != ReasonUnsupportedAlgorithm {
-		t.Fatalf("signature sets = %#v", sets)
-	}
-	for _, owner := range transport.queried {
-		if strings.HasPrefix(owner, compositeTestPQSelector+".") {
-			t.Fatalf("composite selector key was fetched: %q", owner)
+// TestVerifierCompositeBesideEd25519DependsOnSeparator re-derives the
+// Draft-07 "composite plus ed25519 set passes" case under Draft-08. The
+// composite mldsa44-ed25519-sha512 token is an unimplemented algorithm, a
+// PERMERROR intermediate decided without fetching its key (Section 14.6 step
+// 4). Joined by "|" the Ed25519 group passes on its own (step 7); joined by
+// "," the sig-all group holding the composite is PERMERROR (step 6), so the
+// message no longer verifies.
+func TestVerifierCompositeBesideEd25519DependsOnSeparator(t *testing.T) {
+	for _, test := range []struct {
+		separator string
+		state     ResultState
+		reason    ReasonCode
+	}{
+		{"|", ResultStatePASS, ReasonNone},
+		{",", ResultStatePERMERROR, ReasonUnsupportedAlgorithm},
+	} {
+		raw, edKey := mixedCompositeFixture(t, true, test.separator)
+		transport := &compositeDNSTransport{t: t, edKey: edKey}
+		result := verifyWithCompositeDNS(t, transport, raw)
+		if result.State() != test.state || result.PrimaryReason() != test.reason {
+			t.Fatalf("%q: Verify() = %q/%q", test.separator, result.State(), result.PrimaryReason())
+		}
+		sets := result.SignatureSets()
+		if len(sets) != 2 ||
+			sets[0].Algorithm() != AlgorithmEd25519SHA256 || sets[0].Status() != SignatureStatusPASS || sets[0].Reason() != ReasonNone ||
+			sets[1].Algorithm() != AlgorithmUnknown || sets[1].Status() != SignatureStatusIgnored || sets[1].Reason() != ReasonUnsupportedAlgorithm {
+			t.Fatalf("%q: signature sets = %#v", test.separator, sets)
+		}
+		for _, owner := range transport.queried {
+			if strings.HasPrefix(owner, compositeTestPQSelector+".") {
+				t.Fatalf("composite selector key was fetched: %q", owner)
+			}
 		}
 	}
 	if Algorithm(compositeTestToken).Known() {
@@ -164,7 +175,7 @@ func TestVerifierIgnoresCompositeSetAndPassesSupportedSet(t *testing.T) {
 // uses the composite algorithm has no checkable supported algorithm and ends
 // in PERMERROR unsupported_algorithm, as for any unknown-only signature.
 func TestVerifierRejectsCompositeOnlySignature(t *testing.T) {
-	raw, edKey := mixedCompositeFixture(t, false)
+	raw, edKey := mixedCompositeFixture(t, false, "")
 	result := verifyWithCompositeDNS(t, &compositeDNSTransport{t: t, edKey: edKey}, raw)
 	if result.State() != ResultStatePERMERROR || result.PrimaryReason() != ReasonUnsupportedAlgorithm {
 		t.Fatalf("Verify() = %q/%q", result.State(), result.PrimaryReason())

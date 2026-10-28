@@ -178,7 +178,7 @@
     {
       "id": "policy-invalid-recipe-source",
       "path": "lib/policy_projection_test.go",
-      "sha256": "048315b0258a5ad83d0ef3680f33f92cc8da5cf8a70eb76283e31254c9ec7b84",
+      "sha256": "c807c7e995ae0c06b0b458ca0d78298bebe66fc4a00b02bc1d3c67f9643e9faa",
       "module": "lib"
     },
     {
@@ -376,7 +376,7 @@
     {
       "id": "verification-composite-unsupported-source",
       "path": "lib/unsupported_composite_test.go",
-      "sha256": "f3275333134fb070706612de7305cd3732e616e9c7fba0980530be71ab8723f3",
+      "sha256": "3d110a9450c5eb16419e55fcb30d73d9512b536e93e6ea31ed24fe50d176bd09",
       "module": "lib"
     },
     {
@@ -394,7 +394,7 @@
     {
       "id": "verification-multisignature-source",
       "path": "lib/internal/verify/multisignature_test.go",
-      "sha256": "43c85beaa889b1a508e02923241e6559cca78d6d7120e54d7a17d67cc6868b4f",
+      "sha256": "bb6e1e08d660f030a3300256b6539d463f393722c206ddbe2fd7ab43efdb1e6c",
       "module": "lib"
     },
     {

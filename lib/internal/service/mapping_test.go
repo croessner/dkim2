@@ -4,6 +4,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/croessner/dkim2/internal/combine"
 	"github.com/croessner/dkim2/internal/verify"
 )
 
@@ -121,7 +122,10 @@ func TestMapVerificationResultFailsClosedOnUnknownFacts(t *testing.T) {
 	}
 }
 
-// TestMapVerificationResultHandlesUnknownAlgorithmCombinations verifies draft-05 ignore semantics.
+// TestMapVerificationResultHandlesUnknownAlgorithmCombinations pins the
+// Draft-08 Section 14.6 step 4 rule: an unknown algorithm is a PERMERROR
+// intermediate, so it blocks its own sig-all group but not a passing
+// alternative "|" group.
 func TestMapVerificationResultHandlesUnknownAlgorithmCombinations(t *testing.T) {
 	target := verify.Target{Sequence: 1, InstanceNumber: 1}
 	unknownCheck := verify.CheckResult{Kind: verify.CheckKindSignature, Status: verify.CheckStatusUnsupported, Code: verify.ErrorCodeUnsupportedAlgorithm, Algorithm: verify.AlgorithmUnknown, Target: target}
@@ -134,9 +138,14 @@ func TestMapVerificationResultHandlesUnknownAlgorithmCombinations(t *testing.T) 
 	if unknownOnly.State() != StatePERMERROR || unknownOnly.PrimaryReason() != ReasonUnsupportedAlgorithm {
 		t.Fatalf("unknown-only = %q/%q", unknownOnly.State(), unknownOnly.PrimaryReason())
 	}
-	mixed := mapVerificationResult(newVerifyResultWithDefaultCustody(target, verify.TargetStatusPass, requiredChecksWithSignatures(target, unknownCheck, passCheck), []verify.SignatureSetResult{unknown, pass}), DefaultLimits())
-	if mixed.State() != StatePASS {
-		t.Fatalf("supported pass plus unknown = %q, want PASS", mixed.State())
+	mixed := mapVerificationResult(newVerifyResultWithDefaultCustody(target, verify.TargetStatusUnsupported, requiredChecksWithSignatures(target, unknownCheck, passCheck), []verify.SignatureSetResult{unknown, pass}), DefaultLimits())
+	if mixed.State() != StatePERMERROR || mixed.PrimaryReason() != ReasonUnsupportedAlgorithm {
+		t.Fatalf("supported pass plus unknown in one group = %q/%q, want PERMERROR/unsupported_algorithm", mixed.State(), mixed.PrimaryReason())
+	}
+	alternativeLayout, _ := combine.NewLayout(1, 1)
+	alternative := mapVerificationResult(newVerifyResultWithDefaultCustody(target, verify.TargetStatusPass, requiredChecksWithSignatures(target, unknownCheck, passCheck), []verify.SignatureSetResult{unknown, pass}).WithSignatureLayout(alternativeLayout), DefaultLimits())
+	if alternative.State() != StatePASS {
+		t.Fatalf("unknown|pass = %q/%q, want PASS", alternative.State(), alternative.PrimaryReason())
 	}
 
 	missingRequired := mapVerificationResult(newVerifyResultWithDefaultCustody(target, verify.TargetStatusPass, nil, []verify.SignatureSetResult{pass}), DefaultLimits())

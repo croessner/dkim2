@@ -641,7 +641,8 @@ func classifyPreviousHop(state *receivedState, run verify.LocalHopRun) Propagati
 
 // historicalInstancesSupported reports whether every extracted Message-Instance
 // from the previous hop's instance upwards carries a supported hash tuple,
-// which the descent needs to re-prove each intermediate state.
+// which the descent needs to re-prove each intermediate state: at least one
+// h= group of implemented algorithms (Draft-08 Section 14.7).
 func historicalInstancesSupported(instances []instance.MessageInstance, previousInstance uint64) bool {
 	if len(instances) == 0 || previousInstance == 0 {
 		return false
@@ -650,7 +651,7 @@ func historicalInstancesSupported(instances []instance.MessageInstance, previous
 		if parsed.Number() < previousInstance {
 			continue
 		}
-		if _, selection := parsed.SupportedHashSets(); selection != instance.HashSelectionStatusSelected {
+		if !verify.HashCombinationEvaluable(parsed) {
 			return false
 		}
 	}

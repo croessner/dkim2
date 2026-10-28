@@ -25,7 +25,10 @@ func TestAlgorithmPolicyClassifiesAllowedUnsupportedAndDisabled(t *testing.T) {
 		status    KeyStatus
 	}{
 		{name: "allowed rsa", algorithm: AlgorithmRSASHA256, status: KeyStatusFound},
-		{name: "disabled ed25519", algorithm: AlgorithmEd25519SHA256, status: KeyStatusPolicyRejected},
+		// A locally disabled algorithm is KeyStatusDisabledAlgorithm; the earlier
+		// KeyStatusPolicyRejected did not pair with the disabled-algorithm set
+		// status and surfaced as internal_contract.
+		{name: "disabled ed25519", algorithm: AlgorithmEd25519SHA256, status: KeyStatusDisabledAlgorithm},
 		{name: "unsupported future", algorithm: "future-sha999", status: KeyStatusUnsupportedAlgorithm},
 	}
 	for _, tt := range tests {
@@ -153,8 +156,8 @@ func TestValidatePublicKeyMaterialRejectsUnsupportedAndDisabledAlgorithms(t *tes
 	key := ed25519.PublicKey(bytes.Repeat([]byte{0x42}, ed25519.PublicKeySize))
 
 	_, status, err := validatePublicKeyMaterial(AlgorithmEd25519SHA256, key, policy)
-	if !IsErrorCode(err, ErrorCodeDisabledAlgorithm) || status != KeyStatusPolicyRejected {
-		t.Fatalf("disabled status/error = %q/%v, want policy rejected", status, err)
+	if !IsErrorCode(err, ErrorCodeDisabledAlgorithm) || status != KeyStatusDisabledAlgorithm {
+		t.Fatalf("disabled status/error = %q/%v, want disabled algorithm", status, err)
 	}
 
 	_, status, err = validatePublicKeyMaterial("future-sha999", key, policy)

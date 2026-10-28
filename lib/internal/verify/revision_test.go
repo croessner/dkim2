@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/croessner/dkim2/internal/canonical"
+	"github.com/croessner/dkim2/internal/combine"
 )
 
 // TestVerifyRevisionProofChecksEveryInheritedSignature proves all-hop crypto instead of highest-target reinterpretation.
@@ -347,25 +348,29 @@ func TestVerifyRevisionProofRejectsUnsupportedOnlyAndAllowsTerminalNextDomain(t 
 	}
 }
 
-// TestVerifyRevisionProofRequiresEveryKnownSetAndIgnoresOnlyMixedUnknownExtensions locks per-field set semantics.
-func TestVerifyRevisionProofRequiresEveryKnownSetAndIgnoresOnlyMixedUnknownExtensions(t *testing.T) {
-	for _, fixture := range []multiSignatureFixture{newMultiSignatureFixture(t), newSupportedAndUnknownSignatureFixture(t)} {
-		keys := fixture.validKeys()
-		if len(fixture.ed25519Key) == 0 {
-			keys = keys[:1]
-		}
-		verifier := mustVerifierWithKeys(t, keys)
-		outcome, proof, err := verifier.VerifyRevisionProof(context.Background(), Request{Message: fixture.message, Envelope: matchingEnvelope()})
-		if err != nil || outcome != RevisionProofVerified || !proof.Valid() {
-			t.Fatalf("mixed-set outcome/proof/error = %q/%v/%v", outcome, proof.Valid(), err)
-		}
+// TestVerifyRevisionProofRequiresEveryKnownSetAndRejectsUnknownInGroup locks
+// per-field set semantics under Draft-08 Section 14.6: every set of a sig-all
+// group must pass, and an unknown algorithm in that group is a PERMERROR
+// intermediate rather than an ignored extension.
+func TestVerifyRevisionProofRequiresEveryKnownSetAndRejectsUnknownInGroup(t *testing.T) {
+	both := newMultiSignatureFixture(t)
+	verifier := mustVerifierWithKeys(t, both.validKeys())
+	outcome, proof, err := verifier.VerifyRevisionProof(context.Background(), Request{Message: both.message, Envelope: matchingEnvelope()})
+	if err != nil || outcome != RevisionProofVerified || !proof.Valid() {
+		t.Fatalf("all-known outcome/proof/error = %q/%v/%v", outcome, proof.Valid(), err)
+	}
+	mixed := newSupportedAndUnknownSignatureFixture(t)
+	verifier = mustVerifierWithKeys(t, mixed.validKeys()[:1])
+	outcome, proof, err = verifier.VerifyRevisionProof(context.Background(), Request{Message: mixed.message, Envelope: matchingEnvelope()})
+	if err != nil || outcome == RevisionProofVerified || proof.Valid() {
+		t.Fatalf("unknown-in-group outcome/proof/error = %q/%v/%v", outcome, proof.Valid(), err)
 	}
 
 	fixture := newMultiSignatureFixture(t)
 	keys := fixture.validKeys()
 	keys[1].Material = fixture.wrongEd25519
-	verifier := mustVerifierWithKeys(t, keys)
-	outcome, proof, err := verifier.VerifyRevisionProof(context.Background(), Request{Message: fixture.message, Envelope: matchingEnvelope()})
+	verifier = mustVerifierWithKeys(t, keys)
+	outcome, proof, err = verifier.VerifyRevisionProof(context.Background(), Request{Message: fixture.message, Envelope: matchingEnvelope()})
 	if err != nil || outcome != RevisionProofSignatureMismatch || proof.Valid() {
 		t.Fatalf("one-known-failure outcome/proof/error = %q/%v/%v", outcome, proof.Valid(), err)
 	}
@@ -455,21 +460,38 @@ func TestVerifyRevisionProofRejectsTargetOverridesAndUnsafeTimePolicyBeforeWork(
 	}
 }
 
-// TestRevisionSignatureOutcomePrecedenceIsOrderIndependent locks provider-contract dominance.
-func TestRevisionSignatureOutcomePrecedenceIsOrderIndependent(t *testing.T) {
-	contract := SignatureSetResult{Status: SignatureSetStatusProviderContract}
-	temporary := SignatureSetResult{Status: SignatureSetStatusProviderTemporary}
-	permanent := SignatureSetResult{Status: SignatureSetStatusProviderPermanent}
-	for _, sets := range [][]SignatureSetResult{
-		{temporary, contract}, {contract, temporary}, {permanent, contract}, {contract, permanent},
-	} {
-		if got := revisionSignatureOutcome(signatureEvaluation{sets: sets}); got != RevisionProofProviderContract {
-			t.Fatalf("revisionSignatureOutcome(%v) = %q, want provider_contract", sets, got)
-		}
+// TestRevisionSignatureOutcomeReportsDecisiveSet pins the Draft-08 rule
+// that a non-PASS inherited field reports its decisive set: the first set in
+// field order whose intermediate equals the combined result. Permanent key
+// failures keep their specific reason.
+func TestRevisionSignatureOutcomeReportsDecisiveSet(t *testing.T) {
+	contract := SignatureSetStatusProviderContract
+	temporary := SignatureSetStatusProviderTemporary
+	permanent := SignatureSetStatusProviderPermanent
+	missing := SignatureSetStatusMissingKey
+	tests := []struct {
+		statuses []SignatureSetStatus
+		want     RevisionProofOutcome
+	}{
+		{[]SignatureSetStatus{temporary, contract}, RevisionProofProviderContract},
+		{[]SignatureSetStatus{contract, temporary}, RevisionProofProviderContract},
+		{[]SignatureSetStatus{permanent, contract}, RevisionProofProviderRejected},
+		{[]SignatureSetStatus{contract, permanent}, RevisionProofProviderContract},
+		{[]SignatureSetStatus{temporary, permanent}, RevisionProofProviderRejected},
+		{[]SignatureSetStatus{SignatureSetStatusPass, temporary}, RevisionProofProviderTemporary},
+		{[]SignatureSetStatus{missing, SignatureSetStatusFail}, RevisionProofSignatureMismatch},
+		{[]SignatureSetStatus{SignatureSetStatusPass, missing}, RevisionProofMissingKey},
 	}
-	for _, sets := range [][]SignatureSetResult{{temporary, permanent}, {permanent, temporary}} {
-		if got := revisionSignatureOutcome(signatureEvaluation{sets: sets}); got != RevisionProofProviderRejected {
-			t.Fatalf("revisionSignatureOutcome(%v) = %q, want provider_rejected", sets, got)
+	for _, test := range tests {
+		sets := make([]SignatureSetResult, len(test.statuses))
+		for index, status := range test.statuses {
+			sets[index] = SignatureSetResult{Index: index, Status: status}
+		}
+		layout, _ := combine.SingleGroup(len(sets))
+		evaluation := signatureEvaluation{sets: sets, layout: layout}
+		evaluation.combine()
+		if got := revisionSignatureOutcome(evaluation); got != test.want {
+			t.Fatalf("revisionSignatureOutcome(%v) = %q, want %q", test.statuses, got, test.want)
 		}
 	}
 }

@@ -178,7 +178,14 @@ func verificationEventOutcome(
 		return ObservationResultSuccess, ObservationReasonNone, ObservationErrorNone
 	case ResultStateTEMPERROR:
 		return ObservationResultTemporary, ObservationReasonUnavailable, ObservationErrorTemporary
-	case ResultStateFAIL, ResultStatePERMERROR:
+	case ResultStatePERMERROR:
+		// The bounded policy reason separates an algorithm disabled by local
+		// policy from an unknown one; both report unsupported_algorithm.
+		if result.locallyDisabledAlgorithm() {
+			return ObservationResultFailure, ObservationReasonPolicy, ObservationErrorNone
+		}
+		return ObservationResultFailure, ObservationReasonProtocol, ObservationErrorNone
+	case ResultStateFAIL:
 		return ObservationResultFailure, ObservationReasonProtocol, ObservationErrorNone
 	default:
 		return ObservationResultInternal, ObservationReasonUnavailable, ObservationErrorInternal

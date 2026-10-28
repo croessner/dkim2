@@ -297,11 +297,20 @@ invented. The capability still proves every existing signature over protocol
 fields, the current/highest message hashes, sequence/reference integrity, and
 the complete custody structure relevant to appending a hop.
 
-Within every existing signature field, every known supported signature set
-must pass. Unknown sets in a mixed field are ignored as draft extensions, but
-a field with no supported set is unsupported-only and prevents capability
-issuance. All-hop verification is subject to hard/narrowable total field, set,
-lookup, canonical-work, and provider-call budgets.
+Every existing signature field must reach a Draft-08 Section 14.6 PASS under
+its `sig-any`/`sig-all` layout, combined by the shared
+`verify.CombineSignatureSets` owner. Unknown and locally disabled algorithms
+are PERMERROR intermediates decided without a key lookup; a field with no
+enabled set is unsupported. Sets of a passing field that did not pass
+themselves are sealed as `ignored_unknown` (unknown algorithm) or
+`alternative_not_passed` (implemented algorithm in a losing group, with its
+key-lookup usage recorded). A non-PASS field reports its decisive set; an
+inherited permanent key failure keeps its specific reason (`missing_key`,
+`invalid_key`, `revoked_key`, `ambiguous_key`, `unsupported_key_type`,
+`key_algorithm_mismatch`) instead of collapsing into `provider_permanent`;
+no privacy rule required the collapse. All-hop verification is subject to
+hard/narrowable total field, set, lookup, canonical-work, and provider-call
+budgets; key lookups are counted for policy-enabled sets only.
 
 The normal capability state is `verified`. A second closed state,
 `terminal_next_domain_authorization_required`, may be issued only when every

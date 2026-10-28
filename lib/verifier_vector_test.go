@@ -180,7 +180,10 @@ func publicGoldenCases(corpus publicGoldenCorpus) []publicGoldenCase {
 		pass("rsa_sha256_pass", goldenVectorRSAPass),
 		pass("ed25519_sha256_pass", "ed25519_pass"),
 		pass("rsa_and_ed25519_both_pass", "both_pass"),
-		pass("supported_pass_plus_unknown_signature_pass", "supported_unknown_pass"),
+		// The frozen "supported_unknown_pass" vector joins an RSA set and an
+		// unknown set with ",". Draft-08 Section 14.6 step 4 makes the unknown
+		// set a PERMERROR intermediate, so the one sig-all group is PERMERROR.
+		{name: "supported_pass_plus_unknown_signature_in_group_permerror", vector: "supported_unknown_pass", mode: goldenProviderKeys, state: ResultStatePERMERROR, reason: ReasonUnsupportedAlgorithm, class: CheckClassSignature, custody: CustodyStructureNotPresent, sequence: 1, instance: 1},
 		{name: "sha256_plus_mismatching_sha512_fails", vector: "sha_unknown_hash_pass", mode: goldenProviderKeys, state: ResultStateFAIL, reason: ReasonHashMismatch, class: CheckClassBodyHash, custody: CustodyStructureNotPresent, sequence: 1, instance: 1},
 		{name: "mismatching_sha512_only_fails", vector: "unknown_hash_only", mode: goldenProviderKeys, state: ResultStateFAIL, reason: ReasonHashMismatch, class: CheckClassBodyHash, custody: CustodyStructureNotPresent, sequence: 1, instance: 1},
 		{name: "unknown_signature_only_permerror", vector: "unknown_signature_only", mode: goldenProviderKeys, state: ResultStatePERMERROR, reason: ReasonUnsupportedAlgorithm, class: CheckClassSignature, custody: CustodyStructureNotPresent, sequence: 1, instance: 1},

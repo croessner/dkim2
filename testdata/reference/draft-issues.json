@@ -293,7 +293,7 @@
       "upstream_status": "acknowledged",
       "behavior_owner": "lib/internal/signature",
       "conformance_cases": ["verification/composite-algorithm-unsupported"],
-      "test_refs": ["lib/internal/keyresolver/record_test.go#TestParseRecordAcceptsClosedLegalMatrix", "lib/internal/signature/signing_order_test.go#TestPostQuantumCompositeIsOutsideTheAlgorithmVocabulary", "lib/internal/signing/profile_test.go#TestCompositeAlgorithmIsNotSignable", "lib/unsupported_composite_test.go#TestVerifierIgnoresCompositeSetAndPassesSupportedSet", "lib/unsupported_composite_test.go#TestVerifierRejectsCompositeOnlySignature"],
+      "test_refs": ["lib/internal/keyresolver/record_test.go#TestParseRecordAcceptsClosedLegalMatrix", "lib/internal/signature/signing_order_test.go#TestPostQuantumCompositeIsOutsideTheAlgorithmVocabulary", "lib/internal/signing/profile_test.go#TestCompositeAlgorithmIsNotSignable", "lib/unsupported_composite_test.go#TestVerifierCompositeBesideEd25519DependsOnSeparator", "lib/unsupported_composite_test.go#TestVerifierRejectsCompositeOnlySignature"],
       "external_cases": [],
       "public_effect": "composite-algorithm-unsupported",
       "resolution_criterion": "wg-post-quantum-construction-settled",
