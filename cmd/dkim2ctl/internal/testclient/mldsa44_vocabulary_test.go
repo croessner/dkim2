@@ -38,3 +38,18 @@ func TestGeneratedClientAdmitsMLDSA44Vocabulary(t *testing.T) {
 		t.Fatal("hop with the removed composite was admitted")
 	}
 }
+
+// TestGeneratedClientRejectsUnproducedSHA512Vocabulary proves the verifier
+// projection hop vocabulary is exactly the Draft-08 Section 3 signature
+// algorithms the daemon can verify. rsa-sha512 and ed25519-sha512 appear only
+// in the DNS-02 registry listing; no verifier projection can carry them.
+func TestGeneratedClientRejectsUnproducedSHA512Vocabulary(t *testing.T) {
+	for _, algorithm := range []generated.VerifierHopSignatureAlgorithms{"rsa-sha512", "ed25519-sha512"} {
+		if algorithm.Valid() {
+			t.Fatalf("generated hop vocabulary admits unproduced %q", algorithm)
+		}
+		if _, ok := verifierAlgorithmStrings([]generated.VerifierHopSignatureAlgorithms{algorithm}); ok {
+			t.Fatalf("hop with unproduced %q was admitted", algorithm)
+		}
+	}
+}

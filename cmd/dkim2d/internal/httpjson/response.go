@@ -323,7 +323,7 @@ func mapVerifierHop(hop dkim2.VerifierHop, index int) (generated.VerifierHop, er
 		return generated.VerifierHop{}, newMappingError(MappingInternalContract)
 	}
 	algorithms := hop.SignatureAlgorithms()
-	if !slices.IsSorted(algorithms) || len(algorithms) == 0 || len(algorithms) > 4 {
+	if !slices.IsSorted(algorithms) || len(algorithms) == 0 || len(algorithms) > 3 {
 		return generated.VerifierHop{}, newMappingError(MappingInternalContract)
 	}
 	mappedAlgorithms := make([]generated.VerifierHopSignatureAlgorithms, len(algorithms))

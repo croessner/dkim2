@@ -1214,10 +1214,8 @@ func (e VerifierHopRecipeMode) Valid() bool {
 // Defines values for VerifierHopSignatureAlgorithms.
 const (
 	VerifierAlgorithmEd25519SHA256 VerifierHopSignatureAlgorithms = "ed25519-sha256"
-	VerifierAlgorithmEd25519SHA512 VerifierHopSignatureAlgorithms = "ed25519-sha512"
 	VerifierAlgorithmMLDSA44       VerifierHopSignatureAlgorithms = "mldsa44"
 	VerifierAlgorithmRSASHA256     VerifierHopSignatureAlgorithms = "rsa-sha256"
-	VerifierAlgorithmRSASHA512     VerifierHopSignatureAlgorithms = "rsa-sha512"
 )
 
 // Valid indicates whether the value is a known member of the VerifierHopSignatureAlgorithms enum.
@@ -1225,13 +1223,9 @@ func (e VerifierHopSignatureAlgorithms) Valid() bool {
 	switch e {
 	case VerifierAlgorithmEd25519SHA256:
 		return true
-	case VerifierAlgorithmEd25519SHA512:
-		return true
 	case VerifierAlgorithmMLDSA44:
 		return true
 	case VerifierAlgorithmRSASHA256:
-		return true
-	case VerifierAlgorithmRSASHA512:
 		return true
 	default:
 		return false
@@ -1641,27 +1635,29 @@ type VerifierHistoryState string
 
 // VerifierHop defines model for VerifierHop.
 type VerifierHop struct {
-	AffectedHeaderCount    int                              `json:"affected_header_count"`
-	AffectedHeaders        []string                         `json:"affected_headers"`
-	BodyAvailability       VerifierHopBodyAvailability      `json:"body_availability"`
-	ChangeClasses          []VerifierHopChangeClasses       `json:"change_classes"`
-	ChangeCount            int                              `json:"change_count"`
-	CustodyTransition      VerifierHopCustodyTransition     `json:"custody_transition"`
-	Exploded               bool                             `json:"exploded"`
-	FeedHere               bool                             `json:"feed_here"`
-	Feedback               bool                             `json:"feedback"`
-	HistoryBodyState       VerifierHistoryState             `json:"history_body_state"`
-	HistoryHeaderState     VerifierHistoryState             `json:"history_header_state"`
-	HopBinding             SHA256Binding                    `json:"hop_binding"`
-	MessageInstance        CanonicalUint64                  `json:"message_instance"`
-	RecipeBodyMode         VerifierHopRecipeBodyMode        `json:"recipe_body_mode"`
-	RecipeDigest           SHA256Binding                    `json:"recipe_digest"`
-	RecipeHasHeaderChanges bool                             `json:"recipe_has_header_changes"`
-	RecipeMode             VerifierHopRecipeMode            `json:"recipe_mode"`
-	Sequence               CanonicalUint64                  `json:"sequence"`
-	SignatureAlgorithms    []VerifierHopSignatureAlgorithms `json:"signature_algorithms"`
-	SignatureState         VerifierHopSignatureState        `json:"signature_state"`
-	SignerDomain           string                           `json:"signer_domain"`
+	AffectedHeaderCount    int                          `json:"affected_header_count"`
+	AffectedHeaders        []string                     `json:"affected_headers"`
+	BodyAvailability       VerifierHopBodyAvailability  `json:"body_availability"`
+	ChangeClasses          []VerifierHopChangeClasses   `json:"change_classes"`
+	ChangeCount            int                          `json:"change_count"`
+	CustodyTransition      VerifierHopCustodyTransition `json:"custody_transition"`
+	Exploded               bool                         `json:"exploded"`
+	FeedHere               bool                         `json:"feed_here"`
+	Feedback               bool                         `json:"feedback"`
+	HistoryBodyState       VerifierHistoryState         `json:"history_body_state"`
+	HistoryHeaderState     VerifierHistoryState         `json:"history_header_state"`
+	HopBinding             SHA256Binding                `json:"hop_binding"`
+	MessageInstance        CanonicalUint64              `json:"message_instance"`
+	RecipeBodyMode         VerifierHopRecipeBodyMode    `json:"recipe_body_mode"`
+	RecipeDigest           SHA256Binding                `json:"recipe_digest"`
+	RecipeHasHeaderChanges bool                         `json:"recipe_has_header_changes"`
+	RecipeMode             VerifierHopRecipeMode        `json:"recipe_mode"`
+	Sequence               CanonicalUint64              `json:"sequence"`
+
+	// SignatureAlgorithms Sorted unique algorithms of the hop's passing signature sets. The vocabulary is exactly the Draft-08 Section 3 signature algorithms this verifier implements; DNS-02 registry entries without a Draft-08 signing definition never verify and are never listed.
+	SignatureAlgorithms []VerifierHopSignatureAlgorithms `json:"signature_algorithms"`
+	SignatureState      VerifierHopSignatureState        `json:"signature_state"`
+	SignerDomain        string                           `json:"signer_domain"`
 }
 
 // VerifierHopBodyAvailability defines model for VerifierHop.BodyAvailability.

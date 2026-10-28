@@ -79,7 +79,7 @@ func (h VerifierHop) Valid() bool {
 // verifierHopShapeValid validates closed hop content independently of its projection binding.
 func verifierHopShapeValid(h VerifierHop) bool {
 	if !h.sealed || h.sequence == 0 || h.instance == 0 || h.domain == "" || len(h.domain) > 253 ||
-		len(h.algorithms) == 0 || len(h.algorithms) > 4 || !h.custody.Known() ||
+		len(h.algorithms) == 0 || len(h.algorithms) > 3 || !h.custody.Known() ||
 		!h.recipeMode.Known() || !h.recipe.Valid() || !h.headerState.Known() ||
 		!h.bodyState.Known() || !h.bodyAvailable.Known() {
 		return false

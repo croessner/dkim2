@@ -541,6 +541,12 @@ projected.verifier_projection.hops[1].signature_algorithms = { 'ed25519-sha256',
 assert(verifier.policy_attributes(projected) == nil, 'composite hop algorithm must fail closed')
 projected.verifier_projection.hops[1].signature_algorithms = { 'mldsa44-ed25519-sha256' }
 assert(verifier.policy_attributes(projected) == nil, 'unknown hop algorithm must fail closed')
+-- DNS-02 registry names without a Draft-08 signing definition never verify,
+-- so the daemon never lists them on a hop.
+for _, unproduced in ipairs({ 'rsa-sha512', 'ed25519-sha512' }) do
+  projected.verifier_projection.hops[1].signature_algorithms = { unproduced }
+  assert(verifier.policy_attributes(projected) == nil, unproduced .. ' hop algorithm must fail closed')
+end
 projected.verifier_projection.hops[1].signature_algorithms = { 'ed25519-sha256' }
 
 for _, case in ipairs({

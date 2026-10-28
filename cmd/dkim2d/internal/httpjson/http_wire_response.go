@@ -365,7 +365,7 @@ func validVerifierHop(hop generated.VerifierHop, index int) bool {
 func validVerifierHopShape(hop generated.VerifierHop, index int) bool {
 	return hop.Sequence == strconv.Itoa(index+1) && validCanonicalUint64(hop.MessageInstance) &&
 		len(hop.HopBinding) == 32 && validSigningDomain(hop.SignerDomain) &&
-		len(hop.SignatureAlgorithms) > 0 && len(hop.SignatureAlgorithms) <= 4 &&
+		len(hop.SignatureAlgorithms) > 0 && len(hop.SignatureAlgorithms) <= 3 &&
 		sortedUniqueVerifierAlgorithms(hop.SignatureAlgorithms) && hop.SignatureState == generated.VerifierHopSignatureStatePass &&
 		hop.CustodyTransition.Valid() && hop.RecipeMode.Valid() && hop.RecipeBodyMode.Valid() &&
 		hop.HistoryHeaderState.Valid() && hop.HistoryBodyState.Valid() && hop.BodyAvailability.Valid() &&

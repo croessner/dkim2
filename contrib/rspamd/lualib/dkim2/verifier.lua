@@ -424,10 +424,11 @@ local function valid_header_name(value)
   return true
 end
 
+-- The verifier projection lists only the Draft-08 Section 3 signature
+-- algorithms the daemon verifies; DNS-02 registry names without a Draft-08
+-- signing definition never appear.
 local signature_algorithms = {
-  ['rsa-sha256'] = true, ['rsa-sha512'] = true,
-  ['ed25519-sha256'] = true, ['ed25519-sha512'] = true,
-  mldsa44 = true,
+  ['rsa-sha256'] = true, ['ed25519-sha256'] = true, mldsa44 = true,
 }
 local custody_transitions = {
   origin = true, ordinary = true, next_domain = true, terminal_next_domain = true,
@@ -451,7 +452,7 @@ local function valid_projection_hop(value, expected_sequence)
   if not exact_keys(value, required, {}) or not valid_canonical_uint(value.sequence) or
       tonumber(value.sequence) ~= expected_sequence or not valid_canonical_uint(value.message_instance) or
       not valid_base64_digest(value.hop_binding) or not valid_domain(value.signer_domain) or
-      not sorted_unique_strings(value.signature_algorithms, 4, signature_algorithms) or
+      not sorted_unique_strings(value.signature_algorithms, 3, signature_algorithms) or
       value.signature_state ~= 'pass' or not custody_transitions[value.custody_transition] or
       type(value.feedback) ~= 'boolean' or type(value.feed_here) ~= 'boolean' or
       type(value.exploded) ~= 'boolean' or not recipe_modes[value.recipe_mode] or

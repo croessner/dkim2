@@ -865,7 +865,7 @@ func verifierChangeStrings(values []generated.VerifierHopChangeClasses) ([]strin
 // validVerifierHopShape validates bounded scalar and collection shape.
 func validVerifierHopShape(hop generated.VerifierHop, index int, algorithms, changes []string) bool {
 	return hop.Sequence == strconv.Itoa(index+1) && validPositiveUint(hop.MessageInstance) && len(hop.HopBinding) == 32 &&
-		validDomain(hop.SignerDomain) && len(algorithms) > 0 && len(algorithms) <= 4 && strictSortedStrings(algorithms) &&
+		validDomain(hop.SignerDomain) && len(algorithms) > 0 && len(algorithms) <= 3 && strictSortedStrings(algorithms) &&
 		hop.SignatureState == generated.VerifierHopSignatureStatePass && hop.CustodyTransition.Valid() &&
 		hop.RecipeMode.Valid() && hop.RecipeBodyMode.Valid() && hop.HistoryHeaderState.Valid() &&
 		hop.HistoryBodyState.Valid() && hop.BodyAvailability.Valid() && len(hop.RecipeDigest) == 32 &&

@@ -325,7 +325,7 @@
       "upstream_status": "not_reported",
       "behavior_owner": "lib/internal/signature",
       "conformance_cases": [],
-      "test_refs": ["lib/internal/signature/signing_order_test.go#TestDNS02OnlyAlgorithmNamesAreUnknownSigNames"],
+      "test_refs": ["cmd/dkim2ctl/internal/testclient/mldsa44_vocabulary_test.go#TestGeneratedClientRejectsUnproducedSHA512Vocabulary", "lib/internal/signature/signing_order_test.go#TestDNS02OnlyAlgorithmNamesAreUnknownSigNames"],
       "external_cases": [],
       "public_effect": "dns-only-algorithms-unknown",
       "resolution_criterion": "dns-draft-aligns-algorithm-list",

@@ -172,7 +172,7 @@
     {
       "id": "openapi-wire-response-source",
       "path": "cmd/dkim2d/internal/httpjson/http_wire_response.go",
-      "sha256": "586df0355e902603b54d62331a1a08809294f2bf276ef4c1862e18ce4bf93610",
+      "sha256": "a824901a97db8493e76e3d2a126ce5132affd435f116710c31be3f755c251d56",
       "module": "cmd/dkim2d"
     },
     {
