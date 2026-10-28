@@ -7,9 +7,9 @@ is a reviewed behavior migration, not an automatic compatibility update.
 ## Public surfaces
 
 - The exported root library API is reviewed against the exact base
-  `19aad3cd2f61f52ca8cfc81a5628dd1798ca491f`. The deterministic API manifest
+  `38edd52d9d1f2a09319ddc24d8a846249732bf4a`. The deterministic API manifest
   has 899 declarations and SHA-256
-  `f7b044a60c29d4443b08815e8ed0e500eb9b88fdb467980366fb568e0d58b352`.
+  `134e557a4ad24a4145a670a51d9c6fcd7dcaf207f65158d51a12f3e4253f756b`.
   The [root library API delta](#root-library-api-delta) lists every
   declaration removed, added, or changed since the previous reviewed base
   `f7099dbd47ff3bd79e30f7801814c87eb0914b4c` (883 declarations); the
@@ -102,7 +102,8 @@ Draft-08 migration (`v0.1.48`):
 
 - Removed: `NewDerivedDSNSigningEvidenceRequest`,
   `NewPostfixDerivedDSNSigningEvidenceRequest`,
-  `NewPostfixReportingDSNSigningEvidenceRequest`, `ReasonTooManySignatures`.
+  `NewPostfixReportingDSNSigningEvidenceRequest`, `ReasonTooManySignatures`,
+  `SignatureStatusIgnored`.
 - Added: `AlgorithmMLDSA44`, `DSNEvidenceStageFromNotAuthentic`,
   `DSNEvidenceStageIdentityUnavailable`, `DSNIdentity.Domain`,
   `DSNProfileSource`, `DSNSigningEvidence.Resolved`,
@@ -122,6 +123,12 @@ Draft-08 migration (`v0.1.48`):
   `SignatureSetFact.String`, `Signer.ResolveDSNSigningIdentity`,
   `SigningCredential`.
 - Changed: `DraftIdentifier`, `NewDSNSigningEvidenceRequest`.
+
+`SignatureStatusIgnored` leaves the `SignatureStatus` constant block: an
+unknown algorithm is reported as `SignatureStatusPERMERROR` with
+`ReasonUnsupportedAlgorithm` (Draft-08 Section 14.6 step 4); the declaration
+count is unchanged because the manifest counts the constant block as one
+declaration.
 
 `DraftIdentifier` is `draft-ietf-dkim-dkim2-spec-08`.
 `NewDSNSigningEvidenceRequest` no longer takes a `DSNIdentity`; the Section
