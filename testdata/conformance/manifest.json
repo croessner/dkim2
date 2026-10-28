@@ -202,7 +202,7 @@
     {
       "id": "postfix-qualification-policy-source",
       "path": "tools/postfix_qualification_policy_test.go",
-      "sha256": "1d8ff5adf009f7246f41ef6a8f785c64246686f8570f57c4d1589dd2d6e4b955",
+      "sha256": "1c4ac87f09a32c6f8d0b5ab3e026e78ef96e77fa7e76b42738691a5c35106ebc",
       "module": "tools"
     },
     {

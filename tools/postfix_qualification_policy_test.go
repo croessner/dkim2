@@ -366,14 +366,62 @@ func TestPostfixQualificationHelperIsStandardGuardrail(t *testing.T) {
 		[]byte(".PHONY: test-postfix-qualification-helper"),
 		[]byte("test-postfix-qualification-helper:"),
 		[]byte("go test contrib/qualification/postfix-milter/cmd/qualify/main.go \\\n\t\t\tcontrib/qualification/postfix-milter/cmd/qualify/main_test.go"),
-		[]byte("test: test-postfix-qualification-helper"),
-		[]byte("guardrails: check-go-toolchain-contract check-ci fmt-check vet lint test race"),
-		[]byte("release-guardrails: guardrails"),
 	} {
 		if !bytes.Contains(makefile, required) {
 			t.Fatal("Makefile omitted the Postfix qualification helper guardrail")
 		}
 	}
+	for _, edge := range []struct {
+		target       string
+		prerequisite string
+	}{
+		{target: "test", prerequisite: "test-postfix-qualification-helper"},
+		{target: "guardrails", prerequisite: "test"},
+		{target: "release-guardrails", prerequisite: "guardrails"},
+	} {
+		prerequisites, ok := makefileRulePrerequisites(makefile, edge.target)
+		if !ok || !slicesContainExact(prerequisites, edge.prerequisite) {
+			t.Fatalf("Makefile target %s omitted the Postfix qualification helper gate %s", edge.target, edge.prerequisite)
+		}
+	}
+}
+
+// TestMakefileRulePrerequisitesRequiresOneExactRule proves the gate parser cannot be satisfied by lookalike rules.
+func TestMakefileRulePrerequisitesRequiresOneExactRule(t *testing.T) {
+	makefile := []byte("test: test-postfix-qualification-helper other\n" +
+		"guardrails-extra: test\n" +
+		"guardrails: vet lint race\n" +
+		"duplicate: test\n" +
+		"duplicate: race\n" +
+		"assigned := test\n")
+	prerequisites, ok := makefileRulePrerequisites(makefile, "test")
+	if !ok || !slicesContainExact(prerequisites, "test-postfix-qualification-helper") {
+		t.Fatal("exact rule prerequisites were not parsed")
+	}
+	if prerequisites, ok := makefileRulePrerequisites(makefile, "guardrails"); !ok ||
+		slicesContainExact(prerequisites, "test") {
+		t.Fatal("a lookalike target leaked prerequisites into guardrails")
+	}
+	for _, target := range []string{"duplicate", "assigned", "missing"} {
+		if _, ok := makefileRulePrerequisites(makefile, target); ok {
+			t.Fatalf("ambiguous or absent rule %s was accepted", target)
+		}
+	}
+}
+
+// makefileRulePrerequisites returns the prerequisites of exactly one ordinary rule line for target.
+func makefileRulePrerequisites(makefile []byte, target string) ([]string, bool) {
+	var prerequisites []string
+	matches := 0
+	for _, line := range strings.Split(string(makefile), "\n") {
+		rest, found := strings.CutPrefix(line, target+":")
+		if !found || strings.HasPrefix(rest, ":") || strings.HasPrefix(rest, "=") {
+			continue
+		}
+		matches++
+		prerequisites = strings.Fields(rest)
+	}
+	return prerequisites, matches == 1
 }
 
 // FuzzPostfixQualificationComposeDecoding exercises bounded strict YAML decoding.
