@@ -580,7 +580,8 @@ var qualificationIdentities = []signingIdentity{
 
 // writeSigningGeneration creates the synthetic RSA profiles, policies, and
 // private manifest of the qualification stack and returns the TXT records the
-// fixture authority must publish for them.
+// fixture authority must publish for them. Keys use the 2048-bit RSA signing
+// floor that the daemon enforces when it loads a signing profile.
 func writeSigningGeneration(generation string) (map[string]string, error) {
 	handles := make([]any, 0, len(qualificationIdentities))
 	profiles := make([]any, 0, len(qualificationIdentities))
@@ -588,7 +589,7 @@ func writeSigningGeneration(generation string) (map[string]string, error) {
 	entries := make([]any, 0, len(qualificationIdentities))
 	records := make(map[string]string, len(qualificationIdentities))
 	for _, identity := range qualificationIdentities {
-		key, err := rsa.GenerateKey(rand.Reader, 1024)
+		key, err := rsa.GenerateKey(rand.Reader, dkim2.MinSigningRSABits)
 		if err != nil {
 			return nil, errQualification
 		}
