@@ -19,6 +19,11 @@ operator commands: `make integration-postfix`, `make integration-exim`, and
 `make qualification-exim`. Container publication does not run for ordinary
 pushes or pull requests.
 
+Gate test targets (`make test`, `make test-tools`, and `make race`) run with
+`-count=1`. Many tests read vectors, schemas, fixtures, or the Makefile from
+outside their own module root, and the go test result cache does not track
+such inputs, so a cached pass could otherwise hide a changed input.
+
 ## Tool versions and policy
 
 `build/ci/toolchain.json` contains the Go tool and Valkey fixture versions used

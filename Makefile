@@ -4,6 +4,11 @@ ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 PRODUCT_MODULES := ./lib ./cmd/dkim2d ./cmd/dkim2-milter ./cmd/dkim2-exim ./cmd/dkim2ctl ./cmd/dkim2-dsn-propagator
 TOOL_MODULES := ./tools
 MODULES := $(PRODUCT_MODULES) $(TOOL_MODULES)
+# Gate tests read fixtures, vectors, schemas, and policy files outside their
+# own module root. The go test result cache does not track files outside the
+# module root, so a cached pass could hide a changed input; gate runs always
+# execute the tests.
+GATE_TEST_FLAGS := -count=1
 OPENAPI_DIR := $(ROOT)/docs/specs/openapi
 OPENAPI_SOURCE := $(OPENAPI_DIR)/dkim2d.yaml
 OPENAPI_SERVER_CONFIG := $(OPENAPI_DIR)/oapi-codegen.server.yml
@@ -167,7 +172,7 @@ test-fips140-mldsa44:
 test: test-postfix-qualification-helper test-fips140-mldsa44
 	@set -e; for module in $(PRODUCT_MODULES); do \
 		echo "==> go test $$module/..."; \
-		(cd $$module && go test ./...); \
+		(cd $$module && go test $(GATE_TEST_FLAGS) ./...); \
 	done
 
 # The tools module owns the conformance, interop, reference, and security
@@ -176,7 +181,7 @@ test: test-postfix-qualification-helper test-fips140-mldsa44
 test-tools:
 	@set -e; for module in $(TOOL_MODULES); do \
 		echo "==> go test $$module/..."; \
-		(cd $$module && go test ./...); \
+		(cd $$module && go test $(GATE_TEST_FLAGS) ./...); \
 	done
 
 # The Rspamd Policy E2E response fixtures carry verifier projection bindings
@@ -327,7 +332,7 @@ check-exim-build:
 race:
 	@set -e; for module in $(PRODUCT_MODULES); do \
 		echo "==> go test -race $$module/..."; \
-		(cd $$module && go test -race ./...); \
+		(cd $$module && go test $(GATE_TEST_FLAGS) -race ./...); \
 	done
 
 .PHONY: vet

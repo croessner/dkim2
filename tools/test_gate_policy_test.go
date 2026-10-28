@@ -1,0 +1,35 @@
+package tools_test
+
+import (
+	"bytes"
+	"testing"
+)
+
+// TestGateTestsBypassTheResultCache freezes uncached gate test runs, because
+// the go test cache does not track repository inputs outside a module root.
+func TestGateTestsBypassTheResultCache(t *testing.T) {
+	makefile := readRepositoryFile(t, "Makefile", 1<<20)
+	for _, required := range [][]byte{
+		[]byte("GATE_TEST_FLAGS := -count=1\n"),
+		[]byte("(cd $$module && go test $(GATE_TEST_FLAGS) ./...); \\\n\tdone\n\n# The tools module"),
+		[]byte("test-tools:\n\t@set -e; for module in $(TOOL_MODULES); do \\\n\t\techo \"==> go test $$module/...\"; \\\n\t\t(cd $$module && go test $(GATE_TEST_FLAGS) ./...); \\\n"),
+		[]byte("(cd $$module && go test $(GATE_TEST_FLAGS) -race ./...); \\\n"),
+	} {
+		if !bytes.Contains(makefile, required) {
+			t.Fatalf("Makefile gate test recipe lost uncached execution: %q", required)
+		}
+	}
+	for _, edge := range []struct {
+		target       string
+		prerequisite string
+	}{
+		{target: "guardrails", prerequisite: "test"},
+		{target: "guardrails", prerequisite: "test-tools"},
+		{target: "guardrails", prerequisite: "race"},
+	} {
+		prerequisites, ok := makefileRulePrerequisites(makefile, edge.target)
+		if !ok || !slicesContainExact(prerequisites, edge.prerequisite) {
+			t.Fatalf("Makefile target %s omitted gate %s", edge.target, edge.prerequisite)
+		}
+	}
+}
