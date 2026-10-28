@@ -382,8 +382,11 @@ promoted by caller-controlled environment variables.
 
 Image vulnerability scanning is release-blocking for every reported finding,
 irrespective of its severity label. Each offline scan consumes an exclusive
-copy-on-write scanner, OCI-layout, metadata, and database view created from
-descriptor-confined source bytes. The database owner uses constant-memory
+scanner, OCI-layout, metadata, and database view created from
+descriptor-confined source bytes. The view is a copy-on-write clone where the
+filesystem supports it; on Linux filesystems without reflink support it is an
+exact-size copy from the same verified descriptor. Either way the installed
+bytes are re-hashed before the scan. The database owner uses constant-memory
 hashing under a separate 2 GiB limit and checks metadata, database descriptor
 identity, source candidate, input inventory, and tool identity around every
 scan. The scanner has a fixed timeout, minimal credential-free environment,

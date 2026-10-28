@@ -8,6 +8,6 @@ import (
 )
 
 // cloneFile rejects platforms without descriptor-based copy-on-write cloning.
-func cloneFile(*os.File, string) error {
+func cloneFile(*os.File, string, int64) error {
 	return errors.New("database_clone_platform")
 }

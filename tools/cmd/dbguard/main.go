@@ -414,7 +414,8 @@ func prepareScanSnapshot(
 	return snapshot, nil
 }
 
-// cloneSnapshotFile installs exact descriptor-bound bytes using filesystem CoW.
+// cloneSnapshotFile installs exact descriptor-bound bytes, using filesystem
+// copy-on-write where supported, and re-verifies the installed size and hash.
 func cloneSnapshotFile(
 	root string,
 	source *os.File,
@@ -425,7 +426,7 @@ func cloneSnapshotFile(
 	if source == nil {
 		return errors.New("database_snapshot")
 	}
-	if err := cloneFile(source, target); err != nil {
+	if err := cloneFile(source, target, expected.Size); err != nil {
 		return errors.New("database_snapshot")
 	}
 	relative, err := filepath.Rel(root, target)

@@ -10,8 +10,10 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-// cloneFile creates one copy-on-write clone from an already-open source descriptor.
-func cloneFile(source *os.File, target string) error {
+// cloneFile creates one copy-on-write clone from an already-open source
+// descriptor. APFS clones the whole file, so the expected size is not needed;
+// the caller re-hashes the target before use.
+func cloneFile(source *os.File, target string, _ int64) error {
 	if source == nil {
 		return errors.New("database_clone")
 	}
