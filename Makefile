@@ -48,6 +48,8 @@ help:
 		'  make vet                     run Go vet' \
 		'  make lint                    run golangci-lint' \
 		'  make test                    run Go unit tests only' \
+		'  make test-tools              run tools-module runner tests' \
+		'  make check-rspamd-projection-binding verify Rspamd fixture bindings' \
 		'  make test-fips140-mldsa44    prove mldsa44 fails closed under FIPS v1.0.0' \
 		'  make race                    run race-enabled Go unit tests only' \
 		'  make build-check             build all product surfaces' \
@@ -167,6 +169,21 @@ test: test-postfix-qualification-helper test-fips140-mldsa44
 		echo "==> go test $$module/..."; \
 		(cd $$module && go test ./...); \
 	done
+
+# The tools module owns the conformance, interop, reference, and security
+# runners whose own tests freeze evidence counts and manifest bindings.
+.PHONY: test-tools
+test-tools:
+	@set -e; for module in $(TOOL_MODULES); do \
+		echo "==> go test $$module/..."; \
+		(cd $$module && go test ./...); \
+	done
+
+# The Rspamd Policy E2E response fixtures carry verifier projection bindings
+# that must match the producer's binding functions for the current draft.
+.PHONY: check-rspamd-projection-binding
+check-rspamd-projection-binding:
+	@contrib/rspamd/tests/policy-e2e/verify-two-hop-projection.sh
 
 .PHONY: test-exim-local-scan
 test-exim-local-scan:
@@ -581,7 +598,7 @@ integration-exim: test-exim-local-scan check-exim-matrix-prep check-exim-c-linux
 qualification-exim: integration-exim check-exim-c-linux-cross test-exim-real-matrix
 
 .PHONY: guardrails
-guardrails: check-go-toolchain-contract check-ci fmt-check vet lint test race build-check check-generated check-vendor check-platform-builds check-boundaries check-operator-docs
+guardrails: check-go-toolchain-contract check-ci fmt-check vet lint test test-tools check-rspamd-projection-binding race build-check check-generated check-vendor check-platform-builds check-boundaries check-operator-docs
 
 .PHONY: product-binaries
 product-binaries:
