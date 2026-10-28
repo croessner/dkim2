@@ -18,4 +18,12 @@ printf '{"Replace":{"%s":"%s","%s":"%s"}}\n' "$VIRTUAL_TEST" "$SOURCE_TEST" \
   "$DKIM2_REPO/lib/internal/verify/policy_e2e_reputation_test.go" "$SCRIPT_DIR/reputation_projection_test.gotxt" >"$OVERLAY"
 
 POLICY_E2E_TWO_HOP_FIXTURE="$SCRIPT_DIR/dkim2-two-hop-response.json" \
-  go test -overlay "$OVERLAY" ./lib/internal/verify -run '^TestPolicyE2E(TwoHopProjectionBinding|ReputationProjections)$' -count=1
+  go -C "$DKIM2_REPO" test -overlay "$OVERLAY" ./lib/internal/verify -run '^TestPolicyE2E(TwoHopProjectionBinding|ReputationProjections)$' -count=1
+
+# Every other response fixture that carries a verifier projection is locked to
+# the same producer binding functions, so a draft or projection change cannot
+# leave a stale binding behind in any of them.
+for FIXTURE in dkim2-response.json dkim2-received-dsn-response.json; do
+  POLICY_E2E_TWO_HOP_FIXTURE="$SCRIPT_DIR/$FIXTURE" \
+    go -C "$DKIM2_REPO" test -overlay "$OVERLAY" ./lib/internal/verify -run '^TestPolicyE2ETwoHopProjectionBinding$' -count=1
+done

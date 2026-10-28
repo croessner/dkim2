@@ -57,12 +57,12 @@
     "schema": "dkim2.verifier-projection.v1",
     "draft": "draft-ietf-dkim-dkim2-spec-08",
     "binding_algorithm": "sha-256",
-    "binding": "mOBskY9a9xU6WI7KYvu5516JdfNHyHP1w5rdLkwslZk=",
+    "binding": "WZjCjtZ6Pw2CYn/LGlOoDST1EUEmsoiyOtQzvFvfugk=",
     "hops": [
       {
         "sequence": "1",
         "message_instance": "2",
-        "hop_binding": "G0pGpIzm4NVVQUBEh0QBSGLYV/bnVho93IxzWA/jm9U=",
+        "hop_binding": "X6+AZC7JMT43e9oqbUKEyjv+uCkdnjiVXbvL3rFmsoY=",
         "signer_domain": "example.test",
         "signature_algorithms": [
           "ed25519-sha256",
