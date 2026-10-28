@@ -641,6 +641,8 @@ func TestHeaderOnlySerializerRoundTrip(t *testing.T) {
 // TestRebuildNotReconstructableCauses proves descent and previous-hop
 // failures that pass the evaluation still fail closed inside the rebuild.
 func TestRebuildNotReconstructableCauses(t *testing.T) {
+	rebuildMismatchBesideUnknown := "sha256:" + base64.StdEncoding.EncodeToString(make([]byte, 32)) + ":" + base64.StdEncoding.EncodeToString(make([]byte, 32)) +
+		",x-new:" + base64.StdEncoding.EncodeToString([]byte("header")) + ":" + base64.StdEncoding.EncodeToString([]byte("body"))
 	cases := []struct {
 		name    string
 		mutate  func(dsntest.Original) dsntest.Original
@@ -650,6 +652,14 @@ func TestRebuildNotReconstructableCauses(t *testing.T) {
 		{"hash mismatch during re-proof", func(original dsntest.Original) dsntest.Original {
 			// The forwarder signed a recipe that restores a state other than the one m=1 hashes.
 			original.Revisions[0].Recipe = `{"h":{"subject":[{"d":[" wrong"]}]},"b":[{"d":["origin body"]}]}`
+			return original
+		}, RebuildNotReconstructable, RebuildFailureHashMismatch},
+		// Section 14.7 step 4: a mismatching sha256 set beside an unknown set
+		// in the same hash-all group of the previous hop's Message-Instance is
+		// FAIL, so the descent reports a mismatch instead of the eligibility
+		// check refusing the chain as unsupported.
+		{"hash mismatch beside unknown algorithm", func(original dsntest.Original) dsntest.Original {
+			original.Revisions[0].HashSets = rebuildMismatchBesideUnknown
 			return original
 		}, RebuildNotReconstructable, RebuildFailureHashMismatch},
 		{"malformed recipe", func(original dsntest.Original) dsntest.Original {
@@ -692,6 +702,22 @@ func TestRebuildNotReconstructableCauses(t *testing.T) {
 				t.Fatal("failed rebuild exposed output")
 			}
 		})
+	}
+}
+
+// TestReceivedEvaluationUnknownOnlyPreviousInstanceIsNotReconstructable
+// proves the eligibility check still refuses a previous-hop Message-Instance
+// whose hash-sets all use unimplemented algorithms: every Section 14.7
+// intermediate is PERMERROR, so no descent could prove that state.
+func TestReceivedEvaluationUnknownOnlyPreviousInstanceIsNotReconstructable(t *testing.T) {
+	original := defaultPropagationOriginal(rebuildFullRecipe)
+	original.Revisions[0].HashSets = "x-new:" + base64.StdEncoding.EncodeToString([]byte("header")) + ":" + base64.StdEncoding.EncodeToString([]byte("body"))
+	spec := propagationSpec{original: original}
+	evaluator := mustRebuildEvaluator(t, "")
+	raw, recipient := spec.build(t)
+	evaluation, err := evaluator.Evaluate(context.Background(), ReceivedRequest{Raw: raw, OuterRecipient: []byte(recipient), Authority: newReceivedAuthority(receivedLocalDomain)})
+	if err != nil || evaluation.Propagation() != PropagationNotReconstructable {
+		t.Fatalf("evaluation propagation=%q error=%v", evaluation.Propagation(), err)
 	}
 }
 

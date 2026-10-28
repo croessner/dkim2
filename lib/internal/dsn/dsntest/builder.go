@@ -82,6 +82,10 @@ type Revision struct {
 	// Recipe is the JSON recipe carried by the next higher Message-Instance
 	// that reconstructs this state; empty renders that instance without r=.
 	Recipe string
+	// HashSets, when non-empty, replaces the computed sha256 h= value of
+	// this revision's Message-Instance verbatim, such as a mismatching or
+	// unimplemented hash-set combination.
+	HashSets string
 }
 
 // Original describes one signed embedded original message.
@@ -156,6 +160,9 @@ func (o Original) renderInstances(canonicalizer canonical.Canonicalizer) ([]stri
 		hashes, err := instanceHashes(canonicalizer, state.Headers, state.Body)
 		if err != nil {
 			return nil, err
+		}
+		if state.HashSets != "" {
+			hashes = state.HashSets
 		}
 		line := "Message-Instance: m=" + itoa(number) + "; h=" + hashes + ";"
 		if index > 0 && states[index-1].Recipe != "" {

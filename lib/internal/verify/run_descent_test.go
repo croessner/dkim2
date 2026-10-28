@@ -189,6 +189,11 @@ func TestRunDescentFailsClosedOnUnprovableStates(t *testing.T) {
 			return bytes.Replace(raw, []byte("Message-Instance: m=1; h=sha256:"), []byte("Message-Instance: m=1; h=sha999:"), 1)
 		}, RunDescentUnsupportedHash},
 		{"hash mismatch during re-proof", mutateOriginHeaderHash, RunDescentHashMismatch},
+		// Section 14.7 step 4: a mismatching sha256 set beside an unknown set
+		// in the same hash-all group is FAIL, not PERMERROR.
+		{"hash mismatch beside unknown algorithm", func(raw []byte) []byte {
+			return appendOriginUnknownHashSet(mutateOriginHeaderHash(raw))
+		}, RunDescentHashMismatch},
 		{"malformed recipe", func(raw []byte) []byte {
 			return replaceRecipe(raw, descentSubjectRecipe, `{"h":{"subject":[{"x":1}]}}`)
 		}, RunDescentRecipeInvalid},
@@ -241,6 +246,23 @@ func mutateOriginHeaderHash(raw []byte) []byte {
 		mutated[position] = 'A'
 	}
 	return mutated
+}
+
+// appendOriginUnknownHashSet adds an unimplemented x-new hash-set to the
+// hash-all group of the m=1 h= value.
+func appendOriginUnknownHashSet(raw []byte) []byte {
+	marker := []byte("Message-Instance: m=1; h=sha256:")
+	offset := bytes.Index(raw, marker)
+	if offset < 0 {
+		return raw
+	}
+	end := bytes.IndexByte(raw[offset:], ';')
+	end = bytes.IndexByte(raw[offset+end+1:], ';') + offset + end + 1
+	unknown := ",x-new:" + base64.StdEncoding.EncodeToString([]byte("header")) + ":" + base64.StdEncoding.EncodeToString([]byte("body"))
+	mutated := make([]byte, 0, len(raw)+len(unknown))
+	mutated = append(mutated, raw[:end]...)
+	mutated = append(mutated, unknown...)
+	return append(mutated, raw[end:]...)
 }
 
 // TestRunDescentLimitExhaustionIsNotReconstructable proves a transition limit

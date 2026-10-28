@@ -127,7 +127,10 @@ func TestDraft08HeadersOnlyHashSetPassesOnHeaderHash(t *testing.T) {
 // checks evaluate each lower Message-Instance h= with the Section 14.7
 // algebra against the recreated message: a mismatching group beside a
 // passing alternative is accepted, an unknown algorithm inside the only
-// group is unsupported, and a mismatching only group fails.
+// group is unsupported, and a mismatching only group fails. A mismatching
+// implemented set beside an unknown one in the same hash-all group fails as
+// well: Section 14.7 step 4 lets a FAIL intermediate win over a PERMERROR
+// intermediate, exactly as on the current-target path.
 func TestDraft08HistoryEvaluatesLowerInstanceGroups(t *testing.T) {
 	current := []byte("Subject:current\r\n\r\nbody\r\n")
 	mismatch := historyHashSets(t, current, []canonical.HashAlgorithm{canonical.HashAlgorithmSHA256}, canonical.HashAlgorithmSHA256)
@@ -143,6 +146,7 @@ func TestDraft08HistoryEvaluatesLowerInstanceGroups(t *testing.T) {
 		{"mismatch|pass", mismatch + " | " + sha512, HistoryCoverageComplete, HistoryStopOriginReached},
 		{"pass,unknown", sha512 + "," + unknown, HistoryCoverageUnsupported, HistoryStopHashUnsupported},
 		{"mismatch only", mismatch, HistoryCoverageFailed, HistoryStopHashMismatch},
+		{"mismatch,unknown", mismatch + "," + unknown, HistoryCoverageFailed, HistoryStopHashMismatch},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -152,5 +156,31 @@ func TestDraft08HistoryEvaluatesLowerInstanceGroups(t *testing.T) {
 				t.Fatalf("Walk() = valid:%t coverage:%q stop:%q error:%v", walk.Valid(), walk.Coverage(), walk.StopReason(), err)
 			}
 		})
+	}
+}
+
+// TestHashCombinationComputableOnlyRejectsDigestFreeValues proves the cheap
+// precondition is false only when no hash-set is implemented, which is
+// exactly when every Section 14.7 intermediate is PERMERROR; a value with
+// an implemented set beside an unknown one in a single group still needs
+// the digest, because a mismatch there is FAIL.
+func TestHashCombinationComputableOnlyRejectsDigestFreeValues(t *testing.T) {
+	tests := []struct {
+		template   string
+		computable bool
+	}{
+		{"{x-new}", false},
+		{"{sha256-header},{x-new}", true},
+		{"{x-new}|{sha256}", true},
+	}
+	for _, test := range tests {
+		_, parsed := hashCombinationMessage(t, test.template, hashCombinationBase)
+		if got := HashCombinationComputable(parsed); got != test.computable {
+			t.Fatalf("%s: HashCombinationComputable() = %t, want %t", test.template, got, test.computable)
+		}
+		evaluation, digestFree := digestFreeHashEvaluation(parsed)
+		if digestFree == test.computable || digestFree && !evaluation.permanentError() {
+			t.Fatalf("%s: digestFreeHashEvaluation() = %v,%t", test.template, evaluation.outcome.Result(), digestFree)
+		}
 	}
 }

@@ -232,13 +232,13 @@ func (c HistoryCoordinator) Descend(ctx context.Context, collection instance.Col
 // initialStateMatches re-proves the initial state against the current
 // instance's h= value with the shared Section 14.7 algebra (header-only when
 // the body is not known) under the remaining canonical work ceiling. It
-// reports (matched, supported, canonical work, error); a value without any
-// group of implemented algorithms is unsupported, and exhausting the
-// ceiling is a history limit error the caller maps onto its own closed
-// outcome.
+// reports (matched, supported, canonical work, error): supported is false
+// exactly when the combination is PERMERROR, which needs no digest when no
+// hash-set is implemented. Exhausting the ceiling is a history limit error
+// the caller maps onto its own closed outcome.
 func (c HistoryCoordinator) initialStateMatches(state recipe.State, current instance.MessageInstance, remaining int) (bool, bool, int, error) {
-	if !HashCombinationEvaluable(current) {
-		return false, false, 0, nil
+	if evaluation, ok := digestFreeHashEvaluation(current); ok {
+		return evaluation.pass(), !evaluation.permanentError(), 0, nil
 	}
 	headerInput, bodyInput, bodyKnown, work, err := c.canonicalInputsWithin(state, remaining)
 	if err != nil {
@@ -251,7 +251,7 @@ func (c HistoryCoordinator) initialStateMatches(state recipe.State, current inst
 	if err != nil {
 		return false, true, work, historyError(ErrorCodeHistoryInternalContract)
 	}
-	return evaluation.pass(), true, work, nil
+	return evaluation.pass(), !evaluation.permanentError(), work, nil
 }
 
 // descentFailureForStop maps one sealed history stop onto the closed descent failure.

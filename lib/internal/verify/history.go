@@ -436,12 +436,9 @@ func (c HistoryCoordinator) validatePreviousWithin(state recipe.State, current, 
 	if current.Number() <= 1 || previous.Number()+1 != current.Number() {
 		return HistoryTransition{}, 0, historyError(ErrorCodeHistoryInstanceNotAdjacent)
 	}
-	if !HashCombinationEvaluable(previous) {
-		bodyState := HistoryDimensionUnsupported
-		if state.BodyState() == recipe.BodyAvailabilityUnavailable {
-			bodyState = HistoryDimensionUnavailable
-		}
-		return HistoryTransition{current.Number(), previous.Number(), HistoryRecipeModeApplied, HistoryDimensionUnsupported, bodyState, state, true}, 0, nil
+	if evaluation, ok := digestFreeHashEvaluation(previous); ok {
+		headerState, bodyState := evaluation.historyDimensions(state.BodyState() == recipe.BodyAvailabilityKnown)
+		return HistoryTransition{current.Number(), previous.Number(), HistoryRecipeModeApplied, headerState, bodyState, state, true}, 0, nil
 	}
 	headerInput, bodyInput, bodyKnown, work, err := c.canonicalInputsWithin(state, remaining)
 	if err != nil {
@@ -452,7 +449,9 @@ func (c HistoryCoordinator) validatePreviousWithin(state recipe.State, current, 
 	}
 	// Section 13: each lower Message-Instance h= is evaluated with the shared
 	// Section 14.7 algebra against the message recreated by the higher
-	// Recipes; below a null Recipe only header hashes can be checked.
+	// Recipes; below a null Recipe only header hashes can be checked. An
+	// unimplemented set is a PERMERROR intermediate, so a mismatching set in
+	// the same group still makes the combination FAIL.
 	evaluation, err := evaluateInstanceHashes(c.canonicalizer.Options().Limits, previous, headerInput, bodyInput, bodyKnown)
 	if err != nil {
 		return HistoryTransition{}, 0, historyError(ErrorCodeHistoryInternalContract)
@@ -674,8 +673,11 @@ func (c HistoryCoordinator) proveCurrentHistoryState(initial recipe.State, curre
 // currentStateMatches binds direct Walk input to the already passing
 // current h= combination.
 func (c HistoryCoordinator) currentStateMatches(state recipe.State, current instance.MessageInstance, maxCanonicalBytes int) (bool, int, error) {
-	if state.BodyState() != recipe.BodyAvailabilityKnown || !HashCombinationEvaluable(current) {
+	if state.BodyState() != recipe.BodyAvailabilityKnown {
 		return false, 0, nil
+	}
+	if evaluation, ok := digestFreeHashEvaluation(current); ok {
+		return evaluation.pass(), 0, nil
 	}
 	headerInput, bodyInput, bodyKnown, work, canonicalErr := c.canonicalInputsWithin(state, maxCanonicalBytes)
 	if canonicalErr != nil || !bodyKnown {

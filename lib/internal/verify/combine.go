@@ -67,6 +67,12 @@ type hashEvaluation struct {
 // pass reports whether the h= combination passed.
 func (e hashEvaluation) pass() bool { return e.outcome.Pass() }
 
+// permanentError reports whether the h= combination is PERMERROR, that is,
+// unsupported rather than matched or mismatched.
+func (e hashEvaluation) permanentError() bool {
+	return e.outcome.Result() == combine.ResultPermError
+}
+
 // historyDimensions projects the outcome onto the bounded per-dimension
 // history vocabulary: matched dimensions for PASS, unsupported dimensions
 // for PERMERROR, and the decisive set's mismatching dimensions for FAIL. An
@@ -175,28 +181,38 @@ func compareDigestMatch(current, expected []byte) (bool, ErrorCode) {
 	return status == CheckStatusPass, code
 }
 
-// HashCombinationEvaluable reports whether at least one hash-all group
-// consists only of implemented algorithms, that is, whether the Section 14.7
-// combination can reach PASS or FAIL rather than PERMERROR. Callers use it
-// as a cheap precondition before reconstructing state.
-func HashCombinationEvaluable(parsed instance.MessageInstance) bool {
-	sets := parsed.HashSets()
-	layout := parsed.HashLayout()
-	if !layout.Valid() || layout.Sets() != len(sets) {
-		return false
-	}
-	start := 0
-	for _, size := range layout.GroupSizes() {
-		complete := true
-		for _, set := range sets[start : start+size] {
-			if _, implemented := canonicalHashAlgorithm(set.Name()); !set.Known() || !implemented {
-				complete = false
-			}
-		}
-		if complete {
+// HashCombinationComputable reports whether at least one hash-set of the
+// parsed h= value uses an algorithm this verifier implements, so that the
+// Section 14.7 combination depends on a computed digest. When it is false
+// every intermediate is PERMERROR and the combination is PERMERROR without
+// reconstructing any state; callers use it as a cheap precondition and must
+// otherwise evaluate the full combination, where a FAIL intermediate wins
+// over PERMERROR.
+func HashCombinationComputable(parsed instance.MessageInstance) bool {
+	for _, set := range parsed.HashSets() {
+		if _, implemented := canonicalHashAlgorithm(set.Name()); set.Known() && implemented {
 			return true
 		}
-		start += size
 	}
 	return false
+}
+
+// digestFreeHashEvaluation returns the Section 14.7 evaluation of an h=
+// value without any implemented hash-set: every intermediate is PERMERROR and
+// the outcome is the combination of those intermediates. It reports false
+// when a digest is needed, or when the layout is incoherent, so the caller
+// falls through to evaluateInstanceHashes and its fail-closed mapping.
+func digestFreeHashEvaluation(parsed instance.MessageInstance) (hashEvaluation, bool) {
+	if HashCombinationComputable(parsed) {
+		return hashEvaluation{}, false
+	}
+	intermediates := make([]combine.Result, len(parsed.HashSets()))
+	for index := range intermediates {
+		intermediates[index] = combine.ResultPermError
+	}
+	outcome := combine.Hashes(parsed.HashLayout(), intermediates)
+	if !outcome.Valid() {
+		return hashEvaluation{}, false
+	}
+	return hashEvaluation{outcome: outcome}, true
 }

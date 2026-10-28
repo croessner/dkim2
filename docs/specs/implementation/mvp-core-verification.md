@@ -387,8 +387,8 @@ The binding mapping is:
 | Section 14.6 signature combination is FAIL | `FAIL` | A pass and a fail in one `,` group is `FAIL`. |
 | Only unknown signature algorithms | `PERMERROR` | Nothing checkable exists; never PASS. |
 | Supported pass plus unknown algorithm in one `,` group | `PERMERROR` | Draft-08 Section 14.6 step 4: the unknown set is a PERMERROR intermediate (`unsupported_algorithm`). Joined by `\|` the supported group can pass. |
-| Implemented hash plus unknown hash algorithm in one `,` group | `PERMERROR` | Draft-08 Section 14.7 step 2; `sha256\|x-new` passes through `sha256`. |
-| No hash group of implemented algorithms | `PERMERROR` | Nothing checkable covers the current message hashes. |
+| Matching implemented hash plus unknown hash algorithm in one `,` group | `PERMERROR` | Draft-08 Section 14.7 step 4; `sha256\|x-new` passes through `sha256`. A mismatching implemented hash in that group is `FAIL`, because FAIL wins over PERMERROR. |
+| No hash group of implemented algorithms and no mismatching implemented hash | `PERMERROR` | Nothing checkable covers the current message hashes. |
 | Missing, invalid, ambiguous, mismatched, or policy-rejected static key | `PERMERROR` | No DNS temporary semantics exist in M5. |
 | Temporary injected provider failure | `TEMPERROR` | Provider errors must be typed; arbitrary strings do not decide mapping. |
 | Missing/malformed DKIM2 field, tag, sequence, current instance, or request evidence | `PERMERROR` | Includes resource-limit failure. |

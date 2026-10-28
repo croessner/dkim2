@@ -401,7 +401,17 @@ The `Area` columns of Sections 3 and 4 refer to this list.
   against the message recreated by the higher Recipes; below a null Recipe
   only header hashes are compared), the run descent, the headers-only DSN
   check (C40, Section 16.4 item 3: a hash-set passes on its header hash), and
-  through the verifier the DSN evidence. The Draft-07 bucket rules
+  through the verifier the DSN evidence. No caller gates on a group of
+  implemented algorithms any more: the history walk, the run descent, the
+  initial-state proofs, and the received-DSN eligibility check compute the
+  implemented sets and give unknown sets a PERMERROR intermediate, so a
+  mismatching set beside an unknown one in a `hash-all` group is FAIL on
+  every path, as on the current target. The only precondition,
+  `HashCombinationComputable`, skips digests when no set is implemented, in
+  which case every intermediate and therefore the combination is PERMERROR.
+  The combined outcome maps FAIL to the history `mismatch` dimension and the
+  `hash_mismatch` stop (run descent and rebuild `hash_mismatch`), and
+  PERMERROR to `unsupported` and `unsupported_hash`. The Draft-07 bucket rules
   (`targetStatus` pass/fail/other counters, "every known hash must match,
   unknown skipped", `revisionSignatureOutcome` precedence) are removed.
 - An unknown algorithm is a PERMERROR intermediate without a key lookup. A

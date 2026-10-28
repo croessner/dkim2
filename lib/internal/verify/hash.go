@@ -40,7 +40,8 @@ func (hashCheckResults) Format(state fmt.State, _ rune) {
 // compareTargetHashes evaluates the target h= value with the shared Section
 // 14.7 algebra over the current header and body. A FAIL marks the
 // dimensions in which the decisive hash-set did not match; a PERMERROR (no
-// group of implemented algorithms) reports both dimensions unsupported.
+// group passes and no implemented set mismatches) reports both dimensions
+// unsupported.
 func compareTargetHashes(canonicalizer canonical.Canonicalizer, message rawmsg.Message, targetInstance instance.MessageInstance, target Target) (hashCheckResults, error) {
 	bodyInput, err := canonicalizer.BodyHashInputFromMessage(message)
 	if err != nil {

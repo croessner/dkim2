@@ -655,9 +655,11 @@ func propagatedIdentityAligned(signingDomain string, previousRecipient []byte) b
 }
 
 // historicalInstancesSupported reports whether every extracted Message-Instance
-// from the previous hop's instance upwards carries a supported hash tuple,
-// which the descent needs to re-prove each intermediate state: at least one
-// h= group of implemented algorithms (Draft-08 Section 14.7).
+// from the previous hop's instance upwards carries at least one hash-set of
+// an implemented algorithm. Without one, every Draft-08 Section 14.7
+// intermediate is PERMERROR, so the descent could never re-prove that state;
+// otherwise the descent evaluates the full combination, where a mismatching
+// set makes the result FAIL even beside an unimplemented one.
 func historicalInstancesSupported(instances []instance.MessageInstance, previousInstance uint64) bool {
 	if len(instances) == 0 || previousInstance == 0 {
 		return false
@@ -666,7 +668,7 @@ func historicalInstancesSupported(instances []instance.MessageInstance, previous
 		if parsed.Number() < previousInstance {
 			continue
 		}
-		if !verify.HashCombinationEvaluable(parsed) {
+		if !verify.HashCombinationComputable(parsed) {
 			return false
 		}
 	}
