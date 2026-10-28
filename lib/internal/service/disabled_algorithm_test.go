@@ -53,3 +53,49 @@ func assertUnsupportedAlgorithmSetFact(t *testing.T, mapped Result) {
 		t.Fatalf("NewGroupedSelectedProjection() error = %v", err)
 	}
 }
+
+// TestUnsupportedTargetHashSealsUnsupportedAlgorithmOverKeyErrors pins the
+// non-set source of PERMERROR unsupported_algorithm: an unsupported target
+// hash combination outranks a missing-key set, and the policy projection
+// admits that reason only because the target hash evidence travels with it.
+// The same facts without the hash evidence stay a set-derived missing_key.
+func TestUnsupportedTargetHashSealsUnsupportedAlgorithmOverKeyErrors(t *testing.T) {
+	target := verify.Target{Sequence: 1, InstanceNumber: 1}
+	missingCheck := verify.CheckResult{Kind: verify.CheckKindSignature, Status: verify.CheckStatusFail, Code: verify.ErrorCodeMissingKey, Algorithm: verify.AlgorithmRSASHA256, Target: target}
+	missing := verify.SignatureSetResult{Index: 0, Selector: failedSelector, Algorithm: verify.AlgorithmRSASHA256, Status: verify.SignatureSetStatusMissingKey, KeyStatus: verify.KeyStatusMissing}
+	unsupportedHashes := requiredChecksWithSignatures(target, missingCheck)
+	for index := range unsupportedHashes {
+		if unsupportedHashes[index].Kind == verify.CheckKindHeaderHash || unsupportedHashes[index].Kind == verify.CheckKindBodyHash {
+			unsupportedHashes[index].Status = verify.CheckStatusUnsupported
+			unsupportedHashes[index].HashStatus = verify.HashStatusUnsupported
+			unsupportedHashes[index].Code = verify.ErrorCodeUnsupportedAlgorithm
+		}
+	}
+	for _, test := range []struct {
+		name   string
+		checks []verify.CheckResult
+		reason Reason
+		hash   policy.TargetHash
+	}{
+		{"unsupported target hash", unsupportedHashes, ReasonUnsupportedAlgorithm, policy.TargetHashUnsupported},
+		{"checkable target hash", requiredChecksWithSignatures(target, missingCheck), ReasonMissingKey, policy.TargetHashCheckable},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			input := newVerifyResultWithDefaultCustody(target, verify.TargetStatusUnsupported, test.checks, []verify.SignatureSetResult{missing})
+			mapped := mapVerificationResult(input, DefaultLimits())
+			if mapped.State() != StatePERMERROR || mapped.PrimaryReason() != test.reason || selectedTargetHash(input) != test.hash {
+				t.Fatalf("mapped = %q/%q hash=%q", mapped.State(), mapped.PrimaryReason(), selectedTargetHash(input))
+			}
+			fact, err := policySignatureFact(mapped.SignatureSets()[0])
+			if err != nil {
+				t.Fatalf("policySignatureFact() error = %v", err)
+			}
+			reason, _ := policyVerificationReason(mapped.PrimaryReason())
+			layout, _ := combine.NewLayout(1)
+			projection, err := policy.NewGroupedSelectedTargetProjection(policy.ProtocolPERMERROR, reason, 1, nil, []policy.SignatureFact{fact}, layout, selectedTargetHash(input), policy.DefaultLimits())
+			if err != nil || !projection.Valid() {
+				t.Fatalf("NewGroupedSelectedTargetProjection() error = %v", err)
+			}
+		})
+	}
+}

@@ -37,7 +37,22 @@ func buildSelectedPolicyProjection(state State, reason Reason, target Target, in
 		}
 		hops = []policy.HopFact{hop}
 	}
-	return policy.NewGroupedSelectedProjection(protocol, verificationReason, target.Sequence, hops, signatures, input.SignatureLayout(), policy.DefaultLimits())
+	return policy.NewGroupedSelectedTargetProjection(protocol, verificationReason, target.Sequence, hops, signatures, input.SignatureLayout(), selectedTargetHash(input), policy.DefaultLimits())
+}
+
+// selectedTargetHash reports the Draft-08 Section 14.7 class of the selected
+// target's hash combination: unsupported when a current header or body hash
+// check is the PERMERROR unsupported_algorithm outcome, the only non-set
+// source of that aggregate reason, and checkable otherwise.
+func selectedTargetHash(input verify.Result) policy.TargetHash {
+	for _, check := range input.Checks() {
+		if (check.Kind == verify.CheckKindHeaderHash || check.Kind == verify.CheckKindBodyHash) &&
+			check.HashStatus == verify.HashStatusUnsupported && check.Status == verify.CheckStatusUnsupported &&
+			check.Code == verify.ErrorCodeUnsupportedAlgorithm {
+			return policy.TargetHashUnsupported
+		}
+	}
+	return policy.TargetHashCheckable
 }
 
 // policyVerificationReason maps the authoritative aggregate service reason.

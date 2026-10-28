@@ -329,7 +329,7 @@ func TestPermanentProjectionRequiresACompatibleOutcomeDriver(t *testing.T) {
 	fail := mustProjectionSignatureFact(t, SetAlgorithmRSA, SetStatusFail, SetReasonSignatureMismatch)
 	missing := mustProjectionSignatureFact(t, SetAlgorithmRSA, SetStatusPermerror, SetReasonMissingKey)
 	provider := mustProjectionSignatureFact(t, SetAlgorithmRSA, SetStatusPermerror, SetReasonProviderPermanent)
-	ignored := mustProjectionSignatureFact(t, SetAlgorithmUnknown, SetStatusPermerror, SetReasonUnsupportedAlgorithm)
+	unknown := mustProjectionSignatureFact(t, SetAlgorithmUnknown, SetStatusPermerror, SetReasonUnsupportedAlgorithm)
 	invalid := []struct {
 		name   string
 		reason VerificationReason
@@ -347,7 +347,7 @@ func TestPermanentProjectionRequiresACompatibleOutcomeDriver(t *testing.T) {
 		{"out of band over missing", VerificationReasonOutOfBandRequired, []SignatureFact{missing}},
 		// Draft-08 Section 14.6 step 4: an unknown algorithm in the group is a
 		// PERMERROR whose unsupported_algorithm reason outranks timestamp_invalid.
-		{"timestamp over unknown in group", VerificationReasonTimestampInvalid, []SignatureFact{pass, ignored}},
+		{"timestamp over unknown in group", VerificationReasonTimestampInvalid, []SignatureFact{pass, unknown}},
 		{"pre-target malformed message", VerificationReasonMalformedMessage, []SignatureFact{pass}},
 		{"pre-target malformed protocol", VerificationReasonMalformedProtocol, []SignatureFact{pass}},
 		{"pre-target missing protocol", VerificationReasonMissingProtocol, []SignatureFact{pass}},
@@ -366,11 +366,12 @@ func TestPermanentProjectionRequiresACompatibleOutcomeDriver(t *testing.T) {
 		facts  []SignatureFact
 	}{
 		{VerificationReasonMissingKey, []SignatureFact{pass, missing}},
-		{VerificationReasonMissingKey, []SignatureFact{pass, missing, ignored}},
+		{VerificationReasonMissingKey, []SignatureFact{pass, missing, unknown}},
 		{VerificationReasonProviderPermanent, []SignatureFact{provider}},
-		{VerificationReasonUnsupportedAlgorithm, []SignatureFact{ignored}},
-		{VerificationReasonUnsupportedAlgorithm, []SignatureFact{pass}},
-		{VerificationReasonUnsupportedAlgorithm, []SignatureFact{pass, missing}},
+		{VerificationReasonUnsupportedAlgorithm, []SignatureFact{unknown}},
+		// unsupported_algorithm over {pass} or {pass, missing} needs the
+		// unsupported target hash evidence; see
+		// TestUnsupportedAlgorithmReasonRequiresItsSource.
 		{VerificationReasonLimitExceeded, []SignatureFact{pass}},
 	}
 	for _, test := range valid {
@@ -565,5 +566,51 @@ func TestGroupedProjectionRecomputesSection14_6(t *testing.T) {
 	}
 	if _, err := NewGroupedSelectedProjection(ProtocolPASS, VerificationReasonNone, 1, []HopFact{hop}, []SignatureFact{pass}, alternative, DefaultLimits()); !IsErrorCode(err, ErrorInternalContract) {
 		t.Fatalf("layout not describing the facts error = %v, want internal contract", err)
+	}
+}
+
+// TestUnsupportedAlgorithmReasonRequiresItsSource proves an aggregate
+// PERMERROR unsupported_algorithm needs one of its two real sources: a
+// decisive set carrying that reason (an unknown or locally disabled
+// algorithm, Draft-08 Section 14.6 step 4), or a selected target whose
+// Section 14.7 hash combination is PERMERROR. Without the hash evidence the
+// reason is set-derived and must equal the decisive set's reason in both
+// directions.
+func TestUnsupportedAlgorithmReasonRequiresItsSource(t *testing.T) {
+	pass := mustProjectionSignatureFact(t, SetAlgorithmRSA, SetStatusPass, SetReasonNone)
+	missing := mustProjectionSignatureFact(t, SetAlgorithmRSA, SetStatusPermerror, SetReasonMissingKey)
+	temporary := mustProjectionSignatureFact(t, SetAlgorithmRSA, SetStatusTemperror, SetReasonProviderTemporary)
+	unknown := mustProjectionSignatureFact(t, SetAlgorithmUnknown, SetStatusPermerror, SetReasonUnsupportedAlgorithm)
+	disabled := mustProjectionSignatureFact(t, SetAlgorithmEd25519, SetStatusPermerror, SetReasonUnsupportedAlgorithm)
+	tests := []struct {
+		name   string
+		reason VerificationReason
+		facts  []SignatureFact
+		hash   TargetHash
+		valid  bool
+	}{
+		{"unsupported over missing key without hash evidence", VerificationReasonUnsupportedAlgorithm, []SignatureFact{missing}, TargetHashCheckable, false},
+		{"unsupported over pass without hash evidence", VerificationReasonUnsupportedAlgorithm, []SignatureFact{pass}, TargetHashCheckable, false},
+		{"unsupported over temperror without hash evidence", VerificationReasonUnsupportedAlgorithm, []SignatureFact{temporary}, TargetHashCheckable, false},
+		{"missing key over unknown decisive set", VerificationReasonMissingKey, []SignatureFact{unknown}, TargetHashCheckable, false},
+		{"unknown decisive set", VerificationReasonUnsupportedAlgorithm, []SignatureFact{unknown}, TargetHashCheckable, true},
+		{"disabled decisive set", VerificationReasonUnsupportedAlgorithm, []SignatureFact{disabled}, TargetHashCheckable, true},
+		{"unsupported hash over missing key", VerificationReasonUnsupportedAlgorithm, []SignatureFact{missing}, TargetHashUnsupported, true},
+		{"unsupported hash over pass", VerificationReasonUnsupportedAlgorithm, []SignatureFact{pass}, TargetHashUnsupported, true},
+		{"unsupported hash over temperror", VerificationReasonUnsupportedAlgorithm, []SignatureFact{temporary}, TargetHashUnsupported, true},
+		{"unsupported hash with higher-precedence limit", VerificationReasonLimitExceeded, []SignatureFact{pass}, TargetHashUnsupported, true},
+		{"unsupported hash hidden behind missing key", VerificationReasonMissingKey, []SignatureFact{missing}, TargetHashUnsupported, false},
+		{"unsupported hash hidden behind signature mismatch", VerificationReasonSignatureMismatch, []SignatureFact{pass}, TargetHashUnsupported, false},
+		{"unknown target hash state", VerificationReasonUnsupportedAlgorithm, []SignatureFact{unknown}, TargetHash("future"), false},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			protocol, _ := ProtocolForVerificationReason(test.reason)
+			layout, _ := combine.SingleGroup(len(test.facts))
+			projection, err := NewGroupedSelectedTargetProjection(protocol, test.reason, 1, nil, test.facts, layout, test.hash, DefaultLimits())
+			if (err == nil && projection.Valid()) != test.valid {
+				t.Fatalf("projection valid=%t error=%v, want valid=%t", projection.Valid(), err, test.valid)
+			}
+		})
 	}
 }

@@ -318,6 +318,9 @@ type Projection struct {
 	chainFailure       bool
 	receivedDSN        ReceivedDSNFacts
 	hasReceivedDSN     bool
+	// hashUnsupported records a PERMERROR Section 14.7 target hash
+	// combination, sealed only through NewGroupedSelectedTargetProjection.
+	hashUnsupported bool
 }
 
 // NewSelectedProjection seals a selected target with aggregate reason
@@ -330,9 +333,36 @@ func NewSelectedProjection(protocol ProtocolClass, reason VerificationReason, ta
 
 // NewGroupedSelectedProjection seals a selected target whose signature facts
 // are in field order under the parsed Draft-08 sig-any/sig-all layout. The
-// layout lets validation recompute the Section 14.6 combination exactly.
+// layout lets validation recompute the Section 14.6 combination exactly. The
+// target hash combination is recorded as checkable, so an
+// unsupported_algorithm reason must come from the decisive set.
 func NewGroupedSelectedProjection(protocol ProtocolClass, reason VerificationReason, target uint64, hops []HopFact, signatures []SignatureFact, layout combine.Layout, limits Limits) (Projection, error) {
-	projection := Projection{form: TargetSelected, protocol: protocol, verificationReason: reason, targetSequence: target, history: HistoryNotEvaluated, hops: slices.Clone(hops), signatureFacts: slices.Clone(signatures), signatureLayout: layout}
+	return NewGroupedSelectedTargetProjection(protocol, reason, target, hops, signatures, layout, TargetHashCheckable, limits)
+}
+
+// TargetHash is the sealed class of the selected target's Draft-08 Section
+// 14.7 hash combination as far as the aggregate reason depends on it.
+type TargetHash string
+
+const (
+	// TargetHashCheckable reports a hash combination that is PASS or FAIL.
+	TargetHashCheckable TargetHash = "checkable"
+	// TargetHashUnsupported reports a PERMERROR hash combination: no
+	// hash-all group of implemented algorithms decided it.
+	TargetHashUnsupported TargetHash = "unsupported"
+)
+
+// Known reports whether h belongs to the closed vocabulary.
+func (h TargetHash) Known() bool { return h == TargetHashCheckable || h == TargetHashUnsupported }
+
+// NewGroupedSelectedTargetProjection seals a selected target like
+// NewGroupedSelectedProjection and additionally records the target hash
+// class, the only non-set source of a PERMERROR unsupported_algorithm.
+func NewGroupedSelectedTargetProjection(protocol ProtocolClass, reason VerificationReason, target uint64, hops []HopFact, signatures []SignatureFact, layout combine.Layout, hash TargetHash, limits Limits) (Projection, error) {
+	if !hash.Known() {
+		return Projection{}, newError(ErrorInternalContract)
+	}
+	projection := Projection{form: TargetSelected, protocol: protocol, verificationReason: reason, targetSequence: target, history: HistoryNotEvaluated, hops: slices.Clone(hops), signatureFacts: slices.Clone(signatures), signatureLayout: layout, hashUnsupported: hash == TargetHashUnsupported}
 	if err := projection.validate(limits); err != nil {
 		return Projection{}, err
 	}
@@ -499,10 +529,22 @@ func (p Projection) validateCurrent() error {
 	if len(p.hops) == 1 && (p.hops[0].sequence != p.targetSequence || !p.hops[0].Valid() || p.hops[0].transition != currentTransition(p.targetSequence)) {
 		return newError(ErrorInternalContract)
 	}
-	if !p.verificationReasonFactsCoherent() {
+	if !p.verificationReasonFactsCoherent() || !p.targetHashCoherent() {
 		return newError(ErrorInternalContract)
 	}
 	return nil
+}
+
+// targetHashCoherent binds an unsupported target hash combination to its
+// aggregate outcome: the service ranks the PERMERROR unsupported_algorithm of
+// the hash ahead of every set-derived reason, so only PERMERROR with
+// unsupported_algorithm or a higher-precedence permanent reason may carry it.
+func (p Projection) targetHashCoherent() bool {
+	if !p.hashUnsupported {
+		return true
+	}
+	return p.protocol == ProtocolPERMERROR &&
+		permanentProjectionReasonRank(p.verificationReason) <= permanentProjectionReasonRank(VerificationReasonUnsupportedAlgorithm)
 }
 
 // validateRevisionFailure distinguishes passing current-set evidence from
@@ -587,7 +629,7 @@ func (p Projection) eligiblePermanentPrimaryCoherent(outcome combine.Outcome) bo
 		p.verificationReason == VerificationReasonMissingProtocol || p.verificationReason == VerificationReasonSequenceInvalid {
 		return false
 	}
-	setDerived := permanentSetReasonRank(p.verificationReason) >= 0
+	setDerived := p.permanentReasonSetDerived()
 	if outcome.Result() != combine.ResultPermError {
 		return !setDerived
 	}
@@ -596,6 +638,17 @@ func (p Projection) eligiblePermanentPrimaryCoherent(outcome combine.Outcome) bo
 		return decisive == p.verificationReason
 	}
 	return permanentProjectionReasonRank(p.verificationReason) <= permanentProjectionReasonRank(decisive)
+}
+
+// permanentReasonSetDerived reports whether the aggregate permanent reason
+// can only come from a decisive signature set. Key and provider reasons
+// always do; unsupported_algorithm does unless the target hash combination
+// is PERMERROR, its only non-set source on a selected target.
+func (p Projection) permanentReasonSetDerived() bool {
+	if p.verificationReason == VerificationReasonUnsupportedAlgorithm {
+		return !p.hashUnsupported
+	}
+	return permanentSetReasonRank(p.verificationReason) >= 0
 }
 
 // permanentProjectionReasonRank mirrors authoritative permanent service precedence.

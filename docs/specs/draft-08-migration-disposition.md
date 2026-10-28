@@ -450,7 +450,15 @@ The `Area` columns of Sections 3 and 4 refer to this list.
   by the policy fact coherence rule, so such results carried no policy
   projection; the rule now admits `unsupported_algorithm` for every
   algorithm and restricts `unknown` to `unsupported_algorithm` or
-  `internal_contract`.
+  `internal_contract`. An aggregate PERMERROR `unsupported_algorithm` is
+  sealed only with one of its two sources: the decisive set carries that
+  reason (an unknown or disabled algorithm), or the selected target's
+  Section 14.7 hash combination is PERMERROR, recorded through
+  `policy.NewGroupedSelectedTargetProjection` with `TargetHashUnsupported`.
+  The service ranks the hash reason ahead of every set-derived key or
+  provider reason, so that evidence also forbids a lower-ranked aggregate
+  reason or a non-PERMERROR state. Without it the reason is set-derived and
+  must equal the decisive set's reason.
   `verify.Result.SignatureLayout`, `policy.NewGroupedSelectedProjection`,
   and the sealed policy projection carry the layout, and policy validation
   recomputes the combination instead of the Draft-07 "PASS has no failing
