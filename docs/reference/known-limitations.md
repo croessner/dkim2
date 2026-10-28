@@ -136,10 +136,19 @@ certification, or universal interoperability claim.
 - Product images are Linux `amd64` and `arm64`; release preparation does not
   publish them or create `latest`, stable, minor, or major aliases.
 - The Draft-08 replay identifier is draft-bound inside the replay HMAC frame.
-  An in-place upgrade keeps the epoch and secret, but Draft-06 records are not
-  consulted: a message first seen under Draft-06 that still verifies under
+  An in-place upgrade keeps the epoch and secret, but Draft-07 records are not
+  consulted: a message first seen under Draft-07 that still verifies under
   Draft-08 can be accepted once more, bounded by the configured retention
-  period.
+  period. Replay state is not backward compatible after a rollback either
+  (see the [Draft-08 operator migration](../operator/draft-08-migration.md)).
+- A history containing a null body Recipe (`"b":null`) is FAIL
+  `body_history_unavailable`: such a message is never a Fully Verified DKIM2
+  Message, strict policy rejects it, and transit or revision signing refuses
+  it. There is no acceptance knob.
+- The Authentication-Results comment keeps its closed `(reason=<code>)`
+  vocabulary and never carries the selectors that Draft-08 Section 14.6 step
+  8 suggests for error text; the per-set selectors are available in the REST
+  `SignatureSetResult.selector` and the library `SignatureSetFact`.
 
 Stable IDs and resolution criteria for draft and interpretation limits are in
 [the issue log](draft-issues.md).

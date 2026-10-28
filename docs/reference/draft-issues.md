@@ -16,7 +16,7 @@ is independently observed.
 - `DKIM2-ISSUE-0002` and `DKIM2-ISSUE-0005` covered the Draft-06 `TBA`
   areas for full-chain policy guidance and Security Considerations. Both are
   superseded by the Draft-08 baseline: Section 13 assigns acceptance of a
-  Validly Signed message to local policy, which the policy engine owns, and
+  Fully Verified DKIM2 Message to local policy, which the policy engine owns, and
   Section 20 publishes the security considerations (unsigned header fields,
   resource limits, null Recipes, RSA key size), which the bounded recipe and
   verifier limits already enforce.
@@ -82,7 +82,9 @@ is independently observed.
   `ed25519-sha512`, and the composite as signing algorithms, while Draft-08
   defines only `rsa-sha256`, `ed25519-sha256`, and `mldsa44`. Draft-08 is
   authoritative for `s=` sig-names; the DNS-02-only names are unknown
-  algorithms (a PERMERROR intermediate, no key lookup).
+  algorithms (a PERMERROR intermediate, no key lookup). They never verify, so
+  the REST verifier projection (`VerifierHop.signature_algorithms`) never
+  lists them, and its closed vocabulary is exactly the three Draft-08 names.
 - `DKIM2-ISSUE-0022` records that DNS-02 names the composite key type
   `mldsa44-ed25519` in its Section 3.3 table but `mldsa44-ed25519-sha512` in
   the Section 3.4.1 ABNF. Both spellings are unsupported key types.

@@ -274,7 +274,7 @@ func hasSignatureSet(result Result, algorithm Algorithm, status SignatureSetStat
 
 // TestVerifierRejectsExplodedOnFirstSignature reproduces Draft-08 Section
 // 12.5: exploded MUST NOT be set on i=1, and Sections 2.11 and 13 make that
-// Signer requirement part of a Validly Signed message. A later signature may
+// Signer requirement part of a Fully Verified DKIM2 Message. A later signature may
 // carry exploded, and the uppercase spelling is an inert unknown flag.
 func TestVerifierRejectsExplodedOnFirstSignature(t *testing.T) {
 	fixture := newRSAVerificationFixture(t)

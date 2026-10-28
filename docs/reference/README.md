@@ -11,6 +11,9 @@ limitations without creating a second protocol model.
   configuration, and module compatibility window.
 - [Known limitations](known-limitations.md) states incomplete or unavailable
   capabilities without converting them into passing evidence.
+- [Draft-08 migration](../operator/draft-08-migration.md) lists the
+  configuration, REST, signal, mail-flow, replay, and rollback changes of the
+  Draft-07 to Draft-08 upgrade.
 - [Preview release candidate](release-candidate.md) freezes the intended
   version, seven-tag plan, non-publication boundary, and capability status.
 - [Conformance](../conformance.md) defines claim classes and exact report

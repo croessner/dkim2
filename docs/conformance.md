@@ -2,9 +2,9 @@
 
 This repository tests the behavior baseline
 `draft-ietf-dkim-dkim2-spec-08` and the DNS baseline
-`draft-ietf-dkim-dkim2-dns-02`; the migration from Draft-07 and DNS-01 is in
-progress (`docs/specs/draft-08-migration-disposition.md`), and until its work
-packages are complete the tested protocol behavior is the Draft-07 behavior.
+`draft-ietf-dkim-dkim2-dns-02`; the migration from Draft-07 and DNS-01 is
+complete (`docs/specs/draft-08-migration-disposition.md`), and the tested
+protocol behavior is the Draft-08 behavior.
 Results are evidence for one exact Git base and candidate-snapshot digest;
 historical reports do not establish the state of a different checkout.
 

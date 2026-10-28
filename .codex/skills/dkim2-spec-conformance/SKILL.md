@@ -43,9 +43,15 @@ Prefer draft-versioned golden vectors and negative vectors. Tests must prove:
 - Current-envelope matching for the highest DKIM2 signature.
 - Message-Instance hash behavior.
 - SHA-256 and SHA-512 Message-Instance verification, including duplicate-name
-  rejection and all-supported-hash agreement.
-- Draft-08 unsigned-header, lowercase Recipe-key, signature-cardinality, and
-  unchanged Message-Instance transition behavior.
+  rejection and the Draft-08 Section 14.7 `hash-all` (`,`) and `hash-any`
+  (`|`) group evaluation.
+- Draft-08 Section 14.6 `sig-all` and `sig-any` signature-group evaluation,
+  distinct selectors, and the `rsa-sha256`, `ed25519-sha256`, and `mldsa44`
+  algorithms; an unimplemented algorithm is a PERMERROR intermediate.
+- Draft-08 unsigned-header, lowercase Recipe-key, and unchanged
+  Message-Instance transition behavior.
+- Draft-08 Section 14.1 states: PASS means a Fully Verified DKIM2 Message,
+  FAIL means verification completed and the message is not Fully Verified.
 - Recipe parse, apply, generate, null-recipe, and resource-limit behavior.
 - DNS key-record state distinctions.
 - Structured error states rather than raw string matching.

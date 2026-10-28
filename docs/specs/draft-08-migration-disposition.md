@@ -1,6 +1,6 @@
 # DKIM2 Draft-08 Migration Disposition
 
-Status: implementation authority, migration in progress
+Status: implementation authority, migration complete (see Section 16)
 
 Message specification: `draft-ietf-dkim-dkim2-spec-08`, 27 October 2026
 
@@ -12,7 +12,7 @@ Previous baseline: `draft-ietf-dkim-dkim2-spec-07` plus
 ## 1. Authority and method
 
 This document is the tracked authority for the migration from Draft-07/DNS-01
-to Draft-08/DNS-02. It records every behavior change, the owning work package,
+to Draft-08/DNS-02. It records every behavior change, the owning change area,
 and every local interpretation. Historical audit records, reports, and earlier
 migration dispositions keep their original identifiers.
 
@@ -33,9 +33,9 @@ Requirement strength is marked MUST/SHOULD/MAY (draft), descriptive (draft
 prose), editorial (no behavior), or local (product policy that is stricter
 than the draft).
 
-The repository advertises the Draft-08 identifiers from the first work package
-on. No release or conformance claim is made until every work package below is
-complete.
+The repository advertised the Draft-08 identifiers from the first change area
+on and made no release or conformance claim until every change area below was
+complete. Section 16 records the final state.
 
 ## 2. Section renumbering
 
@@ -61,7 +61,7 @@ by number.
 
 ## 3. DNS-01 to DNS-02
 
-| # | Section | Change | Disposition | Package |
+| # | Section | Change | Disposition | Area |
 | --- | --- | --- | --- | --- |
 | N1 | 2.9 | `LWSP` token removed | The parser uses FWS/WSP only; regression test | 2 |
 | N2 | 3.3 | Lists five algorithms: `rsa-sha256`, `rsa-sha512`, `ed25519-sha256`, `ed25519-sha512`, `mldsa44-ed25519-sha512` (composite); RSA MUST, others SHOULD during bring-up and MUST later; `rsa-sha1` MUST NOT validate | Inconsistent with spec-08, which defines only `rsa-sha256`, `ed25519-sha256`, and `mldsa44` and dropped the composite. Spec-08 is authoritative for `s=` sig-names: `rsa-sha512`, `ed25519-sha512`, and the composite are unknown algorithms (PERMERROR intermediate). New draft issue | 6 |
@@ -71,7 +71,7 @@ by number.
 
 ## 4. Draft-07 to Draft-08
 
-| # | Section | Change | Strength | Disposition | Package |
+| # | Section | Change | Strength | Disposition | Area |
 | --- | --- | --- | --- | --- | --- |
 | C1 | 3, 3.4 | Composite `mldsa44-ed25519-sha512` replaced by pure ML-DSA-44 `mldsa44` (FIPS 204 ML-DSA.Sign/Verify, no HashML-DSA, input is the full Section 12.8 byte string, context `DKIM2`, 3228-character base64 signature); Signers SHOULD use hedged signing; Verifiers MUST implement all algorithms | MUST (verify), MAY (sign) | D1 | 6 |
 | C2 | 3.2 | RSA: Signers SHOULD use at least 2048 bits; Verifiers MUST validate 1024 to 4096, MAY larger, MUST NOT below 1024 | MUST/SHOULD | Verification bounds 1024 to 8192 already comply; signing floor D10 | 6 |
@@ -116,7 +116,7 @@ by number.
 | C41 | 16.4 | Returned message without DKIM2 fields: the specification does not apply | descriptive | Already `EmbeddedAbsent`, not propagated | — |
 | C42 | 19 | IANA header registrations | IANA | Documentation | 9 |
 | C43 | 20 | Auto-Submitted example removed from Security Considerations | editorial | Documentation | 9 |
-| C44 | 1.1, 21 | DKIM2BCP, DKIMKEYS (DNS-02), RFC 8301 and 3864 references | editorial | Identifiers in package 1, documentation in package 9 | 1, 9 |
+| C44 | 1.1, 21 | DKIM2BCP, DKIMKEYS (DNS-02), RFC 8301 and 3864 references | editorial | Identifiers in area 1, documentation in area 9 | 1, 9 |
 | C45 | 2.11 | "Validly Signed DKIM2 Message" renamed "Fully Verified DKIM2 Message" | terminology | Documentation and comments | 9 |
 | C46 | 2.13 | Imported tokens reduced to RFC 5321 `Domain` | editorial | — | — |
 | C47 | 10.6 | Bcc rule broadened from an address in a `Bcc:` header field to any blind carbon copy address, envelope-only bcc included | MUST | The signer takes `rt=` from the adapter; adapter and operator responsibility. The existing stricter Bcc isolation is kept | 9 |
@@ -142,7 +142,7 @@ errors (PERMERROR `malformed_protocol`). Duplicate hash names and selectors are
 checked across all groups. The per-algorithm cap of two and the
 `too_many_signatures` reason are removed everywhere; the local DoS bounds
 `max_signature_sets` and `max_hash_sets` of 16 stay (`limit_exceeded`). Until
-package 4 enables the algebra, package 3 parsers are group-aware but fail
+the evaluation algebra is enabled, the group-aware parsers fail
 closed with PERMERROR `malformed_protocol` on more than one group.
 
 **D3 Signer layout.** The signer uses a fixed layout without configuration:
@@ -202,7 +202,7 @@ therefore refuse such messages (Section 12). The library generator option
 warning. There is no acceptance knob in this migration; the operator
 documentation and rollout preflight state the consequence.
 
-**D8 DSN identity.** Package 7 implements the Section 16.2 identity resolver:
+**D8 DSN identity.** The DSN identity change implements the Section 16.2 identity resolver:
 candidate signing domains are the local `delivery_status` profile domains
 that relaxed-match an `rt=` address of the highest DS of the embedded reported
 message (Parameter1 is the `rt=` address, Parameter2 the `d=`), RFC
@@ -237,7 +237,7 @@ floor fail at load.
 and external consumers move together. The replay identity space restarts,
 because the draft identifier is bound into the replay frame.
 
-## 6. Work packages
+## 6. Change areas
 
 1. Baseline identifiers, generated contracts, versioned fixtures, draft-bound
    goldens, section citations, and this document (no behavior change).
@@ -252,7 +252,9 @@ because the draft identifier is bound into the replay frame.
 9. Documentation and qualification (C5, C10, C19, C36, C42 to C45, C47),
    operator migration guide, draft issues, and final review.
 
-## 7. Package 1 state
+The `Area` columns of Sections 3 and 4 refer to this list.
+
+## 7. Baseline identifiers state
 
 - Draft identifiers now name Draft-08 and DNS-02: the six library constants
   (`dkim2.DraftIdentifier`, `canonical.DraftBaseline`, `verify.DraftBaseline`,
@@ -267,7 +269,7 @@ because the draft identifier is bound into the replay frame.
   references use `DraftIetfDkimDkim2Spec08`.
 - Versioned vector and fixture directories and files were renamed in place.
   Before the rename, the Draft-07 and DNS-01 versions of every corpus whose
-  meaning a later package changes (canonical and recipe goldens, signing,
+  meaning a later change area changes (canonical and recipe goldens, signing,
   public, custody, received-DSN, and DSN propagation vectors, and the DNS
   golden) were copied to `lib/testdata/vectors/history/draft-ietf-dkim-dkim2-spec-07/`
   and `lib/testdata/vectors/history/draft-ietf-dkim-dkim2-dns-01/`, so earlier
@@ -285,11 +287,11 @@ because the draft identifier is bound into the replay frame.
   statement that Draft-07 removed the `donotmodify` and `donotexplode` flags
   or that DNS-01 retired the DNS `t=` tag, including the operator-facing
   configuration migration error.
-- Protocol behavior is still the Draft-07 behavior until the following
-  packages land. Interoperability and Exim qualification remain
+- Protocol behavior stayed the Draft-07 behavior until the following change
+  areas landed. Interoperability and Exim qualification remain
   `unqualified_draft08`.
 
-## 8. Package 2 state
+## 8. Unsigned header list state
 
 - C4: `Auto-Submitted` and `VBR-Info` are signed. The exact unsigned set in
   `exactUnsignedHeaderName` (`lib/internal/canonical/header.go`) now holds
@@ -335,7 +337,7 @@ because the draft identifier is bound into the replay frame.
 - Qualification and `dkim2ctl` fixtures compute hashes at run time through
   the library and carry no frozen digests over these fields.
 
-## 9. Package 3 state
+## 9. Combinator syntax state
 
 - C13, C15: the `h=` and `s=` parsers follow the exact Draft-08 Section 9.3
   and 10.9 ABNF. `lib/internal/combine` owns the group structure (`Layout`:
@@ -367,17 +369,17 @@ because the draft identifier is bound into the replay frame.
 - D3: the signer layout is derived from the canonically ordered credentials
   before any signature value is computed. Classical algorithms
   (`rsa-sha256`, `ed25519-sha256`) form the first `sig-all` group; any other
-  algorithm (the `mldsa44` credential of package 6) starts a separate `|`
+  algorithm (the `mldsa44` credential, Section 13) starts a separate `|`
   group. With today's two algorithms the output stays one `,` group, and the
   Message-Instance `h=` emission stays one `sha256` set.
-- Until package 4 enabled the Section 14.6/14.7 algebra, a value with more
-  than one group failed closed (PERMERROR `malformed_protocol`); package 4
-  lifted that rule.
+- Until the Section 14.6/14.7 algebra was enabled, a value with more than
+  one group failed closed (PERMERROR `malformed_protocol`); the evaluation
+  algebra (Section 10) lifted that rule.
 - Fuzz targets: `FuzzSplit` (exact rejoin and layout invariants) and the
   existing parser fuzzers with group seeds and layout and unsigned-rendering
   invariants.
 
-## 10. Package 4 state
+## 10. Evaluation algebra state
 
 - C3, C33, C34: `lib/internal/combine` owns the Section 14.6 steps 5 to 7
   and Section 14.7 steps 3 to 5 algebra (`combine.Signatures`,
@@ -430,7 +432,7 @@ because the draft identifier is bound into the replay frame.
   `provider_rejected` as before, and the policy revision-failure projection
   admits them. Sealed revision facts gain `alternative_not_passed` (with the
   key-lookup marker); lookups are counted for policy-enabled sets.
-- Package 3's fail-closed rule for more than one group is lifted; the
+- The combinator syntax's fail-closed rule for more than one group is lifted; the
   parsers accept `|` groups.
 - Section 14.6 step 8 (selectors in error text): superseded by Section 12;
   every non-passing per-set fact now carries its selector.
@@ -633,6 +635,11 @@ because the draft identifier is bound into the replay frame.
   `docs/reference/compatibility.md`. OpenAPI `SignatureSetResult.algorithm`
   and `VerifierHop.signature_algorithms` gain `mldsa44`; every generated
   artifact and the Rspamd vocabulary were regenerated or updated.
+  `VerifierHop.signature_algorithms` also drops the never-produced
+  `rsa-sha512` and `ed25519-sha512` (a hop lists only verified Draft-08
+  Section 3 algorithms; DNS-02 listing them is `DKIM2-ISSUE-0021`) and
+  bounds the array at three items in OpenAPI, the daemon, dkim2ctl, and
+  the Rspamd adapter.
 - Custody: `cmd/dkim2d/internal/signingstore` loads the seed-only PKCS#8 form
   (exact `crypto/x509` re-marshal, ML-DSA-44 parameter set, nonzero seed),
   derives the SPKI and matches it against the stored credential, generates
@@ -652,8 +659,11 @@ because the draft identifier is bound into the replay frame.
   2048) and 98304 (production, previously 65536); the previous values could
   not load a fully populated three-credential installation. Record ceilings
   `1024*3 + 1024 + 3072 + 4096 = 11264` and
-  `32768*3 + 32768 + 98304 + 65536 = 294912`, both within the hard limits
-  (262144 handles, 1048576 records). A reproducer loads `MaxProfiles`
+  `32768*3 + 32768 + 98304 + 65536 = 294912`, both within the hard limits.
+  The hard limits follow the same derivation: `131072*3 = 393216` handles
+  (previously 262144, which could not hold three credentials for every hard
+  profile) and `131072*3 + 131072 + 393216 + 262144 = 1179648` records
+  (previously 1048576). A reproducer loads `MaxProfiles`
   three-algorithm profiles with distinct handles and `MaxPolicies` policies
   under both profiles.
   Memory, flat-file, LDAP, and the shared SQL snapshot mapper (PostgreSQL,
@@ -936,3 +946,86 @@ because the draft identifier is bound into the replay frame.
   `DKIM2_WRITE_DSN_PROPAGATION_VECTORS=1`, and the corpus test now verifies
   every frozen report PASS under the published keys and checks its leading
   trace block. Inputs and the frozen history copies are unchanged.
+
+## 16. Final state
+
+Every change area of Section 6 is implemented; the repository behavior is
+Draft-08 plus DNS-02. The operator upgrade, rollback, and the consumers that
+move together are in `docs/operator/draft-08-migration.md`; the library API
+delta and the reviewed API base are in `docs/reference/compatibility.md`.
+
+Closeout corrections found by running every gate against the finished
+migration:
+
+- Postfix propagation lane (`propagation_not_local`): the harness's foreign
+  notification reported a message addressed to the local final recipient,
+  so the foreign delivery-status `d=` could not relaxed-match its `rt=` and
+  the daemon correctly left it unsigned under Section 16.2. The fixture was
+  wrong, not the product: the foreign message is now addressed under the
+  foreign delivery-status profile domain, a unit test pins that topology,
+  and the lane classifies the completion signature as `not_local` again.
+- Conformance runner freeze: the portable evidence count is 100, because
+  the two `mldsa44` manifest cases have real producers. The tools module
+  tests were outside every gate; `make test-tools` now runs them in
+  `make guardrails`.
+- Rspamd Policy E2E fixtures: the verifier projection binding covers the
+  draft identifier, so the Draft-07 bindings were stale. They were
+  regenerated with the producer's binding functions for all three
+  binding-bearing responses, and `make check-rspamd-projection-binding`
+  locks them in `make guardrails`.
+- Datasource hard limits follow the one-handle-per-credential derivation:
+  393216 handles and 1179648 records for 131072 profiles (Section 13).
+- `VerifierHop.signature_algorithms` lists only `rsa-sha256`,
+  `ed25519-sha256`, and `mldsa44` (at most three); `rsa-sha512` and
+  `ed25519-sha512` were never produced (Section 13).
+- Live datasource integration (`make integration-datasources`), which runs
+  migration 010 against the pinned LDAP, PostgreSQL, MySQL, and MariaDB
+  servers: its SECURITY DEFINER allowlists predated the rotation campaign
+  and terminal closure routines (`purge_generation`,
+  `campaign_candidate_generation_is_forward`, `dkim2_v3_purge_generation`,
+  `dkim2_v3_record_campaign_terminal`), and the report carried a fixed base
+  revision that the reference validator, which requires the checked-out
+  `HEAD`, rejects on every other commit. The allowlists now name those
+  routines with their exact kind, arguments, and grants (one shared
+  PostgreSQL list for the routine and ACL audits), and the report binds
+  `git rev-parse HEAD`.
+- Terminology: active documentation, code comments, and the agent skills use
+  "Fully Verified DKIM2 Message"; historical records keep "Validly Signed".
+- Reviewed library API base: `testdata/reference/go-api-base.json` and the
+  checker's bound revision moved to the Draft-08 surface; every removed,
+  added, or changed root declaration since the previous base is listed.
+
+Draft issues: `DKIM2-ISSUE-0019` is superseded by the baseline;
+`DKIM2-ISSUE-0020` (`k=mldsa44`), `DKIM2-ISSUE-0021` (DNS-02-only algorithm
+names), `DKIM2-ISSUE-0022` (composite key-type spelling), and
+`DKIM2-ISSUE-0023` (sender-side bounce) are implemented interpretations,
+recorded identically in `testdata/reference/draft-issues.json` and
+`docs/reference/draft-issues.md`.
+
+Evidence on the final tree:
+
+- `make release-guardrails` (guardrails including `make test-tools` and
+  `make check-rspamd-projection-binding`, `govulncheck` with no called
+  vulnerability, `make check-conformance`, and the portable `make
+  conformance` report): pass.
+- `make check-reference` with the moved API base: pass.
+- `make integration-datasources` on the pinned LDAP, PostgreSQL, MySQL, and
+  MariaDB images, migration 010 included: pass, report published.
+- `contrib/qualification/postfix-milter/run.sh --lane all
+  .artifacts/conformance-postfix` (core and propagation lanes, two
+  identical runs): pass.
+- `make test-valkey`, `make check-security`, `make test-exim-local-scan`,
+  `make check-exim-matrix-prep`, `contrib/rspamd/tests/run.sh`, and the
+  Policy E2E Python tests: pass.
+
+Open points that remain outside this repository or this migration:
+
+- Exim stays `unqualified_draft08` until a fresh five-row Draft-08 real-matrix
+  run; external interoperability peers are not requalified.
+- The full Rspamd Policy E2E lane (`contrib/rspamd/tests/run-policy-e2e.sh`)
+  needs the external Nauthilus and `miltertest-go` checkouts; its
+  repository-local parts (projection binding lock, Lua contract tests,
+  Python observer and probe tests) pass.
+- Rollout of the consumers that move together (mailstack Rspamd adapter and
+  pins, `dkim2pub`, `dkim2-intelligence`) and ML-DSA-44 production keys
+  follow the release.

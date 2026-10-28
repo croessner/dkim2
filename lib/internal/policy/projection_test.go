@@ -168,7 +168,7 @@ func TestRevisionFailureProjectionAllowsOnlyServiceOutcomePairs(t *testing.T) {
 		{ProtocolPERMERROR, VerificationReasonInvalidRecipe},
 		{ProtocolPERMERROR, VerificationReasonMalformedProtocol},
 		{ProtocolPERMERROR, VerificationReasonInternalContract},
-		// Inherited key failures keep their specific reason (Draft-08 migration D4).
+		// Inherited key failures keep their specific reason (Draft-08 Section 14.5).
 		{ProtocolPERMERROR, VerificationReasonMissingKey},
 		{ProtocolPERMERROR, VerificationReasonInvalidKey},
 	}

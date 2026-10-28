@@ -47,7 +47,7 @@ func (s Signature) UnsignedSignatureValue() ([]byte, bool) {
 }
 
 // signingGroup returns the fixed generated-layout group of a signable
-// algorithm (plan D3): classical algorithms form the first sig-all group and
+// algorithm: classical algorithms form the first sig-all group and
 // a post-quantum algorithm forms a separate alternative group after "|", the
 // Section 10.9 phased-deployment pattern that lets a verifier without the
 // newer algorithm pass through the classical group.

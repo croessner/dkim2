@@ -78,6 +78,7 @@ for document in \
   "$onboarding" \
   docs/operator/datasource-ldap-postgresql.md \
   docs/operator/opendkim-migration.md \
+  docs/operator/draft-08-migration.md \
   docs/operator/examples/dkim2d-signing-ldap.yaml \
   docs/operator/examples/dkim2d-signing-postgresql.yaml \
   docs/operator/examples/dkim2d-signing-mysql.yaml \
@@ -175,6 +176,33 @@ for evidence in \
 done
 
 grep -Fq 'docs/reference/README.md' README.md
+
+# The Draft-08 operator migration guide is linked from the entry points and
+# names every operator-visible change the upgrade and its rollback depend on.
+draft08_guide=docs/operator/draft-08-migration.md
+grep -Fq "$draft08_guide" README.md
+grep -Fq 'draft-08-migration.md' docs/reference/README.md
+for required in \
+  'draft-ietf-dkim-dkim2-spec-08' \
+  'unsupported_draft' \
+  'reporting_domain' \
+  'MinSigningRSABits' \
+  '010_mldsa44_algorithm.sql' \
+  'GOFIPS140=v1.0.0' \
+  'too_many_signatures' \
+  'custody_mismatch' \
+  'body_history_unavailable' \
+  'invalid_recipe' \
+  'X-DKIM2-Unsigned-Reason' \
+  'dkim2d_dsn_unsigned_total' \
+  'insert_header' \
+  'insertion_offset' \
+  'Fully Verified DKIM2 Message' \
+  'dkim2pub' \
+  'dkim2-intelligence' \
+  'Rollback'; do
+  grep -Fq "$required" "$draft08_guide"
+done
 for reference in draft-issues.md compatibility.md known-limitations.md; do
   grep -Fq "$reference" docs/reference/README.md
 done

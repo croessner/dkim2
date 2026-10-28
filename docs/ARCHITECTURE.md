@@ -89,6 +89,7 @@
 | 0.1.0-draft | 2026-10-28 | Christian Roessner / Claude | Replaced the DSN signing identity with the Draft-08 Section 16.2 resolver: `Signer.ResolveDSNSigningIdentity` binds only a local `delivery_status` profile domain that relaxed-matches an `rt=` address of the returned original's highest DKIM2-Signature and makes the report From Authentic (Sections 11, 12.4), RFC 3464-linked recipients first, then `reporting_domain` when it matches, then the most specific domain. The derived "embedded highest `d=`" identity and the unconditional reporting identity are removed; `reporting_domain` keeps its stable path with the new meaning "preferred candidate when matching". A report without such a domain leaves unsigned: `/v1/dsn/sign` answers 204 with the closed `X-DKIM2-Unsigned-Reason`, adapters continue without mutation, and `dkim2d_dsn_unsigned_total{unsigned_reason}` counts it. Propagation refuses a completion `d=` that does not relaxed-match the previous hop's `rt=` (`forbidden_identity_misaligned`). |
 | 0.1.0-draft | 2026-10-28 | Christian Roessner / Claude | Moved trace-field placement to the top of the header block (Draft-08 Sections 9 and 10, RFC 5322 Section 3.6 SHOULD): the Milter inserts this hop's `Message-Instance`, `DKIM2-Signature`, and optional `X-DKIM2-Info` with `SMFIR_INSHEADER` index 0 in reverse plan order, which lands above Postfix's own `Received` field, and the Exim transport filter prepends the same block above Exim's `Received` field. The action plan is unchanged and documents the top-down block order. Verification and the Section 16.3 rebuild are placement-independent. Library completed-message outputs still append. The Postfix profile pins the queued top-of-header order. |
 | 0.1.0-draft | 2026-10-28 | Christian Roessner / Claude | Moved library completed-message placement to the top of the header block through the single owner `rawmsg.PrependValidatedFields`. The signing completion proof identifies this hop's fields by `m=` and `i=` instead of the last physical `DKIM2-Signature` and still rejects forged, altered, or reordered protocol fields. `/v1/revise/batch` `insertion_offset` is always 0 and its fields are top-down. Propagated DSNs are top-placed and pinned by the Postfix profile. |
+| 0.1.0-draft | 2026-10-28 | Christian Roessner / Claude | Completed the Draft-08/DNS-02 migration: the Postfix not_local fixture reports a foreign-addressed message as Section 16.2 requires, the datasource hard limits follow the one-handle-per-credential derivation (393216 handles, 1179648 records), `VerifierHop.signature_algorithms` lists only the verified Section 3 algorithms (no `rsa-sha512` or `ed25519-sha512`, at most three), the Rspamd Policy E2E projection bindings follow the producer for Draft-08, `make guardrails` also runs the tools-module runner tests and the Rspamd projection binding lock, the reviewed library API baseline moved to the Draft-08 surface, and the operator guide `docs/operator/draft-08-migration.md` records the upgrade and rollback. |
 
 ## 1. Purpose
 
@@ -102,9 +103,9 @@ The design uses these reviewed behavior baselines as its source of truth:
 - `draft-ietf-dkim-dkim2-spec-08`
 - `draft-ietf-dkim-dkim2-dns-02` for the implemented DNS behavior and vectors.
 
-The Draft-08 and DNS-02 migration disposition, including every behavior change,
-local interpretation, and work package, is recorded in
-`docs/specs/draft-08-migration-disposition.md`; the migration is in progress.
+The Draft-08 and DNS-02 migration disposition, including every behavior change and
+local interpretation, is recorded in
+`docs/specs/draft-08-migration-disposition.md`; the migration is complete.
 The preceding Draft-07 and DNS-01 disposition remains in
 `docs/specs/draft-07-migration-disposition.md`. Historical audit records retain
 their original identifiers.

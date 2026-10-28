@@ -2,14 +2,11 @@
 
 This repository contains an actively developed Go reference implementation of
 DKIM2 based on `draft-ietf-dkim-dkim2-spec-08` with the DNS companion
-`draft-ietf-dkim-dkim2-dns-02`; the migration from Draft-07 and DNS-01 is in
-progress and recorded in `docs/specs/draft-08-migration-disposition.md`. Until
-its work packages are complete, protocol behavior is still the Draft-07
-behavior described in `docs/specs/draft-07-migration-disposition.md`, whose
-operator upgrade steps are in `docs/operator/draft-07-migration.md`. The
-baseline is not an external conformance claim until the migration is complete
-and the real Exim matrix and external interoperability peers are requalified
-against Draft-08.
+`draft-ietf-dkim-dkim2-dns-02`. The migration from Draft-07 and DNS-01 is
+complete and recorded in `docs/specs/draft-08-migration-disposition.md`; the
+operator upgrade steps are in `docs/operator/draft-08-migration.md`. The
+baseline is not an external conformance claim until the real Exim matrix and
+external interoperability peers are requalified against Draft-08.
 
 The first design goal is precision: the core implementation must work from a
 controlled RFC 5322 message representation, preserve wire-significant details,
@@ -107,6 +104,9 @@ Current contents:
   activation, retirement, and rollback runbook.
 - `docs/operator/opendkim-migration.md`: protected dry-run, apply, publication,
   and higher-generation rollback workflow.
+- `docs/operator/draft-08-migration.md`: Draft-08/DNS-02 upgrade,
+  configuration, REST and signal changes, mail-flow consequences, replay-store
+  transition, the consumers that move together, and rollback.
 - `docs/operator/draft-07-migration.md`: historical Draft-07/DNS-01 upgrade, replay-store
   transition, removed configuration, mail-flow changes, and known limitations.
 - `docs/replay-store-valkey.md`: production replay-store topology, ACL,
@@ -187,6 +187,18 @@ exact outgoing SMTP envelope evidence, authority-issued copy tickets, opaque
 private-key handles, deterministic Draft-08 fields, final message reparsing,
 custody checks, and cryptographic self-verification. Out-of-band outputs
 remain closed until their exact route-bound release.
+
+Verification implements the Draft-08 algorithms `rsa-sha256`,
+`ed25519-sha256`, and pure ML-DSA-44 (`mldsa44`, DNS `k=mldsa44`), and
+evaluates Message-Instance `h=` and DKIM2-Signature `s=` values as
+`hash-all`/`sig-all` (`,`) and `hash-any`/`sig-any` (`|`) groups. PASS means
+a Fully Verified DKIM2 Message; FAIL means verification completed and the
+message is not Fully Verified. A signing profile holds up to three
+credentials and signs as `rsa,ed25519 | mldsa44`, so verifiers without ML-DSA
+still pass through the classical group. RSA signing keys need at least 2048
+bits. Delivery-status notifications are signed only under a local domain that
+relaxed-matches an `rt=` recipient of the reported message (Draft-08 Section
+16.2), otherwise they leave unsigned with an explicit reason.
 
 Datasource selection is exact and fail closed. Providers return immutable
 same-generation profiles and policies with opaque private-key handle IDs; they
