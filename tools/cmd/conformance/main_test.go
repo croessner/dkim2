@@ -374,7 +374,7 @@ func TestConfiguredRunnersEmitExactEvidence(t *testing.T) {
 // semantic tests behind the Draft-08 canonical and invalid-recipe claims.
 func TestDraft08NormativeBindingsUseExactCrossVersionAndRecipeProofs(t *testing.T) {
 	want := map[string]string{
-		"canonical\x00draft04-to-draft08-header-boundary": "TestDraft04SignatureFailsUnderDraft08HeaderRules",
+		"canonical\x00draft04-to-draft08-header-boundary": "TestDraft07SignatureFailsUnderDraft08HeaderRules",
 		"canonical\x00draft08-to-draft04-header-boundary": "TestDraft08SignatureFailsUnderDraft04HeaderRules",
 		"policy\x00draft08-invalid-recipe-json":           "TestMalformedHistoriedMessageFailsClosedAcrossServiceAndFacade",
 	}

@@ -331,7 +331,7 @@ var portableDefinitions = []runnerDefinition{
 		timeout: 2 * time.Minute,
 		cases: []runnerCase{
 			{key: "canonical\x00body-hash-input", testName: "TestGoldenBodyCanonicalizationFixtures", artifacts: []string{"canonical-body"}},
-			{key: "canonical\x00draft04-to-draft08-header-boundary", testName: "TestDraft04SignatureFailsUnderDraft08HeaderRules", artifacts: []string{canonicalHeaderArtifact}},
+			{key: "canonical\x00draft04-to-draft08-header-boundary", testName: "TestDraft07SignatureFailsUnderDraft08HeaderRules", artifacts: []string{canonicalHeaderArtifact}},
 			{key: "canonical\x00draft08-digest-algorithms", testName: "TestSHA512DigestHashesCanonicalInput", artifacts: []string{"canonical-digest-source"}},
 			{key: "canonical\x00draft08-header-exclusions", testName: "TestHeaderRelevanceDraft08UnsignedSet", artifacts: []string{canonicalHeaderArtifact}},
 			{key: "canonical\x00draft08-to-draft04-header-boundary", testName: "TestDraft08SignatureFailsUnderDraft04HeaderRules", artifacts: []string{canonicalHeaderArtifact}},
