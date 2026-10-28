@@ -14,7 +14,7 @@ func TestMapVerificationResultAppliesBindingPrecedence(t *testing.T) {
 	passChecks := requiredPassChecks(target)
 	passSet := verify.SignatureSetResult{Index: 0, Algorithm: verify.AlgorithmRSASHA256, Status: verify.SignatureSetStatusPass, KeyStatus: verify.KeyStatusFound}
 	failSet := verify.SignatureSetResult{Index: 1, Selector: failedSelector, Algorithm: verify.AlgorithmEd25519SHA256, Status: verify.SignatureSetStatusFail, KeyStatus: verify.KeyStatusFound}
-	temporarySet := verify.SignatureSetResult{Index: 0, Algorithm: verify.AlgorithmRSASHA256, Status: verify.SignatureSetStatusProviderTemporary, KeyStatus: verify.KeyStatusProviderTemporary}
+	temporarySet := verify.SignatureSetResult{Index: 0, Selector: failedSelector, Algorithm: verify.AlgorithmRSASHA256, Status: verify.SignatureSetStatusProviderTemporary, KeyStatus: verify.KeyStatusProviderTemporary}
 	timestampCheck := verify.CheckResult{Kind: verify.CheckKindTimestamp, Status: verify.CheckStatusFail, Code: verify.ErrorCodeTimestampInvalid, TimestampStatus: verify.TimestampStatusExpired, Target: target}
 	permanentCheck := verify.CheckResult{Kind: verify.CheckKindBodyHash, Status: verify.CheckStatusFail, Code: verify.ErrorCodeMalformedState, HashStatus: verify.HashStatusInvalid, Target: target}
 	failAndTemporaryChecks := requiredChecksWithSignatures(target,
@@ -140,8 +140,8 @@ func TestMapVerificationResultHandlesUnknownAlgorithmCombinations(t *testing.T) 
 	target := verify.Target{Sequence: 1, InstanceNumber: 1}
 	unknownCheck := verify.CheckResult{Kind: verify.CheckKindSignature, Status: verify.CheckStatusUnsupported, Code: verify.ErrorCodeUnsupportedAlgorithm, Algorithm: verify.AlgorithmUnknown, Target: target}
 	passCheck := verify.CheckResult{Kind: verify.CheckKindSignature, Status: verify.CheckStatusPass, Algorithm: verify.AlgorithmRSASHA256, Target: target}
-	unknownOnlySet := verify.SignatureSetResult{Index: 0, Algorithm: verify.AlgorithmUnknown, Status: verify.SignatureSetStatusUnsupportedAlgorithm, KeyStatus: verify.KeyStatusUnsupportedAlgorithm}
-	unknown := verify.SignatureSetResult{Index: 0, Algorithm: verify.AlgorithmUnknown, Status: verify.SignatureSetStatusUnsupportedAlgorithm, KeyStatus: verify.KeyStatusUnsupportedAlgorithm}
+	unknownOnlySet := verify.SignatureSetResult{Index: 0, Selector: failedSelector, Algorithm: verify.AlgorithmUnknown, Status: verify.SignatureSetStatusUnsupportedAlgorithm, KeyStatus: verify.KeyStatusUnsupportedAlgorithm}
+	unknown := verify.SignatureSetResult{Index: 0, Selector: failedSelector, Algorithm: verify.AlgorithmUnknown, Status: verify.SignatureSetStatusUnsupportedAlgorithm, KeyStatus: verify.KeyStatusUnsupportedAlgorithm}
 	pass := verify.SignatureSetResult{Index: 1, Algorithm: verify.AlgorithmRSASHA256, Status: verify.SignatureSetStatusPass, KeyStatus: verify.KeyStatusFound}
 
 	unknownOnly := mapVerificationResult(newVerifyResultWithDefaultCustody(target, verify.TargetStatusUnsupported, requiredChecksWithSignatures(target, unknownCheck), []verify.SignatureSetResult{unknownOnlySet}), DefaultLimits())

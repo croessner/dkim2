@@ -171,9 +171,10 @@ a reproducer for the current `PolicyRejected` to `internal_contract` mapping,
 with an observation label separating "disabled locally" from "unknown". Key
 results keep their specific reasons. The public reason of a non-PASS overall
 result is the reason of the first set in field order whose intermediate equals
-the overall result. Hash combinations never yield TEMPERROR. The Section 14.6
-step 8 selector text cannot be carried by the bounded Authentication-Results
-comment vocabulary (documented deviation).
+the overall result. Hash combinations never yield TEMPERROR. Section 14.6
+step 8: non-passing per-set results name their selector; only the
+Authentication-Results comment keeps its closed reason vocabulary (see
+Section 12).
 
 **D5 States.** FAIL (Section 14.1, completed but not Fully Verified):
 `hash_mismatch`, `signature_mismatch`, `timestamp_invalid`,
@@ -430,9 +431,8 @@ because the draft identifier is bound into the replay frame.
   key-lookup marker); lookups are counted for policy-enabled sets.
 - Package 3's fail-closed rule for more than one group is lifted; the
   parsers accept `|` groups.
-- Section 14.6 step 8 (selectors in error text) cannot be carried by the
-  bounded Authentication-Results and reason vocabulary; FAIL per-set facts
-  carry the selector as before (documented deviation).
+- Section 14.6 step 8 (selectors in error text): superseded by Section 12;
+  every non-passing per-set fact now carries its selector.
 - Changed expectations, each justified by the Draft-08 text: a supported
   pass beside an unknown set in one `,` group is PERMERROR
   `unsupported_algorithm` (Section 14.6 step 4; public golden case
@@ -551,3 +551,32 @@ because the draft identifier is bound into the replay frame.
   custody facade, service, and core tests expect FAIL `custody_mismatch` /
   `next_domain_mismatch` for the selected target; the null-body revision and
   replay tests expect the refusal instead of a verified proof.
+
+## 12. Signature-set selectors state
+
+- Section 14.6 step 8 ("human-readable text for any error SHOULD provide the
+  relevant Selector values"): Section 14.6 step 8 is implemented through the per-set results: every
+  non-passing signature set (fail, permerror including key errors and unknown or
+  locally disabled algorithms, temperror, ignored) carries its parsed selector in
+  the library `SignatureSetFact.Selector` and the REST `SignatureSetResult.selector`.
+  The remaining, narrow deviation is that the Authentication-Results comment keeps
+  its closed `(reason=<code>)` vocabulary, which downstream parsers (Rspamd,
+  mailstack, dkim2-intelligence) depend on; selector values are not placed there.
+- Owner: `verify` attaches the parsed selector (DNS-label syntax enforced by
+  the signature parser, never raw header bytes) to every set result; the
+  service per-set mapping (`signatureSetFact`) exposes it for every non-passing
+  fact, and `service.SignatureSelectorCoherent` is the single presence rule
+  (pass and `internal_contract` without selector, every other status with one
+  bounded selector). The public `VerifyResult` invariant delegates to it; the
+  daemon REST mapper, the Milter and Exim response admission, and `dkim2ctl`
+  re-check the same rule at their boundaries. Formatting a
+  `SignatureSetFact` is now redacted, so selectors leave the library only
+  through the explicit accessor and the REST field.
+- Selectors are never metric labels and never part of the
+  Authentication-Results value. The OpenAPI `SignatureSetResult.selector`
+  description changed; its pattern and length bounds are unchanged, and all
+  generated servers and clients were regenerated.
+- Tests: library per-set presence for pass, fail, missing key, temporary
+  provider failure, and unknown algorithm; REST JSON goldens for pass,
+  permerror, and temperror sets; boundary rule tests in Milter, Exim, and
+  `dkim2ctl`.

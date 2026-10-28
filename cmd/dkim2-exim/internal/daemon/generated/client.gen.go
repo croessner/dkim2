@@ -1558,7 +1558,7 @@ type SignatureSetResult struct {
 	Algorithm SignatureSetResultAlgorithm `json:"algorithm"`
 	Reason    VerificationReason          `json:"reason"`
 
-	// Selector Canonical selector for a failed supported signature; absent for every other result.
+	// Selector Draft-08 Section 14.6 step 8. The parsed, DNS-label-validated selector of every set whose status is not pass: fail, permerror (key errors and unknown or locally disabled algorithms), temperror, and ignored. Absent for pass and for an internal_contract fact that names no parsed set. Never copied from raw header bytes.
 	Selector *string                  `json:"selector,omitempty"`
 	Status   SignatureSetResultStatus `json:"status"`
 }

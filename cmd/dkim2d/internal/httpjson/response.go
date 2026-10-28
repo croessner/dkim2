@@ -582,7 +582,7 @@ func mapVerificationSnapshot(input verificationSnapshot) (generated.Verification
 		status, statusOK := mapSignatureStatus(fact.status)
 		reason, factReasonOK := mapVerificationReason(fact.reason)
 		if !algorithmOK || !statusOK || !factReasonOK ||
-			(fact.status == dkim2.SignatureStatusFAIL) != (fact.selector != "") || len(fact.selector) > 253 {
+			!responseSelectorCoherent(fact.status, fact.reason, fact.selector) {
 			return generated.VerificationResult{}, newMappingError(MappingInternalContract)
 		}
 		signatureSets[index] = generated.SignatureSetResult{
@@ -731,6 +731,17 @@ func mapVerificationState(value dkim2.ResultState) (generated.VerificationState,
 	default:
 		return "", false
 	}
+}
+
+// responseSelectorCoherent re-checks the library per-set selector rule at
+// the REST boundary: a passing set and an internal-contract fact carry no
+// selector, every other non-passing set carries one bounded selector
+// (Draft-08 Section 14.6 step 8).
+func responseSelectorCoherent(status dkim2.SignatureStatus, reason dkim2.ReasonCode, selector string) bool {
+	if len(selector) > 253 {
+		return false
+	}
+	return (status == dkim2.SignatureStatusPASS || reason == dkim2.ReasonInternalContract) == (selector == "")
 }
 
 // mapVerificationReason maps only reasons reachable in verification results:

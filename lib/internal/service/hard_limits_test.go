@@ -77,7 +77,7 @@ func unsupportedSetFacts(target verify.Target, count int) ([]verify.SignatureSet
 	sets := make([]verify.SignatureSetResult, count)
 	signatureChecks := make([]verify.CheckResult, count)
 	for index := range sets {
-		sets[index] = verify.SignatureSetResult{Index: index, Algorithm: verify.AlgorithmUnknown, Status: verify.SignatureSetStatusUnsupportedAlgorithm, KeyStatus: verify.KeyStatusUnsupportedAlgorithm}
+		sets[index] = verify.SignatureSetResult{Index: index, Selector: failedSelector, Algorithm: verify.AlgorithmUnknown, Status: verify.SignatureSetStatusUnsupportedAlgorithm, KeyStatus: verify.KeyStatusUnsupportedAlgorithm}
 		signatureChecks[index] = verify.CheckResult{Kind: verify.CheckKindSignature, Status: verify.CheckStatusUnsupported, Code: verify.ErrorCodeUnsupportedAlgorithm, Algorithm: verify.AlgorithmUnknown, Target: target}
 	}
 	return sets, requiredChecksWithSignatures(target, signatureChecks...)

@@ -1040,16 +1040,18 @@ func validVerificationProjection(value generated.VerificationResult) bool {
 	for _, signature := range value.SignatureSets {
 		if !signature.Algorithm.Valid() || !signature.Status.Valid() ||
 			!signature.Reason.Valid() ||
-			!validDiagnosticSelector(signature.Status, signature.Selector) {
+			!validDiagnosticSelector(signature.Status, signature.Reason, signature.Selector) {
 			return false
 		}
 	}
 	return true
 }
 
-// validDiagnosticSelector admits one bounded selector only for a failed supported signature.
-func validDiagnosticSelector(status generated.SignatureSetResultStatus, selector *string) bool {
-	if status != generated.SignatureSetResultStatusFail {
+// validDiagnosticSelector admits a bounded selector exactly for every
+// non-passing set except an internal-contract fact (Draft-08 Section 14.6
+// step 8).
+func validDiagnosticSelector(status generated.SignatureSetResultStatus, reason generated.VerificationReason, selector *string) bool {
+	if status == generated.SignatureSetResultStatusPass || reason == generated.VerificationReasonInternalContract {
 		return selector == nil
 	}
 	return selector != nil && len(*selector) >= 1 && len(*selector) <= 253

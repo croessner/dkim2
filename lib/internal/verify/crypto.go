@@ -107,7 +107,9 @@ func (e *signatureEvaluation) combine() {
 	e.outcome = CombineSignatureSets(e.layout, e.sets)
 }
 
-// evaluateSignatureSet checks one selector:algorithm:signature tuple.
+// evaluateSignatureSet checks one selector:algorithm:signature tuple. Every
+// outcome carries the parsed selector; the service decides which outcomes
+// expose it.
 func (v Verifier) evaluateSignatureSet(ctx context.Context, targetSignature signature.Signature, set signature.Set, index int, digests signatureDigests, target Target) SignatureSetResult {
 	algorithm := Algorithm(set.Algorithm())
 	result := SignatureSetResult{
@@ -115,6 +117,7 @@ func (v Verifier) evaluateSignatureSet(ctx context.Context, targetSignature sign
 		Algorithm: algorithm,
 		Status:    SignatureSetStatusNotChecked,
 		KeyStatus: KeyStatusNotChecked,
+		Selector:  set.Selector(),
 	}
 
 	switch status := v.options.AlgorithmPolicy.ClassifyAlgorithm(algorithm); status {
@@ -187,7 +190,6 @@ func (v Verifier) evaluateSignatureSet(ctx context.Context, targetSignature sign
 	result.KeyStatus = KeyStatusFound
 	if err := verifySignatureDigest(algorithm, material, digests.forAlgorithm(algorithm), set.Signature().Decoded(), target, index); err != nil {
 		result.Status = SignatureSetStatusFail
-		result.Selector = set.Selector()
 
 		return result
 	}

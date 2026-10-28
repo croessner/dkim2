@@ -2336,7 +2336,12 @@ components:
           $ref: "#/components/schemas/VerificationReason"
         selector:
           type: string
-          description: Canonical selector for a failed supported signature; absent for every other result.
+          description: >-
+            Draft-08 Section 14.6 step 8. The parsed, DNS-label-validated
+            selector of every set whose status is not pass: fail, permerror
+            (key errors and unknown or locally disabled algorithms), temperror,
+            and ignored. Absent for pass and for an internal_contract fact that
+            names no parsed set. Never copied from raw header bytes.
           minLength: 1
           maxLength: 253
           pattern: '^[A-Za-z0-9_](?:[A-Za-z0-9_-]{0,61}[A-Za-z0-9_])?(?:\.[A-Za-z0-9_](?:[A-Za-z0-9_-]{0,61}[A-Za-z0-9_])?)*$'

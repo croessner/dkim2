@@ -25,6 +25,22 @@ type SignatureSetFact struct {
 	Selector  string
 }
 
+// SignatureSelectorCoherent is the single rule for per-set selector
+// presence (Draft-08 Section 14.6 step 8): a passing set carries no
+// selector, an internal-contract fact that names no parsed set carries none,
+// and every other non-passing set (fail, permerror including key and
+// unknown or disabled algorithm errors, temperror, ignored) carries its
+// bounded parsed selector.
+func SignatureSelectorCoherent(status SignatureStatus, reason Reason, selector string) bool {
+	if len(selector) > 253 {
+		return false
+	}
+	if status == SignaturePASS || reason == ReasonInternalContract {
+		return selector == ""
+	}
+	return selector != ""
+}
+
 // Result is an immutable internal current-verification outcome.
 type Result struct {
 	draft                 string
@@ -89,7 +105,7 @@ func resultDataValid(state State, custody Custody, reason Reason, checks []Check
 		if !fact.Algorithm.Known() || !fact.Status.Known() || !fact.Reason.Known() {
 			return false
 		}
-		if (fact.Status == SignatureFAIL) != (fact.Selector != "") || len(fact.Selector) > 253 {
+		if !SignatureSelectorCoherent(fact.Status, fact.Reason, fact.Selector) {
 			return false
 		}
 	}

@@ -1050,10 +1050,14 @@ document the exact blocker.
   separates it from an unknown algorithm (`protocol`). The disabled
   classification carries `KeyStatusDisabledAlgorithm`; the earlier
   `policy_rejected` pairing surfaced as `internal_contract`.
-- Settled: Section 14.6 step 8 asks error text to name selectors; the
-  bounded Authentication-Results and public reason vocabulary cannot carry
-  selectors, so per-set facts carry them only for FAIL sets (documented
-  deviation).
+- Settled: Section 14.6 step 8 is implemented through the per-set results: every
+  non-passing signature set (fail, permerror including key errors and unknown or
+  locally disabled algorithms, temperror, ignored) carries its parsed selector in
+  the library `SignatureSetFact.Selector` and the REST `SignatureSetResult.selector`.
+  The remaining, narrow deviation is that the Authentication-Results comment keeps
+  its closed `(reason=<code>)` vocabulary, which downstream parsers (Rspamd,
+  mailstack, dkim2-intelligence) depend on; selector values are not placed there
+  (documented deviation).
 - Settled: Signing-domain alignment follows Sections 8.8, 9.4, and 11.4,
   using ASCII lowercase and exact or dot-boundary suffix comparison; `mf=<>`
   and every `nd=` signature are not applicable.

@@ -14,14 +14,14 @@ import (
 func TestLocallyDisabledAlgorithmMapsToUnsupportedAlgorithm(t *testing.T) {
 	target := verify.Target{Sequence: 1, InstanceNumber: 1}
 	disabledCheck := verify.CheckResult{Kind: verify.CheckKindSignature, Status: verify.CheckStatusFail, Code: verify.ErrorCodeDisabledAlgorithm, Algorithm: verify.AlgorithmEd25519SHA256, Target: target}
-	disabled := verify.SignatureSetResult{Index: 0, Algorithm: verify.AlgorithmEd25519SHA256, Status: verify.SignatureSetStatusDisabledAlgorithm, KeyStatus: verify.KeyStatusDisabledAlgorithm}
+	disabled := verify.SignatureSetResult{Index: 0, Selector: failedSelector, Algorithm: verify.AlgorithmEd25519SHA256, Status: verify.SignatureSetStatusDisabledAlgorithm, KeyStatus: verify.KeyStatusDisabledAlgorithm}
 	mapped := mapVerificationResult(newVerifyResultWithDefaultCustody(target, verify.TargetStatusUnsupported, requiredChecksWithSignatures(target, disabledCheck), []verify.SignatureSetResult{disabled}), DefaultLimits())
 	if mapped.State() != StatePERMERROR || mapped.PrimaryReason() != ReasonUnsupportedAlgorithm || !mapped.LocallyDisabledAlgorithm() {
 		t.Fatalf("disabled = %q/%q locally=%t", mapped.State(), mapped.PrimaryReason(), mapped.LocallyDisabledAlgorithm())
 	}
 
 	unknownCheck := verify.CheckResult{Kind: verify.CheckKindSignature, Status: verify.CheckStatusUnsupported, Code: verify.ErrorCodeUnsupportedAlgorithm, Algorithm: verify.AlgorithmUnknown, Target: target}
-	unknown := verify.SignatureSetResult{Index: 0, Algorithm: verify.AlgorithmUnknown, Status: verify.SignatureSetStatusUnsupportedAlgorithm, KeyStatus: verify.KeyStatusUnsupportedAlgorithm}
+	unknown := verify.SignatureSetResult{Index: 0, Selector: failedSelector, Algorithm: verify.AlgorithmUnknown, Status: verify.SignatureSetStatusUnsupportedAlgorithm, KeyStatus: verify.KeyStatusUnsupportedAlgorithm}
 	mapped = mapVerificationResult(newVerifyResultWithDefaultCustody(target, verify.TargetStatusUnsupported, requiredChecksWithSignatures(target, unknownCheck), []verify.SignatureSetResult{unknown}), DefaultLimits())
 	if mapped.State() != StatePERMERROR || mapped.PrimaryReason() != ReasonUnsupportedAlgorithm || mapped.LocallyDisabledAlgorithm() {
 		t.Fatalf("unknown = %q/%q locally=%t", mapped.State(), mapped.PrimaryReason(), mapped.LocallyDisabledAlgorithm())

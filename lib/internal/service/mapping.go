@@ -505,8 +505,9 @@ func (a *mappingAccumulator) mapSignatureSet(set verify.SignatureSetResult) {
 }
 
 // signatureSetFact projects one validated set result onto its bounded
-// per-set fact: PASS, FAIL with selector, TEMPERROR, PERMERROR with its
-// specific reason, or an ignored unknown algorithm.
+// per-set fact: PASS, FAIL, TEMPERROR, PERMERROR with its specific reason,
+// or an ignored unknown algorithm. Every non-passing fact names the parsed
+// selector (Draft-08 Section 14.6 step 8).
 func signatureSetFact(algorithm Algorithm, set verify.SignatureSetResult) SignatureSetFact {
 	fact := SignatureSetFact{Algorithm: algorithm}
 	switch set.Status {
@@ -521,7 +522,6 @@ func signatureSetFact(algorithm Algorithm, set verify.SignatureSetResult) Signat
 			fact.Status, fact.Reason = SignaturePERMERROR, ReasonInternalContract
 		} else {
 			fact.Status, fact.Reason = SignatureFAIL, ReasonSignatureMismatch
-			fact.Selector = set.Selector
 		}
 	case verify.SignatureSetStatusUnsupportedAlgorithm:
 		if set.KeyStatus != verify.KeyStatusUnsupportedAlgorithm || algorithm != AlgorithmUnknown {
@@ -536,6 +536,9 @@ func signatureSetFact(algorithm Algorithm, set verify.SignatureSetResult) Signat
 		}
 	default:
 		fact.Status, fact.Reason = SignaturePERMERROR, reasonForSignatureSet(set)
+	}
+	if fact.Status != SignaturePASS && fact.Reason != ReasonInternalContract {
+		fact.Selector = set.Selector
 	}
 	return fact
 }

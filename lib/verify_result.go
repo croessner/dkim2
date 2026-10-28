@@ -354,8 +354,30 @@ func newSignatureSetFact(algorithm Algorithm, status SignatureStatus, reason Rea
 	return SignatureSetFact{algorithm: algorithm, status: status, reason: reason, selector: selector}
 }
 
-// Selector returns the failed supported signature selector when present.
+// Selector returns the parsed selector of a non-passing set (Draft-08
+// Section 14.6 step 8); a passing set and an internal-contract fact carry
+// none.
 func (f SignatureSetFact) Selector() (string, bool) { return f.selector, f.selector != "" }
+
+const signatureSetFactRedactedText = "dkim2.SignatureSetFact{redacted}"
+
+// String returns a constant representation so formatting never carries the
+// message-derived selector; callers read it explicitly through Selector.
+func (SignatureSetFact) String() string { return signatureSetFactRedactedText }
+
+// GoString returns a constant representation without the selector.
+func (SignatureSetFact) GoString() string { return signatureSetFactRedactedText }
+
+// Format prevents formatting from traversing the message-derived selector.
+func (SignatureSetFact) Format(state fmt.State, _ rune) {
+	_, _ = io.WriteString(state, signatureSetFactRedactedText)
+}
+
+// signatureSelectorCoherent mirrors the service rule for per-set selector
+// presence at the public boundary.
+func signatureSelectorCoherent(status SignatureStatus, reason ReasonCode, selector string) bool {
+	return service.SignatureSelectorCoherent(service.SignatureStatus(status), service.Reason(reason), selector)
+}
 
 // Algorithm returns the bounded signature algorithm family.
 func (f SignatureSetFact) Algorithm() Algorithm {
@@ -510,7 +532,7 @@ func verifyResultDataValid(data verifyResultData) bool {
 		if !fact.algorithm.Known() || !fact.status.Known() || !fact.reason.Known() {
 			return false
 		}
-		if (fact.status == SignatureStatusFAIL) != (fact.selector != "") || len(fact.selector) > 253 {
+		if !signatureSelectorCoherent(fact.status, fact.reason, fact.selector) {
 			return false
 		}
 	}

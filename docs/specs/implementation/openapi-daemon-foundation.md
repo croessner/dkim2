@@ -495,7 +495,9 @@ of `message`, `protocol`, `body_hash`, `header_hash`, `signature`, `key`,
 `internal_contract`. `reason` uses the verification reason enum.
 
 `SignatureSetResult` has exactly required `algorithm`, `status`, and `reason`
-plus the optional failed-signature `selector`. `algorithm` is `rsa-sha256`,
+plus the `selector`, present exactly for every non-passing set (fail,
+permerror, temperror, ignored) except an `internal_contract` fact, and absent
+for pass (Draft-08 Section 14.6 step 8). `algorithm` is `rsa-sha256`,
 `ed25519-sha256`, or `unknown` (an unsupported algorithm such as the
 post-quantum `mldsa44-ed25519-sha512` is reported as `unknown`); `status` is `pass`,
 `fail`, `permerror`, `temperror`, or `ignored`; `reason` uses the
