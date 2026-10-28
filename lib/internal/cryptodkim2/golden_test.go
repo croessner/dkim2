@@ -16,6 +16,19 @@ type cryptoGoldenFile struct {
 	RSABoundaries []rsaBoundaryVector `json:"rsa_boundaries"`
 	RSA8192Verify rsaVerifyVector     `json:"rsa_8192_verify"`
 	Ed25519Verify ed25519VerifyVector `json:"ed25519_verify"`
+	MLDSA44       mldsa44Vector       `json:"mldsa44_vector"`
+}
+
+// mldsa44Vector is one pure ML-DSA-44 known-answer vector over a fixed
+// Section 12.8 input with the "DKIM2" context string.
+type mldsa44Vector struct {
+	Seed                 string `json:"seed_base64"`
+	PrivatePKCS8         string `json:"private_pkcs8_base64"`
+	PublicSPKI           string `json:"public_spki_base64"`
+	PublicRaw            string `json:"public_raw_base64"`
+	Input                string `json:"input_base64"`
+	DeterministicSig     string `json:"deterministic_signature_base64"`
+	IndependentHedgedSig string `json:"openssl_hedged_signature_base64"`
 }
 
 type ed25519VerifyVector struct {
@@ -89,8 +102,8 @@ func TestDraft08CryptoVerificationGoldenVectors(t *testing.T) {
 	if publicKey.N.BitLen() != 8192 || publicKey.E != 65537 || len(signatureBytes) != 1024 {
 		t.Fatal("RSA-8192 verification vector has incoherent public dimensions")
 	}
-	if err := VerifyDigest(signature.AlgorithmRSASHA256, publicKey, digest, signatureBytes, Limits{}); err != nil {
-		t.Fatalf("RSA-8192 VerifyDigest() code=%s", ErrorCodeOf(err))
+	if err := VerifyRepresentative(signature.AlgorithmRSASHA256, publicKey, digest, signatureBytes, Limits{}); err != nil {
+		t.Fatalf("RSA-8192 VerifyRepresentative() code=%s", ErrorCodeOf(err))
 	}
 	edPublic, err := base64.StdEncoding.DecodeString(golden.Ed25519Verify.PublicKey)
 	if err != nil || len(edPublic) != ed25519.PublicKeySize {
@@ -104,7 +117,7 @@ func TestDraft08CryptoVerificationGoldenVectors(t *testing.T) {
 	if err != nil || len(edSignature) != ed25519.SignatureSize {
 		t.Fatalf("Ed25519 signature vector error=%v length=%d", err, len(edSignature))
 	}
-	if err := VerifyDigest(signature.AlgorithmEd25519SHA256, ed25519.PublicKey(edPublic), edDigest, edSignature, Limits{}); err != nil {
-		t.Fatalf("Ed25519 VerifyDigest() code=%s", ErrorCodeOf(err))
+	if err := VerifyRepresentative(signature.AlgorithmEd25519SHA256, ed25519.PublicKey(edPublic), edDigest, edSignature, Limits{}); err != nil {
+		t.Fatalf("Ed25519 VerifyRepresentative() code=%s", ErrorCodeOf(err))
 	}
 }

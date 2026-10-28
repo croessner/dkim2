@@ -386,7 +386,7 @@ func (a *Authority) SignDigest(
 	for _, profiles := range a.profiles {
 		for _, key := range profiles {
 			if key.Handle == handle {
-				digest := request.Digest()
+				digest := request.MessageRepresentative()
 				return dkim2.NewPrivateKeySignResult(ed25519.Sign(key.Private, digest[:])), nil
 			}
 		}

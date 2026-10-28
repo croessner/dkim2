@@ -3,6 +3,7 @@ package signing
 import (
 	"math"
 
+	"github.com/croessner/dkim2/internal/cryptodkim2"
 	"github.com/croessner/dkim2/internal/instance"
 	"github.com/croessner/dkim2/internal/rawmsg"
 	"github.com/croessner/dkim2/internal/signature"
@@ -119,7 +120,8 @@ func (l Limits) Validate() error {
 		l.MaxGeneratedSignatureSets > l.MaxSignatureSetsPerField ||
 		l.MaxGeneratedSignatureSets > l.MaxTotalSignatureSets ||
 		l.MaxGeneratedSignatureSets > l.MaxPrivateSigningCalls ||
-		l.MaxPrivateSignatureBytes < (l.MaxRSABits+7)/8 {
+		l.MaxPrivateSignatureBytes < (l.MaxRSABits+7)/8 ||
+		l.MaxPrivateSignatureBytes < cryptodkim2.MLDSA44SignatureBytes {
 		return optionsError(LimitNameLimitCoherence, 0)
 	}
 	if _, err := instance.PreflightSigningField(1, l.MaxDecodedRecipeBytes, true, instance.RenderLimits{

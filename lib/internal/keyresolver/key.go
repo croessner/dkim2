@@ -77,6 +77,9 @@ func (o KeyOutcome) Valid() bool {
 		case AlgorithmEd25519SHA256:
 			key, ok := o.material.(ed25519.PublicKey)
 			return ok && len(key) == ed25519.PublicKeySize
+		case AlgorithmMLDSA44:
+			_, err := cryptodkim2.ValidatePublicKey(AlgorithmMLDSA44, o.material, cryptodkim2.DefaultLimits())
+			return err == nil
 		default:
 			return false
 		}
@@ -139,6 +142,15 @@ func DecodeKey(record Record, requested Algorithm) (KeyOutcome, error) {
 		base.status = KeyOutcomeFound
 		base.material = ed25519.PublicKey(bytes.Clone(data))
 		return base, nil
+	case AlgorithmMLDSA44:
+		key, err := cryptodkim2.ParseMLDSA44PublicKey(data)
+		if err != nil {
+			base.status = KeyOutcomeInvalid
+			return base, nil
+		}
+		base.status = KeyOutcomeFound
+		base.material = key
+		return base, nil
 	default:
 		return KeyOutcome{}, newResolverError(ErrorClassContract)
 	}
@@ -168,7 +180,8 @@ func decodeRSAPublicKey(data []byte) *rsa.PublicKey {
 // keyTypeMatchesAlgorithm reports exact supported algorithm and DNS k= coherence.
 func keyTypeMatchesAlgorithm(keyType KeyType, algorithm Algorithm) bool {
 	return keyType == KeyTypeRSA && algorithm == AlgorithmRSASHA256 ||
-		keyType == KeyTypeEd25519 && algorithm == AlgorithmEd25519SHA256
+		keyType == KeyTypeEd25519 && algorithm == AlgorithmEd25519SHA256 ||
+		keyType == KeyTypeMLDSA44 && algorithm == AlgorithmMLDSA44
 }
 
 // cloneKeyMaterial returns a detached copy of supported key material.

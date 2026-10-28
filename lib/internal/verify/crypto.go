@@ -20,30 +20,41 @@ type signatureEvaluation struct {
 	outcome combine.Outcome
 }
 
-// signatureDigests holds the Section 12.8 signature-input digest: SHA-256
-// for rsa-sha256 and ed25519-sha256.
+// signatureDigests holds the per-algorithm message representatives of one
+// Section 12.8 signature input: the SHA-256 digest that rsa-sha256 and
+// ed25519-sha256 sign, and the complete input bytes that pure mldsa44 signs.
 type signatureDigests struct {
 	sha256 []byte
+	input  canonical.ByteInput
 }
 
-// forAlgorithm returns the digest the algorithm signs, or nil for an
-// algorithm without a digest contract. The algorithm-to-hash mapping is
-// owned by cryptodkim2.DigestBytes, the same owner the signer uses.
+// forAlgorithm returns the message representative the algorithm signs, or
+// nil for an algorithm without a representative contract. Which algorithms
+// sign the input directly is owned by cryptodkim2, the same owner the signer
+// uses.
 func (d signatureDigests) forAlgorithm(algorithm Algorithm) []byte {
-	if !algorithm.Signable() || cryptodkim2.DigestBytes(algorithm) != len(d.sha256) {
+	representative := d.sha256
+	if cryptodkim2.SignsInputDirectly(algorithm) {
+		// Copied only when an algorithm needs the input itself, so a
+		// classical-only verification retains no second input copy.
+		representative = d.input.Bytes()
+	}
+	if !algorithm.Signable() || !cryptodkim2.ValidRepresentativeLength(algorithm, len(representative)) {
 		return nil
 	}
-	return d.sha256
+	return representative
 }
 
-// computeSignatureDigests derives the signature-input digest from one
-// canonical Section 12.8 input.
+// computeSignatureDigests derives every message representative from one
+// canonical Section 12.8 input. The immutable input is retained for pure
+// mldsa44 verification; it is the canonical protocol-field byte string,
+// already bounded by the canonicalizer's signature-input limit.
 func computeSignatureDigests(canonicalizer canonical.Canonicalizer, input canonical.ByteInput) (signatureDigests, error) {
 	sha256Digest, err := canonicalizer.SHA256Digest(input)
 	if err != nil {
 		return signatureDigests{}, err
 	}
-	return signatureDigests{sha256: sha256Digest.Bytes()}, nil
+	return signatureDigests{sha256: sha256Digest.Bytes(), input: input}, nil
 }
 
 // signatureInputDigest calculates the digests over Section 12.8 input bytes.
@@ -223,9 +234,10 @@ func providerKeyErrorPairValid(
 	return mapped == key.Metadata.Status && mapped != KeyStatusProviderError || IsErrorCode(err, ErrorCodeProviderError) && mapped == KeyStatusProviderError
 }
 
-// verifySignatureDigest verifies one decoded signature over Section 12.8 digest bytes.
-func verifySignatureDigest(algorithm Algorithm, material any, digest []byte, signatureBytes []byte, target Target, index int) error {
-	err := cryptodkim2.VerifyDigest(algorithm, material, digest, signatureBytes, cryptodkim2.DefaultLimits())
+// verifySignatureDigest verifies one decoded signature over the algorithm's
+// Section 12.8 message representative.
+func verifySignatureDigest(algorithm Algorithm, material any, representative []byte, signatureBytes []byte, target Target, index int) error {
+	err := cryptodkim2.VerifyRepresentative(algorithm, material, representative, signatureBytes, cryptodkim2.DefaultLimits())
 	if err == nil {
 		return nil
 	}

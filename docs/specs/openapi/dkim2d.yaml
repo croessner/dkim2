@@ -2133,11 +2133,13 @@ components:
               - rsa-sha512
               - ed25519-sha256
               - ed25519-sha512
+              - mldsa44
             x-enum-varnames:
               - VerifierAlgorithmRSASHA256
               - VerifierAlgorithmRSASHA512
               - VerifierAlgorithmEd25519SHA256
               - VerifierAlgorithmEd25519SHA512
+              - VerifierAlgorithmMLDSA44
         signature_state:
           type: string
           enum:
@@ -2323,6 +2325,7 @@ components:
           enum:
             - rsa-sha256
             - ed25519-sha256
+            - mldsa44
             - unknown
         status:
           type: string

@@ -86,6 +86,9 @@ const (
 	AlgorithmEd25519
 	// AlgorithmUnknown identifies a bounded unsupported family.
 	AlgorithmUnknown
+	// AlgorithmMLDSA44 identifies pure ML-DSA-44. It is appended after
+	// AlgorithmUnknown so existing numeric values stay stable.
+	AlgorithmMLDSA44
 )
 
 // CacheResult identifies one bounded cache outcome.
@@ -274,7 +277,7 @@ func validReason(value Reason) bool { return value >= ReasonNone && value <= Rea
 func validError(value ErrorClass) bool { return value >= ErrorNone && value <= ErrorInternal }
 
 // validAlgorithm validates one algorithm.
-func validAlgorithm(value Algorithm) bool { return value >= AlgorithmNone && value <= AlgorithmUnknown }
+func validAlgorithm(value Algorithm) bool { return value >= AlgorithmNone && value <= AlgorithmMLDSA44 }
 
 // validCache validates one cache outcome.
 func validCache(value CacheResult) bool { return value >= CacheNotUsed && value <= CacheMiss }

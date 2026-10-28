@@ -292,7 +292,11 @@ transports may enable caching.
 `k=`:
 
 - Optional; omission means `rsa`.
-- `rsa` and `ed25519` are recognized case-sensitive values.
+- `rsa`, `ed25519`, and `mldsa44` are recognized case-sensitive values.
+  DNS-02 defines no key type for pure ML-DSA-44; `mldsa44` is the local
+  interpretation that equals the Draft-08 sig-name (`DKIM2-ISSUE-0020`).
+  Both composite spellings, `mldsa44-ed25519` and `mldsa44-ed25519-sha512`,
+  are unsupported key types (`DKIM2-ISSUE-0022`).
 - An unrecognized key type is a typed unsupported-key record. It is not
   silently reinterpreted as RSA, and its `p=` bytes are never passed to a
   decoder.
@@ -377,10 +381,22 @@ error, Base64 text, or private material.
 - Returned `ed25519.PublicKey` values clone the byte slice while preserving
   the named type.
 
+### ML-DSA-44
+
+- `k=mldsa44` requires `p=` to decode to exactly 1312 octets, the raw FIPS
+  204 ML-DSA-44 public-key encoding (1752 base64 characters, Draft-08
+  Section 14.5). Every other length, an SPKI wrapper, and an encoding
+  `crypto/mldsa` rejects are invalid keys. `h=` is ignored (DNS-02 retired
+  it).
+- The decoded `*mldsa.PublicKey` is immutable and shared; it is constructed
+  only through `cryptodkim2.ParseMLDSA44PublicKey`.
+
 ### Algorithm Coherence
 
 - RSA-SHA256 queries accept only RSA records.
 - Ed25519-SHA256 queries accept only Ed25519 records.
+- mldsa44 queries accept only `k=mldsa44` records; `key_algorithm_mismatch`
+  in both directions otherwise.
 - A supported requested algorithm with a different supported key type is a
   distinct permanent algorithm-mismatch/key-invalid state.
 - Unknown requested algorithms are rejected before DNS lookup.

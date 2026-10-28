@@ -391,6 +391,7 @@ var portableDefinitions = []runnerDefinition{
 		cases: []runnerCase{
 			{key: "signing\x00custody-cryptography", testName: "TestDraft08CryptoVerificationGoldenVectors", artifacts: []string{"signing-custody", signingProvenanceArtifact}},
 			{key: "signing\x00custody-key-policy", testName: "TestCryptoPublicKeyPolicyBoundaryGoldenVectors", artifacts: []string{"signing-custody", signingProvenanceArtifact}},
+			{key: "signing\x00mldsa44-known-answer", testName: "TestMLDSA44KnownAnswerVector", artifacts: []string{"signing-custody", signingProvenanceArtifact}},
 		},
 	},
 	{
@@ -617,6 +618,7 @@ var portableDefinitions = []runnerDefinition{
 			{key: "verification\x00draft08-recipe-less-unknown-only", testName: "TestHistoryAcceptsRecipeLessUnchangedTransitionMatrix", artifacts: []string{verificationDraft08Artifact}},
 			{key: "verification\x00draft08-same-algorithm-positional", testName: "TestVerifierChecksSameAlgorithmSignaturesPositionally", artifacts: []string{"verification-multisignature-source"}},
 			{key: "verification\x00draft08-sha512-only", testName: "TestVerifierAcceptsSHA512Only", artifacts: []string{verificationDraft08Artifact}},
+			{key: "verification\x00mldsa44-phased-deployment", testName: "TestMLDSA44PhasedDeploymentLayout", artifacts: []string{"verification-mldsa44-source"}},
 		},
 	},
 }

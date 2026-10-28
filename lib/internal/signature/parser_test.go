@@ -308,6 +308,9 @@ func TestParseRejectsInvalidSignatureBase64AndLengths(t *testing.T) {
 	}{
 		{name: "invalid base64", in: testSelector + ":ed25519-sha256:not_base64", code: ErrorCodeInvalidSignatureBase64},
 		{name: "ed25519 short", in: testSelector + ":ed25519-sha256:" + base64.StdEncoding.EncodeToString([]byte("short")), code: ErrorCodeInvalidSignatureLength},
+		{name: "mldsa44 short", in: testSelector + ":mldsa44:" + base64OfByte(0xcc, 2419), code: ErrorCodeInvalidSignatureLength},
+		{name: "mldsa44 long", in: testSelector + ":mldsa44:" + base64OfByte(0xcc, 2421), code: ErrorCodeInvalidSignatureLength},
+		{name: "mldsa44 ed25519-sized", in: testSelector + ":mldsa44:" + base64OfByte(0xcc, 64), code: ErrorCodeInvalidSignatureLength},
 	}
 
 	for _, tt := range tests {
@@ -317,6 +320,25 @@ func TestParseRejectsInvalidSignatureBase64AndLengths(t *testing.T) {
 				t.Fatalf("Parse() error = %v, want %s", err, tt.code)
 			}
 		})
+	}
+}
+
+// TestParseAcceptsExactMLDSA44Signature proves a Draft-08 Section 3.4
+// mldsa44 set of exactly 2420 octets (3228 base64 characters), folded with
+// white space inside the base64string, parses as a known algorithm.
+func TestParseAcceptsExactMLDSA44Signature(t *testing.T) {
+	encoded := base64OfByte(0xcc, 2420)
+	if len(encoded) != 3228 {
+		t.Fatalf("encoded length = %d", len(encoded))
+	}
+	folded := encoded[:1614] + " \t" + encoded[1614:]
+	parsed, err := Parse(dkim2SignatureField(t, 0, signatureValueWith("s", testSelector+":mldsa44:"+folded)))
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	sets := parsed.SignatureSets()
+	if len(sets) != 1 || !sets[0].KnownAlgorithm() || sets[0].Algorithm() != string(AlgorithmMLDSA44) || sets[0].Signature().DecodedLen() != 2420 {
+		t.Fatalf("mldsa44 set = %#v", sets)
 	}
 }
 

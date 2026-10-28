@@ -607,9 +607,10 @@ func (c Coordinator) proveCompletedSignature(message rawmsg.Message, signatures 
 	limits := c.cryptoLimits()
 	for index, set := range sets {
 		credential := completed.profile.credentials[index]
-		if !set.KnownAlgorithm() || set.Selector() != credential.selector ||
+		representative, representativeErr := cryptodkim2.MessageRepresentative(credential.algorithm, input.Bytes())
+		if representativeErr != nil || !set.KnownAlgorithm() || set.Selector() != credential.selector ||
 			Algorithm(set.Algorithm()) != credential.algorithm ||
-			cryptodkim2.VerifyDigest(credential.algorithm, credential.publicKey, cryptodkim2.SignatureInputDigest(credential.algorithm, input.Bytes()), set.Signature().Decoded(), limits) != nil {
+			cryptodkim2.VerifyRepresentative(credential.algorithm, credential.publicKey, representative, set.Signature().Decoded(), limits) != nil {
 			return newError(ErrorCodeCryptographicSelfCheck, ErrorLocation{
 				Phase: PhaseComplete, Algorithm: credential.algorithm,
 			}, ErrorDetails{})

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto"
 	"crypto/ed25519"
+	"crypto/mldsa"
 	"crypto/rsa"
 	"crypto/sha256"
 	"crypto/x509"
@@ -13,10 +14,16 @@ import (
 )
 
 const (
-	hardMinRSABits        = 1024
-	hardMaxRSABits        = 8192
-	requiredRSAExponent   = 65537
-	hardMaxSignatureBytes = 1024
+	hardMinRSABits      = 1024
+	hardMaxRSABits      = 8192
+	requiredRSAExponent = 65537
+	// maxRSASignatureBytes is the rsa-sha256 value size of the largest
+	// admitted 8192-bit modulus.
+	maxRSASignatureBytes = hardMaxRSABits / 8
+	// hardMaxSignatureBytes is the largest per-algorithm signature value:
+	// the fixed 2420-octet mldsa44 signature. Every algorithm additionally
+	// has its own exact or modulus-derived bound (see MaxSignatureBytesFor).
+	hardMaxSignatureBytes = MLDSA44SignatureBytes
 )
 
 // Limits contains narrowable crypto policy and fixed algorithm contracts.
@@ -27,7 +34,9 @@ type Limits struct {
 	MaxRSABits int
 	// RequiredRSAExponent is the fixed RSA public exponent.
 	RequiredRSAExponent int
-	// MaxSignatureBytes is the fixed encoded signature-byte ceiling.
+	// MaxSignatureBytes is the narrowable decoded signature-byte ceiling
+	// across all algorithms. Narrowing it below an algorithm's exact size
+	// makes that algorithm unusable for the narrowed contract.
 	MaxSignatureBytes int
 }
 
@@ -102,20 +111,54 @@ func ValidatePublicKey(algorithm signature.Algorithm, material any, limits Limit
 			return nil, newError(ErrorCodeInvalidKey)
 		}
 		return ed25519.PublicKey(bytes.Clone(key)), nil
+	case signature.AlgorithmMLDSA44:
+		key, ok := material.(*mldsa.PublicKey)
+		if !ok {
+			return nil, newError(ErrorCodeWrongKeyType)
+		}
+		if !validMLDSA44PublicKey(key) {
+			return nil, newError(ErrorCodeInvalidKey)
+		}
+		return key, nil
 	default:
 		return nil, newError(ErrorCodeUnsupportedAlgorithm)
 	}
 }
 
-// digestBytes returns the signature-input digest size each algorithm signs.
-func digestBytes(algorithm signature.Algorithm) int {
-	return DigestBytes(algorithm)
+// ExpectedSignatureBytes returns the exact decoded signature size one
+// validated public key produces: the modulus size for RSA, 64 octets for
+// Ed25519, and 2420 octets for ML-DSA-44. Other material reports false.
+func ExpectedSignatureBytes(validated any) (int, bool) {
+	switch key := validated.(type) {
+	case *rsa.PublicKey:
+		if key == nil || key.N == nil {
+			return 0, false
+		}
+		return key.Size(), true
+	case ed25519.PublicKey:
+		return ed25519.SignatureSize, true
+	case *mldsa.PublicKey:
+		return MLDSA44SignatureBytes, validMLDSA44PublicKey(key)
+	default:
+		return 0, false
+	}
 }
 
-// DigestBytes returns the Section 12.8 signature-input digest size an
-// algorithm signs: 32 bytes (SHA-256) for rsa-sha256 and ed25519-sha256.
-func DigestBytes(signature.Algorithm) int {
-	return crypto.SHA256.Size()
+// MaxSignatureBytesFor returns the per-algorithm decoded signature bound:
+// the modulus size of the largest admitted RSA key (1024 octets) for
+// rsa-sha256, exactly 64 octets for ed25519-sha256, and exactly 2420 octets
+// for mldsa44. Unknown algorithms have no bound and return zero.
+func MaxSignatureBytesFor(algorithm signature.Algorithm) int {
+	switch algorithm {
+	case signature.AlgorithmRSASHA256:
+		return maxRSASignatureBytes
+	case signature.AlgorithmEd25519SHA256:
+		return ed25519.SignatureSize
+	case signature.AlgorithmMLDSA44:
+		return MLDSA44SignatureBytes
+	default:
+		return 0
+	}
 }
 
 // ValidRSAPublicKeyStructure reports whether key satisfies basic RFC 8017 shape invariants.
@@ -142,7 +185,7 @@ func validateSignatureLengthValidated(algorithm signature.Algorithm, validated a
 	if !algorithm.Known() {
 		return newError(ErrorCodeUnsupportedAlgorithm)
 	}
-	if length <= 0 || length > resolved.MaxSignatureBytes {
+	if length <= 0 || length > resolved.MaxSignatureBytes || length > MaxSignatureBytesFor(algorithm) {
 		return newError(ErrorCodeInvalidSignatureLength)
 	}
 	switch key := validated.(type) {
@@ -154,17 +197,23 @@ func validateSignatureLengthValidated(algorithm signature.Algorithm, validated a
 		if length != ed25519.SignatureSize {
 			return newError(ErrorCodeInvalidSignatureLength)
 		}
+	case *mldsa.PublicKey:
+		if length != MLDSA44SignatureBytes {
+			return newError(ErrorCodeInvalidSignatureLength)
+		}
 	default:
 		return newError(ErrorCodeWrongKeyType)
 	}
 	return nil
 }
 
-// VerifyDigest validates all inputs and verifies one signature over the
-// algorithm-specific signature-input digest (32 bytes for rsa-sha256 and
-// ed25519-sha256).
-func VerifyDigest(algorithm signature.Algorithm, material any, digest, signatureBytes []byte, limits Limits) error {
-	if len(digest) != digestBytes(algorithm) {
+// VerifyRepresentative validates all inputs and verifies one signature over
+// the algorithm's message representative of a Section 12.8 signature input
+// (see MessageRepresentative): the 32-byte SHA-256 digest for rsa-sha256 and
+// ed25519-sha256, and the complete input bytes for mldsa44, which uses pure
+// ML-DSA.Verify (FIPS 204 Algorithm 3) with the context string "DKIM2".
+func VerifyRepresentative(algorithm signature.Algorithm, material any, representative, signatureBytes []byte, limits Limits) error {
+	if !ValidRepresentativeLength(algorithm, len(representative)) {
 		return newError(ErrorCodeInvalidDigestLength)
 	}
 	resolved, err := limits.normalized()
@@ -180,11 +229,15 @@ func VerifyDigest(algorithm signature.Algorithm, material any, digest, signature
 	}
 	switch key := validated.(type) {
 	case *rsa.PublicKey:
-		if rsa.VerifyPKCS1v15(key, crypto.SHA256, digest, signatureBytes) != nil {
+		if rsa.VerifyPKCS1v15(key, crypto.SHA256, representative, signatureBytes) != nil {
 			return newError(ErrorCodeSignatureMismatch)
 		}
 	case ed25519.PublicKey:
-		if !ed25519.Verify(key, digest, signatureBytes) {
+		if !ed25519.Verify(key, representative, signatureBytes) {
+			return newError(ErrorCodeSignatureMismatch)
+		}
+	case *mldsa.PublicKey:
+		if !verifyMLDSA44(key, representative, signatureBytes) {
 			return newError(ErrorCodeSignatureMismatch)
 		}
 	default:
@@ -193,9 +246,10 @@ func VerifyDigest(algorithm signature.Algorithm, material any, digest, signature
 	return nil
 }
 
-// SelfVerifyDigest applies the same strict verification contract to a newly created signature.
-func SelfVerifyDigest(algorithm signature.Algorithm, material any, digest, signatureBytes []byte, limits Limits) error {
-	return VerifyDigest(algorithm, material, digest, signatureBytes, limits)
+// SelfVerifyRepresentative applies the same strict verification contract to
+// a newly created signature.
+func SelfVerifyRepresentative(algorithm signature.Algorithm, material any, representative, signatureBytes []byte, limits Limits) error {
+	return VerifyRepresentative(algorithm, material, representative, signatureBytes, limits)
 }
 
 // ClonePublicKey returns detached supported key material or nil for unknown types.
@@ -205,6 +259,14 @@ func ClonePublicKey(material any) any {
 		return cloneRSAKey(key)
 	case ed25519.PublicKey:
 		return ed25519.PublicKey(bytes.Clone(key))
+	case *mldsa.PublicKey:
+		// An *mldsa.PublicKey is immutable and safe for concurrent use, so
+		// sharing it detaches as well as a copy and avoids re-expanding the
+		// key on the verification path.
+		if !validMLDSA44PublicKey(key) {
+			return nil
+		}
+		return key
 	default:
 		return nil
 	}
@@ -218,12 +280,52 @@ func cloneRSAKey(key *rsa.PublicKey) *rsa.PublicKey {
 	return &rsa.PublicKey{N: new(big.Int).Set(key.N), E: key.E}
 }
 
-// SignatureInputDigest returns the digest of one Section 12.8 signature input
-// that algorithm signs or verifies: SHA-256 for rsa-sha256 and
-// ed25519-sha256. It is the single digest owner for signing.
-func SignatureInputDigest(_ signature.Algorithm, input []byte) []byte {
-	sum := sha256.Sum256(input)
-	return sum[:]
+// MessageRepresentative returns the exact bytes algorithm passes to its
+// signing or verification primitive for one Section 12.8 signature input. It
+// is the single representative owner for signer and verifier:
+//
+//   - rsa-sha256 and ed25519-sha256 (Sections 3.2 and 3.3) sign the 32-byte
+//     SHA-256 digest of the input;
+//   - mldsa44 (Section 3.4) is pure ML-DSA: the input bytes are signed
+//     directly without being hashed first, so the representative is a
+//     detached copy of the complete input.
+//
+// Unknown algorithms and an empty input fail closed.
+func MessageRepresentative(algorithm signature.Algorithm, input []byte) ([]byte, error) {
+	if len(input) == 0 {
+		return nil, newError(ErrorCodeInvalidDigestLength)
+	}
+	switch {
+	case !algorithm.Signable():
+		return nil, newError(ErrorCodeUnsupportedAlgorithm)
+	case SignsInputDirectly(algorithm):
+		return bytes.Clone(input), nil
+	default:
+		sum := sha256.Sum256(input)
+		return sum[:], nil
+	}
+}
+
+// SignsInputDirectly reports whether algorithm signs the complete Section
+// 12.8 input instead of its SHA-256 digest: true only for pure mldsa44
+// (Section 3.4, "DKIM2 does not use HashML-DSA").
+func SignsInputDirectly(algorithm signature.Algorithm) bool {
+	return algorithm == signature.AlgorithmMLDSA44
+}
+
+// ValidRepresentativeLength reports whether length is a coherent message
+// representative size for algorithm: exactly 32 octets (SHA-256) for
+// rsa-sha256 and ed25519-sha256, and any nonempty Section 12.8 input for
+// mldsa44. The caller bounds the input size before it is produced.
+func ValidRepresentativeLength(algorithm signature.Algorithm, length int) bool {
+	switch {
+	case !algorithm.Signable():
+		return false
+	case SignsInputDirectly(algorithm):
+		return length > 0
+	default:
+		return length == crypto.SHA256.Size()
+	}
 }
 
 // PublicKeysEqual compares exact algorithm-specific public key material for
@@ -236,6 +338,9 @@ func PublicKeysEqual(left, right any) bool {
 	case ed25519.PublicKey:
 		r, ok := right.(ed25519.PublicKey)
 		return ok && len(l) == ed25519.PublicKeySize && bytes.Equal(l, r)
+	case *mldsa.PublicKey:
+		r, ok := right.(*mldsa.PublicKey)
+		return ok && validMLDSA44PublicKey(l) && validMLDSA44PublicKey(r) && l.Equal(r)
 	default:
 		return false
 	}
@@ -243,11 +348,18 @@ func PublicKeysEqual(left, right any) bool {
 
 // ParseSigningPublicKeySPKI decodes one canonical SubjectPublicKeyInfo for a
 // signable algorithm: a crypto/x509 encoding that round-trips byte for byte
-// for rsa-sha256 and ed25519-sha256. Unknown algorithms fail closed. It is the
-// single SPKI owner for stored signing credentials.
+// for rsa-sha256, ed25519-sha256, and mldsa44 (OID 2.16.840.1.101.3.4.3.17).
+// Unknown algorithms fail closed; a parsed key of another type or ML-DSA
+// parameter set is rejected by ValidatePublicKey. It is the single SPKI owner
+// for stored signing credentials.
 func ParseSigningPublicKeySPKI(algorithm signature.Algorithm, spki []byte) (any, error) {
 	if !algorithm.Signable() {
 		return nil, newError(ErrorCodeUnsupportedAlgorithm)
+	}
+	if algorithm == signature.AlgorithmMLDSA44 {
+		if err := MLDSA44Available(); err != nil {
+			return nil, err
+		}
 	}
 	parsed, err := x509.ParsePKIXPublicKey(spki)
 	if err != nil {

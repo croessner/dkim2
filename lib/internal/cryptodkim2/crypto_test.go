@@ -101,7 +101,7 @@ func TestVerifyDigestUsesOneSharedAlgorithmLeaf(t *testing.T) {
 	if err != nil {
 		t.Fatal("rsa.SignPKCS1v15() failed")
 	}
-	if err := VerifyDigest(signature.AlgorithmRSASHA256, &rsaPrivate.PublicKey, digest, rsaSignature, Limits{}); err != nil {
+	if err := VerifyRepresentative(signature.AlgorithmRSASHA256, &rsaPrivate.PublicKey, digest, rsaSignature, Limits{}); err != nil {
 		t.Fatalf("RSA verify code=%s", ErrorCodeOf(err))
 	}
 	edPublic, edPrivate, err := ed25519.GenerateKey(rand.Reader)
@@ -109,14 +109,14 @@ func TestVerifyDigestUsesOneSharedAlgorithmLeaf(t *testing.T) {
 		t.Fatal("ed25519.GenerateKey() failed")
 	}
 	edSignature := ed25519.Sign(edPrivate, digest)
-	if err := VerifyDigest(signature.AlgorithmEd25519SHA256, edPublic, digest, edSignature, Limits{}); err != nil {
+	if err := VerifyRepresentative(signature.AlgorithmEd25519SHA256, edPublic, digest, edSignature, Limits{}); err != nil {
 		t.Fatalf("Ed25519 verify code=%s", ErrorCodeOf(err))
 	}
 	edSignature[0] ^= 1
-	if err := VerifyDigest(signature.AlgorithmEd25519SHA256, edPublic, digest, edSignature, Limits{}); ErrorCodeOf(err) != ErrorCodeSignatureMismatch {
+	if err := VerifyRepresentative(signature.AlgorithmEd25519SHA256, edPublic, digest, edSignature, Limits{}); ErrorCodeOf(err) != ErrorCodeSignatureMismatch {
 		t.Fatalf("Ed25519 mismatch code=%s", ErrorCodeOf(err))
 	}
-	if err := VerifyDigest(signature.AlgorithmEd25519SHA256, edPublic, digest[:31], edSignature, Limits{}); ErrorCodeOf(err) != ErrorCodeInvalidDigestLength {
+	if err := VerifyRepresentative(signature.AlgorithmEd25519SHA256, edPublic, digest[:31], edSignature, Limits{}); ErrorCodeOf(err) != ErrorCodeInvalidDigestLength {
 		t.Fatalf("digest length code=%s", ErrorCodeOf(err))
 	}
 }

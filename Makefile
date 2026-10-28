@@ -48,6 +48,7 @@ help:
 		'  make vet                     run Go vet' \
 		'  make lint                    run golangci-lint' \
 		'  make test                    run Go unit tests only' \
+		'  make test-fips140-mldsa44    prove mldsa44 fails closed under FIPS v1.0.0' \
 		'  make race                    run race-enabled Go unit tests only' \
 		'  make build-check             build all product surfaces' \
 		'  make check-generated         verify generated OpenAPI and adapter artifacts' \
@@ -152,8 +153,16 @@ test-postfix-qualification-helper:
 		go test contrib/qualification/postfix-milter/cmd/qualify/main.go \
 			contrib/qualification/postfix-milter/cmd/qualify/main_test.go
 
+# The FIPS 140-3 Go Cryptographic Module v1.0.0 has no ML-DSA; these tests
+# prove that enabling mldsa44 fails closed when built against it.
+.PHONY: test-fips140-mldsa44
+test-fips140-mldsa44:
+	@cd lib && GOFIPS140=v1.0.0 go test -count=1 \
+		-run 'TestMLDSA44AvailabilityFollowsCryptographicModule|TestMLDSA44PolicyFailsClosedWithoutRuntime|TestMLDSA44CredentialFailsClosedWithoutRuntime' \
+		./internal/cryptodkim2/ ./internal/verify/ ./internal/signing/
+
 .PHONY: test
-test: test-postfix-qualification-helper
+test: test-postfix-qualification-helper test-fips140-mldsa44
 	@set -e; for module in $(PRODUCT_MODULES); do \
 		echo "==> go test $$module/..."; \
 		(cd $$module && go test ./...); \

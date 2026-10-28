@@ -168,7 +168,7 @@ func TestParseAlgorithmAdmitsOnlySignableAlgorithms(t *testing.T) {
 			t.Fatalf("ParseAlgorithm(%q) = %q, %v", algorithm, parsed, err)
 		}
 	}
-	if got := SigningAlgorithms(); len(got) != 2 || got[0] != AlgorithmRSASHA256 || got[1] != AlgorithmEd25519SHA256 {
+	if got := SigningAlgorithms(); len(got) != 3 || got[0] != AlgorithmRSASHA256 || got[1] != AlgorithmEd25519SHA256 || got[2] != AlgorithmMLDSA44 {
 		t.Fatalf("SigningAlgorithms() = %v", got)
 	}
 	for _, value := range []string{"", "unknown", "rsa-sha1", "RSA-SHA256", "ed25519-sha512", "mldsa44-ed25519-sha512"} {

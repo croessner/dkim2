@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/hmac"
+	"crypto/mldsa"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
@@ -349,6 +350,13 @@ func detachProviderPublicKey(algorithm Algorithm, material any) any {
 			return nil
 		}
 		return &rsa.PublicKey{N: new(big.Int).Set(key.N), E: key.E}
+	case *mldsa.PublicKey:
+		if algorithm != AlgorithmMLDSA44 {
+			return nil
+		}
+		// An *mldsa.PublicKey is immutable; ClonePublicKey shares it after
+		// checking the ML-DSA-44 parameter set.
+		return cryptodkim2.ClonePublicKey(key)
 	default:
 		return nil
 	}
@@ -384,6 +392,11 @@ func publicKeyTranscript(material any) []byte {
 		return result
 	case ed25519.PublicKey:
 		return append([]byte(nil), key...)
+	case *mldsa.PublicKey:
+		if key == nil {
+			return nil
+		}
+		return key.Bytes()
 	default:
 		return nil
 	}

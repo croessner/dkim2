@@ -95,7 +95,7 @@ func (p *propagationProvider) SignDigest(_ context.Context, handle PrivateKeyHan
 		if err != nil || expected != handle || request.Algorithm() != AlgorithmEd25519SHA256 {
 			continue
 		}
-		digest := request.Digest()
+		digest := request.MessageRepresentative()
 		return NewPrivateKeySignResult(ed25519.Sign(key.Private, digest[:])), nil
 	}
 	return PrivateKeySignResult{}, errors.New("unknown handle")

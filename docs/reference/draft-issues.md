@@ -61,18 +61,31 @@ is independently observed.
   The two public-facade conformance cases are bound to this entry; their
   earlier omission from this register was a documentation defect.
 
-- `DKIM2-ISSUE-0019` records a deliberate deviation: Draft-08 Section 3.4
-  names the post-quantum `mldsa44-ed25519-sha512` algorithm without spelling
-  out its message representative, DNS-02 Section 3.3 cites the LAMPS composite
-  construction for the matching key type, and the DKIM working group has not
-  settled the DKIM2 post-quantum construction (the October 2026 list
-  discussion weighs separate multiple signatures, the LAMPS composite, and
-  plain ML-DSA-44; it is to be revisited at IETF 127). The implementation does
-  not ship a construction that may not be standardized: the algorithm and the
-  `k=mldsa44-ed25519-sha512` key type are not implemented and are handled
-  exactly like any other unknown algorithm or key type, and signing
-  credentials that declare it fail closed. The baseline stays
-  `draft-ietf-dkim-dkim2-spec-08` plus `draft-ietf-dkim-dkim2-dns-02`.
+- `DKIM2-ISSUE-0019` is superseded by the baseline. Draft-07 Section 3.4
+  named the post-quantum composite `mldsa44-ed25519-sha512`; Draft-08
+  Section 3.4 replaces it with pure ML-DSA-44 (`mldsa44`), which the
+  implementation now verifies and signs. The composite algorithm and the
+  `k=mldsa44-ed25519-sha512` key type stay unimplemented and are handled
+  exactly like any other unknown algorithm or key type; signing credentials
+  that declare it fail closed.
+
+## DNS-02 and Draft-08 algorithm gaps
+
+- `DKIM2-ISSUE-0020` records that DNS-02 defines no key type for pure
+  ML-DSA-44. The implementation reads `k=mldsa44` (a valid hyphenated
+  `x-key-k-tag-type` word equal to the Draft-08 Section 10.9 sig-name, as the
+  key-type and algorithm match requires) with `p=` carrying the raw
+  1312-octet FIPS 204 public key (1752 base64 characters); every other length
+  is a malformed key (`invalid_key`, Draft-08 Section 14.5), and `h=` is
+  ignored. `opendkim-manage-go` publishes exactly this form.
+- `DKIM2-ISSUE-0021` records that DNS-02 Section 3.3 lists `rsa-sha512`,
+  `ed25519-sha512`, and the composite as signing algorithms, while Draft-08
+  defines only `rsa-sha256`, `ed25519-sha256`, and `mldsa44`. Draft-08 is
+  authoritative for `s=` sig-names; the DNS-02-only names are unknown
+  algorithms (a PERMERROR intermediate, no key lookup).
+- `DKIM2-ISSUE-0022` records that DNS-02 names the composite key type
+  `mldsa44-ed25519` in its Section 3.3 table but `mldsa44-ed25519-sha512` in
+  the Section 3.4.1 ABNF. Both spellings are unsupported key types.
 
 The repository has not filed, commented on, or modified any upstream issue as
 part of this release-candidate work.
@@ -84,5 +97,6 @@ part of this release-candidate work.
 `DKIM2-ISSUE-0007`, `DKIM2-ISSUE-0008`, `DKIM2-ISSUE-0009`,
 `DKIM2-ISSUE-0010`, `DKIM2-ISSUE-0011`, `DKIM2-ISSUE-0012`,
 `DKIM2-ISSUE-0013`, `DKIM2-ISSUE-0014`, `DKIM2-ISSUE-0015`,
-`DKIM2-ISSUE-0016`, `DKIM2-ISSUE-0017`, `DKIM2-ISSUE-0018`, and
-`DKIM2-ISSUE-0019`.
+`DKIM2-ISSUE-0016`, `DKIM2-ISSUE-0017`, `DKIM2-ISSUE-0018`,
+`DKIM2-ISSUE-0019`, `DKIM2-ISSUE-0020`, `DKIM2-ISSUE-0021`, and
+`DKIM2-ISSUE-0022`.

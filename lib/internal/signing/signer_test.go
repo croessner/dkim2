@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto"
 	"crypto/ed25519"
+	"crypto/mldsa"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
@@ -30,11 +31,13 @@ const (
 	eventInheritedEd25519             = "inherited:ed25519-sha256"
 	eventPublishRSA                   = "publish:rsa-sha256"
 	eventPublishEd25519               = "publish:ed25519-sha256"
+	eventPublishMLDSA44               = "publish:mldsa44"
 	eventAuthorizePolicy              = "authorize:policy"
 	eventAuthorizeFeedbackRelay       = "authorize:feedback_relay"
 	eventAuthorizeRecipientDisclosure = "authorize:recipient_disclosure"
 	eventSignRSA                      = "sign:rsa-sha256"
 	eventSignEd25519                  = "sign:ed25519-sha256"
+	eventSignMLDSA44                  = "sign:mldsa44"
 	eventRouteReserve                 = "route:reserve"
 	eventRouteBurn                    = "route:burn"
 	eventRouteReplace                 = "route:replace"
@@ -203,7 +206,7 @@ func (h signerHarness) defaultSigner(t *testing.T) PrivateKeySigner {
 		if !ok {
 			t.Fatal("private signer received an unknown opaque handle")
 		}
-		digest := request.Digest()
+		digest := request.MessageRepresentative()
 		var signatureBytes []byte
 		var err error
 		switch request.Algorithm() {
@@ -211,6 +214,8 @@ func (h signerHarness) defaultSigner(t *testing.T) PrivateKeySigner {
 			signatureBytes, err = rsa.SignPKCS1v15(rand.Reader, key.(*rsa.PrivateKey), crypto.SHA256, digest[:])
 		case AlgorithmEd25519SHA256:
 			signatureBytes = ed25519.Sign(key.(ed25519.PrivateKey), digest[:])
+		case AlgorithmMLDSA44:
+			signatureBytes, err = key.(*mldsa.PrivateKey).Sign(rand.Reader, digest, cryptodkim2.MLDSA44SignerOptions())
 		default:
 			t.Fatalf("private signer received unknown algorithm %q", request.Algorithm())
 		}
@@ -482,6 +487,14 @@ func newTestSigningProfile(t *testing.T, domain string, algorithms []Algorithm) 
 			seed := sha256.Sum256([]byte("signer-harness-ed25519"))
 			key := ed25519.NewKeyFromSeed(seed[:])
 			publicKey, privateKey = key.Public().(ed25519.PublicKey), key
+		case AlgorithmMLDSA44:
+			selector, handleText = "mldsa-selector", "mldsa-handle"
+			seed := sha256.Sum256([]byte("signer-harness-mldsa44"))
+			key, keyErr := mldsa.NewPrivateKey(mldsa.MLDSA44(), seed[:])
+			if keyErr != nil {
+				t.Fatalf("mldsa.NewPrivateKey() error = %v", keyErr)
+			}
+			publicKey, privateKey = key.PublicKey(), key
 		default:
 			t.Fatalf("unsupported harness algorithm %q", algorithm)
 		}
@@ -508,7 +521,7 @@ func newTestSigningProfile(t *testing.T, domain string, algorithms []Algorithm) 
 func TestPrivateKeySignRequestAndResultAreClosedImmutableAndRedacted(t *testing.T) {
 	zeroDigest := make([]byte, sha256.Size)
 	request, err := NewPrivateKeySignRequest(AlgorithmEd25519SHA256, zeroDigest)
-	if err != nil || !request.Valid() || request.Algorithm() != AlgorithmEd25519SHA256 || !bytes.Equal(request.Digest(), zeroDigest) {
+	if err != nil || !request.Valid() || request.Algorithm() != AlgorithmEd25519SHA256 || !bytes.Equal(request.MessageRepresentative(), zeroDigest) {
 		t.Fatalf("zero-digest request valid=%t algorithm=%q error=%v", request.Valid(), request.Algorithm(), err)
 	}
 	if invalid, requestErr := NewPrivateKeySignRequest(Algorithm("future"), zeroDigest); !IsErrorCode(requestErr, ErrorCodeInvalidRequest) || invalid.Valid() {
@@ -696,13 +709,31 @@ func TestOriginSigningSupportsRSAEd25519AndDualInCanonicalOrder(t *testing.T) {
 				eventSignRSA, eventSignEd25519,
 			},
 		},
+		{
+			name: "mldsa44 only", algorithms: []Algorithm{AlgorithmMLDSA44},
+			wantEvents: []string{eventRouteReserve, eventRouteBurn, eventPublishMLDSA44, eventSignMLDSA44},
+		},
+		{
+			name: "classical group plus mldsa44 alternative", algorithms: []Algorithm{AlgorithmMLDSA44, AlgorithmEd25519SHA256, AlgorithmRSASHA256},
+			wantEvents: []string{
+				eventRouteReserve, eventRouteBurn, eventPublishRSA, eventPublishEd25519, eventPublishMLDSA44,
+				eventSignRSA, eventSignEd25519, eventSignMLDSA44,
+			},
+		},
+		{
+			name: "ed25519 plus mldsa44 alternative", algorithms: []Algorithm{AlgorithmMLDSA44, AlgorithmEd25519SHA256},
+			wantEvents: []string{
+				eventRouteReserve, eventRouteBurn, eventPublishEd25519, eventPublishMLDSA44,
+				eventSignEd25519, eventSignMLDSA44,
+			},
+		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			harness := newSignerHarness(t, test.algorithms...)
 			var digests [][]byte
 			delegate := harness.defaultSigner(t)
 			signer := privateSignerFunc(func(ctx context.Context, handle PrivateKeyHandle, request PrivateKeySignRequest) (PrivateKeySignResult, error) {
-				digests = append(digests, request.Digest())
+				digests = append(digests, request.MessageRepresentative())
 				return delegate.SignDigest(ctx, handle, request)
 			})
 			coordinator := harness.newCoordinator(t, signer, Limits{})
@@ -729,9 +760,17 @@ func TestOriginSigningSupportsRSAEd25519AndDualInCanonicalOrder(t *testing.T) {
 				t.Fatalf("signer calls = %d, want %d", len(digests), len(canonical))
 			}
 			for index, algorithm := range canonical {
-				if len(digests[index]) != cryptodkim2.DigestBytes(algorithm) {
-					t.Fatalf("%s received a %d-byte digest", algorithm, len(digests[index]))
+				want := sha256.Size
+				if algorithm == AlgorithmMLDSA44 {
+					want = completed.input.Len()
 				}
+				if len(digests[index]) != want || !cryptodkim2.ValidRepresentativeLength(algorithm, len(digests[index])) {
+					t.Fatalf("%s received a %d-byte representative, want %d", algorithm, len(digests[index]), want)
+				}
+			}
+			wantAlternative := slices.Contains(test.algorithms, AlgorithmMLDSA44) && len(test.algorithms) > 1
+			if strings.Contains(string(completed.field.Bytes()), "|") != wantAlternative {
+				t.Fatalf("s= group layout does not match the algorithms %v", test.algorithms)
 			}
 			field := string(completed.field.Bytes())
 			rsaAt, edAt := strings.Index(field, "rsa-selector:rsa-sha256:"),

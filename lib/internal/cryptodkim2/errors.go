@@ -20,12 +20,18 @@ const (
 	ErrorCodeInvalidKey ErrorCode = "invalid_key"
 	// ErrorCodeKeyPolicyRejected reports structurally valid material outside fixed policy.
 	ErrorCodeKeyPolicyRejected ErrorCode = "key_policy_rejected"
-	// ErrorCodeInvalidDigestLength reports a non-SHA-256 digest length.
+	// ErrorCodeInvalidDigestLength reports a message representative whose
+	// length does not fit the algorithm (not a 32-byte SHA-256 digest for
+	// rsa-sha256 and ed25519-sha256, or an empty mldsa44 input).
 	ErrorCodeInvalidDigestLength ErrorCode = "invalid_digest_length"
 	// ErrorCodeInvalidSignatureLength reports an algorithm-incoherent signature length.
 	ErrorCodeInvalidSignatureLength ErrorCode = "invalid_signature_length"
 	// ErrorCodeSignatureMismatch reports cryptographic verification failure.
 	ErrorCodeSignatureMismatch ErrorCode = "signature_mismatch"
+	// ErrorCodeAlgorithmUnavailable reports an implemented algorithm the
+	// cryptographic runtime cannot provide, such as mldsa44 under the FIPS
+	// 140-3 Go Cryptographic Module v1.0.0.
+	ErrorCodeAlgorithmUnavailable ErrorCode = "algorithm_unavailable"
 )
 
 // Known reports whether code belongs to the closed crypto vocabulary.
@@ -33,7 +39,7 @@ func (c ErrorCode) Known() bool {
 	switch c {
 	case ErrorCodeInvalidOptions, ErrorCodeUnsupportedAlgorithm, ErrorCodeWrongKeyType,
 		ErrorCodeInvalidKey, ErrorCodeKeyPolicyRejected, ErrorCodeInvalidDigestLength,
-		ErrorCodeInvalidSignatureLength, ErrorCodeSignatureMismatch:
+		ErrorCodeInvalidSignatureLength, ErrorCodeSignatureMismatch, ErrorCodeAlgorithmUnavailable:
 		return true
 	default:
 		return false

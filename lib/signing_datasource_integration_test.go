@@ -189,7 +189,7 @@ func (p *orderedSigningProvider) SignDigest(
 	if handle != p.handle || request.Algorithm() != AlgorithmRSASHA256 {
 		return PrivateKeySignResult{}, NewPermanentProviderError()
 	}
-	digest := request.Digest()
+	digest := request.MessageRepresentative()
 	signature, err := rsa.SignPKCS1v15(
 		rand.Reader,
 		p.key,

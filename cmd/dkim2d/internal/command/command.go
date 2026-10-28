@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/croessner/dkim2"
 	"github.com/croessner/dkim2/cmd/dkim2d/internal/app"
 	"github.com/croessner/dkim2/cmd/dkim2d/internal/config"
 	"github.com/croessner/dkim2/cmd/dkim2d/internal/domainadmin"
@@ -96,6 +97,11 @@ var (
 	buildVersion      = "development"
 	errCommandShape   = errors.New("dkim2d command shape failure")
 	errCommandRuntime = errors.New("dkim2d command runtime failure")
+	// errMLDSA44Unavailable is the fixed, secret-free startup refusal when the
+	// binary was built against a cryptographic module without ML-DSA.
+	errMLDSA44Unavailable = errors.New("mldsa44 is unavailable: this binary uses the FIPS 140-3 Go " +
+		"Cryptographic Module v1.0.0, which has no ML-DSA, but Draft-08 Section 3 requires verifiers " +
+		"to implement mldsa44; rebuild without GOFIPS140=v1.0.0")
 )
 
 // configMigrationError carries fixed schema-owned migration guidance for a
@@ -148,6 +154,9 @@ type commandDependencies struct {
 	rollback    func(context.Context, string, string, bool, string) ([]byte, error)
 	domain      func(context.Context, domainadmin.CommandRequest) ([]byte, error)
 	rotation    func(context.Context, rotationruntime.Request) ([]byte, error)
+	// cryptography reports whether the runtime provides every mandatory
+	// signature algorithm; nil means the production check.
+	cryptography func() error
 }
 
 // protectedBootstrap adapts the concrete protected owner without exposing it to tests.
@@ -215,7 +224,22 @@ func productionDependencies() commandDependencies {
 		rotation: func(ctx context.Context, request rotationruntime.Request) ([]byte, error) {
 			return rotationruntime.RunFile(ctx, request, nil)
 		},
+		cryptography: dkim2.MLDSA44Available,
 	}
+}
+
+// requireCryptographicRuntime fails closed before any configuration is
+// loaded when the runtime cannot provide mldsa44, so a FIPS v1.0.0 build
+// never starts a verifier or signer that silently lacks the algorithm.
+func requireCryptographicRuntime(deps commandDependencies) error {
+	check := deps.cryptography
+	if check == nil {
+		check = dkim2.MLDSA44Available
+	}
+	if check() != nil {
+		return errMLDSA44Unavailable
+	}
+	return nil
 }
 
 // Execute runs one fresh dkim2d command and returns its stable process exit status.
@@ -260,6 +284,9 @@ func executeWithDependencies(
 		return 0
 	case errors.As(err, &migration):
 		writeDiagnostic(stderr, "dkim2d: "+migration.guidance+"\n")
+		return 1
+	case errors.Is(err, errMLDSA44Unavailable):
+		writeDiagnostic(stderr, "dkim2d: "+errMLDSA44Unavailable.Error()+"\n")
 		return 1
 	case errors.Is(err, errCommandRuntime):
 		writeDiagnostic(stderr, commandRuntimeDiagnostic)
@@ -637,6 +664,9 @@ func runValidate(configPath string, deps commandDependencies) error {
 		deps.load == nil {
 		return errCommandRuntime
 	}
+	if err := requireCryptographicRuntime(deps); err != nil {
+		return err
+	}
 	owner, err := loadBootstrap(
 		deps.load,
 		configPath,
@@ -702,6 +732,9 @@ func runServe(
 ) error {
 	if startContext == nil || !filepath.IsAbs(configPath) {
 		return errCommandRuntime
+	}
+	if err := requireCryptographicRuntime(deps); err != nil {
+		return err
 	}
 	owner, err := loadBootstrap(deps.load, configPath, flags)
 	if err != nil {

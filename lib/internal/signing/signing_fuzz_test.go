@@ -37,7 +37,7 @@ func FuzzSigningRequest(f *testing.F) {
 		sum := sha256.Sum256(append(bytes.Clone(handleSeed), nonceSeed...))
 		digest := sum[:]
 		request, err := NewPrivateKeySignRequest(algorithm, digest)
-		if err != nil || !request.Valid() || request.Algorithm() != algorithm || !bytes.Equal(request.Digest(), digest) {
+		if err != nil || !request.Valid() || request.Algorithm() != algorithm || !bytes.Equal(request.MessageRepresentative(), digest) {
 			t.Fatalf("NewPrivateKeySignRequest() valid=%t algorithm=%q error=%v", request.Valid(), request.Algorithm(), err)
 		}
 

@@ -122,6 +122,60 @@ deployed and rolled back as one digest-pinned set. The exact multi-instance resp
 documented in the
 [Milter adapter contract](../specs/implementation/milter-adapter.md#canonical-multi-instance-policy-response).
 
+### ML-DSA-44 (`mldsa44`)
+
+Draft-08 Section 3.4 makes pure ML-DSA-44 a verifier MUST. The library,
+`dkim2d`, the generated clients, and the Rspamd contrib add it together.
+
+Breaking changes to the exported root Go API (`github.com/croessner/dkim2`):
+
+- `PrivateKeySigner` implementations: `PrivateKeySignRequest.Valid` now also
+  accepts `mldsa44`, and the bytes to sign are
+  `PrivateKeySignRequest.MessageRepresentative()`. For `rsa-sha256` and
+  `ed25519-sha256` this is the unchanged 32-byte SHA-256 digest; for
+  `mldsa44` it is the complete Section 12.8 input (bounded by
+  `SigningLimits.MaxSignatureInputBytes`, 2 MiB by default), which the signer
+  passes to the hedged `crypto/mldsa` `PrivateKey.Sign` with
+  `MLDSA44SignerOptions()` (context string `DKIM2`). `Digest()` is
+  deprecated and returns nil for `mldsa44`; a callback that assumed a 32-byte
+  digest for every valid request must switch to `MessageRepresentative()`.
+  The interface method keeps its name `SignDigest`.
+- `Algorithm.Known` accepts `AlgorithmMLDSA44`; exhaustive switches over
+  `Algorithm` (and over `ObservationAlgorithm`, which appends
+  `ObservationAlgorithmMLDSA44` after the existing values without
+  renumbering them) need a new case.
+- A `SigningProfile` may hold three credentials, `SignedMessageFacts.Algorithms()`
+  may contain `mldsa44`, and the emitted `s=` value then contains a `|`
+  separator (`rsa,ed25519 | mldsa44`).
+- `SigningLimits.MaxPrivateSignatureBytes` defaults to 2420 (was 1024) and
+  must be at least 2420; `MaxGeneratedSignatureSets` and
+  `MaxPrivateSigningCalls` default to 3 (were 2). A caller that pinned the old
+  values gets `invalid_options`.
+- `NewVerifier` and `NewMLDSA44SigningCredential` fail when the binary is
+  built against the FIPS 140-3 Go Cryptographic Module v1.0.0, which has no
+  ML-DSA; `MLDSA44Available` reports the condition.
+
+Additive declarations: `AlgorithmMLDSA44`, `FoundMLDSA44PublicKey`,
+`PublicKeyResult.MLDSA44PublicKey`, `MLDSA44SigningCredential`,
+`NewMLDSA44SigningCredential`, `NewMLDSA44SigningProfile`, the sealed
+`SigningCredential` interface with `NewSigningProfile`,
+`NewMLDSA44NextDomainPublicationRequest`, `MLDSA44SignerOptions`,
+`MLDSA44Available`, `ObservationAlgorithmMLDSA44`, and
+`PrivateKeySignRequest.MessageRepresentative`.
+
+Repository-internal packages (not a public surface, listed for sibling
+modules): `signing.PrivateKeySignRequest.Digest` is replaced by
+`MessageRepresentative`, and `cryptodkim2.VerifyDigest`, `SelfVerifyDigest`,
+`DigestBytes`, and `SignatureInputDigest` are replaced by
+`VerifyRepresentative`, `SelfVerifyRepresentative`,
+`ValidRepresentativeLength`, and `MessageRepresentative`.
+
+HTTP wire `v1`: `SignatureSetResult.algorithm` and
+`VerifierHop.signature_algorithms` gain `mldsa44`. Generated clients reject
+values outside their enum, so every generated artifact and the Rspamd
+vocabulary are deployed with the daemon as one digest-pinned set. `dkim2d
+serve` and `dkim2d validate` refuse to start without ML-DSA support.
+
 The compatibility window begins only if all seven `v0.1.0-rc.1` module tags
 are later created under separately authorized release work. From then through
 `v0.1.0`, breaking exported Go API, HTTP wire `v1`, configuration, CLI machine

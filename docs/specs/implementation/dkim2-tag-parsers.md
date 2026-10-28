@@ -395,12 +395,16 @@ syntax that the DNS record format copies from DKIM2.
   are null, and no WSP is emitted. Verifier canonicalization and the signer's
   completion proof both use it; the signer's folded unsigned field is proven
   to reduce to the same bytes.
-- Known signature algorithm names are `rsa-sha256` and `ed25519-sha256`.
-  Unknown algorithm names are represented but cannot create verification
-  success in later milestones.
-- For `ed25519-sha256`, M2 may enforce the stable 64-byte Ed25519 signature
-  length after base64 decoding. RSA signature lengths and key matching remain
-  deferred to M4 and DNS milestones.
+- Known signature algorithm names are `rsa-sha256`, `ed25519-sha256`, and
+  `mldsa44` (Draft-08 Section 10.9). Unknown algorithm names, including the
+  DNS-02-only `rsa-sha512`, `ed25519-sha512`, and the removed composite, are
+  represented but cannot create verification success.
+- Fixed-length algorithms are enforced after base64 decoding: exactly 64
+  octets for `ed25519-sha256` and exactly 2420 octets (3228 base64
+  characters) for `mldsa44`; any other length is
+  `invalid_signature_length`. RSA signature lengths depend on the key and are
+  checked at verification. The signer renders the 3228-character `mldsa44`
+  value folded in 64-character chunks inside the base64string.
 - A selector must not repeat anywhere in one `s=` value, across all groups
   (`duplicate_selector`). Several sets may use the same algorithm with
   distinct selectors; Draft-08 removed the Draft-07 per-algorithm cap of two

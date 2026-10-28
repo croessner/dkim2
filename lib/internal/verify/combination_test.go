@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto"
 	"crypto/ed25519"
+	"crypto/mldsa"
 	"crypto/rand"
 	"crypto/rsa"
 	"encoding/base64"
@@ -15,6 +16,7 @@ const (
 	combinationRSASelector     = "combo-rsa.test"
 	combinationRSATwoSelector  = "combo-rsa-two.test"
 	combinationEdSelector      = "combo-ed.test"
+	combinationMLDSASelector   = "combo-ml.test"
 	combinationUnknownSelector = "combo-future.test"
 	combinationUnknownName     = "future-sha999"
 
@@ -36,6 +38,8 @@ type combinationFixture struct {
 	rsaTwoKey *rsa.PublicKey
 	edKey     ed25519.PublicKey
 	wrongEd   ed25519.PublicKey
+	mlKey     *mldsa.PublicKey
+	wrongML   *mldsa.PublicKey
 	signed    string
 }
 
@@ -60,12 +64,21 @@ func newCombinationFixture(t *testing.T, template string) combinationFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
+	mlPrivate, err := mldsa.GenerateKey(mldsa.MLDSA44())
+	if err != nil {
+		t.Fatal(err)
+	}
+	wrongML, err := mldsa.GenerateKey(mldsa.MLDSA44())
+	if err != nil {
+		t.Fatal(err)
+	}
 	headerDigest, bodyDigest := baseMessageDigests(t)
 	render := func(values map[string]string) string {
 		return strings.NewReplacer(
 			"{rsa}", combinationRSASelector+":"+string(AlgorithmRSASHA256)+":"+values["rsa"],
 			"{rsa2}", combinationRSATwoSelector+":"+string(AlgorithmRSASHA256)+":"+values["rsa2"],
 			"{ed}", combinationEdSelector+":"+string(AlgorithmEd25519SHA256)+":"+values["ed"],
+			"{ml}", combinationMLDSASelector+":"+string(AlgorithmMLDSA44)+":"+foldedBase64(values["ml"]),
 			"{x}", combinationUnknownSelector+":"+combinationUnknownName+":"+values["x"],
 		).Replace(template)
 	}
@@ -73,10 +86,15 @@ func newCombinationFixture(t *testing.T, template string) combinationFixture {
 		"rsa":  base64.StdEncoding.EncodeToString(bytesOf(0xa5, 128)),
 		"rsa2": base64.StdEncoding.EncodeToString(bytesOf(0xa5, 128)),
 		"ed":   base64.StdEncoding.EncodeToString(bytesOf(0xa5, ed25519.SignatureSize)),
+		"ml":   base64.StdEncoding.EncodeToString(bytesOf(0xa5, mldsa.MLDSA44SignatureSize)),
 		"x":    base64.StdEncoding.EncodeToString(bytesOf(0x42, 32)),
 	}
 	unsigned := mustParseVerificationMessage(t, rawWithSignatureFields(headerDigest, bodyDigest, []string{signatureField(1, render(placeholders))}))
 	digest := signatureDigestForTarget(t, unsigned, 1)
+	mlSignature, err := mlPrivate.Sign(rand.Reader, signatureInputForTarget(t, unsigned, 1), &mldsa.Options{Context: "DKIM2"})
+	if err != nil {
+		t.Fatal(err)
+	}
 	rsaSignature, err := rsa.SignPKCS1v15(rand.Reader, rsaKey, crypto.SHA256, digest)
 	if err != nil {
 		t.Fatal(err)
@@ -89,6 +107,7 @@ func newCombinationFixture(t *testing.T, template string) combinationFixture {
 		"rsa":  base64.StdEncoding.EncodeToString(rsaSignature),
 		"rsa2": base64.StdEncoding.EncodeToString(rsaTwoSignature),
 		"ed":   base64.StdEncoding.EncodeToString(ed25519.Sign(edPrivate, digest)),
+		"ml":   base64.StdEncoding.EncodeToString(mlSignature),
 		"x":    placeholders["x"],
 	}
 	signed := render(values)
@@ -96,13 +115,31 @@ func newCombinationFixture(t *testing.T, template string) combinationFixture {
 	if err != nil {
 		t.Fatalf("parseVerificationFixture() error = %v", err)
 	}
-	return combinationFixture{verificationFixture: parsed, rsaKey: &rsaKey.PublicKey, rsaTwoKey: &rsaTwo.PublicKey, edKey: edPublic, wrongEd: wrongEd, signed: signed}
+	return combinationFixture{
+		verificationFixture: parsed, rsaKey: &rsaKey.PublicKey, rsaTwoKey: &rsaTwo.PublicKey, edKey: edPublic, wrongEd: wrongEd,
+		mlKey: mlPrivate.PublicKey(), wrongML: wrongML.PublicKey(), signed: signed,
+	}
+}
+
+// foldedBase64 inserts folding white space into a long base64string so the
+// 3228-character mldsa44 value stays within header line limits; FWS inside
+// a base64string is ignored (Draft-08 Section 2).
+func foldedBase64(value string) string {
+	const chunk = 64
+	var folded strings.Builder
+	for start := 0; start < len(value); start += chunk {
+		if start > 0 {
+			folded.WriteString("\r\n\t")
+		}
+		folded.WriteString(value[start:min(start+chunk, len(value))])
+	}
+	return folded.String()
 }
 
 // combinationKeys selects the published keys: correct, wrong, temporary, or
 // absent per selector.
 type combinationKeys struct {
-	rsa, rsaTwo, ed string
+	rsa, rsaTwo, ed, ml string
 }
 
 // combinationProvider answers lookups from the fixture according to the
@@ -116,7 +153,10 @@ type combinationProvider struct {
 // LookupKey returns the configured key, a missing key, or a temporary failure.
 func (p *combinationProvider) LookupKey(_ context.Context, query KeyQuery) (PublicKey, error) {
 	p.lookups = append(p.lookups, query.Selector)
-	mode := map[string]string{combinationRSASelector: p.keys.rsa, combinationRSATwoSelector: p.keys.rsaTwo, combinationEdSelector: p.keys.ed}[query.Selector]
+	mode := map[string]string{
+		combinationRSASelector: p.keys.rsa, combinationRSATwoSelector: p.keys.rsaTwo,
+		combinationEdSelector: p.keys.ed, combinationMLDSASelector: p.keys.ml,
+	}[query.Selector]
 	var material any
 	switch {
 	case mode == keyModeTemporary:
@@ -127,6 +167,10 @@ func (p *combinationProvider) LookupKey(_ context.Context, query KeyQuery) (Publ
 		material = p.fixture.rsaKey
 	case query.Selector == combinationRSATwoSelector:
 		material = p.fixture.rsaTwoKey
+	case query.Selector == combinationMLDSASelector && mode == keyModeWrong:
+		material = p.fixture.wrongML
+	case query.Selector == combinationMLDSASelector:
+		material = p.fixture.mlKey
 	case mode == keyModeWrong:
 		material = p.fixture.wrongEd
 	default:

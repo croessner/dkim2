@@ -530,6 +530,22 @@ func signatureDigestForTarget(t *testing.T, message rawmsg.Message, target uint6
 	return digest[:]
 }
 
+// signatureInputForTarget returns the complete Section 12.8 signature input
+// of one target, the message representative pure mldsa44 signs.
+func signatureInputForTarget(t *testing.T, message rawmsg.Message, target uint64) []byte {
+	t.Helper()
+
+	input, err := mustCanonicalizer(t).SignatureInput(canonical.SignatureInputSelection{
+		Headers:        message.Headers(),
+		TargetSequence: target,
+	})
+	if err != nil {
+		t.Fatalf("SignatureInput() error = %v", err)
+	}
+
+	return input.Bytes()
+}
+
 // rawWithSignatureFields renders a synthetic message with supplied signature field bodies.
 func rawWithSignatureFields(headerDigest string, bodyDigest string, signatureFields []string) string {
 	var raw strings.Builder

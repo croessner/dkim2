@@ -356,8 +356,8 @@ func TestTargetEnforcesSharedSignatureSetCardinality(t *testing.T) {
 		code ErrorCode
 	}{
 		{name: "duplicate selector", sets: []SetPlan{{Selector: "same", Algorithm: AlgorithmRSASHA256}, {Selector: "SAME", Algorithm: AlgorithmEd25519SHA256}}, code: ErrorCodeDuplicateSelector},
-		{name: "third set exceeds generated set limit", sets: []SetPlan{{Selector: signatureTestFirstSelector, Algorithm: Algorithm("future")}, {Selector: signatureTestSecondSelector, Algorithm: Algorithm("future")}, {Selector: signatureTestThirdSelector, Algorithm: Algorithm("future")}}, code: ErrorCodeLimitExceeded},
-		{name: "total set limit", sets: []SetPlan{{Selector: signatureTestFirstSelector, Algorithm: Algorithm("future-one")}, {Selector: signatureTestSecondSelector, Algorithm: Algorithm("future-two")}, {Selector: signatureTestThirdSelector, Algorithm: Algorithm("future-three")}, {Selector: "fourth", Algorithm: Algorithm("future-four")}}, code: ErrorCodeLimitExceeded},
+		{name: "fourth set exceeds generated set limit", sets: []SetPlan{{Selector: signatureTestFirstSelector, Algorithm: Algorithm("future")}, {Selector: signatureTestSecondSelector, Algorithm: Algorithm("future")}, {Selector: signatureTestThirdSelector, Algorithm: Algorithm("future")}, {Selector: "fourth", Algorithm: Algorithm("future")}}, code: ErrorCodeLimitExceeded},
+		{name: "total set limit", sets: []SetPlan{{Selector: signatureTestFirstSelector, Algorithm: Algorithm("future-one")}, {Selector: signatureTestSecondSelector, Algorithm: Algorithm("future-two")}, {Selector: signatureTestThirdSelector, Algorithm: Algorithm("future-three")}, {Selector: "fourth", Algorithm: Algorithm("future-four")}, {Selector: "fifth", Algorithm: Algorithm("future-five")}}, code: ErrorCodeLimitExceeded},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

@@ -2,10 +2,12 @@ package dkim2
 
 import (
 	"crypto/ed25519"
+	"crypto/mldsa"
 	"crypto/rsa"
 	"fmt"
 	"io"
 
+	"github.com/croessner/dkim2/internal/niliface"
 	"github.com/croessner/dkim2/internal/signing"
 )
 
@@ -105,8 +107,61 @@ func (c Ed25519SigningCredential) Format(state fmt.State, _ rune) {
 	_, _ = io.WriteString(state, c.String())
 }
 
-// SigningProfile is an immutable canonical signing domain with one or both
-// baseline algorithm credentials.
+// MLDSA44SigningCredential is one immutable pure ML-DSA-44 public credential
+// paired with an opaque private-key handle.
+type MLDSA44SigningCredential struct{ value signing.Credential }
+
+// NewMLDSA44SigningCredential validates and snapshots one mldsa44
+// credential. It fails closed when the cryptographic runtime cannot provide
+// ML-DSA-44 (the FIPS 140-3 Go Cryptographic Module v1.0.0) or the key is not
+// an ML-DSA-44 key.
+func NewMLDSA44SigningCredential(selector string, publicKey *mldsa.PublicKey, handle PrivateKeyHandle) (MLDSA44SigningCredential, error) {
+	value, err := signing.NewCredential(selector, signing.AlgorithmMLDSA44, publicKey, handle.value, signing.DefaultLimits())
+	if err != nil {
+		return MLDSA44SigningCredential{}, mapSigningError(err)
+	}
+	return MLDSA44SigningCredential{value: value}, nil
+}
+
+// Valid reports whether the mldsa44 credential remains coherent.
+func (c MLDSA44SigningCredential) Valid() bool {
+	return c.value.Valid() && c.value.Algorithm() == signing.AlgorithmMLDSA44
+}
+
+// String returns a constant secret-safe credential summary.
+func (c MLDSA44SigningCredential) String() string {
+	return "dkim2.MLDSA44SigningCredential{redacted}"
+}
+
+// GoString returns the constant secret-safe credential Go representation.
+func (c MLDSA44SigningCredential) GoString() string { return c.String() }
+
+// Format routes every credential formatting form through the redacted summary.
+func (c MLDSA44SigningCredential) Format(state fmt.State, _ rune) {
+	_, _ = io.WriteString(state, c.String())
+}
+
+// SigningCredential is one validated credential of any signable algorithm:
+// RSASigningCredential, Ed25519SigningCredential, or
+// MLDSA44SigningCredential. The interface is sealed to this package.
+type SigningCredential interface {
+	signingCredential() signing.Credential
+}
+
+// signingCredential returns the internal RSA credential.
+func (c RSASigningCredential) signingCredential() signing.Credential { return c.value }
+
+// signingCredential returns the internal Ed25519 credential.
+func (c Ed25519SigningCredential) signingCredential() signing.Credential { return c.value }
+
+// signingCredential returns the internal mldsa44 credential.
+func (c MLDSA44SigningCredential) signingCredential() signing.Credential { return c.value }
+
+// SigningProfile is an immutable canonical signing domain with one
+// credential for each of up to three signable algorithms. The emitted s= tag
+// joins the classical credentials (rsa-sha256, ed25519-sha256) as one
+// sig-all group and puts an mldsa44 credential in a separate sig-any
+// alternative after "|" (Draft-08 Section 10.9 phased deployment).
 type SigningProfile struct{ value signing.Profile }
 
 // NewProjectedSigningProfile seals one already validated internal datasource
@@ -129,6 +184,26 @@ func NewRSASigningProfile(domain string, credential RSASigningCredential) (Signi
 // NewEd25519SigningProfile constructs a single-algorithm Ed25519-SHA256 profile.
 func NewEd25519SigningProfile(domain string, credential Ed25519SigningCredential) (SigningProfile, error) {
 	return newSigningProfile(domain, []signing.Credential{credential.value})
+}
+
+// NewMLDSA44SigningProfile constructs a single-algorithm mldsa44 profile.
+func NewMLDSA44SigningProfile(domain string, credential MLDSA44SigningCredential) (SigningProfile, error) {
+	return newSigningProfile(domain, []signing.Credential{credential.value})
+}
+
+// NewSigningProfile constructs a profile from one credential per algorithm in
+// any order; the profile owner sorts them into the canonical signing order
+// and rejects duplicate algorithms, duplicate selectors (across every s=
+// group), nil credentials, and more than three credentials.
+func NewSigningProfile(domain string, credentials ...SigningCredential) (SigningProfile, error) {
+	values := make([]signing.Credential, 0, len(credentials))
+	for _, credential := range credentials {
+		if credential == nil || niliface.IsNil(credential) {
+			return SigningProfile{}, newSigningError(SigningErrorInvalidRequest)
+		}
+		values = append(values, credential.signingCredential())
+	}
+	return newSigningProfile(domain, values)
 }
 
 // NewDualSigningProfile constructs a canonical RSA-then-Ed25519 profile.

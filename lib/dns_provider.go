@@ -3,6 +3,7 @@ package dkim2
 import (
 	"context"
 	"crypto/ed25519"
+	"crypto/mldsa"
 	"crypto/rsa"
 	"errors"
 	"fmt"
@@ -126,6 +127,8 @@ func (p *DNSPublicKeyProvider) LookupPublicKey(ctx context.Context, query Public
 			return FoundRSAPublicKey(key), nil
 		case ed25519.PublicKey:
 			return FoundEd25519PublicKey(key), nil
+		case *mldsa.PublicKey:
+			return FoundMLDSA44PublicKey(key.Bytes()), nil
 		default:
 			return PublicKeyResult{}, newAPIError(APIErrorCodeInvalidProvider)
 		}
@@ -180,6 +183,8 @@ func resolverAlgorithm(algorithm Algorithm) (keyresolver.Algorithm, bool) {
 		return keyresolver.AlgorithmRSASHA256, true
 	case AlgorithmEd25519SHA256:
 		return keyresolver.AlgorithmEd25519SHA256, true
+	case AlgorithmMLDSA44:
+		return keyresolver.AlgorithmMLDSA44, true
 	default:
 		return "", false
 	}

@@ -76,6 +76,8 @@ const (
 	ObservationAlgorithmRSA = internalobs.AlgorithmRSA
 	// ObservationAlgorithmEd25519 identifies the Ed25519 family.
 	ObservationAlgorithmEd25519 = internalobs.AlgorithmEd25519
+	// ObservationAlgorithmMLDSA44 identifies the pure ML-DSA-44 family.
+	ObservationAlgorithmMLDSA44 = internalobs.AlgorithmMLDSA44
 	// ObservationAlgorithmUnknown identifies a bounded unknown family.
 	ObservationAlgorithmUnknown = internalobs.AlgorithmUnknown
 	// ObservationCacheNotUsed identifies a lookup without caching.

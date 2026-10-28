@@ -261,7 +261,7 @@ func TestAdapterRejectsUnusableConstructionDependencies(t *testing.T) {
 	var typedNil *adapterProvider
 	validProvider := &adapterProvider{}
 	invalidSigningLimits := signing.DefaultLimits()
-	invalidSigningLimits.MaxPrivateSigningCalls = 3
+	invalidSigningLimits.MaxPrivateSigningCalls = 4
 
 	tests := []struct {
 		name          string

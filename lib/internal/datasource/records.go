@@ -21,6 +21,8 @@ const (
 	AlgorithmRSASHA256 = signature.AlgorithmRSASHA256
 	// AlgorithmEd25519SHA256 identifies one Ed25519-SHA256 signing credential.
 	AlgorithmEd25519SHA256 = signature.AlgorithmEd25519SHA256
+	// AlgorithmMLDSA44 identifies one pure ML-DSA-44 signing credential.
+	AlgorithmMLDSA44 = signature.AlgorithmMLDSA44
 )
 
 // Credential contains one immutable public signing credential and opaque handle ID.
@@ -222,7 +224,8 @@ func (p Profile) Status() RecordStatus { return p.status }
 // CredentialCount returns the bounded number of complete profile credentials.
 func (p Profile) CredentialCount() int { return len(p.credentials) }
 
-// Credentials returns detached credentials in RSA then Ed25519 order.
+// Credentials returns detached credentials in canonical signing order:
+// RSA, Ed25519, then ML-DSA-44.
 func (p Profile) Credentials() []Credential {
 	output := make([]Credential, len(p.credentials))
 	for index := range p.credentials {

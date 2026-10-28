@@ -53,8 +53,9 @@ type Credential struct {
 }
 
 // SignableAlgorithm reports whether this implementation can create
-// signatures with algorithm: rsa-sha256 and ed25519-sha256. The unsettled
-// post-quantum composite is not implemented and fails closed.
+// signatures with algorithm: rsa-sha256, ed25519-sha256, and mldsa44. The
+// Draft-07 composite that Draft-08 removed is not implemented and fails
+// closed.
 func SignableAlgorithm(algorithm Algorithm) bool {
 	return algorithm.Signable()
 }
@@ -64,6 +65,11 @@ func NewCredential(selector string, algorithm Algorithm, publicKey any, handle P
 	resolved, err := limits.normalized()
 	if err != nil || !handle.Valid() || !SignableAlgorithm(algorithm) {
 		return Credential{}, newError(ErrorCodeInvalidRequest, ErrorLocation{Phase: PhasePreflight}, ErrorDetails{})
+	}
+	if algorithm == AlgorithmMLDSA44 && cryptodkim2.MLDSA44Available() != nil {
+		// Fail closed with an explicit algorithm error when the runtime
+		// (the FIPS 140-3 Go Cryptographic Module v1.0.0) cannot sign it.
+		return Credential{}, newError(ErrorCodeUnsupportedAlgorithm, ErrorLocation{Phase: PhasePreflight, Algorithm: algorithm}, ErrorDetails{})
 	}
 	query, queryErr := keyresolver.NewQuery("credential.invalid", selector, algorithm, keyresolver.DefaultLimits())
 	if queryErr != nil {
@@ -155,7 +161,8 @@ func NewProfile(domain string, credentials []Credential) (Profile, error) {
 // Domain returns the canonical signing domain.
 func (p Profile) Domain() string { return p.domain }
 
-// Credentials returns detached credentials in RSA then Ed25519 order.
+// Credentials returns detached credentials in canonical signing order:
+// RSA, Ed25519, then ML-DSA-44.
 func (p Profile) Credentials() []Credential {
 	output := slices.Clone(p.credentials)
 	for index := range output {

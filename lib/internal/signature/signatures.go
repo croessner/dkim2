@@ -2,12 +2,36 @@ package signature
 
 import (
 	"bytes"
+	"crypto/ed25519"
+	"crypto/mldsa"
 
 	"github.com/croessner/dkim2/internal/combine"
 	"github.com/croessner/dkim2/internal/tagvalue"
 )
 
-const ed25519SignatureBytes = 64
+const (
+	// ed25519SignatureBytes is the exact RFC 8032 Ed25519 signature size.
+	ed25519SignatureBytes = ed25519.SignatureSize
+	// mldsa44SignatureBytes is the exact FIPS 204 ML-DSA-44 signature size.
+	mldsa44SignatureBytes = mldsa.MLDSA44SignatureSize
+	// maxRSASignatureBytes is the rsa-sha256 value size of the largest
+	// admitted 8192-bit modulus.
+	maxRSASignatureBytes = 1024
+)
+
+// fixedSignatureBytes returns the exact decoded signature size of an
+// algorithm whose signatures have one fixed length (ed25519-sha256 and
+// mldsa44); rsa-sha256 and unknown algorithms report false.
+func fixedSignatureBytes(algorithm Algorithm) (int, bool) {
+	switch algorithm {
+	case AlgorithmEd25519SHA256:
+		return ed25519SignatureBytes, true
+	case AlgorithmMLDSA44:
+		return mldsa44SignatureBytes, true
+	default:
+		return 0, false
+	}
+}
 
 // parseSignatureSets parses the Draft-08 Section 10.9 s= value (sig-any of
 // sig-all groups of sig-set) into sets in field order and their group
@@ -49,7 +73,8 @@ func parseSignatureSets(value string, limits Limits, fieldIndex int) ([]Set, com
 }
 
 // parseSignatureSet parses one sig-set = selector [FWS] ":" [FWS] sig-name
-// [FWS] ":" message-sig. White space may surround selector and sig-name and
+// [FWS] ":" message-sig. A known fixed-length algorithm (ed25519-sha256,
+// mldsa44) with any other decoded signature length is a malformed field. White space may surround selector and sig-name and
 // may appear inside or before the message-sig base64string; it may not
 // appear inside a selector (an RFC 5321 Domain) or a sig-name textstring.
 // The raw selector spelling is kept for the Section 12.8 unsigned target.
@@ -85,10 +110,10 @@ func parseSignatureSet(input []byte, limits tagvalue.Limits, fieldIndex int, sig
 		knownAlgorithm: knownSignatureAlgorithm(algorithm),
 		signature:      signature,
 	}
-	if Algorithm(algorithm) == AlgorithmEd25519SHA256 && signature.DecodedLen() != ed25519SignatureBytes {
+	if exact, fixed := fixedSignatureBytes(Algorithm(algorithm)); fixed && signature.DecodedLen() != exact {
 		return Set{}, newError(ErrorCodeInvalidSignatureLength, ErrorLocation{FieldIndex: fieldIndex, SignatureIndex: signatureIndex}, ErrorDetails{
 			TagName: "s",
-			Limit:   ed25519SignatureBytes,
+			Limit:   exact,
 			Count:   signature.DecodedLen(),
 		}, nil)
 	}

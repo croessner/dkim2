@@ -125,6 +125,8 @@ func policySetAlgorithm(value Algorithm) (policy.SetAlgorithm, bool) {
 		return policy.SetAlgorithmRSA, true
 	case AlgorithmEd25519SHA256:
 		return policy.SetAlgorithmEd25519, true
+	case AlgorithmMLDSA44:
+		return policy.SetAlgorithmMLDSA44, true
 	case AlgorithmUnknown:
 		return policy.SetAlgorithmUnknown, true
 	default:

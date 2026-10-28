@@ -286,13 +286,13 @@
     {
       "id": "signature-negative-source",
       "path": "lib/internal/signature/parser_test.go",
-      "sha256": "cbcbf0b8630700370644eb633ec19f714ef82c38d9e3baf0687ed88d702c5d14",
+      "sha256": "c56a14968de8d9e27ce3c58fcd59e339af3a8e7b3b9fe3fd75ceeef439f55e21",
       "module": "lib"
     },
     {
       "id": "signing-custody",
       "path": "lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-08/custody-crypto-golden.json",
-      "sha256": "4cb3b3b06bc408993870e50dedb68fa33ad53f40b66a09e2c75d460344d255a2",
+      "sha256": "f67e41b509dd166a033edc6d2c6420de3ad5116c5ecf7e41b76eb28ea548d142",
       "module": "lib"
     },
     {
@@ -304,7 +304,7 @@
     {
       "id": "signing-facade-source",
       "path": "lib/signing_facade_test.go",
-      "sha256": "414474267d608524b5532c325788108968a7bbc58b26ed5c1ed98ae13a90910a",
+      "sha256": "8322b7fc35f4c4ae79dac369c3e40567e0b36d723a3df1a9c9303a632a0bd7af",
       "module": "lib"
     },
     {
@@ -392,9 +392,15 @@
       "module": "lib"
     },
     {
+      "id": "verification-mldsa44-source",
+      "path": "lib/internal/verify/mldsa44_test.go",
+      "sha256": "4f3da3840e637a3f56b8887dc0d0d0482402216d878708de38f1d33ad05f4b93",
+      "module": "lib"
+    },
+    {
       "id": "verification-multisignature-source",
       "path": "lib/internal/verify/multisignature_test.go",
-      "sha256": "bb6e1e08d660f030a3300256b6539d463f393722c206ddbe2fd7ab43efdb1e6c",
+      "sha256": "bbc01a5f94f99511e3851127ba5061d62a27c7ece131b53515fceaf113f16481",
       "module": "lib"
     },
     {
@@ -1684,6 +1690,23 @@
     },
     {
       "suite": "signing",
+      "case_id": "mldsa44-known-answer",
+      "class": "draft_normative",
+      "authority": [
+        "draft-ietf-dkim-dkim2-spec-08 Sections 3.4 and 12.8"
+      ],
+      "provenance": "independent_oracle",
+      "runner": "portable_vector",
+      "required_platform": "portable",
+      "expected_outcome": "pass",
+      "artifacts": [
+        "signing-custody",
+        "signing-provenance"
+      ],
+      "producer": "crypto-golden-tests"
+    },
+    {
+      "suite": "signing",
       "case_id": "next-domain-facade",
       "class": "draft_normative",
       "authority": [
@@ -1989,6 +2012,22 @@
       "expected_outcome": "pass",
       "artifacts": [
         "verification-draft08-source"
+      ],
+      "producer": "verification-draft08-tests"
+    },
+    {
+      "suite": "verification",
+      "case_id": "mldsa44-phased-deployment",
+      "class": "draft_normative",
+      "authority": [
+        "draft-ietf-dkim-dkim2-spec-08 Sections 3.4, 10.9, and 14.6"
+      ],
+      "provenance": "cross_primitive",
+      "runner": "portable_vector",
+      "required_platform": "portable",
+      "expected_outcome": "pass",
+      "artifacts": [
+        "verification-mldsa44-source"
       ],
       "producer": "verification-draft08-tests"
     },

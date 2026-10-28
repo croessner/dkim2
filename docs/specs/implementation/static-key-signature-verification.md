@@ -404,10 +404,17 @@ M4 must build cryptographic input through `lib/internal/canonical`:
 
 ### Algorithm And Public-Key Semantics
 
-The default M4 algorithm allowlist is exact:
+The default algorithm allowlist is exact and covers every Draft-08 Section 3
+algorithm a verifier MUST implement:
 
 - `rsa-sha256`
 - `ed25519-sha256`
+- `mldsa44`
+
+`lib/internal/cryptodkim2` is the single owner of each algorithm's message
+representative (`MessageRepresentative`): the SHA-256 digest of the Section
+12.8 input for `rsa-sha256` and `ed25519-sha256`, the complete input for
+`mldsa44`. Signer and verifier both use it.
 
 Unknown algorithms, disabled algorithms, or known algorithms without a usable
 matching public key cannot produce success.
@@ -435,6 +442,23 @@ Ed25519-SHA256 semantics:
   digest using Go's `crypto/ed25519`. This follows the active draft text that
   defines Ed25519-SHA256 as PureEdDSA over the SHA-256 hash value, not over
   the raw canonical signature input bytes.
+
+ML-DSA-44 semantics (Draft-08 Section 3.4):
+
+- The provider must supply an ML-DSA-44 public key (`*mldsa.PublicKey`) for
+  `mldsa44`; the DNS form is `k=mldsa44` with the raw 1312-octet FIPS 204
+  encoding in `p=` (local interpretation, `DKIM2-ISSUE-0020`). Any other
+  length or an encoding `crypto/mldsa` rejects is `invalid_key`; another
+  ML-DSA parameter set is an invalid key.
+- The verifier calls pure `mldsa.Verify` (FIPS 204 Algorithm 3) over the
+  complete Section 12.8 input bytes, without hashing first, with the context
+  string `DKIM2`. The parser enforces exactly 2420 signature octets; any other
+  length is a malformed field, like a wrong-length Ed25519 value.
+- A runtime without ML-DSA (the FIPS 140-3 Go Cryptographic Module v1.0.0)
+  cannot construct a verifier whose policy enables `mldsa44`; the policy
+  validation fails closed with `unsupported_algorithm`.
+- Hedged and deterministic signatures verify the same way; the signer uses
+  the hedged variant.
 
 Provider and key matching:
 

@@ -28,6 +28,11 @@ func NewEd25519NextDomainPublicationRequest(domain string, credential Ed25519Sig
 	return NextDomainPublicationRequest{domain: domain, credential: credential.value, valid: credential.Valid()}
 }
 
+// NewMLDSA44NextDomainPublicationRequest binds one mldsa44 future credential to its nd= domain.
+func NewMLDSA44NextDomainPublicationRequest(domain string, credential MLDSA44SigningCredential) NextDomainPublicationRequest {
+	return NextDomainPublicationRequest{domain: domain, credential: credential.value, valid: credential.Valid()}
+}
+
 // String returns a constant secret-safe publication-request summary.
 func (r NextDomainPublicationRequest) String() string {
 	return "dkim2.NextDomainPublicationRequest{redacted}"

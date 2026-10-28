@@ -6,6 +6,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/croessner/dkim2/internal/cryptodkim2"
 	"github.com/croessner/dkim2/internal/verify"
 )
 
@@ -126,6 +127,8 @@ func observationAlgorithm(algorithm verify.Algorithm) ObservationAlgorithm {
 		return ObservationAlgorithmRSA
 	case verify.AlgorithmEd25519SHA256:
 		return ObservationAlgorithmEd25519
+	case verify.AlgorithmMLDSA44:
+		return ObservationAlgorithmMLDSA44
 	default:
 		return ObservationAlgorithmUnknown
 	}
@@ -135,7 +138,8 @@ func observationAlgorithm(algorithm verify.Algorithm) ObservationAlgorithm {
 func foundInternalPublicKey(result PublicKeyResult, algorithm verify.Algorithm) (verify.PublicKey, error) {
 	rsaKey, hasRSA := result.RSAPublicKey()
 	edKey, hasEd := result.Ed25519PublicKey()
-	if publicMaterialVariants(hasRSA, hasEd) != 1 {
+	mldsaKey, hasMLDSA := result.MLDSA44PublicKey()
+	if publicMaterialVariants(hasRSA, hasEd, hasMLDSA) != 1 {
 		return verify.PublicKey{}, verify.NewProviderFailure(verify.ProviderFailureContract)
 	}
 	metadata := verify.KeyMetadata{Status: verify.KeyStatusFound}
@@ -150,6 +154,15 @@ func foundInternalPublicKey(result PublicKeyResult, algorithm verify.Algorithm) 
 			return verify.PublicKey{}, verify.NewProviderFailure(verify.ProviderFailureContract)
 		}
 		return verify.PublicKey{Algorithm: algorithm, Material: ed25519.PublicKey(append([]byte(nil), edKey...)), Metadata: metadata}, nil
+	case verify.AlgorithmMLDSA44:
+		if !hasMLDSA {
+			return verify.PublicKey{}, verify.NewProviderFailure(verify.ProviderFailureContract)
+		}
+		key, err := cryptodkim2.ParseMLDSA44PublicKey(mldsaKey)
+		if err != nil {
+			return verify.PublicKey{}, verify.NewProviderFailure(verify.ProviderFailureContract)
+		}
+		return verify.PublicKey{Algorithm: algorithm, Material: key, Metadata: metadata}, nil
 	default:
 		return verify.PublicKey{}, verify.NewProviderFailure(verify.ProviderFailureContract)
 	}
@@ -171,7 +184,8 @@ func publicMaterialVariants(present ...bool) int {
 func publicResultHasMaterial(result PublicKeyResult) bool {
 	_, hasRSA := result.RSAPublicKey()
 	_, hasEd := result.Ed25519PublicKey()
-	return publicMaterialVariants(hasRSA, hasEd) > 0
+	_, hasMLDSA := result.MLDSA44PublicKey()
+	return publicMaterialVariants(hasRSA, hasEd, hasMLDSA) > 0
 }
 
 // publicAlgorithm maps an internal verification algorithm into the closed public provider vocabulary.
@@ -181,6 +195,8 @@ func publicAlgorithm(algorithm verify.Algorithm) (Algorithm, bool) {
 		return AlgorithmRSASHA256, true
 	case verify.AlgorithmEd25519SHA256:
 		return AlgorithmEd25519SHA256, true
+	case verify.AlgorithmMLDSA44:
+		return AlgorithmMLDSA44, true
 	default:
 		return AlgorithmUnknown, false
 	}

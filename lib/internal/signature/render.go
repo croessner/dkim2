@@ -20,9 +20,10 @@ const (
 	maxGeneratedSets       = len(signingAlgorithmOrder)
 	maxEnvelopePathBytes   = 32 * 1024
 	maxGeneratedNonceBytes = 64
-	// maxSignatureBytes is the rsa-sha256 value size of the largest admitted
-	// 8192-bit modulus, the largest signable signature.
-	maxSignatureBytes = 1024
+	// maxSignatureBytes is the largest signable signature value: the fixed
+	// 2420-octet mldsa44 signature. Each algorithm is additionally held to
+	// its own bound (validateGeneratedSignatureLength).
+	maxSignatureBytes = mldsa44SignatureBytes
 )
 
 // SetPlan identifies one signature set whose value will be supplied later.
@@ -472,8 +473,11 @@ func validateGeneratedSignatureLength(algorithm Algorithm, length int, limits Re
 	if length <= 0 || length > limits.MaxSignatureBytes {
 		return renderLimitError("max_signature_bytes", limits.MaxSignatureBytes, length)
 	}
-	if algorithm == AlgorithmEd25519SHA256 && length != ed25519SignatureBytes {
-		return newError(ErrorCodeInvalidSignatureLength, ErrorLocation{}, ErrorDetails{TagName: "s", Limit: ed25519SignatureBytes, Count: length}, nil)
+	if algorithm == AlgorithmRSASHA256 && length > maxRSASignatureBytes {
+		return renderLimitError("max_signature_bytes", maxRSASignatureBytes, length)
+	}
+	if exact, fixed := fixedSignatureBytes(algorithm); fixed && length != exact {
+		return newError(ErrorCodeInvalidSignatureLength, ErrorLocation{}, ErrorDetails{TagName: "s", Limit: exact, Count: length}, nil)
 	}
 	return nil
 }

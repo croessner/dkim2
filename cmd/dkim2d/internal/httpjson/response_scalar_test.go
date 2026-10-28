@@ -83,6 +83,7 @@ func TestVerificationScalarMappings(t *testing.T) {
 	assertScalarMapping(t, "algorithm", mapAlgorithm, []scalarMappingCase[dkim2.Algorithm, generated.SignatureSetResultAlgorithm]{
 		{dkim2.AlgorithmRSASHA256, generated.RsaSha256},
 		{dkim2.AlgorithmEd25519SHA256, generated.Ed25519Sha256},
+		{dkim2.AlgorithmMLDSA44, generated.Mldsa44},
 		{dkim2.AlgorithmUnknown, generated.Unknown},
 	})
 	assertScalarMapping(t, "signature status", mapSignatureStatus, []scalarMappingCase[dkim2.SignatureStatus, generated.SignatureSetResultStatus]{

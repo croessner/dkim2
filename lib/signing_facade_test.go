@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto"
 	"crypto/ed25519"
+	"crypto/mldsa"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
@@ -87,6 +88,7 @@ func (a publicRouteMemoryAuthority) ConsumeRelease(ctx context.Context, query Ro
 type publicSigningProvider struct {
 	rsaKey  *rsa.PrivateKey
 	edKey   ed25519.PrivateKey
+	mlKey   *mldsa.PrivateKey
 	lookups atomic.Int64
 	signs   atomic.Int64
 }
@@ -99,15 +101,22 @@ func (p *publicSigningProvider) LookupPublicKey(_ context.Context, query PublicK
 		return FoundRSAPublicKey(&p.rsaKey.PublicKey), nil
 	case AlgorithmEd25519SHA256:
 		return FoundEd25519PublicKey(p.edKey.Public().(ed25519.PublicKey)), nil
+	case AlgorithmMLDSA44:
+		if p.mlKey == nil {
+			return MissingPublicKey(query.Algorithm()), nil
+		}
+		return FoundMLDSA44PublicKey(p.mlKey.PublicKey().Bytes()), nil
 	default:
 		return MissingPublicKey(query.Algorithm()), nil
 	}
 }
 
-// SignDigest signs exactly the native digest supplied through the public callback.
+// SignDigest signs exactly the message representative supplied through the
+// public callback: the digest for classical algorithms and the complete
+// Section 12.8 input, with hedged ML-DSA.Sign and ctx "DKIM2", for mldsa44.
 func (p *publicSigningProvider) SignDigest(_ context.Context, _ PrivateKeyHandle, request PrivateKeySignRequest) (PrivateKeySignResult, error) {
 	p.signs.Add(1)
-	digest := request.Digest()
+	digest := request.MessageRepresentative()
 	switch request.Algorithm() {
 	case AlgorithmRSASHA256:
 		signatureBytes, err := rsa.SignPKCS1v15(rand.Reader, p.rsaKey, crypto.SHA256, digest[:])
@@ -117,6 +126,15 @@ func (p *publicSigningProvider) SignDigest(_ context.Context, _ PrivateKeyHandle
 		return NewPrivateKeySignResult(signatureBytes), nil
 	case AlgorithmEd25519SHA256:
 		return NewPrivateKeySignResult(ed25519.Sign(p.edKey, digest[:])), nil
+	case AlgorithmMLDSA44:
+		if request.Digest() != nil {
+			return PrivateKeySignResult{}, NewPermanentProviderError()
+		}
+		signatureBytes, err := p.mlKey.Sign(rand.Reader, digest, MLDSA44SignerOptions())
+		if err != nil {
+			return PrivateKeySignResult{}, err
+		}
+		return NewPrivateKeySignResult(signatureBytes), nil
 	default:
 		return PrivateKeySignResult{}, nil
 	}
@@ -544,6 +562,11 @@ func TestPublicOriginatorSigningAlgorithmsAndImmutableBytes(t *testing.T) {
 	rsaKey := loadPublicSigningRSAKey(t)
 	seed := sha256.Sum256([]byte("dkim2-public-originator-ed25519-test-key"))
 	edKey := ed25519.NewKeyFromSeed(seed[:])
+	mlSeed := sha256.Sum256([]byte("dkim2-public-originator-mldsa44-test-key"))
+	mlKey, err := mldsa.NewPrivateKey(mldsa.MLDSA44(), mlSeed[:])
+	if err != nil {
+		t.Fatalf("mldsa.NewPrivateKey() error = %v", err)
+	}
 	raw := []byte("From: alice@example.test\r\nTo: bob@example.net\r\nSubject: root facade\r\n\r\nbody\r\n")
 	for _, testCase := range []struct {
 		name       string
@@ -575,9 +598,39 @@ func TestPublicOriginatorSigningAlgorithmsAndImmutableBytes(t *testing.T) {
 			}
 			return NewDualSigningProfile("example.test", rsaCredential, edCredential)
 		}},
+		{name: "mldsa44", algorithms: []Algorithm{AlgorithmMLDSA44}, profile: func(_, _ PrivateKeyHandle) (SigningProfile, error) {
+			handle, handleErr := NewPrivateKeyHandle([]byte("ml-key"))
+			if handleErr != nil {
+				return SigningProfile{}, handleErr
+			}
+			credential, credentialErr := NewMLDSA44SigningCredential("pq", mlKey.PublicKey(), handle)
+			if credentialErr != nil {
+				return SigningProfile{}, credentialErr
+			}
+			return NewMLDSA44SigningProfile("example.test", credential)
+		}},
+		{name: "classical group or mldsa44", algorithms: []Algorithm{AlgorithmRSASHA256, AlgorithmEd25519SHA256, AlgorithmMLDSA44}, profile: func(rsaHandle, edHandle PrivateKeyHandle) (SigningProfile, error) {
+			mlHandle, handleErr := NewPrivateKeyHandle([]byte("ml-key"))
+			if handleErr != nil {
+				return SigningProfile{}, handleErr
+			}
+			mlCredential, credentialErr := NewMLDSA44SigningCredential("pq", mlKey.PublicKey(), mlHandle)
+			if credentialErr != nil {
+				return SigningProfile{}, credentialErr
+			}
+			rsaCredential, credentialErr := NewRSASigningCredential(testRSASelector, &rsaKey.PublicKey, rsaHandle)
+			if credentialErr != nil {
+				return SigningProfile{}, credentialErr
+			}
+			edCredential, credentialErr := NewEd25519SigningCredential("ed", edKey.Public().(ed25519.PublicKey), edHandle)
+			if credentialErr != nil {
+				return SigningProfile{}, credentialErr
+			}
+			return NewSigningProfile("example.test", mlCredential, edCredential, rsaCredential)
+		}},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
-			provider := &publicSigningProvider{rsaKey: rsaKey, edKey: edKey}
+			provider := &publicSigningProvider{rsaKey: rsaKey, edKey: edKey, mlKey: mlKey}
 			assertPublicOriginatorSigning(t, provider, raw, testCase.profile, testCase.algorithms)
 		})
 	}
@@ -638,6 +691,15 @@ func assertPublicOriginatorSigning(
 	}
 	first := signed.Bytes()
 	second := signed.Bytes()
+	wantAlternative := slices.Contains(algorithms, AlgorithmMLDSA44) && len(algorithms) > 1
+	if bytes.Contains(first, []byte("|")) != wantAlternative {
+		t.Fatalf("s= sig-any separator present=%t, want %t", !wantAlternative, wantAlternative)
+	}
+	for line := range bytes.SplitSeq(first, []byte("\r\n")) {
+		if len(line) > 998 {
+			t.Fatalf("signed output has a %d-octet physical line", len(line))
+		}
+	}
 	if len(first) <= len(raw) || !bytes.Contains(first, []byte("Message-Instance:")) ||
 		!bytes.Contains(first, []byte("DKIM2-Signature:")) || !bytes.Equal(first, second) {
 		t.Fatal("signed output is incomplete or unstable")
@@ -1579,8 +1641,14 @@ func TestPublicSigningTypesExcludePrivateAndOpenMaterial(t *testing.T) {
 	}
 	sum := sha256.Sum256([]byte("test"))
 	digest := sum[:]
-	if got := (PrivateKeySignRequest{digest: digest, algorithm: AlgorithmRSASHA256, valid: true}).Digest(); !bytes.Equal(got, digest) {
-		t.Fatal("digest accessor changed immutable request")
+	request := PrivateKeySignRequest{representative: digest, algorithm: AlgorithmRSASHA256, valid: true}
+	if got := request.MessageRepresentative(); !bytes.Equal(got, digest) || !bytes.Equal(request.Digest(), digest) {
+		t.Fatal("representative accessor changed immutable request")
+	}
+	input := []byte("complete section 12.8 input")
+	mlRequest := PrivateKeySignRequest{representative: input, algorithm: AlgorithmMLDSA44, valid: true}
+	if !mlRequest.Valid() || !bytes.Equal(mlRequest.MessageRepresentative(), input) || mlRequest.Digest() != nil {
+		t.Fatal("mldsa44 request does not carry the complete input or exposes it as a digest")
 	}
 }
 

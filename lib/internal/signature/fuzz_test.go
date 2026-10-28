@@ -24,6 +24,9 @@ func FuzzParseDKIM2Signature(f *testing.F) {
 		[]byte(signatureValueWith("s", "one:ed25519-sha256:"+base64OfByte(0xaa, 64)+" | two:future-sha999:"+base64OfByte(0xbb, 48)) + ";"),
 		[]byte(signatureValueWith("s", "one:rsa-sha256:"+base64OfByte(0xaa, 128)+",two:ed25519-sha256:"+base64OfByte(0xbb, 64)+"|three:mldsa44:"+base64OfByte(0xcc, 48)) + ";"),
 		[]byte(signatureValueWith("s", "one:ed25519-sha256:"+base64OfByte(0xaa, 64)+"||") + ";"),
+		[]byte(signatureValueWith("s", "pq:mldsa44:"+base64OfByte(0xcc, 2420)) + ";"),
+		[]byte(signatureValueWith("s", "pq:mldsa44:"+base64OfByte(0xcc, 2419)) + ";"),
+		[]byte(signatureValueWith("s", "ed:ed25519-sha256:"+base64OfByte(0xaa, 63)+"|pq:mldsa44:"+base64OfByte(0xcc, 64)) + ";"),
 	}
 	for _, seed := range seeds {
 		f.Add(seed)

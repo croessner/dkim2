@@ -19,6 +19,9 @@ const (
 	AlgorithmRSASHA256 = signature.AlgorithmRSASHA256
 	// AlgorithmEd25519SHA256 identifies Ed25519 verification over SHA-256 digest bytes.
 	AlgorithmEd25519SHA256 = signature.AlgorithmEd25519SHA256
+	// AlgorithmMLDSA44 identifies pure ML-DSA-44 verification over the
+	// complete Section 12.8 input with the "DKIM2" context string.
+	AlgorithmMLDSA44 = signature.AlgorithmMLDSA44
 	// AlgorithmUnknown is the bounded result token for algorithms outside the active contract.
 	AlgorithmUnknown Algorithm = "unknown"
 )
@@ -132,7 +135,7 @@ func DefaultRevisionLimits() RevisionLimits {
 // DefaultAlgorithmPolicy returns the active signature algorithm allowlist.
 func DefaultAlgorithmPolicy() AlgorithmPolicy {
 	return AlgorithmPolicy{
-		AllowedAlgorithms: []Algorithm{AlgorithmRSASHA256, AlgorithmEd25519SHA256},
+		AllowedAlgorithms: []Algorithm{AlgorithmRSASHA256, AlgorithmEd25519SHA256, AlgorithmMLDSA44},
 		MinRSABits:        defaultRSAMinBits,
 		MaxRSABits:        cryptodkim2.DefaultLimits().MaxRSABits,
 	}
@@ -300,6 +303,13 @@ func (p AlgorithmPolicy) Validate() error {
 			return invalidOptionError("allowed_algorithms", len(p.AllowedAlgorithms))
 		}
 		seen[algorithm] = struct{}{}
+		if algorithm == AlgorithmMLDSA44 && cryptodkim2.MLDSA44Available() != nil {
+			// A runtime without ML-DSA (such as the FIPS 140-3 Go
+			// Cryptographic Module v1.0.0) cannot implement the Draft-08
+			// Section 3 verifier-mandatory mldsa44 algorithm, so
+			// construction fails closed instead of silently ignoring it.
+			return unsupportedAlgorithmError(algorithm)
+		}
 	}
 
 	return nil

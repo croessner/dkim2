@@ -241,7 +241,7 @@ func signPrivateCredential(
 		!privateKeyMatchesAlgorithm(credential.key, credential.algorithm) {
 		return dkim2.PrivateKeySignResult{}, dkim2.NewPermanentProviderError()
 	}
-	digest := request.Digest()
+	digest := request.MessageRepresentative()
 	defer clear(digest)
 	var signature []byte
 	var err error

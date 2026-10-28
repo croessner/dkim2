@@ -1010,6 +1010,7 @@ func (e ReplayResultClass) Valid() bool {
 // Defines values for SignatureSetResultAlgorithm.
 const (
 	Ed25519Sha256 SignatureSetResultAlgorithm = "ed25519-sha256"
+	Mldsa44       SignatureSetResultAlgorithm = "mldsa44"
 	RsaSha256     SignatureSetResultAlgorithm = "rsa-sha256"
 	Unknown       SignatureSetResultAlgorithm = "unknown"
 )
@@ -1018,6 +1019,8 @@ const (
 func (e SignatureSetResultAlgorithm) Valid() bool {
 	switch e {
 	case Ed25519Sha256:
+		return true
+	case Mldsa44:
 		return true
 	case RsaSha256:
 		return true
@@ -1440,6 +1443,7 @@ func (e VerifierHopRecipeMode) Valid() bool {
 const (
 	VerifierAlgorithmEd25519SHA256 VerifierHopSignatureAlgorithms = "ed25519-sha256"
 	VerifierAlgorithmEd25519SHA512 VerifierHopSignatureAlgorithms = "ed25519-sha512"
+	VerifierAlgorithmMLDSA44       VerifierHopSignatureAlgorithms = "mldsa44"
 	VerifierAlgorithmRSASHA256     VerifierHopSignatureAlgorithms = "rsa-sha256"
 	VerifierAlgorithmRSASHA512     VerifierHopSignatureAlgorithms = "rsa-sha512"
 )
@@ -1450,6 +1454,8 @@ func (e VerifierHopSignatureAlgorithms) Valid() bool {
 	case VerifierAlgorithmEd25519SHA256:
 		return true
 	case VerifierAlgorithmEd25519SHA512:
+		return true
+	case VerifierAlgorithmMLDSA44:
 		return true
 	case VerifierAlgorithmRSASHA256:
 		return true
