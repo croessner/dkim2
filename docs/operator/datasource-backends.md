@@ -369,8 +369,11 @@ profile; the daemon emits `s=` as `rsa,ed25519 | mldsa44`.
   mutable storage, so they cannot be zeroized; the daemon clears only the
   PKCS#8 and seed buffers it owns. Treat process memory like any other
   signing-key custody.
-- The datasource record ceilings are 10240 (default) and 262144
-  (production): `profiles * 3 + profiles + handles + policies`.
+- The datasource handle ceilings are 3072 (default) and 98304 (production),
+  one handle per credential (`profiles * 3`), so a fully loaded installation
+  with three credentials per profile loads. The record ceilings are 11264
+  (default) and 294912 (production):
+  `profiles * 3 + profiles + handles + policies`.
 
 RSA signing floor: the release rejects RSA signing keys below 2048 bits.
 Before upgrading, list the modulus sizes of every RSA credential in the

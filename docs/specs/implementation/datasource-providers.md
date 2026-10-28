@@ -379,10 +379,12 @@ identifier, domain, and selector limits are semantic: valid exact-limit
 datasets succeed and one-over datasets fail.
 
 One examined record/work unit is each profile, nested credential, declared
-handle, and policy, so the maximum is
-`1024 + (1024 * 3) + 2048 + 4096 = 10240` (three credentials per profile:
-`rsa-sha256`, `ed25519-sha256`, `mldsa44`; the production profile is
-`32768 + (32768 * 3) + 65536 + 65536 = 262144`). Limit arithmetic uses checked
+handle, and policy. Every credential references its own declared handle (a
+handle shared between credentials is ambiguous), so the handle ceiling is
+`profiles * 3`: 3072 by default and 98304 in the production profile. The
+record maximum is `1024 + (1024 * 3) + 3072 + 4096 = 11264` (three
+credentials per profile: `rsa-sha256`, `ed25519-sha256`, `mldsa44`; the
+production profile is `32768 + (32768 * 3) + 98304 + 65536 = 294912`). Limit arithmetic uses checked
 addition. Usage reports only bounded counts and byte totals, never raw values.
 A caller cannot disable a limit with zero, negative, overflowed, or
 maximum-integer sentinel values.

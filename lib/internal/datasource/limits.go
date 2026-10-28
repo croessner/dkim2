@@ -30,39 +30,43 @@ func HardLimits() Limits {
 	}
 }
 
-// DefaultLimits returns the restrictive default datasource limits. MaxRecords
-// is derived, not chosen: MaxProfiles*MaxCredentialsPerProfile + MaxProfiles +
-// MaxHandles + MaxPolicies, so every profile can carry one credential per
-// signable algorithm (rsa-sha256, ed25519-sha256, mldsa44):
+// DefaultLimits returns the restrictive default datasource limits. Every
+// credential references its own key handle (providers reject a handle shared
+// between credentials), so MaxHandles is derived as
+// MaxProfiles*MaxCredentialsPerProfile and a profile can carry one credential
+// per signable algorithm (rsa-sha256, ed25519-sha256, mldsa44). MaxRecords is
+// derived too: MaxProfiles*MaxCredentialsPerProfile + MaxProfiles +
+// MaxHandles + MaxPolicies:
 //
-//	1024*3 + 1024 + 2048 + 4096 = 3072 + 7168 = 10240
+//	MaxHandles = 1024*3 = 3072
+//	MaxRecords = 1024*3 + 1024 + 3072 + 4096 = 11264
 //
 // ProductionLimits follows the same derivation.
 func DefaultLimits() Limits {
 	limits := HardLimits()
 	limits.MaxProfiles = 1024
-	limits.MaxHandles = 2048
+	limits.MaxHandles = 3072
 	limits.MaxPolicies = 4096
 	limits.MaxJSONFileBytes = 1 << 20
 	limits.MaxDecodedStringBytes = 1 << 20
-	limits.MaxRecords = 10240
+	limits.MaxRecords = 11264
 	return limits
 }
 
 // ProductionLimits returns the finite large-installation profile:
 //
-//	32768*3 + 32768 + 65536 + 65536 = 98304 + 163840 = 262144
+//	MaxHandles = 32768*3 = 98304
+//	MaxRecords = 32768*3 + 32768 + 98304 + 65536 = 294912
 //
-// MaxHandles stays a separate bound; handles are counted once each and are
-// not multiplied by the credential bound.
+// Both stay within HardLimits (262144 handles, 1<<20 records).
 func ProductionLimits() Limits {
 	limits := HardLimits()
 	limits.MaxProfiles = 32768
-	limits.MaxHandles = 65536
+	limits.MaxHandles = 98304
 	limits.MaxPolicies = 65536
 	limits.MaxJSONFileBytes = 128 << 20
 	limits.MaxDecodedStringBytes = 128 << 20
-	limits.MaxRecords = 262144
+	limits.MaxRecords = 294912
 	return limits
 }
 

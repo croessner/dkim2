@@ -11,14 +11,14 @@ func TestLimitProfilesMatchFrozenMaxima(t *testing.T) {
 	wantDefault := Limits{
 		MaxIdentifierBytes: 128, MaxDomainBytes: 253, MaxDomainLabels: 127,
 		MaxSelectorBytes: 253, MaxSelectorLabels: 127, MaxProfiles: 1024,
-		MaxCredentialsPerProfile: 3, MaxHandles: 2048, MaxPolicies: 4096,
+		MaxCredentialsPerProfile: 3, MaxHandles: 3072, MaxPolicies: 4096,
 		MaxJSONFileBytes: 1_048_576, MaxJSONDepth: 16, MaxJSONStringBytes: 16_384,
 		MaxDecodedStringBytes: 1_048_576, MaxDecodedPublicKeyBytes: 2_048,
-		MaxRecords: 10_240,
+		MaxRecords: 11_264,
 	}
 	wantProduction := wantDefault
-	wantProduction.MaxProfiles, wantProduction.MaxHandles, wantProduction.MaxPolicies = 32768, 65536, 65536
-	wantProduction.MaxJSONFileBytes, wantProduction.MaxDecodedStringBytes, wantProduction.MaxRecords = 128<<20, 128<<20, 262144
+	wantProduction.MaxProfiles, wantProduction.MaxHandles, wantProduction.MaxPolicies = 32768, 98304, 65536
+	wantProduction.MaxJSONFileBytes, wantProduction.MaxDecodedStringBytes, wantProduction.MaxRecords = 128<<20, 128<<20, 294912
 	wantHard := wantDefault
 	wantHard.MaxProfiles, wantHard.MaxHandles, wantHard.MaxPolicies = 131072, 262144, 262144
 	wantHard.MaxJSONFileBytes, wantHard.MaxDecodedStringBytes, wantHard.MaxRecords = 512<<20, 512<<20, 1<<20
@@ -32,6 +32,13 @@ func TestLimitProfilesMatchFrozenMaxima(t *testing.T) {
 		derived := limits.MaxProfiles*limits.MaxCredentialsPerProfile + limits.MaxProfiles + limits.MaxHandles + limits.MaxPolicies
 		if limits.MaxRecords != derived {
 			t.Fatalf("MaxRecords = %d, derived %d", limits.MaxRecords, derived)
+		}
+		if limits.MaxHandles != limits.MaxProfiles*limits.MaxCredentialsPerProfile {
+			t.Fatalf("MaxHandles = %d, want one handle per credential %d",
+				limits.MaxHandles, limits.MaxProfiles*limits.MaxCredentialsPerProfile)
+		}
+		if err := limits.Validate(); err != nil {
+			t.Fatalf("derived limits exceed hard limits: %v", err)
 		}
 	}
 }

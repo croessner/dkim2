@@ -646,9 +646,16 @@ because the draft identifier is bound into the replay frame.
   native custody codec, signs, and verifies against its DNS record through
   the DNS key provider; the dkim2d DNS export renders the identical record.
   LDAP needs no schema change.
-- Datasource limits: three credentials per profile; record ceilings
-  `1024*3 + 1024 + 2048 + 4096 = 10240` and
-  `32768*3 + 32768 + 65536 + 65536 = 262144`. Handle ceilings are unchanged.
+- Datasource limits: three credentials per profile. Each credential needs
+  its own key handle (providers reject a shared handle as ambiguous), so the
+  handle ceilings are derived as `profiles * 3`: 3072 (default, previously
+  2048) and 98304 (production, previously 65536); the previous values could
+  not load a fully populated three-credential installation. Record ceilings
+  `1024*3 + 1024 + 3072 + 4096 = 11264` and
+  `32768*3 + 32768 + 98304 + 65536 = 294912`, both within the hard limits
+  (262144 handles, 1048576 records). A reproducer loads `MaxProfiles`
+  three-algorithm profiles with distinct handles and `MaxPolicies` policies
+  under both profiles.
   Memory, flat-file, LDAP, and the shared SQL snapshot mapper (PostgreSQL,
   MySQL, MariaDB) accept the same three-algorithm profile and reject it under
   a two-credential bound. Forward migration `010_mldsa44_algorithm.sql`
