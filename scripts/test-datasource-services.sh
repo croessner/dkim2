@@ -1062,10 +1062,10 @@ expected_sql_generation=5
 run_qualification 5
 echo 'datasource integration: post-activation provider qualification pass'
 
-postgresql_definer_audit="$(docker exec "$postgresql_name" psql -v ON_ERROR_STOP=1 \
-	-U postgres -d dkim2 -Atqc "
-WITH expected(name, kind, arguments) AS (
-  VALUES
+# postgresql_definer_routines is the single allowlist of SECURITY DEFINER
+# routines that the migrations create, with their exact kind and argument
+# types; the definer and ACL audits below both compare against it.
+postgresql_definer_routines="
     ('administration_lock_observe', 'f', ''),
     ('administration_lock_for_update', 'f', ''),
     ('candidate_root_for_update', 'f', 'dkim2_datasource.generation_number, text, bytea'),
@@ -1074,7 +1074,14 @@ WITH expected(name, kind, arguments) AS (
     ('administration_lock_owned_by', 'f', 'text'),
     ('administration_lock_is_owned', 'f', ''),
     ('generation_is_version', 'f', 'dkim2_datasource.generation_number, text'),
-    ('record_campaign_terminal', 'p', 'text, text, text, dkim2_datasource.generation_number, dkim2_datasource.generation_number, dkim2_datasource.generation_number, bytea, text, text, timestamp with time zone')
+    ('campaign_candidate_generation_is_forward', 'f', 'dkim2_datasource.generation_number'),
+    ('purge_generation', 'p', 'dkim2_datasource.generation_number, text, bytea, dkim2_datasource.generation_number, text, text, bytea'),
+    ('record_campaign_terminal', 'p', 'text, text, text, dkim2_datasource.generation_number, dkim2_datasource.generation_number, dkim2_datasource.generation_number, bytea, text, text, timestamp with time zone')"
+
+postgresql_definer_audit="$(docker exec "$postgresql_name" psql -v ON_ERROR_STOP=1 \
+	-U postgres -d dkim2 -Atqc "
+WITH expected(name, kind, arguments) AS (
+  VALUES$postgresql_definer_routines
 ), actual AS (
   SELECT routine.oid, routine.proname AS name, routine.prokind::text AS kind,
          oidvectortypes(routine.proargtypes) AS arguments,
@@ -1095,21 +1102,12 @@ SELECT concat_ws('|',
   (SELECT count(*) FROM expected LEFT JOIN valid USING (name, kind, arguments)
     WHERE valid.oid IS NULL)
 );" 2>/dev/null)" || postgresql_definer_audit=unavailable
-expect_equal postgresql-definer-routines "$postgresql_definer_audit" "9|0|0"
+expect_equal postgresql-definer-routines "$postgresql_definer_audit" "11|0|0"
 
 postgresql_acl_audit="$(docker exec "$postgresql_name" psql -v ON_ERROR_STOP=1 \
 	-U postgres -d dkim2 -Atqc "
 WITH expected_routine(name, kind, arguments) AS (
-  VALUES
-    ('administration_lock_observe', 'f', ''),
-    ('administration_lock_for_update', 'f', ''),
-    ('candidate_root_for_update', 'f', 'dkim2_datasource.generation_number, text, bytea'),
-    ('administration_lock_claim', 'p', 'dkim2_datasource.generation_number, text'),
-    ('administration_lock_release', 'p', 'dkim2_datasource.generation_number, text'),
-    ('administration_lock_owned_by', 'f', 'text'),
-    ('administration_lock_is_owned', 'f', ''),
-    ('generation_is_version', 'f', 'dkim2_datasource.generation_number, text'),
-    ('record_campaign_terminal', 'p', 'text, text, text, dkim2_datasource.generation_number, dkim2_datasource.generation_number, dkim2_datasource.generation_number, bytea, text, text, timestamp with time zone')
+  VALUES$postgresql_definer_routines
 ), expected_acl(name, grantee) AS (
   VALUES
     ('administration_lock_observe', 'postgres'),
@@ -1133,6 +1131,10 @@ WITH expected_routine(name, kind, arguments) AS (
     ('generation_is_version', 'postgres'),
     ('generation_is_version', 'dkim2_publisher'),
     ('generation_is_version', 'dkim2_stager'),
+    ('campaign_candidate_generation_is_forward', 'postgres'),
+    ('campaign_candidate_generation_is_forward', 'dkim2_stager'),
+    ('purge_generation', 'postgres'),
+    ('purge_generation', 'dkim2_purger'),
     ('record_campaign_terminal', 'postgres'),
     ('record_campaign_terminal', 'dkim2_closer')
 ), routines AS (
@@ -1162,7 +1164,7 @@ SELECT concat_ws('|',
   (SELECT count(*) FROM expected_acl LEFT JOIN actual_acl USING (name, grantee)
     WHERE actual_acl.name IS NULL OR privilege_type <> 'EXECUTE')
 );" 2>/dev/null)" || postgresql_acl_audit=unavailable
-expect_equal postgresql-definer-acls "$postgresql_acl_audit" "23|0|0"
+expect_equal postgresql-definer-acls "$postgresql_acl_audit" "27|0|0"
 
 DKIM2_DATASOURCE_CA="$work/certs/ca.crt" \
 DKIM2_LDAP_PORT="$ldap_port" \
@@ -1262,11 +1264,11 @@ for tuple in \
 			"SELECT SUM(PRIVILEGE_TYPE = 'UPDATE' AND TABLE_NAME = 'dkim2_publication_lock' AND COLUMN_NAME = 'singleton'), SUM(NOT (PRIVILEGE_TYPE = 'UPDATE' AND TABLE_NAME = 'dkim2_publication_lock' AND COLUMN_NAME = 'singleton')) FROM information_schema.COLUMN_PRIVILEGES WHERE TABLE_SCHEMA = '$database' AND GRANTEE = CONCAT(CHAR(39), 'dkim2_publisher_login', CHAR(39), '@', CHAR(39), '%', CHAR(39))" 2>/dev/null)" || publisher_columns=unavailable
 		expect_equal publisher-column-grants "$publisher_columns" "1	0"
 	done
-	all_routine_allowlist="$publisher_allowlist,'dkim2_assert_staging','dkim2_assert_v2_staging','dkim2_assert_v3_operation','dkim2_assert_v3_metadata','dkim2_assert_v3_lock','dkim2_v3_lock_observe','dkim2_v3_lock_for_update','dkim2_v3_current_for_update','dkim2_v3_lock_candidate_root','dkim2_v3_insert_generation','dkim2_v3_claim_lock','dkim2_v3_release_lock','dkim2_v3_insert_handle','dkim2_v3_insert_profile','dkim2_v3_insert_credential','dkim2_v3_insert_policy','dkim2_v3_insert_key_material','dkim2_v3_seal_generation','dkim2_v3_activate'"
+	all_routine_allowlist="$publisher_allowlist,'dkim2_assert_staging','dkim2_assert_v2_staging','dkim2_assert_v3_operation','dkim2_assert_v3_metadata','dkim2_assert_v3_lock','dkim2_v3_lock_observe','dkim2_v3_lock_for_update','dkim2_v3_current_for_update','dkim2_v3_lock_candidate_root','dkim2_v3_insert_generation','dkim2_v3_claim_lock','dkim2_v3_release_lock','dkim2_v3_insert_handle','dkim2_v3_insert_profile','dkim2_v3_insert_credential','dkim2_v3_insert_policy','dkim2_v3_insert_key_material','dkim2_v3_seal_generation','dkim2_v3_activate','dkim2_v3_purge_generation','dkim2_v3_record_campaign_terminal'"
 	for database in dkim2 dkim2_empty dkim2_fresh; do
 		routine_definers="$(docker exec "$container" "$client" -uroot "-p$password" -NBe \
 			"SELECT SUM(ROUTINE_NAME IN ($all_routine_allowlist) AND ROUTINE_TYPE = 'PROCEDURE' AND SECURITY_TYPE = 'DEFINER' AND DEFINER = 'root@localhost'), SUM(ROUTINE_NAME NOT IN ($all_routine_allowlist) OR ROUTINE_TYPE <> 'PROCEDURE' OR SECURITY_TYPE <> 'DEFINER' OR DEFINER <> 'root@localhost') FROM information_schema.ROUTINES WHERE ROUTINE_SCHEMA = '$database' AND ROUTINE_NAME LIKE 'dkim2\\_%'" 2>/dev/null)" || routine_definers=unavailable
-		expect_equal fixed-routine-definers "$routine_definers" "28	0"
+		expect_equal fixed-routine-definers "$routine_definers" "30	0"
 	done
 	for role_contract in snapshot:7:1 staging:7:11 activation:7:5; do
 		role=${role_contract%%:*}
@@ -1394,12 +1396,15 @@ fi
 
 candidate="$(GOCACHE="${GOCACHE:-/tmp/dkim2-go-build-cache}" \
 	go -C "$repository_root/tools" run ./cmd/candidateid -root "$repository_root")"
+# The report binds the exact checked-out revision; the reference validator
+# requires base_revision to equal HEAD and the candidate snapshot of this tree.
+base_revision="$(git -C "$repository_root" rev-parse --verify HEAD)"
 report_candidate="$work/datasource-integration-report.json"
 {
 	printf '%s\n' \
 		'{' \
 		'  "schema": "dkim2.datasource-integration-report.v2",' \
-		'  "base_revision": "92cd6ccb6f27c449939867914581e26ffe30186d",' \
+		"  \"base_revision\": \"$base_revision\"," \
 		"  \"candidate_snapshot_sha256\": \"$candidate\"," \
 		"  \"ldap_image\": \"$ldap_image\"," \
 		"  \"postgresql_image\": \"$postgresql_image\"," \
