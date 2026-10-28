@@ -54,6 +54,12 @@ func TestRuntimePublicSocketSmoke(t *testing.T) {
 	}
 }
 
+// oracleTransferTimeout bounds each oracle request. The negative matrix streams
+// a body one octet above the 361 MB daemon process limit, which takes several
+// seconds over loopback under the race detector, so the fixture server and
+// client deadlines must exceed that transfer rather than the default 5 s.
+const oracleTransferTimeout = 30 * time.Second
+
 // TestIndependentSocketOracleGeneratedOperationMatrix crosses protected files,
 // loopback transport, generated DTOs, complete responses, and stable output.
 func TestIndependentSocketOracleGeneratedOperationMatrix(t *testing.T) {
@@ -74,8 +80,8 @@ func TestIndependentSocketOracleGeneratedOperationMatrix(t *testing.T) {
 	server := &http.Server{
 		Handler:           handler,
 		ReadHeaderTimeout: 5 * time.Second,
-		ReadTimeout:       5 * time.Second,
-		WriteTimeout:      5 * time.Second,
+		ReadTimeout:       oracleTransferTimeout,
+		WriteTimeout:      oracleTransferTimeout,
 	}
 	done := make(chan error, 1)
 	go func() { done <- server.Serve(listener) }()
@@ -119,6 +125,7 @@ func TestIndependentSocketOracleGeneratedOperationMatrix(t *testing.T) {
 	}
 	options := DefaultOptions()
 	options.ServerURL = "http://" + listener.Addr().String()
+	options.Timeout = oracleTransferTimeout
 	options.CapabilityFile = processCapability
 	options.SignCapabilityFile = signCapability
 	options.ReviseCapabilityFile = reviseCapability

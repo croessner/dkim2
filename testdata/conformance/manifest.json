@@ -118,7 +118,7 @@
     {
       "id": "openapi-independent-oracle-source",
       "path": "cmd/dkim2ctl/internal/testclient/public_socket_test.go",
-      "sha256": "47ed79de0fb82c6e201a663807793f7b3eeab718286622b34b3890a92df14399",
+      "sha256": "9e2ed04c925069f2f78f61547a95b3072dfa22f7943bd4146bf50b61899aabea",
       "module": "cmd/dkim2ctl"
     },
     {
